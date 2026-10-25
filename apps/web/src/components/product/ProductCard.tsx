@@ -6,6 +6,7 @@ import CompareQuickToggle from '@/components/compare/CompareQuickToggle';
 import RadarBadge from '@/components/radar/RadarBadge';
 import type { RadarSignal } from '@/lib/deal-radar';
 import { contentLang } from '@/lib/content-lang';
+import { MAX_VALID_VND_PRICE } from '@/lib/rate-domain';
 
 export interface ProductCardSpec {
   readonly key: string;
@@ -35,8 +36,40 @@ export interface ProductCardProps {
   readonly verified?: boolean;
 }
 
-const formatVnd = (value: number) =>
-  `${Number(value).toLocaleString('vi-VN')} ₫`;
+export function sanitizeProductCardPriceVnd(value: unknown): number {
+  const num = Number(value);
+  if (!Number.isFinite(num) || num <= 0 || num > MAX_VALID_VND_PRICE) {
+    return 0;
+  }
+  return Math.round(num);
+}
+
+export function formatProductCardVnd(value: unknown): string {
+  return `${sanitizeProductCardPriceVnd(value).toLocaleString('vi-VN')} ₫`;
+}
+
+export function sanitizeProductCardScore(
+  value: unknown,
+  maxScore: number
+): number | null {
+  if (value == null) return null;
+  const num = Number(value);
+  if (!Number.isFinite(num) || num <= 0) return null;
+  return Math.min(maxScore, num);
+}
+
+const PRODUCT_CARD_CONTROL_CHARS_RE = /\p{Cc}+/gu;
+
+export function sanitizeProductCardSlug(value: unknown): string {
+  if (typeof value !== 'string') return '';
+  return value.replace(PRODUCT_CARD_CONTROL_CHARS_RE, '').trim().slice(0, 256);
+}
+
+export function sanitizeProductCardCount(value: unknown): number {
+  const num = Number(value);
+  if (!Number.isFinite(num) || num <= 0) return 0;
+  return Math.min(10_000_000, Math.round(num));
+}
 
 /**
  * Product tile for the home grid and the category catalogs. Fixed regions
@@ -63,8 +96,15 @@ export default function ProductCard({
 }: ProductCardProps) {
   const t = useTranslations('productCard');
   const locale = useLocale();
-  const hasRange = maxPrice > minPrice;
-  const meta = [brand, ...tags].filter(Boolean);
+  const safeMinPrice = sanitizeProductCardPriceVnd(minPrice);
+  const safeMaxPrice = sanitizeProductCardPriceVnd(maxPrice);
+  const hasRange = safeMinPrice > 0 && safeMaxPrice > safeMinPrice;
+  const safeUserScore = sanitizeProductCardScore(userScore, 5);
+  const safeExpertScore = sanitizeProductCardScore(expertScore, 10);
+  const safeReviewCount = sanitizeProductCardCount(reviewCount);
+  const safeMerchantCount = sanitizeProductCardCount(merchantCount);
+  const safeSlug = sanitizeProductCardSlug(slug);
+  const meta = [brand, ...(Array.isArray(tags) ? tags : [])].filter(Boolean);
 
   return (
     <article className="rate-card rate-product-card h-100">
@@ -85,11 +125,11 @@ export default function ProductCard({
           <CompareQuickToggle
             compact
             item={{
-              slug,
+              slug: safeSlug,
               name,
               brand,
               thumbnail,
-              min_price: minPrice,
+              min_price: safeMinPrice,
               categoryPath,
             }}
           />
@@ -113,28 +153,28 @@ export default function ProductCard({
         </h3>
 
         <div className="rate-product-card-scores">
-          {userScore != null ? (
+          {safeUserScore != null ? (
             <>
               <span className="rate-score-badge-user">
-                ★ {userScore.toFixed(1)}
+                ★ {safeUserScore.toFixed(1)}
               </span>
               <span className="rate-product-card-muted">
-                {t('reviewCount', { count: reviewCount })}
+                {t('reviewCount', { count: safeReviewCount })}
               </span>
             </>
           ) : (
             <span className="rate-product-card-muted">{t('noReviews')}</span>
           )}
-          {expertScore != null && (
+          {safeExpertScore != null && (
             <span className="rate-score-badge-expert">
-              {t('expertScore', { score: expertScore.toFixed(1) })}
+              {t('expertScore', { score: safeExpertScore.toFixed(1) })}
             </span>
           )}
         </div>
 
         <RadarBadge signal={radarSignal} className="rate-product-card-radar" />
 
-        {specs.length > 0 && (
+        {Array.isArray(specs) && specs.length > 0 && (
           <ul className="rate-product-card-specs">
             {specs.slice(0, 3).map((spec) => (
               <li
@@ -159,14 +199,18 @@ export default function ProductCard({
             <div>
               <div className="rate-product-card-muted">{t('refPrice')}</div>
               <div className="rate-product-card-price">
-                {formatVnd(minPrice)}
+                {formatProductCardVnd(safeMinPrice)}
               </div>
             </div>
             <div className="rate-product-card-price-aside">
               {hasRange && (
-                <div>{t('priceUpTo', { price: formatVnd(maxPrice) })}</div>
+                <div>
+                  {t('priceUpTo', {
+                    price: formatProductCardVnd(safeMaxPrice),
+                  })}
+                </div>
               )}
-              <div>{t('sources', { count: merchantCount })}</div>
+              <div>{t('sources', { count: safeMerchantCount })}</div>
             </div>
           </div>
 
@@ -175,7 +219,7 @@ export default function ProductCard({
               {t('viewDetails')}
             </Link>
             <Link
-              href={`/inspect?q=${encodeURIComponent(slug)}`}
+              href={`/inspect?q=${encodeURIComponent(safeSlug)}`}
               className="btn btn-outline-secondary fw-medium"
               title={t('priceHistoryTitle')}
             >
