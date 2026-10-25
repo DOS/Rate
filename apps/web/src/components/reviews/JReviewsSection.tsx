@@ -88,6 +88,39 @@ const FLAG_STYLES: Record<ReviewBadgeKind, string> = {
 
 const STORAGE_KEY = 'rate_review_votes_v1';
 const LOCAL_REVIEWS_PREFIX = 'rate_community_reviews_v1_';
+const JREVIEWS_CONTROL_CHARS_RE = /\p{Cc}+/gu;
+
+export function sanitizeJReviewsExportSlug(value: unknown): string {
+  if (typeof value !== 'string') return 'audit';
+  const cleaned = value
+    .replace(JREVIEWS_CONTROL_CHARS_RE, '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9-_]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 80);
+  return cleaned || 'audit';
+}
+
+export function sanitizeJReviewsMarkdownCell(
+  value: unknown,
+  maxLen = 120
+): string {
+  if (typeof value !== 'string') return '-';
+  const cleaned = value
+    .replace(JREVIEWS_CONTROL_CHARS_RE, ' ')
+    .replace(/\|/g, '-')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, maxLen);
+  return cleaned || '-';
+}
+
+export function sanitizeJReviewsPercentage(value: unknown): number {
+  const num = Number(value);
+  if (!Number.isFinite(num) || num <= 0) return 0;
+  return Math.max(0, Math.min(100, Math.round(num)));
+}
 
 export default function JReviewsSection({
   masterProductId,
@@ -659,16 +692,16 @@ export default function JReviewsSection({
     ];
     const sep = headers.map(() => '---');
     const rows = filteredAndSortedReviews.map((r) => [
-      r.author_name.replace(/\|/g, '-'),
+      sanitizeJReviewsMarkdownCell(r.author_name, 80),
       r.reviewer_type === 'expert' ? 'Expert' : 'Verified Buyer',
       `${r.rating_star}/5★`,
       `${r.helpfulness_weight.toFixed(2)}x`,
       reviewBadgeKind(r),
       String(r.upvotes),
-      r.comment.replace(/\|/g, '-').replace(/\r?\n/g, ' ').slice(0, 120),
+      sanitizeJReviewsMarkdownCell(r.comment, 120),
     ]);
     const md = [
-      `### ⭐ Rate.vn JReviews AI-checked buyer reviews: ${productName} (${filteredAndSortedReviews.length} reviews)`,
+      `### ⭐ Rate.vn JReviews AI-checked buyer reviews: ${sanitizeJReviewsMarkdownCell(productName, 160)} (${filteredAndSortedReviews.length} reviews)`,
       `- **Price signal:** ${radarMarkdownCell(radarSignal)}`,
       '',
       `| ${headers.join(' | ')} |`,
@@ -728,11 +761,12 @@ export default function JReviewsSection({
         ...rows.map((row) => row.map(escapeCsvCell).join(',')),
       ].join('\r\n');
 
+    const safeExportSlug = sanitizeJReviewsExportSlug(productSlug);
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `rate-jreviews-${productSlug || 'audit'}.csv`;
+    a.download = `rate-jreviews-${safeExportSlug}.csv`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -745,9 +779,10 @@ export default function JReviewsSection({
       filteredAndSortedReviews.length === 0
     )
       return;
+    const safeExportSlug = sanitizeJReviewsExportSlug(productSlug);
     const payload = {
       source: 'Rate.vn JReviews AI-checked buyer reviews',
-      productSlug: productSlug || 'audit',
+      productSlug: safeExportSlug,
       productName,
       exportedAt: new Date().toISOString(),
       deal_radar: radarExportFields(radarSignal),
@@ -760,7 +795,7 @@ export default function JReviewsSection({
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `rate-jreviews-${productSlug || 'audit'}.json`;
+    a.download = `rate-jreviews-${safeExportSlug}.json`;
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -1232,13 +1267,19 @@ export default function JReviewsSection({
           </div>
           <div className="d-flex small flex-wrap gap-2">
             <span className="badge bg-success text-white">
-              {t('authenticPctBadge', { pct: summary.authentic_pct })}
+              {t('authenticPctBadge', {
+                pct: sanitizeJReviewsPercentage(summary.authentic_pct),
+              })}
             </span>
             <span className="badge bg-warning text-dark">
-              {t('suspiciousPctBadge', { pct: summary.suspicious_pct })}
+              {t('suspiciousPctBadge', {
+                pct: sanitizeJReviewsPercentage(summary.suspicious_pct),
+              })}
             </span>
             <span className="badge bg-danger text-white">
-              {t('fakePctBadge', { pct: summary.fake_pct })}
+              {t('fakePctBadge', {
+                pct: sanitizeJReviewsPercentage(summary.fake_pct),
+              })}
             </span>
           </div>
         </div>
@@ -1251,18 +1292,30 @@ export default function JReviewsSection({
         >
           <div
             className="progress-bar bg-success"
-            style={{ width: `${summary.authentic_pct}%` }}
-            title={t('authenticPctBadge', { pct: summary.authentic_pct })}
+            style={{
+              width: `${sanitizeJReviewsPercentage(summary.authentic_pct)}%`,
+            }}
+            title={t('authenticPctBadge', {
+              pct: sanitizeJReviewsPercentage(summary.authentic_pct),
+            })}
           />
           <div
             className="progress-bar bg-warning"
-            style={{ width: `${summary.suspicious_pct}%` }}
-            title={t('suspiciousPctBadge', { pct: summary.suspicious_pct })}
+            style={{
+              width: `${sanitizeJReviewsPercentage(summary.suspicious_pct)}%`,
+            }}
+            title={t('suspiciousPctBadge', {
+              pct: sanitizeJReviewsPercentage(summary.suspicious_pct),
+            })}
           />
           <div
             className="progress-bar bg-danger"
-            style={{ width: `${summary.fake_pct}%` }}
-            title={t('fakePctBadge', { pct: summary.fake_pct })}
+            style={{
+              width: `${sanitizeJReviewsPercentage(summary.fake_pct)}%`,
+            }}
+            title={t('fakePctBadge', {
+              pct: sanitizeJReviewsPercentage(summary.fake_pct),
+            })}
           />
         </div>
 

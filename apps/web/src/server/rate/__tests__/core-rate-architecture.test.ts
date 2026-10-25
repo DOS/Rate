@@ -12492,10 +12492,7 @@ async function runCoreArchitectureSuite() {
     assert.equal(resolvePriceWatchStep(25_000_000), 100_000);
     assert.equal(resolvePriceWatchStep(-100), 100_000);
 
-    assert.equal(
-      sanitizePriceWatchInput(18_500_000.6, 20_000_000),
-      18_500_001
-    );
+    assert.equal(sanitizePriceWatchInput(18_500_000.6, 20_000_000), 18_500_001);
     assert.equal(sanitizePriceWatchInput(0, 20_000_000), 0);
     assert.equal(sanitizePriceWatchInput(-500, 20_000_000), 19_000_000);
     assert.equal(
@@ -12511,6 +12508,71 @@ async function runCoreArchitectureSuite() {
 
     console.log(
       '  ✅ [126b/129] ProductCard, PriceWatchButton & WatchlistQuickToggle Bounds (#1034) passed'
+    );
+  }
+
+  // -------------------------------------------------------------------------
+  // 126c. LeaderboardExplorer, CompareQuickToggle & JReviewsSection Bounds (#1036)
+  // -------------------------------------------------------------------------
+  {
+    const {
+      sanitizeLeaderboardWeight,
+      sanitizeLeaderboardPriceVnd,
+      formatLeaderboardPriceVnd,
+      sanitizeLeaderboardMarkdownCell,
+      sanitizeLeaderboardBarPercentage,
+    } = await import('../../../components/leaderboard/LeaderboardExplorer');
+    const { normalizeQuickCompareSlug } =
+      await import('../../../components/compare/CompareQuickToggle');
+    const {
+      sanitizeJReviewsExportSlug,
+      sanitizeJReviewsMarkdownCell,
+      sanitizeJReviewsPercentage,
+    } = await import('../../../components/reviews/JReviewsSection');
+
+    assert.equal(sanitizeLeaderboardWeight(45.6, 20), 46);
+    assert.equal(sanitizeLeaderboardWeight(-15, 20), 0);
+    assert.equal(sanitizeLeaderboardWeight(180, 20), 100);
+    assert.equal(sanitizeLeaderboardWeight(Number.NaN, 25), 25);
+
+    assert.equal(sanitizeLeaderboardPriceVnd(18_990_000.4), 18_990_000);
+    assert.equal(sanitizeLeaderboardPriceVnd(-100), 0);
+    assert.equal(sanitizeLeaderboardPriceVnd(9_000_000_000), 0);
+    assert.equal(formatLeaderboardPriceVnd(25_990_000), '25.990.000 ₫');
+    assert.equal(formatLeaderboardPriceVnd(-100), '0 ₫');
+
+    assert.equal(
+      sanitizeLeaderboardMarkdownCell('  Galaxy\r\nS25 | Ultra\u0000  '),
+      'Galaxy S25 - Ultra'
+    );
+    assert.equal(sanitizeLeaderboardMarkdownCell('   '), '-');
+
+    assert.equal(sanitizeLeaderboardBarPercentage(4.5), 90);
+    assert.equal(sanitizeLeaderboardBarPercentage(7.5), 100);
+    assert.equal(sanitizeLeaderboardBarPercentage(-2), 0);
+
+    assert.equal(
+      normalizeQuickCompareSlug('  Apple\u0000 iPhone 16 Pro  '),
+      'apple-iphone-16-pro'
+    );
+    assert.equal(normalizeQuickCompareSlug('   '), '');
+
+    assert.equal(
+      sanitizeJReviewsExportSlug('  ../iPhone 16 Pro\u0000!!  '),
+      'iphone-16-pro'
+    );
+    assert.equal(sanitizeJReviewsExportSlug('   '), 'audit');
+    assert.equal(
+      sanitizeJReviewsMarkdownCell('  Great\r\nphone | 10/10\u0000  '),
+      'Great phone - 10/10'
+    );
+    assert.equal(sanitizeJReviewsMarkdownCell(''), '-');
+    assert.equal(sanitizeJReviewsPercentage(84.6), 85);
+    assert.equal(sanitizeJReviewsPercentage(150), 100);
+    assert.equal(sanitizeJReviewsPercentage(-10), 0);
+
+    console.log(
+      '  ✅ [126c/130] LeaderboardExplorer, CompareQuickToggle & JReviewsSection Bounds (#1036) passed'
     );
   }
 
