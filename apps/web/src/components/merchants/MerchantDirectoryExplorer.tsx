@@ -44,8 +44,15 @@ import {
   BsStarFill,
 } from 'react-icons/bs';
 
+import {
+  sanitizeMerchantAuditText,
+  sanitizeMerchantCount,
+  sanitizeMerchantScore100,
+} from '@/components/merchants/MerchantShareAuditButton';
+
 // Rows per request when an export collects every matching store.
 const EXPORT_PAGE_SIZE = 500;
+export const MAX_MERCHANT_EXPORT_PAGES = 20;
 
 interface MerchantDirectoryExplorerProps {
   /** First page for the initial filters, rendered on the server. */
@@ -206,14 +213,16 @@ export default function MerchantDirectoryExplorer({
   /** Every store matching the current filters, for the exports. */
   const fetchAllMatching = async (): Promise<MerchantSummary[]> => {
     const all: MerchantSummary[] = [];
-    for (let offset = 0; ; offset += EXPORT_PAGE_SIZE) {
+    for (let pageIdx = 0; pageIdx < MAX_MERCHANT_EXPORT_PAGES; pageIdx += 1) {
+      const offset = pageIdx * EXPORT_PAGE_SIZE;
       const page = await fetchDirectoryPage(filters, offset, EXPORT_PAGE_SIZE);
       all.push(...page.items);
       if (page.items.length < EXPORT_PAGE_SIZE || all.length >= page.matched) {
-        // Pages can come from different cache snapshots: drop repeats.
-        return [...new Map(all.map((m) => [m.id, m])).values()];
+        break;
       }
     }
+    // Pages can come from different cache snapshots: drop repeats.
+    return [...new Map(all.map((m) => [m.id, m])).values()];
   };
   const radarPayload = useDealRadarPayload();
 
@@ -335,15 +344,15 @@ export default function MerchantDirectoryExplorer({
     const rows = filteredMerchants.map((m) => {
       const rStats = getMerchantRadarStats(m);
       return [
-        m.name.replace(/\|/g, '-'),
-        m.platform.toUpperCase(),
+        sanitizeMerchantAuditText(m.name, 'Unknown'),
+        sanitizeMerchantAuditText(m.platform, 'shopee', 32).toUpperCase(),
         m.is_official ? 'Yes' : 'No',
-        `${m.trust_score}/100`,
-        `${m.review_risk_score}/100`,
-        String(rStats.genuineDealCount),
-        String(rStats.fakeTrapCount),
-        String(m.review_risk_breakdown.authentic_count),
-        String(m.product_count),
+        `${sanitizeMerchantScore100(m.trust_score)}/100`,
+        `${sanitizeMerchantScore100(m.review_risk_score)}/100`,
+        String(sanitizeMerchantCount(rStats.genuineDealCount)),
+        String(sanitizeMerchantCount(rStats.fakeTrapCount)),
+        String(sanitizeMerchantCount(m.review_risk_breakdown?.authentic_count)),
+        String(sanitizeMerchantCount(m.product_count)),
       ];
     });
     const md = [
@@ -410,23 +419,23 @@ export default function MerchantDirectoryExplorer({
     ];
     const rows = filteredMerchants.map((m) => {
       const rStats = getMerchantRadarStats(m);
+      const ignoredReviews =
+        sanitizeMerchantCount(m.review_risk_breakdown?.coin_spam_count) +
+        sanitizeMerchantCount(m.review_risk_breakdown?.seeding_fake_count);
       return [
-        m.id,
-        m.name,
-        m.platform,
-        m.platform_shop_id,
+        sanitizeMerchantAuditText(m.id, '', 120),
+        sanitizeMerchantAuditText(m.name, 'Unknown'),
+        sanitizeMerchantAuditText(m.platform, 'shopee', 32),
+        sanitizeMerchantAuditText(m.platform_shop_id, '', 80),
         m.is_official ? 'true' : 'false',
-        String(m.trust_score),
-        String(m.review_risk_score),
-        String(rStats.genuineDealCount),
-        String(rStats.fakeTrapCount),
-        String(m.review_risk_breakdown.authentic_count),
-        String(
-          m.review_risk_breakdown.coin_spam_count +
-            m.review_risk_breakdown.seeding_fake_count
-        ),
-        String(m.product_count),
-        String(m.follower_count),
+        String(sanitizeMerchantScore100(m.trust_score)),
+        String(sanitizeMerchantScore100(m.review_risk_score)),
+        String(sanitizeMerchantCount(rStats.genuineDealCount)),
+        String(sanitizeMerchantCount(rStats.fakeTrapCount)),
+        String(sanitizeMerchantCount(m.review_risk_breakdown?.authentic_count)),
+        String(ignoredReviews),
+        String(sanitizeMerchantCount(m.product_count)),
+        String(sanitizeMerchantCount(m.follower_count)),
       ];
     });
     const csvContent =
@@ -471,7 +480,9 @@ export default function MerchantDirectoryExplorer({
     const a = document.createElement('a');
     a.href = url;
     a.download = `rate-merchants-audit-${new Date().toISOString().slice(0, 10)}.json`;
+    document.body.appendChild(a);
     a.click();
+    document.body.removeChild(a);
     URL.revokeObjectURL(url);
   };
 

@@ -2,6 +2,24 @@ import React from 'react';
 import { useTranslations } from 'next-intl';
 import { EMPTY_RADAR_SIGNAL, type RadarSignal } from '@/lib/deal-radar';
 
+export function sanitizeRadarPercentage(value: unknown, maxPct = 1000): number {
+  const num = Number(value);
+  if (!Number.isFinite(num) || num <= 0) return 0;
+  return Math.min(maxPct, num);
+}
+
+export function sanitizeRadarMinSpreadPct(
+  value: unknown,
+  fallback = 10
+): number {
+  if (value === Number.POSITIVE_INFINITY) return Number.POSITIVE_INFINITY;
+  const num = typeof value === 'number' ? value : Number(value);
+  if (Number.isNaN(num)) return fallback;
+  if (num === Number.POSITIVE_INFINITY) return Number.POSITIVE_INFINITY;
+  if (!Number.isFinite(num)) return 0;
+  return Math.max(0, num);
+}
+
 interface RadarBadgeProps {
   readonly signal: RadarSignal;
   /** Hide the spread-only badge below this percentage (default 10). */
@@ -25,15 +43,19 @@ export default function RadarBadge({
 }: RadarBadgeProps) {
   const tDeals = useTranslations('deals');
   const sig = signal ?? EMPTY_RADAR_SIGNAL;
+  const safeSavingsPct = sanitizeRadarPercentage(sig.savingsPct, 100);
+  const safeFakeMarkupPct = sanitizeRadarPercentage(sig.fakeMarkupPct, 1000);
+  const safeSpreadPct = sanitizeRadarPercentage(sig.spreadPct, 1000);
+  const safeMinSpreadPct = sanitizeRadarMinSpreadPct(minSpreadPct, 10);
   let label = '';
-  if (sig.verdict === 'genuine_deal') {
-    label = tDeals('radarBadgeGenuine', { pct: sig.savingsPct.toFixed(1) });
-  } else if (sig.verdict === 'fake_sale_trap') {
+  if (sig.verdict === 'genuine_deal' && safeSavingsPct > 0) {
+    label = tDeals('radarBadgeGenuine', { pct: safeSavingsPct.toFixed(1) });
+  } else if (sig.verdict === 'fake_sale_trap' && safeFakeMarkupPct > 0) {
     label = tDeals('radarBadgeFakeTrap', {
-      pct: sig.fakeMarkupPct.toFixed(1),
+      pct: safeFakeMarkupPct.toFixed(1),
     });
-  } else if (sig.spreadPct > 0 && sig.spreadPct >= minSpreadPct) {
-    label = tDeals('radarBadgeSpread', { pct: sig.spreadPct.toFixed(1) });
+  } else if (safeSpreadPct > 0 && safeSpreadPct >= safeMinSpreadPct) {
+    label = tDeals('radarBadgeSpread', { pct: safeSpreadPct.toFixed(1) });
   }
   if (!label) return <>{emptyFallback}</>;
   const tone =
