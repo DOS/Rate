@@ -45,9 +45,10 @@ Tài liệu này tổng hợp đầy đủ **User-Level Hard Rules (`C:\Users\JO
      - `node scripts/ops/verify-live.mjs --wait 900`: kiểm tra rate.vn chạy đúng commit của `main` (`/api/health` trả `commit`), database đọc được và các route chính trả 200. Script đọc lại `main` mỗi vòng chờ. Chỉ khi bản live chậm hơn `main`, nó mới in lệnh `vercel promote <deployment của main> --scope metados`; nếu bản live đi trước hoặc lệch nhánh so với `main`, nó dặn không làm gì. Không bao giờ redeploy hay promote một deployment build từ commit khác (`promote` không build lại, và bật lại tự gán domain sau một lần `vercel rollback`).
      - `node scripts/ops/board.mjs <issue> --status in-progress|in-review|done --agent <Nick>`: cập nhật Project #9 và nhãn (xem mục 1). Script từ chối issue đang mang nhãn `agent:*` của agent khác; `--take-over` chỉ dùng khi agent đó đã bàn giao hoặc JOY chỉ định.
 
-7. **Chủ động thực thi liên tục & đề xuất việc tiếp theo (Proactive Next-Task):**
-   - **Khi đang ở chế độ `/goal` hoặc được giao làm hết backlog:** Tự động tạo/nhận và làm liên tục từng task đến khi sạch toàn bộ backlog mà **KHÔNG dừng lại hỏi `Bắt đầu chứ?`**.
-   - Chỉ khi đã hoàn thành toàn bộ mục tiêu và không còn task khả dụng mới báo cáo tổng kết.
+7. **Chủ động thực thi liên tục & đề xuất việc tiếp theo (Always-On Proactive Backlog - Skill `proactive-backlog`):**
+   - **Luôn kích hoạt mặc định ở MỌI lượt hội thoại (không chỉ trong `/goal`):** Mọi Agent (Antigravity, Claude Code, Codex) phải luôn tuân theo quy trình khép kín của skill `proactive-backlog` (`~/.gemini/config/skills/proactive-backlog/SKILL.md`, `~/.claude/skills/proactive-backlog/SKILL.md`, `~/.codex/skills/proactive-backlog/SKILL.md`).
+   - Ngay khi hoàn thành một task (hoặc khi được gọi dậy), tự động quét GitHub Issues (`gh issue list`) và codebase theo chuyên môn (`agent:web`, `agent:core`, `agent:crawl`, `agent:guard`, `agent:brand`), tự tạo Issue Tiếng Anh nếu cần, claim qua `node scripts/ops/board.mjs <issue> --status in-progress --agent <Nick>`, cài đặt + viết unit test, chạy fresh-context review, tự merge PR qua `node scripts/ops/merge-when-green.mjs <pr>`, đóng Issue (`--status done`), và **chuyển ngay sang task tiếp theo mà KHÔNG dừng lại hỏi `Bắt đầu chứ?` hay `Làm tiếp nhé?`**.
+   - Chỉ dừng lại báo cáo tổng kết khi toàn bộ backlog khả dụng đã sạch hoàn toàn, gặp thao tác rủi ro cao bắt buộc hỏi JOY (Mục 0.1, 0.2), hoặc khi JOY chủ động yêu cầu dừng.
 
 ---
 

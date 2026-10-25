@@ -11976,6 +11976,87 @@ async function runCoreArchitectureSuite() {
     );
   }
 
+  // -------------------------------------------------------------------------
+  // 122. Merchant Audit, Deep Inspect Exports & Radar Badge Bounds (#1020)
+  // -------------------------------------------------------------------------
+  {
+    const {
+      sanitizeMerchantAuditText,
+      sanitizeMerchantScore100,
+      sanitizeMerchantCount,
+      computeAuthenticReviewPercentage,
+      sanitizeMerchantDownloadSlug,
+    } = await import('../../../components/merchants/MerchantShareAuditButton');
+    const { MAX_MERCHANT_EXPORT_PAGES } =
+      await import('../../../components/merchants/MerchantDirectoryExplorer');
+    const {
+      sanitizeInspectQuery,
+      sanitizeInspectPriceVnd,
+      sanitizeInspectDownloadSlug,
+    } = await import('../../../components/inspect/DeepInspectWorkspace');
+    const { sanitizeRadarPercentage } =
+      await import('../../../components/radar/RadarBadge');
+
+    assert.equal(
+      sanitizeMerchantAuditText(
+        '  Shop\r\nName | Official\u0000  ',
+        'Fallback'
+      ),
+      'Shop Name - Official'
+    );
+    assert.equal(sanitizeMerchantAuditText('   ', 'Fallback'), 'Fallback');
+    assert.equal(sanitizeMerchantAuditText(null, 'Fallback'), 'Fallback');
+
+    assert.equal(sanitizeMerchantScore100(92.6), 93);
+    assert.equal(sanitizeMerchantScore100(-15), 0);
+    assert.equal(sanitizeMerchantScore100(250), 100);
+    assert.equal(sanitizeMerchantScore100(Number.NaN), 0);
+
+    assert.equal(sanitizeMerchantCount(42.4), 42);
+    assert.equal(sanitizeMerchantCount(-5), 0);
+    assert.equal(sanitizeMerchantCount(Number.POSITIVE_INFINITY), 0);
+    assert.equal(sanitizeMerchantCount(99_000_000), 10_000_000);
+
+    assert.equal(computeAuthenticReviewPercentage(80, 100), 80);
+    assert.equal(computeAuthenticReviewPercentage(150, 100), 100);
+    assert.equal(computeAuthenticReviewPercentage(-10, 100), 0);
+    assert.equal(computeAuthenticReviewPercentage(0, 0), 100);
+
+    assert.equal(
+      sanitizeMerchantDownloadSlug('Shopee Mall / VN #1!'),
+      'shopee-mall-vn-1'
+    );
+    assert.equal(sanitizeMerchantDownloadSlug('   ', 'shop'), 'shop');
+    assert.equal(MAX_MERCHANT_EXPORT_PAGES, 20);
+
+    assert.equal(
+      sanitizeInspectQuery('  https://shopee.vn/item\n`test`  '),
+      "https://shopee.vn/item 'test'"
+    );
+    assert.equal(sanitizeInspectQuery('a'.repeat(700)).length, 512);
+    assert.equal(sanitizeInspectQuery(null), '');
+
+    assert.equal(sanitizeInspectPriceVnd(25_990_000.4), 25_990_000);
+    assert.equal(sanitizeInspectPriceVnd(-1000), 0);
+    assert.equal(sanitizeInspectPriceVnd(9_000_000_000), 0);
+    assert.equal(sanitizeInspectPriceVnd(Number.NaN), 0);
+
+    assert.equal(
+      sanitizeInspectDownloadSlug('iPhone 16 Pro Max / 256GB'),
+      'iphone-16-pro-max-256gb'
+    );
+    assert.equal(sanitizeInspectDownloadSlug('', 'audit'), 'audit');
+
+    assert.equal(sanitizeRadarPercentage(18.45, 100), 18.45);
+    assert.equal(sanitizeRadarPercentage(150, 100), 100);
+    assert.equal(sanitizeRadarPercentage(-5, 100), 0);
+    assert.equal(sanitizeRadarPercentage(Number.NaN, 100), 0);
+
+    console.log(
+      '  ✅ [122/122] Merchant Audit, Deep Inspect Exports & Radar Badge Bounds (#1020) passed'
+    );
+  }
+
   console.log('🎉 All Rate.vn Core Architecture tests passed!');
 }
 

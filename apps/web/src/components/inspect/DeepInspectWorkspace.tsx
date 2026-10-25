@@ -7,6 +7,7 @@ import AnalyzerText from '@/components/reviews/AnalyzerText';
 import { useDetailsDismiss } from '@/components/elementary/use-details-dismiss';
 import { Link, useRouter } from '@/lib/navigation';
 import {
+  MAX_VALID_VND_PRICE,
   getMasterProductHref,
   resolveCompareBatteryMah,
   resolveCompareEffectiveUserRating,
@@ -57,6 +58,41 @@ import {
 } from '@/lib/offer-plausibility';
 import { productImageUrl } from '@/lib/rate-domain-core';
 
+const INSPECT_CONTROL_CHARS_RE = /[\u0000-\u001F\u007F-\u009F]+/g;
+
+export function sanitizeInspectQuery(rawQuery: unknown, maxLen = 512): string {
+  if (typeof rawQuery !== 'string') return '';
+  const cleaned = rawQuery
+    .replace(INSPECT_CONTROL_CHARS_RE, ' ')
+    .replace(/`+/g, "'")
+    .replace(/\s+/g, ' ')
+    .trim();
+  return cleaned.length > maxLen ? cleaned.slice(0, maxLen) : cleaned;
+}
+
+export function sanitizeInspectPriceVnd(value: unknown): number {
+  const num = Number(value);
+  if (!Number.isFinite(num) || num <= 0 || num > MAX_VALID_VND_PRICE) {
+    return 0;
+  }
+  return Math.round(num);
+}
+
+export function sanitizeInspectDownloadSlug(
+  value: unknown,
+  fallback = 'audit'
+): string {
+  if (typeof value !== 'string') return fallback;
+  const slug = value
+    .replace(INSPECT_CONTROL_CHARS_RE, '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9._-]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 80);
+  return slug || fallback;
+}
+
 interface DeepInspectWorkspaceProps {
   initialQuery?: string;
   initialInspection?: UrlInspectionResult | null;
@@ -85,7 +121,7 @@ export default function DeepInspectWorkspace({
   const radarIndex = useDealRadarIndex();
 
   const runInspection = async (targetQuery: string) => {
-    const clean = targetQuery.trim();
+    const clean = sanitizeInspectQuery(targetQuery);
     if (!clean) return;
     setLoading(true);
     setErrorMsg(null);
@@ -119,22 +155,24 @@ export default function DeepInspectWorkspace({
 
   const handleFormSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const clean = queryInput.trim();
+    const clean = sanitizeInspectQuery(queryInput);
     if (!clean) return;
     router.replace(`/inspect?q=${encodeURIComponent(clean)}`);
     await runInspection(clean);
   };
 
   const handleSelectSample = async (sampleQuery: string) => {
-    setQueryInput(sampleQuery);
-    router.replace(`/inspect?q=${encodeURIComponent(sampleQuery)}`);
-    await runInspection(sampleQuery);
+    const clean = sanitizeInspectQuery(sampleQuery);
+    if (!clean) return;
+    setQueryInput(clean);
+    router.replace(`/inspect?q=${encodeURIComponent(clean)}`);
+    await runInspection(clean);
   };
 
   const handleCopyReportLink = async () => {
     if (typeof window === 'undefined') return;
     const shareUrl = `${window.location.origin}/inspect?q=${encodeURIComponent(
-      queryInput.trim()
+      sanitizeInspectQuery(queryInput)
     )}`;
     try {
       await navigator.clipboard.writeText(shareUrl);
@@ -179,24 +217,26 @@ export default function DeepInspectWorkspace({
   const handleCopyAuditMarkdown = async () => {
     if (typeof window === 'undefined') return;
     try {
+      const cleanQuery = sanitizeInspectQuery(queryInput);
       const shareUrl = `${window.location.origin}/inspect?q=${encodeURIComponent(
-        queryInput.trim()
+        cleanQuery
       )}`;
-      const currentListedPrice = Number(
+      const currentListedPrice = sanitizeInspectPriceVnd(
         matchedOffer?.price_current || master?.min_price || 0
       );
-      const claimedOrigPrice = matchedOffer?.price_original
-        ? Number(matchedOffer.price_original)
-        : null;
-      const histLow = Number(
+      const rawClaimedOrig = sanitizeInspectPriceVnd(
+        matchedOffer?.price_original
+      );
+      const claimedOrigPrice = rawClaimedOrig > 0 ? rawClaimedOrig : null;
+      const histLow = sanitizeInspectPriceVnd(
         priceHistory?.lowestEverPrice || master?.min_price || 0
       );
-      const histHigh = Number(
+      const histHigh = sanitizeInspectPriceVnd(
         priceHistory?.highestEverPrice || master?.max_price || 0
       );
       const lines = [
         `### 🔬 ${t('title')} · Rate.vn`,
-        `- **${t('mdQuery')}:** \`${queryInput.trim()}\``,
+        `- **${t('mdQuery')}:** \`${cleanQuery}\``,
         ...(master
           ? [
               `- **${t('mdProduct')}:** ${master.name} (\`${master.model_key}\`)`,
@@ -266,12 +306,13 @@ export default function DeepInspectWorkspace({
         : matchedOffer
           ? [matchedOffer]
           : [];
-    const histLow = Number(
+    const histLow = sanitizeInspectPriceVnd(
       priceHistory?.lowestEverPrice || master?.min_price || 0
     );
-    const histHigh = Number(
+    const histHigh = sanitizeInspectPriceVnd(
       priceHistory?.highestEverPrice || master?.max_price || 0
     );
+    const cleanQuery = sanitizeInspectQuery(queryInput);
     const rows = offers.map((o) => [
       o.merchant?.name || merchant?.name || t('unknownShop'),
       (
@@ -280,9 +321,9 @@ export default function DeepInspectWorkspace({
         merchant?.platform ||
         'shopee'
       ).toUpperCase(),
-      o.title || master?.name || queryInput.trim(),
-      Number(o.price_current || 0),
-      Number(o.price_original || 0),
+      o.title || master?.name || cleanQuery,
+      sanitizeInspectPriceVnd(o.price_current),
+      sanitizeInspectPriceVnd(o.price_original),
       histLow,
       histHigh,
       matchedPriceSpread?.spreadPct ?? 0,
@@ -303,8 +344,10 @@ export default function DeepInspectWorkspace({
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `rate-inspect-${master?.slug || 'audit'}.csv`;
+    a.download = `rate-inspect-${sanitizeInspectDownloadSlug(master?.slug, 'audit')}.csv`;
+    document.body.appendChild(a);
     a.click();
+    document.body.removeChild(a);
     URL.revokeObjectURL(url);
   };
 
@@ -312,7 +355,7 @@ export default function DeepInspectWorkspace({
     if (typeof window === 'undefined' || !result) return;
     const payload = {
       source: 'Rate.vn Deep URL & Fake Discount Inspector',
-      query: queryInput.trim(),
+      query: sanitizeInspectQuery(queryInput),
       exportedAt: new Date().toISOString(),
       dealRadar: radarExportFields(radarSignal),
       dealRadarContext: {
@@ -329,8 +372,10 @@ export default function DeepInspectWorkspace({
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `rate-inspect-${master?.slug || 'audit'}.json`;
+    a.download = `rate-inspect-${sanitizeInspectDownloadSlug(master?.slug, 'audit')}.json`;
+    document.body.appendChild(a);
     a.click();
+    document.body.removeChild(a);
     URL.revokeObjectURL(url);
   };
 
