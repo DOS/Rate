@@ -1,0 +1,75 @@
+name: Incident report
+
+# The incident inbox for agents (DOS/Rate#1057). When CI fails on dev or main,
+# open an `incident` issue (or comment on the open one) with the run, commit
+# and failing jobs; when it passes again, close that issue. Agents treat an
+# open `incident` issue as their first priority (AGENTS.md).
+# workflow_run only fires for this file as it is on the default branch (dev).
+on:
+  workflow_run:
+    workflows: ['Verify Build & Typecheck (Zero-Strapi 2026)']
+    types: [completed]
+    branches: [dev, main]
+
+permissions:
+  actions: read
+  issues: write
+
+concurrency:
+  group: incident-${{ github.event.workflow_run.name }}-${{ github.event.workflow_run.head_branch }}
+  cancel-in-progress: false
+
+jobs:
+  report:
+    name: Open or close the incident issue
+    # Only branch pushes: pull request runs are reported on the PR itself.
+    if: github.event.workflow_run.event == 'push' && contains(fromJSON('["success","failure","timed_out"]'), github.event.workflow_run.conclusion)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      GH_TOKEN: ${{ github.token }}
+      REPO: ${{ github.repository }}
+      WORKFLOW: ${{ github.event.workflow_run.name }}
+      BRANCH: ${{ github.event.workflow_run.head_branch }}
+      CONCLUSION: ${{ github.event.workflow_run.conclusion }}
+      RUN_ID: ${{ github.event.workflow_run.id }}
+      RUN_URL: ${{ github.event.workflow_run.html_url }}
+      SHA: ${{ github.event.workflow_run.head_sha }}
+      COMMIT_TITLE: ${{ github.event.workflow_run.head_commit.message }}
+    steps:
+      - name: Open, update or close the incident
+        run: |
+          set -euo pipefail
+          title="incident: ${WORKFLOW} failing on ${BRANCH}"
+          subject="$(printf '%s' "${COMMIT_TITLE}" | head -n 1 | cut -c1-120)"
+          gh label create incident -R "$REPO" --color B60205 \
+            --description "Production or CI breakage: first priority for any free agent" 2>/dev/null || true
+          open=""
+          while IFS=$'\t' read -r num t; do
+            if [ "$t" = "$title" ]; then open="$num"; break; fi
+          done < <(gh issue list -R "$REPO" --state open --label incident --limit 50 \
+            --json number,title --jq '.[] | "\(.number)\t\(.title)"')
+
+          if [ "$CONCLUSION" = "success" ]; then
+            if [ -n "$open" ]; then
+              gh issue comment "$open" -R "$REPO" --body "Recovered: ${RUN_URL} passed on \`${SHA:0:8}\` (${subject})."
+              gh issue close "$open" -R "$REPO" --reason completed
+            fi
+            exit 0
+          fi
+
+          failing="$(gh run view "$RUN_ID" -R "$REPO" --json jobs \
+            --jq '[.jobs[] | select(.conclusion == "failure" or .conclusion == "timed_out") | .name] | join(", ")')"
+          body="$(printf '%s\n' \
+            "**${WORKFLOW}** ${CONCLUSION} on \`${BRANCH}\`." \
+            "" \
+            "- Run: ${RUN_URL}" \
+            "- Commit: \`${SHA:0:8}\` ${subject}" \
+            "- Failing jobs: ${failing:-unknown}" \
+            "" \
+            "Agents: this is the first priority (AGENTS.md). Claim it, find the breaking change, fix forward. The issue closes itself when the workflow passes on \`${BRANCH}\` again.")"
+          if [ -n "$open" ]; then
+            gh issue comment "$open" -R "$REPO" --body "$body"
+          else
+            gh issue create -R "$REPO" --title "$title" --label incident --body "$body"
+          fi
