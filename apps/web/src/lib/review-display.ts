@@ -14,6 +14,26 @@ import type {
  */
 export type ReviewBadgeKind = ReviewFlagCategory | 'pending';
 
+const VALID_REVIEW_FLAG_CATEGORIES = new Set<ReviewFlagCategory>([
+  'authentic',
+  'low_value_coin_spam',
+  'seeding_fake',
+  'competitor_sabotage',
+  'review_bombing',
+]);
+
+function parseDecimalReviewNumber(raw: unknown): number {
+  if (typeof raw === 'number') return raw;
+  if (typeof raw === 'string') {
+    const cleaned = raw.replace(/\p{Cc}+/gu, '').trim();
+    if (!cleaned || cleaned.length > 32 || /^[+-]?0[xbo]/i.test(cleaned)) {
+      return Number.NaN;
+    }
+    return Number(cleaned);
+  }
+  return Number.NaN;
+}
+
 export function isPendingReview(review: Pick<ReviewItem, 'verdict'>): boolean {
   return (
     Boolean(review && typeof review === 'object') &&
@@ -25,9 +45,12 @@ export function reviewBadgeKind(
   review: Pick<ReviewItem, 'verdict' | 'flag_category'>
 ): ReviewBadgeKind {
   if (!review || typeof review !== 'object') return 'authentic';
-  return isPendingReview(review)
-    ? 'pending'
-    : review.flag_category || 'authentic';
+  if (isPendingReview(review)) return 'pending';
+  const rawCat = review.flag_category;
+  return typeof rawCat === 'string' &&
+    VALID_REVIEW_FLAG_CATEGORIES.has(rawCat as ReviewFlagCategory)
+    ? (rawCat as ReviewFlagCategory)
+    : 'authentic';
 }
 
 /** Excluded from the rating because it was flagged, not because it is still pending. */
@@ -39,13 +62,7 @@ export function isFilteredOutReview(
 ): boolean {
   if (!review || typeof review !== 'object') return false;
   if (isPendingReview(review)) return false;
-  const rawWeight = review.helpfulness_weight;
-  const weight =
-    typeof rawWeight === 'number'
-      ? rawWeight
-      : typeof rawWeight === 'string' && String(rawWeight).trim()
-        ? Number(rawWeight)
-        : NaN;
+  const weight = parseDecimalReviewNumber(review.helpfulness_weight);
   return !review.include_in_rating || !Number.isFinite(weight) || weight <= 0;
 }
 
@@ -135,13 +152,7 @@ export function weightExplanationCopy(
         : '';
     return { text: cleanText };
   }
-  const rawWeightInput = breakdown.weight;
-  const rawWeight =
-    typeof rawWeightInput === 'number'
-      ? rawWeightInput
-      : typeof rawWeightInput === 'string' && String(rawWeightInput).trim()
-        ? Number(rawWeightInput)
-        : NaN;
+  const rawWeight = parseDecimalReviewNumber(breakdown.weight);
   const safeWeight = Number.isFinite(rawWeight)
     ? Math.max(0, Math.min(10, rawWeight))
     : 0;
@@ -198,8 +209,10 @@ const SUBMIT_ERROR_KEYS = new Map<string, SubmitErrorKey>([
  * UI never shows it directly.
  */
 export function submitErrorKey(code: unknown): SubmitErrorKey {
-  return (
-    (typeof code === 'string' && SUBMIT_ERROR_KEYS.get(code)) ||
-    'errSubmitFailed'
-  );
+  if (typeof code !== 'string') return 'errSubmitFailed';
+  const normalized = code
+    .replace(/\p{Cc}+/gu, '')
+    .trim()
+    .toUpperCase();
+  return SUBMIT_ERROR_KEYS.get(normalized) ?? 'errSubmitFailed';
 }

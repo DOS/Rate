@@ -137,13 +137,23 @@ export function resolveRevalidationTargets(input: RevalidationTargetsInput): {
   const tagSet = new Set<string>();
   const pathSet = new Set<string>();
 
+  const isSafeColonSegment = (seg: string): boolean =>
+    Boolean(seg) &&
+    /[a-z0-9]/i.test(seg) &&
+    !UNSAFE_CACHE_PARAM_KEYS.has(seg.toLowerCase()) &&
+    !/^(?:0+|null|undefined|nan|true|false|-+|_+|:+|\.+)$/i.test(seg);
+
   const rawTags = Array.isArray(safeInput.tags) ? safeInput.tags : [];
   for (const tag of rawTags.slice(0, 50)) {
     if (typeof tag !== 'string') continue;
     const clean = tag.trim().toLowerCase();
+    const suffix = clean.startsWith('rate:') ? clean.slice(5) : '';
+    const segments = suffix ? suffix.split(':') : [];
     if (
       clean &&
       SAFE_CACHE_TAG_REGEX.test(clean) &&
+      segments.length > 0 &&
+      segments.every(isSafeColonSegment) &&
       !/(?:^|:)\.\.?$|(?:^|:)[.:]+$/.test(clean)
     ) {
       tagSet.add(clean);
@@ -157,6 +167,7 @@ export function resolveRevalidationTargets(input: RevalidationTargetsInput): {
       !clean ||
       clean.length > 120 ||
       !SAFE_ENTITY_TOKEN_REGEX.test(clean) ||
+      !isSafeColonSegment(clean) ||
       clean.startsWith('.') ||
       clean.endsWith('.') ||
       clean.includes('..')
@@ -181,6 +192,7 @@ export function resolveRevalidationTargets(input: RevalidationTargetsInput): {
       !clean ||
       clean.length > 60 ||
       !SAFE_ENTITY_TOKEN_REGEX.test(clean) ||
+      !isSafeColonSegment(clean) ||
       clean.startsWith('.') ||
       clean.endsWith('.') ||
       clean.includes('..')
@@ -199,10 +211,13 @@ export function resolveRevalidationTargets(input: RevalidationTargetsInput): {
   for (const merchantId of rawMerchants.slice(0, 50)) {
     if (typeof merchantId !== 'string') continue;
     const clean = merchantId.trim();
+    const segments = clean ? clean.split(':') : [];
     if (
       !clean ||
       clean.length > 120 ||
       !SAFE_MERCHANT_IDENTIFIER_REGEX.test(clean) ||
+      segments.length === 0 ||
+      !segments.every(isSafeColonSegment) ||
       clean.startsWith('.') ||
       clean.endsWith('.') ||
       clean.startsWith(':') ||
