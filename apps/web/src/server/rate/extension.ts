@@ -313,6 +313,25 @@ export function canonicalizeProductUrl(rawUrl?: string | null): string | null {
     if (parsed.username !== '' || parsed.password !== '') {
       return null;
     }
+    const host = parsed.hostname.toLowerCase();
+    if (
+      !host ||
+      !host.includes('.') ||
+      host.startsWith('.') ||
+      host.endsWith('.') ||
+      host.includes('..') ||
+      host.startsWith('[') ||
+      /^\d+(?:\.\d+){3}$/.test(host) ||
+      host === 'localhost' ||
+      host.endsWith('.localhost') ||
+      host.endsWith('.local') ||
+      host.endsWith('.internal')
+    ) {
+      return null;
+    }
+    if (parsed.port !== '' && parsed.port !== '80' && parsed.port !== '443') {
+      return null;
+    }
     return `${parsed.origin}${parsed.pathname}`;
   } catch {
     return null;
@@ -368,6 +387,17 @@ export function detectPlatformFromInput(
       return null;
     }
     host = parsed.hostname.toLowerCase();
+    if (
+      !host ||
+      host.startsWith('.') ||
+      host.endsWith('.') ||
+      host.includes('..')
+    ) {
+      return null;
+    }
+    if (parsed.port !== '' && parsed.port !== '80' && parsed.port !== '443') {
+      return null;
+    }
   } catch {
     return null;
   }
@@ -399,16 +429,20 @@ export function detectAccessoryOrJunk(params: {
   url?: string | null;
   price?: number | null;
 }): { isAccessory: boolean; reason: string | null } {
+  const safeParams =
+    params && typeof params === 'object' && !Array.isArray(params)
+      ? params
+      : ({} as typeof params);
   const titleLower =
-    typeof params.title === 'string'
-      ? params.title
+    typeof safeParams.title === 'string'
+      ? safeParams.title
           .replace(/\p{Cc}+/gu, ' ')
           .trim()
           .toLowerCase()
       : '';
   const urlLower =
-    typeof params.url === 'string'
-      ? params.url
+    typeof safeParams.url === 'string'
+      ? safeParams.url
           .replace(/\p{Cc}+/gu, '')
           .trim()
           .toLowerCase()
@@ -431,13 +465,14 @@ export function detectAccessoryOrJunk(params: {
     : MINIMUM_DEVICE_PRICE_FLOOR_VND;
 
   if (
-    typeof params.price === 'number' &&
-    params.price > 0 &&
-    params.price < minFloor
+    typeof safeParams.price === 'number' &&
+    Number.isFinite(safeParams.price) &&
+    safeParams.price > 0 &&
+    safeParams.price < minFloor
   ) {
     return {
       isAccessory: true,
-      reason: `Mức giá (${params.price.toLocaleString('vi-VN')} ₫) thấp hơn ngưỡng tối thiểu của thiết bị chính hãng (${minFloor.toLocaleString('vi-VN')} ₫) - khả năng cao là phụ kiện hoặc linh kiện.`,
+      reason: `Mức giá (${safeParams.price.toLocaleString('vi-VN')} ₫) thấp hơn ngưỡng tối thiểu của thiết bị chính hãng (${minFloor.toLocaleString('vi-VN')} ₫) - khả năng cao là phụ kiện hoặc linh kiện.`,
     };
   }
 
@@ -498,8 +533,12 @@ export function extractStorageAndAmbiguity(params: {
     return Array.from(found).sort((a, b) => a - b);
   };
 
-  const variantText = sanitizeExtensionField(params.selectedVariant, 160);
-  const titleText = sanitizeExtensionField(params.title, 400);
+  const safeParams =
+    params && typeof params === 'object' && !Array.isArray(params)
+      ? params
+      : ({} as typeof params);
+  const variantText = sanitizeExtensionField(safeParams.selectedVariant, 160);
+  const titleText = sanitizeExtensionField(safeParams.title, 400);
 
   const variantCaps = variantText ? parseCapacities(variantText) : [];
   const titleCaps = titleText ? parseCapacities(titleText) : [];
@@ -562,7 +601,9 @@ export function evaluateExtensionPriceVerdict(params: {
   priceHistory: MasterProductPriceHistorySummary | null;
 }): ExtensionPriceAssessment {
   const safeParams =
-    params && typeof params === 'object' ? params : ({} as typeof params);
+    params && typeof params === 'object' && !Array.isArray(params)
+      ? params
+      : ({} as typeof params);
   const {
     isAccessory,
     accessoryReason,
@@ -1313,7 +1354,12 @@ export interface ExtensionCrowdIngestResult {
 export async function ingestExtensionCrowdSignal(
   input: ExtensionCrowdIngestInput
 ): Promise<ExtensionCrowdIngestResult> {
-  if (!input || typeof input !== 'object' || !input.userConsentOptIn) {
+  if (
+    !input ||
+    typeof input !== 'object' ||
+    Array.isArray(input) ||
+    !input.userConsentOptIn
+  ) {
     return {
       accepted: false,
       quarantinedForWorker: false,
@@ -1414,12 +1460,19 @@ export async function ingestExtensionCrowdSignal(
   }
 
   const SAFE_EXTERNAL_ID_REGEX = /^[a-zA-Z0-9._-]{1,128}$/;
+  const isValidExternalEntityId = (val: string): boolean =>
+    SAFE_EXTERNAL_ID_REGEX.test(val) &&
+    /[a-zA-Z0-9]/.test(val) &&
+    !val.startsWith('.') &&
+    !val.endsWith('.') &&
+    !val.includes('..') &&
+    !/^(?:0|null|undefined|nan|infinity|-infinity|true|false)$/i.test(val);
   const rawCleanItemId = sanitizeExtensionField(input.externalItemId, 128);
-  const cleanItemId = SAFE_EXTERNAL_ID_REGEX.test(rawCleanItemId)
+  const cleanItemId = isValidExternalEntityId(rawCleanItemId)
     ? rawCleanItemId
     : '';
   const rawCleanShopId = sanitizeExtensionField(input.externalShopId, 128);
-  const cleanShopId = SAFE_EXTERNAL_ID_REGEX.test(rawCleanShopId)
+  const cleanShopId = isValidExternalEntityId(rawCleanShopId)
     ? rawCleanShopId
     : '';
   if (!cleanItemId || (rawCleanShopId !== '' && !cleanShopId)) {

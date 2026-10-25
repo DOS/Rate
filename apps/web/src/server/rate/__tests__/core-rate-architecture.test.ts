@@ -11274,6 +11274,100 @@ async function runCoreArchitectureSuite() {
       ['Apple', 'Samsung']
     );
 
+    const {
+      canonicalizeProductUrl,
+      detectPlatformFromInput,
+      detectAccessoryOrJunk,
+      extractStorageAndAmbiguity,
+      ingestExtensionCrowdSignal,
+      normalizeDealRadarOptions,
+      computeCrossPlatformDealRadarFromData,
+    } = await import('@/server/rate');
+
+    assert.equal(canonicalizeProductUrl('https://localhost/p/123'), null);
+    assert.equal(canonicalizeProductUrl('https://127.0.0.1/p/123'), null);
+    assert.equal(canonicalizeProductUrl('https://[::1]/p/123'), null);
+    assert.equal(
+      canonicalizeProductUrl('https://shopee.vn:8443/i.123.456'),
+      null
+    );
+    assert.equal(canonicalizeProductUrl('https://shopee..vn/i.123.456'), null);
+    assert.equal(
+      canonicalizeProductUrl('https://shopee.vn/i.123.456?sp_atk=abc'),
+      'https://shopee.vn/i.123.456'
+    );
+
+    assert.equal(
+      detectPlatformFromInput(null, 'https://shopee.vn:8443/i.123.456'),
+      null
+    );
+    assert.equal(
+      detectPlatformFromInput(null, 'https://.shopee.vn/i.123.456'),
+      null
+    );
+    assert.equal(
+      detectPlatformFromInput(null, 'https://shopee.vn/i.123.456'),
+      'shopee'
+    );
+
+    assert.deepEqual(detectAccessoryOrJunk(null as never), {
+      isAccessory: false,
+      reason: null,
+    });
+    assert.equal(extractStorageAndAmbiguity([] as never).storageGb, null);
+
+    for (const badId of ['...', '0', 'null', 'NaN', '.123', '123.']) {
+      const res = await ingestExtensionCrowdSignal({
+        userConsentOptIn: true,
+        platform: 'shopee',
+        url: 'https://shopee.vn/Apple-iPhone-16-i.88019283.24918273645',
+        title: 'Apple iPhone 16 128GB',
+        price: 21_990_000,
+        externalItemId: badId,
+      });
+      assert.equal(res.accepted, false);
+      assert.equal(res.jobState, 'rejected_invalid_url');
+    }
+
+    assert.equal(
+      normalizeDealRadarOptions({ platform: '---' }).platformFilter,
+      'all'
+    );
+    assert.equal(normalizeDealRadarOptions([] as never).platformFilter, 'all');
+
+    const radar = computeCrossPlatformDealRadarFromData([
+      {
+        master: {
+          id: 'mp-1',
+          slug: 'iphone-16',
+          name: 'iPhone 16',
+          brand: 'Apple',
+          category_slug: 'smartphones',
+        } as never,
+        offers: [
+          {
+            id: 'o1',
+            platform: 'shopee',
+            price_current: 20_000_000,
+            price_original: 22_000_000,
+            url: 'javascript:alert(1)',
+            merchant: { id: 'm1', name: 'Shop A', is_official: true },
+          } as never,
+          {
+            id: 'o2',
+            platform: 'lazada',
+            price_current: 24_000_000,
+            price_original: 30_000_000,
+            url: 'https://www.lazada.vn:8443/products/i123.html',
+            merchant: { id: 'm2', name: 'Shop B', is_official: true },
+          } as never,
+        ],
+      },
+    ]);
+    assert.equal(radar.genuineDeals[0]?.offerUrl, '');
+    assert.equal(radar.priceSpreadLeaders[0]?.cheapestOfferUrl, '');
+    assert.equal(radar.fakeSaleTraps[0]?.offerUrl, '');
+
     console.log(
       '  ✅ [121/121] API Handler URL/Slug/Vote Guards & OpenAPI Server Origin Bounds (#978) passed'
     );
