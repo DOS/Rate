@@ -529,7 +529,13 @@ export function extractStorageAndAmbiguity(params: {
 }
 
 function computeMedian(values: number[]): number {
-  const valid = values.filter((v) => Number.isFinite(v) && v > 0);
+  const valid = (Array.isArray(values) ? values : []).filter(
+    (v) =>
+      typeof v === 'number' &&
+      Number.isFinite(v) &&
+      v > 0 &&
+      v <= MAX_VALID_VND_PRICE
+  );
   if (valid.length === 0) return 0;
   const sorted = [...valid].sort((a, b) => a - b);
   const mid = Math.floor(sorted.length / 2);
@@ -555,6 +561,8 @@ export function evaluateExtensionPriceVerdict(params: {
   observedOfferId?: string | null;
   priceHistory: MasterProductPriceHistorySummary | null;
 }): ExtensionPriceAssessment {
+  const safeParams =
+    params && typeof params === 'object' ? params : ({} as typeof params);
   const {
     isAccessory,
     accessoryReason,
@@ -564,7 +572,8 @@ export function evaluateExtensionPriceVerdict(params: {
     offers,
     observedOfferId,
     priceHistory,
-  } = params;
+  } = safeParams;
+  const safeOffers = Array.isArray(offers) ? offers : [];
 
   if (isAccessory) {
     return {
@@ -589,10 +598,16 @@ export function evaluateExtensionPriceVerdict(params: {
 
   // The market reference leaves bait-price listings out, whichever caller
   // (extension lookup or the inspect API) passes the offers (DOS/Rate#797).
-  const marketOffers = plausibleOffers(offers);
+  const marketOffers = plausibleOffers(safeOffers);
   const offerPrices = marketOffers
     .map((o) => o.price_current)
-    .filter((p) => Number.isFinite(p) && p > 0 && p <= MAX_VALID_VND_PRICE);
+    .filter(
+      (p) =>
+        typeof p === 'number' &&
+        Number.isFinite(p) &&
+        p > 0 &&
+        p <= MAX_VALID_VND_PRICE
+    );
 
   const marketMinPrice =
     offerPrices.length > 0 ? Math.min(...offerPrices) : null;
@@ -601,8 +616,22 @@ export function evaluateExtensionPriceVerdict(params: {
   const marketMedianPrice =
     offerPrices.length > 0 ? computeMedian(offerPrices) : null;
 
-  const historicalMinPrice = priceHistory?.lowestEverPrice ?? marketMinPrice;
-  const historicalMaxPrice = priceHistory?.highestEverPrice ?? marketMaxPrice;
+  const rawHistMin = priceHistory?.lowestEverPrice;
+  const historicalMinPrice =
+    typeof rawHistMin === 'number' &&
+    Number.isFinite(rawHistMin) &&
+    rawHistMin > 0 &&
+    rawHistMin <= MAX_VALID_VND_PRICE
+      ? rawHistMin
+      : marketMinPrice;
+  const rawHistMax = priceHistory?.highestEverPrice;
+  const historicalMaxPrice =
+    typeof rawHistMax === 'number' &&
+    Number.isFinite(rawHistMax) &&
+    rawHistMax > 0 &&
+    rawHistMax <= MAX_VALID_VND_PRICE
+      ? rawHistMax
+      : marketMaxPrice;
 
   if (isAmbiguousVariant) {
     return {
@@ -630,8 +659,8 @@ export function evaluateExtensionPriceVerdict(params: {
   // against every other offer, as the offers table judges each row, so the
   // two never disagree about a listing.
   const otherOffers = observedOfferId
-    ? offers.filter((o) => o.id !== observedOfferId)
-    : offers;
+    ? safeOffers.filter((o) => o && o.id !== observedOfferId)
+    : safeOffers;
   if (observedPrice && isImplausiblyLowPrice(observedPrice, otherOffers)) {
     return {
       verdict: 'insufficient_data',
@@ -1284,7 +1313,7 @@ export interface ExtensionCrowdIngestResult {
 export async function ingestExtensionCrowdSignal(
   input: ExtensionCrowdIngestInput
 ): Promise<ExtensionCrowdIngestResult> {
-  if (!input.userConsentOptIn) {
+  if (!input || typeof input !== 'object' || !input.userConsentOptIn) {
     return {
       accepted: false,
       quarantinedForWorker: false,
@@ -1384,9 +1413,16 @@ export async function ingestExtensionCrowdSignal(
     rpcClient = getRateClient();
   }
 
-  const cleanItemId = sanitizeExtensionField(input.externalItemId, 128);
-  const cleanShopId = sanitizeExtensionField(input.externalShopId, 128);
-  if (!cleanItemId) {
+  const SAFE_EXTERNAL_ID_REGEX = /^[a-zA-Z0-9._-]{1,128}$/;
+  const rawCleanItemId = sanitizeExtensionField(input.externalItemId, 128);
+  const cleanItemId = SAFE_EXTERNAL_ID_REGEX.test(rawCleanItemId)
+    ? rawCleanItemId
+    : '';
+  const rawCleanShopId = sanitizeExtensionField(input.externalShopId, 128);
+  const cleanShopId = SAFE_EXTERNAL_ID_REGEX.test(rawCleanShopId)
+    ? rawCleanShopId
+    : '';
+  if (!cleanItemId || (rawCleanShopId !== '' && !cleanShopId)) {
     return {
       accepted: false,
       quarantinedForWorker: false,
