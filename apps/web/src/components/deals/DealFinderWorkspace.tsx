@@ -13,6 +13,7 @@ import type { MasterProduct } from '@repo/shared-data';
 import {
   type CanonicalCategorySlug,
   getMasterProductCategorySlug,
+  MAX_VALID_VND_PRICE,
 } from '@/lib/rate-domain';
 import {
   scoreMasterProductForLeaderboard,
@@ -43,8 +44,109 @@ interface DealFinderWorkspaceProps {
 // 30,000px column on phones (DOS/Rate#633).
 const DEALS_PAGE_SIZE = 12;
 
-type PersonaKey =
+export type PersonaKey =
   'default' | 'value_hunter' | 'photography' | 'gaming' | 'endurance';
+
+export function rankProductsForDealFinder(
+  products: readonly MasterProduct[],
+  options: {
+    readonly categoryFilter: CanonicalCategorySlug | 'all';
+    readonly persona: PersonaKey;
+    readonly maxBudgetVnd: number;
+    readonly searchQuery: string;
+  }
+) {
+  const { categoryFilter, persona, maxBudgetVnd, searchQuery } = options;
+  const safeBudget =
+    Number.isFinite(maxBudgetVnd) && maxBudgetVnd > 0
+      ? Math.min(MAX_VALID_VND_PRICE, maxBudgetVnd)
+      : MAX_VALID_VND_PRICE;
+  const q =
+    typeof searchQuery === 'string' ? searchQuery.trim().toLowerCase() : '';
+  const scored: Array<
+    Omit<ScoredLeaderboardItem, 'rank'> & {
+      personaScore5: number;
+      spreadSavingsVnd: number;
+      costPerPointVnd: number;
+    }
+  > = [];
+
+  if (!Array.isArray(products)) return [];
+
+  for (const p of products) {
+    if (!p || typeof p !== 'object') continue;
+    const cat = getMasterProductCategorySlug(p);
+    if (categoryFilter !== 'all' && cat !== categoryFilter) continue;
+    const rawMinP = Number(p.min_price);
+    if (
+      !Number.isFinite(rawMinP) ||
+      rawMinP <= 0 ||
+      rawMinP > MAX_VALID_VND_PRICE ||
+      rawMinP > safeBudget
+    ) {
+      continue;
+    }
+    const minP = Math.round(rawMinP);
+    const nameLower = typeof p.name === 'string' ? p.name.toLowerCase() : '';
+    const brandLower = typeof p.brand === 'string' ? p.brand.toLowerCase() : '';
+    if (q && !nameLower.includes(q) && !brandLower.includes(q)) {
+      continue;
+    }
+
+    const item = scoreMasterProductForLeaderboard(p);
+    const c = item.criteria;
+    let personaScore5 = item.combinedScore5;
+    if (persona === 'value_hunter') {
+      personaScore5 = Number(
+        (item.combinedScore5 * 0.45 + c.value * 0.55).toFixed(2)
+      );
+    } else if (persona === 'photography') {
+      personaScore5 = Number(
+        (item.combinedScore5 * 0.4 + c.camera * 0.6).toFixed(2)
+      );
+    } else if (persona === 'gaming') {
+      personaScore5 = Number(
+        (item.combinedScore5 * 0.4 + c.performance * 0.6).toFixed(2)
+      );
+    } else if (persona === 'endurance') {
+      personaScore5 = Number(
+        (item.combinedScore5 * 0.4 + c.battery * 0.6).toFixed(2)
+      );
+    }
+
+    const rawMaxP = Number(p.max_price);
+    const maxP =
+      Number.isFinite(rawMaxP) &&
+      rawMaxP >= minP &&
+      rawMaxP <= MAX_VALID_VND_PRICE
+        ? Math.round(rawMaxP)
+        : minP;
+    const spreadSavingsVnd = Math.max(0, maxP - minP);
+    const combinedScore10 = item.combinedScore5 * 2;
+    const costPerPointVnd =
+      combinedScore10 > 0 ? Math.round(minP / combinedScore10) : 0;
+
+    scored.push({
+      ...item,
+      minPrice: minP,
+      personaScore5,
+      spreadSavingsVnd,
+      costPerPointVnd,
+    });
+  }
+
+  scored.sort((a, b) => {
+    if (b.personaScore5 !== a.personaScore5) {
+      return b.personaScore5 - a.personaScore5;
+    }
+    return a.minPrice - b.minPrice;
+  });
+
+  return scored.map((item, idx) => ({
+    ...item,
+    rank: idx + 1,
+  }));
+}
 
 export default function DealFinderWorkspace({
   products,
@@ -112,14 +214,14 @@ export default function DealFinderWorkspace({
   ];
 
   const filteredGenuineDeals = useMemo<CrossPlatformDealRadarItem[]>(() => {
-    if (!dealRadar) return [];
+    if (!dealRadar || !Array.isArray(dealRadar.genuineDeals)) return [];
     return dealRadar.genuineDeals.filter(
       (item) => categoryFilter === 'all' || item.categorySlug === categoryFilter
     );
   }, [dealRadar, categoryFilter]);
 
   const filteredFakeSaleTraps = useMemo<CrossPlatformDealRadarItem[]>(() => {
-    if (!dealRadar) return [];
+    if (!dealRadar || !Array.isArray(dealRadar.fakeSaleTraps)) return [];
     return dealRadar.fakeSaleTraps.filter(
       (item) => categoryFilter === 'all' || item.categorySlug === categoryFilter
     );
@@ -265,76 +367,16 @@ export default function DealFinderWorkspace({
     URL.revokeObjectURL(url);
   };
 
-  const rankedDeals = useMemo(() => {
-    const q = searchQuery.trim().toLowerCase();
-    const scored: Array<
-      Omit<ScoredLeaderboardItem, 'rank'> & {
-        personaScore5: number;
-        spreadSavingsVnd: number;
-        costPerPointVnd: number;
-      }
-    > = [];
-
-    for (const p of products) {
-      const cat = getMasterProductCategorySlug(p);
-      if (categoryFilter !== 'all' && cat !== categoryFilter) continue;
-      const minP = Number(p.min_price || 0);
-      if (minP <= 0 || minP > maxBudgetVnd) continue;
-      if (
-        q &&
-        !p.name.toLowerCase().includes(q) &&
-        !p.brand.toLowerCase().includes(q)
-      ) {
-        continue;
-      }
-
-      const item = scoreMasterProductForLeaderboard(p);
-      const c = item.criteria;
-      let personaScore5 = item.combinedScore5;
-      if (persona === 'value_hunter') {
-        personaScore5 = Number(
-          (item.combinedScore5 * 0.45 + c.value * 0.55).toFixed(2)
-        );
-      } else if (persona === 'photography') {
-        personaScore5 = Number(
-          (item.combinedScore5 * 0.4 + c.camera * 0.6).toFixed(2)
-        );
-      } else if (persona === 'gaming') {
-        personaScore5 = Number(
-          (item.combinedScore5 * 0.4 + c.performance * 0.6).toFixed(2)
-        );
-      } else if (persona === 'endurance') {
-        personaScore5 = Number(
-          (item.combinedScore5 * 0.4 + c.battery * 0.6).toFixed(2)
-        );
-      }
-
-      const maxP = Number(p.max_price || minP);
-      const spreadSavingsVnd = Math.max(0, maxP - minP);
-      const combinedScore10 = item.combinedScore5 * 2;
-      const costPerPointVnd =
-        combinedScore10 > 0 ? Math.round(minP / combinedScore10) : minP;
-
-      scored.push({
-        ...item,
-        personaScore5,
-        spreadSavingsVnd,
-        costPerPointVnd,
-      });
-    }
-
-    scored.sort((a, b) => {
-      if (b.personaScore5 !== a.personaScore5) {
-        return b.personaScore5 - a.personaScore5;
-      }
-      return a.minPrice - b.minPrice;
-    });
-
-    return scored.map((item, idx) => ({
-      ...item,
-      rank: idx + 1,
-    }));
-  }, [products, categoryFilter, persona, maxBudgetVnd, searchQuery]);
+  const rankedDeals = useMemo(
+    () =>
+      rankProductsForDealFinder(products, {
+        categoryFilter,
+        persona,
+        maxBudgetVnd,
+        searchQuery,
+      }),
+    [products, categoryFilter, persona, maxBudgetVnd, searchQuery]
+  );
 
   const handleCopyDealsMarkdown = async () => {
     if (typeof window === 'undefined' || rankedDeals.length === 0) return;
@@ -391,7 +433,7 @@ export default function DealFinderWorkspace({
       d.expertScore10 != null ? d.expertScore10.toFixed(1) : '',
       d.minPrice,
       d.spreadSavingsVnd,
-      d.costPerPointVnd,
+      d.costPerPointVnd > 0 ? d.costPerPointVnd : '',
       `${window.location.origin}${d.productHref}`,
       ...radarCsvCells(getRadarSignal(radarIndex, d.slug)),
     ]);
@@ -839,13 +881,15 @@ export default function DealFinderWorkspace({
                         </Link>
                         <div className="text-danger fw-bold rate-tabular mt-1">
                           {deal.minPrice.toLocaleString('vi-VN')} ₫{' '}
-                          <span className="text-secondary small fw-normal">
-                            {t('costPerPointSub', {
-                              cost: deal.costPerPointVnd.toLocaleString(
-                                'vi-VN'
-                              ),
-                            })}
-                          </span>
+                          {deal.costPerPointVnd > 0 && (
+                            <span className="text-secondary small fw-normal">
+                              {t('costPerPointSub', {
+                                cost: deal.costPerPointVnd.toLocaleString(
+                                  'vi-VN'
+                                ),
+                              })}
+                            </span>
+                          )}
                         </div>
                       </div>
                     </div>
