@@ -2603,6 +2603,98 @@ async function run() {
     'EntityMatcher.resolveOrCreateMasterProduct must reject array candidates'
   );
 
+  // DOS/Rate#961: ArenaSpecSyncer URL port/hostname guards, control-char countPopulatedFieldGroups, auditCatalogAgainstArenaRegistry row guard, and shopee-to-supabase array guards
+  const { ArenaSpecSyncer } = await import('./arena-spec-syncer.js');
+  const { platformReviewIdFor: platformReviewIdFor961 } = await import('./shopee-to-supabase.js');
+
+  const arenaParsed961 = parseGsmArenaHtmlToSpecs(
+    '<h1 data-spec="modelname">Apple iPhone 18 Pro</h1>',
+    {
+      gsmarenaUrl: 'https://www.gsmarena.com:8443/apple_iphone_18_pro-14209.php',
+      phonearenaUrl: 'https://www.phonearena.com./phones/Apple-iPhone-18-Pro_id12539',
+    }
+  );
+  assert.equal(
+    arenaParsed961.gsmarenaUrl,
+    undefined,
+    'normalizeArenaUrl must reject non-standard ports'
+  );
+  assert.equal(
+    arenaParsed961.phonearenaUrl,
+    undefined,
+    'normalizeArenaUrl must reject trailing-dot hostnames'
+  );
+  assert.equal(
+    countPopulatedFieldGroups({
+      display: { type: ' ' },
+    }),
+    0,
+    'countPopulatedFieldGroups must treat control-character-only strings as unpopulated'
+  );
+  const syncer961 = new ArenaSpecSyncer();
+  const auditReport961 = await syncer961.auditCatalogAgainstArenaRegistry({
+    from: () => ({
+      select: () => ({
+        order: () => ({
+          range: async (from: number) => ({
+            data:
+              from === 0
+                ? ([
+                    null,
+                    ['array-row'],
+                    {
+                      id: 'm-961',
+                      name: 'Xiaomi 18 Pro Max 512GB',
+                      slug: 'xiaomi-18-pro-max-512gb',
+                      model_key: 'xiaomi:18-pro-max:512gb',
+                      specifications: {},
+                    },
+                  ] as never)
+                : [],
+            error: null,
+          }),
+        }),
+      }),
+    }),
+  });
+  assert.equal(auditReport961.incompleteSpecMasters.length, 1);
+  assert.equal(auditReport961.incompleteSpecMasters[0]?.id, 'm-961');
+
+  assert.match(
+    platformReviewIdFor961([] as never),
+    /^rv-[0-9a-f]{64}$/,
+    'platformReviewIdFor must safely hash fallback when passed an array'
+  );
+  const normalizedPrices961 = normalizeScrapedProductPrices({
+    itemId: '123456',
+    title: 'iPhone 16 Pro Max 256GB',
+    priceMin: 28_990_000,
+    priceMax: 28_990_000,
+    currency: 'VND',
+    historicalSold: 10,
+    ratingStar: 4.9,
+    ratingCount: 5,
+    images: [],
+    models: [['invalid-array-model'] as never, { name: '256GB', price: 28_990_000 }],
+    attributes: [],
+    shop: [] as never,
+    reviews: [
+      ['invalid-array-review'] as never,
+      {
+        author: 'u1',
+        ratingStar: 5,
+        comment: 'good',
+        images: [],
+        reviewer: [] as never,
+      },
+    ],
+    url: 'https://shopee.vn/product-i.1.123456',
+  } as never);
+  assert.equal(normalizedPrices961.models.length, 1);
+  assert.equal(normalizedPrices961.reviews.length, 1);
+  assert.equal(normalizedPrices961.reviews[0]?.reviewer, undefined);
+  assert.equal(normalizedPrices961.shop.url, undefined);
+
   console.log(
     `✅ [P2/P3 Trust Model & #292/#352/#356/#359/#379/#382/#401/#497/#514/#522/#528/#557/#834/#836/#882/#908/#954] Voter weight, Wilson lower bound (50/52=${wilson50of52} > 1/1=${wilson1of1}), shingle copy seeding (sim=${shingleSim}), affiliate shortlinks, peer floor, ArenaSpecSyncer, Importer & ReviewAnalyzer hardening (#352, #356, #359, #379, #382, #401, #497, #514, #522, #528, #557, #834, #836, #882, #908, #954) verified`
   );

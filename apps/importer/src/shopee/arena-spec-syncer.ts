@@ -97,10 +97,15 @@ function normalizeArenaUrl(
   }
   try {
     const parsed = baseOrigin ? new URL(trimmed, baseOrigin) : new URL(trimmed);
+    const hostname = parsed.hostname.toLowerCase();
     if (
       (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') ||
       Boolean(parsed.username || parsed.password) ||
-      !hostPattern.test(parsed.hostname)
+      (parsed.port !== '' && parsed.port !== '80' && parsed.port !== '443') ||
+      !hostname ||
+      hostname.startsWith('.') ||
+      hostname.endsWith('.') ||
+      !hostPattern.test(hostname)
     ) {
       return undefined;
     }
@@ -615,7 +620,7 @@ function isPopulatedSpecFieldValue(
 ): boolean {
   if (v === null || v === undefined || depth > 8) return false;
   if (typeof v === 'number') return Number.isFinite(v);
-  if (typeof v === 'string') return v.trim().length > 0;
+  if (typeof v === 'string') return v.replace(/\p{Cc}+/gu, '').trim().length > 0;
   if (typeof v === 'boolean') return true;
   if (typeof v === 'object') {
     if (seen.has(v)) return false;
@@ -724,6 +729,7 @@ export class ArenaSpecSyncer {
     const incompleteSpecMasters: ArenaCatalogAuditReport['incompleteSpecMasters'] = [];
 
     for (const r of rows) {
+      if (!r || typeof r !== 'object' || Array.isArray(r)) continue;
       if (r.model_key) {
         const cleanedKey = String(r.model_key)
           .replace(/\p{Cc}+/gu, '')
