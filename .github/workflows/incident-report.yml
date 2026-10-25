@@ -13,6 +13,7 @@ on:
 
 permissions:
   actions: read
+  contents: read
   issues: write
 
 concurrency:
@@ -23,7 +24,9 @@ jobs:
   report:
     name: Open or close the incident issue
     # Only branch pushes: pull request runs are reported on the PR itself.
-    if: github.event.workflow_run.event == 'push' && contains(fromJSON('["success","failure","timed_out"]'), github.event.workflow_run.conclusion)
+    # `cancelled` counts as a failure: CI never cancels a push run itself, so
+    # it means a job hit its timeout (or someone stopped a hung run).
+    if: github.event.workflow_run.event == 'push' && contains(fromJSON('["success","failure","timed_out","cancelled"]'), github.event.workflow_run.conclusion)
     runs-on: ubuntu-latest
     timeout-minutes: 5
     env:
@@ -40,15 +43,29 @@ jobs:
       - name: Open, update or close the incident
         run: |
           set -euo pipefail
+          # Events can arrive out of order: only the run of the branch's
+          # current head speaks for the branch, so a stale failure never
+          # reopens an incident a newer run has closed.
+          head="$(gh api "repos/${REPO}/commits/${BRANCH}" --jq .sha)"
+          if [ "$head" != "$SHA" ]; then
+            echo "Run is for ${SHA:0:8}, ${BRANCH} is at ${head:0:8} now: skipped."
+            exit 0
+          fi
+
           title="incident: ${WORKFLOW} failing on ${BRANCH}"
-          subject="$(printf '%s' "${COMMIT_TITLE}" | head -n 1 | cut -c1-120)"
+          # Untrusted text, shown as inline code so its @mentions and #refs
+          # ping or link nothing (backticks removed so it cannot close the span).
+          subject="\`$(printf '%s' "${COMMIT_TITLE}" | head -n 1 | cut -c1-120 | tr -d '\`')\`"
           gh label create incident -R "$REPO" --color B60205 \
             --description "Production or CI breakage: first priority for any free agent" 2>/dev/null || true
+          # Read the list first so an API error fails the step (pipefail does
+          # not cover process substitution) instead of creating a duplicate.
+          list="$(gh issue list -R "$REPO" --state open --label incident --limit 50 \
+            --json number,title --jq '.[] | "\(.number)\t\(.title)"')"
           open=""
           while IFS=$'\t' read -r num t; do
             if [ "$t" = "$title" ]; then open="$num"; break; fi
-          done < <(gh issue list -R "$REPO" --state open --label incident --limit 50 \
-            --json number,title --jq '.[] | "\(.number)\t\(.title)"')
+          done <<< "$list"
 
           if [ "$CONCLUSION" = "success" ]; then
             if [ -n "$open" ]; then
@@ -59,7 +76,7 @@ jobs:
           fi
 
           failing="$(gh run view "$RUN_ID" -R "$REPO" --json jobs \
-            --jq '[.jobs[] | select(.conclusion == "failure" or .conclusion == "timed_out") | .name] | join(", ")')"
+            --jq '[.jobs[] | select(.conclusion == "failure" or .conclusion == "timed_out" or .conclusion == "cancelled") | .name] | join(", ")')"
           body="$(printf '%s\n' \
             "**${WORKFLOW}** ${CONCLUSION} on \`${BRANCH}\`." \
             "" \
