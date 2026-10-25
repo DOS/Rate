@@ -385,6 +385,7 @@
     "brandFilterLabel": "Hãng",
     "brandFilterAria": "Lọc theo thương hiệu",
     "priceAll": "Mọi tầm giá",
+    "priceSegmentAria": "Lọc theo tầm giá",
     "priceUnder15": "Dưới 15 triệu",
     "price15to25": "15 - 25 triệu",
     "priceOver25": "Trên 25 triệu",

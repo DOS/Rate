@@ -385,6 +385,7 @@
     "brandFilterLabel": "Brand",
     "brandFilterAria": "Filter by brand",
     "priceAll": "All price tiers",
+    "priceSegmentAria": "Filter by price range",
     "priceUnder15": "Under 15M VND",
     "price15to25": "15M - 25M VND",
     "priceOver25": "Over 25M VND",

@@ -385,6 +385,7 @@
     "brandFilterLabel": "Značka",
     "brandFilterAria": "Filtrovat podle značky",
     "priceAll": "Všechny cenové hladiny",
+    "priceSegmentAria": "Filtrovat podle ceny",
     "priceUnder15": "Do 15M VND",
     "price15to25": "15M - 25M VND",
     "priceOver25": "Nad 25M VND",
