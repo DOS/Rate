@@ -2728,6 +2728,80 @@ async function runTests() {
     );
   }
 
+  // Lookup Entity ID Validation & Offer URL Matching (#1006)
+  {
+    const extServerMod = await import('../../web/src/server/rate/extension.js');
+    const {
+      isValidExternalEntityId,
+      buildCandidateExternalItemIds,
+      doesOfferUrlMatchCandidateIds,
+    } = (
+      'isValidExternalEntityId' in extServerMod
+        ? extServerMod
+        : (extServerMod as unknown as { default: typeof extServerMod }).default
+    ) as typeof extServerMod;
+
+    assert.equal(isValidExternalEntityId('0'), false);
+    assert.equal(isValidExternalEntityId('000'), false);
+    assert.equal(isValidExternalEntityId('null'), false);
+    assert.equal(isValidExternalEntityId('..bad'), false);
+    assert.equal(isValidExternalEntityId('bad id'), false);
+    assert.equal(isValidExternalEntityId('12345678'), true);
+
+    assert.deepEqual(
+      buildCandidateExternalItemIds({
+        externalId: '000',
+        shopId: 'null',
+        platform: 'shopee',
+      }),
+      []
+    );
+    assert.deepEqual(
+      buildCandidateExternalItemIds({
+        externalId: '111222_000',
+        shopId: null,
+        platform: 'shopee',
+      }),
+      ['111222_000']
+    );
+    assert.deepEqual(
+      buildCandidateExternalItemIds({
+        externalId: '987654321',
+        shopId: '123456',
+        platform: 'shopee',
+      }),
+      ['987654321', '123456_987654321']
+    );
+    assert.deepEqual(
+      buildCandidateExternalItemIds({
+        externalId: 'iphone-16-pro-max',
+        shopId: null,
+        platform: 'cellphones',
+      }),
+      ['iphone-16-pro-max', 'cps-iphone-16-pro-max']
+    );
+
+    // Prevent domain/scheme or short token false-positive matches in offer URLs
+    assert.equal(
+      doesOfferUrlMatchCandidateIds(
+        'https://shopee.vn/product/123456/987654321',
+        ['shopee.vn', 'https', '12']
+      ),
+      false
+    );
+    assert.equal(
+      doesOfferUrlMatchCandidateIds(
+        'https://shopee.vn/product/123456/987654321',
+        ['987654321']
+      ),
+      true
+    );
+
+    console.log(
+      '  \u2705 [Lookup Entity ID Validation & Offer URL Matching (#1006)] Verified'
+    );
+  }
+
   console.log('🎉 All Rate Browser Extension MV3 v2 tests passed!');
 }
 
