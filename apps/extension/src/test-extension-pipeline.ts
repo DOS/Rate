@@ -2627,6 +2627,107 @@ async function runTests() {
     );
   }
 
+  // --- DOS/Rate#1004: security-guards URL/ID/sparkline bounds & ecommerce-detector IDs ---
+  {
+    const { sanitizeExtensionProductSignal, filterValidSparklinePrices } =
+      await import('./security-guards.js');
+
+    assert.equal(
+      normalizeAllowedApiBaseUrl('https://user:pass@rate.vn'),
+      DEFAULT_API_BASE_URL
+    );
+    assert.equal(
+      normalizeAllowedApiBaseUrl('https://rate.vn/extra/path'),
+      DEFAULT_API_BASE_URL
+    );
+    assert.equal(
+      normalizeAllowedApiBaseUrl('https://rate.vn?evil=1'),
+      DEFAULT_API_BASE_URL
+    );
+    assert.equal(
+      normalizeAllowedApiBaseUrl('https://www.rate.vn/'),
+      'https://www.rate.vn'
+    );
+
+    const badSig = sanitizeExtensionProductSignal({
+      platform: 'shopee',
+      canonicalUrl: 'https://shopee..vn/item-i.1.2',
+      externalItemId: '000',
+      externalShopId: 'null',
+      title: 'iPhone 16',
+      selectedVariant: null,
+      price: 25_000_000,
+      originalPrice: null,
+      ratingStar: null,
+      ratingCount: null,
+    });
+    assert.equal(badSig.canonicalUrl, '');
+    assert.equal(badSig.externalItemId, null);
+    assert.equal(badSig.externalShopId, null);
+
+    assert.equal(
+      escapeSafeExternalHref('https://shopee..vn/item', 'https://rate.vn'),
+      'https://rate.vn'
+    );
+    assert.equal(
+      escapeSafeExternalHref(
+        'https://shopee.vn/item with space',
+        'https://rate.vn'
+      ),
+      'https://rate.vn'
+    );
+
+    assert.deepEqual(
+      filterValidSparklinePrices([
+        { price: true as unknown as number },
+        null as never,
+        [] as never,
+        { price: 24_990_000 },
+      ]),
+      [24_990_000]
+    );
+
+    assert.equal(sanitizeProductUrl('https://shopee..vn/item-i.1.2'), null);
+    assert.equal(sanitizeProductUrl('https://shopee.vn:8443/item-i.1.2'), null);
+    assert.equal(
+      detectEcommercePlatform('https://shopee..vn/item-i.1.2'),
+      null
+    );
+    assert.equal(
+      detectEcommercePlatform('https://shopee.vn:8443/item-i.1.2'),
+      null
+    );
+
+    assert.deepEqual(
+      extractIdsFromUrl('shopee', 'https://shopee.vn/item-i.0.000'),
+      {
+        externalItemId: null,
+        externalShopId: null,
+      }
+    );
+    assert.deepEqual(
+      extractIdsFromUrl('tiktok', 'https://www.tiktok.com/@..bad/product/000'),
+      {
+        externalItemId: null,
+        externalShopId: null,
+      }
+    );
+    assert.deepEqual(
+      extractIdsFromUrl(
+        'cellphones',
+        'https://cellphones.com.vn/..bad..slug.html'
+      ),
+      {
+        externalItemId: null,
+        externalShopId: null,
+      }
+    );
+
+    console.log(
+      '  \u2705 [Extension URL/ID/Sparkline Bounds & Detector IDs (#1004)] Verified'
+    );
+  }
+
   console.log('🎉 All Rate Browser Extension MV3 v2 tests passed!');
 }
 
