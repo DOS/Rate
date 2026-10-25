@@ -6,7 +6,31 @@ export interface ImporterAlgorithmMetadata {
   paramsHash: string;
 }
 
-function sanitizeImporterIdentifier(value: unknown, maxLen: number): string {
+const DISALLOWED_IMPORTER_IDENTIFIER_REGEX =
+  /^(?:null|undefined|nan|none|infinity|-infinity|true|false|__proto__|constructor|prototype)$/i;
+
+export function sanitizeImporterIdentifier(value: unknown, maxLen: number): string {
+  if (typeof value !== 'string') return '';
+  const safeMaxLen =
+    typeof maxLen === 'number' && Number.isFinite(maxLen) && maxLen > 0
+      ? Math.min(Math.trunc(maxLen), 256)
+      : 128;
+  const cleaned = value
+    .replace(/\p{Cc}+/gu, '')
+    .trim()
+    .slice(0, safeMaxLen);
+  if (
+    !cleaned ||
+    /^0+$/.test(cleaned) ||
+    /^[-_.]+$/.test(cleaned) ||
+    DISALLOWED_IMPORTER_IDENTIFIER_REGEX.test(cleaned)
+  ) {
+    return '';
+  }
+  return cleaned;
+}
+
+function sanitizeImporterMetaKey(value: unknown, maxLen: number): string {
   if (typeof value !== 'string') return '';
   return value
     .replace(/\p{Cc}+/gu, '')
@@ -182,7 +206,7 @@ export function sanitizeLogMeta(
   if (typeof value === 'number') return Number.isFinite(value) ? value : null;
   if (value instanceof Error) {
     return {
-      name: value.name || 'Error',
+      name: sanitizeImporterIdentifier(value.name, 128) || 'Error',
       message: redactSensitiveString(value.message || ''),
     };
   }
@@ -198,12 +222,14 @@ export function sanitizeLogMeta(
       let count = 0;
       for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
         if (UNSAFE_OBJECT_KEYS.has(k)) continue;
+        const safeKey = sanitizeImporterMetaKey(k, 128);
+        if (!safeKey || UNSAFE_OBJECT_KEYS.has(safeKey)) continue;
         if (count >= MAX_LOG_META_KEYS) break;
         count += 1;
-        if (SENSITIVE_META_KEY_RE.test(k)) {
-          out[k] = '[REDACTED]';
+        if (SENSITIVE_META_KEY_RE.test(safeKey)) {
+          out[safeKey] = '[REDACTED]';
         } else {
-          out[k] = sanitizeLogMeta(v, depth + 1, seen);
+          out[safeKey] = sanitizeLogMeta(v, depth + 1, seen);
         }
       }
       return out;
@@ -265,14 +291,23 @@ export class ImporterStructuredLogger {
     message: string,
     meta?: Record<string, unknown>
   ): ImporterLogEntry {
-    const cleanField = (val: unknown, fallback = ''): string =>
-      typeof val === 'string'
-        ? val
-            .replace(/\p{Cc}+/gu, ' ')
-            .replace(/\s+/g, ' ')
-            .trim()
-            .slice(0, 120) || fallback
-        : fallback;
+    const cleanField = (val: unknown, fallback = ''): string => {
+      if (typeof val !== 'string') return fallback;
+      const cleaned = val
+        .replace(/\p{Cc}+/gu, ' ')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .slice(0, 120);
+      if (
+        !cleaned ||
+        /^0+$/.test(cleaned) ||
+        /^[-_.]+$/.test(cleaned) ||
+        DISALLOWED_IMPORTER_IDENTIFIER_REGEX.test(cleaned)
+      ) {
+        return fallback;
+      }
+      return cleaned;
+    };
     const cleanNullableField = (val: unknown): string | null => {
       const cleaned = cleanField(val, '');
       return cleaned.length > 0 ? cleaned : null;

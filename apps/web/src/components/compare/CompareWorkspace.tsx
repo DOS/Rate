@@ -25,6 +25,7 @@ import type {
 } from '@repo/shared-data';
 import {
   type CanonicalCategorySlug,
+  MAX_VALID_VND_PRICE,
   buildPopular1v1BattlesForCategory,
   getMasterProductCategorySlug,
   getMasterProductHref,
@@ -97,6 +98,41 @@ function getEffectiveRating(p: MasterProduct): number {
   return resolveCompareEffectiveUserRating(p);
 }
 
+const COMPARE_CONTROL_CHARS_RE = /\p{Cc}+/gu;
+
+export function sanitizeComparePriceVnd(value: unknown): number {
+  const num = Number(value);
+  if (!Number.isFinite(num) || num <= 0 || num > MAX_VALID_VND_PRICE) {
+    return 0;
+  }
+  return Math.round(num);
+}
+
+export function formatComparePriceVnd(value: unknown): string {
+  const safe = sanitizeComparePriceVnd(value);
+  return safe > 0 ? `${safe.toLocaleString('vi-VN')} ₫` : '-';
+}
+
+export function sanitizeCompareMerchantCount(value: unknown): number {
+  const num = Number(value);
+  if (!Number.isFinite(num) || num <= 0) return 0;
+  return Math.min(10_000_000, Math.round(num));
+}
+
+export function sanitizeCompareMarkdownCell(
+  value: unknown,
+  fallback = '-'
+): string {
+  if (typeof value !== 'string') return fallback;
+  const cleaned = value
+    .replace(COMPARE_CONTROL_CHARS_RE, ' ')
+    .replace(/\|/g, '-')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 160);
+  return cleaned || fallback;
+}
+
 function buildCategoryTabs(t: CompareTranslator): Array<{
   slug: CanonicalCategorySlug;
   label: string;
@@ -167,20 +203,19 @@ function buildSpecGroups(t: CompareTranslator): SpecGroupDef[] {
         {
           id: 'min_price',
           label: t('rowMinPrice'),
-          renderValue: (p) =>
-            Number(p.min_price) > 0
-              ? `${Number(p.min_price).toLocaleString('vi-VN')} ₫`
-              : '-',
-          numericValue: (p) =>
-            Number(p.min_price) > 0 ? Number(p.min_price) : null,
+          renderValue: (p) => formatComparePriceVnd(p.min_price),
+          numericValue: (p) => {
+            const safe = sanitizeComparePriceVnd(p.min_price);
+            return safe > 0 ? safe : null;
+          },
           higherIsBetter: false,
         },
         {
           id: 'price_range',
           label: t('rowPriceRange'),
           renderValue: (p) => {
-            const min = Number(p.min_price || 0);
-            const max = Number(p.max_price || 0);
+            const min = sanitizeComparePriceVnd(p.min_price);
+            const max = sanitizeComparePriceVnd(p.max_price);
             if (min <= 0) return '-';
             if (max > min) {
               return `${min.toLocaleString('vi-VN')} ₫ - ${max.toLocaleString('vi-VN')} ₫`;
@@ -192,15 +227,17 @@ function buildSpecGroups(t: CompareTranslator): SpecGroupDef[] {
           id: 'merchant_count',
           label: t('rowMerchantCount'),
           renderValue: (p) =>
-            t('valSourcesCount', { count: p.merchant_count || 0 }),
-          numericValue: (p) => Number(p.merchant_count || 0),
+            t('valSourcesCount', {
+              count: sanitizeCompareMerchantCount(p.merchant_count),
+            }),
+          numericValue: (p) => sanitizeCompareMerchantCount(p.merchant_count),
           higherIsBetter: true,
         },
         {
           id: 'value_per_point',
           label: t('rowValuePerPoint'),
           renderValue: (p) => {
-            const min = Number(p.min_price || 0);
+            const min = sanitizeComparePriceVnd(p.min_price);
             if (min <= 0) return '-';
             const u = getEffectiveRating(p) > 0 ? getEffectiveRating(p) : null;
             const exp5 = resolveCompareExpertRating5(p);
@@ -218,7 +255,7 @@ function buildSpecGroups(t: CompareTranslator): SpecGroupDef[] {
             });
           },
           numericValue: (p) => {
-            const min = Number(p.min_price || 0);
+            const min = sanitizeComparePriceVnd(p.min_price);
             if (min <= 0) return null;
             const u = getEffectiveRating(p) > 0 ? getEffectiveRating(p) : null;
             const exp5 = resolveCompareExpertRating5(p);
@@ -237,13 +274,13 @@ function buildSpecGroups(t: CompareTranslator): SpecGroupDef[] {
           id: 'daily_cost_2y',
           label: t('rowDailyCost2y'),
           renderValue: (p) => {
-            const min = Number(p.min_price || 0);
+            const min = sanitizeComparePriceVnd(p.min_price);
             if (min <= 0) return '-';
             const daily = Math.round(min / 730);
             return t('valPerDay', { cost: daily.toLocaleString('vi-VN') });
           },
           numericValue: (p) => {
-            const min = Number(p.min_price || 0);
+            const min = sanitizeComparePriceVnd(p.min_price);
             return min > 0 ? Math.round(min / 730) : null;
           },
           higherIsBetter: false,
@@ -1039,7 +1076,10 @@ export default function CompareWorkspace({
   const handleCopyMarkdownReport = async () => {
     if (typeof window === 'undefined' || products.length === 0) return;
     try {
-      const headerCols = [t('mdReportColSpec'), ...products.map((p) => p.name)];
+      const headerCols = [
+        t('mdReportColSpec'),
+        ...products.map((p) => sanitizeCompareMarkdownCell(p.name)),
+      ];
       const sepCols = headerCols.map(() => '---');
       const lines: string[] = [
         `### ${t('mdReportTitle', { category: activeCategoryMeta.label })}`,
@@ -1065,11 +1105,7 @@ export default function CompareWorkspace({
           })
           .join(' | ')} |`,
         `| **${t('mdRowMinPrice')}** | ${products
-          .map((p) =>
-            Number(p.min_price) > 0
-              ? `${Number(p.min_price).toLocaleString('vi-VN')} ₫`
-              : '-'
-          )
+          .map((p) => formatComparePriceVnd(p.min_price))
           .join(' | ')} |`,
         `| **${t('mdRowDealRadar')}** | ${products
           .map((p) =>
@@ -1176,7 +1212,7 @@ export default function CompareWorkspace({
           brand: p.brand,
           userRating: u > 0 ? u : null,
           expertRating: e,
-          minPriceVnd: Number(p.min_price || 0),
+          minPriceVnd: sanitizeComparePriceVnd(p.min_price),
           dealRadar: radarExportFields(getRadarSignal(radarIndex, p.slug)),
         };
       }),
@@ -1235,8 +1271,12 @@ export default function CompareWorkspace({
       .filter((p) => getEffectiveRating(p) > 0)
       .sort((a, b) => getEffectiveRating(b) - getEffectiveRating(a));
     const byPrice = [...products]
-      .filter((p) => Number(p.min_price || 0) > 0)
-      .sort((a, b) => Number(a.min_price || 0) - Number(b.min_price || 0));
+      .filter((p) => sanitizeComparePriceVnd(p.min_price) > 0)
+      .sort(
+        (a, b) =>
+          sanitizeComparePriceVnd(a.min_price) -
+          sanitizeComparePriceVnd(b.min_price)
+      );
     const byMemory = [...products]
       .filter((p) => resolveCompareMemoryScore(p) > 0)
       .sort(

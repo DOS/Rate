@@ -3,6 +3,21 @@ export const MAX_FETCH_ALL_PAGE_SIZE = 1000;
 export const MAX_FETCH_ALL_PAGES_CEILING = 10_000;
 export const MAX_SHOPEE_ENQUEUE_URL_LENGTH = 2048;
 
+function parsePositivePagingInt(raw: unknown, fallback: number, max: number): number {
+  if (typeof raw === 'number') {
+    if (!Number.isFinite(raw) || raw < 1) return fallback;
+    return Math.min(max, Math.floor(raw));
+  }
+  if (typeof raw === 'string') {
+    const cleaned = raw.replace(/\p{Cc}+/gu, '').trim();
+    if (!cleaned || /^0[xob]/i.test(cleaned)) return fallback;
+    const parsed = Number(cleaned);
+    if (!Number.isFinite(parsed) || parsed < 1) return fallback;
+    return Math.min(max, Math.floor(parsed));
+  }
+  return fallback;
+}
+
 /**
  * Reads every row of a query in pages. One PostgREST response stops at the
  * project's max-rows (1000 on Supabase) without an error, so full-table reads
@@ -28,16 +43,16 @@ export async function fetchAllPages<T>(
           .trim()
           .slice(0, 160) || 'fetchAllPages'
       : 'fetchAllPages';
-  const rawPageSize = typeof pageSize === 'boolean' ? Number.NaN : Number(pageSize);
-  const safePageSize =
-    Number.isFinite(rawPageSize) && rawPageSize >= 1
-      ? Math.min(MAX_FETCH_ALL_PAGE_SIZE, Math.floor(rawPageSize))
-      : MAX_FETCH_ALL_PAGE_SIZE;
-  const rawMaxPages = typeof maxPages === 'boolean' ? Number.NaN : Number(maxPages);
-  const safeMaxPages =
-    Number.isFinite(rawMaxPages) && rawMaxPages >= 1
-      ? Math.min(MAX_FETCH_ALL_PAGES_CEILING, Math.floor(rawMaxPages))
-      : DEFAULT_FETCH_ALL_MAX_PAGES;
+  const safePageSize = parsePositivePagingInt(
+    pageSize,
+    MAX_FETCH_ALL_PAGE_SIZE,
+    MAX_FETCH_ALL_PAGE_SIZE
+  );
+  const safeMaxPages = parsePositivePagingInt(
+    maxPages,
+    DEFAULT_FETCH_ALL_MAX_PAGES,
+    MAX_FETCH_ALL_PAGES_CEILING
+  );
   if (typeof buildPage !== 'function') {
     throw new Error(`${safeLabel}: buildPage must be a function`);
   }
@@ -111,6 +126,9 @@ export function parseShopeeEnqueueUrl(
   ) {
     return null;
   }
+  if (/^\/(?:verify|buyer\/login|search)(?:\/|$)/i.test(parsed.pathname)) {
+    return null;
+  }
   const match =
     parsed.pathname.match(/(?:a-)?i\.([1-9]\d{0,19})\.([1-9]\d{0,19})(?!\d)/i) ||
     parsed.pathname.match(/\/(?:product|opaanlp)\/([1-9]\d{0,19})\/([1-9]\d{0,19})(?!\d)/i);
@@ -148,11 +166,14 @@ export function resolveBackfillSupabaseTarget(rawUrl: string | undefined | null)
   if (parsed.username || parsed.password) {
     throw new Error('SUPABASE_URL must not contain embedded credentials.');
   }
+  const hostLower = parsed.hostname.toLowerCase();
   if (
-    !parsed.hostname ||
-    parsed.hostname.startsWith('.') ||
-    parsed.hostname.endsWith('.') ||
-    parsed.hostname.includes('..')
+    !hostLower ||
+    hostLower.startsWith('.') ||
+    hostLower.endsWith('.') ||
+    hostLower.includes('..') ||
+    hostLower === '0.0.0.0' ||
+    (!hostLower.includes('.') && hostLower !== 'localhost' && hostLower !== '[::1]')
   ) {
     throw new Error('SUPABASE_URL is missing or has an invalid hostname.');
   }

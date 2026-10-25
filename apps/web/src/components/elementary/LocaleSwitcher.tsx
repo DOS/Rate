@@ -97,6 +97,38 @@ interface LocaleSwitcherProps {
   compact?: boolean;
 }
 
+const SUPPORTED_SWITCHER_LOCALES = new Set<string>(routing.locales);
+
+export function sanitizeSwitcherLocale(
+  value: unknown,
+  fallback: AppLocale = 'vi'
+): AppLocale {
+  if (typeof value !== 'string') return fallback;
+  const cleaned = value
+    .replace(/\p{Cc}+/gu, '')
+    .trim()
+    .toLowerCase();
+  if (SUPPORTED_SWITCHER_LOCALES.has(cleaned)) {
+    return cleaned as AppLocale;
+  }
+  return fallback;
+}
+
+export function sanitizeSwitcherQueryString(rawSearch: unknown): string {
+  if (typeof rawSearch !== 'string') return '';
+  const cleaned = rawSearch
+    .replace(/\p{Cc}+/gu, '')
+    .trim()
+    .replace(/^\?+/, '')
+    .slice(0, 1024);
+  if (!cleaned) return '';
+  try {
+    return new URLSearchParams(cleaned).toString();
+  } catch {
+    return '';
+  }
+}
+
 export function LocaleSwitcher({
   locale: propLocale,
   className,
@@ -105,7 +137,10 @@ export function LocaleSwitcher({
 }: LocaleSwitcherProps) {
   const contextLocale = useLocale();
   const tNav = useTranslations('rate.nav');
-  const currentLocale = (propLocale || contextLocale) as AppLocale;
+  const currentLocale = sanitizeSwitcherLocale(
+    propLocale || contextLocale,
+    sanitizeSwitcherLocale(contextLocale, 'vi')
+  );
   const [isOpen, setIsOpen] = useState(false);
   const [, startTransition] = useTransition();
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -128,20 +163,21 @@ export function LocaleSwitcher({
 
   const handleSelect = (nextLocale: string) => {
     setIsOpen(false);
-    if (nextLocale === currentLocale) return;
+    const safeNextLocale = sanitizeSwitcherLocale(nextLocale, currentLocale);
+    if (safeNextLocale === currentLocale) return;
 
     if (typeof document !== 'undefined') {
-      document.cookie = `NEXT_LOCALE=${nextLocale}; path=/; max-age=${60 * 60 * 24 * 365}; SameSite=Lax`;
+      document.cookie = `NEXT_LOCALE=${safeNextLocale}; path=/; max-age=${60 * 60 * 24 * 365}; SameSite=Lax`;
     }
 
     // Read at click time: useSearchParams would make the switcher
     // client-only on cached pages, so it popped in after hydration and
     // shifted the navbar (DOS/Rate#515).
-    const queryParams = window.location.search.slice(1);
+    const queryParams = sanitizeSwitcherQueryString(window.location.search);
     startTransition(() => {
       router.replace(
         queryParams.length > 0 ? `${pathname}?${queryParams}` : pathname,
-        { locale: nextLocale as AppLocale }
+        { locale: safeNextLocale }
       );
       router.refresh();
     });

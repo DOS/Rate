@@ -12577,6 +12577,282 @@ async function runCoreArchitectureSuite() {
   }
 
   // -------------------------------------------------------------------------
+  // 126d. PriceHistorySection, CompareWorkspace & HeroSearchInspector Bounds (#1043)
+  // -------------------------------------------------------------------------
+  {
+    const {
+      formatPriceHistoryVnd,
+      formatCompactPriceHistoryVnd,
+      sanitizePriceHistoryCount,
+      sanitizePriceHistoryMarkdownCell,
+    } = await import('../../../components/price-history/PriceHistorySection');
+    const {
+      sanitizeComparePriceVnd,
+      formatComparePriceVnd,
+      sanitizeCompareMerchantCount,
+      sanitizeCompareMarkdownCell,
+    } = await import('../../../components/compare/CompareWorkspace');
+    const {
+      isLikelyEcommerceUrl,
+      sanitizeHeroInspectorPriceVnd,
+      sanitizeHeroInspectorRating,
+    } = await import('../../../components/home/HeroSearchInspector');
+
+    assert.equal(formatPriceHistoryVnd(18_990_000.4), '18.990.000 ₫');
+    assert.equal(formatPriceHistoryVnd(-500), '-');
+    assert.equal(formatPriceHistoryVnd(9_000_000_000), '-');
+    assert.equal(formatCompactPriceHistoryVnd(18_500_000), '18.5tr');
+    assert.equal(formatCompactPriceHistoryVnd(450_000), '450k');
+    assert.equal(formatCompactPriceHistoryVnd(-100), '0');
+    assert.equal(sanitizePriceHistoryCount(14.8), 15);
+    assert.equal(sanitizePriceHistoryCount(-5), 0);
+    assert.equal(
+      sanitizePriceHistoryMarkdownCell('  Apple\r\nFlagship | Store\u0000  '),
+      'Apple Flagship - Store'
+    );
+
+    assert.equal(sanitizeComparePriceVnd(25_990_000.4), 25_990_000);
+    assert.equal(sanitizeComparePriceVnd(-100), 0);
+    assert.equal(sanitizeComparePriceVnd(9_000_000_000), 0);
+    assert.equal(formatComparePriceVnd(25_990_000), '25.990.000 ₫');
+    assert.equal(formatComparePriceVnd(-100), '-');
+    assert.equal(sanitizeCompareMerchantCount(8.4), 8);
+    assert.equal(sanitizeCompareMerchantCount(-3), 0);
+    assert.equal(
+      sanitizeCompareMarkdownCell('  iPhone\r\n16 | Pro\u0000  '),
+      'iPhone 16 - Pro'
+    );
+
+    assert.equal(
+      isLikelyEcommerceUrl('  \u0000https://shopee.vn/item-i.123.456  '),
+      true
+    );
+    assert.equal(isLikelyEcommerceUrl('iphone 16 pro max'), false);
+    assert.equal(isLikelyEcommerceUrl(null), false);
+    assert.equal(sanitizeHeroInspectorPriceVnd(18_990_000.4), 18_990_000);
+    assert.equal(sanitizeHeroInspectorPriceVnd(-100), 0);
+    assert.equal(sanitizeHeroInspectorRating(4.8, 4.2), 4.8);
+    assert.equal(sanitizeHeroInspectorRating(0, 6.4), 5);
+    assert.equal(sanitizeHeroInspectorRating(-1, Number.NaN), 0);
+
+    console.log(
+      '  ✅ [126d/131] PriceHistorySection, CompareWorkspace & HeroSearchInspector Bounds (#1043) passed'
+    );
+  }
+
+  // -------------------------------------------------------------------------
+  // 126e. RateAuthPortal, CommunityQuarantineSubmitForm & ApiPlaygroundClient Bounds (#1047)
+  // -------------------------------------------------------------------------
+  {
+    const { sanitizeAuthRedirectTarget } =
+      await import('../../../components/auth/RateAuthPortal');
+    const {
+      outcomeFromJobState,
+      sanitizeQuarantinePriceVnd,
+      sanitizeQuarantineTextField,
+    } =
+      await import('../../../components/contact/CommunityQuarantineSubmitForm');
+    const {
+      sanitizePlaygroundApiPath,
+      sanitizePlaygroundDownloadId,
+      sanitizePlaygroundMarkdownCell,
+    } = await import('../../../components/developers/ApiPlaygroundClient');
+
+    assert.equal(
+      sanitizeAuthRedirectTarget('/vi/watchlist?tab=alerts#top'),
+      '/vi/watchlist?tab=alerts#top'
+    );
+    assert.equal(sanitizeAuthRedirectTarget('https://evil.example/phish'), '/');
+    assert.equal(sanitizeAuthRedirectTarget('//evil.example/phish'), '/');
+    assert.equal(sanitizeAuthRedirectTarget('/\\evil.example/phish'), '/');
+    assert.equal(sanitizeAuthRedirectTarget('javascript:alert(1)'), '/');
+    assert.equal(sanitizeAuthRedirectTarget(null), '/');
+    assert.equal(sanitizeAuthRedirectTarget(`/${'a'.repeat(600)}`), '/');
+
+    assert.equal(outcomeFromJobState('skipped_no_consent'), 'noConsent');
+    assert.equal(outcomeFromJobState('rejected_invalid_url'), 'invalidUrl');
+    assert.equal(
+      outcomeFromJobState('platform_worker_pending_phase_5_1'),
+      'platformPending'
+    );
+    assert.equal(outcomeFromJobState('rejected_invalid_price'), 'invalidPrice');
+    assert.equal(outcomeFromJobState('skipped_accessory'), 'accessory');
+    assert.equal(outcomeFromJobState('unknown_state'), 'failed');
+
+    assert.equal(sanitizeQuarantinePriceVnd('18990000.4', 50_000), 18_990_000);
+    assert.equal(sanitizeQuarantinePriceVnd('10000', 50_000), null);
+    assert.equal(sanitizeQuarantinePriceVnd('9000000000', 50_000), null);
+    assert.equal(sanitizeQuarantinePriceVnd('NaN', 50_000), null);
+    assert.equal(sanitizeQuarantinePriceVnd('', 1000), null);
+    assert.equal(sanitizeQuarantinePriceVnd(true, 1000), null);
+    assert.equal(
+      sanitizeQuarantineTextField('  iPhone\u0000 16 Pro Max  ', 320),
+      'iPhone 16 Pro Max'
+    );
+
+    assert.equal(
+      sanitizePlaygroundApiPath(
+        '/api/v1/rate/products?limit=3&sort=rating_desc'
+      ),
+      '/api/v1/rate/products?limit=3&sort=rating_desc'
+    );
+    assert.equal(
+      sanitizePlaygroundApiPath("/api/v1/rate/products?q=$HOME'test"),
+      '/api/v1/rate/products?q=%24HOME%27test'
+    );
+    assert.equal(sanitizePlaygroundApiPath('/api//evil.example'), null);
+    assert.equal(sanitizePlaygroundApiPath('/api/../secret'), null);
+    assert.equal(
+      sanitizePlaygroundApiPath('https://evil.example/api/v1'),
+      null
+    );
+    assert.equal(
+      sanitizePlaygroundDownloadId('  ../List Products\u0000!! '),
+      'list-products'
+    );
+    assert.equal(sanitizePlaygroundDownloadId('   '), 'endpoint');
+    assert.equal(
+      sanitizePlaygroundMarkdownCell('  GET\r\n`/api/v1` | Title\u0000  '),
+      "GET '/api/v1' - Title"
+    );
+
+    console.log(
+      '  ✅ [126e/132] RateAuthPortal, CommunityQuarantineSubmitForm & ApiPlaygroundClient Bounds (#1047) passed'
+    );
+  }
+
+  // -------------------------------------------------------------------------
+  // 126f. VersusInteractiveScoreboard, DealFinderWorkspace & WatchlistWorkspace Bounds (#1049)
+  // -------------------------------------------------------------------------
+  {
+    const {
+      sanitizeVersusScore5,
+      sanitizeVersusExportSlug,
+      sanitizeVersusMarkdownCell,
+    } = await import('../../../components/compare/VersusInteractiveScoreboard');
+    const {
+      sanitizeDealFinderBudgetVnd,
+      sanitizeDealFinderSearchQuery,
+      sanitizeDealFinderMarkdownCell,
+    } = await import('../../../components/deals/DealFinderWorkspace');
+    const {
+      sanitizeWatchlistBestOfferUrl,
+      sanitizeWatchlistMarkdownCell,
+      sanitizeWatchlistCount,
+    } = await import('../../../components/watchlist/WatchlistWorkspace');
+
+    assert.equal(sanitizeVersusScore5(4.856), 4.86);
+    assert.equal(sanitizeVersusScore5(8.2), 5);
+    assert.equal(sanitizeVersusScore5(-1), 0);
+    assert.equal(sanitizeVersusScore5(Number.NaN), 0);
+    assert.equal(
+      sanitizeVersusExportSlug('  ../iPhone 16 Pro\u0000!!  '),
+      'iphone-16-pro'
+    );
+    assert.equal(sanitizeVersusExportSlug('   '), 'device');
+    assert.equal(
+      sanitizeVersusMarkdownCell('  Galaxy\r\nS25 | Ultra\u0000  '),
+      'Galaxy S25 - Ultra'
+    );
+
+    assert.equal(sanitizeDealFinderBudgetVnd(35_990_000.4), 35_990_000);
+    assert.equal(sanitizeDealFinderBudgetVnd(-500), 1_000_000_000);
+    assert.equal(sanitizeDealFinderBudgetVnd(9_000_000_000), 1_000_000_000);
+    assert.equal(
+      sanitizeDealFinderSearchQuery('  \u0000iPhone 16 Pro  '),
+      'iphone 16 pro'
+    );
+    assert.equal(
+      sanitizeDealFinderMarkdownCell('  Apple\r\nStore | Mall\u0000  '),
+      'Apple Store - Mall'
+    );
+
+    assert.equal(
+      sanitizeWatchlistBestOfferUrl('  \u0000https://shopee.vn/item-i.1.2  '),
+      'https://shopee.vn/item-i.1.2'
+    );
+    assert.equal(
+      sanitizeWatchlistBestOfferUrl('https://user:pass@evil.example/item'),
+      null
+    );
+    assert.equal(sanitizeWatchlistBestOfferUrl('javascript:alert(1)'), null);
+    assert.equal(
+      sanitizeWatchlistMarkdownCell('  Shop\r\nOfficial | VN\u0000  '),
+      'Shop Official - VN'
+    );
+    assert.equal(sanitizeWatchlistCount(12.6), 13);
+    assert.equal(sanitizeWatchlistCount(-4), 0);
+
+    console.log(
+      '  ✅ [126f/133] VersusInteractiveScoreboard, DealFinderWorkspace & WatchlistWorkspace Bounds (#1049) passed'
+    );
+  }
+
+  // -------------------------------------------------------------------------
+  // 126g. ListSidebarOne, RangeSlider & LocaleSwitcher Bounds (#1052)
+  // -------------------------------------------------------------------------
+  {
+    const {
+      sanitizeSidebarRating,
+      sanitizeSidebarPositiveInts,
+      sanitizeSidebarBrands,
+      sanitizeSidebarPriceMillion,
+      sanitizeSidebarKeyword,
+    } = await import('../../../app/[locale]/components/list-sidebar-one');
+    const { sanitizeSliderBounds, sanitizeSliderTuple } =
+      await import('../../../app/[locale]/components/range-slider');
+    const { sanitizeSwitcherLocale, sanitizeSwitcherQueryString } =
+      await import('../../../components/elementary/LocaleSwitcher');
+
+    assert.equal(sanitizeSidebarRating('4.5'), 4.5);
+    assert.equal(sanitizeSidebarRating('9.9'), 5);
+    assert.equal(sanitizeSidebarRating('-2'), 0);
+    assert.equal(sanitizeSidebarRating('NaN'), 0);
+    assert.deepEqual(
+      sanitizeSidebarPositiveInts(' 8, 12, 8, -4, Infinity, 999999 ', 1024),
+      [8, 12]
+    );
+    assert.deepEqual(
+      sanitizeSidebarBrands('  Apple\u0000 , Samsung , apple ,   '),
+      ['Apple', 'Samsung']
+    );
+    assert.equal(sanitizeSidebarPriceMillion('15000000', 1, 80, 1), 15);
+    assert.equal(sanitizeSidebarPriceMillion('Infinity', 1, 80, 1), 1);
+    assert.equal(sanitizeSidebarPriceMillion('-5000000', 1, 80, 80), 80);
+    assert.equal(
+      sanitizeSidebarKeyword('  iPhone\r\n16\u0000   Pro  '),
+      'iPhone 16 Pro'
+    );
+
+    assert.deepEqual(sanitizeSliderBounds(5, 60, 2), {
+      min: 5,
+      max: 60,
+      step: 2,
+    });
+    assert.deepEqual(sanitizeSliderBounds(50, 10, -1), {
+      min: 50,
+      max: 150,
+      step: 1,
+    });
+    assert.deepEqual(sanitizeSliderTuple([45, 15], 10, 60), [15, 45]);
+    assert.deepEqual(sanitizeSliderTuple([-10, 999], 10, 60), [10, 60]);
+    assert.deepEqual(sanitizeSliderTuple(null, 10, 60), [10, 60]);
+
+    assert.equal(sanitizeSwitcherLocale('  EN\u0000 '), 'en');
+    assert.equal(sanitizeSwitcherLocale('fr', 'vi'), 'vi');
+    assert.equal(sanitizeSwitcherLocale(null, 'cs'), 'cs');
+    assert.equal(
+      sanitizeSwitcherQueryString('?brand=Apple\u0000&sort=price_asc'),
+      'brand=Apple&sort=price_asc'
+    );
+    assert.equal(sanitizeSwitcherQueryString('   '), '');
+
+    console.log(
+      '  ✅ [126g/134] ListSidebarOne, RangeSlider & LocaleSwitcher Bounds (#1052) passed'
+    );
+  }
+
+  // -------------------------------------------------------------------------
   // 127. Rate Server Index & Extension Entity, Slug, and Category Bounds (#1029)
   // -------------------------------------------------------------------------
   {

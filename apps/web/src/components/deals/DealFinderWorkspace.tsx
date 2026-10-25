@@ -47,6 +47,32 @@ const DEALS_PAGE_SIZE = 12;
 export type PersonaKey =
   'default' | 'value_hunter' | 'photography' | 'gaming' | 'endurance';
 
+export function sanitizeDealFinderBudgetVnd(value: unknown): number {
+  const num = typeof value === 'number' ? value : Number(value);
+  if (!Number.isFinite(num) || num <= 0) return MAX_VALID_VND_PRICE;
+  return Math.min(MAX_VALID_VND_PRICE, Math.round(num));
+}
+
+export function sanitizeDealFinderSearchQuery(value: unknown): string {
+  if (typeof value !== 'string') return '';
+  return value
+    .replace(/\p{Cc}+/gu, ' ')
+    .trim()
+    .toLowerCase()
+    .slice(0, 120);
+}
+
+export function sanitizeDealFinderMarkdownCell(value: unknown): string {
+  if (typeof value !== 'string') return '-';
+  const cleaned = value
+    .replace(/\p{Cc}+/gu, ' ')
+    .replace(/\|/g, '-')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 180);
+  return cleaned || '-';
+}
+
 export function rankProductsForDealFinder(
   products: readonly MasterProduct[],
   options: {
@@ -57,12 +83,8 @@ export function rankProductsForDealFinder(
   }
 ) {
   const { categoryFilter, persona, maxBudgetVnd, searchQuery } = options;
-  const safeBudget =
-    Number.isFinite(maxBudgetVnd) && maxBudgetVnd > 0
-      ? Math.min(MAX_VALID_VND_PRICE, maxBudgetVnd)
-      : MAX_VALID_VND_PRICE;
-  const q =
-    typeof searchQuery === 'string' ? searchQuery.trim().toLowerCase() : '';
+  const safeBudget = sanitizeDealFinderBudgetVnd(maxBudgetVnd);
+  const q = sanitizeDealFinderSearchQuery(searchQuery);
   const scored: Array<
     Omit<ScoredLeaderboardItem, 'rank'> & {
       personaScore5: number;
@@ -252,7 +274,7 @@ export default function DealFinderWorkspace({
         '| --- | --- | --- | --- | --- | --- |',
         ...filteredGenuineDeals.map(
           (g) =>
-            `| ${g.productName} | ${g.platform.toUpperCase()} (${g.merchantName}) | **${g.priceCurrent.toLocaleString('vi-VN')} ₫** | ${g.marketMedianPrice.toLocaleString('vi-VN')} ₫ | -${g.savingsVsMedianVnd.toLocaleString('vi-VN')} ₫ (-${g.savingsVsMedianPct}%) | ${g.jreviewsScore10 != null ? `${g.jreviewsScore10.toFixed(1)}/10` : t('noScore')} |`
+            `| ${sanitizeDealFinderMarkdownCell(g.productName)} | ${sanitizeDealFinderMarkdownCell(g.platform.toUpperCase())} (${sanitizeDealFinderMarkdownCell(g.merchantName)}) | **${g.priceCurrent.toLocaleString('vi-VN')} ₫** | ${g.marketMedianPrice.toLocaleString('vi-VN')} ₫ | -${g.savingsVsMedianVnd.toLocaleString('vi-VN')} ₫ (-${g.savingsVsMedianPct}%) | ${g.jreviewsScore10 != null ? `${g.jreviewsScore10.toFixed(1)}/10` : t('noScore')} |`
         ),
         '',
         t('radarMdFakeTitle'),
@@ -260,7 +282,7 @@ export default function DealFinderWorkspace({
         '| --- | --- | --- | --- | --- | --- |',
         ...filteredFakeSaleTraps.map(
           (trap) =>
-            `| ${trap.productName} | ${trap.platform.toUpperCase()} (${trap.merchantName}) | ${trap.priceCurrent.toLocaleString('vi-VN')} ₫ | ${(trap.priceOriginal || trap.priceCurrent).toLocaleString('vi-VN')} ₫ | ${trap.marketMedianPrice.toLocaleString('vi-VN')} ₫ | **+${trap.fakeMarkupPct}%** |`
+            `| ${sanitizeDealFinderMarkdownCell(trap.productName)} | ${sanitizeDealFinderMarkdownCell(trap.platform.toUpperCase())} (${sanitizeDealFinderMarkdownCell(trap.merchantName)}) | ${trap.priceCurrent.toLocaleString('vi-VN')} ₫ | ${(trap.priceOriginal || trap.priceCurrent).toLocaleString('vi-VN')} ₫ | ${trap.marketMedianPrice.toLocaleString('vi-VN')} ₫ | **+${trap.fakeMarkupPct}%** |`
         ),
         '',
         t('radarMdSpreadTitle'),
@@ -268,7 +290,7 @@ export default function DealFinderWorkspace({
         '| --- | --- | --- | --- | --- | --- |',
         ...filteredPriceSpreadLeaders.map(
           (s) =>
-            `| ${s.productName} | ${s.cheapestPlatform.toUpperCase()} (${s.cheapestMerchantName}) | ${s.priciestPlatform.toUpperCase()} (${s.priciestMerchantName}) | **${s.minPrice.toLocaleString('vi-VN')} ₫** | ${s.maxPrice.toLocaleString('vi-VN')} ₫ | **-${s.spreadVnd.toLocaleString('vi-VN')} ₫ (${s.spreadPct}%)** |`
+            `| ${sanitizeDealFinderMarkdownCell(s.productName)} | ${sanitizeDealFinderMarkdownCell(s.cheapestPlatform.toUpperCase())} (${sanitizeDealFinderMarkdownCell(s.cheapestMerchantName)}) | ${sanitizeDealFinderMarkdownCell(s.priciestPlatform.toUpperCase())} (${sanitizeDealFinderMarkdownCell(s.priciestMerchantName)}) | **${s.minPrice.toLocaleString('vi-VN')} ₫** | ${s.maxPrice.toLocaleString('vi-VN')} ₫ | **-${s.spreadVnd.toLocaleString('vi-VN')} ₫ (${s.spreadPct}%)** |`
         ),
       ];
       await navigator.clipboard.writeText(lines.join('\n'));
@@ -395,7 +417,7 @@ export default function DealFinderWorkspace({
           .slice(0, 20)
           .map(
             (d) =>
-              `| #${d.rank} | ${d.name} | ${d.brand} | **${d.personaScore5 > 0 ? `${d.personaScore5.toFixed(2)}/5.0` : t('noScore')}** | ★ ${d.userScore5 > 0 ? d.userScore5.toFixed(1) : t('noScore')} (${d.expertScore10 != null ? `Lab ${d.expertScore10.toFixed(1)}/10` : t('labNoScore')}) | **${d.minPrice.toLocaleString('vi-VN')} ₫** | ${d.spreadSavingsVnd > 0 ? `-${d.spreadSavingsVnd.toLocaleString('vi-VN')} ₫` : t('samePrice')} | ${radarMarkdownCell(getRadarSignal(radarIndex, d.slug))} |`
+              `| #${d.rank} | ${sanitizeDealFinderMarkdownCell(d.name)} | ${sanitizeDealFinderMarkdownCell(d.brand)} | **${d.personaScore5 > 0 ? `${d.personaScore5.toFixed(2)}/5.0` : t('noScore')}** | ★ ${d.userScore5 > 0 ? d.userScore5.toFixed(1) : t('noScore')} (${d.expertScore10 != null ? `Lab ${d.expertScore10.toFixed(1)}/10` : t('labNoScore')}) | **${d.minPrice.toLocaleString('vi-VN')} ₫** | ${d.spreadSavingsVnd > 0 ? `-${d.spreadSavingsVnd.toLocaleString('vi-VN')} ₫` : t('samePrice')} | ${radarMarkdownCell(getRadarSignal(radarIndex, d.slug))} |`
           ),
       ];
       await navigator.clipboard.writeText(lines.join('\n'));

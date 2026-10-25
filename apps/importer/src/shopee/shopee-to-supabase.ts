@@ -36,20 +36,31 @@ function hashEntity(val: string): string {
   return '0x' + crypto.createHash('sha256').update(val.toLowerCase()).digest('hex');
 }
 
-const SENTINEL_REVIEW_IDS = new Set(['0', 'null', 'undefined', 'nan', 'none', '---']);
+const DISALLOWED_INGEST_ID_REGEX =
+  /^(?:null|undefined|nan|infinity|-infinity|true|false|none|n\/a|unknown|__proto__|constructor|prototype)$/i;
+
+export function sanitizeIngestionEntityId(raw: unknown, maxLen = 128): string | null {
+  if (typeof raw !== 'string' && typeof raw !== 'number') return null;
+  if (typeof raw === 'number' && (!Number.isFinite(raw) || raw <= 0)) return null;
+  const cleaned = String(raw)
+    .replace(/\p{Cc}+/gu, '')
+    .trim();
+  if (!cleaned || cleaned.length > maxLen || /\s/.test(cleaned)) return null;
+  if (
+    /^0+$/.test(cleaned) ||
+    !/[\p{L}\p{N}]/u.test(cleaned) ||
+    DISALLOWED_INGEST_ID_REGEX.test(cleaned)
+  ) {
+    return null;
+  }
+  return cleaned;
+}
 
 export function platformReviewIdFor(r: ShopeeReview): string {
   const safeReview =
     r && typeof r === 'object' && !Array.isArray(r) ? r : ({} as Partial<ShopeeReview>);
-  const cleanId =
-    typeof safeReview.reviewId === 'string'
-      ? safeReview.reviewId.replace(/\p{Cc}+/gu, '').trim()
-      : '';
-  if (
-    cleanId.length > 0 &&
-    cleanId.length <= 160 &&
-    !SENTINEL_REVIEW_IDS.has(cleanId.toLowerCase())
-  ) {
+  const cleanId = sanitizeIngestionEntityId(safeReview.reviewId, 160);
+  if (cleanId) {
     return cleanId;
   }
   const author = String(safeReview.author || '').slice(0, 200);
@@ -302,25 +313,11 @@ export class ShopeeIngestionPipeline {
     errorPrefix: string
   ): Promise<Set<string>> {
     const found = new Set<string>();
-    const safeProductId =
-      typeof productId === 'string'
-        ? productId
-            .replace(/\p{Cc}+/gu, '')
-            .trim()
-            .slice(0, 128)
-        : '';
+    const safeProductId = sanitizeIngestionEntityId(productId, 128) ?? '';
     if (!safeProductId || !Array.isArray(ids) || ids.length === 0) return found;
     const unique = [
       ...new Set(
-        ids
-          .filter((id): id is string => typeof id === 'string')
-          .map(id =>
-            id
-              .replace(/\p{Cc}+/gu, '')
-              .trim()
-              .slice(0, 160)
-          )
-          .filter(Boolean)
+        ids.map(id => sanitizeIngestionEntityId(id, 160)).filter((id): id is string => id !== null)
       ),
     ].slice(0, 1_000);
     for (let i = 0; i < unique.length; i += 50) {
@@ -351,11 +348,8 @@ export class ShopeeIngestionPipeline {
           : await eqBuilder.not('platform_review_id', 'is', null);
       if (error) throw new Error(`${errorPrefix}: ${error.message}`);
       for (const r of (data || []) as Array<{ platform_review_id: string }>) {
-        if (!r || typeof r !== 'object' || typeof r.platform_review_id !== 'string') continue;
-        const cleanRevId = r.platform_review_id
-          .replace(/\p{Cc}+/gu, '')
-          .trim()
-          .slice(0, 160);
+        if (!r || typeof r !== 'object') continue;
+        const cleanRevId = sanitizeIngestionEntityId(r.platform_review_id, 160);
         if (cleanRevId) found.add(cleanRevId);
       }
       if (typeof eqBuilder.in !== 'function') break;
@@ -376,15 +370,11 @@ export class ShopeeIngestionPipeline {
 
     for (const c of cats || []) {
       if (!c || typeof c !== 'object') continue;
-      const safeSlug =
-        typeof c.slug === 'string'
-          ? c.slug
-              .replace(/\p{Cc}+/gu, '')
-              .trim()
-              .slice(0, 120)
-          : '';
+      const safeSlug = sanitizeIngestionEntityId(c.slug, 120) ?? '';
       const safeId =
-        typeof c.id === 'string' && !/\p{Cc}/u.test(c.id.trim()) ? c.id.trim().slice(0, 128) : '';
+        typeof c.id === 'string' && !/[\s\p{Cc}]/u.test(c.id.trim())
+          ? (sanitizeIngestionEntityId(c.id.trim(), 128) ?? '')
+          : '';
       if (!safeSlug || !safeId) continue;
       this.categoryIdBySlug.set(safeSlug, safeId);
       if (safeSlug === 'smartphones') {
@@ -498,10 +488,7 @@ export class ShopeeIngestionPipeline {
     let hinted: { masterId: string; isNew: boolean } | null = null;
     const safeMasterIdHint =
       typeof options.masterIdHint === 'string'
-        ? options.masterIdHint
-            .replace(/\p{Cc}+/gu, '')
-            .trim()
-            .slice(0, 128)
+        ? (sanitizeIngestionEntityId(options.masterIdHint, 128) ?? '')
         : '';
     if (safeMasterIdHint) {
       const { data: hintRow, error: hintErr } = await this.supabase
@@ -904,11 +891,23 @@ export class ShopeeIngestionPipeline {
             })(),
           ]);
 
+          const rawMasterMinPrice = masterRow?.min_price;
+          const parsedMasterMinPrice =
+            typeof rawMasterMinPrice === 'number'
+              ? rawMasterMinPrice
+              : typeof rawMasterMinPrice === 'string'
+                ? (() => {
+                    const cleaned = rawMasterMinPrice.replace(/\p{Cc}+/gu, '').trim();
+                    return cleaned && !/^0[xob]/i.test(cleaned) ? Number(cleaned) : Number.NaN;
+                  })()
+                : Number.NaN;
           const canonicalMinPrice = resolveClusterPeerFloorPrice(
             Array.isArray(peerRows) ? (peerRows as ClusterPeerPriceCandidate[]) : [],
             productId,
-            typeof masterRow?.min_price === 'number' || typeof masterRow?.min_price === 'string'
-              ? Number(masterRow.min_price)
+            Number.isFinite(parsedMasterMinPrice) &&
+              parsedMasterMinPrice > 0 &&
+              parsedMasterMinPrice <= MAX_VALID_VND_PRICE
+              ? parsedMasterMinPrice
               : undefined
           );
 

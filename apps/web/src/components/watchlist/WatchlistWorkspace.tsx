@@ -17,6 +17,7 @@ import {
   getWatchlist,
   removeWatchlistItem,
   resolveWatchlistItemCurrentPrices,
+  sanitizeWatchlistPrice,
   sanitizeWatchlistTargetPrice,
   subscribeWatchlist,
   upsertWatchlistItem,
@@ -75,6 +76,44 @@ const PLATFORM_DISPLAY_LABELS: Record<string, string> = {
   didongviet: 'Di Động Việt',
   phongvu: 'Phong Vũ',
 };
+
+export function sanitizeWatchlistBestOfferUrl(rawUrl: unknown): string | null {
+  if (typeof rawUrl !== 'string') return null;
+  const cleaned = rawUrl.replace(/\p{Cc}+/gu, '').trim();
+  if (!cleaned || cleaned.length > 2048 || !/^https?:\/\//i.test(cleaned)) {
+    return null;
+  }
+  try {
+    const parsed = new URL(cleaned);
+    if (
+      (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') ||
+      parsed.username ||
+      parsed.password
+    ) {
+      return null;
+    }
+    return parsed.toString();
+  } catch {
+    return null;
+  }
+}
+
+export function sanitizeWatchlistMarkdownCell(value: unknown): string {
+  if (typeof value !== 'string') return '-';
+  const cleaned = value
+    .replace(/\p{Cc}+/gu, ' ')
+    .replace(/\|/g, '-')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 180);
+  return cleaned || '-';
+}
+
+export function sanitizeWatchlistCount(value: unknown): number {
+  const num = typeof value === 'number' ? value : Number(value);
+  if (!Number.isFinite(num) || num <= 0) return 0;
+  return Math.min(100_000, Math.round(num));
+}
 
 export default function WatchlistWorkspace({
   catalogProducts,
@@ -321,12 +360,15 @@ export default function WatchlistWorkspace({
               : '0 ₫';
           const hit = curMin > 0 && curMin <= item.targetPrice;
           const bestOfferStr = liveDeal?.best_offer
-            ? `${liveDeal.best_offer.merchant_name} (${liveDeal.best_offer.platform.toUpperCase()})`
-            : t('mdSourcesCount', {
-                count:
-                  liveDeal?.merchant_count || liveProd?.merchant_count || 0,
-              });
-          return `| ${item.name} | ${item.brand} | ${curMin.toLocaleString('vi-VN')} ₫ | ${item.targetPrice.toLocaleString('vi-VN')} ₫ | ${spreadStr} | ${radarMarkdownCell(rSig)} | ${hit ? t('mdStatusReached') : t('mdStatusWatching')} | ${bestOfferStr} |`;
+            ? `${sanitizeWatchlistMarkdownCell(liveDeal.best_offer.merchant_name)} (${sanitizeWatchlistMarkdownCell(liveDeal.best_offer.platform.toUpperCase())})`
+            : sanitizeWatchlistMarkdownCell(
+                t('mdSourcesCount', {
+                  count: sanitizeWatchlistCount(
+                    liveDeal?.merchant_count || liveProd?.merchant_count
+                  ),
+                })
+              );
+          return `| ${sanitizeWatchlistMarkdownCell(item.name)} | ${sanitizeWatchlistMarkdownCell(item.brand)} | ${curMin.toLocaleString('vi-VN')} ₫ | ${item.targetPrice.toLocaleString('vi-VN')} ₫ | ${spreadStr} | ${radarMarkdownCell(rSig)} | ${hit ? t('mdStatusReached') : t('mdStatusWatching')} | ${bestOfferStr} |`;
         }),
       ];
       await navigator.clipboard.writeText(lines.join('\n'));
@@ -738,14 +780,12 @@ export default function WatchlistWorkspace({
               ? getMasterProductHref(live)
               : `${item.categoryPath || '/smartphones'}/${item.slug}`;
             const bestOffer = dealInfo?.best_offer || null;
-            const bestOfferSafeUrl =
-              bestOffer &&
-              typeof bestOffer.url === 'string' &&
-              /^https?:\/\//i.test(bestOffer.url.trim())
-                ? bestOffer.url.trim()
-                : null;
-            const platformCount =
-              dealInfo?.platform_count || live?.merchant_count || 0;
+            const bestOfferSafeUrl = bestOffer
+              ? sanitizeWatchlistBestOfferUrl(bestOffer.url)
+              : null;
+            const platformCount = sanitizeWatchlistCount(
+              dealInfo?.platform_count || live?.merchant_count
+            );
             const radarSignal =
               dealInfo?.radar_signal ?? getRadarSignal(radarIndex, item.slug);
             const parsedAddedTime = Date.parse(item.addedAt);
@@ -897,9 +937,10 @@ export default function WatchlistWorkspace({
                               })
                             : t('sellersCountSub', {
                                 count:
-                                  dealInfo?.merchant_count ||
-                                  live?.merchant_count ||
-                                  1,
+                                  sanitizeWatchlistCount(
+                                    dealInfo?.merchant_count ||
+                                      live?.merchant_count
+                                  ) || 1,
                               })}
                         </div>
                       </div>
@@ -1002,10 +1043,9 @@ export default function WatchlistWorkspace({
                           className="small fw-semibold text-primary text-decoration-none"
                         >
                           {t('openDealLink', {
-                            price: (Number.isFinite(Number(bestOffer.price)) &&
-                            Number(bestOffer.price) > 0
-                              ? Math.round(Number(bestOffer.price))
-                              : currentMin
+                            price: (
+                              sanitizeWatchlistPrice(bestOffer.price) ||
+                              currentMin
                             ).toLocaleString('vi-VN'),
                           })}
                         </a>

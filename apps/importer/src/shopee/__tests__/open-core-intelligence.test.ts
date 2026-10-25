@@ -1303,6 +1303,283 @@ async function runSuite() {
     '  ✅ [14/14] Earbud :unknown Keys, AirPods Pro Years, iPad RAM & Non-Phone Spec Hygiene (#643, #657) passed'
   );
 
+  // =========================================================================
+  // 15. ClusterPeerFloor, MerchantReviewRisk & ImporterLogger Numeric & ID Bounds (#1040)
+  // =========================================================================
+  {
+    const { resolveClusterPeerFloorPrice } = await import('../cluster-peer-floor.js');
+    const { normalizeSafeId, toValidPrice, mapStoredReview, scoreMerchants } =
+      await import('../merchant-review-risk.js');
+    const { AiReviewAnalyzer } = await import('../ai-review-analyzer.js');
+    const { sanitizeImporterIdentifier, sanitizeLogMeta, ImporterStructuredLogger } =
+      await import('../logger.js');
+
+    assert.equal(
+      resolveClusterPeerFloorPrice(
+        [
+          { id: '0', price_current: '0x100000' },
+          { id: 'null', price_current: '\u000025000000 ' },
+        ],
+        'null',
+        '0x200000' as unknown as number
+      ),
+      25_000_000,
+      'resolveClusterPeerFloorPrice must not self-exclude sentinel IDs and must reject hex prices while stripping control chars (#1040)'
+    );
+    assert.equal(
+      resolveClusterPeerFloorPrice([], 'prod-1', '\u000018500000 ' as unknown as number),
+      18_500_000
+    );
+    assert.equal(
+      resolveClusterPeerFloorPrice([], 'prod-1', '0x100000' as unknown as number),
+      undefined
+    );
+
+    assert.equal(normalizeSafeId('0'), null);
+    assert.equal(normalizeSafeId('0000'), null);
+    assert.equal(normalizeSafeId('---'), null);
+    assert.equal(normalizeSafeId('null'), null);
+    assert.equal(normalizeSafeId('undefined'), null);
+    assert.equal(normalizeSafeId('__proto__'), null);
+    assert.equal(normalizeSafeId('constructor'), null);
+    assert.equal(normalizeSafeId('prototype'), null);
+    assert.equal(normalizeSafeId('m-1\u0000bad'), null);
+    assert.equal(normalizeSafeId('  m-1040 '), 'm-1040');
+
+    assert.equal(toValidPrice('0x100000'), 0);
+    assert.equal(toValidPrice('\u000019990000 '), 19_990_000);
+
+    const mappedRev1040 = mapStoredReview({
+      id: '  rev-1040 ',
+      product_id: 'p-1',
+      rating_star: '0x4',
+      comment: 'Good phone',
+      review_flags: { verdict: 'authentic', flag_category: 'authentic', include_in_rating: true },
+    });
+    assert.equal(mappedRev1040?.raw.rating_star, 5);
+
+    const analyzer1040 = new AiReviewAnalyzer({ apiKey: '' });
+    const scored1040 = scoreMerchants(
+      analyzer1040,
+      [
+        {
+          id: '  merch-1040 ',
+          platform: '__proto__',
+          is_official: false,
+          follower_count: '0x100',
+          review_risk_score: '\u000042 ',
+        },
+      ],
+      [
+        {
+          id: 'prod-1040',
+          merchant_id: 'merch-1040',
+          cluster_id: '0000',
+          price_current: 20_000_000,
+        },
+      ],
+      [
+        {
+          id: 'rev-1040',
+          product_id: 'prod-1040',
+          rating_star: '\u00004 ',
+          comment: 'Tot',
+          review_flags: {
+            verdict: 'authentic',
+            flag_category: 'authentic',
+            include_in_rating: true,
+          },
+        },
+      ],
+      new Map()
+    );
+    assert.equal(scored1040.length, 1);
+    assert.equal(scored1040[0]?.merchantId, 'merch-1040');
+    assert.equal(scored1040[0]?.previousScore, 42);
+
+    assert.equal(sanitizeImporterIdentifier('0000', 64), '');
+    assert.equal(sanitizeImporterIdentifier('---', 64), '');
+    assert.equal(sanitizeImporterIdentifier('__proto__', 64), '');
+    assert.equal(sanitizeImporterIdentifier('\u0000algo-1 ', 64), 'algo-1');
+
+    const meta1040 = sanitizeLogMeta({
+      '__proto__\u0000': 'bad',
+      '\u0000api_key ': 'secret',
+      err: Object.assign(new Error('failed'), { name: '__proto__' }),
+    }) as Record<string, unknown>;
+    assert.equal(Object.hasOwn(meta1040, '__proto__'), false);
+    assert.equal(meta1040.api_key, '[REDACTED]');
+    assert.equal((meta1040.err as { name?: string })?.name, 'Error');
+
+    const impLogger1040 = new ImporterStructuredLogger({
+      component: '__proto__',
+      runId: '0000',
+      jobId: '---',
+      platform: 'null',
+    });
+    const impEntry1040 = impLogger1040.formatEntry('info', 'constructor', 'ok');
+    assert.equal(impEntry1040.component, 'Importer');
+    assert.equal(impEntry1040.run_id, null);
+    assert.equal(impEntry1040.job_id, null);
+    assert.equal(impEntry1040.platform, null);
+    assert.equal(impEntry1040.event, 'importer.event');
+
+    console.log(
+      '  ✅ [15/15] ClusterPeerFloor, MerchantReviewRisk & ImporterLogger Numeric & ID Bounds (#1040) passed'
+    );
+  }
+
+  // =========================================================================
+  // 16. Paging & ShopeeToSupabase URL, Review ID & Entity ID Bounds (#1046)
+  // =========================================================================
+  {
+    const { fetchAllPages, parseShopeeEnqueueUrl, resolveBackfillSupabaseTarget } =
+      await import('../paging.js');
+    const { platformReviewIdFor, sanitizeIngestionEntityId } =
+      await import('../shopee-to-supabase.js');
+
+    // 1. fetchAllPages rejects hex/octal string pageSize/maxPages and clamps positive integers
+    const ranges1046: Array<[number, number]> = [];
+    await fetchAllPages(
+      'hex_page',
+      (from, to) => {
+        ranges1046.push([from, to]);
+        return Promise.resolve({ data: [], error: null });
+      },
+      '0x10' as unknown as number,
+      '0x5' as unknown as number
+    );
+    assert.deepEqual(ranges1046, [[0, 999]]);
+
+    // 2. parseShopeeEnqueueUrl rejects /verify, /buyer/login, and /search interstitial paths
+    assert.equal(
+      parseShopeeEnqueueUrl('https://shopee.vn/verify/captcha-i.88201679.27110898667'),
+      null
+    );
+    assert.equal(
+      parseShopeeEnqueueUrl('https://shopee.vn/buyer/login/i.88201679.27110898667'),
+      null
+    );
+    assert.equal(parseShopeeEnqueueUrl('https://shopee.vn/search/i.88201679.27110898667'), null);
+
+    // 3. resolveBackfillSupabaseTarget rejects 0.0.0.0 and single-label non-localhost hosts
+    assert.throws(() => resolveBackfillSupabaseTarget('https://0.0.0.0:54321'), /invalid hostname/);
+    assert.throws(
+      () => resolveBackfillSupabaseTarget('https://internal-db:54321'),
+      /invalid hostname/
+    );
+    assert.equal(resolveBackfillSupabaseTarget('http://localhost:54321').host, 'localhost:54321');
+
+    // 4. sanitizeIngestionEntityId and platformReviewIdFor reject sentinels, multi-zero, and whitespace
+    assert.equal(sanitizeIngestionEntityId('0000'), null);
+    assert.equal(sanitizeIngestionEntityId('---'), null);
+    assert.equal(sanitizeIngestionEntityId('__proto__'), null);
+    assert.equal(sanitizeIngestionEntityId('rev id'), null);
+    assert.equal(sanitizeIngestionEntityId('\u0000rev-1046 '), 'rev-1046');
+
+    const baseRev1046 = {
+      reviewId: '0000',
+      author: 'User 1046',
+      ratingStar: 5,
+      comment: 'Solid phone',
+      images: [],
+    };
+    const hashed1046 = platformReviewIdFor(baseRev1046);
+    assert.ok(hashed1046.startsWith('rv-'));
+    assert.equal(platformReviewIdFor({ ...baseRev1046, reviewId: '__proto__' }), hashed1046);
+    assert.equal(platformReviewIdFor({ ...baseRev1046, reviewId: '---' }), hashed1046);
+    assert.equal(platformReviewIdFor({ ...baseRev1046, reviewId: 'bad space' }), hashed1046);
+
+    console.log(
+      '  ✅ [16/16] Paging & ShopeeToSupabase URL, Review ID & Entity ID Bounds (#1046) passed'
+    );
+  }
+
+  // =========================================================================
+  // 17. EntityMatcher & ArenaSpecSyncer Numeric, Key & ID Bounds (#1053)
+  // =========================================================================
+  {
+    const {
+      EntityMatcher,
+      sanitizeMatcherEntityId,
+      toBoundedPositiveInt,
+      toBoundedPositiveNumber,
+    } = await import('../entity-matcher.js');
+    const { ArenaSpecSyncer, extractGsmArenaDataSpecs } = await import('../arena-spec-syncer.js');
+
+    // 1. toBoundedPositiveInt and toBoundedPositiveNumber strip control chars and reject hex/octal/binary prefixes
+    assert.equal(toBoundedPositiveInt('0x10', 2048), null);
+    assert.equal(toBoundedPositiveInt('0o20', 2048), null);
+    assert.equal(toBoundedPositiveInt('0b1000', 2048), null);
+    assert.equal(toBoundedPositiveInt('\u0000 16 \r\n', 2048), 16);
+    assert.equal(toBoundedPositiveNumber('0x10', 120), null);
+    assert.equal(toBoundedPositiveNumber('\u0000 6.8 \n', 120), 6.8);
+
+    // 2. sanitizeMatcherEntityId and enrichMasterProductById reject multi-zero, pure-punctuation, internal whitespace, and prototype keys
+    assert.equal(sanitizeMatcherEntityId('0000'), '');
+    assert.equal(sanitizeMatcherEntityId('---'), '');
+    assert.equal(sanitizeMatcherEntityId('__proto__'), '');
+    assert.equal(sanitizeMatcherEntityId('constructor'), '');
+    assert.equal(sanitizeMatcherEntityId('prototype'), '');
+    assert.equal(sanitizeMatcherEntityId('id with space'), '');
+    assert.equal(sanitizeMatcherEntityId('  master-1053  '), 'master-1053');
+
+    const matcher1053 = new EntityMatcher({} as never);
+    await assert.rejects(
+      () => matcher1053.enrichMasterProductById('0000'),
+      /masterId must be a non-empty string/
+    );
+    await assert.rejects(
+      () => matcher1053.enrichMasterProductById('__proto__'),
+      /masterId must be a non-empty string/
+    );
+
+    // 3. extractGsmArenaDataSpecs rejects prototype-pollution and pure-punctuation keys
+    const specs1053 = extractGsmArenaDataSpecs(
+      `<td data-spec="__proto__">polluted</td>
+       <td data-spec="constructor">bad</td>
+       <td data-spec="---">dash</td>
+       <td data-spec="modelname">Samsung Galaxy S26 Ultra</td>`
+    );
+    assert.equal(Object.hasOwn(specs1053, '__proto__'), false);
+    assert.equal(Object.hasOwn(specs1053, 'constructor'), false);
+    assert.equal(Object.hasOwn(specs1053, '---'), false);
+    assert.equal(specs1053.modelname, 'Samsung Galaxy S26 Ultra');
+
+    // 4. auditCatalogAgainstArenaRegistry sanitizes id, model_key, and slug
+    const syncer1053 = new ArenaSpecSyncer();
+    const audit1053 = await syncer1053.auditCatalogAgainstArenaRegistry({
+      from: () => ({
+        select: () => ({
+          order: () => ({
+            range: async (from: number) => ({
+              data:
+                from === 0
+                  ? [
+                      {
+                        id: '0000',
+                        name: 'Bad Sentinel Master',
+                        model_key: '__proto__',
+                        slug: '---',
+                        specifications: {},
+                      },
+                    ]
+                  : [],
+              error: null,
+            }),
+          }),
+        }),
+      }),
+    } as never);
+    assert.equal(audit1053.incompleteSpecMasters.length, 1);
+    assert.equal(audit1053.incompleteSpecMasters[0]?.id, '');
+    assert.equal(audit1053.incompleteSpecMasters[0]?.model_key, '');
+
+    console.log(
+      '  ✅ [17/17] EntityMatcher & ArenaSpecSyncer Numeric, Key & ID Bounds (#1053) passed'
+    );
+  }
+
   console.log('🎉 All @repo/crawlers Open-Core Intelligence tests passed!');
 }
 
