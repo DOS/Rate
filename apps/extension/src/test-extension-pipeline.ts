@@ -2816,8 +2816,7 @@ async function runTests() {
         ? radarMod
         : (radarMod as unknown as { default: typeof radarMod }).default
     ) as typeof radarMod;
-    const plausibilityMod =
-      await import('../../web/src/lib/offer-plausibility.js');
+    const plausibilityMod = await import('@repo/shared-data/rules');
     const { implausiblyLowOfferIds, implausiblyLowIndexes } = (
       typeof plausibilityMod.implausiblyLowOfferIds === 'function'
         ? plausibilityMod

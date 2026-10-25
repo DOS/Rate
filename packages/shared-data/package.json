@@ -8,6 +8,11 @@
       "import": "./dist/index.js",
       "require": "./dist/index.js"
     },
+    "./rules": {
+      "types": "./dist/rules/index.d.ts",
+      "import": "./dist/rules/index.js",
+      "require": "./dist/rules/index.js"
+    },
     "./server": {
       "types": "./dist/server.d.ts",
       "import": "./dist/server.js",
