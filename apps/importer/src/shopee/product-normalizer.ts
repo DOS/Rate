@@ -24,6 +24,7 @@ function normalizeHttpAssetUrl(raw: unknown): string | null {
     const parsed = new URL(trimmed);
     if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return null;
     if (parsed.username || parsed.password) return null;
+    if (parsed.port !== '' && parsed.port !== '80' && parsed.port !== '443') return null;
     if (!parsed.hostname || parsed.hostname.startsWith('.') || parsed.hostname.endsWith('.')) {
       return null;
     }

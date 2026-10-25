@@ -33,7 +33,7 @@ export function resolveClusterPeerFloorPrice(
     const limit = Math.min(peerRows.length, MAX_CLUSTER_PEER_ROWS);
     for (let i = 0; i < limit; i++) {
       const row = peerRows[i];
-      if (!row || typeof row !== 'object') continue;
+      if (!row || typeof row !== 'object' || Array.isArray(row)) continue;
       const rowId =
         typeof row.id === 'string' || (typeof row.id === 'number' && Number.isFinite(row.id))
           ? String(row.id)
@@ -56,7 +56,13 @@ export function resolveClusterPeerFloorPrice(
       if (price < peerMin) {
         peerMin = price;
       }
-      const mObj = Array.isArray(row.merchants) ? row.merchants[0] : row.merchants;
+      const mObj = Array.isArray(row.merchants)
+        ? row.merchants.find((m: { is_official?: boolean | null } | null | undefined) =>
+            Boolean(m && typeof m === 'object' && !Array.isArray(m))
+          )
+        : row.merchants && typeof row.merchants === 'object'
+          ? row.merchants
+          : null;
       if (mObj?.is_official && price < officialMin) {
         officialMin = price;
       }

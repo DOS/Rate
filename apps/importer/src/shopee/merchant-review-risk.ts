@@ -78,14 +78,16 @@ export interface ReviewRow {
 export function mapStoredReview(
   row: ReviewRow
 ): { result: AnalyzedReviewResult; raw: ReviewInputItem } | null {
-  if (!row || typeof row !== 'object') return null;
+  if (!row || typeof row !== 'object' || Array.isArray(row)) return null;
   const reviewId = normalizeSafeId(row.id);
   if (!reviewId) return null;
   const vf = Array.isArray(row.review_flags)
     ? row.review_flags.find((f): f is NonNullable<(typeof row.review_flags)[number]> =>
-        Boolean(f && typeof f === 'object')
+        Boolean(f && typeof f === 'object' && !Array.isArray(f))
       )
-    : row.review_flags;
+    : row.review_flags && typeof row.review_flags === 'object'
+      ? row.review_flags
+      : null;
   const rawVerdict = typeof vf?.verdict === 'string' ? vf.verdict.trim().toLowerCase() : null;
   if (rawVerdict === 'unanalyzed') return null;
   const verdict: AnalyzedReviewResult['verdict'] =
@@ -159,11 +161,18 @@ export function strongestPriceAnomaly(
   officialByMerchant: ReadonlyMap<string, boolean>,
   masterMinByCluster: ReadonlyMap<string, number>
 ): { listingPrice: number; canonicalMinPrice: number } | null {
-  if (!merchant || typeof merchant !== 'object' || merchant.is_official) return null;
+  if (
+    !merchant ||
+    typeof merchant !== 'object' ||
+    Array.isArray(merchant) ||
+    merchant.is_official
+  ) {
+    return null;
+  }
   if (!Array.isArray(listings) || listings.length === 0) return null;
   let best: { listingPrice: number; canonicalMinPrice: number; ratio: number } | null = null;
   for (const listing of listings) {
-    if (!listing || typeof listing !== 'object') continue;
+    if (!listing || typeof listing !== 'object' || Array.isArray(listing)) continue;
     const price = toValidPrice(listing.price_current);
     if (!price || !listing.cluster_id) continue;
     const clusterPeers =
@@ -171,7 +180,7 @@ export function strongestPriceAnomaly(
         ? (productsByCluster.get(listing.cluster_id) ?? [])
         : [];
     const peers = clusterPeers
-      .filter((p): p is ProductRow => Boolean(p && typeof p === 'object'))
+      .filter((p): p is ProductRow => Boolean(p && typeof p === 'object' && !Array.isArray(p)))
       .map(p => ({
         id: p.id,
         price_current: p.price_current,
@@ -215,7 +224,7 @@ export function scoreMerchants(
   const safeMerchants: MerchantRow[] = [];
   if (Array.isArray(merchants)) {
     for (const m of merchants) {
-      if (!m || typeof m !== 'object') continue;
+      if (!m || typeof m !== 'object' || Array.isArray(m)) continue;
       const safeId = normalizeSafeId(m.id);
       if (!safeId) continue;
       safeMerchants.push({ ...m, id: safeId });
@@ -224,7 +233,7 @@ export function scoreMerchants(
   const safeProducts: ProductRow[] = [];
   if (Array.isArray(products)) {
     for (const p of products) {
-      if (!p || typeof p !== 'object') continue;
+      if (!p || typeof p !== 'object' || Array.isArray(p)) continue;
       const safeId = normalizeSafeId(p.id);
       if (!safeId) continue;
       safeProducts.push({
@@ -236,7 +245,9 @@ export function scoreMerchants(
     }
   }
   const safeReviews = Array.isArray(reviews)
-    ? reviews.filter((rv): rv is ReviewRow => Boolean(rv && typeof rv === 'object'))
+    ? reviews.filter((rv): rv is ReviewRow =>
+        Boolean(rv && typeof rv === 'object' && !Array.isArray(rv))
+      )
     : [];
   const merchantById = new Map(safeMerchants.map(m => [m.id, m]));
   const officialByMerchant = new Map(safeMerchants.map(m => [m.id, Boolean(m.is_official)]));
@@ -442,7 +453,11 @@ export async function loadAndScoreMerchant(
     'merchant_id',
     [safeMerchantId]
   );
-  const clusterIds = uniqueIds(listings.map(p => p.cluster_id));
+  const clusterIds = uniqueIds(
+    listings
+      .filter(p => Boolean(p && typeof p === 'object' && !Array.isArray(p)))
+      .map(p => p.cluster_id)
+  );
   // The peers' official flag comes embedded, so no per-merchant read.
   type PeerRow = ProductRow & {
     merchants?: { is_official?: boolean | null } | Array<{ is_official?: boolean | null }> | null;
@@ -458,14 +473,18 @@ export async function loadAndScoreMerchant(
   const peerMerchants = new Map<string, MerchantRow>();
   const rows: PeerRow[] = [...listings, ...peers];
   for (const rawRow of rows) {
-    if (!rawRow || typeof rawRow !== 'object') continue;
+    if (!rawRow || typeof rawRow !== 'object' || Array.isArray(rawRow)) continue;
     const { merchants: embedded, ...product } = rawRow;
     const safeProductId = normalizeSafeId(product.id);
     if (!safeProductId) continue;
     productById.set(safeProductId, { ...product, id: safeProductId });
     const safePeerMerchantId = normalizeSafeId(product.merchant_id);
     if (!safePeerMerchantId || safePeerMerchantId === safeMerchantId) continue;
-    const official = Array.isArray(embedded) ? embedded[0]?.is_official : embedded?.is_official;
+    const official = Array.isArray(embedded)
+      ? embedded.find(e => Boolean(e && typeof e === 'object' && !Array.isArray(e)))?.is_official
+      : embedded && typeof embedded === 'object'
+        ? embedded.is_official
+        : undefined;
     peerMerchants.set(safePeerMerchantId, {
       id: safePeerMerchantId,
       platform: '',
@@ -478,7 +497,9 @@ export async function loadAndScoreMerchant(
     'reviews',
     REVIEW_RISK_SELECT,
     'product_id',
-    uniqueIds(listings.filter(p => Boolean(p && typeof p === 'object')).map(p => p.id))
+    uniqueIds(
+      listings.filter(p => Boolean(p && typeof p === 'object' && !Array.isArray(p))).map(p => p.id)
+    )
   );
   const masters = await fetchAllByIds<{ id: string; min_price: number | string | null }>(
     supabase,
@@ -489,7 +510,7 @@ export async function loadAndScoreMerchant(
   );
   const masterMinByCluster = new Map<string, number>();
   for (const m of masters) {
-    if (!m || typeof m !== 'object') continue;
+    if (!m || typeof m !== 'object' || Array.isArray(m)) continue;
     const masterId = normalizeSafeId(m.id);
     const price = toValidPrice(m.min_price);
     if (masterId && price) masterMinByCluster.set(masterId, price);
