@@ -14,9 +14,19 @@ export const MAX_PLAUSIBLE_VND_PRICE = 1_000_000_000;
 
 function toSafePlausiblePrice(raw: unknown): number {
   if (typeof raw !== 'number' && typeof raw !== 'string') return NaN;
-  if (typeof raw === 'string' && !raw.trim()) return NaN;
-  const n = typeof raw === 'number' ? raw : Number(raw.trim());
-  return Number.isFinite(n) && n > 0 && n <= MAX_PLAUSIBLE_VND_PRICE ? n : NaN;
+  if (typeof raw === 'string') {
+    const cleaned = raw.replace(/\p{Cc}+/gu, '').trim();
+    if (!cleaned || cleaned.length > 32 || /^[+-]?0[xbo]/i.test(cleaned)) {
+      return NaN;
+    }
+    const n = Number(cleaned);
+    return Number.isFinite(n) && n > 0 && n <= MAX_PLAUSIBLE_VND_PRICE
+      ? n
+      : NaN;
+  }
+  return Number.isFinite(raw) && raw > 0 && raw <= MAX_PLAUSIBLE_VND_PRICE
+    ? raw
+    : NaN;
 }
 
 function isValidPlausiblePrice(price: unknown): price is number {
@@ -106,10 +116,12 @@ export function implausiblyLowOfferIds<
       )
       .filter(
         (id) =>
-          Boolean(id) &&
-          id.length <= 256 &&
+          /^[a-zA-Z0-9._-]{1,256}$/.test(id) &&
           /[a-zA-Z0-9]/.test(id) &&
-          !/^(?:0|null|undefined|nan|infinity|-infinity|true|false)$/i.test(id)
+          !id.startsWith('.') &&
+          !id.endsWith('.') &&
+          !id.includes('..') &&
+          !/^(?:0+|null|undefined|nan|infinity|-infinity|true|false)$/i.test(id)
       )
   );
 }

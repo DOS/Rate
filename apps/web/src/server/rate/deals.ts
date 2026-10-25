@@ -216,7 +216,8 @@ export function normalizeDealRadarOptions(options?: {
     rawPlat &&
     rawPlat !== 'all' &&
     SAFE_PLATFORM_FILTER_REGEX.test(rawPlat) &&
-    /[a-z0-9]/.test(rawPlat)
+    /[a-z0-9]/.test(rawPlat) &&
+    !/^(?:0+|null|undefined|nan|infinity|-infinity|true|false)$/i.test(rawPlat)
       ? rawPlat
       : 'all';
 
@@ -266,6 +267,25 @@ export function computeCrossPlatformDealRadarFromData(
       continue;
     }
     const { master, offers } = cluster;
+    const rawMasterSlug =
+      typeof master.slug === 'string'
+        ? master.slug
+            .replace(/\p{Cc}+/gu, '')
+            .trim()
+            .slice(0, 200)
+        : '';
+    const safeMasterSlug =
+      /^[a-zA-Z0-9][a-zA-Z0-9._-]{0,199}$/.test(rawMasterSlug) &&
+      !rawMasterSlug.endsWith('.') &&
+      !rawMasterSlug.includes('..') &&
+      !/^(?:0+|null|undefined|nan|infinity|-infinity|true|false)$/i.test(
+        rawMasterSlug
+      )
+        ? rawMasterSlug
+        : '';
+    if (!safeMasterSlug) {
+      continue;
+    }
     const categorySlug = getMasterProductCategorySlug(master);
     if (categoryFilter !== 'all' && categorySlug !== categoryFilter) {
       continue;
@@ -287,7 +307,7 @@ export function computeCrossPlatformDealRadarFromData(
             o.price_current > 0 &&
             o.price_current <= MAX_VALID_VND_PRICE
         )
-        .map((o) => {
+        .map((o, idx) => {
           const cleanedPlat =
             typeof o.platform === 'string'
               ? o.platform
@@ -299,7 +319,10 @@ export function computeCrossPlatformDealRadarFromData(
           const safePlatform =
             cleanedPlat &&
             SAFE_PLATFORM_FILTER_REGEX.test(cleanedPlat) &&
-            /[a-z0-9]/.test(cleanedPlat)
+            /[a-z0-9]/.test(cleanedPlat) &&
+            !/^(?:0+|null|undefined|nan|infinity|-infinity|true|false)$/i.test(
+              cleanedPlat
+            )
               ? cleanedPlat
               : 'shopee';
           const rawMerchant =
@@ -315,15 +338,45 @@ export function computeCrossPlatformDealRadarFromData(
                   .trim()
                   .slice(0, 160) || safePlatform.toUpperCase()
               : safePlatform.toUpperCase();
-          const safeMerchantId =
+          const cleanedMerchantId =
             typeof rawMerchant.id === 'string'
               ? rawMerchant.id
                   .replace(/\p{Cc}+/gu, '')
                   .trim()
                   .slice(0, 128)
               : '';
+          const safeMerchantId =
+            /^[a-zA-Z0-9._-]{1,128}$/.test(cleanedMerchantId) &&
+            /[a-zA-Z0-9]/.test(cleanedMerchantId) &&
+            !cleanedMerchantId.startsWith('.') &&
+            !cleanedMerchantId.endsWith('.') &&
+            !cleanedMerchantId.includes('..') &&
+            !/^(?:0+|null|undefined|nan|infinity|-infinity|true|false)$/i.test(
+              cleanedMerchantId
+            )
+              ? cleanedMerchantId
+              : '';
+          const cleanedOfferId =
+            typeof o.id === 'string'
+              ? o.id
+                  .replace(/\p{Cc}+/gu, '')
+                  .trim()
+                  .slice(0, 128)
+              : '';
+          const safeOfferId =
+            /^[a-zA-Z0-9._-]{1,128}$/.test(cleanedOfferId) &&
+            /[a-zA-Z0-9]/.test(cleanedOfferId) &&
+            !cleanedOfferId.startsWith('.') &&
+            !cleanedOfferId.endsWith('.') &&
+            !cleanedOfferId.includes('..') &&
+            !/^(?:0+|null|undefined|nan|infinity|-infinity|true|false)$/i.test(
+              cleanedOfferId
+            )
+              ? cleanedOfferId
+              : `offer-${idx + 1}`;
           return {
             ...o,
+            id: safeOfferId,
             platform: safePlatform,
             url: sanitizeDealOfferHttpUrl(o.url),
             merchant: {
@@ -359,7 +412,7 @@ export function computeCrossPlatformDealRadarFromData(
         ? Number((rawExpert <= 5 ? rawExpert * 2 : rawExpert).toFixed(1))
         : null;
     const imageUrl = resolveProductImageUrl(master);
-    const productHref = `/${categorySlug}/${master.slug}`;
+    const productHref = `/${categorySlug}/${safeMasterSlug}`;
 
     // 1. Identify best genuine deal for this Master Product
     const sortedByPrice = [...validOffers].sort(
@@ -383,8 +436,8 @@ export function computeCrossPlatformDealRadarFromData(
         priciestOffer.platform.toLowerCase() === platformFilter)
     ) {
       priceSpreadLeaders.push({
-        id: `spread-${master.slug}`,
-        productSlug: master.slug,
+        id: `spread-${safeMasterSlug}`,
+        productSlug: safeMasterSlug,
         productName: master.name,
         brand: master.brand,
         categorySlug,
@@ -436,12 +489,12 @@ export function computeCrossPlatformDealRadarFromData(
         : 'best_market_deal';
 
       genuineDeals.push({
-        id: `deal-${master.slug}-${bestOffer.platform}`,
+        id: `deal-${safeMasterSlug}-${bestOffer.platform}`,
         verdict,
         verdictBadgeVi: isAllTimeLow
           ? '🔥 Đáy Giá Đa Sàn'
           : '✅ Giá Tốt Nhất 10 Sàn',
-        productSlug: master.slug,
+        productSlug: safeMasterSlug,
         productName: master.name,
         brand: master.brand,
         categorySlug,
@@ -493,10 +546,10 @@ export function computeCrossPlatformDealRadarFromData(
       // Flag when original price is >= 11% above market median and current price is >= market median
       if (fakeMarkupPct >= 11 && off.price_current >= marketMedianPrice) {
         const candidateTrap: CrossPlatformDealRadarItem = {
-          id: `trap-${master.slug}-${off.platform}-${off.id}`,
+          id: `trap-${safeMasterSlug}-${off.platform}-${off.id}`,
           verdict: 'inflated_fake_sale',
           verdictBadgeVi: `⚠️ Nâng giá gốc +${fakeMarkupPct}%`,
-          productSlug: master.slug,
+          productSlug: safeMasterSlug,
           productName: master.name,
           brand: master.brand,
           categorySlug,
