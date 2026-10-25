@@ -37,14 +37,16 @@ export function supabasePublicEnv(): { url: string; anonKey: string } | null {
 }
 
 /** Supabase stores the session in `sb-<project>-auth-token` cookies (possibly chunked). */
+const SUPABASE_AUTH_COOKIE_NAME_RE =
+  /^sb-[a-z0-9_-]{1,64}-auth-token(?:\.\d{1,3})?$/i;
+
 export function hasSupabaseAuthCookie(cookies: CookieRecord[]): boolean {
   if (!Array.isArray(cookies)) return false;
   return cookies.some(
     (c) =>
-      Boolean(c) &&
+      Boolean(c && typeof c === 'object' && !Array.isArray(c)) &&
       typeof c.name === 'string' &&
-      c.name.startsWith('sb-') &&
-      c.name.includes('-auth-token') &&
+      SUPABASE_AUTH_COOKIE_NAME_RE.test(c.name) &&
       typeof c.value === 'string' &&
       Boolean(c.value.replace(/\p{Cc}+/gu, '').trim())
   );

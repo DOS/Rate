@@ -14,7 +14,8 @@ export function sanitizeBrowserAccessToken(rawToken: unknown): string | null {
   if (
     !trimmed ||
     trimmed.length > MAX_BROWSER_ACCESS_TOKEN_LENGTH ||
-    /\s/u.test(trimmed)
+    /\s/u.test(trimmed) ||
+    /^(?:null|undefined|nan|true|false|0)$/i.test(trimmed)
   ) {
     return null;
   }

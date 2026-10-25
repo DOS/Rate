@@ -11368,6 +11368,97 @@ async function runCoreArchitectureSuite() {
     assert.equal(radar.priceSpreadLeaders[0]?.cheapestOfferUrl, '');
     assert.equal(radar.fakeSaleTraps[0]?.offerUrl, '');
 
+    const {
+      readBearerToken,
+      readCookieAccessToken,
+      isSameOriginRequest,
+      mapRpcRejection,
+    } = await import('../request-auth');
+    const { hasSupabaseAuthCookie } = await import('@/lib/supabase/cookies');
+    const { sanitizeBrowserAccessToken } =
+      await import('@/lib/auth/access-token');
+
+    assert.equal(readBearerToken(null as never), '');
+    assert.equal(
+      readBearerToken(
+        new Request('https://rate.vn/api', {
+          headers: { Authorization: 'Bearer null' },
+        })
+      ),
+      ''
+    );
+    assert.equal(
+      await readCookieAccessToken([
+        {
+          name: 'sb-proj-auth-token',
+          value: JSON.stringify({ access_token: 'undefined' }),
+        },
+      ]),
+      null
+    );
+    assert.equal(
+      await readCookieAccessToken([
+        {
+          name: 'sb--auth-token',
+          value: JSON.stringify({
+            access_token: ['dummy', 'session', '12345678'].join('-'),
+          }),
+        },
+      ]),
+      null
+    );
+    assert.equal(await readCookieAccessToken(null as never), null);
+
+    assert.equal(
+      isSameOriginRequest(
+        new Request('https://rate.vn/api', {
+          headers: { Origin: 'null', Host: 'rate.vn' },
+        })
+      ),
+      false
+    );
+    assert.equal(
+      isSameOriginRequest(
+        new Request('https://rate.vn/api', {
+          headers: {
+            Origin: 'https://user:pass@rate.vn',
+            Host: 'rate.vn',
+          },
+        })
+      ),
+      false
+    );
+    assert.equal(
+      isSameOriginRequest(
+        new Request('https://rate.vn/api', {
+          headers: {
+            Origin: 'https://rate.vn',
+            'x-forwarded-host': 'rate..vn',
+          },
+        })
+      ),
+      false
+    );
+    assert.equal(
+      isSameOriginRequest(
+        new Request('https://rate.vn/api', {
+          headers: { Origin: 'https://rate.vn', Host: 'rate.vn' },
+        })
+      ),
+      true
+    );
+
+    assert.equal(mapRpcRejection([] as never, {}), null);
+    assert.equal(mapRpcRejection({ code: 'P0001' }, [] as never), null);
+    assert.equal(
+      hasSupabaseAuthCookie([
+        { name: 'sb--auth-token', value: 'eyJhbGciOiJIUzI1NiJ9' },
+      ]),
+      false
+    );
+    assert.equal(sanitizeBrowserAccessToken('null'), null);
+    assert.equal(sanitizeBrowserAccessToken('undefined'), null);
+
     console.log(
       '  ✅ [121/121] API Handler URL/Slug/Vote Guards & OpenAPI Server Origin Bounds (#978) passed'
     );
