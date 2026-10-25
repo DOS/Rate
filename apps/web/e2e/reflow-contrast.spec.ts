@@ -9,6 +9,10 @@ const PHONE_PAGES = [
   '/smartphones/iphone-16-pro-max-256gb',
   '/merchants',
   '/compare',
+  // Longer sort labels pushed the catalog sideways in en and cs
+  // (DOS/Rate#1082).
+  '/en/smartphones',
+  '/cs/smartphones',
 ];
 
 for (const path of PHONE_PAGES) {

@@ -674,7 +674,7 @@ export async function CategoryCatalogContent({
 
                   <div className="col-xl-5 col-lg-5 col-md-5 col-sm-12">
                     <div className="text-md-end">
-                      <div className="dropdown d-inline-flex p-0">
+                      <div className="dropdown d-inline-flex mw-100 p-0">
                         <a
                           href="#shortfilter"
                           className="dropdown-toggle toogleDrops px-3 py-2"
