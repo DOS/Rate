@@ -347,6 +347,7 @@ export function computeCrossPlatformDealRadarFromData(
               : '';
           const safeMerchantId =
             /^[a-zA-Z0-9._-]{1,128}$/.test(cleanedMerchantId) &&
+            /[a-zA-Z0-9]/.test(cleanedMerchantId) &&
             !cleanedMerchantId.startsWith('.') &&
             !cleanedMerchantId.endsWith('.') &&
             !cleanedMerchantId.includes('..') &&
@@ -364,6 +365,7 @@ export function computeCrossPlatformDealRadarFromData(
               : '';
           const safeOfferId =
             /^[a-zA-Z0-9._-]{1,128}$/.test(cleanedOfferId) &&
+            /[a-zA-Z0-9]/.test(cleanedOfferId) &&
             !cleanedOfferId.startsWith('.') &&
             !cleanedOfferId.endsWith('.') &&
             !cleanedOfferId.includes('..') &&

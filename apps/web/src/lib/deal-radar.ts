@@ -310,6 +310,7 @@ export function selectMerchantRadar(
     .slice(0, 256);
   const targetId =
     /^[a-zA-Z0-9._-]{1,256}$/.test(rawTargetId) &&
+    /[a-zA-Z0-9]/.test(rawTargetId) &&
     !rawTargetId.startsWith('.') &&
     !rawTargetId.endsWith('.') &&
     !rawTargetId.includes('..') &&
