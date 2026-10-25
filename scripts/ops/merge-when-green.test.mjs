@@ -25,7 +25,12 @@ const pr = (overrides = {}) => ({
   merged: false,
   state: 'open',
   mergeable_state: 'clean',
-  head: { sha: 'abcdef1234567890' },
+  head: {
+    sha: 'abcdef1234567890',
+    ref: 'fix/x',
+    repo: { full_name: 'DOS/Rate' },
+  },
+  base: { ref: 'dev', repo: { full_name: 'DOS/Rate' } },
   ...overrides,
 });
 const green = [run('CI', 'completed', 'success')];
@@ -226,6 +231,53 @@ test('a green PR behind a strict base is brought up to date, not merged', () => 
       0
     ).action,
     'wait'
+  );
+});
+
+test('a promotion or fork PR behind its base is never updated automatically', () => {
+  const promotion = decide(
+    pr({
+      mergeable_state: 'behind',
+      head: {
+        sha: 'abcdef1234567890',
+        ref: 'dev',
+        repo: { full_name: 'DOS/Rate' },
+      },
+      base: { ref: 'main', repo: { full_name: 'DOS/Rate' } },
+    }),
+    { state: 'passed' },
+    0
+  );
+  assert.equal(promotion.action, 'fail');
+  assert.match(promotion.message, /shared branch.*back-merge main into dev/);
+  const fork = decide(
+    pr({
+      mergeable_state: 'behind',
+      head: {
+        sha: 'abcdef1234567890',
+        ref: 'fix/x',
+        repo: { full_name: 'someone/Rate' },
+      },
+    }),
+    { state: 'passed' },
+    0
+  );
+  assert.equal(fork.action, 'fail');
+  assert.match(fork.message, /fork branch/);
+});
+
+test('conflicts and failures win over being behind', () => {
+  assert.match(
+    decide(pr({ mergeable_state: 'dirty' }), { state: 'passed' }, 0).message,
+    /conflicts/
+  );
+  assert.equal(
+    decide(
+      pr({ mergeable_state: 'behind' }),
+      { state: 'failed', failed: ['CI'] },
+      0
+    ).action,
+    'fail'
   );
 });
 

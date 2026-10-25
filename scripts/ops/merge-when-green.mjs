@@ -152,7 +152,22 @@ export function decide(pr, checks, blockedPolls) {
   if (checks.state === 'pending') return { action: 'wait' };
   // A strict ruleset counts checks only on a head that contains the latest
   // base: bring the branch up to date and wait for the new head's checks.
-  if (pr.mergeable_state === 'behind') return { action: 'update' };
+  // Never for a shared branch (a dev to main promotion: that update would push
+  // an unreviewed back-merge to dev, see RELEASE.md) or a fork's branch.
+  if (pr.mergeable_state === 'behind') {
+    const headRef = pr.head.ref;
+    const fork =
+      pr.head.repo?.full_name &&
+      pr.base.repo?.full_name &&
+      pr.head.repo.full_name !== pr.base.repo.full_name;
+    if (PROTECTED_BRANCHES.has(headRef) || fork) {
+      return {
+        action: 'fail',
+        message: `PR ${pr.number} is behind ${pr.base.ref}; its head ${headRef} is ${fork ? 'a fork branch' : 'a shared branch'}, so it is not updated automatically (back-merge ${pr.base.ref} into ${headRef} through a PR, Docs/Resources/RELEASE.md)`,
+      };
+    }
+    return { action: 'update' };
+  }
   // GitHub recomputes mergeability a little after the last check finishes.
   if (pr.mergeable_state === 'blocked' || pr.mergeable_state === 'unknown') {
     return blockedPolls + 1 >= BLOCKED_POLLS
@@ -196,6 +211,7 @@ export async function mergeWhenGreen({
   let apiErrors = 0;
   let mergeRefusals = 0;
   let branchUpdates = 0;
+  let lastUpdatedSha = null;
   for (;;) {
     let head;
     try {
@@ -235,6 +251,12 @@ export async function mergeWhenGreen({
     if (next.action === 'done') return { ok: true, message: next.message };
     if (next.action === 'fail') return { ok: false, message: next.message };
     if (next.action === 'update') {
+      // update-branch is asynchronous: until the new head appears, the old
+      // head still reads as behind. Wait for it instead of updating again.
+      if (pr.head.sha === lastUpdatedSha) {
+        await sleep(intervalMs);
+        continue;
+      }
       if (++branchUpdates > MAX_BRANCH_UPDATES) {
         return {
           ok: false,
@@ -258,6 +280,7 @@ export async function mergeWhenGreen({
           message: `PR ${number} is behind ${pr.base.ref} and could not be updated: ${updated.stderr.trim()}`,
         };
       }
+      lastUpdatedSha = pr.head.sha;
       console.log(`PR ${number} was behind ${pr.base.ref}: branch updated`);
       await sleep(intervalMs);
       continue;
