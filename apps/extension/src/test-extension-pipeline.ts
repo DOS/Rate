@@ -3501,6 +3501,32 @@ async function runTests() {
     );
   }
 
+  // Rate-Domain & Spec-Localizer Numeric, Key-Spec, and Sentinel Bounds (#1038)
+  {
+    const { normalizeCompareFiveStarRating, resolveCompareRamGb } =
+      await import('../../web/src/lib/rate-domain');
+    const { localizeSpecValue } =
+      await import('../../web/src/lib/spec-localizer');
+
+    assert.equal(normalizeCompareFiveStarRating('0x4'), 0);
+    assert.equal(normalizeCompareFiveStarRating('\u00004.5'), 4.5);
+    assert.equal(
+      resolveCompareRamGb({
+        ram_gb: '0x10' as unknown as number,
+        specifications: {},
+        key_specs: { ram: '16 GB' },
+      }),
+      16
+    );
+    assert.equal(localizeSpecValue({} as unknown as string, 'vi'), '-');
+    assert.equal(localizeSpecValue('__proto__', 'en'), '-');
+    assert.equal(localizeSpecValue('N/A', 'cs'), '-');
+
+    console.log(
+      '  \u2705 [Rate-Domain & Spec-Localizer Numeric, Key-Spec, and Sentinel Bounds (#1038)] Verified'
+    );
+  }
+
   console.log('🎉 All Rate Browser Extension MV3 v2 tests passed!');
 }
 

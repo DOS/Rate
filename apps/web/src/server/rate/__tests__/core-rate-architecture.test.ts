@@ -12680,6 +12680,87 @@ async function runCoreArchitectureSuite() {
     );
   }
 
+  // -------------------------------------------------------------------------
+  // 129. Rate-Domain & Spec-Localizer Numeric, Key-Spec, and Sentinel Bounds (#1038)
+  // -------------------------------------------------------------------------
+  {
+    const {
+      normalizeCompareFiveStarRating,
+      resolveCompareDisplaySizeInch,
+      resolveCompareRamGb,
+      resolveCompareStorageGb,
+      resolveCompareBatteryMah,
+    } = await import('../../../lib/rate-domain');
+    const { localizeSpecValue } = await import('../../../lib/spec-localizer');
+
+    assert.equal(normalizeCompareFiveStarRating('0x4'), 0);
+    assert.equal(normalizeCompareFiveStarRating('0b100'), 0);
+    assert.equal(normalizeCompareFiveStarRating('0o4'), 0);
+    assert.equal(normalizeCompareFiveStarRating('\u00004.5 '), 4.5);
+
+    assert.equal(
+      resolveCompareDisplaySizeInch({
+        screen_size_inch: '0x6' as unknown as number,
+        specifications: {
+          display: { size_inch: '0x6' as unknown as number },
+        },
+        key_specs: { screen: { bad: 1 } as unknown as string },
+      }),
+      null
+    );
+    assert.equal(
+      resolveCompareDisplaySizeInch({
+        screen_size_inch: '\u00006.78 ' as unknown as number,
+        specifications: {},
+        key_specs: {},
+      }),
+      6.78
+    );
+
+    assert.equal(
+      resolveCompareRamGb({
+        ram_gb: '0x10' as unknown as number,
+        specifications: {},
+        key_specs: { ram: '\u000016 GB' },
+      }),
+      16
+    );
+    assert.equal(
+      resolveCompareStorageGb({
+        storage_gb: '0x100' as unknown as number,
+        specifications: {},
+        key_specs: { storage: '\u0000512 GB' },
+      }),
+      512
+    );
+    assert.equal(
+      resolveCompareBatteryMah({
+        battery_mah: '0x1000' as unknown as number,
+        specifications: {},
+        key_specs: { battery: '\u00005000 mAh' },
+      }),
+      5000
+    );
+
+    assert.equal(localizeSpecValue({} as unknown as string, 'vi'), '-');
+    assert.equal(localizeSpecValue([] as unknown as string, 'en'), '-');
+    assert.equal(localizeSpecValue('null', 'vi'), '-');
+    assert.equal(localizeSpecValue('undefined', 'en'), '-');
+    assert.equal(localizeSpecValue('NaN', 'cs'), '-');
+    assert.equal(localizeSpecValue('N/A', 'vi'), '-');
+    assert.equal(localizeSpecValue('__proto__', 'en'), '-');
+    assert.equal(localizeSpecValue('constructor', 'cs'), '-');
+    assert.equal(localizeSpecValue('prototype', 'vi'), '-');
+    assert.equal(
+      localizeSpecValue('  OLED\u0000   120Hz  ', 'en'),
+      'OLED 120Hz'
+    );
+
+    console.log(
+      '  ✅ [129/129] Rate-Domain & Spec-Localizer Numeric, Key-Spec, and Sentinel Bounds (#1038) passed'
+    );
+  }
+
   console.log('🎉 All Rate.vn Core Architecture tests passed!');
 }
 
