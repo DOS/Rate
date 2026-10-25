@@ -3164,6 +3164,78 @@ async function runTests() {
     );
   }
 
+  // Sold-Count, SEO & Sitemap-Lastmod Bounds (#1014)
+  {
+    const { formatSoldCount } = await import('../../web/src/lib/sold-count.js');
+    const { absoluteUrl, fitTitle, SITE_URL } =
+      await import('../../web/src/lib/seo.js');
+    const { buildSitemapLastModified, versusLastModified } =
+      await import('../../web/src/lib/sitemap-lastmod.js');
+
+    assert.equal(
+      formatSoldCount('0x100' as unknown as number, '20k+', 'vi-VN'),
+      '0',
+      'formatSoldCount must reject hex historicalSold literals'
+    );
+    assert.equal(
+      formatSoldCount(500, '---', 'vi-VN'),
+      (500).toLocaleString('vi-VN'),
+      'formatSoldCount must ignore pure-punctuation display labels'
+    );
+    assert.equal(
+      formatSoldCount(500, 'null', 'vi-VN'),
+      (500).toLocaleString('vi-VN'),
+      'formatSoldCount must ignore sentinel display labels'
+    );
+    assert.equal(formatSoldCount(20_000, '20k+', 'vi-VN'), '20k+');
+
+    assert.equal(
+      absoluteUrl('https://127.0.0.1/img.png'),
+      SITE_URL,
+      'absoluteUrl must reject IPv4 literals'
+    );
+    assert.equal(
+      absoluteUrl('https://localhost/img.png'),
+      SITE_URL,
+      'absoluteUrl must reject single-label hostnames'
+    );
+    assert.equal(
+      absoluteUrl('https://cdn.internal/img.png'),
+      SITE_URL,
+      'absoluteUrl must reject .internal hostnames'
+    );
+    assert.equal(
+      absoluteUrl('https://cdn.rate.vn/img/p.png'),
+      'https://cdn.rate.vn/img/p.png'
+    );
+    assert.equal(fitTitle(['iPhone 16 Pro'], 65), 'iPhone 16 Pro');
+
+    const lastmod = buildSitemapLastModified([
+      {
+        slug: '---',
+        categorySlug: 'smartphones',
+        updatedAt: '2026-03-01T00:00:00Z',
+      },
+      {
+        slug: 'iphone-16-pro',
+        categorySlug: '__proto__',
+        updatedAt: '2026-03-01T00:00:00Z',
+      },
+      {
+        slug: '\u0000iphone-16-pro',
+        categorySlug: 'smartphones',
+        updatedAt: '\u00072026-03-01T00:00:00Z',
+      },
+    ]);
+    assert.equal(lastmod.bySlug.size, 1);
+    assert.equal(lastmod.byCategory.size, 1);
+    assert.equal(versusLastModified(lastmod, '---', '000'), undefined);
+
+    console.log(
+      '  \u2705 [Sold-Count, SEO & Sitemap-Lastmod Bounds (#1014)] Verified'
+    );
+  }
+
   console.log('🎉 All Rate Browser Extension MV3 v2 tests passed!');
 }
 

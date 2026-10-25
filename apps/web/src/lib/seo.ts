@@ -29,9 +29,11 @@ export function fitTitle(
     ? Math.max(1, Math.min(1000, Math.floor(rawMax)))
     : MAX_TITLE_LENGTH;
   const cleanedCandidates = candidates
+    .slice(0, 50)
     .map((c) =>
       typeof c === 'string'
         ? c
+            .slice(0, 2000)
             .replace(/\p{Cc}+/gu, ' ')
             .replace(/\s+/g, ' ')
             .trim()
@@ -94,13 +96,18 @@ export function absoluteUrl(pathOrUrl: string): string {
     if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
       return SITE_URL;
     }
+    const host = parsed.hostname.toLowerCase();
     if (
       parsed.username ||
       parsed.password ||
-      !parsed.hostname ||
-      parsed.hostname.startsWith('[') ||
-      parsed.hostname.endsWith('.') ||
-      parsed.hostname.includes('..') ||
+      !host ||
+      host.startsWith('.') ||
+      host.startsWith('[') ||
+      host.endsWith('.') ||
+      host.includes('..') ||
+      !host.includes('.') ||
+      /^\d+(?:\.\d+){3}$/.test(host) ||
+      /\.(?:local|internal|localhost)$/i.test(host) ||
       Boolean(parsed.port)
     ) {
       return SITE_URL;
