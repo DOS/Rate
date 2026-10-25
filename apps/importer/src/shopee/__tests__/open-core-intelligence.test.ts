@@ -1303,6 +1303,132 @@ async function runSuite() {
     '  ✅ [14/14] Earbud :unknown Keys, AirPods Pro Years, iPad RAM & Non-Phone Spec Hygiene (#643, #657) passed'
   );
 
+  // =========================================================================
+  // 15. ClusterPeerFloor, MerchantReviewRisk & ImporterLogger Numeric & ID Bounds (#1040)
+  // =========================================================================
+  {
+    const { resolveClusterPeerFloorPrice } = await import('../cluster-peer-floor.js');
+    const { normalizeSafeId, toValidPrice, mapStoredReview, scoreMerchants } =
+      await import('../merchant-review-risk.js');
+    const { AiReviewAnalyzer } = await import('../ai-review-analyzer.js');
+    const { sanitizeImporterIdentifier, sanitizeLogMeta, ImporterStructuredLogger } =
+      await import('../logger.js');
+
+    assert.equal(
+      resolveClusterPeerFloorPrice(
+        [
+          { id: '0', price_current: '0x100000' },
+          { id: 'null', price_current: '\u000025000000 ' },
+        ],
+        'null',
+        '0x200000' as unknown as number
+      ),
+      25_000_000,
+      'resolveClusterPeerFloorPrice must not self-exclude sentinel IDs and must reject hex prices while stripping control chars (#1040)'
+    );
+    assert.equal(
+      resolveClusterPeerFloorPrice([], 'prod-1', '\u000018500000 ' as unknown as number),
+      18_500_000
+    );
+    assert.equal(
+      resolveClusterPeerFloorPrice([], 'prod-1', '0x100000' as unknown as number),
+      undefined
+    );
+
+    assert.equal(normalizeSafeId('0'), null);
+    assert.equal(normalizeSafeId('0000'), null);
+    assert.equal(normalizeSafeId('---'), null);
+    assert.equal(normalizeSafeId('null'), null);
+    assert.equal(normalizeSafeId('undefined'), null);
+    assert.equal(normalizeSafeId('__proto__'), null);
+    assert.equal(normalizeSafeId('constructor'), null);
+    assert.equal(normalizeSafeId('prototype'), null);
+    assert.equal(normalizeSafeId('m-1\u0000bad'), null);
+    assert.equal(normalizeSafeId('  m-1040 '), 'm-1040');
+
+    assert.equal(toValidPrice('0x100000'), 0);
+    assert.equal(toValidPrice('\u000019990000 '), 19_990_000);
+
+    const mappedRev1040 = mapStoredReview({
+      id: '  rev-1040 ',
+      product_id: 'p-1',
+      rating_star: '0x4',
+      comment: 'Good phone',
+      review_flags: { verdict: 'authentic', flag_category: 'authentic', include_in_rating: true },
+    });
+    assert.equal(mappedRev1040?.raw.rating_star, 5);
+
+    const analyzer1040 = new AiReviewAnalyzer({ apiKey: '' });
+    const scored1040 = scoreMerchants(
+      analyzer1040,
+      [
+        {
+          id: '  merch-1040 ',
+          platform: '__proto__',
+          is_official: false,
+          follower_count: '0x100',
+          review_risk_score: '\u000042 ',
+        },
+      ],
+      [
+        {
+          id: 'prod-1040',
+          merchant_id: 'merch-1040',
+          cluster_id: '0000',
+          price_current: 20_000_000,
+        },
+      ],
+      [
+        {
+          id: 'rev-1040',
+          product_id: 'prod-1040',
+          rating_star: '\u00004 ',
+          comment: 'Tot',
+          review_flags: {
+            verdict: 'authentic',
+            flag_category: 'authentic',
+            include_in_rating: true,
+          },
+        },
+      ],
+      new Map()
+    );
+    assert.equal(scored1040.length, 1);
+    assert.equal(scored1040[0]?.merchantId, 'merch-1040');
+    assert.equal(scored1040[0]?.previousScore, 42);
+
+    assert.equal(sanitizeImporterIdentifier('0000', 64), '');
+    assert.equal(sanitizeImporterIdentifier('---', 64), '');
+    assert.equal(sanitizeImporterIdentifier('__proto__', 64), '');
+    assert.equal(sanitizeImporterIdentifier('\u0000algo-1 ', 64), 'algo-1');
+
+    const meta1040 = sanitizeLogMeta({
+      '__proto__\u0000': 'bad',
+      '\u0000api_key ': 'secret',
+      err: Object.assign(new Error('failed'), { name: '__proto__' }),
+    }) as Record<string, unknown>;
+    assert.equal(Object.hasOwn(meta1040, '__proto__'), false);
+    assert.equal(meta1040.api_key, '[REDACTED]');
+    assert.equal((meta1040.err as { name?: string })?.name, 'Error');
+
+    const impLogger1040 = new ImporterStructuredLogger({
+      component: '__proto__',
+      runId: '0000',
+      jobId: '---',
+      platform: 'null',
+    });
+    const impEntry1040 = impLogger1040.formatEntry('info', 'constructor', 'ok');
+    assert.equal(impEntry1040.component, 'Importer');
+    assert.equal(impEntry1040.run_id, null);
+    assert.equal(impEntry1040.job_id, null);
+    assert.equal(impEntry1040.platform, null);
+    assert.equal(impEntry1040.event, 'importer.event');
+
+    console.log(
+      '  ✅ [15/15] ClusterPeerFloor, MerchantReviewRisk & ImporterLogger Numeric & ID Bounds (#1040) passed'
+    );
+  }
+
   console.log('🎉 All @repo/crawlers Open-Core Intelligence tests passed!');
 }
 
