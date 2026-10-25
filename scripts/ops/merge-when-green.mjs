@@ -103,10 +103,11 @@ export function requiredChecksFromRules(rules) {
  * always as merge commits (Docs/Resources/RELEASE.md). Elsewhere `main` is the
  * working branch and PRs squash like any other.
  */
-export const RELEASE_FLOW_REPOS = new Set(['DOS/Rate']);
+export const RELEASE_FLOW_REPOS = new Set(['dos/rate']);
 
 export function mergeMethodFor(baseRef, requested, repo = DEFAULT_REPO) {
-  if (baseRef === 'main' && RELEASE_FLOW_REPOS.has(repo)) {
+  // GitHub repository names are case-insensitive: `dos/rate` is DOS/Rate.
+  if (baseRef === 'main' && RELEASE_FLOW_REPOS.has(repo.toLowerCase())) {
     if (requested && requested !== 'merge') {
       throw new Error(
         `PRs into main merge with a merge commit, not ${requested} (RELEASE.md)`

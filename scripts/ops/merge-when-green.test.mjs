@@ -163,6 +163,10 @@ test('a repository without the dev to main release flow squashes into main', () 
   assert.equal(mergeMethodFor('main', undefined, 'DOS/Rate-Services'), 'squash');
   assert.equal(mergeMethodFor('main', 'merge', 'DOS/status'), 'merge');
   assert.equal(mergeMethodFor('main', undefined, 'DOS/Rate'), 'merge');
+  assert.throws(
+    () => mergeMethodFor('main', 'squash', 'dos/rate'),
+    /merge commit/
+  );
 });
 
 test('deletes only a squashed branch of the same repository that is not dev or main', () => {
