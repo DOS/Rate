@@ -3081,6 +3081,89 @@ async function runTests() {
     );
   }
 
+  // #1012: merchant-directory and product-competitors platform, slug, and numeric bounds
+  {
+    const {
+      parseMerchantDirectoryFilters,
+      merchantDirectoryFilterParams,
+      summarizeMerchantDirectory,
+      filterMerchantDirectory,
+      DEFAULT_MERCHANT_DIRECTORY_FILTERS,
+    } = await import('../../web/src/lib/merchant-directory');
+    const { rankRelatedCompetitors, peerPriceDelta } =
+      await import('../../web/src/lib/product-competitors');
+
+    const parsedFilters = parseMerchantDirectoryFilters((k) =>
+      k === 'platform' ? '000' : null
+    );
+    assert.equal(parsedFilters.platform, 'all');
+
+    const paramsSentinel = merchantDirectoryFilterParams({
+      ...DEFAULT_MERCHANT_DIRECTORY_FILTERS,
+      platform: 'null',
+    });
+    assert.equal(paramsSentinel.get('platform'), null);
+
+    const summary = summarizeMerchantDirectory([
+      {
+        id: 'm1',
+        name: 'Shop 1',
+        platform: '000',
+        trust_score: '0x60' as unknown as number,
+        is_official: true,
+      } as unknown as Parameters<typeof summarizeMerchantDirectory>[0][number],
+    ]);
+    assert.deepEqual(summary.platformCounts, {});
+    assert.equal(summary.safe, 0);
+
+    const filteredMerchants = filterMerchantDirectory(
+      [
+        {
+          id: 'm1',
+          name: 'Shop 1',
+          platform: 'shopee',
+          trust_score: 90,
+          product_count: '0x100' as unknown as number,
+        },
+        {
+          id: 'm2',
+          name: 'Shop 2',
+          platform: 'shopee',
+          trust_score: 90,
+          product_count: 50,
+        },
+      ] as unknown as Parameters<typeof filterMerchantDirectory>[0],
+      {
+        ...DEFAULT_MERCHANT_DIRECTORY_FILTERS,
+        platform: '000',
+        sortBy: 'products_desc',
+      }
+    );
+    assert.equal(filteredMerchants.length, 2);
+    assert.equal(filteredMerchants[0]?.id, 'm2');
+
+    const competitors = rankRelatedCompetitors(
+      [
+        { slug: '000', min_price: 25_000_000 },
+        {
+          slug: 'galaxy-s24-ultra',
+          min_price: '0x100000' as unknown as number,
+        },
+        { slug: 'xiaomi-14-ultra', min_price: 26_000_000 },
+      ],
+      'iphone-16-pro',
+      25_000_000
+    );
+    assert.equal(competitors.length, 2);
+    assert.equal(competitors[0]?.slug, 'xiaomi-14-ultra');
+    assert.equal(competitors[1]?.slug, 'galaxy-s24-ultra');
+    assert.equal(peerPriceDelta('0x100' as unknown as number, 25_000_000), 0);
+
+    console.log(
+      '  \u2705 [Merchant-Directory & Product-Competitors Bounds (#1012)] Verified'
+    );
+  }
+
   console.log('🎉 All Rate Browser Extension MV3 v2 tests passed!');
 }
 

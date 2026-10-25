@@ -65,6 +65,16 @@ const SEEDING_TIERS: readonly MerchantSeedingTier[] = [
 ];
 
 const SAFE_PLATFORM_FILTER_REGEX = /^(?=.*[a-z0-9])[a-z0-9_-]{1,40}$/;
+const MAX_MERCHANT_DIRECTORY_SCAN = 5_000;
+
+function isValidMerchantPlatform(raw: string): boolean {
+  return (
+    SAFE_PLATFORM_FILTER_REGEX.test(raw) &&
+    !/^(?:0+|null|undefined|nan|infinity|-infinity|true|false|__proto__|constructor|prototype)$/i.test(
+      raw
+    )
+  );
+}
 
 function isOfficialMerchantFlag(value: unknown): boolean {
   return (
@@ -104,9 +114,10 @@ export function parseMerchantDirectoryFilters(
     .replace(/\p{Cc}+/gu, '')
     .trim()
     .toLowerCase();
-  const platform = SAFE_PLATFORM_FILTER_REGEX.test(rawPlatform)
-    ? rawPlatform
-    : 'all';
+  const platform =
+    rawPlatform !== 'all' && isValidMerchantPlatform(rawPlatform)
+      ? rawPlatform
+      : 'all';
   return {
     query: safeGet('q')
       .replace(/\p{Cc}+/gu, ' ')
@@ -144,7 +155,7 @@ export function merchantDirectoryFilterParams(
     .replace(/\p{Cc}+/gu, '')
     .trim()
     .toLowerCase();
-  if (safePlatform !== 'all' && SAFE_PLATFORM_FILTER_REGEX.test(safePlatform)) {
+  if (safePlatform !== 'all' && isValidMerchantPlatform(safePlatform)) {
     params.set('platform', safePlatform);
   }
   if (safeFilters.officialOnly === true) params.set('official', 'true');
@@ -171,15 +182,37 @@ export function merchantDirectoryFilterParams(
 
 function toSafeScore100(value: unknown, fallback = 0): number {
   if (typeof value !== 'number' && typeof value !== 'string') return fallback;
-  if (typeof value === 'string' && !value.trim()) return fallback;
-  const n = typeof value === 'string' ? Number(value.trim()) : value;
+  let n = Number.NaN;
+  if (typeof value === 'number') {
+    n = value;
+  } else {
+    const cleaned = value.replace(/\p{Cc}+/gu, '').trim();
+    if (
+      cleaned.length > 0 &&
+      cleaned.length <= 32 &&
+      !/^[+-]?0[xbo]/i.test(cleaned)
+    ) {
+      n = Number(cleaned);
+    }
+  }
   return Number.isFinite(n) ? Math.min(100, Math.max(0, n)) : fallback;
 }
 
 function toSafeCount(value: unknown): number {
   if (typeof value !== 'number' && typeof value !== 'string') return 0;
-  if (typeof value === 'string' && !value.trim()) return 0;
-  const n = typeof value === 'string' ? Number(value.trim()) : value;
+  let n = Number.NaN;
+  if (typeof value === 'number') {
+    n = value;
+  } else {
+    const cleaned = value.replace(/\p{Cc}+/gu, '').trim();
+    if (
+      cleaned.length > 0 &&
+      cleaned.length <= 32 &&
+      !/^[+-]?0[xbo]/i.test(cleaned)
+    ) {
+      n = Number(cleaned);
+    }
+  }
   return Number.isFinite(n) && n > 0 ? Math.min(100_000_000, Math.floor(n)) : 0;
 }
 
@@ -187,9 +220,11 @@ export function summarizeMerchantDirectory(
   merchants: readonly MerchantSummary[]
 ): MerchantDirectorySummary {
   const safeMerchants = Array.isArray(merchants)
-    ? merchants.filter((m): m is MerchantSummary =>
-        Boolean(m && typeof m === 'object' && !Array.isArray(m))
-      )
+    ? merchants
+        .filter((m): m is MerchantSummary =>
+          Boolean(m && typeof m === 'object' && !Array.isArray(m))
+        )
+        .slice(0, MAX_MERCHANT_DIRECTORY_SCAN)
     : [];
   const platformCounts: Record<string, number> = {};
   let official = 0;
@@ -200,12 +235,7 @@ export function summarizeMerchantDirectory(
       .replace(/\p{Cc}+/gu, '')
       .trim()
       .toLowerCase();
-    if (
-      SAFE_PLATFORM_FILTER_REGEX.test(p) &&
-      p !== '__proto__' &&
-      p !== 'constructor' &&
-      p !== 'prototype'
-    ) {
+    if (isValidMerchantPlatform(p)) {
       const prev = Object.hasOwn(platformCounts, p)
         ? (platformCounts[p] ?? 0)
         : 0;
@@ -232,9 +262,11 @@ export function filterMerchantDirectory(
   filters: MerchantDirectoryFilters
 ): MerchantSummary[] {
   const safeMerchants = Array.isArray(merchants)
-    ? merchants.filter((m): m is MerchantSummary =>
-        Boolean(m && typeof m === 'object' && !Array.isArray(m))
-      )
+    ? merchants
+        .filter((m): m is MerchantSummary =>
+          Boolean(m && typeof m === 'object' && !Array.isArray(m))
+        )
+        .slice(0, MAX_MERCHANT_DIRECTORY_SCAN)
     : [];
   const safeFilters =
     filters && typeof filters === 'object' && !Array.isArray(filters)
@@ -247,7 +279,7 @@ export function filterMerchantDirectory(
     .trim()
     .toLowerCase();
   const platform =
-    rawPlatform !== 'all' && SAFE_PLATFORM_FILTER_REGEX.test(rawPlatform)
+    rawPlatform !== 'all' && isValidMerchantPlatform(rawPlatform)
       ? rawPlatform
       : 'all';
   const officialOnly = safeFilters.officialOnly === true;
