@@ -30,6 +30,9 @@ const CATEGORY_LINK_IDS = new Set([
 // Already reachable from the logo and the price-alert button on desktop.
 const DESKTOP_HIDDEN_LINK_IDS = new Set(['home', 'watchlist']);
 
+/** The width at which the navbar menu becomes the off-canvas phone menu (style.scss). */
+const PHONE_MENU_QUERY = '(max-width: 991.98px)';
+
 export function NavbarDarkDynamic({
   links,
   logoUrl,
@@ -40,10 +43,28 @@ export function NavbarDarkDynamic({
   const tNav = useTranslations('rate.nav');
   const [scroll, setScroll] = useState(false);
   const [toggle, setToggle] = useState(false);
+  // On phones the menu is off-canvas: its links sit just off screen, within the
+  // margin Next treats as visible, so every route in it was prefetched on each
+  // page view. They prefetch once the menu is open (DOS/Rate#1064). Read at
+  // first client render; the prop does not change the markup.
+  const [phoneMenu, setPhoneMenu] = useState(
+    () =>
+      typeof window !== 'undefined' &&
+      window.matchMedia(PHONE_MENU_QUERY).matches
+  );
+  const menuPrefetch = phoneMenu && !toggle ? false : undefined;
   const toggleRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const [categoriesOpen, setCategoriesOpen] = useState(false);
   const categoriesRef = useRef<HTMLLIElement>(null);
+
+  useEffect(() => {
+    const query = window.matchMedia(PHONE_MENU_QUERY);
+    const update = () => setPhoneMenu(query.matches);
+    update();
+    query.addEventListener('change', update);
+    return () => query.removeEventListener('change', update);
+  }, []);
 
   // Desktop categories dropdown: closes on Escape (focus back to its button),
   // on a pointer press outside it, and when focus leaves it (DOS/Rate#611).
@@ -294,6 +315,7 @@ export function NavbarDarkDynamic({
                           <Link
                             href={link.href!}
                             target={link.newTab ? '_blank' : undefined}
+                            prefetch={menuPrefetch}
                           >
                             {link.label}
                           </Link>
@@ -320,7 +342,9 @@ export function NavbarDarkDynamic({
                         : undefined
                     }
                   >
-                    <Link href={link.href!}>{link.label}</Link>
+                    <Link href={link.href!} prefetch={menuPrefetch}>
+                      {link.label}
+                    </Link>
                   </li>
                 );
                 return (
@@ -345,6 +369,7 @@ export function NavbarDarkDynamic({
                           <li key={String(link.id)}>
                             <Link
                               href={link.href!}
+                              prefetch={menuPrefetch}
                               onClick={() => setCategoriesOpen(false)}
                             >
                               {link.label}
@@ -368,6 +393,7 @@ export function NavbarDarkDynamic({
                 <li className="list-buttons d-flex align-items-center">
                   <Link
                     href="/watchlist"
+                    prefetch={menuPrefetch}
                     className="d-inline-flex align-items-center"
                   >
                     <BsBellFill className="fs-6 me-1" />

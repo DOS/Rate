@@ -145,6 +145,8 @@ export default async function VersusComparePage({ params }: VersusPageProps) {
           ? scoreB
           : scoreA;
 
+  // Summary ItemList: each item links to its product page, which carries the
+  // Product markup (DOS/Rate#1059).
   const itemListSchema = {
     '@context': 'https://schema.org',
     '@type': 'ItemList',
@@ -153,33 +155,8 @@ export default async function VersusComparePage({ params }: VersusPageProps) {
     itemListElement: [scoreA, scoreB].map((entry, idx) => ({
       '@type': 'ListItem',
       position: idx + 1,
-      item: {
-        '@type': 'Product',
-        name: entry.name,
-        brand: { '@type': 'Brand', name: entry.brand },
-        url: `https://rate.vn${getMasterProductHref(entry.product)}`,
-        ...(entry.expertScore10 != null && entry.authenticReviewCount > 0
-          ? {
-              aggregateRating: {
-                '@type': 'AggregateRating',
-                ratingValue: entry.expertScore10,
-                bestRating: 10,
-                worstRating: 1,
-                ratingCount: entry.authenticReviewCount,
-              },
-            }
-          : entry.userScore5 > 0 && entry.authenticReviewCount > 0
-            ? {
-                aggregateRating: {
-                  '@type': 'AggregateRating',
-                  ratingValue: entry.userScore5,
-                  bestRating: 5,
-                  worstRating: 1,
-                  ratingCount: entry.authenticReviewCount,
-                },
-              }
-            : {}),
-      },
+      name: entry.name,
+      url: `https://rate.vn${getMasterProductHref(entry.product)}`,
     })),
   };
 
