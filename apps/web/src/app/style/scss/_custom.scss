@@ -903,6 +903,9 @@
     display: inline-flex;
     align-items: center;
     gap: 0.35rem;
+    // At least 24px tall: WCAG 2.2 target size, and it sits next to other
+    // targets (DOS/Rate#1075).
+    min-height: 24px;
     margin-bottom: 0.75rem;
     font-size: 0.875rem;
     font-weight: 600;
