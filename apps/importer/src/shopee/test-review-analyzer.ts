@@ -2747,6 +2747,34 @@ async function run() {
   );
   assert.equal(normalizedPrices961.shop.url, undefined);
 
+  // #968: Backfill job option/row guards & ImporterStructuredLogger meta bounds
+  const { createImporterLogger, ImporterStructuredLogger } = await import('./logger.js');
+  const logger968 = createImporterLogger('TestComponent', ['bad-override'] as never);
+  const entry968 = logger968.formatEntry('info', 'test.event', 'hello', ['array-meta'] as never);
+  assert.equal(entry968.component, 'TestComponent');
+  assert.equal(entry968.meta, undefined, 'formatEntry must ignore array meta payloads');
+  const nullLogger968 = new ImporterStructuredLogger(null as never).child(['bad-child'] as never);
+  assert.equal(nullLogger968.formatEntry('info', 'e', 'm').component, 'Importer');
+
+  const { runReviewRiskBackfill } = await import('./jobs/backfill-review-risk.js');
+  const fakeBackfillClient = {
+    from: () => ({
+      select: () => ({
+        order: () => ({
+          range: async () => ({ data: [], error: null }),
+        }),
+      }),
+    }),
+  };
+  const backfillRes968 = await runReviewRiskBackfill(fakeBackfillClient as never, {
+    apply: 'false' as unknown as boolean,
+  });
+  assert.equal(
+    backfillRes968.apply,
+    false,
+    'runReviewRiskBackfill must require strict boolean apply === true'
+  );
+
   console.log(
     `✅ [P2/P3 Trust Model & #292/#352/#356/#359/#379/#382/#401/#497/#514/#522/#528/#557/#834/#836/#882/#908/#954] Voter weight, Wilson lower bound (50/52=${wilson50of52} > 1/1=${wilson1of1}), shingle copy seeding (sim=${shingleSim}), affiliate shortlinks, peer floor, ArenaSpecSyncer, Importer & ReviewAnalyzer hardening (#352, #356, #359, #379, #382, #401, #497, #514, #522, #528, #557, #834, #836, #882, #908, #954) verified`
   );

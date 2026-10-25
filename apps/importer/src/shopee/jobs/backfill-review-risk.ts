@@ -62,7 +62,7 @@ export async function loadAndScore(supabase: RateSupabaseClient): Promise<Mercha
   );
   const masterMinByCluster = new Map<string, number>();
   for (const m of masters) {
-    if (!m || typeof m !== 'object') continue;
+    if (!m || typeof m !== 'object' || Array.isArray(m)) continue;
     const clusterId = typeof m.id === 'string' && !/\p{Cc}/u.test(m.id) ? m.id.trim() : '';
     const price = toValidPrice(m.min_price);
     if (clusterId && clusterId.length <= 128 && price) {
@@ -81,7 +81,9 @@ export async function runReviewRiskBackfill(
   supabase: RateSupabaseClient,
   options: { apply?: boolean } = {}
 ): Promise<{ apply: boolean; scored: number; changed: number; written: number }> {
-  const apply = Boolean(options?.apply);
+  const safeOptions =
+    options && typeof options === 'object' && !Array.isArray(options) ? options : {};
+  const apply = safeOptions.apply === true;
   const scores = await loadAndScore(supabase);
   const changed = scores.filter(s => s.previousScore !== s.risk.risk_score);
   for (const s of changed.slice(0, 25)) {
