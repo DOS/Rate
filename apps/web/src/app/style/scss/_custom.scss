@@ -1522,3 +1522,24 @@ body .input-group > .input-group-text {
     margin-right: 0 !important;
   }
 }
+
+// Forced colours replace the background and text colours that mark a pressed
+// toggle (btn-danger vs btn-outline-dark), so the selected category looked
+// like the others in Windows High Contrast. Draw every pressed control with
+// the system highlight instead (DOS/Rate#1086).
+// `html` outranks Bootstrap's !important utilities (bg-white, text-dark) on
+// children such as count badges.
+@media (forced-colors: active) {
+  html [aria-pressed='true'] {
+    forced-color-adjust: none;
+    background-color: Highlight !important;
+    border-color: Highlight !important;
+    color: HighlightText !important;
+
+    * {
+      background-color: transparent !important;
+      border-color: HighlightText !important;
+      color: HighlightText !important;
+    }
+  }
+}
