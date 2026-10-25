@@ -12358,7 +12358,97 @@ async function runCoreArchitectureSuite() {
     assert.equal(isMissingRpcError({ code: '\u0000pgrst202 ' }), true);
 
     console.log(
-      '  ✅ [123/123] API Handler & Request Auth Numeric/Slug/Brand/Token Bounds (#1025) passed'
+      '  ✅ [125/126] API Handler & Request Auth Numeric/Slug/Brand/Token Bounds (#1025) passed'
+    );
+  }
+
+  // -------------------------------------------------------------------------
+  // 126. compare-tray, CompareTrayBar & ProductLeaderboardBadges Bounds (#1030)
+  // -------------------------------------------------------------------------
+  {
+    const {
+      sanitizeTrayText,
+      sanitizeTraySlug,
+      sanitizeTrayPriceVnd,
+      isCanonicalTrayCategorySlug,
+      normalizeTrayItem: normalizeTrayItem1030,
+    } = await import('../../../components/compare/compare-tray');
+    const { formatCompareTrayPriceVnd } =
+      await import('../../../components/compare/CompareTrayBar');
+    const { sanitizeLeaderboardBadgeEntry } =
+      await import('../../../components/leaderboard/ProductLeaderboardBadges');
+
+    assert.equal(
+      sanitizeTrayText('  iPhone\r\n16\u0000 Pro  '),
+      'iPhone 16 Pro'
+    );
+    assert.equal(sanitizeTrayText(null), '');
+    assert.equal(
+      sanitizeTraySlug('  Apple\u0000 iPhone 16 Pro  '),
+      'apple-iphone-16-pro'
+    );
+    assert.equal(sanitizeTrayPriceVnd(18_990_000.4), 18_990_000);
+    assert.equal(sanitizeTrayPriceVnd(-100), 0);
+    assert.equal(sanitizeTrayPriceVnd(9_000_000_000), 0);
+    assert.equal(isCanonicalTrayCategorySlug('smartphones'), true);
+    assert.equal(isCanonicalTrayCategorySlug('invalid-cat'), false);
+
+    const normalizedTray1030 = normalizeTrayItem1030({
+      slug: '  sony-wf-1000xm5\u0000 ',
+      name: '  Sony\nWF-1000XM5  ',
+      brand: '  Sony\r\n  ',
+      thumbnail: null,
+      min_price: -50_000,
+      categorySlug: 'invalid-cat' as never,
+    });
+    assert.equal(normalizedTray1030.slug, 'sony-wf-1000xm5');
+    assert.equal(normalizedTray1030.name, 'Sony WF-1000XM5');
+    assert.equal(normalizedTray1030.brand, 'Sony');
+    assert.equal(normalizedTray1030.min_price, 0);
+    assert.equal(normalizedTray1030.categorySlug, 'earbuds');
+
+    assert.equal(formatCompareTrayPriceVnd(25_990_000), '25.990.000 ₫');
+    assert.equal(formatCompareTrayPriceVnd(-50_000), '0 ₫');
+    assert.equal(formatCompareTrayPriceVnd(9_000_000_000), '0 ₫');
+
+    const validBadge = sanitizeLeaderboardBadgeEntry({
+      categorySlug: 'smartphones',
+      criterion: 'combined',
+      rank: 1.2,
+      totalInCategory: 28.4,
+      score5: 6.5,
+    });
+    assert.deepEqual(validBadge, {
+      categorySlug: 'smartphones',
+      criterion: 'combined',
+      rank: 1,
+      totalInCategory: 28,
+      score5: 5,
+      score10: 10,
+    });
+    assert.equal(
+      sanitizeLeaderboardBadgeEntry({
+        categorySlug: 'invalid',
+        criterion: 'combined',
+        rank: 1,
+        totalInCategory: 10,
+        score5: 4.5,
+      }),
+      null
+    );
+    assert.equal(
+      sanitizeLeaderboardBadgeEntry({
+        categorySlug: 'smartphones',
+        criterion: 'combined',
+        rank: 0,
+        totalInCategory: 10,
+        score5: 4.5,
+      }),
+      null
+    );
+
+    console.log(
+      '  ✅ [126/126] compare-tray, CompareTrayBar & ProductLeaderboardBadges Bounds (#1030) passed'
     );
   }
 
