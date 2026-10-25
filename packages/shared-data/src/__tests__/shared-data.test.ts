@@ -237,6 +237,181 @@ function testMasterProductAndScrapedProductSchemas(): void {
   assert.equal(scraped.historicalSold, 0);
   assert.deepEqual(scraped.reviews, []);
 
+  assert.equal(
+    ScrapedProductSchema.parse({
+      platform: 'shopee',
+      itemId: '123456',
+      shopId: '654321',
+      url: 'https://shopee.vn/product/654321/123456',
+      title: 'iPhone 16 Pro Max 256GB',
+      priceMin: 31990000,
+      priceMax: 33990000,
+      priceBeforeDiscount: 2_000_000_000,
+      shop: { shopId: '654321', name: 'Apple Flagship Store', isMall: true },
+    }).priceBeforeDiscount,
+    undefined,
+    'ScrapedProductSchema must drop priceBeforeDiscount exceeding MAX_VALID_VND_PRICE to undefined'
+  );
+  assert.equal(
+    ScrapedProductSchema.safeParse({
+      platform: 'shopee',
+      itemId: '123456',
+      shopId: '654321',
+      url: 'https://shopee.vn/product/654321/123456',
+      title: 'iPhone 16 Pro Max 256GB',
+      priceMin: 31990000,
+      priceMax: 33990000,
+      priceBeforeDiscount: -1,
+      shop: { shopId: '654321', name: 'Apple Flagship Store', isMall: true },
+    }).success,
+    false,
+    'ScrapedProductSchema must reject negative priceBeforeDiscount'
+  );
+  assert.deepEqual(
+    ScrapedProductSchema.parse({
+      platform: 'shopee',
+      itemId: '123456',
+      shopId: '654321',
+      url: 'https://shopee.vn/product/654321/123456',
+      title: 'iPhone 16 Pro Max 256GB',
+      priceMin: 31990000,
+      priceMax: 33990000,
+      models: [
+        { modelId: 'm1', name: '256GB', price: 31990000 },
+        { modelId: 'm2', name: 'Oversized', price: 2_000_000_000 },
+      ],
+      shop: { shopId: '654321', name: 'Apple Flagship Store', isMall: true },
+    }).models,
+    [{ modelId: 'm1', name: '256GB', price: 31990000 }],
+    'ScrapedProductSchema must filter out models with price exceeding MAX_VALID_VND_PRICE'
+  );
+  assert.equal(
+    ScrapedProductSchema.safeParse({
+      platform: 'shopee',
+      itemId: '123456',
+      shopId: '654321',
+      url: 'https://shopee.vn/product/654321/123456',
+      title: 'iPhone 16 Pro Max 256GB',
+      priceMin: 31990000,
+      priceMax: 33990000,
+      reviews: [
+        {
+          reviewId: 'r1',
+          author: 'Buyer',
+          ratingStar: 5,
+          comment: 'Good',
+          images: ['javascript:alert(1)'],
+        },
+      ],
+      shop: { shopId: '654321', name: 'Apple Flagship Store', isMall: true },
+    }).success,
+    false,
+    'ScrapedProductSchema must reject non-http reviews[].images'
+  );
+  assert.equal(
+    ScrapedProductSchema.safeParse({
+      platform: 'shopee',
+      itemId: '123456',
+      shopId: '654321',
+      url: 'https://shopee.vn/product/654321/123456',
+      title: 'iPhone 16 Pro Max 256GB',
+      priceMin: 31990000,
+      priceMax: 33990000,
+      reviews: [
+        {
+          reviewId: 'r1',
+          author: 'Buyer',
+          ratingStar: 5,
+          comment: 'Good',
+          videos: ['javascript:alert(1)'],
+        },
+      ],
+      shop: { shopId: '654321', name: 'Apple Flagship Store', isMall: true },
+    }).success,
+    false,
+    'ScrapedProductSchema must reject non-http reviews[].videos'
+  );
+  assert.equal(
+    ScrapedProductSchema.safeParse({
+      platform: 'shopee',
+      itemId: '123456',
+      shopId: '654321',
+      url: 'https://shopee.vn/product/654321/123456',
+      title: 'iPhone 16 Pro Max 256GB',
+      priceMin: 31990000,
+      priceMax: 33990000,
+      reviews: [
+        {
+          reviewId: 'r1',
+          author: 'Buyer',
+          authorAvatar: 'javascript:alert(1)',
+          ratingStar: 5,
+          comment: 'Good',
+        },
+      ],
+      shop: { shopId: '654321', name: 'Apple Flagship Store', isMall: true },
+    }).success,
+    false,
+    'ScrapedProductSchema must reject non-http reviews[].authorAvatar'
+  );
+  assert.equal(
+    ScrapedProductSchema.safeParse({
+      platform: 'shopee',
+      itemId: '123456',
+      shopId: '654321',
+      url: 'https://shopee.vn/product/654321/123456',
+      title: 'iPhone 16 Pro Max 256GB',
+      priceMin: 31990000,
+      priceMax: 33990000,
+      reviews: [
+        {
+          reviewId: 'r1',
+          author: 'Buyer',
+          ratingStar: 5,
+          comment: 'Good',
+          reviewer: { profileUrl: 'javascript:alert(1)' },
+        },
+      ],
+      shop: { shopId: '654321', name: 'Apple Flagship Store', isMall: true },
+    }).success,
+    false,
+    'ScrapedProductSchema must reject non-http reviews[].reviewer.profileUrl'
+  );
+  assert.equal(
+    ScrapedProductSchema.safeParse({
+      platform: 'shopee',
+      itemId: '123456',
+      shopId: '654321',
+      url: 'https://shopee.vn/product/654321/123456',
+      title: 'iPhone 16 Pro Max 256GB',
+      priceMin: 31990000,
+      priceMax: 33990000,
+      images: ['javascript:alert(1)'],
+      shop: { shopId: '654321', name: 'Apple Flagship Store', isMall: true },
+    }).success,
+    false,
+    'ScrapedProductSchema must reject non-http images'
+  );
+  assert.equal(
+    ScrapedProductSchema.safeParse({
+      platform: 'shopee',
+      itemId: '123456',
+      shopId: '654321',
+      url: 'https://shopee.vn/product/654321/123456',
+      title: 'iPhone 16 Pro Max 256GB',
+      priceMin: 31990000,
+      priceMax: 33990000,
+      shop: {
+        shopId: '654321',
+        name: 'Apple Flagship Store',
+        isMall: true,
+        url: 'javascript:alert(1)',
+      },
+    }).success,
+    false,
+    'ScrapedProductSchema must reject non-http shop.url'
+  );
+
   const paged = PaginationSchema.parse({});
   assert.equal(paged.page, 1);
   assert.equal(paged.pageSize, 25);
