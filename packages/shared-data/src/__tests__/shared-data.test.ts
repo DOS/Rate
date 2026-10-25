@@ -19,7 +19,6 @@ import {
 } from '../index.js';
 import { getAdminClient, getRateClient, getDosafeClient } from '../server.js';
 import * as rules from '../rules/index.js';
-import { MAX_VALID_VND_PRICE } from '../index.js';
 import { readdirSync, readFileSync } from 'node:fs';
 
 function testVersionAndZeroStrapiExports(): void {
@@ -664,8 +663,11 @@ function testSeedingRiskPenalty(): void {
 
 function testPriceRules(): void {
   // One 1B VND ceiling for the schemas and the bait-price rule.
-  assert.equal(rules.MAX_VALID_VND_PRICE, MAX_VALID_VND_PRICE);
-  assert.equal(rules.MAX_PLAUSIBLE_VND_PRICE, MAX_VALID_VND_PRICE);
+  assert.equal(rules.MAX_VALID_VND_PRICE, sharedDataRoot.MAX_VALID_VND_PRICE);
+  assert.equal(
+    rules.MAX_PLAUSIBLE_VND_PRICE,
+    sharedDataRoot.MAX_VALID_VND_PRICE
+  );
   // The rules ship on their own subpath, not the root export.
   assert.equal('plausibleOffers' in sharedDataRoot, false);
 
@@ -701,16 +703,33 @@ function testPriceRules(): void {
   assert.deepEqual([...rules.implausiblyLowOfferIds(offers)], ['a']);
   assert.equal(rules.plausibleMinPrice(0, offers), 3_000_000);
 
-  // Browser-safe: the compiled rules import neither zod nor Supabase.
+  // One definition of the ceiling: the schemas re-export it, never redefine it.
+  assert.doesNotMatch(
+    readFileSync(
+      new URL('../schemas/specs.schema.js', import.meta.url),
+      'utf8'
+    ),
+    /MAX_VALID_VND_PRICE\s*=/
+  );
+
+  // Browser-safe: the compiled rules import only each other, so neither zod
+  // nor Supabase can reach a client bundle through them.
   const dir = new URL('../rules/', import.meta.url);
   for (const file of readdirSync(dir).filter((f) => f.endsWith('.js'))) {
     const source = readFileSync(new URL(file, dir), 'utf8');
-    assert.doesNotMatch(
-      source,
-      /from ['"](?:zod|@supabase\/)/,
-      `rules/${file}`
-    );
-    assert.doesNotMatch(source, /schemas\/|clients\//, `rules/${file}`);
+    // Static import/export statements (tsc emits them at column 0) and
+    // dynamic import() calls; comments are not matched.
+    const specifiers = [
+      ...source.matchAll(/^(?:import|export)\b[^;]*?['"]([^'"]+)['"]/gm),
+      ...source.matchAll(/\bimport\(\s*['"]([^'"]+)['"]/g),
+    ].map((m) => m[1]);
+    for (const specifier of specifiers) {
+      assert.match(
+        specifier ?? '',
+        /^\.\/[\w-]+\.js$/,
+        `rules/${file} imports ${specifier}`
+      );
+    }
   }
 }
 
