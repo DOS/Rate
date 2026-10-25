@@ -831,6 +831,109 @@ async function runTests() {
     }) as Record<string, unknown>;
     assert.equal(sanitizedMeta906.publishableKey, '[REDACTED]');
     assert.equal(sanitizedMeta906.publishable_key, '[REDACTED]');
+
+    // Regression tests for #952: AI spec enricher, peer floor, merchant risk, and price normalizer
+    const { resolveClusterPeerFloorPrice: resolveFloor952 } =
+      await import('./cluster-peer-floor.js');
+    const { toValidPrice: toValidPrice952, mapStoredReview: mapStoredReview952 } =
+      await import('./merchant-review-risk.js');
+
+    const clonedMalformed952 = cloneAiEnrichmentResponse({
+      ram_gb: 99_999,
+      storage_gb: -16,
+      screen_size_inch: 250,
+      battery_mah: 999_999,
+      has_5g: 'maybe' as unknown as boolean,
+      specifications: {} as never,
+      key_specs: {
+        screen: '  6.8" OLED\u0000\r\n ',
+        chip: '   ',
+      } as never,
+    });
+    assert.equal(clonedMalformed952.ram_gb, null);
+    assert.equal(clonedMalformed952.storage_gb, null);
+    assert.equal(clonedMalformed952.screen_size_inch, null);
+    assert.equal(clonedMalformed952.battery_mah, null);
+    assert.equal(clonedMalformed952.has_5g, undefined);
+    assert.deepEqual(clonedMalformed952.key_specs, { screen: '6.8" OLED' });
+    assert.deepEqual(cloneAiEnrichmentResponse([] as unknown as never).key_specs, {});
+
+    assert.equal(
+      resolveFloor952(
+        [
+          {
+            id: 'peer-1',
+            price_current: 24_990_000.6,
+            merchants: { is_official: true },
+          },
+        ],
+        'self-1',
+        26_990_000.4
+      ),
+      24_990_001,
+      'resolveClusterPeerFloorPrice must round peer prices to integer VND'
+    );
+    assert.equal(
+      resolveFloor952([], 'self-1', 26_990_000.4),
+      26_990_000,
+      'resolveClusterPeerFloorPrice must round fallbackMasterMinPrice to integer VND'
+    );
+
+    assert.equal(toValidPrice952(19_990_000.6), 19_990_001);
+    const mappedSparseFlags952 = mapStoredReview952({
+      id: 'rev-sparse-952',
+      product_id: 'prod-952',
+      rating_star: 5,
+      comment: 'Great phone',
+      review_flags: [
+        null as unknown as { verdict?: string | null },
+        { verdict: 'fake', flag_category: 'seeding_fake', include_in_rating: false },
+      ],
+    });
+    assert.equal(mappedSparseFlags952?.result.verdict, 'fake');
+    assert.equal(mappedSparseFlags952?.result.include_in_rating, false);
+
+    const normalizedPrices952 = normalizeScrapedProductPrices({
+      platform: 'shopee',
+      itemId: '952',
+      shopId: '888',
+      title: 'iPhone 16 Pro Max',
+      priceMin: 29_990_000.6,
+      priceMax: 29_990_000.2,
+      priceBeforeDiscount: 34_990_000.4,
+      currency: 'VND',
+      stock: 10,
+      historicalSold: 12.9,
+      ratingStar: 4.9,
+      ratingCount: 5,
+      images: [],
+      attributes: [],
+      models: [{ modelId: 'm1', name: '256GB', price: 29_990_000.6, stock: 5 }],
+      shop: {
+        shopId: '888',
+        name: 'Official',
+        isMall: true,
+        ratingStar: 4.9,
+        followerCount: 1000,
+      },
+      reviews: [
+        null as unknown as never,
+        {
+          reviewId: 'r1',
+          author: 'User',
+          ratingStar: 5,
+          comment: 'Nice',
+          createdAt: '2026-10-01T00:00:00Z',
+          images: [],
+        },
+      ],
+      url: 'https://shopee.vn/item-i.888.952',
+    });
+    assert.equal(normalizedPrices952.priceMin, 29_990_001);
+    assert.equal(normalizedPrices952.priceMax, 29_990_001);
+    assert.equal(normalizedPrices952.priceBeforeDiscount, 34_990_000);
+    assert.equal(normalizedPrices952.models[0]?.price, 29_990_001);
+    assert.equal(normalizedPrices952.reviews.length, 1);
   } finally {
     mockServer.close();
   }
