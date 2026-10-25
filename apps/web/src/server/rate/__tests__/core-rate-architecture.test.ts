@@ -2496,22 +2496,22 @@ async function runCoreArchitectureSuite() {
     '  ✅ [48/49] Unified API v1 Error Sanitizer & Bounded Query Parsers (T9) + Pure Domain Module rate-domain.ts (T12) (#170) passed'
   );
 
-  // 49. Issue #159: POST /api/v1/rate/extension/ingest never uses SUPABASE_SERVICE_ROLE_KEY, calls narrow enqueue_crowd_verify_signal RPC, and never echoes raw DB error.message
+  // 49. Issue #159: POST /api/v1/rate/extension/ingest never uses SUPABASE_SECRET_KEY, calls narrow enqueue_crowd_verify_signal RPC, and never echoes raw DB error.message
   const extensionServerSrc = fs.readFileSync(
     path.join(repoRoot, 'apps/web/src/server/rate/extension.ts'),
     'utf8'
   );
   assert.ok(
-    !extensionServerSrc.includes('SUPABASE_SERVICE_ROLE_KEY'),
-    'apps/web/src/server/rate/extension.ts must never reference SUPABASE_SERVICE_ROLE_KEY (#159)'
+    !extensionServerSrc.includes('SUPABASE_SECRET_KEY'),
+    'apps/web/src/server/rate/extension.ts must never reference SUPABASE_SECRET_KEY (#159)'
   );
   const eslintSrc = fs.readFileSync(
     path.join(repoRoot, 'apps/web/eslint.config.mjs'),
     'utf8'
   );
   assert.ok(
-    eslintSrc.includes('SUPABASE_SERVICE_ROLE_KEY'),
-    'apps/web/eslint.config.mjs must ban SUPABASE_SERVICE_ROLE_KEY in src/app/** and src/server/** (#159)'
+    eslintSrc.includes('SUPABASE_SECRET_KEY'),
+    'apps/web/eslint.config.mjs must ban SUPABASE_SECRET_KEY in src/app/** and src/server/** (#159)'
   );
 
   const { ingestExtensionCrowdSignal } =

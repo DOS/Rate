@@ -40,7 +40,7 @@ const MASTER_ID = '99999999-8888-4777-8666-555555555555';
 process.env.NEXT_PUBLIC_SUPABASE_URL = SUPABASE_URL;
 process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = ANON_KEY;
 // eslint-disable-next-line no-restricted-syntax -- a fake key, set so the test can prove no request carries it
-process.env.SUPABASE_SERVICE_ROLE_KEY = SERVICE_KEY;
+process.env.SUPABASE_SECRET_KEY = SERVICE_KEY;
 
 interface RecordedCall {
   url: string;
@@ -445,7 +445,7 @@ function testSharedDataClients() {
   delete env.SUPABASE_ANON_KEY;
   env.SUPABASE_URL = SUPABASE_URL;
   // eslint-disable-next-line no-restricted-syntax -- a fake key, set so the test can prove no request carries it
-  env.SUPABASE_SERVICE_ROLE_KEY = SERVICE_KEY;
+  env.SUPABASE_SECRET_KEY = SERVICE_KEY;
   const out = spawnSync(
     process.execPath,
     ['--input-type=module', '-e', script],

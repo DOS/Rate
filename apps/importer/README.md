@@ -47,7 +47,7 @@ pnpm --filter @repo/crawlers exec tsx src/shopee/test-ai-enricher.ts
 
 Sao chép `.env.example` thành `.env`. Không commit file `.env`.
 
-- **Supabase:** `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` (chỉ dùng phía server).
+- **Supabase:** `SUPABASE_URL`, `SUPABASE_SECRET_KEY` (chỉ dùng phía server).
 - **LLM:** `AI_PROVIDER` (`dos-ai`, `openai`, `gemini`, `deepseek`, `groq`, `openrouter`, `ollama`), `AI_API_KEY`, `AI_BASE_URL`, `AI_MODEL`, `AI_TIMEOUT_MS`. Nếu không đặt `AI_PROVIDER`, engine tự chọn theo key đang có, theo thứ tự `DOS_AI_API_KEY` / `DOS_AI_BASE_URL`, `OPENAI_API_KEY`, `GEMINI_API_KEY` / `GOOGLE_API_KEY`, `DEEPSEEK_API_KEY`, `GROQ_API_KEY`, `OPENROUTER_API_KEY`, nếu không có thì dùng `openai`. Mỗi provider đọc key riêng của nó trước, `AI_API_KEY` là fallback chung (riêng `openai` đọc `AI_API_KEY` trước `OPENAI_API_KEY`).
 
 ## Script Vận Hành
