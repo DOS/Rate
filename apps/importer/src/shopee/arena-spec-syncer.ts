@@ -166,7 +166,13 @@ export function extractGsmArenaDataSpecs(html: string): Record<string, string> {
       .trim()
       .slice(0, 120);
     const val = stripHtmlTags(safeHtml.slice(openTag.lastIndex, close.at)).slice(0, 4000);
-    if (key && val && !Object.hasOwn(specs, key)) {
+    if (
+      key &&
+      val &&
+      /[a-z0-9]/i.test(key) &&
+      !/^(?:__proto__|constructor|prototype)$/i.test(key) &&
+      !Object.hasOwn(specs, key)
+    ) {
       specs[key] = val;
       specCount += 1;
     }
@@ -742,32 +748,43 @@ export class ArenaSpecSyncer {
     const existingSlugs = new Set<string>();
     const incompleteSpecMasters: ArenaCatalogAuditReport['incompleteSpecMasters'] = [];
 
+    const sanitizeAuditToken = (raw: unknown, maxLen: number): string => {
+      const str =
+        typeof raw === 'number' && Number.isSafeInteger(raw) && raw > 0
+          ? String(raw)
+          : typeof raw === 'string'
+            ? raw
+            : '';
+      if (!str) return '';
+      const trimmed = str.replace(/\p{Cc}+/gu, '').trim();
+      if (
+        !trimmed ||
+        trimmed.length > maxLen ||
+        /\s/.test(trimmed) ||
+        !/[a-zA-Z0-9]/.test(trimmed) ||
+        /^(?:0+|null|undefined|nan|none|n\/a|unknown|infinity|-infinity|true|false|__proto__|constructor|prototype)$/i.test(
+          trimmed
+        )
+      ) {
+        return '';
+      }
+      return trimmed;
+    };
+
     for (const r of rows) {
       if (!r || typeof r !== 'object' || Array.isArray(r)) continue;
-      if (r.model_key) {
-        const cleanedKey = String(r.model_key)
-          .replace(/\p{Cc}+/gu, '')
-          .trim()
-          .toLowerCase();
-        if (cleanedKey) existingKeys.add(cleanedKey);
+      const safeModelKey = sanitizeAuditToken(r.model_key, 200);
+      if (safeModelKey) {
+        existingKeys.add(safeModelKey.toLowerCase());
       }
-      if (r.slug) {
-        const cleanedSlug = String(r.slug)
-          .replace(/\p{Cc}+/gu, '')
-          .trim()
-          .toLowerCase();
-        if (cleanedSlug) existingSlugs.add(cleanedSlug);
+      const safeSlug = sanitizeAuditToken(r.slug, 200);
+      if (safeSlug) {
+        existingSlugs.add(safeSlug.toLowerCase());
       }
       const populatedGroups = countPopulatedFieldGroups(r.specifications);
       if (populatedGroups < 10) {
         incompleteSpecMasters.push({
-          id:
-            typeof r.id === 'string'
-              ? r.id
-                  .replace(/\p{Cc}+/gu, '')
-                  .trim()
-                  .slice(0, 128)
-              : '',
+          id: sanitizeAuditToken(r.id, 128),
           name:
             typeof r.name === 'string'
               ? r.name
@@ -775,13 +792,7 @@ export class ArenaSpecSyncer {
                   .trim()
                   .slice(0, 300)
               : '',
-          model_key:
-            typeof r.model_key === 'string'
-              ? r.model_key
-                  .replace(/\p{Cc}+/gu, '')
-                  .trim()
-                  .slice(0, 200)
-              : '',
+          model_key: safeModelKey,
           populatedGroups,
         });
       }

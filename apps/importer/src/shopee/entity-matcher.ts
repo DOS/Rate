@@ -30,10 +30,32 @@ const MAX_SCREEN_SIZE_INCH = 120;
 const MAX_BATTERY_MAH = 500_000;
 export const MAX_ENTITY_IMAGES = 50;
 
-const SENTINEL_MASTER_IDS = new Set(['0', 'null', 'undefined', 'nan', 'none']);
+const SENTINEL_MATCHER_ID_RE =
+  /^(?:0+|null|undefined|nan|none|n\/a|unknown|infinity|-infinity|true|false|__proto__|constructor|prototype)$/i;
 
 function hasControlOrSpaceChar(val: string): boolean {
   return /[\p{Cc}\s]/u.test(val);
+}
+
+export function sanitizeMatcherEntityId(raw: unknown, maxLen = 128): string {
+  const str =
+    typeof raw === 'number' && Number.isSafeInteger(raw) && raw > 0
+      ? String(raw)
+      : typeof raw === 'string'
+        ? raw
+        : '';
+  if (!str) return '';
+  const trimmed = str.trim();
+  if (
+    !trimmed ||
+    trimmed.length > maxLen ||
+    hasControlOrSpaceChar(trimmed) ||
+    !/[a-zA-Z0-9]/.test(trimmed) ||
+    SENTINEL_MATCHER_ID_RE.test(trimmed)
+  ) {
+    return '';
+  }
+  return trimmed;
 }
 
 function isStrictBoolean(val: unknown): boolean {
@@ -85,14 +107,28 @@ export function sanitizeHttpUrlList(urls: unknown): string[] {
 }
 
 export function toBoundedPositiveInt(value: unknown, max: number): number | null {
-  if (typeof value === 'boolean') return null;
-  const n = Number(value);
+  if (typeof value !== 'number' && typeof value !== 'string') return null;
+  let n: number;
+  if (typeof value === 'string') {
+    const cleaned = value.replace(/[\s\p{Cc}]+/gu, '');
+    if (!cleaned || /^0[xob]/i.test(cleaned)) return null;
+    n = Number(cleaned);
+  } else {
+    n = value;
+  }
   return Number.isInteger(n) && n > 0 && n <= max ? n : null;
 }
 
 export function toBoundedPositiveNumber(value: unknown, max: number): number | null {
-  if (typeof value === 'boolean') return null;
-  const n = Number(value);
+  if (typeof value !== 'number' && typeof value !== 'string') return null;
+  let n: number;
+  if (typeof value === 'string') {
+    const cleaned = value.replace(/[\s\p{Cc}]+/gu, '');
+    if (!cleaned || /^0[xob]/i.test(cleaned)) return null;
+    n = Number(cleaned);
+  } else {
+    n = value;
+  }
   return Number.isFinite(n) && n > 0 && n <= max ? n : null;
 }
 
@@ -124,13 +160,7 @@ export class EntityMatcher {
     if (!safeModelKey) {
       throw new Error('[EntityMatcher] candidate.model_key must be a non-empty string');
     }
-    const safeCategoryId =
-      typeof categoryId === 'string'
-        ? categoryId
-            .replace(/\p{Cc}+/gu, '')
-            .trim()
-            .slice(0, 128) || undefined
-        : undefined;
+    const safeCategoryId = sanitizeMatcherEntityId(categoryId, 128) || undefined;
     const safeRawTitle =
       typeof rawTitle === 'string'
         ? rawTitle
@@ -184,24 +214,15 @@ export class EntityMatcher {
     const validFuzzyMatches = Array.isArray(fuzzyMatches)
       ? fuzzyMatches.filter(m => {
           if (!m || typeof m !== 'object' || Array.isArray(m)) return false;
-          const masterId =
-            typeof m.master_id === 'string' && !/\p{Cc}/u.test(m.master_id.trim())
-              ? m.master_id.trim()
-              : '';
-          if (SENTINEL_MASTER_IDS.has(masterId.toLowerCase())) return false;
+          const masterId = sanitizeMatcherEntityId(m.master_id, 128);
+          if (!masterId) return false;
           const sim = typeof m.similarity === 'boolean' ? Number.NaN : Number(m.similarity);
-          return (
-            masterId.length > 0 &&
-            masterId.length <= 128 &&
-            Number.isFinite(sim) &&
-            sim >= ENTITY_MATCH_CANDIDATE_FLOOR &&
-            sim <= 1
-          );
+          return Number.isFinite(sim) && sim >= ENTITY_MATCH_CANDIDATE_FLOOR && sim <= 1;
         })
       : [];
     if (validFuzzyMatches.length > 0) {
       const topMatch = validFuzzyMatches[0]!;
-      const topMasterId = String(topMatch.master_id).trim().slice(0, 128);
+      const topMasterId = sanitizeMatcherEntityId(topMatch.master_id, 128);
       const topSim = Number(topMatch.similarity);
       if (topSim >= ENTITY_MATCH_ACCEPT_THRESHOLD) {
         logger.info(
@@ -388,10 +409,7 @@ export class EntityMatcher {
    * Enriches an existing Master Product row in Supabase with full 10-Field-Group specs via AI
    */
   public async enrichMasterProductById(masterId: string): Promise<boolean> {
-    const safeMasterId = String(masterId ?? '')
-      .replace(/\p{Cc}+/gu, '')
-      .trim()
-      .slice(0, 128);
+    const safeMasterId = sanitizeMatcherEntityId(masterId, 128);
     if (!safeMasterId) {
       throw new Error('[EntityMatcher] masterId must be a non-empty string');
     }
