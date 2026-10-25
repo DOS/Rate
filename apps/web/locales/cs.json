@@ -509,7 +509,6 @@
     "authenticPctBadge": "Skutečné: {pct}%",
     "suspiciousPctBadge": "Spam / Podezřelé: {pct}%",
     "fakePctBadge": "Falešné recenze: {pct}%",
-    "authenticityProgressAria": "Poměr důvěryhodnosti recenzí",
     "aiSummaryPrefix": "AI souhrn:",
     "prosHeading": "Klady potvrzené kupujícími",
     "prosEmpty": "Načítání dalších kladů od ověřených kupujících.",
