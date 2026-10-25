@@ -20,10 +20,19 @@ function toValidCompetitorPrice(value: unknown): number {
 
 function normalizeCompetitorSlug(value: unknown): string {
   if (typeof value !== 'string') return '';
-  return value
+  const cleaned = value
     .replace(/\p{Cc}+/gu, '')
     .trim()
+    .toLowerCase()
     .slice(0, 256);
+  if (
+    !cleaned ||
+    !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(cleaned) ||
+    /^(?:0|null|undefined|nan|infinity|-infinity|true|false)$/i.test(cleaned)
+  ) {
+    return '';
+  }
+  return cleaned;
 }
 
 function sanitizeSpecSegment(value: unknown): string {
@@ -56,7 +65,7 @@ export function rankRelatedCompetitors<
       : 3;
   return peers
     .filter((p) => {
-      if (!p || typeof p !== 'object') return false;
+      if (!p || typeof p !== 'object' || Array.isArray(p)) return false;
       const peerSlug = normalizeCompetitorSlug(p.slug);
       return Boolean(peerSlug) && peerSlug !== safeCurrentSlug;
     })
@@ -89,7 +98,8 @@ export function buildKeySpecLine(
     'key_specs' | 'specifications' | 'ram_gb' | 'storage_gb' | 'battery_mah'
   >
 ): string {
-  if (!product || typeof product !== 'object') return '';
+  if (!product || typeof product !== 'object' || Array.isArray(product))
+    return '';
   const keySpecs = (
     product.key_specs &&
     typeof product.key_specs === 'object' &&

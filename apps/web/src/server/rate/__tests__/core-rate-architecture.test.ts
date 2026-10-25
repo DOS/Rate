@@ -11459,6 +11459,116 @@ async function runCoreArchitectureSuite() {
     assert.equal(sanitizeBrowserAccessToken('null'), null);
     assert.equal(sanitizeBrowserAccessToken('undefined'), null);
 
+    const {
+      implausiblyLowOfferIds: implausiblyLowOfferIds983,
+      plausibleOffers: plausibleOffers983,
+    } = await import('../../../lib/offer-plausibility');
+    const {
+      buildKeySpecLine: buildKeySpecLine983,
+      rankRelatedCompetitors: rankRelatedCompetitors983,
+    } = await import('../../../lib/product-competitors');
+    const {
+      buildPopular1v1BattlesForCategory: buildPopular1v1BattlesForCategory983,
+      computeJReviewsCriteriaScores: computeJReviewsCriteriaScores983,
+      computeProductStandingInCategory: computeProductStandingInCategory983,
+      rankMasterProductsForLeaderboard: rankMasterProductsForLeaderboard983,
+      scoreMasterProductForLeaderboard: scoreMasterProductForLeaderboard983,
+    } = await import('../../../lib/leaderboard-engine');
+
+    const rawOffers983 = [
+      ['array-offer'] as never,
+      { id: '0', price_current: 1_000_000 },
+      { id: 'null', price_current: 1_000_000 },
+      { id: '---', price_current: 1_000_000 },
+      { id: 'bait-offer-1', price_current: 1_000_000 },
+      { id: 'real-1', price_current: 25_000_000 },
+      { id: 'real-2', price_current: 26_000_000 },
+      { id: 'real-3', price_current: 27_000_000 },
+      { id: 'real-4', price_current: 28_000_000 },
+      { id: 'real-5', price_current: 29_000_000 },
+      { id: 'real-6', price_current: 30_000_000 },
+    ];
+    assert.equal(plausibleOffers983(rawOffers983).length, 6);
+    assert.deepEqual(
+      [...implausiblyLowOfferIds983(rawOffers983)],
+      ['bait-offer-1']
+    );
+
+    const competitors983 = rankRelatedCompetitors983(
+      [
+        ['array-peer'] as never,
+        { slug: '---', min_price: 20_000_000 },
+        { slug: 'null', min_price: 20_000_000 },
+        { slug: 'bad..slug', min_price: 20_000_000 },
+        { slug: 'IPhone-16-Pro', min_price: 24_000_000 },
+        { slug: 'galaxy-s24-ultra', min_price: 25_000_000 },
+      ],
+      'iphone-16-pro',
+      24_000_000
+    );
+    assert.equal(competitors983.length, 1);
+    assert.equal(competitors983[0]?.slug, 'galaxy-s24-ultra');
+    assert.equal(buildKeySpecLine983([] as never), '');
+
+    assert.equal(
+      computeJReviewsCriteriaScores983([] as never, 0, null).screen,
+      0
+    );
+    assert.equal(scoreMasterProductForLeaderboard983([] as never).slug, '');
+
+    const sampleProducts983 = [
+      ['array-product'] as never,
+      {
+        id: 'mp-1',
+        slug: 'iphone-16-pro-max',
+        name: 'iPhone 16 Pro Max',
+        brand: 'Apple',
+        model: 'iPhone 16 Pro Max',
+        category_id: 'smartphones',
+        user_rating_weighted: 4.8,
+        expert_rating: 9.2,
+        min_price: 29_990_000,
+        max_price: 32_990_000,
+      },
+      {
+        id: 'mp-2',
+        slug: 'galaxy-s24-ultra',
+        name: 'Galaxy S24 Ultra',
+        brand: 'Samsung',
+        model: 'Galaxy S24 Ultra',
+        category_id: 'smartphones',
+        user_rating_weighted: 4.7,
+        expert_rating: 9.0,
+        min_price: 26_990_000,
+        max_price: 29_990_000,
+      },
+    ];
+    const rankedWithBoolLimit983 = rankMasterProductsForLeaderboard983(
+      sampleProducts983 as never,
+      { limit: true as never }
+    );
+    assert.equal(rankedWithBoolLimit983.length, 2);
+
+    assert.deepEqual(
+      computeProductStandingInCategory983(
+        [] as never,
+        sampleProducts983 as never
+      ),
+      []
+    );
+
+    const battlesWithSlugless983 = buildPopular1v1BattlesForCategory983(
+      [
+        {
+          ...(sampleProducts983[1] as Record<string, unknown>),
+          slug: '',
+        } as never,
+        sampleProducts983[2] as never,
+      ],
+      'smartphones'
+    );
+    assert.deepEqual(battlesWithSlugless983, []);
+
     console.log(
       '  ✅ [121/121] API Handler URL/Slug/Vote Guards & OpenAPI Server Origin Bounds (#978) passed'
     );

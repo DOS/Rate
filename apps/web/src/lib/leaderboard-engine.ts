@@ -156,7 +156,7 @@ export function computeJReviewsCriteriaScores(
   expertScore5: number | null
 ): LeaderboardCriteriaBreakdown {
   const safeItem = (
-    item && typeof item === 'object' ? item : {}
+    item && typeof item === 'object' && !Array.isArray(item) ? item : {}
   ) as MasterProduct;
   const rawCriteria = (
     safeItem.expert_criteria_scores &&
@@ -357,7 +357,7 @@ export function scoreMasterProductForLeaderboard(
   criterion: LeaderboardCriterionKey = 'combined'
 ): Omit<ScoredLeaderboardItem, 'rank'> {
   const safeItem = (
-    item && typeof item === 'object' ? item : {}
+    item && typeof item === 'object' && !Array.isArray(item) ? item : {}
   ) as MasterProduct;
   const safeCriterion = normalizeLeaderboardCriterion(criterion);
   const categorySlug = getMasterProductCategorySlug(safeItem);
@@ -508,7 +508,11 @@ export function rankMasterProductsForLeaderboard(
     limit?: number;
   }
 ): ScoredLeaderboardItem[] {
-  const rawCategory = options?.category;
+  const safeOptions =
+    options && typeof options === 'object' && !Array.isArray(options)
+      ? options
+      : undefined;
+  const rawCategory = safeOptions?.category;
   const category: CanonicalCategorySlug | 'all' =
     typeof rawCategory === 'string' &&
     rawCategory
@@ -517,14 +521,22 @@ export function rankMasterProductsForLeaderboard(
       .toLowerCase() === 'all'
       ? 'all'
       : normalizeLeaderboardCategory(rawCategory);
-  const criterion = normalizeLeaderboardCriterion(options?.criterion);
-  const priceSegment = normalizeLeaderboardPriceSegment(options?.priceSegment);
-  const brand = sanitizeLeaderboardText(options?.brand ?? 'all', 128) || 'all';
-  const q = sanitizeLeaderboardText(options?.query ?? '', 256).toLowerCase();
+  const criterion = normalizeLeaderboardCriterion(safeOptions?.criterion);
+  const priceSegment = normalizeLeaderboardPriceSegment(
+    safeOptions?.priceSegment
+  );
+  const brand =
+    sanitizeLeaderboardText(safeOptions?.brand ?? 'all', 128) || 'all';
+  const q = sanitizeLeaderboardText(
+    safeOptions?.query ?? '',
+    256
+  ).toLowerCase();
 
   const safeProducts = Array.isArray(products)
     ? products
-        .filter((p): p is MasterProduct => Boolean(p && typeof p === 'object'))
+        .filter((p): p is MasterProduct =>
+          Boolean(p && typeof p === 'object' && !Array.isArray(p))
+        )
         .slice(0, MAX_LEADERBOARD_PRODUCTS_SCAN)
     : [];
 
@@ -609,7 +621,8 @@ export function rankMasterProductsForLeaderboard(
       rank: idx + 1,
     }));
 
-  const rawLimit = Number(options?.limit);
+  const rawLimit =
+    typeof safeOptions?.limit === 'number' ? safeOptions.limit : NaN;
   if (Number.isFinite(rawLimit) && rawLimit >= 1) {
     return filtered.slice(
       0,
@@ -627,13 +640,19 @@ export function computeProductStandingInCategory(
   targetProduct: MasterProduct,
   categoryProducts: MasterProduct[]
 ): ProductLeaderboardBadgeInfo[] {
-  if (!targetProduct || typeof targetProduct !== 'object') return [];
+  if (
+    !targetProduct ||
+    typeof targetProduct !== 'object' ||
+    Array.isArray(targetProduct)
+  ) {
+    return [];
+  }
   const targetSlug = sanitizeLeaderboardText(targetProduct.slug, 256);
   if (!targetSlug) return [];
   const categorySlug = getMasterProductCategorySlug(targetProduct);
   const safeCategoryProducts = Array.isArray(categoryProducts)
     ? categoryProducts.filter((p): p is MasterProduct =>
-        Boolean(p && typeof p === 'object')
+        Boolean(p && typeof p === 'object' && !Array.isArray(p))
       )
     : [];
   const peers = safeCategoryProducts.filter(
@@ -725,7 +744,14 @@ export function buildPopular1v1BattlesForCategory(
     if (pairs.length >= safeMaxPairs) break;
     const itemA = ranked[idxA];
     const itemB = ranked[idxB];
-    if (!itemA || !itemB || itemA.slug === itemB.slug) continue;
+    if (
+      !itemA ||
+      !itemB ||
+      !itemA.slug ||
+      !itemB.slug ||
+      itemA.slug === itemB.slug
+    )
+      continue;
 
     const versusSlug = `${itemA.slug}-vs-${itemB.slug}`;
     const scoreDelta5 = Number(
