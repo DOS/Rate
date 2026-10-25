@@ -95,7 +95,7 @@ export class EntityMatcher {
     categoryId?: string,
     rawTitle?: string
   ): Promise<{ masterId: string; isNew: boolean }> {
-    if (!candidate || typeof candidate !== 'object') {
+    if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)) {
       throw new Error('[EntityMatcher] candidate must be a non-null object');
     }
     const safeModelKey = String(candidate.model_key ?? '')
@@ -456,10 +456,24 @@ export class EntityMatcher {
       return false;
     }
 
+    const safeRowColors = Array.isArray(row.colors)
+      ? row.colors
+          .filter((c): c is string => typeof c === 'string')
+          .map(c =>
+            c
+              .replace(/\p{Cc}+/gu, ' ')
+              .replace(/\s+/g, ' ')
+              .trim()
+              .slice(0, 80)
+          )
+          .filter(Boolean)
+          .slice(0, 50)
+      : [];
+
     const mergedSpecifications = mergeProductSpecifications(
       existingSpecsRecord,
       aiResult.specifications,
-      Array.isArray(row.colors) && row.colors.length > 0 ? row.colors : undefined
+      safeRowColors.length > 0 ? safeRowColors : undefined
     );
     if (!mergedSpecifications.category_slug) {
       mergedSpecifications.category_slug = inferredCategorySlug;

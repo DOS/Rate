@@ -2540,8 +2540,71 @@ async function run() {
   );
   assert.equal(emptyMerchantRisk908.total_reviews, 0);
 
+  // DOS/Rate#954: computeVoterWeight null/array guard, numeric review_id shingle lookup, evaluateMerchantRisk finite followerCount & price rounding, and EntityMatcher array guard
+  assert.equal(
+    computeVoterWeight(null as unknown as Parameters<typeof computeVoterWeight>[0]),
+    0.1,
+    'computeVoterWeight must not throw when params is null'
+  );
+  assert.equal(
+    computeVoterWeight([] as unknown as Parameters<typeof computeVoterWeight>[0]),
+    0.1,
+    'computeVoterWeight must not throw when params is an array'
+  );
+  const numericIdShingleRes = analyzer.analyzeWithHeuristics([
+    {
+      id: 1001 as unknown as string,
+      author_name: 'user_a',
+      rating_star: 5,
+      comment: 'Điện thoại dùng rất mượt pin trâu màn hình sáng đẹp cực kỳ',
+    },
+    {
+      id: 1002 as unknown as string,
+      author_name: 'user_b',
+      rating_star: 5,
+      comment: 'Điện thoại dùng rất mượt pin trâu màn hình sáng đẹp tuyệt vời',
+    },
+  ]);
+  assert.equal(numericIdShingleRes[0]?.review_id, '1001');
+  assert.equal(
+    numericIdShingleRes[0]?.flag_category,
+    'seeding_fake',
+    'analyzeWithHeuristics must detect shingle similarity when runtime review.id is a number'
+  );
+  const infFollowersRisk = analyzer.evaluateMerchantRisk({
+    platform: 'shopee',
+    isOfficial: false,
+    followerCount: Number.POSITIVE_INFINITY,
+    listingPrice: 10_000_000.4,
+    canonicalMinPrice: 25_000_000.6,
+    reviewResults: [],
+  });
+  const zeroFollowersRisk = analyzer.evaluateMerchantRisk({
+    platform: 'shopee',
+    isOfficial: false,
+    followerCount: 0,
+    listingPrice: 10_000_000.4,
+    canonicalMinPrice: 25_000_000.6,
+    reviewResults: [],
+  });
+  assert.equal(
+    infFollowersRisk.risk_score,
+    zeroFollowersRisk.risk_score,
+    'evaluateMerchantRisk must not grant follower trust bonus when followerCount is Infinity'
+  );
+  assert.equal(infFollowersRisk.price_anomaly_detected, true);
+  await assert.rejects(
+    async () => {
+      const { EntityMatcher } = await import('./entity-matcher.js');
+      const matcher = new EntityMatcher({} as never);
+      await matcher.resolveOrCreateMasterProduct([] as never);
+    },
+    /candidate must be a non-null object/,
+    'EntityMatcher.resolveOrCreateMasterProduct must reject array candidates'
+  );
+
   console.log(
-    `✅ [P2/P3 Trust Model & #292/#352/#356/#359/#379/#382/#401/#497/#514/#522/#528/#557/#834/#836/#882/#908] Voter weight, Wilson lower bound (50/52=${wilson50of52} > 1/1=${wilson1of1}), shingle copy seeding (sim=${shingleSim}), affiliate shortlinks, peer floor, ArenaSpecSyncer, Importer & ReviewAnalyzer hardening (#352, #356, #359, #379, #382, #401, #497, #514, #522, #528, #557, #834, #836, #882, #908) verified`
+    `✅ [P2/P3 Trust Model & #292/#352/#356/#359/#379/#382/#401/#497/#514/#522/#528/#557/#834/#836/#882/#908/#954] Voter weight, Wilson lower bound (50/52=${wilson50of52} > 1/1=${wilson1of1}), shingle copy seeding (sim=${shingleSim}), affiliate shortlinks, peer floor, ArenaSpecSyncer, Importer & ReviewAnalyzer hardening (#352, #356, #359, #379, #382, #401, #497, #514, #522, #528, #557, #834, #836, #882, #908, #954) verified`
   );
 
   console.log('\n🎉 ALL AI REVIEW ANALYZER TESTS PASSED!');
