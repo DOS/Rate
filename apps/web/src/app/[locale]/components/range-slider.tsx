@@ -15,6 +15,41 @@ export interface RangeSliderProps {
   onChangeComplete?: (values: [number, number]) => void;
 }
 
+export function sanitizeSliderBounds(
+  min?: unknown,
+  max?: unknown,
+  step?: unknown
+): { min: number; max: number; step: number } {
+  const rawMin = typeof min === 'number' ? min : Number(min);
+  const rawMax = typeof max === 'number' ? max : Number(max);
+  const rawStep = typeof step === 'number' ? step : Number(step);
+  const safeMin = Number.isFinite(rawMin) ? rawMin : 0;
+  const safeMax =
+    Number.isFinite(rawMax) && rawMax >= safeMin ? rawMax : safeMin + 100;
+  const safeStep = Number.isFinite(rawStep) && rawStep > 0 ? rawStep : 1;
+  return { min: safeMin, max: safeMax, step: safeStep };
+}
+
+export function sanitizeSliderTuple(
+  tuple: unknown,
+  min: number,
+  max: number
+): [number, number] {
+  const { min: safeMin, max: safeMax } = sanitizeSliderBounds(min, max, 1);
+  if (!Array.isArray(tuple) || tuple.length < 2) {
+    return [safeMin, safeMax];
+  }
+  const n0 = typeof tuple[0] === 'number' ? tuple[0] : Number(tuple[0]);
+  const n1 = typeof tuple[1] === 'number' ? tuple[1] : Number(tuple[1]);
+  const clamped0 = Number.isFinite(n0)
+    ? Math.min(safeMax, Math.max(safeMin, n0))
+    : safeMin;
+  const clamped1 = Number.isFinite(n1)
+    ? Math.min(safeMax, Math.max(safeMin, n1))
+    : safeMax;
+  return [Math.min(clamped0, clamped1), Math.max(clamped0, clamped1)];
+}
+
 export default function RangeSlider({
   min = 0,
   max = 100,
@@ -26,8 +61,13 @@ export default function RangeSlider({
   onChangeComplete,
 }: RangeSliderProps) {
   const tSidebar = useTranslations('catalog.sidebar');
-  const [internalRange, setInternalRange] = useState<[number, number]>(
-    value ?? defaultValue
+  const {
+    min: safeMin,
+    max: safeMax,
+    step: safeStep,
+  } = sanitizeSliderBounds(min, max, step);
+  const [internalRange, setInternalRange] = useState<[number, number]>(() =>
+    sanitizeSliderTuple(value ?? defaultValue, safeMin, safeMax)
   );
 
   // Depend on the two numbers, not the array, so a new array with the same
@@ -36,11 +76,15 @@ export default function RangeSlider({
   const valueMax = value?.[1];
   useEffect(() => {
     if (valueMin !== undefined && valueMax !== undefined) {
-      setInternalRange([valueMin, valueMax]);
+      setInternalRange(
+        sanitizeSliderTuple([valueMin, valueMax], safeMin, safeMax)
+      );
     }
-  }, [valueMin, valueMax]);
+  }, [valueMin, valueMax, safeMin, safeMax]);
 
-  const activeRange = value ?? internalRange;
+  const activeRange = value
+    ? sanitizeSliderTuple(value, safeMin, safeMax)
+    : internalRange;
 
   const handleRangeChange = (values: number | number[]) => {
     if (
@@ -48,7 +92,11 @@ export default function RangeSlider({
       typeof values[0] === 'number' &&
       typeof values[1] === 'number'
     ) {
-      const next: [number, number] = [values[0], values[1]];
+      const next = sanitizeSliderTuple(
+        [values[0], values[1]],
+        safeMin,
+        safeMax
+      );
       setInternalRange(next);
       onChange?.(next);
     }
@@ -60,7 +108,9 @@ export default function RangeSlider({
       typeof values[0] === 'number' &&
       typeof values[1] === 'number'
     ) {
-      onChangeComplete?.([values[0], values[1]]);
+      onChangeComplete?.(
+        sanitizeSliderTuple([values[0], values[1]], safeMin, safeMax)
+      );
     }
   };
 
@@ -68,9 +118,9 @@ export default function RangeSlider({
     <div className="searchBar-single-wrap mt-2">
       <Slider
         range
-        min={min}
-        max={max}
-        step={step}
+        min={safeMin}
+        max={safeMax}
+        step={safeStep}
         value={activeRange}
         onChange={handleRangeChange}
         onChangeComplete={handleAfterChange}

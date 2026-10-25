@@ -23,6 +23,88 @@ export interface ListSidebarOneProps {
   brandFacets?: { name: string; count: number }[];
 }
 
+export function sanitizeSidebarRating(value: unknown): number {
+  const num = typeof value === 'number' ? value : Number(value);
+  if (!Number.isFinite(num) || num <= 0) return 0;
+  return Number(Math.min(5, num).toFixed(1));
+}
+
+export function sanitizeSidebarPositiveInts(
+  csvOrValue: unknown,
+  maxItemValue = 65_536
+): number[] {
+  if (typeof csvOrValue !== 'string' || !csvOrValue.trim()) return [];
+  const seen = new Set<number>();
+  const out: number[] = [];
+  for (const part of csvOrValue.split(',')) {
+    const cleaned = part.replace(/\p{Cc}+/gu, '').trim();
+    if (!cleaned) continue;
+    const num = Number(cleaned);
+    if (!Number.isFinite(num) || num <= 0) continue;
+    const rounded = Math.round(num);
+    if (rounded <= 0 || rounded > maxItemValue || seen.has(rounded)) continue;
+    seen.add(rounded);
+    out.push(rounded);
+    if (out.length >= 20) break;
+  }
+  return out;
+}
+
+export function sanitizeSidebarBrands(csvOrValue: unknown): string[] {
+  if (typeof csvOrValue !== 'string' || !csvOrValue.trim()) return [];
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const part of csvOrValue.split(',')) {
+    const cleaned = part
+      .replace(/\p{Cc}+/gu, '')
+      .trim()
+      .slice(0, 64);
+    if (!cleaned) continue;
+    const lower = cleaned.toLowerCase();
+    if (seen.has(lower)) continue;
+    seen.add(lower);
+    out.push(cleaned);
+    if (out.length >= 25) break;
+  }
+  return out;
+}
+
+export function sanitizeSidebarPriceMillion(
+  rawPriceVnd: unknown,
+  sliderMin: number,
+  sliderMax: number,
+  fallbackMillion: number
+): number {
+  const safeMin = Number.isFinite(sliderMin) && sliderMin >= 0 ? sliderMin : 0;
+  const safeMax =
+    Number.isFinite(sliderMax) && sliderMax >= safeMin ? sliderMax : safeMin;
+  const safeFallback = Math.min(
+    safeMax,
+    Math.max(
+      safeMin,
+      Number.isFinite(fallbackMillion) ? fallbackMillion : safeMin
+    )
+  );
+  if (rawPriceVnd === null || rawPriceVnd === undefined || rawPriceVnd === '') {
+    return safeFallback;
+  }
+  const num =
+    typeof rawPriceVnd === 'number' ? rawPriceVnd : Number(rawPriceVnd);
+  if (!Number.isFinite(num) || num <= 0) return safeFallback;
+  const million = Math.round(num / 1_000_000);
+  if (!Number.isFinite(million) || million <= 0) return safeFallback;
+  return Math.min(safeMax, Math.max(safeMin, million));
+}
+
+export function sanitizeSidebarKeyword(value: unknown): string {
+  if (typeof value !== 'string') return '';
+  return value
+    .replace(/\p{Cc}+/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 120);
+}
+
 export default function ListSidebarOne({
   categorySlug = 'smartphones',
   categories = [],
@@ -52,43 +134,32 @@ export default function ListSidebarOne({
   );
 
   // Parse active filter state from URL query params
-  const currentQ = searchParams?.get('q') || '';
-  const currentMinRating = Number(searchParams?.get('rating') || 0);
-  const currentBrands = (searchParams?.get('brands') || '')
-    .split(',')
-    .map((s) => s.trim())
-    .filter(Boolean);
-  const currentRams = (searchParams?.get('ram') || '')
-    .split(',')
-    .map((s) => Number(s.trim()))
-    .filter((n) => !Number.isNaN(n) && n > 0);
-  const currentStorages = (searchParams?.get('storage') || '')
-    .split(',')
-    .map((s) => Number(s.trim()))
-    .filter((n) => !Number.isNaN(n) && n > 0);
+  const currentQ = sanitizeSidebarKeyword(searchParams?.get('q'));
+  const currentMinRating = sanitizeSidebarRating(searchParams?.get('rating'));
+  const currentBrands = sanitizeSidebarBrands(searchParams?.get('brands'));
+  const currentRams = sanitizeSidebarPositiveInts(
+    searchParams?.get('ram'),
+    1024
+  );
+  const currentStorages = sanitizeSidebarPositiveInts(
+    searchParams?.get('storage'),
+    16_384
+  );
 
   const sliderMin = schema.priceRangeMillion.min;
   const sliderMax = schema.priceRangeMillion.max;
-  const rawMinMillion = searchParams?.get('minPrice')
-    ? Math.min(
-        sliderMax,
-        Math.max(
-          sliderMin,
-          Math.round(Number(searchParams.get('minPrice')) / 1_000_000) ||
-            sliderMin
-        )
-      )
-    : sliderMin;
-  const rawMaxMillion = searchParams?.get('maxPrice')
-    ? Math.max(
-        sliderMin,
-        Math.min(
-          sliderMax,
-          Math.round(Number(searchParams.get('maxPrice')) / 1_000_000) ||
-            sliderMax
-        )
-      )
-    : sliderMax;
+  const rawMinMillion = sanitizeSidebarPriceMillion(
+    searchParams?.get('minPrice'),
+    sliderMin,
+    sliderMax,
+    sliderMin
+  );
+  const rawMaxMillion = sanitizeSidebarPriceMillion(
+    searchParams?.get('maxPrice'),
+    sliderMin,
+    sliderMax,
+    sliderMax
+  );
   const urlMinMillion = Math.min(rawMinMillion, rawMaxMillion);
   const urlMaxMillion = Math.max(rawMinMillion, rawMaxMillion);
 
@@ -118,16 +189,18 @@ export default function ListSidebarOne({
   };
 
   const toggleMultiString = (paramKey: string, val: string) => {
+    const cleanVal = val
+      .replace(/\p{Cc}+/gu, '')
+      .trim()
+      .slice(0, 64);
+    if (!cleanVal) return;
     updateUrlParams((params) => {
-      const existing = (params.get(paramKey) || '')
-        .split(',')
-        .map((s) => s.trim())
-        .filter(Boolean);
-      const lower = val.toLowerCase();
+      const existing = sanitizeSidebarBrands(params.get(paramKey));
+      const lower = cleanVal.toLowerCase();
       const has = existing.some((x) => x.toLowerCase() === lower);
       const next = has
         ? existing.filter((x) => x.toLowerCase() !== lower)
-        : [...existing, val];
+        : [...existing, cleanVal];
       if (next.length > 0) {
         params.set(paramKey, next.join(','));
       } else {
@@ -137,13 +210,14 @@ export default function ListSidebarOne({
   };
 
   const toggleMultiNumber = (paramKey: string, val: number) => {
+    if (!Number.isFinite(val) || val <= 0) return;
+    const cleanVal = Math.round(val);
     updateUrlParams((params) => {
-      const existing = (params.get(paramKey) || '')
-        .split(',')
-        .map((s) => Number(s.trim()))
-        .filter((n) => !Number.isNaN(n) && n > 0);
-      const has = existing.includes(val);
-      const next = has ? existing.filter((x) => x !== val) : [...existing, val];
+      const existing = sanitizeSidebarPositiveInts(params.get(paramKey));
+      const has = existing.includes(cleanVal);
+      const next = has
+        ? existing.filter((x) => x !== cleanVal)
+        : [...existing, cleanVal];
       if (next.length > 0) {
         params.set(paramKey, next.join(','));
       } else {
@@ -153,9 +227,10 @@ export default function ListSidebarOne({
   };
 
   const handleRatingChange = (ratingVal: number) => {
+    const safeRating = sanitizeSidebarRating(ratingVal);
     updateUrlParams((params) => {
-      if (ratingVal > 0) {
-        params.set('rating', String(ratingVal));
+      if (safeRating > 0) {
+        params.set('rating', String(safeRating));
       } else {
         params.delete('rating');
       }
@@ -218,8 +293,9 @@ export default function ListSidebarOne({
   const handleApplyForm = (e: React.FormEvent) => {
     e.preventDefault();
     updateUrlParams((params) => {
-      if (keyword.trim()) {
-        params.set('q', keyword.trim());
+      const cleanQ = sanitizeSidebarKeyword(keyword);
+      if (cleanQ) {
+        params.set('q', cleanQ);
       } else {
         params.delete('q');
       }
