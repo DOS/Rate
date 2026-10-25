@@ -12722,6 +12722,73 @@ async function runCoreArchitectureSuite() {
   }
 
   // -------------------------------------------------------------------------
+  // 126f. VersusInteractiveScoreboard, DealFinderWorkspace & WatchlistWorkspace Bounds (#1049)
+  // -------------------------------------------------------------------------
+  {
+    const {
+      sanitizeVersusScore5,
+      sanitizeVersusExportSlug,
+      sanitizeVersusMarkdownCell,
+    } = await import('../../../components/compare/VersusInteractiveScoreboard');
+    const {
+      sanitizeDealFinderBudgetVnd,
+      sanitizeDealFinderSearchQuery,
+      sanitizeDealFinderMarkdownCell,
+    } = await import('../../../components/deals/DealFinderWorkspace');
+    const {
+      sanitizeWatchlistBestOfferUrl,
+      sanitizeWatchlistMarkdownCell,
+      sanitizeWatchlistCount,
+    } = await import('../../../components/watchlist/WatchlistWorkspace');
+
+    assert.equal(sanitizeVersusScore5(4.856), 4.86);
+    assert.equal(sanitizeVersusScore5(8.2), 5);
+    assert.equal(sanitizeVersusScore5(-1), 0);
+    assert.equal(sanitizeVersusScore5(Number.NaN), 0);
+    assert.equal(
+      sanitizeVersusExportSlug('  ../iPhone 16 Pro\u0000!!  '),
+      'iphone-16-pro'
+    );
+    assert.equal(sanitizeVersusExportSlug('   '), 'device');
+    assert.equal(
+      sanitizeVersusMarkdownCell('  Galaxy\r\nS25 | Ultra\u0000  '),
+      'Galaxy S25 - Ultra'
+    );
+
+    assert.equal(sanitizeDealFinderBudgetVnd(35_990_000.4), 35_990_000);
+    assert.equal(sanitizeDealFinderBudgetVnd(-500), 1_000_000_000);
+    assert.equal(sanitizeDealFinderBudgetVnd(9_000_000_000), 1_000_000_000);
+    assert.equal(
+      sanitizeDealFinderSearchQuery('  \u0000iPhone 16 Pro  '),
+      'iphone 16 pro'
+    );
+    assert.equal(
+      sanitizeDealFinderMarkdownCell('  Apple\r\nStore | Mall\u0000  '),
+      'Apple Store - Mall'
+    );
+
+    assert.equal(
+      sanitizeWatchlistBestOfferUrl('  \u0000https://shopee.vn/item-i.1.2  '),
+      'https://shopee.vn/item-i.1.2'
+    );
+    assert.equal(
+      sanitizeWatchlistBestOfferUrl('https://user:pass@evil.example/item'),
+      null
+    );
+    assert.equal(sanitizeWatchlistBestOfferUrl('javascript:alert(1)'), null);
+    assert.equal(
+      sanitizeWatchlistMarkdownCell('  Shop\r\nOfficial | VN\u0000  '),
+      'Shop Official - VN'
+    );
+    assert.equal(sanitizeWatchlistCount(12.6), 13);
+    assert.equal(sanitizeWatchlistCount(-4), 0);
+
+    console.log(
+      '  ✅ [126f/133] VersusInteractiveScoreboard, DealFinderWorkspace & WatchlistWorkspace Bounds (#1049) passed'
+    );
+  }
+
+  // -------------------------------------------------------------------------
   // 127. Rate Server Index & Extension Entity, Slug, and Category Bounds (#1029)
   // -------------------------------------------------------------------------
   {
