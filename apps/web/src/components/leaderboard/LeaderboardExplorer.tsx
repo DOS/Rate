@@ -929,6 +929,13 @@ export default function LeaderboardExplorer({
             >
               <BsSliders aria-hidden="true" className="me-1" />
               {copy.customizeWeightsBtn}
+              {/* Custom weights select no persona pill and are shown only by
+                  this button's colour, so its name says so too (#1067). */}
+              {activePersona === 'custom' && (
+                <span className="visually-hidden">
+                  {`: ${copy.personaLabels.custom}`}
+                </span>
+              )}
             </button>
           </div>
 

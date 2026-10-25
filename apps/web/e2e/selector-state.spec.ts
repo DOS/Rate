@@ -36,6 +36,19 @@ test('leaderboard selectors expose their state', async ({ page }) => {
   await customize.click();
   await expect(customize).toHaveAttribute('aria-expanded', 'true');
   await expect(page.locator('#leaderboard-weight-sliders')).toBeVisible();
+
+  // Moving a slider makes the weights custom: no preset is pressed, and the
+  // customize button, coloured for it, says so in its name.
+  await expect(customize).not.toHaveAccessibleName(/Trọng số cá nhân hóa/);
+  const slider = page
+    .locator('#leaderboard-weight-sliders input[type="range"]')
+    .first();
+  await slider.focus();
+  await page.keyboard.press('ArrowRight');
+  await expect(customize).toHaveAccessibleName(/Trọng số cá nhân hóa/);
+  await expect(groups[2]!.getByRole('button', { pressed: true })).toHaveCount(
+    0
+  );
 });
 
 test('the compare category switcher exposes its state', async ({ page }) => {
