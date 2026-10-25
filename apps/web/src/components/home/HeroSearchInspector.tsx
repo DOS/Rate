@@ -8,6 +8,7 @@ import { startNavigationProgress } from '@/components/elementary/NavigationProgr
 import type { KeySpecs } from '@repo/shared-data';
 import type { HeroProductSuggestion } from '@/lib/hero-products';
 import {
+  MAX_VALID_VND_PRICE,
   getMasterProductHref,
   type UrlInspectionResult,
 } from '@/lib/rate-domain';
@@ -63,12 +64,38 @@ const SAMPLE_INSPECT_LINKS = [
   },
 ];
 
-function isLikelyEcommerceUrl(input: string): boolean {
-  const s = input.trim();
+const HERO_INSPECTOR_CONTROL_CHARS_RE = /\p{Cc}+/gu;
+
+export function isLikelyEcommerceUrl(input: unknown): boolean {
+  if (typeof input !== 'string') return false;
+  const s = input.replace(HERO_INSPECTOR_CONTROL_CHARS_RE, '').trim();
   return (
     /^https?:\/\//i.test(s) ||
     /shopee\.vn|lazada\.vn|tiki\.vn|tiktok\.com|i\.\d+\.\d+/i.test(s)
   );
+}
+
+export function sanitizeHeroInspectorPriceVnd(value: unknown): number {
+  const num = Number(value);
+  if (!Number.isFinite(num) || num <= 0 || num > MAX_VALID_VND_PRICE) {
+    return 0;
+  }
+  return Math.round(num);
+}
+
+export function sanitizeHeroInspectorRating(
+  userRatingWeighted: unknown,
+  averageRating: unknown
+): number {
+  const w = Number(userRatingWeighted);
+  if (Number.isFinite(w) && w > 0) {
+    return Math.min(5, w);
+  }
+  const avg = Number(averageRating);
+  if (Number.isFinite(avg) && avg > 0) {
+    return Math.min(5, avg);
+  }
+  return 0;
 }
 
 export default function HeroSearchInspector({
@@ -394,14 +421,14 @@ export default function HeroSearchInspector({
                     {filteredProducts.map((item, idx) => {
                       const keySpecs = (item.key_specs || {}) as KeySpecs;
                       const thumb = productImageUrl(item);
-                      const minPrice = Number(
-                        item.min_price || 0
-                      ).toLocaleString('vi-VN');
-                      const rating =
-                        item.user_rating_weighted &&
-                        Number(item.user_rating_weighted) > 0
-                          ? Number(item.user_rating_weighted)
-                          : Number(item.average_rating || 0);
+                      const safeMinPrice = sanitizeHeroInspectorPriceVnd(
+                        item.min_price
+                      );
+                      const minPrice = safeMinPrice.toLocaleString('vi-VN');
+                      const rating = sanitizeHeroInspectorRating(
+                        item.user_rating_weighted,
+                        item.average_rating
+                      );
 
                       return (
                         <div
@@ -502,7 +529,7 @@ export default function HeroSearchInspector({
                                 name: item.name,
                                 brand: item.brand,
                                 thumbnail: thumb ?? null,
-                                min_price: Number(item.min_price || 0),
+                                min_price: safeMinPrice,
                               }}
                             />
                           </div>
