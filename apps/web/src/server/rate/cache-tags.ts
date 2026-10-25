@@ -123,7 +123,8 @@ export function isSafeRevalidationPath(rawPath: string): boolean {
   if (clean.includes('\\') || /\p{Cc}/u.test(clean) || /[\s?#]/.test(clean)) {
     return false;
   }
-  if (/(?:^|\/)\.\.(?:\/|$)/.test(clean)) return false;
+  if (/(?:^|\/)\.\.?(?:\/|$)/.test(clean)) return false;
+  if (/%(?:2e|2f|5c|00)/i.test(clean)) return false;
   return true;
 }
 
@@ -131,20 +132,35 @@ export function resolveRevalidationTargets(input: RevalidationTargetsInput): {
   tags: string[];
   paths: string[];
 } {
+  const safeInput =
+    input && typeof input === 'object' && !Array.isArray(input) ? input : {};
   const tagSet = new Set<string>();
   const pathSet = new Set<string>();
 
-  for (const tag of (input.tags ?? []).slice(0, 50)) {
+  const rawTags = Array.isArray(safeInput.tags) ? safeInput.tags : [];
+  for (const tag of rawTags.slice(0, 50)) {
     if (typeof tag !== 'string') continue;
     const clean = tag.trim().toLowerCase();
-    if (clean && SAFE_CACHE_TAG_REGEX.test(clean)) {
+    if (
+      clean &&
+      SAFE_CACHE_TAG_REGEX.test(clean) &&
+      !/(?:^|:)\.\.?$|(?:^|:)[.:]+$/.test(clean)
+    ) {
       tagSet.add(clean);
     }
   }
-  for (const slug of (input.slugs ?? []).slice(0, 50)) {
+  const rawSlugs = Array.isArray(safeInput.slugs) ? safeInput.slugs : [];
+  for (const slug of rawSlugs.slice(0, 50)) {
     if (typeof slug !== 'string') continue;
     const clean = slug.trim();
-    if (!clean || clean.length > 120 || !SAFE_ENTITY_TOKEN_REGEX.test(clean)) {
+    if (
+      !clean ||
+      clean.length > 120 ||
+      !SAFE_ENTITY_TOKEN_REGEX.test(clean) ||
+      clean.startsWith('.') ||
+      clean.endsWith('.') ||
+      clean.includes('..')
+    ) {
       continue;
     }
     tagSet.add(productCacheTag(clean));
@@ -155,10 +171,20 @@ export function resolveRevalidationTargets(input: RevalidationTargetsInput): {
     tagSet.add(RATE_CACHE_TAGS.DEALS);
     tagSet.add(RATE_CACHE_TAGS.STATS);
   }
-  for (const cat of (input.categories ?? []).slice(0, 20)) {
+  const rawCategories = Array.isArray(safeInput.categories)
+    ? safeInput.categories
+    : [];
+  for (const cat of rawCategories.slice(0, 20)) {
     if (typeof cat !== 'string') continue;
     const clean = cat.trim();
-    if (!clean || clean.length > 60 || !SAFE_ENTITY_TOKEN_REGEX.test(clean)) {
+    if (
+      !clean ||
+      clean.length > 60 ||
+      !SAFE_ENTITY_TOKEN_REGEX.test(clean) ||
+      clean.startsWith('.') ||
+      clean.endsWith('.') ||
+      clean.includes('..')
+    ) {
       continue;
     }
     tagSet.add(categoryCacheTag(clean));
@@ -167,13 +193,21 @@ export function resolveRevalidationTargets(input: RevalidationTargetsInput): {
     tagSet.add(RATE_CACHE_TAGS.DEALS);
     tagSet.add(RATE_CACHE_TAGS.STATS);
   }
-  for (const merchantId of (input.merchants ?? []).slice(0, 50)) {
+  const rawMerchants = Array.isArray(safeInput.merchants)
+    ? safeInput.merchants
+    : [];
+  for (const merchantId of rawMerchants.slice(0, 50)) {
     if (typeof merchantId !== 'string') continue;
     const clean = merchantId.trim();
     if (
       !clean ||
       clean.length > 120 ||
-      !SAFE_MERCHANT_IDENTIFIER_REGEX.test(clean)
+      !SAFE_MERCHANT_IDENTIFIER_REGEX.test(clean) ||
+      clean.startsWith('.') ||
+      clean.endsWith('.') ||
+      clean.startsWith(':') ||
+      clean.endsWith(':') ||
+      clean.includes('..')
     ) {
       continue;
     }
@@ -184,7 +218,8 @@ export function resolveRevalidationTargets(input: RevalidationTargetsInput): {
     tagSet.add(RATE_CACHE_TAGS.DEALS);
     tagSet.add(RATE_CACHE_TAGS.STATS);
   }
-  for (const p of (input.paths ?? []).slice(0, 50)) {
+  const rawPaths = Array.isArray(safeInput.paths) ? safeInput.paths : [];
+  for (const p of rawPaths.slice(0, 50)) {
     if (typeof p !== 'string') continue;
     const clean = p.trim();
     if (isSafeRevalidationPath(clean)) {
