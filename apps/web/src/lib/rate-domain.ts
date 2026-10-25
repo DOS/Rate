@@ -105,7 +105,7 @@ export function normalizeCompareFiveStarRating(
 export function resolveCompareEffectiveUserRating(
   p: Pick<SharedMasterProduct, 'user_rating_weighted' | 'average_rating'>
 ): number {
-  if (!p || typeof p !== 'object') return 0;
+  if (!p || typeof p !== 'object' || Array.isArray(p)) return 0;
   const weighted = normalizeCompareFiveStarRating(p.user_rating_weighted);
   if (weighted > 0) return weighted;
   return normalizeCompareFiveStarRating(p.average_rating);
@@ -114,7 +114,7 @@ export function resolveCompareEffectiveUserRating(
 export function resolveCompareExpertRating5(
   p: Pick<SharedMasterProduct, 'expert_rating'>
 ): number | null {
-  if (!p || typeof p !== 'object') return null;
+  if (!p || typeof p !== 'object' || Array.isArray(p)) return null;
   const norm = normalizeCompareFiveStarRating(p.expert_rating);
   return norm > 0 ? norm : null;
 }
@@ -149,7 +149,7 @@ export function resolveCompareDisplaySizeInch(
     'screen_size_inch' | 'specifications' | 'key_specs'
   >
 ): number | null {
-  if (!p || typeof p !== 'object') return null;
+  if (!p || typeof p !== 'object' || Array.isArray(p)) return null;
   const specs = (
     p.specifications &&
     typeof p.specifications === 'object' &&
@@ -197,7 +197,7 @@ export function resolveCompareDisplaySizeInch(
 export function resolveCompareRamGb(
   p: Pick<SharedMasterProduct, 'ram_gb' | 'specifications' | 'key_specs'>
 ): number | null {
-  if (!p || typeof p !== 'object') return null;
+  if (!p || typeof p !== 'object' || Array.isArray(p)) return null;
   const fromTop = toPositiveFiniteSpec(p.ram_gb, 0, MAX_COMPARE_RAM_GB);
   if (fromTop !== null) {
     return fromTop;
@@ -237,7 +237,7 @@ export function resolveCompareRamGb(
 export function resolveCompareStorageGb(
   p: Pick<SharedMasterProduct, 'storage_gb' | 'specifications' | 'key_specs'>
 ): number | null {
-  if (!p || typeof p !== 'object') return null;
+  if (!p || typeof p !== 'object' || Array.isArray(p)) return null;
   const fromTop = toPositiveFiniteSpec(p.storage_gb, 0, MAX_COMPARE_STORAGE_GB);
   if (fromTop !== null) {
     return fromTop;
@@ -293,7 +293,7 @@ export function resolveCompareMemoryScore(
 export function resolveCompareBatteryMah(
   p: Pick<SharedMasterProduct, 'battery_mah' | 'specifications' | 'key_specs'>
 ): number | null {
-  if (!p || typeof p !== 'object') return null;
+  if (!p || typeof p !== 'object' || Array.isArray(p)) return null;
   const specs = (
     p.specifications &&
     typeof p.specifications === 'object' &&
