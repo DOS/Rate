@@ -11994,7 +11994,7 @@ async function runCoreArchitectureSuite() {
       sanitizeInspectPriceVnd,
       sanitizeInspectDownloadSlug,
     } = await import('../../../components/inspect/DeepInspectWorkspace');
-    const { sanitizeRadarPercentage } =
+    const { sanitizeRadarPercentage, sanitizeRadarMinSpreadPct } =
       await import('../../../components/radar/RadarBadge');
 
     assert.equal(
@@ -12051,6 +12051,13 @@ async function runCoreArchitectureSuite() {
     assert.equal(sanitizeRadarPercentage(150, 100), 100);
     assert.equal(sanitizeRadarPercentage(-5, 100), 0);
     assert.equal(sanitizeRadarPercentage(Number.NaN, 100), 0);
+    assert.equal(
+      sanitizeRadarMinSpreadPct(Number.POSITIVE_INFINITY),
+      Number.POSITIVE_INFINITY
+    );
+    assert.equal(sanitizeRadarMinSpreadPct(Number.NaN, 10), 10);
+    assert.equal(sanitizeRadarMinSpreadPct(-5, 10), 0);
+    assert.equal(sanitizeRadarMinSpreadPct(15, 10), 15);
 
     console.log(
       '  ✅ [122/122] Merchant Audit, Deep Inspect Exports & Radar Badge Bounds (#1020) passed'
