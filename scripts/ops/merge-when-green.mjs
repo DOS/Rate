@@ -35,6 +35,8 @@ export const BLOCKED_POLLS = 6;
 const MAX_API_ERRORS = 3;
 /** Merge refusals retried after a fresh read of the head. */
 const MAX_MERGE_REFUSALS = 3;
+/** Times a PR behind a strict base is brought up to date before giving up. */
+export const MAX_BRANCH_UPDATES = 5;
 
 /** Required checks an --ignore would hide: that can never turn green. */
 export const ignoredRequired = (required, ignore) =>
@@ -148,6 +150,24 @@ export function decide(pr, checks, blockedPolls) {
     };
   }
   if (checks.state === 'pending') return { action: 'wait' };
+  // A strict ruleset counts checks only on a head that contains the latest
+  // base: bring the branch up to date and wait for the new head's checks.
+  // Never for a shared branch (a dev to main promotion: that update would push
+  // an unreviewed back-merge to dev, see RELEASE.md) or a fork's branch.
+  if (pr.mergeable_state === 'behind') {
+    const headRef = pr.head.ref;
+    const fork =
+      pr.head.repo?.full_name &&
+      pr.base.repo?.full_name &&
+      pr.head.repo.full_name !== pr.base.repo.full_name;
+    if (PROTECTED_BRANCHES.has(headRef) || fork) {
+      return {
+        action: 'fail',
+        message: `PR ${pr.number} is behind ${pr.base.ref}; its head ${headRef} is ${fork ? 'a fork branch' : 'a shared branch'}, so it is not updated automatically (back-merge ${pr.base.ref} into ${headRef} through a PR, Docs/Resources/RELEASE.md)`,
+      };
+    }
+    return { action: 'update' };
+  }
   // GitHub recomputes mergeability a little after the last check finishes.
   if (pr.mergeable_state === 'blocked' || pr.mergeable_state === 'unknown') {
     return blockedPolls + 1 >= BLOCKED_POLLS
@@ -190,7 +210,16 @@ export async function mergeWhenGreen({
   let blockedPolls = 0;
   let apiErrors = 0;
   let mergeRefusals = 0;
+  let branchUpdates = 0;
+  let lastUpdatedSha = null;
   for (;;) {
+    // Every path back to the top of the loop is bounded by this deadline.
+    if (Date.now() > deadline) {
+      return {
+        ok: false,
+        message: `PR ${number} still not mergeable after ${timeoutMs / 60_000} min`,
+      };
+    }
     let head;
     try {
       head = readHead(repo, number);
@@ -228,6 +257,41 @@ export async function mergeWhenGreen({
     const next = decide(pr, checks, blockedPolls);
     if (next.action === 'done') return { ok: true, message: next.message };
     if (next.action === 'fail') return { ok: false, message: next.message };
+    if (next.action === 'update') {
+      // update-branch is asynchronous: until the new head appears, the old
+      // head still reads as behind. Wait for it instead of updating again.
+      if (pr.head.sha === lastUpdatedSha) {
+        await sleep(intervalMs);
+        continue;
+      }
+      if (++branchUpdates > MAX_BRANCH_UPDATES) {
+        return {
+          ok: false,
+          message: `PR ${number} is still behind ${pr.base.ref} after ${MAX_BRANCH_UPDATES} updates (the base keeps moving)`,
+        };
+      }
+      const updated = gh(
+        [
+          'api',
+          '-X',
+          'PUT',
+          `repos/${repo}/pulls/${number}/update-branch`,
+          '-f',
+          `expected_head_sha=${pr.head.sha}`,
+        ],
+        { allowFailure: true }
+      );
+      if (updated.status !== 0) {
+        return {
+          ok: false,
+          message: `PR ${number} is behind ${pr.base.ref} and could not be updated: ${updated.stderr.trim()}`,
+        };
+      }
+      lastUpdatedSha = pr.head.sha;
+      console.log(`PR ${number} was behind ${pr.base.ref}: branch updated`);
+      await sleep(intervalMs);
+      continue;
+    }
     if (next.action === 'merge') {
       const merged = gh(
         [
