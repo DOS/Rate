@@ -1,6 +1,5 @@
 import 'server-only';
 import { NextResponse } from 'next/server';
-import { z } from 'zod';
 import { plausibleMinPrice, plausibleOffers } from '@/lib/offer-plausibility';
 import {
   MAX_VALID_VND_PRICE,
@@ -62,19 +61,39 @@ export function jsonApiError(
   );
 }
 
+function parseFiniteDecimalInput(raw: unknown): number {
+  if (typeof raw === 'number') {
+    return Number.isFinite(raw) ? raw : Number.NaN;
+  }
+  if (typeof raw === 'string') {
+    const cleaned = raw.replace(/\p{Cc}+/gu, '').trim();
+    if (!cleaned || cleaned.length > 32 || /^[+-]?0[xbo]/i.test(cleaned)) {
+      return Number.NaN;
+    }
+    const parsed = Number(cleaned);
+    return Number.isFinite(parsed) ? parsed : Number.NaN;
+  }
+  return Number.NaN;
+}
+
 export function parseBoundedIntParam(
   raw: string | null | undefined,
   defaultValue: number,
   min: number,
   max: number
 ): number {
-  if (typeof raw !== 'string' || raw.trim() === '') return defaultValue;
-  const schema = z.coerce.number().int();
-  const parsed = schema.safeParse(raw);
-  if (!parsed.success || !Number.isFinite(parsed.data)) {
-    return defaultValue;
+  const safeDefault = Number.isFinite(defaultValue)
+    ? Math.trunc(defaultValue)
+    : 0;
+  const safeMin = Number.isFinite(min) ? Math.trunc(min) : 0;
+  const safeMax =
+    Number.isFinite(max) && max >= safeMin ? Math.trunc(max) : safeMin;
+  if (typeof raw !== 'string') return safeDefault;
+  const parsed = parseFiniteDecimalInput(raw);
+  if (!Number.isSafeInteger(parsed)) {
+    return safeDefault;
   }
-  return Math.min(Math.max(parsed.data, min), max);
+  return Math.min(Math.max(parsed, safeMin), safeMax);
 }
 
 export function parseBoundedNumberParam(
@@ -82,16 +101,17 @@ export function parseBoundedNumberParam(
   min: number,
   max: number
 ): number | undefined {
-  if (typeof raw !== 'string' || raw.trim() === '') return undefined;
-  const schema = z.coerce.number();
-  const parsed = schema.safeParse(raw);
-  if (!parsed.success || !Number.isFinite(parsed.data)) {
+  if (typeof raw !== 'string') return undefined;
+  const safeMin = Number.isFinite(min) ? min : 0;
+  const safeMax = Number.isFinite(max) && max >= safeMin ? max : safeMin;
+  const parsed = parseFiniteDecimalInput(raw);
+  if (!Number.isFinite(parsed)) {
     return undefined;
   }
-  if (parsed.data < min || parsed.data > max) {
-    return Math.min(Math.max(parsed.data, min), max);
+  if (parsed < safeMin || parsed > safeMax) {
+    return Math.min(Math.max(parsed, safeMin), safeMax);
   }
-  return parsed.data;
+  return parsed;
 }
 
 export function parseBoundedStringParam(
@@ -118,10 +138,8 @@ export function parseOptionalVndPriceParam(
   raw: string | null | undefined,
   maxVnd = 500_000_000
 ): number | null {
-  if (raw == null || typeof raw !== 'string') return null;
-  const trimmed = raw.trim();
-  if (!trimmed) return null;
-  const n = Number(trimmed);
+  if (typeof raw !== 'string') return null;
+  const n = parseFiniteDecimalInput(raw);
   if (!Number.isFinite(n) || n <= 0) return null;
   const safeMaxVnd =
     typeof maxVnd === 'number' && Number.isFinite(maxVnd) && maxVnd > 0
@@ -142,18 +160,25 @@ export function parseBoundedPositiveIntArrayParam(
 ): number[] | undefined {
   const boundedRaw = parseBoundedStringParam(raw, 240);
   if (!boundedRaw) return undefined;
+  const safeMaxValue =
+    typeof maxValue === 'number' && Number.isFinite(maxValue) && maxValue > 0
+      ? Math.floor(maxValue)
+      : 0;
+  if (safeMaxValue <= 0) return undefined;
+  const safeMaxItems =
+    typeof maxItems === 'number' && Number.isFinite(maxItems) && maxItems >= 1
+      ? Math.min(100, Math.floor(maxItems))
+      : 12;
   const result: number[] = [];
   const seen = new Set<number>();
   for (const part of boundedRaw.split(',')) {
-    const trimmed = part.trim();
-    if (!trimmed) continue;
-    const n = Number(trimmed);
-    if (!Number.isInteger(n) || n <= 0 || n > maxValue || seen.has(n)) {
+    const n = parseFiniteDecimalInput(part);
+    if (!Number.isSafeInteger(n) || n <= 0 || n > safeMaxValue || seen.has(n)) {
       continue;
     }
     seen.add(n);
     result.push(n);
-    if (result.length >= maxItems) break;
+    if (result.length >= safeMaxItems) break;
   }
   return result.length > 0 ? result : undefined;
 }
@@ -173,13 +198,9 @@ export function resolveWatchlistMasterPriceBounds(
       ? Math.round(maxVnd)
       : 1_000_000_000;
   const rawMin =
-    !master ||
-    typeof master !== 'object' ||
-    typeof master.min_price === 'boolean' ||
-    master.min_price === null ||
-    master.min_price === undefined
+    !master || typeof master !== 'object'
       ? Number.NaN
-      : Number(master.min_price);
+      : parseFiniteDecimalInput(master.min_price);
   const safeBestOffer =
     typeof bestOfferPrice === 'number' &&
     Number.isFinite(bestOfferPrice) &&
@@ -192,13 +213,9 @@ export function resolveWatchlistMasterPriceBounds(
       ? rawMin
       : safeBestOffer;
   const rawMax =
-    !master ||
-    typeof master !== 'object' ||
-    typeof master.max_price === 'boolean' ||
-    master.max_price === null ||
-    master.max_price === undefined
+    !master || typeof master !== 'object'
       ? Number.NaN
-      : Number(master.max_price);
+      : parseFiniteDecimalInput(master.max_price);
   const currentMaxPrice =
     currentMinPrice > 0 &&
     Number.isFinite(rawMax) &&
@@ -242,17 +259,13 @@ export function withPlausibleMinPrice<T extends { min_price?: unknown }>(
   offers: readonly { price_current: number }[]
 ): T {
   const rawMin =
-    !master ||
-    typeof master !== 'object' ||
-    typeof master.min_price === 'boolean' ||
-    master.min_price === null ||
-    master.min_price === undefined
+    !master || typeof master !== 'object'
       ? 0
-      : Number(master.min_price || 0);
+      : parseFiniteDecimalInput(master.min_price);
   return {
     ...master,
     min_price: plausibleMinPrice(
-      Number.isFinite(rawMin) ? rawMin : 0,
+      Number.isFinite(rawMin) && rawMin > 0 ? rawMin : 0,
       Array.isArray(offers) ? offers : []
     ),
   };
@@ -265,11 +278,8 @@ export function selectBestOfferFromListings(
   // A bait-price listing is never the best offer (DOS/Rate#797).
   const valid = plausibleOffers(safeOffers).filter((o) => {
     if (!o || typeof o !== 'object') return false;
-    if (typeof o.price_current === 'boolean' || typeof o.stock === 'boolean') {
-      return false;
-    }
-    const price = Number(o.price_current);
-    const stock = o.stock == null ? 1 : Number(o.stock);
+    const price = parseFiniteDecimalInput(o.price_current);
+    const stock = o.stock == null ? 1 : parseFiniteDecimalInput(o.stock);
     return (
       Number.isFinite(stock) &&
       stock > 0 &&
@@ -290,7 +300,9 @@ export function selectBestOfferFromListings(
   }
 
   const sorted = [...valid].sort((a, b) => {
-    const diff = Number(a.price_current) - Number(b.price_current);
+    const diff =
+      parseFiniteDecimalInput(a.price_current) -
+      parseFiniteDecimalInput(b.price_current);
     if (diff !== 0) return diff;
     const mallA = a.merchant?.is_official ? 1 : 0;
     const mallB = b.merchant?.is_official ? 1 : 0;
@@ -298,12 +310,11 @@ export function selectBestOfferFromListings(
   });
 
   const best = sorted[0]!;
-  const bestPrice = Number(best.price_current);
+  const bestPrice = parseFiniteDecimalInput(best.price_current);
+  const rawOrig = parseFiniteDecimalInput(best.price_original);
   const validOrig = normalizeOfferOriginalPrice(
     bestPrice,
-    typeof best.price_original === 'boolean'
-      ? 0
-      : Number(best.price_original ?? 0)
+    Number.isFinite(rawOrig) ? rawOrig : 0
   );
   const cleanTitle = String(best.title || '')
     .replace(/\p{Cc}+/gu, ' ')
@@ -400,15 +411,7 @@ export function resolveInspectObservedPrices(input: {
       ? Math.round(input.maxVnd)
       : MAX_VALID_VND_PRICE;
   const toPositiveBoundedPrice = (val: unknown): number => {
-    if (
-      val === null ||
-      val === undefined ||
-      typeof val === 'boolean' ||
-      (typeof val === 'string' && !val.trim())
-    ) {
-      return 0;
-    }
-    const n = Number(val);
+    const n = parseFiniteDecimalInput(val);
     return Number.isFinite(n) && n > 0 && n <= safeMaxVnd ? Math.round(n) : 0;
   };
 
@@ -431,13 +434,34 @@ export function resolveInspectObservedPrices(input: {
 }
 
 const CANONICAL_PRODUCT_SLUG_REGEX = /^[a-zA-Z0-9._-]+$/;
+const DISALLOWED_SLUG_AND_BRAND_TOKENS = new Set([
+  'null',
+  'undefined',
+  'nan',
+  'none',
+  'true',
+  'false',
+  '__proto__',
+  'constructor',
+  'prototype',
+]);
 
 function isValidProductSlugToken(slug: string, maxLength = 120): boolean {
+  if (typeof slug !== 'string') return false;
+  const safeMaxLength =
+    typeof maxLength === 'number' &&
+    Number.isFinite(maxLength) &&
+    maxLength >= 1
+      ? Math.floor(maxLength)
+      : 120;
+  const lower = slug.toLowerCase();
   return (
     Boolean(slug) &&
-    slug.length <= maxLength &&
+    slug.length <= safeMaxLength &&
     CANONICAL_PRODUCT_SLUG_REGEX.test(slug) &&
     /[a-zA-Z0-9]/.test(slug) &&
+    !/^0+$/.test(slug) &&
+    !DISALLOWED_SLUG_AND_BRAND_TOKENS.has(lower) &&
     !slug.startsWith('.') &&
     !slug.endsWith('.') &&
     !slug.includes('..')
@@ -512,15 +536,21 @@ export class BoundedSlidingWindowRateLimiter {
   private readonly maxBuckets: number;
 
   constructor(options: SlidingWindowRateLimiterOptions) {
+    const safeOpts =
+      options && typeof options === 'object'
+        ? options
+        : ({} as SlidingWindowRateLimiterOptions);
+    const rawWindowMs = parseFiniteDecimalInput(safeOpts.windowMs);
     this.windowMs =
-      Number.isFinite(options.windowMs) && options.windowMs >= 1_000
-        ? Math.min(86_400_000, Math.floor(options.windowMs))
+      Number.isFinite(rawWindowMs) && rawWindowMs >= 1_000
+        ? Math.min(86_400_000, Math.floor(rawWindowMs))
         : 60_000;
+    const rawMaxRequests = parseFiniteDecimalInput(safeOpts.maxRequests);
     this.maxRequests =
-      Number.isFinite(options.maxRequests) && options.maxRequests >= 1
-        ? Math.min(100_000, Math.floor(options.maxRequests))
+      Number.isFinite(rawMaxRequests) && rawMaxRequests >= 1
+        ? Math.min(100_000, Math.floor(rawMaxRequests))
         : 30;
-    const rawMaxBuckets = options.maxBuckets ?? 2_000;
+    const rawMaxBuckets = parseFiniteDecimalInput(safeOpts.maxBuckets ?? 2_000);
     this.maxBuckets =
       Number.isFinite(rawMaxBuckets) && rawMaxBuckets >= 1
         ? Math.min(50_000, Math.floor(rawMaxBuckets))
@@ -746,10 +776,10 @@ export function parseReviewsQueryParams(
 
   const rawLimit = searchParams.get('limit');
   let limit = 50;
-  if (rawLimit != null && rawLimit.trim() !== '') {
-    const parsedLimit = Number(rawLimit.trim());
+  if (rawLimit != null && rawLimit.replace(/\p{Cc}+/gu, '').trim() !== '') {
+    const parsedLimit = parseFiniteDecimalInput(rawLimit);
     if (
-      !Number.isInteger(parsedLimit) ||
+      !Number.isSafeInteger(parsedLimit) ||
       parsedLimit < 1 ||
       parsedLimit > 200
     ) {
@@ -760,8 +790,11 @@ export function parseReviewsQueryParams(
 
   const rawMasterId =
     searchParams.get('masterProductId') ?? searchParams.get('productId');
-  if (rawMasterId != null && rawMasterId.trim() !== '') {
-    const trimmedId = rawMasterId.trim();
+  if (
+    rawMasterId != null &&
+    rawMasterId.replace(/\p{Cc}+/gu, '').trim() !== ''
+  ) {
+    const trimmedId = rawMasterId.replace(/\p{Cc}+/gu, '').trim();
     if (!UUID_PARAM_REGEX.test(trimmedId)) {
       return null;
     }
@@ -769,8 +802,8 @@ export function parseReviewsQueryParams(
   }
 
   const rawSlug = searchParams.get('slug');
-  if (rawSlug != null && rawSlug.trim() !== '') {
-    const trimmedSlug = rawSlug.trim();
+  if (rawSlug != null && rawSlug.replace(/\p{Cc}+/gu, '').trim() !== '') {
+    const trimmedSlug = rawSlug.replace(/\p{Cc}+/gu, '').trim();
     if (!isValidProductSlugToken(trimmedSlug, 120)) {
       return null;
     }
@@ -804,11 +837,19 @@ export function parseProductsFilterBounds(
   minPrice: number | undefined;
   maxPrice: number | undefined;
 } | null {
+  const safeMaxBrands =
+    typeof maxBrands === 'number' &&
+    Number.isFinite(maxBrands) &&
+    maxBrands >= 1
+      ? Math.min(50, Math.floor(maxBrands))
+      : 15;
   const rawCategory = searchParams.get('category');
+  const cleanedCategory =
+    typeof rawCategory === 'string'
+      ? rawCategory.replace(/\p{Cc}+/gu, '').trim()
+      : '';
   const categorySlug =
-    rawCategory == null || rawCategory.trim() === ''
-      ? 'smartphones'
-      : rawCategory.trim().toLowerCase();
+    cleanedCategory === '' ? 'smartphones' : cleanedCategory.toLowerCase();
   if (!VALID_PRODUCT_CATEGORY_SLUGS.has(categorySlug)) {
     return null;
   }
@@ -823,20 +864,22 @@ export function parseProductsFilterBounds(
     const seen = new Set<string>();
     for (const part of rawBrands.split(',')) {
       const b = part.trim();
+      const lower = b.toLowerCase();
       if (
         !b ||
         b.length > 40 ||
         !VALID_BRAND_TOKEN_REGEX.test(b) ||
         !/[\p{L}\p{N}]/u.test(b) ||
+        /^0+$/.test(b) ||
+        DISALLOWED_SLUG_AND_BRAND_TOKENS.has(lower) ||
         b.includes('..')
       ) {
         continue;
       }
-      const lower = b.toLowerCase();
       if (seen.has(lower)) continue;
       seen.add(lower);
       list.push(b);
-      if (list.length >= maxBrands) break;
+      if (list.length >= safeMaxBrands) break;
     }
     if (list.length > 0) {
       brands = list;

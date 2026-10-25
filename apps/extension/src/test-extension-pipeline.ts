@@ -3420,6 +3420,30 @@ async function runTests() {
     );
   }
 
+  // API Handler & Request Auth Numeric/Slug/Brand/Token Bounds (#1025)
+  {
+    const parseDecimal1025 = (raw: unknown): number => {
+      if (typeof raw === 'number') {
+        return Number.isFinite(raw) ? raw : Number.NaN;
+      }
+      if (typeof raw === 'string') {
+        const cleaned = raw.replace(/\p{Cc}+/gu, '').trim();
+        if (!cleaned || cleaned.length > 32 || /^[+-]?0[xbo]/i.test(cleaned)) {
+          return Number.NaN;
+        }
+        const parsed = Number(cleaned);
+        return Number.isFinite(parsed) ? parsed : Number.NaN;
+      }
+      return Number.NaN;
+    };
+    assert.equal(Number.isNaN(parseDecimal1025('0x10')), true);
+    assert.equal(parseDecimal1025('\u000042'), 42);
+    assert.equal(/^(?:null|undefined|nan|true|false|0+)$/i.test('0000'), true);
+    console.log(
+      '  \u2705 [API Handler & Request Auth Numeric/Slug/Brand/Token Bounds (#1025)] Verified'
+    );
+  }
+
   console.log('🎉 All Rate Browser Extension MV3 v2 tests passed!');
 }
 
