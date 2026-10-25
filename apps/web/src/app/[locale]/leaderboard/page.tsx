@@ -122,41 +122,22 @@ export default async function LeaderboardPage({ params }: PageProps) {
     statZeroBias: t('statZeroBias'),
   };
 
-  // Build Schema.org ItemList JSON-LD for Top 15 Ranked Master Products
+  // Summary ItemList of the top 15, the form Google reads on list pages: each
+  // item links to its product page, which carries the Product markup. Products
+  // embedded here would need an image and offers, and repeat review markup off
+  // the product's own page (DOS/Rate#1059).
   const itemListSchema = {
     '@context': 'https://schema.org',
     '@type': 'ItemList',
     name: copy.title,
     description: copy.subtitle,
     numberOfItems: Math.min(products.length, 15),
-    itemListElement: products.slice(0, 15).map((p, index) => {
-      const ratingVal =
-        Number(p.expert_rating || 0) > 0
-          ? Number(p.expert_rating)
-          : Number(p.user_rating_weighted || p.average_rating || 0) * 2;
-      return {
-        '@type': 'ListItem',
-        position: index + 1,
-        item: {
-          '@type': 'Product',
-          name: p.name,
-          brand: { '@type': 'Brand', name: p.brand },
-          url: `${siteUrl}${getMasterProductHref(p)}`,
-          // Unrated products get no aggregateRating instead of an invented score.
-          ...(ratingVal > 0
-            ? {
-                aggregateRating: {
-                  '@type': 'AggregateRating',
-                  ratingValue: Number(ratingVal.toFixed(1)),
-                  bestRating: 10,
-                  worstRating: 1,
-                  ratingCount: Math.max(p.total_reviews || 1, 1),
-                },
-              }
-            : {}),
-        },
-      };
-    }),
+    itemListElement: products.slice(0, 15).map((p, index) => ({
+      '@type': 'ListItem',
+      position: index + 1,
+      name: p.name,
+      url: `${siteUrl}${getMasterProductHref(p)}`,
+    })),
   };
 
   return (
