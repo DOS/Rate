@@ -8,6 +8,18 @@ export function sanitizeRadarPercentage(value: unknown, maxPct = 1000): number {
   return Math.min(maxPct, num);
 }
 
+export function sanitizeRadarMinSpreadPct(
+  value: unknown,
+  fallback = 10
+): number {
+  if (value === Number.POSITIVE_INFINITY) return Number.POSITIVE_INFINITY;
+  const num = typeof value === 'number' ? value : Number(value);
+  if (Number.isNaN(num)) return fallback;
+  if (num === Number.POSITIVE_INFINITY) return Number.POSITIVE_INFINITY;
+  if (!Number.isFinite(num)) return 0;
+  return Math.max(0, num);
+}
+
 interface RadarBadgeProps {
   readonly signal: RadarSignal;
   /** Hide the spread-only badge below this percentage (default 10). */
@@ -34,9 +46,7 @@ export default function RadarBadge({
   const safeSavingsPct = sanitizeRadarPercentage(sig.savingsPct, 100);
   const safeFakeMarkupPct = sanitizeRadarPercentage(sig.fakeMarkupPct, 1000);
   const safeSpreadPct = sanitizeRadarPercentage(sig.spreadPct, 1000);
-  const safeMinSpreadPct = Number.isFinite(minSpreadPct)
-    ? Math.max(0, minSpreadPct)
-    : 10;
+  const safeMinSpreadPct = sanitizeRadarMinSpreadPct(minSpreadPct, 10);
   let label = '';
   if (sig.verdict === 'genuine_deal' && safeSavingsPct > 0) {
     label = tDeals('radarBadgeGenuine', { pct: safeSavingsPct.toFixed(1) });
