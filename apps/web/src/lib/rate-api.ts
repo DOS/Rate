@@ -731,7 +731,43 @@ export class RateDataUnavailableError extends Error {
 // Same shape the public API accepts (CANONICAL_PRODUCT_SLUG_REGEX). Anything
 // else cannot be a product, and sending it would let PostgREST reject the
 // query (NUL bytes, quotes in in.()), which would now surface as a 5xx.
-const PRODUCT_SLUG_REGEX = /^[a-zA-Z0-9._-]{1,120}$/;
+const PRODUCT_SLUG_REGEX = /^(?=.*[a-zA-Z0-9])[a-zA-Z0-9._-]{1,120}$/;
+
+const SENTINEL_RATE_API_TOKENS = new Set([
+  '0',
+  'null',
+  'undefined',
+  'nan',
+  'none',
+  'n/a',
+  'na',
+  'false',
+  'true',
+]);
+
+function sanitizeRateEntityId(raw: unknown): string {
+  if (typeof raw !== 'string') return '';
+  const cleaned = raw
+    .replace(/\p{Cc}+/gu, '')
+    .trim()
+    .slice(0, 120);
+  if (
+    !cleaned ||
+    SENTINEL_RATE_API_TOKENS.has(cleaned.toLowerCase()) ||
+    !/[\p{L}\p{N}]/u.test(cleaned)
+  ) {
+    return '';
+  }
+  return cleaned;
+}
+
+function isStrictOfferOfficialFlag(raw: unknown): boolean {
+  return (
+    raw === true ||
+    raw === 1 ||
+    (typeof raw === 'string' && raw.trim().toLowerCase() === 'true')
+  );
+}
 
 /**
  * Fetch a single master product by its slug. Null means no published product
@@ -742,7 +778,13 @@ export async function getMasterProductBySlug(
 ): Promise<MasterProduct | null> {
   const cleanSlug =
     typeof slug === 'string' ? slug.replace(/\p{Cc}+/gu, '').trim() : '';
-  if (!PRODUCT_SLUG_REGEX.test(cleanSlug)) return null;
+  if (
+    !PRODUCT_SLUG_REGEX.test(cleanSlug) ||
+    cleanSlug.includes('..') ||
+    SENTINEL_RATE_API_TOKENS.has(cleanSlug.toLowerCase())
+  ) {
+    return null;
+  }
   const supabase = getRateClient();
   const { data, error } = await supabase
     .from('master_products')
@@ -868,6 +910,29 @@ function sanitizeOfferString(raw: unknown): string {
   return typeof raw === 'string' ? raw.replace(/\p{Cc}+/gu, '').trim() : '';
 }
 
+function sanitizeOfferUrl(raw: unknown): string {
+  const cleaned = sanitizeOfferString(raw);
+  if (!cleaned || cleaned.length > 2048 || /\s/.test(cleaned)) return '';
+  try {
+    const parsed = new URL(cleaned);
+    if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') return '';
+    if (
+      parsed.username ||
+      parsed.password ||
+      !parsed.hostname ||
+      parsed.hostname.startsWith('[') ||
+      parsed.hostname.endsWith('.') ||
+      parsed.hostname.includes('..') ||
+      Boolean(parsed.port)
+    ) {
+      return '';
+    }
+    return cleaned;
+  } catch {
+    return '';
+  }
+}
+
 /** True when the view row's seller has no review risk from the importer. */
 function isUnscoredTrustViewRow(row: RawTrustViewRow): boolean {
   return !hasPersistedReviewRisk(
@@ -917,45 +982,53 @@ export function mapTrustViewRowToMerchantOffer(
   row: RawTrustViewRow,
   followerCount?: number
 ): MerchantOffer {
-  const combinedRisk = toSafeRiskScore100(row.threat_risk_score, 0);
-  const dosafeRisk = toSafeRiskScore100(row.dosafe_risk_score, combinedRisk);
-  const persistedReviewRisk = toSafeRiskScore100(row.review_risk_score, 0);
+  const safeRow =
+    row && typeof row === 'object' && !Array.isArray(row)
+      ? row
+      : ({} as RawTrustViewRow);
+  const combinedRisk = toSafeRiskScore100(safeRow.threat_risk_score, 0);
+  const dosafeRisk = toSafeRiskScore100(
+    safeRow.dosafe_risk_score,
+    combinedRisk
+  );
+  const persistedReviewRisk = toSafeRiskScore100(safeRow.review_risk_score, 0);
+  const isOfficial = isStrictOfferOfficialFlag(safeRow.merchant_is_official);
   // The view reads 0 for a seller the importer never scored; use the same
   // baseline as the merchant pages (#685).
-  const reviewRisk = isUnscoredTrustViewRow(row)
+  const reviewRisk = isUnscoredTrustViewRow(safeRow)
     ? baselineReviewRisk({
-        isOfficial: row.merchant_is_official,
-        platform: row.platform,
+        isOfficial,
+        platform: safeRow.platform,
         followerCount,
       })
     : persistedReviewRisk;
-  const priceCurrent = toSafeOfferPrice(row.price_current);
-  const cleanPlatform = sanitizeOfferString(row.platform).toLowerCase();
-  const cleanLocation = sanitizeOfferString(row.merchant_location);
+  const priceCurrent = toSafeOfferPrice(safeRow.price_current);
+  const cleanPlatform = sanitizeOfferString(safeRow.platform).toLowerCase();
+  const cleanLocation = sanitizeOfferString(safeRow.merchant_location);
   const safeBreakdown =
-    row.review_risk_breakdown &&
-    typeof row.review_risk_breakdown === 'object' &&
-    !Array.isArray(row.review_risk_breakdown)
-      ? row.review_risk_breakdown
+    safeRow.review_risk_breakdown &&
+    typeof safeRow.review_risk_breakdown === 'object' &&
+    !Array.isArray(safeRow.review_risk_breakdown)
+      ? safeRow.review_risk_breakdown
       : null;
   return {
-    id: sanitizeOfferString(row.id),
+    id: sanitizeOfferString(safeRow.id),
     platform: cleanPlatform,
-    title: sanitizeOfferString(row.title),
+    title: sanitizeOfferString(safeRow.title),
     price_current: priceCurrent,
     price_original: normalizeOfferOriginalPrice(
       priceCurrent,
-      row.price_original
+      safeRow.price_original
     ),
-    stock: toSafeNonNegativeVoteCount(row.stock, 100_000_000),
-    rating_star: toSafeStarRating5(row.rating_star),
-    rating_count: toSafeNonNegativeVoteCount(row.rating_count, 100_000_000),
-    url: sanitizeOfferString(row.url),
+    stock: toSafeNonNegativeVoteCount(safeRow.stock, 100_000_000),
+    rating_star: toSafeStarRating5(safeRow.rating_star),
+    rating_count: toSafeNonNegativeVoteCount(safeRow.rating_count, 100_000_000),
+    url: sanitizeOfferUrl(safeRow.url),
     merchant: {
-      id: sanitizeOfferString(row.merchant_id),
-      name: sanitizeOfferString(row.merchant_name) || 'Gian hàng',
+      id: sanitizeOfferString(safeRow.merchant_id),
+      name: sanitizeOfferString(safeRow.merchant_name) || 'Gian hàng',
       platform: cleanPlatform,
-      is_official: Boolean(row.merchant_is_official),
+      is_official: isOfficial,
       rating_star: null,
       follower_count: toSafeNonNegativeVoteCount(followerCount, 100_000_000),
       location: cleanLocation || null,
@@ -968,13 +1041,26 @@ export function mapTrustViewRowToMerchantOffer(
 }
 
 export function mapOfferRowToMerchantOffer(item: RawOfferRow): MerchantOffer {
-  const merchantObj = Array.isArray(item.merchants)
-    ? item.merchants[0]
-    : item.merchants;
+  const safeItem =
+    item && typeof item === 'object' && !Array.isArray(item)
+      ? item
+      : ({} as RawOfferRow);
+  const rawMerchant = Array.isArray(safeItem.merchants)
+    ? safeItem.merchants[0]
+    : safeItem.merchants;
+  const merchantObj =
+    rawMerchant &&
+    typeof rawMerchant === 'object' &&
+    !Array.isArray(rawMerchant)
+      ? rawMerchant
+      : undefined;
   const meta =
-    merchantObj?.metadata && typeof merchantObj.metadata === 'object'
+    merchantObj?.metadata &&
+    typeof merchantObj.metadata === 'object' &&
+    !Array.isArray(merchantObj.metadata)
       ? merchantObj.metadata
       : null;
+  const isOfficial = isStrictOfferOfficialFlag(merchantObj?.is_official);
   const baseRisk = toSafeRiskScore100(merchantObj?.risk_score, 0);
   const dosafeRisk =
     merchantObj?.dosafe_risk_score != null
@@ -995,8 +1081,8 @@ export function mapOfferRowToMerchantOffer(item: RawOfferRow): MerchantOffer {
       : typeof meta?.review_risk_score === 'number'
         ? toSafeRiskScore100(meta.review_risk_score, 0)
         : baselineReviewRisk({
-            isOfficial: merchantObj?.is_official,
-            platform: merchantObj?.platform ?? item.platform,
+            isOfficial,
+            platform: merchantObj?.platform ?? safeItem.platform,
             followerCount: Number(merchantObj?.follower_count) || 0,
           });
   const metaCombined =
@@ -1023,36 +1109,41 @@ export function mapOfferRowToMerchantOffer(item: RawOfferRow): MerchantOffer {
           ('review_risk_score' in meta || 'seeding_spam_ratio_pct' in meta)
         ? meta
         : null);
-  const priceCurrent = toSafeOfferPrice(item.price_current);
+  const priceCurrent = toSafeOfferPrice(safeItem.price_current);
   const rawMerchantRating =
     typeof merchantObj?.rating_star === 'number' ||
     (typeof merchantObj?.rating_star === 'string' &&
       merchantObj.rating_star.trim() !== '')
       ? Number(merchantObj.rating_star)
       : null;
-  const cleanItemPlatform = sanitizeOfferString(item.platform).toLowerCase();
+  const cleanItemPlatform = sanitizeOfferString(
+    safeItem.platform
+  ).toLowerCase();
   const cleanMerchantPlatform =
     sanitizeOfferString(merchantObj?.platform).toLowerCase() ||
     cleanItemPlatform;
   const cleanMerchantLocation = sanitizeOfferString(merchantObj?.location);
   return {
-    id: sanitizeOfferString(item.id),
+    id: sanitizeOfferString(safeItem.id),
     platform: cleanItemPlatform,
-    title: sanitizeOfferString(item.title),
+    title: sanitizeOfferString(safeItem.title),
     price_current: priceCurrent,
     price_original: normalizeOfferOriginalPrice(
       priceCurrent,
-      item.price_original
+      safeItem.price_original
     ),
-    stock: toSafeNonNegativeVoteCount(item.stock, 100_000_000),
-    rating_star: toSafeStarRating5(item.rating_star),
-    rating_count: toSafeNonNegativeVoteCount(item.rating_count, 100_000_000),
-    url: sanitizeOfferString(item.url),
+    stock: toSafeNonNegativeVoteCount(safeItem.stock, 100_000_000),
+    rating_star: toSafeStarRating5(safeItem.rating_star),
+    rating_count: toSafeNonNegativeVoteCount(
+      safeItem.rating_count,
+      100_000_000
+    ),
+    url: sanitizeOfferUrl(safeItem.url),
     merchant: {
       id: sanitizeOfferString(merchantObj?.id),
       name: sanitizeOfferString(merchantObj?.name) || 'Gian hàng',
       platform: cleanMerchantPlatform,
-      is_official: Boolean(merchantObj?.is_official),
+      is_official: isOfficial,
       rating_star:
         rawMerchantRating !== null &&
         Number.isFinite(rawMerchantRating) &&
@@ -1098,6 +1189,8 @@ const OFFER_FALLBACK_SELECT = `
 export async function getMasterProductOffers(
   masterId: string
 ): Promise<MerchantOffer[]> {
+  const cleanMasterId = sanitizeRateEntityId(masterId);
+  if (!cleanMasterId) return [];
   const supabase = getRateClient();
   // Paged: one request stops at PostgREST max-rows (1000), so a product with
   // more listings would silently lose offers. id breaks price ties.
@@ -1107,7 +1200,7 @@ export async function getMasterProductOffers(
       supabase
         .from('v_products_with_merchant_trust')
         .select(TRUST_VIEW_SELECT)
-        .eq('cluster_id', masterId)
+        .eq('cluster_id', cleanMasterId)
         .order('price_current', { ascending: true })
         .order('id')
         .range(from, to)
@@ -1125,7 +1218,7 @@ export async function getMasterProductOffers(
     supabase
       .from('products')
       .select(OFFER_FALLBACK_SELECT)
-      .eq('cluster_id', masterId)
+      .eq('cluster_id', cleanMasterId)
       .order('price_current', { ascending: true })
       .order('id')
       .range(from, to)
@@ -1144,18 +1237,7 @@ export async function getMasterProductOffersBatch(
     return new Map();
   }
   const uniqueIds = Array.from(
-    new Set(
-      masterIds
-        .map((id) =>
-          typeof id === 'string'
-            ? id
-                .replace(/\p{Cc}+/gu, '')
-                .trim()
-                .slice(0, 120)
-            : ''
-        )
-        .filter(Boolean)
-    )
+    new Set(masterIds.map(sanitizeRateEntityId).filter(Boolean))
   );
   const offersByMaster = new Map<string, MerchantOffer[]>(
     uniqueIds.map((id) => [id, []])
