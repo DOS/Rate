@@ -10813,7 +10813,148 @@ async function runCoreArchitectureSuite() {
     );
 
     console.log(
-      '  ✅ [117/117] Deal Radar Non-Array Guards & Compare Spec Regex Bounds (#950) passed'
+      '  ✅ [117/118] Deal Radar Non-Array Guards & Compare Spec Regex Bounds (#950) passed'
+    );
+  }
+
+  // 118. ProductValueCalculator, DealFinderWorkspace & VersusInteractiveScoreboard Bounds (#960)
+  {
+    const { computeProductValueMetrics } =
+      await import('../../../components/leaderboard/ProductValueCalculator');
+    const { rankProductsForDealFinder } =
+      await import('../../../components/deals/DealFinderWorkspace');
+    const { computeVersusWeightedResult } =
+      await import('../../../components/compare/VersusInteractiveScoreboard');
+
+    // 118a. computeProductValueMetrics: expertScore10 === 0 treated as unscored, not 0/10
+    const zeroExpertMetrics = computeProductValueMetrics({
+      brand: 'Apple',
+      categorySlug: 'smartphones',
+      minPriceVnd: 25_000_000,
+      maxPriceVnd: 27_000_000,
+      userScore5: 4.5,
+      expertScore10: 0,
+      months: 24,
+      includeResale: true,
+    });
+    assert.equal(
+      zeroExpertMetrics.combined10,
+      9,
+      'computeProductValueMetrics must treat expertScore10 === 0 as unscored instead of dragging combined10 down by 40%'
+    );
+    assert.equal(zeroExpertMetrics.maxSpreadSavingsVnd, 2_000_000);
+
+    // 118b. computeProductValueMetrics: 5-point expertScore10 normalized to 10-point scale and out-of-range prices guarded
+    const fivePointExpertMetrics = computeProductValueMetrics({
+      brand: 'Samsung',
+      categorySlug: 'smartphones',
+      minPriceVnd: 20_000_000,
+      maxPriceVnd: 999_999_999_999,
+      userScore5: 4.5,
+      expertScore10: 4.5,
+      months: 24,
+      includeResale: false,
+    });
+    assert.equal(
+      fivePointExpertMetrics.combined10,
+      9,
+      'computeProductValueMetrics must normalize 5-point expertScore10 (<= 5) to 10-point scale'
+    );
+    assert.equal(
+      fivePointExpertMetrics.safeMaxPrice,
+      20_000_000,
+      'computeProductValueMetrics must clamp maxPriceVnd > MAX_VALID_VND_PRICE back to safeMinPrice'
+    );
+    const invalidMinMetrics = computeProductValueMetrics({
+      brand: 'Apple',
+      categorySlug: 'smartphones',
+      minPriceVnd: Number.NaN,
+      maxPriceVnd: 30_000_000,
+      userScore5: 4.8,
+      expertScore10: 9.2,
+      months: 24,
+      includeResale: true,
+    });
+    assert.equal(invalidMinMetrics.safeMinPrice, 0);
+    assert.equal(invalidMinMetrics.costPerPoint10, 0);
+
+    // 118c. rankProductsForDealFinder: malformed rows and out-of-range prices are guarded
+    const basePeer = mockPeers[0]!;
+    const rankedDealsTest = rankProductsForDealFinder(
+      [
+        {
+          ...basePeer,
+          id: 'unscored-deal',
+          slug: 'unscored-deal',
+          name: 'Unscored Phone',
+          brand: 'Xiaomi',
+          min_price: 10_000_000,
+          max_price: 999_999_999_999,
+          average_rating: 0,
+          user_rating_weighted: 0,
+          expert_rating: 0,
+          total_reviews: 0,
+          specifications: {},
+          key_specs: {},
+        },
+        {
+          ...basePeer,
+          id: 'nan-price-deal',
+          slug: 'nan-price-deal',
+          min_price: Number.NaN,
+        },
+        {
+          ...basePeer,
+          id: 'non-string-name-deal',
+          slug: 'non-string-name-deal',
+          name: null as never,
+          brand: undefined as never,
+          min_price: 15_000_000,
+        },
+      ],
+      {
+        categoryFilter: 'all',
+        persona: 'default',
+        maxBudgetVnd: 50_000_000,
+        searchQuery: 'xiaomi',
+      }
+    );
+    assert.equal(rankedDealsTest.length, 1);
+    assert.equal(rankedDealsTest[0]?.slug, 'unscored-deal');
+    assert.equal(
+      rankedDealsTest[0]?.spreadSavingsVnd,
+      0,
+      'rankProductsForDealFinder must ignore max_price > MAX_VALID_VND_PRICE'
+    );
+
+    // 118d. computeVersusWeightedResult: all-zero custom weights fall back to equal criteria average instead of 0
+    const scoreItemA = rankedList[0]!;
+    const scoreItemB = rankedList[1]!;
+    const zeroWeightsRes = computeVersusWeightedResult(
+      scoreItemA,
+      scoreItemB,
+      { screen: 0, performance: 0, camera: 0, battery: 0, value: 0 },
+      'custom'
+    );
+    const equalWeightsRes = computeVersusWeightedResult(
+      scoreItemA,
+      scoreItemB,
+      { screen: 20, performance: 20, camera: 20, battery: 20, value: 20 },
+      'custom'
+    );
+    assert.equal(
+      zeroWeightsRes.finalA,
+      equalWeightsRes.finalA,
+      'computeVersusWeightedResult must fall back to equal criteria average when all custom weights are 0'
+    );
+    assert.equal(
+      zeroWeightsRes.finalB,
+      equalWeightsRes.finalB,
+      'computeVersusWeightedResult must fall back to equal criteria average for product B when all custom weights are 0'
+    );
+
+    console.log(
+      '  ✅ [118/118] ProductValueCalculator, DealFinderWorkspace & VersusInteractiveScoreboard Bounds (#960) passed'
     );
   }
 

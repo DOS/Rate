@@ -9,6 +9,7 @@ import {
   type RadarSignal,
 } from '@/lib/deal-radar';
 import { escapeCsvCell } from '@/lib/csv-safe';
+import { MAX_VALID_VND_PRICE } from '@/lib/rate-domain';
 
 interface ProductValueCalculatorProps {
   readonly productName: string;
@@ -22,14 +23,14 @@ interface ProductValueCalculatorProps {
   readonly radarSignal?: RadarSignal | null;
 }
 
-type HorizonMonths = 12 | 24 | 36;
+export type HorizonMonths = 12 | 24 | 36;
 
-function estimateResaleRetentionRatio(
+export function estimateResaleRetentionRatio(
   brand: string,
   categorySlug: string,
   months: HorizonMonths
 ): number {
-  const b = (brand || '').toLowerCase();
+  const b = typeof brand === 'string' ? brand.toLowerCase() : '';
   const isApple = b.includes('apple');
   const isLaptop = categorySlug === 'laptops';
   const isEarbuds = categorySlug === 'earbuds';
@@ -44,6 +45,88 @@ function estimateResaleRetentionRatio(
   if (months === 12) return base12;
   if (months === 24) return Number((base12 * 0.74).toFixed(2));
   return Number((base12 * 0.54).toFixed(2));
+}
+
+export interface ProductValueMetricsInput {
+  readonly brand: string;
+  readonly categorySlug: string;
+  readonly minPriceVnd: number;
+  readonly maxPriceVnd: number;
+  readonly userScore5: number;
+  readonly expertScore10: number | null;
+  readonly months: HorizonMonths;
+  readonly includeResale: boolean;
+}
+
+export function computeProductValueMetrics({
+  brand,
+  categorySlug,
+  minPriceVnd,
+  maxPriceVnd,
+  userScore5,
+  expertScore10,
+  months,
+  includeResale,
+}: ProductValueMetricsInput) {
+  const rawMin = Number(minPriceVnd);
+  const safeMinPrice =
+    Number.isFinite(rawMin) && rawMin > 0 && rawMin <= MAX_VALID_VND_PRICE
+      ? Math.round(rawMin)
+      : 0;
+  const rawMax = Number(maxPriceVnd);
+  const safeMaxPrice =
+    Number.isFinite(rawMax) &&
+    rawMax >= safeMinPrice &&
+    rawMax <= MAX_VALID_VND_PRICE
+      ? Math.round(rawMax)
+      : safeMinPrice;
+  const rawUser5 = Number(userScore5);
+  const safeUser5 =
+    Number.isFinite(rawUser5) && rawUser5 > 0 ? Math.min(5, rawUser5) : 0;
+  const rawExpert = expertScore10 != null ? Number(expertScore10) : 0;
+  const safeExpert10 =
+    Number.isFinite(rawExpert) && rawExpert > 0
+      ? Math.min(10, rawExpert <= 5 ? rawExpert * 2 : rawExpert)
+      : null;
+
+  const rawCombined10 =
+    safeUser5 > 0 && safeExpert10 != null
+      ? safeUser5 * 2 * 0.6 + safeExpert10 * 0.4
+      : safeUser5 > 0
+        ? safeUser5 * 2
+        : (safeExpert10 ?? 0);
+  const combined10 = rawCombined10 > 0 ? Number(rawCombined10.toFixed(2)) : 0;
+  const costPerPoint10 =
+    safeMinPrice > 0 && combined10 > 0
+      ? Math.round(safeMinPrice / combined10)
+      : 0;
+
+  const safeMonths: HorizonMonths =
+    months === 12 || months === 24 || months === 36 ? months : 24;
+  const retentionRatio = includeResale
+    ? estimateResaleRetentionRatio(brand, categorySlug, safeMonths)
+    : 0;
+  const estimatedResaleVnd = Math.round(safeMinPrice * retentionRatio);
+  const netOwnershipCostVnd = Math.max(0, safeMinPrice - estimatedResaleVnd);
+  const totalDays = safeMonths * 30.4;
+  const dailyCostVnd =
+    safeMinPrice > 0 ? Math.round(netOwnershipCostVnd / totalDays) : 0;
+  const monthlyCostVnd =
+    safeMinPrice > 0 ? Math.round(netOwnershipCostVnd / safeMonths) : 0;
+  const maxSpreadSavingsVnd = Math.max(0, safeMaxPrice - safeMinPrice);
+
+  return {
+    safeMinPrice,
+    safeMaxPrice,
+    combined10,
+    costPerPoint10,
+    retentionPct: Math.round(retentionRatio * 100),
+    estimatedResaleVnd,
+    netOwnershipCostVnd,
+    dailyCostVnd,
+    monthlyCostVnd,
+    maxSpreadSavingsVnd,
+  };
 }
 
 export default function ProductValueCalculator({
@@ -61,57 +144,44 @@ export default function ProductValueCalculator({
   const [months, setMonths] = useState<HorizonMonths>(24);
   const [includeResale, setIncludeResale] = useState<boolean>(true);
 
-  const metrics = useMemo(() => {
-    const safeMinPrice = Math.max(0, Number(minPriceVnd || 0));
-    const safeMaxPrice = Math.max(safeMinPrice, Number(maxPriceVnd || 0));
-    const rawCombined10 =
-      userScore5 > 0 && expertScore10 != null
-        ? userScore5 * 2 * 0.6 + expertScore10 * 0.4
-        : userScore5 > 0
-          ? userScore5 * 2
-          : (expertScore10 ?? 0);
-    const combined10 = rawCombined10 > 0 ? Number(rawCombined10.toFixed(2)) : 0;
-    const costPerPoint10 =
-      safeMinPrice > 0 && combined10 > 0
-        ? Math.round(safeMinPrice / combined10)
-        : 0;
+  const metrics = useMemo(
+    () =>
+      computeProductValueMetrics({
+        brand,
+        categorySlug,
+        minPriceVnd,
+        maxPriceVnd,
+        userScore5,
+        expertScore10,
+        months,
+        includeResale,
+      }),
+    [
+      brand,
+      categorySlug,
+      expertScore10,
+      includeResale,
+      maxPriceVnd,
+      minPriceVnd,
+      months,
+      userScore5,
+    ]
+  );
 
-    const retentionRatio = includeResale
-      ? estimateResaleRetentionRatio(brand, categorySlug, months)
-      : 0;
-    const estimatedResaleVnd = Math.round(safeMinPrice * retentionRatio);
-    const netOwnershipCostVnd = Math.max(0, safeMinPrice - estimatedResaleVnd);
-    const totalDays = months * 30.4;
-    const dailyCostVnd =
-      safeMinPrice > 0 ? Math.round(netOwnershipCostVnd / totalDays) : 0;
-    const monthlyCostVnd =
-      safeMinPrice > 0 ? Math.round(netOwnershipCostVnd / months) : 0;
-    const maxSpreadSavingsVnd = Math.max(0, safeMaxPrice - safeMinPrice);
-
-    return {
-      combined10,
-      costPerPoint10,
-      retentionPct: Math.round(retentionRatio * 100),
-      estimatedResaleVnd,
-      netOwnershipCostVnd,
-      dailyCostVnd,
-      monthlyCostVnd,
-      maxSpreadSavingsVnd,
-    };
-  }, [
-    brand,
-    categorySlug,
-    expertScore10,
-    includeResale,
-    maxPriceVnd,
-    minPriceVnd,
-    months,
-    userScore5,
-  ]);
-
-  if (!minPriceVnd || minPriceVnd <= 0) {
+  if (metrics.safeMinPrice <= 0) {
     return null;
   }
+
+  const rawValueScore = Number(valueCriterionScore5);
+  const safeValueCriterionScore5 =
+    Number.isFinite(rawValueScore) && rawValueScore > 0
+      ? Math.min(5, rawValueScore)
+      : 0;
+  const safeCategoryFileToken =
+    (typeof categorySlug === 'string' ? categorySlug : '')
+      .toLowerCase()
+      .replace(/[^a-z0-9_-]+/g, '-')
+      .replace(/^-+|-+$/g, '') || 'devices';
 
   const handleDownloadValueCsv = () => {
     if (typeof window === 'undefined') return;
@@ -131,11 +201,11 @@ export default function ProductValueCalculator({
       const ratio = includeResale
         ? estimateResaleRetentionRatio(brand, categorySlug, h)
         : 0;
-      const resale = Math.round(minPriceVnd * ratio);
-      const net = Math.max(0, minPriceVnd - resale);
+      const resale = Math.round(metrics.safeMinPrice * ratio);
+      const net = Math.max(0, metrics.safeMinPrice - resale);
       return [
         h,
-        minPriceVnd,
+        metrics.safeMinPrice,
         Math.round(ratio * 100),
         resale,
         net,
@@ -152,7 +222,7 @@ export default function ProductValueCalculator({
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `rate-tco-${categorySlug}-${months}m.csv`;
+    a.download = `rate-tco-${safeCategoryFileToken}-${months}m.csv`;
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -166,8 +236,8 @@ export default function ProductValueCalculator({
       categorySlug,
       selectedHorizonMonths: months,
       includeResale,
-      minPriceVnd,
-      maxPriceVnd,
+      minPriceVnd: metrics.safeMinPrice,
+      maxPriceVnd: metrics.safeMaxPrice,
       metrics,
       dealRadar: radarSignal ? radarExportFields(radarSignal) : null,
       exportedAt: new Date().toISOString(),
@@ -178,7 +248,7 @@ export default function ProductValueCalculator({
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `rate-tco-${categorySlug}-${months}m.json`;
+    a.download = `rate-tco-${safeCategoryFileToken}-${months}m.json`;
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -195,7 +265,7 @@ export default function ProductValueCalculator({
           </h3>
           <p className="text-muted small mb-0">
             {t('valueCalcSubtitle', {
-              price: minPriceVnd.toLocaleString('vi-VN'),
+              price: metrics.safeMinPrice.toLocaleString('vi-VN'),
               score:
                 metrics.combined10 > 0
                   ? `${metrics.combined10}/10`
@@ -319,8 +389,8 @@ export default function ProductValueCalculator({
               {t('valueCalcCardValueScoreTitle')}
             </div>
             <div className="h5 fw-bold rate-tabular text-primary mb-1">
-              {valueCriterionScore5 > 0
-                ? `★ ${valueCriterionScore5.toFixed(1)}/5.0`
+              {safeValueCriterionScore5 > 0
+                ? `★ ${safeValueCriterionScore5.toFixed(1)}/5.0`
                 : t('valueCalcNotAvailable')}
             </div>
             <div className="small text-secondary rate-tabular">
