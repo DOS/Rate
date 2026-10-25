@@ -9,7 +9,7 @@ export const UserRoleSchema = z.enum(['user', 'moderator', 'admin']);
 
 export const UserSchema = z.object({
   id: UUIDv7Schema,
-  username: z.string().min(3).max(50),
+  username: z.string().trim().min(3).max(50),
   email: z.string().max(254).email(),
   firstName: z.string().max(100).optional(),
   lastName: z.string().max(100).optional(),

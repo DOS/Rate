@@ -85,6 +85,15 @@ function testRouteConstants(): void {
     RATE_API_V1_ENDPOINTS.REVIEW_VOTE('rev-42'),
     '/api/reviews/rev-42/vote'
   );
+  assert.equal(
+    RATE_API_V1_ENDPOINTS.PRODUCT_DETAIL('..'),
+    '/api/v1/rate/products/'
+  );
+  assert.equal(
+    RATE_API_V1_ENDPOINTS.MERCHANT_DETAIL('.'),
+    '/api/v1/rate/merchants/'
+  );
+  assert.equal(RATE_API_V1_ENDPOINTS.REVIEW_VOTE('..'), '/api/reviews//vote');
   assert.equal(RATE_API_V1_ENDPOINTS.HEALTH, '/api/health');
   assert.equal(ROUTES.API.LISTINGS, '/api/v1/rate/products');
   assert.equal(STATUS_CODES.OK, 200);
@@ -508,6 +517,69 @@ function testMasterProductAndScrapedProductSchemas(): void {
     },
   });
   assert.equal(parsedResponse.data.ok, true);
+
+  assert.equal(
+    sharedDataRoot.ListingSchema.safeParse({
+      id: '01929000-0000-7000-8000-000000000001',
+      title: '   ',
+      slug: 'valid-slug',
+      type: 'product',
+      category: 'technology',
+      status: 'published',
+      locale: 'vi',
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    }).success,
+    false,
+    'ListingSchema must reject whitespace-only title'
+  );
+  assert.equal(
+    sharedDataRoot.ListingSchema.safeParse({
+      id: '01929000-0000-7000-8000-000000000001',
+      title: 'Valid Title',
+      slug: '../admin',
+      type: 'product',
+      category: 'technology',
+      status: 'published',
+      locale: 'vi',
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    }).success,
+    false,
+    'ListingSchema must reject path separators in slug'
+  );
+  assert.equal(
+    sharedDataRoot.ReviewFilterSchema.safeParse({
+      minRating: 5,
+      maxRating: 2,
+    }).success,
+    false,
+    'ReviewFilterSchema must reject minRating > maxRating'
+  );
+  assert.equal(
+    sharedDataRoot.ReviewReactionSchema.safeParse({
+      reviewId: '01929000-0000-7000-8000-000000000001',
+      userId: '01929000-0000-7000-8000-000000000002',
+      type: 'report',
+      reason: '   ',
+    }).success,
+    false,
+    'ReviewReactionSchema must reject whitespace-only reason'
+  );
+  assert.equal(
+    sharedDataRoot.UserSchema.safeParse({
+      id: '01929000-0000-7000-8000-000000000001',
+      username: '   ',
+      email: 'user@example.com',
+      role: 'user',
+      isActive: true,
+      emailConfirmed: true,
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    }).success,
+    false,
+    'UserSchema must reject whitespace-only username'
+  );
 }
 
 function testSupabaseClientGuards(): void {
