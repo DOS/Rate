@@ -12023,6 +12023,136 @@ async function runCoreArchitectureSuite() {
     console.log('  ✅ [122/122] Cache-Tags Revalidation Bounds (#1016) passed');
   }
 
+  // 123. API Handler & Request Auth Numeric/Slug/Brand/Token Bounds (#1025)
+  {
+    const {
+      parseBoundedIntParam,
+      parseBoundedNumberParam,
+      parseOptionalVndPriceParam,
+      parseBoundedPositiveIntArrayParam,
+      resolveWatchlistMasterPriceBounds,
+      withPlausibleMinPrice,
+      selectBestOfferFromListings,
+      resolveInspectObservedPrices,
+      parseCompareSlugsParam,
+      parseWatchlistSlugsParam,
+      parseReviewsQueryParams,
+      parseProductsFilterBounds,
+    } = await import('../api-handler');
+    const {
+      readBearerToken,
+      readCookieAccessToken,
+      mapRpcRejection,
+      isMissingRpcError,
+    } = await import('../request-auth');
+
+    assert.equal(parseBoundedIntParam('0x10', 24, 1, 100), 24);
+    assert.equal(parseBoundedIntParam('\u000036', 24, 1, 100), 36);
+    assert.equal(parseBoundedNumberParam('0x4', 0, 5), undefined);
+    assert.equal(parseBoundedNumberParam('\u00004.5', 0, 5), 4.5);
+    assert.equal(parseOptionalVndPriceParam('0x1000000'), null);
+    assert.equal(parseOptionalVndPriceParam('\u000025000000'), 25_000_000);
+    assert.deepEqual(
+      parseBoundedPositiveIntArrayParam('0x8,\u000012,0b100,16', 128),
+      [12, 16]
+    );
+    assert.deepEqual(
+      resolveWatchlistMasterPriceBounds(
+        { min_price: '0x1000000', max_price: '0x2000000' },
+        28_000_000
+      ),
+      { currentMinPrice: 28_000_000, currentMaxPrice: 28_000_000 }
+    );
+    assert.equal(
+      withPlausibleMinPrice({ min_price: '0x1000000' }, [
+        { price_current: 26_000_000 },
+      ]).min_price,
+      26_000_000
+    );
+    const bestRes = selectBestOfferFromListings([
+      {
+        id: 'hex-offer',
+        price_current: '0x1000000' as unknown as number,
+        stock: 5,
+      },
+      {
+        id: 'valid-offer',
+        price_current: '\u000025000000' as unknown as number,
+        price_original: '0x3000000' as unknown as number,
+        stock: '\u00003',
+      },
+    ]);
+    assert.equal(bestRes.bestOffer?.id, 'valid-offer');
+    assert.equal(bestRes.bestOffer?.price, 25_000_000);
+    assert.equal(bestRes.bestOffer?.original_price, 25_000_000);
+    assert.deepEqual(
+      resolveInspectObservedPrices({
+        matchedOfferPriceCurrent: '0x1000000',
+        masterMinPrice: '\u000024000000',
+      }),
+      { observedPrice: 24_000_000, observedOriginalPrice: 0 }
+    );
+    assert.deepEqual(
+      parseCompareSlugsParam('000,null,undefined,__proto__,iphone-16-pro'),
+      ['iphone-16-pro']
+    );
+    assert.deepEqual(
+      parseWatchlistSlugsParam('0000,constructor,prototype,galaxy-s25-ultra'),
+      ['galaxy-s25-ultra']
+    );
+    assert.equal(
+      parseReviewsQueryParams(
+        new URLSearchParams({ slug: 'iphone-16-pro', limit: '0x10' })
+      ),
+      null
+    );
+    assert.equal(
+      parseReviewsQueryParams(
+        new URLSearchParams({ slug: '000', limit: '20' })
+      ),
+      null
+    );
+    assert.equal(
+      parseReviewsQueryParams(
+        new URLSearchParams({ slug: '\u0000iphone-16-pro', limit: '\u000025' })
+      )?.limit,
+      25
+    );
+    const filterBounds = parseProductsFilterBounds(
+      new URLSearchParams({
+        category: '\u0000smartphones',
+        brands: '000,null,undefined,__proto__,Apple,Samsung',
+      })
+    );
+    assert.deepEqual(filterBounds?.brands, ['Apple', 'Samsung']);
+
+    const zeroBearerReq = new Request('https://rate.vn/api/reviews/1/vote', {
+      headers: { Authorization: 'Bearer 0000' },
+    });
+    assert.equal(readBearerToken(zeroBearerReq), '');
+    assert.equal(
+      await readCookieAccessToken([
+        {
+          name: 'sb-test-auth-token',
+          value: JSON.stringify({ access_token: '0000' }),
+        },
+      ]),
+      null
+    );
+    const rpcTable = {
+      P0001: { status: 400, code: 'BAD_INPUT', error: 'Bad input' },
+    };
+    assert.equal(
+      mapRpcRejection({ code: '\u0000p0001 ' }, rpcTable)?.code,
+      'BAD_INPUT'
+    );
+    assert.equal(isMissingRpcError({ code: '\u0000pgrst202 ' }), true);
+
+    console.log(
+      '  ✅ [123/123] API Handler & Request Auth Numeric/Slug/Brand/Token Bounds (#1025) passed'
+    );
+  }
+
   console.log('🎉 All Rate.vn Core Architecture tests passed!');
 }
 

@@ -58,7 +58,7 @@ export function readBearerToken(request: Request): string {
     !token ||
     token.length > MAX_BEARER_TOKEN_LENGTH ||
     /[\s\p{Cc}]/u.test(token) ||
-    /^(?:null|undefined|nan|true|false|0)$/i.test(token)
+    /^(?:null|undefined|nan|true|false|0+)$/i.test(token)
   ) {
     return '';
   }
@@ -121,7 +121,7 @@ export async function readCookieAccessToken(
       !token ||
       token.length > MAX_BEARER_TOKEN_LENGTH ||
       /[\s\p{Cc}]/u.test(token) ||
-      /^(?:null|undefined|nan|true|false|0)$/i.test(token)
+      /^(?:null|undefined|nan|true|false|0+)$/i.test(token)
     ) {
       return null;
     }
@@ -293,7 +293,13 @@ export function mapRpcRejection(
 ): RpcRejection | null {
   const safeError =
     error && typeof error === 'object' && !Array.isArray(error) ? error : null;
-  const code = typeof safeError?.code === 'string' ? safeError.code.trim() : '';
+  const code =
+    typeof safeError?.code === 'string'
+      ? safeError.code
+          .replace(/\p{Cc}+/gu, '')
+          .trim()
+          .toUpperCase()
+      : '';
   const rejection =
     code &&
     table &&
@@ -305,7 +311,7 @@ export function mapRpcRejection(
   if (rejection) {
     // Native Postgres errors can share these SQLSTATEs; keep the real text in logs.
     log.warn('rpc rejected', {
-      code: error?.code,
+      code,
       message: (error as { message?: string })?.message,
     });
   }
@@ -371,5 +377,12 @@ async function authenticateCookieSession(
 export function isMissingRpcError(
   error: { code?: string } | null | undefined
 ): boolean {
-  return error?.code === 'PGRST202';
+  const code =
+    typeof error?.code === 'string'
+      ? error.code
+          .replace(/\p{Cc}+/gu, '')
+          .trim()
+          .toUpperCase()
+      : '';
+  return code === 'PGRST202';
 }
