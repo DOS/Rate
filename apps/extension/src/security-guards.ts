@@ -1,8 +1,25 @@
-import type { ExtractedPageProductSignal } from './types.js';
+import type {
+  ExtractedPageProductSignal,
+  SupportedEcommercePlatform,
+} from './types.js';
 
 export const DEFAULT_API_BASE_URL = 'https://rate.vn';
 
 export const MAX_VALID_EXTENSION_VND_PRICE = 1_000_000_000;
+
+const ALLOWED_EXTENSION_PLATFORMS: ReadonlySet<SupportedEcommercePlatform> =
+  new Set<SupportedEcommercePlatform>([
+    'shopee',
+    'lazada',
+    'tiki',
+    'tiktok',
+    'cellphones',
+    'tgdd',
+    'fptshop',
+    'hoangha',
+    'didongviet',
+    'phongvu',
+  ]);
 
 export const ALLOWED_API_BASE_ORIGINS = [
   'https://rate.vn',
@@ -44,6 +61,9 @@ export function isPrivilegedExtensionSender(
   },
   expectedRuntimeId?: string
 ): boolean {
+  if (!sender || typeof sender !== 'object' || Array.isArray(sender)) {
+    return false;
+  }
   if (sender.tab != null) {
     return false;
   }
@@ -154,50 +174,62 @@ function sanitizeCanonicalSignalUrl(rawUrl: unknown): string {
 export function sanitizeExtensionProductSignal(
   signal: ExtractedPageProductSignal
 ): ExtractedPageProductSignal {
+  const safeSignal =
+    signal && typeof signal === 'object'
+      ? signal
+      : ({} as Partial<ExtractedPageProductSignal>);
+
+  const rawPlatform =
+    typeof safeSignal.platform === 'string'
+      ? (safeSignal.platform.trim().toLowerCase() as SupportedEcommercePlatform)
+      : 'shopee';
+  const validPlatform: SupportedEcommercePlatform =
+    ALLOWED_EXTENSION_PLATFORMS.has(rawPlatform) ? rawPlatform : 'shopee';
+
   const validPrice =
-    typeof signal.price === 'number' &&
-    Number.isFinite(signal.price) &&
-    signal.price > 0 &&
-    signal.price <= MAX_VALID_EXTENSION_VND_PRICE
-      ? Math.round(signal.price)
+    typeof safeSignal.price === 'number' &&
+    Number.isFinite(safeSignal.price) &&
+    safeSignal.price > 0 &&
+    safeSignal.price <= MAX_VALID_EXTENSION_VND_PRICE
+      ? Math.round(safeSignal.price)
       : null;
 
   const validOriginalPrice =
-    typeof signal.originalPrice === 'number' &&
-    Number.isFinite(signal.originalPrice) &&
-    signal.originalPrice > 0 &&
-    signal.originalPrice <= MAX_VALID_EXTENSION_VND_PRICE &&
-    (validPrice === null || signal.originalPrice >= validPrice)
-      ? Math.round(signal.originalPrice)
+    typeof safeSignal.originalPrice === 'number' &&
+    Number.isFinite(safeSignal.originalPrice) &&
+    safeSignal.originalPrice > 0 &&
+    safeSignal.originalPrice <= MAX_VALID_EXTENSION_VND_PRICE &&
+    (validPrice === null || safeSignal.originalPrice >= validPrice)
+      ? Math.round(safeSignal.originalPrice)
       : null;
 
   const validRatingStar =
-    typeof signal.ratingStar === 'number' &&
-    Number.isFinite(signal.ratingStar) &&
-    signal.ratingStar >= 0 &&
-    signal.ratingStar <= 5
-      ? Number(signal.ratingStar.toFixed(2))
+    typeof safeSignal.ratingStar === 'number' &&
+    Number.isFinite(safeSignal.ratingStar) &&
+    safeSignal.ratingStar >= 0 &&
+    safeSignal.ratingStar <= 5
+      ? Number(safeSignal.ratingStar.toFixed(2))
       : null;
 
   const validRatingCount =
-    typeof signal.ratingCount === 'number' &&
-    Number.isFinite(signal.ratingCount) &&
-    signal.ratingCount >= 0 &&
-    signal.ratingCount <= 100_000_000
-      ? Math.round(signal.ratingCount)
+    typeof safeSignal.ratingCount === 'number' &&
+    Number.isFinite(safeSignal.ratingCount) &&
+    safeSignal.ratingCount >= 0 &&
+    safeSignal.ratingCount <= 100_000_000
+      ? Math.round(safeSignal.ratingCount)
       : null;
 
   const trimmedTitle =
-    typeof signal.title === 'string'
-      ? signal.title
+    typeof safeSignal.title === 'string'
+      ? safeSignal.title
           .replace(/\p{Cc}+/gu, ' ')
           .replace(/\s+/g, ' ')
           .trim()
           .slice(0, 500)
       : '';
   const trimmedVariant =
-    typeof signal.selectedVariant === 'string'
-      ? signal.selectedVariant
+    typeof safeSignal.selectedVariant === 'string'
+      ? safeSignal.selectedVariant
           .replace(/\p{Cc}+/gu, ' ')
           .replace(/\s+/g, ' ')
           .trim()
@@ -205,10 +237,11 @@ export function sanitizeExtensionProductSignal(
       : null;
 
   return {
-    ...signal,
-    canonicalUrl: sanitizeCanonicalSignalUrl(signal.canonicalUrl),
-    externalItemId: sanitizeExternalIdentifier(signal.externalItemId),
-    externalShopId: sanitizeExternalIdentifier(signal.externalShopId),
+    ...safeSignal,
+    platform: validPlatform,
+    canonicalUrl: sanitizeCanonicalSignalUrl(safeSignal.canonicalUrl),
+    externalItemId: sanitizeExternalIdentifier(safeSignal.externalItemId),
+    externalShopId: sanitizeExternalIdentifier(safeSignal.externalShopId),
     title: trimmedTitle,
     selectedVariant: trimmedVariant,
     price: validPrice,
@@ -316,7 +349,15 @@ export function formatSafeNumber(
     fallback?: number;
   } = {}
 ): string {
-  const fallback = options.fallback ?? 0;
+  const safeOpts = options && typeof options === 'object' ? options : {};
+  const rawFallback =
+    typeof safeOpts.fallback === 'number'
+      ? safeOpts.fallback
+      : typeof safeOpts.fallback === 'string' &&
+          String(safeOpts.fallback).trim() !== ''
+        ? Number(safeOpts.fallback)
+        : 0;
+  const fallback = Number.isFinite(rawFallback) ? rawFallback : 0;
   const num =
     typeof val === 'number'
       ? val
@@ -324,11 +365,23 @@ export function formatSafeNumber(
         ? Number(val)
         : NaN;
   const resolved = Number.isFinite(num) ? num : fallback;
-  const min = options.min ?? -Infinity;
-  const max = options.max ?? Infinity;
-  const clamped = Math.min(max, Math.max(min, resolved));
-  if (typeof options.decimals === 'number' && options.decimals >= 0) {
-    return clamped.toFixed(Math.min(6, Math.floor(options.decimals)));
+  const min =
+    typeof safeOpts.min === 'number' && Number.isFinite(safeOpts.min)
+      ? safeOpts.min
+      : -Infinity;
+  const max =
+    typeof safeOpts.max === 'number' && Number.isFinite(safeOpts.max)
+      ? safeOpts.max
+      : Infinity;
+  const low = Math.min(min, max);
+  const high = Math.max(min, max);
+  const clamped = Math.min(high, Math.max(low, resolved));
+  if (
+    typeof safeOpts.decimals === 'number' &&
+    Number.isFinite(safeOpts.decimals) &&
+    safeOpts.decimals >= 0
+  ) {
+    return clamped.toFixed(Math.min(6, Math.floor(safeOpts.decimals)));
   }
   return String(Math.round(clamped));
 }
