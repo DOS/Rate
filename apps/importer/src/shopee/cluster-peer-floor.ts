@@ -2,6 +2,44 @@ import { MAX_VALID_VND_PRICE } from '@repo/shared-data';
 
 export const MAX_CLUSTER_PEER_ROWS = 1000;
 
+const DISALLOWED_CLUSTER_PEER_ID_REGEX =
+  /^(?:null|undefined|nan|none|infinity|-infinity|true|false|__proto__|constructor|prototype)$/i;
+
+function sanitizeClusterPeerId(value: unknown): string {
+  if (typeof value === 'number') {
+    return Number.isSafeInteger(value) && value > 0 ? String(value) : '';
+  }
+  if (typeof value !== 'string') return '';
+  const cleaned = value
+    .replace(/\p{Cc}+/gu, '')
+    .trim()
+    .slice(0, 128);
+  if (
+    !cleaned ||
+    /\s/.test(cleaned) ||
+    /^0+$/.test(cleaned) ||
+    /^[-_.]+$/.test(cleaned) ||
+    DISALLOWED_CLUSTER_PEER_ID_REGEX.test(cleaned)
+  ) {
+    return '';
+  }
+  return cleaned;
+}
+
+function parseFiniteVndPrice(value: unknown): number {
+  if (typeof value === 'number') {
+    return Number.isFinite(value) ? value : Number.NaN;
+  }
+  if (typeof value === 'string') {
+    const cleaned = value.replace(/\p{Cc}+/gu, '').trim();
+    if (!cleaned || cleaned.length > 32 || /^[+-]?0[xbo]/i.test(cleaned)) {
+      return Number.NaN;
+    }
+    return Number(cleaned);
+  }
+  return Number.NaN;
+}
+
 export interface ClusterPeerPriceCandidate {
   id?: unknown;
   price_current?: unknown;
@@ -21,35 +59,16 @@ export function resolveClusterPeerFloorPrice(
 ): number | undefined {
   let officialMin = Number.POSITIVE_INFINITY;
   let peerMin = Number.POSITIVE_INFINITY;
-  const safeCurrentId =
-    typeof currentProductId === 'string'
-      ? currentProductId
-          .replace(/\p{Cc}+/gu, '')
-          .trim()
-          .slice(0, 128)
-      : '';
+  const safeCurrentId = sanitizeClusterPeerId(currentProductId);
 
   if (Array.isArray(peerRows)) {
     const limit = Math.min(peerRows.length, MAX_CLUSTER_PEER_ROWS);
     for (let i = 0; i < limit; i++) {
       const row = peerRows[i];
       if (!row || typeof row !== 'object' || Array.isArray(row)) continue;
-      const rowId =
-        typeof row.id === 'string' || (typeof row.id === 'number' && Number.isFinite(row.id))
-          ? String(row.id)
-              .replace(/\p{Cc}+/gu, '')
-              .trim()
-              .slice(0, 128)
-          : '';
+      const rowId = sanitizeClusterPeerId(row.id);
       if (safeCurrentId && rowId === safeCurrentId) continue;
-      if (
-        typeof row.price_current === 'boolean' ||
-        row.price_current === null ||
-        row.price_current === undefined
-      ) {
-        continue;
-      }
-      const rawPrice = Number(row.price_current);
+      const rawPrice = parseFiniteVndPrice(row.price_current);
       if (!Number.isFinite(rawPrice) || rawPrice <= 0 || rawPrice > MAX_VALID_VND_PRICE) continue;
       const price = Math.round(rawPrice);
       if (price <= 0 || price > MAX_VALID_VND_PRICE) continue;
@@ -75,13 +94,10 @@ export function resolveClusterPeerFloorPrice(
   if (Number.isFinite(peerMin)) {
     return peerMin;
   }
-  if (
-    typeof fallbackMasterMinPrice === 'boolean' ||
-    fallbackMasterMinPrice === null ||
-    fallbackMasterMinPrice === undefined
-  ) {
+  const rawFallback = parseFiniteVndPrice(fallbackMasterMinPrice);
+  if (!Number.isFinite(rawFallback)) {
     return undefined;
   }
-  const fb = Math.round(Number(fallbackMasterMinPrice));
+  const fb = Math.round(rawFallback);
   return Number.isFinite(fb) && fb > 0 && fb <= MAX_VALID_VND_PRICE ? fb : undefined;
 }

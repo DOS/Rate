@@ -70,6 +70,23 @@ export interface ReviewRow {
     | null;
 }
 
+const DISALLOWED_MERCHANT_RISK_ID_REGEX =
+  /^(?:null|undefined|nan|none|infinity|-infinity|true|false|__proto__|constructor|prototype)$/i;
+
+function parseFiniteRiskNumber(raw: unknown): number {
+  if (typeof raw === 'number') {
+    return Number.isFinite(raw) ? raw : Number.NaN;
+  }
+  if (typeof raw === 'string') {
+    const cleaned = raw.replace(/\p{Cc}+/gu, '').trim();
+    if (!cleaned || cleaned.length > 32 || /^[+-]?0[xbo]/i.test(cleaned)) {
+      return Number.NaN;
+    }
+    return Number(cleaned);
+  }
+  return Number.NaN;
+}
+
 /**
  * One stored review as the web reads it, or null while it is unanalyzed.
  * Mirrors the mapping in apps/web/src/lib/rate-api.ts (`getMerchantsList`)
@@ -114,12 +131,7 @@ export function mapStoredReview(
     typeof vf?.include_in_rating === 'boolean'
       ? vf.include_in_rating
       : category === 'authentic' && verdict !== 'fake';
-  const parsedStar =
-    typeof row.rating_star === 'boolean' ||
-    row.rating_star === null ||
-    row.rating_star === undefined
-      ? Number.NaN
-      : Number(row.rating_star);
+  const parsedStar = parseFiniteRiskNumber(row.rating_star);
   const ratingStar =
     Number.isFinite(parsedStar) && parsedStar >= 1 && parsedStar <= 5 ? Math.round(parsedStar) : 5;
   return {
@@ -146,8 +158,9 @@ export function mapStoredReview(
 
 /** A usable VND price, or 0. */
 export const toValidPrice = (raw: unknown): number => {
-  if (typeof raw === 'boolean' || raw === null || raw === undefined) return 0;
-  const n = Math.round(Number(raw));
+  const parsed = parseFiniteRiskNumber(raw);
+  if (!Number.isFinite(parsed)) return 0;
+  const n = Math.round(parsed);
   return Number.isFinite(n) && n > 0 && n <= MAX_VALID_VND_PRICE ? n : 0;
 };
 
@@ -175,10 +188,11 @@ export function strongestPriceAnomaly(
   for (const listing of listings) {
     if (!listing || typeof listing !== 'object' || Array.isArray(listing)) continue;
     const price = toValidPrice(listing.price_current);
-    if (!price || !listing.cluster_id) continue;
+    const clusterId = normalizeSafeId(listing.cluster_id);
+    if (!price || !clusterId) continue;
     const clusterPeers =
       productsByCluster && typeof productsByCluster.get === 'function'
-        ? (productsByCluster.get(listing.cluster_id) ?? [])
+        ? (productsByCluster.get(clusterId) ?? [])
         : [];
     const peers = clusterPeers
       .filter((p): p is ProductRow => Boolean(p && typeof p === 'object' && !Array.isArray(p)))
@@ -194,7 +208,7 @@ export function strongestPriceAnomaly(
       }));
     const fallbackMasterMin =
       masterMinByCluster && typeof masterMinByCluster.get === 'function'
-        ? masterMinByCluster.get(listing.cluster_id)
+        ? masterMinByCluster.get(clusterId)
         : undefined;
     const floor = resolveClusterPeerFloorPrice(peers, listing.id, fallbackMasterMin);
     if (!floor || floor <= 2_000_000 || floor > MAX_VALID_VND_PRICE) continue;
@@ -294,24 +308,26 @@ export function scoreMerchants(
       officialByMerchant,
       masterMinByCluster
     );
-    const rawFollowers =
-      typeof merchant.follower_count === 'boolean' ||
-      merchant.follower_count === null ||
-      merchant.follower_count === undefined
-        ? Number.NaN
-        : Number(merchant.follower_count);
+    const rawFollowers = parseFiniteRiskNumber(merchant.follower_count);
     const safeFollowerCount =
       Number.isFinite(rawFollowers) &&
       rawFollowers >= 0 &&
       rawFollowers <= MAX_MERCHANT_FOLLOWER_COUNT
         ? Math.floor(rawFollowers)
         : 0;
-    const safePlatform =
+    const rawPlatform =
       typeof merchant.platform === 'string'
         ? merchant.platform
             .replace(/\p{Cc}+/gu, '')
             .trim()
             .slice(0, 40)
+        : '';
+    const safePlatform =
+      rawPlatform &&
+      !/^0+$/.test(rawPlatform) &&
+      !/^[-_.]+$/.test(rawPlatform) &&
+      !DISALLOWED_MERCHANT_RISK_ID_REGEX.test(rawPlatform)
+        ? rawPlatform
         : '';
     const risk = analyzer.evaluateMerchantRisk({
       merchantId,
@@ -323,12 +339,7 @@ export function scoreMerchants(
       reviewResults: bucket.results,
       rawReviews: bucket.raws,
     });
-    const rawPrev =
-      typeof merchant.review_risk_score === 'boolean' ||
-      merchant.review_risk_score === null ||
-      merchant.review_risk_score === undefined
-        ? Number.NaN
-        : Number(merchant.review_risk_score);
+    const rawPrev = parseFiniteRiskNumber(merchant.review_risk_score);
     const previousScore =
       Number.isFinite(rawPrev) && rawPrev >= 0 && rawPrev <= 100 ? rawPrev : null;
     scores.push({
@@ -340,10 +351,19 @@ export function scoreMerchants(
   return scores.sort((a, b) => a.merchantId.localeCompare(b.merchantId));
 }
 
-function normalizeSafeId(raw: unknown): string | null {
+export function normalizeSafeId(raw: unknown): string | null {
   if (typeof raw !== 'string') return null;
   const trimmed = raw.trim();
-  if (!trimmed || trimmed.length > 128 || /[\s\p{Cc}]/u.test(trimmed)) return null;
+  if (
+    !trimmed ||
+    trimmed.length > 128 ||
+    /[\s\p{Cc}]/u.test(trimmed) ||
+    /^0+$/.test(trimmed) ||
+    /^[-_.]+$/.test(trimmed) ||
+    DISALLOWED_MERCHANT_RISK_ID_REGEX.test(trimmed)
+  ) {
+    return null;
+  }
   return trimmed;
 }
 
@@ -358,10 +378,7 @@ export async function writeMerchantReviewRisk(
   if (!safeMerchantId) {
     throw new Error('Invalid merchantId for writeMerchantReviewRisk');
   }
-  const rawScore =
-    typeof (risk as { risk_score?: unknown })?.risk_score === 'boolean'
-      ? Number.NaN
-      : Number(risk?.risk_score);
+  const rawScore = parseFiniteRiskNumber((risk as { risk_score?: unknown })?.risk_score);
   const safeScore = Number.isFinite(rawScore)
     ? Math.min(100, Math.max(0, Math.round(rawScore)))
     : 0;
