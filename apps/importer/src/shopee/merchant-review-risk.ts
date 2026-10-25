@@ -81,7 +81,11 @@ export function mapStoredReview(
   if (!row || typeof row !== 'object') return null;
   const reviewId = normalizeSafeId(row.id);
   if (!reviewId) return null;
-  const vf = Array.isArray(row.review_flags) ? row.review_flags[0] : row.review_flags;
+  const vf = Array.isArray(row.review_flags)
+    ? row.review_flags.find((f): f is NonNullable<(typeof row.review_flags)[number]> =>
+        Boolean(f && typeof f === 'object')
+      )
+    : row.review_flags;
   const rawVerdict = typeof vf?.verdict === 'string' ? vf.verdict.trim().toLowerCase() : null;
   if (rawVerdict === 'unanalyzed') return null;
   const verdict: AnalyzedReviewResult['verdict'] =
@@ -140,7 +144,7 @@ export function mapStoredReview(
 /** A usable VND price, or 0. */
 export const toValidPrice = (raw: unknown): number => {
   if (typeof raw === 'boolean' || raw === null || raw === undefined) return 0;
-  const n = Number(raw);
+  const n = Math.round(Number(raw));
   return Number.isFinite(n) && n > 0 && n <= MAX_VALID_VND_PRICE ? n : 0;
 };
 

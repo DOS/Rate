@@ -418,15 +418,28 @@ export function mergeProductSpecifications(
 export const MAX_SPEC_CACHE_ENTRIES = 250;
 
 export function cloneAiEnrichmentResponse(res: AiEnrichmentResponse): AiEnrichmentResponse {
-  const safeRes = res && typeof res === 'object' ? res : ({} as AiEnrichmentResponse);
+  const safeRes =
+    res && typeof res === 'object' && !Array.isArray(res) ? res : ({} as AiEnrichmentResponse);
+  const rawKeySpecs =
+    safeRes.key_specs && typeof safeRes.key_specs === 'object' && !Array.isArray(safeRes.key_specs)
+      ? (safeRes.key_specs as Record<string, unknown>)
+      : {};
+  const sanitizedKeySpecs: Record<string, string> = {};
+  for (const [k, v] of Object.entries(rawKeySpecs)) {
+    const cleanVal = sanitizeKeySpecText(v);
+    if (cleanVal) {
+      sanitizedKeySpecs[k] = cleanVal;
+    }
+  }
+  const parsedKeySpecs = KeySpecsSchema.safeParse(sanitizedKeySpecs);
   return {
-    ram_gb: safeRes.ram_gb ?? null,
-    storage_gb: safeRes.storage_gb ?? null,
-    screen_size_inch: safeRes.screen_size_inch ?? null,
-    battery_mah: safeRes.battery_mah ?? null,
-    has_5g: safeRes.has_5g,
+    ram_gb: toBoundedIntOrUndefined(safeRes.ram_gb, 2048) ?? null,
+    storage_gb: toBoundedIntOrUndefined(safeRes.storage_gb, 65536) ?? null,
+    screen_size_inch: toBoundedNumberOrUndefined(safeRes.screen_size_inch, 120) ?? null,
+    battery_mah: toBoundedIntOrUndefined(safeRes.battery_mah, 500000) ?? null,
+    has_5g: toBooleanOrUndefined(safeRes.has_5g),
     specifications: sanitizeSpecifications(safeRes.specifications),
-    key_specs: { ...(safeRes.key_specs ?? {}) },
+    key_specs: parsedKeySpecs.success ? parsedKeySpecs.data : {},
   };
 }
 
@@ -859,7 +872,11 @@ REQUIRED JSON SCHEMA:
       }
 
       const cleanedJson = extractJsonObjectString(rawContent);
-      const parsedJson = JSON.parse(cleanedJson);
+      const rawParsed: unknown = JSON.parse(cleanedJson);
+      if (!rawParsed || typeof rawParsed !== 'object' || Array.isArray(rawParsed)) {
+        return null;
+      }
+      const parsedJson = rawParsed as Record<string, unknown>;
       const specifications = sanitizeSpecifications(parsedJson.specifications || parsedJson);
 
       const ramGb =
@@ -891,7 +908,12 @@ REQUIRED JSON SCHEMA:
         if (storageGb !== null) specifications.hardware.storage_gb = storageGb;
       }
 
-      const rawKeySpecs = parsedJson.key_specs || {};
+      const rawKeySpecs =
+        parsedJson.key_specs &&
+        typeof parsedJson.key_specs === 'object' &&
+        !Array.isArray(parsedJson.key_specs)
+          ? (parsedJson.key_specs as Record<string, unknown>)
+          : {};
       const keySpecsCandidate: KeySpecs = {
         screen:
           sanitizeKeySpecText(rawKeySpecs.screen) ||
@@ -963,12 +985,13 @@ REQUIRED JSON SCHEMA:
     candidate: NormalizedProductCandidate,
     rawTitle?: string
   ): Promise<NormalizedProductCandidate> {
-    if (!candidate || typeof candidate !== 'object') {
+    if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)) {
       throw new Error('[AiSpecEnricher] candidate must be a non-null object');
     }
     if (candidate.is_benchmark_enriched) {
       return {
         ...candidate,
+        colors: sanitizeColorList(candidate.colors) ?? [],
         spec_source: candidate.spec_source ?? 'benchmark_registry',
       };
     }
@@ -990,25 +1013,42 @@ REQUIRED JSON SCHEMA:
     });
 
     if (!aiResult) {
-      return candidate;
+      return {
+        ...candidate,
+        colors: sanitizeColorList(candidate.colors) ?? [],
+      };
     }
 
+    const safeColors = sanitizeColorList(candidate.colors) ?? [];
     // Deep-merge all 10 Field Groups so candidate.specifications fields are preserved
     // when AI omits a field or group, and candidate.colors override design.colors.
     const mergedSpecifications = mergeProductSpecifications(
       candidate.specifications,
       aiResult.specifications,
-      candidate.colors
+      safeColors
     );
 
+    const baseKeySpecs =
+      candidate.key_specs &&
+      typeof candidate.key_specs === 'object' &&
+      !Array.isArray(candidate.key_specs)
+        ? candidate.key_specs
+        : {};
+    const rawAiKeySpecs =
+      aiResult.key_specs &&
+      typeof aiResult.key_specs === 'object' &&
+      !Array.isArray(aiResult.key_specs)
+        ? aiResult.key_specs
+        : {};
     const incomingKeySpecs = Object.fromEntries(
-      Object.entries(aiResult.key_specs || {}).filter(
-        ([, v]) => v !== undefined && v !== null && String(v).trim() !== ''
-      )
+      Object.entries(rawAiKeySpecs)
+        .map(([k, v]) => [k, sanitizeKeySpecText(v)] as const)
+        .filter((entry): entry is readonly [string, string] => Boolean(entry[1]))
     );
 
     return {
       ...candidate,
+      colors: safeColors,
       ram_gb: validCandidateRam ?? toBoundedIntOrUndefined(aiResult.ram_gb, 2048) ?? null,
       storage_gb:
         validCandidateStorage ?? toBoundedIntOrUndefined(aiResult.storage_gb, 65536) ?? null,
@@ -1018,7 +1058,7 @@ REQUIRED JSON SCHEMA:
       has_5g: aiResult.has_5g ?? candidate.has_5g,
       specifications: mergedSpecifications,
       key_specs: {
-        ...candidate.key_specs,
+        ...baseKeySpecs,
         ...incomingKeySpecs,
       },
       spec_source: 'ai_unverified',

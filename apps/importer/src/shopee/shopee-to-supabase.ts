@@ -123,20 +123,27 @@ export function hasPopulatedSpecificationGroups(specs: unknown): boolean {
 export function normalizeScrapedProductPrices(
   product: ValidatedScrapedProduct
 ): ValidatedScrapedProduct {
-  if (!product || typeof product !== 'object') {
+  if (!product || typeof product !== 'object' || Array.isArray(product)) {
     throw new Error('normalizeScrapedProductPrices requires a non-null product object');
   }
-  const priceMin = typeof product.priceMin === 'boolean' ? 0 : Number(product.priceMin);
+  const rawPriceMin = typeof product.priceMin === 'boolean' ? 0 : Number(product.priceMin);
+  const priceMin =
+    Number.isFinite(rawPriceMin) && rawPriceMin > 0
+      ? Math.min(Math.round(rawPriceMin), MAX_VALID_VND_PRICE)
+      : 0;
   const rawPriceMax = typeof product.priceMax === 'boolean' ? Number.NaN : Number(product.priceMax);
+  const roundedPriceMax = Number.isFinite(rawPriceMax) ? Math.round(rawPriceMax) : Number.NaN;
   const priceMax =
-    Number.isFinite(rawPriceMax) && rawPriceMax >= priceMin && rawPriceMax <= MAX_VALID_VND_PRICE
-      ? rawPriceMax
+    Number.isFinite(roundedPriceMax) &&
+    roundedPriceMax >= priceMin &&
+    roundedPriceMax <= MAX_VALID_VND_PRICE
+      ? roundedPriceMax
       : priceMin;
   const rawBefore =
     product.priceBeforeDiscount !== undefined &&
     product.priceBeforeDiscount !== null &&
     typeof product.priceBeforeDiscount !== 'boolean'
-      ? Number(product.priceBeforeDiscount)
+      ? Math.round(Number(product.priceBeforeDiscount))
       : undefined;
   const validBeforeDiscount =
     rawBefore !== undefined &&
@@ -147,11 +154,16 @@ export function normalizeScrapedProductPrices(
       ? rawBefore
       : undefined;
   const models = Array.isArray(product.models)
-    ? product.models.filter(m => {
-        if (!m || typeof m !== 'object' || typeof m.price === 'boolean') return false;
-        const p = Number(m.price);
-        return Number.isFinite(p) && p > 0 && p <= MAX_VALID_VND_PRICE;
-      })
+    ? product.models
+        .filter(m => {
+          if (!m || typeof m !== 'object' || typeof m.price === 'boolean') return false;
+          const p = Math.round(Number(m.price));
+          return Number.isFinite(p) && p > 0 && p <= MAX_VALID_VND_PRICE;
+        })
+        .map(m => ({
+          ...m,
+          price: Math.round(Number(m.price)),
+        }))
     : [];
   const rawSold =
     typeof product.historicalSold === 'boolean' ? Number.NaN : Number(product.historicalSold);
@@ -170,23 +182,26 @@ export function normalizeScrapedProductPrices(
   const images = sanitizeHttpUrlList(product.images);
   const shopUrl = sanitizeHttpUrl(product.shop?.url) ?? undefined;
   const reviews = Array.isArray(product.reviews)
-    ? product.reviews.map(r => ({
-        ...r,
-        authorAvatar: sanitizeHttpUrl(r.authorAvatar) ?? undefined,
-        images: sanitizeHttpUrlList(r.images),
-        ...(r.videos !== undefined ? { videos: sanitizeHttpUrlList(r.videos) } : {}),
-        ...(r.reviewer
-          ? {
-              reviewer: {
-                ...r.reviewer,
-                profileUrl: sanitizeHttpUrl(r.reviewer.profileUrl) ?? undefined,
-              },
-            }
-          : {}),
-      }))
+    ? product.reviews
+        .filter((r): r is ShopeeReview => Boolean(r && typeof r === 'object'))
+        .map(r => ({
+          ...r,
+          authorAvatar: sanitizeHttpUrl(r.authorAvatar) ?? undefined,
+          images: sanitizeHttpUrlList(r.images),
+          ...(r.videos !== undefined ? { videos: sanitizeHttpUrlList(r.videos) } : {}),
+          ...(r.reviewer && typeof r.reviewer === 'object'
+            ? {
+                reviewer: {
+                  ...r.reviewer,
+                  profileUrl: sanitizeHttpUrl(r.reviewer.profileUrl) ?? undefined,
+                },
+              }
+            : {}),
+        }))
     : [];
   return {
     ...product,
+    priceMin,
     priceMax,
     priceBeforeDiscount: validBeforeDiscount,
     historicalSold,

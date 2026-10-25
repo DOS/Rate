@@ -49,8 +49,10 @@ export function resolveClusterPeerFloorPrice(
       ) {
         continue;
       }
-      const price = Number(row.price_current);
-      if (!Number.isFinite(price) || price <= 0 || price > MAX_VALID_VND_PRICE) continue;
+      const rawPrice = Number(row.price_current);
+      if (!Number.isFinite(rawPrice) || rawPrice <= 0 || rawPrice > MAX_VALID_VND_PRICE) continue;
+      const price = Math.round(rawPrice);
+      if (price <= 0 || price > MAX_VALID_VND_PRICE) continue;
       if (price < peerMin) {
         peerMin = price;
       }
@@ -74,6 +76,6 @@ export function resolveClusterPeerFloorPrice(
   ) {
     return undefined;
   }
-  const fb = Number(fallbackMasterMinPrice);
+  const fb = Math.round(Number(fallbackMasterMinPrice));
   return Number.isFinite(fb) && fb > 0 && fb <= MAX_VALID_VND_PRICE ? fb : undefined;
 }
