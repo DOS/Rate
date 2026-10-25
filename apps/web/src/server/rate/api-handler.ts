@@ -313,6 +313,14 @@ export function selectBestOfferFromListings(
     .replace(/\p{Cc}+/gu, ' ')
     .trim()
     .slice(0, 120);
+  const rawBestUrl =
+    typeof best.url === 'string'
+      ? best.url
+          .replace(/\p{Cc}+/gu, '')
+          .trim()
+          .slice(0, 2048)
+      : '';
+  const safeBestUrl = isSafeHttpOfferUrl(rawBestUrl, 2048) ? rawBestUrl : '';
   return {
     bestOffer: {
       id: String(best.id || '')
@@ -322,13 +330,7 @@ export function selectBestOfferFromListings(
       title: cleanTitle,
       price: bestPrice,
       original_price: validOrig ?? bestPrice,
-      url:
-        typeof best.url === 'string'
-          ? best.url
-              .replace(/\p{Cc}+/gu, '')
-              .trim()
-              .slice(0, 2048)
-          : '',
+      url: safeBestUrl,
       platform: normalizeOfferPlatform(best),
       merchant_name: cleanMerchantName || 'Official Store',
       is_official_mall: Boolean(best.merchant?.is_official),
@@ -337,12 +339,12 @@ export function selectBestOfferFromListings(
   };
 }
 
-export function isSafeCrowdIngestHttpUrl(rawUrl: string): boolean {
+function isSafeHttpOfferUrl(rawUrl: string, maxLength = 1024): boolean {
   if (typeof rawUrl !== 'string') return false;
   const trimmed = rawUrl.trim();
   if (
     !trimmed ||
-    trimmed.length > 1024 ||
+    trimmed.length > maxLength ||
     /\s/.test(trimmed) ||
     /\p{Cc}/u.test(trimmed)
   ) {
@@ -354,11 +356,33 @@ export function isSafeCrowdIngestHttpUrl(rawUrl: string): boolean {
       return false;
     }
     if (parsed.username || parsed.password) return false;
-    if (!parsed.hostname) return false;
+    const host = parsed.hostname.toLowerCase();
+    if (
+      !host ||
+      !host.includes('.') ||
+      host.startsWith('.') ||
+      host.endsWith('.') ||
+      host.includes('..') ||
+      host.startsWith('[') ||
+      host === 'localhost' ||
+      host.endsWith('.localhost') ||
+      host.endsWith('.local') ||
+      host.endsWith('.internal') ||
+      /^\d+(?:\.\d+){3}$/.test(host)
+    ) {
+      return false;
+    }
+    if (parsed.port !== '' && parsed.port !== '80' && parsed.port !== '443') {
+      return false;
+    }
     return true;
   } catch {
     return false;
   }
+}
+
+export function isSafeCrowdIngestHttpUrl(rawUrl: string): boolean {
+  return isSafeHttpOfferUrl(rawUrl, 1024);
 }
 
 export function resolveInspectObservedPrices(input: {
@@ -408,6 +432,18 @@ export function resolveInspectObservedPrices(input: {
 
 const CANONICAL_PRODUCT_SLUG_REGEX = /^[a-zA-Z0-9._-]+$/;
 
+function isValidProductSlugToken(slug: string, maxLength = 120): boolean {
+  return (
+    Boolean(slug) &&
+    slug.length <= maxLength &&
+    CANONICAL_PRODUCT_SLUG_REGEX.test(slug) &&
+    /[a-zA-Z0-9]/.test(slug) &&
+    !slug.startsWith('.') &&
+    !slug.endsWith('.') &&
+    !slug.includes('..')
+  );
+}
+
 /**
  * Parses and validates comma-separated master product slugs for `GET /api/v1/rate/compare`.
  * Bounds raw input length, trims/deduplicates up to `maxSlugs` (default 4), and rejects invalid characters.
@@ -422,8 +458,7 @@ export function parseCompareSlugsParam(
   const seen = new Set<string>();
   for (const part of boundedRaw.split(',')) {
     const slug = part.trim();
-    if (!slug) continue;
-    if (slug.length > 120 || !CANONICAL_PRODUCT_SLUG_REGEX.test(slug)) {
+    if (!isValidProductSlugToken(slug, 120)) {
       continue;
     }
     const lower = slug.toLowerCase();
@@ -450,8 +485,7 @@ export function parseWatchlistSlugsParam(
   const seen = new Set<string>();
   for (const part of boundedRaw.split(',')) {
     const slug = part.trim().toLowerCase();
-    if (!slug) continue;
-    if (slug.length > 120 || !CANONICAL_PRODUCT_SLUG_REGEX.test(slug)) {
+    if (!isValidProductSlugToken(slug, 120)) {
       continue;
     }
     if (seen.has(slug)) continue;
@@ -597,7 +631,7 @@ export function resolveReviewVoteInput(rawBody: unknown): {
   voteType: ReviewVoteAction;
   reportReason: ReviewReportReason;
 } | null {
-  if (!rawBody || typeof rawBody !== 'object') {
+  if (!rawBody || typeof rawBody !== 'object' || Array.isArray(rawBody)) {
     return null;
   }
   const body = rawBody as Record<string, unknown>;
@@ -649,8 +683,6 @@ export function resolveReviewVoteInput(rawBody: unknown): {
   return { voteType, reportReason };
 }
 
-const VALID_VERSUS_SLUG_REGEX = /^[a-z0-9._-]+$/i;
-
 /**
  * Parses and validates a 1v1 versus pair (`?pair=<slugA>-vs-<slugB>` or `?slugA=...&slugB=...`).
  * Rejects missing, identical, overlong (`> 120` chars), or malformed product slugs (`null`).
@@ -660,7 +692,7 @@ export function parseVersusQueryParams(
   maxSlugLength = 120
 ): [string, string] | null {
   const isValidSlug = (s: string): boolean =>
-    Boolean(s && s.length <= maxSlugLength && VALID_VERSUS_SLUG_REGEX.test(s));
+    isValidProductSlugToken(s, maxSlugLength);
 
   const rawPair = (searchParams.get('pair') || '').toLowerCase().trim();
   if (
@@ -739,10 +771,7 @@ export function parseReviewsQueryParams(
   const rawSlug = searchParams.get('slug');
   if (rawSlug != null && rawSlug.trim() !== '') {
     const trimmedSlug = rawSlug.trim();
-    if (
-      trimmedSlug.length > 120 ||
-      !CANONICAL_PRODUCT_SLUG_REGEX.test(trimmedSlug)
-    ) {
+    if (!isValidProductSlugToken(trimmedSlug, 120)) {
       return null;
     }
     return { masterProductId: null, slug: trimmedSlug, hideFake, limit };
@@ -794,7 +823,15 @@ export function parseProductsFilterBounds(
     const seen = new Set<string>();
     for (const part of rawBrands.split(',')) {
       const b = part.trim();
-      if (!b || b.length > 40 || !VALID_BRAND_TOKEN_REGEX.test(b)) continue;
+      if (
+        !b ||
+        b.length > 40 ||
+        !VALID_BRAND_TOKEN_REGEX.test(b) ||
+        !/[\p{L}\p{N}]/u.test(b) ||
+        b.includes('..')
+      ) {
+        continue;
+      }
       const lower = b.toLowerCase();
       if (seen.has(lower)) continue;
       seen.add(lower);

@@ -89,6 +89,39 @@ export function normalizeOpenApiServerOrigin(
     if (parsed.username || parsed.password) {
       return 'https://rate.vn';
     }
+    const host = parsed.hostname.toLowerCase();
+    if (
+      !host ||
+      host.startsWith('.') ||
+      host.endsWith('.') ||
+      host.includes('..')
+    ) {
+      return 'https://rate.vn';
+    }
+    const isLoopback =
+      host === 'localhost' ||
+      host === '127.0.0.1' ||
+      host === '[::1]' ||
+      host === '::1';
+    if (
+      !isLoopback &&
+      parsed.port !== '' &&
+      parsed.port !== '80' &&
+      parsed.port !== '443'
+    ) {
+      return 'https://rate.vn';
+    }
+    if (
+      !isLoopback &&
+      (!host.includes('.') ||
+        host.startsWith('[') ||
+        host.endsWith('.localhost') ||
+        host.endsWith('.local') ||
+        host.endsWith('.internal') ||
+        /^\d+(?:\.\d+){3}$/.test(host))
+    ) {
+      return 'https://rate.vn';
+    }
     if (!parsed.origin || parsed.origin === 'null') {
       return 'https://rate.vn';
     }

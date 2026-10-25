@@ -11172,6 +11172,113 @@ async function runCoreArchitectureSuite() {
     );
   }
 
+  // 121. Issue #978: api-handler URL/slug/vote guards & OpenAPI server origin bounds
+  {
+    const {
+      isSafeCrowdIngestHttpUrl,
+      parseCompareSlugsParam,
+      parseProductsFilterBounds,
+      parseReviewsQueryParams,
+      parseVersusQueryParams,
+      parseWatchlistSlugsParam,
+      resolveReviewVoteInput,
+      selectBestOfferFromListings,
+    } = await import('../api-handler');
+    const { normalizeOpenApiServerOrigin } = await import('../openapi');
+
+    assert.equal(
+      normalizeOpenApiServerOrigin('https://rate.vn:8443/api'),
+      'https://rate.vn'
+    );
+    assert.equal(
+      normalizeOpenApiServerOrigin('http://10.0.0.1/api'),
+      'https://rate.vn'
+    );
+    assert.equal(
+      normalizeOpenApiServerOrigin('http://169.254.169.254/latest'),
+      'https://rate.vn'
+    );
+    assert.equal(
+      normalizeOpenApiServerOrigin('https://.rate.vn'),
+      'https://rate.vn'
+    );
+    assert.equal(
+      normalizeOpenApiServerOrigin('http://localhost:3000/api'),
+      'http://localhost:3000'
+    );
+
+    assert.equal(
+      isSafeCrowdIngestHttpUrl('https://shopee.vn:8443/item-i.1.2'),
+      false
+    );
+    assert.equal(
+      isSafeCrowdIngestHttpUrl('https://.shopee.vn/item-i.1.2'),
+      false
+    );
+    assert.equal(
+      isSafeCrowdIngestHttpUrl('https://shopee.vn/item-i.1.2'),
+      true
+    );
+
+    const unsafeBest = selectBestOfferFromListings([
+      {
+        id: 'off-1',
+        title: 'iPhone 16',
+        price_current: 21_990_000,
+        url: 'javascript:alert(1)',
+        platform: 'shopee',
+      },
+    ]);
+    assert.equal(unsafeBest.bestOffer?.url, '');
+
+    assert.deepEqual(
+      parseCompareSlugsParam('..,iphone-16,.bad,bad.,a..b,galaxy-s24'),
+      ['iphone-16', 'galaxy-s24']
+    );
+    assert.deepEqual(
+      parseWatchlistSlugsParam('..,IPHONE-16,.bad,bad.,a..b,Galaxy-S24'),
+      ['iphone-16', 'galaxy-s24']
+    );
+    assert.equal(
+      parseVersusQueryParams(new URLSearchParams('pair=..-vs-iphone-16')),
+      null
+    );
+    assert.equal(
+      parseVersusQueryParams(new URLSearchParams('slugA=.bad&slugB=iphone-16')),
+      null
+    );
+    assert.deepEqual(
+      parseVersusQueryParams(
+        new URLSearchParams('pair=iphone-16-vs-galaxy-s24')
+      ),
+      ['iphone-16', 'galaxy-s24']
+    );
+
+    assert.equal(parseReviewsQueryParams(new URLSearchParams('slug=..')), null);
+    assert.equal(
+      parseReviewsQueryParams(new URLSearchParams('slug=.iphone-16')),
+      null
+    );
+    assert.equal(
+      parseReviewsQueryParams(new URLSearchParams('slug=iphone-16'))?.slug,
+      'iphone-16'
+    );
+
+    assert.equal(resolveReviewVoteInput(['up']), null);
+    assert.deepEqual(
+      parseProductsFilterBounds(
+        new URLSearchParams(
+          'category=smartphones&brands=...,--,Apple,A..B,Samsung'
+        )
+      )?.brands,
+      ['Apple', 'Samsung']
+    );
+
+    console.log(
+      '  ✅ [121/121] API Handler URL/Slug/Vote Guards & OpenAPI Server Origin Bounds (#978) passed'
+    );
+  }
+
   console.log('🎉 All Rate.vn Core Architecture tests passed!');
 }
 
