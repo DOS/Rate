@@ -213,6 +213,13 @@ export async function mergeWhenGreen({
   let branchUpdates = 0;
   let lastUpdatedSha = null;
   for (;;) {
+    // Every path back to the top of the loop is bounded by this deadline.
+    if (Date.now() > deadline) {
+      return {
+        ok: false,
+        message: `PR ${number} still not mergeable after ${timeoutMs / 60_000} min`,
+      };
+    }
     let head;
     try {
       head = readHead(repo, number);
