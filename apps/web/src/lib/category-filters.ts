@@ -525,7 +525,15 @@ export function getCategoryFilterSchema(
       .replace(CATEGORY_CONTROL_CHAR_RE, '')
       .trim()
       .slice(0, MAX_BRAND_NAME_LEN);
-    if (!trimmed) continue;
+    if (
+      !trimmed ||
+      !/[\p{L}\p{N}]/u.test(trimmed) ||
+      /^(?:0+|null|undefined|nan|infinity|-infinity|true|false|__proto__|constructor|prototype)$/i.test(
+        trimmed
+      )
+    ) {
+      continue;
+    }
     const lower = trimmed.toLowerCase();
     if (seenLower.has(lower)) continue;
     seenLower.add(lower);
@@ -581,10 +589,16 @@ export function formatStorageLabel(gb: number): string {
   if (typeof rawGb !== 'number' && typeof rawGb !== 'string') {
     return '0GB';
   }
-  if (typeof rawGb === 'string' && !rawGb.trim()) {
-    return '0GB';
+  let n: number;
+  if (typeof rawGb === 'string') {
+    const cleaned = rawGb.replace(CATEGORY_CONTROL_CHAR_RE, '').trim();
+    if (!cleaned || cleaned.length > 32 || /^[+-]?0[xbo]/i.test(cleaned)) {
+      return '0GB';
+    }
+    n = Number(cleaned);
+  } else {
+    n = rawGb;
   }
-  const n = typeof rawGb === 'string' ? Number(rawGb.trim()) : rawGb;
   if (!Number.isFinite(n) || n <= 0 || n > MAX_STORAGE_GB) {
     return '0GB';
   }

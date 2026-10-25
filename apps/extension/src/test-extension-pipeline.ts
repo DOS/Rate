@@ -3236,6 +3236,89 @@ async function runTests() {
     );
   }
 
+  // Category-Filters & Review-Display Bounds (#1016)
+  {
+    const { formatStorageLabel, getCategoryFilterSchema } =
+      await import('../../web/src/lib/category-filters.js');
+    const {
+      reviewBadgeKind,
+      isFilteredOutReview,
+      weightExplanationCopy,
+      submitErrorKey,
+    } = await import('../../web/src/lib/review-display.js');
+
+    assert.equal(
+      formatStorageLabel('0x100' as unknown as number),
+      '0GB',
+      'formatStorageLabel must reject hex literals'
+    );
+    assert.equal(
+      formatStorageLabel('\u0000256' as unknown as number),
+      '256GB',
+      'formatStorageLabel must strip control chars before parsing decimal GB'
+    );
+    assert.equal(formatStorageLabel(1024), '1TB');
+
+    const schema = getCategoryFilterSchema('smartphones', [
+      '---',
+      '000',
+      'null',
+      'Nothing',
+    ]);
+    assert.equal(
+      schema.defaultBrands.includes('---'),
+      false,
+      'getCategoryFilterSchema must reject pure-punctuation dynamic brands'
+    );
+    assert.equal(
+      schema.defaultBrands.includes('000'),
+      false,
+      'getCategoryFilterSchema must reject all-zero dynamic brands'
+    );
+    assert.equal(
+      schema.defaultBrands.includes('null'),
+      false,
+      'getCategoryFilterSchema must reject sentinel dynamic brands'
+    );
+    assert.equal(schema.defaultBrands.includes('Nothing'), true);
+
+    assert.equal(
+      reviewBadgeKind({
+        verdict: 'authentic',
+        flag_category: 'unknown_bad_flag' as unknown as 'authentic',
+      }),
+      'authentic',
+      'reviewBadgeKind must fall back to authentic for unrecognized flag_category'
+    );
+    assert.equal(
+      isFilteredOutReview({
+        verdict: 'authentic',
+        include_in_rating: true,
+        helpfulness_weight: '0x1' as unknown as number,
+      }),
+      true,
+      'isFilteredOutReview must reject hex helpfulness_weight literals'
+    );
+    assert.deepEqual(
+      weightExplanationCopy({
+        explanationKind: 'seeding',
+        weight: '0x5' as unknown as number,
+        explanationVi: '',
+      }),
+      { key: 'weightExplanationSeeding', values: { weight: '0.00' } },
+      'weightExplanationCopy must reject hex weight literals'
+    );
+    assert.equal(
+      submitErrorKey(' \u0000auth_required '),
+      'errLoginRequired',
+      'submitErrorKey must normalize control chars, whitespace, and case'
+    );
+
+    console.log(
+      '  \u2705 [Category-Filters & Review-Display Bounds (#1016)] Verified'
+    );
+  }
+
   console.log('🎉 All Rate Browser Extension MV3 v2 tests passed!');
 }
 

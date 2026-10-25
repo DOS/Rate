@@ -11976,6 +11976,53 @@ async function runCoreArchitectureSuite() {
     );
   }
 
+  // 122. Cache-Tags Revalidation Bounds (#1016)
+  {
+    const { resolveRevalidationTargets } = await import('../cache-tags');
+    const targets = resolveRevalidationTargets({
+      tags: [
+        'rate:---',
+        'rate:000',
+        'rate:__proto__',
+        'rate:null',
+        'rate:product:---',
+        'rate:product:__proto__',
+        'rate:products',
+      ],
+      slugs: ['---', '000', '__proto__', 'null', 'iphone-16-pro'],
+      categories: ['---', '000', 'constructor', 'smartphones'],
+      merchants: [
+        '---',
+        '000',
+        'prototype',
+        'shopee:---',
+        'shopee:000',
+        'shopee:__proto__',
+        'shopee:apple-flagship',
+      ],
+    });
+    assert.equal(targets.tags.includes('rate:---'), false);
+    assert.equal(targets.tags.includes('rate:000'), false);
+    assert.equal(targets.tags.includes('rate:__proto__'), false);
+    assert.equal(targets.tags.includes('rate:null'), false);
+    assert.equal(targets.tags.includes('rate:product:---'), false);
+    assert.equal(targets.tags.includes('rate:product:__proto__'), false);
+    assert.equal(targets.tags.includes('rate:merchant:shopee:---'), false);
+    assert.equal(targets.tags.includes('rate:merchant:shopee:000'), false);
+    assert.equal(
+      targets.tags.includes('rate:merchant:shopee:__proto__'),
+      false
+    );
+    assert.equal(targets.tags.includes('rate:products'), true);
+    assert.equal(targets.tags.includes('rate:product:iphone-16-pro'), true);
+    assert.equal(targets.tags.includes('rate:category:smartphones'), true);
+    assert.equal(
+      targets.tags.includes('rate:merchant:shopee:apple-flagship'),
+      true
+    );
+    console.log('  ✅ [122/122] Cache-Tags Revalidation Bounds (#1016) passed');
+  }
+
   console.log('🎉 All Rate.vn Core Architecture tests passed!');
 }
 
