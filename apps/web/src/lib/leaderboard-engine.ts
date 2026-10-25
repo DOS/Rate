@@ -138,6 +138,20 @@ function sanitizeLeaderboardText(raw: unknown, maxLen: number): string {
   return raw.replace(LEADERBOARD_CONTROL_CHAR_RE, '').trim().slice(0, maxLen);
 }
 
+function sanitizeLeaderboardSlug(raw: unknown): string {
+  const cleaned = sanitizeLeaderboardText(raw, 256);
+  if (
+    !cleaned ||
+    !/^[a-zA-Z0-9][a-zA-Z0-9._-]{0,255}$/.test(cleaned) ||
+    cleaned.endsWith('.') ||
+    cleaned.includes('..') ||
+    /^(?:0+|null|undefined|nan|infinity|-infinity|true|false)$/i.test(cleaned)
+  ) {
+    return '';
+  }
+  return cleaned;
+}
+
 function clampScore5(value: number): number {
   if (!Number.isFinite(value) || value <= 0) return 0;
   return Number(Math.min(5.0, value).toFixed(2));
@@ -145,9 +159,28 @@ function clampScore5(value: number): number {
 
 function toSafePositiveNumber(raw: unknown): number {
   if (typeof raw !== 'number' && typeof raw !== 'string') return 0;
-  if (typeof raw === 'string' && !raw.trim()) return 0;
-  const n = Number(raw);
-  return Number.isFinite(n) && n > 0 ? n : 0;
+  if (typeof raw === 'string') {
+    const cleaned = raw.replace(LEADERBOARD_CONTROL_CHAR_RE, '').trim();
+    if (!cleaned || cleaned.length > 32 || /^[+-]?0[xbo]/i.test(cleaned)) {
+      return 0;
+    }
+    const n = Number(cleaned);
+    return Number.isFinite(n) && n > 0 ? n : 0;
+  }
+  return Number.isFinite(raw) && raw > 0 ? raw : 0;
+}
+
+function toSafeNonNegativeNumber(raw: unknown): number {
+  if (typeof raw !== 'number' && typeof raw !== 'string') return NaN;
+  if (typeof raw === 'string') {
+    const cleaned = raw.replace(LEADERBOARD_CONTROL_CHAR_RE, '').trim();
+    if (!cleaned || cleaned.length > 32 || /^[+-]?0[xbo]/i.test(cleaned)) {
+      return NaN;
+    }
+    const n = Number(cleaned);
+    return Number.isFinite(n) && n >= 0 ? n : NaN;
+  }
+  return Number.isFinite(raw) && raw >= 0 ? raw : NaN;
 }
 
 export function computeJReviewsCriteriaScores(
@@ -436,13 +469,7 @@ export function scoreMasterProductForLeaderboard(
   else if (safeCriterion === 'expert') activeScore5 = expertScore5 ?? 0;
   else if (safeCriterion !== 'combined') activeScore5 = criteria[safeCriterion];
 
-  const hasExplicitAuthentic =
-    typeof safeItem.authentic_review_count === 'number' ||
-    (typeof safeItem.authentic_review_count === 'string' &&
-      String(safeItem.authentic_review_count).trim() !== '');
-  const rawAuthentic = hasExplicitAuthentic
-    ? Number(safeItem.authentic_review_count)
-    : NaN;
+  const rawAuthentic = toSafeNonNegativeNumber(safeItem.authentic_review_count);
   const rawTotal = toSafePositiveNumber(safeItem.total_reviews);
   const safeTotal =
     rawTotal > 0
@@ -474,7 +501,7 @@ export function scoreMasterProductForLeaderboard(
       : 0;
 
   return {
-    slug: sanitizeLeaderboardText(safeItem.slug, 256),
+    slug: sanitizeLeaderboardSlug(safeItem.slug),
     name: sanitizeLeaderboardText(safeItem.name, 300),
     brand: sanitizeLeaderboardText(safeItem.brand, 128),
     model: sanitizeLeaderboardText(safeItem.model, 256),
@@ -647,7 +674,7 @@ export function computeProductStandingInCategory(
   ) {
     return [];
   }
-  const targetSlug = sanitizeLeaderboardText(targetProduct.slug, 256);
+  const targetSlug = sanitizeLeaderboardSlug(targetProduct.slug);
   if (!targetSlug) return [];
   const categorySlug = getMasterProductCategorySlug(targetProduct);
   const safeCategoryProducts = Array.isArray(categoryProducts)
@@ -658,7 +685,7 @@ export function computeProductStandingInCategory(
   const peers = safeCategoryProducts.filter(
     (p) => getMasterProductCategorySlug(p) === categorySlug
   );
-  if (!peers.some((p) => sanitizeLeaderboardText(p.slug, 256) === targetSlug)) {
+  if (!peers.some((p) => sanitizeLeaderboardSlug(p.slug) === targetSlug)) {
     peers.push(targetProduct);
   }
 

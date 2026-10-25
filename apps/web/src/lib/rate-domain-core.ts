@@ -97,11 +97,20 @@ export function toSafeNonNegativeVoteCount(
   raw: unknown,
   max = 1_000_000
 ): number {
-  const num =
-    typeof raw === 'number' ||
-    (typeof raw === 'string' && raw.trim().length > 0)
-      ? Number(raw)
-      : Number.NaN;
+  if (typeof raw !== 'number' && typeof raw !== 'string') return 0;
+  let num = Number.NaN;
+  if (typeof raw === 'number') {
+    num = raw;
+  } else {
+    const cleaned = raw.replace(/\p{Cc}+/gu, '').trim();
+    if (
+      cleaned.length > 0 &&
+      cleaned.length <= 32 &&
+      !/^[+-]?0[xbo]/i.test(cleaned)
+    ) {
+      num = Number(cleaned);
+    }
+  }
   if (!Number.isFinite(num) || num <= 0) return 0;
   return Math.min(max, Math.floor(num));
 }
@@ -1114,13 +1123,20 @@ export function getMasterProductHref(
       ? product
       : ({ slug: '' } as Pick<MasterProduct, 'slug'>);
   const catSlug = getMasterProductCategorySlug(safeProduct, categorySlugById);
-  const safeSlug =
+  const rawSlug =
     typeof safeProduct.slug === 'string'
       ? safeProduct.slug
           .replace(/\p{Cc}+/gu, '')
           .trim()
           .replace(/^\/+|\/+$/g, '')
           .slice(0, 256)
+      : '';
+  const safeSlug =
+    /^[a-zA-Z0-9][a-zA-Z0-9._-]{0,255}$/.test(rawSlug) &&
+    !rawSlug.endsWith('.') &&
+    !rawSlug.includes('..') &&
+    !/^(?:0+|null|undefined|nan|infinity|-infinity|true|false)$/i.test(rawSlug)
+      ? rawSlug
       : '';
   return safeSlug
     ? `/${catSlug}/${encodeURIComponent(safeSlug)}`
@@ -1626,10 +1642,11 @@ export function parseEcommerceUrlOrQuery(raw: string): ParsedEcommerceUrl {
         Boolean(lastSeg) &&
         lastSeg!.length >= 2 &&
         lastSeg!.length <= 256 &&
-        /[a-z0-9]/i.test(lastSegLower) &&
-        !lastSegLower.startsWith('.') &&
-        !lastSegLower.endsWith('.') &&
+        /^[a-z0-9][a-z0-9._-]*[a-z0-9]$/i.test(lastSegLower) &&
         !lastSegLower.includes('..') &&
+        !/^(?:0+|null|undefined|nan|infinity|-infinity|true|false)$/i.test(
+          lastSegLower
+        ) &&
         !RETAIL_NON_PRODUCT_FIRST_SEGMENTS.has(firstSegLower) &&
         !RETAIL_NON_PRODUCT_FIRST_SEGMENTS.has(lastSegLower) &&
         !(
@@ -1657,7 +1674,9 @@ export function parseEcommerceUrlOrQuery(raw: string): ParsedEcommerceUrl {
         const candidateSlug = (rateSlugMatch[1] || '').toLowerCase();
         const validSlug =
           /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(candidateSlug) &&
-          !/^(?:0|null|undefined|nan|infinity|true|false)$/i.test(candidateSlug)
+          !/^(?:0+|null|undefined|nan|infinity|true|false)$/i.test(
+            candidateSlug
+          )
             ? rateSlugMatch[1]!
             : null;
         if (validSlug) {
@@ -1737,7 +1756,7 @@ export function parseEcommerceUrlOrQuery(raw: string): ParsedEcommerceUrl {
     const candidateSlug = (rateSlugMatch[1] || '').toLowerCase();
     const validSlug =
       /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(candidateSlug) &&
-      !/^(?:0|null|undefined|nan|infinity|true|false)$/i.test(candidateSlug)
+      !/^(?:0+|null|undefined|nan|infinity|true|false)$/i.test(candidateSlug)
         ? rateSlugMatch[1]!
         : null;
     if (validSlug) {

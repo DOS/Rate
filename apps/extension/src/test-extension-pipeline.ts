@@ -2994,6 +2994,93 @@ async function runTests() {
     );
   }
 
+  // #1010: leaderboard-engine and rate-domain-core slug, URL, and numeric bounds
+  {
+    const {
+      scoreMasterProductForLeaderboard,
+      computeProductStandingInCategory,
+    } = await import('../../web/src/lib/leaderboard-engine');
+    const {
+      toSafeNonNegativeVoteCount,
+      getMasterProductHref,
+      parseEcommerceUrlOrQuery,
+    } = await import('../../web/src/lib/rate-domain-core');
+
+    const scoredSentinel = scoreMasterProductForLeaderboard({
+      id: 'm1',
+      slug: '000',
+      name: 'Phone',
+      brand: 'Brand',
+      model: 'Phone',
+      category_id: 'smartphones',
+      min_price: '0x100' as unknown as number,
+      total_reviews: '0b1010' as unknown as number,
+      authentic_review_count: '0o77' as unknown as number,
+    } as unknown as Parameters<typeof scoreMasterProductForLeaderboard>[0]);
+    assert.equal(scoredSentinel.slug, '');
+    assert.equal(scoredSentinel.minPrice, 0);
+    assert.equal(scoredSentinel.authenticReviewCount, 0);
+
+    assert.deepEqual(
+      computeProductStandingInCategory(
+        {
+          id: 'm1',
+          slug: 'null',
+          name: 'Phone',
+          brand: 'Brand',
+          model: 'Phone',
+          category_id: 'smartphones',
+        } as unknown as Parameters<typeof computeProductStandingInCategory>[0],
+        []
+      ),
+      []
+    );
+
+    assert.equal(toSafeNonNegativeVoteCount('0x10'), 0);
+    assert.equal(toSafeNonNegativeVoteCount('0b11'), 0);
+    assert.equal(toSafeNonNegativeVoteCount('0o17'), 0);
+    assert.equal(toSafeNonNegativeVoteCount('42'), 42);
+
+    assert.equal(
+      getMasterProductHref({ slug: '000', category_id: 'smartphones' }),
+      '/smartphones'
+    );
+    assert.equal(
+      getMasterProductHref({ slug: 'foo/bar', category_id: 'smartphones' }),
+      '/smartphones'
+    );
+    assert.equal(
+      getMasterProductHref({
+        slug: 'iphone-16-pro',
+        category_id: 'smartphones',
+      }),
+      '/smartphones/iphone-16-pro'
+    );
+
+    assert.equal(
+      parseEcommerceUrlOrQuery('https://rate.vn/smartphones/000').internalSlug,
+      null
+    );
+    assert.equal(
+      parseEcommerceUrlOrQuery('/smartphones/0000').internalSlug,
+      null
+    );
+    assert.equal(
+      parseEcommerceUrlOrQuery('https://cellphones.com.vn/00.html')
+        .platformItemId,
+      null
+    );
+    assert.equal(
+      parseEcommerceUrlOrQuery('https://cellphones.com.vn/null.html')
+        .platformItemId,
+      null
+    );
+
+    console.log(
+      '  \u2705 [Leaderboard-Engine & Rate-Domain-Core Bounds (#1010)] Verified'
+    );
+  }
+
   console.log('🎉 All Rate Browser Extension MV3 v2 tests passed!');
 }
 
