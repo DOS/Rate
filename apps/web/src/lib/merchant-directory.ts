@@ -64,7 +64,15 @@ const SEEDING_TIERS: readonly MerchantSeedingTier[] = [
   'elevated',
 ];
 
-const SAFE_PLATFORM_FILTER_REGEX = /^[a-z0-9_-]{1,40}$/;
+const SAFE_PLATFORM_FILTER_REGEX = /^(?=.*[a-z0-9])[a-z0-9_-]{1,40}$/;
+
+function isOfficialMerchantFlag(value: unknown): boolean {
+  return (
+    value === true ||
+    value === 1 ||
+    (typeof value === 'string' && value.trim().toLowerCase() === 'true')
+  );
+}
 
 /** Parses filters from URL search params, falling back to the defaults. */
 export function parseMerchantDirectoryFilters(
@@ -73,22 +81,26 @@ export function parseMerchantDirectoryFilters(
   if (typeof get !== 'function') {
     return { ...DEFAULT_MERCHANT_DIRECTORY_FILTERS };
   }
+  const safeGet = (key: string): string => {
+    const raw = get(key);
+    return typeof raw === 'string' ? raw : '';
+  };
   const pick = <T extends string>(
     raw: string | null | undefined,
     allowed: readonly T[],
     fallback: T
   ): T => {
-    const v = (raw ?? '')
+    const v = (typeof raw === 'string' ? raw : '')
       .replace(/\p{Cc}+/gu, '')
       .trim()
       .toLowerCase() as T;
     return allowed.includes(v) ? v : fallback;
   };
-  const official = (get('official') ?? get('officialOnly') ?? '')
+  const official = (safeGet('official') || safeGet('officialOnly'))
     .replace(/\p{Cc}+/gu, '')
     .trim()
     .toLowerCase();
-  const rawPlatform = (get('platform') ?? 'all')
+  const rawPlatform = (safeGet('platform') || 'all')
     .replace(/\p{Cc}+/gu, '')
     .trim()
     .toLowerCase();
@@ -96,16 +108,16 @@ export function parseMerchantDirectoryFilters(
     ? rawPlatform
     : 'all';
   return {
-    query: (get('q') ?? '')
+    query: safeGet('q')
       .replace(/\p{Cc}+/gu, ' ')
       .replace(/\s+/g, ' ')
       .trim()
       .slice(0, 160),
     platform,
     officialOnly: official === 'true' || official === '1',
-    riskTier: pick(get('risk'), RISK_TIERS, 'all'),
-    seedingTier: pick(get('seeding'), SEEDING_TIERS, 'all'),
-    sortBy: pick(get('sort'), SORTS, 'trust_desc'),
+    riskTier: pick(safeGet('risk'), RISK_TIERS, 'all'),
+    seedingTier: pick(safeGet('seeding'), SEEDING_TIERS, 'all'),
+    sortBy: pick(safeGet('sort'), SORTS, 'trust_desc'),
   };
 }
 
@@ -176,7 +188,7 @@ export function summarizeMerchantDirectory(
 ): MerchantDirectorySummary {
   const safeMerchants = Array.isArray(merchants)
     ? merchants.filter((m): m is MerchantSummary =>
-        Boolean(m && typeof m === 'object')
+        Boolean(m && typeof m === 'object' && !Array.isArray(m))
       )
     : [];
   const platformCounts: Record<string, number> = {};
@@ -184,7 +196,7 @@ export function summarizeMerchantDirectory(
   let safe = 0;
   let trustSum = 0;
   for (const m of safeMerchants) {
-    const p = (m.platform || '')
+    const p = (typeof m.platform === 'string' ? m.platform : '')
       .replace(/\p{Cc}+/gu, '')
       .trim()
       .toLowerCase();
@@ -199,7 +211,7 @@ export function summarizeMerchantDirectory(
         : 0;
       platformCounts[p] = prev + 1;
     }
-    if (m.is_official) official += 1;
+    if (isOfficialMerchantFlag(m.is_official)) official += 1;
     const trustScore = toSafeScore100(m.trust_score);
     if (trustScore >= 80) safe += 1;
     trustSum += trustScore;
@@ -221,7 +233,7 @@ export function filterMerchantDirectory(
 ): MerchantSummary[] {
   const safeMerchants = Array.isArray(merchants)
     ? merchants.filter((m): m is MerchantSummary =>
-        Boolean(m && typeof m === 'object')
+        Boolean(m && typeof m === 'object' && !Array.isArray(m))
       )
     : [];
   const safeFilters =
@@ -273,7 +285,7 @@ export function filterMerchantDirectory(
     if (platform !== 'all' && mPlatform !== platform) {
       return false;
     }
-    if (officialOnly && !m.is_official) return false;
+    if (officialOnly && !isOfficialMerchantFlag(m.is_official)) return false;
     const trustScore = toSafeScore100(m.trust_score);
     const reviewRiskScore = toSafeScore100(m.review_risk_score);
     if (riskTier === 'safe' && trustScore < 80) return false;
@@ -327,9 +339,12 @@ export function pageMerchantDirectory(
   limit: number
 ): MerchantDirectoryPage {
   const matching = filterMerchantDirectory(merchants, filters);
-  const start = Number.isFinite(offset) && offset >= 0 ? Math.floor(offset) : 0;
+  const start =
+    typeof offset === 'number' && Number.isFinite(offset) && offset >= 0
+      ? Math.min(100_000, Math.floor(offset))
+      : 0;
   const safeLimit =
-    Number.isFinite(limit) && limit >= 0
+    typeof limit === 'number' && Number.isFinite(limit) && limit >= 0
       ? Math.min(500, Math.floor(limit))
       : MERCHANT_PAGE_SIZE;
   return {

@@ -74,17 +74,35 @@ export function fitDescription(text: string): string {
 export function absoluteUrl(pathOrUrl: string): string {
   if (typeof pathOrUrl !== 'string') return SITE_URL;
   const cleaned = pathOrUrl.replace(/\p{Cc}+/gu, '').trim();
-  if (!cleaned || cleaned.length > 2048) return SITE_URL;
-  if (cleaned.startsWith('//') || cleaned.startsWith('/\\')) {
+  if (!cleaned || cleaned.length > 2048 || /\s/.test(cleaned)) return SITE_URL;
+  if (
+    cleaned.startsWith('//') ||
+    cleaned.startsWith('/\\') ||
+    cleaned.startsWith('\\')
+  ) {
     return SITE_URL;
   }
   try {
     const isAbsolute = /^https?:\/\//i.test(cleaned);
+    if (
+      !isAbsolute &&
+      (cleaned.includes('\\') || /(?:^|\/)\.\.(?:\/|$)/.test(cleaned))
+    ) {
+      return SITE_URL;
+    }
     const parsed = isAbsolute ? new URL(cleaned) : new URL(cleaned, SITE_URL);
     if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
       return SITE_URL;
     }
-    if (parsed.username || parsed.password) {
+    if (
+      parsed.username ||
+      parsed.password ||
+      !parsed.hostname ||
+      parsed.hostname.startsWith('[') ||
+      parsed.hostname.endsWith('.') ||
+      parsed.hostname.includes('..') ||
+      Boolean(parsed.port)
+    ) {
       return SITE_URL;
     }
     if (!isAbsolute && parsed.origin !== SITE_URL) {

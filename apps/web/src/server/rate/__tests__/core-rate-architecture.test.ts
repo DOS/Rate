@@ -11669,6 +11669,110 @@ async function runCoreArchitectureSuite() {
     assert.equal(resolveCompareStorageGb986([] as never), null);
     assert.equal(resolveCompareBatteryMah986([] as never), null);
 
+    // #988: merchant-directory, seo & navigation input/URL bounds
+    const {
+      DEFAULT_MERCHANT_DIRECTORY_FILTERS: defaultMerchFilters988,
+      filterMerchantDirectory: filterMerchantDirectory988,
+      pageMerchantDirectory: pageMerchantDirectory988,
+      parseMerchantDirectoryFilters: parseMerchantDirectoryFilters988,
+      summarizeMerchantDirectory: summarizeMerchantDirectory988,
+    } = await import('../../../lib/merchant-directory');
+    const { SITE_URL: siteUrl988, absoluteUrl: absoluteUrl988 } =
+      await import('../../../lib/seo');
+    const { formatHref: formatHref988, isAppLink: isAppLink988 } =
+      await import('../../../lib/navigation');
+
+    const parsedMerchFilters988 = parseMerchantDirectoryFilters988((k) =>
+      k === 'platform' ? '---' : (123 as never)
+    );
+    assert.equal(parsedMerchFilters988.platform, 'all');
+    assert.equal(parsedMerchFilters988.query, '');
+
+    const summary988 = summarizeMerchantDirectory988([
+      ['array-merchant'] as never,
+      {
+        id: 'm1',
+        name: 'Store 1',
+        platform: '---',
+        platform_shop_id: 's1',
+        slug: 'store-1',
+        is_official: 'false' as never,
+        trust_score: 90,
+        review_risk_score: 5,
+        product_count: 10,
+        follower_count: 100,
+      } as never,
+      {
+        id: 'm2',
+        name: 'Store 2',
+        platform: 'shopee',
+        platform_shop_id: 's2',
+        slug: 'store-2',
+        is_official: 1 as never,
+        trust_score: 95,
+        review_risk_score: 2,
+        product_count: 20,
+        follower_count: 200,
+      } as never,
+    ]);
+    assert.equal(summary988.total, 2);
+    assert.equal(summary988.official, 1);
+    assert.equal(summary988.platformCounts['---'], undefined);
+    assert.equal(summary988.platformCounts.shopee, 1);
+
+    const filteredMerch988 = filterMerchantDirectory988(
+      [
+        ['array-merchant'] as never,
+        {
+          id: 'm1',
+          name: 'Store 1',
+          platform: 'shopee',
+          platform_shop_id: 's1',
+          slug: 'store-1',
+          is_official: 'false' as never,
+          trust_score: 90,
+          review_risk_score: 5,
+          product_count: 10,
+          follower_count: 100,
+        } as never,
+      ],
+      { ...defaultMerchFilters988, officialOnly: true }
+    );
+    assert.equal(filteredMerch988.length, 0);
+
+    const pagedMerch988 = pageMerchantDirectory988(
+      [],
+      defaultMerchFilters988,
+      999_999_999,
+      20
+    );
+    assert.equal(pagedMerch988.offset, 100_000);
+
+    assert.equal(absoluteUrl988('/products/../admin'), siteUrl988);
+    assert.equal(
+      absoluteUrl988(`/products${String.fromCharCode(92)}admin`),
+      siteUrl988
+    );
+    assert.equal(absoluteUrl988('https://rate..vn/smartphones'), siteUrl988);
+    assert.equal(
+      absoluteUrl988('https://rate.vn:8443/smartphones'),
+      siteUrl988
+    );
+    assert.equal(absoluteUrl988('https://rate.vn/a b'), siteUrl988);
+
+    assert.equal(isAppLink988('/products/../admin'), false);
+    assert.equal(
+      isAppLink988(`/products${String.fromCharCode(92)}admin`),
+      false
+    );
+    assert.equal(formatHref988('/products/../admin'), '#');
+    assert.equal(
+      formatHref988(`/products${String.fromCharCode(92)}admin`),
+      '#'
+    );
+    assert.equal(formatHref988('https://rate..vn/smartphones'), '#');
+    assert.equal(formatHref988('https://rate.vn:8443/smartphones'), '#');
+
     console.log(
       '  ✅ [121/121] API Handler URL/Slug/Vote Guards & OpenAPI Server Origin Bounds (#978) passed'
     );
