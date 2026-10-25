@@ -3319,6 +3319,107 @@ async function runTests() {
     );
   }
 
+  // Catalog-Listing, Discount-Verdict-Copy & Product-Detail-Copy Bounds (#1021)
+  {
+    const { isPlainListing } =
+      await import('../../web/src/lib/catalog-listing.js');
+    const { discountVerdictCopy } =
+      await import('../../web/src/lib/discount-verdict-copy.js');
+    const { bayesianTierKey, radarExplanation } =
+      await import('../../web/src/lib/product-detail-copy.js');
+
+    assert.equal(
+      isPlainListing({
+        categorySlug: 'smartphones',
+        sort: 'price_asc',
+        limit: 24,
+      }),
+      true
+    );
+    assert.equal(
+      isPlainListing({
+        categorySlug: 'smartphones',
+        limit: '0x10' as unknown as number,
+      }),
+      false,
+      'isPlainListing must reject string limit values'
+    );
+
+    const verdictCopy = discountVerdictCopy(
+      (k, v) => `${k}:${JSON.stringify(v ?? {})}`,
+      {
+        verdict: 'fake_discount',
+        price_current: '0x1000000' as unknown as number,
+        price_original: '\u000030000000' as unknown as number,
+        claimed_discount_pct: '0x20' as unknown as number,
+        real_discount_vs_median_pct: 0,
+        historical_min_price: 25_000_000,
+        historical_max_price: '0x2000000' as unknown as number,
+        historical_median_price: 26_000_000,
+        badge_label: '',
+        explanation: '',
+      }
+    );
+    assert.equal(verdictCopy.label, 'labelFake:{}');
+    assert.equal(
+      verdictCopy.explanation.includes('"claimed":0'),
+      true,
+      'discountVerdictCopy must reject hex claimed_discount_pct literals'
+    );
+    assert.equal(
+      verdictCopy.explanation.includes((30_000_000).toLocaleString('vi-VN')),
+      true,
+      'discountVerdictCopy must strip control chars on decimal price_original'
+    );
+
+    assert.equal(
+      bayesianTierKey({
+        confidenceTier: 'prior' as unknown as 'low',
+        effectiveWeightSum: '0x5' as unknown as number,
+      }),
+      'bayesianTierPrior',
+      'bayesianTierKey must reject hex effectiveWeightSum literals'
+    );
+    assert.equal(
+      bayesianTierKey({
+        confidenceTier: 'prior' as unknown as 'low',
+        effectiveWeightSum: '\u00002.5' as unknown as number,
+      }),
+      'bayesianTierSmoothed',
+      'bayesianTierKey must accept decimal string effectiveWeightSum after stripping control chars'
+    );
+
+    const fakeRadar = radarExplanation({
+      verdict: 'fake_sale_trap',
+      genuineDeal: null,
+      fakeSaleTrap: {
+        offerId: 'o1',
+        merchantId: 'm1',
+        merchantName: 'Shop A',
+        platform: 'shopee',
+        url: 'https://shopee.vn/product/1/2',
+        priceCurrent: '0x2000000' as unknown as number,
+        priceOriginal: '0x3000000' as unknown as number,
+        marketMinPrice: 20_000_000,
+        fakeMarkupPct: '0x30' as unknown as number,
+        claimedDiscountPct: '0x20' as unknown as number,
+      },
+    });
+    assert.deepEqual(fakeRadar, {
+      key: 'radarExplanationFakeSale',
+      values: {
+        original: '0',
+        markupPct: '0',
+        claimedPct: '0',
+        aboveFloor: '0',
+      },
+    });
+
+    console.log(
+      '  \u2705 [Catalog-Listing, Discount-Verdict-Copy & Product-Detail-Copy Bounds (#1021)] Verified'
+    );
+  }
+
   console.log('🎉 All Rate Browser Extension MV3 v2 tests passed!');
 }
 
