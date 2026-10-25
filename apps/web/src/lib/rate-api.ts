@@ -1336,12 +1336,14 @@ async function getListingIdsForMaster(
   masterId: string,
   label: string
 ): Promise<string[]> {
+  const cleanMasterId = sanitizeRateEntityId(masterId);
+  if (!cleanMasterId) return [];
   const supabase = getRateClient();
   const rows = await fetchAllRows<{ id: string }>(label, (from, to) =>
     supabase
       .from('products')
       .select('id')
-      .eq('cluster_id', masterId)
+      .eq('cluster_id', cleanMasterId)
       .order('id')
       .range(from, to)
   );
@@ -1355,12 +1357,12 @@ async function getListingIdsForMaster(
 export async function getMasterProductReviews(
   masterId: string
 ): Promise<ReviewItem[]> {
-  const supabase = getRateClient();
   const productIds = await getListingIdsForMaster(
     masterId,
     `listings for master ${masterId}`
   );
   if (productIds.length === 0) return [];
+  const supabase = getRateClient();
 
   const reviewRows = await readInChunks(
     productIds,
@@ -1458,7 +1460,12 @@ export async function getMasterProductReviewSummary(
 ): Promise<ReviewAnalysisSummary> {
   // Unanalyzed community reviews are neither authentic nor suspicious yet, so
   // they stay out of every percentage.
-  const analyzedReviews = reviewsFallback.filter((r) => !isPendingReview(r));
+  const safeFallback = Array.isArray(reviewsFallback)
+    ? reviewsFallback.filter((r): r is ReviewItem =>
+        Boolean(r && typeof r === 'object' && !Array.isArray(r))
+      )
+    : [];
+  const analyzedReviews = safeFallback.filter((r) => !isPendingReview(r));
   const totalFromReviews = analyzedReviews.length;
   const authenticFromReviews = analyzedReviews.filter(
     (r) => r.include_in_rating
@@ -1488,12 +1495,12 @@ export async function getMasterProductReviewSummary(
       ? Math.round((fakeFromReviews / totalFromReviews) * 1000) / 10
       : 0;
 
-  const supabase = getRateClient();
   const productIds = await getListingIdsForMaster(
     masterId,
     `review summary listings for master ${masterId}`
   );
   if (productIds.length > 0) {
+    const supabase = getRateClient();
     const analysisRows = await readInChunks(
       productIds,
       `review analysis for master ${masterId}`,
@@ -1727,14 +1734,22 @@ export async function getMasterProductPriceHistory(
   /** false skips the all-time low/high reads, for callers using only byOffer. */
   options: { allTime?: boolean } = {}
 ): Promise<MasterProductPriceHistorySummary> {
-  const allTime = options.allTime ?? true;
+  const safeOptions =
+    options && typeof options === 'object' && !Array.isArray(options)
+      ? options
+      : {};
+  const allTime = safeOptions.allTime ?? true;
+  const cleanMasterId = sanitizeRateEntityId(masterId);
   // Bait-price listings far below every other store take no part: no chart
   // points, no market median, no current or all-time low, and no discount
   // verdict (DOS/Rate#797). The highest offer is never flagged, so a
   // non-empty list stays non-empty.
-  const offers = plausibleOffers(
-    existingOffers ?? (await getMasterProductOffers(masterId))
-  );
+  const rawOffers = Array.isArray(existingOffers)
+    ? existingOffers
+    : cleanMasterId
+      ? await getMasterProductOffers(cleanMasterId)
+      : [];
+  const offers = plausibleOffers(rawOffers);
   if (offers.length === 0) {
     return {
       points: [],
@@ -2483,36 +2498,23 @@ export function computeDynamicReviewRisk(
 export async function getMerchantsList(
   params?: MerchantListFilterParams
 ): Promise<MerchantSummary[]> {
-  const supabase = getRateClient();
+  const safeParams =
+    params && typeof params === 'object' && !Array.isArray(params)
+      ? params
+      : undefined;
 
-  const sanitizedIds = Array.isArray(params?.ids)
+  const sanitizedIds = Array.isArray(safeParams?.ids)
     ? Array.from(
         new Set(
-          params.ids
-            .map((id) =>
-              typeof id === 'string'
-                ? id
-                    .replace(/\p{Cc}+/gu, '')
-                    .trim()
-                    .slice(0, 128)
-                : ''
-            )
-            .filter(Boolean)
+          safeParams.ids.map((id) => sanitizeRateEntityId(id)).filter(Boolean)
         )
       )
     : undefined;
-  const sanitizedPlatformShopIds = Array.isArray(params?.platformShopIds)
+  const sanitizedPlatformShopIds = Array.isArray(safeParams?.platformShopIds)
     ? Array.from(
         new Set(
-          params.platformShopIds
-            .map((id) =>
-              typeof id === 'string'
-                ? id
-                    .replace(/\p{Cc}+/gu, '')
-                    .trim()
-                    .slice(0, 128)
-                : ''
-            )
+          safeParams.platformShopIds
+            .map((id) => sanitizeRateEntityId(id))
             .filter(Boolean)
         )
       )
@@ -2524,17 +2526,18 @@ export async function getMerchantsList(
   ) {
     return [];
   }
+  const supabase = getRateClient();
   const cleanPlatform =
-    typeof params?.platform === 'string'
-      ? params.platform
+    typeof safeParams?.platform === 'string'
+      ? safeParams.platform
           .replace(/\p{Cc}+/gu, '')
           .trim()
           .toLowerCase()
           .slice(0, 64)
       : '';
   const cleanNameContains =
-    typeof params?.nameContains === 'string'
-      ? params.nameContains
+    typeof safeParams?.nameContains === 'string'
+      ? safeParams.nameContains
           .replace(/\p{Cc}+/gu, '')
           .trim()
           .slice(0, 200)
