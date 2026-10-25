@@ -11834,6 +11834,52 @@ async function runCoreArchitectureSuite() {
     ]);
     assert.equal(batchMap990.size, 0);
 
+    const {
+      compareMasterProducts: compareMasterProducts992,
+      normalizeMasterProductRow: normalizeMasterProductRow992,
+      baselineReviewRisk: baselineReviewRisk992,
+      persistedReviewRiskOf: persistedReviewRiskOf992,
+      hasStoredReviewRisk: hasStoredReviewRisk992,
+      computeDynamicReviewRisk: computeDynamicReviewRisk992,
+      forEachWithConcurrency: forEachWithConcurrency992,
+      getMerchantProfileById: getMerchantProfileById992,
+    } = await import('../../../lib/rate-api');
+
+    assert.deepEqual(
+      await compareMasterProducts992(['..', 'null', 'undefined', '0', '---']),
+      []
+    );
+    const arrRow992 = [] as never;
+    assert.equal(normalizeMasterProductRow992(arrRow992), arrRow992);
+    const badSlugRow992 = {
+      slug: 'a..b',
+      name: 'Test',
+    } as never;
+    assert.equal(normalizeMasterProductRow992(badSlugRow992), badSlugRow992);
+
+    assert.equal(baselineReviewRisk992([] as never), 15);
+    assert.equal(baselineReviewRisk992({ isOfficial: 'false' as never }), 15);
+    assert.equal(baselineReviewRisk992({ isOfficial: true }), 0);
+    assert.equal(persistedReviewRiskOf992([] as never), 0);
+    assert.equal(hasStoredReviewRisk992([] as never), false);
+    const dynRisk992 = computeDynamicReviewRisk992(
+      [['array-review'] as never],
+      { isOfficial: 'false' as never }
+    );
+    assert.equal(dynRisk992.reviewRiskScore, 15);
+    assert.equal(dynRisk992.breakdown.total_reviews, 0);
+
+    const visited992: number[] = [];
+    await forEachWithConcurrency992([1, 2, 3], Number.NaN, async (item) => {
+      visited992.push(item);
+    });
+    assert.deepEqual(visited992, [1, 2, 3]);
+    await forEachWithConcurrency992(null as never, 2, async () => {});
+
+    assert.equal(await getMerchantProfileById992('null'), null);
+    assert.equal(await getMerchantProfileById992('---'), null);
+    assert.equal(await getMerchantProfileById992('a..b'), null);
+
     console.log(
       '  ✅ [121/121] API Handler URL/Slug/Vote Guards & OpenAPI Server Origin Bounds (#978) passed'
     );

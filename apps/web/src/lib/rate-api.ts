@@ -1593,7 +1593,12 @@ export async function compareMasterProducts(
         .map((s) =>
           typeof s === 'string' ? s.replace(/\p{Cc}+/gu, '').trim() : ''
         )
-        .filter((s) => PRODUCT_SLUG_REGEX.test(s))
+        .filter(
+          (s) =>
+            PRODUCT_SLUG_REGEX.test(s) &&
+            !s.includes('..') &&
+            !SENTINEL_RATE_API_TOKENS.has(s.toLowerCase())
+        )
     )
   ).slice(0, 4);
   if (uniqueSlugs.length === 0) return [];
@@ -2128,12 +2133,19 @@ export function normalizeMasterProductRow(
   row: MasterProduct,
   categorySlugHint?: CanonicalCategorySlug | null
 ): MasterProduct {
-  if (!row || typeof row !== 'object') return row;
+  if (!row || typeof row !== 'object' || Array.isArray(row)) return row;
   const cleanSlug =
     typeof row.slug === 'string'
       ? row.slug.replace(/\p{Cc}+/gu, '').trim()
       : '';
-  if (!cleanSlug) return row;
+  if (
+    !cleanSlug ||
+    !PRODUCT_SLUG_REGEX.test(cleanSlug) ||
+    cleanSlug.includes('..') ||
+    SENTINEL_RATE_API_TOKENS.has(cleanSlug.toLowerCase())
+  ) {
+    return row;
+  }
   let normalized = cleanSlug === row.slug ? row : { ...row, slug: cleanSlug };
   if (KNOWN_LOCAL_DEVICE_IMAGES.has(cleanSlug)) {
     const localImg = `/img/devices/${cleanSlug}.jpg`;
@@ -2263,13 +2275,14 @@ export interface DynamicReviewRiskMerchant {
 
 /** The importer's seller adjustments: official -15, free channels +10, 50k+ followers -5. */
 function merchantRiskAdjustment(merchant: DynamicReviewRiskMerchant): number {
-  if (!merchant || typeof merchant !== 'object') return 0;
+  if (!merchant || typeof merchant !== 'object' || Array.isArray(merchant))
+    return 0;
   let delta = 0;
   const cleanPlatform =
     typeof merchant.platform === 'string'
       ? merchant.platform.trim().toLowerCase()
       : '';
-  if (merchant.isOfficial) delta -= 15;
+  if (isStrictOfferOfficialFlag(merchant.isOfficial)) delta -= 15;
   else if (cleanPlatform === 'facebook' || cleanPlatform === 'website')
     delta += 10;
   const followers = toSafeNonNegativeVoteCount(
@@ -2302,7 +2315,7 @@ export function persistedReviewRiskOf(row: {
   review_risk_breakdown?: unknown;
   metadata?: unknown;
 }): number {
-  if (!row || typeof row !== 'object') return 0;
+  if (!row || typeof row !== 'object' || Array.isArray(row)) return 0;
   const column = toSafeRiskScore100(row.review_risk_score, 0);
   if (
     row.review_risk_score != null &&
@@ -2331,7 +2344,7 @@ export function hasStoredReviewRisk(row: {
   review_risk_breakdown?: unknown;
   metadata?: unknown;
 }): boolean {
-  if (!row || typeof row !== 'object') return false;
+  if (!row || typeof row !== 'object' || Array.isArray(row)) return false;
   if (
     row.review_risk_score != null &&
     hasPersistedReviewRisk(
@@ -2381,7 +2394,7 @@ export function computeDynamicReviewRisk(
   // Unanalyzed community reviews carry no risk signal yet.
   const safeReviews = Array.isArray(allReviews)
     ? allReviews.filter((r): r is ReviewItem =>
-        Boolean(r && typeof r === 'object')
+        Boolean(r && typeof r === 'object' && !Array.isArray(r))
       )
     : [];
   const reviews = safeReviews.filter((r) => !isPendingReview(r));
@@ -2800,6 +2813,12 @@ export async function forEachWithConcurrency<T>(
   limit: number,
   task: (item: T) => Promise<void>
 ): Promise<void> {
+  if (!Array.isArray(items) || items.length === 0 || typeof task !== 'function')
+    return;
+  const safeLimit =
+    typeof limit === 'number' && Number.isFinite(limit) && limit >= 1
+      ? Math.min(50, Math.floor(limit))
+      : 1;
   let next = 0;
   let failed = false;
   const worker = async () => {
@@ -2814,7 +2833,7 @@ export async function forEachWithConcurrency<T>(
     }
   };
   await Promise.all(
-    Array.from({ length: Math.min(limit, items.length) }, worker)
+    Array.from({ length: Math.min(safeLimit, items.length) }, worker)
   );
 }
 
@@ -2843,12 +2862,8 @@ async function readInChunks(
 export async function getMerchantProfileById(
   idOrSlug: string
 ): Promise<MerchantProfileDetail | null> {
-  if (typeof idOrSlug !== 'string') return null;
-  const cleaned = idOrSlug
-    .replace(/\p{Cc}+/gu, '')
-    .trim()
-    .slice(0, 128);
-  if (!cleaned) return null;
+  const cleaned = sanitizeRateEntityId(idOrSlug);
+  if (!cleaned || cleaned.includes('..')) return null;
 
   const supabase = getRateClient();
   const isUuid =
