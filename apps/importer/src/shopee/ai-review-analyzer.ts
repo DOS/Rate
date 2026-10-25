@@ -202,15 +202,35 @@ const VALID_MERCHANT_RISK_LEVELS = new Set<MerchantRiskEvaluation['risk_level']>
 ]);
 
 function clampNonNegativeInt(n: unknown, max = 1_000_000_000): number {
-  const num = typeof n === 'number' ? n : Number.NaN;
+  const num =
+    typeof n === 'number'
+      ? n
+      : typeof n === 'string' && n.trim().length > 0
+        ? Number(n)
+        : Number.NaN;
   if (!Number.isFinite(num) || num < 0) return 0;
   return Math.min(max, Math.floor(num));
 }
 
 function clamp0to100(n: unknown, fallback = 0): number {
-  const num = typeof n === 'number' ? n : Number.NaN;
+  const num =
+    typeof n === 'number'
+      ? n
+      : typeof n === 'string' && n.trim().length > 0
+        ? Number(n)
+        : Number.NaN;
   if (!Number.isFinite(num)) return fallback;
   return Math.min(100, Math.max(0, Number(num.toFixed(2))));
+}
+
+function isStrictRiskBoolean(val: unknown): boolean {
+  if (typeof val === 'boolean') return val;
+  if (typeof val === 'number') return val === 1;
+  if (typeof val === 'string') {
+    const lower = val.trim().toLowerCase();
+    return lower === 'true' || lower === '1';
+  }
+  return false;
 }
 
 function normalizeSafeDbId(raw: unknown): string {
@@ -223,7 +243,9 @@ function normalizeSafeDbId(raw: unknown): string {
 /** The `review_risk_breakdown` stored with `review_risk_score` on rate.merchants. */
 export function merchantRiskBreakdown(risk: MerchantRiskEvaluation) {
   const safeRisk =
-    risk && typeof risk === 'object' ? risk : ({} as Partial<MerchantRiskEvaluation>);
+    risk && typeof risk === 'object' && !Array.isArray(risk)
+      ? risk
+      : ({} as Partial<MerchantRiskEvaluation>);
   const riskLevel: MerchantRiskEvaluation['risk_level'] = VALID_MERCHANT_RISK_LEVELS.has(
     safeRisk.risk_level as MerchantRiskEvaluation['risk_level']
   )
@@ -235,19 +257,23 @@ export function merchantRiskBreakdown(risk: MerchantRiskEvaluation) {
         .filter(Boolean)
         .slice(0, 20)
     : [];
+  const toRatio = (v: unknown) =>
+    typeof v === 'boolean' || (typeof v === 'string' && v.trim().length === 0)
+      ? 0
+      : clamp01(Number(v ?? 0));
   return {
     risk_level: riskLevel,
     trust_score: clamp0to100(safeRisk.trust_score, 85),
-    seeding_ratio: clamp01(Number(safeRisk.seeding_ratio ?? 0)),
-    coin_spam_ratio: clamp01(Number(safeRisk.coin_spam_ratio ?? 0)),
-    sabotage_ratio: clamp01(Number(safeRisk.sabotage_ratio ?? 0)),
+    seeding_ratio: toRatio(safeRisk.seeding_ratio),
+    coin_spam_ratio: toRatio(safeRisk.coin_spam_ratio),
+    sabotage_ratio: toRatio(safeRisk.sabotage_ratio),
     total_reviews: clampNonNegativeInt(safeRisk.total_reviews),
     authentic_count: clampNonNegativeInt(safeRisk.authentic_count),
     coin_spam_count: clampNonNegativeInt(safeRisk.coin_spam_count),
     seeding_fake_count: clampNonNegativeInt(safeRisk.seeding_fake_count),
     sabotage_or_bombing_count: clampNonNegativeInt(safeRisk.sabotage_or_bombing_count),
     suspicious_ratio_pct: clamp0to100(safeRisk.suspicious_ratio_pct, 0),
-    price_anomaly_detected: Boolean(safeRisk.price_anomaly_detected),
+    price_anomaly_detected: isStrictRiskBoolean(safeRisk.price_anomaly_detected),
     reasons,
   };
 }

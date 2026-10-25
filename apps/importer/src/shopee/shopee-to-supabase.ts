@@ -36,6 +36,8 @@ function hashEntity(val: string): string {
   return '0x' + crypto.createHash('sha256').update(val.toLowerCase()).digest('hex');
 }
 
+const SENTINEL_REVIEW_IDS = new Set(['0', 'null', 'undefined', 'nan', 'none', '---']);
+
 export function platformReviewIdFor(r: ShopeeReview): string {
   const safeReview =
     r && typeof r === 'object' && !Array.isArray(r) ? r : ({} as Partial<ShopeeReview>);
@@ -43,7 +45,11 @@ export function platformReviewIdFor(r: ShopeeReview): string {
     typeof safeReview.reviewId === 'string'
       ? safeReview.reviewId.replace(/\p{Cc}+/gu, '').trim()
       : '';
-  if (cleanId.length > 0 && cleanId.length <= 160) {
+  if (
+    cleanId.length > 0 &&
+    cleanId.length <= 160 &&
+    !SENTINEL_REVIEW_IDS.has(cleanId.toLowerCase())
+  ) {
     return cleanId;
   }
   const author = String(safeReview.author || '').slice(0, 200);

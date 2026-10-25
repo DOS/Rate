@@ -30,8 +30,20 @@ const MAX_SCREEN_SIZE_INCH = 120;
 const MAX_BATTERY_MAH = 500_000;
 export const MAX_ENTITY_IMAGES = 50;
 
+const SENTINEL_MASTER_IDS = new Set(['0', 'null', 'undefined', 'nan', 'none']);
+
 function hasControlOrSpaceChar(val: string): boolean {
   return /[\p{Cc}\s]/u.test(val);
+}
+
+function isStrictBoolean(val: unknown): boolean {
+  if (typeof val === 'boolean') return val;
+  if (typeof val === 'number') return val === 1;
+  if (typeof val === 'string') {
+    const lower = val.trim().toLowerCase();
+    return lower === 'true' || lower === '1';
+  }
+  return false;
 }
 
 export function sanitizeHttpUrl(raw: unknown): string | null {
@@ -43,6 +55,13 @@ export function sanitizeHttpUrl(raw: unknown): string | null {
     if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return null;
     if (parsed.username || parsed.password) return null;
     if (!parsed.hostname) return null;
+    if (
+      parsed.hostname.startsWith('.') ||
+      parsed.hostname.endsWith('.') ||
+      parsed.hostname.includes('..')
+    ) {
+      return null;
+    }
     if (parsed.port !== '' && parsed.port !== '80' && parsed.port !== '443') return null;
     return trimmed;
   } catch {
@@ -164,11 +183,13 @@ export class EntityMatcher {
     let ambiguousFuzzy = false;
     const validFuzzyMatches = Array.isArray(fuzzyMatches)
       ? fuzzyMatches.filter(m => {
+          if (!m || typeof m !== 'object' || Array.isArray(m)) return false;
           const masterId =
-            typeof m?.master_id === 'string' && !/\p{Cc}/u.test(m.master_id.trim())
+            typeof m.master_id === 'string' && !/\p{Cc}/u.test(m.master_id.trim())
               ? m.master_id.trim()
               : '';
-          const sim = typeof m?.similarity === 'boolean' ? Number.NaN : Number(m?.similarity);
+          if (SENTINEL_MASTER_IDS.has(masterId.toLowerCase())) return false;
+          const sim = typeof m.similarity === 'boolean' ? Number.NaN : Number(m.similarity);
           return (
             masterId.length > 0 &&
             masterId.length <= 128 &&
@@ -296,7 +317,7 @@ export class EntityMatcher {
       storage_gb: toBoundedPositiveInt(candidate.storage_gb, MAX_STORAGE_GB),
       screen_size_inch: toBoundedPositiveNumber(candidate.screen_size_inch, MAX_SCREEN_SIZE_INCH),
       battery_mah: toBoundedPositiveInt(candidate.battery_mah, MAX_BATTERY_MAH),
-      has_5g: Boolean(candidate.has_5g),
+      has_5g: isStrictBoolean(candidate.has_5g),
       specifications: candidate.specifications,
       key_specs: candidate.key_specs,
       images: safeImages,
@@ -494,7 +515,7 @@ export class EntityMatcher {
           toBoundedPositiveNumber(aiResult.screen_size_inch, MAX_SCREEN_SIZE_INCH),
         battery_mah:
           existingBatteryMah ?? toBoundedPositiveInt(aiResult.battery_mah, MAX_BATTERY_MAH),
-        has_5g: row.has_5g ? true : (aiResult.has_5g ?? row.has_5g),
+        has_5g: isStrictBoolean(row.has_5g) ? true : isStrictBoolean(aiResult.has_5g ?? row.has_5g),
         specifications: mergedSpecifications,
         key_specs: mergedKeySpecs,
         updated_at: new Date().toISOString(),
