@@ -10702,7 +10702,7 @@ async function runCoreArchitectureSuite() {
       externalItemId: 'bad item id with spaces',
       externalShopId: '88201679',
       url: 'https://shopee.vn/Dien-thoai-Apple-iPhone-16-Pro-Max-256GB-i.88201679.2918273645',
-      title: 'Apple iPhone 16 Pro Max 256GB Ch?nh h?ng VN/A',
+      title: 'Apple iPhone 16 Pro Max 256GB Chính hãng VN/A',
       price: 29_990_000,
       userConsentOptIn: true,
       rateClient: {
@@ -10720,7 +10720,7 @@ async function runCoreArchitectureSuite() {
       externalItemId: '2918273645',
       externalShopId: '../bad/shop',
       url: 'https://shopee.vn/Dien-thoai-Apple-iPhone-16-Pro-Max-256GB-i.88201679.2918273645',
-      title: 'Apple iPhone 16 Pro Max 256GB Ch?nh h?ng VN/A',
+      title: 'Apple iPhone 16 Pro Max 256GB Chính hãng VN/A',
       price: 29_990_000,
       userConsentOptIn: true,
       rateClient: {
@@ -10734,7 +10734,86 @@ async function runCoreArchitectureSuite() {
     assert.equal(badShopIdRes.jobState, 'rejected_invalid_url');
 
     console.log(
-      '  ✅ [116/116] Deals Radar, Extension Price Verdict & Crowd Ingest Bounds (#948) passed'
+      '  ✅ [116/117] Deals Radar, Extension Price Verdict & Crowd Ingest Bounds (#948) passed'
+    );
+  }
+
+  // 117. Deal Radar Non-Array Guards & Compare Spec Regex Bounds (#950)
+  {
+    const dealRadarLib = await import('../../../lib/deal-radar');
+    const rateDomainLib = await import('../../../lib/rate-domain');
+
+    assert.equal(
+      dealRadarLib.unwrapRadarPayload({
+        genuineDeals: [],
+        fakeSaleTraps: 'not-an-array',
+      }),
+      null,
+      'unwrapRadarPayload must reject non-array fakeSaleTraps'
+    );
+    assert.equal(
+      dealRadarLib.unwrapRadarPayload({
+        genuineDeals: [],
+        priceSpreadLeaders: { bad: true },
+      }),
+      null,
+      'unwrapRadarPayload must reject non-array priceSpreadLeaders'
+    );
+    const malformedRadarIdx = dealRadarLib.buildRadarIndex({
+      genuineDeals: 'bad' as never,
+      fakeSaleTraps: 123 as never,
+      priceSpreadLeaders: {} as never,
+    } as never);
+    assert.equal(malformedRadarIdx.size, 0);
+    const malformedMerchantRadar = dealRadarLib.selectMerchantRadar(
+      {
+        genuineDeals: 'bad' as never,
+        fakeSaleTraps: {} as never,
+      } as never,
+      { id: 'm1', name: 'Shop 1' }
+    );
+    assert.equal(malformedMerchantRadar.genuineDealCount, 0);
+    assert.equal(malformedMerchantRadar.fakeTrapCount, 0);
+
+    assert.equal(
+      rateDomainLib.resolveCompareBatteryMah({
+        battery_mah: null,
+        specifications: null as never,
+        key_specs: { battery: '5.000 mAh, Sạc nhanh 45W' } as never,
+      }),
+      5000,
+      'resolveCompareBatteryMah must parse thousand-separated 5.000 mAh'
+    );
+    assert.equal(
+      rateDomainLib.resolveCompareBatteryMah({
+        battery_mah: null,
+        specifications: null as never,
+        key_specs: { battery: '5,500 mAh' } as never,
+      }),
+      5500,
+      'resolveCompareBatteryMah must parse comma thousand-separated 5,500 mAh'
+    );
+    assert.equal(
+      rateDomainLib.resolveCompareBatteryMah({
+        battery_mah: null,
+        specifications: [] as never,
+        key_specs: { battery: '999999 mAh' } as never,
+      }),
+      null,
+      'resolveCompareBatteryMah must reject 6-digit mAh > 100,000 without matching trailing digits'
+    );
+    assert.equal(
+      rateDomainLib.resolveCompareRamGb({
+        ram_gb: null,
+        specifications: [] as never,
+        key_specs: { ram: '99999 GB' } as never,
+      }),
+      null,
+      'resolveCompareRamGb must reject 5-digit GB without matching trailing digits'
+    );
+
+    console.log(
+      '  ✅ [117/117] Deal Radar Non-Array Guards & Compare Spec Regex Bounds (#950) passed'
     );
   }
 

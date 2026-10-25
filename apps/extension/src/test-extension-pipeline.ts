@@ -9,6 +9,7 @@ import {
   extractPriceFromJsonLdOffers,
   extractProductSignalFromDom,
   extractRatingFromJsonLd,
+  extractSelectedVariantFromDom,
   flattenJsonLdEntities,
   isJsonLdProductEntity,
   parseVndPriceText,
@@ -2560,6 +2561,69 @@ async function runTests() {
 
     console.log(
       '  ✅ [Extension Security Guards & Detector Bounds (#846)] Verified'
+    );
+  }
+
+  // --- DOS/Rate#950: sender/signal/number bounds & DOM variant deduplication ---
+  {
+    assert.equal(isPrivilegedExtensionSender(null as never), false);
+    assert.equal(isPrivilegedExtensionSender([] as never), false);
+
+    const nullSignal = sanitizeExtensionProductSignal(null as never);
+    assert.equal(nullSignal.platform, 'shopee');
+    assert.equal(nullSignal.title, '');
+    assert.equal(nullSignal.price, null);
+
+    const badPlatformSignal = sanitizeExtensionProductSignal({
+      platform: 'evil_platform' as never,
+      canonicalUrl: 'https://shopee.vn/item-i.1.2',
+      externalItemId: '2',
+      externalShopId: '1',
+      title: 'iPhone 16',
+      selectedVariant: null,
+      price: 20_000_000,
+      originalPrice: null,
+      ratingStar: null,
+      ratingCount: null,
+    });
+    assert.equal(badPlatformSignal.platform, 'shopee');
+
+    assert.equal(
+      formatSafeNumber('not-a-number', {
+        fallback: Number.NaN,
+        min: 100,
+        max: 10,
+      }),
+      '10'
+    );
+    assert.equal(formatSafeNumber(42.6, null as never), '43');
+
+    assert.deepEqual(extractIdsFromUrl('shopee', null as never), {
+      externalItemId: null,
+      externalShopId: null,
+    });
+    assert.equal(cleanExtractedProductTitle(null as never), '');
+    assert.equal(
+      cleanExtractedProductTitle('  iPhone\u000016   Pro  | Shopee VN'),
+      'iPhone 16 Pro'
+    );
+
+    const duplicateDom = {
+      querySelectorAll(sel: string) {
+        if (
+          sel === 'button.product-variation--selected' ||
+          sel === 'button[aria-checked="true"]'
+        ) {
+          return [{ textContent: '  256GB\u0000 ' }, { textContent: '256gb' }];
+        }
+        return [];
+      },
+    } as unknown as Document;
+    assert.equal(extractSelectedVariantFromDom(duplicateDom), '256GB');
+    assert.equal(extractSelectedVariantFromDom(null as never), null);
+
+    console.log(
+      '  ✅ [Extension Sender/Signal/Number & DOM Variant Bounds (#950)] Verified'
     );
   }
 

@@ -150,7 +150,13 @@ export function resolveCompareDisplaySizeInch(
   >
 ): number | null {
   if (!p || typeof p !== 'object') return null;
-  const specs = (p.specifications || {}) as ProductSpecifications;
+  const specs = (
+    p.specifications &&
+    typeof p.specifications === 'object' &&
+    !Array.isArray(p.specifications)
+      ? p.specifications
+      : {}
+  ) as ProductSpecifications;
   const fromSpecs = toPositiveFiniteSpec(
     specs.display?.size_inch,
     0.5,
@@ -167,7 +173,13 @@ export function resolveCompareDisplaySizeInch(
   if (fromTop !== null) {
     return fromTop;
   }
-  const ks = (p.key_specs || {}) as KeySpecs;
+  const ks = (
+    p.key_specs &&
+    typeof p.key_specs === 'object' &&
+    !Array.isArray(p.key_specs)
+      ? p.key_specs
+      : {}
+  ) as KeySpecs;
   // Up to two decimals ("6.78 inch"), never starting mid-number: with one
   // decimal only, "6.78" matched as 78 (DOS/Rate#546 release-gate review).
   const m = String(ks.screen || '').match(
@@ -190,7 +202,13 @@ export function resolveCompareRamGb(
   if (fromTop !== null) {
     return fromTop;
   }
-  const specs = (p.specifications || {}) as ProductSpecifications;
+  const specs = (
+    p.specifications &&
+    typeof p.specifications === 'object' &&
+    !Array.isArray(p.specifications)
+      ? p.specifications
+      : {}
+  ) as ProductSpecifications;
   const fromSpecs = toPositiveFiniteSpec(
     specs.hardware?.ram_gb,
     0,
@@ -199,8 +217,14 @@ export function resolveCompareRamGb(
   if (fromSpecs !== null) {
     return fromSpecs;
   }
-  const ks = (p.key_specs || {}) as KeySpecs;
-  const m = String(ks.ram || '').match(/(\d+)\s*GB/i);
+  const ks = (
+    p.key_specs &&
+    typeof p.key_specs === 'object' &&
+    !Array.isArray(p.key_specs)
+      ? p.key_specs
+      : {}
+  ) as KeySpecs;
+  const m = String(ks.ram || '').match(/(?<![\d.,])(\d{1,4})\s*GB/i);
   if (m?.[1]) {
     const parsed = toPositiveFiniteSpec(m[1], 0, MAX_COMPARE_RAM_GB);
     if (parsed !== null) {
@@ -218,7 +242,13 @@ export function resolveCompareStorageGb(
   if (fromTop !== null) {
     return fromTop;
   }
-  const specs = (p.specifications || {}) as ProductSpecifications;
+  const specs = (
+    p.specifications &&
+    typeof p.specifications === 'object' &&
+    !Array.isArray(p.specifications)
+      ? p.specifications
+      : {}
+  ) as ProductSpecifications;
   const fromSpecs = toPositiveFiniteSpec(
     specs.hardware?.storage_gb,
     0,
@@ -227,8 +257,16 @@ export function resolveCompareStorageGb(
   if (fromSpecs !== null) {
     return fromSpecs;
   }
-  const ks = (p.key_specs || {}) as KeySpecs;
-  const m = String(ks.storage || '').match(/(\d+(?:[.,]\d+)?)\s*(TB|GB)/i);
+  const ks = (
+    p.key_specs &&
+    typeof p.key_specs === 'object' &&
+    !Array.isArray(p.key_specs)
+      ? p.key_specs
+      : {}
+  ) as KeySpecs;
+  const m = String(ks.storage || '').match(
+    /(?<![\d.,])(\d+(?:[.,]\d+)?)\s*(TB|GB)/i
+  );
   if (m?.[1] && m?.[2]) {
     const val = Number(m[1].replace(',', '.'));
     if (Number.isFinite(val) && val > 0) {
@@ -256,7 +294,13 @@ export function resolveCompareBatteryMah(
   p: Pick<SharedMasterProduct, 'battery_mah' | 'specifications' | 'key_specs'>
 ): number | null {
   if (!p || typeof p !== 'object') return null;
-  const specs = (p.specifications || {}) as ProductSpecifications;
+  const specs = (
+    p.specifications &&
+    typeof p.specifications === 'object' &&
+    !Array.isArray(p.specifications)
+      ? p.specifications
+      : {}
+  ) as ProductSpecifications;
   const fromSpecs = toPositiveFiniteSpec(
     specs.battery?.capacity_mah,
     0,
@@ -273,10 +317,19 @@ export function resolveCompareBatteryMah(
   if (fromTop !== null) {
     return fromTop;
   }
-  const ks = (p.key_specs || {}) as KeySpecs;
-  const m = String(ks.battery || '').match(/(\d{2,5})\s*mAh/i);
+  const ks = (
+    p.key_specs &&
+    typeof p.key_specs === 'object' &&
+    !Array.isArray(p.key_specs)
+      ? p.key_specs
+      : {}
+  ) as KeySpecs;
+  const m = String(ks.battery || '').match(
+    /(?<![\d.,])(\d{1,2}[.,]\d{3}|\d{2,6})\s*mAh/i
+  );
   if (m?.[1]) {
-    const parsed = toPositiveFiniteSpec(m[1], 0, MAX_COMPARE_BATTERY_MAH);
+    const cleaned = m[1].replace(/[.,]/g, '');
+    const parsed = toPositiveFiniteSpec(cleaned, 0, MAX_COMPARE_BATTERY_MAH);
     if (parsed !== null) {
       return parsed;
     }

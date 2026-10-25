@@ -122,6 +122,9 @@ export function extractIdsFromUrl(
   platform: SupportedEcommercePlatform,
   canonicalUrl: string
 ): { externalItemId: string | null; externalShopId: string | null } {
+  if (typeof canonicalUrl !== 'string' || !canonicalUrl.trim()) {
+    return { externalItemId: null, externalShopId: null };
+  }
   if (platform === 'shopee') {
     const m =
       canonicalUrl.match(/(?:a-)?i\.(\d+)\.(\d+)/i) ||
@@ -439,15 +442,18 @@ export function extractRatingFromJsonLd(aggRaw: unknown): {
 }
 
 export function cleanExtractedProductTitle(rawTitle: string): string {
+  if (typeof rawTitle !== 'string') return '';
   const withoutPlatformSuffix = rawTitle
+    .replace(/\p{Cc}+/gu, ' ')
     .replace(
       /\s*(?:\||[-–—])\s*(?:Shopee(?:\s*Việt\s*Nam|\s*VN)?|Lazada(?:\s*Việt\s*Nam|\s*VN)?|Tiki(?:\.vn)?|TikTok\s*Shop|CellphoneS(?:\.com\.vn)?|Thế\s*Giới\s*Di\s*Động|Thegioididong(?:\.com)?|TopZone(?:\.vn)?|Điện\s*Máy\s*Xanh|FPT\s*Shop|Fptshop(?:\.com\.vn)?|Hoàng\s*Hà\s*Mobile|HoangHaMobile(?:\.com)?|Di\s*Động\s*Việt|Didongviet(?:\.vn)?|Phong\s*Vũ|Phongvu(?:\.vn)?).*$/i,
       ''
     )
+    .replace(/\s+/g, ' ')
     .trim();
 
   if (!withoutPlatformSuffix.includes('|')) {
-    return withoutPlatformSuffix;
+    return withoutPlatformSuffix.slice(0, 500);
   }
 
   const pipeSegments = withoutPlatformSuffix
@@ -464,7 +470,7 @@ export function cleanExtractedProductTitle(rawTitle: string): string {
     }
   }
 
-  return keptSegments.join(' ').replace(/\s+/g, ' ').trim();
+  return keptSegments.join(' ').replace(/\s+/g, ' ').trim().slice(0, 500);
 }
 
 /**
@@ -472,6 +478,7 @@ export function cleanExtractedProductTitle(rawTitle: string): string {
  * so multi-variant listings (128GB / 256GB / 512GB / 1TB) are disambiguated.
  */
 export function extractSelectedVariantFromDom(doc: Document): string | null {
+  if (!doc || typeof doc.querySelectorAll !== 'function') return null;
   const selectors = [
     // Shopee active tier variation button
     'button.product-variation--selected',
@@ -486,18 +493,26 @@ export function extractSelectedVariantFromDom(doc: Document): string | null {
   ];
 
   const pickedLabels: string[] = [];
+  const seenLower = new Set<string>();
   for (const sel of selectors) {
     const nodes = doc.querySelectorAll(sel);
     nodes.forEach((node) => {
-      const txt = (node.textContent || '').trim();
+      const txt = (node.textContent || '')
+        .replace(/\p{Cc}+/gu, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
       if (txt && txt.length <= 60) {
-        pickedLabels.push(txt);
+        const key = txt.toLowerCase();
+        if (!seenLower.has(key)) {
+          seenLower.add(key);
+          pickedLabels.push(txt);
+        }
       }
     });
   }
 
   if (pickedLabels.length > 0) {
-    return pickedLabels.join(' - ');
+    return pickedLabels.join(' - ').slice(0, 200);
   }
   return null;
 }
