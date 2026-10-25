@@ -20,8 +20,11 @@ test.use({
   },
 });
 
+// The category switcher is a group of single-select buttons (DOS/Rate#1067).
+const categories = (page: Page) =>
+  page.getByRole('group', { name: 'Chọn ngành hàng' });
 const selectedTab = (page: Page) =>
-  page.getByRole('tablist').getByRole('tab', { selected: true });
+  categories(page).getByRole('button', { pressed: true });
 // The active criterion is the dark pill.
 const activeCriterion = (page: Page) => page.locator('button.btn-dark');
 
@@ -30,8 +33,9 @@ test('/leaderboard is served from the page cache', async ({ request }) => {
   const res = await request.get('/leaderboard?cat=earbuds');
   expect(res.status()).toBe(200);
   expect(res.headers()['x-nextjs-cache']).toMatch(/^(HIT|STALE)$/);
-  // Only the URL reader is client-rendered: the tabs are in the server HTML.
-  expect(await res.text()).toContain('role="tablist"');
+  // Only the URL reader is client-rendered: the category switcher is in the
+  // server HTML.
+  expect(await res.text()).toContain('aria-label="Chọn ngành hàng"');
 });
 
 test('a leaderboard deep link opens its tab, and a click updates the URL', async ({
@@ -41,9 +45,8 @@ test('a leaderboard deep link opens its tab, and a click updates the URL', async
   await expect(selectedTab(page)).toContainText('Tai nghe ANC');
   await expect(activeCriterion(page)).toContainText('Điểm người mua thực chất');
 
-  await page
-    .getByRole('tablist')
-    .getByRole('tab', { name: /Laptop & MacBook/ })
+  await categories(page)
+    .getByRole('button', { name: /Laptop & MacBook/ })
     .click();
   await expect(selectedTab(page)).toContainText('Laptop & MacBook');
   await expect(page).toHaveURL(/\/leaderboard\?cat=laptops&criterion=user$/);

@@ -364,6 +364,7 @@ export default function LeaderboardExplorer({
       searchPlaceholder: t('searchPlaceholder'),
       allBrands: t('allBrands'),
       priceAll: t('priceAll'),
+      priceSegmentAria: t('priceSegmentAria'),
       priceUnder15: t('priceUnder15'),
       price15to25: t('price15to25'),
       priceOver25: t('priceOver25'),
@@ -828,10 +829,12 @@ export default function LeaderboardExplorer({
           </div>
         </div>
 
-        {/* 5-Category Switcher Pills */}
+        {/* 5-Category Switcher Pills: single-select buttons, not tabs (no
+            panels); the pressed one is exposed, not only its colour
+            (DOS/Rate#1067). */}
         <div
           className="d-flex mb-4 flex-wrap gap-2"
-          role="tablist"
+          role="group"
           aria-label={t('categoryTabsAria')}
         >
           {categoryTabs.map((tab) => {
@@ -841,8 +844,7 @@ export default function LeaderboardExplorer({
               <button
                 key={tab.slug}
                 type="button"
-                role="tab"
-                aria-selected={isSelected}
+                aria-pressed={isSelected}
                 onClick={() => handleSelectCategory(tab.slug)}
                 className={`btn rounded-pill fw-semibold d-inline-flex align-items-center gap-2 px-3 py-2 ${
                   isSelected
@@ -868,16 +870,24 @@ export default function LeaderboardExplorer({
 
         {/* 8-Mode JReviews Ranking Criterion Selector */}
         <div className="mb-3">
-          <div className="small text-muted fw-semibold mb-2">
+          <div
+            id="leaderboard-criterion-label"
+            className="small text-muted fw-semibold mb-2"
+          >
             {copy.chooseCriterion}
           </div>
-          <div className="d-flex flex-wrap gap-2">
+          <div
+            className="d-flex flex-wrap gap-2"
+            role="group"
+            aria-labelledby="leaderboard-criterion-label"
+          >
             {criterionOptions.map((opt) => {
               const isSelected = opt.key === activeCriterion;
               return (
                 <button
                   key={opt.key}
                   type="button"
+                  aria-pressed={isSelected && activePersona === 'none'}
                   onClick={() => {
                     setActivePersona('none');
                     handleSelectCriterion(opt.key);
@@ -899,11 +909,16 @@ export default function LeaderboardExplorer({
         {/* 3. Smart Use-Case Persona Recommender & Custom 5-Criteria Weight Sliders (Issue #52) */}
         <div className="border-top mb-3 pt-3">
           <div className="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
-            <div className="small text-muted fw-semibold">
+            <div
+              id="leaderboard-persona-label"
+              className="small text-muted fw-semibold"
+            >
               {copy.personaTitle}
             </div>
             <button
               type="button"
+              aria-expanded={showWeightSliders}
+              aria-controls="leaderboard-weight-sliders"
               onClick={() => setShowWeightSliders((v) => !v)}
               className={`btn btn-sm rounded-pill px-3 py-1 ${
                 showWeightSliders || activePersona === 'custom'
@@ -917,7 +932,11 @@ export default function LeaderboardExplorer({
             </button>
           </div>
 
-          <div className="d-flex flex-wrap gap-2">
+          <div
+            className="d-flex flex-wrap gap-2"
+            role="group"
+            aria-labelledby="leaderboard-persona-label"
+          >
             {(
               [
                 'none',
@@ -933,6 +952,7 @@ export default function LeaderboardExplorer({
                 <button
                   key={presetKey}
                   type="button"
+                  aria-pressed={isSelected}
                   onClick={() => applyPersonaPreset(presetKey)}
                   className={`btn btn-sm rounded-pill px-3 py-1 ${
                     isSelected
@@ -948,7 +968,10 @@ export default function LeaderboardExplorer({
           </div>
 
           {showWeightSliders && (
-            <div className="rounded-3 bg-light mt-2 border p-3">
+            <div
+              id="leaderboard-weight-sliders"
+              className="rounded-3 bg-light mt-2 border p-3"
+            >
               <div className="row g-3">
                 {(
                   [
@@ -1004,7 +1027,11 @@ export default function LeaderboardExplorer({
           </div>
 
           <div className="col-lg-4 col-md-6">
-            <div className="d-flex flex-wrap gap-1">
+            <div
+              className="d-flex flex-wrap gap-1"
+              role="group"
+              aria-label={copy.priceSegmentAria}
+            >
               {(
                 [
                   { id: 'all', label: copy.priceAll },
@@ -1016,6 +1043,7 @@ export default function LeaderboardExplorer({
                 <button
                   key={seg.id}
                   type="button"
+                  aria-pressed={priceSegment === seg.id}
                   onClick={() => setPriceSegment(seg.id)}
                   className={`btn btn-sm rounded-pill px-2 py-1 ${
                     priceSegment === seg.id
