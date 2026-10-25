@@ -12789,6 +12789,70 @@ async function runCoreArchitectureSuite() {
   }
 
   // -------------------------------------------------------------------------
+  // 126g. ListSidebarOne, RangeSlider & LocaleSwitcher Bounds (#1052)
+  // -------------------------------------------------------------------------
+  {
+    const {
+      sanitizeSidebarRating,
+      sanitizeSidebarPositiveInts,
+      sanitizeSidebarBrands,
+      sanitizeSidebarPriceMillion,
+      sanitizeSidebarKeyword,
+    } = await import('../../../app/[locale]/components/list-sidebar-one');
+    const { sanitizeSliderBounds, sanitizeSliderTuple } =
+      await import('../../../app/[locale]/components/range-slider');
+    const { sanitizeSwitcherLocale, sanitizeSwitcherQueryString } =
+      await import('../../../components/elementary/LocaleSwitcher');
+
+    assert.equal(sanitizeSidebarRating('4.5'), 4.5);
+    assert.equal(sanitizeSidebarRating('9.9'), 5);
+    assert.equal(sanitizeSidebarRating('-2'), 0);
+    assert.equal(sanitizeSidebarRating('NaN'), 0);
+    assert.deepEqual(
+      sanitizeSidebarPositiveInts(' 8, 12, 8, -4, Infinity, 999999 ', 1024),
+      [8, 12]
+    );
+    assert.deepEqual(
+      sanitizeSidebarBrands('  Apple\u0000 , Samsung , apple ,   '),
+      ['Apple', 'Samsung']
+    );
+    assert.equal(sanitizeSidebarPriceMillion('15000000', 1, 80, 1), 15);
+    assert.equal(sanitizeSidebarPriceMillion('Infinity', 1, 80, 1), 1);
+    assert.equal(sanitizeSidebarPriceMillion('-5000000', 1, 80, 80), 80);
+    assert.equal(
+      sanitizeSidebarKeyword('  iPhone\r\n16\u0000   Pro  '),
+      'iPhone 16 Pro'
+    );
+
+    assert.deepEqual(sanitizeSliderBounds(5, 60, 2), {
+      min: 5,
+      max: 60,
+      step: 2,
+    });
+    assert.deepEqual(sanitizeSliderBounds(50, 10, -1), {
+      min: 50,
+      max: 150,
+      step: 1,
+    });
+    assert.deepEqual(sanitizeSliderTuple([45, 15], 10, 60), [15, 45]);
+    assert.deepEqual(sanitizeSliderTuple([-10, 999], 10, 60), [10, 60]);
+    assert.deepEqual(sanitizeSliderTuple(null, 10, 60), [10, 60]);
+
+    assert.equal(sanitizeSwitcherLocale('  EN\u0000 '), 'en');
+    assert.equal(sanitizeSwitcherLocale('fr', 'vi'), 'vi');
+    assert.equal(sanitizeSwitcherLocale(null, 'cs'), 'cs');
+    assert.equal(
+      sanitizeSwitcherQueryString('?brand=Apple\u0000&sort=price_asc'),
+      'brand=Apple&sort=price_asc'
+    );
+    assert.equal(sanitizeSwitcherQueryString('   '), '');
+
+    console.log(
+      '  ✅ [126g/134] ListSidebarOne, RangeSlider & LocaleSwitcher Bounds (#1052) passed'
+    );
+  }
+
+  // -------------------------------------------------------------------------
   // 127. Rate Server Index & Extension Entity, Slug, and Category Bounds (#1029)
   // -------------------------------------------------------------------------
   {
