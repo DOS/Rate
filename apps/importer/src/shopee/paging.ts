@@ -143,8 +143,8 @@ export function resolveBackfillSupabaseTarget(rawUrl: string | undefined | null)
   if (parsed.username || parsed.password) {
     throw new Error('SUPABASE_URL must not contain embedded credentials.');
   }
-  if (!parsed.hostname) {
-    throw new Error('SUPABASE_URL is missing hostname.');
+  if (!parsed.hostname || parsed.hostname.startsWith('.') || parsed.hostname.endsWith('.')) {
+    throw new Error('SUPABASE_URL is missing or has an invalid hostname.');
   }
   return {
     url: parsed.origin,

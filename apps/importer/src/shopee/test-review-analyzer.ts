@@ -2693,6 +2693,58 @@ async function run() {
   assert.equal(normalizedPrices961.models.length, 1);
   assert.equal(normalizedPrices961.reviews.length, 1);
   assert.equal(normalizedPrices961.reviews[0]?.reviewer, undefined);
+
+  // DOS/Rate#964: ProductNormalizer port guard, resolveBackfillSupabaseTarget dot hostname guard, resolveClusterPeerFloorPrice & merchant-review-risk array guards
+  const { ProductNormalizer: ProductNormalizer964 } = await import('./product-normalizer.js');
+  const { resolveBackfillSupabaseTarget } = await import('./paging.js');
+  const { mapStoredReview, strongestPriceAnomaly } = await import('./merchant-review-risk.js');
+
+  const normalizer964 = new ProductNormalizer964();
+  const normProd964 = normalizer964.normalize({
+    itemId: '964',
+    shopId: '1',
+    title: 'iPhone 16 Pro Max 256GB',
+    priceMin: 28_990_000,
+    priceMax: 28_990_000,
+    currency: 'VND',
+    historicalSold: 1,
+    ratingStar: 5,
+    ratingCount: 1,
+    images: ['https://cdn.example.com:8443/img.jpg', 'https://cdn.example.com/valid.jpg'],
+    models: [],
+    attributes: [],
+    shop: { shopId: '1', name: 'Shop', isMall: true },
+    reviews: [],
+    url: 'https://shopee.vn/product-i.1.964',
+  });
+  assert.deepEqual(
+    normProd964.images,
+    ['https://cdn.example.com/valid.jpg'],
+    'ProductNormalizer must reject image URLs with non-standard ports'
+  );
+  assert.throws(
+    () => resolveBackfillSupabaseTarget('https://example.supabase.co./'),
+    /invalid hostname/,
+    'resolveBackfillSupabaseTarget must reject trailing-dot hostnames'
+  );
+  const peerFloor964 = resolveClusterPeerFloorPrice(
+    [
+      ['invalid-array-peer'] as never,
+      {
+        id: 'peer-1',
+        price_current: 25_000_000,
+        merchants: [null as never, { is_official: true }],
+      },
+    ],
+    'self-id'
+  );
+  assert.equal(peerFloor964, 25_000_000);
+  assert.equal(mapStoredReview([] as never), null, 'mapStoredReview must reject array inputs');
+  assert.equal(
+    strongestPriceAnomaly([] as never, [], new Map(), new Map(), new Map()),
+    null,
+    'strongestPriceAnomaly must reject array merchant input'
+  );
   assert.equal(normalizedPrices961.shop.url, undefined);
 
   console.log(
