@@ -13,6 +13,10 @@ const PHONE_PAGES = [
   // (DOS/Rate#1082).
   '/en/smartphones',
   '/cs/smartphones',
+  // Czech copy is the longest; the merchant rating line did not wrap
+  // (DOS/Rate#1084).
+  '/cs/leaderboard',
+  '/cs/merchants/excluded-review-store',
 ];
 
 for (const path of PHONE_PAGES) {
