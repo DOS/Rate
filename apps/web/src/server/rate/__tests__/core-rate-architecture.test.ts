@@ -10496,7 +10496,87 @@ async function runCoreArchitectureSuite() {
     );
 
     console.log(
-      '  ✅ [114/114] rate-api Filter Sanitization, Batch Offer IDs & Compare Slug Guards (#944) passed'
+      '  ✅ [114/115] rate-api Filter Sanitization, Batch Offer IDs & Compare Slug Guards (#944) passed'
+    );
+  }
+
+  // 115. getMerchantsList, getMerchantProfileById, and inspectProductOrShopUrl Bounds (#946)
+  {
+    const rateApiMod = await import('../../../lib/rate-api');
+
+    const emptyByIds = await rateApiMod.getMerchantsList({
+      ids: ['   \u0000  ', null as unknown as string],
+    });
+    assert.deepEqual(
+      emptyByIds,
+      [],
+      'getMerchantsList must return [] without querying DB when all ids sanitize to empty'
+    );
+
+    const emptyByShopIds = await rateApiMod.getMerchantsList({
+      platformShopIds: ['   \u0007  ', undefined as unknown as string],
+    });
+    assert.deepEqual(
+      emptyByShopIds,
+      [],
+      'getMerchantsList must return [] without querying DB when all platformShopIds sanitize to empty'
+    );
+
+    const nullProfile = await rateApiMod.getMerchantProfileById(
+      null as unknown as string
+    );
+    assert.equal(
+      nullProfile,
+      null,
+      'getMerchantProfileById must return null for non-string input'
+    );
+    const ctrlProfile =
+      await rateApiMod.getMerchantProfileById('   \u0000\u0007   ');
+    assert.equal(
+      ctrlProfile,
+      null,
+      'getMerchantProfileById must return null for control-char-only input'
+    );
+
+    const nonStringInspect = await rateApiMod.inspectProductOrShopUrl(
+      null as unknown as string
+    );
+    assert.equal(
+      nonStringInspect.matchedType,
+      'not_found',
+      'inspectProductOrShopUrl must safely return not_found for non-string input'
+    );
+    assert.equal(nonStringInspect.query, '');
+
+    const ctrlInspect =
+      await rateApiMod.inspectProductOrShopUrl('   \u0000\u001f   ');
+    assert.equal(
+      ctrlInspect.matchedType,
+      'not_found',
+      'inspectProductOrShopUrl must safely return not_found for control-char-only input'
+    );
+
+    const rateApiSrc = fs.readFileSync(
+      path.join(webSrcRoot, 'lib/rate-api.ts'),
+      'utf8'
+    );
+    assert.equal(
+      rateApiSrc.includes(
+        'const baseRisk = toSafeRiskScore100(m.risk_score, 0);'
+      ),
+      true,
+      'getMerchantsList must clamp m.risk_score via toSafeRiskScore100'
+    );
+    assert.equal(
+      rateApiSrc.includes(
+        'const baseRisk = toSafeRiskScore100(merchantRow.risk_score, 0);'
+      ),
+      true,
+      'getMerchantProfileById must clamp merchantRow.risk_score via toSafeRiskScore100'
+    );
+
+    console.log(
+      '  ✅ [115/115] getMerchantsList, getMerchantProfileById & inspectProductOrShopUrl Bounds (#946) passed'
     );
   }
 

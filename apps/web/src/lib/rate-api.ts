@@ -2390,6 +2390,63 @@ export async function getMerchantsList(
 ): Promise<MerchantSummary[]> {
   const supabase = getRateClient();
 
+  const sanitizedIds = Array.isArray(params?.ids)
+    ? Array.from(
+        new Set(
+          params.ids
+            .map((id) =>
+              typeof id === 'string'
+                ? id
+                    .replace(/\p{Cc}+/gu, '')
+                    .trim()
+                    .slice(0, 128)
+                : ''
+            )
+            .filter(Boolean)
+        )
+      )
+    : undefined;
+  const sanitizedPlatformShopIds = Array.isArray(params?.platformShopIds)
+    ? Array.from(
+        new Set(
+          params.platformShopIds
+            .map((id) =>
+              typeof id === 'string'
+                ? id
+                    .replace(/\p{Cc}+/gu, '')
+                    .trim()
+                    .slice(0, 128)
+                : ''
+            )
+            .filter(Boolean)
+        )
+      )
+    : undefined;
+  if (
+    (sanitizedIds !== undefined && sanitizedIds.length === 0) ||
+    (sanitizedPlatformShopIds !== undefined &&
+      sanitizedPlatformShopIds.length === 0)
+  ) {
+    return [];
+  }
+  const cleanPlatform =
+    typeof params?.platform === 'string'
+      ? params.platform
+          .replace(/\p{Cc}+/gu, '')
+          .trim()
+          .toLowerCase()
+          .slice(0, 64)
+      : '';
+  const cleanNameContains =
+    typeof params?.nameContains === 'string'
+      ? params.nameContains
+          .replace(/\p{Cc}+/gu, '')
+          .trim()
+          .slice(0, 200)
+          .replace(/[\\%_]/g, (c) => `\\${c}`)
+          .replace(/\*/g, '')
+      : '';
+
   const merchantsQuery = () => {
     let q = supabase
       .from('merchants')
@@ -2400,29 +2457,21 @@ export async function getMerchantsList(
       .order('follower_count', { ascending: false })
       // Tiebreak so pages never overlap or skip rows.
       .order('id');
-    if (params?.platform && params.platform !== 'all') {
-      q = q.eq('platform', params.platform.toLowerCase());
+    if (cleanPlatform && cleanPlatform !== 'all') {
+      q = q.eq('platform', cleanPlatform);
     }
     if (params?.officialOnly) {
       q = q.eq('is_official', true);
     }
-    if (params?.ids) q = q.in('id', [...params.ids]);
-    if (params?.platformShopIds) {
-      q = q.in('platform_shop_id', [...params.platformShopIds]);
+    if (sanitizedIds) q = q.in('id', sanitizedIds);
+    if (sanitizedPlatformShopIds) {
+      q = q.in('platform_shop_id', sanitizedPlatformShopIds);
     }
-    if (params?.nameContains) {
-      // A literal substring: escape LIKE's own wildcards, and drop '*' which
-      // PostgREST also turns into '%'.
-      const literal = params.nameContains
-        .replace(/[\\%_]/g, (c) => `\\${c}`)
-        .replace(/\*/g, '');
-      q = q.ilike('name', `%${literal}%`);
+    if (cleanNameContains) {
+      q = q.ilike('name', `%${cleanNameContains}%`);
     }
     return q;
   };
-  if (params?.ids?.length === 0 || params?.platformShopIds?.length === 0) {
-    return [];
-  }
   const hasPostQueryFilterOrSort = Boolean(
     (params?.q && params.q.trim()) ||
     (typeof params?.minTrust === 'number' && !Number.isNaN(params.minTrust)) ||
@@ -2588,12 +2637,16 @@ export async function getMerchantsList(
             followerCount: Number(m.follower_count) || 0,
           });
     const meta = (
-      m.metadata && typeof m.metadata === 'object' ? m.metadata : {}
+      m.metadata && typeof m.metadata === 'object' && !Array.isArray(m.metadata)
+        ? m.metadata
+        : {}
     ) as Record<string, unknown>;
+    const baseRisk = toSafeRiskScore100(m.risk_score, 0);
     const dosafeRisk =
-      typeof meta.dosafe_risk_score === 'number'
-        ? meta.dosafe_risk_score
-        : Number(m.risk_score || 0);
+      typeof meta.dosafe_risk_score === 'number' &&
+      Number.isFinite(meta.dosafe_risk_score)
+        ? toSafeRiskScore100(meta.dosafe_risk_score, 0)
+        : baseRisk;
     const persistedReviewRisk = persistedReviewRiskOf(m);
     const effectiveReviewRisk = Math.max(
       dynamicRisk?.reviewRiskScore ?? 0,
@@ -2609,17 +2662,13 @@ export async function getMerchantsList(
         suspicious_ratio_pct: 0,
       };
     const metaCombined =
-      typeof meta.combined_risk_score === 'number'
-        ? meta.combined_risk_score
+      typeof meta.combined_risk_score === 'number' &&
+      Number.isFinite(meta.combined_risk_score)
+        ? toSafeRiskScore100(meta.combined_risk_score, 0)
         : 0;
     const combinedRisk = Math.min(
       100,
-      Math.max(
-        Number(m.risk_score || 0),
-        dosafeRisk,
-        effectiveReviewRisk,
-        metaCombined
-      )
+      Math.max(baseRisk, dosafeRisk, effectiveReviewRisk, metaCombined)
     );
     const trustScore = Math.max(0, 100 - combinedRisk);
 
@@ -2635,8 +2684,9 @@ export async function getMerchantsList(
           ? `https://shopee.vn/shop/${m.platform_shop_id}`
           : null),
       is_official: Boolean(m.is_official),
-      rating_star: m.rating_star != null ? Number(m.rating_star) : null,
-      follower_count: Number(m.follower_count || 0),
+      rating_star:
+        m.rating_star != null ? toSafeStarRating5(m.rating_star) : null,
+      follower_count: toSafeNonNegativeVoteCount(m.follower_count, 100_000_000),
       location: m.location || null,
       dosafe_risk_score: dosafeRisk,
       review_risk_score: effectiveReviewRisk,
@@ -2711,7 +2761,11 @@ async function readInChunks(
 export async function getMerchantProfileById(
   idOrSlug: string
 ): Promise<MerchantProfileDetail | null> {
-  const cleaned = idOrSlug.trim();
+  if (typeof idOrSlug !== 'string') return null;
+  const cleaned = idOrSlug
+    .replace(/\p{Cc}+/gu, '')
+    .trim()
+    .slice(0, 128);
   if (!cleaned) return null;
 
   const supabase = getRateClient();
@@ -2879,7 +2933,7 @@ export async function getMerchantProfileById(
     const masterInfo = p.cluster_id
       ? masterById.get(p.cluster_id) || null
       : null;
-    const priceCurrent = Number(p.price_current || 0);
+    const priceCurrent = toSafeOfferPrice(p.price_current);
     return {
       id: p.id,
       platform: p.platform,
@@ -2890,15 +2944,18 @@ export async function getMerchantProfileById(
         priceCurrent,
         p.price_original
       ),
-      stock: Number(p.stock || 0),
-      historical_sold: Number(p.historical_sold || 0),
+      stock: toSafeNonNegativeVoteCount(p.stock, 10_000_000),
+      historical_sold: toSafeNonNegativeVoteCount(
+        p.historical_sold,
+        100_000_000
+      ),
       historical_sold_display:
         typeof p.historical_sold_display === 'string' &&
         p.historical_sold_display.trim()
           ? p.historical_sold_display.trim()
           : null,
-      rating_star: Number(p.rating_star || 0),
-      rating_count: Number(p.rating_count || 0),
+      rating_star: toSafeStarRating5(p.rating_star),
+      rating_count: toSafeNonNegativeVoteCount(p.rating_count, 100_000_000),
       url: p.url,
       image: firstImageUrl(p.images),
       master_product: masterInfo,
@@ -2979,14 +3036,18 @@ export async function getMerchantProfileById(
     followerCount: Number(merchantRow.follower_count) || 0,
   });
   const meta = (
-    merchantRow.metadata && typeof merchantRow.metadata === 'object'
+    merchantRow.metadata &&
+    typeof merchantRow.metadata === 'object' &&
+    !Array.isArray(merchantRow.metadata)
       ? merchantRow.metadata
       : {}
   ) as Record<string, unknown>;
+  const baseRisk = toSafeRiskScore100(merchantRow.risk_score, 0);
   const dosafeRisk =
-    typeof meta.dosafe_risk_score === 'number'
-      ? meta.dosafe_risk_score
-      : Number(merchantRow.risk_score || 0);
+    typeof meta.dosafe_risk_score === 'number' &&
+    Number.isFinite(meta.dosafe_risk_score)
+      ? toSafeRiskScore100(meta.dosafe_risk_score, 0)
+      : baseRisk;
   const persistedReviewRisk = persistedReviewRiskOf(merchantRow);
   // A persisted importer score covers all of the seller's reviews; the dynamic
   // one only the newest page. Use the persisted score when there is one, as
@@ -2997,15 +3058,13 @@ export async function getMerchantProfileById(
       : Math.max(dynamicRisk.reviewRiskScore, persistedReviewRisk);
   const breakdown = persistedBreakdown ?? dynamicRisk.breakdown;
   const metaCombined =
-    typeof meta.combined_risk_score === 'number' ? meta.combined_risk_score : 0;
+    typeof meta.combined_risk_score === 'number' &&
+    Number.isFinite(meta.combined_risk_score)
+      ? toSafeRiskScore100(meta.combined_risk_score, 0)
+      : 0;
   const combinedRisk = Math.min(
     100,
-    Math.max(
-      Number(merchantRow.risk_score || 0),
-      dosafeRisk,
-      effectiveReviewRisk,
-      metaCombined
-    )
+    Math.max(baseRisk, dosafeRisk, effectiveReviewRisk, metaCombined)
   );
   const trustScore = Math.max(0, 100 - combinedRisk);
   const prices = listings
@@ -3025,8 +3084,13 @@ export async function getMerchantProfileById(
         : null),
     is_official: Boolean(merchantRow.is_official),
     rating_star:
-      merchantRow.rating_star != null ? Number(merchantRow.rating_star) : null,
-    follower_count: Number(merchantRow.follower_count || 0),
+      merchantRow.rating_star != null
+        ? toSafeStarRating5(merchantRow.rating_star)
+        : null,
+    follower_count: toSafeNonNegativeVoteCount(
+      merchantRow.follower_count,
+      100_000_000
+    ),
     location: merchantRow.location || null,
     dosafe_risk_score: dosafeRisk,
     review_risk_score: effectiveReviewRisk,
@@ -3353,7 +3417,13 @@ const PLATFORM_ITEM_ID_PREFIX: Partial<
 export async function inspectProductOrShopUrl(
   rawQuery: string
 ): Promise<UrlInspectionResult> {
-  const query = rawQuery.trim();
+  const query =
+    typeof rawQuery === 'string'
+      ? rawQuery
+          .replace(/\p{Cc}+/gu, '')
+          .trim()
+          .slice(0, 2048)
+      : '';
   const parsedUrl = parseEcommerceUrlOrQuery(query);
 
   if (!query) {
