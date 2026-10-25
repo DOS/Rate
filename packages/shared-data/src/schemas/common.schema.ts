@@ -14,11 +14,23 @@ export const HttpUrlSchema = z
       if (/\p{Cc}/u.test(val) || /\s/.test(val)) return false;
       try {
         const parsed = new URL(val);
+        const bareHost = parsed.hostname.toLowerCase().replace(/^\[|\]$/g, '');
+        const isLoopback =
+          bareHost === 'localhost' ||
+          bareHost === '127.0.0.1' ||
+          bareHost === '::1';
         return (
           (parsed.protocol === 'http:' || parsed.protocol === 'https:') &&
           parsed.username === '' &&
           parsed.password === '' &&
-          Boolean(parsed.hostname)
+          Boolean(parsed.hostname) &&
+          !parsed.hostname.startsWith('.') &&
+          !parsed.hostname.endsWith('.') &&
+          !parsed.hostname.includes('..') &&
+          (isLoopback ||
+            parsed.port === '' ||
+            parsed.port === '80' ||
+            parsed.port === '443')
         );
       } catch {
         return false;
