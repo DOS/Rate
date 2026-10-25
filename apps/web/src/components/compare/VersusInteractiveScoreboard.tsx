@@ -75,6 +75,36 @@ export const PERSONA_WEIGHTS: Record<
   },
 };
 
+export function sanitizeVersusScore5(value: unknown): number {
+  const num = typeof value === 'number' ? value : Number(value);
+  if (!Number.isFinite(num) || num <= 0) return 0;
+  return Number(Math.min(5, num).toFixed(2));
+}
+
+export function sanitizeVersusExportSlug(value: unknown): string {
+  if (typeof value !== 'string') return 'device';
+  const cleaned = value
+    .replace(/\p{Cc}+/gu, '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9-]+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '')
+    .slice(0, 120);
+  return cleaned || 'device';
+}
+
+export function sanitizeVersusMarkdownCell(value: unknown): string {
+  if (typeof value !== 'string') return '-';
+  const cleaned = value
+    .replace(/\p{Cc}+/gu, ' ')
+    .replace(/\|/g, '-')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 180);
+  return cleaned || '-';
+}
+
 export function computeVersusWeightedResult(
   scoreA: ScoredVersusItem,
   scoreB: ScoredVersusItem,
@@ -91,20 +121,25 @@ export function computeVersusWeightedResult(
   const rawSumW = wScreen + wPerf + wCam + wBat + wVal;
 
   const calcWeighted = (item: ScoredVersusItem): number => {
+    const baseScore5 = sanitizeVersusScore5(item.combinedScore5);
     if (persona === 'default') {
-      return item.combinedScore5;
+      return baseScore5;
     }
-    const c = item.criteria;
+    const cScreen = sanitizeVersusScore5(item.criteria?.screen);
+    const cPerf = sanitizeVersusScore5(item.criteria?.performance);
+    const cCam = sanitizeVersusScore5(item.criteria?.camera);
+    const cBat = sanitizeVersusScore5(item.criteria?.battery);
+    const cVal = sanitizeVersusScore5(item.criteria?.value);
     const wAvg =
       rawSumW > 0
-        ? (c.screen * wScreen +
-            c.performance * wPerf +
-            c.camera * wCam +
-            c.battery * wBat +
-            c.value * wVal) /
+        ? (cScreen * wScreen +
+            cPerf * wPerf +
+            cCam * wCam +
+            cBat * wBat +
+            cVal * wVal) /
           rawSumW
-        : (c.screen + c.performance + c.camera + c.battery + c.value) / 5;
-    return Number((item.combinedScore5 * 0.35 + wAvg * 0.65).toFixed(2));
+        : (cScreen + cPerf + cCam + cBat + cVal) / 5;
+    return sanitizeVersusScore5(baseScore5 * 0.35 + wAvg * 0.65);
   };
 
   const finalA = calcWeighted(scoreA);
@@ -177,32 +212,32 @@ export default function VersusInteractiveScoreboard({
     {
       key: 'screen' as const,
       label: t('criteriaScreen'),
-      aVal: scoreA.criteria.screen,
-      bVal: scoreB.criteria.screen,
+      aVal: sanitizeVersusScore5(scoreA.criteria?.screen),
+      bVal: sanitizeVersusScore5(scoreB.criteria?.screen),
     },
     {
       key: 'performance' as const,
       label: t('criteriaPerformance'),
-      aVal: scoreA.criteria.performance,
-      bVal: scoreB.criteria.performance,
+      aVal: sanitizeVersusScore5(scoreA.criteria?.performance),
+      bVal: sanitizeVersusScore5(scoreB.criteria?.performance),
     },
     {
       key: 'camera' as const,
       label: t('criteriaCamera'),
-      aVal: scoreA.criteria.camera,
-      bVal: scoreB.criteria.camera,
+      aVal: sanitizeVersusScore5(scoreA.criteria?.camera),
+      bVal: sanitizeVersusScore5(scoreB.criteria?.camera),
     },
     {
       key: 'battery' as const,
       label: t('criteriaBattery'),
-      aVal: scoreA.criteria.battery,
-      bVal: scoreB.criteria.battery,
+      aVal: sanitizeVersusScore5(scoreA.criteria?.battery),
+      bVal: sanitizeVersusScore5(scoreB.criteria?.battery),
     },
     {
       key: 'value' as const,
       label: t('criteriaValue'),
-      aVal: scoreA.criteria.value,
-      bVal: scoreB.criteria.value,
+      aVal: sanitizeVersusScore5(scoreA.criteria?.value),
+      bVal: sanitizeVersusScore5(scoreB.criteria?.value),
     },
   ];
 
@@ -211,29 +246,35 @@ export default function VersusInteractiveScoreboard({
     try {
       const sigA = getRadarSignal(radarIndex, scoreA.slug);
       const sigB = getRadarSignal(radarIndex, scoreB.slug);
+      const safeNameA = sanitizeVersusMarkdownCell(scoreA.name);
+      const safeNameB = sanitizeVersusMarkdownCell(scoreB.name);
+      const safeWinnerName = sanitizeVersusMarkdownCell(
+        weightedResult.winner.name
+      );
+      const safePriceAdv = sanitizeVersusMarkdownCell(priceAdvantageLabel);
       const leadScore =
         weightedResult.finalA >= weightedResult.finalB
           ? weightedResult.finalA.toFixed(2)
           : weightedResult.finalB.toFixed(2);
       const lines = [
-        `### ${t('md1v1Heading', { nameA: scoreA.name, nameB: scoreB.name })}`,
-        `- **${t('mdLeadingDevice')}:** **${weightedResult.winner.name}** (${leadScore}/5.0 - ${t('mdScoreDelta', { delta: weightedResult.delta })})`,
+        `### ${t('md1v1Heading', { nameA: safeNameA, nameB: safeNameB })}`,
+        `- **${t('mdLeadingDevice')}:** **${safeWinnerName}** (${leadScore}/5.0 - ${t('mdScoreDelta', { delta: weightedResult.delta })})`,
         `- **${t('mdAuditUrl')}:** ${window.location.href}`,
         '',
-        `| ${t('mdColCriterion')} | ${scoreA.name} | ${scoreB.name} | ${t('mdColAdvantage')} |`,
+        `| ${t('mdColCriterion')} | ${safeNameA} | ${safeNameB} | ${t('mdColAdvantage')} |`,
         `| --- | --- | --- | --- |`,
-        `| **${t('mdRowWeightedScore')}** | **${weightedResult.finalA.toFixed(2)}/5.0** | **${weightedResult.finalB.toFixed(2)}/5.0** | **${weightedResult.winner.name}** |`,
+        `| **${t('mdRowWeightedScore')}** | **${weightedResult.finalA.toFixed(2)}/5.0** | **${weightedResult.finalB.toFixed(2)}/5.0** | **${safeWinnerName}** |`,
         ...criteriaRows.map((r) => {
           const winName =
             r.aVal > r.bVal
-              ? scoreA.name
+              ? safeNameA
               : r.bVal > r.aVal
-                ? scoreB.name
-                : t('mdRowTie');
-          return `| ${r.label} | ${r.aVal.toFixed(2)}/5.0 | ${r.bVal.toFixed(2)}/5.0 | ${winName} |`;
+                ? safeNameB
+                : sanitizeVersusMarkdownCell(t('mdRowTie'));
+          return `| ${sanitizeVersusMarkdownCell(r.label)} | ${r.aVal.toFixed(2)}/5.0 | ${r.bVal.toFixed(2)}/5.0 | ${winName} |`;
         }),
-        `| **${t('mdRowMinPrice')}** | ${scoreA.minPrice > 0 ? `${scoreA.minPrice.toLocaleString('vi-VN')} ₫` : '-'} | ${scoreB.minPrice > 0 ? `${scoreB.minPrice.toLocaleString('vi-VN')} ₫` : '-'} | ${priceAdvantageLabel} |`,
-        `| **${t('mdRowDealRadar')}** | ${radarMarkdownCell(sigA, locale)} | ${radarMarkdownCell(sigB, locale)} | ${sigA.verdict === 'genuine_deal' ? scoreA.name : sigB.verdict === 'genuine_deal' ? scoreB.name : '-'} |`,
+        `| **${t('mdRowMinPrice')}** | ${scoreA.minPrice > 0 ? `${scoreA.minPrice.toLocaleString('vi-VN')} ₫` : '-'} | ${scoreB.minPrice > 0 ? `${scoreB.minPrice.toLocaleString('vi-VN')} ₫` : '-'} | ${safePriceAdv} |`,
+        `| **${t('mdRowDealRadar')}** | ${radarMarkdownCell(sigA, locale)} | ${radarMarkdownCell(sigB, locale)} | ${sigA.verdict === 'genuine_deal' ? safeNameA : sigB.verdict === 'genuine_deal' ? safeNameB : '-'} |`,
       ];
       await navigator.clipboard.writeText(lines.join('\n'));
       setCopiedVerdict(true);
@@ -326,7 +367,7 @@ export default function VersusInteractiveScoreboard({
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `rate-1v1-${scoreA.slug}-vs-${scoreB.slug}.csv`;
+    a.download = `rate-1v1-${sanitizeVersusExportSlug(scoreA.slug)}-vs-${sanitizeVersusExportSlug(scoreB.slug)}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -335,19 +376,21 @@ export default function VersusInteractiveScoreboard({
     if (typeof window === 'undefined') return;
     const sigA = getRadarSignal(radarIndex, scoreA.slug);
     const sigB = getRadarSignal(radarIndex, scoreB.slug);
+    const safeSlugA = sanitizeVersusExportSlug(scoreA.slug);
+    const safeSlugB = sanitizeVersusExportSlug(scoreB.slug);
     const payload = {
       source: 'Rate.vn 1v1 Versus Scoreboard',
-      versusSlug: `${scoreA.slug}-vs-${scoreB.slug}`,
+      versusSlug: `${safeSlugA}-vs-${safeSlugB}`,
       persona,
       weights,
       exportedAt: new Date().toISOString(),
       winner: {
-        slug: weightedResult.winner.slug,
+        slug: sanitizeVersusExportSlug(weightedResult.winner.slug),
         name: weightedResult.winner.name,
         scoreDelta5: Number(weightedResult.delta),
       },
       productA: {
-        slug: scoreA.slug,
+        slug: safeSlugA,
         name: scoreA.name,
         brand: scoreA.brand,
         weightedScore5: weightedResult.finalA,
@@ -356,7 +399,7 @@ export default function VersusInteractiveScoreboard({
         dealRadar: radarExportFields(sigA),
       },
       productB: {
-        slug: scoreB.slug,
+        slug: safeSlugB,
         name: scoreB.name,
         brand: scoreB.brand,
         weightedScore5: weightedResult.finalB,
@@ -378,7 +421,7 @@ export default function VersusInteractiveScoreboard({
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `rate-1v1-${scoreA.slug}-vs-${scoreB.slug}.json`;
+    a.download = `rate-1v1-${safeSlugA}-vs-${safeSlugB}.json`;
     a.click();
     URL.revokeObjectURL(url);
   };
