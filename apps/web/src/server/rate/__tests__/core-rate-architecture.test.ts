@@ -12107,7 +12107,128 @@ async function runCoreArchitectureSuite() {
     assert.equal(sanitizeRadarMinSpreadPct(15, 10), 15);
 
     console.log(
-      '  ✅ [123/123] Merchant Audit, Deep Inspect Exports & Radar Badge Bounds (#1020) passed'
+      '  ✅ [123/124] Merchant Audit, Deep Inspect Exports & Radar Badge Bounds (#1020) passed'
+    );
+  }
+
+  // -------------------------------------------------------------------------
+  // 124. ProductSpecsExportToolbar, CategoryCatalogToolbar & VersusMatchupSwitcher Bounds (#1026)
+  // -------------------------------------------------------------------------
+  {
+    const {
+      sanitizeSpecExportText,
+      formatPositiveSpecMetric,
+      sanitizeSpecDownloadSlug,
+      buildProductSpecExportRows,
+    } =
+      await import('../../../components/leaderboard/ProductSpecsExportToolbar');
+    const {
+      sanitizeCatalogToolbarText,
+      sanitizeCatalogPriceVnd,
+      sanitizeCatalogCount,
+      sanitizeCatalogDownloadSlug,
+    } = await import('../../../components/leaderboard/CategoryCatalogToolbar');
+    const nodeModule = await import('node:module');
+    const extMap = (
+      nodeModule.default as unknown as {
+        _extensions?: Record<string, (mod: { exports: unknown }) => void>;
+      }
+    )._extensions;
+    if (extMap && !extMap['.css']) {
+      extMap['.css'] = (mod) => {
+        mod.exports = { bar: 'bar' };
+      };
+    }
+    const { leavesCurrentPage } =
+      await import('../../../components/elementary/NavigationProgress');
+    const { formatVersusPeerPriceBadge, resolveEffectivePeerSlugs } =
+      await import('../../../components/compare/VersusMatchupSwitcher');
+
+    assert.equal(
+      leavesCurrentPage('/compare/a-vs-b', 'https://rate.vn/smartphones'),
+      true
+    );
+    assert.equal(
+      leavesCurrentPage('#specs', 'https://rate.vn/smartphones'),
+      false
+    );
+    assert.equal(
+      leavesCurrentPage('http://[::1', 'https://rate.vn/smartphones'),
+      false
+    );
+    assert.equal(
+      leavesCurrentPage(
+        'https://shopee.vn/item',
+        'https://rate.vn/smartphones'
+      ),
+      false
+    );
+
+    assert.equal(
+      sanitizeSpecExportText('  LTPO\r\nOLED\u0000 120Hz  ', '-'),
+      'LTPO OLED 120Hz'
+    );
+    assert.equal(sanitizeSpecExportText('   ', '-'), '-');
+    assert.equal(formatPositiveSpecMetric(6.86, '"', 100), '6.86"');
+    assert.equal(formatPositiveSpecMetric(-120, 'Hz', 1000), null);
+    assert.equal(formatPositiveSpecMetric(9999, 'Hz', 1000), null);
+    assert.equal(formatPositiveSpecMetric(Number.NaN, 'g', 50_000), null);
+    assert.equal(
+      sanitizeSpecDownloadSlug('iPhone 16 Pro / 256GB!'),
+      'iphone-16-pro-256gb'
+    );
+
+    const specRows = buildProductSpecExportRows(
+      {
+        display: {
+          size_inch: 6.7,
+          type: 'Super Retina\nXDR',
+          refresh_rate_hz: -120,
+        },
+        battery: {
+          capacity_mah: 5000,
+          fast_charging_w: 45,
+        },
+      } as never,
+      { chip: 'Apple A18 Pro' }
+    );
+    assert.equal(specRows.length, 13);
+    assert.equal(specRows[0]?.[2], '6.7" | Super Retina XDR');
+    assert.equal(specRows[2]?.[2], 'Apple A18 Pro');
+    assert.equal(specRows[6]?.[2], '5000 mAh | 45W');
+
+    assert.equal(
+      sanitizeCatalogToolbarText('  Galaxy\nS24 | Ultra  ', 'Unknown'),
+      'Galaxy S24 - Ultra'
+    );
+    assert.equal(sanitizeCatalogPriceVnd(19_990_000.6), 19_990_001);
+    assert.equal(sanitizeCatalogPriceVnd(-500_000), 0);
+    assert.equal(sanitizeCatalogPriceVnd(9_000_000_000), 0);
+    assert.equal(sanitizeCatalogCount(145.2), 145);
+    assert.equal(sanitizeCatalogCount(-10), 0);
+    assert.equal(
+      sanitizeCatalogDownloadSlug('Smartphones & Tablets!'),
+      'smartphones-tablets'
+    );
+
+    assert.equal(formatVersusPeerPriceBadge(28_990_000), '29M');
+    assert.equal(formatVersusPeerPriceBadge(450_000), '450K');
+    assert.equal(formatVersusPeerPriceBadge(0), 'N/A');
+    assert.equal(formatVersusPeerPriceBadge(-1_000_000), 'N/A');
+    assert.equal(formatVersusPeerPriceBadge(9_000_000_000), 'N/A');
+
+    const resolvedSlugs = resolveEffectivePeerSlugs(
+      [{ slug: 'iphone-16' } as never, { slug: 'galaxy-s24' } as never],
+      'invalid-slug',
+      'iphone-16'
+    );
+    assert.deepEqual(resolvedSlugs, {
+      effectiveSlugA: 'iphone-16',
+      effectiveSlugB: 'galaxy-s24',
+    });
+
+    console.log(
+      '  ✅ [124/124] ProductSpecsExportToolbar, CategoryCatalogToolbar & VersusMatchupSwitcher Bounds (#1026) passed'
     );
   }
 

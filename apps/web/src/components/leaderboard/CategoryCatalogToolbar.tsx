@@ -7,6 +7,7 @@ import { Link } from '@/lib/navigation';
 import { useDetailsDismiss } from '@/components/elementary/use-details-dismiss';
 import { escapeCsvCell } from '@/lib/csv-safe';
 import {
+  MAX_VALID_VND_PRICE,
   resolveCompareEffectiveUserRating,
   resolveCompareExpertRating10,
   type MasterProduct,
@@ -20,6 +21,52 @@ import {
   type CrossPlatformDealRadarResponse,
 } from '@/lib/deal-radar';
 import { useDealRadarIndex } from '@/components/radar/use-deal-radar';
+
+const CATALOG_CONTROL_CHARS_RE = /\p{Cc}+/gu;
+
+export function sanitizeCatalogToolbarText(
+  value: unknown,
+  fallback = '',
+  maxLen = 160
+): string {
+  if (typeof value !== 'string') return fallback;
+  const cleaned = value
+    .replace(CATALOG_CONTROL_CHARS_RE, ' ')
+    .replace(/\|/g, '-')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (!cleaned) return fallback;
+  return cleaned.length > maxLen ? cleaned.slice(0, maxLen) : cleaned;
+}
+
+export function sanitizeCatalogPriceVnd(value: unknown): number {
+  const num = Number(value);
+  if (!Number.isFinite(num) || num <= 0 || num > MAX_VALID_VND_PRICE) {
+    return 0;
+  }
+  return Math.round(num);
+}
+
+export function sanitizeCatalogCount(value: unknown): number {
+  const num = Number(value);
+  if (!Number.isFinite(num) || num <= 0) return 0;
+  return Math.min(10_000_000, Math.round(num));
+}
+
+export function sanitizeCatalogDownloadSlug(
+  value: unknown,
+  fallback = 'catalog'
+): string {
+  if (typeof value !== 'string') return fallback;
+  const slug = value
+    .replace(CATALOG_CONTROL_CHARS_RE, '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9._-]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 80);
+  return slug || fallback;
+}
 
 interface CategoryCatalogToolbarProps {
   readonly categorySlug: string;
@@ -42,6 +89,16 @@ export default function CategoryCatalogToolbar({
 
   const radarIndex = useDealRadarIndex(dealRadar);
   const radarFor = (slug: string) => getRadarSignal(radarIndex, slug);
+
+  const safeCategorySlug = sanitizeCatalogDownloadSlug(
+    categorySlug,
+    'smartphones'
+  );
+  const safeCategoryTitle = sanitizeCatalogToolbarText(
+    categoryTitle,
+    safeCategorySlug,
+    120
+  );
 
   const effectiveSlugA = useMemo(() => {
     if (slugA && products.some((p) => p.slug === slugA)) return slugA;
@@ -77,24 +134,28 @@ export default function CategoryCatalogToolbar({
       const userRating = rawUser > 0 ? rawUser : null;
       const expertScore10 = resolveCompareExpertRating10(p);
       const radar = radarFor(p.slug);
+      const minPrice = sanitizeCatalogPriceVnd(p.min_price);
+      const authReviews = sanitizeCatalogCount(
+        p.authentic_review_count || p.total_reviews || 0
+      );
       return [
         String(idx + 1),
-        p.name.replace(/\|/g, '-'),
-        p.brand || '-',
+        sanitizeCatalogToolbarText(p.name, 'Unknown'),
+        sanitizeCatalogToolbarText(p.brand, '-', 80),
         userRating != null
           ? `${userRating.toFixed(1)}/5.0`
           : t('toolbar.unratedText'),
         expertScore10 != null
           ? `${expertScore10.toFixed(1)}/10`
           : t('toolbar.unratedText'),
-        String(p.authentic_review_count || p.total_reviews || 0),
-        p.min_price ? `${Number(p.min_price).toLocaleString('vi-VN')} ₫` : '-',
+        String(authReviews),
+        minPrice > 0 ? `${minPrice.toLocaleString('vi-VN')} ₫` : '-',
         radarMarkdownCell(radar),
       ];
     });
 
     const md = [
-      `### 📂 Rate.vn category catalog: ${categoryTitle} (${products.length} devices)`,
+      `### 📂 Rate.vn category catalog: ${safeCategoryTitle} (${products.length} devices)`,
       '',
       `| ${headers.join(' | ')} |`,
       `| ${sep.join(' | ')} |`,
@@ -133,16 +194,18 @@ export default function CategoryCatalogToolbar({
       const radar = radarFor(p.slug);
       return [
         String(idx + 1),
-        p.slug,
-        p.name,
-        p.brand || '',
-        categorySlug,
+        sanitizeCatalogToolbarText(p.slug, '', 120),
+        sanitizeCatalogToolbarText(p.name, 'Unknown'),
+        sanitizeCatalogToolbarText(p.brand, '', 80),
+        safeCategorySlug,
         userRating != null ? userRating.toFixed(1) : '',
         expertScore10 != null ? expertScore10.toFixed(1) : '',
-        String(p.authentic_review_count || p.total_reviews || 0),
-        String(p.merchant_count || 0),
-        String(p.min_price || 0),
-        String(p.max_price || 0),
+        String(
+          sanitizeCatalogCount(p.authentic_review_count || p.total_reviews || 0)
+        ),
+        String(sanitizeCatalogCount(p.merchant_count)),
+        String(sanitizeCatalogPriceVnd(p.min_price)),
+        String(sanitizeCatalogPriceVnd(p.max_price)),
         ...radarCsvCells(radar),
       ];
     });
@@ -158,7 +221,7 @@ export default function CategoryCatalogToolbar({
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `rate-catalog-${categorySlug}.csv`;
+    a.download = `rate-catalog-${safeCategorySlug}.csv`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -169,8 +232,8 @@ export default function CategoryCatalogToolbar({
     if (typeof document === 'undefined' || products.length === 0) return;
     const payload = {
       source: 'Rate.vn Category Catalog',
-      categorySlug,
-      categoryTitle,
+      categorySlug: safeCategorySlug,
+      categoryTitle: safeCategoryTitle,
       exportedAt: new Date().toISOString(),
       productCount: products.length,
       products: products.map((p, idx) => {
@@ -178,12 +241,12 @@ export default function CategoryCatalogToolbar({
         const expertScore10 = resolveCompareExpertRating10(p);
         return {
           rank: idx + 1,
-          slug: p.slug,
-          name: p.name,
-          brand: p.brand,
+          slug: sanitizeCatalogToolbarText(p.slug, '', 120),
+          name: sanitizeCatalogToolbarText(p.name, 'Unknown'),
+          brand: sanitizeCatalogToolbarText(p.brand, '', 80),
           userRating: rawUser > 0 ? rawUser : null,
           expertRating: expertScore10,
-          minPriceVnd: Number(p.min_price || 0),
+          minPriceVnd: sanitizeCatalogPriceVnd(p.min_price),
           dealRadar: radarExportFields(radarFor(p.slug)),
         };
       }),
@@ -194,8 +257,10 @@ export default function CategoryCatalogToolbar({
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `rate-catalog-${categorySlug}.json`;
+    a.download = `rate-catalog-${safeCategorySlug}.json`;
+    document.body.appendChild(a);
     a.click();
+    document.body.removeChild(a);
     URL.revokeObjectURL(url);
   };
 
@@ -207,7 +272,7 @@ export default function CategoryCatalogToolbar({
         {products.length >= 2 ? (
           <div className="d-flex align-items-center flex-grow-1 flex-wrap gap-2">
             <span className="rate-catalog-toolbar-label">
-              {t('toolbar.quick1v1Label', { title: categoryTitle })}
+              {t('toolbar.quick1v1Label', { title: safeCategoryTitle })}
             </span>
             <select
               className="form-select form-select-sm w-auto"
