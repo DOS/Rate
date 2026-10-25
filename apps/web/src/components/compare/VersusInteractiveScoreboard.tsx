@@ -172,6 +172,7 @@ export default function VersusInteractiveScoreboard({
   const t = useTranslations('compare');
   const locale = useLocale();
   const useCaseLabelId = useId();
+  const slidersPanelId = useId();
   const [persona, setPersona] = useState<PersonaPresetKey>('default');
   const [weights, setWeights] = useState<CriteriaWeights>(
     PERSONA_WEIGHTS.default
@@ -470,6 +471,7 @@ export default function VersusInteractiveScoreboard({
           <button
             type="button"
             aria-expanded={showSliders}
+            aria-controls={slidersPanelId}
             onClick={() => setShowSliders((prev) => !prev)}
             className={`btn btn-sm rounded-pill px-3 py-1 ${
               showSliders || persona === 'custom'
@@ -480,6 +482,11 @@ export default function VersusInteractiveScoreboard({
           >
             <BsSliders aria-hidden="true" className="me-1" />
             {t('customWeightsBtn')}
+            {/* Custom weights select no preset and are shown only by this
+                button's colour, so its name says so too (DOS/Rate#1069). */}
+            {persona === 'custom' && (
+              <span className="visually-hidden">{`: ${t('customWeightsActive')}`}</span>
+            )}
           </button>
         </div>
 
@@ -520,6 +527,7 @@ export default function VersusInteractiveScoreboard({
       {/* Interactive 5-Criteria Weight Sliders */}
       {showSliders && (
         <div
+          id={slidersPanelId}
           className="rounded-3 border-secondary border-opacity-25 mb-3 border p-3"
           style={{ background: 'rgba(255,255,255,0.04)' }}
         >

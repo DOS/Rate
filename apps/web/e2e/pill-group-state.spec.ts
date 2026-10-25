@@ -11,7 +11,7 @@ const PAGES: { path: string; groups: (string | RegExp)[] }[] = [
     path: '/compare/iphone-16-pro-max-256gb-vs-samsung-galaxy-s25-ultra-256gb',
     groups: [/Chấm theo nhu cầu/],
   },
-  { path: '/deals', groups: [/Ngành hàng/] },
+  { path: '/deals', groups: [/Ngành hàng/, /Ưu tiên chấm điểm/] },
   {
     path: '/merchants',
     groups: ['Lọc theo sàn', 'Lọc theo rủi ro đánh giá'],
@@ -39,7 +39,45 @@ test('choosing another pill moves the pressed state', async ({ page }) => {
   const group = page.getByRole('group', { name: /Mã/ }).first();
   const python = group.getByRole('button', { name: 'Python' });
   await expect(python).toHaveAttribute('aria-pressed', 'false');
-  await python.click();
-  await expect(python).toHaveAttribute('aria-pressed', 'true');
+  // A click before hydration does nothing; retry until React handles it.
+  await expect(async () => {
+    if ((await python.getAttribute('aria-pressed')) !== 'true') {
+      await python.click();
+    }
+    await expect(python).toHaveAttribute('aria-pressed', 'true', {
+      timeout: 500,
+    });
+  }).toPass();
   await expect(group.getByRole('button', { pressed: true })).toHaveCount(1);
+});
+
+test('compare custom weights are named on the sliders toggle', async ({
+  page,
+}) => {
+  expect(
+    (
+      await page.goto(
+        '/compare/iphone-16-pro-max-256gb-vs-samsung-galaxy-s25-ultra-256gb'
+      )
+    )?.status()
+  ).toBe(200);
+  const toggle = page.getByRole('button', { name: /Tùy chỉnh trọng số/ });
+  await expect(async () => {
+    if ((await toggle.getAttribute('aria-expanded')) !== 'true') {
+      await toggle.click();
+    }
+    await expect(toggle).toHaveAttribute('aria-expanded', 'true', {
+      timeout: 500,
+    });
+  }).toPass();
+  // useId ids hold characters that need escaping in a #id selector.
+  const panelId = (await toggle.getAttribute('aria-controls')) ?? '';
+  const panel = page.locator(`[id="${panelId}"]`);
+  await expect(panel).toBeVisible();
+  await expect(toggle).not.toHaveAccessibleName(/Trọng số tùy chỉnh/);
+  await panel.locator('input[type="range"]').first().focus();
+  await page.keyboard.press('ArrowRight');
+  await expect(toggle).toHaveAccessibleName(/Trọng số tùy chỉnh/);
+  const presets = page.getByRole('group', { name: /Chấm theo nhu cầu/ });
+  await expect(presets.getByRole('button', { pressed: true })).toHaveCount(0);
 });

@@ -178,6 +178,7 @@ export default function DealFinderWorkspace({
   const t = useTranslations('deals');
   const locale = useLocale();
   const categoryLabelId = useId();
+  const personaLabelId = useId();
   const [categoryFilter, setCategoryFilter] = useState<
     CanonicalCategorySlug | 'all'
   >(initialCategory);
@@ -586,8 +587,13 @@ export default function DealFinderWorkspace({
         <div
           id="rate-deal-personas"
           className="d-flex align-items-center mb-3 flex-wrap gap-2"
+          role="group"
+          aria-labelledby={personaLabelId}
         >
-          <span className="small text-secondary fw-semibold me-1">
+          <span
+            id={personaLabelId}
+            className="small text-secondary fw-semibold me-1"
+          >
             {t('personaLabel')}
           </span>
           {personaOptions.map((p) => (
