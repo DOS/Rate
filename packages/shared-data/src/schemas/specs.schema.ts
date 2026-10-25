@@ -184,7 +184,7 @@ export const SupportedEcommercePlatformSchema = z.enum([
 export const ScrapedReviewerSchema = z.object({
   key: z.string().max(128).optional(),
   isAnonymous: z.boolean().optional(),
-  profileUrl: z.string().max(2048).optional(),
+  profileUrl: HttpUrlSchema.optional(),
   joinedAt: z.string().max(64).optional(),
   totalReviews: z.number().int().nonnegative().optional(),
   helpfulVotes: z.number().int().nonnegative().optional(),
@@ -196,13 +196,13 @@ export const ScrapedReviewerSchema = z.object({
 export const ScrapedReviewSchema = z.object({
   reviewId: z.string().max(128),
   author: z.string().max(200),
-  authorAvatar: z.string().max(2048).optional(),
+  authorAvatar: HttpUrlSchema.optional(),
   ratingStar: z.number().min(1).max(5),
   comment: z.string().max(10_000),
   variation: z.string().max(250).optional(),
   createdAt: z.string().max(64).optional(),
-  images: z.array(z.string().max(2048)).max(50).default([]),
-  videos: z.array(z.string().max(2048)).max(20).optional(),
+  images: z.array(HttpUrlSchema).max(50).default([]),
+  videos: z.array(HttpUrlSchema).max(20).optional(),
   sellerReply: z.string().max(5000).optional(),
   likeCount: z.number().int().nonnegative().optional(),
   reviewer: ScrapedReviewerSchema.optional(),
@@ -217,7 +217,11 @@ export const ScrapedProductSchema = z.object({
   description: z.string().max(50_000).optional(),
   priceMin: z.number().nonnegative().max(MAX_VALID_VND_PRICE),
   priceMax: z.number().nonnegative().max(MAX_VALID_VND_PRICE),
-  priceBeforeDiscount: z.number().nonnegative().optional(),
+  priceBeforeDiscount: z
+    .number()
+    .nonnegative()
+    .transform((v) => (v > MAX_VALID_VND_PRICE ? undefined : v))
+    .optional(),
   currency: z.string().min(1).max(16).default('VND'),
   historicalSold: z.number().int().nonnegative().default(0),
   /** Marketplace sold label (e.g. "20k+") when historicalSold is only its floor. */
@@ -236,7 +240,7 @@ export const ScrapedProductSchema = z.object({
     .array(z.number().int().nonnegative())
     .max(10)
     .optional(),
-  images: z.array(z.string().max(2048)).max(100).default([]),
+  images: z.array(HttpUrlSchema).max(100).default([]),
   models: z
     .array(
       z.object({
@@ -248,7 +252,10 @@ export const ScrapedProductSchema = z.object({
       })
     )
     .max(200)
-    .default([]),
+    .default([])
+    .transform((models) =>
+      models.filter((m) => m.price <= MAX_VALID_VND_PRICE)
+    ),
   attributes: z
     .array(
       z.object({
@@ -265,7 +272,7 @@ export const ScrapedProductSchema = z.object({
     ratingStar: z.number().min(0).max(5).optional(),
     followerCount: z.number().int().nonnegative().optional(),
     location: z.string().max(200).optional(),
-    url: z.string().max(2048).optional(),
+    url: HttpUrlSchema.optional(),
   }),
   reviews: z.array(ScrapedReviewSchema).max(500).default([]),
   pricesOnly: z.boolean().optional(),
