@@ -12,6 +12,7 @@ import { useLocale, useTranslations } from 'next-intl';
 import type { IconType } from 'react-icons';
 import { Link } from '@/lib/navigation';
 import {
+  MAX_VALID_VND_PRICE,
   getMasterProductCategorySlug,
   normalizeLeaderboardCategory,
   normalizeLeaderboardCriterion,
@@ -61,6 +62,51 @@ import {
 import ContentText from '@/components/elementary/ContentText';
 
 export type { LeaderboardCriterionKey, LeaderboardPriceSegment };
+
+const LEADERBOARD_CONTROL_CHARS_RE = /\p{Cc}+/gu;
+
+export function sanitizeLeaderboardWeight(
+  value: unknown,
+  fallback = 0
+): number {
+  const num = Number(value);
+  if (!Number.isFinite(num)) {
+    return Math.max(0, Math.min(100, Math.round(Number(fallback) || 0)));
+  }
+  return Math.max(0, Math.min(100, Math.round(num)));
+}
+
+export function sanitizeLeaderboardPriceVnd(value: unknown): number {
+  const num = Number(value);
+  if (!Number.isFinite(num) || num <= 0 || num > MAX_VALID_VND_PRICE) {
+    return 0;
+  }
+  return Math.round(num);
+}
+
+export function formatLeaderboardPriceVnd(value: unknown): string {
+  return `${sanitizeLeaderboardPriceVnd(value).toLocaleString('vi-VN')} ₫`;
+}
+
+export function sanitizeLeaderboardMarkdownCell(
+  value: unknown,
+  fallback = '-'
+): string {
+  if (typeof value !== 'string') return fallback;
+  const cleaned = value
+    .replace(LEADERBOARD_CONTROL_CHARS_RE, ' ')
+    .replace(/\|/g, '-')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 160);
+  return cleaned || fallback;
+}
+
+export function sanitizeLeaderboardBarPercentage(score5: unknown): number {
+  const num = Number(score5);
+  if (!Number.isFinite(num) || num <= 0) return 0;
+  return Math.max(0, Math.min(100, Math.round((num / 5) * 100)));
+}
 
 interface LeaderboardExplorerProps {
   readonly products: readonly MasterProduct[];
@@ -294,7 +340,7 @@ export default function LeaderboardExplorer({
     setActivePersona('custom');
     setCustomWeights((prev) => ({
       ...prev,
-      [key]: Math.max(0, Math.min(100, val)),
+      [key]: sanitizeLeaderboardWeight(val, prev[key]),
     }));
   };
 
@@ -377,7 +423,7 @@ export default function LeaderboardExplorer({
       ) {
         return false;
       }
-      const minPrice = Number(item.min_price || 0);
+      const minPrice = sanitizeLeaderboardPriceVnd(item.min_price);
       if (priceSegment !== 'all') {
         if (minPrice <= 0) return false;
         if (priceSegment === 'under15m' && minPrice >= 15_000_000) return false;
@@ -456,8 +502,8 @@ export default function LeaderboardExplorer({
       if (b.authenticCount !== a.authenticCount) {
         return b.authenticCount - a.authenticCount;
       }
-      const priceA = Number(a.product.min_price || 0);
-      const priceB = Number(b.product.min_price || 0);
+      const priceA = sanitizeLeaderboardPriceVnd(a.product.min_price);
+      const priceB = sanitizeLeaderboardPriceVnd(b.product.min_price);
       if (priceA > 0 && priceB > 0 && priceA !== priceB) {
         return priceA - priceB;
       }
@@ -527,18 +573,17 @@ export default function LeaderboardExplorer({
     const sep = headers.map(() => '---');
     const rows = rankedEntries.map((entry, idx) => {
       const radar = getRadarSignal(radarIndex, entry.product.slug);
+      const safePrice = sanitizeLeaderboardPriceVnd(entry.product.min_price);
       return [
         `#${idx + 1}`,
-        entry.product.name.replace(/\|/g, '-'),
-        entry.product.brand || '-',
+        sanitizeLeaderboardMarkdownCell(entry.product.name),
+        sanitizeLeaderboardMarkdownCell(entry.product.brand),
         entry.activeScore5.toFixed(2),
         entry.userScore5 > 0 ? entry.userScore5.toFixed(1) : t('unratedShort'),
         entry.expertScore10 != null
           ? entry.expertScore10.toFixed(1)
           : t('unratedShort'),
-        entry.product.min_price
-          ? `${Number(entry.product.min_price).toLocaleString('vi-VN')} ₫`
-          : '-',
+        safePrice > 0 ? formatLeaderboardPriceVnd(safePrice) : '-',
         radarMarkdownCell(radar),
       ];
     });
@@ -597,7 +642,7 @@ export default function LeaderboardExplorer({
         entry.criteria.camera > 0 ? entry.criteria.camera.toFixed(1) : '',
         entry.criteria.battery > 0 ? entry.criteria.battery.toFixed(1) : '',
         entry.criteria.value > 0 ? entry.criteria.value.toFixed(1) : '',
-        String(entry.product.min_price || 0),
+        String(sanitizeLeaderboardPriceVnd(entry.product.min_price)),
         ...radarCsvCells(radar),
       ];
     });
@@ -637,7 +682,7 @@ export default function LeaderboardExplorer({
         userScore5: entry.userScore5,
         expertScore10: entry.expertScore10,
         criteria: entry.criteria,
-        minPriceVnd: Number(entry.product.min_price || 0),
+        minPriceVnd: sanitizeLeaderboardPriceVnd(entry.product.min_price),
         dealRadar: radarExportFields(
           getRadarSignal(radarIndex, entry.product.slug)
         ),
@@ -1223,7 +1268,7 @@ export default function LeaderboardExplorer({
                           ] as const
                         ).map((c) => {
                           const val = entry.criteria[c.key];
-                          const pct = Math.round((val / 5) * 100);
+                          const pct = sanitizeLeaderboardBarPercentage(val);
                           return (
                             <div key={c.key} className="mb-1 last:mb-0">
                               <div
@@ -1269,10 +1314,7 @@ export default function LeaderboardExplorer({
 
                     <div className="border-top border-secondary border-opacity-25 d-flex justify-content-between align-items-center flex-wrap gap-2 pt-2">
                       <span className="small text-white-50 rate-tabular">
-                        {Number(entry.product.min_price).toLocaleString(
-                          'vi-VN'
-                        )}{' '}
-                        ₫
+                        {formatLeaderboardPriceVnd(entry.product.min_price)}
                       </span>
                       <Link
                         href={entry.productHref}
@@ -1396,9 +1438,10 @@ export default function LeaderboardExplorer({
         {rankedEntries.map((entry, idx) => {
           const rank = idx + 1;
           const keySpecs = (entry.product.key_specs || {}) as KeySpecs;
-          const minPriceText = Number(
-            entry.product.min_price || 0
-          ).toLocaleString('vi-VN');
+          const safeRowPrice = sanitizeLeaderboardPriceVnd(
+            entry.product.min_price
+          );
+          const minPriceText = safeRowPrice.toLocaleString('vi-VN');
           const rowRadarSignal = getRadarSignal(radarIndex, entry.product.slug);
 
           return (
@@ -1584,7 +1627,7 @@ export default function LeaderboardExplorer({
                           brand: entry.product.brand,
                           categoryPath: entry.categoryPath,
                           thumbnail: entry.thumbnail,
-                          min_price: Number(entry.product.min_price || 0),
+                          min_price: safeRowPrice,
                         }}
                       />
                       <Link
