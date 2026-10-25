@@ -3,6 +3,7 @@
 import React, { useId, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { Link } from '@/lib/navigation';
+import { MAX_VALID_VND_PRICE } from '@/lib/rate-domain';
 import {
   BsCheckCircleFill,
   BsExclamationTriangleFill,
@@ -34,7 +35,9 @@ interface SubmitResult {
   jobId: string | null;
 }
 
-function outcomeFromJobState(jobState: string | undefined): SubmitOutcome {
+export function outcomeFromJobState(
+  jobState: string | undefined
+): SubmitOutcome {
   switch (jobState) {
     case 'skipped_no_consent':
       return 'noConsent';
@@ -50,6 +53,34 @@ function outcomeFromJobState(jobState: string | undefined): SubmitOutcome {
     default:
       return 'failed';
   }
+}
+
+export function sanitizeQuarantinePriceVnd(
+  value: unknown,
+  minVnd = 1000
+): number | null {
+  if (typeof value === 'string' && !value.trim()) return null;
+  if (value === null || value === undefined || typeof value === 'boolean') {
+    return null;
+  }
+  const num = typeof value === 'number' ? value : Number(value);
+  if (!Number.isFinite(num)) return null;
+  const rounded = Math.round(num);
+  const safeMin =
+    Number.isFinite(minVnd) && minVnd >= 1 ? Math.round(minVnd) : 1;
+  if (rounded < safeMin || rounded > MAX_VALID_VND_PRICE) return null;
+  return rounded;
+}
+
+export function sanitizeQuarantineTextField(
+  value: unknown,
+  maxLength = 320
+): string {
+  if (typeof value !== 'string') return '';
+  return value
+    .replace(/\p{Cc}+/gu, '')
+    .trim()
+    .slice(0, maxLength);
 }
 
 export default function CommunityQuarantineSubmitForm() {
@@ -69,6 +100,35 @@ export default function CommunityQuarantineSubmitForm() {
     setIsSubmitting(true);
     setResult(null);
 
+    const safeUrl = sanitizeQuarantineTextField(url, 1024);
+    const safeTitle = sanitizeQuarantineTextField(title, 320);
+    const safePrice = sanitizeQuarantinePriceVnd(currentPrice, 50_000);
+    const hasOriginalInput = originalPrice.trim().length > 0;
+    const safeOriginalPrice = hasOriginalInput
+      ? sanitizeQuarantinePriceVnd(originalPrice, 1000)
+      : null;
+    const safeSku = sanitizeQuarantineTextField(skuText, 160);
+
+    if (!safeUrl || safeTitle.length < 3 || safePrice === null) {
+      setResult({
+        accepted: false,
+        outcome: safePrice === null ? 'invalidPrice' : 'invalidInput',
+        jobId: null,
+      });
+      setIsSubmitting(false);
+      return;
+    }
+
+    if (hasOriginalInput && safeOriginalPrice === null) {
+      setResult({
+        accepted: false,
+        outcome: 'invalidPrice',
+        jobId: null,
+      });
+      setIsSubmitting(false);
+      return;
+    }
+
     try {
       const res = await fetch('/api/v1/rate/extension/ingest', {
         method: 'POST',
@@ -76,13 +136,11 @@ export default function CommunityQuarantineSubmitForm() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          url: url.trim(),
-          title: title.trim(),
-          price: Math.round(Number(currentPrice)),
-          originalPrice: originalPrice.trim()
-            ? Math.round(Number(originalPrice))
-            : undefined,
-          selectedVariant: skuText.trim() || undefined,
+          url: safeUrl,
+          title: safeTitle,
+          price: safePrice,
+          originalPrice: safeOriginalPrice ?? undefined,
+          selectedVariant: safeSku || undefined,
           userConsentOptIn: consentGranted,
         }),
       });
@@ -132,7 +190,7 @@ export default function CommunityQuarantineSubmitForm() {
           <p className="text-muted small mb-0">{t('quarantineSubtitle')}</p>
         </div>
         <Link
-          href={`/inspect?q=${encodeURIComponent(url)}`}
+          href={`/inspect?q=${encodeURIComponent(sanitizeQuarantineTextField(url, 1024))}`}
           className="btn btn-sm btn-outline-primary rounded-pill fw-semibold px-3"
         >
           {t('quarantineOpenInspectBtn')}

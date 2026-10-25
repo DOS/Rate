@@ -22,6 +22,62 @@ export interface ApiPresetEndpoint {
   defaultBody?: string;
 }
 
+export function sanitizePlaygroundApiPath(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const cleaned = value.replace(/\p{Cc}+/gu, '').trim();
+  if (
+    !cleaned ||
+    cleaned.length > 2048 ||
+    !cleaned.startsWith('/api/') ||
+    cleaned.startsWith('/api//') ||
+    cleaned.includes('\\') ||
+    /(?:^|\/)\.\.(?:\/|\?|$)/.test(cleaned)
+  ) {
+    return null;
+  }
+  try {
+    const parsed = new URL(cleaned, 'https://rate.vn');
+    if (
+      parsed.origin !== 'https://rate.vn' ||
+      !parsed.pathname.startsWith('/api/') ||
+      parsed.pathname.startsWith('/api//')
+    ) {
+      return null;
+    }
+    return `${parsed.pathname}${parsed.search}`.replace(
+      /['"$`\\]/g,
+      (ch) => `%${ch.charCodeAt(0).toString(16).toUpperCase().padStart(2, '0')}`
+    );
+  } catch {
+    return null;
+  }
+}
+
+export function sanitizePlaygroundDownloadId(value: unknown): string {
+  if (typeof value !== 'string') return 'endpoint';
+  const cleaned = value
+    .replace(/\p{Cc}+/gu, '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9-]+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '')
+    .slice(0, 80);
+  return cleaned || 'endpoint';
+}
+
+export function sanitizePlaygroundMarkdownCell(value: unknown): string {
+  if (typeof value !== 'string') return '-';
+  const cleaned = value
+    .replace(/\p{Cc}+/gu, ' ')
+    .replace(/\|/g, '-')
+    .replace(/`/g, "'")
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 240);
+  return cleaned || '-';
+}
+
 export default function ApiPlaygroundClient() {
   const t = useTranslations('developers');
 
@@ -166,8 +222,8 @@ export default function ApiPlaygroundClient() {
 
   const handleRunRequest = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
-    const targetPath = customPath.trim();
-    if (!targetPath.startsWith('/api/')) {
+    const targetPath = sanitizePlaygroundApiPath(customPath);
+    if (!targetPath) {
       setStatusCode(400);
       setResponseJson(
         JSON.stringify(
@@ -220,20 +276,23 @@ export default function ApiPlaygroundClient() {
     }
   };
 
+  const safeSnippetPath =
+    sanitizePlaygroundApiPath(customPath) ?? '/api/v1/rate/products';
+
   const curlSnippet =
     customMethod === 'POST'
-      ? `curl -X POST "https://rate.vn${customPath}" \\\n  -H "Accept: application/json" \\\n  -H "Content-Type: application/json" \\\n  -d '${requestBody.replace(/\s+/g, ' ').trim()}'`
-      : `curl -X GET "https://rate.vn${customPath}" \\\n  -H "Accept: application/json"`;
+      ? `curl -X POST "https://rate.vn${safeSnippetPath}" \\\n  -H "Accept: application/json" \\\n  -H "Content-Type: application/json" \\\n  -d '${requestBody.replace(/\s+/g, ' ').trim().replace(/'/g, "'\\''")}'`
+      : `curl -X GET "https://rate.vn${safeSnippetPath}" \\\n  -H "Accept: application/json"`;
 
   const fetchSnippet =
     customMethod === 'POST'
-      ? `const res = await fetch("https://rate.vn${customPath}", {\n  method: "POST",\n  headers: { "Content-Type": "application/json" },\n  body: JSON.stringify(${requestBody.trim() || '{}'}),\n});\nconst data = await res.json();`
-      : `const res = await fetch("https://rate.vn${customPath}", {\n  headers: { Accept: "application/json" },\n});\nconst data = await res.json();`;
+      ? `const res = await fetch("https://rate.vn${safeSnippetPath}", {\n  method: "POST",\n  headers: { "Content-Type": "application/json" },\n  body: JSON.stringify(${requestBody.trim() || '{}'}),\n});\nconst data = await res.json();`
+      : `const res = await fetch("https://rate.vn${safeSnippetPath}", {\n  headers: { Accept: "application/json" },\n});\nconst data = await res.json();`;
 
   const pythonSnippet =
     customMethod === 'POST'
-      ? `import requests\n\nres = requests.post(\n    "https://rate.vn${customPath}",\n    json=${requestBody.trim() || '{}'},\n    timeout=15,\n)\nprint(res.status_code, res.json())`
-      : `import requests\n\nres = requests.get(\n    "https://rate.vn${customPath}",\n    headers={"Accept": "application/json"},\n    timeout=15,\n)\nprint(res.status_code, res.json())`;
+      ? `import requests\n\nres = requests.post(\n    "https://rate.vn${safeSnippetPath}",\n    json=${requestBody.trim() || '{}'},\n    timeout=15,\n)\nprint(res.status_code, res.json())`
+      : `import requests\n\nres = requests.get(\n    "https://rate.vn${safeSnippetPath}",\n    headers={"Accept": "application/json"},\n    timeout=15,\n)\nprint(res.status_code, res.json())`;
 
   const activeSnippet =
     snippetMode === 'curl'
@@ -270,7 +329,7 @@ export default function ApiPlaygroundClient() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `rate-api-${selectedId}.json`;
+    a.download = `rate-api-${sanitizePlaygroundDownloadId(selectedId)}.json`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -287,7 +346,7 @@ export default function ApiPlaygroundClient() {
         '| --- | --- | --- | --- |',
         ...presetEndpoints.map(
           (ep) =>
-            `| \`${ep.method}\` | \`${ep.path}\` | **${ep.title}** | ${ep.description} |`
+            `| \`${sanitizePlaygroundMarkdownCell(ep.method)}\` | \`${sanitizePlaygroundMarkdownCell(ep.path)}\` | **${sanitizePlaygroundMarkdownCell(ep.title)}** | ${sanitizePlaygroundMarkdownCell(ep.description)} |`
         ),
       ];
       await navigator.clipboard.writeText(lines.join('\n'));
