@@ -1429,6 +1429,72 @@ async function runSuite() {
     );
   }
 
+  // =========================================================================
+  // 16. Paging & ShopeeToSupabase URL, Review ID & Entity ID Bounds (#1046)
+  // =========================================================================
+  {
+    const { fetchAllPages, parseShopeeEnqueueUrl, resolveBackfillSupabaseTarget } =
+      await import('../paging.js');
+    const { platformReviewIdFor, sanitizeIngestionEntityId } =
+      await import('../shopee-to-supabase.js');
+
+    // 1. fetchAllPages rejects hex/octal string pageSize/maxPages and clamps positive integers
+    const ranges1046: Array<[number, number]> = [];
+    await fetchAllPages(
+      'hex_page',
+      (from, to) => {
+        ranges1046.push([from, to]);
+        return Promise.resolve({ data: [], error: null });
+      },
+      '0x10' as unknown as number,
+      '0x5' as unknown as number
+    );
+    assert.deepEqual(ranges1046, [[0, 999]]);
+
+    // 2. parseShopeeEnqueueUrl rejects /verify, /buyer/login, and /search interstitial paths
+    assert.equal(
+      parseShopeeEnqueueUrl('https://shopee.vn/verify/captcha-i.88201679.27110898667'),
+      null
+    );
+    assert.equal(
+      parseShopeeEnqueueUrl('https://shopee.vn/buyer/login/i.88201679.27110898667'),
+      null
+    );
+    assert.equal(parseShopeeEnqueueUrl('https://shopee.vn/search/i.88201679.27110898667'), null);
+
+    // 3. resolveBackfillSupabaseTarget rejects 0.0.0.0 and single-label non-localhost hosts
+    assert.throws(() => resolveBackfillSupabaseTarget('https://0.0.0.0:54321'), /invalid hostname/);
+    assert.throws(
+      () => resolveBackfillSupabaseTarget('https://internal-db:54321'),
+      /invalid hostname/
+    );
+    assert.equal(resolveBackfillSupabaseTarget('http://localhost:54321').host, 'localhost:54321');
+
+    // 4. sanitizeIngestionEntityId and platformReviewIdFor reject sentinels, multi-zero, and whitespace
+    assert.equal(sanitizeIngestionEntityId('0000'), null);
+    assert.equal(sanitizeIngestionEntityId('---'), null);
+    assert.equal(sanitizeIngestionEntityId('__proto__'), null);
+    assert.equal(sanitizeIngestionEntityId('rev id'), null);
+    assert.equal(sanitizeIngestionEntityId('\u0000rev-1046 '), 'rev-1046');
+
+    const baseRev1046 = {
+      reviewId: '0000',
+      author: 'User 1046',
+      ratingStar: 5,
+      comment: 'Solid phone',
+      images: [],
+    };
+    const hashed1046 = platformReviewIdFor(baseRev1046);
+    assert.ok(hashed1046.startsWith('rv-'));
+    assert.equal(platformReviewIdFor({ ...baseRev1046, reviewId: '__proto__' }), hashed1046);
+    assert.equal(platformReviewIdFor({ ...baseRev1046, reviewId: '---' }), hashed1046);
+    assert.equal(platformReviewIdFor({ ...baseRev1046, reviewId: 'bad space' }), hashed1046);
+
+    console.log(
+      '  ✅ [16/16] Paging & ShopeeToSupabase URL, Review ID & Entity ID Bounds (#1046) passed'
+    );
+  }
+
   console.log('🎉 All @repo/crawlers Open-Core Intelligence tests passed!');
 }
 
