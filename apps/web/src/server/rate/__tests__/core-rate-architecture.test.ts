@@ -11569,6 +11569,106 @@ async function runCoreArchitectureSuite() {
     );
     assert.deepEqual(battlesWithSlugless983, []);
 
+    const {
+      computeBayesianRatingSummary: computeBayesianRatingSummary986,
+      computeCombinedDualScore: computeCombinedDualScore986,
+      computeJReviewsWeight: computeJReviewsWeight986,
+      detectStarDistributionAnomaly: detectStarDistributionAnomaly986,
+      evaluateReviewTrustAssessment: evaluateReviewTrustAssessment986,
+      extractPersistedBreakdown: extractPersistedBreakdown986,
+      filterAndSortMerchants: filterAndSortMerchants986,
+      getMasterProductCategorySlug: getMasterProductCategorySlug986,
+      getMasterProductHref: getMasterProductHref986,
+      isImageUrl: isImageUrl986,
+      parseEcommerceUrlOrQuery: parseEcommerceUrlOrQuery986,
+      productImageUrl: productImageUrl986,
+      resolveProductImageUrl: resolveProductImageUrl986,
+    } = await import('../../../lib/rate-domain-core');
+    const {
+      resolveCompareBatteryMah: resolveCompareBatteryMah986,
+      resolveCompareDisplaySizeInch: resolveCompareDisplaySizeInch986,
+      resolveCompareEffectiveUserRating: resolveCompareEffectiveUserRating986,
+      resolveCompareExpertRating5: resolveCompareExpertRating5986,
+      resolveCompareRamGb: resolveCompareRamGb986,
+      resolveCompareStorageGb: resolveCompareStorageGb986,
+    } = await import('../../../lib/rate-domain');
+
+    assert.equal(
+      evaluateReviewTrustAssessment986([] as never).breakdown.weight,
+      0
+    );
+    assert.equal(computeCombinedDualScore986([] as never).overall, 0);
+    assert.equal(computeJReviewsWeight986([] as never), 0);
+    assert.equal(
+      computeBayesianRatingSummary986(['bad' as never]).effectiveWeightSum,
+      0
+    );
+    const anomaly986 = detectStarDistributionAnomaly986([
+      ['array-rev'] as never,
+      { rating_star: true as never, comment: '', flag_category: 'authentic' },
+      { rating_star: 5, comment: '', flag_category: 'authentic' },
+      { rating_star: 5, comment: '', flag_category: 'authentic' },
+      { rating_star: 5, comment: '', flag_category: 'authentic' },
+      { rating_star: 5, comment: '', flag_category: 'authentic' },
+      { rating_star: 5, comment: '', flag_category: 'authentic' },
+    ]);
+    assert.equal(anomaly986.isAnomalous, true);
+
+    assert.equal(isImageUrl986('/img/../secret.jpg'), false);
+    assert.equal(
+      isImageUrl986(`/img${String.fromCharCode(92)}secret.jpg`),
+      false
+    );
+    assert.equal(isImageUrl986('https://cdn..example.com/a.jpg'), false);
+    assert.equal(isImageUrl986('https://cdn.example.com:8443/a.jpg'), false);
+    assert.equal(isImageUrl986('/img/devices/apple-iphone-16-128gb.jpg'), true);
+    assert.equal(productImageUrl986([] as never), null);
+    assert.equal(resolveProductImageUrl986([] as never), null);
+    assert.equal(getMasterProductCategorySlug986([] as never), 'smartphones');
+    assert.equal(getMasterProductHref986([] as never), '/smartphones');
+    assert.equal(extractPersistedBreakdown986([] as never), null);
+    assert.deepEqual(
+      filterAndSortMerchants986([['array-merchant'] as never], [] as never),
+      []
+    );
+
+    assert.equal(
+      parseEcommerceUrlOrQuery986('https://shopee..vn/item-i.123.456').platform,
+      null
+    );
+    assert.equal(
+      parseEcommerceUrlOrQuery986('https://shopee.vn:8443/item-i.123.456')
+        .platform,
+      null
+    );
+    assert.equal(
+      parseEcommerceUrlOrQuery986(
+        'https://www.tiktok.com/@.../product/12345678'
+      ).platformShopId,
+      null
+    );
+    assert.equal(
+      parseEcommerceUrlOrQuery986('https://cellphones.com.vn/..')
+        .platformItemId,
+      null
+    );
+    assert.equal(
+      parseEcommerceUrlOrQuery986('https://rate.vn/smartphones/null')
+        .internalSlug,
+      null
+    );
+    assert.equal(
+      parseEcommerceUrlOrQuery986('/smartphones/undefined').internalSlug,
+      null
+    );
+
+    assert.equal(resolveCompareEffectiveUserRating986([] as never), 0);
+    assert.equal(resolveCompareExpertRating5986([] as never), null);
+    assert.equal(resolveCompareDisplaySizeInch986([] as never), null);
+    assert.equal(resolveCompareRamGb986([] as never), null);
+    assert.equal(resolveCompareStorageGb986([] as never), null);
+    assert.equal(resolveCompareBatteryMah986([] as never), null);
+
     console.log(
       '  ✅ [121/121] API Handler URL/Slug/Vote Guards & OpenAPI Server Origin Bounds (#978) passed'
     );

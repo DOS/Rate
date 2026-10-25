@@ -176,7 +176,7 @@ const WEB_LONG_TERM_RE =
  * (`Docs/Platform/review-trust-model.html` Sections 3, 5, 9, 15).
  */
 export function evaluateReviewTrustAssessment(
-  review: Pick<
+  rawReview: Pick<
     ReviewItem,
     | 'rating_star'
     | 'comment'
@@ -190,7 +190,14 @@ export function evaluateReviewTrustAssessment(
     | 'signals'
   >
 ): ReviewTrustAssessment {
-  const comment = (review.comment || '').normalize('NFC').trim();
+  const review = (
+    rawReview && typeof rawReview === 'object' && !Array.isArray(rawReview)
+      ? rawReview
+      : {}
+  ) as typeof rawReview;
+  const comment = (typeof review.comment === 'string' ? review.comment : '')
+    .normalize('NFC')
+    .trim();
   const cleanText = comment.replace(/[\s.!,]+$/u, '').trim();
   const hasShipping = WEB_SHIPPING_ASPECT_RE.test(comment);
   const hasProduct = WEB_PRODUCT_ASPECT_RE.test(comment);
@@ -427,12 +434,16 @@ export function computeCombinedDualScore(params: {
   userConfidence: number;
   fallbackAverage?: number;
 }): CombinedDualScoreResult {
+  const safeParams =
+    params && typeof params === 'object' && !Array.isArray(params)
+      ? params
+      : ({} as typeof params);
   const {
     userScore,
     expertScore,
     userConfidence,
     fallbackAverage = 0,
-  } = params;
+  } = safeParams;
   const safeUser =
     typeof userScore === 'number' &&
     Number.isFinite(userScore) &&
@@ -527,14 +538,23 @@ export function detectStarDistributionAnomaly(
   let fiveStarCount = 0;
   let criticalStarCount = 0;
   let shallowOrFlaggedFiveStar = 0;
+  const safeReviews = Array.isArray(reviews) ? reviews : [];
 
-  for (const r of reviews) {
+  for (const r of safeReviews) {
+    if (
+      !r ||
+      typeof r !== 'object' ||
+      Array.isArray(r) ||
+      typeof r.rating_star === 'boolean'
+    ) {
+      continue;
+    }
     const rawStar = Number(r.rating_star);
     if (!Number.isFinite(rawStar)) continue;
     const star = Math.round(rawStar);
     if (star < 1 || star > 5) continue;
     ratedCount += 1;
-    const text = (r.comment || '').trim();
+    const text = (typeof r.comment === 'string' ? r.comment : '').trim();
     if (star === 5) {
       fiveStarCount += 1;
       if (
@@ -596,6 +616,9 @@ export function computeJReviewsWeight(params: {
   verdict?: string | null;
   includeInRating?: boolean;
 }): number {
+  if (!params || typeof params !== 'object' || Array.isArray(params)) {
+    return 0;
+  }
   const {
     upvotes,
     downvotes,
@@ -664,9 +687,17 @@ export function computeBayesianRatingSummary(
 ): BayesianRatingSummary {
   let effectiveWeightSum = 0;
   let weightedStarSum = 0;
+  const safeReviews = Array.isArray(reviews) ? reviews : [];
 
-  for (const r of reviews) {
-    if (!r.include_in_rating) continue;
+  for (const r of safeReviews) {
+    if (
+      !r ||
+      typeof r !== 'object' ||
+      Array.isArray(r) ||
+      !r.include_in_rating
+    ) {
+      continue;
+    }
     const rawW =
       typeof r.helpfulness_weight === 'number'
         ? r.helpfulness_weight
@@ -866,7 +897,9 @@ export function isImageUrl(value: unknown): value is string {
   const trimmed = value.trim();
   if (!trimmed || trimmed.length > 2048 || /[\s\p{Cc}]/u.test(trimmed))
     return false;
-  if (/^\/(?!\/)\S+$/.test(trimmed)) return true;
+  if (/^\/(?!\/)\S+$/.test(trimmed)) {
+    return !trimmed.includes('..') && !trimmed.includes('\\');
+  }
   if (!/^(?:https?:)?\/\/[^\s/?#]+\S*$/i.test(trimmed)) return false;
   try {
     const parsed = new URL(
@@ -875,6 +908,18 @@ export function isImageUrl(value: unknown): value is string {
     if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:')
       return false;
     if (parsed.username || parsed.password) return false;
+    const host = parsed.hostname.toLowerCase();
+    if (
+      !host ||
+      host.startsWith('.') ||
+      host.endsWith('.') ||
+      host.includes('..')
+    ) {
+      return false;
+    }
+    if (parsed.port !== '' && parsed.port !== '80' && parsed.port !== '443') {
+      return false;
+    }
     return true;
   } catch {
     return false;
@@ -885,7 +930,9 @@ export function isImageUrl(value: unknown): value is string {
 export function usableImageUrls(
   images: readonly unknown[] | null | undefined
 ): string[] {
-  return (images ?? []).filter(isImageUrl).map((url) => url.trim());
+  return (Array.isArray(images) ? images : [])
+    .filter(isImageUrl)
+    .map((url) => url.trim());
 }
 
 /** The first usable image of a stored `images` list, or null. */
@@ -900,7 +947,13 @@ export function productImageUrl(product: {
   readonly thumbnail?: string | null;
   readonly images?: readonly unknown[] | null;
 }): string | null {
-  return firstImageUrl([product.thumbnail, ...(product.images ?? [])]);
+  if (!product || typeof product !== 'object' || Array.isArray(product)) {
+    return null;
+  }
+  return firstImageUrl([
+    product.thumbnail,
+    ...(Array.isArray(product.images) ? product.images : []),
+  ]);
 }
 
 export function resolveProductImageUrl(
@@ -915,7 +968,11 @@ export function resolveProductImageUrl(
     | null,
   fallbackUrl?: string | null
 ): string | null {
-  if (slugOrProduct && typeof slugOrProduct === 'object') {
+  if (
+    slugOrProduct &&
+    typeof slugOrProduct === 'object' &&
+    !Array.isArray(slugOrProduct)
+  ) {
     const slug =
       typeof slugOrProduct.slug === 'string'
         ? slugOrProduct.slug
@@ -965,7 +1022,7 @@ export function isCanonicalCategorySlug(
 }
 
 export function getMasterProductCategorySlug(
-  product: Pick<MasterProduct, 'slug'> & {
+  rawProduct: Pick<MasterProduct, 'slug'> & {
     name?: string | null;
     model?: string | null;
     category_id?: string | null;
@@ -975,8 +1032,15 @@ export function getMasterProductCategorySlug(
   },
   categorySlugById?: ReadonlyMap<string, string>
 ): CanonicalCategorySlug {
+  const product = (
+    rawProduct && typeof rawProduct === 'object' && !Array.isArray(rawProduct)
+      ? rawProduct
+      : { slug: '' }
+  ) as typeof rawProduct;
   const catSlugFromMap =
-    product.category_id && categorySlugById
+    product.category_id &&
+    categorySlugById &&
+    typeof categorySlugById.get === 'function'
       ? categorySlugById.get(product.category_id)
       : undefined;
   const catSlugFromMeta =
@@ -1046,7 +1110,7 @@ export function getMasterProductHref(
   categorySlugById?: ReadonlyMap<string, string>
 ): string {
   const safeProduct =
-    product && typeof product === 'object'
+    product && typeof product === 'object' && !Array.isArray(product)
       ? product
       : ({ slug: '' } as Pick<MasterProduct, 'slug'>);
   const catSlug = getMasterProductCategorySlug(safeProduct, categorySlugById);
@@ -1153,6 +1217,9 @@ function parseMerchantRiskBreakdownCandidate(
 export function extractPersistedBreakdown(
   m: Pick<RawMerchantSafeRow, 'review_risk_breakdown' | 'metadata'>
 ): MerchantRiskBreakdown | null {
+  if (!m || typeof m !== 'object' || Array.isArray(m)) {
+    return null;
+  }
   const fromTopLevel = parseMerchantRiskBreakdownCandidate(
     m.review_risk_breakdown
   );
@@ -1184,13 +1251,17 @@ export function filterAndSortMerchants(
   params?: MerchantListFilterParams
 ): MerchantSummary[] {
   if (!Array.isArray(merchants)) return [];
+  const safeParams =
+    params && typeof params === 'object' && !Array.isArray(params)
+      ? params
+      : undefined;
   let results = merchants.filter((m): m is MerchantSummary =>
-    Boolean(m && typeof m === 'object')
+    Boolean(m && typeof m === 'object' && !Array.isArray(m))
   );
 
   const cleanQ =
-    typeof params?.q === 'string'
-      ? params.q
+    typeof safeParams?.q === 'string'
+      ? safeParams.q
           .replace(/\p{Cc}+/gu, ' ')
           .replace(/\s+/g, ' ')
           .trim()
@@ -1228,10 +1299,10 @@ export function filterAndSortMerchants(
   }
 
   if (
-    typeof params?.minTrust === 'number' &&
-    Number.isFinite(params.minTrust)
+    typeof safeParams?.minTrust === 'number' &&
+    Number.isFinite(safeParams.minTrust)
   ) {
-    const safeMinTrust = Math.max(0, Math.min(100, params.minTrust));
+    const safeMinTrust = Math.max(0, Math.min(100, safeParams.minTrust));
     results = results.filter((m) => {
       const trust =
         typeof m.trust_score === 'number' && Number.isFinite(m.trust_score)
@@ -1241,11 +1312,11 @@ export function filterAndSortMerchants(
     });
   }
 
-  if (params?.sort) {
+  if (safeParams?.sort) {
     const safeNum = (v: unknown, fallback = 0): number =>
       typeof v === 'number' && Number.isFinite(v) ? v : fallback;
     results.sort((a, b) => {
-      switch (params.sort) {
+      switch (safeParams.sort) {
         case 'trust_desc':
           return (
             safeNum(b.trust_score) - safeNum(a.trust_score) ||
@@ -1274,11 +1345,11 @@ export function filterAndSortMerchants(
   }
 
   if (
-    typeof params?.limit === 'number' &&
-    Number.isFinite(params.limit) &&
-    params.limit >= 1
+    typeof safeParams?.limit === 'number' &&
+    Number.isFinite(safeParams.limit) &&
+    safeParams.limit >= 1
   ) {
-    results = results.slice(0, Math.min(Math.floor(params.limit), 5000));
+    results = results.slice(0, Math.min(Math.floor(safeParams.limit), 5000));
   }
 
   return results;
@@ -1399,9 +1470,20 @@ export function parseEcommerceUrlOrQuery(raw: string): ParsedEcommerceUrl {
       const parsed = new URL(
         hasHttpProtocol ? trimmed : `https://${trimmed.replace(/^\/+/, '')}`
       );
+      const candidateHost = parsed.hostname.toLowerCase();
+      const isLoopback =
+        candidateHost === 'localhost' || candidateHost === '127.0.0.1';
       if (
         (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') ||
-        Boolean(parsed.username || parsed.password)
+        Boolean(parsed.username || parsed.password) ||
+        !candidateHost ||
+        candidateHost.startsWith('.') ||
+        candidateHost.endsWith('.') ||
+        candidateHost.includes('..') ||
+        (!isLoopback &&
+          parsed.port !== '' &&
+          parsed.port !== '80' &&
+          parsed.port !== '443')
       ) {
         return {
           isUrl: false,
@@ -1411,7 +1493,7 @@ export function parseEcommerceUrlOrQuery(raw: string): ParsedEcommerceUrl {
           internalSlug: null,
         };
       }
-      parsedHost = parsed.hostname.toLowerCase();
+      parsedHost = candidateHost;
       parsedPathname = parsed.pathname;
     } catch {
       parsedHost = null;
@@ -1492,10 +1574,19 @@ export function parseEcommerceUrlOrQuery(raw: string): ParsedEcommerceUrl {
         parsedPathname.match(/\/product\/(\d+)/i) ||
         parsedPathname.match(/\/view\/product\/(\d+)/i);
       const shopMatch = parsedPathname.match(/\/@([a-zA-Z0-9_.-]{1,64})/);
+      const rawShopHandle = shopMatch?.[1] || null;
+      const safeShopHandle =
+        rawShopHandle &&
+        /[a-zA-Z0-9]/.test(rawShopHandle) &&
+        !rawShopHandle.startsWith('.') &&
+        !rawShopHandle.endsWith('.') &&
+        !rawShopHandle.includes('..')
+          ? rawShopHandle
+          : null;
       return {
         isUrl: true,
         platform: 'tiktok',
-        platformShopId: shopMatch?.[1] || null,
+        platformShopId: safeShopHandle,
         platformItemId: toPositiveNumericId(prodMatch?.[1], 6, 24),
         internalSlug: null,
       };
@@ -1534,6 +1625,11 @@ export function parseEcommerceUrlOrQuery(raw: string): ParsedEcommerceUrl {
       const isValidItemSlug =
         Boolean(lastSeg) &&
         lastSeg!.length >= 2 &&
+        lastSeg!.length <= 256 &&
+        /[a-z0-9]/i.test(lastSegLower) &&
+        !lastSegLower.startsWith('.') &&
+        !lastSegLower.endsWith('.') &&
+        !lastSegLower.includes('..') &&
         !RETAIL_NON_PRODUCT_FIRST_SEGMENTS.has(firstSegLower) &&
         !RETAIL_NON_PRODUCT_FIRST_SEGMENTS.has(lastSegLower) &&
         !(
@@ -1558,13 +1654,21 @@ export function parseEcommerceUrlOrQuery(raw: string): ParsedEcommerceUrl {
         /\/(?:smartphones|tablets|laptops|smartwatches|earbuds)\/([a-z0-9-]+)/i
       );
       if (rateSlugMatch) {
-        return {
-          isUrl: true,
-          platform: 'rate',
-          platformShopId: null,
-          platformItemId: null,
-          internalSlug: rateSlugMatch[1] || null,
-        };
+        const candidateSlug = (rateSlugMatch[1] || '').toLowerCase();
+        const validSlug =
+          /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(candidateSlug) &&
+          !/^(?:0|null|undefined|nan|infinity|true|false)$/i.test(candidateSlug)
+            ? rateSlugMatch[1]!
+            : null;
+        if (validSlug) {
+          return {
+            isUrl: true,
+            platform: 'rate',
+            platformShopId: null,
+            platformItemId: null,
+            internalSlug: validSlug,
+          };
+        }
       }
     }
 
@@ -1630,13 +1734,21 @@ export function parseEcommerceUrlOrQuery(raw: string): ParsedEcommerceUrl {
     /\/(?:smartphones|tablets|laptops|smartwatches|earbuds)\/([a-z0-9-]+)/i
   );
   if (rateSlugMatch) {
-    return {
-      isUrl: true,
-      platform: 'rate',
-      platformShopId: null,
-      platformItemId: null,
-      internalSlug: rateSlugMatch[1] || null,
-    };
+    const candidateSlug = (rateSlugMatch[1] || '').toLowerCase();
+    const validSlug =
+      /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(candidateSlug) &&
+      !/^(?:0|null|undefined|nan|infinity|true|false)$/i.test(candidateSlug)
+        ? rateSlugMatch[1]!
+        : null;
+    if (validSlug) {
+      return {
+        isUrl: true,
+        platform: 'rate',
+        platformShopId: null,
+        platformItemId: null,
+        internalSlug: validSlug,
+      };
+    }
   }
 
   return {
