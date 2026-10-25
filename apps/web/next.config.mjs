@@ -95,6 +95,19 @@ const nextConfig = {
         source: "/api/:path*",
         headers: [{ key: "X-Robots-Tag", value: "noindex" }],
       },
+      // Unhashed static images (logo, device photos, OG image) were served with
+      // max-age=0, a revalidation round trip per image on every page view.
+      // A day fresh, then a week reused while revalidating; not immutable
+      // because the file names do not change with the content (DOS/Rate#1062).
+      ...["/img/:path*", "/images/:path*", "/favicon.ico"].map((source) => ({
+        source,
+        headers: [
+          {
+            key: "Cache-Control",
+            value: "public, max-age=86400, stale-while-revalidate=604800",
+          },
+        ],
+      })),
       {
         source: "/(.*)",
         headers: [
