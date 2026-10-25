@@ -11773,6 +11773,67 @@ async function runCoreArchitectureSuite() {
     assert.equal(formatHref988('https://rate..vn/smartphones'), '#');
     assert.equal(formatHref988('https://rate.vn:8443/smartphones'), '#');
 
+    // #990: rate-api offer mapping, slug guards & batch ID bounds
+    const {
+      getMasterProductBySlug: getMasterProductBySlug990,
+      getMasterProductOffers: getMasterProductOffers990,
+      getMasterProductOffersBatch: getMasterProductOffersBatch990,
+      mapOfferRowToMerchantOffer: mapOfferRowToMerchantOffer990,
+      mapTrustViewRowToMerchantOffer: mapTrustViewRowToMerchantOffer990,
+    } = await import('../../../lib/rate-api');
+
+    assert.equal(mapTrustViewRowToMerchantOffer990([] as never).id, '');
+    const trustRow990 = mapTrustViewRowToMerchantOffer990({
+      id: 'o1',
+      merchant_id: 'm1',
+      platform: 'shopee',
+      title: 'Phone',
+      price_current: 10_000_000,
+      price_original: null,
+      stock: 5,
+      rating_star: 4.8,
+      rating_count: 10,
+      url: 'https://shopee.vn:8443/item',
+      merchant_is_official: 'false' as never,
+    });
+    assert.equal(trustRow990.url, '');
+    assert.equal(trustRow990.merchant.is_official, false);
+
+    assert.equal(mapOfferRowToMerchantOffer990([] as never).id, '');
+    const offerRow990 = mapOfferRowToMerchantOffer990({
+      id: 'o2',
+      platform: 'lazada',
+      title: 'Phone 2',
+      price_current: 12_000_000,
+      price_original: null,
+      stock: 3,
+      rating_star: 4.9,
+      rating_count: 20,
+      url: 'javascript:alert(1)',
+      merchants: {
+        id: 'm2',
+        name: 'Store 2',
+        platform: 'lazada',
+        is_official: 'false' as never,
+        metadata: ['array-meta'] as never,
+      },
+    });
+    assert.equal(offerRow990.url, '');
+    assert.equal(offerRow990.merchant.is_official, false);
+
+    assert.equal(await getMasterProductBySlug990('..'), null);
+    assert.equal(await getMasterProductBySlug990('---'), null);
+    assert.equal(await getMasterProductBySlug990('null'), null);
+    assert.deepEqual(await getMasterProductOffers990('0'), []);
+    assert.deepEqual(await getMasterProductOffers990('---'), []);
+    const batchMap990 = await getMasterProductOffersBatch990([
+      '0',
+      'null',
+      'undefined',
+      '---',
+    ]);
+    assert.equal(batchMap990.size, 0);
+
     console.log(
       '  ✅ [121/121] API Handler URL/Slug/Vote Guards & OpenAPI Server Origin Bounds (#978) passed'
     );
