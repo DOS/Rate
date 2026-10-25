@@ -7,8 +7,9 @@
 //   node scripts/ops/merge-when-green.mjs <pr> [--repo DOS/Rate]
 //     [--method squash|merge] [--require "<check>"]... [--ignore "<check>"]...
 //
-// PRs into main always use a merge commit (Docs/Resources/RELEASE.md); other
-// PRs default to squash, and a squashed head branch is deleted afterwards.
+// In DOS/Rate, PRs into main always use a merge commit (Docs/Resources/RELEASE.md);
+// other PRs, and every PR in a repository without that release flow, default
+// to squash, and a squashed head branch is deleted afterwards.
 // --ignore lets a known-broken, non-required check through; name it in the PR.
 // Prints one line and exits 0 when merged, 1 when it cannot merge.
 
@@ -97,8 +98,15 @@ export function requiredChecksFromRules(rules) {
   ];
 }
 
-export function mergeMethodFor(baseRef, requested) {
-  if (baseRef === 'main') {
+/**
+ * Repositories whose `main` only takes the dev to main promotion and hotfixes,
+ * always as merge commits (Docs/Resources/RELEASE.md). Elsewhere `main` is the
+ * working branch and PRs squash like any other.
+ */
+export const RELEASE_FLOW_REPOS = new Set(['DOS/Rate']);
+
+export function mergeMethodFor(baseRef, requested, repo = DEFAULT_REPO) {
+  if (baseRef === 'main' && RELEASE_FLOW_REPOS.has(repo)) {
     if (requested && requested !== 'merge') {
       throw new Error(
         `PRs into main merge with a merge commit, not ${requested} (RELEASE.md)`
@@ -200,7 +208,7 @@ export async function mergeWhenGreen({
     let method = null;
     if (pr.state === 'open') {
       try {
-        method = mergeMethodFor(pr.base.ref, requested);
+        method = mergeMethodFor(pr.base.ref, requested, repo);
       } catch (err) {
         return { ok: false, message: `PR ${number}: ${err.message}` };
       }
