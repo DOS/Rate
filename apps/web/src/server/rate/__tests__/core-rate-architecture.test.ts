@@ -10954,7 +10954,155 @@ async function runCoreArchitectureSuite() {
     );
 
     console.log(
-      '  ✅ [118/118] ProductValueCalculator, DealFinderWorkspace & VersusInteractiveScoreboard Bounds (#960) passed'
+      '  ✅ [118/119] ProductValueCalculator, DealFinderWorkspace & VersusInteractiveScoreboard Bounds (#960) passed'
+    );
+  }
+
+  // 119. WatchlistWorkspace, ProductOffersExplorer & ProductShareAuditButton Bounds (#965)
+  {
+    const { normalizeWatchlistItem, resolveWatchlistItemCurrentPrices } =
+      await import('../../../components/watchlist/watchlist-store');
+    const {
+      computeMerchantTrustScore,
+      computeOffersPriceSpreadAudit,
+      isSafeExternalOfferUrl,
+    } = await import('../../../components/leaderboard/ProductOffersExplorer');
+    const { normalizeShareAuditFields } =
+      await import('../../../components/leaderboard/ProductShareAuditButton');
+
+    // 119a. normalizeWatchlistItem strips control chars & normalizes invalid addedAt; resolveWatchlistItemCurrentPrices bounds live/catalog prices
+    const normItem = normalizeWatchlistItem({
+      slug: '  iphone-16-pro\u0000\n ',
+      name: '  iPhone 16 Pro\u0007 ',
+      brand: '  Apple\t ',
+      categoryPath: '/smartphones',
+      thumbnail: null,
+      priceWhenAdded: 25_000_000,
+      targetPrice: 23_500_000,
+      addedAt: 'not-a-valid-date',
+    });
+    assert.equal(normItem.slug, 'iphone-16-pro');
+    assert.equal(normItem.name, 'iPhone 16 Pro');
+    assert.equal(normItem.brand, 'Apple');
+    assert.ok(
+      Number.isFinite(Date.parse(normItem.addedAt)),
+      'normalizeWatchlistItem must replace invalid addedAt strings with a valid ISO timestamp'
+    );
+
+    const resolvedPrices = resolveWatchlistItemCurrentPrices(
+      { priceWhenAdded: 25_000_000 },
+      { current_min_price: -100, current_max_price: 999_999_999_999 },
+      { min_price: 24_000_000, max_price: 26_500_000 }
+    );
+    assert.equal(resolvedPrices.currentMin, 24_000_000);
+    assert.equal(resolvedPrices.currentMax, 26_500_000);
+
+    // 119b. ProductOffersExplorer helpers: computeMerchantTrustScore clamps to [0, 100], isSafeExternalOfferUrl blocks unsafe protocols, computeOffersPriceSpreadAudit bounds prices
+    assert.equal(computeMerchantTrustScore(-25), 100);
+    assert.equal(computeMerchantTrustScore(150), 0);
+    assert.equal(computeMerchantTrustScore(Number.NaN), 100);
+    assert.equal(computeMerchantTrustScore(18), 82);
+
+    assert.equal(
+      isSafeExternalOfferUrl('https://shopee.vn/product/123/456'),
+      true
+    );
+    assert.equal(isSafeExternalOfferUrl('javascript:alert(1)'), false);
+    assert.equal(isSafeExternalOfferUrl('data:text/html,<h1>hi</h1>'), false);
+    assert.equal(isSafeExternalOfferUrl(''), false);
+
+    const mockSpreadAudit = computeOffersPriceSpreadAudit([
+      {
+        id: 'o1',
+        platform: 'shopee',
+        title: 'Listing 1',
+        price_current: 20_000_000,
+        price_original: 22_000_000,
+        url: 'https://shopee.vn/i.1.1',
+        stock_status: 'in_stock',
+        merchant: {
+          id: 'm1',
+          name: 'Shop 1',
+          platform: 'shopee',
+          is_official: true,
+          risk_score: 10,
+          dosafe_risk_score: 5,
+          review_risk_score: 15,
+        },
+      },
+      {
+        id: 'o2',
+        platform: 'lazada',
+        title: 'Listing 2',
+        price_current: 22_000_000,
+        price_original: 22_000_000,
+        url: 'https://lazada.vn/products/i2.html',
+        stock_status: 'in_stock',
+        merchant: {
+          id: 'm2',
+          name: 'Shop 2',
+          platform: 'lazada',
+          is_official: true,
+          risk_score: 12,
+          dosafe_risk_score: 8,
+          review_risk_score: 16,
+        },
+      },
+      {
+        id: 'o3-corrupt',
+        platform: 'tiki',
+        title: 'Corrupt Price Listing',
+        price_current: 999_999_999_999,
+        price_original: null,
+        url: 'https://tiki.vn/p3.html',
+        stock_status: 'in_stock',
+        merchant: {
+          id: 'm3',
+          name: 'Shop 3',
+          platform: 'tiki',
+          is_official: false,
+          risk_score: 20,
+          dosafe_risk_score: 20,
+          review_risk_score: 20,
+        },
+      },
+    ] as never);
+    assert.ok(mockSpreadAudit);
+    assert.equal(mockSpreadAudit.spreadVnd, 2_000_000);
+    assert.equal(mockSpreadAudit.spreadPct, 10);
+    assert.equal(mockSpreadAudit.platformCount, 2);
+
+    // 119c. normalizeShareAuditFields normalizes expertScore10 (<= 0 unscored, <= 5 doubled to /10) and filename token
+    const shareNorm = normalizeShareAuditFields({
+      modelKey: 'apple/iphone:18..pro',
+      userScore5: 4.85,
+      expertScore10: 0,
+      authenticReviews: -5,
+      minPriceVnd: 999_999_999_999,
+      offerCount: 8.9,
+    });
+    assert.equal(shareNorm.safeUserScore5, 4.85);
+    assert.equal(shareNorm.safeExpertScore10, null);
+    assert.equal(shareNorm.safeAuthenticReviews, 0);
+    assert.equal(shareNorm.safeMinPriceVnd, 0);
+    assert.equal(shareNorm.safeOfferCount, 8);
+    assert.equal(shareNorm.safeModelKeyToken, 'apple-iphone-18-pro');
+
+    const shareNorm5Pt = normalizeShareAuditFields({
+      modelKey: '',
+      userScore5: 9,
+      expertScore10: 4.6,
+      authenticReviews: 12,
+      minPriceVnd: 28_990_000,
+      offerCount: 5,
+    });
+    assert.equal(shareNorm5Pt.safeUserScore5, 5);
+    assert.equal(shareNorm5Pt.safeExpertScore10, 9.2);
+    assert.equal(shareNorm5Pt.safeMinPriceVnd, 28_990_000);
+    assert.equal(shareNorm5Pt.safeModelKeyToken, 'audit');
+
+    console.log(
+      '  ✅ [119/119] WatchlistWorkspace, ProductOffersExplorer & ProductShareAuditButton Bounds (#965) passed'
     );
   }
 

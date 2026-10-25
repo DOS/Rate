@@ -16,6 +16,7 @@ import {
   computeWatchlistTargetPrice,
   getWatchlist,
   removeWatchlistItem,
+  resolveWatchlistItemCurrentPrices,
   sanitizeWatchlistTargetPrice,
   subscribeWatchlist,
   upsertWatchlistItem,
@@ -184,7 +185,10 @@ export default function WatchlistWorkspace({
             headers,
             body: JSON.stringify({
               slug: item.slug,
-              targetPrice: item.targetPrice,
+              targetPrice: sanitizeWatchlistTargetPrice(
+                item.targetPrice,
+                item.priceWhenAdded
+              ),
               locale: locale || 'vi',
             }),
           });
@@ -240,9 +244,11 @@ export default function WatchlistWorkspace({
   const reachedCount = items.filter((item) => {
     const liveProd = productBySlug.get(item.slug);
     const liveDeal = liveDeals[item.slug];
-    const currentMin =
-      liveDeal?.current_min_price ||
-      (liveProd ? Number(liveProd.min_price || 0) : item.priceWhenAdded);
+    const { currentMin } = resolveWatchlistItemCurrentPrices(
+      item,
+      liveDeal,
+      liveProd
+    );
     return currentMin > 0 && currentMin <= item.targetPrice;
   }).length;
 
@@ -250,12 +256,8 @@ export default function WatchlistWorkspace({
     (acc, item) => {
       const liveProd = productBySlug.get(item.slug);
       const liveDeal = liveDeals[item.slug];
-      const curMin =
-        liveDeal?.current_min_price ||
-        (liveProd ? Number(liveProd.min_price || 0) : item.priceWhenAdded);
-      const curMax =
-        liveDeal?.current_max_price ||
-        (liveProd ? Number(liveProd.max_price || curMin) : curMin);
+      const { currentMin: curMin, currentMax: curMax } =
+        resolveWatchlistItemCurrentPrices(item, liveDeal, liveProd);
       const userR = liveProd ? resolveCompareEffectiveUserRating(liveProd) : 0;
       acc.totalMinVnd += curMin;
       acc.totalTargetVnd += item.targetPrice;
@@ -309,12 +311,8 @@ export default function WatchlistWorkspace({
           const liveDeal = liveDeals[item.slug];
           const rSig =
             liveDeal?.radar_signal ?? getRadarSignal(radarIndex, item.slug);
-          const curMin =
-            liveDeal?.current_min_price ||
-            (liveProd ? Number(liveProd.min_price || 0) : item.priceWhenAdded);
-          const curMax =
-            liveDeal?.current_max_price ||
-            (liveProd ? Number(liveProd.max_price || curMin) : curMin);
+          const { currentMin: curMin, currentMax: curMax } =
+            resolveWatchlistItemCurrentPrices(item, liveDeal, liveProd);
           const fallbackSpreadVnd = Math.max(0, curMax - curMin);
           const spreadStr = rSig?.priceSpread
             ? `+${rSig.priceSpread.spreadPct}% (${rSig.priceSpread.spreadVnd.toLocaleString('vi-VN')} ₫)`
@@ -360,12 +358,8 @@ export default function WatchlistWorkspace({
       const liveDeal = liveDeals[item.slug];
       const rSig =
         liveDeal?.radar_signal ?? getRadarSignal(radarIndex, item.slug);
-      const curMin =
-        liveDeal?.current_min_price ||
-        (liveProd ? Number(liveProd.min_price || 0) : item.priceWhenAdded);
-      const curMax =
-        liveDeal?.current_max_price ||
-        (liveProd ? Number(liveProd.max_price || curMin) : curMin);
+      const { currentMin: curMin, currentMax: curMax } =
+        resolveWatchlistItemCurrentPrices(item, liveDeal, liveProd);
       const spreadVnd =
         rSig?.priceSpread?.spreadVnd ?? Math.max(0, curMax - curMin);
       const spreadPct =
@@ -411,12 +405,8 @@ export default function WatchlistWorkspace({
         const liveDeal = liveDeals[item.slug];
         const rSig =
           liveDeal?.radar_signal ?? getRadarSignal(radarIndex, item.slug);
-        const curMin =
-          liveDeal?.current_min_price ||
-          (liveProd ? Number(liveProd.min_price || 0) : item.priceWhenAdded);
-        const curMax =
-          liveDeal?.current_max_price ||
-          (liveProd ? Number(liveProd.max_price || curMin) : curMin);
+        const { currentMin: curMin, currentMax: curMax } =
+          resolveWatchlistItemCurrentPrices(item, liveDeal, liveProd);
         return {
           ...item,
           currentMinPriceVnd: curMin,
@@ -735,16 +725,8 @@ export default function WatchlistWorkspace({
           {items.map((item) => {
             const live = productBySlug.get(item.slug);
             const dealInfo = liveDeals[item.slug];
-            const currentMin = dealInfo?.current_min_price
-              ? Number(dealInfo.current_min_price)
-              : live
-                ? Number(live.min_price || 0)
-                : item.priceWhenAdded;
-            const currentMax = dealInfo?.current_max_price
-              ? Number(dealInfo.current_max_price)
-              : live
-                ? Number(live.max_price || currentMin)
-                : currentMin;
+            const { currentMin, currentMax } =
+              resolveWatchlistItemCurrentPrices(item, dealInfo, live);
             const diffFromAdded =
               currentMin > 0 && item.priceWhenAdded > 0
                 ? currentMin - item.priceWhenAdded
@@ -756,10 +738,20 @@ export default function WatchlistWorkspace({
               ? getMasterProductHref(live)
               : `${item.categoryPath || '/smartphones'}/${item.slug}`;
             const bestOffer = dealInfo?.best_offer || null;
+            const bestOfferSafeUrl =
+              bestOffer &&
+              typeof bestOffer.url === 'string' &&
+              /^https?:\/\//i.test(bestOffer.url.trim())
+                ? bestOffer.url.trim()
+                : null;
             const platformCount =
               dealInfo?.platform_count || live?.merchant_count || 0;
             const radarSignal =
               dealInfo?.radar_signal ?? getRadarSignal(radarIndex, item.slug);
+            const parsedAddedTime = Date.parse(item.addedAt);
+            const safeAddedDate = Number.isFinite(parsedAddedTime)
+              ? new Date(parsedAddedTime).toLocaleDateString('vi-VN')
+              : '-';
 
             return (
               <div key={item.slug} className="col-lg-6 col-12">
@@ -867,9 +859,7 @@ export default function WatchlistWorkspace({
                         </h2>
                         <div className="text-muted small">
                           {t('savedDateLabel', {
-                            date: new Date(item.addedAt).toLocaleDateString(
-                              'vi-VN'
-                            ),
+                            date: safeAddedDate,
                           })}
                         </div>
                       </div>
@@ -960,7 +950,12 @@ export default function WatchlistWorkspace({
                             setEditingSlug(
                               editingSlug === item.slug ? null : item.slug
                             );
-                            setEditTarget(item.targetPrice);
+                            setEditTarget(
+                              sanitizeWatchlistTargetPrice(
+                                item.targetPrice,
+                                currentMin || item.priceWhenAdded
+                              )
+                            );
                           }}
                           className="btn btn-link btn-sm text-decoration-none p-0"
                           style={{ fontSize: '0.8125rem' }}
@@ -999,16 +994,22 @@ export default function WatchlistWorkspace({
                           </span>
                         )}
                       </div>
-                      <a
-                        href={bestOffer.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="small fw-semibold text-primary text-decoration-none"
-                      >
-                        {t('openDealLink', {
-                          price: bestOffer.price.toLocaleString('vi-VN'),
-                        })}
-                      </a>
+                      {bestOfferSafeUrl && (
+                        <a
+                          href={bestOfferSafeUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="small fw-semibold text-primary text-decoration-none"
+                        >
+                          {t('openDealLink', {
+                            price: (Number.isFinite(Number(bestOffer.price)) &&
+                            Number(bestOffer.price) > 0
+                              ? Math.round(Number(bestOffer.price))
+                              : currentMin
+                            ).toLocaleString('vi-VN'),
+                          })}
+                        </a>
+                      )}
                     </div>
                   )}
 

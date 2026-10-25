@@ -11,9 +11,10 @@ import {
 } from 'react-icons/bs';
 import { discountVerdictCopy } from '@/lib/discount-verdict-copy';
 import { Link } from '@/lib/navigation';
-import type {
-  MasterProductPriceHistorySummary,
-  MerchantOffer,
+import {
+  MAX_VALID_VND_PRICE,
+  type MasterProductPriceHistorySummary,
+  type MerchantOffer,
 } from '@/lib/rate-domain';
 import {
   RADAR_CSV_HEADERS,
@@ -37,6 +38,63 @@ interface ProductOffersExplorerProps {
 
 export type OfferSortKey = 'price_asc' | 'trust_desc' | 'discount_desc';
 
+export function computeMerchantTrustScore(riskScore: unknown): number {
+  const num = Number(riskScore);
+  const clampedRisk = Number.isFinite(num)
+    ? Math.max(0, Math.min(100, Math.round(num)))
+    : 0;
+  return 100 - clampedRisk;
+}
+
+export function isSafeExternalOfferUrl(url: unknown): boolean {
+  if (typeof url !== 'string' || !url.trim()) return false;
+  try {
+    const parsed = new URL(url.trim());
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
+
+export function computeOffersPriceSpreadAudit(
+  offers: readonly MerchantOffer[],
+  implausibleOfferIds: ReadonlySet<string> = new Set()
+) {
+  if (!Array.isArray(offers)) return null;
+  const valid = offers.filter((o) => {
+    const p = Number(o?.price_current);
+    return (
+      Number.isFinite(p) &&
+      p > 0 &&
+      p <= MAX_VALID_VND_PRICE &&
+      !implausibleOfferIds.has(o.id)
+    );
+  });
+  if (valid.length < 2) return null;
+  const sorted = [...valid].sort((a, b) => a.price_current - b.price_current);
+  const cheapest = sorted[0]!;
+  const priciest = sorted[sorted.length - 1]!;
+  const spreadVnd = Math.max(
+    0,
+    priciest.price_current - cheapest.price_current
+  );
+  if (spreadVnd <= 0) return null;
+  const spreadPct = Number(
+    ((spreadVnd / cheapest.price_current) * 100).toFixed(1)
+  );
+  return {
+    cheapest,
+    priciest,
+    spreadVnd,
+    spreadPct,
+    platformCount: new Set(
+      valid.map((o) =>
+        typeof o.platform === 'string' ? o.platform.toLowerCase() : ''
+      )
+    ).size,
+  };
+}
+
 export default function ProductOffersExplorer({
   productName,
   productSlug,
@@ -53,59 +111,44 @@ export default function ProductOffersExplorer({
   const [sortBy, setSortBy] = useState<OfferSortKey>('price_asc');
   const [copiedOffersMd, setCopiedOffersMd] = useState(false);
 
+  const safeOffers = useMemo(
+    () => (Array.isArray(offers) ? offers : []),
+    [offers]
+  );
+
   const platforms = useMemo(() => {
     const counts = new Map<string, number>();
-    for (const o of offers) {
-      const p = o.platform.toLowerCase();
+    for (const o of safeOffers) {
+      const p = typeof o.platform === 'string' ? o.platform.toLowerCase() : '';
+      if (!p) continue;
       counts.set(p, (counts.get(p) ?? 0) + 1);
     }
     return Array.from(counts.entries());
-  }, [offers]);
+  }, [safeOffers]);
 
   // Bait-price listings far below every other store (DOS/Rate#797): labelled,
   // listed after the plausible offers and left out of the price spread.
   const implausibleOfferIds = useMemo(
-    () => implausiblyLowOfferIds(offers),
-    [offers]
+    () => implausiblyLowOfferIds(safeOffers),
+    [safeOffers]
   );
 
-  const priceSpreadAudit = useMemo(() => {
-    const valid = offers.filter(
-      (o) => Number(o.price_current || 0) > 0 && !implausibleOfferIds.has(o.id)
-    );
-    if (valid.length < 2) return null;
-    const sorted = [...valid].sort((a, b) => a.price_current - b.price_current);
-    const cheapest = sorted[0]!;
-    const priciest = sorted[sorted.length - 1]!;
-    const spreadVnd = Math.max(
-      0,
-      priciest.price_current - cheapest.price_current
-    );
-    if (spreadVnd <= 0) return null;
-    const spreadPct = Number(
-      ((spreadVnd / cheapest.price_current) * 100).toFixed(1)
-    );
-    return {
-      cheapest,
-      priciest,
-      spreadVnd,
-      spreadPct,
-      platformCount: new Set(valid.map((o) => o.platform.toLowerCase())).size,
-    };
-  }, [offers, implausibleOfferIds]);
+  const priceSpreadAudit = useMemo(
+    () => computeOffersPriceSpreadAudit(safeOffers, implausibleOfferIds),
+    [safeOffers, implausibleOfferIds]
+  );
 
   const filteredOffers = useMemo(() => {
-    const base = offers.filter((o) => {
-      if (
-        selectedPlatform !== 'all' &&
-        o.platform.toLowerCase() !== selectedPlatform
-      ) {
+    const base = safeOffers.filter((o) => {
+      const plat =
+        typeof o.platform === 'string' ? o.platform.toLowerCase() : '';
+      if (selectedPlatform !== 'all' && plat !== selectedPlatform) {
         return false;
       }
       if (officialOnly && !o.merchant.is_official) {
         return false;
       }
-      const trustScore = Math.max(0, 100 - (o.merchant.risk_score || 0));
+      const trustScore = computeMerchantTrustScore(o.merchant.risk_score);
       if (highTrustOnly && trustScore < 80) {
         return false;
       }
@@ -116,8 +159,8 @@ export default function ProductOffersExplorer({
       const implausibleA = implausibleOfferIds.has(a.id) ? 1 : 0;
       const implausibleB = implausibleOfferIds.has(b.id) ? 1 : 0;
       if (implausibleA !== implausibleB) return implausibleA - implausibleB;
-      const trustA = Math.max(0, 100 - (a.merchant.risk_score || 0));
-      const trustB = Math.max(0, 100 - (b.merchant.risk_score || 0));
+      const trustA = computeMerchantTrustScore(a.merchant.risk_score);
+      const trustB = computeMerchantTrustScore(b.merchant.risk_score);
       const discA =
         a.price_original && a.price_original > a.price_current
           ? (a.price_original - a.price_current) / a.price_original
@@ -136,13 +179,19 @@ export default function ProductOffersExplorer({
       return a.price_current - b.price_current || trustB - trustA;
     });
   }, [
-    offers,
+    safeOffers,
     selectedPlatform,
     officialOnly,
     highTrustOnly,
     sortBy,
     implausibleOfferIds,
   ]);
+
+  const safeSlugFileToken =
+    (typeof productSlug === 'string' ? productSlug : '')
+      .toLowerCase()
+      .replace(/[^a-z0-9_-]+/g, '-')
+      .replace(/^-+|-+$/g, '') || 'audit';
 
   const handleCopyOffersMarkdown = async () => {
     if (typeof navigator === 'undefined' || filteredOffers.length === 0) return;
@@ -157,17 +206,20 @@ export default function ProductOffersExplorer({
     ];
     const sep = headers.map(() => '---');
     const rows = filteredOffers.map((o) => {
-      const trust = Math.max(0, 100 - (o.merchant.risk_score || 0));
+      const trust = computeMerchantTrustScore(o.merchant.risk_score);
       const analysis = byOffer[o.id];
+      const hasValidOrig =
+        o.price_original != null &&
+        Number.isFinite(Number(o.price_original)) &&
+        Number(o.price_original) > o.price_current &&
+        Number(o.price_original) <= MAX_VALID_VND_PRICE;
       return [
         o.platform.toUpperCase(),
         o.merchant.name.replace(/\|/g, '-'),
         o.merchant.is_official ? 'Yes' : 'No',
         `${trust}%`,
         `${o.price_current.toLocaleString('vi-VN')} ₫`,
-        o.price_original
-          ? `${o.price_original.toLocaleString('vi-VN')} ₫`
-          : '-',
+        hasValidOrig ? `${o.price_original!.toLocaleString('vi-VN')} ₫` : '-',
         implausibleOfferIds.has(o.id)
           ? t('offersImplausiblyLowBadge')
           : analysis
@@ -225,8 +277,13 @@ export default function ProductOffersExplorer({
       ...(radarSignal ? RADAR_CSV_HEADERS : []),
     ];
     const rows = filteredOffers.map((o) => {
-      const trust = Math.max(0, 100 - (o.merchant.risk_score || 0));
+      const trust = computeMerchantTrustScore(o.merchant.risk_score);
       const analysis = byOffer[o.id];
+      const hasValidOrig =
+        o.price_original != null &&
+        Number.isFinite(Number(o.price_original)) &&
+        Number(o.price_original) > o.price_current &&
+        Number(o.price_original) <= MAX_VALID_VND_PRICE;
       return [
         o.id,
         o.platform,
@@ -236,11 +293,11 @@ export default function ProductOffersExplorer({
         String(o.merchant.dosafe_risk_score || 0),
         String(o.merchant.review_risk_score || 0),
         String(o.price_current),
-        String(o.price_original || ''),
+        hasValidOrig ? String(o.price_original) : '',
         implausibleOfferIds.has(o.id)
           ? 'implausibly_low'
           : analysis?.verdict || 'normal',
-        o.url,
+        isSafeExternalOfferUrl(o.url) ? o.url.trim() : '',
         ...(radarSignal ? radarCsvCells(radarSignal) : []),
       ];
     });
@@ -256,7 +313,7 @@ export default function ProductOffersExplorer({
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `rate-offers-${productSlug}.csv`;
+    a.download = `rate-offers-${safeSlugFileToken}.csv`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -284,20 +341,27 @@ export default function ProductOffersExplorer({
             maxPriceVnd: priceSpreadAudit.priciest.price_current,
           }
         : null,
-      offers: filteredOffers.map((o) => ({
-        id: o.id,
-        platform: o.platform,
-        merchantName: o.merchant.name,
-        isOfficialMall: o.merchant.is_official,
-        trustScorePercent: Math.max(0, 100 - (o.merchant.risk_score || 0)),
-        priceCurrentVnd: o.price_current,
-        priceOriginalVnd: o.price_original || null,
-        verdict: implausibleOfferIds.has(o.id)
-          ? 'implausibly_low'
-          : byOffer[o.id]?.verdict || 'normal',
-        implausiblyLow: implausibleOfferIds.has(o.id),
-        url: o.url,
-      })),
+      offers: filteredOffers.map((o) => {
+        const hasValidOrig =
+          o.price_original != null &&
+          Number.isFinite(Number(o.price_original)) &&
+          Number(o.price_original) > o.price_current &&
+          Number(o.price_original) <= MAX_VALID_VND_PRICE;
+        return {
+          id: o.id,
+          platform: o.platform,
+          merchantName: o.merchant.name,
+          isOfficialMall: o.merchant.is_official,
+          trustScorePercent: computeMerchantTrustScore(o.merchant.risk_score),
+          priceCurrentVnd: o.price_current,
+          priceOriginalVnd: hasValidOrig ? o.price_original : null,
+          verdict: implausibleOfferIds.has(o.id)
+            ? 'implausibly_low'
+            : byOffer[o.id]?.verdict || 'normal',
+          implausiblyLow: implausibleOfferIds.has(o.id),
+          url: isSafeExternalOfferUrl(o.url) ? o.url.trim() : '',
+        };
+      }),
     };
     const blob = new Blob([JSON.stringify(payload, null, 2)], {
       type: 'application/json;charset=utf-8;',
@@ -305,7 +369,7 @@ export default function ProductOffersExplorer({
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `rate-offers-${productSlug}.json`;
+    a.download = `rate-offers-${safeSlugFileToken}.json`;
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -373,7 +437,7 @@ export default function ProductOffersExplorer({
               }`}
               style={{ fontSize: '0.8125rem' }}
             >
-              {t('offersFilterAll', { count: offers.length })}
+              {t('offersFilterAll', { count: safeOffers.length })}
             </button>
             {platforms.map(([plat, count]) => (
               <button
@@ -509,13 +573,19 @@ export default function ProductOffersExplorer({
             <tbody>
               {filteredOffers.map((offer) => {
                 const price = offer.price_current.toLocaleString('vi-VN');
-                const origPrice = offer.price_original
-                  ? offer.price_original.toLocaleString('vi-VN')
-                  : null;
-                const trustScore = Math.max(
-                  0,
-                  100 - (offer.merchant.risk_score || 0)
+                const origPrice =
+                  offer.price_original != null &&
+                  Number.isFinite(Number(offer.price_original)) &&
+                  Number(offer.price_original) > offer.price_current &&
+                  Number(offer.price_original) <= MAX_VALID_VND_PRICE
+                    ? offer.price_original.toLocaleString('vi-VN')
+                    : null;
+                const trustScore = computeMerchantTrustScore(
+                  offer.merchant.risk_score
                 );
+                const safeOfferUrl = isSafeExternalOfferUrl(offer.url)
+                  ? offer.url.trim()
+                  : null;
                 const trustBadgeClass =
                   trustScore >= 80
                     ? 'bg-success-subtle text-success'
@@ -648,23 +718,25 @@ export default function ProductOffersExplorer({
                       )}
                     </td>
                     <td className="text-end">
-                      <div className="d-inline-flex align-items-center justify-content-end flex-wrap gap-1">
-                        <Link
-                          href={`/inspect?q=${encodeURIComponent(offer.url)}&price=${offer.price_current}`}
-                          className="btn btn-sm btn-outline-primary rounded-pill px-2"
-                          title={t('offersInspectBtnTitle')}
-                        >
-                          {t('offersInspectBtn')}
-                        </Link>
-                        <a
-                          href={offer.url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="btn btn-sm btn-outline-secondary rounded-pill px-3"
-                        >
-                          {t('offersSourceLinkBtn')}
-                        </a>
-                      </div>
+                      {safeOfferUrl && (
+                        <div className="d-inline-flex align-items-center justify-content-end flex-wrap gap-1">
+                          <Link
+                            href={`/inspect?q=${encodeURIComponent(safeOfferUrl)}&price=${offer.price_current}`}
+                            className="btn btn-sm btn-outline-primary rounded-pill px-2"
+                            title={t('offersInspectBtnTitle')}
+                          >
+                            {t('offersInspectBtn')}
+                          </Link>
+                          <a
+                            href={safeOfferUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="btn btn-sm btn-outline-secondary rounded-pill px-3"
+                          >
+                            {t('offersSourceLinkBtn')}
+                          </a>
+                        </div>
+                      )}
                     </td>
                   </tr>
                 );
