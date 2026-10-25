@@ -276,6 +276,51 @@ function testMasterProductAndScrapedProductSchemas(): void {
       .success,
     true
   );
+  assert.equal(
+    sharedDataRoot.HttpUrlSchema.safeParse('https://.rate.vn/smartphones')
+      .success,
+    false,
+    'HttpUrlSchema must reject leading-dot hostnames'
+  );
+  assert.equal(
+    sharedDataRoot.HttpUrlSchema.safeParse('https://rate..vn/smartphones')
+      .success,
+    false,
+    'HttpUrlSchema must reject consecutive-dot hostnames'
+  );
+  assert.equal(
+    sharedDataRoot.HttpUrlSchema.safeParse('https://rate.vn:8443/smartphones')
+      .success,
+    false,
+    'HttpUrlSchema must reject non-standard ports on public hosts'
+  );
+  assert.equal(
+    sharedDataRoot.isValidSupabaseHttpUrl('https://.supabase.co'),
+    false,
+    'isValidSupabaseHttpUrl must reject leading-dot hostnames'
+  );
+  assert.equal(
+    sharedDataRoot.isValidSupabaseHttpUrl('https://example..supabase.co'),
+    false,
+    'isValidSupabaseHttpUrl must reject consecutive-dot hostnames'
+  );
+  assert.equal(
+    sharedDataRoot.isValidSupabaseHttpUrl('https://example.supabase.co.'),
+    false,
+    'isValidSupabaseHttpUrl must reject trailing-dot hostnames'
+  );
+  assert.equal(
+    sharedDataRoot.HttpUrlSchema.safeParse('https://rate.vn./smartphones')
+      .success,
+    false,
+    'HttpUrlSchema must reject trailing-dot hostnames'
+  );
+  assert.equal(
+    sharedDataRoot.HttpUrlSchema.safeParse('http://localhost:3000/smartphones')
+      .success,
+    true,
+    'HttpUrlSchema must allow custom ports on loopback hosts'
+  );
 
   const responseSchema = ApiResponseSchema(z.object({ ok: z.boolean() }));
   const parsedResponse = responseSchema.parse({

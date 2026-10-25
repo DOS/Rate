@@ -29,6 +29,9 @@ export function isValidSupabaseHttpUrl(rawUrl: string): boolean {
     return (
       (parsed.protocol === 'https:' || parsed.protocol === 'http:') &&
       Boolean(parsed.hostname) &&
+      !parsed.hostname.startsWith('.') &&
+      !parsed.hostname.endsWith('.') &&
+      !parsed.hostname.includes('..') &&
       parsed.username === '' &&
       parsed.password === '' &&
       parsed.search === '' &&
