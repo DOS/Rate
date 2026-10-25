@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { escapeCsvCell } from '@/lib/csv-safe';
 
-const CONTROL_CHARS_RE = /[\u0000-\u001F\u007F-\u009F]+/g;
+const CONTROL_CHARS_RE = /\p{Cc}+/gu;
 
 export function sanitizeMerchantAuditText(
   value: unknown,

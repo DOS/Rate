@@ -58,7 +58,7 @@ import {
 } from '@/lib/offer-plausibility';
 import { productImageUrl } from '@/lib/rate-domain-core';
 
-const INSPECT_CONTROL_CHARS_RE = /[\u0000-\u001F\u007F-\u009F]+/g;
+const INSPECT_CONTROL_CHARS_RE = /\p{Cc}+/gu;
 
 export function sanitizeInspectQuery(rawQuery: unknown, maxLen = 512): string {
   if (typeof rawQuery !== 'string') return '';
