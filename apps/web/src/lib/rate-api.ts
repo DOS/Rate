@@ -235,6 +235,14 @@ export interface CategoryDirectoryFacets {
 export async function getCategoryDirectoryFacets(
   categorySlug: string = 'smartphones'
 ): Promise<CategoryDirectoryFacets> {
+  const cleanCategorySlug =
+    typeof categorySlug === 'string'
+      ? categorySlug
+          .replace(/\p{Cc}+/gu, '')
+          .trim()
+          .toLowerCase()
+          .slice(0, 64)
+      : 'smartphones';
   const supabase = getRateClient();
 
   const { data: catRows, error: catErr } = await supabase
@@ -244,7 +252,7 @@ export async function getCategoryDirectoryFacets(
 
   if (catErr) {
     log.error('category directory lookup failed', {
-      categorySlug,
+      categorySlug: cleanCategorySlug,
       message: catErr.message,
     });
     throw new RateDataUnavailableError('categories', catErr);
@@ -252,7 +260,7 @@ export async function getCategoryDirectoryFacets(
 
   const categories = (catRows as RateCategoryItem[]) || [];
   const currentCategory =
-    categories.find((c) => c.slug === categorySlug) || null;
+    categories.find((c) => c.slug === cleanCategorySlug) || null;
 
   if (!currentCategory) {
     return {
@@ -346,17 +354,25 @@ export async function getMasterProducts(
 ): Promise<MasterProduct[]> {
   const supabase = getRateClient();
   let resolvedCategoryId: string | null = null;
+  const cleanCategorySlug =
+    typeof params?.categorySlug === 'string'
+      ? params.categorySlug
+          .replace(/\p{Cc}+/gu, '')
+          .trim()
+          .toLowerCase()
+          .slice(0, 64)
+      : '';
 
-  if (params?.categorySlug && params.categorySlug !== 'all') {
+  if (cleanCategorySlug && cleanCategorySlug !== 'all') {
     const { data: catRow, error: catErr } = await supabase
       .from('categories')
       .select('id')
-      .eq('slug', params.categorySlug)
+      .eq('slug', cleanCategorySlug)
       .maybeSingle();
 
     if (catErr) {
       log.error('category slug lookup failed', {
-        categorySlug: params.categorySlug,
+        categorySlug: cleanCategorySlug,
         message: catErr.message,
       });
       throw new RateDataUnavailableError('category lookup', catErr);
@@ -368,12 +384,30 @@ export async function getMasterProducts(
     resolvedCategoryId = catRow.id;
   }
 
+  const sanitizeBrandToken = (raw: unknown): string =>
+    typeof raw === 'string'
+      ? raw
+          .replace(/\p{Cc}+/gu, '')
+          .trim()
+          .slice(0, 80)
+      : '';
+  const cleanedMultiBrands = Array.isArray(params?.brands)
+    ? params.brands.map(sanitizeBrandToken).filter(Boolean).slice(0, 50)
+    : [];
+  const cleanedSingleBrand = sanitizeBrandToken(params?.brand);
   const brandList =
-    params?.brands && params.brands.length > 0
-      ? params.brands.map((b) => b.trim()).filter(Boolean)
-      : params?.brand
-        ? [params.brand.trim()].filter(Boolean)
+    cleanedMultiBrands.length > 0
+      ? cleanedMultiBrands
+      : cleanedSingleBrand
+        ? [cleanedSingleBrand]
         : null;
+  const cleanSearch =
+    typeof params?.search === 'string'
+      ? params.search
+          .replace(/\p{Cc}+/gu, '')
+          .trim()
+          .slice(0, 120)
+      : '';
   const boundedLimit =
     typeof params?.limit === 'number' &&
     Number.isFinite(params.limit) &&
@@ -387,15 +421,11 @@ export async function getMasterProducts(
       ? Math.min(Math.floor(params.offset), 100_000)
       : 0;
 
-  const categoryHint: CanonicalCategorySlug | null =
-    params?.categorySlug &&
-    (params.categorySlug === 'smartphones' ||
-      params.categorySlug === 'tablets' ||
-      params.categorySlug === 'laptops' ||
-      params.categorySlug === 'smartwatches' ||
-      params.categorySlug === 'earbuds')
-      ? params.categorySlug
-      : null;
+  const categoryHint: CanonicalCategorySlug | null = isCanonicalCategorySlug(
+    cleanCategorySlug
+  )
+    ? cleanCategorySlug
+    : null;
 
   // Audit C1: Prefer server-side SQL RPC `search_master_products` when deployed.
   // Every filter defaults to NULL in SQL, so an omitted (undefined) filter is
@@ -406,7 +436,7 @@ export async function getMasterProducts(
       {
         p_category_id: resolvedCategoryId ?? undefined,
         p_brands: brandList && brandList.length > 0 ? brandList : undefined,
-        p_search: params?.search?.trim() || undefined,
+        p_search: cleanSearch || undefined,
         p_min_price: params?.minPrice,
         p_max_price: params?.maxPrice,
         p_min_rating: params?.minRating,
@@ -438,12 +468,10 @@ export async function getMasterProducts(
   // filters run in JS below. Applied after .range() they would empty or
   // under-fill a page, so with any of them the fallback reads every row the SQL
   // filters allow, then pages in JS (DOS/Rate#482, #510).
-  const hasMultiBrands = Boolean(
-    params?.brands && params.brands.some((b) => b.trim().length > 0)
-  );
+  const hasMultiBrands = cleanedMultiBrands.length > 0;
   const needsJsFilter = Boolean(
     hasMultiBrands ||
-    (params?.search && params.search.trim().length > 0) ||
+    cleanSearch.length > 0 ||
     (typeof params?.minRating === 'number' && params.minRating > 0) ||
     (typeof params?.minBatteryMah === 'number' && params.minBatteryMah > 0) ||
     (typeof params?.minRefreshRateHz === 'number' &&
@@ -456,6 +484,7 @@ export async function getMasterProducts(
     params?.sort === 'rating_desc'
   );
 
+  const safeSingleBrandIlike = sanitizePostgrestFilterToken(cleanedSingleBrand);
   const buildFallbackQuery = () => {
     let query = supabase
       .from('master_products')
@@ -466,8 +495,8 @@ export async function getMasterProducts(
       query = query.eq('category_id', resolvedCategoryId);
     }
 
-    if (!hasMultiBrands && params?.brand && params.brand.trim()) {
-      query = query.ilike('brand', `%${params.brand.trim()}%`);
+    if (!hasMultiBrands && safeSingleBrandIlike) {
+      query = query.ilike('brand', `%${safeSingleBrandIlike}%`);
     }
 
     if (typeof params?.minPrice === 'number' && params.minPrice > 0) {
@@ -539,18 +568,23 @@ export async function getMasterProducts(
   }
 
   // Multi-brand case-insensitive filter
-  if (hasMultiBrands && params?.brands) {
+  if (hasMultiBrands) {
     const allowedBrands = new Set(
-      params.brands.map((b) => b.trim().toLowerCase()).filter(Boolean)
+      cleanedMultiBrands.map((b) => b.toLowerCase())
     );
     items = items.filter((item) =>
-      allowedBrands.has((item.brand || '').trim().toLowerCase())
+      allowedBrands.has(
+        (item.brand || '')
+          .replace(/\p{Cc}+/gu, '')
+          .trim()
+          .toLowerCase()
+      )
     );
   }
 
   // Keyword search across combined brand + name + model + chipset + key_specs (supports multi-token queries like "Apple iPhone 16 Pro Max")
-  if (params?.search && params.search.trim().length > 0) {
-    const q = params.search.trim().toLowerCase();
+  if (cleanSearch.length > 0) {
+    const q = cleanSearch.toLowerCase();
     const tokens = q.split(/\s+/).filter((t) => t.length >= 2);
     items = items.filter((item) => {
       const combined = [
@@ -706,12 +740,14 @@ const PRODUCT_SLUG_REGEX = /^[a-zA-Z0-9._-]{1,120}$/;
 export async function getMasterProductBySlug(
   slug: string
 ): Promise<MasterProduct | null> {
-  if (!PRODUCT_SLUG_REGEX.test(slug)) return null;
+  const cleanSlug =
+    typeof slug === 'string' ? slug.replace(/\p{Cc}+/gu, '').trim() : '';
+  if (!PRODUCT_SLUG_REGEX.test(cleanSlug)) return null;
   const supabase = getRateClient();
   const { data, error } = await supabase
     .from('master_products')
     .select('*')
-    .eq('slug', slug)
+    .eq('slug', cleanSlug)
     .eq('status', 'published')
     .maybeSingle();
 
@@ -1104,8 +1140,22 @@ export async function getMasterProductOffers(
 export async function getMasterProductOffersBatch(
   masterIds: readonly string[]
 ): Promise<Map<string, MerchantOffer[]>> {
+  if (!Array.isArray(masterIds) || masterIds.length === 0) {
+    return new Map();
+  }
   const uniqueIds = Array.from(
-    new Set(masterIds.map((id) => id.trim()).filter(Boolean))
+    new Set(
+      masterIds
+        .map((id) =>
+          typeof id === 'string'
+            ? id
+                .replace(/\p{Cc}+/gu, '')
+                .trim()
+                .slice(0, 120)
+            : ''
+        )
+        .filter(Boolean)
+    )
   );
   const offersByMaster = new Map<string, MerchantOffer[]>(
     uniqueIds.map((id) => [id, []])
@@ -1454,10 +1504,14 @@ export async function getMasterProductReviewSummary(
 export async function compareMasterProducts(
   slugs: string[]
 ): Promise<MasterProduct[]> {
-  if (!slugs || slugs.length === 0) return [];
+  if (!Array.isArray(slugs) || slugs.length === 0) return [];
   const uniqueSlugs = Array.from(
     new Set(
-      slugs.map((s) => s.trim()).filter((s) => PRODUCT_SLUG_REGEX.test(s))
+      slugs
+        .map((s) =>
+          typeof s === 'string' ? s.replace(/\p{Cc}+/gu, '').trim() : ''
+        )
+        .filter((s) => PRODUCT_SLUG_REGEX.test(s))
     )
   ).slice(0, 4);
   if (uniqueSlugs.length === 0) return [];

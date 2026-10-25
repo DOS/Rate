@@ -10434,6 +10434,72 @@ async function runCoreArchitectureSuite() {
     );
   }
 
+  // [114/114] rate-api Filter Sanitization, Batch Offer IDs & Compare Slug Guards (#944)
+  {
+    const rateApiMod = await import('../../../lib/rate-api');
+    const emptyBatch = await rateApiMod.getMasterProductOffersBatch(
+      null as unknown as readonly string[]
+    );
+    assert.equal(
+      emptyBatch.size,
+      0,
+      'getMasterProductOffersBatch must return empty Map for non-array input'
+    );
+    const blankBatch = await rateApiMod.getMasterProductOffersBatch([
+      '   \u0000  ',
+      null as unknown as string,
+    ]);
+    assert.equal(
+      blankBatch.size,
+      0,
+      'getMasterProductOffersBatch must ignore control-char-only or non-string IDs'
+    );
+
+    const nonArrayCompare = await rateApiMod.compareMasterProducts(
+      null as unknown as string[]
+    );
+    assert.deepEqual(
+      nonArrayCompare,
+      [],
+      'compareMasterProducts must return [] for non-array input'
+    );
+    const invalidSlugsCompare = await rateApiMod.compareMasterProducts([
+      null as unknown as string,
+      '../evil-slug',
+      '   \u0007   ',
+    ]);
+    assert.deepEqual(
+      invalidSlugsCompare,
+      [],
+      'compareMasterProducts must safely filter out non-string and invalid slugs without calling Supabase'
+    );
+
+    const invalidBySlug = await rateApiMod.getMasterProductBySlug(
+      null as unknown as string
+    );
+    assert.equal(
+      invalidBySlug,
+      null,
+      'getMasterProductBySlug must return null for non-string input without calling Supabase'
+    );
+
+    const rateApiSrc = fs.readFileSync(
+      path.join(webSrcRoot, 'lib/rate-api.ts'),
+      'utf8'
+    );
+    assert.equal(
+      rateApiSrc.includes(
+        'const safeSingleBrandIlike = sanitizePostgrestFilterToken(cleanedSingleBrand);'
+      ),
+      true,
+      'getMasterProducts must sanitize single-brand fallback ILIKE token via sanitizePostgrestFilterToken'
+    );
+
+    console.log(
+      '  ✅ [114/114] rate-api Filter Sanitization, Batch Offer IDs & Compare Slug Guards (#944) passed'
+    );
+  }
+
   console.log('🎉 All Rate.vn Core Architecture tests passed!');
 }
 
