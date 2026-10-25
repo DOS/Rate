@@ -72,7 +72,7 @@ export async function auditMasterSpecs(supabase: RateSupabaseClient): Promise<nu
     model_key: string;
     specifications?: ProductSpecifications | null;
   }>) {
-    if (!row || typeof row !== 'object') continue;
+    if (!row || typeof row !== 'object' || Array.isArray(row)) continue;
     const safeName =
       stripKeySpecControlChars(String(row.name ?? ''))
         .replace(/\s+/g, ' ')
@@ -218,7 +218,7 @@ export function mergeKeySpecs(
 export async function runMasterSpecsBackfill(
   options: BackfillSpecsOptions = {}
 ): Promise<BackfillSpecsResult> {
-  if (!options || typeof options !== 'object') options = {};
+  if (!options || typeof options !== 'object' || Array.isArray(options)) options = {};
   const apply = options.apply === true;
   const { createClient } = await import('@supabase/supabase-js');
   const { EntityMatcher } = await import('../entity-matcher.js');
@@ -254,7 +254,7 @@ export async function runMasterSpecsBackfill(
   }
   const categoryIdBySlug = new Map<string, string>();
   for (const c of categories || []) {
-    if (!c || typeof c !== 'object') continue;
+    if (!c || typeof c !== 'object' || Array.isArray(c)) continue;
     const safeSlug =
       typeof c.slug === 'string' ? stripKeySpecControlChars(c.slug).trim().slice(0, 120) : '';
     const safeCatId =
@@ -366,7 +366,7 @@ export async function runMasterSpecsBackfill(
 
   let skipped = 0;
   for (const m of masters || []) {
-    if (!m || typeof m !== 'object') continue;
+    if (!m || typeof m !== 'object' || Array.isArray(m)) continue;
     const safeMasterId =
       typeof m.id === 'string' && !/\p{Cc}/u.test(m.id.trim()) ? m.id.trim().slice(0, 128) : '';
     const safeModelKey =
@@ -457,7 +457,7 @@ export async function runMasterSpecsBackfill(
 export async function runQuickSpecSyncAndAudit(
   options: BackfillSpecsOptions = {}
 ): Promise<number> {
-  if (!options || typeof options !== 'object') options = {};
+  if (!options || typeof options !== 'object' || Array.isArray(options)) options = {};
   const apply = options.apply === true;
   const { createClient } = await import('@supabase/supabase-js');
   const rawSupabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;

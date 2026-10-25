@@ -243,13 +243,19 @@ export class ImporterStructuredLogger {
   private context: ImporterLogContext;
 
   constructor(context: ImporterLogContext) {
-    this.context = { ...context };
+    const safeCtx =
+      context && typeof context === 'object' && !Array.isArray(context)
+        ? context
+        : { component: 'Importer' };
+    this.context = { ...safeCtx };
   }
 
   public child(overrides: Partial<ImporterLogContext>): ImporterStructuredLogger {
+    const safeOverrides =
+      overrides && typeof overrides === 'object' && !Array.isArray(overrides) ? overrides : {};
     return new ImporterStructuredLogger({
       ...this.context,
-      ...overrides,
+      ...safeOverrides,
     });
   }
 
@@ -271,7 +277,12 @@ export class ImporterStructuredLogger {
       const cleaned = cleanField(val, '');
       return cleaned.length > 0 ? cleaned : null;
     };
-    const sanitizedMeta = meta ? (sanitizeLogMeta(meta) as Record<string, unknown>) : undefined;
+    const rawMeta =
+      meta && typeof meta === 'object' && !Array.isArray(meta) ? sanitizeLogMeta(meta) : undefined;
+    const sanitizedMeta =
+      rawMeta && typeof rawMeta === 'object' && !Array.isArray(rawMeta)
+        ? (rawMeta as Record<string, unknown>)
+        : undefined;
     return {
       timestamp: new Date().toISOString(),
       level,
@@ -309,8 +320,10 @@ export function createImporterLogger(
   component: string,
   overrides: Omit<ImporterLogContext, 'component'> = {}
 ): ImporterStructuredLogger {
+  const safeOverrides =
+    overrides && typeof overrides === 'object' && !Array.isArray(overrides) ? overrides : {};
   return new ImporterStructuredLogger({
+    ...safeOverrides,
     component,
-    ...overrides,
   });
 }
