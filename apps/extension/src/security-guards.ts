@@ -36,10 +36,21 @@ export function normalizeAllowedApiBaseUrl(
   while (trimmed.endsWith('/')) {
     trimmed = trimmed.slice(0, -1);
   }
-  if (!trimmed) return DEFAULT_API_BASE_URL;
+  if (!trimmed || trimmed.length > 2048 || /[\s\p{Cc}]/u.test(trimmed)) {
+    return DEFAULT_API_BASE_URL;
+  }
 
   try {
     const parsed = new URL(trimmed);
+    if (
+      parsed.username ||
+      parsed.password ||
+      parsed.search ||
+      parsed.hash ||
+      (parsed.pathname && parsed.pathname !== '/')
+    ) {
+      return DEFAULT_API_BASE_URL;
+    }
     const origin = parsed.origin.toLowerCase();
     const isAllowed = (ALLOWED_API_BASE_ORIGINS as readonly string[]).includes(
       origin
@@ -143,26 +154,52 @@ export function selectFreshestSessionSignal<T extends SessionSignalEntry>(
 }
 
 const SAFE_EXTERNAL_ID_REGEX = /^[a-zA-Z0-9_.-]{1,120}$/;
+const RESERVED_EXTERNAL_ID_REGEX =
+  /^(?:0+|null|undefined|nan|infinity|-infinity|true|false)$/i;
 
 function sanitizeExternalIdentifier(val: unknown): string | null {
   if (typeof val !== 'string') return null;
   const cleaned = val.replace(/\p{Cc}+/gu, '').trim();
-  if (!cleaned || !SAFE_EXTERNAL_ID_REGEX.test(cleaned)) {
+  if (
+    !cleaned ||
+    !SAFE_EXTERNAL_ID_REGEX.test(cleaned) ||
+    !/[a-zA-Z0-9]/.test(cleaned) ||
+    cleaned.startsWith('.') ||
+    cleaned.endsWith('.') ||
+    cleaned.includes('..') ||
+    RESERVED_EXTERNAL_ID_REGEX.test(cleaned)
+  ) {
     return null;
   }
   return cleaned;
 }
 
+function isValidHttpUrlHostname(host: string): boolean {
+  const lower = host.toLowerCase();
+  return (
+    Boolean(lower) &&
+    !lower.startsWith('.') &&
+    !lower.endsWith('.') &&
+    !lower.includes('..')
+  );
+}
+
 function sanitizeCanonicalSignalUrl(rawUrl: unknown): string {
   if (typeof rawUrl !== 'string') return '';
   const cleaned = rawUrl.replace(/\p{Cc}+/gu, '').trim();
-  if (!cleaned || cleaned.length > 2048) return '';
+  if (!cleaned || cleaned.length > 2048 || /\s/.test(cleaned)) return '';
   try {
     const parsed = new URL(cleaned);
     if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
       return '';
     }
     if (parsed.username || parsed.password) {
+      return '';
+    }
+    if (!isValidHttpUrlHostname(parsed.hostname)) {
+      return '';
+    }
+    if (parsed.port !== '' && parsed.port !== '80' && parsed.port !== '443') {
       return '';
     }
     return `${parsed.origin}${parsed.pathname}`;
@@ -257,13 +294,17 @@ export function escapeSafeExternalHref(
 ): string {
   if (typeof rawUrl !== 'string') return fallbackUrl;
   const trimmed = rawUrl.replace(/\p{Cc}+/gu, '').trim();
-  if (!trimmed || trimmed.length > 2048) return fallbackUrl;
+  if (!trimmed || trimmed.length > 2048 || /\s/.test(trimmed))
+    return fallbackUrl;
   try {
     const parsed = new URL(trimmed, 'https://rate.vn');
     if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
       return fallbackUrl;
     }
     if (parsed.username || parsed.password) {
+      return fallbackUrl;
+    }
+    if (!isValidHttpUrlHostname(parsed.hostname)) {
       return fallbackUrl;
     }
     return parsed.href
@@ -420,7 +461,12 @@ export function filterValidSparklinePrices(
 ): number[] {
   if (!Array.isArray(points)) return [];
   const valid = points
-    .map((p) => Number(p?.price))
+    .filter(
+      (p) =>
+        Boolean(p && typeof p === 'object' && !Array.isArray(p)) &&
+        typeof p.price !== 'boolean'
+    )
+    .map((p) => Number(p.price))
     .filter(
       (p) => Number.isFinite(p) && p > 0 && p <= MAX_VALID_EXTENSION_VND_PRICE
     );
