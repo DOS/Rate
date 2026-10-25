@@ -282,7 +282,9 @@ export default async function MerchantProfilePage({
                       className="d-flex align-items-center small flex-wrap gap-3"
                       style={{ color: '#94a3b8' }}
                     >
-                      <span className="d-inline-flex align-items-center gap-1">
+                      {/* Items wrap: "Hodnocení tržiště: Neaktualizováno" is wider
+                          than a 320px header column (DOS/Rate#1084). */}
+                      <span className="d-inline-flex align-items-center flex-wrap gap-1">
                         <BsStarFill className="text-warning" />
                         {t('platformRatingLabel')}{' '}
                         <strong className="font-monospace text-white">
@@ -291,7 +293,7 @@ export default async function MerchantProfilePage({
                             : t('notUpdatedYet')}
                         </strong>
                       </span>
-                      <span className="d-inline-flex align-items-center gap-1">
+                      <span className="d-inline-flex align-items-center flex-wrap gap-1">
                         <BsPeopleFill className="text-info" />
                         {t('followersLabel')}{' '}
                         <strong className="font-monospace text-white">
@@ -300,7 +302,7 @@ export default async function MerchantProfilePage({
                             : '-'}
                         </strong>
                       </span>
-                      <span className="d-inline-flex align-items-center gap-1">
+                      <span className="d-inline-flex align-items-center flex-wrap gap-1">
                         <BsBoxSeam className="text-success" />
                         {t('trackedModelsLabel')}{' '}
                         <strong className="font-monospace text-white">
