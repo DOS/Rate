@@ -13,6 +13,7 @@ import {
   type MerchantOffer,
 } from '../../lib/rate-api';
 import {
+  EMPTY_RADAR_SIGNAL,
   buildRadarIndex,
   getRadarSignal,
   type RadarSignal,
@@ -208,7 +209,16 @@ export function computeCrossPlatformDealRadarFromData(
     ? clusters.slice(0, MAX_DEAL_RADAR_CLUSTERS)
     : [];
 
-  for (const { master, offers } of boundedClusters) {
+  for (const cluster of boundedClusters) {
+    if (
+      !cluster ||
+      typeof cluster !== 'object' ||
+      !cluster.master ||
+      typeof cluster.master !== 'object'
+    ) {
+      continue;
+    }
+    const { master, offers } = cluster;
     const categorySlug = getMasterProductCategorySlug(master);
     if (categoryFilter !== 'all' && categorySlug !== categoryFilter) {
       continue;
@@ -221,12 +231,61 @@ export function computeCrossPlatformDealRadarFromData(
     // Bait-price listings (far below every other store) set no market floor,
     // spread, deal or trap (DOS/Rate#797).
     const validOffers = plausibleOffers(
-      clusterOffers.filter(
-        (o) =>
-          Number.isFinite(o.price_current) &&
-          o.price_current > 0 &&
-          o.price_current <= MAX_VALID_VND_PRICE
-      )
+      clusterOffers
+        .filter(
+          (o): o is MerchantOffer =>
+            Boolean(o && typeof o === 'object') &&
+            typeof o.price_current === 'number' &&
+            Number.isFinite(o.price_current) &&
+            o.price_current > 0 &&
+            o.price_current <= MAX_VALID_VND_PRICE
+        )
+        .map((o) => {
+          const safePlatform =
+            typeof o.platform === 'string'
+              ? o.platform
+                  .replace(/\p{Cc}+/gu, '')
+                  .trim()
+                  .toLowerCase()
+                  .slice(0, 40) || 'shopee'
+              : 'shopee';
+          const rawMerchant =
+            o.merchant && typeof o.merchant === 'object'
+              ? o.merchant
+              : ({} as MerchantOffer['merchant']);
+          const safeMerchantName =
+            typeof rawMerchant.name === 'string'
+              ? rawMerchant.name
+                  .replace(/\p{Cc}+/gu, ' ')
+                  .trim()
+                  .slice(0, 160) || safePlatform.toUpperCase()
+              : safePlatform.toUpperCase();
+          const safeMerchantId =
+            typeof rawMerchant.id === 'string'
+              ? rawMerchant.id
+                  .replace(/\p{Cc}+/gu, '')
+                  .trim()
+                  .slice(0, 128)
+              : '';
+          return {
+            ...o,
+            platform: safePlatform,
+            url:
+              typeof o.url === 'string'
+                ? o.url
+                    .replace(/\p{Cc}+/gu, '')
+                    .trim()
+                    .slice(0, 2048)
+                : '',
+            merchant: {
+              ...rawMerchant,
+              id: safeMerchantId,
+              name: safeMerchantName,
+              platform: safePlatform,
+              is_official: Boolean(rawMerchant.is_official),
+            },
+          };
+        })
     );
     if (validOffers.length < 2) continue;
 
@@ -471,11 +530,17 @@ export function computeProductRadarSignal(
   master: MasterProduct,
   offers: MerchantOffer[]
 ): RadarSignal {
+  if (!master || typeof master !== 'object') {
+    return EMPTY_RADAR_SIGNAL;
+  }
   const radar = computeCrossPlatformDealRadarFromData([{ master, offers }], {
     categorySlug: 'all',
     limit: 50,
   });
-  return getRadarSignal(buildRadarIndex(radar), master.slug);
+  return getRadarSignal(
+    buildRadarIndex(radar),
+    typeof master.slug === 'string' ? master.slug : ''
+  );
 }
 
 const _getCrossPlatformDealRadarByKey = cache(

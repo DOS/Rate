@@ -10580,6 +10580,164 @@ async function runCoreArchitectureSuite() {
     );
   }
 
+  // 116. Deals Radar, Extension Price Verdict & Crowd Ingest Bounds (#948)
+  {
+    const dealsMod = await import('../deals');
+    const extMod = await import('../extension');
+
+    // 116.1 computeCrossPlatformDealRadarFromData & computeProductRadarSignal guard null/malformed entries
+    const radarFromMalformed = dealsMod.computeCrossPlatformDealRadarFromData([
+      null as unknown as never,
+      { master: null as unknown as never, offers: [] },
+      {
+        master: {
+          id: 'master-948',
+          slug: 'iphone-16-pro-948',
+          name: 'iPhone 16 Pro',
+          brand: 'Apple',
+          category_slug: 'smartphones',
+        } as unknown as never,
+        offers: [
+          null as unknown as never,
+          {
+            id: 'off-1',
+            platform: '  SHOPEE\u0000 ',
+            price_current: 24_990_000,
+            price_original: 27_990_000,
+            url: 'https://shopee.vn/item-1\u0000',
+            merchant: null as unknown as never,
+          } as unknown as never,
+          {
+            id: 'off-2',
+            platform: 'tiki',
+            price_current: 26_990_000,
+            price_original: 27_990_000,
+            url: 'https://tiki.vn/item-2',
+            merchant: {
+              id: 'm-2\u0000',
+              name: 'Tiki Trading\u0007',
+              platform: 'tiki',
+              is_official: true,
+              risk_score: 5,
+            } as unknown as never,
+          } as unknown as never,
+        ],
+      },
+    ]);
+    assert.equal(radarFromMalformed.totalClustersAnalyzed, 1);
+    assert.equal(radarFromMalformed.genuineDeals.length, 1);
+    assert.equal(radarFromMalformed.genuineDeals[0]?.platform, 'shopee');
+    assert.equal(radarFromMalformed.genuineDeals[0]?.merchantName, 'SHOPEE');
+
+    const emptySignal = dealsMod.computeProductRadarSignal(
+      null as unknown as never,
+      []
+    );
+    assert.equal(emptySignal.verdict, 'none');
+    assert.equal(emptySignal.genuineDeal, null);
+    assert.equal(emptySignal.fakeSaleTrap, null);
+    assert.equal(emptySignal.priceSpread, null);
+
+    // 116.2 evaluateExtensionPriceVerdict bounds priceHistory lowest/highest and guards non-array offers
+    const verdictBoundedHist = extMod.evaluateExtensionPriceVerdict({
+      isAccessory: false,
+      accessoryReason: null,
+      isAmbiguousVariant: false,
+      observedPrice: 25_000_000,
+      observedOriginalPrice: null,
+      offers: [
+        {
+          id: 'o1',
+          platform: 'shopee',
+          price_current: 24_500_000,
+          price_original: null,
+          url: 'https://shopee.vn/1',
+          merchant: {
+            id: 'm1',
+            name: 'M1',
+            platform: 'shopee',
+            is_official: true,
+          },
+        } as unknown as never,
+        {
+          id: 'o2',
+          platform: 'tiki',
+          price_current: 25_500_000,
+          price_original: null,
+          url: 'https://tiki.vn/2',
+          merchant: {
+            id: 'm2',
+            name: 'M2',
+            platform: 'tiki',
+            is_official: true,
+          },
+        } as unknown as never,
+      ],
+      observedOfferId: 'o1',
+      priceHistory: {
+        lowestEverPrice: -500,
+        highestEverPrice: 999_999_999_999,
+      } as unknown as never,
+    });
+    assert.equal(
+      verdictBoundedHist.historicalMinPrice,
+      24_500_000,
+      'evaluateExtensionPriceVerdict must ignore non-positive lowestEverPrice and fall back to marketMinPrice'
+    );
+    assert.equal(
+      verdictBoundedHist.historicalMaxPrice,
+      25_500_000,
+      'evaluateExtensionPriceVerdict must ignore out-of-range highestEverPrice and fall back to marketMaxPrice'
+    );
+
+    // 116.3 ingestExtensionCrowdSignal guards non-object input and rejects malformed externalItemId / externalShopId
+    const nullInputRes = await extMod.ingestExtensionCrowdSignal(
+      null as unknown as never
+    );
+    assert.equal(nullInputRes.accepted, false);
+    assert.equal(nullInputRes.jobState, 'skipped_no_consent');
+
+    const badItemIdRes = await extMod.ingestExtensionCrowdSignal({
+      platform: 'shopee',
+      externalItemId: 'bad item id with spaces',
+      externalShopId: '88201679',
+      url: 'https://shopee.vn/Dien-thoai-Apple-iPhone-16-Pro-Max-256GB-i.88201679.2918273645',
+      title: 'Apple iPhone 16 Pro Max 256GB Ch?nh h?ng VN/A',
+      price: 29_990_000,
+      userConsentOptIn: true,
+      rateClient: {
+        rpc: async () => ({
+          data: [{ state: 'enqueued', job_id: 'j1' }],
+          error: null,
+        }),
+      },
+    });
+    assert.equal(badItemIdRes.accepted, false);
+    assert.equal(badItemIdRes.jobState, 'rejected_invalid_url');
+
+    const badShopIdRes = await extMod.ingestExtensionCrowdSignal({
+      platform: 'shopee',
+      externalItemId: '2918273645',
+      externalShopId: '../bad/shop',
+      url: 'https://shopee.vn/Dien-thoai-Apple-iPhone-16-Pro-Max-256GB-i.88201679.2918273645',
+      title: 'Apple iPhone 16 Pro Max 256GB Ch?nh h?ng VN/A',
+      price: 29_990_000,
+      userConsentOptIn: true,
+      rateClient: {
+        rpc: async () => ({
+          data: [{ state: 'enqueued', job_id: 'j1' }],
+          error: null,
+        }),
+      },
+    });
+    assert.equal(badShopIdRes.accepted, false);
+    assert.equal(badShopIdRes.jobState, 'rejected_invalid_url');
+
+    console.log(
+      '  ✅ [116/116] Deals Radar, Extension Price Verdict & Crowd Ingest Bounds (#948) passed'
+    );
+  }
+
   console.log('🎉 All Rate.vn Core Architecture tests passed!');
 }
 
