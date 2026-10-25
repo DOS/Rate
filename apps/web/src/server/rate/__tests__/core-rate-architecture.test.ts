@@ -12448,7 +12448,69 @@ async function runCoreArchitectureSuite() {
     );
 
     console.log(
-      '  ✅ [126/127] compare-tray, CompareTrayBar & ProductLeaderboardBadges Bounds (#1030) passed'
+      '  ✅ [126/129] compare-tray, CompareTrayBar & ProductLeaderboardBadges Bounds (#1030) passed'
+    );
+  }
+
+  // -------------------------------------------------------------------------
+  // 126b. ProductCard, PriceWatchButton & WatchlistQuickToggle Bounds (#1034)
+  // -------------------------------------------------------------------------
+  {
+    const {
+      sanitizeProductCardPriceVnd,
+      formatProductCardVnd,
+      sanitizeProductCardScore,
+      sanitizeProductCardCount,
+      sanitizeProductCardSlug,
+    } = await import('../../../components/product/ProductCard');
+    const { resolvePriceWatchStep, sanitizePriceWatchInput } =
+      await import('../../../components/watchlist/PriceWatchButton');
+    const { normalizeQuickWatchlistSlug } =
+      await import('../../../components/watchlist/WatchlistQuickToggle');
+
+    assert.equal(sanitizeProductCardPriceVnd(18_990_000.4), 18_990_000);
+    assert.equal(sanitizeProductCardPriceVnd(-100), 0);
+    assert.equal(sanitizeProductCardPriceVnd(9_000_000_000), 0);
+    assert.equal(formatProductCardVnd(25_990_000), '25.990.000 ₫');
+    assert.equal(formatProductCardVnd(-100), '0 ₫');
+
+    assert.equal(sanitizeProductCardScore(4.64, 5), 4.64);
+    assert.equal(sanitizeProductCardScore(7.8, 5), 5);
+    assert.equal(sanitizeProductCardScore(-1, 5), null);
+    assert.equal(sanitizeProductCardScore(Number.NaN, 10), null);
+
+    assert.equal(sanitizeProductCardCount(42.8), 43);
+    assert.equal(sanitizeProductCardCount(-5), 0);
+    assert.equal(sanitizeProductCardCount(99_999_999), 10_000_000);
+    assert.equal(
+      sanitizeProductCardSlug('  iphone-16-pro\u0000  '),
+      'iphone-16-pro'
+    );
+
+    assert.equal(resolvePriceWatchStep(450_000), 10_000);
+    assert.equal(resolvePriceWatchStep(3_500_000), 100_000);
+    assert.equal(resolvePriceWatchStep(25_000_000), 100_000);
+    assert.equal(resolvePriceWatchStep(-100), 100_000);
+
+    assert.equal(
+      sanitizePriceWatchInput(18_500_000.6, 20_000_000),
+      18_500_001
+    );
+    assert.equal(sanitizePriceWatchInput(0, 20_000_000), 0);
+    assert.equal(sanitizePriceWatchInput(-500, 20_000_000), 19_000_000);
+    assert.equal(
+      sanitizePriceWatchInput(9_000_000_000, 20_000_000),
+      1_000_000_000
+    );
+
+    assert.equal(
+      normalizeQuickWatchlistSlug('  sony-wf-1000xm5\u0000  '),
+      'sony-wf-1000xm5'
+    );
+    assert.equal(normalizeQuickWatchlistSlug('   '), '');
+
+    console.log(
+      '  ✅ [126b/129] ProductCard, PriceWatchButton & WatchlistQuickToggle Bounds (#1034) passed'
     );
   }
 

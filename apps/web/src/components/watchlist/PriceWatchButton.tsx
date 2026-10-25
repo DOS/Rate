@@ -3,16 +3,38 @@
 import { useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { Link } from '@/lib/navigation';
+import { MAX_VALID_VND_PRICE } from '@/lib/rate-domain';
 import {
   MIN_WATCHLIST_TARGET_PRICE,
   computeWatchlistTargetPrice,
   getWatchlist,
   removeWatchlistItem,
+  sanitizeWatchlistPrice,
+  sanitizeWatchlistSlug,
   sanitizeWatchlistTargetPrice,
   subscribeWatchlist,
   upsertWatchlistItem,
   type WatchlistItem,
 } from './watchlist-store';
+
+export function resolvePriceWatchStep(currentMinPrice: unknown): number {
+  const safeCurrent = sanitizeWatchlistPrice(currentMinPrice);
+  return safeCurrent > 0 && safeCurrent < 2_000_000 ? 10_000 : 100_000;
+}
+
+export function sanitizePriceWatchInput(
+  rawValue: unknown,
+  currentMinPrice: unknown
+): number {
+  const num = Number(rawValue);
+  if (!Number.isFinite(num) || num < 0) {
+    return computeWatchlistTargetPrice(
+      sanitizeWatchlistPrice(currentMinPrice),
+      5
+    );
+  }
+  return Math.min(MAX_VALID_VND_PRICE, Math.round(num));
+}
 
 interface PriceWatchButtonProps {
   slug: string;
@@ -34,38 +56,41 @@ export default function PriceWatchButton({
   size = 'md',
 }: PriceWatchButtonProps) {
   const t = useTranslations('watchlist');
+  const safeSlug = sanitizeWatchlistSlug(slug);
+  const safeCurrentMinPrice = sanitizeWatchlistPrice(currentMinPrice);
   const [watchedItem, setWatchedItem] = useState<WatchlistItem | null>(null);
   const [showEditor, setShowEditor] = useState(false);
   const [targetInput, setTargetInput] = useState<number>(
-    computeWatchlistTargetPrice(currentMinPrice, 5)
+    computeWatchlistTargetPrice(safeCurrentMinPrice, 5)
   );
 
   useEffect(() => {
     const sync = () => {
-      const found = getWatchlist().find((x) => x.slug === slug) || null;
+      const found = getWatchlist().find((x) => x.slug === safeSlug) || null;
       setWatchedItem(found);
       if (found) {
         setTargetInput(found.targetPrice);
-      } else if (currentMinPrice > 0) {
-        setTargetInput(computeWatchlistTargetPrice(currentMinPrice, 5));
+      } else if (safeCurrentMinPrice > 0) {
+        setTargetInput(computeWatchlistTargetPrice(safeCurrentMinPrice, 5));
       }
     };
     sync();
     return subscribeWatchlist(sync);
-  }, [slug, currentMinPrice]);
+  }, [safeSlug, safeCurrentMinPrice]);
 
   const handleSave = (customTarget: number) => {
+    if (!safeSlug) return;
     const cleanTarget = sanitizeWatchlistTargetPrice(
       customTarget,
-      currentMinPrice
+      safeCurrentMinPrice
     );
     upsertWatchlistItem({
-      slug,
+      slug: safeSlug,
       name,
       brand,
       categoryPath,
       thumbnail,
-      priceWhenAdded: currentMinPrice,
+      priceWhenAdded: safeCurrentMinPrice,
       targetPrice: cleanTarget,
       addedAt: new Date().toISOString(),
     });
@@ -73,12 +98,13 @@ export default function PriceWatchButton({
   };
 
   const handleRemove = () => {
-    removeWatchlistItem(slug);
+    if (!safeSlug) return;
+    removeWatchlistItem(safeSlug);
     setShowEditor(false);
   };
 
-  const preset5Pct = computeWatchlistTargetPrice(currentMinPrice, 5);
-  const preset10Pct = computeWatchlistTargetPrice(currentMinPrice, 10);
+  const preset5Pct = computeWatchlistTargetPrice(safeCurrentMinPrice, 5);
+  const preset10Pct = computeWatchlistTargetPrice(safeCurrentMinPrice, 10);
 
   return (
     <div className="position-relative d-inline-block">
@@ -92,7 +118,9 @@ export default function PriceWatchButton({
       >
         {watchedItem
           ? t('btnWatching', {
-              price: watchedItem.targetPrice.toLocaleString('vi-VN'),
+              price: sanitizeWatchlistPrice(
+                watchedItem.targetPrice
+              ).toLocaleString('vi-VN'),
             })
           : t('btnWatch')}
       </button>
@@ -120,7 +148,7 @@ export default function PriceWatchButton({
           <p className="text-muted mb-2" style={{ fontSize: '0.8125rem' }}>
             {t('currentBestPrice')}{' '}
             <strong className="text-danger">
-              {currentMinPrice.toLocaleString('vi-VN')} ₫
+              {safeCurrentMinPrice.toLocaleString('vi-VN')} ₫
             </strong>
           </p>
 
@@ -147,14 +175,14 @@ export default function PriceWatchButton({
             <span className="input-group-text">{t('targetInputLabel')}</span>
             <input
               type="number"
-              step={
-                currentMinPrice > 0 && currentMinPrice < 2_000_000
-                  ? 10000
-                  : 100000
-              }
+              step={resolvePriceWatchStep(safeCurrentMinPrice)}
               min={MIN_WATCHLIST_TARGET_PRICE}
               value={targetInput}
-              onChange={(e) => setTargetInput(Number(e.target.value || 0))}
+              onChange={(e) =>
+                setTargetInput(
+                  sanitizePriceWatchInput(e.target.value, safeCurrentMinPrice)
+                )
+              }
               className="form-control fw-semibold"
             />
           </div>
