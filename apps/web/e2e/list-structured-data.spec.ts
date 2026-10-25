@@ -29,7 +29,10 @@ for (const { path, minItems } of PAGES) {
       expect(item['@type']).toBe('ListItem');
       expect(item.position).toBe(i + 1);
       expect(typeof item.name).toBe('string');
-      expect(String(item.url)).toMatch(/^https:\/\/rate\.vn\/[a-z-]+\/[\w-]+$/);
+      // Absolute, on whatever origin the site is configured with.
+      const url = new URL(String(item.url));
+      expect(url.protocol).toBe('https:');
+      expect(url.pathname).toMatch(/^\/[a-z-]+\/[\w-]+$/);
       expect(item.item).toBeUndefined();
     });
     expect(JSON.stringify(list)).not.toContain('"Product"');
