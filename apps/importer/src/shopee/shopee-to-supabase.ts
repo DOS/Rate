@@ -37,7 +37,8 @@ function hashEntity(val: string): string {
 }
 
 export function platformReviewIdFor(r: ShopeeReview): string {
-  const safeReview = r && typeof r === 'object' ? r : ({} as Partial<ShopeeReview>);
+  const safeReview =
+    r && typeof r === 'object' && !Array.isArray(r) ? r : ({} as Partial<ShopeeReview>);
   const cleanId =
     typeof safeReview.reviewId === 'string'
       ? safeReview.reviewId.replace(/\p{Cc}+/gu, '').trim()
@@ -156,7 +157,8 @@ export function normalizeScrapedProductPrices(
   const models = Array.isArray(product.models)
     ? product.models
         .filter(m => {
-          if (!m || typeof m !== 'object' || typeof m.price === 'boolean') return false;
+          if (!m || typeof m !== 'object' || Array.isArray(m) || typeof m.price === 'boolean')
+            return false;
           const p = Math.round(Number(m.price));
           return Number.isFinite(p) && p > 0 && p <= MAX_VALID_VND_PRICE;
         })
@@ -180,23 +182,26 @@ export function normalizeScrapedProductPrices(
       ? Math.min(Math.floor(rawRatingCount), 100_000_000)
       : 0;
   const images = sanitizeHttpUrlList(product.images);
-  const shopUrl = sanitizeHttpUrl(product.shop?.url) ?? undefined;
+  const safeShop =
+    product.shop && typeof product.shop === 'object' && !Array.isArray(product.shop)
+      ? product.shop
+      : ({} as ValidatedScrapedProduct['shop']);
+  const shopUrl = sanitizeHttpUrl(safeShop.url) ?? undefined;
   const reviews = Array.isArray(product.reviews)
     ? product.reviews
-        .filter((r): r is ShopeeReview => Boolean(r && typeof r === 'object'))
+        .filter((r): r is ShopeeReview => Boolean(r && typeof r === 'object' && !Array.isArray(r)))
         .map(r => ({
           ...r,
           authorAvatar: sanitizeHttpUrl(r.authorAvatar) ?? undefined,
           images: sanitizeHttpUrlList(r.images),
           ...(r.videos !== undefined ? { videos: sanitizeHttpUrlList(r.videos) } : {}),
-          ...(r.reviewer && typeof r.reviewer === 'object'
-            ? {
-                reviewer: {
+          reviewer:
+            r.reviewer && typeof r.reviewer === 'object' && !Array.isArray(r.reviewer)
+              ? {
                   ...r.reviewer,
                   profileUrl: sanitizeHttpUrl(r.reviewer.profileUrl) ?? undefined,
-                },
-              }
-            : {}),
+                }
+              : undefined,
         }))
     : [];
   return {
@@ -210,7 +215,7 @@ export function normalizeScrapedProductPrices(
     images,
     models,
     shop: {
-      ...product.shop,
+      ...safeShop,
       url: shopUrl,
     },
     reviews,
@@ -407,7 +412,7 @@ export class ShopeeIngestionPipeline {
     masterId: string;
     platform: SupportedEcommercePlatform;
   }> {
-    if (!options || typeof options !== 'object') options = {};
+    if (!options || typeof options !== 'object' || Array.isArray(options)) options = {};
     const product = normalizeScrapedProductPrices(ScrapedProductSchema.parse(rawProduct));
     if (
       !Number.isFinite(product.priceMin) ||
@@ -657,8 +662,9 @@ export class ShopeeIngestionPipeline {
         .order('recorded_at', { ascending: false })
         .limit(1);
 
-      const latestObs =
-        Array.isArray(latestObsRows) && latestObsRows.length > 0 ? latestObsRows[0] : null;
+      const latestObs = Array.isArray(latestObsRows)
+        ? (latestObsRows.find(row => row && typeof row === 'object' && !Array.isArray(row)) ?? null)
+        : null;
       const currentPrice = Number(product.priceMin);
       const currentOriginal = Number(product.priceBeforeDiscount || 0);
       const prevPrice = latestObs ? Number(latestObs.price) : -1;
@@ -855,14 +861,14 @@ export class ShopeeIngestionPipeline {
             .filter(r => r.reviewer)
             .map(r => [platformReviewIdFor(r), r.reviewer] as const)
         );
-        const analysisInput: ReviewInputItem[] = (storedReviews || []).map(
-          (row: ReviewInputItem & { platform_review_id?: string | null }) => ({
+        const analysisInput: ReviewInputItem[] = (storedReviews || [])
+          .filter(row => Boolean(row && typeof row === 'object' && !Array.isArray(row)))
+          .map((row: ReviewInputItem & { platform_review_id?: string | null }) => ({
             ...row,
             reviewer: row.platform_review_id
               ? reviewerByPlatformId.get(row.platform_review_id)
               : undefined,
-          })
-        );
+          }));
 
         if (storedErr) {
           platLogger.warn(
@@ -870,7 +876,7 @@ export class ShopeeIngestionPipeline {
             `Review analysis skipped (fetch failed): ${storedErr.message}`,
             { productId }
           );
-        } else if (storedReviews && storedReviews.length > 0) {
+        } else if (analysisInput.length > 0) {
           const [{ data: masterRow }, { data: peerRows }] = await Promise.all([
             this.supabase
               .from('master_products')
@@ -895,7 +901,9 @@ export class ShopeeIngestionPipeline {
           const canonicalMinPrice = resolveClusterPeerFloorPrice(
             Array.isArray(peerRows) ? (peerRows as ClusterPeerPriceCandidate[]) : [],
             productId,
-            masterRow?.min_price ? Number(masterRow.min_price) : undefined
+            typeof masterRow?.min_price === 'number' || typeof masterRow?.min_price === 'string'
+              ? Number(masterRow.min_price)
+              : undefined
           );
 
           const { summary, merchantRisk } = await this.reviewAnalyzer.persistAnalysisToSupabase(
