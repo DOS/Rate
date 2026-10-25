@@ -746,7 +746,9 @@ export function computeVoterWeight(params: {
   trustScore?: number | null;
   isVerifiedContact?: boolean;
 }): number {
-  const { accountAgeDays, verifiedReviewCount, trustScore, isVerifiedContact = true } = params;
+  const safeParams =
+    params && typeof params === 'object' && !Array.isArray(params) ? params : ({} as typeof params);
+  const { accountAgeDays, verifiedReviewCount, trustScore, isVerifiedContact = true } = safeParams;
   if (!isVerifiedContact) return 0;
   const validAge =
     typeof accountAgeDays === 'number' && Number.isFinite(accountAgeDays) && accountAgeDays >= 0
@@ -1169,25 +1171,24 @@ export class AiReviewAnalyzer {
   public analyzeWithHeuristics(reviews: ReviewInputItem[]): AnalyzedReviewResult[] {
     if (!Array.isArray(reviews)) return [];
     const safeReviews = reviews.filter((r): r is ReviewInputItem =>
-      Boolean(r && typeof r === 'object')
+      Boolean(r && typeof r === 'object' && !Array.isArray(r))
     );
     // 1. Pre-compute duplicate comment frequency across distinct authors
     const commentCounts = new Map<string, Set<string>>();
     const substantiveByAuthor: Array<{ id: string; authorKey: string; norm: string }> = [];
     for (const r of safeReviews) {
+      const reviewId = String(r.id ?? '');
       const norm = normalizeTextForDedupe(r.comment || '');
       // Rating labels repeat across buyers because the platform writes them, not because of seeding.
       if (norm.length >= 15 && !isRatingOnlyComment(r.comment)) {
         const rawAuthor =
-          typeof r.author_name === 'string' && r.author_name.trim()
-            ? r.author_name
-            : String(r.id ?? '');
+          typeof r.author_name === 'string' && r.author_name.trim() ? r.author_name : reviewId;
         const authorKey = rawAuthor.toLowerCase();
         const authors = commentCounts.get(norm) || new Set<string>();
         authors.add(authorKey);
         commentCounts.set(norm, authors);
         if (norm.length >= 25) {
-          substantiveByAuthor.push({ id: String(r.id ?? ''), authorKey, norm });
+          substantiveByAuthor.push({ id: reviewId, authorKey, norm });
         }
       }
     }
@@ -1208,13 +1209,18 @@ export class AiReviewAnalyzer {
     }
 
     return safeReviews.map(r => {
+      const reviewId = String(r.id ?? '');
+      const safeRatingStar =
+        typeof r.rating_star === 'number' && Number.isFinite(r.rating_star)
+          ? r.rating_star
+          : Number.NaN;
       const comment = (typeof r.comment === 'string' ? r.comment : '')
         .normalize('NFC')
         .replace(/\p{Cc}+/gu, '')
         .trim();
       const norm = normalizeTextForDedupe(comment);
       const distinctAuthorsWithSameText = commentCounts.get(norm)?.size ?? 1;
-      const maxShingleSim = maxShingleSimByReviewId.get(r.id) ?? 0;
+      const maxShingleSim = maxShingleSimByReviewId.get(reviewId) ?? 0;
 
       // Default clean signals
       let burstScore = 0.05;
@@ -1236,7 +1242,7 @@ export class AiReviewAnalyzer {
           comment
         );
       const isUnopenedFiller =
-        r.rating_star >= 4 &&
+        safeRatingStar >= 4 &&
         /chưa\s*(?:dùng|xài|bóc|khui|mở\s*hộp|test)\s*(?:nên\s*chưa\s*biết|nhưng\s*cứ\s*cho\s*5\s*sao)/i.test(
           comment
         );
@@ -1245,7 +1251,7 @@ export class AiReviewAnalyzer {
 
       // Rule B: Competitor Sabotage (Đối thủ chơi xấu / chèo kéo sang shop khác / dìm 1 sao vô căn cứ)
       const isCompetitorSabotage =
-        r.rating_star <= 2 &&
+        safeRatingStar <= 2 &&
         (/(?:qua\s*shop\s+\S+(?:\s+\S+){0,5}\s+mua|mua\s*bên\s+\S+(?:\s+\S+){0,5}\s+rẻ\s*hơn|đừng\s*mua\s*shop\s*này\s*qua\s*bên|ib\s*mình\s*bán\s*rẻ\s*hơn|liên\s*hệ\s*zalo\s*\d{8,})/i.test(
           comment
         ) ||
@@ -1255,7 +1261,7 @@ export class AiReviewAnalyzer {
 
       // Rule C: Review Bombing (Bom review / hủy đơn chưa trải nghiệm dịch vụ / hùa theo drama)
       const isReviewBombing =
-        r.rating_star <= 2 &&
+        safeRatingStar <= 2 &&
         /chưa\s*(?:dùng|sử\s*dụng|trải\s*nghiệm)\s*(?:dịch\s*vụ|sản\s*phẩm)|mới\s*đặt\s*đã\s*hủy|hủy\s*đơn\s*rồi|vào\s*đánh\s*1\s*sao\s*cho\s*bõ\s*ghét|hùa\s*theo|tẩy\s*chay\s*shop/i.test(
           comment
         );
@@ -1269,14 +1275,14 @@ export class AiReviewAnalyzer {
       const isCopiedSeeding =
         !isDuplicateSeeding && maxShingleSim >= 0.65 && !isCoinSpamPhrase && !isRatingOnly;
       const isScriptedPraise =
-        r.rating_star === 5 &&
+        safeRatingStar === 5 &&
         /sản\s*phẩm\s*tuyệt\s*vời\s*đáng\s*đồng\s*tiền\s*bát\s*gạo\s*sẽ\s*ủng\s*hộ\s*shop\s*dài\s*dài\s*10\s*điểm/i.test(
           comment
         ) &&
         distinctAuthorsWithSameText >= 2;
 
       const isShippingOnly = isShippingOnlyComment(comment);
-      const hasContradiction = hasStarSentimentContradiction(r.rating_star, comment);
+      const hasContradiction = hasStarSentimentContradiction(safeRatingStar, comment);
 
       if (isCompetitorSabotage) {
         flagCategory = 'competitor_sabotage';
@@ -1361,7 +1367,7 @@ export class AiReviewAnalyzer {
       }
 
       return {
-        review_id: r.id,
+        review_id: reviewId,
         verdict,
         flag_category: flagCategory,
         fake_probability: clamp01(fakeProb),
@@ -1621,6 +1627,9 @@ Return ONLY valid JSON matching:
         } catch {
           continue;
         }
+        if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+          continue;
+        }
 
         const validatedBatch = AiReviewBatchResponseSchema.safeParse(parsed);
         const batchData: RawAiReviewBatch = validatedBatch.success ? validatedBatch.data : parsed;
@@ -1628,9 +1637,14 @@ Return ONLY valid JSON matching:
         anyBatchSucceeded = true;
         if (Array.isArray(batchData?.reviews)) {
           for (const rawItem of batchData.reviews) {
+            if (!rawItem || typeof rawItem !== 'object' || Array.isArray(rawItem)) continue;
             const parsedItem = AiReviewBatchItemSchema.safeParse(rawItem);
             const item: RawAiReviewItem = parsedItem.success ? parsedItem.data : rawItem;
-            if (item?.review_id) aiMap.set(String(item.review_id), item);
+            const revId =
+              typeof item?.review_id === 'string' || typeof item?.review_id === 'number'
+                ? String(item.review_id).trim()
+                : '';
+            if (revId) aiMap.set(revId, item);
           }
         }
         if (Array.isArray(batchData?.pros)) {
@@ -2034,22 +2048,27 @@ Return ONLY valid JSON matching:
 
     // 2. Price Anomaly Detection (Scam / Counterfeit dump pricing)
     let priceAnomaly = false;
-    if (
-      typeof safeInput.listingPrice === 'number' &&
-      Number.isFinite(safeInput.listingPrice) &&
-      safeInput.listingPrice > 0 &&
-      safeInput.listingPrice <= MAX_VALID_VND_PRICE &&
+    const roundedListingPrice =
+      typeof safeInput.listingPrice === 'number' && Number.isFinite(safeInput.listingPrice)
+        ? Math.round(safeInput.listingPrice)
+        : 0;
+    const roundedCanonicalMinPrice =
       typeof safeInput.canonicalMinPrice === 'number' &&
-      Number.isFinite(safeInput.canonicalMinPrice) &&
-      safeInput.canonicalMinPrice > 2_000_000 &&
-      safeInput.canonicalMinPrice <= MAX_VALID_VND_PRICE &&
-      safeInput.listingPrice < safeInput.canonicalMinPrice * 0.58 &&
+      Number.isFinite(safeInput.canonicalMinPrice)
+        ? Math.round(safeInput.canonicalMinPrice)
+        : 0;
+    if (
+      roundedListingPrice > 0 &&
+      roundedListingPrice <= MAX_VALID_VND_PRICE &&
+      roundedCanonicalMinPrice > 2_000_000 &&
+      roundedCanonicalMinPrice <= MAX_VALID_VND_PRICE &&
+      roundedListingPrice < roundedCanonicalMinPrice * 0.58 &&
       !safeInput.isOfficial
     ) {
       priceAnomaly = true;
       risk += 45;
       reasons.push(
-        `Giá bán (${safeInput.listingPrice.toLocaleString('vi-VN')}₫) thấp bất thường so với giá sàn chuẩn (${safeInput.canonicalMinPrice.toLocaleString('vi-VN')}₫) -> Cảnh báo hàng dựng/nhái hoặc lừa đảo (+45 điểm rủi ro).`
+        `Giá bán (${roundedListingPrice.toLocaleString('vi-VN')}₫) thấp bất thường so với giá sàn chuẩn (${roundedCanonicalMinPrice.toLocaleString('vi-VN')}₫) -> Cảnh báo hàng dựng/nhái hoặc lừa đảo (+45 điểm rủi ro).`
       );
     }
 
@@ -2093,7 +2112,11 @@ Return ONLY valid JSON matching:
       );
     }
 
-    if ((safeInput.followerCount ?? 0) >= 50000) {
+    if (
+      typeof safeInput.followerCount === 'number' &&
+      Number.isFinite(safeInput.followerCount) &&
+      safeInput.followerCount >= 50000
+    ) {
       risk -= 5;
     }
 
