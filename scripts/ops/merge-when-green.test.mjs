@@ -160,7 +160,10 @@ test('PRs into main always merge with a merge commit', () => {
 });
 
 test('a repository without the dev to main release flow squashes into main', () => {
-  assert.equal(mergeMethodFor('main', undefined, 'DOS/Rate-Services'), 'squash');
+  assert.equal(
+    mergeMethodFor('main', undefined, 'DOS/Rate-Services'),
+    'squash'
+  );
   assert.equal(mergeMethodFor('main', 'merge', 'DOS/status'), 'merge');
   assert.equal(mergeMethodFor('main', undefined, 'DOS/Rate'), 'merge');
   assert.throws(
@@ -208,6 +211,22 @@ test('decides from the PR state and its checks', () => {
     'wait'
   );
   assert.equal(decide(pr(), passed, 0).action, 'merge');
+});
+
+test('a green PR behind a strict base is brought up to date, not merged', () => {
+  assert.deepEqual(
+    decide(pr({ mergeable_state: 'behind' }), { state: 'passed' }, 0),
+    { action: 'update' }
+  );
+  // While its checks still run, it just waits.
+  assert.equal(
+    decide(
+      pr({ mergeable_state: 'behind' }),
+      { state: 'pending', pending: ['CI'] },
+      0
+    ).action,
+    'wait'
+  );
 });
 
 test('gives a green but blocked PR a few polls before reporting it', () => {
