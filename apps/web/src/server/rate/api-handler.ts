@@ -25,10 +25,13 @@ export function sanitizePublicApiError(
   err: unknown,
   fallbackMessage = 'Internal server error'
 ): string {
-  if (!(err instanceof Error)) {
+  if (!(err instanceof Error) || typeof err.message !== 'string') {
     return fallbackMessage;
   }
-  const msg = err.message.trim();
+  const msg = err.message
+    .replace(/\p{Cc}+/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
   if (!msg || msg.length > 240 || DB_INTERNAL_ERROR_REGEX.test(msg)) {
     return fallbackMessage;
   }
@@ -65,7 +68,7 @@ export function parseBoundedIntParam(
   min: number,
   max: number
 ): number {
-  if (raw == null || raw.trim() === '') return defaultValue;
+  if (typeof raw !== 'string' || raw.trim() === '') return defaultValue;
   const schema = z.coerce.number().int();
   const parsed = schema.safeParse(raw);
   if (!parsed.success || !Number.isFinite(parsed.data)) {
@@ -79,7 +82,7 @@ export function parseBoundedNumberParam(
   min: number,
   max: number
 ): number | undefined {
-  if (raw == null || raw.trim() === '') return undefined;
+  if (typeof raw !== 'string' || raw.trim() === '') return undefined;
   const schema = z.coerce.number();
   const parsed = schema.safeParse(raw);
   if (!parsed.success || !Number.isFinite(parsed.data)) {
@@ -95,7 +98,7 @@ export function parseBoundedStringParam(
   raw: string | null | undefined,
   maxLength: number
 ): string | null {
-  if (raw == null) return null;
+  if (typeof raw !== 'string') return null;
   const safeMaxLength =
     Number.isFinite(maxLength) && maxLength >= 1 ? Math.floor(maxLength) : 256;
   const cleaned = raw.replace(/\p{Cc}+/gu, ' ').trim();
@@ -275,18 +278,13 @@ export function selectBestOfferFromListings(
       price <= MAX_VALID_VND_PRICE
     );
   });
-  const platforms = Array.from(
-    new Set(
-      valid
-        .map((o) =>
-          String(o.merchant?.platform || o.platform || 'shopee')
-            .replace(/\p{Cc}+/gu, '')
-            .trim()
-            .toLowerCase()
-        )
-        .filter(Boolean)
-    )
-  );
+  const normalizeOfferPlatform = (o: WatchlistCandidateOffer): string =>
+    String(o.merchant?.platform || o.platform || 'shopee')
+      .replace(/\p{Cc}+/gu, '')
+      .trim()
+      .toLowerCase()
+      .slice(0, 32) || 'shopee';
+  const platforms = Array.from(new Set(valid.map(normalizeOfferPlatform)));
   if (valid.length === 0) {
     return { bestOffer: null, offerPlatforms: platforms };
   }
@@ -315,17 +313,25 @@ export function selectBestOfferFromListings(
     .replace(/\p{Cc}+/gu, ' ')
     .trim()
     .slice(0, 120);
+  const rawBestUrl =
+    typeof best.url === 'string'
+      ? best.url
+          .replace(/\p{Cc}+/gu, '')
+          .trim()
+          .slice(0, 2048)
+      : '';
+  const safeBestUrl = isSafeHttpOfferUrl(rawBestUrl, 2048) ? rawBestUrl : '';
   return {
     bestOffer: {
-      id: String(best.id || '').trim(),
+      id: String(best.id || '')
+        .replace(/\p{Cc}+/gu, '')
+        .trim()
+        .slice(0, 128),
       title: cleanTitle,
       price: bestPrice,
       original_price: validOrig ?? bestPrice,
-      url: typeof best.url === 'string' ? best.url.trim().slice(0, 2048) : '',
-      platform: String(best.merchant?.platform || best.platform || 'shopee')
-        .replace(/\p{Cc}+/gu, '')
-        .trim()
-        .toLowerCase(),
+      url: safeBestUrl,
+      platform: normalizeOfferPlatform(best),
       merchant_name: cleanMerchantName || 'Official Store',
       is_official_mall: Boolean(best.merchant?.is_official),
     },
@@ -333,12 +339,12 @@ export function selectBestOfferFromListings(
   };
 }
 
-export function isSafeCrowdIngestHttpUrl(rawUrl: string): boolean {
+function isSafeHttpOfferUrl(rawUrl: string, maxLength = 1024): boolean {
   if (typeof rawUrl !== 'string') return false;
   const trimmed = rawUrl.trim();
   if (
     !trimmed ||
-    trimmed.length > 1024 ||
+    trimmed.length > maxLength ||
     /\s/.test(trimmed) ||
     /\p{Cc}/u.test(trimmed)
   ) {
@@ -350,11 +356,33 @@ export function isSafeCrowdIngestHttpUrl(rawUrl: string): boolean {
       return false;
     }
     if (parsed.username || parsed.password) return false;
-    if (!parsed.hostname) return false;
+    const host = parsed.hostname.toLowerCase();
+    if (
+      !host ||
+      !host.includes('.') ||
+      host.startsWith('.') ||
+      host.endsWith('.') ||
+      host.includes('..') ||
+      host.startsWith('[') ||
+      host === 'localhost' ||
+      host.endsWith('.localhost') ||
+      host.endsWith('.local') ||
+      host.endsWith('.internal') ||
+      /^\d+(?:\.\d+){3}$/.test(host)
+    ) {
+      return false;
+    }
+    if (parsed.port !== '' && parsed.port !== '80' && parsed.port !== '443') {
+      return false;
+    }
     return true;
   } catch {
     return false;
   }
+}
+
+export function isSafeCrowdIngestHttpUrl(rawUrl: string): boolean {
+  return isSafeHttpOfferUrl(rawUrl, 1024);
 }
 
 export function resolveInspectObservedPrices(input: {
@@ -404,6 +432,18 @@ export function resolveInspectObservedPrices(input: {
 
 const CANONICAL_PRODUCT_SLUG_REGEX = /^[a-zA-Z0-9._-]+$/;
 
+function isValidProductSlugToken(slug: string, maxLength = 120): boolean {
+  return (
+    Boolean(slug) &&
+    slug.length <= maxLength &&
+    CANONICAL_PRODUCT_SLUG_REGEX.test(slug) &&
+    /[a-zA-Z0-9]/.test(slug) &&
+    !slug.startsWith('.') &&
+    !slug.endsWith('.') &&
+    !slug.includes('..')
+  );
+}
+
 /**
  * Parses and validates comma-separated master product slugs for `GET /api/v1/rate/compare`.
  * Bounds raw input length, trims/deduplicates up to `maxSlugs` (default 4), and rejects invalid characters.
@@ -418,8 +458,7 @@ export function parseCompareSlugsParam(
   const seen = new Set<string>();
   for (const part of boundedRaw.split(',')) {
     const slug = part.trim();
-    if (!slug) continue;
-    if (slug.length > 120 || !CANONICAL_PRODUCT_SLUG_REGEX.test(slug)) {
+    if (!isValidProductSlugToken(slug, 120)) {
       continue;
     }
     const lower = slug.toLowerCase();
@@ -446,8 +485,7 @@ export function parseWatchlistSlugsParam(
   const seen = new Set<string>();
   for (const part of boundedRaw.split(',')) {
     const slug = part.trim().toLowerCase();
-    if (!slug) continue;
-    if (slug.length > 120 || !CANONICAL_PRODUCT_SLUG_REGEX.test(slug)) {
+    if (!isValidProductSlugToken(slug, 120)) {
       continue;
     }
     if (seen.has(slug)) continue;
@@ -494,17 +532,27 @@ export class BoundedSlidingWindowRateLimiter {
   }
 
   public pruneExpired(now = Date.now()): void {
+    const safeNow =
+      typeof now === 'number' && Number.isFinite(now) ? now : Date.now();
     for (const [key, bucket] of this.buckets.entries()) {
-      if (now >= bucket.windowResetAt) {
+      if (safeNow >= bucket.windowResetAt) {
         this.buckets.delete(key);
       }
     }
   }
 
   public allow(clientKey: string, now = Date.now()): boolean {
-    const normalizedKey = clientKey.trim().slice(0, 128) || 'anon';
+    const safeNow =
+      typeof now === 'number' && Number.isFinite(now) ? now : Date.now();
+    const normalizedKey =
+      (typeof clientKey === 'string'
+        ? clientKey
+            .replace(/\p{Cc}+/gu, '')
+            .trim()
+            .slice(0, 128)
+        : '') || 'anon';
     const existing = this.buckets.get(normalizedKey);
-    if (existing && now < existing.windowResetAt) {
+    if (existing && safeNow < existing.windowResetAt) {
       if (existing.count >= this.maxRequests) {
         return false;
       }
@@ -519,7 +567,7 @@ export class BoundedSlidingWindowRateLimiter {
     }
 
     if (this.buckets.size >= this.maxBuckets) {
-      this.pruneExpired(now);
+      this.pruneExpired(safeNow);
       while (this.buckets.size >= this.maxBuckets) {
         const oldestKey = this.buckets.keys().next().value;
         if (oldestKey === undefined) break;
@@ -529,7 +577,7 @@ export class BoundedSlidingWindowRateLimiter {
 
     this.buckets.set(normalizedKey, {
       count: 1,
-      windowResetAt: now + this.windowMs,
+      windowResetAt: safeNow + this.windowMs,
     });
     return true;
   }
@@ -583,16 +631,22 @@ export function resolveReviewVoteInput(rawBody: unknown): {
   voteType: ReviewVoteAction;
   reportReason: ReviewReportReason;
 } | null {
-  if (!rawBody || typeof rawBody !== 'object') {
+  if (!rawBody || typeof rawBody !== 'object' || Array.isArray(rawBody)) {
     return null;
   }
   const body = rawBody as Record<string, unknown>;
   let voteType: ReviewVoteAction | null = null;
   const rawAction =
     typeof body.voteType === 'string'
-      ? body.voteType.trim().toLowerCase()
+      ? body.voteType
+          .replace(/\p{Cc}+/gu, '')
+          .trim()
+          .toLowerCase()
       : typeof body.vote === 'string'
-        ? body.vote.trim().toLowerCase()
+        ? body.vote
+            .replace(/\p{Cc}+/gu, '')
+            .trim()
+            .toLowerCase()
         : null;
 
   if (
@@ -610,9 +664,15 @@ export function resolveReviewVoteInput(rawBody: unknown): {
 
   const rawReason =
     typeof body.reportReason === 'string'
-      ? body.reportReason.trim().toLowerCase()
+      ? body.reportReason
+          .replace(/\p{Cc}+/gu, '')
+          .trim()
+          .toLowerCase()
       : typeof body.reason === 'string'
-        ? body.reason.trim().toLowerCase()
+        ? body.reason
+            .replace(/\p{Cc}+/gu, '')
+            .trim()
+            .toLowerCase()
         : null;
   const reportReason: ReviewReportReason =
     rawReason &&
@@ -623,8 +683,6 @@ export function resolveReviewVoteInput(rawBody: unknown): {
   return { voteType, reportReason };
 }
 
-const VALID_VERSUS_SLUG_REGEX = /^[a-z0-9._-]+$/i;
-
 /**
  * Parses and validates a 1v1 versus pair (`?pair=<slugA>-vs-<slugB>` or `?slugA=...&slugB=...`).
  * Rejects missing, identical, overlong (`> 120` chars), or malformed product slugs (`null`).
@@ -634,7 +692,7 @@ export function parseVersusQueryParams(
   maxSlugLength = 120
 ): [string, string] | null {
   const isValidSlug = (s: string): boolean =>
-    Boolean(s && s.length <= maxSlugLength && VALID_VERSUS_SLUG_REGEX.test(s));
+    isValidProductSlugToken(s, maxSlugLength);
 
   const rawPair = (searchParams.get('pair') || '').toLowerCase().trim();
   if (
@@ -713,10 +771,7 @@ export function parseReviewsQueryParams(
   const rawSlug = searchParams.get('slug');
   if (rawSlug != null && rawSlug.trim() !== '') {
     const trimmedSlug = rawSlug.trim();
-    if (
-      trimmedSlug.length > 120 ||
-      !CANONICAL_PRODUCT_SLUG_REGEX.test(trimmedSlug)
-    ) {
+    if (!isValidProductSlugToken(trimmedSlug, 120)) {
       return null;
     }
     return { masterProductId: null, slug: trimmedSlug, hideFake, limit };
@@ -768,7 +823,15 @@ export function parseProductsFilterBounds(
     const seen = new Set<string>();
     for (const part of rawBrands.split(',')) {
       const b = part.trim();
-      if (!b || b.length > 40 || !VALID_BRAND_TOKEN_REGEX.test(b)) continue;
+      if (
+        !b ||
+        b.length > 40 ||
+        !VALID_BRAND_TOKEN_REGEX.test(b) ||
+        !/[\p{L}\p{N}]/u.test(b) ||
+        b.includes('..')
+      ) {
+        continue;
+      }
       const lower = b.toLowerCase();
       if (seen.has(lower)) continue;
       seen.add(lower);

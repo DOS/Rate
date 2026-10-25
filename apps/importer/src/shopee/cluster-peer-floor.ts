@@ -21,15 +21,26 @@ export function resolveClusterPeerFloorPrice(
 ): number | undefined {
   let officialMin = Number.POSITIVE_INFINITY;
   let peerMin = Number.POSITIVE_INFINITY;
-  const safeCurrentId = typeof currentProductId === 'string' ? currentProductId.trim() : '';
+  const safeCurrentId =
+    typeof currentProductId === 'string'
+      ? currentProductId
+          .replace(/\p{Cc}+/gu, '')
+          .trim()
+          .slice(0, 128)
+      : '';
 
   if (Array.isArray(peerRows)) {
     const limit = Math.min(peerRows.length, MAX_CLUSTER_PEER_ROWS);
     for (let i = 0; i < limit; i++) {
       const row = peerRows[i];
-      if (!row || typeof row !== 'object') continue;
+      if (!row || typeof row !== 'object' || Array.isArray(row)) continue;
       const rowId =
-        typeof row.id === 'string' || typeof row.id === 'number' ? String(row.id).trim() : '';
+        typeof row.id === 'string' || (typeof row.id === 'number' && Number.isFinite(row.id))
+          ? String(row.id)
+              .replace(/\p{Cc}+/gu, '')
+              .trim()
+              .slice(0, 128)
+          : '';
       if (safeCurrentId && rowId === safeCurrentId) continue;
       if (
         typeof row.price_current === 'boolean' ||
@@ -38,12 +49,20 @@ export function resolveClusterPeerFloorPrice(
       ) {
         continue;
       }
-      const price = Number(row.price_current);
-      if (!Number.isFinite(price) || price <= 0 || price > MAX_VALID_VND_PRICE) continue;
+      const rawPrice = Number(row.price_current);
+      if (!Number.isFinite(rawPrice) || rawPrice <= 0 || rawPrice > MAX_VALID_VND_PRICE) continue;
+      const price = Math.round(rawPrice);
+      if (price <= 0 || price > MAX_VALID_VND_PRICE) continue;
       if (price < peerMin) {
         peerMin = price;
       }
-      const mObj = Array.isArray(row.merchants) ? row.merchants[0] : row.merchants;
+      const mObj = Array.isArray(row.merchants)
+        ? row.merchants.find((m: { is_official?: boolean | null } | null | undefined) =>
+            Boolean(m && typeof m === 'object' && !Array.isArray(m))
+          )
+        : row.merchants && typeof row.merchants === 'object'
+          ? row.merchants
+          : null;
       if (mObj?.is_official && price < officialMin) {
         officialMin = price;
       }
@@ -63,6 +82,6 @@ export function resolveClusterPeerFloorPrice(
   ) {
     return undefined;
   }
-  const fb = Number(fallbackMasterMinPrice);
+  const fb = Math.round(Number(fallbackMasterMinPrice));
   return Number.isFinite(fb) && fb > 0 && fb <= MAX_VALID_VND_PRICE ? fb : undefined;
 }

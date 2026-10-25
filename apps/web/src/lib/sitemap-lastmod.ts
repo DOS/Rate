@@ -23,10 +23,38 @@ export interface SitemapLastModified {
 
 const MIN_SITEMAP_TIMESTAMP_MS = Date.UTC(2020, 0, 1);
 const MAX_FUTURE_SKEW_MS = 24 * 60 * 60 * 1000;
+const RESERVED_SITEMAP_KEYS = new Set([
+  '__proto__',
+  'constructor',
+  'prototype',
+  'null',
+  'undefined',
+  'nan',
+  'true',
+  'false',
+]);
+
+function cleanSitemapSlug(raw: unknown, maxLen: number): string {
+  if (typeof raw !== 'string') return '';
+  const cleaned = raw
+    .replace(/\p{Cc}+/gu, '')
+    .trim()
+    .slice(0, maxLen);
+  if (
+    !cleaned ||
+    RESERVED_SITEMAP_KEYS.has(cleaned.toLowerCase()) ||
+    !/^[a-zA-Z0-9._-]+$/.test(cleaned) ||
+    !/[a-zA-Z0-9]/.test(cleaned) ||
+    /^(?:0+|\.+|-+|_+)$/.test(cleaned)
+  ) {
+    return '';
+  }
+  return cleaned;
+}
 
 function parseDate(value: string | null | undefined): Date | undefined {
   if (typeof value !== 'string') return undefined;
-  const trimmed = value.trim();
+  const trimmed = value.replace(/\p{Cc}+/gu, '').trim();
   if (!trimmed || trimmed.length > 64) return undefined;
   const ms = Date.parse(trimmed);
   if (
@@ -52,16 +80,10 @@ export function buildSitemapLastModified(
   const byCategory = new Map<string, Date>();
   const bySlug = new Map<string, Date>();
   if (!Array.isArray(rows)) return { latest, byCategory, bySlug };
-  for (const row of rows) {
-    if (!row) continue;
-    const slug =
-      typeof row.slug === 'string'
-        ? row.slug.replace(/\p{Cc}+/gu, '').trim()
-        : '';
-    const categorySlug =
-      typeof row.categorySlug === 'string'
-        ? row.categorySlug.replace(/\p{Cc}+/gu, '').trim()
-        : '';
+  for (const row of rows.slice(0, 10_000)) {
+    if (!row || typeof row !== 'object') continue;
+    const slug = cleanSitemapSlug(row.slug, 256);
+    const categorySlug = cleanSitemapSlug(row.categorySlug, 64);
     if (!slug || !categorySlug) continue;
     const date = parseDate(row.updatedAt);
     if (!date) continue;
@@ -79,7 +101,10 @@ export function versusLastModified(
   slugA: string,
   slugB: string
 ): Date | undefined {
-  return newer(dates.bySlug.get(slugA), dates.bySlug.get(slugB));
+  if (!dates || !(dates.bySlug instanceof Map)) return undefined;
+  const cleanA = cleanSitemapSlug(slugA, 256);
+  const cleanB = cleanSitemapSlug(slugB, 256);
+  return newer(dates.bySlug.get(cleanA), dates.bySlug.get(cleanB));
 }
 
 /**
@@ -87,7 +112,13 @@ export function versusLastModified(
  * with its stores (risk rescoring) as well as with the catalogue.
  */
 export function newestOf(...dates: Array<Date | undefined>): Date | undefined {
-  return dates.reduce<Date | undefined>((acc, d) => newer(acc, d), undefined);
+  return dates
+    .slice(0, 1000)
+    .reduce<Date | undefined>(
+      (acc, d) =>
+        d instanceof Date && Number.isFinite(d.getTime()) ? newer(acc, d) : acc,
+      undefined
+    );
 }
 
 /** A row's own change time, or undefined when unknown or unparseable. */

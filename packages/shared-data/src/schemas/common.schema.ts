@@ -6,17 +6,40 @@ import { z } from 'zod';
 
 export const HttpUrlSchema = z
   .string()
+  .min(1)
+  .max(2048)
   .url()
   .refine(
     (val) => {
+      if (/\p{Cc}/u.test(val) || /\s/.test(val)) return false;
       try {
         const parsed = new URL(val);
-        return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+        const bareHost = parsed.hostname.toLowerCase().replace(/^\[|\]$/g, '');
+        const isLoopback =
+          bareHost === 'localhost' ||
+          bareHost === '127.0.0.1' ||
+          bareHost === '::1';
+        return (
+          (parsed.protocol === 'http:' || parsed.protocol === 'https:') &&
+          parsed.username === '' &&
+          parsed.password === '' &&
+          Boolean(parsed.hostname) &&
+          !parsed.hostname.startsWith('.') &&
+          !parsed.hostname.endsWith('.') &&
+          !parsed.hostname.includes('..') &&
+          (isLoopback ||
+            parsed.port === '' ||
+            parsed.port === '80' ||
+            parsed.port === '443')
+        );
       } catch {
         return false;
       }
     },
-    { message: 'URL must use http:// or https:// protocol' }
+    {
+      message:
+        'URL must use http:// or https:// protocol without credentials or control chars',
+    }
   );
 
 // Pagination
@@ -55,7 +78,7 @@ export const DateRangeSchema = z.object({
 });
 
 export const SortSchema = z.object({
-  field: z.string(),
+  field: z.string().trim().min(1).max(64),
   order: z.enum(['asc', 'desc']).default('asc'),
 });
 

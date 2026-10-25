@@ -10,30 +10,37 @@ export const MAX_NORMALIZED_IMAGE_COUNT = 50;
 export const MAX_NORMALIZED_DESCRIPTION_LENGTH = 8000;
 
 function stripControlChars(input: string): string {
-  let out = '';
-  for (let i = 0; i < input.length; i++) {
-    const code = input.charCodeAt(i);
-    if (code === 0x09 || code === 0x0a || code === 0x0d || (code > 0x1f && code !== 0x7f)) {
-      out += input[i];
-    } else {
-      out += ' ';
-    }
-  }
-  return out;
+  if (typeof input !== 'string') return '';
+  return input.replace(/(?:(?![\t\r\n])\p{Cc})/gu, ' ');
 }
 
 function normalizeHttpAssetUrl(raw: unknown): string | null {
   if (typeof raw !== 'string') return null;
   const trimmed = raw.trim();
-  if (!trimmed || trimmed.length > MAX_NORMALIZED_IMAGE_URL_LENGTH) return null;
-  for (let i = 0; i < trimmed.length; i++) {
-    const code = trimmed.charCodeAt(i);
-    if (code <= 0x20 || code === 0x7f) return null;
+  if (!trimmed || trimmed.length > MAX_NORMALIZED_IMAGE_URL_LENGTH || /[\s\p{Cc}]/u.test(trimmed)) {
+    return null;
   }
   try {
     const parsed = new URL(trimmed);
     if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return null;
-    if (!parsed.hostname) return null;
+    if (parsed.username || parsed.password) return null;
+    if (parsed.port !== '' && parsed.port !== '80' && parsed.port !== '443') return null;
+    const host = parsed.hostname.toLowerCase();
+    if (
+      !host ||
+      !host.includes('.') ||
+      host.startsWith('.') ||
+      host.endsWith('.') ||
+      host.includes('..') ||
+      host.startsWith('[') ||
+      /^\d+(?:\.\d+){3}$/.test(host) ||
+      host === 'localhost' ||
+      host.endsWith('.localhost') ||
+      host.endsWith('.local') ||
+      host.endsWith('.internal')
+    ) {
+      return null;
+    }
     return parsed.toString();
   } catch {
     return null;
@@ -82,8 +89,10 @@ export interface NormalizedProductCandidate {
  * offering trade-in programs are not misclassified as used devices.
  */
 export function detectProductCondition(title: string, description?: string): ProductCondition {
-  const cleanTitle = title.replace(/thu\s*cũ\s*đổi\s*mới/gi, ' ');
-  const cleanDesc = (description || '').replace(/thu\s*cũ\s*đổi\s*mới/gi, ' ');
+  const safeTitle = typeof title === 'string' ? title : '';
+  const safeDesc = typeof description === 'string' ? description : '';
+  const cleanTitle = safeTitle.replace(/thu\s*cũ\s*đổi\s*mới/gi, ' ');
+  const cleanDesc = safeDesc.replace(/thu\s*cũ\s*đổi\s*mới/gi, ' ');
 
   const checkSource = (text: string): ProductCondition | null => {
     if (
@@ -129,7 +138,9 @@ export function detectProductCondition(title: string, description?: string): Pro
  * Detect product distribution origin (official VN/A vs parallel import vs unknown) (Audit C6).
  */
 export function detectProductOrigin(title: string, description?: string): ProductOrigin {
-  const combined = `${title} ${description || ''}`;
+  const safeTitle = typeof title === 'string' ? title : '';
+  const safeDesc = typeof description === 'string' ? description : '';
+  const combined = `${safeTitle} ${safeDesc}`;
   if (
     /(?:xách\s*tay|bản\s*mỹ|\bll\/a\b|\bzp\/a\b|\bza\/a\b|\bch\/a\b|\bkh\/a\b|\bj\/a\b|bản\s*hàn|bản\s*nhật|bản\s*trung|nội\s*địa(?:\s*trung|\s*nhật|\s*hàn)?|quốc\s*tế\s*mỹ)/i.test(
       combined
@@ -160,7 +171,7 @@ const APPLE_FAMILIES: ReadonlyArray<readonly [RegExp, string]> = [
  * Detect canonical category slug from product title across all 5 tech categories.
  */
 export function detectCategorySlug(title: string): CanonicalCategorySlug {
-  const t = title.toLowerCase();
+  const t = typeof title === 'string' ? title.toLowerCase() : '';
   if (
     /airpods|galaxy\s*buds|w[fh]1000xm|wf-\d+|wh-\d+|tai\s*nghe|earbuds?|freebuds|soundcore|quietcomfort|momentum\s*true/i.test(
       t
@@ -1074,8 +1085,7 @@ function isProductCodeToken(token: string): boolean {
 
 function slugify(text: string): string {
   return (
-    text
-      .toString()
+    String(text ?? '')
       .normalize('NFD')
       .replace(/[\u0300-\u036f]/g, '')
       .toLowerCase()
@@ -1089,6 +1099,9 @@ function slugify(text: string): string {
       .replace(/\s+/g, '-')
       .replace(/[^\w-]+/g, '')
       .replace(/--+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .slice(0, 200)
+      .replace(/-+$/g, '')
   );
 }
 
@@ -1097,7 +1110,11 @@ export class ProductNormalizer {
    * Normalizes raw Shopee product into canonical master product candidate across all 5 categories
    */
   public normalize(raw: ShopeeProduct): NormalizedProductCandidate {
-    const title = raw.title;
+    const safeRaw = raw && typeof raw === 'object' ? raw : ({} as ShopeeProduct);
+    const title =
+      typeof safeRaw.title === 'string'
+        ? stripControlChars(safeRaw.title).replace(/\s+/g, ' ').trim().slice(0, 1000)
+        : '';
     const categorySlug = detectCategorySlug(title);
 
     // 1. Extract Brand
@@ -1325,6 +1342,7 @@ export class ProductNormalizer {
       }
       model = modelTokens.length > 0 ? modelTokens.join(' ') : rawTokens.slice(0, 2).join(' ');
     }
+    model = model.replace(/\s+/g, ' ').trim().slice(0, 120).trim();
 
     // 3. Extract Storage - RAM-aware (plan v7 §5.2, Codex-reproduced bug:
     // "Samsung Galaxy A55 8GB RAM 256GB" must be 256GB, not the first GB token).
@@ -1413,7 +1431,9 @@ export class ProductNormalizer {
     );
 
     const baseKey = `${slugify(brand)}:${slugify(model)}`;
-    const benchmark = CANONICAL_PHONE_REGISTRY[baseKey];
+    const benchmark = Object.hasOwn(CANONICAL_PHONE_REGISTRY, baseKey)
+      ? CANONICAL_PHONE_REGISTRY[baseKey]
+      : undefined;
 
     const toValidStorageGb = (val: number): number | null =>
       Number.isFinite(val) && Number.isInteger(val) && val > 0 && val <= MAX_VALID_STORAGE_GB
@@ -1455,8 +1475,8 @@ export class ProductNormalizer {
 
     // 4. Extract Colors from models / variations
     const colors: string[] = [];
-    if (Array.isArray(raw.models)) {
-      for (const m of raw.models) {
+    if (Array.isArray(safeRaw.models)) {
+      for (const m of safeRaw.models) {
         if (colors.length >= MAX_NORMALIZED_COLOR_COUNT) break;
         const normalizedColor =
           typeof m?.name === 'string'
@@ -1473,8 +1493,8 @@ export class ProductNormalizer {
     }
 
     const images: string[] = [];
-    if (Array.isArray(raw.images)) {
-      for (const img of raw.images) {
+    if (Array.isArray(safeRaw.images)) {
+      for (const img of safeRaw.images) {
         if (images.length >= MAX_NORMALIZED_IMAGE_COUNT) break;
         const normalizedImg = normalizeHttpAssetUrl(img);
         if (normalizedImg && !images.includes(normalizedImg)) {
@@ -1699,7 +1719,8 @@ export class ProductNormalizer {
             ? 'Dual Camera'
             : 'Single Camera';
 
-    const rawPriceMin = Number(raw.priceMin);
+    const rawPriceMinInput: unknown = safeRaw.priceMin;
+    const rawPriceMin = typeof rawPriceMinInput === 'boolean' ? NaN : Number(rawPriceMinInput);
     const safePriceMin =
       Number.isFinite(rawPriceMin) && rawPriceMin > 0 && rawPriceMin <= MAX_VALID_VND_PRICE
         ? rawPriceMin
@@ -1841,8 +1862,8 @@ export class ProductNormalizer {
     };
 
     const sanitizedDescription =
-      typeof raw.description === 'string'
-        ? stripControlChars(raw.description).trim().slice(0, MAX_NORMALIZED_DESCRIPTION_LENGTH)
+      typeof safeRaw.description === 'string'
+        ? stripControlChars(safeRaw.description).trim().slice(0, MAX_NORMALIZED_DESCRIPTION_LENGTH)
         : undefined;
     const condition = detectProductCondition(title, sanitizedDescription);
     const origin = detectProductOrigin(title, sanitizedDescription);

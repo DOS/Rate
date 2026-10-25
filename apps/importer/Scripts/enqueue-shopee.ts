@@ -16,7 +16,7 @@ import { scopeSupabaseToRate } from '../src/shopee/types.js';
 dotenv.config({ quiet: true });
 
 const logger = createImporterLogger('EnqueueShopee');
-const admin = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, {
+const admin = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_SECRET_KEY!, {
   auth: { autoRefreshToken: false, persistSession: false },
 });
 const db = scopeSupabaseToRate(admin);

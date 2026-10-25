@@ -24,18 +24,28 @@ export const RATE_ROUTES = {
   CONTACT_US: '/contact-us',
 } as const;
 
+function sanitizePathSegment(raw: unknown, maxLen: number): string {
+  if (typeof raw !== 'string') return '';
+  const cleaned = raw
+    .replace(/\p{Cc}+/gu, '')
+    .trim()
+    .slice(0, maxLen);
+  if (!cleaned || cleaned === '.' || cleaned === '..') return '';
+  return cleaned;
+}
+
 export const RATE_API_V1_ENDPOINTS = {
   BASE: '/api/v1/rate',
   PRODUCTS: '/api/v1/rate/products',
   PRODUCT_DETAIL: (slug: string) =>
-    `/api/v1/rate/products/${encodeURIComponent(slug)}`,
+    `/api/v1/rate/products/${encodeURIComponent(sanitizePathSegment(slug, 180))}`,
   COMPARE: '/api/v1/rate/compare',
   VERSUS: '/api/v1/rate/versus',
   DEALS: '/api/v1/rate/deals',
   LEADERBOARD: '/api/v1/rate/leaderboard',
   MERCHANTS: '/api/v1/rate/merchants',
   MERCHANT_DETAIL: (id: string) =>
-    `/api/v1/rate/merchants/${encodeURIComponent(id)}`,
+    `/api/v1/rate/merchants/${encodeURIComponent(sanitizePathSegment(id, 128))}`,
   LOOKUP: '/api/v1/rate/lookup',
   INSPECT: '/api/v1/rate/inspect',
   WATCHLIST: '/api/v1/rate/watchlist',
@@ -47,7 +57,7 @@ export const RATE_API_V1_ENDPOINTS = {
   EXTENSION_LOOKUP: '/api/v1/rate/extension/lookup',
   EXTENSION_INGEST: '/api/v1/rate/extension/ingest',
   REVIEW_VOTE: (reviewId: string) =>
-    `/api/reviews/${encodeURIComponent(reviewId)}/vote`,
+    `/api/reviews/${encodeURIComponent(sanitizePathSegment(reviewId, 128))}/vote`,
   HEALTH: '/api/health',
 } as const;
 

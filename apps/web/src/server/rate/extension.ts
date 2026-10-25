@@ -296,14 +296,40 @@ function sanitizeExtensionField(raw: unknown, maxLen: number): string {
  */
 export function canonicalizeProductUrl(rawUrl?: string | null): string | null {
   if (!rawUrl || typeof rawUrl !== 'string') return null;
-  const trimmed = rawUrl.replace(/\p{Cc}+/gu, '').trim();
-  if (!trimmed || trimmed.length > MAX_EXTENSION_URL_LENGTH) return null;
+  if (/\p{Cc}/u.test(rawUrl)) return null;
+  const trimmed = rawUrl.trim();
+  if (
+    !trimmed ||
+    trimmed.length > MAX_EXTENSION_URL_LENGTH ||
+    /\s/.test(trimmed)
+  ) {
+    return null;
+  }
   try {
     const parsed = new URL(trimmed);
     if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
       return null;
     }
     if (parsed.username !== '' || parsed.password !== '') {
+      return null;
+    }
+    const host = parsed.hostname.toLowerCase();
+    if (
+      !host ||
+      !host.includes('.') ||
+      host.startsWith('.') ||
+      host.endsWith('.') ||
+      host.includes('..') ||
+      host.startsWith('[') ||
+      /^\d+(?:\.\d+){3}$/.test(host) ||
+      host === 'localhost' ||
+      host.endsWith('.localhost') ||
+      host.endsWith('.local') ||
+      host.endsWith('.internal')
+    ) {
+      return null;
+    }
+    if (parsed.port !== '' && parsed.port !== '80' && parsed.port !== '443') {
       return null;
     }
     return `${parsed.origin}${parsed.pathname}`;
@@ -320,7 +346,13 @@ export function detectPlatformFromInput(
   rawPlatform?: string | null,
   rawUrl?: string | null
 ): SupportedEcommercePlatform | null {
-  const norm = (rawPlatform || '').trim().toLowerCase();
+  const norm =
+    typeof rawPlatform === 'string'
+      ? rawPlatform
+          .replace(/\p{Cc}+/gu, '')
+          .trim()
+          .toLowerCase()
+      : '';
   if (
     norm === 'shopee' ||
     norm === 'lazada' ||
@@ -336,8 +368,15 @@ export function detectPlatformFromInput(
     return norm;
   }
   if (!rawUrl || typeof rawUrl !== 'string') return null;
-  const trimmedUrl = rawUrl.replace(/\p{Cc}+/gu, '').trim();
-  if (!trimmedUrl || trimmedUrl.length > MAX_EXTENSION_URL_LENGTH) return null;
+  if (/\p{Cc}/u.test(rawUrl)) return null;
+  const trimmedUrl = rawUrl.trim();
+  if (
+    !trimmedUrl ||
+    trimmedUrl.length > MAX_EXTENSION_URL_LENGTH ||
+    /\s/.test(trimmedUrl)
+  ) {
+    return null;
+  }
   let host: string;
   try {
     const parsed = new URL(trimmedUrl);
@@ -348,6 +387,17 @@ export function detectPlatformFromInput(
       return null;
     }
     host = parsed.hostname.toLowerCase();
+    if (
+      !host ||
+      host.startsWith('.') ||
+      host.endsWith('.') ||
+      host.includes('..')
+    ) {
+      return null;
+    }
+    if (parsed.port !== '' && parsed.port !== '80' && parsed.port !== '443') {
+      return null;
+    }
   } catch {
     return null;
   }
@@ -379,8 +429,24 @@ export function detectAccessoryOrJunk(params: {
   url?: string | null;
   price?: number | null;
 }): { isAccessory: boolean; reason: string | null } {
-  const titleLower = (params.title || '').trim().toLowerCase();
-  const urlLower = (params.url || '').trim().toLowerCase();
+  const safeParams =
+    params && typeof params === 'object' && !Array.isArray(params)
+      ? params
+      : ({} as typeof params);
+  const titleLower =
+    typeof safeParams.title === 'string'
+      ? safeParams.title
+          .replace(/\p{Cc}+/gu, ' ')
+          .trim()
+          .toLowerCase()
+      : '';
+  const urlLower =
+    typeof safeParams.url === 'string'
+      ? safeParams.url
+          .replace(/\p{Cc}+/gu, '')
+          .trim()
+          .toLowerCase()
+      : '';
   if (titleLower) {
     for (const kw of ACCESSORY_KEYWORDS_VI_EN) {
       if (titleLower.includes(kw)) {
@@ -399,13 +465,14 @@ export function detectAccessoryOrJunk(params: {
     : MINIMUM_DEVICE_PRICE_FLOOR_VND;
 
   if (
-    typeof params.price === 'number' &&
-    params.price > 0 &&
-    params.price < minFloor
+    typeof safeParams.price === 'number' &&
+    Number.isFinite(safeParams.price) &&
+    safeParams.price > 0 &&
+    safeParams.price < minFloor
   ) {
     return {
       isAccessory: true,
-      reason: `Mức giá (${params.price.toLocaleString('vi-VN')} ₫) thấp hơn ngưỡng tối thiểu của thiết bị chính hãng (${minFloor.toLocaleString('vi-VN')} ₫) - khả năng cao là phụ kiện hoặc linh kiện.`,
+      reason: `Mức giá (${safeParams.price.toLocaleString('vi-VN')} ₫) thấp hơn ngưỡng tối thiểu của thiết bị chính hãng (${minFloor.toLocaleString('vi-VN')} ₫) - khả năng cao là phụ kiện hoặc linh kiện.`,
     };
   }
 
@@ -466,8 +533,12 @@ export function extractStorageAndAmbiguity(params: {
     return Array.from(found).sort((a, b) => a - b);
   };
 
-  const variantText = (params.selectedVariant || '').trim();
-  const titleText = (params.title || '').trim();
+  const safeParams =
+    params && typeof params === 'object' && !Array.isArray(params)
+      ? params
+      : ({} as typeof params);
+  const variantText = sanitizeExtensionField(safeParams.selectedVariant, 160);
+  const titleText = sanitizeExtensionField(safeParams.title, 400);
 
   const variantCaps = variantText ? parseCapacities(variantText) : [];
   const titleCaps = titleText ? parseCapacities(titleText) : [];
@@ -497,7 +568,13 @@ export function extractStorageAndAmbiguity(params: {
 }
 
 function computeMedian(values: number[]): number {
-  const valid = values.filter((v) => Number.isFinite(v) && v > 0);
+  const valid = (Array.isArray(values) ? values : []).filter(
+    (v) =>
+      typeof v === 'number' &&
+      Number.isFinite(v) &&
+      v > 0 &&
+      v <= MAX_VALID_VND_PRICE
+  );
   if (valid.length === 0) return 0;
   const sorted = [...valid].sort((a, b) => a - b);
   const mid = Math.floor(sorted.length / 2);
@@ -523,6 +600,10 @@ export function evaluateExtensionPriceVerdict(params: {
   observedOfferId?: string | null;
   priceHistory: MasterProductPriceHistorySummary | null;
 }): ExtensionPriceAssessment {
+  const safeParams =
+    params && typeof params === 'object' && !Array.isArray(params)
+      ? params
+      : ({} as typeof params);
   const {
     isAccessory,
     accessoryReason,
@@ -532,7 +613,8 @@ export function evaluateExtensionPriceVerdict(params: {
     offers,
     observedOfferId,
     priceHistory,
-  } = params;
+  } = safeParams;
+  const safeOffers = Array.isArray(offers) ? offers : [];
 
   if (isAccessory) {
     return {
@@ -557,10 +639,16 @@ export function evaluateExtensionPriceVerdict(params: {
 
   // The market reference leaves bait-price listings out, whichever caller
   // (extension lookup or the inspect API) passes the offers (DOS/Rate#797).
-  const marketOffers = plausibleOffers(offers);
+  const marketOffers = plausibleOffers(safeOffers);
   const offerPrices = marketOffers
     .map((o) => o.price_current)
-    .filter((p) => Number.isFinite(p) && p > 0 && p <= MAX_VALID_VND_PRICE);
+    .filter(
+      (p) =>
+        typeof p === 'number' &&
+        Number.isFinite(p) &&
+        p > 0 &&
+        p <= MAX_VALID_VND_PRICE
+    );
 
   const marketMinPrice =
     offerPrices.length > 0 ? Math.min(...offerPrices) : null;
@@ -569,8 +657,22 @@ export function evaluateExtensionPriceVerdict(params: {
   const marketMedianPrice =
     offerPrices.length > 0 ? computeMedian(offerPrices) : null;
 
-  const historicalMinPrice = priceHistory?.lowestEverPrice ?? marketMinPrice;
-  const historicalMaxPrice = priceHistory?.highestEverPrice ?? marketMaxPrice;
+  const rawHistMin = priceHistory?.lowestEverPrice;
+  const historicalMinPrice =
+    typeof rawHistMin === 'number' &&
+    Number.isFinite(rawHistMin) &&
+    rawHistMin > 0 &&
+    rawHistMin <= MAX_VALID_VND_PRICE
+      ? rawHistMin
+      : marketMinPrice;
+  const rawHistMax = priceHistory?.highestEverPrice;
+  const historicalMaxPrice =
+    typeof rawHistMax === 'number' &&
+    Number.isFinite(rawHistMax) &&
+    rawHistMax > 0 &&
+    rawHistMax <= MAX_VALID_VND_PRICE
+      ? rawHistMax
+      : marketMaxPrice;
 
   if (isAmbiguousVariant) {
     return {
@@ -598,8 +700,8 @@ export function evaluateExtensionPriceVerdict(params: {
   // against every other offer, as the offers table judges each row, so the
   // two never disagree about a listing.
   const otherOffers = observedOfferId
-    ? offers.filter((o) => o.id !== observedOfferId)
-    : offers;
+    ? safeOffers.filter((o) => o && o.id !== observedOfferId)
+    : safeOffers;
   if (observedPrice && isImplausiblyLowPrice(observedPrice, otherOffers)) {
     return {
       verdict: 'insufficient_data',
@@ -771,6 +873,92 @@ export function evaluateExtensionPriceVerdict(params: {
   };
 }
 
+const SAFE_EXTERNAL_ID_REGEX = /^[a-zA-Z0-9._-]{1,128}$/;
+
+export function isValidExternalEntityId(val: string): boolean {
+  return (
+    typeof val === 'string' &&
+    SAFE_EXTERNAL_ID_REGEX.test(val) &&
+    /[a-zA-Z0-9]/.test(val) &&
+    !/^0+$/.test(val) &&
+    !val.startsWith('.') &&
+    !val.endsWith('.') &&
+    !val.includes('..') &&
+    !/^(?:null|undefined|nan|infinity|-infinity|true|false)$/i.test(val)
+  );
+}
+
+export function buildCandidateExternalItemIds(params: {
+  externalId?: string | null;
+  shopId?: string | null;
+  platform?: SupportedEcommercePlatform | null;
+}): string[] {
+  const rawExternalId = sanitizeExtensionField(params.externalId, 128);
+  const cleanExternalId = isValidExternalEntityId(rawExternalId)
+    ? rawExternalId
+    : null;
+  const rawShopId = sanitizeExtensionField(params.shopId, 128);
+  const cleanShopId = isValidExternalEntityId(rawShopId) ? rawShopId : null;
+
+  const candidateItemIds = new Set<string>();
+  if (!cleanExternalId) {
+    return [];
+  }
+
+  candidateItemIds.add(cleanExternalId);
+  if (cleanExternalId.includes('_')) {
+    const parts = cleanExternalId.split('_');
+    if (parts[1] && isValidExternalEntityId(parts[1])) {
+      candidateItemIds.add(parts[1]);
+    }
+  }
+  if (cleanShopId && !cleanExternalId.includes('_')) {
+    candidateItemIds.add(`${cleanShopId}_${cleanExternalId}`);
+  }
+  const prefixMap: Partial<Record<SupportedEcommercePlatform, string>> = {
+    tiktok: 'tts-',
+    cellphones: 'cps-',
+    tgdd: 'tgdd-',
+    fptshop: 'fpt-',
+    hoangha: 'hhm-',
+    didongviet: 'ddv-',
+    phongvu: 'pv-',
+  };
+  const prefix = params.platform ? prefixMap[params.platform] : undefined;
+  if (prefix && !cleanExternalId.startsWith(prefix)) {
+    const prefixed = `${prefix}${cleanExternalId}`;
+    if (isValidExternalEntityId(prefixed)) {
+      candidateItemIds.add(prefixed);
+    }
+  }
+  return Array.from(candidateItemIds);
+}
+
+export function doesOfferUrlMatchCandidateIds(
+  offerUrl: string,
+  candidateItemIds: Iterable<string>
+): boolean {
+  if (typeof offerUrl !== 'string' || !offerUrl.trim()) return false;
+  let pathAndSearch = offerUrl;
+  try {
+    const parsed = new URL(offerUrl);
+    pathAndSearch = `${parsed.pathname}${parsed.search}`;
+  } catch {
+    // Keep raw string when URL parsing fails
+  }
+  for (const id of candidateItemIds) {
+    if (
+      typeof id === 'string' &&
+      id.length >= 4 &&
+      isValidExternalEntityId(id) &&
+      pathAndSearch.includes(id)
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
+
 /**
  * Fast-Path Read-Only Lookup for Rate Browser Extension MV3 (`GET /api/v1/rate/extension/lookup`).
  * Strictly Read-Only: Never invokes AI Spec Enricher or mutates `rate.master_products`.
@@ -802,7 +990,8 @@ export async function lookupExtensionProduct(
       : null;
 
   const urlKeyword = extractKeywordFromProductUrl(canonicalUrl || params.url);
-  const effectiveTitle = (params.title || '').trim() || urlKeyword;
+  const effectiveTitle =
+    sanitizeExtensionField(params.title, 400) || urlKeyword;
 
   // Step 1: Accessory / Junk Gatekeeper
   const gatekeeper = detectAccessoryOrJunk({
@@ -858,36 +1047,32 @@ export async function lookupExtensionProduct(
   const parsedFromUrl = canonicalUrl
     ? parseEcommerceUrlOrQuery(canonicalUrl)
     : null;
+  const sanitizedParamExternalId = sanitizeExtensionField(
+    params.externalId,
+    128
+  );
   const rawExternalId =
-    (params.externalId || '').trim() || parsedFromUrl?.platformItemId || null;
+    (isValidExternalEntityId(sanitizedParamExternalId)
+      ? sanitizedParamExternalId
+      : null) ||
+    parsedFromUrl?.platformItemId ||
+    null;
+  const sanitizedParamShopId = sanitizeExtensionField(params.shopId, 128);
   const effectiveShopId =
-    (params.shopId || '').trim() || parsedFromUrl?.platformShopId || null;
+    (isValidExternalEntityId(sanitizedParamShopId)
+      ? sanitizedParamShopId
+      : null) ||
+    parsedFromUrl?.platformShopId ||
+    null;
 
   // Normalize externalId (handle both `shopId_itemId`, platform prefixes, and raw `itemId`)
-  const candidateItemIds = new Set<string>();
-  if (rawExternalId) {
-    candidateItemIds.add(rawExternalId);
-    if (rawExternalId.includes('_')) {
-      const parts = rawExternalId.split('_');
-      if (parts[1]) candidateItemIds.add(parts[1]);
-    }
-    if (effectiveShopId && !rawExternalId.includes('_')) {
-      candidateItemIds.add(`${effectiveShopId}_${rawExternalId}`);
-    }
-    const prefixMap: Partial<Record<SupportedEcommercePlatform, string>> = {
-      tiktok: 'tts-',
-      cellphones: 'cps-',
-      tgdd: 'tgdd-',
-      fptshop: 'fpt-',
-      hoangha: 'hhm-',
-      didongviet: 'ddv-',
-      phongvu: 'pv-',
-    };
-    const prefix = platform ? prefixMap[platform] : undefined;
-    if (prefix && !rawExternalId.startsWith(prefix)) {
-      candidateItemIds.add(`${prefix}${rawExternalId}`);
-    }
-  }
+  const candidateItemIds = new Set<string>(
+    buildCandidateExternalItemIds({
+      externalId: rawExternalId,
+      shopId: effectiveShopId,
+      platform,
+    })
+  );
 
   // Step 3: Search candidate Master Products in DB (Read-Only)
   const searchKeyword = cleanModelSearchQuery || effectiveTitle || '';
@@ -1050,17 +1235,15 @@ export async function lookupExtensionProduct(
     offers.find(
       (o) =>
         (canonicalUrl && o.url.includes(canonicalUrl)) ||
-        Array.from(candidateItemIds).some((id) => o.url.includes(id))
+        doesOfferUrlMatchCandidateIds(o.url, candidateItemIds)
     ) || null;
   const matchedOffer = urlMatchedOffer || plausibleOffers(offers)[0] || null;
 
-  if (matchedOffer && candidateItemIds.size > 0) {
-    for (const id of candidateItemIds) {
-      if (matchedOffer.url.includes(id)) {
-        matchStatus = 'exact_listing';
-        break;
-      }
-    }
+  if (
+    matchedOffer &&
+    doesOfferUrlMatchCandidateIds(matchedOffer.url, candidateItemIds)
+  ) {
+    matchStatus = 'exact_listing';
   }
 
   const categoryPath = getMasterProductCategorySlug(matchedMaster);
@@ -1080,12 +1263,18 @@ export async function lookupExtensionProduct(
   const topRival =
     sameCategoryPeers.find((peer) => peer.id !== matchedMaster!.id) || null;
 
-  const rawTotalRevs = Number(matchedMaster.total_reviews || 0);
+  const rawTotalRevs =
+    typeof matchedMaster.total_reviews === 'number'
+      ? matchedMaster.total_reviews
+      : 0;
   const totalRevs =
     Number.isFinite(rawTotalRevs) && rawTotalRevs > 0
       ? Math.floor(rawTotalRevs)
       : 0;
-  const rawAuthRevs = Number(matchedMaster.authentic_review_count ?? totalRevs);
+  const rawAuthRevs =
+    typeof matchedMaster.authentic_review_count === 'number'
+      ? matchedMaster.authentic_review_count
+      : totalRevs;
   const authRevs =
     Number.isFinite(rawAuthRevs) && rawAuthRevs >= 0
       ? Math.min(totalRevs, Math.floor(rawAuthRevs))
@@ -1241,7 +1430,12 @@ export interface ExtensionCrowdIngestResult {
 export async function ingestExtensionCrowdSignal(
   input: ExtensionCrowdIngestInput
 ): Promise<ExtensionCrowdIngestResult> {
-  if (!input.userConsentOptIn) {
+  if (
+    !input ||
+    typeof input !== 'object' ||
+    Array.isArray(input) ||
+    !input.userConsentOptIn
+  ) {
     return {
       accepted: false,
       quarantinedForWorker: false,
@@ -1341,9 +1535,15 @@ export async function ingestExtensionCrowdSignal(
     rpcClient = getRateClient();
   }
 
-  const cleanItemId = sanitizeExtensionField(input.externalItemId, 128);
-  const cleanShopId = sanitizeExtensionField(input.externalShopId, 128);
-  if (!cleanItemId) {
+  const rawCleanItemId = sanitizeExtensionField(input.externalItemId, 128);
+  const cleanItemId = isValidExternalEntityId(rawCleanItemId)
+    ? rawCleanItemId
+    : '';
+  const rawCleanShopId = sanitizeExtensionField(input.externalShopId, 128);
+  const cleanShopId = isValidExternalEntityId(rawCleanShopId)
+    ? rawCleanShopId
+    : '';
+  if (!cleanItemId || (rawCleanShopId !== '' && !cleanShopId)) {
     return {
       accepted: false,
       quarantinedForWorker: false,

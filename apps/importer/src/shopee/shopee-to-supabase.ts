@@ -36,18 +36,33 @@ function hashEntity(val: string): string {
   return '0x' + crypto.createHash('sha256').update(val.toLowerCase()).digest('hex');
 }
 
+const SENTINEL_REVIEW_IDS = new Set(['0', 'null', 'undefined', 'nan', 'none', '---']);
+
 export function platformReviewIdFor(r: ShopeeReview): string {
-  const cleanId = typeof r?.reviewId === 'string' ? r.reviewId.replace(/\p{Cc}+/gu, '').trim() : '';
-  if (cleanId.length > 0 && cleanId.length <= 160) {
+  const safeReview =
+    r && typeof r === 'object' && !Array.isArray(r) ? r : ({} as Partial<ShopeeReview>);
+  const cleanId =
+    typeof safeReview.reviewId === 'string'
+      ? safeReview.reviewId.replace(/\p{Cc}+/gu, '').trim()
+      : '';
+  if (
+    cleanId.length > 0 &&
+    cleanId.length <= 160 &&
+    !SENTINEL_REVIEW_IDS.has(cleanId.toLowerCase())
+  ) {
     return cleanId;
   }
+  const author = String(safeReview.author || '').slice(0, 200);
+  const rating =
+    typeof safeReview.ratingStar === 'boolean' ? '' : String(safeReview.ratingStar ?? '');
+  const variation = String(safeReview.variation || '').slice(0, 200);
+  const createdAt = String(safeReview.createdAt || '').slice(0, 64);
+  const comment = String(safeReview.comment || '').slice(0, 10_000);
   return (
     'rv-' +
     crypto
       .createHash('sha256')
-      .update(
-        `${r?.author || ''}|${r?.ratingStar ?? ''}|${r?.variation || ''}|${r?.createdAt || ''}|${r?.comment || ''}`
-      )
+      .update(`${author}|${rating}|${variation}|${createdAt}|${comment}`)
       .digest('hex')
   );
 }
@@ -77,10 +92,27 @@ export function hasPopulatedSpecificationGroups(specs: unknown): boolean {
     if (group && typeof group === 'object' && !Array.isArray(group)) {
       const hasValue = Object.values(group as Record<string, unknown>).some(v => {
         if (v === undefined || v === null) return false;
+        if (typeof v === 'number') return Number.isFinite(v);
+        if (typeof v === 'boolean') return true;
         if (Array.isArray(v)) {
-          return v.some(item => item !== undefined && item !== null && String(item).trim() !== '');
+          return v.some(
+            item =>
+              item !== undefined &&
+              item !== null &&
+              (typeof item === 'number'
+                ? Number.isFinite(item)
+                : typeof item === 'boolean'
+                  ? true
+                  : String(item)
+                      .replace(/\p{Cc}+/gu, '')
+                      .trim() !== '')
+          );
         }
-        return String(v).trim() !== '';
+        return (
+          String(v)
+            .replace(/\p{Cc}+/gu, '')
+            .trim() !== ''
+        );
       });
       if (hasValue) return true;
     }
@@ -98,15 +130,27 @@ export function hasPopulatedSpecificationGroups(specs: unknown): boolean {
 export function normalizeScrapedProductPrices(
   product: ValidatedScrapedProduct
 ): ValidatedScrapedProduct {
-  const priceMin = Number(product.priceMin);
-  const rawPriceMax = Number(product.priceMax);
+  if (!product || typeof product !== 'object' || Array.isArray(product)) {
+    throw new Error('normalizeScrapedProductPrices requires a non-null product object');
+  }
+  const rawPriceMin = typeof product.priceMin === 'boolean' ? 0 : Number(product.priceMin);
+  const priceMin =
+    Number.isFinite(rawPriceMin) && rawPriceMin > 0
+      ? Math.min(Math.round(rawPriceMin), MAX_VALID_VND_PRICE)
+      : 0;
+  const rawPriceMax = typeof product.priceMax === 'boolean' ? Number.NaN : Number(product.priceMax);
+  const roundedPriceMax = Number.isFinite(rawPriceMax) ? Math.round(rawPriceMax) : Number.NaN;
   const priceMax =
-    Number.isFinite(rawPriceMax) && rawPriceMax >= priceMin && rawPriceMax <= MAX_VALID_VND_PRICE
-      ? rawPriceMax
+    Number.isFinite(roundedPriceMax) &&
+    roundedPriceMax >= priceMin &&
+    roundedPriceMax <= MAX_VALID_VND_PRICE
+      ? roundedPriceMax
       : priceMin;
   const rawBefore =
-    product.priceBeforeDiscount !== undefined && product.priceBeforeDiscount !== null
-      ? Number(product.priceBeforeDiscount)
+    product.priceBeforeDiscount !== undefined &&
+    product.priceBeforeDiscount !== null &&
+    typeof product.priceBeforeDiscount !== 'boolean'
+      ? Math.round(Number(product.priceBeforeDiscount))
       : undefined;
   const validBeforeDiscount =
     rawBefore !== undefined &&
@@ -117,37 +161,67 @@ export function normalizeScrapedProductPrices(
       ? rawBefore
       : undefined;
   const models = Array.isArray(product.models)
-    ? product.models.filter(m => {
-        const p = Number(m?.price);
-        return Number.isFinite(p) && p > 0 && p <= MAX_VALID_VND_PRICE;
-      })
+    ? product.models
+        .filter(m => {
+          if (!m || typeof m !== 'object' || Array.isArray(m) || typeof m.price === 'boolean')
+            return false;
+          const p = Math.round(Number(m.price));
+          return Number.isFinite(p) && p > 0 && p <= MAX_VALID_VND_PRICE;
+        })
+        .map(m => ({
+          ...m,
+          price: Math.round(Number(m.price)),
+        }))
     : [];
+  const rawSold =
+    typeof product.historicalSold === 'boolean' ? Number.NaN : Number(product.historicalSold);
+  const historicalSold =
+    Number.isFinite(rawSold) && rawSold >= 0 ? Math.min(Math.floor(rawSold), 1_000_000_000) : 0;
+  const rawRatingStar =
+    typeof product.ratingStar === 'boolean' ? Number.NaN : Number(product.ratingStar);
+  const ratingStar =
+    Number.isFinite(rawRatingStar) && rawRatingStar >= 0 && rawRatingStar <= 5 ? rawRatingStar : 0;
+  const rawRatingCount =
+    typeof product.ratingCount === 'boolean' ? Number.NaN : Number(product.ratingCount);
+  const ratingCount =
+    Number.isFinite(rawRatingCount) && rawRatingCount >= 0
+      ? Math.min(Math.floor(rawRatingCount), 100_000_000)
+      : 0;
   const images = sanitizeHttpUrlList(product.images);
-  const shopUrl = sanitizeHttpUrl(product.shop?.url) ?? undefined;
+  const safeShop =
+    product.shop && typeof product.shop === 'object' && !Array.isArray(product.shop)
+      ? product.shop
+      : ({} as ValidatedScrapedProduct['shop']);
+  const shopUrl = sanitizeHttpUrl(safeShop.url) ?? undefined;
   const reviews = Array.isArray(product.reviews)
-    ? product.reviews.map(r => ({
-        ...r,
-        authorAvatar: sanitizeHttpUrl(r.authorAvatar) ?? undefined,
-        images: sanitizeHttpUrlList(r.images),
-        ...(r.videos !== undefined ? { videos: sanitizeHttpUrlList(r.videos) } : {}),
-        ...(r.reviewer
-          ? {
-              reviewer: {
-                ...r.reviewer,
-                profileUrl: sanitizeHttpUrl(r.reviewer.profileUrl) ?? undefined,
-              },
-            }
-          : {}),
-      }))
+    ? product.reviews
+        .filter((r): r is ShopeeReview => Boolean(r && typeof r === 'object' && !Array.isArray(r)))
+        .map(r => ({
+          ...r,
+          authorAvatar: sanitizeHttpUrl(r.authorAvatar) ?? undefined,
+          images: sanitizeHttpUrlList(r.images),
+          ...(r.videos !== undefined ? { videos: sanitizeHttpUrlList(r.videos) } : {}),
+          reviewer:
+            r.reviewer && typeof r.reviewer === 'object' && !Array.isArray(r.reviewer)
+              ? {
+                  ...r.reviewer,
+                  profileUrl: sanitizeHttpUrl(r.reviewer.profileUrl) ?? undefined,
+                }
+              : undefined,
+        }))
     : [];
   return {
     ...product,
+    priceMin,
     priceMax,
     priceBeforeDiscount: validBeforeDiscount,
+    historicalSold,
+    ratingStar,
+    ratingCount,
     images,
     models,
     shop: {
-      ...product.shop,
+      ...safeShop,
       url: shopUrl,
     },
     reviews,
@@ -197,10 +271,10 @@ export class ShopeeIngestionPipeline {
       this.supabase = aiConfig.supabaseClient;
     } else {
       const rawUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-      const key = (process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_KEY || '').trim();
+      const key = (process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_KEY || '').trim();
 
       if (!rawUrl.trim() || !key) {
-        throw new Error('Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY in environment.');
+        throw new Error('Missing SUPABASE_URL or SUPABASE_SECRET_KEY in environment.');
       }
       const { url } = resolveBackfillSupabaseTarget(rawUrl);
 
@@ -228,13 +302,33 @@ export class ShopeeIngestionPipeline {
     errorPrefix: string
   ): Promise<Set<string>> {
     const found = new Set<string>();
-    const unique = [...new Set(ids.filter(Boolean))];
+    const safeProductId =
+      typeof productId === 'string'
+        ? productId
+            .replace(/\p{Cc}+/gu, '')
+            .trim()
+            .slice(0, 128)
+        : '';
+    if (!safeProductId || !Array.isArray(ids) || ids.length === 0) return found;
+    const unique = [
+      ...new Set(
+        ids
+          .filter((id): id is string => typeof id === 'string')
+          .map(id =>
+            id
+              .replace(/\p{Cc}+/gu, '')
+              .trim()
+              .slice(0, 160)
+          )
+          .filter(Boolean)
+      ),
+    ].slice(0, 1_000);
     for (let i = 0; i < unique.length; i += 50) {
       const chunk = unique.slice(i, i + 50);
       const eqBuilder = this.supabase
         .from('reviews')
         .select('platform_review_id')
-        .eq('product_id', productId) as unknown as {
+        .eq('product_id', safeProductId) as unknown as {
         in?: (
           col: string,
           vals: string[]
@@ -257,7 +351,12 @@ export class ShopeeIngestionPipeline {
           : await eqBuilder.not('platform_review_id', 'is', null);
       if (error) throw new Error(`${errorPrefix}: ${error.message}`);
       for (const r of (data || []) as Array<{ platform_review_id: string }>) {
-        if (r?.platform_review_id) found.add(r.platform_review_id);
+        if (!r || typeof r !== 'object' || typeof r.platform_review_id !== 'string') continue;
+        const cleanRevId = r.platform_review_id
+          .replace(/\p{Cc}+/gu, '')
+          .trim()
+          .slice(0, 160);
+        if (cleanRevId) found.add(cleanRevId);
       }
       if (typeof eqBuilder.in !== 'function') break;
     }
@@ -276,9 +375,20 @@ export class ShopeeIngestionPipeline {
     }
 
     for (const c of cats || []) {
-      this.categoryIdBySlug.set(c.slug, c.id);
-      if (c.slug === 'smartphones') {
-        this.smartphoneCategoryId = c.id;
+      if (!c || typeof c !== 'object') continue;
+      const safeSlug =
+        typeof c.slug === 'string'
+          ? c.slug
+              .replace(/\p{Cc}+/gu, '')
+              .trim()
+              .slice(0, 120)
+          : '';
+      const safeId =
+        typeof c.id === 'string' && !/\p{Cc}/u.test(c.id.trim()) ? c.id.trim().slice(0, 128) : '';
+      if (!safeSlug || !safeId) continue;
+      this.categoryIdBySlug.set(safeSlug, safeId);
+      if (safeSlug === 'smartphones') {
+        this.smartphoneCategoryId = safeId;
       }
     }
 
@@ -308,6 +418,7 @@ export class ShopeeIngestionPipeline {
     masterId: string;
     platform: SupportedEcommercePlatform;
   }> {
+    if (!options || typeof options !== 'object' || Array.isArray(options)) options = {};
     const product = normalizeScrapedProductPrices(ScrapedProductSchema.parse(rawProduct));
     if (
       !Number.isFinite(product.priceMin) ||
@@ -385,16 +496,21 @@ export class ShopeeIngestionPipeline {
     // a listing that is already clustered) keeps the listing on it instead of
     // re-matching every crawl, which can split it onto a new draft master.
     let hinted: { masterId: string; isNew: boolean } | null = null;
-    if (options.masterIdHint) {
+    const safeMasterIdHint =
+      typeof options.masterIdHint === 'string'
+        ? options.masterIdHint
+            .replace(/\p{Cc}+/gu, '')
+            .trim()
+            .slice(0, 128)
+        : '';
+    if (safeMasterIdHint) {
       const { data: hintRow, error: hintErr } = await this.supabase
         .from('master_products')
         .select('id, specifications')
-        .eq('id', options.masterIdHint)
+        .eq('id', safeMasterIdHint)
         .maybeSingle();
       if (hintErr) {
-        throw new Error(
-          `Failed to verify masterIdHint (${options.masterIdHint}): ${hintErr.message}`
-        );
+        throw new Error(`Failed to verify masterIdHint (${safeMasterIdHint}): ${hintErr.message}`);
       }
       if (hintRow?.id) {
         hinted = { masterId: hintRow.id, isNew: false };
@@ -552,8 +668,9 @@ export class ShopeeIngestionPipeline {
         .order('recorded_at', { ascending: false })
         .limit(1);
 
-      const latestObs =
-        Array.isArray(latestObsRows) && latestObsRows.length > 0 ? latestObsRows[0] : null;
+      const latestObs = Array.isArray(latestObsRows)
+        ? (latestObsRows.find(row => row && typeof row === 'object' && !Array.isArray(row)) ?? null)
+        : null;
       const currentPrice = Number(product.priceMin);
       const currentOriginal = Number(product.priceBeforeDiscount || 0);
       const prevPrice = latestObs ? Number(latestObs.price) : -1;
@@ -750,14 +867,14 @@ export class ShopeeIngestionPipeline {
             .filter(r => r.reviewer)
             .map(r => [platformReviewIdFor(r), r.reviewer] as const)
         );
-        const analysisInput: ReviewInputItem[] = (storedReviews || []).map(
-          (row: ReviewInputItem & { platform_review_id?: string | null }) => ({
+        const analysisInput: ReviewInputItem[] = (storedReviews || [])
+          .filter(row => Boolean(row && typeof row === 'object' && !Array.isArray(row)))
+          .map((row: ReviewInputItem & { platform_review_id?: string | null }) => ({
             ...row,
             reviewer: row.platform_review_id
               ? reviewerByPlatformId.get(row.platform_review_id)
               : undefined,
-          })
-        );
+          }));
 
         if (storedErr) {
           platLogger.warn(
@@ -765,7 +882,7 @@ export class ShopeeIngestionPipeline {
             `Review analysis skipped (fetch failed): ${storedErr.message}`,
             { productId }
           );
-        } else if (storedReviews && storedReviews.length > 0) {
+        } else if (analysisInput.length > 0) {
           const [{ data: masterRow }, { data: peerRows }] = await Promise.all([
             this.supabase
               .from('master_products')
@@ -790,7 +907,9 @@ export class ShopeeIngestionPipeline {
           const canonicalMinPrice = resolveClusterPeerFloorPrice(
             Array.isArray(peerRows) ? (peerRows as ClusterPeerPriceCandidate[]) : [],
             productId,
-            masterRow?.min_price ? Number(masterRow.min_price) : undefined
+            typeof masterRow?.min_price === 'number' || typeof masterRow?.min_price === 'string'
+              ? Number(masterRow.min_price)
+              : undefined
           );
 
           const { summary, merchantRisk } = await this.reviewAnalyzer.persistAnalysisToSupabase(

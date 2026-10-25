@@ -64,39 +64,71 @@ const SEEDING_TIERS: readonly MerchantSeedingTier[] = [
   'elevated',
 ];
 
-const SAFE_PLATFORM_FILTER_REGEX = /^[a-z0-9_-]{1,40}$/;
+const SAFE_PLATFORM_FILTER_REGEX = /^(?=.*[a-z0-9])[a-z0-9_-]{1,40}$/;
+const MAX_MERCHANT_DIRECTORY_SCAN = 5_000;
+
+function isValidMerchantPlatform(raw: string): boolean {
+  return (
+    SAFE_PLATFORM_FILTER_REGEX.test(raw) &&
+    !/^(?:0+|null|undefined|nan|infinity|-infinity|true|false|__proto__|constructor|prototype)$/i.test(
+      raw
+    )
+  );
+}
+
+function isOfficialMerchantFlag(value: unknown): boolean {
+  return (
+    value === true ||
+    value === 1 ||
+    (typeof value === 'string' && value.trim().toLowerCase() === 'true')
+  );
+}
 
 /** Parses filters from URL search params, falling back to the defaults. */
 export function parseMerchantDirectoryFilters(
   get: (key: string) => string | null | undefined
 ): MerchantDirectoryFilters {
+  if (typeof get !== 'function') {
+    return { ...DEFAULT_MERCHANT_DIRECTORY_FILTERS };
+  }
+  const safeGet = (key: string): string => {
+    const raw = get(key);
+    return typeof raw === 'string' ? raw : '';
+  };
   const pick = <T extends string>(
     raw: string | null | undefined,
     allowed: readonly T[],
     fallback: T
   ): T => {
-    const v = (raw ?? '').trim().toLowerCase() as T;
+    const v = (typeof raw === 'string' ? raw : '')
+      .replace(/\p{Cc}+/gu, '')
+      .trim()
+      .toLowerCase() as T;
     return allowed.includes(v) ? v : fallback;
   };
-  const official = (get('official') ?? get('officialOnly') ?? '').toLowerCase();
-  const rawPlatform = (get('platform') ?? 'all')
+  const official = (safeGet('official') || safeGet('officialOnly'))
     .replace(/\p{Cc}+/gu, '')
     .trim()
     .toLowerCase();
-  const platform = SAFE_PLATFORM_FILTER_REGEX.test(rawPlatform)
-    ? rawPlatform
-    : 'all';
+  const rawPlatform = (safeGet('platform') || 'all')
+    .replace(/\p{Cc}+/gu, '')
+    .trim()
+    .toLowerCase();
+  const platform =
+    rawPlatform !== 'all' && isValidMerchantPlatform(rawPlatform)
+      ? rawPlatform
+      : 'all';
   return {
-    query: (get('q') ?? '')
+    query: safeGet('q')
       .replace(/\p{Cc}+/gu, ' ')
       .replace(/\s+/g, ' ')
       .trim()
       .slice(0, 160),
     platform,
     officialOnly: official === 'true' || official === '1',
-    riskTier: pick(get('risk'), RISK_TIERS, 'all'),
-    seedingTier: pick(get('seeding'), SEEDING_TIERS, 'all'),
-    sortBy: pick(get('sort'), SORTS, 'trust_desc'),
+    riskTier: pick(safeGet('risk'), RISK_TIERS, 'all'),
+    seedingTier: pick(safeGet('seeding'), SEEDING_TIERS, 'all'),
+    sortBy: pick(safeGet('sort'), SORTS, 'trust_desc'),
   };
 }
 
@@ -105,76 +137,116 @@ export function merchantDirectoryFilterParams(
   filters: MerchantDirectoryFilters
 ): URLSearchParams {
   const params = new URLSearchParams();
-  const safeQuery = (typeof filters.query === 'string' ? filters.query : '')
+  const safeFilters =
+    filters && typeof filters === 'object' && !Array.isArray(filters)
+      ? filters
+      : DEFAULT_MERCHANT_DIRECTORY_FILTERS;
+  const safeQuery = (
+    typeof safeFilters.query === 'string' ? safeFilters.query : ''
+  )
     .replace(/\p{Cc}+/gu, ' ')
     .replace(/\s+/g, ' ')
     .trim()
     .slice(0, 160);
   if (safeQuery) params.set('q', safeQuery);
   const safePlatform = (
-    typeof filters.platform === 'string' ? filters.platform : 'all'
+    typeof safeFilters.platform === 'string' ? safeFilters.platform : 'all'
   )
     .replace(/\p{Cc}+/gu, '')
     .trim()
     .toLowerCase();
-  if (safePlatform !== 'all' && SAFE_PLATFORM_FILTER_REGEX.test(safePlatform)) {
+  if (safePlatform !== 'all' && isValidMerchantPlatform(safePlatform)) {
     params.set('platform', safePlatform);
   }
-  if (filters.officialOnly) params.set('official', 'true');
-  if (RISK_TIERS.includes(filters.riskTier) && filters.riskTier !== 'all') {
-    params.set('risk', filters.riskTier);
+  if (safeFilters.officialOnly === true) params.set('official', 'true');
+  if (
+    RISK_TIERS.includes(safeFilters.riskTier) &&
+    safeFilters.riskTier !== 'all'
+  ) {
+    params.set('risk', safeFilters.riskTier);
   }
   if (
-    SEEDING_TIERS.includes(filters.seedingTier) &&
-    filters.seedingTier !== 'all'
+    SEEDING_TIERS.includes(safeFilters.seedingTier) &&
+    safeFilters.seedingTier !== 'all'
   ) {
-    params.set('seeding', filters.seedingTier);
+    params.set('seeding', safeFilters.seedingTier);
   }
-  if (SORTS.includes(filters.sortBy) && filters.sortBy !== 'trust_desc') {
-    params.set('sort', filters.sortBy);
+  if (
+    SORTS.includes(safeFilters.sortBy) &&
+    safeFilters.sortBy !== 'trust_desc'
+  ) {
+    params.set('sort', safeFilters.sortBy);
   }
   return params;
 }
 
 function toSafeScore100(value: unknown, fallback = 0): number {
-  const n = Number(value);
+  if (typeof value !== 'number' && typeof value !== 'string') return fallback;
+  let n = Number.NaN;
+  if (typeof value === 'number') {
+    n = value;
+  } else {
+    const cleaned = value.replace(/\p{Cc}+/gu, '').trim();
+    if (
+      cleaned.length > 0 &&
+      cleaned.length <= 32 &&
+      !/^[+-]?0[xbo]/i.test(cleaned)
+    ) {
+      n = Number(cleaned);
+    }
+  }
   return Number.isFinite(n) ? Math.min(100, Math.max(0, n)) : fallback;
 }
 
 function toSafeCount(value: unknown): number {
-  const n = Number(value);
-  return Number.isFinite(n) && n > 0 ? Math.floor(n) : 0;
+  if (typeof value !== 'number' && typeof value !== 'string') return 0;
+  let n = Number.NaN;
+  if (typeof value === 'number') {
+    n = value;
+  } else {
+    const cleaned = value.replace(/\p{Cc}+/gu, '').trim();
+    if (
+      cleaned.length > 0 &&
+      cleaned.length <= 32 &&
+      !/^[+-]?0[xbo]/i.test(cleaned)
+    ) {
+      n = Number(cleaned);
+    }
+  }
+  return Number.isFinite(n) && n > 0 ? Math.min(100_000_000, Math.floor(n)) : 0;
 }
 
 export function summarizeMerchantDirectory(
   merchants: readonly MerchantSummary[]
 ): MerchantDirectorySummary {
+  const safeMerchants = Array.isArray(merchants)
+    ? merchants
+        .filter((m): m is MerchantSummary =>
+          Boolean(m && typeof m === 'object' && !Array.isArray(m))
+        )
+        .slice(0, MAX_MERCHANT_DIRECTORY_SCAN)
+    : [];
   const platformCounts: Record<string, number> = {};
   let official = 0;
   let safe = 0;
   let trustSum = 0;
-  for (const m of merchants) {
-    const p = (m.platform || '')
+  for (const m of safeMerchants) {
+    const p = (typeof m.platform === 'string' ? m.platform : '')
       .replace(/\p{Cc}+/gu, '')
       .trim()
       .toLowerCase();
-    if (
-      SAFE_PLATFORM_FILTER_REGEX.test(p) &&
-      p !== '__proto__' &&
-      p !== 'constructor' &&
-      p !== 'prototype'
-    ) {
+    if (isValidMerchantPlatform(p)) {
       const prev = Object.hasOwn(platformCounts, p)
         ? (platformCounts[p] ?? 0)
         : 0;
       platformCounts[p] = prev + 1;
     }
-    if (m.is_official) official += 1;
+    if (isOfficialMerchantFlag(m.is_official)) official += 1;
     const trustScore = toSafeScore100(m.trust_score);
     if (trustScore >= 80) safe += 1;
     trustSum += trustScore;
   }
-  const total = merchants.length;
+  const total = safeMerchants.length;
   return {
     total,
     official,
@@ -189,18 +261,63 @@ export function filterMerchantDirectory(
   merchants: readonly MerchantSummary[],
   filters: MerchantDirectoryFilters
 ): MerchantSummary[] {
-  const { platform, officialOnly, riskTier, seedingTier, sortBy } = filters;
-  const kw = (typeof filters.query === 'string' ? filters.query : '')
+  const safeMerchants = Array.isArray(merchants)
+    ? merchants
+        .filter((m): m is MerchantSummary =>
+          Boolean(m && typeof m === 'object' && !Array.isArray(m))
+        )
+        .slice(0, MAX_MERCHANT_DIRECTORY_SCAN)
+    : [];
+  const safeFilters =
+    filters && typeof filters === 'object' && !Array.isArray(filters)
+      ? filters
+      : DEFAULT_MERCHANT_DIRECTORY_FILTERS;
+  const rawPlatform = (
+    typeof safeFilters.platform === 'string' ? safeFilters.platform : 'all'
+  )
+    .replace(/\p{Cc}+/gu, '')
+    .trim()
+    .toLowerCase();
+  const platform =
+    rawPlatform !== 'all' && isValidMerchantPlatform(rawPlatform)
+      ? rawPlatform
+      : 'all';
+  const officialOnly = safeFilters.officialOnly === true;
+  const riskTier = RISK_TIERS.includes(safeFilters.riskTier)
+    ? safeFilters.riskTier
+    : 'all';
+  const seedingTier = SEEDING_TIERS.includes(safeFilters.seedingTier)
+    ? safeFilters.seedingTier
+    : 'all';
+  const sortBy = SORTS.includes(safeFilters.sortBy)
+    ? safeFilters.sortBy
+    : 'trust_desc';
+  const kw = (typeof safeFilters.query === 'string' ? safeFilters.query : '')
     .replace(/\p{Cc}+/gu, ' ')
     .replace(/\s+/g, ' ')
     .trim()
     .slice(0, 160)
     .toLowerCase();
-  const filtered = merchants.filter((m) => {
-    if (platform !== 'all' && (m.platform || '').toLowerCase() !== platform) {
+  const toCleanLower = (val: unknown): string =>
+    typeof val === 'string'
+      ? val
+          .replace(/\p{Cc}+/gu, ' ')
+          .replace(/\s+/g, ' ')
+          .trim()
+          .toLowerCase()
+      : '';
+  const filtered = safeMerchants.filter((m) => {
+    const mPlatform =
+      typeof m.platform === 'string'
+        ? m.platform
+            .replace(/\p{Cc}+/gu, '')
+            .trim()
+            .toLowerCase()
+        : '';
+    if (platform !== 'all' && mPlatform !== platform) {
       return false;
     }
-    if (officialOnly && !m.is_official) return false;
+    if (officialOnly && !isOfficialMerchantFlag(m.is_official)) return false;
     const trustScore = toSafeScore100(m.trust_score);
     const reviewRiskScore = toSafeScore100(m.review_risk_score);
     if (riskTier === 'safe' && trustScore < 80) return false;
@@ -212,10 +329,10 @@ export function filterMerchantDirectory(
     if (seedingTier === 'elevated' && reviewRiskScore <= 15) return false;
     if (kw) {
       const hit =
-        (m.name || '').toLowerCase().includes(kw) ||
-        (m.platform_shop_id || '').toLowerCase().includes(kw) ||
-        (m.platform || '').toLowerCase().includes(kw) ||
-        (m.slug ? m.slug.toLowerCase().includes(kw) : false);
+        toCleanLower(m.name).includes(kw) ||
+        toCleanLower(m.platform_shop_id).includes(kw) ||
+        mPlatform.includes(kw) ||
+        toCleanLower(m.slug).includes(kw);
       if (!hit) return false;
     }
     return true;
@@ -254,9 +371,12 @@ export function pageMerchantDirectory(
   limit: number
 ): MerchantDirectoryPage {
   const matching = filterMerchantDirectory(merchants, filters);
-  const start = Number.isFinite(offset) && offset >= 0 ? Math.floor(offset) : 0;
+  const start =
+    typeof offset === 'number' && Number.isFinite(offset) && offset >= 0
+      ? Math.min(100_000, Math.floor(offset))
+      : 0;
   const safeLimit =
-    Number.isFinite(limit) && limit >= 0
+    typeof limit === 'number' && Number.isFinite(limit) && limit >= 0
       ? Math.min(500, Math.floor(limit))
       : MERCHANT_PAGE_SIZE;
   return {

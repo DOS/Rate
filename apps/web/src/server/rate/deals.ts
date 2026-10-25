@@ -13,6 +13,7 @@ import {
   type MerchantOffer,
 } from '../../lib/rate-api';
 import {
+  EMPTY_RADAR_SIGNAL,
   buildRadarIndex,
   getRadarSignal,
   type RadarSignal,
@@ -107,16 +108,26 @@ function resolveEffectiveMerchantRisk(
   fallback: number
 ): number {
   const safeFallback =
-    Number.isFinite(fallback) && fallback >= 0 ? Math.min(100, fallback) : 0;
+    typeof fallback === 'number' && Number.isFinite(fallback) && fallback >= 0
+      ? Math.min(100, fallback)
+      : 0;
   if (!merchant) return safeFallback;
-  const risk = Number(merchant.risk_score ?? safeFallback);
-  const dosafe = Number(merchant.dosafe_risk_score ?? 0);
-  const review = Number(merchant.review_risk_score ?? 0);
-  const rawMax = Math.max(
-    Number.isFinite(risk) ? risk : safeFallback,
-    Number.isFinite(dosafe) ? dosafe : 0,
-    Number.isFinite(review) ? review : 0
-  );
+  const risk =
+    typeof merchant.risk_score === 'number' &&
+    Number.isFinite(merchant.risk_score)
+      ? merchant.risk_score
+      : safeFallback;
+  const dosafe =
+    typeof merchant.dosafe_risk_score === 'number' &&
+    Number.isFinite(merchant.dosafe_risk_score)
+      ? merchant.dosafe_risk_score
+      : 0;
+  const review =
+    typeof merchant.review_risk_score === 'number' &&
+    Number.isFinite(merchant.review_risk_score)
+      ? merchant.review_risk_score
+      : 0;
+  const rawMax = Math.max(risk, dosafe, review);
   return Math.min(100, Math.max(0, rawMax));
 }
 
@@ -133,6 +144,44 @@ function resolveEffectiveMerchantRisk(
 const SAFE_PLATFORM_FILTER_REGEX = /^[a-z0-9_-]{1,40}$/;
 export const MAX_DEAL_RADAR_CLUSTERS = 500;
 
+function sanitizeDealOfferHttpUrl(rawUrl: unknown): string {
+  if (typeof rawUrl !== 'string') return '';
+  if (/\p{Cc}/u.test(rawUrl)) return '';
+  const trimmed = rawUrl.trim();
+  if (!trimmed || trimmed.length > 2048 || /\s/.test(trimmed)) return '';
+  try {
+    const parsed = new URL(trimmed);
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+      return '';
+    }
+    if (parsed.username !== '' || parsed.password !== '') {
+      return '';
+    }
+    const host = parsed.hostname.toLowerCase();
+    if (
+      !host ||
+      !host.includes('.') ||
+      host.startsWith('.') ||
+      host.endsWith('.') ||
+      host.includes('..') ||
+      host.startsWith('[') ||
+      /^\d+(?:\.\d+){3}$/.test(host) ||
+      host === 'localhost' ||
+      host.endsWith('.localhost') ||
+      host.endsWith('.local') ||
+      host.endsWith('.internal')
+    ) {
+      return '';
+    }
+    if (parsed.port !== '' && parsed.port !== '80' && parsed.port !== '443') {
+      return '';
+    }
+    return parsed.toString();
+  } catch {
+    return '';
+  }
+}
+
 export function normalizeDealRadarOptions(options?: {
   categorySlug?: string | null;
   platform?: string | null;
@@ -142,9 +191,13 @@ export function normalizeDealRadarOptions(options?: {
   platformFilter: string;
   limit: number;
 } {
+  const safeOptions =
+    options && typeof options === 'object' && !Array.isArray(options)
+      ? options
+      : undefined;
   const rawCat =
-    typeof options?.categorySlug === 'string'
-      ? options.categorySlug
+    typeof safeOptions?.categorySlug === 'string'
+      ? safeOptions.categorySlug
           .replace(/\p{Cc}+/gu, '')
           .trim()
           .toLowerCase()
@@ -153,18 +206,23 @@ export function normalizeDealRadarOptions(options?: {
     rawCat && isCanonicalCategorySlug(rawCat) ? rawCat : 'all';
 
   const rawPlat =
-    typeof options?.platform === 'string'
-      ? options.platform
+    typeof safeOptions?.platform === 'string'
+      ? safeOptions.platform
           .replace(/\p{Cc}+/gu, '')
           .trim()
           .toLowerCase()
       : '';
   const platformFilter =
-    rawPlat && rawPlat !== 'all' && SAFE_PLATFORM_FILTER_REGEX.test(rawPlat)
+    rawPlat &&
+    rawPlat !== 'all' &&
+    SAFE_PLATFORM_FILTER_REGEX.test(rawPlat) &&
+    /[a-z0-9]/.test(rawPlat) &&
+    !/^(?:0+|null|undefined|nan|infinity|-infinity|true|false)$/i.test(rawPlat)
       ? rawPlat
       : 'all';
 
-  const rawLimit = Number(options?.limit);
+  const rawLimit =
+    typeof safeOptions?.limit === 'number' ? safeOptions.limit : Number.NaN;
   const limit =
     Number.isFinite(rawLimit) && rawLimit >= 1
       ? Math.min(Math.floor(rawLimit), 50)
@@ -197,7 +255,37 @@ export function computeCrossPlatformDealRadarFromData(
     ? clusters.slice(0, MAX_DEAL_RADAR_CLUSTERS)
     : [];
 
-  for (const { master, offers } of boundedClusters) {
+  for (const cluster of boundedClusters) {
+    if (
+      !cluster ||
+      typeof cluster !== 'object' ||
+      Array.isArray(cluster) ||
+      !cluster.master ||
+      typeof cluster.master !== 'object' ||
+      Array.isArray(cluster.master)
+    ) {
+      continue;
+    }
+    const { master, offers } = cluster;
+    const rawMasterSlug =
+      typeof master.slug === 'string'
+        ? master.slug
+            .replace(/\p{Cc}+/gu, '')
+            .trim()
+            .slice(0, 200)
+        : '';
+    const safeMasterSlug =
+      /^[a-zA-Z0-9][a-zA-Z0-9._-]{0,199}$/.test(rawMasterSlug) &&
+      !rawMasterSlug.endsWith('.') &&
+      !rawMasterSlug.includes('..') &&
+      !/^(?:0+|null|undefined|nan|infinity|-infinity|true|false)$/i.test(
+        rawMasterSlug
+      )
+        ? rawMasterSlug
+        : '';
+    if (!safeMasterSlug) {
+      continue;
+    }
     const categorySlug = getMasterProductCategorySlug(master);
     if (categoryFilter !== 'all' && categorySlug !== categoryFilter) {
       continue;
@@ -210,12 +298,96 @@ export function computeCrossPlatformDealRadarFromData(
     // Bait-price listings (far below every other store) set no market floor,
     // spread, deal or trap (DOS/Rate#797).
     const validOffers = plausibleOffers(
-      clusterOffers.filter(
-        (o) =>
-          Number.isFinite(o.price_current) &&
-          o.price_current > 0 &&
-          o.price_current <= MAX_VALID_VND_PRICE
-      )
+      clusterOffers
+        .filter(
+          (o): o is MerchantOffer =>
+            Boolean(o && typeof o === 'object' && !Array.isArray(o)) &&
+            typeof o.price_current === 'number' &&
+            Number.isFinite(o.price_current) &&
+            o.price_current > 0 &&
+            o.price_current <= MAX_VALID_VND_PRICE
+        )
+        .map((o, idx) => {
+          const cleanedPlat =
+            typeof o.platform === 'string'
+              ? o.platform
+                  .replace(/\p{Cc}+/gu, '')
+                  .trim()
+                  .toLowerCase()
+                  .slice(0, 40)
+              : '';
+          const safePlatform =
+            cleanedPlat &&
+            SAFE_PLATFORM_FILTER_REGEX.test(cleanedPlat) &&
+            /[a-z0-9]/.test(cleanedPlat) &&
+            !/^(?:0+|null|undefined|nan|infinity|-infinity|true|false)$/i.test(
+              cleanedPlat
+            )
+              ? cleanedPlat
+              : 'shopee';
+          const rawMerchant =
+            o.merchant &&
+            typeof o.merchant === 'object' &&
+            !Array.isArray(o.merchant)
+              ? o.merchant
+              : ({} as MerchantOffer['merchant']);
+          const safeMerchantName =
+            typeof rawMerchant.name === 'string'
+              ? rawMerchant.name
+                  .replace(/\p{Cc}+/gu, ' ')
+                  .trim()
+                  .slice(0, 160) || safePlatform.toUpperCase()
+              : safePlatform.toUpperCase();
+          const cleanedMerchantId =
+            typeof rawMerchant.id === 'string'
+              ? rawMerchant.id
+                  .replace(/\p{Cc}+/gu, '')
+                  .trim()
+                  .slice(0, 128)
+              : '';
+          const safeMerchantId =
+            /^[a-zA-Z0-9._-]{1,128}$/.test(cleanedMerchantId) &&
+            /[a-zA-Z0-9]/.test(cleanedMerchantId) &&
+            !cleanedMerchantId.startsWith('.') &&
+            !cleanedMerchantId.endsWith('.') &&
+            !cleanedMerchantId.includes('..') &&
+            !/^(?:0+|null|undefined|nan|infinity|-infinity|true|false)$/i.test(
+              cleanedMerchantId
+            )
+              ? cleanedMerchantId
+              : '';
+          const cleanedOfferId =
+            typeof o.id === 'string'
+              ? o.id
+                  .replace(/\p{Cc}+/gu, '')
+                  .trim()
+                  .slice(0, 128)
+              : '';
+          const safeOfferId =
+            /^[a-zA-Z0-9._-]{1,128}$/.test(cleanedOfferId) &&
+            /[a-zA-Z0-9]/.test(cleanedOfferId) &&
+            !cleanedOfferId.startsWith('.') &&
+            !cleanedOfferId.endsWith('.') &&
+            !cleanedOfferId.includes('..') &&
+            !/^(?:0+|null|undefined|nan|infinity|-infinity|true|false)$/i.test(
+              cleanedOfferId
+            )
+              ? cleanedOfferId
+              : `offer-${idx + 1}`;
+          return {
+            ...o,
+            id: safeOfferId,
+            platform: safePlatform,
+            url: sanitizeDealOfferHttpUrl(o.url),
+            merchant: {
+              ...rawMerchant,
+              id: safeMerchantId,
+              name: safeMerchantName,
+              platform: safePlatform,
+              is_official: Boolean(rawMerchant.is_official),
+            },
+          };
+        })
     );
     if (validOffers.length < 2) continue;
 
@@ -228,19 +400,19 @@ export function computeCrossPlatformDealRadarFromData(
     const marketMedianPrice = computeMedian(prices);
     if (marketMedianPrice <= 0) continue;
 
-    const rawExpert = Number(
-      master.expert_rating ||
-        master.user_rating_weighted ||
-        master.average_rating ||
-        0
-    );
+    const pickPositiveRating = (val: unknown): number =>
+      typeof val === 'number' && Number.isFinite(val) && val > 0 ? val : 0;
+    const rawExpert =
+      pickPositiveRating(master.expert_rating) ||
+      pickPositiveRating(master.user_rating_weighted) ||
+      pickPositiveRating(master.average_rating);
     // No expert or user rating yet: leave the score empty instead of inventing one.
     const jreviewsScore10 =
       Number.isFinite(rawExpert) && rawExpert > 0 && rawExpert <= 10
         ? Number((rawExpert <= 5 ? rawExpert * 2 : rawExpert).toFixed(1))
         : null;
     const imageUrl = resolveProductImageUrl(master);
-    const productHref = `/${categorySlug}/${master.slug}`;
+    const productHref = `/${categorySlug}/${safeMasterSlug}`;
 
     // 1. Identify best genuine deal for this Master Product
     const sortedByPrice = [...validOffers].sort(
@@ -264,8 +436,8 @@ export function computeCrossPlatformDealRadarFromData(
         priciestOffer.platform.toLowerCase() === platformFilter)
     ) {
       priceSpreadLeaders.push({
-        id: `spread-${master.slug}`,
-        productSlug: master.slug,
+        id: `spread-${safeMasterSlug}`,
+        productSlug: safeMasterSlug,
         productName: master.name,
         brand: master.brand,
         categorySlug,
@@ -317,12 +489,12 @@ export function computeCrossPlatformDealRadarFromData(
         : 'best_market_deal';
 
       genuineDeals.push({
-        id: `deal-${master.slug}-${bestOffer.platform}`,
+        id: `deal-${safeMasterSlug}-${bestOffer.platform}`,
         verdict,
         verdictBadgeVi: isAllTimeLow
           ? '🔥 Đáy Giá Đa Sàn'
           : '✅ Giá Tốt Nhất 10 Sàn',
-        productSlug: master.slug,
+        productSlug: safeMasterSlug,
         productName: master.name,
         brand: master.brand,
         categorySlug,
@@ -374,10 +546,10 @@ export function computeCrossPlatformDealRadarFromData(
       // Flag when original price is >= 11% above market median and current price is >= market median
       if (fakeMarkupPct >= 11 && off.price_current >= marketMedianPrice) {
         const candidateTrap: CrossPlatformDealRadarItem = {
-          id: `trap-${master.slug}-${off.platform}-${off.id}`,
+          id: `trap-${safeMasterSlug}-${off.platform}-${off.id}`,
           verdict: 'inflated_fake_sale',
           verdictBadgeVi: `⚠️ Nâng giá gốc +${fakeMarkupPct}%`,
-          productSlug: master.slug,
+          productSlug: safeMasterSlug,
           productName: master.name,
           brand: master.brand,
           categorySlug,
@@ -460,11 +632,17 @@ export function computeProductRadarSignal(
   master: MasterProduct,
   offers: MerchantOffer[]
 ): RadarSignal {
+  if (!master || typeof master !== 'object' || Array.isArray(master)) {
+    return EMPTY_RADAR_SIGNAL;
+  }
   const radar = computeCrossPlatformDealRadarFromData([{ master, offers }], {
     categorySlug: 'all',
     limit: 50,
   });
-  return getRadarSignal(buildRadarIndex(radar), master.slug);
+  return getRadarSignal(
+    buildRadarIndex(radar),
+    typeof master.slug === 'string' ? master.slug : ''
+  );
 }
 
 const _getCrossPlatformDealRadarByKey = cache(

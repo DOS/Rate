@@ -9,10 +9,10 @@ export const UserRoleSchema = z.enum(['user', 'moderator', 'admin']);
 
 export const UserSchema = z.object({
   id: UUIDv7Schema,
-  username: z.string().min(3).max(50),
-  email: z.string().email(),
-  firstName: z.string().optional(),
-  lastName: z.string().optional(),
+  username: z.string().trim().min(3).max(50),
+  email: z.string().max(254).email(),
+  firstName: z.string().max(100).optional(),
+  lastName: z.string().max(100).optional(),
   avatar: HttpUrlSchema.optional(),
   role: UserRoleSchema,
   isActive: z.boolean(),
@@ -35,12 +35,12 @@ export const UpdateUserSchema = UserSchema.partial().omit({
 });
 
 export const UserLoginSchema = z.object({
-  identifier: z.string(), // email or username
-  password: z.string(),
+  identifier: z.string().trim().min(1).max(254), // email or username
+  password: z.string().min(1).max(256),
 });
 
 export const UserAuthResponseSchema = z.object({
-  jwt: z.string(),
+  jwt: z.string().min(1).max(4096),
   user: UserSchema,
 });
 

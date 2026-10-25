@@ -85,6 +85,15 @@ function testRouteConstants(): void {
     RATE_API_V1_ENDPOINTS.REVIEW_VOTE('rev-42'),
     '/api/reviews/rev-42/vote'
   );
+  assert.equal(
+    RATE_API_V1_ENDPOINTS.PRODUCT_DETAIL('..'),
+    '/api/v1/rate/products/'
+  );
+  assert.equal(
+    RATE_API_V1_ENDPOINTS.MERCHANT_DETAIL('.'),
+    '/api/v1/rate/merchants/'
+  );
+  assert.equal(RATE_API_V1_ENDPOINTS.REVIEW_VOTE('..'), '/api/reviews//vote');
   assert.equal(RATE_API_V1_ENDPOINTS.HEALTH, '/api/health');
   assert.equal(ROUTES.API.LISTINGS, '/api/v1/rate/products');
   assert.equal(STATUS_CODES.OK, 200);
@@ -237,6 +246,181 @@ function testMasterProductAndScrapedProductSchemas(): void {
   assert.equal(scraped.historicalSold, 0);
   assert.deepEqual(scraped.reviews, []);
 
+  assert.equal(
+    ScrapedProductSchema.parse({
+      platform: 'shopee',
+      itemId: '123456',
+      shopId: '654321',
+      url: 'https://shopee.vn/product/654321/123456',
+      title: 'iPhone 16 Pro Max 256GB',
+      priceMin: 31990000,
+      priceMax: 33990000,
+      priceBeforeDiscount: 2_000_000_000,
+      shop: { shopId: '654321', name: 'Apple Flagship Store', isMall: true },
+    }).priceBeforeDiscount,
+    undefined,
+    'ScrapedProductSchema must drop priceBeforeDiscount exceeding MAX_VALID_VND_PRICE to undefined'
+  );
+  assert.equal(
+    ScrapedProductSchema.safeParse({
+      platform: 'shopee',
+      itemId: '123456',
+      shopId: '654321',
+      url: 'https://shopee.vn/product/654321/123456',
+      title: 'iPhone 16 Pro Max 256GB',
+      priceMin: 31990000,
+      priceMax: 33990000,
+      priceBeforeDiscount: -1,
+      shop: { shopId: '654321', name: 'Apple Flagship Store', isMall: true },
+    }).success,
+    false,
+    'ScrapedProductSchema must reject negative priceBeforeDiscount'
+  );
+  assert.deepEqual(
+    ScrapedProductSchema.parse({
+      platform: 'shopee',
+      itemId: '123456',
+      shopId: '654321',
+      url: 'https://shopee.vn/product/654321/123456',
+      title: 'iPhone 16 Pro Max 256GB',
+      priceMin: 31990000,
+      priceMax: 33990000,
+      models: [
+        { modelId: 'm1', name: '256GB', price: 31990000 },
+        { modelId: 'm2', name: 'Oversized', price: 2_000_000_000 },
+      ],
+      shop: { shopId: '654321', name: 'Apple Flagship Store', isMall: true },
+    }).models,
+    [{ modelId: 'm1', name: '256GB', price: 31990000 }],
+    'ScrapedProductSchema must filter out models with price exceeding MAX_VALID_VND_PRICE'
+  );
+  assert.equal(
+    ScrapedProductSchema.safeParse({
+      platform: 'shopee',
+      itemId: '123456',
+      shopId: '654321',
+      url: 'https://shopee.vn/product/654321/123456',
+      title: 'iPhone 16 Pro Max 256GB',
+      priceMin: 31990000,
+      priceMax: 33990000,
+      reviews: [
+        {
+          reviewId: 'r1',
+          author: 'Buyer',
+          ratingStar: 5,
+          comment: 'Good',
+          images: ['javascript:alert(1)'],
+        },
+      ],
+      shop: { shopId: '654321', name: 'Apple Flagship Store', isMall: true },
+    }).success,
+    false,
+    'ScrapedProductSchema must reject non-http reviews[].images'
+  );
+  assert.equal(
+    ScrapedProductSchema.safeParse({
+      platform: 'shopee',
+      itemId: '123456',
+      shopId: '654321',
+      url: 'https://shopee.vn/product/654321/123456',
+      title: 'iPhone 16 Pro Max 256GB',
+      priceMin: 31990000,
+      priceMax: 33990000,
+      reviews: [
+        {
+          reviewId: 'r1',
+          author: 'Buyer',
+          ratingStar: 5,
+          comment: 'Good',
+          videos: ['javascript:alert(1)'],
+        },
+      ],
+      shop: { shopId: '654321', name: 'Apple Flagship Store', isMall: true },
+    }).success,
+    false,
+    'ScrapedProductSchema must reject non-http reviews[].videos'
+  );
+  assert.equal(
+    ScrapedProductSchema.safeParse({
+      platform: 'shopee',
+      itemId: '123456',
+      shopId: '654321',
+      url: 'https://shopee.vn/product/654321/123456',
+      title: 'iPhone 16 Pro Max 256GB',
+      priceMin: 31990000,
+      priceMax: 33990000,
+      reviews: [
+        {
+          reviewId: 'r1',
+          author: 'Buyer',
+          authorAvatar: 'javascript:alert(1)',
+          ratingStar: 5,
+          comment: 'Good',
+        },
+      ],
+      shop: { shopId: '654321', name: 'Apple Flagship Store', isMall: true },
+    }).success,
+    false,
+    'ScrapedProductSchema must reject non-http reviews[].authorAvatar'
+  );
+  assert.equal(
+    ScrapedProductSchema.safeParse({
+      platform: 'shopee',
+      itemId: '123456',
+      shopId: '654321',
+      url: 'https://shopee.vn/product/654321/123456',
+      title: 'iPhone 16 Pro Max 256GB',
+      priceMin: 31990000,
+      priceMax: 33990000,
+      reviews: [
+        {
+          reviewId: 'r1',
+          author: 'Buyer',
+          ratingStar: 5,
+          comment: 'Good',
+          reviewer: { profileUrl: 'javascript:alert(1)' },
+        },
+      ],
+      shop: { shopId: '654321', name: 'Apple Flagship Store', isMall: true },
+    }).success,
+    false,
+    'ScrapedProductSchema must reject non-http reviews[].reviewer.profileUrl'
+  );
+  assert.equal(
+    ScrapedProductSchema.safeParse({
+      platform: 'shopee',
+      itemId: '123456',
+      shopId: '654321',
+      url: 'https://shopee.vn/product/654321/123456',
+      title: 'iPhone 16 Pro Max 256GB',
+      priceMin: 31990000,
+      priceMax: 33990000,
+      images: ['javascript:alert(1)'],
+      shop: { shopId: '654321', name: 'Apple Flagship Store', isMall: true },
+    }).success,
+    false,
+    'ScrapedProductSchema must reject non-http images'
+  );
+  assert.equal(
+    ScrapedProductSchema.safeParse({
+      platform: 'shopee',
+      itemId: '123456',
+      shopId: '654321',
+      url: 'https://shopee.vn/product/654321/123456',
+      title: 'iPhone 16 Pro Max 256GB',
+      priceMin: 31990000,
+      priceMax: 33990000,
+      shop: {
+        shopId: '654321',
+        name: 'Apple Flagship Store',
+        isMall: true,
+        url: 'javascript:alert(1)',
+      },
+    }).success,
+    false,
+    'ScrapedProductSchema must reject non-http shop.url'
+  );
+
   const paged = PaginationSchema.parse({});
   assert.equal(paged.page, 1);
   assert.equal(paged.pageSize, 25);
@@ -276,6 +460,51 @@ function testMasterProductAndScrapedProductSchemas(): void {
       .success,
     true
   );
+  assert.equal(
+    sharedDataRoot.HttpUrlSchema.safeParse('https://.rate.vn/smartphones')
+      .success,
+    false,
+    'HttpUrlSchema must reject leading-dot hostnames'
+  );
+  assert.equal(
+    sharedDataRoot.HttpUrlSchema.safeParse('https://rate..vn/smartphones')
+      .success,
+    false,
+    'HttpUrlSchema must reject consecutive-dot hostnames'
+  );
+  assert.equal(
+    sharedDataRoot.HttpUrlSchema.safeParse('https://rate.vn:8443/smartphones')
+      .success,
+    false,
+    'HttpUrlSchema must reject non-standard ports on public hosts'
+  );
+  assert.equal(
+    sharedDataRoot.isValidSupabaseHttpUrl('https://.supabase.co'),
+    false,
+    'isValidSupabaseHttpUrl must reject leading-dot hostnames'
+  );
+  assert.equal(
+    sharedDataRoot.isValidSupabaseHttpUrl('https://example..supabase.co'),
+    false,
+    'isValidSupabaseHttpUrl must reject consecutive-dot hostnames'
+  );
+  assert.equal(
+    sharedDataRoot.isValidSupabaseHttpUrl('https://example.supabase.co.'),
+    false,
+    'isValidSupabaseHttpUrl must reject trailing-dot hostnames'
+  );
+  assert.equal(
+    sharedDataRoot.HttpUrlSchema.safeParse('https://rate.vn./smartphones')
+      .success,
+    false,
+    'HttpUrlSchema must reject trailing-dot hostnames'
+  );
+  assert.equal(
+    sharedDataRoot.HttpUrlSchema.safeParse('http://localhost:3000/smartphones')
+      .success,
+    true,
+    'HttpUrlSchema must allow custom ports on loopback hosts'
+  );
 
   const responseSchema = ApiResponseSchema(z.object({ ok: z.boolean() }));
   const parsedResponse = responseSchema.parse({
@@ -288,6 +517,69 @@ function testMasterProductAndScrapedProductSchemas(): void {
     },
   });
   assert.equal(parsedResponse.data.ok, true);
+
+  assert.equal(
+    sharedDataRoot.ListingSchema.safeParse({
+      id: '01929000-0000-7000-8000-000000000001',
+      title: '   ',
+      slug: 'valid-slug',
+      type: 'product',
+      category: 'technology',
+      status: 'published',
+      locale: 'vi',
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    }).success,
+    false,
+    'ListingSchema must reject whitespace-only title'
+  );
+  assert.equal(
+    sharedDataRoot.ListingSchema.safeParse({
+      id: '01929000-0000-7000-8000-000000000001',
+      title: 'Valid Title',
+      slug: '../admin',
+      type: 'product',
+      category: 'technology',
+      status: 'published',
+      locale: 'vi',
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    }).success,
+    false,
+    'ListingSchema must reject path separators in slug'
+  );
+  assert.equal(
+    sharedDataRoot.ReviewFilterSchema.safeParse({
+      minRating: 5,
+      maxRating: 2,
+    }).success,
+    false,
+    'ReviewFilterSchema must reject minRating > maxRating'
+  );
+  assert.equal(
+    sharedDataRoot.ReviewReactionSchema.safeParse({
+      reviewId: '01929000-0000-7000-8000-000000000001',
+      userId: '01929000-0000-7000-8000-000000000002',
+      type: 'report',
+      reason: '   ',
+    }).success,
+    false,
+    'ReviewReactionSchema must reject whitespace-only reason'
+  );
+  assert.equal(
+    sharedDataRoot.UserSchema.safeParse({
+      id: '01929000-0000-7000-8000-000000000001',
+      username: '   ',
+      email: 'user@example.com',
+      role: 'user',
+      isActive: true,
+      emailConfirmed: true,
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    }).success,
+    false,
+    'UserSchema must reject whitespace-only username'
+  );
 }
 
 function testSupabaseClientGuards(): void {
@@ -295,14 +587,14 @@ function testSupabaseClientGuards(): void {
   const prevFallbackUrl = process.env.SUPABASE_URL;
   const prevAnon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   const prevFallbackAnon = process.env.SUPABASE_ANON_KEY;
-  const prevService = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const prevService = process.env.SUPABASE_SECRET_KEY;
 
   try {
     delete process.env.NEXT_PUBLIC_SUPABASE_URL;
     delete process.env.SUPABASE_URL;
     delete process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
     delete process.env.SUPABASE_ANON_KEY;
-    delete process.env.SUPABASE_SERVICE_ROLE_KEY;
+    delete process.env.SUPABASE_SECRET_KEY;
 
     assert.throws(() => getPublicClient(), /Missing NEXT_PUBLIC_SUPABASE_URL/);
     assert.throws(() => getAdminClient(), /Missing SUPABASE_URL/);
@@ -311,13 +603,13 @@ function testSupabaseClientGuards(): void {
 
     process.env.NEXT_PUBLIC_SUPABASE_URL = 'javascript:alert(1)';
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = 'anon-test-key';
-    process.env.SUPABASE_SERVICE_ROLE_KEY = 'service-role-test-key';
+    process.env.SUPABASE_SECRET_KEY = 'service-role-test-key';
     assert.throws(() => getPublicClient(), /Invalid NEXT_PUBLIC_SUPABASE_URL/);
     assert.throws(() => getAdminClient(), /Invalid SUPABASE_URL/);
 
     process.env.NEXT_PUBLIC_SUPABASE_URL = 'https://example.supabase.co';
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = 'anon-test-key';
-    process.env.SUPABASE_SERVICE_ROLE_KEY = 'service-role-test-key';
+    process.env.SUPABASE_SECRET_KEY = 'service-role-test-key';
 
     const pub = getPublicClient();
     assert.equal(typeof pub.from, 'function');
@@ -341,8 +633,8 @@ function testSupabaseClientGuards(): void {
     if (prevFallbackAnon === undefined) delete process.env.SUPABASE_ANON_KEY;
     else process.env.SUPABASE_ANON_KEY = prevFallbackAnon;
 
-    if (prevService === undefined) delete process.env.SUPABASE_SERVICE_ROLE_KEY;
-    else process.env.SUPABASE_SERVICE_ROLE_KEY = prevService;
+    if (prevService === undefined) delete process.env.SUPABASE_SECRET_KEY;
+    else process.env.SUPABASE_SECRET_KEY = prevService;
   }
 }
 

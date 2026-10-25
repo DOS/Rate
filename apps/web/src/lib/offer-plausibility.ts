@@ -12,6 +12,23 @@ export const MIN_OFFERS_FOR_OUTLIER = 3;
 /** Maximum plausible VND listing price (1B VND). */
 export const MAX_PLAUSIBLE_VND_PRICE = 1_000_000_000;
 
+function toSafePlausiblePrice(raw: unknown): number {
+  if (typeof raw !== 'number' && typeof raw !== 'string') return NaN;
+  if (typeof raw === 'string') {
+    const cleaned = raw.replace(/\p{Cc}+/gu, '').trim();
+    if (!cleaned || cleaned.length > 32 || /^[+-]?0[xbo]/i.test(cleaned)) {
+      return NaN;
+    }
+    const n = Number(cleaned);
+    return Number.isFinite(n) && n > 0 && n <= MAX_PLAUSIBLE_VND_PRICE
+      ? n
+      : NaN;
+  }
+  return Number.isFinite(raw) && raw > 0 && raw <= MAX_PLAUSIBLE_VND_PRICE
+    ? raw
+    : NaN;
+}
+
 function isValidPlausiblePrice(price: unknown): price is number {
   return (
     typeof price === 'number' &&
@@ -30,7 +47,7 @@ function isValidPlausiblePrice(price: unknown): price is number {
 export function implausiblyLowIndexes(prices: readonly number[]): Set<number> {
   if (!Array.isArray(prices)) return new Set<number>();
   const sorted = prices
-    .map((price, index) => ({ price: Number(price), index }))
+    .map((price, index) => ({ price: toSafePlausiblePrice(price), index }))
     .filter(({ price }) => isValidPlausiblePrice(price))
     .sort((a, b) => a.price - b.price);
   const flagged = new Set<number>();
@@ -57,10 +74,10 @@ export function isImplausiblyLowPrice(
   price: number,
   offers: readonly { price_current: number }[]
 ): boolean {
-  const numPrice = Number(price);
+  const numPrice = toSafePlausiblePrice(price);
   if (!isValidPlausiblePrice(numPrice) || !Array.isArray(offers)) return false;
   const sorted = offers
-    .map((o) => Number(o?.price_current))
+    .map((o) => toSafePlausiblePrice(o?.price_current))
     .filter((p) => isValidPlausiblePrice(p))
     .sort((a, b) => a - b);
   if (sorted.length < MIN_OFFERS_FOR_OUTLIER - 1) return false;
@@ -73,8 +90,12 @@ export function plausibleOffers<T extends { price_current: number }>(
   offers: readonly T[]
 ): T[] {
   if (!Array.isArray(offers)) return [];
-  const flagged = implausiblyLowIndexes(offers.map((o) => o.price_current));
-  return offers.filter((_, index) => !flagged.has(index));
+  const flagged = implausiblyLowIndexes(offers.map((o) => o?.price_current));
+  return offers.filter(
+    (o, index): o is T =>
+      Boolean(o && typeof o === 'object' && !Array.isArray(o)) &&
+      !flagged.has(index)
+  );
 }
 
 /** Ids of the implausibly low offers. */
@@ -82,9 +103,26 @@ export function implausiblyLowOfferIds<
   T extends { id: string; price_current: number },
 >(offers: readonly T[]): Set<string> {
   if (!Array.isArray(offers)) return new Set<string>();
-  const flagged = implausiblyLowIndexes(offers.map((o) => o.price_current));
+  const flagged = implausiblyLowIndexes(offers.map((o) => o?.price_current));
   return new Set(
-    offers.filter((_, index) => flagged.has(index)).map((o) => o.id)
+    offers
+      .filter(
+        (o, index) =>
+          Boolean(o && typeof o === 'object' && !Array.isArray(o)) &&
+          flagged.has(index)
+      )
+      .map((o) =>
+        typeof o.id === 'string' ? o.id.replace(/\p{Cc}+/gu, '').trim() : ''
+      )
+      .filter(
+        (id) =>
+          /^[a-zA-Z0-9._-]{1,256}$/.test(id) &&
+          /[a-zA-Z0-9]/.test(id) &&
+          !id.startsWith('.') &&
+          !id.endsWith('.') &&
+          !id.includes('..') &&
+          !/^(?:0+|null|undefined|nan|infinity|-infinity|true|false)$/i.test(id)
+      )
   );
 }
 
@@ -97,7 +135,7 @@ export function plausibleMinPrice(
   offers: readonly { price_current: number }[]
 ): number {
   const prices = plausibleOffers(offers)
-    .map((o) => Number(o?.price_current))
+    .map((o) => toSafePlausiblePrice(o?.price_current))
     .filter((p) => isValidPlausiblePrice(p));
   if (prices.length > 0) {
     let min = prices[0]!;
@@ -106,6 +144,6 @@ export function plausibleMinPrice(
     }
     return min;
   }
-  const safeStored = Number(storedMinPrice);
+  const safeStored = toSafePlausiblePrice(storedMinPrice);
   return isValidPlausiblePrice(safeStored) ? safeStored : 0;
 }

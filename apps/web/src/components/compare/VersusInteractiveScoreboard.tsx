@@ -20,7 +20,7 @@ import { escapeCsvCell } from '@/lib/csv-safe';
 import RadarBadge from '@/components/radar/RadarBadge';
 import { useDealRadarIndex } from '@/components/radar/use-deal-radar';
 
-type ScoredVersusItem = Omit<ScoredLeaderboardItem, 'rank'>;
+export type ScoredVersusItem = Omit<ScoredLeaderboardItem, 'rank'>;
 
 interface VersusInteractiveScoreboardProps {
   readonly scoreA: ScoredVersusItem;
@@ -28,7 +28,7 @@ interface VersusInteractiveScoreboardProps {
   readonly locale?: string;
 }
 
-type PersonaPresetKey =
+export type PersonaPresetKey =
   | 'default'
   | 'photography'
   | 'gaming'
@@ -37,7 +37,7 @@ type PersonaPresetKey =
   | 'value_hunter'
   | 'custom';
 
-interface CriteriaWeights {
+export interface CriteriaWeights {
   screen: number;
   performance: number;
   camera: number;
@@ -45,7 +45,7 @@ interface CriteriaWeights {
   value: number;
 }
 
-const PERSONA_WEIGHTS: Record<
+export const PERSONA_WEIGHTS: Record<
   Exclude<PersonaPresetKey, 'custom'>,
   CriteriaWeights
 > = {
@@ -75,6 +75,61 @@ const PERSONA_WEIGHTS: Record<
   },
 };
 
+export function computeVersusWeightedResult(
+  scoreA: ScoredVersusItem,
+  scoreB: ScoredVersusItem,
+  weights: CriteriaWeights,
+  persona: PersonaPresetKey
+) {
+  const sanitizeWeight = (v: number): number =>
+    Number.isFinite(v) ? Math.max(0, Math.min(100, v)) : 0;
+  const wScreen = sanitizeWeight(weights.screen);
+  const wPerf = sanitizeWeight(weights.performance);
+  const wCam = sanitizeWeight(weights.camera);
+  const wBat = sanitizeWeight(weights.battery);
+  const wVal = sanitizeWeight(weights.value);
+  const rawSumW = wScreen + wPerf + wCam + wBat + wVal;
+
+  const calcWeighted = (item: ScoredVersusItem): number => {
+    if (persona === 'default') {
+      return item.combinedScore5;
+    }
+    const c = item.criteria;
+    const wAvg =
+      rawSumW > 0
+        ? (c.screen * wScreen +
+            c.performance * wPerf +
+            c.camera * wCam +
+            c.battery * wBat +
+            c.value * wVal) /
+          rawSumW
+        : (c.screen + c.performance + c.camera + c.battery + c.value) / 5;
+    return Number((item.combinedScore5 * 0.35 + wAvg * 0.65).toFixed(2));
+  };
+
+  const finalA = calcWeighted(scoreA);
+  const finalB = calcWeighted(scoreB);
+  const tiePriceSide = comparePositiveMinPrices(
+    scoreA.minPrice,
+    scoreB.minPrice
+  );
+  const winner =
+    finalA > finalB
+      ? scoreA
+      : finalB > finalA
+        ? scoreB
+        : tiePriceSide === 'B'
+          ? scoreB
+          : scoreA;
+
+  return {
+    finalA,
+    finalB,
+    delta: Math.abs(finalA - finalB).toFixed(2),
+    winner,
+  };
+}
+
 export default function VersusInteractiveScoreboard({
   scoreA,
   scoreB,
@@ -96,9 +151,10 @@ export default function VersusInteractiveScoreboard({
 
   const updateWeight = (key: keyof CriteriaWeights, val: number) => {
     setPersona('custom');
+    const safeVal = Number.isFinite(val) ? Math.max(0, Math.min(100, val)) : 0;
     setWeights((prev) => ({
       ...prev,
-      [key]: Math.max(0, Math.min(100, val)),
+      [key]: safeVal,
     }));
   };
 
@@ -112,51 +168,10 @@ export default function VersusInteractiveScoreboard({
           ? t('mdRowTie')
           : '-';
 
-  const weightedResult = useMemo(() => {
-    const sumW =
-      weights.screen +
-        weights.performance +
-        weights.camera +
-        weights.battery +
-        weights.value || 100;
-
-    const calcWeighted = (item: ScoredVersusItem): number => {
-      if (persona === 'default') {
-        return item.combinedScore5;
-      }
-      const c = item.criteria;
-      const wAvg =
-        (c.screen * weights.screen +
-          c.performance * weights.performance +
-          c.camera * weights.camera +
-          c.battery * weights.battery +
-          c.value * weights.value) /
-        sumW;
-      return Number((item.combinedScore5 * 0.35 + wAvg * 0.65).toFixed(2));
-    };
-
-    const finalA = calcWeighted(scoreA);
-    const finalB = calcWeighted(scoreB);
-    const tiePriceSide = comparePositiveMinPrices(
-      scoreA.minPrice,
-      scoreB.minPrice
-    );
-    const winner =
-      finalA > finalB
-        ? scoreA
-        : finalB > finalA
-          ? scoreB
-          : tiePriceSide === 'B'
-            ? scoreB
-            : scoreA;
-
-    return {
-      finalA,
-      finalB,
-      delta: Math.abs(finalA - finalB).toFixed(2),
-      winner,
-    };
-  }, [scoreA, scoreB, weights, persona]);
+  const weightedResult = useMemo(
+    () => computeVersusWeightedResult(scoreA, scoreB, weights, persona),
+    [scoreA, scoreB, weights, persona]
+  );
 
   const criteriaRows = [
     {
@@ -217,7 +232,7 @@ export default function VersusInteractiveScoreboard({
                 : t('mdRowTie');
           return `| ${r.label} | ${r.aVal.toFixed(2)}/5.0 | ${r.bVal.toFixed(2)}/5.0 | ${winName} |`;
         }),
-        `| **${t('mdRowMinPrice')}** | ${scoreA.minPrice.toLocaleString('vi-VN')} ₫ | ${scoreB.minPrice.toLocaleString('vi-VN')} ₫ | ${priceAdvantageLabel} |`,
+        `| **${t('mdRowMinPrice')}** | ${scoreA.minPrice > 0 ? `${scoreA.minPrice.toLocaleString('vi-VN')} ₫` : '-'} | ${scoreB.minPrice > 0 ? `${scoreB.minPrice.toLocaleString('vi-VN')} ₫` : '-'} | ${priceAdvantageLabel} |`,
         `| **${t('mdRowDealRadar')}** | ${radarMarkdownCell(sigA, locale)} | ${radarMarkdownCell(sigB, locale)} | ${sigA.verdict === 'genuine_deal' ? scoreA.name : sigB.verdict === 'genuine_deal' ? scoreB.name : '-'} |`,
       ];
       await navigator.clipboard.writeText(lines.join('\n'));
@@ -266,9 +281,11 @@ export default function VersusInteractiveScoreboard({
         scoreA.expertScore10 != null ? scoreA.expertScore10.toFixed(1) : '',
         scoreB.expertScore10 != null ? scoreB.expertScore10.toFixed(1) : '',
         scoreA.expertScore10 != null && scoreB.expertScore10 != null
-          ? scoreA.expertScore10 >= scoreB.expertScore10
+          ? scoreA.expertScore10 > scoreB.expertScore10
             ? scoreA.name
-            : scoreB.name
+            : scoreB.expertScore10 > scoreA.expertScore10
+              ? scoreB.name
+              : t('mdRowTie')
           : scoreA.expertScore10 != null
             ? scoreA.name
             : scoreB.expertScore10 != null
@@ -278,8 +295,8 @@ export default function VersusInteractiveScoreboard({
       [
         t('csvRowMinPriceVnd'),
         '-',
-        scoreA.minPrice,
-        scoreB.minPrice,
+        scoreA.minPrice > 0 ? scoreA.minPrice : '',
+        scoreB.minPrice > 0 ? scoreB.minPrice : '',
         priceAdvantageLabel,
       ],
       [

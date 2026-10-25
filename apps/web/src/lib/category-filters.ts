@@ -525,7 +525,15 @@ export function getCategoryFilterSchema(
       .replace(CATEGORY_CONTROL_CHAR_RE, '')
       .trim()
       .slice(0, MAX_BRAND_NAME_LEN);
-    if (!trimmed) continue;
+    if (
+      !trimmed ||
+      !/[\p{L}\p{N}]/u.test(trimmed) ||
+      /^(?:0+|null|undefined|nan|infinity|-infinity|true|false|__proto__|constructor|prototype)$/i.test(
+        trimmed
+      )
+    ) {
+      continue;
+    }
     const lower = trimmed.toLowerCase();
     if (seenLower.has(lower)) continue;
     seenLower.add(lower);
@@ -542,23 +550,33 @@ export function localizeCategoryFilterSchema(
   schema: CategoryFilterSchema,
   t: (key: string) => string
 ): CategoryFilterSchema {
+  const safeSchema =
+    schema && typeof schema === 'object' ? schema : DEFAULT_SMARTPHONE_SCHEMA;
   const slug =
-    typeof schema?.categorySlug === 'string' &&
-    Object.hasOwn(CATEGORY_FILTER_SCHEMAS, schema.categorySlug)
-      ? schema.categorySlug
+    typeof safeSchema.categorySlug === 'string' &&
+    Object.hasOwn(CATEGORY_FILTER_SCHEMAS, safeSchema.categorySlug)
+      ? safeSchema.categorySlug
       : 'smartphones';
+  const fallbackSchema =
+    CATEGORY_FILTER_SCHEMAS[slug] ?? DEFAULT_SMARTPHONE_SCHEMA;
+  const presets = Array.isArray(safeSchema.pricePresets)
+    ? safeSchema.pricePresets
+    : fallbackSchema.pricePresets;
+  const features = Array.isArray(safeSchema.featureCheckboxes)
+    ? safeSchema.featureCheckboxes
+    : fallbackSchema.featureCheckboxes;
 
   return {
-    ...schema,
+    ...safeSchema,
     directoryName: t('schemas.directoryTech'),
     categoryTitle: t(`schemas.${slug}.title`),
     categorySubtitle: t(`schemas.${slug}.subtitle`),
     searchPlaceholder: t(`schemas.${slug}.searchPlaceholder`),
-    pricePresets: schema.pricePresets.map((preset) => ({
+    pricePresets: presets.map((preset) => ({
       ...preset,
       label: t(`schemas.${slug}.presets.${preset.id}`),
     })),
-    featureCheckboxes: schema.featureCheckboxes.map((feat) => ({
+    featureCheckboxes: features.map((feat) => ({
       ...feat,
       label: t(`schemas.${slug}.features.${feat.key}.label`),
       description: t(`schemas.${slug}.features.${feat.key}.desc`),
@@ -567,7 +585,20 @@ export function localizeCategoryFilterSchema(
 }
 
 export function formatStorageLabel(gb: number): string {
-  const n = Number(gb);
+  const rawGb: unknown = gb;
+  if (typeof rawGb !== 'number' && typeof rawGb !== 'string') {
+    return '0GB';
+  }
+  let n: number;
+  if (typeof rawGb === 'string') {
+    const cleaned = rawGb.replace(CATEGORY_CONTROL_CHAR_RE, '').trim();
+    if (!cleaned || cleaned.length > 32 || /^[+-]?0[xbo]/i.test(cleaned)) {
+      return '0GB';
+    }
+    n = Number(cleaned);
+  } else {
+    n = rawGb;
+  }
   if (!Number.isFinite(n) || n <= 0 || n > MAX_STORAGE_GB) {
     return '0GB';
   }

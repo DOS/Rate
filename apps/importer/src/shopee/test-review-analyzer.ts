@@ -2470,9 +2470,441 @@ async function run() {
     'analyzeWithHeuristics must strip control characters before checking minimum comment length'
   );
 
-  console.log(
-    `✅ [P2/P3 Trust Model & #292/#352/#356/#359/#379/#382/#401/#497/#514/#522/#528/#557/#834/#836/#882] Voter weight, Wilson lower bound (50/52=${wilson50of52} > 1/1=${wilson1of1}), shingle copy seeding (sim=${shingleSim}), affiliate shortlinks, peer floor, ArenaSpecSyncer, Importer & ReviewAnalyzer hardening (#352, #356, #359, #379, #382, #401, #497, #514, #522, #528, #557, #834, #836, #882) verified`
+  // DOS/Rate#908: compute6AxisWeightBreakdown, computeBayesianProductRating, computeReviewWeight, computeWilsonLowerBound, computeTextShingleSimilarity, assessReview6Axes, analyzeWithHeuristics, computeJReviewsSummary & evaluateMerchantRisk bounds
+  const unknownAxisBreakdown = compute6AxisWeightBreakdown({
+    authenticity: 'unknown_axis' as unknown as import('./ai-review-analyzer.js').Authenticity,
+    independence: 'organic',
+    depth: 'detailed',
+    gateOverrideReason: '  policy\u0000_override\r\n ',
+  });
+  assert.equal(unknownAxisBreakdown.gate, 0);
+  assert.equal(unknownAxisBreakdown.weight, 0);
+  assert.equal(unknownAxisBreakdown.gateReason, 'policy _override');
+
+  const bayesianMalformed = computeBayesianProductRating(null as unknown as []);
+  assert.equal(bayesianMalformed.score, 4.2);
+  assert.equal(bayesianMalformed.confidence, 0);
+
+  assert.equal(
+    computeReviewWeight({
+      flagCategory:
+        'unknown_cat' as unknown as import('./ai-review-analyzer.js').ReviewFlagCategory,
+      verdict: 'authentic',
+    }),
+    0,
+    'computeReviewWeight must return 0 for unrecognized flagCategory'
   );
+  assert.equal(
+    computeReviewWeight({
+      flagCategory: 'authentic',
+      verdict: 'unknown_verdict' as unknown as import('./ai-review-analyzer.js').ReviewVerdict,
+    }),
+    0,
+    'computeReviewWeight must return 0 for unrecognized verdict'
+  );
+  assert.equal(
+    computeWilsonLowerBound(10, 2, Number.NaN),
+    computeWilsonLowerBound(10, 2, 1.96),
+    'computeWilsonLowerBound must fall back to z=1.96 when z is NaN'
+  );
+  assert.equal(
+    computeTextShingleSimilarity(null as unknown as string, 'test a b c'),
+    0,
+    'computeTextShingleSimilarity must return 0 on non-string input'
+  );
+  const emptyMediaAssess = assessReview6Axes({
+    id: 'rev-908',
+    rating_star: 5,
+    comment: 'Máy dùng rất mượt, pin trâu cả ngày, màn hình sáng đẹp rõ nét',
+    images: ['   ', '' as string],
+  });
+  const noMediaAssess = assessReview6Axes({
+    id: 'rev-908',
+    rating_star: 5,
+    comment: 'Máy dùng rất mượt, pin trâu cả ngày, màn hình sáng đẹp rõ nét',
+    images: [],
+  });
+  assert.equal(
+    emptyMediaAssess.breakdown.depth,
+    noMediaAssess.breakdown.depth,
+    'assessReview6Axes must ignore whitespace-only image strings when computing hasRealMedia'
+  );
+  assert.deepEqual(analyzer.analyzeWithHeuristics(null as unknown as []), []);
+  const emptySummary908 = analyzer.computeJReviewsSummary(
+    null as unknown as [],
+    null as unknown as []
+  );
+  assert.equal(emptySummary908.total_reviews_analyzed, 0);
+  const emptyMerchantRisk908 = analyzer.evaluateMerchantRisk(
+    null as unknown as import('./ai-review-analyzer.js').MerchantRiskInput
+  );
+  assert.equal(emptyMerchantRisk908.total_reviews, 0);
+
+  // DOS/Rate#954: computeVoterWeight null/array guard, numeric review_id shingle lookup, evaluateMerchantRisk finite followerCount & price rounding, and EntityMatcher array guard
+  assert.equal(
+    computeVoterWeight(null as unknown as Parameters<typeof computeVoterWeight>[0]),
+    0.1,
+    'computeVoterWeight must not throw when params is null'
+  );
+  assert.equal(
+    computeVoterWeight([] as unknown as Parameters<typeof computeVoterWeight>[0]),
+    0.1,
+    'computeVoterWeight must not throw when params is an array'
+  );
+  const numericIdShingleRes = analyzer.analyzeWithHeuristics([
+    {
+      id: 1001 as unknown as string,
+      author_name: 'user_a',
+      rating_star: 5,
+      comment: 'Điện thoại dùng rất mượt pin trâu màn hình sáng đẹp cực kỳ',
+    },
+    {
+      id: 1002 as unknown as string,
+      author_name: 'user_b',
+      rating_star: 5,
+      comment: 'Điện thoại dùng rất mượt pin trâu màn hình sáng đẹp tuyệt vời',
+    },
+  ]);
+  assert.equal(numericIdShingleRes[0]?.review_id, '1001');
+  assert.equal(
+    numericIdShingleRes[0]?.flag_category,
+    'seeding_fake',
+    'analyzeWithHeuristics must detect shingle similarity when runtime review.id is a number'
+  );
+  const infFollowersRisk = analyzer.evaluateMerchantRisk({
+    platform: 'shopee',
+    isOfficial: false,
+    followerCount: Number.POSITIVE_INFINITY,
+    listingPrice: 10_000_000.4,
+    canonicalMinPrice: 25_000_000.6,
+    reviewResults: [],
+  });
+  const zeroFollowersRisk = analyzer.evaluateMerchantRisk({
+    platform: 'shopee',
+    isOfficial: false,
+    followerCount: 0,
+    listingPrice: 10_000_000.4,
+    canonicalMinPrice: 25_000_000.6,
+    reviewResults: [],
+  });
+  assert.equal(
+    infFollowersRisk.risk_score,
+    zeroFollowersRisk.risk_score,
+    'evaluateMerchantRisk must not grant follower trust bonus when followerCount is Infinity'
+  );
+  assert.equal(infFollowersRisk.price_anomaly_detected, true);
+  await assert.rejects(
+    async () => {
+      const { EntityMatcher } = await import('./entity-matcher.js');
+      const matcher = new EntityMatcher({} as never);
+      await matcher.resolveOrCreateMasterProduct([] as never);
+    },
+    /candidate must be a non-null object/,
+    'EntityMatcher.resolveOrCreateMasterProduct must reject array candidates'
+  );
+
+  // DOS/Rate#961: ArenaSpecSyncer URL port/hostname guards, control-char countPopulatedFieldGroups, auditCatalogAgainstArenaRegistry row guard, and shopee-to-supabase array guards
+  const { ArenaSpecSyncer } = await import('./arena-spec-syncer.js');
+  const { platformReviewIdFor: platformReviewIdFor961 } = await import('./shopee-to-supabase.js');
+
+  const arenaParsed961 = parseGsmArenaHtmlToSpecs(
+    '<h1 data-spec="modelname">Apple iPhone 18 Pro</h1>',
+    {
+      gsmarenaUrl: 'https://www.gsmarena.com:8443/apple_iphone_18_pro-14209.php',
+      phonearenaUrl: 'https://www.phonearena.com./phones/Apple-iPhone-18-Pro_id12539',
+    }
+  );
+  assert.equal(
+    arenaParsed961.gsmarenaUrl,
+    undefined,
+    'normalizeArenaUrl must reject non-standard ports'
+  );
+  assert.equal(
+    arenaParsed961.phonearenaUrl,
+    undefined,
+    'normalizeArenaUrl must reject trailing-dot hostnames'
+  );
+  assert.equal(
+    countPopulatedFieldGroups({
+      display: { type: ' ' },
+    }),
+    0,
+    'countPopulatedFieldGroups must treat control-character-only strings as unpopulated'
+  );
+  const syncer961 = new ArenaSpecSyncer();
+  const auditReport961 = await syncer961.auditCatalogAgainstArenaRegistry({
+    from: () => ({
+      select: () => ({
+        order: () => ({
+          range: async (from: number) => ({
+            data:
+              from === 0
+                ? ([
+                    null,
+                    ['array-row'],
+                    {
+                      id: 'm-961',
+                      name: 'Xiaomi 18 Pro Max 512GB',
+                      slug: 'xiaomi-18-pro-max-512gb',
+                      model_key: 'xiaomi:18-pro-max:512gb',
+                      specifications: {},
+                    },
+                  ] as never)
+                : [],
+            error: null,
+          }),
+        }),
+      }),
+    }),
+  });
+  assert.equal(auditReport961.incompleteSpecMasters.length, 1);
+  assert.equal(auditReport961.incompleteSpecMasters[0]?.id, 'm-961');
+
+  assert.match(
+    platformReviewIdFor961([] as never),
+    /^rv-[0-9a-f]{64}$/,
+    'platformReviewIdFor must safely hash fallback when passed an array'
+  );
+  const normalizedPrices961 = normalizeScrapedProductPrices({
+    itemId: '123456',
+    title: 'iPhone 16 Pro Max 256GB',
+    priceMin: 28_990_000,
+    priceMax: 28_990_000,
+    currency: 'VND',
+    historicalSold: 10,
+    ratingStar: 4.9,
+    ratingCount: 5,
+    images: [],
+    models: [['invalid-array-model'] as never, { name: '256GB', price: 28_990_000 }],
+    attributes: [],
+    shop: [] as never,
+    reviews: [
+      ['invalid-array-review'] as never,
+      {
+        author: 'u1',
+        ratingStar: 5,
+        comment: 'good',
+        images: [],
+        reviewer: [] as never,
+      },
+    ],
+    url: 'https://shopee.vn/product-i.1.123456',
+  } as never);
+  assert.equal(normalizedPrices961.models.length, 1);
+  assert.equal(normalizedPrices961.reviews.length, 1);
+  assert.equal(normalizedPrices961.reviews[0]?.reviewer, undefined);
+
+  // DOS/Rate#964: ProductNormalizer port guard, resolveBackfillSupabaseTarget dot hostname guard, resolveClusterPeerFloorPrice & merchant-review-risk array guards
+  const { ProductNormalizer: ProductNormalizer964 } = await import('./product-normalizer.js');
+  const { resolveBackfillSupabaseTarget } = await import('./paging.js');
+  const { mapStoredReview, strongestPriceAnomaly } = await import('./merchant-review-risk.js');
+
+  const normalizer964 = new ProductNormalizer964();
+  const normProd964 = normalizer964.normalize({
+    itemId: '964',
+    shopId: '1',
+    title: 'iPhone 16 Pro Max 256GB',
+    priceMin: 28_990_000,
+    priceMax: 28_990_000,
+    currency: 'VND',
+    historicalSold: 1,
+    ratingStar: 5,
+    ratingCount: 1,
+    images: ['https://cdn.example.com:8443/img.jpg', 'https://cdn.example.com/valid.jpg'],
+    models: [],
+    attributes: [],
+    shop: { shopId: '1', name: 'Shop', isMall: true },
+    reviews: [],
+    url: 'https://shopee.vn/product-i.1.964',
+  });
+  assert.deepEqual(
+    normProd964.images,
+    ['https://cdn.example.com/valid.jpg'],
+    'ProductNormalizer must reject image URLs with non-standard ports'
+  );
+  assert.throws(
+    () => resolveBackfillSupabaseTarget('https://example.supabase.co./'),
+    /invalid hostname/,
+    'resolveBackfillSupabaseTarget must reject trailing-dot hostnames'
+  );
+  const peerFloor964 = resolveClusterPeerFloorPrice(
+    [
+      ['invalid-array-peer'] as never,
+      {
+        id: 'peer-1',
+        price_current: 25_000_000,
+        merchants: [null as never, { is_official: true }],
+      },
+    ],
+    'self-id'
+  );
+  assert.equal(peerFloor964, 25_000_000);
+  assert.equal(mapStoredReview([] as never), null, 'mapStoredReview must reject array inputs');
+  assert.equal(
+    strongestPriceAnomaly([] as never, [], new Map(), new Map(), new Map()),
+    null,
+    'strongestPriceAnomaly must reject array merchant input'
+  );
+  assert.equal(normalizedPrices961.shop.url, undefined);
+
+  // #968: Backfill job option/row guards & ImporterStructuredLogger meta bounds
+  const { createImporterLogger, ImporterStructuredLogger } = await import('./logger.js');
+  const logger968 = createImporterLogger('TestComponent', ['bad-override'] as never);
+  const entry968 = logger968.formatEntry('info', 'test.event', 'hello', ['array-meta'] as never);
+  assert.equal(entry968.component, 'TestComponent');
+  assert.equal(entry968.meta, undefined, 'formatEntry must ignore array meta payloads');
+  const nullLogger968 = new ImporterStructuredLogger(null as never).child(['bad-child'] as never);
+  assert.equal(nullLogger968.formatEntry('info', 'e', 'm').component, 'Importer');
+
+  const { runReviewRiskBackfill } = await import('./jobs/backfill-review-risk.js');
+  const fakeBackfillClient = {
+    from: () => ({
+      select: () => ({
+        order: () => ({
+          range: async () => ({ data: [], error: null }),
+        }),
+      }),
+    }),
+  };
+  const backfillRes968 = await runReviewRiskBackfill(fakeBackfillClient as never, {
+    apply: 'false' as unknown as boolean,
+  });
+  assert.equal(
+    backfillRes968.apply,
+    false,
+    'runReviewRiskBackfill must require strict boolean apply === true'
+  );
+
+  console.log(
+    `✅ [P2/P3 Trust Model & #292/#352/#356/#359/#379/#382/#401/#497/#514/#522/#528/#557/#834/#836/#882/#908/#954] Voter weight, Wilson lower bound (50/52=${wilson50of52} > 1/1=${wilson1of1}), shingle copy seeding (sim=${shingleSim}), affiliate shortlinks, peer floor, ArenaSpecSyncer, Importer & ReviewAnalyzer hardening (#352, #356, #359, #379, #382, #401, #497, #514, #522, #528, #557, #834, #836, #882, #908, #954) verified`
+  );
+
+  // -------------------------------------------------------------------------
+  // Issue #998: EntityMatcher, MerchantRiskBreakdown & platformReviewIdFor Bounds
+  // -------------------------------------------------------------------------
+  console.log(
+    '\nTesting EntityMatcher, MerchantRiskBreakdown & platformReviewIdFor Bounds (#998)...'
+  );
+  {
+    const { sanitizeHttpUrl, EntityMatcher } = await import('./entity-matcher.js');
+    const { platformReviewIdFor } = await import('./shopee-to-supabase.js');
+    const { merchantRiskBreakdown } = await import('./ai-review-analyzer.js');
+
+    assert.equal(sanitizeHttpUrl('https://.shopee.vn/img.jpg'), null);
+    assert.equal(sanitizeHttpUrl('https://shopee..vn/img.jpg'), null);
+    assert.equal(sanitizeHttpUrl('https://shopee.vn./img.jpg'), null);
+    assert.equal(sanitizeHttpUrl('https://cf.shopee.vn/file/abc'), 'https://cf.shopee.vn/file/abc');
+
+    const riskFromArr = merchantRiskBreakdown(['bad-array'] as never);
+    assert.equal(riskFromArr.risk_level, 'low');
+    assert.equal(riskFromArr.price_anomaly_detected, false);
+
+    const riskFalseStr = merchantRiskBreakdown({
+      risk_score: 20,
+      trust_score: '91.5' as never,
+      risk_level: 'low',
+      seeding_ratio: '0.15' as never,
+      coin_spam_ratio: false as never,
+      sabotage_ratio: '' as never,
+      total_reviews: '42' as never,
+      authentic_count: '36' as never,
+      coin_spam_count: 2,
+      seeding_fake_count: 4,
+      sabotage_or_bombing_count: 0,
+      suspicious_ratio_pct: '14.28' as never,
+      price_anomaly_detected: 'false' as never,
+      reasons: ['Valid reason'],
+    });
+    assert.equal(riskFalseStr.price_anomaly_detected, false);
+    assert.equal(riskFalseStr.trust_score, 91.5);
+    assert.equal(riskFalseStr.total_reviews, 42);
+    assert.equal(riskFalseStr.authentic_count, 36);
+    assert.equal(riskFalseStr.suspicious_ratio_pct, 14.28);
+    assert.equal(riskFalseStr.coin_spam_ratio, 0);
+    assert.equal(riskFalseStr.sabotage_ratio, 0);
+
+    const rvSentinelZero = platformReviewIdFor({
+      reviewId: '0',
+      author: 'alice',
+      ratingStar: 5,
+      comment: 'First review',
+      images: [],
+    });
+    const rvSentinelNull = platformReviewIdFor({
+      reviewId: 'null',
+      author: 'bob',
+      ratingStar: 4,
+      comment: 'Second review',
+      images: [],
+    });
+    assert.ok(rvSentinelZero.startsWith('rv-'));
+    assert.ok(rvSentinelNull.startsWith('rv-'));
+    assert.notEqual(rvSentinelZero, rvSentinelNull);
+
+    let insertedMasterPayload: Record<string, unknown> | null = null;
+    const mockMatcherDb = {
+      from(table: string) {
+        assert.equal(table, 'master_products');
+        return {
+          select() {
+            return {
+              eq() {
+                return {
+                  async maybeSingle() {
+                    return { data: null, error: null };
+                  },
+                };
+              },
+            };
+          },
+          upsert(row: Record<string, unknown>) {
+            insertedMasterPayload = row;
+            return {
+              select() {
+                return Promise.resolve({ data: [{ id: 'mp-created-998' }], error: null });
+              },
+            };
+          },
+        };
+      },
+      async rpc() {
+        return {
+          data: [
+            null,
+            ['array-entry'],
+            { master_id: '0', similarity: 0.95, name: 'Sentinel Zero' },
+            { master_id: 'null', similarity: 0.92, name: 'Sentinel Null' },
+          ],
+          error: null,
+        };
+      },
+    };
+    const matcher = new EntityMatcher(
+      mockMatcherDb as never,
+      {
+        async enrichCandidate(c: unknown) {
+          return c;
+        },
+      } as never
+    );
+    const resolved = await matcher.resolveOrCreateMasterProduct({
+      model_key: 'apple-iphone-16-128gb',
+      name: 'Apple iPhone 16 128GB',
+      slug: 'apple-iphone-16-128gb',
+      brand: 'Apple',
+      model: 'iPhone 16',
+      storage_gb: 128,
+      ram_gb: 8,
+      has_5g: 'false' as never,
+      is_benchmark_enriched: true,
+    } as never);
+    assert.equal(resolved.masterId, 'mp-created-998');
+    assert.equal(resolved.isNew, true);
+    assert.equal(insertedMasterPayload?.['has_5g'], false);
+    console.log(
+      '\u2705 [EntityMatcher, MerchantRiskBreakdown & platformReviewIdFor Bounds (#998)] Verified!'
+    );
+  }
 
   console.log('\n🎉 ALL AI REVIEW ANALYZER TESTS PASSED!');
 }

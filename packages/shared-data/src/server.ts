@@ -7,23 +7,19 @@
  * policy and grant on the `rate` schema.
  */
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import {
+  isValidSupabaseApiKey,
+  isValidSupabaseHttpUrl,
+} from './clients/supabase.js';
 
 export type SchemaScopedSupabaseClient = ReturnType<SupabaseClient['schema']>;
+export { isValidSupabaseApiKey, isValidSupabaseHttpUrl };
 
 let _adminClient: SupabaseClient | null = null;
 
 /**
- * Get the admin Supabase client (service role, bypassing RLS).
+ * Get the admin Supabase client (Supabase secret key, bypassing RLS).
  */
-function isValidSupabaseHttpUrl(rawUrl: string): boolean {
-  try {
-    const parsed = new URL(rawUrl);
-    return parsed.protocol === 'https:' || parsed.protocol === 'http:';
-  } catch {
-    return false;
-  }
-}
-
 export function getAdminClient(): SupabaseClient {
   if (!_adminClient) {
     const supabaseUrl = (
@@ -31,17 +27,20 @@ export function getAdminClient(): SupabaseClient {
       process.env.SUPABASE_URL ??
       ''
     ).trim();
-    const supabaseServiceKey = (
-      process.env.SUPABASE_SERVICE_ROLE_KEY ?? ''
-    ).trim();
+    const supabaseServiceKey = (process.env.SUPABASE_SECRET_KEY ?? '').trim();
     if (!supabaseUrl || !supabaseServiceKey) {
       throw new Error(
-        'Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY environment variables.'
+        'Missing SUPABASE_URL or SUPABASE_SECRET_KEY environment variables.'
       );
     }
     if (!isValidSupabaseHttpUrl(supabaseUrl)) {
       throw new Error(
         'Invalid SUPABASE_URL: must use http:// or https:// protocol.'
+      );
+    }
+    if (!isValidSupabaseApiKey(supabaseServiceKey)) {
+      throw new Error(
+        'Invalid SUPABASE_SECRET_KEY: must be a non-empty token without whitespace or control characters.'
       );
     }
     _adminClient = createClient(supabaseUrl, supabaseServiceKey, {

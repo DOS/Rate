@@ -72,7 +72,18 @@ export async function auditMasterSpecs(supabase: RateSupabaseClient): Promise<nu
     model_key: string;
     specifications?: ProductSpecifications | null;
   }>) {
-    const label = `${row.name} (${row.model_key})`;
+    if (!row || typeof row !== 'object' || Array.isArray(row)) continue;
+    const safeName =
+      stripKeySpecControlChars(String(row.name ?? ''))
+        .replace(/\s+/g, ' ')
+        .trim()
+        .slice(0, 200) || '(unnamed)';
+    const safeModelKey =
+      stripKeySpecControlChars(String(row.model_key ?? ''))
+        .replace(/\s+/g, ' ')
+        .trim()
+        .slice(0, 160) || '(no-key)';
+    const label = `${safeName} (${safeModelKey})`;
     const specCheck = ProductSpecificationsSchema.safeParse(row.specifications);
     if (!specCheck.success) {
       failures.push(`${label} failed ProductSpecificationsSchema validation`);
@@ -108,7 +119,14 @@ function stripKeySpecControlChars(input: string): string {
   return input.replace(/\p{Cc}+/gu, ' ');
 }
 
+function isPlainSpecObject(value: unknown): value is Record<string, unknown> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const proto = Object.getPrototypeOf(value);
+  return proto === Object.prototype || proto === null;
+}
+
 export function sanitizeKeySpecKey(key: string): string | null {
+  if (typeof key !== 'string') return null;
   const cleaned = stripKeySpecControlChars(key).replace(/\s+/g, ' ').trim();
   if (!cleaned || cleaned.length > MAX_KEY_SPEC_KEY_LENGTH || UNSAFE_KEY_SPEC_KEYS.has(cleaned)) {
     return null;
@@ -116,7 +134,11 @@ export function sanitizeKeySpecKey(key: string): string | null {
   return cleaned;
 }
 
-function sanitizeKeySpecValue(value: unknown, depth = 0): unknown {
+function sanitizeKeySpecValue(
+  value: unknown,
+  depth = 0,
+  seen: WeakSet<object> = new WeakSet<object>()
+): unknown {
   if (depth > 4 || value === undefined || value === null) return undefined;
   if (typeof value === 'boolean') return value;
   if (typeof value === 'number') {
@@ -131,25 +153,37 @@ function sanitizeKeySpecValue(value: unknown, depth = 0): unknown {
     return cleaned.length > 0 ? cleaned : undefined;
   }
   if (Array.isArray(value)) {
-    return value
-      .slice(0, 50)
-      .map(item => sanitizeKeySpecValue(item, depth + 1))
-      .filter(item => item !== undefined);
-  }
-  if (typeof value === 'object') {
-    const objOut: Record<string, unknown> = {};
-    let count = 0;
-    for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
-      const safeKey = sanitizeKeySpecKey(k);
-      if (!safeKey) continue;
-      if (count >= MAX_KEY_SPEC_OBJECT_KEYS && !Object.hasOwn(objOut, safeKey)) continue;
-      const sanitized = sanitizeKeySpecValue(v, depth + 1);
-      if (sanitized !== undefined) {
-        if (!Object.hasOwn(objOut, safeKey)) count += 1;
-        objOut[safeKey] = sanitized;
-      }
+    if (seen.has(value)) return undefined;
+    seen.add(value);
+    try {
+      return value
+        .slice(0, 50)
+        .map(item => sanitizeKeySpecValue(item, depth + 1, seen))
+        .filter(item => item !== undefined);
+    } finally {
+      seen.delete(value);
     }
-    return objOut;
+  }
+  if (isPlainSpecObject(value)) {
+    if (seen.has(value)) return undefined;
+    seen.add(value);
+    try {
+      const objOut: Record<string, unknown> = {};
+      let count = 0;
+      for (const [k, v] of Object.entries(value)) {
+        const safeKey = sanitizeKeySpecKey(k);
+        if (!safeKey) continue;
+        if (count >= MAX_KEY_SPEC_OBJECT_KEYS && !Object.hasOwn(objOut, safeKey)) continue;
+        const sanitized = sanitizeKeySpecValue(v, depth + 1, seen);
+        if (sanitized !== undefined) {
+          if (!Object.hasOwn(objOut, safeKey)) count += 1;
+          objOut[safeKey] = sanitized;
+        }
+      }
+      return objOut;
+    } finally {
+      seen.delete(value);
+    }
   }
   return undefined;
 }
@@ -158,11 +192,8 @@ export function mergeKeySpecs(
   existing: unknown,
   incoming: Record<string, unknown> | null | undefined
 ): Record<string, unknown> {
-  const base =
-    existing && typeof existing === 'object' && !Array.isArray(existing)
-      ? (existing as Record<string, unknown>)
-      : {};
-  const next = incoming && typeof incoming === 'object' && !Array.isArray(incoming) ? incoming : {};
+  const base = isPlainSpecObject(existing) ? existing : {};
+  const next = isPlainSpecObject(incoming) ? incoming : {};
   const out: Record<string, unknown> = {};
   let count = 0;
   for (const source of [base, next]) {
@@ -170,7 +201,7 @@ export function mergeKeySpecs(
       const safeKey = sanitizeKeySpecKey(k);
       if (!safeKey) continue;
       if (count >= MAX_KEY_SPEC_OBJECT_KEYS && !Object.hasOwn(out, safeKey)) continue;
-      const sanitized = sanitizeKeySpecValue(v, 0);
+      const sanitized = sanitizeKeySpecValue(v, 0, new WeakSet<object>([source]));
       if (sanitized !== undefined) {
         if (!Object.hasOwn(out, safeKey)) count += 1;
         out[safeKey] = sanitized;
@@ -187,14 +218,15 @@ export function mergeKeySpecs(
 export async function runMasterSpecsBackfill(
   options: BackfillSpecsOptions = {}
 ): Promise<BackfillSpecsResult> {
+  if (!options || typeof options !== 'object' || Array.isArray(options)) options = {};
   const apply = options.apply === true;
   const { createClient } = await import('@supabase/supabase-js');
   const { EntityMatcher } = await import('../entity-matcher.js');
 
   const rawUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-  const key = (process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_KEY || '').trim();
+  const key = (process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_KEY || '').trim();
   if (!rawUrl.trim() || !key) {
-    throw new Error('Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY in environment.');
+    throw new Error('Missing SUPABASE_URL or SUPABASE_SECRET_KEY in environment.');
   }
   const { url } = resolveBackfillSupabaseTarget(rawUrl);
 
@@ -222,7 +254,14 @@ export async function runMasterSpecsBackfill(
   }
   const categoryIdBySlug = new Map<string, string>();
   for (const c of categories || []) {
-    categoryIdBySlug.set(c.slug, c.id);
+    if (!c || typeof c !== 'object' || Array.isArray(c)) continue;
+    const safeSlug =
+      typeof c.slug === 'string' ? stripKeySpecControlChars(c.slug).trim().slice(0, 120) : '';
+    const safeCatId =
+      typeof c.id === 'string' && !/\p{Cc}/u.test(c.id.trim()) ? c.id.trim().slice(0, 128) : '';
+    if (safeSlug && safeCatId) {
+      categoryIdBySlug.set(safeSlug, safeCatId);
+    }
   }
 
   const catalogModelKeys = new Set<string>();
@@ -327,10 +366,25 @@ export async function runMasterSpecsBackfill(
 
   let skipped = 0;
   for (const m of masters || []) {
-    if (catalogModelKeys.has(m.model_key)) continue;
+    if (!m || typeof m !== 'object' || Array.isArray(m)) continue;
+    const safeMasterId =
+      typeof m.id === 'string' && !/\p{Cc}/u.test(m.id.trim()) ? m.id.trim().slice(0, 128) : '';
+    const safeModelKey =
+      typeof m.model_key === 'string'
+        ? stripKeySpecControlChars(m.model_key).trim().slice(0, 160)
+        : '';
+    const safeName =
+      typeof m.name === 'string'
+        ? stripKeySpecControlChars(m.name).replace(/\s+/g, ' ').trim().slice(0, 200) || '(unnamed)'
+        : '(unnamed)';
+    if (!safeMasterId || !safeModelKey) {
+      skipped++;
+      continue;
+    }
+    if (catalogModelKeys.has(safeModelKey)) continue;
 
-    const canonicalEntry = Object.hasOwn(CANONICAL_BACKFILL_SPECS_BY_MODEL_KEY, m.model_key)
-      ? CANONICAL_BACKFILL_SPECS_BY_MODEL_KEY[m.model_key]
+    const canonicalEntry = Object.hasOwn(CANONICAL_BACKFILL_SPECS_BY_MODEL_KEY, safeModelKey)
+      ? CANONICAL_BACKFILL_SPECS_BY_MODEL_KEY[safeModelKey]
       : undefined;
 
     if (canonicalEntry) {
@@ -355,20 +409,20 @@ export async function runMasterSpecsBackfill(
             ),
             updated_at: new Date().toISOString(),
           })
-          .eq('id', m.id);
+          .eq('id', safeMasterId);
 
         if (upErr) {
-          throw new Error(`Failed to backfill ${m.name}: ${upErr.message}`);
+          throw new Error(`Failed to backfill ${safeName}: ${upErr.message}`);
         }
       }
       catalogUpdated++;
       logger.info(
         'backfill.canonical_updated',
-        `[Canonical Specs] ${m.name} (${m.model_key}): ${apply ? 'UPDATED' : 'DRY-RUN WOULD UPDATE'}`,
-        { modelKey: m.model_key, apply }
+        `[Canonical Specs] ${safeName} (${safeModelKey}): ${apply ? 'UPDATED' : 'DRY-RUN WOULD UPDATE'}`,
+        { modelKey: safeModelKey, apply }
       );
     } else if (apply && enricher.isConfigured()) {
-      const ok = await matcher.enrichMasterProductById(m.id);
+      const ok = await matcher.enrichMasterProductById(safeMasterId);
       if (ok) {
         catalogUpdated++;
       } else {
@@ -376,8 +430,8 @@ export async function runMasterSpecsBackfill(
       }
       logger.info(
         'backfill.ai_enriched',
-        `[AI Enrich] ${m.name} (${m.id}): ${ok ? 'UPDATED' : 'SKIPPED'}`,
-        { masterId: m.id, updated: ok }
+        `[AI Enrich] ${safeName} (${safeMasterId}): ${ok ? 'UPDATED' : 'SKIPPED'}`,
+        { masterId: safeMasterId, updated: ok }
       );
     } else {
       skipped++;
@@ -403,17 +457,18 @@ export async function runMasterSpecsBackfill(
 export async function runQuickSpecSyncAndAudit(
   options: BackfillSpecsOptions = {}
 ): Promise<number> {
+  if (!options || typeof options !== 'object' || Array.isArray(options)) options = {};
   const apply = options.apply === true;
   const { createClient } = await import('@supabase/supabase-js');
   const rawSupabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
   const supabaseKey = (
-    process.env.SUPABASE_SERVICE_ROLE_KEY ||
+    process.env.SUPABASE_SECRET_KEY ||
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
     process.env.SUPABASE_ANON_KEY ||
     ''
   ).trim();
   if (!rawSupabaseUrl?.trim() || !supabaseKey) {
-    throw new Error('Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY');
+    throw new Error('Missing SUPABASE_URL or SUPABASE_SECRET_KEY');
   }
   const { url: supabaseUrl } = resolveBackfillSupabaseTarget(rawSupabaseUrl);
   const supabase = scopeSupabaseToRate(

@@ -58,36 +58,43 @@ const categorySlugOnly = <T>(value: T): T => {
 // The box matches on and shows only the chip and the screen.
 const searchKeySpecs = (
   keySpecs: HeroProductSuggestion['key_specs']
-): HeroProductSuggestion['key_specs'] =>
-  keySpecs && {
+): HeroProductSuggestion['key_specs'] => {
+  if (!keySpecs || typeof keySpecs !== 'object') return {};
+  return {
     chip: sanitizeOptionalSpecText(keySpecs.chip),
     screen: sanitizeOptionalSpecText(keySpecs.screen),
   };
+};
 
 export function toHeroProductSuggestions(
   products: readonly HeroProductSuggestion[]
 ): HeroProductSuggestion[] {
   if (!Array.isArray(products)) return [];
-  return products.slice(0, MAX_HERO_PRODUCTS).map((p) => ({
-    id: p.id,
-    slug: p.slug,
-    name: p.name,
-    brand: p.brand,
-    model: p.model,
-    model_key: p.model_key,
-    variant_name: p.variant_name,
-    key_specs: searchKeySpecs(p.key_specs),
-    storage_gb: p.storage_gb,
-    // The first usable image, not the first entry, which can be junk such as
-    // "[object Object]" (DOS/Rate#810).
-    images: usableImageUrls(p.images).slice(0, 1),
-    thumbnail: p.thumbnail,
-    min_price: p.min_price,
-    merchant_count: p.merchant_count,
-    user_rating_weighted: p.user_rating_weighted,
-    average_rating: p.average_rating,
-    category_id: p.category_id,
-    metadata: categorySlugOnly(p.metadata),
-    specifications: categorySlugOnly(p.specifications),
-  }));
+  return products
+    .filter(
+      (p): p is HeroProductSuggestion => Boolean(p) && typeof p === 'object'
+    )
+    .slice(0, MAX_HERO_PRODUCTS)
+    .map((p) => ({
+      id: p.id,
+      slug: p.slug,
+      name: p.name,
+      brand: p.brand,
+      model: p.model,
+      model_key: p.model_key,
+      variant_name: p.variant_name,
+      key_specs: searchKeySpecs(p.key_specs),
+      storage_gb: p.storage_gb,
+      // The first usable image, not the first entry, which can be junk such as
+      // "[object Object]" (DOS/Rate#810).
+      images: usableImageUrls(p.images).slice(0, 1),
+      thumbnail: p.thumbnail,
+      min_price: p.min_price,
+      merchant_count: p.merchant_count,
+      user_rating_weighted: p.user_rating_weighted,
+      average_rating: p.average_rating,
+      category_id: p.category_id,
+      metadata: categorySlugOnly(p.metadata),
+      specifications: categorySlugOnly(p.specifications),
+    }));
 }

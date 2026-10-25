@@ -2496,22 +2496,22 @@ async function runCoreArchitectureSuite() {
     '  ✅ [48/49] Unified API v1 Error Sanitizer & Bounded Query Parsers (T9) + Pure Domain Module rate-domain.ts (T12) (#170) passed'
   );
 
-  // 49. Issue #159: POST /api/v1/rate/extension/ingest never uses SUPABASE_SERVICE_ROLE_KEY, calls narrow enqueue_crowd_verify_signal RPC, and never echoes raw DB error.message
+  // 49. Issue #159: POST /api/v1/rate/extension/ingest never uses SUPABASE_SECRET_KEY, calls narrow enqueue_crowd_verify_signal RPC, and never echoes raw DB error.message
   const extensionServerSrc = fs.readFileSync(
     path.join(repoRoot, 'apps/web/src/server/rate/extension.ts'),
     'utf8'
   );
   assert.ok(
-    !extensionServerSrc.includes('SUPABASE_SERVICE_ROLE_KEY'),
-    'apps/web/src/server/rate/extension.ts must never reference SUPABASE_SERVICE_ROLE_KEY (#159)'
+    !extensionServerSrc.includes('SUPABASE_SECRET_KEY'),
+    'apps/web/src/server/rate/extension.ts must never reference SUPABASE_SECRET_KEY (#159)'
   );
   const eslintSrc = fs.readFileSync(
     path.join(repoRoot, 'apps/web/eslint.config.mjs'),
     'utf8'
   );
   assert.ok(
-    eslintSrc.includes('SUPABASE_SERVICE_ROLE_KEY'),
-    'apps/web/eslint.config.mjs must ban SUPABASE_SERVICE_ROLE_KEY in src/app/** and src/server/** (#159)'
+    eslintSrc.includes('SUPABASE_SECRET_KEY'),
+    'apps/web/eslint.config.mjs must ban SUPABASE_SECRET_KEY in src/app/** and src/server/** (#159)'
   );
 
   const { ingestExtensionCrowdSignal } =
@@ -9178,6 +9178,2849 @@ async function runCoreArchitectureSuite() {
     console.log(
       '  ✅ [101/101] Inspect Observed Price Bounds, Health TTL Clock Guard & Revalidate Token Checks (#868) passed'
     );
+  }
+
+  // 102. Cache-Tags Revalidation/BigInt Guards & Api-Handler Parameter Bounds (#890)
+  {
+    const cacheTagsMod =
+      require('../cache-tags') as typeof import('../cache-tags');
+    const apiHandlerMod =
+      require('../api-handler') as typeof import('../api-handler');
+
+    assert.equal(
+      cacheTagsMod.productCacheTag('  Apple-iPhone-18\u0000 '),
+      'rate:product:apple-iphone-18'
+    );
+    assert.equal(
+      cacheTagsMod.categoryCacheTag('  Smartphones\u0085 '),
+      'rate:category:smartphones'
+    );
+    assert.equal(
+      cacheTagsMod.merchantCacheTag('  Shopee:123\u0007 '),
+      'rate:merchant:shopee:123'
+    );
+    assert.equal(
+      cacheTagsMod.isSafeRevalidationPath('/smartphones\u0085/iphone'),
+      false,
+      'isSafeRevalidationPath must reject C1 control characters'
+    );
+    assert.equal(
+      cacheTagsMod.isSafeRevalidationPath('/smartphones/iphone 18'),
+      false,
+      'isSafeRevalidationPath must reject internal whitespace'
+    );
+    assert.equal(
+      cacheTagsMod.canonicalizeCacheParams({
+        big: BigInt('9007199254740993'),
+        arr: [1, () => {}, Symbol('x')],
+      }),
+      '{"arr":[1,null,null],"big":"9007199254740993"}'
+    );
+    assert.equal(
+      apiHandlerMod.sanitizePublicApiError(
+        new Error('Invalid\u0000\r\nquery param')
+      ),
+      'Invalid query param'
+    );
+    assert.equal(
+      apiHandlerMod.parseBoundedIntParam(true as unknown as string, 25, 1, 100),
+      25
+    );
+    assert.equal(
+      apiHandlerMod.parseBoundedNumberParam(123 as unknown as string, 1, 100),
+      undefined
+    );
+    assert.equal(
+      apiHandlerMod.parseBoundedStringParam({} as unknown as string, 50),
+      null
+    );
+
+    console.log(
+      '  ✅ [102/103] Cache-Tags Revalidation/BigInt Guards & Api-Handler Parameter Bounds (#890) passed'
+    );
+  }
+
+  // 103. Deals, Extension & Server Rate Cache Input Bounds (#892)
+  {
+    const dealsMod = require('../deals') as typeof import('../deals');
+    const extMod = require('../extension') as typeof import('../extension');
+
+    const normOpts = dealsMod.normalizeDealRadarOptions({
+      limit: true as unknown as number,
+    });
+    assert.equal(
+      normOpts.limit,
+      12,
+      'normalizeDealRadarOptions must reject boolean limit: true and fall back to default 12'
+    );
+
+    const radarRes = dealsMod.computeCrossPlatformDealRadarFromData([
+      {
+        master: {
+          id: 'mp-892',
+          slug: 'iphone-18-pro',
+          name: 'iPhone 18 Pro',
+          brand: 'Apple',
+          model: 'iPhone 18 Pro',
+          category_id: null,
+          min_price: 25_000_000,
+          max_price: 28_000_000,
+          expert_rating: true as unknown as number,
+          user_rating_weighted: '4.8' as unknown as number,
+          average_rating: 4.5,
+        } as unknown as import('../../../lib/rate-api').MasterProduct,
+        offers: [
+          {
+            id: 'off-1',
+            platform: 'shopee',
+            price_current: 25_000_000,
+            price_original: 27_000_000,
+            url: 'https://shopee.vn/iPhone-18-Pro-i.1.2',
+            merchant: {
+              id: 'm-1',
+              name: 'Shopee Mall',
+              is_official: true,
+              risk_score: true as unknown as number,
+              dosafe_risk_score: '90' as unknown as number,
+              review_risk_score: false as unknown as number,
+            },
+          },
+          {
+            id: 'off-2',
+            platform: 'lazada',
+            price_current: 28_000_000,
+            price_original: 28_000_000,
+            url: 'https://www.lazada.vn/products/iphone-18-pro-i123.html',
+            merchant: {
+              id: 'm-2',
+              name: 'Lazada Mall',
+              is_official: true,
+              risk_score: 10,
+            },
+          },
+        ] as unknown as import('../../../lib/rate-api').MerchantOffer[],
+      },
+    ]);
+    assert.equal(radarRes.genuineDeals.length, 1);
+    assert.equal(
+      radarRes.genuineDeals[0]?.jreviewsScore10,
+      9.0,
+      'computeCrossPlatformDealRadarFromData must ignore non-numeric expert_rating/user_rating_weighted'
+    );
+    assert.equal(
+      radarRes.genuineDeals[0]?.merchantRiskScore,
+      5,
+      'resolveEffectiveMerchantRisk must ignore non-numeric risk scores and use fallback'
+    );
+
+    assert.equal(
+      extMod.canonicalizeProductUrl(
+        'https://shopee.vn/iPhone-18-i.111.222\u0000'
+      ),
+      null,
+      'canonicalizeProductUrl must reject URLs containing control characters'
+    );
+    assert.equal(
+      extMod.canonicalizeProductUrl('https://shopee.vn/iPhone 18-i.111.222'),
+      null,
+      'canonicalizeProductUrl must reject URLs containing internal whitespace'
+    );
+    assert.equal(
+      extMod.detectPlatformFromInput(
+        123 as unknown as string,
+        'https://shopee.vn/iPhone-18-i.111.222\u0085'
+      ),
+      null,
+      'detectPlatformFromInput must guard non-string platform and reject C1 control chars in URL'
+    );
+    assert.doesNotThrow(() =>
+      extMod.detectAccessoryOrJunk({
+        title: 123 as unknown as string,
+        url: {} as unknown as string,
+      })
+    );
+    assert.doesNotThrow(() =>
+      extMod.extractStorageAndAmbiguity({
+        title: 123 as unknown as string,
+        selectedVariant: true as unknown as string,
+      })
+    );
+
+    console.log(
+      '  ✅ [103/104] Deals, Extension & Server Rate Cache Input Bounds (#892) passed'
+    );
+  }
+
+  // 104. Rate Domain Core Image URL, Vote Count & Parser Bounds (#894)
+  {
+    const domainCoreMod =
+      require('../../../lib/rate-domain-core') as typeof import('../../../lib/rate-domain-core');
+
+    assert.equal(
+      domainCoreMod.toSafeNonNegativeVoteCount(true),
+      0,
+      'toSafeNonNegativeVoteCount must reject boolean true'
+    );
+    assert.equal(
+      domainCoreMod.toSafeNonNegativeVoteCount('15'),
+      15,
+      'toSafeNonNegativeVoteCount must accept numeric strings'
+    );
+
+    const bayesian = domainCoreMod.computeBayesianRatingSummary([
+      {
+        rating_star: true as unknown as number,
+        helpfulness_weight: true as unknown as number,
+        include_in_rating: true,
+      },
+    ]);
+    assert.equal(
+      bayesian.effectiveWeightSum,
+      0,
+      'computeBayesianRatingSummary must ignore non-numeric rating_star / helpfulness_weight'
+    );
+
+    assert.equal(
+      domainCoreMod.isImageUrl('https://user:pass@evil.example/img.jpg'),
+      false,
+      'isImageUrl must reject URLs with embedded credentials'
+    );
+    assert.equal(
+      domainCoreMod.isImageUrl('https://cdn.example.com/img\u0000.jpg'),
+      false,
+      'isImageUrl must reject URLs with control characters'
+    );
+    assert.equal(
+      domainCoreMod.isImageUrl('//cdn.example.com/valid.jpg'),
+      true,
+      'isImageUrl must accept valid protocol-relative URLs'
+    );
+
+    assert.equal(
+      domainCoreMod.sanitizePostgrestFilterToken(123 as unknown as string),
+      '',
+      'sanitizePostgrestFilterToken must guard non-string inputs'
+    );
+    assert.equal(
+      domainCoreMod.parseEcommerceUrlOrQuery(null as unknown as string).isUrl,
+      false,
+      'parseEcommerceUrlOrQuery must guard non-string inputs'
+    );
+    assert.equal(
+      domainCoreMod.stripEcommerceNoiseTokens(123 as unknown as string),
+      '',
+      'stripEcommerceNoiseTokens must guard non-string inputs'
+    );
+    assert.equal(
+      domainCoreMod.extractProductKeywordFromUrl(
+        'https://shopee.vn/iPhone-18-Pro-i.111.222\u0000'
+      ),
+      'iPhone 18 Pro',
+      'extractProductKeywordFromUrl must strip control characters before parsing'
+    );
+
+    console.log(
+      '  ✅ [104/105] Rate Domain Core Image URL, Vote Count & Parser Bounds (#894) passed'
+    );
+  }
+
+  // 105. Rate API Offer Mapping, Risk Score & Master Row Bounds (#896)
+  {
+    const rateApiMod =
+      require('../../../lib/rate-api') as typeof import('../../../lib/rate-api');
+
+    assert.equal(
+      rateApiMod.normalizeOfferOriginalPrice(10_000_000, true),
+      null,
+      'normalizeOfferOriginalPrice must reject boolean true'
+    );
+    assert.equal(
+      rateApiMod.normalizeOfferOriginalPrice(10_000_000, '   '),
+      null,
+      'normalizeOfferOriginalPrice must reject whitespace-only strings'
+    );
+    assert.equal(
+      rateApiMod.normalizeOfferOriginalPrice(10_000_000, 12_345_678.6),
+      12_345_679,
+      'normalizeOfferOriginalPrice must round fractional VND prices'
+    );
+
+    const trustOffer = rateApiMod.mapTrustViewRowToMerchantOffer(
+      {
+        id: 'off-1\u0000',
+        merchant_id: 'm-1\u0000',
+        platform: 'SHOPEE\u0000',
+        title: 'iPhone 16 Pro\u0007',
+        price_current: '25990000',
+        price_original: true as unknown as number,
+        stock: -10,
+        rating_star: true as unknown as number,
+        rating_count: '20' as unknown as number,
+        url: 'https://shopee.vn/item\u0000',
+        merchant_name: 'Apple Flagship\u0000',
+        merchant_is_official: true,
+        merchant_location: '\u0000',
+        review_risk_breakdown: [] as unknown as Record<string, unknown>,
+      },
+      -500
+    );
+    assert.equal(trustOffer.id, 'off-1');
+    assert.equal(trustOffer.platform, 'shopee');
+    assert.equal(trustOffer.title, 'iPhone 16 Pro');
+    assert.equal(trustOffer.rating_star, 0);
+    assert.equal(trustOffer.merchant.follower_count, 0);
+    assert.equal(trustOffer.merchant.location, null);
+    assert.equal(trustOffer.merchant.review_risk_breakdown, null);
+
+    const mappedOffer = rateApiMod.mapOfferRowToMerchantOffer({
+      id: 'off-2\u0000',
+      platform: 'LAZADA\u0000',
+      title: 'Galaxy S24\u0000',
+      price_current: 20_000_000,
+      price_original: null,
+      stock: 5,
+      rating_star: 4.8,
+      rating_count: 10,
+      url: 'https://www.lazada.vn/products/s24.html\u0000',
+      merchants: {
+        id: 'm-2\u0000',
+        name: 'Samsung Official\u0000',
+        platform: 'LAZADA',
+        is_official: true,
+        rating_star: true as unknown as number,
+        follower_count: 1000,
+      },
+    });
+    assert.equal(
+      mappedOffer.merchant.rating_star,
+      null,
+      'mapOfferRowToMerchantOffer must reject boolean merchant rating_star'
+    );
+    assert.equal(mappedOffer.platform, 'lazada');
+
+    assert.equal(
+      rateApiMod.hasStoredReviewRisk({
+        metadata: { review_risk_score: NaN },
+      }),
+      false,
+      'hasStoredReviewRisk must reject NaN metadata.review_risk_score'
+    );
+    assert.equal(
+      rateApiMod.hasStoredReviewRisk({
+        metadata: { review_risk_score: -5 },
+      }),
+      false,
+      'hasStoredReviewRisk must reject negative metadata.review_risk_score'
+    );
+
+    const dynRisk = rateApiMod.computeDynamicReviewRisk(
+      [
+        {
+          id: 'r-1',
+          author_name: 'Buyer',
+          rating_star: 0,
+          comment: 'Missing rating star',
+          variation: null,
+          created_at: '2026-01-01T00:00:00Z',
+          reviewer_type: 'user',
+          upvotes: 0,
+          downvotes: 0,
+          report_count: 0,
+          helpfulness_weight: 1,
+          include_in_rating: true,
+          criteria_ratings: {},
+          verdict: 'authentic',
+          fake_probability: 0,
+          flag_category: 'authentic',
+          reason: null,
+          signals: null,
+        },
+      ],
+      { platform: '  FACEBOOK  ' }
+    );
+    assert.equal(
+      dynRisk.reviewRiskScore,
+      25,
+      'computeDynamicReviewRisk must ignore 0-star rows in 1-2 star complaint calculation and normalize platform case'
+    );
+
+    const normMaster = rateApiMod.normalizeMasterProductRow(
+      {
+        id: 'mp-1',
+        slug: 'apple-iphone-16-pro-max-256gb\u0000',
+        metadata: [] as unknown as Record<string, unknown>,
+      } as unknown as import('@repo/shared-data').MasterProduct,
+      'invalid-cat' as unknown as import('../../../lib/rate-api').CanonicalCategorySlug
+    );
+    assert.equal(normMaster.slug, 'apple-iphone-16-pro-max-256gb');
+    assert.equal(
+      normMaster.thumbnail,
+      '/img/devices/apple-iphone-16-pro-max-256gb.jpg'
+    );
+
+    console.log(
+      '  \u2705 [105/106] Rate API Offer Mapping, Risk Score & Master Row Bounds (#896) passed'
+    );
+  }
+
+  // 106. Issue #898: Deal Radar & Leaderboard Engine Numeric, Criterion & Input Bounds
+  {
+    const dealRadarMod =
+      require('../../../lib/deal-radar') as typeof import('../../../lib/deal-radar');
+    const lbMod =
+      require('../../../lib/leaderboard-engine') as typeof import('../../../lib/leaderboard-engine');
+
+    assert.equal(
+      dealRadarMod.unwrapRadarPayload([]),
+      null,
+      'unwrapRadarPayload must reject top-level arrays'
+    );
+    assert.equal(
+      dealRadarMod.unwrapRadarPayload({ data: [] }),
+      null,
+      'unwrapRadarPayload must reject array data envelopes'
+    );
+
+    const radarIdx898 = dealRadarMod.buildRadarIndex({
+      generatedAt: '2026-01-01T00:00:00Z',
+      genuineDeals: [
+        {
+          productSlug: 'iphone-16-pro\u0000',
+          productName: 'iPhone 16 Pro',
+          platform: 'shopee',
+          merchantId: 'm-1',
+          merchantName: 'Shop 1',
+          priceCurrent: true as unknown as number,
+          savingsVsMedianPct: true as unknown as number,
+          claimedDiscountPct: 0,
+          fakeMarkupPct: 0,
+          verdict: 'best_market_deal',
+        } as unknown as import('../../../lib/deal-radar').CrossPlatformDealRadarItem,
+      ],
+      fakeSaleTraps: [],
+      priceSpreadLeaders: [],
+    } as unknown as import('../../../lib/deal-radar').CrossPlatformDealRadarResponse);
+    const sig898 = dealRadarMod.getRadarSignal(radarIdx898, 'iphone-16-pro');
+    assert.equal(
+      sig898.savingsPct,
+      0,
+      'buildRadarIndex must not coerce boolean savingsVsMedianPct to 1'
+    );
+
+    assert.equal(
+      dealRadarMod.radarLabel(
+        {
+          ...dealRadarMod.EMPTY_RADAR_SIGNAL,
+          verdict:
+            'invalid' as unknown as import('../../../lib/deal-radar').RadarVerdict,
+          spreadPct: 12.5,
+        },
+        NaN,
+        'en'
+      ),
+      '\u{1F4CA} +12.5% cross-platform spread',
+      'radarLabel must normalize invalid verdict and sanitize NaN minSpreadPct to 0'
+    );
+    assert.equal(
+      dealRadarMod.radarExportFields({
+        ...dealRadarMod.EMPTY_RADAR_SIGNAL,
+        verdict:
+          'invalid' as unknown as import('../../../lib/deal-radar').RadarVerdict,
+      }).verdict,
+      'none',
+      'radarExportFields must normalize invalid verdict to none'
+    );
+
+    assert.equal(
+      lbMod.normalizeLeaderboardCategory('  LAPTOPS\u0000 '),
+      'laptops',
+      'normalizeLeaderboardCategory must strip control chars'
+    );
+    assert.equal(
+      lbMod.normalizeLeaderboardCriterion('  BATTERY\u0007 '),
+      'battery',
+      'normalizeLeaderboardCriterion must strip control chars'
+    );
+    assert.equal(
+      lbMod.normalizeLeaderboardPriceSegment('  UNDER15M\u0000 '),
+      'under15m',
+      'normalizeLeaderboardPriceSegment must strip control chars'
+    );
+
+    const scored898 = lbMod.scoreMasterProductForLeaderboard(
+      {
+        id: 'mp-898',
+        slug: 'galaxy-s24-ultra\u0000',
+        name: 'Samsung Galaxy S24 Ultra',
+        brand: 'Samsung',
+        model: 'S24 Ultra',
+        average_rating: 4.8,
+        total_reviews: 25,
+        authentic_review_count: 0,
+        min_price: 24_990_000,
+      } as unknown as import('@repo/shared-data').MasterProduct,
+      'invalid-crit' as unknown as import('../../../lib/leaderboard-engine').LeaderboardCriterionKey
+    );
+    assert.equal(
+      scored898.authenticReviewCount,
+      0,
+      'scoreMasterProductForLeaderboard must preserve explicit authentic_review_count: 0'
+    );
+    assert.equal(
+      scored898.filteredNoiseReviewCount,
+      25,
+      'scoreMasterProductForLeaderboard must count all 25 reviews as filtered noise when authentic_review_count is 0'
+    );
+    assert.ok(
+      Number.isFinite(scored898.activeScore5) &&
+        Number.isFinite(scored898.activeScore10),
+      'scoreMasterProductForLeaderboard must normalize invalid criterion so activeScore5/10 stay finite'
+    );
+
+    assert.deepEqual(
+      lbMod.computeProductStandingInCategory(
+        null as unknown as import('@repo/shared-data').MasterProduct,
+        []
+      ),
+      [],
+      'computeProductStandingInCategory must guard null targetProduct'
+    );
+    assert.equal(
+      lbMod.comparePositiveMinPrices(true as unknown as number, 10_000_000),
+      'B',
+      'comparePositiveMinPrices must reject boolean minPriceA'
+    );
+
+    console.log(
+      '  ✅ [106/107] Deal Radar & Leaderboard Engine Numeric, Criterion & Input Bounds (#898) passed'
+    );
+  }
+
+  // 107. Issue #900: Offer-Plausibility, Product-Competitors & Copy/SEO/Sitemap Helpers Bounds
+  {
+    const plausMod =
+      require('../../../lib/offer-plausibility') as typeof import('../../../lib/offer-plausibility');
+    const compMod =
+      require('../../../lib/product-competitors') as typeof import('../../../lib/product-competitors');
+    const verdictCopyMod =
+      require('../../../lib/discount-verdict-copy') as typeof import('../../../lib/discount-verdict-copy');
+    const detailCopyMod =
+      require('../../../lib/product-detail-copy') as typeof import('../../../lib/product-detail-copy');
+    const revDisplayMod =
+      require('../../../lib/review-display') as typeof import('../../../lib/review-display');
+    const seoMod =
+      require('../../../lib/seo') as typeof import('../../../lib/seo');
+    const sitemapMod =
+      require('../../../lib/sitemap-lastmod') as typeof import('../../../lib/sitemap-lastmod');
+
+    assert.equal(
+      plausMod.implausiblyLowIndexes([
+        true as unknown as number,
+        20_000_000,
+        21_000_000,
+      ]).size,
+      0,
+      'implausiblyLowIndexes must ignore boolean true instead of coercing to 1 VND'
+    );
+    assert.equal(
+      plausMod.isImplausiblyLowPrice(true as unknown as number, [
+        { price_current: 20_000_000 },
+        { price_current: 21_000_000 },
+      ]),
+      false,
+      'isImplausiblyLowPrice must reject boolean price'
+    );
+    const lowIds900 = plausMod.implausiblyLowOfferIds([
+      { id: 'bait-1\u0000', price_current: 1_000_000 },
+      { id: 'real-1', price_current: 20_000_000 },
+      { id: 'real-2', price_current: 21_000_000 },
+    ]);
+    assert.equal(
+      lowIds900.has('bait-1'),
+      true,
+      'implausiblyLowOfferIds must strip control chars from id'
+    );
+
+    const rankedPeers900 = compMod.rankRelatedCompetitors(
+      [
+        { slug: 'iphone-16\u0000', min_price: 20_000_000 },
+        { slug: 'galaxy-s24', min_price: true as unknown as number },
+        { slug: 'xiaomi-14', min_price: 19_000_000 },
+      ],
+      '  iphone-16  ',
+      20_000_000,
+      true as unknown as number
+    );
+    assert.equal(
+      rankedPeers900.length,
+      2,
+      'rankRelatedCompetitors must exclude currentSlug after stripping control chars'
+    );
+    assert.equal(
+      rankedPeers900[0]?.slug,
+      'xiaomi-14',
+      'rankRelatedCompetitors must rank priced peer ahead of boolean min_price peer'
+    );
+    assert.equal(
+      compMod.buildKeySpecLine(
+        null as unknown as import('@repo/shared-data').MasterProduct
+      ),
+      ''
+    );
+
+    const vCopy900 = verdictCopyMod.discountVerdictCopy(
+      (k, v) => `${k}:${JSON.stringify(v)}`,
+      {
+        verdict: 'fake_discount',
+        price_current: true as unknown as number,
+        price_original: true as unknown as number,
+        historical_median_price: 20_000_000,
+        historical_max_price: 22_000_000,
+        claimed_discount_pct: true as unknown as number,
+        real_discount_vs_median_pct: 0,
+      } as unknown as import('../../../lib/rate-api').OfferDiscountAnalysis
+    );
+    assert.match(
+      vCopy900.explanation,
+      /"claimed":0/,
+      'discountVerdictCopy must not coerce boolean claimed_discount_pct to 1'
+    );
+
+    const rExp900 = detailCopyMod.radarExplanation({
+      verdict: 'genuine_deal',
+      genuineDeal: {
+        savingsVsMedianVnd: true as unknown as number,
+        savingsVsMedianPct: true as unknown as number,
+        merchantName: 'Shop\u0000A',
+        platform: 'shopee\u0000',
+      } as unknown as import('../../../lib/deal-radar').CrossPlatformDealRadarItem,
+      fakeSaleTrap: null,
+    });
+    assert.equal(
+      rExp900?.key === 'radarExplanationGenuineDeal'
+        ? rExp900.values.pct
+        : null,
+      '0',
+      'radarExplanation must not coerce boolean savingsVsMedianPct to 1'
+    );
+
+    assert.equal(
+      revDisplayMod.isFilteredOutReview({
+        verdict: 'authentic',
+        include_in_rating: true,
+        helpfulness_weight: true as unknown as number,
+      }),
+      true,
+      'isFilteredOutReview must treat boolean helpfulness_weight as invalid'
+    );
+
+    assert.equal(seoMod.fitTitle(null as unknown as string[]), '');
+    const jsonLd900 = seoMod.siteJsonLd('evil-locale', 'Hello\u0000World');
+    assert.equal(jsonLd900['@graph'][1]?.inLanguage, 'vi');
+    assert.equal(jsonLd900['@graph'][1]?.description, 'Hello World');
+
+    const invalidDate900 = new Date('invalid');
+    const validDate900 = new Date('2026-01-15T00:00:00Z');
+    assert.equal(
+      sitemapMod.newestOf(invalidDate900, validDate900),
+      validDate900,
+      'newestOf must ignore Invalid Date instances'
+    );
+
+    console.log(
+      '  ✅ [107/107] Offer-Plausibility, Product-Competitors & Copy/SEO/Sitemap Helpers Bounds (#900) passed'
+    );
+  }
+
+  // -------------------------------------------------------------------------
+  // 108. Merchant-Directory, Rate-Domain Compare Specs & Catalog/Copy/Nav Helpers Bounds (#902)
+  // -------------------------------------------------------------------------
+  {
+    const dirMod = await import('../../../lib/merchant-directory');
+    const domMod = await import('../../../lib/rate-domain');
+    const catListMod = await import('../../../lib/catalog-listing');
+    const catFilterMod = await import('../../../lib/category-filters');
+    const soldMod = await import('../../../lib/sold-count');
+    const langMod = await import('../../../lib/content-lang');
+    const analyzerMod = await import('../../../lib/analyzer-copy');
+    const navMod = await import('../../../lib/navigation');
+
+    assert.deepEqual(
+      dirMod.parseMerchantDirectoryFilters(
+        null as unknown as (key: string) => string
+      ),
+      dirMod.DEFAULT_MERCHANT_DIRECTORY_FILTERS,
+      'parseMerchantDirectoryFilters must guard non-function getter'
+    );
+    const dirSummary902 = dirMod.summarizeMerchantDirectory([
+      {
+        id: 'm1',
+        name: 'Shop 1',
+        platform: 'shopee',
+        platform_shop_id: '111',
+        is_official: true,
+        rating_star: 4.9,
+        follower_count: true as unknown as number,
+        product_count: true as unknown as number,
+        risk_score: 0,
+        review_risk_score: false as unknown as number,
+        trust_score: null as unknown as number,
+      } as unknown as import('../../../lib/rate-domain').MerchantSummary,
+    ]);
+    assert.equal(
+      dirSummary902.safe,
+      0,
+      'summarizeMerchantDirectory must not coerce null trust_score to 80+'
+    );
+    assert.deepEqual(
+      dirMod.filterMerchantDirectory(
+        null as unknown as import('../../../lib/rate-domain').MerchantSummary[],
+        null as unknown as import('../../../lib/merchant-directory').MerchantDirectoryFilters
+      ),
+      [],
+      'filterMerchantDirectory must guard non-array merchants and nullish filters'
+    );
+
+    assert.equal(
+      domMod.resolveCompareDisplaySizeInch({
+        screen_size_inch: true as unknown as number,
+        specifications: { display: { size_inch: true as unknown as number } },
+        key_specs: { screen: '6.78 inch' },
+      } as unknown as import('@repo/shared-data').MasterProduct),
+      6.78,
+      'resolveCompareDisplaySizeInch must reject boolean size_inch and fall back to key_specs.screen'
+    );
+    assert.equal(
+      domMod.resolveCompareRamGb({
+        ram_gb: true as unknown as number,
+        specifications: { hardware: { ram_gb: true as unknown as number } },
+        key_specs: { ram: '12 GB' },
+      } as unknown as import('@repo/shared-data').MasterProduct),
+      12,
+      'resolveCompareRamGb must reject boolean ram_gb and fall back to key_specs.ram'
+    );
+    assert.equal(
+      domMod.resolveCompareStorageGb({
+        storage_gb: true as unknown as number,
+        specifications: { hardware: { storage_gb: true as unknown as number } },
+        key_specs: { storage: '512 GB' },
+      } as unknown as import('@repo/shared-data').MasterProduct),
+      512,
+      'resolveCompareStorageGb must reject boolean storage_gb and fall back to key_specs.storage'
+    );
+    assert.equal(
+      domMod.resolveCompareBatteryMah({
+        battery_mah: true as unknown as number,
+        specifications: {
+          battery: { capacity_mah: true as unknown as number },
+        },
+        key_specs: { battery: '5000 mAh' },
+      } as unknown as import('@repo/shared-data').MasterProduct),
+      5000,
+      'resolveCompareBatteryMah must reject boolean battery_mah and fall back to key_specs.battery'
+    );
+
+    assert.equal(
+      catListMod.isPlainListing({
+        categorySlug: 'smartphones',
+        sort: 'sql_injection' as unknown as import('../../../lib/rate-api').MasterProductFilterParams['sort'],
+      }),
+      false,
+      'isPlainListing must reject non-canonical sort options'
+    );
+    assert.equal(
+      catListMod.isPlainListing({
+        categorySlug: 'smartphones',
+        limit: 12.5,
+      }),
+      false,
+      'isPlainListing must reject fractional limit values'
+    );
+    assert.equal(
+      catListMod.isPlainListing({
+        categorySlug: 'smartphones',
+        sort: 'price_asc',
+        limit: 24,
+        offset: 0,
+      }),
+      true
+    );
+
+    assert.equal(
+      catFilterMod.formatStorageLabel(true as unknown as number),
+      '0GB',
+      'formatStorageLabel must reject boolean true'
+    );
+    assert.equal(
+      catFilterMod.formatStorageLabel('1024' as unknown as number),
+      '1TB'
+    );
+
+    assert.equal(
+      soldMod.formatSoldCount('1500' as unknown as number, '1,5k+', 'en'),
+      '1.5K+',
+      'formatSoldCount must accept numeric string historicalSold'
+    );
+    assert.equal(
+      langMod.contentLang('Điện thoại chính hãng', 'vi-VN'),
+      undefined,
+      'contentLang must treat vi-VN as Vietnamese locale without override'
+    );
+    assert.equal(
+      langMod.contentLang('Điện thoại chính hãng', 'en-US'),
+      'vi',
+      'contentLang must return vi for Vietnamese text on non-vi locale'
+    );
+
+    const aCopy902 = analyzerMod.analyzerCopy(
+      '  Đánh giá chi tiết,\u0000hợp lệ từ người dùng thực tế.  '
+    );
+    assert.deepEqual(
+      aCopy902,
+      { key: 'reasonAuthentic', values: {} },
+      'analyzerCopy must strip control characters and collapse whitespace before template matching'
+    );
+
+    const baseAppUrl902 = navMod.getAppPublicUrl();
+    const parsedBase902 = new URL(baseAppUrl902);
+    const diffPortUrl902 = `${parsedBase902.protocol}//${parsedBase902.hostname}:65432/smartphones`;
+    assert.equal(
+      navMod.isAppLink(diffPortUrl902),
+      false,
+      'isAppLink must reject different port on the same hostname'
+    );
+    assert.equal(navMod.isAppLink('/smartphones'), true);
+
+    console.log(
+      '  ✅ [108/109] Merchant-Directory, Rate-Domain Compare Specs & Catalog/Copy/Nav Helpers Bounds (#902) passed'
+    );
+  }
+
+  // 109. RPC Error Lookup, Sliding-Window Rate Limiter & Cache Parameter Canonicalization (#934)
+  {
+    const reqAuthMod =
+      require('../request-auth') as typeof import('../request-auth');
+    const apiHandlerMod =
+      require('../api-handler') as typeof import('../api-handler');
+    const cacheTagsMod =
+      require('../cache-tags') as typeof import('../cache-tags');
+
+    const rpcTable = {
+      P0001: { status: 400, code: 'BAD_INPUT', error: 'Invalid input' },
+    };
+    assert.equal(
+      reqAuthMod.mapRpcRejection({ code: 'toString' }, rpcTable),
+      null,
+      'mapRpcRejection must ignore Object.prototype keys like toString'
+    );
+    assert.equal(
+      reqAuthMod.mapRpcRejection({ code: 'constructor' }, rpcTable),
+      null,
+      'mapRpcRejection must ignore Object.prototype keys like constructor'
+    );
+    assert.deepEqual(
+      reqAuthMod.mapRpcRejection({ code: ' P0001 ' }, rpcTable),
+      rpcTable.P0001
+    );
+
+    const limiter = new apiHandlerMod.BoundedSlidingWindowRateLimiter({
+      windowMs: 60_000,
+      maxRequests: 1,
+    });
+    assert.equal(limiter.allow('  client\u0007-1  ', Number.NaN), true);
+    assert.equal(limiter.allow('client-1', Number.POSITIVE_INFINITY), false);
+    assert.equal(
+      limiter.allow(null as unknown as string, 1000),
+      true,
+      'allow must guard non-string clientKey as anon'
+    );
+
+    const bestOfferRes = apiHandlerMod.selectBestOfferFromListings([
+      {
+        id: `  offer\u0000-${'x'.repeat(200)}  `,
+        title: 'iPhone 16',
+        price_current: 20_000_000,
+        url: '  https://shopee.vn/item\u0007-1  ',
+        platform: '  SHOPEE\u0000  ',
+      },
+    ]);
+    assert.equal(bestOfferRes.bestOffer?.id.length, 128);
+    assert.ok(!bestOfferRes.bestOffer?.id.includes('\u0000'));
+    assert.equal(bestOfferRes.bestOffer?.url, 'https://shopee.vn/item-1');
+    assert.equal(bestOfferRes.bestOffer?.platform, 'shopee');
+
+    assert.deepEqual(
+      apiHandlerMod.resolveReviewVoteInput({
+        voteType: '  UP\u0000 ',
+        reportReason: ' FAKE\u0007 ',
+      }),
+      { voteType: 'up', reportReason: 'fake' }
+    );
+
+    const canonJson = cacheTagsMod.canonicalizeCacheParams({
+      q: `iphone\u0000${'x'.repeat(600)}`,
+      ['__proto__']: { polluted: true },
+      constructor: 'bad',
+    });
+    const parsedCanon = JSON.parse(canonJson) as Record<string, unknown>;
+    assert.equal(typeof parsedCanon.q, 'string');
+    assert.equal((parsedCanon.q as string).length, 500);
+    assert.equal(Object.hasOwn(parsedCanon, 'constructor'), false);
+    assert.equal(
+      cacheTagsMod.productCacheTag(`slug-${'a'.repeat(200)}`).length,
+      'rate:product:'.length + 120
+    );
+
+    console.log(
+      '  ✅ [109/110] RPC Error Lookup, Sliding-Window Rate Limiter & Cache Parameter Canonicalization (#934) passed'
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // 110. Supabase Cookie Env, Browser Access Token, Logger & Hero Bounds (#936)
+  // ---------------------------------------------------------------------------
+  {
+    const cookiesMod = await import('../../../lib/supabase/cookies');
+    const tokenMod = await import('../../../lib/auth/access-token');
+    const heroMerchantsMod = await import('../../../lib/hero-merchants');
+    const heroProductsMod = await import('../../../lib/hero-products');
+
+    assert.equal(
+      cookiesMod.hasSupabaseAuthCookie(
+        null as unknown as import('../../../lib/supabase/cookies').CookieRecord[]
+      ),
+      false,
+      'hasSupabaseAuthCookie must guard non-array inputs'
+    );
+    assert.equal(
+      cookiesMod.hasSupabaseAuthCookie([
+        { name: 'sb-proj-auth-token', value: '  \u0000  ' },
+      ]),
+      false,
+      'hasSupabaseAuthCookie must reject empty/whitespace/control-char cookie values'
+    );
+    assert.equal(
+      cookiesMod.hasSupabaseAuthCookie([
+        { name: 'sb-proj-auth-token.0', value: 'eyJhbGciOiJIUzI1NiJ9' },
+      ]),
+      true
+    );
+
+    assert.equal(
+      tokenMod.sanitizeBrowserAccessToken(
+        '  \u0007eyJhbGciOiJIUzI1NiJ9.payload.sig  '
+      ),
+      'eyJhbGciOiJIUzI1NiJ9.payload.sig'
+    );
+    assert.equal(
+      tokenMod.sanitizeBrowserAccessToken('token with spaces'),
+      null,
+      'sanitizeBrowserAccessToken must reject whitespace-containing tokens'
+    );
+    assert.equal(
+      tokenMod.sanitizeBrowserAccessToken('a'.repeat(17_000)),
+      null,
+      'sanitizeBrowserAccessToken must reject oversized tokens'
+    );
+
+    const merchants936 = heroMerchantsMod.toHeroMerchantSuggestions([
+      null as unknown as import('../../../lib/hero-merchants').HeroMerchantSuggestion,
+      {
+        id: 'm-1',
+        name: 'Shop 1',
+        platform: 'shopee',
+        platform_shop_id: 's-1',
+        is_official: true,
+        trust_score: true as unknown as number,
+        dosafe_risk_score: '   ' as unknown as number,
+      },
+    ]);
+    assert.equal(merchants936.length, 1);
+    assert.equal(
+      merchants936[0]?.trust_score,
+      0,
+      'clampScore100 must reject boolean true instead of coercing to 1'
+    );
+    assert.equal(merchants936[0]?.dosafe_risk_score, 0);
+
+    const products936 = heroProductsMod.toHeroProductSuggestions([
+      undefined as unknown as import('../../../lib/hero-products').HeroProductSuggestion,
+    ]);
+    assert.equal(products936.length, 0);
+
+    console.log(
+      '  ✅ [110/111] Supabase Cookie Env, Browser Access Token, Logger & Hero Bounds (#936) passed'
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // 111. Review Item Sanitization, Voter Timestamp Guards & API Route Query Bounds (#938)
+  // ---------------------------------------------------------------------------
+  {
+    const reviewsRouteMod =
+      await import('../../../app/api/v1/rate/reviews/route');
+    const voteRouteMod =
+      await import('../../../app/api/reviews/[id]/vote/route');
+    const productsRouteMod =
+      await import('../../../app/api/v1/rate/products/route');
+    const watchlistRouteMod =
+      await import('../../../app/api/v1/rate/watchlist/route');
+
+    const sanitizedReview938 = reviewsRouteMod.toReviewItem(
+      {
+        id: Number.NaN,
+        author_name: '  Alice\u0000 ',
+        comment: 'Line 1\r\nLine 2\u0007',
+        variation: '  256GB\u0000 ',
+        reason: '  Valid\u0007 reason ',
+        created_at: '  2026-01-01T00:00:00.000Z\u0000 ',
+      },
+      {}
+    );
+    assert.equal(
+      sanitizedReview938.id,
+      '',
+      'toReviewItem must reject NaN numeric id'
+    );
+    assert.equal(sanitizedReview938.author_name, 'Alice');
+    assert.equal(sanitizedReview938.comment, 'Line 1\nLine 2');
+    assert.equal(sanitizedReview938.variation, '256GB');
+    assert.equal(sanitizedReview938.reason, 'Valid reason');
+    assert.equal(sanitizedReview938.created_at, '2026-01-01T00:00:00.000Z');
+
+    const elig938 = voteRouteMod.evaluateVoterEligibility({
+      is_anonymous: false,
+      email_confirmed_at: '  2025-01-01T00:00:00.000Z\u0000 ',
+      created_at: '  2025-01-01T00:00:00.000Z\u0007 ',
+    });
+    assert.equal(elig938.eligible, true);
+
+    assert.equal(productsRouteMod.parseBooleanFlag('  TRUE\u0000 '), true);
+    assert.equal(productsRouteMod.parseBooleanFlag(' 1\u0007 '), true);
+    assert.equal(productsRouteMod.parseBooleanFlag('false'), undefined);
+
+    assert.equal(
+      watchlistRouteMod.resolveWatchlistMerchantCount(-5, 3),
+      3,
+      'resolveWatchlistMerchantCount must fall back to offersCount when rawMerchantCount is negative'
+    );
+    assert.equal(
+      watchlistRouteMod.resolveWatchlistMerchantCount(true, 4),
+      4,
+      'resolveWatchlistMerchantCount must reject boolean rawMerchantCount'
+    );
+    assert.equal(watchlistRouteMod.resolveWatchlistMerchantCount(12, 4), 12);
+
+    console.log(
+      '  ✅ [111/112] Review Item Sanitization, Voter Timestamp Guards & API Route Query Bounds (#938) passed'
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // 112. Merchant Directory Filters, CSV Coercion, SEO Locale & OpenAPI Route (#940)
+  // ---------------------------------------------------------------------------
+  {
+    const merchantDirMod = await import('../../../lib/merchant-directory');
+    const csvSafeMod = await import('../../../lib/csv-safe');
+    const seoMod = await import('../../../lib/seo');
+    const openApiJsonRouteMod =
+      await import('../../../app/api/v1/rate/openapi.json/route');
+    const { NextRequest } = await import('next/server');
+
+    const parsedFilters940 = merchantDirMod.parseMerchantDirectoryFilters(
+      (key) => {
+        if (key === 'official') return '  TRUE\u0000 ';
+        if (key === 'risk') return '  SAFE\u0007 ';
+        if (key === 'seeding') return '  LOW\u0000 ';
+        if (key === 'sort') return '  FOLLOWERS_DESC\u0007 ';
+        return null;
+      }
+    );
+    assert.equal(parsedFilters940.officialOnly, true);
+    assert.equal(parsedFilters940.riskTier, 'safe');
+    assert.equal(parsedFilters940.seedingTier, 'low');
+    assert.equal(parsedFilters940.sortBy, 'followers_desc');
+
+    const filteredMerchants940 = merchantDirMod.filterMerchantDirectory(
+      [
+        {
+          id: 'm1',
+          name: 12345 as unknown as string,
+          platform: 'shopee',
+          platform_shop_id: 'shop\u0000123',
+          slug: 'apple-store',
+          is_official: true,
+          rating_star: 4.9,
+          follower_count: 1000,
+          product_count: 10,
+          location: 'VN',
+          trust_score: 95,
+          risk_score: 5,
+          review_risk_score: 5,
+        } as unknown as import('../../../lib/rate-domain').MerchantSummary,
+      ],
+      {
+        ...merchantDirMod.DEFAULT_MERCHANT_DIRECTORY_FILTERS,
+        query: 'shop 123',
+      }
+    );
+    assert.equal(filteredMerchants940.length, 1);
+
+    assert.equal(
+      csvSafeMod.escapeCsvCell(Object.create(null)),
+      '',
+      'escapeCsvCell must not throw TypeError on Object.create(null)'
+    );
+    assert.equal(
+      csvSafeMod.escapeCsvCell({ arbitrary: true }),
+      '',
+      'escapeCsvCell must not serialize plain objects as [object Object]'
+    );
+    assert.equal(
+      csvSafeMod.escapeCsvCell('Hello\u0085World\u009F'),
+      'HelloWorld',
+      'escapeCsvCell must strip Unicode C1 control characters'
+    );
+    assert.equal(
+      csvSafeMod.buildSafeCsvContent(
+        ['Col'],
+        [['Val']],
+        'INVALID' as unknown as '\r\n'
+      ),
+      '\uFEFFCol\r\nVal'
+    );
+
+    assert.equal(
+      seoMod.defaultOpenGraph('__proto__').locale,
+      'vi_VN',
+      'defaultOpenGraph must guard OG_LOCALES with Object.hasOwn'
+    );
+    assert.equal(seoMod.defaultOpenGraph('  EN\u0000 ').locale, 'en_US');
+
+    const openApiRes940 = await openApiJsonRouteMod.GET(
+      new NextRequest('https://rate.vn/api/v1/rate/openapi.json')
+    );
+    assert.equal(openApiRes940.status, 200);
+
+    console.log(
+      '  ✅ [112/113] Merchant Directory Filters, CSV Coercion, SEO Locale & OpenAPI Route (#940) passed'
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // 113. rate-domain-core Route Hrefs, Merchant Filter/Sort & URL ID Parsing (#942)
+  // ---------------------------------------------------------------------------
+  {
+    const domCoreMod = await import('../../../lib/rate-domain-core');
+
+    assert.equal(
+      domCoreMod.getCategoryRouteHref('  TABLETS\u0000 '),
+      '/tablets',
+      'getCategoryRouteHref must strip control chars and lowercase canonical category slugs'
+    );
+    assert.equal(
+      domCoreMod.getCategoryRouteHref('  \u0000  '),
+      '/smartphones',
+      'getCategoryRouteHref must default empty/whitespace slugs to /smartphones'
+    );
+    assert.equal(
+      domCoreMod.resolveProductImageUrl('  APPLE-IPHONE-16-128GB\u0000 '),
+      '/img/devices/apple-iphone-16-128gb.jpg',
+      'resolveProductImageUrl must normalize string slug before KNOWN_LOCAL_DEVICE_IMAGES lookup'
+    );
+    assert.equal(
+      domCoreMod.resolveProductImageUrl({
+        slug: '  SAMSUNG-GALAXY-S24-ULTRA-256GB\u0007 ',
+      }),
+      '/img/devices/samsung-galaxy-s24-ultra-256gb.jpg',
+      'resolveProductImageUrl must normalize object slug before KNOWN_LOCAL_DEVICE_IMAGES lookup'
+    );
+    assert.equal(
+      domCoreMod.getMasterProductHref({
+        slug: '  /apple-iphone-16-128gb\u0000/ ',
+        name: 'iPhone 16',
+      }),
+      '/smartphones/apple-iphone-16-128gb',
+      'getMasterProductHref must strip control characters and leading/trailing slashes from product.slug'
+    );
+
+    assert.deepEqual(
+      domCoreMod.filterAndSortMerchants(
+        null as unknown as import('../../../lib/rate-domain-core').MerchantSummary[]
+      ),
+      [],
+      'filterAndSortMerchants must guard non-array merchants input'
+    );
+    const merchants942 = domCoreMod.filterAndSortMerchants(
+      [
+        {
+          id: 'm1',
+          name: 'Apple\u0000Flagship',
+          platform: 'shopee',
+          platform_shop_id: '88201679',
+          slug: null,
+          url: null,
+          is_official: true,
+          rating_star: 4.9,
+          follower_count: 1000,
+          location: 'VN',
+          dosafe_risk_score: 5,
+          review_risk_score: Number.NaN,
+          risk_score: 5,
+          trust_score: 90,
+          product_count: 10,
+          min_price: null,
+          max_price: null,
+          review_risk_breakdown: {
+            total_reviews: 0,
+            authentic_count: 0,
+            coin_spam_count: 0,
+            seeding_fake_count: 0,
+            sabotage_or_bombing_count: 0,
+            suspicious_ratio_pct: 0,
+          },
+          updated_at: null,
+        },
+      ],
+      {
+        q: '  apple\u0007flagship  ',
+        minTrust: Number.POSITIVE_INFINITY,
+        sort: 'seeding_asc',
+      }
+    );
+    assert.equal(
+      merchants942.length,
+      1,
+      'filterAndSortMerchants must ignore non-finite minTrust and match control-char stripped q'
+    );
+
+    assert.equal(
+      domCoreMod.parseEcommerceUrlOrQuery(
+        'https://user:pass@shopee.vn/item-i.88201679.18093055535'
+      ).isUrl,
+      false,
+      'parseEcommerceUrlOrQuery must reject credentialed URLs'
+    );
+    assert.equal(
+      domCoreMod.parseEcommerceUrlOrQuery(
+        'https://shopee.vn/item-i.0.18093055535'
+      ).platformItemId,
+      null,
+      'parseEcommerceUrlOrQuery must reject zero shopId on Shopee URLs'
+    );
+    assert.equal(
+      domCoreMod.parseEcommerceUrlOrQuery(
+        'https://www.lazada.vn/products/item-i0.html'
+      ).platformItemId,
+      null,
+      'parseEcommerceUrlOrQuery must reject zero itemId on Lazada URLs'
+    );
+    assert.equal(
+      domCoreMod.parseEcommerceUrlOrQuery('https://tiki.vn/item-p00123.html')
+        .platformItemId,
+      null,
+      'parseEcommerceUrlOrQuery must reject leading-zero itemId on Tiki URLs'
+    );
+    assert.equal(
+      domCoreMod.parseEcommerceUrlOrQuery(
+        'https://shop.tiktok.com/view/product/00000000'
+      ).platformItemId,
+      null,
+      'parseEcommerceUrlOrQuery must reject zero/leading-zero product IDs on TikTok URLs'
+    );
+
+    console.log(
+      '  ✅ [113/113] rate-domain-core Route Hrefs, Merchant Filter/Sort & URL ID Parsing (#942) passed'
+    );
+  }
+
+  // [114/114] rate-api Filter Sanitization, Batch Offer IDs & Compare Slug Guards (#944)
+  {
+    const rateApiMod = await import('../../../lib/rate-api');
+    const emptyBatch = await rateApiMod.getMasterProductOffersBatch(
+      null as unknown as readonly string[]
+    );
+    assert.equal(
+      emptyBatch.size,
+      0,
+      'getMasterProductOffersBatch must return empty Map for non-array input'
+    );
+    const blankBatch = await rateApiMod.getMasterProductOffersBatch([
+      '   \u0000  ',
+      null as unknown as string,
+    ]);
+    assert.equal(
+      blankBatch.size,
+      0,
+      'getMasterProductOffersBatch must ignore control-char-only or non-string IDs'
+    );
+
+    const nonArrayCompare = await rateApiMod.compareMasterProducts(
+      null as unknown as string[]
+    );
+    assert.deepEqual(
+      nonArrayCompare,
+      [],
+      'compareMasterProducts must return [] for non-array input'
+    );
+    const invalidSlugsCompare = await rateApiMod.compareMasterProducts([
+      null as unknown as string,
+      '../evil-slug',
+      '   \u0007   ',
+    ]);
+    assert.deepEqual(
+      invalidSlugsCompare,
+      [],
+      'compareMasterProducts must safely filter out non-string and invalid slugs without calling Supabase'
+    );
+
+    const invalidBySlug = await rateApiMod.getMasterProductBySlug(
+      null as unknown as string
+    );
+    assert.equal(
+      invalidBySlug,
+      null,
+      'getMasterProductBySlug must return null for non-string input without calling Supabase'
+    );
+
+    const rateApiSrc = fs.readFileSync(
+      path.join(webSrcRoot, 'lib/rate-api.ts'),
+      'utf8'
+    );
+    assert.equal(
+      rateApiSrc.includes(
+        'const safeSingleBrandIlike = sanitizePostgrestFilterToken(cleanedSingleBrand);'
+      ),
+      true,
+      'getMasterProducts must sanitize single-brand fallback ILIKE token via sanitizePostgrestFilterToken'
+    );
+
+    console.log(
+      '  ✅ [114/115] rate-api Filter Sanitization, Batch Offer IDs & Compare Slug Guards (#944) passed'
+    );
+  }
+
+  // 115. getMerchantsList, getMerchantProfileById, and inspectProductOrShopUrl Bounds (#946)
+  {
+    const rateApiMod = await import('../../../lib/rate-api');
+
+    const emptyByIds = await rateApiMod.getMerchantsList({
+      ids: ['   \u0000  ', null as unknown as string],
+    });
+    assert.deepEqual(
+      emptyByIds,
+      [],
+      'getMerchantsList must return [] without querying DB when all ids sanitize to empty'
+    );
+
+    const emptyByShopIds = await rateApiMod.getMerchantsList({
+      platformShopIds: ['   \u0007  ', undefined as unknown as string],
+    });
+    assert.deepEqual(
+      emptyByShopIds,
+      [],
+      'getMerchantsList must return [] without querying DB when all platformShopIds sanitize to empty'
+    );
+
+    const nullProfile = await rateApiMod.getMerchantProfileById(
+      null as unknown as string
+    );
+    assert.equal(
+      nullProfile,
+      null,
+      'getMerchantProfileById must return null for non-string input'
+    );
+    const ctrlProfile =
+      await rateApiMod.getMerchantProfileById('   \u0000\u0007   ');
+    assert.equal(
+      ctrlProfile,
+      null,
+      'getMerchantProfileById must return null for control-char-only input'
+    );
+
+    const nonStringInspect = await rateApiMod.inspectProductOrShopUrl(
+      null as unknown as string
+    );
+    assert.equal(
+      nonStringInspect.matchedType,
+      'not_found',
+      'inspectProductOrShopUrl must safely return not_found for non-string input'
+    );
+    assert.equal(nonStringInspect.query, '');
+
+    const ctrlInspect =
+      await rateApiMod.inspectProductOrShopUrl('   \u0000\u001f   ');
+    assert.equal(
+      ctrlInspect.matchedType,
+      'not_found',
+      'inspectProductOrShopUrl must safely return not_found for control-char-only input'
+    );
+
+    const rateApiSrc = fs.readFileSync(
+      path.join(webSrcRoot, 'lib/rate-api.ts'),
+      'utf8'
+    );
+    assert.equal(
+      rateApiSrc.includes(
+        'const baseRisk = toSafeRiskScore100(m.risk_score, 0);'
+      ),
+      true,
+      'getMerchantsList must clamp m.risk_score via toSafeRiskScore100'
+    );
+    assert.equal(
+      rateApiSrc.includes(
+        'const baseRisk = toSafeRiskScore100(merchantRow.risk_score, 0);'
+      ),
+      true,
+      'getMerchantProfileById must clamp merchantRow.risk_score via toSafeRiskScore100'
+    );
+
+    console.log(
+      '  ✅ [115/115] getMerchantsList, getMerchantProfileById & inspectProductOrShopUrl Bounds (#946) passed'
+    );
+  }
+
+  // 116. Deals Radar, Extension Price Verdict & Crowd Ingest Bounds (#948)
+  {
+    const dealsMod = await import('../deals');
+    const extMod = await import('../extension');
+
+    // 116.1 computeCrossPlatformDealRadarFromData & computeProductRadarSignal guard null/malformed entries
+    const radarFromMalformed = dealsMod.computeCrossPlatformDealRadarFromData([
+      null as unknown as never,
+      { master: null as unknown as never, offers: [] },
+      {
+        master: {
+          id: 'master-948',
+          slug: 'iphone-16-pro-948',
+          name: 'iPhone 16 Pro',
+          brand: 'Apple',
+          category_slug: 'smartphones',
+        } as unknown as never,
+        offers: [
+          null as unknown as never,
+          {
+            id: 'off-1',
+            platform: '  SHOPEE\u0000 ',
+            price_current: 24_990_000,
+            price_original: 27_990_000,
+            url: 'https://shopee.vn/item-1\u0000',
+            merchant: null as unknown as never,
+          } as unknown as never,
+          {
+            id: 'off-2',
+            platform: 'tiki',
+            price_current: 26_990_000,
+            price_original: 27_990_000,
+            url: 'https://tiki.vn/item-2',
+            merchant: {
+              id: 'm-2\u0000',
+              name: 'Tiki Trading\u0007',
+              platform: 'tiki',
+              is_official: true,
+              risk_score: 5,
+            } as unknown as never,
+          } as unknown as never,
+        ],
+      },
+    ]);
+    assert.equal(radarFromMalformed.totalClustersAnalyzed, 1);
+    assert.equal(radarFromMalformed.genuineDeals.length, 1);
+    assert.equal(radarFromMalformed.genuineDeals[0]?.platform, 'shopee');
+    assert.equal(radarFromMalformed.genuineDeals[0]?.merchantName, 'SHOPEE');
+
+    const emptySignal = dealsMod.computeProductRadarSignal(
+      null as unknown as never,
+      []
+    );
+    assert.equal(emptySignal.verdict, 'none');
+    assert.equal(emptySignal.genuineDeal, null);
+    assert.equal(emptySignal.fakeSaleTrap, null);
+    assert.equal(emptySignal.priceSpread, null);
+
+    // 116.2 evaluateExtensionPriceVerdict bounds priceHistory lowest/highest and guards non-array offers
+    const verdictBoundedHist = extMod.evaluateExtensionPriceVerdict({
+      isAccessory: false,
+      accessoryReason: null,
+      isAmbiguousVariant: false,
+      observedPrice: 25_000_000,
+      observedOriginalPrice: null,
+      offers: [
+        {
+          id: 'o1',
+          platform: 'shopee',
+          price_current: 24_500_000,
+          price_original: null,
+          url: 'https://shopee.vn/1',
+          merchant: {
+            id: 'm1',
+            name: 'M1',
+            platform: 'shopee',
+            is_official: true,
+          },
+        } as unknown as never,
+        {
+          id: 'o2',
+          platform: 'tiki',
+          price_current: 25_500_000,
+          price_original: null,
+          url: 'https://tiki.vn/2',
+          merchant: {
+            id: 'm2',
+            name: 'M2',
+            platform: 'tiki',
+            is_official: true,
+          },
+        } as unknown as never,
+      ],
+      observedOfferId: 'o1',
+      priceHistory: {
+        lowestEverPrice: -500,
+        highestEverPrice: 999_999_999_999,
+      } as unknown as never,
+    });
+    assert.equal(
+      verdictBoundedHist.historicalMinPrice,
+      24_500_000,
+      'evaluateExtensionPriceVerdict must ignore non-positive lowestEverPrice and fall back to marketMinPrice'
+    );
+    assert.equal(
+      verdictBoundedHist.historicalMaxPrice,
+      25_500_000,
+      'evaluateExtensionPriceVerdict must ignore out-of-range highestEverPrice and fall back to marketMaxPrice'
+    );
+
+    // 116.3 ingestExtensionCrowdSignal guards non-object input and rejects malformed externalItemId / externalShopId
+    const nullInputRes = await extMod.ingestExtensionCrowdSignal(
+      null as unknown as never
+    );
+    assert.equal(nullInputRes.accepted, false);
+    assert.equal(nullInputRes.jobState, 'skipped_no_consent');
+
+    const badItemIdRes = await extMod.ingestExtensionCrowdSignal({
+      platform: 'shopee',
+      externalItemId: 'bad item id with spaces',
+      externalShopId: '88201679',
+      url: 'https://shopee.vn/Dien-thoai-Apple-iPhone-16-Pro-Max-256GB-i.88201679.2918273645',
+      title: 'Apple iPhone 16 Pro Max 256GB Chính hãng VN/A',
+      price: 29_990_000,
+      userConsentOptIn: true,
+      rateClient: {
+        rpc: async () => ({
+          data: [{ state: 'enqueued', job_id: 'j1' }],
+          error: null,
+        }),
+      },
+    });
+    assert.equal(badItemIdRes.accepted, false);
+    assert.equal(badItemIdRes.jobState, 'rejected_invalid_url');
+
+    const badShopIdRes = await extMod.ingestExtensionCrowdSignal({
+      platform: 'shopee',
+      externalItemId: '2918273645',
+      externalShopId: '../bad/shop',
+      url: 'https://shopee.vn/Dien-thoai-Apple-iPhone-16-Pro-Max-256GB-i.88201679.2918273645',
+      title: 'Apple iPhone 16 Pro Max 256GB Chính hãng VN/A',
+      price: 29_990_000,
+      userConsentOptIn: true,
+      rateClient: {
+        rpc: async () => ({
+          data: [{ state: 'enqueued', job_id: 'j1' }],
+          error: null,
+        }),
+      },
+    });
+    assert.equal(badShopIdRes.accepted, false);
+    assert.equal(badShopIdRes.jobState, 'rejected_invalid_url');
+
+    console.log(
+      '  ✅ [116/117] Deals Radar, Extension Price Verdict & Crowd Ingest Bounds (#948) passed'
+    );
+  }
+
+  // 117. Deal Radar Non-Array Guards & Compare Spec Regex Bounds (#950)
+  {
+    const dealRadarLib = await import('../../../lib/deal-radar');
+    const rateDomainLib = await import('../../../lib/rate-domain');
+
+    assert.equal(
+      dealRadarLib.unwrapRadarPayload({
+        genuineDeals: [],
+        fakeSaleTraps: 'not-an-array',
+      }),
+      null,
+      'unwrapRadarPayload must reject non-array fakeSaleTraps'
+    );
+    assert.equal(
+      dealRadarLib.unwrapRadarPayload({
+        genuineDeals: [],
+        priceSpreadLeaders: { bad: true },
+      }),
+      null,
+      'unwrapRadarPayload must reject non-array priceSpreadLeaders'
+    );
+    const malformedRadarIdx = dealRadarLib.buildRadarIndex({
+      genuineDeals: 'bad' as never,
+      fakeSaleTraps: 123 as never,
+      priceSpreadLeaders: {} as never,
+    } as never);
+    assert.equal(malformedRadarIdx.size, 0);
+    const malformedMerchantRadar = dealRadarLib.selectMerchantRadar(
+      {
+        genuineDeals: 'bad' as never,
+        fakeSaleTraps: {} as never,
+      } as never,
+      { id: 'm1', name: 'Shop 1' }
+    );
+    assert.equal(malformedMerchantRadar.genuineDealCount, 0);
+    assert.equal(malformedMerchantRadar.fakeTrapCount, 0);
+
+    assert.equal(
+      rateDomainLib.resolveCompareBatteryMah({
+        battery_mah: null,
+        specifications: null as never,
+        key_specs: { battery: '5.000 mAh, Sạc nhanh 45W' } as never,
+      }),
+      5000,
+      'resolveCompareBatteryMah must parse thousand-separated 5.000 mAh'
+    );
+    assert.equal(
+      rateDomainLib.resolveCompareBatteryMah({
+        battery_mah: null,
+        specifications: null as never,
+        key_specs: { battery: '5,500 mAh' } as never,
+      }),
+      5500,
+      'resolveCompareBatteryMah must parse comma thousand-separated 5,500 mAh'
+    );
+    assert.equal(
+      rateDomainLib.resolveCompareBatteryMah({
+        battery_mah: null,
+        specifications: [] as never,
+        key_specs: { battery: '999999 mAh' } as never,
+      }),
+      null,
+      'resolveCompareBatteryMah must reject 6-digit mAh > 100,000 without matching trailing digits'
+    );
+    assert.equal(
+      rateDomainLib.resolveCompareRamGb({
+        ram_gb: null,
+        specifications: [] as never,
+        key_specs: { ram: '99999 GB' } as never,
+      }),
+      null,
+      'resolveCompareRamGb must reject 5-digit GB without matching trailing digits'
+    );
+
+    console.log(
+      '  ✅ [117/118] Deal Radar Non-Array Guards & Compare Spec Regex Bounds (#950) passed'
+    );
+  }
+
+  // 118. ProductValueCalculator, DealFinderWorkspace & VersusInteractiveScoreboard Bounds (#960)
+  {
+    const { computeProductValueMetrics } =
+      await import('../../../components/leaderboard/ProductValueCalculator');
+    const { rankProductsForDealFinder } =
+      await import('../../../components/deals/DealFinderWorkspace');
+    const { computeVersusWeightedResult } =
+      await import('../../../components/compare/VersusInteractiveScoreboard');
+
+    // 118a. computeProductValueMetrics: expertScore10 === 0 treated as unscored, not 0/10
+    const zeroExpertMetrics = computeProductValueMetrics({
+      brand: 'Apple',
+      categorySlug: 'smartphones',
+      minPriceVnd: 25_000_000,
+      maxPriceVnd: 27_000_000,
+      userScore5: 4.5,
+      expertScore10: 0,
+      months: 24,
+      includeResale: true,
+    });
+    assert.equal(
+      zeroExpertMetrics.combined10,
+      9,
+      'computeProductValueMetrics must treat expertScore10 === 0 as unscored instead of dragging combined10 down by 40%'
+    );
+    assert.equal(zeroExpertMetrics.maxSpreadSavingsVnd, 2_000_000);
+
+    // 118b. computeProductValueMetrics: 5-point expertScore10 normalized to 10-point scale and out-of-range prices guarded
+    const fivePointExpertMetrics = computeProductValueMetrics({
+      brand: 'Samsung',
+      categorySlug: 'smartphones',
+      minPriceVnd: 20_000_000,
+      maxPriceVnd: 999_999_999_999,
+      userScore5: 4.5,
+      expertScore10: 4.5,
+      months: 24,
+      includeResale: false,
+    });
+    assert.equal(
+      fivePointExpertMetrics.combined10,
+      9,
+      'computeProductValueMetrics must normalize 5-point expertScore10 (<= 5) to 10-point scale'
+    );
+    assert.equal(
+      fivePointExpertMetrics.safeMaxPrice,
+      20_000_000,
+      'computeProductValueMetrics must clamp maxPriceVnd > MAX_VALID_VND_PRICE back to safeMinPrice'
+    );
+    const invalidMinMetrics = computeProductValueMetrics({
+      brand: 'Apple',
+      categorySlug: 'smartphones',
+      minPriceVnd: Number.NaN,
+      maxPriceVnd: 30_000_000,
+      userScore5: 4.8,
+      expertScore10: 9.2,
+      months: 24,
+      includeResale: true,
+    });
+    assert.equal(invalidMinMetrics.safeMinPrice, 0);
+    assert.equal(invalidMinMetrics.costPerPoint10, 0);
+
+    // 118c. rankProductsForDealFinder: malformed rows and out-of-range prices are guarded
+    const basePeer = mockPeers[0]!;
+    const rankedDealsTest = rankProductsForDealFinder(
+      [
+        {
+          ...basePeer,
+          id: 'unscored-deal',
+          slug: 'unscored-deal',
+          name: 'Unscored Phone',
+          brand: 'Xiaomi',
+          min_price: 10_000_000,
+          max_price: 999_999_999_999,
+          average_rating: 0,
+          user_rating_weighted: 0,
+          expert_rating: 0,
+          total_reviews: 0,
+          specifications: {},
+          key_specs: {},
+        },
+        {
+          ...basePeer,
+          id: 'nan-price-deal',
+          slug: 'nan-price-deal',
+          min_price: Number.NaN,
+        },
+        {
+          ...basePeer,
+          id: 'non-string-name-deal',
+          slug: 'non-string-name-deal',
+          name: null as never,
+          brand: undefined as never,
+          min_price: 15_000_000,
+        },
+      ],
+      {
+        categoryFilter: 'all',
+        persona: 'default',
+        maxBudgetVnd: 50_000_000,
+        searchQuery: 'xiaomi',
+      }
+    );
+    assert.equal(rankedDealsTest.length, 1);
+    assert.equal(rankedDealsTest[0]?.slug, 'unscored-deal');
+    assert.equal(
+      rankedDealsTest[0]?.spreadSavingsVnd,
+      0,
+      'rankProductsForDealFinder must ignore max_price > MAX_VALID_VND_PRICE'
+    );
+
+    // 118d. computeVersusWeightedResult: all-zero custom weights fall back to equal criteria average instead of 0
+    const scoreItemA = rankedList[0]!;
+    const scoreItemB = rankedList[1]!;
+    const zeroWeightsRes = computeVersusWeightedResult(
+      scoreItemA,
+      scoreItemB,
+      { screen: 0, performance: 0, camera: 0, battery: 0, value: 0 },
+      'custom'
+    );
+    const equalWeightsRes = computeVersusWeightedResult(
+      scoreItemA,
+      scoreItemB,
+      { screen: 20, performance: 20, camera: 20, battery: 20, value: 20 },
+      'custom'
+    );
+    assert.equal(
+      zeroWeightsRes.finalA,
+      equalWeightsRes.finalA,
+      'computeVersusWeightedResult must fall back to equal criteria average when all custom weights are 0'
+    );
+    assert.equal(
+      zeroWeightsRes.finalB,
+      equalWeightsRes.finalB,
+      'computeVersusWeightedResult must fall back to equal criteria average for product B when all custom weights are 0'
+    );
+
+    console.log(
+      '  ✅ [118/119] ProductValueCalculator, DealFinderWorkspace & VersusInteractiveScoreboard Bounds (#960) passed'
+    );
+  }
+
+  // 119. WatchlistWorkspace, ProductOffersExplorer & ProductShareAuditButton Bounds (#965)
+  {
+    const { normalizeWatchlistItem, resolveWatchlistItemCurrentPrices } =
+      await import('../../../components/watchlist/watchlist-store');
+    const {
+      computeMerchantTrustScore,
+      computeOffersPriceSpreadAudit,
+      isSafeExternalOfferUrl,
+    } = await import('../../../components/leaderboard/ProductOffersExplorer');
+    const { normalizeShareAuditFields } =
+      await import('../../../components/leaderboard/ProductShareAuditButton');
+
+    // 119a. normalizeWatchlistItem strips control chars & normalizes invalid addedAt; resolveWatchlistItemCurrentPrices bounds live/catalog prices
+    const normItem = normalizeWatchlistItem({
+      slug: '  iphone-16-pro\u0000\n ',
+      name: '  iPhone 16 Pro\u0007 ',
+      brand: '  Apple\t ',
+      categoryPath: '/smartphones',
+      thumbnail: null,
+      priceWhenAdded: 25_000_000,
+      targetPrice: 23_500_000,
+      addedAt: 'not-a-valid-date',
+    });
+    assert.equal(normItem.slug, 'iphone-16-pro');
+    assert.equal(normItem.name, 'iPhone 16 Pro');
+    assert.equal(normItem.brand, 'Apple');
+    assert.ok(
+      Number.isFinite(Date.parse(normItem.addedAt)),
+      'normalizeWatchlistItem must replace invalid addedAt strings with a valid ISO timestamp'
+    );
+
+    const resolvedPrices = resolveWatchlistItemCurrentPrices(
+      { priceWhenAdded: 25_000_000 },
+      { current_min_price: -100, current_max_price: 999_999_999_999 },
+      { min_price: 24_000_000, max_price: 26_500_000 }
+    );
+    assert.equal(resolvedPrices.currentMin, 24_000_000);
+    assert.equal(resolvedPrices.currentMax, 26_500_000);
+
+    // 119b. ProductOffersExplorer helpers: computeMerchantTrustScore clamps to [0, 100], isSafeExternalOfferUrl blocks unsafe protocols, computeOffersPriceSpreadAudit bounds prices
+    assert.equal(computeMerchantTrustScore(-25), 100);
+    assert.equal(computeMerchantTrustScore(150), 0);
+    assert.equal(computeMerchantTrustScore(Number.NaN), 100);
+    assert.equal(computeMerchantTrustScore(18), 82);
+
+    assert.equal(
+      isSafeExternalOfferUrl('https://shopee.vn/product/123/456'),
+      true
+    );
+    assert.equal(isSafeExternalOfferUrl('javascript:alert(1)'), false);
+    assert.equal(isSafeExternalOfferUrl('data:text/html,<h1>hi</h1>'), false);
+    assert.equal(isSafeExternalOfferUrl(''), false);
+
+    const mockSpreadAudit = computeOffersPriceSpreadAudit([
+      {
+        id: 'o1',
+        platform: 'shopee',
+        title: 'Listing 1',
+        price_current: 20_000_000,
+        price_original: 22_000_000,
+        url: 'https://shopee.vn/i.1.1',
+        stock_status: 'in_stock',
+        merchant: {
+          id: 'm1',
+          name: 'Shop 1',
+          platform: 'shopee',
+          is_official: true,
+          risk_score: 10,
+          dosafe_risk_score: 5,
+          review_risk_score: 15,
+        },
+      },
+      {
+        id: 'o2',
+        platform: 'lazada',
+        title: 'Listing 2',
+        price_current: 22_000_000,
+        price_original: 22_000_000,
+        url: 'https://lazada.vn/products/i2.html',
+        stock_status: 'in_stock',
+        merchant: {
+          id: 'm2',
+          name: 'Shop 2',
+          platform: 'lazada',
+          is_official: true,
+          risk_score: 12,
+          dosafe_risk_score: 8,
+          review_risk_score: 16,
+        },
+      },
+      {
+        id: 'o3-corrupt',
+        platform: 'tiki',
+        title: 'Corrupt Price Listing',
+        price_current: 999_999_999_999,
+        price_original: null,
+        url: 'https://tiki.vn/p3.html',
+        stock_status: 'in_stock',
+        merchant: {
+          id: 'm3',
+          name: 'Shop 3',
+          platform: 'tiki',
+          is_official: false,
+          risk_score: 20,
+          dosafe_risk_score: 20,
+          review_risk_score: 20,
+        },
+      },
+    ] as never);
+    assert.ok(mockSpreadAudit);
+    assert.equal(mockSpreadAudit.spreadVnd, 2_000_000);
+    assert.equal(mockSpreadAudit.spreadPct, 10);
+    assert.equal(mockSpreadAudit.platformCount, 2);
+
+    // 119c. normalizeShareAuditFields normalizes expertScore10 (<= 0 unscored, <= 5 doubled to /10) and filename token
+    const shareNorm = normalizeShareAuditFields({
+      modelKey: 'apple/iphone:18..pro',
+      userScore5: 4.85,
+      expertScore10: 0,
+      authenticReviews: -5,
+      minPriceVnd: 999_999_999_999,
+      offerCount: 8.9,
+    });
+    assert.equal(shareNorm.safeUserScore5, 4.85);
+    assert.equal(shareNorm.safeExpertScore10, null);
+    assert.equal(shareNorm.safeAuthenticReviews, 0);
+    assert.equal(shareNorm.safeMinPriceVnd, 0);
+    assert.equal(shareNorm.safeOfferCount, 8);
+    assert.equal(shareNorm.safeModelKeyToken, 'apple-iphone-18-pro');
+
+    const shareNorm5Pt = normalizeShareAuditFields({
+      modelKey: '',
+      userScore5: 9,
+      expertScore10: 4.6,
+      authenticReviews: 12,
+      minPriceVnd: 28_990_000,
+      offerCount: 5,
+    });
+    assert.equal(shareNorm5Pt.safeUserScore5, 5);
+    assert.equal(shareNorm5Pt.safeExpertScore10, 9.2);
+    assert.equal(shareNorm5Pt.safeMinPriceVnd, 28_990_000);
+    assert.equal(shareNorm5Pt.safeModelKeyToken, 'audit');
+
+    console.log(
+      '  ✅ [119/120] WatchlistWorkspace, ProductOffersExplorer & ProductShareAuditButton Bounds (#965) passed'
+    );
+  }
+
+  // 120. Issue #976: cache-tags revalidation targets & cached entity/slug bounds
+  {
+    const {
+      isSafeRevalidationPath,
+      resolveRevalidationTargets,
+      sanitizeCachedEntityId,
+      sanitizeCachedProductSlug,
+      sanitizeCachedCompareSlugsCsv,
+    } = require('../index') as typeof import('../index');
+
+    assert.equal(isSafeRevalidationPath('/smartphones/./iphone-16'), false);
+    assert.equal(isSafeRevalidationPath('/.'), false);
+    assert.equal(isSafeRevalidationPath('/smartphones/%2e%2e/admin'), false);
+    assert.equal(isSafeRevalidationPath('/smartphones/%2fadmin'), false);
+    assert.equal(
+      isSafeRevalidationPath('/smartphones/iphone-16-pro-max'),
+      true
+    );
+
+    assert.deepEqual(resolveRevalidationTargets(null as never), {
+      tags: [],
+      paths: [],
+    });
+    assert.deepEqual(
+      resolveRevalidationTargets({
+        tags: ['rate:..', 'rate:products'],
+        slugs: ['..', '.bad', 'bad.', 'a..b', 'iphone-16'],
+        categories: ['.', 'smartphones'],
+        merchants: [':bad', 'bad:', '..', 'shopee:123'],
+        paths: ['/smartphones/./x', '/smartphones/iphone-16'],
+      }),
+      {
+        tags: [
+          'rate:products',
+          'rate:product:iphone-16',
+          'rate:offers',
+          'rate:price-history',
+          'rate:reviews',
+          'rate:deals',
+          'rate:stats',
+          'rate:category:smartphones',
+          'rate:categories',
+          'rate:merchant:shopee:123',
+          'rate:merchants',
+        ],
+        paths: ['/smartphones/iphone-16'],
+      }
+    );
+
+    assert.equal(sanitizeCachedEntityId('.'), '');
+    assert.equal(sanitizeCachedEntityId('..'), '');
+    assert.equal(sanitizeCachedProductSlug('..'), '');
+    assert.equal(sanitizeCachedProductSlug('.iphone-16'), '');
+    assert.equal(sanitizeCachedProductSlug('iphone-16.'), '');
+    assert.equal(sanitizeCachedProductSlug('iphone..16'), '');
+    assert.equal(sanitizeCachedProductSlug('iphone-16-pro'), 'iphone-16-pro');
+    assert.equal(
+      sanitizeCachedCompareSlugsCsv('..,iphone-16,.bad,galaxy-s24'),
+      'iphone-16,galaxy-s24'
+    );
+
+    console.log(
+      '  ✅ [120/120] Cache Tag Revalidation Targets & Cached Entity/Slug Bounds (#976) passed'
+    );
+  }
+
+  // 121. Issue #978: api-handler URL/slug/vote guards & OpenAPI server origin bounds
+  {
+    const {
+      isSafeCrowdIngestHttpUrl,
+      parseCompareSlugsParam,
+      parseProductsFilterBounds,
+      parseReviewsQueryParams,
+      parseVersusQueryParams,
+      parseWatchlistSlugsParam,
+      resolveReviewVoteInput,
+      selectBestOfferFromListings,
+    } = await import('../api-handler');
+    const { normalizeOpenApiServerOrigin } = await import('../openapi');
+
+    assert.equal(
+      normalizeOpenApiServerOrigin('https://rate.vn:8443/api'),
+      'https://rate.vn'
+    );
+    assert.equal(
+      normalizeOpenApiServerOrigin('http://10.0.0.1/api'),
+      'https://rate.vn'
+    );
+    assert.equal(
+      normalizeOpenApiServerOrigin('http://169.254.169.254/latest'),
+      'https://rate.vn'
+    );
+    assert.equal(
+      normalizeOpenApiServerOrigin('https://.rate.vn'),
+      'https://rate.vn'
+    );
+    assert.equal(
+      normalizeOpenApiServerOrigin('http://localhost:3000/api'),
+      'http://localhost:3000'
+    );
+
+    assert.equal(
+      isSafeCrowdIngestHttpUrl('https://shopee.vn:8443/item-i.1.2'),
+      false
+    );
+    assert.equal(
+      isSafeCrowdIngestHttpUrl('https://.shopee.vn/item-i.1.2'),
+      false
+    );
+    assert.equal(
+      isSafeCrowdIngestHttpUrl('https://shopee.vn/item-i.1.2'),
+      true
+    );
+
+    const unsafeBest = selectBestOfferFromListings([
+      {
+        id: 'off-1',
+        title: 'iPhone 16',
+        price_current: 21_990_000,
+        url: 'javascript:alert(1)',
+        platform: 'shopee',
+      },
+    ]);
+    assert.equal(unsafeBest.bestOffer?.url, '');
+
+    assert.deepEqual(
+      parseCompareSlugsParam('..,iphone-16,.bad,bad.,a..b,galaxy-s24'),
+      ['iphone-16', 'galaxy-s24']
+    );
+    assert.deepEqual(
+      parseWatchlistSlugsParam('..,IPHONE-16,.bad,bad.,a..b,Galaxy-S24'),
+      ['iphone-16', 'galaxy-s24']
+    );
+    assert.equal(
+      parseVersusQueryParams(new URLSearchParams('pair=..-vs-iphone-16')),
+      null
+    );
+    assert.equal(
+      parseVersusQueryParams(new URLSearchParams('slugA=.bad&slugB=iphone-16')),
+      null
+    );
+    assert.deepEqual(
+      parseVersusQueryParams(
+        new URLSearchParams('pair=iphone-16-vs-galaxy-s24')
+      ),
+      ['iphone-16', 'galaxy-s24']
+    );
+
+    assert.equal(parseReviewsQueryParams(new URLSearchParams('slug=..')), null);
+    assert.equal(
+      parseReviewsQueryParams(new URLSearchParams('slug=.iphone-16')),
+      null
+    );
+    assert.equal(
+      parseReviewsQueryParams(new URLSearchParams('slug=iphone-16'))?.slug,
+      'iphone-16'
+    );
+
+    assert.equal(resolveReviewVoteInput(['up']), null);
+    assert.deepEqual(
+      parseProductsFilterBounds(
+        new URLSearchParams(
+          'category=smartphones&brands=...,--,Apple,A..B,Samsung'
+        )
+      )?.brands,
+      ['Apple', 'Samsung']
+    );
+
+    const {
+      canonicalizeProductUrl,
+      detectPlatformFromInput,
+      detectAccessoryOrJunk,
+      extractStorageAndAmbiguity,
+      ingestExtensionCrowdSignal,
+      normalizeDealRadarOptions,
+      computeCrossPlatformDealRadarFromData,
+    } = await import('@/server/rate');
+
+    assert.equal(canonicalizeProductUrl('https://localhost/p/123'), null);
+    assert.equal(canonicalizeProductUrl('https://127.0.0.1/p/123'), null);
+    assert.equal(canonicalizeProductUrl('https://[::1]/p/123'), null);
+    assert.equal(
+      canonicalizeProductUrl('https://shopee.vn:8443/i.123.456'),
+      null
+    );
+    assert.equal(canonicalizeProductUrl('https://shopee..vn/i.123.456'), null);
+    assert.equal(
+      canonicalizeProductUrl('https://shopee.vn/i.123.456?sp_atk=abc'),
+      'https://shopee.vn/i.123.456'
+    );
+
+    assert.equal(
+      detectPlatformFromInput(null, 'https://shopee.vn:8443/i.123.456'),
+      null
+    );
+    assert.equal(
+      detectPlatformFromInput(null, 'https://.shopee.vn/i.123.456'),
+      null
+    );
+    assert.equal(
+      detectPlatformFromInput(null, 'https://shopee.vn/i.123.456'),
+      'shopee'
+    );
+
+    assert.deepEqual(detectAccessoryOrJunk(null as never), {
+      isAccessory: false,
+      reason: null,
+    });
+    assert.equal(extractStorageAndAmbiguity([] as never).storageGb, null);
+
+    for (const badId of ['...', '0', 'null', 'NaN', '.123', '123.']) {
+      const res = await ingestExtensionCrowdSignal({
+        userConsentOptIn: true,
+        platform: 'shopee',
+        url: 'https://shopee.vn/Apple-iPhone-16-i.88019283.24918273645',
+        title: 'Apple iPhone 16 128GB',
+        price: 21_990_000,
+        externalItemId: badId,
+      });
+      assert.equal(res.accepted, false);
+      assert.equal(res.jobState, 'rejected_invalid_url');
+    }
+
+    assert.equal(
+      normalizeDealRadarOptions({ platform: '---' }).platformFilter,
+      'all'
+    );
+    assert.equal(normalizeDealRadarOptions([] as never).platformFilter, 'all');
+
+    const radar = computeCrossPlatformDealRadarFromData([
+      {
+        master: {
+          id: 'mp-1',
+          slug: 'iphone-16',
+          name: 'iPhone 16',
+          brand: 'Apple',
+          category_slug: 'smartphones',
+        } as never,
+        offers: [
+          {
+            id: 'o1',
+            platform: 'shopee',
+            price_current: 20_000_000,
+            price_original: 22_000_000,
+            url: 'javascript:alert(1)',
+            merchant: { id: 'm1', name: 'Shop A', is_official: true },
+          } as never,
+          {
+            id: 'o2',
+            platform: 'lazada',
+            price_current: 24_000_000,
+            price_original: 30_000_000,
+            url: 'https://www.lazada.vn:8443/products/i123.html',
+            merchant: { id: 'm2', name: 'Shop B', is_official: true },
+          } as never,
+        ],
+      },
+    ]);
+    assert.equal(radar.genuineDeals[0]?.offerUrl, '');
+    assert.equal(radar.priceSpreadLeaders[0]?.cheapestOfferUrl, '');
+    assert.equal(radar.fakeSaleTraps[0]?.offerUrl, '');
+
+    const {
+      readBearerToken,
+      readCookieAccessToken,
+      isSameOriginRequest,
+      mapRpcRejection,
+    } = await import('../request-auth');
+    const { hasSupabaseAuthCookie } = await import('@/lib/supabase/cookies');
+    const { sanitizeBrowserAccessToken } =
+      await import('@/lib/auth/access-token');
+
+    assert.equal(readBearerToken(null as never), '');
+    assert.equal(
+      readBearerToken(
+        new Request('https://rate.vn/api', {
+          headers: { Authorization: 'Bearer null' },
+        })
+      ),
+      ''
+    );
+    assert.equal(
+      await readCookieAccessToken([
+        {
+          name: 'sb-proj-auth-token',
+          value: JSON.stringify({ access_token: 'undefined' }),
+        },
+      ]),
+      null
+    );
+    assert.equal(
+      await readCookieAccessToken([
+        {
+          name: 'sb--auth-token',
+          value: JSON.stringify({
+            access_token: ['dummy', 'session', '12345678'].join('-'),
+          }),
+        },
+      ]),
+      null
+    );
+    assert.equal(await readCookieAccessToken(null as never), null);
+
+    assert.equal(
+      isSameOriginRequest(
+        new Request('https://rate.vn/api', {
+          headers: { Origin: 'null', Host: 'rate.vn' },
+        })
+      ),
+      false
+    );
+    assert.equal(
+      isSameOriginRequest(
+        new Request('https://rate.vn/api', {
+          headers: {
+            Origin: 'https://user:pass@rate.vn',
+            Host: 'rate.vn',
+          },
+        })
+      ),
+      false
+    );
+    assert.equal(
+      isSameOriginRequest(
+        new Request('https://rate.vn/api', {
+          headers: {
+            Origin: 'https://rate.vn',
+            'x-forwarded-host': 'rate..vn',
+          },
+        })
+      ),
+      false
+    );
+    assert.equal(
+      isSameOriginRequest(
+        new Request('https://rate.vn/api', {
+          headers: { Origin: 'https://rate.vn', Host: 'rate.vn' },
+        })
+      ),
+      true
+    );
+
+    assert.equal(mapRpcRejection([] as never, {}), null);
+    assert.equal(mapRpcRejection({ code: 'P0001' }, [] as never), null);
+    assert.equal(
+      hasSupabaseAuthCookie([
+        { name: 'sb--auth-token', value: 'eyJhbGciOiJIUzI1NiJ9' },
+      ]),
+      false
+    );
+    assert.equal(sanitizeBrowserAccessToken('null'), null);
+    assert.equal(sanitizeBrowserAccessToken('undefined'), null);
+
+    const {
+      implausiblyLowOfferIds: implausiblyLowOfferIds983,
+      plausibleOffers: plausibleOffers983,
+    } = await import('../../../lib/offer-plausibility');
+    const {
+      buildKeySpecLine: buildKeySpecLine983,
+      rankRelatedCompetitors: rankRelatedCompetitors983,
+    } = await import('../../../lib/product-competitors');
+    const {
+      buildPopular1v1BattlesForCategory: buildPopular1v1BattlesForCategory983,
+      computeJReviewsCriteriaScores: computeJReviewsCriteriaScores983,
+      computeProductStandingInCategory: computeProductStandingInCategory983,
+      rankMasterProductsForLeaderboard: rankMasterProductsForLeaderboard983,
+      scoreMasterProductForLeaderboard: scoreMasterProductForLeaderboard983,
+    } = await import('../../../lib/leaderboard-engine');
+
+    const rawOffers983 = [
+      ['array-offer'] as never,
+      { id: '0', price_current: 1_000_000 },
+      { id: 'null', price_current: 1_000_000 },
+      { id: '---', price_current: 1_000_000 },
+      { id: 'bait-offer-1', price_current: 1_000_000 },
+      { id: 'real-1', price_current: 25_000_000 },
+      { id: 'real-2', price_current: 26_000_000 },
+      { id: 'real-3', price_current: 27_000_000 },
+      { id: 'real-4', price_current: 28_000_000 },
+      { id: 'real-5', price_current: 29_000_000 },
+      { id: 'real-6', price_current: 30_000_000 },
+    ];
+    assert.equal(plausibleOffers983(rawOffers983).length, 6);
+    assert.deepEqual(
+      [...implausiblyLowOfferIds983(rawOffers983)],
+      ['bait-offer-1']
+    );
+
+    const competitors983 = rankRelatedCompetitors983(
+      [
+        ['array-peer'] as never,
+        { slug: '---', min_price: 20_000_000 },
+        { slug: 'null', min_price: 20_000_000 },
+        { slug: 'bad..slug', min_price: 20_000_000 },
+        { slug: 'IPhone-16-Pro', min_price: 24_000_000 },
+        { slug: 'galaxy-s24-ultra', min_price: 25_000_000 },
+      ],
+      'iphone-16-pro',
+      24_000_000
+    );
+    assert.equal(competitors983.length, 1);
+    assert.equal(competitors983[0]?.slug, 'galaxy-s24-ultra');
+    assert.equal(buildKeySpecLine983([] as never), '');
+
+    assert.equal(
+      computeJReviewsCriteriaScores983([] as never, 0, null).screen,
+      0
+    );
+    assert.equal(scoreMasterProductForLeaderboard983([] as never).slug, '');
+
+    const sampleProducts983 = [
+      ['array-product'] as never,
+      {
+        id: 'mp-1',
+        slug: 'iphone-16-pro-max',
+        name: 'iPhone 16 Pro Max',
+        brand: 'Apple',
+        model: 'iPhone 16 Pro Max',
+        category_id: 'smartphones',
+        user_rating_weighted: 4.8,
+        expert_rating: 9.2,
+        min_price: 29_990_000,
+        max_price: 32_990_000,
+      },
+      {
+        id: 'mp-2',
+        slug: 'galaxy-s24-ultra',
+        name: 'Galaxy S24 Ultra',
+        brand: 'Samsung',
+        model: 'Galaxy S24 Ultra',
+        category_id: 'smartphones',
+        user_rating_weighted: 4.7,
+        expert_rating: 9.0,
+        min_price: 26_990_000,
+        max_price: 29_990_000,
+      },
+    ];
+    const rankedWithBoolLimit983 = rankMasterProductsForLeaderboard983(
+      sampleProducts983 as never,
+      { limit: true as never }
+    );
+    assert.equal(rankedWithBoolLimit983.length, 2);
+
+    assert.deepEqual(
+      computeProductStandingInCategory983(
+        [] as never,
+        sampleProducts983 as never
+      ),
+      []
+    );
+
+    const battlesWithSlugless983 = buildPopular1v1BattlesForCategory983(
+      [
+        {
+          ...(sampleProducts983[1] as Record<string, unknown>),
+          slug: '',
+        } as never,
+        sampleProducts983[2] as never,
+      ],
+      'smartphones'
+    );
+    assert.deepEqual(battlesWithSlugless983, []);
+
+    const {
+      computeBayesianRatingSummary: computeBayesianRatingSummary986,
+      computeCombinedDualScore: computeCombinedDualScore986,
+      computeJReviewsWeight: computeJReviewsWeight986,
+      detectStarDistributionAnomaly: detectStarDistributionAnomaly986,
+      evaluateReviewTrustAssessment: evaluateReviewTrustAssessment986,
+      extractPersistedBreakdown: extractPersistedBreakdown986,
+      filterAndSortMerchants: filterAndSortMerchants986,
+      getMasterProductCategorySlug: getMasterProductCategorySlug986,
+      getMasterProductHref: getMasterProductHref986,
+      isImageUrl: isImageUrl986,
+      parseEcommerceUrlOrQuery: parseEcommerceUrlOrQuery986,
+      productImageUrl: productImageUrl986,
+      resolveProductImageUrl: resolveProductImageUrl986,
+    } = await import('../../../lib/rate-domain-core');
+    const {
+      resolveCompareBatteryMah: resolveCompareBatteryMah986,
+      resolveCompareDisplaySizeInch: resolveCompareDisplaySizeInch986,
+      resolveCompareEffectiveUserRating: resolveCompareEffectiveUserRating986,
+      resolveCompareExpertRating5: resolveCompareExpertRating5986,
+      resolveCompareRamGb: resolveCompareRamGb986,
+      resolveCompareStorageGb: resolveCompareStorageGb986,
+    } = await import('../../../lib/rate-domain');
+
+    assert.equal(
+      evaluateReviewTrustAssessment986([] as never).breakdown.weight,
+      0
+    );
+    assert.equal(computeCombinedDualScore986([] as never).overall, 0);
+    assert.equal(computeJReviewsWeight986([] as never), 0);
+    assert.equal(
+      computeBayesianRatingSummary986(['bad' as never]).effectiveWeightSum,
+      0
+    );
+    const anomaly986 = detectStarDistributionAnomaly986([
+      ['array-rev'] as never,
+      { rating_star: true as never, comment: '', flag_category: 'authentic' },
+      { rating_star: 5, comment: '', flag_category: 'authentic' },
+      { rating_star: 5, comment: '', flag_category: 'authentic' },
+      { rating_star: 5, comment: '', flag_category: 'authentic' },
+      { rating_star: 5, comment: '', flag_category: 'authentic' },
+      { rating_star: 5, comment: '', flag_category: 'authentic' },
+    ]);
+    assert.equal(anomaly986.isAnomalous, true);
+
+    assert.equal(isImageUrl986('/img/../secret.jpg'), false);
+    assert.equal(
+      isImageUrl986(`/img${String.fromCharCode(92)}secret.jpg`),
+      false
+    );
+    assert.equal(isImageUrl986('https://cdn..example.com/a.jpg'), false);
+    assert.equal(isImageUrl986('https://cdn.example.com:8443/a.jpg'), false);
+    assert.equal(isImageUrl986('/img/devices/apple-iphone-16-128gb.jpg'), true);
+    assert.equal(productImageUrl986([] as never), null);
+    assert.equal(resolveProductImageUrl986([] as never), null);
+    assert.equal(getMasterProductCategorySlug986([] as never), 'smartphones');
+    assert.equal(getMasterProductHref986([] as never), '/smartphones');
+    assert.equal(extractPersistedBreakdown986([] as never), null);
+    assert.deepEqual(
+      filterAndSortMerchants986([['array-merchant'] as never], [] as never),
+      []
+    );
+
+    assert.equal(
+      parseEcommerceUrlOrQuery986('https://shopee..vn/item-i.123.456').platform,
+      null
+    );
+    assert.equal(
+      parseEcommerceUrlOrQuery986('https://shopee.vn:8443/item-i.123.456')
+        .platform,
+      null
+    );
+    assert.equal(
+      parseEcommerceUrlOrQuery986(
+        'https://www.tiktok.com/@.../product/12345678'
+      ).platformShopId,
+      null
+    );
+    assert.equal(
+      parseEcommerceUrlOrQuery986('https://cellphones.com.vn/..')
+        .platformItemId,
+      null
+    );
+    assert.equal(
+      parseEcommerceUrlOrQuery986('https://rate.vn/smartphones/null')
+        .internalSlug,
+      null
+    );
+    assert.equal(
+      parseEcommerceUrlOrQuery986('/smartphones/undefined').internalSlug,
+      null
+    );
+
+    assert.equal(resolveCompareEffectiveUserRating986([] as never), 0);
+    assert.equal(resolveCompareExpertRating5986([] as never), null);
+    assert.equal(resolveCompareDisplaySizeInch986([] as never), null);
+    assert.equal(resolveCompareRamGb986([] as never), null);
+    assert.equal(resolveCompareStorageGb986([] as never), null);
+    assert.equal(resolveCompareBatteryMah986([] as never), null);
+
+    // #988: merchant-directory, seo & navigation input/URL bounds
+    const {
+      DEFAULT_MERCHANT_DIRECTORY_FILTERS: defaultMerchFilters988,
+      filterMerchantDirectory: filterMerchantDirectory988,
+      pageMerchantDirectory: pageMerchantDirectory988,
+      parseMerchantDirectoryFilters: parseMerchantDirectoryFilters988,
+      summarizeMerchantDirectory: summarizeMerchantDirectory988,
+    } = await import('../../../lib/merchant-directory');
+    const { SITE_URL: siteUrl988, absoluteUrl: absoluteUrl988 } =
+      await import('../../../lib/seo');
+    const { formatHref: formatHref988, isAppLink: isAppLink988 } =
+      await import('../../../lib/navigation');
+
+    const parsedMerchFilters988 = parseMerchantDirectoryFilters988((k) =>
+      k === 'platform' ? '---' : (123 as never)
+    );
+    assert.equal(parsedMerchFilters988.platform, 'all');
+    assert.equal(parsedMerchFilters988.query, '');
+
+    const summary988 = summarizeMerchantDirectory988([
+      ['array-merchant'] as never,
+      {
+        id: 'm1',
+        name: 'Store 1',
+        platform: '---',
+        platform_shop_id: 's1',
+        slug: 'store-1',
+        is_official: 'false' as never,
+        trust_score: 90,
+        review_risk_score: 5,
+        product_count: 10,
+        follower_count: 100,
+      } as never,
+      {
+        id: 'm2',
+        name: 'Store 2',
+        platform: 'shopee',
+        platform_shop_id: 's2',
+        slug: 'store-2',
+        is_official: 1 as never,
+        trust_score: 95,
+        review_risk_score: 2,
+        product_count: 20,
+        follower_count: 200,
+      } as never,
+    ]);
+    assert.equal(summary988.total, 2);
+    assert.equal(summary988.official, 1);
+    assert.equal(summary988.platformCounts['---'], undefined);
+    assert.equal(summary988.platformCounts.shopee, 1);
+
+    const filteredMerch988 = filterMerchantDirectory988(
+      [
+        ['array-merchant'] as never,
+        {
+          id: 'm1',
+          name: 'Store 1',
+          platform: 'shopee',
+          platform_shop_id: 's1',
+          slug: 'store-1',
+          is_official: 'false' as never,
+          trust_score: 90,
+          review_risk_score: 5,
+          product_count: 10,
+          follower_count: 100,
+        } as never,
+      ],
+      { ...defaultMerchFilters988, officialOnly: true }
+    );
+    assert.equal(filteredMerch988.length, 0);
+
+    const pagedMerch988 = pageMerchantDirectory988(
+      [],
+      defaultMerchFilters988,
+      999_999_999,
+      20
+    );
+    assert.equal(pagedMerch988.offset, 100_000);
+
+    assert.equal(absoluteUrl988('/products/../admin'), siteUrl988);
+    assert.equal(
+      absoluteUrl988(`/products${String.fromCharCode(92)}admin`),
+      siteUrl988
+    );
+    assert.equal(absoluteUrl988('https://rate..vn/smartphones'), siteUrl988);
+    assert.equal(
+      absoluteUrl988('https://rate.vn:8443/smartphones'),
+      siteUrl988
+    );
+    assert.equal(absoluteUrl988('https://rate.vn/a b'), siteUrl988);
+
+    assert.equal(isAppLink988('/products/../admin'), false);
+    assert.equal(
+      isAppLink988(`/products${String.fromCharCode(92)}admin`),
+      false
+    );
+    assert.equal(formatHref988('/products/../admin'), '#');
+    assert.equal(
+      formatHref988(`/products${String.fromCharCode(92)}admin`),
+      '#'
+    );
+    assert.equal(formatHref988('https://rate..vn/smartphones'), '#');
+    assert.equal(formatHref988('https://rate.vn:8443/smartphones'), '#');
+
+    // #990: rate-api offer mapping, slug guards & batch ID bounds
+    const {
+      getMasterProductBySlug: getMasterProductBySlug990,
+      getMasterProductOffers: getMasterProductOffers990,
+      getMasterProductOffersBatch: getMasterProductOffersBatch990,
+      mapOfferRowToMerchantOffer: mapOfferRowToMerchantOffer990,
+      mapTrustViewRowToMerchantOffer: mapTrustViewRowToMerchantOffer990,
+    } = await import('../../../lib/rate-api');
+
+    assert.equal(mapTrustViewRowToMerchantOffer990([] as never).id, '');
+    const trustRow990 = mapTrustViewRowToMerchantOffer990({
+      id: 'o1',
+      merchant_id: 'm1',
+      platform: 'shopee',
+      title: 'Phone',
+      price_current: 10_000_000,
+      price_original: null,
+      stock: 5,
+      rating_star: 4.8,
+      rating_count: 10,
+      url: 'https://shopee.vn:8443/item',
+      merchant_is_official: 'false' as never,
+    });
+    assert.equal(trustRow990.url, '');
+    assert.equal(trustRow990.merchant.is_official, false);
+
+    assert.equal(mapOfferRowToMerchantOffer990([] as never).id, '');
+    const offerRow990 = mapOfferRowToMerchantOffer990({
+      id: 'o2',
+      platform: 'lazada',
+      title: 'Phone 2',
+      price_current: 12_000_000,
+      price_original: null,
+      stock: 3,
+      rating_star: 4.9,
+      rating_count: 20,
+      url: 'javascript:alert(1)',
+      merchants: {
+        id: 'm2',
+        name: 'Store 2',
+        platform: 'lazada',
+        is_official: 'false' as never,
+        metadata: ['array-meta'] as never,
+      },
+    });
+    assert.equal(offerRow990.url, '');
+    assert.equal(offerRow990.merchant.is_official, false);
+
+    assert.equal(await getMasterProductBySlug990('..'), null);
+    assert.equal(await getMasterProductBySlug990('---'), null);
+    assert.equal(await getMasterProductBySlug990('null'), null);
+    assert.deepEqual(await getMasterProductOffers990('0'), []);
+    assert.deepEqual(await getMasterProductOffers990('---'), []);
+    const batchMap990 = await getMasterProductOffersBatch990([
+      '0',
+      'null',
+      'undefined',
+      '---',
+    ]);
+    assert.equal(batchMap990.size, 0);
+
+    const {
+      compareMasterProducts: compareMasterProducts992,
+      normalizeMasterProductRow: normalizeMasterProductRow992,
+      baselineReviewRisk: baselineReviewRisk992,
+      persistedReviewRiskOf: persistedReviewRiskOf992,
+      hasStoredReviewRisk: hasStoredReviewRisk992,
+      computeDynamicReviewRisk: computeDynamicReviewRisk992,
+      forEachWithConcurrency: forEachWithConcurrency992,
+      getMerchantProfileById: getMerchantProfileById992,
+    } = await import('../../../lib/rate-api');
+
+    assert.deepEqual(
+      await compareMasterProducts992(['..', 'null', 'undefined', '0', '---']),
+      []
+    );
+    const arrRow992 = [] as never;
+    assert.equal(normalizeMasterProductRow992(arrRow992), arrRow992);
+    const badSlugRow992 = {
+      slug: 'a..b',
+      name: 'Test',
+    } as never;
+    assert.equal(normalizeMasterProductRow992(badSlugRow992), badSlugRow992);
+
+    assert.equal(baselineReviewRisk992([] as never), 15);
+    assert.equal(baselineReviewRisk992({ isOfficial: 'false' as never }), 15);
+    assert.equal(baselineReviewRisk992({ isOfficial: true }), 0);
+    assert.equal(persistedReviewRiskOf992([] as never), 0);
+    assert.equal(hasStoredReviewRisk992([] as never), false);
+    const dynRisk992 = computeDynamicReviewRisk992(
+      [['array-review'] as never],
+      { isOfficial: 'false' as never }
+    );
+    assert.equal(dynRisk992.reviewRiskScore, 15);
+    assert.equal(dynRisk992.breakdown.total_reviews, 0);
+
+    const visited992: number[] = [];
+    await forEachWithConcurrency992([1, 2, 3], Number.NaN, async (item) => {
+      visited992.push(item);
+    });
+    assert.deepEqual(visited992, [1, 2, 3]);
+    await forEachWithConcurrency992(null as never, 2, async () => {});
+
+    assert.equal(await getMerchantProfileById992('null'), null);
+    assert.equal(await getMerchantProfileById992('---'), null);
+    assert.equal(await getMerchantProfileById992('a..b'), null);
+
+    const {
+      getMasterProductReviews: getMasterProductReviews994,
+      getMasterProductReviewSummary: getMasterProductReviewSummary994,
+      getMasterProductPriceHistory: getMasterProductPriceHistory994,
+      getMerchantsList: getMerchantsList994,
+    } = await import('../../../lib/rate-api');
+
+    assert.deepEqual(await getMasterProductReviews994('0'), []);
+    assert.deepEqual(await getMasterProductReviews994('---'), []);
+    const revSummary994 = await getMasterProductReviewSummary994('0', [
+      null as never,
+      [] as never,
+      {
+        id: 'r1',
+        author_name: 'Buyer',
+        rating_star: 5,
+        comment: 'Great phone',
+        variation: null,
+        created_at: '2026-10-01T00:00:00Z',
+        reviewer_type: 'user',
+        upvotes: 1,
+        downvotes: 0,
+        report_count: 0,
+        helpfulness_weight: 1,
+        include_in_rating: true,
+        criteria_ratings: {},
+        verdict: 'authentic',
+        fake_probability: 0.05,
+        flag_category: 'authentic',
+        reason: null,
+        signals: null,
+      },
+    ]);
+    assert.equal(revSummary994.total_analyzed, 1);
+    assert.equal(revSummary994.authentic_pct, 100);
+
+    const hist994 = await getMasterProductPriceHistory994(
+      '0',
+      undefined,
+      null as never
+    );
+    assert.deepEqual(hist994.points, []);
+    assert.equal(hist994.currentMinPrice, null);
+
+    assert.deepEqual(
+      await getMerchantsList994({ ids: ['0', 'null', 'undefined', '---'] }),
+      []
+    );
+    assert.deepEqual(
+      await getMerchantsList994({
+        platformShopIds: ['0', 'null', 'undefined', '---'],
+      }),
+      []
+    );
+
+    const { resolveIncludeInRating: resolveIncludeInRating996 } =
+      await import('../../../lib/rate-api');
+    assert.equal(
+      resolveIncludeInRating996(false, 'authentic', 'authentic'),
+      false
+    );
+    assert.equal(
+      resolveIncludeInRating996('false', 'authentic', 'authentic'),
+      false
+    );
+    assert.equal(resolveIncludeInRating996(0, 'authentic', 'authentic'), false);
+    assert.equal(
+      resolveIncludeInRating996('0', 'authentic', 'authentic'),
+      false
+    );
+    assert.equal(
+      resolveIncludeInRating996('true', 'low_value_coin_spam', 'suspicious'),
+      true
+    );
+    assert.equal(
+      resolveIncludeInRating996(1, 'low_value_coin_spam', 'suspicious'),
+      true
+    );
+    assert.equal(
+      resolveIncludeInRating996(null, 'authentic', 'authentic'),
+      true
+    );
+    assert.equal(
+      resolveIncludeInRating996(undefined, 'authentic', 'fake'),
+      false
+    );
+    assert.equal(
+      resolveIncludeInRating996([] as never, 'seeding_fake', 'authentic'),
+      false
+    );
+
+    console.log(
+      '  ✅ [121/121] API Handler URL/Slug/Vote Guards & OpenAPI Server Origin Bounds (#978) passed'
+    );
+  }
+
+  // 122. Cache-Tags Revalidation Bounds (#1016)
+  {
+    const { resolveRevalidationTargets } = await import('../cache-tags');
+    const targets = resolveRevalidationTargets({
+      tags: [
+        'rate:---',
+        'rate:000',
+        'rate:__proto__',
+        'rate:null',
+        'rate:product:---',
+        'rate:product:__proto__',
+        'rate:products',
+      ],
+      slugs: ['---', '000', '__proto__', 'null', 'iphone-16-pro'],
+      categories: ['---', '000', 'constructor', 'smartphones'],
+      merchants: [
+        '---',
+        '000',
+        'prototype',
+        'shopee:---',
+        'shopee:000',
+        'shopee:__proto__',
+        'shopee:apple-flagship',
+      ],
+    });
+    assert.equal(targets.tags.includes('rate:---'), false);
+    assert.equal(targets.tags.includes('rate:000'), false);
+    assert.equal(targets.tags.includes('rate:__proto__'), false);
+    assert.equal(targets.tags.includes('rate:null'), false);
+    assert.equal(targets.tags.includes('rate:product:---'), false);
+    assert.equal(targets.tags.includes('rate:product:__proto__'), false);
+    assert.equal(targets.tags.includes('rate:merchant:shopee:---'), false);
+    assert.equal(targets.tags.includes('rate:merchant:shopee:000'), false);
+    assert.equal(
+      targets.tags.includes('rate:merchant:shopee:__proto__'),
+      false
+    );
+    assert.equal(targets.tags.includes('rate:products'), true);
+    assert.equal(targets.tags.includes('rate:product:iphone-16-pro'), true);
+    assert.equal(targets.tags.includes('rate:category:smartphones'), true);
+    assert.equal(
+      targets.tags.includes('rate:merchant:shopee:apple-flagship'),
+      true
+    );
+    console.log('  ✅ [122/122] Cache-Tags Revalidation Bounds (#1016) passed');
   }
 
   console.log('🎉 All Rate.vn Core Architecture tests passed!');

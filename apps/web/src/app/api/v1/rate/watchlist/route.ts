@@ -31,6 +31,28 @@ const WATCHLIST_CORS_HEADERS: Record<string, string> = {
   'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
 };
 
+export function resolveWatchlistMerchantCount(
+  rawMerchantCount: unknown,
+  offersCount: number
+): number {
+  const safeOffersCount =
+    Number.isFinite(offersCount) && offersCount > 0
+      ? Math.min(10_000, Math.floor(offersCount))
+      : 0;
+  if (
+    typeof rawMerchantCount !== 'boolean' &&
+    rawMerchantCount !== null &&
+    rawMerchantCount !== undefined &&
+    !(typeof rawMerchantCount === 'string' && !rawMerchantCount.trim())
+  ) {
+    const n = Number(rawMerchantCount);
+    if (Number.isFinite(n) && n > 0) {
+      return Math.min(10_000, Math.floor(n));
+    }
+  }
+  return safeOffersCount;
+}
+
 export async function OPTIONS() {
   return new NextResponse(null, {
     status: 204,
@@ -123,7 +145,10 @@ export async function GET(request: NextRequest) {
           brand: master.brand,
           current_min_price: currentMinPrice,
           current_max_price: currentMaxPrice,
-          merchant_count: Number(master.merchant_count || offers.length || 0),
+          merchant_count: resolveWatchlistMerchantCount(
+            master.merchant_count,
+            offers.length
+          ),
           platform_count: offerPlatforms.length,
           offer_platforms: offerPlatforms,
           best_offer: bestOffer,

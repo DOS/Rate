@@ -39,9 +39,23 @@ export const EMPTY_RADAR_SIGNAL: RadarSignal = Object.freeze({
 export function unwrapRadarPayload(
   json: unknown
 ): CrossPlatformDealRadarResponse | null {
-  const raw = (json as { data?: unknown } | null)?.data ?? json;
-  const payload = raw as Partial<CrossPlatformDealRadarResponse> | null;
-  if (!payload || !Array.isArray(payload.genuineDeals)) return null;
+  if (!json || typeof json !== 'object' || Array.isArray(json)) return null;
+  const raw = (json as { data?: unknown }).data ?? json;
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+  const payload = raw as Partial<CrossPlatformDealRadarResponse>;
+  if (!Array.isArray(payload.genuineDeals)) return null;
+  if (
+    payload.fakeSaleTraps !== undefined &&
+    !Array.isArray(payload.fakeSaleTraps)
+  ) {
+    return null;
+  }
+  if (
+    payload.priceSpreadLeaders !== undefined &&
+    !Array.isArray(payload.priceSpreadLeaders)
+  ) {
+    return null;
+  }
   return payload as CrossPlatformDealRadarResponse;
 }
 
@@ -52,19 +66,58 @@ const CONTROL_CHAR_RE = /\p{Cc}/gu;
 
 function normalizeRadarSlug(raw: unknown): string {
   if (typeof raw !== 'string') return '';
-  return raw.replace(CONTROL_CHAR_RE, '').trim().slice(0, MAX_RADAR_SLUG_LEN);
+  const cleaned = raw
+    .replace(CONTROL_CHAR_RE, '')
+    .trim()
+    .slice(0, MAX_RADAR_SLUG_LEN);
+  if (
+    !cleaned ||
+    !/^[a-zA-Z0-9][a-zA-Z0-9._-]{0,255}$/.test(cleaned) ||
+    cleaned.endsWith('.') ||
+    cleaned.includes('..') ||
+    /^(?:0+|null|undefined|nan|infinity|-infinity|true|false)$/i.test(cleaned)
+  ) {
+    return '';
+  }
+  return cleaned;
 }
 
 function toSafeRadarPrice(value: unknown): number {
-  const n = Number(value);
-  return Number.isFinite(n) && n > 0 && n <= MAX_RADAR_VND_PRICE
-    ? n
+  if (typeof value !== 'number' && typeof value !== 'string') {
+    return Number.POSITIVE_INFINITY;
+  }
+  if (typeof value === 'string') {
+    const cleaned = value.replace(CONTROL_CHAR_RE, '').trim();
+    if (!cleaned || cleaned.length > 32 || /^[+-]?0[xbo]/i.test(cleaned)) {
+      return Number.POSITIVE_INFINITY;
+    }
+    const n = Number(cleaned);
+    return Number.isFinite(n) && n > 0 && n <= MAX_RADAR_VND_PRICE
+      ? n
+      : Number.POSITIVE_INFINITY;
+  }
+  return Number.isFinite(value) && value > 0 && value <= MAX_RADAR_VND_PRICE
+    ? value
     : Number.POSITIVE_INFINITY;
 }
 
 function toSafeRadarPct(value: unknown, max = 10_000): number {
-  const n = Number(value);
-  return Number.isFinite(n) && n > 0 ? Math.min(n, max) : 0;
+  if (typeof value !== 'number' && typeof value !== 'string') return 0;
+  if (typeof value === 'string') {
+    const cleaned = value.replace(CONTROL_CHAR_RE, '').trim();
+    if (!cleaned || cleaned.length > 32 || /^[+-]?0[xbo]/i.test(cleaned)) {
+      return 0;
+    }
+    const n = Number(cleaned);
+    return Number.isFinite(n) && n > 0 ? Math.min(n, max) : 0;
+  }
+  return Number.isFinite(value) && value > 0 ? Math.min(value, max) : 0;
+}
+
+function normalizeRadarVerdict(value: unknown): RadarVerdict {
+  return value === 'genuine_deal' || value === 'fake_sale_trap'
+    ? value
+    : 'none';
 }
 
 /** Build a slug -> signal index. A genuine deal wins over a trap. */
@@ -77,7 +130,16 @@ export function buildRadarIndex(
     const prev = map.get(slug) ?? EMPTY_RADAR_SIGNAL;
     map.set(slug, { ...prev, ...patch });
   };
-  for (const g of (payload.genuineDeals ?? []).slice(0, MAX_RADAR_ITEMS)) {
+  const genuineDeals = Array.isArray(payload.genuineDeals)
+    ? payload.genuineDeals.slice(0, MAX_RADAR_ITEMS)
+    : [];
+  const fakeSaleTraps = Array.isArray(payload.fakeSaleTraps)
+    ? payload.fakeSaleTraps.slice(0, MAX_RADAR_ITEMS)
+    : [];
+  const priceSpreadLeaders = Array.isArray(payload.priceSpreadLeaders)
+    ? payload.priceSpreadLeaders.slice(0, MAX_RADAR_ITEMS)
+    : [];
+  for (const g of genuineDeals) {
     const slug = normalizeRadarSlug(g?.productSlug);
     if (!slug) continue;
     const prev = map.get(slug)?.genuineDeal;
@@ -89,36 +151,48 @@ export function buildRadarIndex(
       (nextSavings === prevSavings &&
         toSafeRadarPrice(g.priceCurrent) < toSafeRadarPrice(prev.priceCurrent));
     if (isStronger) {
-      upsert(slug, { genuineDeal: { ...g, productSlug: slug } });
+      upsert(slug, {
+        genuineDeal: {
+          ...g,
+          productSlug: slug,
+          savingsVsMedianPct: nextSavings,
+        },
+      });
     }
   }
-  for (const t of (payload.fakeSaleTraps ?? []).slice(0, MAX_RADAR_ITEMS)) {
+  for (const t of fakeSaleTraps) {
     const slug = normalizeRadarSlug(t?.productSlug);
     if (!slug) continue;
     const prev = map.get(slug)?.fakeSaleTrap;
     const prevMarkup = toSafeRadarPct(prev?.fakeMarkupPct);
     const nextMarkup = toSafeRadarPct(t.fakeMarkupPct);
+    const nextClaimed = toSafeRadarPct(t.claimedDiscountPct, 100);
     const isWorse =
       !prev ||
       nextMarkup > prevMarkup ||
       (nextMarkup === prevMarkup &&
-        toSafeRadarPct(t.claimedDiscountPct) >
-          toSafeRadarPct(prev.claimedDiscountPct));
+        nextClaimed > toSafeRadarPct(prev.claimedDiscountPct, 100));
     if (isWorse) {
-      upsert(slug, { fakeSaleTrap: { ...t, productSlug: slug } });
+      upsert(slug, {
+        fakeSaleTrap: {
+          ...t,
+          productSlug: slug,
+          fakeMarkupPct: nextMarkup,
+          claimedDiscountPct: nextClaimed,
+        },
+      });
     }
   }
-  for (const sp of (payload.priceSpreadLeaders ?? []).slice(
-    0,
-    MAX_RADAR_ITEMS
-  )) {
+  for (const sp of priceSpreadLeaders) {
     const slug = normalizeRadarSlug(sp?.productSlug);
     if (!slug) continue;
     const prev = map.get(slug)?.priceSpread;
     const prevSpread = toSafeRadarPct(prev?.spreadPct);
     const nextSpread = toSafeRadarPct(sp.spreadPct);
     if (!prev || nextSpread > prevSpread) {
-      upsert(slug, { priceSpread: { ...sp, productSlug: slug } });
+      upsert(slug, {
+        priceSpread: { ...sp, productSlug: slug, spreadPct: nextSpread },
+      });
     }
   }
   for (const [slug, sig] of map) {
@@ -153,24 +227,32 @@ export function radarLabel(
   minSpreadPct = 0,
   locale?: string
 ): string {
-  const sig = signal ?? EMPTY_RADAR_SIGNAL;
+  const sig =
+    signal && typeof signal === 'object' ? signal : EMPTY_RADAR_SIGNAL;
+  const verdict = normalizeRadarVerdict(sig.verdict);
   const loc = locale === 'en' || locale === 'cs' ? locale : 'vi';
+  const safeMinSpreadPct =
+    typeof minSpreadPct === 'number' &&
+    Number.isFinite(minSpreadPct) &&
+    minSpreadPct > 0
+      ? minSpreadPct
+      : 0;
   const safeSavingsPct = toSafeRadarPct(sig.savingsPct);
   const safeFakeMarkupPct = toSafeRadarPct(sig.fakeMarkupPct);
   const safeSpreadPct = toSafeRadarPct(sig.spreadPct);
-  if (sig.verdict === 'genuine_deal') {
+  if (verdict === 'genuine_deal') {
     const pct = safeSavingsPct.toFixed(1);
     if (loc === 'en') return `🔥 Cross-platform low (-${pct}%)`;
     if (loc === 'cs') return `🔥 Minimum napříč obchody (-${pct}%)`;
     return `🔥 Đáy giá đa sàn (-${pct}%)`;
   }
-  if (sig.verdict === 'fake_sale_trap') {
+  if (verdict === 'fake_sale_trap') {
     const pct = safeFakeMarkupPct.toFixed(1);
     if (loc === 'en') return `🚨 Fake sale warning (+${pct}%)`;
     if (loc === 'cs') return `🚨 Upozornění na falešnou slevu (+${pct}%)`;
     return `🚨 Cảnh báo giảm giá ảo (+${pct}%)`;
   }
-  if (safeSpreadPct > 0 && safeSpreadPct >= minSpreadPct) {
+  if (safeSpreadPct > 0 && safeSpreadPct >= safeMinSpreadPct) {
     const pct = safeSpreadPct.toFixed(1);
     if (loc === 'en') return `📊 +${pct}% cross-platform spread`;
     if (loc === 'cs') return `📊 +${pct}% rozdíl mezi e-shopy`;
@@ -181,9 +263,10 @@ export function radarLabel(
 
 /** Flat fields used by every Markdown/CSV/JSON export. */
 export function radarExportFields(signal?: RadarSignal | null) {
-  const sig = signal ?? EMPTY_RADAR_SIGNAL;
+  const sig =
+    signal && typeof signal === 'object' ? signal : EMPTY_RADAR_SIGNAL;
   return {
-    verdict: sig.verdict,
+    verdict: normalizeRadarVerdict(sig.verdict),
     savingsPct: toSafeRadarPct(sig.savingsPct),
     fakeMarkupPct: toSafeRadarPct(sig.fakeMarkupPct),
     spreadPct: toSafeRadarPct(sig.spreadPct),
@@ -198,9 +281,10 @@ export const RADAR_CSV_HEADERS = [
 ] as const;
 
 export function radarCsvCells(signal?: RadarSignal | null): string[] {
-  const sig = signal ?? EMPTY_RADAR_SIGNAL;
+  const sig =
+    signal && typeof signal === 'object' ? signal : EMPTY_RADAR_SIGNAL;
   return [
-    sig.verdict,
+    normalizeRadarVerdict(sig.verdict),
     toSafeRadarPct(sig.savingsPct).toFixed(1),
     toSafeRadarPct(sig.fakeMarkupPct).toFixed(1),
     toSafeRadarPct(sig.spreadPct).toFixed(1),
@@ -220,15 +304,33 @@ export function selectMerchantRadar(
   payload: CrossPlatformDealRadarResponse | null | undefined,
   merchant: { id: string; name: string }
 ) {
-  const targetId = String(merchant?.id || '')
+  const rawTargetId = String(merchant?.id || '')
     .replace(CONTROL_CHAR_RE, '')
     .trim()
     .slice(0, 256);
-  const nameLower = String(merchant?.name || '')
+  const targetId =
+    /^[a-zA-Z0-9._-]{1,256}$/.test(rawTargetId) &&
+    /[a-zA-Z0-9]/.test(rawTargetId) &&
+    !rawTargetId.startsWith('.') &&
+    !rawTargetId.endsWith('.') &&
+    !rawTargetId.includes('..') &&
+    !/^(?:0+|null|undefined|nan|infinity|-infinity|true|false)$/i.test(
+      rawTargetId
+    )
+      ? rawTargetId
+      : '';
+  const rawNameLower = String(merchant?.name || '')
     .replace(CONTROL_CHAR_RE, '')
     .trim()
     .slice(0, 256)
     .toLowerCase();
+  const nameLower =
+    rawNameLower &&
+    !/^(?:0+|null|undefined|nan|infinity|-infinity|true|false)$/i.test(
+      rawNameLower
+    )
+      ? rawNameLower
+      : '';
   const belongs = (i: CrossPlatformDealRadarItem) =>
     (Boolean(targetId) &&
       String(i?.merchantId || '')
@@ -239,12 +341,14 @@ export function selectMerchantRadar(
         .replace(CONTROL_CHAR_RE, '')
         .trim()
         .toLowerCase() === nameLower);
-  const genuineDeals = (payload?.genuineDeals ?? [])
-    .slice(0, MAX_RADAR_ITEMS)
-    .filter(belongs);
-  const fakeSaleTraps = (payload?.fakeSaleTraps ?? [])
-    .slice(0, MAX_RADAR_ITEMS)
-    .filter(belongs);
+  const rawDeals = Array.isArray(payload?.genuineDeals)
+    ? payload.genuineDeals
+    : [];
+  const rawTraps = Array.isArray(payload?.fakeSaleTraps)
+    ? payload.fakeSaleTraps
+    : [];
+  const genuineDeals = rawDeals.slice(0, MAX_RADAR_ITEMS).filter(belongs);
+  const fakeSaleTraps = rawTraps.slice(0, MAX_RADAR_ITEMS).filter(belongs);
   return {
     genuineDeals,
     fakeSaleTraps,

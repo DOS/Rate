@@ -194,22 +194,87 @@ export interface MerchantRiskInput {
   rawReviews?: ReviewInputItem[];
 }
 
+const VALID_MERCHANT_RISK_LEVELS = new Set<MerchantRiskEvaluation['risk_level']>([
+  'low',
+  'moderate',
+  'high',
+  'critical',
+]);
+
+function clampNonNegativeInt(n: unknown, max = 1_000_000_000): number {
+  const num =
+    typeof n === 'number'
+      ? n
+      : typeof n === 'string' && n.trim().length > 0
+        ? Number(n)
+        : Number.NaN;
+  if (!Number.isFinite(num) || num < 0) return 0;
+  return Math.min(max, Math.floor(num));
+}
+
+function clamp0to100(n: unknown, fallback = 0): number {
+  const num =
+    typeof n === 'number'
+      ? n
+      : typeof n === 'string' && n.trim().length > 0
+        ? Number(n)
+        : Number.NaN;
+  if (!Number.isFinite(num)) return fallback;
+  return Math.min(100, Math.max(0, Number(num.toFixed(2))));
+}
+
+function isStrictRiskBoolean(val: unknown): boolean {
+  if (typeof val === 'boolean') return val;
+  if (typeof val === 'number') return val === 1;
+  if (typeof val === 'string') {
+    const lower = val.trim().toLowerCase();
+    return lower === 'true' || lower === '1';
+  }
+  return false;
+}
+
+function normalizeSafeDbId(raw: unknown): string {
+  if (typeof raw !== 'string') return '';
+  const trimmed = raw.trim();
+  if (!trimmed || trimmed.length > 128 || /\p{Cc}/u.test(trimmed)) return '';
+  return trimmed;
+}
+
 /** The `review_risk_breakdown` stored with `review_risk_score` on rate.merchants. */
 export function merchantRiskBreakdown(risk: MerchantRiskEvaluation) {
+  const safeRisk =
+    risk && typeof risk === 'object' && !Array.isArray(risk)
+      ? risk
+      : ({} as Partial<MerchantRiskEvaluation>);
+  const riskLevel: MerchantRiskEvaluation['risk_level'] = VALID_MERCHANT_RISK_LEVELS.has(
+    safeRisk.risk_level as MerchantRiskEvaluation['risk_level']
+  )
+    ? (safeRisk.risk_level as MerchantRiskEvaluation['risk_level'])
+    : 'low';
+  const reasons = Array.isArray(safeRisk.reasons)
+    ? safeRisk.reasons
+        .map(r => (typeof r === 'string' ? sanitizeAiGeneratedText(r, 400) : ''))
+        .filter(Boolean)
+        .slice(0, 20)
+    : [];
+  const toRatio = (v: unknown) =>
+    typeof v === 'boolean' || (typeof v === 'string' && v.trim().length === 0)
+      ? 0
+      : clamp01(Number(v ?? 0));
   return {
-    risk_level: risk.risk_level,
-    trust_score: risk.trust_score,
-    seeding_ratio: risk.seeding_ratio,
-    coin_spam_ratio: risk.coin_spam_ratio,
-    sabotage_ratio: risk.sabotage_ratio,
-    total_reviews: risk.total_reviews,
-    authentic_count: risk.authentic_count,
-    coin_spam_count: risk.coin_spam_count,
-    seeding_fake_count: risk.seeding_fake_count,
-    sabotage_or_bombing_count: risk.sabotage_or_bombing_count,
-    suspicious_ratio_pct: risk.suspicious_ratio_pct,
-    price_anomaly_detected: risk.price_anomaly_detected,
-    reasons: risk.reasons,
+    risk_level: riskLevel,
+    trust_score: clamp0to100(safeRisk.trust_score, 85),
+    seeding_ratio: toRatio(safeRisk.seeding_ratio),
+    coin_spam_ratio: toRatio(safeRisk.coin_spam_ratio),
+    sabotage_ratio: toRatio(safeRisk.sabotage_ratio),
+    total_reviews: clampNonNegativeInt(safeRisk.total_reviews),
+    authentic_count: clampNonNegativeInt(safeRisk.authentic_count),
+    coin_spam_count: clampNonNegativeInt(safeRisk.coin_spam_count),
+    seeding_fake_count: clampNonNegativeInt(safeRisk.seeding_fake_count),
+    sabotage_or_bombing_count: clampNonNegativeInt(safeRisk.sabotage_or_bombing_count),
+    suspicious_ratio_pct: clamp0to100(safeRisk.suspicious_ratio_pct, 0),
+    price_anomaly_detected: isStrictRiskBoolean(safeRisk.price_anomaly_detected),
+    reasons,
   };
 }
 
@@ -333,7 +398,7 @@ export function compute6AxisWeightBreakdown(params: {
     upvotes = 0,
     downvotes = 0,
     reportCount = 0,
-  } = params;
+  } = params ?? ({} as typeof params);
 
   const authenticityMap: Record<Authenticity, number> = {
     genuine: 1.0,
@@ -362,9 +427,9 @@ export function compute6AxisWeightBreakdown(params: {
     expert_depth: 1.2,
   };
 
-  const A = authenticityMap[authenticity];
-  const B = independenceMap[independence];
-  let C = depthBaseMap[depth];
+  const A = Object.hasOwn(authenticityMap, authenticity) ? authenticityMap[authenticity] : 0;
+  const B = Object.hasOwn(independenceMap, independence) ? independenceMap[independence] : 0;
+  let C = Object.hasOwn(depthBaseMap, depth) ? depthBaseMap[depth] : 0;
   if (depth === 'specific_short' || depth === 'detailed' || depth === 'expert_depth') {
     if (hasRealMedia) C += 0.1;
     if (hasLongTermUsage) C += 0.2;
@@ -384,8 +449,15 @@ export function compute6AxisWeightBreakdown(params: {
   const rawF = 1 + 0.45 * Math.log(1 + netPos) - 0.3 * netNeg - 0.35 * safeReportCount;
   const F = Number(Math.max(0.1, Math.min(2.0, rawF)).toFixed(4));
 
+  const cleanGateOverride =
+    typeof gateOverrideReason === 'string'
+      ? gateOverrideReason
+          .replace(/\p{Cc}+/gu, ' ')
+          .trim()
+          .slice(0, 120)
+      : '';
   let gate: 0 | 1 = 1;
-  let gateReason: string | undefined = gateOverrideReason;
+  let gateReason: string | undefined = cleanGateOverride || undefined;
   if (gateReason) {
     gate = 0;
   } else if (A === 0) {
@@ -454,10 +526,20 @@ export function computeBayesianProductRating(
 
   let weightSum = 0;
   let weightedRatingSum = 0;
-  for (const item of items) {
-    const w = Number.isFinite(item.weight) && item.weight > 0 ? item.weight : 0;
+  const safeItems = Array.isArray(items) ? items : [];
+  for (const item of safeItems) {
+    if (!item || typeof item !== 'object') continue;
+    const w =
+      typeof item.weight === 'number' && Number.isFinite(item.weight) && item.weight > 0
+        ? item.weight
+        : 0;
     if (w <= 0) continue;
-    if (!Number.isFinite(item.rating_star) || item.rating_star < 1 || item.rating_star > 5) {
+    if (
+      typeof item.rating_star !== 'number' ||
+      !Number.isFinite(item.rating_star) ||
+      item.rating_star < 1 ||
+      item.rating_star > 5
+    ) {
       continue;
     }
     weightSum += w;
@@ -510,16 +592,10 @@ export function computeReviewWeight(params: {
   flagCategory: ReviewFlagCategory;
   verdict: ReviewVerdict;
 }): number {
+  if (!params || typeof params !== 'object') return 0;
   const { upvotes = 0, downvotes = 0, reportCount = 0, flagCategory, verdict } = params;
 
-  if (
-    flagCategory === 'low_value_coin_spam' ||
-    flagCategory === 'seeding_fake' ||
-    flagCategory === 'competitor_sabotage' ||
-    flagCategory === 'review_bombing' ||
-    verdict === 'fake' ||
-    verdict === 'unanalyzed'
-  ) {
+  if (flagCategory !== 'authentic' || (verdict !== 'authentic' && verdict !== 'suspicious')) {
     return 0;
   }
 
@@ -546,10 +622,13 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 
 /** Age of the reviewer's account when the review was written, in days. */
 function accountAgeDays(r: ReviewInputItem): number | null {
-  const joined = Date.parse(r.reviewer?.joinedAt || '');
+  if (!r || typeof r !== 'object') return null;
+  const rawJoined = typeof r.reviewer?.joinedAt === 'string' ? r.reviewer.joinedAt.trim() : '';
+  const joined = rawJoined ? Date.parse(rawJoined) : Number.NaN;
   if (!Number.isFinite(joined)) return null;
   // Age at the time of writing; without a review date we would be measuring today's age.
-  const written = Date.parse(r.platform_created_at || '');
+  const rawWritten = typeof r.platform_created_at === 'string' ? r.platform_created_at.trim() : '';
+  const written = rawWritten ? Date.parse(rawWritten) : Number.NaN;
   if (!Number.isFinite(written)) return null;
   const days = (written - joined) / DAY_MS;
   return days >= 0 ? days : null;
@@ -569,6 +648,7 @@ export function accountAgeBucket(r: ReviewInputItem): ReviewSignals['account_age
  * count (0 -> 0, 9 -> 0.5, 99+ -> 1). Falls back to the old neutral prior when unknown.
  */
 export function reviewerHistoryScore(r: ReviewInputItem): number {
+  if (!r || typeof r !== 'object') return 0.7;
   if (r.reviewer_type === 'expert') return 1.0;
   const total = r.reviewer?.totalReviews;
   if (typeof total !== 'number' || !Number.isFinite(total) || total < 0) return 0.7;
@@ -583,7 +663,7 @@ export function reviewerHistoryScore(r: ReviewInputItem): number {
 const RATING_LABEL_RE = /^(?:(?:cực\s*k[ìỳ]|rất)\s+)?(?:không\s+)?hài\s+lòng$|^bình\s+thường$/i;
 
 export function isRatingOnlyComment(comment: string | null | undefined): boolean {
-  const text = (comment || '')
+  const text = (typeof comment === 'string' ? comment : '')
     .normalize('NFC')
     .replace(/\p{Cc}+/gu, '')
     .replace(/[\s.!,]+$/u, '')
@@ -618,7 +698,7 @@ const PRODUCT_MENTION_RE =
  * any product attribute or usage experience (Section 4 #13 & Section 13 P1).
  */
 export function isShippingOnlyComment(comment: string | null | undefined): boolean {
-  const text = (comment || '')
+  const text = (typeof comment === 'string' ? comment : '')
     .normalize('NFC')
     .replace(/\p{Cc}+/gu, '')
     .trim();
@@ -634,7 +714,8 @@ export function hasStarSentimentContradiction(
   ratingStar: number,
   comment: string | null | undefined
 ): boolean {
-  const text = (comment || '')
+  if (typeof ratingStar !== 'number' || !Number.isFinite(ratingStar)) return false;
+  const text = (typeof comment === 'string' ? comment : '')
     .normalize('NFC')
     .replace(/\p{Cc}+/gu, '')
     .trim();
@@ -691,7 +772,9 @@ export function computeVoterWeight(params: {
   trustScore?: number | null;
   isVerifiedContact?: boolean;
 }): number {
-  const { accountAgeDays, verifiedReviewCount, trustScore, isVerifiedContact = true } = params;
+  const safeParams =
+    params && typeof params === 'object' && !Array.isArray(params) ? params : ({} as typeof params);
+  const { accountAgeDays, verifiedReviewCount, trustScore, isVerifiedContact = true } = safeParams;
   if (!isVerifiedContact) return 0;
   const validAge =
     typeof accountAgeDays === 'number' && Number.isFinite(accountAgeDays) && accountAgeDays >= 0
@@ -723,15 +806,18 @@ export function computeWilsonLowerBound(
   const neg = Number.isFinite(unhelpfulWeight) && unhelpfulWeight > 0 ? unhelpfulWeight : 0;
   const n = pos + neg;
   if (n <= 0) return 0;
+  const safeZ = typeof z === 'number' && Number.isFinite(z) && z > 0 && z <= 10 ? z : 1.96;
   const pHat = pos / n;
-  const z2 = z * z;
-  const numerator = pHat + z2 / (2 * n) - z * Math.sqrt((pHat * (1 - pHat) + z2 / (4 * n)) / n);
+  const z2 = safeZ * safeZ;
+  const numerator = pHat + z2 / (2 * n) - safeZ * Math.sqrt((pHat * (1 - pHat) + z2 / (4 * n)) / n);
   const denominator = 1 + z2 / n;
   return Number(Math.max(0, Math.min(1, numerator / denominator)).toFixed(4));
 }
 
 function normalizeTextForDedupe(text: string): string {
+  if (typeof text !== 'string') return '';
   return text
+    .slice(0, 4000)
     .toLowerCase()
     .replace(/[^\p{L}\p{N}\s]/gu, ' ')
     .replace(/\s+/g, ' ')
@@ -787,7 +873,9 @@ export function assessReview6Axes(
     isConflictOfInterest?: boolean;
   } = {}
 ): ReviewAssessment {
-  const comment = (review.comment || '')
+  const safeReview =
+    review && typeof review === 'object' ? review : ({ id: '', rating_star: 0 } as ReviewInputItem);
+  const comment = (typeof safeReview.comment === 'string' ? safeReview.comment : '')
     .normalize('NFC')
     .replace(/\p{Cc}+/gu, '')
     .trim();
@@ -796,7 +884,7 @@ export function assessReview6Axes(
   // 1. Extract aspects & routing
   const aspects: Record<string, ReviewAspectSignal> = {};
   const defaultSentiment: -1 | 0 | 1 =
-    review.rating_star >= 4 ? 1 : review.rating_star <= 2 ? -1 : 0;
+    safeReview.rating_star >= 4 ? 1 : safeReview.rating_star <= 2 ? -1 : 0;
 
   if (SHIPPING_ASPECT_RE.test(comment)) {
     aspects.shipping = {
@@ -843,7 +931,7 @@ export function assessReview6Axes(
 
   const productAspectCount = Object.values(aspects).filter(a => a.routesTo === 'product').length;
   const shippingOnly = isShippingOnlyComment(comment);
-  const contradiction = hasStarSentimentContradiction(review.rating_star, comment);
+  const contradiction = hasStarSentimentContradiction(safeReview.rating_star, comment);
 
   // 2. Axis A: Authenticity
   let authenticity: Authenticity = 'genuine';
@@ -883,7 +971,7 @@ export function assessReview6Axes(
   } else if (options.isCoinSpam) {
     depth = 'filler';
   } else if (
-    review.reviewer_type === 'expert' ||
+    safeReview.reviewer_type === 'expert' ||
     TECHNICAL_MEASUREMENT_RE.test(comment) ||
     (comment.length >= 240 && productAspectCount >= 2)
   ) {
@@ -899,20 +987,25 @@ export function assessReview6Axes(
     depth = 'low_effort';
   }
 
-  const hasRealMedia = Array.isArray(review.images) && review.images.length > 0;
+  const hasRealMedia =
+    Array.isArray(safeReview.images) &&
+    safeReview.images.some(img => typeof img === 'string' && img.trim().length > 0);
   const hasLongTermUsage = LONG_TERM_USAGE_RE.test(comment);
 
   // 5. Axis D: Reviewer credibility
   let reviewerMultiplier = 1.0;
-  const ageBucket = accountAgeBucket(review);
-  const totalReviews = review.reviewer?.totalReviews;
-  if (review.reviewer_type === 'expert') {
+  const ageBucket = accountAgeBucket(safeReview);
+  const totalReviews = safeReview.reviewer?.totalReviews;
+  if (safeReview.reviewer_type === 'expert') {
     reviewerMultiplier = 1.3;
   } else if (ageBucket === 'low' && (totalReviews === undefined || totalReviews <= 2)) {
     reviewerMultiplier = 0.5;
   } else if (typeof totalReviews === 'number' && totalReviews >= 10) {
     reviewerMultiplier = 1.1;
-  } else if (review.is_verified_buyer === false && review.reviewer?.verifiedPurchase === false) {
+  } else if (
+    safeReview.is_verified_buyer === false &&
+    safeReview.reviewer?.verifiedPurchase === false
+  ) {
     reviewerMultiplier = 0.8;
   }
 
@@ -938,9 +1031,9 @@ export function assessReview6Axes(
     hasLongTermUsage,
     reviewerMultiplier,
     contextMultiplier,
-    upvotes: review.upvotes ?? 0,
-    downvotes: review.downvotes ?? 0,
-    reportCount: review.report_count ?? 0,
+    upvotes: safeReview.upvotes ?? 0,
+    downvotes: safeReview.downvotes ?? 0,
+    reportCount: safeReview.report_count ?? 0,
   });
 
   return {
@@ -956,7 +1049,7 @@ export function assessReview6Axes(
 }
 
 export const AiReviewBatchItemSchema = z.object({
-  review_id: z.string().min(1),
+  review_id: z.string().min(1).max(128),
   flag_category: z.enum([
     'authentic',
     'low_value_coin_spam',
@@ -993,14 +1086,14 @@ export const AiReviewBatchItemSchema = z.object({
     .optional(),
   relevance: z.number().min(0).max(1).optional(),
   ai_generated_prob: z.number().min(0).max(1).optional(),
-  reason: z.string(),
+  reason: z.string().max(500),
 });
 
 export const AiReviewBatchResponseSchema = z.object({
-  reviews: z.array(AiReviewBatchItemSchema),
-  pros: z.array(z.string()).default([]),
-  cons: z.array(z.string()).default([]),
-  ai_summary: z.string().default(''),
+  reviews: z.array(AiReviewBatchItemSchema).max(100),
+  pros: z.array(z.string().max(200)).max(12).default([]),
+  cons: z.array(z.string().max(200)).max(12).default([]),
+  ai_summary: z.string().max(1000).default(''),
 });
 
 /**
@@ -1022,12 +1115,18 @@ export class AiReviewAnalyzer {
   private timeoutMs: number;
 
   constructor(config: AiSpecEnricherConfig = {}) {
-    this.provider = this.resolveProvider(config.provider);
+    const safeConfig = config && typeof config === 'object' ? config : {};
+    this.provider = this.resolveProvider(safeConfig.provider);
     const defaults = PROVIDER_DEFAULTS[this.provider];
 
-    this.apiKey = (config.apiKey ?? this.resolveApiKey(this.provider)).trim();
+    const rawApiKey =
+      typeof safeConfig.apiKey === 'string' ? safeConfig.apiKey : this.resolveApiKey(this.provider);
+    this.apiKey = rawApiKey
+      .replace(/\p{Cc}+/gu, '')
+      .trim()
+      .slice(0, 512);
     this.baseUrl = resolveValidHttpBaseUrl(
-      config.baseUrl ||
+      safeConfig.baseUrl ||
         process.env.AI_BASE_URL ||
         process.env.DOS_AI_BASE_URL ||
         process.env.OPENAI_BASE_URL ||
@@ -1035,11 +1134,17 @@ export class AiReviewAnalyzer {
       defaults.baseUrl
     );
 
-    this.model =
-      (config.model || process.env.AI_MODEL || process.env.OPENAI_MODEL || '').trim() ||
-      defaults.defaultModel;
+    const rawModelCandidate =
+      (typeof safeConfig.model === 'string' && safeConfig.model.replace(/\p{Cc}+/gu, '').trim()) ||
+      (process.env.AI_MODEL || '').replace(/\p{Cc}+/gu, '').trim() ||
+      (process.env.OPENAI_MODEL || '').replace(/\p{Cc}+/gu, '').trim() ||
+      '';
+    this.model = rawModelCandidate.slice(0, 128) || defaults.defaultModel;
 
-    const rawTimeout = config.timeoutMs ?? Number(process.env.AI_TIMEOUT_MS || 25000);
+    const rawTimeout =
+      typeof safeConfig.timeoutMs === 'boolean'
+        ? Number.NaN
+        : (safeConfig.timeoutMs ?? Number(process.env.AI_TIMEOUT_MS || 25000));
     this.timeoutMs =
       Number.isFinite(rawTimeout) && rawTimeout > 0
         ? Math.min(Math.max(Math.round(rawTimeout), 1000), 120000)
@@ -1047,9 +1152,13 @@ export class AiReviewAnalyzer {
   }
 
   private resolveProvider(explicit?: SupportedAiProvider): SupportedAiProvider {
-    if (explicit && explicit in PROVIDER_DEFAULTS) return explicit;
-    const envProvider = (process.env.AI_PROVIDER || '').trim().toLowerCase() as SupportedAiProvider;
-    if (envProvider && envProvider in PROVIDER_DEFAULTS) return envProvider;
+    if (typeof explicit === 'string' && Object.hasOwn(PROVIDER_DEFAULTS, explicit)) {
+      return explicit as SupportedAiProvider;
+    }
+    const envProvider = (process.env.AI_PROVIDER || '').trim().toLowerCase();
+    if (envProvider && Object.hasOwn(PROVIDER_DEFAULTS, envProvider)) {
+      return envProvider as SupportedAiProvider;
+    }
 
     if (process.env.DOS_AI_API_KEY || process.env.DOS_AI_BASE_URL) return 'dos-ai';
     if (process.env.OPENAI_API_KEY) return 'openai';
@@ -1064,7 +1173,13 @@ export class AiReviewAnalyzer {
     const keys = PROVIDER_DEFAULTS[provider].envKeys;
     for (const k of keys) {
       const val = process.env[k];
-      if (val && val.trim().length > 0) return val.trim();
+      if (typeof val === 'string') {
+        const cleaned = val
+          .replace(/\p{Cc}+/gu, '')
+          .trim()
+          .slice(0, 512);
+        if (cleaned.length > 0) return cleaned;
+      }
     }
     return '';
   }
@@ -1080,19 +1195,26 @@ export class AiReviewAnalyzer {
    * at 0 token cost.
    */
   public analyzeWithHeuristics(reviews: ReviewInputItem[]): AnalyzedReviewResult[] {
+    if (!Array.isArray(reviews)) return [];
+    const safeReviews = reviews.filter((r): r is ReviewInputItem =>
+      Boolean(r && typeof r === 'object' && !Array.isArray(r))
+    );
     // 1. Pre-compute duplicate comment frequency across distinct authors
     const commentCounts = new Map<string, Set<string>>();
     const substantiveByAuthor: Array<{ id: string; authorKey: string; norm: string }> = [];
-    for (const r of reviews) {
+    for (const r of safeReviews) {
+      const reviewId = String(r.id ?? '');
       const norm = normalizeTextForDedupe(r.comment || '');
       // Rating labels repeat across buyers because the platform writes them, not because of seeding.
       if (norm.length >= 15 && !isRatingOnlyComment(r.comment)) {
-        const authorKey = (r.author_name || r.id).toLowerCase();
+        const rawAuthor =
+          typeof r.author_name === 'string' && r.author_name.trim() ? r.author_name : reviewId;
+        const authorKey = rawAuthor.toLowerCase();
         const authors = commentCounts.get(norm) || new Set<string>();
         authors.add(authorKey);
         commentCounts.set(norm, authors);
         if (norm.length >= 25) {
-          substantiveByAuthor.push({ id: r.id, authorKey, norm });
+          substantiveByAuthor.push({ id: reviewId, authorKey, norm });
         }
       }
     }
@@ -1112,14 +1234,19 @@ export class AiReviewAnalyzer {
       }
     }
 
-    return reviews.map(r => {
-      const comment = (r.comment || '')
+    return safeReviews.map(r => {
+      const reviewId = String(r.id ?? '');
+      const safeRatingStar =
+        typeof r.rating_star === 'number' && Number.isFinite(r.rating_star)
+          ? r.rating_star
+          : Number.NaN;
+      const comment = (typeof r.comment === 'string' ? r.comment : '')
         .normalize('NFC')
         .replace(/\p{Cc}+/gu, '')
         .trim();
       const norm = normalizeTextForDedupe(comment);
       const distinctAuthorsWithSameText = commentCounts.get(norm)?.size ?? 1;
-      const maxShingleSim = maxShingleSimByReviewId.get(r.id) ?? 0;
+      const maxShingleSim = maxShingleSimByReviewId.get(reviewId) ?? 0;
 
       // Default clean signals
       let burstScore = 0.05;
@@ -1141,7 +1268,7 @@ export class AiReviewAnalyzer {
           comment
         );
       const isUnopenedFiller =
-        r.rating_star >= 4 &&
+        safeRatingStar >= 4 &&
         /chưa\s*(?:dùng|xài|bóc|khui|mở\s*hộp|test)\s*(?:nên\s*chưa\s*biết|nhưng\s*cứ\s*cho\s*5\s*sao)/i.test(
           comment
         );
@@ -1150,7 +1277,7 @@ export class AiReviewAnalyzer {
 
       // Rule B: Competitor Sabotage (Đối thủ chơi xấu / chèo kéo sang shop khác / dìm 1 sao vô căn cứ)
       const isCompetitorSabotage =
-        r.rating_star <= 2 &&
+        safeRatingStar <= 2 &&
         (/(?:qua\s*shop\s+\S+(?:\s+\S+){0,5}\s+mua|mua\s*bên\s+\S+(?:\s+\S+){0,5}\s+rẻ\s*hơn|đừng\s*mua\s*shop\s*này\s*qua\s*bên|ib\s*mình\s*bán\s*rẻ\s*hơn|liên\s*hệ\s*zalo\s*\d{8,})/i.test(
           comment
         ) ||
@@ -1160,7 +1287,7 @@ export class AiReviewAnalyzer {
 
       // Rule C: Review Bombing (Bom review / hủy đơn chưa trải nghiệm dịch vụ / hùa theo drama)
       const isReviewBombing =
-        r.rating_star <= 2 &&
+        safeRatingStar <= 2 &&
         /chưa\s*(?:dùng|sử\s*dụng|trải\s*nghiệm)\s*(?:dịch\s*vụ|sản\s*phẩm)|mới\s*đặt\s*đã\s*hủy|hủy\s*đơn\s*rồi|vào\s*đánh\s*1\s*sao\s*cho\s*bõ\s*ghét|hùa\s*theo|tẩy\s*chay\s*shop/i.test(
           comment
         );
@@ -1174,14 +1301,14 @@ export class AiReviewAnalyzer {
       const isCopiedSeeding =
         !isDuplicateSeeding && maxShingleSim >= 0.65 && !isCoinSpamPhrase && !isRatingOnly;
       const isScriptedPraise =
-        r.rating_star === 5 &&
+        safeRatingStar === 5 &&
         /sản\s*phẩm\s*tuyệt\s*vời\s*đáng\s*đồng\s*tiền\s*bát\s*gạo\s*sẽ\s*ủng\s*hộ\s*shop\s*dài\s*dài\s*10\s*điểm/i.test(
           comment
         ) &&
         distinctAuthorsWithSameText >= 2;
 
       const isShippingOnly = isShippingOnlyComment(comment);
-      const hasContradiction = hasStarSentimentContradiction(r.rating_star, comment);
+      const hasContradiction = hasStarSentimentContradiction(safeRatingStar, comment);
 
       if (isCompetitorSabotage) {
         flagCategory = 'competitor_sabotage';
@@ -1266,7 +1393,7 @@ export class AiReviewAnalyzer {
       }
 
       return {
-        review_id: r.id,
+        review_id: reviewId,
         verdict,
         flag_category: flagCategory,
         fake_probability: clamp01(fakeProb),
@@ -1526,6 +1653,9 @@ Return ONLY valid JSON matching:
         } catch {
           continue;
         }
+        if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+          continue;
+        }
 
         const validatedBatch = AiReviewBatchResponseSchema.safeParse(parsed);
         const batchData: RawAiReviewBatch = validatedBatch.success ? validatedBatch.data : parsed;
@@ -1533,9 +1663,14 @@ Return ONLY valid JSON matching:
         anyBatchSucceeded = true;
         if (Array.isArray(batchData?.reviews)) {
           for (const rawItem of batchData.reviews) {
+            if (!rawItem || typeof rawItem !== 'object' || Array.isArray(rawItem)) continue;
             const parsedItem = AiReviewBatchItemSchema.safeParse(rawItem);
             const item: RawAiReviewItem = parsedItem.success ? parsedItem.data : rawItem;
-            if (item?.review_id) aiMap.set(String(item.review_id), item);
+            const revId =
+              typeof item?.review_id === 'string' || typeof item?.review_id === 'number'
+                ? String(item.review_id).trim()
+                : '';
+            if (revId) aiMap.set(revId, item);
           }
         }
         if (Array.isArray(batchData?.pros)) {
@@ -1632,7 +1767,9 @@ Return ONLY valid JSON matching:
               ? clamp01(aiItem.ai_generated_prob)
               : updatedAssessment.aiGeneratedProb;
 
-          const hasRealMedia = Array.isArray(srcReview?.images) && srcReview.images.length > 0;
+          const hasRealMedia =
+            Array.isArray(srcReview?.images) &&
+            srcReview.images.some(img => typeof img === 'string' && img.trim().length > 0);
           const hasLongTermUsage = LONG_TERM_USAGE_RE.test(srcReview?.comment || '');
           const nextBreakdown = compute6AxisWeightBreakdown({
             authenticity: nextAuth,
@@ -1731,6 +1868,8 @@ Return ONLY valid JSON matching:
     aiCons: string[] = [],
     aiSummaryText = ''
   ): JReviewsProductSummary {
+    const safeReviews = Array.isArray(reviews) ? reviews : [];
+    const safeResults = Array.isArray(results) ? results : [];
     const breakdown: Record<ReviewFlagCategory, number> = {
       authentic: 0,
       low_value_coin_spam: 0,
@@ -1749,13 +1888,22 @@ Return ONLY valid JSON matching:
     let positiveAuthenticCount = 0;
     const bayesianInputs: Array<{ rating_star: number; weight: number }> = [];
 
-    for (let i = 0; i < reviews.length; i++) {
-      const r = reviews[i];
-      const res = results[i];
-      const cat = res?.flag_category ?? 'authentic';
+    for (let i = 0; i < safeReviews.length; i++) {
+      const r = safeReviews[i];
+      const res = safeResults[i];
+      if (!r || typeof r !== 'object') {
+        ignoredCount++;
+        continue;
+      }
+      const rawCat = res?.flag_category;
+      const cat: ReviewFlagCategory =
+        rawCat && Object.hasOwn(breakdown, rawCat) ? rawCat : 'authentic';
       breakdown[cat] = (breakdown[cat] || 0) + 1;
 
-      const safeStar = Number.isFinite(r.rating_star) ? Math.max(1, Math.min(5, r.rating_star)) : 0;
+      const safeStar =
+        typeof r.rating_star === 'number' && Number.isFinite(r.rating_star)
+          ? Math.max(1, Math.min(5, r.rating_star))
+          : 0;
       rawSum += safeStar;
 
       const weight =
@@ -1783,7 +1931,7 @@ Return ONLY valid JSON matching:
       }
     }
 
-    const rawAvg = reviews.length > 0 ? Number((rawSum / reviews.length).toFixed(2)) : 0;
+    const rawAvg = safeReviews.length > 0 ? Number((rawSum / safeReviews.length).toFixed(2)) : 0;
     // No user review carries weight: there is no weighted rating (0, as refresh_master_product_rating
     // writes), not the raw average of the reviews that were just excluded.
     const weightedUserRating =
@@ -1813,7 +1961,7 @@ Return ONLY valid JSON matching:
     // Authenticity score penalizes seeding_fake, but treats coin_spam mildly
     const seedingCount = breakdown.seeding_fake;
     const coinSpamCount = breakdown.low_value_coin_spam;
-    const total = Math.max(1, reviews.length);
+    const total = Math.max(1, safeReviews.length);
     const authenticityScore = Number(
       Math.max(
         0,
@@ -1828,19 +1976,27 @@ Return ONLY valid JSON matching:
 
     const defaultSummary =
       authenticCount > 0
-        ? `Đã phân tích ${reviews.length} đánh giá: giữ lại ${authenticCount} đánh giá thực chất (điểm JReviews có trọng số: ${weightedUserRating}/5★) và loại bỏ ${ignoredCount} đánh giá rác/nhận xu/seeding/bom hàng khỏi điểm tổng.`
+        ? `Đã phân tích ${safeReviews.length} đánh giá: giữ lại ${authenticCount} đánh giá thực chất (điểm JReviews có trọng số: ${weightedUserRating}/5★) và loại bỏ ${ignoredCount} đánh giá rác/nhận xu/seeding/bom hàng khỏi điểm tổng.`
         : `Chưa có đánh giá thực chất sau khi lọc ${ignoredCount} bình luận rác/nhận xu.`;
 
     const cleanPros = Array.from(
-      new Set(aiPros.map(p => sanitizeAiGeneratedText(p, 160)).filter(Boolean))
+      new Set(
+        (Array.isArray(aiPros) ? aiPros : [])
+          .map(p => sanitizeAiGeneratedText(p, 160))
+          .filter(Boolean)
+      )
     ).slice(0, 6);
     const cleanCons = Array.from(
-      new Set(aiCons.map(c => sanitizeAiGeneratedText(c, 160)).filter(Boolean))
+      new Set(
+        (Array.isArray(aiCons) ? aiCons : [])
+          .map(c => sanitizeAiGeneratedText(c, 160))
+          .filter(Boolean)
+      )
     ).slice(0, 6);
     const cleanSummaryText = sanitizeAiGeneratedText(aiSummaryText, 600);
 
     return {
-      total_reviews_analyzed: reviews.length,
+      total_reviews_analyzed: safeReviews.length,
       authentic_review_count: authenticCount,
       ignored_review_count: ignoredCount,
       raw_average_rating: rawAvg,
@@ -1868,16 +2024,25 @@ Return ONLY valid JSON matching:
    * - Does NOT penalize the merchant for `low_value_coin_spam`, `competitor_sabotage`, or `review_bombing`!
    */
   public evaluateMerchantRisk(input: MerchantRiskInput): MerchantRiskEvaluation {
-    const totalReviews = input.reviewResults.length;
+    const safeInput =
+      input && typeof input === 'object'
+        ? input
+        : ({ platform: 'shopee', isOfficial: false, reviewResults: [] } as MerchantRiskInput);
+    const safeReviewResults = Array.isArray(safeInput.reviewResults)
+      ? safeInput.reviewResults.filter((r): r is AnalyzedReviewResult =>
+          Boolean(r && typeof r === 'object')
+        )
+      : [];
+    const totalReviews = safeReviewResults.length;
     const total = Math.max(1, totalReviews);
-    const seedingCount = input.reviewResults.filter(r => r.flag_category === 'seeding_fake').length;
-    const coinSpamCategoryCount = input.reviewResults.filter(
+    const seedingCount = safeReviewResults.filter(r => r.flag_category === 'seeding_fake').length;
+    const coinSpamCategoryCount = safeReviewResults.filter(
       r => r.flag_category === 'low_value_coin_spam'
     ).length;
-    const sabotageCount = input.reviewResults.filter(
+    const sabotageCount = safeReviewResults.filter(
       r => r.flag_category === 'competitor_sabotage' || r.flag_category === 'review_bombing'
     ).length;
-    const coinSpamOrExcludedCount = input.reviewResults.filter(
+    const coinSpamOrExcludedCount = safeReviewResults.filter(
       r =>
         r.flag_category === 'low_value_coin_spam' ||
         (!r.include_in_rating && r.flag_category === 'authentic')
@@ -1909,32 +2074,43 @@ Return ONLY valid JSON matching:
 
     // 2. Price Anomaly Detection (Scam / Counterfeit dump pricing)
     let priceAnomaly = false;
+    const roundedListingPrice =
+      typeof safeInput.listingPrice === 'number' && Number.isFinite(safeInput.listingPrice)
+        ? Math.round(safeInput.listingPrice)
+        : 0;
+    const roundedCanonicalMinPrice =
+      typeof safeInput.canonicalMinPrice === 'number' &&
+      Number.isFinite(safeInput.canonicalMinPrice)
+        ? Math.round(safeInput.canonicalMinPrice)
+        : 0;
     if (
-      typeof input.listingPrice === 'number' &&
-      Number.isFinite(input.listingPrice) &&
-      input.listingPrice > 0 &&
-      input.listingPrice <= MAX_VALID_VND_PRICE &&
-      typeof input.canonicalMinPrice === 'number' &&
-      Number.isFinite(input.canonicalMinPrice) &&
-      input.canonicalMinPrice > 2_000_000 &&
-      input.canonicalMinPrice <= MAX_VALID_VND_PRICE &&
-      input.listingPrice < input.canonicalMinPrice * 0.58 &&
-      !input.isOfficial
+      roundedListingPrice > 0 &&
+      roundedListingPrice <= MAX_VALID_VND_PRICE &&
+      roundedCanonicalMinPrice > 2_000_000 &&
+      roundedCanonicalMinPrice <= MAX_VALID_VND_PRICE &&
+      roundedListingPrice < roundedCanonicalMinPrice * 0.58 &&
+      !safeInput.isOfficial
     ) {
       priceAnomaly = true;
       risk += 45;
       reasons.push(
-        `Giá bán (${input.listingPrice.toLocaleString('vi-VN')}₫) thấp bất thường so với giá sàn chuẩn (${input.canonicalMinPrice.toLocaleString('vi-VN')}₫) -> Cảnh báo hàng dựng/nhái hoặc lừa đảo (+45 điểm rủi ro).`
+        `Giá bán (${roundedListingPrice.toLocaleString('vi-VN')}₫) thấp bất thường so với giá sàn chuẩn (${roundedCanonicalMinPrice.toLocaleString('vi-VN')}₫) -> Cảnh báo hàng dựng/nhái hoặc lừa đảo (+45 điểm rủi ro).`
       );
     }
 
     // 3. Authentic 1-2 Star Scam/Defect Reports (exclude competitor_sabotage & review_bombing!)
-    if (input.rawReviews && input.rawReviews.length > 0) {
+    if (Array.isArray(safeInput.rawReviews) && safeInput.rawReviews.length > 0) {
       let authenticLowStarCount = 0;
-      for (let i = 0; i < input.rawReviews.length; i++) {
-        const rev = input.rawReviews[i];
-        const flag = input.reviewResults[i];
-        if (rev.rating_star <= 2 && flag?.flag_category === 'authentic' && flag.include_in_rating) {
+      for (let i = 0; i < safeInput.rawReviews.length; i++) {
+        const rev = safeInput.rawReviews[i];
+        const flag = safeInput.reviewResults?.[i];
+        if (
+          rev &&
+          typeof rev.rating_star === 'number' &&
+          rev.rating_star <= 2 &&
+          flag?.flag_category === 'authentic' &&
+          flag.include_in_rating
+        ) {
           // A review left out of the rating (e.g. voted down to weight 0) is no complaint either.
           // A low star with no text describes no defect: it counts at the same reduced weight
           // as in the rating, not as a full complaint.
@@ -1952,17 +2128,21 @@ Return ONLY valid JSON matching:
     }
 
     // 4. Platform & Official Mall Trust Bonus
-    if (input.isOfficial) {
+    if (safeInput.isOfficial) {
       risk -= 15;
       reasons.push('Gian hàng Chính hãng (Mall / Official Store) (-15 điểm rủi ro).');
-    } else if (input.platform === 'facebook' || input.platform === 'website') {
+    } else if (safeInput.platform === 'facebook' || safeInput.platform === 'website') {
       risk += 10;
       reasons.push(
-        `Giao dịch qua kênh tự do (${input.platform}) cần kiểm tra kỹ thông tin thanh toán (+10 điểm rủi ro).`
+        `Giao dịch qua kênh tự do (${safeInput.platform}) cần kiểm tra kỹ thông tin thanh toán (+10 điểm rủi ro).`
       );
     }
 
-    if ((input.followerCount ?? 0) >= 50000) {
+    if (
+      typeof safeInput.followerCount === 'number' &&
+      Number.isFinite(safeInput.followerCount) &&
+      safeInput.followerCount >= 50000
+    ) {
       risk -= 5;
     }
 
@@ -2010,7 +2190,9 @@ Return ONLY valid JSON matching:
     reviewIds: readonly string[]
   ): Promise<Map<string, PreservedReviewFlag>> {
     const preserved = new Map<string, PreservedReviewFlag>();
-    const uniqueIds = Array.from(new Set(reviewIds.filter(Boolean)));
+    const uniqueIds = Array.from(
+      new Set((Array.isArray(reviewIds) ? reviewIds : []).map(normalizeSafeDbId).filter(Boolean))
+    );
     // Chunked so a large batch never exceeds the PostgREST URL length.
     for (let i = 0; i < uniqueIds.length; i += 150) {
       const { data, error } = await supabase
@@ -2037,7 +2219,7 @@ Return ONLY valid JSON matching:
         'review_bombing',
       ]);
       for (const row of (data || []) as Array<Record<string, unknown>>) {
-        const revId = typeof row.review_id === 'string' ? row.review_id.trim() : '';
+        const revId = normalizeSafeDbId(row?.review_id);
         if (!revId) continue;
         const rawVerdict = row.verdict as ReviewVerdict;
         const rawFlagCat = row.flag_category as ReviewFlagCategory;
@@ -2075,10 +2257,26 @@ Return ONLY valid JSON matching:
     summary: JReviewsProductSummary;
     merchantRisk?: MerchantRiskEvaluation;
   }> {
-    const analysis = await this.analyzeReviewsRaw(params.reviews, {
-      entityName: params.entityName,
-      entityType: params.entityType,
-      platform: params.platform,
+    const safeProductId = normalizeSafeDbId(params?.productId);
+    if (!safeProductId) {
+      throw new Error('[AiReviewAnalyzer] productId must be a valid non-empty string');
+    }
+    const safeMasterId = normalizeSafeDbId(params?.masterId);
+    const safeMerchantId = normalizeSafeDbId(params?.merchantId);
+    const safePlatform =
+      typeof params?.platform === 'string'
+        ? params.platform
+            .replace(/\p{Cc}+/gu, '')
+            .trim()
+            .toLowerCase()
+            .slice(0, 32) || 'shopee'
+        : 'shopee';
+    const safeReviews = Array.isArray(params?.reviews) ? params.reviews : [];
+
+    const analysis = await this.analyzeReviewsRaw(safeReviews, {
+      entityName: params?.entityName,
+      entityType: params?.entityType,
+      platform: safePlatform,
     });
 
     // Flags owned by another detector are neither overwritten nor contradicted:
@@ -2095,9 +2293,9 @@ Return ONLY valid JSON matching:
       preservedFlags.size === 0
         ? analysis.results
         : analysis.results.map((r, idx) => {
-            const stored = preservedFlags.get(r.review_id);
+            const stored = preservedFlags.get(normalizeSafeDbId(r.review_id));
             if (!stored) return r;
-            const srcReview = params.reviews[idx];
+            const srcReview = safeReviews[idx];
             const helpfulness_weight = !stored.include_in_rating
               ? 0
               : computeReviewWeight({
@@ -2110,7 +2308,7 @@ Return ONLY valid JSON matching:
             return { ...r, ...stored, helpfulness_weight };
           });
     const summary = this.computeJReviewsSummary(
-      params.reviews,
+      safeReviews,
       results,
       null,
       analysis.aiPros,
@@ -2120,26 +2318,37 @@ Return ONLY valid JSON matching:
 
     // 1. Upsert into rate.review_flags & update helpfulness_weight on rate.reviews
     if (results.length > 0) {
-      const flagRows = results.map((r, i) => ({
-        review_id: r.review_id,
-        fake_probability: r.fake_probability,
-        verdict: r.verdict,
-        flag_category: r.flag_category,
-        reason: r.reason,
-        include_in_rating: r.include_in_rating,
-        signals: r.signals,
-        detector:
-          r.detector ||
-          (this.isConfigured() ? `hybrid:${this.provider}:${this.model}` : 'heuristic:v2-jreviews'),
-        detector_version: '2.0.0',
-        input_hash:
-          '0x' +
-          crypto
-            .createHash('sha256')
-            .update(`${r.review_id}|${params.reviews[i]?.comment || ''}`)
-            .digest('hex'),
-        analyzed_at: new Date().toISOString(),
-      }));
+      const flagRows = results
+        .map((r, i) => {
+          const safeRevId = normalizeSafeDbId(r.review_id);
+          if (!safeRevId) return null;
+          return {
+            review_id: safeRevId,
+            fake_probability: clamp01(r.fake_probability),
+            verdict: r.verdict,
+            flag_category: r.flag_category,
+            reason: sanitizeAiGeneratedText(r.reason, 500) || 'Đánh giá người dùng',
+            include_in_rating: Boolean(r.include_in_rating),
+            signals: r.signals,
+            detector:
+              sanitizeAiGeneratedText(
+                r.detector ||
+                  (this.isConfigured()
+                    ? `hybrid:${this.provider}:${this.model}`
+                    : 'heuristic:v2-jreviews'),
+                120
+              ) || 'heuristic:v2-jreviews',
+            detector_version: '2.0.0',
+            input_hash:
+              '0x' +
+              crypto
+                .createHash('sha256')
+                .update(`${safeRevId}|${safeReviews[i]?.comment || ''}`)
+                .digest('hex'),
+            analyzed_at: new Date().toISOString(),
+          };
+        })
+        .filter((row): row is NonNullable<typeof row> => row !== null);
       const writableFlagRows = flagRows.filter(row => !preservedFlags.has(row.review_id));
 
       for (let i = 0; i < writableFlagRows.length; i += 200) {
@@ -2154,10 +2363,12 @@ Return ONLY valid JSON matching:
       }
 
       for (const r of results) {
+        const safeRevId = normalizeSafeDbId(r.review_id);
+        if (!safeRevId) continue;
         const { error: revErr } = await supabase
           .from('reviews')
           .update({ helpfulness_weight: r.helpfulness_weight })
-          .eq('id', r.review_id);
+          .eq('id', safeRevId);
         if (revErr) {
           throw new Error(
             `[AiReviewAnalyzer] Failed to update review helpfulness_weight: ${revErr.message}`
@@ -2169,7 +2380,7 @@ Return ONLY valid JSON matching:
     // 2. Upsert product-level summary into rate.review_analysis
     const { error: analysisErr } = await supabase.from('review_analysis').upsert(
       {
-        product_id: params.productId,
+        product_id: safeProductId,
         total_reviews_analyzed: summary.total_reviews_analyzed,
         authenticity_score: summary.authenticity_score,
         sentiment_positive_ratio: summary.sentiment_positive_ratio,
@@ -2188,10 +2399,10 @@ Return ONLY valid JSON matching:
     }
 
     // 3. Update master_products weighted rating & authentic count via canonical SQL RPC (Audit C5)
-    if (params.masterId) {
+    if (safeMasterId) {
       if (typeof supabase.rpc === 'function') {
         const { error: rpcErr } = await supabase.rpc('refresh_master_product_rating', {
-          p_master_id: params.masterId,
+          p_master_id: safeMasterId,
         });
         if (rpcErr) {
           throw new Error(
@@ -2207,7 +2418,7 @@ Return ONLY valid JSON matching:
             authentic_review_count: summary.authentic_review_count,
             updated_at: new Date().toISOString(),
           })
-          .eq('id', params.masterId);
+          .eq('id', safeMasterId);
         if (masterErr) {
           throw new Error(
             `[AiReviewAnalyzer] Failed to update master_products rating: ${masterErr.message}`
@@ -2218,16 +2429,16 @@ Return ONLY valid JSON matching:
 
     // 4. Evaluate and update merchant review_risk_score (leaving risk_score for DOSafe threat_intel)
     let merchantRisk: MerchantRiskEvaluation | undefined;
-    if (params.merchantId) {
+    if (safeMerchantId) {
       merchantRisk = this.evaluateMerchantRisk({
-        merchantId: params.merchantId,
-        platform: params.platform || 'shopee',
+        merchantId: safeMerchantId,
+        platform: safePlatform,
         isOfficial: Boolean(params.isOfficial),
         followerCount: params.followerCount,
         listingPrice: params.listingPrice,
         canonicalMinPrice: params.canonicalMinPrice,
         reviewResults: results,
-        rawReviews: params.reviews,
+        rawReviews: safeReviews,
       });
 
       const nowIso = new Date().toISOString();
@@ -2240,7 +2451,7 @@ Return ONLY valid JSON matching:
           review_risk_updated_at: nowIso,
           updated_at: nowIso,
         })
-        .eq('id', params.merchantId);
+        .eq('id', safeMerchantId);
       if (merchErr) {
         if (/review_risk_score|schema cache/i.test(merchErr.message)) {
           const { error: fallbackErr } = await supabase
@@ -2253,7 +2464,7 @@ Return ONLY valid JSON matching:
               },
               updated_at: nowIso,
             })
-            .eq('id', params.merchantId);
+            .eq('id', safeMerchantId);
           if (fallbackErr) {
             throw new Error(
               `[AiReviewAnalyzer] Failed to update merchant metadata risk fallback: ${fallbackErr.message}`
@@ -2286,8 +2497,8 @@ Return ONLY valid JSON matching:
       reportReason?: 'spam' | 'fake' | 'offensive' | 'off_topic' | 'other' | null;
     }
   ): Promise<{ action: 'upserted' | 'deleted' }> {
-    const reviewId = (params.reviewId || '').trim();
-    const voterId = (params.voterId || '').trim();
+    const reviewId = normalizeSafeDbId(params?.reviewId);
+    const voterId = normalizeSafeDbId(params?.voterId);
     if (!reviewId || !voterId) {
       throw new Error('[AiReviewAnalyzer] reviewId and voterId must be non-empty strings');
     }

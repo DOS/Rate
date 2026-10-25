@@ -5,6 +5,7 @@ import {
   type NormalizedProductCandidate,
 } from './product-normalizer.js';
 import { AiSpecEnricher, mergeProductSpecifications } from './ai-spec-enricher.js';
+import { mergeKeySpecs } from './jobs/backfill-specs.js';
 import { createImporterLogger } from './logger.js';
 import type { RateSupabaseClient } from './types.js';
 
@@ -29,8 +30,20 @@ const MAX_SCREEN_SIZE_INCH = 120;
 const MAX_BATTERY_MAH = 500_000;
 export const MAX_ENTITY_IMAGES = 50;
 
+const SENTINEL_MASTER_IDS = new Set(['0', 'null', 'undefined', 'nan', 'none']);
+
 function hasControlOrSpaceChar(val: string): boolean {
   return /[\p{Cc}\s]/u.test(val);
+}
+
+function isStrictBoolean(val: unknown): boolean {
+  if (typeof val === 'boolean') return val;
+  if (typeof val === 'number') return val === 1;
+  if (typeof val === 'string') {
+    const lower = val.trim().toLowerCase();
+    return lower === 'true' || lower === '1';
+  }
+  return false;
 }
 
 export function sanitizeHttpUrl(raw: unknown): string | null {
@@ -42,6 +55,13 @@ export function sanitizeHttpUrl(raw: unknown): string | null {
     if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return null;
     if (parsed.username || parsed.password) return null;
     if (!parsed.hostname) return null;
+    if (
+      parsed.hostname.startsWith('.') ||
+      parsed.hostname.endsWith('.') ||
+      parsed.hostname.includes('..')
+    ) {
+      return null;
+    }
     if (parsed.port !== '' && parsed.port !== '80' && parsed.port !== '443') return null;
     return trimmed;
   } catch {
@@ -94,6 +114,33 @@ export class EntityMatcher {
     categoryId?: string,
     rawTitle?: string
   ): Promise<{ masterId: string; isNew: boolean }> {
+    if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)) {
+      throw new Error('[EntityMatcher] candidate must be a non-null object');
+    }
+    const safeModelKey = String(candidate.model_key ?? '')
+      .replace(/\p{Cc}+/gu, '')
+      .trim()
+      .slice(0, 200);
+    if (!safeModelKey) {
+      throw new Error('[EntityMatcher] candidate.model_key must be a non-empty string');
+    }
+    const safeCategoryId =
+      typeof categoryId === 'string'
+        ? categoryId
+            .replace(/\p{Cc}+/gu, '')
+            .trim()
+            .slice(0, 128) || undefined
+        : undefined;
+    const safeRawTitle =
+      typeof rawTitle === 'string'
+        ? rawTitle
+            .replace(/\p{Cc}+/gu, ' ')
+            .replace(/\s+/g, ' ')
+            .trim()
+            .slice(0, 500)
+        : undefined;
+    candidate = { ...candidate, model_key: safeModelKey };
+
     // Tier 1: Deterministic model_key matching
     const { data: exactMatch, error: exactErr } = await this.supabase
       .from('master_products')
@@ -136,10 +183,16 @@ export class EntityMatcher {
     let ambiguousFuzzy = false;
     const validFuzzyMatches = Array.isArray(fuzzyMatches)
       ? fuzzyMatches.filter(m => {
-          const masterId = typeof m?.master_id === 'string' ? m.master_id.trim() : '';
-          const sim = Number(m?.similarity);
+          if (!m || typeof m !== 'object' || Array.isArray(m)) return false;
+          const masterId =
+            typeof m.master_id === 'string' && !/\p{Cc}/u.test(m.master_id.trim())
+              ? m.master_id.trim()
+              : '';
+          if (SENTINEL_MASTER_IDS.has(masterId.toLowerCase())) return false;
+          const sim = typeof m.similarity === 'boolean' ? Number.NaN : Number(m.similarity);
           return (
             masterId.length > 0 &&
+            masterId.length <= 128 &&
             Number.isFinite(sim) &&
             sim >= ENTITY_MATCH_CANDIDATE_FLOOR &&
             sim <= 1
@@ -148,7 +201,7 @@ export class EntityMatcher {
       : [];
     if (validFuzzyMatches.length > 0) {
       const topMatch = validFuzzyMatches[0]!;
-      const topMasterId = String(topMatch.master_id).trim();
+      const topMasterId = String(topMatch.master_id).trim().slice(0, 128);
       const topSim = Number(topMatch.similarity);
       if (topSim >= ENTITY_MATCH_ACCEPT_THRESHOLD) {
         logger.info(
@@ -174,7 +227,7 @@ export class EntityMatcher {
 
     // Tier 3: No existing master product matches -> Enrich with AI Spec Enricher (if not in local benchmark registry)
     // and seed a new Master Product.
-    candidate = await this.enricher.enrichCandidate(candidate, rawTitle);
+    candidate = await this.enricher.enrichCandidate(candidate, safeRawTitle);
 
     // - Upsert on model_key (unique) so a concurrent crawler inserting the same
     //   canonical entity resolves instead of crashing (plan v7 §5.1 / Gemini B3).
@@ -202,25 +255,74 @@ export class EntityMatcher {
     // winner WITHOUT overwriting its canonical metadata or status (Codex
     // blocker: a re-asserting upsert could re-publish a draft/archived master).
     const safeImages = sanitizeHttpUrlList(candidate.images);
+    const safeColors = Array.isArray(candidate.colors)
+      ? candidate.colors
+          .filter((c): c is string => typeof c === 'string')
+          .map(c =>
+            c
+              .replace(/\p{Cc}+/gu, ' ')
+              .replace(/\s+/g, ' ')
+              .trim()
+              .slice(0, 80)
+          )
+          .filter(Boolean)
+          .slice(0, 50)
+      : [];
+    const safeSlug =
+      String(candidate.slug ?? '')
+        .replace(/\p{Cc}+/gu, '')
+        .trim()
+        .slice(0, 300) ||
+      safeModelKey
+        .replace(/[^a-z0-9-]+/gi, '-')
+        .toLowerCase()
+        .slice(0, 300);
     const baseInsertRow = {
-      category_id: categoryId || null,
-      brand: candidate.brand,
-      model: candidate.model,
-      variant_name: candidate.variant_name,
-      model_key: candidate.model_key,
-      name: candidate.name,
-      slug: candidate.slug,
-      description: candidate.description || '',
+      category_id: safeCategoryId || null,
+      brand:
+        String(candidate.brand ?? '')
+          .replace(/\p{Cc}+/gu, ' ')
+          .trim()
+          .slice(0, 100) || 'Unknown',
+      model:
+        String(candidate.model ?? '')
+          .replace(/\p{Cc}+/gu, ' ')
+          .trim()
+          .slice(0, 200) || 'Unknown',
+      variant_name: candidate.variant_name
+        ? String(candidate.variant_name)
+            .replace(/\p{Cc}+/gu, ' ')
+            .trim()
+            .slice(0, 200) || null
+        : null,
+      model_key:
+        String(candidate.model_key ?? '')
+          .replace(/\p{Cc}+/gu, '')
+          .trim()
+          .slice(0, 200) || safeModelKey,
+      name:
+        String(candidate.name ?? '')
+          .replace(/\p{Cc}+/gu, ' ')
+          .trim()
+          .slice(0, 300) || safeModelKey,
+      slug: safeSlug,
+      description:
+        typeof candidate.description === 'string'
+          ? candidate.description
+              .replace(/\p{Cc}+/gu, ' ')
+              .trim()
+              .slice(0, 10_000)
+          : '',
       ram_gb: toBoundedPositiveInt(candidate.ram_gb, MAX_RAM_GB),
       storage_gb: toBoundedPositiveInt(candidate.storage_gb, MAX_STORAGE_GB),
       screen_size_inch: toBoundedPositiveNumber(candidate.screen_size_inch, MAX_SCREEN_SIZE_INCH),
       battery_mah: toBoundedPositiveInt(candidate.battery_mah, MAX_BATTERY_MAH),
-      has_5g: candidate.has_5g,
+      has_5g: isStrictBoolean(candidate.has_5g),
       specifications: candidate.specifications,
       key_specs: candidate.key_specs,
       images: safeImages,
       thumbnail: safeImages[0] || null,
-      colors: candidate.colors,
+      colors: safeColors,
       status: seedStatus,
     };
 
@@ -239,7 +341,7 @@ export class EntityMatcher {
         .update(candidate.model_key)
         .digest('hex')
         .slice(0, 8);
-      const fallbackSlug = `${candidate.slug.slice(0, 170)}-${slugSuffix}`;
+      const fallbackSlug = `${safeSlug.slice(0, 170)}-${slugSuffix}`;
       const retry = await this.supabase
         .from('master_products')
         .upsert(
@@ -286,16 +388,26 @@ export class EntityMatcher {
    * Enriches an existing Master Product row in Supabase with full 10-Field-Group specs via AI
    */
   public async enrichMasterProductById(masterId: string): Promise<boolean> {
+    const safeMasterId = String(masterId ?? '')
+      .replace(/\p{Cc}+/gu, '')
+      .trim()
+      .slice(0, 128);
+    if (!safeMasterId) {
+      throw new Error('[EntityMatcher] masterId must be a non-empty string');
+    }
+
     const { data: row, error: fetchErr } = await this.supabase
       .from('master_products')
       .select(
         'id, brand, model, storage_gb, ram_gb, screen_size_inch, battery_mah, has_5g, name, description, colors, specifications, key_specs'
       )
-      .eq('id', masterId)
+      .eq('id', safeMasterId)
       .maybeSingle();
 
     if (fetchErr || !row) {
-      throw new Error(`[EntityMatcher] Master product ${masterId} not found: ${fetchErr?.message}`);
+      throw new Error(
+        `[EntityMatcher] Master product ${safeMasterId} not found: ${fetchErr?.message}`
+      );
     }
 
     const existingSpecsRecord =
@@ -322,13 +434,42 @@ export class EntityMatcher {
     const existingScreenInch = toBoundedPositiveNumber(row.screen_size_inch, MAX_SCREEN_SIZE_INCH);
     const existingBatteryMah = toBoundedPositiveInt(row.battery_mah, MAX_BATTERY_MAH);
 
+    const safeRowBrand =
+      typeof row.brand === 'string'
+        ? row.brand
+            .replace(/\p{Cc}+/gu, ' ')
+            .trim()
+            .slice(0, 100) || 'Unknown'
+        : 'Unknown';
+    const safeRowModel =
+      typeof row.model === 'string'
+        ? row.model
+            .replace(/\p{Cc}+/gu, ' ')
+            .trim()
+            .slice(0, 200) || 'Unknown'
+        : 'Unknown';
+    const safeRowName =
+      typeof row.name === 'string'
+        ? row.name
+            .replace(/\p{Cc}+/gu, ' ')
+            .trim()
+            .slice(0, 300)
+        : undefined;
+    const safeRowDescription =
+      typeof row.description === 'string'
+        ? row.description
+            .replace(/\p{Cc}+/gu, ' ')
+            .trim()
+            .slice(0, 4_000)
+        : undefined;
+
     const aiResult = await this.enricher.fetchSpecsFromAi({
-      brand: row.brand,
-      model: row.model,
+      brand: safeRowBrand,
+      model: safeRowModel,
       storageGb: existingStorageGb,
       ramGb: existingRamGb,
-      rawTitle: row.name,
-      rawDescription: row.description,
+      rawTitle: safeRowName,
+      rawDescription: safeRowDescription,
       categorySlug: inferredCategorySlug,
     });
 
@@ -336,28 +477,33 @@ export class EntityMatcher {
       return false;
     }
 
+    const safeRowColors = Array.isArray(row.colors)
+      ? row.colors
+          .filter((c): c is string => typeof c === 'string')
+          .map(c =>
+            c
+              .replace(/\p{Cc}+/gu, ' ')
+              .replace(/\s+/g, ' ')
+              .trim()
+              .slice(0, 80)
+          )
+          .filter(Boolean)
+          .slice(0, 50)
+      : [];
+
     const mergedSpecifications = mergeProductSpecifications(
       existingSpecsRecord,
       aiResult.specifications,
-      Array.isArray(row.colors) && row.colors.length > 0 ? row.colors : undefined
+      safeRowColors.length > 0 ? safeRowColors : undefined
     );
     if (!mergedSpecifications.category_slug) {
       mergedSpecifications.category_slug = inferredCategorySlug;
     }
 
-    const existingKeySpecs =
-      row.key_specs && typeof row.key_specs === 'object' && !Array.isArray(row.key_specs)
-        ? (row.key_specs as Record<string, unknown>)
-        : {};
-    const incomingKeySpecs = Object.fromEntries(
-      Object.entries(aiResult.key_specs || {}).filter(
-        ([, v]) => v !== undefined && v !== null && String(v).trim() !== ''
-      )
+    const mergedKeySpecs = mergeKeySpecs(
+      row.key_specs,
+      aiResult.key_specs as unknown as Record<string, unknown>
     );
-    const mergedKeySpecs = {
-      ...existingKeySpecs,
-      ...incomingKeySpecs,
-    };
 
     const { error: updateErr } = await this.supabase
       .from('master_products')
@@ -369,16 +515,16 @@ export class EntityMatcher {
           toBoundedPositiveNumber(aiResult.screen_size_inch, MAX_SCREEN_SIZE_INCH),
         battery_mah:
           existingBatteryMah ?? toBoundedPositiveInt(aiResult.battery_mah, MAX_BATTERY_MAH),
-        has_5g: row.has_5g ? true : (aiResult.has_5g ?? row.has_5g),
+        has_5g: isStrictBoolean(row.has_5g) ? true : isStrictBoolean(aiResult.has_5g ?? row.has_5g),
         specifications: mergedSpecifications,
         key_specs: mergedKeySpecs,
         updated_at: new Date().toISOString(),
       })
-      .eq('id', masterId);
+      .eq('id', safeMasterId);
 
     if (updateErr) {
       throw new Error(
-        `[EntityMatcher] Failed to update enriched specs for ${masterId}: ${updateErr.message}`
+        `[EntityMatcher] Failed to update enriched specs for ${safeMasterId}: ${updateErr.message}`
       );
     }
 

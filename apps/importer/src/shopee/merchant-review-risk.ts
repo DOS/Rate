@@ -78,10 +78,16 @@ export interface ReviewRow {
 export function mapStoredReview(
   row: ReviewRow
 ): { result: AnalyzedReviewResult; raw: ReviewInputItem } | null {
-  if (!row || typeof row !== 'object') return null;
-  const reviewId = typeof row.id === 'string' ? row.id.trim() : '';
+  if (!row || typeof row !== 'object' || Array.isArray(row)) return null;
+  const reviewId = normalizeSafeId(row.id);
   if (!reviewId) return null;
-  const vf = Array.isArray(row.review_flags) ? row.review_flags[0] : row.review_flags;
+  const vf = Array.isArray(row.review_flags)
+    ? row.review_flags.find((f): f is NonNullable<(typeof row.review_flags)[number]> =>
+        Boolean(f && typeof f === 'object' && !Array.isArray(f))
+      )
+    : row.review_flags && typeof row.review_flags === 'object'
+      ? row.review_flags
+      : null;
   const rawVerdict = typeof vf?.verdict === 'string' ? vf.verdict.trim().toLowerCase() : null;
   if (rawVerdict === 'unanalyzed') return null;
   const verdict: AnalyzedReviewResult['verdict'] =
@@ -104,9 +110,10 @@ export function mapStoredReview(
   if (verdict === 'fake' && category !== 'competitor_sabotage' && category !== 'review_bombing') {
     category = 'seeding_fake';
   }
-  const includeInRating = Boolean(
-    vf?.include_in_rating ?? (category === 'authentic' && verdict !== 'fake')
-  );
+  const includeInRating =
+    typeof vf?.include_in_rating === 'boolean'
+      ? vf.include_in_rating
+      : category === 'authentic' && verdict !== 'fake';
   const parsedStar =
     typeof row.rating_star === 'boolean' ||
     row.rating_star === null ||
@@ -129,7 +136,10 @@ export function mapStoredReview(
     raw: {
       id: reviewId,
       rating_star: ratingStar,
-      comment: typeof row.comment === 'string' ? row.comment.slice(0, 4000) : '',
+      comment:
+        typeof row.comment === 'string'
+          ? row.comment.slice(0, 4000).replace(/(?:(?![\t\r\n])\p{Cc})+/gu, ' ')
+          : '',
     },
   };
 }
@@ -137,7 +147,7 @@ export function mapStoredReview(
 /** A usable VND price, or 0. */
 export const toValidPrice = (raw: unknown): number => {
   if (typeof raw === 'boolean' || raw === null || raw === undefined) return 0;
-  const n = Number(raw);
+  const n = Math.round(Number(raw));
   return Number.isFinite(n) && n > 0 && n <= MAX_VALID_VND_PRICE ? n : 0;
 };
 
@@ -152,21 +162,41 @@ export function strongestPriceAnomaly(
   officialByMerchant: ReadonlyMap<string, boolean>,
   masterMinByCluster: ReadonlyMap<string, number>
 ): { listingPrice: number; canonicalMinPrice: number } | null {
-  if (merchant.is_official) return null;
+  if (
+    !merchant ||
+    typeof merchant !== 'object' ||
+    Array.isArray(merchant) ||
+    merchant.is_official === true
+  ) {
+    return null;
+  }
+  if (!Array.isArray(listings) || listings.length === 0) return null;
   let best: { listingPrice: number; canonicalMinPrice: number; ratio: number } | null = null;
   for (const listing of listings) {
+    if (!listing || typeof listing !== 'object' || Array.isArray(listing)) continue;
     const price = toValidPrice(listing.price_current);
     if (!price || !listing.cluster_id) continue;
-    const peers = (productsByCluster.get(listing.cluster_id) ?? []).map(p => ({
-      id: p.id,
-      price_current: p.price_current,
-      merchants: { is_official: officialByMerchant.get(p.merchant_id ?? '') ?? false },
-    }));
-    const floor = resolveClusterPeerFloorPrice(
-      peers,
-      listing.id,
-      masterMinByCluster.get(listing.cluster_id)
-    );
+    const clusterPeers =
+      productsByCluster && typeof productsByCluster.get === 'function'
+        ? (productsByCluster.get(listing.cluster_id) ?? [])
+        : [];
+    const peers = clusterPeers
+      .filter((p): p is ProductRow => Boolean(p && typeof p === 'object' && !Array.isArray(p)))
+      .map(p => ({
+        id: p.id,
+        price_current: p.price_current,
+        merchants: {
+          is_official:
+            officialByMerchant && typeof officialByMerchant.get === 'function'
+              ? (officialByMerchant.get(p.merchant_id ?? '') ?? false)
+              : false,
+        },
+      }));
+    const fallbackMasterMin =
+      masterMinByCluster && typeof masterMinByCluster.get === 'function'
+        ? masterMinByCluster.get(listing.cluster_id)
+        : undefined;
+    const floor = resolveClusterPeerFloorPrice(peers, listing.id, fallbackMasterMin);
     if (!floor || floor <= 2_000_000 || floor > MAX_VALID_VND_PRICE) continue;
     const ratio = price / floor;
     if (ratio < 0.58 && (!best || ratio < best.ratio)) {
@@ -192,12 +222,40 @@ export function scoreMerchants(
   reviews: readonly ReviewRow[],
   masterMinByCluster: ReadonlyMap<string, number>
 ): MerchantScore[] {
-  const merchantById = new Map(merchants.map(m => [m.id, m]));
-  const officialByMerchant = new Map(merchants.map(m => [m.id, Boolean(m.is_official)]));
-  const productById = new Map(products.map(p => [p.id, p]));
+  const safeMerchants: MerchantRow[] = [];
+  if (Array.isArray(merchants)) {
+    for (const m of merchants) {
+      if (!m || typeof m !== 'object' || Array.isArray(m)) continue;
+      const safeId = normalizeSafeId(m.id);
+      if (!safeId) continue;
+      safeMerchants.push({ ...m, id: safeId });
+    }
+  }
+  const safeProducts: ProductRow[] = [];
+  if (Array.isArray(products)) {
+    for (const p of products) {
+      if (!p || typeof p !== 'object' || Array.isArray(p)) continue;
+      const safeId = normalizeSafeId(p.id);
+      if (!safeId) continue;
+      safeProducts.push({
+        ...p,
+        id: safeId,
+        merchant_id: normalizeSafeId(p.merchant_id),
+        cluster_id: normalizeSafeId(p.cluster_id),
+      });
+    }
+  }
+  const safeReviews = Array.isArray(reviews)
+    ? reviews.filter((rv): rv is ReviewRow =>
+        Boolean(rv && typeof rv === 'object' && !Array.isArray(rv))
+      )
+    : [];
+  const merchantById = new Map(safeMerchants.map(m => [m.id, m]));
+  const officialByMerchant = new Map(safeMerchants.map(m => [m.id, m.is_official === true]));
+  const productById = new Map(safeProducts.map(p => [p.id, p]));
   const productsByCluster = new Map<string, ProductRow[]>();
   const listingsByMerchant = new Map<string, ProductRow[]>();
-  for (const p of products) {
+  for (const p of safeProducts) {
     if (p.cluster_id) {
       const list = productsByCluster.get(p.cluster_id) ?? [];
       list.push(p);
@@ -213,8 +271,10 @@ export function scoreMerchants(
     string,
     { results: AnalyzedReviewResult[]; raws: ReviewInputItem[] }
   >();
-  for (const row of reviews) {
-    const merchantId = productById.get(row.product_id)?.merchant_id;
+  for (const row of safeReviews) {
+    const safeProductId = normalizeSafeId(row.product_id);
+    if (!safeProductId) continue;
+    const merchantId = productById.get(safeProductId)?.merchant_id;
     if (!merchantId || !merchantById.has(merchantId)) continue;
     const mapped = mapStoredReview(row);
     if (!mapped) continue;
@@ -246,10 +306,17 @@ export function scoreMerchants(
       rawFollowers <= MAX_MERCHANT_FOLLOWER_COUNT
         ? Math.floor(rawFollowers)
         : 0;
+    const safePlatform =
+      typeof merchant.platform === 'string'
+        ? merchant.platform
+            .replace(/\p{Cc}+/gu, '')
+            .trim()
+            .slice(0, 40)
+        : '';
     const risk = analyzer.evaluateMerchantRisk({
       merchantId,
-      platform: merchant.platform,
-      isOfficial: Boolean(merchant.is_official),
+      platform: safePlatform,
+      isOfficial: merchant.is_official === true,
       followerCount: safeFollowerCount,
       listingPrice: anomaly?.listingPrice,
       canonicalMinPrice: anomaly?.canonicalMinPrice,
@@ -276,11 +343,7 @@ export function scoreMerchants(
 function normalizeSafeId(raw: unknown): string | null {
   if (typeof raw !== 'string') return null;
   const trimmed = raw.trim();
-  if (!trimmed || trimmed.length > 128) return null;
-  for (let i = 0; i < trimmed.length; i++) {
-    const code = trimmed.charCodeAt(i);
-    if (code <= 0x1f || code === 0x7f) return null;
-  }
+  if (!trimmed || trimmed.length > 128 || /[\s\p{Cc}]/u.test(trimmed)) return null;
   return trimmed;
 }
 
@@ -391,7 +454,11 @@ export async function loadAndScoreMerchant(
     'merchant_id',
     [safeMerchantId]
   );
-  const clusterIds = uniqueIds(listings.map(p => p.cluster_id));
+  const clusterIds = uniqueIds(
+    listings
+      .filter(p => Boolean(p && typeof p === 'object' && !Array.isArray(p)))
+      .map(p => p.cluster_id)
+  );
   // The peers' official flag comes embedded, so no per-merchant read.
   type PeerRow = ProductRow & {
     merchants?: { is_official?: boolean | null } | Array<{ is_official?: boolean | null }> | null;
@@ -406,14 +473,23 @@ export async function loadAndScoreMerchant(
   const productById = new Map<string, ProductRow>();
   const peerMerchants = new Map<string, MerchantRow>();
   const rows: PeerRow[] = [...listings, ...peers];
-  for (const { merchants: embedded, ...product } of rows) {
-    productById.set(product.id, product);
-    if (!product.merchant_id || product.merchant_id === safeMerchantId) continue;
-    const official = Array.isArray(embedded) ? embedded[0]?.is_official : embedded?.is_official;
-    peerMerchants.set(product.merchant_id, {
-      id: product.merchant_id,
+  for (const rawRow of rows) {
+    if (!rawRow || typeof rawRow !== 'object' || Array.isArray(rawRow)) continue;
+    const { merchants: embedded, ...product } = rawRow;
+    const safeProductId = normalizeSafeId(product.id);
+    if (!safeProductId) continue;
+    productById.set(safeProductId, { ...product, id: safeProductId });
+    const safePeerMerchantId = normalizeSafeId(product.merchant_id);
+    if (!safePeerMerchantId || safePeerMerchantId === safeMerchantId) continue;
+    const official = Array.isArray(embedded)
+      ? embedded.find(e => Boolean(e && typeof e === 'object' && !Array.isArray(e)))?.is_official
+      : embedded && typeof embedded === 'object'
+        ? embedded.is_official
+        : undefined;
+    peerMerchants.set(safePeerMerchantId, {
+      id: safePeerMerchantId,
       platform: '',
-      is_official: Boolean(official),
+      is_official: official === true,
       follower_count: 0,
     });
   }
@@ -422,7 +498,9 @@ export async function loadAndScoreMerchant(
     'reviews',
     REVIEW_RISK_SELECT,
     'product_id',
-    uniqueIds(listings.map(p => p.id))
+    uniqueIds(
+      listings.filter(p => Boolean(p && typeof p === 'object' && !Array.isArray(p))).map(p => p.id)
+    )
   );
   const masters = await fetchAllByIds<{ id: string; min_price: number | string | null }>(
     supabase,
@@ -433,8 +511,10 @@ export async function loadAndScoreMerchant(
   );
   const masterMinByCluster = new Map<string, number>();
   for (const m of masters) {
+    if (!m || typeof m !== 'object' || Array.isArray(m)) continue;
+    const masterId = normalizeSafeId(m.id);
     const price = toValidPrice(m.min_price);
-    if (price) masterMinByCluster.set(m.id, price);
+    if (masterId && price) masterMinByCluster.set(masterId, price);
   }
 
   const scores = scoreMerchants(

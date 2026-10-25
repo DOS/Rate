@@ -11,6 +11,7 @@ import {
   radarLabel,
   type RadarSignal,
 } from '@/lib/deal-radar';
+import { MAX_VALID_VND_PRICE } from '@/lib/rate-domain';
 
 interface ProductShareAuditButtonProps {
   readonly name: string;
@@ -23,6 +24,50 @@ interface ProductShareAuditButtonProps {
   readonly offerCount: number;
   readonly keySpecLine?: string;
   readonly radarSignal?: RadarSignal;
+}
+
+export function normalizeShareAuditFields(input: {
+  readonly modelKey: string;
+  readonly userScore5: number;
+  readonly expertScore10: number | null;
+  readonly authenticReviews: number;
+  readonly minPriceVnd: number;
+  readonly offerCount: number;
+}) {
+  const rawUser = Number(input.userScore5);
+  const safeUserScore5 =
+    Number.isFinite(rawUser) && rawUser > 0 ? Math.min(5, rawUser) : 0;
+  const rawExpert =
+    input.expertScore10 != null ? Number(input.expertScore10) : 0;
+  const safeExpertScore10 =
+    Number.isFinite(rawExpert) && rawExpert > 0
+      ? Math.min(10, rawExpert <= 5 ? rawExpert * 2 : rawExpert)
+      : null;
+  const rawReviews = Number(input.authenticReviews);
+  const safeAuthenticReviews =
+    Number.isFinite(rawReviews) && rawReviews > 0 ? Math.floor(rawReviews) : 0;
+  const rawPrice = Number(input.minPriceVnd);
+  const safeMinPriceVnd =
+    Number.isFinite(rawPrice) && rawPrice > 0 && rawPrice <= MAX_VALID_VND_PRICE
+      ? Math.round(rawPrice)
+      : 0;
+  const rawOffers = Number(input.offerCount);
+  const safeOfferCount =
+    Number.isFinite(rawOffers) && rawOffers > 0 ? Math.floor(rawOffers) : 0;
+  const safeModelKeyToken =
+    (typeof input.modelKey === 'string' ? input.modelKey : '')
+      .toLowerCase()
+      .replace(/[^a-z0-9_-]+/g, '-')
+      .replace(/^-+|-+$/g, '') || 'audit';
+
+  return {
+    safeUserScore5,
+    safeExpertScore10,
+    safeAuthenticReviews,
+    safeMinPriceVnd,
+    safeOfferCount,
+    safeModelKeyToken,
+  };
 }
 
 export default function ProductShareAuditButton({
@@ -41,26 +86,42 @@ export default function ProductShareAuditButton({
   const [copiedMd, setCopiedMd] = useState(false);
   const [copiedUrl, setCopiedUrl] = useState(false);
 
+  const {
+    safeUserScore5,
+    safeExpertScore10,
+    safeAuthenticReviews,
+    safeMinPriceVnd,
+    safeOfferCount,
+    safeModelKeyToken,
+  } = normalizeShareAuditFields({
+    modelKey,
+    userScore5,
+    expertScore10,
+    authenticReviews,
+    minPriceVnd,
+    offerCount,
+  });
+
   const handleCopyMarkdown = async () => {
     if (typeof window === 'undefined') return;
     try {
       const priceStr =
-        minPriceVnd > 0
+        safeMinPriceVnd > 0
           ? t('shareAuditPriceSources', {
-              price: minPriceVnd.toLocaleString('vi-VN'),
-              count: offerCount,
+              price: safeMinPriceVnd.toLocaleString('vi-VN'),
+              count: safeOfferCount,
             })
           : t('shareAuditUpdating');
       const userScoreStr =
-        userScore5 > 0
+        safeUserScore5 > 0
           ? t('shareAuditMdUserScoreVal', {
-              score: userScore5.toFixed(2),
-              count: authenticReviews,
+              score: safeUserScore5.toFixed(2),
+              count: safeAuthenticReviews,
             })
           : t('shareAuditMdNoReviews');
       const expertScoreStr =
-        expertScore10 != null
-          ? `${expertScore10.toFixed(1)}/10`
+        safeExpertScore10 != null
+          ? `${safeExpertScore10.toFixed(1)}/10`
           : t('shareAuditMdNoExpert');
       const lines = [
         t('shareAuditMdTitle', { name, brand }),
@@ -113,11 +174,11 @@ export default function ProductShareAuditButton({
       name,
       brand,
       modelKey,
-      userScore5 > 0 ? userScore5.toFixed(2) : '',
-      expertScore10 != null ? expertScore10.toFixed(1) : '',
-      authenticReviews,
-      minPriceVnd,
-      offerCount,
+      safeUserScore5 > 0 ? safeUserScore5.toFixed(2) : '',
+      safeExpertScore10 != null ? safeExpertScore10.toFixed(1) : '',
+      safeAuthenticReviews,
+      safeMinPriceVnd > 0 ? safeMinPriceVnd : '',
+      safeOfferCount,
       keySpecLine || '',
       ...(radarSignal ? radarCsvCells(radarSignal) : []),
     ];
@@ -126,7 +187,7 @@ export default function ProductShareAuditButton({
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `rate-product-${modelKey || 'audit'}.csv`;
+    a.download = `rate-product-${safeModelKeyToken}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -140,11 +201,11 @@ export default function ProductShareAuditButton({
         name,
         brand,
         modelKey,
-        userScore5: userScore5 > 0 ? userScore5 : null,
-        expertScore10,
-        authenticReviews,
-        minPriceVnd,
-        offerCount,
+        userScore5: safeUserScore5 > 0 ? safeUserScore5 : null,
+        expertScore10: safeExpertScore10,
+        authenticReviews: safeAuthenticReviews,
+        minPriceVnd: safeMinPriceVnd,
+        offerCount: safeOfferCount,
         keySpecLine: keySpecLine || null,
         dealRadar: radarSignal ? radarExportFields(radarSignal) : null,
       },
@@ -155,7 +216,7 @@ export default function ProductShareAuditButton({
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `rate-product-${modelKey || 'audit'}.json`;
+    a.download = `rate-product-${safeModelKeyToken}.json`;
     a.click();
     URL.revokeObjectURL(url);
   };

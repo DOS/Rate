@@ -85,9 +85,9 @@ export default [
       'no-restricted-syntax': [
         'error',
         {
-          selector: "MemberExpression[property.name='SUPABASE_SERVICE_ROLE_KEY']",
+          selector: "MemberExpression[property.name='SUPABASE_SECRET_KEY']",
           message:
-            'Never use SUPABASE_SERVICE_ROLE_KEY in apps/web (src/app/** or src/server/**). Use the anon client (getRateClient) or a user-scoped client.',
+            'Never use SUPABASE_SECRET_KEY in apps/web (src/app/** or src/server/**). Use the anon client (getRateClient) or a user-scoped client.',
         },
       ],
     },

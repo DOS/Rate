@@ -142,10 +142,12 @@ const SAFE_PRODUCT_SLUG_REGEX = /^[a-z0-9._-]{1,120}$/;
 
 export function sanitizeCachedEntityId(value: unknown, maxLen = 128): string {
   if (typeof value !== 'string') return '';
-  return value
+  const cleaned = value
     .replace(/\p{Cc}+/gu, '')
     .trim()
     .slice(0, maxLen);
+  if (!cleaned || cleaned === '.' || cleaned === '..') return '';
+  return cleaned;
 }
 
 export function sanitizeCachedProductSlug(value: unknown): string {
@@ -155,7 +157,15 @@ export function sanitizeCachedProductSlug(value: unknown): string {
     .trim()
     .toLowerCase()
     .slice(0, 120);
-  return SAFE_PRODUCT_SLUG_REGEX.test(cleaned) ? cleaned : '';
+  if (
+    !SAFE_PRODUCT_SLUG_REGEX.test(cleaned) ||
+    cleaned.startsWith('.') ||
+    cleaned.endsWith('.') ||
+    cleaned.includes('..')
+  ) {
+    return '';
+  }
+  return cleaned;
 }
 
 export function sanitizeCachedCompareSlugsCsv(slugsCsv: unknown): string {
@@ -292,8 +302,11 @@ export const getCachedMasterProductReviewSummary = cache(
     existingReviews?: import('../../lib/rate-api').ReviewItem[]
   ) => {
     const cleanId = sanitizeCachedEntityId(masterProductId);
-    const reviewsKey = existingReviews
-      ? `reviews:${existingReviews.length}:${existingReviews
+    const safeReviews = Array.isArray(existingReviews)
+      ? existingReviews.filter((r) => Boolean(r && typeof r === 'object'))
+      : undefined;
+    const reviewsKey = safeReviews
+      ? `reviews:${safeReviews.length}:${safeReviews
           .slice(0, 20)
           .map(
             (r) =>
@@ -304,7 +317,7 @@ export const getCachedMasterProductReviewSummary = cache(
     return withRateDataCache(
       async (id: string) => {
         const reviews =
-          existingReviews ?? (await getCachedMasterProductReviews(id));
+          safeReviews ?? (await getCachedMasterProductReviews(id));
         return _getMasterProductReviewSummary(id, reviews);
       },
       ['rate-master-product-review-summary', cleanId, reviewsKey],
@@ -322,19 +335,32 @@ export const getCachedMasterProductPriceHistory = cache(
     existingOffers?: import('../../lib/rate-api').MerchantOffer[]
   ) => {
     const cleanId = sanitizeCachedEntityId(masterProductId);
-    const offersKey = existingOffers
-      ? `offers:${existingOffers.length}:${existingOffers
+    const safeOffers = Array.isArray(existingOffers)
+      ? existingOffers.filter((o) => Boolean(o && typeof o === 'object'))
+      : undefined;
+    const offersKey = safeOffers
+      ? `offers:${safeOffers.length}:${safeOffers
           .slice(0, 20)
-          .map(
-            (o) =>
-              `${sanitizeCachedEntityId(o.id)}:${o.price_current}:${o.price_original ?? ''}`
-          )
+          .map((o) => {
+            const safeCur =
+              typeof o.price_current === 'number' &&
+              Number.isFinite(o.price_current) &&
+              o.price_current > 0
+                ? Math.round(o.price_current)
+                : 0;
+            const safeOrig =
+              typeof o.price_original === 'number' &&
+              Number.isFinite(o.price_original) &&
+              o.price_original > 0
+                ? Math.round(o.price_original)
+                : '';
+            return `${sanitizeCachedEntityId(o.id)}:${safeCur}:${safeOrig}`;
+          })
           .join('|')}`
       : 'offers:auto';
     return withRateDataCache(
       async (id: string) => {
-        const offers =
-          existingOffers ?? (await getCachedMasterProductOffers(id));
+        const offers = safeOffers ?? (await getCachedMasterProductOffers(id));
         return _getMasterProductPriceHistory(id, offers);
       },
       ['rate-master-product-price-history', cleanId, offersKey],

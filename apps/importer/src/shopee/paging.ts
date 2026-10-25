@@ -38,11 +38,25 @@ export async function fetchAllPages<T>(
     Number.isFinite(rawMaxPages) && rawMaxPages >= 1
       ? Math.min(MAX_FETCH_ALL_PAGES_CEILING, Math.floor(rawMaxPages))
       : DEFAULT_FETCH_ALL_MAX_PAGES;
+  if (typeof buildPage !== 'function') {
+    throw new Error(`${safeLabel}: buildPage must be a function`);
+  }
   const rows: T[] = [];
   let nonEmptyPages = 0;
   for (let from = 0; ;) {
-    const { data, error } = await buildPage(from, from + safePageSize - 1);
-    if (error) throw new Error(`${safeLabel}: ${error.message}`);
+    const pageRes = await buildPage(from, from + safePageSize - 1);
+    const error = pageRes?.error ?? null;
+    if (error) {
+      const safeMsg =
+        typeof error.message === 'string'
+          ? error.message
+              .replace(/\p{Cc}+/gu, ' ')
+              .trim()
+              .slice(0, 500) || 'unknown error'
+          : 'unknown error';
+      throw new Error(`${safeLabel}: ${safeMsg}`);
+    }
+    const data = pageRes?.data ?? null;
     const page = Array.isArray(data) ? data : [];
     if (page.length === 0) return rows;
     nonEmptyPages += 1;
@@ -89,7 +103,12 @@ export function parseShopeeEnqueueUrl(
     return null;
   }
   const host = parsed.hostname.toLowerCase();
-  if (host !== 'shopee.vn' && !host.endsWith('.shopee.vn')) {
+  if (
+    host.startsWith('.') ||
+    host.endsWith('.') ||
+    host.includes('..') ||
+    (host !== 'shopee.vn' && !host.endsWith('.shopee.vn'))
+  ) {
     return null;
   }
   const match =
@@ -129,8 +148,16 @@ export function resolveBackfillSupabaseTarget(rawUrl: string | undefined | null)
   if (parsed.username || parsed.password) {
     throw new Error('SUPABASE_URL must not contain embedded credentials.');
   }
-  if (!parsed.hostname) {
-    throw new Error('SUPABASE_URL is missing hostname.');
+  if (
+    !parsed.hostname ||
+    parsed.hostname.startsWith('.') ||
+    parsed.hostname.endsWith('.') ||
+    parsed.hostname.includes('..')
+  ) {
+    throw new Error('SUPABASE_URL is missing or has an invalid hostname.');
+  }
+  if (parsed.search || parsed.hash) {
+    throw new Error('SUPABASE_URL must not contain query parameters or fragments.');
   }
   return {
     url: parsed.origin,

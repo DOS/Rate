@@ -92,19 +92,21 @@ function normalizeArenaUrl(
   baseOrigin?: string
 ): string | undefined {
   const trimmed = typeof rawUrl === 'string' ? rawUrl.trim() : '';
-  if (!trimmed || trimmed.length > 2048 || /\s/.test(trimmed)) {
+  if (!trimmed || trimmed.length > 2048 || /\p{Cc}/u.test(trimmed) || /\s/.test(trimmed)) {
     return undefined;
-  }
-  for (let i = 0; i < trimmed.length; i++) {
-    const code = trimmed.charCodeAt(i);
-    if (code <= 0x1f || code === 0x7f) return undefined;
   }
   try {
     const parsed = baseOrigin ? new URL(trimmed, baseOrigin) : new URL(trimmed);
+    const hostname = parsed.hostname.toLowerCase();
     if (
       (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') ||
       Boolean(parsed.username || parsed.password) ||
-      !hostPattern.test(parsed.hostname)
+      (parsed.port !== '' && parsed.port !== '80' && parsed.port !== '443') ||
+      !hostname ||
+      hostname.startsWith('.') ||
+      hostname.endsWith('.') ||
+      hostname.includes('..') ||
+      !hostPattern.test(hostname)
     ) {
       return undefined;
     }
@@ -116,6 +118,7 @@ function normalizeArenaUrl(
 
 function stripHtmlTags(raw: string): string {
   return decodeArenaHtmlEntities(raw.replace(/<br\s*\/?>/gi, '\n').replace(/<[^<>]+>/g, ' '))
+    .replace(/(?:(?!\n)\p{Cc})+/gu, ' ')
     .replace(/[ \t]+/g, ' ')
     .trim();
 }
@@ -145,8 +148,9 @@ export function extractGsmArenaDataSpecs(html: string): Record<string, string> {
     closesByTag.set(tag, list);
   }
   const cursors = new Map<string, number>();
+  let specCount = 0;
   let match: RegExpExecArray | null;
-  while ((match = openTag.exec(safeHtml)) !== null) {
+  while (specCount < 500 && (match = openTag.exec(safeHtml)) !== null) {
     const keyMatch = /\bdata-spec=["']([^"']+)["']/i.exec(match[2] || '');
     if (!keyMatch) continue;
     const tag = match[1].toLowerCase();
@@ -157,10 +161,14 @@ export function extractGsmArenaDataSpecs(html: string): Record<string, string> {
     cursors.set(tag, cursor);
     const close = list[cursor];
     if (!close) continue;
-    const key = keyMatch[1]?.trim();
-    const val = stripHtmlTags(safeHtml.slice(openTag.lastIndex, close.at));
-    if (key && val && !specs[key]) {
+    const key = keyMatch[1]
+      ?.replace(/\p{Cc}+/gu, '')
+      .trim()
+      .slice(0, 120);
+    const val = stripHtmlTags(safeHtml.slice(openTag.lastIndex, close.at)).slice(0, 4000);
+    if (key && val && !Object.hasOwn(specs, key)) {
       specs[key] = val;
+      specCount += 1;
     }
     openTag.lastIndex = close.end;
   }
@@ -177,9 +185,18 @@ export function splitCameraModulesToPhoneArenaFormat(rawModules: string): {
   third_camera?: string;
   fourth_camera?: string;
 } {
+  if (typeof rawModules !== 'string' || !rawModules) {
+    return {};
+  }
   const lines = rawModules
     .split(/\r?\n|;\s*(?=\d+\s*MP)/i)
-    .map(l => l.trim())
+    .map(l =>
+      l
+        .replace(/\p{Cc}+/gu, ' ')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .slice(0, 500)
+    )
     .filter(l => l.length > 0);
 
   return {
@@ -198,12 +215,22 @@ export function parseGsmArenaHtmlToSpecs(
   html: string,
   meta?: { gsmarenaUrl?: string; phonearenaUrl?: string; phonearenaHtml?: string }
 ): ArenaSyncedDeviceSpec {
+  const safeMeta = meta && typeof meta === 'object' && !Array.isArray(meta) ? meta : undefined;
   const d = extractGsmArenaDataSpecs(html);
-  const pa = meta?.phonearenaHtml ? extractPhoneArenaTableSpecs(meta.phonearenaHtml) : {};
-  const modelName = d['modelname'] || pa['device name'] || 'Unknown Device';
-  const brand = modelName.split(/\s+/)[0] || 'Generic';
-  const model =
-    modelName.replace(new RegExp(`^${escapeRegExp(brand)}\\s+`, 'i'), '').trim() || modelName;
+  const pa =
+    typeof safeMeta?.phonearenaHtml === 'string' && safeMeta.phonearenaHtml
+      ? extractPhoneArenaTableSpecs(safeMeta.phonearenaHtml)
+      : {};
+  const rawModelName = (d['modelname'] || pa['device name'] || 'Unknown Device')
+    .replace(/\s+/g, ' ')
+    .trim();
+  const modelName = (rawModelName || 'Unknown Device').slice(0, 200).trim();
+  const brand = (modelName.split(/\s+/)[0] || 'Generic').slice(0, 80);
+  const model = (
+    modelName.replace(new RegExp(`^${escapeRegExp(brand)}\\s+`, 'i'), '').trim() || modelName
+  )
+    .slice(0, 160)
+    .trim();
 
   // Display parsing
   const sizeMatch = (d['displaysize'] || pa['screen size'] || '').match(
@@ -285,57 +312,69 @@ export function parseGsmArenaHtmlToSpecs(
         new Set(
           colorsRaw
             .split(',')
-            .map(c => c.trim())
+            .map(c => c.trim().slice(0, 80))
             .filter(Boolean)
         )
-      )
+      ).slice(0, 50)
     : [];
   const nfcRaw = d['nfc'] || pa['nfc'] || '';
+  const capSpec = (val: string | undefined): string | undefined => {
+    if (!val) return undefined;
+    const trimmed = val.trim().slice(0, 500);
+    return trimmed || undefined;
+  };
+  const capKeySpec = (val: string | undefined): string | undefined => {
+    if (!val) return undefined;
+    const trimmed = val.trim().slice(0, 200);
+    return trimmed || undefined;
+  };
 
   const rawSpecs: ProductSpecifications = {
     display: {
       size_inch: screenSizeInch ?? undefined,
-      type: d['displaytype'] || pa['display type'] || undefined,
-      resolution: d['displayresolution'] || pa['resolution'] || undefined,
+      type: capSpec(d['displaytype'] || pa['display type']),
+      resolution: capSpec(d['displayresolution'] || pa['resolution']),
       refresh_rate_hz: refreshRateHz,
       ppi,
-      protection: d['displayprotection'] || undefined,
-      features: d['displayother'] || d['displaytype'] || undefined,
+      protection: capSpec(d['displayprotection']),
+      features: capSpec(d['displayother'] || d['displaytype']),
     },
     hardware: {
-      chipset: d['chipset'] || pa['system chip'] || undefined,
-      cpu: d['cpu'] || pa['processor'] || undefined,
-      gpu: d['gpu'] || pa['gpu'] || undefined,
+      chipset: capSpec(d['chipset'] || pa['system chip']),
+      cpu: capSpec(d['cpu'] || pa['processor']),
+      gpu: capSpec(d['gpu'] || pa['gpu']),
       ram_gb: ramGb ?? undefined,
       storage_gb: storageGb ?? undefined,
-      storage_expansion: d['memoryother']
-        ? `${d['memoryslot'] || 'No'} (${d['memoryother']})`
-        : d['memoryslot'] || 'No',
-      os: d['os'] || pa['os'] || undefined,
+      storage_expansion: capSpec(
+        d['memoryother']
+          ? `${d['memoryslot'] || 'No'} (${d['memoryother']})`
+          : d['memoryslot'] || 'No'
+      ),
+      os: capSpec(d['os'] || pa['os']),
     },
     camera: {
-      main_camera: camSplit.main_camera,
-      second_camera: camSplit.second_camera,
-      third_camera: camSplit.third_camera,
-      fourth_camera: camSplit.fourth_camera,
-      video_recording: d['cam1video'] || pa['video recording'] || undefined,
-      front_camera: d['cam2modules']
-        ? d['cam2modules'].replace(/\r?\n/g, ' | ')
-        : pa['front camera'] || undefined,
-      flash: d['cam1features'] || 'LED Flash, HDR, Panorama',
+      main_camera: capSpec(camSplit.main_camera),
+      second_camera: capSpec(camSplit.second_camera),
+      third_camera: capSpec(camSplit.third_camera),
+      fourth_camera: capSpec(camSplit.fourth_camera),
+      video_recording: capSpec(d['cam1video'] || pa['video recording']),
+      front_camera: capSpec(
+        d['cam2modules'] ? d['cam2modules'].replace(/\r?\n/g, ' | ') : pa['front camera']
+      ),
+      flash: capSpec(d['cam1features'] || 'LED Flash, HDR, Panorama'),
     },
     battery: {
       capacity_mah: batteryMah ?? undefined,
-      type: batRaw || undefined,
-      charging: chargingRaw ? chargingRaw.replace(/\r?\n/g, ', ') : undefined,
+      type: capSpec(batRaw),
+      charging: capSpec(chargingRaw ? chargingRaw.replace(/\r?\n/g, ', ') : undefined),
       fast_charging_w: fastChargingW,
       reverse_charging: /reverse\s+wireless/i.test(chargingRaw) ? true : undefined,
     },
     design: {
-      dimensions: d['dimensions'] || pa['dimensions'] || undefined,
+      dimensions: capSpec(d['dimensions'] || pa['dimensions']),
       weight_g: weightG,
-      materials: d['build'] || d['bodyother'] || undefined,
-      resistance: resistanceMatch ? resistanceMatch[0].trim() : undefined,
+      materials: capSpec(d['build'] || d['bodyother']),
+      resistance: capSpec(resistanceMatch ? resistanceMatch[0].trim() : undefined),
       biometrics: /fingerprint/i.test(d['sensors'] || pa['biometrics'] || '')
         ? 'Under-display ultrasonic fingerprint, Face Unlock'
         : 'Face ID / Biometric sensor',
@@ -343,71 +382,82 @@ export function parseGsmArenaHtmlToSpecs(
     },
     cellular: {
       has_5g: has5g,
-      bands_5g: has5g ? d['net5g'] || '5G SA/NSA/Sub6' : d['net5g'] || undefined,
-      sim_type: d['sim'] || (has5g ? 'Dual SIM (Nano-SIM + eSIM)' : 'No cellular connectivity'),
-      data_speed: d['speed'] || (has5g ? '5G, LTE-A' : 'Wi-Fi Only'),
-      technology: d['nettech'] || (has5g ? 'GSM / HSPA / LTE / 5G' : 'No cellular connectivity'),
+      bands_5g: capSpec(has5g ? d['net5g'] || '5G SA/NSA/Sub6' : d['net5g']),
+      sim_type: capSpec(
+        d['sim'] || (has5g ? 'Dual SIM (Nano-SIM + eSIM)' : 'No cellular connectivity')
+      ),
+      data_speed: capSpec(d['speed'] || (has5g ? '5G, LTE-A' : 'Wi-Fi Only')),
+      technology: capSpec(
+        d['nettech'] || (has5g ? 'GSM / HSPA / LTE / 5G' : 'No cellular connectivity')
+      ),
     },
     connectivity: {
-      bluetooth: d['bluetooth'] || pa['bluetooth'] || undefined,
-      wlan: d['wlan'] || pa['wi-fi'] || undefined,
-      usb: d['usb'] || pa['usb'] || undefined,
+      bluetooth: capSpec(d['bluetooth'] || pa['bluetooth']),
+      wlan: capSpec(d['wlan'] || pa['wi-fi']),
+      usb: capSpec(d['usb'] || pa['usb']),
       nfc: nfcRaw ? /yes|true|nfc/i.test(nfcRaw) && !/^no\b/i.test(nfcRaw.trim()) : true,
-      location: d['gps'] || undefined,
-      sensors: d['sensors'] || undefined,
+      location: capSpec(d['gps']),
+      sensors: capSpec(d['sensors']),
     },
     multimedia: {
-      loudspeaker: d['loudspeaker'] || 'Stereo speakers, Dolby Atmos',
+      loudspeaker: capSpec(d['loudspeaker'] || 'Stereo speakers, Dolby Atmos'),
       headphone_jack_35mm: has35mmJack,
-      audio_features: d['soundother'] || '24-bit/192kHz Hi-Res & Hi-Res Wireless audio',
+      audio_features: capSpec(d['soundother'] || '24-bit/192kHz Hi-Res & Hi-Res Wireless audio'),
     },
     availability: {
-      announced: d['announced'] || undefined,
-      status: d['status'] || undefined,
-      prices_msrp: d['price'] || undefined,
+      announced: capSpec(d['announced']),
+      status: capSpec(d['status']),
+      prices_msrp: capSpec(d['price']),
     },
     regulatory: {
-      sar_head: d['sar-us'] || undefined,
-      sar_body: d['sar-eu'] || undefined,
+      sar_head: capSpec(d['sar-us']),
+      sar_body: capSpec(d['sar-eu']),
       certifications: 'CE, FCC, RoHS, QCVN (BTTTT Vietnam)',
     },
   };
 
   const validatedSpecs = ProductSpecificationsSchema.parse(rawSpecs);
   const keySpecs = KeySpecsSchema.parse({
-    screen: screenSizeInch
-      ? `${screenSizeInch}" ${d['displaytype']?.split(',')[0] || 'LTPO OLED'} ${refreshRateHz ? `${refreshRateHz}Hz` : ''}`.trim()
-      : d['displaytype'],
-    chip: d['chipset'] || pa['system chip'] || undefined,
+    screen: capKeySpec(
+      screenSizeInch
+        ? `${screenSizeInch}" ${d['displaytype']?.split(',')[0] || 'LTPO OLED'} ${refreshRateHz ? `${refreshRateHz}Hz` : ''}`
+        : d['displaytype']
+    ),
+    chip: capKeySpec(d['chipset'] || pa['system chip']),
     ram: ramGb ? `${ramGb}GB` : undefined,
     storage: storageGb
       ? storageGb >= 1024 && storageGb % 512 === 0
         ? `${storageGb / 1024}TB`
         : `${storageGb}GB`
       : undefined,
-    camera: camSplit.main_camera
-      ? [camSplit.main_camera, camSplit.second_camera, camSplit.third_camera]
-          .filter(Boolean)
-          .map(c => c?.split(',')[0]?.trim())
-          .join(' + ')
-      : undefined,
-    battery: batteryMah
-      ? `${batteryMah}mAh${fastChargingW ? ` ${fastChargingW}W` : ''}`
-      : batRaw || undefined,
+    camera: capKeySpec(
+      camSplit.main_camera
+        ? [camSplit.main_camera, camSplit.second_camera, camSplit.third_camera]
+            .filter(Boolean)
+            .map(c => c?.split(',')[0]?.trim())
+            .join(' + ')
+        : undefined
+    ),
+    battery: capKeySpec(
+      batteryMah ? `${batteryMah}mAh${fastChargingW ? ` ${fastChargingW}W` : ''}` : batRaw
+    ),
   });
 
-  const gsmarenaUrl = normalizeArenaUrl(meta?.gsmarenaUrl, /(?:^|\.)gsmarena\.com$/i);
-  const phonearenaUrl = normalizeArenaUrl(meta?.phonearenaUrl, /(?:^|\.)phonearena\.com$/i);
+  const gsmarenaUrl = normalizeArenaUrl(safeMeta?.gsmarenaUrl, /(?:^|\.)gsmarena\.com$/i);
+  const phonearenaUrl = normalizeArenaUrl(safeMeta?.phonearenaUrl, /(?:^|\.)phonearena\.com$/i);
 
   return {
-    source: phonearenaUrl || meta?.phonearenaHtml ? 'hybrid' : 'gsmarena',
+    source:
+      phonearenaUrl || (typeof safeMeta?.phonearenaHtml === 'string' && safeMeta.phonearenaHtml)
+        ? 'hybrid'
+        : 'gsmarena',
     gsmarenaUrl,
     phonearenaUrl,
     brand,
     model,
     modelName,
-    announced: d['announced'],
-    status: d['status'],
+    announced: capSpec(d['announced']?.replace(/\s+/g, ' ')),
+    status: capSpec(d['status']?.replace(/\s+/g, ' ')),
     ramGb,
     storageGb,
     screenSizeInch,
@@ -431,14 +481,19 @@ export function extractPhoneArenaTableSpecs(html: string): Record<string, string
   // the next cell instead of rescanning the rest of the page (polynomial-redos).
   const rowRegex =
     /<tr[^<>]*>\s*<(?:th|td)[^<>]*>((?:(?!<\/?t[rhd]\b)[\s\S])*)<\/(?:th|td)>\s*<td[^<>]*>((?:(?!<\/?t[rhd]\b)[\s\S])*)<\/td>\s*<\/tr>/gi;
+  let rowCount = 0;
   let match: RegExpExecArray | null;
-  while ((match = rowRegex.exec(safeHtml)) !== null) {
+  while (rowCount < 500 && (match = rowRegex.exec(safeHtml)) !== null) {
     const label = stripHtmlTags(match[1] || '')
+      .replace(/\s+/g, ' ')
       .replace(/:$/, '')
-      .toLowerCase();
-    const val = stripHtmlTags(match[2] || '');
-    if (label && val && !out[label]) {
+      .trim()
+      .toLowerCase()
+      .slice(0, 120);
+    const val = stripHtmlTags(match[2] || '').slice(0, 4000);
+    if (label && val && !Object.hasOwn(out, label)) {
       out[label] = val;
+      rowCount += 1;
     }
   }
   return out;
@@ -463,7 +518,14 @@ export function parseGsmArenaBrandCatalogHtml(
   const safeHtml =
     html.length > MAX_ARENA_HTML_LENGTH ? html.slice(0, MAX_ARENA_HTML_LENGTH) : html;
   const results: DiscoveredArenaCatalogItem[] = [];
-  const trimmedBrand = typeof brandHint === 'string' ? brandHint.trim() : '';
+  const trimmedBrand =
+    typeof brandHint === 'string'
+      ? brandHint
+          .replace(/\p{Cc}+/gu, ' ')
+          .replace(/\s+/g, ' ')
+          .trim()
+          .slice(0, 80)
+      : '';
   const brandPrefixRe = trimmedBrand
     ? new RegExp(`^${escapeRegExp(trimmedBrand)}(?:\\s|$)`, 'i')
     : null;
@@ -476,7 +538,10 @@ export function parseGsmArenaBrandCatalogHtml(
     const href = match[1]?.trim() || '';
     const inner = match[2] || '';
     const nameMatch = inner.match(/<span[^<>]*>((?:(?!<\/?span\b)[\s\S])*)<\/span>/i);
-    const rawName = stripHtmlTags(nameMatch ? nameMatch[1] || '' : inner);
+    const rawName = stripHtmlTags(nameMatch ? nameMatch[1] || '' : inner)
+      .replace(/\s+/g, ' ')
+      .trim()
+      .slice(0, 200);
     if (!rawName || !href) continue;
     const url = normalizeArenaUrl(
       decodeArenaHtmlEntities(href),
@@ -484,8 +549,11 @@ export function parseGsmArenaBrandCatalogHtml(
       'https://www.gsmarena.com/'
     );
     if (!url) continue;
-    const fullName =
-      brandPrefixRe && !brandPrefixRe.test(rawName) ? `${trimmedBrand} ${rawName}` : rawName;
+    const fullName = (
+      brandPrefixRe && !brandPrefixRe.test(rawName) ? `${trimmedBrand} ${rawName}` : rawName
+    )
+      .slice(0, 200)
+      .trim();
     const rawImgSrc = [...inner.matchAll(/<img\b([^<>]*)>/gi)]
       // `(?:^|\s)` so `data-src` lazy-load placeholders are not taken for src.
       .map(img => /(?:^|\s)src=["']([^"']+)["']/i.exec(img[1] || '')?.[1])
@@ -523,7 +591,10 @@ export function parsePhoneArenaCatalogHtml(html: string): DiscoveredArenaCatalog
   let match: RegExpExecArray | null;
   while (results.length < MAX_ARENA_CATALOG_ITEMS && (match = linkRegex.exec(safeHtml)) !== null) {
     const rawHref = hrefRegex.exec(match[1] || '')?.[1]?.trim() || '';
-    const text = stripHtmlTags(match[2] || '');
+    const text = stripHtmlTags(match[2] || '')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .slice(0, 200);
     if (!rawHref || !text || text.length < 4) continue;
     if (/compare|benchmarks|size-compare|reviews/i.test(rawHref)) continue;
     const url = normalizeArenaUrl(
@@ -556,21 +627,36 @@ const CANONICAL_10_SPEC_GROUPS = [
   'regulatory',
 ] as const;
 
-function isPopulatedSpecFieldValue(v: unknown): boolean {
-  if (v === null || v === undefined) return false;
+function isPopulatedSpecFieldValue(
+  v: unknown,
+  depth = 0,
+  seen: WeakSet<object> = new WeakSet<object>()
+): boolean {
+  if (v === null || v === undefined || depth > 8) return false;
   if (typeof v === 'number') return Number.isFinite(v);
-  if (typeof v === 'string') return v.trim().length > 0;
-  if (Array.isArray(v)) return v.some(isPopulatedSpecFieldValue);
+  if (typeof v === 'string') return v.replace(/\p{Cc}+/gu, '').trim().length > 0;
+  if (typeof v === 'boolean') return true;
   if (typeof v === 'object') {
-    return Object.values(v as Record<string, unknown>).some(isPopulatedSpecFieldValue);
+    if (seen.has(v)) return false;
+    seen.add(v);
+    try {
+      if (Array.isArray(v)) {
+        return v.slice(0, 100).some(item => isPopulatedSpecFieldValue(item, depth + 1, seen));
+      }
+      return Object.values(v as Record<string, unknown>)
+        .slice(0, 100)
+        .some(item => isPopulatedSpecFieldValue(item, depth + 1, seen));
+    } finally {
+      seen.delete(v);
+    }
   }
-  return true;
+  return false;
 }
 
 export function countPopulatedFieldGroups(
   specs: Record<string, unknown> | null | undefined
 ): number {
-  if (!specs || typeof specs !== 'object') return 0;
+  if (!specs || typeof specs !== 'object' || Array.isArray(specs)) return 0;
   let count = 0;
   for (const key of CANONICAL_10_SPEC_GROUPS) {
     const group = specs[key];
@@ -578,7 +664,7 @@ export function countPopulatedFieldGroups(
       group &&
       typeof group === 'object' &&
       !Array.isArray(group) &&
-      Object.values(group as Record<string, unknown>).some(isPopulatedSpecFieldValue)
+      Object.values(group as Record<string, unknown>).some(val => isPopulatedSpecFieldValue(val, 0))
     ) {
       count += 1;
     }
@@ -657,14 +743,45 @@ export class ArenaSpecSyncer {
     const incompleteSpecMasters: ArenaCatalogAuditReport['incompleteSpecMasters'] = [];
 
     for (const r of rows) {
-      if (r.model_key) existingKeys.add(String(r.model_key).toLowerCase());
-      if (r.slug) existingSlugs.add(String(r.slug).toLowerCase());
+      if (!r || typeof r !== 'object' || Array.isArray(r)) continue;
+      if (r.model_key) {
+        const cleanedKey = String(r.model_key)
+          .replace(/\p{Cc}+/gu, '')
+          .trim()
+          .toLowerCase();
+        if (cleanedKey) existingKeys.add(cleanedKey);
+      }
+      if (r.slug) {
+        const cleanedSlug = String(r.slug)
+          .replace(/\p{Cc}+/gu, '')
+          .trim()
+          .toLowerCase();
+        if (cleanedSlug) existingSlugs.add(cleanedSlug);
+      }
       const populatedGroups = countPopulatedFieldGroups(r.specifications);
       if (populatedGroups < 10) {
         incompleteSpecMasters.push({
-          id: r.id,
-          name: r.name,
-          model_key: r.model_key,
+          id:
+            typeof r.id === 'string'
+              ? r.id
+                  .replace(/\p{Cc}+/gu, '')
+                  .trim()
+                  .slice(0, 128)
+              : '',
+          name:
+            typeof r.name === 'string'
+              ? r.name
+                  .replace(/\p{Cc}+/gu, '')
+                  .trim()
+                  .slice(0, 300)
+              : '',
+          model_key:
+            typeof r.model_key === 'string'
+              ? r.model_key
+                  .replace(/\p{Cc}+/gu, '')
+                  .trim()
+                  .slice(0, 200)
+              : '',
           populatedGroups,
         });
       }

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { fetchAllPages, parseShopeeEnqueueUrl, resolveBackfillSupabaseTarget } from '../paging.js';
-import { mergeKeySpecs, sanitizeKeySpecKey } from '../jobs/backfill-specs.js';
+import { auditMasterSpecs, mergeKeySpecs, sanitizeKeySpecKey } from '../jobs/backfill-specs.js';
 
 // A fake query over `total` rows that, like PostgREST, never returns more than
 // `maxRows` per response whatever range is asked for.
@@ -150,6 +150,126 @@ async function run() {
     a: 'val one',
     b: 'ok',
   });
+
+  // Issue #910: non-function buildPage, nullish page response, control chars in error.message,
+  // non-string sanitizeKeySpecKey, cyclic/non-plain objects in mergeKeySpecs, and auditMasterSpecs label sanitization
+  await assert.rejects(
+    fetchAllPages('bad_builder', null as unknown as never),
+    /bad_builder: buildPage must be a function/
+  );
+  assert.deepEqual(
+    await fetchAllPages('null_page', () => Promise.resolve(null as unknown as never)),
+    []
+  );
+  await assert.rejects(
+    fetchAllPages('ctrl_err', () =>
+      Promise.resolve({ data: null, error: { message: 'db\u0007\u0085failure' } })
+    ),
+    /ctrl_err: db failure/
+  );
+
+  assert.equal(sanitizeKeySpecKey(123 as unknown as string), null);
+  const cyclicSpec: Record<string, unknown> = { valid: 'ok' };
+  cyclicSpec.self = cyclicSpec;
+  const cyclicArr: unknown[] = ['item1'];
+  cyclicArr.push(cyclicArr);
+  cyclicSpec.arr = cyclicArr;
+  cyclicSpec.dateObj = new Date(0);
+  const sharedLeaf = { sub: 'shared' };
+  cyclicSpec.refA = sharedLeaf;
+  cyclicSpec.refB = sharedLeaf;
+  assert.deepEqual(mergeKeySpecs(cyclicSpec, new Date(0) as unknown as Record<string, unknown>), {
+    valid: 'ok',
+    arr: ['item1'],
+    refA: { sub: 'shared' },
+    refB: { sub: 'shared' },
+  });
+
+  await assert.rejects(
+    auditMasterSpecs({
+      from: () => ({
+        select: () => ({
+          order: () => ({
+            range: (from: number) =>
+              Promise.resolve({
+                data:
+                  from === 0
+                    ? [
+                        null,
+                        {
+                          id: 'm1',
+                          name: 'Phone\u0000\u0085X',
+                          model_key: 'phone\u0007-x',
+                          specifications: null,
+                        },
+                      ]
+                    : [],
+                error: null,
+              }),
+          }),
+        }),
+      }),
+    } as never),
+    /Phone X \(phone -x\) failed ProductSpecificationsSchema validation/
+  );
+
+  // Issue #1002: arena-spec-syncer URL/camera/meta guards, paging dot/query/hash checks, and merchant-review-risk ID/boolean bounds
+  assert.equal(
+    parseShopeeEnqueueUrl('https://..shopee.vn/product/88201679/27110898667'),
+    null,
+    'must reject consecutive dots in Shopee hostname (#1002)'
+  );
+  assert.equal(
+    parseShopeeEnqueueUrl('https://.shopee.vn/product/88201679/27110898667'),
+    null,
+    'must reject leading dot in Shopee hostname (#1002)'
+  );
+  assert.throws(
+    () => resolveBackfillSupabaseTarget('https://example..supabase.co'),
+    /invalid hostname/,
+    'must reject consecutive dots in Supabase hostname (#1002)'
+  );
+  assert.throws(
+    () => resolveBackfillSupabaseTarget('https://example.supabase.co?foo=1'),
+    /query parameters or fragments/,
+    'must reject query parameters in Supabase target URL (#1002)'
+  );
+  assert.throws(
+    () => resolveBackfillSupabaseTarget('https://example.supabase.co#frag'),
+    /query parameters or fragments/,
+    'must reject fragments in Supabase target URL (#1002)'
+  );
+
+  const { parseGsmArenaHtmlToSpecs, splitCameraModulesToPhoneArenaFormat } =
+    await import('../arena-spec-syncer.js');
+  const camModules = splitCameraModulesToPhoneArenaFormat(
+    '50 MP\u0000\u0085 wide\n12 MP\u0007 ultrawide'
+  );
+  assert.equal(camModules.main_camera, '50 MP wide');
+  assert.equal(camModules.second_camera, '12 MP ultrawide');
+  const specFromArrayMeta = parseGsmArenaHtmlToSpecs(
+    '<h1 data-spec="modelname">Apple iPhone 16</h1>',
+    [] as unknown as { gsmarenaUrl?: string }
+  );
+  assert.equal(specFromArrayMeta.source, 'gsmarena');
+
+  const { mapStoredReview, uniqueIds } = await import('../merchant-review-risk.js');
+  assert.deepEqual(uniqueIds(['valid-id', 'id with spaces', '  another-id  ']), [
+    'another-id',
+    'valid-id',
+  ]);
+  const mappedNonBool = mapStoredReview({
+    id: 'rev-1',
+    product_id: 'prod-1',
+    rating_star: 5,
+    comment: 'Great phone',
+    review_flags: {
+      verdict: 'fake',
+      flag_category: 'seeding_fake',
+      include_in_rating: 'true' as unknown as boolean,
+    },
+  });
+  assert.equal(mappedNonBool?.result.include_in_rating, false);
 
   console.log('✅ fetchAllPages & parseShopeeEnqueueUrl suite passed');
 }

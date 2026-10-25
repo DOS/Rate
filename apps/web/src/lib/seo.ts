@@ -23,14 +23,17 @@ export function fitTitle(
   candidates: readonly string[],
   max: number = MAX_TITLE_LENGTH
 ): string {
-  const rawMax = Number(max);
+  if (!Array.isArray(candidates)) return '';
+  const rawMax = typeof max === 'number' ? max : NaN;
   const limit = Number.isFinite(rawMax)
     ? Math.max(1, Math.min(1000, Math.floor(rawMax)))
     : MAX_TITLE_LENGTH;
   const cleanedCandidates = candidates
+    .slice(0, 50)
     .map((c) =>
       typeof c === 'string'
         ? c
+            .slice(0, 2000)
             .replace(/\p{Cc}+/gu, ' ')
             .replace(/\s+/g, ' ')
             .trim()
@@ -73,17 +76,40 @@ export function fitDescription(text: string): string {
 export function absoluteUrl(pathOrUrl: string): string {
   if (typeof pathOrUrl !== 'string') return SITE_URL;
   const cleaned = pathOrUrl.replace(/\p{Cc}+/gu, '').trim();
-  if (!cleaned || cleaned.length > 2048) return SITE_URL;
-  if (cleaned.startsWith('//') || cleaned.startsWith('/\\')) {
+  if (!cleaned || cleaned.length > 2048 || /\s/.test(cleaned)) return SITE_URL;
+  if (
+    cleaned.startsWith('//') ||
+    cleaned.startsWith('/\\') ||
+    cleaned.startsWith('\\')
+  ) {
     return SITE_URL;
   }
   try {
     const isAbsolute = /^https?:\/\//i.test(cleaned);
+    if (
+      !isAbsolute &&
+      (cleaned.includes('\\') || /(?:^|\/)\.\.(?:\/|$)/.test(cleaned))
+    ) {
+      return SITE_URL;
+    }
     const parsed = isAbsolute ? new URL(cleaned) : new URL(cleaned, SITE_URL);
     if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
       return SITE_URL;
     }
-    if (parsed.username || parsed.password) {
+    const host = parsed.hostname.toLowerCase();
+    if (
+      parsed.username ||
+      parsed.password ||
+      !host ||
+      host.startsWith('.') ||
+      host.startsWith('[') ||
+      host.endsWith('.') ||
+      host.includes('..') ||
+      !host.includes('.') ||
+      /^\d+(?:\.\d+){3}$/.test(host) ||
+      /\.(?:local|internal|localhost)$/i.test(host) ||
+      Boolean(parsed.port)
+    ) {
       return SITE_URL;
     }
     if (!isAbsolute && parsed.origin !== SITE_URL) {
@@ -97,6 +123,15 @@ export function absoluteUrl(pathOrUrl: string): string {
 
 /** Organization and WebSite JSON-LD for the home page (DOS/Rate#738). */
 export function siteJsonLd(locale: string, description: string) {
+  const safeLocale = locale === 'en' || locale === 'cs' ? locale : 'vi';
+  const safeDescription =
+    typeof description === 'string'
+      ? description
+          .replace(/\p{Cc}+/gu, ' ')
+          .replace(/\s+/g, ' ')
+          .trim()
+          .slice(0, 500)
+      : '';
   const organizationId = `${SITE_URL}/#organization`;
   return {
     '@context': 'https://schema.org',
@@ -113,8 +148,8 @@ export function siteJsonLd(locale: string, description: string) {
         '@id': `${SITE_URL}/#website`,
         name: 'Rate.vn',
         url: SITE_URL,
-        description,
-        inLanguage: locale,
+        description: safeDescription,
+        inLanguage: safeLocale,
         publisher: { '@id': organizationId },
       },
     ],
@@ -135,10 +170,20 @@ const OG_LOCALES: Record<string, string> = {
  * page's resolved title and description.
  */
 export function defaultOpenGraph(locale: string) {
+  const cleanLocale =
+    typeof locale === 'string'
+      ? locale
+          .replace(/\p{Cc}+/gu, '')
+          .trim()
+          .toLowerCase()
+      : '';
+  const resolvedOgLocale = Object.hasOwn(OG_LOCALES, cleanLocale)
+    ? OG_LOCALES[cleanLocale]!
+    : OG_LOCALES.vi;
   return {
     type: 'website' as const,
     siteName: 'Rate.vn',
-    locale: OG_LOCALES[locale] ?? OG_LOCALES.vi,
+    locale: resolvedOgLocale,
     images: [SHARE_IMAGE],
   };
 }

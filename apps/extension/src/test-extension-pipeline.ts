@@ -9,6 +9,7 @@ import {
   extractPriceFromJsonLdOffers,
   extractProductSignalFromDom,
   extractRatingFromJsonLd,
+  extractSelectedVariantFromDom,
   flattenJsonLdEntities,
   isJsonLdProductEntity,
   parseVndPriceText,
@@ -2560,6 +2561,761 @@ async function runTests() {
 
     console.log(
       '  ✅ [Extension Security Guards & Detector Bounds (#846)] Verified'
+    );
+  }
+
+  // --- DOS/Rate#950: sender/signal/number bounds & DOM variant deduplication ---
+  {
+    assert.equal(isPrivilegedExtensionSender(null as never), false);
+    assert.equal(isPrivilegedExtensionSender([] as never), false);
+
+    const nullSignal = sanitizeExtensionProductSignal(null as never);
+    assert.equal(nullSignal.platform, 'shopee');
+    assert.equal(nullSignal.title, '');
+    assert.equal(nullSignal.price, null);
+
+    const badPlatformSignal = sanitizeExtensionProductSignal({
+      platform: 'evil_platform' as never,
+      canonicalUrl: 'https://shopee.vn/item-i.1.2',
+      externalItemId: '2',
+      externalShopId: '1',
+      title: 'iPhone 16',
+      selectedVariant: null,
+      price: 20_000_000,
+      originalPrice: null,
+      ratingStar: null,
+      ratingCount: null,
+    });
+    assert.equal(badPlatformSignal.platform, 'shopee');
+
+    assert.equal(
+      formatSafeNumber('not-a-number', {
+        fallback: Number.NaN,
+        min: 100,
+        max: 10,
+      }),
+      '10'
+    );
+    assert.equal(formatSafeNumber(42.6, null as never), '43');
+
+    assert.deepEqual(extractIdsFromUrl('shopee', null as never), {
+      externalItemId: null,
+      externalShopId: null,
+    });
+    assert.equal(cleanExtractedProductTitle(null as never), '');
+    assert.equal(
+      cleanExtractedProductTitle('  iPhone\u000016   Pro  | Shopee VN'),
+      'iPhone 16 Pro'
+    );
+
+    const duplicateDom = {
+      querySelectorAll(sel: string) {
+        if (
+          sel === 'button.product-variation--selected' ||
+          sel === 'button[aria-checked="true"]'
+        ) {
+          return [{ textContent: '  256GB\u0000 ' }, { textContent: '256gb' }];
+        }
+        return [];
+      },
+    } as unknown as Document;
+    assert.equal(extractSelectedVariantFromDom(duplicateDom), '256GB');
+    assert.equal(extractSelectedVariantFromDom(null as never), null);
+
+    console.log(
+      '  ✅ [Extension Sender/Signal/Number & DOM Variant Bounds (#950)] Verified'
+    );
+  }
+
+  // --- DOS/Rate#1004: security-guards URL/ID/sparkline bounds & ecommerce-detector IDs ---
+  {
+    const { sanitizeExtensionProductSignal, filterValidSparklinePrices } =
+      await import('./security-guards.js');
+
+    assert.equal(
+      normalizeAllowedApiBaseUrl('https://user:pass@rate.vn'),
+      DEFAULT_API_BASE_URL
+    );
+    assert.equal(
+      normalizeAllowedApiBaseUrl('https://rate.vn/extra/path'),
+      DEFAULT_API_BASE_URL
+    );
+    assert.equal(
+      normalizeAllowedApiBaseUrl('https://rate.vn?evil=1'),
+      DEFAULT_API_BASE_URL
+    );
+    assert.equal(
+      normalizeAllowedApiBaseUrl('https://www.rate.vn/'),
+      'https://www.rate.vn'
+    );
+
+    const badSig = sanitizeExtensionProductSignal({
+      platform: 'shopee',
+      canonicalUrl: 'https://shopee..vn/item-i.1.2',
+      externalItemId: '000',
+      externalShopId: 'null',
+      title: 'iPhone 16',
+      selectedVariant: null,
+      price: 25_000_000,
+      originalPrice: null,
+      ratingStar: null,
+      ratingCount: null,
+    });
+    assert.equal(badSig.canonicalUrl, '');
+    assert.equal(badSig.externalItemId, null);
+    assert.equal(badSig.externalShopId, null);
+
+    assert.equal(
+      escapeSafeExternalHref('https://shopee..vn/item', 'https://rate.vn'),
+      'https://rate.vn'
+    );
+    assert.equal(
+      escapeSafeExternalHref(
+        'https://shopee.vn/item with space',
+        'https://rate.vn'
+      ),
+      'https://rate.vn'
+    );
+
+    assert.deepEqual(
+      filterValidSparklinePrices([
+        { price: true as unknown as number },
+        null as never,
+        [] as never,
+        { price: 24_990_000 },
+      ]),
+      [24_990_000]
+    );
+
+    assert.equal(sanitizeProductUrl('https://shopee..vn/item-i.1.2'), null);
+    assert.equal(sanitizeProductUrl('https://shopee.vn:8443/item-i.1.2'), null);
+    assert.equal(
+      detectEcommercePlatform('https://shopee..vn/item-i.1.2'),
+      null
+    );
+    assert.equal(
+      detectEcommercePlatform('https://shopee.vn:8443/item-i.1.2'),
+      null
+    );
+
+    assert.deepEqual(
+      extractIdsFromUrl('shopee', 'https://shopee.vn/item-i.0.000'),
+      {
+        externalItemId: null,
+        externalShopId: null,
+      }
+    );
+    assert.deepEqual(
+      extractIdsFromUrl('tiktok', 'https://www.tiktok.com/@..bad/product/000'),
+      {
+        externalItemId: null,
+        externalShopId: null,
+      }
+    );
+    assert.deepEqual(
+      extractIdsFromUrl(
+        'cellphones',
+        'https://cellphones.com.vn/..bad..slug.html'
+      ),
+      {
+        externalItemId: null,
+        externalShopId: null,
+      }
+    );
+
+    console.log(
+      '  \u2705 [Extension URL/ID/Sparkline Bounds & Detector IDs (#1004)] Verified'
+    );
+  }
+
+  // Lookup Entity ID Validation & Offer URL Matching (#1006)
+  {
+    const extServerMod = await import('../../web/src/server/rate/extension.js');
+    const {
+      isValidExternalEntityId,
+      buildCandidateExternalItemIds,
+      doesOfferUrlMatchCandidateIds,
+    } = (
+      'isValidExternalEntityId' in extServerMod
+        ? extServerMod
+        : (extServerMod as unknown as { default: typeof extServerMod }).default
+    ) as typeof extServerMod;
+
+    assert.equal(isValidExternalEntityId('0'), false);
+    assert.equal(isValidExternalEntityId('000'), false);
+    assert.equal(isValidExternalEntityId('null'), false);
+    assert.equal(isValidExternalEntityId('..bad'), false);
+    assert.equal(isValidExternalEntityId('bad id'), false);
+    assert.equal(isValidExternalEntityId('12345678'), true);
+
+    assert.deepEqual(
+      buildCandidateExternalItemIds({
+        externalId: '000',
+        shopId: 'null',
+        platform: 'shopee',
+      }),
+      []
+    );
+    assert.deepEqual(
+      buildCandidateExternalItemIds({
+        externalId: '111222_000',
+        shopId: null,
+        platform: 'shopee',
+      }),
+      ['111222_000']
+    );
+    assert.deepEqual(
+      buildCandidateExternalItemIds({
+        externalId: '987654321',
+        shopId: '123456',
+        platform: 'shopee',
+      }),
+      ['987654321', '123456_987654321']
+    );
+    assert.deepEqual(
+      buildCandidateExternalItemIds({
+        externalId: 'iphone-16-pro-max',
+        shopId: null,
+        platform: 'cellphones',
+      }),
+      ['iphone-16-pro-max', 'cps-iphone-16-pro-max']
+    );
+
+    // Prevent domain/scheme or short token false-positive matches in offer URLs
+    assert.equal(
+      doesOfferUrlMatchCandidateIds(
+        'https://shopee.vn/product/123456/987654321',
+        ['shopee.vn', 'https', '12']
+      ),
+      false
+    );
+    assert.equal(
+      doesOfferUrlMatchCandidateIds(
+        'https://shopee.vn/product/123456/987654321',
+        ['987654321']
+      ),
+      true
+    );
+
+    console.log(
+      '  \u2705 [Lookup Entity ID Validation & Offer URL Matching (#1006)] Verified'
+    );
+  }
+
+  // 25. Deals, Deal-Radar, and Offer-Plausibility ID/Slug/Numeric Bounds (#1008)
+  {
+    const dealsMod = await import('../../web/src/server/rate/deals.js');
+    const { computeCrossPlatformDealRadarFromData } = (
+      typeof dealsMod.computeCrossPlatformDealRadarFromData === 'function'
+        ? dealsMod
+        : (dealsMod as unknown as { default: typeof dealsMod }).default
+    ) as typeof dealsMod;
+    const radarMod = await import('../../web/src/lib/deal-radar.js');
+    const { buildRadarIndex } = (
+      typeof radarMod.buildRadarIndex === 'function'
+        ? radarMod
+        : (radarMod as unknown as { default: typeof radarMod }).default
+    ) as typeof radarMod;
+    const plausibilityMod =
+      await import('../../web/src/lib/offer-plausibility.js');
+    const { implausiblyLowOfferIds, implausiblyLowIndexes } = (
+      typeof plausibilityMod.implausiblyLowOfferIds === 'function'
+        ? plausibilityMod
+        : (plausibilityMod as unknown as { default: typeof plausibilityMod })
+            .default
+    ) as typeof plausibilityMod;
+
+    // 1. implausiblyLowIndexes and implausiblyLowOfferIds reject hex/binary/octal and malformed IDs
+    const lowIdx = implausiblyLowIndexes([
+      20_000_000,
+      20_000_000,
+      5_000_000,
+      '0x100' as unknown as number,
+    ]);
+    assert.deepEqual([...lowIdx], [2]);
+    const lowIds = implausiblyLowOfferIds([
+      { id: 'offer-1', price_current: 20_000_000 },
+      { id: 'offer-2', price_current: 20_000_000 },
+      { id: 'offer-3', price_current: 20_000_000 },
+      { id: 'offer-4', price_current: 20_000_000 },
+      { id: '000', price_current: 5_000_000 },
+      { id: '..bad..', price_current: 5_000_000 },
+      { id: 'valid-low-id', price_current: 5_000_000 },
+    ]);
+    assert.deepEqual([...lowIds], ['valid-low-id']);
+
+    // 2. buildRadarIndex rejects invalid slugs and hex/binary/octal string numbers
+    const radarIdx = buildRadarIndex({
+      generatedAt: new Date().toISOString(),
+      categoryFilter: 'all',
+      totalClustersAnalyzed: 1,
+      totalOffersAnalyzed: 2,
+      genuineDeals: [
+        {
+          id: 'd1',
+          verdict: 'best_market_deal',
+          verdictBadgeVi: 'Deal',
+          productSlug: '../bad/slug',
+          productName: 'Bad',
+          brand: 'Brand',
+          categorySlug: 'smartphones',
+          productHref: '/smartphones/bad',
+          imageUrl: null,
+          platform: 'shopee',
+          merchantId: 'm1',
+          merchantName: 'Shop',
+          isOfficialMall: true,
+          merchantRiskScore: 5,
+          offerUrl: 'https://shopee.vn/p',
+          priceCurrent: 10_000_000,
+          priceOriginal: null,
+          marketMedianPrice: 12_000_000,
+          marketMinPrice: 10_000_000,
+          marketMaxPrice: 12_000_000,
+          savingsVsMedianVnd: 2_000_000,
+          savingsVsMedianPct: 16.7,
+          claimedDiscountPct: 0,
+          fakeMarkupPct: 0,
+          jreviewsScore10: 8.5,
+          explanationVi: 'ok',
+        },
+        {
+          id: 'd2',
+          verdict: 'best_market_deal',
+          verdictBadgeVi: 'Deal',
+          productSlug: 'iphone-16-pro',
+          productName: 'iPhone 16 Pro',
+          brand: 'Apple',
+          categorySlug: 'smartphones',
+          productHref: '/smartphones/iphone-16-pro',
+          imageUrl: null,
+          platform: 'shopee',
+          merchantId: 'm1',
+          merchantName: 'Shop',
+          isOfficialMall: true,
+          merchantRiskScore: 5,
+          offerUrl: 'https://shopee.vn/p',
+          priceCurrent: '0x1000' as unknown as number,
+          priceOriginal: null,
+          marketMedianPrice: 12_000_000,
+          marketMinPrice: 10_000_000,
+          marketMaxPrice: 12_000_000,
+          savingsVsMedianVnd: 2_000_000,
+          savingsVsMedianPct: '0x10' as unknown as number,
+          claimedDiscountPct: 0,
+          fakeMarkupPct: 0,
+          jreviewsScore10: 8.5,
+          explanationVi: 'ok',
+        },
+      ],
+      fakeSaleTraps: [],
+      priceSpreadLeaders: [],
+    });
+    assert.equal(radarIdx.has('../bad/slug'), false);
+    assert.equal(radarIdx.get('iphone-16-pro')?.savingsPct, 0);
+    assert.equal(
+      radarIdx.get('iphone-16-pro')?.genuineDeal?.savingsVsMedianPct,
+      0
+    );
+
+    // 3. computeCrossPlatformDealRadarFromData skips invalid master.slug and sanitizes merchant/offer IDs
+    const radarRes = computeCrossPlatformDealRadarFromData(
+      [
+        {
+          master: {
+            id: 'm-bad',
+            slug: '000',
+            name: 'Invalid Slug Product',
+            brand: 'Apple',
+          } as unknown as Parameters<
+            typeof computeCrossPlatformDealRadarFromData
+          >[0][number]['master'],
+          offers: [
+            {
+              id: 'o1',
+              platform: 'shopee',
+              price_current: 20_000_000,
+              url: 'https://shopee.vn/1',
+              merchant: { id: 'm1', name: 'M1', is_official: true },
+            },
+            {
+              id: 'o2',
+              platform: 'lazada',
+              price_current: 25_000_000,
+              url: 'https://lazada.vn/2',
+              merchant: { id: 'm2', name: 'M2', is_official: true },
+            },
+          ] as unknown as Parameters<
+            typeof computeCrossPlatformDealRadarFromData
+          >[0][number]['offers'],
+        },
+        {
+          master: {
+            id: 'm-good',
+            slug: 'galaxy-s24-ultra',
+            name: 'Galaxy S24 Ultra',
+            brand: 'Samsung',
+          } as unknown as Parameters<
+            typeof computeCrossPlatformDealRadarFromData
+          >[0][number]['master'],
+          offers: [
+            {
+              id: '000',
+              platform: '000',
+              price_current: 20_000_000,
+              url: 'https://shopee.vn/1',
+              merchant: { id: '000', name: 'Official', is_official: true },
+            },
+            {
+              id: '..bad..',
+              platform: 'lazada',
+              price_current: 26_000_000,
+              price_original: 32_000_000,
+              url: 'https://lazada.vn/2',
+              merchant: { id: '..bad..', name: 'Lazada', is_official: true },
+            },
+          ] as unknown as Parameters<
+            typeof computeCrossPlatformDealRadarFromData
+          >[0][number]['offers'],
+        },
+      ],
+      { platform: '000' }
+    );
+    assert.equal(radarRes.totalClustersAnalyzed, 1);
+    assert.equal(radarRes.genuineDeals[0]?.merchantId, '');
+    assert.equal(radarRes.genuineDeals[0]?.platform, 'shopee');
+    assert.equal(
+      radarRes.fakeSaleTraps[0]?.id,
+      'trap-galaxy-s24-ultra-lazada-offer-2'
+    );
+
+    console.log(
+      '  \u2705 [Deals, Deal-Radar & Offer-Plausibility Bounds (#1008)] Verified'
+    );
+  }
+
+  // #1010: leaderboard-engine and rate-domain-core slug, URL, and numeric bounds
+  {
+    const {
+      scoreMasterProductForLeaderboard,
+      computeProductStandingInCategory,
+    } = await import('../../web/src/lib/leaderboard-engine');
+    const {
+      toSafeNonNegativeVoteCount,
+      getMasterProductHref,
+      parseEcommerceUrlOrQuery,
+    } = await import('../../web/src/lib/rate-domain-core');
+
+    const scoredSentinel = scoreMasterProductForLeaderboard({
+      id: 'm1',
+      slug: '000',
+      name: 'Phone',
+      brand: 'Brand',
+      model: 'Phone',
+      category_id: 'smartphones',
+      min_price: '0x100' as unknown as number,
+      total_reviews: '0b1010' as unknown as number,
+      authentic_review_count: '0o77' as unknown as number,
+    } as unknown as Parameters<typeof scoreMasterProductForLeaderboard>[0]);
+    assert.equal(scoredSentinel.slug, '');
+    assert.equal(scoredSentinel.minPrice, 0);
+    assert.equal(scoredSentinel.authenticReviewCount, 0);
+
+    assert.deepEqual(
+      computeProductStandingInCategory(
+        {
+          id: 'm1',
+          slug: 'null',
+          name: 'Phone',
+          brand: 'Brand',
+          model: 'Phone',
+          category_id: 'smartphones',
+        } as unknown as Parameters<typeof computeProductStandingInCategory>[0],
+        []
+      ),
+      []
+    );
+
+    assert.equal(toSafeNonNegativeVoteCount('0x10'), 0);
+    assert.equal(toSafeNonNegativeVoteCount('0b11'), 0);
+    assert.equal(toSafeNonNegativeVoteCount('0o17'), 0);
+    assert.equal(toSafeNonNegativeVoteCount('42'), 42);
+
+    assert.equal(
+      getMasterProductHref({ slug: '000', category_id: 'smartphones' }),
+      '/smartphones'
+    );
+    assert.equal(
+      getMasterProductHref({ slug: 'foo/bar', category_id: 'smartphones' }),
+      '/smartphones'
+    );
+    assert.equal(
+      getMasterProductHref({
+        slug: 'iphone-16-pro',
+        category_id: 'smartphones',
+      }),
+      '/smartphones/iphone-16-pro'
+    );
+
+    assert.equal(
+      parseEcommerceUrlOrQuery('https://rate.vn/smartphones/000').internalSlug,
+      null
+    );
+    assert.equal(
+      parseEcommerceUrlOrQuery('/smartphones/0000').internalSlug,
+      null
+    );
+    assert.equal(
+      parseEcommerceUrlOrQuery('https://cellphones.com.vn/00.html')
+        .platformItemId,
+      null
+    );
+    assert.equal(
+      parseEcommerceUrlOrQuery('https://cellphones.com.vn/null.html')
+        .platformItemId,
+      null
+    );
+
+    console.log(
+      '  \u2705 [Leaderboard-Engine & Rate-Domain-Core Bounds (#1010)] Verified'
+    );
+  }
+
+  // #1012: merchant-directory and product-competitors platform, slug, and numeric bounds
+  {
+    const {
+      parseMerchantDirectoryFilters,
+      merchantDirectoryFilterParams,
+      summarizeMerchantDirectory,
+      filterMerchantDirectory,
+      DEFAULT_MERCHANT_DIRECTORY_FILTERS,
+    } = await import('../../web/src/lib/merchant-directory');
+    const { rankRelatedCompetitors, peerPriceDelta } =
+      await import('../../web/src/lib/product-competitors');
+
+    const parsedFilters = parseMerchantDirectoryFilters((k) =>
+      k === 'platform' ? '000' : null
+    );
+    assert.equal(parsedFilters.platform, 'all');
+
+    const paramsSentinel = merchantDirectoryFilterParams({
+      ...DEFAULT_MERCHANT_DIRECTORY_FILTERS,
+      platform: 'null',
+    });
+    assert.equal(paramsSentinel.get('platform'), null);
+
+    const summary = summarizeMerchantDirectory([
+      {
+        id: 'm1',
+        name: 'Shop 1',
+        platform: '000',
+        trust_score: '0x60' as unknown as number,
+        is_official: true,
+      } as unknown as Parameters<typeof summarizeMerchantDirectory>[0][number],
+    ]);
+    assert.deepEqual(summary.platformCounts, {});
+    assert.equal(summary.safe, 0);
+
+    const filteredMerchants = filterMerchantDirectory(
+      [
+        {
+          id: 'm1',
+          name: 'Shop 1',
+          platform: 'shopee',
+          trust_score: 90,
+          product_count: '0x100' as unknown as number,
+        },
+        {
+          id: 'm2',
+          name: 'Shop 2',
+          platform: 'shopee',
+          trust_score: 90,
+          product_count: 50,
+        },
+      ] as unknown as Parameters<typeof filterMerchantDirectory>[0],
+      {
+        ...DEFAULT_MERCHANT_DIRECTORY_FILTERS,
+        platform: '000',
+        sortBy: 'products_desc',
+      }
+    );
+    assert.equal(filteredMerchants.length, 2);
+    assert.equal(filteredMerchants[0]?.id, 'm2');
+
+    const competitors = rankRelatedCompetitors(
+      [
+        { slug: '000', min_price: 25_000_000 },
+        {
+          slug: 'galaxy-s24-ultra',
+          min_price: '0x100000' as unknown as number,
+        },
+        { slug: 'xiaomi-14-ultra', min_price: 26_000_000 },
+      ],
+      'iphone-16-pro',
+      25_000_000
+    );
+    assert.equal(competitors.length, 2);
+    assert.equal(competitors[0]?.slug, 'xiaomi-14-ultra');
+    assert.equal(competitors[1]?.slug, 'galaxy-s24-ultra');
+    assert.equal(peerPriceDelta('0x100' as unknown as number, 25_000_000), 0);
+
+    console.log(
+      '  \u2705 [Merchant-Directory & Product-Competitors Bounds (#1012)] Verified'
+    );
+  }
+
+  // Sold-Count, SEO & Sitemap-Lastmod Bounds (#1014)
+  {
+    const { formatSoldCount } = await import('../../web/src/lib/sold-count.js');
+    const { absoluteUrl, fitTitle, SITE_URL } =
+      await import('../../web/src/lib/seo.js');
+    const { buildSitemapLastModified, versusLastModified } =
+      await import('../../web/src/lib/sitemap-lastmod.js');
+
+    assert.equal(
+      formatSoldCount('0x100' as unknown as number, '20k+', 'vi-VN'),
+      '0',
+      'formatSoldCount must reject hex historicalSold literals'
+    );
+    assert.equal(
+      formatSoldCount(500, '---', 'vi-VN'),
+      (500).toLocaleString('vi-VN'),
+      'formatSoldCount must ignore pure-punctuation display labels'
+    );
+    assert.equal(
+      formatSoldCount(500, 'null', 'vi-VN'),
+      (500).toLocaleString('vi-VN'),
+      'formatSoldCount must ignore sentinel display labels'
+    );
+    assert.equal(formatSoldCount(20_000, '20k+', 'vi-VN'), '20k+');
+
+    assert.equal(
+      absoluteUrl('https://127.0.0.1/img.png'),
+      SITE_URL,
+      'absoluteUrl must reject IPv4 literals'
+    );
+    assert.equal(
+      absoluteUrl('https://localhost/img.png'),
+      SITE_URL,
+      'absoluteUrl must reject single-label hostnames'
+    );
+    assert.equal(
+      absoluteUrl('https://cdn.internal/img.png'),
+      SITE_URL,
+      'absoluteUrl must reject .internal hostnames'
+    );
+    assert.equal(
+      absoluteUrl('https://cdn.rate.vn/img/p.png'),
+      'https://cdn.rate.vn/img/p.png'
+    );
+    assert.equal(fitTitle(['iPhone 16 Pro'], 65), 'iPhone 16 Pro');
+
+    const lastmod = buildSitemapLastModified([
+      {
+        slug: '---',
+        categorySlug: 'smartphones',
+        updatedAt: '2026-03-01T00:00:00Z',
+      },
+      {
+        slug: 'iphone-16-pro',
+        categorySlug: '__proto__',
+        updatedAt: '2026-03-01T00:00:00Z',
+      },
+      {
+        slug: '\u0000iphone-16-pro',
+        categorySlug: 'smartphones',
+        updatedAt: '\u00072026-03-01T00:00:00Z',
+      },
+    ]);
+    assert.equal(lastmod.bySlug.size, 1);
+    assert.equal(lastmod.byCategory.size, 1);
+    assert.equal(versusLastModified(lastmod, '---', '000'), undefined);
+
+    console.log(
+      '  \u2705 [Sold-Count, SEO & Sitemap-Lastmod Bounds (#1014)] Verified'
+    );
+  }
+
+  // Category-Filters & Review-Display Bounds (#1016)
+  {
+    const { formatStorageLabel, getCategoryFilterSchema } =
+      await import('../../web/src/lib/category-filters.js');
+    const {
+      reviewBadgeKind,
+      isFilteredOutReview,
+      weightExplanationCopy,
+      submitErrorKey,
+    } = await import('../../web/src/lib/review-display.js');
+
+    assert.equal(
+      formatStorageLabel('0x100' as unknown as number),
+      '0GB',
+      'formatStorageLabel must reject hex literals'
+    );
+    assert.equal(
+      formatStorageLabel('\u0000256' as unknown as number),
+      '256GB',
+      'formatStorageLabel must strip control chars before parsing decimal GB'
+    );
+    assert.equal(formatStorageLabel(1024), '1TB');
+
+    const schema = getCategoryFilterSchema('smartphones', [
+      '---',
+      '000',
+      'null',
+      'Nothing',
+    ]);
+    assert.equal(
+      schema.defaultBrands.includes('---'),
+      false,
+      'getCategoryFilterSchema must reject pure-punctuation dynamic brands'
+    );
+    assert.equal(
+      schema.defaultBrands.includes('000'),
+      false,
+      'getCategoryFilterSchema must reject all-zero dynamic brands'
+    );
+    assert.equal(
+      schema.defaultBrands.includes('null'),
+      false,
+      'getCategoryFilterSchema must reject sentinel dynamic brands'
+    );
+    assert.equal(schema.defaultBrands.includes('Nothing'), true);
+
+    assert.equal(
+      reviewBadgeKind({
+        verdict: 'authentic',
+        flag_category: 'unknown_bad_flag' as unknown as 'authentic',
+      }),
+      'authentic',
+      'reviewBadgeKind must fall back to authentic for unrecognized flag_category'
+    );
+    assert.equal(
+      isFilteredOutReview({
+        verdict: 'authentic',
+        include_in_rating: true,
+        helpfulness_weight: '0x1' as unknown as number,
+      }),
+      true,
+      'isFilteredOutReview must reject hex helpfulness_weight literals'
+    );
+    assert.deepEqual(
+      weightExplanationCopy({
+        explanationKind: 'seeding',
+        weight: '0x5' as unknown as number,
+        explanationVi: '',
+      }),
+      { key: 'weightExplanationSeeding', values: { weight: '0.00' } },
+      'weightExplanationCopy must reject hex weight literals'
+    );
+    assert.equal(
+      submitErrorKey(' \u0000auth_required '),
+      'errLoginRequired',
+      'submitErrorKey must normalize control chars, whitespace, and case'
+    );
+
+    console.log(
+      '  \u2705 [Category-Filters & Review-Display Bounds (#1016)] Verified'
     );
   }
 

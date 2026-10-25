@@ -10,10 +10,41 @@ import {
 } from '@/lib/rate-domain';
 
 const MAX_COMPETITOR_VND_PRICE = 1_000_000_000;
+const MAX_COMPETITOR_PEERS_SCAN = 1_000;
 
 function toValidCompetitorPrice(value: unknown): number {
-  const n = Number(value);
+  if (typeof value !== 'number' && typeof value !== 'string') return 0;
+  let n = Number.NaN;
+  if (typeof value === 'number') {
+    n = value;
+  } else {
+    const cleaned = value.replace(/\p{Cc}+/gu, '').trim();
+    if (
+      cleaned.length > 0 &&
+      cleaned.length <= 32 &&
+      !/^[+-]?0[xbo]/i.test(cleaned)
+    ) {
+      n = Number(cleaned);
+    }
+  }
   return Number.isFinite(n) && n > 0 && n <= MAX_COMPETITOR_VND_PRICE ? n : 0;
+}
+
+function normalizeCompetitorSlug(value: unknown): string {
+  if (typeof value !== 'string') return '';
+  const cleaned = value
+    .replace(/\p{Cc}+/gu, '')
+    .trim()
+    .toLowerCase()
+    .slice(0, 256);
+  if (
+    !cleaned ||
+    !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(cleaned) ||
+    /^(?:0+|null|undefined|nan|infinity|-infinity|true|false)$/i.test(cleaned)
+  ) {
+    return '';
+  }
+  return cleaned;
 }
 
 function sanitizeSpecSegment(value: unknown): string {
@@ -38,11 +69,19 @@ export function rankRelatedCompetitors<
   limit = 3
 ): T[] {
   if (!Array.isArray(peers)) return [];
+  const safeCurrentSlug = normalizeCompetitorSlug(currentSlug);
   const safeBasePrice = toValidCompetitorPrice(currentMinPrice);
   const safeLimit =
-    Number.isFinite(limit) && limit >= 0 ? Math.min(50, Math.floor(limit)) : 3;
+    typeof limit === 'number' && Number.isFinite(limit) && limit >= 0
+      ? Math.min(50, Math.floor(limit))
+      : 3;
   return peers
-    .filter((p) => p && p.slug !== currentSlug)
+    .slice(0, MAX_COMPETITOR_PEERS_SCAN)
+    .filter((p) => {
+      if (!p || typeof p !== 'object' || Array.isArray(p)) return false;
+      const peerSlug = normalizeCompetitorSlug(p.slug);
+      return Boolean(peerSlug) && peerSlug !== safeCurrentSlug;
+    })
     .sort((a, b) => {
       const pa = toValidCompetitorPrice(a.min_price);
       const pb = toValidCompetitorPrice(b.min_price);
@@ -72,8 +111,22 @@ export function buildKeySpecLine(
     'key_specs' | 'specifications' | 'ram_gb' | 'storage_gb' | 'battery_mah'
   >
 ): string {
-  const keySpecs = (product.key_specs || {}) as KeySpecs;
-  const specs = (product.specifications || {}) as ProductSpecifications;
+  if (!product || typeof product !== 'object' || Array.isArray(product))
+    return '';
+  const keySpecs = (
+    product.key_specs &&
+    typeof product.key_specs === 'object' &&
+    !Array.isArray(product.key_specs)
+      ? product.key_specs
+      : {}
+  ) as KeySpecs;
+  const specs = (
+    product.specifications &&
+    typeof product.specifications === 'object' &&
+    !Array.isArray(product.specifications)
+      ? product.specifications
+      : {}
+  ) as ProductSpecifications;
   const ramGb = resolveCompareRamGb(product);
   const storageGb = resolveCompareStorageGb(product);
   const batteryMah = resolveCompareBatteryMah(product);

@@ -85,7 +85,9 @@ export const VALID_LEADERBOARD_CATEGORIES: readonly CanonicalCategorySlug[] = [
 export function normalizeLeaderboardCategory(
   raw?: string | null
 ): CanonicalCategorySlug {
-  const cleaned = String(raw || '')
+  if (typeof raw !== 'string') return 'smartphones';
+  const cleaned = raw
+    .replace(/\p{Cc}+/gu, '')
     .toLowerCase()
     .trim() as CanonicalCategorySlug;
   if (VALID_LEADERBOARD_CATEGORIES.includes(cleaned)) {
@@ -97,7 +99,9 @@ export function normalizeLeaderboardCategory(
 export function normalizeLeaderboardCriterion(
   raw?: string | null
 ): LeaderboardCriterionKey {
-  const cleaned = String(raw || '')
+  if (typeof raw !== 'string') return 'combined';
+  const cleaned = raw
+    .replace(/\p{Cc}+/gu, '')
     .toLowerCase()
     .trim() as LeaderboardCriterionKey;
   if (VALID_LEADERBOARD_CRITERIA.includes(cleaned)) {
@@ -109,7 +113,9 @@ export function normalizeLeaderboardCriterion(
 export function normalizeLeaderboardPriceSegment(
   raw?: string | null
 ): LeaderboardPriceSegment {
-  const cleaned = String(raw || '')
+  if (typeof raw !== 'string') return 'all';
+  const cleaned = raw
+    .replace(/\p{Cc}+/gu, '')
     .toLowerCase()
     .trim() as LeaderboardPriceSegment;
   if (
@@ -132,9 +138,49 @@ function sanitizeLeaderboardText(raw: unknown, maxLen: number): string {
   return raw.replace(LEADERBOARD_CONTROL_CHAR_RE, '').trim().slice(0, maxLen);
 }
 
+function sanitizeLeaderboardSlug(raw: unknown): string {
+  const cleaned = sanitizeLeaderboardText(raw, 256);
+  if (
+    !cleaned ||
+    !/^[a-zA-Z0-9][a-zA-Z0-9._-]{0,255}$/.test(cleaned) ||
+    cleaned.endsWith('.') ||
+    cleaned.includes('..') ||
+    /^(?:0+|null|undefined|nan|infinity|-infinity|true|false)$/i.test(cleaned)
+  ) {
+    return '';
+  }
+  return cleaned;
+}
+
 function clampScore5(value: number): number {
   if (!Number.isFinite(value) || value <= 0) return 0;
   return Number(Math.min(5.0, value).toFixed(2));
+}
+
+function toSafePositiveNumber(raw: unknown): number {
+  if (typeof raw !== 'number' && typeof raw !== 'string') return 0;
+  if (typeof raw === 'string') {
+    const cleaned = raw.replace(LEADERBOARD_CONTROL_CHAR_RE, '').trim();
+    if (!cleaned || cleaned.length > 32 || /^[+-]?0[xbo]/i.test(cleaned)) {
+      return 0;
+    }
+    const n = Number(cleaned);
+    return Number.isFinite(n) && n > 0 ? n : 0;
+  }
+  return Number.isFinite(raw) && raw > 0 ? raw : 0;
+}
+
+function toSafeNonNegativeNumber(raw: unknown): number {
+  if (typeof raw !== 'number' && typeof raw !== 'string') return NaN;
+  if (typeof raw === 'string') {
+    const cleaned = raw.replace(LEADERBOARD_CONTROL_CHAR_RE, '').trim();
+    if (!cleaned || cleaned.length > 32 || /^[+-]?0[xbo]/i.test(cleaned)) {
+      return NaN;
+    }
+    const n = Number(cleaned);
+    return Number.isFinite(n) && n >= 0 ? n : NaN;
+  }
+  return Number.isFinite(raw) && raw >= 0 ? raw : NaN;
 }
 
 export function computeJReviewsCriteriaScores(
@@ -142,23 +188,47 @@ export function computeJReviewsCriteriaScores(
   userScore5: number,
   expertScore5: number | null
 ): LeaderboardCriteriaBreakdown {
-  const rawCriteria = (item.expert_criteria_scores || {}) as Record<
-    string,
-    unknown
-  >;
-  const specs = (item.specifications || {}) as ProductSpecifications;
-  const categorySlug = getMasterProductCategorySlug(item);
+  const safeItem = (
+    item && typeof item === 'object' && !Array.isArray(item) ? item : {}
+  ) as MasterProduct;
+  const rawCriteria = (
+    safeItem.expert_criteria_scores &&
+    typeof safeItem.expert_criteria_scores === 'object' &&
+    !Array.isArray(safeItem.expert_criteria_scores)
+      ? safeItem.expert_criteria_scores
+      : {}
+  ) as Record<string, unknown>;
+  const specs = (
+    safeItem.specifications &&
+    typeof safeItem.specifications === 'object' &&
+    !Array.isArray(safeItem.specifications)
+      ? safeItem.specifications
+      : {}
+  ) as ProductSpecifications;
+  const categorySlug = getMasterProductCategorySlug(safeItem);
+  const safeUserScore5 =
+    typeof userScore5 === 'number' &&
+    Number.isFinite(userScore5) &&
+    userScore5 > 0
+      ? clampScore5(userScore5)
+      : 0;
+  const safeExpertScore5 =
+    typeof expertScore5 === 'number' &&
+    Number.isFinite(expertScore5) &&
+    expertScore5 > 0
+      ? clampScore5(expertScore5)
+      : null;
   const base5 =
-    userScore5 > 0 && expertScore5 != null
-      ? Number((userScore5 * 0.55 + expertScore5 * 0.45).toFixed(2))
-      : userScore5 > 0
-        ? userScore5
-        : (expertScore5 ?? 0);
+    safeUserScore5 > 0 && safeExpertScore5 != null
+      ? Number((safeUserScore5 * 0.55 + safeExpertScore5 * 0.45).toFixed(2))
+      : safeUserScore5 > 0
+        ? safeUserScore5
+        : (safeExpertScore5 ?? 0);
 
   const parseRaw = (keys: string[], fallbackDelta: number): number => {
     for (const k of keys) {
-      const v = Number(rawCriteria[k]);
-      if (Number.isFinite(v) && v > 0 && v <= 10) {
+      const v = toSafePositiveNumber(rawCriteria[k]);
+      if (v > 0 && v <= 10) {
         return clampScore5(v > 5 ? v / 2 : v);
       }
     }
@@ -166,13 +236,15 @@ export function computeJReviewsCriteriaScores(
     return clampScore5(base5 + fallbackDelta);
   };
 
-  const refreshHz = Number(specs.display?.refresh_rate_hz || 0);
-  const ramGb = Number(item.ram_gb || specs.hardware?.ram_gb || 0);
-  const batteryMah = Number(
-    item.battery_mah || specs.battery?.capacity_mah || 0
-  );
-  const fastChargingW = Number(specs.battery?.fast_charging_w || 0);
-  const rawMinPrice = Number(item.min_price || 0);
+  const refreshHz = toSafePositiveNumber(specs.display?.refresh_rate_hz);
+  const ramGb =
+    toSafePositiveNumber(safeItem.ram_gb) ||
+    toSafePositiveNumber(specs.hardware?.ram_gb);
+  const batteryMah =
+    toSafePositiveNumber(safeItem.battery_mah) ||
+    toSafePositiveNumber(specs.battery?.capacity_mah);
+  const fastChargingW = toSafePositiveNumber(specs.battery?.fast_charging_w);
+  const rawMinPrice = toSafePositiveNumber(safeItem.min_price);
   const minPrice =
     Number.isFinite(rawMinPrice) &&
     rawMinPrice > 0 &&
@@ -317,27 +389,33 @@ export function scoreMasterProductForLeaderboard(
   item: MasterProduct,
   criterion: LeaderboardCriterionKey = 'combined'
 ): Omit<ScoredLeaderboardItem, 'rank'> {
-  const categorySlug = getMasterProductCategorySlug(item);
+  const safeItem = (
+    item && typeof item === 'object' && !Array.isArray(item) ? item : {}
+  ) as MasterProduct;
+  const safeCriterion = normalizeLeaderboardCriterion(criterion);
+  const categorySlug = getMasterProductCategorySlug(safeItem);
   const categoryPath = getCategoryRouteHref(categorySlug);
-  const productHref = getMasterProductHref(item);
+  const productHref = getMasterProductHref(safeItem);
   const thumbnail =
     resolveProductImageUrl({
-      slug: item.slug,
-      name: item.name,
-      model: item.model,
-      category_id: item.category_id,
-      metadata: item.metadata,
-      thumbnail: item.thumbnail,
-      images: item.images,
+      slug: safeItem.slug,
+      name: safeItem.name,
+      model: safeItem.model,
+      category_id: safeItem.category_id,
+      metadata: safeItem.metadata,
+      thumbnail: safeItem.thumbnail,
+      images: safeItem.images,
     }) || '/img/devices/apple-iphone-16-pro-max-256gb.jpg';
 
-  const rawUser = Number(item.user_rating_weighted || item.average_rating || 0);
+  const rawUser =
+    toSafePositiveNumber(safeItem.user_rating_weighted) ||
+    toSafePositiveNumber(safeItem.average_rating);
   const userScore5 =
-    Number.isFinite(rawUser) && rawUser > 0 && rawUser <= 10
+    rawUser > 0 && rawUser <= 10
       ? clampScore5(rawUser > 5 ? rawUser / 2 : rawUser)
       : 0;
 
-  const rawExpert = Number(item.expert_rating || 0);
+  const rawExpert = toSafePositiveNumber(safeItem.expert_rating);
   const expertScore10: number | null =
     Number.isFinite(rawExpert) && rawExpert > 0 && rawExpert <= 10
       ? Number(
@@ -348,7 +426,7 @@ export function scoreMasterProductForLeaderboard(
     expertScore10 != null ? Number((expertScore10 / 2).toFixed(2)) : null;
 
   const criteria = computeJReviewsCriteriaScores(
-    item,
+    safeItem,
     userScore5,
     expertScore5
   );
@@ -387,18 +465,18 @@ export function scoreMasterProductForLeaderboard(
   }
 
   let activeScore5 = combinedScore5;
-  if (criterion === 'user') activeScore5 = userScore5;
-  else if (criterion === 'expert') activeScore5 = expertScore5 ?? 0;
-  else if (criterion !== 'combined') activeScore5 = criteria[criterion];
+  if (safeCriterion === 'user') activeScore5 = userScore5;
+  else if (safeCriterion === 'expert') activeScore5 = expertScore5 ?? 0;
+  else if (safeCriterion !== 'combined') activeScore5 = criteria[safeCriterion];
 
-  const rawAuthentic = Number(item.authentic_review_count);
-  const rawTotal = Number(item.total_reviews);
+  const rawAuthentic = toSafeNonNegativeNumber(safeItem.authentic_review_count);
+  const rawTotal = toSafePositiveNumber(safeItem.total_reviews);
   const safeTotal =
-    Number.isFinite(rawTotal) && rawTotal > 0
+    rawTotal > 0
       ? Math.min(Math.floor(rawTotal), MAX_LEADERBOARD_COUNT_CEILING)
       : 0;
   const authenticReviewCount =
-    Number.isFinite(rawAuthentic) && rawAuthentic > 0
+    Number.isFinite(rawAuthentic) && rawAuthentic >= 0
       ? Math.min(Math.floor(rawAuthentic), MAX_LEADERBOARD_COUNT_CEILING)
       : safeTotal;
   const filteredNoiseReviewCount = Math.max(
@@ -406,31 +484,27 @@ export function scoreMasterProductForLeaderboard(
     safeTotal - authenticReviewCount
   );
 
-  const rawMinPrice = Number(item.min_price || 0);
+  const rawMinPrice = toSafePositiveNumber(safeItem.min_price);
   const minPrice =
-    Number.isFinite(rawMinPrice) &&
-    rawMinPrice > 0 &&
-    rawMinPrice <= 1_000_000_000
+    rawMinPrice > 0 && rawMinPrice <= 1_000_000_000
       ? Math.round(rawMinPrice)
       : 0;
-  const rawMaxPrice = Number(item.max_price || 0);
+  const rawMaxPrice = toSafePositiveNumber(safeItem.max_price);
   const maxPrice =
-    Number.isFinite(rawMaxPrice) &&
-    rawMaxPrice > 0 &&
-    rawMaxPrice <= 1_000_000_000
+    rawMaxPrice > 0 && rawMaxPrice <= 1_000_000_000
       ? Math.max(minPrice, Math.round(rawMaxPrice))
       : minPrice;
-  const rawMerchantCount = Number(item.merchant_count || 0);
+  const rawMerchantCount = toSafePositiveNumber(safeItem.merchant_count);
   const merchantCount =
-    Number.isFinite(rawMerchantCount) && rawMerchantCount > 0
+    rawMerchantCount > 0
       ? Math.min(Math.floor(rawMerchantCount), MAX_LEADERBOARD_COUNT_CEILING)
       : 0;
 
   return {
-    slug: sanitizeLeaderboardText(item.slug, 256),
-    name: sanitizeLeaderboardText(item.name, 300),
-    brand: sanitizeLeaderboardText(item.brand, 128),
-    model: sanitizeLeaderboardText(item.model, 256),
+    slug: sanitizeLeaderboardSlug(safeItem.slug),
+    name: sanitizeLeaderboardText(safeItem.name, 300),
+    brand: sanitizeLeaderboardText(safeItem.brand, 128),
+    model: sanitizeLeaderboardText(safeItem.model, 256),
     categorySlug,
     categoryPath,
     productHref,
@@ -446,7 +520,7 @@ export function scoreMasterProductForLeaderboard(
     maxPrice,
     merchantCount,
     criteria,
-    product: item,
+    product: safeItem,
   };
 }
 
@@ -461,14 +535,36 @@ export function rankMasterProductsForLeaderboard(
     limit?: number;
   }
 ): ScoredLeaderboardItem[] {
-  const category = options?.category ?? 'smartphones';
-  const criterion = options?.criterion ?? 'combined';
-  const priceSegment = options?.priceSegment ?? 'all';
-  const brand = sanitizeLeaderboardText(options?.brand ?? 'all', 128) || 'all';
-  const q = sanitizeLeaderboardText(options?.query ?? '', 256).toLowerCase();
+  const safeOptions =
+    options && typeof options === 'object' && !Array.isArray(options)
+      ? options
+      : undefined;
+  const rawCategory = safeOptions?.category;
+  const category: CanonicalCategorySlug | 'all' =
+    typeof rawCategory === 'string' &&
+    rawCategory
+      .replace(/\p{Cc}+/gu, '')
+      .trim()
+      .toLowerCase() === 'all'
+      ? 'all'
+      : normalizeLeaderboardCategory(rawCategory);
+  const criterion = normalizeLeaderboardCriterion(safeOptions?.criterion);
+  const priceSegment = normalizeLeaderboardPriceSegment(
+    safeOptions?.priceSegment
+  );
+  const brand =
+    sanitizeLeaderboardText(safeOptions?.brand ?? 'all', 128) || 'all';
+  const q = sanitizeLeaderboardText(
+    safeOptions?.query ?? '',
+    256
+  ).toLowerCase();
 
   const safeProducts = Array.isArray(products)
-    ? products.slice(0, MAX_LEADERBOARD_PRODUCTS_SCAN)
+    ? products
+        .filter((p): p is MasterProduct =>
+          Boolean(p && typeof p === 'object' && !Array.isArray(p))
+        )
+        .slice(0, MAX_LEADERBOARD_PRODUCTS_SCAN)
     : [];
 
   const filtered = safeProducts
@@ -552,7 +648,8 @@ export function rankMasterProductsForLeaderboard(
       rank: idx + 1,
     }));
 
-  const rawLimit = Number(options?.limit);
+  const rawLimit =
+    typeof safeOptions?.limit === 'number' ? safeOptions.limit : NaN;
   if (Number.isFinite(rawLimit) && rawLimit >= 1) {
     return filtered.slice(
       0,
@@ -570,11 +667,25 @@ export function computeProductStandingInCategory(
   targetProduct: MasterProduct,
   categoryProducts: MasterProduct[]
 ): ProductLeaderboardBadgeInfo[] {
+  if (
+    !targetProduct ||
+    typeof targetProduct !== 'object' ||
+    Array.isArray(targetProduct)
+  ) {
+    return [];
+  }
+  const targetSlug = sanitizeLeaderboardSlug(targetProduct.slug);
+  if (!targetSlug) return [];
   const categorySlug = getMasterProductCategorySlug(targetProduct);
-  const peers = categoryProducts.filter(
+  const safeCategoryProducts = Array.isArray(categoryProducts)
+    ? categoryProducts.filter((p): p is MasterProduct =>
+        Boolean(p && typeof p === 'object' && !Array.isArray(p))
+      )
+    : [];
+  const peers = safeCategoryProducts.filter(
     (p) => getMasterProductCategorySlug(p) === categorySlug
   );
-  if (!peers.some((p) => p.slug === targetProduct.slug)) {
+  if (!peers.some((p) => sanitizeLeaderboardSlug(p.slug) === targetSlug)) {
     peers.push(targetProduct);
   }
 
@@ -595,7 +706,7 @@ export function computeProductStandingInCategory(
       category: categorySlug,
       criterion: crit,
     });
-    const found = ranked.find((r) => r.slug === targetProduct.slug);
+    const found = ranked.find((r) => r.slug === targetSlug);
     if (!found) continue;
 
     // Always include overall combined rank; also include top-3 sub-criteria ranks
@@ -635,13 +746,14 @@ export function buildPopular1v1BattlesForCategory(
   category: CanonicalCategorySlug,
   maxPairs: number = 3
 ): Flagship1v1BattlePair[] {
+  const safeCategory = normalizeLeaderboardCategory(category);
   const safeMaxPairs =
-    Number.isFinite(maxPairs) && maxPairs >= 0
+    typeof maxPairs === 'number' && Number.isFinite(maxPairs) && maxPairs >= 0
       ? Math.min(Math.floor(maxPairs), 20)
       : 3;
   if (safeMaxPairs === 0) return [];
   const ranked = rankMasterProductsForLeaderboard(products, {
-    category,
+    category: safeCategory,
     criterion: 'combined',
   });
   if (ranked.length < 2) return [];
@@ -659,7 +771,14 @@ export function buildPopular1v1BattlesForCategory(
     if (pairs.length >= safeMaxPairs) break;
     const itemA = ranked[idxA];
     const itemB = ranked[idxB];
-    if (!itemA || !itemB || itemA.slug === itemB.slug) continue;
+    if (
+      !itemA ||
+      !itemB ||
+      !itemA.slug ||
+      !itemB.slug ||
+      itemA.slug === itemB.slug
+    )
+      continue;
 
     const versusSlug = `${itemA.slug}-vs-${itemB.slug}`;
     const scoreDelta5 = Number(
@@ -679,7 +798,7 @@ export function buildPopular1v1BattlesForCategory(
     pairs.push({
       versusSlug,
       versusHref: `/compare/${versusSlug}`,
-      categorySlug: category,
+      categorySlug: safeCategory,
       productA: itemA,
       productB: itemB,
       winnerSlug,
@@ -703,9 +822,15 @@ export function comparePositiveMinPrices(
   minPriceB: number
 ): 'A' | 'B' | 'equal' | 'unknown' {
   const validA =
-    Number.isFinite(minPriceA) && minPriceA > 0 && minPriceA <= 1_000_000_000;
+    typeof minPriceA === 'number' &&
+    Number.isFinite(minPriceA) &&
+    minPriceA > 0 &&
+    minPriceA <= 1_000_000_000;
   const validB =
-    Number.isFinite(minPriceB) && minPriceB > 0 && minPriceB <= 1_000_000_000;
+    typeof minPriceB === 'number' &&
+    Number.isFinite(minPriceB) &&
+    minPriceB > 0 &&
+    minPriceB <= 1_000_000_000;
   if (validA && validB) {
     if (minPriceA < minPriceB) return 'A';
     if (minPriceB < minPriceA) return 'B';

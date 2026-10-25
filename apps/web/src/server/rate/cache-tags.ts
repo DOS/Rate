@@ -21,15 +21,27 @@ export type RateCanonicalCacheTag =
   (typeof RATE_CACHE_TAGS)[keyof typeof RATE_CACHE_TAGS];
 
 export function productCacheTag(slug: string): string {
-  return `rate:product:${slug.trim().toLowerCase()}`;
+  return `rate:product:${String(slug ?? '')
+    .replace(/\p{Cc}+/gu, '')
+    .trim()
+    .toLowerCase()
+    .slice(0, 120)}`;
 }
 
 export function categoryCacheTag(categorySlug: string): string {
-  return `rate:category:${categorySlug.trim().toLowerCase()}`;
+  return `rate:category:${String(categorySlug ?? '')
+    .replace(/\p{Cc}+/gu, '')
+    .trim()
+    .toLowerCase()
+    .slice(0, 60)}`;
 }
 
 export function merchantCacheTag(merchantId: string): string {
-  return `rate:merchant:${merchantId.trim().toLowerCase()}`;
+  return `rate:merchant:${String(merchantId ?? '')
+    .replace(/\p{Cc}+/gu, '')
+    .trim()
+    .toLowerCase()
+    .slice(0, 120)}`;
 }
 
 export interface RevalidationTargetsInput {
@@ -43,6 +55,11 @@ export interface RevalidationTargetsInput {
 const SAFE_CACHE_TAG_REGEX = /^rate:[a-z0-9:._-]{1,150}$/i;
 const SAFE_ENTITY_TOKEN_REGEX = /^[a-z0-9._-]+$/i;
 const SAFE_MERCHANT_IDENTIFIER_REGEX = /^[a-z0-9:._-]+$/i;
+const UNSAFE_CACHE_PARAM_KEYS = new Set([
+  '__proto__',
+  'constructor',
+  'prototype',
+]);
 
 export function canonicalizeCacheParams(
   value: unknown,
@@ -52,11 +69,17 @@ export function canonicalizeCacheParams(
   if (value === null || value === undefined) {
     return depth === 0 ? '{}' : 'null';
   }
+  if (typeof value === 'string') {
+    return JSON.stringify(value.replace(/\p{Cc}+/gu, '').slice(0, 500));
+  }
   if (typeof value === 'number') {
     return Number.isFinite(value) ? JSON.stringify(value) : 'null';
   }
+  if (typeof value === 'bigint') {
+    return JSON.stringify(value.toString());
+  }
   if (typeof value !== 'object') {
-    return JSON.stringify(value);
+    return JSON.stringify(value) ?? 'null';
   }
   if (seen.has(value)) {
     return '"[Circular]"';
@@ -73,7 +96,12 @@ export function canonicalizeCacheParams(
         .join(',')}]`;
     }
     const entries = Object.entries(value as Record<string, unknown>)
-      .filter(([, val]) => val !== undefined)
+      .filter(
+        ([key, val]) =>
+          val !== undefined &&
+          !UNSAFE_CACHE_PARAM_KEYS.has(key) &&
+          key.length <= 128
+      )
       .sort(([keyA], [keyB]) => keyA.localeCompare(keyB))
       .slice(0, 60);
     return `{${entries
@@ -92,11 +120,11 @@ export function isSafeRevalidationPath(rawPath: string): boolean {
   const clean = rawPath.trim();
   if (!clean || clean.length > 200) return false;
   if (!clean.startsWith('/') || clean.startsWith('//')) return false;
-  // eslint-disable-next-line no-control-regex -- rejecting control characters in revalidation paths
-  if (clean.includes('\\') || /[\u0000-\u001F\u007F?#]/.test(clean)) {
+  if (clean.includes('\\') || /\p{Cc}/u.test(clean) || /[\s?#]/.test(clean)) {
     return false;
   }
-  if (/(?:^|\/)\.\.(?:\/|$)/.test(clean)) return false;
+  if (/(?:^|\/)\.\.?(?:\/|$)/.test(clean)) return false;
+  if (/%(?:2e|2f|5c|00)/i.test(clean)) return false;
   return true;
 }
 
@@ -104,20 +132,46 @@ export function resolveRevalidationTargets(input: RevalidationTargetsInput): {
   tags: string[];
   paths: string[];
 } {
+  const safeInput =
+    input && typeof input === 'object' && !Array.isArray(input) ? input : {};
   const tagSet = new Set<string>();
   const pathSet = new Set<string>();
 
-  for (const tag of (input.tags ?? []).slice(0, 50)) {
+  const isSafeColonSegment = (seg: string): boolean =>
+    Boolean(seg) &&
+    /[a-z0-9]/i.test(seg) &&
+    !UNSAFE_CACHE_PARAM_KEYS.has(seg.toLowerCase()) &&
+    !/^(?:0+|null|undefined|nan|true|false|-+|_+|:+|\.+)$/i.test(seg);
+
+  const rawTags = Array.isArray(safeInput.tags) ? safeInput.tags : [];
+  for (const tag of rawTags.slice(0, 50)) {
     if (typeof tag !== 'string') continue;
     const clean = tag.trim().toLowerCase();
-    if (clean && SAFE_CACHE_TAG_REGEX.test(clean)) {
+    const suffix = clean.startsWith('rate:') ? clean.slice(5) : '';
+    const segments = suffix ? suffix.split(':') : [];
+    if (
+      clean &&
+      SAFE_CACHE_TAG_REGEX.test(clean) &&
+      segments.length > 0 &&
+      segments.every(isSafeColonSegment) &&
+      !/(?:^|:)\.\.?$|(?:^|:)[.:]+$/.test(clean)
+    ) {
       tagSet.add(clean);
     }
   }
-  for (const slug of (input.slugs ?? []).slice(0, 50)) {
+  const rawSlugs = Array.isArray(safeInput.slugs) ? safeInput.slugs : [];
+  for (const slug of rawSlugs.slice(0, 50)) {
     if (typeof slug !== 'string') continue;
     const clean = slug.trim();
-    if (!clean || clean.length > 120 || !SAFE_ENTITY_TOKEN_REGEX.test(clean)) {
+    if (
+      !clean ||
+      clean.length > 120 ||
+      !SAFE_ENTITY_TOKEN_REGEX.test(clean) ||
+      !isSafeColonSegment(clean) ||
+      clean.startsWith('.') ||
+      clean.endsWith('.') ||
+      clean.includes('..')
+    ) {
       continue;
     }
     tagSet.add(productCacheTag(clean));
@@ -128,10 +182,21 @@ export function resolveRevalidationTargets(input: RevalidationTargetsInput): {
     tagSet.add(RATE_CACHE_TAGS.DEALS);
     tagSet.add(RATE_CACHE_TAGS.STATS);
   }
-  for (const cat of (input.categories ?? []).slice(0, 20)) {
+  const rawCategories = Array.isArray(safeInput.categories)
+    ? safeInput.categories
+    : [];
+  for (const cat of rawCategories.slice(0, 20)) {
     if (typeof cat !== 'string') continue;
     const clean = cat.trim();
-    if (!clean || clean.length > 60 || !SAFE_ENTITY_TOKEN_REGEX.test(clean)) {
+    if (
+      !clean ||
+      clean.length > 60 ||
+      !SAFE_ENTITY_TOKEN_REGEX.test(clean) ||
+      !isSafeColonSegment(clean) ||
+      clean.startsWith('.') ||
+      clean.endsWith('.') ||
+      clean.includes('..')
+    ) {
       continue;
     }
     tagSet.add(categoryCacheTag(clean));
@@ -140,13 +205,24 @@ export function resolveRevalidationTargets(input: RevalidationTargetsInput): {
     tagSet.add(RATE_CACHE_TAGS.DEALS);
     tagSet.add(RATE_CACHE_TAGS.STATS);
   }
-  for (const merchantId of (input.merchants ?? []).slice(0, 50)) {
+  const rawMerchants = Array.isArray(safeInput.merchants)
+    ? safeInput.merchants
+    : [];
+  for (const merchantId of rawMerchants.slice(0, 50)) {
     if (typeof merchantId !== 'string') continue;
     const clean = merchantId.trim();
+    const segments = clean ? clean.split(':') : [];
     if (
       !clean ||
       clean.length > 120 ||
-      !SAFE_MERCHANT_IDENTIFIER_REGEX.test(clean)
+      !SAFE_MERCHANT_IDENTIFIER_REGEX.test(clean) ||
+      segments.length === 0 ||
+      !segments.every(isSafeColonSegment) ||
+      clean.startsWith('.') ||
+      clean.endsWith('.') ||
+      clean.startsWith(':') ||
+      clean.endsWith(':') ||
+      clean.includes('..')
     ) {
       continue;
     }
@@ -157,7 +233,8 @@ export function resolveRevalidationTargets(input: RevalidationTargetsInput): {
     tagSet.add(RATE_CACHE_TAGS.DEALS);
     tagSet.add(RATE_CACHE_TAGS.STATS);
   }
-  for (const p of (input.paths ?? []).slice(0, 50)) {
+  const rawPaths = Array.isArray(safeInput.paths) ? safeInput.paths : [];
+  for (const p of rawPaths.slice(0, 50)) {
     if (typeof p !== 'string') continue;
     const clean = p.trim();
     if (isSafeRevalidationPath(clean)) {

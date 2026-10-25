@@ -100,7 +100,10 @@ const PROVIDER_DEFAULTS: Record<
 function toNumberOrUndefined(val: unknown): number | undefined {
   if (typeof val === 'number' && Number.isFinite(val)) return val;
   if (typeof val === 'string') {
-    const match = val.replace(',', '.').match(/(\d+(?:\.\d+)?)/);
+    const match = val
+      .slice(0, 200)
+      .replace(',', '.')
+      .match(/(?<![-\d.])(\d+(?:\.\d+)?)/);
     if (match) {
       const parsed = parseFloat(match[1]);
       if (Number.isFinite(parsed)) return parsed;
@@ -173,6 +176,7 @@ function asRecord(val: unknown): Record<string, unknown> | undefined {
  * Extracts the outermost JSON object substring (`{...}`) in O(n) without regex backtracking.
  */
 export function extractJsonObjectString(rawContent: string): string {
+  if (typeof rawContent !== 'string') return '';
   const trimmed = rawContent.trim();
   const firstBrace = trimmed.indexOf('{');
   const lastBrace = trimmed.lastIndexOf('}');
@@ -317,7 +321,7 @@ export function sanitizeSpecifications(raw: unknown): ProductSpecifications {
     : undefined;
 
   const candidateSpecs: ProductSpecifications = {
-    category_slug: toStringOrUndefined(root.category_slug),
+    category_slug: toStringOrUndefined(root.category_slug, 64),
     availability: availabilityParsed?.success ? availabilityParsed.data : undefined,
     design: designParsed?.success ? designParsed.data : undefined,
     display: displayParsed?.success ? displayParsed.data : undefined,
@@ -414,14 +418,28 @@ export function mergeProductSpecifications(
 export const MAX_SPEC_CACHE_ENTRIES = 250;
 
 export function cloneAiEnrichmentResponse(res: AiEnrichmentResponse): AiEnrichmentResponse {
+  const safeRes =
+    res && typeof res === 'object' && !Array.isArray(res) ? res : ({} as AiEnrichmentResponse);
+  const rawKeySpecs =
+    safeRes.key_specs && typeof safeRes.key_specs === 'object' && !Array.isArray(safeRes.key_specs)
+      ? (safeRes.key_specs as Record<string, unknown>)
+      : {};
+  const sanitizedKeySpecs: Record<string, string> = {};
+  for (const [k, v] of Object.entries(rawKeySpecs)) {
+    const cleanVal = sanitizeKeySpecText(v);
+    if (cleanVal) {
+      sanitizedKeySpecs[k] = cleanVal;
+    }
+  }
+  const parsedKeySpecs = KeySpecsSchema.safeParse(sanitizedKeySpecs);
   return {
-    ram_gb: res.ram_gb ?? null,
-    storage_gb: res.storage_gb ?? null,
-    screen_size_inch: res.screen_size_inch ?? null,
-    battery_mah: res.battery_mah ?? null,
-    has_5g: res.has_5g,
-    specifications: sanitizeSpecifications(res.specifications),
-    key_specs: { ...(res.key_specs ?? {}) },
+    ram_gb: toBoundedIntOrUndefined(safeRes.ram_gb, 2048) ?? null,
+    storage_gb: toBoundedIntOrUndefined(safeRes.storage_gb, 65536) ?? null,
+    screen_size_inch: toBoundedNumberOrUndefined(safeRes.screen_size_inch, 120) ?? null,
+    battery_mah: toBoundedIntOrUndefined(safeRes.battery_mah, 500000) ?? null,
+    has_5g: toBooleanOrUndefined(safeRes.has_5g),
+    specifications: sanitizeSpecifications(safeRes.specifications),
+    key_specs: parsedKeySpecs.success ? parsedKeySpecs.data : {},
   };
 }
 
@@ -431,6 +449,7 @@ export function cloneAiEnrichmentResponse(res: AiEnrichmentResponse): AiEnrichme
  * Supports: OpenAI, DOS-AI Gateway, Gemini, DeepSeek, Groq, OpenRouter, Ollama (or any OpenAI-compatible API).
  */
 export function trimTrailingSlashes(rawUrl: string): string {
+  if (typeof rawUrl !== 'string') return '';
   let end = rawUrl.length;
   while (end > 0 && rawUrl.charCodeAt(end - 1) === 47) {
     end -= 1;
@@ -439,25 +458,35 @@ export function trimTrailingSlashes(rawUrl: string): string {
 }
 
 export function resolveValidHttpBaseUrl(candidateUrl: string, fallbackUrl: string): string {
-  const cleaned = trimTrailingSlashes(typeof candidateUrl === 'string' ? candidateUrl.trim() : '');
-  if (cleaned && cleaned.length <= 512 && !/\p{Cc}/u.test(cleaned) && !/\s/.test(cleaned)) {
+  const isValidHttpBase = (urlStr: string): boolean => {
+    if (!urlStr || urlStr.length > 512 || /\p{Cc}/u.test(urlStr) || /\s/.test(urlStr)) {
+      return false;
+    }
     try {
-      const parsed = new URL(cleaned);
-      if (
+      const parsed = new URL(urlStr);
+      return (
         (parsed.protocol === 'http:' || parsed.protocol === 'https:') &&
-        parsed.hostname &&
+        Boolean(parsed.hostname) &&
+        !parsed.hostname.startsWith('.') &&
+        !parsed.hostname.endsWith('.') &&
+        !parsed.hostname.includes('..') &&
         parsed.username === '' &&
         parsed.password === '' &&
         parsed.search === '' &&
         parsed.hash === ''
-      ) {
-        return cleaned;
-      }
+      );
     } catch {
-      // fall through to fallbackUrl
+      return false;
     }
+  };
+  const cleaned = trimTrailingSlashes(typeof candidateUrl === 'string' ? candidateUrl.trim() : '');
+  if (isValidHttpBase(cleaned)) {
+    return cleaned;
   }
-  return trimTrailingSlashes(fallbackUrl);
+  const cleanedFallback = trimTrailingSlashes(
+    typeof fallbackUrl === 'string' ? fallbackUrl.trim() : ''
+  );
+  return isValidHttpBase(cleanedFallback) ? cleanedFallback : 'https://api.openai.com/v1';
 }
 
 export class AiSpecEnricher {
@@ -470,12 +499,19 @@ export class AiSpecEnricher {
   private memoryCache = new Map<string, AiEnrichmentResponse>();
 
   constructor(config: AiSpecEnricherConfig = {}) {
-    this.provider = this.resolveProvider(config.provider);
+    const safeConfig = config && typeof config === 'object' && !Array.isArray(config) ? config : {};
+    this.provider = this.resolveProvider(safeConfig.provider);
     const defaults = PROVIDER_DEFAULTS[this.provider];
 
-    this.apiKey = config.apiKey ?? this.resolveApiKey(this.provider);
+    const rawApiKey =
+      typeof safeConfig.apiKey === 'string' ? safeConfig.apiKey : this.resolveApiKey(this.provider);
+    const cleanedApiKey = rawApiKey
+      .replace(/\p{Cc}+/gu, '')
+      .trim()
+      .slice(0, 512);
+    this.apiKey = cleanedApiKey && !/\s/.test(cleanedApiKey) ? cleanedApiKey : '';
     this.baseUrl = resolveValidHttpBaseUrl(
-      config.baseUrl ||
+      safeConfig.baseUrl ||
         process.env.AI_BASE_URL ||
         process.env.DOS_AI_BASE_URL ||
         process.env.OPENAI_BASE_URL ||
@@ -483,22 +519,34 @@ export class AiSpecEnricher {
       defaults.baseUrl
     );
 
-    this.model =
-      config.model || process.env.AI_MODEL || process.env.OPENAI_MODEL || defaults.defaultModel;
+    const rawModelCandidate =
+      (typeof safeConfig.model === 'string' && safeConfig.model.replace(/\p{Cc}+/gu, '').trim()) ||
+      (process.env.AI_MODEL || '').replace(/\p{Cc}+/gu, '').trim() ||
+      (process.env.OPENAI_MODEL || '').replace(/\p{Cc}+/gu, '').trim() ||
+      '';
+    this.model = rawModelCandidate.slice(0, 128) || defaults.defaultModel;
 
-    const rawTimeout = config.timeoutMs ?? Number(process.env.AI_TIMEOUT_MS || 25000);
+    const rawTimeout =
+      typeof safeConfig.timeoutMs === 'boolean'
+        ? Number.NaN
+        : (safeConfig.timeoutMs ?? Number(process.env.AI_TIMEOUT_MS || 25000));
     this.timeoutMs =
       Number.isFinite(rawTimeout) && rawTimeout >= 1000 && rawTimeout <= 120000
         ? Math.round(rawTimeout)
         : 25000;
-    const rawTemp = config.temperature ?? 0.1;
+    const rawTemp =
+      typeof safeConfig.temperature === 'boolean' ? Number.NaN : (safeConfig.temperature ?? 0.1);
     this.temperature = Number.isFinite(rawTemp) && rawTemp >= 0 && rawTemp <= 2 ? rawTemp : 0.1;
   }
 
   private resolveProvider(explicit?: SupportedAiProvider): SupportedAiProvider {
-    if (explicit && explicit in PROVIDER_DEFAULTS) return explicit;
-    const envProvider = (process.env.AI_PROVIDER || '').trim().toLowerCase() as SupportedAiProvider;
-    if (envProvider && envProvider in PROVIDER_DEFAULTS) return envProvider;
+    if (typeof explicit === 'string' && Object.hasOwn(PROVIDER_DEFAULTS, explicit)) {
+      return explicit as SupportedAiProvider;
+    }
+    const envProvider = (process.env.AI_PROVIDER || '').trim().toLowerCase();
+    if (envProvider && Object.hasOwn(PROVIDER_DEFAULTS, envProvider)) {
+      return envProvider as SupportedAiProvider;
+    }
 
     if (process.env.DOS_AI_API_KEY || process.env.DOS_AI_BASE_URL) return 'dos-ai';
     if (process.env.OPENAI_API_KEY) return 'openai';
@@ -513,7 +561,13 @@ export class AiSpecEnricher {
     const keys = PROVIDER_DEFAULTS[provider].envKeys;
     for (const k of keys) {
       const val = process.env[k];
-      if (val && val.trim().length > 0) return val.trim();
+      if (typeof val === 'string') {
+        const cleaned = val
+          .replace(/\p{Cc}+/gu, '')
+          .trim()
+          .slice(0, 512);
+        if (cleaned.length > 0 && !/\s/.test(cleaned)) return cleaned;
+      }
     }
     return '';
   }
@@ -708,6 +762,37 @@ REQUIRED JSON SCHEMA:
     rawDescription?: string;
     categorySlug?: string;
   }): Promise<AiEnrichmentResponse | null> {
+    if (!params || typeof params !== 'object' || Array.isArray(params)) return null;
+    const cleanBrand =
+      typeof params.brand === 'string' ? params.brand.replace(/\p{Cc}+/gu, ' ').trim() : '';
+    const cleanModel =
+      typeof params.model === 'string' ? params.model.replace(/\p{Cc}+/gu, ' ').trim() : '';
+    if (!cleanBrand || !cleanModel) return null;
+    const cleanRawTitle =
+      typeof params.rawTitle === 'string'
+        ? params.rawTitle
+            .replace(/\p{Cc}+/gu, ' ')
+            .trim()
+            .slice(0, 500) || undefined
+        : undefined;
+    const cleanRawDesc =
+      typeof params.rawDescription === 'string'
+        ? params.rawDescription
+            .replace(/\p{Cc}+/gu, ' ')
+            .trim()
+            .slice(0, 2000) || undefined
+        : undefined;
+    const cleanCategorySlug =
+      typeof params.categorySlug === 'string' ? params.categorySlug : undefined;
+    params = {
+      ...params,
+      brand: cleanBrand,
+      model: cleanModel,
+      rawTitle: cleanRawTitle,
+      rawDescription: cleanRawDesc,
+      categorySlug: cleanCategorySlug,
+    };
+
     if (!this.isConfigured()) {
       logger.info(
         'spec_enrich.skipped_unconfigured',
@@ -821,7 +906,11 @@ REQUIRED JSON SCHEMA:
       }
 
       const cleanedJson = extractJsonObjectString(rawContent);
-      const parsedJson = JSON.parse(cleanedJson);
+      const rawParsed: unknown = JSON.parse(cleanedJson);
+      if (!rawParsed || typeof rawParsed !== 'object' || Array.isArray(rawParsed)) {
+        return null;
+      }
+      const parsedJson = rawParsed as Record<string, unknown>;
       const specifications = sanitizeSpecifications(parsedJson.specifications || parsedJson);
 
       const ramGb =
@@ -853,7 +942,12 @@ REQUIRED JSON SCHEMA:
         if (storageGb !== null) specifications.hardware.storage_gb = storageGb;
       }
 
-      const rawKeySpecs = parsedJson.key_specs || {};
+      const rawKeySpecs =
+        parsedJson.key_specs &&
+        typeof parsedJson.key_specs === 'object' &&
+        !Array.isArray(parsedJson.key_specs)
+          ? (parsedJson.key_specs as Record<string, unknown>)
+          : {};
       const keySpecsCandidate: KeySpecs = {
         screen:
           sanitizeKeySpecText(rawKeySpecs.screen) ||
@@ -925,9 +1019,14 @@ REQUIRED JSON SCHEMA:
     candidate: NormalizedProductCandidate,
     rawTitle?: string
   ): Promise<NormalizedProductCandidate> {
-    if (candidate.is_benchmark_enriched) {
+    if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)) {
+      throw new Error('[AiSpecEnricher] candidate must be a non-null object');
+    }
+    if (candidate.is_benchmark_enriched === true) {
       return {
         ...candidate,
+        has_5g: toBooleanOrUndefined(candidate.has_5g) ?? false,
+        colors: sanitizeColorList(candidate.colors) ?? [],
         spec_source: candidate.spec_source ?? 'benchmark_registry',
       };
     }
@@ -949,35 +1048,53 @@ REQUIRED JSON SCHEMA:
     });
 
     if (!aiResult) {
-      return candidate;
+      return {
+        ...candidate,
+        has_5g: toBooleanOrUndefined(candidate.has_5g) ?? false,
+        colors: sanitizeColorList(candidate.colors) ?? [],
+      };
     }
 
+    const safeColors = sanitizeColorList(candidate.colors) ?? [];
     // Deep-merge all 10 Field Groups so candidate.specifications fields are preserved
     // when AI omits a field or group, and candidate.colors override design.colors.
     const mergedSpecifications = mergeProductSpecifications(
       candidate.specifications,
       aiResult.specifications,
-      candidate.colors
+      safeColors
     );
 
+    const baseKeySpecs =
+      candidate.key_specs &&
+      typeof candidate.key_specs === 'object' &&
+      !Array.isArray(candidate.key_specs)
+        ? candidate.key_specs
+        : {};
+    const rawAiKeySpecs =
+      aiResult.key_specs &&
+      typeof aiResult.key_specs === 'object' &&
+      !Array.isArray(aiResult.key_specs)
+        ? aiResult.key_specs
+        : {};
     const incomingKeySpecs = Object.fromEntries(
-      Object.entries(aiResult.key_specs || {}).filter(
-        ([, v]) => v !== undefined && v !== null && String(v).trim() !== ''
-      )
+      Object.entries(rawAiKeySpecs)
+        .map(([k, v]) => [k, sanitizeKeySpecText(v)] as const)
+        .filter((entry): entry is readonly [string, string] => Boolean(entry[1]))
     );
 
     return {
       ...candidate,
+      colors: safeColors,
       ram_gb: validCandidateRam ?? toBoundedIntOrUndefined(aiResult.ram_gb, 2048) ?? null,
       storage_gb:
         validCandidateStorage ?? toBoundedIntOrUndefined(aiResult.storage_gb, 65536) ?? null,
       screen_size_inch:
         toBoundedNumberOrUndefined(aiResult.screen_size_inch, 120) ?? validCandidateScreen,
       battery_mah: toBoundedIntOrUndefined(aiResult.battery_mah, 500000) ?? validCandidateBattery,
-      has_5g: aiResult.has_5g ?? candidate.has_5g,
+      has_5g: aiResult.has_5g ?? toBooleanOrUndefined(candidate.has_5g) ?? false,
       specifications: mergedSpecifications,
       key_specs: {
-        ...candidate.key_specs,
+        ...baseKeySpecs,
         ...incomingKeySpecs,
       },
       spec_source: 'ai_unverified',

@@ -6,16 +6,32 @@ import type {
 /**
  * Strip all tracking query strings (sp_atk, xptdk, utm_*, fbclid, etc.) and hashes.
  */
+function isValidDetectorHostname(host: string): boolean {
+  const lower = host.toLowerCase();
+  return (
+    Boolean(lower) &&
+    !lower.startsWith('.') &&
+    !lower.endsWith('.') &&
+    !lower.includes('..')
+  );
+}
+
 export function sanitizeProductUrl(rawUrl: string): string | null {
   if (typeof rawUrl !== 'string') return null;
   const cleaned = rawUrl.replace(/\p{Cc}+/gu, '').trim();
-  if (!cleaned || cleaned.length > 2048) return null;
+  if (!cleaned || cleaned.length > 2048 || /\s/.test(cleaned)) return null;
   try {
     const parsed = new URL(cleaned);
     if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
       return null;
     }
     if (parsed.username || parsed.password) {
+      return null;
+    }
+    if (!isValidDetectorHostname(parsed.hostname)) {
+      return null;
+    }
+    if (parsed.port !== '' && parsed.port !== '80' && parsed.port !== '443') {
       return null;
     }
     return `${parsed.origin}${parsed.pathname}`;
@@ -33,7 +49,7 @@ export function detectEcommercePlatform(
 ): SupportedEcommercePlatform | null {
   if (typeof url !== 'string') return null;
   const cleaned = url.replace(/\p{Cc}+/gu, '').trim();
-  if (!cleaned || cleaned.length > 2048) return null;
+  if (!cleaned || cleaned.length > 2048 || /\s/.test(cleaned)) return null;
   let host: string;
   try {
     const parsed = new URL(cleaned);
@@ -41,6 +57,12 @@ export function detectEcommercePlatform(
       return null;
     }
     if (parsed.username || parsed.password) {
+      return null;
+    }
+    if (!isValidDetectorHostname(parsed.hostname)) {
+      return null;
+    }
+    if (parsed.port !== '' && parsed.port !== '80' && parsed.port !== '443') {
       return null;
     }
     host = parsed.hostname.toLowerCase();
@@ -122,11 +144,17 @@ export function extractIdsFromUrl(
   platform: SupportedEcommercePlatform,
   canonicalUrl: string
 ): { externalItemId: string | null; externalShopId: string | null } {
+  if (typeof canonicalUrl !== 'string' || !canonicalUrl.trim()) {
+    return { externalItemId: null, externalShopId: null };
+  }
+  const isPositiveDigits = (s: string | undefined): s is string =>
+    Boolean(s && s.length <= 24 && !/^0+$/.test(s));
+
   if (platform === 'shopee') {
     const m =
       canonicalUrl.match(/(?:a-)?i\.(\d+)\.(\d+)/i) ||
       canonicalUrl.match(/\/(?:product|opaanlp)\/(\d+)\/(\d+)/i);
-    if (m && m[1] && m[2] && m[1].length <= 24 && m[2].length <= 24) {
+    if (m && isPositiveDigits(m[1]) && isPositiveDigits(m[2])) {
       return {
         externalShopId: m[1],
         externalItemId: m[2],
@@ -137,10 +165,10 @@ export function extractIdsFromUrl(
 
   if (platform === 'lazada') {
     const m = canonicalUrl.match(/-i(\d+)(?:-s(\d+))?\.html/i);
-    if (m && m[1] && m[1].length <= 24 && (!m[2] || m[2].length <= 24)) {
+    if (m && isPositiveDigits(m[1])) {
       return {
         externalItemId: m[1],
-        externalShopId: m[2] || null,
+        externalShopId: isPositiveDigits(m[2]) ? m[2] : null,
       };
     }
     return { externalItemId: null, externalShopId: null };
@@ -148,7 +176,7 @@ export function extractIdsFromUrl(
 
   if (platform === 'tiki') {
     const m = canonicalUrl.match(/-p(\d+)\.html/i);
-    if (m && m[1] && m[1].length <= 24) {
+    if (m && isPositiveDigits(m[1])) {
       return {
         externalItemId: m[1],
         externalShopId: null,
@@ -165,10 +193,17 @@ export function extractIdsFromUrl(
       canonicalUrl.match(/\/product\/(\d+)/i) ||
       canonicalUrl.match(/\/view\/product\/(\d+)/i);
     const shopMatch = canonicalUrl.match(/\/@([a-zA-Z0-9_.-]+)/);
-    const itemId =
-      prodMatch?.[1] && prodMatch[1].length <= 24 ? prodMatch[1] : null;
+    const itemId = isPositiveDigits(prodMatch?.[1]) ? prodMatch![1]! : null;
+    const rawShop = shopMatch?.[1] || '';
     const shopId =
-      shopMatch?.[1] && shopMatch[1].length <= 64 ? shopMatch[1] : null;
+      rawShop &&
+      rawShop.length <= 64 &&
+      /[a-zA-Z0-9]/.test(rawShop) &&
+      !rawShop.startsWith('.') &&
+      !rawShop.endsWith('.') &&
+      !rawShop.includes('..')
+        ? rawShop
+        : null;
     return {
       externalItemId: itemId,
       externalShopId: shopId,
@@ -197,6 +232,10 @@ export function extractIdsFromUrl(
     lastSegment!.length >= 2 &&
     lastSegment!.length <= 120 &&
     /^[a-zA-Z0-9_.-]+$/.test(lastSegment!) &&
+    /[a-zA-Z0-9]/.test(lastSegment!) &&
+    !lastSegment!.startsWith('.') &&
+    !lastSegment!.endsWith('.') &&
+    !lastSegment!.includes('..') &&
     !RETAIL_NON_PRODUCT_FIRST_SEGMENTS.has(firstSegLower) &&
     !RETAIL_NON_PRODUCT_FIRST_SEGMENTS.has(lastSegLower) &&
     !(segments.length === 1 && RETAIL_CATEGORY_ROOT_SLUGS.has(firstSegLower)) &&
@@ -439,15 +478,18 @@ export function extractRatingFromJsonLd(aggRaw: unknown): {
 }
 
 export function cleanExtractedProductTitle(rawTitle: string): string {
+  if (typeof rawTitle !== 'string') return '';
   const withoutPlatformSuffix = rawTitle
+    .replace(/\p{Cc}+/gu, ' ')
     .replace(
       /\s*(?:\||[-–—])\s*(?:Shopee(?:\s*Việt\s*Nam|\s*VN)?|Lazada(?:\s*Việt\s*Nam|\s*VN)?|Tiki(?:\.vn)?|TikTok\s*Shop|CellphoneS(?:\.com\.vn)?|Thế\s*Giới\s*Di\s*Động|Thegioididong(?:\.com)?|TopZone(?:\.vn)?|Điện\s*Máy\s*Xanh|FPT\s*Shop|Fptshop(?:\.com\.vn)?|Hoàng\s*Hà\s*Mobile|HoangHaMobile(?:\.com)?|Di\s*Động\s*Việt|Didongviet(?:\.vn)?|Phong\s*Vũ|Phongvu(?:\.vn)?).*$/i,
       ''
     )
+    .replace(/\s+/g, ' ')
     .trim();
 
   if (!withoutPlatformSuffix.includes('|')) {
-    return withoutPlatformSuffix;
+    return withoutPlatformSuffix.slice(0, 500);
   }
 
   const pipeSegments = withoutPlatformSuffix
@@ -464,7 +506,7 @@ export function cleanExtractedProductTitle(rawTitle: string): string {
     }
   }
 
-  return keptSegments.join(' ').replace(/\s+/g, ' ').trim();
+  return keptSegments.join(' ').replace(/\s+/g, ' ').trim().slice(0, 500);
 }
 
 /**
@@ -472,6 +514,7 @@ export function cleanExtractedProductTitle(rawTitle: string): string {
  * so multi-variant listings (128GB / 256GB / 512GB / 1TB) are disambiguated.
  */
 export function extractSelectedVariantFromDom(doc: Document): string | null {
+  if (!doc || typeof doc.querySelectorAll !== 'function') return null;
   const selectors = [
     // Shopee active tier variation button
     'button.product-variation--selected',
@@ -486,18 +529,26 @@ export function extractSelectedVariantFromDom(doc: Document): string | null {
   ];
 
   const pickedLabels: string[] = [];
+  const seenLower = new Set<string>();
   for (const sel of selectors) {
     const nodes = doc.querySelectorAll(sel);
     nodes.forEach((node) => {
-      const txt = (node.textContent || '').trim();
+      const txt = (node.textContent || '')
+        .replace(/\p{Cc}+/gu, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
       if (txt && txt.length <= 60) {
-        pickedLabels.push(txt);
+        const key = txt.toLowerCase();
+        if (!seenLower.has(key)) {
+          seenLower.add(key);
+          pickedLabels.push(txt);
+        }
       }
     });
   }
 
   if (pickedLabels.length > 0) {
-    return pickedLabels.join(' - ');
+    return pickedLabels.join(' - ').slice(0, 200);
   }
   return null;
 }

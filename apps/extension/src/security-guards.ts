@@ -1,8 +1,25 @@
-import type { ExtractedPageProductSignal } from './types.js';
+import type {
+  ExtractedPageProductSignal,
+  SupportedEcommercePlatform,
+} from './types.js';
 
 export const DEFAULT_API_BASE_URL = 'https://rate.vn';
 
 export const MAX_VALID_EXTENSION_VND_PRICE = 1_000_000_000;
+
+const ALLOWED_EXTENSION_PLATFORMS: ReadonlySet<SupportedEcommercePlatform> =
+  new Set<SupportedEcommercePlatform>([
+    'shopee',
+    'lazada',
+    'tiki',
+    'tiktok',
+    'cellphones',
+    'tgdd',
+    'fptshop',
+    'hoangha',
+    'didongviet',
+    'phongvu',
+  ]);
 
 export const ALLOWED_API_BASE_ORIGINS = [
   'https://rate.vn',
@@ -19,10 +36,21 @@ export function normalizeAllowedApiBaseUrl(
   while (trimmed.endsWith('/')) {
     trimmed = trimmed.slice(0, -1);
   }
-  if (!trimmed) return DEFAULT_API_BASE_URL;
+  if (!trimmed || trimmed.length > 2048 || /[\s\p{Cc}]/u.test(trimmed)) {
+    return DEFAULT_API_BASE_URL;
+  }
 
   try {
     const parsed = new URL(trimmed);
+    if (
+      parsed.username ||
+      parsed.password ||
+      parsed.search ||
+      parsed.hash ||
+      (parsed.pathname && parsed.pathname !== '/')
+    ) {
+      return DEFAULT_API_BASE_URL;
+    }
     const origin = parsed.origin.toLowerCase();
     const isAllowed = (ALLOWED_API_BASE_ORIGINS as readonly string[]).includes(
       origin
@@ -44,6 +72,9 @@ export function isPrivilegedExtensionSender(
   },
   expectedRuntimeId?: string
 ): boolean {
+  if (!sender || typeof sender !== 'object' || Array.isArray(sender)) {
+    return false;
+  }
   if (sender.tab != null) {
     return false;
   }
@@ -123,26 +154,52 @@ export function selectFreshestSessionSignal<T extends SessionSignalEntry>(
 }
 
 const SAFE_EXTERNAL_ID_REGEX = /^[a-zA-Z0-9_.-]{1,120}$/;
+const RESERVED_EXTERNAL_ID_REGEX =
+  /^(?:0+|null|undefined|nan|infinity|-infinity|true|false)$/i;
 
 function sanitizeExternalIdentifier(val: unknown): string | null {
   if (typeof val !== 'string') return null;
   const cleaned = val.replace(/\p{Cc}+/gu, '').trim();
-  if (!cleaned || !SAFE_EXTERNAL_ID_REGEX.test(cleaned)) {
+  if (
+    !cleaned ||
+    !SAFE_EXTERNAL_ID_REGEX.test(cleaned) ||
+    !/[a-zA-Z0-9]/.test(cleaned) ||
+    cleaned.startsWith('.') ||
+    cleaned.endsWith('.') ||
+    cleaned.includes('..') ||
+    RESERVED_EXTERNAL_ID_REGEX.test(cleaned)
+  ) {
     return null;
   }
   return cleaned;
 }
 
+function isValidHttpUrlHostname(host: string): boolean {
+  const lower = host.toLowerCase();
+  return (
+    Boolean(lower) &&
+    !lower.startsWith('.') &&
+    !lower.endsWith('.') &&
+    !lower.includes('..')
+  );
+}
+
 function sanitizeCanonicalSignalUrl(rawUrl: unknown): string {
   if (typeof rawUrl !== 'string') return '';
   const cleaned = rawUrl.replace(/\p{Cc}+/gu, '').trim();
-  if (!cleaned || cleaned.length > 2048) return '';
+  if (!cleaned || cleaned.length > 2048 || /\s/.test(cleaned)) return '';
   try {
     const parsed = new URL(cleaned);
     if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
       return '';
     }
     if (parsed.username || parsed.password) {
+      return '';
+    }
+    if (!isValidHttpUrlHostname(parsed.hostname)) {
+      return '';
+    }
+    if (parsed.port !== '' && parsed.port !== '80' && parsed.port !== '443') {
       return '';
     }
     return `${parsed.origin}${parsed.pathname}`;
@@ -154,50 +211,62 @@ function sanitizeCanonicalSignalUrl(rawUrl: unknown): string {
 export function sanitizeExtensionProductSignal(
   signal: ExtractedPageProductSignal
 ): ExtractedPageProductSignal {
+  const safeSignal =
+    signal && typeof signal === 'object'
+      ? signal
+      : ({} as Partial<ExtractedPageProductSignal>);
+
+  const rawPlatform =
+    typeof safeSignal.platform === 'string'
+      ? (safeSignal.platform.trim().toLowerCase() as SupportedEcommercePlatform)
+      : 'shopee';
+  const validPlatform: SupportedEcommercePlatform =
+    ALLOWED_EXTENSION_PLATFORMS.has(rawPlatform) ? rawPlatform : 'shopee';
+
   const validPrice =
-    typeof signal.price === 'number' &&
-    Number.isFinite(signal.price) &&
-    signal.price > 0 &&
-    signal.price <= MAX_VALID_EXTENSION_VND_PRICE
-      ? Math.round(signal.price)
+    typeof safeSignal.price === 'number' &&
+    Number.isFinite(safeSignal.price) &&
+    safeSignal.price > 0 &&
+    safeSignal.price <= MAX_VALID_EXTENSION_VND_PRICE
+      ? Math.round(safeSignal.price)
       : null;
 
   const validOriginalPrice =
-    typeof signal.originalPrice === 'number' &&
-    Number.isFinite(signal.originalPrice) &&
-    signal.originalPrice > 0 &&
-    signal.originalPrice <= MAX_VALID_EXTENSION_VND_PRICE &&
-    (validPrice === null || signal.originalPrice >= validPrice)
-      ? Math.round(signal.originalPrice)
+    typeof safeSignal.originalPrice === 'number' &&
+    Number.isFinite(safeSignal.originalPrice) &&
+    safeSignal.originalPrice > 0 &&
+    safeSignal.originalPrice <= MAX_VALID_EXTENSION_VND_PRICE &&
+    (validPrice === null || safeSignal.originalPrice >= validPrice)
+      ? Math.round(safeSignal.originalPrice)
       : null;
 
   const validRatingStar =
-    typeof signal.ratingStar === 'number' &&
-    Number.isFinite(signal.ratingStar) &&
-    signal.ratingStar >= 0 &&
-    signal.ratingStar <= 5
-      ? Number(signal.ratingStar.toFixed(2))
+    typeof safeSignal.ratingStar === 'number' &&
+    Number.isFinite(safeSignal.ratingStar) &&
+    safeSignal.ratingStar >= 0 &&
+    safeSignal.ratingStar <= 5
+      ? Number(safeSignal.ratingStar.toFixed(2))
       : null;
 
   const validRatingCount =
-    typeof signal.ratingCount === 'number' &&
-    Number.isFinite(signal.ratingCount) &&
-    signal.ratingCount >= 0 &&
-    signal.ratingCount <= 100_000_000
-      ? Math.round(signal.ratingCount)
+    typeof safeSignal.ratingCount === 'number' &&
+    Number.isFinite(safeSignal.ratingCount) &&
+    safeSignal.ratingCount >= 0 &&
+    safeSignal.ratingCount <= 100_000_000
+      ? Math.round(safeSignal.ratingCount)
       : null;
 
   const trimmedTitle =
-    typeof signal.title === 'string'
-      ? signal.title
+    typeof safeSignal.title === 'string'
+      ? safeSignal.title
           .replace(/\p{Cc}+/gu, ' ')
           .replace(/\s+/g, ' ')
           .trim()
           .slice(0, 500)
       : '';
   const trimmedVariant =
-    typeof signal.selectedVariant === 'string'
-      ? signal.selectedVariant
+    typeof safeSignal.selectedVariant === 'string'
+      ? safeSignal.selectedVariant
           .replace(/\p{Cc}+/gu, ' ')
           .replace(/\s+/g, ' ')
           .trim()
@@ -205,10 +274,11 @@ export function sanitizeExtensionProductSignal(
       : null;
 
   return {
-    ...signal,
-    canonicalUrl: sanitizeCanonicalSignalUrl(signal.canonicalUrl),
-    externalItemId: sanitizeExternalIdentifier(signal.externalItemId),
-    externalShopId: sanitizeExternalIdentifier(signal.externalShopId),
+    ...safeSignal,
+    platform: validPlatform,
+    canonicalUrl: sanitizeCanonicalSignalUrl(safeSignal.canonicalUrl),
+    externalItemId: sanitizeExternalIdentifier(safeSignal.externalItemId),
+    externalShopId: sanitizeExternalIdentifier(safeSignal.externalShopId),
     title: trimmedTitle,
     selectedVariant: trimmedVariant,
     price: validPrice,
@@ -224,13 +294,17 @@ export function escapeSafeExternalHref(
 ): string {
   if (typeof rawUrl !== 'string') return fallbackUrl;
   const trimmed = rawUrl.replace(/\p{Cc}+/gu, '').trim();
-  if (!trimmed || trimmed.length > 2048) return fallbackUrl;
+  if (!trimmed || trimmed.length > 2048 || /\s/.test(trimmed))
+    return fallbackUrl;
   try {
     const parsed = new URL(trimmed, 'https://rate.vn');
     if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
       return fallbackUrl;
     }
     if (parsed.username || parsed.password) {
+      return fallbackUrl;
+    }
+    if (!isValidHttpUrlHostname(parsed.hostname)) {
       return fallbackUrl;
     }
     return parsed.href
@@ -316,7 +390,15 @@ export function formatSafeNumber(
     fallback?: number;
   } = {}
 ): string {
-  const fallback = options.fallback ?? 0;
+  const safeOpts = options && typeof options === 'object' ? options : {};
+  const rawFallback =
+    typeof safeOpts.fallback === 'number'
+      ? safeOpts.fallback
+      : typeof safeOpts.fallback === 'string' &&
+          String(safeOpts.fallback).trim() !== ''
+        ? Number(safeOpts.fallback)
+        : 0;
+  const fallback = Number.isFinite(rawFallback) ? rawFallback : 0;
   const num =
     typeof val === 'number'
       ? val
@@ -324,11 +406,23 @@ export function formatSafeNumber(
         ? Number(val)
         : NaN;
   const resolved = Number.isFinite(num) ? num : fallback;
-  const min = options.min ?? -Infinity;
-  const max = options.max ?? Infinity;
-  const clamped = Math.min(max, Math.max(min, resolved));
-  if (typeof options.decimals === 'number' && options.decimals >= 0) {
-    return clamped.toFixed(Math.min(6, Math.floor(options.decimals)));
+  const min =
+    typeof safeOpts.min === 'number' && Number.isFinite(safeOpts.min)
+      ? safeOpts.min
+      : -Infinity;
+  const max =
+    typeof safeOpts.max === 'number' && Number.isFinite(safeOpts.max)
+      ? safeOpts.max
+      : Infinity;
+  const low = Math.min(min, max);
+  const high = Math.max(min, max);
+  const clamped = Math.min(high, Math.max(low, resolved));
+  if (
+    typeof safeOpts.decimals === 'number' &&
+    Number.isFinite(safeOpts.decimals) &&
+    safeOpts.decimals >= 0
+  ) {
+    return clamped.toFixed(Math.min(6, Math.floor(safeOpts.decimals)));
   }
   return String(Math.round(clamped));
 }
@@ -367,7 +461,12 @@ export function filterValidSparklinePrices(
 ): number[] {
   if (!Array.isArray(points)) return [];
   const valid = points
-    .map((p) => Number(p?.price))
+    .filter(
+      (p) =>
+        Boolean(p && typeof p === 'object' && !Array.isArray(p)) &&
+        typeof p.price !== 'boolean'
+    )
+    .map((p) => Number(p.price))
     .filter(
       (p) => Number.isFinite(p) && p > 0 && p <= MAX_VALID_EXTENSION_VND_PRICE
     );

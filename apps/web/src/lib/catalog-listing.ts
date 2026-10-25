@@ -5,6 +5,15 @@ import type {
 
 const PLAIN_LISTING_KEYS = new Set(['categorySlug', 'sort', 'limit', 'offset']);
 
+const VALID_PLAIN_LISTING_SORTS: ReadonlySet<string> = new Set([
+  'default',
+  'price_asc',
+  'price_desc',
+  'rating_desc',
+  'merchants_desc',
+  'newest',
+]);
+
 const CANONICAL_CATEGORY_SLUGS: ReadonlySet<string> =
   new Set<CanonicalCategorySlug>([
     'smartphones',
@@ -28,8 +37,16 @@ export function isPlainListing(params: MasterProductFilterParams): boolean {
     return false;
   }
   if (
+    params.sort !== undefined &&
+    (typeof params.sort !== 'string' ||
+      !VALID_PLAIN_LISTING_SORTS.has(params.sort))
+  ) {
+    return false;
+  }
+  if (
     params.limit !== undefined &&
-    (!Number.isFinite(params.limit) ||
+    (typeof params.limit !== 'number' ||
+      !Number.isInteger(params.limit) ||
       params.limit < 1 ||
       params.limit > MAX_PLAIN_LISTING_LIMIT)
   ) {
@@ -37,7 +54,8 @@ export function isPlainListing(params: MasterProductFilterParams): boolean {
   }
   if (
     params.offset !== undefined &&
-    (!Number.isFinite(params.offset) ||
+    (typeof params.offset !== 'number' ||
+      !Number.isInteger(params.offset) ||
       params.offset < 0 ||
       params.offset > MAX_PLAIN_LISTING_OFFSET)
   ) {

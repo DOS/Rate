@@ -11,7 +11,7 @@
     "WEBPACK_CACHE_TYPE"
   ],
   "globalPassThroughEnv": [
-    "SUPABASE_SERVICE_ROLE_KEY",
+    "SUPABASE_SECRET_KEY",
     "AI_PROVIDER",
     "AI_API_KEY",
     "AI_BASE_URL",

@@ -62,8 +62,12 @@ export async function loadAndScore(supabase: RateSupabaseClient): Promise<Mercha
   );
   const masterMinByCluster = new Map<string, number>();
   for (const m of masters) {
+    if (!m || typeof m !== 'object' || Array.isArray(m)) continue;
+    const clusterId = typeof m.id === 'string' && !/\p{Cc}/u.test(m.id) ? m.id.trim() : '';
     const price = toValidPrice(m.min_price);
-    if (price) masterMinByCluster.set(m.id, price);
+    if (clusterId && clusterId.length <= 128 && price) {
+      masterMinByCluster.set(clusterId, price);
+    }
   }
   logger.info(
     'backfill.loaded',
@@ -77,7 +81,9 @@ export async function runReviewRiskBackfill(
   supabase: RateSupabaseClient,
   options: { apply?: boolean } = {}
 ): Promise<{ apply: boolean; scored: number; changed: number; written: number }> {
-  const apply = Boolean(options.apply);
+  const safeOptions =
+    options && typeof options === 'object' && !Array.isArray(options) ? options : {};
+  const apply = safeOptions.apply === true;
   const scores = await loadAndScore(supabase);
   const changed = scores.filter(s => s.previousScore !== s.risk.risk_score);
   for (const s of changed.slice(0, 25)) {
@@ -115,9 +121,9 @@ if (isDirectExecution) {
   (async () => {
     const { createClient } = await import('@supabase/supabase-js');
     const rawUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-    const key = (process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_KEY || '').trim();
+    const key = (process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_KEY || '').trim();
     if (!rawUrl.trim() || !key) {
-      throw new Error('Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY in environment.');
+      throw new Error('Missing SUPABASE_URL or SUPABASE_SECRET_KEY in environment.');
     }
     const { url, host } = resolveBackfillSupabaseTarget(rawUrl);
     const supabase = scopeSupabaseToRate(

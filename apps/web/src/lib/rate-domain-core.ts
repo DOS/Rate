@@ -97,7 +97,20 @@ export function toSafeNonNegativeVoteCount(
   raw: unknown,
   max = 1_000_000
 ): number {
-  const num = Number(raw);
+  if (typeof raw !== 'number' && typeof raw !== 'string') return 0;
+  let num = Number.NaN;
+  if (typeof raw === 'number') {
+    num = raw;
+  } else {
+    const cleaned = raw.replace(/\p{Cc}+/gu, '').trim();
+    if (
+      cleaned.length > 0 &&
+      cleaned.length <= 32 &&
+      !/^[+-]?0[xbo]/i.test(cleaned)
+    ) {
+      num = Number(cleaned);
+    }
+  }
   if (!Number.isFinite(num) || num <= 0) return 0;
   return Math.min(max, Math.floor(num));
 }
@@ -172,7 +185,7 @@ const WEB_LONG_TERM_RE =
  * (`Docs/Platform/review-trust-model.html` Sections 3, 5, 9, 15).
  */
 export function evaluateReviewTrustAssessment(
-  review: Pick<
+  rawReview: Pick<
     ReviewItem,
     | 'rating_star'
     | 'comment'
@@ -186,7 +199,14 @@ export function evaluateReviewTrustAssessment(
     | 'signals'
   >
 ): ReviewTrustAssessment {
-  const comment = (review.comment || '').normalize('NFC').trim();
+  const review = (
+    rawReview && typeof rawReview === 'object' && !Array.isArray(rawReview)
+      ? rawReview
+      : {}
+  ) as typeof rawReview;
+  const comment = (typeof review.comment === 'string' ? review.comment : '')
+    .normalize('NFC')
+    .trim();
   const cleanText = comment.replace(/[\s.!,]+$/u, '').trim();
   const hasShipping = WEB_SHIPPING_ASPECT_RE.test(comment);
   const hasProduct = WEB_PRODUCT_ASPECT_RE.test(comment);
@@ -423,12 +443,16 @@ export function computeCombinedDualScore(params: {
   userConfidence: number;
   fallbackAverage?: number;
 }): CombinedDualScoreResult {
+  const safeParams =
+    params && typeof params === 'object' && !Array.isArray(params)
+      ? params
+      : ({} as typeof params);
   const {
     userScore,
     expertScore,
     userConfidence,
     fallbackAverage = 0,
-  } = params;
+  } = safeParams;
   const safeUser =
     typeof userScore === 'number' &&
     Number.isFinite(userScore) &&
@@ -523,14 +547,23 @@ export function detectStarDistributionAnomaly(
   let fiveStarCount = 0;
   let criticalStarCount = 0;
   let shallowOrFlaggedFiveStar = 0;
+  const safeReviews = Array.isArray(reviews) ? reviews : [];
 
-  for (const r of reviews) {
+  for (const r of safeReviews) {
+    if (
+      !r ||
+      typeof r !== 'object' ||
+      Array.isArray(r) ||
+      typeof r.rating_star === 'boolean'
+    ) {
+      continue;
+    }
     const rawStar = Number(r.rating_star);
     if (!Number.isFinite(rawStar)) continue;
     const star = Math.round(rawStar);
     if (star < 1 || star > 5) continue;
     ratedCount += 1;
-    const text = (r.comment || '').trim();
+    const text = (typeof r.comment === 'string' ? r.comment : '').trim();
     if (star === 5) {
       fiveStarCount += 1;
       if (
@@ -592,6 +625,9 @@ export function computeJReviewsWeight(params: {
   verdict?: string | null;
   includeInRating?: boolean;
 }): number {
+  if (!params || typeof params !== 'object' || Array.isArray(params)) {
+    return 0;
+  }
   const {
     upvotes,
     downvotes,
@@ -660,11 +696,22 @@ export function computeBayesianRatingSummary(
 ): BayesianRatingSummary {
   let effectiveWeightSum = 0;
   let weightedStarSum = 0;
+  const safeReviews = Array.isArray(reviews) ? reviews : [];
 
-  for (const r of reviews) {
-    if (!r.include_in_rating) continue;
-    const rawW = Number(r.helpfulness_weight);
-    const star = Number(r.rating_star);
+  for (const r of safeReviews) {
+    if (
+      !r ||
+      typeof r !== 'object' ||
+      Array.isArray(r) ||
+      !r.include_in_rating
+    ) {
+      continue;
+    }
+    const rawW =
+      typeof r.helpfulness_weight === 'number'
+        ? r.helpfulness_weight
+        : Number.NaN;
+    const star = typeof r.rating_star === 'number' ? r.rating_star : Number.NaN;
     if (
       Number.isFinite(rawW) &&
       rawW > 0 &&
@@ -786,16 +833,27 @@ export interface RawMerchantSafeRow {
 }
 
 export function getCategoryRouteHref(slug: string): string {
-  if (
-    slug === 'smartphones' ||
-    slug === 'tablets' ||
-    slug === 'laptops' ||
-    slug === 'smartwatches' ||
-    slug === 'earbuds'
-  ) {
-    return `/${slug}`;
+  const safeSlug =
+    typeof slug === 'string'
+      ? slug
+          .replace(/\p{Cc}+/gu, '')
+          .trim()
+          .toLowerCase()
+          .slice(0, 128)
+      : '';
+  if (!safeSlug) {
+    return '/smartphones';
   }
-  return `/smartphones?category=${encodeURIComponent(slug)}`;
+  if (
+    safeSlug === 'smartphones' ||
+    safeSlug === 'tablets' ||
+    safeSlug === 'laptops' ||
+    safeSlug === 'smartwatches' ||
+    safeSlug === 'earbuds'
+  ) {
+    return `/${safeSlug}`;
+  }
+  return `/smartphones?category=${encodeURIComponent(safeSlug)}`;
 }
 
 export const KNOWN_LOCAL_DEVICE_IMAGES = new Set<string>([
@@ -844,18 +902,46 @@ export const KNOWN_LOCAL_DEVICE_IMAGES = new Set<string>([
  * (DOS/Rate#810).
  */
 export function isImageUrl(value: unknown): value is string {
-  // A host after "http(s)://" or "//"; otherwise one slash and a path.
-  return (
-    typeof value === 'string' &&
-    /^(?:(?:https?:)?\/\/[^\s/?#]+|\/(?!\/)\S)\S*$/i.test(value.trim())
-  );
+  if (typeof value !== 'string') return false;
+  const trimmed = value.trim();
+  if (!trimmed || trimmed.length > 2048 || /[\s\p{Cc}]/u.test(trimmed))
+    return false;
+  if (/^\/(?!\/)\S+$/.test(trimmed)) {
+    return !trimmed.includes('..') && !trimmed.includes('\\');
+  }
+  if (!/^(?:https?:)?\/\/[^\s/?#]+\S*$/i.test(trimmed)) return false;
+  try {
+    const parsed = new URL(
+      trimmed.startsWith('//') ? `https:${trimmed}` : trimmed
+    );
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:')
+      return false;
+    if (parsed.username || parsed.password) return false;
+    const host = parsed.hostname.toLowerCase();
+    if (
+      !host ||
+      host.startsWith('.') ||
+      host.endsWith('.') ||
+      host.includes('..')
+    ) {
+      return false;
+    }
+    if (parsed.port !== '' && parsed.port !== '80' && parsed.port !== '443') {
+      return false;
+    }
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 /** The usable images of a stored `images` list, trimmed, in order. */
 export function usableImageUrls(
   images: readonly unknown[] | null | undefined
 ): string[] {
-  return (images ?? []).filter(isImageUrl).map((url) => url.trim());
+  return (Array.isArray(images) ? images : [])
+    .filter(isImageUrl)
+    .map((url) => url.trim());
 }
 
 /** The first usable image of a stored `images` list, or null. */
@@ -870,7 +956,13 @@ export function productImageUrl(product: {
   readonly thumbnail?: string | null;
   readonly images?: readonly unknown[] | null;
 }): string | null {
-  return firstImageUrl([product.thumbnail, ...(product.images ?? [])]);
+  if (!product || typeof product !== 'object' || Array.isArray(product)) {
+    return null;
+  }
+  return firstImageUrl([
+    product.thumbnail,
+    ...(Array.isArray(product.images) ? product.images : []),
+  ]);
 }
 
 export function resolveProductImageUrl(
@@ -885,8 +977,18 @@ export function resolveProductImageUrl(
     | null,
   fallbackUrl?: string | null
 ): string | null {
-  if (slugOrProduct && typeof slugOrProduct === 'object') {
-    const slug = slugOrProduct.slug;
+  if (
+    slugOrProduct &&
+    typeof slugOrProduct === 'object' &&
+    !Array.isArray(slugOrProduct)
+  ) {
+    const slug =
+      typeof slugOrProduct.slug === 'string'
+        ? slugOrProduct.slug
+            .replace(/\p{Cc}+/gu, '')
+            .trim()
+            .toLowerCase()
+        : '';
     if (slug && KNOWN_LOCAL_DEVICE_IMAGES.has(slug)) {
       return `/img/devices/${slug}.jpg`;
     }
@@ -900,8 +1002,15 @@ export function resolveProductImageUrl(
       firstImageUrl([fallbackUrl])
     );
   }
-  if (slugOrProduct && KNOWN_LOCAL_DEVICE_IMAGES.has(slugOrProduct)) {
-    return `/img/devices/${slugOrProduct}.jpg`;
+  const cleanStringSlug =
+    typeof slugOrProduct === 'string'
+      ? slugOrProduct
+          .replace(/\p{Cc}+/gu, '')
+          .trim()
+          .toLowerCase()
+      : '';
+  if (cleanStringSlug && KNOWN_LOCAL_DEVICE_IMAGES.has(cleanStringSlug)) {
+    return `/img/devices/${cleanStringSlug}.jpg`;
   }
   return firstImageUrl([fallbackUrl]);
 }
@@ -922,7 +1031,7 @@ export function isCanonicalCategorySlug(
 }
 
 export function getMasterProductCategorySlug(
-  product: Pick<MasterProduct, 'slug'> & {
+  rawProduct: Pick<MasterProduct, 'slug'> & {
     name?: string | null;
     model?: string | null;
     category_id?: string | null;
@@ -932,8 +1041,15 @@ export function getMasterProductCategorySlug(
   },
   categorySlugById?: ReadonlyMap<string, string>
 ): CanonicalCategorySlug {
+  const product = (
+    rawProduct && typeof rawProduct === 'object' && !Array.isArray(rawProduct)
+      ? rawProduct
+      : { slug: '' }
+  ) as typeof rawProduct;
   const catSlugFromMap =
-    product.category_id && categorySlugById
+    product.category_id &&
+    categorySlugById &&
+    typeof categorySlugById.get === 'function'
       ? categorySlugById.get(product.category_id)
       : undefined;
   const catSlugFromMeta =
@@ -1002,8 +1118,29 @@ export function getMasterProductHref(
   },
   categorySlugById?: ReadonlyMap<string, string>
 ): string {
-  const catSlug = getMasterProductCategorySlug(product, categorySlugById);
-  return `/${catSlug}/${product.slug}`;
+  const safeProduct =
+    product && typeof product === 'object' && !Array.isArray(product)
+      ? product
+      : ({ slug: '' } as Pick<MasterProduct, 'slug'>);
+  const catSlug = getMasterProductCategorySlug(safeProduct, categorySlugById);
+  const rawSlug =
+    typeof safeProduct.slug === 'string'
+      ? safeProduct.slug
+          .replace(/\p{Cc}+/gu, '')
+          .trim()
+          .replace(/^\/+|\/+$/g, '')
+          .slice(0, 256)
+      : '';
+  const safeSlug =
+    /^[a-zA-Z0-9][a-zA-Z0-9._-]{0,255}$/.test(rawSlug) &&
+    !rawSlug.endsWith('.') &&
+    !rawSlug.includes('..') &&
+    !/^(?:0+|null|undefined|nan|infinity|-infinity|true|false)$/i.test(rawSlug)
+      ? rawSlug
+      : '';
+  return safeSlug
+    ? `/${catSlug}/${encodeURIComponent(safeSlug)}`
+    : `/${catSlug}`;
 }
 
 export interface MerchantListFilterParams {
@@ -1096,6 +1233,9 @@ function parseMerchantRiskBreakdownCandidate(
 export function extractPersistedBreakdown(
   m: Pick<RawMerchantSafeRow, 'review_risk_breakdown' | 'metadata'>
 ): MerchantRiskBreakdown | null {
+  if (!m || typeof m !== 'object' || Array.isArray(m)) {
+    return null;
+  }
   const fromTopLevel = parseMerchantRiskBreakdownCandidate(
     m.review_risk_breakdown
   );
@@ -1126,42 +1266,93 @@ export function filterAndSortMerchants(
   merchants: MerchantSummary[],
   params?: MerchantListFilterParams
 ): MerchantSummary[] {
-  let results = [...merchants];
+  if (!Array.isArray(merchants)) return [];
+  const safeParams =
+    params && typeof params === 'object' && !Array.isArray(params)
+      ? params
+      : undefined;
+  let results = merchants.filter((m): m is MerchantSummary =>
+    Boolean(m && typeof m === 'object' && !Array.isArray(m))
+  );
 
-  if (params?.q && params.q.trim()) {
-    const kw = params.q.trim().toLowerCase();
-    results = results.filter(
-      (m) =>
-        m.name.toLowerCase().includes(kw) ||
-        m.platform_shop_id.toLowerCase().includes(kw) ||
-        m.platform.toLowerCase().includes(kw) ||
-        (m.slug && m.slug.toLowerCase().includes(kw))
-    );
+  const cleanQ =
+    typeof safeParams?.q === 'string'
+      ? safeParams.q
+          .replace(/\p{Cc}+/gu, ' ')
+          .replace(/\s+/g, ' ')
+          .trim()
+          .slice(0, 200)
+          .toLowerCase()
+      : '';
+  if (cleanQ) {
+    results = results.filter((m) => {
+      const name =
+        typeof m.name === 'string'
+          ? m.name
+              .replace(/\p{Cc}+/gu, ' ')
+              .replace(/\s+/g, ' ')
+              .toLowerCase()
+          : '';
+      const shopId =
+        typeof m.platform_shop_id === 'string'
+          ? m.platform_shop_id.replace(/\p{Cc}+/gu, '').toLowerCase()
+          : '';
+      const platform =
+        typeof m.platform === 'string'
+          ? m.platform.replace(/\p{Cc}+/gu, '').toLowerCase()
+          : '';
+      const slug =
+        typeof m.slug === 'string'
+          ? m.slug.replace(/\p{Cc}+/gu, '').toLowerCase()
+          : '';
+      return (
+        name.includes(cleanQ) ||
+        shopId.includes(cleanQ) ||
+        platform.includes(cleanQ) ||
+        (Boolean(slug) && slug.includes(cleanQ))
+      );
+    });
   }
 
-  if (typeof params?.minTrust === 'number' && !Number.isNaN(params.minTrust)) {
-    results = results.filter((m) => m.trust_score >= params.minTrust!);
+  if (
+    typeof safeParams?.minTrust === 'number' &&
+    Number.isFinite(safeParams.minTrust)
+  ) {
+    const safeMinTrust = Math.max(0, Math.min(100, safeParams.minTrust));
+    results = results.filter((m) => {
+      const trust =
+        typeof m.trust_score === 'number' && Number.isFinite(m.trust_score)
+          ? m.trust_score
+          : 0;
+      return trust >= safeMinTrust;
+    });
   }
 
-  if (params?.sort) {
+  if (safeParams?.sort) {
+    const safeNum = (v: unknown, fallback = 0): number =>
+      typeof v === 'number' && Number.isFinite(v) ? v : fallback;
     results.sort((a, b) => {
-      switch (params.sort) {
+      switch (safeParams.sort) {
         case 'trust_desc':
           return (
-            b.trust_score - a.trust_score || b.product_count - a.product_count
+            safeNum(b.trust_score) - safeNum(a.trust_score) ||
+            safeNum(b.product_count) - safeNum(a.product_count)
           );
         case 'products_desc':
           return (
-            b.product_count - a.product_count || b.trust_score - a.trust_score
+            safeNum(b.product_count) - safeNum(a.product_count) ||
+            safeNum(b.trust_score) - safeNum(a.trust_score)
           );
         case 'seeding_asc':
           return (
-            a.review_risk_score - b.review_risk_score ||
-            b.trust_score - a.trust_score
+            safeNum(a.review_risk_score, 100) -
+              safeNum(b.review_risk_score, 100) ||
+            safeNum(b.trust_score) - safeNum(a.trust_score)
           );
         case 'followers_desc':
           return (
-            b.follower_count - a.follower_count || b.trust_score - a.trust_score
+            safeNum(b.follower_count) - safeNum(a.follower_count) ||
+            safeNum(b.trust_score) - safeNum(a.trust_score)
           );
         default:
           return 0;
@@ -1170,11 +1361,11 @@ export function filterAndSortMerchants(
   }
 
   if (
-    typeof params?.limit === 'number' &&
-    Number.isFinite(params.limit) &&
-    params.limit >= 1
+    typeof safeParams?.limit === 'number' &&
+    Number.isFinite(safeParams.limit) &&
+    safeParams.limit >= 1
   ) {
-    results = results.slice(0, Math.min(Math.floor(params.limit), 5000));
+    results = results.slice(0, Math.min(Math.floor(safeParams.limit), 5000));
   }
 
   return results;
@@ -1185,7 +1376,8 @@ export function filterAndSortMerchants(
  * so commas, parentheses, dots, or spaces cannot inject arbitrary PostgREST operators.
  */
 export function sanitizePostgrestFilterToken(raw: string): string {
-  return raw.replace(/[^a-zA-Z0-9_-]/g, '');
+  if (typeof raw !== 'string') return '';
+  return raw.replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 128);
 }
 
 export interface ParsedEcommerceUrl {
@@ -1264,13 +1456,28 @@ const RETAIL_CATEGORY_ROOT_SLUGS = new Set([
 ]);
 
 export function parseEcommerceUrlOrQuery(raw: string): ParsedEcommerceUrl {
-  const trimmed = raw.trim();
+  const trimmed =
+    typeof raw === 'string'
+      ? raw
+          .replace(/\p{Cc}+/gu, '')
+          .trim()
+          .slice(0, 2048)
+      : '';
   const hasHttpProtocol = /^https?:\/\//i.test(trimmed);
   const hasKnownDomainToken =
     /(?:^|\/\/|\.)(?:shopee\.vn|lazada\.vn|tiki\.vn|tiktok\.com|cellphones\.com\.vn|thegioididong\.com|topzone\.vn|dienmayxanh\.com|fptshop\.com\.vn|hoanghamobile\.com|didongviet\.vn|phongvu\.vn|rate\.vn)(?:\/|$)/i.test(
       trimmed
     );
   const isUrl = hasHttpProtocol || hasKnownDomainToken;
+
+  const toPositiveNumericId = (
+    val: string | undefined,
+    minLen = 1,
+    maxLen = 24
+  ): string | null => {
+    if (!val || val.length < minLen || val.length > maxLen) return null;
+    return /^[1-9]\d*$/.test(val) ? val : null;
+  };
 
   let parsedHost: string | null = null;
   let parsedPathname = trimmed;
@@ -1279,7 +1486,21 @@ export function parseEcommerceUrlOrQuery(raw: string): ParsedEcommerceUrl {
       const parsed = new URL(
         hasHttpProtocol ? trimmed : `https://${trimmed.replace(/^\/+/, '')}`
       );
-      if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+      const candidateHost = parsed.hostname.toLowerCase();
+      const isLoopback =
+        candidateHost === 'localhost' || candidateHost === '127.0.0.1';
+      if (
+        (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') ||
+        Boolean(parsed.username || parsed.password) ||
+        !candidateHost ||
+        candidateHost.startsWith('.') ||
+        candidateHost.endsWith('.') ||
+        candidateHost.includes('..') ||
+        (!isLoopback &&
+          parsed.port !== '' &&
+          parsed.port !== '80' &&
+          parsed.port !== '443')
+      ) {
         return {
           isUrl: false,
           platform: null,
@@ -1288,7 +1509,7 @@ export function parseEcommerceUrlOrQuery(raw: string): ParsedEcommerceUrl {
           internalSlug: null,
         };
       }
-      parsedHost = parsed.hostname.toLowerCase();
+      parsedHost = candidateHost;
       parsedPathname = parsed.pathname;
     } catch {
       parsedHost = null;
@@ -1302,11 +1523,13 @@ export function parseEcommerceUrlOrQuery(raw: string): ParsedEcommerceUrl {
         parsedPathname.match(/(?:a-)?i\.(\d+)\.(\d+)/i) ||
         parsedPathname.match(/\/(?:product|opaanlp)\/(\d+)\/(\d+)/i);
       if (itemMatch) {
+        const shopId = toPositiveNumericId(itemMatch[1]);
+        const itemId = toPositiveNumericId(itemMatch[2]);
         return {
           isUrl: true,
           platform: 'shopee',
-          platformShopId: itemMatch[1] || null,
-          platformItemId: itemMatch[2] || null,
+          platformShopId: shopId && itemId ? shopId : null,
+          platformItemId: shopId && itemId ? itemId : null,
           internalSlug: null,
         };
       }
@@ -1315,7 +1538,7 @@ export function parseEcommerceUrlOrQuery(raw: string): ParsedEcommerceUrl {
         return {
           isUrl: true,
           platform: 'shopee',
-          platformShopId: shopMatch[1] || null,
+          platformShopId: toPositiveNumericId(shopMatch[1]),
           platformItemId: null,
           internalSlug: null,
         };
@@ -1331,11 +1554,13 @@ export function parseEcommerceUrlOrQuery(raw: string): ParsedEcommerceUrl {
 
     if (isDomainOrSubdomain(parsedHost, 'lazada.vn')) {
       const lazadaMatch = parsedPathname.match(/-i(\d+)(?:-s(\d+))?\.html/i);
+      const itemId = toPositiveNumericId(lazadaMatch?.[1]);
+      const skuId = toPositiveNumericId(lazadaMatch?.[2]);
       return {
         isUrl: true,
         platform: 'lazada',
-        platformShopId: lazadaMatch?.[2] || null,
-        platformItemId: lazadaMatch?.[1] || null,
+        platformShopId: itemId ? skuId : null,
+        platformItemId: itemId,
         internalSlug: null,
       };
     }
@@ -1346,7 +1571,7 @@ export function parseEcommerceUrlOrQuery(raw: string): ParsedEcommerceUrl {
         isUrl: true,
         platform: 'tiki',
         platformShopId: null,
-        platformItemId: tikiMatch?.[1] || null,
+        platformItemId: toPositiveNumericId(tikiMatch?.[1]),
         internalSlug: null,
       };
     }
@@ -1364,12 +1589,21 @@ export function parseEcommerceUrlOrQuery(raw: string): ParsedEcommerceUrl {
       const prodMatch =
         parsedPathname.match(/\/product\/(\d+)/i) ||
         parsedPathname.match(/\/view\/product\/(\d+)/i);
-      const shopMatch = parsedPathname.match(/\/@([a-zA-Z0-9_.-]+)/);
+      const shopMatch = parsedPathname.match(/\/@([a-zA-Z0-9_.-]{1,64})/);
+      const rawShopHandle = shopMatch?.[1] || null;
+      const safeShopHandle =
+        rawShopHandle &&
+        /[a-zA-Z0-9]/.test(rawShopHandle) &&
+        !rawShopHandle.startsWith('.') &&
+        !rawShopHandle.endsWith('.') &&
+        !rawShopHandle.includes('..')
+          ? rawShopHandle
+          : null;
       return {
         isUrl: true,
         platform: 'tiktok',
-        platformShopId: shopMatch?.[1] || null,
-        platformItemId: prodMatch?.[1] || null,
+        platformShopId: safeShopHandle,
+        platformItemId: toPositiveNumericId(prodMatch?.[1], 6, 24),
         internalSlug: null,
       };
     }
@@ -1407,6 +1641,12 @@ export function parseEcommerceUrlOrQuery(raw: string): ParsedEcommerceUrl {
       const isValidItemSlug =
         Boolean(lastSeg) &&
         lastSeg!.length >= 2 &&
+        lastSeg!.length <= 256 &&
+        /^[a-z0-9][a-z0-9._-]*[a-z0-9]$/i.test(lastSegLower) &&
+        !lastSegLower.includes('..') &&
+        !/^(?:0+|null|undefined|nan|infinity|-infinity|true|false)$/i.test(
+          lastSegLower
+        ) &&
         !RETAIL_NON_PRODUCT_FIRST_SEGMENTS.has(firstSegLower) &&
         !RETAIL_NON_PRODUCT_FIRST_SEGMENTS.has(lastSegLower) &&
         !(
@@ -1431,13 +1671,23 @@ export function parseEcommerceUrlOrQuery(raw: string): ParsedEcommerceUrl {
         /\/(?:smartphones|tablets|laptops|smartwatches|earbuds)\/([a-z0-9-]+)/i
       );
       if (rateSlugMatch) {
-        return {
-          isUrl: true,
-          platform: 'rate',
-          platformShopId: null,
-          platformItemId: null,
-          internalSlug: rateSlugMatch[1] || null,
-        };
+        const candidateSlug = (rateSlugMatch[1] || '').toLowerCase();
+        const validSlug =
+          /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(candidateSlug) &&
+          !/^(?:0+|null|undefined|nan|infinity|true|false)$/i.test(
+            candidateSlug
+          )
+            ? rateSlugMatch[1]!
+            : null;
+        if (validSlug) {
+          return {
+            isUrl: true,
+            platform: 'rate',
+            platformShopId: null,
+            platformItemId: null,
+            internalSlug: validSlug,
+          };
+        }
       }
     }
 
@@ -1456,35 +1706,46 @@ export function parseEcommerceUrlOrQuery(raw: string): ParsedEcommerceUrl {
     trimmed.match(/(?:a-)?i\.(\d+)\.(\d+)/i) ||
     trimmed.match(/\/(?:product|opaanlp)\/(\d+)\/(\d+)/i);
   if (shopeeItemMatch) {
-    return {
-      isUrl: true,
-      platform: 'shopee',
-      platformShopId: shopeeItemMatch[1] || null,
-      platformItemId: shopeeItemMatch[2] || null,
-      internalSlug: null,
-    };
+    const shopId = toPositiveNumericId(shopeeItemMatch[1]);
+    const itemId = toPositiveNumericId(shopeeItemMatch[2]);
+    if (shopId && itemId) {
+      return {
+        isUrl: true,
+        platform: 'shopee',
+        platformShopId: shopId,
+        platformItemId: itemId,
+        internalSlug: null,
+      };
+    }
   }
 
   const lazadaMatch = trimmed.match(/-i(\d+)(?:-s(\d+))?\.html/i);
   if (lazadaMatch) {
-    return {
-      isUrl: true,
-      platform: 'lazada',
-      platformShopId: lazadaMatch[2] || null,
-      platformItemId: lazadaMatch[1] || null,
-      internalSlug: null,
-    };
+    const itemId = toPositiveNumericId(lazadaMatch[1]);
+    const skuId = toPositiveNumericId(lazadaMatch[2]);
+    if (itemId) {
+      return {
+        isUrl: true,
+        platform: 'lazada',
+        platformShopId: skuId,
+        platformItemId: itemId,
+        internalSlug: null,
+      };
+    }
   }
 
   const tikiMatch = trimmed.match(/-p(\d+)\.html/i);
   if (tikiMatch) {
-    return {
-      isUrl: true,
-      platform: 'tiki',
-      platformShopId: null,
-      platformItemId: tikiMatch[1] || null,
-      internalSlug: null,
-    };
+    const itemId = toPositiveNumericId(tikiMatch[1]);
+    if (itemId) {
+      return {
+        isUrl: true,
+        platform: 'tiki',
+        platformShopId: null,
+        platformItemId: itemId,
+        internalSlug: null,
+      };
+    }
   }
 
   // Rate.vn internal relative URL: /smartphones/<slug>, /tablets/<slug>, /laptops/<slug>, /smartwatches/<slug>, /earbuds/<slug>
@@ -1492,13 +1753,21 @@ export function parseEcommerceUrlOrQuery(raw: string): ParsedEcommerceUrl {
     /\/(?:smartphones|tablets|laptops|smartwatches|earbuds)\/([a-z0-9-]+)/i
   );
   if (rateSlugMatch) {
-    return {
-      isUrl: true,
-      platform: 'rate',
-      platformShopId: null,
-      platformItemId: null,
-      internalSlug: rateSlugMatch[1] || null,
-    };
+    const candidateSlug = (rateSlugMatch[1] || '').toLowerCase();
+    const validSlug =
+      /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(candidateSlug) &&
+      !/^(?:0+|null|undefined|nan|infinity|true|false)$/i.test(candidateSlug)
+        ? rateSlugMatch[1]!
+        : null;
+    if (validSlug) {
+      return {
+        isUrl: true,
+        platform: 'rate',
+        platformShopId: null,
+        platformItemId: null,
+        internalSlug: validSlug,
+      };
+    }
   }
 
   return {
@@ -1514,7 +1783,9 @@ const ECOMMERCE_SLUG_NOISE_PHRASES_REGEX =
   /(?:^|[\s,.|-]+)(?:điện thoại di động|dien thoai di dong|điện thoại|dien thoai|di động|di dong|smartphone|máy tính bảng|may tinh bang|tablet|máy tính xách tay|may tinh xach tay|laptop|đồng hồ thông minh|dong ho thong minh|smartwatch|tai nghe bluetooth true wireless|tai nghe bluetooth không dây|tai nghe bluetooth khong day|tai nghe chụp tai chống ồn|tai nghe chup tai chong on|tai nghe bluetooth|tai nghe không dây|tai nghe khong day|tai nghe true wireless|tai nghe nhét tai|tai nghe nhet tai|tai nghe(?!\s+(?:có dây|co day))|earbuds|chính hãng vn\/a|chinh hang vn a|chinh hang vna|chính hãng|chinh hang|vn\/a|vn a|vna|fullbox|mới 100%|moi 100%|moi 100|nguyên seal|nguyen seal|trả góp 0%|tra gop 0%|trả góp|tra gop|bảo hành \d+ tháng|bao hanh \d+ thang|bảo hành chính hãng|bao hanh chinh hang|freeship|hoả tốc|hỏa tốc|hoa toc|giá rẻ|gia re|nhập khẩu|nhap khau|quốc tế|quoc te)(?=$|[\s,.|-])/giu;
 
 export function stripEcommerceNoiseTokens(rawText: string): string {
+  if (typeof rawText !== 'string') return '';
   return rawText
+    .replace(/\p{Cc}+/gu, ' ')
     .replace(/\[[^\]]*\]/g, ' ')
     .replace(/\([^)]*\)/g, ' ')
     .replace(ECOMMERCE_SLUG_NOISE_PHRASES_REGEX, ' ')
@@ -1529,8 +1800,8 @@ export function stripEcommerceNoiseTokens(rawText: string): string {
  */
 export function extractProductKeywordFromUrl(rawUrl?: string | null): string {
   if (!rawUrl || typeof rawUrl !== 'string') return '';
-  const trimmed = rawUrl.trim();
-  if (!trimmed) return '';
+  const trimmed = rawUrl.replace(/\p{Cc}+/gu, '').trim();
+  if (!trimmed || trimmed.length > 2048) return '';
   const hasHttpProtocol = /^https?:\/\//i.test(trimmed);
   const hasKnownDomainToken =
     /(?:^|\/\/|\.)(?:shopee\.vn|lazada\.vn|tiki\.vn|tiktok\.com|cellphones\.com\.vn|thegioididong\.com|topzone\.vn|dienmayxanh\.com|fptshop\.com\.vn|hoanghamobile\.com|didongviet\.vn|phongvu\.vn|rate\.vn)(?:\/|$)/i.test(

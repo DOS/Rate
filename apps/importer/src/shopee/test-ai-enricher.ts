@@ -574,7 +574,366 @@ async function runTests() {
     assert.equal(sanitizedHtmlSpecs.design?.colors?.[1]?.length, 80);
     assert.equal(sanitizedHtmlSpecs.design?.colors?.length, 32);
 
+    // DOS/Rate#888: ArenaSpecSyncer Object.hasOwn prototype safety, C1 control-char URL guard, and audit key normalization
+    const {
+      ArenaSpecSyncer,
+      extractGsmArenaDataSpecs,
+      extractPhoneArenaTableSpecs,
+      parseGsmArenaBrandCatalogHtml,
+    } = await import('./arena-spec-syncer.js');
+    const gsmSpecs888 = extractGsmArenaDataSpecs(
+      '<td data-spec="toString">Proto\u0000Value</td><td data-spec="modelname">Apple\u0085iPhone 18 Pro</td>'
+    );
+    assert.equal(
+      gsmSpecs888.toString,
+      'Proto Value',
+      'extractGsmArenaDataSpecs must use Object.hasOwn so prototype keys like toString are captured'
+    );
+    assert.equal(
+      gsmSpecs888.modelname,
+      'Apple iPhone 18 Pro',
+      'extractGsmArenaDataSpecs must strip C1 control characters from values'
+    );
+    const paSpecs888 = extractPhoneArenaTableSpecs(
+      '<tr><th>toString:</th><td>PA\u0000Proto</td></tr><tr><th>System chip</th><td>Apple A20 Pro</td></tr>'
+    );
+    assert.equal(
+      paSpecs888.tostring,
+      'PA Proto',
+      'extractPhoneArenaTableSpecs must use Object.hasOwn so prototype keys are captured'
+    );
+    const catalog888 = parseGsmArenaBrandCatalogHtml(
+      '<li><a href="apple_iphone_18\u0085-1.php"><span>iPhone 18</span></a></li>' +
+        '<li><a href="apple_iphone_18_pro-2.php"><span>iPhone 18 Pro</span></a></li>',
+      'Apple'
+    );
+    assert.equal(
+      catalog888.length,
+      1,
+      'parseGsmArenaBrandCatalogHtml must reject URLs containing C1 control characters'
+    );
+    const syncer888 = new ArenaSpecSyncer();
+    const auditReport888 = await syncer888.auditCatalogAgainstArenaRegistry({
+      from: () => ({
+        select: () => ({
+          order: () => ({
+            range: async (from: number) => ({
+              data:
+                from === 0
+                  ? [
+                      {
+                        id: 'm-1',
+                        name: 'Xiaomi 18 Pro Max 512GB',
+                        model_key: '  XIAOMI:18-PRO-MAX:512GB\u0000 ',
+                        slug: '  xiaomi-18-pro-max-512gb\r\n ',
+                        specifications: null,
+                      },
+                    ]
+                  : [],
+              error: null,
+            }),
+          }),
+        }),
+      }),
+    });
+    assert.equal(
+      auditReport888.missingFromDatabase.some(r => r.model_key === 'xiaomi:18-pro-max:512gb'),
+      false,
+      'auditCatalogAgainstArenaRegistry must trim and strip control chars from DB model_key and slug'
+    );
+
     console.log('✅ [AiSpecEnricher] Mock OpenAI-compatible enrichment & caching passed 100%!');
+    // DOS/Rate#904: merchant-review-risk C1 control-char & nullish guards, ai-spec-enricher negative-string guard, entity-matcher boolean similarity guard, and shopee-to-supabase NaN/boolean guards
+    const { uniqueIds, strongestPriceAnomaly, scoreMerchants } =
+      await import('./merchant-review-risk.js');
+    const { trimTrailingSlashes, cloneAiEnrichmentResponse } =
+      await import('./ai-spec-enricher.js');
+    const { hasPopulatedSpecificationGroups, normalizeScrapedProductPrices } =
+      await import('./shopee-to-supabase.js');
+
+    assert.deepEqual(
+      uniqueIds(['valid-id', 'badid', 'bad id']),
+      ['valid-id'],
+      'uniqueIds must reject C1 and C0 control characters via normalizeSafeId'
+    );
+    assert.equal(
+      strongestPriceAnomaly(
+        null as unknown as Parameters<typeof strongestPriceAnomaly>[0],
+        [],
+        new Map(),
+        new Map(),
+        new Map()
+      ),
+      null,
+      'strongestPriceAnomaly must guard nullish merchant'
+    );
+    assert.deepEqual(
+      scoreMerchants(
+        null as unknown as Parameters<typeof scoreMerchants>[0],
+        null as unknown as [],
+        null as unknown as [],
+        null as unknown as [],
+        new Map()
+      ),
+      [],
+      'scoreMerchants must guard non-array inputs'
+    );
+
+    const negStringSpecs = sanitizeSpecifications({
+      hardware: { ram_gb: '-12 GB', storage_gb: '256 GB' },
+      display: { size_inch: '-6.7 inch' },
+    });
+    assert.equal(
+      negStringSpecs.hardware?.ram_gb,
+      undefined,
+      'sanitizeSpecifications must not parse "-12 GB" as +12'
+    );
+    assert.equal(negStringSpecs.hardware?.storage_gb, 256);
+    assert.equal(
+      negStringSpecs.display?.size_inch,
+      undefined,
+      'sanitizeSpecifications must not parse "-6.7 inch" as +6.7'
+    );
+    assert.equal(extractJsonObjectString(null as unknown as string), '');
+    assert.equal(trimTrailingSlashes(null as unknown as string), '');
+    assert.deepEqual(cloneAiEnrichmentResponse(null as unknown as never).specifications, {});
+
+    assert.equal(
+      hasPopulatedSpecificationGroups({
+        display: { size_inch: Number.NaN, ppi: Number.POSITIVE_INFINITY },
+      }),
+      false,
+      'hasPopulatedSpecificationGroups must reject NaN and Infinity numbers'
+    );
+    const normalizedPrices904 = normalizeScrapedProductPrices({
+      platform: 'shopee',
+      itemId: '1',
+      shopId: '2',
+      url: 'https://shopee.vn/item-i.2.1',
+      title: 'Phone',
+      priceMin: 10_000_000,
+      priceMax: true as unknown as number,
+      priceBeforeDiscount: true as unknown as number,
+      currency: 'VND',
+      stock: 5,
+      historicalSold: 10,
+      ratingStar: 4.9,
+      ratingCount: 10,
+      images: [],
+      attributes: [],
+      models: [{ modelId: 'm1', name: '128GB', price: true as unknown as number, stock: 1 }],
+      shop: { shopId: '2', name: 'Shop', isMall: false, ratingStar: 4.9, followerCount: 100 },
+      reviews: [],
+    });
+    assert.equal(
+      normalizedPrices904.priceMax,
+      10_000_000,
+      'normalizeScrapedProductPrices must reject boolean priceMax'
+    );
+    assert.equal(
+      normalizedPrices904.priceBeforeDiscount,
+      undefined,
+      'normalizeScrapedProductPrices must reject boolean priceBeforeDiscount'
+    );
+    assert.deepEqual(
+      normalizedPrices904.models,
+      [],
+      'normalizeScrapedProductPrices must reject boolean model price'
+    );
+
+    // 10. ArenaSpecSyncer, ProductNormalizer & Logger Bounds (#906)
+    const { countPopulatedFieldGroups, splitCameraModulesToPhoneArenaFormat } =
+      await import('./arena-spec-syncer.js');
+    const { detectProductCondition, detectProductOrigin, detectCategorySlug } =
+      await import('./product-normalizer.js');
+    const { computeImporterAlgorithmMetadata, redactSensitiveString, sanitizeLogMeta } =
+      await import('./logger.js');
+
+    const circularGroup906: Record<string, unknown> = {};
+    circularGroup906.self = circularGroup906;
+    assert.equal(
+      countPopulatedFieldGroups({ display: circularGroup906 }),
+      0,
+      'countPopulatedFieldGroups must not overflow stack on circular spec group'
+    );
+    assert.deepEqual(
+      splitCameraModulesToPhoneArenaFormat(null as unknown as string),
+      {},
+      'splitCameraModulesToPhoneArenaFormat must guard non-string input'
+    );
+
+    assert.equal(
+      detectProductCondition(null as unknown as string),
+      'new',
+      'detectProductCondition must guard non-string title'
+    );
+    assert.equal(
+      detectProductOrigin(null as unknown as string),
+      'unknown',
+      'detectProductOrigin must guard non-string title'
+    );
+    assert.equal(
+      detectCategorySlug(null as unknown as string),
+      'smartphones',
+      'detectCategorySlug must guard non-string title'
+    );
+    const normalized906 = new ProductNormalizer().normalize({
+      itemId: '906',
+      shopId: '2',
+      url: 'https://shopee.vn/item-i.2.906',
+      title: 'Apple iPhone 16 Pro Max 256GB VN/A',
+      description: 'M\u0085y m\u009fi 100%',
+      priceMin: true as unknown as number,
+      priceMax: 30_000_000,
+      currency: 'VND',
+      stock: 5,
+      historicalSold: 10,
+      ratingStar: 4.9,
+      ratingCount: 10,
+      images: ['https://user:pass@cf.shopee.vn/file/bad.jpg', 'https://cf.shopee.vn/file/good.jpg'],
+      attributes: [],
+      models: [],
+      shop: { shopId: '2', name: 'Shop', isMall: true, ratingStar: 4.9, followerCount: 100 },
+      reviews: [],
+    });
+    assert.ok(
+      !/\p{Cc}/u.test(normalized906.description ?? ''),
+      'ProductNormalizer must strip C1 control characters from description'
+    );
+    assert.deepEqual(
+      normalized906.images,
+      ['https://cf.shopee.vn/file/good.jpg'],
+      'ProductNormalizer must reject image URLs with embedded credentials'
+    );
+    assert.ok(
+      normalized906.specifications.availability?.prices_msrp?.includes(': 0'),
+      'ProductNormalizer must reject boolean priceMin'
+    );
+
+    const circularParams906: Record<string, unknown> = { a: 1 };
+    circularParams906.self = circularParams906;
+    const importerMeta906 = computeImporterAlgorithmMetadata(
+      '  norm_engine\u0000\r\n ',
+      ' 2.0.0\u0007 ',
+      circularParams906
+    );
+    assert.equal(importerMeta906.algo, 'norm_engine');
+    assert.equal(importerMeta906.version, '2.0.0');
+    assert.equal(importerMeta906.paramsHash.length, 12);
+    assert.equal(
+      redactSensitiveString(123 as unknown as string),
+      '',
+      'redactSensitiveString must return empty string for non-string input'
+    );
+    const sanitizedMeta906 = sanitizeLogMeta({
+      publishableKey: 'dummy',
+      publishable_key: 'dummy',
+    }) as Record<string, unknown>;
+    assert.equal(sanitizedMeta906.publishableKey, '[REDACTED]');
+    assert.equal(sanitizedMeta906.publishable_key, '[REDACTED]');
+
+    // Regression tests for #952: AI spec enricher, peer floor, merchant risk, and price normalizer
+    const { resolveClusterPeerFloorPrice: resolveFloor952 } =
+      await import('./cluster-peer-floor.js');
+    const { toValidPrice: toValidPrice952, mapStoredReview: mapStoredReview952 } =
+      await import('./merchant-review-risk.js');
+
+    const clonedMalformed952 = cloneAiEnrichmentResponse({
+      ram_gb: 99_999,
+      storage_gb: -16,
+      screen_size_inch: 250,
+      battery_mah: 999_999,
+      has_5g: 'maybe' as unknown as boolean,
+      specifications: {} as never,
+      key_specs: {
+        screen: '  6.8" OLED\u0000\r\n ',
+        chip: '   ',
+      } as never,
+    });
+    assert.equal(clonedMalformed952.ram_gb, null);
+    assert.equal(clonedMalformed952.storage_gb, null);
+    assert.equal(clonedMalformed952.screen_size_inch, null);
+    assert.equal(clonedMalformed952.battery_mah, null);
+    assert.equal(clonedMalformed952.has_5g, undefined);
+    assert.deepEqual(clonedMalformed952.key_specs, { screen: '6.8" OLED' });
+    assert.deepEqual(cloneAiEnrichmentResponse([] as unknown as never).key_specs, {});
+
+    assert.equal(
+      resolveFloor952(
+        [
+          {
+            id: 'peer-1',
+            price_current: 24_990_000.6,
+            merchants: { is_official: true },
+          },
+        ],
+        'self-1',
+        26_990_000.4
+      ),
+      24_990_001,
+      'resolveClusterPeerFloorPrice must round peer prices to integer VND'
+    );
+    assert.equal(
+      resolveFloor952([], 'self-1', 26_990_000.4),
+      26_990_000,
+      'resolveClusterPeerFloorPrice must round fallbackMasterMinPrice to integer VND'
+    );
+
+    assert.equal(toValidPrice952(19_990_000.6), 19_990_001);
+    const mappedSparseFlags952 = mapStoredReview952({
+      id: 'rev-sparse-952',
+      product_id: 'prod-952',
+      rating_star: 5,
+      comment: 'Great phone',
+      review_flags: [
+        null as unknown as { verdict?: string | null },
+        { verdict: 'fake', flag_category: 'seeding_fake', include_in_rating: false },
+      ],
+    });
+    assert.equal(mappedSparseFlags952?.result.verdict, 'fake');
+    assert.equal(mappedSparseFlags952?.result.include_in_rating, false);
+
+    const normalizedPrices952 = normalizeScrapedProductPrices({
+      platform: 'shopee',
+      itemId: '952',
+      shopId: '888',
+      title: 'iPhone 16 Pro Max',
+      priceMin: 29_990_000.6,
+      priceMax: 29_990_000.2,
+      priceBeforeDiscount: 34_990_000.4,
+      currency: 'VND',
+      stock: 10,
+      historicalSold: 12.9,
+      ratingStar: 4.9,
+      ratingCount: 5,
+      images: [],
+      attributes: [],
+      models: [{ modelId: 'm1', name: '256GB', price: 29_990_000.6, stock: 5 }],
+      shop: {
+        shopId: '888',
+        name: 'Official',
+        isMall: true,
+        ratingStar: 4.9,
+        followerCount: 1000,
+      },
+      reviews: [
+        null as unknown as never,
+        {
+          reviewId: 'r1',
+          author: 'User',
+          ratingStar: 5,
+          comment: 'Nice',
+          createdAt: '2026-10-01T00:00:00Z',
+          images: [],
+        },
+      ],
+      url: 'https://shopee.vn/item-i.888.952',
+    });
+    assert.equal(normalizedPrices952.priceMin, 29_990_001);
+    assert.equal(normalizedPrices952.priceMax, 29_990_001);
+    assert.equal(normalizedPrices952.priceBeforeDiscount, 34_990_000);
+    assert.equal(normalizedPrices952.models[0]?.price, 29_990_001);
+    assert.equal(normalizedPrices952.reviews.length, 1);
   } finally {
     mockServer.close();
   }
@@ -597,6 +956,84 @@ const isApply = process.argv.includes('--apply');
     await runMasterSpecsBackfill({ apply: isApply });
     return;
   }
+  // Issue #1000: resolveValidHttpBaseUrl, AiSpecEnricher constructor/prompt/enrichCandidate bounds, and normalizeHttpAssetUrl host bounds
+  {
+    const { resolveValidHttpBaseUrl } = await import('./ai-spec-enricher.js');
+    assert.strictEqual(
+      resolveValidHttpBaseUrl('https://user:pass@api.dos.ai/v1', 'https://fallback.example.com'),
+      'https://fallback.example.com'
+    );
+    assert.strictEqual(
+      resolveValidHttpBaseUrl('https://api.dos.ai/v1?foo=1', 'https://fallback.example.com'),
+      'https://fallback.example.com'
+    );
+    assert.strictEqual(
+      resolveValidHttpBaseUrl('https://api.dos.ai/v1#frag', 'https://fallback.example.com'),
+      'https://fallback.example.com'
+    );
+    assert.strictEqual(
+      resolveValidHttpBaseUrl('https://api.dos.ai./v1///', 'https://fallback.example.com'),
+      'https://fallback.example.com'
+    );
+    assert.strictEqual(
+      resolveValidHttpBaseUrl('https://api.dos.ai/v1///', 'https://fallback.example.com'),
+      'https://api.dos.ai/v1'
+    );
+
+    const enricherWithSpaceKey = new AiSpecEnricher({
+      apiKey: 'secret key with spaces',
+      timeoutMs: true as unknown as number,
+      temperature: false as unknown as number,
+    });
+    assert.strictEqual(enricherWithSpaceKey.isConfigured(), false);
+    assert.strictEqual((enricherWithSpaceKey as unknown as { timeoutMs: number }).timeoutMs, 25000);
+    assert.strictEqual(
+      (enricherWithSpaceKey as unknown as { temperature: number }).temperature,
+      0.1
+    );
+
+    const normalizer = new ProductNormalizer();
+    const baseCandidate = normalizer.normalize({
+      itemId: '100001',
+      shopId: '200001',
+      url: 'https://shopee.vn/product/200001/100001',
+      title: 'iPhone 16 Pro Max 256GB VN/A',
+      priceMin: 29990000,
+      priceMax: 29990000,
+      currency: 'VND',
+      historicalSold: 10,
+      ratingStar: 4.9,
+      ratingCount: 5,
+      images: [
+        'https://cf.shopee.vn./file/trailing-dot',
+        'https://localhost/file/local',
+        'https://127.0.0.1/file/loopback',
+        'https://shopee/file/single-label',
+        'https://cf.shopee.vn/file/valid-image',
+      ],
+      models: [],
+      attributes: [],
+      shop: {
+        shopId: '200001',
+        name: 'Official Store',
+        isMall: true,
+        ratingStar: 4.9,
+        followerCount: 1000,
+      },
+      reviews: [],
+    });
+    assert.deepStrictEqual(baseCandidate.images, ['https://cf.shopee.vn/file/valid-image']);
+
+    const unconfiguredEnricher = new AiSpecEnricher({ apiKey: '' });
+    const nonBooleanBenchmarkCandidate = {
+      ...baseCandidate,
+      is_benchmark_enriched: 'false' as unknown as boolean,
+      spec_source: undefined,
+    };
+    const enrichedRes = await unconfiguredEnricher.enrichCandidate(nonBooleanBenchmarkCandidate);
+    assert.strictEqual(enrichedRes.spec_source, undefined);
+  }
+
   await runTests();
 })().catch(err => {
   console.error('❌ Execution failed:', err);

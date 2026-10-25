@@ -25,7 +25,12 @@ const pr = (overrides = {}) => ({
   merged: false,
   state: 'open',
   mergeable_state: 'clean',
-  head: { sha: 'abcdef1234567890' },
+  head: {
+    sha: 'abcdef1234567890',
+    ref: 'fix/x',
+    repo: { full_name: 'DOS/Rate' },
+  },
+  base: { ref: 'dev', repo: { full_name: 'DOS/Rate' } },
   ...overrides,
 });
 const green = [run('CI', 'completed', 'success')];
@@ -159,6 +164,19 @@ test('PRs into main always merge with a merge commit', () => {
   assert.throws(() => mergeMethodFor('dev', 'rebase'), /unknown merge method/);
 });
 
+test('a repository without the dev to main release flow squashes into main', () => {
+  assert.equal(
+    mergeMethodFor('main', undefined, 'DOS/Rate-Services'),
+    'squash'
+  );
+  assert.equal(mergeMethodFor('main', 'merge', 'DOS/status'), 'merge');
+  assert.equal(mergeMethodFor('main', undefined, 'DOS/Rate'), 'merge');
+  assert.throws(
+    () => mergeMethodFor('main', 'squash', 'dos/rate'),
+    /merge commit/
+  );
+});
+
 test('deletes only a squashed branch of the same repository that is not dev or main', () => {
   const base = {
     method: 'squash',
@@ -198,6 +216,69 @@ test('decides from the PR state and its checks', () => {
     'wait'
   );
   assert.equal(decide(pr(), passed, 0).action, 'merge');
+});
+
+test('a green PR behind a strict base is brought up to date, not merged', () => {
+  assert.deepEqual(
+    decide(pr({ mergeable_state: 'behind' }), { state: 'passed' }, 0),
+    { action: 'update' }
+  );
+  // While its checks still run, it just waits.
+  assert.equal(
+    decide(
+      pr({ mergeable_state: 'behind' }),
+      { state: 'pending', pending: ['CI'] },
+      0
+    ).action,
+    'wait'
+  );
+});
+
+test('a promotion or fork PR behind its base is never updated automatically', () => {
+  const promotion = decide(
+    pr({
+      mergeable_state: 'behind',
+      head: {
+        sha: 'abcdef1234567890',
+        ref: 'dev',
+        repo: { full_name: 'DOS/Rate' },
+      },
+      base: { ref: 'main', repo: { full_name: 'DOS/Rate' } },
+    }),
+    { state: 'passed' },
+    0
+  );
+  assert.equal(promotion.action, 'fail');
+  assert.match(promotion.message, /shared branch.*back-merge main into dev/);
+  const fork = decide(
+    pr({
+      mergeable_state: 'behind',
+      head: {
+        sha: 'abcdef1234567890',
+        ref: 'fix/x',
+        repo: { full_name: 'someone/Rate' },
+      },
+    }),
+    { state: 'passed' },
+    0
+  );
+  assert.equal(fork.action, 'fail');
+  assert.match(fork.message, /fork branch/);
+});
+
+test('conflicts and failures win over being behind', () => {
+  assert.match(
+    decide(pr({ mergeable_state: 'dirty' }), { state: 'passed' }, 0).message,
+    /conflicts/
+  );
+  assert.equal(
+    decide(
+      pr({ mergeable_state: 'behind' }),
+      { state: 'failed', failed: ['CI'] },
+      0
+    ).action,
+    'fail'
+  );
 });
 
 test('gives a green but blocked PR a few polls before reporting it', () => {
