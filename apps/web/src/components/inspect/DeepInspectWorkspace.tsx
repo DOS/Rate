@@ -55,7 +55,7 @@ import { SAMPLE_AUDIT_URLS } from '@/lib/inspect-samples';
 import {
   implausiblyLowOfferIds,
   plausibleOffers,
-} from '@/lib/offer-plausibility';
+} from '@repo/shared-data/rules';
 import { productImageUrl } from '@/lib/rate-domain-core';
 
 const INSPECT_CONTROL_CHARS_RE = /\p{Cc}+/gu;

@@ -2,7 +2,7 @@ import { createClient } from '@supabase/supabase-js';
 import type { Database, MasterProduct } from '@repo/shared-data';
 import { createLogger } from '@/lib/logger';
 import { isPendingReview } from '@/lib/review-display';
-import { plausibleOffers } from '@/lib/offer-plausibility';
+import { plausibleOffers } from '@repo/shared-data/rules';
 import {
   type ReviewFlagCategory,
   type ReviewItem,

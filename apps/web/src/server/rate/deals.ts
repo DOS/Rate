@@ -18,7 +18,7 @@ import {
   getRadarSignal,
   type RadarSignal,
 } from '../../lib/deal-radar';
-import { plausibleOffers } from '../../lib/offer-plausibility';
+import { plausibleOffers } from '@repo/shared-data/rules';
 import {
   RATE_CACHE_TAGS,
   categoryCacheTag,

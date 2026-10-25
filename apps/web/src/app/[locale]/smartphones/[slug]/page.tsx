@@ -67,7 +67,7 @@ import ProductValueCalculator from '@/components/leaderboard/ProductValueCalcula
 import ProductOffersExplorer from '@/components/leaderboard/ProductOffersExplorer';
 import ProductSpecsExportToolbar from '@/components/leaderboard/ProductSpecsExportToolbar';
 import ClientMessages from '@/components/providers/ClientMessages';
-import { plausibleMinPrice } from '@/lib/offer-plausibility';
+import { plausibleMinPrice } from '@repo/shared-data/rules';
 import {
   firstImageUrl,
   usableImageUrls,
