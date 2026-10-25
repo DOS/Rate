@@ -83,7 +83,8 @@ export function plausibleOffers<T extends { price_current: number }>(
   const flagged = implausiblyLowIndexes(offers.map((o) => o?.price_current));
   return offers.filter(
     (o, index): o is T =>
-      Boolean(o && typeof o === 'object') && !flagged.has(index)
+      Boolean(o && typeof o === 'object' && !Array.isArray(o)) &&
+      !flagged.has(index)
   );
 }
 
@@ -96,12 +97,20 @@ export function implausiblyLowOfferIds<
   return new Set(
     offers
       .filter(
-        (o, index) => Boolean(o && typeof o === 'object') && flagged.has(index)
+        (o, index) =>
+          Boolean(o && typeof o === 'object' && !Array.isArray(o)) &&
+          flagged.has(index)
       )
       .map((o) =>
         typeof o.id === 'string' ? o.id.replace(/\p{Cc}+/gu, '').trim() : ''
       )
-      .filter(Boolean)
+      .filter(
+        (id) =>
+          Boolean(id) &&
+          id.length <= 256 &&
+          /[a-zA-Z0-9]/.test(id) &&
+          !/^(?:0|null|undefined|nan|infinity|-infinity|true|false)$/i.test(id)
+      )
   );
 }
 
