@@ -12641,6 +12641,87 @@ async function runCoreArchitectureSuite() {
   }
 
   // -------------------------------------------------------------------------
+  // 126e. RateAuthPortal, CommunityQuarantineSubmitForm & ApiPlaygroundClient Bounds (#1047)
+  // -------------------------------------------------------------------------
+  {
+    const { sanitizeAuthRedirectTarget } =
+      await import('../../../components/auth/RateAuthPortal');
+    const {
+      outcomeFromJobState,
+      sanitizeQuarantinePriceVnd,
+      sanitizeQuarantineTextField,
+    } =
+      await import('../../../components/contact/CommunityQuarantineSubmitForm');
+    const {
+      sanitizePlaygroundApiPath,
+      sanitizePlaygroundDownloadId,
+      sanitizePlaygroundMarkdownCell,
+    } = await import('../../../components/developers/ApiPlaygroundClient');
+
+    assert.equal(
+      sanitizeAuthRedirectTarget('/vi/watchlist?tab=alerts#top'),
+      '/vi/watchlist?tab=alerts#top'
+    );
+    assert.equal(sanitizeAuthRedirectTarget('https://evil.example/phish'), '/');
+    assert.equal(sanitizeAuthRedirectTarget('//evil.example/phish'), '/');
+    assert.equal(sanitizeAuthRedirectTarget('/\\evil.example/phish'), '/');
+    assert.equal(sanitizeAuthRedirectTarget('javascript:alert(1)'), '/');
+    assert.equal(sanitizeAuthRedirectTarget(null), '/');
+    assert.equal(sanitizeAuthRedirectTarget(`/${'a'.repeat(600)}`), '/');
+
+    assert.equal(outcomeFromJobState('skipped_no_consent'), 'noConsent');
+    assert.equal(outcomeFromJobState('rejected_invalid_url'), 'invalidUrl');
+    assert.equal(
+      outcomeFromJobState('platform_worker_pending_phase_5_1'),
+      'platformPending'
+    );
+    assert.equal(outcomeFromJobState('rejected_invalid_price'), 'invalidPrice');
+    assert.equal(outcomeFromJobState('skipped_accessory'), 'accessory');
+    assert.equal(outcomeFromJobState('unknown_state'), 'failed');
+
+    assert.equal(sanitizeQuarantinePriceVnd('18990000.4', 50_000), 18_990_000);
+    assert.equal(sanitizeQuarantinePriceVnd('10000', 50_000), null);
+    assert.equal(sanitizeQuarantinePriceVnd('9000000000', 50_000), null);
+    assert.equal(sanitizeQuarantinePriceVnd('NaN', 50_000), null);
+    assert.equal(sanitizeQuarantinePriceVnd('', 1000), null);
+    assert.equal(sanitizeQuarantinePriceVnd(true, 1000), null);
+    assert.equal(
+      sanitizeQuarantineTextField('  iPhone\u0000 16 Pro Max  ', 320),
+      'iPhone 16 Pro Max'
+    );
+
+    assert.equal(
+      sanitizePlaygroundApiPath(
+        '/api/v1/rate/products?limit=3&sort=rating_desc'
+      ),
+      '/api/v1/rate/products?limit=3&sort=rating_desc'
+    );
+    assert.equal(
+      sanitizePlaygroundApiPath("/api/v1/rate/products?q=$HOME'test"),
+      '/api/v1/rate/products?q=%24HOME%27test'
+    );
+    assert.equal(sanitizePlaygroundApiPath('/api//evil.example'), null);
+    assert.equal(sanitizePlaygroundApiPath('/api/../secret'), null);
+    assert.equal(
+      sanitizePlaygroundApiPath('https://evil.example/api/v1'),
+      null
+    );
+    assert.equal(
+      sanitizePlaygroundDownloadId('  ../List Products\u0000!! '),
+      'list-products'
+    );
+    assert.equal(sanitizePlaygroundDownloadId('   '), 'endpoint');
+    assert.equal(
+      sanitizePlaygroundMarkdownCell('  GET\r\n`/api/v1` | Title\u0000  '),
+      "GET '/api/v1' - Title"
+    );
+
+    console.log(
+      '  ✅ [126e/132] RateAuthPortal, CommunityQuarantineSubmitForm & ApiPlaygroundClient Bounds (#1047) passed'
+    );
+  }
+
+  // -------------------------------------------------------------------------
   // 127. Rate Server Index & Extension Entity, Slug, and Category Bounds (#1029)
   // -------------------------------------------------------------------------
   {

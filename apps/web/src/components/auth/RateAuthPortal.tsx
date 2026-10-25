@@ -28,6 +28,33 @@ interface RateAuthPortalProps {
   locale?: string;
 }
 
+const MAX_AUTH_REDIRECT_LENGTH = 512;
+
+export function sanitizeAuthRedirectTarget(rawTarget: unknown): string {
+  if (typeof rawTarget !== 'string') return '/';
+  const cleaned = rawTarget.replace(/\p{Cc}+/gu, '').trim();
+  if (
+    !cleaned ||
+    cleaned.length > MAX_AUTH_REDIRECT_LENGTH ||
+    !cleaned.startsWith('/') ||
+    cleaned.startsWith('//') ||
+    cleaned.startsWith('/\\') ||
+    cleaned.includes('\\') ||
+    /^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(cleaned)
+  ) {
+    return '/';
+  }
+  try {
+    const parsed = new URL(cleaned, 'https://rate.vn');
+    if (parsed.origin !== 'https://rate.vn') {
+      return '/';
+    }
+    return `${parsed.pathname}${parsed.search}${parsed.hash}`;
+  } catch {
+    return '/';
+  }
+}
+
 export default function RateAuthPortal({ mode }: RateAuthPortalProps) {
   const t = useTranslations('authPortal');
   const copy = {
@@ -92,7 +119,9 @@ export default function RateAuthPortal({ mode }: RateAuthPortalProps) {
   );
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
-  const redirectTarget = searchParams.get('callbackUrl') || '/';
+  const redirectTarget = sanitizeAuthRedirectTarget(
+    searchParams.get('callbackUrl')
+  );
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
