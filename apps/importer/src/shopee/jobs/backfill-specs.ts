@@ -224,9 +224,9 @@ export async function runMasterSpecsBackfill(
   const { EntityMatcher } = await import('../entity-matcher.js');
 
   const rawUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-  const key = (process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_KEY || '').trim();
+  const key = (process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_KEY || '').trim();
   if (!rawUrl.trim() || !key) {
-    throw new Error('Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY in environment.');
+    throw new Error('Missing SUPABASE_URL or SUPABASE_SECRET_KEY in environment.');
   }
   const { url } = resolveBackfillSupabaseTarget(rawUrl);
 
@@ -462,13 +462,13 @@ export async function runQuickSpecSyncAndAudit(
   const { createClient } = await import('@supabase/supabase-js');
   const rawSupabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
   const supabaseKey = (
-    process.env.SUPABASE_SERVICE_ROLE_KEY ||
+    process.env.SUPABASE_SECRET_KEY ||
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
     process.env.SUPABASE_ANON_KEY ||
     ''
   ).trim();
   if (!rawSupabaseUrl?.trim() || !supabaseKey) {
-    throw new Error('Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY');
+    throw new Error('Missing SUPABASE_URL or SUPABASE_SECRET_KEY');
   }
   const { url: supabaseUrl } = resolveBackfillSupabaseTarget(rawSupabaseUrl);
   const supabase = scopeSupabaseToRate(

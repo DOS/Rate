@@ -295,14 +295,14 @@ function testSupabaseClientGuards(): void {
   const prevFallbackUrl = process.env.SUPABASE_URL;
   const prevAnon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   const prevFallbackAnon = process.env.SUPABASE_ANON_KEY;
-  const prevService = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const prevService = process.env.SUPABASE_SECRET_KEY;
 
   try {
     delete process.env.NEXT_PUBLIC_SUPABASE_URL;
     delete process.env.SUPABASE_URL;
     delete process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
     delete process.env.SUPABASE_ANON_KEY;
-    delete process.env.SUPABASE_SERVICE_ROLE_KEY;
+    delete process.env.SUPABASE_SECRET_KEY;
 
     assert.throws(() => getPublicClient(), /Missing NEXT_PUBLIC_SUPABASE_URL/);
     assert.throws(() => getAdminClient(), /Missing SUPABASE_URL/);
@@ -311,13 +311,13 @@ function testSupabaseClientGuards(): void {
 
     process.env.NEXT_PUBLIC_SUPABASE_URL = 'javascript:alert(1)';
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = 'anon-test-key';
-    process.env.SUPABASE_SERVICE_ROLE_KEY = 'service-role-test-key';
+    process.env.SUPABASE_SECRET_KEY = 'service-role-test-key';
     assert.throws(() => getPublicClient(), /Invalid NEXT_PUBLIC_SUPABASE_URL/);
     assert.throws(() => getAdminClient(), /Invalid SUPABASE_URL/);
 
     process.env.NEXT_PUBLIC_SUPABASE_URL = 'https://example.supabase.co';
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = 'anon-test-key';
-    process.env.SUPABASE_SERVICE_ROLE_KEY = 'service-role-test-key';
+    process.env.SUPABASE_SECRET_KEY = 'service-role-test-key';
 
     const pub = getPublicClient();
     assert.equal(typeof pub.from, 'function');
@@ -341,8 +341,8 @@ function testSupabaseClientGuards(): void {
     if (prevFallbackAnon === undefined) delete process.env.SUPABASE_ANON_KEY;
     else process.env.SUPABASE_ANON_KEY = prevFallbackAnon;
 
-    if (prevService === undefined) delete process.env.SUPABASE_SERVICE_ROLE_KEY;
-    else process.env.SUPABASE_SERVICE_ROLE_KEY = prevService;
+    if (prevService === undefined) delete process.env.SUPABASE_SECRET_KEY;
+    else process.env.SUPABASE_SECRET_KEY = prevService;
   }
 }
 

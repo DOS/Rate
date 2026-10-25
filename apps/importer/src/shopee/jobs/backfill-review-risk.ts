@@ -119,9 +119,9 @@ if (isDirectExecution) {
   (async () => {
     const { createClient } = await import('@supabase/supabase-js');
     const rawUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-    const key = (process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_KEY || '').trim();
+    const key = (process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_KEY || '').trim();
     if (!rawUrl.trim() || !key) {
-      throw new Error('Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY in environment.');
+      throw new Error('Missing SUPABASE_URL or SUPABASE_SECRET_KEY in environment.');
     }
     const { url, host } = resolveBackfillSupabaseTarget(rawUrl);
     const supabase = scopeSupabaseToRate(

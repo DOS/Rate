@@ -18,7 +18,7 @@ export { isValidSupabaseApiKey, isValidSupabaseHttpUrl };
 let _adminClient: SupabaseClient | null = null;
 
 /**
- * Get the admin Supabase client (service role, bypassing RLS).
+ * Get the admin Supabase client (Supabase secret key, bypassing RLS).
  */
 export function getAdminClient(): SupabaseClient {
   if (!_adminClient) {
@@ -27,12 +27,10 @@ export function getAdminClient(): SupabaseClient {
       process.env.SUPABASE_URL ??
       ''
     ).trim();
-    const supabaseServiceKey = (
-      process.env.SUPABASE_SERVICE_ROLE_KEY ?? ''
-    ).trim();
+    const supabaseServiceKey = (process.env.SUPABASE_SECRET_KEY ?? '').trim();
     if (!supabaseUrl || !supabaseServiceKey) {
       throw new Error(
-        'Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY environment variables.'
+        'Missing SUPABASE_URL or SUPABASE_SECRET_KEY environment variables.'
       );
     }
     if (!isValidSupabaseHttpUrl(supabaseUrl)) {
@@ -42,7 +40,7 @@ export function getAdminClient(): SupabaseClient {
     }
     if (!isValidSupabaseApiKey(supabaseServiceKey)) {
       throw new Error(
-        'Invalid SUPABASE_SERVICE_ROLE_KEY: must be a non-empty token without whitespace or control characters.'
+        'Invalid SUPABASE_SECRET_KEY: must be a non-empty token without whitespace or control characters.'
       );
     }
     _adminClient = createClient(supabaseUrl, supabaseServiceKey, {
