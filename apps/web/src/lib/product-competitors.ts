@@ -10,11 +10,23 @@ import {
 } from '@/lib/rate-domain';
 
 const MAX_COMPETITOR_VND_PRICE = 1_000_000_000;
+const MAX_COMPETITOR_PEERS_SCAN = 1_000;
 
 function toValidCompetitorPrice(value: unknown): number {
   if (typeof value !== 'number' && typeof value !== 'string') return 0;
-  if (typeof value === 'string' && !value.trim()) return 0;
-  const n = Number(value);
+  let n = Number.NaN;
+  if (typeof value === 'number') {
+    n = value;
+  } else {
+    const cleaned = value.replace(/\p{Cc}+/gu, '').trim();
+    if (
+      cleaned.length > 0 &&
+      cleaned.length <= 32 &&
+      !/^[+-]?0[xbo]/i.test(cleaned)
+    ) {
+      n = Number(cleaned);
+    }
+  }
   return Number.isFinite(n) && n > 0 && n <= MAX_COMPETITOR_VND_PRICE ? n : 0;
 }
 
@@ -28,7 +40,7 @@ function normalizeCompetitorSlug(value: unknown): string {
   if (
     !cleaned ||
     !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(cleaned) ||
-    /^(?:0|null|undefined|nan|infinity|-infinity|true|false)$/i.test(cleaned)
+    /^(?:0+|null|undefined|nan|infinity|-infinity|true|false)$/i.test(cleaned)
   ) {
     return '';
   }
@@ -64,6 +76,7 @@ export function rankRelatedCompetitors<
       ? Math.min(50, Math.floor(limit))
       : 3;
   return peers
+    .slice(0, MAX_COMPETITOR_PEERS_SCAN)
     .filter((p) => {
       if (!p || typeof p !== 'object' || Array.isArray(p)) return false;
       const peerSlug = normalizeCompetitorSlug(p.slug);
