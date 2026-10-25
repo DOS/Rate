@@ -85,15 +85,36 @@ import type {
   ProductSpecifications,
 } from '@repo/shared-data';
 
+function parseFiniteNumericSpec(raw: unknown): number {
+  if (typeof raw === 'number') {
+    return Number.isFinite(raw) ? raw : NaN;
+  }
+  if (typeof raw === 'string') {
+    const cleaned = raw.replace(/\p{Cc}+/gu, '').trim();
+    if (!cleaned || cleaned.length > 32 || /^[+-]?0[xbo]/i.test(cleaned)) {
+      return NaN;
+    }
+    return Number(cleaned.replace(',', '.'));
+  }
+  return NaN;
+}
+
+function toBoundedKeySpecText(value: unknown, maxLen = 256): string {
+  if (typeof value === 'number') {
+    return Number.isFinite(value) ? String(value) : '';
+  }
+  if (typeof value !== 'string') return '';
+  return value
+    .replace(/\p{Cc}+/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, maxLen);
+}
+
 export function normalizeCompareFiveStarRating(
   raw: number | string | null | undefined
 ): number {
-  const num =
-    typeof raw === 'number'
-      ? raw
-      : typeof raw === 'string' && raw.trim() !== ''
-        ? Number(raw.trim().replace(',', '.'))
-        : NaN;
+  const num = parseFiniteNumericSpec(raw);
   if (!Number.isFinite(num) || num <= 0 || num > 100) {
     return 0;
   }
@@ -136,10 +157,7 @@ function toPositiveFiniteSpec(
   minExclusive: number,
   maxInclusive: number
 ): number | null {
-  if (typeof value !== 'number' && typeof value !== 'string') return null;
-  if (typeof value === 'string' && !value.trim()) return null;
-  const n =
-    typeof value === 'string' ? Number(value.trim().replace(',', '.')) : value;
+  const n = parseFiniteNumericSpec(value);
   return Number.isFinite(n) && n > minExclusive && n <= maxInclusive ? n : null;
 }
 
@@ -182,7 +200,7 @@ export function resolveCompareDisplaySizeInch(
   ) as KeySpecs;
   // Up to two decimals ("6.78 inch"), never starting mid-number: with one
   // decimal only, "6.78" matched as 78 (DOS/Rate#546 release-gate review).
-  const m = String(ks.screen || '').match(
+  const m = toBoundedKeySpecText(ks.screen).match(
     /(?<![\d.,])(\d{1,2}(?:[.,]\d{1,2})?)\s*(?:inch|in\b|")/i
   );
   if (m?.[1]) {
@@ -224,7 +242,7 @@ export function resolveCompareRamGb(
       ? p.key_specs
       : {}
   ) as KeySpecs;
-  const m = String(ks.ram || '').match(/(?<![\d.,])(\d{1,4})\s*GB/i);
+  const m = toBoundedKeySpecText(ks.ram).match(/(?<![\d.,])(\d{1,4})\s*GB/i);
   if (m?.[1]) {
     const parsed = toPositiveFiniteSpec(m[1], 0, MAX_COMPARE_RAM_GB);
     if (parsed !== null) {
@@ -264,7 +282,7 @@ export function resolveCompareStorageGb(
       ? p.key_specs
       : {}
   ) as KeySpecs;
-  const m = String(ks.storage || '').match(
+  const m = toBoundedKeySpecText(ks.storage).match(
     /(?<![\d.,])(\d+(?:[.,]\d+)?)\s*(TB|GB)/i
   );
   if (m?.[1] && m?.[2]) {
@@ -324,7 +342,7 @@ export function resolveCompareBatteryMah(
       ? p.key_specs
       : {}
   ) as KeySpecs;
-  const m = String(ks.battery || '').match(
+  const m = toBoundedKeySpecText(ks.battery).match(
     /(?<![\d.,])(\d{1,2}[.,]\d{3}|\d{2,6})\s*mAh/i
   );
   if (m?.[1]) {
