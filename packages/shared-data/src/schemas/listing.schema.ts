@@ -32,8 +32,15 @@ export const ListingCategorySchema = z.enum([
 
 export const ListingSchema = z.object({
   id: UUIDv7Schema,
-  title: z.string().min(1).max(200),
-  slug: z.string().min(1).max(200),
+  title: z.string().trim().min(1).max(200),
+  slug: z
+    .string()
+    .trim()
+    .min(1)
+    .max(200)
+    .refine((s) => s !== '.' && s !== '..' && !/[\p{Cc}\s/\\]/u.test(s), {
+      message: 'Invalid listing slug',
+    }),
   description: z.string().max(10_000).optional(),
   content: z.string().max(50_000).optional(),
   type: ListingTypeSchema,

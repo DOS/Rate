@@ -26,10 +26,12 @@ export const RATE_ROUTES = {
 
 function sanitizePathSegment(raw: unknown, maxLen: number): string {
   if (typeof raw !== 'string') return '';
-  return raw
+  const cleaned = raw
     .replace(/\p{Cc}+/gu, '')
     .trim()
     .slice(0, maxLen);
+  if (!cleaned || cleaned === '.' || cleaned === '..') return '';
+  return cleaned;
 }
 
 export const RATE_API_V1_ENDPOINTS = {
