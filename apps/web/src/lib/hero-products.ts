@@ -1,5 +1,5 @@
 import type { MasterProduct } from '@repo/shared-data';
-import { usableImageUrls } from './rate-domain-core';
+import { isCanonicalCategorySlug, usableImageUrls } from './rate-domain-core';
 
 /**
  * The product fields the hero search box shows, filters on and links with.
@@ -44,22 +44,27 @@ function sanitizeOptionalSpecText(
 
 // getMasterProductHref only reads category_slug from these two objects. An
 // empty object, not null, matches their non-nullable schema type.
-const categorySlugOnly = <T>(value: T): T => {
-  if (!value || typeof value !== 'object') return {} as T;
+export const categorySlugOnly = <T>(value: T): T => {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return {} as T;
+  }
   const raw = (value as Record<string, unknown>).category_slug;
   if (typeof raw !== 'string') return {} as T;
   const slug = raw
     .replace(/\p{Cc}+/gu, '')
     .trim()
+    .toLowerCase()
     .slice(0, 64);
-  return (slug ? { category_slug: slug } : {}) as T;
+  return (isCanonicalCategorySlug(slug) ? { category_slug: slug } : {}) as T;
 };
 
 // The box matches on and shows only the chip and the screen.
 const searchKeySpecs = (
   keySpecs: HeroProductSuggestion['key_specs']
 ): HeroProductSuggestion['key_specs'] => {
-  if (!keySpecs || typeof keySpecs !== 'object') return {};
+  if (!keySpecs || typeof keySpecs !== 'object' || Array.isArray(keySpecs)) {
+    return {};
+  }
   return {
     chip: sanitizeOptionalSpecText(keySpecs.chip),
     screen: sanitizeOptionalSpecText(keySpecs.screen),
@@ -72,7 +77,8 @@ export function toHeroProductSuggestions(
   if (!Array.isArray(products)) return [];
   return products
     .filter(
-      (p): p is HeroProductSuggestion => Boolean(p) && typeof p === 'object'
+      (p): p is HeroProductSuggestion =>
+        Boolean(p) && typeof p === 'object' && !Array.isArray(p)
     )
     .slice(0, MAX_HERO_PRODUCTS)
     .map((p) => ({

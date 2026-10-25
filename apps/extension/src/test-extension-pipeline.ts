@@ -3480,6 +3480,27 @@ async function runTests() {
     );
   }
 
+  // Hero-Products & Hero-Merchants Numeric, Category, and ID Bounds (#1033)
+  {
+    const { categorySlugOnly: heroCategorySlugOnly } =
+      await import('../../web/src/lib/hero-products');
+    const { sanitizeMerchantIdentifier, clampScore100 } =
+      await import('../../web/src/lib/hero-merchants');
+
+    assert.deepEqual(heroCategorySlugOnly({ category_slug: 'invalid' }), {});
+    assert.deepEqual(heroCategorySlugOnly({ category_slug: 'SMARTWATCHES' }), {
+      category_slug: 'smartwatches',
+    });
+    assert.equal(sanitizeMerchantIdentifier('0000', 128), '');
+    assert.equal(sanitizeMerchantIdentifier('__proto__', 128), '');
+    assert.equal(clampScore100('0x50'), 0);
+    assert.equal(clampScore100('\u000095'), 95);
+
+    console.log(
+      '  \u2705 [Hero-Products & Hero-Merchants Numeric, Category, and ID Bounds (#1033)] Verified'
+    );
+  }
+
   console.log('🎉 All Rate Browser Extension MV3 v2 tests passed!');
 }
 
