@@ -641,6 +641,8 @@ export default function DealFinderWorkspace({
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder={t('searchPlaceholder')}
+              // Named even after the placeholder is gone (DOS/Rate#1077).
+              aria-label={t('searchPlaceholder')}
               className="form-control form-control-sm rounded-pill px-3 py-2"
             />
           </div>
