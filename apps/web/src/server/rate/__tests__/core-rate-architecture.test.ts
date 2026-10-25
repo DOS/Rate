@@ -12520,7 +12520,101 @@ async function runCoreArchitectureSuite() {
     assert.equal(isValidExternalEntityId('123456789'), true);
 
     console.log(
-      '  ✅ [127/127] Rate Server Index & Extension Entity, Slug, and Category Bounds (#1029) passed'
+      '  ✅ [127/128] Rate Server Index & Extension Entity, Slug, and Category Bounds (#1029) passed'
+    );
+  }
+
+  // -------------------------------------------------------------------------
+  // 128. Hero-Products & Hero-Merchants Numeric, Category, and ID Bounds (#1033)
+  // -------------------------------------------------------------------------
+  {
+    const { categorySlugOnly: heroCategorySlugOnly, toHeroProductSuggestions } =
+      await import('../../../lib/hero-products');
+    const {
+      sanitizeMerchantIdentifier,
+      clampScore100,
+      toHeroMerchantSuggestions,
+    } = await import('../../../lib/hero-merchants');
+
+    assert.deepEqual(heroCategorySlugOnly(null), {});
+    assert.deepEqual(heroCategorySlugOnly([]), {});
+    assert.deepEqual(heroCategorySlugOnly({ category_slug: '---' }), {});
+    assert.deepEqual(
+      heroCategorySlugOnly({ category_slug: 'electronics' }),
+      {}
+    );
+    assert.deepEqual(
+      heroCategorySlugOnly({ category_slug: '  \u0000LAPTOPS  ' }),
+      { category_slug: 'laptops' }
+    );
+
+    const heroProds = toHeroProductSuggestions([
+      [] as unknown as import('../../../lib/hero-products').HeroProductSuggestion,
+      {
+        id: 'p-1',
+        slug: 'macbook-pro-m4',
+        name: 'MacBook Pro M4',
+        brand: 'Apple',
+        model: 'MacBook Pro',
+        model_key: 'apple:macbook-pro:512gb',
+        variant_name: '512GB',
+        key_specs: [] as unknown as Record<string, string>,
+        storage_gb: 512,
+        images: ['https://cdn.tgdd.vn/Products/Images/44/1/macbook.jpg'],
+        thumbnail: 'https://cdn.tgdd.vn/Products/Images/44/1/macbook.jpg',
+        min_price: 39_990_000,
+        merchant_count: 5,
+        user_rating_weighted: 4.9,
+        average_rating: 4.8,
+        category_id: 'cat-laptops',
+        metadata: { category_slug: 'non-canonical' } as never,
+        specifications: { category_slug: '  LAPTOPS\u0000 ' } as never,
+      },
+    ]);
+    assert.equal(heroProds.length, 1);
+    assert.deepEqual(heroProds[0]?.key_specs, {});
+    assert.deepEqual(heroProds[0]?.metadata, {});
+    assert.deepEqual(heroProds[0]?.specifications, {
+      category_slug: 'laptops',
+    });
+
+    assert.equal(sanitizeMerchantIdentifier('0', 128), '');
+    assert.equal(sanitizeMerchantIdentifier('0000', 128), '');
+    assert.equal(sanitizeMerchantIdentifier('---', 128), '');
+    assert.equal(sanitizeMerchantIdentifier('null', 128), '');
+    assert.equal(sanitizeMerchantIdentifier('undefined', 128), '');
+    assert.equal(sanitizeMerchantIdentifier('__proto__', 128), '');
+    assert.equal(sanitizeMerchantIdentifier('constructor', 128), '');
+    assert.equal(sanitizeMerchantIdentifier('prototype', 128), '');
+    assert.equal(sanitizeMerchantIdentifier('\u0000shop-42 ', 128), 'shop-42');
+
+    assert.equal(clampScore100('0x50'), 0);
+    assert.equal(clampScore100('0b1010'), 0);
+    assert.equal(clampScore100('0o77'), 0);
+    assert.equal(clampScore100('\u000088.5 '), 88.5);
+    assert.equal(clampScore100('150'), 100);
+    assert.equal(clampScore100('-20'), 0);
+
+    const heroMerchants = toHeroMerchantSuggestions([
+      [] as unknown as import('../../../lib/hero-merchants').HeroMerchantSuggestion,
+      {
+        id: '0000',
+        name: 'Shop A',
+        platform: 'shopee',
+        platform_shop_id: '__proto__',
+        is_official: true,
+        trust_score: '0x50' as unknown as number,
+        dosafe_risk_score: '\u000012.5' as unknown as number,
+      },
+    ]);
+    assert.equal(heroMerchants.length, 1);
+    assert.equal(heroMerchants[0]?.id, '');
+    assert.equal(heroMerchants[0]?.platform_shop_id, '');
+    assert.equal(heroMerchants[0]?.trust_score, 0);
+    assert.equal(heroMerchants[0]?.dosafe_risk_score, 12.5);
+
+    console.log(
+      '  ✅ [128/128] Hero-Products & Hero-Merchants Numeric, Category, and ID Bounds (#1033) passed'
     );
   }
 
