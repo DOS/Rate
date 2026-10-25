@@ -8,6 +8,69 @@ import type {
 } from '@/lib/leaderboard-engine';
 import { BsAwardFill, BsTrophyFill } from 'react-icons/bs';
 
+const VALID_BADGE_CATEGORIES = new Set<CanonicalCategorySlug>([
+  'smartphones',
+  'tablets',
+  'laptops',
+  'smartwatches',
+  'earbuds',
+]);
+
+const VALID_BADGE_CRITERIA = new Set<LeaderboardCriterionKey>([
+  'combined',
+  'user',
+  'expert',
+  'screen',
+  'performance',
+  'camera',
+  'battery',
+  'value',
+]);
+
+export function sanitizeLeaderboardBadgeEntry(
+  rawBadge: unknown
+): ProductLeaderboardBadgeInfo | null {
+  if (!rawBadge || typeof rawBadge !== 'object') return null;
+  const candidate = rawBadge as Partial<ProductLeaderboardBadgeInfo>;
+  if (
+    typeof candidate.categorySlug !== 'string' ||
+    !VALID_BADGE_CATEGORIES.has(candidate.categorySlug as CanonicalCategorySlug)
+  ) {
+    return null;
+  }
+  if (
+    typeof candidate.criterion !== 'string' ||
+    !VALID_BADGE_CRITERIA.has(candidate.criterion as LeaderboardCriterionKey)
+  ) {
+    return null;
+  }
+  const rank = Number(candidate.rank);
+  if (!Number.isFinite(rank) || rank < 1) return null;
+  const safeRank = Math.min(10_000, Math.round(rank));
+  const rawTotal = Number(candidate.totalInCategory);
+  const safeTotal =
+    Number.isFinite(rawTotal) && rawTotal >= safeRank
+      ? Math.min(100_000, Math.round(rawTotal))
+      : safeRank;
+  const rawScore5 = Number(candidate.score5);
+  if (!Number.isFinite(rawScore5) || rawScore5 <= 0) return null;
+  const safeScore5 = Math.min(5, Math.max(0, Number(rawScore5.toFixed(2))));
+  const rawScore10 = Number(candidate.score10);
+  const safeScore10 =
+    Number.isFinite(rawScore10) && rawScore10 > 0
+      ? Math.min(10, Math.max(0, Number(rawScore10.toFixed(2))))
+      : Number((safeScore5 * 2).toFixed(2));
+
+  return {
+    categorySlug: candidate.categorySlug as CanonicalCategorySlug,
+    criterion: candidate.criterion as LeaderboardCriterionKey,
+    rank: safeRank,
+    totalInCategory: safeTotal,
+    score5: safeScore5,
+    score10: safeScore10,
+  };
+}
+
 interface ProductLeaderboardBadgesProps {
   badges: ProductLeaderboardBadgeInfo[];
   locale?: string;
@@ -17,7 +80,12 @@ export default async function ProductLeaderboardBadges({
   badges,
   locale,
 }: ProductLeaderboardBadgesProps) {
-  if (!badges || badges.length === 0) {
+  const validBadges = Array.isArray(badges)
+    ? badges
+        .map(sanitizeLeaderboardBadgeEntry)
+        .filter((b): b is ProductLeaderboardBadgeInfo => b !== null)
+    : [];
+  if (validBadges.length === 0) {
     return null;
   }
 
@@ -64,7 +132,7 @@ export default async function ProductLeaderboardBadges({
         {sectionLabel}
       </span>
 
-      {badges.map((b) => {
+      {validBadges.map((b) => {
         const isFirst = b.rank === 1;
         const isCombined = b.criterion === 'combined';
         const titleText = isCombined

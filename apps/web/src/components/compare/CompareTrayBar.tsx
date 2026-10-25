@@ -9,6 +9,7 @@ import {
   type CompareTrayItem,
   getCompareTray,
   MAX_COMPARE_ITEMS,
+  sanitizeTrayPriceVnd,
   setCompareTray,
   subscribeCompareTray,
 } from './compare-tray';
@@ -16,6 +17,10 @@ import {
 // Per-tab memory of the user's last choice; phones start collapsed (#607).
 const COLLAPSED_KEY = 'rate_compare_tray_collapsed';
 const PHONE_QUERY = '(max-width: 767.98px)';
+
+export function formatCompareTrayPriceVnd(value: unknown): string {
+  return `${sanitizeTrayPriceVnd(value).toLocaleString('vi-VN')} ₫`;
+}
 
 export default function CompareTrayBar() {
   const t = useTranslations('compare');
@@ -37,9 +42,11 @@ export default function CompareTrayBar() {
     } catch {
       // Storage blocked: fall back to the viewport default.
     }
-    setCollapsed(
-      saved != null ? saved === '1' : window.matchMedia(PHONE_QUERY).matches
-    );
+    const isPhoneViewport =
+      typeof window !== 'undefined' &&
+      typeof window.matchMedia === 'function' &&
+      window.matchMedia(PHONE_QUERY).matches;
+    setCollapsed(saved != null ? saved === '1' : isPhoneViewport);
   }, []);
 
   const toggleCollapsed = () => {
@@ -170,7 +177,7 @@ export default function CompareTrayBar() {
                         className="text-warning fw-bold rate-tabular text-nowrap"
                         style={{ fontSize: '0.8125rem' }}
                       >
-                        {Number(item.min_price || 0).toLocaleString('vi-VN')} ₫
+                        {formatCompareTrayPriceVnd(item.min_price)}
                       </div>
                     </div>
                     <button
