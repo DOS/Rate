@@ -956,6 +956,84 @@ const isApply = process.argv.includes('--apply');
     await runMasterSpecsBackfill({ apply: isApply });
     return;
   }
+  // Issue #1000: resolveValidHttpBaseUrl, AiSpecEnricher constructor/prompt/enrichCandidate bounds, and normalizeHttpAssetUrl host bounds
+  {
+    const { resolveValidHttpBaseUrl } = await import('./ai-spec-enricher.js');
+    assert.strictEqual(
+      resolveValidHttpBaseUrl('https://user:pass@api.dos.ai/v1', 'https://fallback.example.com'),
+      'https://fallback.example.com'
+    );
+    assert.strictEqual(
+      resolveValidHttpBaseUrl('https://api.dos.ai/v1?foo=1', 'https://fallback.example.com'),
+      'https://fallback.example.com'
+    );
+    assert.strictEqual(
+      resolveValidHttpBaseUrl('https://api.dos.ai/v1#frag', 'https://fallback.example.com'),
+      'https://fallback.example.com'
+    );
+    assert.strictEqual(
+      resolveValidHttpBaseUrl('https://api.dos.ai./v1///', 'https://fallback.example.com'),
+      'https://fallback.example.com'
+    );
+    assert.strictEqual(
+      resolveValidHttpBaseUrl('https://api.dos.ai/v1///', 'https://fallback.example.com'),
+      'https://api.dos.ai/v1'
+    );
+
+    const enricherWithSpaceKey = new AiSpecEnricher({
+      apiKey: 'secret key with spaces',
+      timeoutMs: true as unknown as number,
+      temperature: false as unknown as number,
+    });
+    assert.strictEqual(enricherWithSpaceKey.isConfigured(), false);
+    assert.strictEqual((enricherWithSpaceKey as unknown as { timeoutMs: number }).timeoutMs, 25000);
+    assert.strictEqual(
+      (enricherWithSpaceKey as unknown as { temperature: number }).temperature,
+      0.1
+    );
+
+    const normalizer = new ProductNormalizer();
+    const baseCandidate = normalizer.normalize({
+      itemId: '100001',
+      shopId: '200001',
+      url: 'https://shopee.vn/product/200001/100001',
+      title: 'iPhone 16 Pro Max 256GB VN/A',
+      priceMin: 29990000,
+      priceMax: 29990000,
+      currency: 'VND',
+      historicalSold: 10,
+      ratingStar: 4.9,
+      ratingCount: 5,
+      images: [
+        'https://cf.shopee.vn./file/trailing-dot',
+        'https://localhost/file/local',
+        'https://127.0.0.1/file/loopback',
+        'https://shopee/file/single-label',
+        'https://cf.shopee.vn/file/valid-image',
+      ],
+      models: [],
+      attributes: [],
+      shop: {
+        shopId: '200001',
+        name: 'Official Store',
+        isMall: true,
+        ratingStar: 4.9,
+        followerCount: 1000,
+      },
+      reviews: [],
+    });
+    assert.deepStrictEqual(baseCandidate.images, ['https://cf.shopee.vn/file/valid-image']);
+
+    const unconfiguredEnricher = new AiSpecEnricher({ apiKey: '' });
+    const nonBooleanBenchmarkCandidate = {
+      ...baseCandidate,
+      is_benchmark_enriched: 'false' as unknown as boolean,
+      spec_source: undefined,
+    };
+    const enrichedRes = await unconfiguredEnricher.enrichCandidate(nonBooleanBenchmarkCandidate);
+    assert.strictEqual(enrichedRes.spec_source, undefined);
+  }
+
   await runTests();
 })().catch(err => {
   console.error('❌ Execution failed:', err);

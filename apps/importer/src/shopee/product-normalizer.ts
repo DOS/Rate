@@ -25,7 +25,20 @@ function normalizeHttpAssetUrl(raw: unknown): string | null {
     if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return null;
     if (parsed.username || parsed.password) return null;
     if (parsed.port !== '' && parsed.port !== '80' && parsed.port !== '443') return null;
-    if (!parsed.hostname || parsed.hostname.startsWith('.') || parsed.hostname.endsWith('.')) {
+    const host = parsed.hostname.toLowerCase();
+    if (
+      !host ||
+      !host.includes('.') ||
+      host.startsWith('.') ||
+      host.endsWith('.') ||
+      host.includes('..') ||
+      host.startsWith('[') ||
+      /^\d+(?:\.\d+){3}$/.test(host) ||
+      host === 'localhost' ||
+      host.endsWith('.localhost') ||
+      host.endsWith('.local') ||
+      host.endsWith('.internal')
+    ) {
       return null;
     }
     return parsed.toString();
