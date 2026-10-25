@@ -11102,7 +11102,73 @@ async function runCoreArchitectureSuite() {
     assert.equal(shareNorm5Pt.safeModelKeyToken, 'audit');
 
     console.log(
-      '  ✅ [119/119] WatchlistWorkspace, ProductOffersExplorer & ProductShareAuditButton Bounds (#965) passed'
+      '  ✅ [119/120] WatchlistWorkspace, ProductOffersExplorer & ProductShareAuditButton Bounds (#965) passed'
+    );
+  }
+
+  // 120. Issue #976: cache-tags revalidation targets & cached entity/slug bounds
+  {
+    const {
+      isSafeRevalidationPath,
+      resolveRevalidationTargets,
+      sanitizeCachedEntityId,
+      sanitizeCachedProductSlug,
+      sanitizeCachedCompareSlugsCsv,
+    } = require('../index') as typeof import('../index');
+
+    assert.equal(isSafeRevalidationPath('/smartphones/./iphone-16'), false);
+    assert.equal(isSafeRevalidationPath('/.'), false);
+    assert.equal(isSafeRevalidationPath('/smartphones/%2e%2e/admin'), false);
+    assert.equal(isSafeRevalidationPath('/smartphones/%2fadmin'), false);
+    assert.equal(
+      isSafeRevalidationPath('/smartphones/iphone-16-pro-max'),
+      true
+    );
+
+    assert.deepEqual(resolveRevalidationTargets(null as never), {
+      tags: [],
+      paths: [],
+    });
+    assert.deepEqual(
+      resolveRevalidationTargets({
+        tags: ['rate:..', 'rate:products'],
+        slugs: ['..', '.bad', 'bad.', 'a..b', 'iphone-16'],
+        categories: ['.', 'smartphones'],
+        merchants: [':bad', 'bad:', '..', 'shopee:123'],
+        paths: ['/smartphones/./x', '/smartphones/iphone-16'],
+      }),
+      {
+        tags: [
+          'rate:products',
+          'rate:product:iphone-16',
+          'rate:offers',
+          'rate:price-history',
+          'rate:reviews',
+          'rate:deals',
+          'rate:stats',
+          'rate:category:smartphones',
+          'rate:categories',
+          'rate:merchant:shopee:123',
+          'rate:merchants',
+        ],
+        paths: ['/smartphones/iphone-16'],
+      }
+    );
+
+    assert.equal(sanitizeCachedEntityId('.'), '');
+    assert.equal(sanitizeCachedEntityId('..'), '');
+    assert.equal(sanitizeCachedProductSlug('..'), '');
+    assert.equal(sanitizeCachedProductSlug('.iphone-16'), '');
+    assert.equal(sanitizeCachedProductSlug('iphone-16.'), '');
+    assert.equal(sanitizeCachedProductSlug('iphone..16'), '');
+    assert.equal(sanitizeCachedProductSlug('iphone-16-pro'), 'iphone-16-pro');
+    assert.equal(
+      sanitizeCachedCompareSlugsCsv('..,iphone-16,.bad,galaxy-s24'),
+      'iphone-16,galaxy-s24'
+    );
+
+    console.log(
+      '  ✅ [120/120] Cache Tag Revalidation Targets & Cached Entity/Slug Bounds (#976) passed'
     );
   }
 
