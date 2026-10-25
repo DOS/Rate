@@ -7,9 +7,15 @@ import {
   computeWatchlistTargetPrice,
   getWatchlist,
   removeWatchlistItem,
+  sanitizeWatchlistPrice,
+  sanitizeWatchlistSlug,
   subscribeWatchlist,
   upsertWatchlistItem,
 } from './watchlist-store';
+
+export function normalizeQuickWatchlistSlug(value: unknown): string {
+  return sanitizeWatchlistSlug(value);
+}
 
 export interface WatchlistQuickItem {
   slug: string;
@@ -36,30 +42,36 @@ export default function WatchlistQuickToggle({
 }: WatchlistQuickToggleProps) {
   const t = useTranslations('watchlist');
   const [watched, setWatched] = useState(false);
+  const safeSlug = normalizeQuickWatchlistSlug(item?.slug);
 
   useEffect(() => {
     const sync = () => {
+      if (!safeSlug) {
+        setWatched(false);
+        return;
+      }
       const list = getWatchlist();
-      setWatched(list.some((x) => x.slug === item.slug));
+      setWatched(list.some((x) => x.slug === safeSlug));
     };
     sync();
     return subscribeWatchlist(sync);
-  }, [item.slug]);
+  }, [safeSlug]);
 
   const handleToggle = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
+    if (!safeSlug) return;
 
     if (watched) {
-      removeWatchlistItem(item.slug);
+      removeWatchlistItem(safeSlug);
       return;
     }
 
-    const basePrice = Math.max(0, Number(item.min_price || 0));
+    const basePrice = sanitizeWatchlistPrice(item?.min_price);
     const defaultTarget = computeWatchlistTargetPrice(basePrice, 5);
 
     upsertWatchlistItem({
-      slug: item.slug,
+      slug: safeSlug,
       name: item.name,
       brand: item.brand,
       categoryPath: item.categoryPath || '/smartphones',

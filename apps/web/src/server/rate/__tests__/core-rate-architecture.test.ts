@@ -12020,7 +12020,807 @@ async function runCoreArchitectureSuite() {
       targets.tags.includes('rate:merchant:shopee:apple-flagship'),
       true
     );
-    console.log('  ✅ [122/122] Cache-Tags Revalidation Bounds (#1016) passed');
+    console.log('  ✅ [122/123] Cache-Tags Revalidation Bounds (#1016) passed');
+  }
+
+  // -------------------------------------------------------------------------
+  // 123. Merchant Audit, Deep Inspect Exports & Radar Badge Bounds (#1020)
+  // -------------------------------------------------------------------------
+  {
+    const {
+      sanitizeMerchantAuditText,
+      sanitizeMerchantScore100,
+      sanitizeMerchantCount,
+      computeAuthenticReviewPercentage,
+      sanitizeMerchantDownloadSlug,
+    } = await import('../../../components/merchants/MerchantShareAuditButton');
+    const { MAX_MERCHANT_EXPORT_PAGES } =
+      await import('../../../components/merchants/MerchantDirectoryExplorer');
+    const {
+      sanitizeInspectQuery,
+      sanitizeInspectPriceVnd,
+      sanitizeInspectDownloadSlug,
+    } = await import('../../../components/inspect/DeepInspectWorkspace');
+    const { sanitizeRadarPercentage, sanitizeRadarMinSpreadPct } =
+      await import('../../../components/radar/RadarBadge');
+
+    assert.equal(
+      sanitizeMerchantAuditText(
+        '  Shop\r\nName | Official\u0000  ',
+        'Fallback'
+      ),
+      'Shop Name - Official'
+    );
+    assert.equal(sanitizeMerchantAuditText('   ', 'Fallback'), 'Fallback');
+    assert.equal(sanitizeMerchantAuditText(null, 'Fallback'), 'Fallback');
+
+    assert.equal(sanitizeMerchantScore100(92.6), 93);
+    assert.equal(sanitizeMerchantScore100(-15), 0);
+    assert.equal(sanitizeMerchantScore100(250), 100);
+    assert.equal(sanitizeMerchantScore100(Number.NaN), 0);
+
+    assert.equal(sanitizeMerchantCount(42.4), 42);
+    assert.equal(sanitizeMerchantCount(-5), 0);
+    assert.equal(sanitizeMerchantCount(Number.POSITIVE_INFINITY), 0);
+    assert.equal(sanitizeMerchantCount(99_000_000), 10_000_000);
+
+    assert.equal(computeAuthenticReviewPercentage(80, 100), 80);
+    assert.equal(computeAuthenticReviewPercentage(150, 100), 100);
+    assert.equal(computeAuthenticReviewPercentage(-10, 100), 0);
+    assert.equal(computeAuthenticReviewPercentage(0, 0), 100);
+
+    assert.equal(
+      sanitizeMerchantDownloadSlug('Shopee Mall / VN #1!'),
+      'shopee-mall-vn-1'
+    );
+    assert.equal(sanitizeMerchantDownloadSlug('   ', 'shop'), 'shop');
+    assert.equal(MAX_MERCHANT_EXPORT_PAGES, 20);
+
+    assert.equal(
+      sanitizeInspectQuery('  https://shopee.vn/item\n`test`  '),
+      "https://shopee.vn/item 'test'"
+    );
+    assert.equal(sanitizeInspectQuery('a'.repeat(700)).length, 512);
+    assert.equal(sanitizeInspectQuery(null), '');
+
+    assert.equal(sanitizeInspectPriceVnd(25_990_000.4), 25_990_000);
+    assert.equal(sanitizeInspectPriceVnd(-1000), 0);
+    assert.equal(sanitizeInspectPriceVnd(9_000_000_000), 0);
+    assert.equal(sanitizeInspectPriceVnd(Number.NaN), 0);
+
+    assert.equal(
+      sanitizeInspectDownloadSlug('iPhone 16 Pro Max / 256GB'),
+      'iphone-16-pro-max-256gb'
+    );
+    assert.equal(sanitizeInspectDownloadSlug('', 'audit'), 'audit');
+
+    assert.equal(sanitizeRadarPercentage(18.45, 100), 18.45);
+    assert.equal(sanitizeRadarPercentage(150, 100), 100);
+    assert.equal(sanitizeRadarPercentage(-5, 100), 0);
+    assert.equal(sanitizeRadarPercentage(Number.NaN, 100), 0);
+    assert.equal(
+      sanitizeRadarMinSpreadPct(Number.POSITIVE_INFINITY),
+      Number.POSITIVE_INFINITY
+    );
+    assert.equal(sanitizeRadarMinSpreadPct(Number.NaN, 10), 10);
+    assert.equal(sanitizeRadarMinSpreadPct(-5, 10), 0);
+    assert.equal(sanitizeRadarMinSpreadPct(15, 10), 15);
+
+    console.log(
+      '  ✅ [123/124] Merchant Audit, Deep Inspect Exports & Radar Badge Bounds (#1020) passed'
+    );
+  }
+
+  // -------------------------------------------------------------------------
+  // 124. ProductSpecsExportToolbar, CategoryCatalogToolbar & VersusMatchupSwitcher Bounds (#1026)
+  // -------------------------------------------------------------------------
+  {
+    const {
+      sanitizeSpecExportText,
+      formatPositiveSpecMetric,
+      sanitizeSpecDownloadSlug,
+      buildProductSpecExportRows,
+    } =
+      await import('../../../components/leaderboard/ProductSpecsExportToolbar');
+    const {
+      sanitizeCatalogToolbarText,
+      sanitizeCatalogPriceVnd,
+      sanitizeCatalogCount,
+      sanitizeCatalogDownloadSlug,
+    } = await import('../../../components/leaderboard/CategoryCatalogToolbar');
+    const nodeModule = await import('node:module');
+    const extMap = (
+      nodeModule.default as unknown as {
+        _extensions?: Record<string, (mod: { exports: unknown }) => void>;
+      }
+    )._extensions;
+    if (extMap && !extMap['.css']) {
+      extMap['.css'] = (mod) => {
+        mod.exports = { bar: 'bar' };
+      };
+    }
+    const { leavesCurrentPage } =
+      await import('../../../components/elementary/NavigationProgress');
+    const { formatVersusPeerPriceBadge, resolveEffectivePeerSlugs } =
+      await import('../../../components/compare/VersusMatchupSwitcher');
+
+    assert.equal(
+      leavesCurrentPage('/compare/a-vs-b', 'https://rate.vn/smartphones'),
+      true
+    );
+    assert.equal(
+      leavesCurrentPage('#specs', 'https://rate.vn/smartphones'),
+      false
+    );
+    assert.equal(
+      leavesCurrentPage('http://[::1', 'https://rate.vn/smartphones'),
+      false
+    );
+    assert.equal(
+      leavesCurrentPage(
+        'https://shopee.vn/item',
+        'https://rate.vn/smartphones'
+      ),
+      false
+    );
+
+    assert.equal(
+      sanitizeSpecExportText('  LTPO\r\nOLED\u0000 120Hz  ', '-'),
+      'LTPO OLED 120Hz'
+    );
+    assert.equal(sanitizeSpecExportText('   ', '-'), '-');
+    assert.equal(formatPositiveSpecMetric(6.86, '"', 100), '6.86"');
+    assert.equal(formatPositiveSpecMetric(-120, 'Hz', 1000), null);
+    assert.equal(formatPositiveSpecMetric(9999, 'Hz', 1000), null);
+    assert.equal(formatPositiveSpecMetric(Number.NaN, 'g', 50_000), null);
+    assert.equal(
+      sanitizeSpecDownloadSlug('iPhone 16 Pro / 256GB!'),
+      'iphone-16-pro-256gb'
+    );
+
+    const specRows = buildProductSpecExportRows(
+      {
+        display: {
+          size_inch: 6.7,
+          type: 'Super Retina\nXDR',
+          refresh_rate_hz: -120,
+        },
+        battery: {
+          capacity_mah: 5000,
+          fast_charging_w: 45,
+        },
+      } as never,
+      { chip: 'Apple A18 Pro' }
+    );
+    assert.equal(specRows.length, 13);
+    assert.equal(specRows[0]?.[2], '6.7" | Super Retina XDR');
+    assert.equal(specRows[2]?.[2], 'Apple A18 Pro');
+    assert.equal(specRows[6]?.[2], '5000 mAh | 45W');
+
+    assert.equal(
+      sanitizeCatalogToolbarText('  Galaxy\nS24 | Ultra  ', 'Unknown'),
+      'Galaxy S24 - Ultra'
+    );
+    assert.equal(sanitizeCatalogPriceVnd(19_990_000.6), 19_990_001);
+    assert.equal(sanitizeCatalogPriceVnd(-500_000), 0);
+    assert.equal(sanitizeCatalogPriceVnd(9_000_000_000), 0);
+    assert.equal(sanitizeCatalogCount(145.2), 145);
+    assert.equal(sanitizeCatalogCount(-10), 0);
+    assert.equal(
+      sanitizeCatalogDownloadSlug('Smartphones & Tablets!'),
+      'smartphones-tablets'
+    );
+
+    assert.equal(formatVersusPeerPriceBadge(28_990_000), '29M');
+    assert.equal(formatVersusPeerPriceBadge(450_000), '450K');
+    assert.equal(formatVersusPeerPriceBadge(0), 'N/A');
+    assert.equal(formatVersusPeerPriceBadge(-1_000_000), 'N/A');
+    assert.equal(formatVersusPeerPriceBadge(9_000_000_000), 'N/A');
+
+    const resolvedSlugs = resolveEffectivePeerSlugs(
+      [{ slug: 'iphone-16' } as never, { slug: 'galaxy-s24' } as never],
+      'invalid-slug',
+      'iphone-16'
+    );
+    assert.deepEqual(resolvedSlugs, {
+      effectiveSlugA: 'iphone-16',
+      effectiveSlugB: 'galaxy-s24',
+    });
+
+    console.log(
+      '  ✅ [124/124] ProductSpecsExportToolbar, CategoryCatalogToolbar & VersusMatchupSwitcher Bounds (#1026) passed'
+    );
+  }
+
+  // 123. API Handler & Request Auth Numeric/Slug/Brand/Token Bounds (#1025)
+  {
+    const {
+      parseBoundedIntParam,
+      parseBoundedNumberParam,
+      parseOptionalVndPriceParam,
+      parseBoundedPositiveIntArrayParam,
+      resolveWatchlistMasterPriceBounds,
+      withPlausibleMinPrice,
+      selectBestOfferFromListings,
+      resolveInspectObservedPrices,
+      parseCompareSlugsParam,
+      parseWatchlistSlugsParam,
+      parseReviewsQueryParams,
+      parseProductsFilterBounds,
+    } = await import('../api-handler');
+    const {
+      readBearerToken,
+      readCookieAccessToken,
+      mapRpcRejection,
+      isMissingRpcError,
+    } = await import('../request-auth');
+
+    assert.equal(parseBoundedIntParam('0x10', 24, 1, 100), 24);
+    assert.equal(parseBoundedIntParam('\u000036', 24, 1, 100), 36);
+    assert.equal(parseBoundedNumberParam('0x4', 0, 5), undefined);
+    assert.equal(parseBoundedNumberParam('\u00004.5', 0, 5), 4.5);
+    assert.equal(parseOptionalVndPriceParam('0x1000000'), null);
+    assert.equal(parseOptionalVndPriceParam('\u000025000000'), 25_000_000);
+    assert.deepEqual(
+      parseBoundedPositiveIntArrayParam('0x8,\u000012,0b100,16', 128),
+      [12, 16]
+    );
+    assert.deepEqual(
+      resolveWatchlistMasterPriceBounds(
+        { min_price: '0x1000000', max_price: '0x2000000' },
+        28_000_000
+      ),
+      { currentMinPrice: 28_000_000, currentMaxPrice: 28_000_000 }
+    );
+    assert.equal(
+      withPlausibleMinPrice({ min_price: '0x1000000' }, [
+        { price_current: 26_000_000 },
+      ]).min_price,
+      26_000_000
+    );
+    const bestRes = selectBestOfferFromListings([
+      {
+        id: 'hex-offer',
+        price_current: '0x1000000' as unknown as number,
+        stock: 5,
+      },
+      {
+        id: 'valid-offer',
+        price_current: '\u000025000000' as unknown as number,
+        price_original: '0x3000000' as unknown as number,
+        stock: '\u00003',
+      },
+    ]);
+    assert.equal(bestRes.bestOffer?.id, 'valid-offer');
+    assert.equal(bestRes.bestOffer?.price, 25_000_000);
+    assert.equal(bestRes.bestOffer?.original_price, 25_000_000);
+    assert.deepEqual(
+      resolveInspectObservedPrices({
+        matchedOfferPriceCurrent: '0x1000000',
+        masterMinPrice: '\u000024000000',
+      }),
+      { observedPrice: 24_000_000, observedOriginalPrice: 0 }
+    );
+    assert.deepEqual(
+      parseCompareSlugsParam('000,null,undefined,__proto__,iphone-16-pro'),
+      ['iphone-16-pro']
+    );
+    assert.deepEqual(
+      parseWatchlistSlugsParam('0000,constructor,prototype,galaxy-s25-ultra'),
+      ['galaxy-s25-ultra']
+    );
+    assert.equal(
+      parseReviewsQueryParams(
+        new URLSearchParams({ slug: 'iphone-16-pro', limit: '0x10' })
+      ),
+      null
+    );
+    assert.equal(
+      parseReviewsQueryParams(
+        new URLSearchParams({ slug: '000', limit: '20' })
+      ),
+      null
+    );
+    assert.equal(
+      parseReviewsQueryParams(
+        new URLSearchParams({ slug: '\u0000iphone-16-pro', limit: '\u000025' })
+      )?.limit,
+      25
+    );
+    const filterBounds = parseProductsFilterBounds(
+      new URLSearchParams({
+        category: '\u0000smartphones',
+        brands: '000,null,undefined,__proto__,Apple,Samsung',
+      })
+    );
+    assert.deepEqual(filterBounds?.brands, ['Apple', 'Samsung']);
+
+    const zeroBearerReq = new Request('https://rate.vn/api/reviews/1/vote', {
+      headers: { Authorization: 'Bearer 0000' },
+    });
+    assert.equal(readBearerToken(zeroBearerReq), '');
+    assert.equal(
+      await readCookieAccessToken([
+        {
+          name: 'sb-test-auth-token',
+          value: JSON.stringify({ access_token: '0000' }),
+        },
+      ]),
+      null
+    );
+    const rpcTable = {
+      P0001: { status: 400, code: 'BAD_INPUT', error: 'Bad input' },
+    };
+    assert.equal(
+      mapRpcRejection({ code: '\u0000p0001 ' }, rpcTable)?.code,
+      'BAD_INPUT'
+    );
+    assert.equal(isMissingRpcError({ code: '\u0000pgrst202 ' }), true);
+
+    console.log(
+      '  ✅ [125/127] API Handler & Request Auth Numeric/Slug/Brand/Token Bounds (#1025) passed'
+    );
+  }
+
+  // -------------------------------------------------------------------------
+  // 126. compare-tray, CompareTrayBar & ProductLeaderboardBadges Bounds (#1030)
+  // -------------------------------------------------------------------------
+  {
+    const {
+      sanitizeTrayText,
+      sanitizeTraySlug,
+      sanitizeTrayPriceVnd,
+      isCanonicalTrayCategorySlug,
+      normalizeTrayItem: normalizeTrayItem1030,
+    } = await import('../../../components/compare/compare-tray');
+    const { formatCompareTrayPriceVnd } =
+      await import('../../../components/compare/CompareTrayBar');
+    const { sanitizeLeaderboardBadgeEntry } =
+      await import('../../../components/leaderboard/ProductLeaderboardBadges');
+
+    assert.equal(
+      sanitizeTrayText('  iPhone\r\n16\u0000 Pro  '),
+      'iPhone 16 Pro'
+    );
+    assert.equal(sanitizeTrayText(null), '');
+    assert.equal(
+      sanitizeTraySlug('  Apple\u0000 iPhone 16 Pro  '),
+      'apple-iphone-16-pro'
+    );
+    assert.equal(sanitizeTrayPriceVnd(18_990_000.4), 18_990_000);
+    assert.equal(sanitizeTrayPriceVnd(-100), 0);
+    assert.equal(sanitizeTrayPriceVnd(9_000_000_000), 0);
+    assert.equal(isCanonicalTrayCategorySlug('smartphones'), true);
+    assert.equal(isCanonicalTrayCategorySlug('invalid-cat'), false);
+
+    const normalizedTray1030 = normalizeTrayItem1030({
+      slug: '  sony-wf-1000xm5\u0000 ',
+      name: '  Sony\nWF-1000XM5  ',
+      brand: '  Sony\r\n  ',
+      thumbnail: null,
+      min_price: -50_000,
+      categorySlug: 'invalid-cat' as never,
+    });
+    assert.equal(normalizedTray1030.slug, 'sony-wf-1000xm5');
+    assert.equal(normalizedTray1030.name, 'Sony WF-1000XM5');
+    assert.equal(normalizedTray1030.brand, 'Sony');
+    assert.equal(normalizedTray1030.min_price, 0);
+    assert.equal(normalizedTray1030.categorySlug, 'earbuds');
+
+    assert.equal(formatCompareTrayPriceVnd(25_990_000), '25.990.000 ₫');
+    assert.equal(formatCompareTrayPriceVnd(-50_000), '0 ₫');
+    assert.equal(formatCompareTrayPriceVnd(9_000_000_000), '0 ₫');
+
+    const validBadge = sanitizeLeaderboardBadgeEntry({
+      categorySlug: 'smartphones',
+      criterion: 'combined',
+      rank: 1.2,
+      totalInCategory: 28.4,
+      score5: 6.5,
+    });
+    assert.deepEqual(validBadge, {
+      categorySlug: 'smartphones',
+      criterion: 'combined',
+      rank: 1,
+      totalInCategory: 28,
+      score5: 5,
+      score10: 10,
+    });
+    assert.equal(
+      sanitizeLeaderboardBadgeEntry({
+        categorySlug: 'invalid',
+        criterion: 'combined',
+        rank: 1,
+        totalInCategory: 10,
+        score5: 4.5,
+      }),
+      null
+    );
+    assert.equal(
+      sanitizeLeaderboardBadgeEntry({
+        categorySlug: 'smartphones',
+        criterion: 'combined',
+        rank: 0,
+        totalInCategory: 10,
+        score5: 4.5,
+      }),
+      null
+    );
+
+    console.log(
+      '  ✅ [126/129] compare-tray, CompareTrayBar & ProductLeaderboardBadges Bounds (#1030) passed'
+    );
+  }
+
+  // -------------------------------------------------------------------------
+  // 126b. ProductCard, PriceWatchButton & WatchlistQuickToggle Bounds (#1034)
+  // -------------------------------------------------------------------------
+  {
+    const {
+      sanitizeProductCardPriceVnd,
+      formatProductCardVnd,
+      sanitizeProductCardScore,
+      sanitizeProductCardCount,
+      sanitizeProductCardSlug,
+    } = await import('../../../components/product/ProductCard');
+    const { resolvePriceWatchStep, sanitizePriceWatchInput } =
+      await import('../../../components/watchlist/PriceWatchButton');
+    const { normalizeQuickWatchlistSlug } =
+      await import('../../../components/watchlist/WatchlistQuickToggle');
+
+    assert.equal(sanitizeProductCardPriceVnd(18_990_000.4), 18_990_000);
+    assert.equal(sanitizeProductCardPriceVnd(-100), 0);
+    assert.equal(sanitizeProductCardPriceVnd(9_000_000_000), 0);
+    assert.equal(formatProductCardVnd(25_990_000), '25.990.000 ₫');
+    assert.equal(formatProductCardVnd(-100), '0 ₫');
+
+    assert.equal(sanitizeProductCardScore(4.64, 5), 4.64);
+    assert.equal(sanitizeProductCardScore(7.8, 5), 5);
+    assert.equal(sanitizeProductCardScore(-1, 5), null);
+    assert.equal(sanitizeProductCardScore(Number.NaN, 10), null);
+
+    assert.equal(sanitizeProductCardCount(42.8), 43);
+    assert.equal(sanitizeProductCardCount(-5), 0);
+    assert.equal(sanitizeProductCardCount(99_999_999), 10_000_000);
+    assert.equal(
+      sanitizeProductCardSlug('  iphone-16-pro\u0000  '),
+      'iphone-16-pro'
+    );
+
+    assert.equal(resolvePriceWatchStep(450_000), 10_000);
+    assert.equal(resolvePriceWatchStep(3_500_000), 100_000);
+    assert.equal(resolvePriceWatchStep(25_000_000), 100_000);
+    assert.equal(resolvePriceWatchStep(-100), 100_000);
+
+    assert.equal(sanitizePriceWatchInput(18_500_000.6, 20_000_000), 18_500_001);
+    assert.equal(sanitizePriceWatchInput(0, 20_000_000), 0);
+    assert.equal(sanitizePriceWatchInput(-500, 20_000_000), 19_000_000);
+    assert.equal(
+      sanitizePriceWatchInput(9_000_000_000, 20_000_000),
+      1_000_000_000
+    );
+
+    assert.equal(
+      normalizeQuickWatchlistSlug('  sony-wf-1000xm5\u0000  '),
+      'sony-wf-1000xm5'
+    );
+    assert.equal(normalizeQuickWatchlistSlug('   '), '');
+
+    console.log(
+      '  ✅ [126b/129] ProductCard, PriceWatchButton & WatchlistQuickToggle Bounds (#1034) passed'
+    );
+  }
+
+  // -------------------------------------------------------------------------
+  // 126c. LeaderboardExplorer, CompareQuickToggle & JReviewsSection Bounds (#1036)
+  // -------------------------------------------------------------------------
+  {
+    const {
+      sanitizeLeaderboardWeight,
+      sanitizeLeaderboardPriceVnd,
+      formatLeaderboardPriceVnd,
+      sanitizeLeaderboardMarkdownCell,
+      sanitizeLeaderboardBarPercentage,
+    } = await import('../../../components/leaderboard/LeaderboardExplorer');
+    const { normalizeQuickCompareSlug } =
+      await import('../../../components/compare/CompareQuickToggle');
+    const {
+      sanitizeJReviewsExportSlug,
+      sanitizeJReviewsMarkdownCell,
+      sanitizeJReviewsPercentage,
+    } = await import('../../../components/reviews/JReviewsSection');
+
+    assert.equal(sanitizeLeaderboardWeight(45.6, 20), 46);
+    assert.equal(sanitizeLeaderboardWeight(-15, 20), 0);
+    assert.equal(sanitizeLeaderboardWeight(180, 20), 100);
+    assert.equal(sanitizeLeaderboardWeight(Number.NaN, 25), 25);
+
+    assert.equal(sanitizeLeaderboardPriceVnd(18_990_000.4), 18_990_000);
+    assert.equal(sanitizeLeaderboardPriceVnd(-100), 0);
+    assert.equal(sanitizeLeaderboardPriceVnd(9_000_000_000), 0);
+    assert.equal(formatLeaderboardPriceVnd(25_990_000), '25.990.000 ₫');
+    assert.equal(formatLeaderboardPriceVnd(-100), '0 ₫');
+
+    assert.equal(
+      sanitizeLeaderboardMarkdownCell('  Galaxy\r\nS25 | Ultra\u0000  '),
+      'Galaxy S25 - Ultra'
+    );
+    assert.equal(sanitizeLeaderboardMarkdownCell('   '), '-');
+
+    assert.equal(sanitizeLeaderboardBarPercentage(4.5), 90);
+    assert.equal(sanitizeLeaderboardBarPercentage(7.5), 100);
+    assert.equal(sanitizeLeaderboardBarPercentage(-2), 0);
+
+    assert.equal(
+      normalizeQuickCompareSlug('  Apple\u0000 iPhone 16 Pro  '),
+      'apple-iphone-16-pro'
+    );
+    assert.equal(normalizeQuickCompareSlug('   '), '');
+
+    assert.equal(
+      sanitizeJReviewsExportSlug('  ../iPhone 16 Pro\u0000!!  '),
+      'iphone-16-pro'
+    );
+    assert.equal(sanitizeJReviewsExportSlug('   '), 'audit');
+    assert.equal(
+      sanitizeJReviewsMarkdownCell('  Great\r\nphone | 10/10\u0000  '),
+      'Great phone - 10/10'
+    );
+    assert.equal(sanitizeJReviewsMarkdownCell(''), '-');
+    assert.equal(sanitizeJReviewsPercentage(84.6), 85);
+    assert.equal(sanitizeJReviewsPercentage(150), 100);
+    assert.equal(sanitizeJReviewsPercentage(-10), 0);
+
+    console.log(
+      '  ✅ [126c/130] LeaderboardExplorer, CompareQuickToggle & JReviewsSection Bounds (#1036) passed'
+    );
+  }
+
+  // -------------------------------------------------------------------------
+  // 127. Rate Server Index & Extension Entity, Slug, and Category Bounds (#1029)
+  // -------------------------------------------------------------------------
+  {
+    const {
+      sanitizeCachedEntityId,
+      sanitizeCachedProductSlug,
+      sanitizeCachedCompareSlugsCsv,
+      categorySlugOnly,
+    } = await import('../index');
+    const { isValidExternalEntityId } = await import('../extension');
+
+    assert.equal(sanitizeCachedEntityId('0'), '');
+    assert.equal(sanitizeCachedEntityId('0000'), '');
+    assert.equal(sanitizeCachedEntityId('---'), '');
+    assert.equal(sanitizeCachedEntityId('_._'), '');
+    assert.equal(sanitizeCachedEntityId('null'), '');
+    assert.equal(sanitizeCachedEntityId('undefined'), '');
+    assert.equal(sanitizeCachedEntityId('NaN'), '');
+    assert.equal(sanitizeCachedEntityId('none'), '');
+    assert.equal(sanitizeCachedEntityId('true'), '');
+    assert.equal(sanitizeCachedEntityId('false'), '');
+    assert.equal(sanitizeCachedEntityId('__proto__'), '');
+    assert.equal(sanitizeCachedEntityId('constructor'), '');
+    assert.equal(sanitizeCachedEntityId('prototype'), '');
+    assert.equal(sanitizeCachedEntityId('.lead'), '');
+    assert.equal(sanitizeCachedEntityId('trail.'), '');
+    assert.equal(sanitizeCachedEntityId('a..b'), '');
+    assert.equal(sanitizeCachedEntityId('\u0000m-123 ', 10), 'm-123');
+
+    assert.equal(sanitizeCachedProductSlug('0'), '');
+    assert.equal(sanitizeCachedProductSlug('000'), '');
+    assert.equal(sanitizeCachedProductSlug('---'), '');
+    assert.equal(sanitizeCachedProductSlug('___'), '');
+    assert.equal(sanitizeCachedProductSlug('null'), '');
+    assert.equal(sanitizeCachedProductSlug('undefined'), '');
+    assert.equal(sanitizeCachedProductSlug('nan'), '');
+    assert.equal(sanitizeCachedProductSlug('none'), '');
+    assert.equal(sanitizeCachedProductSlug('true'), '');
+    assert.equal(sanitizeCachedProductSlug('false'), '');
+    assert.equal(sanitizeCachedProductSlug('__proto__'), '');
+    assert.equal(sanitizeCachedProductSlug('constructor'), '');
+    assert.equal(sanitizeCachedProductSlug('prototype'), '');
+    assert.equal(
+      sanitizeCachedCompareSlugsCsv(
+        '000,---,null,__proto__,iphone-16-pro,galaxy-s25'
+      ),
+      'iphone-16-pro,galaxy-s25'
+    );
+
+    assert.equal(categorySlugOnly(null), null);
+    assert.equal(
+      categorySlugOnly([] as unknown as Record<string, unknown>),
+      null
+    );
+    assert.equal(categorySlugOnly({ category_slug: '---' }), null);
+    assert.equal(categorySlugOnly({ category_slug: 'electronics' }), null);
+    assert.deepEqual(categorySlugOnly({ category_slug: '  \u0000EARBUDS  ' }), {
+      category_slug: 'earbuds',
+    });
+
+    assert.equal(isValidExternalEntityId('none'), false);
+    assert.equal(isValidExternalEntityId('__proto__'), false);
+    assert.equal(isValidExternalEntityId('constructor'), false);
+    assert.equal(isValidExternalEntityId('prototype'), false);
+    assert.equal(isValidExternalEntityId('123456789'), true);
+
+    console.log(
+      '  ✅ [127/128] Rate Server Index & Extension Entity, Slug, and Category Bounds (#1029) passed'
+    );
+  }
+
+  // -------------------------------------------------------------------------
+  // 128. Hero-Products & Hero-Merchants Numeric, Category, and ID Bounds (#1033)
+  // -------------------------------------------------------------------------
+  {
+    const { categorySlugOnly: heroCategorySlugOnly, toHeroProductSuggestions } =
+      await import('../../../lib/hero-products');
+    const {
+      sanitizeMerchantIdentifier,
+      clampScore100,
+      toHeroMerchantSuggestions,
+    } = await import('../../../lib/hero-merchants');
+
+    assert.deepEqual(heroCategorySlugOnly(null), {});
+    assert.deepEqual(heroCategorySlugOnly([]), {});
+    assert.deepEqual(heroCategorySlugOnly({ category_slug: '---' }), {});
+    assert.deepEqual(
+      heroCategorySlugOnly({ category_slug: 'electronics' }),
+      {}
+    );
+    assert.deepEqual(
+      heroCategorySlugOnly({ category_slug: '  \u0000LAPTOPS  ' }),
+      { category_slug: 'laptops' }
+    );
+
+    const heroProds = toHeroProductSuggestions([
+      [] as unknown as import('../../../lib/hero-products').HeroProductSuggestion,
+      {
+        id: 'p-1',
+        slug: 'macbook-pro-m4',
+        name: 'MacBook Pro M4',
+        brand: 'Apple',
+        model: 'MacBook Pro',
+        model_key: 'apple:macbook-pro:512gb',
+        variant_name: '512GB',
+        key_specs: [] as unknown as Record<string, string>,
+        storage_gb: 512,
+        images: ['https://cdn.tgdd.vn/Products/Images/44/1/macbook.jpg'],
+        thumbnail: 'https://cdn.tgdd.vn/Products/Images/44/1/macbook.jpg',
+        min_price: 39_990_000,
+        merchant_count: 5,
+        user_rating_weighted: 4.9,
+        average_rating: 4.8,
+        category_id: 'cat-laptops',
+        metadata: { category_slug: 'non-canonical' } as never,
+        specifications: { category_slug: '  LAPTOPS\u0000 ' } as never,
+      },
+    ]);
+    assert.equal(heroProds.length, 1);
+    assert.deepEqual(heroProds[0]?.key_specs, {});
+    assert.deepEqual(heroProds[0]?.metadata, {});
+    assert.deepEqual(heroProds[0]?.specifications, {
+      category_slug: 'laptops',
+    });
+
+    assert.equal(sanitizeMerchantIdentifier('0', 128), '');
+    assert.equal(sanitizeMerchantIdentifier('0000', 128), '');
+    assert.equal(sanitizeMerchantIdentifier('---', 128), '');
+    assert.equal(sanitizeMerchantIdentifier('null', 128), '');
+    assert.equal(sanitizeMerchantIdentifier('undefined', 128), '');
+    assert.equal(sanitizeMerchantIdentifier('__proto__', 128), '');
+    assert.equal(sanitizeMerchantIdentifier('constructor', 128), '');
+    assert.equal(sanitizeMerchantIdentifier('prototype', 128), '');
+    assert.equal(sanitizeMerchantIdentifier('\u0000shop-42 ', 128), 'shop-42');
+
+    assert.equal(clampScore100('0x50'), 0);
+    assert.equal(clampScore100('0b1010'), 0);
+    assert.equal(clampScore100('0o77'), 0);
+    assert.equal(clampScore100('\u000088.5 '), 88.5);
+    assert.equal(clampScore100('150'), 100);
+    assert.equal(clampScore100('-20'), 0);
+
+    const heroMerchants = toHeroMerchantSuggestions([
+      [] as unknown as import('../../../lib/hero-merchants').HeroMerchantSuggestion,
+      {
+        id: '0000',
+        name: 'Shop A',
+        platform: 'shopee',
+        platform_shop_id: '__proto__',
+        is_official: true,
+        trust_score: '0x50' as unknown as number,
+        dosafe_risk_score: '\u000012.5' as unknown as number,
+      },
+    ]);
+    assert.equal(heroMerchants.length, 1);
+    assert.equal(heroMerchants[0]?.id, '');
+    assert.equal(heroMerchants[0]?.platform_shop_id, '');
+    assert.equal(heroMerchants[0]?.trust_score, 0);
+    assert.equal(heroMerchants[0]?.dosafe_risk_score, 12.5);
+
+    console.log(
+      '  ✅ [128/128] Hero-Products & Hero-Merchants Numeric, Category, and ID Bounds (#1033) passed'
+    );
+  }
+
+  // -------------------------------------------------------------------------
+  // 129. Rate-Domain & Spec-Localizer Numeric, Key-Spec, and Sentinel Bounds (#1038)
+  // -------------------------------------------------------------------------
+  {
+    const {
+      normalizeCompareFiveStarRating,
+      resolveCompareDisplaySizeInch,
+      resolveCompareRamGb,
+      resolveCompareStorageGb,
+      resolveCompareBatteryMah,
+    } = await import('../../../lib/rate-domain');
+    const { localizeSpecValue } = await import('../../../lib/spec-localizer');
+
+    assert.equal(normalizeCompareFiveStarRating('0x4'), 0);
+    assert.equal(normalizeCompareFiveStarRating('0b100'), 0);
+    assert.equal(normalizeCompareFiveStarRating('0o4'), 0);
+    assert.equal(normalizeCompareFiveStarRating('\u00004.5 '), 4.5);
+
+    assert.equal(
+      resolveCompareDisplaySizeInch({
+        screen_size_inch: '0x6' as unknown as number,
+        specifications: {
+          display: { size_inch: '0x6' as unknown as number },
+        },
+        key_specs: { screen: { bad: 1 } as unknown as string },
+      }),
+      null
+    );
+    assert.equal(
+      resolveCompareDisplaySizeInch({
+        screen_size_inch: '\u00006.78 ' as unknown as number,
+        specifications: {},
+        key_specs: {},
+      }),
+      6.78
+    );
+
+    assert.equal(
+      resolveCompareRamGb({
+        ram_gb: '0x10' as unknown as number,
+        specifications: {},
+        key_specs: { ram: '\u000016 GB' },
+      }),
+      16
+    );
+    assert.equal(
+      resolveCompareStorageGb({
+        storage_gb: '0x100' as unknown as number,
+        specifications: {},
+        key_specs: { storage: '\u0000512 GB' },
+      }),
+      512
+    );
+    assert.equal(
+      resolveCompareBatteryMah({
+        battery_mah: '0x1000' as unknown as number,
+        specifications: {},
+        key_specs: { battery: '\u00005000 mAh' },
+      }),
+      5000
+    );
+
+    assert.equal(localizeSpecValue({} as unknown as string, 'vi'), '-');
+    assert.equal(localizeSpecValue([] as unknown as string, 'en'), '-');
+    assert.equal(localizeSpecValue('null', 'vi'), '-');
+    assert.equal(localizeSpecValue('undefined', 'en'), '-');
+    assert.equal(localizeSpecValue('NaN', 'cs'), '-');
+    assert.equal(localizeSpecValue('N/A', 'vi'), '-');
+    assert.equal(localizeSpecValue('__proto__', 'en'), '-');
+    assert.equal(localizeSpecValue('constructor', 'cs'), '-');
+    assert.equal(localizeSpecValue('prototype', 'vi'), '-');
+    assert.equal(
+      localizeSpecValue('  OLED\u0000   120Hz  ', 'en'),
+      'OLED 120Hz'
+    );
+
+    console.log(
+      '  ✅ [129/129] Rate-Domain & Spec-Localizer Numeric, Key-Spec, and Sentinel Bounds (#1038) passed'
+    );
   }
 
   console.log('🎉 All Rate.vn Core Architecture tests passed!');

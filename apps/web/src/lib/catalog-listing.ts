@@ -46,7 +46,7 @@ export function isPlainListing(params: MasterProductFilterParams): boolean {
   if (
     params.limit !== undefined &&
     (typeof params.limit !== 'number' ||
-      !Number.isInteger(params.limit) ||
+      !Number.isSafeInteger(params.limit) ||
       params.limit < 1 ||
       params.limit > MAX_PLAIN_LISTING_LIMIT)
   ) {
@@ -55,7 +55,7 @@ export function isPlainListing(params: MasterProductFilterParams): boolean {
   if (
     params.offset !== undefined &&
     (typeof params.offset !== 'number' ||
-      !Number.isInteger(params.offset) ||
+      !Number.isSafeInteger(params.offset) ||
       params.offset < 0 ||
       params.offset > MAX_PLAIN_LISTING_OFFSET)
   ) {

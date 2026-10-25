@@ -6,10 +6,38 @@ import { BsLightningCharge } from 'react-icons/bs';
 import { useRouter } from '@/lib/navigation';
 import { startNavigationProgress } from '@/components/elementary/NavigationProgress';
 import {
+  MAX_VALID_VND_PRICE,
   getMasterProductCategorySlug,
   type CanonicalCategorySlug,
   type MasterProduct,
 } from '@/lib/rate-domain';
+
+export function formatVersusPeerPriceBadge(value: unknown): string {
+  const num = Number(value);
+  if (!Number.isFinite(num) || num <= 0 || num > MAX_VALID_VND_PRICE) {
+    return 'N/A';
+  }
+  if (num >= 1_000_000) {
+    return `${Math.max(1, Math.round(num / 1_000_000))}M`;
+  }
+  return `${Math.max(1, Math.round(num / 1_000))}K`;
+}
+
+export function resolveEffectivePeerSlugs(
+  peers: readonly MasterProduct[],
+  requestedSlugA: string,
+  requestedSlugB: string
+): { effectiveSlugA: string; effectiveSlugB: string } {
+  const validSlugs = new Set(peers.map((p) => p.slug).filter(Boolean));
+  const effectiveSlugA = validSlugs.has(requestedSlugA)
+    ? requestedSlugA
+    : (peers[0]?.slug ?? '');
+  const effectiveSlugB =
+    validSlugs.has(requestedSlugB) && requestedSlugB !== effectiveSlugA
+      ? requestedSlugB
+      : (peers.find((p) => p.slug && p.slug !== effectiveSlugA)?.slug ?? '');
+  return { effectiveSlugA, effectiveSlugB };
+}
 
 interface VersusMatchupSwitcherProps {
   readonly currentSlugA: string;
@@ -31,20 +59,28 @@ export default function VersusMatchupSwitcher({
   const [slugB, setSlugB] = useState<string>(currentSlugB);
 
   const sameCategoryPeers = useMemo(() => {
+    if (!Array.isArray(catalogCandidates)) return [];
     return catalogCandidates.filter(
-      (p) => getMasterProductCategorySlug(p) === categorySlug
+      (p) => p && getMasterProductCategorySlug(p) === categorySlug
     );
   }, [catalogCandidates, categorySlug]);
 
-  const canLaunchMatchup = Boolean(slugA && slugB && slugA !== slugB);
+  const { effectiveSlugA, effectiveSlugB } = useMemo(
+    () => resolveEffectivePeerSlugs(sameCategoryPeers, slugA, slugB),
+    [sameCategoryPeers, slugA, slugB]
+  );
+
+  const canLaunchMatchup = Boolean(
+    effectiveSlugA && effectiveSlugB && effectiveSlugA !== effectiveSlugB
+  );
   const isDifferentFromCurrent =
-    slugA !== currentSlugA || slugB !== currentSlugB;
+    effectiveSlugA !== currentSlugA || effectiveSlugB !== currentSlugB;
 
   const handleLaunchMatchup = (e: React.FormEvent) => {
     e.preventDefault();
     if (!canLaunchMatchup) return;
-    startNavigationProgress(`/compare/${slugA}-vs-${slugB}`);
-    router.push(`/compare/${slugA}-vs-${slugB}`);
+    startNavigationProgress(`/compare/${effectiveSlugA}-vs-${effectiveSlugB}`);
+    router.push(`/compare/${effectiveSlugA}-vs-${effectiveSlugB}`);
   };
 
   if (sameCategoryPeers.length < 2) {
@@ -75,7 +111,7 @@ export default function VersusMatchupSwitcher({
         <div className="col-lg-5 col-md-6">
           <select
             aria-label={t('selectDeviceAAria')}
-            value={slugA}
+            value={effectiveSlugA}
             onChange={(e) => setSlugA(e.target.value)}
             className="form-select form-select-sm bg-dark border-secondary text-white"
           >
@@ -83,13 +119,9 @@ export default function VersusMatchupSwitcher({
               <option
                 key={`a-${peer.slug}`}
                 value={peer.slug}
-                disabled={peer.slug === slugB}
+                disabled={peer.slug === effectiveSlugB}
               >
-                [A] {peer.name} (
-                {Number(peer.min_price || 0) > 0
-                  ? `${Math.round(Number(peer.min_price) / 1000000)}M`
-                  : 'N/A'}
-                )
+                [A] {peer.name} ({formatVersusPeerPriceBadge(peer.min_price)})
               </option>
             ))}
           </select>
@@ -98,7 +130,7 @@ export default function VersusMatchupSwitcher({
         <div className="col-lg-5 col-md-6">
           <select
             aria-label={t('selectDeviceBAria')}
-            value={slugB}
+            value={effectiveSlugB}
             onChange={(e) => setSlugB(e.target.value)}
             className="form-select form-select-sm bg-dark border-secondary text-white"
           >
@@ -106,13 +138,9 @@ export default function VersusMatchupSwitcher({
               <option
                 key={`b-${peer.slug}`}
                 value={peer.slug}
-                disabled={peer.slug === slugA}
+                disabled={peer.slug === effectiveSlugA}
               >
-                [B] {peer.name} (
-                {Number(peer.min_price || 0) > 0
-                  ? `${Math.round(Number(peer.min_price) / 1000000)}M`
-                  : 'N/A'}
-                )
+                [B] {peer.name} ({formatVersusPeerPriceBadge(peer.min_price)})
               </option>
             ))}
           </select>

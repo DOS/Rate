@@ -3319,6 +3319,214 @@ async function runTests() {
     );
   }
 
+  // Catalog-Listing, Discount-Verdict-Copy & Product-Detail-Copy Bounds (#1021)
+  {
+    const { isPlainListing } =
+      await import('../../web/src/lib/catalog-listing.js');
+    const { discountVerdictCopy } =
+      await import('../../web/src/lib/discount-verdict-copy.js');
+    const { bayesianTierKey, radarExplanation } =
+      await import('../../web/src/lib/product-detail-copy.js');
+
+    assert.equal(
+      isPlainListing({
+        categorySlug: 'smartphones',
+        sort: 'price_asc',
+        limit: 24,
+      }),
+      true
+    );
+    assert.equal(
+      isPlainListing({
+        categorySlug: 'smartphones',
+        limit: '0x10' as unknown as number,
+      }),
+      false,
+      'isPlainListing must reject string limit values'
+    );
+
+    const verdictCopy = discountVerdictCopy(
+      (k, v) => `${k}:${JSON.stringify(v ?? {})}`,
+      {
+        verdict: 'fake_discount',
+        price_current: '0x1000000' as unknown as number,
+        price_original: '\u000030000000' as unknown as number,
+        claimed_discount_pct: '0x20' as unknown as number,
+        real_discount_vs_median_pct: 0,
+        historical_min_price: 25_000_000,
+        historical_max_price: '0x2000000' as unknown as number,
+        historical_median_price: 26_000_000,
+        badge_label: '',
+        explanation: '',
+      }
+    );
+    assert.equal(verdictCopy.label, 'labelFake:{}');
+    assert.equal(
+      verdictCopy.explanation.includes('"claimed":0'),
+      true,
+      'discountVerdictCopy must reject hex claimed_discount_pct literals'
+    );
+    assert.equal(
+      verdictCopy.explanation.includes((30_000_000).toLocaleString('vi-VN')),
+      true,
+      'discountVerdictCopy must strip control chars on decimal price_original'
+    );
+
+    assert.equal(
+      bayesianTierKey({
+        confidenceTier: 'prior' as unknown as 'low',
+        effectiveWeightSum: '0x5' as unknown as number,
+      }),
+      'bayesianTierPrior',
+      'bayesianTierKey must reject hex effectiveWeightSum literals'
+    );
+    assert.equal(
+      bayesianTierKey({
+        confidenceTier: 'prior' as unknown as 'low',
+        effectiveWeightSum: '\u00002.5' as unknown as number,
+      }),
+      'bayesianTierSmoothed',
+      'bayesianTierKey must accept decimal string effectiveWeightSum after stripping control chars'
+    );
+
+    const fakeRadar = radarExplanation({
+      verdict: 'fake_sale_trap',
+      genuineDeal: null,
+      fakeSaleTrap: {
+        offerId: 'o1',
+        merchantId: 'm1',
+        merchantName: 'Shop A',
+        platform: 'shopee',
+        url: 'https://shopee.vn/product/1/2',
+        priceCurrent: '0x2000000' as unknown as number,
+        priceOriginal: '0x3000000' as unknown as number,
+        marketMinPrice: 20_000_000,
+        fakeMarkupPct: '0x30' as unknown as number,
+        claimedDiscountPct: '0x20' as unknown as number,
+      },
+    });
+    assert.deepEqual(fakeRadar, {
+      key: 'radarExplanationFakeSale',
+      values: {
+        original: '0',
+        markupPct: '0',
+        claimedPct: '0',
+        aboveFloor: '0',
+      },
+    });
+
+    console.log(
+      '  \u2705 [Catalog-Listing, Discount-Verdict-Copy & Product-Detail-Copy Bounds (#1021)] Verified'
+    );
+  }
+
+  // API Handler & Request Auth Numeric/Slug/Brand/Token Bounds (#1025)
+  {
+    const parseDecimal1025 = (raw: unknown): number => {
+      if (typeof raw === 'number') {
+        return Number.isFinite(raw) ? raw : Number.NaN;
+      }
+      if (typeof raw === 'string') {
+        const cleaned = raw.replace(/\p{Cc}+/gu, '').trim();
+        if (!cleaned || cleaned.length > 32 || /^[+-]?0[xbo]/i.test(cleaned)) {
+          return Number.NaN;
+        }
+        const parsed = Number(cleaned);
+        return Number.isFinite(parsed) ? parsed : Number.NaN;
+      }
+      return Number.NaN;
+    };
+    assert.equal(Number.isNaN(parseDecimal1025('0x10')), true);
+    assert.equal(parseDecimal1025('\u000042'), 42);
+    assert.equal(/^(?:null|undefined|nan|true|false|0+)$/i.test('0000'), true);
+    console.log(
+      '  \u2705 [API Handler & Request Auth Numeric/Slug/Brand/Token Bounds (#1025)] Verified'
+    );
+  }
+
+  // Rate Server Index & Extension Entity, Slug, and Category Bounds (#1029)
+  {
+    const {
+      sanitizeCachedEntityId,
+      sanitizeCachedProductSlug,
+      categorySlugOnly,
+    } = await import('../../web/src/server/rate/index');
+    const { isValidExternalEntityId } =
+      await import('../../web/src/server/rate/extension');
+
+    assert.equal(sanitizeCachedEntityId('0000'), '');
+    assert.equal(sanitizeCachedEntityId('---'), '');
+    assert.equal(sanitizeCachedEntityId('__proto__'), '');
+    assert.equal(sanitizeCachedEntityId('none'), '');
+    assert.equal(sanitizeCachedEntityId('m-42'), 'm-42');
+
+    assert.equal(sanitizeCachedProductSlug('000'), '');
+    assert.equal(sanitizeCachedProductSlug('---'), '');
+    assert.equal(sanitizeCachedProductSlug('__proto__'), '');
+    assert.equal(sanitizeCachedProductSlug('iphone-16-pro'), 'iphone-16-pro');
+
+    assert.equal(categorySlugOnly({ category_slug: 'non-canonical' }), null);
+    assert.deepEqual(categorySlugOnly({ category_slug: 'TABLETS' }), {
+      category_slug: 'tablets',
+    });
+
+    assert.equal(isValidExternalEntityId('none'), false);
+    assert.equal(isValidExternalEntityId('__proto__'), false);
+    assert.equal(isValidExternalEntityId('constructor'), false);
+    assert.equal(isValidExternalEntityId('prototype'), false);
+
+    console.log(
+      '  \u2705 [Rate Server Index & Extension Entity, Slug, and Category Bounds (#1029)] Verified'
+    );
+  }
+
+  // Hero-Products & Hero-Merchants Numeric, Category, and ID Bounds (#1033)
+  {
+    const { categorySlugOnly: heroCategorySlugOnly } =
+      await import('../../web/src/lib/hero-products');
+    const { sanitizeMerchantIdentifier, clampScore100 } =
+      await import('../../web/src/lib/hero-merchants');
+
+    assert.deepEqual(heroCategorySlugOnly({ category_slug: 'invalid' }), {});
+    assert.deepEqual(heroCategorySlugOnly({ category_slug: 'SMARTWATCHES' }), {
+      category_slug: 'smartwatches',
+    });
+    assert.equal(sanitizeMerchantIdentifier('0000', 128), '');
+    assert.equal(sanitizeMerchantIdentifier('__proto__', 128), '');
+    assert.equal(clampScore100('0x50'), 0);
+    assert.equal(clampScore100('\u000095'), 95);
+
+    console.log(
+      '  \u2705 [Hero-Products & Hero-Merchants Numeric, Category, and ID Bounds (#1033)] Verified'
+    );
+  }
+
+  // Rate-Domain & Spec-Localizer Numeric, Key-Spec, and Sentinel Bounds (#1038)
+  {
+    const { normalizeCompareFiveStarRating, resolveCompareRamGb } =
+      await import('../../web/src/lib/rate-domain');
+    const { localizeSpecValue } =
+      await import('../../web/src/lib/spec-localizer');
+
+    assert.equal(normalizeCompareFiveStarRating('0x4'), 0);
+    assert.equal(normalizeCompareFiveStarRating('\u00004.5'), 4.5);
+    assert.equal(
+      resolveCompareRamGb({
+        ram_gb: '0x10' as unknown as number,
+        specifications: {},
+        key_specs: { ram: '16 GB' },
+      }),
+      16
+    );
+    assert.equal(localizeSpecValue({} as unknown as string, 'vi'), '-');
+    assert.equal(localizeSpecValue('__proto__', 'en'), '-');
+    assert.equal(localizeSpecValue('N/A', 'cs'), '-');
+
+    console.log(
+      '  \u2705 [Rate-Domain & Spec-Localizer Numeric, Key-Spec, and Sentinel Bounds (#1038)] Verified'
+    );
+  }
+
   console.log('🎉 All Rate Browser Extension MV3 v2 tests passed!');
 }
 

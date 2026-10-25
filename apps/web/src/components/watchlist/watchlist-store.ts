@@ -23,7 +23,7 @@ const EVENT_NAME = 'rate:watchlist:change';
 export const MAX_WATCHLIST_ITEMS = 50;
 export const MIN_WATCHLIST_TARGET_PRICE = 10_000;
 
-function sanitizeWatchlistPrice(value: unknown): number {
+export function sanitizeWatchlistPrice(value: unknown): number {
   const num = Number(value);
   if (!Number.isFinite(num) || num < 0 || num > MAX_VALID_VND_PRICE) {
     return 0;
@@ -83,6 +83,10 @@ function sanitizeWatchlistText(raw: unknown, maxLen: number): string {
   return raw.replace(WATCHLIST_CONTROL_CHAR_RE, '').trim().slice(0, maxLen);
 }
 
+export function sanitizeWatchlistSlug(raw: unknown): string {
+  return sanitizeWatchlistText(raw, 256);
+}
+
 export function resolveWatchlistItemCurrentPrices(
   item: Pick<WatchlistItem, 'priceWhenAdded'>,
   liveDeal?: {
@@ -109,7 +113,7 @@ export function resolveWatchlistItemCurrentPrices(
 }
 
 export function normalizeWatchlistItem(item: WatchlistItem): WatchlistItem {
-  const cleanSlug = sanitizeWatchlistText(item.slug, 256);
+  const cleanSlug = sanitizeWatchlistSlug(item.slug);
   const cleanName = sanitizeWatchlistText(item.name, 300);
   const cleanBrand = sanitizeWatchlistText(item.brand, 128);
   const pathMatch =
@@ -204,8 +208,9 @@ export function upsertWatchlistItem(item: WatchlistItem): WatchlistItem[] {
 }
 
 export function removeWatchlistItem(slug: string): WatchlistItem[] {
+  const cleanSlug = sanitizeWatchlistSlug(slug);
   const current = getWatchlist();
-  const next = current.filter((x) => x.slug !== slug);
+  const next = current.filter((x) => x.slug !== cleanSlug);
   saveWatchlist(next);
   return next;
 }

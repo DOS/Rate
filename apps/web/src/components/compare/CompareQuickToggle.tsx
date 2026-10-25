@@ -6,10 +6,15 @@ import { BsCheckLg, BsPlusLg } from 'react-icons/bs';
 import {
   type CompareTrayItem,
   getCompareTray,
+  sanitizeTraySlug,
   subscribeCompareTray,
   toggleCompareTrayItem,
 } from './compare-tray';
 import WatchlistQuickToggle from '@/components/watchlist/WatchlistQuickToggle';
+
+export function normalizeQuickCompareSlug(value: unknown): string {
+  return sanitizeTraySlug(value);
+}
 
 interface CompareQuickToggleProps {
   item: CompareTrayItem & { categoryPath?: string };
@@ -30,20 +35,29 @@ export default function CompareQuickToggle({
   const t = useTranslations('compare');
   const [selected, setSelected] = useState(false);
   const [limitAlert, setLimitAlert] = useState(false);
+  const safeSlug = normalizeQuickCompareSlug(item?.slug);
 
   useEffect(() => {
     const sync = () => {
+      if (!safeSlug) {
+        setSelected(false);
+        return;
+      }
       const tray = getCompareTray();
-      setSelected(tray.some((x) => x.slug === item.slug));
+      setSelected(tray.some((x) => x.slug === safeSlug));
     };
     sync();
     return subscribeCompareTray(sync);
-  }, [item.slug]);
+  }, [safeSlug]);
 
   const handleToggle = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    const res = toggleCompareTrayItem(item);
+    if (!safeSlug) return;
+    const res = toggleCompareTrayItem({
+      ...item,
+      slug: safeSlug,
+    });
     if (res.limitReached) {
       setLimitAlert(true);
       setTimeout(() => setLimitAlert(false), 2200);

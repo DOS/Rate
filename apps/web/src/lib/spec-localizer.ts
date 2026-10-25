@@ -459,6 +459,9 @@ const CS_SPEC_REPLACEMENTS: Array<[RegExp, string]> = [
   [/\boptical zoom\b/gi, 'optický zoom'],
 ];
 
+const DISALLOWED_SPEC_TEXT_REGEX =
+  /^(?:null|undefined|nan|none|n\/a|infinity|-infinity|__proto__|constructor|prototype)$/i;
+
 /**
  * Localizes a raw technical specification string (originally sourced from PhoneArena/GSMArena)
  * into the active locale (`vi`, `en`, or `cs`) while preserving technical units and standards.
@@ -477,12 +480,18 @@ export function localizeSpecValue(
   if (typeof raw === 'number') {
     return Number.isFinite(raw) ? String(raw) : '-';
   }
+  if (typeof raw !== 'string') {
+    return '-';
+  }
 
-  let text = String(raw)
-    .replace(/\p{Cc}/gu, ' ')
+  let text = raw
+    .replace(/\p{Cc}+/gu, ' ')
+    .replace(/\s+/g, ' ')
     .trim()
     .slice(0, 2_000);
-  if (!text || text === '-') return '-';
+  if (!text || text === '-' || DISALLOWED_SPEC_TEXT_REGEX.test(text)) {
+    return '-';
+  }
 
   if (lang === 'vi') {
     text = text.replace(
