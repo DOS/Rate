@@ -213,6 +213,64 @@ async function run() {
     /Phone X \(phone -x\) failed ProductSpecificationsSchema validation/
   );
 
+  // Issue #1002: arena-spec-syncer URL/camera/meta guards, paging dot/query/hash checks, and merchant-review-risk ID/boolean bounds
+  assert.equal(
+    parseShopeeEnqueueUrl('https://..shopee.vn/product/88201679/27110898667'),
+    null,
+    'must reject consecutive dots in Shopee hostname (#1002)'
+  );
+  assert.equal(
+    parseShopeeEnqueueUrl('https://.shopee.vn/product/88201679/27110898667'),
+    null,
+    'must reject leading dot in Shopee hostname (#1002)'
+  );
+  assert.throws(
+    () => resolveBackfillSupabaseTarget('https://example..supabase.co'),
+    /invalid hostname/,
+    'must reject consecutive dots in Supabase hostname (#1002)'
+  );
+  assert.throws(
+    () => resolveBackfillSupabaseTarget('https://example.supabase.co?foo=1'),
+    /query parameters or fragments/,
+    'must reject query parameters in Supabase target URL (#1002)'
+  );
+  assert.throws(
+    () => resolveBackfillSupabaseTarget('https://example.supabase.co#frag'),
+    /query parameters or fragments/,
+    'must reject fragments in Supabase target URL (#1002)'
+  );
+
+  const { parseGsmArenaHtmlToSpecs, splitCameraModulesToPhoneArenaFormat } =
+    await import('../arena-spec-syncer.js');
+  const camModules = splitCameraModulesToPhoneArenaFormat(
+    '50 MP\u0000\u0085 wide\n12 MP\u0007 ultrawide'
+  );
+  assert.equal(camModules.main_camera, '50 MP wide');
+  assert.equal(camModules.second_camera, '12 MP ultrawide');
+  const specFromArrayMeta = parseGsmArenaHtmlToSpecs(
+    '<h1 data-spec="modelname">Apple iPhone 16</h1>',
+    [] as unknown as { gsmarenaUrl?: string }
+  );
+  assert.equal(specFromArrayMeta.source, 'gsmarena');
+
+  const { mapStoredReview, uniqueIds } = await import('../merchant-review-risk.js');
+  assert.deepEqual(uniqueIds(['valid-id', 'id with spaces', '  another-id  ']), [
+    'another-id',
+    'valid-id',
+  ]);
+  const mappedNonBool = mapStoredReview({
+    id: 'rev-1',
+    product_id: 'prod-1',
+    rating_star: 5,
+    comment: 'Great phone',
+    review_flags: {
+      verdict: 'fake',
+      flag_category: 'seeding_fake',
+      include_in_rating: 'true' as unknown as boolean,
+    },
+  });
+  assert.equal(mappedNonBool?.result.include_in_rating, false);
+
   console.log('✅ fetchAllPages & parseShopeeEnqueueUrl suite passed');
 }
 
