@@ -45,7 +45,7 @@ export interface MerchantRow {
   platform: string;
   is_official: boolean | null;
   follower_count: number | string | null;
-  review_risk_score?: number | null;
+  review_risk_score?: number | string | null;
 }
 
 export interface ProductRow {
