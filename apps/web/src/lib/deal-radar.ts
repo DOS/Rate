@@ -66,27 +66,52 @@ const CONTROL_CHAR_RE = /\p{Cc}/gu;
 
 function normalizeRadarSlug(raw: unknown): string {
   if (typeof raw !== 'string') return '';
-  return raw.replace(CONTROL_CHAR_RE, '').trim().slice(0, MAX_RADAR_SLUG_LEN);
+  const cleaned = raw
+    .replace(CONTROL_CHAR_RE, '')
+    .trim()
+    .slice(0, MAX_RADAR_SLUG_LEN);
+  if (
+    !cleaned ||
+    !/^[a-zA-Z0-9][a-zA-Z0-9._-]{0,255}$/.test(cleaned) ||
+    cleaned.endsWith('.') ||
+    cleaned.includes('..') ||
+    /^(?:0+|null|undefined|nan|infinity|-infinity|true|false)$/i.test(cleaned)
+  ) {
+    return '';
+  }
+  return cleaned;
 }
 
 function toSafeRadarPrice(value: unknown): number {
   if (typeof value !== 'number' && typeof value !== 'string') {
     return Number.POSITIVE_INFINITY;
   }
-  if (typeof value === 'string' && !value.trim()) {
-    return Number.POSITIVE_INFINITY;
+  if (typeof value === 'string') {
+    const cleaned = value.replace(CONTROL_CHAR_RE, '').trim();
+    if (!cleaned || cleaned.length > 32 || /^[+-]?0[xbo]/i.test(cleaned)) {
+      return Number.POSITIVE_INFINITY;
+    }
+    const n = Number(cleaned);
+    return Number.isFinite(n) && n > 0 && n <= MAX_RADAR_VND_PRICE
+      ? n
+      : Number.POSITIVE_INFINITY;
   }
-  const n = Number(value);
-  return Number.isFinite(n) && n > 0 && n <= MAX_RADAR_VND_PRICE
-    ? n
+  return Number.isFinite(value) && value > 0 && value <= MAX_RADAR_VND_PRICE
+    ? value
     : Number.POSITIVE_INFINITY;
 }
 
 function toSafeRadarPct(value: unknown, max = 10_000): number {
   if (typeof value !== 'number' && typeof value !== 'string') return 0;
-  if (typeof value === 'string' && !value.trim()) return 0;
-  const n = Number(value);
-  return Number.isFinite(n) && n > 0 ? Math.min(n, max) : 0;
+  if (typeof value === 'string') {
+    const cleaned = value.replace(CONTROL_CHAR_RE, '').trim();
+    if (!cleaned || cleaned.length > 32 || /^[+-]?0[xbo]/i.test(cleaned)) {
+      return 0;
+    }
+    const n = Number(cleaned);
+    return Number.isFinite(n) && n > 0 ? Math.min(n, max) : 0;
+  }
+  return Number.isFinite(value) && value > 0 ? Math.min(value, max) : 0;
 }
 
 function normalizeRadarVerdict(value: unknown): RadarVerdict {
@@ -126,7 +151,13 @@ export function buildRadarIndex(
       (nextSavings === prevSavings &&
         toSafeRadarPrice(g.priceCurrent) < toSafeRadarPrice(prev.priceCurrent));
     if (isStronger) {
-      upsert(slug, { genuineDeal: { ...g, productSlug: slug } });
+      upsert(slug, {
+        genuineDeal: {
+          ...g,
+          productSlug: slug,
+          savingsVsMedianPct: nextSavings,
+        },
+      });
     }
   }
   for (const t of fakeSaleTraps) {
@@ -135,14 +166,21 @@ export function buildRadarIndex(
     const prev = map.get(slug)?.fakeSaleTrap;
     const prevMarkup = toSafeRadarPct(prev?.fakeMarkupPct);
     const nextMarkup = toSafeRadarPct(t.fakeMarkupPct);
+    const nextClaimed = toSafeRadarPct(t.claimedDiscountPct, 100);
     const isWorse =
       !prev ||
       nextMarkup > prevMarkup ||
       (nextMarkup === prevMarkup &&
-        toSafeRadarPct(t.claimedDiscountPct) >
-          toSafeRadarPct(prev.claimedDiscountPct));
+        nextClaimed > toSafeRadarPct(prev.claimedDiscountPct, 100));
     if (isWorse) {
-      upsert(slug, { fakeSaleTrap: { ...t, productSlug: slug } });
+      upsert(slug, {
+        fakeSaleTrap: {
+          ...t,
+          productSlug: slug,
+          fakeMarkupPct: nextMarkup,
+          claimedDiscountPct: nextClaimed,
+        },
+      });
     }
   }
   for (const sp of priceSpreadLeaders) {
@@ -152,7 +190,9 @@ export function buildRadarIndex(
     const prevSpread = toSafeRadarPct(prev?.spreadPct);
     const nextSpread = toSafeRadarPct(sp.spreadPct);
     if (!prev || nextSpread > prevSpread) {
-      upsert(slug, { priceSpread: { ...sp, productSlug: slug } });
+      upsert(slug, {
+        priceSpread: { ...sp, productSlug: slug, spreadPct: nextSpread },
+      });
     }
   }
   for (const [slug, sig] of map) {
@@ -264,15 +304,32 @@ export function selectMerchantRadar(
   payload: CrossPlatformDealRadarResponse | null | undefined,
   merchant: { id: string; name: string }
 ) {
-  const targetId = String(merchant?.id || '')
+  const rawTargetId = String(merchant?.id || '')
     .replace(CONTROL_CHAR_RE, '')
     .trim()
     .slice(0, 256);
-  const nameLower = String(merchant?.name || '')
+  const targetId =
+    /^[a-zA-Z0-9._-]{1,256}$/.test(rawTargetId) &&
+    !rawTargetId.startsWith('.') &&
+    !rawTargetId.endsWith('.') &&
+    !rawTargetId.includes('..') &&
+    !/^(?:0+|null|undefined|nan|infinity|-infinity|true|false)$/i.test(
+      rawTargetId
+    )
+      ? rawTargetId
+      : '';
+  const rawNameLower = String(merchant?.name || '')
     .replace(CONTROL_CHAR_RE, '')
     .trim()
     .slice(0, 256)
     .toLowerCase();
+  const nameLower =
+    rawNameLower &&
+    !/^(?:0+|null|undefined|nan|infinity|-infinity|true|false)$/i.test(
+      rawNameLower
+    )
+      ? rawNameLower
+      : '';
   const belongs = (i: CrossPlatformDealRadarItem) =>
     (Boolean(targetId) &&
       String(i?.merchantId || '')

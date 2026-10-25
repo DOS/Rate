@@ -2802,6 +2802,198 @@ async function runTests() {
     );
   }
 
+  // 25. Deals, Deal-Radar, and Offer-Plausibility ID/Slug/Numeric Bounds (#1008)
+  {
+    const dealsMod = await import('../../web/src/server/rate/deals.js');
+    const { computeCrossPlatformDealRadarFromData } = (
+      typeof dealsMod.computeCrossPlatformDealRadarFromData === 'function'
+        ? dealsMod
+        : (dealsMod as unknown as { default: typeof dealsMod }).default
+    ) as typeof dealsMod;
+    const radarMod = await import('../../web/src/lib/deal-radar.js');
+    const { buildRadarIndex } = (
+      typeof radarMod.buildRadarIndex === 'function'
+        ? radarMod
+        : (radarMod as unknown as { default: typeof radarMod }).default
+    ) as typeof radarMod;
+    const plausibilityMod =
+      await import('../../web/src/lib/offer-plausibility.js');
+    const { implausiblyLowOfferIds, implausiblyLowIndexes } = (
+      typeof plausibilityMod.implausiblyLowOfferIds === 'function'
+        ? plausibilityMod
+        : (plausibilityMod as unknown as { default: typeof plausibilityMod })
+            .default
+    ) as typeof plausibilityMod;
+
+    // 1. implausiblyLowIndexes and implausiblyLowOfferIds reject hex/binary/octal and malformed IDs
+    const lowIdx = implausiblyLowIndexes([
+      20_000_000,
+      20_000_000,
+      5_000_000,
+      '0x100' as unknown as number,
+    ]);
+    assert.deepEqual([...lowIdx], [2]);
+    const lowIds = implausiblyLowOfferIds([
+      { id: 'offer-1', price_current: 20_000_000 },
+      { id: 'offer-2', price_current: 20_000_000 },
+      { id: 'offer-3', price_current: 20_000_000 },
+      { id: 'offer-4', price_current: 20_000_000 },
+      { id: '000', price_current: 5_000_000 },
+      { id: '..bad..', price_current: 5_000_000 },
+      { id: 'valid-low-id', price_current: 5_000_000 },
+    ]);
+    assert.deepEqual([...lowIds], ['valid-low-id']);
+
+    // 2. buildRadarIndex rejects invalid slugs and hex/binary/octal string numbers
+    const radarIdx = buildRadarIndex({
+      generatedAt: new Date().toISOString(),
+      categoryFilter: 'all',
+      totalClustersAnalyzed: 1,
+      totalOffersAnalyzed: 2,
+      genuineDeals: [
+        {
+          id: 'd1',
+          verdict: 'best_market_deal',
+          verdictBadgeVi: 'Deal',
+          productSlug: '../bad/slug',
+          productName: 'Bad',
+          brand: 'Brand',
+          categorySlug: 'smartphones',
+          productHref: '/smartphones/bad',
+          imageUrl: null,
+          platform: 'shopee',
+          merchantId: 'm1',
+          merchantName: 'Shop',
+          isOfficialMall: true,
+          merchantRiskScore: 5,
+          offerUrl: 'https://shopee.vn/p',
+          priceCurrent: 10_000_000,
+          priceOriginal: null,
+          marketMedianPrice: 12_000_000,
+          marketMinPrice: 10_000_000,
+          marketMaxPrice: 12_000_000,
+          savingsVsMedianVnd: 2_000_000,
+          savingsVsMedianPct: 16.7,
+          claimedDiscountPct: 0,
+          fakeMarkupPct: 0,
+          jreviewsScore10: 8.5,
+          explanationVi: 'ok',
+        },
+        {
+          id: 'd2',
+          verdict: 'best_market_deal',
+          verdictBadgeVi: 'Deal',
+          productSlug: 'iphone-16-pro',
+          productName: 'iPhone 16 Pro',
+          brand: 'Apple',
+          categorySlug: 'smartphones',
+          productHref: '/smartphones/iphone-16-pro',
+          imageUrl: null,
+          platform: 'shopee',
+          merchantId: 'm1',
+          merchantName: 'Shop',
+          isOfficialMall: true,
+          merchantRiskScore: 5,
+          offerUrl: 'https://shopee.vn/p',
+          priceCurrent: '0x1000' as unknown as number,
+          priceOriginal: null,
+          marketMedianPrice: 12_000_000,
+          marketMinPrice: 10_000_000,
+          marketMaxPrice: 12_000_000,
+          savingsVsMedianVnd: 2_000_000,
+          savingsVsMedianPct: '0x10' as unknown as number,
+          claimedDiscountPct: 0,
+          fakeMarkupPct: 0,
+          jreviewsScore10: 8.5,
+          explanationVi: 'ok',
+        },
+      ],
+      fakeSaleTraps: [],
+      priceSpreadLeaders: [],
+    });
+    assert.equal(radarIdx.has('../bad/slug'), false);
+    assert.equal(radarIdx.get('iphone-16-pro')?.savingsPct, 0);
+    assert.equal(
+      radarIdx.get('iphone-16-pro')?.genuineDeal?.savingsVsMedianPct,
+      0
+    );
+
+    // 3. computeCrossPlatformDealRadarFromData skips invalid master.slug and sanitizes merchant/offer IDs
+    const radarRes = computeCrossPlatformDealRadarFromData(
+      [
+        {
+          master: {
+            id: 'm-bad',
+            slug: '000',
+            name: 'Invalid Slug Product',
+            brand: 'Apple',
+          } as unknown as Parameters<
+            typeof computeCrossPlatformDealRadarFromData
+          >[0][number]['master'],
+          offers: [
+            {
+              id: 'o1',
+              platform: 'shopee',
+              price_current: 20_000_000,
+              url: 'https://shopee.vn/1',
+              merchant: { id: 'm1', name: 'M1', is_official: true },
+            },
+            {
+              id: 'o2',
+              platform: 'lazada',
+              price_current: 25_000_000,
+              url: 'https://lazada.vn/2',
+              merchant: { id: 'm2', name: 'M2', is_official: true },
+            },
+          ] as unknown as Parameters<
+            typeof computeCrossPlatformDealRadarFromData
+          >[0][number]['offers'],
+        },
+        {
+          master: {
+            id: 'm-good',
+            slug: 'galaxy-s24-ultra',
+            name: 'Galaxy S24 Ultra',
+            brand: 'Samsung',
+          } as unknown as Parameters<
+            typeof computeCrossPlatformDealRadarFromData
+          >[0][number]['master'],
+          offers: [
+            {
+              id: '000',
+              platform: '000',
+              price_current: 20_000_000,
+              url: 'https://shopee.vn/1',
+              merchant: { id: '000', name: 'Official', is_official: true },
+            },
+            {
+              id: '..bad..',
+              platform: 'lazada',
+              price_current: 26_000_000,
+              price_original: 32_000_000,
+              url: 'https://lazada.vn/2',
+              merchant: { id: '..bad..', name: 'Lazada', is_official: true },
+            },
+          ] as unknown as Parameters<
+            typeof computeCrossPlatformDealRadarFromData
+          >[0][number]['offers'],
+        },
+      ],
+      { platform: '000' }
+    );
+    assert.equal(radarRes.totalClustersAnalyzed, 1);
+    assert.equal(radarRes.genuineDeals[0]?.merchantId, '');
+    assert.equal(radarRes.genuineDeals[0]?.platform, 'shopee');
+    assert.equal(
+      radarRes.fakeSaleTraps[0]?.id,
+      'trap-galaxy-s24-ultra-lazada-offer-2'
+    );
+
+    console.log(
+      '  \u2705 [Deals, Deal-Radar & Offer-Plausibility Bounds (#1008)] Verified'
+    );
+  }
+
   console.log('🎉 All Rate Browser Extension MV3 v2 tests passed!');
 }
 
