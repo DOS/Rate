@@ -11935,6 +11935,42 @@ async function runCoreArchitectureSuite() {
       []
     );
 
+    const { resolveIncludeInRating: resolveIncludeInRating996 } =
+      await import('../../../lib/rate-api');
+    assert.equal(
+      resolveIncludeInRating996(false, 'authentic', 'authentic'),
+      false
+    );
+    assert.equal(
+      resolveIncludeInRating996('false', 'authentic', 'authentic'),
+      false
+    );
+    assert.equal(resolveIncludeInRating996(0, 'authentic', 'authentic'), false);
+    assert.equal(
+      resolveIncludeInRating996('0', 'authentic', 'authentic'),
+      false
+    );
+    assert.equal(
+      resolveIncludeInRating996('true', 'low_value_coin_spam', 'suspicious'),
+      true
+    );
+    assert.equal(
+      resolveIncludeInRating996(1, 'low_value_coin_spam', 'suspicious'),
+      true
+    );
+    assert.equal(
+      resolveIncludeInRating996(null, 'authentic', 'authentic'),
+      true
+    );
+    assert.equal(
+      resolveIncludeInRating996(undefined, 'authentic', 'fake'),
+      false
+    );
+    assert.equal(
+      resolveIncludeInRating996([] as never, 'seeding_fake', 'authentic'),
+      false
+    );
+
     console.log(
       '  ✅ [121/121] API Handler URL/Slug/Vote Guards & OpenAPI Server Origin Bounds (#978) passed'
     );

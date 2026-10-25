@@ -1350,6 +1350,21 @@ async function getListingIdsForMaster(
   return rows.map((row) => row.id);
 }
 
+export function resolveIncludeInRating(
+  rawInclude: unknown,
+  flagCategory: ReviewFlagCategory,
+  verdict: string | null
+): boolean {
+  if (typeof rawInclude === 'boolean') return rawInclude;
+  if (typeof rawInclude === 'number') return rawInclude === 1;
+  if (typeof rawInclude === 'string') {
+    const lower = rawInclude.trim().toLowerCase();
+    if (lower === 'true' || lower === '1') return true;
+    if (lower === 'false' || lower === '0') return false;
+  }
+  return flagCategory === 'authentic' && verdict !== 'fake';
+}
+
 /**
  * Fetch reviews across listings grouped under a master product,
  * including JReviews vote metrics and AI transparency flags.
@@ -1385,9 +1400,13 @@ export async function getMasterProductReviews(
     .slice(0, 50);
 
   return reviews.map((r) => {
-    const vf = Array.isArray(r.review_flags)
+    const rawVf = Array.isArray(r.review_flags)
       ? r.review_flags[0]
       : r.review_flags;
+    const vf =
+      rawVf && typeof rawVf === 'object' && !Array.isArray(rawVf)
+        ? rawVf
+        : null;
     const verdict = vf?.verdict ?? null;
     const flagCategory: ReviewFlagCategory =
       vf?.flag_category ||
@@ -1396,9 +1415,10 @@ export async function getMasterProductReviews(
         : verdict === 'suspicious'
           ? 'low_value_coin_spam'
           : 'authentic');
-    const includeInRating = Boolean(
-      vf?.include_in_rating ??
-      (flagCategory === 'authentic' && verdict !== 'fake')
+    const includeInRating = resolveIncludeInRating(
+      vf?.include_in_rating,
+      flagCategory,
+      verdict
     );
     const upvotes = Number(r.upvotes ?? 0);
     const downvotes = Number(r.downvotes ?? 0);
@@ -2558,7 +2578,7 @@ export async function getMerchantsList(
     if (cleanPlatform && cleanPlatform !== 'all') {
       q = q.eq('platform', cleanPlatform);
     }
-    if (params?.officialOnly) {
+    if (isStrictOfferOfficialFlag(safeParams?.officialOnly)) {
       q = q.eq('is_official', true);
     }
     if (sanitizedIds) q = q.in('id', sanitizedIds);
@@ -2571,16 +2591,17 @@ export async function getMerchantsList(
     return q;
   };
   const hasPostQueryFilterOrSort = Boolean(
-    (params?.q && params.q.trim()) ||
-    (typeof params?.minTrust === 'number' && !Number.isNaN(params.minTrust)) ||
-    params?.sort
+    (typeof safeParams?.q === 'string' && safeParams.q.trim()) ||
+    (typeof safeParams?.minTrust === 'number' &&
+      !Number.isNaN(safeParams.minTrust)) ||
+    safeParams?.sort
   );
   const directLimit =
     !hasPostQueryFilterOrSort &&
-    typeof params?.limit === 'number' &&
-    Number.isFinite(params.limit) &&
-    params.limit >= 1
-      ? Math.min(Math.floor(params.limit), 5000)
+    typeof safeParams?.limit === 'number' &&
+    Number.isFinite(safeParams.limit) &&
+    safeParams.limit >= 1
+      ? Math.min(Math.floor(safeParams.limit), 5000)
       : null;
 
   // Every merchant unless only the top `limit` is needed: one request is
@@ -2673,9 +2694,13 @@ export async function getMerchantsList(
     >) || []) {
       const mId = prodToMerchant.get(r.product_id);
       if (!mId) continue;
-      const vf = Array.isArray(r.review_flags)
+      const rawVf = Array.isArray(r.review_flags)
         ? r.review_flags[0]
         : r.review_flags;
+      const vf =
+        rawVf && typeof rawVf === 'object' && !Array.isArray(rawVf)
+          ? rawVf
+          : null;
       const verdict = vf?.verdict ?? null;
       const flagCategory: ReviewFlagCategory =
         vf?.flag_category ||
@@ -2684,9 +2709,10 @@ export async function getMerchantsList(
           : verdict === 'suspicious'
             ? 'low_value_coin_spam'
             : 'authentic');
-      const includeInRating = Boolean(
-        vf?.include_in_rating ??
-        (flagCategory === 'authentic' && verdict !== 'fake')
+      const includeInRating = resolveIncludeInRating(
+        vf?.include_in_rating,
+        flagCategory,
+        verdict
       );
       const upvotes = Number(r.upvotes ?? 0);
       const downvotes = Number(r.downvotes ?? 0);
@@ -2730,7 +2756,7 @@ export async function getMerchantsList(
       persistedBreakdown || hasStoredReviewRisk(m)
         ? null
         : computeDynamicReviewRisk(mReviews, {
-            isOfficial: m.is_official,
+            isOfficial: isStrictOfferOfficialFlag(m.is_official),
             platform: m.platform,
             followerCount: Number(m.follower_count) || 0,
           });
@@ -2777,11 +2803,11 @@ export async function getMerchantsList(
       name: m.name,
       slug: m.slug || null,
       url:
-        m.url ||
+        sanitizeOfferUrl(m.url) ||
         (m.platform === 'shopee' && m.platform_shop_id
           ? `https://shopee.vn/shop/${m.platform_shop_id}`
           : null),
-      is_official: Boolean(m.is_official),
+      is_official: isStrictOfferOfficialFlag(m.is_official),
       rating_star:
         m.rating_star != null ? toSafeStarRating5(m.rating_star) : null,
       follower_count: toSafeNonNegativeVoteCount(m.follower_count, 100_000_000),
@@ -2798,7 +2824,7 @@ export async function getMerchantsList(
     };
   });
 
-  return filterAndSortMerchants(results, params);
+  return filterAndSortMerchants(results, safeParams);
 }
 
 // Ids per in.() filter: a merchant can list hundreds of products, and one
@@ -3056,7 +3082,7 @@ export async function getMerchantProfileById(
           : null,
       rating_star: toSafeStarRating5(p.rating_star),
       rating_count: toSafeNonNegativeVoteCount(p.rating_count, 100_000_000),
-      url: p.url,
+      url: sanitizeOfferUrl(p.url),
       image: firstImageUrl(p.images),
       master_product: masterInfo,
       discount_analysis: discountByOfferId.get(p.id) || null,
@@ -3069,9 +3095,13 @@ export async function getMerchantProfileById(
       RawReviewRow & { product_id: string }
     >
   ).map((r) => {
-    const vf = Array.isArray(r.review_flags)
+    const rawVf = Array.isArray(r.review_flags)
       ? r.review_flags[0]
       : r.review_flags;
+    const vf =
+      rawVf && typeof rawVf === 'object' && !Array.isArray(rawVf)
+        ? rawVf
+        : null;
     const verdict = vf?.verdict ?? null;
     const flagCategory: ReviewFlagCategory =
       vf?.flag_category ||
@@ -3080,9 +3110,10 @@ export async function getMerchantProfileById(
         : verdict === 'suspicious'
           ? 'low_value_coin_spam'
           : 'authentic');
-    const includeInRating = Boolean(
-      vf?.include_in_rating ??
-      (flagCategory === 'authentic' && verdict !== 'fake')
+    const includeInRating = resolveIncludeInRating(
+      vf?.include_in_rating,
+      flagCategory,
+      verdict
     );
     const upvotes = Number(r.upvotes ?? 0);
     const downvotes = Number(r.downvotes ?? 0);
@@ -3131,7 +3162,7 @@ export async function getMerchantProfileById(
 
   const persistedBreakdown = extractPersistedBreakdown(merchantRow);
   const dynamicRisk = computeDynamicReviewRisk(recentReviews, {
-    isOfficial: merchantRow.is_official,
+    isOfficial: isStrictOfferOfficialFlag(merchantRow.is_official),
     platform: merchantRow.platform,
     followerCount: Number(merchantRow.follower_count) || 0,
   });
@@ -3178,11 +3209,11 @@ export async function getMerchantProfileById(
     name: merchantRow.name,
     slug: merchantRow.slug || null,
     url:
-      merchantRow.url ||
+      sanitizeOfferUrl(merchantRow.url) ||
       (merchantRow.platform === 'shopee' && merchantRow.platform_shop_id
         ? `https://shopee.vn/shop/${merchantRow.platform_shop_id}`
         : null),
-    is_official: Boolean(merchantRow.is_official),
+    is_official: isStrictOfferOfficialFlag(merchantRow.is_official),
     rating_star:
       merchantRow.rating_star != null
         ? toSafeStarRating5(merchantRow.rating_star)
@@ -3384,9 +3415,13 @@ export async function getRatePlatformStats(): Promise<RatePlatformStats> {
 
   const mappedReviews: RatePlatformStats['recentReviewsSample'] =
     rawReviews.map((r) => {
-      const vf = Array.isArray(r.review_flags)
+      const rawVf = Array.isArray(r.review_flags)
         ? r.review_flags[0]
         : r.review_flags;
+      const vf =
+        rawVf && typeof rawVf === 'object' && !Array.isArray(rawVf)
+          ? rawVf
+          : null;
       const verdict = vf?.verdict ?? null;
       const flagCategory: ReviewFlagCategory =
         vf?.flag_category ||
@@ -3395,9 +3430,10 @@ export async function getRatePlatformStats(): Promise<RatePlatformStats> {
           : verdict === 'suspicious'
             ? 'low_value_coin_spam'
             : 'authentic');
-      const includeInRating = Boolean(
-        vf?.include_in_rating ??
-        (flagCategory === 'authentic' && verdict !== 'fake')
+      const includeInRating = resolveIncludeInRating(
+        vf?.include_in_rating,
+        flagCategory,
+        verdict
       );
       const upvotes = Number(r.upvotes ?? 0);
       const downvotes = Number(r.downvotes ?? 0);
