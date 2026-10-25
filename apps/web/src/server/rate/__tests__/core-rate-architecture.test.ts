@@ -12107,7 +12107,128 @@ async function runCoreArchitectureSuite() {
     assert.equal(sanitizeRadarMinSpreadPct(15, 10), 15);
 
     console.log(
-      '  ✅ [123/123] Merchant Audit, Deep Inspect Exports & Radar Badge Bounds (#1020) passed'
+      '  ✅ [123/124] Merchant Audit, Deep Inspect Exports & Radar Badge Bounds (#1020) passed'
+    );
+  }
+
+  // -------------------------------------------------------------------------
+  // 124. ProductSpecsExportToolbar, CategoryCatalogToolbar & VersusMatchupSwitcher Bounds (#1026)
+  // -------------------------------------------------------------------------
+  {
+    const {
+      sanitizeSpecExportText,
+      formatPositiveSpecMetric,
+      sanitizeSpecDownloadSlug,
+      buildProductSpecExportRows,
+    } =
+      await import('../../../components/leaderboard/ProductSpecsExportToolbar');
+    const {
+      sanitizeCatalogToolbarText,
+      sanitizeCatalogPriceVnd,
+      sanitizeCatalogCount,
+      sanitizeCatalogDownloadSlug,
+    } = await import('../../../components/leaderboard/CategoryCatalogToolbar');
+    const nodeModule = await import('node:module');
+    const extMap = (
+      nodeModule.default as unknown as {
+        _extensions?: Record<string, (mod: { exports: unknown }) => void>;
+      }
+    )._extensions;
+    if (extMap && !extMap['.css']) {
+      extMap['.css'] = (mod) => {
+        mod.exports = { bar: 'bar' };
+      };
+    }
+    const { leavesCurrentPage } =
+      await import('../../../components/elementary/NavigationProgress');
+    const { formatVersusPeerPriceBadge, resolveEffectivePeerSlugs } =
+      await import('../../../components/compare/VersusMatchupSwitcher');
+
+    assert.equal(
+      leavesCurrentPage('/compare/a-vs-b', 'https://rate.vn/smartphones'),
+      true
+    );
+    assert.equal(
+      leavesCurrentPage('#specs', 'https://rate.vn/smartphones'),
+      false
+    );
+    assert.equal(
+      leavesCurrentPage('http://[::1', 'https://rate.vn/smartphones'),
+      false
+    );
+    assert.equal(
+      leavesCurrentPage(
+        'https://shopee.vn/item',
+        'https://rate.vn/smartphones'
+      ),
+      false
+    );
+
+    assert.equal(
+      sanitizeSpecExportText('  LTPO\r\nOLED\u0000 120Hz  ', '-'),
+      'LTPO OLED 120Hz'
+    );
+    assert.equal(sanitizeSpecExportText('   ', '-'), '-');
+    assert.equal(formatPositiveSpecMetric(6.86, '"', 100), '6.86"');
+    assert.equal(formatPositiveSpecMetric(-120, 'Hz', 1000), null);
+    assert.equal(formatPositiveSpecMetric(9999, 'Hz', 1000), null);
+    assert.equal(formatPositiveSpecMetric(Number.NaN, 'g', 50_000), null);
+    assert.equal(
+      sanitizeSpecDownloadSlug('iPhone 16 Pro / 256GB!'),
+      'iphone-16-pro-256gb'
+    );
+
+    const specRows = buildProductSpecExportRows(
+      {
+        display: {
+          size_inch: 6.7,
+          type: 'Super Retina\nXDR',
+          refresh_rate_hz: -120,
+        },
+        battery: {
+          capacity_mah: 5000,
+          fast_charging_w: 45,
+        },
+      } as never,
+      { chip: 'Apple A18 Pro' }
+    );
+    assert.equal(specRows.length, 13);
+    assert.equal(specRows[0]?.[2], '6.7" | Super Retina XDR');
+    assert.equal(specRows[2]?.[2], 'Apple A18 Pro');
+    assert.equal(specRows[6]?.[2], '5000 mAh | 45W');
+
+    assert.equal(
+      sanitizeCatalogToolbarText('  Galaxy\nS24 | Ultra  ', 'Unknown'),
+      'Galaxy S24 - Ultra'
+    );
+    assert.equal(sanitizeCatalogPriceVnd(19_990_000.6), 19_990_001);
+    assert.equal(sanitizeCatalogPriceVnd(-500_000), 0);
+    assert.equal(sanitizeCatalogPriceVnd(9_000_000_000), 0);
+    assert.equal(sanitizeCatalogCount(145.2), 145);
+    assert.equal(sanitizeCatalogCount(-10), 0);
+    assert.equal(
+      sanitizeCatalogDownloadSlug('Smartphones & Tablets!'),
+      'smartphones-tablets'
+    );
+
+    assert.equal(formatVersusPeerPriceBadge(28_990_000), '29M');
+    assert.equal(formatVersusPeerPriceBadge(450_000), '450K');
+    assert.equal(formatVersusPeerPriceBadge(0), 'N/A');
+    assert.equal(formatVersusPeerPriceBadge(-1_000_000), 'N/A');
+    assert.equal(formatVersusPeerPriceBadge(9_000_000_000), 'N/A');
+
+    const resolvedSlugs = resolveEffectivePeerSlugs(
+      [{ slug: 'iphone-16' } as never, { slug: 'galaxy-s24' } as never],
+      'invalid-slug',
+      'iphone-16'
+    );
+    assert.deepEqual(resolvedSlugs, {
+      effectiveSlugA: 'iphone-16',
+      effectiveSlugB: 'galaxy-s24',
+    });
+
+    console.log(
+      '  ✅ [124/124] ProductSpecsExportToolbar, CategoryCatalogToolbar & VersusMatchupSwitcher Bounds (#1026) passed'
     );
   }
 
@@ -12237,12 +12358,102 @@ async function runCoreArchitectureSuite() {
     assert.equal(isMissingRpcError({ code: '\u0000pgrst202 ' }), true);
 
     console.log(
-      '  ✅ [124/125] API Handler & Request Auth Numeric/Slug/Brand/Token Bounds (#1025) passed'
+      '  ✅ [125/127] API Handler & Request Auth Numeric/Slug/Brand/Token Bounds (#1025) passed'
     );
   }
 
   // -------------------------------------------------------------------------
-  // 125. Rate Server Index & Extension Entity, Slug, and Category Bounds (#1029)
+  // 126. compare-tray, CompareTrayBar & ProductLeaderboardBadges Bounds (#1030)
+  // -------------------------------------------------------------------------
+  {
+    const {
+      sanitizeTrayText,
+      sanitizeTraySlug,
+      sanitizeTrayPriceVnd,
+      isCanonicalTrayCategorySlug,
+      normalizeTrayItem: normalizeTrayItem1030,
+    } = await import('../../../components/compare/compare-tray');
+    const { formatCompareTrayPriceVnd } =
+      await import('../../../components/compare/CompareTrayBar');
+    const { sanitizeLeaderboardBadgeEntry } =
+      await import('../../../components/leaderboard/ProductLeaderboardBadges');
+
+    assert.equal(
+      sanitizeTrayText('  iPhone\r\n16\u0000 Pro  '),
+      'iPhone 16 Pro'
+    );
+    assert.equal(sanitizeTrayText(null), '');
+    assert.equal(
+      sanitizeTraySlug('  Apple\u0000 iPhone 16 Pro  '),
+      'apple-iphone-16-pro'
+    );
+    assert.equal(sanitizeTrayPriceVnd(18_990_000.4), 18_990_000);
+    assert.equal(sanitizeTrayPriceVnd(-100), 0);
+    assert.equal(sanitizeTrayPriceVnd(9_000_000_000), 0);
+    assert.equal(isCanonicalTrayCategorySlug('smartphones'), true);
+    assert.equal(isCanonicalTrayCategorySlug('invalid-cat'), false);
+
+    const normalizedTray1030 = normalizeTrayItem1030({
+      slug: '  sony-wf-1000xm5\u0000 ',
+      name: '  Sony\nWF-1000XM5  ',
+      brand: '  Sony\r\n  ',
+      thumbnail: null,
+      min_price: -50_000,
+      categorySlug: 'invalid-cat' as never,
+    });
+    assert.equal(normalizedTray1030.slug, 'sony-wf-1000xm5');
+    assert.equal(normalizedTray1030.name, 'Sony WF-1000XM5');
+    assert.equal(normalizedTray1030.brand, 'Sony');
+    assert.equal(normalizedTray1030.min_price, 0);
+    assert.equal(normalizedTray1030.categorySlug, 'earbuds');
+
+    assert.equal(formatCompareTrayPriceVnd(25_990_000), '25.990.000 ₫');
+    assert.equal(formatCompareTrayPriceVnd(-50_000), '0 ₫');
+    assert.equal(formatCompareTrayPriceVnd(9_000_000_000), '0 ₫');
+
+    const validBadge = sanitizeLeaderboardBadgeEntry({
+      categorySlug: 'smartphones',
+      criterion: 'combined',
+      rank: 1.2,
+      totalInCategory: 28.4,
+      score5: 6.5,
+    });
+    assert.deepEqual(validBadge, {
+      categorySlug: 'smartphones',
+      criterion: 'combined',
+      rank: 1,
+      totalInCategory: 28,
+      score5: 5,
+      score10: 10,
+    });
+    assert.equal(
+      sanitizeLeaderboardBadgeEntry({
+        categorySlug: 'invalid',
+        criterion: 'combined',
+        rank: 1,
+        totalInCategory: 10,
+        score5: 4.5,
+      }),
+      null
+    );
+    assert.equal(
+      sanitizeLeaderboardBadgeEntry({
+        categorySlug: 'smartphones',
+        criterion: 'combined',
+        rank: 0,
+        totalInCategory: 10,
+        score5: 4.5,
+      }),
+      null
+    );
+
+    console.log(
+      '  ✅ [126/127] compare-tray, CompareTrayBar & ProductLeaderboardBadges Bounds (#1030) passed'
+    );
+  }
+
+  // -------------------------------------------------------------------------
+  // 127. Rate Server Index & Extension Entity, Slug, and Category Bounds (#1029)
   // -------------------------------------------------------------------------
   {
     const {
@@ -12309,7 +12520,7 @@ async function runCoreArchitectureSuite() {
     assert.equal(isValidExternalEntityId('123456789'), true);
 
     console.log(
-      '  ✅ [125/125] Rate Server Index & Extension Entity, Slug, and Category Bounds (#1029) passed'
+      '  ✅ [127/127] Rate Server Index & Extension Entity, Slug, and Category Bounds (#1029) passed'
     );
   }
 
