@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
 import ContentText from '@/components/elementary/ContentText';
 import {
@@ -177,6 +177,7 @@ export default function DealFinderWorkspace({
 }: DealFinderWorkspaceProps) {
   const t = useTranslations('deals');
   const locale = useLocale();
+  const categoryLabelId = useId();
   const [categoryFilter, setCategoryFilter] = useState<
     CanonicalCategorySlug | 'all'
   >(initialCategory);
@@ -552,15 +553,23 @@ export default function DealFinderWorkspace({
           </div>
         </div>
 
-        {/* Category Pills */}
-        <div className="d-flex align-items-center mb-3 flex-wrap gap-2">
-          <span className="small text-secondary fw-semibold me-1">
+        {/* Category Pills: the pressed one is exposed (DOS/Rate#1069) */}
+        <div
+          className="d-flex align-items-center mb-3 flex-wrap gap-2"
+          role="group"
+          aria-labelledby={categoryLabelId}
+        >
+          <span
+            id={categoryLabelId}
+            className="small text-secondary fw-semibold me-1"
+          >
             {t('categoryLabel')}
           </span>
           {categoryOptions.map((opt) => (
             <button
               key={opt.slug}
               type="button"
+              aria-pressed={categoryFilter === opt.slug}
               onClick={() => setCategoryFilter(opt.slug)}
               className={`btn btn-sm rounded-pill px-3 py-1 ${
                 categoryFilter === opt.slug

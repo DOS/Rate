@@ -822,6 +822,8 @@
     "avgTrustScore": "Điểm tin cậy trung bình",
     "searchPlaceholder": "Tìm tên gian hàng, mã shop_id hoặc sàn (Shopee, Lazada, Tiki, CellphoneS, TGDĐ)...",
     "allPlatforms": "Tất cả sàn",
+    "platformFilterAria": "Lọc theo sàn",
+    "seedingFilterAria": "Lọc theo rủi ro đánh giá",
     "officialMallOnly": "Chỉ hiện Official Mall",
     "riskFilterLabel": "Mức tín nhiệm:",
     "riskAll": "Tất cả mức",

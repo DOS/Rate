@@ -822,6 +822,8 @@
     "avgTrustScore": "Průměrné Trust skóre",
     "searchPlaceholder": "Hledat podle názvu obchodu, ID nebo tržiště...",
     "allPlatforms": "Všechny platformy",
+    "platformFilterAria": "Filtrovat podle tržiště",
+    "seedingFilterAria": "Filtrovat podle rizika recenzí",
     "officialMallOnly": "Pouze Official Mall",
     "riskFilterLabel": "Úroveň důvěry:",
     "riskAll": "Všechny úrovně",

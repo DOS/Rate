@@ -284,6 +284,7 @@ export default function ProductValueCalculator({
               <button
                 key={m}
                 type="button"
+                aria-pressed={months === m}
                 onClick={() => setMonths(m)}
                 className={`btn rounded-pill fw-semibold me-1 px-3 ${
                   months === m ? 'btn-danger' : 'btn-outline-secondary'

@@ -822,6 +822,8 @@
     "avgTrustScore": "Average trust score",
     "searchPlaceholder": "Search by merchant name, shop ID, or platform...",
     "allPlatforms": "All platforms",
+    "platformFilterAria": "Filter by marketplace",
+    "seedingFilterAria": "Filter by review risk",
     "officialMallOnly": "Official Mall only",
     "riskFilterLabel": "Trust level:",
     "riskAll": "All tiers",

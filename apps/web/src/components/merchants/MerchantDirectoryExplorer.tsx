@@ -234,6 +234,8 @@ export default function MerchantDirectoryExplorer({
       avgTrustScore: t('avgTrustScore'),
       searchPlaceholder: t('searchPlaceholder'),
       allPlatforms: t('allPlatforms'),
+      platformFilterAria: t('platformFilterAria'),
+      seedingFilterAria: t('seedingFilterAria'),
       officialMallOnly: t('officialMallOnly'),
       riskFilterLabel: t('riskFilterLabel'),
       riskAll: t('riskAll'),
@@ -599,35 +601,48 @@ export default function MerchantDirectoryExplorer({
         {/* Platform Pills + Official Toggle + Seeding Risk Filter */}
         <div className="d-flex justify-content-between align-items-center border-top mt-3 flex-wrap gap-2 pt-3">
           <div className="d-flex align-items-center flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={() => setPlatform('all')}
-              className={`btn btn-sm rounded-pill px-3 ${
-                platform === 'all' ? 'btn-dark fw-semibold' : 'btn-outline-dark'
-              }`}
+            {/* Each filter exposes its pressed choice, not only its colour
+                (DOS/Rate#1069). */}
+            <div
+              className="d-flex align-items-center flex-wrap gap-2"
+              role="group"
+              aria-label={labels.platformFilterAria}
             >
-              {labels.allPlatforms} ({summary.total})
-            </button>
-            {availablePlatforms.map((p) => {
-              const count = platformCounts.get(p) ?? 0;
-              return (
-                <button
-                  key={p}
-                  type="button"
-                  onClick={() => setPlatform(p)}
-                  className={`btn btn-sm rounded-pill text-uppercase px-3 ${
-                    platform === p
-                      ? 'btn-danger fw-semibold'
-                      : 'btn-outline-secondary'
-                  }`}
-                >
-                  {p} ({count})
-                </button>
-              );
-            })}
+              <button
+                type="button"
+                aria-pressed={platform === 'all'}
+                onClick={() => setPlatform('all')}
+                className={`btn btn-sm rounded-pill px-3 ${
+                  platform === 'all'
+                    ? 'btn-dark fw-semibold'
+                    : 'btn-outline-dark'
+                }`}
+              >
+                {labels.allPlatforms} ({summary.total})
+              </button>
+              {availablePlatforms.map((p) => {
+                const count = platformCounts.get(p) ?? 0;
+                return (
+                  <button
+                    key={p}
+                    type="button"
+                    aria-pressed={platform === p}
+                    onClick={() => setPlatform(p)}
+                    className={`btn btn-sm rounded-pill text-uppercase px-3 ${
+                      platform === p
+                        ? 'btn-danger fw-semibold'
+                        : 'btn-outline-secondary'
+                    }`}
+                  >
+                    {p} ({count})
+                  </button>
+                );
+              })}
+            </div>
 
             <button
               type="button"
+              aria-pressed={officialOnly}
               onClick={() => setOfficialOnly(!officialOnly)}
               className={`btn btn-sm rounded-pill d-inline-flex align-items-center gap-1 px-3 ${
                 officialOnly ? 'btn-success fw-semibold' : 'btn-outline-success'
@@ -637,7 +652,11 @@ export default function MerchantDirectoryExplorer({
               {labels.officialMallOnly}
             </button>
 
-            <div className="btn-group btn-group-sm" role="group">
+            <div
+              className="btn-group btn-group-sm"
+              role="group"
+              aria-label={labels.seedingFilterAria}
+            >
               {(
                 [
                   { id: 'all', label: labels.seedingAll },
@@ -648,6 +667,7 @@ export default function MerchantDirectoryExplorer({
                 <button
                   key={tier.id}
                   type="button"
+                  aria-pressed={seedingTier === tier.id}
                   onClick={() => setSeedingTier(tier.id)}
                   className={`btn rounded-pill ms-1 px-2 py-1 ${
                     seedingTier === tier.id

@@ -423,16 +423,25 @@ export default function ApiPlaygroundClient() {
       <div className="card-body p-4">
         {/* Preset Selector Pills */}
         <div className="mb-3">
-          <div className="small fw-bold text-uppercase text-muted mb-2">
+          <div
+            id={`${fieldId}-presets`}
+            className="small fw-bold text-uppercase text-muted mb-2"
+          >
             {t('pgSelectPresetLabel', { count: presetEndpoints.length })}
           </div>
-          <div className="d-flex flex-wrap gap-2">
+          {/* The pressed preset is exposed, not only its colour (DOS/Rate#1069). */}
+          <div
+            className="d-flex flex-wrap gap-2"
+            role="group"
+            aria-labelledby={`${fieldId}-presets`}
+          >
             {presetEndpoints.map((preset) => {
               const isSelected = preset.id === selectedId;
               return (
                 <button
                   key={preset.id}
                   type="button"
+                  aria-pressed={isSelected}
                   onClick={() => handleSelectPreset(preset)}
                   className={`btn btn-sm rounded-pill fw-medium px-3 py-2 ${
                     isSelected ? 'btn-danger' : 'btn-outline-secondary'
@@ -517,12 +526,21 @@ export default function ApiPlaygroundClient() {
             <div className="rounded-3 bg-dark h-100 p-3 text-white">
               <div className="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-1">
                 <div className="d-flex align-items-center gap-2">
-                  <span className="small fw-semibold text-white-50">
-                    <BsCodeSlash className="me-1" /> {t('pgCodeLabel')}
+                  <span
+                    id={`${fieldId}-code`}
+                    className="small fw-semibold text-white-50"
+                  >
+                    <BsCodeSlash aria-hidden="true" className="me-1" />{' '}
+                    {t('pgCodeLabel')}
                   </span>
-                  <div className="btn-group btn-group-sm">
+                  <div
+                    className="btn-group btn-group-sm"
+                    role="group"
+                    aria-labelledby={`${fieldId}-code`}
+                  >
                     <button
                       type="button"
+                      aria-pressed={snippetMode === 'curl'}
                       onClick={() => setSnippetMode('curl')}
                       className={`btn btn-sm py-0 ${
                         snippetMode === 'curl'
@@ -534,6 +552,7 @@ export default function ApiPlaygroundClient() {
                     </button>
                     <button
                       type="button"
+                      aria-pressed={snippetMode === 'fetch'}
                       onClick={() => setSnippetMode('fetch')}
                       className={`btn btn-sm py-0 ${
                         snippetMode === 'fetch'
@@ -545,6 +564,7 @@ export default function ApiPlaygroundClient() {
                     </button>
                     <button
                       type="button"
+                      aria-pressed={snippetMode === 'python'}
                       onClick={() => setSnippetMode('python')}
                       className={`btn btn-sm py-0 ${
                         snippetMode === 'python'
