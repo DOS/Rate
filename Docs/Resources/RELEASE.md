@@ -11,7 +11,7 @@ This is the release workflow for `rate.vn`. It follows the same model as DOS/DOS
 
 ## Normal release
 
-1. Feature PRs go into `dev` as usual: review, green `Typecheck & Build Monorepo`, squash merge.
+1. Feature PRs go into `dev` as usual: review, green required checks (`Typecheck & Build Monorepo`, `E2E (Playwright)`, `Secret scan (gitleaks)`, `task-claim`), squash merge.
 2. Check `dev` on its Vercel Preview deployment.
 3. Open the promotion PR from `dev` itself, not from a copy branch:
    `gh pr create --repo DOS/Rate --base main --head dev --title "chore(release): promote dev to main"`
