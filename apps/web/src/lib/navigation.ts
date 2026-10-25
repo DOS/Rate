@@ -48,9 +48,16 @@ export const isAppLink = (link: string): boolean => {
   if (
     !cleaned ||
     cleaned.length > MAX_HREF_LEN ||
+    /\s/.test(cleaned) ||
     cleaned.startsWith('//') ||
     cleaned.startsWith('/\\') ||
     cleaned.startsWith('\\')
+  ) {
+    return false;
+  }
+  if (
+    !/^https?:\/\//i.test(cleaned) &&
+    (cleaned.includes('\\') || /(?:^|\/)\.\.(?:\/|$)/.test(cleaned))
   ) {
     return false;
   }
@@ -76,7 +83,12 @@ export const isAppLink = (link: string): boolean => {
 
 export const formatHref = (href: string | undefined | null): string => {
   const cleaned = sanitizeHrefInput(href);
-  if (!cleaned || cleaned === '#' || cleaned.length > MAX_HREF_LEN) {
+  if (
+    !cleaned ||
+    cleaned === '#' ||
+    cleaned.length > MAX_HREF_LEN ||
+    /\s/.test(cleaned)
+  ) {
     // Empty or over-length path -> return hash to prevent unwanted issues
     return '#';
   }
@@ -97,7 +109,15 @@ export const formatHref = (href: string | undefined | null): string => {
     try {
       const parsed = new URL(cleaned);
       if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
-        if (parsed.username || parsed.password || !parsed.hostname) {
+        if (
+          parsed.username ||
+          parsed.password ||
+          !parsed.hostname ||
+          parsed.hostname.startsWith('[') ||
+          parsed.hostname.endsWith('.') ||
+          parsed.hostname.includes('..') ||
+          Boolean(parsed.port)
+        ) {
           return '#';
         }
         return cleaned;
@@ -109,6 +129,10 @@ export const formatHref = (href: string | undefined | null): string => {
     } catch {
       return '#';
     }
+  }
+
+  if (cleaned.includes('\\') || /(?:^|\/)\.\.(?:\/|$)/.test(cleaned)) {
+    return '#';
   }
 
   return cleaned.startsWith('/') ? cleaned : `/${cleaned}`;
