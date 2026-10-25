@@ -1,5 +1,31 @@
 export const MAX_DISPLAY_SOLD_COUNT = 100_000_000;
 
+const INVALID_SOLD_LABELS = new Set([
+  '0',
+  'null',
+  'undefined',
+  'nan',
+  'infinity',
+  '-infinity',
+  'true',
+  'false',
+]);
+
+function parseDecimalSoldCount(raw: unknown): number {
+  if (typeof raw === 'number') {
+    return Number.isFinite(raw) ? raw : NaN;
+  }
+  if (typeof raw === 'string') {
+    const trimmed = raw.replace(/\p{Cc}+/gu, '').trim();
+    if (!trimmed || trimmed.length > 32 || /^[+-]?0[xbo]/i.test(trimmed)) {
+      return NaN;
+    }
+    const n = Number(trimmed);
+    return Number.isFinite(n) ? n : NaN;
+  }
+  return NaN;
+}
+
 function resolveSafeSoldLocale(locale: string): string {
   if (typeof locale !== 'string') return 'vi-VN';
   const cleaned = locale.replace(/\p{Cc}+/gu, '').trim();
@@ -23,24 +49,24 @@ export function formatSoldCount(
   historicalSoldDisplay: string | null | undefined,
   locale: string
 ): string {
-  const rawInput: unknown = historicalSold;
-  const rawSold =
-    typeof rawInput === 'number'
-      ? rawInput
-      : typeof rawInput === 'string' && rawInput.trim()
-        ? Number(rawInput.trim())
-        : NaN;
+  const rawSold = parseDecimalSoldCount(historicalSold);
   const sold =
     Number.isFinite(rawSold) && rawSold > 0 && rawSold <= MAX_DISPLAY_SOLD_COUNT
       ? Math.trunc(rawSold)
       : 0;
-  const label =
+  const rawLabel =
     typeof historicalSoldDisplay === 'string'
       ? historicalSoldDisplay
           .replace(/\p{Cc}+/gu, ' ')
           .replace(/\s+/g, ' ')
           .trim()
           .slice(0, 40)
+      : '';
+  const label =
+    rawLabel &&
+    !INVALID_SOLD_LABELS.has(rawLabel.toLowerCase()) &&
+    /\p{N}/u.test(rawLabel)
+      ? rawLabel
       : '';
   const safeLocale = resolveSafeSoldLocale(locale);
   const isVi = safeLocale === 'vi' || safeLocale.startsWith('vi-');
