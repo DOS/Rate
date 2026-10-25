@@ -396,7 +396,7 @@
     "rank3Label": "3. místo",
     "fullTableTitle": "Kompletní žebříček kategorie",
     "verifiedReviewsSuffix": "ověřených recenzí",
-    "blockedSpamCount": "{count, plural, one {Zablokována # falešná/spamová recenze} few {Zablokovány # falešné/spamové recenze} other {Zablokováno # falešných/spamových recenzí}}",
+    "blockedSpamCount": "{count, plural, one {Zablokována # falešná či spamová recenze} few {Zablokovány # falešné či spamové recenze} other {Zablokováno # falešných či spamových recenzí}}",
     "storesTrackedSuffix": "obchodů",
     "viewAuditDetailBtn": "Recenze a 10 skupin parametrů →",
     "inspectBtn": "Ověřit cenu",

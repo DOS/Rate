@@ -5,7 +5,7 @@ import {
   isImplausiblyLowPrice,
   plausibleMinPrice,
   plausibleOffers,
-} from '../offer-plausibility';
+} from '@repo/shared-data/rules';
 
 function main() {
   console.warn('🧪 Offer plausibility suite');

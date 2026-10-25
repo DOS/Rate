@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { MAX_VALID_VND_PRICE } from '../rules/price-limits.js';
 import { HttpUrlSchema, StatusSchema } from './common.schema.js';
 
 /**
@@ -122,8 +123,8 @@ export const KeySpecsSchema = z.object({
   ram: z.string().max(200).optional(),
 });
 
-/** Maximum realistic VND listing price (1 billion VND) to block unscaled fixed-point / concatenated price bugs. */
-export const MAX_VALID_VND_PRICE = 1_000_000_000;
+// Defined with the price rules so `@repo/shared-data/rules` stays free of zod.
+export { MAX_VALID_VND_PRICE };
 
 export const MasterProductSchema = z.object({
   id: z.string().uuid(),

@@ -6423,6 +6423,11 @@ a.mousewheel.center {
   border-radius: 50px;
   transition: all ease 0.4s;
   color: var(--bs-dark);
+  // Long labels ("ŘAZENÍ: VÝCHOZÍ (NEDÁVNO AKTUALIZOVANÉ)") wrap instead of
+  // pushing a 320px page sideways; Bootstrap's toggle is nowrap
+  // (DOS/Rate#1082).
+  max-width: 100%;
+  white-space: normal;
 
   &:hover {
     background-color: var(--bs-primary-bg-subtle);

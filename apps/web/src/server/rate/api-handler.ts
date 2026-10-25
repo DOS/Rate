@@ -1,6 +1,6 @@
 import 'server-only';
 import { NextResponse } from 'next/server';
-import { plausibleMinPrice, plausibleOffers } from '@/lib/offer-plausibility';
+import { plausibleMinPrice, plausibleOffers } from '@repo/shared-data/rules';
 import {
   MAX_VALID_VND_PRICE,
   normalizeOfferOriginalPrice,

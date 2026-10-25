@@ -216,8 +216,10 @@ export function LocaleSwitcher({
         style={{
           height: compact ? '38px' : '48px',
           // The compact switcher sits in the phone header, which has to fit
-          // 320px (DOS/Rate#809).
-          padding: compact ? '0 8px' : '0 14px',
+          // 320px (DOS/Rate#809) with the widest label: "EN" and "CS" are
+          // ~5px wider than "VI" and pushed the menu toggle's tap area off
+          // screen (DOS/Rate#1082).
+          padding: compact ? '0 5px' : '0 14px',
           backgroundColor: isDarkHeader
             ? 'rgba(255, 255, 255, 0.12)'
             : 'var(--bs-card-bg, #ffffff)',

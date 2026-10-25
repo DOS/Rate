@@ -1,8 +1,9 @@
 import 'server-only';
 import {
   isImplausiblyLowPrice,
+  minimumListingPriceVnd,
   plausibleOffers,
-} from '../../lib/offer-plausibility';
+} from '@repo/shared-data/rules';
 import type { Database } from '@repo/shared-data';
 import {
   MAX_VALID_VND_PRICE,
@@ -269,11 +270,6 @@ const ACCESSORY_KEYWORDS_VI_EN = [
   'camera lens protector',
 ];
 
-const MINIMUM_DEVICE_PRICE_FLOOR_VND = 1_200_000;
-const MINIMUM_EARBUDS_PRICE_FLOOR_VND = 400_000;
-const EARBUDS_TITLE_REGEX =
-  /\b(?:airpods|earpods|buds|freebuds|soundpeats|wf-|wh-|tws|tai[\s_-]*nghe|earbuds|in[\s_-]*ear)\b/i;
-
 function isDomainOrSubdomain(host: string, domain: string): boolean {
   return host === domain || host.endsWith(`.${domain}`);
 }
@@ -458,11 +454,7 @@ export function detectAccessoryOrJunk(params: {
     }
   }
 
-  const isEarbuds =
-    EARBUDS_TITLE_REGEX.test(titleLower) || EARBUDS_TITLE_REGEX.test(urlLower);
-  const minFloor = isEarbuds
-    ? MINIMUM_EARBUDS_PRICE_FLOOR_VND
-    : MINIMUM_DEVICE_PRICE_FLOOR_VND;
+  const minFloor = minimumListingPriceVnd([titleLower, urlLower]);
 
   if (
     typeof safeParams.price === 'number' &&

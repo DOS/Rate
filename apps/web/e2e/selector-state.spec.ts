@@ -57,3 +57,27 @@ test('the compare category switcher exposes its state', async ({ page }) => {
   const group = page.getByRole('group', { name: 'Chọn danh mục đối chiếu' });
   await expect(group.getByRole('button', { pressed: true })).toHaveCount(1);
 });
+
+// Forced colours drop the colours that mark the pressed button; it must still
+// look different from the others (DOS/Rate#1086).
+for (const [path, name] of [
+  ['/leaderboard', 'Chọn ngành hàng'],
+  ['/compare', 'Chọn danh mục đối chiếu'],
+] as const) {
+  test(`the pressed category stands out in forced colors on ${path}`, async ({
+    page,
+  }) => {
+    await page.emulateMedia({ forcedColors: 'active' });
+    expect((await page.goto(path))?.status()).toBe(200);
+    const group = page.getByRole('group', { name });
+    const look = (pressed: boolean) =>
+      group
+        .getByRole('button', { pressed })
+        .first()
+        .evaluate((el) => getComputedStyle(el).backgroundColor);
+    await expect(group.getByRole('button', { pressed: false })).not.toHaveCount(
+      0
+    );
+    expect(await look(true)).not.toBe(await look(false));
+  });
+}
