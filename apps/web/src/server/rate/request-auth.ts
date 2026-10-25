@@ -40,14 +40,25 @@ export interface RejectedRateRequest {
 const MAX_BEARER_TOKEN_LENGTH = 4096;
 
 export function readBearerToken(request: Request): string {
-  const header = (request.headers.get('authorization') || '').trim();
+  if (
+    !request ||
+    typeof request !== 'object' ||
+    !request.headers ||
+    typeof request.headers.get !== 'function'
+  ) {
+    return '';
+  }
+  const rawHeader = request.headers.get('authorization');
+  if (typeof rawHeader !== 'string' || /\p{Cc}/u.test(rawHeader)) return '';
+  const header = rawHeader.trim();
   const match = /^Bearer\s+(.+)$/i.exec(header);
   if (!match || !match[1]) return '';
   const token = match[1].trim();
   if (
     !token ||
     token.length > MAX_BEARER_TOKEN_LENGTH ||
-    /[\s\p{Cc}]/u.test(token)
+    /[\s\p{Cc}]/u.test(token) ||
+    /^(?:null|undefined|nan|true|false|0)$/i.test(token)
   ) {
     return '';
   }
@@ -61,7 +72,7 @@ function readCookies(request: Request): CookieRecord[] {
   }));
 }
 
-const AUTH_COOKIE_RE = /^(sb-[^.]+-auth-token)(?:\.\d+)?$/;
+const AUTH_COOKIE_RE = /^(sb-[a-z0-9_-]{1,64}-auth-token)(?:\.\d{1,3})?$/i;
 const BASE64_PREFIX = 'base64-';
 const MAX_COOKIE_SESSION_LENGTH = 16_384;
 
@@ -73,8 +84,19 @@ const MAX_COOKIE_SESSION_LENGTH = 16_384;
 export async function readCookieAccessToken(
   cookies: CookieRecord[]
 ): Promise<string | null> {
-  const byName = new Map(cookies.map((c) => [c.name, c.value]));
-  const key = cookies
+  if (!Array.isArray(cookies)) return null;
+  const safeCookies = cookies.filter((c): c is CookieRecord =>
+    Boolean(
+      c &&
+      typeof c === 'object' &&
+      !Array.isArray(c) &&
+      typeof c.name === 'string' &&
+      typeof c.value === 'string'
+    )
+  );
+  if (safeCookies.length === 0) return null;
+  const byName = new Map(safeCookies.map((c) => [c.name, c.value]));
+  const key = safeCookies
     .map((c) => AUTH_COOKIE_RE.exec(c.name)?.[1])
     .find((k): k is string => Boolean(k));
   if (!key) return null;
@@ -85,13 +107,21 @@ export async function readCookieAccessToken(
       ? stringFromBase64URL(raw.slice(BASE64_PREFIX.length))
       : raw;
     if (!json || json.length > MAX_COOKIE_SESSION_LENGTH) return null;
-    const session = JSON.parse(json) as { access_token?: unknown };
-    if (typeof session.access_token !== 'string') return null;
+    const session = JSON.parse(json) as { access_token?: unknown } | null;
+    if (
+      !session ||
+      typeof session !== 'object' ||
+      Array.isArray(session) ||
+      typeof session.access_token !== 'string'
+    ) {
+      return null;
+    }
     const token = session.access_token.trim();
     if (
       !token ||
       token.length > MAX_BEARER_TOKEN_LENGTH ||
-      /[\s\p{Cc}]/u.test(token)
+      /[\s\p{Cc}]/u.test(token) ||
+      /^(?:null|undefined|nan|true|false|0)$/i.test(token)
     ) {
       return null;
     }
@@ -106,19 +136,62 @@ export async function readCookieAccessToken(
  * come from this site. Browsers send Origin on every POST fetch.
  */
 export function isSameOriginRequest(request: Request): boolean {
-  const origin = request.headers.get('origin');
-  if (!origin) return false;
+  if (
+    !request ||
+    typeof request !== 'object' ||
+    !request.headers ||
+    typeof request.headers.get !== 'function'
+  ) {
+    return false;
+  }
+  const rawOrigin = request.headers.get('origin');
+  if (
+    typeof rawOrigin !== 'string' ||
+    !rawOrigin ||
+    rawOrigin.length > 2048 ||
+    /[\s\p{Cc}]/u.test(rawOrigin) ||
+    rawOrigin.trim().toLowerCase() === 'null'
+  ) {
+    return false;
+  }
   const forwardedHost = request.headers
     .get('x-forwarded-host')
     ?.split(',')[0]
     ?.trim();
+  let fallbackHost = '';
+  try {
+    fallbackHost =
+      typeof request.url === 'string' ? new URL(request.url).host : '';
+  } catch {
+    fallbackHost = '';
+  }
   const host = (
     forwardedHost ||
     request.headers.get('host')?.trim() ||
-    new URL(request.url).host
+    fallbackHost
   ).toLowerCase();
+  if (
+    !host ||
+    host.length > 255 ||
+    /[\s\p{Cc}/\\@]/u.test(host) ||
+    host.startsWith('.') ||
+    host.endsWith('.') ||
+    host.includes('..')
+  ) {
+    return false;
+  }
   try {
-    return new URL(origin).host.toLowerCase() === host;
+    const parsedOrigin = new URL(rawOrigin.trim());
+    if (
+      parsedOrigin.protocol !== 'http:' &&
+      parsedOrigin.protocol !== 'https:'
+    ) {
+      return false;
+    }
+    if (parsedOrigin.username !== '' || parsedOrigin.password !== '') {
+      return false;
+    }
+    return parsedOrigin.host.toLowerCase() === host;
   } catch {
     return false;
   }
@@ -218,9 +291,15 @@ export function mapRpcRejection(
   error: { code?: string } | null | undefined,
   table: Record<string, RpcRejection>
 ): RpcRejection | null {
-  const code = typeof error?.code === 'string' ? error.code.trim() : '';
+  const safeError =
+    error && typeof error === 'object' && !Array.isArray(error) ? error : null;
+  const code = typeof safeError?.code === 'string' ? safeError.code.trim() : '';
   const rejection =
-    code && table && typeof table === 'object' && Object.hasOwn(table, code)
+    code &&
+    table &&
+    typeof table === 'object' &&
+    !Array.isArray(table) &&
+    Object.hasOwn(table, code)
       ? (table[code] ?? null)
       : null;
   if (rejection) {
