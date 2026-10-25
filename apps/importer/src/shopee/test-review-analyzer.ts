@@ -2779,6 +2779,133 @@ async function run() {
     `✅ [P2/P3 Trust Model & #292/#352/#356/#359/#379/#382/#401/#497/#514/#522/#528/#557/#834/#836/#882/#908/#954] Voter weight, Wilson lower bound (50/52=${wilson50of52} > 1/1=${wilson1of1}), shingle copy seeding (sim=${shingleSim}), affiliate shortlinks, peer floor, ArenaSpecSyncer, Importer & ReviewAnalyzer hardening (#352, #356, #359, #379, #382, #401, #497, #514, #522, #528, #557, #834, #836, #882, #908, #954) verified`
   );
 
+  // -------------------------------------------------------------------------
+  // Issue #998: EntityMatcher, MerchantRiskBreakdown & platformReviewIdFor Bounds
+  // -------------------------------------------------------------------------
+  console.log(
+    '\nTesting EntityMatcher, MerchantRiskBreakdown & platformReviewIdFor Bounds (#998)...'
+  );
+  {
+    const { sanitizeHttpUrl, EntityMatcher } = await import('./entity-matcher.js');
+    const { platformReviewIdFor } = await import('./shopee-to-supabase.js');
+    const { merchantRiskBreakdown } = await import('./ai-review-analyzer.js');
+
+    assert.equal(sanitizeHttpUrl('https://.shopee.vn/img.jpg'), null);
+    assert.equal(sanitizeHttpUrl('https://shopee..vn/img.jpg'), null);
+    assert.equal(sanitizeHttpUrl('https://shopee.vn./img.jpg'), null);
+    assert.equal(sanitizeHttpUrl('https://cf.shopee.vn/file/abc'), 'https://cf.shopee.vn/file/abc');
+
+    const riskFromArr = merchantRiskBreakdown(['bad-array'] as never);
+    assert.equal(riskFromArr.risk_level, 'low');
+    assert.equal(riskFromArr.price_anomaly_detected, false);
+
+    const riskFalseStr = merchantRiskBreakdown({
+      risk_score: 20,
+      trust_score: '91.5' as never,
+      risk_level: 'low',
+      seeding_ratio: '0.15' as never,
+      coin_spam_ratio: false as never,
+      sabotage_ratio: '' as never,
+      total_reviews: '42' as never,
+      authentic_count: '36' as never,
+      coin_spam_count: 2,
+      seeding_fake_count: 4,
+      sabotage_or_bombing_count: 0,
+      suspicious_ratio_pct: '14.28' as never,
+      price_anomaly_detected: 'false' as never,
+      reasons: ['Valid reason'],
+    });
+    assert.equal(riskFalseStr.price_anomaly_detected, false);
+    assert.equal(riskFalseStr.trust_score, 91.5);
+    assert.equal(riskFalseStr.total_reviews, 42);
+    assert.equal(riskFalseStr.authentic_count, 36);
+    assert.equal(riskFalseStr.suspicious_ratio_pct, 14.28);
+    assert.equal(riskFalseStr.coin_spam_ratio, 0);
+    assert.equal(riskFalseStr.sabotage_ratio, 0);
+
+    const rvSentinelZero = platformReviewIdFor({
+      reviewId: '0',
+      author: 'alice',
+      ratingStar: 5,
+      comment: 'First review',
+      images: [],
+    });
+    const rvSentinelNull = platformReviewIdFor({
+      reviewId: 'null',
+      author: 'bob',
+      ratingStar: 4,
+      comment: 'Second review',
+      images: [],
+    });
+    assert.ok(rvSentinelZero.startsWith('rv-'));
+    assert.ok(rvSentinelNull.startsWith('rv-'));
+    assert.notEqual(rvSentinelZero, rvSentinelNull);
+
+    let insertedMasterPayload: Record<string, unknown> | null = null;
+    const mockMatcherDb = {
+      from(table: string) {
+        assert.equal(table, 'master_products');
+        return {
+          select() {
+            return {
+              eq() {
+                return {
+                  async maybeSingle() {
+                    return { data: null, error: null };
+                  },
+                };
+              },
+            };
+          },
+          upsert(row: Record<string, unknown>) {
+            insertedMasterPayload = row;
+            return {
+              select() {
+                return Promise.resolve({ data: [{ id: 'mp-created-998' }], error: null });
+              },
+            };
+          },
+        };
+      },
+      async rpc() {
+        return {
+          data: [
+            null,
+            ['array-entry'],
+            { master_id: '0', similarity: 0.95, name: 'Sentinel Zero' },
+            { master_id: 'null', similarity: 0.92, name: 'Sentinel Null' },
+          ],
+          error: null,
+        };
+      },
+    };
+    const matcher = new EntityMatcher(
+      mockMatcherDb as never,
+      {
+        async enrichCandidate(c: unknown) {
+          return c;
+        },
+      } as never
+    );
+    const resolved = await matcher.resolveOrCreateMasterProduct({
+      model_key: 'apple-iphone-16-128gb',
+      name: 'Apple iPhone 16 128GB',
+      slug: 'apple-iphone-16-128gb',
+      brand: 'Apple',
+      model: 'iPhone 16',
+      storage_gb: 128,
+      ram_gb: 8,
+      has_5g: 'false' as never,
+      is_benchmark_enriched: true,
+    } as never);
+    assert.equal(resolved.masterId, 'mp-created-998');
+    assert.equal(resolved.isNew, true);
+    assert.equal(insertedMasterPayload?.['has_5g'], false);
+    console.log(
+      '\u2705 [EntityMatcher, MerchantRiskBreakdown & platformReviewIdFor Bounds (#998)] Verified!'
+    );
+  }
+
   console.log('\n🎉 ALL AI REVIEW ANALYZER TESTS PASSED!');
 }
 
