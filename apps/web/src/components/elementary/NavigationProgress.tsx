@@ -10,13 +10,25 @@ const MAX_VISIBLE_MS = 8_000;
 const START_EVENT = 'rate:navigation-start';
 
 /** True when `href` leaves the current page (not a hash or the same URL). */
-function leavesCurrentPage(href: string): boolean {
-  const url = new URL(href, window.location.href);
-  return (
-    url.origin === window.location.origin &&
-    (url.pathname !== window.location.pathname ||
-      url.search !== window.location.search)
-  );
+export function leavesCurrentPage(href: string, currentHref?: string): boolean {
+  if (typeof href !== 'string' || !href.trim()) return false;
+  const baseHref =
+    typeof currentHref === 'string' && currentHref.trim()
+      ? currentHref
+      : typeof window !== 'undefined' && window.location?.href
+        ? window.location.href
+        : '';
+  if (!baseHref) return false;
+  try {
+    const base = new URL(baseHref);
+    const url = new URL(href, base);
+    return (
+      url.origin === base.origin &&
+      (url.pathname !== base.pathname || url.search !== base.search)
+    );
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -24,6 +36,7 @@ function leavesCurrentPage(href: string): boolean {
  * `router.push(href)`. Link clicks are picked up automatically.
  */
 export function startNavigationProgress(href: string): void {
+  if (typeof window === 'undefined') return;
   if (leavesCurrentPage(href)) window.dispatchEvent(new Event(START_EVENT));
 }
 
