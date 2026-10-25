@@ -27,13 +27,20 @@ export interface DiscountVerdictCopy {
   explanation: string;
 }
 
+function parseDecimalVerdictNumber(raw: unknown): number {
+  if (typeof raw === 'number') return raw;
+  if (typeof raw === 'string') {
+    const cleaned = raw.replace(/\p{Cc}+/gu, '').trim();
+    if (!cleaned || cleaned.length > 32 || /^[+-]?0[xbo]/i.test(cleaned)) {
+      return Number.NaN;
+    }
+    return Number(cleaned);
+  }
+  return Number.NaN;
+}
+
 const vnd = (price: number | null | undefined) => {
-  const num =
-    typeof price === 'number'
-      ? price
-      : typeof price === 'string' && String(price).trim()
-        ? Number(price)
-        : 0;
+  const num = parseDecimalVerdictNumber(price);
   const safe =
     Number.isFinite(num) && num > 0 && num <= MAX_VALID_VND_PRICE
       ? Math.round(num)
@@ -42,12 +49,7 @@ const vnd = (price: number | null | undefined) => {
 };
 
 const toSafePct = (pct: number | null | undefined) => {
-  const num =
-    typeof pct === 'number'
-      ? pct
-      : typeof pct === 'string' && String(pct).trim()
-        ? Number(pct)
-        : 0;
+  const num = parseDecimalVerdictNumber(pct);
   return Number.isFinite(num) && num > 0
     ? Math.min(100, Math.round(num * 10) / 10)
     : 0;

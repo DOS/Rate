@@ -13,6 +13,20 @@ export type BayesianTierKey =
   | 'bayesianTierSmoothed'
   | 'bayesianTierPrior';
 
+const COPY_CONTROL_CHAR_RE = /\p{Cc}/gu;
+
+function parseDecimalDetailNumber(value: unknown): number {
+  if (typeof value === 'number') return value;
+  if (typeof value === 'string') {
+    const cleaned = value.replace(COPY_CONTROL_CHAR_RE, '').trim();
+    if (!cleaned || cleaned.length > 32 || /^[+-]?0[xbo]/i.test(cleaned)) {
+      return Number.NaN;
+    }
+    return Number(cleaned);
+  }
+  return Number.NaN;
+}
+
 /** Mirrors the tiers `computeBayesianRatingSummary` labels. */
 export function bayesianTierKey(
   summary: Pick<BayesianRatingSummary, 'confidenceTier' | 'effectiveWeightSum'>
@@ -24,11 +38,12 @@ export function bayesianTierKey(
       return 'bayesianTierMedium';
     case 'low':
       return 'bayesianTierLow';
-    default:
-      return Number.isFinite(summary?.effectiveWeightSum) &&
-        summary.effectiveWeightSum > 0
+    default: {
+      const weightSum = parseDecimalDetailNumber(summary?.effectiveWeightSum);
+      return Number.isFinite(weightSum) && weightSum > 0
         ? 'bayesianTierSmoothed'
         : 'bayesianTierPrior';
+    }
   }
 }
 
@@ -52,15 +67,8 @@ export type RadarExplanation =
       };
     };
 
-const COPY_CONTROL_CHAR_RE = /\p{Cc}/gu;
-
 const vnd = (value: unknown) => {
-  const num =
-    typeof value === 'number'
-      ? value
-      : typeof value === 'string' && value.trim()
-        ? Number(value)
-        : 0;
+  const num = parseDecimalDetailNumber(value);
   const safe =
     Number.isFinite(num) && num > 0
       ? Math.min(Math.round(num), MAX_VALID_VND_PRICE)
@@ -69,12 +77,7 @@ const vnd = (value: unknown) => {
 };
 
 const safePctString = (value: unknown, max = 10_000): string => {
-  const num =
-    typeof value === 'number'
-      ? value
-      : typeof value === 'string' && value.trim()
-        ? Number(value)
-        : 0;
+  const num = parseDecimalDetailNumber(value);
   if (!Number.isFinite(num) || num <= 0) return '0';
   return String(Math.min(num, max));
 };
@@ -110,20 +113,8 @@ export function radarExplanation(
     trap &&
     trap.priceOriginal != null
   ) {
-    const current =
-      typeof trap.priceCurrent === 'number'
-        ? trap.priceCurrent
-        : typeof trap.priceCurrent === 'string' &&
-            String(trap.priceCurrent).trim()
-          ? Number(trap.priceCurrent)
-          : NaN;
-    const floor =
-      typeof trap.marketMinPrice === 'number'
-        ? trap.marketMinPrice
-        : typeof trap.marketMinPrice === 'string' &&
-            String(trap.marketMinPrice).trim()
-          ? Number(trap.marketMinPrice)
-          : NaN;
+    const current = parseDecimalDetailNumber(trap.priceCurrent);
+    const floor = parseDecimalDetailNumber(trap.marketMinPrice);
     const rawDiff = current - floor;
     return {
       key: 'radarExplanationFakeSale',
