@@ -11880,6 +11880,61 @@ async function runCoreArchitectureSuite() {
     assert.equal(await getMerchantProfileById992('---'), null);
     assert.equal(await getMerchantProfileById992('a..b'), null);
 
+    const {
+      getMasterProductReviews: getMasterProductReviews994,
+      getMasterProductReviewSummary: getMasterProductReviewSummary994,
+      getMasterProductPriceHistory: getMasterProductPriceHistory994,
+      getMerchantsList: getMerchantsList994,
+    } = await import('../../../lib/rate-api');
+
+    assert.deepEqual(await getMasterProductReviews994('0'), []);
+    assert.deepEqual(await getMasterProductReviews994('---'), []);
+    const revSummary994 = await getMasterProductReviewSummary994('0', [
+      null as never,
+      [] as never,
+      {
+        id: 'r1',
+        author_name: 'Buyer',
+        rating_star: 5,
+        comment: 'Great phone',
+        variation: null,
+        created_at: '2026-10-01T00:00:00Z',
+        reviewer_type: 'user',
+        upvotes: 1,
+        downvotes: 0,
+        report_count: 0,
+        helpfulness_weight: 1,
+        include_in_rating: true,
+        criteria_ratings: {},
+        verdict: 'authentic',
+        fake_probability: 0.05,
+        flag_category: 'authentic',
+        reason: null,
+        signals: null,
+      },
+    ]);
+    assert.equal(revSummary994.total_analyzed, 1);
+    assert.equal(revSummary994.authentic_pct, 100);
+
+    const hist994 = await getMasterProductPriceHistory994(
+      '0',
+      undefined,
+      null as never
+    );
+    assert.deepEqual(hist994.points, []);
+    assert.equal(hist994.currentMinPrice, null);
+
+    assert.deepEqual(
+      await getMerchantsList994({ ids: ['0', 'null', 'undefined', '---'] }),
+      []
+    );
+    assert.deepEqual(
+      await getMerchantsList994({
+        platformShopIds: ['0', 'null', 'undefined', '---'],
+      }),
+      []
+    );
+
     console.log(
       '  ✅ [121/121] API Handler URL/Slug/Vote Guards & OpenAPI Server Origin Bounds (#978) passed'
     );
