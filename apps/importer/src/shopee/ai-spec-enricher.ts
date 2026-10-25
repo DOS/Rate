@@ -458,25 +458,35 @@ export function trimTrailingSlashes(rawUrl: string): string {
 }
 
 export function resolveValidHttpBaseUrl(candidateUrl: string, fallbackUrl: string): string {
-  const cleaned = trimTrailingSlashes(typeof candidateUrl === 'string' ? candidateUrl.trim() : '');
-  if (cleaned && cleaned.length <= 512 && !/\p{Cc}/u.test(cleaned) && !/\s/.test(cleaned)) {
+  const isValidHttpBase = (urlStr: string): boolean => {
+    if (!urlStr || urlStr.length > 512 || /\p{Cc}/u.test(urlStr) || /\s/.test(urlStr)) {
+      return false;
+    }
     try {
-      const parsed = new URL(cleaned);
-      if (
+      const parsed = new URL(urlStr);
+      return (
         (parsed.protocol === 'http:' || parsed.protocol === 'https:') &&
-        parsed.hostname &&
+        Boolean(parsed.hostname) &&
+        !parsed.hostname.startsWith('.') &&
+        !parsed.hostname.endsWith('.') &&
+        !parsed.hostname.includes('..') &&
         parsed.username === '' &&
         parsed.password === '' &&
         parsed.search === '' &&
         parsed.hash === ''
-      ) {
-        return cleaned;
-      }
+      );
     } catch {
-      // fall through to fallbackUrl
+      return false;
     }
+  };
+  const cleaned = trimTrailingSlashes(typeof candidateUrl === 'string' ? candidateUrl.trim() : '');
+  if (isValidHttpBase(cleaned)) {
+    return cleaned;
   }
-  return trimTrailingSlashes(fallbackUrl);
+  const cleanedFallback = trimTrailingSlashes(
+    typeof fallbackUrl === 'string' ? fallbackUrl.trim() : ''
+  );
+  return isValidHttpBase(cleanedFallback) ? cleanedFallback : 'https://api.openai.com/v1';
 }
 
 export class AiSpecEnricher {
@@ -489,16 +499,17 @@ export class AiSpecEnricher {
   private memoryCache = new Map<string, AiEnrichmentResponse>();
 
   constructor(config: AiSpecEnricherConfig = {}) {
-    const safeConfig = config && typeof config === 'object' ? config : {};
+    const safeConfig = config && typeof config === 'object' && !Array.isArray(config) ? config : {};
     this.provider = this.resolveProvider(safeConfig.provider);
     const defaults = PROVIDER_DEFAULTS[this.provider];
 
     const rawApiKey =
       typeof safeConfig.apiKey === 'string' ? safeConfig.apiKey : this.resolveApiKey(this.provider);
-    this.apiKey = rawApiKey
+    const cleanedApiKey = rawApiKey
       .replace(/\p{Cc}+/gu, '')
       .trim()
       .slice(0, 512);
+    this.apiKey = cleanedApiKey && !/\s/.test(cleanedApiKey) ? cleanedApiKey : '';
     this.baseUrl = resolveValidHttpBaseUrl(
       safeConfig.baseUrl ||
         process.env.AI_BASE_URL ||
@@ -555,7 +566,7 @@ export class AiSpecEnricher {
           .replace(/\p{Cc}+/gu, '')
           .trim()
           .slice(0, 512);
-        if (cleaned.length > 0) return cleaned;
+        if (cleaned.length > 0 && !/\s/.test(cleaned)) return cleaned;
       }
     }
     return '';
@@ -751,13 +762,36 @@ REQUIRED JSON SCHEMA:
     rawDescription?: string;
     categorySlug?: string;
   }): Promise<AiEnrichmentResponse | null> {
-    if (!params || typeof params !== 'object') return null;
+    if (!params || typeof params !== 'object' || Array.isArray(params)) return null;
     const cleanBrand =
       typeof params.brand === 'string' ? params.brand.replace(/\p{Cc}+/gu, ' ').trim() : '';
     const cleanModel =
       typeof params.model === 'string' ? params.model.replace(/\p{Cc}+/gu, ' ').trim() : '';
     if (!cleanBrand || !cleanModel) return null;
-    params = { ...params, brand: cleanBrand, model: cleanModel };
+    const cleanRawTitle =
+      typeof params.rawTitle === 'string'
+        ? params.rawTitle
+            .replace(/\p{Cc}+/gu, ' ')
+            .trim()
+            .slice(0, 500) || undefined
+        : undefined;
+    const cleanRawDesc =
+      typeof params.rawDescription === 'string'
+        ? params.rawDescription
+            .replace(/\p{Cc}+/gu, ' ')
+            .trim()
+            .slice(0, 2000) || undefined
+        : undefined;
+    const cleanCategorySlug =
+      typeof params.categorySlug === 'string' ? params.categorySlug : undefined;
+    params = {
+      ...params,
+      brand: cleanBrand,
+      model: cleanModel,
+      rawTitle: cleanRawTitle,
+      rawDescription: cleanRawDesc,
+      categorySlug: cleanCategorySlug,
+    };
 
     if (!this.isConfigured()) {
       logger.info(
@@ -988,9 +1022,10 @@ REQUIRED JSON SCHEMA:
     if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)) {
       throw new Error('[AiSpecEnricher] candidate must be a non-null object');
     }
-    if (candidate.is_benchmark_enriched) {
+    if (candidate.is_benchmark_enriched === true) {
       return {
         ...candidate,
+        has_5g: toBooleanOrUndefined(candidate.has_5g) ?? false,
         colors: sanitizeColorList(candidate.colors) ?? [],
         spec_source: candidate.spec_source ?? 'benchmark_registry',
       };
@@ -1015,6 +1050,7 @@ REQUIRED JSON SCHEMA:
     if (!aiResult) {
       return {
         ...candidate,
+        has_5g: toBooleanOrUndefined(candidate.has_5g) ?? false,
         colors: sanitizeColorList(candidate.colors) ?? [],
       };
     }
@@ -1055,7 +1091,7 @@ REQUIRED JSON SCHEMA:
       screen_size_inch:
         toBoundedNumberOrUndefined(aiResult.screen_size_inch, 120) ?? validCandidateScreen,
       battery_mah: toBoundedIntOrUndefined(aiResult.battery_mah, 500000) ?? validCandidateBattery,
-      has_5g: aiResult.has_5g ?? candidate.has_5g,
+      has_5g: aiResult.has_5g ?? toBooleanOrUndefined(candidate.has_5g) ?? false,
       specifications: mergedSpecifications,
       key_specs: {
         ...baseKeySpecs,
