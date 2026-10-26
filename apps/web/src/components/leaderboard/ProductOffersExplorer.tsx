@@ -46,14 +46,53 @@ export function computeMerchantTrustScore(riskScore: unknown): number {
   return 100 - clampedRisk;
 }
 
+export function sanitizeOfferRiskScore100(value: unknown): number {
+  const num = typeof value === 'number' ? value : Number(value);
+  if (!Number.isFinite(num) || num <= 0) return 0;
+  return Math.min(100, Math.round(num));
+}
+
 export function isSafeExternalOfferUrl(url: unknown): boolean {
-  if (typeof url !== 'string' || !url.trim()) return false;
+  if (typeof url !== 'string') return false;
+  if (/\p{Cc}/u.test(url)) return false;
+  const trimmed = url.trim();
+  if (!trimmed || trimmed.length > 2048 || !/^https?:\/\//i.test(trimmed)) {
+    return false;
+  }
   try {
-    const parsed = new URL(url.trim());
-    return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+    const parsed = new URL(trimmed);
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+      return false;
+    }
+    if (parsed.username || parsed.password) return false;
+    return true;
   } catch {
     return false;
   }
+}
+
+export function sanitizeOffersMarkdownCell(value: unknown): string {
+  if (typeof value !== 'string') return '-';
+  const cleaned = value
+    .replace(/\p{Cc}+/gu, ' ')
+    .replace(/\|/g, '-')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 180);
+  return cleaned || '-';
+}
+
+export function sanitizeOffersFileToken(value: unknown): string {
+  if (typeof value !== 'string') return 'audit';
+  const cleaned = value
+    .replace(/\p{Cc}+/gu, '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 120);
+  return cleaned || 'audit';
 }
 
 export function computeOffersPriceSpreadAudit(
@@ -187,11 +226,7 @@ export default function ProductOffersExplorer({
     implausibleOfferIds,
   ]);
 
-  const safeSlugFileToken =
-    (typeof productSlug === 'string' ? productSlug : '')
-      .toLowerCase()
-      .replace(/[^a-z0-9_-]+/g, '-')
-      .replace(/^-+|-+$/g, '') || 'audit';
+  const safeSlugFileToken = sanitizeOffersFileToken(productSlug);
 
   const handleCopyOffersMarkdown = async () => {
     if (typeof navigator === 'undefined' || filteredOffers.length === 0) return;
@@ -213,18 +248,19 @@ export default function ProductOffersExplorer({
         Number.isFinite(Number(o.price_original)) &&
         Number(o.price_original) > o.price_current &&
         Number(o.price_original) <= MAX_VALID_VND_PRICE;
+      const verdictCell = implausibleOfferIds.has(o.id)
+        ? t('offersImplausiblyLowBadge')
+        : analysis
+          ? discountVerdictCopy(tVerdict, analysis).label
+          : tVerdict('labelNormal');
       return [
-        o.platform.toUpperCase(),
-        o.merchant.name.replace(/\|/g, '-'),
+        sanitizeOffersMarkdownCell(o.platform.toUpperCase()),
+        sanitizeOffersMarkdownCell(o.merchant.name),
         o.merchant.is_official ? 'Yes' : 'No',
         `${trust}%`,
         `${o.price_current.toLocaleString('vi-VN')} ₫`,
         hasValidOrig ? `${o.price_original!.toLocaleString('vi-VN')} ₫` : '-',
-        implausibleOfferIds.has(o.id)
-          ? t('offersImplausiblyLowBadge')
-          : analysis
-            ? discountVerdictCopy(tVerdict, analysis).label
-            : tVerdict('labelNormal'),
+        sanitizeOffersMarkdownCell(verdictCell),
       ];
     });
 
@@ -236,14 +272,20 @@ export default function ProductOffersExplorer({
           count: priceSpreadAudit.platformCount,
           spreadVnd: priceSpreadAudit.spreadVnd.toLocaleString('vi-VN'),
           spreadPct: priceSpreadAudit.spreadPct,
-          cheapestPlatform: priceSpreadAudit.cheapest.platform.toUpperCase(),
-          cheapestMerchant: priceSpreadAudit.cheapest.merchant.name,
-          priciestPlatform: priceSpreadAudit.priciest.platform.toUpperCase(),
+          cheapestPlatform: sanitizeOffersMarkdownCell(
+            priceSpreadAudit.cheapest.platform.toUpperCase()
+          ),
+          cheapestMerchant: sanitizeOffersMarkdownCell(
+            priceSpreadAudit.cheapest.merchant.name
+          ),
+          priciestPlatform: sanitizeOffersMarkdownCell(
+            priceSpreadAudit.priciest.platform.toUpperCase()
+          ),
         })
       : '';
 
     const md = [
-      `### 🛡️ Rate.vn cross-store price check: ${productName}`,
+      `### 🛡️ Rate.vn cross-store price check: ${sanitizeOffersMarkdownCell(productName)}`,
       radarLine + spreadLine,
       `| ${headers.join(' | ')} |`,
       `| ${sep.join(' | ')} |`,
@@ -290,8 +332,8 @@ export default function ProductOffersExplorer({
         o.merchant.name,
         o.merchant.is_official ? 'true' : 'false',
         String(trust),
-        String(o.merchant.dosafe_risk_score || 0),
-        String(o.merchant.review_risk_score || 0),
+        String(sanitizeOfferRiskScore100(o.merchant.dosafe_risk_score)),
+        String(sanitizeOfferRiskScore100(o.merchant.review_risk_score)),
         String(o.price_current),
         hasValidOrig ? String(o.price_original) : '',
         implausibleOfferIds.has(o.id)
@@ -682,8 +724,14 @@ export default function ProductOffersExplorer({
                           className="text-muted"
                           style={{ fontSize: '0.8125rem' }}
                         >
-                          DOSafe: {offer.merchant.dosafe_risk_score}/100 |
-                          Review Risk: {offer.merchant.review_risk_score}
+                          DOSafe:{' '}
+                          {sanitizeOfferRiskScore100(
+                            offer.merchant.dosafe_risk_score
+                          )}
+                          /100 | Review Risk:{' '}
+                          {sanitizeOfferRiskScore100(
+                            offer.merchant.review_risk_score
+                          )}
                           /100
                         </div>
                       </div>

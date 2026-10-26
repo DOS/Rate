@@ -12853,6 +12853,73 @@ async function runCoreArchitectureSuite() {
   }
 
   // -------------------------------------------------------------------------
+  // 126h. ProductOffersExplorer, ProductShareAuditButton & ProductValueCalculator Bounds (#1055)
+  // -------------------------------------------------------------------------
+  {
+    const {
+      isSafeExternalOfferUrl,
+      sanitizeOfferRiskScore100,
+      sanitizeOffersMarkdownCell,
+      sanitizeOffersFileToken,
+    } = await import('../../../components/leaderboard/ProductOffersExplorer');
+    const { normalizeShareAuditFields, sanitizeShareAuditText } =
+      await import('../../../components/leaderboard/ProductShareAuditButton');
+    const { sanitizeValueCalcFileToken, sanitizeValueCriterionScore5 } =
+      await import('../../../components/leaderboard/ProductValueCalculator');
+
+    assert.equal(isSafeExternalOfferUrl('https://shopee.vn/item-i.1.2'), true);
+    assert.equal(
+      isSafeExternalOfferUrl('https://user:pass@evil.example/item'),
+      false
+    );
+    assert.equal(isSafeExternalOfferUrl('https://shopee.vn/item\u0000'), false);
+    assert.equal(isSafeExternalOfferUrl('javascript:alert(1)'), false);
+    assert.equal(sanitizeOfferRiskScore100(145.6), 100);
+    assert.equal(sanitizeOfferRiskScore100(-12), 0);
+    assert.equal(
+      sanitizeOffersMarkdownCell('  Shop\r\nMall | Official\u0000  '),
+      'Shop Mall - Official'
+    );
+    assert.equal(
+      sanitizeOffersFileToken('  ../iPhone 16 Pro\u0000!!  '),
+      'iphone-16-pro'
+    );
+    assert.equal(sanitizeOffersFileToken('   '), 'audit');
+
+    const auditFields = normalizeShareAuditFields({
+      modelKey: '  ../apple:iphone-16\u0000!!  ',
+      userScore5: 7.5,
+      expertScore10: 14,
+      authenticReviews: 50_000_000,
+      minPriceVnd: 9_000_000_000,
+      offerCount: -5,
+    });
+    assert.equal(auditFields.safeModelKeyToken, 'apple-iphone-16');
+    assert.equal(auditFields.safeUserScore5, 5);
+    assert.equal(auditFields.safeExpertScore10, 10);
+    assert.equal(auditFields.safeAuthenticReviews, 10_000_000);
+    assert.equal(auditFields.safeMinPriceVnd, 0);
+    assert.equal(auditFields.safeOfferCount, 0);
+    assert.equal(
+      sanitizeShareAuditText('  iPhone\r\n16 | Pro\u0000  ', 160),
+      'iPhone 16 - Pro'
+    );
+
+    assert.equal(sanitizeValueCriterionScore5(4.84), 4.8);
+    assert.equal(sanitizeValueCriterionScore5(9.2), 5);
+    assert.equal(sanitizeValueCriterionScore5(-2), 0);
+    assert.equal(
+      sanitizeValueCalcFileToken('  ../Smartphones\u0000!!  '),
+      'smartphones'
+    );
+    assert.equal(sanitizeValueCalcFileToken('   '), 'devices');
+
+    console.log(
+      '  ✅ [126h/135] ProductOffersExplorer, ProductShareAuditButton & ProductValueCalculator Bounds (#1055) passed'
+    );
+  }
+
+  // -------------------------------------------------------------------------
   // 127. Rate Server Index & Extension Entity, Slug, and Category Bounds (#1029)
   // -------------------------------------------------------------------------
   {
