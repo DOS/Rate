@@ -733,6 +733,7 @@
     "title": "Kiểm tra link sản phẩm và phát hiện giá gốc bị nâng khống",
     "subtitle": "Dán link Shopee, Lazada, Tiki, TikTok Shop hoặc tên thiết bị để so với lịch sử giá thật, xem điểm rủi ro của gian hàng và tỷ lệ đánh giá ảo.",
     "inputPlaceholder": "Dán URL sản phẩm/gian hàng (vd: https://shopee.vn/...-i.88201679.27110898667) hoặc nhập tên máy...",
+    "inputAria": "Link sản phẩm, gian hàng hoặc tên máy",
     "inspectBtn": "Kiểm tra ngay",
     "inspectingBtn": "Đang kiểm tra...",
     "copyLinkBtn": "Sao chép link kết quả",
