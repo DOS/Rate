@@ -733,6 +733,7 @@
     "title": "Check a product link and spot inflated list prices",
     "subtitle": "Paste a Shopee, Lazada, Tiki or TikTok Shop link, or a device name, to compare it with real price history and see the seller's risk scores and fake-review share.",
     "inputPlaceholder": "Paste product/shop URL (e.g. https://shopee.vn/...-i.88201679.27110898667) or model name...",
+    "inputAria": "Product or shop link, or model name",
     "inspectBtn": "Check now",
     "inspectingBtn": "Checking...",
     "copyLinkBtn": "Copy result link",

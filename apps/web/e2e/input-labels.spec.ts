@@ -3,7 +3,17 @@ import { expect, test } from '@playwright/test';
 // A placeholder is not a label: it disappears as soon as the user types.
 // Every visible field must be named by a <label>, aria-label or
 // aria-labelledby (WCAG 1.3.1, 3.3.2; DOS/Rate#1077).
-const PAGES = ['/smartphones', '/deals', '/merchants', '/leaderboard'];
+const PAGES = [
+  '/smartphones',
+  '/deals',
+  '/merchants',
+  '/leaderboard',
+  // The pre-filled link input was named only by its placeholder
+  // (DOS/Rate#1088).
+  '/inspect',
+  '/contact-us',
+  '/compare',
+];
 
 for (const path of PAGES) {
   test(`visible fields have a label on ${path}`, async ({ page }) => {

@@ -462,6 +462,9 @@ export default function DeepInspectWorkspace({
                   type="text"
                   className="form-control text-dark border-0"
                   placeholder={t('inputPlaceholder')}
+                  // The sample URL pre-fills it, so the placeholder is never a
+                  // visible label (DOS/Rate#1088).
+                  aria-label={t('inputAria')}
                   value={queryInput}
                   onChange={(e) => setQueryInput(e.target.value)}
                 />

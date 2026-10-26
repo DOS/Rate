@@ -733,6 +733,7 @@
     "title": "Kontrola odkazů z tržišť a detekce uměle navýšených cen",
     "subtitle": "Vložte odkaz ze Shopee, Lazada, Tiki či TikTok Shop nebo název zařízení a porovnejte ho se skutečnou historií cen, rizikovými skóre prodejce a podílem falešných recenzí.",
     "inputPlaceholder": "Vložte URL produktu/obchodu (např. https://shopee.vn/...-i.88201679.27110898667) nebo název modelu...",
+    "inputAria": "Odkaz na produkt nebo obchod, nebo název modelu",
     "inspectBtn": "Zkontrolovat",
     "inspectingBtn": "Kontroluji...",
     "copyLinkBtn": "Kopírovat odkaz na report",
