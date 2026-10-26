@@ -25,6 +25,24 @@ interface ProductValueCalculatorProps {
 
 export type HorizonMonths = 12 | 24 | 36;
 
+export function sanitizeValueCriterionScore5(value: unknown): number {
+  const num = typeof value === 'number' ? value : Number(value);
+  if (!Number.isFinite(num) || num <= 0) return 0;
+  return Number(Math.min(5, num).toFixed(1));
+}
+
+export function sanitizeValueCalcFileToken(value: unknown): string {
+  if (typeof value !== 'string') return 'devices';
+  const cleaned = value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]+/g, '-')
+    .replace(/-+/g, '-')
+    .slice(0, 80)
+    .replace(/^-+|-+$/g, '');
+  return cleaned || 'devices';
+}
+
 export function estimateResaleRetentionRatio(
   brand: string,
   categorySlug: string,
@@ -172,16 +190,9 @@ export default function ProductValueCalculator({
     return null;
   }
 
-  const rawValueScore = Number(valueCriterionScore5);
   const safeValueCriterionScore5 =
-    Number.isFinite(rawValueScore) && rawValueScore > 0
-      ? Math.min(5, rawValueScore)
-      : 0;
-  const safeCategoryFileToken =
-    (typeof categorySlug === 'string' ? categorySlug : '')
-      .toLowerCase()
-      .replace(/[^a-z0-9_-]+/g, '-')
-      .replace(/^-+|-+$/g, '') || 'devices';
+    sanitizeValueCriterionScore5(valueCriterionScore5);
+  const safeCategoryFileToken = sanitizeValueCalcFileToken(categorySlug);
 
   const handleDownloadValueCsv = () => {
     if (typeof window === 'undefined') return;
