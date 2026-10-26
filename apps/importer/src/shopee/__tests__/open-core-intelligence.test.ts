@@ -502,6 +502,8 @@ async function runSuite() {
     ['Apple iPhone 18 Pro Max', 'apple:iphone-18-pro-max:unknown'],
     ['Apple iPhone 18 Pro', 'apple:iphone-18-pro:unknown'],
     ['Lenovo ThinkPad X1 Carbon Gen 12 Ultra 7 155U', 'lenovo:thinkpad-x1-carbon-gen-12:unknown'],
+    ['Máy tính bảng iPad Pro M5 11 inch WiFi', 'apple:ipad-pro-m5:unknown'],
+    ['Máy tính bảng Xiaomi Pad 7 Pro', 'xiaomi:pad-7-pro:unknown'],
   ];
   for (const [title, expectedKey] of storagelessRegistryTitles) {
     const storageless = normalizer.normalize(createDummyShopeeProduct(title));
@@ -509,7 +511,13 @@ async function runSuite() {
     assert.equal(storageless.storage_gb, null, title);
     assert.equal(storageless.needs_review, true, title);
     assert.equal(storageless.is_benchmark_enriched, true, title);
+    assert.equal(storageless.specifications.hardware?.storage_gb, undefined, title);
   }
+  const storagelessZenbook = normalizer.normalize(
+    createDummyShopeeProduct('Laptop ASUS Zenbook S 14 UX5406AA-SU348W')
+  );
+  assert.equal(storagelessZenbook.name, 'Asus Zenbook S 14');
+  assert.equal(storagelessZenbook.slug, 'asus-zenbook-s-14');
   // A title that names its storage still keys at it.
   assert.equal(
     normalizer.normalize(createDummyShopeeProduct('Apple iPhone 18 Pro Max 512GB')).model_key,
