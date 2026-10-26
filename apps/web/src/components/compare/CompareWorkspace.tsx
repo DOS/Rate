@@ -1307,7 +1307,8 @@ export default function CompareWorkspace({
           </div>
           <div
             className="d-flex flex-wrap gap-2"
-            role="tablist"
+            // Single-select buttons, not tabs: there are no panels (DOS/Rate#1067).
+            role="group"
             aria-label={t('categoryTabsAria')}
           >
             {categoryTabs.map((tab) => {
@@ -1319,8 +1320,7 @@ export default function CompareWorkspace({
                 <button
                   key={tab.slug}
                   type="button"
-                  role="tab"
-                  aria-selected={isActive}
+                  aria-pressed={isActive}
                   onClick={() => handleSwitchCategoryTab(tab.slug)}
                   className={`btn btn-sm rounded-pill fw-semibold px-3 py-1 ${
                     isActive

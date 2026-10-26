@@ -9699,7 +9699,7 @@ async function runCoreArchitectureSuite() {
   // 107. Issue #900: Offer-Plausibility, Product-Competitors & Copy/SEO/Sitemap Helpers Bounds
   {
     const plausMod =
-      require('../../../lib/offer-plausibility') as typeof import('../../../lib/offer-plausibility');
+      require('@repo/shared-data/rules') as typeof import('@repo/shared-data/rules');
     const compMod =
       require('../../../lib/product-competitors') as typeof import('../../../lib/product-competitors');
     const verdictCopyMod =
@@ -11462,7 +11462,7 @@ async function runCoreArchitectureSuite() {
     const {
       implausiblyLowOfferIds: implausiblyLowOfferIds983,
       plausibleOffers: plausibleOffers983,
-    } = await import('../../../lib/offer-plausibility');
+    } = await import('@repo/shared-data/rules');
     const {
       buildKeySpecLine: buildKeySpecLine983,
       rankRelatedCompetitors: rankRelatedCompetitors983,

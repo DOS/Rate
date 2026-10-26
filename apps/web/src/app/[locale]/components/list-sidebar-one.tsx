@@ -1,5 +1,5 @@
 'use client';
-import React, { useEffect, useState, useTransition } from 'react';
+import React, { useEffect, useId, useState, useTransition } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useLocale, useTranslations } from 'next-intl';
 import { BsFunnel, BsStarFill } from 'react-icons/bs';
@@ -164,6 +164,7 @@ export default function ListSidebarOne({
   const urlMaxMillion = Math.max(rawMinMillion, rawMaxMillion);
 
   const [keyword, setKeyword] = useState(currentQ);
+  const keywordHeaderId = useId();
   const [priceRange, setPriceRange] = useState<[number, number]>([
     urlMinMillion,
     urlMaxMillion,
@@ -349,7 +350,10 @@ export default function ListSidebarOne({
                 {/* 1. Keyword Search Box */}
                 <div className="filter-search-box mb-4">
                   <div className="filtersearch-title d-flex justify-content-between align-items-center">
-                    <h3 className="lh-base text-uppercase fw-medium mb-2 text-sm">
+                    <h3
+                      id={keywordHeaderId}
+                      className="lh-base text-uppercase fw-medium mb-2 text-sm"
+                    >
                       {t('sidebar.keywordChipsetHeader')}
                     </h3>
                     <span className="badge bg-light text-muted small border">
@@ -357,9 +361,12 @@ export default function ListSidebarOne({
                     </span>
                   </div>
                   <div className="form-group form-border mb-0">
+                    {/* Named by the heading above, not only by the
+                        placeholder (DOS/Rate#1077). */}
                     <input
                       type="text"
                       className="form-control"
+                      aria-labelledby={keywordHeaderId}
                       placeholder={schema.searchPlaceholder}
                       value={keyword}
                       onChange={(e) => setKeyword(e.target.value)}

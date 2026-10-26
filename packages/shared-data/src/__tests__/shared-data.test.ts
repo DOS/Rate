@@ -18,6 +18,8 @@ import {
   z,
 } from '../index.js';
 import { getAdminClient, getRateClient, getDosafeClient } from '../server.js';
+import * as rules from '../rules/index.js';
+import { readdirSync, readFileSync } from 'node:fs';
 
 function testVersionAndZeroStrapiExports(): void {
   assert.equal(SHARED_DATA_VERSION, '2.0.0');
@@ -659,26 +661,102 @@ function testSeedingRiskPenalty(): void {
   );
 }
 
+function testPriceRules(): void {
+  // One 1B VND ceiling for the schemas and the bait-price rule.
+  assert.equal(rules.MAX_VALID_VND_PRICE, sharedDataRoot.MAX_VALID_VND_PRICE);
+  assert.equal(
+    rules.MAX_PLAUSIBLE_VND_PRICE,
+    sharedDataRoot.MAX_VALID_VND_PRICE
+  );
+  // The rules ship on their own subpath, not the root export.
+  assert.equal('plausibleOffers' in sharedDataRoot, false);
+
+  assert.equal(
+    rules.minimumListingPriceVnd(['iphone 16 pro max 256gb']),
+    1_200_000
+  );
+  assert.equal(
+    rules.minimumListingPriceVnd(['galaxy buds pro', 'https://shop.vn/x']),
+    400_000
+  );
+  // Current behaviour, kept by the move: "buds3" has no word boundary after
+  // "buds", so it gets the device floor (follow-up in DOS/Rate#1089).
+  assert.equal(rules.minimumListingPriceVnd(['galaxy buds3 pro']), 1_200_000);
+  assert.equal(
+    rules.minimumListingPriceVnd(['sony', 'https://shop.vn/tai-nghe-sony']),
+    400_000,
+    'the URL alone can name earbuds'
+  );
+  assert.equal(
+    rules.minimumListingPriceVnd(['budsy phone stand']),
+    1_200_000,
+    'whole words only'
+  );
+
+  // 500k is below 40% of the median of the other three (3.1M): flagged.
+  const offers = [
+    { id: 'a', price_current: 500_000 },
+    { id: 'b', price_current: 3_000_000 },
+    { id: 'c', price_current: 3_100_000 },
+    { id: 'd', price_current: 9_000_000 },
+  ];
+  assert.deepEqual([...rules.implausiblyLowOfferIds(offers)], ['a']);
+  assert.equal(rules.plausibleMinPrice(0, offers), 3_000_000);
+
+  // One definition of the ceiling: the schemas re-export it, never redefine it.
+  assert.doesNotMatch(
+    readFileSync(
+      new URL('../schemas/specs.schema.js', import.meta.url),
+      'utf8'
+    ),
+    /MAX_VALID_VND_PRICE\s*=/
+  );
+
+  // Browser-safe: the compiled rules import only each other, so neither zod
+  // nor Supabase can reach a client bundle through them.
+  const dir = new URL('../rules/', import.meta.url);
+  for (const file of readdirSync(dir).filter((f) => f.endsWith('.js'))) {
+    const source = readFileSync(new URL(file, dir), 'utf8');
+    // Static import/export statements (tsc emits them at column 0) and
+    // dynamic import() calls; comments are not matched.
+    const specifiers = [
+      ...source.matchAll(/^(?:import|export)\b[^;]*?['"]([^'"]+)['"]/gm),
+      ...source.matchAll(/\bimport\(\s*['"]([^'"]+)['"]/g),
+    ].map((m) => m[1]);
+    for (const specifier of specifiers) {
+      assert.match(
+        specifier ?? '',
+        /^\.\/[\w-]+\.js$/,
+        `rules/${file} imports ${specifier}`
+      );
+    }
+  }
+}
+
 function main(): void {
   console.log('🧪 Running @repo/shared-data unit tests...');
   testVersionAndZeroStrapiExports();
   console.log(
-    '  ✅ [1/5] Version & Zero-Strapi root export isolation verified'
+    '  ✅ [1/7] Version & Zero-Strapi root export isolation verified'
   );
   testRouteConstants();
-  console.log('  ✅ [2/5] Route & REST API v1 constants verified');
+  console.log('  ✅ [2/7] Route & REST API v1 constants verified');
   testTenFieldGroupsSpecificationsSchema();
   console.log(
-    '  ✅ [3/5] 10-Field-Groups ProductSpecificationsSchema verified'
+    '  ✅ [3/7] 10-Field-Groups ProductSpecificationsSchema verified'
   );
   testMasterProductAndScrapedProductSchemas();
   console.log(
-    '  ✅ [4/5] MasterProduct, ScrapedProduct & common schemas verified'
+    '  ✅ [4/7] MasterProduct, ScrapedProduct & common schemas verified'
   );
   testSupabaseClientGuards();
-  console.log('  ✅ [5/6] Supabase client fail-closed env guards verified');
+  console.log('  ✅ [5/7] Supabase client fail-closed env guards verified');
   testSeedingRiskPenalty();
-  console.log('  ✅ [6/6] Shared seeding risk penalty verified');
+  console.log('  ✅ [6/7] Shared seeding risk penalty verified');
+  testPriceRules();
+  console.log(
+    '  ✅ [7/7] Shared price rules (@repo/shared-data/rules) verified'
+  );
   console.log('🎉 All @repo/shared-data tests passed!');
 }
 

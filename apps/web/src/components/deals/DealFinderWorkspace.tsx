@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
 import ContentText from '@/components/elementary/ContentText';
 import {
@@ -177,6 +177,8 @@ export default function DealFinderWorkspace({
 }: DealFinderWorkspaceProps) {
   const t = useTranslations('deals');
   const locale = useLocale();
+  const categoryLabelId = useId();
+  const personaLabelId = useId();
   const [categoryFilter, setCategoryFilter] = useState<
     CanonicalCategorySlug | 'all'
   >(initialCategory);
@@ -552,15 +554,23 @@ export default function DealFinderWorkspace({
           </div>
         </div>
 
-        {/* Category Pills */}
-        <div className="d-flex align-items-center mb-3 flex-wrap gap-2">
-          <span className="small text-secondary fw-semibold me-1">
+        {/* Category Pills: the pressed one is exposed (DOS/Rate#1069) */}
+        <div
+          className="d-flex align-items-center mb-3 flex-wrap gap-2"
+          role="group"
+          aria-labelledby={categoryLabelId}
+        >
+          <span
+            id={categoryLabelId}
+            className="small text-secondary fw-semibold me-1"
+          >
             {t('categoryLabel')}
           </span>
           {categoryOptions.map((opt) => (
             <button
               key={opt.slug}
               type="button"
+              aria-pressed={categoryFilter === opt.slug}
               onClick={() => setCategoryFilter(opt.slug)}
               className={`btn btn-sm rounded-pill px-3 py-1 ${
                 categoryFilter === opt.slug
@@ -577,8 +587,13 @@ export default function DealFinderWorkspace({
         <div
           id="rate-deal-personas"
           className="d-flex align-items-center mb-3 flex-wrap gap-2"
+          role="group"
+          aria-labelledby={personaLabelId}
         >
-          <span className="small text-secondary fw-semibold me-1">
+          <span
+            id={personaLabelId}
+            className="small text-secondary fw-semibold me-1"
+          >
             {t('personaLabel')}
           </span>
           {personaOptions.map((p) => (
@@ -626,6 +641,8 @@ export default function DealFinderWorkspace({
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder={t('searchPlaceholder')}
+              // Named even after the placeholder is gone (DOS/Rate#1077).
+              aria-label={t('searchPlaceholder')}
               className="form-control form-control-sm rounded-pill px-3 py-2"
             />
           </div>

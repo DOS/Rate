@@ -24,7 +24,7 @@ import {
   type RadarSignal,
 } from '@/lib/deal-radar';
 import { escapeCsvCell } from '@/lib/csv-safe';
-import { implausiblyLowOfferIds } from '@/lib/offer-plausibility';
+import { implausiblyLowOfferIds } from '@repo/shared-data/rules';
 import { contentLang } from '@/lib/content-lang';
 import ContentText from '@/components/elementary/ContentText';
 

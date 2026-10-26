@@ -70,7 +70,8 @@ gh issue list -R DOS/Rate-Services --state open
 - **Quy tắc Định danh Agent (Agent Nickname) & Tránh trùng lặp:**
   - Vì mọi Agent đều chạy dưới tài khoản GitHub của JOY (`@me`), **MỖI AGENT PHẢI TỰ ĐẶT MỘT NICKNAME NGẮN GỌN** theo chuyên môn hoặc phiên làm việc (ví dụ: `Crawl`, `Web`, `Core`, `DB`, `QA`) và gắn cả **Nhãn `agent:<nickname>`** lẫn **Cột `Agent` trên GitHub Project #9**.
   - **TUYỆT ĐỐI KHÔNG** tự ý làm các Issue đang có nhãn `status:in-progress`, `status:in-review` hoặc đã có nhãn `agent:<khác>` đang chạy (trừ khi JOY chỉ định rõ).
-  - Ưu tiên chọn các Issue đang có nhãn `status:ready`.
+  - **Issue có nhãn `incident` là ưu tiên số 1**, trên mọi việc khác: chúng do `.github/workflows/incident-report.yml` tự mở khi CI đỏ trên `dev`/`main` (DOS/Rate-Services có workflow tương tự cho crawler theo lịch), hoặc do Upptime mở trong `DOS/status` khi rate.vn sập. Nhận issue, tìm thay đổi gây lỗi, sửa tiếp (fix forward). Issue tự đóng khi workflow xanh lại.
+  - Sau đó ưu tiên chọn các Issue đang có nhãn `status:ready`.
   - Nếu yêu cầu của người dùng chưa có Issue tương ứng, **TẠO NGAY ISSUE MỚI BẰNG TIẾNG ANH** và gắn vào GitHub Project #9:
     ```powershell
     $agentNick = "Crawl" # Đặt nickname riêng của Agent (vd: Crawl, Web, Core...)
@@ -201,4 +202,4 @@ Mỗi finding khi review (subagent fresh-context, bot, hoặc người) phải �
 - **Vòng 1:** Sửa các finding hợp lý ở mọi mức.
 - **Từ vòng 2 trở đi:** Trong PR hiện tại chỉ sửa P0/P1, mọi finding về bảo mật hoặc dữ liệu, lỗi trong hành vi mà chính PR này thêm vào, và required check đang đỏ. Các P2/P3 còn lại gom vào **một** issue follow-up duy nhất; trả lời từng thread kèm link issue đó rồi resolve thread.
 - Một lượt review của bot bị rate-limit, bị bỏ qua (skipped) hoặc không có nội dung **không phải là review**. Không chờ và không tính là đã review.
-- Cổng review thật sự là **review bằng subagent fresh-context** (Mục 0.2). Required check `Typecheck & Build Monorepo` phải xanh trước khi merge (ruleset `dev-main-light` trên `dev` và `main`: chặn xóa nhánh và force-push, không yêu cầu approval). Riêng `main` có thêm ruleset `main-release`: bắt buộc qua PR, chỉ cho merge commit, và phải xanh thêm `PR into main comes from dev` và `main must not lead dev` (Mục 0.6).
+- Cổng review thật sự là **review bằng subagent fresh-context** (Mục 0.2). Các required check `Typecheck & Build Monorepo`, `E2E (Playwright)` và `Secret scan (gitleaks)` phải xanh trước khi merge (ruleset `dev-main-light` trên `dev` và `main`: chặn xóa nhánh và force-push, không yêu cầu approval). Riêng `main` có thêm ruleset `main-release`: bắt buộc qua PR, chỉ cho merge commit, và phải xanh thêm `PR into main comes from dev` và `main must not lead dev` (Mục 0.6).

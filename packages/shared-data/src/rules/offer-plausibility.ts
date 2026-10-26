@@ -3,14 +3,19 @@
  * store asks for the same model is almost never a real deal: it is a
  * counterfeit, an accessory or a bait listing. Such offers must not set a
  * product's "from" price or the deal radar's market floor.
+ *
+ * The database applies the same rule to rate.master_products.min_price in
+ * rate.refresh_master_market_stats (DOS-Me migration
+ * 20261024060000_rate_master_min_price_plausible.sql): change both together.
  */
+import { MAX_VALID_VND_PRICE } from './price-limits.js';
 
 /** An offer below this share of the other offers' median is implausible. */
 export const IMPLAUSIBLY_LOW_RATIO = 0.4;
 /** Fewer offers than this are too few to call one an outlier. */
 export const MIN_OFFERS_FOR_OUTLIER = 3;
-/** Maximum plausible VND listing price (1B VND). */
-export const MAX_PLAUSIBLE_VND_PRICE = 1_000_000_000;
+/** Maximum plausible VND listing price: the shared 1B VND ceiling. */
+export const MAX_PLAUSIBLE_VND_PRICE = MAX_VALID_VND_PRICE;
 
 function toSafePlausiblePrice(raw: unknown): number {
   if (typeof raw !== 'number' && typeof raw !== 'string') return NaN;

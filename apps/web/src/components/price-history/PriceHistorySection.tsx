@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useId, useMemo, useRef, useState } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
 import ExportMenu from '@/components/elementary/ExportMenu';
 import ContentText from '@/components/elementary/ContentText';
@@ -145,6 +145,7 @@ export default function PriceHistorySection({
   const t = useTranslations('productDetail');
   const tVerdict = useTranslations('priceVerdict');
   const locale = useLocale();
+  const storeFilterLabelId = useId();
   const [selectedProductId, setSelectedProductId] = useState<string>('ALL');
   const [timeRange, setTimeRange] = useState<TimeRangeKey>('all');
   const [activePointIndex, setActivePointIndex] = useState<number | null>(null);
@@ -652,14 +653,23 @@ export default function PriceHistorySection({
         </div>
       </div>
 
-      {/* Controls: Merchant Filter & Time Range */}
+      {/* Controls: Merchant Filter & Time Range. Single-select groups that
+          expose the pressed choice, not only its colour (DOS/Rate#1069). */}
       <div className="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center mb-3 gap-3">
-        <div className="d-flex align-items-center flex-wrap gap-2">
-          <span className="small text-muted fw-medium me-1">
+        <div
+          className="d-flex align-items-center flex-wrap gap-2"
+          role="group"
+          aria-labelledby={storeFilterLabelId}
+        >
+          <span
+            id={storeFilterLabelId}
+            className="small text-muted fw-medium me-1"
+          >
             {t('priceHistoryMerchantFilterLabel')}
           </span>
           <button
             type="button"
+            aria-pressed={selectedProductId === 'ALL'}
             onClick={() => {
               setSelectedProductId('ALL');
               setActivePointIndex(null);
@@ -682,6 +692,7 @@ export default function PriceHistorySection({
               <button
                 key={oa.product_id}
                 type="button"
+                aria-pressed={isSelected}
                 onClick={() => {
                   setSelectedProductId(oa.product_id);
                   setActivePointIndex(null);
@@ -721,6 +732,7 @@ export default function PriceHistorySection({
             <button
               key={item.key}
               type="button"
+              aria-pressed={timeRange === item.key}
               onClick={() => {
                 setTimeRange(item.key);
                 setActivePointIndex(null);

@@ -89,3 +89,15 @@ test('footer links are at least 44px tall on a phone', async ({ page }) => {
     expect(box).toBeGreaterThanOrEqual(44);
   }
 });
+
+// WCAG 2.2 target size (24px minimum): the catalog deal-radar link was 21px
+// tall next to other targets (DOS/Rate#1075).
+test('the catalog deal-radar link is at least 24px tall', async ({ page }) => {
+  await page.goto('/smartphones');
+  const link = page.locator(
+    '[data-testid="category-deal-radar"] .rate-radar-spread-head > a'
+  );
+  await expect(link).toBeVisible();
+  const box = await link.boundingBox();
+  expect(box!.height).toBeGreaterThanOrEqual(24);
+});

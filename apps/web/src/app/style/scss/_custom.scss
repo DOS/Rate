@@ -903,6 +903,9 @@
     display: inline-flex;
     align-items: center;
     gap: 0.35rem;
+    // At least 24px tall: WCAG 2.2 target size, and it sits next to other
+    // targets (DOS/Rate#1075).
+    min-height: 24px;
     margin-bottom: 0.75rem;
     font-size: 0.875rem;
     font-weight: 600;
@@ -1517,5 +1520,26 @@ body .input-group > .input-group-text {
 
   .navigation .mobile_nav ul > li.me-1 {
     margin-right: 0 !important;
+  }
+}
+
+// Forced colours replace the background and text colours that mark a pressed
+// toggle (btn-danger vs btn-outline-dark), so the selected category looked
+// like the others in Windows High Contrast. Draw every pressed control with
+// the system highlight instead (DOS/Rate#1086).
+// `html` outranks Bootstrap's !important utilities (bg-white, text-dark) on
+// children such as count badges.
+@media (forced-colors: active) {
+  html [aria-pressed='true'] {
+    forced-color-adjust: none;
+    background-color: Highlight !important;
+    border-color: Highlight !important;
+    color: HighlightText !important;
+
+    * {
+      background-color: transparent !important;
+      border-color: HighlightText !important;
+      color: HighlightText !important;
+    }
   }
 }
