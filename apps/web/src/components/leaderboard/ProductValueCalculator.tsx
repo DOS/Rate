@@ -34,13 +34,12 @@ export function sanitizeValueCriterionScore5(value: unknown): number {
 export function sanitizeValueCalcFileToken(value: unknown): string {
   if (typeof value !== 'string') return 'devices';
   const cleaned = value
-    .replace(/\p{Cc}+/gu, '')
     .trim()
     .toLowerCase()
     .replace(/[^a-z0-9_-]+/g, '-')
     .replace(/-+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, 80);
+    .slice(0, 80)
+    .replace(/^-+|-+$/g, '');
   return cleaned || 'devices';
 }
 

@@ -52,10 +52,18 @@ export function sanitizeOfferRiskScore100(value: unknown): number {
   return Math.min(100, Math.round(num));
 }
 
+// Missing scores render as "-" so "no data" never reads as "no risk".
+export function formatOfferRiskScore100(value: unknown): string {
+  if (value == null || value === '') return '-';
+  const num = typeof value === 'number' ? value : Number(value);
+  if (!Number.isFinite(num)) return '-';
+  return String(sanitizeOfferRiskScore100(num));
+}
+
 export function isSafeExternalOfferUrl(url: unknown): boolean {
   if (typeof url !== 'string') return false;
-  if (/\p{Cc}/u.test(url)) return false;
   const trimmed = url.trim();
+  if (/\p{Cc}/u.test(trimmed)) return false;
   if (!trimmed || trimmed.length > 2048 || !/^https?:\/\//i.test(trimmed)) {
     return false;
   }
@@ -85,13 +93,12 @@ export function sanitizeOffersMarkdownCell(value: unknown): string {
 export function sanitizeOffersFileToken(value: unknown): string {
   if (typeof value !== 'string') return 'audit';
   const cleaned = value
-    .replace(/\p{Cc}+/gu, '')
     .trim()
     .toLowerCase()
     .replace(/[^a-z0-9_-]+/g, '-')
     .replace(/-+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, 120);
+    .slice(0, 120)
+    .replace(/^-+|-+$/g, '');
   return cleaned || 'audit';
 }
 
@@ -725,11 +732,11 @@ export default function ProductOffersExplorer({
                           style={{ fontSize: '0.8125rem' }}
                         >
                           DOSafe:{' '}
-                          {sanitizeOfferRiskScore100(
+                          {formatOfferRiskScore100(
                             offer.merchant.dosafe_risk_score
                           )}
                           /100 | Review Risk:{' '}
-                          {sanitizeOfferRiskScore100(
+                          {formatOfferRiskScore100(
                             offer.merchant.review_risk_score
                           )}
                           /100

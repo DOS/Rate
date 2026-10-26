@@ -12861,6 +12861,7 @@ async function runCoreArchitectureSuite() {
       sanitizeOfferRiskScore100,
       sanitizeOffersMarkdownCell,
       sanitizeOffersFileToken,
+      formatOfferRiskScore100,
     } = await import('../../../components/leaderboard/ProductOffersExplorer');
     const { normalizeShareAuditFields, sanitizeShareAuditText } =
       await import('../../../components/leaderboard/ProductShareAuditButton');
@@ -12874,8 +12875,33 @@ async function runCoreArchitectureSuite() {
     );
     assert.equal(isSafeExternalOfferUrl('https://shopee.vn/item\u0000'), false);
     assert.equal(isSafeExternalOfferUrl('javascript:alert(1)'), false);
+    assert.equal(isSafeExternalOfferUrl(' https://shopee.vn/x\n'), true);
+    assert.equal(isSafeExternalOfferUrl('https://shopee.vn/x\ny'), false);
+    assert.equal(
+      isSafeExternalOfferUrl(`https://shopee.vn/${'a'.repeat(2030)}`),
+      true
+    );
+    assert.equal(
+      isSafeExternalOfferUrl(`https://shopee.vn/${'a'.repeat(2031)}`),
+      false
+    );
+    assert.equal(formatOfferRiskScore100(null), '-');
+    assert.equal(formatOfferRiskScore100(undefined), '-');
+    assert.equal(formatOfferRiskScore100(0), '0');
+    assert.equal(formatOfferRiskScore100(42.5), '43');
+    assert.equal(formatOfferRiskScore100(250), '100');
     assert.equal(sanitizeOfferRiskScore100(145.6), 100);
     assert.equal(sanitizeOfferRiskScore100(-12), 0);
+    assert.equal(sanitizeOfferRiskScore100('42.4'), 42);
+    assert.equal(sanitizeOfferRiskScore100(Number.NaN), 0);
+    assert.equal(sanitizeOffersMarkdownCell(null), '-');
+    assert.equal(sanitizeOffersMarkdownCell('x'.repeat(500)).length, 180);
+    assert.equal(sanitizeOffersFileToken('a'.repeat(500)).length, 120);
+    assert.equal(
+      sanitizeOffersFileToken(`${'a'.repeat(119)}-b`),
+      'a'.repeat(119)
+    );
+    assert.equal(sanitizeOffersFileToken('iphone\n16'), 'iphone-16');
     assert.equal(
       sanitizeOffersMarkdownCell('  Shop\r\nMall | Official\u0000  '),
       'Shop Mall - Official'
@@ -12902,7 +12928,7 @@ async function runCoreArchitectureSuite() {
     assert.equal(auditFields.safeOfferCount, 0);
     assert.equal(
       sanitizeShareAuditText('  iPhone\r\n16 | Pro\u0000  ', 160),
-      'iPhone 16 - Pro'
+      'iPhone 16 | Pro'
     );
 
     assert.equal(sanitizeValueCriterionScore5(4.84), 4.8);
@@ -12913,6 +12939,19 @@ async function runCoreArchitectureSuite() {
       'smartphones'
     );
     assert.equal(sanitizeValueCalcFileToken('   '), 'devices');
+    assert.equal(sanitizeValueCalcFileToken('a'.repeat(500)).length, 80);
+    assert.equal(
+      normalizeShareAuditFields({
+        modelKey: 'k'.repeat(500),
+        userScore5: 4,
+        expertScore10: null,
+        authenticReviews: 3,
+        minPriceVnd: 1_000_000,
+        offerCount: 2,
+      }).safeModelKeyToken.length,
+      80
+    );
+    assert.equal(sanitizeShareAuditText('y'.repeat(500), 80).length, 80);
 
     console.log(
       '  ✅ [126h/135] ProductOffersExplorer, ProductShareAuditButton & ProductValueCalculator Bounds (#1055) passed'

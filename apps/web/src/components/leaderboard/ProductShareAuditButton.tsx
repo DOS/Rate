@@ -33,7 +33,6 @@ export function sanitizeShareAuditText(
   if (typeof value !== 'string') return '';
   return value
     .replace(/\p{Cc}+/gu, ' ')
-    .replace(/\|/g, '-')
     .replace(/\s+/g, ' ')
     .trim()
     .slice(0, maxLength);
@@ -73,13 +72,12 @@ export function normalizeShareAuditFields(input: {
       : 0;
   const safeModelKeyToken =
     (typeof input.modelKey === 'string' ? input.modelKey : '')
-      .replace(/\p{Cc}+/gu, '')
       .trim()
       .toLowerCase()
       .replace(/[^a-z0-9_-]+/g, '-')
       .replace(/-+/g, '-')
-      .replace(/^-+|-+$/g, '')
-      .slice(0, 80) || 'audit';
+      .slice(0, 80)
+      .replace(/^-+|-+$/g, '') || 'audit';
 
   return {
     safeUserScore5,
