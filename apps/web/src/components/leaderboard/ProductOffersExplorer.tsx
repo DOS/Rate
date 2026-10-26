@@ -52,9 +52,12 @@ export function sanitizeOfferRiskScore100(value: unknown): number {
   return Math.min(100, Math.round(num));
 }
 
-// Missing scores render as "-" so "no data" never reads as "no risk".
+// Defensive: a score that is not a usable number renders as "-" rather than
+// "0", so malformed data never reads as "no risk".
 export function formatOfferRiskScore100(value: unknown): string {
-  if (value == null || value === '') return '-';
+  if (typeof value === 'string' ? !value.trim() : typeof value !== 'number') {
+    return '-';
+  }
   const num = typeof value === 'number' ? value : Number(value);
   if (!Number.isFinite(num)) return '-';
   return String(sanitizeOfferRiskScore100(num));

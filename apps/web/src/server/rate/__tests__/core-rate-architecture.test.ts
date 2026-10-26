@@ -12887,6 +12887,9 @@ async function runCoreArchitectureSuite() {
     );
     assert.equal(formatOfferRiskScore100(null), '-');
     assert.equal(formatOfferRiskScore100(undefined), '-');
+    assert.equal(formatOfferRiskScore100('  '), '-');
+    assert.equal(formatOfferRiskScore100(true), '-');
+    assert.equal(formatOfferRiskScore100('37'), '37');
     assert.equal(formatOfferRiskScore100(0), '0');
     assert.equal(formatOfferRiskScore100(42.5), '43');
     assert.equal(formatOfferRiskScore100(250), '100');
