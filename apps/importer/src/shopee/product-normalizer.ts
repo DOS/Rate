@@ -1155,8 +1155,8 @@ export class ProductNormalizer {
     // Apple's desktops and speakers, last so another brand wins, and not when the title
     // only names what it fits or looks like ("Bàn phím cho Mac mini") (DOS/Rate#819).
     else if (
-      /\bimac\b|\bmac\s*(?:mini|studio)\b|homepod/i.test(title) &&
-      !/\b(?:cho|for|giống)\s+(?:imac|mac|homepod)/i.test(title)
+      /\bimac\b|\bmac\s*(?:mini|studio)\b|homepod|\bvision\s*pro\b/i.test(title) &&
+      !/\b(?:cho|for|giống)\s+(?:imac|mac|homepod|vision)/i.test(title)
     )
       brand = 'Apple';
 
@@ -1282,11 +1282,19 @@ export class ProductNormalizer {
                 .replace(/^11$/, 'A16');
         // An iPad Air generation without a chip is its own model; the 6th and 7th are the M2
         // and M3 Airs, keyed like titles that name the chip, and a named M chip wins: "iPad
-        // Air 5 M1" is the "iPad Air M1" (DOS/Rate#819).
+        // Air 5 M1" is the "iPad Air M1" (DOS/Rate#819). The chip is read only from the Air's
+        // own part of the title, before a "+" bundle or a "cho/for" accessory phrase.
         const air = line.match(/^air\s*([1-9])$/i);
+        const airChip = air
+          ? appleTitle
+              .slice(ipadMatch.index ?? 0)
+              .split(/ ?\+ | (?:cho|for) /i)[0]!
+              .match(/\b(M\d)\b/i)?.[1]
+              ?.toUpperCase()
+          : undefined;
         if (air)
-          line = chip
-            ? `Air ${chip}`
+          line = airChip
+            ? `Air ${airChip}`
             : air[1] === '6'
               ? 'Air M2'
               : air[1] === '7'
@@ -1336,7 +1344,7 @@ export class ProductNormalizer {
         // after the line keeps "HomePod 2" and "Apple TV 4K 2022" apart (DOS/Rate#819).
         const generation = appleTitle
           .slice(familyEnd)
-          .match(/^ ?([1-9]|20\d{2})\b(?! ?(?:gb|tb)\b)/i);
+          .match(/^ ?\(? ?([1-9]|20\d{2})\b(?! ?(?:gb|tb)\b)/i);
         if (/^(?:Mac mini|Mac Studio|iMac)$/.test(model) && chip)
           model = `${model} ${chip}${chipMatch?.[2] ? ` ${chipMatch[2]}` : ''}`;
         else if (

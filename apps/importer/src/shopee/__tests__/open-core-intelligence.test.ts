@@ -316,6 +316,10 @@ async function runSuite() {
     ['Apple HomePod 2', 'apple:homepod-2:unknown'],
     ['Apple HomePod (2nd generation)', 'apple:homepod-2:unknown'],
     ['Apple TV 4K 2022 128GB', 'apple:tv-4k-3:128gb'],
+    ['Apple TV 4K (2022) 128GB', 'apple:tv-4k-3:128gb'],
+    ['Vision Pro 256GB', 'apple:vision-pro:256gb'],
+    // A chip named for a bundled accessory is not the Air's.
+    ['iPad Air 5 64GB + ốp lưng cho iPad Pro M4', 'apple:ipad-air-5:64gb'],
     // Another brand, or a title that only names what it fits, is not an Apple desktop.
     ['Ốp Samsung Galaxy S24 imac', 'samsung:op-samsung-galaxy-s24:unknown'],
     // An accessory naming its own family before "cho" keeps the model it fits.
