@@ -42,6 +42,34 @@ test('a job name with dashes cannot end the HTML comment early', () => {
   assert.deepEqual(readPending(body), ['a --> b']);
 });
 
+test('a marker quoted from a commit title cannot replace the real one', () => {
+  const fake = '<!-- incident-pending: [] -->';
+  const body = writePending(`Commit ${fake} ${fake}`, [E2E]);
+  assert.deepEqual(readPending(body), [E2E]);
+  assert.equal(body.match(/incident-pending/g).length, 1);
+  assert.equal(
+    decide({
+      conclusion: 'success',
+      jobs: [job(BUILD, 'success'), job(E2E, 'skipped')],
+      open: { number: 1, body: `Commit ${fake}
+
+${writePending('', [E2E])}` },
+    }).action,
+    'unverified'
+  );
+});
+
+test('a matrix name recovers only when every job of that name succeeded', () => {
+  assert.equal(
+    decide({
+      conclusion: 'success',
+      jobs: [job('Test', 'success'), job('Test', 'skipped')],
+      open: incident(['Test']),
+    }).action,
+    'unverified'
+  );
+});
+
 test('a missing or broken marker reads as unknown', () => {
   assert.equal(readPending('An incident opened before #1134.'), null);
   assert.equal(readPending('<!-- incident-pending: [oops -->'), null);
@@ -103,6 +131,18 @@ test('a skipped job that never failed does not block closing', () => {
   );
 });
 
+test('a pending job no longer in the workflow does not block closing', () => {
+  const jobs = [job(BUILD, 'success'), job('E2E (Chromium)', 'success')];
+  assert.equal(
+    decide({ conclusion: 'success', jobs, open: incident([E2E]) }).action,
+    'close'
+  );
+  assert.equal(
+    decide({ conclusion: 'success', jobs: [], open: incident([E2E]) }).action,
+    'unverified'
+  );
+});
+
 test('recovery is tracked across runs: each job may pass in a different one', () => {
   const first = decide({
     conclusion: 'success',
@@ -161,14 +201,10 @@ test('an incident without a marker closes only when every job succeeded', () => 
   );
 });
 
-test('a failure without failing job names leaves the pending jobs unknown', () => {
+test('a failure without failing job names keeps the jobs already pending', () => {
   assert.deepEqual(
-    decide({
-      conclusion: 'failure',
-      jobs: [job(BUILD, 'success')],
-      open: incident([E2E]),
-    }),
-    { action: 'update', pending: null, failing: [] }
+    decide({ conclusion: 'cancelled', jobs: [], open: incident([E2E]) }),
+    { action: 'update', pending: [E2E], failing: [] }
   );
   assert.equal(
     decide({ conclusion: 'failure', jobs: [], open: null }).pending,
