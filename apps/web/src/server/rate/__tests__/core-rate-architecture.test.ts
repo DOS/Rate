@@ -13126,6 +13126,238 @@ async function runCoreArchitectureSuite() {
   }
 
   // -------------------------------------------------------------------------
+  // 126j. View offers select threat_source and read merchants.metadata (#1108)
+  // -------------------------------------------------------------------------
+  {
+    const {
+      getMasterProductOffers,
+      getMasterProductOffersBatch,
+      mapTrustViewRowToMerchantOffer,
+    } = await import('@/lib/rate-api');
+
+    const viewMerchant = (extra: Record<string, unknown>, metaRisk?: unknown) =>
+      mapTrustViewRowToMerchantOffer(
+        {
+          id: 'o',
+          merchant_id: 'm',
+          platform: 'shopee',
+          title: 't',
+          price_current: 1_000_000,
+          url: 'https://shopee.vn/p',
+          review_risk_score: 0,
+          review_risk_breakdown: {},
+          ...extra,
+        } as never,
+        undefined,
+        metaRisk as never
+      ).merchant;
+    // Metadata fills a missing view score only.
+    assert.equal(
+      viewMerchant({ dosafe_risk_score: 0 }, 7).dosafe_risk_score,
+      7
+    );
+    assert.equal(viewMerchant({ dosafe_risk_score: 0 }, 7).risk_score, 15);
+    assert.equal(viewMerchant({}, 60).risk_score, 60);
+    assert.equal(
+      viewMerchant({ dosafe_risk_score: 0, threat_source: 'dosafe' }, 7)
+        .dosafe_risk_score,
+      0
+    );
+    assert.equal(
+      viewMerchant({ dosafe_risk_score: 35 }, 7).dosafe_risk_score,
+      35
+    );
+    // threat_intel.source is NOT NULL: a blank one is still a joined row's 0;
+    // a null one is the LEFT JOIN miss.
+    assert.equal(
+      viewMerchant({ dosafe_risk_score: 0, threat_source: '' })
+        .dosafe_risk_score,
+      0
+    );
+    assert.equal(
+      viewMerchant({ dosafe_risk_score: 0, threat_source: null })
+        .dosafe_risk_score,
+      null
+    );
+    assert.equal(
+      viewMerchant({ dosafe_risk_score: 0 }, '7').dosafe_risk_score,
+      null
+    );
+    assert.equal(
+      viewMerchant({ dosafe_risk_score: 0 }, 250).dosafe_risk_score,
+      100
+    );
+
+    const viewRow1108 = (id: string, merchantId: string, dosafe: number) => ({
+      id,
+      cluster_id: 'master-1108',
+      merchant_id: merchantId,
+      platform: 'shopee',
+      title: 't',
+      price_current: 1_000_000,
+      url: 'https://shopee.vn/p',
+      threat_risk_score: dosafe,
+      dosafe_risk_score: dosafe,
+      review_risk_score: 42,
+      review_risk_breakdown: { total_reviews: 3 },
+    });
+    const viewSelects1108: string[] = [];
+    const merchantIds1108: string[] = [];
+    const json1108 = (body: unknown) =>
+      new Response(JSON.stringify(body), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      });
+    globalThis.fetch = (async (input: RequestInfo | URL) => {
+      const url = new URL(
+        typeof input === 'string'
+          ? input
+          : input instanceof URL
+            ? input.toString()
+            : input.url
+      );
+      if (url.pathname.endsWith('/v_products_with_merchant_trust')) {
+        viewSelects1108.push(url.searchParams.get('select') ?? '');
+        return json1108(
+          Number(url.searchParams.get('offset') ?? 0) > 0
+            ? []
+            : [
+                viewRow1108('o1', 'm-meta', 0),
+                viewRow1108('o2', 'm-scored', 35),
+              ]
+        );
+      }
+      if (url.pathname.endsWith('/merchants')) {
+        merchantIds1108.push(url.searchParams.get('id') ?? '');
+        assert.match(
+          url.searchParams.get('select') ?? '',
+          /metadata->dosafe_risk_score/
+        );
+        return json1108([
+          {
+            id: 'm-meta',
+            follower_count: 900,
+            metadata_dosafe_risk_score: 7,
+          },
+        ]);
+      }
+      return json1108([]);
+    }) as typeof fetch;
+
+    const offers1108 = await getMasterProductOffers('master-1108');
+    const batch1108 = await getMasterProductOffersBatch(['master-1108']);
+    for (const offers of [offers1108, batch1108.get('master-1108') ?? []]) {
+      assert.deepEqual(
+        offers.map((o) => [o.id, o.merchant.dosafe_risk_score]),
+        [
+          ['o1', 7],
+          ['o2', 35],
+        ]
+      );
+      // A scored seller gets no follower count from the extra read (#685).
+      assert.equal(offers[0]?.merchant.follower_count, 0);
+    }
+    // Without threat_source every view 0 would read as missing (#1099).
+    assert.ok(viewSelects1108.length > 0);
+    for (const select of viewSelects1108) {
+      assert.ok(
+        select
+          .split(',')
+          .map((c) => c.trim())
+          .includes('threat_source'),
+        `TRUST_VIEW_SELECT must include threat_source: ${select}`
+      );
+    }
+    // Only the seller without a view score is read.
+    assert.deepEqual(merchantIds1108, ['in.(m-meta)', 'in.(m-meta)']);
+
+    // An unscored seller without a view score gets both values; a rejected
+    // metadata path still leaves the follower adjustment (#685); a row with
+    // no seller is not read.
+    const unscoredRow1108 = {
+      ...viewRow1108('o3', 'm-new', 0),
+      review_risk_score: 0,
+      review_risk_breakdown: {},
+    };
+    const noSellerRow1108 = { ...viewRow1108('o4', '', 0), merchant_id: '' };
+    const runOffers1108 = async (rejectMetadata: boolean) => {
+      const selects: string[] = [];
+      globalThis.fetch = (async (input: RequestInfo | URL) => {
+        const url = new URL(
+          typeof input === 'string'
+            ? input
+            : input instanceof URL
+              ? input.toString()
+              : input.url
+        );
+        if (url.pathname.endsWith('/v_products_with_merchant_trust')) {
+          return json1108(
+            Number(url.searchParams.get('offset') ?? 0) > 0
+              ? []
+              : [unscoredRow1108, noSellerRow1108]
+          );
+        }
+        if (url.pathname.endsWith('/merchants')) {
+          const select = url.searchParams.get('select') ?? '';
+          selects.push(`${select} | ${url.searchParams.get('id')}`);
+          if (rejectMetadata && select.includes('metadata')) {
+            return new Response(
+              JSON.stringify({ message: 'simulated metadata path failure' }),
+              { status: 400, headers: { 'content-type': 'application/json' } }
+            );
+          }
+          return json1108([
+            {
+              id: 'm-new',
+              follower_count: 60000,
+              ...(select.includes('metadata')
+                ? { metadata_dosafe_risk_score: 12 }
+                : {}),
+            },
+          ]);
+        }
+        return json1108([]);
+      }) as typeof fetch;
+      const offers = await getMasterProductOffers('master-1108');
+      return { offers, selects };
+    };
+    const both1108 = await runOffers1108(false);
+    assert.deepEqual(
+      both1108.offers.map((o) => [
+        o.id,
+        o.merchant.dosafe_risk_score,
+        o.merchant.review_risk_score,
+        o.merchant.follower_count,
+      ]),
+      [
+        ['o3', 12, 10, 60000],
+        ['o4', null, 42, 0],
+      ]
+    );
+    assert.equal(both1108.selects.length, 1);
+    assert.match(both1108.selects[0] ?? '', /\| in\.\(m-new\)$/);
+    const rejected1108 = await runOffers1108(true);
+    assert.deepEqual(
+      rejected1108.offers.map((o) => [
+        o.id,
+        o.merchant.dosafe_risk_score,
+        o.merchant.review_risk_score,
+      ]),
+      [
+        ['o3', null, 10],
+        ['o4', null, 42],
+      ]
+    );
+    assert.deepEqual(rejected1108.selects.slice(1), [
+      'id,follower_count | in.(m-new)',
+    ]);
+
+    console.log(
+      '  ✅ [126j/135] View offers select threat_source and read merchants.metadata (#1108) passed'
+    );
+  }
+
+  // -------------------------------------------------------------------------
   // 127. Rate Server Index & Extension Entity, Slug, and Category Bounds (#1029)
   // -------------------------------------------------------------------------
   {
