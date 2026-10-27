@@ -63,6 +63,12 @@ export function formatOfferRiskScore100(value: unknown): string {
   return String(sanitizeOfferRiskScore100(num));
 }
 
+// The CSV leaves a missing score empty where the UI shows "-" (#1099).
+export function offerRiskScoreCsvCell(value: unknown): string {
+  const formatted = formatOfferRiskScore100(value);
+  return formatted === '-' ? '' : formatted;
+}
+
 export function isSafeExternalOfferUrl(url: unknown): boolean {
   if (typeof url !== 'string') return false;
   const trimmed = url.trim();
@@ -100,8 +106,9 @@ export function sanitizeOffersFileToken(value: unknown): string {
     .toLowerCase()
     .replace(/[^a-z0-9_-]+/g, '-')
     .replace(/-+/g, '-')
+    .replace(/^-+/, '')
     .slice(0, 120)
-    .replace(/^-+|-+$/g, '');
+    .replace(/-+$/, '');
   return cleaned || 'audit';
 }
 
@@ -342,8 +349,8 @@ export default function ProductOffersExplorer({
         o.merchant.name,
         o.merchant.is_official ? 'true' : 'false',
         String(trust),
-        String(sanitizeOfferRiskScore100(o.merchant.dosafe_risk_score)),
-        String(sanitizeOfferRiskScore100(o.merchant.review_risk_score)),
+        offerRiskScoreCsvCell(o.merchant.dosafe_risk_score),
+        offerRiskScoreCsvCell(o.merchant.review_risk_score),
         String(o.price_current),
         hasValidOrig ? String(o.price_original) : '',
         implausibleOfferIds.has(o.id)

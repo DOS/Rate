@@ -65,8 +65,9 @@ export interface ExtensionOfferItem {
     name: string;
     is_official: boolean;
     risk_score: number;
-    dosafe_risk_score: number;
-    review_risk_score: number;
+    /** `null` when the seller has no stored score (DOS/Rate#1099). */
+    dosafe_risk_score: number | null;
+    review_risk_score: number | null;
   };
 }
 
