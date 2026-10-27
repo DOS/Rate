@@ -27,6 +27,11 @@ import {
   extractProductKeywordFromUrl,
   firstImageUrl,
 } from './rate-domain-core';
+import {
+  isOfferUnavailable,
+  type OfferAvailability,
+  toOfferAvailability,
+} from './product-market-stats';
 export {
   computeWilsonLowerBound,
   evaluateReviewTrustAssessment,
@@ -160,6 +165,12 @@ export interface MerchantOffer {
   rating_star: number;
   rating_count: number;
   url: string;
+  /**
+   * rate.products.availability: a sold-out or discontinued listing keeps its
+   * last price but is not counted in the master's stats (DOS/Rate#1141).
+   * `null` when it was not read.
+   */
+  availability?: OfferAvailability | null;
   merchant: {
     id: string;
     name: string;
@@ -1301,27 +1312,82 @@ export async function getMasterProductOffers(
   ).catch(() => null);
   if (viewRows) {
     const rows = viewRows as unknown as RawTrustViewRow[];
-    const extras = await sellerExtrasForTrustViewRows(rows);
+    const [extras, availability] = await Promise.all([
+      sellerExtrasForTrustViewRows(rows),
+      getListingAvailabilityForMaster(cleanMasterId),
+    ]);
     return rows.map((row) =>
-      mapTrustViewRowToMerchantOffer(
-        row,
-        extras.followerCounts.get(row.merchant_id),
-        extras.metadataDosafeRisks.get(row.merchant_id)
+      withOfferAvailability(
+        mapTrustViewRowToMerchantOffer(
+          row,
+          extras.followerCounts.get(row.merchant_id),
+          extras.metadataDosafeRisks.get(row.merchant_id)
+        ),
+        availability
       )
     );
   }
 
   // Fallback with explicit column list matching column-level SELECT grants on rate.merchants
-  const rows = await fetchAllRows('product offers', (from, to) =>
-    supabase
-      .from('products')
-      .select(OFFER_FALLBACK_SELECT)
-      .eq('cluster_id', cleanMasterId)
-      .order('price_current', { ascending: true })
-      .order('id')
-      .range(from, to)
+  const [rows, availability] = await Promise.all([
+    fetchAllRows('product offers', (from, to) =>
+      supabase
+        .from('products')
+        .select(OFFER_FALLBACK_SELECT)
+        .eq('cluster_id', cleanMasterId)
+        .order('price_current', { ascending: true })
+        .order('id')
+        .range(from, to)
+    ),
+    getListingAvailabilityForMaster(cleanMasterId),
+  ]);
+  return (rows as unknown as RawOfferRow[]).map((row) =>
+    withOfferAvailability(mapOfferRowToMerchantOffer(row), availability)
   );
-  return (rows as unknown as RawOfferRow[]).map(mapOfferRowToMerchantOffer);
+}
+
+/**
+ * Availability of every listing of a master, by listing id. The trust view
+ * predates the column (DOS-Me 20261020230000), so it is read from
+ * rate.products. A failed read leaves availability unknown: the offers still
+ * render, only without their sold-out label.
+ */
+async function getListingAvailabilityForMaster(
+  masterId: string
+): Promise<Map<string, OfferAvailability>> {
+  const supabase = getRateClient();
+  try {
+    const rows = await fetchAllRows<{ id: string; availability: unknown }>(
+      'listing availability',
+      (from, to) =>
+        supabase
+          .from('products')
+          .select('id, availability')
+          .eq('cluster_id', masterId)
+          .order('id')
+          .range(from, to) as unknown as PromiseLike<{
+          data: { id: string; availability: unknown }[] | null;
+          error: { message: string } | null;
+        }>
+    );
+    const byId = new Map<string, OfferAvailability>();
+    for (const row of rows) {
+      const availability = toOfferAvailability(row?.availability);
+      if (availability && typeof row.id === 'string') {
+        byId.set(row.id, availability);
+      }
+    }
+    return byId;
+  } catch {
+    return new Map();
+  }
+}
+
+function withOfferAvailability(
+  offer: MerchantOffer,
+  availability: ReadonlyMap<string, OfferAvailability>
+): MerchantOffer {
+  return { ...offer, availability: availability.get(offer.id) ?? null };
 }
 
 /**
@@ -2168,8 +2234,15 @@ export async function getMasterProductPriceHistory(
     }
   }
 
+  // The lowest in-stock price, like the stored min_price: a sold-out listing
+  // keeps its last price (DOS/Rate#1141). Unknown availability counts.
+  const inStockOfferPrices = plausibleOffers(
+    rawOffers.filter((o) => !isOfferUnavailable(o))
+  )
+    .map((o) => o.price_current)
+    .filter((p) => Number.isFinite(p) && p > 0 && p <= MAX_VALID_VND_PRICE);
   const currentMinPrice =
-    validOfferPrices.length > 0 ? Math.min(...validOfferPrices) : null;
+    inStockOfferPrices.length > 0 ? Math.min(...inStockOfferPrices) : null;
 
   return {
     points,
