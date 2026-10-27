@@ -861,7 +861,7 @@
     "filteredSpamCount": "{count, plural, one {# fake or spam review filtered} other {# fake or spam reviews filtered}}",
     "noAbnormalReviews": "No abnormal review patterns detected",
     "priceRangeLabel": "Reference price range:",
-    "radarGenuineBadge": "{count} cross-store lows (-{pct}%)",
+    "radarGenuineBadge": "{count} below-median deals (-{pct}%)",
     "radarFakeBadge": "{count} fake-sale markup alerts",
     "radarZeroFakeBadge": "No fake-sale alerts found",
     "viewTrustProfileCta": "View seller profile →",

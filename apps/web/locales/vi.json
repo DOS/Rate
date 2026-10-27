@@ -861,7 +861,7 @@
     "filteredSpamCount": "{count} đánh giá ảo hoặc spam đã lọc",
     "noAbnormalReviews": "Chưa phát hiện đánh giá bất thường",
     "priceRangeLabel": "Biên độ giá tham chiếu:",
-    "radarGenuineBadge": "{count} giá đáy giữa các sàn (-{pct}%)",
+    "radarGenuineBadge": "{count} tin bán dưới giá trung vị (-{pct}%)",
     "radarFakeBadge": "{count} Cảnh báo kê khống giá gốc",
     "radarZeroFakeBadge": "Chưa phát hiện giảm giá ảo",
     "viewTrustProfileCta": "Xem hồ sơ gian hàng →",

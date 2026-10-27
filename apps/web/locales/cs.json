@@ -861,7 +861,7 @@
     "filteredSpamCount": "{count, plural, one {# falešná nebo spamová recenze odfiltrována} few {# falešné nebo spamové recenze odfiltrovány} other {# falešných nebo spamových recenzí odfiltrováno}}",
     "noAbnormalReviews": "Žádné podezřelé vzorce recenzí",
     "priceRangeLabel": "Referenční cenové rozpětí:",
-    "radarGenuineBadge": "{count} minim napříč obchody (-{pct}%)",
+    "radarGenuineBadge": "{count} nabídek pod mediánem (-{pct}%)",
     "radarFakeBadge": "{count} varování na falešnou slevu",
     "radarZeroFakeBadge": "Žádná varování před falešnou slevou",
     "viewTrustProfileCta": "Zobrazit profil prodejce →",
