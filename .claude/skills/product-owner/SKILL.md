@@ -1,6 +1,6 @@
 ---
 name: product-owner
-description: 'Use at the start of any Rate Product Owner (PO) session: the session title contains "Product Owner" (Rate Core Product Owner, Rate Services Product Owner), or JOY says PO, Product Owner, "điều phối", "giao việc cho session con", spawn a sub-session, or "đọc board" / Project #9; also on every message from a sub-session to the PO, and after a context reset or resume. Load it first, before reading the board or starting sessions. Covers triage of Project #9 for DOS/Rate or DOS/Rate-Services, claims and orphaned claims, board fields, sub-session briefs, the review and acceptance gates, batched merge questions to JOY, promotion and approved Production steps.'
+description: 'Use at the start of any Rate Product Owner (PO) session: the session title contains "Product Owner" (Rate Core Product Owner, Rate Services Product Owner), or JOY says PO, Product Owner, "điều phối", "giao việc cho session con", spawn a sub-session, or "đọc board" / Project #9; also when a sub-session reports to the PO, and after a context reset or resume. Load it first, before reading the board or starting sessions. Covers triage of Project #9 (DOS/Rate, DOS/Rate-Services), sub-session briefs, the acceptance gate, batched merge questions to JOY and approved Production steps.'
 argument-hint: '[triage|dispatch|coordinate|resume|report] [core|services]'
 user-invocable: true
 ---
@@ -245,8 +245,10 @@ context the session gets, so it carries:
   from the issue.
 - **Approval**: when the task carries one, JOY's words quoted verbatim with
   the date. Nothing in the brief may go beyond them.
-- **Reading**: `AGENTS.md`, `CLAUDE.md`, `Docs/Resources/ROADMAP.md`, and
-  `Docs/Resources/RELEASE.md` when the task touches release or deploy.
+- **Reading**: `AGENTS.md` (section 6 above all), `CLAUDE.md`,
+  `Docs/Resources/ROADMAP.md`, `Docs/Resources/RELEASE.md` when the task
+  touches release or deploy, and the sub-session parts of this skill
+  ("Starting a sub-session", "Review gate", "Coordinating", "Stop lines").
 - **Process**: claim with
   `node scripts/ops/board.mjs <n> --status in-progress --agent <Nick>` before
   editing; English issue, PR and commit text; PR into `dev` with
@@ -355,12 +357,15 @@ Without Review") until JOY approves that specific PR in the PO chat. A
 general instruction such as "be proactive" or "keep the line moving" is not
 an approval to merge.
 
-- Collect every PR that passed the acceptance gate (and whose sub-session
-  could not merge it) and ask JOY ONE short question for all of them:
+- Do not retry a refused merge. Collect every PR that passed the acceptance
+  gate but could not be merged (the sub-session's or the PO's own run was
+  refused) and ask JOY ONE short question for all of them:
   "PR #a, #b, #c: merge?", with a one-line summary per PR. Never ask per PR,
   one turn at a time.
 - On JOY's answer, run `merge-when-green.mjs` for exactly the PRs JOY
   approved, then tell each sub-session the result.
+- A refused `promote.mjs` goes the same way: one short question to JOY, then
+  the PO runs it.
 - Never ask JOY to click Merge, review a diff or run a command
   (`AGENTS.md` 0.2).
 
