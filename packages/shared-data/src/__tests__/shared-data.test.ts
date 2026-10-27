@@ -679,9 +679,22 @@ function testPriceRules(): void {
     rules.minimumListingPriceVnd(['galaxy buds pro', 'https://shop.vn/x']),
     400_000
   );
-  // Current behaviour, kept by the move: "buds3" has no word boundary after
-  // "buds", so it gets the device floor (follow-up in DOS/Rate#1089).
-  assert.equal(rules.minimumListingPriceVnd(['galaxy buds3 pro']), 1_200_000);
+  // A model number right after the name is still earbuds (DOS/Rate#1092).
+  for (const title of [
+    'galaxy buds3 pro',
+    'Samsung Galaxy Buds2',
+    'Huawei FreeBuds5i',
+    'Huawei FreeBuds 5i',
+    'Apple AirPods4',
+    'https://shop.vn/samsung-galaxy-buds3-pro',
+  ]) {
+    assert.equal(rules.minimumListingPriceVnd([title]), 400_000, title);
+  }
+  assert.equal(
+    rules.minimumListingPriceVnd(['galaxy buds+']),
+    400_000,
+    'a "+" after the name is no word character'
+  );
   assert.equal(
     rules.minimumListingPriceVnd(['sony', 'https://shop.vn/tai-nghe-sony']),
     400_000,
