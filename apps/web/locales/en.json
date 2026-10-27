@@ -964,6 +964,8 @@
     "metaTitle": "{name} - From {minPrice} ₫ | Rate.vn",
     "metaTitleShort": "{name} - From {minPrice} ₫",
     "metaDesc": "Compare {name} prices across {merchantCount} merchants, spot fake discounts in the price history and read filtered buyer reviews on Rate.vn.",
+    "metaDescNoStock": "No store has the {name} ({brand}) in stock right now. See its price history to spot fake discounts and read real reviews (fake reviews filtered) on Rate.vn.",
+    "ogDescNoStock": "No store has it in stock right now. See the 10 GSMArena/PhoneArena spec groups and the price history chart.",
     "ogTitle": "{name} - Specs and true price history | Rate.vn",
     "ogDesc": "Best price from {minPrice} ₫. See the 10 standardized GSMArena/PhoneArena spec groups and the price history chart.",
     "breadcrumbHome": "Home",

@@ -964,6 +964,8 @@
     "metaTitle": "{name} - Giá từ {minPrice} ₫ | Rate.vn",
     "metaTitleShort": "{name} - Giá từ {minPrice} ₫",
     "metaDesc": "So sánh giá {name} từ {merchantCount} gian hàng, xem lịch sử giá để nhận ra giảm giá ảo và đọc đánh giá thật (đã lọc đánh giá ảo) trên Rate.vn.",
+    "metaDescNoStock": "{name} ({brand}) hiện chưa có nơi bán còn hàng. Xem lịch sử giá để nhận ra giảm giá ảo và đọc đánh giá thật (đã lọc đánh giá ảo) trên Rate.vn.",
+    "ogDescNoStock": "Chưa có nơi bán còn hàng. Xem 10 nhóm thông số kỹ thuật chuẩn GSMArena/PhoneArena và biểu đồ lịch sử giá.",
     "ogTitle": "{name} - So sánh giá và kiểm tra khuyến mãi | Rate.vn",
     "ogDesc": "Giá tốt nhất từ {minPrice} ₫. Xem 10 nhóm thông số kỹ thuật chuẩn GSMArena/PhoneArena và biểu đồ lịch sử giá.",
     "breadcrumbHome": "Trang chủ",

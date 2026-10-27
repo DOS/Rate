@@ -44,9 +44,12 @@ export function productMarketStats(
   const minPrice = toStoredPrice(product?.min_price);
   const storedMax = toStoredPrice(product?.max_price);
   const rawCount = Number(product?.merchant_count);
+  // A stored price has at least one seller, even with a stale or null count.
   const sellerCount =
-    minPrice > 0 && Number.isFinite(rawCount) && rawCount > 0
-      ? Math.min(Math.floor(rawCount), 100_000)
+    minPrice > 0
+      ? Number.isFinite(rawCount) && rawCount >= 1
+        ? Math.min(Math.floor(rawCount), 100_000)
+        : 1
       : 0;
   return {
     minPrice,

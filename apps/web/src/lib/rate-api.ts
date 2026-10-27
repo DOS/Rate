@@ -2,7 +2,10 @@ import { createClient } from '@supabase/supabase-js';
 import type { Database, MasterProduct } from '@repo/shared-data';
 import { createLogger } from '@/lib/logger';
 import { isPendingReview } from '@/lib/review-display';
-import { plausibleOffers } from '@repo/shared-data/rules';
+import {
+  implausiblyLowOfferIds,
+  plausibleOffers,
+} from '@repo/shared-data/rules';
 import {
   type ReviewFlagCategory,
   type ReviewItem,
@@ -1937,7 +1940,12 @@ export async function getMasterProductPriceHistory(
     : cleanMasterId
       ? await getMasterProductOffers(cleanMasterId)
       : [];
-  const offers = plausibleOffers(rawOffers);
+  // Bait prices are judged among the in-stock listings, as the stored
+  // min_price is; a sold-out listing keeps its chart (DOS/Rate#1141).
+  const baitIds = implausiblyLowOfferIds(
+    rawOffers.filter((o) => !isOfferUnavailable(o))
+  );
+  const offers = rawOffers.filter((o) => !baitIds.has(o.id));
   if (offers.length === 0) {
     return {
       points: [],
@@ -2236,9 +2244,8 @@ export async function getMasterProductPriceHistory(
 
   // The lowest in-stock price, like the stored min_price: a sold-out listing
   // keeps its last price (DOS/Rate#1141). Unknown availability counts.
-  const inStockOfferPrices = plausibleOffers(
-    rawOffers.filter((o) => !isOfferUnavailable(o))
-  )
+  const inStockOfferPrices = offers
+    .filter((o) => !isOfferUnavailable(o))
     .map((o) => o.price_current)
     .filter((p) => Number.isFinite(p) && p > 0 && p <= MAX_VALID_VND_PRICE);
   const currentMinPrice =

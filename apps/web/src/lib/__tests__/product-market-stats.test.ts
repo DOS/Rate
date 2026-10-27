@@ -46,6 +46,12 @@ async function main() {
     maxPrice: 0,
     sellerCount: 0,
   });
+  assert.equal(
+    productMarketStats({ min_price: 500, max_price: 500, merchant_count: null })
+      .sellerCount,
+    1,
+    'A stored price has at least one seller'
+  );
   // A max below the min (a partial write) never shows a reversed range.
   assert.equal(
     productMarketStats({ min_price: 500, max_price: 100, merchant_count: 1 })
@@ -116,6 +122,7 @@ async function main() {
   const spread = computeOffersPriceSpreadAudit(budsOffers);
   assert.ok(spread);
   assert.equal(spread.cheapest.price_current, buds.min_price);
+  // Here only: the stored max also counts a listing's variant top price.
   assert.equal(spread.priciest.price_current, buds.max_price);
 
   // Every surface reads the stored stats. The product page, its metadata and
@@ -124,7 +131,7 @@ async function main() {
   const page = read('../../app/[locale]/smartphones/[slug]/page.tsx');
   assert.match(
     page,
-    /import \{ productMarketStats \} from '@\/lib\/product-market-stats'/
+    /productMarketStats,\n\} from '@\/lib\/product-market-stats'/
   );
   assert.doesNotMatch(
     page,
@@ -150,6 +157,25 @@ async function main() {
   assert.doesNotMatch(metadata, /getCachedMasterProductOffers/);
   assert.match(page, /lowPrice: currentMinPrice/);
   assert.match(page, /offerCount: sellerCount/);
+
+  assert.match(
+    page,
+    /computeProductRadarSignal\(product, inStockOffers\)/,
+    'The radar note never quotes a sold-out listing'
+  );
+  assert.match(page, /currentMinPrice: currentMinPrice > 0 \? currentMinPrice/);
+
+  const productApi = read('../../app/api/v1/rate/products/[slug]/route.ts');
+  assert.match(
+    productApi,
+    /offers\.filter\(\(o\) => !isOfferUnavailable\(o\)\)/
+  );
+  const watchlist = read('../../app/api/v1/rate/watchlist/route.ts');
+  assert.doesNotMatch(
+    watchlist,
+    /withPlausibleMinPrice/,
+    'Watchlist prices and alerts use the stored min_price'
+  );
 
   // The catalogue, compare and the API read the same stored columns.
   const api = read('../rate-api.ts');
