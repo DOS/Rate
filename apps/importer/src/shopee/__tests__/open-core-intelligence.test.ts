@@ -476,8 +476,19 @@ async function runSuite() {
     // A band phrase without a size starts no list: the size after its comma is the case's.
     ['Apple Watch Series 10 Dây Cao Su, 46mm', 'apple:watch-series-10-46mm:unknown'],
     ['Apple Watch Series 10 Dây Cao Su | 42mm GPS', 'apple:watch-series-10-42mm:unknown'],
-    // A part that holds more than a size ends the list.
-    ['Apple Watch Series 10 Sport Band 45mm, 46mm GPS', 'apple:watch-series-10-46mm:unknown'],
+    ['Apple Watch Series 10 Dây Cao Su S/M, 46mm', 'apple:watch-series-10-46mm:unknown'],
+    // A listed size keeps its band's fit, a bracket or text after it.
+    ['Apple Watch Series 10 Sport Band 45mm, 46mm GPS', 'apple:watch-series-10:unknown'],
+    [
+      'Apple Watch Series 10 GPS Dây Cao Su 42mm, 46mm Chính Hãng VN/A',
+      'apple:watch-series-10:unknown',
+    ],
+    ['Apple Watch Series 10 Sport Band 42mm S/M, 46mm M/L', 'apple:watch-series-10:unknown'],
+    ['Apple Watch Series 10 Sport Band 42mm | 46mm (S/M)', 'apple:watch-series-10:unknown'],
+    ['Apple Watch Series 10 [Sport Band 42mm, 46mm] Mới 100%', 'apple:watch-series-10:unknown'],
+    ['Apple Watch Series 10 Dây Sport Band 46mm, 42mm.', 'apple:watch-series-10:unknown'],
+    // A case size before the band phrase still wins.
+    ['Apple Watch Series 11 GPS 46mm, Dây Cao Su 46mm S/M', 'apple:watch-series-11-46mm:64gb'],
     // ")", ";", an en dash or " - " still end the band phrase and its list.
     ['Apple Watch Series 10 (Sport Band 45mm) 46mm, 42mm', 'apple:watch-series-10-46mm:unknown'],
   ];
