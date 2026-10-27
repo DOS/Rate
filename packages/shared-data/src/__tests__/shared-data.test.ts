@@ -751,11 +751,22 @@ function testPriceRules(): void {
     'SonyWH-XB910N tai nghe',
     'Tai nghe Sony WH 1000XM5',
     'Sony_WH-1000XM5 tai nghe',
+    'Tai nghe Sony WH-L600',
+    'Tai nghe Sony WH-RF400',
+    'https://repairpods.vn/iphone-16',
     'https://shop.vn/tai-nghe-sony-wh-1000xm5',
     'Which phone',
   ]) {
     assert.equal(rules.minimumListingPriceVnd([title]), 1_200_000, title);
   }
+  assert.equal(
+    rules.minimumListingPriceVnd([
+      'Tai nghe Sony WH-1000XM5',
+      'https://shop.vn/tai-nghe-sony',
+    ]),
+    1_200_000,
+    'an over-ear title wins over "tai-nghe" in the URL'
+  );
   assert.equal(
     rules.minimumListingPriceVnd(['galaxy buds+']),
     400_000,
