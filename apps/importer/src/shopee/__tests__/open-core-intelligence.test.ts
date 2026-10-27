@@ -295,13 +295,27 @@ async function runSuite() {
     ['iPad Gen 11 128GB', 'apple:ipad-a16:128gb'],
     ['iPad (11th generation) 128GB', 'apple:ipad-a16:128gb'],
     ['Apple iPad 10 64GB', 'apple:ipad-10:64gb'],
+    // Only the first A-chip counts, and not past another iPad or a comparison.
+    ['iPad 10 64GB so sánh với iPad A16', 'apple:ipad-10:64gb'],
+    ['iPad 9 64GB chip A13 - A16 sắp về', 'apple:ipad-9:64gb'],
+    // "iPad 11 Pro" is the 11-inch Pro, not the 11th generation.
+    ['iPad 11 Pro M4 256GB', 'apple:ipad-pro-m4:256gb'],
     // Apple lines with no pattern of their own are not iPhones.
-    ['Apple TV 4K (3rd generation) 128GB', 'apple:tv-4k:128gb'],
+    ['Apple TV 4K (3rd generation) 128GB', 'apple:tv-4k-3:128gb'],
     ['Apple Vision Pro 256GB', 'apple:vision-pro:256gb'],
     ['Mac mini M4 256GB', 'apple:mac-mini-m4:256gb'],
     ['Apple iMac M4 24 inch 256GB', 'apple:imac-m4:256gb'],
     ['Mac Studio M4 Max 512GB', 'apple:mac-studio-m4-max:512gb'],
     ['Loa Apple HomePod mini', 'apple:homepod-mini:unknown'],
+    // A generation or year after the line keeps generations apart.
+    ['Apple HomePod 2', 'apple:homepod-2:unknown'],
+    ['Apple HomePod (2nd generation)', 'apple:homepod-2:unknown'],
+    ['Apple TV 4K 2022 128GB', 'apple:tv-4k-3:128gb'],
+    // Another brand, or a title that only names what it fits, is not an Apple desktop.
+    ['Ốp Samsung Galaxy S24 imac', 'samsung:op-samsung-galaxy-s24:unknown'],
+    // An accessory naming its own family before "cho" keeps the model it fits.
+    ['Ốp lưng iPhone cho iPhone 15 Pro Max', 'apple:iphone-15-pro-max:unknown'],
+    ['Bao da iPad cho iPad Air 5', 'apple:ipad-air-5:unknown'],
     // An iPhone named only as what an accessory fits is not the product.
     ['Tai nghe AirPods Pro 2 cho iPhone Air', 'apple:airpods-pro-2:unknown'],
     ['Tai nghe AirPods Pro 2 cho iPhone 17', 'apple:airpods-pro-2:unknown'],
