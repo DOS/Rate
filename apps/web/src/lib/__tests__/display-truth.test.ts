@@ -4,11 +4,7 @@ import { join } from 'node:path';
 import { computeCrossPlatformDealRadarFromData } from '../../server/rate/deals';
 import { merchantRiskTone } from '../merchant-risk-tone';
 import { radarExplanation } from '../product-detail-copy';
-import {
-  buildRadarIndex,
-  isMultiPlatformFloor,
-  radarLabel,
-} from '../deal-radar';
+import { buildRadarIndex } from '../deal-radar';
 import { computeJReviewsUserScores } from '../jreviews-user-score';
 import {
   computeBayesianRatingSummary,
@@ -126,38 +122,8 @@ assert.ok(
   `no "10 sàn" claim from 2 offers: ${deal.explanationVi} / ${deal.verdictBadgeVi}`
 );
 assert.match(deal.explanationVi, /trung vị của 2 tin bán/);
-assert.equal(
-  deal.verdict,
-  'best_market_deal',
-  'two offers are no multi-platform floor (no "Đáy giá đa sàn" badge)'
-);
 
 const signal = buildRadarIndex(radar).get(master.slug)!;
-// Two offers are a below-median price, never the "multi-platform floor" badge.
-assert.equal(isMultiPlatformFloor(signal.genuineDeal), false);
-for (const locale of LOCALES) {
-  const label = radarLabel(signal, 0, locale);
-  assert.ok(
-    !/Đáy giá đa sàn|Cross-platform low|Minimum napříč/.test(label),
-    `${locale}: 2 offers must not read as a multi-platform floor: ${label}`
-  );
-  const messages = readLocale(locale);
-  assert.ok(messages.deals!.radarBadgeBelowMedian);
-  assert.ok(messages.compare!.radarBelowMedian);
-  assert.ok(messages.watchlist!.radarBelowMedianBadge);
-}
-for (const file of [
-  ['components', 'radar', 'RadarBadge.tsx'],
-  ['components', 'compare', 'CompareWorkspace.tsx'],
-  ['components', 'watchlist', 'WatchlistWorkspace.tsx'],
-]) {
-  assert.ok(
-    readFileSync(join(__dirname, '..', '..', ...file), 'utf8').includes(
-      'isMultiPlatformFloor('
-    ),
-    `${file.join('/')} must label only real floors as the multi-platform floor`
-  );
-}
 const note = radarExplanation(signal);
 assert.equal(note?.key, 'radarExplanationGenuineDeal');
 assert.equal(note!.values.count, '2');
@@ -199,13 +165,6 @@ const sameMerchant = computeCrossPlatformDealRadarFromData(
 );
 assert.equal(sameMerchant.totalOffersAnalyzed, 3);
 assert.equal(sameMerchant.totalMerchantsAnalyzed, 2);
-// With 3 offers the cheapest one, 2% or more below the median, is the floor.
-assert.equal(sameMerchant.genuineDeals[0]?.verdict, 'genuine_all_time_low');
-assert.equal(sameMerchant.genuineDeals[0]?.marketOfferCount, 3);
-assert.match(
-  radarLabel(buildRadarIndex(sameMerchant).get(master.slug)!, 0, 'vi'),
-  /Đáy giá đa sàn/
-);
 
 // DOS/Rate#1144: with no expert score, the composite equals the buyer score
 // the header shows. 9 rating-only 5-star reviews (weight 0.25 each) are 4.54

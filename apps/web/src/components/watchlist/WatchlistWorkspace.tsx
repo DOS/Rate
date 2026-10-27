@@ -26,7 +26,6 @@ import {
 import CompareQuickToggle from '@/components/compare/CompareQuickToggle';
 import {
   getRadarSignal,
-  isMultiPlatformFloor,
   RADAR_CSV_HEADERS,
   radarCsvCells,
   radarExportFields,
@@ -853,17 +852,12 @@ export default function WatchlistWorkspace({
                           >
                             {radarSignal.genuineDeal && (
                               <span className="badge bg-success-subtle text-success rounded-pill small">
-                                {t(
-                                  isMultiPlatformFloor(radarSignal.genuineDeal)
-                                    ? 'radarGenuineBadge'
-                                    : 'radarBelowMedianBadge',
-                                  {
-                                    pct: radarSignal.genuineDeal
-                                      .savingsVsMedianPct,
-                                    platform:
-                                      radarSignal.genuineDeal.platform.toUpperCase(),
-                                  }
-                                )}
+                                {t('radarGenuineBadge', {
+                                  pct: radarSignal.genuineDeal
+                                    .savingsVsMedianPct,
+                                  platform:
+                                    radarSignal.genuineDeal.platform.toUpperCase(),
+                                })}
                               </span>
                             )}
                             {radarSignal.fakeSaleTrap && (

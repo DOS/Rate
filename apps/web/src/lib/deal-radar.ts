@@ -25,17 +25,6 @@ export interface RadarSignal {
 
 export type RadarIndex = ReadonlyMap<string, RadarSignal>;
 
-/**
- * True only for a deal deals.ts called the multi-platform floor, which needs
- * 3+ offers. A cheaper-than-median offer among 2 is not "Đáy giá đa sàn"
- * (DOS/Rate#1145).
- */
-export function isMultiPlatformFloor(
-  deal: Pick<CrossPlatformDealRadarItem, 'verdict'> | null | undefined
-): boolean {
-  return deal?.verdict === 'genuine_all_time_low';
-}
-
 export const EMPTY_RADAR_SIGNAL: RadarSignal = Object.freeze({
   verdict: 'none',
   savingsPct: 0,
@@ -253,11 +242,6 @@ export function radarLabel(
   const safeSpreadPct = toSafeRadarPct(sig.spreadPct);
   if (verdict === 'genuine_deal') {
     const pct = safeSavingsPct.toFixed(1);
-    if (!isMultiPlatformFloor(sig.genuineDeal)) {
-      if (loc === 'en') return `✅ Below median (-${pct}%)`;
-      if (loc === 'cs') return `✅ Pod mediánem (-${pct}%)`;
-      return `✅ Dưới giá trung vị (-${pct}%)`;
-    }
     if (loc === 'en') return `🔥 Cross-platform low (-${pct}%)`;
     if (loc === 'cs') return `🔥 Minimum napříč obchody (-${pct}%)`;
     return `🔥 Đáy giá đa sàn (-${pct}%)`;
