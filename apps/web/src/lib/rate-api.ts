@@ -1352,38 +1352,53 @@ export async function getMasterProductOffers(
 /**
  * Availability of every listing of a master, by listing id. The trust view
  * predates the column (DOS-Me 20261020230000), so it is read from
- * rate.products. A failed read leaves availability unknown: the offers still
- * render, only without their sold-out label.
+ * rate.products. A failed read, or a schema without the column (the E2E
+ * stack built from this repo's migration copy, until DOS/Rate#1147), leaves
+ * availability unknown: the offers still render, only without their sold-out
+ * label, and the page's prices come from the stored stats either way.
  */
 async function getListingAvailabilityForMaster(
   masterId: string
 ): Promise<Map<string, OfferAvailability>> {
   const supabase = getRateClient();
+  const byId = new Map<string, OfferAvailability>();
+  const pageSize = 1000;
   try {
-    const rows = await fetchAllRows<{ id: string; availability: unknown }>(
-      'listing availability',
-      (from, to) =>
-        supabase
-          .from('products')
-          .select('id, availability')
-          .eq('cluster_id', masterId)
-          .order('id')
-          .range(from, to) as unknown as PromiseLike<{
-          data: { id: string; availability: unknown }[] | null;
-          error: { message: string } | null;
-        }>
-    );
-    const byId = new Map<string, OfferAvailability>();
-    for (const row of rows) {
-      const availability = toOfferAvailability(row?.availability);
-      if (availability && typeof row.id === 'string') {
-        byId.set(row.id, availability);
+    for (let from = 0, pages = 0; pages < FETCH_ALL_MAX_PAGES; pages++) {
+      const { data, error } = (await supabase
+        .from('products')
+        .select('id, availability')
+        .eq('cluster_id', masterId)
+        .order('id')
+        .range(from, from + pageSize - 1)) as unknown as {
+        data: { id: string; availability: unknown }[] | null;
+        error: { message: string } | null;
+      };
+      if (error) {
+        log.warn('listing availability unavailable', {
+          masterId,
+          message: error.message,
+        });
+        return new Map();
       }
+      const page = data ?? [];
+      for (const row of page) {
+        const availability = toOfferAvailability(row?.availability);
+        if (availability && typeof row?.id === 'string') {
+          byId.set(row.id, availability);
+        }
+      }
+      if (page.length < pageSize) break;
+      from += page.length;
     }
-    return byId;
-  } catch {
+  } catch (err) {
+    log.warn('listing availability unavailable', {
+      masterId,
+      message: err instanceof Error ? err.message : String(err),
+    });
     return new Map();
   }
+  return byId;
 }
 
 function withOfferAvailability(
