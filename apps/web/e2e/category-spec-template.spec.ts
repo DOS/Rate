@@ -11,7 +11,7 @@ test('earbud page shows audio specs and no phone fields', async ({ page }) => {
   const specs = page.locator('#specs-section');
   const headings = specs.locator('h3');
   await expect(headings.first()).toHaveText(/^1\. Âm thanh/);
-  await expect(headings).toHaveCount(6);
+  await expect(headings).toHaveCount(7);
   await expect(specs).toContainText('E2E 10.5mm driver');
   await expect(specs).toContainText('E2E ANC');
   for (const text of [
@@ -54,6 +54,8 @@ test('a watch page never shows 5G', async ({ page }) => {
   await expect(meta).not.toContainText('5G');
   const specs = page.locator('#specs-section');
   await expect(specs).toContainText('Mạng Di động (Cellular)');
+  // The bands row stays, as 4G only.
+  await expect(specs).toContainText('Băng tần 4G');
   await expect(specs).not.toContainText('5G');
   await expect(specs).not.toContainText('Camera');
 });

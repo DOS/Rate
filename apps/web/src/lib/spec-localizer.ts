@@ -62,6 +62,7 @@ export interface SpecUiDictionary {
     simType: string;
     dataSpeed: string;
     bands5g4g: string;
+    bands4g: string;
     volteVowifi: string;
     wlan: string;
     bluetooth: string;
@@ -144,6 +145,7 @@ const SPEC_UI_DICTS: Record<RateLocale, SpecUiDictionary> = {
       simType: 'Chuẩn SIM',
       dataSpeed: 'Tốc độ dữ liệu',
       bands5g4g: 'Băng tần 5G / 4G',
+      bands4g: 'Băng tần 4G',
       volteVowifi: 'VoLTE / VoWiFi',
       wlan: 'Wi-Fi (WLAN)',
       bluetooth: 'Bluetooth',
@@ -224,6 +226,7 @@ const SPEC_UI_DICTS: Record<RateLocale, SpecUiDictionary> = {
       simType: 'SIM configuration',
       dataSpeed: 'Data speed',
       bands5g4g: '5G / 4G bands',
+      bands4g: '4G bands',
       volteVowifi: 'VoLTE / VoWiFi',
       wlan: 'Wi-Fi (WLAN)',
       bluetooth: 'Bluetooth',
@@ -304,6 +307,7 @@ const SPEC_UI_DICTS: Record<RateLocale, SpecUiDictionary> = {
       simType: 'Typ SIM karty',
       dataSpeed: 'Rychlost dat',
       bands5g4g: 'Pásma 5G / 4G',
+      bands4g: 'Pásma 4G',
       volteVowifi: 'VoLTE / VoWiFi',
       wlan: 'Wi-Fi (WLAN)',
       bluetooth: 'Bluetooth',

@@ -741,7 +741,7 @@ async function runEntityMatcherSuite() {
   assert.equal(budsRow?.battery_mah, 515);
   const budsSpecs = budsRow?.specifications as Record<string, Record<string, unknown>>;
   assert.equal(budsSpecs.display, undefined);
-  assert.equal(budsSpecs.hardware, undefined);
+  assert.deepEqual(budsSpecs.hardware, { chipset: 'BES2700' }, 'the audio chip stays');
   assert.equal(budsSpecs.camera, undefined);
   assert.equal(budsSpecs.cellular, undefined);
   assert.equal(budsSpecs.connectivity?.wlan, undefined);
@@ -763,14 +763,36 @@ async function runEntityMatcherSuite() {
     },
     phoneShapedAi
   );
-  assert.equal(watchRow?.has_5g, false, 'a stored 5G flag on a watch is cleared');
+  // A watch keeps its stored 5G facts (a few models have RedCap 5G); only the
+  // page hides them, and the camera it cannot have is dropped.
+  assert.equal(watchRow?.has_5g, true);
   assert.equal(watchRow?.storage_gb, 64);
   const watchSpecs = watchRow?.specifications as Record<string, Record<string, unknown>>;
   assert.equal(watchSpecs.camera, undefined);
-  assert.equal(watchSpecs.cellular?.has_5g, undefined);
-  assert.equal(watchSpecs.cellular?.bands_5g, undefined);
+  assert.equal(watchSpecs.cellular?.has_5g, true);
+  assert.equal(watchSpecs.cellular?.bands_5g, 'n78');
   assert.equal(watchSpecs.cellular?.bands_4g, 'LTE');
   assert.equal(watchSpecs.display?.size_inch, 1);
+
+  // A category guessed from the title does not scope the write: a master
+  // without a stored category keeps its RAM even when its name says "tai nghe".
+  const guessedRow = await enrichByCategory(
+    {
+      id: 'guess-1142',
+      brand: 'Samsung',
+      model: 'Galaxy S25',
+      name: 'Samsung Galaxy S25 tặng tai nghe Galaxy Buds',
+      ram_gb: 12,
+      storage_gb: 256,
+      has_5g: true,
+      specifications: {},
+      key_specs: {},
+    },
+    phoneShapedAi
+  );
+  assert.equal(guessedRow?.ram_gb, 12);
+  assert.equal(guessedRow?.storage_gb, 256);
+  assert.equal(guessedRow?.has_5g, true);
 
   const budsInsertDb = createMockSupabase();
   await new EntityMatcher(budsInsertDb.client, offlineEnricher).resolveOrCreateMasterProduct({

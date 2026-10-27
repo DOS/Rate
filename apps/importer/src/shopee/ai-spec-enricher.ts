@@ -981,15 +981,19 @@ REQUIRED JSON SCHEMA:
 
       // The schema is phone-shaped; drop what the category does not have
       // (earbuds: no screen, RAM or camera; watches: no 5G) (DOS/Rate#1142).
-      const result: AiEnrichmentResponse = applyCategorySpecTemplate(catKey, {
-        ram_gb: ramGb,
-        storage_gb: storageGb,
-        screen_size_inch: screenSizeInch,
-        battery_mah: batteryMah,
-        has_5g: has5g,
-        specifications,
-        key_specs: keySpecs,
-      });
+      const result: AiEnrichmentResponse = applyCategorySpecTemplate(
+        catKey,
+        {
+          ram_gb: ramGb,
+          storage_gb: storageGb,
+          screen_size_inch: screenSizeInch,
+          battery_mah: batteryMah,
+          has_5g: has5g,
+          specifications,
+          key_specs: keySpecs,
+        },
+        { forStorage: true }
+      );
 
       this.setCacheEntry(cacheKey, result);
       logger.info(

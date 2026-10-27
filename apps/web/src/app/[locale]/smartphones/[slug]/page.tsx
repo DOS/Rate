@@ -1031,10 +1031,16 @@ export async function ProductDetailView({
                       <dd className="fw-medium col-7">
                         {loc(specs?.hardware?.chipset || keySpecs?.chip)}
                       </dd>
-                      <dt className="text-muted col-5">{specUi.fields.cpu}</dt>
-                      <dd className="fw-medium col-7">
-                        {loc(specs?.hardware?.cpu)}
-                      </dd>
+                      {shows('hardware', 'cpu') && (
+                        <>
+                          <dt className="text-muted col-5">
+                            {specUi.fields.cpu}
+                          </dt>
+                          <dd className="fw-medium col-7">
+                            {loc(specs?.hardware?.cpu)}
+                          </dd>
+                        </>
+                      )}
                       {shows('hardware', 'gpu') && (
                         <>
                           <dt className="text-muted col-5">
@@ -1045,24 +1051,34 @@ export async function ProductDetailView({
                           </dd>
                         </>
                       )}
-                      <dt className="text-muted col-5">{specUi.fields.ram}</dt>
-                      <dd className="fw-medium col-7">
-                        {specs?.hardware?.ram_gb
-                          ? `${specs.hardware.ram_gb} GB`
-                          : product.ram_gb
-                            ? `${product.ram_gb} GB`
-                            : '-'}
-                      </dd>
-                      <dt className="text-muted col-5">
-                        {specUi.fields.storage}
-                      </dt>
-                      <dd className="fw-medium col-7">
-                        {specs?.hardware?.storage_gb
-                          ? `${specs.hardware.storage_gb} GB`
-                          : product.storage_gb
-                            ? `${product.storage_gb} GB`
-                            : '-'}
-                      </dd>
+                      {shows('hardware', 'ram_gb') && (
+                        <>
+                          <dt className="text-muted col-5">
+                            {specUi.fields.ram}
+                          </dt>
+                          <dd className="fw-medium col-7">
+                            {specs?.hardware?.ram_gb
+                              ? `${specs.hardware.ram_gb} GB`
+                              : product.ram_gb
+                                ? `${product.ram_gb} GB`
+                                : '-'}
+                          </dd>
+                        </>
+                      )}
+                      {shows('hardware', 'storage_gb') && (
+                        <>
+                          <dt className="text-muted col-5">
+                            {specUi.fields.storage}
+                          </dt>
+                          <dd className="fw-medium col-7">
+                            {specs?.hardware?.storage_gb
+                              ? `${specs.hardware.storage_gb} GB`
+                              : product.storage_gb
+                                ? `${product.storage_gb} GB`
+                                : '-'}
+                          </dd>
+                        </>
+                      )}
                       {shows('hardware', 'storage_expansion') && (
                         <>
                           <dt className="text-muted col-5">
@@ -1073,10 +1089,16 @@ export async function ProductDetailView({
                           </dd>
                         </>
                       )}
-                      <dt className="text-muted col-5">{specUi.fields.os}</dt>
-                      <dd className="fw-medium col-7">
-                        {loc(specs?.hardware?.os)}
-                      </dd>
+                      {shows('hardware', 'os') && (
+                        <>
+                          <dt className="text-muted col-5">
+                            {specUi.fields.os}
+                          </dt>
+                          <dd className="fw-medium col-7">
+                            {loc(specs?.hardware?.os)}
+                          </dd>
+                        </>
+                      )}
                     </dl>
                   </div>
                 </div>
@@ -1289,23 +1311,23 @@ export async function ProductDetailView({
                       <dd className="fw-medium col-7">
                         {loc(specs?.cellular?.data_speed)}
                       </dd>
-                      {shows('cellular', 'bands_5g') && (
-                        <>
-                          <dt className="text-muted col-5">
-                            {specUi.fields.bands5g4g}
-                          </dt>
-                          <dd className="fw-medium col-7">
-                            {loc(
-                              [
-                                specs?.cellular?.bands_5g,
-                                specs?.cellular?.bands_4g,
-                              ]
-                                .filter(Boolean)
-                                .join(' | ')
-                            )}
-                          </dd>
-                        </>
-                      )}
+                      <dt className="text-muted col-5">
+                        {shows('cellular', 'bands_5g')
+                          ? specUi.fields.bands5g4g
+                          : specUi.fields.bands4g}
+                      </dt>
+                      <dd className="fw-medium col-7">
+                        {loc(
+                          [
+                            shows('cellular', 'bands_5g')
+                              ? specs?.cellular?.bands_5g
+                              : null,
+                            specs?.cellular?.bands_4g,
+                          ]
+                            .filter(Boolean)
+                            .join(' | ')
+                        )}
+                      </dd>
                       <dt className="text-muted col-5">
                         {specUi.fields.volteVowifi}
                       </dt>

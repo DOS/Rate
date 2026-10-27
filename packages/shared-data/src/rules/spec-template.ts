@@ -29,13 +29,22 @@ export interface CategorySpecTemplate {
   groups: readonly SpecGroupKey[];
   /** Fields of a listed group that the category does not have. */
   hiddenFields: Partial<Record<SpecGroupKey, readonly string[]>>;
+  /**
+   * Fields the page does not show although a model may really have them, so
+   * the importer keeps them: a few watches do carry 5G (RedCap).
+   */
+  displayHiddenFields: Partial<Record<SpecGroupKey, readonly string[]>>;
   /** `key_specs` entries that apply. */
   keySpecs: readonly KeySpecKey[];
   /** Whether the top-level `ram_gb` / `storage_gb` / `screen_size_inch` apply. */
   ram: boolean;
   storage: boolean;
   screen: boolean;
-  /** 5G is a phone and tablet fact; watches sell as LTE / GPS + Cellular. */
+  /**
+   * Whether the page shows 5G. Watches sell as LTE / GPS + Cellular and the
+   * enricher flags them 5G wrongly; the stored flag is cleared only for a
+   * category without a cellular group.
+   */
   has5g: boolean;
 }
 
@@ -64,6 +73,7 @@ const ALL_KEY_SPECS: readonly KeySpecKey[] = [
 const PHONE_TEMPLATE: CategorySpecTemplate = {
   groups: ALL_GROUPS,
   hiddenFields: {},
+  displayHiddenFields: {},
   keySpecs: ALL_KEY_SPECS,
   ram: true,
   storage: true,
@@ -74,7 +84,8 @@ const PHONE_TEMPLATE: CategorySpecTemplate = {
 const SPEC_TEMPLATES: Readonly<Record<string, CategorySpecTemplate>> = {
   smartphones: PHONE_TEMPLATE,
   tablets: PHONE_TEMPLATE,
-  laptops: { ...PHONE_TEMPLATE, has5g: false },
+  // Laptops keep the full template: some ship with 5G modems.
+  laptops: PHONE_TEMPLATE,
   smartwatches: {
     groups: [
       'display',
@@ -87,11 +98,12 @@ const SPEC_TEMPLATES: Readonly<Record<string, CategorySpecTemplate>> = {
       'availability',
       'regulatory',
     ],
-    hiddenFields: {
+    hiddenFields: {},
+    displayHiddenFields: {
       hardware: ['gpu', 'storage_expansion'],
       cellular: ['has_5g', 'bands_5g'],
     },
-    keySpecs: ['screen', 'chip', 'battery', 'storage'],
+    keySpecs: ['screen', 'chip', 'battery', 'storage', 'ram'],
     ram: true,
     storage: true,
     screen: true,
@@ -102,15 +114,26 @@ const SPEC_TEMPLATES: Readonly<Record<string, CategorySpecTemplate>> = {
       'multimedia',
       'battery',
       'connectivity',
+      'hardware',
       'design',
       'availability',
       'regulatory',
     ],
     hiddenFields: {
+      // The audio chip (Apple H2, BES2700) is the one hardware fact earbuds have.
+      hardware: [
+        'cpu',
+        'gpu',
+        'ram_gb',
+        'storage_gb',
+        'storage_expansion',
+        'os',
+      ],
       design: ['biometrics'],
       connectivity: ['wlan', 'location', 'nfc'],
       multimedia: ['headphone_jack_35mm'],
     },
+    displayHiddenFields: {},
     keySpecs: ['chip', 'battery'],
     ram: false,
     storage: false,
@@ -129,7 +152,16 @@ export function getCategorySpecTemplate(
   return SPEC_TEMPLATES[normalizeSlug(categorySlug)] ?? PHONE_TEMPLATE;
 }
 
-/** Whether a field of a group applies to the category. */
+const hiddenIn = (
+  template: CategorySpecTemplate,
+  group: SpecGroupKey,
+  forStorage: boolean
+): readonly string[] => [
+  ...(template.hiddenFields[group] ?? []),
+  ...(forStorage ? [] : (template.displayHiddenFields[group] ?? [])),
+];
+
+/** Whether the page shows a field of a group for the category. */
 export function specFieldApplies(
   template: CategorySpecTemplate,
   group: SpecGroupKey,
@@ -137,7 +169,7 @@ export function specFieldApplies(
 ): boolean {
   return (
     template.groups.includes(group) &&
-    !(template.hiddenFields[group] ?? []).includes(field)
+    !hiddenIn(template, group, false).includes(field)
   );
 }
 
@@ -157,11 +189,17 @@ const isRecord = (v: unknown): v is Record<string, unknown> =>
  * A copy of a product with the spec groups, fields and flat columns its
  * category does not have removed. Fields outside the ten groups (such as
  * `category_slug`) are kept. Values the category has are never changed, so
- * applying it twice gives the same result.
+ * applying it twice gives the same result. It only narrows: removed flat
+ * columns become `null` (`has_5g` becomes `false`) and groups lose keys, so
+ * callers should type those fields as nullable, as the row types do.
+ *
+ * `forStorage` (the importer) removes only what the category cannot have and
+ * keeps what the page merely hides, such as a watch's real 5G support.
  */
 export function applyCategorySpecTemplate<T extends CategoryScopedSpecs>(
   categorySlug: string | null | undefined,
-  product: T
+  product: T,
+  { forStorage = false }: { forStorage?: boolean } = {}
 ): T {
   const template = getCategorySpecTemplate(categorySlug);
   if (template === PHONE_TEMPLATE) return product;
@@ -175,8 +213,8 @@ export function applyCategorySpecTemplate<T extends CategoryScopedSpecs>(
         continue;
       }
       if (!template.groups.includes(group as SpecGroupKey)) continue;
-      const hidden = template.hiddenFields[group as SpecGroupKey];
-      if (hidden && isRecord(value)) {
+      const hidden = hiddenIn(template, group as SpecGroupKey, forStorage);
+      if (hidden.length > 0 && isRecord(value)) {
         specs[group] = Object.fromEntries(
           Object.entries(value).filter(([field]) => !hidden.includes(field))
         );
@@ -199,6 +237,9 @@ export function applyCategorySpecTemplate<T extends CategoryScopedSpecs>(
   if (!template.storage && 'storage_gb' in product) out.storage_gb = null;
   if (!template.screen && 'screen_size_inch' in product)
     out.screen_size_inch = null;
-  if (!template.has5g && 'has_5g' in product) out.has_5g = false;
+  const shows5g = forStorage
+    ? template.groups.includes('cellular')
+    : template.has5g;
+  if (!shows5g && 'has_5g' in product) out.has_5g = false;
   return out;
 }

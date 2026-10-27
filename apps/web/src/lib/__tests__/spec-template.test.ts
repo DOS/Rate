@@ -43,30 +43,26 @@ function main() {
   for (const locale of ['vi', 'en', 'cs']) {
     const ui = getSpecUiDictionary(locale);
     const buds = headings('earbuds', locale);
-    assert.equal(buds.length, 6);
+    assert.equal(buds.length, 7);
     assert.ok(buds[0]!.startsWith('1. '));
     assert.ok(buds[0]!.endsWith(ui.groups.multimedia.replace(/^\d+\.\s*/, '')));
-    for (const group of [
-      'display',
-      'hardware',
-      'camera',
-      'cellular',
-    ] as const) {
+    for (const group of ['display', 'camera', 'cellular'] as const) {
       const label = ui.groups[group].replace(/^\d+\.\s*/, '');
       assert.ok(
         !buds.some((h: string) => h.endsWith(label)),
         `earbuds (${locale}) must not show ${group}`
       );
     }
-    assert.equal(specSectionBadge(ui, buds.length).startsWith('6 '), true);
+    assert.equal(specSectionBadge(ui, buds.length).startsWith('7 '), true);
   }
   assert.deepEqual(headings('earbuds', 'en'), [
     '1. Audio & multimedia',
     '2. Battery & charging',
     '3. Connectivity & sensors',
-    '4. Design & durability',
-    '5. Availability & MSRP',
-    '6. Regulatory, certifications & SAR',
+    '4. Hardware & performance',
+    '5. Design & durability',
+    '6. Availability & MSRP',
+    '7. Regulatory, certifications & SAR',
   ]);
 
   // Smartwatches: no camera group and no "5G" anywhere in the headings.
