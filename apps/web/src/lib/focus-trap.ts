@@ -64,27 +64,84 @@ export function tabFromSpot(
 }
 
 /**
+ * How many open `inertOutside` calls hold each element inert. Only elements
+ * in this map had their `inert` set by us; anything else that is inert
+ * belongs to other code and is never cleared here.
+ */
+const inertHolds = new Map<HTMLElement, number>();
+
+/**
  * Makes everything in the page `inert` except `keep` and their ancestors, so
  * the rest of the page leaves the focus order and the accessibility tree.
- * Elements that were already inert are left alone. Returns the undo.
+ * Elements added to the page while it holds (a toast, a portal, new content
+ * after a soft navigation) become inert too. Elements that other code made
+ * inert are left alone, and so is an element whose `inert` other code
+ * changes while this holds. Returns the undo, which clears only the `inert`
+ * set here, once no other open call still holds the element.
  */
 export function inertOutside(keep: readonly HTMLElement[]): () => void {
-  const changed: HTMLElement[] = [];
-  for (const kept of keep) {
-    for (
-      let node: HTMLElement = kept;
-      node.parentElement && node !== document.body;
-      node = node.parentElement
-    ) {
-      for (const sibling of Array.from(node.parentElement.children)) {
-        if (!(sibling instanceof HTMLElement) || sibling.inert) continue;
-        if (keep.some((el) => sibling.contains(el))) continue;
-        sibling.inert = true;
-        changed.push(sibling);
-      }
+  // Every element this call has held, including ones it gave up because
+  // other code took over their `inert`: it does not take those again.
+  const mine = new Set<HTMLElement>();
+  // Drops this call's hold; the last hold clears the `inert` set here.
+  function release(el: HTMLElement) {
+    const holds = inertHolds.get(el);
+    if (holds === undefined) return;
+    if (holds > 1) {
+      inertHolds.set(el, holds - 1);
+    } else {
+      inertHolds.delete(el);
+      el.inert = false;
     }
   }
+  const observer = new MutationObserver((records) => {
+    for (const record of records) {
+      if (record.type === 'childList') {
+        // A removed element is no longer held, so it is not kept or watched.
+        for (const node of Array.from(record.removedNodes)) {
+          if (!(node instanceof HTMLElement) || !mine.has(node)) continue;
+          release(node);
+          mine.delete(node);
+        }
+        continue;
+      }
+      // Our own writes are dropped below, so this change is someone else's.
+      if (record.target instanceof HTMLElement)
+        inertHolds.delete(record.target);
+    }
+    hold();
+  });
+  function hold() {
+    observer.disconnect();
+    for (const kept of keep) {
+      for (
+        let node: HTMLElement = kept;
+        node.parentElement && node !== document.body;
+        node = node.parentElement
+      ) {
+        observer.observe(node.parentElement, { childList: true });
+        for (const sibling of Array.from(node.parentElement.children)) {
+          if (!(sibling instanceof HTMLElement) || mine.has(sibling)) continue;
+          if (keep.some((el) => sibling.contains(el))) continue;
+          const holds = inertHolds.get(sibling);
+          if (holds === undefined && sibling.inert) continue;
+          // Written only once: a second write would read, to the observer
+          // of the call that holds it already, as a change by other code.
+          if (holds === undefined) sibling.inert = true;
+          inertHolds.set(sibling, (holds ?? 0) + 1);
+          mine.add(sibling);
+        }
+      }
+    }
+    for (const el of mine) {
+      if (inertHolds.has(el))
+        observer.observe(el, { attributeFilter: ['inert'] });
+    }
+    observer.takeRecords();
+  }
+  hold();
   return () => {
-    for (const el of changed) el.inert = false;
+    observer.disconnect();
+    for (const el of mine) release(el);
   };
 }

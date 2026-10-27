@@ -189,3 +189,86 @@ test('Tab after a click on a blank spot stays in the phone menu', async ({
     if (key === 'Tab') expect(state.isClose).toBe(true);
   }
 });
+
+// Content added while the menu is open is inert too, and closing the menu
+// clears only the inert it set: an element that other code made inert,
+// before or while the menu was open, stays inert (DOS/Rate#1110).
+test('the open phone menu covers late content and keeps foreign inert', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/');
+  // Inert before the menu opens: not ours to clear.
+  await page.evaluate(() => {
+    document.querySelector('footer')!.inert = true;
+  });
+  const { menu } = await openMenu(page);
+
+  await page.evaluate(() => {
+    const toast = document.createElement('button');
+    toast.id = 'late-toast';
+    toast.textContent = 'Late toast';
+    document.body.append(toast);
+    const extra = document.createElement('a');
+    extra.id = 'late-nav-link';
+    extra.href = '/late';
+    extra.textContent = 'Late nav link';
+    document.getElementById('rate-nav-menu')!.parentElement!.append(extra);
+    // Other code makes an element inert that the menu already holds.
+    const held = [...document.querySelectorAll<HTMLElement>('[inert]')].find(
+      (el) => el.contains(document.querySelector('main'))
+    )!;
+    held.dataset.testHeld = '';
+    held.inert = true;
+  });
+  await expect
+    .poll(() =>
+      page.evaluate(() =>
+        ['late-toast', 'late-nav-link'].map((id) =>
+          Boolean(document.getElementById(id)!.closest('[inert]'))
+        )
+      )
+    )
+    .toEqual([true, true]);
+  expect(await accessibleNodes(page)).not.toContain('button:Late toast');
+
+  await page.keyboard.press('Escape');
+  await expect(menu).not.toHaveClass(/nav-menus-wrapper-open/);
+  expect(
+    await page.evaluate(() => ({
+      toast: document.getElementById('late-toast')!.inert,
+      link: document.getElementById('late-nav-link')!.inert,
+      held: document.querySelector<HTMLElement>('[data-test-held]')!.inert,
+      footer: document.querySelector('footer')!.inert,
+    }))
+  ).toEqual({ toast: false, link: false, held: true, footer: true });
+});
+
+// At 320px (supported since DOS/Rate#809) the drawer leaves the toggle in
+// view, so the live toggle is never a hidden button (DOS/Rate#1110).
+test('the open phone menu leaves the toggle visible at 320px', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 320, height: 640 });
+  await page.goto('/');
+  const { menu, toggle } = await openMenu(page);
+  const drawer = (await menu.boundingBox())!;
+  const button = (await toggle.boundingBox())!;
+  expect(drawer.x + drawer.width).toBeLessThanOrEqual(button.x);
+  expect(
+    await toggle.evaluate((el) => {
+      const box = el.getBoundingClientRect();
+      return (
+        document.elementFromPoint(
+          box.left + box.width / 2,
+          box.top + box.height / 2
+        ) === el
+      );
+    })
+  ).toBe(true);
+
+  // Escape hands focus back to the toggle, which is on screen.
+  await page.keyboard.press('Escape');
+  await expect(toggle).toBeFocused();
+  await expect(toggle).toBeInViewport();
+});
