@@ -1097,7 +1097,7 @@ function isProductCodeToken(token: string): boolean {
 const SIZE_NOT_PRECEDED_BY = String.raw`(?<![\d.,a-z])(?<!(?:ram|os) )`;
 const SIZE_NOT_FOLLOWED_BY = String.raw`(?![.,]?\d|[a-z]| ?(?:gb?\b|tb?\b|th\b|gen|mm|w\b|h\b|\/|-? ?(?:core|nhân|lõi)|cpu|gpu|tiếng|giờ))`;
 const SIZE_MARKER = String.raw` ?(?:-? ?inch|in\b|"|''|”|″)`;
-const IPAD_SIZE = String.raw`(11|12[.,]9|13)`;
+const IPAD_SIZE = String.raw`(11|12[.,]9|13)(?:[.,]0)?`;
 const MACBOOK_AIR_SIZE = String.raw`(13|15)(?:[.,]\d)?`;
 const MACBOOK_PRO_SIZE = String.raw`(1[3-6])(?:[.,]\d)?`;
 const sizePatterns = (size: string): [RegExp, RegExp] => [
@@ -1114,7 +1114,8 @@ const APPLE_SIZE_PATTERNS: Record<string, [RegExp, RegExp]> = {
  * The size of an Apple line sold in more than one: "11", "12.9" or "13" for an iPad Pro
  * or Air, "13" or "15" for a MacBook Air, "13" to "16" for a MacBook Pro, "42mm" or
  * "46mm" for a Watch Series or SE. Read from the product's own part of the title, after
- * its family word and before a "cho/for" accessory phrase; a size with "inch" wins over
+ * its family word and before a "cho/for" accessory phrase or a "+" bundle; a size with
+ * "inch" wins over
  * a bare number (DOS/Rate#1113).
  */
 function readAppleSize(model: string, title: string): string {
@@ -1129,7 +1130,8 @@ function readAppleSize(model: string, title: string): string {
           : '';
   if (!family) return '';
   const at = title.search(new RegExp(`\\b${family.split(' ')[0]}\\b`, 'i'));
-  const own = title.slice(Math.max(0, at)).split(/ (?:cho|for) /i)[0]!;
+  // A bundle's "+ bàn phím 11 inch" is another product; "GPS + Cellular" is the watch.
+  const own = title.slice(Math.max(0, at)).split(/ (?:cho|for) | ?\+ (?!cellular|lte)/i)[0]!;
   if (family === 'watch')
     return own.match(/(?<!\d)(38|4[0-2]|4[4-6]) ?mm\b/i)?.[1]?.concat('mm') ?? '';
   const [marked, bare] = APPLE_SIZE_PATTERNS[family]!;

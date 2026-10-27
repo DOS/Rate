@@ -377,6 +377,16 @@ async function runSuite() {
     // An Air comes in 13 and 15 inch; an OS version or a part code is no size.
     ['MacBook Air M2 8GB 256GB macOS 14 Sonoma', 'apple:macbook-air-m2:256gb'],
     ['MacBook Air M2 Z15S 8GB 256GB', 'apple:macbook-air-m2:256gb'],
+    ['MacBook Air M3 256GB macOS 14', 'apple:macbook-air-m3:256gb'],
+    ['HN Macbook Air M4 16 256 macbook', keyOf('Macbook Air M4 256')],
+    [
+      'MacBook Pro M4 Pro CPU 14 nhân GPU 20 nhân RAM 24GB SSD 512GB',
+      'apple:macbook-pro-m4-pro:512gb',
+    ],
+    ['iPad Pro M4 13.0 inch 256GB', 'apple:ipad-pro-m4-13:256gb'],
+    // A bundled accessory's size is not the product's; "GPS + Cellular" is the watch.
+    ['iPad Pro M4 256GB + bàn phím 11 inch', 'apple:ipad-pro-m4:256gb'],
+    ['iPad Pro 11 inch M4 + Magic Keyboard 256GB', 'apple:ipad-pro-m4-11:256gb'],
     ['MacBook Pro M4 Pro 16″ 24GB 512GB', 'apple:macbook-pro-m4-pro-16:512gb'],
     // A title without its size keeps the size-less key and goes to Tier 2.
     ['Máy tính bảng Apple iPad Pro M4 256GB WiFi', 'apple:ipad-pro-m4:256gb'],
