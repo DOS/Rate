@@ -14,6 +14,14 @@ VALUES
   -- Its listing query fails on purpose (FAULT_MARKERS in scripts/e2e/run.mjs).
   ('eeeeeeee-eeee-4eee-8eee-eeeeeeeefa17', 'shopee', 'shop_fault', 'Faulty Listings Store', 'faulty-listings-store', false);
 
+-- DOSafe scores on both sides of the shared risk cut-off, with no reviews: a
+-- 4/100 store is not a scam warning and 0 reviews is not "100% authentic";
+-- a 60/100 store is (DOS/Rate#1140).
+INSERT INTO rate.merchants (id, platform, platform_shop_id, name, slug, is_official, risk_score)
+VALUES
+  ('11111111-1111-4111-8111-111111111140', 'shopee', 'shop_low_risk', 'Low Risk Store', 'low-risk-store', true, 4),
+  ('11111111-1111-4111-8111-111111111160', 'shopee', 'shop_high_risk', 'High Risk Store', 'high-risk-store', false, 60);
+
 INSERT INTO rate.master_products
   (id, category_id, brand, model, model_key, name, slug, ram_gb, storage_gb, screen_size_inch, battery_mah, has_5g,
    min_price, max_price, merchant_count, status, metadata)

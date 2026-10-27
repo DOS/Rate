@@ -55,6 +55,8 @@ export type RadarExplanation =
         pct: string;
         merchant: string;
         platform: string;
+        /** Offers behind the median, never a fixed "10 platforms" (#1145). */
+        count: string;
       };
     }
   | {
@@ -82,6 +84,14 @@ const safePctString = (value: unknown, max = 10_000): string => {
   return String(Math.min(num, max));
 };
 
+const offerCountString = (value: unknown): string | null => {
+  const num = parseDecimalDetailNumber(value);
+  // A median needs at least two offers; deals.ts never makes one from fewer.
+  return Number.isFinite(num) && num >= 2
+    ? String(Math.min(Math.floor(num), 10_000))
+    : null;
+};
+
 const safeLabelText = (value: unknown, maxLen: number): string => {
   if (typeof value !== 'string') return '';
   return value.replace(COPY_CONTROL_CHAR_RE, '').trim().slice(0, maxLen);
@@ -97,6 +107,9 @@ export function radarExplanation(
   if (!signal || typeof signal !== 'object') return null;
   if (signal.verdict === 'genuine_deal' && signal.genuineDeal) {
     const deal = signal.genuineDeal;
+    // No offer count, no sentence: never print a number we do not know.
+    const count = offerCountString(deal.marketOfferCount);
+    if (count == null) return null;
     return {
       key: 'radarExplanationGenuineDeal',
       values: {
@@ -104,6 +117,7 @@ export function radarExplanation(
         pct: safePctString(deal.savingsVsMedianPct),
         merchant: safeLabelText(deal.merchantName, 200),
         platform: safeLabelText(deal.platform, 64).toUpperCase(),
+        count,
       },
     };
   }

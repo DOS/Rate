@@ -5345,6 +5345,7 @@ async function runCoreArchitectureSuite() {
           marketMaxPrice: 28_990_000,
           savingsVsMedianVnd: 1_500_000,
           savingsVsMedianPct: 5.6,
+          marketOfferCount: 3,
           claimedDiscountPct: 12,
           fakeMarkupPct: 0,
           jreviewsScore10: 9.2,
@@ -5373,6 +5374,7 @@ async function runCoreArchitectureSuite() {
           marketMaxPrice: 28_990_000,
           savingsVsMedianVnd: 3_100_000,
           savingsVsMedianPct: 11.5,
+          marketOfferCount: 3,
           claimedDiscountPct: 17.6,
           fakeMarkupPct: 0,
           jreviewsScore10: 9.2,
@@ -5403,6 +5405,7 @@ async function runCoreArchitectureSuite() {
           marketMaxPrice: 27_000_000,
           savingsVsMedianVnd: -500_000,
           savingsVsMedianPct: -2,
+          marketOfferCount: 3,
           claimedDiscountPct: 18.8,
           fakeMarkupPct: 25.5,
           jreviewsScore10: 9.1,
@@ -5431,6 +5434,7 @@ async function runCoreArchitectureSuite() {
           marketMaxPrice: 27_000_000,
           savingsVsMedianVnd: -1_000_000,
           savingsVsMedianPct: -3.9,
+          marketOfferCount: 3,
           claimedDiscountPct: 33.7,
           fakeMarkupPct: 56.8,
           jreviewsScore10: 9.1,
@@ -5486,6 +5490,7 @@ async function runCoreArchitectureSuite() {
       categoryFilter: 'all',
       totalClustersAnalyzed: 2,
       totalOffersAnalyzed: 4,
+      totalMerchantsAnalyzed: 3,
       generatedAt: new Date().toISOString(),
     });
 
@@ -5527,6 +5532,7 @@ async function runCoreArchitectureSuite() {
         categoryFilter: 'all',
         totalClustersAnalyzed: 1,
         totalOffersAnalyzed: 1,
+        totalMerchantsAnalyzed: 1,
         generatedAt: new Date().toISOString(),
       },
       { id: 'non-existent-id', name: '   ' }
@@ -9666,10 +9672,54 @@ async function runCoreArchitectureSuite() {
       0,
       'scoreMasterProductForLeaderboard must preserve explicit authentic_review_count: 0'
     );
+    // total_reviews is the marketplaces' rating count, not reviews Rate.vn
+    // stored and filtered, so it never becomes a blocked count (#1139).
     assert.equal(
       scored898.filteredNoiseReviewCount,
-      25,
-      'scoreMasterProductForLeaderboard must count all 25 reviews as filtered noise when authentic_review_count is 0'
+      0,
+      'scoreMasterProductForLeaderboard must not derive a blocked count from total_reviews (#1139)'
+    );
+    const iphone15 = {
+      id: 'mp-iphone-15',
+      slug: 'apple-iphone-15-128gb',
+      name: 'Apple iPhone 15 128GB',
+      brand: 'Apple',
+      user_rating_weighted: 4.6,
+      total_reviews: 6833,
+      authentic_review_count: 15,
+    } as unknown as import('@repo/shared-data').MasterProduct;
+    const lb1139 = lbMod.scoreMasterProductForLeaderboard(iphone15, 'combined');
+    assert.equal(lb1139.authenticReviewCount, 15);
+    assert.equal(
+      lb1139.filteredNoiseReviewCount,
+      0,
+      'iPhone 15 (6833 marketplace ratings, 15 stored authentic) must not claim 6818 blocked reviews (#1139)'
+    );
+    assert.equal(
+      lbMod.scoreMasterProductForLeaderboard(iphone15, 'combined', {
+        'mp-iphone-15': 3,
+        'mp-other': 99,
+      }).filteredNoiseReviewCount,
+      3,
+      'the blocked count must be the stored filtered reviews of that product only (#1139)'
+    );
+    for (const bad of [-4, Number.NaN, '7' as unknown as number]) {
+      assert.equal(
+        lbMod.scoreMasterProductForLeaderboard(iphone15, 'combined', {
+          'mp-iphone-15': bad,
+        }).filteredNoiseReviewCount,
+        bad === ('7' as unknown as number) ? 7 : 0,
+        'filtered review counts must be non-negative integers (#1139)'
+      );
+    }
+    const ranked1139 = lbMod.rankMasterProductsForLeaderboard([iphone15], {
+      category: 'all',
+      filteredReviewCounts: { 'mp-iphone-15': 2 },
+    });
+    assert.equal(
+      ranked1139[0]?.filteredNoiseReviewCount,
+      2,
+      'rankMasterProductsForLeaderboard must pass filteredReviewCounts through (#1139)'
     );
     assert.ok(
       Number.isFinite(scored898.activeScore5) &&
@@ -9791,6 +9841,7 @@ async function runCoreArchitectureSuite() {
       genuineDeal: {
         savingsVsMedianVnd: true as unknown as number,
         savingsVsMedianPct: true as unknown as number,
+        marketOfferCount: 3,
         merchantName: 'Shop\u0000A',
         platform: 'shopee\u0000',
       } as unknown as import('../../../lib/deal-radar').CrossPlatformDealRadarItem,

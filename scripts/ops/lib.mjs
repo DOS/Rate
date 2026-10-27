@@ -7,9 +7,10 @@ import { pathToFileURL } from 'node:url';
 
 export const DEFAULT_REPO = 'DOS/Rate';
 
-export function gh(args, { allowFailure = false } = {}) {
+export function gh(args, { allowFailure = false, input } = {}) {
   const r = spawnSync('gh', args, {
     encoding: 'utf8',
+    input,
     maxBuffer: 64 * 1024 * 1024,
   });
   if (r.error) throw r.error;

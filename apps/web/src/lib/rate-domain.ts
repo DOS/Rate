@@ -70,6 +70,7 @@ export {
   normalizeLeaderboardPriceSegment,
   rankMasterProductsForLeaderboard,
   scoreMasterProductForLeaderboard,
+  type FilteredReviewCountsByMaster,
   type Flagship1v1BattlePair,
   type LeaderboardCriteriaBreakdown,
   type LeaderboardCriterionKey,

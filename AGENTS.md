@@ -72,7 +72,7 @@ gh issue list -R DOS/Rate-Services --state open
 - **Quy tắc Định danh Agent (Agent Nickname) & Tránh trùng lặp:**
   - Vì mọi Agent đều chạy dưới tài khoản GitHub của JOY (`@me`), **MỖI AGENT PHẢI TỰ ĐẶT MỘT NICKNAME NGẮN GỌN** theo chuyên môn hoặc phiên làm việc (ví dụ: `Crawl`, `Web`, `Core`, `DB`, `QA`) và gắn cả **Nhãn `agent:<nickname>`** lẫn **Cột `Agent` trên GitHub Project #9**.
   - **TUYỆT ĐỐI KHÔNG** tự ý làm các Issue đang có nhãn `status:in-progress`, `status:in-review` hoặc đã có nhãn `agent:<khác>` đang chạy (trừ khi JOY chỉ định rõ).
-  - **Issue có nhãn `incident` là ưu tiên số 1**, trên mọi việc khác: chúng do `.github/workflows/incident-report.yml` tự mở khi CI đỏ trên `dev`/`main` (DOS/Rate-Services có workflow tương tự cho crawler theo lịch), hoặc do Upptime mở trong `DOS/status` khi rate.vn sập. Nhận issue, tìm thay đổi gây lỗi, sửa tiếp (fix forward). Issue tự đóng khi workflow xanh lại.
+  - **Issue có nhãn `incident` là ưu tiên số 1**, trên mọi việc khác: chúng do `.github/workflows/incident-report.yml` tự mở khi CI đỏ trên `dev`/`main` (DOS/Rate-Services có workflow tương tự cho crawler theo lịch), hoặc do Upptime mở trong `DOS/status` khi rate.vn sập. Nhận issue, tìm thay đổi gây lỗi, sửa tiếp (fix forward). Issue tự đóng khi mọi job đã lỗi chạy xanh lại (job bị bỏ qua, `skipped`, không tính là đã hồi phục).
   - Sau đó ưu tiên chọn các Issue đang có nhãn `status:ready`.
   - Nếu yêu cầu của người dùng chưa có Issue tương ứng, **TẠO NGAY ISSUE MỚI BẰNG TIẾNG ANH** và gắn vào GitHub Project #9:
     ```powershell

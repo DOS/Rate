@@ -1,4 +1,6 @@
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 
 import {
@@ -7,9 +9,13 @@ import {
   evaluateChecks,
   ignoredRequired,
   latestRuns,
+  MAX_LINE,
   mergeMethodFor,
   requiredChecksFromRules,
   shouldDeleteBranch,
+  squashBody,
+  squashTitle,
+  wrapLine,
 } from './merge-when-green.mjs';
 import { encodeRef } from './lib.mjs';
 
@@ -290,4 +296,105 @@ test('gives a green but blocked PR a few polls before reporting it', () => {
   const last = decide(blocked, { state: 'passed' }, BLOCKED_POLLS - 1);
   assert.equal(last.action, 'fail');
   assert.match(last.message, /required review or check/);
+});
+
+// The commits of DOS/Rate#1127, whose default squash failed commitlint on the
+// promotion PR DOS/Rate#1128 (DOS/Rate#1130).
+const CO_AUTHOR = 'Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>';
+const LONG_COMMITS = [
+  `fix(shared-data): earbuds regex reads glued brands and drops over-ear titles that say tai nghe (#1125)
+
+Any brand glued to Buds, FreeBuds, AirPods or WF1000XM now reads as earbuds
+(PixelBudsPro2, HuaweiFreeBudsPro4, SonyWF1000XM5), as do AirPodsPro2 and
+two glued tiers (Buds3ProFE).
+
+${CO_AUTHOR}`,
+  `fix(shared-data): over-ear WH with a space or underscore, glued Redmi/Samsung/Enco/Tune Buds (#1125)
+
+Review follow-up on PR #1127, with a reference line that is far longer than one hundred characters in total.
+See https://github.com/DOS/Rate/pull/1127#issuecomment-1234567890 for the review thread and the whole discussion.
+A path with no spaces: ${'packages/shared-data/src/'.repeat(6)}earbuds.ts
+
+${CO_AUTHOR}`,
+];
+const LONG_TITLE =
+  'fix(shared-data): earbuds regex reads glued brands, drops over-ear tai nghe titles (#1125)';
+
+const repoRoot = fileURLToPath(new URL('../../', import.meta.url));
+/** Lints a message with the repository's commitlint.config.ts. */
+function commitlint(message) {
+  const r = spawnSync(
+    process.execPath,
+    ['node_modules/@commitlint/cli/cli.js'],
+    { cwd: repoRoot, input: message, encoding: 'utf8' }
+  );
+  assert.equal(r.error, undefined);
+  return { ok: r.status === 0, output: r.stdout + r.stderr };
+}
+
+test('wraps a long line under its list marker and splits a word longer than a line', () => {
+  const words = Array.from({ length: 40 }, (_, i) => `word${i}`).join(' ');
+  const wrapped = wrapLine(`* ${words}`);
+  assert.ok(wrapped.length > 1);
+  assert.ok(wrapped.every((line) => line.length <= MAX_LINE));
+  assert.ok(wrapped.slice(1).every((line) => line.startsWith('  w')));
+  assert.equal(wrapped.join(' ').replace(/\s+/g, ' '), `* ${words}`);
+  const word = 'x'.repeat(250);
+  assert.equal(wrapLine(word).join(''), word);
+  assert.ok(wrapLine(word).every((line) => line.length <= MAX_LINE));
+  assert.deepEqual(wrapLine('short'), ['short']);
+  const url = `see https://example.com/${'a'.repeat(120)}`;
+  assert.deepEqual(wrapLine(url), [url]);
+});
+
+test('splits a long word between characters, never inside an emoji', () => {
+  const wrapped = wrapLine(`a${'😀'.repeat(50)}`);
+  assert.ok(wrapped.every((line) => line.length <= MAX_LINE));
+  assert.ok(wrapped.every((line) => !/[\uD800-\uDBFF]$/.test(line)));
+  assert.equal(wrapped.join(''), `a${'😀'.repeat(50)}`);
+  assert.throws(() => wrapLine('x y', 0), RangeError);
+});
+
+test('keeps the PR number in the squash title, or refuses a title that cannot carry it', () => {
+  assert.equal(
+    squashTitle(' fix(web):  a thing ', 7),
+    'fix(web): a thing (#7)'
+  );
+  assert.equal(squashTitle(LONG_TITLE, 1127), `${LONG_TITLE} (#1127)`);
+  // Cutting these would leave an empty subject or a start-case one.
+  assert.equal(squashTitle(`${LONG_TITLE} and more`, 1127), null);
+  assert.equal(squashTitle(`fix: ${'a'.repeat(89)}`, 1133), null);
+  // Not conventional: commitlint ignores `v1.2.3` alone, not with `(#n)`.
+  assert.equal(squashTitle('v1.2.3', 1133), null);
+  assert.equal(squashTitle('Update stuff', 1133), null);
+  assert.equal(
+    squashTitle('feat(web)!: drop old route', 3),
+    'feat(web)!: drop old route (#3)'
+  );
+});
+
+test('gathers the trailers once each into a footer after the commits', () => {
+  const body = squashBody(LONG_COMMITS);
+  assert.ok(body.startsWith('* fix(shared-data): earbuds regex'));
+  assert.ok(body.endsWith(`\n\n${CO_AUTHOR}`));
+  assert.equal(body.split(CO_AUTHOR).length, 2);
+  assert.ok(body.includes('\n\n* fix(shared-data): over-ear WH'));
+  assert.equal(squashBody(['fix: a\r\n\r\nbody\r\n']), '* fix: a\n\nbody');
+  // A trailer is never wrapped: one too long for commitlint is left out.
+  const long = `Co-authored-by: ${'a'.repeat(90)} <a@b.com>`;
+  assert.equal(
+    squashBody([`fix: a\n\n${long}\n${CO_AUTHOR}`]),
+    `* fix: a\n\n${CO_AUTHOR}`
+  );
+});
+
+test('the squash message of PR bodies with lines over 100 characters passes commitlint', () => {
+  const header = squashTitle(LONG_TITLE, 1127);
+  const message = `${header}\n\n${squashBody(LONG_COMMITS)}\n`;
+  // GitHub's default squash of the same commits fails, so the test has teeth.
+  const github = `${header}\n\n${LONG_COMMITS.map((m) => `* ${m}`).join('\n\n')}\n`;
+  assert.equal(commitlint(github).ok, false);
+  const result = commitlint(message);
+  assert.ok(result.ok, result.output);
+  assert.doesNotMatch(result.output, /warning/);
 });
