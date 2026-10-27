@@ -1144,10 +1144,18 @@ export class ProductNormalizer {
       // "15 - ProMax", "S24-Ultra" and "15 (ProMax)" are "15 ProMax" and "S24 Ultra".
       .replace(/(?<=\d[a-z]?) ?- ?(pro ?max|pro|plus|ultra|mini|lite|fe)\b/gi, ' $1')
       .replace(/(?<=\d[a-z]?) ?\( ?(pro ?max|pro|plus|ultra|mini|lite|fe) ?\)/gi, ' $1')
-      // A "+" set apart after a model number ("S24 +", "iPhone 15 +") is the Plus, when it
-      // ends the name: the title ends, a size or a separator follows. "A55 + Tặng" is a
-      // gift and "A55 8 + 256GB" a RAM/ROM pair, so both keep their keys.
-      .replace(/(?<=\b[a-z]+ ?\d+[a-z]?) \+(?= ?(?:$|[-([,]|\d+(?:[.,]\d+)? ?(?:gb|tb)\b))/gi, '+');
+      // A "+" set apart after a model number or its "Pro" ("S24 +", "iPhone 15 +", "Note
+      // 13 Pro +") is the Plus when it ends the name: the title ends, or a size, network or
+      // separator follows. "A55 + Tặng" is a gift and "A55 8 + 256GB" a RAM/ROM pair, so
+      // both keep their keys. The text before the "+" is checked on a bounded slice rather
+      // than by a variable-length lookbehind (CodeQL js/polynomial-redos).
+      .replace(
+        / \+(?= ?(?:$|[-([,]|\d+(?:[.,]\d+)? ?(?:gb|tb)\b|[45]g\b|lte\b))/gi,
+        (plus: string, at: number, text: string) =>
+          /(?:\b[a-z]+ ?\d+[a-z]?|\d[a-z]? pro)$/i.test(text.slice(Math.max(0, at - 32), at))
+            ? '+'
+            : plus
+      );
     // Samsung's "Galaxy S 24" and "Tab S 9" are the S24 and the Tab S9.
     if (brand === 'Samsung')
       modelTitle = modelTitle.replace(/\b(galaxy|tab) s (\d{1,2})\b/gi, '$1 S$2');
@@ -1161,7 +1169,7 @@ export class ProductNormalizer {
         ' $1'
       );
       const iphoneMatch = appleTitle.match(
-        /iphone\s*(\d+e\b|\d+(?:\s*(?:pro\s*max|pro|plus|mini|air|\+))?|air\b|duo\b|se(?:\s*(?:\(\s*(?:2020|2022|2025)\s*\)|(?:2020|2022|2025)\b|(?:gen\s*)?[234]\b))?)/i
+        /iphone\s*(\d+e\b|\d+(?:\s*(?:pro\s*max|pro|plus|mini|air)|\+)?|air\b|duo\b|se(?:\s*(?:\(\s*(?:2020|2022|2025)\s*\)|(?:2020|2022|2025)\b|(?:gen\s*)?[234]\b))?)/i
       );
       // The base iPad by its chip, "iPad A16" or "iPad (A16)", and "iPad Gen 10" like
       // "iPad 10" (DOS/Rate#817).
@@ -1199,7 +1207,7 @@ export class ProductNormalizer {
             (line: string) => line[0]!.toUpperCase() + line.slice(1).toLowerCase()
           )
           // "15+" is "15 Plus" (DOS/Rate#1090).
-          .replace(/^(\d+) ?\+$/, '$1 Plus')
+          .replace(/^(\d+)\+$/, '$1 Plus')
           // "16ProMax" and "16 ProMax" are "16 Pro Max" (DOS/Rate#815).
           .replace(/^(\d+)(?=pro|plus|mini|air)/i, '$1 ')
           .replace(/\b(pro)(max)\b/i, '$1 $2');

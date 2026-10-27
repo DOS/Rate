@@ -218,10 +218,18 @@ async function runSuite() {
     // A "+" before a gift or a word is not a Plus model (DOS/Rate#597).
     ['Samsung Galaxy A55 + Tặng ốp', 'samsung:galaxy-a55-tang:unknown'],
     ['iPhone 15 128GB + Ốp lưng', 'apple:iphone-15:128gb'],
+    ['iPhone 15 + Tặng sạc', 'apple:iphone-15:unknown'],
+    ['Combo iPhone 15 + AirPods', 'apple:iphone-15:unknown'],
+    ['iPhone 15 + Ốp lưng 128GB', 'apple:iphone-15:128gb'],
+    // A network after the "+" still ends the name; so does a "+" after "Pro".
+    ['Samsung Galaxy S24 + 5G', 'samsung:galaxy-s24-plus:unknown'],
+    ['Xiaomi Redmi Note 13 Pro + 5G 256GB', 'xiaomi:redmi-note-13-pro-plus:256gb'],
   ];
   for (const [title, expectedKey] of tierWordSpellings) {
     assert.equal(keyOf(title), expectedKey, title);
   }
+  // A RAM/ROM pair written "8 + 256GB" is not a Plus model.
+  assert.doesNotMatch(keyOf('Samsung Galaxy A55 8 + 256GB'), /plus/);
   assert.equal(
     normalizer.normalize(createDummyShopeeProduct('Apple iPhone 15+ 128GB')).model,
     'iPhone 15 Plus'
