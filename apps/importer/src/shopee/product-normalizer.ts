@@ -1106,6 +1106,7 @@ const sizePatterns = (size: string): [RegExp, RegExp] => [
 ];
 const WATCH_BAND_WORD =
   /(?<![\p{L}\d])(?:d(?:\u00e2|a\u0302)y|band|strap|loop|bracelet)(?![\p{L}\d])/iu;
+const WATCH_SIZE = /(?<!\d)(38|4[0-2]|4[4-6]) ?mm\b/i;
 const APPLE_SIZE_PATTERNS: Record<string, [RegExp, RegExp]> = {
   ipad: sizePatterns(IPAD_SIZE),
   'macbook air': sizePatterns(MACBOOK_AIR_SIZE),
@@ -1134,18 +1135,23 @@ function readAppleSize(model: string, title: string): string {
   const at = title.search(new RegExp(`\\b${family.split(' ')[0]}\\b`, 'i'));
   // A bundle's "+ bàn phím 11 inch" is another product; "GPS + Cellular" is the watch.
   const own = title.slice(Math.max(0, at)).split(/ (?:cho|for) | ?\+ (?!cellular|lte)/i)[0]!;
-  if (family === 'watch')
-    return (
-      own
-        // Retailers name the case size before the band ("46mm Viền nhôm Dây cao su S/M"),
-        // so a size after "dây"/"band"/"strap" is the band's, up to the next ")", ",", "|"
-        // or " - " (DOS/Rate#1124).
-        .split(/[),|]| - /)
-        .map(part => part.split(WATCH_BAND_WORD)[0])
-        .join(' ')
-        .match(/(?<!\d)(38|4[0-2]|4[4-6]) ?mm\b/i)?.[1]
-        ?.concat('mm') ?? ''
+  if (family === 'watch') {
+    // A size outside a band phrase ("dây", "band", "strap", "loop" or "bracelet" up to the
+    // next ")", ",", "|", ";", en dash or " - ") is the case's. A band is sold by the case
+    // it fits ("Dây Cao Su 46mm"), so a band's size counts only when the title names no
+    // other: "dây Sport Band 45mm cho mặt 42mm" does not tell the watch's (DOS/Rate#1124).
+    const caseSize = own
+      .split(/[),|;\u2013]| - /)
+      .map(part => part.split(WATCH_BAND_WORD)[0])
+      .join(' ')
+      .match(WATCH_SIZE)?.[1];
+    if (caseSize) return `${caseSize}mm`;
+    const bandSize = own.match(WATCH_SIZE)?.[1];
+    const sizes = new Set(
+      [...title.slice(Math.max(0, at)).matchAll(new RegExp(WATCH_SIZE, 'gi'))].map(m => m[1])
     );
+    return bandSize && sizes.size === 1 ? `${bandSize}mm` : '';
+  }
   const [marked, bare] = APPLE_SIZE_PATTERNS[family]!;
   const size = (own.match(marked) ?? own.match(bare))?.[1];
   return size ? size.replace(',', '.') : '';
