@@ -1,3 +1,4 @@
+import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Page } from '@playwright/test';
 
 // With the phone menu open, Tab and Shift+Tab cycle inside it, close button
@@ -35,6 +36,67 @@ const focused = (page: Page) =>
       label: el ? `${el.tagName} ${el.textContent?.trim() ?? ''}` : 'none',
     };
   });
+
+// The non-ignored nodes of Chromium's accessibility tree, as "role:name".
+// Playwright's role locators do not drop inert content, so ask the browser.
+async function accessibleNodes(page: Page) {
+  const cdp = await page.context().newCDPSession(page);
+  const { nodes } = await cdp.send('Accessibility.getFullAXTree');
+  await cdp.detach();
+  return nodes
+    .filter((n) => !n.ignored)
+    .map((n) => `${n.role?.value ?? ''}:${n.name?.value ?? ''}`);
+}
+
+// With the phone menu open, screen readers no longer reach the page behind
+// the drawer (DOS/Rate#1102).
+test('the page behind the open phone menu is inert', async ({ page }) => {
+  // axe's color-contrast pass over the home page outlasts the 30s default.
+  test.setTimeout(120_000);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/');
+  const before = await accessibleNodes(page);
+  expect(before).toContain('main:');
+  expect(before).toContain('contentinfo:');
+  expect(
+    await page.evaluate(() => document.querySelectorAll('[inert]').length)
+  ).toBe(0);
+
+  const { menu, toggle } = await openMenu(page);
+  const open = await accessibleNodes(page);
+  expect(open).not.toContain('main:');
+  expect(open).not.toContain('contentinfo:');
+  // Only the menu and its toggle stay live.
+  expect(
+    await page.evaluate(() => {
+      const menu = document.getElementById('rate-nav-menu')!;
+      const toggle = document.querySelector('.nav-toggle')!;
+      const live = [...document.querySelectorAll('a[href], button')].filter(
+        (el) => !el.closest('[inert]')
+      );
+      return {
+        toggleLive: live.includes(toggle),
+        outside: live
+          .filter((el) => el !== toggle && !menu.contains(el))
+          .map((el) => el.outerHTML.slice(0, 80)),
+      };
+    })
+  ).toEqual({ toggleLive: true, outside: [] });
+
+  const { violations } = await new AxeBuilder({ page })
+    .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
+    .analyze();
+  expect(violations.map((v) => `${v.impact} ${v.id}`)).toEqual([]);
+
+  // Escape removes inert and hands focus back to the toggle.
+  await page.keyboard.press('Escape');
+  await expect(menu).not.toHaveClass(/nav-menus-wrapper-open/);
+  await expect(toggle).toBeFocused();
+  expect(
+    await page.evaluate(() => document.querySelectorAll('[inert]').length)
+  ).toBe(0);
+  expect(await accessibleNodes(page)).toContain('main:');
+});
 
 for (const viewport of [
   { name: 'portrait', width: 390, height: 844 },
@@ -75,7 +137,7 @@ for (const viewport of [
 test('a tap beside the open phone menu closes it', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('/');
-  const { menu } = await openMenu(page);
+  const { menu, toggle } = await openMenu(page);
   // The page shows to the right of the 320px drawer. The URL must not
   // change: a navigation would remount the navbar closed and pass for the
   // wrong reason.
@@ -83,4 +145,5 @@ test('a tap beside the open phone menu closes it', async ({ page }) => {
   await page.mouse.click(370, 600);
   await expect(menu).not.toHaveClass(/nav-menus-wrapper-open/);
   await expect(page).toHaveURL(url);
+  await expect(toggle).toBeFocused();
 });

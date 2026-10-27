@@ -41,3 +41,29 @@ export function tabbableIn(root: HTMLElement): HTMLElement[] {
       getComputedStyle(el).visibility !== 'hidden'
   );
 }
+
+/**
+ * Makes everything in the page `inert` except `keep` and their ancestors, so
+ * the rest of the page leaves the focus order and the accessibility tree.
+ * Elements that were already inert are left alone. Returns the undo.
+ */
+export function inertOutside(keep: readonly HTMLElement[]): () => void {
+  const changed: HTMLElement[] = [];
+  for (const kept of keep) {
+    for (
+      let node: HTMLElement = kept;
+      node.parentElement && node !== document.body;
+      node = node.parentElement
+    ) {
+      for (const sibling of Array.from(node.parentElement.children)) {
+        if (!(sibling instanceof HTMLElement) || sibling.inert) continue;
+        if (keep.some((el) => sibling.contains(el))) continue;
+        sibling.inert = true;
+        changed.push(sibling);
+      }
+    }
+  }
+  return () => {
+    for (const el of changed) el.inert = false;
+  };
+}

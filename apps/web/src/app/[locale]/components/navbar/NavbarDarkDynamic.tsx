@@ -12,7 +12,7 @@ import {
 } from 'react-icons/bs';
 import LocaleSwitcher from '@/components/elementary/LocaleSwitcher';
 import RateWordmark from '@/components/brand/RateWordmark';
-import { tabbableIn, wrapFocusTarget } from '@/lib/focus-trap';
+import { inertOutside, tabbableIn, wrapFocusTarget } from '@/lib/focus-trap';
 
 export interface NavbarLinkItem {
   readonly id?: string | number;
@@ -111,56 +111,66 @@ export function NavbarDarkDynamic({
     return () => document.removeEventListener('keydown', onKeyDown);
   }, [toggle]);
 
-  // While the phone menu is open, Tab and Shift+Tab wrap inside it, and focus
-  // that still reaches the page behind is sent back in (DOS/Rate#1098). The
-  // toggle is let through: closing hands focus back to it before this
-  // effect is cleaned up. A tap or click on the page beside the drawer
-  // closes it and keeps the focus it gives. Focus moves without
-  // preventScroll: the drawer scrolls on short screens, and the page behind
-  // stays put since the drawer is fixed.
+  // While the phone menu is open, the page behind it is inert: screen readers
+  // and Tab cannot reach it, and taps go through to the body (DOS/Rate#1102).
+  // The toggle stays live, so every close path can hand focus back to it
+  // while the page is still inert. Tab and Shift+Tab wrap inside the menu
+  // (DOS/Rate#1098). A tap or click beside the drawer closes it; a press
+  // that turns into a scroll or a pinch fires no click and leaves it open.
+  // Focus moves without preventScroll: the drawer scrolls on short screens,
+  // and the page behind stays put since the drawer is fixed.
   useEffect(() => {
     const menu = menuRef.current;
-    if (!toggle || !phoneMenu || !menu) return;
-    let pointerOutside = false;
-    const onPointerDown = (e: PointerEvent) => {
-      // Only a primary tap or left click; not a right click or a second
-      // finger.
-      if (!e.isPrimary || e.button !== 0) return;
+    const toggleButton = toggleRef.current;
+    if (!toggle || !phoneMenu || !menu || !toggleButton) return;
+    const restore = inertOutside([menu, toggleButton]);
+    const outside = (e: Event) => {
       const path = e.composedPath();
-      const toggleButton = toggleRef.current;
-      if (path.includes(menu)) return;
-      if (toggleButton && path.includes(toggleButton)) return;
-      pointerOutside = true;
+      return !path.includes(menu) && !path.includes(toggleButton);
+    };
+    let pressedOutside = false;
+    const onPointerDown = (e: PointerEvent) => {
+      pressedOutside = outside(e);
+    };
+    const onClick = (e: MouseEvent) => {
+      // Only a left click or a tap that also started outside; not a drag
+      // out of the drawer.
+      if (e.button !== 0 || !pressedOutside || !outside(e)) return;
       setToggle(false);
+      toggleButton.focus({ preventScroll: true });
     };
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key !== 'Tab' || e.altKey || e.ctrlKey || e.metaKey) return;
-      const active =
-        document.activeElement instanceof HTMLElement
-          ? document.activeElement
-          : null;
+      const active = document.activeElement;
+      // After a click on a blank spot in the drawer focus is on the body,
+      // and the browser's own Tab continues from that spot.
+      if (active === document.body) return;
       const items = tabbableIn(menu);
       // A focused element inside the menu that Tab cannot reach (a closing
       // popup) is left to the browser's own order.
-      if (active && menu.contains(active) && !items.includes(active)) return;
-      const target = wrapFocusTarget(items, active, e.shiftKey);
+      if (
+        active instanceof HTMLElement &&
+        menu.contains(active) &&
+        !items.includes(active)
+      )
+        return;
+      const target = wrapFocusTarget(
+        items,
+        active instanceof HTMLElement ? active : null,
+        e.shiftKey
+      );
       if (!target) return;
       e.preventDefault();
       target.focus();
     };
-    const onFocusIn = (e: FocusEvent) => {
-      const target = e.target instanceof Node ? e.target : null;
-      if (pointerOutside) return;
-      if (menu.contains(target) || target === toggleRef.current) return;
-      tabbableIn(menu)[0]?.focus();
-    };
     document.addEventListener('pointerdown', onPointerDown);
+    document.addEventListener('click', onClick);
     document.addEventListener('keydown', onKeyDown);
-    document.addEventListener('focusin', onFocusIn);
     return () => {
       document.removeEventListener('pointerdown', onPointerDown);
+      document.removeEventListener('click', onClick);
       document.removeEventListener('keydown', onKeyDown);
-      document.removeEventListener('focusin', onFocusIn);
+      restore();
     };
   }, [toggle, phoneMenu]);
 
