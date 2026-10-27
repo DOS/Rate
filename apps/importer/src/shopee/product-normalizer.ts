@@ -231,7 +231,10 @@ const CANONICAL_PHONE_REGISTRY: Record<
     has_5g: boolean;
     release_date: string;
     ip_rating: string;
-    default_storage_gb?: number;
+    // Set only for a model that ships in a single storage size (a watch generation), so a
+    // title that names no storage still knows it. A model sold in several sizes has none:
+    // its storage-less title keys as ':unknown' (DOS/Rate#1094).
+    only_storage_gb?: number;
   }
 > = {
   'apple:iphone-16-pro-max': {
@@ -559,7 +562,7 @@ const CANONICAL_PHONE_REGISTRY: Record<
     has_5g: true,
     release_date: 'September 2023',
     ip_rating: 'IP6X + 100m water resistant (EN13319, MIL-STD 810H)',
-    default_storage_gb: 64,
+    only_storage_gb: 64,
   },
   'apple:airpods-pro-2': {
     battery_mah: 523,
@@ -616,7 +619,6 @@ const CANONICAL_PHONE_REGISTRY: Record<
     has_5g: true,
     release_date: 'September 2024',
     ip_rating: 'IP68 dust/water resistant (1.5m for 30 min) + Enhanced Armor Aluminum',
-    default_storage_gb: 256,
   },
   'xiaomi:pad-6s-pro': {
     screen_size_inch: 12.4,
@@ -638,7 +640,6 @@ const CANONICAL_PHONE_REGISTRY: Record<
     has_5g: false,
     release_date: 'February 2024',
     ip_rating: 'All-metal unibody, Corning Gorilla Glass 5',
-    default_storage_gb: 256,
   },
   'asus:zenbook-s-14': {
     screen_size_inch: 14.0,
@@ -660,7 +661,6 @@ const CANONICAL_PHONE_REGISTRY: Record<
     has_5g: false,
     release_date: 'September 2024',
     ip_rating: 'Ceraluminum chassis, MIL-STD 810H military-grade standard',
-    default_storage_gb: 1024,
   },
   'lenovo:thinkpad-x1-carbon-gen-12': {
     screen_size_inch: 14.0,
@@ -682,7 +682,6 @@ const CANONICAL_PHONE_REGISTRY: Record<
     has_5g: false,
     release_date: 'March 2024',
     ip_rating: 'Carbon fiber weave top + recycled magnesium chassis, MIL-STD-810H',
-    default_storage_gb: 512,
   },
   'samsung:galaxy-watch-ultra': {
     screen_size_inch: 1.5,
@@ -704,7 +703,7 @@ const CANONICAL_PHONE_REGISTRY: Record<
     has_5g: false,
     release_date: 'July 2024',
     ip_rating: 'IP68 + 10ATM water resistant (100m, MIL-STD-810H, Titanium Grade 4)',
-    default_storage_gb: 32,
+    only_storage_gb: 32,
   },
   'garmin:forerunner-265': {
     screen_size_inch: 1.3,
@@ -726,7 +725,7 @@ const CANONICAL_PHONE_REGISTRY: Record<
     has_5g: false,
     release_date: 'March 2023',
     ip_rating: '5 ATM water resistant (50m swim-ready, fiber-reinforced polymer)',
-    default_storage_gb: 8,
+    only_storage_gb: 8,
   },
   'samsung:galaxy-buds3-pro': {
     battery_mah: 515,
@@ -769,7 +768,6 @@ const CANONICAL_PHONE_REGISTRY: Record<
     has_5g: true,
     release_date: 'September 2026',
     ip_rating: 'IP68/IP69 dust/water resistant (high-pressure water jets; immersible up to 2m)',
-    default_storage_gb: 512,
   },
   'xiaomi:17-pro-max': {
     screen_size_inch: 6.85,
@@ -792,7 +790,6 @@ const CANONICAL_PHONE_REGISTRY: Record<
     has_5g: true,
     release_date: 'September 2025',
     ip_rating: 'IP68 dust/water resistant (up to 1.5m for 30 min)',
-    default_storage_gb: 512,
   },
   'apple:iphone-18-pro-max': {
     screen_size_inch: 6.9,
@@ -817,7 +814,6 @@ const CANONICAL_PHONE_REGISTRY: Record<
     has_5g: true,
     release_date: 'September 2026',
     ip_rating: 'IP68 dust/water resistant (up to 6m for 30 min)',
-    default_storage_gb: 256,
   },
   'apple:iphone-18-pro': {
     screen_size_inch: 6.3,
@@ -842,7 +838,6 @@ const CANONICAL_PHONE_REGISTRY: Record<
     has_5g: true,
     release_date: 'September 2026',
     ip_rating: 'IP68 dust/water resistant (up to 6m for 30 min)',
-    default_storage_gb: 256,
   },
   'samsung:galaxy-s26-ultra': {
     screen_size_inch: 6.9,
@@ -866,7 +861,6 @@ const CANONICAL_PHONE_REGISTRY: Record<
     has_5g: true,
     release_date: 'February 2026',
     ip_rating: 'IP68 dust/water resistant (up to 1.5m for 30 min, Titanium Grade 5 + S Pen)',
-    default_storage_gb: 256,
   },
   'oppo:find-x9-pro': {
     screen_size_inch: 6.82,
@@ -890,7 +884,6 @@ const CANONICAL_PHONE_REGISTRY: Record<
     has_5g: true,
     release_date: 'October 2025',
     ip_rating: 'IP68/IP69 dust/water resistant (high-pressure water jets; immersible up to 1.5m)',
-    default_storage_gb: 512,
   },
   'apple:ipad-pro-m5': {
     screen_size_inch: 11.1,
@@ -913,7 +906,6 @@ const CANONICAL_PHONE_REGISTRY: Record<
     has_5g: true,
     release_date: 'October 2025',
     ip_rating: '5.3mm Ultra-thin 100% recycled aluminum enclosure',
-    default_storage_gb: 256,
   },
   'xiaomi:pad-7-pro': {
     screen_size_inch: 11.2,
@@ -935,7 +927,6 @@ const CANONICAL_PHONE_REGISTRY: Record<
     has_5g: false,
     release_date: 'October 2024',
     ip_rating: 'Unibody aluminum alloy frame, 6.18mm slim profile',
-    default_storage_gb: 256,
   },
   'apple:macbook-air-m4': {
     screen_size_inch: 13.6,
@@ -957,7 +948,6 @@ const CANONICAL_PHONE_REGISTRY: Record<
     has_5g: false,
     release_date: 'March 2025',
     ip_rating: 'Fanless silent 100% recycled aluminum unibody enclosure',
-    default_storage_gb: 256,
   },
   'apple:macbook-pro-m4-pro': {
     screen_size_inch: 14.2,
@@ -981,7 +971,6 @@ const CANONICAL_PHONE_REGISTRY: Record<
     has_5g: false,
     release_date: 'November 2024',
     ip_rating: 'Precision-machined aluminum enclosure (Space Black anodized seal)',
-    default_storage_gb: 512,
   },
   'apple:watch-series-11': {
     screen_size_inch: 1.96,
@@ -1004,7 +993,7 @@ const CANONICAL_PHONE_REGISTRY: Record<
     has_5g: false,
     release_date: 'September 2025',
     ip_rating: 'IP6X dust resistant + WR50 water resistant (50m swimproof)',
-    default_storage_gb: 64,
+    only_storage_gb: 64,
   },
   'apple:watch-ultra-3': {
     screen_size_inch: 1.98,
@@ -1027,7 +1016,7 @@ const CANONICAL_PHONE_REGISTRY: Record<
     has_5g: true,
     release_date: 'September 2025',
     ip_rating: 'IP6X + WR100 (100m water resistant, MIL-STD 810H, Aerospace Grade 5 Titanium)',
-    default_storage_gb: 64,
+    only_storage_gb: 64,
   },
   'apple:airpods-pro-3': {
     battery_mah: 540,
@@ -1467,8 +1456,8 @@ export class ProductNormalizer {
     } else if (storageCandidates.length === 1) {
       storageGb = storageCandidates[0].value;
       storageConfident = true;
-    } else if (storageCandidates.length === 0 && benchmark?.default_storage_gb != null) {
-      storageGb = benchmark.default_storage_gb;
+    } else if (storageCandidates.length === 0 && benchmark?.only_storage_gb != null) {
+      storageGb = benchmark.only_storage_gb;
       storageConfident = true;
     }
     const storageKnown = storageGb !== null;

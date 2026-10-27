@@ -491,6 +491,45 @@ async function runSuite() {
   assert.equal(garminFr265.model_key, 'garmin:forerunner-265:8gb');
   assert.equal(garminFr265.is_benchmark_enriched, true);
 
+  // A storage-less title of a registry model sold in several storage sizes keys as
+  // ':unknown', never at a guessed default size (DOS/Rate#1094). Labeled fixtures from
+  // the Rate-Services audit run 40252379212.
+  const storagelessRegistryTitles: Array<[string, string]> = [
+    // A 16GB/512GB CellphoneS listing that used to key under the 1TB master.
+    ['Laptop ASUS Zenbook S 14 UX5406AA-SU348W', 'asus:zenbook-s-14:unknown'],
+    // "12GB" is RAM: the title names no storage.
+    ['Samsung Galaxy S26 Ultra 5G 12GB', 'samsung:galaxy-s26-ultra:unknown'],
+    ['Apple iPhone 18 Pro Max', 'apple:iphone-18-pro-max:unknown'],
+    ['Apple iPhone 18 Pro', 'apple:iphone-18-pro:unknown'],
+    ['Lenovo ThinkPad X1 Carbon Gen 12 Ultra 7 155U', 'lenovo:thinkpad-x1-carbon-gen-12:unknown'],
+    ['Máy tính bảng iPad Pro M5 11 inch WiFi', 'apple:ipad-pro-m5:unknown'],
+    ['Máy tính bảng Xiaomi Pad 7 Pro', 'xiaomi:pad-7-pro:unknown'],
+  ];
+  for (const [title, expectedKey] of storagelessRegistryTitles) {
+    const storageless = normalizer.normalize(createDummyShopeeProduct(title));
+    assert.equal(storageless.model_key, expectedKey, title);
+    assert.equal(storageless.storage_gb, null, title);
+    assert.equal(storageless.needs_review, true, title);
+    assert.equal(storageless.is_benchmark_enriched, true, title);
+    assert.equal(storageless.specifications.hardware?.storage_gb, undefined, title);
+  }
+  const storagelessZenbook = normalizer.normalize(
+    createDummyShopeeProduct('Laptop ASUS Zenbook S 14 UX5406AA-SU348W')
+  );
+  assert.equal(storagelessZenbook.name, 'Asus Zenbook S 14');
+  assert.equal(storagelessZenbook.slug, 'asus-zenbook-s-14');
+  // A title that names its storage still keys at it.
+  assert.equal(
+    normalizer.normalize(createDummyShopeeProduct('Apple iPhone 18 Pro Max 512GB')).model_key,
+    'apple:iphone-18-pro-max:512gb'
+  );
+  // A watch generation ships in one storage size, so its storage is known without the
+  // title naming it (the single-storage watches above keep their keys).
+  assert.equal(
+    normalizer.normalize(createDummyShopeeProduct('Apple Watch Series 11 GPS 46mm')).model_key,
+    'apple:watch-series-11:64gb'
+  );
+
   const sonyBuds = normalizer.normalize(
     createDummyShopeeProduct('Tai nghe chống ồn Sony WF-1000XM5 Chính hãng')
   );
@@ -1220,13 +1259,14 @@ async function runSuite() {
     assert.equal(keyOf('Tai nghe AirPods Pro 2023'), 'apple:airpods-pro-2:unknown');
     assert.equal(keyOf('Tai nghe AirPods Pro (2023) USB-C'), 'apple:airpods-pro-2:unknown');
 
-    // #643: FPT Shop names 256GB iPad Pro M5 by its 12GB RAM
+    // #643: FPT Shop names the iPad Pro M5 by its 12GB RAM, which the 256GB and 512GB
+    // models share, so the storage stays unknown (#1094).
     const ipadProM5Ram = normalizer.normalize(
       createDummyShopeeProduct('iPad Pro 11 M5 2025 WiFi 12GB')
     );
-    assert.equal(ipadProM5Ram.model_key, 'apple:ipad-pro-m5:256gb');
+    assert.equal(ipadProM5Ram.model_key, 'apple:ipad-pro-m5:unknown');
     assert.equal(ipadProM5Ram.ram_gb, 12);
-    assert.equal(ipadProM5Ram.storage_gb, 256);
+    assert.equal(ipadProM5Ram.storage_gb, null);
 
     const ipadAirRamOnly = normalizer.normalize(
       createDummyShopeeProduct('iPad Air 11 M3 2025 WiFi 8GB')
