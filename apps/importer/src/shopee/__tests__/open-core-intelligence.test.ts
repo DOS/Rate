@@ -370,6 +370,14 @@ async function runSuite() {
     ['MacBook Air M4 16/256', 'apple:macbook-air-m4:unknown'],
     ['MacBook Pro M4 16-core GPU 14 inch 512GB', 'apple:macbook-pro-m4-14:512gb'],
     ['iPad Pro M4 11-core 256GB', 'apple:ipad-pro-m4:256gb'],
+    ['MacBook Pro M4 Max 16 nhân CPU 40 nhân GPU 48GB 1TB', keyOf('MacBook Pro M4 Max 48GB 1TB')],
+    ['MacBook Pro M3 Pro 18GB 512GB - 14 lõi GPU', 'apple:macbook-pro-m3-pro:512gb'],
+    ['MacBook Air M3 16G 512G', keyOf('MacBook Air M3 512G')],
+    ['MacBook Air M3 RAM 16 SSD 512GB', keyOf('MacBook Air M3 RAM SSD 512GB')],
+    // An Air comes in 13 and 15 inch; an OS version or a part code is no size.
+    ['MacBook Air M2 8GB 256GB macOS 14 Sonoma', 'apple:macbook-air-m2:256gb'],
+    ['MacBook Air M2 Z15S 8GB 256GB', 'apple:macbook-air-m2:256gb'],
+    ['MacBook Pro M4 Pro 16″ 24GB 512GB', 'apple:macbook-pro-m4-pro-16:512gb'],
     // A title without its size keeps the size-less key and goes to Tier 2.
     ['Máy tính bảng Apple iPad Pro M4 256GB WiFi', 'apple:ipad-pro-m4:256gb'],
     ['Apple Watch Series 11 64GB', 'apple:watch-series-11:64gb'],
@@ -385,11 +393,24 @@ async function runSuite() {
   for (const [title, expectedKey] of appleSizeKeys1113) {
     assert.equal(keyOf(title), expectedKey, title);
   }
-  // The registry has one entry per line: a sized title keeps the line's benchmark.
+  // The registry has one entry per line: a sized title keeps the line's benchmark, but
+  // the entry's screen and battery describe only the size it was written for.
   assert.equal(
     normalizer.normalize(createDummyShopeeProduct('Apple Watch Series 11 GPS 42mm'))
       .is_benchmark_enriched,
     true
+  );
+  const ipadPro13 = normalizer.normalize(
+    createDummyShopeeProduct('iPad Pro M4 13 inch WiFi 256GB')
+  );
+  assert.equal(ipadPro13.screen_size_inch, 13);
+  assert.equal(ipadPro13.battery_mah, null);
+  const ipadPro11 = normalizer.normalize(createDummyShopeeProduct('iPad Pro M4 11 inch 256GB'));
+  assert.equal(ipadPro11.screen_size_inch, 11);
+  assert.equal(ipadPro11.battery_mah, 8160);
+  assert.equal(
+    normalizer.normalize(createDummyShopeeProduct('MacBook Air M3 15 inch 256GB')).screen_size_inch,
+    15
   );
   // iPad mini 6 and 7 are two models (DOS/Rate#819): "(A17 Pro)" is the 7th, "8.3 inch" is
   // its screen, and a size or a year after "mini" is no generation.
