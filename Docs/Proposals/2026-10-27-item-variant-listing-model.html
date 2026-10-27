@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="vi" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="color-scheme" content="dark" />
+  <title>Mô hình Item, Variant, Listing</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0f1113;
+      --surface: #161a1e;
+      --surface-2: #1d2228;
+      --border: #2a313a;
+      --text: #e8edf2;
+      --muted: #9ba5b0;
+      --accent: #FF2E29;
+      --accent-soft: rgba(255, 46, 41, 0.14);
+      --green: #22c55e;
+      --green-soft: rgba(34, 197, 94, 0.14);
+      --amber: #f59e0b;
+      --amber-soft: rgba(245, 158, 11, 0.14);
+      --code-bg: #0b0d0f;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 32px 16px 64px;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Inter, sans-serif;
+      line-height: 1.65;
+    }
+    .container { max-width: 940px; margin: 0 auto; }
+    h1 { font-size: 28px; margin: 12px 0 8px; letter-spacing: -0.02em; }
+    h2 { font-size: 20px; margin: 36px 0 12px; padding-bottom: 8px; border-bottom: 1px solid var(--border); color: #fff; }
+    h3 { font-size: 16px; margin: 20px 0 8px; color: #fff; }
+    p, li { color: var(--text); }
+    .muted { color: var(--muted); }
+    .badge { display: inline-block; padding: 4px 10px; border-radius: 6px; font-size: 12px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; }
+    .badge-accent { background: var(--accent-soft); color: var(--accent); border: 1px solid rgba(255,46,41,0.35); }
+    .badge-green { background: var(--green-soft); color: var(--green); border: 1px solid rgba(34,197,94,0.35); }
+    .badge-amber { background: var(--amber-soft); color: var(--amber); border: 1px solid rgba(245,158,11,0.35); }
+    .card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 16px 18px; margin: 14px 0; }
+    .card.rec { border-color: rgba(34,197,94,0.45); }
+    .card.warn { border-color: rgba(245,158,11,0.45); }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
+    .table-wrap { overflow-x: auto; margin: 12px 0; }
+    table { width: 100%; border-collapse: collapse; font-size: 14px; min-width: 560px; }
+    th, td { border: 1px solid var(--border); padding: 8px 10px; text-align: left; vertical-align: top; }
+    th { background: var(--surface-2); color: #fff; }
+    code { background: var(--code-bg); border: 1px solid var(--border); border-radius: 4px; padding: 1px 5px; font-size: 13px; }
+    .tree { background: var(--code-bg); border: 1px solid var(--border); border-radius: 8px; padding: 14px 16px; font-family: ui-monospace, Consolas, monospace; font-size: 13px; white-space: pre; overflow-x: auto; }
+    .q { border-left: 3px solid var(--accent); padding-left: 12px; margin: 16px 0; }
+    .q strong { color: #fff; }
+    a { color: #ff6b66; }
+  </style>
+</head>
+<body>
+<div class="container">
+  <span class="badge badge-accent">Đề xuất, chưa code</span>
+  <span class="badge badge-amber">Chờ JOY quyết 7 câu</span>
+  <h1>Mô hình Item, Variant, Listing</h1>
+  <p class="muted">Ngày 27/10/2026 · Issue <a href="https://github.com/DOS/Rate/issues/1129">DOS/Rate#1129</a> · Bản kỹ thuật đầy đủ (tiếng Anh): <a href="./2026-10-27-item-variant-listing-model.md">2026-10-27-item-variant-listing-model.md</a></p>
+
+  <div class="card rec">
+    <h3>Tóm tắt một đoạn</h3>
+    <p>Hiện mỗi dung lượng là một "sản phẩm gốc" riêng (iPhone 17 Pro 256GB và 512GB là hai trang, hai thẻ, hai suất trên bảng xếp hạng). Đề xuất: thêm bảng <code>items</code> đứng trên, giữ bảng hiện tại làm <b>phiên bản (variant)</b>, mỗi gian hàng (listing) gắn vào Item và gắn vào phiên bản nếu biết rõ dung lượng. Mọi phép so giá vẫn so trong cùng một dung lượng như hôm nay, nên phần rủi ro nhất không phải viết lại. Listing không rõ dung lượng gắn vào Item, không bị đoán bừa sang bản 256GB nữa (giải quyết luôn #1105).</p>
+  </div>
+
+  <h2>1. Mô hình JOY đặt ra, áp vào dữ liệu</h2>
+  <div class="tree">Item: Apple iPhone 17 Pro          (1 trang, 1 điểm đánh giá, giá "từ ...")
+ ├─ Variant 256GB                    (giá thấp nhất riêng, deal riêng, báo giá riêng)
+ │    ├─ Listing: Shopee shop A
+ │    └─ Listing: FPT Shop
+ ├─ Variant 512GB
+ │    └─ Listing: CellphoneS
+ └─ (chưa rõ dung lượng)
+      └─ Listing: Lazada shop B      (hiện riêng, không tính vào giá "từ ...")</div>
+  <p class="muted">iPad Pro 11 inch và 13 inch, Apple Watch 42mm và 46mm vẫn là hai Item khác nhau (khác màn hình, pin, thông số), giữ đúng như #1113 và #1124.</p>
+
+  <h2>2. Hiện trạng (đã khảo sát 4 mảng)</h2>
+  <div class="grid">
+    <div class="card"><h3>Database</h3><p>Bảng <code>master_products</code> mỗi dòng là một dung lượng, có slug, giá, điểm riêng. Listing trỏ về qua <code>cluster_id</code>. Không có tầng nào phía trên.</p></div>
+    <div class="card"><h3>Web</h3><p>Mỗi dung lượng là một trang, một URL, một mục sitemap. Bản 512GB có thể hiện thành "đối thủ" của chính bản 256GB, và một mẫu có thể chiếm nhiều suất trong top 10.</p></div>
+    <div class="card"><h3>Importer</h3><p>Khóa <code>brand:model:dung-lượng</code>. Tiêu đề không ghi dung lượng bị so gần đúng rồi gắn nhầm vào bản có dung lượng (#1105). Giá thấp nhất của cả listing (mọi dung lượng) bị ghi cho một bản.</p></div>
+    <div class="card"><h3>Rate Services</h3><p>Mọi bộ kiểm tra giá, rủi ro gian hàng, seeding đều nhóm theo <code>cluster_id</code>, tức theo dung lượng. Đây là lý do nên giữ nguyên nghĩa của nó.</p></div>
+  </div>
+  <p class="muted">Số liệu công khai lúc 27/10/2026: 16 sản phẩm đang hiển thị, chưa mẫu nào có hơn một dung lượng được công bố. Dữ liệu chuyển đổi nhỏ, phần tốn công chủ yếu là code web và Rate Services.</p>
+
+  <h2>3. Các phương án</h2>
+  <div class="table-wrap">
+  <table>
+    <tr><th></th><th>A. Bảng Item + bảng Variant mới</th><th>B. Thêm Item phía trên bảng cũ (đề xuất)</th><th>C. Một bảng tự tham chiếu</th><th>D. Biến bảng cũ thành Item</th></tr>
+    <tr><td>Logic so giá theo dung lượng</td><td>Viết lại</td><td><b>Giữ nguyên</b></td><td>Giữ nguyên</td><td>Viết lại, dễ trộn giá các dung lượng</td></tr>
+    <tr><td>URL, ID cũ</td><td>Cần bảng ánh xạ</td><td><b>Giữ nguyên, tự chuyển hướng</b></td><td>Giữ</td><td>ID đổi nghĩa ngầm, nguy hiểm</td></tr>
+    <tr><td>Độ sạch về lâu dài</td><td>Tốt nhất</td><td>Tốt (đổi tên sau bằng view)</td><td>Kém</td><td>Tốt nhưng chuyển đổi rủi ro</td></tr>
+    <tr><td>Chi phí</td><td>Cao nhất</td><td><b>Thấp nhất</b></td><td>Trung bình, phức tạp kéo dài</td><td>Cao, rủi ro cao</td></tr>
+  </table>
+  </div>
+
+  <h2>4. Dữ liệu nằm ở tầng nào</h2>
+  <div class="table-wrap">
+  <table>
+    <tr><th>Dữ liệu</th><th>Item</th><th>Variant (dung lượng)</th><th>Listing</th></tr>
+    <tr><td>Thông số</td><td>Gần như toàn bộ</td><td>Chỉ dung lượng, RAM, giá niêm yết</td><td>Dữ liệu thô của sàn</td></tr>
+    <tr><td>Giá</td><td>Giá "từ ..." và khoảng giá</td><td>Giá thấp nhất, số gian hàng, deal, chênh giá</td><td>Giá hiện tại, lịch sử giá</td></tr>
+    <tr><td>Đánh giá, điểm</td><td>Một điểm chung cho mọi dung lượng</td><td>Không tách riêng</td><td>Từng review gốc</td></tr>
+    <tr><td>Báo giá (alert)</td><td>Để sau</td><td>Giữ nguyên theo dung lượng</td><td></td></tr>
+  </table>
+  </div>
+
+  <h2>5. Ảnh hưởng</h2>
+  <ul>
+    <li><b>Web:</b> mỗi Item một trang <code>/smartphones/apple-iphone-17-pro</code>, có nút chọn dung lượng kèm giá từng bản. URL cũ (<code>...-256gb</code>) tự chuyển sang trang Item với đúng dung lượng đã chọn, không mất SEO. Danh mục, tìm kiếm, bảng xếp hạng, sitemap đếm theo Item. So sánh và đối đầu không còn ghép hai bản của cùng một máy.</li>
+    <li><b>API v1 và tiện ích trình duyệt:</b> chỉ thêm trường mới, client cũ vẫn chạy. Tiện ích đã có sẵn nút chọn phiên bản, chỉ cần lấy đủ các bản từ database và bỏ việc mặc định 256GB khi không rõ.</li>
+    <li><b>Importer:</b> khóa tách thành <code>item_key</code> và <code>variant_key</code>. So gần đúng chỉ còn ở tầng Item (tên Item không chứa dung lượng nên hết lỗi #1105). Dung lượng chỉ được gán khi có bằng chứng rõ, không đoán, không để AI tự điền.</li>
+    <li><b>Rate Services:</b> các bộ kiểm tra giá giữ nguyên, chỉ cần xử lý listing chưa rõ dung lượng, nhận Item trong job, và dùng hàm tách khóa dùng chung.</li>
+  </ul>
+
+  <h2>6. Kế hoạch chuyển đổi DOS-Me</h2>
+  <div class="table-wrap">
+  <table>
+    <tr><th>Bước</th><th>Làm gì</th><th>Quay lui</th></tr>
+    <tr><td>M0</td><td>Đồng bộ 8 migration còn thiếu vào bản tham chiếu, chạy truy vấn kiểm kê chỉ đọc, sửa các khóa seed lệch</td><td>Không cần</td></tr>
+    <tr><td>M1</td><td>Thêm bảng <code>items</code> và các cột mới (chỉ thêm, không sửa, không xóa)</td><td>Xóa phần vừa thêm</td></tr>
+    <tr><td>M2</td><td>Điền dữ liệu Item từ bảng cũ, thêm các hàm truy vấn mới</td><td>Xóa dữ liệu mới, đường cũ không bị ảnh hưởng</td></tr>
+    <tr><td>Giai đoạn song song</td><td>Code ghi cả hai tầng, web bật trang Item bằng cờ, URL cũ chuyển hướng. Tối thiểu một đợt promote và khoảng 30 ngày</td><td>Tắt cờ</td></tr>
+    <tr><td>M3</td><td>Gom các bản "chưa rõ dung lượng" về Item, có bảng sao lưu</td><td>Khôi phục từ bảng sao lưu</td></tr>
+    <tr><td>M4</td><td>Khóa ràng buộc (bắt buộc có Item, listing và dung lượng phải cùng Item)</td><td>Gỡ ràng buộc</td></tr>
+    <tr><td>M5, M6</td><td>Tùy chọn: giá theo từng SKU của sàn, đổi tên cho gọn</td><td>Xóa bảng, view</td></tr>
+  </table>
+  </div>
+  <div class="card warn"><p><b>Lưu ý:</b> luồng beta của DOS-Me đang bị khóa (ROADMAP 6.4). Có thể chuẩn bị và thử trên preview ngay, nhưng lên prod phải chờ luồng beta mở lại. Mỗi bước M1 đến M4 đều cần JOY duyệt riêng.</p></div>
+
+  <h2>7. Bảy câu cần JOY quyết</h2>
+  <p class="muted">Mỗi câu có phương án đề xuất. Nếu JOY đồng ý hết, chỉ cần trả lời "theo đề xuất".</p>
+  <div class="q"><strong>Câu 1. URL:</strong> mỗi Item một URL được Google index, chọn dung lượng bằng <code>?v=256gb</code> (đề xuất). Hay mỗi dung lượng một URL riêng được index (nhiều trang hơn nhưng nội dung gần trùng)?</div>
+  <div class="q"><strong>Câu 2. Listing không rõ dung lượng:</strong> hiện thành nhóm riêng "Chưa rõ dung lượng" trên trang Item và không tính vào giá "từ ..." (đề xuất). Hay tính luôn vào giá "từ ..." (trông rẻ hơn nhưng dễ gây hiểu nhầm)?</div>
+  <div class="q"><strong>Câu 3. Trục phiên bản:</strong> trước mắt chỉ theo dung lượng; kích thước màn hình hay vỏ là Item riêng như hiện nay; Wi-Fi và Cellular tạm gộp, tách sau nếu so giá bị lệch (đề xuất). Hay tách Wi-Fi và Cellular ngay từ đầu?</div>
+  <div class="q"><strong>Câu 4. Điểm đánh giá:</strong> một điểm chung cho cả Item, gộp review mọi dung lượng (đề xuất)?</div>
+  <div class="q"><strong>Câu 5. Báo giá:</strong> giữ theo từng dung lượng, tính năng "báo khi bất kỳ dung lượng nào xuống giá" để sau (đề xuất)?</div>
+  <div class="q"><strong>Câu 6. #1105:</strong> tiếp tục giữ, gộp vào task sửa bộ khớp trong kế hoạch này, không làm bản vá tạm (đề xuất)?</div>
+  <div class="q"><strong>Câu 7. API công khai:</strong> danh sách <code>/api/v1/rate/products</code> giữ mặc định theo dung lượng trong giai đoạn song song, sau đó mới chuyển sang theo Item kèm thông báo (đề xuất)?</div>
+
+  <h2>8. Danh sách việc sau khi JOY duyệt</h2>
+  <p>15 việc (PO sẽ tạo issue sau khi JOY duyệt): 3 việc nhỏ chuẩn bị, 2 migration DOS-Me, 2 việc importer, 6 việc web/API/tiện ích/E2E, 1 việc Rate Services, 1 việc tùy chọn. Đường găng: chuẩn bị, rồi M1 và M2, rồi importer và tầng dữ liệu web song song, rồi trang và Rate Services, rồi M3 và M4. Chi tiết kích thước và phụ thuộc ở mục 10 bản tiếng Anh.</p>
+
+  <p class="muted" style="margin-top:40px">Tài liệu này chỉ là đề xuất. Chưa có code, migration hay thay đổi dữ liệu nào được thực hiện.</p>
+</div>
+</body>
+</html>
