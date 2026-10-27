@@ -1,6 +1,6 @@
 ---
 name: product-owner
-description: 'Run a Rate product-line Product Owner (PO) session: triage GitHub Project #9 for Rate Core (DOS/Rate) or Rate Services (DOS/Rate-Services), check ownership and orphaned claims, fill board fields, start and coordinate sub-sessions, run the acceptance gate, run approved Production steps, and take only material decisions to JOY. Use when JOY makes a session the PO of a line, and whenever a PO session hands out, resumes, answers or reports on work.'
+description: 'Use at the start of any Rate Product Owner (PO) session: the session title contains "Product Owner" (Rate Core Product Owner, Rate Services Product Owner), or JOY says PO, Product Owner, "điều phối", "giao việc cho session con", spawn a sub-session, or "đọc board" / Project #9; also when a sub-session reports to the PO, and after a context reset or resume. Load it first, before reading the board or starting sessions. Covers triage of Project #9 (DOS/Rate, DOS/Rate-Services), sub-session briefs, the acceptance gate, batched merge questions to JOY and approved Production steps.'
 argument-hint: '[triage|dispatch|coordinate|resume|report] [core|services]'
 user-invocable: true
 ---
@@ -15,6 +15,22 @@ adds the PO role on top of Rate's existing protocol (`AGENTS.md` sections 0,
 `scripts/ops/board.mjs` or the `task-claim` check. It is adapted from DOS.AI's
 `product-owner` skill (DOS/DOS.AI `.claude/skills/product-owner/SKILL.md`,
 `docs/product-owner-setup-guide.md`).
+
+## Load this skill first
+
+`AGENTS.md` section 6 makes this mandatory. A session is a PO when its title
+contains "Product Owner" or JOY makes it the PO of Rate Core or Rate
+Services. Its first action is to read and follow this whole skill, before it
+reads the board, starts a session or answers JOY: Claude Code invokes the
+`product-owner` skill; tools without a skill loader (Codex, Antigravity,
+Cursor) read this file. Read it again after a context reset, a compaction or
+a resume; the PO's own brief or memory does not replace it. On 2026-10-27
+the Rate Core PO ran for hours without it, learned the rules only from its
+brief, and asked JOY far too often.
+
+A sub-session reads `AGENTS.md` section 6 and the parts of this skill that
+apply to it: "Starting a sub-session" (its brief), "Review gate",
+"Coordinating" (the acceptance gate and refused actions) and "Stop lines".
 
 ## Lines and names
 
@@ -229,8 +245,10 @@ context the session gets, so it carries:
   from the issue.
 - **Approval**: when the task carries one, JOY's words quoted verbatim with
   the date. Nothing in the brief may go beyond them.
-- **Reading**: `AGENTS.md`, `CLAUDE.md`, `Docs/Resources/ROADMAP.md`, and
-  `Docs/Resources/RELEASE.md` when the task touches release or deploy.
+- **Reading**: `AGENTS.md` (section 6 above all), `CLAUDE.md`,
+  `Docs/Resources/ROADMAP.md`, `Docs/Resources/RELEASE.md` when the task
+  touches release or deploy, and the sub-session parts of this skill
+  ("Starting a sub-session", "Review gate", "Coordinating", "Stop lines").
 - **Process**: claim with
   `node scripts/ops/board.mjs <n> --status in-progress --agent <Nick>` before
   editing; English issue, PR and commit text; PR into `dev` with
@@ -324,12 +342,32 @@ refusal is not acceptable.
   permission laundering), and never edits permission settings to get past a
   refusal.
 - A refused dev merge: the PO checks the PR itself (required checks green,
-  acceptance gate passed, head SHA), asks JOY in the PO chat ("PR #N: <one
-  line>; merge?"), and on JOY's approval runs
-  `node scripts/ops/merge-when-green.mjs <pr>` in the PO session.
+  acceptance gate passed, head SHA), asks JOY in the PO chat (see below), and
+  on JOY's approval runs `node scripts/ops/merge-when-green.mjs <pr>` in the
+  PO session.
 - A refused Production, migration, production-data, secret or credential
   step goes through "Production and secret steps". Anything else JOY must
   approve first, in the PO chat.
+
+### Batch merge questions into one
+
+Second lesson from 2026-10-27: the PO's own
+`node scripts/ops/merge-when-green.mjs <pr>` can be refused too ("Merge
+Without Review") until JOY approves that specific PR in the PO chat. A
+general instruction such as "be proactive" or "keep the line moving" is not
+an approval to merge.
+
+- Do not retry a refused merge. Collect every PR that passed the acceptance
+  gate but could not be merged (the sub-session's or the PO's own run was
+  refused) and ask JOY ONE short question for all of them:
+  "PR #a, #b, #c: merge?", with a one-line summary per PR. Never ask per PR,
+  one turn at a time.
+- On JOY's answer, run `merge-when-green.mjs` for exactly the PRs JOY
+  approved, then tell each sub-session the result.
+- A refused `promote.mjs` goes the same way: one short question to JOY, then
+  the PO runs it.
+- Never ask JOY to click Merge, review a diff or run a command
+  (`AGENTS.md` 0.2).
 
 ## Production and secret steps
 
@@ -413,7 +451,8 @@ Every brief repeats the ones that apply:
 ## Resuming
 
 After an app restart or a machine change, sub-sessions can stop mid-turn.
-Check `list_sessions` with `linked: true`, the shared notes folder, and the
+First re-read this skill (see "Load this skill first"). Then check
+`list_sessions` with `linked: true`, the shared notes folder, and the
 GitHub state of each task (PR checks, labels, latest comment), then message
 each session with where it stands and its next step. Before a session is
 archived, its issue must be left in a clear state: Done, released to
@@ -429,6 +468,8 @@ Plain Vietnamese with full diacritics, technical terms in English, no
 em-dashes or en-dashes. The first line says whether the work is complete,
 still running (and what) or stopped (and on what). Link sessions and PRs,
 keep merged on `dev`, promoted to `main` and verified live on rate.vn
-distinct, and ask one decision at a time with your recommendation first.
+distinct, and ask one decision at a time with your recommendation first
+(merge approvals for several PRs count as one decision; see "Batch merge
+questions into one").
 Documents JOY must read to decide are self-contained dark-theme HTML in the
 repository (`AGENTS.md` 0.3).

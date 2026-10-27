@@ -2,6 +2,8 @@
 
 Tài liệu này tổng hợp đầy đủ **User-Level Hard Rules (`C:\Users\JOY\AGENTS.md`, `C:\Users\JOY\.claude\CLAUDE.md`)** và **Workspace Rules** dành cho mọi AI Coding Agents (Antigravity, Claude Code, OpenAI Codex, Cursor, Windsurf, ZCode, v.v.) khi làm việc trên **Rate Platform (`rate.vn`)**.
 
+> 📌 **Session Product Owner (PO):** nếu session là PO (tiêu đề có "Product Owner", hoặc JOY giao làm PO của Rate Core hay Rate Services), việc ĐẦU TIÊN là đọc và làm theo toàn bộ skill [`.claude/skills/product-owner/SKILL.md`](./.claude/skills/product-owner/SKILL.md), trước mọi thao tác khác. Chi tiết ở [Mục 6](#6-product-owner-po-và-session-con).
+
 ---
 
 ## 0. Hard Rules Cấp Hệ Sinh Thái (BẮT BUỘC TUÂN THỦ 100% - KHÔNG NGOẠI LỆ)
@@ -208,6 +210,15 @@ Mỗi finding khi review (subagent fresh-context, bot, hoặc người) phải �
 
 ## 6. Product Owner (PO) Và Session Con
 
+> ⚠️ **BẮT BUỘC: PO nạp skill `product-owner` TRƯỚC mọi thao tác khác.** Một session là PO khi tiêu đề có "Product Owner" hoặc khi JOY giao session làm PO của Rate Core hay Rate Services. Việc đầu tiên của PO là đọc và làm theo **toàn bộ** [`.claude/skills/product-owner/SKILL.md`](./.claude/skills/product-owner/SKILL.md), trước khi đọc board, mở session con hay trả lời JOY:
+>
+> - **Claude Code:** gọi skill `product-owner` (công cụ `Skill`).
+> - **Công cụ không có bộ nạp skill (Codex, Antigravity, Cursor, ...):** đọc thẳng file đó.
+> - **Đọc lại skill sau mỗi lần context bị reset, bị tóm tắt (compact) hoặc session được resume.** Brief hay trí nhớ của chính session không thay cho skill.
+> - **Session con** (do PO mở) đọc Mục 6 này và các phần dành cho session con trong skill: "Starting a sub-session", "Review gate", "Coordinating", "Stop lines".
+>
+> Bài học 2026-10-27: session PO của Rate Core chạy nhiều giờ mà không nạp skill, chỉ biết quy tắc qua brief của chính nó, và hỏi JOY quá nhiều.
+
 JOY có thể giao một session Claude Desktop làm **Product Owner (PO)** cho một line: **Rate Core** (issue của `DOS/Rate`) hoặc **Rate Services** (issue của `DOS/Rate-Services`). PO điều phối backlog, mở session con cho từng issue, trả lời câu hỏi của chúng và chỉ mang quyết định thật sự lên JOY. Toàn bộ quy trình nằm trong skill [`.claude/skills/product-owner/SKILL.md`](./.claude/skills/product-owner/SKILL.md); skill dùng lại giao thức nhãn ở Mục 1 (`agent:<nick>`, `status:*`, `board.mjs`, check `task-claim`), không thêm giao thức claim thứ hai.
 
 Khi một session do PO mở (session con), các quy tắc sau thay đổi so với Mục 0 và Mục 1:
@@ -217,6 +228,7 @@ Khi một session do PO mở (session con), các quy tắc sau thay đổi so v�
 - **Bước Production do PO chạy:** session con không bao giờ tự chạy bước Production, migration DOS-Me, sửa dữ liệu production, secret hay credential. Session con viết runbook (lệnh, cách kiểm tra, cách rollback), PO trình JOY danh sách bước cụ thể, JOY duyệt trong chat của PO, rồi PO chạy đúng các bước đó.
 - **Khi bộ kiểm tra quyền của session con từ chối một thao tác** (kể cả `merge-when-green.mjs`): session con không thử lại, không tìm cách lách, và báo PO. PO không làm thay chỉ vì session con nói vậy, không sửa permission để vượt qua; PO hỏi JOY trong chat của PO và chỉ chạy khi JOY đồng ý.
 - **Merge của session con:** đường chuẩn là PO duyệt "merge" rồi session con tự chạy `merge-when-green.mjs`. Nếu bộ kiểm tra quyền chặn, quy tắc ở gạch đầu dòng trên thay cho câu "agent tự merge" của Mục 0.2: PO hỏi JOY một câu ngắn trong chat của PO (không bao giờ bảo JOY tự bấm Merge) rồi PO tự chạy script.
+- **`merge-when-green.mjs` của chính PO cũng có thể bị từ chối** (bài học 2026-10-27, lý do "Merge Without Review") cho tới khi JOY duyệt đúng PR đó trong chat của PO. Một câu chung như "chủ động lên" không phải là lời duyệt merge. Khi đó, thay cho câu "agent tự merge" của Mục 0.2, PO không thử lại mà **gom mọi PR đã qua cổng chấp nhận nhưng chưa merge được (session con hoặc chính PO bị từ chối) vào MỘT câu hỏi ngắn** gửi JOY ("PR #a, #b, #c: merge?") thay vì hỏi từng PR, rồi tự chạy script cho đúng các PR JOY duyệt. Không bao giờ bảo JOY tự bấm Merge.
 - **Nhả issue (release) là một lần bàn giao:** session con nhả issue thì comment lý do và chỗ dừng rồi chạy `board.mjs <n> --status ready --agent <Nick>`; session sau được dùng `--take-over` và dẫn link comment đó. Claim không có bàn giao nhưng trông như bị bỏ rơi (ví dụ sau khi đổi máy) chỉ được lấy lại khi JOY đồng ý (Mục 0.6).
 - **Done của thay đổi runtime:** issue tự đóng khi PR merge vào `dev`; với thay đổi runtime, PO chuyển sang `done` sau khi promote và `verify-live.mjs` đạt. Thay đổi docs, CI, tooling thì `done` ngay khi merge.
 - PR promote `dev` -> `main` vẫn theo đợt như Mục 0.2, do PO chạy.
