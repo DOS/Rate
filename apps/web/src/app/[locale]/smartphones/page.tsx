@@ -404,7 +404,7 @@ export async function CategoryCatalogContent({
             borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
           }}
         >
-          <div className="position-relative z-1 container">
+          <div className="position-relative z-1 rate-catalog-wide">
             <div className="row justify-content-center align-items-center">
               <div className="col-xl-12 col-lg-12 col-md-12 col-sm-12">
                 <div className="position-relative mt-2 text-start">
@@ -434,9 +434,9 @@ export async function CategoryCatalogContent({
 
         {/* Top Hero Search Bar matching grid-layout-01 `.heroSearch.style-01` */}
         <div className="position-relative d-flex flex-column mt-n3 z-2">
-          <div className="container">
+          <div className="rate-catalog-wide">
             <div className="row align-items-center justify-content-center">
-              <div className="col-xl-11 col-lg-12 col-md-12 col-12">
+              <div className="col-12">
                 <form
                   method="GET"
                   action={basePath}
@@ -562,12 +562,14 @@ export async function CategoryCatalogContent({
           </div>
         </div>
 
-        {/* Main Content Section matching grid-layout-01 */}
-        <section>
-          <div className="container">
-            <div className="row g-4">
+        {/* Full-width catalog (DOS/Rate#1132): a fixed-width filter sidebar
+        that sticks under the navbar, and results that take the rest of the
+        width up to the .rate-catalog-wide cap. */}
+        <section className="rate-catalog-section">
+          <div className="rate-catalog-wide">
+            <div className="rate-catalog-layout">
               {/* Left Sidebar: Dynamic 10-Field-Groups Filter */}
-              <div className="col-xl-4 col-lg-4 col-md-12 col-sm-12">
+              <div className="rate-catalog-sidebar">
                 <Suspense
                   fallback={
                     <div className="bg-light rounded-4 text-muted small p-4">
@@ -584,7 +586,7 @@ export async function CategoryCatalogContent({
               </div>
 
               {/* Right Listing Grid */}
-              <div className="col-xl-8 col-lg-8 col-md-12 col-sm-12">
+              <div className="rate-catalog-results">
                 {/* Active Filter Chips matching `.alert.tag-alert` */}
                 {activeChips.length > 0 && (
                   <div className="row align-items-start mb-4">
@@ -724,11 +726,197 @@ export async function CategoryCatalogContent({
                   dealRadar={categoryDealRadar}
                 />
 
+                {/* Product Cards Grid (DESIGN.md v3.0 Rating & Review-First .rate-card) */}
+                {products.length === 0 ? (
+                  <div className="card rounded-4 bg-light border-0 p-5 text-center shadow-sm">
+                    <h3 className="h5 fw-bold mb-2">
+                      {facets.totalUnfiltered === 0
+                        ? t('page.emptySyncingTitle', {
+                            title: schema.categoryTitle,
+                          })
+                        : t('page.emptyMatchingTitle')}
+                    </h3>
+                    <p className="text-muted mb-3">
+                      {facets.totalUnfiltered === 0
+                        ? t('page.emptySyncingDesc', {
+                            title: schema.categoryTitle,
+                            brands: schema.defaultBrands.join(', '),
+                          })
+                        : t('page.emptyMatchingDesc')}
+                    </p>
+                    <div className="d-flex justify-content-center flex-wrap gap-2">
+                      {activeChips.length > 0 && (
+                        <Link
+                          href={basePath}
+                          className="btn btn-primary rounded-pill fw-medium px-4"
+                        >
+                          {t('page.resetFiltersBtn')}
+                        </Link>
+                      )}
+                      {categorySlug !== 'smartphones' && (
+                        <Link
+                          href="/smartphones"
+                          className="btn btn-primary rounded-pill fw-medium px-4"
+                        >
+                          {t('page.browseSmartphonesBtn')}
+                        </Link>
+                      )}
+                      <Link
+                        href="/merchants"
+                        className="btn btn-outline-dark rounded-pill fw-medium px-4"
+                      >
+                        {t('page.merchantProfilesBtn')}
+                      </Link>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="rate-catalog-grid">
+                    {products.map((storedItem) => {
+                      // Only the specs the category has (DOS/Rate#1142).
+                      const item = applyCategorySpecTemplate(
+                        categorySlug,
+                        storedItem
+                      );
+                      const keySpecs = (item.key_specs || {}) as KeySpecs;
+                      const specs = (item.specifications ||
+                        {}) as ProductSpecifications;
+                      const thumb = productImageUrl(item);
+
+                      const effectiveRating =
+                        item.user_rating_weighted &&
+                        Number(item.user_rating_weighted) > 0
+                          ? Number(item.user_rating_weighted)
+                          : item.average_rating &&
+                              Number(item.average_rating) > 0
+                            ? Number(item.average_rating)
+                            : null;
+                      const expertScore =
+                        item.expert_rating != null &&
+                        Number(item.expert_rating) > 0
+                          ? Number(item.expert_rating)
+                          : null;
+
+                      const refreshHz = specs.display?.refresh_rate_hz;
+                      const fastChargeW = specs.battery?.fast_charging_w;
+                      const memoryLabel = [
+                        item.ram_gb ? `${item.ram_gb}GB` : '',
+                        item.storage_gb
+                          ? formatStorageLabel(Number(item.storage_gb))
+                          : '',
+                      ]
+                        .filter(Boolean)
+                        .join(' / ');
+                      const tags = [
+                        memoryLabel,
+                        item.has_5g ? '5G' : '',
+                        refreshHz && refreshHz >= 120 ? `${refreshHz}Hz` : '',
+                        specs.connectivity?.nfc ? 'NFC' : '',
+                      ].filter(Boolean);
+
+                      const cardSpecs: ProductCardSpec[] = [];
+                      const chip = keySpecs.chip || specs.hardware?.chipset;
+                      if (chip) {
+                        cardSpecs.push({
+                          key: 'chip',
+                          icon: <BsCpu />,
+                          label: String(chip),
+                        });
+                      }
+                      const screen =
+                        keySpecs.screen ||
+                        (item.screen_size_inch
+                          ? `${item.screen_size_inch}"`
+                          : '');
+                      if (screen) {
+                        cardSpecs.push({
+                          key: 'screen',
+                          icon: <BsPhone />,
+                          label: String(screen),
+                        });
+                      }
+                      if (item.battery_mah) {
+                        cardSpecs.push({
+                          key: 'battery',
+                          icon: <BsBatteryHalf />,
+                          label: `${item.battery_mah} mAh${
+                            fastChargeW ? ` · ${fastChargeW}W` : ''
+                          }`,
+                        });
+                      }
+
+                      return (
+                        <div key={item.id}>
+                          <ProductCard
+                            slug={item.slug}
+                            href={`${basePath}/${item.slug}`}
+                            categoryPath={basePath}
+                            name={item.name}
+                            brand={item.brand}
+                            thumbnail={thumb ?? null}
+                            tags={tags}
+                            specs={cardSpecs}
+                            userScore={effectiveRating}
+                            reviewCount={Number(
+                              item.authentic_review_count ||
+                                item.total_reviews ||
+                                0
+                            )}
+                            expertScore={expertScore}
+                            radarSignal={getRadarSignal(radarIndex, item.slug)}
+                            minPrice={Number(item.min_price || 0)}
+                            maxPrice={Number(item.max_price || 0)}
+                            merchantCount={item.merchant_count || 0}
+                            verified
+                          />
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+                {(page > 1 || hasNextPage) && (
+                  <nav
+                    className="d-flex justify-content-center align-items-center gap-3 mt-4"
+                    aria-label={t('page.paginationLabel')}
+                  >
+                    {page > 1 &&
+                      (products.length === 0 ? (
+                        // Past the last page: go back to the start.
+                        <Link
+                          href={pageHref(1)}
+                          className="btn btn-outline-secondary rounded-pill px-4"
+                        >
+                          {t('page.firstPage')}
+                        </Link>
+                      ) : (
+                        <Link
+                          href={pageHref(page - 1)}
+                          className="btn btn-outline-secondary rounded-pill px-4"
+                          rel="prev"
+                        >
+                          {t('page.prevPage')}
+                        </Link>
+                      ))}
+                    <span className="text-muted small">
+                      {t('page.pageNumber', { page })}
+                    </span>
+                    {hasNextPage && (
+                      <Link
+                        href={pageHref(page + 1)}
+                        className="btn btn-outline-secondary rounded-pill px-4"
+                        rel="next"
+                      >
+                        {t('page.nextPage')}
+                      </Link>
+                    )}
+                  </nav>
+                )}
+                {/* Deal radar sits after the results so the product list
+                starts right under the toolbar (DOS/Rate#1132). */}
                 {categoryDealRadar &&
                   (categoryDealRadar.genuineDeals.length > 0 ||
                     categoryDealRadar.fakeSaleTraps.length > 0) && (
                     <div
-                      className="rate-card rate-home-radar mb-4"
+                      className="rate-card rate-home-radar mt-4"
                       data-testid="category-deal-radar"
                     >
                       <div className="rate-radar-spread-head">
@@ -890,194 +1078,6 @@ export async function CategoryCatalogContent({
                         )}
                     </div>
                   )}
-
-                {/* Product Cards Grid (DESIGN.md v3.0 Rating & Review-First .rate-card) */}
-                {products.length === 0 ? (
-                  <div className="card rounded-4 bg-light border-0 p-5 text-center shadow-sm">
-                    <h3 className="h5 fw-bold mb-2">
-                      {facets.totalUnfiltered === 0
-                        ? t('page.emptySyncingTitle', {
-                            title: schema.categoryTitle,
-                          })
-                        : t('page.emptyMatchingTitle')}
-                    </h3>
-                    <p className="text-muted mb-3">
-                      {facets.totalUnfiltered === 0
-                        ? t('page.emptySyncingDesc', {
-                            title: schema.categoryTitle,
-                            brands: schema.defaultBrands.join(', '),
-                          })
-                        : t('page.emptyMatchingDesc')}
-                    </p>
-                    <div className="d-flex justify-content-center flex-wrap gap-2">
-                      {activeChips.length > 0 && (
-                        <Link
-                          href={basePath}
-                          className="btn btn-primary rounded-pill fw-medium px-4"
-                        >
-                          {t('page.resetFiltersBtn')}
-                        </Link>
-                      )}
-                      {categorySlug !== 'smartphones' && (
-                        <Link
-                          href="/smartphones"
-                          className="btn btn-primary rounded-pill fw-medium px-4"
-                        >
-                          {t('page.browseSmartphonesBtn')}
-                        </Link>
-                      )}
-                      <Link
-                        href="/merchants"
-                        className="btn btn-outline-dark rounded-pill fw-medium px-4"
-                      >
-                        {t('page.merchantProfilesBtn')}
-                      </Link>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="row align-items-stretch justify-content-start g-xl-4 g-3">
-                    {products.map((storedItem) => {
-                      // Only the specs the category has (DOS/Rate#1142).
-                      const item = applyCategorySpecTemplate(
-                        categorySlug,
-                        storedItem
-                      );
-                      const keySpecs = (item.key_specs || {}) as KeySpecs;
-                      const specs = (item.specifications ||
-                        {}) as ProductSpecifications;
-                      const thumb = productImageUrl(item);
-
-                      const effectiveRating =
-                        item.user_rating_weighted &&
-                        Number(item.user_rating_weighted) > 0
-                          ? Number(item.user_rating_weighted)
-                          : item.average_rating &&
-                              Number(item.average_rating) > 0
-                            ? Number(item.average_rating)
-                            : null;
-                      const expertScore =
-                        item.expert_rating != null &&
-                        Number(item.expert_rating) > 0
-                          ? Number(item.expert_rating)
-                          : null;
-
-                      const refreshHz = specs.display?.refresh_rate_hz;
-                      const fastChargeW = specs.battery?.fast_charging_w;
-                      const memoryLabel = [
-                        item.ram_gb ? `${item.ram_gb}GB` : '',
-                        item.storage_gb
-                          ? formatStorageLabel(Number(item.storage_gb))
-                          : '',
-                      ]
-                        .filter(Boolean)
-                        .join(' / ');
-                      const tags = [
-                        memoryLabel,
-                        item.has_5g ? '5G' : '',
-                        refreshHz && refreshHz >= 120 ? `${refreshHz}Hz` : '',
-                        specs.connectivity?.nfc ? 'NFC' : '',
-                      ].filter(Boolean);
-
-                      const cardSpecs: ProductCardSpec[] = [];
-                      const chip = keySpecs.chip || specs.hardware?.chipset;
-                      if (chip) {
-                        cardSpecs.push({
-                          key: 'chip',
-                          icon: <BsCpu />,
-                          label: String(chip),
-                        });
-                      }
-                      const screen =
-                        keySpecs.screen ||
-                        (item.screen_size_inch
-                          ? `${item.screen_size_inch}"`
-                          : '');
-                      if (screen) {
-                        cardSpecs.push({
-                          key: 'screen',
-                          icon: <BsPhone />,
-                          label: String(screen),
-                        });
-                      }
-                      if (item.battery_mah) {
-                        cardSpecs.push({
-                          key: 'battery',
-                          icon: <BsBatteryHalf />,
-                          label: `${item.battery_mah} mAh${
-                            fastChargeW ? ` · ${fastChargeW}W` : ''
-                          }`,
-                        });
-                      }
-
-                      return (
-                        <div
-                          className="col-xl-6 col-lg-6 col-md-6 col-sm-12 col-12"
-                          key={item.id}
-                        >
-                          <ProductCard
-                            slug={item.slug}
-                            href={`${basePath}/${item.slug}`}
-                            categoryPath={basePath}
-                            name={item.name}
-                            brand={item.brand}
-                            thumbnail={thumb ?? null}
-                            tags={tags}
-                            specs={cardSpecs}
-                            userScore={effectiveRating}
-                            reviewCount={Number(
-                              item.authentic_review_count ||
-                                item.total_reviews ||
-                                0
-                            )}
-                            expertScore={expertScore}
-                            radarSignal={getRadarSignal(radarIndex, item.slug)}
-                            minPrice={Number(item.min_price || 0)}
-                            maxPrice={Number(item.max_price || 0)}
-                            merchantCount={item.merchant_count || 0}
-                            verified
-                          />
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-                {(page > 1 || hasNextPage) && (
-                  <nav
-                    className="d-flex justify-content-center align-items-center gap-3 mt-4"
-                    aria-label={t('page.paginationLabel')}
-                  >
-                    {page > 1 &&
-                      (products.length === 0 ? (
-                        // Past the last page: go back to the start.
-                        <Link
-                          href={pageHref(1)}
-                          className="btn btn-outline-secondary rounded-pill px-4"
-                        >
-                          {t('page.firstPage')}
-                        </Link>
-                      ) : (
-                        <Link
-                          href={pageHref(page - 1)}
-                          className="btn btn-outline-secondary rounded-pill px-4"
-                          rel="prev"
-                        >
-                          {t('page.prevPage')}
-                        </Link>
-                      ))}
-                    <span className="text-muted small">
-                      {t('page.pageNumber', { page })}
-                    </span>
-                    {hasNextPage && (
-                      <Link
-                        href={pageHref(page + 1)}
-                        className="btn btn-outline-secondary rounded-pill px-4"
-                        rel="next"
-                      >
-                        {t('page.nextPage')}
-                      </Link>
-                    )}
-                  </nav>
-                )}
               </div>
             </div>
           </div>
