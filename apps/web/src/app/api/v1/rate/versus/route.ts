@@ -193,7 +193,11 @@ export async function GET(req: NextRequest) {
     const category = getMasterProductCategorySlug(prodA);
 
     // filtered_noise_review_count counts stored reviews only (DOS/Rate#1139).
-    const filteredReviewCounts = await getCachedFilteredReviewCountsByMaster();
+    // On a read failure no product claims a blocked count, which is still true.
+    const filteredReviewCounts =
+      await getCachedFilteredReviewCountsByMaster().catch(
+        () => ({}) as Record<string, number>
+      );
     const scoreA = scoreMasterProductForLeaderboard(
       prodA,
       'combined',

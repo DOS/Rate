@@ -9841,6 +9841,7 @@ async function runCoreArchitectureSuite() {
       genuineDeal: {
         savingsVsMedianVnd: true as unknown as number,
         savingsVsMedianPct: true as unknown as number,
+        marketOfferCount: 3,
         merchantName: 'Shop\u0000A',
         platform: 'shopee\u0000',
       } as unknown as import('../../../lib/deal-radar').CrossPlatformDealRadarItem,

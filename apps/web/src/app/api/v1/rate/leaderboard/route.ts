@@ -61,7 +61,11 @@ export async function GET(req: NextRequest) {
         limit: 500,
         sort: 'rating_desc',
       }),
-      getCachedFilteredReviewCountsByMaster(),
+      // A failed count read shows no blocked count (still true) instead of
+      // failing the whole ranking (DOS/Rate#1139).
+      getCachedFilteredReviewCountsByMaster().catch(
+        () => ({}) as Record<string, number>
+      ),
     ]);
 
     const ranked = rankMasterProductsForLeaderboard(allProducts, {

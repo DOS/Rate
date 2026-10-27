@@ -904,7 +904,7 @@
     "statSabotage": "Phá hoại/Bomb",
     "profileRadarBadge": "Tín hiệu giá đáy và giảm giá ảo",
     "profileRadarAnalyzed": "Đối chiếu tự động trên {count} tin bán đa sàn",
-    "profileRadarGenuineCount": "{count} giá đáy giữa các sàn",
+    "profileRadarGenuineCount": "{count} tin bán dưới giá trung vị",
     "profileRadarFakeCount": "{count} cảnh báo kê khống giá gốc",
     "profileRadarZeroFake": "0 cảnh báo nâng khống giá gốc",
     "openRadar10PlatformsBtn": "Xem deal trên 10 sàn →",

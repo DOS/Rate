@@ -904,7 +904,7 @@
     "statSabotage": "Sabotáž/Bombing",
     "profileRadarBadge": "Cenová minima a falešné slevy",
     "profileRadarAnalyzed": "Automaticky porovnáno napříč {count} nabídkami",
-    "profileRadarGenuineCount": "{count} minim napříč obchody",
+    "profileRadarGenuineCount": "{count} nabídek pod mediánem",
     "profileRadarFakeCount": "{count} varování na falešnou slevu",
     "profileRadarZeroFake": "0 varování na falešnou slevu",
     "openRadar10PlatformsBtn": "Slevy z 10 obchodů →",

@@ -904,7 +904,7 @@
     "statSabotage": "Sabotage/Bomb",
     "profileRadarBadge": "Price lows and fake-sale signals",
     "profileRadarAnalyzed": "Automatically cross-checked across {count} multi-platform listings",
-    "profileRadarGenuineCount": "{count} cross-store lows",
+    "profileRadarGenuineCount": "{count} below-median listings",
     "profileRadarFakeCount": "{count} fake-sale markup alerts",
     "profileRadarZeroFake": "0 fake-sale markup alerts",
     "openRadar10PlatformsBtn": "Deals across 10 stores →",

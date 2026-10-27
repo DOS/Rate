@@ -400,9 +400,14 @@ export function computeCrossPlatformDealRadarFromData(
     totalClustersAnalyzed++;
     totalOffersAnalyzed += validOffers.length;
     for (const o of validOffers) {
+      // Without an id, a seller is its platform and name; without a name
+      // either (the name fell back to the platform), only the offer is known.
+      const named = o.merchant.name !== o.platform.toUpperCase();
       analyzedMerchantKeys.add(
         o.merchant.id ||
-          `${o.platform.toLowerCase()}:${o.merchant.name.toLowerCase()}`
+          (named
+            ? `${o.platform.toLowerCase()}:${o.merchant.name.toLowerCase()}`
+            : `offer:${o.id}`)
       );
     }
 

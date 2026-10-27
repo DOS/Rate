@@ -127,6 +127,26 @@ const signal = buildRadarIndex(radar).get(master.slug)!;
 const note = radarExplanation(signal);
 assert.equal(note?.key, 'radarExplanationGenuineDeal');
 assert.equal(note!.values.count, '2');
+// Without a known offer count there is no median sentence at all.
+assert.equal(
+  radarExplanation({
+    ...signal,
+    genuineDeal: {
+      ...signal.genuineDeal!,
+      marketOfferCount: undefined as never,
+    },
+  }),
+  null
+);
+for (const locale of LOCALES) {
+  const merchants = readLocale(locale).merchants!;
+  for (const key of ['radarGenuineBadge', 'profileRadarGenuineCount']) {
+    assert.ok(
+      !/giá đáy|cross-store low|minim napříč/i.test(merchants[key]!),
+      `${locale}: merchants.${key} counts every genuine deal, not floors`
+    );
+  }
+}
 for (const locale of LOCALES) {
   const messages = readLocale(locale);
   const sentence = messages.productDetail!.radarExplanationGenuineDeal!;
