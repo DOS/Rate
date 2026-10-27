@@ -132,6 +132,99 @@ export function shouldDeleteBranch({ method, headRef, headRepo, baseRepo }) {
 }
 
 /**
+ * commitlint's limit (commitlint.config.ts) for the header and for every body
+ * and footer line. The commitlint check of a dev to main promotion lints the
+ * head of dev, which is usually a squash commit made here (DOS/Rate#1130).
+ */
+export const MAX_LINE = 100;
+// commitlint exempts any line holding a URL from the line limit.
+const URL_LINE = /\bhttps?:\/\/\S+/;
+const TRAILER = /^(?:co-authored-by|signed-off-by):\s*\S/i;
+const LIST_MARKER = /^\s*(?:[-*+]\s+|\d+[.)]\s+)?/;
+
+/**
+ * One line as lines of at most `width` characters: words wrap under the text
+ * of a list item, and a word longer than a whole line is split.
+ */
+export function wrapLine(line, width = MAX_LINE) {
+  if (line.length <= width || URL_LINE.test(line)) return [line];
+  const marker = line.match(LIST_MARKER)[0];
+  const first = marker.length <= width / 2 ? marker : '';
+  const hang = ' '.repeat(first.length);
+  const lines = [];
+  let current = first;
+  let empty = true;
+  for (let word of line.slice(first.length).split(/\s+/).filter(Boolean)) {
+    for (;;) {
+      const sep = empty ? '' : ' ';
+      if (current.length + sep.length + word.length <= width) {
+        current += sep + word;
+        empty = false;
+        break;
+      }
+      if (empty) {
+        // Not even an empty line holds the word: split it.
+        const room = width - current.length;
+        lines.push(current + word.slice(0, room));
+        word = word.slice(room);
+        current = hang;
+        continue;
+      }
+      lines.push(current);
+      current = hang;
+      empty = true;
+    }
+  }
+  if (!empty) lines.push(current);
+  return lines;
+}
+
+/**
+ * The squash commit's header: the PR title with its number, which promote.mjs
+ * reads back. A title too long for both is cut at a word.
+ */
+export function squashTitle(title, number) {
+  const suffix = ` (#${number})`;
+  const text = title.trim().replace(/\s+/g, ' ');
+  if (text.length + suffix.length <= MAX_LINE) return text + suffix;
+  const room = MAX_LINE - suffix.length;
+  const cut = text.slice(0, room + 1).replace(/\s+\S*$/, '');
+  const head = (
+    cut.length > 0 && cut.length <= room ? cut : text.slice(0, room)
+  ).replace(/[\s.,;:!?-]+$/, '');
+  return head + suffix;
+}
+
+/**
+ * The squash commit's body, like GitHub's default (each commit as a list
+ * item), with every line wrapped to the limit and the commits' co-author and
+ * sign-off trailers gathered once each into a footer after a blank line.
+ */
+export function squashBody(messages) {
+  const trailers = new Map();
+  const items = [];
+  for (const message of messages) {
+    const lines = [];
+    for (const line of message.replace(/\r\n?/g, '\n').split('\n')) {
+      if (TRAILER.test(line.trim())) {
+        const trailer = line.trim().replace(/:\s*/, ': ');
+        const key = trailer.toLowerCase();
+        if (!trailers.has(key)) trailers.set(key, trailer);
+      } else {
+        lines.push(line.trimEnd());
+      }
+    }
+    while (lines.length > 0 && lines.at(-1) === '') lines.pop();
+    while (lines.length > 0 && lines[0] === '') lines.shift();
+    if (lines.length === 0) continue;
+    lines[0] = `* ${lines[0]}`;
+    items.push(lines.flatMap((line) => wrapLine(line)).join('\n'));
+  }
+  const footer = [...trailers.values()].flatMap((line) => wrapLine(line));
+  return [items.join('\n\n'), footer.join('\n')].filter(Boolean).join('\n\n');
+}
+
+/**
  * What to do with the PR now: 'merge', 'wait', or a final 'done' / 'fail'
  * with a one-line message.
  */
@@ -210,6 +303,7 @@ export async function mergeWhenGreen({
   let blockedPolls = 0;
   let apiErrors = 0;
   let mergeRefusals = 0;
+  let commitListErrors = 0;
   let branchUpdates = 0;
   let lastUpdatedSha = null;
   for (;;) {
@@ -293,6 +387,30 @@ export async function mergeWhenGreen({
       continue;
     }
     if (next.action === 'merge') {
+      // GitHub's default squash message keeps the commits' long lines and
+      // mixes their trailers into the body: send one commitlint accepts.
+      const squash = [];
+      if (method === 'squash') {
+        let messages;
+        try {
+          messages = ghPaginated(
+            `repos/${repo}/pulls/${number}/commits?per_page=100`,
+            '.[] | {message: .commit.message}'
+          ).map((c) => c.message);
+        } catch (err) {
+          if (++commitListErrors >= MAX_API_ERRORS) {
+            return { ok: false, message: `PR ${number}: ${err.message}` };
+          }
+          await sleep(intervalMs);
+          continue;
+        }
+        squash.push(
+          '-f',
+          `commit_title=${squashTitle(pr.title, number)}`,
+          '-f',
+          `commit_message=${squashBody(messages)}`
+        );
+      }
       const merged = gh(
         [
           'api',
@@ -303,6 +421,7 @@ export async function mergeWhenGreen({
           `merge_method=${method}`,
           '-f',
           `sha=${pr.head.sha}`,
+          ...squash,
           '--jq',
           '.sha',
         ],
