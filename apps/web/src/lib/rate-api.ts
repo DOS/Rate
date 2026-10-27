@@ -997,19 +997,40 @@ async function sellerExtrasForTrustViewRows(
   if (ids.length === 0) return extras;
   try {
     const supabase = getRateClient();
-    for (let i = 0; i < ids.length; i += IN_FILTER_CHUNK_SIZE) {
+    const read = async (chunk: string[], select: string) => {
+      if (chunk.length === 0) return [];
       const { data, error } = await supabase
         .from('merchants')
-        .select(
-          'id, follower_count, metadata_dosafe_risk_score:metadata->dosafe_risk_score'
-        )
-        .in('id', ids.slice(i, i + IN_FILTER_CHUNK_SIZE));
-      if (error) return extras;
-      for (const m of (data ?? []) as unknown as Array<{
-        id: string;
-        follower_count: number | string | null;
-        metadata_dosafe_risk_score?: unknown;
-      }>) {
+        .select(select)
+        .in('id', chunk);
+      return error
+        ? null
+        : ((data ?? []) as unknown as Array<{
+            id: string;
+            follower_count: number | string | null;
+            metadata_dosafe_risk_score?: unknown;
+          }>);
+    };
+    let withMetadata = true;
+    for (let i = 0; i < ids.length; i += IN_FILTER_CHUNK_SIZE) {
+      const chunk = ids.slice(i, i + IN_FILTER_CHUNK_SIZE);
+      let rows = withMetadata
+        ? await read(
+            chunk,
+            'id, follower_count, metadata_dosafe_risk_score:metadata->dosafe_risk_score'
+          )
+        : null;
+      // A rejected metadata path must not cost unscored sellers their
+      // follower adjustment (#685): fall back to the columns #685 read.
+      if (!rows) {
+        withMetadata = false;
+        rows = await read(
+          chunk.filter((id) => unscored.has(id)),
+          'id, follower_count'
+        );
+      }
+      if (!rows) return extras;
+      for (const m of rows) {
         if (unscored.has(m.id)) {
           extras.followerCounts.set(m.id, Number(m.follower_count) || 0);
         }

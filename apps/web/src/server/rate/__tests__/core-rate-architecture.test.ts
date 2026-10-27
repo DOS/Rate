@@ -13271,6 +13271,87 @@ async function runCoreArchitectureSuite() {
     // Only the seller without a view score is read.
     assert.deepEqual(merchantIds1108, ['in.(m-meta)', 'in.(m-meta)']);
 
+    // An unscored seller without a view score gets both values; a rejected
+    // metadata path still leaves the follower adjustment (#685); a row with
+    // no seller is not read.
+    const unscoredRow1108 = {
+      ...viewRow1108('o3', 'm-new', 0),
+      review_risk_score: 0,
+      review_risk_breakdown: {},
+    };
+    const noSellerRow1108 = { ...viewRow1108('o4', '', 0), merchant_id: '' };
+    const runOffers1108 = async (rejectMetadata: boolean) => {
+      const selects: string[] = [];
+      globalThis.fetch = (async (input: RequestInfo | URL) => {
+        const url = new URL(
+          typeof input === 'string'
+            ? input
+            : input instanceof URL
+              ? input.toString()
+              : input.url
+        );
+        if (url.pathname.endsWith('/v_products_with_merchant_trust')) {
+          return json1108(
+            Number(url.searchParams.get('offset') ?? 0) > 0
+              ? []
+              : [unscoredRow1108, noSellerRow1108]
+          );
+        }
+        if (url.pathname.endsWith('/merchants')) {
+          const select = url.searchParams.get('select') ?? '';
+          selects.push(`${select} | ${url.searchParams.get('id')}`);
+          if (rejectMetadata && select.includes('metadata')) {
+            return new Response(
+              JSON.stringify({ message: 'simulated metadata path failure' }),
+              { status: 400, headers: { 'content-type': 'application/json' } }
+            );
+          }
+          return json1108([
+            {
+              id: 'm-new',
+              follower_count: 60000,
+              ...(select.includes('metadata')
+                ? { metadata_dosafe_risk_score: 12 }
+                : {}),
+            },
+          ]);
+        }
+        return json1108([]);
+      }) as typeof fetch;
+      const offers = await getMasterProductOffers('master-1108');
+      return { offers, selects };
+    };
+    const both1108 = await runOffers1108(false);
+    assert.deepEqual(
+      both1108.offers.map((o) => [
+        o.id,
+        o.merchant.dosafe_risk_score,
+        o.merchant.review_risk_score,
+        o.merchant.follower_count,
+      ]),
+      [
+        ['o3', 12, 10, 60000],
+        ['o4', null, 42, 0],
+      ]
+    );
+    assert.equal(both1108.selects.length, 1);
+    assert.match(both1108.selects[0] ?? '', /\| in\.\(m-new\)$/);
+    const rejected1108 = await runOffers1108(true);
+    assert.deepEqual(
+      rejected1108.offers.map((o) => [
+        o.id,
+        o.merchant.dosafe_risk_score,
+        o.merchant.review_risk_score,
+      ]),
+      [
+        ['o3', null, 10],
+        ['o4', null, 42],
+      ]
+    );
+    assert.deepEqual(rejected1108.selects.slice(1), [
+      'id,follower_count | in.(m-new)',
+    ]);
+
     console.log(
       '  ✅ [126j/135] View offers select threat_source and read merchants.metadata (#1108) passed'
     );
