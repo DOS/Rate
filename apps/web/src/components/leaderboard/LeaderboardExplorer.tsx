@@ -18,6 +18,7 @@ import {
   normalizeLeaderboardCriterion,
   scoreMasterProductForLeaderboard,
   type CanonicalCategorySlug,
+  type FilteredReviewCountsByMaster,
   type LeaderboardCriterionKey,
   type LeaderboardPriceSegment,
   type MasterProduct,
@@ -112,6 +113,8 @@ interface LeaderboardExplorerProps {
   readonly products: readonly MasterProduct[];
   readonly dealRadar?: CrossPlatformDealRadarResponse | null;
   readonly locale?: string;
+  /** Stored reviews kept out of the rating, per master id (DOS/Rate#1139). */
+  readonly filteredReviewCounts?: FilteredReviewCountsByMaster;
 }
 
 interface RankedProductEntry {
@@ -173,9 +176,14 @@ function buildCategoryTabs(t: TranslateFn): ReadonlyArray<{
 
 function computeProductScores(
   item: MasterProduct,
-  criterion: LeaderboardCriterionKey
+  criterion: LeaderboardCriterionKey,
+  filteredReviewCounts?: FilteredReviewCountsByMaster
 ): RankedProductEntry {
-  const scored = scoreMasterProductForLeaderboard(item, criterion);
+  const scored = scoreMasterProductForLeaderboard(
+    item,
+    criterion,
+    filteredReviewCounts
+  );
   return {
     product: scored.product,
     categorySlug: scored.categorySlug,
@@ -218,6 +226,7 @@ function TabFromUrl({
 export default function LeaderboardExplorer({
   products,
   dealRadar,
+  filteredReviewCounts,
 }: LeaderboardExplorerProps) {
   const t = useTranslations('leaderboard');
   const locale = useLocale();
@@ -464,7 +473,11 @@ export default function LeaderboardExplorer({
 
     const scored = filtered
       .map((item) => {
-        const base = computeProductScores(item, activeCriterion);
+        const base = computeProductScores(
+          item,
+          activeCriterion,
+          filteredReviewCounts
+        );
         if (activePersona !== 'none' && totalWeight > 0) {
           const weighted5 = Number(
             (
@@ -524,6 +537,7 @@ export default function LeaderboardExplorer({
     activeCriterion,
     activePersona,
     customWeights,
+    filteredReviewCounts,
   ]);
 
   const top3Slugs = useMemo(

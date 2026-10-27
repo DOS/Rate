@@ -118,6 +118,7 @@ function main() {
     categoryFilter: 'all',
     totalClustersAnalyzed: 1,
     totalOffersAnalyzed: 2,
+    totalMerchantsAnalyzed: 2,
     genuineDeals: [
       {
         id: 'gd-ctrl',
@@ -142,6 +143,7 @@ function main() {
         marketMaxPrice: 28_000_000,
         savingsVsMedianVnd: 2_000_000,
         savingsVsMedianPct: 7.7,
+        marketOfferCount: 3,
         claimedDiscountPct: 14.3,
         fakeMarkupPct: 0,
         jreviewsScore10: 9.0,

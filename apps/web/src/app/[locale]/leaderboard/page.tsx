@@ -8,6 +8,7 @@ import {
 } from 'react-icons/bs';
 import { Link } from '@/lib/navigation';
 import {
+  getCachedFilteredReviewCountsByMaster,
   getCachedMasterProducts,
   getCrossPlatformDealRadar,
 } from '@/server/rate';
@@ -83,23 +84,29 @@ export default async function LeaderboardPage({ params }: PageProps) {
 
   // The 100 best-rated models of each category: one global top 100 could
   // leave a whole category out of its own leaderboard tab (DOS/Rate#473).
-  const [productsByCategory, dealRadar] = await Promise.all([
-    Promise.all(
-      [...VALID_CATEGORIES].map((categorySlug) =>
-        getCachedMasterProducts({
-          categorySlug,
-          limit: 100,
-          sort: 'rating_desc',
-        })
-      )
-    ),
-    // No fallback: the page is cached, so a null radar would be served for
-    // the whole revalidate window (DOS/Rate#491).
-    getCrossPlatformDealRadar({
-      categorySlug: 'all',
-      limit: 36,
-    }),
-  ]);
+  const [productsByCategory, dealRadar, filteredReviewCounts] =
+    await Promise.all([
+      Promise.all(
+        [...VALID_CATEGORIES].map((categorySlug) =>
+          getCachedMasterProducts({
+            categorySlug,
+            limit: 100,
+            sort: 'rating_desc',
+          })
+        )
+      ),
+      // No fallback: the page is cached, so a null radar would be served for
+      // the whole revalidate window (DOS/Rate#491).
+      getCrossPlatformDealRadar({
+        categorySlug: 'all',
+        limit: 36,
+      }),
+      // Real counts of excluded stored reviews (DOS/Rate#1139). On a read
+      // failure no product claims a blocked count, which is still true.
+      getCachedFilteredReviewCountsByMaster().catch(
+        () => ({}) as Record<string, number>
+      ),
+    ]);
   // Back in one best-rated-first list (same key as search_master_products'
   // rating_desc), so the top 15 in the ItemList below stay platform-wide.
   const ratingOf = (p: (typeof productsByCategory)[number][number]) =>
@@ -345,6 +352,7 @@ export default async function LeaderboardPage({ params }: PageProps) {
             <LeaderboardExplorer
               products={products}
               dealRadar={dealRadar}
+              filteredReviewCounts={filteredReviewCounts}
               locale={resolvedLocale}
             />
           </section>
