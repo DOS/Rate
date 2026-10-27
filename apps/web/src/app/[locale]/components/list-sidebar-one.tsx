@@ -323,7 +323,7 @@ export default function ListSidebarOne({
 
   return (
     <>
-      <div className="searchingSidebar pe-xl-5">
+      <div className="searchingSidebar">
         <div
           className="offcanvas offcanvas-start largeshow"
           data-bs-scroll="true"

@@ -130,3 +130,66 @@
 .rate-export-menu-list {
   max-width: calc(100vw - 1rem);
 }
+
+// Full-width catalog layout (DOS/Rate#1132). The hero, search bar and
+// results share one wide frame instead of the 1320px .container: a fixed
+// filter sidebar on the left and a results grid that adds columns as the
+// screen widens, capped at 1800px so rows stay readable on large monitors.
+.rate-catalog-wide {
+  width: 100%;
+  max-width: 1800px;
+  margin-inline: auto;
+  padding-inline: 1rem;
+
+  @media (min-width: 992px) {
+    padding-inline: 1.5rem;
+  }
+}
+
+// The template's 80px section padding left a tall gap under the search bar;
+// start the results closer to it.
+.rate-catalog-section {
+  padding: 2rem 0 4rem;
+}
+
+.rate-catalog-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 1.5rem;
+
+  @media (min-width: 992px) {
+    grid-template-columns: 280px minmax(0, 1fr);
+    align-items: start;
+  }
+
+  @media (min-width: 1600px) {
+    grid-template-columns: 300px minmax(0, 1fr);
+  }
+}
+
+// From 992px the filter panel is inline (style.scss .offcanvas.largeshow).
+// Keep it under the sticky navbar while the results scroll, and let it
+// scroll on its own when it is taller than the window. Below 992px it is the
+// off-canvas drawer, which must not get a sticky or scrolling parent.
+@media (min-width: 992px) {
+  .rate-catalog-sidebar {
+    position: sticky;
+    top: 5.5rem;
+    max-height: calc(100vh - 6.5rem);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
+  }
+}
+
+// Results: as many ~280px cards as fit (1 on phones, 2 on tablets, 3 at
+// 1280-1440px, 4 at 1920px). min() keeps a single column inside 320px.
+.rate-catalog-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(280px, 100%), 1fr));
+  gap: 1rem;
+
+  @media (min-width: 1200px) {
+    gap: 1.25rem;
+  }
+}
