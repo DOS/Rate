@@ -276,6 +276,53 @@ async function runSuite() {
   assert.equal(keyOf('iPad Gen 10 (A14 Bionic) 64GB'), keyOf('Apple iPad 10 64GB'));
   assert.equal(keyOf('Apple iPad 10.9 inch (A14) 64GB'), keyOf('Apple iPad 10 64GB'));
   assert.equal(keyOf('MacBook Neoprene Sleeve 13 inch'), 'apple:macbook:unknown');
+  // Apple keys still merged or split wrongly (DOS/Rate#819). Labeled fixtures: title -> key.
+  const appleKeys819: Array<[string, string]> = [
+    // iPad Air generations without a chip are separate models; the 6th and 7th are the
+    // M2 and M3 Airs, keyed like the titles that name the chip.
+    ['iPad Air 4 64GB', 'apple:ipad-air-4:64gb'],
+    ['iPad Air 5 64GB', 'apple:ipad-air-5:64gb'],
+    ['Apple iPad Air (5th generation) Wi-Fi 64GB', 'apple:ipad-air-5:64gb'],
+    ['Apple iPad Air 6 128GB', 'apple:ipad-air-m2:128gb'],
+    ['iPad Air 11 inch M2 128GB', 'apple:ipad-air-m2:128gb'],
+    ['iPad Air 13 M3 256GB', 'apple:ipad-air-m3:256gb'],
+    ['iPad Air 128GB', 'apple:ipad-air:128gb'],
+    ['iPad Air 4G 64GB', 'apple:ipad-air:64gb'],
+    // An A16 or later chip anywhere after the size or generation names the base iPad, and
+    // the 11th generation is the iPad (A16).
+    ['iPad 11 2025 A16 128GB', 'apple:ipad-a16:128gb'],
+    ['iPad 11 inch Wifi A16 128GB', 'apple:ipad-a16:128gb'],
+    ['iPad Gen 11 128GB', 'apple:ipad-a16:128gb'],
+    ['iPad (11th generation) 128GB', 'apple:ipad-a16:128gb'],
+    ['Apple iPad 10 64GB', 'apple:ipad-10:64gb'],
+    // Apple lines with no pattern of their own are not iPhones.
+    ['Apple TV 4K (3rd generation) 128GB', 'apple:tv-4k:128gb'],
+    ['Apple Vision Pro 256GB', 'apple:vision-pro:256gb'],
+    ['Mac mini M4 256GB', 'apple:mac-mini-m4:256gb'],
+    ['Apple iMac M4 24 inch 256GB', 'apple:imac-m4:256gb'],
+    ['Mac Studio M4 Max 512GB', 'apple:mac-studio-m4-max:512gb'],
+    ['Loa Apple HomePod mini', 'apple:homepod-mini:unknown'],
+    // An iPhone named only as what an accessory fits is not the product.
+    ['Tai nghe AirPods Pro 2 cho iPhone Air', 'apple:airpods-pro-2:unknown'],
+    ['Tai nghe AirPods Pro 2 cho iPhone 17', 'apple:airpods-pro-2:unknown'],
+    ['iPhone 17 256GB', 'apple:iphone-17:256gb'],
+    // A case size is no Watch Ultra generation.
+    ['Apple Watch Ultra 49mm', 'apple:watch-ultra:unknown'],
+    ['Apple Watch Ultra 49mm Titan', 'apple:watch-ultra:unknown'],
+    ['Apple Watch Ultra', 'apple:watch-ultra:unknown'],
+    ['Apple Watch Ultra 2 49mm', 'apple:watch-ultra-2:64gb'],
+    ['Apple Watch Ultra 3 49mm', 'apple:watch-ultra-3:64gb'],
+    // The 2020 and 2022 iPhone SE are the 2nd and 3rd generation.
+    ['iPhone SE (2022) 64GB', 'apple:iphone-se-3:64gb'],
+    ['iPhone SE 2022 64GB', 'apple:iphone-se-3:64gb'],
+    ['iPhone SE 3 64GB', 'apple:iphone-se-3:64gb'],
+    ['iPhone SE (3rd generation) 64GB', 'apple:iphone-se-3:64gb'],
+    ['iPhone SE 2020 64GB', 'apple:iphone-se-2:64gb'],
+    ['iPhone SE 2 64GB', 'apple:iphone-se-2:64gb'],
+  ];
+  for (const [title, expectedKey] of appleKeys819) {
+    assert.equal(keyOf(title), expectedKey, title);
+  }
   // iPad mini 6 and 7 are two models (DOS/Rate#819): "(A17 Pro)" is the 7th, "8.3 inch" is
   // its screen, and a size or a year after "mini" is no generation.
   assert.equal(keyOf('Apple iPad mini 6 Wi-Fi 64GB'), 'apple:ipad-mini-6:64gb');
