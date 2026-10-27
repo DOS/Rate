@@ -1140,22 +1140,32 @@ export class ProductNormalizer {
     let model = '';
     // Spellings that split a tier word from its model number read like the joined ones
     // (DOS/Rate#1090). `title` has single spaces, so each gap is one optional space.
+    // Each rewrite applies only where the name ends right after it: the title ends, or a
+    // separator, a number (size, RAM/ROM), a network or "Chính hãng" follows, so "Tab S9 -
+    // Ultra slim case" and "A55 + Tặng" keep their keys.
     let modelTitle = title
       // "15 - ProMax", "S24-Ultra" and "15 (ProMax)" are "15 ProMax" and "S24 Ultra".
-      .replace(/(?<=\d[a-z]?) ?- ?(pro ?max|pro|plus|ultra|mini|lite|fe)\b/gi, ' $1')
-      .replace(/(?<=\d[a-z]?) ?\( ?(pro ?max|pro|plus|ultra|mini|lite|fe) ?\)/gi, ' $1')
-      // A "+" set apart after a model number or its "Pro" ("S24 +", "iPhone 15 +", "Note
-      // 13 Pro +") is the Plus when it ends the name: the title ends, or a size, network or
-      // separator follows. "A55 + Tặng" is a gift and "A55 8 + 256GB" a RAM/ROM pair, so
-      // both keep their keys. The text before the "+" is checked on a bounded slice rather
-      // than by a variable-length lookbehind (CodeQL js/polynomial-redos).
       .replace(
-        / \+(?= ?(?:$|[-([,]|\d+(?:[.,]\d+)? ?(?:gb|tb)\b|[45]g\b|lte\b))/gi,
+        /(?<=\d[a-z]?) ?- ?(pro ?max|pro|plus|ultra|mini|lite|fe)\b(?= ?(?:$|[-,(]|\d|[45]g\b|lte\b|chính\b))/gi,
+        ' $1'
+      )
+      .replace(
+        /(?<=\d[a-z]?) ?\( ?(pro ?max|pro|plus|ultra|mini|lite|fe) ?\)(?= ?(?:$|[-,(]|\d|[45]g\b|lte\b|chính\b))/gi,
+        ' $1 '
+      )
+      // A "+" set apart after a model number or its "Pro" ("S24 +", "iPhone 15 +", "Note
+      // 13 Pro +") is the Plus. "A55 8 + 256GB" is a RAM/ROM pair and keeps its key. The
+      // text before the "+" is checked on a bounded slice rather than by a variable-length
+      // lookbehind (CodeQL js/polynomial-redos).
+      .replace(
+        / \+(?= ?(?:$|[-,]|\d+(?:[.,]\d+)? ?(?:gb|tb)\b|[45]g\b|lte\b|chính\b))/gi,
         (plus: string, at: number, text: string) =>
           /(?:\b[a-z]+ ?\d+[a-z]?|\d[a-z]? pro)$/i.test(text.slice(Math.max(0, at - 32), at))
-            ? '+'
+            ? '+ '
             : plus
-      );
+      )
+      .replace(/ {2,}/g, ' ')
+      .trim();
     // Samsung's "Galaxy S 24" and "Tab S 9" are the S24 and the Tab S9.
     if (brand === 'Samsung')
       modelTitle = modelTitle.replace(/\b(galaxy|tab) s (\d{1,2})\b/gi, '$1 S$2');

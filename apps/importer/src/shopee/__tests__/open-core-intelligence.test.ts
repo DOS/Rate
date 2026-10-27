@@ -224,6 +224,13 @@ async function runSuite() {
     // A network after the "+" still ends the name; so does a "+" after "Pro".
     ['Samsung Galaxy S24 + 5G', 'samsung:galaxy-s24-plus:unknown'],
     ['Xiaomi Redmi Note 13 Pro + 5G 256GB', 'xiaomi:redmi-note-13-pro-plus:256gb'],
+    ['Samsung Galaxy S24 + 5G 256GB', 'samsung:galaxy-s24-plus:256gb'],
+    ['Samsung Galaxy S24 +256GB', 'samsung:galaxy-s24-plus:256gb'],
+    ['Samsung Galaxy S24 (Ultra)256GB', 'samsung:galaxy-s24-ultra:256gb'],
+    // A tier word that starts an accessory or gift phrase is not the model's.
+    ['iPhone 15 + Free case 128GB', 'apple:iphone-15:128gb'],
+    ['Samsung Galaxy S24 + (Free case) 256GB', 'samsung:galaxy-s24:256gb'],
+    ['Samsung Galaxy Tab S9 - Ultra slim case 256GB', 'samsung:galaxy-tab-s9:256gb'],
   ];
   for (const [title, expectedKey] of tierWordSpellings) {
     assert.equal(keyOf(title), expectedKey, title);
