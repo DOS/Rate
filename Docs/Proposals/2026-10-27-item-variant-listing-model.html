@@ -77,7 +77,7 @@
  │    └─ Listing: CellphoneS
  └─ (chưa rõ dung lượng)
       └─ Listing: Lazada shop B      (hiện riêng, không tính vào giá "từ ...")</div>
-  <p class="muted">iPad Pro 11 inch và 13 inch, Apple Watch 42mm và 46mm vẫn là hai Item khác nhau (khác màn hình, pin, thông số), giữ đúng như #1113 và #1124.</p>
+  <p class="muted">iPad Pro 11 inch và 13 inch, Apple Watch 42mm và 46mm vẫn là hai Item khác nhau (khác màn hình, pin, thông số), giữ đúng như #1113 và #1124. Sản phẩm không có dung lượng (tai nghe, nhiều đồng hồ Garmin) là Item có đúng một phiên bản, vẫn có giá bình thường; nhóm "chưa rõ dung lượng" chỉ xuất hiện ở Item bán nhiều dung lượng.</p>
 
   <h2>2. Hiện trạng (đã khảo sát 4 mảng)</h2>
   <div class="grid">
@@ -123,10 +123,10 @@
   <table>
     <tr><th>Bước</th><th>Làm gì</th><th>Quay lui</th></tr>
     <tr><td>M0</td><td>Đồng bộ 8 migration còn thiếu vào bản tham chiếu, chạy truy vấn kiểm kê chỉ đọc, sửa các khóa seed lệch</td><td>Không cần</td></tr>
-    <tr><td>M1</td><td>Thêm bảng <code>items</code> và các cột mới (chỉ thêm, không sửa, không xóa)</td><td>Xóa phần vừa thêm</td></tr>
-    <tr><td>M2</td><td>Điền dữ liệu Item từ bảng cũ, thêm các hàm truy vấn mới</td><td>Xóa dữ liệu mới, đường cũ không bị ảnh hưởng</td></tr>
+    <tr><td>M1</td><td>Thêm bảng <code>items</code> và các cột mới (chỉ thêm, không sửa, không xóa), kèm trigger đồng bộ để code cũ đang chạy vẫn ghi đúng Item</td><td>Xóa phần vừa thêm</td></tr>
+    <tr><td>M2</td><td>Điền dữ liệu Item từ bảng cũ, thêm các hàm truy vấn mới</td><td>Gỡ liên kết rồi xóa dữ liệu Item trong một transaction; dữ liệu cũ không bị đụng tới</td></tr>
     <tr><td>Giai đoạn song song</td><td>Code ghi cả hai tầng, web bật trang Item bằng cờ, URL cũ chuyển hướng. Tối thiểu một đợt promote và khoảng 30 ngày</td><td>Tắt cờ</td></tr>
-    <tr><td>M3</td><td>Gom các bản "chưa rõ dung lượng" về Item, có bảng sao lưu</td><td>Khôi phục từ bảng sao lưu</td></tr>
+    <tr><td>M3</td><td>Với Item bán nhiều dung lượng: chuyển các listing "chưa rõ dung lượng" về thẳng Item, có bảng sao lưu. Chỉ chạy sau khi Rate Services đã sẵn sàng</td><td>Khôi phục từ bảng sao lưu</td></tr>
     <tr><td>M4</td><td>Khóa ràng buộc (bắt buộc có Item, listing và dung lượng phải cùng Item)</td><td>Gỡ ràng buộc</td></tr>
     <tr><td>M5, M6</td><td>Tùy chọn: giá theo từng SKU của sàn, đổi tên cho gọn</td><td>Xóa bảng, view</td></tr>
   </table>
@@ -145,6 +145,9 @@
 
   <h2>8. Danh sách việc sau khi JOY duyệt</h2>
   <p>15 việc (PO sẽ tạo issue sau khi JOY duyệt): 3 việc nhỏ chuẩn bị, 2 migration DOS-Me, 2 việc importer, 6 việc web/API/tiện ích/E2E, 1 việc Rate Services, 1 việc tùy chọn. Đường găng: chuẩn bị, rồi M1 và M2, rồi importer và tầng dữ liệu web song song, rồi trang và Rate Services, rồi M3 và M4. Chi tiết kích thước và phụ thuộc ở mục 10 bản tiếng Anh.</p>
+
+  <h2>9. Kết quả review</h2>
+  <p>Đã qua hai vòng review độc lập (một subagent mới hoàn toàn và Codex). Không có lỗi P0. Các lỗi P1 nằm ở SQL nháp và thứ tự chuyển đổi (ví dụ tai nghe suýt mất phiên bản duy nhất, chỉ mục tìm kiếm sai schema trên prod, cách quay lui không an toàn) và đã được sửa hết trong bản này. Phương án B được cả hai bên xác nhận là hợp lý.</p>
 
   <p class="muted" style="margin-top:40px">Tài liệu này chỉ là đề xuất. Chưa có code, migration hay thay đổi dữ liệu nào được thực hiện.</p>
 </div>

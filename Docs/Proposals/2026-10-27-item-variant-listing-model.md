@@ -15,10 +15,10 @@ JOY's target model, in JOY's words: one Item per product; the other storage size
   - Add a new table, `rate.items`.
   - `master_products` stays the **variant** table, with new `item_id` and `variant_key` columns.
   - Listings (`rate.products`) gain `item_id`.
-  - The existing `products.cluster_id` keeps meaning "this listing's variant". It becomes **NULL when the variant is unknown**.
+  - The existing `products.cluster_id` keeps meaning "this listing's variant". It becomes **NULL when the size is not stated on an Item sold in several sizes**. Sizeless lines such as earbuds keep a single variant.
 - **Why this option.** Every price computation that must compare like with like keeps working unchanged, because they all group by `cluster_id`: per-variant min price, spread, deal radar, peer floors, merchant risk, price alerts. Item-level views (pages, directory, search, leaderboard, rating) are added on top.
 - **Effect on #1105.** A storage-less listing attaches to the Item with no variant, instead of being fuzzy-linked to a sized master. Fuzzy matching moves to Item names, which carry no storage. Variant assignment becomes exact-only.
-- **Migration.** Five additive DOS-Me phases with a compatibility window. Old variant slugs keep resolving and redirect to the Item page with the variant preselected. The published catalog is small today: 16 published masters, all with three-part keys, and no published Item has more than one size yet (read from the public API on 2026-10-27). The backfill is cheap. The real cost is code, mostly the web app and Rate-Services.
+- **Migration.** Four required DOS-Me phases (M1 to M4, additive first, constraints last) and two optional ones, with a compatibility window. Sync triggers keep old writers consistent during the window. Old variant slugs keep resolving and redirect to the Item page with the variant preselected. The published catalog is small today: 16 published masters, all with three-part keys, and no published Item has more than one size yet (read from the public API on 2026-10-27). The backfill is cheap. The real cost is code, mostly the web app and Rate-Services.
 
 ## 1. Survey of the current model
 
@@ -44,7 +44,8 @@ JOY's target model, in JOY's words: one Item per product; the other storage size
 
 **Notes**
 
-- The contract guard in `20261005130000` checks master_products columns and types only at its own position in a replay. Later additive columns (for example DOS-Me's `spec_provenance`) do not trip it. Renaming or dropping one of the 28 pinned columns would, so this design **adds** columns and renames nothing.
+- The contract guard in `20261005130000` compares the live columns to its 28-column list with a FULL OUTER JOIN (`:216-235`). Any extra column therefore counts as drift. It passes only because it runs at its own position in an ordered replay. Re-running that migration on a database that already has DOS-Me's `spec_provenance` would fail today. So the guard is not what limits this design. The real limits are the frozen `match_master_product` signature (`:283-292`) and the code that reads `master_products`. This design **adds** columns and renames nothing.
+- `rate.v_products_with_merchant_trust` (`20261014033000:17-61`, re-created in DOS-Me `20261018153000:320-365`) is the listing view the web reads offers from (`rate-api.ts:1292,1358`). It has a fixed column list. A new `item_id` column must be appended at the end, so that `CREATE OR REPLACE VIEW` still works.
 - No trigger maintains `min_price` or `merchant_count`. Callers (importer, worker, auditors) invoke the refresh RPCs explicitly.
 
 ### 1.2 Importer (`apps/importer`)
@@ -62,7 +63,7 @@ JOY's target model, in JOY's words: one Item per product; the other storage size
   - Upserts the listing with `cluster_id = masterId`.
   - Then calls `refresh_master_market_stats`.
   - Price history is per listing.
-  - **Existing defect:** the listing's `priceMin` spans every marketplace variation (all storages), yet it is attributed to one sized master (`:598-605`).
+  - **Existing defect:** the listing's `price_min`/`price_max` span every marketplace variation (all storages), yet they are attributed to one sized master (`:546-548`). They feed that master's `min_price`/`max_price` through `refresh_master_market_stats`.
   - `masterIdHint` (`:488-519`) lets Rate-Services pin a listing to a master.
 - **Seeds** (`flagship-seed-data.ts`) list one sized key per device. Several seed keys never match what the normalizer produces:
   - earbuds seeded as `:64gb` or `:standard`, while the normalizer gives `:unknown`;
@@ -150,7 +151,7 @@ JOY's target model, in JOY's words: one Item per product; the other storage size
 
 | Data | Item | Variant (`master_products`) | Listing (`products`) |
 | :--- | :--- | :--- | :--- |
-| Identity | `item_key` = `brand:model` (Apple screen or case size stays in `model`), `slug`, `name`, `brand`, `model`, `category_id`, `status` | `variant_key` (e.g. `256gb`, `1tb`, `std`), `model_key` = `item_key:variant_key` (kept for compatibility), own `slug` (old URL), `variant_name` label, `sort_order` | `item_id` (required), `cluster_id` = variant (NULL = unknown), `platform`, `platform_item_id`, `url` |
+| Identity | `item_key` = `brand:model` (Apple screen or case size stays in `model`), `slug`, `name`, `brand`, `model`, `category_id`, `status` | `variant_key` (the literal key segment, e.g. `256gb`, `1024gb`, `standard`, `unknown`), `model_key` = `item_key:variant_key` (unchanged), own `slug` (old URL), `variant_name` label, `sort_order` | `item_id` (required), `cluster_id` = variant (NULL = unknown), `platform`, `platform_item_id`, `url` |
 | Specs | `specifications`, `key_specs`, `description`, `images`, `thumbnail`, `spec_provenance`, expert review | overrides only: `storage_gb`, `ram_gb`, `key_specs.storage`, launch price | raw `models`, `attributes`, `title` |
 | Prices | `min_price` = min over published variants; `max_price`; `price_variant_count` | `min_price`, `max_price`, `merchant_count` (unchanged logic; known-variant listings only) | `price_current`, `price_history` (unchanged) |
 | Ratings and reviews | `user_rating_weighted`, `authentic_review_count`, `average_rating`, `total_reviews`, computed over **all** listings of the Item, including unknown-variant ones | during the compatibility window the columns mirror the Item value; no separate per-size rating | review rows stay on listings; `reviews.variation` text stays |
@@ -163,10 +164,11 @@ JOY's target model, in JOY's words: one Item per product; the other storage size
 
 ### 4.2 Variant axis
 
-- **v1: storage only.** `variant_key` is the existing third key segment, with these normalizations:
-  - `unknown` is never a variant: it becomes NULL on the listing;
-  - `standard` and earbuds become a single `std` variant;
-  - a single-size registry line (`only_storage_gb`) gets that size.
+- **v1: storage only.** `variant_key` is the existing third key segment, **stored literally**: `256gb`, `1024gb`, `standard`, `unknown`. This keeps `model_key = item_key:variant_key` true for every existing row and for what the normalizer emits today, so Tier 1 matching and Rate-Services fixtures keep working. Display labels (`1TB`, "Standard") are derived; they are never keys.
+- **When `unknown` is a real variant and when it is not.**
+  - **Single-variant Item:** the Item has no sized variant, for example earbuds (the normalizer keys every earbud as `:unknown` on purpose, `product-normalizer.ts:1623-1626`), Garmin watches, or a line not yet seen with a size. Here the `unknown` (or `standard`) master **is** the Item's only variant. Its listings keep `cluster_id`, and it has a normal price.
+  - **Multi-size Item:** the Item has at least one sized variant (`variant_key ~ '^\d+gb'`). Here `unknown` means "size not stated". The listing gets `cluster_id = NULL`, and the `:unknown` master is retired (M3 and the importer rule in 4.5).
+- **Single-size registry lines** (`only_storage_gb`) get that size, as today.
 - **Apple screen and case sizes stay part of the Item.** This keeps the #1113/#1124 behaviour: iPad Pro 11 and iPad Pro 13 are different Items. They have different specs, battery and screen, not just a different SKU.
 - **Colour stays a listing attribute,** not a variant.
 - **Connectivity (Wi-Fi vs Cellular for tablets and watches) is an open question (Q3).** The key format reserves room: `256gb-cellular` is a valid `variant_key`, so adding the axis later is data, not schema.
@@ -193,7 +195,7 @@ CREATE TABLE IF NOT EXISTS rate.items (
   spec_provenance            jsonb NOT NULL DEFAULT '{}'::jsonb,
   images                     text[] NOT NULL DEFAULT '{}',
   thumbnail                  text,
-  default_variant_id         uuid,            -- FK added after master_products.item_id exists
+  default_variant_id         uuid,            -- FK added below; nullable, so no insert-order cycle
   min_price                  numeric(15,2) NOT NULL DEFAULT 0,
   max_price                  numeric(15,2) NOT NULL DEFAULT 0,
   price_variant_count        integer NOT NULL DEFAULT 0,
@@ -211,27 +213,35 @@ CREATE TABLE IF NOT EXISTS rate.items (
   created_at                 timestamptz NOT NULL DEFAULT now(),
   updated_at                 timestamptz NOT NULL DEFAULT now(),
   CONSTRAINT items_item_key_key UNIQUE (item_key),
-  CONSTRAINT items_slug_key UNIQUE (slug),
-  CONSTRAINT items_item_key_shape CHECK (item_key ~ '^[a-z0-9][a-z0-9-]*:[a-z0-9][a-z0-9.-]*$')
+  CONSTRAINT items_slug_key UNIQUE (slug)
 );
+-- No shape CHECK on item_key: legacy keys (e.g. `khc:`) must still get an Item (M2) and are
+-- reported by the M0 inventory instead.
 
 ALTER TABLE rate.master_products ADD COLUMN IF NOT EXISTS item_id uuid;
 ALTER TABLE rate.master_products ADD COLUMN IF NOT EXISTS variant_key text;
 ALTER TABLE rate.master_products ADD COLUMN IF NOT EXISTS sort_order smallint;
 ALTER TABLE rate.products        ADD COLUMN IF NOT EXISTS item_id uuid;
-ALTER TABLE rate.products        ADD COLUMN IF NOT EXISTS variant_source text
-  CHECK (variant_source IS NULL OR variant_source IN ('title','sku','single_size','manual','legacy'));
+ALTER TABLE rate.products        ADD COLUMN IF NOT EXISTS variant_source text;
 
 DO $$ BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_master_products_item') THEN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint
+                 WHERE conrelid = 'rate.products'::regclass AND conname = 'products_variant_source_check') THEN
+    ALTER TABLE rate.products ADD CONSTRAINT products_variant_source_check CHECK
+      (variant_source IS NULL OR variant_source IN ('title','sku','single_size','single_variant','manual','legacy'));
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint
+                 WHERE conrelid = 'rate.master_products'::regclass AND conname = 'fk_master_products_item') THEN
     ALTER TABLE rate.master_products ADD CONSTRAINT fk_master_products_item
       FOREIGN KEY (item_id) REFERENCES rate.items(id) ON DELETE RESTRICT;
   END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_products_item') THEN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint
+                 WHERE conrelid = 'rate.products'::regclass AND conname = 'fk_products_item') THEN
     ALTER TABLE rate.products ADD CONSTRAINT fk_products_item
       FOREIGN KEY (item_id) REFERENCES rate.items(id) ON DELETE RESTRICT;
   END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_items_default_variant') THEN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint
+                 WHERE conrelid = 'rate.items'::regclass AND conname = 'fk_items_default_variant') THEN
     ALTER TABLE rate.items ADD CONSTRAINT fk_items_default_variant
       FOREIGN KEY (default_variant_id) REFERENCES rate.master_products(id) ON DELETE SET NULL;
   END IF;
@@ -242,17 +252,75 @@ CREATE UNIQUE INDEX IF NOT EXISTS uq_master_products_item_variant
 CREATE INDEX IF NOT EXISTS idx_rate_products_item ON rate.products (item_id);
 CREATE INDEX IF NOT EXISTS idx_items_status_cat_price ON rate.items (status, category_id, min_price);
 CREATE INDEX IF NOT EXISTS idx_items_status_rating ON rate.items (status, user_rating_weighted DESC);
-CREATE INDEX IF NOT EXISTS idx_items_search_trgm ON rate.items
-  USING gin ((brand || ' ' || name || ' ' || model || ' ' || item_key) extensions.gin_trgm_ops);
--- RLS and grants: mirror master_products (public SELECT on published rows, service_role ALL,
--- rate_worker policy and column grants as in DOS-Me 20261018183000), plus the updated_at trigger.
+
+-- pg_trgm lives in schema `sign` on prod and `extensions` elsewhere (DOS-Me 20261018183000:93-103),
+-- so the trigram index is built with the schema looked up at run time, as init :41-57 does.
+DO $$ DECLARE v_trgm text; BEGIN
+  SELECT n.nspname INTO v_trgm FROM pg_extension e JOIN pg_namespace n ON n.oid = e.extnamespace
+  WHERE e.extname = 'pg_trgm';
+  EXECUTE format('CREATE INDEX IF NOT EXISTS idx_items_search_trgm ON rate.items USING gin '
+                 '((brand || '' '' || name || '' '' || model || '' '' || item_key) %I.gin_trgm_ops)', v_trgm);
+END $$;
+
+ALTER TABLE rate.items ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Public can view published items" ON rate.items;
+CREATE POLICY "Public can view published items" ON rate.items FOR SELECT USING (status = 'published');
+DROP POLICY IF EXISTS "Service role write items" ON rate.items;
+CREATE POLICY "Service role write items" ON rate.items FOR ALL TO service_role USING (true) WITH CHECK (true);
+GRANT SELECT ON rate.items TO anon, authenticated;
+GRANT ALL ON rate.items TO service_role;
+-- plus: rate_worker policy and column grants (pattern of DOS-Me 20261018183000), the updated_at
+-- trigger (pattern of 20261018120105), and `item_id` appended at the END of
+-- v_products_with_merchant_trust so CREATE OR REPLACE VIEW keeps working.
+```
+
+**Compatibility sync (M1, removed in M4).** The old importer and Rate-Services keep writing `cluster_id` without `item_id` until their code changes ship. A listing can also move between masters after the backfill. So M1 installs two BEFORE triggers. This makes the order between the migration and the code deploys irrelevant:
+
+```sql
+-- products: item follows the variant whenever a variant is set
+CREATE OR REPLACE FUNCTION rate.products_sync_item() RETURNS trigger
+LANGUAGE plpgsql SET search_path = '' AS $$
+BEGIN
+  IF NEW.cluster_id IS NOT NULL THEN
+    SELECT mp.item_id INTO NEW.item_id FROM rate.master_products mp WHERE mp.id = NEW.cluster_id;
+  END IF;   -- cluster_id NULL: keep the item_id the writer supplied (unknown variant)
+  RETURN NEW;
+END $$;
+-- master_products: a master inserted without an Item gets one from its key (created as draft)
+CREATE OR REPLACE FUNCTION rate.master_products_sync_item() RETURNS trigger
+LANGUAGE plpgsql SET search_path = '' AS $$
+DECLARE v_key text := split_part(NEW.model_key, ':', 1) || ':' || split_part(NEW.model_key, ':', 2);
+BEGIN
+  NEW.variant_key := COALESCE(NEW.variant_key, NULLIF(split_part(NEW.model_key, ':', 3), ''));
+  IF NEW.item_id IS NULL THEN
+    INSERT INTO rate.items (item_key, slug, name, brand, model, category_id, status)
+    VALUES (v_key, rate.item_slug_from_master(NEW.slug, NEW.model_key),
+            rate.item_name_from_master(NEW.name), NEW.brand, NEW.model, NEW.category_id, 'draft')
+    ON CONFLICT (item_key) DO NOTHING;
+    SELECT i.id INTO NEW.item_id FROM rate.items i WHERE i.item_key = v_key;
+  END IF;
+  RETURN NEW;
+END $$;
+-- CREATE TRIGGER trg_products_sync_item BEFORE INSERT OR UPDATE OF cluster_id ON rate.products ...
+-- CREATE TRIGGER trg_master_products_sync_item BEFORE INSERT OR UPDATE OF model_key ON rate.master_products ...
+-- (each wrapped in DROP TRIGGER IF EXISTS; slug collision in the INSERT falls back to a suffixed slug)
 ```
 
 ```sql
--- M5: constraints, after the backfill is verified
-ALTER TABLE rate.master_products ALTER COLUMN item_id SET NOT NULL;
-ALTER TABLE rate.products ADD CONSTRAINT products_item_id_not_null CHECK (item_id IS NOT NULL) NOT VALID;
-ALTER TABLE rate.products VALIDATE CONSTRAINT products_item_id_not_null;
+-- M4: constraints, after the backfill and reconciliation are verified (every step re-runnable)
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM rate.master_products WHERE item_id IS NULL) THEN
+    ALTER TABLE rate.master_products ALTER COLUMN item_id SET NOT NULL;
+  ELSE
+    RAISE EXCEPTION 'M4: master_products rows without item_id remain';
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint
+                 WHERE conrelid = 'rate.products'::regclass AND conname = 'products_item_id_not_null') THEN
+    ALTER TABLE rate.products ADD CONSTRAINT products_item_id_not_null CHECK (item_id IS NOT NULL) NOT VALID;
+  END IF;
+END $$;
+ALTER TABLE rate.products VALIDATE CONSTRAINT products_item_id_not_null;   -- no-op when already valid
+
 -- A listing's variant must belong to the listing's Item.
 CREATE OR REPLACE FUNCTION rate.products_variant_item_guard() RETURNS trigger
 LANGUAGE plpgsql SET search_path = '' AS $$
@@ -265,35 +333,51 @@ BEGIN
   END IF;
   RETURN NEW;
 END $$;
--- Moving a variant to another Item must carry its listings (same transaction), so the guard
--- needs a companion trigger on master_products.item_id updates that rejects stranded listings.
+DROP TRIGGER IF EXISTS trg_products_variant_item_guard ON rate.products;
+CREATE TRIGGER trg_products_variant_item_guard
+  BEFORE INSERT OR UPDATE OF cluster_id, item_id ON rate.products
+  FOR EACH ROW EXECUTE FUNCTION rate.products_variant_item_guard();
+-- Companion trigger on master_products: changing a variant's item_id is rejected while it still has
+-- listings on the old Item (moves are done by an RPC that moves the listings in the same transaction).
 ```
 
 ### 4.4 Listing with an unknown variant
 
+This applies only to multi-size Items (section 4.2). On a single-variant Item, every listing belongs to its one variant.
+
 - **Stored as:** `products.item_id = <item>`, `products.cluster_id = NULL`, `variant_source = NULL`.
-- **Never feeds a variant.** It is excluded from variant `min_price`/`max_price`/`merchant_count`, spread, deal radar and peer floors. These already filter by `cluster_id`, so the exclusion is automatic.
+- **Never feeds a variant.** It is excluded from variant `min_price`/`max_price`/`merchant_count`, spread, deal radar and peer floors. These already filter by `cluster_id`, so the exclusion is automatic. Every consumer that groups by `cluster_id` must still treat NULL as "no variant" rather than as one group (section 5).
 - **Counted at Item level.** It feeds Item `listing_count`, `unknown_variant_listing_count`, Item `merchant_count` and Item ratings, because its reviews are about the device.
 - **Shown** on the Item page in a separate group, "Storage not stated" (VI: "Chưa rõ dung lượng"). Each row gets a note and its own price. It is not used for the "from" price (Q2).
+- **Kept fresh.** Refresh jobs for these listings are keyed by listing and Item, not by variant, so they keep being re-crawled (section 5.4).
 - **Upgraded later, never guessed.** It moves to a variant when a later crawl gives explicit evidence: a stated title, a selected marketplace SKU, or a single-size line. `variant_source` records which. The AI enricher must not set storage on a listing.
-- **Multi-size marketplace listings.** A Shopee listing whose SKUs span several storages is one listing. Phase 1 attaches it to the variant of its cheapest SKU only when that SKU names its storage, and otherwise to the Item with unknown variant. This also fixes today's defect where `priceMin` across all SKUs is filed under one sized master. Per-SKU offers are the optional phase M6 (`rate.listing_skus`).
+- **Multi-size marketplace listings.** A Shopee listing whose SKUs span several storages is one listing with one `price_current`/`price_min`/`price_max`.
+  - Phase 1 attaches it to the variant of its cheapest SKU only when that SKU names its storage, and otherwise to the Item with unknown variant.
+  - This fixes the variant's **min** price. But `price_max` still spans every SKU (`shopee-to-supabase.ts:546-548`) and still feeds the variant's `max_price`. Phase 1 should therefore write the SKU's own price as `price_max` for such a listing, or the variant max must ignore multi-SKU listings.
+  - The full fix is per-SKU offers, the optional phase M5 (`rate.listing_skus`).
 
 ### 4.5 Keys and matching
 
 - **Normalizer output**:
   - `item_key` = `slugify(brand):slugify(model + appleSize)`;
-  - `variant_key` = `{N}gb|{N}tb|std|null`;
+  - `variant_key` = the third key segment in today's format (`{N}gb`, `unknown`; earbuds stay `unknown`);
   - `item_name` and `item_slug` (no storage);
-  - `variant_name`.
+  - `variant_name`;
+  - a new `variant_known` flag.
 
-  `model_key` stays as `item_key:(variant_key ?? 'unknown')` until the compatibility window closes, so Rate-Services helpers keep working unchanged.
+  `model_key` keeps exactly today's shape, so Rate-Services helpers and fixtures keep working.
 - **Shared helpers.** `packages/shared-data` gets `composeModelKey` and `splitModelKey`, so Rate-Services stops parsing key strings itself.
 - **Matcher, item first:**
   1. Item by exact `item_key`.
-  2. Variant by exact `(item_id, variant_key)`. A missing sized variant of a known published Item is created as a variant row. Specs are inherited from the Item; only storage and RAM are overridden. The Item stays published. A draft is needed only when the Item is new.
-  3. Tier 2 fuzzy runs against **Item** names through a new RPC, `match_item(search_title, p_brand, p_model, p_threshold)`. Item names never contain storage, so the #1105 failure mode (bare title vs sized name) disappears. The frozen `match_master_product` stays for the compatibility window.
-  4. Tier 3 creates a draft Item, plus a variant only when the key states one.
-- **Pipeline hint.** `masterIdHint` keeps working (variant id implies item). A new `itemIdHint` is added for storage-less pages.
+  2. If the size is known: the variant by exact `(item_id, variant_key)`. A missing sized variant of a known published Item is created as a variant row. Specs are inherited from the Item; only storage and RAM are overridden. The Item stays published. A draft is needed only when the Item is new.
+  3. If the size is unknown: on a single-variant Item, its one variant; on a multi-size Item, no variant (`cluster_id = NULL`).
+  4. **Retiring `unknown`.** When an Item gets its first sized variant, its `unknown` master is retired by the same rule as M3: listings get `cluster_id = NULL`, and the master is archived. This is an RPC run in one transaction.
+  5. Tier 2 fuzzy runs against **Item** names through a new RPC, `match_item(search_title, p_brand, p_model, p_threshold)`. Item names never contain storage, so the #1105 failure mode (bare title vs sized name) disappears. The RPC calls `similarity()` schema-qualified through the run-time pg_trgm lookup, as `match_master_product` does, and is granted to `rate_worker`. The frozen `match_master_product` stays for the compatibility window.
+  6. Tier 3 creates a draft Item, plus a variant only when the key states one.
+- **Pipeline hints:**
+  - `masterIdHint` keeps working (a variant id implies its Item). It must **reject archived masters**: today the hint is only checked for existence (`shopee-to-supabase.ts:488-519`), so a queued job that still carries a retired `:unknown` master id would put the listing back on it. When the hinted master is archived, the hint is mapped to its Item with no variant.
+  - A new `itemIdHint` is added for storage-less pages.
+- **Ratings.** `refresh_master_product_rating` keeps its signature. Its body is replaced so that it resolves the master's Item, computes the rating over every listing of that Item (including unknown-variant listings), writes it on the Item, and mirrors it onto each variant row for old readers. `refresh_review_vote_counts` today resolves the master through `cluster_id` and skips NULL (`20261018120103:170`). It switches to `products.item_id`, so votes on unknown-variant listings also count.
 
 ## 5. Impact
 
@@ -319,6 +403,7 @@ END $$;
   - OpenAPI gains Item and Variant component schemas. The doc text also gets corrected: it claims `/products/{slug}` accepts a `model_key`, which it does not.
 - **Extension.**
   - `lookupExtensionProduct` resolves the Item and returns **all** its variants from the DB, not only the siblings among the top 8 search hits.
+  - Exact listing lookup by URL or `platform_item_id` today requires `cluster_id NOT NULL` (`extension.ts:1101-1103`, and the same in `inspectProductOrShopUrl`, `rate-api.ts:3706-3728`). It gains an `item_id` fallback, so unknown-variant listings are still recognised.
   - It drops the "unknown storage means 256GB" default; unknown shows the Item with no size preselected.
   - It returns Item URLs.
   - The side-panel picker already exists, so the client change is small.
@@ -328,7 +413,7 @@ END $$;
 
 | File | Change |
 | :--- | :--- |
-| `product-normalizer.ts` | Emit `item_key`, `variant_key`, `item_name`, `item_slug`. Earbuds and fixed-size lines get `std` or the fixed size and are no longer `:unknown`. `needs_review` stops meaning "storage unknown". |
+| `product-normalizer.ts` | Emit `item_key`, `variant_key` (the literal third segment, format unchanged), `item_name`, `item_slug`, and a `variant_known` flag, so callers stop inferring it from `:unknown`. `needs_review` stops meaning "storage unknown". |
 | `entity-matcher.ts` | Item-first tiers (section 4.5). Variant creation under a published Item. Fuzzy only at Item level. Return `{itemId, variantId \| null}`. **Closes #1105.** |
 | `shopee-to-supabase.ts` | Write `products.item_id`, nullable `cluster_id`, `variant_source`. Pick the variant from the selected or cheapest SKU only when it states storage. Refresh variant stats, then Item stats. `itemIdHint`. |
 | `ai-spec-enricher.ts` | Cache and enrich per Item. Variant overrides only. Never assign storage to a listing. |
@@ -339,10 +424,11 @@ END $$;
 
 ### 5.4 DOS/Rate-Services (general terms; its own issues in its own repo)
 
-- **Grouping by `cluster_id` stays correct,** because it remains the variant. Every auditor that groups by it must treat NULL as "no variant": skip it for floors and spread, and count it at Item level if needed.
+- **Grouping by `cluster_id` stays correct,** because it remains the variant. Every auditor that groups by it must treat NULL as "no variant": skip it for floors and spread, and count it at Item level if needed. This must ship **before** any writer starts producing NULL `cluster_id` (task 13 before M3 and before the importer flag in task 5).
 - **Key-parsing helpers** should switch to the shared `splitModelKey`/`composeModelKey`, so they stop splitting strings themselves. Their about 184 fixture literals stay valid during the compatibility window, because `model_key` keeps its shape.
 - **Listing verification** gains an Item-level mode. A page with no stated storage is accepted for the Item with no variant, instead of being rejected as "other variant".
-- **Job payloads** carry `item_id` plus an optional variant id. Queued jobs with old ids stay valid, because variant ids do not change.
+- **Job payloads** carry `item_id` plus an optional variant id. Queued jobs with old variant ids stay valid, because variant ids do not change. The one exception is a retired `:unknown` master id (M3, or the importer rule in 4.5): the pipeline maps a hint to an archived master onto its Item with no variant.
+- **Refresh rotation** is per master today. Listings with no variant must be refreshed by listing and Item, or their price and availability go stale.
 - **Seeding and coverage** can run per Item, with per-variant coverage computed after the search.
 - **Writers of master aggregates** (the spread auditor, cleanup scripts) also call the new Item refresh RPC.
 - **Bump the `vendor/rate` pin** after the importer change lands. The local submodule checkout is currently ahead of the pinned commit, which is worth syncing first.
@@ -355,122 +441,159 @@ With this model, a storage-less title resolves to the Item with no variant. #110
 
 ## 7. DOS-Me migration plan
 
-All steps are idempotent. Each phase is its own DOS-Me migration: preview, then beta, then prod, each with JOY's approval. Reference copies go into `DOS/Rate/supabase/migrations/`, and `database.types.ts` is regenerated. **Dependency:** the DOS-Me beta workflow is locked (ROADMAP 6.4). Until it reopens, these migrations cannot reach prod by the normal path.
+**Common rules for every phase**
+
+- Every step is idempotent: guarded by `IF NOT EXISTS` / `conrelid` + `conname` checks, or written as re-runnable `UPDATE ... WHERE <not yet done>`.
+- Each phase is its own DOS-Me migration: preview, then beta, then prod, each with JOY's approval.
+- Reference copies go into `DOS/Rate/supabase/migrations/`, and `database.types.ts` is regenerated.
+- **Dependency:** the DOS-Me beta workflow is locked (ROADMAP 6.4). Until it reopens, these migrations cannot reach prod by the normal path.
 
 | Phase | What | Reversible by |
 | :--- | :--- | :--- |
-| **M0** | Mirror the eight missing DOS-Me `rate` migrations into this repo's reference copy and regenerate types (a docs/types PR, no DDL). Run the read-only inventory queries below. Fix seed-key drift in data (merge duplicate earbuds and watch masters) as a separate, reviewed data step if the inventory finds duplicates. | not applicable |
-| **M1** | Additive DDL from section 4.3: `rate.items`, new columns, indexes, RLS/grants, `rate_worker` access, updated_at trigger. | `DROP` of the new objects (no data depends on them yet) |
-| **M2** | Backfill Items and links (below). New RPCs: `refresh_item_stats`, `refresh_item_rating`, `match_item`, `resolve_catalog_slug`, `search_items_v1`, facet and autocomplete v2, plus `submit_community_review` accepting an Item. Old RPCs are untouched. | set the new columns to NULL and truncate `items`; old paths never read them |
-| **Compatibility window** | Importer and Rate-Services write both levels. Web ships Item pages behind an env flag, then switches. Old slugs redirect. Lasts at least one promote cycle and until the sitemap has been re-crawled (about 30 days). | flip the flag off |
-| **M3** | Collapse unknown-storage masters: listings of `:unknown` masters get `cluster_id = NULL` (`item_id` is already set); the masters are archived. A backup table records each change. | restore from the backup table (below) |
-| **M4** | Constraints: `item_id NOT NULL` on both tables, the listing/variant/Item guard triggers, `default_variant_id` filled. | drop the constraints and triggers |
-| **M5 (optional)** | `rate.listing_skus` (per-SKU price and stock per listing, with nullable `variant_id`). Per-SKU price history. | drop table |
-| **M6 (optional)** | `rate.item_variants` as a view over `master_products`, for naming clarity. Deprecate per-variant rating columns. | drop view |
+| **M0** | Mirror the eight missing DOS-Me `rate` migrations into this repo's reference copy and regenerate types (a docs/types PR, no DDL). Run the read-only inventory queries (7.3). If duplicates exist, fix seed-key drift as a separate, reviewed data step: earbuds seeded `:64gb`/`:standard` vs normalized `:unknown`, and `watch-ultra-3-49mm`. Duplicates are **archived, never deleted**: `price_alerts` cascade on delete, so alerts are moved to the surviving master first. | not applicable |
+| **M1** | Additive DDL (4.3): `rate.items`, new columns, indexes (pg_trgm schema looked up at run time), RLS/grants, `rate_worker` access, updated_at trigger, `item_id` appended to the trust view, the two compatibility sync triggers, and the slug/name helper functions they call. | One transaction: drop the sync triggers, drop the FKs, drop the columns and `rate.items`. No existing data depends on them. |
+| **M2** | Backfill (7.1) and new RPCs: `refresh_item_stats`, `match_item`, `resolve_catalog_slug`, `search_items_v1`, facet and autocomplete v2, plus `submit_community_review` accepting an Item. `refresh_master_product_rating` and `refresh_review_vote_counts` get Item-aware bodies with the same signatures (4.5). Other old RPCs are untouched. | One transaction, with writers paused: `UPDATE ... SET item_id = NULL, variant_key = NULL` on both tables, `UPDATE rate.items SET default_variant_id = NULL`, then `DELETE FROM rate.items`. **Never `TRUNCATE rate.items`:** it fails while the FKs exist, and `TRUNCATE ... CASCADE` would wipe `master_products`, `products` and, through them, price history, reviews and alerts. The old rating bodies are restored from the previous migration. |
+| **Compatibility window** | Importer and Rate-Services ship Item-aware code. The sync triggers keep old writers consistent meanwhile. The web ships Item pages behind an env flag, then switches, and old slugs redirect. A reconciliation query (7.3) runs after the last writer changes. Lasts at least one promote cycle and until the sitemap has been re-crawled (about 30 days). | Flip the flag off. |
+| **M3** | Retire `unknown` masters on **multi-size Items only** (7.2). Single-variant Items (earbuds, Garmin and other sizeless lines) are untouched. A backup table records each change. Runs only after Rate-Services handles NULL `cluster_id` (task 13). | Restore from the backup table (7.2) |
+| **M4** | Constraints (4.3): `item_id NOT NULL` on both tables, the listing/variant/Item guard triggers, `default_variant_id` filled. Drop the compatibility sync triggers. | Drop the constraints and guard triggers, and re-create the sync triggers |
+| **M5 (optional)** | `rate.listing_skus` (per-SKU price and stock per listing, with nullable `variant_id`). Per-SKU price history. | Drop table |
+| **M6 (optional)** | `rate.item_variants` as a view over `master_products`, for naming clarity. Deprecate the per-variant rating mirror columns. | Drop view |
 
 ### 7.1 M2 backfill (draft)
 
 ```sql
--- Variant key from the existing key; 'unknown' is not a variant.
+-- Variant key = the literal third key segment (format unchanged: 256gb, 1024gb, standard, unknown).
 UPDATE rate.master_products mp
-SET variant_key = CASE
-      WHEN split_part(mp.model_key, ':', 3) IN ('unknown') THEN NULL
-      WHEN split_part(mp.model_key, ':', 3) = 'standard' THEN 'std'
-      ELSE split_part(mp.model_key, ':', 3) END
-WHERE mp.variant_key IS NULL
-  AND mp.model_key ~ '^[a-z0-9][a-z0-9-]*:[a-z0-9][a-z0-9.-]*:[a-z0-9-]+$';
+SET variant_key = NULLIF(split_part(mp.model_key, ':', 3), '')
+WHERE mp.variant_key IS NULL;
 
--- One Item per brand:model; attributes from a representative variant
--- (published first, then most merchants, then oldest).
+-- One Item per brand:model, including Items whose masters are all archived (status 'archived'),
+-- so that M4's NOT NULL can hold. Representative variant: published first, then most merchants,
+-- then oldest. Nullable source columns are COALESCEd because the Item columns are NOT NULL.
 INSERT INTO rate.items (item_key, slug, name, brand, model, category_id, status, entity_type,
-                        description, specifications, key_specs, images, thumbnail, metadata)
+                        description, specifications, key_specs, spec_provenance, images, thumbnail,
+                        expert_rating, expert_review_summary, expert_criteria_scores, metadata)
 SELECT DISTINCT ON (k.item_key)
        k.item_key,
-       regexp_replace(mp.slug, '-(\d+(gb|tb)|standard|unknown)$', ''),
-       regexp_replace(mp.name, '\s+\d+\s?(GB|TB)$', '', 'i'),
+       rate.item_slug_from_master(mp.slug, mp.model_key),   -- strips '-<N>gb|tb' / '-standard' / '-unknown'
+       rate.item_name_from_master(mp.name),                  -- strips a trailing '<N> GB|TB'
        mp.brand, mp.model, mp.category_id,
-       CASE WHEN bool_or(mp.status = 'published') OVER (PARTITION BY k.item_key) THEN 'published'
-            ELSE 'draft' END,
-       mp.entity_type, mp.description, mp.specifications, mp.key_specs, mp.images, mp.thumbnail,
-       mp.metadata || jsonb_build_object('backfilled_from_master', mp.id)
+       CASE WHEN bool_or(mp.status = 'published') OVER w THEN 'published'
+            WHEN bool_or(COALESCE(mp.status, 'draft') <> 'archived') OVER w THEN 'draft'
+            ELSE 'archived' END,
+       COALESCE(mp.entity_type, 'product'), mp.description,
+       COALESCE(mp.specifications, '{}'::jsonb), COALESCE(mp.key_specs, '{}'::jsonb),
+       COALESCE(mp.spec_provenance, '{}'::jsonb), COALESCE(mp.images, '{}'), mp.thumbnail,
+       mp.expert_rating, mp.expert_review_summary, COALESCE(mp.expert_criteria_scores, '{}'::jsonb),
+       COALESCE(mp.metadata, '{}'::jsonb) || jsonb_build_object('backfilled_from_master', mp.id)
 FROM rate.master_products mp
 CROSS JOIN LATERAL (SELECT split_part(mp.model_key, ':', 1) || ':' || split_part(mp.model_key, ':', 2) AS item_key) k
-WHERE mp.model_key ~ '^[a-z0-9][a-z0-9-]*:[a-z0-9][a-z0-9.-]*:[a-z0-9-]+$'
-  AND mp.status <> 'archived'
-ORDER BY k.item_key, (mp.status = 'published') DESC, mp.merchant_count DESC, mp.created_at ASC
+WINDOW w AS (PARTITION BY k.item_key)
+ORDER BY k.item_key, (mp.status = 'published') DESC NULLS LAST,
+         mp.merchant_count DESC NULLS LAST, mp.created_at ASC NULLS LAST
 ON CONFLICT (item_key) DO NOTHING;
--- Slug collisions (ON CONFLICT on slug) are resolved before this statement by the inventory step;
--- the migration aborts if any remain.
+-- The helpers use single-backslash regexes ('-(\d+(gb|tb)|standard|unknown)$'), which are correct
+-- under standard_conforming_strings = on. Slug collisions are found by the M0 inventory and resolved
+-- first; the migration aborts if any remain.
 
 UPDATE rate.master_products mp SET item_id = i.id
 FROM rate.items i
 WHERE mp.item_id IS NULL
   AND i.item_key = split_part(mp.model_key, ':', 1) || ':' || split_part(mp.model_key, ':', 2);
 
+-- Re-runnable and self-correcting: also fixes listings whose master changed after a previous run.
 UPDATE rate.products p SET item_id = mp.item_id, variant_source = COALESCE(p.variant_source, 'legacy')
 FROM rate.master_products mp
-WHERE p.cluster_id = mp.id AND p.item_id IS NULL;
+WHERE p.cluster_id = mp.id AND p.item_id IS DISTINCT FROM mp.item_id;
 
 -- Item-level aggregates and ratings
 SELECT rate.refresh_item_stats(id) FROM rate.items;
-SELECT rate.refresh_item_rating(id) FROM rate.items;
+SELECT rate.refresh_master_product_rating(mp.id)        -- new body writes the Item and the mirrors
+FROM (SELECT DISTINCT ON (item_id) id, item_id FROM rate.master_products ORDER BY item_id, id) mp;
 ```
 
 - **Specs in the backfill.** Item `specifications` are copied from the representative variant. A follow-up importer job (dry-run by default, like `backfill-specs.ts`) strips variant-only fields such as storage from the Item specs and writes them as variant overrides.
-- **Legacy keys** are listed by the inventory and fixed or archived before M2 runs: anything that fails the three-segment shape, `khc:` keys, and old hyphen-format keys. The migration aborts if any non-archived master would be left without an Item.
+- **Listings with no master** (`products.cluster_id IS NULL` today, if any, for example listings never matched) get no Item from this backfill. The M0 inventory counts them. Before M4 each is either matched to an Item by the importer or archived, because M4 requires `item_id`.
+- **Legacy keys** (`khc:`, old hyphen-format keys, anything without three segments) still get an Item, so no master is left behind. The inventory lists them for manual review.
 
-### 7.2 M3 collapse (draft)
+### 7.2 M3 retire `unknown` on multi-size Items (draft)
 
 ```sql
 CREATE TABLE IF NOT EXISTS rate.m3_unknown_variant_backup (
-  product_id uuid PRIMARY KEY, old_cluster_id uuid NOT NULL, master_old_status text NOT NULL,
+  product_id uuid PRIMARY KEY,
+  old_cluster_id uuid NOT NULL,
+  old_variant_source text,
+  master_old_status text,                    -- nullable: master_products.status is nullable
   backed_up_at timestamptz NOT NULL DEFAULT now());
-INSERT INTO rate.m3_unknown_variant_backup (product_id, old_cluster_id, master_old_status)
-SELECT p.id, p.cluster_id, mp.status
-FROM rate.products p JOIN rate.master_products mp ON mp.id = p.cluster_id
-WHERE mp.variant_key IS NULL AND split_part(mp.model_key, ':', 3) = 'unknown'
+
+WITH multi AS (                              -- Items that have at least one sized variant
+  SELECT DISTINCT item_id FROM rate.master_products WHERE variant_key ~ '^\d+(gb|tb)$')
+INSERT INTO rate.m3_unknown_variant_backup (product_id, old_cluster_id, old_variant_source, master_old_status)
+SELECT p.id, p.cluster_id, p.variant_source, mp.status
+FROM rate.products p
+JOIN rate.master_products mp ON mp.id = p.cluster_id
+JOIN multi ON multi.item_id = mp.item_id
+WHERE mp.variant_key = 'unknown'
 ON CONFLICT (product_id) DO NOTHING;
+
 UPDATE rate.products p SET cluster_id = NULL, variant_source = NULL
 FROM rate.m3_unknown_variant_backup b WHERE p.id = b.product_id AND p.cluster_id = b.old_cluster_id;
--- Archive only masters with no price alerts; alerts on them are reported and resolved first.
+
+-- Archive the retired masters; any with price alerts are reported and resolved first
+-- (alerts are per variant and an unknown master has no variant to point to).
 UPDATE rate.master_products mp SET status = 'archived'
-WHERE mp.variant_key IS NULL AND split_part(mp.model_key, ':', 3) = 'unknown'
+WHERE mp.id IN (SELECT DISTINCT old_cluster_id FROM rate.m3_unknown_variant_backup)
   AND NOT EXISTS (SELECT 1 FROM rate.price_alerts a WHERE a.master_product_id = mp.id);
 -- then refresh_master_market_stats for the affected masters and refresh_item_stats for their Items
 ```
 
-- **Rollback of M3:**
+**Rollback of M3.** Restore only rows that are still in the state M3 left them in. Report the rest instead of overwriting a variant the importer has assigned since:
 
-  ```sql
-  UPDATE rate.products p SET cluster_id = b.old_cluster_id FROM rate.m3_unknown_variant_backup b WHERE p.id = b.product_id;
-  ```
+```sql
+UPDATE rate.products p SET cluster_id = b.old_cluster_id, variant_source = b.old_variant_source
+FROM rate.m3_unknown_variant_backup b
+WHERE p.id = b.product_id AND p.cluster_id IS NULL;
+SELECT b.product_id, p.cluster_id AS now_on FROM rate.m3_unknown_variant_backup b
+JOIN rate.products p ON p.id = b.product_id WHERE p.cluster_id IS NOT NULL
+  AND p.cluster_id <> b.old_cluster_id;                        -- conflicts, resolved by hand
+UPDATE rate.master_products mp SET status = b.master_old_status
+FROM (SELECT DISTINCT old_cluster_id, master_old_status FROM rate.m3_unknown_variant_backup) b
+WHERE mp.id = b.old_cluster_id;
+-- then refresh the stats
+```
 
-  then restore `status` from `master_old_status` and refresh the stats.
-- **Community reviews.** `submit_community_review` attaches reviews to a listing. Moving a listing to "no variant" keeps the review on that listing and on the same Item. This avoids the orphaning seen in the iPhone 16e offer move (DOS-Me `20261022140000`).
+**Community reviews.** `submit_community_review` attaches reviews to a listing. Moving a listing to "no variant" keeps the review on that listing and on the same Item. This avoids the orphaning seen in the iPhone 16e offer move (DOS-Me `20261022140000`).
 
 ### 7.3 Verification queries (read-only; run after each phase)
 
 ```sql
 -- Inventory (M0)
 SELECT count(*) FILTER (WHERE model_key !~ '^[a-z0-9][a-z0-9-]*:[a-z0-9][a-z0-9.-]*:[a-z0-9-]+$') AS bad_shape,
+       count(*) FILTER (WHERE model_key LIKE 'khc:%') AS khc_keys,
        count(*) FILTER (WHERE split_part(model_key, ':', 3) = 'unknown') AS unknown_masters,
+       count(*) FILTER (WHERE status IS NULL) AS null_status,
        count(*) FILTER (WHERE status = 'published') AS published, count(*) AS total
 FROM rate.master_products;
+SELECT count(*) AS listings_without_master FROM rate.products WHERE cluster_id IS NULL;
 SELECT split_part(model_key, ':', 1) || ':' || split_part(model_key, ':', 2) AS item_key,
        array_agg(model_key ORDER BY model_key) AS variants, count(DISTINCT brand) AS brands,
        count(DISTINCT category_id) AS categories
-FROM rate.master_products WHERE status <> 'archived'
+FROM rate.master_products
 GROUP BY 1 HAVING count(DISTINCT brand) > 1 OR count(DISTINCT category_id) > 1;   -- expect 0 rows
--- Unknown masters that carry alerts or community reviews (decide before M3)
+-- Earbuds or other sizeless categories carrying a fake size (seed drift), to fix in M0
+SELECT mp.model_key FROM rate.master_products mp JOIN rate.categories c ON c.id = mp.category_id
+WHERE c.slug = 'earbuds' AND split_part(mp.model_key, ':', 3) NOT IN ('unknown');
+-- Unknown masters on multi-size Items that carry alerts or community reviews (decide before M3)
 SELECT mp.model_key, count(DISTINCT a.id) AS alerts, count(DISTINCT r.id) AS reviews
 FROM rate.master_products mp
 LEFT JOIN rate.price_alerts a ON a.master_product_id = mp.id
 LEFT JOIN rate.products p ON p.cluster_id = mp.id
 LEFT JOIN rate.reviews r ON r.product_id = p.id
-WHERE split_part(mp.model_key, ':', 3) = 'unknown' GROUP BY 1 HAVING count(a.id) + count(r.id) > 0;
+WHERE split_part(mp.model_key, ':', 3) = 'unknown'
+GROUP BY 1 HAVING count(DISTINCT a.id) + count(DISTINCT r.id) > 0;
 
--- After M2
-SELECT count(*) FROM rate.master_products WHERE item_id IS NULL AND status <> 'archived';  -- 0
+-- After M2, and again as the reconciliation after the last writer changes
+SELECT count(*) FROM rate.master_products WHERE item_id IS NULL;                            -- 0
 SELECT count(*) FROM rate.products WHERE item_id IS NULL AND cluster_id IS NOT NULL;       -- 0
 SELECT count(*) FROM rate.products p JOIN rate.master_products mp ON mp.id = p.cluster_id
 WHERE p.item_id IS DISTINCT FROM mp.item_id;                                                -- 0
@@ -481,15 +604,23 @@ WHERE i.min_price IS DISTINCT FROM (SELECT COALESCE(min(mp.min_price) FILTER (WH
 -- An Item slug may only collide with one of its own variants' slugs
 SELECT i.slug FROM rate.items i JOIN rate.master_products mp ON mp.slug = i.slug
 WHERE mp.item_id IS DISTINCT FROM i.id;                                                      -- 0 rows
+-- Item names and slugs must not carry a size
+SELECT item_key, slug, name FROM rate.items
+WHERE slug ~ '-\d+(gb|tb)$' OR name ~* '\s\d+\s?(gb|tb)$';                                  -- 0 rows
 -- Published variant counts per Item, for the page smoke test
 SELECT i.slug, count(mp.id) FROM rate.items i JOIN rate.master_products mp ON mp.item_id = i.id
 WHERE i.status = 'published' GROUP BY 1 ORDER BY 2 DESC;
 
 -- After M3
 SELECT count(*) FROM rate.products p JOIN rate.master_products mp ON mp.id = p.cluster_id
-WHERE split_part(mp.model_key, ':', 3) = 'unknown';                                         -- 0
+WHERE mp.variant_key = 'unknown'
+  AND EXISTS (SELECT 1 FROM rate.master_products s WHERE s.item_id = mp.item_id
+              AND s.variant_key ~ '^\d+(gb|tb)$');                                          -- 0
 SELECT (SELECT count(*) FROM rate.m3_unknown_variant_backup) AS moved,
        (SELECT count(*) FROM rate.products WHERE cluster_id IS NULL AND item_id IS NOT NULL) AS unknown_now;
+-- Earbuds and other single-variant Items still priced
+SELECT i.item_key FROM rate.items i JOIN rate.categories c ON c.id = i.category_id
+WHERE c.slug = 'earbuds' AND i.status = 'published' AND i.min_price = 0;                    -- review any rows
 ```
 
 ## 8. Risks
@@ -498,6 +629,8 @@ SELECT (SELECT count(*) FROM rate.m3_unknown_variant_backup) AS moved,
 | :--- | :--- |
 | SEO: every indexed product URL changes. | 308 to the Item page with the variant preselected. The canonical points to the Item. The sitemap is swapped in the same deploy. Keep the redirects permanently, since they are cheap. |
 | Public API clients break. | Additive fields only within v1. Item grouping is opt-in (`group=item`) until announced. |
+| Old writers (importer, Rate-Services) create masters or move listings without `item_id` during the window. | The M1 sync triggers derive `item_id` from `cluster_id` and create draft Items for new keys. The reconciliation query (7.3) runs after the last writer changes. |
+| A writer produces NULL `cluster_id` before Rate-Services handles it. | Task 5 writes NULL `cluster_id` only behind a flag that is turned on after task 13 ships. M3 runs after task 13. |
 | Rate-Services and this repo drift during the compatibility window. | `model_key` keeps its shape. Variant ids do not change. Helpers are shared through `@repo/shared-data`. The vendor bump happens only after the importer change is merged. |
 | Item spec backfill picks the wrong representative. | Published, then most merchants, then oldest. A dry-run diff job is reviewed before applying. |
 | Unknown-variant listings make an Item look cheaper. | They are excluded from the "from" price and shown in their own group (Q2). |
@@ -526,7 +659,7 @@ Sizes: S is up to a day, M is 2-3 days, L is about a week of agent time, includi
 | 2 | M0: run the inventory queries (read-only) and write the data-fix list (seed key drift, legacy keys, slug collisions) | Rate (PO runs the queries) | S | |
 | 3 | `shared-data`: Item and Variant schemas, `composeModelKey`/`splitModelKey`, `item_key` and `variant_key` rules | Rate | S | |
 | 4 | DOS-Me M1 + M2: `rate.items`, columns, RLS/grants, backfill, Item RPCs | DOS-Me (with JOY's approval) + Rate reference copy | L | 1, 2 |
-| 5 | Normalizer emits `item_key`/`variant_key`; matcher becomes item-first with `match_item` (**closes #1105**); pipeline writes `item_id` with nullable variant and `variant_source`, plus `itemIdHint` | Rate | L | 3, 4 |
+| 5 | Normalizer emits `item_key`/`variant_key`; matcher becomes item-first with `match_item` (**closes #1105**); pipeline writes `item_id` with nullable variant and `variant_source`, `itemIdHint`, archived-hint mapping. Writing NULL `cluster_id` sits behind a flag, turned on after task 13 | Rate | L | 3, 4 (flag on: 13) |
 | 6 | Seeds as Item plus variants; spec enrichment and backfill per Item; review rating at Item level | Rate | M | 5 |
 | 7 | Web data layer: Item queries, `resolveCatalogSlug`, 308 redirects, cache tags | Rate | M | 4 |
 | 8 | Product page per Item: variant selector, unknown-size group, `ProductGroup` JSON-LD, canonical, no sibling competitors | Rate | L | 7 |
@@ -538,4 +671,24 @@ Sizes: S is up to a day, M is 2-3 days, L is about a week of agent time, includi
 | 14 | DOS-Me M3 (unknown collapse) and M4 (constraints) | DOS-Me (with JOY's approval) | M | 5, 13, compatibility window |
 | 15 | (optional) M5 `listing_skus`, per-SKU prices | DOS-Me + Rate | L | 14 |
 
-**Critical path:** 1, 2 and 3, then 4, then 5 and 7 in parallel, then 8 to 11 and 13, then 14. The web tasks (8 to 11) can share one feature flag, so that they ship dark and switch together.
+**Critical path:** 1, 2 and 3, then 4, then 5 and 7 in parallel, then 8 to 11 and 13, then the task 5 flag, then 14. The web tasks (8 to 11) can share one feature flag, so that they ship dark and switch together.
+
+## 11. Review log
+
+Reviewed on PR #1136 by a fresh-context subagent and by a Codex adversarial pass (no P0). Fixed in this revision:
+
+- **Earbuds and other sizeless lines would have lost their only variant in M3.** `unknown` is now a real variant on single-variant Items, and M3 is limited to multi-size Items (4.2, 7.2).
+- **`variant_key` now keeps today's literal format** (`1024gb`, `standard`, `unknown`), so `model_key` and Tier 1 matching do not change shape (4.2, 4.5).
+- **Trigram index:** the pg_trgm schema is looked up at run time, because prod keeps it in `sign` (4.3).
+- **M2 backfill now also covers archived masters,** so M4 can enforce `NOT NULL`. It also COALESCEs nullable source columns, sorts with `NULLS LAST`, and copies the expert and provenance columns (7.1).
+- **M2 rollback** uses `DELETE`, never `TRUNCATE` (7).
+- **M3 rollback** is conditional and restores `variant_source`. The backup allows a NULL master status (7.2).
+- **Constraint steps** are idempotent and the guard trigger is created (4.3).
+- **New compatibility sync triggers** keep old writers consistent, and a reconciliation step follows (4.3, 7).
+- **`masterIdHint`** to an archived master maps to its Item (4.5).
+- **Ratings, including votes,** roll up through `products.item_id` (4.5).
+- **Other consumers covered:** the trust view (1.1), and the URL lookups in the extension and inspect (5.2).
+- **Refresh of unknown-variant listings, and ordering** against Rate-Services (5.4, 8, 10).
+- **M0 duplicate merges** archive and move alerts instead of deleting.
+
+Not applied: one finding said the slug regexes needed different escaping. They use single backslashes, which are correct under `standard_conforming_strings = on`, and a verification query now checks that Item names and slugs carry no size.
