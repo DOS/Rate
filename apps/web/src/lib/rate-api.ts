@@ -955,11 +955,12 @@ function isUnscoredTrustViewRow(row: RawTrustViewRow): boolean {
 /**
  * The view's DOSafe score, or null when it has none. The view reads 0 for a
  * seller with no threat_intel row and no synced merchants.risk_score (column
- * default 0): that is a missing score (#1099).
+ * default 0): that is a missing score (#1099). threat_intel.source is NOT
+ * NULL, so any string, even a blank one, marks a joined row (#1108).
  */
 function trustViewDosafeRisk(row: RawTrustViewRow): number | null {
   const viewDosafeRisk = toOptionalRiskScore100(row.dosafe_risk_score);
-  return viewDosafeRisk === 0 && !sanitizeOfferString(row.threat_source)
+  return viewDosafeRisk === 0 && typeof row.threat_source !== 'string'
     ? null
     : viewDosafeRisk;
 }

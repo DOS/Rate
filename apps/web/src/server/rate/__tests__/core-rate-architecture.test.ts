@@ -13167,6 +13167,18 @@ async function runCoreArchitectureSuite() {
       viewMerchant({ dosafe_risk_score: 35 }, 7).dosafe_risk_score,
       35
     );
+    // threat_intel.source is NOT NULL: a blank one is still a joined row's 0;
+    // a null one is the LEFT JOIN miss.
+    assert.equal(
+      viewMerchant({ dosafe_risk_score: 0, threat_source: '' })
+        .dosafe_risk_score,
+      0
+    );
+    assert.equal(
+      viewMerchant({ dosafe_risk_score: 0, threat_source: null })
+        .dosafe_risk_score,
+      null
+    );
     assert.equal(
       viewMerchant({ dosafe_risk_score: 0 }, '7').dosafe_risk_score,
       null
