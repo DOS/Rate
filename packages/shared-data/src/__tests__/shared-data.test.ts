@@ -708,6 +708,7 @@ function testPriceRules(): void {
     'Sony WF-1000XM5',
     'Apple AirPods Pro 2',
     'AirPodsPro',
+    'samsung:galaxy-buds3-pro:unknown',
   ]) {
     assert.equal(rules.minimumListingPriceVnd([title]), 400_000, title);
   }
@@ -718,6 +719,7 @@ function testPriceRules(): void {
     'Galaxy Watch7',
     'Samsung Galaxy Z Flip',
     'Buddha statue',
+    'sony:wh-1000xm5:unknown',
   ]) {
     assert.equal(rules.minimumListingPriceVnd([title]), 1_200_000, title);
   }
