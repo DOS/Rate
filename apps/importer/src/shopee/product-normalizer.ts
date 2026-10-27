@@ -1108,6 +1108,7 @@ const WATCH_BAND_WORD =
   /(?<!kh[\p{L}\p{M}]{1,3}ng )(?:d(?:\u00e2|a\u0302)y|band|strap|loop|bracelet)(?![\p{L}\d])/iu;
 const WATCH_SIZE = /(?<!\d)(38|4[0-2]|4[4-6]) ?mm\b/i;
 const LIST_WATCH_SIZE = /^ ?(?:38|4[0-2]|4[4-6]) ?mm\b/i;
+const WATCH_CASE_WORD = /(?<![\p{L}\d])(?:case|mặt|vỏ)(?![\p{L}\d])/iu;
 const APPLE_SIZE_PATTERNS: Record<string, [RegExp, RegExp]> = {
   ipad: sizePatterns(IPAD_SIZE),
   'macbook air': sizePatterns(MACBOOK_AIR_SIZE),
@@ -1143,13 +1144,15 @@ function readAppleSize(model: string, title: string): string {
     // other: "dây Sport Band 45mm cho mặt 42mm" does not tell the watch's (DOS/Rate#1124).
     // A band phrase with a size runs on over the parts after it that start with a size
     // and follow "," or "|": "Sport Loop 42mm | 46mm" or "Dây 42mm S/M, 46mm M/L" names
-    // two band sizes, not a case (DOS/Rate#1137).
+    // two band sizes, not a case (DOS/Rate#1137). A part that names the case ("46mm, 42mm
+    // Aluminum Case") ends the list.
     const parts = own.split(/([),|;\u2013]| - )/);
     const outside: string[] = [];
     let bandList = false;
     for (let i = 0; i < parts.length; i += 2) {
       const part = parts[i]!;
-      if (bandList && /^[,|]$/.test(parts[i - 1]!) && LIST_WATCH_SIZE.test(part)) continue;
+      const listed = LIST_WATCH_SIZE.test(part) && !WATCH_CASE_WORD.test(part.normalize('NFC'));
+      if (bandList && /^[,|]$/.test(parts[i - 1]!) && listed) continue;
       const [before, ...band] = part.split(WATCH_BAND_WORD);
       outside.push(before!);
       bandList = WATCH_SIZE.test(band.join(' '));

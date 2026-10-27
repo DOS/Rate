@@ -491,6 +491,14 @@ async function runSuite() {
     ['Apple Watch Series 11 GPS 46mm, Dây Cao Su 46mm S/M', 'apple:watch-series-11-46mm:64gb'],
     // ")", ";", an en dash or " - " still end the band phrase and its list.
     ['Apple Watch Series 10 (Sport Band 45mm) 46mm, 42mm', 'apple:watch-series-10-46mm:unknown'],
+    // A listed part that names the case ("case", "mặt", "vỏ") is the case's.
+    [
+      'Apple Watch Series 11 GPS Sport Band 46mm, 42mm Aluminum Case',
+      'apple:watch-series-11-42mm:64gb',
+    ],
+    ['Apple Watch Series 11 GPS Sport Band 46mm | 42mm Case', 'apple:watch-series-11-42mm:64gb'],
+    ['Apple Watch Series 10 Dây Vải 45mm, 42mm mặt nhôm', 'apple:watch-series-10-42mm:unknown'],
+    ['Apple Watch Series 10 Dây Vải 45mm, 46mm vỏ nhôm', 'apple:watch-series-10-46mm:unknown'],
   ];
   for (const [title, expectedKey] of watchBandListKeys1137) {
     assert.equal(keyOf(title), expectedKey, title);
