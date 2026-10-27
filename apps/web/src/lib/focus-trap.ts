@@ -83,13 +83,31 @@ export function inertOutside(keep: readonly HTMLElement[]): () => void {
   // Every element this call has held, including ones it gave up because
   // other code took over their `inert`: it does not take those again.
   const mine = new Set<HTMLElement>();
+  // Drops this call's hold; the last hold clears the `inert` set here.
+  function release(el: HTMLElement) {
+    const holds = inertHolds.get(el);
+    if (holds === undefined) return;
+    if (holds > 1) {
+      inertHolds.set(el, holds - 1);
+    } else {
+      inertHolds.delete(el);
+      el.inert = false;
+    }
+  }
   const observer = new MutationObserver((records) => {
     for (const record of records) {
-      const el = record.target;
-      if (record.type !== 'attributes' || !(el instanceof HTMLElement))
+      if (record.type === 'childList') {
+        // A removed element is no longer held, so it is not kept or watched.
+        for (const node of Array.from(record.removedNodes)) {
+          if (!(node instanceof HTMLElement) || !mine.has(node)) continue;
+          release(node);
+          mine.delete(node);
+        }
         continue;
+      }
       // Our own writes are dropped below, so this change is someone else's.
-      inertHolds.delete(el);
+      if (record.target instanceof HTMLElement)
+        inertHolds.delete(record.target);
     }
     hold();
   });
@@ -124,15 +142,6 @@ export function inertOutside(keep: readonly HTMLElement[]): () => void {
   hold();
   return () => {
     observer.disconnect();
-    for (const el of mine) {
-      const holds = inertHolds.get(el);
-      if (holds === undefined) continue;
-      if (holds > 1) {
-        inertHolds.set(el, holds - 1);
-      } else {
-        inertHolds.delete(el);
-        el.inert = false;
-      }
-    }
+    for (const el of mine) release(el);
   };
 }

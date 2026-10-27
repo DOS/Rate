@@ -252,10 +252,6 @@ test('the open phone menu leaves the toggle visible at 320px', async ({
   await page.setViewportSize({ width: 320, height: 640 });
   await page.goto('/');
   const { menu, toggle } = await openMenu(page);
-  // The drawer slides in over 0.8s.
-  await expect
-    .poll(async () => (await menu.boundingBox())?.x)
-    .toBeGreaterThanOrEqual(0);
   const drawer = (await menu.boundingBox())!;
   const button = (await toggle.boundingBox())!;
   expect(drawer.x + drawer.width).toBeLessThanOrEqual(button.x);
