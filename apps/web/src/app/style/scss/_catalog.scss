@@ -182,14 +182,32 @@
   }
 }
 
-// Results: as many ~280px cards as fit (1 on phones, 2 on tablets, 3 at
+// Results: as many 290px+ cards as fit (1 on phones, 2 on tablets, 3 at
 // 1280-1440px, 4 at 1920px). min() keeps a single column inside 320px.
 .rate-catalog-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(min(280px, 100%), 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(290px, 100%), 1fr));
   gap: 1rem;
 
   @media (min-width: 1200px) {
     gap: 1.25rem;
+  }
+
+  // Near the 290px minimum, longer copy (cs) must not overflow the card:
+  // the radar badge wraps, and the second button drops to its own row
+  // instead of breaking its label over two lines.
+  .rate-product-card-radar {
+    max-width: 100%;
+    white-space: normal;
+    text-align: left;
+  }
+
+  .rate-product-card-cta {
+    flex-wrap: wrap;
+
+    .btn {
+      flex: 1 1 auto;
+      white-space: nowrap;
+    }
   }
 }

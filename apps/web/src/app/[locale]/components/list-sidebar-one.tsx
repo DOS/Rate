@@ -349,14 +349,16 @@ export default function ListSidebarOne({
               <form className="search-inner" onSubmit={handleApplyForm}>
                 {/* 1. Keyword Search Box */}
                 <div className="filter-search-box mb-4">
-                  <div className="filtersearch-title d-flex justify-content-between align-items-center">
+                  {/* Wraps in the 280px sidebar: the badge drops under the
+                  title instead of squeezing it onto three lines (#1132). */}
+                  <div className="filtersearch-title d-flex justify-content-between align-items-center column-gap-2 flex-wrap">
                     <h3
                       id={keywordHeaderId}
-                      className="lh-base text-uppercase fw-medium mb-2 text-sm"
+                      className="lh-base text-uppercase fw-medium text-nowrap mb-2 text-sm"
                     >
                       {t('sidebar.keywordChipsetHeader')}
                     </h3>
-                    <span className="badge bg-light text-muted small border">
+                    <span className="badge bg-light text-muted small mb-2 border">
                       {schema.directoryName}
                     </span>
                   </div>
