@@ -953,58 +953,120 @@ function isUnscoredTrustViewRow(row: RawTrustViewRow): boolean {
 }
 
 /**
- * Follower counts for the unscored sellers among view rows; the view has
- * none and the baseline needs it (#685). Missing data leaves the count out.
+ * The view's DOSafe score, or null when it has none. The view reads 0 for a
+ * seller with no threat_intel row and no synced merchants.risk_score (column
+ * default 0): that is a missing score (#1099). threat_intel.source is NOT
+ * NULL, so any string, even a blank one, marks a joined row (#1108).
  */
-async function followerCountsForUnscoredSellers(
+function trustViewDosafeRisk(row: RawTrustViewRow): number | null {
+  const viewDosafeRisk = toOptionalRiskScore100(row.dosafe_risk_score);
+  return viewDosafeRisk === 0 && typeof row.threat_source !== 'string'
+    ? null
+    : viewDosafeRisk;
+}
+
+/** What the view lacks for its sellers, read from rate.merchants. */
+interface TrustViewSellerExtras {
+  /** Unscored sellers only: the baseline needs it (#685). */
+  followerCounts: Map<string, number>;
+  /** merchants.metadata.dosafe_risk_score for sellers the view has none for. */
+  metadataDosafeRisks: Map<string, number>;
+}
+
+/**
+ * Follower counts for the unscored sellers among view rows (#685) and the
+ * metadata DOSafe score for sellers with no view score (#1108). The view's
+ * metadata column is the product's, so both come from rate.merchants.
+ * Missing data leaves an entry out.
+ */
+async function sellerExtrasForTrustViewRows(
   rows: readonly RawTrustViewRow[]
-): Promise<Map<string, number>> {
-  const ids = Array.from(
-    new Set(
-      rows
-        .filter((row) => row.merchant_id && isUnscoredTrustViewRow(row))
-        .map((row) => row.merchant_id)
-    )
-  );
-  const counts = new Map<string, number>();
-  if (ids.length === 0) return counts;
+): Promise<TrustViewSellerExtras> {
+  const unscored = new Set<string>();
+  const noDosafe = new Set<string>();
+  for (const row of rows) {
+    if (!row.merchant_id) continue;
+    if (isUnscoredTrustViewRow(row)) unscored.add(row.merchant_id);
+    if (trustViewDosafeRisk(row) === null) noDosafe.add(row.merchant_id);
+  }
+  const extras: TrustViewSellerExtras = {
+    followerCounts: new Map(),
+    metadataDosafeRisks: new Map(),
+  };
+  const ids = Array.from(new Set([...unscored, ...noDosafe]));
+  if (ids.length === 0) return extras;
   try {
     const supabase = getRateClient();
-    for (let i = 0; i < ids.length; i += IN_FILTER_CHUNK_SIZE) {
+    const read = async (chunk: string[], select: string) => {
+      if (chunk.length === 0) return [];
       const { data, error } = await supabase
         .from('merchants')
-        .select('id, follower_count')
-        .in('id', ids.slice(i, i + IN_FILTER_CHUNK_SIZE));
-      if (error) return counts;
-      for (const m of (data ?? []) as Array<{
-        id: string;
-        follower_count: number | string | null;
-      }>) {
-        counts.set(m.id, Number(m.follower_count) || 0);
+        .select(select)
+        .in('id', chunk);
+      return error
+        ? null
+        : ((data ?? []) as unknown as Array<{
+            id: string;
+            follower_count: number | string | null;
+            metadata_dosafe_risk_score?: unknown;
+          }>);
+    };
+    let withMetadata = true;
+    for (let i = 0; i < ids.length; i += IN_FILTER_CHUNK_SIZE) {
+      const chunk = ids.slice(i, i + IN_FILTER_CHUNK_SIZE);
+      let rows = withMetadata
+        ? await read(
+            chunk,
+            'id, follower_count, metadata_dosafe_risk_score:metadata->dosafe_risk_score'
+          )
+        : null;
+      // A rejected metadata path must not cost unscored sellers their
+      // follower adjustment (#685): fall back to the columns #685 read.
+      if (!rows) {
+        withMetadata = false;
+        rows = await read(
+          chunk.filter((id) => unscored.has(id)),
+          'id, follower_count'
+        );
+      }
+      if (!rows) return extras;
+      for (const m of rows) {
+        if (unscored.has(m.id)) {
+          extras.followerCounts.set(m.id, Number(m.follower_count) || 0);
+        }
+        // Numbers only, as mapOfferRowToMerchantOffer reads metadata.
+        const metaRisk =
+          typeof m.metadata_dosafe_risk_score === 'number'
+            ? toOptionalRiskScore100(m.metadata_dosafe_risk_score)
+            : null;
+        if (noDosafe.has(m.id) && metaRisk !== null) {
+          extras.metadataDosafeRisks.set(m.id, metaRisk);
+        }
       }
     }
   } catch {
-    // The baseline without the follower adjustment is still a valid number.
+    // Without them the baseline and a missing DOSafe score still render.
   }
-  return counts;
+  return extras;
 }
 
 export function mapTrustViewRowToMerchantOffer(
   row: RawTrustViewRow,
-  followerCount?: number
+  followerCount?: number,
+  metadataDosafeRisk?: number | null
 ): MerchantOffer {
   const safeRow =
     row && typeof row === 'object' && !Array.isArray(row)
       ? row
       : ({} as RawTrustViewRow);
   const combinedRisk = toSafeRiskScore100(safeRow.threat_risk_score, 0);
-  // The view reads 0 for a seller with no threat_intel row and no synced
-  // merchants.risk_score (column default 0): that is a missing score (#1099).
-  const viewDosafeRisk = toOptionalRiskScore100(safeRow.dosafe_risk_score);
+  // merchants.metadata only fills a missing view score, as on the fallback
+  // path where metadata is read when no column score exists (#1108).
   const dosafeRisk =
-    viewDosafeRisk === 0 && !sanitizeOfferString(safeRow.threat_source)
-      ? null
-      : viewDosafeRisk;
+    trustViewDosafeRisk(safeRow) ??
+    (typeof metadataDosafeRisk === 'number'
+      ? toOptionalRiskScore100(metadataDosafeRisk)
+      : null);
   const persistedReviewRisk = toSafeRiskScore100(safeRow.review_risk_score, 0);
   const isOfficial = isStrictOfferOfficialFlag(safeRow.merchant_is_official);
   const hasSeller = sanitizeOfferString(safeRow.merchant_id) !== '';
@@ -1239,9 +1301,13 @@ export async function getMasterProductOffers(
   ).catch(() => null);
   if (viewRows) {
     const rows = viewRows as unknown as RawTrustViewRow[];
-    const followers = await followerCountsForUnscoredSellers(rows);
+    const extras = await sellerExtrasForTrustViewRows(rows);
     return rows.map((row) =>
-      mapTrustViewRowToMerchantOffer(row, followers.get(row.merchant_id))
+      mapTrustViewRowToMerchantOffer(
+        row,
+        extras.followerCounts.get(row.merchant_id),
+        extras.metadataDosafeRisks.get(row.merchant_id)
+      )
     );
   }
 
@@ -1299,13 +1365,17 @@ export async function getMasterProductOffersBatch(
 
     if (viewData) {
       const rows = viewData as unknown as RawTrustViewRow[];
-      const followers = await followerCountsForUnscoredSellers(rows);
+      const extras = await sellerExtrasForTrustViewRows(rows);
       for (const row of rows) {
         const cid = row.cluster_id ? String(row.cluster_id) : '';
         if (!cid) continue;
         const list = offersByMaster.get(cid) ?? [];
         list.push(
-          mapTrustViewRowToMerchantOffer(row, followers.get(row.merchant_id))
+          mapTrustViewRowToMerchantOffer(
+            row,
+            extras.followerCounts.get(row.merchant_id),
+            extras.metadataDosafeRisks.get(row.merchant_id)
+          )
         );
         offersByMaster.set(cid, list);
       }

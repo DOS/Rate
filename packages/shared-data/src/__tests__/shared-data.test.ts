@@ -694,6 +694,79 @@ function testPriceRules(): void {
   ]) {
     assert.equal(rules.minimumListingPriceVnd([title]), 400_000, title);
   }
+  // Glued tiers and a glued brand are earbuds; over-ear WH- headphones and
+  // other devices keep the device floor (DOS/Rate#1116).
+  for (const title of [
+    'Samsung Galaxy BudsPro3',
+    'Samsung Galaxy Buds Pro 3',
+    'Huawei FreeBudsPro4',
+    'Huawei FreeBuds5i',
+    'Huawei FreeBuds 5i',
+    'SamsungGalaxyBuds3',
+    'Galaxy Buds3 Pro',
+    'Galaxy Buds2Pro',
+    'Sony WF-1000XM5',
+    'Apple AirPods Pro 2',
+    'AirPodsPro',
+    'samsung:galaxy-buds3-pro:unknown',
+  ]) {
+    assert.equal(rules.minimumListingPriceVnd([title]), 400_000, title);
+  }
+  for (const title of [
+    'Sony WH-1000XM5',
+    'Sony WH-CH720N',
+    'Samsung Galaxy S24',
+    'Galaxy Watch7',
+    'Samsung Galaxy Z Flip',
+    'Buddha statue',
+    'sony:wh-1000xm5:unknown',
+  ]) {
+    assert.equal(rules.minimumListingPriceVnd([title]), 1_200_000, title);
+  }
+  // Any brand glued to the name, two glued tiers and a digit after "Pro" are
+  // earbuds; an over-ear title stays a device even with "tai nghe" in it
+  // (DOS/Rate#1125).
+  for (const title of [
+    'PixelBudsPro2',
+    'Google PixelBudsPro2',
+    'HuaweiFreeBudsPro4',
+    'HuaweiFreeBuds5i',
+    'SonyWF1000XM5',
+    'SonyWF-1000XM5',
+    'AirPodsPro2',
+    'Apple AirPodsPro2',
+    'Buds3ProFE',
+    'Samsung Galaxy Buds3ProFE',
+    'XiaomiRedmiBuds5Pro',
+    'SamsungBuds3',
+    'OppoEncoBuds2',
+    'pin 0.5Wh tai nghe',
+  ]) {
+    assert.equal(rules.minimumListingPriceVnd([title]), 400_000, title);
+  }
+  for (const title of [
+    'Tai nghe Sony WH-1000XM5',
+    'Tai nghe chụp tai Sony WH1000XM4',
+    'Tai nghe Bluetooth Sony WH-CH720N',
+    'SonyWH-XB910N tai nghe',
+    'Tai nghe Sony WH 1000XM5',
+    'Sony_WH-1000XM5 tai nghe',
+    'Tai nghe Sony WH-L600',
+    'Tai nghe Sony WH-RF400',
+    'https://repairpods.vn/iphone-16',
+    'https://shop.vn/tai-nghe-sony-wh-1000xm5',
+    'Which phone',
+  ]) {
+    assert.equal(rules.minimumListingPriceVnd([title]), 1_200_000, title);
+  }
+  assert.equal(
+    rules.minimumListingPriceVnd([
+      'Tai nghe Sony WH-1000XM5',
+      'https://shop.vn/tai-nghe-sony',
+    ]),
+    1_200_000,
+    'an over-ear title wins over "tai-nghe" in the URL'
+  );
   assert.equal(
     rules.minimumListingPriceVnd(['galaxy buds+']),
     400_000,

@@ -1089,6 +1089,74 @@ function isProductCodeToken(token: string): boolean {
     );
 }
 
+// Screen sizes an Apple line is sold in. A bare number counts only on its own: not in a
+// part code ("Z15S"), after "RAM" or an OS name ("macOS 14"), or before a storage, a
+// RAM/ROM pair or a core count ("16GB", "16G", "16/512", "16-core", "16 nhân CPU").
+// Titles carry single spaces, so each gap is one optional space (CodeQL
+// js/polynomial-redos).
+const SIZE_NOT_PRECEDED_BY = String.raw`(?<![\d.,a-z])(?<!(?:ram|os) )`;
+const SIZE_NOT_FOLLOWED_BY = String.raw`(?![.,]?\d|[a-z]| ?(?:gb?\b|tb?\b|th\b|gen|mm|w\b|h\b|\/|-? ?(?:core|nhân|lõi)|cpu|gpu|tiếng|giờ))`;
+const SIZE_MARKER = String.raw` ?(?:-? ?inch|in\b|"|''|”|″)`;
+const IPAD_SIZE = String.raw`(11|12[.,]9|13)(?:[.,]0)?`;
+const MACBOOK_AIR_SIZE = String.raw`(13|15)(?:[.,]\d)?`;
+const MACBOOK_PRO_SIZE = String.raw`(1[3-6])(?:[.,]\d)?`;
+const sizePatterns = (size: string): [RegExp, RegExp] => [
+  new RegExp(String.raw`(?<![\d.,])` + size + SIZE_MARKER, 'i'),
+  new RegExp(SIZE_NOT_PRECEDED_BY + size + SIZE_NOT_FOLLOWED_BY, 'i'),
+];
+const WATCH_BAND_WORD =
+  /(?<!kh[\p{L}\p{M}]{1,3}ng )(?:d(?:\u00e2|a\u0302)y|band|strap|loop|bracelet)(?![\p{L}\d])/iu;
+const WATCH_SIZE = /(?<!\d)(38|4[0-2]|4[4-6]) ?mm\b/i;
+const APPLE_SIZE_PATTERNS: Record<string, [RegExp, RegExp]> = {
+  ipad: sizePatterns(IPAD_SIZE),
+  'macbook air': sizePatterns(MACBOOK_AIR_SIZE),
+  'macbook pro': sizePatterns(MACBOOK_PRO_SIZE),
+};
+
+/**
+ * The size of an Apple line sold in more than one: "11", "12.9" or "13" for an iPad Pro
+ * or Air, "13" or "15" for a MacBook Air, "13" to "16" for a MacBook Pro, "42mm" or
+ * "46mm" for a Watch Series or SE. Read from the product's own part of the title, after
+ * its family word and before a "cho/for" accessory phrase or a "+" bundle; a size with
+ * "inch" wins over
+ * a bare number (DOS/Rate#1113).
+ */
+function readAppleSize(model: string, title: string): string {
+  const family = /^ipad (?:pro|air)\b/i.test(model)
+    ? 'ipad'
+    : /^macbook air\b/i.test(model)
+      ? 'macbook air'
+      : /^macbook pro\b/i.test(model)
+        ? 'macbook pro'
+        : /^watch (?:series|se\d?)\b/i.test(model)
+          ? 'watch'
+          : '';
+  if (!family) return '';
+  const at = title.search(new RegExp(`\\b${family.split(' ')[0]}\\b`, 'i'));
+  // A bundle's "+ bàn phím 11 inch" is another product; "GPS + Cellular" is the watch.
+  const own = title.slice(Math.max(0, at)).split(/ (?:cho|for) | ?\+ (?!cellular|lte)/i)[0]!;
+  if (family === 'watch') {
+    // A size outside a band phrase ("dây", "band", "strap", "loop" or "bracelet" up to the
+    // next ")", ",", "|", ";", en dash or " - ") is the case's. A band is sold by the case
+    // it fits ("Dây Cao Su 46mm"), so a band's size counts only when the title names no
+    // other: "dây Sport Band 45mm cho mặt 42mm" does not tell the watch's (DOS/Rate#1124).
+    const caseSize = own
+      .split(/[),|;\u2013]| - /)
+      .map(part => part.split(WATCH_BAND_WORD)[0])
+      .join(' ')
+      .match(WATCH_SIZE)?.[1];
+    if (caseSize) return `${caseSize}mm`;
+    const bandSize = own.match(WATCH_SIZE)?.[1];
+    const sizes = new Set(
+      [...title.slice(Math.max(0, at)).matchAll(new RegExp(WATCH_SIZE, 'gi'))].map(m => m[1])
+    );
+    return bandSize && sizes.size === 1 ? `${bandSize}mm` : '';
+  }
+  const [marked, bare] = APPLE_SIZE_PATTERNS[family]!;
+  const size = (own.match(marked) ?? own.match(bare))?.[1];
+  return size ? size.replace(',', '.') : '';
+}
+
 function slugify(text: string): string {
   return (
     String(text ?? '')
@@ -1162,6 +1230,7 @@ export class ProductNormalizer {
 
     // 2. Extract Model
     let model = '';
+    let appleSize = '';
     // Spellings that split a tier word from its model number read like the joined ones
     // (DOS/Rate#1090). `title` has single spaces, so each gap is one optional space.
     // Each rewrite applies only where the name ends right after it: the title ends, or a
@@ -1354,6 +1423,12 @@ export class ProductNormalizer {
           // Retailers name an Apple TV 4K or HomePod by its year as often as by its generation.
           model = `${model} ${APPLE_GENERATION_BY_YEAR[`${model} ${generation[1]}`] ?? generation[1]}`;
       }
+      // A line Apple sells in more than one size keys each size apart: the 11 and 13 inch
+      // iPad Pro, or the 42 and 46mm Watch Series, are two products at two prices. A title
+      // without its size keeps the size-less key, and one-size lines (Watch Ultra 49mm,
+      // iPad mini, MacBook Neo) never carry one (DOS/Rate#1113).
+      appleSize = readAppleSize(model, appleTitle);
+      if (appleSize) model = `${model} ${appleSize}`;
     } else if (brand === 'Sony' && /w([fh])-?1000xm(\d+)/i.test(modelTitle)) {
       // "WF1000XM5" without the hyphen is the same model (DOS/Rate#815).
       const m = modelTitle.match(/w([fh])-?1000xm(\d+)/i);
@@ -1529,8 +1604,12 @@ export class ProductNormalizer {
     );
 
     const baseKey = `${slugify(brand)}:${slugify(model)}`;
-    const benchmark = Object.hasOwn(CANONICAL_PHONE_REGISTRY, baseKey)
-      ? CANONICAL_PHONE_REGISTRY[baseKey]
+    // The registry holds one entry per line, not per size.
+    const registryKey = appleSize
+      ? `${slugify(brand)}:${slugify(model.slice(0, -appleSize.length))}`
+      : baseKey;
+    const benchmark = Object.hasOwn(CANONICAL_PHONE_REGISTRY, registryKey)
+      ? CANONICAL_PHONE_REGISTRY[registryKey]
       : undefined;
 
     const toValidStorageGb = (val: number): number | null =>
@@ -1652,9 +1731,20 @@ export class ProductNormalizer {
       categorySlug === 'earbuds' || categorySlug === 'smartwatches'
         ? null
         : (validClaimedRam ?? benchmark?.ram_gb ?? null);
+    // The registry describes one size of a line: its screen and battery do not describe
+    // the other size ("iPad Pro M4 13" is not the 11 inch entry) (DOS/Rate#1113).
+    const appleInches = appleSize && !appleSize.endsWith('mm') ? parseFloat(appleSize) : null;
+    const benchmarkSized =
+      benchmark &&
+      (appleInches === null ||
+        Math.floor(benchmark.screen_size_inch ?? NaN) === Math.floor(appleInches))
+        ? benchmark
+        : undefined;
     const screenSize =
-      categorySlug === 'earbuds' ? null : (benchmark?.screen_size_inch ?? titleScreenSize);
-    const batteryMah = benchmark ? benchmark.battery_mah : null;
+      categorySlug === 'earbuds'
+        ? null
+        : (benchmarkSized?.screen_size_inch ?? titleScreenSize ?? appleInches);
+    const batteryMah = benchmarkSized ? benchmarkSized.battery_mah : null;
     const has5g = benchmark
       ? benchmark.has_5g
       : categorySlug === 'smartphones' || /\b5g\b/i.test(title);
