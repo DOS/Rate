@@ -38,6 +38,15 @@ export function sanitizeShareAuditText(
     .slice(0, maxLength);
 }
 
+// Markdown code spans cannot escape a backtick, so one in the text would end
+// the span early; a straight quote keeps the value readable (#1099).
+export function sanitizeShareAuditCodeSpan(
+  value: unknown,
+  maxLength = 200
+): string {
+  return sanitizeShareAuditText(value, maxLength).replace(/`/g, "'");
+}
+
 export function normalizeShareAuditFields(input: {
   readonly modelKey: string;
   readonly userScore5: number;
@@ -76,8 +85,9 @@ export function normalizeShareAuditFields(input: {
       .toLowerCase()
       .replace(/[^a-z0-9_-]+/g, '-')
       .replace(/-+/g, '-')
+      .replace(/^-+/, '')
       .slice(0, 80)
-      .replace(/^-+|-+$/g, '') || 'audit';
+      .replace(/-+$/, '') || 'audit';
 
   return {
     safeUserScore5,
@@ -160,7 +170,9 @@ export default function ProductShareAuditButton({
         ...(radarSignal
           ? [t('shareAuditMdRadar', { signal: radarLabel(radarSignal) })]
           : []),
-        t('shareAuditMdModelKey', { modelKey: safeModelKey }),
+        t('shareAuditMdModelKey', {
+          modelKey: sanitizeShareAuditCodeSpan(modelKey, 120),
+        }),
         t('shareAuditMdUrl', { url: window.location.href }),
       ];
       await navigator.clipboard.writeText(lines.join('\n'));

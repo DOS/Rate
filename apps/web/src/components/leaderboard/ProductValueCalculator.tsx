@@ -38,8 +38,9 @@ export function sanitizeValueCalcFileToken(value: unknown): string {
     .toLowerCase()
     .replace(/[^a-z0-9_-]+/g, '-')
     .replace(/-+/g, '-')
+    .replace(/^-+/, '')
     .slice(0, 80)
-    .replace(/^-+|-+$/g, '');
+    .replace(/-+$/, '');
   return cleaned || 'devices';
 }
 

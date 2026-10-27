@@ -169,8 +169,10 @@ export interface MerchantOffer {
     follower_count: number;
     location: string | null;
     risk_score: number;
-    dosafe_risk_score: number;
-    review_risk_score: number;
+    /** `null` when no DOSafe or combined score is stored (#1099). */
+    dosafe_risk_score: number | null;
+    /** `null` only for an offer with no seller; else stored or baseline (#685). */
+    review_risk_score: number | null;
     review_risk_breakdown: Record<string, unknown> | null;
   };
 }
@@ -892,6 +894,14 @@ function toSafeRiskScore100(raw: unknown, fallback = 0): number {
   return Math.max(0, Math.min(100, num));
 }
 
+/** A clamped 0-100 score, or `null` when the value is missing or not a number. */
+function toOptionalRiskScore100(raw: unknown): number | null {
+  if (typeof raw !== 'number' && typeof raw !== 'string') return null;
+  if (typeof raw === 'string' && raw.trim() === '') return null;
+  const num = Number(raw);
+  return Number.isFinite(num) ? Math.max(0, Math.min(100, num)) : null;
+}
+
 function toSafeOfferPrice(raw: unknown): number {
   if (typeof raw !== 'number' && typeof raw !== 'string') return 0;
   const num = Number(raw);
@@ -987,21 +997,24 @@ export function mapTrustViewRowToMerchantOffer(
       ? row
       : ({} as RawTrustViewRow);
   const combinedRisk = toSafeRiskScore100(safeRow.threat_risk_score, 0);
-  const dosafeRisk = toSafeRiskScore100(
-    safeRow.dosafe_risk_score,
-    combinedRisk
-  );
+  // Without a DOSafe or combined score the DOSafe risk is missing, not 0 (#1099).
+  const dosafeRisk =
+    toOptionalRiskScore100(safeRow.dosafe_risk_score) ??
+    toOptionalRiskScore100(safeRow.threat_risk_score);
   const persistedReviewRisk = toSafeRiskScore100(safeRow.review_risk_score, 0);
   const isOfficial = isStrictOfferOfficialFlag(safeRow.merchant_is_official);
+  const hasSeller = sanitizeOfferString(safeRow.merchant_id) !== '';
   // The view reads 0 for a seller the importer never scored; use the same
   // baseline as the merchant pages (#685).
-  const reviewRisk = isUnscoredTrustViewRow(safeRow)
-    ? baselineReviewRisk({
-        isOfficial,
-        platform: safeRow.platform,
-        followerCount,
-      })
-    : persistedReviewRisk;
+  const reviewRisk = !isUnscoredTrustViewRow(safeRow)
+    ? persistedReviewRisk
+    : hasSeller
+      ? baselineReviewRisk({
+          isOfficial,
+          platform: safeRow.platform,
+          followerCount,
+        })
+      : null;
   const priceCurrent = toSafeOfferPrice(safeRow.price_current);
   const cleanPlatform = sanitizeOfferString(safeRow.platform).toLowerCase();
   const cleanLocation = sanitizeOfferString(safeRow.merchant_location);
@@ -1032,7 +1045,7 @@ export function mapTrustViewRowToMerchantOffer(
       rating_star: null,
       follower_count: toSafeNonNegativeVoteCount(followerCount, 100_000_000),
       location: cleanLocation || null,
-      risk_score: Math.max(combinedRisk, dosafeRisk, reviewRisk),
+      risk_score: Math.max(combinedRisk, dosafeRisk ?? 0, reviewRisk ?? 0),
       dosafe_risk_score: dosafeRisk,
       review_risk_score: reviewRisk,
       review_risk_breakdown: safeBreakdown,
@@ -1062,34 +1075,44 @@ export function mapOfferRowToMerchantOffer(item: RawOfferRow): MerchantOffer {
       : null;
   const isOfficial = isStrictOfferOfficialFlag(merchantObj?.is_official);
   const baseRisk = toSafeRiskScore100(merchantObj?.risk_score, 0);
+  // Column, then metadata, then the combined score; none of them is a missing
+  // DOSafe risk, not 0 (#1099).
   const dosafeRisk =
-    merchantObj?.dosafe_risk_score != null
-      ? toSafeRiskScore100(merchantObj.dosafe_risk_score, baseRisk)
-      : typeof meta?.dosafe_risk_score === 'number'
-        ? toSafeRiskScore100(meta.dosafe_risk_score, baseRisk)
-        : baseRisk;
+    toOptionalRiskScore100(merchantObj?.dosafe_risk_score) ??
+    (typeof meta?.dosafe_risk_score === 'number'
+      ? toOptionalRiskScore100(meta.dosafe_risk_score)
+      : null) ??
+    toOptionalRiskScore100(merchantObj?.risk_score);
   // Without a stored score (column, then metadata) the seller gets the merchant
   // pages' baseline (#685). A never-scored column (0 / {}) is not a score.
   const columnReviewRisk = toSafeRiskScore100(
     merchantObj?.review_risk_score,
     0
   );
+  // An offer with no merchant row has no seller to give a baseline (#1099).
   const reviewRisk =
     merchantObj?.review_risk_score != null &&
     hasPersistedReviewRisk(columnReviewRisk, merchantObj.review_risk_breakdown)
       ? columnReviewRisk
       : typeof meta?.review_risk_score === 'number'
         ? toSafeRiskScore100(meta.review_risk_score, 0)
-        : baselineReviewRisk({
-            isOfficial,
-            platform: merchantObj?.platform ?? safeItem.platform,
-            followerCount: Number(merchantObj?.follower_count) || 0,
-          });
+        : merchantObj
+          ? baselineReviewRisk({
+              isOfficial,
+              platform: merchantObj.platform ?? safeItem.platform,
+              followerCount: Number(merchantObj.follower_count) || 0,
+            })
+          : null;
   const metaCombined =
     typeof meta?.combined_risk_score === 'number'
       ? toSafeRiskScore100(meta.combined_risk_score, 0)
       : 0;
-  const combinedRisk = Math.max(baseRisk, dosafeRisk, reviewRisk, metaCombined);
+  const combinedRisk = Math.max(
+    baseRisk,
+    dosafeRisk ?? 0,
+    reviewRisk ?? 0,
+    metaCombined
+  );
   const topLevelBreakdown =
     merchantObj?.review_risk_breakdown &&
     typeof merchantObj.review_risk_breakdown === 'object' &&
