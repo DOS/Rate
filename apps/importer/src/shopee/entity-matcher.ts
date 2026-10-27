@@ -4,6 +4,7 @@ import {
   type CanonicalCategorySlug,
   type NormalizedProductCandidate,
 } from './product-normalizer.js';
+import { applyCategorySpecTemplate } from '@repo/shared-data/rules';
 import { AiSpecEnricher, mergeProductSpecifications } from './ai-spec-enricher.js';
 import { mergeKeySpecs } from './jobs/backfill-specs.js';
 import { createImporterLogger } from './logger.js';
@@ -298,7 +299,9 @@ export class EntityMatcher {
         .replace(/[^a-z0-9-]+/gi, '-')
         .toLowerCase()
         .slice(0, 300);
-    const baseInsertRow = {
+    // Only the spec fields the category has: no screen or RAM on earbuds, no
+    // 5G on a watch (DOS/Rate#1142).
+    const baseInsertRow = applyCategorySpecTemplate(candidate.category_slug, {
       category_id: safeCategoryId || null,
       brand:
         String(candidate.brand ?? '')
@@ -345,7 +348,7 @@ export class EntityMatcher {
       thumbnail: safeImages[0] || null,
       colors: safeColors,
       status: seedStatus,
-    };
+    });
 
     let { data: createdRows, error: createErr } = await this.supabase
       .from('master_products')
@@ -525,19 +528,24 @@ export class EntityMatcher {
 
     const { error: updateErr } = await this.supabase
       .from('master_products')
-      .update({
-        ram_gb: existingRamGb ?? toBoundedPositiveInt(aiResult.ram_gb, MAX_RAM_GB),
-        storage_gb: existingStorageGb ?? toBoundedPositiveInt(aiResult.storage_gb, MAX_STORAGE_GB),
-        screen_size_inch:
-          existingScreenInch ??
-          toBoundedPositiveNumber(aiResult.screen_size_inch, MAX_SCREEN_SIZE_INCH),
-        battery_mah:
-          existingBatteryMah ?? toBoundedPositiveInt(aiResult.battery_mah, MAX_BATTERY_MAH),
-        has_5g: isStrictBoolean(row.has_5g) ? true : isStrictBoolean(aiResult.has_5g ?? row.has_5g),
-        specifications: mergedSpecifications,
-        key_specs: mergedKeySpecs,
-        updated_at: new Date().toISOString(),
-      })
+      .update(
+        applyCategorySpecTemplate(inferredCategorySlug, {
+          ram_gb: existingRamGb ?? toBoundedPositiveInt(aiResult.ram_gb, MAX_RAM_GB),
+          storage_gb:
+            existingStorageGb ?? toBoundedPositiveInt(aiResult.storage_gb, MAX_STORAGE_GB),
+          screen_size_inch:
+            existingScreenInch ??
+            toBoundedPositiveNumber(aiResult.screen_size_inch, MAX_SCREEN_SIZE_INCH),
+          battery_mah:
+            existingBatteryMah ?? toBoundedPositiveInt(aiResult.battery_mah, MAX_BATTERY_MAH),
+          has_5g: isStrictBoolean(row.has_5g)
+            ? true
+            : isStrictBoolean(aiResult.has_5g ?? row.has_5g),
+          specifications: mergedSpecifications,
+          key_specs: mergedKeySpecs,
+          updated_at: new Date().toISOString(),
+        })
+      )
       .eq('id', safeMasterId);
 
     if (updateErr) {

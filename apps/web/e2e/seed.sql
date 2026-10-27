@@ -164,6 +164,22 @@ FROM generate_series(1, 201) AS g;
 UPDATE rate.master_products SET user_rating_weighted = 4
 WHERE slug LIKE 'e2e-bud-%';
 
+-- One bud stored with phone-shaped specs, as the AI enricher wrote them for
+-- real earbuds: a 1 inch screen, 1GB RAM, 64GB ROM, microphones as cameras and
+-- a 5G flag. Its page and card must show none of them (DOS/Rate#1142).
+UPDATE rate.master_products
+SET ram_gb = 1, storage_gb = 64, screen_size_inch = 1, has_5g = true,
+  specifications = '{"category_slug": "earbuds",
+    "display": {"size_inch": 1, "refresh_rate_hz": 60, "ppi": 300},
+    "hardware": {"ram_gb": 1, "storage_gb": 64, "gpu": "E2E Audio Engine"},
+    "camera": {"main_camera": "E2E Mic Array"},
+    "cellular": {"has_5g": true},
+    "battery": {"capacity_mah": 515},
+    "multimedia": {"loudspeaker": "E2E 10.5mm driver", "audio_features": "E2E ANC"},
+    "connectivity": {"bluetooth": "5.4"}}',
+  key_specs = '{"screen": "1 inch", "camera": "E2E Mic Array", "ram": "1GB", "storage": "64GB", "battery": "515 mAh"}'
+WHERE slug = 'e2e-bud-002';
+
 -- A phone whose six 5-star reviews are mostly star-only, one of them a
 -- sponsored post: the product page shows the star-distribution warning and a
 -- disclosure badge, which must follow the active locale (DOS/Rate#566). Its

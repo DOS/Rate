@@ -675,6 +675,119 @@ async function runEntityMatcherSuite() {
   assert.equal(ctrlEntry.platform, 'shopee');
   assert.equal(ctrlEntry.event, 'evt name');
   console.log('  ✅ [9/9] DOS/Rate#876 EntityMatcher & Logger control-char/boolean bounds passed');
+
+  // 10. DOS/Rate#1142: masters keep only the spec fields their category has.
+  const enrichByCategory = async (
+    row: Record<string, unknown>,
+    aiResult: Record<string, unknown>
+  ): Promise<Record<string, unknown> | undefined> => {
+    let updated: Record<string, unknown> | undefined;
+    const db = {
+      from() {
+        return {
+          select: () => ({
+            eq: () => ({ maybeSingle: async () => ({ data: row, error: null }) }),
+          }),
+          update(payload: Record<string, unknown>) {
+            updated = payload;
+            return { eq: async () => ({ error: null }) };
+          },
+        };
+      },
+    } as unknown as RateSupabaseClient;
+    const enricher = { fetchSpecsFromAi: async () => aiResult } as unknown as AiSpecEnricher;
+    assert.equal(
+      await new EntityMatcher(db, enricher).enrichMasterProductById(String(row.id)),
+      true
+    );
+    return updated;
+  };
+  const phoneShapedAi = {
+    ram_gb: 1,
+    storage_gb: 64,
+    screen_size_inch: 1,
+    battery_mah: 515,
+    has_5g: true,
+    specifications: {
+      display: { size_inch: 1, refresh_rate_hz: 60, ppi: 300 },
+      hardware: { ram_gb: 1, storage_gb: 64, chipset: 'BES2700' },
+      camera: { main_camera: '3 High-SNR Microphones' },
+      cellular: { has_5g: true, bands_5g: 'n78', bands_4g: 'LTE' },
+      battery: { capacity_mah: 515 },
+      multimedia: { audio_features: 'ANC, LDAC' },
+      connectivity: { bluetooth: '5.4', wlan: 'Auto Switch' },
+    },
+    key_specs: { screen: '1"', camera: 'Mic', ram: '1GB', storage: '64GB', battery: '515 mAh' },
+  };
+  const budsRow = await enrichByCategory(
+    {
+      id: 'buds-1142',
+      brand: 'Samsung',
+      model: 'Galaxy Buds3 Pro',
+      name: 'Samsung Galaxy Buds3 Pro',
+      ram_gb: 1,
+      storage_gb: 64,
+      screen_size_inch: 1,
+      has_5g: false,
+      specifications: { category_slug: 'earbuds', display: { size_inch: 1 } },
+      key_specs: { ram: '1GB' },
+    },
+    phoneShapedAi
+  );
+  assert.equal(budsRow?.ram_gb, null, 'earbuds keep no RAM, even one stored before');
+  assert.equal(budsRow?.storage_gb, null);
+  assert.equal(budsRow?.screen_size_inch, null);
+  assert.equal(budsRow?.has_5g, false);
+  assert.equal(budsRow?.battery_mah, 515);
+  const budsSpecs = budsRow?.specifications as Record<string, Record<string, unknown>>;
+  assert.equal(budsSpecs.display, undefined);
+  assert.equal(budsSpecs.hardware, undefined);
+  assert.equal(budsSpecs.camera, undefined);
+  assert.equal(budsSpecs.cellular, undefined);
+  assert.equal(budsSpecs.connectivity?.wlan, undefined);
+  assert.equal(budsSpecs.connectivity?.bluetooth, '5.4');
+  assert.equal(budsSpecs.multimedia?.audio_features, 'ANC, LDAC');
+  assert.equal(budsSpecs.category_slug, 'earbuds');
+  assert.deepEqual(budsRow?.key_specs, { battery: '515 mAh' });
+
+  const watchRow = await enrichByCategory(
+    {
+      id: 'watch-1142',
+      brand: 'Apple',
+      model: 'Watch Ultra 2',
+      name: 'Apple Watch Ultra 2 64GB',
+      storage_gb: 64,
+      has_5g: true,
+      specifications: { category_slug: 'smartwatches' },
+      key_specs: {},
+    },
+    phoneShapedAi
+  );
+  assert.equal(watchRow?.has_5g, false, 'a stored 5G flag on a watch is cleared');
+  assert.equal(watchRow?.storage_gb, 64);
+  const watchSpecs = watchRow?.specifications as Record<string, Record<string, unknown>>;
+  assert.equal(watchSpecs.camera, undefined);
+  assert.equal(watchSpecs.cellular?.has_5g, undefined);
+  assert.equal(watchSpecs.cellular?.bands_5g, undefined);
+  assert.equal(watchSpecs.cellular?.bands_4g, 'LTE');
+  assert.equal(watchSpecs.display?.size_inch, 1);
+
+  const budsInsertDb = createMockSupabase();
+  await new EntityMatcher(budsInsertDb.client, offlineEnricher).resolveOrCreateMasterProduct({
+    ...s24New,
+    model_key: 'samsung:galaxy-buds3-pro',
+    category_slug: 'earbuds',
+    ram_gb: 1,
+    storage_gb: 64,
+    screen_size_inch: 1,
+    has_5g: true,
+  });
+  const budsInsert = budsInsertDb.capturedUpserts[0]?.payload;
+  assert.equal(budsInsert?.ram_gb, null);
+  assert.equal(budsInsert?.storage_gb, null);
+  assert.equal(budsInsert?.screen_size_inch, null);
+  assert.equal(budsInsert?.has_5g, false);
+  console.log('  ✅ [10/10] DOS/Rate#1142 category spec templates on master writes passed');
   console.log('🎉 All EntityMatcher & Open-Core Audit C6/C8/T15/Low tests passed!');
 }
 

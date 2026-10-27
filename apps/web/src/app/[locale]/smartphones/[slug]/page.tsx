@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { Fragment, type ReactNode } from 'react';
 import { getTranslations, setRequestLocale } from 'next-intl/server';
 import { Link } from '@/lib/navigation';
 import { notFound } from 'next/navigation';
@@ -54,7 +55,12 @@ import PageShell from '../../components/page-shell';
 import type { KeySpecs, ProductSpecifications } from '@repo/shared-data';
 
 import { normalizeRateLocale } from '@/lib/rate-i18n';
-import { getSpecUiDictionary, localizeSpecValue } from '@/lib/spec-localizer';
+import {
+  getSpecUiDictionary,
+  localizeSpecValue,
+  specGroupHeading,
+  specSectionBadge,
+} from '@/lib/spec-localizer';
 import { contentLang } from '@/lib/content-lang';
 import ContentText from '@/components/elementary/ContentText';
 import {
@@ -67,7 +73,13 @@ import ProductValueCalculator from '@/components/leaderboard/ProductValueCalcula
 import ProductOffersExplorer from '@/components/leaderboard/ProductOffersExplorer';
 import ProductSpecsExportToolbar from '@/components/leaderboard/ProductSpecsExportToolbar';
 import ClientMessages from '@/components/providers/ClientMessages';
-import { plausibleMinPrice } from '@repo/shared-data/rules';
+import {
+  applyCategorySpecTemplate,
+  getCategorySpecTemplate,
+  plausibleMinPrice,
+  specFieldApplies,
+  type SpecGroupKey,
+} from '@repo/shared-data/rules';
 import {
   firstImageUrl,
   usableImageUrls,
@@ -154,17 +166,21 @@ export async function ProductDetailView({
 }) {
   const { locale, slug } = await params;
   setRequestLocale(locale);
-  const [t, tNav, product] = await Promise.all([
+  const [t, tNav, storedProduct] = await Promise.all([
     getTranslations({ locale, namespace: 'productDetail' }),
     getTranslations({ locale, namespace: 'rate.nav' }),
     getCachedMasterProductBySlug(slug),
   ]);
 
-  if (!product) {
+  if (!storedProduct) {
     notFound();
   }
 
   const categorySlug = categoryBasePath.replace(/^\//, '') || 'smartphones';
+  // Each category shows only the spec groups and fields it has: earbuds have
+  // no screen, RAM or camera, watches no 5G (DOS/Rate#1142).
+  const specTemplate = getCategorySpecTemplate(categorySlug);
+  const product = applyCategorySpecTemplate(categorySlug, storedProduct);
   const localizedCategoryLabel =
     categorySlug === 'smartphones' ||
     categorySlug === 'laptops' ||
@@ -173,8 +189,8 @@ export async function ProductDetailView({
     categorySlug === 'earbuds'
       ? tNav(categorySlug)
       : categoryLabel;
-  const [offers, reviews, categoryPeers, categoryDealRadar] = await Promise.all(
-    [
+  const [offers, reviews, storedCategoryPeers, categoryDealRadar] =
+    await Promise.all([
       getCachedMasterProductOffers(product.id),
       getCachedMasterProductReviews(product.id),
       // No fallbacks: this page is cached, so an empty fallback would be
@@ -185,7 +201,9 @@ export async function ProductDetailView({
         categorySlug: categorySlug as CanonicalCategorySlug,
         limit: 50,
       }),
-    ]
+    ]);
+  const categoryPeers = storedCategoryPeers.map((peer) =>
+    applyCategorySpecTemplate(categorySlug, peer)
   );
   const [reviewSummary, priceHistory] = await Promise.all([
     getCachedMasterProductReviewSummary(product.id, reviews),
@@ -752,46 +770,51 @@ export async function ProductDetailView({
                     </div>
                   </div>
                 </div>
-                <div className="col-sm-4 col-6">
-                  <div className="bg-light rounded-3 h-100 border p-3">
-                    <div className="text-muted small">
-                      {categorySlug === 'earbuds' &&
-                      !keySpecs?.camera &&
-                      !specs?.camera?.main_camera
-                        ? t('quickSpecAudioAnc')
-                        : t('quickSpecMainCamera')}
-                    </div>
-                    <div className="fw-semibold small">
-                      <ContentText
-                        text={String(
-                          keySpecs?.camera ||
-                            specs?.camera?.main_camera ||
-                            specs?.multimedia?.audio_features ||
-                            '-'
-                        )}
-                        locale={locale}
-                      />
-                    </div>
-                  </div>
-                </div>
-                <div className="col-sm-4 col-6">
-                  <div className="bg-light rounded-3 h-100 border p-3">
-                    <div className="text-muted small">
-                      {t('quickSpecMemory')}
-                    </div>
-                    <div className="fw-semibold small">
-                      {(() => {
-                        const ram = product.ram_gb ?? specs?.hardware?.ram_gb;
-                        const rom =
-                          product.storage_gb ?? specs?.hardware?.storage_gb;
-                        if (ram && rom) return `${ram}GB / ${rom}GB`;
-                        if (ram) return `${ram}GB RAM`;
-                        if (rom) return `${rom}GB`;
-                        return keySpecs?.ram || keySpecs?.storage || '-';
-                      })()}
+                {(specTemplate.groups.includes('camera') ||
+                  categorySlug === 'earbuds') && (
+                  <div className="col-sm-4 col-6">
+                    <div className="bg-light rounded-3 h-100 border p-3">
+                      <div className="text-muted small">
+                        {categorySlug === 'earbuds' &&
+                        !keySpecs?.camera &&
+                        !specs?.camera?.main_camera
+                          ? t('quickSpecAudioAnc')
+                          : t('quickSpecMainCamera')}
+                      </div>
+                      <div className="fw-semibold small">
+                        <ContentText
+                          text={String(
+                            keySpecs?.camera ||
+                              specs?.camera?.main_camera ||
+                              specs?.multimedia?.audio_features ||
+                              '-'
+                          )}
+                          locale={locale}
+                        />
+                      </div>
                     </div>
                   </div>
-                </div>
+                )}
+                {(specTemplate.ram || specTemplate.storage) && (
+                  <div className="col-sm-4 col-6">
+                    <div className="bg-light rounded-3 h-100 border p-3">
+                      <div className="text-muted small">
+                        {t('quickSpecMemory')}
+                      </div>
+                      <div className="fw-semibold small">
+                        {(() => {
+                          const ram = product.ram_gb ?? specs?.hardware?.ram_gb;
+                          const rom =
+                            product.storage_gb ?? specs?.hardware?.storage_gb;
+                          if (ram && rom) return `${ram}GB / ${rom}GB`;
+                          if (ram) return `${ram}GB RAM`;
+                          if (rom) return `${rom}GB`;
+                          return keySpecs?.ram || keySpecs?.storage || '-';
+                        })()}
+                      </div>
+                    </div>
+                  </div>
+                )}
                 <div className="col-sm-4 col-6">
                   <div className="bg-light rounded-3 h-100 border p-3">
                     <div className="text-muted small">
@@ -919,7 +942,7 @@ export async function ProductDetailView({
             />
           </div>
 
-          {/* SECTION #2: 10 Field Groups Specifications (Full 10/10 Canonical Schema per DESIGN.md v3.0) */}
+          {/* SECTION #2: Spec groups, per category template (DOS/Rate#1142) */}
           {(() => {
             const specUi = getSpecUiDictionary(locale);
             const loc = (v: string | number | boolean | null | undefined) => (
@@ -928,6 +951,555 @@ export async function ProductDetailView({
                 locale={locale}
               />
             );
+            const groupHeading = (group: SpecGroupKey) =>
+              specGroupHeading(
+                specUi,
+                group,
+                specTemplate.groups.indexOf(group) + 1,
+                specTemplate.has5g
+              );
+            const shows = (group: SpecGroupKey, field: string) =>
+              specFieldApplies(specTemplate, group, field);
+            const groupNodes: Record<SpecGroupKey, ReactNode> = {
+              display: (
+                <div className="col-md-6 col-12">
+                  <div className="rounded-4 h-100 border bg-white p-4">
+                    <h3 className="h6 fw-bold text-primary mb-3">
+                      {groupHeading('display')}
+                    </h3>
+                    <dl className="row small mb-0">
+                      <dt className="text-muted col-5">
+                        {specUi.fields.screenSize}
+                      </dt>
+                      <dd className="fw-medium col-7">
+                        {specs?.display?.size_inch
+                          ? `${specs.display.size_inch} inch`
+                          : product.screen_size_inch
+                            ? `${product.screen_size_inch} inch`
+                            : '-'}
+                      </dd>
+                      <dt className="text-muted col-5">
+                        {specUi.fields.panelType}
+                      </dt>
+                      <dd className="fw-medium col-7">
+                        {loc(specs?.display?.type || keySpecs?.screen)}
+                      </dd>
+                      <dt className="text-muted col-5">
+                        {specUi.fields.resolution}
+                      </dt>
+                      <dd className="fw-medium col-7">
+                        {loc(specs?.display?.resolution)}
+                      </dd>
+                      <dt className="text-muted col-5">
+                        {specUi.fields.refreshRate}
+                      </dt>
+                      <dd className="fw-medium col-7">
+                        {specs?.display?.refresh_rate_hz
+                          ? `${specs.display.refresh_rate_hz} Hz`
+                          : '-'}
+                      </dd>
+                      <dt className="text-muted col-5">{specUi.fields.ppi}</dt>
+                      <dd className="fw-medium col-7">
+                        {specs?.display?.ppi ? `${specs.display.ppi} ppi` : '-'}
+                      </dd>
+                      <dt className="text-muted col-5">
+                        {specUi.fields.protection}
+                      </dt>
+                      <dd className="fw-medium col-7">
+                        {loc(specs?.display?.protection)}
+                      </dd>
+                      <dt className="text-muted col-5">
+                        {specUi.fields.displayFeatures}
+                      </dt>
+                      <dd className="fw-medium col-7">
+                        {loc(specs?.display?.features)}
+                      </dd>
+                    </dl>
+                  </div>
+                </div>
+              ),
+              hardware: (
+                <div className="col-md-6 col-12">
+                  <div className="rounded-4 h-100 border bg-white p-4">
+                    <h3 className="h6 fw-bold text-primary mb-3">
+                      {groupHeading('hardware')}
+                    </h3>
+                    <dl className="row small mb-0">
+                      <dt className="text-muted col-5">
+                        {specUi.fields.chipset}
+                      </dt>
+                      <dd className="fw-medium col-7">
+                        {loc(specs?.hardware?.chipset || keySpecs?.chip)}
+                      </dd>
+                      <dt className="text-muted col-5">{specUi.fields.cpu}</dt>
+                      <dd className="fw-medium col-7">
+                        {loc(specs?.hardware?.cpu)}
+                      </dd>
+                      {shows('hardware', 'gpu') && (
+                        <>
+                          <dt className="text-muted col-5">
+                            {specUi.fields.gpu}
+                          </dt>
+                          <dd className="fw-medium col-7">
+                            {loc(specs?.hardware?.gpu)}
+                          </dd>
+                        </>
+                      )}
+                      <dt className="text-muted col-5">{specUi.fields.ram}</dt>
+                      <dd className="fw-medium col-7">
+                        {specs?.hardware?.ram_gb
+                          ? `${specs.hardware.ram_gb} GB`
+                          : product.ram_gb
+                            ? `${product.ram_gb} GB`
+                            : '-'}
+                      </dd>
+                      <dt className="text-muted col-5">
+                        {specUi.fields.storage}
+                      </dt>
+                      <dd className="fw-medium col-7">
+                        {specs?.hardware?.storage_gb
+                          ? `${specs.hardware.storage_gb} GB`
+                          : product.storage_gb
+                            ? `${product.storage_gb} GB`
+                            : '-'}
+                      </dd>
+                      {shows('hardware', 'storage_expansion') && (
+                        <>
+                          <dt className="text-muted col-5">
+                            {specUi.fields.storageExpansion}
+                          </dt>
+                          <dd className="fw-medium col-7">
+                            {loc(specs?.hardware?.storage_expansion)}
+                          </dd>
+                        </>
+                      )}
+                      <dt className="text-muted col-5">{specUi.fields.os}</dt>
+                      <dd className="fw-medium col-7">
+                        {loc(specs?.hardware?.os)}
+                      </dd>
+                    </dl>
+                  </div>
+                </div>
+              ),
+              camera: (
+                <div className="col-md-6 col-12">
+                  <div className="rounded-4 h-100 border bg-white p-4">
+                    <h3 className="h6 fw-bold text-primary mb-3">
+                      {groupHeading('camera')}
+                    </h3>
+                    <dl className="row small mb-0">
+                      <dt className="text-muted col-5">
+                        {specUi.fields.rearSetup}
+                      </dt>
+                      <dd className="fw-medium col-7">
+                        {loc(specs?.camera?.rear_setup)}
+                      </dd>
+                      <dt className="text-muted col-5">
+                        {specUi.fields.mainCamera}
+                      </dt>
+                      <dd className="fw-medium col-7">
+                        {loc(specs?.camera?.main_camera || keySpecs?.camera)}
+                      </dd>
+                      <dt className="text-muted col-5">
+                        {specUi.fields.secondCamera}
+                      </dt>
+                      <dd className="fw-medium col-7">
+                        {loc(specs?.camera?.second_camera)}
+                      </dd>
+                      <dt className="text-muted col-5">
+                        {specUi.fields.thirdCamera}
+                      </dt>
+                      <dd className="fw-medium col-7">
+                        {loc(specs?.camera?.third_camera)}
+                      </dd>
+                      {specs?.camera?.fourth_camera && (
+                        <>
+                          <dt className="text-muted col-5">
+                            {specUi.fields.fourthCamera}
+                          </dt>
+                          <dd className="fw-medium col-7">
+                            {loc(specs.camera.fourth_camera)}
+                          </dd>
+                        </>
+                      )}
+                      <dt className="text-muted col-5">
+                        {specUi.fields.frontCamera}
+                      </dt>
+                      <dd className="fw-medium col-7">
+                        {loc(specs?.camera?.front_camera)}
+                      </dd>
+                      <dt className="text-muted col-5">
+                        {specUi.fields.videoAndFlash}
+                      </dt>
+                      <dd className="fw-medium col-7">
+                        {loc(
+                          [specs?.camera?.video_recording, specs?.camera?.flash]
+                            .filter(Boolean)
+                            .join(' | ')
+                        )}
+                      </dd>
+                    </dl>
+                  </div>
+                </div>
+              ),
+              battery: (
+                <div className="col-md-6 col-12">
+                  <div className="rounded-4 h-100 border bg-white p-4">
+                    <h3 className="h6 fw-bold text-primary mb-3">
+                      {groupHeading('battery')}
+                    </h3>
+                    <dl className="row small mb-0">
+                      <dt className="text-muted col-5">
+                        {specUi.fields.batteryCapacity}
+                      </dt>
+                      <dd className="fw-medium col-7">
+                        {specs?.battery?.capacity_mah
+                          ? `${specs.battery.capacity_mah} mAh`
+                          : product.battery_mah
+                            ? `${product.battery_mah} mAh`
+                            : loc(keySpecs?.battery)}
+                      </dd>
+                      <dt className="text-muted col-5">
+                        {specUi.fields.batteryType}
+                      </dt>
+                      <dd className="fw-medium col-7">
+                        {loc(specs?.battery?.type)}
+                      </dd>
+                      <dt className="text-muted col-5">
+                        {specUi.fields.chargingTech}
+                      </dt>
+                      <dd className="fw-medium col-7">
+                        {loc(specs?.battery?.charging)}
+                      </dd>
+                      <dt className="text-muted col-5">
+                        {specUi.fields.fastCharging}
+                      </dt>
+                      <dd className="fw-medium col-7">
+                        {specs?.battery?.fast_charging_w
+                          ? `${specs.battery.fast_charging_w} W`
+                          : '-'}
+                      </dd>
+                      <dt className="text-muted col-5">
+                        {specUi.fields.reverseCharging}
+                      </dt>
+                      <dd className="fw-medium col-7">
+                        {typeof specs?.battery?.reverse_charging === 'string'
+                          ? loc(specs.battery.reverse_charging)
+                          : specs?.battery?.reverse_charging === true
+                            ? specUi.supported
+                            : specs?.battery?.reverse_charging === false
+                              ? specUi.no
+                              : '-'}
+                      </dd>
+                    </dl>
+                  </div>
+                </div>
+              ),
+              design: (
+                <div className="col-md-6 col-12">
+                  <div className="rounded-4 h-100 border bg-white p-4">
+                    <h3 className="h6 fw-bold text-primary mb-3">
+                      {groupHeading('design')}
+                    </h3>
+                    <dl className="row small mb-0">
+                      <dt className="text-muted col-5">
+                        {specUi.fields.dimensions}
+                      </dt>
+                      <dd className="fw-medium col-7">
+                        {loc(specs?.design?.dimensions)}
+                      </dd>
+                      <dt className="text-muted col-5">
+                        {specUi.fields.weight}
+                      </dt>
+                      <dd className="fw-medium col-7">
+                        {specs?.design?.weight_g
+                          ? `${specs.design.weight_g} g`
+                          : '-'}
+                      </dd>
+                      <dt className="text-muted col-5">
+                        {specUi.fields.materialsAndBuild}
+                      </dt>
+                      <dd className="fw-medium col-7">
+                        {loc(
+                          [specs?.design?.materials, specs?.design?.build]
+                            .filter(Boolean)
+                            .join(' | ')
+                        )}
+                      </dd>
+                      <dt className="text-muted col-5">
+                        {specUi.fields.resistance}
+                      </dt>
+                      <dd className="fw-medium col-7">
+                        {loc(specs?.design?.resistance)}
+                      </dd>
+                      {shows('design', 'biometrics') && (
+                        <>
+                          <dt className="text-muted col-5">
+                            {specUi.fields.biometrics}
+                          </dt>
+                          <dd className="fw-medium col-7">
+                            {loc(specs?.design?.biometrics)}
+                          </dd>
+                        </>
+                      )}
+                      <dt className="text-muted col-5">
+                        {specUi.fields.physicalKeys}
+                      </dt>
+                      <dd className="fw-medium col-7">
+                        {loc(specs?.design?.keys)}
+                      </dd>
+                    </dl>
+                  </div>
+                </div>
+              ),
+              cellular: (
+                <div className="col-md-6 col-12">
+                  <div className="rounded-4 h-100 border bg-white p-4">
+                    <h3 className="h6 fw-bold text-primary mb-3">
+                      {groupHeading('cellular')}
+                    </h3>
+                    <dl className="row small mb-0">
+                      {shows('cellular', 'has_5g') && (
+                        <>
+                          <dt className="text-muted col-5">
+                            {specUi.fields.support5g}
+                          </dt>
+                          <dd className="fw-medium col-7">
+                            {(specs?.cellular?.has_5g ?? product.has_5g)
+                              ? specUi.has5gYes
+                              : specUi.no}
+                          </dd>
+                        </>
+                      )}
+                      <dt className="text-muted col-5">
+                        {specUi.fields.networkTech}
+                      </dt>
+                      <dd className="fw-medium col-7">
+                        {loc(specs?.cellular?.technology)}
+                      </dd>
+                      <dt className="text-muted col-5">
+                        {specUi.fields.simType}
+                      </dt>
+                      <dd className="fw-medium col-7">
+                        {loc(specs?.cellular?.sim_type)}
+                      </dd>
+                      <dt className="text-muted col-5">
+                        {specUi.fields.dataSpeed}
+                      </dt>
+                      <dd className="fw-medium col-7">
+                        {loc(specs?.cellular?.data_speed)}
+                      </dd>
+                      {shows('cellular', 'bands_5g') && (
+                        <>
+                          <dt className="text-muted col-5">
+                            {specUi.fields.bands5g4g}
+                          </dt>
+                          <dd className="fw-medium col-7">
+                            {loc(
+                              [
+                                specs?.cellular?.bands_5g,
+                                specs?.cellular?.bands_4g,
+                              ]
+                                .filter(Boolean)
+                                .join(' | ')
+                            )}
+                          </dd>
+                        </>
+                      )}
+                      <dt className="text-muted col-5">
+                        {specUi.fields.volteVowifi}
+                      </dt>
+                      <dd className="fw-medium col-7">
+                        {specs?.cellular?.volte || specs?.cellular?.vowifi
+                          ? [
+                              specs?.cellular?.volte ? 'VoLTE' : null,
+                              specs?.cellular?.vowifi ? 'VoWiFi' : null,
+                            ]
+                              .filter(Boolean)
+                              .join(' + ')
+                          : '-'}
+                      </dd>
+                    </dl>
+                  </div>
+                </div>
+              ),
+              connectivity: (
+                <div className="col-md-6 col-12">
+                  <div className="rounded-4 h-100 border bg-white p-4">
+                    <h3 className="h6 fw-bold text-primary mb-3">
+                      {groupHeading('connectivity')}
+                    </h3>
+                    <dl className="row small mb-0">
+                      {shows('connectivity', 'wlan') && (
+                        <>
+                          <dt className="text-muted col-5">
+                            {specUi.fields.wlan}
+                          </dt>
+                          <dd className="fw-medium col-7">
+                            {loc(specs?.connectivity?.wlan)}
+                          </dd>
+                        </>
+                      )}
+                      <dt className="text-muted col-5">
+                        {specUi.fields.bluetooth}
+                      </dt>
+                      <dd className="fw-medium col-7">
+                        {loc(specs?.connectivity?.bluetooth)}
+                      </dd>
+                      <dt className="text-muted col-5">
+                        {specUi.fields.usbPort}
+                      </dt>
+                      <dd className="fw-medium col-7">
+                        {loc(specs?.connectivity?.usb)}
+                      </dd>
+                      {shows('connectivity', 'nfc') && (
+                        <>
+                          <dt className="text-muted col-5">
+                            {specUi.fields.nfc}
+                          </dt>
+                          <dd className="fw-medium col-7">
+                            {specs?.connectivity?.nfc === true
+                              ? specUi.yes
+                              : specs?.connectivity?.nfc === false
+                                ? specUi.no
+                                : '-'}
+                          </dd>
+                        </>
+                      )}
+                      {shows('connectivity', 'location') && (
+                        <>
+                          <dt className="text-muted col-5">
+                            {specUi.fields.locationGps}
+                          </dt>
+                          <dd className="fw-medium col-7">
+                            {loc(specs?.connectivity?.location)}
+                          </dd>
+                        </>
+                      )}
+                      <dt className="text-muted col-5">
+                        {specUi.fields.sensorsAndOther}
+                      </dt>
+                      <dd className="fw-medium col-7">
+                        {loc(
+                          [
+                            specs?.connectivity?.sensors,
+                            specs?.connectivity?.other,
+                          ]
+                            .filter(Boolean)
+                            .join(' | ')
+                        )}
+                      </dd>
+                    </dl>
+                  </div>
+                </div>
+              ),
+              multimedia: (
+                <div className="col-md-6 col-12">
+                  <div className="rounded-4 h-100 border bg-white p-4">
+                    <h3 className="h6 fw-bold text-primary mb-3">
+                      {groupHeading('multimedia')}
+                    </h3>
+                    <dl className="row small mb-0">
+                      <dt className="text-muted col-5">
+                        {specUi.fields.loudspeaker}
+                      </dt>
+                      <dd className="fw-medium col-7">
+                        {loc(specs?.multimedia?.loudspeaker)}
+                      </dd>
+                      {shows('multimedia', 'headphone_jack_35mm') && (
+                        <>
+                          <dt className="text-muted col-5">
+                            {specUi.fields.jack35mm}
+                          </dt>
+                          <dd className="fw-medium col-7">
+                            {specs?.multimedia?.headphone_jack_35mm === true
+                              ? specUi.yes
+                              : specs?.multimedia?.headphone_jack_35mm === false
+                                ? specUi.no
+                                : '-'}
+                          </dd>
+                        </>
+                      )}
+                      <dt className="text-muted col-5">
+                        {specUi.fields.audioFeatures}
+                      </dt>
+                      <dd className="fw-medium col-7">
+                        {loc(specs?.multimedia?.audio_features)}
+                      </dd>
+                    </dl>
+                  </div>
+                </div>
+              ),
+              availability: (
+                <div className="col-md-6 col-12">
+                  <div className="rounded-4 h-100 border bg-white p-4">
+                    <h3 className="h6 fw-bold text-primary mb-3">
+                      {groupHeading('availability')}
+                    </h3>
+                    <dl className="row small mb-0">
+                      <dt className="text-muted col-5">
+                        {specUi.fields.announcedDate}
+                      </dt>
+                      <dd className="fw-medium col-7">
+                        {loc(specs?.availability?.announced)}
+                      </dd>
+                      <dt className="text-muted col-5">
+                        {specUi.fields.commercialStatus}
+                      </dt>
+                      <dd className="fw-medium col-7">
+                        {specs?.availability?.status
+                          ? loc(specs.availability.status)
+                          : specUi.availableStatus}
+                      </dd>
+                      <dt className="text-muted col-5">
+                        {specUi.fields.msrpPrice}
+                      </dt>
+                      <dd className="fw-medium col-7">
+                        {loc(specs?.availability?.prices_msrp)}
+                      </dd>
+                    </dl>
+                  </div>
+                </div>
+              ),
+              regulatory: (
+                <div className="col-md-6 col-12">
+                  <div className="rounded-4 h-100 border bg-white p-4">
+                    <h3 className="h6 fw-bold text-primary mb-3">
+                      {groupHeading('regulatory')}
+                    </h3>
+                    <dl className="row small mb-0">
+                      <dt className="text-muted col-5">
+                        {specUi.fields.certifications}
+                      </dt>
+                      <dd className="fw-medium col-7">
+                        {loc(specs?.regulatory?.certifications)}
+                      </dd>
+                      <dt className="text-muted col-5">
+                        {specUi.fields.fccApproval}
+                      </dt>
+                      <dd className="fw-medium col-7">
+                        {loc(specs?.regulatory?.fcc_approval)}
+                      </dd>
+                      <dt className="text-muted col-5">
+                        {specUi.fields.sarLevel}
+                      </dt>
+                      <dd className="fw-medium col-7">
+                        {[
+                          specs?.regulatory?.sar_head
+                            ? `${specUi.fields.sarHeadPrefix}: ${specs.regulatory.sar_head}`
+                            : null,
+                          specs?.regulatory?.sar_body
+                            ? `${specUi.fields.sarBodyPrefix}: ${specs.regulatory.sar_body}`
+                            : null,
+                        ]
+                          .filter(Boolean)
+                          .join(' | ') || '-'}
+                      </dd>
+                    </dl>
+                  </div>
+                </div>
+              ),
+            };
             return (
               <div
                 id="specs-section"
@@ -953,7 +1525,7 @@ export async function ProductDetailView({
                       radarSignal={radarSignal}
                     />
                     <span className="badge bg-dark-subtle text-dark rounded-pill px-3 py-2">
-                      {specUi.sectionBadge}
+                      {specSectionBadge(specUi, specTemplate.groups.length)}
                     </span>
                   </div>
                 </div>
@@ -964,518 +1536,9 @@ export async function ProductDetailView({
                   showLessLabel={t('specsShowLess')}
                   openOnHash="#specs-section"
                 >
-                  {/* 1. Display */}
-                  <div className="col-md-6 col-12">
-                    <div className="rounded-4 h-100 border bg-white p-4">
-                      <h3 className="h6 fw-bold text-primary mb-3">
-                        {specUi.groups.display}
-                      </h3>
-                      <dl className="row small mb-0">
-                        <dt className="text-muted col-5">
-                          {specUi.fields.screenSize}
-                        </dt>
-                        <dd className="fw-medium col-7">
-                          {specs?.display?.size_inch
-                            ? `${specs.display.size_inch} inch`
-                            : product.screen_size_inch
-                              ? `${product.screen_size_inch} inch`
-                              : '-'}
-                        </dd>
-                        <dt className="text-muted col-5">
-                          {specUi.fields.panelType}
-                        </dt>
-                        <dd className="fw-medium col-7">
-                          {loc(specs?.display?.type || keySpecs?.screen)}
-                        </dd>
-                        <dt className="text-muted col-5">
-                          {specUi.fields.resolution}
-                        </dt>
-                        <dd className="fw-medium col-7">
-                          {loc(specs?.display?.resolution)}
-                        </dd>
-                        <dt className="text-muted col-5">
-                          {specUi.fields.refreshRate}
-                        </dt>
-                        <dd className="fw-medium col-7">
-                          {specs?.display?.refresh_rate_hz
-                            ? `${specs.display.refresh_rate_hz} Hz`
-                            : '-'}
-                        </dd>
-                        <dt className="text-muted col-5">
-                          {specUi.fields.ppi}
-                        </dt>
-                        <dd className="fw-medium col-7">
-                          {specs?.display?.ppi
-                            ? `${specs.display.ppi} ppi`
-                            : '-'}
-                        </dd>
-                        <dt className="text-muted col-5">
-                          {specUi.fields.protection}
-                        </dt>
-                        <dd className="fw-medium col-7">
-                          {loc(specs?.display?.protection)}
-                        </dd>
-                        <dt className="text-muted col-5">
-                          {specUi.fields.displayFeatures}
-                        </dt>
-                        <dd className="fw-medium col-7">
-                          {loc(specs?.display?.features)}
-                        </dd>
-                      </dl>
-                    </div>
-                  </div>
-
-                  {/* 2. Hardware */}
-                  <div className="col-md-6 col-12">
-                    <div className="rounded-4 h-100 border bg-white p-4">
-                      <h3 className="h6 fw-bold text-primary mb-3">
-                        {specUi.groups.hardware}
-                      </h3>
-                      <dl className="row small mb-0">
-                        <dt className="text-muted col-5">
-                          {specUi.fields.chipset}
-                        </dt>
-                        <dd className="fw-medium col-7">
-                          {loc(specs?.hardware?.chipset || keySpecs?.chip)}
-                        </dd>
-                        <dt className="text-muted col-5">
-                          {specUi.fields.cpu}
-                        </dt>
-                        <dd className="fw-medium col-7">
-                          {loc(specs?.hardware?.cpu)}
-                        </dd>
-                        <dt className="text-muted col-5">
-                          {specUi.fields.gpu}
-                        </dt>
-                        <dd className="fw-medium col-7">
-                          {loc(specs?.hardware?.gpu)}
-                        </dd>
-                        <dt className="text-muted col-5">
-                          {specUi.fields.ram}
-                        </dt>
-                        <dd className="fw-medium col-7">
-                          {specs?.hardware?.ram_gb
-                            ? `${specs.hardware.ram_gb} GB`
-                            : product.ram_gb
-                              ? `${product.ram_gb} GB`
-                              : '-'}
-                        </dd>
-                        <dt className="text-muted col-5">
-                          {specUi.fields.storage}
-                        </dt>
-                        <dd className="fw-medium col-7">
-                          {specs?.hardware?.storage_gb
-                            ? `${specs.hardware.storage_gb} GB`
-                            : product.storage_gb
-                              ? `${product.storage_gb} GB`
-                              : '-'}
-                        </dd>
-                        <dt className="text-muted col-5">
-                          {specUi.fields.storageExpansion}
-                        </dt>
-                        <dd className="fw-medium col-7">
-                          {loc(specs?.hardware?.storage_expansion)}
-                        </dd>
-                        <dt className="text-muted col-5">{specUi.fields.os}</dt>
-                        <dd className="fw-medium col-7">
-                          {loc(specs?.hardware?.os)}
-                        </dd>
-                      </dl>
-                    </div>
-                  </div>
-
-                  {/* 3. Camera (PhoneArena Split Architecture) */}
-                  <div className="col-md-6 col-12">
-                    <div className="rounded-4 h-100 border bg-white p-4">
-                      <h3 className="h6 fw-bold text-primary mb-3">
-                        {specUi.groups.camera}
-                      </h3>
-                      <dl className="row small mb-0">
-                        <dt className="text-muted col-5">
-                          {specUi.fields.rearSetup}
-                        </dt>
-                        <dd className="fw-medium col-7">
-                          {loc(specs?.camera?.rear_setup)}
-                        </dd>
-                        <dt className="text-muted col-5">
-                          {specUi.fields.mainCamera}
-                        </dt>
-                        <dd className="fw-medium col-7">
-                          {loc(specs?.camera?.main_camera || keySpecs?.camera)}
-                        </dd>
-                        <dt className="text-muted col-5">
-                          {specUi.fields.secondCamera}
-                        </dt>
-                        <dd className="fw-medium col-7">
-                          {loc(specs?.camera?.second_camera)}
-                        </dd>
-                        <dt className="text-muted col-5">
-                          {specUi.fields.thirdCamera}
-                        </dt>
-                        <dd className="fw-medium col-7">
-                          {loc(specs?.camera?.third_camera)}
-                        </dd>
-                        {specs?.camera?.fourth_camera && (
-                          <>
-                            <dt className="text-muted col-5">
-                              {specUi.fields.fourthCamera}
-                            </dt>
-                            <dd className="fw-medium col-7">
-                              {loc(specs.camera.fourth_camera)}
-                            </dd>
-                          </>
-                        )}
-                        <dt className="text-muted col-5">
-                          {specUi.fields.frontCamera}
-                        </dt>
-                        <dd className="fw-medium col-7">
-                          {loc(specs?.camera?.front_camera)}
-                        </dd>
-                        <dt className="text-muted col-5">
-                          {specUi.fields.videoAndFlash}
-                        </dt>
-                        <dd className="fw-medium col-7">
-                          {loc(
-                            [
-                              specs?.camera?.video_recording,
-                              specs?.camera?.flash,
-                            ]
-                              .filter(Boolean)
-                              .join(' | ')
-                          )}
-                        </dd>
-                      </dl>
-                    </div>
-                  </div>
-
-                  {/* 4. Battery */}
-                  <div className="col-md-6 col-12">
-                    <div className="rounded-4 h-100 border bg-white p-4">
-                      <h3 className="h6 fw-bold text-primary mb-3">
-                        {specUi.groups.battery}
-                      </h3>
-                      <dl className="row small mb-0">
-                        <dt className="text-muted col-5">
-                          {specUi.fields.batteryCapacity}
-                        </dt>
-                        <dd className="fw-medium col-7">
-                          {specs?.battery?.capacity_mah
-                            ? `${specs.battery.capacity_mah} mAh`
-                            : product.battery_mah
-                              ? `${product.battery_mah} mAh`
-                              : loc(keySpecs?.battery)}
-                        </dd>
-                        <dt className="text-muted col-5">
-                          {specUi.fields.batteryType}
-                        </dt>
-                        <dd className="fw-medium col-7">
-                          {loc(specs?.battery?.type)}
-                        </dd>
-                        <dt className="text-muted col-5">
-                          {specUi.fields.chargingTech}
-                        </dt>
-                        <dd className="fw-medium col-7">
-                          {loc(specs?.battery?.charging)}
-                        </dd>
-                        <dt className="text-muted col-5">
-                          {specUi.fields.fastCharging}
-                        </dt>
-                        <dd className="fw-medium col-7">
-                          {specs?.battery?.fast_charging_w
-                            ? `${specs.battery.fast_charging_w} W`
-                            : '-'}
-                        </dd>
-                        <dt className="text-muted col-5">
-                          {specUi.fields.reverseCharging}
-                        </dt>
-                        <dd className="fw-medium col-7">
-                          {typeof specs?.battery?.reverse_charging === 'string'
-                            ? loc(specs.battery.reverse_charging)
-                            : specs?.battery?.reverse_charging === true
-                              ? specUi.supported
-                              : specs?.battery?.reverse_charging === false
-                                ? specUi.no
-                                : '-'}
-                        </dd>
-                      </dl>
-                    </div>
-                  </div>
-
-                  {/* 5. Design */}
-                  <div className="col-md-6 col-12">
-                    <div className="rounded-4 h-100 border bg-white p-4">
-                      <h3 className="h6 fw-bold text-primary mb-3">
-                        {specUi.groups.design}
-                      </h3>
-                      <dl className="row small mb-0">
-                        <dt className="text-muted col-5">
-                          {specUi.fields.dimensions}
-                        </dt>
-                        <dd className="fw-medium col-7">
-                          {loc(specs?.design?.dimensions)}
-                        </dd>
-                        <dt className="text-muted col-5">
-                          {specUi.fields.weight}
-                        </dt>
-                        <dd className="fw-medium col-7">
-                          {specs?.design?.weight_g
-                            ? `${specs.design.weight_g} g`
-                            : '-'}
-                        </dd>
-                        <dt className="text-muted col-5">
-                          {specUi.fields.materialsAndBuild}
-                        </dt>
-                        <dd className="fw-medium col-7">
-                          {loc(
-                            [specs?.design?.materials, specs?.design?.build]
-                              .filter(Boolean)
-                              .join(' | ')
-                          )}
-                        </dd>
-                        <dt className="text-muted col-5">
-                          {specUi.fields.resistance}
-                        </dt>
-                        <dd className="fw-medium col-7">
-                          {loc(specs?.design?.resistance)}
-                        </dd>
-                        <dt className="text-muted col-5">
-                          {specUi.fields.biometrics}
-                        </dt>
-                        <dd className="fw-medium col-7">
-                          {loc(specs?.design?.biometrics)}
-                        </dd>
-                        <dt className="text-muted col-5">
-                          {specUi.fields.physicalKeys}
-                        </dt>
-                        <dd className="fw-medium col-7">
-                          {loc(specs?.design?.keys)}
-                        </dd>
-                      </dl>
-                    </div>
-                  </div>
-
-                  {/* 6. Cellular */}
-                  <div className="col-md-6 col-12">
-                    <div className="rounded-4 h-100 border bg-white p-4">
-                      <h3 className="h6 fw-bold text-primary mb-3">
-                        {specUi.groups.cellular}
-                      </h3>
-                      <dl className="row small mb-0">
-                        <dt className="text-muted col-5">
-                          {specUi.fields.support5g}
-                        </dt>
-                        <dd className="fw-medium col-7">
-                          {(specs?.cellular?.has_5g ?? product.has_5g)
-                            ? specUi.has5gYes
-                            : specUi.no}
-                        </dd>
-                        <dt className="text-muted col-5">
-                          {specUi.fields.networkTech}
-                        </dt>
-                        <dd className="fw-medium col-7">
-                          {loc(specs?.cellular?.technology)}
-                        </dd>
-                        <dt className="text-muted col-5">
-                          {specUi.fields.simType}
-                        </dt>
-                        <dd className="fw-medium col-7">
-                          {loc(specs?.cellular?.sim_type)}
-                        </dd>
-                        <dt className="text-muted col-5">
-                          {specUi.fields.dataSpeed}
-                        </dt>
-                        <dd className="fw-medium col-7">
-                          {loc(specs?.cellular?.data_speed)}
-                        </dd>
-                        <dt className="text-muted col-5">
-                          {specUi.fields.bands5g4g}
-                        </dt>
-                        <dd className="fw-medium col-7">
-                          {loc(
-                            [
-                              specs?.cellular?.bands_5g,
-                              specs?.cellular?.bands_4g,
-                            ]
-                              .filter(Boolean)
-                              .join(' | ')
-                          )}
-                        </dd>
-                        <dt className="text-muted col-5">
-                          {specUi.fields.volteVowifi}
-                        </dt>
-                        <dd className="fw-medium col-7">
-                          {specs?.cellular?.volte || specs?.cellular?.vowifi
-                            ? [
-                                specs?.cellular?.volte ? 'VoLTE' : null,
-                                specs?.cellular?.vowifi ? 'VoWiFi' : null,
-                              ]
-                                .filter(Boolean)
-                                .join(' + ')
-                            : '-'}
-                        </dd>
-                      </dl>
-                    </div>
-                  </div>
-
-                  {/* 7. Connectivity */}
-                  <div className="col-md-6 col-12">
-                    <div className="rounded-4 h-100 border bg-white p-4">
-                      <h3 className="h6 fw-bold text-primary mb-3">
-                        {specUi.groups.connectivity}
-                      </h3>
-                      <dl className="row small mb-0">
-                        <dt className="text-muted col-5">
-                          {specUi.fields.wlan}
-                        </dt>
-                        <dd className="fw-medium col-7">
-                          {loc(specs?.connectivity?.wlan)}
-                        </dd>
-                        <dt className="text-muted col-5">
-                          {specUi.fields.bluetooth}
-                        </dt>
-                        <dd className="fw-medium col-7">
-                          {loc(specs?.connectivity?.bluetooth)}
-                        </dd>
-                        <dt className="text-muted col-5">
-                          {specUi.fields.usbPort}
-                        </dt>
-                        <dd className="fw-medium col-7">
-                          {loc(specs?.connectivity?.usb)}
-                        </dd>
-                        <dt className="text-muted col-5">
-                          {specUi.fields.nfc}
-                        </dt>
-                        <dd className="fw-medium col-7">
-                          {specs?.connectivity?.nfc === true
-                            ? specUi.yes
-                            : specs?.connectivity?.nfc === false
-                              ? specUi.no
-                              : '-'}
-                        </dd>
-                        <dt className="text-muted col-5">
-                          {specUi.fields.locationGps}
-                        </dt>
-                        <dd className="fw-medium col-7">
-                          {loc(specs?.connectivity?.location)}
-                        </dd>
-                        <dt className="text-muted col-5">
-                          {specUi.fields.sensorsAndOther}
-                        </dt>
-                        <dd className="fw-medium col-7">
-                          {loc(
-                            [
-                              specs?.connectivity?.sensors,
-                              specs?.connectivity?.other,
-                            ]
-                              .filter(Boolean)
-                              .join(' | ')
-                          )}
-                        </dd>
-                      </dl>
-                    </div>
-                  </div>
-
-                  {/* 8. Multimedia */}
-                  <div className="col-md-6 col-12">
-                    <div className="rounded-4 h-100 border bg-white p-4">
-                      <h3 className="h6 fw-bold text-primary mb-3">
-                        {specUi.groups.multimedia}
-                      </h3>
-                      <dl className="row small mb-0">
-                        <dt className="text-muted col-5">
-                          {specUi.fields.loudspeaker}
-                        </dt>
-                        <dd className="fw-medium col-7">
-                          {loc(specs?.multimedia?.loudspeaker)}
-                        </dd>
-                        <dt className="text-muted col-5">
-                          {specUi.fields.jack35mm}
-                        </dt>
-                        <dd className="fw-medium col-7">
-                          {specs?.multimedia?.headphone_jack_35mm === true
-                            ? specUi.yes
-                            : specs?.multimedia?.headphone_jack_35mm === false
-                              ? specUi.no
-                              : '-'}
-                        </dd>
-                        <dt className="text-muted col-5">
-                          {specUi.fields.audioFeatures}
-                        </dt>
-                        <dd className="fw-medium col-7">
-                          {loc(specs?.multimedia?.audio_features)}
-                        </dd>
-                      </dl>
-                    </div>
-                  </div>
-
-                  {/* 9. Availability */}
-                  <div className="col-md-6 col-12">
-                    <div className="rounded-4 h-100 border bg-white p-4">
-                      <h3 className="h6 fw-bold text-primary mb-3">
-                        {specUi.groups.availability}
-                      </h3>
-                      <dl className="row small mb-0">
-                        <dt className="text-muted col-5">
-                          {specUi.fields.announcedDate}
-                        </dt>
-                        <dd className="fw-medium col-7">
-                          {loc(specs?.availability?.announced)}
-                        </dd>
-                        <dt className="text-muted col-5">
-                          {specUi.fields.commercialStatus}
-                        </dt>
-                        <dd className="fw-medium col-7">
-                          {specs?.availability?.status
-                            ? loc(specs.availability.status)
-                            : specUi.availableStatus}
-                        </dd>
-                        <dt className="text-muted col-5">
-                          {specUi.fields.msrpPrice}
-                        </dt>
-                        <dd className="fw-medium col-7">
-                          {loc(specs?.availability?.prices_msrp)}
-                        </dd>
-                      </dl>
-                    </div>
-                  </div>
-
-                  {/* 10. Regulatory */}
-                  <div className="col-md-6 col-12">
-                    <div className="rounded-4 h-100 border bg-white p-4">
-                      <h3 className="h6 fw-bold text-primary mb-3">
-                        {specUi.groups.regulatory}
-                      </h3>
-                      <dl className="row small mb-0">
-                        <dt className="text-muted col-5">
-                          {specUi.fields.certifications}
-                        </dt>
-                        <dd className="fw-medium col-7">
-                          {loc(specs?.regulatory?.certifications)}
-                        </dd>
-                        <dt className="text-muted col-5">
-                          {specUi.fields.fccApproval}
-                        </dt>
-                        <dd className="fw-medium col-7">
-                          {loc(specs?.regulatory?.fcc_approval)}
-                        </dd>
-                        <dt className="text-muted col-5">
-                          {specUi.fields.sarLevel}
-                        </dt>
-                        <dd className="fw-medium col-7">
-                          {[
-                            specs?.regulatory?.sar_head
-                              ? `${specUi.fields.sarHeadPrefix}: ${specs.regulatory.sar_head}`
-                              : null,
-                            specs?.regulatory?.sar_body
-                              ? `${specUi.fields.sarBodyPrefix}: ${specs.regulatory.sar_body}`
-                              : null,
-                          ]
-                            .filter(Boolean)
-                            .join(' | ') || '-'}
-                        </dd>
-                      </dl>
-                    </div>
-                  </div>
+                  {specTemplate.groups.map((group) => (
+                    <Fragment key={group}>{groupNodes[group]}</Fragment>
+                  ))}
                 </PhoneCollapsible>
               </div>
             );

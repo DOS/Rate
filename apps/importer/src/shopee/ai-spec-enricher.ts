@@ -15,6 +15,7 @@ import {
   type ProductSpecifications,
   type KeySpecs,
 } from '@repo/shared-data';
+import { applyCategorySpecTemplate } from '@repo/shared-data/rules';
 import type { NormalizedProductCandidate } from './product-normalizer.js';
 import { computeRetryDelayMs, createImporterLogger, sanitizeAiGeneratedText } from './logger.js';
 
@@ -619,6 +620,7 @@ RULES:
 3. Boolean fields (has_5g, nfc, volte, vowifi, headphone_jack_35mm) MUST be JSON booleans (true or false).
 4. Separate cameras clearly following PhoneArena structure: main_camera, second_camera (ultrawide), third_camera (telephoto/macro), fourth_camera (periscope if present), front_camera.
 5. Keep descriptive text concise, accurate, and readable for Vietnamese & international users.
+6. Omit groups and fields the device category does not have. Earbuds have no display, RAM, storage, camera or cellular network; describe their drivers, codecs, ANC and battery instead. Smartwatches have no camera, and a cellular watch is LTE unless the model really supports 5G.
 
 REQUIRED JSON SCHEMA:
 {
@@ -977,7 +979,9 @@ REQUIRED JSON SCHEMA:
       const keySpecsParsed = KeySpecsSchema.safeParse(keySpecsCandidate);
       const keySpecs: KeySpecs = keySpecsParsed.success ? keySpecsParsed.data : {};
 
-      const result: AiEnrichmentResponse = {
+      // The schema is phone-shaped; drop what the category does not have
+      // (earbuds: no screen, RAM or camera; watches: no 5G) (DOS/Rate#1142).
+      const result: AiEnrichmentResponse = applyCategorySpecTemplate(catKey, {
         ram_gb: ramGb,
         storage_gb: storageGb,
         screen_size_inch: screenSizeInch,
@@ -985,7 +989,7 @@ REQUIRED JSON SCHEMA:
         has_5g: has5g,
         specifications,
         key_specs: keySpecs,
-      };
+      });
 
       this.setCacheEntry(cacheKey, result);
       logger.info(
