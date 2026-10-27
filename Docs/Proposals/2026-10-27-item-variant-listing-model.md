@@ -167,7 +167,7 @@ JOY's target model, in JOY's words: one Item per product; the other storage size
 - **v1: storage only.** `variant_key` is the existing third key segment, **stored literally**: `256gb`, `1024gb`, `standard`, `unknown`. This keeps `model_key = item_key:variant_key` true for every existing row and for what the normalizer emits today, so Tier 1 matching and Rate-Services fixtures keep working. Display labels (`1TB`, "Standard") are derived; they are never keys.
 - **When `unknown` is a real variant and when it is not.**
   - **Single-variant Item:** the Item has no sized variant, for example earbuds (the normalizer keys every earbud as `:unknown` on purpose, `product-normalizer.ts:1623-1626`), Garmin watches, or a line not yet seen with a size. Here the `unknown` (or `standard`) master **is** the Item's only variant. Its listings keep `cluster_id`, and it has a normal price.
-  - **Multi-size Item:** the Item has at least one sized variant (`variant_key ~ '^\d+gb'`). Here `unknown` means "size not stated". The listing gets `cluster_id = NULL`, and the `:unknown` master is retired (M3 and the importer rule in 4.5).
+  - **Multi-size Item:** the Item has at least one **non-archived** sized variant (`variant_key ~ '^\d+(gb|tb)$'`), and its category has a storage axis (never earbuds). Here `unknown` means "size not stated". The listing gets `cluster_id = NULL`, and the `:unknown` master is retired (M3 and the importer rule in 4.5).
 - **Single-size registry lines** (`only_storage_gb`) get that size, as today.
 - **Apple screen and case sizes stay part of the Item.** This keeps the #1113/#1124 behaviour: iPad Pro 11 and iPad Pro 13 are different Items. They have different specs, battery and screen, not just a different SKU.
 - **Colour stays a listing attribute,** not a variant.
@@ -269,17 +269,20 @@ DROP POLICY IF EXISTS "Service role write items" ON rate.items;
 CREATE POLICY "Service role write items" ON rate.items FOR ALL TO service_role USING (true) WITH CHECK (true);
 GRANT SELECT ON rate.items TO anon, authenticated;
 GRANT ALL ON rate.items TO service_role;
--- plus: rate_worker policy and column grants (pattern of DOS-Me 20261018183000), the updated_at
+-- plus: rate_worker SELECT policy and grant on rate.items (pattern of DOS-Me 20261018183000; writes go
+-- through the SECURITY DEFINER sync triggers and Item RPCs, EXECUTE granted to rate_worker), the updated_at
 -- trigger (pattern of 20261018120105), and `item_id` appended at the END of
 -- v_products_with_merchant_trust so CREATE OR REPLACE VIEW keeps working.
 ```
+
+**M1 and M2 ship as one DOS-Me migration** (schema, sync triggers and backfill in one transaction), so there is no gap in which the triggers create Items that the backfill then skips. Sections 4.3 and 7.1 stay separate here only for readability.
 
 **Compatibility sync (M1, removed in M4).** The old importer and Rate-Services keep writing `cluster_id` without `item_id` until their code changes ship. A listing can also move between masters after the backfill. So M1 installs two BEFORE triggers. This makes the order between the migration and the code deploys irrelevant:
 
 ```sql
 -- products: item follows the variant whenever a variant is set
 CREATE OR REPLACE FUNCTION rate.products_sync_item() RETURNS trigger
-LANGUAGE plpgsql SET search_path = '' AS $$
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = '' AS $$
 BEGIN
   IF NEW.cluster_id IS NOT NULL THEN
     SELECT mp.item_id INTO NEW.item_id FROM rate.master_products mp WHERE mp.id = NEW.cluster_id;
@@ -287,20 +290,28 @@ BEGIN
   RETURN NEW;
 END $$;
 -- master_products: a master inserted without an Item gets one from its key (created as draft)
+-- SECURITY DEFINER: writers such as rate_worker are subject to RLS and hold no grant on rate.items;
+-- the function only derives an Item from the row being written, so it exposes nothing else.
 CREATE OR REPLACE FUNCTION rate.master_products_sync_item() RETURNS trigger
-LANGUAGE plpgsql SET search_path = '' AS $$
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = '' AS $$
 DECLARE v_key text := split_part(NEW.model_key, ':', 1) || ':' || split_part(NEW.model_key, ':', 2);
 BEGIN
-  NEW.variant_key := COALESCE(NEW.variant_key, NULLIF(split_part(NEW.model_key, ':', 3), ''));
-  IF NEW.item_id IS NULL THEN
+  IF TG_OP = 'INSERT' OR NEW.model_key IS DISTINCT FROM OLD.model_key THEN
+    NEW.variant_key := NULLIF(split_part(NEW.model_key, ':', 3), '');   -- re-derived on a re-key
     INSERT INTO rate.items (item_key, slug, name, brand, model, category_id, status)
     VALUES (v_key, rate.item_slug_from_master(NEW.slug, NEW.model_key),
-            rate.item_name_from_master(NEW.name), NEW.brand, NEW.model, NEW.category_id, 'draft')
+            rate.item_name_from_master(NEW.name), NEW.brand, NEW.model, NEW.category_id,
+            CASE WHEN NEW.status = 'published' THEN 'published' ELSE 'draft' END)
     ON CONFLICT (item_key) DO NOTHING;
     SELECT i.id INTO NEW.item_id FROM rate.items i WHERE i.item_key = v_key;
   END IF;
+  IF NEW.status = 'published' THEN               -- publishing a variant publishes its Item
+    UPDATE rate.items SET status = 'published' WHERE id = NEW.item_id AND status <> 'published';
+  END IF;
   RETURN NEW;
 END $$;
+-- An AFTER UPDATE OF model_key, item_id trigger moves the master's listings to the new item_id in
+-- the same statement (UPDATE rate.products SET item_id = NEW.item_id WHERE cluster_id = NEW.id).
 -- CREATE TRIGGER trg_products_sync_item BEFORE INSERT OR UPDATE OF cluster_id ON rate.products ...
 -- CREATE TRIGGER trg_master_products_sync_item BEFORE INSERT OR UPDATE OF model_key ON rate.master_products ...
 -- (each wrapped in DROP TRIGGER IF EXISTS; slug collision in the INSERT falls back to a suffixed slug)
@@ -451,7 +462,7 @@ With this model, a storage-less title resolves to the Item with no variant. #110
 | Phase | What | Reversible by |
 | :--- | :--- | :--- |
 | **M0** | Mirror the eight missing DOS-Me `rate` migrations into this repo's reference copy and regenerate types (a docs/types PR, no DDL). Run the read-only inventory queries (7.3). If duplicates exist, fix seed-key drift as a separate, reviewed data step: earbuds seeded `:64gb`/`:standard` vs normalized `:unknown`, and `watch-ultra-3-49mm`. Duplicates are **archived, never deleted**: `price_alerts` cascade on delete, so alerts are moved to the surviving master first. | not applicable |
-| **M1** | Additive DDL (4.3): `rate.items`, new columns, indexes (pg_trgm schema looked up at run time), RLS/grants, `rate_worker` access, updated_at trigger, `item_id` appended to the trust view, the two compatibility sync triggers, and the slug/name helper functions they call. | One transaction: drop the sync triggers, drop the FKs, drop the columns and `rate.items`. No existing data depends on them. |
+| **M1** | Ships in the same migration as M2. Additive DDL (4.3): `rate.items`, new columns, indexes (pg_trgm schema looked up at run time), RLS/grants, `rate_worker` access, updated_at trigger, `item_id` appended to the trust view, the two compatibility sync triggers, and the slug/name helper functions they call. | One transaction: drop the sync triggers, drop the FKs, drop the columns and `rate.items`. No existing data depends on them. |
 | **M2** | Backfill (7.1) and new RPCs: `refresh_item_stats`, `match_item`, `resolve_catalog_slug`, `search_items_v1`, facet and autocomplete v2, plus `submit_community_review` accepting an Item. `refresh_master_product_rating` and `refresh_review_vote_counts` get Item-aware bodies with the same signatures (4.5). Other old RPCs are untouched. | One transaction, with writers paused: `UPDATE ... SET item_id = NULL, variant_key = NULL` on both tables, `UPDATE rate.items SET default_variant_id = NULL`, then `DELETE FROM rate.items`. **Never `TRUNCATE rate.items`:** it fails while the FKs exist, and `TRUNCATE ... CASCADE` would wipe `master_products`, `products` and, through them, price history, reviews and alerts. The old rating bodies are restored from the previous migration. |
 | **Compatibility window** | Importer and Rate-Services ship Item-aware code. The sync triggers keep old writers consistent meanwhile. The web ships Item pages behind an env flag, then switches, and old slugs redirect. A reconciliation query (7.3) runs after the last writer changes. Lasts at least one promote cycle and until the sitemap has been re-crawled (about 30 days). | Flip the flag off. |
 | **M3** | Retire `unknown` masters on **multi-size Items only** (7.2). Single-variant Items (earbuds, Garmin and other sizeless lines) are untouched. A backup table records each change. Runs only after Rate-Services handles NULL `cluster_id` (task 13). | Restore from the backup table (7.2) |
@@ -506,6 +517,16 @@ UPDATE rate.products p SET item_id = mp.item_id, variant_source = COALESCE(p.var
 FROM rate.master_products mp
 WHERE p.cluster_id = mp.id AND p.item_id IS DISTINCT FROM mp.item_id;
 
+-- Items that already existed (created by the sync triggers, or by a re-run): recompute status from
+-- their masters, so a published product is never hidden behind a draft Item.
+UPDATE rate.items i SET status = s.status
+FROM (SELECT item_id,
+             CASE WHEN bool_or(status = 'published') THEN 'published'
+                  WHEN bool_or(COALESCE(status, 'draft') <> 'archived') THEN 'draft'
+                  ELSE 'archived' END AS status
+      FROM rate.master_products WHERE item_id IS NOT NULL GROUP BY item_id) s
+WHERE i.id = s.item_id AND i.status IS DISTINCT FROM s.status;
+
 -- Item-level aggregates and ratings
 SELECT rate.refresh_item_stats(id) FROM rate.items;
 SELECT rate.refresh_master_product_rating(mp.id)        -- new body writes the Item and the mirrors
@@ -526,8 +547,13 @@ CREATE TABLE IF NOT EXISTS rate.m3_unknown_variant_backup (
   master_old_status text,                    -- nullable: master_products.status is nullable
   backed_up_at timestamptz NOT NULL DEFAULT now());
 
-WITH multi AS (                              -- Items that have at least one sized variant
-  SELECT DISTINCT item_id FROM rate.master_products WHERE variant_key ~ '^\d+(gb|tb)$')
+-- Abort first if the 7.3 seed-drift query (sized earbuds) still returns rows.
+WITH multi AS (                              -- Items with at least one LIVE sized variant
+  SELECT DISTINCT mp.item_id FROM rate.master_products mp
+  LEFT JOIN rate.categories c ON c.id = mp.category_id
+  WHERE mp.variant_key ~ '^\d+(gb|tb)$'
+    AND mp.status IS DISTINCT FROM 'archived'
+    AND COALESCE(c.slug, '') <> 'earbuds')   -- sizeless categories are never multi-size
 INSERT INTO rate.m3_unknown_variant_backup (product_id, old_cluster_id, old_variant_source, master_old_status)
 SELECT p.id, p.cluster_id, p.variant_source, mp.status
 FROM rate.products p
@@ -615,7 +641,7 @@ WHERE i.status = 'published' GROUP BY 1 ORDER BY 2 DESC;
 SELECT count(*) FROM rate.products p JOIN rate.master_products mp ON mp.id = p.cluster_id
 WHERE mp.variant_key = 'unknown'
   AND EXISTS (SELECT 1 FROM rate.master_products s WHERE s.item_id = mp.item_id
-              AND s.variant_key ~ '^\d+(gb|tb)$');                                          -- 0
+              AND s.variant_key ~ '^\d+(gb|tb)$' AND s.status IS DISTINCT FROM 'archived');                                          -- 0
 SELECT (SELECT count(*) FROM rate.m3_unknown_variant_backup) AS moved,
        (SELECT count(*) FROM rate.products WHERE cluster_id IS NULL AND item_id IS NOT NULL) AS unknown_now;
 -- Earbuds and other single-variant Items still priced
@@ -687,6 +713,11 @@ Reviewed on PR #1136 by a fresh-context subagent and by a Codex adversarial pass
 - **New compatibility sync triggers** keep old writers consistent, and a reconciliation step follows (4.3, 7).
 - **`masterIdHint`** to an archived master maps to its Item (4.5).
 - **Ratings, including votes,** roll up through `products.item_id` (4.5).
+- **Round 2:**
+  - M3's multi-size rule ignores archived sizes and earbuds;
+  - the sync trigger handles re-keys and publishes the Item;
+  - M1 and M2 ship as one migration, with an Item status recompute;
+  - the trigger functions are `SECURITY DEFINER`, so `rate_worker` needs no write grant on `rate.items`.
 - **Other consumers covered:** the trust view (1.1), and the URL lookups in the extension and inspect (5.2).
 - **Refresh of unknown-variant listings, and ordering** against Rate-Services (5.4, 8, 10).
 - **M0 duplicate merges** archive and move alerts instead of deleting.
