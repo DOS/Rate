@@ -287,6 +287,11 @@ async function runSuite() {
     ['iPad Air 11 inch M2 128GB', 'apple:ipad-air-m2:128gb'],
     ['iPad Air 13 M3 256GB', 'apple:ipad-air-m3:256gb'],
     ['iPad Air 128GB', 'apple:ipad-air:128gb'],
+    ['iPad Air 5 M1 64GB', 'apple:ipad-air-m1:64gb'],
+    ['iPad Air M1 64GB', 'apple:ipad-air-m1:64gb'],
+    ['iPad 10 64GB - Tặng bao da dùng chung iPad A16', 'apple:ipad-10:64gb'],
+    ['Tai nghe Sony WH-1000XM5 cho Mac mini M4', 'sony:wh-1000xm5:unknown'],
+    ['Mac mini 2018 256GB', 'apple:mac-mini-2018:256gb'],
     ['iPad Air 4G 64GB', 'apple:ipad-air:64gb'],
     // An A16 or later chip anywhere after the size or generation names the base iPad, and
     // the 11th generation is the iPad (A16).

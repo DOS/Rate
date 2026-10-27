@@ -1281,9 +1281,17 @@ export class ProductNormalizer {
                 // The 11th generation is the iPad (A16) (DOS/Rate#819).
                 .replace(/^11$/, 'A16');
         // An iPad Air generation without a chip is its own model; the 6th and 7th are the M2
-        // and M3 Airs, keyed like titles that name the chip (DOS/Rate#819).
+        // and M3 Airs, keyed like titles that name the chip, and a named M chip wins: "iPad
+        // Air 5 M1" is the "iPad Air M1" (DOS/Rate#819).
         const air = line.match(/^air\s*([1-9])$/i);
-        if (air) line = air[1] === '6' ? 'Air M2' : air[1] === '7' ? 'Air M3' : `Air ${air[1]}`;
+        if (air)
+          line = chip
+            ? `Air ${chip}`
+            : air[1] === '6'
+              ? 'Air M2'
+              : air[1] === '7'
+                ? 'Air M3'
+                : `Air ${air[1]}`;
         // "iPad mini 6" and "iPad mini 7" are two models, not one "iPad mini"; Apple calls the
         // 7th "iPad mini (A17 Pro)", and "8.3 inch" or "8,3 inch" is the screen (DOS/Rate#819).
         // One digit, not a "5G" or "4G" network or a storage ("mini 64 Wifi").
