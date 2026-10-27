@@ -2,8 +2,9 @@ name: Incident report
 
 # The incident inbox for agents (DOS/Rate#1057). When CI fails on dev or main,
 # open an `incident` issue (or comment on the open one) with the run, commit
-# and failing jobs; when it passes again, close that issue. Agents treat an
-# open `incident` issue as their first priority (AGENTS.md).
+# and failing jobs; when every failing job passes again, close that issue
+# (scripts/ops/incident-report.mjs). Agents treat an open `incident` issue
+# as their first priority (AGENTS.md).
 # workflow_run only fires for this file as it is on the default branch (dev).
 on:
   workflow_run:
@@ -36,57 +37,20 @@ jobs:
       BRANCH: ${{ github.event.workflow_run.head_branch }}
       CONCLUSION: ${{ github.event.workflow_run.conclusion }}
       RUN_ID: ${{ github.event.workflow_run.id }}
+      RUN_ATTEMPT: ${{ github.event.workflow_run.run_attempt }}
       RUN_URL: ${{ github.event.workflow_run.html_url }}
       SHA: ${{ github.event.workflow_run.head_sha }}
       COMMIT_TITLE: ${{ github.event.workflow_run.head_commit.message }}
     steps:
+      # The script comes from the default branch (workflow_run runs there),
+      # never from the run's commit: no untrusted code gets the token.
+      - name: Check out the incident script
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          sparse-checkout: scripts/ops
+          persist-credentials: false
+
+      # Closes only when every job that failed has concluded `success` again:
+      # a job skipped on a later push proves nothing (DOS/Rate#1134).
       - name: Open, update or close the incident
-        run: |
-          set -euo pipefail
-          # Events can arrive out of order: only the run of the branch's
-          # current head speaks for the branch, so a stale failure never
-          # reopens an incident a newer run has closed.
-          head="$(gh api "repos/${REPO}/commits/${BRANCH}" --jq .sha)"
-          if [ "$head" != "$SHA" ]; then
-            echo "Run is for ${SHA:0:8}, ${BRANCH} is at ${head:0:8} now: skipped."
-            exit 0
-          fi
-
-          title="incident: ${WORKFLOW} failing on ${BRANCH}"
-          # Untrusted text, shown as inline code so its @mentions and #refs
-          # ping or link nothing (backticks removed so it cannot close the span).
-          subject="\`$(printf '%s' "${COMMIT_TITLE}" | head -n 1 | cut -c1-120 | tr -d '\`')\`"
-          gh label create incident -R "$REPO" --color B60205 \
-            --description "Production or CI breakage: first priority for any free agent" 2>/dev/null || true
-          # Read the list first so an API error fails the step (pipefail does
-          # not cover process substitution) instead of creating a duplicate.
-          list="$(gh issue list -R "$REPO" --state open --label incident --limit 50 \
-            --json number,title --jq '.[] | "\(.number)\t\(.title)"')"
-          open=""
-          while IFS=$'\t' read -r num t; do
-            if [ "$t" = "$title" ]; then open="$num"; break; fi
-          done <<< "$list"
-
-          if [ "$CONCLUSION" = "success" ]; then
-            if [ -n "$open" ]; then
-              gh issue comment "$open" -R "$REPO" --body "Recovered: ${RUN_URL} passed on \`${SHA:0:8}\` (${subject})."
-              gh issue close "$open" -R "$REPO" --reason completed
-            fi
-            exit 0
-          fi
-
-          failing="$(gh run view "$RUN_ID" -R "$REPO" --json jobs \
-            --jq '[.jobs[] | select(.conclusion == "failure" or .conclusion == "timed_out" or .conclusion == "cancelled") | .name] | join(", ")')"
-          body="$(printf '%s\n' \
-            "**${WORKFLOW}** ${CONCLUSION} on \`${BRANCH}\`." \
-            "" \
-            "- Run: ${RUN_URL}" \
-            "- Commit: \`${SHA:0:8}\` ${subject}" \
-            "- Failing jobs: ${failing:-unknown}" \
-            "" \
-            "Agents: this is the first priority (AGENTS.md). Claim it, find the breaking change, fix forward. The issue closes itself when the workflow passes on \`${BRANCH}\` again.")"
-          if [ -n "$open" ]; then
-            gh issue comment "$open" -R "$REPO" --body "$body"
-          else
-            gh issue create -R "$REPO" --title "$title" --label incident --body "$body"
-          fi
+        run: node scripts/ops/incident-report.mjs
