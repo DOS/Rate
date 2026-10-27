@@ -43,6 +43,27 @@ export function tabbableIn(root: HTMLElement): HTMLElement[] {
 }
 
 /**
+ * Where Tab (or Shift+Tab when `backwards`) goes from `spot`, a non-focusable
+ * node that was clicked: the first of `items` after it (or the last before
+ * it), wrapping to the other end when there is none.
+ */
+export function tabFromSpot(
+  items: readonly HTMLElement[],
+  spot: Node,
+  backwards: boolean
+): HTMLElement | null {
+  const after = (el: HTMLElement) =>
+    spot.contains(el) ||
+    Boolean(
+      spot.compareDocumentPosition(el) & Node.DOCUMENT_POSITION_FOLLOWING
+    );
+  const next = backwards
+    ? [...items].reverse().find((el) => !after(el) && !el.contains(spot))
+    : items.find(after);
+  return next ?? (backwards ? items[items.length - 1] : items[0]) ?? null;
+}
+
+/**
  * Makes everything in the page `inert` except `keep` and their ancestors, so
  * the rest of the page leaves the focus order and the accessibility tree.
  * Elements that were already inert are left alone. Returns the undo.

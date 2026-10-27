@@ -12,7 +12,12 @@ import {
 } from 'react-icons/bs';
 import LocaleSwitcher from '@/components/elementary/LocaleSwitcher';
 import RateWordmark from '@/components/brand/RateWordmark';
-import { inertOutside, tabbableIn, wrapFocusTarget } from '@/lib/focus-trap';
+import {
+  inertOutside,
+  tabFromSpot,
+  tabbableIn,
+  wrapFocusTarget,
+} from '@/lib/focus-trap';
 
 export interface NavbarLinkItem {
   readonly id?: string | number;
@@ -115,8 +120,9 @@ export function NavbarDarkDynamic({
   // and Tab cannot reach it, and taps go through to the body (DOS/Rate#1102).
   // The toggle stays live, so every close path can hand focus back to it
   // while the page is still inert. Tab and Shift+Tab wrap inside the menu
-  // (DOS/Rate#1098). A tap or click beside the drawer closes it; a press
-  // that turns into a scroll or a pinch fires no click and leaves it open.
+  // (DOS/Rate#1098), which inert alone does not do. A tap or click beside
+  // the drawer closes it; a press that turns into a scroll or a pinch fires
+  // no click and leaves it open.
   // Focus moves without preventScroll: the drawer scrolls on short screens,
   // and the page behind stays put since the drawer is fixed.
   useEffect(() => {
@@ -129,12 +135,20 @@ export function NavbarDarkDynamic({
       return !path.includes(menu) && !path.includes(toggleButton);
     };
     let pressedOutside = false;
+    // The last spot pressed inside the drawer, where Tab continues from when
+    // the press left focus on the body.
+    let pressedIn: Node | null = null;
     const onPointerDown = (e: PointerEvent) => {
       pressedOutside = outside(e);
+      pressedIn =
+        e.target instanceof Node && menu.contains(e.target) ? e.target : null;
+    };
+    const onPointerUp = (e: PointerEvent) => {
+      pressedOutside &&= outside(e);
     };
     const onClick = (e: MouseEvent) => {
-      // Only a left click or a tap that also started outside; not a drag
-      // out of the drawer.
+      // Only a left click or a tap that started and ended outside; not a
+      // drag out of or into the drawer.
       if (e.button !== 0 || !pressedOutside || !outside(e)) return;
       setToggle(false);
       toggleButton.focus({ preventScroll: true });
@@ -142,10 +156,16 @@ export function NavbarDarkDynamic({
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key !== 'Tab' || e.altKey || e.ctrlKey || e.metaKey) return;
       const active = document.activeElement;
-      // After a click on a blank spot in the drawer focus is on the body,
-      // and the browser's own Tab continues from that spot.
-      if (active === document.body) return;
       const items = tabbableIn(menu);
+      // After a click on a blank spot in the drawer focus is on the body:
+      // Tab continues from that spot, and still wraps at the ends.
+      if (active === document.body && pressedIn) {
+        const target = tabFromSpot(items, pressedIn, e.shiftKey);
+        if (!target) return;
+        e.preventDefault();
+        target.focus();
+        return;
+      }
       // A focused element inside the menu that Tab cannot reach (a closing
       // popup) is left to the browser's own order.
       if (
@@ -164,10 +184,12 @@ export function NavbarDarkDynamic({
       target.focus();
     };
     document.addEventListener('pointerdown', onPointerDown);
+    document.addEventListener('pointerup', onPointerUp);
     document.addEventListener('click', onClick);
     document.addEventListener('keydown', onKeyDown);
     return () => {
       document.removeEventListener('pointerdown', onPointerDown);
+      document.removeEventListener('pointerup', onPointerUp);
       document.removeEventListener('click', onClick);
       document.removeEventListener('keydown', onKeyDown);
       restore();

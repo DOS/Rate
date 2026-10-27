@@ -51,16 +51,14 @@ async function accessibleNodes(page: Page) {
 // With the phone menu open, screen readers no longer reach the page behind
 // the drawer (DOS/Rate#1102).
 test('the page behind the open phone menu is inert', async ({ page }) => {
-  // axe's color-contrast pass over the home page outlasts the 30s default.
-  test.setTimeout(120_000);
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('/');
+  const inertCount = () =>
+    page.evaluate(() => document.querySelectorAll('[inert]').length);
   const before = await accessibleNodes(page);
   expect(before).toContain('main:');
   expect(before).toContain('contentinfo:');
-  expect(
-    await page.evaluate(() => document.querySelectorAll('[inert]').length)
-  ).toBe(0);
+  const inertBefore = await inertCount();
 
   const { menu, toggle } = await openMenu(page);
   const open = await accessibleNodes(page);
@@ -83,7 +81,9 @@ test('the page behind the open phone menu is inert', async ({ page }) => {
     })
   ).toEqual({ toggleLive: true, outside: [] });
 
+  // a11y.spec.ts scans the closed page; this covers the open menu.
   const { violations } = await new AxeBuilder({ page })
+    .include('#navigation')
     .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
     .analyze();
   expect(violations.map((v) => `${v.impact} ${v.id}`)).toEqual([]);
@@ -92,9 +92,7 @@ test('the page behind the open phone menu is inert', async ({ page }) => {
   await page.keyboard.press('Escape');
   await expect(menu).not.toHaveClass(/nav-menus-wrapper-open/);
   await expect(toggle).toBeFocused();
-  expect(
-    await page.evaluate(() => document.querySelectorAll('[inert]').length)
-  ).toBe(0);
+  expect(await inertCount()).toBe(inertBefore);
   expect(await accessibleNodes(page)).toContain('main:');
 });
 
@@ -146,4 +144,48 @@ test('a tap beside the open phone menu closes it', async ({ page }) => {
   await expect(menu).not.toHaveClass(/nav-menus-wrapper-open/);
   await expect(page).toHaveURL(url);
   await expect(toggle).toBeFocused();
+});
+
+test('a drag out of or into the open phone menu keeps it open', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/');
+  const { menu } = await openMenu(page);
+  for (const [from, to] of [
+    [160, 370],
+    [370, 160],
+  ] as const) {
+    await page.mouse.move(from, 800);
+    await page.mouse.down();
+    await page.mouse.move(to, 800, { steps: 5 });
+    await page.mouse.up();
+    await expect(menu).toHaveClass(/nav-menus-wrapper-open/);
+  }
+});
+
+// After a click on a blank spot in the drawer, Tab goes on from that spot
+// and still wraps inside the menu (DOS/Rate#1102).
+test('Tab after a click on a blank spot stays in the phone menu', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/');
+  await openMenu(page);
+  // The bottom of the drawer, below its last item.
+  const spot = { x: 160, y: 835 };
+  expect(
+    await page.evaluate(({ x, y }) => document.elementFromPoint(x, y)?.id, spot)
+  ).toBe('rate-nav-menu');
+  for (const key of ['Tab', 'Shift+Tab']) {
+    await page.mouse.click(spot.x, spot.y);
+    expect(await page.evaluate(() => document.activeElement?.tagName)).toBe(
+      'BODY'
+    );
+    await page.keyboard.press(key);
+    const state = await focused(page);
+    expect(state.inMenu, `${key} moved to ${state.label}`).toBe(true);
+    // Past the last item, Tab wraps to the close button, the first stop.
+    if (key === 'Tab') expect(state.isClose).toBe(true);
+  }
 });
