@@ -123,6 +123,9 @@ export function NavbarDarkDynamic({
     if (!toggle || !phoneMenu || !menu) return;
     let pointerOutside = false;
     const onPointerDown = (e: PointerEvent) => {
+      // Only a primary tap or left click; not a right click or a second
+      // finger.
+      if (!e.isPrimary || e.button !== 0) return;
       const path = e.composedPath();
       const toggleButton = toggleRef.current;
       if (path.includes(menu)) return;

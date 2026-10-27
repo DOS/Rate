@@ -76,7 +76,11 @@ test('a tap beside the open phone menu closes it', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('/');
   const { menu } = await openMenu(page);
-  // The page shows to the right of the 320px drawer.
+  // The page shows to the right of the 320px drawer. The URL must not
+  // change: a navigation would remount the navbar closed and pass for the
+  // wrong reason.
+  const url = page.url();
   await page.mouse.click(370, 600);
   await expect(menu).not.toHaveClass(/nav-menus-wrapper-open/);
+  await expect(page).toHaveURL(url);
 });
