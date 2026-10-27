@@ -1138,17 +1138,49 @@ export class ProductNormalizer {
 
     // 2. Extract Model
     let model = '';
+    // Spellings that split a tier word from its model number read like the joined ones
+    // (DOS/Rate#1090). `title` has single spaces, so each gap is one optional space.
+    // Each rewrite applies only where the name ends right after it: the title ends, or a
+    // separator, a size ("256GB"), a RAM/ROM pair ("8/256"), a network or "Chính hãng"
+    // follows, so "Tab S9 - Ultra slim case", "Tab S9 - Ultra 2-in-1 case" and "A55 + Tặng"
+    // keep their keys.
+    let modelTitle = title
+      // "15 - ProMax", "S24-Ultra" and "15 (ProMax)" are "15 ProMax" and "S24 Ultra".
+      .replace(
+        /(?<=\d[a-z]?) ?- ?(pro ?max|pro|plus|ultra|mini|lite|fe)\b(?= ?(?:$|[-,(]|\d+(?:[.,]\d+)? ?(?:gb|tb)\b|\d+ ?\/ ?\d+|[45]g\b|lte\b|chính\b))/gi,
+        ' $1'
+      )
+      .replace(
+        /(?<=\d[a-z]?) ?\( ?(pro ?max|pro|plus|ultra|mini|lite|fe) ?\)(?= ?(?:$|[-,(]|\d+(?:[.,]\d+)? ?(?:gb|tb)\b|\d+ ?\/ ?\d+|[45]g\b|lte\b|chính\b))/gi,
+        ' $1 '
+      )
+      // A "+" set apart after a model number or its "Pro" ("S24 +", "iPhone 15 +", "Note
+      // 13 Pro +") is the Plus. "A55 8 + 256GB" is a RAM/ROM pair and keeps its key. The
+      // text before the "+" is checked on a bounded slice rather than by a variable-length
+      // lookbehind (CodeQL js/polynomial-redos).
+      .replace(
+        / \+(?= ?(?:$|[-,]|\d+(?:[.,]\d+)? ?(?:gb|tb)\b|[45]g\b|lte\b|chính\b))/gi,
+        (plus: string, at: number, text: string) =>
+          /(?:\b[a-z]+ ?\d+[a-z]?|\d[a-z]? pro)$/i.test(text.slice(Math.max(0, at - 32), at))
+            ? '+ '
+            : plus
+      )
+      .replace(/ {2,}/g, ' ')
+      .trim();
+    // Samsung's "Galaxy S 24" and "Tab S 9" are the S24 and the Tab S9.
+    if (brand === 'Samsung')
+      modelTitle = modelTitle.replace(/\b(galaxy|tab) s (\d{1,2})\b/gi, '$1 S$2');
     if (brand === 'Apple') {
       // "(2nd generation)" is the generation number: "Watch Ultra (2nd generation)" is
       // "Watch Ultra 2", "AirPods Pro (2nd generation)" is "AirPods Pro 2" (DOS/Rate#817).
       // One optional space before the "(" keeps a single space in the name; a leading
       // `\s*` would be quadratic on long whitespace (CodeQL js/polynomial-redos).
-      const appleTitle = title.replace(
+      const appleTitle = modelTitle.replace(
         / ?\(\s*(\d{1,2})(?:st|nd|rd|th)\s*gen(?:eration)?\s*\)/gi,
         ' $1'
       );
       const iphoneMatch = appleTitle.match(
-        /iphone\s*(\d+e\b|\d+(?:\s*(?:pro\s*max|pro|plus|mini|air))?|air\b|duo\b|se(?:\s*(?:\(\s*(?:2020|2022|2025)\s*\)|(?:2020|2022|2025)\b|(?:gen\s*)?[234]\b))?)/i
+        /iphone\s*(\d+e\b|\d+(?:\s*(?:pro\s*max|pro|plus|mini|air)|\+(?= ?(?:$|[-,]|\d+(?:[.,]\d+)? ?(?:gb|tb)\b|[45]g\b|lte\b|chính\b)))?|air\b|duo\b|se(?:\s*(?:\(\s*(?:2020|2022|2025)\s*\)|(?:2020|2022|2025)\b|(?:gen\s*)?[234]\b))?)/i
       );
       // The base iPad by its chip, "iPad A16" or "iPad (A16)", and "iPad Gen 10" like
       // "iPad 10" (DOS/Rate#817).
@@ -1169,7 +1201,7 @@ export class ProductNormalizer {
 
       // Retail titles often put the chip after the screen size ("iPad Pro 11 inch M4",
       // "MacBook Air 13 inch M3"); pick it up wherever it sits.
-      const chipMatch = title.match(/\b(M\d)(?:\s+(Pro|Max))?\b/i);
+      const chipMatch = modelTitle.match(/\b(M\d)(?:\s+(Pro|Max))?\b/i);
       const chip = chipMatch ? chipMatch[1].toUpperCase() : '';
 
       if (iphoneMatch && iphoneMatch[1]) {
@@ -1185,6 +1217,8 @@ export class ProductNormalizer {
             /^(air|duo)$/i,
             (line: string) => line[0]!.toUpperCase() + line.slice(1).toLowerCase()
           )
+          // "15+" is "15 Plus" (DOS/Rate#1090).
+          .replace(/^(\d+)\+$/, '$1 Plus')
           // "16ProMax" and "16 ProMax" are "16 Pro Max" (DOS/Rate#815).
           .replace(/^(\d+)(?=pro|plus|mini|air)/i, '$1 ')
           .replace(/\b(pro)(max)\b/i, '$1 $2');
@@ -1241,32 +1275,32 @@ export class ProductNormalizer {
         let first = Infinity;
         model = 'iPhone';
         for (const [family, name] of APPLE_FAMILIES) {
-          const at = title.search(family);
+          const at = modelTitle.search(family);
           if (at >= 0 && at < first) [first, model] = [at, name];
         }
       }
-    } else if (brand === 'Sony' && /w([fh])-?1000xm(\d+)/i.test(title)) {
+    } else if (brand === 'Sony' && /w([fh])-?1000xm(\d+)/i.test(modelTitle)) {
       // "WF1000XM5" without the hyphen is the same model (DOS/Rate#815).
-      const m = title.match(/w([fh])-?1000xm(\d+)/i);
+      const m = modelTitle.match(/w([fh])-?1000xm(\d+)/i);
       model = `W${m?.[1]?.toUpperCase()}-1000XM${m?.[2]}`;
-    } else if (brand === 'Asus' && /zenbook\s*s\s*14/i.test(title)) {
+    } else if (brand === 'Asus' && /zenbook\s*s\s*14/i.test(modelTitle)) {
       model = 'Zenbook S 14';
-    } else if (brand === 'Lenovo' && /thinkpad\s*x1\s*carbon\s*gen\s*12/i.test(title)) {
+    } else if (brand === 'Lenovo' && /thinkpad\s*x1\s*carbon\s*gen\s*12/i.test(modelTitle)) {
       model = 'ThinkPad X1 Carbon Gen 12';
-    } else if (brand === 'Garmin' && /forerunner\s*265/i.test(title)) {
+    } else if (brand === 'Garmin' && /forerunner\s*265/i.test(modelTitle)) {
       model = 'Forerunner 265';
-    } else if (brand === 'Samsung' && /galaxy\s*watch\s*ultra/i.test(title)) {
+    } else if (brand === 'Samsung' && /galaxy\s*watch\s*ultra/i.test(modelTitle)) {
       model = 'Galaxy Watch Ultra';
-    } else if (brand === 'Samsung' && /galaxy\s*buds\s*3\s*pro/i.test(title)) {
+    } else if (brand === 'Samsung' && /galaxy\s*buds\s*3\s*pro/i.test(modelTitle)) {
       model = 'Galaxy Buds3 Pro';
-    } else if (brand === 'Samsung' && /galaxy\s*tab\s*s10\s*ultra/i.test(title)) {
+    } else if (brand === 'Samsung' && /galaxy\s*tab\s*s10\s*ultra/i.test(modelTitle)) {
       model = 'Galaxy Tab S10 Ultra';
-    } else if (brand === 'Xiaomi' && /pad\s*6s\s*pro/i.test(title)) {
+    } else if (brand === 'Xiaomi' && /pad\s*6s\s*pro/i.test(modelTitle)) {
       model = 'Pad 6S Pro';
-    } else if (brand === 'Xiaomi' && /pad\s*7\s*pro/i.test(title)) {
+    } else if (brand === 'Xiaomi' && /pad\s*7\s*pro/i.test(modelTitle)) {
       model = 'Pad 7 Pro';
     } else {
-      const withoutLeadingPromo = title
+      const withoutLeadingPromo = modelTitle
         .replace(/^(?:\s*(?:\[[^\]]*\]|\([^)]*\)|【[^】]*】))+\s*/, '')
         .trim();
       const cleaned = withoutLeadingPromo

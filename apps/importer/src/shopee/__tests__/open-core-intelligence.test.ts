@@ -193,6 +193,57 @@ async function runSuite() {
   assert.equal(keyOf('Xiaomi Redmi Note 17 Pro Max 512GB'), 'xiaomi:redmi-note-17-pro-max:512gb');
   assert.equal(keyOf('Xiaomi Redmi Note 17 ProMax 512GB'), 'xiaomi:redmi-note-17-pro-max:512gb');
   assert.equal(keyOf('Xiaomi Redmi Note 17 Pro 512GB'), 'xiaomi:redmi-note-17-pro:512gb');
+  // A tier word written apart from the model number, or behind a separator, stays part of
+  // the model (DOS/Rate#1090). Labeled fixtures: title -> correct key.
+  const tierWordSpellings: Array<[string, string]> = [
+    ['Apple iPhone 15+ 128GB', 'apple:iphone-15-plus:128gb'],
+    ['iPhone 15 + 128GB', 'apple:iphone-15-plus:128gb'],
+    ['Samsung Galaxy S24 + 256GB', 'samsung:galaxy-s24-plus:256gb'],
+    ['Samsung Galaxy S24 +', 'samsung:galaxy-s24-plus:unknown'],
+    ['Samsung Galaxy Tab S 9 Ultra 256GB', 'samsung:galaxy-tab-s9-ultra:256gb'],
+    ['Samsung Galaxy S 24 Ultra 512GB', 'samsung:galaxy-s24-ultra:512gb'],
+    ['iPhone 15 - ProMax', 'apple:iphone-15-pro-max:unknown'],
+    ['iPhone 15 (ProMax) 256GB', 'apple:iphone-15-pro-max:256gb'],
+    ['iPhone 15 - Pro Max 256GB', 'apple:iphone-15-pro-max:256gb'],
+    ['Samsung Galaxy S24 - Ultra 256GB', 'samsung:galaxy-s24-ultra:256gb'],
+    ['Xiaomi Redmi Note 13 (Pro) 256GB', 'xiaomi:redmi-note-13-pro:256gb'],
+    // Spellings that already keyed right keep their keys.
+    ['Samsung Galaxy S24+ 256GB', 'samsung:galaxy-s24-plus:256gb'],
+    ['Samsung Galaxy S24 Plus 256GB', 'samsung:galaxy-s24-plus:256gb'],
+    ['iPhone 15 ProMax 256GB', 'apple:iphone-15-pro-max:256gb'],
+    ['iPhone 15 Plus 128GB', 'apple:iphone-15-plus:128gb'],
+    ['Samsung Galaxy Tab S9 Ultra 256GB', 'samsung:galaxy-tab-s9-ultra:256gb'],
+    ['Samsung Galaxy S24 256GB', 'samsung:galaxy-s24:256gb'],
+    ['iPhone 15 128GB', 'apple:iphone-15:128gb'],
+    // A "+" before a gift or a word is not a Plus model (DOS/Rate#597).
+    ['Samsung Galaxy A55 + Tặng ốp', 'samsung:galaxy-a55-tang:unknown'],
+    ['iPhone 15 128GB + Ốp lưng', 'apple:iphone-15:128gb'],
+    ['iPhone 15 + Tặng sạc', 'apple:iphone-15:unknown'],
+    ['Combo iPhone 15 + AirPods', 'apple:iphone-15:unknown'],
+    ['Combo iPhone 15+AirPods', 'apple:iphone-15:unknown'],
+    ['Samsung Galaxy Tab S9 - Ultra 2-in-1 case 256GB', 'samsung:galaxy-tab-s9:256gb'],
+    ['iPhone 15 - Pro Max 8/256GB', 'apple:iphone-15-pro-max:256gb'],
+    ['iPhone 15 + Ốp lưng 128GB', 'apple:iphone-15:128gb'],
+    // A network after the "+" still ends the name; so does a "+" after "Pro".
+    ['Samsung Galaxy S24 + 5G', 'samsung:galaxy-s24-plus:unknown'],
+    ['Xiaomi Redmi Note 13 Pro + 5G 256GB', 'xiaomi:redmi-note-13-pro-plus:256gb'],
+    ['Samsung Galaxy S24 + 5G 256GB', 'samsung:galaxy-s24-plus:256gb'],
+    ['Samsung Galaxy S24 +256GB', 'samsung:galaxy-s24-plus:256gb'],
+    ['Samsung Galaxy S24 (Ultra)256GB', 'samsung:galaxy-s24-ultra:256gb'],
+    // A tier word that starts an accessory or gift phrase is not the model's.
+    ['iPhone 15 + Free case 128GB', 'apple:iphone-15:128gb'],
+    ['Samsung Galaxy S24 + (Free case) 256GB', 'samsung:galaxy-s24:256gb'],
+    ['Samsung Galaxy Tab S9 - Ultra slim case 256GB', 'samsung:galaxy-tab-s9:256gb'],
+  ];
+  for (const [title, expectedKey] of tierWordSpellings) {
+    assert.equal(keyOf(title), expectedKey, title);
+  }
+  // A RAM/ROM pair written "8 + 256GB" is not a Plus model.
+  assert.doesNotMatch(keyOf('Samsung Galaxy A55 8 + 256GB'), /plus/);
+  assert.equal(
+    normalizer.normalize(createDummyShopeeProduct('Apple iPhone 15+ 128GB')).model,
+    'iPhone 15 Plus'
+  );
   // Sony's WF/WH-1000XM line with or without the hyphen.
   assert.equal(keyOf('Tai nghe TWS Sony WF1000XM5'), keyOf('Tai nghe TWS Sony WF-1000XM5'));
   assert.equal(keyOf('Tai nghe TWS Sony WF1000XM5'), 'sony:wf-1000xm5:unknown');
