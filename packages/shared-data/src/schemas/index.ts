@@ -8,3 +8,4 @@ export * from './listing.schema.js';
 export * from './review.schema.js';
 export * from './common.schema.js';
 export * from './specs.schema.js';
+export * from './item.schema.js';
