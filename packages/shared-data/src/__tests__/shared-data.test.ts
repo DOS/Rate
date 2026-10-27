@@ -737,6 +737,10 @@ function testPriceRules(): void {
     'Apple AirPodsPro2',
     'Buds3ProFE',
     'Samsung Galaxy Buds3ProFE',
+    'XiaomiRedmiBuds5Pro',
+    'SamsungBuds3',
+    'OppoEncoBuds2',
+    'pin 0.5Wh tai nghe',
   ]) {
     assert.equal(rules.minimumListingPriceVnd([title]), 400_000, title);
   }
@@ -745,6 +749,8 @@ function testPriceRules(): void {
     'Tai nghe chụp tai Sony WH1000XM4',
     'Tai nghe Bluetooth Sony WH-CH720N',
     'SonyWH-XB910N tai nghe',
+    'Tai nghe Sony WH 1000XM5',
+    'Sony_WH-1000XM5 tai nghe',
     'https://shop.vn/tai-nghe-sony-wh-1000xm5',
     'Which phone',
   ]) {
