@@ -419,7 +419,7 @@ async function runSuite() {
     ['Apple Watch Series 10 Sport Loop 45mm cho mặt 46mm', 'apple:watch-series-10:unknown'],
     ['Apple Watch Series 10 Sport Band 45mm cho mặt 42mm', 'apple:watch-series-10:unknown'],
     ['Apple Watch SE 3 GPS Strap 40mm for 44mm case', 'apple:watch-se-3:unknown'],
-    ['Apple Watch Series 10 Bracelet 42mm | 46mm', 'apple:watch-series-10-46mm:unknown'],
+    ['Apple Watch Series 10 Bracelet 42mm | 46mm', 'apple:watch-series-10:unknown'],
     // A band is sold by the case it fits: a band's size alone is the case's.
     [
       'Apple Watch Series 10 GPS Dây Cao Su 46mm Chính Hãng VN/A',
@@ -447,12 +447,41 @@ async function runSuite() {
       'Apple Watch SE 2024 Viền nhôm dây cao su [40mm/GPS] - Mới',
       'apple:watch-se-2024-40mm:unknown',
     ],
-    // A decomposed or upper-case "dây" is the same word; "Bandit" is no band.
-    ['Apple Watch Series 10 da\u0302y vải 45mm, 42mm', 'apple:watch-series-10-42mm:unknown'],
-    ['APPLE WATCH SERIES 10 DÂY VẢI 45MM, 42MM', 'apple:watch-series-10-42mm:unknown'],
+    // A decomposed or upper-case "dây" is the same word, so "42mm" after its comma is a
+    // second band size (DOS/Rate#1137); "Bandit" is no band.
+    ['Apple Watch Series 10 da\u0302y vải 45mm, 42mm', 'apple:watch-series-10:unknown'],
+    ['APPLE WATCH SERIES 10 DÂY VẢI 45MM, 42MM', 'apple:watch-series-10:unknown'],
     ['Apple Watch Series 10 Bandit 46mm cho mặt 42mm', 'apple:watch-series-10-46mm:unknown'],
   ];
   for (const [title, expectedKey] of watchBandSizeKeys1124) {
+    assert.equal(keyOf(title), expectedKey, title);
+  }
+  // DOS/Rate#1137: a band phrase that ends in a size runs on over the sizes listed after
+  // it with "," or "|"; only a size outside that list is the case's.
+  const watchBandListKeys1137: Array<[string, string]> = [
+    // The titles of the issue.
+    [
+      'Apple Watch Series 11 GPS (Sport Band 42mm, 46mm) Case 42mm',
+      'apple:watch-series-11-42mm:64gb',
+    ],
+    ['Apple Watch Series 11 GPS Nhôm Dây Sport Loop 42mm | 46mm', 'apple:watch-series-11:64gb'],
+    ['Apple Watch Series 11 Dây Vải 42mm 46mm', 'apple:watch-series-11:64gb'],
+    // The list runs on over every listed size, and a pipe list keys like a comma list.
+    ['Apple Watch Series 10 Sport Band 42mm, 46mm, 42mm', 'apple:watch-series-10:unknown'],
+    ['Apple Watch Series 10 Dây Vải 42mm | 46mm | Chính Hãng', 'apple:watch-series-10:unknown'],
+    [
+      'Apple Watch Series 10 Sport Band 42mm, 46mm | mặt 46mm',
+      'apple:watch-series-10-46mm:unknown',
+    ],
+    // A band phrase without a size starts no list: the size after its comma is the case's.
+    ['Apple Watch Series 10 Dây Cao Su, 46mm', 'apple:watch-series-10-46mm:unknown'],
+    ['Apple Watch Series 10 Dây Cao Su | 42mm GPS', 'apple:watch-series-10-42mm:unknown'],
+    // A part that holds more than a size ends the list.
+    ['Apple Watch Series 10 Sport Band 45mm, 46mm GPS', 'apple:watch-series-10-46mm:unknown'],
+    // ")", ";", an en dash or " - " still end the band phrase and its list.
+    ['Apple Watch Series 10 (Sport Band 45mm) 46mm, 42mm', 'apple:watch-series-10-46mm:unknown'],
+  ];
+  for (const [title, expectedKey] of watchBandListKeys1137) {
     assert.equal(keyOf(title), expectedKey, title);
   }
   // The registry has one entry per line: a sized title keeps the line's benchmark, but
