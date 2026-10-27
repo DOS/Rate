@@ -4821,8 +4821,11 @@ nav a:hover {
 }
 
 @media (max-width: 991.98px) {
+  // Narrower than the screen by enough to leave the menu toggle (30px, 12px
+  // from the right edge) in view: it stays live while the menu is open and
+  // takes focus back when it closes (DOS/Rate#1110).
   .navigation .nav-menus-wrapper {
-    width: 320px;
+    width: min(320px, calc(100vw - 56px));
     height: 100%;
     top: 0;
     left: -400px;
