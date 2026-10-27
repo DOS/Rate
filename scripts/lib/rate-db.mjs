@@ -113,7 +113,9 @@ export function startRateDb({
   sql(`CREATE ROLE anon; CREATE ROLE authenticated; CREATE ROLE service_role;
     CREATE ROLE authenticator NOINHERIT;
     CREATE SCHEMA auth;
-    CREATE TABLE auth.users (id UUID PRIMARY KEY, email TEXT, email_confirmed_at TIMESTAMPTZ);
+    CREATE TABLE auth.users (id UUID PRIMARY KEY, email TEXT, email_confirmed_at TIMESTAMPTZ,
+      phone_confirmed_at TIMESTAMPTZ, is_anonymous BOOLEAN NOT NULL DEFAULT false,
+      created_at TIMESTAMPTZ DEFAULT now());
     CREATE FUNCTION auth.uid() RETURNS UUID LANGUAGE sql STABLE AS $$
       SELECT NULLIF(NULLIF(current_setting('request.jwt.claims', true), '')::jsonb ->> 'sub', '')::uuid
     $$;
