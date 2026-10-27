@@ -147,6 +147,7 @@ const LIST_MARKER = /^\s*(?:[-*+]\s+|\d+[.)]\s+)?/;
  * of a list item, and a word longer than a whole line is split.
  */
 export function wrapLine(line, width = MAX_LINE) {
+  if (!(width >= 2)) throw new RangeError(`cannot wrap to width ${width}`);
   if (line.length <= width || URL_LINE.test(line)) return [line];
   const marker = line.match(LIST_MARKER)[0];
   const first = marker.length <= width / 2 ? marker : '';
@@ -164,9 +165,16 @@ export function wrapLine(line, width = MAX_LINE) {
       }
       if (empty) {
         // Not even an empty line holds the word: split it.
+        // Cut between characters, never inside a surrogate pair.
         const room = width - current.length;
-        lines.push(current + word.slice(0, room));
-        word = word.slice(room);
+        let piece = '';
+        for (const char of word) {
+          if (piece.length + char.length > room) break;
+          piece += char;
+        }
+        if (piece === '') piece = word.slice(0, Math.max(room, 1));
+        lines.push(current + piece);
+        word = word.slice(piece.length);
         current = hang;
         continue;
       }
@@ -179,20 +187,20 @@ export function wrapLine(line, width = MAX_LINE) {
   return lines;
 }
 
+// `type(scope)!: subject`, the header shape commitlint's parser reads.
+const CONVENTIONAL_HEADER = /^[a-z]+(?:\([^()\r\n]*\))?!?: \S/;
+
 /**
  * The squash commit's header: the PR title with its number, which promote.mjs
- * reads back. A title too long for both is cut at a word.
+ * reads back. Null when the title is not a conventional header or the header
+ * is over the limit: cutting it could leave an empty or start-case subject.
  */
 export function squashTitle(title, number) {
-  const suffix = ` (#${number})`;
   const text = title.trim().replace(/\s+/g, ' ');
-  if (text.length + suffix.length <= MAX_LINE) return text + suffix;
-  const room = MAX_LINE - suffix.length;
-  const cut = text.slice(0, room + 1).replace(/\s+\S*$/, '');
-  const head = (
-    cut.length > 0 && cut.length <= room ? cut : text.slice(0, room)
-  ).replace(/[\s.,;:!?-]+$/, '');
-  return head + suffix;
+  const header = `${text} (#${number})`;
+  return CONVENTIONAL_HEADER.test(text) && header.length <= MAX_LINE
+    ? header
+    : null;
 }
 
 /**
@@ -220,7 +228,10 @@ export function squashBody(messages) {
     lines[0] = `* ${lines[0]}`;
     items.push(lines.flatMap((line) => wrapLine(line)).join('\n'));
   }
-  const footer = [...trailers.values()].flatMap((line) => wrapLine(line));
+  // A wrapped trailer no longer credits anyone: leave out one too long.
+  const footer = [...trailers.values()].filter(
+    (line) => line.length <= MAX_LINE
+  );
   return [items.join('\n\n'), footer.join('\n')].filter(Boolean).join('\n\n');
 }
 
@@ -343,6 +354,12 @@ export async function mergeWhenGreen({
           message: `PR ${number}: cannot --ignore required check(s) ${conflict.join(', ')}`,
         };
       }
+      if (method === 'squash' && !squashTitle(pr.title, number)) {
+        return {
+          ok: false,
+          message: `PR ${number}: its title must be a conventional header that fits "<title> (#${number})" in ${MAX_LINE} characters, so the squash commit passes commitlint`,
+        };
+      }
     }
     const checks = evaluateChecks(head.runs, head.statuses, {
       ignore: [...IGNORED_CHECKS, ...ignore],
@@ -389,7 +406,7 @@ export async function mergeWhenGreen({
     if (next.action === 'merge') {
       // GitHub's default squash message keeps the commits' long lines and
       // mixes their trailers into the body: send one commitlint accepts.
-      const squash = [];
+      const squash = {};
       if (method === 'squash') {
         let messages;
         try {
@@ -397,35 +414,48 @@ export async function mergeWhenGreen({
             `repos/${repo}/pulls/${number}/commits?per_page=100`,
             '.[] | {message: .commit.message}'
           ).map((c) => c.message);
+          commitListErrors = 0;
         } catch (err) {
           if (++commitListErrors >= MAX_API_ERRORS) {
-            return { ok: false, message: `PR ${number}: ${err.message}` };
+            return {
+              ok: false,
+              message: `PR ${number}: cannot list its commits: ${err.message}`,
+            };
           }
           await sleep(intervalMs);
           continue;
         }
-        squash.push(
-          '-f',
-          `commit_title=${squashTitle(pr.title, number)}`,
-          '-f',
-          `commit_message=${squashBody(messages)}`
-        );
+        // The commits API stops at 250: never write a body that drops some.
+        if (messages.length < pr.commits) {
+          return {
+            ok: false,
+            message: `PR ${number}: only ${messages.length} of its ${pr.commits} commits could be listed for the squash message`,
+          };
+        }
+        squash.commit_title = squashTitle(pr.title, number);
+        squash.commit_message = squashBody(messages);
       }
+      // The fields go as JSON on stdin: a long squash message is over the
+      // Windows command line limit.
       const merged = gh(
         [
           'api',
           '-X',
           'PUT',
           `repos/${repo}/pulls/${number}/merge`,
-          '-f',
-          `merge_method=${method}`,
-          '-f',
-          `sha=${pr.head.sha}`,
-          ...squash,
+          '--input',
+          '-',
           '--jq',
           '.sha',
         ],
-        { allowFailure: true }
+        {
+          allowFailure: true,
+          input: JSON.stringify({
+            merge_method: method,
+            sha: pr.head.sha,
+            ...squash,
+          }),
+        }
       );
       if (merged.status !== 0) {
         // A check re-queued after the last read (for example by a PR edit)

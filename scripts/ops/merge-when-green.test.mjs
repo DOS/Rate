@@ -347,13 +347,30 @@ test('wraps a long line under its list marker and splits a word longer than a li
   assert.deepEqual(wrapLine(url), [url]);
 });
 
-test('keeps the PR number in the squash title and cuts a long title at a word', () => {
-  assert.equal(squashTitle('fix(web): a thing', 7), 'fix(web): a thing (#7)');
-  const title = squashTitle(LONG_TITLE, 1127);
-  assert.equal(title, `${LONG_TITLE} (#1127)`);
-  const longer = squashTitle(`${LONG_TITLE} and more words here`, 1127);
-  assert.ok(longer.length <= MAX_LINE);
-  assert.equal(longer, `${LONG_TITLE} (#1127)`);
+test('splits a long word between characters, never inside an emoji', () => {
+  const wrapped = wrapLine(`a${'😀'.repeat(50)}`);
+  assert.ok(wrapped.every((line) => line.length <= MAX_LINE));
+  assert.ok(wrapped.every((line) => !/[\uD800-\uDBFF]$/.test(line)));
+  assert.equal(wrapped.join(''), `a${'😀'.repeat(50)}`);
+  assert.throws(() => wrapLine('x y', 0), RangeError);
+});
+
+test('keeps the PR number in the squash title, or refuses a title that cannot carry it', () => {
+  assert.equal(
+    squashTitle(' fix(web):  a thing ', 7),
+    'fix(web): a thing (#7)'
+  );
+  assert.equal(squashTitle(LONG_TITLE, 1127), `${LONG_TITLE} (#1127)`);
+  // Cutting these would leave an empty subject or a start-case one.
+  assert.equal(squashTitle(`${LONG_TITLE} and more`, 1127), null);
+  assert.equal(squashTitle(`fix: ${'a'.repeat(89)}`, 1133), null);
+  // Not conventional: commitlint ignores `v1.2.3` alone, not with `(#n)`.
+  assert.equal(squashTitle('v1.2.3', 1133), null);
+  assert.equal(squashTitle('Update stuff', 1133), null);
+  assert.equal(
+    squashTitle('feat(web)!: drop old route', 3),
+    'feat(web)!: drop old route (#3)'
+  );
 });
 
 test('gathers the trailers once each into a footer after the commits', () => {
@@ -363,6 +380,12 @@ test('gathers the trailers once each into a footer after the commits', () => {
   assert.equal(body.split(CO_AUTHOR).length, 2);
   assert.ok(body.includes('\n\n* fix(shared-data): over-ear WH'));
   assert.equal(squashBody(['fix: a\r\n\r\nbody\r\n']), '* fix: a\n\nbody');
+  // A trailer is never wrapped: one too long for commitlint is left out.
+  const long = `Co-authored-by: ${'a'.repeat(90)} <a@b.com>`;
+  assert.equal(
+    squashBody([`fix: a\n\n${long}\n${CO_AUTHOR}`]),
+    `* fix: a\n\n${CO_AUTHOR}`
+  );
 });
 
 test('the squash message of PR bodies with lines over 100 characters passes commitlint', () => {
