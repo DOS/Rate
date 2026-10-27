@@ -29,6 +29,8 @@ label; do not add them, and do not bulk-edit existing issues to tag them.
 - The PO session is titled `Rate Core Product Owner` or
   `Rate Services Product Owner`. Sub-sessions are titled
   `#<issue> <short task>` (for Rate Services: `RS#<issue> <short task>`).
+- Rate Services works differently from Rate Core; see "Rate Services
+  differences" before dispatching there.
 - The PO uses the agent nickname `PO` on issues it claims itself (tracking
   and docs tasks). Sub-sessions keep the specialist nicknames from
   `AGENTS.md` (`Web`, `Core`, `Crawl`, `Guard`, `Brand`, `Ops`, `CI`,
@@ -41,7 +43,8 @@ label; do not add them, and do not bulk-edit existing issues to tag them.
 
 ## Keep the line moving
 
-JOY's standing instruction for DOS.AI POs (2026-10-27), applied here too:
+JOY's standing instruction for DOS.AI POs (2026-10-27), adopted for Rate by
+the Rate Core PO on 2026-10-27 as a default that JOY may change:
 "quan trọng là phải làm việc liên tục. PO sẽ luôn phải điều phối và
 brainstorm, planning để define backlog cho sub session làm" (work
 continuously; the PO always coordinates, brainstorms and plans to define the
@@ -61,8 +64,9 @@ only the issue in their brief.
 - To free a slot (only when a higher-priority task needs one and the line is
   at 5), the lowest-priority session pushes its work, posts a release comment
   naming where it stopped, and runs
-  `node scripts/ops/board.mjs <n> --status ready --agent <nick>` (the label
-  stays as a pointer to who worked on it; see "Claims"). Then it is archived.
+  `node scripts/ops/board.mjs <n> --status ready --agent <Nick>`. `board.mjs`
+  keeps the `agent:*` label; the release comment is the hand-over that lets
+  the next session take the issue (see "Claims"). Then it is archived.
 - Keep a ready backlog for the line: issues with a clear outcome, acceptance,
   files, Size set, on Project #9 in `Ready` (`status:ready`), in priority
   order. Draw it from `Docs/Resources/ROADMAP.md` (open items of the current
@@ -113,35 +117,41 @@ already known (run link, error line, issue) and let it investigate.
 Rate claims an issue with labels, not comments: `agent:<nick>` plus one
 `status:*` label, mirrored to Project #9 Status and Agent by
 `node scripts/ops/board.mjs <n> --status <s> --agent <Nick> [--repo DOS/Rate-Services]`.
+`--agent` is required on every call, and `board.mjs` always keeps an
+`agent:*` label on the issue.
 In DOS/Rate the required `task-claim` check (`scripts/task-claim-check.mjs`,
 ruleset `dev-task-claim`) passes a PR into `dev` only when every
 issue it closes carries an `agent:*` label and `status:in-progress` or
 `status:in-review`. PRs reference their issue with `Closes #<n>` (the check
-reads closing references). Do not use DOS.AI's `claim:`/`release:` comments
+reads closing references). Merging into `dev`, the default branch, closes
+the issue automatically. Do not use DOS.AI's `claim:`/`release:` comments
 or its `task-claim` skill here.
 
 DOS.AI's claim concepts map onto Rate like this. Every comment is English and
 starts with `**[Agent: <Nick>]**`.
 
-| DOS.AI                        | Rate                                                                                                                                                          |
-| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `claim:`                      | `board.mjs <n> --status in-progress --agent <Nick>` plus a claim comment naming the branch                                                                    |
-| `checkpoint:`                 | A comment at each milestone (PR opened, blocked, paused): done, evidence, next step                                                                           |
-| `handoff:` to another session | A handoff comment (done, evidence, remaining work, next step); the receiver runs `board.mjs ... --take-over` with its own nickname                            |
-| `handoff:` to JOY             | A handoff comment, then the PO takes the decision to JOY; the issue keeps its labels until JOY answers                                                        |
-| `release:`                    | A release comment (why, where it stopped), then `board.mjs <n> --status ready` (or `backlog` if blocked; name the blocker)                                    |
-| `done:`                       | `board.mjs <n> --status done` and close the issue with the evidence, after the merge (docs, CI, tooling) or after the live check (runtime changes, see below) |
+| DOS.AI                        | Rate                                                                                                                                                                                                                                     |
+| ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `claim:`                      | `board.mjs <n> --status in-progress --agent <Nick>` plus a claim comment naming the branch                                                                                                                                               |
+| `checkpoint:`                 | A comment at each milestone (PR opened, blocked, paused): done, evidence, next step                                                                                                                                                      |
+| `handoff:` to another session | A handoff comment (done, evidence, remaining work, next step); the receiver runs `board.mjs ... --take-over` with its own nickname                                                                                                       |
+| `handoff:` to JOY             | A handoff comment, then the PO takes the decision to JOY; the issue keeps its labels until JOY answers                                                                                                                                   |
+| `release:`                    | A release comment (why, where it stopped), then `board.mjs <n> --status ready --agent <Nick>` (or `backlog` if blocked; name the blocker). The release comment counts as a hand-over: the next session may run `--take-over` and link it |
+| `done:`                       | `board.mjs <n> --status done --agent <Nick>` with the evidence: by the sub-session after the merge for docs, CI and tooling; by the PO after the promotion and live check for runtime changes                                            |
 
 Orphaned claims: an issue with an `agent:*` label and `status:in-progress`
 or `status:in-review`, but no open branch or PR, no commit and no comment in
-the last 24 hours, and no live session that owns it (`ListAgents`,
-`list_sessions` with `linked: true`), is orphaned. That happens after a
-machine change, an app restart or an archived session. The PO checks the
-evidence (branch, PR, latest comment, notes folder), then the new session
-posts a takeover comment linking the evidence and runs
-`board.mjs <n> --status in-progress --agent <Nick> --take-over`. Never take
-over a claim that may still be live: if in doubt, ask JOY. `--take-over` is
-otherwise only for a handoff or JOY's assignment (`AGENTS.md` 0.6).
+the last 24 hours, and no live session that owns it, may be orphaned. That
+happens after a machine change, an app restart or an archived session.
+`ListAgents` and `list_sessions` only see Claude sessions; Codex,
+Antigravity or agents on another machine are invisible to them, so silence
+there is not proof. `AGENTS.md` allows `--take-over` only after a hand-over
+(a handoff or release comment) or on JOY's assignment, so an orphaned claim
+with neither is JOY's call: the PO collects the evidence (labels, branch,
+PR, latest comment, notes folder) and asks JOY in one line. On JOY's yes,
+quoted in the brief with the date, the new session posts a takeover comment
+linking the evidence and runs
+`board.mjs <n> --status in-progress --agent <Nick> --take-over`.
 
 ## Triage
 
@@ -168,8 +178,9 @@ otherwise only for a handoff or JOY's assignment (`AGENTS.md` 0.6).
 
 Project #9 (`PVT_kwDOA388Vc4Bm5Ml`) serves both lines. Every issue the PO
 creates or hands out is on the board with Status and Size; `board.mjs` adds
-it to the board and sets Status and Agent. Fill only empty values and never
-overwrite another session's choice. Ids verified live on 2026-10-27 with
+it to the board and sets Status and Agent (it overwrites both). For Size,
+Issue Type and `area:*` labels, fill only empty values and never overwrite
+another session's choice. Ids verified live on 2026-10-27 with
 `gh project field-list 9 --owner DOS --format json`:
 
 | Field        | Id                               | Options                                                                                             |
@@ -189,7 +200,9 @@ Optional, when an issue has none: org Issue Type with `updateIssueIssueType`
 (Task `IT_kwDOA388Vc4As2J7`, Bug `IT_kwDOA388Vc4As2J9`,
 Feature `IT_kwDOA388Vc4As2KA`). Rate also uses `area:*` labels.
 
-Size is set on the board item (look the item id up from the issue first):
+Size is set on the board item. Look the item id up from the issue first, with
+the query in `AGENTS.md` 1 (`name: "Rate"`, or `name: "Rate-Services"`
+for the Services line):
 
 ```powershell
 gh project item-edit --project-id PVT_kwDOA388Vc4Bm5Ml --id <item id> --field-id PVTSSF_lADOA388Vc4Bm5MlzhlgTCc --single-select-option-id 86db8eb3
@@ -206,7 +219,9 @@ itself whether to use in-process subagents (parallel research, the
 fresh-context review the gate requires); they work under that session's
 claim.
 
-Use `start_session` with a fresh context and its own worktree
+Use `start_session` with a fresh context and its own worktree. Use
+`initiation: "user_asked"` only when JOY told the PO to dispatch work in the
+PO chat; otherwise the session is a proposal card JOY has to start. Worktree:
 (`<repo>\.claude\worktrees\<task>`, `AGENTS.md` 0.5). The brief is the only
 context the session gets, so it carries:
 
@@ -219,10 +234,14 @@ context the session gets, so it carries:
 - **Process**: claim with
   `node scripts/ops/board.mjs <n> --status in-progress --agent <Nick>` before
   editing; English issue, PR and commit text; PR into `dev` with
-  `Closes #<n>`; `board.mjs <n> --status in-review` once the PR is open; the
-  review gate (below); the PO acceptance gate; then
+  `Closes #<n>`; `board.mjs <n> --status in-review --agent <Nick>` once the
+  PR is open; the review gate (below); the PO acceptance gate; then
   `node scripts/ops/merge-when-green.mjs <pr>` after the PO answers "merge";
-  then `board.mjs <n> --status done` and close the issue with the evidence.
+  then, for docs, CI and tooling,
+  `board.mjs <n> --status done --agent <Nick>` with the evidence. A runtime
+  issue stays `status:in-review` (closed by the merge) until the PO marks it
+  Done after the promotion. For Rate Services, see "Rate Services
+  differences".
 - **Stop line**: what is not authorized (see "Stop lines"). A sub-session
   never runs a Production, DOS-Me migration, production-data, secret or
   credential step itself. It prepares the runbook described under
@@ -234,7 +253,7 @@ context the session gets, so it carries:
   or the shared notes folder, not here.
 - **Reporting**: the wrap-up is a recap only, never a question or buttons for
   JOY. Decisions, approvals and access needs go to the PO with SendMessage
-  (`to`: the PO's session id). Reports are in Vietnamese with full
+  (`to`: the PO's `local_...` session id). Reports are in Vietnamese with full
   diacritics and no em-dashes or en-dashes; the first line says complete,
   running or stopped.
 
@@ -255,7 +274,8 @@ Before the PR leaves draft (or before asking for the acceptance gate):
    required checks; the rest goes into one follow-up issue. A rate-limited,
    skipped or empty bot review is not a review.
 4. Required checks green: `Typecheck & Build Monorepo`, `E2E (Playwright)`,
-   `Secret scan (gitleaks)`, `task-claim`.
+   `Secret scan (gitleaks)`, `task-claim` (Rate Services: see "Rate
+   Services differences").
 
 ## Coordinating
 
@@ -313,7 +333,8 @@ refusal is not acceptable.
 
 ## Production and secret steps
 
-By JOY's choice for DOS.AI (2026-10-27), applied here: "Để PO chạy các bước
+By JOY's choice for DOS.AI (2026-10-27), adopted for Rate by the Rate Core
+PO on 2026-10-27 as a default that JOY may change: "Để PO chạy các bước
 Production và secret: session con chuẩn bị sẵn từng bước, tao chỉ duyệt trong
 chat của PO, PO chạy." These steps are: anything that changes rate.vn other
 than the normal promotion, a DOS-Me migration PR or its deploy, a write to
@@ -344,7 +365,31 @@ no ready backlog left, 10 or more PRs waiting on `dev`, the oldest
 unpromoted change older than 24 hours, or the end of a long working session.
 Only when `dev` head CI is green and no PR is mid-way through fixing a
 production bug. A runtime issue is Done after the promotion and the live
-check; docs, CI and tooling issues are Done once merged.
+check: once `verify-live.mjs` passes, the PO runs
+`board.mjs <n> --status done --agent <Nick>` for every runtime issue in the
+batch (the issues are already closed by their merges). Docs, CI and tooling
+issues are Done once merged.
+
+## Rate Services differences
+
+Verified on 2026-10-27. `DOS/Rate-Services` has no `dev` branch and none of
+Rate Core's release flow:
+
+- PRs go into `main` (the default branch). Its required checks are
+  `Typecheck & Multi-Platform Scraper Unit Suite` and
+  `Secret scan (gitleaks)`. There is no `task-claim` check, so the labels
+  are a convention there, but they are still required.
+- It has no `scripts/ops/`. Run `board.mjs` and `merge-when-green.mjs` from
+  a `DOS/Rate` checkout with `--repo DOS/Rate-Services` on every call; both
+  default to `DOS/Rate`, so a missing `--repo` changes or merges an
+  unrelated Rate Core item with the same number. The Codex review uses
+  `--base main`.
+- `promote.mjs` and `verify-live.mjs` do not apply. A Services issue is Done
+  once merged plus the runtime evidence its acceptance names (for example a
+  green scheduled crawler run).
+- A merge into `main` there changes what the crawlers run against the shared
+  production database, so the acceptance gate always asks for the second
+  independent reviewer when a change writes data.
 
 ## Stop lines (Rate)
 

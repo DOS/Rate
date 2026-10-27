@@ -60,6 +60,7 @@ packages/*/.env
 !.claude/skills/
 .claude/skills/*
 !.claude/skills/product-owner/
+*/**/.claude/
 .codex/
 .gemini/
 .cursor/
