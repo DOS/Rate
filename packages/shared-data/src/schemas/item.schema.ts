@@ -89,7 +89,9 @@ export const ItemSchema = z.object({
  * A variant: a `rate.master_products` row with its Item link. `item_id` and
  * `variant_key` stay nullable until the backfill and the M4 constraints.
  * When the `model_key` is well formed, `variant_key` must be its third
- * segment, so `model_key = item_key:variant_key` holds.
+ * segment, so `model_key = item_key:variant_key` holds. A legacy key outside
+ * that shape is not checked; the DB derives its `variant_key` with
+ * `split_part(model_key, ':', 3)` (design doc 4.3, 7.1).
  */
 export const VariantSchema = MasterProductSchema.extend({
   item_id: z.string().uuid().nullable().optional(),
