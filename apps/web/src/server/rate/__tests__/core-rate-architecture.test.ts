@@ -13126,6 +13126,145 @@ async function runCoreArchitectureSuite() {
   }
 
   // -------------------------------------------------------------------------
+  // 126j. View offers select threat_source and read merchants.metadata (#1108)
+  // -------------------------------------------------------------------------
+  {
+    const {
+      getMasterProductOffers,
+      getMasterProductOffersBatch,
+      mapTrustViewRowToMerchantOffer,
+    } = await import('@/lib/rate-api');
+
+    const viewMerchant = (extra: Record<string, unknown>, metaRisk?: unknown) =>
+      mapTrustViewRowToMerchantOffer(
+        {
+          id: 'o',
+          merchant_id: 'm',
+          platform: 'shopee',
+          title: 't',
+          price_current: 1_000_000,
+          url: 'https://shopee.vn/p',
+          review_risk_score: 0,
+          review_risk_breakdown: {},
+          ...extra,
+        } as never,
+        undefined,
+        metaRisk as never
+      ).merchant;
+    // Metadata fills a missing view score only.
+    assert.equal(
+      viewMerchant({ dosafe_risk_score: 0 }, 7).dosafe_risk_score,
+      7
+    );
+    assert.equal(viewMerchant({ dosafe_risk_score: 0 }, 7).risk_score, 15);
+    assert.equal(viewMerchant({}, 60).risk_score, 60);
+    assert.equal(
+      viewMerchant({ dosafe_risk_score: 0, threat_source: 'dosafe' }, 7)
+        .dosafe_risk_score,
+      0
+    );
+    assert.equal(
+      viewMerchant({ dosafe_risk_score: 35 }, 7).dosafe_risk_score,
+      35
+    );
+    assert.equal(
+      viewMerchant({ dosafe_risk_score: 0 }, '7').dosafe_risk_score,
+      null
+    );
+    assert.equal(
+      viewMerchant({ dosafe_risk_score: 0 }, 250).dosafe_risk_score,
+      100
+    );
+
+    const viewRow1108 = (id: string, merchantId: string, dosafe: number) => ({
+      id,
+      cluster_id: 'master-1108',
+      merchant_id: merchantId,
+      platform: 'shopee',
+      title: 't',
+      price_current: 1_000_000,
+      url: 'https://shopee.vn/p',
+      threat_risk_score: dosafe,
+      dosafe_risk_score: dosafe,
+      review_risk_score: 42,
+      review_risk_breakdown: { total_reviews: 3 },
+    });
+    const viewSelects1108: string[] = [];
+    const merchantIds1108: string[] = [];
+    const json1108 = (body: unknown) =>
+      new Response(JSON.stringify(body), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      });
+    globalThis.fetch = (async (input: RequestInfo | URL) => {
+      const url = new URL(
+        typeof input === 'string'
+          ? input
+          : input instanceof URL
+            ? input.toString()
+            : input.url
+      );
+      if (url.pathname.endsWith('/v_products_with_merchant_trust')) {
+        viewSelects1108.push(url.searchParams.get('select') ?? '');
+        return json1108(
+          Number(url.searchParams.get('offset') ?? 0) > 0
+            ? []
+            : [
+                viewRow1108('o1', 'm-meta', 0),
+                viewRow1108('o2', 'm-scored', 35),
+              ]
+        );
+      }
+      if (url.pathname.endsWith('/merchants')) {
+        merchantIds1108.push(url.searchParams.get('id') ?? '');
+        assert.match(
+          url.searchParams.get('select') ?? '',
+          /metadata->dosafe_risk_score/
+        );
+        return json1108([
+          {
+            id: 'm-meta',
+            follower_count: 900,
+            metadata_dosafe_risk_score: 7,
+          },
+        ]);
+      }
+      return json1108([]);
+    }) as typeof fetch;
+
+    const offers1108 = await getMasterProductOffers('master-1108');
+    const batch1108 = await getMasterProductOffersBatch(['master-1108']);
+    for (const offers of [offers1108, batch1108.get('master-1108') ?? []]) {
+      assert.deepEqual(
+        offers.map((o) => [o.id, o.merchant.dosafe_risk_score]),
+        [
+          ['o1', 7],
+          ['o2', 35],
+        ]
+      );
+      // A scored seller gets no follower count from the extra read (#685).
+      assert.equal(offers[0]?.merchant.follower_count, 0);
+    }
+    // Without threat_source every view 0 would read as missing (#1099).
+    assert.ok(viewSelects1108.length > 0);
+    for (const select of viewSelects1108) {
+      assert.ok(
+        select
+          .split(',')
+          .map((c) => c.trim())
+          .includes('threat_source'),
+        `TRUST_VIEW_SELECT must include threat_source: ${select}`
+      );
+    }
+    // Only the seller without a view score is read.
+    assert.deepEqual(merchantIds1108, ['in.(m-meta)', 'in.(m-meta)']);
+
+    console.log(
+      '  ✅ [126j/135] View offers select threat_source and read merchants.metadata (#1108) passed'
+    );
+  }
+
+  // -------------------------------------------------------------------------
   // 127. Rate Server Index & Extension Entity, Slug, and Category Bounds (#1029)
   // -------------------------------------------------------------------------
   {
