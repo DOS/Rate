@@ -890,6 +890,9 @@ function testItemVariantKeys(): void {
     // A dot is allowed in the model segment (design doc 7.3), although
     // today's slugify strips it.
     ['xiaomi:redmi-note-14.5:128gb', 'xiaomi:redmi-note-14.5', '128gb'],
+    // slugify keeps `_` (it strips [^\w-]), including at the start.
+    ['asus:vivobook-x1504_va:512gb', 'asus:vivobook-x1504_va', '512gb'],
+    ['samsung:_galaxy-s25:256gb', 'samsung:_galaxy-s25', '256gb'],
   ];
   for (const [modelKey, itemKey, variantKey] of forms) {
     assert.deepEqual(splitModelKey(modelKey), { itemKey, variantKey });
@@ -907,9 +910,9 @@ function testItemVariantKeys(): void {
     if (!/\.(ts|mjs)$/.test(file)) continue;
     const source = readFileSync(new URL(file, fixtureDir), 'utf8');
     for (const m of source.matchAll(
-      // Wider than the key shape (upper case, `_`), so a fixture key the
-      // helpers would reject fails here instead of being skipped. The brand
-      // must start with a letter, which leaves out ISO timestamps.
+      // Wider than the key shape (upper case), so a fixture key the helpers
+      // would reject fails here instead of being skipped. The brand must
+      // start with a letter or `_`, which leaves out ISO timestamps.
       /['"`]([A-Za-z_][\w-]*:[\w.-]+:[\w.-]+)['"`]/g
     )) {
       fixtureKeys.add(m[1] ?? '');
@@ -934,6 +937,9 @@ function testItemVariantKeys(): void {
     'apple:iphone-17:',
     'apple:-iphone:256gb',
     'apple:iphone 17:256gb',
+    // Empty model segment, as the normalizer emits for a title with no model.
+    'samsung::unknown',
+    'khac::256gb',
     'apple:iphone-17:256GB',
     `apple:${'x'.repeat(200)}:256gb`,
   ]) {

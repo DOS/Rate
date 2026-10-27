@@ -10,14 +10,15 @@
  *   `unknown` (earbuds), and later suffixed forms such as `256gb-cellular`.
  *   Display labels (`1TB`, "Standard") are derived from it, never keys.
  *
- * Segment shapes follow the design doc's inventory check (section 7.3). A key
- * outside them (legacy keys without three segments, upper case, empty
- * segments) is not parsed: `splitModelKey` returns null for it.
+ * Segment shapes follow the design doc's inventory check (section 7.3). They
+ * allow `_`, which the normalizer's slugify keeps (`x1504_va`). A key outside
+ * them (legacy keys without three segments, upper case, empty segments such
+ * as `samsung::unknown`) is not parsed: `splitModelKey` returns null for it.
  */
 
-const BRAND_SEGMENT = '[a-z0-9][a-z0-9-]*';
-const MODEL_SEGMENT = '[a-z0-9][a-z0-9.-]*';
-const VARIANT_SEGMENT = '[a-z0-9-]+';
+const BRAND_SEGMENT = '[a-z0-9_][a-z0-9_-]*';
+const MODEL_SEGMENT = '[a-z0-9_][a-z0-9_.-]*';
+const VARIANT_SEGMENT = '[a-z0-9_-]+';
 
 export const ITEM_KEY_PATTERN = new RegExp(
   `^${BRAND_SEGMENT}:${MODEL_SEGMENT}$`
