@@ -165,7 +165,24 @@ const APPLE_FAMILIES: ReadonlyArray<readonly [RegExp, string]> = [
   [/macbook/i, 'MacBook'],
   [/\bwatch\b/i, 'Watch'],
   [/airpods/i, 'AirPods'],
+  // Lines with no pattern of their own; on a tie the first listed wins (DOS/Rate#819).
+  [/apple\s*tv\s*4k/i, 'TV 4K'],
+  [/apple\s*tv/i, 'TV'],
+  [/vision\s*pro/i, 'Vision Pro'],
+  [/mac\s*mini/i, 'Mac mini'],
+  [/mac\s*studio/i, 'Mac Studio'],
+  [/\bimac\b/i, 'iMac'],
+  [/homepod\s*mini/i, 'HomePod mini'],
+  [/homepod/i, 'HomePod'],
 ];
+
+const APPLE_GENERATION_BY_YEAR: Readonly<Record<string, string>> = {
+  'TV 4K 2017': '1',
+  'TV 4K 2021': '2',
+  'TV 4K 2022': '3',
+  'HomePod 2018': '1',
+  'HomePod 2023': '2',
+};
 
 /**
  * Detect canonical category slug from product title across all 5 tech categories.
@@ -1135,6 +1152,13 @@ export class ProductNormalizer {
     else if (/sennheiser|momentum/i.test(title)) brand = 'Sennheiser';
     else if (/oneplus/i.test(title)) brand = 'OnePlus';
     else if (/\bhonor\b|magicbook/i.test(title)) brand = 'Honor';
+    // Apple's desktops and speakers, last so another brand wins, and not when the title
+    // only names what it fits or looks like ("Bàn phím cho Mac mini") (DOS/Rate#819).
+    else if (
+      /\bimac\b|\bmac\s*(?:mini|studio)\b|homepod|\bvision\s*pro\b/i.test(title) &&
+      !/\b(?:cho|for|giống)\s+(?:imac|mac|homepod|vision)/i.test(title)
+    )
+      brand = 'Apple';
 
     // 2. Extract Model
     let model = '';
@@ -1175,23 +1199,31 @@ export class ProductNormalizer {
       // "Watch Ultra 2", "AirPods Pro (2nd generation)" is "AirPods Pro 2" (DOS/Rate#817).
       // One optional space before the "(" keeps a single space in the name; a leading
       // `\s*` would be quadratic on long whitespace (CodeQL js/polynomial-redos).
-      const appleTitle = modelTitle.replace(
+      let appleTitle = modelTitle.replace(
         / ?\(\s*(\d{1,2})(?:st|nd|rd|th)\s*gen(?:eration)?\s*\)/gi,
         ' $1'
       );
+      // An iPhone or iPad named after another Apple product as what it fits is not the
+      // product: "AirPods Pro 2 cho iPhone Air" is the AirPods (DOS/Rate#819).
+      const fitsAt = appleTitle.search(/ (?:cho|for) (?:iphone|ipad)\b/i);
+      // Only another family counts: "Ốp lưng iPhone cho iPhone 15" is still the iPhone 15.
+      if (fitsAt > 0 && /airpods|\bwatch\b|macbook/i.test(appleTitle.slice(0, fitsAt)))
+        appleTitle = appleTitle.slice(0, fitsAt);
       const iphoneMatch = appleTitle.match(
         /iphone\s*(\d+e\b|\d+(?:\s*(?:pro\s*max|pro|plus|mini|air)|\+(?= ?(?:$|[-,]|\d+(?:[.,]\d+)? ?(?:gb|tb)\b|[45]g\b|lte\b|chính\b)))?|air\b|duo\b|se(?:\s*(?:\(\s*(?:2020|2022|2025)\s*\)|(?:2020|2022|2025)\b|(?:gen\s*)?[234]\b))?)/i
       );
       // The base iPad by its chip, "iPad A16" or "iPad (A16)", and "iPad Gen 10" like
       // "iPad 10" (DOS/Rate#817).
       const ipadMatch = appleTitle.match(
-        /ipad\s*(?:\(\s*)?(pro\s*m\d+|air\s*m\d+|pro|air|mini(?:\s*[1-9](?!\d|[.,]\d|g\b|\s*(?:gb|tb|inch\b|in\b|"|'')))?|gen\s*\d+|a\d{2}\b|\d+)/i
+        // A screen size before the line ("iPad 11 Pro M4") is skipped (DOS/Rate#819).
+        /ipad\s*(?:\(\s*)?(?:\d{2}(?:[.,]\d)?\s*(?:inch\s*)?(?=pro|air|mini))?(pro\s*m\d+|air\s*m\d+|air\s*[1-9](?!\d|[.,]\d|g\b|\s*(?:gb|tb|inch\b|in\b|"|''))|pro|air|mini(?:\s*[1-9](?!\d|[.,]\d|g\b|\s*(?:gb|tb|inch\b|in\b|"|'')))?|gen\s*\d+|a\d{2}\b|\d+(?!\d|\s*(?:pro|air|mini)\b))/i
       );
       const macbookMatch = appleTitle.match(
         /macbook\s*(pro\s*m\d+(?:\s*(?:pro|max))?|air\s*m\d+|air|pro|neo\b)/i
       );
       const watchMatch = appleTitle.match(
-        /(?:apple\s*)?watch\s*(ultra\s*\d+|series\s*\d+|se(?:\s*\d+(?!\d|\s*(?:mm|gb|tb)\b)|(?![a-z])))/i
+        // "Ultra 49mm" is the case size, not a generation (DOS/Rate#819).
+        /(?:apple\s*)?watch\s*(ultra(?:\s*\d+(?!\d|\s*mm\b))?|series\s*\d+|se(?:\s*\d+(?!\d|\s*(?:mm|gb|tb)\b)|(?![a-z])))/i
       );
       const airpodsMatch = appleTitle.match(
         // Each run of spaces has exactly one `\s*` that can match it, so long
@@ -1212,6 +1244,9 @@ export class ProductNormalizer {
           .trim()
           .replace(/^(\d+)E\b/, '$1e')
           .replace(/^se\b/i, 'SE')
+          // The 2020 and 2022 iPhone SE are the 2nd and 3rd generation (DOS/Rate#819).
+          .replace(/^SE 2020$/, 'SE 2')
+          .replace(/^SE 2022$/, 'SE 3')
           // "iPhone Air" and "iPhone Duo" have no number (DOS/Rate#817).
           .replace(
             /^(air|duo)$/i,
@@ -1225,21 +1260,46 @@ export class ProductNormalizer {
         model = `iPhone ${normalizedIphoneSuffix}`;
       } else if (ipadMatch && ipadMatch[1]) {
         // Apple names the base iPad by its chip from the A16 on, so an A16 or later chip
-        // right after the screen size or generation is the model: "iPad 11 inch (A16)" and
-        // "iPad 11 (A16)" are the iPad (A16). Earlier ones go by generation: "iPad 10" and
-        // "iPad Gen 10 (A14 Bionic)" stay the 10th (DOS/Rate#817). Each run of spaces has
-        // one `\s*` that can match it.
+        // after the screen size or generation is the model: "iPad 11 inch (A16)" and
+        // "iPad 11 2025 A16" are the iPad (A16). Earlier ones go by generation: "iPad 10" and
+        // "iPad Gen 10 (A14 Bionic)" stay the 10th (DOS/Rate#817, #819).
+        // The first A-chip counts, and only up to another iPad or a comparison: "iPad 10
+        // so sánh với iPad A16" and "iPad 9 chip A13 - A16 sắp về" keep their generation.
         const chipAfter = /^(?:gen\s*)?\d+$/i.test(ipadMatch[1])
           ? appleTitle
               .slice((ipadMatch.index ?? 0) + ipadMatch[0].length)
-              .match(/^(?:[.,]\d+)?\s*(?:-?(?:inch\b|in\b|"|'')\s*)?(?:\(\s*)?a(1[6-9]|2\d)\b/i)
+              .split(/\bipad\b|so sánh|\bvs\b/i)[0]!
+              .match(/\ba(\d{2})\b/i)
           : null;
-        let line = chipAfter
-          ? `A${chipAfter[1]}`
-          : ipadMatch[1]
-              .trim()
-              .replace(/^gen\s*/i, '')
-              .replace(/^a(\d{2})$/i, 'A$1');
+        let line =
+          chipAfter && Number(chipAfter[1]) >= 16
+            ? `A${chipAfter[1]}`
+            : ipadMatch[1]
+                .trim()
+                .replace(/^gen\s*/i, '')
+                .replace(/^a(\d{2})$/i, 'A$1')
+                // The 11th generation is the iPad (A16) (DOS/Rate#819).
+                .replace(/^11$/, 'A16');
+        // An iPad Air generation without a chip is its own model; the 6th and 7th are the M2
+        // and M3 Airs, keyed like titles that name the chip, and a named M chip wins: "iPad
+        // Air 5 M1" is the "iPad Air M1" (DOS/Rate#819). The chip is read only from the Air's
+        // own part of the title, before a "+" bundle or a "cho/for" accessory phrase.
+        const air = line.match(/^air\s*([1-9])$/i);
+        const airChip = air
+          ? appleTitle
+              .slice(ipadMatch.index ?? 0)
+              .split(/ ?\+ | (?:cho|for) /i)[0]!
+              .match(/\b(M\d)\b/i)?.[1]
+              ?.toUpperCase()
+          : undefined;
+        if (air)
+          line = airChip
+            ? `Air ${airChip}`
+            : air[1] === '6'
+              ? 'Air M2'
+              : air[1] === '7'
+                ? 'Air M3'
+                : `Air ${air[1]}`;
         // "iPad mini 6" and "iPad mini 7" are two models, not one "iPad mini"; Apple calls the
         // 7th "iPad mini (A17 Pro)", and "8.3 inch" or "8,3 inch" is the screen (DOS/Rate#819).
         // One digit, not a "5G" or "4G" network or a storage ("mini 64 Wifi").
@@ -1273,11 +1333,26 @@ export class ProductNormalizer {
         // No line matched: keep the family the title names first rather than call it an
         // iPhone ("MacBook M4", "Apple \"iPad\" 256GB") (DOS/Rate#817).
         let first = Infinity;
+        let familyEnd = 0;
         model = 'iPhone';
         for (const [family, name] of APPLE_FAMILIES) {
-          const at = modelTitle.search(family);
-          if (at >= 0 && at < first) [first, model] = [at, name];
+          const found = appleTitle.match(family);
+          const at = found?.index ?? -1;
+          if (at >= 0 && at < first) [first, model, familyEnd] = [at, name, at + found![0].length];
         }
+        // Desktop Macs go by their chip like the MacBooks; otherwise a generation or year right
+        // after the line keeps "HomePod 2" and "Apple TV 4K 2022" apart (DOS/Rate#819).
+        const generation = appleTitle
+          .slice(familyEnd)
+          .match(/^ ?\(? ?([1-9]|20\d{2})\b(?! ?(?:gb|tb)\b)/i);
+        if (/^(?:Mac mini|Mac Studio|iMac)$/.test(model) && chip)
+          model = `${model} ${chip}${chipMatch?.[2] ? ` ${chipMatch[2]}` : ''}`;
+        else if (
+          /^(?:TV|TV 4K|HomePod|HomePod mini|Mac mini|Mac Studio|iMac)$/.test(model) &&
+          generation
+        )
+          // Retailers name an Apple TV 4K or HomePod by its year as often as by its generation.
+          model = `${model} ${APPLE_GENERATION_BY_YEAR[`${model} ${generation[1]}`] ?? generation[1]}`;
       }
     } else if (brand === 'Sony' && /w([fh])-?1000xm(\d+)/i.test(modelTitle)) {
       // "WF1000XM5" without the hyphen is the same model (DOS/Rate#815).

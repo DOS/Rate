@@ -1296,8 +1296,9 @@ async function run() {
     ...baseRaw,
     title: 'Apple iPhone SE (2022) 64GB Chính hãng VN/A',
   });
-  assert.equal(iphoneSe2022.model, 'iPhone SE 2022');
-  assert.equal(iphoneSe2022.model_key, 'apple:iphone-se-2022:64gb');
+  // The 2022 iPhone SE is the 3rd generation (DOS/Rate#819).
+  assert.equal(iphoneSe2022.model, 'iPhone SE 3');
+  assert.equal(iphoneSe2022.model_key, 'apple:iphone-se-3:64gb');
 
   const promoSamsung = normalizer.normalize({
     ...baseRaw,
