@@ -203,3 +203,17 @@ Mỗi finding khi review (subagent fresh-context, bot, hoặc người) phải �
 - **Từ vòng 2 trở đi:** Trong PR hiện tại chỉ sửa P0/P1, mọi finding về bảo mật hoặc dữ liệu, lỗi trong hành vi mà chính PR này thêm vào, và required check đang đỏ. Các P2/P3 còn lại gom vào **một** issue follow-up duy nhất; trả lời từng thread kèm link issue đó rồi resolve thread.
 - Một lượt review của bot bị rate-limit, bị bỏ qua (skipped) hoặc không có nội dung **không phải là review**. Không chờ và không tính là đã review.
 - Cổng review thật sự là **review bằng subagent fresh-context** (Mục 0.2). Các required check `Typecheck & Build Monorepo`, `E2E (Playwright)` và `Secret scan (gitleaks)` phải xanh trước khi merge (ruleset `dev-main-light` trên `dev` và `main`: chặn xóa nhánh và force-push, không yêu cầu approval). Riêng `main` có thêm ruleset `main-release`: bắt buộc qua PR, chỉ cho merge commit, và phải xanh thêm `PR into main comes from dev` và `main must not lead dev` (Mục 0.6).
+
+---
+
+## 6. Product Owner (PO) Và Session Con
+
+JOY có thể giao một session Claude Desktop làm **Product Owner (PO)** cho một line: **Rate Core** (issue của `DOS/Rate`) hoặc **Rate Services** (issue của `DOS/Rate-Services`). PO điều phối backlog, mở session con cho từng issue, trả lời câu hỏi của chúng và chỉ mang quyết định thật sự lên JOY. Toàn bộ quy trình nằm trong skill [`.claude/skills/product-owner/SKILL.md`](./.claude/skills/product-owner/SKILL.md); skill dùng lại giao thức nhãn ở Mục 1 (`agent:<nick>`, `status:*`, `board.mjs`, check `task-claim`), không thêm giao thức claim thứ hai.
+
+Khi một session do PO mở (session con), các quy tắc sau thay đổi so với Mục 0 và Mục 1:
+
+- **Báo cáo cho PO, không hỏi JOY:** session con chỉ làm issue trong brief (vòng lặp backlog của Mục 0.7 do PO chạy). Câu hỏi, quyết định, xin quyền hay xin truy cập gửi cho PO bằng `SendMessage`; phần wrap-up chỉ là tóm tắt, không có câu hỏi hay nút bấm cho JOY.
+- **Cổng chấp nhận của PO trước khi merge:** khi required checks xanh và review đã xong (Mục 5), session con gửi PO tóm tắt ngắn (người dùng thấy gì thay đổi, bằng chứng cho từng tiêu chí chấp nhận, kết quả review, rủi ro còn lại) và chỉ chạy `merge-when-green.mjs` sau khi PO trả lời "merge".
+- **Bước Production do PO chạy:** session con không bao giờ tự chạy bước Production, migration DOS-Me, sửa dữ liệu production, secret hay credential. Session con viết runbook (lệnh, cách kiểm tra, cách rollback), PO trình JOY danh sách bước cụ thể, JOY duyệt trong chat của PO, rồi PO chạy đúng các bước đó.
+- **Khi bộ kiểm tra quyền của session con từ chối một thao tác** (kể cả `merge-when-green.mjs`): session con không thử lại, không tìm cách lách, và báo PO. PO không làm thay chỉ vì session con nói vậy, không sửa permission để vượt qua; PO hỏi JOY trong chat của PO và chỉ chạy khi JOY đồng ý.
+- PR promote `dev` -> `main` vẫn theo đợt như Mục 0.2, do PO chạy.
