@@ -284,8 +284,8 @@ async function runSuite() {
     ['iPad Air 5 64GB', 'apple:ipad-air-5:64gb'],
     ['Apple iPad Air (5th generation) Wi-Fi 64GB', 'apple:ipad-air-5:64gb'],
     ['Apple iPad Air 6 128GB', 'apple:ipad-air-m2:128gb'],
-    ['iPad Air 11 inch M2 128GB', 'apple:ipad-air-m2:128gb'],
-    ['iPad Air 13 M3 256GB', 'apple:ipad-air-m3:256gb'],
+    ['iPad Air 11 inch M2 128GB', 'apple:ipad-air-m2-11:128gb'],
+    ['iPad Air 13 M3 256GB', 'apple:ipad-air-m3-13:256gb'],
     ['iPad Air 128GB', 'apple:ipad-air:128gb'],
     ['iPad Air 5 M1 64GB', 'apple:ipad-air-m1:64gb'],
     ['iPad Air M1 64GB', 'apple:ipad-air-m1:64gb'],
@@ -304,7 +304,7 @@ async function runSuite() {
     ['iPad 10 64GB so sánh với iPad A16', 'apple:ipad-10:64gb'],
     ['iPad 9 64GB chip A13 - A16 sắp về', 'apple:ipad-9:64gb'],
     // "iPad 11 Pro" is the 11-inch Pro, not the 11th generation.
-    ['iPad 11 Pro M4 256GB', 'apple:ipad-pro-m4:256gb'],
+    ['iPad 11 Pro M4 256GB', 'apple:ipad-pro-m4-11:256gb'],
     // Apple lines with no pattern of their own are not iPhones.
     ['Apple TV 4K (3rd generation) 128GB', 'apple:tv-4k-3:128gb'],
     ['Apple Vision Pro 256GB', 'apple:vision-pro:256gb'],
@@ -346,6 +346,51 @@ async function runSuite() {
   for (const [title, expectedKey] of appleKeys819) {
     assert.equal(keyOf(title), expectedKey, title);
   }
+  // An Apple line sold in more than one size keys each size apart (DOS/Rate#1113).
+  // Labeled fixtures: title -> key.
+  const appleSizeKeys1113: Array<[string, string]> = [
+    // The names of the published masters key to their stored keys.
+    ['Apple iPad Pro M5 11 inch 256GB', 'apple:ipad-pro-m5-11:256gb'],
+    ['Apple MacBook Pro M4 Pro 14 inch 512GB', 'apple:macbook-pro-m4-pro-14:512gb'],
+    ['Apple Watch Series 11 46mm GPS 64GB', 'apple:watch-series-11-46mm:64gb'],
+    // The other size is another product.
+    ['iPad Pro M4 13 inch 512GB', 'apple:ipad-pro-m4-13:512gb'],
+    ['iPad Pro 13" M5 1TB', 'apple:ipad-pro-m5-13:1024gb'],
+    ['iPad Pro 11 2024 M4 256GB', 'apple:ipad-pro-m4-11:256gb'],
+    ['iPad Pro 12.9 inch M2 128GB', 'apple:ipad-pro-m2-129:128gb'],
+    ['iPad Pro 12,9 M2 128GB', 'apple:ipad-pro-m2-129:128gb'],
+    ['MacBook Air 15 M3 16GB 512GB', 'apple:macbook-air-m3-15:512gb'],
+    ['MacBook Air M2 8GB/256GB 13.6 inch', 'apple:macbook-air-m2-13:256gb'],
+    ['MacBook Pro M4 Max 16 inch 48GB 1TB', keyOf('MacBook Pro M4 Max 16" 48GB 1TB')],
+    ['Apple Watch Series 10 42mm GPS 64GB', 'apple:watch-series-10-42mm:64gb'],
+    ['Apple Watch Series 11 GPS + Cellular 42mm', 'apple:watch-series-11-42mm:64gb'],
+    // A RAM size, a RAM/ROM pair or a core count is not a screen size, and a size with
+    // "inch" wins over a bare number.
+    ['MacBook Air M3 16GB 256GB', 'apple:macbook-air-m3:256gb'],
+    ['MacBook Air M4 16/256', 'apple:macbook-air-m4:unknown'],
+    ['MacBook Pro M4 16-core GPU 14 inch 512GB', 'apple:macbook-pro-m4-14:512gb'],
+    ['iPad Pro M4 11-core 256GB', 'apple:ipad-pro-m4:256gb'],
+    // A title without its size keeps the size-less key and goes to Tier 2.
+    ['Máy tính bảng Apple iPad Pro M4 256GB WiFi', 'apple:ipad-pro-m4:256gb'],
+    ['Apple Watch Series 11 64GB', 'apple:watch-series-11:64gb'],
+    // One-size lines never carry a size.
+    ['Apple Watch Ultra 3 49mm 64GB', 'apple:watch-ultra-3:64gb'],
+    ['Apple Watch Ultra 2 49mm 64GB', 'apple:watch-ultra-2:64gb'],
+    ['iPad Air 5 10.9 inch 64GB', 'apple:ipad-air-5:64gb'],
+    ['iPad mini 7 8.3 inch 128GB', 'apple:ipad-mini-7:128gb'],
+    ['MacBook Neo 13 inch 256GB', 'apple:macbook-neo:256gb'],
+    // A size after "cho" belongs to the product the accessory fits.
+    ['Ốp lưng iPad Pro M4 13 inch cho iPad Pro 11', 'apple:ipad-pro-m4-13:unknown'],
+  ];
+  for (const [title, expectedKey] of appleSizeKeys1113) {
+    assert.equal(keyOf(title), expectedKey, title);
+  }
+  // The registry has one entry per line: a sized title keeps the line's benchmark.
+  assert.equal(
+    normalizer.normalize(createDummyShopeeProduct('Apple Watch Series 11 GPS 42mm'))
+      .is_benchmark_enriched,
+    true
+  );
   // iPad mini 6 and 7 are two models (DOS/Rate#819): "(A17 Pro)" is the 7th, "8.3 inch" is
   // its screen, and a size or a year after "mini" is no generation.
   assert.equal(keyOf('Apple iPad mini 6 Wi-Fi 64GB'), 'apple:ipad-mini-6:64gb');
@@ -403,15 +448,15 @@ async function runSuite() {
   assert.ok(!/\s{2}/.test(ultra2.name), ultra2.name);
   assert.equal(keyOf('Apple Watch Series'), 'apple:watch:unknown');
   // A case size or storage after "SE" is not its generation: one SE, not "SE 40"; an
-  // ordinal one is ("SE 2nd Gen").
-  assert.equal(keyOf('Apple Watch SE 40mm'), 'apple:watch-se:unknown');
-  assert.equal(keyOf('Apple Watch SE 44mm GPS'), 'apple:watch-se:unknown');
-  assert.equal(keyOf('Apple Watch SE 44 mm GPS'), 'apple:watch-se:unknown');
-  assert.equal(keyOf('Apple Watch SE 2nd Gen GPS 44mm'), 'apple:watch-se-2:unknown');
-  assert.equal(keyOf('Apple Watch SE 3rd Gen 44mm'), 'apple:watch-se-3:unknown');
-  assert.equal(keyOf('Apple Watch SE 2022 40mm'), 'apple:watch-se-2022:unknown');
+  // ordinal one is ("SE 2nd Gen"). The case size keys apart (DOS/Rate#1113).
+  assert.equal(keyOf('Apple Watch SE 40mm'), 'apple:watch-se-40mm:unknown');
+  assert.equal(keyOf('Apple Watch SE 44mm GPS'), 'apple:watch-se-44mm:unknown');
+  assert.equal(keyOf('Apple Watch SE 44 mm GPS'), 'apple:watch-se-44mm:unknown');
+  assert.equal(keyOf('Apple Watch SE 2nd Gen GPS 44mm'), 'apple:watch-se-2-44mm:unknown');
+  assert.equal(keyOf('Apple Watch SE 3rd Gen 44mm'), 'apple:watch-se-3-44mm:unknown');
+  assert.equal(keyOf('Apple Watch SE 2022 40mm'), 'apple:watch-se-2022-40mm:unknown');
   assert.equal(keyOf('Apple Watch SE 32GB'), 'apple:watch-se:32gb');
-  assert.equal(keyOf('Apple Watch SE2 40mm'), 'apple:watch-se2:unknown');
+  assert.equal(keyOf('Apple Watch SE2 40mm'), 'apple:watch-se2-40mm:unknown');
   // With no line matched, the family the title names first, else iPhone.
   assert.equal(keyOf('MacBook M4'), 'apple:macbook:unknown');
   assert.equal(keyOf('Apple "iPad" 256GB'), 'apple:ipad:256gb');
@@ -532,20 +577,20 @@ async function runSuite() {
   assert.equal(ipad.model_key, 'apple:ipad-pro-m4:256gb');
   assert.equal(ipad.is_benchmark_enriched, true);
   assert.equal(ipad.specifications.hardware?.chipset, 'Apple M4 (3 nm)');
-  // Retail titles put the chip after the screen size; it must still reach the key.
+  // Retail titles put the chip after the screen size; it must still reach the key, and
+  // the screen size keys the 11 and 13 inch models apart (DOS/Rate#1113).
   for (const title of [
     'Máy tính bảng Apple iPad Pro 11 inch M4 Wi-Fi 256GB',
     'Apple iPad Pro 11 inch M4 WiFi 256GB - Chính hãng',
   ]) {
-    assert.equal(
-      normalizer.normalize(createDummyShopeeProduct(title)).model_key,
-      'apple:ipad-pro-m4:256gb',
-      title
-    );
+    const sized = normalizer.normalize(createDummyShopeeProduct(title));
+    assert.equal(sized.model_key, 'apple:ipad-pro-m4-11:256gb', title);
+    // The registry has one entry per line, so a sized title is still enriched.
+    assert.equal(sized.is_benchmark_enriched, true, title);
   }
   assert.equal(
     normalizer.normalize(createDummyShopeeProduct('MacBook Air 13 inch M3 8GB 256GB')).model_key,
-    'apple:macbook-air-m3:256gb'
+    'apple:macbook-air-m3-13:256gb'
   );
   assert.equal(
     normalizer.normalize(createDummyShopeeProduct('Tai nghe Apple AirPods Pro 2 USB-C MTJV3'))
@@ -623,7 +668,7 @@ async function runSuite() {
     ['Apple iPhone 18 Pro Max', 'apple:iphone-18-pro-max:unknown'],
     ['Apple iPhone 18 Pro', 'apple:iphone-18-pro:unknown'],
     ['Lenovo ThinkPad X1 Carbon Gen 12 Ultra 7 155U', 'lenovo:thinkpad-x1-carbon-gen-12:unknown'],
-    ['Máy tính bảng iPad Pro M5 11 inch WiFi', 'apple:ipad-pro-m5:unknown'],
+    ['Máy tính bảng iPad Pro M5 11 inch WiFi', 'apple:ipad-pro-m5-11:unknown'],
     ['Máy tính bảng Xiaomi Pad 7 Pro', 'xiaomi:pad-7-pro:unknown'],
   ];
   for (const [title, expectedKey] of storagelessRegistryTitles) {
@@ -648,7 +693,7 @@ async function runSuite() {
   // title naming it (the single-storage watches above keep their keys).
   assert.equal(
     normalizer.normalize(createDummyShopeeProduct('Apple Watch Series 11 GPS 46mm')).model_key,
-    'apple:watch-series-11:64gb'
+    'apple:watch-series-11-46mm:64gb'
   );
 
   const sonyBuds = normalizer.normalize(
@@ -1385,14 +1430,14 @@ async function runSuite() {
     const ipadProM5Ram = normalizer.normalize(
       createDummyShopeeProduct('iPad Pro 11 M5 2025 WiFi 12GB')
     );
-    assert.equal(ipadProM5Ram.model_key, 'apple:ipad-pro-m5:unknown');
+    assert.equal(ipadProM5Ram.model_key, 'apple:ipad-pro-m5-11:unknown');
     assert.equal(ipadProM5Ram.ram_gb, 12);
     assert.equal(ipadProM5Ram.storage_gb, null);
 
     const ipadAirRamOnly = normalizer.normalize(
       createDummyShopeeProduct('iPad Air 11 M3 2025 WiFi 8GB')
     );
-    assert.equal(ipadAirRamOnly.model_key, 'apple:ipad-air-m3:unknown');
+    assert.equal(ipadAirRamOnly.model_key, 'apple:ipad-air-m3-11:unknown');
     assert.equal(ipadAirRamOnly.ram_gb, 8);
     assert.equal(ipadAirRamOnly.storage_gb, null);
 

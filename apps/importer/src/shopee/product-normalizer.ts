@@ -1089,6 +1089,44 @@ function isProductCodeToken(token: string): boolean {
     );
 }
 
+// Screen sizes an Apple line is sold in, as a number not glued to another digit, a
+// storage, a RAM/ROM pair or a core count ("16GB", "16/512", "16-core GPU").
+const SIZE_NOT_FOLLOWED_BY = String.raw`(?![.,]?\d|\s*(?:gb|tb|th\b|gen|mm|w\b|h\b|\/|-?\s*core|cpu|gpu|tiếng|giờ))`;
+const SIZE_MARKER = String.raw`\s*(?:-?\s*inch|in\b|"|''|”)`;
+const IPAD_SIZE = String.raw`(?<![\d.,])(11|12[.,]9|13)`;
+const MACBOOK_SIZE = String.raw`(?<![\d.,])(1[3-6])(?:[.,]\d)?`;
+const IPAD_SIZE_MARKED = new RegExp(IPAD_SIZE + SIZE_MARKER, 'i');
+const IPAD_SIZE_BARE = new RegExp(IPAD_SIZE + SIZE_NOT_FOLLOWED_BY, 'i');
+const MACBOOK_SIZE_MARKED = new RegExp(MACBOOK_SIZE + SIZE_MARKER, 'i');
+const MACBOOK_SIZE_BARE = new RegExp(MACBOOK_SIZE + SIZE_NOT_FOLLOWED_BY, 'i');
+
+/**
+ * The size of an Apple line sold in more than one: "11" or "13" for an iPad Pro or Air,
+ * "13" to "16" for a MacBook Air or Pro, "42mm" or "46mm" for a Watch Series or SE.
+ * Read from the product's own part of the title, after its family word and before a
+ * "cho/for" accessory phrase; a size with "inch" wins over a bare number (DOS/Rate#1113).
+ */
+function readAppleSize(model: string, title: string): string {
+  const family = /^ipad (?:pro|air)\b/i.test(model)
+    ? 'ipad'
+    : /^macbook (?:pro|air)\b/i.test(model)
+      ? 'macbook'
+      : /^watch (?:series|se\d?)\b/i.test(model)
+        ? 'watch'
+        : '';
+  if (!family) return '';
+  const at = title.search(new RegExp(`\\b${family}\\b`, 'i'));
+  const own = title.slice(Math.max(0, at)).split(/ (?:cho|for) /i)[0]!;
+  if (family === 'watch')
+    return own.match(/(?<!\d)(38|4[0-2]|4[4-6]) ?mm\b/i)?.[1]?.concat('mm') ?? '';
+  const [marked, bare] =
+    family === 'ipad'
+      ? [IPAD_SIZE_MARKED, IPAD_SIZE_BARE]
+      : [MACBOOK_SIZE_MARKED, MACBOOK_SIZE_BARE];
+  const size = (own.match(marked) ?? own.match(bare))?.[1];
+  return size ? size.replace(',', '.') : '';
+}
+
 function slugify(text: string): string {
   return (
     String(text ?? '')
@@ -1162,6 +1200,7 @@ export class ProductNormalizer {
 
     // 2. Extract Model
     let model = '';
+    let appleSize = '';
     // Spellings that split a tier word from its model number read like the joined ones
     // (DOS/Rate#1090). `title` has single spaces, so each gap is one optional space.
     // Each rewrite applies only where the name ends right after it: the title ends, or a
@@ -1354,6 +1393,12 @@ export class ProductNormalizer {
           // Retailers name an Apple TV 4K or HomePod by its year as often as by its generation.
           model = `${model} ${APPLE_GENERATION_BY_YEAR[`${model} ${generation[1]}`] ?? generation[1]}`;
       }
+      // A line Apple sells in more than one size keys each size apart: the 11 and 13 inch
+      // iPad Pro, or the 42 and 46mm Watch Series, are two products at two prices. A title
+      // without its size keeps the size-less key, and one-size lines (Watch Ultra 49mm,
+      // iPad mini, MacBook Neo) never carry one (DOS/Rate#1113).
+      appleSize = readAppleSize(model, appleTitle);
+      if (appleSize) model = `${model} ${appleSize}`;
     } else if (brand === 'Sony' && /w([fh])-?1000xm(\d+)/i.test(modelTitle)) {
       // "WF1000XM5" without the hyphen is the same model (DOS/Rate#815).
       const m = modelTitle.match(/w([fh])-?1000xm(\d+)/i);
@@ -1529,8 +1574,12 @@ export class ProductNormalizer {
     );
 
     const baseKey = `${slugify(brand)}:${slugify(model)}`;
-    const benchmark = Object.hasOwn(CANONICAL_PHONE_REGISTRY, baseKey)
-      ? CANONICAL_PHONE_REGISTRY[baseKey]
+    // The registry holds one entry per line, not per size.
+    const registryKey = appleSize
+      ? `${slugify(brand)}:${slugify(model.slice(0, -appleSize.length))}`
+      : baseKey;
+    const benchmark = Object.hasOwn(CANONICAL_PHONE_REGISTRY, registryKey)
+      ? CANONICAL_PHONE_REGISTRY[registryKey]
       : undefined;
 
     const toValidStorageGb = (val: number): number | null =>
