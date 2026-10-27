@@ -59,7 +59,11 @@ const VARIANT_NAME_SUFFIX = /\s\d+\s?(gb|tb)$/i;
 /** Categories with no storage axis (section 4.2). */
 const SIZELESS_CATEGORIES = new Set(['earbuds']);
 
-export const itemKeyOf = (modelKey: string): string => modelKey.split(':').slice(0, 2).join(':');
+/** `split_part(k, ':', 1) || ':' || split_part(k, ':', 2)`, as the M2 backfill groups. */
+export const itemKeyOf = (modelKey: string): string => {
+  const [brand = '', model = ''] = modelKey.split(':');
+  return `${brand}:${model}`;
+};
 export const variantKeyOf = (modelKey: string): string => modelKey.split(':')[2] ?? '';
 export const itemSlugOf = (slug: string): string => slug.replace(VARIANT_SLUG_SUFFIX, '');
 export const itemNameOf = (name: string): string => name.replace(VARIANT_NAME_SUFFIX, '');
@@ -99,7 +103,6 @@ export function buildInventoryReport(input: {
   const masters = input.masters;
   const byId = new Map(masters.map(m => [m.id, m]));
   const byKey = new Map(masters.map(m => [m.model_key, m]));
-  const bySlug = new Map(masters.map(m => [m.slug, m]));
 
   const items = new Map<string, InventoryMaster[]>();
   for (const m of masters) {
@@ -133,7 +136,9 @@ export function buildInventoryReport(input: {
   const itemConflicts = [...items.entries()]
     .filter(
       ([, v]) =>
-        new Set(v.map(m => m.brand)).size > 1 || new Set(v.map(m => m.category_id)).size > 1
+        // count(DISTINCT ...) ignores NULLs, so a missing brand or category is not a conflict.
+        new Set(v.map(m => m.brand).filter(b => b !== null)).size > 1 ||
+        new Set(v.map(m => m.category_id).filter(c => c !== null)).size > 1
     )
     .map(([item_key, v]) => ({ item_key, variants: v.map(m => m.model_key) }));
 
@@ -166,7 +171,8 @@ export function buildInventoryReport(input: {
     }))
     .filter(d => d.model_key !== d.normalized_key);
 
-  // Listings whose own title keys elsewhere: another Item, or the same Item at another size.
+  // Listings whose own title keys elsewhere: another Item, the same Item at another size, or
+  // the same Item with no size stated (the listings that lose their variant on multi-size Items).
   const listingDrift = input.listings.flatMap(p => {
     const master = p.cluster_id ? byId.get(p.cluster_id) : undefined;
     if (!master || !p.title) return [];
@@ -174,7 +180,12 @@ export function buildInventoryReport(input: {
     if (normalized === master.model_key) return [];
     return [
       {
-        kind: itemKeyOf(normalized) === itemKeyOf(master.model_key) ? 'variant' : 'item',
+        kind:
+          itemKeyOf(normalized) !== itemKeyOf(master.model_key)
+            ? 'item'
+            : variantKeyOf(normalized) === 'unknown'
+              ? 'size_not_stated'
+              : 'variant',
         master_key: master.model_key,
         normalized_key: normalized,
         platform: p.platform,
@@ -184,32 +195,36 @@ export function buildInventoryReport(input: {
     ];
   });
 
-  // Item slugs from the section 7.1 helper: two Items on one slug, or an Item slug that is
-  // another Item's variant slug, abort the M2 backfill.
+  // Item slugs from the section 7.1 helper. Two Items on one slug abort the M2 backfill. This
+  // also covers an Item slug that is another Item's variant slug: that variant slug carries no
+  // size suffix, so it strips to itself. An Item whose masters strip to different slugs gets
+  // whichever one the backfill's representative master has, and a slug that still ends in a
+  // size after stripping fails the post-M2 check of section 7.3.
   const itemSlugOwners = new Map<string, Set<string>>();
+  const itemSlugsByItem = new Map<string, Set<string>>();
   for (const m of masters) {
-    const owners = itemSlugOwners.get(itemSlugOf(m.slug)) ?? new Set<string>();
+    const slug = itemSlugOf(m.slug);
+    const owners = itemSlugOwners.get(slug) ?? new Set<string>();
     owners.add(itemKeyOf(m.model_key));
-    itemSlugOwners.set(itemSlugOf(m.slug), owners);
-  }
-  const slugOnOtherItem = new Map<string, string[]>();
-  for (const m of masters) {
-    const other = bySlug.get(itemSlugOf(m.slug));
-    if (other && itemKeyOf(other.model_key) !== itemKeyOf(m.model_key)) {
-      slugOnOtherItem.set(itemSlugOf(m.slug), [itemKeyOf(m.model_key), itemKeyOf(other.model_key)]);
-    }
+    itemSlugOwners.set(slug, owners);
+    const slugs = itemSlugsByItem.get(itemKeyOf(m.model_key)) ?? new Set<string>();
+    slugs.add(slug);
+    itemSlugsByItem.set(itemKeyOf(m.model_key), slugs);
   }
   const slugCollisions = [
     ...[...itemSlugOwners.entries()]
       .filter(([, owners]) => owners.size > 1)
-      .map(([slug, owners]) => ({ slug, kind: 'two_items', items: [...owners] })),
-    ...[...slugOnOtherItem.entries()].map(([slug, items]) => ({
-      slug,
-      kind: 'item_slug_is_other_variant',
-      items,
-    })),
+      .map(([slug, owners]) => ({ kind: 'two_items', slugs: [slug], items: [...owners] })),
+    ...[...itemSlugsByItem.entries()]
+      .filter(([, slugs]) => slugs.size > 1)
+      .map(([item, slugs]) => ({ kind: 'item_slug_differs', slugs: [...slugs], items: [item] })),
+    ...[...itemSlugOwners.entries()]
+      .filter(([slug]) => /-\d+(gb|tb)$/.test(slug))
+      .map(([slug, owners]) => ({ kind: 'still_sized', slugs: [slug], items: [...owners] })),
   ];
 
+  // Broader than the section 7.3 check (a size anywhere, not only at the end), so a name such as
+  // "12GB RAM" is flagged too; those rows are read by hand.
   const sizedItemNames = masters
     .filter(m => /\d+\s?(gb|tb)\b/i.test(itemNameOf(m.name)))
     .map(m => ({ model_key: m.model_key, name: m.name }));
@@ -217,8 +232,10 @@ export function buildInventoryReport(input: {
   const storageMismatch = masters
     .filter(m => {
       const v = variantKeyOf(m.model_key);
-      const sized = /^(\d+)gb$/.exec(v);
-      return sized ? Number(sized[1]) !== m.storage_gb : m.storage_gb !== null;
+      // `1tb` and suffixed keys such as `256gb-cellular` (section 4.2) are sized too.
+      const sized = /^(\d+)(gb|tb)(?:-|$)/.exec(v);
+      if (!sized) return m.storage_gb !== null;
+      return Number(sized[1]) * (sized[2] === 'tb' ? 1024 : 1) !== m.storage_gb;
     })
     .map(m => ({ model_key: m.model_key, storage_gb: m.storage_gb }));
 
