@@ -687,6 +687,10 @@ function testPriceRules(): void {
     'Huawei FreeBuds 5i',
     'Apple AirPods4',
     'https://shop.vn/samsung-galaxy-buds3-pro',
+    'Samsung Galaxy Buds2Pro',
+    'https://shop.vn/galaxy-buds3pro',
+    'Apple AirPodsPro 2',
+    'Sony WF1000XM5',
   ]) {
     assert.equal(rules.minimumListingPriceVnd([title]), 400_000, title);
   }
