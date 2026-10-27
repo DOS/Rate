@@ -16,6 +16,7 @@ import {
   getMerchantProfileById as _getMerchantProfileById,
   getMerchantsList as _getMerchantsList,
   getRatePlatformStats as _getRatePlatformStats,
+  getFilteredReviewCountsByMaster as _getFilteredReviewCountsByMaster,
   getSitemapRows as _getSitemapRows,
   inspectProductOrShopUrl as _inspectProductOrShopUrl,
   isCanonicalCategorySlug,
@@ -498,6 +499,18 @@ export const getCachedRatePlatformStats = cache(() =>
     revalidate: 600,
     tags: [RATE_CACHE_TAGS.STATS],
   })()
+);
+
+/** Stored reviews kept out of the rating, per master id (DOS/Rate#1139). */
+export const getCachedFilteredReviewCountsByMaster = cache(() =>
+  withRateDataCache(
+    _getFilteredReviewCountsByMaster,
+    ['rate-filtered-review-counts-by-master'],
+    {
+      revalidate: 600,
+      tags: [RATE_CACHE_TAGS.REVIEWS],
+    }
+  )()
 );
 
 export const getCachedInspectProductOrShopUrl = cache(

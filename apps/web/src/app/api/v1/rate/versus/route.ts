@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import {
   computeProductRadarSignal,
   getCachedCompareMasterProducts,
+  getCachedFilteredReviewCountsByMaster,
   getMasterProductCategorySlug,
   getMasterProductOffersBatch,
 } from '@/server/rate';
@@ -191,8 +192,18 @@ export async function GET(req: NextRequest) {
     const prodB = compared[1];
     const category = getMasterProductCategorySlug(prodA);
 
-    const scoreA = scoreMasterProductForLeaderboard(prodA, 'combined');
-    const scoreB = scoreMasterProductForLeaderboard(prodB, 'combined');
+    // filtered_noise_review_count counts stored reviews only (DOS/Rate#1139).
+    const filteredReviewCounts = await getCachedFilteredReviewCountsByMaster();
+    const scoreA = scoreMasterProductForLeaderboard(
+      prodA,
+      'combined',
+      filteredReviewCounts
+    );
+    const scoreB = scoreMasterProductForLeaderboard(
+      prodB,
+      'combined',
+      filteredReviewCounts
+    );
 
     const requestedPersonaId = (
       parseBoundedStringParam(searchParams.get('persona'), 32) || 'balanced'

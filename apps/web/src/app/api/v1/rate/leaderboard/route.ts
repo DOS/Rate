@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import {
   computeProductRadarSignal,
+  getCachedFilteredReviewCountsByMaster,
   getCachedMasterProducts,
   getMasterProductOffersBatch,
 } from '@/server/rate';
@@ -54,11 +55,14 @@ export async function GET(req: NextRequest) {
     // Brand, price segment, query and the criterion ranking all run on this
     // list, so it must be the whole category, not its 100 best-rated models
     // (DOS/Rate#473). 500 is getMasterProducts' cap.
-    const allProducts = await getCachedMasterProducts({
-      categorySlug: category,
-      limit: 500,
-      sort: 'rating_desc',
-    });
+    const [allProducts, filteredReviewCounts] = await Promise.all([
+      getCachedMasterProducts({
+        categorySlug: category,
+        limit: 500,
+        sort: 'rating_desc',
+      }),
+      getCachedFilteredReviewCountsByMaster(),
+    ]);
 
     const ranked = rankMasterProductsForLeaderboard(allProducts, {
       category,
@@ -66,6 +70,7 @@ export async function GET(req: NextRequest) {
       priceSegment,
       brand,
       query,
+      filteredReviewCounts,
     });
 
     const pageRanked = ranked.slice(0, limit);
