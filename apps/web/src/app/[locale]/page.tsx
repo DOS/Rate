@@ -58,6 +58,7 @@ import {
   productImageUrl,
 } from '@/lib/rate-domain-core';
 import { applyCategorySpecTemplate } from '@repo/shared-data/rules';
+import { merchantRiskTone } from '@/lib/merchant-risk-tone';
 
 // Cached after the first request, refreshed every 5 minutes or when the
 // worker revalidates its cache tags (DOS/Rate#491).
@@ -637,6 +638,7 @@ export default async function Home({
                         <h3 className="rate-home-radar-title">
                           {tHome('radarHomeAnalyzed', {
                             offers: dealRadar.totalOffersAnalyzed,
+                            merchants: dealRadar.totalMerchantsAnalyzed,
                             clusters: dealRadar.totalClustersAnalyzed,
                           })}
                         </h3>
@@ -852,8 +854,7 @@ export default async function Home({
               {merchants
                 .slice(0, HOME_MERCHANT_PREVIEW_COUNT)
                 .map((merchant) => {
-                  const tone = (risk: number) =>
-                    risk < 20 ? 'is-good' : risk < 50 ? 'is-warn' : 'is-bad';
+                  const tone = (risk: number) => `is-${merchantRiskTone(risk)}`;
                   const overallTone = tone(merchant.risk_score);
                   const trustLabel =
                     overallTone === 'is-good'
@@ -911,7 +912,8 @@ export default async function Home({
                             <dd className={tone(merchant.dosafe_risk_score)}>
                               {merchant.dosafe_risk_score}/100
                             </dd>
-                            {merchant.dosafe_risk_score < 20 && (
+                            {merchantRiskTone(merchant.dosafe_risk_score) ===
+                              'good' && (
                               <dd className="rate-merchant-note">
                                 {tHome('noScamDetected')}
                               </dd>

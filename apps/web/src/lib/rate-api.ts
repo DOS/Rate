@@ -3357,6 +3357,89 @@ export const EMPTY_RATE_PLATFORM_STATS: RatePlatformStats = {
  * Fetch live platform statistics, category product counts, and recent verified/flagged
  * reviews from the `rate` schema to power the Homepage with 100% real database data.
  */
+/**
+ * Stored reviews the analyser kept out of the rating, per master product id
+ * (DOS/Rate#1139). Same rule as the platform's filteredSeedingCount below:
+ * include_in_rating false, or NULL with a flagged category or a fake verdict,
+ * and never a review still pending analysis. Masters with none are absent.
+ * The leaderboard must not derive this from master_products.total_reviews,
+ * which is the marketplaces' own rating count, not reviews Rate.vn read.
+ */
+export async function getFilteredReviewCountsByMaster(): Promise<
+  Record<string, number>
+> {
+  const supabase = getRateClient();
+  const [explicitRows, derivedRows] = await Promise.all([
+    fetchAllRows<{ review_id: string }>('filtered review flags', (from, to) =>
+      supabase
+        .from('review_flags')
+        .select('review_id')
+        .eq('include_in_rating', false)
+        .or('verdict.is.null,verdict.neq.unanalyzed')
+        .order('review_id')
+        .range(from, to)
+    ),
+    fetchAllRows<{ review_id: string }>('filtered review flags', (from, to) =>
+      supabase
+        .from('review_flags')
+        .select('review_id')
+        .is('include_in_rating', null)
+        .or(
+          'and(flag_category.neq.authentic,or(verdict.is.null,verdict.neq.unanalyzed)),verdict.eq.fake,and(flag_category.is.null,verdict.eq.suspicious)'
+        )
+        .order('review_id')
+        .range(from, to)
+    ),
+  ]);
+  const reviewIds = Array.from(
+    new Set(
+      [...explicitRows, ...derivedRows]
+        .map((r) => String(r.review_id ?? ''))
+        .filter(Boolean)
+    )
+  );
+  if (reviewIds.length === 0) return {};
+
+  const reviewRows = await fetchAllRowsInChunks<{
+    id: string;
+    product_id: string | null;
+  }>('filtered reviews', reviewIds, (chunk, from, to) =>
+    supabase
+      .from('reviews')
+      .select('id, product_id')
+      .in('id', chunk)
+      .order('id')
+      .range(from, to)
+  );
+  const productIds = Array.from(
+    new Set(reviewRows.map((r) => String(r.product_id ?? '')).filter(Boolean))
+  );
+  if (productIds.length === 0) return {};
+
+  const productRows = await fetchAllRowsInChunks<{
+    id: string;
+    cluster_id: string | null;
+  }>('filtered review products', productIds, (chunk, from, to) =>
+    supabase
+      .from('products')
+      .select('id, cluster_id')
+      .in('id', chunk)
+      .order('id')
+      .range(from, to)
+  );
+  const masterByProduct = new Map(
+    productRows.map((p) => [String(p.id), String(p.cluster_id ?? '')])
+  );
+
+  const counts: Record<string, number> = {};
+  for (const r of reviewRows) {
+    const masterId = masterByProduct.get(String(r.product_id ?? ''));
+    if (!masterId) continue;
+    counts[masterId] = (counts[masterId] ?? 0) + 1;
+  }
+  return counts;
+}
+
 export async function getRatePlatformStats(): Promise<RatePlatformStats> {
   const supabase = getRateClient();
 

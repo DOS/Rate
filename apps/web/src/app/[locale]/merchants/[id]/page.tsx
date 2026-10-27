@@ -31,6 +31,7 @@ import {
   BsStarFill,
 } from 'react-icons/bs';
 import { isPendingReview } from '@/lib/review-display';
+import { merchantRiskTone } from '@/lib/merchant-risk-tone';
 import ContentText from '@/components/elementary/ContentText';
 import { contentLang } from '@/lib/content-lang';
 import ClientMessages from '@/components/providers/ClientMessages';
@@ -145,10 +146,13 @@ export default async function MerchantProfilePage({
         : 'bg-danger text-white';
 
   const brk = merchant.review_risk_breakdown;
+  // No ratio without analysed reviews: 0 of 0 is not "100% authentic".
   const authenticPct =
     brk.total_reviews > 0
       ? Math.round((brk.authentic_count / brk.total_reviews) * 1000) / 10
-      : 100;
+      : null;
+  // Same cut-offs as the home merchant cards (DOS/Rate#1140).
+  const scamTone = merchantRiskTone(merchant.dosafe_risk_score);
 
   const canonicalUrl = `https://rate.vn/merchants/${merchant.id}`;
 
@@ -396,10 +400,14 @@ export default async function MerchantProfilePage({
                   </div>
                   <span
                     className={`badge rounded-pill fs-6 px-3 py-2 ${
-                      merchant.dosafe_risk_score === 0
+                      scamTone === 'good'
                         ? 'bg-success-subtle text-success'
-                        : 'bg-danger text-white'
+                        : scamTone === 'warn'
+                          ? 'bg-warning-subtle text-warning-emphasis'
+                          : 'bg-danger text-white'
                     }`}
+                    data-testid="merchant-scam-badge"
+                    data-tone={scamTone}
                   >
                     {t('scamRiskBadge', { score: merchant.dosafe_risk_score })}
                   </span>
@@ -410,10 +418,21 @@ export default async function MerchantProfilePage({
                 <div className="rounded-3 bg-light mt-auto p-3">
                   <div className="d-flex align-items-center justify-content-between small mb-2">
                     <span className="text-muted">{t('scamStatusLabel')}</span>
-                    <span className="fw-semibold text-success">
-                      {merchant.dosafe_risk_score === 0
+                    <span
+                      className={`fw-semibold ${
+                        scamTone === 'good'
+                          ? 'text-success'
+                          : scamTone === 'warn'
+                            ? 'text-warning-emphasis'
+                            : 'text-danger'
+                      }`}
+                      data-testid="merchant-scam-status"
+                    >
+                      {scamTone === 'good'
                         ? t('scamStatusClean')
-                        : t('scamStatusAlert')}
+                        : scamTone === 'warn'
+                          ? t('scamStatusCaution')
+                          : t('scamStatusAlert')}
                     </span>
                   </div>
                   <div className="d-flex align-items-center justify-content-between small mb-2">
@@ -466,9 +485,19 @@ export default async function MerchantProfilePage({
                   </span>
                 </div>
 
-                <p className="text-muted small mb-3">
-                  {t('layer2DescPrefix')} <strong>{brk.total_reviews}</strong>{' '}
-                  {t('layer2DescMid')} <strong>{authenticPct}%</strong>).
+                <p
+                  className="text-muted small mb-3"
+                  data-testid="merchant-review-summary"
+                >
+                  {authenticPct == null ? (
+                    t('layer2NoReviews')
+                  ) : (
+                    <>
+                      {t('layer2DescPrefix')}{' '}
+                      <strong>{brk.total_reviews}</strong> {t('layer2DescMid')}{' '}
+                      <strong>{authenticPct}%</strong>).
+                    </>
+                  )}
                 </p>
 
                 <div className="row g-2 mt-auto">
