@@ -220,6 +220,9 @@ async function runSuite() {
     ['iPhone 15 128GB + Ốp lưng', 'apple:iphone-15:128gb'],
     ['iPhone 15 + Tặng sạc', 'apple:iphone-15:unknown'],
     ['Combo iPhone 15 + AirPods', 'apple:iphone-15:unknown'],
+    ['Combo iPhone 15+AirPods', 'apple:iphone-15:unknown'],
+    ['Samsung Galaxy Tab S9 - Ultra 2-in-1 case 256GB', 'samsung:galaxy-tab-s9:256gb'],
+    ['iPhone 15 - Pro Max 8/256GB', 'apple:iphone-15-pro-max:256gb'],
     ['iPhone 15 + Ốp lưng 128GB', 'apple:iphone-15:128gb'],
     // A network after the "+" still ends the name; so does a "+" after "Pro".
     ['Samsung Galaxy S24 + 5G', 'samsung:galaxy-s24-plus:unknown'],

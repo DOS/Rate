@@ -1141,16 +1141,17 @@ export class ProductNormalizer {
     // Spellings that split a tier word from its model number read like the joined ones
     // (DOS/Rate#1090). `title` has single spaces, so each gap is one optional space.
     // Each rewrite applies only where the name ends right after it: the title ends, or a
-    // separator, a number (size, RAM/ROM), a network or "Chính hãng" follows, so "Tab S9 -
-    // Ultra slim case" and "A55 + Tặng" keep their keys.
+    // separator, a size ("256GB"), a RAM/ROM pair ("8/256"), a network or "Chính hãng"
+    // follows, so "Tab S9 - Ultra slim case", "Tab S9 - Ultra 2-in-1 case" and "A55 + Tặng"
+    // keep their keys.
     let modelTitle = title
       // "15 - ProMax", "S24-Ultra" and "15 (ProMax)" are "15 ProMax" and "S24 Ultra".
       .replace(
-        /(?<=\d[a-z]?) ?- ?(pro ?max|pro|plus|ultra|mini|lite|fe)\b(?= ?(?:$|[-,(]|\d|[45]g\b|lte\b|chính\b))/gi,
+        /(?<=\d[a-z]?) ?- ?(pro ?max|pro|plus|ultra|mini|lite|fe)\b(?= ?(?:$|[-,(]|\d+(?:[.,]\d+)? ?(?:gb|tb)\b|\d+ ?\/ ?\d+|[45]g\b|lte\b|chính\b))/gi,
         ' $1'
       )
       .replace(
-        /(?<=\d[a-z]?) ?\( ?(pro ?max|pro|plus|ultra|mini|lite|fe) ?\)(?= ?(?:$|[-,(]|\d|[45]g\b|lte\b|chính\b))/gi,
+        /(?<=\d[a-z]?) ?\( ?(pro ?max|pro|plus|ultra|mini|lite|fe) ?\)(?= ?(?:$|[-,(]|\d+(?:[.,]\d+)? ?(?:gb|tb)\b|\d+ ?\/ ?\d+|[45]g\b|lte\b|chính\b))/gi,
         ' $1 '
       )
       // A "+" set apart after a model number or its "Pro" ("S24 +", "iPhone 15 +", "Note
@@ -1179,7 +1180,7 @@ export class ProductNormalizer {
         ' $1'
       );
       const iphoneMatch = appleTitle.match(
-        /iphone\s*(\d+e\b|\d+(?:\s*(?:pro\s*max|pro|plus|mini|air)|\+)?|air\b|duo\b|se(?:\s*(?:\(\s*(?:2020|2022|2025)\s*\)|(?:2020|2022|2025)\b|(?:gen\s*)?[234]\b))?)/i
+        /iphone\s*(\d+e\b|\d+(?:\s*(?:pro\s*max|pro|plus|mini|air)|\+(?= ?(?:$|[-,]|\d+(?:[.,]\d+)? ?(?:gb|tb)\b|[45]g\b|lte\b|chính\b)))?|air\b|duo\b|se(?:\s*(?:\(\s*(?:2020|2022|2025)\s*\)|(?:2020|2022|2025)\b|(?:gen\s*)?[234]\b))?)/i
       );
       // The base iPad by its chip, "iPad A16" or "iPad (A16)", and "iPad Gen 10" like
       // "iPad 10" (DOS/Rate#817).
