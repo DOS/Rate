@@ -16,6 +16,7 @@ import {
   BsStarFill,
 } from 'react-icons/bs';
 import { contentLang } from '@/lib/content-lang';
+import { computeJReviewsUserScores } from '@/lib/jreviews-user-score';
 import { escapeCsvCell } from '@/lib/csv-safe';
 import {
   computeCombinedDualScore,
@@ -270,40 +271,12 @@ export default function JReviewsSection({
       (r) => r.reviewer_type === 'expert' && r.helpfulness_weight > 0
     );
 
-    let computedUser: number | null =
-      userRatingWeighted && userRatingWeighted > 0 ? userRatingWeighted : null;
-    let userWeightSum = 0;
-    let userWeightedStars = 0;
-    if (validUserReviews.length > 0) {
-      userWeightSum = validUserReviews.reduce(
-        (acc, r) => acc + r.helpfulness_weight,
-        0
-      );
-      userWeightedStars = validUserReviews.reduce(
-        (acc, r) => acc + r.rating_star * r.helpfulness_weight,
-        0
-      );
-      if (userWeightSum > 0) {
-        computedUser = Number((userWeightedStars / userWeightSum).toFixed(2));
-      }
-    } else if (computedUser == null && averageRating > 0) {
-      computedUser = Number(Number(averageRating).toFixed(2));
-    }
-
-    const priorMean = 4.2;
-    const priorStrength = 3;
-    const bayesianUserScore =
-      userWeightSum > 0
-        ? Number(
-            (
-              (priorStrength * priorMean + userWeightedStars) /
-              (priorStrength + userWeightSum)
-            ).toFixed(2)
-          )
-        : computedUser;
-    const bayesianConfidence = Number(
-      (userWeightSum / (userWeightSum + priorStrength)).toFixed(2)
-    );
+    const {
+      user: computedUser,
+      bayesianUser: bayesianUserScore,
+      bayesianConfidence,
+      userWeightSum,
+    } = computeJReviewsUserScores(reviews, userRatingWeighted, averageRating);
     const confidenceTier: 'insufficient_data' | 'low' | 'medium' | 'high' =
       bayesianConfidence < 0.3
         ? 'insufficient_data'
@@ -336,8 +309,10 @@ export default function JReviewsSection({
       }
     }
 
+    // The buyer score the header shows, so a 100% buyer composite equals it
+    // (DOS/Rate#1144).
     const dualScore = computeCombinedDualScore({
-      userScore: computedUser,
+      userScore: bayesianUserScore,
       expertScore: computedExpert,
       userConfidence: bayesianConfidence,
       fallbackAverage: averageRating,

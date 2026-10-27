@@ -5,6 +5,11 @@ import { computeCrossPlatformDealRadarFromData } from '../../server/rate/deals';
 import { merchantRiskTone } from '../merchant-risk-tone';
 import { radarExplanation } from '../product-detail-copy';
 import { buildRadarIndex } from '../deal-radar';
+import { computeJReviewsUserScores } from '../jreviews-user-score';
+import {
+  computeBayesianRatingSummary,
+  computeCombinedDualScore,
+} from '../rate-domain-core';
 
 // Display defects from the live audit #1131: numbers and warnings the site
 // showed that were not true.
@@ -160,5 +165,42 @@ const sameMerchant = computeCrossPlatformDealRadarFromData(
 );
 assert.equal(sameMerchant.totalOffersAnalyzed, 3);
 assert.equal(sameMerchant.totalMerchantsAnalyzed, 2);
+
+// DOS/Rate#1144: with no expert score, the composite equals the buyer score
+// the header shows. 9 rating-only 5-star reviews (weight 0.25 each) are 4.54
+// in the header and were 5.0 in the composite.
+const ratingOnly = Array.from({ length: 9 }, () => ({
+  reviewer_type: 'user',
+  include_in_rating: true,
+  helpfulness_weight: 0.25,
+  rating_star: 5,
+}));
+const header = computeBayesianRatingSummary(ratingOnly, 5).bayesianRating;
+const live = computeJReviewsUserScores(ratingOnly, 5, 5);
+assert.equal(header, 4.54);
+assert.equal(live.bayesianUser, header);
+assert.equal(
+  live.user,
+  5,
+  'the plain weighted mean stays shown as TB trọng số'
+);
+const composite = computeCombinedDualScore({
+  userScore: live.bayesianUser,
+  expertScore: null,
+  userConfidence: live.bayesianConfidence,
+  fallbackAverage: 5,
+});
+assert.equal(composite.blendMode, 'user_only');
+assert.equal(composite.overall, header);
+assert.equal(composite.overall.toFixed(1), header.toFixed(1));
+const reviewsSection = readFileSync(
+  join(__dirname, '..', '..', 'components', 'reviews', 'JReviewsSection.tsx'),
+  'utf8'
+);
+assert.match(
+  reviewsSection,
+  /computeCombinedDualScore\(\{\s*userScore: bayesianUserScore,/,
+  'the reviews section composite must read the Bayesian buyer score'
+);
 
 console.log('display-truth: ok');
