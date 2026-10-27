@@ -12987,17 +12987,50 @@ async function runCoreArchitectureSuite() {
         url: 'https://shopee.vn/p',
         ...extra,
       } as never).merchant;
-    // No DOSafe score and no combined score: missing, not 0.
+    // The view's COALESCE(t.risk_score, m.risk_score, 0) reads 0 for a seller
+    // with no threat_intel row: missing, not 0. A threat_intel 0 is a score.
+    const realView = { review_risk_score: 0, review_risk_breakdown: {} };
+    assert.equal(
+      viewMerchant({ ...realView, dosafe_risk_score: 0, threat_risk_score: 0 })
+        .dosafe_risk_score,
+      null
+    );
+    assert.equal(
+      viewMerchant({
+        ...realView,
+        dosafe_risk_score: 0,
+        threat_risk_score: 0,
+        threat_source: 'chongluadao',
+      }).dosafe_risk_score,
+      0
+    );
+    // A synced merchants.risk_score without a threat_intel row is kept.
+    assert.equal(
+      viewMerchant({
+        ...realView,
+        dosafe_risk_score: 35,
+        threat_risk_score: 35,
+      }).dosafe_risk_score,
+      35
+    );
+    // The combined score includes review risk, so it never stands in for DOSafe.
+    assert.equal(
+      viewMerchant({ review_risk_score: 40, threat_risk_score: 40 })
+        .dosafe_risk_score,
+      null
+    );
     assert.equal(viewMerchant({}).dosafe_risk_score, null);
     assert.equal(
       viewMerchant({ dosafe_risk_score: '  ' }).dosafe_risk_score,
       null
     );
-    assert.equal(viewMerchant({ threat_risk_score: 30 }).dosafe_risk_score, 30);
-    assert.equal(viewMerchant({ dosafe_risk_score: 0 }).dosafe_risk_score, 0);
     assert.equal(viewMerchant({}).risk_score, 15);
-    // A view row with no seller has no review baseline to show.
+    // A stored review risk still wins over the baseline (#685).
+    assert.equal(viewMerchant({ review_risk_score: 42 }).review_risk_score, 42);
+    // A view row with no seller has no review baseline to show, but its trust
+    // is never better than the baseline's.
     assert.equal(viewMerchant({ merchant_id: '' }).review_risk_score, null);
+    assert.equal(viewMerchant({ merchant_id: '' }).risk_score, 15);
 
     const rawMerchant = (merchants: unknown) =>
       mapOfferRowToMerchantOffer({
@@ -13009,9 +13042,32 @@ async function runCoreArchitectureSuite() {
         merchants,
       } as never).merchant;
     assert.equal(rawMerchant({ id: 'm' }).dosafe_risk_score, null);
+    // merchants.risk_score defaults to 0: a bare 0 is no DOSafe score.
+    assert.equal(
+      rawMerchant({ id: 'm', risk_score: 0 }).dosafe_risk_score,
+      null
+    );
     assert.equal(
       rawMerchant({ id: 'm', risk_score: 12 }).dosafe_risk_score,
       12
+    );
+    // Column beats metadata, metadata beats risk_score.
+    assert.equal(
+      rawMerchant({
+        id: 'm',
+        dosafe_risk_score: 3,
+        risk_score: 50,
+        metadata: { dosafe_risk_score: 7 },
+      }).dosafe_risk_score,
+      3
+    );
+    assert.equal(
+      rawMerchant({
+        id: 'm',
+        risk_score: 50,
+        metadata: { dosafe_risk_score: 7 },
+      }).dosafe_risk_score,
+      7
     );
     assert.equal(
       rawMerchant({ id: 'm', metadata: { dosafe_risk_score: 7 } })
@@ -13028,7 +13084,8 @@ async function runCoreArchitectureSuite() {
     // No merchant row at all: both scores are missing.
     assert.equal(rawMerchant(null).dosafe_risk_score, null);
     assert.equal(rawMerchant(null).review_risk_score, null);
-    assert.equal(rawMerchant(null).risk_score, 0);
+    // ...yet an unknown seller never ranks as more trusted than the baseline.
+    assert.equal(rawMerchant(null).risk_score, 15);
 
     // The UI shows "-" and the CSV an empty cell for the same missing score.
     for (const v of [null, undefined, '', Number.NaN]) {

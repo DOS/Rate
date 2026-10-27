@@ -821,6 +821,7 @@ interface RawTrustViewRow {
   merchant_is_official?: boolean | null;
   merchant_location?: string | null;
   threat_risk_score?: number | string | null;
+  threat_source?: string | null;
   dosafe_risk_score?: number | string | null;
   review_risk_score?: number | string | null;
   review_risk_breakdown?: Record<string, unknown> | null;
@@ -997,10 +998,13 @@ export function mapTrustViewRowToMerchantOffer(
       ? row
       : ({} as RawTrustViewRow);
   const combinedRisk = toSafeRiskScore100(safeRow.threat_risk_score, 0);
-  // Without a DOSafe or combined score the DOSafe risk is missing, not 0 (#1099).
+  // The view reads 0 for a seller with no threat_intel row and no synced
+  // merchants.risk_score (column default 0): that is a missing score (#1099).
+  const viewDosafeRisk = toOptionalRiskScore100(safeRow.dosafe_risk_score);
   const dosafeRisk =
-    toOptionalRiskScore100(safeRow.dosafe_risk_score) ??
-    toOptionalRiskScore100(safeRow.threat_risk_score);
+    viewDosafeRisk === 0 && !sanitizeOfferString(safeRow.threat_source)
+      ? null
+      : viewDosafeRisk;
   const persistedReviewRisk = toSafeRiskScore100(safeRow.review_risk_score, 0);
   const isOfficial = isStrictOfferOfficialFlag(safeRow.merchant_is_official);
   const hasSeller = sanitizeOfferString(safeRow.merchant_id) !== '';
@@ -1045,7 +1049,11 @@ export function mapTrustViewRowToMerchantOffer(
       rating_star: null,
       follower_count: toSafeNonNegativeVoteCount(followerCount, 100_000_000),
       location: cleanLocation || null,
-      risk_score: Math.max(combinedRisk, dosafeRisk ?? 0, reviewRisk ?? 0),
+      risk_score: Math.max(
+        combinedRisk,
+        dosafeRisk ?? 0,
+        reviewRisk ?? baselineReviewRisk({ platform: safeRow.platform })
+      ),
       dosafe_risk_score: dosafeRisk,
       review_risk_score: reviewRisk,
       review_risk_breakdown: safeBreakdown,
@@ -1075,14 +1083,14 @@ export function mapOfferRowToMerchantOffer(item: RawOfferRow): MerchantOffer {
       : null;
   const isOfficial = isStrictOfferOfficialFlag(merchantObj?.is_official);
   const baseRisk = toSafeRiskScore100(merchantObj?.risk_score, 0);
-  // Column, then metadata, then the combined score; none of them is a missing
-  // DOSafe risk, not 0 (#1099).
+  // Column, then metadata, then a synced merchants.risk_score; the column
+  // defaults to 0, so a bare 0 there is a missing DOSafe risk (#1099).
   const dosafeRisk =
     toOptionalRiskScore100(merchantObj?.dosafe_risk_score) ??
     (typeof meta?.dosafe_risk_score === 'number'
       ? toOptionalRiskScore100(meta.dosafe_risk_score)
       : null) ??
-    toOptionalRiskScore100(merchantObj?.risk_score);
+    (baseRisk > 0 ? baseRisk : null);
   // Without a stored score (column, then metadata) the seller gets the merchant
   // pages' baseline (#685). A never-scored column (0 / {}) is not a score.
   const columnReviewRisk = toSafeRiskScore100(
@@ -1107,10 +1115,11 @@ export function mapOfferRowToMerchantOffer(item: RawOfferRow): MerchantOffer {
     typeof meta?.combined_risk_score === 'number'
       ? toSafeRiskScore100(meta.combined_risk_score, 0)
       : 0;
+  // An unknown seller is never safer than the baseline in trust and sorting.
   const combinedRisk = Math.max(
     baseRisk,
     dosafeRisk ?? 0,
-    reviewRisk ?? 0,
+    reviewRisk ?? baselineReviewRisk({ platform: safeItem.platform }),
     metaCombined
   );
   const topLevelBreakdown =
@@ -1192,7 +1201,7 @@ export function mapOfferRowToMerchantOffer(item: RawOfferRow): MerchantOffer {
  * uncapped now that they page.
  */
 const TRUST_VIEW_SELECT =
-  'id, cluster_id, merchant_id, platform, title, price_current, price_original, stock, rating_star, rating_count, url, merchant_name, merchant_is_official, merchant_location, threat_risk_score, dosafe_risk_score, review_risk_score, review_risk_breakdown';
+  'id, cluster_id, merchant_id, platform, title, price_current, price_original, stock, rating_star, rating_count, url, merchant_name, merchant_is_official, merchant_location, threat_risk_score, threat_source, dosafe_risk_score, review_risk_score, review_risk_breakdown';
 
 /** Offer columns readable through rate.merchants' column-level grants. */
 const OFFER_FALLBACK_SELECT = `

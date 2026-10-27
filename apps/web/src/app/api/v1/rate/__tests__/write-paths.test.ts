@@ -1207,6 +1207,7 @@ async function testRateApiTrustAndOfferBounds() {
     rating_count: -10,
     url: 'https://shopee.vn/product/1/2',
     threat_risk_score: 250,
+    threat_source: 'dosafe',
     dosafe_risk_score: -20,
     review_risk_score: Number.NaN,
   });
