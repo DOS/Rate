@@ -417,6 +417,7 @@ async function runSuite() {
     // Two sizes, one of them the band's, leave the size-less key (Tier 2).
     ['Apple Watch Series 10 dây Sport Band 45mm cho mặt 42mm', 'apple:watch-series-10:unknown'],
     ['Apple Watch Series 10 Sport Loop 45mm cho mặt 46mm', 'apple:watch-series-10:unknown'],
+    ['Apple Watch Series 10 Sport Band 45mm cho mặt 42mm', 'apple:watch-series-10:unknown'],
     ['Apple Watch SE 3 GPS Strap 40mm for 44mm case', 'apple:watch-se-3:unknown'],
     ['Apple Watch Series 10 Bracelet 42mm | 46mm', 'apple:watch-series-10-46mm:unknown'],
     // A band is sold by the case it fits: a band's size alone is the case's.
@@ -431,7 +432,21 @@ async function runSuite() {
     ['Apple Watch Series 11 GPS (Viền nhôm, dây cao su) 46mm', 'apple:watch-series-11-46mm:64gb'],
     ['Apple Watch Series 10 dây Sport Band 45mm, mặt 42mm', 'apple:watch-series-10-42mm:unknown'],
     ['Apple Watch Series 10 Dây Vải 45mm - 46mm GPS', 'apple:watch-series-10-46mm:unknown'],
+    ['Apple Watch Series 10 Dây Vải 45mm; 46mm GPS', 'apple:watch-series-10-46mm:unknown'],
     ['Apple Watch Series 10 Dây Vải 45mm \u2013 46mm GPS', 'apple:watch-series-10-46mm:unknown'],
+    ['Apple Watch Series 10 (dây vải 45mm) 46mm', 'apple:watch-series-10-46mm:unknown'],
+    // A glued "Sportband" is a band; "không dây" is wireless, no band.
+    ['Apple Watch Series 10 Sportband 45mm cho mặt 42mm', 'apple:watch-series-10:unknown'],
+    ['Apple Watch Series 10 sạc không dây 46mm cho dây 42mm', 'apple:watch-series-10-46mm:unknown'],
+    [
+      'Apple Watch Series 10 sạc kho\u0302ng dây 46mm cho dây 42mm',
+      'apple:watch-series-10-46mm:unknown',
+    ],
+    // A size in brackets after the band is the case's when it is the only one.
+    [
+      'Apple Watch SE 2024 Viền nhôm dây cao su [40mm/GPS] - Mới',
+      'apple:watch-se-2024-40mm:unknown',
+    ],
     // A decomposed or upper-case "dây" is the same word; "Bandit" is no band.
     ['Apple Watch Series 10 da\u0302y vải 45mm, 42mm', 'apple:watch-series-10-42mm:unknown'],
     ['APPLE WATCH SERIES 10 DÂY VẢI 45MM, 42MM', 'apple:watch-series-10-42mm:unknown'],

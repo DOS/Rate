@@ -1105,7 +1105,7 @@ const sizePatterns = (size: string): [RegExp, RegExp] => [
   new RegExp(SIZE_NOT_PRECEDED_BY + size + SIZE_NOT_FOLLOWED_BY, 'i'),
 ];
 const WATCH_BAND_WORD =
-  /(?<![\p{L}\d])(?:d(?:\u00e2|a\u0302)y|band|strap|loop|bracelet)(?![\p{L}\d])/iu;
+  /(?<!kh[\p{L}\p{M}]{1,3}ng )(?:d(?:\u00e2|a\u0302)y|band|strap|loop|bracelet)(?![\p{L}\d])/iu;
 const WATCH_SIZE = /(?<!\d)(38|4[0-2]|4[4-6]) ?mm\b/i;
 const APPLE_SIZE_PATTERNS: Record<string, [RegExp, RegExp]> = {
   ipad: sizePatterns(IPAD_SIZE),
