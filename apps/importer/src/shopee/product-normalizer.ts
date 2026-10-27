@@ -1104,6 +1104,8 @@ const sizePatterns = (size: string): [RegExp, RegExp] => [
   new RegExp(String.raw`(?<![\d.,])` + size + SIZE_MARKER, 'i'),
   new RegExp(SIZE_NOT_PRECEDED_BY + size + SIZE_NOT_FOLLOWED_BY, 'i'),
 ];
+const WATCH_BAND_WORD =
+  /(?<![\p{L}\d])(?:d(?:\u00e2|a\u0302)y|band|strap|loop|bracelet)(?![\p{L}\d])/iu;
 const APPLE_SIZE_PATTERNS: Record<string, [RegExp, RegExp]> = {
   ipad: sizePatterns(IPAD_SIZE),
   'macbook air': sizePatterns(MACBOOK_AIR_SIZE),
@@ -1133,7 +1135,17 @@ function readAppleSize(model: string, title: string): string {
   // A bundle's "+ bàn phím 11 inch" is another product; "GPS + Cellular" is the watch.
   const own = title.slice(Math.max(0, at)).split(/ (?:cho|for) | ?\+ (?!cellular|lte)/i)[0]!;
   if (family === 'watch')
-    return own.match(/(?<!\d)(38|4[0-2]|4[4-6]) ?mm\b/i)?.[1]?.concat('mm') ?? '';
+    return (
+      own
+        // Retailers name the case size before the band ("46mm Viền nhôm Dây cao su S/M"),
+        // so a size after "dây"/"band"/"strap" is the band's, up to the next ")", ",", "|"
+        // or " - " (DOS/Rate#1124).
+        .split(/[),|]| - /)
+        .map(part => part.split(WATCH_BAND_WORD)[0])
+        .join(' ')
+        .match(/(?<!\d)(38|4[0-2]|4[4-6]) ?mm\b/i)?.[1]
+        ?.concat('mm') ?? ''
+    );
   const [marked, bare] = APPLE_SIZE_PATTERNS[family]!;
   const size = (own.match(marked) ?? own.match(bare))?.[1];
   return size ? size.replace(',', '.') : '';

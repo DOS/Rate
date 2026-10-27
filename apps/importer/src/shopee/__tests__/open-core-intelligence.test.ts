@@ -403,6 +403,34 @@ async function runSuite() {
   for (const [title, expectedKey] of appleSizeKeys1113) {
     assert.equal(keyOf(title), expectedKey, title);
   }
+  // DOS/Rate#1124: retailers name the case size before the band, so a size after
+  // "dây"/"band"/"strap" is the band's and never keys the watch.
+  const watchBandSizeKeys1124: Array<[string, string]> = [
+    // Retailer titles: case size first, then the band.
+    [
+      'Apple Watch Series 11 - GPS, 46mm - Viền Nhôm Dây Cao Su S/M',
+      'apple:watch-series-11-46mm:64gb',
+    ],
+    ['Apple Watch Series 11 GPS 46mm viền nhôm dây thể thao', 'apple:watch-series-11-46mm:64gb'],
+    ['Apple Watch Series 10 42mm (GPS) Viền Nhôm - Dây Vải', 'apple:watch-series-10-42mm:unknown'],
+    ['Apple Watch Series 11 42mm viền thép dây Link Bracelet', 'apple:watch-series-11-42mm:64gb'],
+    // A band size alone leaves the size-less key (Tier 2), never the band's size.
+    ['Apple Watch Series 10 dây Sport Band 45mm cho mặt 42mm', 'apple:watch-series-10:unknown'],
+    ['Apple Watch Series 10 Sport Band 45mm', 'apple:watch-series-10:unknown'],
+    ['Apple Watch SE 3 GPS Strap 44mm', 'apple:watch-se-3:unknown'],
+    ['Apple Watch Series 10 Sport Loop 46mm', 'apple:watch-series-10:unknown'],
+    // The band phrase ends at ")", ",", "|" or " - ": a case size after it still counts.
+    ['Apple Watch Series 11 GPS (Viền nhôm, dây cao su) 46mm', 'apple:watch-series-11-46mm:64gb'],
+    ['Apple Watch Series 10 dây Sport Band 45mm, mặt 42mm', 'apple:watch-series-10-42mm:unknown'],
+    ['Apple Watch Series 10 Dây Vải - 46mm GPS', 'apple:watch-series-10-46mm:unknown'],
+    // A decomposed or upper-case "dây" is the same word; "Bandit" is no band.
+    ['Apple Watch Series 10 da\u0302y vải 45mm', 'apple:watch-series-10:unknown'],
+    ['APPLE WATCH SERIES 10 DÂY VẢI 45MM', 'apple:watch-series-10:unknown'],
+    ['Apple Watch Series 10 Bandit 46mm', 'apple:watch-series-10-46mm:unknown'],
+  ];
+  for (const [title, expectedKey] of watchBandSizeKeys1124) {
+    assert.equal(keyOf(title), expectedKey, title);
+  }
   // The registry has one entry per line: a sized title keeps the line's benchmark, but
   // the entry's screen and battery describe only the size it was written for.
   assert.equal(
