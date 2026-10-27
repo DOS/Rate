@@ -193,6 +193,57 @@ async function runSuite() {
   assert.equal(keyOf('Xiaomi Redmi Note 17 Pro Max 512GB'), 'xiaomi:redmi-note-17-pro-max:512gb');
   assert.equal(keyOf('Xiaomi Redmi Note 17 ProMax 512GB'), 'xiaomi:redmi-note-17-pro-max:512gb');
   assert.equal(keyOf('Xiaomi Redmi Note 17 Pro 512GB'), 'xiaomi:redmi-note-17-pro:512gb');
+  // A tier word written apart from the model number, or behind a separator, stays part of
+  // the model (DOS/Rate#1090). Labeled fixtures: title -> correct key.
+  const tierWordSpellings: Array<[string, string]> = [
+    ['Apple iPhone 15+ 128GB', 'apple:iphone-15-plus:128gb'],
+    ['iPhone 15 + 128GB', 'apple:iphone-15-plus:128gb'],
+    ['Samsung Galaxy S24 + 256GB', 'samsung:galaxy-s24-plus:256gb'],
+    ['Samsung Galaxy S24 +', 'samsung:galaxy-s24-plus:unknown'],
+    ['Samsung Galaxy Tab S 9 Ultra 256GB', 'samsung:galaxy-tab-s9-ultra:256gb'],
+    ['Samsung Galaxy S 24 Ultra 512GB', 'samsung:galaxy-s24-ultra:512gb'],
+    ['iPhone 15 - ProMax', 'apple:iphone-15-pro-max:unknown'],
+    ['iPhone 15 (ProMax) 256GB', 'apple:iphone-15-pro-max:256gb'],
+    ['iPhone 15 - Pro Max 256GB', 'apple:iphone-15-pro-max:256gb'],
+    ['Samsung Galaxy S24 - Ultra 256GB', 'samsung:galaxy-s24-ultra:256gb'],
+    ['Xiaomi Redmi Note 13 (Pro) 256GB', 'xiaomi:redmi-note-13-pro:256gb'],
+    // Spellings that already keyed right keep their keys.
+    ['Samsung Galaxy S24+ 256GB', 'samsung:galaxy-s24-plus:256gb'],
+    ['Samsung Galaxy S24 Plus 256GB', 'samsung:galaxy-s24-plus:256gb'],
+    ['iPhone 15 ProMax 256GB', 'apple:iphone-15-pro-max:256gb'],
+    ['iPhone 15 Plus 128GB', 'apple:iphone-15-plus:128gb'],
+    ['Samsung Galaxy Tab S9 Ultra 256GB', 'samsung:galaxy-tab-s9-ultra:256gb'],
+    ['Samsung Galaxy S24 256GB', 'samsung:galaxy-s24:256gb'],
+    ['iPhone 15 128GB', 'apple:iphone-15:128gb'],
+    // A "+" before a gift or a word is not a Plus model (DOS/Rate#597).
+    ['Samsung Galaxy A55 + Tặng ốp', 'samsung:galaxy-a55-tang:unknown'],
+    ['iPhone 15 128GB + Ốp lưng', 'apple:iphone-15:128gb'],
+    ['iPhone 15 + Tặng sạc', 'apple:iphone-15:unknown'],
+    ['Combo iPhone 15 + AirPods', 'apple:iphone-15:unknown'],
+    ['Combo iPhone 15+AirPods', 'apple:iphone-15:unknown'],
+    ['Samsung Galaxy Tab S9 - Ultra 2-in-1 case 256GB', 'samsung:galaxy-tab-s9:256gb'],
+    ['iPhone 15 - Pro Max 8/256GB', 'apple:iphone-15-pro-max:256gb'],
+    ['iPhone 15 + Ốp lưng 128GB', 'apple:iphone-15:128gb'],
+    // A network after the "+" still ends the name; so does a "+" after "Pro".
+    ['Samsung Galaxy S24 + 5G', 'samsung:galaxy-s24-plus:unknown'],
+    ['Xiaomi Redmi Note 13 Pro + 5G 256GB', 'xiaomi:redmi-note-13-pro-plus:256gb'],
+    ['Samsung Galaxy S24 + 5G 256GB', 'samsung:galaxy-s24-plus:256gb'],
+    ['Samsung Galaxy S24 +256GB', 'samsung:galaxy-s24-plus:256gb'],
+    ['Samsung Galaxy S24 (Ultra)256GB', 'samsung:galaxy-s24-ultra:256gb'],
+    // A tier word that starts an accessory or gift phrase is not the model's.
+    ['iPhone 15 + Free case 128GB', 'apple:iphone-15:128gb'],
+    ['Samsung Galaxy S24 + (Free case) 256GB', 'samsung:galaxy-s24:256gb'],
+    ['Samsung Galaxy Tab S9 - Ultra slim case 256GB', 'samsung:galaxy-tab-s9:256gb'],
+  ];
+  for (const [title, expectedKey] of tierWordSpellings) {
+    assert.equal(keyOf(title), expectedKey, title);
+  }
+  // A RAM/ROM pair written "8 + 256GB" is not a Plus model.
+  assert.doesNotMatch(keyOf('Samsung Galaxy A55 8 + 256GB'), /plus/);
+  assert.equal(
+    normalizer.normalize(createDummyShopeeProduct('Apple iPhone 15+ 128GB')).model,
+    'iPhone 15 Plus'
+  );
   // Sony's WF/WH-1000XM line with or without the hyphen.
   assert.equal(keyOf('Tai nghe TWS Sony WF1000XM5'), keyOf('Tai nghe TWS Sony WF-1000XM5'));
   assert.equal(keyOf('Tai nghe TWS Sony WF1000XM5'), 'sony:wf-1000xm5:unknown');
@@ -225,6 +276,76 @@ async function runSuite() {
   assert.equal(keyOf('iPad Gen 10 (A14 Bionic) 64GB'), keyOf('Apple iPad 10 64GB'));
   assert.equal(keyOf('Apple iPad 10.9 inch (A14) 64GB'), keyOf('Apple iPad 10 64GB'));
   assert.equal(keyOf('MacBook Neoprene Sleeve 13 inch'), 'apple:macbook:unknown');
+  // Apple keys still merged or split wrongly (DOS/Rate#819). Labeled fixtures: title -> key.
+  const appleKeys819: Array<[string, string]> = [
+    // iPad Air generations without a chip are separate models; the 6th and 7th are the
+    // M2 and M3 Airs, keyed like the titles that name the chip.
+    ['iPad Air 4 64GB', 'apple:ipad-air-4:64gb'],
+    ['iPad Air 5 64GB', 'apple:ipad-air-5:64gb'],
+    ['Apple iPad Air (5th generation) Wi-Fi 64GB', 'apple:ipad-air-5:64gb'],
+    ['Apple iPad Air 6 128GB', 'apple:ipad-air-m2:128gb'],
+    ['iPad Air 11 inch M2 128GB', 'apple:ipad-air-m2:128gb'],
+    ['iPad Air 13 M3 256GB', 'apple:ipad-air-m3:256gb'],
+    ['iPad Air 128GB', 'apple:ipad-air:128gb'],
+    ['iPad Air 5 M1 64GB', 'apple:ipad-air-m1:64gb'],
+    ['iPad Air M1 64GB', 'apple:ipad-air-m1:64gb'],
+    ['iPad 10 64GB - Tặng bao da dùng chung iPad A16', 'apple:ipad-10:64gb'],
+    ['Tai nghe Sony WH-1000XM5 cho Mac mini M4', 'sony:wh-1000xm5:unknown'],
+    ['Mac mini 2018 256GB', 'apple:mac-mini-2018:256gb'],
+    ['iPad Air 4G 64GB', 'apple:ipad-air:64gb'],
+    // An A16 or later chip anywhere after the size or generation names the base iPad, and
+    // the 11th generation is the iPad (A16).
+    ['iPad 11 2025 A16 128GB', 'apple:ipad-a16:128gb'],
+    ['iPad 11 inch Wifi A16 128GB', 'apple:ipad-a16:128gb'],
+    ['iPad Gen 11 128GB', 'apple:ipad-a16:128gb'],
+    ['iPad (11th generation) 128GB', 'apple:ipad-a16:128gb'],
+    ['Apple iPad 10 64GB', 'apple:ipad-10:64gb'],
+    // Only the first A-chip counts, and not past another iPad or a comparison.
+    ['iPad 10 64GB so sánh với iPad A16', 'apple:ipad-10:64gb'],
+    ['iPad 9 64GB chip A13 - A16 sắp về', 'apple:ipad-9:64gb'],
+    // "iPad 11 Pro" is the 11-inch Pro, not the 11th generation.
+    ['iPad 11 Pro M4 256GB', 'apple:ipad-pro-m4:256gb'],
+    // Apple lines with no pattern of their own are not iPhones.
+    ['Apple TV 4K (3rd generation) 128GB', 'apple:tv-4k-3:128gb'],
+    ['Apple Vision Pro 256GB', 'apple:vision-pro:256gb'],
+    ['Mac mini M4 256GB', 'apple:mac-mini-m4:256gb'],
+    ['Apple iMac M4 24 inch 256GB', 'apple:imac-m4:256gb'],
+    ['Mac Studio M4 Max 512GB', 'apple:mac-studio-m4-max:512gb'],
+    ['Loa Apple HomePod mini', 'apple:homepod-mini:unknown'],
+    // A generation or year after the line keeps generations apart.
+    ['Apple HomePod 2', 'apple:homepod-2:unknown'],
+    ['Apple HomePod (2nd generation)', 'apple:homepod-2:unknown'],
+    ['Apple TV 4K 2022 128GB', 'apple:tv-4k-3:128gb'],
+    ['Apple TV 4K (2022) 128GB', 'apple:tv-4k-3:128gb'],
+    ['Vision Pro 256GB', 'apple:vision-pro:256gb'],
+    // A chip named for a bundled accessory is not the Air's.
+    ['iPad Air 5 64GB + ốp lưng cho iPad Pro M4', 'apple:ipad-air-5:64gb'],
+    // Another brand, or a title that only names what it fits, is not an Apple desktop.
+    ['Ốp Samsung Galaxy S24 imac', 'samsung:op-samsung-galaxy-s24:unknown'],
+    // An accessory naming its own family before "cho" keeps the model it fits.
+    ['Ốp lưng iPhone cho iPhone 15 Pro Max', 'apple:iphone-15-pro-max:unknown'],
+    ['Bao da iPad cho iPad Air 5', 'apple:ipad-air-5:unknown'],
+    // An iPhone named only as what an accessory fits is not the product.
+    ['Tai nghe AirPods Pro 2 cho iPhone Air', 'apple:airpods-pro-2:unknown'],
+    ['Tai nghe AirPods Pro 2 cho iPhone 17', 'apple:airpods-pro-2:unknown'],
+    ['iPhone 17 256GB', 'apple:iphone-17:256gb'],
+    // A case size is no Watch Ultra generation.
+    ['Apple Watch Ultra 49mm', 'apple:watch-ultra:unknown'],
+    ['Apple Watch Ultra 49mm Titan', 'apple:watch-ultra:unknown'],
+    ['Apple Watch Ultra', 'apple:watch-ultra:unknown'],
+    ['Apple Watch Ultra 2 49mm', 'apple:watch-ultra-2:64gb'],
+    ['Apple Watch Ultra 3 49mm', 'apple:watch-ultra-3:64gb'],
+    // The 2020 and 2022 iPhone SE are the 2nd and 3rd generation.
+    ['iPhone SE (2022) 64GB', 'apple:iphone-se-3:64gb'],
+    ['iPhone SE 2022 64GB', 'apple:iphone-se-3:64gb'],
+    ['iPhone SE 3 64GB', 'apple:iphone-se-3:64gb'],
+    ['iPhone SE (3rd generation) 64GB', 'apple:iphone-se-3:64gb'],
+    ['iPhone SE 2020 64GB', 'apple:iphone-se-2:64gb'],
+    ['iPhone SE 2 64GB', 'apple:iphone-se-2:64gb'],
+  ];
+  for (const [title, expectedKey] of appleKeys819) {
+    assert.equal(keyOf(title), expectedKey, title);
+  }
   // iPad mini 6 and 7 are two models (DOS/Rate#819): "(A17 Pro)" is the 7th, "8.3 inch" is
   // its screen, and a size or a year after "mini" is no generation.
   assert.equal(keyOf('Apple iPad mini 6 Wi-Fi 64GB'), 'apple:ipad-mini-6:64gb');
@@ -490,6 +611,45 @@ async function runSuite() {
   assert.equal(garminFr265.category_slug, 'smartwatches');
   assert.equal(garminFr265.model_key, 'garmin:forerunner-265:8gb');
   assert.equal(garminFr265.is_benchmark_enriched, true);
+
+  // A storage-less title of a registry model sold in several storage sizes keys as
+  // ':unknown', never at a guessed default size (DOS/Rate#1094). Labeled fixtures from
+  // the Rate-Services audit run 40252379212.
+  const storagelessRegistryTitles: Array<[string, string]> = [
+    // A 16GB/512GB CellphoneS listing that used to key under the 1TB master.
+    ['Laptop ASUS Zenbook S 14 UX5406AA-SU348W', 'asus:zenbook-s-14:unknown'],
+    // "12GB" is RAM: the title names no storage.
+    ['Samsung Galaxy S26 Ultra 5G 12GB', 'samsung:galaxy-s26-ultra:unknown'],
+    ['Apple iPhone 18 Pro Max', 'apple:iphone-18-pro-max:unknown'],
+    ['Apple iPhone 18 Pro', 'apple:iphone-18-pro:unknown'],
+    ['Lenovo ThinkPad X1 Carbon Gen 12 Ultra 7 155U', 'lenovo:thinkpad-x1-carbon-gen-12:unknown'],
+    ['Máy tính bảng iPad Pro M5 11 inch WiFi', 'apple:ipad-pro-m5:unknown'],
+    ['Máy tính bảng Xiaomi Pad 7 Pro', 'xiaomi:pad-7-pro:unknown'],
+  ];
+  for (const [title, expectedKey] of storagelessRegistryTitles) {
+    const storageless = normalizer.normalize(createDummyShopeeProduct(title));
+    assert.equal(storageless.model_key, expectedKey, title);
+    assert.equal(storageless.storage_gb, null, title);
+    assert.equal(storageless.needs_review, true, title);
+    assert.equal(storageless.is_benchmark_enriched, true, title);
+    assert.equal(storageless.specifications.hardware?.storage_gb, undefined, title);
+  }
+  const storagelessZenbook = normalizer.normalize(
+    createDummyShopeeProduct('Laptop ASUS Zenbook S 14 UX5406AA-SU348W')
+  );
+  assert.equal(storagelessZenbook.name, 'Asus Zenbook S 14');
+  assert.equal(storagelessZenbook.slug, 'asus-zenbook-s-14');
+  // A title that names its storage still keys at it.
+  assert.equal(
+    normalizer.normalize(createDummyShopeeProduct('Apple iPhone 18 Pro Max 512GB')).model_key,
+    'apple:iphone-18-pro-max:512gb'
+  );
+  // A watch generation ships in one storage size, so its storage is known without the
+  // title naming it (the single-storage watches above keep their keys).
+  assert.equal(
+    normalizer.normalize(createDummyShopeeProduct('Apple Watch Series 11 GPS 46mm')).model_key,
+    'apple:watch-series-11:64gb'
+  );
 
   const sonyBuds = normalizer.normalize(
     createDummyShopeeProduct('Tai nghe chống ồn Sony WF-1000XM5 Chính hãng')
@@ -1220,13 +1380,14 @@ async function runSuite() {
     assert.equal(keyOf('Tai nghe AirPods Pro 2023'), 'apple:airpods-pro-2:unknown');
     assert.equal(keyOf('Tai nghe AirPods Pro (2023) USB-C'), 'apple:airpods-pro-2:unknown');
 
-    // #643: FPT Shop names 256GB iPad Pro M5 by its 12GB RAM
+    // #643: FPT Shop names the iPad Pro M5 by its 12GB RAM, which the 256GB and 512GB
+    // models share, so the storage stays unknown (#1094).
     const ipadProM5Ram = normalizer.normalize(
       createDummyShopeeProduct('iPad Pro 11 M5 2025 WiFi 12GB')
     );
-    assert.equal(ipadProM5Ram.model_key, 'apple:ipad-pro-m5:256gb');
+    assert.equal(ipadProM5Ram.model_key, 'apple:ipad-pro-m5:unknown');
     assert.equal(ipadProM5Ram.ram_gb, 12);
-    assert.equal(ipadProM5Ram.storage_gb, 256);
+    assert.equal(ipadProM5Ram.storage_gb, null);
 
     const ipadAirRamOnly = normalizer.normalize(
       createDummyShopeeProduct('iPad Air 11 M3 2025 WiFi 8GB')

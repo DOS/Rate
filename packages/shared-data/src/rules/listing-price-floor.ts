@@ -8,9 +8,13 @@
 export const MINIMUM_DEVICE_PRICE_FLOOR_VND = 1_200_000;
 /** Below this, an earbuds listing is treated as an accessory or part. */
 export const MINIMUM_EARBUDS_PRICE_FLOOR_VND = 400_000;
-/** Titles or URLs of earbuds listings. */
+/**
+ * Titles or URLs of earbuds listings. A model number or tier may follow the
+ * name with no space ("Buds3", "Buds2Pro", "FreeBuds5i", "AirPodsPro",
+ * "WF1000XM5") (DOS/Rate#1092).
+ */
 export const EARBUDS_TITLE_REGEX =
-  /\b(?:airpods|earpods|buds|freebuds|soundpeats|wf-|wh-|tws|tai[\s_-]*nghe|earbuds|in[\s_-]*ear)\b/i;
+  /\b(?:airpods(?:\d+|pro|max)?|earpods|buds\d*(?:pro|fe|live|core|plus)?|freebuds\d*i?|soundpeats|wf-|wf1000xm\d+|wh-|tws|tai[\s_-]*nghe|earbuds|in[\s_-]*ear)\b/i;
 
 /**
  * The floor for a listing: the earbuds floor when any of the texts (title,

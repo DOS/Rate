@@ -55,7 +55,12 @@ packages/*/.env
 
 # IDEs & AI Agent local worktrees/configs
 .idea
-.claude/
+.claude/*
+# Shared agent skills are tracked; worktrees and local settings stay ignored.
+!.claude/skills/
+.claude/skills/*
+!.claude/skills/product-owner/
+*/**/.claude/
 .codex/
 .gemini/
 .cursor/
