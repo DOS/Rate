@@ -694,6 +694,35 @@ function testPriceRules(): void {
   ]) {
     assert.equal(rules.minimumListingPriceVnd([title]), 400_000, title);
   }
+  // Glued tiers and a glued brand are earbuds; over-ear WH- headphones and
+  // other devices keep the device floor (DOS/Rate#1116).
+  for (const title of [
+    'Samsung Galaxy BudsPro3',
+    'Samsung Galaxy Buds Pro 3',
+    'Huawei FreeBudsPro4',
+    'Huawei FreeBuds5i',
+    'Huawei FreeBuds 5i',
+    'SamsungGalaxyBuds3',
+    'Galaxy Buds3 Pro',
+    'Galaxy Buds2Pro',
+    'Sony WF-1000XM5',
+    'Apple AirPods Pro 2',
+    'AirPodsPro',
+    'samsung:galaxy-buds3-pro:unknown',
+  ]) {
+    assert.equal(rules.minimumListingPriceVnd([title]), 400_000, title);
+  }
+  for (const title of [
+    'Sony WH-1000XM5',
+    'Sony WH-CH720N',
+    'Samsung Galaxy S24',
+    'Galaxy Watch7',
+    'Samsung Galaxy Z Flip',
+    'Buddha statue',
+    'sony:wh-1000xm5:unknown',
+  ]) {
+    assert.equal(rules.minimumListingPriceVnd([title]), 1_200_000, title);
+  }
   assert.equal(
     rules.minimumListingPriceVnd(['galaxy buds+']),
     400_000,
