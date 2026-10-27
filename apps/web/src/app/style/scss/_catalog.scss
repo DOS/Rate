@@ -169,15 +169,17 @@
 
 // From 992px the filter panel is inline (style.scss .offcanvas.largeshow).
 // Keep it under the sticky navbar while the results scroll, and let it
-// scroll on its own when it is taller than the window. Below 992px it is the
-// off-canvas drawer, which must not get a sticky or scrolling parent.
+// scroll on its own when it is taller than the window. top clears the
+// ~73px navbar, as #main-content's 5rem scroll-margin-top does. Scroll
+// chaining stays on, so at the sidebar's end the wheel moves the page.
+// Below 992px it is the off-canvas drawer, which must not get a sticky or
+// scrolling parent.
 @media (min-width: 992px) {
   .rate-catalog-sidebar {
     position: sticky;
     top: 5.5rem;
     max-height: calc(100vh - 6.5rem);
     overflow-y: auto;
-    overscroll-behavior: contain;
     scrollbar-width: thin;
   }
 }
@@ -194,8 +196,9 @@
   }
 
   // Near the 290px minimum, longer copy (cs) must not overflow the card:
-  // the radar badge wraps, and the second button drops to its own row
-  // instead of breaking its label over two lines.
+  // the radar badge wraps (Bootstrap's .badge nowrap otherwise wins over
+  // .rate-product-card-radar in _custom.scss), and the second button drops
+  // to its own row instead of breaking its label over two lines.
   .rate-product-card-radar {
     max-width: 100%;
     white-space: normal;
