@@ -198,7 +198,7 @@ function main() {
     assert.equal(
       text,
       'key' in copy
-        ? breakdown.explanationVi.replace(/^Trọng số /, 'Độ tin cậy ')
+        ? breakdown.explanationVi.replace(/^Trọng số /, 'Ước tính ')
         : breakdown.explanationVi,
       kind
     );
