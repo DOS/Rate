@@ -449,6 +449,9 @@ async function runSuite() {
     // A size only the gift names: an 11 inch case fits the 11 inch iPad (DOS/Rate#1277).
     ['iPad Pro M4 Wifi kèm bao da 11 inch 256GB', 'apple:ipad-pro-m4-11:256gb'],
     ['MacBook Air tặng ốp 13 inch M4 16GB 512GB', 'apple:macbook-air-m4-13:512gb'],
+    // For an iPad or a MacBook, a "vỏ"/"hộp" gift is an accessory whatever its material.
+    ['iPad Pro M4 13 kèm vỏ nhôm 11 inch 256GB', 'apple:ipad-pro-m4-13:256gb'],
+    ['MacBook Air M4 13 kèm hộp 15 inch 16GB 512GB', 'apple:macbook-air-m4-13:512gb'],
     ['MacBook Air M3 kèm bao test 15 inch 16GB 512GB', 'apple:macbook-air-m3-15:512gb'],
     ['iPad Pro 13" M5 1TB', 'apple:ipad-pro-m5-13:1024gb'],
     ['iPad Pro 11 2024 M4 256GB', 'apple:ipad-pro-m4-11:256gb'],
@@ -685,6 +688,11 @@ async function runSuite() {
     ['Apple Watch Series 10 GPS kèm hộp 42mm', 'apple:watch-series-10-42mm:64gb'],
     // A gifted size never overrides a size the watch names itself.
     ['Apple Watch Series 10 46mm GPS, tặng ốp 42mm', 'apple:watch-series-10-46mm:64gb'],
+    // A size the rest names but leaves open is never replaced by the gift's.
+    [
+      'Apple Watch Series 10 GPS Sport Band 42mm mặt 46mm, tặng ốp 42mm',
+      'apple:watch-series-10:64gb',
+    ],
     // A bundle word before no sized accessory keeps the product's size.
     ['Apple Watch Series 10 kèm sạc 46mm GPS', 'apple:watch-series-10-46mm:64gb'],
     ['Apple Watch Series 10, kèm sạc 46mm GPS', 'apple:watch-series-10-46mm:64gb'],

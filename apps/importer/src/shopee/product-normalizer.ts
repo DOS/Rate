@@ -1283,10 +1283,12 @@ const CASE_ACCESSORY_WORD =
 // "tặng/kèm" and up to four words, then a watch or screen size.
 const GIFTED_ACCESSORY_SIZE =
   /(?<![\p{L}\d])(quà tặng|tặng|kèm)((?: [\p{L}-]+){1,4}?) ?(?:(?:38|4[0-2]|4[4-6]) ?mm\b|\d{1,2}(?:[.,]\d)? ?(?:inch\b|in\b|"))/giu;
-// An accessory sold by the size it fits: a case, cover or film. "vỏ" with a material
-// ("kèm vỏ nhôm 46mm") is the watch's own case, and a box ("hộp") has no size of its
-// own (DOS/Rate#1277).
+// An accessory sold by the size it fits: a case, cover, film or box.
 const GIFT_ACCESSORY_NOUN =
+  /(?<![\p{L}\d])(?:ốp|case|bao da|silicone|silicon|tpu|cường lực|kính|miếng dán|vỏ|hộp|túi)(?![\p{L}\d])/iu;
+// For a watch, "vỏ" with a material ("kèm vỏ nhôm 46mm") is the watch's own case, and a
+// box ("hộp") is sold by no case size (DOS/Rate#1277).
+const WATCH_GIFT_ACCESSORY_NOUN =
   /(?<![\p{L}\d])(?:ốp|case|bao da|silicone|silicon|tpu|cường lực|kính|miếng dán|vỏ(?! (?:nhôm|titan|titanium|thép|nhựa|aluminum|aluminium|stainless|steel)(?![\p{L}\d]))|túi)(?![\p{L}\d])/iu;
 const APPLE_SIZE_PATTERNS: Record<string, [RegExp, RegExp]> = {
   ipad: sizePatterns(IPAD_SIZE),
@@ -1323,14 +1325,22 @@ function readAppleSize(model: string, rawTitle: string): string {
   const withoutGift = title
     .slice(Math.max(0, at))
     .replace(GIFTED_ACCESSORY_SIZE, (m, word: string, words: string) =>
-      GIFT_ACCESSORY_NOUN.test(words) ? `${word}${words}` : m
+      (family === 'watch' ? WATCH_GIFT_ACCESSORY_NOUN : GIFT_ACCESSORY_NOUN).test(words)
+        ? `${word}${words}`
+        : m
     );
   // A size only the gift names is still the best evidence of the product's: an 11 inch
   // case fits an 11 inch iPad (DOS/Rate#1277).
   const productPart = title.slice(Math.max(0, at));
+  // Only when the rest names no size at all: a size it names but leaves unresolved (a
+  // band list, "mặt 46mm" inside a band phrase) is never replaced by the gift's.
+  const namesSize =
+    family === 'watch'
+      ? WATCH_SIZE.test(withoutGift)
+      : APPLE_SIZE_PATTERNS[family]!.some(re => re.test(withoutGift));
   return (
     readFamilySize(family, withoutGift) ||
-    (withoutGift === productPart ? '' : readFamilySize(family, productPart))
+    (namesSize || withoutGift === productPart ? '' : readFamilySize(family, productPart))
   );
 }
 
