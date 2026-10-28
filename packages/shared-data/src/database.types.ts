@@ -189,6 +189,7 @@ export type Database = {
           ram_gb: number | null;
           screen_size_inch: number | null;
           slug: string;
+          spec_provenance: Json;
           specifications: Json;
           status: string | null;
           storage_gb: number | null;
@@ -225,6 +226,7 @@ export type Database = {
           ram_gb?: number | null;
           screen_size_inch?: number | null;
           slug: string;
+          spec_provenance?: Json;
           specifications?: Json;
           status?: string | null;
           storage_gb?: number | null;
@@ -261,6 +263,7 @@ export type Database = {
           ram_gb?: number | null;
           screen_size_inch?: number | null;
           slug?: string;
+          spec_provenance?: Json;
           specifications?: Json;
           status?: string | null;
           storage_gb?: number | null;
@@ -448,8 +451,10 @@ export type Database = {
       };
       price_history: {
         Row: {
+          crawl_job_id: string | null;
           id: number;
           observation_id: string | null;
+          origin: string;
           price: number;
           price_original: number | null;
           product_id: string;
@@ -458,8 +463,10 @@ export type Database = {
           source: string | null;
         };
         Insert: {
+          crawl_job_id?: string | null;
           id?: number;
           observation_id?: string | null;
+          origin?: string;
           price: number;
           price_original?: number | null;
           product_id: string;
@@ -468,8 +475,10 @@ export type Database = {
           source?: string | null;
         };
         Update: {
+          crawl_job_id?: string | null;
           id?: number;
           observation_id?: string | null;
+          origin?: string;
           price?: number;
           price_original?: number | null;
           product_id?: string;
@@ -501,6 +510,8 @@ export type Database = {
       products: {
         Row: {
           attributes: Json | null;
+          availability: string;
+          availability_checked_at: string | null;
           brand: string | null;
           category_id: string | null;
           cluster_id: string | null;
@@ -511,9 +522,12 @@ export type Database = {
           historical_sold_display: string | null;
           id: string;
           images: string[] | null;
+          last_crawl_job_id: string | null;
+          last_crawled_at: string | null;
           merchant_id: string;
           metadata: Json | null;
           models: Json | null;
+          origin: string;
           platform: string;
           platform_item_id: string;
           price_current: number;
@@ -529,6 +543,8 @@ export type Database = {
         };
         Insert: {
           attributes?: Json | null;
+          availability?: string;
+          availability_checked_at?: string | null;
           brand?: string | null;
           category_id?: string | null;
           cluster_id?: string | null;
@@ -539,9 +555,12 @@ export type Database = {
           historical_sold_display?: string | null;
           id?: string;
           images?: string[] | null;
+          last_crawl_job_id?: string | null;
+          last_crawled_at?: string | null;
           merchant_id: string;
           metadata?: Json | null;
           models?: Json | null;
+          origin?: string;
           platform: string;
           platform_item_id: string;
           price_current: number;
@@ -557,6 +576,8 @@ export type Database = {
         };
         Update: {
           attributes?: Json | null;
+          availability?: string;
+          availability_checked_at?: string | null;
           brand?: string | null;
           category_id?: string | null;
           cluster_id?: string | null;
@@ -567,9 +588,12 @@ export type Database = {
           historical_sold_display?: string | null;
           id?: string;
           images?: string[] | null;
+          last_crawl_job_id?: string | null;
+          last_crawled_at?: string | null;
           merchant_id?: string;
           metadata?: Json | null;
           models?: Json | null;
+          origin?: string;
           platform?: string;
           platform_item_id?: string;
           price_current?: number;
@@ -833,10 +857,13 @@ export type Database = {
           created_at: string | null;
           criteria_ratings: Json | null;
           downvotes: number | null;
+          first_seen_job_id: string | null;
           helpfulness_weight: number | null;
           id: string;
           images: string[] | null;
           is_verified_buyer: boolean | null;
+          observed_at: string;
+          origin: string;
           platform_created_at: string | null;
           platform_review_id: string | null;
           product_id: string;
@@ -853,10 +880,13 @@ export type Database = {
           created_at?: string | null;
           criteria_ratings?: Json | null;
           downvotes?: number | null;
+          first_seen_job_id?: string | null;
           helpfulness_weight?: number | null;
           id?: string;
           images?: string[] | null;
           is_verified_buyer?: boolean | null;
+          observed_at?: string;
+          origin?: string;
           platform_created_at?: string | null;
           platform_review_id?: string | null;
           product_id: string;
@@ -873,10 +903,13 @@ export type Database = {
           created_at?: string | null;
           criteria_ratings?: Json | null;
           downvotes?: number | null;
+          first_seen_job_id?: string | null;
           helpfulness_weight?: number | null;
           id?: string;
           images?: string[] | null;
           is_verified_buyer?: boolean | null;
+          observed_at?: string;
+          origin?: string;
           platform_created_at?: string | null;
           platform_review_id?: string | null;
           product_id?: string;
@@ -998,6 +1031,7 @@ export type Database = {
         };
         Returns: number;
       };
+      current_user_can_vote_reviews: { Args: never; Returns: boolean };
       dequeue_crawl_job: {
         Args: { p_lease?: string; p_platform: string; p_worker_id: string };
         Returns: {
@@ -1079,6 +1113,35 @@ export type Database = {
         Args: { p_claim_token: string; p_extend?: string; p_id: string };
         Returns: boolean;
       };
+      listing_price_context: {
+        Args: {
+          p_after?: string;
+          p_history_days?: number;
+          p_limit?: number;
+          p_merchant_ids?: string[];
+        };
+        Returns: {
+          cluster_id: string;
+          cluster_official_min: number;
+          history_avg: number;
+          history_count: number;
+          history_max: number;
+          history_median: number;
+          history_min: number;
+          merchant_id: string;
+          merchant_is_official: boolean;
+          peer_reference_min: number;
+          platform: string;
+          price_current: number;
+          price_original: number;
+          product_id: string;
+          title: string;
+        }[];
+      };
+      mark_listing_unavailable: {
+        Args: { p_availability: string; p_job_id: string };
+        Returns: string;
+      };
       match_master_product: {
         Args: {
           p_brand?: string;
@@ -1094,6 +1157,17 @@ export type Database = {
           model_key: string;
           name: string;
           similarity: number;
+        }[];
+      };
+      merchant_review_counts: {
+        Args: { p_merchant_ids: string[] };
+        Returns: {
+          authentic_count: number;
+          coin_spam_count: number;
+          merchant_id: string;
+          pending_count: number;
+          seeding_count: number;
+          total_reviews: number;
         }[];
       };
       purge_completed_crawl_jobs: {
@@ -1203,6 +1277,7 @@ export type Database = {
           ram_gb: number | null;
           screen_size_inch: number | null;
           slug: string;
+          spec_provenance: Json;
           specifications: Json;
           status: string | null;
           storage_gb: number | null;
@@ -1220,6 +1295,10 @@ export type Database = {
         };
       };
       signals_valid: { Args: { p: Json }; Returns: boolean };
+      stamp_crawl_provenance: {
+        Args: { p_job_id: string; p_product_id: string };
+        Returns: Json;
+      };
       start_crawl_run: {
         Args: { p_params?: Json; p_source: string };
         Returns: string;
