@@ -336,7 +336,7 @@ export function buildSpecGroups(t: CompareTranslator): SpecGroupDef[] {
             // A resolution text that already names its density keeps it
             // once (DOS/Rate#1214).
             const ppi =
-              specs.display?.ppi && !/\bppi\b/i.test(res)
+              specs.display?.ppi && !/ppi\b/i.test(res)
                 ? ` (${specs.display.ppi} ppi)`
                 : '';
             return res === '-' && !ppi ? '-' : `${res}${ppi}`;
