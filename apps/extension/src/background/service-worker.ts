@@ -10,6 +10,7 @@ import {
   sanitizeProductUrl,
 } from '../extractors/ecommerce-detector.js';
 import {
+  buildCrowdIngestPayload,
   DEFAULT_API_BASE_URL,
   isPrivilegedExtensionSender,
   normalizeAllowedApiBaseUrl,
@@ -114,19 +115,7 @@ async function maybeSendOptInCrowdSignal(
           'X-Rate-Extension-Version': '2.0.0',
         },
         signal: AbortSignal.timeout(8_000),
-        body: JSON.stringify({
-          platform: signal.platform,
-          externalItemId: signal.externalItemId,
-          externalShopId: signal.externalShopId,
-          url: signal.canonicalUrl,
-          title: signal.title,
-          selectedVariant: signal.selectedVariant,
-          price: signal.price,
-          originalPrice: signal.originalPrice,
-          ratingStar: signal.ratingStar,
-          ratingCount: signal.ratingCount,
-          userConsentOptIn: true,
-        }),
+        body: JSON.stringify(buildCrowdIngestPayload(signal)),
       }
     );
   } catch {

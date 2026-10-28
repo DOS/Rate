@@ -477,12 +477,97 @@ async function runTests() {
   );
   const manifestJson = JSON.parse(
     fs.readFileSync(path.resolve(__dirname, '../manifest.json'), 'utf8')
-  ) as { permissions?: string[] };
+  ) as {
+    permissions?: string[];
+    host_permissions?: string[];
+    content_scripts?: Array<{ matches?: string[] }>;
+  };
   assert.deepEqual(
     manifestJson.permissions,
     ['storage', 'sidePanel'],
     'manifest.json must request only least-privilege storage and sidePanel permissions without tabs (Audit C7, #174)'
   );
+  {
+    // TikTok is limited to the hosts its product pages use (DOS/Rate#1232).
+    const hosts = manifestJson.host_permissions ?? [];
+    const matches = manifestJson.content_scripts?.[0]?.matches ?? [];
+    for (const pattern of [...hosts, ...matches]) {
+      assert.ok(!pattern.includes('*.tiktok.com'), pattern);
+    }
+    const matchesPattern = (pattern: string, url: string) =>
+      new RegExp(
+        `^${pattern
+          .replace(/[.+?^${}()|[\]\\]/g, '\\$&')
+          .replace('://\\*\\.', '://(?:[^/]+\\.)?')
+          .replace(/\*/g, '.*')}$`
+      ).test(url);
+    for (const url of [
+      'https://www.tiktok.com/@appleflagship/product/1729384756',
+      'https://www.tiktok.com/view/product/1729384756',
+      'https://shop.tiktok.com/view/product/1729401928401',
+    ]) {
+      assert.ok(
+        matches.some((p) => matchesPattern(p, url)),
+        `content script must run on ${url}`
+      );
+      assert.ok(
+        hosts.some((p) => matchesPattern(p, url)),
+        url
+      );
+    }
+
+    // CHROMEWEBSTORE.md justifies exactly what the manifest requests
+    // (DOS/Rate#1231).
+    const storeDoc = fs.readFileSync(
+      path.resolve(__dirname, '../CHROMEWEBSTORE.md'),
+      'utf8'
+    );
+    const permissionSection = storeDoc.slice(
+      storeDoc.indexOf('## 2. Permissions'),
+      storeDoc.indexOf('## 3.')
+    );
+    const justified = [
+      ...permissionSection.matchAll(/^\|\s*(`[^|]+)\|/gm),
+    ].flatMap((row) => [...row[1]!.matchAll(/`([^`]+)`/g)].map((m) => m[1]));
+    assert.deepEqual(
+      [...justified].sort(),
+      [...(manifestJson.permissions ?? []), ...hosts].sort(),
+      'CHROMEWEBSTORE.md permission table must match manifest.json'
+    );
+    assert.deepEqual(
+      [...matches].sort(),
+      hosts.filter((h) => !/rate\.vn/.test(h)).sort()
+    );
+
+    // The opt-in label names every field the crowd signal sends
+    // (DOS/Rate#1230).
+    const { buildCrowdIngestPayload, CROWD_INGEST_FIELD_LABELS } =
+      await import('./security-guards.js');
+    const payload = buildCrowdIngestPayload({
+      platform: 'shopee',
+      canonicalUrl: 'https://shopee.vn/x-i.1.2',
+      title: 'iPhone 16',
+    } as never);
+    assert.deepEqual(
+      Object.keys(payload).sort(),
+      [...Object.keys(CROWD_INGEST_FIELD_LABELS), 'userConsentOptIn'].sort()
+    );
+    const panelHtml = fs.readFileSync(
+      path.resolve(__dirname, 'sidepanel/sidepanel.html'),
+      'utf8'
+    );
+    const optInLabel = panelHtml.slice(
+      panelHtml.indexOf('id="chk-crowd-optin"'),
+      panelHtml.indexOf('</label>', panelHtml.indexOf('id="chk-crowd-optin"'))
+    );
+    for (const label of Object.values(CROWD_INGEST_FIELD_LABELS)) {
+      assert.ok(optInLabel.includes(label), `opt-in label lacks "${label}"`);
+    }
+    assert.ok(!/Chỉ gửi URL/.test(optInLabel));
+    console.log(
+      '  ✅ [Manifest, store doc and opt-in disclosure agree (#1230, #1231, #1232)] Verified'
+    );
+  }
   if (fs.existsSync(path.resolve(__dirname, '../dist/manifest.json'))) {
     // esbuild bundles each entry (#238): no output may import another file,
     // and the content script (no module support in MV3) must not use import/export.
