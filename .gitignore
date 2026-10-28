@@ -144,6 +144,11 @@ playwright-report-item-model/
 !Docs/Proposals/2026-10-29-dos-me-m0-seed-rekey.sql
 !Docs/Proposals/2026-10-29-dos-me-m0-seed-rekey-rollback.sql
 !Docs/Proposals/2026-10-29-dos-me-m0-seed-rekey-verify.sql
+!Docs/Proposals/2026-10-29-dos-me-item-rpcs.sql
+!Docs/Proposals/2026-10-29-dos-me-item-rpcs-rollback.sql
+!Docs/Proposals/2026-10-29-dos-me-m3-m4.sql
+!Docs/Proposals/2026-10-29-dos-me-m3-m4-rollback.sql
+!Docs/Proposals/2026-10-29-dos-me-m3-m4-verify.sql
 * - Copy*
 * - Bản sao*
 *.dump
