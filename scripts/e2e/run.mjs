@@ -124,6 +124,23 @@ const SUPABASE_PORT_FILE = path.join(
   'e2e-supabase-port'
 );
 const isValidPort = (p) => Number.isInteger(p) && p > 0 && p < 65536;
+// The mode the last build served (DOS/Rate#1159): its ISR pages and redirects are cached
+// under .next, so a --skip-build run in the other mode would serve them.
+const MODE_FILE = path.join(repoRoot, 'apps', 'web', '.next', 'e2e-mode');
+const runMode = itemModel ? 'item-model' : 'default';
+if (skipBuild) {
+  let builtMode = 'default';
+  try {
+    builtMode = readFileSync(MODE_FILE, 'utf8').trim() || 'default';
+  } catch {
+    // a build from before the mode file: the default mode
+  }
+  if (builtMode !== runMode) {
+    throw new Error(
+      `--skip-build reuses a ${builtMode} build; this is a ${runMode} run, rebuild without --skip-build`
+    );
+  }
+}
 
 function recordedSupabasePort() {
   try {
@@ -421,6 +438,7 @@ try {
       throw new Error(`next build failed: ${err.message}`);
     });
     writeFileSync(SUPABASE_PORT_FILE, String(supabasePort));
+    writeFileSync(MODE_FILE, runMode);
   }
 
   // unstable_cache persists in .next/cache/fetch-cache, outside the build

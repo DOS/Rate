@@ -66,9 +66,9 @@ test('a slug that is no published Item or variant of one is a 404', async ({
 }) => {
   for (const path of [
     '/smartphones/e2e-no-such-item',
-    // A draft Item and its variant are not public.
-    '/smartphones/e2e-draft-phone',
-    '/smartphones/e2e-draft-phone-128gb',
+    // A draft Item and its (published) variant are not public.
+    '/smartphones/e2e-item-draft',
+    '/smartphones/e2e-item-draft-128gb',
   ]) {
     const res = await request.get(path, { maxRedirects: 0 });
     expect(res.status(), path).toBe(404);
