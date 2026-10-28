@@ -91,3 +91,12 @@ export function formatSoldCount(
   }
   return sold.toLocaleString(isVi ? 'vi-VN' : safeLocale);
 }
+
+/**
+ * Whether the store reported a sold count. Many retail sites publish none,
+ * and their 0 must not read as "nobody bought this" (DOS/Rate#1252).
+ */
+export function hasSoldCount(historicalSold: unknown): boolean {
+  const sold = parseDecimalSoldCount(historicalSold);
+  return Number.isFinite(sold) && sold >= 1 && sold <= MAX_DISPLAY_SOLD_COUNT;
+}

@@ -858,7 +858,6 @@
     "dosafeAlert": "Nahlášená upozornění na podvod",
     "authenticLabel": "Autentické:",
     "filteredSpamCount": "{count, plural, one {# falešná nebo spamová recenze odfiltrována} few {# falešné nebo spamové recenze odfiltrovány} other {# falešných nebo spamových recenzí odfiltrováno}}",
-    "noAbnormalReviews": "Žádné podezřelé vzorce recenzí",
     "priceRangeLabel": "Referenční cenové rozpětí:",
     "radarGenuineBadge": "{count} nabídek pod mediánem (-{pct}%)",
     "radarFakeBadge": "{count} varování na falešnou slevu",
@@ -936,7 +935,7 @@
     "itemMetaLine": "ID položky:",
     "soldLabel": "Prodáno:",
     "lowestMarketPriceLabel": "Nejnižší tržní cena:",
-    "unclusteredLabel": "Nepřiřazeno",
+    "unclusteredLabel": "Zatím nepřiřazeno k modelu",
     "historicalLowObs": "Historické minimum: {price} ₫ ({count} měření)",
     "collectingHistoryBadge": "Sběr historie cen",
     "viewReviewsAndPricesBtn": "★ Recenze a Ceny",
@@ -961,7 +960,15 @@
     "riskReviewLabel": "Riziko recenzí",
     "trustBadge": "Důvěra: {score}/100",
     "scamRiskBadge": "Riziko podvodu: {score}/100",
-    "reviewRiskBadge": "Riziko recenzí: {score}/100"
+    "reviewRiskBadge": "Riziko recenzí: {score}/100",
+    "reviewRiskNoData": "Riziko recenzí: nedostatek dat",
+    "reviewRiskNoDataShort": "Nedostatek dat",
+    "profileMetaDescNoReviews": "Profil prodejce {name}: riziko podvodu DOSafe ({dosafe}/100) a historie cen {count} produktů na Rate.vn. Zatím žádné recenze k analýze.",
+    "mdSeedingLineNoReviews": "- **Riziko recenzí:** nedostatek dat (zatím žádné recenze k analýze)",
+    "mdAuthenticLineNoReviews": "- **Podíl skutečných recenzí:** zatím žádné recenze",
+    "listingUnavailableBadge": "Není skladem",
+    "listingUnavailableTitle": "Obchod jej hlásí jako vyprodaný nebo ukončený. Cena je naposledy zjištěná, ne aktuální.",
+    "listingUnavailableAudit": "Není skladem, sleva se neposuzuje"
   },
   "productDetail": {
     "notFoundTitle": "Produkt nenalezen | Rate.vn",
@@ -1228,7 +1235,9 @@
     "reviewRiskLabel": "Riziko recenzí",
     "officialMallBadge": "Official Mall",
     "authenticBadge": "Autentická recenze",
-    "starsAria": "{count} z 5 hvězdiček"
+    "starsAria": "{count} z 5 hvězdiček",
+    "reviewRiskNoData": "Nedostatek dat",
+    "reviewRiskNoReviews": "Zatím žádné recenze k analýze"
   },
   "developers": {
     "seoTitle": "Dokumentace REST API v1 pro vývojáře | Rate.vn",

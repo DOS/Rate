@@ -24,6 +24,7 @@ import {
   type MerchantSeedingTier,
   type MerchantSortOption,
 } from '@/lib/merchant-directory';
+import { hasReviewRiskEvidence } from '@/lib/merchant-risk-tone';
 import { selectMerchantRadar } from '@/lib/deal-radar';
 import { useDealRadarPayload } from '@/components/radar/use-deal-radar';
 import { useLocale, useTranslations } from 'next-intl';
@@ -265,7 +266,8 @@ export default function MerchantDirectoryExplorer({
       dosafeZero: t('dosafeZero'),
       dosafeAlert: t('dosafeAlert'),
       authenticLabel: t('authenticLabel'),
-      noAbnormalReviews: t('noAbnormalReviews'),
+      noReviewsToAnalyse: t('layer2NoReviews'),
+      reviewRiskNoData: t('reviewRiskNoDataShort'),
       riskScamLabel: t('riskScamLabel'),
       riskReviewLabel: t('riskReviewLabel'),
       priceRangeLabel: t('priceRangeLabel'),
@@ -350,7 +352,9 @@ export default function MerchantDirectoryExplorer({
         sanitizeMerchantAuditText(m.platform, 'shopee', 32).toUpperCase(),
         m.is_official ? 'Yes' : 'No',
         `${sanitizeMerchantScore100(m.trust_score)}/100`,
-        `${sanitizeMerchantScore100(m.review_risk_score)}/100`,
+        hasReviewRiskEvidence(m.review_risk_breakdown)
+          ? `${sanitizeMerchantScore100(m.review_risk_score)}/100`
+          : labels.reviewRiskNoData,
         String(sanitizeMerchantCount(rStats.genuineDealCount)),
         String(sanitizeMerchantCount(rStats.fakeTrapCount)),
         String(sanitizeMerchantCount(m.review_risk_breakdown?.authentic_count)),
@@ -909,17 +913,26 @@ export default function MerchantDirectoryExplorer({
                               <BsRobot aria-hidden="true" className="me-1" />
                               {labels.riskReviewLabel}
                             </span>
-                            <span
-                              className={`badge rounded-pill rate-tabular ${
-                                merchant.review_risk_score <= 15
-                                  ? 'bg-success-subtle text-success'
-                                  : merchant.review_risk_score <= 40
-                                    ? 'bg-warning-subtle text-warning-emphasis'
-                                    : 'bg-danger-subtle text-danger'
-                              }`}
-                            >
-                              {merchant.review_risk_score}/100
-                            </span>
+                            {hasReviewRiskEvidence(
+                              merchant.review_risk_breakdown
+                            ) ? (
+                              <span
+                                className={`badge rounded-pill rate-tabular ${
+                                  merchant.review_risk_score <= 15
+                                    ? 'bg-success-subtle text-success'
+                                    : merchant.review_risk_score <= 40
+                                      ? 'bg-warning-subtle text-warning-emphasis'
+                                      : 'bg-danger-subtle text-danger'
+                                }`}
+                              >
+                                {merchant.review_risk_score}/100
+                              </span>
+                            ) : (
+                              // No analysed reviews: no number (#1249).
+                              <span className="badge rounded-pill bg-light text-muted border">
+                                {labels.reviewRiskNoData}
+                              </span>
+                            )}
                           </div>
                           <div
                             className="small text-muted d-none d-sm-block"
@@ -947,7 +960,7 @@ export default function MerchantDirectoryExplorer({
                                 )
                               </>
                             ) : (
-                              labels.noAbnormalReviews
+                              labels.noReviewsToAnalyse
                             )}
                           </div>
                         </div>

@@ -399,6 +399,71 @@ async function main() {
     );
   }
 
+  // 5d. A sold-out listing carries its availability, is listed after the
+  //     buyable ones, gets no verdict and is out of the store's price range
+  //     (DOS/Rate#1248).
+  {
+    installFetch({
+      listings: [
+        {
+          ...listingRow,
+          availability: 'out_of_stock',
+          price_current: 2_694_000,
+        },
+        {
+          ...listingRow,
+          id: SECOND_LISTING_ID,
+          price_current: 9_500_000,
+          availability: 'in_stock',
+        },
+        {
+          ...listingRow,
+          id: UNCLUSTERED_LISTING_ID,
+          price_current: 20_000_000,
+          cluster_id: null,
+          availability: null,
+        },
+      ],
+    });
+    const base = await getMerchantProfileBase(MERCHANT_ID);
+    assert.ok(base);
+    assert.deepEqual(
+      base.profile.listings.map((l) => [l.id, l.availability]),
+      [
+        [SECOND_LISTING_ID, 'in_stock'],
+        [UNCLUSTERED_LISTING_ID, null],
+        [LISTING_ID, 'out_of_stock'],
+      ]
+    );
+    assert.equal(base.profile.min_price, 9_500_000);
+    const profile = await attachMerchantDiscountAnalysis(base, {
+      offers: async () => [],
+      priceHistory: async () => ({
+        ...emptyHistory,
+        byOffer: {
+          [LISTING_ID]: { ...analysis, verdict: 'genuine_deal' as const },
+          [SECOND_LISTING_ID]: {
+            ...analysis,
+            product_id: SECOND_LISTING_ID,
+            price_current: 9_500_000,
+          },
+        },
+      }),
+    });
+    const soldOut = profile.listings.find((l) => l.id === LISTING_ID);
+    assert.equal(soldOut?.discount_analysis, null, 'no verdict when sold out');
+    assert.equal(
+      profile.listings.find((l) => l.id === SECOND_LISTING_ID)
+        ?.discount_analysis?.verdict,
+      'fake_discount',
+      'an in-stock listing keeps its verdict'
+    );
+    assert.equal(soldOut?.price_current, 2_694_000);
+    assert.equal(profile.listings.at(-1)?.id, LISTING_ID);
+    assert.equal(profile.min_price, 9_500_000);
+    assert.equal(profile.max_price, 20_000_000);
+  }
+
   // 6. An unknown merchant is null, even when the early listings read fails.
   {
     installFetch({ merchantFound: () => false });

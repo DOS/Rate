@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import { getTranslations, setRequestLocale } from 'next-intl/server';
 import { notFound } from 'next/navigation';
 import { discountVerdictCopy } from '@/lib/discount-verdict-copy';
-import { formatSoldCount } from '@/lib/sold-count';
+import { formatSoldCount, hasSoldCount } from '@/lib/sold-count';
 import AnalyzerText from '@/components/reviews/AnalyzerText';
 import { Link } from '@/lib/navigation';
 import { getCategoryRouteHref, resolveProductImageUrl } from '@/lib/rate-api';
@@ -31,7 +31,11 @@ import {
   BsStarFill,
 } from 'react-icons/bs';
 import { isPendingReview } from '@/lib/review-display';
-import { merchantRiskTone } from '@/lib/merchant-risk-tone';
+import {
+  hasReviewRiskEvidence,
+  merchantRiskTone,
+} from '@/lib/merchant-risk-tone';
+import { isOfferUnavailable } from '@/lib/product-market-stats';
 import ContentText from '@/components/elementary/ContentText';
 import { contentLang } from '@/lib/content-lang';
 import ClientMessages from '@/components/providers/ClientMessages';
@@ -72,13 +76,20 @@ export async function generateMetadata({
     name: merchant.name,
     score: merchant.trust_score,
   });
+  // No review risk number without analysed reviews (DOS/Rate#1249).
   const description = fitDescription(
-    t('profileMetaDesc', {
-      name: merchant.name,
-      dosafe: merchant.dosafe_risk_score,
-      seeding: merchant.review_risk_score,
-      count: merchant.product_count,
-    })
+    hasReviewRiskEvidence(merchant.review_risk_breakdown)
+      ? t('profileMetaDesc', {
+          name: merchant.name,
+          dosafe: merchant.dosafe_risk_score,
+          seeding: merchant.review_risk_score,
+          count: merchant.product_count,
+        })
+      : t('profileMetaDescNoReviews', {
+          name: merchant.name,
+          dosafe: merchant.dosafe_risk_score,
+          count: merchant.product_count,
+        })
   );
 
   return {
@@ -470,19 +481,27 @@ export default async function MerchantProfilePage({
                       {t('layer2Title')}
                     </h2>
                   </div>
-                  <span
-                    className={`badge rounded-pill fs-6 px-3 py-2 ${
-                      merchant.review_risk_score <= 15
-                        ? 'bg-success-subtle text-success'
-                        : merchant.review_risk_score <= 40
-                          ? 'bg-warning-subtle text-warning-emphasis'
-                          : 'bg-danger text-white'
-                    }`}
-                  >
-                    {t('reviewRiskBadge', {
-                      score: merchant.review_risk_score,
-                    })}
-                  </span>
+                  {hasReviewRiskEvidence(brk) ? (
+                    <span
+                      className={`badge rounded-pill fs-6 px-3 py-2 ${
+                        merchant.review_risk_score <= 15
+                          ? 'bg-success-subtle text-success'
+                          : merchant.review_risk_score <= 40
+                            ? 'bg-warning-subtle text-warning-emphasis'
+                            : 'bg-danger text-white'
+                      }`}
+                    >
+                      {t('reviewRiskBadge', {
+                        score: merchant.review_risk_score,
+                      })}
+                    </span>
+                  ) : (
+                    // No analysed reviews: a number would be a guess
+                    // (DOS/Rate#1249).
+                    <span className="badge rounded-pill fs-6 bg-light text-muted border px-3 py-2">
+                      {t('reviewRiskNoData')}
+                    </span>
+                  )}
                 </div>
 
                 <p
@@ -848,7 +867,10 @@ export default async function MerchantProfilePage({
                       const origText = item.price_original
                         ? item.price_original.toLocaleString('vi-VN')
                         : null;
-                      const da = item.discount_analysis;
+                      // A sold-out listing's last price is shown as such,
+                      // never as a deal (DOS/Rate#1248).
+                      const unavailable = isOfferUnavailable(item);
+                      const da = unavailable ? null : item.discount_analysis;
                       const badgeClass =
                         da?.verdict === 'fake_discount'
                           ? 'bg-danger text-white'
@@ -901,13 +923,20 @@ export default async function MerchantProfilePage({
                                 >
                                   {t('itemMetaLine')}{' '}
                                   <code>{item.platform_item_id}</code> •{' '}
-                                  {t('soldLabel')}{' '}
-                                  {formatSoldCount(
-                                    item.historical_sold,
-                                    item.historical_sold_display,
-                                    locale
-                                  )}{' '}
-                                  • ★ {item.rating_star.toFixed(1)} (
+                                  {/* Many retail sites publish no sold
+                                      count: no "Sold: 0" (DOS/Rate#1252). */}
+                                  {hasSoldCount(item.historical_sold) && (
+                                    <>
+                                      {t('soldLabel')}{' '}
+                                      {formatSoldCount(
+                                        item.historical_sold,
+                                        item.historical_sold_display,
+                                        locale
+                                      )}{' '}
+                                      •{' '}
+                                    </>
+                                  )}
+                                  ★ {item.rating_star.toFixed(1)} (
                                   {item.rating_count})
                                 </div>
                               </div>
@@ -950,17 +979,33 @@ export default async function MerchantProfilePage({
                             )}
                           </td>
                           <td>
-                            <div className="fw-bold text-dark font-monospace">
+                            <div
+                              className={`fw-bold font-monospace ${
+                                unavailable ? 'text-muted' : 'text-dark'
+                              }`}
+                            >
                               {priceText} ₫
                             </div>
-                            {origText && (
+                            {origText && !unavailable && (
                               <div className="text-muted small text-decoration-line-through font-monospace">
                                 {origText} ₫
                               </div>
                             )}
+                            {unavailable && (
+                              <span
+                                className="badge bg-secondary-subtle text-secondary-emphasis rounded-pill small mt-1 border"
+                                title={t('listingUnavailableTitle')}
+                              >
+                                {t('listingUnavailableBadge')}
+                              </span>
+                            )}
                           </td>
                           <td>
-                            {da ? (
+                            {unavailable ? (
+                              <span className="badge bg-light text-muted small border">
+                                {t('listingUnavailableAudit')}
+                              </span>
+                            ) : da ? (
                               <div>
                                 <span
                                   className={`badge ${badgeClass} rounded-pill small px-3 py-1`}

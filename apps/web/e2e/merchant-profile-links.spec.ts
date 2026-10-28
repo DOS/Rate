@@ -19,7 +19,9 @@ test('a merchant profile links only products that have a page', async ({
     page.getByRole('table').getByText('E2E Draft Phone chính hãng')
   ).toBeVisible();
   await expect(
-    page.getByText(/Chưa gom cụm|Unclustered/).first()
+    page
+      .getByText(/Chưa ghép với dòng máy nào|Not matched to a model yet/)
+      .first()
   ).toBeVisible();
   await expect(page.locator('a[href*="e2e-draft-phone"]')).toHaveCount(0);
   await expect(page.getByText('E2E Draft Phone', { exact: true })).toHaveCount(

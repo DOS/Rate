@@ -2291,6 +2291,8 @@ export interface MerchantProductListing {
   rating_count: number;
   url: string;
   image: string | null;
+  /** As the retailer last reported it; null when unknown (counts as in stock). */
+  availability: OfferAvailability | null;
   master_product: {
     id: string;
     slug: string;
@@ -2356,6 +2358,7 @@ interface RawProductRow {
   images?: string[] | null;
   url: string;
   cluster_id?: string | null;
+  availability?: string | null;
 }
 
 export function normalizeMasterProductRow(
@@ -2825,7 +2828,7 @@ export async function getMerchantsList(
     (chunk, from, to) =>
       supabase
         .from('products')
-        .select('id, merchant_id, price_current')
+        .select('id, merchant_id, price_current, availability')
         .in('merchant_id', chunk)
         .order('id')
         .range(from, to)
@@ -2836,10 +2839,14 @@ export async function getMerchantsList(
       id: string;
       merchant_id: string;
       price_current: number | string;
+      availability?: unknown;
     }>) || [];
 
   const prodToMerchant = new Map<string, string>();
   const prodsByMerchant = new Map<string, number[]>();
+  // The price range is what the store sells now: sold-out listings keep
+  // their last price but count only as listings (DOS/Rate#1248).
+  const livePricesByMerchant = new Map<string, number[]>();
   const productIdsByMerchant = new Map<string, string[]>();
 
   for (const p of products) {
@@ -2848,6 +2855,15 @@ export async function getMerchantsList(
     const price = Number(p.price_current || 0);
     if (Number.isFinite(price) && price > 0 && price <= MAX_VALID_VND_PRICE) {
       list.push(price);
+      if (
+        !isOfferUnavailable({
+          availability: toOfferAvailability(p.availability),
+        })
+      ) {
+        const live = livePricesByMerchant.get(p.merchant_id) ?? [];
+        live.push(price);
+        livePricesByMerchant.set(p.merchant_id, live);
+      }
     }
     prodsByMerchant.set(p.merchant_id, list);
 
@@ -2944,6 +2960,7 @@ export async function getMerchantsList(
 
   const results: MerchantSummary[] = merchants.map((m) => {
     const prices = prodsByMerchant.get(m.id) ?? [];
+    const livePrices = livePricesByMerchant.get(m.id) ?? [];
     const persistedBreakdown = extractPersistedBreakdown(m);
     const mReviews = mappedReviewsByMerchant.get(m.id) ?? [];
     const dynamicRisk =
@@ -3011,8 +3028,8 @@ export async function getMerchantsList(
       risk_score: combinedRisk,
       trust_score: trustScore,
       product_count: prices.length,
-      min_price: prices.length > 0 ? Math.min(...prices) : null,
-      max_price: prices.length > 0 ? Math.max(...prices) : null,
+      min_price: livePrices.length > 0 ? Math.min(...livePrices) : null,
+      max_price: livePrices.length > 0 ? Math.max(...livePrices) : null,
       review_risk_breakdown: breakdown,
       updated_at: m.updated_at || m.created_at || null,
     };
@@ -3151,7 +3168,11 @@ export async function attachMerchantDiscountAnalysis(
   // and title stay as the profile read them.
   const listings = base.profile.listings
     .map((listing) => {
-      const analysis = discountByOfferId.get(listing.id) || null;
+      // A sold-out listing's last price is no deal and no historical low
+      // (DOS/Rate#1248): it gets no verdict.
+      const analysis = isOfferUnavailable(listing)
+        ? null
+        : discountByOfferId.get(listing.id) || null;
       return {
         ...listing,
         ...(analysis
@@ -3163,9 +3184,14 @@ export async function attachMerchantDiscountAnalysis(
         discount_analysis: analysis,
       };
     })
-    // Stable: equal prices keep the profile's id order.
-    .sort((a, b) => a.price_current - b.price_current);
+    // Stable: equal prices keep the profile's id order. Sold-out last.
+    .sort(
+      (a, b) =>
+        Number(isOfferUnavailable(a)) - Number(isOfferUnavailable(b)) ||
+        a.price_current - b.price_current
+    );
   const prices = listings
+    .filter((l) => !isOfferUnavailable(l))
     .map((l) => l.price_current)
     .filter((p) => Number.isFinite(p) && p > 0 && p <= MAX_VALID_VND_PRICE);
   return {
@@ -3202,7 +3228,7 @@ export async function getMerchantProfileBase(
         supabase
           .from('products')
           .select(
-            'id, merchant_id, platform, platform_item_id, title, price_current, price_original, stock, historical_sold, historical_sold_display, rating_star, rating_count, images, url, cluster_id'
+            'id, merchant_id, platform, platform_item_id, title, price_current, price_original, stock, historical_sold, historical_sold_display, rating_star, rating_count, images, url, cluster_id, availability'
           )
           .eq('merchant_id', merchantId)
           .order('price_current', { ascending: true })
@@ -3382,10 +3408,16 @@ export async function getMerchantProfileBase(
       rating_count: toSafeNonNegativeVoteCount(p.rating_count, 100_000_000),
       url: sanitizeOfferUrl(p.url),
       image: firstImageUrl(p.images),
+      availability: toOfferAvailability(p.availability),
       master_product: masterInfo,
       discount_analysis: null,
     };
   });
+  // Sold-out listings keep their last price: listed after the buyable ones,
+  // as on the product page (DOS/Rate#1248). Stable, so price order stays.
+  listings.sort(
+    (a, b) => Number(isOfferUnavailable(a)) - Number(isOfferUnavailable(b))
+  );
 
   const prodById = new Map(listings.map((l) => [l.id, l]));
   const recentReviews: MerchantProfileDetail['recent_reviews'] = (
@@ -3496,7 +3528,9 @@ export async function getMerchantProfileBase(
     Math.max(baseRisk, dosafeRisk, effectiveReviewRisk, metaCombined)
   );
   const trustScore = Math.max(0, 100 - combinedRisk);
+  // The store's price range is what it sells now: sold-out listings are out.
   const prices = listings
+    .filter((l) => !isOfferUnavailable(l))
     .map((l) => l.price_current)
     .filter((p) => Number.isFinite(p) && p > 0 && p <= MAX_VALID_VND_PRICE);
 
