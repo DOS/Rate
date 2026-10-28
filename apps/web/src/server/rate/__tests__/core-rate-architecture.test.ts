@@ -11726,6 +11726,28 @@ async function runCoreArchitectureSuite() {
       ).platformShopId,
       null
     );
+    // Brand, series and CellphoneS sub-path listings are not products, as
+    // in the extension (DOS/Rate#1246).
+    for (const url of [
+      'https://cellphones.com.vn/mobile/apple.html',
+      'https://cellphones.com.vn/mobile/apple/iphone-16.html',
+      'https://fptshop.com.vn/dien-thoai/samsung',
+      'https://fptshop.com.vn/dien-thoai/iphone-16-series',
+    ]) {
+      assert.equal(parseEcommerceUrlOrQuery986(url).platformItemId, null, url);
+    }
+    assert.equal(
+      parseEcommerceUrlOrQuery986(
+        'https://cellphones.com.vn/op-lung-magsafe-iphone-16-series.html'
+      ).platformItemId,
+      'op-lung-magsafe-iphone-16-series'
+    );
+    assert.equal(
+      parseEcommerceUrlOrQuery986(
+        'https://cellphones.com.vn/iphone-16-pro-max.html'
+      ).platformItemId,
+      'iphone-16-pro-max'
+    );
     // TikTok Shop's pdp pages carry the id last (DOS/Rate#1245).
     for (const url of [
       'https://www.tiktok.com/shop/vn/pdp/apple-iphone-16-128gb/1729384756',

@@ -142,7 +142,8 @@ const RETAIL_CATEGORY_ROOT_SLUGS = new Set([
 
 // A path ending in a bare brand lists that brand's products, as in
 // cellphones.com.vn/mobile/apple.html or fptshop.com.vn/dien-thoai/samsung;
-// no product slug is a brand alone (DOS/Rate#1246).
+// no product slug is a brand alone (DOS/Rate#1246). Keep these rules in
+// sync with parseEcommerceUrlOrQuery in apps/web/src/lib/rate-domain-core.ts.
 const RETAIL_BRAND_LISTING_SLUGS = new Set([
   'apple',
   'samsung',
@@ -182,6 +183,13 @@ const RETAIL_BRAND_LISTING_SLUGS = new Set([
   'ugreen',
   'mac',
 ]);
+
+// "iphone-16-series" lists a series; a case or screen protector for it
+// ("op-lung-iphone-16-series") is a product.
+const ACCESSORY_SLUG_PREFIX =
+  /^(?:op|bao|cuong-luc|kinh|mieng-dan|dan|sac|cu-sac|cap|day|tui|vo|ban-phim|chuot)-/;
+const isSeriesListingSlug = (slug: string) =>
+  /-series$/.test(slug) && !ACCESSORY_SLUG_PREFIX.test(slug);
 
 export function extractIdsFromUrl(
   platform: SupportedEcommercePlatform,
@@ -285,7 +293,7 @@ export function extractIdsFromUrl(
     !RETAIL_NON_PRODUCT_FIRST_SEGMENTS.has(lastSegLower) &&
     !(segments.length === 1 && RETAIL_CATEGORY_ROOT_SLUGS.has(firstSegLower)) &&
     !RETAIL_BRAND_LISTING_SLUGS.has(lastSegLower) &&
-    !/-series$/.test(lastSegLower) &&
+    !isSeriesListingSlug(lastSegLower) &&
     !(platform === 'tgdd' && segments.length < 2) &&
     // CellphoneS product pages sit at the root ("/iphone-16-pro-max.html");
     // deeper paths are category listings (DOS/Rate#1246).

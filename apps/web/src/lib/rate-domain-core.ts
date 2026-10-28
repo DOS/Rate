@@ -1429,6 +1429,57 @@ const RETAIL_NON_PRODUCT_FIRST_SEGMENTS = new Set([
   'c',
 ]);
 
+// A path ending in a bare brand lists that brand's products, as in
+// cellphones.com.vn/mobile/apple.html or fptshop.com.vn/dien-thoai/samsung;
+// no product slug is a brand alone (DOS/Rate#1246). Keep these rules in
+// sync with extractIdsFromUrl in apps/extension/src/extractors/ecommerce-detector.ts.
+const RETAIL_BRAND_LISTING_SLUGS = new Set([
+  'apple',
+  'samsung',
+  'xiaomi',
+  'redmi',
+  'poco',
+  'oppo',
+  'vivo',
+  'realme',
+  'oneplus',
+  'honor',
+  'huawei',
+  'nokia',
+  'motorola',
+  'sony',
+  'google',
+  'asus',
+  'acer',
+  'lenovo',
+  'dell',
+  'hp',
+  'msi',
+  'lg',
+  'tecno',
+  'infinix',
+  'itel',
+  'nubia',
+  'zte',
+  'masstel',
+  'benco',
+  'garmin',
+  'amazfit',
+  'jbl',
+  'marshall',
+  'anker',
+  'baseus',
+  'ugreen',
+  'mac',
+]);
+
+// "iphone-16-series" lists a series; a case or screen protector for it
+// ("op-lung-iphone-16-series") is a product.
+const ACCESSORY_SLUG_PREFIX =
+  /^(?:op|bao|cuong-luc|kinh|mieng-dan|dan|sac|cu-sac|cap|day|tui|vo|ban-phim|chuot)-/;
+const isSeriesListingSlug = (slug: string) =>
+  /-series$/.test(slug) && !ACCESSORY_SLUG_PREFIX.test(slug);
+
 const RETAIL_CATEGORY_ROOT_SLUGS = new Set([
   'dtdd',
   'dien-thoai',
@@ -1654,7 +1705,11 @@ export function parseEcommerceUrlOrQuery(raw: string): ParsedEcommerceUrl {
         !(
           segments.length === 1 && RETAIL_CATEGORY_ROOT_SLUGS.has(firstSegLower)
         ) &&
-        !(retailPlatform === 'tgdd' && segments.length < 2);
+        !RETAIL_BRAND_LISTING_SLUGS.has(lastSegLower) &&
+        !isSeriesListingSlug(lastSegLower) &&
+        !(retailPlatform === 'tgdd' && segments.length < 2) &&
+        // CellphoneS product pages sit at the root (DOS/Rate#1246).
+        !(retailPlatform === 'cellphones' && segments.length > 1);
       return {
         isUrl: true,
         platform: retailPlatform,

@@ -2763,6 +2763,11 @@ async function runTests() {
         'https://www.thegioididong.com/dtdd/samsung-galaxy-s25',
         'samsung-galaxy-s25',
       ],
+      [
+        'cellphones',
+        'https://cellphones.com.vn/op-lung-magsafe-iphone-16-series.html',
+        'op-lung-magsafe-iphone-16-series',
+      ],
     ] as const) {
       assert.equal(extractIdsFromUrl(platform, url).externalItemId, id, url);
     }
