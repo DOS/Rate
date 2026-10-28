@@ -135,6 +135,10 @@ playwright-report/
 !supabase/migrations/*.sql
 # Reviewed E2E fixture: synthetic catalog rows only, no credentials.
 !apps/web/e2e/seed.sql
+# Reviewed DOS-Me migration proposal (DOS/Rate#1150): DDL only, no data, no credentials.
+!Docs/Proposals/2026-10-28-dos-me-m1-m2-items.sql
+!Docs/Proposals/2026-10-28-dos-me-m1-m2-items-rollback.sql
+!Docs/Proposals/2026-10-28-dos-me-m1-m2-items-verify.sql
 * - Copy*
 * - Bản sao*
 *.dump
