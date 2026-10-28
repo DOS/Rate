@@ -1699,8 +1699,12 @@ export class ProductNormalizer {
       model = 'Zenbook S 14';
     } else if (brand === 'Lenovo' && /thinkpad\s*x1\s*carbon\s*gen\s*12/i.test(modelTitle)) {
       model = 'ThinkPad X1 Carbon Gen 12';
-    } else if (brand === 'Garmin' && /forerunner\s*265\s?s\b/i.test(modelTitle)) {
-      // The 265S is the 42mm model, not the 46mm 265 (DOS/Rate#1222).
+    } else if (
+      brand === 'Garmin' &&
+      /forerunner\s*265[ -]?s(?![a-z])(?! ?[/-] ?[a-z])/i.test(modelTitle)
+    ) {
+      // The 265S is the 42mm model, not the 46mm 265 (DOS/Rate#1222): "265S", "265 S",
+      // "265-S", "265S42mm", but not a "265 S/M" band size or a word ("265 Sport").
       model = 'Forerunner 265S';
     } else if (brand === 'Garmin' && /forerunner\s*265/i.test(modelTitle)) {
       model = 'Forerunner 265';

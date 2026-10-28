@@ -819,6 +819,8 @@ async function runSuite() {
     'Đồng hồ Garmin Forerunner 265S',
     'Garmin Forerunner 265 S Music',
     'Garmin Forerunner 265s Đen',
+    'Garmin Forerunner 265S42mm',
+    'Garmin Forerunner 265-S 42mm',
   ]) {
     const fr265s = normalizer.normalize(createDummyShopeeProduct(title));
     assert.equal(fr265s.model_key, 'garmin:forerunner-265s:unknown', title);
@@ -826,6 +828,9 @@ async function runSuite() {
     assert.equal(fr265s.battery_mah, null, title);
   }
   assert.equal(keyOf('Garmin Forerunner 265 Sport'), 'garmin:forerunner-265:8gb');
+  // A band size "S/M" after the 265 is no 265S.
+  assert.equal(keyOf('Garmin Forerunner 265 S/M band'), 'garmin:forerunner-265:8gb');
+  assert.equal(keyOf('Garmin Forerunner 265 S-M band'), 'garmin:forerunner-265:8gb');
   assert.equal(
     keyOf('Điện thoại Samsung Galaxy S25 Ultra, Điện thoại AI, Tìm kiếm thông minh'),
     'samsung:galaxy-s25-ultra:unknown'
