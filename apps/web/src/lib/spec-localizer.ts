@@ -436,10 +436,72 @@ const VI_SPEC_REPLACEMENTS: Array<[RegExp, string]> = [
   [/\(peak\)/gi, '(đỉnh)'],
   [/\(HBM\)/gi, '(HBM)'],
   [/\bratio\b/gi, 'tỷ lệ'],
+  [/\bpixels\b/gi, 'pixel'],
+  [/\bppi density\b/gi, 'ppi'],
+  [/\bdual-band\b/gi, 'băng tần kép'],
+  [/\bperformance\b/gi, 'hiệu năng'],
+  [/\befficiency\b/gi, 'tiết kiệm điện'],
+  [/\(photo\/panorama\)/gi, '(ảnh/toàn cảnh)'],
   [/\bOcta-core\b/gi, '8 nhân (Octa-core)'],
   [/\bHexa-core\b/gi, '6 nhân (Hexa-core)'],
   [/\bDeca-core\b/gi, '10 nhân (Deca-core)'],
 ];
+
+// A letter only Vietnamese uses among the spec languages.
+const VI_LETTER_RE =
+  /[ăâđêôơưạảấầẩẫậắằẳẵặẹẻẽếềểễệĩỉịọỏốồổỗộớờởỡợũụủứừửữựỳỵỷỹ]/i;
+
+// Lowercase tokens a translated value may keep: units and Wi-Fi standards.
+const UNTRANSLATED_TOKENS = new Set([
+  'mm',
+  'cm',
+  'nm',
+  'kg',
+  'mah',
+  'wh',
+  'hz',
+  'khz',
+  'mhz',
+  'ghz',
+  'nits',
+  'ppi',
+  'dpi',
+  'min',
+  'ms',
+  'gb',
+  'tb',
+  'mb',
+  'kb',
+  'mp',
+  'fps',
+  'db',
+  'dba',
+  'mw',
+  'kw',
+  'cd',
+  'in',
+  'oz',
+  'ac',
+  'ax',
+  'be',
+]);
+
+/**
+ * The lowercase English words the Vietnamese replacements leave behind, such
+ * as "fast charging" in "Wireless fast charging". Capitalised names (Retina,
+ * Digital Crown) and units do not count.
+ */
+export function untranslatedViWords(text: string): string[] {
+  let rest = text;
+  for (const [pattern] of VI_SPEC_REPLACEMENTS) {
+    rest = rest.replace(pattern, ' ');
+  }
+  // Whole words, Vietnamese letters included, so "thông" is not read as
+  // "th" and "ng".
+  return (rest.match(/\p{L}+/gu) ?? []).filter(
+    (word) => /^[a-z]{2,}$/.test(word) && !UNTRANSLATED_TOKENS.has(word)
+  );
+}
 
 const EN_SPEC_REPLACEMENTS: Array<[RegExp, string]> = [
   [/Không hỗ trợ thẻ nhớ/gi, 'No card slot'],
@@ -520,6 +582,14 @@ export function localizeSpecValue(
   }
 
   if (lang === 'vi') {
+    // A value the phrase map cannot cover stays whole in its source
+    // language rather than half translated, as in "không dây fast
+    // charging" (DOS/Rate#1187); checked before any rewrite, months too.
+    // A value already stored partly in Vietnamese is mixed at the source;
+    // translating its known phrases still leaves less English.
+    if (!VI_LETTER_RE.test(text) && untranslatedViWords(text).length > 0) {
+      return text;
+    }
     text = text.replace(
       /\b(January|February|March|April|May|June|July|August|September|October|November|December)\s+(\d{4})\b/gi,
       (_, m: string, y: string) => {
