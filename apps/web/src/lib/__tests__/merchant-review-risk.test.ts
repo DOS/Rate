@@ -36,7 +36,7 @@ function merchant(
   } as unknown as MerchantSummary;
 }
 
-function main() {
+async function main() {
   console.warn('🧪 merchant review risk suite (DOS/Rate#1249)');
 
   assert.equal(hasReviewRiskEvidence({ total_reviews: 3 }), true);
@@ -97,7 +97,103 @@ function main() {
     ['low', 'high', 'none']
   );
 
+  await directoryReadsReviewsForStoredScores();
+
   console.warn('  ✅ merchant review risk suite passed');
 }
 
-main();
+// A store with a stored review score but no persisted breakdown: the
+// directory reads its reviews for the breakdown, as the profile does, and
+// keeps the stored score (DOS/Rate#1258).
+async function directoryReadsReviewsForStoredScores() {
+  process.env.NEXT_PUBLIC_SUPABASE_URL = 'https://stub.supabase.co';
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = 'stub-anon-key';
+  const { getMerchantsList } = await import('../rate-api');
+  const STORED = '00000000-0000-4000-8000-000000001258';
+  const NONE = '00000000-0000-4000-8000-000000001259';
+  const json = (body: unknown) =>
+    new Response(JSON.stringify(body), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    });
+  globalThis.fetch = (async (input: RequestInfo | URL) => {
+    const url = new URL(
+      typeof input === 'string'
+        ? input
+        : input instanceof URL
+          ? input.href
+          : input.url
+    );
+    if (Number(url.searchParams.get('offset') ?? 0) > 0) return json([]);
+    const table = url.pathname.replace('/rest/v1/', '');
+    if (table === 'merchants') {
+      return json([
+        {
+          id: STORED,
+          platform: 'shopee',
+          platform_shop_id: 's',
+          name: 'Stored',
+          is_official: false,
+          risk_score: 0,
+          review_risk_score: null,
+          review_risk_breakdown: {},
+          metadata: { review_risk_score: 30 },
+        },
+        {
+          id: NONE,
+          platform: 'fptshop',
+          platform_shop_id: 'n',
+          name: 'None',
+          is_official: false,
+          risk_score: 0,
+          review_risk_score: 4,
+          review_risk_breakdown: {},
+          metadata: {},
+        },
+      ]);
+    }
+    if (table === 'products') {
+      return json([
+        { id: 'p-stored', merchant_id: STORED, price_current: 1_000_000 },
+        { id: 'p-none', merchant_id: NONE, price_current: 2_000_000 },
+      ]);
+    }
+    if (table === 'reviews') {
+      return json(
+        decodeURIComponent(url.search).includes('p-stored')
+          ? [
+              {
+                id: 'r1',
+                product_id: 'p-stored',
+                rating_star: 5,
+                comment: 'ok',
+                review_flags: { verdict: 'authentic' },
+              },
+              {
+                id: 'r2',
+                product_id: 'p-stored',
+                rating_star: 4,
+                comment: 'ok',
+                review_flags: { verdict: 'authentic' },
+              },
+            ]
+          : []
+      );
+    }
+    return json([]);
+  }) as typeof fetch;
+
+  const list = await getMerchantsList({});
+  const stored = list.find((m) => m.id === STORED);
+  const none = list.find((m) => m.id === NONE);
+  assert.ok(stored && none);
+  assert.equal(stored.review_risk_breakdown.total_reviews, 2);
+  assert.equal(stored.review_risk_score, 30, 'the stored score is kept');
+  assert.equal(hasReviewRiskEvidence(stored.review_risk_breakdown), true);
+  assert.equal(hasReviewRiskEvidence(none.review_risk_breakdown), false);
+}
+
+main().catch((err) => {
+  console.error(err);
+  process.exit(1);
+});

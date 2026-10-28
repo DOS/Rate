@@ -435,7 +435,10 @@ export default function MerchantDirectoryExplorer({
         sanitizeMerchantAuditText(m.platform_shop_id, '', 80),
         m.is_official ? 'true' : 'false',
         String(sanitizeMerchantScore100(m.trust_score)),
-        String(sanitizeMerchantScore100(m.review_risk_score)),
+        // Empty without analysed reviews (DOS/Rate#1258).
+        hasReviewRiskEvidence(m.review_risk_breakdown)
+          ? String(sanitizeMerchantScore100(m.review_risk_score))
+          : '',
         String(sanitizeMerchantCount(rStats.genuineDealCount)),
         String(sanitizeMerchantCount(rStats.fakeTrapCount)),
         String(sanitizeMerchantCount(m.review_risk_breakdown?.authentic_count)),

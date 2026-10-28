@@ -2872,9 +2872,12 @@ export async function getMerchantsList(
     productIdsByMerchant.set(p.merchant_id, idList);
   }
 
+  // Reviews are read for every store without a persisted breakdown, also
+  // one with a stored score: the breakdown says whether reviews were
+  // analysed, as on the profile, which reads them too (DOS/Rate#1258).
   const unscoredProductIds: string[] = [];
   for (const m of merchants) {
-    if (!extractPersistedBreakdown(m) && !hasStoredReviewRisk(m)) {
+    if (!extractPersistedBreakdown(m)) {
       const mProdIds = productIdsByMerchant.get(m.id);
       if (mProdIds && mProdIds.length > 0) {
         unscoredProductIds.push(...mProdIds);
@@ -2963,14 +2966,13 @@ export async function getMerchantsList(
     const livePrices = livePricesByMerchant.get(m.id) ?? [];
     const persistedBreakdown = extractPersistedBreakdown(m);
     const mReviews = mappedReviewsByMerchant.get(m.id) ?? [];
-    const dynamicRisk =
-      persistedBreakdown || hasStoredReviewRisk(m)
-        ? null
-        : computeDynamicReviewRisk(mReviews, {
-            isOfficial: isStrictOfferOfficialFlag(m.is_official),
-            platform: m.platform,
-            followerCount: Number(m.follower_count) || 0,
-          });
+    const dynamicRisk = persistedBreakdown
+      ? null
+      : computeDynamicReviewRisk(mReviews, {
+          isOfficial: isStrictOfferOfficialFlag(m.is_official),
+          platform: m.platform,
+          followerCount: Number(m.follower_count) || 0,
+        });
     const meta = (
       m.metadata && typeof m.metadata === 'object' && !Array.isArray(m.metadata)
         ? m.metadata
@@ -2983,10 +2985,12 @@ export async function getMerchantsList(
         ? toSafeRiskScore100(meta.dosafe_risk_score, 0)
         : baseRisk;
     const persistedReviewRisk = persistedReviewRiskOf(m);
-    const effectiveReviewRisk = Math.max(
-      dynamicRisk?.reviewRiskScore ?? 0,
-      persistedReviewRisk
-    );
+    // A stored score covers all of the seller's reviews: it wins over the
+    // one computed here, as on the profile (#684).
+    const effectiveReviewRisk =
+      persistedBreakdown || hasStoredReviewRisk(m)
+        ? persistedReviewRisk
+        : Math.max(dynamicRisk?.reviewRiskScore ?? 0, persistedReviewRisk);
     const breakdown = persistedBreakdown ??
       dynamicRisk?.breakdown ?? {
         total_reviews: 0,

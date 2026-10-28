@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
+import { hasReviewRiskEvidence } from '@/lib/merchant-risk-tone';
 import { discountVerdictCopy } from '@/lib/discount-verdict-copy';
 import AnalyzerText from '@/components/reviews/AnalyzerText';
 import { useDetailsDismiss } from '@/components/elementary/use-details-dismiss';
@@ -278,7 +279,7 @@ export default function DeepInspectWorkspace({
           : []),
         ...(merchant
           ? [
-              `- **${t('mdSeller')}:** ${merchant.name} (${merchant.platform.toUpperCase()}) | ${t('mdTrustScore')}: **${merchant.trust_score}/100** (${t('dosafeRiskLabel')}: ${merchant.dosafe_risk_score}/100, ${t('reviewRiskLabel')}: ${merchant.review_risk_score}/100)`,
+              `- **${t('mdSeller')}:** ${merchant.name} (${merchant.platform.toUpperCase()}) | ${t('mdTrustScore')}: **${merchant.trust_score}/100** (${t('dosafeRiskLabel')}: ${merchant.dosafe_risk_score}/100, ${t('reviewRiskLabel')}: ${hasReviewRiskEvidence(merchant.review_risk_breakdown) ? `${merchant.review_risk_score}/100` : t('reviewRiskNoData')})`,
             ]
           : []),
         `- **${t('mdLink')}:** ${shareUrl}`,
@@ -941,31 +942,44 @@ export default function DeepInspectWorkspace({
                   <div className="mb-4">
                     <div className="d-flex justify-content-between small mb-1">
                       <span className="text-muted">{t('reviewRiskLabel')}</span>
-                      <strong
-                        className={
-                          Number(merchant.review_risk_score || 0) >= 40
-                            ? 'text-danger'
-                            : 'text-primary'
-                        }
-                      >
-                        {Number(merchant.review_risk_score || 0).toFixed(0)}/100
-                      </strong>
+                      {hasReviewRiskEvidence(merchant.review_risk_breakdown) ? (
+                        <strong
+                          className={
+                            Number(merchant.review_risk_score || 0) >= 40
+                              ? 'text-danger'
+                              : 'text-primary'
+                          }
+                        >
+                          {Number(merchant.review_risk_score || 0).toFixed(0)}
+                          /100
+                        </strong>
+                      ) : (
+                        // No analysed reviews: no number (DOS/Rate#1258).
+                        <strong className="text-muted">
+                          {t('reviewRiskNoData')}
+                        </strong>
+                      )}
                     </div>
-                    <div className="progress" style={{ height: 8 }}>
-                      <div
-                        className={`progress-bar ${
-                          Number(merchant.review_risk_score || 0) >= 40
-                            ? 'bg-danger'
-                            : 'bg-primary'
-                        }`}
-                        style={{
-                          width: `${Math.min(
-                            100,
-                            Math.max(4, Number(merchant.review_risk_score || 0))
-                          )}%`,
-                        }}
-                      />
-                    </div>
+                    {hasReviewRiskEvidence(merchant.review_risk_breakdown) && (
+                      <div className="progress" style={{ height: 8 }}>
+                        <div
+                          className={`progress-bar ${
+                            Number(merchant.review_risk_score || 0) >= 40
+                              ? 'bg-danger'
+                              : 'bg-primary'
+                          }`}
+                          style={{
+                            width: `${Math.min(
+                              100,
+                              Math.max(
+                                4,
+                                Number(merchant.review_risk_score || 0)
+                              )
+                            )}%`,
+                          }}
+                        />
+                      </div>
+                    )}
                   </div>
 
                   <Link

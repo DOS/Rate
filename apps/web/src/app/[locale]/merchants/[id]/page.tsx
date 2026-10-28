@@ -996,7 +996,9 @@ export default async function MerchantProfilePage({
                                 className="badge bg-secondary-subtle text-secondary-emphasis rounded-pill small mt-1 border"
                                 title={t('listingUnavailableTitle')}
                               >
-                                {t('listingUnavailableBadge')}
+                                {item.availability === 'discontinued'
+                                  ? t('listingDiscontinuedBadge')
+                                  : t('listingUnavailableBadge')}
                               </span>
                             )}
                           </td>
