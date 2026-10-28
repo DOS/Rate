@@ -658,7 +658,11 @@
     "quickToggleBtnWatched": "Watching price",
     "quickToggleBtnUnwatched": "Watch price",
     "quickToggleShortUnwatched": "Watch price",
-    "quickToggleShortWatched": "Watching"
+    "quickToggleShortWatched": "Watching",
+    "sizeRequiredTitle": "Choose a size to watch: price alerts are set per size.",
+    "sizeRequiredCta": "Choose a size",
+    "sizeRequiredUnavailable": "The sizes could not be loaded.",
+    "sizeRequiredProductLink": "Open the product page"
   },
   "deals": {
     "metaTitle": "Best-value tech deals, checked across 10 stores | Rate.vn",
