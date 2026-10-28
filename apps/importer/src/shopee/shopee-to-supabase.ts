@@ -97,6 +97,80 @@ const SPEC_FIELD_GROUP_KEYS = [
   'regulatory',
 ] as const;
 
+// One size token after spacing is folded: "1TB", "SSD512GB", "ROM128/256GB",
+// "128/256/512GB", "1.5/2TB", "512GB/1TB", "12+256GB". A size glued to any
+// other word ("Spark64/128GB") is not one.
+const SIZE_TOKEN_RE =
+  /^(?:SSD|ROM|HDD|EMMC|UFS)?:?(\d[\d.,]*(?:GB|TB)?(?:[/+]\d[\d.,]*(?:GB|TB)?)*(?<=GB|TB))$/i;
+const SIZE_PART_RE = /^(\d+(?:[.,]\d+)?)(GB|TB)?$/i;
+const RAM_LABEL_RE = /^RAM:?$/i;
+const STORAGE_LABEL_RE = /^(?:SSD|ROM|HDD|EMMC|UFS):?$/i;
+const MAX_TITLE_SCAN = 500;
+
+const sizesOfToken = (list: string): number[] => {
+  const parts = list.split(/[/+]/);
+  const listUnit = SIZE_PART_RE.exec(parts[parts.length - 1])?.[2];
+  if (!listUnit) return [];
+  const sizes: number[] = [];
+  for (const part of parts) {
+    const sized = SIZE_PART_RE.exec(part);
+    if (!sized) return [];
+    const value = parseFloat(sized[1].replace(',', '.'));
+    const unit = (sized[2] ?? listUnit).toUpperCase();
+    if (Number.isFinite(value) && value > 0) {
+      sizes.push(Math.round(unit === 'TB' ? value * 1024 : value));
+    }
+  }
+  return sizes;
+};
+
+/**
+ * The storage sizes, in GB, a title names (DOS/Rate#1197), RAM left out.
+ * A RAM label next to a size binds to it when no other size sits on the
+ * label's far side ("RAM 16GB", "64GB RAM"). Between two sizes it binds by
+ * the title's habit: after it when the title writes labels first ("SSD 512GB
+ * RAM 16GB"), else before it ("64GB RAM 1TB SSD"). Token by token, so the cost
+ * stays linear in the title.
+ */
+export function titleStorageSizesGb(title: string): number[] {
+  const tokens = title
+    .slice(0, MAX_TITLE_SCAN)
+    .replace(/\s+/g, ' ')
+    .replace(/(\d) (GB|TB)\b/gi, '$1$2')
+    .replace(/ ?([/+]) ?/g, '$1')
+    // A unit followed by a suffix: "512GB-VN/A", "1TB.".
+    .replace(/(\d(?:GB|TB))[-.:!]/gi, '$1 ')
+    .split(/[\s,;|()[\]]+/)
+    .filter(Boolean);
+  const isSize = (i: number) => i >= 0 && i < tokens.length && SIZE_TOKEN_RE.test(tokens[i]);
+  const isRamLabel = (i: number) => i >= 0 && i < tokens.length && RAM_LABEL_RE.test(tokens[i]);
+  const isLabel = (t: string) => RAM_LABEL_RE.test(t) || STORAGE_LABEL_RE.test(t);
+  const firstLabel = tokens.findIndex(isLabel);
+  const firstSize = tokens.findIndex((_, i) => isSize(i));
+  const labelsFirst = firstLabel !== -1 && firstLabel < firstSize;
+  // Whether the RAM label at `label` names the size at `size` (a neighbour).
+  const ramNames = (label: number, size: number) => {
+    if (!isRamLabel(label)) return false;
+    const far = label + (label - size);
+    if (!isSize(far)) return true;
+    return labelsFirst ? label < size : label > size;
+  };
+  const sizes: number[] = [];
+  tokens.forEach((token, i) => {
+    const size = SIZE_TOKEN_RE.exec(token);
+    if (!size) return;
+    const glued = token.length !== size[1].length;
+    const isRam = !glued && (ramNames(i - 1, i) || ramNames(i + 1, i));
+    if (!isRam) sizes.push(...sizesOfToken(size[1]));
+  });
+  return sizes;
+}
+
+/** Whether a title names a storage size, also as one of a list. */
+export function titleNamesStorage(title: string, storageGb: number): boolean {
+  return titleStorageSizesGb(title).includes(storageGb);
+}
+
 /**
  * Returns true if at least one of the 10 specification field groups contains a
  * non-empty value (ignoring top-level metadata keys such as `category_slug`).
@@ -518,6 +592,8 @@ export class ShopeeIngestionPipeline {
     let hinted: ItemMatchResult | null = null;
     // undefined = leave the stored variant_source as it is.
     let hintedVariantSource: ItemMatchResult['variantSource'] | undefined;
+    // A hinted master left on a storage conflict: its stats follow the move.
+    let ignoredHintMasterId: string | null = null;
     let safeItemIdHint =
       typeof options.itemIdHint === 'string'
         ? (sanitizeIngestionEntityId(options.itemIdHint, 128) ?? '')
@@ -537,8 +613,8 @@ export class ShopeeIngestionPipeline {
         .from('master_products')
         .select(
           itemModel === 'off'
-            ? 'id, specifications'
-            : 'id, specifications, status, item_id, variant_key'
+            ? 'id, specifications, storage_gb'
+            : 'id, specifications, storage_gb, status, item_id, variant_key'
         )
         .eq('id', safeMasterIdHint)
         .maybeSingle();
@@ -553,10 +629,39 @@ export class ShopeeIngestionPipeline {
         status?: unknown;
         item_id?: unknown;
         variant_key?: unknown;
+        storage_gb?: unknown;
       } | null;
+      // The page states a storage the hinted master does not have (a 1TB page
+      // hinted to the 512GB master): the hint is not applied and the listing is
+      // matched like any other (DOS/Rate#1197). A page with no stated storage,
+      // a title that also names the hinted size ("256/512GB") and a title too
+      // bare to match keep the hint.
+      const hintStorageGb = Number(hintMeta?.storage_gb);
+      const storageConflict =
+        candidate.keyable !== false &&
+        candidate.variant_source === 'title' &&
+        typeof candidate.storage_gb === 'number' &&
+        candidate.storage_gb > 0 &&
+        Number.isFinite(hintStorageGb) &&
+        hintStorageGb > 0 &&
+        candidate.storage_gb !== hintStorageGb &&
+        !titleNamesStorage(product.title, hintStorageGb);
       const hintItemId =
         itemModel === 'off' ? null : sanitizeIngestionEntityId(hintMeta?.item_id, 128);
-      if (hintRow?.id && itemModel !== 'off' && hintMeta?.status === 'archived') {
+      if (hintRow?.id && storageConflict) {
+        platLogger.warn(
+          'ingest.master_hint_storage_conflict',
+          `masterIdHint ${hintRow.id} ignored: the page states ${candidate.storage_gb}GB, the master is ${hintStorageGb}GB`,
+          {
+            masterId: hintRow.id,
+            pageStorageGb: candidate.storage_gb,
+            hintStorageGb,
+          }
+        );
+        ignoredHintMasterId = hintRow.id;
+        // The hinted variant's Item still holds the listing's model.
+        if (hintItemId && !safeItemIdHint) safeItemIdHint = hintItemId;
+      } else if (hintRow?.id && itemModel !== 'off' && hintMeta?.status === 'archived') {
         // A retired master (an Item's `unknown` variant after M3) must not take the
         // listing back: the hint maps to its Item, and the variant comes from the title.
         platLogger.info(
@@ -605,6 +710,9 @@ export class ShopeeIngestionPipeline {
     let previousItemId: string | null = null;
     // True when itemId comes from a kept variant: then it is written even when null.
     let itemIdFromKeptVariant = false;
+    // Off mode reads no stored listing; the master a conflicting hint named is
+    // where the listing sat before.
+    if (itemModel === 'off' && ignoredHintMasterId) previousClusterId = ignoredHintMasterId;
     if (itemModel !== 'off') {
       // A variant set by hand is evidence, never undone by a later page that just
       // does not state the size (design doc 4.4): only listing evidence
