@@ -65,7 +65,8 @@ export function localeProxy(req: NextRequest): NextResponse {
   const localePrefixMatch = pathname.match(/^\/(vi|en|cs)(\/.*)?$/);
   if (localePrefixMatch) {
     const matchedLocale = localePrefixMatch[1]!;
-    const cleanPath = localePrefixMatch[2] || '/';
+    // One leading slash: "/en//host" must not become a protocol-relative Location.
+    const cleanPath = `/${(localePrefixMatch[2] ?? '').replace(/^\/+/, '')}`;
     const redirectUrl = req.nextUrl.clone();
     redirectUrl.pathname = cleanPath;
     const response = NextResponse.redirect(redirectUrl, 308);

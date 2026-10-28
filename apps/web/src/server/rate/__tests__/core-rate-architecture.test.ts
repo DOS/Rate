@@ -367,6 +367,17 @@ async function runCoreArchitectureSuite() {
     'https://rate.vn/compare'
   );
   assert.equal(redirectCsCompare.cookies.get('NEXT_LOCALE')?.value, 'cs');
+  // A doubled slash after the locale stays on the site (no "//host" target).
+  const redirectEnDoubleSlash = middleware(
+    new NextRequest('https://rate.vn/en//evil.example/x', {
+      headers: { 'x-forwarded-proto': 'https', host: 'rate.vn' },
+    })
+  );
+  assert.equal(redirectEnDoubleSlash.status, 308);
+  assert.equal(
+    redirectEnDoubleSlash.headers.get('location'),
+    'https://rate.vn/evil.example/x'
+  );
 
   const unprefixedEnRes = middleware(
     new NextRequest('https://rate.vn/', {
@@ -12872,6 +12883,17 @@ async function runCoreArchitectureSuite() {
     assert.equal(sanitizeAuthRedirectTarget('javascript:alert(1)'), '/');
     assert.equal(sanitizeAuthRedirectTarget(null), '/');
     assert.equal(sanitizeAuthRedirectTarget(`/${'a'.repeat(600)}`), '/');
+    // Dot segments that normalize to a protocol-relative path.
+    for (const target of [
+      '/.//evil.example/phish',
+      '/%2e//evil.example/phish',
+      '/%2E//evil.example',
+      '/a/..//evil.example/phish',
+      '/././/evil.example',
+    ]) {
+      assert.equal(sanitizeAuthRedirectTarget(target), '/', target);
+    }
+    assert.equal(sanitizeAuthRedirectTarget('/a/../watchlist'), '/watchlist');
 
     assert.equal(outcomeFromJobState('skipped_no_consent'), 'noConsent');
     assert.equal(outcomeFromJobState('rejected_invalid_url'), 'invalidUrl');
