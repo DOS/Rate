@@ -843,6 +843,12 @@ async function runSuite() {
     ['Apple iPhone 18 Pro Max', 'apple:iphone-18-pro-max:unknown'],
     ['Apple iPhone 18 Pro', 'apple:iphone-18-pro:unknown'],
     ['Lenovo ThinkPad X1 Carbon Gen 12 Ultra 7 155U', 'lenovo:thinkpad-x1-carbon-gen-12:unknown'],
+    // DOS/Rate#1189: CellphoneS SKU 21KC008PVN is the 1TB config; before #1094 this
+    // title keyed at the registry default and logged "Storage: 512GB" on 2026-10-25.
+    [
+      'Laptop Lenovo ThinkPad X1 Carbon Gen 12 21KC008PVN',
+      'lenovo:thinkpad-x1-carbon-gen-12:unknown',
+    ],
     ['Máy tính bảng iPad Pro M5 11 inch WiFi', 'apple:ipad-pro-m5-11:unknown'],
     ['Máy tính bảng Xiaomi Pad 7 Pro', 'xiaomi:pad-7-pro:unknown'],
   ];
@@ -854,6 +860,13 @@ async function runSuite() {
     assert.equal(storageless.is_benchmark_enriched, true, title);
     assert.equal(storageless.specifications.hardware?.storage_gb, undefined, title);
   }
+  // The same SKU with its configuration in the title keys at 1TB, never the 512GB master.
+  assert.equal(
+    keyOf(
+      'Laptop Lenovo ThinkPad X1 Carbon Gen 12 21KC008PVN (Ultra 7 155H/ 32GB/ 1TB SSD/ 14 inch 2.8K OLED/ Win 11 Pro)'
+    ),
+    'lenovo:thinkpad-x1-carbon-gen-12:1024gb'
+  );
   const storagelessZenbook = normalizer.normalize(
     createDummyShopeeProduct('Laptop ASUS Zenbook S 14 UX5406AA-SU348W')
   );
