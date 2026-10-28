@@ -10,6 +10,7 @@ import { computeProductRadarSignal } from '@/server/rate/deals';
 import { isOfferUnavailable } from '@/lib/product-market-stats';
 import { getMasterProductCategorySlug } from '@/lib/rate-domain';
 import { applyCategorySpecTemplate } from '@repo/shared-data/rules';
+import { listingCountForSaleState, saleStateOfMaster } from '@/lib/sale-state';
 import {
   PUBLIC_API_CORS_HEADERS,
   jsonApiError,
@@ -84,7 +85,17 @@ export async function GET(_request: NextRequest, context: RouteContext) {
       {
         ok: true,
         data: {
-          product,
+          // Why there is no price, when there is none (DOS/Rate#1188).
+          product: {
+            ...product,
+            sale_state: saleStateOfMaster(
+              product,
+              listingCountForSaleState(
+                offers.length,
+                offers.filter((o) => !isOfferUnavailable(o)).length
+              )
+            ),
+          },
           offers,
           priceHistory,
           reviewSummary,

@@ -1879,5 +1879,17 @@
     "summaryNoAuthentic": "Chưa có đánh giá thực chất sau khi lọc {removed} bình luận rác/nhận xu.",
     "proPositiveFeedback": "Nhận phản hồi tích cực từ người dùng thực tế",
     "originalVietnamese": "tiếng Việt"
+  },
+  "saleState": {
+    "soldOut": "Tạm hết hàng ở mọi nơi bán",
+    "soldOutHint": "Các nơi bán đã ghi nhận hiện đều hết hàng.",
+    "discontinued": "Ngừng kinh doanh tại Việt Nam",
+    "discontinuedHint": "Mẫu này không còn được bán mới tại các nơi bán ở Việt Nam.",
+    "comingSoon": "Sắp về Việt Nam",
+    "comingSoonHint": "Mẫu này chưa được bán chính hãng tại Việt Nam.",
+    "notListed": "Chưa có nơi bán tại Việt Nam",
+    "notListedHint": "Rate chưa ghi nhận nơi bán nào tại Việt Nam cho mẫu này.",
+    "noStock": "Chưa có nơi bán còn hàng",
+    "noStockHint": "Không có nơi bán nào đang còn hàng."
   }
 }

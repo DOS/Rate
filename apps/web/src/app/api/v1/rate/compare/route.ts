@@ -8,6 +8,7 @@ import {
 import { computeProductRadarSignal } from '@/server/rate/deals';
 import { radarExportFields } from '@/lib/deal-radar';
 import { applyCategorySpecTemplate } from '@repo/shared-data/rules';
+import { saleStateOfMaster } from '@/lib/sale-state';
 import {
   PUBLIC_API_CORS_HEADERS,
   jsonApiError,
@@ -66,6 +67,7 @@ export async function GET(request: NextRequest) {
             ...applyCategorySpecTemplate(lockedCategory, p),
             canonical_href: getMasterProductHref(p),
             deal_radar: radarExportFields(computeProductRadarSignal(p, offers)),
+            sale_state: saleStateOfMaster(p),
           };
         }),
       },

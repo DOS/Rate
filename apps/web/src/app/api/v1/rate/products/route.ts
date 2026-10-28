@@ -9,6 +9,7 @@ import { computeProductRadarSignal } from '@/server/rate/deals';
 import { radarExportFields } from '@/lib/deal-radar';
 import { getMasterProductCategorySlug } from '@/lib/rate-domain';
 import { applyCategorySpecTemplate } from '@repo/shared-data/rules';
+import { saleStateOfMaster } from '@/lib/sale-state';
 import {
   PUBLIC_API_CORS_HEADERS,
   jsonApiError,
@@ -206,6 +207,7 @@ export async function GET(request: NextRequest) {
           return {
             ...applyCategorySpecTemplate(getMasterProductCategorySlug(p), p),
             deal_radar: radarExportFields(computeProductRadarSignal(p, offers)),
+            sale_state: saleStateOfMaster(p),
           };
         }),
         ...(facets ? { facets } : {}),

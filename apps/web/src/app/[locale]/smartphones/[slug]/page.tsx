@@ -64,6 +64,11 @@ import { contentLang } from '@/lib/content-lang';
 import ContentText from '@/components/elementary/ContentText';
 import { buildProductSpecGroups } from '@/lib/product-spec-rows';
 import {
+  listingCountForSaleState,
+  masterSaleState,
+  saleStateLabelKey,
+} from '@/lib/sale-state';
+import {
   computeProductStandingInCategory,
   scoreMasterProductForLeaderboard,
 } from '@/lib/leaderboard-engine';
@@ -171,9 +176,10 @@ export async function ProductDetailView({
 }) {
   const { locale, slug } = await params;
   setRequestLocale(locale);
-  const [t, tNav, storedProduct] = await Promise.all([
+  const [t, tNav, tSale, storedProduct] = await Promise.all([
     getTranslations({ locale, namespace: 'productDetail' }),
     getTranslations({ locale, namespace: 'rate.nav' }),
+    getTranslations({ locale, namespace: 'saleState' }),
     getCachedMasterProductBySlug(slug),
   ]);
 
@@ -240,6 +246,15 @@ export async function ProductDetailView({
   const keySpecs = product.key_specs as KeySpecs;
   const minPriceFormatted = currentMinPrice.toLocaleString('vi-VN');
   const sellerCount = marketStats.sellerCount;
+  // Why there is no price, when there is none (DOS/Rate#1188).
+  const saleState = masterSaleState({
+    minPrice: currentMinPrice,
+    listingCount: listingCountForSaleState(offers.length, inStockOffers.length),
+    metadata: product.metadata,
+    availabilityStatus: specs?.availability?.status,
+  });
+  const saleStateKey =
+    saleState === 'on_sale' ? null : saleStateLabelKey(saleState);
   const maxPriceFormatted = marketStats.maxPrice.toLocaleString('vi-VN');
 
   const authenticCount =
@@ -873,9 +888,15 @@ export async function ProductDetailView({
                       {t('priceReferenceLabel', { count: sellerCount })}
                     </div>
                     <div className="fw-bold text-dark rate-tabular fs-5">
-                      {currentMinPrice > 0
-                        ? `${minPriceFormatted} ₫`
-                        : t('priceNoneInStock')}
+                      {currentMinPrice > 0 ? (
+                        `${minPriceFormatted} ₫`
+                      ) : saleStateKey ? (
+                        <span data-sale-state={saleState}>
+                          {tSale(saleStateKey)}
+                        </span>
+                      ) : (
+                        t('priceNoneInStock')
+                      )}
                       {currentMinPrice > 0 &&
                         currentMinPrice !== marketStats.maxPrice && (
                           <span className="small fw-normal text-muted ms-2">
@@ -1070,7 +1091,9 @@ export async function ProductDetailView({
             </div>
 
             {offers.length === 0 ? (
-              <p className="text-muted mb-0">{t('noOffersYet')}</p>
+              <p className="text-muted mb-0">
+                {saleStateKey ? tSale(`${saleStateKey}Hint`) : t('noOffersYet')}
+              </p>
             ) : (
               <ProductOffersExplorer
                 productName={product.name}

@@ -16,6 +16,7 @@ import { buildRadarIndex, getRadarSignal } from '@/lib/deal-radar';
 import ProductCard, {
   type ProductCardSpec,
 } from '@/components/product/ProductCard';
+import { saleStateOfMaster } from '@/lib/sale-state';
 import {
   formatStorageLabel,
   getCategoryFilterSchema,
@@ -866,6 +867,7 @@ export async function CategoryCatalogContent({
                             minPrice={Number(item.min_price || 0)}
                             maxPrice={Number(item.max_price || 0)}
                             merchantCount={item.merchant_count || 0}
+                            saleState={saleStateOfMaster(item)}
                             verified
                           />
                         </div>

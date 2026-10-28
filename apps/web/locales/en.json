@@ -1879,5 +1879,17 @@
     "summaryNoAuthentic": "No genuine reviews yet after filtering {removed} spam or coin-farming comments.",
     "proPositiveFeedback": "Positive feedback from real users",
     "originalVietnamese": "in Vietnamese"
+  },
+  "saleState": {
+    "soldOut": "Out of stock everywhere",
+    "soldOutHint": "Every store we track is out of stock.",
+    "discontinued": "Discontinued in Vietnam",
+    "discontinuedHint": "Stores in Vietnam no longer sell this model new.",
+    "comingSoon": "Coming to Vietnam",
+    "comingSoonHint": "This model is not officially sold in Vietnam yet.",
+    "notListed": "No store in Vietnam yet",
+    "notListedHint": "Rate has not found a store in Vietnam selling this model.",
+    "noStock": "Not in stock anywhere",
+    "noStockHint": "No store has it in stock."
   }
 }

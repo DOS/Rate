@@ -356,6 +356,9 @@ export function buildRateOpenApiSpec(
                             radar_signal: {
                               $ref: '#/components/schemas/ProductDealRadarSignal',
                             },
+                            sale_state: {
+                              $ref: '#/components/schemas/ProductSaleState',
+                            },
                           },
                         },
                       },
@@ -402,6 +405,19 @@ export function buildRateOpenApiSpec(
                       radar_signal: {
                         $ref: '#/components/schemas/ProductDealRadarSignal',
                       },
+                      data: {
+                        type: 'object',
+                        properties: {
+                          product: {
+                            type: 'object',
+                            properties: {
+                              sale_state: {
+                                $ref: '#/components/schemas/ProductSaleState',
+                              },
+                            },
+                          },
+                        },
+                      },
                     },
                   },
                 },
@@ -441,7 +457,17 @@ export function buildRateOpenApiSpec(
                     type: 'object',
                     properties: {
                       ok: { type: 'boolean', example: true },
-                      data: { type: 'array', items: { type: 'object' } },
+                      data: {
+                        type: 'array',
+                        items: {
+                          type: 'object',
+                          properties: {
+                            sale_state: {
+                              $ref: '#/components/schemas/ProductSaleState',
+                            },
+                          },
+                        },
+                      },
                       deal_radar: {
                         type: 'object',
                         additionalProperties: {
@@ -1640,6 +1666,19 @@ export function buildRateOpenApiSpec(
               example: true,
             },
           },
+        },
+        ProductSaleState: {
+          type: 'string',
+          enum: [
+            'on_sale',
+            'sold_out',
+            'discontinued',
+            'coming_soon',
+            'not_listed',
+            'no_stock',
+          ],
+          description:
+            'Whether the model can be bought in Vietnam now: `on_sale` (an in-stock price), `discontinued` / `coming_soon` (curated, or from the launch status when no store has stock), `sold_out` (stores list it, none in stock), `not_listed` (no store lists it), `no_stock` (no in-stock store; whether any store lists it is not known, as in list bodies).',
         },
         ProductDealRadarSignal: {
           type: 'object',
