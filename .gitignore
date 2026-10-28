@@ -139,6 +139,9 @@ playwright-report/
 !Docs/Proposals/2026-10-28-dos-me-m1-m2-items.sql
 !Docs/Proposals/2026-10-28-dos-me-m1-m2-items-rollback.sql
 !Docs/Proposals/2026-10-28-dos-me-m1-m2-items-verify.sql
+!Docs/Proposals/2026-10-29-dos-me-m0-seed-rekey.sql
+!Docs/Proposals/2026-10-29-dos-me-m0-seed-rekey-rollback.sql
+!Docs/Proposals/2026-10-29-dos-me-m0-seed-rekey-verify.sql
 * - Copy*
 * - Bản sao*
 *.dump

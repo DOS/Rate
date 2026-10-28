@@ -67,6 +67,9 @@ jobs:
       - name: Replay the DOS-Me Item migration proposal (Docker)
         run: node scripts/test-item-migration-proposal.mjs
 
+      - name: Replay the DOS-Me M0 seed re-key proposal (Docker)
+        run: node scripts/test-m0-seed-rekey-proposal.mjs
+
       - name: Check generated rate schema types match the migrations
         run: pnpm check:db-types
 
