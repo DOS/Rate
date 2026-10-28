@@ -254,6 +254,9 @@ LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = ''
 AS $$
+DECLARE
+  v_status      text;
+  v_variant_key text;
 BEGIN
   IF TG_OP = 'UPDATE'
      AND OLD.variant_source = 'manual'
@@ -266,7 +269,17 @@ BEGIN
     NEW.item_id := OLD.item_id;
   END IF;
   IF NEW.cluster_id IS NOT NULL THEN
-    SELECT mp.item_id INTO NEW.item_id FROM rate.master_products mp WHERE mp.id = NEW.cluster_id;
+    -- FOR SHARE waits for a running retire (which holds the variant FOR UPDATE), so a
+    -- writer that read the variant id before the retire cannot put the listing back on it.
+    SELECT mp.item_id, mp.status, mp.variant_key INTO NEW.item_id, v_status, v_variant_key
+    FROM rate.master_products mp WHERE mp.id = NEW.cluster_id
+    FOR SHARE;
+    IF v_status = 'archived' AND v_variant_key = 'unknown'
+       AND (TG_OP = 'INSERT' OR NEW.cluster_id IS DISTINCT FROM OLD.cluster_id) THEN
+      -- A retired `unknown` variant takes no listing: the listing keeps the Item only.
+      NEW.cluster_id := NULL;
+      NEW.variant_source := NULL;
+    END IF;
   END IF;
   RETURN NEW;
 END $$;
@@ -281,11 +294,13 @@ SECURITY DEFINER
 SET search_path = ''
 AS $$
 BEGIN
-  IF OLD.item_id IS NOT NULL AND OLD.item_id IS DISTINCT FROM NEW.item_id THEN
-    PERFORM rate.refresh_item_stats(OLD.item_id);
-  END IF;
+  -- Lock order everywhere: listing, then variant, then Item. The variant first also gives
+  -- the Item its post-move variant prices.
   IF OLD.cluster_id IS NOT NULL AND OLD.cluster_id IS DISTINCT FROM NEW.cluster_id THEN
     PERFORM rate.refresh_master_market_stats(OLD.cluster_id);
+  END IF;
+  IF OLD.item_id IS NOT NULL AND OLD.item_id IS DISTINCT FROM NEW.item_id THEN
+    PERFORM rate.refresh_item_stats(OLD.item_id);
   END IF;
   RETURN NULL;
 END $$;
@@ -299,49 +314,48 @@ REVOKE EXECUTE ON FUNCTION rate.products_refresh_left() FROM PUBLIC, anon, authe
 
 -- The Item's pooled rating over every crawled listing of the Item, including listings with
 -- no variant (design 4.1, Q4), mirrored onto each variant for old readers. Same review filter
--- as refresh_master_product_rating (20261018153000).
+-- as refresh_master_product_rating (20261018153000). Variants are written before the Item
+-- (lock order: listing, variant, Item).
 CREATE OR REPLACE FUNCTION rate.refresh_item_rating(p_item_id uuid)
 RETURNS void
-LANGUAGE sql
+LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = ''
 AS $$
-  WITH s AS (
-    SELECT
-      round(
-        (sum(r.rating_star * r.helpfulness_weight) FILTER (WHERE r.reviewer_type = 'user'))
-        / NULLIF(sum(r.helpfulness_weight) FILTER (WHERE r.reviewer_type = 'user'), 0),
-        2
-      ) AS weighted,
-      (count(*) FILTER (WHERE r.reviewer_type = 'user'))::integer AS n
-    FROM rate.products p
-    JOIN rate.reviews r ON r.product_id = p.id
-    JOIN rate.review_flags f ON f.review_id = r.id
-    WHERE p.item_id = p_item_id
-      AND p.origin = 'crawl'
-      AND r.origin IN ('crawl', 'community')
-      AND COALESCE(f.include_in_rating, true)
-      AND r.helpfulness_weight > 0
-  ),
-  item AS (
-    UPDATE rate.items i
-    SET user_rating_weighted = COALESCE(s.weighted, 0),
-        authentic_review_count = COALESCE(s.n, 0)
-    FROM s
-    WHERE i.id = p_item_id
-      AND (i.user_rating_weighted, i.authentic_review_count)
-        IS DISTINCT FROM (COALESCE(s.weighted, 0), COALESCE(s.n, 0))
-    RETURNING i.id
-  )
+DECLARE
+  v_weighted numeric;
+  v_n        integer;
+BEGIN
+  SELECT
+    COALESCE(round(
+      (sum(r.rating_star * r.helpfulness_weight) FILTER (WHERE r.reviewer_type = 'user'))
+      / NULLIF(sum(r.helpfulness_weight) FILTER (WHERE r.reviewer_type = 'user'), 0),
+      2
+    ), 0),
+    COALESCE((count(*) FILTER (WHERE r.reviewer_type = 'user'))::integer, 0)
+  INTO v_weighted, v_n
+  FROM rate.products p
+  JOIN rate.reviews r ON r.product_id = p.id
+  JOIN rate.review_flags f ON f.review_id = r.id
+  WHERE p.item_id = p_item_id
+    AND p.origin = 'crawl'
+    AND r.origin IN ('crawl', 'community')
+    AND COALESCE(f.include_in_rating, true)
+    AND r.helpfulness_weight > 0;
+
   UPDATE rate.master_products m
-  SET user_rating_weighted = COALESCE(s.weighted, 0),
-      authentic_review_count = COALESCE(s.n, 0),
+  SET user_rating_weighted = v_weighted,
+      authentic_review_count = v_n,
       updated_at = now()
-  FROM s
   WHERE m.item_id = p_item_id
-    AND (m.user_rating_weighted, m.authentic_review_count)
-      IS DISTINCT FROM (COALESCE(s.weighted, 0), COALESCE(s.n, 0));
-$$;
+    AND (m.user_rating_weighted, m.authentic_review_count) IS DISTINCT FROM (v_weighted, v_n);
+
+  UPDATE rate.items i
+  SET user_rating_weighted = v_weighted,
+      authentic_review_count = v_n
+  WHERE i.id = p_item_id
+    AND (i.user_rating_weighted, i.authentic_review_count) IS DISTINCT FROM (v_weighted, v_n);
+END $$;
 
 -- Item prices (from its published variants), counts (over every crawled listing, with and
 -- without a variant) and its rating.
@@ -352,6 +366,7 @@ SECURITY DEFINER
 SET search_path = ''
 AS $$
 BEGIN
+  PERFORM rate.refresh_item_rating(p_item_id);
   UPDATE rate.items i
   SET min_price = COALESCE(v.min_price, 0),
       max_price = COALESCE(v.max_price, 0),
@@ -378,7 +393,6 @@ BEGIN
          i.unknown_variant_listing_count, i.merchant_count)
       IS DISTINCT FROM (COALESCE(v.min_price, 0), COALESCE(v.max_price, 0), COALESCE(v.n, 0),
                         l.listing_count, l.unknown_count, l.merchant_count);
-  PERFORM rate.refresh_item_rating(p_item_id);
 END $$;
 
 -- Same signature; a master with an Item rates the whole Item (design 4.5). Without an Item
@@ -479,6 +493,63 @@ BEGIN
 END;
 $$;
 
+-- Compatibility hook (removed in M4 with the sync triggers): writers that do not know Items
+-- (the importer with RATE_ITEM_MODEL off, Rate Services before task 13) refresh only the
+-- variant; its Item is refreshed in the same call. Variant query of 20261024060000 unchanged.
+CREATE OR REPLACE FUNCTION rate.refresh_master_market_stats(p_master_id uuid)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+DECLARE
+  v_item uuid;
+BEGIN
+  WITH priced AS (
+    SELECT
+      p.price_current AS price,
+      COALESCE(NULLIF(p.price_max, 0), p.price_current) AS price_top,
+      p.merchant_id,
+      (pg_catalog.row_number() OVER (ORDER BY p.price_current, p.id) - 1)::INTEGER AS k,
+      (pg_catalog.count(*) OVER ())::INTEGER AS m
+    FROM rate.products p
+    WHERE p.cluster_id = p_master_id
+      AND p.origin = 'crawl'
+      AND p.availability = 'in_stock'
+      AND p.price_current > 0
+  ),
+  judged AS (
+    SELECT
+      c.price,
+      c.price_top,
+      c.merchant_id,
+      (c.m >= 3 AND c.price < 0.4 * r.price) AS implausible
+    FROM priced c
+    LEFT JOIN priced r
+      ON r.k = CASE WHEN (c.m - 2) / 2 < c.k THEN (c.m - 2) / 2 ELSE (c.m - 2) / 2 + 1 END
+  ),
+  s AS (
+    SELECT
+      MIN(j.price) FILTER (WHERE NOT j.implausible) AS min_price,
+      MAX(j.price_top) AS max_price,
+      COUNT(DISTINCT j.merchant_id)::INTEGER AS merchant_count
+    FROM judged j
+  )
+  UPDATE rate.master_products m
+  SET min_price = s.min_price,
+      max_price = s.max_price,
+      merchant_count = s.merchant_count,
+      updated_at = now()
+  FROM s
+  WHERE m.id = p_master_id
+    AND (m.min_price, m.max_price, m.merchant_count)
+      IS DISTINCT FROM (s.min_price, s.max_price, s.merchant_count);
+  SELECT m.item_id INTO v_item FROM rate.master_products m WHERE m.id = p_master_id;
+  IF v_item IS NOT NULL THEN
+    PERFORM rate.refresh_item_stats(v_item);
+  END IF;
+END $$;
+
 -- M2.2 Item fuzzy match (design 4.5 step 5) -----------------------------------------------
 
 -- Item names carry no storage, so a bare title never scores against a sized name (#1105).
@@ -520,8 +591,11 @@ END $$;
 
 -- When a multi-size Item (a live sized variant, a category with a storage axis) still has a
 -- live `unknown` variant, its listings move to "no variant" and the variant is archived, in
--- one transaction with the Item row locked. Returns the number of listings moved. Price
--- alerts stay on the archived variant (an alert needs a size; M3 reports them).
+-- one transaction. Lock order as everywhere else: listings, then the variant, then the Item
+-- (through the refreshes), so it cannot deadlock with an ingest moving one of those
+-- listings. What it changes is recorded in `metadata` (listing: the variant and source it
+-- had; variant: its status before), so the rollback can put it back. Returns the number of
+-- listings moved. Price alerts stay on the archived variant (an alert needs a size).
 CREATE OR REPLACE FUNCTION rate.retire_item_unknown_variant(p_item_id uuid)
 RETURNS integer
 LANGUAGE plpgsql
@@ -529,34 +603,46 @@ SECURITY DEFINER
 SET search_path = ''
 AS $$
 DECLARE
-  v_unknown uuid;
-  v_moved   integer := 0;
+  v_unknown  uuid;
+  v_status   text;
+  v_moved    integer := 0;
+  v_override text := COALESCE(current_setting('rate.variant_override', true), '');
 BEGIN
-  PERFORM 1 FROM rate.items i WHERE i.id = p_item_id FOR UPDATE;
-  IF NOT FOUND THEN
-    RETURN 0;
-  END IF;
   IF EXISTS (SELECT 1 FROM rate.items i JOIN rate.categories c ON c.id = i.category_id
              WHERE i.id = p_item_id AND c.slug = 'earbuds') THEN
     RETURN 0;
   END IF;
-  IF NOT EXISTS (SELECT 1 FROM rate.master_products mp
-                 WHERE mp.item_id = p_item_id AND mp.status <> 'archived'
-                   AND mp.variant_key ~ '^[0-9]+(gb|tb)$') THEN
-    RETURN 0;
-  END IF;
   SELECT mp.id INTO v_unknown
   FROM rate.master_products mp
-  WHERE mp.item_id = p_item_id AND mp.variant_key = 'unknown' AND mp.status <> 'archived'
-  FOR UPDATE;
+  WHERE mp.item_id = p_item_id AND mp.variant_key = 'unknown' AND mp.status <> 'archived';
   IF v_unknown IS NULL THEN
     RETURN 0;
   END IF;
+  PERFORM 1 FROM rate.products p WHERE p.cluster_id = v_unknown ORDER BY p.id FOR UPDATE;
+  SELECT mp.status INTO v_status FROM rate.master_products mp WHERE mp.id = v_unknown FOR UPDATE;
+  -- Re-check under the locks: a concurrent call may have retired it, or the sized variant
+  -- may have been archived meanwhile.
+  IF v_status IS NULL OR v_status = 'archived' OR NOT EXISTS (
+       SELECT 1 FROM rate.master_products mp
+       WHERE mp.item_id = p_item_id AND mp.status <> 'archived'
+         AND mp.variant_key ~ '^[0-9]+(gb|tb)$') THEN
+    RETURN 0;
+  END IF;
   PERFORM set_config('rate.variant_override', 'on', true);
-  UPDATE rate.products SET cluster_id = NULL, variant_source = NULL WHERE cluster_id = v_unknown;
+  UPDATE rate.products p
+  SET cluster_id = NULL,
+      variant_source = NULL,
+      metadata = COALESCE(p.metadata, '{}'::jsonb)
+        || jsonb_build_object('retired_unknown_variant', v_unknown,
+                              'variant_source_before_retire', p.variant_source)
+  WHERE p.cluster_id = v_unknown;
   GET DIAGNOSTICS v_moved = ROW_COUNT;
-  PERFORM set_config('rate.variant_override', 'off', true);
-  UPDATE rate.master_products SET status = 'archived' WHERE id = v_unknown;
+  PERFORM set_config('rate.variant_override', v_override, true);
+  UPDATE rate.master_products mp
+  SET status = 'archived',
+      metadata = COALESCE(mp.metadata, '{}'::jsonb)
+        || jsonb_build_object('status_before_retire', v_status, 'retired_by', 'retire_item_unknown_variant')
+  WHERE mp.id = v_unknown;
   PERFORM rate.refresh_master_market_stats(v_unknown);
   PERFORM rate.refresh_item_stats(p_item_id);
   RETURN v_moved;
@@ -608,6 +694,15 @@ BEGIN
   ) c;
   IF v_clash IS NOT NULL THEN
     RAISE EXCEPTION 'M2 backfill: Item slug collisions, resolve them first: %', v_clash;
+  END IF;
+  -- ...or take the slug of an Item that already exists under another key.
+  SELECT string_agg(DISTINCT i.slug, ', ') INTO v_clash
+  FROM rate.master_products mp
+  JOIN rate.items i ON i.slug = rate.item_slug_from_master(mp.slug, mp.model_key)
+  WHERE mp.item_id IS NULL
+    AND i.item_key <> split_part(mp.model_key, ':', 1) || ':' || split_part(mp.model_key, ':', 2);
+  IF v_clash IS NOT NULL THEN
+    RAISE EXCEPTION 'M2 backfill: Item slugs already taken by other Items: %', v_clash;
   END IF;
 END $$;
 

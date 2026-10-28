@@ -37,6 +37,15 @@ Design: [`2026-10-27-item-variant-listing-model.md`](./2026-10-27-item-variant-l
 | `products` AFTER trigger: the Item and variant a listing leaves are refreshed by the statement that moves it, under the row lock                                                                               | Codex finding on #1190 (overlapping ingests leave the middle Item stale)               |
 | Backfill (design 7.1) with an up-front slug-collision abort; Item specs and key specs without storage and RAM                                                                                                  | design 7.1, #1208 rule "no storage on an Item"                                         |
 
+## Concurrency and compatibility
+
+- **One lock order everywhere: listing, then variant, then Item.** The listing triggers refresh the left variant before the left Item; the rating refresh writes the variants before the Item; the retire RPC locks the listings, then the variant, then refreshes the Item. This avoids the deadlock between an ingest moving a listing and a retire on the same Item.
+- **A retired `unknown` variant takes no listing.** The listing trigger reads the variant `FOR SHARE` (it waits for a running retire) and turns a write onto a retired `unknown` into "no variant, same Item".
+- **Old writers keep Item numbers fresh.** `refresh_master_market_stats(p_master_id)` keeps its signature and query and also refreshes the variant's Item (removed with the sync triggers in M4), so the importer with the flag off and Rate Services before task 13 do not leave Item prices or counts stale.
+- **The retire RPC records what it changed** in `metadata` (listing: `retired_unknown_variant`, `variant_source_before_retire`; variant: `status_before_retire`, `retired_by`), so the rollback can put those listings back on their variant.
+- **`rate.variant_override` is a cooperative switch, not a permission.** Any role that can update `rate.products` could set it; only the worker and service role can, and both are trusted writers. The retire RPC restores the caller's value.
+- **An Item is never demoted automatically.** Publishing a variant publishes its Item; archiving every variant leaves the Item's status to an admin (or M3/M4 tooling).
+
 ## Decisions to confirm (JOY)
 
 - **`match_item` filters by brand, not by model.** The design names a `p_model` argument; filtering by it would only find the exact model, which Tier 1 already did. The matcher only links a fuzzy Item hit to variants that exist, so a looser match cannot create a variant under a foreign Item.

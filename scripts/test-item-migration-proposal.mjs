@@ -32,7 +32,9 @@ for (const signal of ['SIGINT', 'SIGTERM']) {
 
 // The verification file's "expect 0" queries, by their V number.
 const expectZero = [
-  ...verify.matchAll(/^-- (V\d+) [^\n]*expect 0\n([\s\S]*?;)/gm),
+  ...verify.matchAll(
+    /^-- (V\d+) [^\n]*expect 0\n(?:--[^\n]*\n)*(SELECT[\s\S]*?;)/gm
+  ),
 ].map(([, id, query]) => ({ id, query }));
 assert.ok(
   expectZero.length >= 10,
@@ -241,6 +243,20 @@ try {
     ),
     '1'
   );
+  // A writer that knows no Items refreshes only the variant (the old RPC): its Item follows.
+  sql(
+    `UPDATE rate.products SET price_current = 29000000 WHERE id = '${ids.zenListing}'`
+  );
+  asRole(
+    'service_role',
+    `SELECT rate.refresh_master_market_stats('${ids.zen1tb}')`
+  );
+  assert.equal(
+    sql(
+      `SELECT min_price::bigint FROM rate.items WHERE item_key = 'asus:zenbook-s-14'`
+    ),
+    '29000000'
+  );
 
   // Retire: the multi-size Item's unknown variant goes; its listing keeps the Item.
   assert.equal(
@@ -260,6 +276,28 @@ try {
       `SELECT unknown_variant_listing_count FROM rate.items WHERE item_key = 'asus:zenbook-s-14'`
     ),
     '1'
+  );
+  // A writer that still holds the retired variant's id cannot put a listing back on it.
+  asRole(
+    'rate_worker',
+    `INSERT INTO rate.products (merchant_id, platform, platform_item_id, title, price_current, url, cluster_id)
+     VALUES ('${ids.shop2}', 'tiki', 'z4', 'Asus Zenbook S 14', 28500000, 'https://tiki.vn/z4', '${unknownId}')`
+  );
+  assert.equal(
+    sql(`SELECT (p.cluster_id IS NULL) || '|' || (p.item_id = mp.item_id)
+         FROM rate.products p, rate.master_products mp WHERE p.platform_item_id = 'z4' AND mp.id = '${unknownId}'`),
+    'true|true'
+  );
+  asRole(
+    'rate_worker',
+    `SELECT rate.refresh_item_stats(item_id) FROM rate.master_products WHERE id = '${unknownId}'`
+  );
+  // A caller's own override survives the retire call.
+  assert.equal(
+    sql(`BEGIN; SET LOCAL rate.variant_override = 'on';
+         SELECT rate.retire_item_unknown_variant(item_id) FROM rate.master_products WHERE id = '${unknownId}';
+         SELECT current_setting('rate.variant_override'); COMMIT;`),
+    '0\non'
   );
   // Earbuds and an Item without a live unknown variant are left alone.
   assert.equal(
@@ -303,8 +341,24 @@ try {
          WHERE table_schema = 'rate' AND column_name IN ('item_id', 'variant_key', 'variant_source', 'sort_order')`),
     '0'
   );
-  sql(`SELECT rate.refresh_master_product_rating('${ids.zen1tb}')`);
+  // The retired variant and its listing are back; ratings are per variant again.
+  assert.equal(
+    sql(`SELECT p.cluster_id || '|' || mp.status FROM rate.products p
+         JOIN rate.master_products mp ON mp.id = p.cluster_id WHERE p.platform_item_id = 'z3'`),
+    `${unknownId}|draft`
+  );
+  assert.equal(
+    sql(
+      `SELECT authentic_review_count FROM rate.master_products WHERE id = '${ids.zen1tb}'`
+    ),
+    '1',
+    'the pooled Item rating is not left on the variant'
+  );
   sql(proposal);
+  // The importer retires the restored unknown variant again on its next write.
+  sql(
+    `SELECT rate.retire_item_unknown_variant(item_id) FROM rate.master_products WHERE id = '${unknownId}'`
+  );
   checkVerify('rollback and re-apply');
 
   console.log(

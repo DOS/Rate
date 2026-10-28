@@ -105,6 +105,79 @@ BEGIN
 END;
 $$;
 
+CREATE OR REPLACE FUNCTION rate.refresh_master_market_stats(p_master_id UUID)
+RETURNS void
+LANGUAGE sql
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+  WITH priced AS (
+    SELECT
+      p.price_current AS price,
+      COALESCE(NULLIF(p.price_max, 0), p.price_current) AS price_top,
+      p.merchant_id,
+      (pg_catalog.row_number() OVER (ORDER BY p.price_current, p.id) - 1)::INTEGER AS k,
+      (pg_catalog.count(*) OVER ())::INTEGER AS m
+    FROM rate.products p
+    WHERE p.cluster_id = p_master_id
+      AND p.origin = 'crawl'
+      AND p.availability = 'in_stock'
+      AND p.price_current > 0
+  ),
+  judged AS (
+    SELECT
+      c.price,
+      c.price_top,
+      c.merchant_id,
+      (c.m >= 3 AND c.price < 0.4 * r.price) AS implausible
+    FROM priced c
+    LEFT JOIN priced r
+      ON r.k = CASE WHEN (c.m - 2) / 2 < c.k THEN (c.m - 2) / 2 ELSE (c.m - 2) / 2 + 1 END
+  ),
+  s AS (
+    SELECT
+      MIN(j.price) FILTER (WHERE NOT j.implausible) AS min_price,
+      MAX(j.price_top) AS max_price,
+      COUNT(DISTINCT j.merchant_id)::INTEGER AS merchant_count
+    FROM judged j
+  )
+  UPDATE rate.master_products m
+  SET min_price = s.min_price,
+      max_price = s.max_price,
+      merchant_count = s.merchant_count,
+      updated_at = now()
+  FROM s
+  WHERE m.id = p_master_id
+    AND (m.min_price, m.max_price, m.merchant_count)
+      IS DISTINCT FROM (s.min_price, s.max_price, s.merchant_count);
+$$;
+
+-- 2b. Put back what retire_item_unknown_variant changed (it records it in `metadata`), then
+-- recompute every variant's rating and prices with the old bodies, so no pooled Item rating
+-- stays mirrored on a variant. Listings that never had a variant (written with
+-- RATE_ITEM_MODEL=nullable_variant) keep cluster_id NULL: the old schema cannot say which
+-- Item they belong to. Count them first with
+--   SELECT count(*) FROM rate.products WHERE cluster_id IS NULL AND item_id IS NOT NULL
+--     AND NOT (metadata ? 'retired_unknown_variant');
+UPDATE rate.master_products mp
+SET status = mp.metadata ->> 'status_before_retire',
+    metadata = mp.metadata - 'status_before_retire' - 'retired_by'
+WHERE mp.metadata ->> 'retired_by' = 'retire_item_unknown_variant'
+  AND mp.metadata ? 'status_before_retire';
+UPDATE rate.products p
+SET cluster_id = (p.metadata ->> 'retired_unknown_variant')::uuid,
+    metadata = p.metadata - 'retired_unknown_variant' - 'variant_source_before_retire'
+WHERE p.cluster_id IS NULL AND p.metadata ? 'retired_unknown_variant';
+DO $$
+DECLARE
+  v_id uuid;
+BEGIN
+  FOR v_id IN SELECT m.id FROM rate.master_products m ORDER BY m.id LOOP
+    PERFORM rate.refresh_master_market_stats(v_id);
+    PERFORM rate.refresh_master_product_rating(v_id);
+  END LOOP;
+END $$;
+
 -- 3. New functions.
 DROP FUNCTION IF EXISTS rate.retire_item_unknown_variant(uuid);
 DROP FUNCTION IF EXISTS rate.match_item(text, text, text, real);

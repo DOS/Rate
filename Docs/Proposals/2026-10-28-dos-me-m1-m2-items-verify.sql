@@ -42,9 +42,12 @@ WHERE i.min_price IS DISTINCT FROM (
 -- V8 Item listing counts.                                                     expect 0
 SELECT count(*) AS item_count_drift
 FROM rate.items i
-WHERE (i.listing_count, i.unknown_variant_listing_count) IS DISTINCT FROM (
-  SELECT count(*)::integer, (count(*) FILTER (WHERE p.cluster_id IS NULL))::integer
-  FROM rate.products p WHERE p.item_id = i.id AND p.origin = 'crawl');
+CROSS JOIN LATERAL (
+  SELECT count(*)::integer AS listings,
+         (count(*) FILTER (WHERE p.cluster_id IS NULL))::integer AS unknown
+  FROM rate.products p WHERE p.item_id = i.id AND p.origin = 'crawl'
+) c
+WHERE (i.listing_count, i.unknown_variant_listing_count) IS DISTINCT FROM (c.listings, c.unknown);
 
 -- V9 An Item slug may only equal one of its own variants' slugs.             expect 0
 SELECT count(*) AS foreign_slug_clash
