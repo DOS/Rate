@@ -1055,7 +1055,7 @@ async function run() {
         specifications: {
           hardware: { chipset: 'Intel Core i5-1335U', storage_gb: 1024, ram_gb: 32 },
         },
-        key_specs: { chipset: 'Core i5-1335U', storage: '1TB' },
+        key_specs: { chip: 'Core i5-1335U', storage: '1TB' },
       };
     };
     const vivobook = candidateFor('Laptop ASUS Vivobook 15 X1504VA 16GB 512GB');
@@ -1068,7 +1068,7 @@ async function run() {
     assert.equal(perItem.specifications.hardware?.ram_gb, 16);
     assert.equal(perItem.specifications.hardware?.chipset, 'Intel Core i5-1335U');
     assert.equal(perItem.key_specs.storage, vivobook.key_specs.storage);
-    assert.equal(perItem.key_specs.chipset, 'Core i5-1335U');
+    assert.equal(perItem.key_specs.chip, 'Core i5-1335U');
     await enricher.enrichCandidate(vivobook);
     assert.deepEqual(asks.at(-1), { storageGb: 512, ramGb: 16 });
 
