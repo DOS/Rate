@@ -341,7 +341,7 @@
     "metaTitle": "Bảng xếp hạng thiết bị công nghệ | Rate.vn",
     "metaDescription": "Bảng xếp hạng độc lập theo danh mục: điểm chuyên gia và điểm người mua thật theo 5 tiêu chí, không bị chi phối bởi quảng cáo hay link affiliate.",
     "kicker": "Bảng xếp hạng thiết bị độc lập",
-    "title": "Bảng xếp hạng thiết bị độc lập 10.0",
+    "title": "Bảng xếp hạng thiết bị độc lập",
     "subtitle": "Xếp hạng khách quan theo danh mục, tách riêng điểm người mua thật, điểm chuyên gia và 5 tiêu chí kỹ thuật khỏi giá bán của các sàn.",
     "home": "Trang chủ",
     "breadcrumb": "Bảng xếp hạng",
@@ -408,16 +408,16 @@
     "critScreen": "Màn hình & hiển thị",
     "critPerformance": "Hiệu năng & nhiệt độ",
     "critCamera": "Camera & quay chụp",
+    "critAnc": "Chống ồn & âm thanh",
     "critBattery": "Pin & sạc nhanh",
     "critValue": "Đáng đồng tiền",
-    "shortDisplay": "Display",
-    "shortPerf": "Perf",
-    "shortCamAnc": "Cam/ANC",
-    "shortBattery": "Battery",
-    "shortValue": "Value",
+    "shortDisplay": "Màn hình",
+    "shortPerf": "Hiệu năng",
+    "shortBattery": "Pin",
+    "shortValue": "Đáng tiền",
     "unratedShort": "chưa có",
-    "expertUnrated": "Expert: chưa có",
-    "userUnrated": "User: chưa có",
+    "expertUnrated": "Chuyên gia: chưa có",
+    "userUnrated": "Người mua: chưa có",
     "copiedLeaderboardMd": "Đã chép BXH Markdown!",
     "copyLeaderboardMdBtn": "Sao chép BXH Markdown",
     "exportCsvBtn": "Xuất bảng CSV",
@@ -429,7 +429,11 @@
     "showdownsHeading": "So kè trực tiếp các thiết bị dẫn đầu cùng danh mục",
     "openCompareMatrixBtn": "So sánh chi tiết →",
     "view1v1DeepBtn": "Xem đối đầu 1v1 chuyên sâu",
-    "categoryTabsAria": "Chọn ngành hàng"
+    "categoryTabsAria": "Chọn ngành hàng",
+    "shortCamera": "Camera",
+    "shortAnc": "Chống ồn",
+    "userScoreShort": "Người mua {score}/5.0",
+    "expertScoreShort": "Chuyên gia {score}/10"
   },
   "reviews": {
     "criteriaScreen": "Màn hình & hiển thị",
@@ -1553,27 +1557,27 @@
         "features": {
           "has5g": {
             "label": "Hỗ trợ 5G",
-            "desc": "Cellular: Kết nối mạng di động 5G tốc độ cao"
+            "desc": "Kết nối mạng di động 5G tốc độ cao"
           },
           "highRefresh": {
             "label": "Màn hình 120Hz+",
-            "desc": "Display: Tần số quét từ 120Hz trở lên"
+            "desc": "Tần số quét từ 120Hz trở lên"
           },
           "bigBattery": {
             "label": "Pin >= 5000mAh",
-            "desc": "Battery: Dung lượng pin từ 5000 mAh trở lên"
+            "desc": "Dung lượng pin từ 5000 mAh trở lên"
           },
           "fastCharge": {
             "label": "Sạc nhanh >= 45W",
-            "desc": "Battery: Công suất sạc nhanh từ 45W trở lên"
+            "desc": "Công suất sạc nhanh từ 45W trở lên"
           },
           "hasNfc": {
             "label": "Có NFC",
-            "desc": "Connectivity: Thanh toán chạm & đọc CCCD gắn chip"
+            "desc": "Thanh toán chạm & đọc CCCD gắn chip"
           },
           "compactScreen": {
             "label": "Nhỏ gọn (<= 6.2\")",
-            "desc": "Display: Màn hình gọn dễ cầm một tay (<= 6.2 inch)"
+            "desc": "Màn hình gọn dễ cầm một tay (<= 6.2 inch)"
           }
         }
       },
