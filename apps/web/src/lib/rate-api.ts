@@ -4463,7 +4463,12 @@ export type CatalogSlugResolution =
       variant: RateItemVariant;
       /** An archived variant, e.g. a retired `unknown` (design doc 7.2). */
       retired: boolean;
-    };
+    }
+  /**
+   * A master with no Item yet (`item_id` NULL before the backfill): its page
+   * stays today's variant page.
+   */
+  | { kind: 'unlinked'; item: null; variant: null };
 
 /**
  * The Item tables or columns are missing (M1+M2 not applied where the flag
@@ -4485,6 +4490,19 @@ const MISSING_SCHEMA_CODES = new Set([
   'PGRST204',
   'PGRST205',
 ]);
+
+/** Rethrows a missing-schema read error as ItemModelUnavailableError. */
+function throwIfItemSchemaMissing<R extends { error: unknown }>(
+  what: string
+): (result: R) => R {
+  return (result) => {
+    const error = result.error as { message: string; code?: string } | null;
+    if (error?.code && MISSING_SCHEMA_CODES.has(error.code)) {
+      throw new ItemModelUnavailableError(what, error);
+    }
+    return result;
+  };
+}
 
 function itemReadError(
   what: string,
@@ -4634,7 +4652,10 @@ export async function getItemVariants(
         .eq('item_id', clean)
         .eq('status', 'published')
         .order('id')
-        .range(from, to) as unknown as PromiseLike<{
+        .range(from, to)
+        .then(
+          throwIfItemSchemaMissing('item variants')
+        ) as unknown as PromiseLike<{
         data: unknown[] | null;
         error: { message: string } | null;
       }>
@@ -4768,7 +4789,14 @@ export async function resolveCatalogSlug(
     throw itemReadError('variant', error);
   }
   const variant = mapItemVariantRow(data);
-  if (!variant) return null;
+  if (!variant) {
+    // A master not yet linked to an Item keeps its page; only a slug that is
+    // no master at all (or a malformed row) is unknown here.
+    const row = data as { id?: unknown; item_id?: unknown } | null;
+    return row && sanitizeRateEntityId(row.id) && row.item_id == null
+      ? { kind: 'unlinked', item: null, variant: null }
+      : null;
+  }
   const owner = await readItem('id', variant.item_id);
   if (!owner) return null;
   const retired = (data as { status?: unknown }).status === 'archived';

@@ -54,13 +54,14 @@ export async function resolveItemRoute(input: {
       resolution?.kind === 'item'
         ? await getCachedItemVariants(resolution.item)
         : [];
-    return planItemRoute({
+    const plan = planItemRoute({
       resolution,
       requestedSlug: input.slug,
       requestedVariant: null,
       categoryBasePath: input.categoryBasePath,
       variants,
     });
+    return plan.kind === 'legacy' ? null : plan;
   } catch (err) {
     if (err instanceof ItemModelUnavailableError) {
       log.warn(

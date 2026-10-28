@@ -48,6 +48,8 @@ export function sanitizeVariantParam(raw: unknown): string | null {
 
 export type ItemRoutePlan =
   | { kind: 'not_found' }
+  /** No Item for this master yet: today's variant page. */
+  | { kind: 'legacy' }
   | { kind: 'redirect'; to: string }
   | {
       kind: 'render';
@@ -74,6 +76,7 @@ export function planItemRoute(input: {
   const { resolution, requestedSlug, requestedVariant, categoryBasePath } =
     input;
   if (!resolution) return { kind: 'not_found' };
+  if (resolution.kind === 'unlinked') return { kind: 'legacy' };
   const { item } = resolution;
   if (resolution.kind === 'variant' && item.slug !== requestedSlug) {
     const base = categoryBasePath.replace(/\/+$/, '');

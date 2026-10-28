@@ -48,6 +48,8 @@ const variantRow = (id: string, gb: number, sort: number | null) => ({
 let calls: string[] = [];
 // Answer as a database without M1+M2 (PostgREST schema-cache miss).
 let schemaMissing = false;
+// Answer as a database whose master_products lacks the M2 columns.
+let variantColumnsMissing = false;
 globalThis.fetch = (async (input: RequestInfo | URL) => {
   const url = new URL(
     typeof input === 'string'
@@ -74,6 +76,15 @@ globalThis.fetch = (async (input: RequestInfo | URL) => {
       { status: 404, headers: { 'content-type': 'application/json' } }
     );
   }
+  if (variantColumnsMissing && url.pathname === '/rest/v1/master_products') {
+    return new Response(
+      JSON.stringify({
+        code: '42703',
+        message: 'column master_products.sort_order does not exist',
+      }),
+      { status: 400, headers: { 'content-type': 'application/json' } }
+    );
+  }
   switch (url.pathname) {
     case '/rest/v1/items':
       if (
@@ -94,6 +105,16 @@ globalThis.fetch = (async (input: RequestInfo | URL) => {
             variant_key: 'unknown',
             storage_gb: null,
             status: 'archived',
+          },
+        ]);
+      // A published master the backfill has not linked to an Item yet.
+      if (q.includes('slug=eq.samsung-galaxy-s24-256gb'))
+        return json([
+          {
+            ...variantRow(V128, 256, null),
+            item_id: null,
+            slug: 'samsung-galaxy-s24-256gb',
+            status: 'published',
           },
         ]);
       if (q.includes(`item_id=eq.${ITEM_ID}`))
@@ -347,12 +368,66 @@ async function main() {
     null
   );
   schemaMissing = false;
+  // Variant columns missing behind a readable Item: same fallback.
+  variantColumnsMissing = true;
+  await assert.rejects(
+    () => api.getItemVariants(ITEM_ID),
+    (err: unknown) => err instanceof api.ItemModelUnavailableError
+  );
+  assert.equal(
+    await resolveItemRoute({
+      slug: 'apple-iphone-16',
+      categoryBasePath: '/smartphones',
+    }),
+    null
+  );
+  variantColumnsMissing = false;
+  // A master with no Item yet keeps its page instead of a 404.
+  assert.deepEqual(await api.resolveCatalogSlug('samsung-galaxy-s24-256gb'), {
+    kind: 'unlinked',
+    item: null,
+    variant: null,
+  });
+  assert.equal(
+    await resolveItemRoute({
+      slug: 'samsung-galaxy-s24-256gb',
+      categoryBasePath: '/smartphones',
+    }),
+    null
+  );
   assert.ok(
     resolveRevalidationTargets({
       slugs: ['apple-iphone-16-128gb'],
     }).tags.includes(productCacheTag('apple-iphone-16'))
   );
   delete process.env.RATE_ITEM_MODEL;
+
+  // Product routes stay ISR whatever the flag: no request-time API (query
+  // string, headers, cookies) and no dynamic opt-in. `?v=` is client-side.
+  const fs = require('node:fs') as typeof import('node:fs');
+  const path = require('node:path') as typeof import('node:path');
+  const productRouteFiles = [
+    'smartphones',
+    'earbuds',
+    'laptops',
+    'smartwatches',
+    'tablets',
+  ].map((c) =>
+    path.resolve(__dirname, `../../../app/[locale]/${c}/[slug]/page.tsx`)
+  );
+  for (const file of [
+    ...productRouteFiles,
+    path.resolve(__dirname, '../item-route.ts'),
+  ]) {
+    const src = fs.readFileSync(file, 'utf8');
+    assert.doesNotMatch(src, /searchParams|\bheaders\(|\bcookies\(/, file);
+    assert.doesNotMatch(src, /export const dynamic\b|force-dynamic/, file);
+  }
+  for (const file of productRouteFiles) {
+    const src = fs.readFileSync(file, 'utf8');
+    assert.match(src, /export const revalidate = 300;/, file);
+    assert.match(src, /export function generateStaticParams\(/, file);
+  }
   console.warn('✅ Item web data layer suite passed');
 }
 
