@@ -6,6 +6,7 @@ import {
   pickItemVariant,
   planVersusRoute,
   versusHref,
+  itemSlugFromProductAnswer,
   type CompareResolution,
 } from '../item-compare';
 
@@ -199,6 +200,28 @@ function main() {
     versusHref('case-a-std', 'pixel-10', map),
     '/compare/case-a-std-vs-pixel-10',
     'an Item slug holding -vs- keeps the variant slug'
+  );
+
+  // A restored tray product reads its Item from the product API (#1294).
+  assert.equal(
+    itemSlugFromProductAnswer(
+      { ok: true, data: { item: { slug: 'apple-iphone-16' } } },
+      'apple-iphone-16-128gb'
+    ),
+    'apple-iphone-16'
+  );
+  assert.equal(
+    itemSlugFromProductAnswer({ ok: true, data: {} }, 'pixel-10'),
+    'pixel-10',
+    'no Item (flag off or unlinked): the slug itself'
+  );
+  assert.equal(itemSlugFromProductAnswer(null, 'x'), 'x');
+  assert.equal(
+    itemSlugFromProductAnswer(
+      { ok: true, data: { item: { slug: 'Bad Slug' } } },
+      'x'
+    ),
+    'x'
   );
 
   console.warn('  ✅ item compare suite passed');
