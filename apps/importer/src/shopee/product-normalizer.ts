@@ -1337,7 +1337,10 @@ function readAppleSize(model: string, rawTitle: string): string {
   const namesSize =
     family === 'watch'
       ? WATCH_SIZE.test(withoutGift)
-      : APPLE_SIZE_PATTERNS[family]!.some(re => re.test(withoutGift));
+      : // The same part the size is read from: not what follows "cho/for" or "+".
+        APPLE_SIZE_PATTERNS[family]!.some(re =>
+          re.test(withoutGift.split(/ (?:cho|for) | ?\+ (?!cellular|lte)/i)[0]!)
+        );
   return (
     readFamilySize(family, withoutGift) ||
     (namesSize || withoutGift === productPart ? '' : readFamilySize(family, productPart))

@@ -452,6 +452,15 @@ async function runSuite() {
     // For an iPad or a MacBook, a "vỏ"/"hộp" gift is an accessory whatever its material.
     ['iPad Pro M4 13 kèm vỏ nhôm 11 inch 256GB', 'apple:ipad-pro-m4-13:256gb'],
     ['MacBook Air M4 13 kèm hộp 15 inch 16GB 512GB', 'apple:macbook-air-m4-13:512gb'],
+    // A number after "cho/for" (a school year, an age) is no size of the product.
+    [
+      'iPad Pro M4 Wifi 256GB tặng bao da 13 inch cho học sinh lớp 11',
+      'apple:ipad-pro-m4-13:256gb',
+    ],
+    [
+      'MacBook Air M4 16GB 512GB tặng ốp 13 inch for students from 15',
+      'apple:macbook-air-m4-13:512gb',
+    ],
     ['MacBook Air M3 kèm bao test 15 inch 16GB 512GB', 'apple:macbook-air-m3-15:512gb'],
     ['iPad Pro 13" M5 1TB', 'apple:ipad-pro-m5-13:1024gb'],
     ['iPad Pro 11 2024 M4 256GB', 'apple:ipad-pro-m4-11:256gb'],
