@@ -32,6 +32,11 @@ const _getCachedItemVariants = cache((itemId: string, itemSlug: string) =>
   })(itemId)
 );
 
+/** A catalogue slug's Item or variant, cached like the product pages. */
+export function getCachedCatalogSlugResolution(slug: string) {
+  return _getCachedCatalogSlug(slug);
+}
+
 export function getCachedItemVariants(item: RateItem) {
   return _getCachedItemVariants(item.id, item.slug);
 }

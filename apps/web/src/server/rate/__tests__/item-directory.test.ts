@@ -118,7 +118,7 @@ globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
           { id: 'draft-variant', brand: 'Google', item_id: DRAFT_ITEM },
         ]);
       }
-      if (q.includes('item_id=in.')) {
+      if (q.includes('item_id=in.') || q.includes(`item_id=eq.${ITEM}`)) {
         return json([variantRow(V256, 256), variantRow(V128, 128)]);
       }
       return json([]);
@@ -235,6 +235,38 @@ async function main() {
   itemsDown = false;
   delete process.env.RATE_ITEM_MODEL;
 
+  // Compare, versus and watchlist per Item (DOS/Rate#1156).
+  const cmp = await import('../item-compare');
+  calls = [];
+  assert.equal(await cmp.resolveCompareSlugs(['apple-iphone-16']), null);
+  assert.equal(await cmp.resolveVersusPlan('a', 'b'), null);
+  assert.equal(await cmp.resolveWatchlistSlug('apple-iphone-16'), null);
+  assert.deepEqual(calls, [], 'flag off: no database read');
+  process.env.RATE_ITEM_MODEL = 'item';
+  assert.deepEqual(
+    await cmp.resolveCompareSlugs(['apple-iphone-16@128gb']),
+    ['apple-iphone-16-128gb'],
+    'a pinned size compares that size'
+  );
+  assert.deepEqual(await cmp.resolveWatchlistSlug('apple-iphone-16'), {
+    variantSlug: 'apple-iphone-16-128gb',
+    sizeRequired: true,
+  });
+  // An Item sharing its slug with one of its sizes watches that size
+  // (review round 1): the stub answers every Item slug with the Item.
+  assert.deepEqual(await cmp.resolveWatchlistSlug('apple-iphone-16-128gb'), {
+    variantSlug: 'apple-iphone-16-128gb',
+    sizeRequired: false,
+  });
+  itemsDown = true;
+  assert.equal(
+    await cmp.resolveCompareSlugs(['apple-iphone-16']),
+    null,
+    'a failing Item read compares the slugs as sent'
+  );
+  itemsDown = false;
+  delete process.env.RATE_ITEM_MODEL;
+
   // The cached pages this touches keep their cache mode: the leaderboard
   // stays ISR, and nothing here reads request-time APIs.
   const fs = require('node:fs') as typeof import('node:fs');
@@ -244,9 +276,17 @@ async function main() {
     'utf8'
   );
   assert.match(leaderboard, /export const revalidate = 60;/);
+  const versus = fs.readFileSync(
+    path.resolve(__dirname, '../../../app/[locale]/compare/[versus]/page.tsx'),
+    'utf8'
+  );
+  assert.match(versus, /export const revalidate = 60;/);
+  assert.doesNotMatch(versus, /searchParams|force-dynamic/);
   assert.doesNotMatch(leaderboard, /force-dynamic/);
   for (const file of [
     path.resolve(__dirname, '../item-directory.ts'),
+    path.resolve(__dirname, '../item-compare.ts'),
+    path.resolve(__dirname, '../../../lib/item-compare.ts'),
     path.resolve(__dirname, '../../../lib/item-directory.ts'),
   ]) {
     assert.doesNotMatch(

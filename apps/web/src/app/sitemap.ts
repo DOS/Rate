@@ -7,6 +7,7 @@ import {
   getMasterProductCategorySlug,
   getMasterProductHref,
 } from '@/server/rate';
+import { getItemSlugByVariantSlug } from '@/server/rate/item-directory';
 import {
   buildPopular1v1BattlesForCategory,
   VALID_LEADERBOARD_CATEGORIES,
@@ -140,9 +141,11 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   try {
     // Product and merchant URLs come from the whole catalogue; the curated
     // 1v1 battles only need the top-ranked products.
-    const [rows, products] = await Promise.all([
+    const [rows, products, itemSlugs] = await Promise.all([
       getCachedSitemapRows(),
       getCachedMasterProducts({ categorySlug: 'all', limit: 500 }),
+      // RATE_ITEM_MODEL on: versus pairs name Items (DOS/Rate#1156); off: null.
+      getItemSlugByVariantSlug(),
     ]);
     const catSlugById = rows.categorySlugById;
 
@@ -179,21 +182,34 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       }
     );
 
+    const versusSeen = new Set<string>();
     const versusEntries: MetadataRoute.Sitemap =
       VALID_LEADERBOARD_CATEGORIES.flatMap((category) =>
-        buildPopular1v1BattlesForCategory(stampedProducts, category, 3).map(
+        buildPopular1v1BattlesForCategory(stampedProducts, category, 3).flatMap(
           (pair) => {
-            const lastModified = versusLastModified(
-              dates,
-              pair.productA.slug,
-              pair.productB.slug
-            );
-            return {
-              url: `${baseUrl}${pair.versusHref}`,
-              ...(lastModified ? { lastModified } : {}),
-              changeFrequency: 'daily' as const,
-              priority: 0.83,
-            };
+            const slugA =
+              itemSlugs?.get(pair.productA.slug) ?? pair.productA.slug;
+            const slugB =
+              itemSlugs?.get(pair.productB.slug) ?? pair.productB.slug;
+            const href = itemSlugs
+              ? `/compare/${slugA}-vs-${slugB}`
+              : pair.versusHref;
+            // Two sizes of one Item are no versus, and a pair is listed once.
+            // One entry per Item pair, whichever way round it was ranked.
+            const pairKey = [slugA, slugB].sort().join('|');
+            if (itemSlugs && (slugA === slugB || versusSeen.has(pairKey))) {
+              return [];
+            }
+            versusSeen.add(pairKey);
+            const lastModified = versusLastModified(dates, slugA, slugB);
+            return [
+              {
+                url: `${baseUrl}${href}`,
+                ...(lastModified ? { lastModified } : {}),
+                changeFrequency: 'daily' as const,
+                priority: 0.83,
+              },
+            ];
           }
         )
       );

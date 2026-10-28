@@ -26,7 +26,7 @@ import { isItemModelOn } from './item-model';
 const log = createLogger('server.item-directory');
 
 /** Runs `read` under the Item model; null when it is off or unavailable. */
-async function whenItemModel<T>(
+export async function whenItemModel<T>(
   what: string,
   read: () => Promise<T>
 ): Promise<T | null> {
