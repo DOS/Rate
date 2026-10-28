@@ -5,6 +5,7 @@ import {
   analyzerCopy,
   listingReviewSummary,
 } from '../analyzer-copy';
+import { LLM_REVIEW_SUMMARY_PREFIX } from '@repo/shared-data/rules';
 
 type Messages = { analyzerCopy?: Record<string, string> };
 const readLocale = (locale: string) =>
@@ -183,7 +184,24 @@ function main() {
   for (const [text] of legacy) {
     assert.ok(!/Đã phân tích|trọng số/.test(listingReviewSummary(text)!));
   }
-  assert.equal(listingReviewSummary('Máy dùng ổn.'), 'Máy dùng ổn.');
+  // LLM free text (DOS/Rate#1244): old rows get the one-listing scope; a
+  // summary quoting a score, a share or a count is not shown at all.
+  assert.equal(
+    listingReviewSummary('Máy dùng ổn.'),
+    `${LLM_REVIEW_SUMMARY_PREFIX}Máy dùng ổn.`
+  );
+  const scoped = `${LLM_REVIEW_SUMMARY_PREFIX}Pin tốt, giao nhanh.`;
+  assert.equal(listingReviewSummary(scoped), scoped, 'scoped once');
+  for (const claim of [
+    'Sản phẩm đạt 4.8/5 sao, người mua rất hài lòng.',
+    'Điểm JReviews có trọng số 4,6 cho thấy chất lượng tốt.',
+    '95% người mua khen pin.',
+    'Có 120 đánh giá khen camera.',
+    'Rated 4.7 out of 5 by buyers.',
+    `${LLM_REVIEW_SUMMARY_PREFIX}Điểm trung bình rất cao.`,
+  ]) {
+    assert.equal(listingReviewSummary(claim), null, claim);
+  }
   assert.equal(listingReviewSummary(null), null);
   assert.equal(listingReviewSummary('  '), null);
 

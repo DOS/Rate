@@ -18,6 +18,12 @@ import {
   z,
 } from '../index.js';
 import { getAdminClient, getRateClient, getDosafeClient } from '../server.js';
+import {
+  LLM_REVIEW_SUMMARY_PREFIX,
+  hasReviewScoreClaim,
+  isScopedLlmReviewSummary,
+  scopeLlmReviewSummary,
+} from '../rules/index.js';
 import * as rules from '../rules/index.js';
 import { readdirSync, readFileSync } from 'node:fs';
 
@@ -1255,6 +1261,57 @@ function testItemVariantKeys(): void {
   ]);
 }
 
+function testLlmReviewSummaryScope(): void {
+  // Qualitative text is kept, after the one-listing scope prefix, once.
+  const plain = 'Pin trâu, camera đêm tốt, máy hơi nóng khi chơi game 2 tiếng.';
+  const scoped = scopeLlmReviewSummary(`  ${plain}
+`);
+  assert.equal(scoped, `${LLM_REVIEW_SUMMARY_PREFIX}${plain}`);
+  assert.ok(isScopedLlmReviewSummary(scoped));
+  assert.equal(scopeLlmReviewSummary(scoped), scoped, 'never prefixed twice');
+  // Spec numbers are not claims.
+  for (const ok of [
+    'Pin 5000mAh, sạc 65W, RAM 8GB, màn 120Hz, dùng 6 tháng vẫn ổn.',
+  ]) {
+    assert.equal(hasReviewScoreClaim(ok), false, ok);
+  }
+  // Scores, shares and counts (vi and en) are claims: never stored or shown.
+  for (const claim of [
+    'Đạt 4.8/5.',
+    '4,8 trên 5 điểm.',
+    'Được chấm 5 sao.',
+    '5★ từ người mua.',
+    '90% khen pin.',
+    'Có 120 đánh giá tích cực.',
+    '30 người mua phàn nàn.',
+    'Điểm trung bình cao.',
+    'Điểm JReviews có trọng số tốt.',
+    'Rated 4.7 out of 5.',
+    '120 reviews praise the battery.',
+    'Weighted score is high.',
+  ]) {
+    assert.equal(hasReviewScoreClaim(claim), true, claim);
+    assert.equal(scopeLlmReviewSummary(claim), null, claim);
+  }
+  assert.equal(
+    scopeLlmReviewSummary(`${LLM_REVIEW_SUMMARY_PREFIX}Đạt 4.8/5.`),
+    null,
+    'a scoped row is checked too'
+  );
+  for (const empty of [
+    null,
+    undefined,
+    '',
+    '   ',
+    42,
+    LLM_REVIEW_SUMMARY_PREFIX,
+  ]) {
+    assert.equal(scopeLlmReviewSummary(empty), null);
+  }
+  const long = scopeLlmReviewSummary('Máy dùng tốt. '.repeat(100))!;
+  assert.ok(long.length <= 600 && long.endsWith('…'));
+}
+
 function main(): void {
   console.log('🧪 Running @repo/shared-data unit tests...');
   testVersionAndZeroStrapiExports();
@@ -1285,6 +1342,8 @@ function main(): void {
   );
   testCategorySpecTemplates();
   console.log('  ✅ [9/9] Category spec templates (DOS/Rate#1142) verified');
+  testLlmReviewSummaryScope();
+  console.log('  ✅ [10/10] LLM review summary scope (DOS/Rate#1244) verified');
   console.log('🎉 All @repo/shared-data tests passed!');
 }
 

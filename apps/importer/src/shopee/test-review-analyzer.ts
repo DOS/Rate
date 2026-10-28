@@ -4,6 +4,7 @@
  */
 import http from 'node:http';
 import assert from 'node:assert/strict';
+import { LLM_REVIEW_SUMMARY_PREFIX } from '@repo/shared-data/rules';
 import { readFileSync } from 'node:fs';
 import {
   AiReviewAnalyzer,
@@ -335,6 +336,34 @@ async function run() {
   );
   assert.equal(ignoredSummary.overall_rating, 0);
   console.log('✅ [JReviews] every review excluded -> weighted rating 0 (matches the SQL refresh)');
+
+  // LLM summary text (DOS/Rate#1244): stored once with the one-listing scope; a
+  // summary quoting a score or count falls back to the templated sentence.
+  const llmScoped = heuristicOnly().computeJReviewsSummary(
+    jr,
+    jrRes,
+    null,
+    [],
+    [],
+    'Pin trâu, camera chụp đêm tốt nhưng máy hơi nóng.'
+  );
+  assert.equal(
+    llmScoped.ai_summary,
+    `${LLM_REVIEW_SUMMARY_PREFIX}Pin trâu, camera chụp đêm tốt nhưng máy hơi nóng.`
+  );
+  const llmScore = heuristicOnly().computeJReviewsSummary(
+    jr,
+    jrRes,
+    null,
+    [],
+    [],
+    'Sản phẩm đạt 4.9/5 sao, được người mua đánh giá rất cao.'
+  );
+  assert.ok(
+    llmScore.ai_summary.startsWith('Lần phân tích gần nhất (một nơi bán) đã xét 4 đánh giá'),
+    'a score quoted by the LLM is never stored'
+  );
+  console.log('✅ [JReviews] LLM summary scoped to one listing; quoted scores fall back');
 
   console.log('\n================================================================');
   console.log('4. Merchant risk: fair to sellers, harsh on seeding & dump pricing');
@@ -2288,7 +2317,7 @@ async function run() {
     'computeJReviewsSummary must strip HTML tags and deduplicate pros'
   );
   assert.deepEqual(summary834.cons, ['Nóng máy']);
-  assert.equal(summary834.ai_summary, 'Tổng kết đánh giá');
+  assert.equal(summary834.ai_summary, `${LLM_REVIEW_SUMMARY_PREFIX}Tổng kết đánh giá`);
 
   await assert.rejects(
     () =>

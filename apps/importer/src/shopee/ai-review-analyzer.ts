@@ -1,5 +1,6 @@
 import crypto from 'node:crypto';
 import { z, MAX_VALID_VND_PRICE, seedingRiskPenalty } from '@repo/shared-data';
+import { scopeLlmReviewSummary } from '@repo/shared-data/rules';
 import {
   resolveValidHttpBaseUrl,
   extractJsonObjectString,
@@ -1534,7 +1535,9 @@ Return ONLY valid JSON matching:
   "pros": ["string (Vietnamese)"],
   "cons": ["string (Vietnamese)"],
   "ai_summary": "string (2-3 sentences in Vietnamese summarizing authentic buyer feedback)"
-}`;
+}
+
+Rules for "ai_summary": these reviews come from ONE listing's latest batch, not from every buyer of the product. Describe only what these buyers say about their experience (quality, battery, defects, accuracy of the description). Never state star ratings, scores, percentages, review or buyer counts, and never give an overall verdict on the product as a whole.`;
 
       interface RawAiReviewItem {
         review_id?: string;
@@ -1997,7 +2000,9 @@ Return ONLY valid JSON matching:
           .filter(Boolean)
       )
     ).slice(0, 6);
-    const cleanSummaryText = sanitizeAiGeneratedText(aiSummaryText, 600);
+    // LLM text covers the same one-listing batch: stored after a scope prefix, and
+    // dropped for the templated sentence when it quotes a score or count (DOS/Rate#1244).
+    const cleanSummaryText = scopeLlmReviewSummary(sanitizeAiGeneratedText(aiSummaryText, 600));
 
     return {
       total_reviews_analyzed: safeReviews.length,
