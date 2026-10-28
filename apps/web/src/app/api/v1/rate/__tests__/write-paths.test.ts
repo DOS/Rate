@@ -708,6 +708,25 @@ async function testCookieSessions() {
     ),
     'an unchanged vote is not written again (#1306)'
   );
+  // A report over a stored up-vote changes the vote (it clears it): written.
+  calls.length = 0;
+  await postVote(
+    new Request(`https://rate.vn/api/reviews/${reviewId}/vote`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${SAME_VOTE_TOKEN}`,
+      },
+      body: JSON.stringify({ voteType: 'report', reportReason: 'spam' }),
+    }) as VoteReq,
+    { params: Promise.resolve({ id: reviewId }) }
+  );
+  assert.ok(
+    calls.some(
+      (c) => c.method === 'POST' && c.url.includes('/rest/v1/review_votes')
+    ),
+    'a report over an up-vote is written (#1306)'
+  );
 
   // An ineligible voter (no created_at, no confirmation) can still clear a vote.
   const clearRes = await postVote(

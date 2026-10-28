@@ -1,7 +1,9 @@
 import { revalidateTag } from 'next/cache';
 import { NextRequest, NextResponse } from 'next/server';
-import { RATE_CACHE_TAGS } from '@/server/rate';
-import { productCacheTag } from '@/server/rate/cache-tags';
+import {
+  masterReviewsCacheTag,
+  productCacheTag,
+} from '@/server/rate/cache-tags';
 import {
   BoundedSlidingWindowRateLimiter,
   resolveReviewVoteInput,
@@ -228,6 +230,7 @@ export async function POST(
         current !== undefined &&
         (voteType === 'report'
           ? current.reported === true &&
+            (current.vote ?? null) === null &&
             (current.report_reason ?? null) === reportReason
           : current.vote === voteType && current.reported !== true);
       if (sameVote) votesChanged = false;
@@ -316,14 +319,12 @@ export async function POST(
       );
     }
 
-    // The review caches and this product's page, not the whole catalogue
-    // (DOS/Rate#1306); the global stats catch up at their own interval.
+    // This product's reviews and page only, not the whole catalogue
+    // (DOS/Rate#1306); global review lists and stats catch up on their own
+    // interval.
     const revalidate =
       votesChanged && voteRevalidationLimiter.allow(voterId)
-        ? [
-            RATE_CACHE_TAGS.REVIEWS,
-            ...(await reviewProductTags(rateClient, reviewId)),
-          ]
+        ? await reviewProductTags(rateClient, reviewId)
         : [];
     for (const tag of revalidate) {
       try {
@@ -365,8 +366,9 @@ export async function POST(
 }
 
 /**
- * The product cache tag of a review's product (its variant master), or none
- * when it cannot be read.
+ * The cache tags of a review's product (its variant master): its reviews and
+ * its page. None when they cannot be read; the caches then catch up on their
+ * own interval.
  */
 async function reviewProductTags(
   rateClient: Awaited<
@@ -396,7 +398,10 @@ async function reviewProductTags(
       .select('slug')
       .eq('id', listing.cluster_id)
       .maybeSingle();
-    return master?.slug ? [productCacheTag(master.slug)] : [];
+    return [
+      masterReviewsCacheTag(listing.cluster_id),
+      ...(master?.slug ? [productCacheTag(master.slug)] : []),
+    ];
   } catch {
     return [];
   }

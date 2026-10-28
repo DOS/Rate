@@ -84,6 +84,7 @@ import {
   canonicalizeCacheParams,
   categoryCacheTag,
   isSafeRevalidationPath,
+  masterReviewsCacheTag,
   merchantCacheTag,
   productCacheTag,
   resolveRevalidationTargets,
@@ -333,7 +334,7 @@ const _getCachedMasterProductReviewsByKey = cache((cleanId: string) =>
     ['rate-master-product-reviews', cleanId],
     {
       revalidate: 300,
-      tags: [RATE_CACHE_TAGS.REVIEWS],
+      tags: [RATE_CACHE_TAGS.REVIEWS, masterReviewsCacheTag(cleanId)],
     }
   )(cleanId)
 );
@@ -371,7 +372,7 @@ export const getCachedMasterProductReviewSummary = cache(
       ['rate-master-product-review-summary', cleanId, reviewsKey],
       {
         revalidate: 300,
-        tags: [RATE_CACHE_TAGS.REVIEWS],
+        tags: [RATE_CACHE_TAGS.REVIEWS, masterReviewsCacheTag(cleanId)],
       }
     )(cleanId);
   }

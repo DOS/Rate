@@ -5293,7 +5293,8 @@ async function runCoreArchitectureSuite() {
     // global stats (DOS/Rate#1306); a new review still refreshes the stats.
     assert.ok(
       reviewsRouteSrc402.includes('RATE_CACHE_TAGS.STATS') &&
-        voteRouteSrc402.includes('RATE_CACHE_TAGS.REVIEWS') &&
+        voteRouteSrc402.includes('masterReviewsCacheTag(') &&
+        !voteRouteSrc402.includes('RATE_CACHE_TAGS.REVIEWS') &&
         voteRouteSrc402.includes('productCacheTag(') &&
         !voteRouteSrc402.includes('RATE_CACHE_TAGS.PRODUCTS') &&
         voteRouteSrc402.includes('authenticateRateRequest('),

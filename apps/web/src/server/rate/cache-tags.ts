@@ -29,6 +29,18 @@ export function productCacheTag(slug: string): string {
     .slice(0, 120)}`;
 }
 
+/**
+ * One product's (variant master's) reviews and review summary, so a vote can
+ * refresh them without flushing every product's reviews (DOS/Rate#1306).
+ */
+export function masterReviewsCacheTag(masterId: string): string {
+  return `rate:reviews:${String(masterId ?? '')
+    .replace(/\p{Cc}+/gu, '')
+    .trim()
+    .toLowerCase()
+    .slice(0, 120)}`;
+}
+
 export function categoryCacheTag(categorySlug: string): string {
   return `rate:category:${String(categorySlug ?? '')
     .replace(/\p{Cc}+/gu, '')
