@@ -3129,35 +3129,38 @@ export async function attachMerchantDiscountAnalysis(
 ): Promise<MerchantProfileDetail> {
   const masterIds = Array.from(new Set(Object.values(base.listingMasterIds)));
   const discountByOfferId = new Map<string, OfferDiscountAnalysis>();
-  const offerById = new Map<string, MerchantOffer>();
   await forEachWithConcurrency(
     masterIds,
     PRICE_HISTORY_CONCURRENCY,
     async (masterId) => {
       const offers = await readers.offers(masterId);
       const ph = await readers.priceHistory(masterId, offers);
-      for (const offer of offers) offerById.set(offer.id, offer);
       for (const [offerId, analysis] of Object.entries(ph.byOffer)) {
         discountByOfferId.set(offerId, analysis);
       }
     }
   );
-  // A listing's price comes from the same offers the verdict was computed
-  // on: the profile entry and the offers entry expire apart, and an old price
-  // next to a verdict on the new one would contradict itself (DOS/Rate#1240).
-  const listings = base.profile.listings.map((listing) => {
-    const offer = offerById.get(listing.id);
-    return {
-      ...listing,
-      ...(offer
-        ? {
-            price_current: offer.price_current,
-            price_original: offer.price_original,
-          }
-        : {}),
-      discount_analysis: discountByOfferId.get(listing.id) || null,
-    };
-  });
+  // A listing with a verdict shows the price the verdict was computed on: the
+  // profile entry and the price-history entry expire apart, and an old price
+  // next to a verdict quoting the new one would contradict itself
+  // (DOS/Rate#1240). A verdict's price is always a valid one. Stock, rating
+  // and title stay as the profile read them.
+  const listings = base.profile.listings
+    .map((listing) => {
+      const analysis = discountByOfferId.get(listing.id) || null;
+      return {
+        ...listing,
+        ...(analysis
+          ? {
+              price_current: analysis.price_current,
+              price_original: analysis.price_original,
+            }
+          : {}),
+        discount_analysis: analysis,
+      };
+    })
+    // Stable: equal prices keep the profile's id order.
+    .sort((a, b) => a.price_current - b.price_current);
   const prices = listings
     .map((l) => l.price_current)
     .filter((p) => Number.isFinite(p) && p > 0 && p <= MAX_VALID_VND_PRICE);

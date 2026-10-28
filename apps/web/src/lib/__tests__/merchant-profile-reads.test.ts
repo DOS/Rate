@@ -343,23 +343,42 @@ async function main() {
       },
       priceHistory: async (_id, offers) => {
         seenOffers.push(offers.map((o) => o.id));
-        return { ...emptyHistory, byOffer: { [LISTING_ID]: analysis } };
+        // The price rose to 10.0M since the profile read 9.0M.
+        return {
+          ...emptyHistory,
+          byOffer: {
+            [LISTING_ID]: {
+              ...analysis,
+              price_current: 10_000_000,
+              price_original: 13_000_000,
+            },
+          },
+        };
       },
     });
     assert.equal(offersCalls, 1, 'one read per master, not per listing');
     assert.deepEqual(seenOffers, [[LISTING_ID]]);
     const byId = new Map(profile.listings.map((l) => [l.id, l]));
-    assert.equal(byId.get(LISTING_ID)?.price_current, 8_500_000);
+    assert.equal(byId.get(LISTING_ID)?.price_current, 10_000_000);
+    assert.equal(byId.get(LISTING_ID)?.price_original, 13_000_000);
+    // No verdict: the profile's own price stays.
     assert.equal(byId.get(SECOND_LISTING_ID)?.price_current, 9_500_000);
     assert.equal(byId.get(SECOND_LISTING_ID)?.discount_analysis, null);
     assert.equal(byId.get(UNCLUSTERED_LISTING_ID)?.discount_analysis, null);
-    assert.equal(profile.min_price, 8_500_000);
+    assert.deepEqual(
+      profile.listings.map((l) => l.id),
+      [SECOND_LISTING_ID, LISTING_ID, UNCLUSTERED_LISTING_ID],
+      'listings stay sorted by the price shown'
+    );
+    assert.equal(profile.min_price, 9_500_000);
     assert.equal(profile.max_price, 20_000_000);
   }
 
   // 5c. The server layer attaches the analysis outside the profile's cache
   //     entry: a nested unstable_cache skips its cache read, so the product
-  //     pages' entries would never be reused (DOS/Rate#1217).
+  //     pages' entries would never be reused (DOS/Rate#1217). A source check,
+  //     a tripwire against moving the call back inside: a reflow or rename
+  //     breaks it, and it does not prove the call is outside every cache.
   {
     const source = readFileSync(
       join(__dirname, '../../server/rate/index.ts'),
