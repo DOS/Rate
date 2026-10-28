@@ -71,7 +71,7 @@ import {
 import { compareRowIsShown, known5g } from '@/lib/product-spec-rows';
 import ContentText from '@/components/elementary/ContentText';
 import { productImageUrl } from '@/lib/rate-domain-core';
-import { versusHref } from '@/lib/item-compare';
+import { itemSlugFromProductAnswer, versusHref } from '@/lib/item-compare';
 
 interface CompareWorkspaceProps {
   initialProducts: MasterProduct[];
@@ -868,6 +868,46 @@ export default function CompareWorkspace({
       storedProducts.map((p) => applyCategorySpecTemplate(activeCategory, p)),
     [storedProducts, activeCategory]
   );
+  // RATE_ITEM_MODEL on (the page passed a map): products the client added
+  // or restored from the tray are read as Items too, so the 1v1 link names
+  // the Item pair without a 308 (DOS/Rate#1294). Off: no map, no reads.
+  const [clientItemSlugs, setClientItemSlugs] = useState<
+    Record<string, string>
+  >({});
+  const pairSlugA = products.length === 2 ? (products[0]?.slug ?? '') : '';
+  const pairSlugB = products.length === 2 ? (products[1]?.slug ?? '') : '';
+  useEffect(() => {
+    if (!itemSlugBySlug || !pairSlugA || !pairSlugB) return;
+    const missing = [pairSlugA, pairSlugB].filter(
+      (slug) => !itemSlugBySlug[slug] && !(slug in clientItemSlugs)
+    );
+    if (missing.length === 0) return;
+    let cancelled = false;
+    void Promise.all(
+      missing.map((slug) =>
+        fetch(`/api/v1/rate/products/${encodeURIComponent(slug)}`)
+          .then((res) => (res.ok ? res.json() : null))
+          .then((json: unknown) => [
+            slug,
+            itemSlugFromProductAnswer(json, slug),
+          ])
+          .catch(() => [slug, slug])
+      )
+    ).then((entries) => {
+      if (!cancelled) {
+        setClientItemSlugs((prev) => ({
+          ...prev,
+          ...Object.fromEntries(entries),
+        }));
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [itemSlugBySlug, pairSlugA, pairSlugB, clientItemSlugs]);
+  const versusSlugMap = itemSlugBySlug
+    ? { ...itemSlugBySlug, ...clientItemSlugs }
+    : undefined;
   const specGroups = useMemo(
     () => filterSpecGroupsForCategory(allSpecGroups, activeCategory),
     [allSpecGroups, activeCategory]
@@ -1704,7 +1744,7 @@ export default function CompareWorkspace({
                   href={versusHref(
                     products[0].slug,
                     products[1].slug,
-                    itemSlugBySlug
+                    versusSlugMap
                   )}
                   className="btn btn-sm btn-dark rounded-pill fw-medium px-3 py-2"
                 >

@@ -162,3 +162,18 @@ export function versusHref(
   };
   return `/compare/${side(slugA)}-vs-${side(slugB)}`;
 }
+
+/**
+ * The Item slug a `/api/v1/rate/products/{slug}` answer names (its `item`,
+ * RATE_ITEM_MODEL on), else the slug itself (DOS/Rate#1294).
+ */
+export function itemSlugFromProductAnswer(json: unknown, slug: string): string {
+  const itemSlug =
+    json && typeof json === 'object' && (json as { ok?: unknown }).ok === true
+      ? (json as { data?: { item?: { slug?: unknown } } }).data?.item?.slug
+      : undefined;
+  return typeof itemSlug === 'string' &&
+    /^[a-z0-9][a-z0-9._-]{0,159}$/.test(itemSlug)
+    ? itemSlug
+    : slug;
+}

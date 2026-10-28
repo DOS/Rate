@@ -211,7 +211,10 @@ async function main() {
   // In-app versus links: only the slugs asked for, mapped to Items (#1290).
   assert.deepEqual(
     await dir.getItemSlugsFor(['apple-iphone-16-256gb', 'samsung-galaxy-s24']),
-    { 'apple-iphone-16-256gb': 'apple-iphone-16' }
+    {
+      'apple-iphone-16-256gb': 'apple-iphone-16',
+      'samsung-galaxy-s24': 'samsung-galaxy-s24',
+    }
   );
 
   // Past the read cap the caller shows its variant listing (#1290).

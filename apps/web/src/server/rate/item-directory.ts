@@ -184,9 +184,8 @@ export async function getItemSlugsFor(
   const map = await getItemSlugByVariantSlug();
   if (!map) return null;
   const out: Record<string, string> = {};
-  for (const slug of slugs) {
-    const itemSlug = map.get(slug);
-    if (itemSlug) out[slug] = itemSlug;
-  }
+  // A slug with no Item maps to itself: it is resolved, so the compare
+  // workspace does not read it again on the client (#1294).
+  for (const slug of slugs) out[slug] = map.get(slug) ?? slug;
   return out;
 }
