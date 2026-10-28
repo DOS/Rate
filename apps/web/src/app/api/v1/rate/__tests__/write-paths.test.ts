@@ -15,6 +15,8 @@ const ANON_KEY = 'anon-test-key';
 const SERVICE_KEY = 'service-role-test-key';
 const GOOD_TOKEN = 'good-user-token';
 const VOTER_TOKEN = 'eligible-voter-token';
+// An eligible voter whose stored vote is already "up" (DOS/Rate#1306).
+const SAME_VOTE_TOKEN = 'same-vote-token';
 // What the stubbed PostgREST answers a VOTER_TOKEN vote with (code 42501).
 let voteRejectionMessage =
   'review_votes: account is not eligible to vote on reviews';
@@ -89,8 +91,18 @@ globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
   const { pathname } = new URL(url);
   // A voter the route accepts but the database guard rejects (DOS/Rate#771).
   if (
+    pathname === '/rest/v1/review_votes' &&
+    (init?.method ?? 'GET') === 'GET' &&
+    headers.authorization === `Bearer ${SAME_VOTE_TOKEN}`
+  ) {
+    return jsonResponse(200, [
+      { vote: 'up', reported: false, report_reason: null },
+    ]);
+  }
+  if (
     pathname === '/auth/v1/user' &&
-    headers.authorization === `Bearer ${VOTER_TOKEN}`
+    (headers.authorization === `Bearer ${VOTER_TOKEN}` ||
+      headers.authorization === `Bearer ${SAME_VOTE_TOKEN}`)
   ) {
     return jsonResponse(200, {
       ...USER,
@@ -670,6 +682,32 @@ async function testCookieSessions() {
     'a 42501 that is not the eligibility guard must not answer VOTER_NOT_ELIGIBLE (#771)'
   );
   assert.equal((await grantErrorVoteRes.json()).code, 'VOTE_REJECTED');
+
+  // The same vote again writes nothing, so it cannot flush caches (#1306).
+  calls.length = 0;
+  await postVote(
+    new Request(`https://rate.vn/api/reviews/${reviewId}/vote`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${SAME_VOTE_TOKEN}`,
+      },
+      body: JSON.stringify({ voteType: 'up' }),
+    }) as VoteReq,
+    { params: Promise.resolve({ id: reviewId }) }
+  );
+  assert.ok(
+    calls.some(
+      (c) => c.method === 'GET' && c.url.includes('/rest/v1/review_votes')
+    ),
+    'the stored vote is read first (#1306)'
+  );
+  assert.ok(
+    !calls.some(
+      (c) => c.method === 'POST' && c.url.includes('/rest/v1/review_votes')
+    ),
+    'an unchanged vote is not written again (#1306)'
+  );
 
   // An ineligible voter (no created_at, no confirmation) can still clear a vote.
   const clearRes = await postVote(
