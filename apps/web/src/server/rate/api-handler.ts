@@ -76,23 +76,13 @@ export function jsonApiError(
  * template does not have, by their documented query names (DOS/Rate#1184).
  * The body carries the category's spec view, so such a filter would match
  * stored values the body no longer shows (`has5g` on a watch, `ramGb` on
- * earbuds); the route answers 400 for them instead. `all` mixes categories,
- * so there a filter must apply to every one of them.
+ * earbuds); the route answers 400 for them instead, and on `all` keeps
+ * only products whose category has every requested filter.
  */
 export function specFiltersOutsideCategory(
   categorySlug: string,
   filters: MasterProductFilterParams
 ): string[] {
-  if (categorySlug === 'all') {
-    const outside = new Set<string>();
-    for (const slug of VALID_PRODUCT_CATEGORY_SLUGS) {
-      if (slug === 'all') continue;
-      for (const name of specFiltersOutsideCategory(slug, filters)) {
-        outside.add(name);
-      }
-    }
-    return [...outside];
-  }
   const template = getCategorySpecTemplate(categorySlug);
   const used: [boolean, boolean, string][] = [
     [Boolean(filters.ramGb?.length), template.ram, 'ramGb'],
@@ -127,6 +117,17 @@ export function specFiltersOutsideCategory(
   return used
     .filter(([requested, applies]) => requested && !applies)
     .map(([, , name]) => name);
+}
+
+/** Whether some category lacks one of the requested spec filters. */
+export function hasCategoryScopedSpecFilter(
+  filters: MasterProductFilterParams
+): boolean {
+  for (const slug of VALID_PRODUCT_CATEGORY_SLUGS) {
+    if (slug === 'all') continue;
+    if (specFiltersOutsideCategory(slug, filters).length > 0) return true;
+  }
+  return false;
 }
 
 function parseFiniteDecimalInput(raw: unknown): number {

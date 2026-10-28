@@ -16,9 +16,11 @@ import {
   parseBoundedNumberParam,
   parseBoundedPositiveIntArrayParam,
   parseBoundedStringParam,
+  hasCategoryScopedSpecFilter,
   parseProductsFilterBounds,
   specFiltersOutsideCategory,
 } from '@/server/rate/api-handler';
+import type { MasterProduct } from '@/lib/rate-api';
 
 export async function OPTIONS() {
   return new NextResponse(null, {
@@ -34,6 +36,37 @@ export function parseBooleanFlag(raw: string | null): boolean | undefined {
     .trim()
     .toLowerCase();
   return cleaned === '1' || cleaned === 'true' ? true : undefined;
+}
+
+const SCOPED_ALL_PAGE_SIZE = 500;
+const SCOPED_ALL_MAX_PAGES = 200;
+
+/**
+ * `category=all` with a spec filter some category lacks: only products whose
+ * own category has every requested filter, paged after that cut so pages
+ * stay exact (DOS/Rate#1184). Reads the catalogue in pages of 500.
+ */
+async function getAllCategoryProductsWithSpecFilters(
+  filterParams: MasterProductFilterParams
+): Promise<MasterProduct[]> {
+  const offset = filterParams.offset ?? 0;
+  const wanted = offset + (filterParams.limit ?? 24);
+  const kept: MasterProduct[] = [];
+  for (let page = 0; page < SCOPED_ALL_MAX_PAGES; page++) {
+    const rows = await getMasterProducts({
+      ...filterParams,
+      offset: page * SCOPED_ALL_PAGE_SIZE,
+      limit: SCOPED_ALL_PAGE_SIZE,
+    });
+    for (const p of rows) {
+      const slug = getMasterProductCategorySlug(p);
+      if (specFiltersOutsideCategory(slug, filterParams).length === 0) {
+        kept.push(p);
+      }
+    }
+    if (kept.length >= wanted || rows.length < SCOPED_ALL_PAGE_SIZE) break;
+  }
+  return kept.slice(offset, wanted);
 }
 
 const VALID_PRODUCT_SORTS = new Set<
@@ -55,8 +88,9 @@ const VALID_PRODUCT_SORTS = new Set<
  * (DOS/Rate#1166). A spec filter the category's template does not have
  * (`has5g` on smartwatches, `ramGb` or `compactScreen` on earbuds) answers
  * 400, so a filter never returns a product whose body contradicts it
- * (DOS/Rate#1184). On `category=all` a spec filter must apply to every
- * category.
+ * (DOS/Rate#1184). On `category=all` such a filter keeps only products whose
+ * own category has it: `has5g=1` returns 5G phones, tablets and laptops,
+ * never watches or earbuds.
  */
 export async function GET(request: NextRequest) {
   try {
@@ -149,7 +183,9 @@ export async function GET(request: NextRequest) {
     }
 
     const [products, facets] = await Promise.all([
-      getMasterProducts(filterParams),
+      categorySlug === 'all' && hasCategoryScopedSpecFilter(filterParams)
+        ? getAllCategoryProductsWithSpecFilters(filterParams)
+        : getMasterProducts(filterParams),
       includeFacets
         ? getCachedCategoryDirectoryFacets(categorySlug)
         : Promise.resolve(null),

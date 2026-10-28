@@ -90,7 +90,11 @@ globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
   }
   if (pathname === '/rest/v1/rpc/search_master_products') {
     searchArgs = typeof init?.body === 'string' ? JSON.parse(init.body) : {};
-    return jsonResponse(200, catalog);
+    const from = Number(searchArgs.p_offset ?? 0);
+    return jsonResponse(
+      200,
+      catalog.slice(from, from + Number(searchArgs.p_limit ?? 200))
+    );
   }
   if (pathname === '/rest/v1/master_products') {
     return jsonResponse(200, masterRows);
@@ -119,10 +123,6 @@ async function testProductFilters() {
     'category=earbuds&compactScreen=true',
     'category=earbuds&nfc=1',
     'category=earbuds&highRefresh=1',
-    // `all` mixes categories, so a filter must apply to every one.
-    'category=all&has5g=1',
-    'category=all&ram=1',
-    'category=all&compact=1',
   ]) {
     const { status, body } = await listProducts(query);
     assert.equal(status, 400, query);
@@ -160,17 +160,57 @@ async function testProductFilters() {
   assert.equal(bud.specifications.display, undefined);
   assert.equal(bud.specifications.camera, undefined);
 
-  // Filters every category has still run on `all`.
+  // Filters every category has still run on `all`, over every category.
   catalog = [EARBUD];
-  ({ status } = await listProducts('category=all&fastCharge=1&battery=400'));
+  ({ status, body } = await listProducts(
+    'category=all&fastCharge=1&battery=400'
+  ));
   assert.equal(status, 200);
+  assert.equal(body.data.length, 1);
 
-  // Phones keep every filter and the stored body.
+  // On `all`, a filter some category lacks keeps only products whose own
+  // category has it, paged after that cut: no 400, no watch or earbud.
   const PHONE = phoneShaped(
     '33333333-3333-4333-8333-333333333333',
     'apple-iphone-16-128gb',
     'smartphones'
   );
+  const PHONE_2 = phoneShaped(
+    '44444444-4444-4444-8444-444444444444',
+    'apple-iphone-16-256gb',
+    'smartphones'
+  );
+  catalog = [WATCH, PHONE, EARBUD, PHONE_2];
+  ({ status, body } = await listProducts('category=all&has5g=1'));
+  assert.equal(status, 200);
+  assert.equal(searchArgs.p_has_5g, true);
+  assert.deepEqual(
+    body.data.map((p: { slug: string }) => p.slug),
+    [PHONE.slug, PHONE_2.slug]
+  );
+  assert.ok(body.data.every((p: { has_5g: boolean }) => p.has_5g === true));
+  ({ body } = await listProducts('category=all&has5g=1&offset=1&limit=1'));
+  assert.deepEqual(
+    body.data.map((p: { slug: string }) => p.slug),
+    [PHONE_2.slug]
+  );
+  // The cut reads past the first 500-row page.
+  catalog = [...Array.from({ length: 500 }, () => WATCH), PHONE];
+  ({ body } = await listProducts('category=all&has5g=1'));
+  assert.deepEqual(
+    body.data.map((p: { slug: string }) => p.slug),
+    [PHONE.slug]
+  );
+  catalog = [WATCH, PHONE, EARBUD, PHONE_2];
+  // A watch has RAM, earbuds do not.
+  ({ body } = await listProducts('category=all&ram=1'));
+  assert.deepEqual(
+    body.data.map((p: { slug: string }) => p.slug),
+    [WATCH.slug, PHONE.slug, PHONE_2.slug]
+  );
+  assert.ok(body.data.every((p: { ram_gb: number }) => p.ram_gb === 1));
+
+  // Phones keep every filter and the stored body.
   catalog = [PHONE];
   ({ status, body } = await listProducts(
     'category=smartphones&has5g=true&ram=1&rom=64&hz=60&compact=1&nfc=1'
