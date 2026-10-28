@@ -1,6 +1,10 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { ANALYZER_COPY_KEYS, analyzerCopy } from '../analyzer-copy';
+import {
+  ANALYZER_COPY_KEYS,
+  analyzerCopy,
+  listingReviewSummary,
+} from '../analyzer-copy';
 
 type Messages = { analyzerCopy?: Record<string, string> };
 const readLocale = (locale: string) =>
@@ -59,15 +63,11 @@ function main() {
       'reasonCommunityDownvoted',
     ],
     [
-      'Đã phân tích 10 đánh giá: giữ lại 10 đánh giá thực chất (điểm JReviews có trọng số: 5/5★) và loại bỏ 0 đánh giá rác/nhận xu/seeding/bom hàng khỏi điểm tổng.',
+      'Lần phân tích gần nhất (một nơi bán) đã xét 12 đánh giá: giữ lại 9 đánh giá thực chất và loại bỏ 3 đánh giá rác, nhận xu, ảo hoặc bom hàng.',
       'summaryDefault',
     ],
     [
-      'Đã phân tích 12 đánh giá: giữ lại 9 đánh giá thực chất (điểm JReviews có trọng số: 4.37/5★) và loại bỏ 3 đánh giá rác/nhận xu/seeding/bom hàng khỏi điểm tổng.',
-      'summaryDefault',
-    ],
-    [
-      'Chưa có đánh giá thực chất sau khi lọc 4 bình luận rác/nhận xu.',
+      'Lần phân tích gần nhất (một nơi bán) chưa thấy đánh giá thực chất sau khi lọc 4 bình luận rác/nhận xu.',
       'summaryNoAuthentic',
     ],
     ['Nhận phản hồi tích cực từ người dùng thực tế', 'proPositiveFeedback'],
@@ -122,16 +122,6 @@ function main() {
       'Nội dung sao chép / xào nấu văn mẫu seeding giữa các tài khoản (tương đồng cấu trúc {pct}%).',
     reasonCommunityAdLink:
       'Phát hiện đường dẫn quảng cáo hoặc điều hướng ngoài luồng nghi vấn Seeding.',
-    summaryDefault:
-      'Đã phân tích {total} đánh giá: giữ lại {kept} đánh giá thực chất (điểm JReviews có trọng số: {rating}/5★) và loại bỏ {removed} đánh giá rác/nhận xu/seeding/bom hàng khỏi điểm tổng.',
-    // The UI says it covers one store's latest batch (DOS/Rate#1216).
-    summaryNoAuthentic:
-      'Chưa có đánh giá thực chất sau khi lọc {removed} bình luận rác/nhận xu.',
-  };
-  // Values the UI leaves out on purpose: the summary speaks for one store's
-  // latest batch, whose rating is not the product's score (DOS/Rate#1216).
-  const dropped: Partial<Record<string, string[]>> = {
-    summaryDefault: ['rating'],
   };
   const covered = new Set<string>();
   for (const [text, key] of samples) {
@@ -146,9 +136,7 @@ function main() {
       assert.ok(!/seeding/i.test(vi[copy.key]!), `${key} still says seeding`);
       assert.deepEqual(
         placeholders(vi[copy.key]!),
-        placeholders(template).filter(
-          (p) => !(dropped[copy.key] ?? []).includes(p ?? '')
-        ),
+        placeholders(template),
         `${key} uses every value the stored string carries`
       );
     }
@@ -159,6 +147,45 @@ function main() {
     [...ANALYZER_COPY_KEYS].sort(),
     'every template has a sample'
   );
+
+  // Summaries stored before DOS/Rate#1225 still read; the batch's weighted
+  // score, which is not the product's, is left out.
+  const legacy: Array<[string, string, string]> = [
+    [
+      'Đã phân tích 10 đánh giá: giữ lại 10 đánh giá thực chất (điểm JReviews có trọng số: 5/5★) và loại bỏ 0 đánh giá rác/nhận xu/seeding/bom hàng khỏi điểm tổng.',
+      'summaryDefault',
+      'Lần phân tích gần nhất (một nơi bán) đã xét 10 đánh giá: giữ lại 10 đánh giá thực chất và loại bỏ 0 đánh giá rác, nhận xu, ảo hoặc bom hàng.',
+    ],
+    [
+      'Đã phân tích 12 đánh giá: giữ lại 9 đánh giá thực chất (điểm JReviews có trọng số: 4.37/5★) và loại bỏ 3 đánh giá rác/nhận xu/seeding/bom hàng khỏi điểm tổng.',
+      'summaryDefault',
+      'Lần phân tích gần nhất (một nơi bán) đã xét 12 đánh giá: giữ lại 9 đánh giá thực chất và loại bỏ 3 đánh giá rác, nhận xu, ảo hoặc bom hàng.',
+    ],
+    [
+      'Chưa có đánh giá thực chất sau khi lọc 4 bình luận rác/nhận xu.',
+      'summaryNoAuthentic',
+      'Lần phân tích gần nhất (một nơi bán) chưa thấy đánh giá thực chất sau khi lọc 4 bình luận rác/nhận xu.',
+    ],
+  ];
+  for (const [text, key, reworded] of legacy) {
+    const copy = analyzerCopy(text);
+    assert.ok('key' in copy && copy.key === key, text);
+    assert.equal(fill(vi[key]!, copy.values), reworded, key);
+    assert.equal(listingReviewSummary(text), reworded, key);
+  }
+  // API v1 and the extension print the same words as the web page; new rows
+  // pass through unchanged, free text and empty values too.
+  for (const [text, key] of samples.filter(([, k]) =>
+    k.startsWith('summary')
+  )) {
+    assert.equal(listingReviewSummary(text), text, key);
+  }
+  for (const [text] of legacy) {
+    assert.ok(!/Đã phân tích|trọng số/.test(listingReviewSummary(text)!));
+  }
+  assert.equal(listingReviewSummary('Máy dùng ổn.'), 'Máy dùng ổn.');
+  assert.equal(listingReviewSummary(null), null);
+  assert.equal(listingReviewSummary('  '), null);
 
   // Free text (e.g. from the LLM pass) is passed through as Vietnamese.
   const free =
