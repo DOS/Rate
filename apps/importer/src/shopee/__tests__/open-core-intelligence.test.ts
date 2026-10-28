@@ -312,6 +312,31 @@ async function runSuite() {
     ['Apple iMac M4 24 inch 256GB', 'apple:imac-m4:256gb'],
     ['Mac Studio M4 Max 512GB', 'apple:mac-studio-m4-max:512gb'],
     ['Loa Apple HomePod mini', 'apple:homepod-mini:unknown'],
+    // An app the product supports sets no brand: a TV naming "Apple TV" is the TV's
+    // brand, never `apple:tv`; an Apple product naming Siri stays itself (DOS/Rate#1195).
+    [
+      'Smart Tivi Samsung 4K 55 inch UA55DU7000 hỗ trợ Apple TV',
+      'samsung:smart-tivi-samsung-4k:unknown',
+    ],
+    [
+      'Smart Tivi Samsung QLED 4K 65 inch QA65Q60D tích hợp Apple TV, AirPlay 2',
+      'samsung:smart-tivi-samsung-qled:unknown',
+    ],
+    [
+      'Google Tivi Sony 4K 55 inch K-55S30 có ứng dụng Apple TV',
+      'sony:google-tivi-sony-4k:unknown',
+    ],
+    [
+      'Smart Tivi Samsung 55 inch Apple TV Netflix YouTube',
+      'samsung:smart-tivi-samsung-55:unknown',
+    ],
+    ['Tivi LG OLED 55 inch hỗ trợ Apple AirPlay', 'khac:tivi-lg:unknown'],
+    ['Apple TV 4K hỗ trợ Siri 64GB', 'apple:tv-4k:64gb'],
+    ['Loa Apple HomePod mini hỗ trợ Apple Music', 'apple:homepod-mini:unknown'],
+    ['iPad Air M2 tặng Apple TV+', 'apple:ipad-air-m2:unknown'],
+    // A bundled Magic Keyboard after the name keeps the iMac.
+    ['Apple iMac M4 24 inch 256GB kèm Magic Keyboard', 'apple:imac-m4:256gb'],
+    ['iMac M4 24 inch 16GB 256GB Magic Keyboard Touch ID', 'apple:imac-m4:256gb'],
     // A generation or year after the line keeps generations apart.
     ['Apple HomePod 2', 'apple:homepod-2:unknown'],
     ['Apple HomePod (2nd generation)', 'apple:homepod-2:unknown'],
