@@ -1004,9 +1004,9 @@ async function updateIfUnchanged(
   return Array.isArray(data) && data.length > 0;
 }
 
-/** `12GB` → 12; anything else → null. */
+/** `12GB` or `8GB LPDDR5X` → its leading size; anything else → null. */
 const gbOfLabel = (raw: unknown): number | null => {
-  const m = typeof raw === 'string' ? /^\s*(\d+)\s*GB\s*$/i.exec(raw) : null;
+  const m = typeof raw === 'string' ? /^\s*(\d+)\s*GB\b/i.exec(raw) : null;
   return m ? toPositiveInt(Number(m[1]), 2048) : null;
 };
 
@@ -1132,9 +1132,12 @@ export async function syncArenaSpecsToItem(
         : {};
     // One RAM per variant: a stored value (number, else label) wins over Arena's, so
     // the number and the label never disagree.
+    // A stored label that names no single size also blocks Arena's RAM.
     const storedRamGb = toPositiveInt(row.ram_gb, 2048);
+    const hasRamLabel = typeof keySpecs.ram === 'string' && keySpecs.ram.trim() !== '';
     const ramGb =
-      storedRamGb ?? gbOfLabel(keySpecs.ram) ?? toPositiveInt(ramByStorage.get(storageGb), 2048);
+      storedRamGb ??
+      (hasRamLabel ? gbOfLabel(keySpecs.ram) : toPositiveInt(ramByStorage.get(storageGb), 2048));
     const storedStorageGb = toPositiveInt(row.storage_gb, 65536);
     const update: Record<string, unknown> = {};
     const keySpecUpdate: Record<string, unknown> = {};

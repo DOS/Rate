@@ -202,6 +202,22 @@ async function run() {
       { id: 'v-old', variant_key: '128gb', status: 'archived', storage_gb: null },
       // A stored RAM number: the label follows it, not Arena.
       { id: 'v-2048', variant_key: '2048gb', status: 'draft', ram_gb: 8, key_specs: {} },
+      // A stored RAM label with a suffix: the number follows it, not Arena.
+      {
+        id: 'v-8192',
+        variant_key: '8192gb',
+        status: 'draft',
+        storage_gb: 8192,
+        key_specs: { storage: '8TB', ram: '24GB LPDDR5X' },
+      },
+      // A stored label that names no size: Arena's RAM is not used either.
+      {
+        id: 'v-16384',
+        variant_key: '16384gb',
+        status: 'draft',
+        storage_gb: 16384,
+        key_specs: { storage: '16TB', ram: 'LPDDR5X' },
+      },
       // A stored RAM label: the number follows it, not Arena.
       {
         id: 'v-4096',
@@ -282,7 +298,7 @@ async function run() {
       apply: false,
       itemKey: 'xiaomi:18-pro-max',
       itemUpdated: true,
-      variantsUpdated: 4,
+      variantsUpdated: 5,
       conflicts: 0,
     });
     assert.equal(filterValue(dry.calls[0], 'item_key'), 'xiaomi:18-pro-max');
@@ -293,7 +309,7 @@ async function run() {
     const appliedRun = await withFlag('nullable_variant', () =>
       syncArenaSpecsToItem(applied.client, spec, { key: 'xiaomi:18-pro-max', apply: true })
     );
-    assert.equal(appliedRun.variantsUpdated, 4);
+    assert.equal(appliedRun.variantsUpdated, 5);
     assert.equal(appliedRun.conflicts, 0);
     assert.ok(!applied.calls.some(c => c.op === 'insert' || c.op === 'upsert'), 'no inserts');
     const itemUpdate = applied.calls.find(c => c.op === 'update' && c.table === 'items');
@@ -324,7 +340,7 @@ async function run() {
     );
     assert.deepEqual(
       variantUpdates.map(c => filterValue(c, 'id')),
-      ['v-256', 'v-1024', 'v-2048', 'v-4096'],
+      ['v-256', 'v-1024', 'v-2048', 'v-8192', 'v-4096'],
       'unknown, archived and filled variants are left alone'
     );
     const withoutStamp = (payload: Row | undefined) => {
@@ -349,7 +365,8 @@ async function run() {
       storage_gb: 2048,
       key_specs: { storage: '2TB', ram: '8GB' },
     });
-    assert.deepEqual(withoutStamp(variantUpdates[3]?.payload), { ram_gb: 8 });
+    assert.deepEqual(withoutStamp(variantUpdates[3]?.payload), { ram_gb: 24 });
+    assert.deepEqual(withoutStamp(variantUpdates[4]?.payload), { ram_gb: 8 });
     for (const update of variantUpdates) {
       assert.ok(
         update.filters.some(
@@ -359,7 +376,7 @@ async function run() {
       );
     }
     assert.equal(
-      filterValue(variantUpdates[3], 'updated_at'),
+      filterValue(variantUpdates[4], 'updated_at'),
       '2026-10-28T00:00:00.000Z',
       'compare-and-swap on the updated_at that was read'
     );
@@ -372,7 +389,7 @@ async function run() {
       itemModel: 'item',
     });
     assert.equal(racedRun.itemUpdated, false);
-    assert.equal(racedRun.variantsUpdated, 3);
+    assert.equal(racedRun.variantsUpdated, 4);
     assert.equal(racedRun.conflicts, 2);
   }
   console.log('  ✅ [2/5] Arena specs go to the Item, variants get only their own overrides');
