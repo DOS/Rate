@@ -13,7 +13,16 @@ import {
   type ProductSpecifications,
   type KeySpecs,
 } from '@repo/shared-data';
+import { isItemKey, splitModelKey } from '@repo/shared-data';
+import { mergeProductSpecifications } from './ai-spec-enricher.js';
+import { resolveItemModelMode, type ItemModelMode } from './item-model-flag.js';
+import {
+  mergeKeySpecs,
+  withoutVariantKeySpecs,
+  withoutVariantSpecs,
+} from './jobs/backfill-specs.js';
 import { fetchAllPages } from './paging.js';
+import type { RateSupabaseClient } from './types.js';
 
 export interface ArenaSyncedDeviceSpec {
   source: 'gsmarena' | 'phonearena' | 'hybrid';
@@ -28,9 +37,63 @@ export interface ArenaSyncedDeviceSpec {
   storageGb: number | null;
   screenSizeInch: number | null;
   batteryMah: number | null;
-  has5g: boolean;
+  /** null when the page states no network technology (DOS/Rate#1196). */
+  has5g: boolean | null;
+  /**
+   * The storage sizes the page lists, each with its RAM when the page pairs exactly one
+   * RAM with it (`256GB 12GB RAM, 512GB 16GB RAM`). Variant overrides (DOS/Rate#1213).
+   */
+  memoryVariants?: ArenaMemoryVariant[];
   specifications: ProductSpecifications;
   keySpecs: KeySpecs;
+}
+
+export interface ArenaMemoryVariant {
+  storageGb: number;
+  ramGb: number | null;
+}
+
+const ARENA_STORAGE_REGEX = /(\d+(?:\.\d+)?)\s*(GB|TB)(?!\s*RAM)/gi;
+// A RAM group, including the slash form of several options (`8GB/12GB RAM`, `8/12GB RAM`).
+const ARENA_RAM_GROUP_REGEX =
+  /\d+(?:\.\d+)?(?:\s*GB)?(?:\s*\/\s*\d+(?:\.\d+)?(?:\s*GB)?)*\s*GB\s*RAM/gi;
+
+/**
+ * Splits a memory line (`128GB 8GB RAM, 256GB 8GB RAM, 256GB 12GB RAM`) into storage
+ * sizes in ascending order. A size whose entries name more than one RAM, or none, gets
+ * `ramGb: null`: the RAM of that variant is not known from the page.
+ */
+export function parseArenaMemoryVariants(memRaw: string): ArenaMemoryVariant[] {
+  if (typeof memRaw !== 'string' || !memRaw.trim()) return [];
+  const ramsByStorage = new Map<number, Set<number | null>>();
+  for (const segment of memRaw.slice(0, 2000).split(/[,;\n]/)) {
+    // Every RAM figure of the segment; its numbers are never read as storage.
+    const rams = new Set<number>();
+    for (const group of segment.match(ARENA_RAM_GROUP_REGEX) ?? []) {
+      for (const n of group.match(/\d+(?:\.\d+)?/g) ?? []) rams.add(Number(n));
+    }
+    const ramValues = [...rams];
+    const ram =
+      ramValues.length === 1 && Number.isInteger(ramValues[0]) && ramValues[0]! >= 1
+        ? ramValues[0]! <= 2048
+          ? ramValues[0]!
+          : null
+        : null;
+    const storageText = segment.replace(ARENA_RAM_GROUP_REGEX, ' ');
+    for (const m of storageText.matchAll(ARENA_STORAGE_REGEX)) {
+      const val = m[2]?.toUpperCase() === 'TB' ? Number(m[1]) * 1024 : Number(m[1]);
+      if (!Number.isInteger(val) || val < 1 || val > 65536) continue;
+      const set = ramsByStorage.get(val) ?? new Set<number | null>();
+      set.add(ram);
+      ramsByStorage.set(val, set);
+    }
+  }
+  return [...ramsByStorage.entries()]
+    .sort(([a], [b]) => a - b)
+    .map(([storageGb, rams]) => {
+      const only = rams.size === 1 ? [...rams][0] : null;
+      return { storageGb, ramGb: only ?? null };
+    });
 }
 
 const NAMED_ARENA_ENTITIES: Readonly<Record<string, string>> = {
@@ -304,9 +367,9 @@ export function parseGsmArenaHtmlToSpecs(
     /IP\d{2}[A-Z]?[^.;\n]*/i
   );
 
-  // 5G check
+  // 5G check: a page with no network fields says nothing about 5G (DOS/Rate#1196).
   const netTech = `${d['nettech'] || ''} ${d['speed'] || ''} ${d['5g'] || ''} ${d['net5g'] || ''}`;
-  const has5g = /5G|NR|SA\/NSA/i.test(netTech);
+  const has5g: boolean | null = netTech.trim() ? /5G|NR|SA\/NSA/i.test(netTech) : null;
 
   // 3.5mm headphone jack check
   const jackRaw = d['jack'] || d['3.5mm jack'] || pa['headphones'] || '';
@@ -386,17 +449,26 @@ export function parseGsmArenaHtmlToSpecs(
         : 'Face ID / Biometric sensor',
       colors: parsedColors.length > 0 ? parsedColors : undefined,
     },
-    cellular: {
-      has_5g: has5g,
-      bands_5g: capSpec(has5g ? d['net5g'] || '5G SA/NSA/Sub6' : d['net5g']),
-      sim_type: capSpec(
-        d['sim'] || (has5g ? 'Dual SIM (Nano-SIM + eSIM)' : 'No cellular connectivity')
-      ),
-      data_speed: capSpec(d['speed'] || (has5g ? '5G, LTE-A' : 'Wi-Fi Only')),
-      technology: capSpec(
-        d['nettech'] || (has5g ? 'GSM / HSPA / LTE / 5G' : 'No cellular connectivity')
-      ),
-    },
+    // An unknown 5G invents no cellular defaults: only what the page states.
+    cellular:
+      has5g === null
+        ? {
+            bands_5g: capSpec(d['net5g']),
+            sim_type: capSpec(d['sim']),
+            data_speed: capSpec(d['speed']),
+            technology: capSpec(d['nettech']),
+          }
+        : {
+            has_5g: has5g,
+            bands_5g: capSpec(has5g ? d['net5g'] || '5G SA/NSA/Sub6' : d['net5g']),
+            sim_type: capSpec(
+              d['sim'] || (has5g ? 'Dual SIM (Nano-SIM + eSIM)' : 'No cellular connectivity')
+            ),
+            data_speed: capSpec(d['speed'] || (has5g ? '5G, LTE-A' : 'Wi-Fi Only')),
+            technology: capSpec(
+              d['nettech'] || (has5g ? 'GSM / HSPA / LTE / 5G' : 'No cellular connectivity')
+            ),
+          },
     connectivity: {
       bluetooth: capSpec(d['bluetooth'] || pa['bluetooth']),
       wlan: capSpec(d['wlan'] || pa['wi-fi']),
@@ -469,6 +541,8 @@ export function parseGsmArenaHtmlToSpecs(
     screenSizeInch,
     batteryMah,
     has5g,
+    // GSMArena's memory line only: PhoneArena's RAM field carries no "RAM" word.
+    memoryVariants: parseArenaMemoryVariants(d['internalmemory'] || ''),
     specifications: validatedSpecs,
     keySpecs,
   };
@@ -695,6 +769,24 @@ export interface ArenaCatalogAuditReport {
     model_key: string;
     populatedGroups: number;
   }>;
+  /**
+   * RATE_ITEM_MODEL on only: Items with < 10 populated field groups. Variants inherit
+   * their Item's specs, so these are the rows a spec sync should fill (DOS/Rate#1213).
+   */
+  incompleteSpecItems?: Array<{
+    id: string;
+    name: string;
+    item_key: string;
+    populatedGroups: number;
+  }>;
+}
+
+export interface ArenaAuditItemRow {
+  id: string;
+  name: string;
+  slug?: string | null;
+  item_key: string;
+  specifications?: Record<string, unknown> | null;
 }
 
 export interface ArenaAuditMasterRow {
@@ -731,8 +823,13 @@ export class ArenaSpecSyncer {
         };
       };
     },
-    pageSize?: number
+    pageSize?: number,
+    options: { itemModel?: ItemModelMode } = {}
   ): Promise<ArenaCatalogAuditReport> {
+    const itemModel =
+      options && typeof options === 'object' && options.itemModel
+        ? options.itemModel
+        : resolveItemModelMode();
     const rows = await fetchAllPages(
       'Arena catalog audit: failed to read master_products',
       (from, to) =>
@@ -798,18 +895,274 @@ export class ArenaSpecSyncer {
       }
     }
 
-    const missingFromDatabase = UPSTREAM_2026_ARENA_REFERENCE_URLS.filter(
-      ref =>
-        !existingKeys.has(ref.model_key.toLowerCase()) && !existingSlugs.has(ref.slug.toLowerCase())
-    );
+    // With the Item model on, a flagship is present when its Item is: another size of
+    // the same Item is not a missing release (design doc 4.1, DOS/Rate#1213).
+    const existingItemKeys = new Set<string>();
+    let incompleteSpecItems: ArenaCatalogAuditReport['incompleteSpecItems'];
+    if (itemModel !== 'off') {
+      incompleteSpecItems = [];
+      for (const key of existingKeys) {
+        const itemKey = splitModelKey(key)?.itemKey;
+        if (itemKey) existingItemKeys.add(itemKey);
+      }
+      // The client is typed for master rows; the items read returns Item rows.
+      const items = await fetchAllPages<ArenaAuditItemRow>(
+        'Arena catalog audit: failed to read items',
+        (from, to) =>
+          supabase
+            .from('items')
+            .select('id, name, slug, item_key, specifications')
+            .order('id', { ascending: true })
+            .range(from, to) as unknown as PromiseLike<{
+            data: ArenaAuditItemRow[] | null;
+            error: { message: string } | null;
+          }>,
+        pageSize
+      );
+      for (const item of items) {
+        if (!item || typeof item !== 'object' || Array.isArray(item)) continue;
+        const safeItemKey = sanitizeAuditToken(item.item_key, 200).toLowerCase();
+        const reportedItemKey =
+          safeItemKey ||
+          (typeof item.item_key === 'string'
+            ? item.item_key
+                .replace(/\p{Cc}+/gu, '')
+                .trim()
+                .slice(0, 200)
+            : '');
+        if (safeItemKey && isItemKey(safeItemKey)) existingItemKeys.add(safeItemKey);
+        const populatedGroups = countPopulatedFieldGroups(item.specifications);
+        if (populatedGroups < 10) {
+          incompleteSpecItems.push({
+            id: sanitizeAuditToken(item.id, 128),
+            name:
+              typeof item.name === 'string'
+                ? item.name
+                    .replace(/\p{Cc}+/gu, '')
+                    .trim()
+                    .slice(0, 300)
+                : '',
+            item_key: reportedItemKey,
+            populatedGroups,
+          });
+        }
+      }
+    }
+
+    const missingFromDatabase = UPSTREAM_2026_ARENA_REFERENCE_URLS.filter(ref => {
+      if (existingKeys.has(ref.model_key.toLowerCase())) return false;
+      if (existingSlugs.has(ref.slug.toLowerCase())) return false;
+      const itemKey = splitModelKey(ref.model_key.toLowerCase())?.itemKey;
+      return !(itemKey && existingItemKeys.has(itemKey));
+    });
 
     return {
       totalArena2026Flagships: UPSTREAM_2026_ARENA_REFERENCE_URLS.length,
       presentInDatabase: UPSTREAM_2026_ARENA_REFERENCE_URLS.length - missingFromDatabase.length,
       missingFromDatabase,
       incompleteSpecMasters,
+      ...(incompleteSpecItems ? { incompleteSpecItems } : {}),
     };
   }
+}
+
+export interface ArenaItemSyncResult {
+  /** `skipped`: flag off or no usable key; `item_missing`: no `rate.items` row. */
+  status: 'skipped' | 'item_missing' | 'synced';
+  apply: boolean;
+  itemKey: string | null;
+  /** The Item was (apply) or would be (dry-run) updated. */
+  itemUpdated: boolean;
+  /** Variants that were (apply) or would be (dry-run) updated. */
+  variantsUpdated: number;
+  /** Rows another writer changed between the read and the write: left as they are. */
+  conflicts: number;
+}
+
+/**
+ * Compare-and-swap on `updated_at`: the update applies only to the row as it was read
+ * (and, for a variant, still not archived). Returns false when nothing matched.
+ */
+async function updateIfUnchanged(
+  supabase: RateSupabaseClient,
+  table: 'items' | 'master_products',
+  id: string,
+  readUpdatedAt: unknown,
+  payload: Record<string, unknown>
+): Promise<boolean> {
+  let query = supabase
+    .from(table)
+    .update({ ...payload, updated_at: new Date().toISOString() })
+    .eq('id', id);
+  query =
+    typeof readUpdatedAt === 'string' && readUpdatedAt
+      ? query.eq('updated_at', readUpdatedAt)
+      : query.is('updated_at', null);
+  if (table === 'master_products') query = query.neq('status', 'archived');
+  const { data, error } = await query.select('id');
+  if (error) throw new Error(`Failed to update ${table} ${id}: ${error.message}`);
+  return Array.isArray(data) && data.length > 0;
+}
+
+/** `12GB` or `8GB LPDDR5X` → its leading size; anything else → null. */
+const gbOfLabel = (raw: unknown): number | null => {
+  const m = typeof raw === 'string' ? /^\s*(\d+)\s*GB\b/i.exec(raw) : null;
+  return m ? toPositiveInt(Number(m[1]), 2048) : null;
+};
+
+const toPositiveInt = (raw: unknown, max: number): number | null => {
+  const n = typeof raw === 'number' ? raw : typeof raw === 'string' ? Number(raw.trim()) : NaN;
+  return Number.isInteger(n) && n > 0 && n <= max ? n : null;
+};
+
+/** `256gb` → 256, `1tb` → 1024; null for `unknown`, `standard` and suffixed keys. */
+function storageGbOfVariantKey(variantKey: unknown): number | null {
+  if (typeof variantKey !== 'string') return null;
+  const m = /^(\d+)(gb|tb)$/.exec(variantKey.trim().toLowerCase());
+  if (!m) return null;
+  return toPositiveInt(m[2] === 'tb' ? Number(m[1]) * 1024 : Number(m[1]), 65536);
+}
+
+const formatStorage = (gb: number): string =>
+  gb >= 1024 && gb % 512 === 0 ? `${gb / 1024}TB` : `${gb}GB`;
+
+/**
+ * Writes an Arena spec to the Item model (design doc 4.1 and 5.3, DOS/Rate#1213):
+ * - the Item (`rate.items` by `item_key`) gets the specs and key specs without storage
+ *   or RAM, merged over what it has;
+ * - each sized variant of the Item gets only its own overrides, and only where they are
+ *   still empty: `storage_gb` from its `variant_key`, `ram_gb` when the page pairs one
+ *   RAM with that size, and the matching `key_specs.storage`/`key_specs.ram`.
+ * A stored RAM (number or label) wins over Arena's. Each write is a compare-and-swap on
+ * `updated_at`, so a row another writer changed (or archived) after the read is left
+ * alone and counted in `conflicts`.
+ * `key` is an `item_key` or a `model_key`. Items are never created (the M1 sync trigger
+ * and the M2 backfill own that). Dry-run unless `apply`; with RATE_ITEM_MODEL off it
+ * reads and writes nothing.
+ */
+export async function syncArenaSpecsToItem(
+  supabase: RateSupabaseClient,
+  spec: ArenaSyncedDeviceSpec,
+  options: { key: string; apply?: boolean; itemModel?: ItemModelMode }
+): Promise<ArenaItemSyncResult> {
+  const safeOptions =
+    options && typeof options === 'object' && !Array.isArray(options)
+      ? options
+      : ({} as { key?: string; apply?: boolean; itemModel?: ItemModelMode });
+  const apply = safeOptions.apply === true;
+  const result: ArenaItemSyncResult = {
+    status: 'skipped',
+    apply,
+    itemKey: null,
+    itemUpdated: false,
+    variantsUpdated: 0,
+    conflicts: 0,
+  };
+  if ((safeOptions.itemModel ?? resolveItemModelMode()) === 'off') return result;
+  if (!spec || typeof spec !== 'object' || Array.isArray(spec)) return result;
+  const rawKey = typeof safeOptions.key === 'string' ? safeOptions.key.trim().toLowerCase() : '';
+  const itemKey = isItemKey(rawKey) ? rawKey : (splitModelKey(rawKey)?.itemKey ?? null);
+  if (!itemKey) return result;
+  result.itemKey = itemKey;
+
+  const { data: item, error: itemErr } = await supabase
+    .from('items')
+    .select('id, specifications, key_specs, updated_at')
+    .eq('item_key', itemKey)
+    .maybeSingle();
+  if (itemErr) throw new Error(`Failed to look up Item ${itemKey}: ${itemErr.message}`);
+  const itemRow = item as {
+    id?: unknown;
+    specifications?: unknown;
+    key_specs?: unknown;
+    updated_at?: unknown;
+  } | null;
+  const itemId = typeof itemRow?.id === 'string' && itemRow.id.trim() ? itemRow.id.trim() : null;
+  if (!itemRow || !itemId) {
+    result.status = 'item_missing';
+    return result;
+  }
+  result.status = 'synced';
+
+  const itemPayload = {
+    specifications: withoutVariantSpecs(
+      mergeProductSpecifications(itemRow.specifications, spec.specifications)
+    ),
+    key_specs: withoutVariantKeySpecs(
+      mergeKeySpecs(itemRow.key_specs, spec.keySpecs as unknown as Record<string, unknown>)
+    ),
+  };
+  if (
+    !apply ||
+    (await updateIfUnchanged(supabase, 'items', itemId, itemRow.updated_at, itemPayload))
+  ) {
+    result.itemUpdated = true;
+  } else {
+    result.conflicts++;
+  }
+
+  const { data: variants, error: varErr } = await supabase
+    .from('master_products')
+    .select('id, variant_key, status, storage_gb, ram_gb, key_specs, updated_at')
+    .eq('item_id', itemId);
+  if (varErr) throw new Error(`Failed to read the variants of ${itemKey}: ${varErr.message}`);
+  const ramByStorage = new Map(
+    (Array.isArray(spec.memoryVariants) ? spec.memoryVariants : []).map(v => [
+      v?.storageGb,
+      v?.ramGb ?? null,
+    ])
+  );
+  for (const raw of Array.isArray(variants) ? variants : []) {
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) continue;
+    const row = raw as {
+      id?: unknown;
+      variant_key?: unknown;
+      status?: unknown;
+      storage_gb?: unknown;
+      ram_gb?: unknown;
+      key_specs?: unknown;
+      updated_at?: unknown;
+    };
+    const variantId = typeof row.id === 'string' && row.id.trim() ? row.id.trim() : null;
+    const storageGb = storageGbOfVariantKey(row.variant_key);
+    if (!variantId || !storageGb || row.status === 'archived') continue;
+    const keySpecs =
+      row.key_specs && typeof row.key_specs === 'object' && !Array.isArray(row.key_specs)
+        ? (row.key_specs as Record<string, unknown>)
+        : {};
+    // One RAM per variant: a stored value (number, else label) wins over Arena's, so
+    // the number and the label never disagree.
+    // A stored label that names no single size also blocks Arena's RAM.
+    const storedRamGb = toPositiveInt(row.ram_gb, 2048);
+    const hasRamLabel = typeof keySpecs.ram === 'string' && keySpecs.ram.trim() !== '';
+    const ramGb =
+      storedRamGb ??
+      (hasRamLabel ? gbOfLabel(keySpecs.ram) : toPositiveInt(ramByStorage.get(storageGb), 2048));
+    const storedStorageGb = toPositiveInt(row.storage_gb, 65536);
+    const update: Record<string, unknown> = {};
+    const keySpecUpdate: Record<string, unknown> = {};
+    if (storedStorageGb === null) update.storage_gb = storageGb;
+    if (ramGb !== null && storedRamGb === null) update.ram_gb = ramGb;
+    if (typeof keySpecs.storage !== 'string' || !keySpecs.storage.trim()) {
+      keySpecUpdate.storage = formatStorage(storedStorageGb ?? storageGb);
+    }
+    if (ramGb !== null && (typeof keySpecs.ram !== 'string' || !keySpecs.ram.trim())) {
+      keySpecUpdate.ram = `${ramGb}GB`;
+    }
+    if (Object.keys(keySpecUpdate).length > 0) {
+      update.key_specs = mergeKeySpecs(keySpecs, keySpecUpdate);
+    }
+    if (Object.keys(update).length === 0) continue;
+    if (
+      apply &&
+      !(await updateIfUnchanged(supabase, 'master_products', variantId, row.updated_at, update))
+    ) {
+      result.conflicts++;
+      continue;
+    }
+    result.variantsUpdated++;
+  }
+  return result;
 }
 
 export const UPSTREAM_2026_ARENA_REFERENCE_URLS: ReadonlyArray<{
