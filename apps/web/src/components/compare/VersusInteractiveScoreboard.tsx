@@ -17,6 +17,7 @@ import {
   radarMarkdownCell,
 } from '@/lib/deal-radar';
 import { escapeCsvCell } from '@/lib/csv-safe';
+import { isVersusScoreTie } from '@/lib/versus-verdict';
 import RadarBadge from '@/components/radar/RadarBadge';
 import { useDealRadarIndex } from '@/components/radar/use-deal-radar';
 
@@ -162,6 +163,8 @@ export function computeVersusWeightedResult(
     finalB,
     delta: Math.abs(finalA - finalB).toFixed(2),
     winner,
+    // Level at the shown precision: no lead for either (DOS/Rate#1209).
+    tie: isVersusScoreTie(finalA, finalB),
   };
 }
 
@@ -260,12 +263,14 @@ export default function VersusInteractiveScoreboard({
           : weightedResult.finalB.toFixed(2);
       const lines = [
         `### ${t('md1v1Heading', { nameA: safeNameA, nameB: safeNameB })}`,
-        `- **${t('mdLeadingDevice')}:** **${safeWinnerName}** (${leadScore}/5.0 - ${t('mdScoreDelta', { delta: weightedResult.delta })})`,
+        weightedResult.tie
+          ? `- **${t('tie1v1Badge')}:** ${t('mdTieLine', { score: leadScore })}`
+          : `- **${t('mdLeadingDevice')}:** **${safeWinnerName}** (${leadScore}/5.0 - ${t('mdScoreDelta', { delta: weightedResult.delta })})`,
         `- **${t('mdAuditUrl')}:** ${window.location.href}`,
         '',
         `| ${t('mdColCriterion')} | ${safeNameA} | ${safeNameB} | ${t('mdColAdvantage')} |`,
         `| --- | --- | --- | --- |`,
-        `| **${t('mdRowWeightedScore')}** | **${weightedResult.finalA.toFixed(2)}/5.0** | **${weightedResult.finalB.toFixed(2)}/5.0** | **${safeWinnerName}** |`,
+        `| **${t('mdRowWeightedScore')}** | **${weightedResult.finalA.toFixed(2)}/5.0** | **${weightedResult.finalB.toFixed(2)}/5.0** | **${weightedResult.tie ? sanitizeVersusMarkdownCell(t('mdRowTie')) : safeWinnerName}** |`,
         ...criteriaRows.map((r) => {
           const winName =
             r.aVal > r.bVal
@@ -305,7 +310,7 @@ export default function VersusInteractiveScoreboard({
         100,
         weightedResult.finalA.toFixed(2),
         weightedResult.finalB.toFixed(2),
-        weightedResult.winner.name,
+        weightedResult.tie ? t('mdRowTie') : weightedResult.winner.name,
       ],
       ...criteriaRows.map((r) => [
         r.label,
@@ -386,11 +391,14 @@ export default function VersusInteractiveScoreboard({
       persona,
       weights,
       exportedAt: new Date().toISOString(),
-      winner: {
-        slug: sanitizeVersusExportSlug(weightedResult.winner.slug),
-        name: weightedResult.winner.name,
-        scoreDelta5: Number(weightedResult.delta),
-      },
+      tie: weightedResult.tie,
+      winner: weightedResult.tie
+        ? null
+        : {
+            slug: sanitizeVersusExportSlug(weightedResult.winner.slug),
+            name: weightedResult.winner.name,
+            scoreDelta5: Number(weightedResult.delta),
+          },
       productA: {
         slug: safeSlugA,
         name: scoreA.name,
@@ -567,12 +575,20 @@ export default function VersusInteractiveScoreboard({
       >
         <div>
           <span className="badge bg-success rounded-pill me-2 text-white">
-            {t('leading1v1Badge')}
+            {weightedResult.tie ? t('tie1v1Badge') : t('leading1v1Badge')}
           </span>
-          <strong className="text-white">{weightedResult.winner.name}</strong>
-          <span className="text-white-50 small ms-2">
-            {t('leadingDeltaNote', { delta: weightedResult.delta })}
-          </span>
+          {weightedResult.tie ? (
+            <span className="text-white-50 small">{t('tieDeltaNote')}</span>
+          ) : (
+            <>
+              <strong className="text-white">
+                {weightedResult.winner.name}
+              </strong>
+              <span className="text-white-50 small ms-2">
+                {t('leadingDeltaNote', { delta: weightedResult.delta })}
+              </span>
+            </>
+          )}
         </div>
         <div className="rate-tabular small text-warning fw-bold">
           {scoreA.brand}: {weightedResult.finalA.toFixed(2)}/5.0 •{' '}
