@@ -65,6 +65,7 @@ import { upsertWatchlistItem } from '@/components/watchlist/watchlist-store';
 import {
   getSpecUiDictionary,
   localizeSpecValue,
+  normalizeStorageExpansion,
   specGroupHeading,
 } from '@/lib/spec-localizer';
 import { compareRowIsShown, known5g } from '@/lib/product-spec-rows';
@@ -332,7 +333,12 @@ export function buildSpecGroups(t: CompareTranslator): SpecGroupDef[] {
           renderValue: (p) => {
             const specs = (p.specifications || {}) as ProductSpecifications;
             const res = specs.display?.resolution || '-';
-            const ppi = specs.display?.ppi ? ` (${specs.display.ppi} ppi)` : '';
+            // A resolution text that already names its density keeps it
+            // once (DOS/Rate#1214).
+            const ppi =
+              specs.display?.ppi && !/ppi\b/i.test(res)
+                ? ` (${specs.display.ppi} ppi)`
+                : '';
             return res === '-' && !ppi ? '-' : `${res}${ppi}`;
           },
           numericValue: (p) => {
@@ -433,7 +439,9 @@ export function buildSpecGroups(t: CompareTranslator): SpecGroupDef[] {
               specs.hardware?.os,
               specs.hardware?.storage_expansion
                 ? t('valCardSlotPrefix', {
-                    value: specs.hardware.storage_expansion,
+                    value: normalizeStorageExpansion(
+                      specs.hardware.storage_expansion
+                    ),
                   })
                 : null,
             ].filter(Boolean);

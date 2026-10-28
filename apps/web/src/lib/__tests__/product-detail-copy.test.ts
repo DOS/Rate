@@ -2,7 +2,11 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { computeProductRadarSignal } from '../../server/rate/deals';
 import { bayesianTierKey, radarExplanation } from '../product-detail-copy';
-import { localizeSpecValue, untranslatedViWords } from '../spec-localizer';
+import {
+  localizeSpecValue,
+  normalizeStorageExpansion,
+  untranslatedViWords,
+} from '../spec-localizer';
 import { computeBayesianRatingSummary } from '../rate-api';
 
 type Messages = Record<string, Record<string, string>>;
@@ -223,6 +227,33 @@ function main() {
     localizeSpecValue('5 ATM water resistant (bơi hồ và bơi biển)', 'vi'),
     '5 ATM kháng nước (bơi hồ và bơi biển)'
   );
+  // OIS is named once (DOS/Rate#1210).
+  assert.equal(
+    localizeSpecValue(
+      '48 MP, f/1.6, (wide), dual pixel PDAF, sensor-shift OIS',
+      'vi'
+    ),
+    '48 MP, f/1.6, (góc rộng), lấy nét Dual Pixel PDAF, chống rung dịch chuyển cảm biến (OIS)'
+  );
+  assert.equal(
+    localizeSpecValue('12 MP, f/2.8, (telephoto), PDAF, OIS', 'vi'),
+    '12 MP, f/2.8, (tele), PDAF, chống rung quang học OIS'
+  );
+  // The durability quick spec reads like the spec section (DOS/Rate#1219).
+  assert.equal(
+    localizeSpecValue('IP68 dust/water resistant (up to 6m for 30 min)', 'vi'),
+    'IP68 kháng bụi và nước (ở độ sâu tới 6m trong 30 phút)'
+  );
+  // A bare "No" storage expansion means no card slot (DOS/Rate#1214).
+  for (const [raw, vi] of [
+    ['No', 'Không hỗ trợ thẻ nhớ'],
+    ['No (NVMe)', 'Không hỗ trợ thẻ nhớ (NVMe)'],
+    ['No card slot', 'Không hỗ trợ thẻ nhớ'],
+    ['microSDXC (dedicated slot)', 'microSDXC (dedicated slot)'],
+  ] as const) {
+    assert.equal(localizeSpecValue(normalizeStorageExpansion(raw), 'vi'), vi);
+  }
+  assert.equal(normalizeStorageExpansion('Nope'), 'Nope');
   // Vietnamese words are whole words, not "th" + "ng".
   assert.deepEqual(untranslatedViWords('thông dụng'), []);
   // English pages are untouched.
