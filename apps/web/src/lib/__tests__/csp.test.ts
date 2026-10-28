@@ -108,6 +108,54 @@ async function main() {
       })
     );
     assert.equal(bad.status, 204);
+    const before = lines.length;
+    // The same violation again is not logged twice.
+    await POST(
+      new Request('https://rate.vn/api/csp-report', {
+        method: 'POST',
+        body: JSON.stringify({
+          'csp-report': {
+            'document-uri': 'https://rate.vn/smartphones',
+            'effective-directive': 'script-src-elem',
+            'blocked-uri': 'inline',
+          },
+        }),
+      })
+    );
+    // A report without a directive, or for another site's page, is not logged.
+    for (const report of [
+      {},
+      {
+        'document-uri': 'https://evil.example/x',
+        'effective-directive': 'script-src-elem',
+      },
+    ]) {
+      await POST(
+        new Request('https://rate.vn/api/csp-report', {
+          method: 'POST',
+          body: JSON.stringify({ 'csp-report': report }),
+        })
+      );
+    }
+    // A streamed body with no Content-Length stops being read past 8 KB.
+    let pulled = 0;
+    const big = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        pulled += 1024;
+        if (pulled > 256 * 1024) controller.close();
+        else controller.enqueue(new Uint8Array(1024).fill(32));
+      },
+    });
+    const huge = await POST(
+      new Request('https://rate.vn/api/csp-report', {
+        method: 'POST',
+        body: big,
+        duplex: 'half',
+      } as RequestInit)
+    );
+    assert.equal(huge.status, 204);
+    assert.ok(pulled <= 16 * 1024, `read ${pulled} bytes of an oversized body`);
+    assert.equal(lines.length, before, 'no further log line');
   } finally {
     console.error = original;
   }
