@@ -337,6 +337,7 @@ export default function ProductOffersExplorer({
       'IsOfficialMall',
       'TrustScorePercent',
       'DosafeRiskScore',
+      'CombinedRiskScore',
       'ReviewRiskScore',
       'PriceCurrentVND',
       'PriceOriginalVND',
@@ -359,6 +360,7 @@ export default function ProductOffersExplorer({
         o.merchant.is_official ? 'true' : 'false',
         String(trust),
         offerRiskScoreCsvCell(o.merchant.dosafe_risk_score),
+        offerRiskScoreCsvCell(o.merchant.risk_score),
         hasReviewRiskEvidence(o.merchant.review_risk_breakdown)
           ? offerRiskScoreCsvCell(o.merchant.review_risk_score)
           : '',
@@ -768,6 +770,8 @@ export default function ProductOffersExplorer({
                           {formatOfferRiskScore100(
                             offer.merchant.dosafe_risk_score
                           )}
+                          /100 | {t('offersCombinedRiskLabel')}:{' '}
+                          {formatOfferRiskScore100(offer.merchant.risk_score)}
                           /100 | {t('offersReviewRiskLabel')}:{' '}
                           {/* No analysed reviews: no number (#1258). */}
                           {hasReviewRiskEvidence(

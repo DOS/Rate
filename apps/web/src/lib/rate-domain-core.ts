@@ -1938,6 +1938,40 @@ export function extractProductKeywordFromUrl(rawUrl?: string | null): string {
 }
 
 /**
+ * The merchant risk split Rate Services writes (RS#708, DOS/Rate#1268): the
+ * `review_risk_score` column is the combined risk, and the breakdown (which
+ * metadata mirrors) carries `combined_risk_score` and the review-only
+ * `review_risk_score`, measured over `total_reviews` (0 when none). Null for
+ * an older breakdown without the split, which keeps today's reading.
+ */
+export function storedRiskSplit(
+  breakdown: unknown,
+  metadata?: unknown
+): { combined: number; reviewOnly: number | null } | null {
+  const asRecord = (raw: unknown): Record<string, unknown> | null =>
+    raw && typeof raw === 'object' && !Array.isArray(raw)
+      ? (raw as Record<string, unknown>)
+      : null;
+  const score = (raw: unknown): number | null =>
+    typeof raw === 'number' && Number.isFinite(raw)
+      ? Math.max(0, Math.min(100, Math.round(raw)))
+      : null;
+  for (const source of [asRecord(breakdown), asRecord(metadata)]) {
+    const combined = score(source?.combined_risk_score);
+    if (!source || combined == null) continue;
+    const total = Number(source.total_reviews);
+    return {
+      combined,
+      reviewOnly:
+        Number.isFinite(total) && total > 0
+          ? score(source.review_risk_score)
+          : null,
+    };
+  }
+  return null;
+}
+
+/**
  * Whether a merchant's review risk score may be shown as a measurement. A
  * breakdown that counts no analysed review (0, or a malformed count) means
  * the score is only a platform baseline: it is shown as "not enough data",
