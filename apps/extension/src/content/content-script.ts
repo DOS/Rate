@@ -6,6 +6,7 @@ import {
   shouldRenderTrustPill,
 } from '../security-guards.js';
 import type { ExtensionLookupData } from '../types.js';
+import { buildPillAriaLabel, resolvePillTheme } from '../verdict-display.js';
 
 const HOST_ID = 'rate-vn-trust-pill-host';
 
@@ -25,39 +26,6 @@ function escapeHtml(raw: string): string {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
-}
-
-function getVerdictTheme(verdict: string): {
-  bg: string;
-  border: string;
-  dot: string;
-} {
-  switch (verdict) {
-    case 'inflated_fake_sale':
-      return {
-        bg: 'rgba(216, 48, 48, 0.16)',
-        border: '#d83030',
-        dot: '#d83030',
-      };
-    case 'genuine_deal':
-      return {
-        bg: 'rgba(45, 186, 105, 0.16)',
-        border: '#2dba69',
-        dot: '#2dba69',
-      };
-    case 'above_market':
-      return {
-        bg: 'rgba(245, 158, 11, 0.16)',
-        border: '#f59e0b',
-        dot: '#f59e0b',
-      };
-    default:
-      return {
-        bg: 'rgba(59, 130, 246, 0.16)',
-        border: '#3b82f6',
-        dot: '#3b82f6',
-      };
-  }
 }
 
 /**
@@ -80,14 +48,22 @@ function renderShadowTrustPill(lookup: ExtensionLookupData): void {
 
     const shadow = host.shadowRoot || host.attachShadow({ mode: 'open' });
     const assessment = lookup.priceAssessment;
-    const theme = getVerdictTheme(assessment.verdict);
+    // A bait price uses the warning theme, not the neutral one (#1298).
+    const theme = resolvePillTheme(
+      assessment.verdict,
+      assessment.implausiblyLow
+    );
 
     const rawRating =
       lookup.masterProduct?.user_rating_weighted ||
       lookup.masterProduct?.average_rating ||
       null;
     const trustedRating = normalizeFiveStarRating(rawRating);
-    const authenticRatio = lookup.reviewSummary?.authentic_pct ?? null;
+    // No share of genuine reviews when none was analysed (#1301).
+    const authenticRatio =
+      (lookup.reviewSummary?.total_analyzed ?? 0) > 0
+        ? (lookup.reviewSummary?.authentic_pct ?? null)
+        : null;
 
     const cheaperSummary =
       assessment.cheaperOfferCount > 0 && assessment.maxSavingsAmount > 0
@@ -206,7 +182,7 @@ function renderShadowTrustPill(lookup: ExtensionLookupData): void {
           flex-shrink: 0;
         }
       </style>
-      <div class="pill-card" id="rate-pill-trigger" role="button" tabindex="0" aria-label="Mở bảng phân tích giá Rate.vn">
+      <div class="pill-card" id="rate-pill-trigger" role="button" tabindex="0" aria-label="${escapeHtml(buildPillAriaLabel(assessment.badgeLabel, cheaperSummary))}">
         <span class="brand-dot"></span>
         <div class="content">
           <div class="top-row">
@@ -215,7 +191,7 @@ function renderShadowTrustPill(lookup: ExtensionLookupData): void {
             ${radarChipHtml}
             ${
               trustedRating
-                ? `<span class="rating-tag">★ ${formatSafeNumber(trustedRating, { min: 0, max: 5, decimals: 1 })} (${formatSafeNumber(authenticRatio ?? 100, { min: 0, max: 100, fallback: 100 })}% thật)</span>`
+                ? `<span class="rating-tag">★ ${formatSafeNumber(trustedRating, { min: 0, max: 5, decimals: 1 })}${authenticRatio == null ? '' : ` (${formatSafeNumber(authenticRatio, { min: 0, max: 100 })}% thật)`}</span>`
                 : ''
             }
           </div>
@@ -241,6 +217,9 @@ function renderShadowTrustPill(lookup: ExtensionLookupData): void {
   });
 }
 
+// Lookups sent from this page, so a late answer for an earlier product is
+// ignored (DOS/Rate#1300).
+let detectGeneration = 0;
 let lastProcessedSignature = '';
 
 async function inspectCurrentPage(): Promise<void> {
@@ -255,6 +234,9 @@ async function inspectCurrentPage(): Promise<void> {
     const signature = `${signal.canonicalUrl}|${signal.selectedVariant || ''}|${signal.price || ''}`;
     if (signature === lastProcessedSignature) return;
     lastProcessedSignature = signature;
+    // Only the latest page's answer may draw or clear the pill: on a
+    // single-page shop an earlier lookup can answer after a later one.
+    const generation = ++detectGeneration;
 
     try {
       const response = (await chrome.runtime.sendMessage({
@@ -262,13 +244,18 @@ async function inspectCurrentPage(): Promise<void> {
         signal,
       })) as { ok?: boolean; data?: ExtensionLookupData | null };
 
+      if (generation !== detectGeneration) return;
       if (response?.ok && response.data) {
         renderShadowTrustPill(response.data);
-      } else if (response?.ok && !response.data) {
+      } else {
+        // Nothing matched or the lookup failed: never leave the previous
+        // product's pill on a single-page shop (DOS/Rate#1300).
         removeTrustPillHost();
       }
     } catch {
-      // Ignore transient messaging errors during page unload
+      // Messaging failed (page unloading, worker restarting): drop the pill
+      // rather than show a stale one (DOS/Rate#1300).
+      if (generation === detectGeneration) removeTrustPillHost();
     }
   });
 }

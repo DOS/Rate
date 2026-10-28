@@ -2,6 +2,7 @@ import 'server-only';
 import {
   applyCategorySpecTemplate,
   getCategorySpecTemplate,
+  implausiblyLowOfferIds,
   isImplausiblyLowPrice,
   minimumListingPriceVnd,
   plausibleOffers,
@@ -211,6 +212,13 @@ export interface ExtensionPriceAssessment {
   implausiblyLow?: true;
 }
 
+/**
+ * An offer in the lookup's lists. `implausiblyLow` marks a bait price far
+ * below every other in-stock store, so the side panel can flag the row
+ * (DOS/Rate#797, #1297).
+ */
+export type ExtensionOffer = MerchantOffer & { implausiblyLow?: true };
+
 export interface ExtensionLookupResponse {
   matchStatus: ExtensionMatchStatus;
   platform: SupportedEcommercePlatform | null;
@@ -224,8 +232,8 @@ export interface ExtensionLookupResponse {
   priceAssessment: ExtensionPriceAssessment;
   masterProduct: MasterProduct | null;
   matchedOffer: MerchantOffer | null;
-  topCheaperOffers: MerchantOffer[];
-  allOffers: MerchantOffer[];
+  topCheaperOffers: ExtensionOffer[];
+  allOffers: ExtensionOffer[];
   merchantProfile: MerchantSummary | null;
   reviewSummary: ReviewAnalysisSummary | null;
   priceHistory: MasterProductPriceHistorySummary | null;
@@ -1440,6 +1448,13 @@ export async function lookupExtensionProduct(
     : null;
   const radarSignal = computeProductRadarSignal(matchedMaster, offers);
 
+  // Bait prices are judged among the in-stock listings, as the market numbers
+  // are; the flag lets the side panel mark the row (DOS/Rate#1297).
+  const baitIds = implausiblyLowOfferIds(inStockOffers);
+  const flagBait = (o: MerchantOffer): ExtensionOffer =>
+    baitIds.has(o.id) ? { ...o, implausiblyLow: true } : o;
+  const flaggedCheaperOffers = topCheaperOffers.map(flagBait);
+
   return {
     matchStatus,
     platform,
@@ -1456,8 +1471,8 @@ export async function lookupExtensionProduct(
     // storage or camera, no watch 5G (DOS/Rate#1184).
     masterProduct: applyCategorySpecTemplate(categoryPath, matchedMaster),
     matchedOffer,
-    topCheaperOffers,
-    allOffers: mode === 'full' ? offers : topCheaperOffers,
+    topCheaperOffers: flaggedCheaperOffers,
+    allOffers: mode === 'full' ? offers.map(flagBait) : flaggedCheaperOffers,
     merchantProfile,
     reviewSummary,
     priceHistory: mode === 'full' ? priceHistory : null,
