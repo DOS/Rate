@@ -498,3 +498,41 @@ export function shouldRenderTrustPill(
     lookup.matchStatus === 'ambiguous_variant'
   );
 }
+
+/**
+ * What the opt-in crowd signal sends, with the words the side panel uses
+ * for each field. The opt-in label lists every one, so a field added here
+ * is disclosed too (DOS/Rate#1230).
+ */
+export const CROWD_INGEST_FIELD_LABELS = {
+  platform: 'sàn',
+  externalItemId: 'mã sản phẩm',
+  externalShopId: 'mã gian hàng',
+  url: 'URL đã cắt tham số theo dõi',
+  title: 'tên sản phẩm',
+  selectedVariant: 'phiên bản đang chọn',
+  price: 'giá bán',
+  originalPrice: 'giá gốc',
+  ratingStar: 'số sao',
+  ratingCount: 'số lượt đánh giá',
+} as const;
+
+export function buildCrowdIngestPayload(
+  signal: ExtractedPageProductSignal
+): Record<keyof typeof CROWD_INGEST_FIELD_LABELS, unknown> & {
+  userConsentOptIn: true;
+} {
+  return {
+    platform: signal.platform,
+    externalItemId: signal.externalItemId,
+    externalShopId: signal.externalShopId,
+    url: signal.canonicalUrl,
+    title: signal.title,
+    selectedVariant: signal.selectedVariant,
+    price: signal.price,
+    originalPrice: signal.originalPrice,
+    ratingStar: signal.ratingStar,
+    ratingCount: signal.ratingCount,
+    userConsentOptIn: true,
+  };
+}

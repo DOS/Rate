@@ -24,15 +24,13 @@
     "service_worker": "background/service-worker.js",
     "type": "module"
   },
-  "permissions": [
-    "storage",
-    "sidePanel"
-  ],
+  "permissions": ["storage", "sidePanel"],
   "host_permissions": [
     "https://shopee.vn/*",
     "https://*.lazada.vn/*",
     "https://tiki.vn/*",
-    "https://*.tiktok.com/*",
+    "https://www.tiktok.com/*",
+    "https://shop.tiktok.com/*",
     "https://cellphones.com.vn/*",
     "https://*.thegioididong.com/*",
     "https://fptshop.com.vn/*",
@@ -48,7 +46,8 @@
         "https://shopee.vn/*",
         "https://*.lazada.vn/*",
         "https://tiki.vn/*",
-        "https://*.tiktok.com/*",
+        "https://www.tiktok.com/*",
+        "https://shop.tiktok.com/*",
         "https://cellphones.com.vn/*",
         "https://*.thegioididong.com/*",
         "https://fptshop.com.vn/*",
