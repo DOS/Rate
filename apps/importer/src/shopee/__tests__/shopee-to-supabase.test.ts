@@ -564,6 +564,24 @@ async function runTests() {
   assert.equal(titleNamesStorage('Laptop RAM 16GB SSD 512GB', 16), false);
   assert.equal(titleNamesStorage('Tecno Spark64/128GB', 64), false);
   assert.deepEqual(titleStorageSizesGb('Laptop Lenovo ThinkPad P16 64GB RAM 1TB SSD'), [1024]);
+  for (const [title, sizes] of [
+    ['Laptop SSD512/1024GB', [512, 1024]],
+    ['Samsung Galaxy A55 ROM128/256GB', [128, 256]],
+    ['Laptop ASUS Zenbook S 14 UX5406AA SSD 512GB RAM 16GB', [512]],
+    ['Laptop RAM: 64GB SSD 1TB', [1024]],
+    ['Laptop RAM 16GB SSD 512GB', [512]],
+    ['Redmi 12+256GB', [12, 256]],
+    ['iPhone 256GB | 512GB', [256, 512]],
+    ['Ổ cứng 1 TB', [1024]],
+    ['Galaxy S25 128 / 256 / 512GB', [128, 256, 512]],
+  ] as const) {
+    assert.deepEqual(titleStorageSizesGb(title), sizes, title);
+  }
+  // Linear in the title: no backtracking blow-up on a long slash list.
+  const longTitle = `Laptop ASUS Zenbook S 14 UX5406AA SSD 1TB ${'128 / '.repeat(400)}X`;
+  const started = performance.now();
+  titleStorageSizesGb(longTitle);
+  assert.ok(performance.now() - started < 50, 'size scan stays fast');
   const { stub: listStub } = createPipelineStubSupabase({
     hintRow: { id: 'master-hint-256', storage_gb: 256 },
   });

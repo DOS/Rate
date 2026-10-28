@@ -97,27 +97,60 @@ const SPEC_FIELD_GROUP_KEYS = [
   'regulatory',
 ] as const;
 
-// A size or a slash list of sizes with its unit at the end ("1TB",
-// "128/256/512GB", "1.5/2TB", "512GB/1TB"), not glued to a model name and not
-// RAM ("64GB RAM", "RAM 16GB").
-const TITLE_SIZE_LIST_RE =
-  /(?<![\w.,])(?<!(?<!\d\s*(?:GB|TB)\s*)RAM\s{0,3})((?:\d+(?:[.,]\d+)?\s*(?:GB|TB)?\s*\/\s*)*\d+(?:[.,]\d+)?)\s*(GB|TB)\b(?!\s*RAM)/gi;
+// One size token after spacing is folded: "1TB", "SSD512GB", "ROM128/256GB",
+// "128/256/512GB", "1.5/2TB", "512GB/1TB", "12+256GB". A size glued to any
+// other word ("Spark64/128GB") is not one.
+const SIZE_TOKEN_RE =
+  /^(?:SSD|ROM|HDD|EMMC|UFS)?:?(\d[\d.,]*(?:GB|TB)?(?:[/+]\d[\d.,]*(?:GB|TB)?)*(?<=GB|TB))$/i;
+const SIZE_PART_RE = /^(\d+(?:[.,]\d+)?)(GB|TB)?$/i;
+const RAM_LABEL_RE = /^RAM:?$/i;
+const STORAGE_LABEL_RE = /^(?:SSD|ROM|HDD|EMMC|UFS):?$/i;
+const MAX_TITLE_SCAN = 500;
 
-/** The storage sizes, in GB, a title names (DOS/Rate#1197). */
-export function titleStorageSizesGb(title: string): number[] {
+const sizesOfToken = (list: string): number[] => {
+  const parts = list.split(/[/+]/);
+  const listUnit = SIZE_PART_RE.exec(parts[parts.length - 1])?.[2];
+  if (!listUnit) return [];
   const sizes: number[] = [];
-  for (const match of title.matchAll(TITLE_SIZE_LIST_RE)) {
-    const listUnit = match[2].toUpperCase();
-    for (const part of match[1].split('/')) {
-      const sized = /(\d+(?:[.,]\d+)?)\s*(GB|TB)?/i.exec(part.trim());
-      if (!sized) continue;
-      const unit = (sized[2] ?? listUnit).toUpperCase();
-      const value = parseFloat(sized[1].replace(',', '.'));
-      if (Number.isFinite(value) && value > 0) {
-        sizes.push(Math.round(unit === 'TB' ? value * 1024 : value));
-      }
+  for (const part of parts) {
+    const sized = SIZE_PART_RE.exec(part);
+    if (!sized) return [];
+    const value = parseFloat(sized[1].replace(',', '.'));
+    const unit = (sized[2] ?? listUnit).toUpperCase();
+    if (Number.isFinite(value) && value > 0) {
+      sizes.push(Math.round(unit === 'TB' ? value * 1024 : value));
     }
   }
+  return sizes;
+};
+
+/**
+ * The storage sizes, in GB, a title names (DOS/Rate#1197), RAM left out.
+ * A RAM or SSD/ROM label binds to the size after it when the title writes
+ * labels first ("RAM 16GB SSD 512GB"), else to the size before it ("64GB RAM
+ * 1TB SSD"). Token by token, so the cost stays linear in the title.
+ */
+export function titleStorageSizesGb(title: string): number[] {
+  const tokens = title
+    .slice(0, MAX_TITLE_SCAN)
+    .replace(/(\d)\s+(GB|TB)\b/gi, '$1$2')
+    .replace(/ *([/+]) */g, '$1')
+    .split(/[\s,;|()[\]]+/)
+    .filter(Boolean);
+  const isLabel = (t: string | undefined) =>
+    t !== undefined && (RAM_LABEL_RE.test(t) || STORAGE_LABEL_RE.test(t));
+  const firstLabel = tokens.findIndex(t => isLabel(t));
+  const firstSize = tokens.findIndex(t => SIZE_TOKEN_RE.test(t));
+  const labelsFirst = firstLabel !== -1 && firstLabel < firstSize;
+  const sizes: number[] = [];
+  tokens.forEach((token, i) => {
+    const size = SIZE_TOKEN_RE.exec(token);
+    if (!size) return;
+    const glued = token.length !== size[1].length;
+    const label = labelsFirst ? tokens[i - 1] : tokens[i + 1];
+    const isRam = !glued && label !== undefined && RAM_LABEL_RE.test(label);
+    if (!isRam) sizes.push(...sizesOfToken(size[1]));
+  });
   return sizes;
 }
 
