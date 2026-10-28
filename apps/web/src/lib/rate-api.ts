@@ -133,17 +133,21 @@ async function fetchAllRows<T>(
     from: number,
     to: number
   ) => PromiseLike<{ data: T[] | null; error: { message: string } | null }>,
-  pageSize = 1000
+  pageSize = 1000,
+  /** False for a speculative read whose caller logs a failure if it uses it. */
+  logFailure = true
 ): Promise<T[]> {
   const rows: T[] = [];
   for (let from = 0, pages = 0; ;) {
     const { data, error } = await buildPage(from, from + pageSize - 1);
     if (error) {
-      log.error('paged read failed', {
-        table: label,
-        row: from,
-        message: error.message,
-      });
+      if (logFailure) {
+        log.error('paged read failed', {
+          table: label,
+          row: from,
+          message: error.message,
+        });
+      }
       throw new RateDataUnavailableError(label, error);
     }
     const page = data ?? [];
@@ -3136,12 +3140,35 @@ export async function attachMerchantDiscountAnalysis(
       }
     }
   );
+  // A listing with a verdict shows the price the verdict was computed on: the
+  // profile entry and the price-history entry expire apart, and an old price
+  // next to a verdict quoting the new one would contradict itself
+  // (DOS/Rate#1240). A verdict's price is always a valid one. Stock, rating
+  // and title stay as the profile read them.
+  const listings = base.profile.listings
+    .map((listing) => {
+      const analysis = discountByOfferId.get(listing.id) || null;
+      return {
+        ...listing,
+        ...(analysis
+          ? {
+              price_current: analysis.price_current,
+              price_original: analysis.price_original,
+            }
+          : {}),
+        discount_analysis: analysis,
+      };
+    })
+    // Stable: equal prices keep the profile's id order.
+    .sort((a, b) => a.price_current - b.price_current);
+  const prices = listings
+    .map((l) => l.price_current)
+    .filter((p) => Number.isFinite(p) && p > 0 && p <= MAX_VALID_VND_PRICE);
   return {
     ...base.profile,
-    listings: base.profile.listings.map((listing) => ({
-      ...listing,
-      discount_analysis: discountByOfferId.get(listing.id) || null,
-    })),
+    min_price: prices.length > 0 ? Math.min(...prices) : null,
+    max_price: prices.length > 0 ? Math.max(...prices) : null,
+    listings,
   };
 }
 
@@ -3164,17 +3191,21 @@ export async function getMerchantProfileBase(
   // Secondary reads throw too: a profile with silently empty listings or
   // reviews would otherwise be cached as if it were true (DOS/Rate#329).
   // Paged: retailers can list more than PostgREST's 1000-row cap.
-  const readListings = (merchantId: string) =>
-    fetchAllRows('merchant listings', (from, to) =>
-      supabase
-        .from('products')
-        .select(
-          'id, merchant_id, platform, platform_item_id, title, price_current, price_original, stock, historical_sold, historical_sold_display, rating_star, rating_count, images, url, cluster_id'
-        )
-        .eq('merchant_id', merchantId)
-        .order('price_current', { ascending: true })
-        .order('id')
-        .range(from, to)
+  const readListings = (merchantId: string, logFailure = true) =>
+    fetchAllRows(
+      'merchant listings',
+      (from, to) =>
+        supabase
+          .from('products')
+          .select(
+            'id, merchant_id, platform, platform_item_id, title, price_current, price_original, stock, historical_sold, historical_sold_display, rating_star, rating_count, images, url, cluster_id'
+          )
+          .eq('merchant_id', merchantId)
+          .order('price_current', { ascending: true })
+          .order('id')
+          .range(from, to),
+      undefined,
+      logFailure
     );
 
   let merchantRow: RawMerchantSafeRow | null = null;
@@ -3184,7 +3215,9 @@ export async function getMerchantProfileBase(
   let listingsByUuid: Promise<unknown[]> | null = null;
 
   if (isUuid) {
-    listingsByUuid = readListings(cleaned);
+    // Unlogged: a UUID that is no merchant id discards this read, failed or
+    // not (DOS/Rate#1240). A failure is logged below if the read is used.
+    listingsByUuid = readListings(cleaned, false);
     // Settled here so a failure is never unhandled while the merchant loads;
     // it is rethrown below when these listings are used.
     listingsByUuid.catch(() => undefined);
@@ -3219,7 +3252,13 @@ export async function getMerchantProfileBase(
   const merchantId = merchantRow.id;
   const prodRows =
     listingsByUuid && merchantId.toLowerCase() === cleaned.toLowerCase()
-      ? await listingsByUuid
+      ? await listingsByUuid.catch((err: unknown) => {
+          log.error('paged read failed', {
+            table: 'merchant listings',
+            message: err instanceof Error ? err.message : String(err),
+          });
+          throw err;
+        })
       : await readListings(merchantId);
 
   const rawProducts = prodRows as unknown as RawProductRow[];
