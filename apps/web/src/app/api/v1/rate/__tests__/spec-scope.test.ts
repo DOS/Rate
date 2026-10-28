@@ -147,6 +147,8 @@ async function testProductFilters() {
   assert.equal(body.data[0].ram_gb, 1);
   assert.equal(body.data[0].has_5g, false);
   assert.equal(body.data[0].specifications.cellular.technology, 'LTE');
+  // In stock, so on sale (DOS/Rate#1188).
+  assert.equal(body.data[0].sale_state, 'on_sale');
 
   catalog = [EARBUD];
   ({ status, body } = await listProducts('category=earbuds&battery=400'));

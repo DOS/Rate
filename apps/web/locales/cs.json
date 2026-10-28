@@ -1879,5 +1879,17 @@
     "summaryNoAuthentic": "Po odfiltrování {removed} spamových nebo odměnových komentářů zatím žádné skutečné recenze.",
     "proPositiveFeedback": "Pozitivní zpětná vazba od skutečných uživatelů",
     "originalVietnamese": "vietnamsky"
+  },
+  "saleState": {
+    "soldOut": "Všude vyprodáno",
+    "soldOutHint": "Všechny sledované obchody jsou vyprodané.",
+    "discontinued": "Ve Vietnamu se již neprodává",
+    "discontinuedHint": "Obchody ve Vietnamu tento model už nově neprodávají.",
+    "comingSoon": "Brzy ve Vietnamu",
+    "comingSoonHint": "Tento model se ve Vietnamu oficiálně zatím neprodává.",
+    "notListed": "Ve Vietnamu zatím bez prodejce",
+    "notListedHint": "Rate zatím nenašel obchod ve Vietnamu, který tento model prodává.",
+    "noStock": "Nikde skladem",
+    "noStockHint": "Žádný obchod ho nemá skladem."
   }
 }
