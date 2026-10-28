@@ -444,6 +444,9 @@ async function runSuite() {
     ['iPad Pro M4 | tặng bút 13 inch WiFi 256GB', 'apple:ipad-pro-m4-13:256gb'],
     ['MacBook Air M3, kèm chuột 15 inch 16GB 512GB', 'apple:macbook-air-m3-15:512gb'],
     ['iPad Pro M4 11 inch tặng bao da 13 inch 256GB', 'apple:ipad-pro-m4-11:256gb'],
+    // "bao test" (guaranteed testing) is no accessory.
+    ['iPad Pro M4 kèm bao test 13 inch WiFi 256GB', 'apple:ipad-pro-m4-13:256gb'],
+    ['MacBook Air M3 kèm bao test 15 inch 16GB 512GB', 'apple:macbook-air-m3-15:512gb'],
     ['iPad Pro 13" M5 1TB', 'apple:ipad-pro-m5-13:1024gb'],
     ['iPad Pro 11 2024 M4 256GB', 'apple:ipad-pro-m4-11:256gb'],
     ['iPad Pro 12.9 inch M2 128GB', 'apple:ipad-pro-m2-129:128gb'],

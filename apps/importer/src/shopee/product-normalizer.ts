@@ -1285,7 +1285,7 @@ const GIFTED_ACCESSORY_SIZE =
   /(?<![\p{L}\d])(quà tặng|tặng|kèm)((?: [\p{L}-]+){1,4}?) ?(?:(?:38|4[0-2]|4[4-6]) ?mm\b|\d{1,2}(?:[.,]\d)? ?(?:inch\b|in\b|"))/giu;
 // An accessory sold by the size it fits: a case, cover, film or box.
 const GIFT_ACCESSORY_NOUN =
-  /(?<![\p{L}\d])(?:ốp|case|bao da|bao|silicone|silicon|tpu|cường lực|kính|miếng dán|vỏ|hộp|túi)(?![\p{L}\d])/iu;
+  /(?<![\p{L}\d])(?:ốp|case|bao da|silicone|silicon|tpu|cường lực|kính|miếng dán|vỏ|hộp|túi)(?![\p{L}\d])/iu;
 const APPLE_SIZE_PATTERNS: Record<string, [RegExp, RegExp]> = {
   ipad: sizePatterns(IPAD_SIZE),
   'macbook air': sizePatterns(MACBOOK_AIR_SIZE),
