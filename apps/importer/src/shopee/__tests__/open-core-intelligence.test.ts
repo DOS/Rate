@@ -460,6 +460,22 @@ async function runSuite() {
     // A size the reader does not take ("10.9") or a gift listing several sizes: no size.
     ['iPad Air 10.9 tặng ốp 11 inch', 'apple:ipad-air:unknown'],
     ['iPad Pro M4 tặng ốp 11 inch/13 inch', 'apple:ipad-pro-m4:unknown'],
+    ['iPad Pro M4 tặng ốp 11 inch / 11.0 inch', 'apple:ipad-pro-m4-11:unknown'],
+    ['iPad Pro M4 tặng ốp 11 inch, 13 inch', 'apple:ipad-pro-m4:unknown'],
+    ['MacBook Pro M4 512GB macOS 14 tặng túi 16 inch', 'apple:macbook-pro-m4-16:512gb'],
+    // Warranty, return days, battery hours, a discount, RAM, an OS version or a charger's
+    // watts are no screen size: the gift's size still stands in.
+    ['iPad Air M2 128GB Chính hãng BH 12 tháng tặng ốp 11 inch', 'apple:ipad-air-m2-11:128gb'],
+    ['iPad Air M2 128GB Đổi trả 15 ngày tặng ốp 11 inch', 'apple:ipad-air-m2-11:128gb'],
+    ['iPad Pro M4 256GB Pin 10 giờ tặng bao da 13 inch', 'apple:ipad-pro-m4-13:256gb'],
+    ['iPad Air M2 128GB giảm 10% tặng ốp 11 inch', 'apple:ipad-air-m2-11:128gb'],
+    ['MacBook Air M3 RAM 16 tặng túi 13 inch', 'apple:macbook-air-m3-13:unknown'],
+    ['MacBook Air M3 macOS 15 tặng túi 13 inch', 'apple:macbook-air-m3-13:unknown'],
+    ['MacBook Air M3 15 W tặng túi 13 inch', 'apple:macbook-air-m3-13:unknown'],
+    // ...and never a size of its own.
+    ['MacBook Air M2 8GB 256GB bảo hành 15 tháng', 'apple:macbook-air-m2:256gb'],
+    ['MacBook Pro M3 18GB 512GB bảo hành 14 tháng', 'apple:macbook-pro-m3:512gb'],
+    ['MacBook Air M2 8GB 256GB 15 gói quà', 'apple:macbook-air-m2:256gb'],
     // A number after "cho/for" (a school year, an age) is no size of the product.
     [
       'iPad Pro M4 Wifi 256GB tặng bao da 13 inch cho học sinh lớp 11',
@@ -717,6 +733,13 @@ async function runSuite() {
     ['Apple Watch Series 10 kèm vỏ nhôm 46mm, GPS 42mm', 'apple:watch-series-10-42mm:64gb'],
     ['Apple Watch Series 10 GPS tặng ốp 42mm / 46mm', 'apple:watch-series-10:64gb'],
     ['Apple Watch Series 10 GPS 46 tặng ốp 42mm', 'apple:watch-series-10:64gb'],
+    ['Apple Watch Series 10 GPS giảm 40% tặng ốp 46mm', 'apple:watch-series-10-46mm:64gb'],
+    // A size listed right after the box's is a list, not the watch's own case.
+    ['Apple Watch Series 10 kèm hộp 46mm | 42mm', 'apple:watch-series-10-46mm:64gb'],
+    // "size 46" beats a box's size; a band's "size 42" is not the watch's.
+    ['Apple Watch Series 10 kèm hộp 42mm, size 46 GPS', 'apple:watch-series-10-46mm:64gb'],
+    ['Apple Watch Series 10 kèm vỏ nhôm 42mm, size 46 GPS', 'apple:watch-series-10-46mm:64gb'],
+    ['Apple Watch Series 10 Sport Band size 42 cho mặt 46mm', 'apple:watch-series-10:64gb'],
     // A bundle word before no sized accessory keeps the product's size.
     ['Apple Watch Series 10 kèm sạc 46mm GPS', 'apple:watch-series-10-46mm:64gb'],
     ['Apple Watch Series 10, kèm sạc 46mm GPS', 'apple:watch-series-10-46mm:64gb'],
