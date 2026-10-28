@@ -3388,9 +3388,7 @@ export async function getMerchantProfileBase(
   const clusterIds = Array.from(
     new Set(rawProducts.map((p) => p.cluster_id).filter(Boolean))
   ) as string[];
-  const productIds = rawProducts.map((p) => p.id);
-
-  const [masterRows, catsRes, reviewRows] = await Promise.all([
+  const [masterRows, catsRes] = await Promise.all([
     // Published only: the product page serves no other status, so a draft
     // master would be linked to a 404 (DOS/Rate#769). Its listings show as
     // unclustered.
@@ -3404,15 +3402,27 @@ export async function getMerchantProfileBase(
         .eq('status', 'published')
     ),
     supabase.from('categories').select('id, slug'),
-    readInChunks(productIds, 'merchant profile', (chunk) =>
+  ]);
+  // Reviews of a listing whose product is not published (draft, archived) stay
+  // out, as on the product's own review paths (DOS/Rate#1309); an unclustered
+  // listing's reviews show.
+  const publishedMasterIds = new Set(
+    (masterRows as Array<{ id: string }>).map((m) => m.id)
+  );
+  const productIds = rawProducts
+    .filter((p) => !p.cluster_id || publishedMasterIds.has(p.cluster_id))
+    .map((p) => p.id);
+  const reviewRows = await readInChunks(
+    productIds,
+    'merchant profile',
+    (chunk) =>
       supabase
         .from('reviews')
         .select('*, review_flags(*)')
         .in('product_id', chunk)
         .order('created_at', { ascending: false })
         .limit(60)
-    ),
-  ]);
+  );
   if (catsRes.error) {
     throw new RateDataUnavailableError('merchant profile', catsRes.error);
   }
