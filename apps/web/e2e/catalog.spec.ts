@@ -163,8 +163,9 @@ test('offer and listing reads page past the 1000-row cap', async ({
     'Review past the 1000-row listing cap.'
   );
   expect(product.data.reviewSummary.total_analyzed).toBe(7);
+  // LLM free text is shown with the one-listing scope (DOS/Rate#1244).
   expect(product.data.reviewSummary.ai_summary).toBe(
-    'E2E analysis past the 1000-row listing cap.'
+    'Theo các đánh giá của một nơi bán trong lần phân tích gần nhất: E2E analysis past the 1000-row listing cap.'
   );
 
   const merchant = await (

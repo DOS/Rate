@@ -1272,6 +1272,19 @@ function testLlmReviewSummaryScope(): void {
   // Spec numbers are not claims.
   for (const ok of [
     'Pin 5000mAh, sạc 65W, RAM 8GB, màn 120Hz, dùng 6 tháng vẫn ổn.',
+    'Pin còn 90% sau 1 năm.',
+    'Sạc từ 0 lên 100% trong 1 tiếng.',
+    'Có 2 điểm trừ: nóng và nặng.',
+    '1 lượt sạc dùng 2 ngày.',
+    'Shop hỗ trợ 24/7.',
+    'Giao ngày 28/10 đúng hẹn.',
+    'Máy dùng được cho 2 người.',
+    'Pin trung bình 2 ngày.',
+    'Camera 50MP chụp đẹp, dùng 2 năm chưa lỗi.',
+    'Pin dùng được 2/3 ngày.',
+    'Pin tụt 10% sau một giờ.',
+    'Màn hình có 1000 điểm ảnh bị lỗi.',
+    'Máy hỗ trợ 2 sao lưu tự động.',
   ]) {
     assert.equal(hasReviewScoreClaim(ok), false, ok);
   }
@@ -1289,6 +1302,29 @@ function testLlmReviewSummaryScope(): void {
     'Rated 4.7 out of 5.',
     '120 reviews praise the battery.',
     'Weighted score is high.',
+    'Đánh giá trung bình 4.8.',
+    'Điểm 4,8.',
+    'Rated 4.7.',
+    'Score of 4.7.',
+    'Average of 4.7.',
+    '80 phần trăm người mua khen pin.',
+    'Người mua khen pin tới 90%.',
+    '30 khách hàng phàn nàn.',
+    'Trong 120 bài đánh giá, nhiều người khen.',
+    '50 phản hồi tích cực.',
+    'Hầu hết đều cho năm sao.',
+    'Most buyers gave five stars.',
+    '4.8 🌟.',
+    'Đạt 9/10.',
+    'rating 4.8',
+    'điểm 9',
+    'hơn trăm người khen pin.',
+    'Hàng nghìn đánh giá tốt.',
+    'Hundreds of buyers like it.',
+    '95 percent of buyers are satisfied.',
+    '95 phần trăm người mua hài lòng.',
+    '４.８⭐',
+    '4​.8/5',
   ]) {
     assert.equal(hasReviewScoreClaim(claim), true, claim);
     assert.equal(scopeLlmReviewSummary(claim), null, claim);
@@ -1310,6 +1346,20 @@ function testLlmReviewSummaryScope(): void {
   }
   const long = scopeLlmReviewSummary('Máy dùng tốt. '.repeat(100))!;
   assert.ok(long.length <= 600 && long.endsWith('…'));
+  const emoji = scopeLlmReviewSummary('😀'.repeat(400))!;
+  const beforeEllipsis = emoji.charCodeAt(emoji.length - 2);
+  assert.ok(emoji.length <= 600 && emoji.endsWith('…'));
+  assert.ok(
+    !(beforeEllipsis >= 0xd800 && beforeEllipsis <= 0xdbff),
+    'no lone surrogate'
+  );
+  assert.equal(
+    scopeLlmReviewSummary(
+      `${LLM_REVIEW_SUMMARY_PREFIX}${LLM_REVIEW_SUMMARY_PREFIX}Pin tốt.`
+    ),
+    `${LLM_REVIEW_SUMMARY_PREFIX}Pin tốt.`,
+    'repeated prefixes collapse to one'
+  );
 }
 
 function main(): void {
