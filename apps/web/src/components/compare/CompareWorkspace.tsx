@@ -870,7 +870,8 @@ export default function CompareWorkspace({
       ...group,
       rows: group.rows.filter((row) =>
         compareRowIsShown(
-          products.map((p) => row.renderValue(p)),
+          // The cells show the localized text, where "N/A" becomes "-".
+          products.map((p) => localizeSpecValue(row.renderValue(p), locale)),
           showDiffOnly
         )
       ),
@@ -1293,13 +1294,21 @@ export default function CompareWorkspace({
       matrix: specGroups.map((group) => ({
         groupId: group.id,
         groupTitle: group.title,
-        rows: group.rows.map((row) => ({
-          id: row.id,
-          label: row.label,
-          values: Object.fromEntries(
-            products.map((p) => [p.slug, row.renderValue(p)])
-          ),
-        })),
+        // Like the CSV, no row that every product leaves empty.
+        rows: group.rows
+          .filter((row) =>
+            compareRowIsShown(
+              products.map((p) => row.renderValue(p)),
+              false
+            )
+          )
+          .map((row) => ({
+            id: row.id,
+            label: row.label,
+            values: Object.fromEntries(
+              products.map((p) => [p.slug, row.renderValue(p)])
+            ),
+          })),
       })),
     };
     const blob = new Blob([JSON.stringify(payload, null, 2)], {
