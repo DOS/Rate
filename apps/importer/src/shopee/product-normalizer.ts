@@ -1147,7 +1147,9 @@ const CANONICAL_PHONE_REGISTRY: Record<
     ip_rating: 'WR50 water resistant (50m) + IP6X dust resistant',
     only_storage_gb: 64,
   },
+  // Size-dependent specs are the 46mm's (`case_mm`, DOS/Rate#1211).
   'apple:watch-series-11': {
+    case_mm: 46,
     screen_size_inch: 1.96,
     battery_mah: 345,
     ram_gb: 2,
