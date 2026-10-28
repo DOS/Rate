@@ -198,6 +198,7 @@ export function strongestPriceAnomaly(
       .filter((p): p is ProductRow => Boolean(p && typeof p === 'object' && !Array.isArray(p)))
       .map(p => ({
         id: p.id,
+        cluster_id: p.cluster_id,
         price_current: p.price_current,
         merchants: {
           is_official:
@@ -210,7 +211,7 @@ export function strongestPriceAnomaly(
       masterMinByCluster && typeof masterMinByCluster.get === 'function'
         ? masterMinByCluster.get(clusterId)
         : undefined;
-    const floor = resolveClusterPeerFloorPrice(peers, listing.id, fallbackMasterMin);
+    const floor = resolveClusterPeerFloorPrice(peers, listing.id, fallbackMasterMin, clusterId);
     if (!floor || floor <= 2_000_000 || floor > MAX_VALID_VND_PRICE) continue;
     const ratio = price / floor;
     if (ratio < 0.58 && (!best || ratio < best.ratio)) {

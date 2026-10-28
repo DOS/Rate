@@ -42,6 +42,8 @@ function parseFiniteVndPrice(value: unknown): number {
 
 export interface ClusterPeerPriceCandidate {
   id?: unknown;
+  /** The peer's variant. When given, only peers of `variantId` count (DOS/Rate#1213). */
+  cluster_id?: unknown;
   price_current?: unknown;
   merchants?: { is_official?: boolean | null } | Array<{ is_official?: boolean | null }> | null;
 }
@@ -51,15 +53,26 @@ export interface ClusterPeerPriceCandidate {
  * preferring Official Mall sibling prices when available, and falling back to
  * `fallbackMasterMinPrice` only when no positive-priced peer listings exist.
  * Ignores unscaled prices `> MAX_VALID_VND_PRICE` (1B VND).
+ *
+ * Peer floors are per variant (design doc 4.4). With `variantId` given:
+ * - `null` (a listing with no variant): no floor at all, not even the fallback;
+ * - an id: a row whose `cluster_id` is set and is not that id, including a
+ *   NULL-variant row (`cluster_id: null`), never enters the floor.
+ * Omitted, rows are taken as already filtered to one variant (unchanged behaviour).
  */
 export function resolveClusterPeerFloorPrice(
   peerRows: readonly ClusterPeerPriceCandidate[],
   currentProductId: string,
-  fallbackMasterMinPrice?: number | null
+  fallbackMasterMinPrice?: number | null,
+  variantId?: string | null
 ): number | undefined {
+  if (variantId === null) return undefined;
   let officialMin = Number.POSITIVE_INFINITY;
   let peerMin = Number.POSITIVE_INFINITY;
   const safeCurrentId = sanitizeClusterPeerId(currentProductId);
+  const safeVariantId = variantId === undefined ? undefined : sanitizeClusterPeerId(variantId);
+  // A variant id that does not sanitize names no variant: no floor.
+  if (safeVariantId === '') return undefined;
 
   if (Array.isArray(peerRows)) {
     const limit = Math.min(peerRows.length, MAX_CLUSTER_PEER_ROWS);
@@ -68,6 +81,13 @@ export function resolveClusterPeerFloorPrice(
       if (!row || typeof row !== 'object' || Array.isArray(row)) continue;
       const rowId = sanitizeClusterPeerId(row.id);
       if (safeCurrentId && rowId === safeCurrentId) continue;
+      if (
+        safeVariantId !== undefined &&
+        row.cluster_id !== undefined &&
+        sanitizeClusterPeerId(row.cluster_id) !== safeVariantId
+      ) {
+        continue;
+      }
       const rawPrice = parseFiniteVndPrice(row.price_current);
       if (!Number.isFinite(rawPrice) || rawPrice <= 0 || rawPrice > MAX_VALID_VND_PRICE) continue;
       const price = Math.round(rawPrice);
