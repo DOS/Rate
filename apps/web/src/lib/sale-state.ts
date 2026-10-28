@@ -26,7 +26,9 @@ const CURATED_STATES = new Set<SaleState>(['discontinued', 'coming_soon']);
 // GSMArena-style launch status, e.g. "Discontinued" or "Coming soon. Exp.
 // release 2026, Q4".
 const DISCONTINUED_STATUS_RE = /\b(?:discontinued|cancell?ed)\b/i;
-const COMING_STATUS_RE = /\b(?:coming soon|announced|rumou?red|expected)\b/i;
+// "Announced" is left out: free-text statuses say "Announced 2024,
+// available" for models long on sale.
+const COMING_STATUS_RE = /\b(?:coming soon|rumou?red)\b/i;
 
 export interface SaleStateInput {
   /** The lowest plausible in-stock price; 0 or less when none. */
@@ -91,18 +93,34 @@ export function saleStateLabelKey(
 }
 
 /**
- * `masterSaleState` read from a master product row, which carries no count of
- * sold-out listings.
+ * The listing count `masterSaleState` may rely on: unknown while some listing
+ * is in stock, since the stored price counts crawled, priced listings only and
+ * "sold out" would then contradict the offer table.
  */
-export function saleStateOfMaster(master: {
-  min_price?: number | null;
-  metadata?: unknown;
-  specifications?: unknown;
-}): SaleState {
+export function listingCountForSaleState(
+  listings: number,
+  inStockListings: number
+): number | undefined {
+  return inStockListings > 0 ? undefined : listings;
+}
+
+/**
+ * `masterSaleState` read from a master product row, which carries no count of
+ * sold-out listings; pass `listingCount` when the listings are at hand.
+ */
+export function saleStateOfMaster(
+  master: {
+    min_price?: number | null;
+    metadata?: unknown;
+    specifications?: unknown;
+  },
+  listingCount?: number
+): SaleState {
   const specs = master.specifications as
     { availability?: { status?: unknown } } | null | undefined;
   return masterSaleState({
     minPrice: master.min_price,
+    listingCount,
     metadata: master.metadata,
     availabilityStatus: specs?.availability?.status,
   });

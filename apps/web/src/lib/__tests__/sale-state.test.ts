@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import {
   SALE_STATES,
+  listingCountForSaleState,
   masterSaleState,
   saleStateLabelKey,
   saleStateOfMaster,
@@ -75,6 +76,27 @@ function main() {
   );
   assert.equal(masterSaleState({ minPrice: 0 }), 'no_stock');
 
+  // Free-text "Announced" is not a launch to come.
+  assert.equal(
+    masterSaleState({
+      minPrice: 0,
+      listingCount: 0,
+      availabilityStatus: 'Announced 2024, available',
+    }),
+    'not_listed'
+  );
+  // An in-stock listing outside the stored price leaves the count unknown,
+  // so the page never says "sold out" above an in-stock offer.
+  assert.equal(listingCountForSaleState(2, 1), undefined);
+  assert.equal(listingCountForSaleState(2, 0), 2);
+  assert.equal(
+    saleStateOfMaster({ min_price: null }, listingCountForSaleState(2, 1)),
+    'no_stock'
+  );
+  assert.equal(
+    saleStateOfMaster({ min_price: null }, listingCountForSaleState(2, 0)),
+    'sold_out'
+  );
   // A master row has no count of sold-out listings.
   assert.equal(saleStateOfMaster({ min_price: 0 }), 'no_stock');
   assert.equal(saleStateOfMaster({ min_price: 9_990_000 }), 'on_sale');

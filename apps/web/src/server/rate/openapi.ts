@@ -405,6 +405,19 @@ export function buildRateOpenApiSpec(
                       radar_signal: {
                         $ref: '#/components/schemas/ProductDealRadarSignal',
                       },
+                      data: {
+                        type: 'object',
+                        properties: {
+                          product: {
+                            type: 'object',
+                            properties: {
+                              sale_state: {
+                                $ref: '#/components/schemas/ProductSaleState',
+                              },
+                            },
+                          },
+                        },
+                      },
                     },
                   },
                 },
@@ -444,7 +457,17 @@ export function buildRateOpenApiSpec(
                     type: 'object',
                     properties: {
                       ok: { type: 'boolean', example: true },
-                      data: { type: 'array', items: { type: 'object' } },
+                      data: {
+                        type: 'array',
+                        items: {
+                          type: 'object',
+                          properties: {
+                            sale_state: {
+                              $ref: '#/components/schemas/ProductSaleState',
+                            },
+                          },
+                        },
+                      },
                       deal_radar: {
                         type: 'object',
                         additionalProperties: {

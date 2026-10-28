@@ -63,7 +63,11 @@ import {
 import { contentLang } from '@/lib/content-lang';
 import ContentText from '@/components/elementary/ContentText';
 import { buildProductSpecGroups } from '@/lib/product-spec-rows';
-import { masterSaleState, saleStateLabelKey } from '@/lib/sale-state';
+import {
+  listingCountForSaleState,
+  masterSaleState,
+  saleStateLabelKey,
+} from '@/lib/sale-state';
 import {
   computeProductStandingInCategory,
   scoreMasterProductForLeaderboard,
@@ -245,7 +249,7 @@ export async function ProductDetailView({
   // Why there is no price, when there is none (DOS/Rate#1188).
   const saleState = masterSaleState({
     minPrice: currentMinPrice,
-    listingCount: offers.length,
+    listingCount: listingCountForSaleState(offers.length, inStockOffers.length),
     metadata: product.metadata,
     availabilityStatus: specs?.availability?.status,
   });
