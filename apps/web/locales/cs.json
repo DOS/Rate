@@ -1868,7 +1868,9 @@
     "priceHistory": "Historie cen",
     "priceHistoryTitle": "Ověřit historii cen a odhalit falešné slevy",
     "noImage": "Bez obrázku",
-    "verified": "Normalizované parametry"
+    "verified": "Normalizované parametry",
+    "fromPrice": "Cena od",
+    "sizesLabel": "Varianty úložiště"
   },
   "priceVerdict": {
     "labelFake": "Varování: falešná sleva",

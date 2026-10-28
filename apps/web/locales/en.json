@@ -1868,7 +1868,9 @@
     "priceHistory": "Price history",
     "priceHistoryTitle": "Check the price history and spot fake discounts",
     "noImage": "No image",
-    "verified": "Specs normalized"
+    "verified": "Specs normalized",
+    "fromPrice": "From",
+    "sizesLabel": "Sizes"
   },
   "priceVerdict": {
     "labelFake": "Fake discount alert",

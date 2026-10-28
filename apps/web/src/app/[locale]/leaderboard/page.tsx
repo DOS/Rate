@@ -10,6 +10,7 @@ import { Link } from '@/lib/navigation';
 import {
   getCachedFilteredReviewCountsByMaster,
   getCachedMasterProducts,
+  groupCatalogRowsByItem,
   getCrossPlatformDealRadar,
 } from '@/server/rate';
 import {
@@ -92,7 +93,8 @@ export default async function LeaderboardPage({ params }: PageProps) {
             categorySlug,
             limit: 100,
             sort: 'rating_desc',
-          })
+            // RATE_ITEM_MODEL on: one slot per Item (DOS/Rate#1155).
+          }).then(groupCatalogRowsByItem)
         )
       ),
       // No fallback: the page is cached, so a null radar would be served for
