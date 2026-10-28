@@ -1283,9 +1283,11 @@ const CASE_ACCESSORY_WORD =
 // "tặng/kèm" and up to four words, then a watch or screen size.
 const GIFTED_ACCESSORY_SIZE =
   /(?<![\p{L}\d])(quà tặng|tặng|kèm)((?: [\p{L}-]+){1,4}?) ?(?:(?:38|4[0-2]|4[4-6]) ?mm\b|\d{1,2}(?:[.,]\d)? ?(?:inch\b|in\b|"))/giu;
-// An accessory sold by the size it fits: a case, cover, film or box.
+// An accessory sold by the size it fits: a case, cover or film. "vỏ" with a material
+// ("kèm vỏ nhôm 46mm") is the watch's own case, and a box ("hộp") has no size of its
+// own (DOS/Rate#1277).
 const GIFT_ACCESSORY_NOUN =
-  /(?<![\p{L}\d])(?:ốp|case|bao da|silicone|silicon|tpu|cường lực|kính|miếng dán|vỏ|hộp|túi)(?![\p{L}\d])/iu;
+  /(?<![\p{L}\d])(?:ốp|case|bao da|silicone|silicon|tpu|cường lực|kính|miếng dán|vỏ(?! (?:nhôm|titan|titanium|thép|nhựa|aluminum|aluminium|stainless|steel)(?![\p{L}\d]))|túi)(?![\p{L}\d])/iu;
 const APPLE_SIZE_PATTERNS: Record<string, [RegExp, RegExp]> = {
   ipad: sizePatterns(IPAD_SIZE),
   'macbook air': sizePatterns(MACBOOK_AIR_SIZE),
@@ -1323,7 +1325,18 @@ function readAppleSize(model: string, rawTitle: string): string {
     .replace(GIFTED_ACCESSORY_SIZE, (m, word: string, words: string) =>
       GIFT_ACCESSORY_NOUN.test(words) ? `${word}${words}` : m
     );
-  const own = withoutGift.split(/ (?:cho|for) | ?\+ (?!cellular|lte)/i)[0]!;
+  // A size only the gift names is still the best evidence of the product's: an 11 inch
+  // case fits an 11 inch iPad (DOS/Rate#1277).
+  const productPart = title.slice(Math.max(0, at));
+  return (
+    readFamilySize(family, withoutGift) ||
+    (withoutGift === productPart ? '' : readFamilySize(family, productPart))
+  );
+}
+
+/** `readAppleSize` over one reading of the product's part of the title. */
+function readFamilySize(family: string, scope: string): string {
+  const own = scope.split(/ (?:cho|for) | ?\+ (?!cellular|lte)/i)[0]!;
   if (family === 'watch') {
     // A size outside a band phrase ("dây", "band", "strap", "loop" or "bracelet" up to the
     // next ")", ",", "|", ";", en dash or " - ") is the case's. A band is sold by the case
@@ -1390,24 +1403,28 @@ function readAppleSize(model: string, rawTitle: string): string {
     // cover or what something fits ("kèm vỏ hộp 42mm", "fits 42mm case").
     // A "| Case 46mm" after a part that already gives the watch a size outside any band
     // ("Series 10 42mm GPS | Case 46mm") is a bundled case, not the watch's (DOS/Rate#1263).
-    const sizedBeforePipe = (i: number) =>
-      parts.some(
-        (sep, j) =>
-          j < i &&
-          sep === '|' &&
-          parts
-            .slice(0, j)
-            .some(
-              (p, k) =>
-                k % 2 === 0 &&
-                WATCH_SIZE.test(p) &&
-                !WATCH_BAND_WORD.test(p) &&
-                !CASE_ACCESSORY_WORD.test(p.normalize('NFC'))
-            )
-      );
+    // One pass: a part is after such a "|" once a sized part came before a "|" before it
+    // (linear in the parts, DOS/Rate#1277).
+    const afterSizedPipe: boolean[] = [];
+    let sizedSeen = false;
+    let armed = false;
+    parts.forEach((p, k) => {
+      if (k % 2 === 1) {
+        if (p === '|' && sizedSeen) armed = true;
+        return;
+      }
+      afterSizedPipe[k] = armed;
+      if (
+        WATCH_SIZE.test(p) &&
+        !WATCH_BAND_WORD.test(p) &&
+        !CASE_ACCESSORY_WORD.test(p.normalize('NFC'))
+      ) {
+        sizedSeen = true;
+      }
+    });
     const namedCase = parts
       .map((part, i) => ({ part: part.normalize('NFC'), i }))
-      .filter(({ i }) => i % 2 === 0 && !sizedBeforePipe(i))
+      .filter(({ i }) => i % 2 === 0 && !afterSizedPipe[i])
       .map(({ part }) => part)
       .filter(
         part =>
@@ -1424,7 +1441,7 @@ function readAppleSize(model: string, rawTitle: string): string {
     const caseSize = outside.join(' ').match(WATCH_SIZE)?.[1];
     if (caseSize) return `${caseSize}mm`;
     const bandSize = own.match(WATCH_SIZE)?.[1];
-    const sizes = new Set([...withoutGift.matchAll(new RegExp(WATCH_SIZE, 'gi'))].map(m => m[1]));
+    const sizes = new Set([...scope.matchAll(new RegExp(WATCH_SIZE, 'gi'))].map(m => m[1]));
     return bandSize && sizes.size === 1 ? `${bandSize}mm` : '';
   }
   const [marked, bare] = APPLE_SIZE_PATTERNS[family]!;

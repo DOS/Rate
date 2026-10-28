@@ -446,6 +446,9 @@ async function runSuite() {
     ['iPad Pro M4 11 inch tặng bao da 13 inch 256GB', 'apple:ipad-pro-m4-11:256gb'],
     // "bao test" (guaranteed testing) is no accessory.
     ['iPad Pro M4 kèm bao test 13 inch WiFi 256GB', 'apple:ipad-pro-m4-13:256gb'],
+    // A size only the gift names: an 11 inch case fits the 11 inch iPad (DOS/Rate#1277).
+    ['iPad Pro M4 Wifi kèm bao da 11 inch 256GB', 'apple:ipad-pro-m4-11:256gb'],
+    ['MacBook Air tặng ốp 13 inch M4 16GB 512GB', 'apple:macbook-air-m4-13:512gb'],
     ['MacBook Air M3 kèm bao test 15 inch 16GB 512GB', 'apple:macbook-air-m3-15:512gb'],
     ['iPad Pro 13" M5 1TB', 'apple:ipad-pro-m5-13:1024gb'],
     ['iPad Pro 11 2024 M4 256GB', 'apple:ipad-pro-m4-11:256gb'],
@@ -663,17 +666,25 @@ async function runSuite() {
     ['Apple Watch Series 10 42mm GPS tặng ốp 46mm', 'apple:watch-series-10-42mm:64gb'],
     ['Apple Watch Series 10 42mm GPS | Ốp TPU Case 46mm', 'apple:watch-series-10-42mm:64gb'],
     ['Apple Watch Series 10 42mm GPS | Bao da Case 46mm', 'apple:watch-series-10-42mm:64gb'],
-    ['Apple Watch Series 10 GPS, tặng Silicone Case 46mm', 'apple:watch-series-10:64gb'],
-    ['Apple Watch Series 10 GPS | kèm ốp 46mm', 'apple:watch-series-10:64gb'],
+    // A size only the gift names is the best evidence left: a 46mm case fits the 46mm
+    // watch (DOS/Rate#1277).
+    ['Apple Watch Series 10 GPS, tặng Silicone Case 46mm', 'apple:watch-series-10-46mm:64gb'],
+    ['Apple Watch Series 10 GPS | kèm ốp 46mm', 'apple:watch-series-10-46mm:64gb'],
     [
       'Apple Watch Series 10 GPS, tặng Silicone Case 46mm'.normalize('NFD'),
-      'apple:watch-series-10:64gb',
+      'apple:watch-series-10-46mm:64gb',
     ],
     [
       'Apple Watch Series 10 GPS Silicone Band 42mm, tặng Silicone Case 46mm',
       'apple:watch-series-10-42mm:64gb',
     ],
-    ['Apple Watch Series 10 GPS kèm ốp 46mm', 'apple:watch-series-10:64gb'],
+    ['Apple Watch Series 10 GPS kèm ốp 46mm', 'apple:watch-series-10-46mm:64gb'],
+    // "vỏ" with a material is the watch's own case, and "hộp" (box) no accessory size.
+    ['Apple Watch Series 10 GPS kèm vỏ nhôm 46mm', 'apple:watch-series-10-46mm:64gb'],
+    ['Apple Watch Series 10 42mm GPS kèm vỏ titan 42mm', 'apple:watch-series-10-42mm:64gb'],
+    ['Apple Watch Series 10 GPS kèm hộp 42mm', 'apple:watch-series-10-42mm:64gb'],
+    // A gifted size never overrides a size the watch names itself.
+    ['Apple Watch Series 10 46mm GPS, tặng ốp 42mm', 'apple:watch-series-10-46mm:64gb'],
     // A bundle word before no sized accessory keeps the product's size.
     ['Apple Watch Series 10 kèm sạc 46mm GPS', 'apple:watch-series-10-46mm:64gb'],
     ['Apple Watch Series 10, kèm sạc 46mm GPS', 'apple:watch-series-10-46mm:64gb'],
@@ -683,6 +694,17 @@ async function runSuite() {
   for (const [title, expectedKey] of namedCaseKeys1223) {
     assert.equal(keyOf(title), expectedKey, title);
   }
+  // The "| Case" check is linear in the parts: a 250-part title stays fast (it took
+  // about 29 ms when it was cubic, DOS/Rate#1277).
+  // Worst case: no sized part before the "|"s, so the old check rescanned them all.
+  const manyParts = `Apple Watch Series 10 GPS 42mm Sport Band${' | a'.repeat(250)}`;
+  keyOf(manyParts);
+  const runs = Array.from({ length: 5 }, () => {
+    const t0 = performance.now();
+    keyOf(manyParts);
+    return performance.now() - t0;
+  }).sort((x, y) => x - y);
+  assert.ok(runs[2]! < 10, `250-part title took ${runs[2]!.toFixed(1)} ms`);
   // The registry has one entry per line: a sized title keeps the line's benchmark, but
   // the entry's screen and battery describe only the size it was written for. A watch
   // entry pinned to one case (`case_mm`) does not describe another case at all: the
