@@ -621,6 +621,37 @@ async function runSuite() {
   for (const [title, expectedKey] of watchBandRangeKeys1162) {
     assert.equal(keyOf(title), expectedKey, title);
   }
+  // DOS/Rate#1223: a part that names the case with its size wins over a band size
+  // written before it, in either order.
+  const namedCaseKeys1223: Array<[string, string]> = [
+    [
+      'Apple Watch Series 11 GPS + Cellular 45mm Sport Band, 46mm Titanium Case',
+      'apple:watch-series-11-46mm:64gb',
+    ],
+    [
+      'Apple Watch Series 11 GPS + Cellular 46mm Titanium Case, 45mm Sport Band',
+      'apple:watch-series-11-46mm:64gb',
+    ],
+    [
+      'Apple Watch Series 10 42mm Sport Loop, 46mm Aluminium Case',
+      'apple:watch-series-10-46mm:64gb',
+    ],
+    ['Apple Watch SE 3 44mm Sport Band, 40mm Case', 'apple:watch-se-3-40mm:unknown'],
+    ['Apple Watch Series 11 45mm Sport Band | Case 42mm', 'apple:watch-series-11-42mm:64gb'],
+    [
+      'Apple Watch Series 11 GPS 45mm Sport Band, 46mm Viền Titanium',
+      'apple:watch-series-11-46mm:64gb',
+    ],
+    // A box, a cover or a fit names no case of the watch itself.
+    ['Apple Watch Series 10 GPS 46mm, kèm vỏ hộp 42mm', 'apple:watch-series-10-46mm:64gb'],
+    [
+      'Apple Watch Series 10 GPS 46mm (Sport Band 45mm, fits 42mm case)',
+      'apple:watch-series-10-46mm:64gb',
+    ],
+  ];
+  for (const [title, expectedKey] of namedCaseKeys1223) {
+    assert.equal(keyOf(title), expectedKey, title);
+  }
   // The registry has one entry per line: a sized title keeps the line's benchmark, but
   // the entry's screen and battery describe only the size it was written for. A watch
   // entry pinned to one case (`case_mm`) does not describe another case at all: the

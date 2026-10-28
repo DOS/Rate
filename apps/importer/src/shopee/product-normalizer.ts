@@ -1272,6 +1272,13 @@ const LONE_WATCH_SIZE = /^ ?(?:38|4[0-2]|4[4-6]) ?mm ?$/i;
 const LAST_WATCH_SIZE = /(?<!\d)(?:38|4[0-2]|4[4-6]) ?mm ?$/i;
 const WATCH_RANGE_SEP = /^(?: - |\u2013)$/;
 const WATCH_CASE_WORD = /(?<![\p{L}\d])(?:case|mặt|vỏ)(?![\p{L}\d])/iu;
+// A size naming the case: "46mm Titanium Case", "46mm Viền Titanium", "Case 42mm"
+// (DOS/Rate#1223). At most two words between the size and a case word that follows it.
+const NAMED_CASE_SIZE =
+  /(?<!\d)(38|4[0-2]|4[4-6]) ?mm(?: [\p{L}\d-]+){0,2} (?:case|vỏ|viền)(?![\p{L}\d])|(?<![\p{L}\d])(?:case|vỏ|viền|mặt) (38|4[0-2]|4[4-6]) ?mm\b/iu;
+// A part about a box, a cover or a fit names no case of the watch itself.
+const CASE_ACCESSORY_WORD =
+  /(?<![\p{L}\d])(?:fits?|hộp|ốp|kèm|compatible|tương thích|cho|for)(?![\p{L}\d])/iu;
 const APPLE_SIZE_PATTERNS: Record<string, [RegExp, RegExp]> = {
   ipad: sizePatterns(IPAD_SIZE),
   'macbook air': sizePatterns(MACBOOK_AIR_SIZE),
@@ -1359,6 +1366,26 @@ function readAppleSize(model: string, title: string): string {
       bandList = WATCH_SIZE.test(band.join(' '));
       bandEnd = LAST_WATCH_SIZE.test(band.join(' '));
     }
+    // A part that names the case with one size ("46mm Titanium Case", "Case 42mm") says
+    // the watch's size, whatever band size comes before it: "45mm Sport Band, 46mm
+    // Titanium Case" is the 46mm (DOS/Rate#1223).
+    // The size must sit next to the case word, and the part must not be about a box, a
+    // cover or what something fits ("kèm vỏ hộp 42mm", "fits 42mm case").
+    const namedCase = parts
+      .filter((_, i) => i % 2 === 0)
+      .map(part => part.normalize('NFC'))
+      .filter(
+        part =>
+          !WATCH_BAND_WORD.test(part) &&
+          !CASE_ACCESSORY_WORD.test(part) &&
+          [...part.matchAll(new RegExp(WATCH_SIZE, 'gi'))].length === 1
+      )
+      .map(part => {
+        const m = part.match(NAMED_CASE_SIZE);
+        return m?.[1] ?? m?.[2];
+      })
+      .filter(Boolean);
+    if (namedCase.length === 1 && namedCase[0]) return `${namedCase[0]}mm`;
     const caseSize = outside.join(' ').match(WATCH_SIZE)?.[1];
     if (caseSize) return `${caseSize}mm`;
     const bandSize = own.match(WATCH_SIZE)?.[1];
