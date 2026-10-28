@@ -1280,6 +1280,12 @@ const NAMED_CASE_SIZE =
 // ("tặng Silicone Case 46mm", "ốp TPU 46mm", DOS/Rate#1263).
 const CASE_ACCESSORY_WORD =
   /(?<![\p{L}\d])(?:fits?|hộp|ốp|kèm|tặng|quà|gift|silicone|silicon|tpu|bao da|compatible|tương thích|cho|for)(?![\p{L}\d])/iu;
+// "tặng/kèm" and up to four words, then a watch or screen size.
+const GIFTED_ACCESSORY_SIZE =
+  /(?<![\p{L}\d])(quà tặng|tặng|kèm)((?: [\p{L}-]+){1,4}?) ?(?:(?:38|4[0-2]|4[4-6]) ?mm\b|\d{1,2}(?:[.,]\d)? ?(?:inch\b|in\b|"))/giu;
+// An accessory sold by the size it fits: a case, cover, film or box.
+const GIFT_ACCESSORY_NOUN =
+  /(?<![\p{L}\d])(?:ốp|case|bao da|bao|silicone|silicon|tpu|cường lực|kính|miếng dán|vỏ|hộp|túi)(?![\p{L}\d])/iu;
 const APPLE_SIZE_PATTERNS: Record<string, [RegExp, RegExp]> = {
   ipad: sizePatterns(IPAD_SIZE),
   'macbook air': sizePatterns(MACBOOK_AIR_SIZE),
@@ -1309,12 +1315,14 @@ function readAppleSize(model: string, rawTitle: string): string {
   if (!family) return '';
   const at = title.search(new RegExp(`\\b${family.split(' ')[0]}\\b`, 'i'));
   // A bundle's "+ bàn phím 11 inch" is another product; "GPS + Cellular" is the watch.
-  // So is what a separate part gifts or bundles: ", tặng Silicone Case 46mm",
-  // "| kèm ốp 46mm" (DOS/Rate#1263). Without a "," or "|" the words may still describe
-  // the product ("kèm sạc 46mm GPS", "kèm bút 13 inch").
+  // The size of a gifted or bundled accessory is not the product's: "tặng Silicone Case
+  // 46mm", "kèm ốp 46mm" lose that size; "kèm sạc 46mm GPS" and "kèm bút 13 inch" name
+  // no accessory with a size of its own and keep it (DOS/Rate#1263).
   const withoutGift = title
     .slice(Math.max(0, at))
-    .split(/ ?[,|] ?(?:quà tặng|tặng|kèm)(?![\p{L}\d])/iu)[0]!;
+    .replace(GIFTED_ACCESSORY_SIZE, (m, word: string, words: string) =>
+      GIFT_ACCESSORY_NOUN.test(words) ? `${word}${words}` : m
+    );
   const own = withoutGift.split(/ (?:cho|for) | ?\+ (?!cellular|lte)/i)[0]!;
   if (family === 'watch') {
     // A size outside a band phrase ("dây", "band", "strap", "loop" or "bracelet" up to the
