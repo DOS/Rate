@@ -1,4 +1,10 @@
-import { MAX_VALID_VND_PRICE, type ProductSpecifications, type KeySpecs } from '@repo/shared-data';
+import {
+  MAX_VALID_VND_PRICE,
+  UNKNOWN_VARIANT_KEY,
+  type ProductSpecifications,
+  type KeySpecs,
+  type VariantSource,
+} from '@repo/shared-data';
 import type { ShopeeProduct } from './types.js';
 
 export const MAX_VALID_RAM_GB = 2048;
@@ -59,6 +65,31 @@ export interface NormalizedProductCandidate {
   model: string;
   variant_name: string;
   model_key: string;
+  /**
+   * Item fields (DOS/Rate#1151). `normalize()` always sets them; they are optional
+   * so candidates built elsewhere stay valid, and the matcher derives the keys
+   * from `model_key` when they are missing.
+   * `item_key` = `brand:model`, the first two `model_key` segments.
+   */
+  item_key?: string;
+  /** The literal third `model_key` segment: `256gb`, `1024gb`, `unknown`. */
+  variant_key?: string;
+  /** Item name and slug, never with a storage size. */
+  item_name?: string;
+  item_slug?: string;
+  /**
+   * The listing's variant is known: a stated or single-size storage, or a line
+   * with no storage axis (earbuds). False only for "storage not stated".
+   */
+  variant_known?: boolean;
+  /** How the variant was found; null when it is not known. */
+  variant_source?: Extract<VariantSource, 'title' | 'single_size' | 'single_variant'> | null;
+  /**
+   * False when the title gives no model segment. The key then carries the
+   * `unkeyed` placeholder model instead of an empty segment (`samsung::unknown`),
+   * and the pipeline and matcher reject the candidate (UnkeyableProductTitleError).
+   */
+  keyable?: boolean;
   name: string;
   slug: string;
   storage_gb: number | null; // null = unparseable from the title; identity carries ':unknown'
@@ -81,6 +112,24 @@ export interface NormalizedProductCandidate {
     model: string;
     enriched_at: string;
   };
+}
+
+/** Model segment of a title that names no model (`keyable: false`). */
+export const UNKEYED_MODEL_SEGMENT = 'unkeyed';
+
+/**
+ * A title with no model to key on (e.g. it would key as `samsung::unknown`). The
+ * listing has no identity to match, so it is rejected before anything is written
+ * (DOS/Rate#1151). `normalize()` itself never throws; it marks `keyable: false`.
+ */
+export class UnkeyableProductTitleError extends Error {
+  readonly code = 'UNKEYABLE_PRODUCT_TITLE';
+  constructor(title: string) {
+    super(
+      `Cannot key product title (no model segment): ${JSON.stringify(String(title ?? '').slice(0, 200))}`
+    );
+    this.name = 'UnkeyableProductTitleError';
+  }
 }
 
 /**
@@ -1632,11 +1681,13 @@ export class ProductNormalizer {
 
     let storageGb: number | null = null;
     let storageConfident = false;
+    let variantSource: NormalizedProductCandidate['variant_source'] = null;
     const marker = romExplicit ?? romLoose;
     if (categorySlug === 'earbuds') {
       // Earbuds have no storage variant and must key as :unknown with null storage (DOS/Rate#643, #657).
       storageGb = null;
       storageConfident = true;
+      variantSource = 'single_variant';
     } else if (marker) {
       const candidateStorage = toValidStorageGb(
         parseFloat(marker[1].replace(',', '.')) * (marker[2].toUpperCase() === 'TB' ? 1024 : 1)
@@ -1660,8 +1711,10 @@ export class ProductNormalizer {
     } else if (storageCandidates.length === 0 && benchmark?.only_storage_gb != null) {
       storageGb = benchmark.only_storage_gb;
       storageConfident = true;
+      variantSource = 'single_size';
     }
     const storageKnown = storageGb !== null;
+    if (storageKnown && variantSource === null) variantSource = 'title';
 
     // 4. Extract Colors from models / variations
     const colors: string[] = [];
@@ -1695,7 +1748,13 @@ export class ProductNormalizer {
 
     // 5. Construct keys & slugs. Unknown storage keeps identity space explicit
     // (':unknown') instead of guessing a default (plan v7 §5.2).
-    const modelKey = storageKnown ? `${baseKey}:${storageGb}gb` : `${baseKey}:unknown`;
+    // An empty key segment ("samsung::unknown") is never emitted: a title with no
+    // model keys on a placeholder and is marked unkeyable (DOS/Rate#1151).
+    const keyable = Boolean(slugify(brand) && slugify(model));
+    const itemKey = keyable ? baseKey : `${slugify(brand) || 'khac'}:${UNKEYED_MODEL_SEGMENT}`;
+    const variantKey = storageKnown ? `${storageGb}gb` : UNKNOWN_VARIANT_KEY;
+    const modelKey = `${itemKey}:${variantKey}`;
+    const itemName = `${brand} ${model}`.trim();
     const storageDisplay =
       categorySlug === 'earbuds'
         ? 'Standard'
@@ -2075,10 +2134,17 @@ export class ProductNormalizer {
       model,
       variant_name: storageDisplay,
       model_key: modelKey,
+      item_key: itemKey,
+      variant_key: variantKey,
+      item_name: itemName,
+      item_slug: slugify(itemName),
+      variant_known: storageKnown || categorySlug === 'earbuds',
+      variant_source: variantSource,
+      keyable,
       name: canonicalName,
       slug,
       storage_gb: storageKnown ? storageGb : null,
-      needs_review: !storageConfident || condition !== 'new',
+      needs_review: !keyable || !storageConfident || condition !== 'new',
       condition,
       origin,
       ram_gb: ramGb,

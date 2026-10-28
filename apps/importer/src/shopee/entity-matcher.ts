@@ -1,5 +1,14 @@
 import crypto from 'node:crypto';
 import {
+  UNKNOWN_VARIANT_KEY,
+  composeModelKey,
+  isItemKey,
+  isSizedVariantKey,
+  splitModelKey,
+  type VariantSource,
+} from '@repo/shared-data';
+import {
+  UnkeyableProductTitleError,
   detectCategorySlug,
   type CanonicalCategorySlug,
   type NormalizedProductCandidate,
@@ -7,6 +16,7 @@ import {
 import { AiSpecEnricher, mergeProductSpecifications } from './ai-spec-enricher.js';
 import { mergeKeySpecs } from './jobs/backfill-specs.js';
 import { createImporterLogger } from './logger.js';
+import { resolveItemModelMode, type ItemModelMode } from './item-model-flag.js';
 import type { RateSupabaseClient } from './types.js';
 
 const logger = createImporterLogger('EntityMatcher');
@@ -132,14 +142,289 @@ export function toBoundedPositiveNumber(value: unknown, max: number): number | n
   return Number.isFinite(n) && n > 0 && n <= max ? n : null;
 }
 
+export interface EntityMatcherOptions {
+  /** Item model rollout mode; defaults to the `RATE_ITEM_MODEL` env (see item-model-flag.ts). */
+  itemModel?: ItemModelMode;
+}
+
+export interface ItemMatchResult {
+  /** The listing's Item; null only in mode `off`, where Items are not read. */
+  itemId: string | null;
+  /** The listing's variant (`cluster_id`); null = no variant, only in mode `nullable_variant`. */
+  masterId: string | null;
+  isNew: boolean;
+  /** `products.variant_source`; null when the listing does not tell its variant. */
+  variantSource: VariantSource | null;
+}
+
+type MatchedItem = { id: string; itemKey: string };
+
 export class EntityMatcher {
   private enricher: AiSpecEnricher;
+  public readonly itemModel: ItemModelMode;
 
   constructor(
     private supabase: RateSupabaseClient,
-    enricher?: AiSpecEnricher
+    enricher?: AiSpecEnricher,
+    options: EntityMatcherOptions = {}
   ) {
     this.enricher = enricher ?? new AiSpecEnricher();
+    this.itemModel = options?.itemModel ?? resolveItemModelMode();
+  }
+
+  /**
+   * Item-first matching (DOS/Rate#1151, design doc section 4.5). In mode `off` this is
+   * exactly `resolveOrCreateMasterProduct`. Otherwise:
+   * 1. Item by `itemIdHint`, then by exact `item_key`, then fuzzy on Item names
+   *    (`match_item`). Item names carry no storage, so a bare title can no longer
+   *    land on a sized variant (#1105).
+   * 2. Known size: the variant by exact `(item_id, variant_key)`, created when missing.
+   * 3. Size not stated: a single-variant Item's one variant. On a multi-size Item, no
+   *    variant in mode `nullable_variant`, the Item's `unknown` variant in mode `item`.
+   * 4. No Item: seed a master as today; the M1 sync trigger creates its draft Item.
+   */
+  public async resolveItemAndVariant(
+    candidate: NormalizedProductCandidate,
+    categoryId?: string,
+    rawTitle?: string,
+    options: { itemIdHint?: string | null } = {}
+  ): Promise<ItemMatchResult> {
+    if (this.itemModel === 'off') {
+      const { masterId, isNew } = await this.resolveOrCreateMasterProduct(
+        candidate,
+        categoryId,
+        rawTitle
+      );
+      return { itemId: null, masterId, isNew, variantSource: null };
+    }
+
+    const input = this.sanitizeCandidateInput(candidate, categoryId, rawTitle);
+    candidate = input.candidate;
+    const { safeModelKey, safeCategoryId, safeRawTitle } = input;
+    const keys = splitModelKey(safeModelKey);
+    if (!keys) {
+      throw new Error(
+        `[EntityMatcher] model_key is not in brand:model:variant shape: ${JSON.stringify(safeModelKey)}`
+      );
+    }
+    const variantKnown =
+      typeof candidate.variant_known === 'boolean'
+        ? candidate.variant_known
+        : keys.variantKey !== UNKNOWN_VARIANT_KEY || candidate.category_slug === 'earbuds';
+    const variantSource: VariantSource | null = variantKnown
+      ? (candidate.variant_source ??
+        (keys.variantKey === UNKNOWN_VARIANT_KEY ? 'single_variant' : 'title'))
+      : null;
+
+    // 1. Item: caller hint, exact item_key, then fuzzy on Item names.
+    let item: MatchedItem | null = null;
+    let ambiguousFuzzy = false;
+    const safeItemIdHint = sanitizeMatcherEntityId(options?.itemIdHint, 128);
+    if (safeItemIdHint) {
+      item = await this.findItem('id', safeItemIdHint);
+      if (item) {
+        logger.info('entity_match.item_hint', `Item from caller hint: ${item.itemKey}`, {
+          itemId: item.id,
+        });
+      } else {
+        logger.warn('entity_match.item_hint_missing', `itemIdHint ${safeItemIdHint} not found`, {
+          itemIdHint: safeItemIdHint,
+        });
+      }
+    }
+    if (!item) {
+      item = await this.findItem('item_key', keys.itemKey);
+      if (item) {
+        logger.info('entity_match.item_tier1_exact', `Item Tier 1 exact: ${item.itemKey}`, {
+          itemId: item.id,
+        });
+      }
+    }
+    if (!item) {
+      const fuzzy = await this.fuzzyMatchItem(candidate);
+      item = fuzzy.item;
+      ambiguousFuzzy = fuzzy.ambiguous;
+    }
+
+    // 4. No Item: seed the master under the candidate's own key. A new Item's one
+    // variant (sized or `unknown`) is its only variant until a sized one appears.
+    if (!item) {
+      const seeded = await this.seedMasterProduct(
+        candidate,
+        safeModelKey,
+        safeCategoryId,
+        safeRawTitle,
+        ambiguousFuzzy
+      );
+      const itemId = await this.itemIdOfMaster(seeded.masterId);
+      return { itemId, masterId: seeded.masterId, isNew: seeded.isNew, variantSource };
+    }
+    if (!isItemKey(item.itemKey)) {
+      throw new Error(
+        `[EntityMatcher] Item ${item.id} has no brand:model key (${JSON.stringify(item.itemKey)}); cannot place a variant under it`
+      );
+    }
+
+    const variants = await this.listItemVariants(item.id);
+    let targetVariantKey = keys.variantKey;
+
+    if (variantKnown) {
+      // 2. Known size: exact (item_id, variant_key), as Tier 1 matches an exact model_key.
+      const exact = variants.find(v => v.variant_key === keys.variantKey);
+      if (exact) {
+        logger.info('entity_match.variant_exact', `Variant ${keys.variantKey} of ${item.itemKey}`, {
+          itemId: item.id,
+          masterId: exact.id,
+        });
+        return { itemId: item.id, masterId: exact.id, isNew: false, variantSource };
+      }
+    } else {
+      // 3. Size not stated. Multi-size = a live sized variant (design doc 4.2).
+      const live = variants.filter(v => v.status !== 'archived');
+      const multiSize = live.some(v => isSizedVariantKey(v.variant_key));
+      if (multiSize && this.itemModel === 'nullable_variant') {
+        logger.info(
+          'entity_match.variant_unknown',
+          `Size not stated on multi-size Item ${item.itemKey}: no variant`,
+          { itemId: item.id }
+        );
+        return { itemId: item.id, masterId: null, isNew: false, variantSource: null };
+      }
+      const unknownVariant = live.find(v => v.variant_key === UNKNOWN_VARIANT_KEY);
+      const only = multiSize
+        ? unknownVariant
+        : (unknownVariant ??
+          live.find(v => v.variant_key === 'standard') ??
+          (live.length === 1 ? live[0] : undefined));
+      if (only) {
+        logger.info(
+          'entity_match.variant_size_not_stated',
+          `Size not stated: variant ${only.variant_key} of ${item.itemKey}`,
+          { itemId: item.id, masterId: only.id, multiSize }
+        );
+        return { itemId: item.id, masterId: only.id, isNew: false, variantSource: null };
+      }
+      targetVariantKey = UNKNOWN_VARIANT_KEY;
+    }
+
+    // Missing variant of a known Item: create it under the Item's own key.
+    const variantModelKey = composeModelKey(item.itemKey, targetVariantKey);
+    const seeded = await this.seedMasterProduct(
+      { ...candidate, model_key: variantModelKey },
+      variantModelKey,
+      safeCategoryId,
+      safeRawTitle,
+      ambiguousFuzzy
+    );
+    logger.info(
+      'entity_match.variant_created',
+      `Variant ${targetVariantKey} of ${item.itemKey}: ${seeded.masterId}`,
+      { itemId: item.id, masterId: seeded.masterId, isNew: seeded.isNew }
+    );
+    return { itemId: item.id, masterId: seeded.masterId, isNew: seeded.isNew, variantSource };
+  }
+
+  private async findItem(column: 'id' | 'item_key', value: string): Promise<MatchedItem | null> {
+    const { data, error } = await this.supabase
+      .from('items')
+      .select('id, item_key')
+      .eq(column, value)
+      .maybeSingle();
+    if (error) {
+      throw new Error(`[EntityMatcher] Item lookup by ${column} failed: ${error.message}`);
+    }
+    const row = data as { id?: unknown; item_key?: unknown } | null;
+    const id = sanitizeMatcherEntityId(row?.id, 128);
+    return id ? { id, itemKey: typeof row?.item_key === 'string' ? row.item_key : '' } : null;
+  }
+
+  /** Item Tier 2: pg_trgm on Item names through `rate.match_item` (design doc 4.5). */
+  private async fuzzyMatchItem(
+    candidate: NormalizedProductCandidate
+  ): Promise<{ item: MatchedItem | null; ambiguous: boolean }> {
+    const searchTitle =
+      typeof candidate.item_name === 'string' && candidate.item_name.trim()
+        ? candidate.item_name
+        : `${candidate.brand} ${candidate.model}`;
+    const { data, error } = await this.supabase.rpc('match_item', {
+      search_title: searchTitle,
+      p_brand: candidate.brand,
+      p_model: candidate.model,
+      p_threshold: ENTITY_MATCH_CANDIDATE_FLOOR,
+    });
+    // As in Tier 2: an RPC failure aborts instead of seeding a duplicate Item.
+    if (error) {
+      throw new Error(`[EntityMatcher] Item Tier 2 fuzzy match failed: ${error.message}`);
+    }
+    const rows = Array.isArray(data)
+      ? data.filter(m => {
+          if (!m || typeof m !== 'object' || Array.isArray(m)) return false;
+          if (!sanitizeMatcherEntityId(m.item_id, 128)) return false;
+          const sim = typeof m.similarity === 'boolean' ? Number.NaN : Number(m.similarity);
+          return Number.isFinite(sim) && sim >= ENTITY_MATCH_CANDIDATE_FLOOR && sim <= 1;
+        })
+      : [];
+    const top = rows[0];
+    if (!top) return { item: null, ambiguous: false };
+    const sim = Number(top.similarity);
+    if (sim < ENTITY_MATCH_ACCEPT_THRESHOLD) {
+      logger.warn(
+        'entity_match.item_tier2_ambiguous',
+        `Item Tier 2 best similarity ${(sim * 100).toFixed(1)}% < ${(ENTITY_MATCH_ACCEPT_THRESHOLD * 100).toFixed(0)}%: seeding as draft if new.`,
+        { similarity: sim, modelKey: candidate.model_key }
+      );
+      return { item: null, ambiguous: true };
+    }
+    const item = {
+      id: sanitizeMatcherEntityId(top.item_id, 128),
+      itemKey: typeof top.item_key === 'string' ? top.item_key : '',
+    };
+    logger.info(
+      'entity_match.item_tier2_fuzzy',
+      `Item Tier 2: "${searchTitle}" ~= "${top.name}" (similarity: ${(sim * 100).toFixed(1)}%)`,
+      { itemId: item.id, similarity: sim }
+    );
+    return { item, ambiguous: false };
+  }
+
+  private async listItemVariants(
+    itemId: string
+  ): Promise<Array<{ id: string; variant_key: string; status: string | null }>> {
+    const { data, error } = await this.supabase
+      .from('master_products')
+      .select('id, variant_key, status')
+      .eq('item_id', itemId)
+      .limit(200);
+    if (error) {
+      throw new Error(`[EntityMatcher] Variant lookup for Item ${itemId} failed: ${error.message}`);
+    }
+    return (Array.isArray(data) ? data : []).flatMap(row => {
+      const id = sanitizeMatcherEntityId(row?.id, 128);
+      return id && typeof row.variant_key === 'string'
+        ? [{ id, variant_key: row.variant_key, status: row.status ?? null }]
+        : [];
+    });
+  }
+
+  /** The Item the M1 sync trigger linked to a master; fails loudly when M1 is missing. */
+  private async itemIdOfMaster(masterId: string): Promise<string> {
+    const { data, error } = await this.supabase
+      .from('master_products')
+      .select('item_id')
+      .eq('id', masterId)
+      .maybeSingle();
+    if (error) {
+      throw new Error(
+        `[EntityMatcher] item_id lookup for master ${masterId} failed: ${error.message}`
+      );
+    }
+    const itemId = sanitizeMatcherEntityId((data as { item_id?: unknown } | null)?.item_id, 128);
+    if (!itemId) {
+      throw new Error(
+        `[EntityMatcher] master ${masterId} has no item_id: the Item migration (DOS/Rate#1150) is not applied`
+      );
+    }
+    return itemId;
   }
 
   /**
@@ -150,26 +435,9 @@ export class EntityMatcher {
     categoryId?: string,
     rawTitle?: string
   ): Promise<{ masterId: string; isNew: boolean }> {
-    if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)) {
-      throw new Error('[EntityMatcher] candidate must be a non-null object');
-    }
-    const safeModelKey = String(candidate.model_key ?? '')
-      .replace(/\p{Cc}+/gu, '')
-      .trim()
-      .slice(0, 200);
-    if (!safeModelKey) {
-      throw new Error('[EntityMatcher] candidate.model_key must be a non-empty string');
-    }
-    const safeCategoryId = sanitizeMatcherEntityId(categoryId, 128) || undefined;
-    const safeRawTitle =
-      typeof rawTitle === 'string'
-        ? rawTitle
-            .replace(/\p{Cc}+/gu, ' ')
-            .replace(/\s+/g, ' ')
-            .trim()
-            .slice(0, 500)
-        : undefined;
-    candidate = { ...candidate, model_key: safeModelKey };
+    const input = this.sanitizeCandidateInput(candidate, categoryId, rawTitle);
+    candidate = input.candidate;
+    const { safeModelKey, safeCategoryId, safeRawTitle } = input;
 
     // Tier 1: Deterministic model_key matching
     const { data: exactMatch, error: exactErr } = await this.supabase
@@ -246,6 +514,63 @@ export class EntityMatcher {
       );
     }
 
+    return this.seedMasterProduct(
+      candidate,
+      safeModelKey,
+      safeCategoryId,
+      safeRawTitle,
+      ambiguousFuzzy
+    );
+  }
+
+  /** Validates and bounds the matcher input; throws on a missing candidate or key. */
+  private sanitizeCandidateInput(
+    candidate: NormalizedProductCandidate,
+    categoryId?: string,
+    rawTitle?: string
+  ): {
+    candidate: NormalizedProductCandidate;
+    safeModelKey: string;
+    safeCategoryId: string | undefined;
+    safeRawTitle: string | undefined;
+  } {
+    if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)) {
+      throw new Error('[EntityMatcher] candidate must be a non-null object');
+    }
+    const safeModelKey = String(candidate.model_key ?? '')
+      .replace(/\p{Cc}+/gu, '')
+      .trim()
+      .slice(0, 200);
+    if (!safeModelKey) {
+      throw new Error('[EntityMatcher] candidate.model_key must be a non-empty string');
+    }
+    if (candidate.keyable === false) {
+      throw new UnkeyableProductTitleError(rawTitle ?? candidate.name);
+    }
+    const safeCategoryId = sanitizeMatcherEntityId(categoryId, 128) || undefined;
+    const safeRawTitle =
+      typeof rawTitle === 'string'
+        ? rawTitle
+            .replace(/\p{Cc}+/gu, ' ')
+            .replace(/\s+/g, ' ')
+            .trim()
+            .slice(0, 500)
+        : undefined;
+    candidate = { ...candidate, model_key: safeModelKey };
+    return { candidate, safeModelKey, safeCategoryId, safeRawTitle };
+  }
+
+  /**
+   * Tier 3: no existing master matches. Enriches the candidate (AI Spec Enricher,
+   * unless it is in the local benchmark registry) and seeds a new master.
+   */
+  private async seedMasterProduct(
+    candidate: NormalizedProductCandidate,
+    safeModelKey: string,
+    safeCategoryId: string | undefined,
+    safeRawTitle: string | undefined,
+    ambiguousFuzzy: boolean
+  ): Promise<{ masterId: string; isNew: boolean }> {
     // Tier 3: No existing master product matches -> Enrich with AI Spec Enricher (if not in local benchmark registry)
     // and seed a new Master Product.
     candidate = await this.enricher.enrichCandidate(candidate, safeRawTitle);
