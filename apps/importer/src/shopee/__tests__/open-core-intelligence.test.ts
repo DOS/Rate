@@ -622,12 +622,25 @@ async function runSuite() {
     assert.equal(keyOf(title), expectedKey, title);
   }
   // The registry has one entry per line: a sized title keeps the line's benchmark, but
-  // the entry's screen and battery describe only the size it was written for.
-  assert.equal(
-    normalizer.normalize(createDummyShopeeProduct('Apple Watch Series 11 GPS 42mm'))
-      .is_benchmark_enriched,
-    true
+  // the entry's screen and battery describe only the size it was written for. A watch
+  // entry pinned to one case (`case_mm`) does not describe another case at all: the
+  // Series 11 entry is the 46mm, so a 42mm title is not benchmark-enriched and gets none
+  // of its size specs (DOS/Rate#1211).
+  const series11Small = normalizer.normalize(
+    createDummyShopeeProduct('Apple Watch Series 11 GPS 42mm')
   );
+  assert.equal(series11Small.model_key, 'apple:watch-series-11-42mm:64gb');
+  assert.equal(series11Small.is_benchmark_enriched, false);
+  assert.equal(series11Small.battery_mah, null);
+  assert.notEqual(series11Small.screen_size_inch, 1.96);
+  assert.equal(series11Small.specifications.design?.weight_g, undefined);
+  assert.equal(series11Small.specifications.display?.resolution, undefined);
+  const series11Big = normalizer.normalize(
+    createDummyShopeeProduct('Apple Watch Series 11 GPS 46mm')
+  );
+  assert.equal(series11Big.is_benchmark_enriched, true);
+  assert.equal(series11Big.screen_size_inch, 1.96);
+  assert.equal(series11Big.battery_mah, 345);
   const ipadPro13 = normalizer.normalize(
     createDummyShopeeProduct('iPad Pro M4 13 inch WiFi 256GB')
   );
