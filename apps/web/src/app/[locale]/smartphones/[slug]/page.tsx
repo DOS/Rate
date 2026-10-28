@@ -2,7 +2,8 @@ import type { Metadata } from 'next';
 import { Fragment } from 'react';
 import { getTranslations, setRequestLocale } from 'next-intl/server';
 import { Link } from '@/lib/navigation';
-import { notFound } from 'next/navigation';
+import { notFound, permanentRedirect } from 'next/navigation';
+import { resolveItemRoute } from '@/server/rate/item-route';
 import {
   getCrossPlatformDealRadar,
   getCachedMasterProductBySlug,
@@ -103,15 +104,28 @@ export function generateStaticParams(): { slug: string }[] {
 }
 
 export type PageParams = Promise<{ locale: string; slug: string }>;
+export type PageSearchParams = Promise<
+  Record<string, string | string[] | undefined>
+>;
 
 export async function generateCategoryProductMetadata(
   params: PageParams,
-  categoryBasePath = '/smartphones'
+  categoryBasePath = '/smartphones',
+  searchParams?: PageSearchParams
 ): Promise<Metadata> {
   const { locale, slug } = await params;
   const lang = normalizeRateLocale(locale);
   const t = await getTranslations({ locale, namespace: 'productDetail' });
-  const product = await getCachedMasterProductBySlug(slug);
+  // RATE_ITEM_MODEL on: an Item URL describes its selected variant and is
+  // canonical (Q1, DOS/Rate#1153). Off: null, the page as before.
+  const itemRoute = await resolveItemRoute({
+    slug,
+    searchParams,
+    categoryBasePath,
+  });
+  const product = await getCachedMasterProductBySlug(
+    itemRoute?.kind === 'render' ? itemRoute.variantSlug : slug
+  );
   if (!product) {
     return {
       title: t('notFoundTitle'),
@@ -121,7 +135,9 @@ export async function generateCategoryProductMetadata(
   const marketStats = productMarketStats(product);
   const hasPrice = marketStats.minPrice > 0;
   const minPrice = marketStats.minPrice.toLocaleString('vi-VN');
-  const canonicalUrl = `https://rate.vn${categoryBasePath}/${product.slug}`;
+  const canonicalUrl = `https://rate.vn${categoryBasePath}/${
+    itemRoute?.kind === 'render' ? itemRoute.itemSlug : product.slug
+  }`;
 
   return {
     // The product name first; the site name, then the price give way to fit
@@ -160,28 +176,43 @@ export async function generateCategoryProductMetadata(
 
 export async function generateMetadata({
   params,
+  searchParams,
 }: {
   params: PageParams;
+  searchParams?: PageSearchParams;
 }): Promise<Metadata> {
-  return generateCategoryProductMetadata(params, '/smartphones');
+  return generateCategoryProductMetadata(params, '/smartphones', searchParams);
 }
 
 export async function ProductDetailView({
   params,
+  searchParams,
   categoryBasePath = '/smartphones',
   categoryLabel = 'Smartphones',
 }: {
   params: PageParams;
+  searchParams?: PageSearchParams;
   categoryBasePath?: string;
   categoryLabel?: string;
 }) {
   const { locale, slug } = await params;
   setRequestLocale(locale);
+  // RATE_ITEM_MODEL on: an old variant URL 308s to its Item URL with `?v=`,
+  // and an Item URL renders its selected variant until the Item page ships
+  // (Q1, DOS/Rate#1153, #1154). Off: null, and the page is as before.
+  const itemRoute = await resolveItemRoute({
+    slug,
+    searchParams,
+    categoryBasePath,
+  });
+  if (itemRoute?.kind === 'redirect') permanentRedirect(itemRoute.to);
+  const productSlug =
+    itemRoute?.kind === 'render' ? itemRoute.variantSlug : slug;
   const [t, tNav, tSale, storedProduct] = await Promise.all([
     getTranslations({ locale, namespace: 'productDetail' }),
     getTranslations({ locale, namespace: 'rate.nav' }),
     getTranslations({ locale, namespace: 'saleState' }),
-    getCachedMasterProductBySlug(slug),
+    getCachedMasterProductBySlug(productSlug),
   ]);
 
   if (!storedProduct) {
@@ -275,7 +306,9 @@ export async function ProductDetailView({
   const keySpecLine = buildKeySpecLine(product, categorySlug);
   const mainImage = firstImageUrl(product.images);
 
-  const canonicalUrl = `https://rate.vn${categoryBasePath}/${product.slug}`;
+  const canonicalUrl = `https://rate.vn${categoryBasePath}/${
+    itemRoute?.kind === 'render' ? itemRoute.itemSlug : product.slug
+  }`;
 
   const structuredDataGraph = {
     '@context': 'https://schema.org',
@@ -1312,8 +1345,16 @@ export async function ProductDetailView({
 
 export default async function SmartphoneDetailPage({
   params,
+  searchParams,
 }: {
   params: PageParams;
+  searchParams?: PageSearchParams;
 }) {
-  return <ProductDetailView params={params} categoryBasePath="/smartphones" />;
+  return (
+    <ProductDetailView
+      params={params}
+      searchParams={searchParams}
+      categoryBasePath="/smartphones"
+    />
+  );
 }

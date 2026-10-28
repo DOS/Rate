@@ -4401,3 +4401,336 @@ export async function inspectProductOrShopUrl(
     suggestions: fallbackSuggestions,
   };
 }
+
+// ---------------------------------------------------------------------------
+// Item / variant / listing model (DOS/Rate#1153; design doc
+// `Docs/Proposals/2026-10-27-item-variant-listing-model.md`, sections 4, 5.1).
+// These read `rate.items`, `master_products.item_id` and `products.item_id`,
+// which exist only after the DOS-Me M1+M2 migration (#1150). Callers reach
+// them only through `server/rate/item-model.ts` while `RATE_ITEM_MODEL` is on;
+// with the flag off nothing here runs.
+// ---------------------------------------------------------------------------
+
+/** A published `rate.items` row, as the web reads it. */
+export interface RateItem {
+  id: string;
+  item_key: string;
+  slug: string;
+  name: string;
+  brand: string;
+  model: string;
+  category_id: string | null;
+  default_variant_id: string | null;
+  min_price: number;
+  max_price: number;
+  price_variant_count: number;
+  merchant_count: number;
+  listing_count: number;
+  unknown_variant_listing_count: number;
+  updated_at: string | null;
+}
+
+/** A published variant (`rate.master_products` row) of an Item. */
+export interface RateItemVariant {
+  id: string;
+  item_id: string;
+  slug: string;
+  name: string;
+  variant_key: string;
+  variant_name: string | null;
+  sort_order: number | null;
+  storage_gb: number | null;
+  min_price: number;
+  max_price: number;
+  merchant_count: number;
+}
+
+/** An Item's offers: per variant, and the listings with no stated size. */
+export interface RateItemOffers {
+  byVariant: Map<string, MerchantOffer[]>;
+  unknownVariant: MerchantOffer[];
+}
+
+/**
+ * `resolveCatalogSlug`: a catalogue slug is either an Item's own slug or an
+ * old variant slug (the URL every page used before Items, design doc 5.1).
+ */
+export type CatalogSlugResolution =
+  | { kind: 'item'; item: RateItem; variant: null }
+  | { kind: 'variant'; item: RateItem; variant: RateItemVariant };
+
+const ITEM_SELECT =
+  'id, item_key, slug, name, brand, model, category_id, default_variant_id, min_price, max_price, price_variant_count, merchant_count, listing_count, unknown_variant_listing_count, updated_at';
+const ITEM_VARIANT_SELECT =
+  'id, item_id, slug, name, variant_key, variant_name, sort_order, storage_gb, min_price, max_price, merchant_count';
+
+// rate.items and the item columns are not in the generated Database types
+// until #1150 lands, so these reads go through an untyped view of the client.
+type UntypedRateQuery = {
+  select: (cols: string) => UntypedRateQuery;
+  eq: (col: string, val: unknown) => UntypedRateQuery;
+  is: (col: string, val: null) => UntypedRateQuery;
+  in: (col: string, vals: readonly unknown[]) => UntypedRateQuery;
+  order: (
+    col: string,
+    opts?: { ascending?: boolean; nullsFirst?: boolean }
+  ) => UntypedRateQuery;
+  range: (from: number, to: number) => UntypedRateQuery;
+  maybeSingle: () => PromiseLike<{
+    data: unknown;
+    error: { message: string } | null;
+  }>;
+} & PromiseLike<{ data: unknown[] | null; error: { message: string } | null }>;
+const untypedRate = (): { from: (table: string) => UntypedRateQuery } =>
+  getRateClient() as unknown as { from: (table: string) => UntypedRateQuery };
+
+const toNonNegative = (raw: unknown): number => {
+  const n = Number(raw);
+  return Number.isFinite(n) && n > 0 ? n : 0;
+};
+
+function mapItemRow(raw: unknown): RateItem | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const r = raw as Record<string, unknown>;
+  const id = sanitizeRateEntityId(r.id);
+  const slug = typeof r.slug === 'string' ? r.slug : '';
+  if (!id || !slug) return null;
+  const str = (v: unknown): string => (typeof v === 'string' ? v : '');
+  return {
+    id,
+    item_key: str(r.item_key),
+    slug,
+    name: str(r.name),
+    brand: str(r.brand),
+    model: str(r.model),
+    category_id: sanitizeRateEntityId(r.category_id) || null,
+    default_variant_id: sanitizeRateEntityId(r.default_variant_id) || null,
+    min_price: toNonNegative(r.min_price),
+    max_price: toNonNegative(r.max_price),
+    price_variant_count: toNonNegative(r.price_variant_count),
+    merchant_count: toNonNegative(r.merchant_count),
+    listing_count: toNonNegative(r.listing_count),
+    unknown_variant_listing_count: toNonNegative(
+      r.unknown_variant_listing_count
+    ),
+    updated_at: typeof r.updated_at === 'string' ? r.updated_at : null,
+  };
+}
+
+function mapItemVariantRow(raw: unknown): RateItemVariant | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const r = raw as Record<string, unknown>;
+  const id = sanitizeRateEntityId(r.id);
+  const itemId = sanitizeRateEntityId(r.item_id);
+  const slug = typeof r.slug === 'string' ? r.slug : '';
+  const variantKey = typeof r.variant_key === 'string' ? r.variant_key : '';
+  if (!id || !itemId || !slug || !variantKey) return null;
+  const sortOrder = Number(r.sort_order);
+  const storage = Number(r.storage_gb);
+  return {
+    id,
+    item_id: itemId,
+    slug,
+    name: typeof r.name === 'string' ? r.name : '',
+    variant_key: variantKey,
+    variant_name: typeof r.variant_name === 'string' ? r.variant_name : null,
+    sort_order:
+      r.sort_order != null && Number.isFinite(sortOrder) ? sortOrder : null,
+    storage_gb: Number.isFinite(storage) && storage > 0 ? storage : null,
+    min_price: toNonNegative(r.min_price),
+    max_price: toNonNegative(r.max_price),
+    merchant_count: toNonNegative(r.merchant_count),
+  };
+}
+
+const isSafeCatalogSlug = (slug: string): boolean =>
+  PRODUCT_SLUG_REGEX.test(slug) &&
+  !slug.includes('..') &&
+  !SENTINEL_RATE_API_TOKENS.has(slug.toLowerCase());
+
+async function readItem(
+  column: 'slug' | 'id',
+  value: string
+): Promise<RateItem | null> {
+  const { data, error } = await untypedRate()
+    .from('items')
+    .select(ITEM_SELECT)
+    .eq(column, value)
+    .eq('status', 'published')
+    .maybeSingle();
+  if (error) {
+    log.error('item lookup failed', { column, value, message: error.message });
+    throw new RateDataUnavailableError('item', error);
+  }
+  return mapItemRow(data);
+}
+
+/** A published Item by its own slug. Needs M1+M2 (#1150). */
+export async function getItemBySlug(slug: string): Promise<RateItem | null> {
+  const clean =
+    typeof slug === 'string' ? slug.replace(/\p{Cc}+/gu, '').trim() : '';
+  if (!isSafeCatalogSlug(clean)) return null;
+  return readItem('slug', clean);
+}
+
+/** A published Item by id. Needs M1+M2 (#1150). */
+export async function getItemById(itemId: string): Promise<RateItem | null> {
+  const clean = sanitizeRateEntityId(itemId);
+  if (!clean) return null;
+  return readItem('id', clean);
+}
+
+/**
+ * An Item's published variants: sized ones by storage, then the rest. A
+ * retired (archived) `unknown` variant is not one of them (design doc 4.4).
+ */
+export async function getItemVariants(
+  itemId: string
+): Promise<RateItemVariant[]> {
+  const clean = sanitizeRateEntityId(itemId);
+  if (!clean) return [];
+  const rows = await fetchAllRows(
+    'item variants',
+    (from, to) =>
+      untypedRate()
+        .from('master_products')
+        .select(ITEM_VARIANT_SELECT)
+        .eq('item_id', clean)
+        .eq('status', 'published')
+        .order('id')
+        .range(from, to) as unknown as PromiseLike<{
+        data: unknown[] | null;
+        error: { message: string } | null;
+      }>
+  );
+  return sortItemVariants(
+    rows.map(mapItemVariantRow).filter((v): v is RateItemVariant => v !== null)
+  );
+}
+
+/** sort_order first, then storage ascending, then the key, so the order is stable. */
+export function sortItemVariants(
+  variants: readonly RateItemVariant[]
+): RateItemVariant[] {
+  return [...variants].sort((a, b) => {
+    const ao = a.sort_order ?? Number.MAX_SAFE_INTEGER;
+    const bo = b.sort_order ?? Number.MAX_SAFE_INTEGER;
+    if (ao !== bo) return ao - bo;
+    const as = a.storage_gb ?? Number.MAX_SAFE_INTEGER;
+    const bs = b.storage_gb ?? Number.MAX_SAFE_INTEGER;
+    if (as !== bs) return as - bs;
+    return a.variant_key.localeCompare(b.variant_key);
+  });
+}
+
+/**
+ * The listings of an Item with no stated size (`item_id` set, `cluster_id`
+ * NULL). The trust view has no `item_id` (#1242 leaves it unchanged), so the
+ * listing ids come from rate.products and their offers from the view.
+ */
+async function getItemUnknownVariantOffers(
+  itemId: string
+): Promise<MerchantOffer[]> {
+  const idRows = await fetchAllRows(
+    'item unknown-variant listings',
+    (from, to) =>
+      untypedRate()
+        .from('products')
+        .select('id, availability')
+        .eq('item_id', itemId)
+        .is('cluster_id', null)
+        .order('id')
+        .range(from, to) as unknown as PromiseLike<{
+        data: unknown[] | null;
+        error: { message: string } | null;
+      }>
+  );
+  const availability = new Map<string, OfferAvailability>();
+  const ids: string[] = [];
+  for (const raw of idRows as Array<{ id?: unknown; availability?: unknown }>) {
+    const id = typeof raw?.id === 'string' ? raw.id : '';
+    if (!id) continue;
+    ids.push(id);
+    const a = toOfferAvailability(raw.availability);
+    if (a) availability.set(id, a);
+  }
+  if (ids.length === 0) return [];
+  const supabase = getRateClient();
+  const viewRows: RawTrustViewRow[] = [];
+  for (let i = 0; i < ids.length; i += IN_FILTER_CHUNK_SIZE) {
+    const chunk = ids.slice(i, i + IN_FILTER_CHUNK_SIZE);
+    const rows = await fetchAllRows(
+      'v_products_with_merchant_trust',
+      (from, to) =>
+        supabase
+          .from('v_products_with_merchant_trust')
+          .select(TRUST_VIEW_SELECT)
+          .in('id', chunk)
+          .order('price_current', { ascending: true })
+          .order('id')
+          .range(from, to)
+    );
+    viewRows.push(...(rows as unknown as RawTrustViewRow[]));
+  }
+  const extras = await sellerExtrasForTrustViewRows(viewRows);
+  return viewRows
+    .map((row) =>
+      withOfferAvailability(
+        mapTrustViewRowToMerchantOffer(
+          row,
+          extras.followerCounts.get(row.merchant_id),
+          extras.metadataDosafeRisks.get(row.merchant_id)
+        ),
+        availability
+      )
+    )
+    .sort((a, b) => a.price_current - b.price_current);
+}
+
+/**
+ * An Item's offers grouped by variant, plus the "size not stated" group,
+ * which never feeds a variant's prices (design doc 4.4, Q2).
+ */
+export async function getItemOffers(
+  itemId: string,
+  variants: readonly RateItemVariant[]
+): Promise<RateItemOffers> {
+  const clean = sanitizeRateEntityId(itemId);
+  if (!clean) return { byVariant: new Map(), unknownVariant: [] };
+  const [byVariant, unknownVariant] = await Promise.all([
+    getMasterProductOffersBatch(variants.map((v) => v.id)),
+    getItemUnknownVariantOffers(clean),
+  ]);
+  return { byVariant, unknownVariant };
+}
+
+/**
+ * A catalogue slug as an Item: its own slug first, then an old variant slug
+ * (design doc 5.1, Q1). Null when neither is published. Needs M1+M2 (#1150).
+ */
+export async function resolveCatalogSlug(
+  slug: string
+): Promise<CatalogSlugResolution | null> {
+  const clean =
+    typeof slug === 'string' ? slug.replace(/\p{Cc}+/gu, '').trim() : '';
+  if (!isSafeCatalogSlug(clean)) return null;
+  const item = await readItem('slug', clean);
+  if (item) return { kind: 'item', item, variant: null };
+  const { data, error } = await untypedRate()
+    .from('master_products')
+    .select(ITEM_VARIANT_SELECT)
+    .eq('slug', clean)
+    .eq('status', 'published')
+    .maybeSingle();
+  if (error) {
+    log.error('variant slug lookup failed', {
+      slug: clean,
+      message: error.message,
+    });
+    throw new RateDataUnavailableError('variant', error);
+  }
+  const variant = mapItemVariantRow(data);
+  if (!variant) return null;
+  const owner = await readItem('id', variant.item_id);
+  return owner ? { kind: 'variant', item: owner, variant } : null;
+}
