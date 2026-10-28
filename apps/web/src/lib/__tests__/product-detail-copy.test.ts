@@ -188,6 +188,31 @@ function main() {
     ),
     '6 nhân (Hexa-core) (2x4.05 GHz hiệu năng + 4x2.42 GHz tiết kiệm điện)'
   );
+  assert.equal(
+    localizeSpecValue(
+      '1080 x 2400 pixels, 20:9 ratio (~395 ppi density)',
+      'vi'
+    ),
+    '1080 x 2400 pixel, 20:9 tỷ lệ (~395 ppi)'
+  );
+  assert.equal(
+    localizeSpecValue('2000 nits (peak), 1000 cd/m² (typ)', 'vi'),
+    '2000 nits (đỉnh), 1000 cd/m² (tiêu chuẩn)'
+  );
+  // The month is not translated inside a value that stays English.
+  assert.equal(
+    localizeSpecValue('Coming soon. Exp. release September 2024', 'vi'),
+    'Coming soon. Exp. release September 2024'
+  );
+  assert.equal(
+    localizeSpecValue('Released September 2024', 'vi'),
+    'Released Tháng 09/2024'
+  );
+  // ĩ and ũ mark a value stored in Vietnamese.
+  assert.equal(
+    localizeSpecValue('Sạc tĩnh, wireless charger', 'vi'),
+    'Sạc tĩnh, không dây charger'
+  );
   // Capitalised names are not untranslated words.
   assert.equal(
     localizeSpecValue('Wireless (Qi2), MagSafe', 'vi'),
