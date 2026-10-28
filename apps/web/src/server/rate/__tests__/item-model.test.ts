@@ -48,6 +48,7 @@ const variantRow = (id: string, gb: number, sort: number | null) => ({
 const CAT_PHONES = '55555555-5555-4555-8555-000000000001';
 const CAT_TABLETS = '55555555-5555-4555-8555-000000000002';
 const CAT_OTHER = '55555555-5555-4555-8555-000000000003';
+const CAT_NEW = '55555555-5555-4555-8555-000000000004';
 let calls: string[] = [];
 // Answer as a database without M1+M2 (PostgREST schema-cache miss).
 let schemaMissing = false;
@@ -90,6 +91,8 @@ globalThis.fetch = (async (input: RequestInfo | URL) => {
   }
   switch (url.pathname) {
     case '/rest/v1/categories':
+      // A category the cached list does not know yet, read by id.
+      if (q.includes(`id=eq.${CAT_NEW}`)) return json([{ slug: 'tablets' }]);
       return json([
         { id: CAT_PHONES, slug: 'smartphones' },
         { id: CAT_TABLETS, slug: 'tablets' },
@@ -463,6 +466,15 @@ async function main() {
       })
     )?.kind,
     'render'
+  );
+  (itemRow as { category_id: string | null }).category_id = CAT_NEW;
+  assert.deepEqual(
+    await resolveItemRoute({
+      slug: 'apple-iphone-16',
+      categoryBasePath: '/smartphones',
+    }),
+    { kind: 'redirect', to: '/tablets/apple-iphone-16' },
+    'a category missing from the cached map is read, not a 404'
   );
   (itemRow as { category_id: string | null }).category_id = CAT_OTHER;
   assert.deepEqual(

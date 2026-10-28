@@ -65,7 +65,18 @@ async function itemCategoryPath(
   item: RateItem
 ): Promise<string | null | false> {
   if (!item.category_id) return null;
-  const slug = new Map(await _getCachedCategorySlugs()).get(item.category_id);
+  let slug = new Map(await _getCachedCategorySlugs()).get(item.category_id);
+  if (slug === undefined) {
+    // A category newer than the cached map: read it before calling the Item
+    // lost; a read error is thrown, never a 404.
+    const { data, error } = await getRateClient()
+      .from('categories')
+      .select('slug')
+      .eq('id', item.category_id)
+      .maybeSingle();
+    if (error) throw new RateDataUnavailableError('categories', error);
+    slug = (data as { slug?: string } | null)?.slug;
+  }
   return slug && isCanonicalCategorySlug(slug) ? `/${slug}` : false;
 }
 

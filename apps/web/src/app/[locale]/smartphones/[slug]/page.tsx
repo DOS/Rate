@@ -128,6 +128,13 @@ export async function generateCategoryProductMetadata(
   // RATE_ITEM_MODEL on: an Item URL describes its selected variant and is
   // canonical (Q1, DOS/Rate#1153). Off: null, the page as before.
   const itemRoute = await resolveItemRoute({ slug, categoryBasePath });
+  // A URL the page 308s away (an old variant URL, an Item under another
+  // category) is never its own canonical: it points where the page goes.
+  if (itemRoute?.kind === 'redirect') {
+    return {
+      alternates: { canonical: `https://rate.vn${itemRoute.to.split('?')[0]}` },
+    };
+  }
   // The sizes the page itself shows, so the title quotes the same "from".
   const itemPage =
     itemRoute?.kind === 'render' && itemRoute.variants.length > 1

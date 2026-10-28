@@ -1,4 +1,5 @@
 import 'server-only';
+import { createHash } from 'node:crypto';
 import { cache } from 'react';
 import {
   getItemUnknownVariantOffers as _getItemUnknownVariantOffers,
@@ -89,9 +90,16 @@ const _getCachedUnknownByOffer = cache(
       [
         'rate-item-unknown-history',
         itemId,
-        offers
-          .map((o) => `${o.id}:${o.price_current}:${o.price_original ?? ''}`)
-          .join('|'),
+        // A hash, so the key stays short however many listings there are.
+        createHash('sha256')
+          .update(
+            offers
+              .map(
+                (o) => `${o.id}:${o.price_current}:${o.price_original ?? ''}`
+              )
+              .join('|')
+          )
+          .digest('hex'),
       ],
       {
         revalidate: 600,
