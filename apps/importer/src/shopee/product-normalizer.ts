@@ -209,14 +209,21 @@ export function detectProductOrigin(title: string, description?: string): Produc
 
 /** Apple apps and services a device can support or run. */
 const APPLE_SERVICE = String.raw`apple\s?(?:tv\+?|music|airplay\s?\d?|home(?:kit)?|arcade)|airplay\s?\d?|homekit|siri`;
-/** "hỗ trợ Apple TV", "tích hợp AirPlay 2", "có ứng dụng Apple TV", "works with Siri". */
+/** Ends a service name: "TV+" keeps its "+", which would otherwise read as a Plus model. */
+const SERVICE_END = String.raw`(?![a-z0-9+])`;
+/** "hỗ trợ Apple TV", "tích hợp: AirPlay 2", "có ứng dụng Apple TV", "works with Siri". */
 const SERVICE_MENTION_RE = new RegExp(
-  String.raw`\b(?:hỗ trợ|tích hợp|có sẵn|cài sẵn|ứng dụng|app|kết nối|tương thích(?: với)?|supports?|works with|compatible with) (?:(?:ứng dụng|app) )?(?:${APPLE_SERVICE})\b`,
+  String.raw`\b(?:hỗ trợ|tích hợp|có sẵn|cài sẵn|ứng dụng|app|kết nối|tương thích(?: với)?|supports?|works with|compatible with):? (?:(?:ứng dụng|app) )?(?:${APPLE_SERVICE})${SERVICE_END}`,
   'gi'
 );
-/** A television title: an "Apple TV" in it is the app, never the Apple TV box. */
+/**
+ * A television of another brand: an "Apple TV" in it is the app, never the Apple TV box
+ * ("Apple TV 4K - Smart TV Box" names no other brand and stays the box).
+ */
 const TELEVISION_TITLE_RE = /\btivi\b|\b(?:smart|google|android|qled|oled) ?tv\b/i;
-const APPLE_SERVICE_RE = new RegExp(String.raw`\b(?:${APPLE_SERVICE})\b`, 'gi');
+const TELEVISION_BRAND_RE =
+  /\b(?:samsung|lg|sony|tcl|xiaomi|casper|panasonic|sharp|toshiba|philips|hisense|coocaa|aqua|skyworth|ffalcon|asanzo|nanoco)\b/i;
+const APPLE_SERVICE_RE = new RegExp(String.raw`\b(?:${APPLE_SERVICE})${SERVICE_END}`, 'gi');
 
 /**
  * Drops the apps and services a title says the product supports, so they set no brand or
@@ -225,7 +232,8 @@ const APPLE_SERVICE_RE = new RegExp(String.raw`\b(?:${APPLE_SERVICE})\b`, 'gi');
  */
 function stripServiceMentions(title: string): string {
   const stripped = title.replace(SERVICE_MENTION_RE, ' ');
-  return (TELEVISION_TITLE_RE.test(stripped) ? stripped.replace(APPLE_SERVICE_RE, ' ') : stripped)
+  const otherBrandTv = TELEVISION_TITLE_RE.test(stripped) && TELEVISION_BRAND_RE.test(stripped);
+  return (otherBrandTv ? stripped.replace(APPLE_SERVICE_RE, ' ') : stripped)
     .replace(/ {2,}/g, ' ')
     .trim();
 }

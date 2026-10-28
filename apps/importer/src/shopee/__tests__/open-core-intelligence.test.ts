@@ -334,6 +334,12 @@ async function runSuite() {
     ['Apple TV 4K hỗ trợ Siri 64GB', 'apple:tv-4k:64gb'],
     ['Loa Apple HomePod mini hỗ trợ Apple Music', 'apple:homepod-mini:unknown'],
     ['iPad Air M2 tặng Apple TV+', 'apple:ipad-air-m2:unknown'],
+    // The "+" of "Apple TV+" goes with it, never a Plus model.
+    ['iPhone 16 hỗ trợ Apple TV+ 128GB', 'apple:iphone-16:128gb'],
+    ['Loa Samsung HW-Q990D hỗ trợ: Apple AirPlay 2', 'samsung:loa-samsung-hw-q990d:unknown'],
+    // An Apple TV box sold as a "Smart TV" box names no other TV brand and stays the box.
+    ['Apple TV 4K 64GB - Smart TV Box with Siri Remote', 'apple:tv-4k:64gb'],
+    ['Smart TV Apple TV 4K 128GB bản Wifi', 'apple:tv-4k:128gb'],
     // A bundled Magic Keyboard after the name keeps the iMac.
     ['Apple iMac M4 24 inch 256GB kèm Magic Keyboard', 'apple:imac-m4:256gb'],
     ['iMac M4 24 inch 16GB 256GB Magic Keyboard Touch ID', 'apple:imac-m4:256gb'],
