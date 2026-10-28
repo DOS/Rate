@@ -594,7 +594,8 @@ WHERE mp.id = b.old_cluster_id;
 
 ```sql
 -- Inventory (M0)
-SELECT count(*) FILTER (WHERE model_key !~ '^[a-z0-9][a-z0-9-]*:[a-z0-9][a-z0-9.-]*:[a-z0-9-]+$') AS bad_shape,
+-- Key shape = the shared-data helpers (splitModelKey). `_` is allowed because slugify keeps it (#1149).
+SELECT count(*) FILTER (WHERE model_key !~ '^[a-z0-9_][a-z0-9_-]*:[a-z0-9_][a-z0-9_.-]*:[a-z0-9_-]+$') AS bad_shape,
        count(*) FILTER (WHERE model_key LIKE 'khc:%') AS khc_keys,
        count(*) FILTER (WHERE split_part(model_key, ':', 3) = 'unknown') AS unknown_masters,
        count(*) FILTER (WHERE status IS NULL) AS null_status,
