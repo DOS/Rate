@@ -1285,6 +1285,12 @@ function testLlmReviewSummaryScope(): void {
     'Pin tụt 10% sau một giờ.',
     'Màn hình có 1000 điểm ảnh bị lỗi.',
     'Máy hỗ trợ 2 sao lưu tự động.',
+    'Người mua cho biết pin tụt 10% sau một giờ.',
+    'Khách khen pin còn 90% sau một năm.',
+    'Màn hình có 2 điểm chết.',
+    'Có 2 điểm sáng: pin và camera.',
+    'Giao hàng ngày 5/10 đúng hẹn.',
+    'Pin dùng được 3/5 ngày.',
   ]) {
     assert.equal(hasReviewScoreClaim(ok), false, ok);
   }
@@ -1308,7 +1314,6 @@ function testLlmReviewSummaryScope(): void {
     'Score of 4.7.',
     'Average of 4.7.',
     '80 phần trăm người mua khen pin.',
-    'Người mua khen pin tới 90%.',
     '30 khách hàng phàn nàn.',
     'Trong 120 bài đánh giá, nhiều người khen.',
     '50 phản hồi tích cực.',
@@ -1316,6 +1321,11 @@ function testLlmReviewSummaryScope(): void {
     'Most buyers gave five stars.',
     '4.8 🌟.',
     'Đạt 9/10.',
+    'Có 30 người khen pin.',
+    '95% các khách hàng hài lòng.',
+    'Được đánh giá 4.8.',
+    'Chấm 4/5.',
+    '85/100 điểm.',
     'rating 4.8',
     'điểm 9',
     'hơn trăm người khen pin.',
@@ -1347,6 +1357,15 @@ function testLlmReviewSummaryScope(): void {
   const long = scopeLlmReviewSummary('Máy dùng tốt. '.repeat(100))!;
   assert.ok(long.length <= 600 && long.endsWith('…'));
   const emoji = scopeLlmReviewSummary('😀'.repeat(400))!;
+  // A pair cut in half upstream: the lone half is dropped.
+  const loneHigh = scopeLlmReviewSummary(
+    `${LLM_REVIEW_SUMMARY_PREFIX}a${'😀'.repeat(10)}${String.fromCharCode(0xd83d)}`
+  )!;
+  const lastUnit = loneHigh.charCodeAt(loneHigh.length - 1);
+  assert.ok(
+    !(lastUnit >= 0xd800 && lastUnit <= 0xdbff),
+    'a cut-off pair is dropped'
+  );
   const beforeEllipsis = emoji.charCodeAt(emoji.length - 2);
   assert.ok(emoji.length <= 600 && emoji.endsWith('…'));
   assert.ok(
