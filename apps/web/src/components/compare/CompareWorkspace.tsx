@@ -1774,9 +1774,12 @@ export default function CompareWorkspace({
                         {activeCategoryMeta.label}
                       </span>
                       <span className="badge bg-danger-subtle text-danger rounded-pill small rate-tabular">
-                        {t('scoreDeltaBadge', {
-                          delta: battle.scoreDelta5.toFixed(2),
-                        })}
+                        {/* A 0.00 gap is a tie, as on the home page (DOS/Rate#1209). */}
+                        {battle.scoreDelta5 > 0.005
+                          ? t('scoreDeltaBadge', {
+                              delta: battle.scoreDelta5.toFixed(2),
+                            })
+                          : t('mdRowTie')}
                       </span>
                     </div>
 

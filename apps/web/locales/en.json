@@ -127,7 +127,7 @@
     "versusAutoVerdict": "Automatic verdict: {winner} leads with an overall score of {score}/5.0{expertSuffix}.",
     "mdTieLine": "Tie ({score}/5.0)",
     "tieDeltaNote": "(same score with the current weights)",
-    "tie1v1Badge": "1v1 tie",
+    "tie1v1Badge": "1v1 Tie",
     "versusAutoVerdictTie": "Automatic verdict: the two models are level on overall score ({score}/5.0); choose on price and the specs you need.",
     "compareMetaTitleWithNames": "Compare {names} - Ratings and 10 spec groups | Rate.vn",
     "compareMetaTitleWithNamesShort": "{names} | Rate.vn",

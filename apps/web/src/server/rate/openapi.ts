@@ -488,7 +488,7 @@ export function buildRateOpenApiSpec(
           summary:
             'Get programmatic 1v1 Head-to-Head JReviews verdict, 5-criteria scoreboard & price delta',
           description:
-            'Evaluates two same-category master products (`?pair=<slugA>-vs-<slugB>` or `?slugA=...&slugB=...`) with optional persona/custom 5-criteria weights (`persona`, `w_screen`, `w_performance`, `w_camera`, `w_battery`, `w_value`) and returns the overall winner, per-criterion head-to-head breakdown, price delta, Deal Radar signals (`deal_radar`), and 10-group specs.',
+            'Evaluates two same-category master products (`?pair=<slugA>-vs-<slugB>` or `?slugA=...&slugB=...`) with optional persona/custom 5-criteria weights (`persona`, `w_screen`, `w_performance`, `w_camera`, `w_battery`, `w_value`) and returns the overall winner (with `is_tie` true when both scores are level at two decimals; `overall_winner` is then only the price or side-A tie-break), per-criterion head-to-head breakdown, price delta, Deal Radar signals (`deal_radar`), and 10-group specs.',
           tags: ['Comparison & Watchlist'],
           parameters: [
             {

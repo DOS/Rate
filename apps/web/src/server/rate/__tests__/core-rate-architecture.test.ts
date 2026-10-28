@@ -11020,9 +11020,17 @@ async function runCoreArchitectureSuite() {
     assert.equal(isVersusScoreTie(5, 4.996), true, 'equal at two decimals');
     assert.equal(isVersusScoreTie(4.98, 4.97), false);
     assert.equal(isVersusScoreTie(Number.NaN, 5), false);
-    const enCompare = (enMessages as { compare: Record<string, string> })
-      .compare;
-    assert.ok(!/ đ$/.test(enCompare.scoreDeltaBadge ?? ''));
+    // The score gap reads as points, never as đồng.
+    const viCompare = (
+      (await import('../../../../locales/vi.json')).default as {
+        compare: Record<string, string>;
+      }
+    ).compare;
+    assert.ok(!/ đ$/.test(viCompare.scoreDeltaBadge ?? ''));
+    assert.equal(
+      viCompare.mdRowTie,
+      (viCompare.tie1v1Badge ?? '').replace(' 1v1', '')
+    );
 
     console.log(
       '  ✅ [118/119] ProductValueCalculator, DealFinderWorkspace & VersusInteractiveScoreboard Bounds (#960) passed'

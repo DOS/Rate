@@ -264,7 +264,7 @@ export default function VersusInteractiveScoreboard({
       const lines = [
         `### ${t('md1v1Heading', { nameA: safeNameA, nameB: safeNameB })}`,
         weightedResult.tie
-          ? `- **${t('mdLeadingDevice')}:** ${t('mdTieLine', { score: leadScore })}`
+          ? `- **${t('tie1v1Badge')}:** ${t('mdTieLine', { score: leadScore })}`
           : `- **${t('mdLeadingDevice')}:** **${safeWinnerName}** (${leadScore}/5.0 - ${t('mdScoreDelta', { delta: weightedResult.delta })})`,
         `- **${t('mdAuditUrl')}:** ${window.location.href}`,
         '',
@@ -310,7 +310,7 @@ export default function VersusInteractiveScoreboard({
         100,
         weightedResult.finalA.toFixed(2),
         weightedResult.finalB.toFixed(2),
-        weightedResult.winner.name,
+        weightedResult.tie ? t('mdRowTie') : weightedResult.winner.name,
       ],
       ...criteriaRows.map((r) => [
         r.label,
