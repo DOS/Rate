@@ -14,7 +14,6 @@ import {
   parseWatchlistSlugsParam,
   resolveWatchlistMasterPriceBounds,
   selectBestOfferFromListings,
-  withPlausibleMinPrice,
 } from '@/server/rate/api-handler';
 import {
   authenticateRateRequest,
@@ -130,8 +129,10 @@ export async function GET(request: NextRequest) {
       const { bestOffer, offerPlatforms } = selectBestOfferFromListings(offers);
       const radarSignal = computeProductRadarSignal(master, offers);
       const { currentMinPrice, currentMaxPrice } =
+        // The stored stats every page shows: in stock, no bait prices
+        // (DOS/Rate#802, #1141).
         resolveWatchlistMasterPriceBounds(
-          withPlausibleMinPrice(master, offers),
+          master,
           bestOffer?.price,
           MAX_VALID_VND_PRICE
         );
@@ -247,7 +248,7 @@ export async function POST(request: NextRequest) {
     const { bestOffer, offerPlatforms } = selectBestOfferFromListings(offers);
     const radarSignal = computeProductRadarSignal(masterProduct, offers);
     const { currentMinPrice } = resolveWatchlistMasterPriceBounds(
-      withPlausibleMinPrice(masterProduct, offers),
+      masterProduct,
       bestOffer?.price,
       MAX_VALID_VND_PRICE
     );

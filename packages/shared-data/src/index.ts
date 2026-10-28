@@ -15,6 +15,9 @@ export * from './clients/index.js';
 // Export constants
 export * from './constants/index.js';
 
+// Item / variant key helpers: model_key = item_key:variant_key (DOS/Rate#1149)
+export * from './rules/model-key.js';
+
 // `rate` schema types generated from supabase/migrations (pnpm gen:db-types)
 export type { Database, Json } from './database.types.js';
 

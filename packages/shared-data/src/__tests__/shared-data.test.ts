@@ -966,32 +966,261 @@ function testCategorySpecTemplates(): void {
   );
 }
 
+function assertRoundTrip(modelKey: string): void {
+  const parts = sharedDataRoot.splitModelKey(modelKey);
+  assert.ok(parts, `splitModelKey must parse ${modelKey}`);
+  const segments = modelKey.split(':');
+  assert.equal(parts.itemKey, `${segments[0]}:${segments[1]}`, modelKey);
+  assert.equal(parts.variantKey, segments[2], modelKey);
+  assert.equal(
+    sharedDataRoot.composeModelKey(parts.itemKey, parts.variantKey),
+    modelKey
+  );
+  assert.equal(sharedDataRoot.isItemKey(parts.itemKey), true, modelKey);
+  assert.equal(sharedDataRoot.isVariantKey(parts.variantKey), true, modelKey);
+}
+
+function testItemVariantKeys(): void {
+  const {
+    splitModelKey,
+    composeModelKey,
+    isModelKey,
+    isItemKey,
+    isVariantKey,
+    isSizedVariantKey,
+    UNKNOWN_VARIANT_KEY,
+    ItemSchema,
+    VariantSchema,
+    VariantSourceSchema,
+    ItemKeySchema,
+    VariantKeySchema,
+    ModelKeySchema,
+  } = sharedDataRoot;
+
+  // Exported from the root entry and from the zod-free rules entry.
+  assert.equal(rules.splitModelKey, splitModelKey);
+  assert.equal(rules.composeModelKey, composeModelKey);
+
+  // Every key form the normalizer emits today (design doc 4.2).
+  const forms: Array<[string, string, string]> = [
+    ['apple:iphone-17-pro:256gb', 'apple:iphone-17-pro', '256gb'],
+    ['apple:iphone-17-pro-max:1024gb', 'apple:iphone-17-pro-max', '1024gb'],
+    // Apple screen / case size stays in the Item (#1113, #1124).
+    ['apple:ipad-pro-m5-11:256gb', 'apple:ipad-pro-m5-11', '256gb'],
+    ['apple:ipad-pro-m5-13:1024gb', 'apple:ipad-pro-m5-13', '1024gb'],
+    ['apple:watch-series-11-46mm:64gb', 'apple:watch-series-11-46mm', '64gb'],
+    // Storage not stated, and earbuds / sizeless watches (single variant).
+    ['apple:iphone-18-pro:unknown', 'apple:iphone-18-pro', 'unknown'],
+    ['apple:airpods-pro-2:unknown', 'apple:airpods-pro-2', 'unknown'],
+    ['samsung:galaxy-buds3-pro:unknown', 'samsung:galaxy-buds3-pro', 'unknown'],
+    ['garmin:fenix-8:unknown', 'garmin:fenix-8', 'unknown'],
+    // Literal legacy / future variant keys (design doc 4.2).
+    [
+      'samsung:galaxy-buds-3-pro:standard',
+      'samsung:galaxy-buds-3-pro',
+      'standard',
+    ],
+    [
+      'apple:ipad-air-m3-11:256gb-cellular',
+      'apple:ipad-air-m3-11',
+      '256gb-cellular',
+    ],
+    [
+      'samsung:galaxy-s26-ultra:256gb-16gbram',
+      'samsung:galaxy-s26-ultra',
+      '256gb-16gbram',
+    ],
+    // A dot is allowed in the model segment (design doc 7.3), although
+    // today's slugify strips it.
+    ['xiaomi:redmi-note-14.5:128gb', 'xiaomi:redmi-note-14.5', '128gb'],
+    // slugify keeps `_` (it strips [^\w-]), including at the start.
+    ['asus:vivobook-x1504_va:512gb', 'asus:vivobook-x1504_va', '512gb'],
+    ['samsung:_galaxy-s25:256gb', 'samsung:_galaxy-s25', '256gb'],
+  ];
+  for (const [modelKey, itemKey, variantKey] of forms) {
+    assert.deepEqual(splitModelKey(modelKey), { itemKey, variantKey });
+    assert.equal(composeModelKey(itemKey, variantKey), modelKey);
+    assertRoundTrip(modelKey);
+  }
+
+  // Every three-part key literal in the importer's normalizer fixtures.
+  const fixtureDir = new URL(
+    '../../../../apps/importer/src/shopee/__tests__/',
+    import.meta.url
+  );
+  const fixtureKeys = new Set<string>();
+  for (const file of readdirSync(fixtureDir)) {
+    if (!/\.(ts|mjs)$/.test(file)) continue;
+    const source = readFileSync(new URL(file, fixtureDir), 'utf8');
+    for (const m of source.matchAll(
+      // Wider than the key shape (upper case), so a fixture key the helpers
+      // would reject fails here instead of being skipped. The brand must
+      // start with a letter or `_`, which leaves out ISO timestamps.
+      /['"`]([A-Za-z_][\w-]*:[\w.-]+:[\w.-]+)['"`]/g
+    )) {
+      fixtureKeys.add(m[1] ?? '');
+    }
+  }
+  assert.ok(
+    fixtureKeys.size >= 100,
+    `expected the importer fixtures to hold 100+ keys, found ${fixtureKeys.size}`
+  );
+  for (const modelKey of fixtureKeys) assertRoundTrip(modelKey);
+
+  // Not in the brand:model:variant shape: not parsed, not composed.
+  for (const bad of [
+    '',
+    'apple_iphone_16',
+    'other:key',
+    'khc:legacy',
+    'a:b:c:d',
+    'Apple:iphone-17:256gb',
+    'apple::256gb',
+    ':iphone-17:256gb',
+    'apple:iphone-17:',
+    'apple:-iphone:256gb',
+    'apple:iphone 17:256gb',
+    // Empty model segment, as the normalizer emits for a title with no model.
+    'samsung::unknown',
+    'khac::256gb',
+    'apple:iphone-17:256GB',
+    `apple:${'x'.repeat(200)}:256gb`,
+  ]) {
+    assert.equal(splitModelKey(bad), null, bad);
+    assert.equal(isModelKey(bad), false, bad);
+    assert.equal(ModelKeySchema.safeParse(bad).success, false, bad);
+  }
+  assert.equal(splitModelKey(undefined as unknown as string), null);
+  assert.throws(() => composeModelKey('apple', '256gb'), RangeError);
+  assert.throws(
+    () => composeModelKey('apple:iphone-17:256gb', '256gb'),
+    RangeError
+  );
+  assert.throws(() => composeModelKey('apple:iphone-17', ''), RangeError);
+  assert.throws(() => composeModelKey('apple:iphone-17', '256:gb'), RangeError);
+  assert.throws(
+    () => composeModelKey(`apple:${'x'.repeat(190)}`, '1024gb'),
+    RangeError
+  );
+  assert.equal(isItemKey('apple:ipad-pro-m5-11'), true);
+  assert.equal(isItemKey('apple:ipad-pro-m5-11:256gb'), false);
+  assert.equal(isVariantKey('256gb-cellular'), true);
+  assert.equal(isVariantKey('256gb:x'), false);
+  assert.equal(ItemKeySchema.safeParse('apple:ipad-pro-m5-11').success, true);
+  assert.equal(ItemKeySchema.safeParse('apple').success, false);
+  assert.equal(VariantKeySchema.safeParse('unknown').success, true);
+  assert.equal(VariantKeySchema.safeParse('').success, false);
+
+  // Only a stated storage size makes an Item multi-size (design doc 4.2).
+  for (const sized of ['8gb', '64gb', '256gb', '1024gb', '1tb']) {
+    assert.equal(isSizedVariantKey(sized), true, sized);
+  }
+  for (const other of [
+    UNKNOWN_VARIANT_KEY,
+    'standard',
+    '256gb-cellular',
+    'gb',
+    '',
+  ]) {
+    assert.equal(isSizedVariantKey(other), false, other);
+  }
+  assert.equal(UNKNOWN_VARIANT_KEY, 'unknown');
+
+  const id = '018f3b2c-1a2b-4c3d-8e4f-5a6b7c8d9e0f';
+  const item = ItemSchema.parse({
+    id,
+    item_key: 'apple:ipad-pro-m5-11',
+    slug: 'apple-ipad-pro-m5-11',
+    name: 'Apple iPad Pro M5 11',
+    brand: 'Apple',
+    model: 'iPad Pro M5 11',
+  });
+  assert.equal(item.status, 'draft');
+  assert.equal(item.min_price, 0);
+  assert.equal(item.unknown_variant_listing_count, 0);
+  assert.deepEqual(item.specifications, {});
+  // Legacy keys still get an Item (design doc 4.3): no shape check on rows.
+  assert.equal(
+    ItemSchema.safeParse({ ...item, item_key: 'khc:legacy-thing' }).success,
+    true
+  );
+  assert.equal(
+    ItemSchema.safeParse({ ...item, status: 'hidden' }).success,
+    false
+  );
+  assert.equal(
+    ItemSchema.safeParse({ ...item, average_rating: 6 }).success,
+    false
+  );
+
+  const variant = {
+    id,
+    brand: 'Apple',
+    model: 'iPad Pro M5 11',
+    model_key: 'apple:ipad-pro-m5-11:256gb',
+    name: 'Apple iPad Pro M5 11 256GB',
+    slug: 'apple-ipad-pro-m5-11-256gb',
+    item_id: id,
+    variant_key: '256gb',
+    sort_order: 1,
+  };
+  assert.equal(VariantSchema.parse(variant).variant_key, '256gb');
+  // Before the backfill both links may be missing.
+  assert.equal(
+    VariantSchema.safeParse({ ...variant, item_id: null, variant_key: null })
+      .success,
+    true
+  );
+  // model_key = item_key:variant_key must hold.
+  assert.equal(
+    VariantSchema.safeParse({ ...variant, variant_key: '512gb' }).success,
+    false
+  );
+  assert.equal(
+    VariantSchema.safeParse({ ...variant, sort_order: 40000 }).success,
+    false
+  );
+
+  assert.deepEqual(VariantSourceSchema.options, [
+    'title',
+    'sku',
+    'single_size',
+    'single_variant',
+    'manual',
+    'legacy',
+  ]);
+}
+
 function main(): void {
   console.log('🧪 Running @repo/shared-data unit tests...');
   testVersionAndZeroStrapiExports();
   console.log(
-    '  ✅ [1/7] Version & Zero-Strapi root export isolation verified'
+    '  ✅ [1/8] Version & Zero-Strapi root export isolation verified'
   );
   testRouteConstants();
-  console.log('  ✅ [2/7] Route & REST API v1 constants verified');
+  console.log('  ✅ [2/8] Route & REST API v1 constants verified');
   testTenFieldGroupsSpecificationsSchema();
   console.log(
-    '  ✅ [3/7] 10-Field-Groups ProductSpecificationsSchema verified'
+    '  ✅ [3/8] 10-Field-Groups ProductSpecificationsSchema verified'
   );
   testMasterProductAndScrapedProductSchemas();
   console.log(
-    '  ✅ [4/7] MasterProduct, ScrapedProduct & common schemas verified'
+    '  ✅ [4/8] MasterProduct, ScrapedProduct & common schemas verified'
   );
   testSupabaseClientGuards();
-  console.log('  ✅ [5/7] Supabase client fail-closed env guards verified');
+  console.log('  ✅ [5/8] Supabase client fail-closed env guards verified');
   testSeedingRiskPenalty();
-  console.log('  ✅ [6/7] Shared seeding risk penalty verified');
+  console.log('  ✅ [6/8] Shared seeding risk penalty verified');
   testPriceRules();
   console.log(
-    '  ✅ [7/7] Shared price rules (@repo/shared-data/rules) verified'
+    '  ✅ [7/8] Shared price rules (@repo/shared-data/rules) verified'
+  );
+  testItemVariantKeys();
+  console.log(
+    '  ✅ [8/8] Item / variant schemas and model_key helpers verified'
   );
   testCategorySpecTemplates();
-  console.log('  ✅ [8/8] Category spec templates (DOS/Rate#1142) verified');
+  console.log('  ✅ [9/9] Category spec templates (DOS/Rate#1142) verified');
   console.log('🎉 All @repo/shared-data tests passed!');
 }
 
