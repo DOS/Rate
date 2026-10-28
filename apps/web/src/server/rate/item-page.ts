@@ -30,7 +30,7 @@ import {
 } from '@/lib/sale-state';
 import { productImageUrl } from '@/lib/rate-domain-core';
 import { isItemModelOn } from './item-model';
-import { getCachedCatalogSlug } from './item-route';
+import { getCachedCatalogSlugResolution } from './item-route';
 import { ItemModelUnavailableError } from '../../lib/rate-api';
 import { createLogger } from '@/lib/logger';
 import {
@@ -262,7 +262,7 @@ export async function loadItemSizePanel(
   if (!isItemModelOn()) return null;
   let resolution;
   try {
-    resolution = await getCachedCatalogSlug(variantSlug);
+    resolution = await getCachedCatalogSlugResolution(variantSlug);
   } catch (err) {
     if (err instanceof ItemModelUnavailableError) return null;
     throw err;

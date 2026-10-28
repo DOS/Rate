@@ -26,7 +26,7 @@ import { isItemModelOn } from './item-model';
 const log = createLogger('server.item-directory');
 
 /** Runs `read` under the Item model; null when it is off or unavailable. */
-async function whenItemModel<T>(
+export async function whenItemModel<T>(
   what: string,
   read: () => Promise<T>
 ): Promise<T | null> {
@@ -99,8 +99,13 @@ export async function getItemCatalogPage<T extends MasterProduct>(
     const rows: T[] = [];
     for (let batch = 0; ; batch++) {
       if (batch === MAX_CATALOG_BATCHES) {
-        log.warn('item catalogue read cut', { variants: rows.length });
-        break;
+        // Too many variants to group in the web: the variant listing,
+        // rather than a page cut short or empty (#1290). Needs the Item
+        // search RPCs (#1279).
+        log.error('item catalogue too large to group, showing variants', {
+          variants: rows.length,
+        });
+        return null;
       }
       const page = await readBatch(
         batch * CATALOG_BATCH_SIZE,
@@ -109,11 +114,27 @@ export async function getItemCatalogPage<T extends MasterProduct>(
       rows.push(...page);
       if (page.length < CATALOG_BATCH_SIZE) break;
     }
-    const grouped = groupRowsByItem(
-      rows,
-      await getCachedItemLinks(rows.map((r) => r.id).filter(Boolean))
+    // The variants are read already: if the Item links fail, this page is
+    // the variant page the caller would read again (same filters, sort and
+    // window), so it is cut from them instead (#1275).
+    const links = await getCachedItemLinks(
+      rows.map((r) => r.id).filter(Boolean)
+    ).catch((err: unknown) => {
+      const message = err instanceof Error ? err.message : String(err);
+      if (err instanceof ItemModelUnavailableError) {
+        log.warn('item links unavailable, showing variants', { message });
+      } else {
+        log.error('item links read failed, showing variants', { message });
+      }
+      return null;
+    });
+    if (!links) {
+      return rows.slice(offset, offset + limit) as Array<T & ItemCatalogRow>;
+    }
+    return sortItemRows(groupRowsByItem(rows, links), sort).slice(
+      offset,
+      offset + limit
     );
-    return sortItemRows(grouped, sort).slice(offset, offset + limit);
   });
 }
 
@@ -151,4 +172,21 @@ export function getItemSlugByVariantSlug() {
     )();
     return new Map(entries);
   });
+}
+
+/**
+ * Item slugs for the given variant slugs, for in-app versus links (#1290);
+ * null while the Item model is off, so pages pass nothing new.
+ */
+export async function getItemSlugsFor(
+  slugs: readonly string[]
+): Promise<Record<string, string> | null> {
+  const map = await getItemSlugByVariantSlug();
+  if (!map) return null;
+  const out: Record<string, string> = {};
+  for (const slug of slugs) {
+    const itemSlug = map.get(slug);
+    if (itemSlug) out[slug] = itemSlug;
+  }
+  return out;
 }

@@ -118,7 +118,7 @@ globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
           { id: 'draft-variant', brand: 'Google', item_id: DRAFT_ITEM },
         ]);
       }
-      if (q.includes('item_id=in.')) {
+      if (q.includes('item_id=in.') || q.includes(`item_id=eq.${ITEM}`)) {
         return json([variantRow(V256, 256), variantRow(V128, 128)]);
       }
       return json([]);
@@ -161,6 +161,7 @@ async function main() {
   assert.equal(await dir.getItemBrandFacets(CATEGORY, 'smartphones'), null);
   assert.equal(await dir.getItemCount(), null);
   assert.equal(await dir.getItemSlugByVariantSlug(), null);
+  assert.equal(await dir.getItemSlugsFor(['apple-iphone-16-128gb']), null);
   assert.deepEqual(calls, [], 'flag off: no database read');
 
   // Flag on: one row per Item, pages cut after grouping.
@@ -207,6 +208,23 @@ async function main() {
   assert.equal(tail!.length, 20);
   assert.equal(tail!.at(-1)!.id, 'lone-599');
 
+  // In-app versus links: only the slugs asked for, mapped to Items (#1290).
+  assert.deepEqual(
+    await dir.getItemSlugsFor(['apple-iphone-16-256gb', 'samsung-galaxy-s24']),
+    { 'apple-iphone-16-256gb': 'apple-iphone-16' }
+  );
+
+  // Past the read cap the caller shows its variant listing (#1290).
+  assert.equal(
+    await dir.getItemCatalogPage(
+      async (_offset, limit) =>
+        Array.from({ length: limit }, (_, i) => row(`x-${i}`, `x-${i}`, 1)),
+      0,
+      10
+    ),
+    null
+  );
+
   // Brand facets in Items; a master of a draft Item counts as itself.
   assert.deepEqual(await api.getCategoryItemBrandFacets(CATEGORY), [
     { name: 'Apple', count: 1 },
@@ -222,7 +240,11 @@ async function main() {
   // Flag on, Item tables missing (M1+M2 not applied): variants as before.
   schemaMissing = true;
   assert.equal(await dir.groupCatalogRowsByItem(rows), rows);
-  assert.equal(await dir.getItemCatalogPage(async () => rows, 0, 10), null);
+  // The variants already read are the page, ungrouped (#1275).
+  assert.deepEqual(
+    (await dir.getItemCatalogPage(async () => rows, 0, 10))?.map((r) => r.id),
+    rows.map((r) => r.id)
+  );
   assert.equal(await dir.getItemBrandFacets(CATEGORY, 'smartphones'), null);
   assert.equal(await dir.getItemCount(), null);
   schemaMissing = false;
@@ -230,8 +252,57 @@ async function main() {
   // Flag on, an Item read failing for another reason: variants too, never a
   // failed page (review round 1).
   itemsDown = true;
+  // The catalogue page cuts the variants it read instead of reading them
+  // again when the Item links fail (#1275).
+  let catalogueReads = 0;
+  assert.deepEqual(
+    (
+      await dir.getItemCatalogPage(
+        async () => {
+          catalogueReads += 1;
+          return rows;
+        },
+        0,
+        2
+      )
+    )?.map((r) => r.id),
+    [V256, LONE]
+  );
+  assert.equal(catalogueReads, 1);
   assert.equal(await dir.groupCatalogRowsByItem(rows), rows);
   assert.equal(await dir.getItemCount(), null);
+  itemsDown = false;
+  delete process.env.RATE_ITEM_MODEL;
+
+  // Compare, versus and watchlist per Item (DOS/Rate#1156).
+  const cmp = await import('../item-compare');
+  calls = [];
+  assert.equal(await cmp.resolveCompareSlugs(['apple-iphone-16']), null);
+  assert.equal(await cmp.resolveVersusPlan('a', 'b'), null);
+  assert.equal(await cmp.resolveWatchlistSlug('apple-iphone-16'), null);
+  assert.deepEqual(calls, [], 'flag off: no database read');
+  process.env.RATE_ITEM_MODEL = 'item';
+  assert.deepEqual(
+    await cmp.resolveCompareSlugs(['apple-iphone-16@128gb']),
+    ['apple-iphone-16-128gb'],
+    'a pinned size compares that size'
+  );
+  assert.deepEqual(await cmp.resolveWatchlistSlug('apple-iphone-16'), {
+    variantSlug: 'apple-iphone-16-128gb',
+    sizeRequired: true,
+  });
+  // An Item sharing its slug with one of its sizes watches that size
+  // (review round 1): the stub answers every Item slug with the Item.
+  assert.deepEqual(await cmp.resolveWatchlistSlug('apple-iphone-16-128gb'), {
+    variantSlug: 'apple-iphone-16-128gb',
+    sizeRequired: false,
+  });
+  itemsDown = true;
+  assert.equal(
+    await cmp.resolveCompareSlugs(['apple-iphone-16']),
+    null,
+    'a failing Item read compares the slugs as sent'
+  );
   itemsDown = false;
   delete process.env.RATE_ITEM_MODEL;
 
@@ -244,9 +315,17 @@ async function main() {
     'utf8'
   );
   assert.match(leaderboard, /export const revalidate = 60;/);
+  const versus = fs.readFileSync(
+    path.resolve(__dirname, '../../../app/[locale]/compare/[versus]/page.tsx'),
+    'utf8'
+  );
+  assert.match(versus, /export const revalidate = 60;/);
+  assert.doesNotMatch(versus, /searchParams|force-dynamic/);
   assert.doesNotMatch(leaderboard, /force-dynamic/);
   for (const file of [
     path.resolve(__dirname, '../item-directory.ts'),
+    path.resolve(__dirname, '../item-compare.ts'),
+    path.resolve(__dirname, '../../../lib/item-compare.ts'),
     path.resolve(__dirname, '../../../lib/item-directory.ts'),
   ]) {
     assert.doesNotMatch(

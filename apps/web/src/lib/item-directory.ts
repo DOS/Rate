@@ -8,6 +8,8 @@ import type { MasterProduct } from '@repo/shared-data';
 
 /** One size of an Item, as a chip on its card. */
 export interface ItemVariantChip {
+  /** The variant (`rate.master_products`) id. */
+  id: string;
   /** The literal key segment: 256gb, 1024gb, standard, unknown. */
   variant_key: string;
   storage_gb: number | null;
@@ -30,6 +32,7 @@ export type ItemCatalogRow = MasterProduct & {
 export interface ItemLinkInput {
   item: { id: string; slug: string; name: string; merchant_count: number };
   variants: readonly {
+    id: string;
     variant_key: string;
     storage_gb: number | null;
     min_price: number;
@@ -75,6 +78,7 @@ export function groupRowsByItem<T extends MasterProduct>(
         ),
         item_slug: link.item.slug,
         item_variants: link.variants.map((v) => ({
+          id: v.id,
           variant_key: v.variant_key,
           storage_gb: v.storage_gb,
           min_price: positivePrice(v.min_price),
@@ -181,16 +185,32 @@ export interface ItemSizeChip {
 export function itemSizeChips(
   row: ItemCatalogRow,
   itemHref: string,
-  formatStorage: (gb: number) => string
+  formatStorage: (gb: number) => string,
+  /** A `?storage=` filter: only the matching sizes, as the price (#1290). */
+  onlyStorage?: readonly number[]
 ): ItemSizeChip[] {
+  const filter =
+    onlyStorage && onlyStorage.length > 0 ? new Set(onlyStorage) : null;
   const sized = (row.item_variants ?? []).filter(
-    (v) => typeof v.storage_gb === 'number' && v.storage_gb > 0
+    (v) =>
+      typeof v.storage_gb === 'number' &&
+      v.storage_gb > 0 &&
+      (!filter || filter.has(v.storage_gb))
   );
-  if (sized.length < 2) return [];
-  return sized.map((v) => ({
-    label: formatStorage(v.storage_gb as number),
-    href: `${itemHref}?v=${encodeURIComponent(v.variant_key)}`,
-  }));
+  // One chip per size label: `256gb` and a later `256gb-cellular` (design
+  // Q3) would read the same, so the first in variant order stands.
+  const chips: ItemSizeChip[] = [];
+  const labels = new Set<string>();
+  for (const v of sized) {
+    const label = formatStorage(v.storage_gb as number);
+    if (labels.has(label)) continue;
+    labels.add(label);
+    chips.push({
+      label,
+      href: `${itemHref}?v=${encodeURIComponent(v.variant_key)}`,
+    });
+  }
+  return chips.length < 2 ? [] : chips;
 }
 
 /**
@@ -231,4 +251,24 @@ export function sortItemRows<T extends { min_price?: unknown }>(
       return (a.price - b.price) * dir || a.index - b.index;
     })
     .map((e) => e.row);
+}
+
+/**
+ * Per-master counts summed over each Item row's sizes, keyed by the row's
+ * id: an Item's rating covers all its listings, so the reviews kept out of
+ * it are all its sizes' (DOS/Rate#1275). Rows with no Item keep their count.
+ */
+export function sumCountsByItemRow(
+  rows: readonly ItemCatalogRow[],
+  countsByMaster: Readonly<Record<string, number>>
+): Record<string, number> {
+  const out: Record<string, number> = { ...countsByMaster };
+  for (const row of rows) {
+    if (!row.item_variants || row.item_variants.length === 0) continue;
+    const ids = new Set([row.id, ...row.item_variants.map((v) => v.id)]);
+    let total = 0;
+    for (const id of ids) total += Number(countsByMaster[id]) || 0;
+    out[row.id] = total;
+  }
+  return out;
 }

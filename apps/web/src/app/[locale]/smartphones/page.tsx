@@ -864,7 +864,8 @@ export async function CategoryCatalogContent({
                             sizeChips={itemSizeChips(
                               item,
                               `${basePath}/${catalogRowSlug(item)}`,
-                              formatStorageLabel
+                              formatStorageLabel,
+                              storageGb
                             )}
                             categoryPath={basePath}
                             name={item.name}

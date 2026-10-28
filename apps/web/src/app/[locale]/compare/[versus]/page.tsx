@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { notFound } from 'next/navigation';
+import { notFound, permanentRedirect } from 'next/navigation';
 import { getTranslations, setRequestLocale } from 'next-intl/server';
 import { BsTrophy } from 'react-icons/bs';
 import { Link } from '@/lib/navigation';
@@ -9,6 +9,8 @@ import {
   getMasterProductCategorySlug,
   getMasterProductHref,
 } from '@/server/rate';
+import { resolveVersusPlan } from '@/server/rate/item-compare';
+import { getItemSlugsFor } from '@/server/rate/item-directory';
 import { normalizeRateLocale } from '@/lib/rate-i18n';
 import { defaultOpenGraph, fitTitle, fitDescription } from '@/lib/seo';
 import { scoreMasterProductForLeaderboard } from '@/lib/leaderboard-engine';
@@ -62,14 +64,23 @@ export async function generateMetadata({
     return notFoundMeta();
   }
 
-  const compared = await getCachedCompareMasterProducts(parsed.join(','));
+  // RATE_ITEM_MODEL on: the Item pair is the page (DOS/Rate#1156).
+  const plan = await resolveVersusPlan(parsed[0], parsed[1]);
+  if (plan && plan.kind !== 'render') {
+    return notFoundMeta();
+  }
+  const compared = await getCachedCompareMasterProducts(
+    (plan ? [plan.slugA, plan.slugB] : parsed).join(',')
+  );
   const a = compared[0];
   const b = compared[1];
   if (!a || !b) {
     return notFoundMeta();
   }
 
-  const canonicalUrl = `https://rate.vn/compare/${a.slug}-vs-${b.slug}`;
+  const canonicalUrl = plan
+    ? `https://rate.vn${plan.canonical}`
+    : `https://rate.vn/compare/${a.slug}-vs-${b.slug}`;
   const fullTitle = t('versusMetaTitle', { nameA: a.name, nameB: b.name });
   // Both names first; the fixed text, then the site name, give way to fit a
   // search result (DOS/Rate#777). The share card keeps the full title.
@@ -110,8 +121,16 @@ export default async function VersusComparePage({ params }: VersusPageProps) {
     notFound();
   }
 
+  // RATE_ITEM_MODEL on: versus URLs name Items, an old variant pair 308s to
+  // its Item pair and a same-Item pair is no versus (DOS/Rate#1156); off:
+  // null, and the page is as before.
+  const plan = await resolveVersusPlan(parsed[0], parsed[1]);
+  if (plan?.kind === 'redirect') permanentRedirect(plan.to);
+  if (plan?.kind === 'not_found') notFound();
+  const pair = plan?.kind === 'render' ? [plan.slugA, plan.slugB] : parsed;
+
   const [compared, directory] = await Promise.all([
-    getCachedCompareMasterProducts(parsed.join(',')),
+    getCachedCompareMasterProducts(pair.join(',')),
     getCachedMasterProducts({
       categorySlug: 'all',
       limit: 60,
@@ -128,6 +147,12 @@ export default async function VersusComparePage({ params }: VersusPageProps) {
   const catSlug = getMasterProductCategorySlug(prodA);
   const scoreA = scoreMasterProductForLeaderboard(prodA, 'combined');
   const scoreB = scoreMasterProductForLeaderboard(prodB, 'combined');
+  // RATE_ITEM_MODEL on: in-app versus links name Items (DOS/Rate#1290).
+  const itemSlugBySlug = await getItemSlugsFor([
+    ...compared.map((p) => p.slug),
+    ...directory.map((p) => p.slug),
+  ]);
+  const itemSlugProps = itemSlugBySlug ? { itemSlugBySlug } : {};
 
   // Summary ItemList: each item links to its product page, which carries the
   // Product markup (DOS/Rate#1059).
@@ -201,6 +226,7 @@ export default async function VersusComparePage({ params }: VersusPageProps) {
               scoreA={scoreA}
               scoreB={scoreB}
               locale={locale}
+              {...itemSlugProps}
             />
 
             <VersusMatchupSwitcher
@@ -209,6 +235,7 @@ export default async function VersusComparePage({ params }: VersusPageProps) {
               categorySlug={catSlug}
               catalogCandidates={directory}
               locale={locale}
+              {...itemSlugProps}
             />
           </div>
         </section>
@@ -221,6 +248,7 @@ export default async function VersusComparePage({ params }: VersusPageProps) {
               initialCategory={catSlug}
               hasExplicitSlugs={true}
               locale={locale}
+              {...itemSlugProps}
             />
           </div>
         </section>

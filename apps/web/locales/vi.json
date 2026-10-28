@@ -658,7 +658,11 @@
     "quickToggleBtnWatched": "Đang canh giá",
     "quickToggleBtnUnwatched": "Canh giá",
     "quickToggleShortUnwatched": "Canh giá",
-    "quickToggleShortWatched": "Đang canh"
+    "quickToggleShortWatched": "Đang canh",
+    "sizeRequiredTitle": "Chọn dung lượng để theo dõi giá: cảnh báo giá đặt theo từng dung lượng.",
+    "sizeRequiredCta": "Chọn dung lượng",
+    "sizeRequiredUnavailable": "Chưa tải được danh sách dung lượng.",
+    "sizeRequiredProductLink": "Mở trang sản phẩm"
   },
   "deals": {
     "metaTitle": "Deal công nghệ đã kiểm tra trên 10 sàn | Rate.vn",
@@ -1184,6 +1188,7 @@
     "specsShowAll": "Xem toàn bộ thông số",
     "specsShowLess": "Thu gọn thông số",
     "exportMenu": "Xuất dữ liệu",
+    "offersCombinedRiskLabel": "Rủi ro tổng hợp",
     "offersReviewRiskLabel": "Rủi ro đánh giá",
     "offersReviewRiskNoData": "chưa đủ dữ liệu",
     "offersDiscontinuedBadge": "Ngừng bán",

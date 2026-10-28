@@ -658,7 +658,11 @@
     "quickToggleBtnWatched": "Hlídáno",
     "quickToggleBtnUnwatched": "Hlídat cenu",
     "quickToggleShortUnwatched": "Hlídat cenu",
-    "quickToggleShortWatched": "Hlídáno"
+    "quickToggleShortWatched": "Hlídáno",
+    "sizeRequiredTitle": "Vyberte velikost úložiště: cenová upozornění se nastavují pro každou zvlášť.",
+    "sizeRequiredCta": "Vybrat velikost",
+    "sizeRequiredUnavailable": "Varianty se nepodařilo načíst.",
+    "sizeRequiredProductLink": "Otevřít stránku produktu"
   },
   "deals": {
     "metaTitle": "Výhodné nabídky ověřené v 10 obchodech | Rate.vn",
@@ -1184,6 +1188,7 @@
     "specsShowAll": "Zobrazit všechny parametry",
     "specsShowLess": "Zobrazit méně parametrů",
     "exportMenu": "Exportovat data",
+    "offersCombinedRiskLabel": "Celkové riziko",
     "offersReviewRiskLabel": "Riziko recenzí",
     "offersReviewRiskNoData": "nedostatek dat",
     "offersDiscontinuedBadge": "Ukončený prodej",

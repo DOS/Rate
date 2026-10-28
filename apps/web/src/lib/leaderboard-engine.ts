@@ -813,7 +813,11 @@ export function buildPopular1v1BattlesForCategory(
     )
       continue;
 
-    const versusSlug = `${itemA.slug}-vs-${itemB.slug}`;
+    // The page each row links to names the versus side: its Item under the
+    // Item model, so the link needs no 308 hop (DOS/Rate#1275).
+    const sideSlug = (item: typeof itemA) =>
+      item.productHref.split('/').pop() || item.slug;
+    const versusSlug = `${sideSlug(itemA)}-vs-${sideSlug(itemB)}`;
     const scoreDelta5 = Number(
       Math.abs(itemA.combinedScore5 - itemB.combinedScore5).toFixed(2)
     );

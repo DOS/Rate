@@ -947,7 +947,7 @@ function buildBaseRateOpenApiSpec(
           summary:
             'List e-commerce merchants with Dual Risk Score (DOSafe + AI Seeding Risk)',
           description:
-            'Returns verified merchants (`rate.merchants`) with filter support for platform, Official Mall status, minimum trust score, search query, and sorting. `review_risk_score` is null for a store with no analysed review.',
+            'Returns verified merchants (`rate.merchants`) with filter support for platform, Official Mall status, minimum trust score, search query, and sorting. `risk_score` is the combined risk; `review_risk_score` is only the part measured on reviews, null for a store with no analysed review.',
           tags: ['Merchants & Dual Risk Score'],
           parameters: [
             {
@@ -1014,7 +1014,7 @@ function buildBaseRateOpenApiSpec(
           summary:
             'Paginated merchant directory with risk tier, seeding tier & platform filters',
           description:
-            'Returns one page (`items`, `matched`, `offset`) of the `/merchants` directory filtered by search query, platform, Official Mall status, trust risk tier (`safe`, `moderate`, `warning`), AI seeding tier (`low`, `elevated`), and sort order. `review_risk_score` is null for a store with no analysed review.',
+            'Returns one page (`items`, `matched`, `offset`) of the `/merchants` directory filtered by search query, platform, Official Mall status, trust risk tier (`safe`, `moderate`, `warning`), AI seeding tier (`low`, `elevated`), and sort order. `risk_score` is the combined risk; `review_risk_score` is only the part measured on reviews, null for a store with no analysed review.',
           tags: ['Merchants & Dual Risk Score'],
           parameters: [
             {
@@ -1104,7 +1104,7 @@ function buildBaseRateOpenApiSpec(
           summary:
             'Get detailed merchant audit profile, seeding breakdown & active listings',
           description:
-            'Fetches a single merchant by UUID, slug, or `platform_shop_id` along with its active marketplace listings and AI review seeding distribution. `review_risk_score` is null for a store with no analysed review.',
+            'Fetches a single merchant by UUID, slug, or `platform_shop_id` along with its active marketplace listings and AI review seeding distribution. `risk_score` is the combined risk; `review_risk_score` is only the part measured on reviews, null for a store with no analysed review.',
           tags: ['Merchants & Dual Risk Score'],
           parameters: [
             {
