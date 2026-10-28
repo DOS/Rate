@@ -1206,14 +1206,6 @@ export function mapOfferRowToMerchantOffer(item: RawOfferRow): MerchantOffer {
     merchantObj?.review_risk_score,
     0
   );
-  // An offer with no merchant row has no seller to give a baseline (#1099).
-  const hasStoredScore =
-    (merchantObj?.review_risk_score != null &&
-      hasPersistedReviewRisk(
-        columnReviewRisk,
-        merchantObj.review_risk_breakdown
-      )) ||
-    typeof meta?.review_risk_score === 'number';
   // RS#708: the column is the combined risk; the review-only part counts
   // only with analysed reviews (DOS/Rate#1268).
   const riskSplit = storedRiskSplit(
@@ -1221,6 +1213,15 @@ export function mapOfferRowToMerchantOffer(item: RawOfferRow): MerchantOffer {
     meta,
     merchantObj?.review_risk_score
   );
+  // An offer with no merchant row has no seller to give a baseline (#1099).
+  const hasStoredScore =
+    riskSplit != null ||
+    (merchantObj?.review_risk_score != null &&
+      hasPersistedReviewRisk(
+        columnReviewRisk,
+        merchantObj.review_risk_breakdown
+      )) ||
+    typeof meta?.review_risk_score === 'number';
   const reviewRisk = riskSplit
     ? (riskSplit.reviewOnly ?? 0)
     : merchantObj?.review_risk_score != null &&

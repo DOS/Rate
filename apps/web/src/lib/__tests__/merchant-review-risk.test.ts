@@ -451,6 +451,27 @@ async function combinedColumnIsNotReviewRisk() {
     },
   } as unknown as Parameters<typeof mapOfferRowToMerchantOffer>[0]);
   assert.equal(staleMeta.merchant.risk_score, 42);
+  // A split only in metadata keeps its breakdown and review-only score.
+  const metaOnly = mapOfferRowToMerchantOffer({
+    id: 'o4',
+    platform: 'shopee',
+    title: 'Phone',
+    price_current: 1_000_000,
+    url: 'https://shopee.vn/p',
+    merchants: {
+      id: 'm4',
+      name: 'Shop',
+      platform: 'shopee',
+      review_risk_score: 0,
+      review_risk_breakdown: {},
+      metadata: { review_risk_breakdown: measured },
+    },
+  } as unknown as Parameters<typeof mapOfferRowToMerchantOffer>[0]);
+  assert.equal(metaOnly.merchant.review_risk_score, 28);
+  assert.equal(
+    hasReviewRiskEvidence(metaOnly.merchant.review_risk_breakdown),
+    true
+  );
 
   // Merchant list and profile read the review-only part, and the combined
   // score still caps trust.
