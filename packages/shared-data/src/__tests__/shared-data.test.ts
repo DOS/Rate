@@ -823,6 +823,149 @@ function testPriceRules(): void {
   }
 }
 
+function testCategorySpecTemplates(): void {
+  const phoneShaped = {
+    ram_gb: 1,
+    storage_gb: 64,
+    screen_size_inch: 1,
+    has_5g: true,
+    specifications: {
+      category_slug: 'x',
+      display: { size_inch: 1, refresh_rate_hz: 60, ppi: 300 },
+      hardware: { ram_gb: 1, storage_gb: 64, gpu: 'g', chipset: 'c' },
+      camera: { main_camera: 'mic' },
+      cellular: { has_5g: true, bands_5g: 'n78', bands_4g: 'LTE' },
+      design: { biometrics: 'b', weight_g: 5 },
+      connectivity: { bluetooth: '5.4', wlan: 'w', nfc: false },
+      multimedia: { audio_features: 'ANC', headphone_jack_35mm: false },
+      battery: { capacity_mah: 500 },
+    },
+    key_specs: {
+      screen: 's',
+      chip: 'c',
+      camera: 'm',
+      battery: 'b',
+      storage: '64GB',
+      ram: '1GB',
+    },
+  };
+
+  // Phones and tablets, and any unknown slug, keep everything untouched.
+  for (const slug of [
+    'smartphones',
+    'tablets',
+    'laptops',
+    undefined,
+    null,
+    'nope',
+  ]) {
+    assert.equal(
+      rules.applyCategorySpecTemplate(slug, phoneShaped),
+      phoneShaped
+    );
+    assert.equal(rules.getCategorySpecTemplate(slug).groups.length, 10);
+  }
+
+  // Earbuds: audio groups only, no screen, RAM, ROM, camera or cellular.
+  const buds = rules.applyCategorySpecTemplate(' Earbuds ', phoneShaped);
+  const budsSpecs = buds.specifications as unknown as Record<
+    string,
+    Record<string, unknown>
+  >;
+  assert.deepEqual(rules.getCategorySpecTemplate('earbuds').groups, [
+    'multimedia',
+    'battery',
+    'connectivity',
+    'hardware',
+    'design',
+    'availability',
+    'regulatory',
+  ]);
+  assert.equal(buds.ram_gb, null);
+  assert.equal(buds.storage_gb, null);
+  assert.equal(buds.screen_size_inch, null);
+  assert.equal(buds.has_5g, false);
+  for (const group of ['display', 'camera', 'cellular']) {
+    assert.equal(budsSpecs[group], undefined, `earbuds drop ${group}`);
+  }
+  assert.equal(budsSpecs.category_slug, 'x', 'non-group keys are kept');
+  assert.deepEqual(budsSpecs.connectivity, { bluetooth: '5.4' });
+  assert.deepEqual(budsSpecs.multimedia, { audio_features: 'ANC' });
+  assert.deepEqual(budsSpecs.design, { weight_g: 5 });
+  // The audio chip is the one hardware fact earbuds keep.
+  assert.deepEqual(budsSpecs.hardware, { chipset: 'c' });
+  const budsStored = rules.applyCategorySpecTemplate('earbuds', phoneShaped, {
+    forStorage: true,
+  });
+  assert.deepEqual(budsStored, buds, 'earbuds store what they show');
+  assert.deepEqual(buds.key_specs, { chip: 'c', battery: 'b' });
+
+  // Smartwatches: the page shows no camera and no 5G; screen, storage and
+  // LTE stay.
+  const watch = rules.applyCategorySpecTemplate('smartwatches', phoneShaped);
+  const watchSpecs = watch.specifications as unknown as Record<
+    string,
+    Record<string, unknown>
+  >;
+  assert.equal(watch.has_5g, false);
+  assert.equal(watch.storage_gb, 64);
+  assert.equal(watch.screen_size_inch, 1);
+  assert.equal(watchSpecs.camera, undefined);
+  assert.deepEqual(watchSpecs.cellular, { bands_4g: 'LTE' });
+  assert.deepEqual(watchSpecs.hardware, {
+    ram_gb: 1,
+    storage_gb: 64,
+    chipset: 'c',
+  });
+  assert.deepEqual(watch.key_specs, {
+    screen: 's',
+    chip: 'c',
+    battery: 'b',
+    storage: '64GB',
+    ram: '1GB',
+  });
+  // Stored, a watch keeps its 5G facts: a few models (RedCap) do have 5G.
+  const watchStored = rules.applyCategorySpecTemplate(
+    'smartwatches',
+    phoneShaped,
+    { forStorage: true }
+  );
+  const watchStoredSpecs = watchStored.specifications as unknown as Record<
+    string,
+    Record<string, unknown>
+  >;
+  assert.equal(watchStored.has_5g, true);
+  assert.deepEqual(
+    watchStoredSpecs.cellular,
+    phoneShaped.specifications.cellular
+  );
+  assert.equal(watchStoredSpecs.hardware?.gpu, 'g');
+  assert.equal(watchStoredSpecs.camera, undefined);
+
+  // Idempotent, never mutates the input, and leaves absent columns absent.
+  assert.deepEqual(rules.applyCategorySpecTemplate('earbuds', buds), buds);
+  assert.equal(phoneShaped.ram_gb, 1);
+  assert.equal(phoneShaped.specifications.display.size_inch, 1);
+  assert.equal(
+    'ram_gb' in rules.applyCategorySpecTemplate('earbuds', { has_5g: true }),
+    false
+  );
+
+  const watchTemplate = rules.getCategorySpecTemplate('smartwatches');
+  assert.equal(
+    rules.specFieldApplies(watchTemplate, 'cellular', 'has_5g'),
+    false
+  );
+  assert.equal(
+    rules.specFieldApplies(watchTemplate, 'cellular', 'technology'),
+    true
+  );
+  assert.equal(
+    rules.specFieldApplies(watchTemplate, 'camera', 'main_camera'),
+    false
+  );
+}
+
 function assertRoundTrip(modelKey: string): void {
   const parts = sharedDataRoot.splitModelKey(modelKey);
   assert.ok(parts, `splitModelKey must parse ${modelKey}`);
@@ -1076,6 +1219,8 @@ function main(): void {
   console.log(
     '  ✅ [8/8] Item / variant schemas and model_key helpers verified'
   );
+  testCategorySpecTemplates();
+  console.log('  ✅ [9/9] Category spec templates (DOS/Rate#1142) verified');
   console.log('🎉 All @repo/shared-data tests passed!');
 }
 

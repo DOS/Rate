@@ -41,6 +41,7 @@ import {
   BsExclamationTriangle,
 } from 'react-icons/bs';
 import type { KeySpecs, ProductSpecifications } from '@repo/shared-data';
+import { applyCategorySpecTemplate } from '@repo/shared-data/rules';
 import ClientMessages from '@/components/providers/ClientMessages';
 import BootstrapClient from '@/app/BootstrapClient';
 import { productImageUrl } from '@/lib/rate-domain-core';
@@ -770,7 +771,12 @@ export async function CategoryCatalogContent({
                   </div>
                 ) : (
                   <div className="rate-catalog-grid">
-                    {products.map((item) => {
+                    {products.map((storedItem) => {
+                      // Only the specs the category has (DOS/Rate#1142).
+                      const item = applyCategorySpecTemplate(
+                        categorySlug,
+                        storedItem
+                      );
                       const keySpecs = (item.key_specs || {}) as KeySpecs;
                       const specs = (item.specifications ||
                         {}) as ProductSpecifications;

@@ -53,7 +53,11 @@ import ContentText from '@/components/elementary/ContentText';
 import { contentLang } from '@/lib/content-lang';
 import ClientMessages from '@/components/providers/ClientMessages';
 import { siteJsonLd } from '@/lib/seo';
-import { productImageUrl } from '@/lib/rate-domain-core';
+import {
+  getMasterProductCategorySlug,
+  productImageUrl,
+} from '@/lib/rate-domain-core';
+import { applyCategorySpecTemplate } from '@repo/shared-data/rules';
 import { merchantRiskTone } from '@/lib/merchant-risk-tone';
 
 // Cached after the first request, refreshed every 5 minutes or when the
@@ -466,7 +470,13 @@ export default async function Home({
               </div>
 
               <div className="row g-4">
-                {masterProducts.slice(0, 6).map((item) => {
+                {masterProducts.slice(0, 6).map((storedItem) => {
+                  // An earbud card carries no RAM, storage or screen chip
+                  // (DOS/Rate#1142).
+                  const item = applyCategorySpecTemplate(
+                    getMasterProductCategorySlug(storedItem, catSlugById),
+                    storedItem
+                  );
                   const thumb = productImageUrl(item);
                   const keySpecs = item.key_specs || {};
                   const productHref = getMasterProductHref(item, catSlugById);
