@@ -732,7 +732,9 @@ export class EntityMatcher {
     // instead: no AI call, and only storage and RAM are its own (DOS/Rate#1152).
     candidate = inherit
       ? inheritItemProfile(candidate, inherit.profile)
-      : await this.enricher.enrichCandidate(candidate, safeRawTitle);
+      : await this.enricher.enrichCandidate(candidate, safeRawTitle, {
+          perItem: this.itemModel !== 'off',
+        });
 
     // - Upsert on model_key (unique) so a concurrent crawler inserting the same
     //   canonical entity resolves instead of crashing (plan v7 §5.1 / Gemini B3).

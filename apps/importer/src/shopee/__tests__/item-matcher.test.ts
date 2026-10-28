@@ -17,7 +17,7 @@ import { syncItemSeedSpecs } from '../jobs/backfill-specs.js';
 import { ITEM_MODEL_ENV, resolveItemModelMode } from '../item-model-flag.js';
 import { ProductNormalizer, UnkeyableProductTitleError } from '../product-normalizer.js';
 import { ShopeeIngestionPipeline } from '../shopee-to-supabase.js';
-import type { AiSpecEnricher } from '../ai-spec-enricher.js';
+import { AiSpecEnricher } from '../ai-spec-enricher.js';
 import type { RateSupabaseClient, ShopeeProduct } from '../types.js';
 
 type Row = Record<string, unknown>;
@@ -1039,7 +1039,58 @@ async function run() {
     );
     assert.ok(!applied.calls.some(c => c.op === 'insert' || c.op === 'upsert'));
   }
-  console.log('  ✅ [6/6] Seeds grouped by Item; Item specs from the seeds (#1152)');
+  // Spec enrichment per Item: one AI ask per Item (no size in the prompt or cache key);
+  // the variant keeps its own storage and RAM. Mode off still asks per size.
+  {
+    const asks: Array<{ storageGb: number | null; ramGb: number | null }> = [];
+    const enricher = new AiSpecEnricher({ apiKey: '' });
+    (enricher as unknown as { fetchSpecsFromAi: unknown }).fetchSpecsFromAi = async (params: {
+      storageGb: number | null;
+      ramGb: number | null;
+    }) => {
+      asks.push({ storageGb: params.storageGb, ramGb: params.ramGb });
+      return {
+        storage_gb: 1024,
+        ram_gb: 32,
+        specifications: {
+          hardware: { chipset: 'Intel Core i5-1335U', storage_gb: 1024, ram_gb: 32 },
+        },
+        key_specs: { chipset: 'Core i5-1335U', storage: '1TB' },
+      };
+    };
+    const vivobook = candidateFor('Laptop ASUS Vivobook 15 X1504VA 16GB 512GB');
+    assert.equal(vivobook.is_benchmark_enriched, false);
+    const perItem = await enricher.enrichCandidate(vivobook, undefined, { perItem: true });
+    assert.deepEqual(asks.at(-1), { storageGb: null, ramGb: null });
+    assert.equal(perItem.storage_gb, 512);
+    assert.equal(perItem.ram_gb, 16);
+    assert.equal(perItem.specifications.hardware?.storage_gb, 512);
+    assert.equal(perItem.specifications.hardware?.ram_gb, 16);
+    assert.equal(perItem.specifications.hardware?.chipset, 'Intel Core i5-1335U');
+    assert.equal(perItem.key_specs.storage, vivobook.key_specs.storage);
+    assert.equal(perItem.key_specs.chipset, 'Core i5-1335U');
+    await enricher.enrichCandidate(vivobook);
+    assert.deepEqual(asks.at(-1), { storageGb: 512, ramGb: 16 });
+
+    // The matcher asks per Item only with the flag on.
+    const seen: unknown[] = [];
+    const recording = {
+      enrichCandidate: async <T>(candidate: T, _title?: string, options?: unknown) => {
+        seen.push(options);
+        return candidate;
+      },
+    } as unknown as AiSpecEnricher;
+    await new EntityMatcher(createItemDb({ seededItemId: 'item-vivobook' }).client, recording, {
+      itemModel: 'item',
+    }).resolveItemAndVariant(vivobook, 'cat-laptops');
+    await new EntityMatcher(createItemDb().client, recording, {
+      itemModel: 'off',
+    }).resolveItemAndVariant(vivobook, 'cat-laptops');
+    assert.deepEqual(seen, [{ perItem: true }, { perItem: false }]);
+  }
+  console.log(
+    '  ✅ [6/6] Seeds grouped by Item; Item specs from the seeds; enrichment per Item (#1152)'
+  );
   console.log('🎉 All item-first matcher tests passed!');
 }
 

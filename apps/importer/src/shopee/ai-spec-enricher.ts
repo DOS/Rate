@@ -1025,8 +1025,13 @@ REQUIRED JSON SCHEMA:
    */
   public async enrichCandidate(
     candidate: NormalizedProductCandidate,
-    rawTitle?: string
+    rawTitle?: string,
+    options: { perItem?: boolean } = {}
   ): Promise<NormalizedProductCandidate> {
+    // Per Item (RATE_ITEM_MODEL on, design doc 5.3, DOS/Rate#1152): the AI is asked and
+    // cached for the Item, not the size, so every size shares one call; storage and RAM
+    // stay the variant's own.
+    const perItem = options?.perItem === true;
     if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)) {
       throw new Error('[AiSpecEnricher] candidate must be a non-null object');
     }
@@ -1048,8 +1053,8 @@ REQUIRED JSON SCHEMA:
     const aiResult = await this.fetchSpecsFromAi({
       brand: candidate.brand,
       model: candidate.model,
-      storageGb: validCandidateStorage,
-      ramGb: validCandidateRam,
+      storageGb: perItem ? null : validCandidateStorage,
+      ramGb: perItem ? null : validCandidateRam,
       rawTitle,
       rawDescription: candidate.description,
       categorySlug: candidate.category_slug,
@@ -1071,6 +1076,15 @@ REQUIRED JSON SCHEMA:
       aiResult.specifications,
       safeColors
     );
+    if (perItem) {
+      // The Item's answer names no size: the variant's storage and RAM win.
+      const ownHardware = sanitizeSpecifications(candidate.specifications).hardware;
+      mergedSpecifications.hardware = {
+        ...mergedSpecifications.hardware,
+        storage_gb: ownHardware?.storage_gb,
+        ram_gb: ownHardware?.ram_gb ?? mergedSpecifications.hardware?.ram_gb,
+      };
+    }
 
     const baseKeySpecs =
       candidate.key_specs &&
@@ -1104,6 +1118,9 @@ REQUIRED JSON SCHEMA:
       key_specs: {
         ...baseKeySpecs,
         ...incomingKeySpecs,
+        ...(perItem && typeof baseKeySpecs.storage === 'string'
+          ? { storage: baseKeySpecs.storage }
+          : {}),
       },
       spec_source: 'ai_unverified',
       spec_enrichment_meta: {
