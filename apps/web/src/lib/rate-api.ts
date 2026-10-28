@@ -1106,7 +1106,11 @@ export function mapTrustViewRowToMerchantOffer(
   // baseline as the merchant pages (#685).
   // RS#708: the column is the combined risk; the review-only part counts
   // only with analysed reviews (DOS/Rate#1268).
-  const riskSplit = storedRiskSplit(safeRow.review_risk_breakdown);
+  const riskSplit = storedRiskSplit(
+    safeRow.review_risk_breakdown,
+    undefined,
+    safeRow.review_risk_score
+  );
   const reviewRisk = riskSplit
     ? (riskSplit.reviewOnly ?? 0)
     : !isUnscoredTrustViewRow(safeRow)
@@ -1212,7 +1216,11 @@ export function mapOfferRowToMerchantOffer(item: RawOfferRow): MerchantOffer {
     typeof meta?.review_risk_score === 'number';
   // RS#708: the column is the combined risk; the review-only part counts
   // only with analysed reviews (DOS/Rate#1268).
-  const riskSplit = storedRiskSplit(merchantObj?.review_risk_breakdown, meta);
+  const riskSplit = storedRiskSplit(
+    merchantObj?.review_risk_breakdown,
+    meta,
+    merchantObj?.review_risk_score
+  );
   const reviewRisk = riskSplit
     ? (riskSplit.reviewOnly ?? 0)
     : merchantObj?.review_risk_score != null &&
@@ -1230,12 +1238,12 @@ export function mapOfferRowToMerchantOffer(item: RawOfferRow): MerchantOffer {
               followerCount: Number(merchantObj.follower_count) || 0,
             })
           : null;
-  const metaCombined = Math.max(
-    typeof meta?.combined_risk_score === 'number'
+  // The split's combined score when there is one; older metadata otherwise.
+  const metaCombined = riskSplit
+    ? riskSplit.combined
+    : typeof meta?.combined_risk_score === 'number'
       ? toSafeRiskScore100(meta.combined_risk_score, 0)
-      : 0,
-    riskSplit?.combined ?? 0
-  );
+      : 0;
   // An unknown seller is never safer than the baseline in trust and sorting.
   const combinedRisk = Math.max(
     baseRisk,
@@ -3047,13 +3055,14 @@ export async function getMerchantsList(
         sabotage_or_bombing_count: 0,
         suspicious_ratio_pct: 0,
       };
-    const metaCombined = Math.max(
-      typeof meta.combined_risk_score === 'number' &&
-        Number.isFinite(meta.combined_risk_score)
+    // The split's combined score when there is one; older metadata otherwise.
+    const metaCombined =
+      storedRiskSplit(m.review_risk_breakdown, m.metadata, m.review_risk_score)
+        ?.combined ??
+      (typeof meta.combined_risk_score === 'number' &&
+      Number.isFinite(meta.combined_risk_score)
         ? toSafeRiskScore100(meta.combined_risk_score, 0)
-        : 0,
-      storedRiskSplit(m.review_risk_breakdown, m.metadata)?.combined ?? 0
-    );
+        : 0);
     const combinedRisk = Math.min(
       100,
       Math.max(baseRisk, dosafeRisk, effectiveReviewRisk, metaCombined)
@@ -3571,14 +3580,17 @@ export async function getMerchantProfileBase(
       ? persistedReviewRisk
       : Math.max(dynamicRisk.reviewRiskScore, persistedReviewRisk);
   const breakdown = persistedBreakdown ?? dynamicRisk.breakdown;
-  const metaCombined = Math.max(
-    typeof meta.combined_risk_score === 'number' &&
-      Number.isFinite(meta.combined_risk_score)
+  // The split's combined score when there is one; older metadata otherwise.
+  const metaCombined =
+    storedRiskSplit(
+      merchantRow.review_risk_breakdown,
+      merchantRow.metadata,
+      merchantRow.review_risk_score
+    )?.combined ??
+    (typeof meta.combined_risk_score === 'number' &&
+    Number.isFinite(meta.combined_risk_score)
       ? toSafeRiskScore100(meta.combined_risk_score, 0)
-      : 0,
-    storedRiskSplit(merchantRow.review_risk_breakdown, merchantRow.metadata)
-      ?.combined ?? 0
-  );
+      : 0);
   const combinedRisk = Math.min(
     100,
     Math.max(baseRisk, dosafeRisk, effectiveReviewRisk, metaCombined)

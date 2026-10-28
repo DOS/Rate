@@ -1941,12 +1941,16 @@ export function extractProductKeywordFromUrl(rawUrl?: string | null): string {
  * The merchant risk split Rate Services writes (RS#708, DOS/Rate#1268): the
  * `review_risk_score` column is the combined risk, and the breakdown (which
  * metadata mirrors) carries `combined_risk_score` and the review-only
- * `review_risk_score`, measured over `total_reviews` (0 when none). Null for
- * an older breakdown without the split, which keeps today's reading.
+ * `review_risk_score`, measured over `total_reviews` (0 when none). A source
+ * counts as the split only with numeric `combined_risk_score`,
+ * `review_risk_score` and `total_reviews`: older metadata already carried a combined score next to a
+ * review score, and keeps today's reading, as does an older breakdown. The
+ * combined score is never below the column (`column`), should they drift.
  */
 export function storedRiskSplit(
   breakdown: unknown,
-  metadata?: unknown
+  metadata?: unknown,
+  column?: unknown
 ): { combined: number; reviewOnly: number | null } | null {
   const asRecord = (raw: unknown): Record<string, unknown> | null =>
     raw && typeof raw === 'object' && !Array.isArray(raw)
@@ -1956,16 +1960,22 @@ export function storedRiskSplit(
     typeof raw === 'number' && Number.isFinite(raw)
       ? Math.max(0, Math.min(100, Math.round(raw)))
       : null;
-  for (const source of [asRecord(breakdown), asRecord(metadata)]) {
+  // The column breakdown, then the one nested in metadata, then metadata's
+  // top level, as extractPersistedBreakdown reads them.
+  const meta = asRecord(metadata);
+  for (const source of [
+    asRecord(breakdown),
+    asRecord(meta?.review_risk_breakdown),
+    meta,
+  ]) {
     const combined = score(source?.combined_risk_score);
+    const total = source?.total_reviews;
     if (!source || combined == null) continue;
-    const total = Number(source.total_reviews);
+    if (typeof total !== 'number' || !Number.isFinite(total)) continue;
+    if (score(source.review_risk_score) == null) continue;
     return {
-      combined,
-      reviewOnly:
-        Number.isFinite(total) && total > 0
-          ? score(source.review_risk_score)
-          : null,
+      combined: Math.max(combined, score(column) ?? 0),
+      reviewOnly: total > 0 ? score(source.review_risk_score) : null,
     };
   }
   return null;
