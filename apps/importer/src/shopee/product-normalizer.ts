@@ -381,6 +381,10 @@ const CANONICAL_PHONE_REGISTRY: Record<
     // title that names no storage still knows it. A model sold in several sizes has none:
     // its storage-less title keys as ':unknown' (DOS/Rate#1094).
     only_storage_gb?: number;
+    // The watch case (mm) the size-dependent specs (screen, battery, weight, dimensions)
+    // describe. A title naming another case gets none of them and is not benchmark
+    // enriched (DOS/Rate#1152).
+    case_mm?: number;
   }
 > = {
   'apple:iphone-16-pro-max': {
@@ -1117,6 +1121,31 @@ const CANONICAL_PHONE_REGISTRY: Record<
     has_5g: false,
     release_date: 'November 2024',
     ip_rating: 'Precision-machined aluminum enclosure (Space Black anodized seal)',
+  },
+  // One storage (64GB), so a title without it keys like the `:64gb` seed (M0 inventory,
+  // DOS/Rate#1148, #1152). Size-dependent specs are the 42mm's (`case_mm`).
+  'apple:watch-series-10': {
+    case_mm: 42,
+    screen_size_inch: 1.77,
+    battery_mah: 327,
+    ram_gb: 2,
+    chipset: 'Apple S10 SiP (64-bit dual-core processor)',
+    cpu: 'Dual-core S10 with 4-core Neural Engine',
+    gpu: 'Apple Watch integrated GPU',
+    os: 'watchOS 11',
+    weight_g: 30,
+    dimensions: '42.0 x 36.0 x 9.7 mm',
+    resolution: '374 x 446 pixels (~326 ppi)',
+    screen_type: 'Wide-angle LTPO3 OLED Always-On Retina display, 1-60Hz, 2000 nits (peak)',
+    refresh_rate_hz: 60,
+    rear_camera: 'Optical Heart Sensor Gen 3 + Electrical Heart Sensor (ECG)',
+    second_camera: 'Depth gauge (6m) + Water temperature sensor',
+    front_camera: 'Ambient light & Double Tap gesture sensor',
+    charging_w: 15,
+    has_5g: false,
+    release_date: 'September 2024',
+    ip_rating: 'WR50 water resistant (50m) + IP6X dust resistant',
+    only_storage_gb: 64,
   },
   'apple:watch-series-11': {
     screen_size_inch: 1.96,
@@ -1975,8 +2004,14 @@ export class ProductNormalizer {
     // The registry describes one size of a line: its screen and battery do not describe
     // the other size ("iPad Pro M4 13" is not the 11 inch entry) (DOS/Rate#1113).
     const appleInches = appleSize && !appleSize.endsWith('mm') ? parseFloat(appleSize) : null;
+    // A watch registry entry pinned to one case does not describe another one.
+    const caseMismatch =
+      benchmark?.case_mm !== undefined &&
+      appleSize.endsWith('mm') &&
+      parseInt(appleSize, 10) !== benchmark.case_mm;
     const benchmarkSized =
       benchmark &&
+      !caseMismatch &&
       (appleInches === null ||
         Math.floor(benchmark.screen_size_inch ?? NaN) === Math.floor(appleInches))
         ? benchmark
@@ -2170,8 +2205,8 @@ export class ProductNormalizer {
         prices_msrp: `${storageDisplay}: ${safePriceMin.toLocaleString('vi-VN')}₫`,
       },
       design: {
-        dimensions: benchmark?.dimensions || undefined,
-        weight_g: benchmark?.weight_g || undefined,
+        dimensions: (caseMismatch ? undefined : benchmark?.dimensions) || undefined,
+        weight_g: (caseMismatch ? undefined : benchmark?.weight_g) || undefined,
         materials: isSmartphone
           ? isApple
             ? 'Ceramic Shield front, glass back, metal frame'
@@ -2196,7 +2231,7 @@ export class ProductNormalizer {
       display: {
         size_inch: categorySlug === 'earbuds' ? undefined : screenSize || undefined,
         type: benchmark?.screen_type || fallbackScreenType,
-        resolution: benchmark?.resolution || undefined,
+        resolution: (caseMismatch ? undefined : benchmark?.resolution) || undefined,
         refresh_rate_hz:
           categorySlug === 'earbuds'
             ? undefined
@@ -2336,8 +2371,8 @@ export class ProductNormalizer {
       key_specs: keySpecs,
       description:
         sanitizedDescription && sanitizedDescription.length > 0 ? sanitizedDescription : undefined,
-      is_benchmark_enriched: Boolean(benchmark),
-      spec_source: benchmark ? 'benchmark_registry' : 'crawled_title',
+      is_benchmark_enriched: Boolean(benchmark) && !caseMismatch,
+      spec_source: benchmark && !caseMismatch ? 'benchmark_registry' : 'crawled_title',
     };
   }
 }

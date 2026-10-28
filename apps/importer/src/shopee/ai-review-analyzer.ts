@@ -8,6 +8,7 @@ import {
 } from './ai-spec-enricher.js';
 import type { RateSupabaseClient, ScrapedReviewer } from './types.js';
 import { computeRetryDelayMs, sanitizeAiGeneratedText } from './logger.js';
+import { resolveItemModelMode, type ItemModelMode } from './item-model-flag.js';
 export { computeRetryDelayMs, sanitizeAiGeneratedText } from './logger.js';
 
 /**
@@ -2243,6 +2244,13 @@ Return ONLY valid JSON matching:
     params: {
       productId: string;
       masterId?: string | null;
+      /**
+       * The listing's Item (RATE_ITEM_MODEL on). A listing with no variant refreshes its
+       * Item's rating, which pools every size (design doc 4.1, Q4, DOS/Rate#1152).
+       */
+      itemId?: string | null;
+      /** The caller's Item model mode; defaults to RATE_ITEM_MODEL. */
+      itemModel?: ItemModelMode;
       merchantId?: string | null;
       reviews: ReviewInputItem[];
       entityName?: string;
@@ -2262,6 +2270,7 @@ Return ONLY valid JSON matching:
       throw new Error('[AiReviewAnalyzer] productId must be a valid non-empty string');
     }
     const safeMasterId = normalizeSafeDbId(params?.masterId);
+    const safeItemId = normalizeSafeDbId(params?.itemId);
     const safeMerchantId = normalizeSafeDbId(params?.merchantId);
     const safePlatform =
       typeof params?.platform === 'string'
@@ -2424,6 +2433,25 @@ Return ONLY valid JSON matching:
             `[AiReviewAnalyzer] Failed to update master_products rating: ${masterErr.message}`
           );
         }
+      }
+    }
+
+    // 3b. A listing with no variant still rates its Item: the M2 `refresh_item_stats`
+    // recomputes the Item's pooled rating over all its listings. With a variant,
+    // `refresh_master_product_rating` above resolves the Item itself (M2 body).
+    if (
+      !safeMasterId &&
+      safeItemId &&
+      (params?.itemModel ?? resolveItemModelMode()) !== 'off' &&
+      typeof supabase.rpc === 'function'
+    ) {
+      const { error: itemRpcErr } = await supabase.rpc('refresh_item_stats', {
+        p_item_id: safeItemId,
+      });
+      if (itemRpcErr) {
+        throw new Error(
+          `[AiReviewAnalyzer] Failed to refresh the Item rating via RPC: ${itemRpcErr.message}`
+        );
       }
     }
 
