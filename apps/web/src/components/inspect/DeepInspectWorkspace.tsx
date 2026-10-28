@@ -56,6 +56,7 @@ import {
   implausiblyLowOfferIds,
   plausibleOffers,
 } from '@repo/shared-data/rules';
+import { isOfferUnavailable } from '@/lib/product-market-stats';
 import { productImageUrl } from '@/lib/rate-domain-core';
 
 const INSPECT_CONTROL_CHARS_RE = /\p{Cc}+/gu;
@@ -184,8 +185,13 @@ export default function DeepInspectWorkspace({
   };
 
   const master = result?.masterProduct ?? null;
+  // A sold-out listing is never the fallback match (DOS/Rate#1177).
   const matchedOffer =
-    result?.matchedOffer ?? plausibleOffers(result?.allOffers ?? [])[0] ?? null;
+    result?.matchedOffer ??
+    plausibleOffers(
+      (result?.allOffers ?? []).filter((o) => !isOfferUnavailable(o))
+    )[0] ??
+    null;
   const discount = result?.discountAnalysis ?? null;
   // Judged as the product page's offers table judges the row (#797).
   const implausibleOfferIds = implausiblyLowOfferIds(result?.allOffers ?? []);
