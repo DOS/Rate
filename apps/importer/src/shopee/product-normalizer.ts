@@ -1257,8 +1257,8 @@ function isProductCodeToken(token: string): boolean {
 // tặng" or "13 hãng" is a bare 13, not "13 t(b)" or "13 h"; "15 tháng" (warranty), "10%"
 // or "15 gói" is no size (DOS/Rate#1291).
 const UNIT_END = String.raw`(?![\p{L}\p{M}\d])`;
-const SIZE_NOT_PRECEDED_BY = String.raw`(?<![\d.,a-z])(?<!(?:ram|os) )`;
-const SIZE_NOT_FOLLOWED_BY = String.raw`(?![.,]?\d|[a-z]| ?(?:gb?${UNIT_END}|tb?${UNIT_END}|th${UNIT_END}|gen|mm|w${UNIT_END}|h${UNIT_END}|\/|-? ?(?:core|nhân|lõi)|cpu|gpu|tiếng|giờ|%|(?:tháng|ngày|tuần|năm|phút|gói|kỳ)${UNIT_END}))`;
+const SIZE_NOT_PRECEDED_BY = String.raw`(?<![\d.,a-z])(?<!\d ?\/ ?)(?<!(?:ram|os|sonoma|sequoia|ventura|monterey|tahoe) )`;
+const SIZE_NOT_FOLLOWED_BY = String.raw`(?![.,]?\d|[a-z]| ?(?:gb?${UNIT_END}|tb?${UNIT_END}|th${UNIT_END}|gen|mm|w${UNIT_END}|h${UNIT_END}|\/|-? ?(?:core|nhân|lõi)|cpu|gpu|tiếng|giờ|%|(?:tháng|ngày|tuần|phút|gói|kỳ|nghìn|ngàn|triệu|tr|k|đ|vnd|ram|ssd|hdd|rom|months?|years?|days?|weeks?|hours?)${UNIT_END}|năm${UNIT_END}(?! ?(?:19|20)\d\d)))`;
 const SIZE_MARKER = String.raw` ?(?:-? ?inch|in${UNIT_END}|"|''|”|″)`;
 const IPAD_SIZE = String.raw`(11|12[.,]9|13)(?:[.,]0)?`;
 const MACBOOK_AIR_SIZE = String.raw`(13|15)(?:[.,]\d)?`;
@@ -1285,14 +1285,17 @@ const CASE_ACCESSORY_WORD =
   /(?<![\p{L}\d])(?:fits?|hộp|ốp|kèm|tặng|quà|gift|silicone|silicon|tpu|bao da|compatible|tương thích|cho|for)(?![\p{L}\d])/iu;
 // "tặng/kèm" and up to four words, then a watch or screen size, or a list of them
 // ("tặng ốp 42mm / 46mm", "tặng ốp 11 inch, 13 inch", DOS/Rate#1291).
-const GIFT_SIZE = String.raw`(?:(?:38|4[0-2]|4[4-6]) ?mm\b|\d{1,2}(?:[.,]\d)? ?(?:inch\b|in\b|"))`;
+const GIFT_BARE_END = String.raw`(?= ?(?:$|[,|;)+/]|(?:tặng|kèm|quà)(?![\p{L}\d])))`;
+const GIFT_SIZE = String.raw`(?:(?:38|4[0-2]|4[4-6]) ?mm\b|\d{1,2}(?:[.,]\d)? ?(?:inch\b|in\b|")|(?:38|4[0-2]|4[4-6]|1[0-6](?:[.,]\d)?)${GIFT_BARE_END})`;
 const GIFTED_ACCESSORY_SIZE = new RegExp(
   String.raw`(?<![\p{L}\d])(quà tặng|tặng|kèm)((?: [\p{L}-]+){1,4}?) ?${GIFT_SIZE}(?: ?(?:\/|,|hoặc|or) ?${GIFT_SIZE})*`,
   'giu'
 );
 // The sizes a gift names: a watch case ("46mm") or a screen ("11", "12.9").
-const GIFT_SIZE_VALUE =
-  /(?<!\d)((?:38|4[0-2]|4[4-6]) ?mm|\d{1,2}(?:[.,]\d)?(?= ?(?:inch|in|")))/giu;
+const GIFT_SIZE_VALUE = new RegExp(
+  String.raw`(?<!\d)((?:38|4[0-2]|4[4-6]) ?mm|\d{1,2}(?:[.,]\d)?(?= ?(?:inch|in|"))|(?:38|4[0-2]|4[4-6]|1[0-6](?:[.,]\d)?)${GIFT_BARE_END})`,
+  'giu'
+);
 // A size the product's part names in a form no size reading takes, so a gift's size must
 // not stand in for it (DOS/Rate#1291): for a watch a bare case number or "size 46"
 // ("Series 10 size 46 tặng ốp 42mm"); for an iPad or a MacBook a bare screen number or
@@ -1361,6 +1364,7 @@ function readAppleSize(model: string, rawTitle: string): string {
             .replace(/ /g, '')
             .replace(',', '.')
             .replace(/\.0(?=mm|$)/, '')
+            .replace(/mm$/, '')
             .toLowerCase()
         );
       }
