@@ -15,7 +15,7 @@ Design: [`2026-10-27-item-variant-listing-model.md`](./2026-10-27-item-variant-l
 
 ## Order of operations
 
-1. **DOS/Rate#1123 first** (M0 re-key of the six drifted seed masters, with JOY's approval), so the Items get the normalizer's Item keys (`apple:watch-ultra-3`, `apple:airpods-pro-2`).
+1. **M0 first: [`2026-10-29-dos-me-m0-seed-rekey.sql`](./2026-10-29-dos-me-m0-seed-rekey.sql)** (DOS/Rate#1212, #1123: re-key of the six drifted seed masters and the seed change right after, with JOY's approval), so the Items get the normalizer's Item keys (`apple:watch-ultra-3`, `apple:airpods-pro-2`).
 2. This migration on preview, run the verification file, then beta, then prod.
 3. The importer keeps `RATE_ITEM_MODEL` off until Rate Services handles NULL `cluster_id` (design task 13). Flag `item` can come first; `nullable_variant` after task 13.
 4. Mirror the applied file into `supabase/migrations/` and regenerate `database.types.ts` (as #1147 did).
