@@ -1359,6 +1359,19 @@ function readAppleSize(model: string, title: string): string {
       bandList = WATCH_SIZE.test(band.join(' '));
       bandEnd = LAST_WATCH_SIZE.test(band.join(' '));
     }
+    // A part that names the case with one size ("46mm Titanium Case", "Case 42mm") says
+    // the watch's size, whatever band size comes before it: "45mm Sport Band, 46mm
+    // Titanium Case" is the 46mm (DOS/Rate#1223).
+    const namedCase = parts
+      .filter((_, i) => i % 2 === 0)
+      .filter(
+        part =>
+          WATCH_CASE_WORD.test(part.normalize('NFC')) &&
+          !WATCH_BAND_WORD.test(part) &&
+          [...part.matchAll(new RegExp(WATCH_SIZE, 'gi'))].length === 1
+      )
+      .map(part => part.match(WATCH_SIZE)?.[1]);
+    if (namedCase.length === 1 && namedCase[0]) return `${namedCase[0]}mm`;
     const caseSize = outside.join(' ').match(WATCH_SIZE)?.[1];
     if (caseSize) return `${caseSize}mm`;
     const bandSize = own.match(WATCH_SIZE)?.[1];
