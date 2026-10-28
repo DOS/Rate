@@ -2824,7 +2824,7 @@ export async function getMerchantsList(
     (chunk, from, to) =>
       supabase
         .from('products')
-        .select('id, merchant_id, price_current')
+        .select('id, merchant_id, price_current, availability')
         .in('merchant_id', chunk)
         .order('id')
         .range(from, to)
@@ -2835,10 +2835,14 @@ export async function getMerchantsList(
       id: string;
       merchant_id: string;
       price_current: number | string;
+      availability?: unknown;
     }>) || [];
 
   const prodToMerchant = new Map<string, string>();
   const prodsByMerchant = new Map<string, number[]>();
+  // The price range is what the store sells now: sold-out listings keep
+  // their last price but count only as listings (DOS/Rate#1248).
+  const livePricesByMerchant = new Map<string, number[]>();
   const productIdsByMerchant = new Map<string, string[]>();
 
   for (const p of products) {
@@ -2847,6 +2851,15 @@ export async function getMerchantsList(
     const price = Number(p.price_current || 0);
     if (Number.isFinite(price) && price > 0 && price <= MAX_VALID_VND_PRICE) {
       list.push(price);
+      if (
+        !isOfferUnavailable({
+          availability: toOfferAvailability(p.availability),
+        })
+      ) {
+        const live = livePricesByMerchant.get(p.merchant_id) ?? [];
+        live.push(price);
+        livePricesByMerchant.set(p.merchant_id, live);
+      }
     }
     prodsByMerchant.set(p.merchant_id, list);
 
@@ -2943,6 +2956,7 @@ export async function getMerchantsList(
 
   const results: MerchantSummary[] = merchants.map((m) => {
     const prices = prodsByMerchant.get(m.id) ?? [];
+    const livePrices = livePricesByMerchant.get(m.id) ?? [];
     const persistedBreakdown = extractPersistedBreakdown(m);
     const mReviews = mappedReviewsByMerchant.get(m.id) ?? [];
     const dynamicRisk =
@@ -3010,8 +3024,8 @@ export async function getMerchantsList(
       risk_score: combinedRisk,
       trust_score: trustScore,
       product_count: prices.length,
-      min_price: prices.length > 0 ? Math.min(...prices) : null,
-      max_price: prices.length > 0 ? Math.max(...prices) : null,
+      min_price: livePrices.length > 0 ? Math.min(...livePrices) : null,
+      max_price: livePrices.length > 0 ? Math.max(...livePrices) : null,
       review_risk_breakdown: breakdown,
       updated_at: m.updated_at || m.created_at || null,
     };

@@ -1234,7 +1234,9 @@
     "reviewRiskLabel": "Review risk",
     "officialMallBadge": "Official Mall",
     "authenticBadge": "Authentic review",
-    "starsAria": "{count} out of 5 stars"
+    "starsAria": "{count} out of 5 stars",
+    "reviewRiskNoData": "Not enough data",
+    "reviewRiskNoReviews": "No reviews to analyse yet"
   },
   "developers": {
     "seoTitle": "REST API v1 docs for developers | Rate.vn",

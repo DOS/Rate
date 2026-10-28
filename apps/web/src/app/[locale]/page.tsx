@@ -59,7 +59,10 @@ import {
   productImageUrl,
 } from '@/lib/rate-domain-core';
 import { applyCategorySpecTemplate } from '@repo/shared-data/rules';
-import { merchantRiskTone } from '@/lib/merchant-risk-tone';
+import {
+  hasReviewRiskEvidence,
+  merchantRiskTone,
+} from '@/lib/merchant-risk-tone';
 
 // Cached after the first request, refreshed every 5 minutes or when the
 // worker revalidates its cache tags (DOS/Rate#491).
@@ -923,15 +926,29 @@ export default async function Home({
                           </div>
                           <div>
                             <dt>{tHome('reviewRiskLabel')}</dt>
-                            <dd className={tone(merchant.review_risk_score)}>
-                              {merchant.review_risk_score}/100
-                            </dd>
-                            <dd className="rate-merchant-note">
-                              {tHome('flaggedReviewsRatio', {
-                                flagged: flaggedRevCount,
-                                total: totalRevAnalyzed,
-                              })}
-                            </dd>
+                            {/* No analysed reviews: no number (DOS/Rate#1249). */}
+                            {hasReviewRiskEvidence(breakdown) ? (
+                              <>
+                                <dd
+                                  className={tone(merchant.review_risk_score)}
+                                >
+                                  {merchant.review_risk_score}/100
+                                </dd>
+                                <dd className="rate-merchant-note">
+                                  {tHome('flaggedReviewsRatio', {
+                                    flagged: flaggedRevCount,
+                                    total: totalRevAnalyzed,
+                                  })}
+                                </dd>
+                              </>
+                            ) : (
+                              <>
+                                <dd>{tHome('reviewRiskNoData')}</dd>
+                                <dd className="rate-merchant-note">
+                                  {tHome('reviewRiskNoReviews')}
+                                </dd>
+                              </>
+                            )}
                           </div>
                           <div>
                             <dt>{tHome('ratingsAndProductsLabel')}</dt>

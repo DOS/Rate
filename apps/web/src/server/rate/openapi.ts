@@ -1054,7 +1054,7 @@ export function buildRateOpenApiSpec(
               name: 'seeding',
               in: 'query',
               description:
-                'AI seeding risk tier (`all`, `low` <= 15, `elevated` > 15)',
+                'AI seeding risk tier (`all`, `low` <= 15, `elevated` > 15). Stores with no analysed reviews match neither tier.',
               schema: {
                 type: 'string',
                 enum: ['all', 'low', 'elevated'],

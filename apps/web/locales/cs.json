@@ -1234,7 +1234,9 @@
     "reviewRiskLabel": "Riziko recenzí",
     "officialMallBadge": "Official Mall",
     "authenticBadge": "Autentická recenze",
-    "starsAria": "{count} z 5 hvězdiček"
+    "starsAria": "{count} z 5 hvězdiček",
+    "reviewRiskNoData": "Nedostatek dat",
+    "reviewRiskNoReviews": "Zatím žádné recenze k analýze"
   },
   "developers": {
     "seoTitle": "Dokumentace REST API v1 pro vývojáře | Rate.vn",

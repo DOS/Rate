@@ -1234,7 +1234,9 @@
     "reviewRiskLabel": "Rủi ro đánh giá",
     "officialMallBadge": "Official Mall",
     "authenticBadge": "Đánh giá thực chất",
-    "starsAria": "{count} trên 5 sao"
+    "starsAria": "{count} trên 5 sao",
+    "reviewRiskNoData": "Chưa đủ dữ liệu",
+    "reviewRiskNoReviews": "Chưa có đánh giá để phân tích"
   },
   "developers": {
     "seoTitle": "Tài liệu REST API v1 cho nhà phát triển | Rate.vn",

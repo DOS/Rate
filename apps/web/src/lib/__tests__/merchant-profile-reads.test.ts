@@ -442,11 +442,22 @@ async function main() {
         ...emptyHistory,
         byOffer: {
           [LISTING_ID]: { ...analysis, verdict: 'genuine_deal' as const },
+          [SECOND_LISTING_ID]: {
+            ...analysis,
+            product_id: SECOND_LISTING_ID,
+            price_current: 9_500_000,
+          },
         },
       }),
     });
     const soldOut = profile.listings.find((l) => l.id === LISTING_ID);
     assert.equal(soldOut?.discount_analysis, null, 'no verdict when sold out');
+    assert.equal(
+      profile.listings.find((l) => l.id === SECOND_LISTING_ID)
+        ?.discount_analysis?.verdict,
+      'fake_discount',
+      'an in-stock listing keeps its verdict'
+    );
     assert.equal(soldOut?.price_current, 2_694_000);
     assert.equal(profile.listings.at(-1)?.id, LISTING_ID);
     assert.equal(profile.min_price, 9_500_000);

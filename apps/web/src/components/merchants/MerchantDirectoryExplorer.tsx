@@ -352,7 +352,9 @@ export default function MerchantDirectoryExplorer({
         sanitizeMerchantAuditText(m.platform, 'shopee', 32).toUpperCase(),
         m.is_official ? 'Yes' : 'No',
         `${sanitizeMerchantScore100(m.trust_score)}/100`,
-        `${sanitizeMerchantScore100(m.review_risk_score)}/100`,
+        hasReviewRiskEvidence(m.review_risk_breakdown)
+          ? `${sanitizeMerchantScore100(m.review_risk_score)}/100`
+          : labels.reviewRiskNoData,
         String(sanitizeMerchantCount(rStats.genuineDealCount)),
         String(sanitizeMerchantCount(rStats.fakeTrapCount)),
         String(sanitizeMerchantCount(m.review_risk_breakdown?.authentic_count)),
