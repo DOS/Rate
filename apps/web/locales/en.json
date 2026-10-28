@@ -1409,6 +1409,8 @@
     "privacyS3Desc": "\"Helpful\" and \"Report\" need a signed-in DOS ID account (at least 7 days old, with a verified email or phone). Rate.vn stores the vote with your account ID so each account votes once per review, and it does not store your IP address.",
     "privacyS4Title": "4. Sellers' private details",
     "privacyS4Desc": "A seller's private details (phone number, bank account) are kept in fields the public cannot read. The website and the API can only read the public fields.",
+    "privacyS5Title": "5. The Rate.vn browser extension",
+    "privacyS5Desc": "On product pages of the 10 supported stores, the extension sends Rate.vn the store, the product URL with tracking parameters removed, the product title, the item and shop ids, the selected variant, the price and the original price to look up price history; this lookup is on by default, read-only and needs no account. Only if you turn on \"Đóng góp phát hiện sản phẩm mới (Opt-In)\" (off by default) does it also send that listing, with its rating and rating count, to a moderation queue; this data does not change public prices by itself. The extension sends no account or personal data, opens no page you did not open, and keeps only the server address, the opt-in choice and a session-only cache of the products you viewed, your latest search and their lookup results in your browser. Text you type into the extension's search box is also sent to look it up.",
     "privacySide1Title": "Check the open code",
     "privacySide1Desc": "The data access rules and how votes are stored are public in the GitHub repository.",
     "privacySide1Btn": "Technical and API docs",
