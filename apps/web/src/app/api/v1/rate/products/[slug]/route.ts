@@ -7,6 +7,7 @@ import {
   getCachedMasterProductReviewSummary,
 } from '@/server/rate';
 import { computeProductRadarSignal } from '@/server/rate/deals';
+import { isOfferUnavailable } from '@/lib/product-market-stats';
 import {
   PUBLIC_API_CORS_HEADERS,
   jsonApiError,
@@ -64,7 +65,11 @@ export async function GET(_request: NextRequest, context: RouteContext) {
       getCachedMasterProductReviewSummary(product.id, reviews),
       getCachedMasterProductPriceHistory(product.id, offers),
     ]);
-    const radarSignal = computeProductRadarSignal(product, offers);
+    // A sold-out listing's last price is no deal (DOS/Rate#1141).
+    const radarSignal = computeProductRadarSignal(
+      product,
+      offers.filter((o) => !isOfferUnavailable(o))
+    );
 
     return NextResponse.json(
       {

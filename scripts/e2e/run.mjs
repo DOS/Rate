@@ -329,7 +329,8 @@ try {
     name: dbName,
     runArgs: ['--network', network, '--network-alias', 'db'],
   });
-  db.sql(`CREATE ROLE authenticator LOGIN NOINHERIT PASSWORD '${AUTHENTICATOR_PASSWORD}';
+  // startRateDb created authenticator (NOLOGIN); PostgREST logs in as it.
+  db.sql(`ALTER ROLE authenticator LOGIN PASSWORD '${AUTHENTICATOR_PASSWORD}';
     GRANT anon, authenticated, service_role TO authenticator;`);
   db.sql(
     readFileSync(path.join(repoRoot, 'apps', 'web', 'e2e', 'seed.sql'), 'utf8')

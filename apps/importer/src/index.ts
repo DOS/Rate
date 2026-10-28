@@ -12,3 +12,4 @@ export * from './shopee/ai-review-analyzer.js';
 export * from './shopee/shopee-to-supabase.js';
 export * from './shopee/jobs/backfill-specs.js';
 export * from './shopee/paging.js';
+export * from './shopee/item-model-flag.js';

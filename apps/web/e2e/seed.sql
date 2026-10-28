@@ -14,6 +14,14 @@ VALUES
   -- Its listing query fails on purpose (FAULT_MARKERS in scripts/e2e/run.mjs).
   ('eeeeeeee-eeee-4eee-8eee-eeeeeeeefa17', 'shopee', 'shop_fault', 'Faulty Listings Store', 'faulty-listings-store', false);
 
+-- DOSafe scores on both sides of the shared risk cut-off, with no reviews: a
+-- 4/100 store is not a scam warning and 0 reviews is not "100% authentic";
+-- a 60/100 store is (DOS/Rate#1140).
+INSERT INTO rate.merchants (id, platform, platform_shop_id, name, slug, is_official, risk_score)
+VALUES
+  ('11111111-1111-4111-8111-111111111140', 'shopee', 'shop_low_risk', 'Low Risk Store', 'low-risk-store', true, 4),
+  ('11111111-1111-4111-8111-111111111160', 'shopee', 'shop_high_risk', 'High Risk Store', 'high-risk-store', false, 60);
+
 INSERT INTO rate.master_products
   (id, category_id, brand, model, model_key, name, slug, ram_gb, storage_gb, screen_size_inch, battery_mah, has_5g,
    min_price, max_price, merchant_count, status, metadata)
@@ -164,6 +172,22 @@ FROM generate_series(1, 201) AS g;
 UPDATE rate.master_products SET user_rating_weighted = 4
 WHERE slug LIKE 'e2e-bud-%';
 
+-- One bud stored with phone-shaped specs, as the AI enricher wrote them for
+-- real earbuds: a 1 inch screen, 1GB RAM, 64GB ROM, microphones as cameras and
+-- a 5G flag. Its page and card must show none of them (DOS/Rate#1142).
+UPDATE rate.master_products
+SET ram_gb = 1, storage_gb = 64, screen_size_inch = 1, has_5g = true,
+  specifications = '{"category_slug": "earbuds",
+    "display": {"size_inch": 1, "refresh_rate_hz": 60, "ppi": 300},
+    "hardware": {"ram_gb": 1, "storage_gb": 64, "gpu": "E2E Audio Engine"},
+    "camera": {"main_camera": "E2E Mic Array"},
+    "cellular": {"has_5g": true},
+    "battery": {"capacity_mah": 515},
+    "multimedia": {"loudspeaker": "E2E 10.5mm driver", "audio_features": "E2E ANC"},
+    "connectivity": {"bluetooth": "5.4"}}',
+  key_specs = '{"screen": "1 inch", "camera": "E2E Mic Array", "ram": "1GB", "storage": "64GB", "battery": "515 mAh"}'
+WHERE slug = 'e2e-bud-002';
+
 -- A phone whose six 5-star reviews are mostly star-only, one of them a
 -- sponsored post: the product page shows the star-distribution warning and a
 -- disclosure badge, which must follow the active locale (DOS/Rate#566). Its
@@ -253,7 +277,9 @@ VALUES
 -- A phone whose cheapest listing is a bait price, 1,250,000: under 40% of
 -- the others' lower median (3,140,000) and above the 1,200,000 accessory
 -- floor (see bait-price.spec.ts). It must not set the "from" price and is labelled
--- (DOS/Rate#797). Old created_at keeps it last in default orderings. Four
+-- (DOS/Rate#797). Its stored min_price is 3,030,000, what
+-- rate.refresh_master_market_stats writes since DOS-Me 20261024060000
+-- (DOS/Rate#802): every page reads the stored stats (DOS/Rate#1141). Old created_at keeps it last in default orderings. Four
 -- short-named stores of its own keep the other merchants' cards unchanged.
 INSERT INTO rate.merchants (id, platform, platform_shop_id, name, slug, is_official)
 VALUES
@@ -264,7 +290,7 @@ VALUES
 INSERT INTO rate.master_products
   (id, category_id, brand, model, model_key, name, slug, min_price, max_price, merchant_count, status, metadata, created_at)
 VALUES ('22222222-2222-4222-8222-222222220797', 'c0000000-0000-4000-8000-000000000001', 'E2E', 'Bait Price Phone',
-  'e2e_bait_price_phone', 'E2E Bait Price Phone', 'e2e-bait-price-phone', 1250000, 3690000, 4, 'published',
+  'e2e_bait_price_phone', 'E2E Bait Price Phone', 'e2e-bait-price-phone', 3030000, 3690000, 4, 'published',
   '{"category_slug": "smartphones"}', timestamptz '2026-01-01 00:00:00+00');
 INSERT INTO rate.products (id, merchant_id, platform, platform_item_id, title, category_id, price_current, url, cluster_id)
 VALUES

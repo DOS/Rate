@@ -25,6 +25,8 @@ for (const name of [
   'createImporterLogger',
   'sanitizeAiGeneratedText',
   'computeRetryDelayMs',
+  'resolveItemModelMode',
+  'UnkeyableProductTitleError',
 ]) {
   assert.equal(
     typeof crawlers[name],
@@ -32,6 +34,12 @@ for (const name of [
     `@repo/crawlers is missing export ${name}`
   );
 }
+// Item model rollout flag (DOS/Rate#1151): Rate-Services reads the same env name.
+assert.equal(crawlers.ITEM_MODEL_ENV, 'RATE_ITEM_MODEL');
+assert.deepEqual([...crawlers.ITEM_MODEL_MODES], ['off', 'item', 'nullable_variant']);
+assert.equal(crawlers.resolveItemModelMode(undefined), 'off');
+assert.equal(typeof crawlers.EntityMatcher.prototype.resolveItemAndVariant, 'function');
+assert.equal(crawlers.UNKEYED_MODEL_SEGMENT, 'unkeyed');
 assert.equal(
   typeof crawlers.MAX_SPEC_CACHE_ENTRIES,
   'number',

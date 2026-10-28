@@ -1,3 +1,4 @@
+import type { SpecGroupKey } from '@repo/shared-data/rules';
 import { type RateLocale, normalizeRateLocale } from './rate-i18n';
 
 export interface SpecUiDictionary {
@@ -9,6 +10,8 @@ export interface SpecUiDictionary {
   supported: string;
   availableStatus: string;
   has5gYes: string;
+  /** The cellular group heading of a category without 5G (smartwatches). */
+  cellularNo5gGroup: string;
   groups: {
     display: string;
     hardware: string;
@@ -59,6 +62,7 @@ export interface SpecUiDictionary {
     simType: string;
     dataSpeed: string;
     bands5g4g: string;
+    bands4g: string;
     volteVowifi: string;
     wlan: string;
     bluetooth: string;
@@ -90,6 +94,7 @@ const SPEC_UI_DICTS: Record<RateLocale, SpecUiDictionary> = {
     supported: 'Có hỗ trợ',
     availableStatus: 'Đang kinh doanh',
     has5gYes: 'Có (5G Sub-6 / mmWave)',
+    cellularNo5gGroup: '6. Mạng Di động (Cellular)',
     groups: {
       display: '1. Màn hình (Display)',
       hardware: '2. Phần cứng & Hiệu năng (Hardware)',
@@ -140,6 +145,7 @@ const SPEC_UI_DICTS: Record<RateLocale, SpecUiDictionary> = {
       simType: 'Chuẩn SIM',
       dataSpeed: 'Tốc độ dữ liệu',
       bands5g4g: 'Băng tần 5G / 4G',
+      bands4g: 'Băng tần 4G',
       volteVowifi: 'VoLTE / VoWiFi',
       wlan: 'Wi-Fi (WLAN)',
       bluetooth: 'Bluetooth',
@@ -169,6 +175,7 @@ const SPEC_UI_DICTS: Record<RateLocale, SpecUiDictionary> = {
     supported: 'Supported',
     availableStatus: 'Available',
     has5gYes: 'Yes (5G Sub-6 / mmWave)',
+    cellularNo5gGroup: '6. Cellular network',
     groups: {
       display: '1. Display & panel',
       hardware: '2. Hardware & performance',
@@ -219,6 +226,7 @@ const SPEC_UI_DICTS: Record<RateLocale, SpecUiDictionary> = {
       simType: 'SIM configuration',
       dataSpeed: 'Data speed',
       bands5g4g: '5G / 4G bands',
+      bands4g: '4G bands',
       volteVowifi: 'VoLTE / VoWiFi',
       wlan: 'Wi-Fi (WLAN)',
       bluetooth: 'Bluetooth',
@@ -248,6 +256,7 @@ const SPEC_UI_DICTS: Record<RateLocale, SpecUiDictionary> = {
     supported: 'Podporováno',
     availableStatus: 'V prodeji',
     has5gYes: 'Ano (5G Sub-6 / mmWave)',
+    cellularNo5gGroup: '6. Mobilní sítě',
     groups: {
       display: '1. Displej a obrazovka',
       hardware: '2. Hardware a výkon',
@@ -298,6 +307,7 @@ const SPEC_UI_DICTS: Record<RateLocale, SpecUiDictionary> = {
       simType: 'Typ SIM karty',
       dataSpeed: 'Rychlost dat',
       bands5g4g: 'Pásma 5G / 4G',
+      bands4g: 'Pásma 4G',
       volteVowifi: 'VoLTE / VoWiFi',
       wlan: 'Wi-Fi (WLAN)',
       bluetooth: 'Bluetooth',
@@ -322,6 +332,26 @@ const SPEC_UI_DICTS: Record<RateLocale, SpecUiDictionary> = {
 
 export function getSpecUiDictionary(locale?: string): SpecUiDictionary {
   return SPEC_UI_DICTS[normalizeRateLocale(locale)];
+}
+
+/**
+ * A group heading numbered by its place in the category's template, so an
+ * earbud page that starts with audio reads "1. Audio" (DOS/Rate#1142).
+ */
+export function specGroupHeading(
+  ui: SpecUiDictionary,
+  group: SpecGroupKey,
+  position: number,
+  has5g = true
+): string {
+  const label =
+    group === 'cellular' && !has5g ? ui.cellularNo5gGroup : ui.groups[group];
+  return `${position}. ${label.replace(/^\d+\.\s*/, '')}`;
+}
+
+/** The "10 spec groups" badge with the category's own group count. */
+export function specSectionBadge(ui: SpecUiDictionary, count: number): string {
+  return ui.sectionBadge.replace(/^\d+/, String(count));
 }
 
 const MONTH_VI_MAP: Record<string, string> = {

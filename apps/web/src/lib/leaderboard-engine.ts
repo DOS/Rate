@@ -385,9 +385,13 @@ export function computeJReviewsCriteriaScores(
   };
 }
 
+/** Filtered-review counts per master id, as read from stored reviews. */
+export type FilteredReviewCountsByMaster = Readonly<Record<string, number>>;
+
 export function scoreMasterProductForLeaderboard(
   item: MasterProduct,
-  criterion: LeaderboardCriterionKey = 'combined'
+  criterion: LeaderboardCriterionKey = 'combined',
+  filteredReviewCounts?: FilteredReviewCountsByMaster | null
 ): Omit<ScoredLeaderboardItem, 'rank'> {
   const safeItem = (
     item && typeof item === 'object' && !Array.isArray(item) ? item : {}
@@ -479,9 +483,12 @@ export function scoreMasterProductForLeaderboard(
     Number.isFinite(rawAuthentic) && rawAuthentic >= 0
       ? Math.min(Math.floor(rawAuthentic), MAX_LEADERBOARD_COUNT_CEILING)
       : safeTotal;
-  const filteredNoiseReviewCount = Math.max(
-    0,
-    safeTotal - authenticReviewCount
+  // Only reviews Rate.vn stored and the analyser excluded. total_reviews is
+  // the marketplaces' own rating count, so total minus authentic is not a
+  // number of blocked reviews (DOS/Rate#1139).
+  const filteredNoiseReviewCount = readFilteredReviewCount(
+    filteredReviewCounts,
+    safeItem.id
   );
 
   const rawMinPrice = toSafePositiveNumber(safeItem.min_price);
@@ -524,6 +531,20 @@ export function scoreMasterProductForLeaderboard(
   };
 }
 
+function readFilteredReviewCount(
+  counts: FilteredReviewCountsByMaster | null | undefined,
+  masterId: unknown
+): number {
+  if (!counts || typeof counts !== 'object' || typeof masterId !== 'string') {
+    return 0;
+  }
+  if (!Object.prototype.hasOwnProperty.call(counts, masterId)) return 0;
+  const raw = Number(counts[masterId]);
+  return Number.isFinite(raw) && raw > 0
+    ? Math.min(Math.floor(raw), MAX_LEADERBOARD_COUNT_CEILING)
+    : 0;
+}
+
 export function rankMasterProductsForLeaderboard(
   products: MasterProduct[],
   options?: {
@@ -533,6 +554,7 @@ export function rankMasterProductsForLeaderboard(
     brand?: string;
     query?: string;
     limit?: number;
+    filteredReviewCounts?: FilteredReviewCountsByMaster | null;
   }
 ): ScoredLeaderboardItem[] {
   const safeOptions =
@@ -568,7 +590,13 @@ export function rankMasterProductsForLeaderboard(
     : [];
 
   const filtered = safeProducts
-    .map((item) => scoreMasterProductForLeaderboard(item, criterion))
+    .map((item) =>
+      scoreMasterProductForLeaderboard(
+        item,
+        criterion,
+        safeOptions?.filteredReviewCounts
+      )
+    )
     .filter((entry) => {
       if (category !== 'all' && entry.categorySlug !== category) {
         return false;

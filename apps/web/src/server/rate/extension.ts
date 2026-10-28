@@ -28,6 +28,7 @@ import {
   type MerchantSummary,
   type ReviewAnalysisSummary,
 } from '../../lib/rate-api';
+import { isOfferUnavailable } from '../../lib/product-market-stats';
 import {
   computeProductStandingInCategory,
   type ProductLeaderboardBadgeInfo,
@@ -606,7 +607,11 @@ export function evaluateExtensionPriceVerdict(params: {
     observedOfferId,
     priceHistory,
   } = safeParams;
-  const safeOffers = Array.isArray(offers) ? offers : [];
+  // Sold-out and discontinued listings keep their last price; they set no
+  // market reference and are no cheaper option (DOS/Rate#1177).
+  const safeOffers = (Array.isArray(offers) ? offers : []).filter(
+    (o) => !isOfferUnavailable(o)
+  );
 
   if (isAccessory) {
     return {
@@ -1223,15 +1228,17 @@ export async function lookupExtensionProduct(
 
   // Fetch offers, price history, and reviews for matched master product
   const offers = await getMasterProductOffers(matchedMaster.id);
-  // Without a URL match, fall back to the cheapest plausible offer, never a
-  // bait-price listing (DOS/Rate#797).
+  // Without a URL match, fall back to the cheapest plausible in-stock offer,
+  // never a bait-price or sold-out listing (DOS/Rate#797, #1177).
+  const inStockOffers = offers.filter((o) => !isOfferUnavailable(o));
   const urlMatchedOffer =
     offers.find(
       (o) =>
         (canonicalUrl && o.url.includes(canonicalUrl)) ||
         doesOfferUrlMatchCandidateIds(o.url, candidateItemIds)
     ) || null;
-  const matchedOffer = urlMatchedOffer || plausibleOffers(offers)[0] || null;
+  const matchedOffer =
+    urlMatchedOffer || plausibleOffers(inStockOffers)[0] || null;
 
   if (
     matchedOffer &&
@@ -1305,10 +1312,11 @@ export async function lookupExtensionProduct(
       : null;
 
   const isAmbiguous = matchStatus === 'ambiguous_variant';
-  // The market reference and "cheaper elsewhere" leave bait-price listings
-  // out; the matched offer above still comes from every offer, so a shopper
-  // on a bait listing sees it judged against the real market (DOS/Rate#797).
-  const marketOffers = plausibleOffers(offers);
+  // The market reference and "cheaper elsewhere" leave bait-price and
+  // sold-out listings out; the URL-matched offer above still comes from every
+  // offer, so a shopper on such a listing sees it judged against the real
+  // market (DOS/Rate#797, #1177).
+  const marketOffers = plausibleOffers(inStockOffers);
   const priceAssessment = evaluateExtensionPriceVerdict({
     isAccessory: false,
     accessoryReason: null,

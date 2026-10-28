@@ -106,12 +106,16 @@ export function startRateDb({
     sleep(250);
   }
 
-  // Supabase-shaped fixture: API roles, auth.uid() from request.jwt.claims, and
-  // the prod extension placement (uuid-ossp in `extensions`, pg_trgm in `sign`,
-  // neither on the default search_path and neither usable by anon).
+  // Supabase-shaped fixture: API roles (authenticator is PostgREST's login
+  // role, the only member of rate_worker), auth.uid() from request.jwt.claims,
+  // and the prod extension placement (uuid-ossp in `extensions`, pg_trgm in
+  // `sign`, neither on the default search_path and neither usable by anon).
   sql(`CREATE ROLE anon; CREATE ROLE authenticated; CREATE ROLE service_role;
+    CREATE ROLE authenticator NOINHERIT;
     CREATE SCHEMA auth;
-    CREATE TABLE auth.users (id UUID PRIMARY KEY, email TEXT, email_confirmed_at TIMESTAMPTZ);
+    CREATE TABLE auth.users (id UUID PRIMARY KEY, email TEXT, email_confirmed_at TIMESTAMPTZ,
+      phone_confirmed_at TIMESTAMPTZ, is_anonymous BOOLEAN NOT NULL DEFAULT false,
+      created_at TIMESTAMPTZ DEFAULT now());
     CREATE FUNCTION auth.uid() RETURNS UUID LANGUAGE sql STABLE AS $$
       SELECT NULLIF(NULLIF(current_setting('request.jwt.claims', true), '')::jsonb ->> 'sub', '')::uuid
     $$;

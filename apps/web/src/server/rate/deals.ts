@@ -18,6 +18,7 @@ import {
   getRadarSignal,
   type RadarSignal,
 } from '../../lib/deal-radar';
+import { isOfferUnavailable } from '../../lib/product-market-stats';
 import { plausibleOffers } from '@repo/shared-data/rules';
 import {
   RATE_CACHE_TAGS,
@@ -51,6 +52,8 @@ export interface CrossPlatformDealRadarItem {
   marketMaxPrice: number;
   savingsVsMedianVnd: number;
   savingsVsMedianPct: number;
+  /** Offers behind marketMedianPrice / marketMinPrice (DOS/Rate#1145). */
+  marketOfferCount: number;
   claimedDiscountPct: number;
   fakeMarkupPct: number;
   jreviewsScore10: number | null;
@@ -85,7 +88,10 @@ export interface CrossPlatformDealRadarResponse {
   categoryFilter: CanonicalCategorySlug | 'all';
   platformFilter?: string;
   totalClustersAnalyzed: number;
+  /** Offers (listings), not merchants: one merchant can list several. */
   totalOffersAnalyzed: number;
+  /** Distinct merchants behind totalOffersAnalyzed (DOS/Rate#1145). */
+  totalMerchantsAnalyzed: number;
   genuineDeals: CrossPlatformDealRadarItem[];
   fakeSaleTraps: CrossPlatformDealRadarItem[];
   priceSpreadLeaders: CrossPlatformPriceSpreadItem[];
@@ -250,6 +256,7 @@ export function computeCrossPlatformDealRadarFromData(
   const priceSpreadLeaders: CrossPlatformPriceSpreadItem[] = [];
   let totalClustersAnalyzed = 0;
   let totalOffersAnalyzed = 0;
+  const analyzedMerchantKeys = new Set<string>();
 
   const boundedClusters = Array.isArray(clusters)
     ? clusters.slice(0, MAX_DEAL_RADAR_CLUSTERS)
@@ -296,12 +303,14 @@ export function computeCrossPlatformDealRadarFromData(
     const clusterOffers = Array.isArray(offers) ? offers : [];
 
     // Bait-price listings (far below every other store) set no market floor,
-    // spread, deal or trap (DOS/Rate#797).
+    // spread, deal or trap (DOS/Rate#797), and neither do sold-out or
+    // discontinued listings, which keep their last price (DOS/Rate#1170).
     const validOffers = plausibleOffers(
       clusterOffers
         .filter(
           (o): o is MerchantOffer =>
             Boolean(o && typeof o === 'object' && !Array.isArray(o)) &&
+            !isOfferUnavailable(o) &&
             typeof o.price_current === 'number' &&
             Number.isFinite(o.price_current) &&
             o.price_current > 0 &&
@@ -393,6 +402,17 @@ export function computeCrossPlatformDealRadarFromData(
 
     totalClustersAnalyzed++;
     totalOffersAnalyzed += validOffers.length;
+    for (const o of validOffers) {
+      // Without an id, a seller is its platform and name; without a name
+      // either (the name fell back to the platform), only the offer is known.
+      const named = o.merchant.name !== o.platform.toUpperCase();
+      analyzedMerchantKeys.add(
+        o.merchant.id ||
+          (named
+            ? `${o.platform.toLowerCase()}:${o.merchant.name.toLowerCase()}`
+            : `offer:${o.id}`)
+      );
+    }
 
     const prices = validOffers.map((o) => o.price_current);
     const marketMinPrice = Math.min(...prices);
@@ -493,7 +513,7 @@ export function computeCrossPlatformDealRadarFromData(
         verdict,
         verdictBadgeVi: isAllTimeLow
           ? '🔥 Đáy Giá Đa Sàn'
-          : '✅ Giá Tốt Nhất 10 Sàn',
+          : '✅ Giá Tốt Nhất Hiện Có',
         productSlug: safeMasterSlug,
         productName: master.name,
         brand: master.brand,
@@ -513,10 +533,11 @@ export function computeCrossPlatformDealRadarFromData(
         marketMaxPrice,
         savingsVsMedianVnd,
         savingsVsMedianPct,
+        marketOfferCount: validOffers.length,
         claimedDiscountPct,
         fakeMarkupPct: 0,
         jreviewsScore10,
-        explanationVi: `Rẻ hơn trung vị 10 sàn ${savingsVsMedianVnd.toLocaleString('vi-VN')} ₫ (-${savingsVsMedianPct}%) tại ${bestOffer.merchant.name} (${bestOffer.platform.toUpperCase()}).`,
+        explanationVi: `Rẻ hơn giá trung vị của ${validOffers.length} tin bán ${savingsVsMedianVnd.toLocaleString('vi-VN')} ₫ (-${savingsVsMedianPct}%) tại ${bestOffer.merchant.name} (${bestOffer.platform.toUpperCase()}).`,
       });
     }
 
@@ -573,6 +594,7 @@ export function computeCrossPlatformDealRadarFromData(
               100
             ).toFixed(1)
           ),
+          marketOfferCount: validOffers.length,
           claimedDiscountPct,
           fakeMarkupPct,
           jreviewsScore10,
@@ -617,6 +639,7 @@ export function computeCrossPlatformDealRadarFromData(
     platformFilter,
     totalClustersAnalyzed,
     totalOffersAnalyzed,
+    totalMerchantsAnalyzed: analyzedMerchantKeys.size,
     genuineDeals: genuineDeals.slice(0, limit),
     fakeSaleTraps: fakeSaleTraps.slice(0, limit),
     priceSpreadLeaders: priceSpreadLeaders.slice(0, limit),
@@ -674,7 +697,8 @@ const _getCrossPlatformDealRadarByKey = cache(
         });
       },
       [
-        'rate-cross-platform-deal-radar',
+        // v2: the response gained totalMerchantsAnalyzed and marketOfferCount.
+        'rate-cross-platform-deal-radar-v2',
         categorySlug,
         platformFilter,
         String(limit),

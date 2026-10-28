@@ -10,7 +10,8 @@ const PRODUCT = '/smartphones/e2e-bait-price-phone';
 test('a bait-price listing does not set the lowest price', async ({ page }) => {
   expect((await page.goto(PRODUCT))?.status()).toBe(200);
 
-  // Title and hero price take the cheapest plausible offer (3,030,000).
+  // Title and hero price read the stored min_price, which leaves the bait
+  // listing out (3,030,000; DOS/Rate#802, #1141).
   await expect(page).toHaveTitle(/3\.030\.000/);
   await expect(page).not.toHaveTitle(/1\.250\.000/);
   await expect(page.locator('.rate-pdv-price-line')).toContainText('3.030.000');

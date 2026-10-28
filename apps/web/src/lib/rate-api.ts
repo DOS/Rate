@@ -2,7 +2,10 @@ import { createClient } from '@supabase/supabase-js';
 import type { Database, MasterProduct } from '@repo/shared-data';
 import { createLogger } from '@/lib/logger';
 import { isPendingReview } from '@/lib/review-display';
-import { plausibleOffers } from '@repo/shared-data/rules';
+import {
+  implausiblyLowOfferIds,
+  plausibleOffers,
+} from '@repo/shared-data/rules';
 import {
   type ReviewFlagCategory,
   type ReviewItem,
@@ -27,6 +30,11 @@ import {
   extractProductKeywordFromUrl,
   firstImageUrl,
 } from './rate-domain-core';
+import {
+  isOfferUnavailable,
+  type OfferAvailability,
+  toOfferAvailability,
+} from './product-market-stats';
 export {
   computeWilsonLowerBound,
   evaluateReviewTrustAssessment,
@@ -160,6 +168,12 @@ export interface MerchantOffer {
   rating_star: number;
   rating_count: number;
   url: string;
+  /**
+   * rate.products.availability: a sold-out or discontinued listing keeps its
+   * last price but is not counted in the master's stats (DOS/Rate#1141).
+   * `null` when it was not read.
+   */
+  availability?: OfferAvailability | null;
   merchant: {
     id: string;
     name: string;
@@ -1301,27 +1315,78 @@ export async function getMasterProductOffers(
   ).catch(() => null);
   if (viewRows) {
     const rows = viewRows as unknown as RawTrustViewRow[];
-    const extras = await sellerExtrasForTrustViewRows(rows);
+    const [extras, availability] = await Promise.all([
+      sellerExtrasForTrustViewRows(rows),
+      getListingAvailability([cleanMasterId]),
+    ]);
     return rows.map((row) =>
-      mapTrustViewRowToMerchantOffer(
-        row,
-        extras.followerCounts.get(row.merchant_id),
-        extras.metadataDosafeRisks.get(row.merchant_id)
+      withOfferAvailability(
+        mapTrustViewRowToMerchantOffer(
+          row,
+          extras.followerCounts.get(row.merchant_id),
+          extras.metadataDosafeRisks.get(row.merchant_id)
+        ),
+        availability
       )
     );
   }
 
   // Fallback with explicit column list matching column-level SELECT grants on rate.merchants
-  const rows = await fetchAllRows('product offers', (from, to) =>
-    supabase
-      .from('products')
-      .select(OFFER_FALLBACK_SELECT)
-      .eq('cluster_id', cleanMasterId)
-      .order('price_current', { ascending: true })
-      .order('id')
-      .range(from, to)
+  const [rows, availability] = await Promise.all([
+    fetchAllRows('product offers', (from, to) =>
+      supabase
+        .from('products')
+        .select(OFFER_FALLBACK_SELECT)
+        .eq('cluster_id', cleanMasterId)
+        .order('price_current', { ascending: true })
+        .order('id')
+        .range(from, to)
+    ),
+    getListingAvailability([cleanMasterId]),
+  ]);
+  return (rows as unknown as RawOfferRow[]).map((row) =>
+    withOfferAvailability(mapOfferRowToMerchantOffer(row), availability)
   );
-  return (rows as unknown as RawOfferRow[]).map(mapOfferRowToMerchantOffer);
+}
+
+/**
+ * Availability of every listing under the given masters (at most
+ * IN_FILTER_CHUNK_SIZE), by listing id. The trust view predates the column
+ * (DOS-Me 20261020230000), so it is read from rate.products. A failed read
+ * throws like the offer reads it completes (DOS/Rate#1174).
+ */
+async function getListingAvailability(
+  masterIds: readonly string[]
+): Promise<Map<string, OfferAvailability>> {
+  const supabase = getRateClient();
+  const rows = await fetchAllRows<{ id: unknown; availability: unknown }>(
+    'listing availability',
+    (from, to) =>
+      supabase
+        .from('products')
+        .select('id, availability')
+        .in('cluster_id', [...masterIds])
+        .order('id')
+        .range(from, to) as unknown as PromiseLike<{
+        data: { id: unknown; availability: unknown }[] | null;
+        error: { message: string } | null;
+      }>
+  );
+  const byId = new Map<string, OfferAvailability>();
+  for (const row of rows) {
+    const availability = toOfferAvailability(row?.availability);
+    if (availability && typeof row?.id === 'string') {
+      byId.set(row.id, availability);
+    }
+  }
+  return byId;
+}
+
+function withOfferAvailability(
+  offer: MerchantOffer,
+  availability: ReadonlyMap<string, OfferAvailability>
+): MerchantOffer {
+  return { ...offer, availability: availability.get(offer.id) ?? null };
 }
 
 /**
@@ -1351,9 +1416,8 @@ export async function getMasterProductOffersBatch(
     const batchIds = uniqueIds.slice(i, i + chunkSize);
 
     // Paged per chunk: 150 masters can easily hold more than 1000 offers.
-    const viewData = await fetchAllRows(
-      'v_products_with_merchant_trust',
-      (from, to) =>
+    const [viewData, availability] = await Promise.all([
+      fetchAllRows('v_products_with_merchant_trust', (from, to) =>
         supabase
           .from('v_products_with_merchant_trust')
           .select(TRUST_VIEW_SELECT)
@@ -1361,7 +1425,9 @@ export async function getMasterProductOffersBatch(
           .order('price_current', { ascending: true })
           .order('id')
           .range(from, to)
-    ).catch(() => null);
+      ).catch(() => null),
+      getListingAvailability(batchIds),
+    ]);
 
     if (viewData) {
       const rows = viewData as unknown as RawTrustViewRow[];
@@ -1371,10 +1437,13 @@ export async function getMasterProductOffersBatch(
         if (!cid) continue;
         const list = offersByMaster.get(cid) ?? [];
         list.push(
-          mapTrustViewRowToMerchantOffer(
-            row,
-            extras.followerCounts.get(row.merchant_id),
-            extras.metadataDosafeRisks.get(row.merchant_id)
+          withOfferAvailability(
+            mapTrustViewRowToMerchantOffer(
+              row,
+              extras.followerCounts.get(row.merchant_id),
+              extras.metadataDosafeRisks.get(row.merchant_id)
+            ),
+            availability
           )
         );
         offersByMaster.set(cid, list);
@@ -1396,7 +1465,9 @@ export async function getMasterProductOffersBatch(
       const cid = item.cluster_id ? String(item.cluster_id) : '';
       if (!cid) continue;
       const list = offersByMaster.get(cid) ?? [];
-      list.push(mapOfferRowToMerchantOffer(item));
+      list.push(
+        withOfferAvailability(mapOfferRowToMerchantOffer(item), availability)
+      );
       offersByMaster.set(cid, list);
     }
   }
@@ -1871,7 +1942,12 @@ export async function getMasterProductPriceHistory(
     : cleanMasterId
       ? await getMasterProductOffers(cleanMasterId)
       : [];
-  const offers = plausibleOffers(rawOffers);
+  // Bait prices are judged among the in-stock listings, as the stored
+  // min_price is; a sold-out listing keeps its chart (DOS/Rate#1141).
+  const baitIds = implausiblyLowOfferIds(
+    rawOffers.filter((o) => !isOfferUnavailable(o))
+  );
+  const offers = rawOffers.filter((o) => !baitIds.has(o.id));
   if (offers.length === 0) {
     return {
       points: [],
@@ -2168,8 +2244,14 @@ export async function getMasterProductPriceHistory(
     }
   }
 
+  // The lowest in-stock price, like the stored min_price: a sold-out listing
+  // keeps its last price (DOS/Rate#1141). Unknown availability counts.
+  const inStockOfferPrices = offers
+    .filter((o) => !isOfferUnavailable(o))
+    .map((o) => o.price_current)
+    .filter((p) => Number.isFinite(p) && p > 0 && p <= MAX_VALID_VND_PRICE);
   const currentMinPrice =
-    validOfferPrices.length > 0 ? Math.min(...validOfferPrices) : null;
+    inStockOfferPrices.length > 0 ? Math.min(...inStockOfferPrices) : null;
 
   return {
     points,
@@ -3357,6 +3439,89 @@ export const EMPTY_RATE_PLATFORM_STATS: RatePlatformStats = {
  * Fetch live platform statistics, category product counts, and recent verified/flagged
  * reviews from the `rate` schema to power the Homepage with 100% real database data.
  */
+/**
+ * Stored reviews the analyser kept out of the rating, per master product id
+ * (DOS/Rate#1139). Same rule as the platform's filteredSeedingCount below:
+ * include_in_rating false, or NULL with a flagged category or a fake verdict,
+ * and never a review still pending analysis. Masters with none are absent.
+ * The leaderboard must not derive this from master_products.total_reviews,
+ * which is the marketplaces' own rating count, not reviews Rate.vn read.
+ */
+export async function getFilteredReviewCountsByMaster(): Promise<
+  Record<string, number>
+> {
+  const supabase = getRateClient();
+  const [explicitRows, derivedRows] = await Promise.all([
+    fetchAllRows<{ review_id: string }>('filtered review flags', (from, to) =>
+      supabase
+        .from('review_flags')
+        .select('review_id')
+        .eq('include_in_rating', false)
+        .or('verdict.is.null,verdict.neq.unanalyzed')
+        .order('review_id')
+        .range(from, to)
+    ),
+    fetchAllRows<{ review_id: string }>('filtered review flags', (from, to) =>
+      supabase
+        .from('review_flags')
+        .select('review_id')
+        .is('include_in_rating', null)
+        .or(
+          'and(flag_category.neq.authentic,or(verdict.is.null,verdict.neq.unanalyzed)),verdict.eq.fake,and(flag_category.is.null,verdict.eq.suspicious)'
+        )
+        .order('review_id')
+        .range(from, to)
+    ),
+  ]);
+  const reviewIds = Array.from(
+    new Set(
+      [...explicitRows, ...derivedRows]
+        .map((r) => String(r.review_id ?? ''))
+        .filter(Boolean)
+    )
+  );
+  if (reviewIds.length === 0) return {};
+
+  const reviewRows = await fetchAllRowsInChunks<{
+    id: string;
+    product_id: string | null;
+  }>('filtered reviews', reviewIds, (chunk, from, to) =>
+    supabase
+      .from('reviews')
+      .select('id, product_id')
+      .in('id', chunk)
+      .order('id')
+      .range(from, to)
+  );
+  const productIds = Array.from(
+    new Set(reviewRows.map((r) => String(r.product_id ?? '')).filter(Boolean))
+  );
+  if (productIds.length === 0) return {};
+
+  const productRows = await fetchAllRowsInChunks<{
+    id: string;
+    cluster_id: string | null;
+  }>('filtered review products', productIds, (chunk, from, to) =>
+    supabase
+      .from('products')
+      .select('id, cluster_id')
+      .in('id', chunk)
+      .order('id')
+      .range(from, to)
+  );
+  const masterByProduct = new Map(
+    productRows.map((p) => [String(p.id), String(p.cluster_id ?? '')])
+  );
+
+  const counts: Record<string, number> = {};
+  for (const r of reviewRows) {
+    const masterId = masterByProduct.get(String(r.product_id ?? ''));
+    if (!masterId) continue;
+    counts[masterId] = (counts[masterId] ?? 0) + 1;
+  }
+  return counts;
+}
+
 export async function getRatePlatformStats(): Promise<RatePlatformStats> {
   const supabase = getRateClient();
 
@@ -3749,10 +3914,11 @@ export async function inspectProductOrShopUrl(
           getMasterProductPriceHistory(masterProduct.id, offers),
           getMasterProductReviewSummary(masterProduct.id, reviews),
         ]);
-        // No bait-price listing as the fallback match (DOS/Rate#797).
+        // No bait-price or sold-out listing as the fallback match
+        // (DOS/Rate#797, #1177).
         const matchedOffer =
           offers.find((o) => o.id === matchedProd.id) ||
-          plausibleOffers(offers)[0] ||
+          plausibleOffers(offers.filter((o) => !isOfferUnavailable(o)))[0] ||
           null;
         const discountAnalysis = matchedOffer
           ? priceHistory.byOffer[matchedOffer.id] || null
@@ -3858,8 +4024,11 @@ export async function inspectProductOrShopUrl(
       );
       if (byShopMerchant) return byShopMerchant;
     }
-    // The cheapest plausible offer, never a bait-price listing (DOS/Rate#797).
-    return plausibleOffers(offers)[0] || null;
+    // The cheapest plausible in-stock offer, never a bait-price or sold-out
+    // listing (DOS/Rate#797, #1177).
+    return (
+      plausibleOffers(offers.filter((o) => !isOfferUnavailable(o)))[0] || null
+    );
   };
 
   // 3. Internal slug or exact master product slug match (including slugified URL keyword)

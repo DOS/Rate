@@ -16,8 +16,14 @@ import {
   type SupportedEcommercePlatform,
   type ValidatedScrapedProduct,
 } from './types.js';
-import { ProductNormalizer } from './product-normalizer.js';
-import { EntityMatcher, sanitizeHttpUrl, sanitizeHttpUrlList } from './entity-matcher.js';
+import { ProductNormalizer, UnkeyableProductTitleError } from './product-normalizer.js';
+import {
+  EntityMatcher,
+  sanitizeHttpUrl,
+  sanitizeHttpUrlList,
+  type ItemMatchResult,
+} from './entity-matcher.js';
+import type { ItemModelMode } from './item-model-flag.js';
 import { AiSpecEnricher, type AiSpecEnricherConfig } from './ai-spec-enricher.js';
 import { AiReviewAnalyzer, type ReviewInputItem } from './ai-review-analyzer.js';
 import { createImporterLogger } from './logger.js';
@@ -249,6 +255,8 @@ export interface ShopeeIngestionPipelineConfig extends AiSpecEnricherConfig {
    * Optional pre-scoped `rate` schema Supabase client for dependency injection / deterministic testing.
    */
   supabaseClient?: RateSupabaseClient;
+  /** Item model rollout mode; defaults to the `RATE_ITEM_MODEL` env (see item-model-flag.ts). */
+  itemModel?: ItemModelMode;
 }
 
 export interface IngestOptions {
@@ -257,6 +265,12 @@ export interface IngestOptions {
    * otherwise the listing goes through entity matching as usual.
    */
   masterIdHint?: string | null;
+  /**
+   * Item this listing is known to belong to, for a page that states no size
+   * (DOS/Rate#1151). Its variant still comes from the title. Ignored while
+   * `RATE_ITEM_MODEL` is `off`, and when `masterIdHint` resolves.
+   */
+  itemIdHint?: string | null;
   /**
    * When true, skips Step 6 review re-analysis so price-only (affiliate) ingests
    * do not re-score stored reviews without reviewer metadata or pay an extra AI pass.
@@ -299,7 +313,9 @@ export class ShopeeIngestionPipeline {
     this.normalizer = new ProductNormalizer();
     this.enricher = new AiSpecEnricher(aiConfig);
     this.reviewAnalyzer = new AiReviewAnalyzer(aiConfig);
-    this.matcher = new EntityMatcher(this.supabase, this.enricher);
+    this.matcher = new EntityMatcher(this.supabase, this.enricher, {
+      itemModel: aiConfig?.itemModel,
+    });
   }
 
   /**
@@ -405,7 +421,10 @@ export class ShopeeIngestionPipeline {
   ): Promise<{
     productId: string;
     merchantId: string;
-    masterId: string;
+    /** The listing's variant; null only in `RATE_ITEM_MODEL=nullable_variant` (no variant). */
+    masterId: string | null;
+    /** The listing's Item; null while `RATE_ITEM_MODEL` is `off`. */
+    itemId: string | null;
     platform: SupportedEcommercePlatform;
   }> {
     if (!options || typeof options !== 'object' || Array.isArray(options)) options = {};
@@ -430,6 +449,15 @@ export class ShopeeIngestionPipeline {
       itemId: product.itemId,
       shopId: product.shop.shopId,
     });
+
+    // Normalize first: a title with no keyable brand or model is rejected
+    // (UnkeyableProductTitleError) before anything is written.
+    const candidate = this.normalizer.normalize(product);
+    // With a masterIdHint the title's key is not used; the matcher still rejects
+    // the candidate if the hint does not resolve.
+    if (candidate.keyable === false && !options.masterIdHint) {
+      throw new UnkeyableProductTitleError(product.title);
+    }
 
     // 1. Upsert merchant
     const entityHash = hashEntity(`${platform}:${product.shop.shopId}`);
@@ -465,8 +493,7 @@ export class ShopeeIngestionPipeline {
     );
     await report?.('merchant');
 
-    // 2. Normalize Specs & Match / Seed Master Product
-    const candidate = this.normalizer.normalize(product);
+    // 2. Match / Seed Master Product
     const resolvedCategoryId =
       this.categoryIdBySlug.get(candidate.category_slug || 'smartphones') ||
       this.smartphoneCategoryId;
@@ -485,22 +512,64 @@ export class ShopeeIngestionPipeline {
     // A caller that already verified the master (coverage discovery, or a refresh of
     // a listing that is already clustered) keeps the listing on it instead of
     // re-matching every crawl, which can split it onto a new draft master.
-    let hinted: { masterId: string; isNew: boolean } | null = null;
+    const itemModel = this.matcher.itemModel;
+    let hinted: ItemMatchResult | null = null;
+    // undefined = leave the stored variant_source as it is.
+    let hintedVariantSource: ItemMatchResult['variantSource'] | undefined;
+    let safeItemIdHint =
+      typeof options.itemIdHint === 'string'
+        ? (sanitizeIngestionEntityId(options.itemIdHint, 128) ?? '')
+        : '';
+    if (safeItemIdHint && itemModel === 'off') {
+      platLogger.warn('ingest.item_hint_ignored', 'itemIdHint ignored: RATE_ITEM_MODEL is off', {
+        itemIdHint: safeItemIdHint,
+      });
+      safeItemIdHint = '';
+    }
     const safeMasterIdHint =
       typeof options.masterIdHint === 'string'
         ? (sanitizeIngestionEntityId(options.masterIdHint, 128) ?? '')
         : '';
     if (safeMasterIdHint) {
-      const { data: hintRow, error: hintErr } = await this.supabase
+      const { data: hintData, error: hintErr } = await this.supabase
         .from('master_products')
-        .select('id, specifications')
+        .select(
+          itemModel === 'off'
+            ? 'id, specifications'
+            : 'id, specifications, status, item_id, variant_key'
+        )
         .eq('id', safeMasterIdHint)
         .maybeSingle();
       if (hintErr) {
         throw new Error(`Failed to verify masterIdHint (${safeMasterIdHint}): ${hintErr.message}`);
       }
-      if (hintRow?.id) {
-        hinted = { masterId: hintRow.id, isNew: false };
+      const hintRow = hintData as {
+        id?: string;
+        specifications?: Record<string, unknown> | null;
+      } | null;
+      const hintMeta = hintData as {
+        status?: unknown;
+        item_id?: unknown;
+        variant_key?: unknown;
+      } | null;
+      const hintItemId =
+        itemModel === 'off' ? null : sanitizeIngestionEntityId(hintMeta?.item_id, 128);
+      if (hintRow?.id && itemModel !== 'off' && hintMeta?.status === 'archived') {
+        // A retired master (an Item's `unknown` variant after M3) must not take the
+        // listing back: the hint maps to its Item, and the variant comes from the title.
+        platLogger.info(
+          'ingest.master_hint_archived',
+          `masterIdHint ${hintRow.id} is archived: matching under its Item ${hintItemId ?? '(none)'}`,
+          { masterId: hintRow.id, itemId: hintItemId }
+        );
+        if (hintItemId) safeItemIdHint = hintItemId;
+      } else if (hintRow?.id) {
+        hinted = { masterId: hintRow.id, itemId: hintItemId, isNew: false, variantSource: null };
+        // The title's variant source holds only when it names the hinted variant.
+        hintedVariantSource =
+          candidate.variant_known && candidate.variant_key === hintMeta?.variant_key
+            ? (candidate.variant_source ?? null)
+            : undefined;
         const existingSpecs = (hintRow as { specifications?: Record<string, unknown> | null })
           .specifications;
         if (existingSpecs !== undefined && !hasPopulatedSpecificationGroups(existingSpecs)) {
@@ -517,25 +586,67 @@ export class ShopeeIngestionPipeline {
         }
       }
     }
-    const { masterId, isNew } =
+    const resolved =
       hinted ??
-      (await this.matcher.resolveOrCreateMasterProduct(
+      (await this.matcher.resolveItemAndVariant(
         candidate,
         resolvedCategoryId || undefined,
-        product.title
+        product.title,
+        { itemIdHint: safeItemIdHint || null }
       ));
+    const { itemId, isNew } = resolved;
+    let masterId = resolved.masterId;
+    let variantSourceToWrite = hinted ? hintedVariantSource : resolved.variantSource;
+    // The variant the listing had before this crawl, so its stats follow a move.
+    let previousClusterId: string | null = null;
+    if (itemModel !== 'off' && !hinted) {
+      // A variant set by hand is evidence, never undone by a later page that just
+      // does not state the size (design doc 4.4): only listing evidence
+      // (variant_source set) may move it.
+      const { data: stored, error: storedErr } = await this.supabase
+        .from('products')
+        .select('cluster_id, variant_source')
+        .eq('platform', platform)
+        .eq('platform_item_id', product.itemId)
+        .maybeSingle();
+      if (storedErr) {
+        throw new Error(`Failed to read the stored listing variant: ${storedErr.message}`);
+      }
+      const storedClusterId = sanitizeIngestionEntityId(stored?.cluster_id, 128);
+      previousClusterId = storedClusterId;
+      // A hand-set variant always stays. A variant backed by listing evidence stays
+      // when this crawl has none; a `legacy` or NULL-source link (e.g. a #1105
+      // fuzzy link) does not.
+      const storedSource = stored?.variant_source;
+      const keepStored =
+        storedSource === 'manual' ||
+        (!resolved.variantSource &&
+          (storedSource === 'title' || storedSource === 'sku' || storedSource === 'single_size'));
+      if (storedClusterId && keepStored) {
+        masterId = storedClusterId;
+        variantSourceToWrite = undefined;
+      }
+    }
     platLogger.info(
       'ingest.master_resolved',
-      `Master Product ${hinted ? 'LINKED (caller hint)' : isNew ? 'CREATED' : 'LINKED'}: ID = ${masterId}`,
-      { masterId, isNew, hinted: Boolean(hinted) }
+      `Master Product ${hinted ? 'LINKED (caller hint)' : isNew ? 'CREATED' : 'LINKED'}: ID = ${masterId ?? '(no variant)'}`,
+      { masterId, itemId, isNew, hinted: Boolean(hinted) }
     );
     await report?.('master');
+
+    // Item columns exist only once the DOS-Me Item migration is applied (DOS/Rate#1150).
+    const itemColumns: { item_id?: string; variant_source?: string | null } = {};
+    if (itemModel !== 'off') {
+      if (itemId) itemColumns.item_id = itemId;
+      if (variantSourceToWrite !== undefined) itemColumns.variant_source = variantSourceToWrite;
+    }
 
     // 3. Upsert product listing into rate.products (linked via cluster_id)
     const { data: savedProduct, error: productErr } = await this.supabase
       .from('products')
       .upsert(
         {
+          ...itemColumns,
           merchant_id: merchantId,
           cluster_id: masterId,
           category_id: resolvedCategoryId,
@@ -576,15 +687,32 @@ export class ShopeeIngestionPipeline {
     });
 
     // 3b. Refresh canonical master_products market stats (min_price, max_price, merchant_count) via SQL RPC (Audit C5)
-    if (typeof this.supabase.rpc === 'function') {
+    // A variant the listing just left is refreshed too, or it keeps the old price.
+    const statsMasterIds = [masterId, previousClusterId].filter(
+      (id, i, all): id is string => Boolean(id) && all.indexOf(id) === i
+    );
+    for (const statsMasterId of typeof this.supabase.rpc === 'function' ? statsMasterIds : []) {
       const { error: marketStatsErr } = await this.supabase.rpc('refresh_master_market_stats', {
-        p_master_id: masterId,
+        p_master_id: statsMasterId,
       });
       if (marketStatsErr) {
         platLogger.warn(
           'ingest.market_stats_rpc_warn',
           `Could not refresh master market stats via RPC: ${marketStatsErr.message}`,
-          { masterId }
+          { masterId: statsMasterId }
+        );
+      }
+    }
+    // Then the Item roll-up (DOS-Me M2 `refresh_item_stats`, design doc 4.1).
+    if (typeof this.supabase.rpc === 'function' && itemModel !== 'off' && itemId) {
+      const { error: itemStatsErr } = await this.supabase.rpc('refresh_item_stats', {
+        p_item_id: itemId,
+      });
+      if (itemStatsErr) {
+        platLogger.warn(
+          'ingest.item_stats_rpc_warn',
+          `Could not refresh Item stats via RPC: ${itemStatsErr.message}`,
+          { itemId }
         );
       }
     }
@@ -870,26 +998,29 @@ export class ShopeeIngestionPipeline {
             { productId }
           );
         } else if (analysisInput.length > 0) {
-          const [{ data: masterRow }, { data: peerRows }] = await Promise.all([
-            this.supabase
-              .from('master_products')
-              .select('min_price')
-              .eq('id', masterId)
-              .maybeSingle(),
-            (() => {
-              const q = this.supabase
-                .from('products')
-                .select('id, price_current, merchants(is_official)')
-                .eq('cluster_id', masterId)
-                .gt('price_current', 0);
-              const withLte =
-                typeof (q as unknown as { lte?: (col: string, val: number) => typeof q }).lte ===
-                'function'
-                  ? q.lte('price_current', MAX_VALID_VND_PRICE)
-                  : q;
-              return withLte.limit(100);
-            })(),
-          ]);
+          // No variant: no peer floor, since peers and min price are per variant.
+          const [{ data: masterRow }, { data: peerRows }] = !masterId
+            ? [{ data: null }, { data: null }]
+            : await Promise.all([
+                this.supabase
+                  .from('master_products')
+                  .select('min_price')
+                  .eq('id', masterId)
+                  .maybeSingle(),
+                (() => {
+                  const q = this.supabase
+                    .from('products')
+                    .select('id, price_current, merchants(is_official)')
+                    .eq('cluster_id', masterId)
+                    .gt('price_current', 0);
+                  const withLte =
+                    typeof (q as unknown as { lte?: (col: string, val: number) => typeof q })
+                      .lte === 'function'
+                      ? q.lte('price_current', MAX_VALID_VND_PRICE)
+                      : q;
+                  return withLte.limit(100);
+                })(),
+              ]);
 
           const rawMasterMinPrice = masterRow?.min_price;
           const parsedMasterMinPrice =
@@ -981,6 +1112,6 @@ export class ShopeeIngestionPipeline {
       `Product ingestion complete! (Master: ${masterId}, Product: ${productId})`,
       { masterId, productId, merchantId }
     );
-    return { productId, merchantId, masterId, platform };
+    return { productId, merchantId, masterId, itemId, platform };
   }
 }

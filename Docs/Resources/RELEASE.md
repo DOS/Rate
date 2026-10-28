@@ -11,7 +11,7 @@ This is the release workflow for `rate.vn`. It follows the same model as DOS/DOS
 
 ## Normal release
 
-1. Feature PRs go into `dev` as usual: review, green required checks (`Typecheck & Build Monorepo`, `E2E (Playwright)`, `Secret scan (gitleaks)`, `task-claim`), squash merge.
+1. Feature PRs go into `dev` as usual: review, green required checks (`Typecheck & Build Monorepo`, `E2E (Playwright)`, `Secret scan (gitleaks)`, `task-claim`), squash merge. `node scripts/ops/merge-when-green.mjs <pr>` writes the squash commit's message itself: the PR title with `(#<pr>)`, then each commit wrapped at 100 characters, with the co-author trailers in a footer. It refuses a PR whose title is not a conventional header or does not fit `<title> (#<pr>)` in 100 characters: shorten the title. The promotion PR's `commitlint` check lints the head of `dev`, which is usually that squash commit, so it must pass `commitlint.config.ts` (DOS/Rate#1130).
 2. Check `dev` on its Vercel Preview deployment.
 3. Open the promotion PR from `dev` itself, not from a copy branch:
    `gh pr create --repo DOS/Rate --base main --head dev --title "chore(release): promote dev to main"`
