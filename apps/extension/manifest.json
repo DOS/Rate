@@ -1,16 +1,17 @@
 {
   "manifest_version": 3,
-  "name": "Rate.vn - So Sánh Giá, Lịch Sử Giá & Lọc Đánh Giá Ảo AI",
+  "name": "__MSG_extName__",
   "short_name": "Rate.vn",
   "version": "2.0.0",
-  "description": "Kiểm tra lịch sử giá 90 ngày, phát hiện giảm giá ảo, tìm nơi bán rẻ hơn và lọc đánh giá seeding bằng AI trên 10 sàn TMĐT & chuỗi bán lẻ Việt Nam.",
+  "description": "__MSG_extDescription__",
+  "default_locale": "vi",
   "icons": {
     "16": "icons/icon-16.png",
     "48": "icons/icon-48.png",
     "128": "icons/icon-128.png"
   },
   "action": {
-    "default_title": "Mở bảng phân tích giá & độ tin cậy Rate.vn",
+    "default_title": "__MSG_actionTitle__",
     "default_icon": {
       "16": "icons/icon-16.png",
       "48": "icons/icon-48.png",

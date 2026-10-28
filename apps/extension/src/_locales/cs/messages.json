@@ -1,0 +1,515 @@
+{
+  "extName": {
+    "message": "Rate.vn - Porovnání cen, historie cen a AI filtr falešných recenzí"
+  },
+  "extDescription": {
+    "message": "Historie cen za 90 dní, odhalení falešných slev, levnější prodejci a AI filtr falešných recenzí v 10 vietnamských obchodech."
+  },
+  "actionTitle": {
+    "message": "Otevřít panel cen a důvěryhodnosti Rate.vn"
+  },
+  "langCode": {
+    "message": "cs"
+  },
+  "panelTitle": {
+    "message": "Rate.vn - Asistent historie cen a falešných slev"
+  },
+  "refresh": {
+    "message": "Obnovit"
+  },
+  "quickLookupTitle": {
+    "message": "Rychlé vyhledání: odkaz z obchodu nebo název zařízení"
+  },
+  "quickLookupAria": {
+    "message": "Odkaz na produkt nebo název zařízení k vyhledání"
+  },
+  "quickLookupPlaceholder": {
+    "message": "Vložte odkaz ze Shopee/TikTok/Lazada nebo napište iPhone 16 Pro Max..."
+  },
+  "quickLookupSubmit": {
+    "message": "Zkontrolovat"
+  },
+  "quickLookupBoxName": {
+    "message": "Rychlé vyhledání"
+  },
+  "quickLookupLoading": {
+    "message": "Kontrolujeme data pro \"$QUERY$\"...",
+    "placeholders": {
+      "query": {
+        "content": "$1"
+      }
+    }
+  },
+  "quickQueryEmpty": {
+    "message": "Zadejte název produktu nebo vložte odkaz z obchodu."
+  },
+  "panelLoading": {
+    "message": "Načítáme údaje o produktu z otevřené stránky..."
+  },
+  "privacyTitle": {
+    "message": "Soukromí a nastavení připojení"
+  },
+  "optInTitle": {
+    "message": "Pomoc s hledáním nových produktů (jen když ji zapnete):"
+  },
+  "optInBody": {
+    "message": "Když je zapnuto, každá nabídka, kterou otevřete, se také odešle do nezávislé fronty ke kontrole Rate.vn s těmito údaji: obchod, ID produktu, ID obchodu, URL bez sledovacích parametrů, název produktu, zvolená varianta, cena, původní cena, počet hvězdiček a počet recenzí. Bez účtu a osobních údajů."
+  },
+  "crowdFieldPlatform": {
+    "message": "obchod"
+  },
+  "crowdFieldExternalItemId": {
+    "message": "ID produktu"
+  },
+  "crowdFieldExternalShopId": {
+    "message": "ID obchodu"
+  },
+  "crowdFieldUrl": {
+    "message": "URL bez sledovacích parametrů"
+  },
+  "crowdFieldTitle": {
+    "message": "název produktu"
+  },
+  "crowdFieldSelectedVariant": {
+    "message": "zvolená varianta"
+  },
+  "crowdFieldPrice": {
+    "message": "cena"
+  },
+  "crowdFieldOriginalPrice": {
+    "message": "původní cena"
+  },
+  "crowdFieldRatingStar": {
+    "message": "počet hvězdiček"
+  },
+  "crowdFieldRatingCount": {
+    "message": "počet recenzí"
+  },
+  "apiBaseLabel": {
+    "message": "Adresa serveru Rate.vn:"
+  },
+  "notAvailable": {
+    "message": "N/A"
+  },
+  "priceUpdating": {
+    "message": "Aktualizuje se"
+  },
+  "offerOutOfStock": {
+    "message": "Není skladem"
+  },
+  "offerDiscontinued": {
+    "message": "Ukončený prodej"
+  },
+  "offerImplausiblyLow": {
+    "message": "Podezřele nízká cena"
+  },
+  "offerCheapest": {
+    "message": "Nejlevnější"
+  },
+  "officialStore": {
+    "message": "Oficiální"
+  },
+  "offerCombinedRisk": {
+    "message": "Celkové riziko: $SCORE$/100",
+    "placeholders": {
+      "score": {
+        "content": "$1"
+      }
+    }
+  },
+  "offerLastSeenPrice": {
+    "message": "Naposledy zaznamenaná cena, ne aktuální nabídka"
+  },
+  "offersCardTitle": {
+    "message": "Porovnání cen v obchodech ($COUNT$)",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
+  },
+  "reviewCardTitle": {
+    "message": "Kvalita recenzí (bez falešných recenzí)"
+  },
+  "reviewUserScore": {
+    "message": "Hodnocení kupujících (filtrované)"
+  },
+  "reviewAuthenticShare": {
+    "message": "Podíl skutečných recenzí"
+  },
+  "reviewAuthenticValue": {
+    "message": "$PCT$ % ($COUNT$ recenzí)",
+    "placeholders": {
+      "pct": {
+        "content": "$1"
+      },
+      "count": {
+        "content": "$2"
+      }
+    }
+  },
+  "reviewNone": {
+    "message": "Zatím bez hodnocení"
+  },
+  "notFoundTitle": {
+    "message": "Tento produkt na Rate.vn zatím není"
+  },
+  "notFoundAccessory": {
+    "message": "Vypadá to na příslušenství nebo díl. Rate.vn u tohoto druhu zboží zatím ceny neporovnává."
+  },
+  "notFoundNoData": {
+    "message": "Rate.vn pro tento produkt zatím nemá data o cenách a recenzích."
+  },
+  "notFoundSearch": {
+    "message": "Hledat na Rate.vn"
+  },
+  "lookupErrorTitle": {
+    "message": "Vyhledání se nezdařilo"
+  },
+  "lookupErrorRateLimited": {
+    "message": "Vyhledáváte trochu rychle. Zkuste to znovu za pár minut."
+  },
+  "lookupErrorServer": {
+    "message": "Rate.vn má potíže. Zkuste to později."
+  },
+  "lookupErrorNetwork": {
+    "message": "Nepodařilo se připojit k Rate.vn. Zkontrolujte připojení a zkuste to znovu."
+  },
+  "lookupErrorOther": {
+    "message": "Tento produkt teď nelze vyhledat."
+  },
+  "retry": {
+    "message": "Zkusit znovu"
+  },
+  "pillCheaperAt": {
+    "message": "Levněji v $COUNT$ obchodech (-$AMOUNT$)",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      },
+      "amount": {
+        "content": "$2"
+      }
+    }
+  },
+  "pillMarketLow": {
+    "message": "Tržní minimum: $PRICE$",
+    "placeholders": {
+      "price": {
+        "content": "$1"
+      }
+    }
+  },
+  "pillPrompt": {
+    "message": "Klikněte pro historii cen a filtr falešných recenzí"
+  },
+  "pillRadarDeal": {
+    "message": "Minimum napříč obchody (-$PCT$ %)",
+    "placeholders": {
+      "pct": {
+        "content": "$1"
+      }
+    }
+  },
+  "pillRadarTrap": {
+    "message": "Falešná sleva (+$PCT$ %)",
+    "placeholders": {
+      "pct": {
+        "content": "$1"
+      }
+    }
+  },
+  "pillRadarSpread": {
+    "message": "Rozdíl $PCT$ %",
+    "placeholders": {
+      "pct": {
+        "content": "$1"
+      }
+    }
+  },
+  "pillAuthentic": {
+    "message": "($PCT$ % skutečných)",
+    "placeholders": {
+      "pct": {
+        "content": "$1"
+      }
+    }
+  },
+  "pillDetails": {
+    "message": "Detail"
+  },
+  "pillOpenPanel": {
+    "message": "Otevřít panel s analýzou ceny"
+  },
+  "badgeFakeSale": {
+    "message": "KLAM"
+  },
+  "badgeGenuineDeal": {
+    "message": "TOP"
+  },
+  "badgeAboveMarket": {
+    "message": "DRAŽ"
+  },
+  "badgeFairPrice": {
+    "message": "OK"
+  },
+  "historyAccumulating": {
+    "message": "Body historie cen se stále sbírají."
+  },
+  "radarDealsTitle": {
+    "message": "Nejnižší cena v 10 obchodech"
+  },
+  "radarSavings": {
+    "message": "Ušetříte $AMOUNT$ (-$PCT$ %)",
+    "placeholders": {
+      "amount": {
+        "content": "$1"
+      },
+      "pct": {
+        "content": "$2"
+      }
+    }
+  },
+  "radarSpreadTitle": {
+    "message": "Největší cenové rozdíly mezi obchody"
+  },
+  "radarSpreadVersus": {
+    "message": "$CHEAPEST$ ($MIN$) vs $PRICIEST$ ($MAX$)",
+    "placeholders": {
+      "cheapest": {
+        "content": "$1"
+      },
+      "min": {
+        "content": "$2"
+      },
+      "priciest": {
+        "content": "$3"
+      },
+      "max": {
+        "content": "$4"
+      }
+    }
+  },
+  "radarSpreadAmount": {
+    "message": "Rozdíl $AMOUNT$",
+    "placeholders": {
+      "amount": {
+        "content": "$1"
+      }
+    }
+  },
+  "radarTrapsTitle": {
+    "message": "Upozornění na falešné slevy"
+  },
+  "radarTrapMarkup": {
+    "message": "Nadsazená původní cena +$PCT$ % ($PRICE$)",
+    "placeholders": {
+      "pct": {
+        "content": "$1"
+      },
+      "price": {
+        "content": "$2"
+      }
+    }
+  },
+  "reviewRiskNoData": {
+    "message": "nedostatek dat"
+  },
+  "merchantDirTitle": {
+    "message": "Důvěryhodnost prodejců v 10 obchodech ($COUNT$)",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
+  },
+  "merchantProductCount": {
+    "message": "produkty: $COUNT$",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
+  },
+  "merchantScamRisk": {
+    "message": "Riziko podvodu: $SCORE$",
+    "placeholders": {
+      "score": {
+        "content": "$1"
+      }
+    }
+  },
+  "merchantReviewRisk": {
+    "message": "Riziko recenzí: $SCORE$",
+    "placeholders": {
+      "score": {
+        "content": "$1"
+      }
+    }
+  },
+  "merchantTrust": {
+    "message": "Důvěra $SCORE$/100",
+    "placeholders": {
+      "score": {
+        "content": "$1"
+      }
+    }
+  },
+  "noProductTitle": {
+    "message": "Stránka produktu nebyla rozpoznána"
+  },
+  "noProductBody": {
+    "message": "Otevřete stránku produktu v obchodech $STORES$ nebo $LAST_STORE$, nebo vložte odkaz či název zařízení do pole $BOX$ výše.",
+    "placeholders": {
+      "stores": {
+        "content": "$1"
+      },
+      "last_store": {
+        "content": "$2"
+      },
+      "box": {
+        "content": "$3"
+      }
+    }
+  },
+  "noProductStores": {
+    "message": "Shopee, Lazada, Tiki, TikTok Shop, CellphoneS, Thế Giới Di Động, FPT Shop, Hoàng Hà Mobile, Di Động Việt"
+  },
+  "noProductLastStore": {
+    "message": "Phong Vũ"
+  },
+  "variantPickerTitle": {
+    "message": "Zvolte prohlíženou variantu úložiště"
+  },
+  "keySpecsTitle": {
+    "message": "Shrnutí 10 skupin parametrů"
+  },
+  "specScreen": {
+    "message": "Displej"
+  },
+  "specChip": {
+    "message": "Čip"
+  },
+  "specCamera": {
+    "message": "Fotoaparát"
+  },
+  "specBattery": {
+    "message": "Baterie a nabíjení"
+  },
+  "merchantCardTitle": {
+    "message": "Důvěryhodnost prodejce"
+  },
+  "merchantTrustScore": {
+    "message": "Skóre důvěryhodnosti"
+  },
+  "merchantRiskPair": {
+    "message": "Riziko podvodu / recenzí"
+  },
+  "historyTitle": {
+    "message": "Vývoj historie cen"
+  },
+  "historyLow": {
+    "message": "Historické minimum"
+  },
+  "historyHigh": {
+    "message": "Historické maximum"
+  },
+  "categorySmartphones": {
+    "message": "Telefony"
+  },
+  "categoryTablets": {
+    "message": "Tablety"
+  },
+  "categoryLaptops": {
+    "message": "Notebooky"
+  },
+  "categorySmartwatches": {
+    "message": "Chytré hodinky"
+  },
+  "categoryEarbuds": {
+    "message": "Bezdrátová sluchátka"
+  },
+  "categoryFallback": {
+    "message": "Zařízení"
+  },
+  "focusCombined": {
+    "message": "Celkově"
+  },
+  "focusScreen": {
+    "message": "Displej"
+  },
+  "focusPerformance": {
+    "message": "Výkon"
+  },
+  "focusCamera": {
+    "message": "Fotoaparát / Zvuk"
+  },
+  "focusBattery": {
+    "message": "Baterie a nabíjení"
+  },
+  "focusValue": {
+    "message": "Hodnota"
+  },
+  "leaderboardCardTitle": {
+    "message": "Podrobný žebříček ($CATEGORY$)",
+    "placeholders": {
+      "category": {
+        "content": "$1"
+      }
+    }
+  },
+  "leaderboardRank": {
+    "message": "Pořadí v kategorii"
+  },
+  "leaderboardScore": {
+    "message": "Celkové skóre"
+  },
+  "radarPillDeal": {
+    "message": "Cenové dno napříč obchody (-$PCT$ %)",
+    "placeholders": {
+      "pct": {
+        "content": "$1"
+      }
+    }
+  },
+  "radarPillTrap": {
+    "message": "Upozornění na falešnou slevu (+$PCT$ %)",
+    "placeholders": {
+      "pct": {
+        "content": "$1"
+      }
+    }
+  },
+  "radarPillSpread": {
+    "message": "Rozdíl v 10 obchodech $PCT$ %",
+    "placeholders": {
+      "pct": {
+        "content": "$1"
+      }
+    }
+  },
+  "linkDetail": {
+    "message": "Zobrazit na Rate.vn"
+  },
+  "linkCompare": {
+    "message": "Porovnat parametry"
+  },
+  "linkLeaderboard": {
+    "message": "Žebříček"
+  },
+  "linkVersus": {
+    "message": "Souboj 1v1"
+  },
+  "linkInspect": {
+    "message": "Podrobná kontrola"
+  },
+  "linkWatch": {
+    "message": "Hlídat cenu"
+  },
+  "observedPrice": {
+    "message": "Prohlížená cena"
+  },
+  "marketMedian": {
+    "message": "Tržní medián"
+  }
+}

@@ -565,10 +565,32 @@ async function runTests() {
       panelHtml.indexOf('id="chk-crowd-optin"'),
       panelHtml.indexOf('</label>', panelHtml.indexOf('id="chk-crowd-optin"'))
     );
-    for (const label of Object.values(CROWD_INGEST_FIELD_LABELS)) {
-      assert.ok(optInLabel.includes(label), `opt-in label lacks "${label}"`);
+    assert.ok(optInLabel.includes('data-i18n="optInBody"'));
+    // Every locale's opt-in text names every field (DOS/Rate#1304).
+    for (const [locale, catalogue] of Object.entries(readLocaleCatalogues())) {
+      const optInText = catalogue.optInBody?.message ?? '';
+      for (const key of Object.values(CROWD_INGEST_FIELD_LABELS)) {
+        const label = catalogue[key]?.message ?? '';
+        assert.ok(label, `${locale} lacks ${key}`);
+        assert.ok(
+          optInText.includes(label),
+          `${locale} opt-in text lacks "${label}"`
+        );
+      }
+      assert.ok(!/Chỉ gửi URL/.test(optInText));
     }
-    assert.ok(!/Chỉ gửi URL/.test(optInLabel));
+    // The store listing names the extension as the vi catalogue does.
+    const viName = readLocaleCatalogues().vi.extName?.message;
+    assert.equal(
+      storeDoc
+        .slice(storeDoc.indexOf('### Extension Name'))
+        .split('\n')
+        .map((line) => line.trim())
+        .filter(Boolean)[1],
+      viName,
+      'CHROMEWEBSTORE.md name must match _locales/vi extName'
+    );
+    assert.equal((manifestJson as { name?: string }).name, '__MSG_extName__');
     console.log(
       '  ✅ [Manifest, store doc and opt-in disclosure agree (#1230, #1231, #1232)] Verified'
     );
@@ -595,6 +617,15 @@ async function runTests() {
       assert.ok(
         out.includes(marker),
         `dist/${rel} must contain its bundled dependencies ("${marker}")`
+      );
+    }
+    // The build ships the chrome.i18n catalogues (DOS/Rate#1304).
+    for (const locale of ['vi', 'en', 'cs']) {
+      assert.ok(
+        fs.existsSync(
+          path.resolve(__dirname, `../dist/_locales/${locale}/messages.json`)
+        ),
+        `dist/_locales/${locale}/messages.json`
       );
     }
   }
@@ -4028,7 +4059,18 @@ async function runTests() {
         assert.ok(!text.includes(english), `${name} still says "${english}"`);
       }
     }
-    assert.ok(panelSource.includes('Điểm tin cậy'));
+    const viCatalogue = fs.readFileSync(
+      path.resolve(__dirname, '_locales/vi/messages.json'),
+      'utf8'
+    );
+    for (const english of ['Rate.vn Intelligence', 'Trust Score', 'Opt-In']) {
+      assert.ok(!viCatalogue.includes(english), `vi still says "${english}"`);
+    }
+    assert.equal(
+      readLocaleCatalogues().vi.merchantTrustScore?.message,
+      'Điểm tin cậy'
+    );
+    assert.ok(panelSource.includes("t('merchantTrustScore')"));
     assert.ok(
       /<div id="panel-root" aria-live="polite">/.test(panelHtml),
       'results are announced'
@@ -4038,7 +4080,7 @@ async function runTests() {
       panelHtml.indexOf('/>', panelHtml.indexOf('id="inp-quick-query"'))
     );
     assert.ok(
-      /aria-label="[^"]+"/.test(quickInput),
+      /data-i18n-aria-label="[^"]+"/.test(quickInput),
       'quick lookup is labelled'
     );
     const pillLabel = buildPillAriaLabel(
@@ -4062,7 +4104,203 @@ async function runTests() {
     );
   }
 
+  // vi, en and cs through chrome.i18n (DOS/Rate#1304)
+  {
+    const catalogues = readLocaleCatalogues();
+    const viKeys = Object.keys(catalogues.vi).sort();
+    const placeholderShape = (entry: LocaleMessage) =>
+      JSON.stringify(
+        Object.entries(entry.placeholders ?? {})
+          .map(([name, p]) => [name, p.content])
+          .sort()
+      );
+    const usedPlaceholders = (message: string) =>
+      [...message.matchAll(/\$([A-Za-z0-9_@]+)\$/g)]
+        .map((m) => m[1]!.toLowerCase())
+        .sort();
+    for (const [locale, catalogue] of Object.entries(catalogues)) {
+      assert.deepEqual(
+        Object.keys(catalogue).sort(),
+        viKeys,
+        `${locale} has the same keys as vi`
+      );
+      for (const [key, entry] of Object.entries(catalogue)) {
+        assert.ok(entry.message.trim(), `${locale}.${key} is empty`);
+        assert.ok(
+          !/[\u2013\u2014]/.test(entry.message),
+          `${locale}.${key} has an en or em dash`
+        );
+        assert.equal(
+          placeholderShape(entry),
+          placeholderShape(catalogues.vi[key]!),
+          `${locale}.${key} placeholders match vi`
+        );
+        assert.deepEqual(
+          [...new Set(usedPlaceholders(entry.message))],
+          Object.keys(entry.placeholders ?? {}).sort(),
+          `${locale}.${key} uses each placeholder it defines`
+        );
+      }
+    }
+    // Chrome store limits for the localised manifest fields.
+    for (const [locale, catalogue] of Object.entries(catalogues)) {
+      assert.ok(catalogue.extName!.message.length <= 75, `${locale} extName`);
+    }
+    const manifestText = fs.readFileSync(
+      path.resolve(__dirname, '../manifest.json'),
+      'utf8'
+    );
+    const manifest = JSON.parse(manifestText) as {
+      default_locale?: string;
+      description?: string;
+      action?: { default_title?: string };
+    };
+    assert.equal(manifest.default_locale, 'vi');
+    assert.equal(manifest.description, '__MSG_extDescription__');
+    assert.equal(manifest.action?.default_title, '__MSG_actionTitle__');
+    for (const m of manifestText.matchAll(/__MSG_(\w+)__/g)) {
+      assert.ok(m[1]! in catalogues.vi, `manifest uses unknown ${m[1]}`);
+    }
+
+    // Every data-i18n* key in the side panel page exists.
+    const html = fs.readFileSync(
+      path.resolve(__dirname, 'sidepanel/sidepanel.html'),
+      'utf8'
+    );
+    const htmlKeys = [...html.matchAll(/data-i18n[\w-]*="([^"]+)"/g)].map(
+      (m) => m[1]!
+    );
+    assert.ok(htmlKeys.length >= 10);
+    for (const key of htmlKeys) {
+      assert.ok(key in catalogues.vi, `sidepanel.html uses unknown ${key}`);
+    }
+
+    // Every t('key') / tHtml('key') in src names a real message.
+    const sourceFiles = listExtensionSourceFiles();
+    for (const file of sourceFiles) {
+      if (file.endsWith('test-extension-pipeline.ts')) continue;
+      const text = fs.readFileSync(file, 'utf8');
+      for (const m of text.matchAll(/\btHtml?\(\s*'([A-Za-z0-9_]+)'/g)) {
+        assert.ok(m[1]! in catalogues.vi, `${file} uses unknown ${m[1]}`);
+      }
+    }
+
+    // No hard-coded Vietnamese user-visible text is left in src: comments
+    // and this test are skipped, and the allowlist holds only text that
+    // parses store pages and is never shown.
+    const VIETNAMESE_LETTER =
+      /[àáâãèéêìíòóôõùúýăđĩũơưÀÁÂÃÈÉÊÌÍÒÓÔÕÙÚÝĂĐĨŨƠƯẠ-ỹ]/;
+    const ALLOWED_VIETNAMESE: Array<[file: string, fragment: string]> = [
+      // Strips "| Thế Giới Di Động" style store suffixes from page titles.
+      ['extractors/ecommerce-detector.ts', 'Thế\\s*Giới\\s*Di\\s*Động'],
+    ];
+    const offenders: string[] = [];
+    for (const file of sourceFiles) {
+      const rel = path.relative(__dirname, file).replace(/\\/g, '/');
+      if (rel === 'test-extension-pipeline.ts') continue;
+      const lines = fs
+        .readFileSync(file, 'utf8')
+        .replace(/\/\*[\s\S]*?\*\//g, (block) => block.replace(/[^\n]/g, ''))
+        .replace(/<!--[\s\S]*?-->/g, (block) => block.replace(/[^\n]/g, ''))
+        .split('\n');
+      lines.forEach((raw, index) => {
+        const line = raw.replace(/(^|\s)\/\/.*$/, '');
+        if (!VIETNAMESE_LETTER.test(line)) return;
+        if (
+          ALLOWED_VIETNAMESE.some(
+            ([allowedFile, fragment]) =>
+              rel === allowedFile && line.includes(fragment)
+          )
+        ) {
+          return;
+        }
+        offenders.push(`${rel}:${index + 1}: ${line.trim()}`);
+      });
+    }
+    assert.deepEqual(offenders, [], 'Vietnamese text belongs in _locales');
+
+    // Without chrome.i18n the helper falls back to the vi catalogue, with
+    // its placeholders filled; with it, the browser's language wins.
+    const { t, tHtml, formatCatalogueEntry } = await import('./i18n.js');
+    assert.equal(t('offerOutOfStock'), 'Hết hàng');
+    assert.equal(
+      t('pillCheaperAt', [3, '1.000.000 ₫']),
+      'Rẻ hơn tại 3 nơi (-1.000.000 ₫)'
+    );
+    assert.equal(
+      tHtml('noProductBody', ['<b>A</b>', '<b>B</b>', '<b>C</b>']),
+      'Hãy mở một trang chi tiết sản phẩm trên <b>A</b> hoặc <b>B</b>, hoặc dán link/tên máy vào ô <b>C</b> phía trên.'
+    );
+    assert.equal(
+      formatCatalogueEntry(catalogues.en.reviewAuthenticValue!, ['85', '40']),
+      '85% (40 reviews)'
+    );
+    assert.equal(
+      formatCatalogueEntry(catalogues.cs.offerOutOfStock!),
+      'Není skladem'
+    );
+    const globalWithChrome = globalThis as { chrome?: unknown };
+    const previousChrome = globalWithChrome.chrome;
+    globalWithChrome.chrome = {
+      i18n: {
+        getMessage: (name: string, subs?: string[]) =>
+          name === 'offerOutOfStock'
+            ? 'Out of stock'
+            : name === 'pillMarketLow'
+              ? `Market low: ${subs?.[0]}`
+              : '',
+      },
+    };
+    try {
+      assert.equal(t('offerOutOfStock'), 'Out of stock');
+      assert.equal(t('pillMarketLow', ['5 ₫']), 'Market low: 5 ₫');
+      // An unknown message in the browser still shows the vi text.
+      assert.equal(t('offerDiscontinued'), 'Ngừng bán');
+      assert.equal(
+        tHtml('offerOutOfStock', []),
+        'Out of stock',
+        'tHtml goes through chrome.i18n too'
+      );
+    } finally {
+      globalWithChrome.chrome = previousChrome;
+    }
+    console.log('  ✅ [vi, en and cs through chrome.i18n (#1304)] Verified');
+  }
+
   console.log('🎉 All Rate Browser Extension MV3 v2 tests passed!');
+}
+
+interface LocaleMessage {
+  message: string;
+  placeholders?: Record<string, { content: string }>;
+}
+
+function readLocaleCatalogues(): Record<
+  'vi' | 'en' | 'cs',
+  Record<string, LocaleMessage>
+> {
+  const read = (locale: string) =>
+    JSON.parse(
+      fs.readFileSync(
+        path.resolve(__dirname, `_locales/${locale}/messages.json`),
+        'utf8'
+      )
+    ) as Record<string, LocaleMessage>;
+  return { vi: read('vi'), en: read('en'), cs: read('cs') };
+}
+
+/** The extension's own .ts and .html sources under src. */
+function listExtensionSourceFiles(): string[] {
+  const files: string[] = [];
+  const walk = (dir: string) => {
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) walk(full);
+      else if (/\.(ts|html)$/.test(entry.name)) files.push(full);
+    }
+  };
+  walk(__dirname);
+  return files;
 }
 
 runTests().catch((err) => {

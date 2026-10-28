@@ -1,0 +1,515 @@
+{
+  "extName": {
+    "message": "Rate.vn - So Sánh Giá, Lịch Sử Giá & Lọc Đánh Giá Ảo AI"
+  },
+  "extDescription": {
+    "message": "Kiểm tra lịch sử giá 90 ngày, phát hiện giảm giá ảo, tìm nơi bán rẻ hơn và lọc đánh giá seeding bằng AI trên 10 sàn TMĐT & chuỗi bán lẻ Việt Nam."
+  },
+  "actionTitle": {
+    "message": "Mở bảng phân tích giá & độ tin cậy Rate.vn"
+  },
+  "langCode": {
+    "message": "vi"
+  },
+  "panelTitle": {
+    "message": "Rate.vn - Trợ Lý Lịch Sử Giá & Chống Giảm Giá Ảo"
+  },
+  "refresh": {
+    "message": "Làm mới"
+  },
+  "quickLookupTitle": {
+    "message": "Tra Cứu Nhanh Link TMĐT Hoặc Tên Máy"
+  },
+  "quickLookupAria": {
+    "message": "Link sản phẩm hoặc tên máy cần tra cứu"
+  },
+  "quickLookupPlaceholder": {
+    "message": "Dán link Shopee/TikTok/Lazada hoặc gõ iPhone 16 Pro Max..."
+  },
+  "quickLookupSubmit": {
+    "message": "Kiểm tra"
+  },
+  "quickLookupBoxName": {
+    "message": "Tra cứu nhanh"
+  },
+  "quickLookupLoading": {
+    "message": "Đang kiểm tra nhanh dữ liệu cho \"$QUERY$\"...",
+    "placeholders": {
+      "query": {
+        "content": "$1"
+      }
+    }
+  },
+  "quickQueryEmpty": {
+    "message": "Vui lòng nhập tên sản phẩm hoặc dán link TMĐT."
+  },
+  "panelLoading": {
+    "message": "Đang đồng bộ thông tin sản phẩm từ trang đang mở..."
+  },
+  "privacyTitle": {
+    "message": "Quyền Riêng Tư & Cấu Hình Kết Nối"
+  },
+  "optInTitle": {
+    "message": "Đóng góp phát hiện sản phẩm mới (chỉ khi bạn bật):"
+  },
+  "optInBody": {
+    "message": "Khi bật, mỗi tin bán bạn mở còn được gửi vào hàng đợi kiểm duyệt độc lập của Rate.vn với: sàn, mã sản phẩm, mã gian hàng, URL đã cắt tham số theo dõi, tên sản phẩm, phiên bản đang chọn, giá bán, giá gốc, số sao và số lượt đánh giá. Không kèm tài khoản hay thông tin cá nhân."
+  },
+  "crowdFieldPlatform": {
+    "message": "sàn"
+  },
+  "crowdFieldExternalItemId": {
+    "message": "mã sản phẩm"
+  },
+  "crowdFieldExternalShopId": {
+    "message": "mã gian hàng"
+  },
+  "crowdFieldUrl": {
+    "message": "URL đã cắt tham số theo dõi"
+  },
+  "crowdFieldTitle": {
+    "message": "tên sản phẩm"
+  },
+  "crowdFieldSelectedVariant": {
+    "message": "phiên bản đang chọn"
+  },
+  "crowdFieldPrice": {
+    "message": "giá bán"
+  },
+  "crowdFieldOriginalPrice": {
+    "message": "giá gốc"
+  },
+  "crowdFieldRatingStar": {
+    "message": "số sao"
+  },
+  "crowdFieldRatingCount": {
+    "message": "số lượt đánh giá"
+  },
+  "apiBaseLabel": {
+    "message": "Địa chỉ máy chủ Rate.vn:"
+  },
+  "notAvailable": {
+    "message": "Chưa có"
+  },
+  "priceUpdating": {
+    "message": "Đang cập nhật"
+  },
+  "offerOutOfStock": {
+    "message": "Hết hàng"
+  },
+  "offerDiscontinued": {
+    "message": "Ngừng bán"
+  },
+  "offerImplausiblyLow": {
+    "message": "Giá thấp bất thường"
+  },
+  "offerCheapest": {
+    "message": "Rẻ nhất"
+  },
+  "officialStore": {
+    "message": "Chính hãng"
+  },
+  "offerCombinedRisk": {
+    "message": "Rủi ro tổng hợp: $SCORE$/100",
+    "placeholders": {
+      "score": {
+        "content": "$1"
+      }
+    }
+  },
+  "offerLastSeenPrice": {
+    "message": "Giá ghi nhận lần cuối, không phải giá đang bán"
+  },
+  "offersCardTitle": {
+    "message": "So Sánh Giá Các Gian Hàng ($COUNT$)",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
+  },
+  "reviewCardTitle": {
+    "message": "Chất lượng đánh giá (đã lọc đánh giá ảo)"
+  },
+  "reviewUserScore": {
+    "message": "Điểm người dùng (đã lọc)"
+  },
+  "reviewAuthenticShare": {
+    "message": "Tỷ Lệ Đánh Giá Thật"
+  },
+  "reviewAuthenticValue": {
+    "message": "$PCT$% ($COUNT$ đánh giá)",
+    "placeholders": {
+      "pct": {
+        "content": "$1"
+      },
+      "count": {
+        "content": "$2"
+      }
+    }
+  },
+  "reviewNone": {
+    "message": "Chưa có đánh giá"
+  },
+  "notFoundTitle": {
+    "message": "Chưa có sản phẩm này trên Rate.vn"
+  },
+  "notFoundAccessory": {
+    "message": "Đây có vẻ là phụ kiện hoặc linh kiện. Rate.vn chưa so sánh giá cho loại hàng này."
+  },
+  "notFoundNoData": {
+    "message": "Rate.vn chưa có dữ liệu giá và đánh giá cho sản phẩm này."
+  },
+  "notFoundSearch": {
+    "message": "Tìm trên Rate.vn"
+  },
+  "lookupErrorTitle": {
+    "message": "Chưa tra cứu được"
+  },
+  "lookupErrorRateLimited": {
+    "message": "Bạn tra cứu hơi nhanh, thử lại sau ít phút."
+  },
+  "lookupErrorServer": {
+    "message": "Rate.vn đang gặp sự cố, thử lại sau."
+  },
+  "lookupErrorNetwork": {
+    "message": "Không kết nối được Rate.vn. Kiểm tra mạng rồi thử lại."
+  },
+  "lookupErrorOther": {
+    "message": "Không tra cứu được sản phẩm này lúc này."
+  },
+  "retry": {
+    "message": "Thử lại"
+  },
+  "pillCheaperAt": {
+    "message": "Rẻ hơn tại $COUNT$ nơi (-$AMOUNT$)",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      },
+      "amount": {
+        "content": "$2"
+      }
+    }
+  },
+  "pillMarketLow": {
+    "message": "Đáy thị trường: $PRICE$",
+    "placeholders": {
+      "price": {
+        "content": "$1"
+      }
+    }
+  },
+  "pillPrompt": {
+    "message": "Bấm để xem lịch sử giá & lọc review ảo"
+  },
+  "pillRadarDeal": {
+    "message": "Đáy đa sàn (-$PCT$%)",
+    "placeholders": {
+      "pct": {
+        "content": "$1"
+      }
+    }
+  },
+  "pillRadarTrap": {
+    "message": "Bẫy Sale (+$PCT$%)",
+    "placeholders": {
+      "pct": {
+        "content": "$1"
+      }
+    }
+  },
+  "pillRadarSpread": {
+    "message": "Lệch $PCT$%",
+    "placeholders": {
+      "pct": {
+        "content": "$1"
+      }
+    }
+  },
+  "pillAuthentic": {
+    "message": "($PCT$% thật)",
+    "placeholders": {
+      "pct": {
+        "content": "$1"
+      }
+    }
+  },
+  "pillDetails": {
+    "message": "Chi tiết"
+  },
+  "pillOpenPanel": {
+    "message": "Mở bảng phân tích giá"
+  },
+  "badgeFakeSale": {
+    "message": "ẢO!"
+  },
+  "badgeGenuineDeal": {
+    "message": "TỐT"
+  },
+  "badgeAboveMarket": {
+    "message": "CAO"
+  },
+  "badgeFairPrice": {
+    "message": "OK"
+  },
+  "historyAccumulating": {
+    "message": "Đang tích lũy thêm các mốc thời gian lịch sử giá."
+  },
+  "radarDealsTitle": {
+    "message": "Giá thấp nhất giữa 10 sàn"
+  },
+  "radarSavings": {
+    "message": "Tiết kiệm $AMOUNT$ (-$PCT$%)",
+    "placeholders": {
+      "amount": {
+        "content": "$1"
+      },
+      "pct": {
+        "content": "$2"
+      }
+    }
+  },
+  "radarSpreadTitle": {
+    "message": "Chênh Lệch Giá Đa Sàn Lớn Nhất"
+  },
+  "radarSpreadVersus": {
+    "message": "$CHEAPEST$ ($MIN$) so với $PRICIEST$ ($MAX$)",
+    "placeholders": {
+      "cheapest": {
+        "content": "$1"
+      },
+      "min": {
+        "content": "$2"
+      },
+      "priciest": {
+        "content": "$3"
+      },
+      "max": {
+        "content": "$4"
+      }
+    }
+  },
+  "radarSpreadAmount": {
+    "message": "Lệch $AMOUNT$",
+    "placeholders": {
+      "amount": {
+        "content": "$1"
+      }
+    }
+  },
+  "radarTrapsTitle": {
+    "message": "Cảnh Báo Giảm Giá Ảo"
+  },
+  "radarTrapMarkup": {
+    "message": "Giá gốc kê khống +$PCT$% ($PRICE$)",
+    "placeholders": {
+      "pct": {
+        "content": "$1"
+      },
+      "price": {
+        "content": "$2"
+      }
+    }
+  },
+  "reviewRiskNoData": {
+    "message": "chưa đủ dữ liệu"
+  },
+  "merchantDirTitle": {
+    "message": "Độ tin cậy gian hàng trên 10 sàn ($COUNT$)",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
+  },
+  "merchantProductCount": {
+    "message": "$COUNT$ SP",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
+  },
+  "merchantScamRisk": {
+    "message": "Rủi ro lừa đảo: $SCORE$",
+    "placeholders": {
+      "score": {
+        "content": "$1"
+      }
+    }
+  },
+  "merchantReviewRisk": {
+    "message": "Rủi ro đánh giá: $SCORE$",
+    "placeholders": {
+      "score": {
+        "content": "$1"
+      }
+    }
+  },
+  "merchantTrust": {
+    "message": "Tin cậy $SCORE$/100",
+    "placeholders": {
+      "score": {
+        "content": "$1"
+      }
+    }
+  },
+  "noProductTitle": {
+    "message": "Chưa nhận diện trang sản phẩm"
+  },
+  "noProductBody": {
+    "message": "Hãy mở một trang chi tiết sản phẩm trên $STORES$ hoặc $LAST_STORE$, hoặc dán link/tên máy vào ô $BOX$ phía trên.",
+    "placeholders": {
+      "stores": {
+        "content": "$1"
+      },
+      "last_store": {
+        "content": "$2"
+      },
+      "box": {
+        "content": "$3"
+      }
+    }
+  },
+  "noProductStores": {
+    "message": "Shopee, Lazada, Tiki, TikTok Shop, CellphoneS, Thế Giới Di Động, FPT Shop, Hoàng Hà Mobile, Di Động Việt"
+  },
+  "noProductLastStore": {
+    "message": "Phong Vũ"
+  },
+  "variantPickerTitle": {
+    "message": "Chọn Phiên Bản Bộ Nhớ Đang Xem"
+  },
+  "keySpecsTitle": {
+    "message": "Tóm Tắt 10 Nhóm Thông Số Chuẩn"
+  },
+  "specScreen": {
+    "message": "Màn hình"
+  },
+  "specChip": {
+    "message": "Vi xử lý"
+  },
+  "specCamera": {
+    "message": "Camera"
+  },
+  "specBattery": {
+    "message": "Pin & Sạc"
+  },
+  "merchantCardTitle": {
+    "message": "Độ Tin Cậy Gian Hàng"
+  },
+  "merchantTrustScore": {
+    "message": "Điểm tin cậy"
+  },
+  "merchantRiskPair": {
+    "message": "Rủi ro lừa đảo / đánh giá"
+  },
+  "historyTitle": {
+    "message": "Biến Động Lịch Sử Giá"
+  },
+  "historyLow": {
+    "message": "Đáy Lịch Sử"
+  },
+  "historyHigh": {
+    "message": "Đỉnh Lịch Sử"
+  },
+  "categorySmartphones": {
+    "message": "Điện thoại"
+  },
+  "categoryTablets": {
+    "message": "Máy tính bảng"
+  },
+  "categoryLaptops": {
+    "message": "Laptop"
+  },
+  "categorySmartwatches": {
+    "message": "Đồng hồ thông minh"
+  },
+  "categoryEarbuds": {
+    "message": "Tai nghe không dây"
+  },
+  "categoryFallback": {
+    "message": "Thiết bị"
+  },
+  "focusCombined": {
+    "message": "Tổng hợp"
+  },
+  "focusScreen": {
+    "message": "Màn hình"
+  },
+  "focusPerformance": {
+    "message": "Hiệu năng"
+  },
+  "focusCamera": {
+    "message": "Camera / Âm thanh"
+  },
+  "focusBattery": {
+    "message": "Pin & Sạc"
+  },
+  "focusValue": {
+    "message": "Đáng tiền"
+  },
+  "leaderboardCardTitle": {
+    "message": "Xếp Hạng Chuyên Sâu ($CATEGORY$)",
+    "placeholders": {
+      "category": {
+        "content": "$1"
+      }
+    }
+  },
+  "leaderboardRank": {
+    "message": "Hạng Danh Mục"
+  },
+  "leaderboardScore": {
+    "message": "Điểm Tổng Hợp"
+  },
+  "radarPillDeal": {
+    "message": "Đáy giá đa sàn (-$PCT$%)",
+    "placeholders": {
+      "pct": {
+        "content": "$1"
+      }
+    }
+  },
+  "radarPillTrap": {
+    "message": "Cảnh báo giảm giá ảo (+$PCT$%)",
+    "placeholders": {
+      "pct": {
+        "content": "$1"
+      }
+    }
+  },
+  "radarPillSpread": {
+    "message": "Lệch 10 sàn $PCT$%",
+    "placeholders": {
+      "pct": {
+        "content": "$1"
+      }
+    }
+  },
+  "linkDetail": {
+    "message": "Xem Trên Rate.vn"
+  },
+  "linkCompare": {
+    "message": "So Sánh Cấu Hình"
+  },
+  "linkLeaderboard": {
+    "message": "Bảng Xếp Hạng"
+  },
+  "linkVersus": {
+    "message": "Đối Đầu 1v1"
+  },
+  "linkInspect": {
+    "message": "Kiểm tra chi tiết"
+  },
+  "linkWatch": {
+    "message": "Canh Giá Thật"
+  },
+  "observedPrice": {
+    "message": "Giá Đang Xem"
+  },
+  "marketMedian": {
+    "message": "Trung Vị Thị Trường"
+  }
+}

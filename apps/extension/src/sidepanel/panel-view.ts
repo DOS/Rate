@@ -15,15 +15,9 @@ import {
   normalizeFiveStarRating,
   resolveSafeApiRelativeUrl,
 } from '../security-guards.js';
+import { escapeHtml, t, type MessageKey } from '../i18n.js';
 
-export function escapeHtml(raw: string): string {
-  return raw
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
-}
+export { escapeHtml };
 
 type PanelOffer = Pick<
   ExtensionOfferItem,
@@ -81,13 +75,28 @@ export function cheapestBuyableOfferId(offers: PanelOffer[]): string | null {
   return buyable ? buyable.id : null;
 }
 
+interface OfferMark {
+  text: string;
+  warn: boolean;
+}
+
+function offerMarkItems(offer: PanelOffer): OfferMark[] {
+  const marks: OfferMark[] = [];
+  if (offer.availability === 'out_of_stock') {
+    marks.push({ text: t('offerOutOfStock'), warn: false });
+  }
+  if (offer.availability === 'discontinued') {
+    marks.push({ text: t('offerDiscontinued'), warn: false });
+  }
+  if (offer.implausiblyLow) {
+    marks.push({ text: t('offerImplausiblyLow'), warn: true });
+  }
+  return marks;
+}
+
 /** The marks the product page shows on a row (DOS/Rate#1297). */
 export function offerMarks(offer: PanelOffer): string[] {
-  const marks: string[] = [];
-  if (offer.availability === 'out_of_stock') marks.push('Hết hàng');
-  if (offer.availability === 'discontinued') marks.push('Ngừng bán');
-  if (offer.implausiblyLow) marks.push('Giá thấp bất thường');
-  return marks;
+  return offerMarkItems(offer).map((m) => m.text);
 }
 
 /** A star rating, or null when unknown or zero (DOS/Rate#1301). */
@@ -98,40 +107,47 @@ export function ratingStarText(raw: unknown): string | null {
     : `★ ${formatSafeNumber(rating, { min: 0, max: 5, decimals: 1 })}`;
 }
 
-const OFFICIAL_BADGE_HTML =
-  '<span style="color:#34d399;font-size: 13px;">Chính hãng</span>';
+export function officialBadgeHtml(): string {
+  return `<span style="color:#34d399;font-size: 13px;">${escapeHtml(t('officialStore'))}</span>`;
+}
 
 function renderOfferRowHtml(
   off: ExtensionOfferItem,
   cheapest: boolean
 ): string {
-  const marks = offerMarks(off);
+  const marks = offerMarkItems(off);
   const muted = !isOfferBuyable(off);
   const star = ratingStarText(off.rating_star);
   const meta = [
     escapeHtml(String(off.platform ?? '').toUpperCase()),
     star,
     // The combined score, as the product page labels it (DOS/Rate#1280).
-    `Rủi ro tổng hợp: ${formatSafeNumber(off.merchant.risk_score, { min: 0, max: 100 })}/100`,
+    escapeHtml(
+      t('offerCombinedRisk', [
+        formatSafeNumber(off.merchant.risk_score, { min: 0, max: 100 }),
+      ])
+    ),
   ].filter(Boolean);
   const marksHtml = [
     ...(cheapest
-      ? ['<span class="offer-mark offer-mark-best">Rẻ nhất</span>']
+      ? [
+          `<span class="offer-mark offer-mark-best">${escapeHtml(t('offerCheapest'))}</span>`,
+        ]
       : []),
     ...marks.map(
       (m) =>
-        `<span class="offer-mark ${m === 'Giá thấp bất thường' ? 'offer-mark-warn' : 'offer-mark-muted'}">${escapeHtml(m)}</span>`
+        `<span class="offer-mark ${m.warn ? 'offer-mark-warn' : 'offer-mark-muted'}">${escapeHtml(m.text)}</span>`
     ),
   ].join(' ');
   const priceTitle = isOfferSoldOut(off)
-    ? ' title="Giá ghi nhận lần cuối, không phải giá đang bán"'
+    ? ` title="${escapeHtml(t('offerLastSeenPrice'))}"`
     : '';
   return `
             <div class="offer-item${muted ? ' offer-item-muted' : ''}">
               <div>
                 <div class="offer-shop">
                   ${escapeHtml(off.merchant.name)}
-                  ${off.merchant.is_official ? OFFICIAL_BADGE_HTML : ''}
+                  ${off.merchant.is_official ? officialBadgeHtml() : ''}
                   ${marksHtml}
                 </div>
                 <div class="offer-meta">
@@ -152,7 +168,7 @@ export function renderOffersCardHtml(offers: ExtensionOfferItem[]): string {
   const cheapestId = cheapestBuyableOfferId(ordered);
   return `
       <div class="card">
-        <div class="card-title">So Sánh Giá Các Gian Hàng (${formatSafeNumber(offers.length, { min: 0 })})</div>
+        <div class="card-title">${escapeHtml(t('offersCardTitle', [formatSafeNumber(offers.length, { min: 0 })]))}</div>
         ${ordered
           .slice(0, 5)
           .map((off) => renderOfferRowHtml(off, off.id === cheapestId))
@@ -180,18 +196,18 @@ export function renderReviewCardHtml(
   const hasReviews = Number.isFinite(analysed) && analysed > 0;
   return `
       <div class="card">
-        <div class="card-title">Chất lượng đánh giá (đã lọc đánh giá ảo)</div>
+        <div class="card-title">${escapeHtml(t('reviewCardTitle'))}</div>
         <div class="stats-grid">
           <div class="stat-box">
-            <div class="stat-label">Điểm người dùng (đã lọc)</div>
-            <div class="stat-val"${star ? ' style="color: #fbbf24;"' : ''}>${star ? `${star} / 5` : 'Chưa có'}</div>
+            <div class="stat-label">${escapeHtml(t('reviewUserScore'))}</div>
+            <div class="stat-val"${star ? ' style="color: #fbbf24;"' : ''}>${star ? `${star} / 5` : escapeHtml(t('notAvailable'))}</div>
           </div>
           <div class="stat-box">
-            <div class="stat-label">Tỷ Lệ Đánh Giá Thật</div>
+            <div class="stat-label">${escapeHtml(t('reviewAuthenticShare'))}</div>
             ${
               hasReviews
-                ? `<div class="stat-val" style="color: #34d399;">${formatSafeNumber(reviews.authentic_pct, { min: 0, max: 100 })}% (${formatSafeNumber(analysed, { min: 0 })} đánh giá)</div>`
-                : '<div class="stat-val">Chưa có đánh giá</div>'
+                ? `<div class="stat-val" style="color: #34d399;">${escapeHtml(t('reviewAuthenticValue', [formatSafeNumber(reviews.authentic_pct, { min: 0, max: 100 }), formatSafeNumber(analysed, { min: 0 })]))}</div>`
+                : `<div class="stat-val">${escapeHtml(t('reviewNone'))}</div>`
             }
           </div>
         </div>
@@ -236,17 +252,13 @@ export function renderNotFoundHtml(
   );
   return `
       <div class="card">
-        <div class="card-title">Chưa có sản phẩm này trên Rate.vn</div>
+        <div class="card-title">${escapeHtml(t('notFoundTitle'))}</div>
         ${query ? `<div class="product-name">${escapeHtml(query)}</div>` : ''}
         <p style="color: #9ca3af;">
-          ${
-            accessory
-              ? 'Đây có vẻ là phụ kiện hoặc linh kiện. Rate.vn chưa so sánh giá cho loại hàng này.'
-              : 'Rate.vn chưa có dữ liệu giá và đánh giá cho sản phẩm này.'
-          }
+          ${escapeHtml(t(accessory ? 'notFoundAccessory' : 'notFoundNoData'))}
         </p>
         <div class="btn-row">
-          <a class="btn-secondary" href="${searchUrl}" target="_blank" rel="noopener noreferrer">Tìm trên Rate.vn</a>
+          <a class="btn-secondary" href="${searchUrl}" target="_blank" rel="noopener noreferrer">${escapeHtml(t('notFoundSearch'))}</a>
         </div>
       </div>
     `;
@@ -266,12 +278,12 @@ export function classifyLookupFailure(
   return 'other';
 }
 
-const LOOKUP_FAILURE_TEXT: Record<LookupFailureKind, string> = {
-  rate_limited: 'Bạn tra cứu hơi nhanh, thử lại sau ít phút.',
-  server: 'Rate.vn đang gặp sự cố, thử lại sau.',
-  network: 'Không kết nối được Rate.vn. Kiểm tra mạng rồi thử lại.',
-  other: 'Không tra cứu được sản phẩm này lúc này.',
-};
+const LOOKUP_FAILURE_MESSAGE = {
+  rate_limited: 'lookupErrorRateLimited',
+  server: 'lookupErrorServer',
+  network: 'lookupErrorNetwork',
+  other: 'lookupErrorOther',
+} as const satisfies Record<LookupFailureKind, MessageKey>;
 
 /** An error card with a retry button (`data-action="retry"`), #1300. */
 export function renderLookupErrorHtml(
@@ -281,11 +293,11 @@ export function renderLookupErrorHtml(
   const title = String(productTitle ?? '').trim();
   return `
       <div class="card" role="alert">
-        <div class="card-title">Chưa tra cứu được</div>
+        <div class="card-title">${escapeHtml(t('lookupErrorTitle'))}</div>
         ${title ? `<div class="product-name">${escapeHtml(title)}</div>` : ''}
-        <p style="color: #9ca3af;">${escapeHtml(LOOKUP_FAILURE_TEXT[kind])}</p>
+        <p style="color: #9ca3af;">${escapeHtml(t(LOOKUP_FAILURE_MESSAGE[kind]))}</p>
         <div class="btn-row">
-          <button type="button" class="btn-secondary" data-action="retry">Thử lại</button>
+          <button type="button" class="btn-secondary" data-action="retry">${escapeHtml(t('retry'))}</button>
         </div>
       </div>
     `;
@@ -299,7 +311,7 @@ export interface PanelActionLink {
 
 /**
  * The product card's links, two per row, each once: no rival means no
- * versus link, not a second "Kiểm tra chi tiết" (DOS/Rate#1299). `href`
+ * versus link, not a second inspect link (DOS/Rate#1299). `href`
  * values are already escaped by resolveSafeApiRelativeUrl.
  */
 export function renderActionRowsHtml(links: PanelActionLink[]): string {
