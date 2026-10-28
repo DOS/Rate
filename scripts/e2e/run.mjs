@@ -9,8 +9,11 @@
 //   3. `next build` (unless --skip-build) and `next start` against that proxy.
 //   4. Playwright specs in apps/web/e2e.
 //
-// Usage: node scripts/e2e/run.mjs [--skip-build] [--serve] [-- <playwright args>]
+// Usage: node scripts/e2e/run.mjs [--skip-build] [--serve] [--item-model] [-- <playwright args>]
 //   --serve keeps the stack up for manual debugging instead of running the specs.
+//   --item-model (DOS/Rate#1159) also applies the DOS-Me M0 + M1+M2 proposals and
+//     apps/web/e2e/item-model/seed.sql, serves the app with RATE_ITEM_MODEL=nullable_variant
+//     and runs only the specs in apps/web/e2e/item-model.
 // Needs Docker and a Playwright Chromium (`pnpm exec playwright install chromium`).
 
 import { spawn, spawnSync } from 'node:child_process';
@@ -26,6 +29,7 @@ import { pruneStaleStacks } from './stale-stacks.mjs';
 const args = process.argv.slice(2);
 const skipBuild = args.includes('--skip-build');
 const serveOnly = args.includes('--serve');
+const itemModel = args.includes('--item-model');
 const playwrightArgs = args.includes('--')
   ? args.slice(args.indexOf('--') + 1)
   : [];
@@ -335,6 +339,16 @@ try {
   db.sql(
     readFileSync(path.join(repoRoot, 'apps', 'web', 'e2e', 'seed.sql'), 'utf8')
   );
+  if (itemModel) {
+    // The proposals in the order JOY applies them, then the Item fixture.
+    for (const file of [
+      ['Docs', 'Proposals', '2026-10-29-dos-me-m0-seed-rekey.sql'],
+      ['Docs', 'Proposals', '2026-10-28-dos-me-m1-m2-items.sql'],
+      ['apps', 'web', 'e2e', 'item-model', 'seed.sql'],
+    ]) {
+      db.sql(readFileSync(path.join(repoRoot, ...file), 'utf8'));
+    }
+  }
 
   docker(
     [
@@ -393,6 +407,8 @@ try {
     // only fills keys that are absent): default output, local public URL.
     NEXT_OUTPUT: '',
     APP_PUBLIC_URL: 'http://localhost',
+    // Read per request by the web app; set for the build too so both agree.
+    RATE_ITEM_MODEL: itemModel ? 'nullable_variant' : 'off',
   };
   if (!skipBuild) {
     // --ui=stream: turbo's TUI would take over the terminal from a detached child.
@@ -445,7 +461,9 @@ try {
       'playwright',
       'test',
       '-c',
-      'apps/web/e2e/playwright.config.ts',
+      itemModel
+        ? 'apps/web/e2e/item-model/playwright.config.ts'
+        : 'apps/web/e2e/playwright.config.ts',
       ...playwrightArgs,
     ],
     {

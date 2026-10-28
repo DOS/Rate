@@ -4,6 +4,8 @@ import { defineConfig, devices } from '@playwright/test';
 // a throwaway PostgREST seeded from apps/web/e2e/seed.sql.
 export default defineConfig({
   testDir: '.',
+  // RATE_ITEM_MODEL specs run only in `run.mjs --item-model` (DOS/Rate#1159).
+  testIgnore: ['item-model/**'],
   outputDir: '../../../test-results/e2e',
   fullyParallel: true,
   forbidOnly: !!process.env.CI,

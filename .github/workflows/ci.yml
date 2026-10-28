@@ -153,3 +153,43 @@ jobs:
             playwright-report/
             test-results/e2e/
           retention-days: 7
+
+  # RATE_ITEM_MODEL=nullable_variant on the DOS-Me M0 + M1+M2 proposals (DOS/Rate#1159):
+  # the Item routes, redirects and canonicals. The default E2E job above stays flag-off.
+  e2e-item-model:
+    name: E2E (Playwright, Item model)
+    timeout-minutes: 20
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        with:
+          version: 10.34.5
+
+      - name: Setup Node.js environment
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Playwright Chromium
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Run Item-model browser E2E against a throwaway database
+        run: node scripts/e2e/run.mjs --item-model
+
+      - name: Upload Playwright report
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: playwright-report-item-model
+          path: |
+            playwright-report-item-model/
+            test-results/e2e-item-model/
+          retention-days: 7

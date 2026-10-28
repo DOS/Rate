@@ -124,6 +124,7 @@ Rate.code-workspace
 
 # Playwright HTML report
 playwright-report/
+playwright-report-item-model/
 
 # Secrets and local data that must never be committed (DOS/Rate#153):
 # Windows Explorer copies (English "x - Copy.env", Vietnamese "x - Bản sao"),
@@ -135,6 +136,7 @@ playwright-report/
 !supabase/migrations/*.sql
 # Reviewed E2E fixture: synthetic catalog rows only, no credentials.
 !apps/web/e2e/seed.sql
+!apps/web/e2e/item-model/seed.sql
 # Reviewed DOS-Me migration proposal (DOS/Rate#1150): DDL only, no data, no credentials.
 !Docs/Proposals/2026-10-28-dos-me-m1-m2-items.sql
 !Docs/Proposals/2026-10-28-dos-me-m1-m2-items-rollback.sql
