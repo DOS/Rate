@@ -658,7 +658,9 @@
     "quickToggleBtnWatched": "Đang canh giá",
     "quickToggleBtnUnwatched": "Canh giá",
     "quickToggleShortUnwatched": "Canh giá",
-    "quickToggleShortWatched": "Đang canh"
+    "quickToggleShortWatched": "Đang canh",
+    "sizeRequiredTitle": "Chọn dung lượng để theo dõi giá: cảnh báo giá đặt theo từng dung lượng.",
+    "sizeRequiredCta": "Chọn dung lượng"
   },
   "deals": {
     "metaTitle": "Deal công nghệ đã kiểm tra trên 10 sàn | Rate.vn",

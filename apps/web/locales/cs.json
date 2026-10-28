@@ -658,7 +658,9 @@
     "quickToggleBtnWatched": "Hlídáno",
     "quickToggleBtnUnwatched": "Hlídat cenu",
     "quickToggleShortUnwatched": "Hlídat cenu",
-    "quickToggleShortWatched": "Hlídáno"
+    "quickToggleShortWatched": "Hlídáno",
+    "sizeRequiredTitle": "Vyberte velikost úložiště: cenová upozornění se nastavují pro každou zvlášť.",
+    "sizeRequiredCta": "Vybrat velikost"
   },
   "deals": {
     "metaTitle": "Výhodné nabídky ověřené v 10 obchodech | Rate.vn",

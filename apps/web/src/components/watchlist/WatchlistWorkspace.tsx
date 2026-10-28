@@ -38,6 +38,12 @@ import {
   jsonWriteHeaders,
 } from '@/lib/auth/access-token';
 import { productImageUrl } from '@/lib/rate-domain-core';
+import { formatStorageLabel } from '@/lib/category-filters';
+import {
+  isSizeRequiredAnswer,
+  watchlistSizeChoices,
+  type WatchlistSizeChoice,
+} from '@/lib/watchlist-sizes';
 
 interface WatchlistWorkspaceProps {
   catalogProducts: MasterProduct[];
@@ -62,6 +68,8 @@ interface LiveWatchlistDeal {
     is_official_mall: boolean;
   } | null;
   radar_signal?: RadarSignal;
+  /** The entry names an Item with several sizes (DOS/Rate#1278). */
+  size_required?: true;
 }
 
 const PLATFORM_DISPLAY_LABELS: Record<string, string> = {
@@ -222,6 +230,41 @@ export default function WatchlistWorkspace({
     // Runs once per page load.
   }, []);
 
+  // An entry naming a whole Item needs a size: alerts stay per size
+  // (DOS/Rate#1278). The sizes come from the product API's `variants`.
+  const [sizePicker, setSizePicker] = useState<{
+    slug: string;
+    choices: WatchlistSizeChoice[];
+  } | null>(null);
+
+  const openSizePicker = (slug: string) => {
+    fetch(`/api/v1/rate/products/${encodeURIComponent(slug)}`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((json) => {
+        const choices = watchlistSizeChoices(
+          json?.ok ? json.data?.variants : null,
+          formatStorageLabel
+        );
+        setSizePicker(choices.length > 0 ? { slug, choices } : null);
+      })
+      .catch(() => setSizePicker(null));
+  };
+
+  const chooseSize = (item: WatchlistItem, choice: WatchlistSizeChoice) => {
+    removeWatchlistItem(item.slug);
+    upsertWatchlistItem({
+      ...item,
+      slug: choice.slug,
+      name: choice.name,
+      priceWhenAdded: choice.minPrice || item.priceWhenAdded,
+      targetPrice:
+        choice.minPrice > 0
+          ? computeWatchlistTargetPrice(choice.minPrice, 5)
+          : item.targetPrice,
+    });
+    setSizePicker(null);
+  };
+
   const handleUpdateTarget = async (item: WatchlistItem) => {
     const cleanTarget = sanitizeWatchlistTargetPrice(
       editTarget,
@@ -236,7 +279,7 @@ export default function WatchlistWorkspace({
     const headers = await authorizedJsonHeaders();
     if (!headers) return;
     try {
-      await fetch('/api/v1/rate/watchlist', {
+      const res = await fetch('/api/v1/rate/watchlist', {
         method: 'POST',
         headers,
         body: JSON.stringify({
@@ -245,6 +288,12 @@ export default function WatchlistWorkspace({
           locale: locale || 'vi',
         }),
       });
+      if (res.status === 422) {
+        const payload = await res.json().catch(() => null);
+        if (isSizeRequiredAnswer(res.status, payload)) {
+          openSizePicker(item.slug);
+        }
+      }
     } catch {
       // Local watchlist already updated
     }
@@ -1046,6 +1095,46 @@ export default function WatchlistWorkspace({
                       </div>
                     </div>
                   </div>
+
+                  {(dealInfo?.size_required ||
+                    sizePicker?.slug === item.slug) && (
+                    <div
+                      className="rounded-3 bg-warning-subtle border-warning-subtle mb-3 border px-3 py-2"
+                      data-testid="watchlist-size-required"
+                    >
+                      <div className="small fw-semibold mb-1">
+                        {t('sizeRequiredTitle')}
+                      </div>
+                      {sizePicker?.slug === item.slug ? (
+                        <div
+                          className="d-flex flex-wrap gap-2"
+                          role="group"
+                          aria-label={t('sizeRequiredTitle')}
+                        >
+                          {sizePicker.choices.map((choice) => (
+                            <button
+                              key={choice.slug}
+                              type="button"
+                              className="btn btn-outline-primary btn-sm rounded-pill"
+                              onClick={() => chooseSize(item, choice)}
+                            >
+                              {choice.label}
+                              {choice.minPrice > 0 &&
+                                ` · ${choice.minPrice.toLocaleString('vi-VN')} ₫`}
+                            </button>
+                          ))}
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          className="btn btn-primary btn-sm rounded-pill"
+                          onClick={() => openSizePicker(item.slug)}
+                        >
+                          {t('sizeRequiredCta')}
+                        </button>
+                      )}
+                    </div>
+                  )}
 
                   {bestOffer && (
                     <div
