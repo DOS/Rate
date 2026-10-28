@@ -453,7 +453,11 @@ export class ShopeeIngestionPipeline {
     // Normalize first: a title with no keyable brand or model is rejected
     // (UnkeyableProductTitleError) before anything is written.
     const candidate = this.normalizer.normalize(product);
-    if (candidate.keyable === false) throw new UnkeyableProductTitleError(product.title);
+    // With a masterIdHint the title's key is not used; the matcher still rejects
+    // the candidate if the hint does not resolve.
+    if (candidate.keyable === false && !options.masterIdHint) {
+      throw new UnkeyableProductTitleError(product.title);
+    }
 
     // 1. Upsert merchant
     const entityHash = hashEntity(`${platform}:${product.shop.shopId}`);
@@ -610,7 +614,15 @@ export class ShopeeIngestionPipeline {
       }
       const storedClusterId = sanitizeIngestionEntityId(stored?.cluster_id, 128);
       previousClusterId = storedClusterId;
-      if (storedClusterId && stored?.variant_source === 'manual' && !resolved.variantSource) {
+      // A hand-set variant always stays. A variant backed by listing evidence stays
+      // when this crawl has none; a `legacy` or NULL-source link (e.g. a #1105
+      // fuzzy link) does not.
+      const storedSource = stored?.variant_source;
+      const keepStored =
+        storedSource === 'manual' ||
+        (!resolved.variantSource &&
+          (storedSource === 'title' || storedSource === 'sku' || storedSource === 'single_size'));
+      if (storedClusterId && keepStored) {
         masterId = storedClusterId;
         variantSourceToWrite = undefined;
       }

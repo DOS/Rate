@@ -459,6 +459,30 @@ async function run() {
     assert.ok(!singleRetired.calls.some(c => c.op === 'upsert'));
   }
   {
+    // An archived sized variant takes no new listing in nullable mode; mode item keeps Tier 1's rule.
+    const archived1tb = {
+      items: [ZENBOOK_ITEM],
+      variants: [{ ...ZENBOOK_1TB, status: 'archived' }],
+    };
+    const title = 'Laptop ASUS Zenbook S 14 UX5406AA 1TB';
+    const nullable = await new EntityMatcher(
+      createItemDb(archived1tb).client,
+      passthroughEnricher,
+      {
+        itemModel: 'nullable_variant',
+      }
+    ).resolveItemAndVariant(candidateFor(title));
+    assert.equal(nullable.masterId, null);
+    const itemMode = await new EntityMatcher(
+      createItemDb(archived1tb).client,
+      passthroughEnricher,
+      {
+        itemModel: 'item',
+      }
+    ).resolveItemAndVariant(candidateFor(title));
+    assert.equal(itemMode.masterId, ZENBOOK_1TB.id);
+  }
+  {
     // A fuzzy Item hit never creates a variant under that Item's key.
     const db = createItemDb({
       items: [{ id: 'item-ip15p', item_key: 'apple:iphone-15-pro' }],
@@ -605,9 +629,31 @@ async function run() {
     assert.equal(keptItem.listing?.cluster_id, ZENBOOK_1TB.id);
     assert.ok(!('variant_source' in (keptItem.listing ?? {})));
 
-    // A size stated in the title is evidence and does move a hand-set variant.
+    // A hand-set variant wins even over a size stated in the title.
+    const manualWins = await ingest(
+      'nullable_variant',
+      'Laptop ASUS Zenbook S 14 UX5406AA 1TB',
+      zenbook,
+      {
+        stored: { cluster_id: 'master-zenbook-512', variant_source: 'manual' },
+      }
+    );
+    assert.equal(manualWins.listing?.cluster_id, 'master-zenbook-512');
+    assert.ok(!('variant_source' in (manualWins.listing ?? {})));
+
+    // Title evidence stays when a later crawl has none; a legacy link does not.
+    const evidenceKept = await ingest('nullable_variant', bareTitle, zenbook, {
+      stored: { cluster_id: ZENBOOK_1TB.id, variant_source: 'title' },
+    });
+    assert.equal(evidenceKept.listing?.cluster_id, ZENBOOK_1TB.id);
+    const legacyDropped = await ingest('nullable_variant', bareTitle, zenbook, {
+      stored: { cluster_id: ZENBOOK_1TB.id, variant_source: 'legacy' },
+    });
+    assert.equal(legacyDropped.listing?.cluster_id, null);
+
+    // A newer size stated in the title moves an evidence-based variant.
     const moved = await ingest('item', 'Laptop ASUS Zenbook S 14 UX5406AA 1TB', zenbook, {
-      stored: { cluster_id: 'master-zenbook-512', variant_source: 'manual' },
+      stored: { cluster_id: 'master-zenbook-512', variant_source: 'title' },
     });
     assert.equal(moved.listing?.cluster_id, ZENBOOK_1TB.id);
     assert.equal(moved.listing?.variant_source, 'title');
@@ -705,6 +751,16 @@ async function run() {
       UnkeyableProductTitleError
     );
     assert.ok(!db.calls.some(c => c.table === 'merchants'));
+
+    // With a live masterIdHint the title's key is unused: the refresh still works.
+    const hintedRefresh = await ingest(
+      'off',
+      'Samsung',
+      zenbook,
+      { hint: { id: 'master-legacy', specifications: { display: { size: 'x' } } } },
+      { masterIdHint: 'master-legacy' }
+    );
+    assert.equal(hintedRefresh.listing?.cluster_id, 'master-legacy');
   }
   console.log(
     '  ✅ [5/5] Pipeline writes item_id, nullable cluster_id and keeps hand-set variants'

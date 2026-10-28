@@ -279,6 +279,16 @@ export class EntityMatcher {
         (keys.variantKey === UNKNOWN_VARIANT_KEY
           ? variants.find(v => v.variant_key === 'standard' && v.status !== 'archived')
           : undefined);
+      // An archived variant takes no new listings once variants may be NULL; mode
+      // item keeps Tier 1's rule (it links to the existing row).
+      if (exact?.status === 'archived' && this.itemModel === 'nullable_variant') {
+        logger.info(
+          'entity_match.variant_archived',
+          `Variant ${exact.variant_key} of ${item.itemKey} is archived: no variant`,
+          { itemId: item.id, masterId: exact.id }
+        );
+        return { itemId: item.id, masterId: null, isNew: false, variantSource: null };
+      }
       if (exact) {
         logger.info('entity_match.variant_exact', `Variant ${keys.variantKey} of ${item.itemKey}`, {
           itemId: item.id,
