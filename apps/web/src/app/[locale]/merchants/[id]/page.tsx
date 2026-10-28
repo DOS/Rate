@@ -519,8 +519,11 @@ export default async function MerchantProfilePage({
                   )}
                 </p>
 
+                {/* No sabotage tile: Rate Services counts sabotage and review
+                    bombing among the authentic reviews, so it would always
+                    read 0 (DOS/Rate#1268). */}
                 <div className="row g-2 mt-auto">
-                  <div className="col-sm-3 col-6">
+                  <div className="col-sm-4 col-12">
                     <div className="rounded-3 bg-success-subtle p-2 text-center">
                       <div className="fw-bold text-success fs-5 font-monospace">
                         {brk.authentic_count}
@@ -533,7 +536,7 @@ export default async function MerchantProfilePage({
                       </div>
                     </div>
                   </div>
-                  <div className="col-sm-3 col-6">
+                  <div className="col-sm-4 col-12">
                     <div className="rounded-3 bg-warning-subtle p-2 text-center">
                       <div className="fw-bold text-warning-emphasis fs-5 font-monospace">
                         {brk.coin_spam_count}
@@ -546,7 +549,7 @@ export default async function MerchantProfilePage({
                       </div>
                     </div>
                   </div>
-                  <div className="col-sm-3 col-6">
+                  <div className="col-sm-4 col-12">
                     <div className="rounded-3 bg-danger-subtle p-2 text-center">
                       <div className="fw-bold text-danger fs-5 font-monospace">
                         {brk.seeding_fake_count}
@@ -556,19 +559,6 @@ export default async function MerchantProfilePage({
                         style={{ fontSize: '0.8125rem' }}
                       >
                         {t('statSeedingFake')}
-                      </div>
-                    </div>
-                  </div>
-                  <div className="col-sm-3 col-6">
-                    <div className="rounded-3 bg-secondary-subtle p-2 text-center">
-                      <div className="fw-bold text-secondary fs-5 font-monospace">
-                        {brk.sabotage_or_bombing_count}
-                      </div>
-                      <div
-                        className="text-muted"
-                        style={{ fontSize: '0.8125rem' }}
-                      >
-                        {t('statSabotage')}
                       </div>
                     </div>
                   </div>

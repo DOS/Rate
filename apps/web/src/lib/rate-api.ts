@@ -25,6 +25,7 @@ import {
   getMasterProductCategorySlug,
   type MerchantListFilterParams,
   extractPersistedBreakdown,
+  storedRiskSplit,
   filterAndSortMerchants,
   sanitizePostgrestFilterToken,
   type ParsedEcommerceUrl,
@@ -54,6 +55,7 @@ export {
   getMasterProductCategorySlug,
   getMasterProductHref,
   extractPersistedBreakdown,
+  storedRiskSplit,
   filterAndSortMerchants,
   sanitizePostgrestFilterToken,
   parseEcommerceUrlOrQuery,
@@ -1102,15 +1104,24 @@ export function mapTrustViewRowToMerchantOffer(
   const hasSeller = sanitizeOfferString(safeRow.merchant_id) !== '';
   // The view reads 0 for a seller the importer never scored; use the same
   // baseline as the merchant pages (#685).
-  const reviewRisk = !isUnscoredTrustViewRow(safeRow)
-    ? persistedReviewRisk
-    : hasSeller
-      ? baselineReviewRisk({
-          isOfficial,
-          platform: safeRow.platform,
-          followerCount,
-        })
-      : null;
+  // RS#708: the column is the combined risk; the review-only part counts
+  // only with analysed reviews (DOS/Rate#1268).
+  const riskSplit = storedRiskSplit(
+    safeRow.review_risk_breakdown,
+    undefined,
+    safeRow.review_risk_score
+  );
+  const reviewRisk = riskSplit
+    ? (riskSplit.reviewOnly ?? 0)
+    : !isUnscoredTrustViewRow(safeRow)
+      ? persistedReviewRisk
+      : hasSeller
+        ? baselineReviewRisk({
+            isOfficial,
+            platform: safeRow.platform,
+            followerCount,
+          })
+        : null;
   const priceCurrent = toSafeOfferPrice(safeRow.price_current);
   const cleanPlatform = sanitizeOfferString(safeRow.platform).toLowerCase();
   const cleanLocation = sanitizeOfferString(safeRow.merchant_location);
@@ -1145,11 +1156,13 @@ export function mapTrustViewRowToMerchantOffer(
       rating_star: null,
       follower_count: toSafeNonNegativeVoteCount(followerCount, 100_000_000),
       location: cleanLocation || null,
-      risk_score: Math.max(
-        combinedRisk,
-        dosafeRisk ?? 0,
-        reviewRisk ?? baselineReviewRisk({ platform: safeRow.platform })
-      ),
+      risk_score: riskSplit
+        ? Math.max(combinedRisk, dosafeRisk ?? 0, riskSplit.combined)
+        : Math.max(
+            combinedRisk,
+            dosafeRisk ?? 0,
+            reviewRisk ?? baselineReviewRisk({ platform: safeRow.platform })
+          ),
       dosafe_risk_score: dosafeRisk,
       review_risk_score: reviewRisk,
       review_risk_breakdown: safeBreakdown,
@@ -1193,17 +1206,29 @@ export function mapOfferRowToMerchantOffer(item: RawOfferRow): MerchantOffer {
     merchantObj?.review_risk_score,
     0
   );
+  // RS#708: the column is the combined risk; the review-only part counts
+  // only with analysed reviews (DOS/Rate#1268).
+  const riskSplit = storedRiskSplit(
+    merchantObj?.review_risk_breakdown,
+    meta,
+    merchantObj?.review_risk_score
+  );
   // An offer with no merchant row has no seller to give a baseline (#1099).
   const hasStoredScore =
+    riskSplit != null ||
     (merchantObj?.review_risk_score != null &&
       hasPersistedReviewRisk(
         columnReviewRisk,
         merchantObj.review_risk_breakdown
       )) ||
     typeof meta?.review_risk_score === 'number';
-  const reviewRisk =
-    merchantObj?.review_risk_score != null &&
-    hasPersistedReviewRisk(columnReviewRisk, merchantObj.review_risk_breakdown)
+  const reviewRisk = riskSplit
+    ? (riskSplit.reviewOnly ?? 0)
+    : merchantObj?.review_risk_score != null &&
+        hasPersistedReviewRisk(
+          columnReviewRisk,
+          merchantObj.review_risk_breakdown
+        )
       ? columnReviewRisk
       : typeof meta?.review_risk_score === 'number'
         ? toSafeRiskScore100(meta.review_risk_score, 0)
@@ -1214,8 +1239,10 @@ export function mapOfferRowToMerchantOffer(item: RawOfferRow): MerchantOffer {
               followerCount: Number(merchantObj.follower_count) || 0,
             })
           : null;
-  const metaCombined =
-    typeof meta?.combined_risk_score === 'number'
+  // The split's combined score when there is one; older metadata otherwise.
+  const metaCombined = riskSplit
+    ? riskSplit.combined
+    : typeof meta?.combined_risk_score === 'number'
       ? toSafeRiskScore100(meta.combined_risk_score, 0)
       : 0;
   // An unknown seller is never safer than the baseline in trust and sorting.
@@ -2573,6 +2600,9 @@ export function persistedReviewRiskOf(row: {
   metadata?: unknown;
 }): number {
   if (!row || typeof row !== 'object' || Array.isArray(row)) return 0;
+  // RS#708: the column is the combined risk, not the review-only part.
+  const split = storedRiskSplit(row.review_risk_breakdown, row.metadata);
+  if (split) return split.reviewOnly ?? 0;
   const column = toSafeRiskScore100(row.review_risk_score, 0);
   if (
     row.review_risk_score != null &&
@@ -2602,6 +2632,7 @@ export function hasStoredReviewRisk(row: {
   metadata?: unknown;
 }): boolean {
   if (!row || typeof row !== 'object' || Array.isArray(row)) return false;
+  if (storedRiskSplit(row.review_risk_breakdown, row.metadata)) return true;
   if (
     row.review_risk_score != null &&
     hasPersistedReviewRisk(
@@ -3025,11 +3056,14 @@ export async function getMerchantsList(
         sabotage_or_bombing_count: 0,
         suspicious_ratio_pct: 0,
       };
+    // The split's combined score when there is one; older metadata otherwise.
     const metaCombined =
-      typeof meta.combined_risk_score === 'number' &&
+      storedRiskSplit(m.review_risk_breakdown, m.metadata, m.review_risk_score)
+        ?.combined ??
+      (typeof meta.combined_risk_score === 'number' &&
       Number.isFinite(meta.combined_risk_score)
         ? toSafeRiskScore100(meta.combined_risk_score, 0)
-        : 0;
+        : 0);
     const combinedRisk = Math.min(
       100,
       Math.max(baseRisk, dosafeRisk, effectiveReviewRisk, metaCombined)
@@ -3547,11 +3581,17 @@ export async function getMerchantProfileBase(
       ? persistedReviewRisk
       : Math.max(dynamicRisk.reviewRiskScore, persistedReviewRisk);
   const breakdown = persistedBreakdown ?? dynamicRisk.breakdown;
+  // The split's combined score when there is one; older metadata otherwise.
   const metaCombined =
-    typeof meta.combined_risk_score === 'number' &&
+    storedRiskSplit(
+      merchantRow.review_risk_breakdown,
+      merchantRow.metadata,
+      merchantRow.review_risk_score
+    )?.combined ??
+    (typeof meta.combined_risk_score === 'number' &&
     Number.isFinite(meta.combined_risk_score)
       ? toSafeRiskScore100(meta.combined_risk_score, 0)
-      : 0;
+      : 0);
   const combinedRisk = Math.min(
     100,
     Math.max(baseRisk, dosafeRisk, effectiveReviewRisk, metaCombined)

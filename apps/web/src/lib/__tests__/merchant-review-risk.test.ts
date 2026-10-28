@@ -142,6 +142,7 @@ async function main() {
 
   await directoryReadsReviewsForStoredScores();
   await offerSellersWithoutReviewsReadAsNoData();
+  await combinedColumnIsNotReviewRisk();
 
   console.warn('  ✅ merchant review risk suite passed');
 }
@@ -318,6 +319,172 @@ async function offerSellersWithoutReviewsReadAsNoData() {
     hasReviewRiskEvidence(fallbackStored.merchant.review_risk_breakdown),
     true,
     'a stored score without a breakdown stays'
+  );
+}
+
+// Rate Services' split (RS#708): the column is the combined risk, and the
+// breakdown carries the review-only part over `total_reviews` (#1268).
+async function combinedColumnIsNotReviewRisk() {
+  const {
+    mapTrustViewRowToMerchantOffer,
+    mapOfferRowToMerchantOffer,
+    persistedReviewRiskOf,
+    hasStoredReviewRisk,
+    storedRiskSplit,
+  } = await import('../rate-api');
+  const noReviews = {
+    combined_risk_score: 42,
+    review_risk_score: 15,
+    total_reviews: 0,
+    authentic_count: 0,
+  };
+  const measured = { ...noReviews, review_risk_score: 28, total_reviews: 40 };
+  assert.deepEqual(storedRiskSplit(noReviews), {
+    combined: 42,
+    reviewOnly: null,
+  });
+  assert.deepEqual(storedRiskSplit(measured), {
+    combined: 42,
+    reviewOnly: 28,
+  });
+  assert.deepEqual(
+    storedRiskSplit({}, { review_risk_breakdown: measured }),
+    { combined: 42, reviewOnly: 28 },
+    'the breakdown nested in metadata'
+  );
+  assert.equal(
+    storedRiskSplit({ total_reviews: 12 }, { combined_risk_score: 80 }),
+    null,
+    'a legacy breakdown with an older combined score is no split'
+  );
+  assert.deepEqual(
+    storedRiskSplit(
+      {},
+      { combined_risk_score: 7, review_risk_score: 3, total_reviews: 0 }
+    ),
+    { combined: 7, reviewOnly: null },
+    'metadata mirrors the split'
+  );
+  // Older metadata carried a combined score next to a review score, with no
+  // review count: it is no split and keeps today's reading.
+  const legacyMeta = {
+    dosafe_risk_score: 15,
+    review_risk_score: 68,
+    combined_risk_score: 48,
+  };
+  assert.equal(storedRiskSplit({}, legacyMeta), null);
+  assert.equal(
+    persistedReviewRiskOf({ review_risk_breakdown: {}, metadata: legacyMeta }),
+    68
+  );
+  // The combined score never drops below the column.
+  assert.equal(storedRiskSplit(measured, undefined, 60)?.combined, 60);
+  assert.equal(
+    storedRiskSplit({ total_reviews: 12 }),
+    null,
+    'an older breakdown keeps the current reading'
+  );
+
+  const row = {
+    id: 'o1',
+    merchant_id: 'm1',
+    platform: 'shopee',
+    title: 'Phone',
+    price_current: 1_000_000,
+    url: 'https://shopee.vn/p',
+    merchant_name: 'Shop',
+    merchant_is_official: false,
+    price_original: null,
+    stock: 1,
+    rating_star: 5,
+    rating_count: 1,
+  };
+  const viewNoReviews = mapTrustViewRowToMerchantOffer(
+    { ...row, review_risk_score: 42, review_risk_breakdown: noReviews },
+    0
+  );
+  assert.equal(
+    hasReviewRiskEvidence(viewNoReviews.merchant.review_risk_breakdown),
+    false,
+    'no analysed review: no review risk number'
+  );
+  assert.notEqual(viewNoReviews.merchant.review_risk_score, 42);
+  assert.equal(viewNoReviews.merchant.risk_score, 42, 'combined drives trust');
+  const viewMeasured = mapTrustViewRowToMerchantOffer(
+    { ...row, review_risk_score: 42, review_risk_breakdown: measured },
+    0
+  );
+  assert.equal(viewMeasured.merchant.review_risk_score, 28);
+  assert.equal(viewMeasured.merchant.risk_score, 42);
+
+  const offer = mapOfferRowToMerchantOffer({
+    id: 'o2',
+    platform: 'shopee',
+    title: 'Phone',
+    price_current: 1_000_000,
+    url: 'https://shopee.vn/p',
+    merchants: {
+      id: 'm2',
+      name: 'Shop',
+      platform: 'shopee',
+      review_risk_score: 42,
+      review_risk_breakdown: measured,
+      metadata: {},
+    },
+  } as unknown as Parameters<typeof mapOfferRowToMerchantOffer>[0]);
+  assert.equal(offer.merchant.review_risk_score, 28);
+  assert.equal(offer.merchant.risk_score, 42);
+  // Older metadata's combined score does not override the split's.
+  const staleMeta = mapOfferRowToMerchantOffer({
+    id: 'o3',
+    platform: 'shopee',
+    title: 'Phone',
+    price_current: 1_000_000,
+    url: 'https://shopee.vn/p',
+    merchants: {
+      id: 'm3',
+      name: 'Shop',
+      platform: 'shopee',
+      review_risk_score: 42,
+      review_risk_breakdown: measured,
+      metadata: { combined_risk_score: 80 },
+    },
+  } as unknown as Parameters<typeof mapOfferRowToMerchantOffer>[0]);
+  assert.equal(staleMeta.merchant.risk_score, 42);
+  // A split only in metadata keeps its breakdown and review-only score.
+  const metaOnly = mapOfferRowToMerchantOffer({
+    id: 'o4',
+    platform: 'shopee',
+    title: 'Phone',
+    price_current: 1_000_000,
+    url: 'https://shopee.vn/p',
+    merchants: {
+      id: 'm4',
+      name: 'Shop',
+      platform: 'shopee',
+      review_risk_score: 0,
+      review_risk_breakdown: {},
+      metadata: { review_risk_breakdown: measured },
+    },
+  } as unknown as Parameters<typeof mapOfferRowToMerchantOffer>[0]);
+  assert.equal(metaOnly.merchant.review_risk_score, 28);
+  assert.equal(
+    hasReviewRiskEvidence(metaOnly.merchant.review_risk_breakdown),
+    true
+  );
+
+  // Merchant list and profile read the review-only part, and the combined
+  // score still caps trust.
+  const merchantRow = {
+    review_risk_score: 42,
+    review_risk_breakdown: noReviews,
+    metadata: {},
+  };
+  assert.equal(persistedReviewRiskOf(merchantRow), 0);
+  assert.equal(hasStoredReviewRisk(merchantRow), true);
+  assert.equal(
+    persistedReviewRiskOf({ ...merchantRow, review_risk_breakdown: measured }),
+    28
   );
 }
 
