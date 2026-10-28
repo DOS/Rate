@@ -77,16 +77,20 @@ export function planItemRoute(input: {
   const { item } = resolution;
   if (resolution.kind === 'variant' && item.slug !== requestedSlug) {
     const base = categoryBasePath.replace(/\/+$/, '');
+    const itemUrl = `${base}/${encodeURIComponent(item.slug)}`;
+    // A retired size (an archived `unknown`) is no size to preselect.
     return {
       kind: 'redirect',
-      to: `${base}/${encodeURIComponent(item.slug)}?v=${encodeURIComponent(
-        resolution.variant.variant_key
-      )}`,
+      to: resolution.retired
+        ? itemUrl
+        : `${itemUrl}?v=${encodeURIComponent(resolution.variant.variant_key)}`,
     };
   }
   const variants = input.variants;
   const chosen =
-    (resolution.kind === 'variant' ? resolution.variant : null) ??
+    (resolution.kind === 'variant' && !resolution.retired
+      ? resolution.variant
+      : null) ??
     (requestedVariant
       ? variants.find((v) => v.variant_key === requestedVariant)
       : undefined) ??

@@ -3,7 +3,6 @@ import {
   generateCategoryProductMetadata,
   ProductDetailView,
   type PageParams,
-  type PageSearchParams,
 } from '../../smartphones/[slug]/page';
 
 // Cached after the first request, refreshed every 5 minutes or when the
@@ -17,26 +16,16 @@ export function generateStaticParams(): { slug: string }[] {
 
 export async function generateMetadata({
   params,
-  searchParams,
 }: {
   params: PageParams;
-  searchParams?: PageSearchParams;
 }): Promise<Metadata> {
-  return generateCategoryProductMetadata(params, '/earbuds', searchParams);
+  return generateCategoryProductMetadata(params, '/earbuds');
 }
 
 export default async function EarbudsDetailPage({
   params,
-  searchParams,
 }: {
   params: PageParams;
-  searchParams?: PageSearchParams;
 }) {
-  return (
-    <ProductDetailView
-      params={params}
-      searchParams={searchParams}
-      categoryBasePath="/earbuds"
-    />
-  );
+  return <ProductDetailView params={params} categoryBasePath="/earbuds" />;
 }

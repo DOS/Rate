@@ -104,28 +104,23 @@ export function generateStaticParams(): { slug: string }[] {
 }
 
 export type PageParams = Promise<{ locale: string; slug: string }>;
-export type PageSearchParams = Promise<
-  Record<string, string | string[] | undefined>
->;
 
 export async function generateCategoryProductMetadata(
   params: PageParams,
-  categoryBasePath = '/smartphones',
-  searchParams?: PageSearchParams
+  categoryBasePath = '/smartphones'
 ): Promise<Metadata> {
   const { locale, slug } = await params;
   const lang = normalizeRateLocale(locale);
   const t = await getTranslations({ locale, namespace: 'productDetail' });
   // RATE_ITEM_MODEL on: an Item URL describes its selected variant and is
   // canonical (Q1, DOS/Rate#1153). Off: null, the page as before.
-  const itemRoute = await resolveItemRoute({
-    slug,
-    searchParams,
-    categoryBasePath,
-  });
-  const product = await getCachedMasterProductBySlug(
-    itemRoute?.kind === 'render' ? itemRoute.variantSlug : slug
-  );
+  const itemRoute = await resolveItemRoute({ slug, categoryBasePath });
+  const product =
+    itemRoute?.kind === 'not_found'
+      ? null
+      : await getCachedMasterProductBySlug(
+          itemRoute?.kind === 'render' ? itemRoute.variantSlug : slug
+        );
   if (!product) {
     return {
       title: t('notFoundTitle'),
@@ -176,22 +171,18 @@ export async function generateCategoryProductMetadata(
 
 export async function generateMetadata({
   params,
-  searchParams,
 }: {
   params: PageParams;
-  searchParams?: PageSearchParams;
 }): Promise<Metadata> {
-  return generateCategoryProductMetadata(params, '/smartphones', searchParams);
+  return generateCategoryProductMetadata(params, '/smartphones');
 }
 
 export async function ProductDetailView({
   params,
-  searchParams,
   categoryBasePath = '/smartphones',
   categoryLabel = 'Smartphones',
 }: {
   params: PageParams;
-  searchParams?: PageSearchParams;
   categoryBasePath?: string;
   categoryLabel?: string;
 }) {
@@ -200,12 +191,11 @@ export async function ProductDetailView({
   // RATE_ITEM_MODEL on: an old variant URL 308s to its Item URL with `?v=`,
   // and an Item URL renders its selected variant until the Item page ships
   // (Q1, DOS/Rate#1153, #1154). Off: null, and the page is as before.
-  const itemRoute = await resolveItemRoute({
-    slug,
-    searchParams,
-    categoryBasePath,
-  });
+  const itemRoute = await resolveItemRoute({ slug, categoryBasePath });
   if (itemRoute?.kind === 'redirect') permanentRedirect(itemRoute.to);
+  // Neither a published Item nor a variant of one: no fallback to the old
+  // master lookup, which would show a variant of an unpublished Item.
+  if (itemRoute?.kind === 'not_found') notFound();
   const productSlug =
     itemRoute?.kind === 'render' ? itemRoute.variantSlug : slug;
   const [t, tNav, tSale, storedProduct] = await Promise.all([
@@ -1345,16 +1335,8 @@ export async function ProductDetailView({
 
 export default async function SmartphoneDetailPage({
   params,
-  searchParams,
 }: {
   params: PageParams;
-  searchParams?: PageSearchParams;
 }) {
-  return (
-    <ProductDetailView
-      params={params}
-      searchParams={searchParams}
-      categoryBasePath="/smartphones"
-    />
-  );
+  return <ProductDetailView params={params} categoryBasePath="/smartphones" />;
 }

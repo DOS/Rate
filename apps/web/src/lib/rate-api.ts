@@ -4457,7 +4457,43 @@ export interface RateItemOffers {
  */
 export type CatalogSlugResolution =
   | { kind: 'item'; item: RateItem; variant: null }
-  | { kind: 'variant'; item: RateItem; variant: RateItemVariant };
+  | {
+      kind: 'variant';
+      item: RateItem;
+      variant: RateItemVariant;
+      /** An archived variant, e.g. a retired `unknown` (design doc 7.2). */
+      retired: boolean;
+    };
+
+/**
+ * The Item tables or columns are missing (M1+M2 not applied where the flag
+ * is on). Callers treat it as "flag off" instead of failing every page.
+ */
+export class ItemModelUnavailableError extends Error {
+  constructor(what: string, cause: { message?: string; code?: string }) {
+    super(
+      `rate-api: item model unavailable (${what}): ${cause.code ?? ''} ${cause.message ?? ''}`.trim()
+    );
+    this.name = 'ItemModelUnavailableError';
+  }
+}
+
+// undefined_table, undefined_column, and PostgREST's schema-cache misses.
+const MISSING_SCHEMA_CODES = new Set([
+  '42P01',
+  '42703',
+  'PGRST204',
+  'PGRST205',
+]);
+
+function itemReadError(
+  what: string,
+  error: { message: string; code?: string }
+): Error {
+  return error.code && MISSING_SCHEMA_CODES.has(error.code)
+    ? new ItemModelUnavailableError(what, error)
+    : new RateDataUnavailableError(what, error);
+}
 
 const ITEM_SELECT =
   'id, item_key, slug, name, brand, model, category_id, default_variant_id, min_price, max_price, price_variant_count, merchant_count, listing_count, unknown_variant_listing_count, updated_at';
@@ -4478,7 +4514,7 @@ type UntypedRateQuery = {
   range: (from: number, to: number) => UntypedRateQuery;
   maybeSingle: () => PromiseLike<{
     data: unknown;
-    error: { message: string } | null;
+    error: { message: string; code?: string } | null;
   }>;
 } & PromiseLike<{ data: unknown[] | null; error: { message: string } | null }>;
 const untypedRate = (): { from: (table: string) => UntypedRateQuery } =>
@@ -4560,7 +4596,7 @@ async function readItem(
     .maybeSingle();
   if (error) {
     log.error('item lookup failed', { column, value, message: error.message });
-    throw new RateDataUnavailableError('item', error);
+    throw itemReadError('item', error);
   }
   return mapItemRow(data);
 }
@@ -4716,21 +4752,25 @@ export async function resolveCatalogSlug(
   if (!isSafeCatalogSlug(clean)) return null;
   const item = await readItem('slug', clean);
   if (item) return { kind: 'item', item, variant: null };
+  // An archived variant (a retired `unknown`, an archived duplicate) still
+  // redirects its old URL to its Item; it is never offered as a size.
   const { data, error } = await untypedRate()
     .from('master_products')
-    .select(ITEM_VARIANT_SELECT)
+    .select(`${ITEM_VARIANT_SELECT}, status`)
     .eq('slug', clean)
-    .eq('status', 'published')
+    .in('status', ['published', 'archived'])
     .maybeSingle();
   if (error) {
     log.error('variant slug lookup failed', {
       slug: clean,
       message: error.message,
     });
-    throw new RateDataUnavailableError('variant', error);
+    throw itemReadError('variant', error);
   }
   const variant = mapItemVariantRow(data);
   if (!variant) return null;
   const owner = await readItem('id', variant.item_id);
-  return owner ? { kind: 'variant', item: owner, variant } : null;
+  if (!owner) return null;
+  const retired = (data as { status?: unknown }).status === 'archived';
+  return { kind: 'variant', item: owner, variant, retired };
 }

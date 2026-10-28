@@ -46,6 +46,8 @@ const variantRow = (id: string, gb: number, sort: number | null) => ({
 });
 
 let calls: string[] = [];
+// Answer as a database without M1+M2 (PostgREST schema-cache miss).
+let schemaMissing = false;
 globalThis.fetch = (async (input: RequestInfo | URL) => {
   const url = new URL(
     typeof input === 'string'
@@ -63,6 +65,15 @@ globalThis.fetch = (async (input: RequestInfo | URL) => {
     });
   const offset = Number(url.searchParams.get('offset') ?? 0);
   if (offset > 0) return json([]);
+  if (schemaMissing && url.pathname === '/rest/v1/items') {
+    return new Response(
+      JSON.stringify({
+        code: 'PGRST205',
+        message: "Could not find the table 'rate.items' in the schema cache",
+      }),
+      { status: 404, headers: { 'content-type': 'application/json' } }
+    );
+  }
   switch (url.pathname) {
     case '/rest/v1/items':
       if (
@@ -74,7 +85,17 @@ globalThis.fetch = (async (input: RequestInfo | URL) => {
       return json([]);
     case '/rest/v1/master_products':
       if (q.includes('slug=eq.apple-iphone-16-128gb'))
-        return json([variantRow(V128, 128, null)]);
+        return json([{ ...variantRow(V128, 128, null), status: 'published' }]);
+      if (q.includes('slug=eq.apple-iphone-16-unknown'))
+        return json([
+          {
+            ...variantRow(V128, 128, null),
+            slug: 'apple-iphone-16-unknown',
+            variant_key: 'unknown',
+            storage_gb: null,
+            status: 'archived',
+          },
+        ]);
       if (q.includes(`item_id=eq.${ITEM_ID}`))
         return json([variantRow(V256, 256, null), variantRow(V128, 128, null)]);
       return json([]);
@@ -134,12 +155,6 @@ async function main() {
     await resolveItemRoute({
       slug: 'apple-iphone-16-128gb',
       categoryBasePath: '/smartphones',
-      // Throws only if awaited: flag off must not read the query string.
-      searchParams: {
-        then() {
-          throw new Error('must not be read');
-        },
-      } as unknown as Promise<Record<string, string>>,
     }),
     null
   );
@@ -175,7 +190,12 @@ async function main() {
   assert.deepEqual(
     planItemRoute({
       ...base,
-      resolution: { kind: 'variant', item, variant: variants[0]! },
+      resolution: {
+        kind: 'variant',
+        item,
+        variant: variants[0]!,
+        retired: false,
+      },
       requestedSlug: 'apple-iphone-16-128gb',
       requestedVariant: null,
     }),
@@ -186,7 +206,7 @@ async function main() {
   assert.equal(
     planItemRoute({
       ...base,
-      resolution: { kind: 'variant', item, variant: shared },
+      resolution: { kind: 'variant', item, variant: shared, retired: false },
       requestedSlug: 'apple-iphone-16',
       requestedVariant: null,
     }).kind,
@@ -217,6 +237,25 @@ async function main() {
     'an unknown ?v= falls back to the default'
   );
   assert.equal(render(null, []).kind, 'not_found');
+  // A retired size redirects to the Item with no size preselected.
+  assert.deepEqual(
+    planItemRoute({
+      ...base,
+      resolution: {
+        kind: 'variant',
+        item,
+        variant: {
+          ...variants[0]!,
+          slug: 'apple-iphone-16-unknown',
+          variant_key: 'unknown',
+        },
+        retired: true,
+      },
+      requestedSlug: 'apple-iphone-16-unknown',
+      requestedVariant: null,
+    }),
+    { kind: 'redirect', to: '/smartphones/apple-iphone-16' }
+  );
   assert.equal(
     flag.itemSlugFromVariantSlug('apple-iphone-16-1024gb'),
     'apple-iphone-16'
@@ -247,6 +286,12 @@ async function main() {
   const byItem = await api.resolveCatalogSlug('apple-iphone-16');
   assert.equal(byItem?.kind, 'item');
   assert.equal(await api.resolveCatalogSlug('no-such-slug'), null);
+  const retired = await api.resolveCatalogSlug('apple-iphone-16-unknown');
+  assert.equal(retired?.kind === 'variant' && retired.retired, true);
+  assert.ok(
+    calls.some((c) => c.includes('status=in.(published,archived)')),
+    'old variant URLs include retired ones'
+  );
   assert.equal(await api.resolveCatalogSlug('../etc'), null);
 
   const itemVariants = await api.getItemVariants(ITEM_ID);
@@ -275,12 +320,33 @@ async function main() {
     kind: 'redirect',
     to: '/smartphones/apple-iphone-16?v=128gb',
   });
+  // An Item URL renders its default variant; ?v= is applied client-side.
   const itemPlan = await resolveItemRoute({
     slug: 'apple-iphone-16',
     categoryBasePath: '/smartphones',
-    searchParams: Promise.resolve({ v: '128gb' }),
   });
-  assert.equal(itemPlan?.kind, 'render');
+  assert.equal(itemPlan?.kind === 'render' && itemPlan.variantKey, '256gb');
+  assert.deepEqual(
+    await resolveItemRoute({
+      slug: 'apple-iphone-16-unknown',
+      categoryBasePath: '/smartphones',
+    }),
+    { kind: 'redirect', to: '/smartphones/apple-iphone-16' }
+  );
+  // Flag on without M1+M2: the page falls back to today's variant page.
+  schemaMissing = true;
+  await assert.rejects(
+    () => api.resolveCatalogSlug('apple-iphone-16-256gb'),
+    (err: unknown) => err instanceof api.ItemModelUnavailableError
+  );
+  assert.equal(
+    await resolveItemRoute({
+      slug: 'apple-iphone-16-256gb',
+      categoryBasePath: '/smartphones',
+    }),
+    null
+  );
+  schemaMissing = false;
   assert.ok(
     resolveRevalidationTargets({
       slugs: ['apple-iphone-16-128gb'],
