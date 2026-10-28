@@ -5,6 +5,17 @@ import { Link } from '@/lib/navigation';
 import { notFound, permanentRedirect } from 'next/navigation';
 import { resolveItemRoute } from '@/server/rate/item-route';
 import {
+  loadItemPageContext,
+  type ItemPageVariant,
+} from '@/server/rate/item-page';
+import {
+  buildItemProductGroupNode,
+  itemVariantLabel,
+  withoutItemSiblings,
+} from '@/lib/item-page';
+import ItemVariantPicker from '@/components/product/item/ItemVariantPicker';
+import ItemVariantPanels from '@/components/product/item/ItemVariantPanels';
+import {
   getCrossPlatformDealRadar,
   getCachedMasterProductBySlug,
   getCachedMasterProductOffers,
@@ -126,9 +137,14 @@ export async function generateCategoryProductMetadata(
       title: t('notFoundTitle'),
     };
   }
-  // The stored stats, like every other page shows (DOS/Rate#1141).
-  const marketStats = productMarketStats(product);
+  // The stored stats, like every other page shows (DOS/Rate#1141). An Item
+  // URL is the Item: its name and the "from" price over its sizes (#1154).
+  const itemMeta = itemRoute?.kind === 'render' ? itemRoute.item : null;
+  const marketStats = itemMeta
+    ? productMarketStats(itemMeta)
+    : productMarketStats(product);
   const hasPrice = marketStats.minPrice > 0;
+  const name = itemMeta?.name || product.name;
   const minPrice = marketStats.minPrice.toLocaleString('vi-VN');
   const canonicalUrl = `https://rate.vn${categoryBasePath}/${
     itemRoute?.kind === 'render' ? itemRoute.itemSlug : product.slug
@@ -140,28 +156,28 @@ export async function generateCategoryProductMetadata(
     title: fitTitle([
       ...(hasPrice
         ? [
-            t('metaTitle', { name: product.name, minPrice }),
-            t('metaTitleShort', { name: product.name, minPrice }),
+            t('metaTitle', { name, minPrice }),
+            t('metaTitleShort', { name, minPrice }),
           ]
         : []),
-      `${product.name} | Rate.vn`,
-      product.name,
+      `${name} | Rate.vn`,
+      name,
     ]),
     description: fitDescription(
       hasPrice
         ? t('metaDesc', {
-            name: product.name,
+            name,
             brand: product.brand,
             merchantCount: marketStats.sellerCount,
           })
-        : t('metaDescNoStock', { name: product.name, brand: product.brand })
+        : t('metaDescNoStock', { name, brand: product.brand })
     ),
     alternates: {
       canonical: canonicalUrl,
     },
     openGraph: {
       ...defaultOpenGraph(lang),
-      title: t('ogTitle', { name: product.name }),
+      title: t('ogTitle', { name }),
       description: hasPrice ? t('ogDesc', { minPrice }) : t('ogDescNoStock'),
       url: canonicalUrl,
       images: [firstImageUrl(product.images) ?? SHARE_IMAGE],
@@ -208,6 +224,14 @@ export async function ProductDetailView({
   if (!storedProduct) {
     notFound();
   }
+  // RATE_ITEM_MODEL on and an Item URL: every size's offers and history, and
+  // the listings whose size is not stated (#1154). Null otherwise.
+  const itemPage =
+    itemRoute?.kind === 'render' && itemRoute.variants.length > 0
+      ? await loadItemPageContext(itemRoute.item, itemRoute.variants)
+      : null;
+  const itemVariants = itemPage?.variants ?? [];
+  const isItemGroup = itemVariants.length > 1;
 
   const categorySlug = categoryBasePath.replace(/^\//, '') || 'smartphones';
   // Each category shows only the spec groups and fields it has: earbuds have
@@ -258,16 +282,26 @@ export async function ProductDetailView({
   // which also holds sold-out listings at their last price (DOS/Rate#1141).
   const marketStats = productMarketStats(product);
   const currentMinPrice = marketStats.minPrice;
+  // An Item's other sizes are the same device, not competitors (#1154).
   const relatedCompetitors = rankRelatedCompetitors(
-    categoryPeers,
+    itemPage
+      ? withoutItemSiblings(
+          categoryPeers,
+          itemVariants.map((v) => v.variant.slug)
+        )
+      : categoryPeers,
     product.slug,
     currentMinPrice
   );
+  // The Item page's name and "from" price span its sizes.
+  const displayName = itemPage?.item.name || product.name;
+  const heroStats = itemPage ? productMarketStats(itemPage.item) : marketStats;
 
   const specs = product.specifications as ProductSpecifications;
   const keySpecs = product.key_specs as KeySpecs;
   const minPriceFormatted = currentMinPrice.toLocaleString('vi-VN');
   const sellerCount = marketStats.sellerCount;
+  const heroMinPriceFormatted = heroStats.minPrice.toLocaleString('vi-VN');
   // Why there is no price, when there is none (DOS/Rate#1188).
   const saleState = masterSaleState({
     minPrice: currentMinPrice,
@@ -300,6 +334,60 @@ export async function ProductDetailView({
     itemRoute?.kind === 'render' ? itemRoute.itemSlug : product.slug
   }`;
 
+  const productDescription =
+    currentMinPrice > 0
+      ? t('metaDesc', {
+          name: product.name,
+          brand: product.brand,
+          merchantCount: sellerCount,
+        })
+      : t('metaDescNoStock', {
+          name: product.name,
+          brand: product.brand,
+        });
+  const aggregateRating =
+    displayUserRating > 0 && authenticCount > 0
+      ? {
+          '@type': 'AggregateRating',
+          ratingValue: Number(displayUserRating.toFixed(2)),
+          reviewCount: authenticCount,
+          bestRating: 5,
+          worstRating: 1,
+        }
+      : null;
+  const itemGroupNode =
+    itemPage && isItemGroup
+      ? buildItemProductGroupNode({
+          itemKey: itemPage.item.item_key,
+          name: displayName,
+          brand: itemPage.item.brand || product.brand,
+          canonicalUrl,
+          description:
+            heroStats.minPrice > 0
+              ? t('metaDesc', {
+                  name: displayName,
+                  brand: product.brand,
+                  merchantCount: heroStats.sellerCount,
+                })
+              : t('metaDescNoStock', {
+                  name: displayName,
+                  brand: product.brand,
+                }),
+          images: usableImageUrls(product.images).map(absoluteUrl),
+          variants: itemVariants.map((v) => {
+            const stats = productMarketStats(v.product);
+            return {
+              variantKey: v.variant.variant_key,
+              label: itemVariantLabel(v.variant),
+              minPrice: stats.minPrice,
+              maxPrice: stats.maxPrice,
+              sellerCount: stats.sellerCount,
+            };
+          }),
+          aggregateRating,
+        })
+      : null;
+
   const structuredDataGraph = {
     '@context': 'https://schema.org',
     '@graph': [
@@ -321,12 +409,12 @@ export async function ProductDetailView({
           {
             '@type': 'ListItem',
             position: 3,
-            name: product.name,
+            name: displayName,
             item: canonicalUrl,
           },
         ],
       },
-      {
+      itemGroupNode ?? {
         '@type': 'Product',
         name: product.name,
         brand: {
@@ -335,17 +423,7 @@ export async function ProductDetailView({
         },
         sku: product.model_key,
         url: canonicalUrl,
-        description:
-          currentMinPrice > 0
-            ? t('metaDesc', {
-                name: product.name,
-                brand: product.brand,
-                merchantCount: sellerCount,
-              })
-            : t('metaDescNoStock', {
-                name: product.name,
-                brand: product.brand,
-              }),
+        description: productDescription,
         image: usableImageUrls(product.images).map(absoluteUrl),
         // Only with a buyable price: a lowPrice of 0 is not an offer.
         ...(currentMinPrice > 0
@@ -361,20 +439,79 @@ export async function ProductDetailView({
               },
             }
           : {}),
-        ...(displayUserRating > 0 && authenticCount > 0
-          ? {
-              aggregateRating: {
-                '@type': 'AggregateRating',
-                ratingValue: Number(displayUserRating.toFixed(2)),
-                reviewCount: authenticCount,
-                bestRating: 5,
-                worstRating: 1,
-              },
-            }
-          : {}),
+        ...(aggregateRating ? { aggregateRating } : {}),
       },
     ],
   };
+
+  // The history chart and the offer table of one size; the variant page
+  // renders them for its own master, an Item page once per size (#1154).
+  const renderPriceHistory = (v: {
+    product: { name: string };
+    priceHistory: typeof priceHistory;
+    minPrice: number;
+    radarSignal: typeof radarSignal;
+  }) => (
+    <PriceHistorySection
+      productName={v.product.name}
+      // Its "current lowest" is the page's "from" price (DOS/Rate#1141).
+      history={{
+        ...v.priceHistory,
+        currentMinPrice: v.minPrice > 0 ? v.minPrice : null,
+      }}
+      radarSignal={v.radarSignal}
+    />
+  );
+  const renderOffersBody = (v: {
+    product: { name: string; slug: string };
+    offers: typeof offers;
+    priceHistory: typeof priceHistory;
+    radarSignal: typeof radarSignal;
+    emptyText: string;
+  }) => (
+    <>
+      <div className="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+        <div>
+          <span className="rate-eyebrow text-muted d-block mb-1">
+            {t('offersEyebrow')}
+          </span>
+          <h2 className="h4 fw-bold d-flex align-items-center mb-0 gap-2">
+            <BsShieldCheck aria-hidden="true" />{' '}
+            {t('offersTitle', { count: v.offers.length })}
+          </h2>
+        </div>
+        <span className="badge bg-light text-secondary rounded-pill border px-3 py-2">
+          {t('offersMedianBadge')}
+        </span>
+      </div>
+
+      {v.offers.length === 0 ? (
+        <p className="text-muted mb-0">{v.emptyText}</p>
+      ) : (
+        <ProductOffersExplorer
+          productName={v.product.name}
+          productSlug={v.product.slug}
+          offers={v.offers}
+          byOffer={v.priceHistory.byOffer}
+          radarSignal={v.radarSignal}
+        />
+      )}
+    </>
+  );
+  const pageEmptyOffersText = saleStateKey
+    ? tSale(`${saleStateKey}Hint`)
+    : t('noOffersYet');
+  const variantPanelInput = (v: ItemPageVariant) => ({
+    product: v.product,
+    offers: v.offers,
+    priceHistory: v.priceHistory,
+    radarSignal: v.radarSignal,
+    minPrice: productMarketStats(v.product).minPrice,
+    emptyText:
+      v.product.id === product.id ? pageEmptyOffersText : t('noOffersYet'),
+  });
+  const defaultVariantKey =
+    itemRoute?.kind === 'render' ? itemRoute.variantKey : '';
 
   return (
     <ClientMessages scope="productDetail">
@@ -403,7 +540,7 @@ export async function ProductDetailView({
                 </Link>
               </li>
               <li className="breadcrumb-item active" aria-current="page">
-                {product.name}
+                {displayName}
               </li>
             </ol>
           </nav>
@@ -456,7 +593,7 @@ export async function ProductDetailView({
                 {[product.brand, product.has_5g ? '5G' : '']
                   .filter(Boolean)
                   .join(' · ')}
-                {product.variant_name && (
+                {product.variant_name && !isItemGroup && (
                   <>
                     {product.brand || product.has_5g ? ' · ' : ''}
                     <ContentText text={product.variant_name} locale={locale} />
@@ -464,19 +601,38 @@ export async function ProductDetailView({
                 )}
               </p>
 
-              <h1 className="h2 fw-bold text-dark mb-2">{product.name}</h1>
+              <h1 className="h2 fw-bold text-dark mb-2">{displayName}</h1>
               {/* Price in the first screen on phones, ahead of the scoreboard
             (DOS/Rate#605); the full price strip stays further down. */}
-              {currentMinPrice > 0 && sellerCount > 0 && (
+              {heroStats.minPrice > 0 && heroStats.sellerCount > 0 && (
                 <p className="rate-pdv-price-line mb-3">
                   {t.rich('heroPriceLine', {
-                    price: minPriceFormatted,
-                    count: sellerCount,
+                    price: heroMinPriceFormatted,
+                    count: heroStats.sellerCount,
                     strong: (chunks) => (
                       <strong className="rate-tabular">{chunks}</strong>
                     ),
                   })}
                 </p>
+              )}
+              {isItemGroup && (
+                <ItemVariantPicker
+                  label={t('itemVariantLabel')}
+                  defaultKey={defaultVariantKey}
+                  options={itemVariants.map((v) => {
+                    const stats = productMarketStats(v.product);
+                    return {
+                      key: v.variant.variant_key,
+                      label: itemVariantLabel(v.variant),
+                      priceLabel:
+                        stats.minPrice > 0
+                          ? t('itemVariantPrice', {
+                              price: stats.minPrice.toLocaleString('vi-VN'),
+                            })
+                          : t('itemVariantNoPrice'),
+                    };
+                  })}
+                />
               )}
               {/* Below lg the scoreboard starts past the first phone screen, so
             the buyer score is repeated next to the price (DOS/Rate#630). */}
@@ -1083,50 +1239,69 @@ export async function ProductDetailView({
           })()}
 
           {/* SECTION #3: Time-Series Price History Chart, Fake Discount Detector & Neutral Merchant Audit */}
-          <PriceHistorySection
-            productName={product.name}
-            // Its "current lowest" is the page's "from" price (DOS/Rate#1141).
-            history={{
-              ...priceHistory,
-              currentMinPrice: currentMinPrice > 0 ? currentMinPrice : null,
-            }}
-            radarSignal={radarSignal}
-          />
+          {isItemGroup ? (
+            <ItemVariantPanels
+              defaultKey={defaultVariantKey}
+              panels={itemVariants.map((v) => ({
+                key: v.variant.variant_key,
+                node: renderPriceHistory(variantPanelInput(v)),
+              }))}
+            />
+          ) : (
+            renderPriceHistory({
+              product,
+              priceHistory,
+              minPrice: currentMinPrice,
+              radarSignal,
+            })
+          )}
 
           {/* Neutral Merchant Reference & Trust Audit Table */}
           <div
             id="offers-table"
             className="card rounded-4 p-md-5 mt-4 mb-5 border-0 p-4 shadow-sm"
           >
-            <div className="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
-              <div>
-                <span className="rate-eyebrow text-muted d-block mb-1">
-                  {t('offersEyebrow')}
-                </span>
-                <h2 className="h4 fw-bold d-flex align-items-center mb-0 gap-2">
-                  <BsShieldCheck aria-hidden="true" />{' '}
-                  {t('offersTitle', { count: offers.length })}
-                </h2>
-              </div>
-              <span className="badge bg-light text-secondary rounded-pill border px-3 py-2">
-                {t('offersMedianBadge')}
-              </span>
-            </div>
-
-            {offers.length === 0 ? (
-              <p className="text-muted mb-0">
-                {saleStateKey ? tSale(`${saleStateKey}Hint`) : t('noOffersYet')}
-              </p>
-            ) : (
-              <ProductOffersExplorer
-                productName={product.name}
-                productSlug={product.slug}
-                offers={offers}
-                byOffer={priceHistory.byOffer}
-                radarSignal={radarSignal}
+            {isItemGroup ? (
+              <ItemVariantPanels
+                defaultKey={defaultVariantKey}
+                panels={itemVariants.map((v) => ({
+                  key: v.variant.variant_key,
+                  node: renderOffersBody(variantPanelInput(v)),
+                }))}
               />
+            ) : (
+              renderOffersBody({
+                product,
+                offers,
+                priceHistory,
+                radarSignal,
+                emptyText: pageEmptyOffersText,
+              })
             )}
           </div>
+
+          {/* Listings whose size is not stated: their own group, never part
+              of the "from" price (Q2, DOS/Rate#1154). */}
+          {itemPage && itemPage.unknownOffers.length > 0 && (
+            <div
+              id="offers-unknown-size"
+              className="card rounded-4 p-md-5 mb-5 border-0 p-4 shadow-sm"
+              data-testid="pdv-unknown-size-offers"
+            >
+              <h2 className="h5 fw-bold mb-1">
+                {t('unknownSizeTitle', {
+                  count: itemPage.unknownOffers.length,
+                })}
+              </h2>
+              <p className="text-muted small mb-3">{t('unknownSizeNote')}</p>
+              <ProductOffersExplorer
+                productName={displayName}
+                productSlug={itemPage.item.slug}
+                offers={itemPage.unknownOffers}
+                byOffer={{}}
+              />
+            </div>
+          )}
 
           {/* Interactive Value Efficiency & 2-Year Ownership Calculator (#62) */}
           {(() => {

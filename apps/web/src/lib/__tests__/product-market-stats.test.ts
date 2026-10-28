@@ -163,7 +163,10 @@ async function main() {
     /computeProductRadarSignal\(product, inStockOffers\)/,
     'The radar note never quotes a sold-out listing'
   );
-  assert.match(page, /currentMinPrice: currentMinPrice > 0 \? currentMinPrice/);
+  // The history's "current lowest" is the "from" price of the size it shows:
+  // the page's own on a variant page, each size's on an Item page (#1154).
+  assert.match(page, /currentMinPrice: v\.minPrice > 0 \? v\.minPrice/);
+  assert.match(page, /minPrice: currentMinPrice,/);
 
   const productApi = read('../../app/api/v1/rate/products/[slug]/route.ts');
   assert.match(

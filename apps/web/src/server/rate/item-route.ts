@@ -50,8 +50,13 @@ export async function resolveItemRoute(input: {
   if (!isItemModelOn()) return null;
   try {
     const resolution = await _getCachedCatalogSlug(input.slug);
+    // Variants are read only for a URL that renders: an Item URL, or a
+    // single-variant Item sharing its variant's slug.
+    const renders =
+      resolution?.kind === 'item' ||
+      (resolution?.kind === 'variant' && resolution.item.slug === input.slug);
     const variants =
-      resolution?.kind === 'item'
+      renders && resolution.item
         ? await getCachedItemVariants(resolution.item)
         : [];
     const plan = planItemRoute({

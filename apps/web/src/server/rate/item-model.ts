@@ -1,6 +1,7 @@
 import 'server-only';
 import type {
   CatalogSlugResolution,
+  RateItem,
   RateItemVariant,
 } from '../../lib/rate-api';
 
@@ -57,6 +58,9 @@ export type ItemRoutePlan =
       variantSlug: string;
       itemSlug: string;
       variantKey: string;
+      item: RateItem;
+      /** Published variants in display order; empty for a shared-slug Item. */
+      variants: readonly RateItemVariant[];
     };
 
 /**
@@ -105,6 +109,8 @@ export function planItemRoute(input: {
     variantSlug: chosen.slug,
     itemSlug: item.slug,
     variantKey: chosen.variant_key,
+    item,
+    variants,
   };
 }
 

@@ -4713,7 +4713,7 @@ export function sortItemVariants(
  * NULL). The trust view has no `item_id` (#1242 leaves it unchanged), so the
  * listing ids come from rate.products and their offers from the view.
  */
-async function getItemUnknownVariantOffers(
+export async function getItemUnknownVariantOffers(
   itemId: string
 ): Promise<MerchantOffer[]> {
   const idRows = await fetchAllRows(

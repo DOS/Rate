@@ -246,6 +246,8 @@ async function main() {
     variantSlug: 'apple-iphone-16-128gb',
     itemSlug: 'apple-iphone-16',
     variantKey: '128gb',
+    item,
+    variants,
   });
   assert.equal(
     (render(null) as { variantKey: string }).variantKey,
@@ -415,9 +417,25 @@ async function main() {
   ].map((c) =>
     path.resolve(__dirname, `../../../app/[locale]/${c}/[slug]/page.tsx`)
   );
+  // The Item page reads `?v=` in the browser (window.location), never through
+  // useSearchParams, which would need a Suspense bailout (#1154).
+  for (const file of [
+    'selected-variant.ts',
+    'ItemVariantPicker.tsx',
+    'ItemVariantPanels.tsx',
+  ].map((f) =>
+    path.resolve(__dirname, `../../../components/product/item/${f}`)
+  )) {
+    assert.doesNotMatch(
+      fs.readFileSync(file, 'utf8'),
+      /useSearchParams|useRouter|searchParams:/,
+      file
+    );
+  }
   for (const file of [
     ...productRouteFiles,
     path.resolve(__dirname, '../item-route.ts'),
+    path.resolve(__dirname, '../item-page.ts'),
   ]) {
     const src = fs.readFileSync(file, 'utf8');
     assert.doesNotMatch(src, /searchParams|\bheaders\(|\bcookies\(/, file);
@@ -428,6 +446,92 @@ async function main() {
     assert.match(src, /export const revalidate = 300;/, file);
     assert.match(src, /export function generateStaticParams\(/, file);
   }
+  // Item page helpers (#1154).
+  const page = await import('../../../lib/item-page');
+  assert.equal(
+    page.itemVariantLabel({ variant_key: '256gb', storage_gb: 256 }),
+    '256GB'
+  );
+  assert.equal(
+    page.itemVariantLabel({ variant_key: '1024gb', storage_gb: 1024 }),
+    '1TB'
+  );
+  assert.equal(page.itemVariantLabel({ variant_key: '1tb' }), '1TB');
+  assert.equal(
+    page.itemVariantLabel({
+      variant_key: '256gb',
+      variant_name: '256GB Titan',
+    }),
+    '256GB Titan'
+  );
+  assert.equal(page.itemVariantLabel({ variant_key: 'standard' }), 'standard');
+  assert.equal(page.cleanVariantKey(' 256GB '), '256gb');
+  assert.equal(page.cleanVariantKey('../x'), null);
+  assert.equal(page.cleanVariantKey(['256gb']), null);
+  assert.deepEqual(
+    page
+      .withoutItemSiblings(
+        [
+          { slug: 'apple-iphone-16-128gb' },
+          { slug: 'samsung-galaxy-s24-256gb' },
+        ],
+        ['apple-iphone-16-128gb', 'apple-iphone-16-256gb']
+      )
+      .map((p) => p.slug),
+    ['samsung-galaxy-s24-256gb'],
+    'same-Item sizes are no competitors'
+  );
+  const group = page.buildItemProductGroupNode({
+    itemKey: 'apple:iphone-16',
+    name: 'Apple iPhone 16',
+    brand: 'Apple',
+    canonicalUrl: 'https://rate.vn/smartphones/apple-iphone-16',
+    description: 'd',
+    images: [],
+    variants: [
+      {
+        variantKey: '128gb',
+        label: '128GB',
+        minPrice: 21990000,
+        maxPrice: 23000000,
+        sellerCount: 3,
+      },
+      {
+        variantKey: '256gb',
+        label: '256GB',
+        minPrice: 0,
+        maxPrice: 0,
+        sellerCount: 0,
+      },
+    ],
+    aggregateRating: {
+      '@type': 'AggregateRating',
+      ratingValue: 4.5,
+      reviewCount: 10,
+    },
+  }) as {
+    '@type': string;
+    url: string;
+    variesBy: string[];
+    aggregateRating?: unknown;
+    hasVariant: {
+      sku: string;
+      url: string;
+      size: string;
+      offers?: { lowPrice: number; offerCount: number };
+    }[];
+  };
+  assert.equal(group['@type'], 'ProductGroup');
+  assert.equal(group.url, 'https://rate.vn/smartphones/apple-iphone-16');
+  assert.deepEqual(group.variesBy, ['https://schema.org/size']);
+  assert.ok(group.aggregateRating, 'one Item-level rating');
+  assert.equal(group.hasVariant[0]!.sku, 'apple:iphone-16:128gb');
+  assert.equal(
+    group.hasVariant[0]!.url,
+    'https://rate.vn/smartphones/apple-iphone-16?v=128gb'
+  );
+  assert.equal(group.hasVariant[0]!.offers?.lowPrice, 21990000);
+  assert.equal(group.hasVariant[1]!.offers, undefined, 'no 0 ₫ offer');
   console.warn('✅ Item web data layer suite passed');
 }
 
