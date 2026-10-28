@@ -944,7 +944,7 @@ export default function DeepInspectWorkspace({
                       <span className="text-muted">{t('reviewRiskLabel')}</span>
                       <strong
                         className={
-                          Number(merchant.review_risk_score || 0) >= 40
+                          (reviewRiskScoreOrNull(merchant) ?? 0) >= 40
                             ? 'text-danger'
                             : 'text-primary'
                         }
@@ -954,21 +954,24 @@ export default function DeepInspectWorkspace({
                           : `${reviewRiskScoreOrNull(merchant)}/100`}
                       </strong>
                     </div>
-                    <div className="progress" style={{ height: 8 }}>
-                      <div
-                        className={`progress-bar ${
-                          Number(merchant.review_risk_score || 0) >= 40
-                            ? 'bg-danger'
-                            : 'bg-primary'
-                        }`}
-                        style={{
-                          width: `${Math.min(
-                            100,
-                            Math.max(4, Number(merchant.review_risk_score || 0))
-                          )}%`,
-                        }}
-                      />
-                    </div>
+                    {/* No analysed review: no bar (DOS/Rate#1249). */}
+                    {reviewRiskScoreOrNull(merchant) != null && (
+                      <div className="progress" style={{ height: 8 }}>
+                        <div
+                          className={`progress-bar ${
+                            (reviewRiskScoreOrNull(merchant) ?? 0) >= 40
+                              ? 'bg-danger'
+                              : 'bg-primary'
+                          }`}
+                          style={{
+                            width: `${Math.min(
+                              100,
+                              Math.max(4, reviewRiskScoreOrNull(merchant) ?? 0)
+                            )}%`,
+                          }}
+                        />
+                      </div>
+                    )}
                   </div>
 
                   <Link

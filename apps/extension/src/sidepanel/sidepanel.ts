@@ -19,6 +19,19 @@ function formatVnd(val: number | null | undefined): string {
   return formatSafeExtensionVnd(val);
 }
 
+// A store with no analysed review has no review risk score (DOS/Rate#1249).
+function reviewRiskText(merchant: {
+  review_risk_score?: number | null;
+  review_risk_breakdown?: { total_reviews?: unknown } | null;
+}): string {
+  const rawTotal = merchant.review_risk_breakdown?.total_reviews;
+  if (rawTotal != null) {
+    const total = Number(rawTotal);
+    if (!Number.isFinite(total) || total <= 0) return 'chưa đủ dữ liệu';
+  }
+  return formatSafeNumber(merchant.review_risk_score, { min: 0, max: 100 });
+}
+
 function escapeHtml(raw: string): string {
   return raw
     .replace(/&/g, '&amp;')
@@ -278,7 +291,7 @@ async function fetchAndRenderMerchantTrustDirectory(
                     ${m.is_official ? '<span style="color:#34d399;font-size: 13px;">[Mall]</span>' : ''}
                   </div>
                   <div class="offer-meta">
-                    ${escapeHtml(m.platform.toUpperCase())} (${formatSafeNumber(m.product_count, { min: 0 })} SP) - Rủi ro lừa đảo: ${formatSafeNumber(m.dosafe_risk_score, { min: 0, max: 100 })} | Rủi ro đánh giá: ${formatSafeNumber(m.review_risk_score, { min: 0, max: 100 })}
+                    ${escapeHtml(m.platform.toUpperCase())} (${formatSafeNumber(m.product_count, { min: 0 })} SP) - Rủi ro lừa đảo: ${formatSafeNumber(m.dosafe_risk_score, { min: 0, max: 100 })} | Rủi ro đánh giá: ${reviewRiskText(m)}
                   </div>
                 </div>
                 <a href="${detailHref}" target="_blank" rel="noopener noreferrer" class="offer-price" style="text-decoration:none;color:${trustColor};">
@@ -464,7 +477,7 @@ function renderPanelContent(
           </div>
           <div class="stat-box">
             <div class="stat-label">Rủi ro lừa đảo / đánh giá</div>
-            <div class="stat-val">${formatSafeNumber(merchant.dosafe_risk_score, { min: 0, max: 100 })} / ${formatSafeNumber(merchant.review_risk_score, { min: 0, max: 100 })}</div>
+            <div class="stat-val">${formatSafeNumber(merchant.dosafe_risk_score, { min: 0, max: 100 })} / ${reviewRiskText(merchant)}</div>
           </div>
         </div>
       </div>

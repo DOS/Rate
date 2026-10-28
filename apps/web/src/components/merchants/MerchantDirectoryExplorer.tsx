@@ -352,7 +352,9 @@ export default function MerchantDirectoryExplorer({
         sanitizeMerchantAuditText(m.platform, 'shopee', 32).toUpperCase(),
         m.is_official ? 'Yes' : 'No',
         `${sanitizeMerchantScore100(m.trust_score)}/100`,
-        `${sanitizeMerchantScore100(m.review_risk_score)}/100`,
+        reviewRiskScoreOrNull(m) == null
+          ? labels.reviewRiskNoData
+          : `${reviewRiskScoreOrNull(m)}/100`,
         String(sanitizeMerchantCount(rStats.genuineDealCount)),
         String(sanitizeMerchantCount(rStats.fakeTrapCount)),
         String(sanitizeMerchantCount(m.review_risk_breakdown?.authentic_count)),
@@ -433,7 +435,9 @@ export default function MerchantDirectoryExplorer({
         sanitizeMerchantAuditText(m.platform_shop_id, '', 80),
         m.is_official ? 'true' : 'false',
         String(sanitizeMerchantScore100(m.trust_score)),
-        String(sanitizeMerchantScore100(m.review_risk_score)),
+        reviewRiskScoreOrNull(m) == null
+          ? ''
+          : String(reviewRiskScoreOrNull(m)),
         String(sanitizeMerchantCount(rStats.genuineDealCount)),
         String(sanitizeMerchantCount(rStats.fakeTrapCount)),
         String(sanitizeMerchantCount(m.review_risk_breakdown?.authentic_count)),
@@ -918,14 +922,15 @@ export default function MerchantDirectoryExplorer({
                             ) : (
                               <span
                                 className={`badge rounded-pill rate-tabular ${
-                                  merchant.review_risk_score <= 15
+                                  (reviewRiskScoreOrNull(merchant) ?? 0) <= 15
                                     ? 'bg-success-subtle text-success'
-                                    : merchant.review_risk_score <= 40
+                                    : (reviewRiskScoreOrNull(merchant) ?? 0) <=
+                                        40
                                       ? 'bg-warning-subtle text-warning-emphasis'
                                       : 'bg-danger-subtle text-danger'
                                 }`}
                               >
-                                {merchant.review_risk_score}/100
+                                {reviewRiskScoreOrNull(merchant)}/100
                               </span>
                             )}
                           </div>

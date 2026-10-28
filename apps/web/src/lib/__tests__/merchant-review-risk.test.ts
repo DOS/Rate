@@ -79,6 +79,26 @@ function main() {
     seedingTier: 'low',
   }).map((m) => m.id);
   assert.deepEqual(lowTier, ['low'], 'no data is not a low-risk store');
+  const elevatedTier = filterMerchantDirectory([noReviews, highRisk, lowRisk], {
+    ...DEFAULT_MERCHANT_DIRECTORY_FILTERS,
+    seedingTier: 'elevated',
+  }).map((m) => m.id);
+  assert.deepEqual(elevatedTier, ['high'], 'no data is not a high-risk store');
+  // A count stored as text or malformed is read too.
+  assert.equal(
+    reviewRiskScoreOrNull({
+      review_risk_score: 4,
+      review_risk_breakdown: { total_reviews: '0' },
+    }),
+    null
+  );
+  assert.equal(
+    reviewRiskScoreOrNull({
+      review_risk_score: 4,
+      review_risk_breakdown: { total_reviews: '12' },
+    }),
+    4
+  );
   console.warn('✅ Merchant review risk suite passed');
 }
 

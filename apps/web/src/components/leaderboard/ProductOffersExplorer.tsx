@@ -359,7 +359,7 @@ export default function ProductOffersExplorer({
         o.merchant.is_official ? 'true' : 'false',
         String(trust),
         offerRiskScoreCsvCell(o.merchant.dosafe_risk_score),
-        offerRiskScoreCsvCell(o.merchant.review_risk_score),
+        offerRiskScoreCsvCell(reviewRiskScoreOrNull(o.merchant)),
         String(o.price_current),
         hasValidOrig ? String(o.price_original) : '',
         implausibleOfferIds.has(o.id)
