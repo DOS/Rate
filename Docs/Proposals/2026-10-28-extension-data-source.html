@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="vi" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="color-scheme" content="dark" />
+  <title>Extension làm nguồn dữ liệu</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0f1113;
+      --surface: #161a1e;
+      --surface-2: #1d2228;
+      --border: #2a313a;
+      --text: #e8edf2;
+      --muted: #9ba5b0;
+      --accent: #FF2E29;
+      --accent-soft: rgba(255, 46, 41, 0.14);
+      --green: #22c55e;
+      --green-soft: rgba(34, 197, 94, 0.14);
+      --amber: #f59e0b;
+      --amber-soft: rgba(245, 158, 11, 0.14);
+      --code-bg: #0b0d0f;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 32px 16px 64px;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Inter, sans-serif;
+      line-height: 1.65;
+    }
+    .container { max-width: 960px; margin: 0 auto; }
+    h1 { font-size: 28px; margin: 12px 0 8px; letter-spacing: -0.02em; }
+    h2 { font-size: 20px; margin: 40px 0 12px; padding-bottom: 8px; border-bottom: 1px solid var(--border); color: #fff; }
+    h3 { font-size: 16px; margin: 22px 0 8px; color: #fff; }
+    p, li { color: var(--text); }
+    .muted { color: var(--muted); }
+    .badge { display: inline-block; padding: 4px 10px; border-radius: 6px; font-size: 12px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; }
+    .badge-accent { background: var(--accent-soft); color: var(--accent); border: 1px solid rgba(255,46,41,0.35); }
+    .badge-green { background: var(--green-soft); color: var(--green); border: 1px solid rgba(34,197,94,0.35); }
+    .badge-amber { background: var(--amber-soft); color: var(--amber); border: 1px solid rgba(245,158,11,0.35); }
+    .card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 16px 18px; margin: 14px 0; }
+    .card.rec { border-color: rgba(34,197,94,0.45); }
+    .card.warn { border-color: rgba(245,158,11,0.45); }
+    .card.key { border-color: rgba(255,46,41,0.45); }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; }
+    .table-wrap { overflow-x: auto; margin: 12px 0; }
+    table { width: 100%; border-collapse: collapse; font-size: 14px; min-width: 620px; }
+    th, td { border: 1px solid var(--border); padding: 8px 10px; text-align: left; vertical-align: top; }
+    th { background: var(--surface-2); color: #fff; }
+    td.pub { color: var(--green); font-weight: 600; white-space: nowrap; }
+    td.priv { color: var(--accent); font-weight: 600; white-space: nowrap; }
+    code { background: var(--code-bg); border: 1px solid var(--border); border-radius: 4px; padding: 1px 5px; font-size: 13px; overflow-wrap: anywhere; }
+    .flow { background: var(--code-bg); border: 1px solid var(--border); border-radius: 8px; padding: 14px 16px; font-family: ui-monospace, Consolas, monospace; font-size: 13px; white-space: pre; overflow-x: auto; }
+    .q { border-left: 3px solid var(--accent); padding-left: 12px; margin: 16px 0; }
+    .q strong { color: #fff; }
+    a { color: #ff6b66; }
+    ol.src li { font-size: 14px; }
+  </style>
+</head>
+<body>
+<div class="container">
+  <span class="badge badge-accent">Đề xuất, chưa code</span>
+  <span class="badge badge-amber">Chờ JOY trả lời 7 câu</span>
+  <h1>Mở rộng extension thành nguồn dữ liệu chính</h1>
+  <p class="muted">Ngày 28/10/2026 - Issue <a href="https://github.com/DOS/Rate/issues/1175">DOS/Rate#1175</a> - Bản tóm tắt tiếng Anh: <a href="./2026-10-28-extension-data-source.md">2026-10-28-extension-data-source.md</a> - Người soạn: session con của Rate Core PO</p>
+
+  <div class="card rec">
+    <h3>Tóm tắt một đoạn</h3>
+    <p>Crawler đang đụng tường bot (TikTok tạm dừng ở RS#658, Lazada search bị trả về trang chặn (punish page) ở RS#659, Shopee chỉ chạy được qua một runner đã đăng nhập). Trình duyệt thật của người dùng không gặp những tường này vì chính người dùng mở trang. Đề xuất: <b>phương án B</b>, cho extension gửi một <b>quan sát tối thiểu</b> (giá, tồn kho, mã SKU, URL, thời điểm, sàn, không có dữ liệu cá nhân) khi người dùng đã đồng ý, lưu vào vùng <b>cách ly</b>, và chỉ đưa lên giá công khai sau khi Rate Services <b>xác minh chéo</b> với crawler hoặc với người dùng độc lập khác. Crawler vẫn giữ làm nguồn khởi động và đối chứng. Extension vẫn công khai (người dùng tải về thì giải nén ra đọc được), còn luật chống đầu độc và chấm điểm tin cậy nằm ở DOS/Rate-Services private. Extension không bao giờ tự tải trang người dùng không mở, không né bot, không giải captcha.</p>
+  </div>
+
+  <h2>1. Hiện trạng <code>apps/extension</code> (đọc từ mã, nhánh <code>dev</code> ngày 28/10)</h2>
+
+  <h3>1.1. Extension đọc gì</h3>
+  <ul>
+    <li>Chạy content script trên 10 sàn và chuỗi bán lẻ: Shopee, Lazada, Tiki, TikTok (<code>*.tiktok.com</code>), CellphoneS, Thế Giới Di Động, FPT Shop, Hoàng Hà, Di Động Việt, Phong Vũ (<code>manifest.json</code>). Quyền khai báo: <code>storage</code>, <code>sidePanel</code> và host của 10 sàn cộng <code>rate.vn</code>.</li>
+    <li>Chỉ xử lý trang chi tiết sản phẩm có mã sản phẩm trong URL, bỏ trang chủ, danh mục, tìm kiếm (<code>extractProductSignalFromDom</code>).</li>
+    <li>Lấy: URL đã cắt tham số theo dõi, mã sản phẩm và mã shop từ URL, tiêu đề, phiên bản đang chọn, giá hiện tại, giá gạch ngang, số sao và số lượt đánh giá. Ưu tiên JSON-LD, sau đó mới tới selector DOM. <b>Chưa đọc tồn kho.</b></li>
+  </ul>
+
+  <h3>1.2. Hai luồng gửi lên server</h3>
+  <div class="flow">Mỗi lần mở trang sản phẩm (luôn chạy, không cần opt-in):
+  GET /api/v1/rate/extension/lookup?platform&amp;url&amp;title&amp;price&amp;...
+  -> chỉ đọc, trả giá lịch sử, nơi bán khác, phán định giá ảo. Không ghi DB.
+
+Chỉ khi người dùng bật "Đóng góp phát hiện sản phẩm mới (Opt-In)" (mặc định TẮT):
+  POST /api/v1/rate/extension/ingest  { platform, externalItemId, externalShopId,
+       url, title, selectedVariant, price, originalPrice, ratingStar,
+       ratingCount, userConsentOptIn: true }
+  -> Zod + giới hạn 15 lần/phút/IP (bộ nhớ trong của từng instance serverless,
+     không phải giới hạn toàn cục) + chặn phụ kiện + kiểm host khớp sàn
+  -> RPC rate.enqueue_crowd_verify_signal (không dùng service role)
+  -> chèn 1 job 'extension_crowd_verify' vào rate.crawl_jobs
+     (trần 120 job/phút toàn hệ thống, đây là giới hạn toàn cục duy nhất)
+  -> worker Rate Services nhận job như một yêu cầu CÀO LẠI URL đó</div>
+
+  <h3>1.3. "Cách ly" hiện tại nghĩa là gì</h3>
+  <ul>
+    <li>Tín hiệu từ người dùng <b>không bao giờ</b> ghi thẳng vào giá công khai. Giá người dùng thấy chỉ nằm trong <code>payload</code> của job.</li>
+    <li>Theo đọc mã Rate Services (mô tả chung), worker không có nhánh xử lý riêng cho loại job này: nó cào lại URL như mọi job khác. Tức là <b>giá người dùng thấy không được dùng làm dữ liệu</b>, chỉ là cái cớ để cào. <b>Khi crawler bị chặn ở sàn đó, tín hiệu cộng đồng hiện không giúp được gì.</b> Đây là lý do chính cần đề xuất này.</li>
+  </ul>
+
+  <div class="card warn">
+    <h3>1.4. Những điểm lệch phát hiện khi đọc mã (cần sửa dù JOY chọn phương án nào)</h3>
+    <ol>
+      <li>Nhãn opt-in trong side panel nói "Chỉ gửi URL sản phẩm công khai đã cắt sạch tham số theo dõi", nhưng payload thật gửi mười trường dữ liệu (cộng cờ đồng ý): nền tảng, mã sản phẩm, mã shop, URL, tiêu đề, phiên bản, giá, giá gốc, số sao, số lượt đánh giá. Lời công bố phải khớp dữ liệu gửi đi; Chrome Web Store coi công bố nổi bật trong giao diện là điều kiện để sự đồng ý có giá trị [6].</li>
+      <li><code>CHROMEWEBSTORE.md</code> giải trình quyền <code>tabs</code> và host <code>localhost:3000</code> nhưng <code>manifest.json</code> không có hai quyền này; ngược lại manifest có năm host mà tài liệu không giải trình: TikTok, Hoàng Hà, Di Động Việt, Phong Vũ, <code>www.rate.vn</code>. Mục công bố quyền riêng tư của tài liệu này cũng chỉ kể 6 tên miền và nói extension "chỉ chạy trên trang chi tiết sản phẩm", trong khi content script khớp mọi đường dẫn của 10 sàn (việc lọc trang sản phẩm diễn ra trong mã, sau khi script đã chạy).</li>
+      <li>Host <code>https://*.tiktok.com/*</code> cho content script chạy trên toàn bộ TikTok (cả video, tin nhắn), rộng hơn mức cần cho trang sản phẩm. Match pattern hỗ trợ giới hạn theo đường dẫn, nên có thể thu hẹp.</li>
+      <li>Trang <code>/privacy-policy</code> của rate.vn chưa nhắc tới extension.</li>
+      <li>Luồng lookup mặc định, không cần opt-in, đã gửi URL, tiêu đề, giá, mã sản phẩm, mã shop (và IP theo bản chất HTTP) lên rate.vn ở mọi lần mở trang sản phẩm. Chính sách Chrome cho phép gửi hoạt động duyệt web khi phục vụ tính năng người dùng thấy và được công bố nổi bật [6]; <b>giả định</b> của người soạn là luồng này hợp lệ nếu được công bố rõ, nhưng nó cũng là dữ liệu duyệt web theo Luật 91/2025/QH15, nên cần đưa vào câu hỏi cho ý kiến pháp lý (mục 4.7).</li>
+    </ol>
+    <p class="muted">Chưa xác minh extension đã được phát hành trên Chrome Web Store hay chưa.</p>
+  </div>
+
+  <h2>2. Honey, Keepa, BeeCost lấy dữ liệu thế nào (chỉ từ nguồn công khai)</h2>
+  <div class="table-wrap"><table>
+    <tr><th>Sản phẩm</th><th>Điều đã công bố hoặc đã được kiểm chứng</th><th>Bài học cho Rate</th></tr>
+    <tr><td><b>Honey</b> (PayPal)</td>
+      <td>Trang "Data and privacy" của Honey nói họ thu thập thông tin sản phẩm chung như giá và tình trạng còn hàng để chạy lịch sử giá và Droplist, chỉ trên các trang mua sắm họ hỗ trợ, và dữ liệu sự kiện không chứa thông tin định danh [1]. Tổ chức datarequests.org cho rằng Honey thu thập lịch sử duyệt web nhiều hơn mức chính sách nói và đã khiếu nại lên cơ quan bảo vệ dữ liệu [2].</td>
+      <td>Mô hình gần nhất với đề xuất: extension đọc giá trên trang người dùng xem. Rủi ro uy tín lớn nhất là <b>làm nhiều hơn điều mình công bố</b>.</td></tr>
+    <tr><td><b>Keepa</b></td>
+      <td>Trang Firefox Add-ons của Keepa nói extension gửi mã ASIN của sản phẩm đang xem để vẽ biểu đồ và không lưu gì về người dùng [3]. Nhà nghiên cứu Wladimir Palant (2021) ghi nhận extension giữ kết nối WebSocket với một mã người dùng cố định, gửi số sao và hạng bán, và <b>nhận lệnh từ server để tải nền các trang Amazon người dùng không mở</b> rồi gửi dữ liệu về [4]. Một thảo luận trên nhóm Chromium Extensions cũng nêu việc này [5]. Keepa còn cung cấp dữ liệu lịch sử giá qua API cho bên ngoài [5b].</td>
+      <td>Ví dụ cần tránh: biến máy người dùng thành crawler phân tán. Đó đúng là logic cào dữ liệu, trái tinh thần chính sách store, và không được đặt trong DOS/Rate. Rate chỉ đọc trang người dùng tự mở.</td></tr>
+    <tr><td><b>BeeCost</b> (Việt Nam)</td>
+      <td>Có extension cho Chrome và Cốc Cốc, hiện lịch sử giá trên Shopee, Tiki, Lazada, Sendo [7][8]; nhà phát triển nói có hơn 100 triệu sản phẩm để so sánh [9]. Một bài đánh giá nói khả năng lấy dữ liệu tốt nhất trên Shopee, chưa ổn định trên Lazada và FPT Shop [10]. <b>Không tìm thấy tài liệu công khai nào mô tả cách BeeCost thu thập dữ liệu</b> hay chính sách quyền riêng tư của họ.</td>
+      <td>Chứng minh người dùng Việt Nam chấp nhận extension lịch sử giá, và Cốc Cốc là kênh phân phối đáng kể. Không suy đoán thêm về cách họ làm.</td></tr>
+  </table></div>
+  <p class="muted">Các nguồn [2], [4], [5] là bên thứ ba và có thể đã cũ; chúng được dẫn để thấy rủi ro, không phải để kết luận hành vi hiện tại của các sản phẩm đó.</p>
+
+  <h2>3. Vì sao trình duyệt thật né được tường bot</h2>
+  <ul>
+    <li>Trang đã được chính người dùng mở, có cookie, phiên đăng nhập, dấu vân tay trình duyệt và IP dân dụng thật. Extension chỉ đọc DOM đã hiện ra, <b>không phát thêm request nào tới sàn</b>, nên sàn không có gì khác thường để chặn.</li>
+    <li>Lưu lượng tự nhiên phân tán: mỗi người xem vài trang, không có đỉnh truy cập từ một IP.</li>
+    <li>Đổi lại: Rate không chọn được trang nào được xem. Dữ liệu dồn vào sản phẩm phổ biến, sản phẩm ít người xem có thể không bao giờ được cập nhật. Vì vậy crawler vẫn cần.</li>
+  </ul>
+
+  <h2>4. Những gì thay đổi nếu extension là nguồn chính</h2>
+
+  <h3>4.1. Payload quan sát tối thiểu (đề xuất <code>ExtensionObservation v1</code>)</h3>
+  <div class="table-wrap"><table>
+    <tr><th>Trường</th><th>Ý nghĩa</th><th>Ghi chú</th></tr>
+    <tr><td><code>schema_version</code></td><td>Phiên bản payload</td><td>Bắt buộc, để server từ chối bản cũ.</td></tr>
+    <tr><td><code>marketplace</code></td><td>Sàn (10 giá trị hiện có)</td><td>Server kiểm lại từ host của URL.</td></tr>
+    <tr><td><code>listing_url</code></td><td>URL chuẩn hóa, không query</td><td>Đã cắt tham số theo dõi như hiện nay.</td></tr>
+    <tr><td><code>external_item_id</code>, <code>external_shop_id</code></td><td>Mã listing và mã shop của sàn</td><td>Mã của gian hàng, không phải của người dùng.</td></tr>
+    <tr><td><code>sku_id</code>, <code>variant_label</code></td><td>Mã phiên bản (ví dụ model id của Shopee) và nhãn phiên bản đang chọn</td><td>Khớp với mô hình Item, Variant, Listing (#1129).</td></tr>
+    <tr><td><code>price_vnd</code>, <code>list_price_vnd</code></td><td>Giá bán hiển thị và giá gạch ngang</td><td>Mục tiêu: chỉ lấy giá công khai chính của trang, <b>bỏ</b> giá sau voucher, xu, giá thành viên, vì chúng phụ thuộc tài khoản. Extractor hiện <b>chưa</b> phân biệt được hai loại giá này; đây là việc của M2 và cần kiểm từng sàn.</td></tr>
+    <tr><td><code>stock_state</code>, <code>stock_qty</code></td><td>Còn hàng, hết hàng, sắp hết, không rõ; số lượng nếu trang hiện</td><td>Trường mới, extractor hiện chưa đọc.</td></tr>
+    <tr><td><code>observed_at</code></td><td>Thời điểm client thấy giá</td><td>Server ghi thêm <code>received_at</code> và tin <code>received_at</code> hơn <code>observed_at</code>.</td></tr>
+    <tr><td><code>extractor</code></td><td>Nguồn trích xuất (JSON-LD hay DOM) và phiên bản extension</td><td>Để loại bản extractor hỏng.</td></tr>
+    <tr><td><code>submitter_id</code></td><td>Mã theo lượt cài, <b>do server cấp</b> khi người dùng đồng ý; server tự ghi thời điểm cấp</td><td>Cần cho chống đầu độc. Coi là dữ liệu cá nhân đã bút danh hóa (pseudonymous), lưu riêng, không công khai, người dùng yêu cầu xóa được. Kẻ tấn công vẫn xin được mã mới tùy ý, nên mã này chỉ giới hạn được client trung thực; phòng thủ thật nằm ở 4.4.</td></tr>
+  </table></div>
+  <p><b>Không bao giờ gửi:</b> cookie, tên tài khoản sàn, giỏ hàng, đơn hàng, địa chỉ, số điện thoại, từ khóa tìm kiếm, referrer, query string, nội dung tab khác, lịch sử duyệt. Bỏ <code>ratingStar</code>, <code>ratingCount</code> khỏi luồng này trừ khi JOY muốn giữ.</p>
+  <p><b>IP:</b> không lưu IP nguyên. Để kiểm "người gửi độc lập" ở 4.4, phía nhận chỉ giữ một mã băm có muối của dải mạng (ví dụ /24 hoặc ASN) trong thời gian ngắn (vài tuần), không gắn vào giá công khai. Mã băm này vẫn là dữ liệu cá nhân và phải được công bố ở 4.2.</p>
+
+  <h3>4.2. Lời đồng ý và chính sách quyền riêng tư</h3>
+  <ul>
+    <li>Giữ <b>opt-in, mặc định tắt</b>. Thêm màn hình chào khi cài lần đầu, nói rõ gửi những trường nào (kể cả mã người gửi và mã băm dải mạng), để làm gì, và nút "Không, cảm ơn" nổi bật ngang nút "Đồng ý". Theo FAQ của Chrome Web Store, sự đồng ý chỉ có giá trị khi đi kèm công bố nổi bật ngay trong giao diện extension; công bố chỉ nằm trong chính sách quyền riêng tư là không đủ [6].</li>
+    <li>Có nút xem "những gì tôi đã gửi gần đây", tắt bất kỳ lúc nào, và yêu cầu xóa theo <code>submitter_id</code>. Đây cũng là quyền của chủ thể dữ liệu theo Luật Bảo vệ dữ liệu cá nhân 91/2025/QH15, hiệu lực từ 01/01/2026, và Nghị định 356/2025/NĐ-CP [11][12].</li>
+    <li>Cập nhật <code>/privacy-policy</code> có mục riêng cho extension, kèm công bố "Limited Use": chỉ dùng cho tính năng giá, không quảng cáo, không bán, không chuyển cho bên thứ ba. FAQ yêu cầu công bố này ở trang chủ hoặc cách một cú nhấp (trang chính sách là được), và thêm một bước xác nhận riêng trong developer dashboard khi nộp [6].</li>
+  </ul>
+
+  <h3>4.3. Rủi ro duyệt Chrome Web Store và Edge Add-ons</h3>
+  <ul>
+    <li><b>Mục đích duy nhất:</b> chính sách yêu cầu dữ liệu thu thập phải cần thiết cho mục đích duy nhất đã công bố và ở mức tối thiểu [6]. <b>Đánh giá của người soạn</b> (không phải lời của chính sách): "kiểm tra giá và lịch sử giá" có thể bao gồm việc gửi quan sát giá, miễn là dữ liệu tối thiểu và người dùng thấy lợi ích; người duyệt store có thể nhìn khác.</li>
+    <li><b>Hoạt động duyệt web và nội dung trang là dữ liệu người dùng</b> theo định nghĩa của Chrome; đọc nội dung trang người dùng xem được tính là xử lý dữ liệu người dùng [6]. Vì vậy công bố và đồng ý ở 4.2 là bắt buộc, không phải tùy chọn.</li>
+    <li>Rủi ro bị từ chối hoặc gỡ: lời công bố lệch payload (mục 1.4), quyền host rộng (TikTok), tài liệu store lệch manifest. Sửa hết trước khi nộp.</li>
+    <li>Edge Add-ons có quy trình duyệt riêng; session này chưa đọc chi tiết chính sách Edge, cần kiểm khi chuẩn bị nộp. Cốc Cốc cài từ Chrome Web Store.</li>
+  </ul>
+
+  <h3>4.4. Chống đầu độc dữ liệu</h3>
+  <p>Nguyên tắc: <b>mọi bản gửi đều là không tin cậy</b>. Mã extension công khai và chạy trên máy người dùng, ai cũng sửa được hoặc gọi thẳng API. Không có cách nào chứng thực client.</p>
+  <div class="grid">
+    <div class="card"><h3>Lớp công khai (DOS/Rate, ở ingest)</h3><ul>
+      <li>Kiểm định dạng, miền giá trị, host khớp sàn, chặn phụ kiện.</li>
+      <li>Giới hạn tần suất thô theo IP và theo <code>submitter_id</code> (chỉ chặn được client trung thực hoặc lỗi; kẻ tấn công đổi mã được).</li>
+      <li>Chỉ <b>lưu</b> vào vùng cách ly, không chấm điểm, không quyết định.</li>
+    </ul></div>
+    <div class="card"><h3>Lớp private (DOS/Rate-Services)</h3><ul>
+      <li>Điểm tin cậy người gửi (tuổi của mã tính theo thời điểm server cấp, lịch sử khớp, tài khoản rate.vn nếu có). Mã mới bắt đầu ở mức tin cậy thấp, nên đổi mã liên tục không có lợi.</li>
+      <li>Đối chiếu với crawler và với người gửi độc lập khác (khác mã người gửi, khác mã băm dải mạng, khác thời điểm).</li>
+      <li>Phát hiện ngoại lai so với giá gần đây, giới hạn biên độ thay đổi.</li>
+      <li>Ngưỡng cụ thể, danh sách chặn, trọng số: không công bố.</li>
+    </ul></div>
+  </div>
+  <p><b>Cách ly tới khi được xác nhận:</b> một quan sát chỉ lên giá công khai khi khớp với crawler trong biên sai số, hoặc khớp với đủ số người gửi độc lập có điểm tin cậy. Một kẻ tạo hàng nghìn lượt cài giả vẫn phải vượt qua tính độc lập và lịch sử tin cậy.</p>
+  <p><b>Lưu ý về trần hiện tại:</b> trần 120 job/phút toàn hệ thống trong RPC hiện nay hợp với "yêu cầu cào lại" nhưng không hợp với nguồn chính: vừa là nút thắt, vừa cho phép một kẻ tấn công làm đầy trần để chặn người dùng thật. Phương án B cần một bảng cách ly riêng có giới hạn theo người gửi thay vì trần toàn cục.</p>
+
+  <h3>4.5. Khởi động lạnh (cold start)</h3>
+  <ul>
+    <li>Extension chỉ hữu ích cho người dùng khi đã có lịch sử giá, mà lịch sử giá lại cần người dùng. Crawler phá vòng lặp này: tiếp tục chạy ở các sàn còn cào được để có dữ liệu ban đầu, và làm mốc đối chiếu.</li>
+    <li><b>Giả định để ước lượng</b> (chưa có số đo): 1.000 người dùng opt-in, mỗi người xem khoảng 5 trang sản phẩm điện thoại mỗi ngày, cho khoảng 5.000 quan sát/ngày, dồn vào vài trăm mẫu phổ biến. Đủ để làm tươi giá sản phẩm hot, chưa đủ cho đuôi dài. Cần số cài đặt thật để kiểm chứng.</li>
+    <li>Kênh tăng trưởng: nút cài trên trang sản phẩm rate.vn, giá trị tự thân của extension (phán định giảm giá ảo), Cốc Cốc.</li>
+  </ul>
+
+  <h3>4.6. Độ phủ theo sàn</h3>
+  <div class="table-wrap"><table>
+    <tr><th>Sàn</th><th>Crawler hiện nay (theo PO Rate Services)</th><th>Extension thêm được gì</th><th>Rủi ro riêng</th></tr>
+    <tr><td>Shopee</td><td>Chỉ chạy qua một runner đã đăng nhập</td><td>Giá trị cao nhất: dữ liệu thật từ nhiều người</td><td>Class CSS bị làm rối, đổi thường xuyên (selector hiện có như <code>.pqTWkA</code>); giá phụ thuộc tài khoản nhiều</td></tr>
+    <tr><td>Lazada</td><td>Search bị trả về trang chặn (RS#659)</td><td>Giá trang chi tiết khi người dùng xem</td><td>Extension không thay được search discovery</td></tr>
+    <tr><td>Tiki</td><td>Chưa có báo cáo bị chặn (chưa xác minh)</td><td>Chủ yếu để đối chiếu</td><td>Thấp</td></tr>
+    <tr><td>TikTok Shop</td><td>Tạm dừng (RS#658)</td><td>Có thể là nguồn duy nhất</td><td>Phải thu hẹp quyền host; trang sản phẩm hay mở trong app chứ không trên web, độ phủ có thể thấp</td></tr>
+    <tr><td>CellphoneS, TGDĐ, FPT Shop, Hoàng Hà, Di Động Việt, Phong Vũ</td><td>Chưa có báo cáo bị chặn (chưa xác minh)</td><td>Đối chiếu, làm tươi giá giữa các lượt cào</td><td>Giá và tồn kho có thể khác theo tỉnh; đề xuất chỉ lấy giá toàn quốc, bỏ tồn kho theo tỉnh để không phải gửi vị trí</td></tr>
+  </table></div>
+
+  <h3>4.7. Pháp lý và điều khoản sàn</h3>
+  <ul>
+    <li>Khác biệt then chốt so với crawler: không có request nào của Rate tới sàn; người dùng tự xem trang, extension đọc những gì đã hiện trên màn hình của họ và chỉ gửi khi họ đồng ý.</li>
+    <li>Điều khoản của nhiều sàn cấm thu thập dữ liệu tự động. Việc đọc thụ động trang người dùng tự mở có thuộc phạm vi đó hay không là <b>vùng xám</b>; Honey, Keepa, BeeCost đã hoạt động nhiều năm, nhưng đó không phải là kết luận pháp lý. Rủi ro thực tế: sàn đổi DOM để làm hỏng extractor, hoặc gửi thư yêu cầu.</li>
+    <li>Giá và tồn kho là dữ kiện. Đây là hiểu biết chung, <b>chưa có luật sư xác nhận</b> cho luật Việt Nam. Đề xuất xin ý kiến pháp lý trước khi phát hành rộng (mốc M4).</li>
+    <li>Dữ liệu cá nhân: payload thiết kế để không có; riêng <code>submitter_id</code>, IP và mã băm dải mạng được xử lý như dữ liệu cá nhân theo Luật 91/2025/QH15 [11].</li>
+    <li>Câu hỏi cho ý kiến pháp lý: (a) đọc thụ động trang người dùng tự mở có vi phạm điều khoản sàn không; (b) luồng lookup mặc định (gửi URL, tiêu đề, giá của trang đang xem, không cần opt-in) có cần đồng ý riêng theo Luật 91/2025/QH15 không; (c) thời hạn lưu mã người gửi và mã băm dải mạng.</li>
+  </ul>
+
+  <h2>5. Câu hỏi của JOY: vì sao extension công khai còn crawler thì private?</h2>
+  <div class="card key">
+    <p><b>Trả lời ngắn:</b> extension không phải crawler. Nó chỉ đọc trang người dùng đang xem, khi họ đồng ý, và gửi lên rate.vn. Phần nhạy cảm không nằm ở việc đọc trang, mà nằm ở <b>cách server quyết định tin bản gửi nào</b>. Phần đó private.</p>
+  </div>
+  <ol>
+    <li><b>Client buộc phải lộ.</b> Extension được phát cho mọi người; tải file <code>.crx</code> về giải nén là đọc được toàn bộ mã. Giấu repo không giấu được client, chỉ làm mất lợi ích của open-core: người dùng và người duyệt store kiểm được extension làm đúng điều nó nói. Với một extension đọc trang mua sắm, sự minh bạch này là điểm bán hàng (ngược với các tranh cãi của Honey và Keepa ở mục 2).</li>
+    <li><b>Extension không chứa gì thuộc loại crawler.</b> Không tải trang người dùng không mở, không proxy, không giải captcha, không né phát hiện bot, không gọi API nội bộ của sàn. Selector đọc giá trên trang người dùng xem không phải bí mật: ai mở DevTools cũng thấy.</li>
+    <li><b>Phía nhận mới là chỗ bị tấn công.</b> Kẻ đầu độc không cần sửa extension, họ gọi thẳng API. Nếu họ đọc được ngưỡng, trọng số, cách đối chiếu với crawler, họ sẽ gửi dữ liệu nằm vừa dưới ngưỡng. Vì vậy chấm điểm tin cậy, đối chiếu crawler, ngưỡng và giới hạn chi tiết nằm ở DOS/Rate-Services.</li>
+    <li><b>Giữ bí mật là lớp phòng thủ thêm, không phải lớp duy nhất.</b> Thiết kế vẫn phải đứng vững nếu luật bị lộ: cách ly mặc định, cần xác nhận độc lập, crawler làm mốc. Bí mật chỉ làm việc lách tốn công hơn.</li>
+  </ol>
+
+  <h3>Bảng phân chia sở hữu</h3>
+  <div class="table-wrap"><table>
+    <tr><th>Thành phần</th><th>Repo</th><th>Vì sao</th></tr>
+    <tr><td>Extension (đọc trang, lời đồng ý, side panel)</td><td class="pub">DOS/Rate (public)</td><td>Phát cho người dùng, đằng nào cũng đọc được; minh bạch giúp qua duyệt store và tạo niềm tin.</td></tr>
+    <tr><td>Schema payload <code>ExtensionObservation</code></td><td class="pub">DOS/Rate (<code>packages/shared-data</code>)</td><td>Là hợp đồng giữa client và server; client cần nó, Rate Services dùng qua submodule.</td></tr>
+    <tr><td>Ingest API và kiểm tra cơ bản (định dạng, miền giá trị, host, đồng ý, giới hạn thô)</td><td class="pub">DOS/Rate (<code>apps/web</code>)</td><td>Chỉ là kiểm hợp lệ, không có luật tin cậy. Không chấm điểm ở đây.</td></tr>
+    <tr><td>Bảng cách ly (lưu quan sát chưa xác minh)</td><td class="pub">Schema: bản tham chiếu ở DOS/Rate; migration chính thức ở DOS-Me</td><td>Cấu trúc bảng không phải bí mật. Anon chỉ ghi qua RPC hẹp, không đọc được.</td></tr>
+    <tr><td>Xác minh và chấm điểm tin cậy người gửi</td><td class="priv">DOS/Rate-Services (private)</td><td>Đây là thứ kẻ tấn công muốn đọc.</td></tr>
+    <tr><td>Đối chiếu với dữ liệu crawler</td><td class="priv">DOS/Rate-Services (private)</td><td>Gắn với crawler, vốn đã private.</td></tr>
+    <tr><td>Ngưỡng, trọng số, danh sách chặn, giới hạn chi tiết</td><td class="priv">DOS/Rate-Services (private, cấu hình)</td><td>Lộ ra là bị gửi vừa dưới ngưỡng.</td></tr>
+    <tr><td>Đưa quan sát đã xác nhận lên giá công khai (<code>price_history</code>)</td><td class="priv">DOS/Rate-Services (job ghi bằng role worker)</td><td>Chỉ phía private được ghi giá công khai; web chỉ hiển thị kèm nguồn.</td></tr>
+    <tr><td>Crawler, proxy, captcha, né bot</td><td class="priv">DOS/Rate-Services (private)</td><td>Như hiện nay, quy tắc cứng của AGENTS.md. Không có phần nào vào extension.</td></tr>
+  </table></div>
+
+  <h2>6. Các phương án</h2>
+  <div class="table-wrap"><table>
+    <tr><th>Phương án</th><th>Mô tả</th><th>Được</th><th>Mất</th></tr>
+    <tr><td><b>A. Giữ nguyên</b></td><td>Tín hiệu cộng đồng chỉ là yêu cầu cào lại; chỉ sửa các điểm lệch ở mục 1.4.</td><td>Rủi ro thấp nhất, tốn ít công (chỉ phần M1).</td><td>Không giải quyết tường bot: sàn chặn crawler thì tín hiệu vô dụng.</td></tr>
+    <tr><td><b>B. Quan sát thụ động, cách ly, xác minh</b> (khuyến nghị)</td><td>Extension gửi quan sát tối thiểu khi đã đồng ý; Rate Services xác minh chéo rồi mới công khai; crawler làm mốc.</td><td>Có dữ liệu ở Shopee, Lazada, TikTok mà không cần né bot; minh bạch; ranh giới repo rõ.</td><td>Phụ thuộc số người cài; đuôi dài thưa; cần bảng mới (migration DOS-Me), việc ở cả hai repo; rủi ro duyệt store.</td></tr>
+    <tr><td><b>C. Crawler phân tán trong extension</b></td><td>Server ra lệnh cho extension tải nền trang người dùng không mở (kiểu Keepa bị báo cáo [4]).</td><td>Phủ rộng, chủ động.</td><td>Là logic cào dữ liệu, không được ở DOS/Rate; dùng IP và phiên của người dùng; nguy cơ bị gỡ khỏi store và mất uy tín. <b>Không khuyến nghị.</b></td></tr>
+  </table></div>
+  <p class="muted">Bổ sung độc lập với cả ba: nguồn chính thức (API affiliate hoặc đối tác của sàn) nếu có, do Rate Services đánh giá riêng.</p>
+
+  <h2>7. Khuyến nghị</h2>
+  <div class="card rec">
+    <p>Chọn <b>phương án B</b>, triển khai theo mốc, có giai đoạn chạy ẩn (shadow) để đo trước khi bất kỳ quan sát nào lên giá công khai. Sửa ngay các điểm lệch ở mục 1.4 vì chúng là rủi ro duyệt store kể cả khi giữ phương án A. Rate Services sở hữu ingestion phía sau, xác minh và đưa lên giá công khai.</p>
+  </div>
+
+  <h2>8. Các mốc</h2>
+  <div class="table-wrap"><table>
+    <tr><th>Mốc</th><th>Nội dung</th><th>Repo</th><th>Điều kiện qua mốc</th></tr>
+    <tr><td>M0</td><td>JOY quyết định về đề xuất này</td><td>-</td><td>JOY trả lời mục 10</td></tr>
+    <tr><td>M1</td><td>Sửa lời công bố cho khớp payload, mục extension trong <code>/privacy-policy</code>, <code>CHROMEWEBSTORE.md</code> khớp manifest, thu hẹp host TikTok, màn hình chào opt-in</td><td>DOS/Rate</td><td>Review fresh-context, kiểm bằng tay trên 10 sàn</td></tr>
+    <tr><td>M2</td><td>Schema <code>ExtensionObservation v1</code>, extractor đọc tồn kho và SKU, ingest lưu vào bảng cách ly mới (migration qua DOS-Me, JOY duyệt)</td><td>DOS/Rate, DOS-Me</td><td>Không ghi gì vào giá công khai; test ingest đầy đủ</td></tr>
+    <tr><td>M3</td><td>Xác minh và chấm điểm ở chế độ shadow: chấm nhưng không công khai, 2 đến 4 tuần</td><td>DOS/Rate-Services</td><td>Các chỉ số ở mục 9 đạt ngưỡng đề xuất</td></tr>
+    <tr><td>M4</td><td>Đưa quan sát đã xác nhận lên <code>price_history</code> kèm nguồn; web hiện "nguồn: người dùng, đã đối chiếu"; ý kiến pháp lý; xác nhận Limited Use trong developer dashboard; nộp Chrome Web Store và Edge</td><td>Cả hai</td><td>JOY duyệt bước production và bước nộp store</td></tr>
+  </table></div>
+
+  <h2>9. Chỉ số quyết định thành công</h2>
+  <div class="table-wrap"><table>
+    <tr><th>Chỉ số</th><th>Ngưỡng đề xuất (để JOY chỉnh)</th></tr>
+    <tr><td>Độ khớp với crawler trên listing cả hai cùng có (shadow)</td><td>Ít nhất 98% quan sát lệch không quá 1%</td></tr>
+    <tr><td>Độ khớp giữa người gửi độc lập trên listing crawler không vào được (TikTok, Shopee và Lazada bị chặn), cộng một mẫu kiểm tra bằng tay mỗi tuần</td><td>Ít nhất 95% cặp quan sát cùng giờ lệch không quá 1%; mẫu tay khớp từ 95%</td></tr>
+    <tr><td>Tỷ lệ quan sát đã lên công khai mà sau đó bị chứng minh sai (bị crawler hoặc mẫu kiểm tay bác trong vòng 24 giờ, với giá lệch quá 1%)</td><td>Dưới 0,5%</td></tr>
+    <tr><td>Tỷ lệ opt-in trên người dùng hoạt động</td><td>Đo trước, đặt ngưỡng sau M2</td></tr>
+    <tr><td>Phần trăm listing Shopee, Lazada, TikTok trong catalog có giá tươi dưới 24 giờ</td><td>Tăng rõ so với chỉ crawler (đo mốc trước M3)</td></tr>
+    <tr><td>Tuổi trung vị của giá đang hiển thị</td><td>Giảm so với mốc trước M3</td></tr>
+    <tr><td>Bị từ chối hoặc gỡ trên store; khiếu nại quyền riêng tư</td><td>0</td></tr>
+  </table></div>
+
+  <h2>10. Câu hỏi mở cho JOY</h2>
+  <div class="q"><strong>1. Chọn phương án nào?</strong> Khuyến nghị B. A nếu muốn chờ thêm; C không khuyến nghị.</div>
+  <div class="q"><strong>2. Mặc định đồng ý:</strong> giữ tắt và hỏi rõ ở màn hình chào (khuyến nghị), hay chỉ để công tắc trong side panel như hiện nay?</div>
+  <div class="q"><strong>3. Danh tính người gửi:</strong> chỉ mã ẩn danh theo lượt cài, hay khuyến khích đăng nhập rate.vn để bản gửi có trọng số cao hơn?</div>
+  <div class="q"><strong>4. Listing chỉ một người thấy</strong> và crawler không vào được: ẩn tới khi có xác nhận (khuyến nghị), hay hiện với nhãn "chưa xác minh"?</div>
+  <div class="q"><strong>5. Ý kiến pháp lý</strong> trước khi phát hành rộng: có thuê luật sư không, ngân sách bao nhiêu?</div>
+  <div class="q"><strong>6. Phát hành store:</strong> dưới tài khoản nhà phát triển nào, và có nộp Edge cùng lúc với Chrome không?</div>
+  <div class="q"><strong>7. Giữ số sao và lượt đánh giá</strong> trong payload, hay bỏ để payload chỉ còn giá, tồn kho, SKU (khuyến nghị bỏ)?</div>
+
+  <h2>Nguồn</h2>
+  <ol class="src">
+    <li>Honey, "Data and privacy": <a href="https://www.joinhoney.com/data-and-privacy/">joinhoney.com/data-and-privacy</a></li>
+    <li>datarequests.org (2020), về việc Honey thu thập dữ liệu: <a href="https://datarequests.org/blog/honey-data-collection">datarequests.org/blog/honey-data-collection</a></li>
+    <li>Keepa trên Firefox Add-ons: <a href="https://addons.mozilla.org/en-US/firefox/addon/keepa/">addons.mozilla.org/en-US/firefox/addon/keepa</a></li>
+    <li>Wladimir Palant, "Data exfiltration in Keepa Price Tracker" (2021): <a href="https://palant.info/2021/08/02/data-exfiltration-in-keepa-price-tracker/">palant.info</a></li>
+    <li>Chromium Extensions group, "Keepa extension is deceptively scraping Amazon in the background": <a href="https://groups.google.com/a/chromium.org/g/chromium-extensions/c/il9VqQBc8So">groups.google.com</a>.<br/>[5b] Thư viện Python cho Keepa API: <a href="https://pypi.org/project/keepa/">pypi.org/project/keepa</a></li>
+    <li>Chrome Web Store, User Data FAQ: <a href="https://developer.chrome.com/docs/webstore/program-policies/user-data-faq">developer.chrome.com</a></li>
+    <li>mytour.vn, về tính năng BeeCost: <a href="https://mytour.vn/en/blog/bai-viet/top-5-features-of-beecost-the-ultimate-tool-for-finding-the-best-online-shopping-deals-mytour.html">mytour.vn</a></li>
+    <li>uplus, review extension BeeCost: <a href="https://uplus.substack.com/p/beecost-check-gia-shopee">uplus.substack.com</a></li>
+    <li>BeeCost trên Ameblo: <a href="https://ameblo.jp/beecost/">ameblo.jp/beecost</a></li>
+    <li>GHN, "BeeCost Shopee là gì": <a href="https://ghn.vn/blogs/tip-ban-hang/beecost-shopee-la-gi">ghn.vn</a></li>
+    <li>Cổng thông tin Hà Tĩnh, Luật Bảo vệ dữ liệu cá nhân có hiệu lực từ 01/01/2026: <a href="https://hatinh.gov.vn/vi/bai-viet/luat-bao-ve-du-lieu-ca-nhan-chinh-thuc-co-hieu-luc-thi-hanh-tu-ngay-112026">hatinh.gov.vn</a></li>
+    <li>Thư viện Pháp luật, Nghị định 356/2025/NĐ-CP (chưa đối chiếu với Công báo; cần luật sư xác nhận ngày ban hành và hiệu lực): <a href="https://thuvienphapluat.vn/van-ban/Quyen-dan-su/Nghi-dinh-356-2025-ND-CP-huong-dan-Luat-Bao-ve-du-lieu-ca-nhan-687428.aspx">thuvienphapluat.vn</a></li>
+  </ol>
+  <p class="muted">Mã nguồn đã đọc (DOS/Rate): <code>apps/extension/manifest.json</code>, <code>apps/extension/CHROMEWEBSTORE.md</code>, <code>apps/extension/src/background/service-worker.ts</code>, <code>apps/extension/src/extractors/ecommerce-detector.ts</code>, <code>apps/extension/src/sidepanel/sidepanel.html</code>, <code>apps/web/src/app/api/v1/rate/extension/ingest/route.ts</code>, <code>apps/web/src/server/rate/extension.ts</code>, <code>apps/web/src/app/[locale]/privacy-policy/page.tsx</code>, <code>apps/web/locales/*.json</code>, <code>supabase/migrations/20261018120101_rate_crowd_verify_signal_rpc.sql</code>. DOS/Rate-Services chỉ được đọc để hiểu chung, không trích mã.</p>
+</div>
+</body>
+</html>
