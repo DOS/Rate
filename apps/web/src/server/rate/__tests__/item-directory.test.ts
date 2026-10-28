@@ -161,6 +161,7 @@ async function main() {
   assert.equal(await dir.getItemBrandFacets(CATEGORY, 'smartphones'), null);
   assert.equal(await dir.getItemCount(), null);
   assert.equal(await dir.getItemSlugByVariantSlug(), null);
+  assert.equal(await dir.getItemSlugsFor(['apple-iphone-16-128gb']), null);
   assert.deepEqual(calls, [], 'flag off: no database read');
 
   // Flag on: one row per Item, pages cut after grouping.
@@ -206,6 +207,12 @@ async function main() {
   assert.deepEqual(batches, [0, 500]);
   assert.equal(tail!.length, 20);
   assert.equal(tail!.at(-1)!.id, 'lone-599');
+
+  // In-app versus links: only the slugs asked for, mapped to Items (#1290).
+  assert.deepEqual(
+    await dir.getItemSlugsFor(['apple-iphone-16-256gb', 'samsung-galaxy-s24']),
+    { 'apple-iphone-16-256gb': 'apple-iphone-16' }
+  );
 
   // Past the read cap the caller shows its variant listing (#1290).
   assert.equal(
