@@ -1195,7 +1195,8 @@
     "unknownSizeTitle": "Storage not stated ({count} sources)",
     "unknownSizeNote": "The seller does not state the storage, so these prices are not part of the product's \"from\" price.",
     "sizePanelLoading": "Loading this size…",
-    "sizePanelLoadFailed": "Could not load this size. Try picking it again."
+    "sizePanelLoadFailed": "Could not load this size.",
+    "sizePanelRetry": "Try again"
   },
   "homePage": {
     "catDescSmartphones": "Filter by chipset, RAM/ROM, refresh rate Hz, battery mAh & fast charge W",

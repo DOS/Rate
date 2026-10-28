@@ -1195,7 +1195,8 @@
     "unknownSizeTitle": "Neuvedené úložiště ({count} zdrojů)",
     "unknownSizeNote": "Prodejce neuvádí velikost úložiště, proto tyto ceny nejsou součástí ceny „od“ produktu.",
     "sizePanelLoading": "Načítání této varianty…",
-    "sizePanelLoadFailed": "Tuto variantu se nepodařilo načíst. Zkuste ji vybrat znovu."
+    "sizePanelLoadFailed": "Tuto variantu se nepodařilo načíst.",
+    "sizePanelRetry": "Zkusit znovu"
   },
   "homePage": {
     "catDescSmartphones": "Filtrovat podle čipsetu, RAM/ROM, obnovovací frekvence Hz, baterie mAh a nabíjení W",

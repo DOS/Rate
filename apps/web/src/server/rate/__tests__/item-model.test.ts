@@ -573,6 +573,10 @@ async function main() {
   assert.match(sizeRes.headers.get('cache-control') ?? '', /s-maxage=300/);
   assert.equal((await sizeGet('../etc')).status, 400);
   assert.equal((await sizeGet('no-such-product')).status, 404);
+  // Only a published size of a published Item: not a retired size, not a
+  // master with no Item yet.
+  assert.equal((await sizeGet('apple-iphone-16-unknown')).status, 404);
+  assert.equal((await sizeGet('samsung-galaxy-s24-256gb')).status, 404);
   delete process.env.RATE_ITEM_MODEL;
   sizeRes = await sizeGet('apple-iphone-16-128gb');
   assert.equal(sizeRes.status, 404, 'flag off: the size route answers nothing');

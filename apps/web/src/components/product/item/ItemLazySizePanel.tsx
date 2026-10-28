@@ -16,25 +16,30 @@ import { useSelectedVariant } from './selected-variant';
 
 export type ItemSizePanelKind = 'strip' | 'history' | 'offers';
 
-// One request per size for the page's lifetime, shared by its three panels.
-const loads = new Map<string, Promise<ItemSizePanelData>>();
+// The request in flight per size, shared by the size's three panels. It is
+// dropped once settled, so a later pick reads fresh data (the route itself is
+// cached for 5 minutes).
+const inFlight = new Map<string, Promise<ItemSizePanelData>>();
 
 function loadSize(slug: string): Promise<ItemSizePanelData> {
-  let load = loads.get(slug);
+  let load = inFlight.get(slug);
   if (!load) {
     load = fetch(itemSizePanelPath(slug))
       .then((res) => (res.ok ? res.json() : Promise.reject(res.status)))
       .then((json: { ok?: boolean; data?: ItemSizePanelData }) =>
         json?.ok && json.data ? json.data : Promise.reject('no data')
       );
-    // A failed load is retried on the next pick, not cached.
-    load.catch(() => loads.delete(slug));
-    loads.set(slug, load);
+    const settle = () => inFlight.delete(slug);
+    load.then(settle, settle);
+    inFlight.set(slug, load);
   }
   return load;
 }
 
-function useSizePanel(slug: string | undefined): {
+function useSizePanel(
+  slug: string | undefined,
+  attempt: number
+): {
   data: ItemSizePanelData | null;
   failed: boolean;
 } {
@@ -53,7 +58,7 @@ function useSizePanel(slug: string | undefined): {
     return () => {
       live = false;
     };
-  }, [slug]);
+  }, [slug, attempt]);
   return state.slug === slug
     ? { data: state.data, failed: state.failed }
     : { data: null, failed: false };
@@ -212,7 +217,11 @@ export default function ItemLazySizePanel({
   const t = useTranslations('productDetail');
   const selected = useSelectedVariant(Object.keys(slugs), defaultKey);
   const lazy = selected !== defaultKey;
-  const { data, failed } = useSizePanel(lazy ? slugs[selected] : undefined);
+  const [attempt, setAttempt] = useState(0);
+  const { data, failed } = useSizePanel(
+    lazy ? slugs[selected] : undefined,
+    attempt
+  );
   if (!lazy) return <Fragment key={defaultKey}>{defaultNode}</Fragment>;
   if (data) {
     return (
@@ -228,6 +237,15 @@ export default function ItemLazySizePanel({
     >
       <p className="text-muted small mb-0">
         {failed ? t('sizePanelLoadFailed') : t('sizePanelLoading')}
+        {failed && (
+          <button
+            type="button"
+            className="btn btn-link btn-sm p-0 ms-2 align-baseline"
+            onClick={() => setAttempt((n) => n + 1)}
+          >
+            {t('sizePanelRetry')}
+          </button>
+        )}
       </p>
     </div>
   );

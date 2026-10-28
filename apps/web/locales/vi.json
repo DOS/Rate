@@ -1195,7 +1195,8 @@
     "unknownSizeTitle": "Chưa rõ dung lượng ({count} nguồn)",
     "unknownSizeNote": "Người bán không ghi rõ dung lượng, nên các giá này không tính vào giá \"từ\" của sản phẩm.",
     "sizePanelLoading": "Đang tải phiên bản này…",
-    "sizePanelLoadFailed": "Không tải được phiên bản này. Hãy thử chọn lại."
+    "sizePanelLoadFailed": "Không tải được phiên bản này.",
+    "sizePanelRetry": "Thử lại"
   },
   "homePage": {
     "catDescSmartphones": "Lọc theo chipset, RAM/ROM, tần số quét Hz, pin mAh & sạc nhanh W",

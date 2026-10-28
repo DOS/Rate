@@ -30,6 +30,8 @@ import {
 } from '@/lib/sale-state';
 import { productImageUrl } from '@/lib/rate-domain-core';
 import { isItemModelOn } from './item-model';
+import { getCachedCatalogSlug } from './item-route';
+import { ItemModelUnavailableError } from '../../lib/rate-api';
 import { createLogger } from '@/lib/logger';
 import {
   RATE_CACHE_TAGS,
@@ -241,8 +243,9 @@ export function itemSizePanelBytes(
   return variants.reduce(
     (sum, v) =>
       sum +
-      JSON.stringify(v.offers).length +
-      JSON.stringify(v.priceHistory).length,
+      // UTF-8 bytes, as sent: Vietnamese titles take more than one each.
+      Buffer.byteLength(JSON.stringify(v.offers), 'utf8') +
+      Buffer.byteLength(JSON.stringify(v.priceHistory), 'utf8'),
     0
   );
 }
@@ -250,12 +253,21 @@ export function itemSizePanelBytes(
 /**
  * One size's panel data for `/api/v1/rate/item-size/{slug}`, through the same
  * cached readers as the page. Null while `RATE_ITEM_MODEL` is off or the
- * slug is no published product.
+ * Item tables are missing, and for a slug that is no published size of a
+ * published Item (a draft Item, a retired size, a master with no Item).
  */
 export async function loadItemSizePanel(
   variantSlug: string
 ): Promise<ItemSizePanelData | null> {
   if (!isItemModelOn()) return null;
+  let resolution;
+  try {
+    resolution = await getCachedCatalogSlug(variantSlug);
+  } catch (err) {
+    if (err instanceof ItemModelUnavailableError) return null;
+    throw err;
+  }
+  if (resolution?.kind !== 'variant' || resolution.retired) return null;
   const product = await getCachedMasterProductBySlug(variantSlug);
   if (!product) return null;
   const offers = await getCachedMasterProductOffers(product.id);
