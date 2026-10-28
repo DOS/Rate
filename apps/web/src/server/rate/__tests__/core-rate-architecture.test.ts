@@ -11031,6 +11031,75 @@ async function runCoreArchitectureSuite() {
     assert.equal(isVersusScoreTie(5, 4.996), true, 'equal at two decimals');
     assert.equal(isVersusScoreTie(4.98, 4.97), false);
     assert.equal(isVersusScoreTie(Number.NaN, 5), false);
+    // The verdict follows the persona: A leads on the default weights, B on
+    // the camera persona, and the verdict names each in turn with its
+    // weights (DOS/Rate#1235).
+    const { versusVerdictCopy, versusVerdictFor } =
+      await import('../../../lib/versus-verdict');
+    const camA = {
+      ...scoreItemA,
+      slug: 'cam-a',
+      name: 'Model A',
+      combinedScore5: 4.9,
+      expertScore10: null,
+      criteria: { screen: 5, performance: 5, camera: 3, battery: 5, value: 5 },
+    };
+    const camB = {
+      ...scoreItemB,
+      slug: 'cam-b',
+      name: 'Model B',
+      combinedScore5: 4.6,
+      expertScore10: null,
+      criteria: { screen: 4, performance: 4, camera: 5, battery: 4, value: 4 },
+    };
+    const { PERSONA_WEIGHTS } =
+      await import('../../../components/compare/VersusInteractiveScoreboard');
+    const labels = {
+      photography: 'Chụp ảnh / Âm thanh',
+      custom: 'Trọng số tùy chỉnh',
+    };
+    const verdictFor = (persona: 'default' | 'photography' | 'business') =>
+      versusVerdictFor(
+        computeVersusWeightedResult(
+          camA,
+          camB,
+          PERSONA_WEIGHTS[persona],
+          persona
+        ),
+        camA.slug,
+        persona,
+        labels
+      );
+    const byDefault = verdictFor('default');
+    const byCamera = verdictFor('photography');
+    assert.equal(byDefault.key, 'versusAutoVerdict');
+    assert.equal(byCamera.key, 'versusAutoVerdict');
+    if (
+      byDefault.key === 'versusAutoVerdict' &&
+      byCamera.key === 'versusAutoVerdict'
+    ) {
+      assert.equal(byDefault.values.winner, 'Model A');
+      assert.equal(byDefault.values.score, '4.90');
+      assert.equal(byCamera.values.winner, 'Model B');
+      assert.equal(byCamera.values.score, '4.50');
+    }
+    assert.equal(byDefault.weightsLabel, null);
+    assert.equal(byCamera.weightsLabel, 'Chụp ảnh / Âm thanh');
+    // A persona without its own label reads as custom weights.
+    assert.equal(verdictFor('business').weightsLabel, 'Trọng số tùy chỉnh');
+    assert.deepEqual(
+      versusVerdictCopy({
+        tie: true,
+        score: 5,
+        winnerName: 'x',
+        weightsLabel: null,
+      }),
+      {
+        key: 'versusAutoVerdictTie',
+        values: { score: '5.00' },
+        weightsLabel: null,
+      }
+    );
     // The score gap reads as points, never as đồng.
     const viCompare = (
       (await import('../../../../locales/vi.json')).default as {

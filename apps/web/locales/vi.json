@@ -129,6 +129,7 @@
     "tieDeltaNote": "(cùng điểm theo trọng số hiện tại)",
     "tie1v1Badge": "Ngang điểm 1v1",
     "versusAutoVerdictTie": "Kết luận tự động: hai mẫu ngang điểm tổng hợp ({score}/5.0), chọn theo giá và thông số bạn cần.",
+    "versusVerdictWeights": "(Theo trọng số: {weights}.)",
     "compareMetaTitleWithNames": "So sánh {names} - Điểm đánh giá và 10 nhóm thông số | Rate.vn",
     "compareMetaTitleWithNamesShort": "{names} | Rate.vn",
     "compareMetaDescWithNames": "So sánh điểm đánh giá thật, 10 nhóm thông số kỹ thuật và giá tham khảo giữa {names} trên Rate.vn.",
