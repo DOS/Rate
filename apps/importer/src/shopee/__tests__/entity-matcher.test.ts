@@ -466,6 +466,50 @@ async function runEntityMatcherSuite() {
     offlineEnricher
   ).resolveOrCreateMasterProduct(watch);
   assert.deepEqual(watchRes, { masterId: 'master-series-10-42', isNew: false });
+  // DOS/Rate#1196: an unknown 5G stays null through the normalizer, the enricher and the
+  // seed; known values are kept.
+  const no5gInfo = normalizer.normalize(createShopeeListing('Samsung Galaxy A26 128GB'));
+  assert.equal(no5gInfo.has_5g, null, 'a phone title with no 5G says nothing about it');
+  assert.deepEqual(no5gInfo.specifications.cellular ?? {}, {});
+  assert.equal(
+    normalizer.normalize(createShopeeListing('Samsung Galaxy A26 128GB 5 G')).has_5g,
+    true
+  );
+  assert.equal(
+    normalizer.normalize(createShopeeListing('Samsung Galaxy A26 5 GB RAM')).has_5g,
+    null
+  );
+  assert.equal(
+    normalizer.normalize(createShopeeListing('Samsung Galaxy A26 5G 128GB')).has_5g,
+    true
+  );
+  assert.equal(normalizer.normalize(createShopeeListing('Xiaomi Pad 7 128GB')).has_5g, null);
+  assert.equal(
+    normalizer.normalize(createShopeeListing('Laptop ASUS Vivobook 15 X1504VA 512GB')).has_5g,
+    false
+  );
+  assert.equal(
+    normalizer.normalize(createShopeeListing('Samsung Galaxy S24 Ultra 256GB')).has_5g,
+    true,
+    'a registry model keeps its known 5G'
+  );
+  const enrichedNo5g = await offlineEnricher.enrichCandidate(no5gInfo, 'Samsung Galaxy A26 128GB');
+  assert.equal(enrichedNo5g.has_5g, null, 'the enricher must not turn an unknown 5G into false');
+  assert.equal(
+    (await offlineEnricher.enrichCandidate({ ...no5gInfo, has_5g: false })).has_5g,
+    false
+  );
+  assert.equal((await offlineEnricher.enrichCandidate({ ...no5gInfo, has_5g: true })).has_5g, true);
+  const no5gSeedDb = createMockSupabase();
+  await new EntityMatcher(no5gSeedDb.client, offlineEnricher).resolveOrCreateMasterProduct(
+    no5gInfo
+  );
+  assert.equal(no5gSeedDb.capturedUpserts[0]?.payload.has_5g, null);
+  const known5gSeedDb = createMockSupabase();
+  await new EntityMatcher(known5gSeedDb.client, offlineEnricher).resolveOrCreateMasterProduct(
+    normalizer.normalize(createShopeeListing('Samsung Galaxy A26 5G 128GB'))
+  );
+  assert.equal(known5gSeedDb.capturedUpserts[0]?.payload.has_5g, true);
   console.log('  ✅ [3/7] Tier 2 fuzzy match threshold & ambiguous draft fallback passed');
 
   // 4. Tier 3 Creation Status: benchmark_registry (new) -> published; non-new or crawled_title -> draft
@@ -562,6 +606,19 @@ async function runEntityMatcherSuite() {
   });
   assert.equal(parsedMaster.status, 'draft');
   assert.equal(parsedMaster.average_rating, null);
+  // A master whose 5G is unknown parses (DOS/Rate#1196).
+  assert.equal(
+    MasterProductSchema.parse({
+      id: '018f1a50-0000-7000-8000-000000000002',
+      brand: 'Samsung',
+      model: 'Galaxy A26',
+      model_key: 'samsung:galaxy-a26:128gb',
+      name: 'Samsung Galaxy A26 128GB',
+      slug: 'samsung-galaxy-a26-128gb',
+      has_5g: null,
+    }).has_5g,
+    null
+  );
 
   const reviewJsonSchema = getAiReviewBatchJsonSchema();
   assert.equal(reviewJsonSchema.type, 'object');

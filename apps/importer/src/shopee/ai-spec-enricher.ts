@@ -1033,7 +1033,7 @@ REQUIRED JSON SCHEMA:
     if (candidate.is_benchmark_enriched === true) {
       return {
         ...candidate,
-        has_5g: toBooleanOrUndefined(candidate.has_5g) ?? false,
+        has_5g: toBooleanOrUndefined(candidate.has_5g) ?? null,
         colors: sanitizeColorList(candidate.colors) ?? [],
         spec_source: candidate.spec_source ?? 'benchmark_registry',
       };
@@ -1058,7 +1058,7 @@ REQUIRED JSON SCHEMA:
     if (!aiResult) {
       return {
         ...candidate,
-        has_5g: toBooleanOrUndefined(candidate.has_5g) ?? false,
+        has_5g: toBooleanOrUndefined(candidate.has_5g) ?? null,
         colors: sanitizeColorList(candidate.colors) ?? [],
       };
     }
@@ -1099,7 +1099,7 @@ REQUIRED JSON SCHEMA:
       screen_size_inch:
         toBoundedNumberOrUndefined(aiResult.screen_size_inch, 120) ?? validCandidateScreen,
       battery_mah: toBoundedIntOrUndefined(aiResult.battery_mah, 500000) ?? validCandidateBattery,
-      has_5g: aiResult.has_5g ?? toBooleanOrUndefined(candidate.has_5g) ?? false,
+      has_5g: aiResult.has_5g ?? toBooleanOrUndefined(candidate.has_5g) ?? null,
       specifications: mergedSpecifications,
       key_specs: {
         ...baseKeySpecs,

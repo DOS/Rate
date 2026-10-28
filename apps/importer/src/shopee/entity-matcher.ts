@@ -84,6 +84,18 @@ function isStrictBoolean(val: unknown): boolean {
   return false;
 }
 
+/** A known boolean, or null when the value says nothing (DOS/Rate#1196). */
+function toBooleanOrNull(val: unknown): boolean | null {
+  if (typeof val === 'boolean') return val;
+  if (typeof val === 'number') return val === 1 ? true : val === 0 ? false : null;
+  if (typeof val === 'string') {
+    const lower = val.trim().toLowerCase();
+    if (lower === 'true' || lower === '1') return true;
+    if (lower === 'false' || lower === '0') return false;
+  }
+  return null;
+}
+
 export function sanitizeHttpUrl(raw: unknown): string | null {
   if (typeof raw !== 'string') return null;
   const trimmed = raw.trim();
@@ -727,7 +739,7 @@ export class EntityMatcher {
         storage_gb: toBoundedPositiveInt(candidate.storage_gb, MAX_STORAGE_GB),
         screen_size_inch: toBoundedPositiveNumber(candidate.screen_size_inch, MAX_SCREEN_SIZE_INCH),
         battery_mah: toBoundedPositiveInt(candidate.battery_mah, MAX_BATTERY_MAH),
-        has_5g: isStrictBoolean(candidate.has_5g),
+        has_5g: toBooleanOrNull(candidate.has_5g),
         specifications: candidate.specifications,
         key_specs: candidate.key_specs,
         images: safeImages,
@@ -930,9 +942,10 @@ export class EntityMatcher {
               toBoundedPositiveNumber(aiResult.screen_size_inch, MAX_SCREEN_SIZE_INCH),
             battery_mah:
               existingBatteryMah ?? toBoundedPositiveInt(aiResult.battery_mah, MAX_BATTERY_MAH),
+            // Unknown stays null rather than false (DOS/Rate#1196).
             has_5g: isStrictBoolean(row.has_5g)
               ? true
-              : isStrictBoolean(aiResult.has_5g ?? row.has_5g),
+              : (toBooleanOrNull(aiResult.has_5g) ?? toBooleanOrNull(row.has_5g)),
             specifications: mergedSpecifications,
             key_specs: mergedKeySpecs,
             updated_at: new Date().toISOString(),
