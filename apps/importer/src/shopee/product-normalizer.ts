@@ -1294,7 +1294,9 @@ const APPLE_SIZE_PATTERNS: Record<string, [RegExp, RegExp]> = {
  * "inch" wins over
  * a bare number (DOS/Rate#1113).
  */
-function readAppleSize(model: string, title: string): string {
+function readAppleSize(model: string, rawTitle: string): string {
+  // Composed form, so "tặng" is found in a decomposed (NFD) title too.
+  const title = rawTitle.normalize('NFC');
   const family = /^ipad (?:pro|air)\b/i.test(model)
     ? 'ipad'
     : /^macbook air\b/i.test(model)
@@ -1307,10 +1309,13 @@ function readAppleSize(model: string, title: string): string {
   if (!family) return '';
   const at = title.search(new RegExp(`\\b${family.split(' ')[0]}\\b`, 'i'));
   // A bundle's "+ bàn phím 11 inch" is another product; "GPS + Cellular" is the watch.
-  // So is what is gifted or bundled: ", tặng Silicone Case 46mm" (DOS/Rate#1263).
-  const own = title
+  // So is what a separate part gifts or bundles: ", tặng Silicone Case 46mm",
+  // "| kèm ốp 46mm" (DOS/Rate#1263). Without a "," or "|" the words may still describe
+  // the product ("kèm sạc 46mm GPS", "kèm bút 13 inch").
+  const withoutGift = title
     .slice(Math.max(0, at))
-    .split(/ (?:cho|for) | ?\+ (?!cellular|lte)|[ ,|]+(?:quà tặng|tặng|kèm)(?![\p{L}\d])/iu)[0]!;
+    .split(/ ?[,|] ?(?:quà tặng|tặng|kèm)(?![\p{L}\d])/iu)[0]!;
+  const own = withoutGift.split(/ (?:cho|for) | ?\+ (?!cellular|lte)/i)[0]!;
   if (family === 'watch') {
     // A size outside a band phrase ("dây", "band", "strap", "loop" or "bracelet" up to the
     // next ")", ",", "|", ";", en dash or " - ") is the case's. A band is sold by the case
@@ -1411,9 +1416,7 @@ function readAppleSize(model: string, title: string): string {
     const caseSize = outside.join(' ').match(WATCH_SIZE)?.[1];
     if (caseSize) return `${caseSize}mm`;
     const bandSize = own.match(WATCH_SIZE)?.[1];
-    const sizes = new Set(
-      [...title.slice(Math.max(0, at)).matchAll(new RegExp(WATCH_SIZE, 'gi'))].map(m => m[1])
-    );
+    const sizes = new Set([...withoutGift.matchAll(new RegExp(WATCH_SIZE, 'gi'))].map(m => m[1]));
     return bandSize && sizes.size === 1 ? `${bandSize}mm` : '';
   }
   const [marked, bare] = APPLE_SIZE_PATTERNS[family]!;
