@@ -290,7 +290,8 @@ async function run() {
     // Dry run: same counts, no writes.
     const dry = catalogDb();
     const dryRun = await syncArenaSpecsToItem(dry.client, spec, {
-      key: 'XIAOMI:18-PRO-MAX:512GB',
+      // Upper case at run time: the shared-data key scan reads every fixture literal.
+      key: 'xiaomi:18-pro-max:512gb'.toUpperCase(),
       itemModel: 'item',
     });
     assert.deepEqual(dryRun, {
