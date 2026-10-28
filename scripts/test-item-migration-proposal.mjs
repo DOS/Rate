@@ -174,6 +174,30 @@ try {
     ),
     'Windows 11'
   );
+  // The engine's write paths when Rate Services runs it as the worker: syncArenaSpecsToItem
+  // (#1213) updates specs guarded by updated_at and reads the id back; ingest and the
+  // matcher read item_id from listings and variants.
+  const itemStamp = sql(
+    `SELECT updated_at FROM rate.items WHERE item_key = 'asus:zenbook-s-14'`
+  );
+  assert.equal(
+    asRole(
+      'rate_worker',
+      `UPDATE rate.items SET specifications = specifications || '{"platform": {"os": "Windows 11"}}',
+         key_specs = key_specs, updated_at = now()
+       WHERE id = (SELECT id FROM rate.items WHERE item_key = 'asus:zenbook-s-14')
+         AND updated_at = '${itemStamp}' RETURNING item_key`
+    ),
+    'asus:zenbook-s-14'
+  );
+  assert.equal(
+    asRole(
+      'rate_worker',
+      `SELECT (count(*) > 0)::text FROM rate.products p
+       JOIN rate.master_products mp ON mp.id = p.cluster_id AND mp.item_id = p.item_id`
+    ),
+    'true'
+  );
   for (const change of [
     `status = 'archived'`,
     `item_key = 'x:y'`,

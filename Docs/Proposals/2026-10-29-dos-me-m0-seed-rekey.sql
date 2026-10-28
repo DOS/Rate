@@ -60,14 +60,18 @@ $$;
 
 -- 2. Earbuds carry no storage ----------------------------------------------------------------
 
+-- By category, and by the re-keyed earbuds keys for a master whose category_id is NULL
+-- (backfill-specs can insert one without a category).
 UPDATE rate.master_products mp
    SET metadata = COALESCE(mp.metadata, '{}'::jsonb)
          || jsonb_build_object('m0_storage_gb_before', mp.storage_gb),
        storage_gb = NULL,
        updated_at = now()
-  FROM rate.categories c
- WHERE c.id = mp.category_id
-   AND c.slug = 'earbuds'
-   AND mp.storage_gb IS NOT NULL;
+ WHERE mp.storage_gb IS NOT NULL
+   AND (mp.model_key IN ('samsung:galaxy-buds3-pro:unknown', 'apple:airpods-pro-3:unknown',
+                       'sony:wf-1000xm5:unknown', 'sony:wf-1000xm6:unknown',
+                       'apple:airpods-pro-2:unknown')
+        OR EXISTS (SELECT 1 FROM rate.categories c
+                   WHERE c.id = mp.category_id AND c.slug = 'earbuds'));
 
 COMMIT;

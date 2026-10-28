@@ -9,14 +9,15 @@ WHERE model_key IN ('samsung:galaxy-buds3-pro:64gb', 'apple:airpods-pro-3:standa
                     'sony:wf-1000xm5:64gb', 'sony:wf-1000xm6:standard',
                     'apple:airpods-pro-2-usbc:64gb', 'apple:watch-ultra-3-49mm:64gb');
 
--- V2 Earbuds carry no storage size, in the key or the column.                 expect 0
+-- V2 Earbuds carry no storage size, in the key or the column, category or not. expect 0
 SELECT count(*) AS sized_earbuds
-FROM rate.master_products mp JOIN rate.categories c ON c.id = mp.category_id
-WHERE c.slug = 'earbuds'
+FROM rate.master_products mp LEFT JOIN rate.categories c ON c.id = mp.category_id
+WHERE (c.slug = 'earbuds' OR mp.model_key IN ('samsung:galaxy-buds3-pro:unknown', 'apple:airpods-pro-3:unknown',
+                       'sony:wf-1000xm5:unknown', 'sony:wf-1000xm6:unknown',
+                       'apple:airpods-pro-2:unknown'))
   AND (split_part(mp.model_key, ':', 3) <> 'unknown' OR mp.storage_gb IS NOT NULL);
 
--- V3 No two masters share a brand:model:variant key (the unique index guarantees it; this
--- also catches a re-key that left an old and a new spelling of one product).   expect 0
+-- V3 No two masters share a model_key (also after a re-key).                    expect 0
 SELECT count(*) AS duplicate_keys
 FROM (SELECT model_key FROM rate.master_products GROUP BY 1 HAVING count(*) > 1) d;
 

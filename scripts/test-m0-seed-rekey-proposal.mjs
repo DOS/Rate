@@ -66,10 +66,11 @@ const masters = [
   ],
   ['sony:wf-1000xm5:64gb', 'sony-wf-1000xm5', 'earbuds', 64, 'draft'],
   ['sony:wf-1000xm6:standard', 'sony-wf-1000xm6', 'earbuds', 1, 'draft'],
+  // No category: backfill-specs can insert a master without one.
   [
     'apple:airpods-pro-2-usbc:64gb',
     'apple-airpods-pro-2-usb-c',
-    'earbuds',
+    null,
     64,
     'draft',
   ],
@@ -103,7 +104,8 @@ try {
         ([key, slug, cat, storage, status], i) => `
     INSERT INTO rate.master_products (id, brand, model, model_key, name, slug, category_id, storage_gb, status)
     SELECT '${id(i)}', split_part('${key}', ':', 1), split_part('${key}', ':', 2), '${key}', '${slug}', '${slug}',
-           c.id, ${storage}, '${status}' FROM rate.categories c WHERE c.slug = '${cat}';
+           c.id, ${storage}, '${status}'
+    FROM (SELECT 1) one LEFT JOIN rate.categories c ON c.slug = '${cat ?? ''}';
     INSERT INTO rate.products (id, merchant_id, platform, platform_item_id, title, price_current, url, cluster_id)
     VALUES ('${listing(i)}', 'e0000000-0000-4000-8000-000000000001', 'shopee', 'l${i}', '${slug}', 5000000,
             'https://shopee.vn/l${i}', '${id(i)}');`
