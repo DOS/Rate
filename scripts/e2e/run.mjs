@@ -407,8 +407,9 @@ try {
     // only fills keys that are absent): default output, local public URL.
     NEXT_OUTPUT: '',
     APP_PUBLIC_URL: 'http://localhost',
-    // Read per request by the web app; set for the build too so both agree.
-    RATE_ITEM_MODEL: itemModel ? 'nullable_variant' : 'off',
+    // --item-model only; read per request by the web app, set for the build too
+    // so both agree. The default run sets nothing here.
+    ...(itemModel ? { RATE_ITEM_MODEL: 'nullable_variant' } : {}),
   };
   if (!skipBuild) {
     // --ui=stream: turbo's TUI would take over the terminal from a detached child.
