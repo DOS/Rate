@@ -99,7 +99,8 @@ export interface NormalizedProductCandidate {
   ram_gb: number | null;
   screen_size_inch: number | null;
   battery_mah: number | null;
-  has_5g: boolean;
+  /** null = not known: no registry entry and no 5G in a phone or tablet title (DOS/Rate#1196). */
+  has_5g: boolean | null;
   colors: string[];
   images: string[];
   specifications: ProductSpecifications;
@@ -1948,9 +1949,16 @@ export class ProductNormalizer {
         ? null
         : (benchmarkSized?.screen_size_inch ?? titleScreenSize ?? appleInches);
     const batteryMah = benchmarkSized ? benchmarkSized.battery_mah : null;
-    const has5g = benchmark
+    // A phone or tablet title that names no 5G does not say it lacks it: unknown, not
+    // false (and not true for every phone). Laptops, watches and earbuds have no 5G
+    // (DOS/Rate#1196).
+    const has5g: boolean | null = benchmark
       ? benchmark.has_5g
-      : categorySlug === 'smartphones' || /\b5g\b/i.test(title);
+      : /\b5g\b/i.test(title)
+        ? true
+        : categorySlug === 'smartphones' || categorySlug === 'tablets'
+          ? null
+          : false;
 
     const fallbackOs =
       categorySlug === 'laptops'
@@ -2207,27 +2215,30 @@ export class ProductNormalizer {
         nfc: true,
         other: isApple ? 'Ultra Wideband (UWB), SOS vệ tinh' : 'Hỗ trợ OTG, Chia sẻ nhanh',
       },
+      // Nothing is known about the network of a phone or tablet whose 5G is unknown.
       cellular:
-        !has5g && categorySlug !== 'smartphones'
-          ? {
-              has_5g: false,
-              technology:
-                categorySlug === 'earbuds' || categorySlug === 'laptops'
-                  ? 'Wi-Fi / Bluetooth (No Cellular)'
-                  : 'Wi-Fi / Bluetooth',
-              sim_type: 'No SIM',
-              volte: false,
-              vowifi: false,
-            }
-          : {
-              has_5g: has5g,
-              bands_5g: has5g ? 'SA/NSA/Sub6' : undefined,
-              bands_4g: 'LTE Cat 20',
-              technology: has5g ? 'GSM / HSPA / LTE / 5G' : 'GSM / HSPA / LTE',
-              sim_type: '2 Nano-SIM + eSIM',
-              volte: true,
-              vowifi: true,
-            },
+        has5g === null
+          ? {}
+          : !has5g && categorySlug !== 'smartphones'
+            ? {
+                has_5g: false,
+                technology:
+                  categorySlug === 'earbuds' || categorySlug === 'laptops'
+                    ? 'Wi-Fi / Bluetooth (No Cellular)'
+                    : 'Wi-Fi / Bluetooth',
+                sim_type: 'No SIM',
+                volte: false,
+                vowifi: false,
+              }
+            : {
+                has_5g: has5g,
+                bands_5g: has5g ? 'SA/NSA/Sub6' : undefined,
+                bands_4g: 'LTE Cat 20',
+                technology: has5g ? 'GSM / HSPA / LTE / 5G' : 'GSM / HSPA / LTE',
+                sim_type: '2 Nano-SIM + eSIM',
+                volte: true,
+                vowifi: true,
+              },
       multimedia: {
         loudspeaker: 'Loa kép Stereo đa chiều',
         headphone_jack_35mm: false,
