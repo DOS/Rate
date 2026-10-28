@@ -1,3 +1,4 @@
+import { compareCategoryParam } from '@/lib/compare-params';
 import type { Metadata } from 'next';
 import { getTranslations, setRequestLocale } from 'next-intl/server';
 import { Link } from '@/lib/navigation';
@@ -22,7 +23,7 @@ export const dynamic = 'force-dynamic';
 
 type PageProps = {
   params: Promise<{ locale: string }>;
-  searchParams: Promise<{ slugs?: string; category?: string }>;
+  searchParams: Promise<{ slugs?: string; category?: string; cat?: string }>;
 };
 
 const VALID_CATEGORIES = new Set<CanonicalCategorySlug>([
@@ -121,7 +122,9 @@ export default async function ComparePhonesPage({
   setRequestLocale(locale);
   const lang = normalizeRateLocale(locale);
   const t = await getTranslations({ locale: lang, namespace: 'compare' });
-  const { slugs: slugsParam, category: categoryParam } = await searchParams;
+  const resolvedSearch = await searchParams;
+  const slugsParam = resolvedSearch.slugs;
+  const categoryParam = compareCategoryParam(resolvedSearch);
   const requestedSlugs = parseSlugsCsv(slugsParam);
 
   const [catalogCandidates, requestedProducts] = await Promise.all([
