@@ -5,6 +5,7 @@ import {
   parseCompareToken,
   pickItemVariant,
   planVersusRoute,
+  versusHref,
   type CompareResolution,
 } from '../item-compare';
 
@@ -178,6 +179,26 @@ function main() {
       { slug: 'samsung-galaxy-s24', resolution: s24 }
     ),
     { kind: 'not_found' }
+  );
+
+  // In-app versus links name Items when mapped (#1290).
+  const map = {
+    'apple-iphone-16-128gb': 'apple-iphone-16',
+    'case-a-std': 'case-vs-cover',
+  };
+  assert.equal(
+    versusHref('apple-iphone-16-128gb', 'pixel-10', map),
+    '/compare/apple-iphone-16-vs-pixel-10'
+  );
+  assert.equal(
+    versusHref('apple-iphone-16-128gb', 'pixel-10'),
+    '/compare/apple-iphone-16-128gb-vs-pixel-10',
+    'no map: as before'
+  );
+  assert.equal(
+    versusHref('case-a-std', 'pixel-10', map),
+    '/compare/case-a-std-vs-pixel-10',
+    'an Item slug holding -vs- keeps the variant slug'
   );
 
   console.warn('  ✅ item compare suite passed');

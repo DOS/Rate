@@ -20,6 +20,7 @@ import { escapeCsvCell } from '@/lib/csv-safe';
 import { isVersusScoreTie, versusVerdictFor } from '@/lib/versus-verdict';
 import RadarBadge from '@/components/radar/RadarBadge';
 import { useDealRadarIndex } from '@/components/radar/use-deal-radar';
+import { versusHref } from '@/lib/item-compare';
 
 export type ScoredVersusItem = Omit<ScoredLeaderboardItem, 'rank'>;
 
@@ -27,6 +28,8 @@ interface VersusInteractiveScoreboardProps {
   readonly scoreA: ScoredVersusItem;
   readonly scoreB: ScoredVersusItem;
   readonly locale?: string;
+  /** RATE_ITEM_MODEL on: variant slug to Item slug, for the swap link. */
+  readonly itemSlugBySlug?: Readonly<Record<string, string>>;
 }
 
 export type PersonaPresetKey =
@@ -171,6 +174,7 @@ export function computeVersusWeightedResult(
 export default function VersusInteractiveScoreboard({
   scoreA,
   scoreB,
+  itemSlugBySlug,
 }: VersusInteractiveScoreboardProps) {
   const t = useTranslations('compare');
   const locale = useLocale();
@@ -556,7 +560,7 @@ export default function VersusInteractiveScoreboard({
               JSON
             </button>
             <Link
-              href={`/compare/${scoreB.slug}-vs-${scoreA.slug}`}
+              href={versusHref(scoreB.slug, scoreA.slug, itemSlugBySlug)}
               className="btn btn-sm btn-outline-light rounded-pill px-3"
               title={t('swapDevicesTitle')}
             >

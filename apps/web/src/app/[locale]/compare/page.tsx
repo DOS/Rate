@@ -8,6 +8,7 @@ import {
   getMasterProductCategorySlug,
 } from '@/server/rate';
 import { resolveCompareSlugs } from '@/server/rate/item-compare';
+import { getItemSlugsFor } from '@/server/rate/item-directory';
 import { normalizeRateLocale } from '@/lib/rate-i18n';
 import { defaultOpenGraph, fitTitle, fitDescription } from '@/lib/seo';
 import CompareWorkspace from '@/components/compare/CompareWorkspace';
@@ -149,6 +150,10 @@ export default async function ComparePhonesPage({
           (p) => getMasterProductCategorySlug(p) === activeCategory
         )
       : sameCategoryCandidates.slice(0, 3);
+  // RATE_ITEM_MODEL on: versus links name Items (DOS/Rate#1290); off: null.
+  const itemSlugBySlug = await getItemSlugsFor(
+    initialProducts.map((p) => p.slug)
+  );
 
   return (
     <ClientMessages scope="compare">
@@ -193,6 +198,7 @@ export default async function ComparePhonesPage({
               initialCategory={activeCategory}
               hasExplicitSlugs={requestedSlugs.length > 0}
               locale={locale}
+              {...(itemSlugBySlug ? { itemSlugBySlug } : {})}
             />
           </div>
         </div>

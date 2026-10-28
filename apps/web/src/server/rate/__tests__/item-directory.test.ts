@@ -207,6 +207,17 @@ async function main() {
   assert.equal(tail!.length, 20);
   assert.equal(tail!.at(-1)!.id, 'lone-599');
 
+  // Past the read cap the caller shows its variant listing (#1290).
+  assert.equal(
+    await dir.getItemCatalogPage(
+      async (_offset, limit) =>
+        Array.from({ length: limit }, (_, i) => row(`x-${i}`, `x-${i}`, 1)),
+      0,
+      10
+    ),
+    null
+  );
+
   // Brand facets in Items; a master of a draft Item counts as itself.
   assert.deepEqual(await api.getCategoryItemBrandFacets(CATEGORY), [
     { name: 'Apple', count: 1 },

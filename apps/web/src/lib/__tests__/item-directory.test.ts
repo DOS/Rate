@@ -155,6 +155,17 @@ function main() {
     ['/x?v=128gb', '/x?v=256gb']
   );
 
+  // A ?storage= filter keeps only the matching sizes' chips (#1290).
+  assert.deepEqual(
+    itemSizeChips(card, '/x', (gb) => `${gb}GB`, [128]),
+    [],
+    'one matching size is no choice'
+  );
+  assert.equal(
+    itemSizeChips(card, '/x', (gb) => `${gb}GB`, [128, 256]).length,
+    2
+  );
+
   // Reviews kept out of an Item's rating are all its sizes' (#1275).
   assert.deepEqual(
     sumCountsByItemRow(grouped, { 'm-128': 2, 'm-256': 3, 'm-other': 1 }),
