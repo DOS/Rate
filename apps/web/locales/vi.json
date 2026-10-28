@@ -660,7 +660,9 @@
     "quickToggleShortUnwatched": "Canh giá",
     "quickToggleShortWatched": "Đang canh",
     "sizeRequiredTitle": "Chọn dung lượng để theo dõi giá: cảnh báo giá đặt theo từng dung lượng.",
-    "sizeRequiredCta": "Chọn dung lượng"
+    "sizeRequiredCta": "Chọn dung lượng",
+    "sizeRequiredUnavailable": "Chưa tải được danh sách dung lượng.",
+    "sizeRequiredProductLink": "Mở trang sản phẩm"
   },
   "deals": {
     "metaTitle": "Deal công nghệ đã kiểm tra trên 10 sàn | Rate.vn",

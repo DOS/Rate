@@ -237,7 +237,15 @@ export default function WatchlistWorkspace({
     choices: WatchlistSizeChoice[];
   } | null>(null);
 
+  // The entry whose sizes could not be read: it links to its product page.
+  const [sizePickerFailed, setSizePickerFailed] = useState<string | null>(null);
+
   const openSizePicker = (slug: string) => {
+    setSizePickerFailed(null);
+    const fail = () => {
+      setSizePickerFailed(slug);
+      setSizePicker((open) => (open?.slug === slug ? null : open));
+    };
     fetch(`/api/v1/rate/products/${encodeURIComponent(slug)}`)
       .then((res) => (res.ok ? res.json() : null))
       .then((json) => {
@@ -245,24 +253,48 @@ export default function WatchlistWorkspace({
           json?.ok ? json.data?.variants : null,
           formatStorageLabel
         );
-        setSizePicker(choices.length > 0 ? { slug, choices } : null);
+        if (choices.length > 0) setSizePicker({ slug, choices });
+        else fail();
       })
-      .catch(() => setSizePicker(null));
+      .catch(fail);
   };
 
-  const chooseSize = (item: WatchlistItem, choice: WatchlistSizeChoice) => {
+  const chooseSize = async (
+    item: WatchlistItem,
+    choice: WatchlistSizeChoice
+  ) => {
+    setSizePicker(null);
+    // A size already watched keeps its own entry and target.
+    const already = getWatchlist().find((x) => x.slug === choice.slug);
     removeWatchlistItem(item.slug);
+    if (already) return;
+    const targetPrice =
+      choice.minPrice > 0
+        ? computeWatchlistTargetPrice(choice.minPrice, 5)
+        : item.targetPrice;
     upsertWatchlistItem({
       ...item,
       slug: choice.slug,
       name: choice.name,
       priceWhenAdded: choice.minPrice || item.priceWhenAdded,
-      targetPrice:
-        choice.minPrice > 0
-          ? computeWatchlistTargetPrice(choice.minPrice, 5)
-          : item.targetPrice,
+      targetPrice,
     });
-    setSizePicker(null);
+    // The cloud alert moves to the chosen size too, when signed in.
+    const headers = await authorizedJsonHeaders();
+    if (!headers) return;
+    try {
+      await fetch('/api/v1/rate/watchlist', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          slug: choice.slug,
+          targetPrice,
+          locale: locale || 'vi',
+        }),
+      });
+    } catch {
+      // Local watchlist already updated
+    }
   };
 
   const handleUpdateTarget = async (item: WatchlistItem) => {
@@ -324,6 +356,7 @@ export default function WatchlistWorkspace({
             ok?: boolean;
             persistedInCloud?: boolean;
             error?: string;
+            code?: string;
           } | null;
           return {
             unauthorized: res.status === 401,
@@ -331,7 +364,11 @@ export default function WatchlistWorkspace({
               res.ok &&
               payload?.ok === true &&
               payload.persistedInCloud === true,
-            error: typeof payload?.error === 'string' ? payload.error : null,
+            error: isSizeRequiredAnswer(res.status, payload)
+              ? t('sizeRequiredTitle')
+              : typeof payload?.error === 'string'
+                ? payload.error
+                : null,
           };
         })
       );
@@ -1102,21 +1139,32 @@ export default function WatchlistWorkspace({
                       className="rounded-3 bg-warning-subtle border-warning-subtle mb-3 border px-3 py-2"
                       data-testid="watchlist-size-required"
                     >
-                      <div className="small fw-semibold mb-1">
+                      <div
+                        className="small fw-semibold mb-1"
+                        id={`size-required-${item.slug}`}
+                      >
                         {t('sizeRequiredTitle')}
                       </div>
+                      {sizePickerFailed === item.slug && (
+                        <div className="small mb-1">
+                          {t('sizeRequiredUnavailable')}{' '}
+                          <Link href={detailHref}>
+                            {t('sizeRequiredProductLink')}
+                          </Link>
+                        </div>
+                      )}
                       {sizePicker?.slug === item.slug ? (
                         <div
                           className="d-flex flex-wrap gap-2"
                           role="group"
-                          aria-label={t('sizeRequiredTitle')}
+                          aria-labelledby={`size-required-${item.slug}`}
                         >
                           {sizePicker.choices.map((choice) => (
                             <button
                               key={choice.slug}
                               type="button"
                               className="btn btn-outline-primary btn-sm rounded-pill"
-                              onClick={() => chooseSize(item, choice)}
+                              onClick={() => void chooseSize(item, choice)}
                             >
                               {choice.label}
                               {choice.minPrice > 0 &&

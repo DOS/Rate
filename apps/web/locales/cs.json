@@ -660,7 +660,9 @@
     "quickToggleShortUnwatched": "Hlídat cenu",
     "quickToggleShortWatched": "Hlídáno",
     "sizeRequiredTitle": "Vyberte velikost úložiště: cenová upozornění se nastavují pro každou zvlášť.",
-    "sizeRequiredCta": "Vybrat velikost"
+    "sizeRequiredCta": "Vybrat velikost",
+    "sizeRequiredUnavailable": "Varianty se nepodařilo načíst.",
+    "sizeRequiredProductLink": "Otevřít stránku produktu"
   },
   "deals": {
     "metaTitle": "Výhodné nabídky ověřené v 10 obchodech | Rate.vn",
