@@ -7,6 +7,8 @@ import {
 } from '@/server/rate';
 import { computeProductRadarSignal } from '@/server/rate/deals';
 import { radarExportFields } from '@/lib/deal-radar';
+import { getMasterProductCategorySlug } from '@/lib/rate-domain';
+import { applyCategorySpecTemplate } from '@repo/shared-data/rules';
 import {
   PUBLIC_API_CORS_HEADERS,
   jsonApiError,
@@ -48,6 +50,8 @@ const VALID_PRODUCT_SORTS = new Set<
  * GET /api/v1/rate/products
  * Structured JSON Backend API for Web Client, Browser Extension MV3, and Partners.
  * Supports 10-Field-Groups multi-criteria filtering, sorting, and optional directory facets.
+ * Each product carries its category's spec view, as rate.vn shows it
+ * (DOS/Rate#1166); filters still match the stored columns.
  */
 export async function GET(request: NextRequest) {
   try {
@@ -145,7 +149,7 @@ export async function GET(request: NextRequest) {
         data: products.map((p) => {
           const offers = offersByMasterId.get(p.id) ?? [];
           return {
-            ...p,
+            ...applyCategorySpecTemplate(getMasterProductCategorySlug(p), p),
             deal_radar: radarExportFields(computeProductRadarSignal(p, offers)),
           };
         }),

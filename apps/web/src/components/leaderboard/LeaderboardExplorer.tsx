@@ -36,6 +36,7 @@ import { useDealRadarIndex } from '@/components/radar/use-deal-radar';
 import CompareQuickToggle from '@/components/compare/CompareQuickToggle';
 import { escapeCsvCell } from '@/lib/csv-safe';
 import type { KeySpecs } from '@repo/shared-data';
+import { applyCategorySpecTemplate } from '@repo/shared-data/rules';
 import {
   BsArrowLeftRight,
   BsAwardFill,
@@ -409,10 +410,12 @@ export default function LeaderboardExplorer({
     return map;
   }, [products]);
 
+  // Rows read the category's view of a product, like the product page: no
+  // RAM or storage pill for earbuds (DOS/Rate#1166).
   const categoryProducts = useMemo(() => {
-    return products.filter(
-      (p) => getMasterProductCategorySlug(p) === activeCategory
-    );
+    return products
+      .filter((p) => getMasterProductCategorySlug(p) === activeCategory)
+      .map((p) => applyCategorySpecTemplate(activeCategory, p));
   }, [products, activeCategory]);
 
   const availableBrands = useMemo(() => {

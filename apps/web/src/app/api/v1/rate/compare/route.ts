@@ -7,6 +7,7 @@ import {
 } from '@/server/rate';
 import { computeProductRadarSignal } from '@/server/rate/deals';
 import { radarExportFields } from '@/lib/deal-radar';
+import { applyCategorySpecTemplate } from '@repo/shared-data/rules';
 import {
   PUBLIC_API_CORS_HEADERS,
   jsonApiError,
@@ -61,7 +62,8 @@ export async function GET(request: NextRequest) {
         data: products.map((p) => {
           const offers = offersByMasterId.get(p.id) ?? [];
           return {
-            ...p,
+            // The category's spec view, as /compare shows it (DOS/Rate#1166).
+            ...applyCategorySpecTemplate(lockedCategory, p),
             canonical_href: getMasterProductHref(p),
             deal_radar: radarExportFields(computeProductRadarSignal(p, offers)),
           };

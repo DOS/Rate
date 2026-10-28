@@ -5,6 +5,13 @@ import { useTranslations } from 'next-intl';
 import ExportMenu from '@/components/elementary/ExportMenu';
 import type { KeySpecs, ProductSpecifications } from '@repo/shared-data';
 import {
+  applyCategorySpecTemplate,
+  getCategorySpecTemplate,
+  specFieldApplies,
+  type CategorySpecTemplate,
+  type SpecGroupKey,
+} from '@repo/shared-data/rules';
+import {
   RADAR_CSV_HEADERS,
   radarCsvCells,
   radarExportFields,
@@ -62,13 +69,52 @@ function joinSpecParts(parts: Array<string | null | undefined>): string {
   return valid.join(' | ') || '-';
 }
 
+type SpecExportRow = [string, string, string];
+
+// The template group each row reads, and the fields that make it a row the
+// category has (any one of them is enough).
+const EXPORT_ROW_FIELDS: ReadonlyArray<[SpecGroupKey, readonly string[]]> = [
+  ['display', ['size_inch', 'type', 'refresh_rate_hz']],
+  ['display', ['resolution', 'protection']],
+  ['hardware', ['chipset', 'cpu', 'gpu']],
+  ['hardware', ['ram_gb', 'storage_gb', 'os']],
+  ['camera', ['main_camera']],
+  ['camera', ['video_recording', 'front_camera']],
+  ['battery', ['capacity_mah']],
+  ['design', ['dimensions', 'weight_g', 'resistance']],
+  ['cellular', ['technology', 'sim_type', 'data_speed']],
+  ['connectivity', ['wlan', 'bluetooth', 'usb']],
+  ['multimedia', ['loudspeaker', 'audio_features']],
+  ['availability', ['announced']],
+  ['regulatory', ['certifications']],
+];
+
+const exportRowApplies = (
+  template: CategorySpecTemplate,
+  index: number
+): boolean => {
+  const [group, fields] = EXPORT_ROW_FIELDS[index] ?? ['display', []];
+  return fields.some((field) => specFieldApplies(template, group, field));
+};
+
+/**
+ * The spec rows a product exports. With a category, only the rows and values
+ * its spec template has, as on the product page: no screen, RAM, ROM or
+ * camera for earbuds and no 5G for a watch (DOS/Rate#1166).
+ */
 export function buildProductSpecExportRows(
   specifications?: ProductSpecifications | null,
-  keySpecs?: KeySpecs | null
-): Array<[string, string, string]> {
-  const specs = specifications ?? {};
-  const keys = keySpecs ?? {};
-  return [
+  keySpecs?: KeySpecs | null,
+  categorySlug?: string | null
+): SpecExportRow[] {
+  const scoped = applyCategorySpecTemplate(categorySlug, {
+    specifications: specifications ?? {},
+    key_specs: keySpecs ?? {},
+  });
+  const template = getCategorySpecTemplate(categorySlug);
+  const specs = (scoped.specifications ?? {}) as ProductSpecifications;
+  const keys = (scoped.key_specs ?? {}) as KeySpecs;
+  const rows: SpecExportRow[] = [
     [
       '1. Display',
       'Size & Panel',
@@ -195,6 +241,7 @@ export function buildProductSpecExportRows(
       ]),
     ],
   ];
+  return rows.filter((_, index) => exportRowApplies(template, index));
 }
 
 interface ProductSpecsExportToolbarProps {
@@ -203,6 +250,8 @@ interface ProductSpecsExportToolbarProps {
   readonly brand: string;
   readonly specifications: ProductSpecifications;
   readonly keySpecs: KeySpecs;
+  /** Scopes the rows and the JSON to the category's spec template. */
+  readonly categorySlug?: string | null;
   readonly radarSignal?: RadarSignal | null;
 }
 
@@ -212,6 +261,7 @@ export default function ProductSpecsExportToolbar({
   brand,
   specifications,
   keySpecs,
+  categorySlug,
   radarSignal,
 }: ProductSpecsExportToolbarProps) {
   const t = useTranslations('productDetail');
@@ -223,10 +273,14 @@ export default function ProductSpecsExportToolbar({
 
   const handleCopySpecsMarkdown = async () => {
     if (typeof navigator === 'undefined') return;
-    const rows = buildProductSpecExportRows(specifications, keySpecs);
+    const rows = buildProductSpecExportRows(
+      specifications,
+      keySpecs,
+      categorySlug
+    );
 
     const md = [
-      `### 📋 Rate.vn 10-Field-Groups Technical Specifications: ${safeProductName} (${safeBrand})`,
+      `### 📋 Rate.vn Technical Specifications: ${safeProductName} (${safeBrand})`,
       `- **Price signal:** ${radarMarkdownCell(radarSignal)}`,
       '',
       '| Field Group | Attribute | Specification |',
@@ -248,7 +302,11 @@ export default function ProductSpecsExportToolbar({
 
   const handleDownloadSpecsCsv = () => {
     if (typeof document === 'undefined') return;
-    const rows = buildProductSpecExportRows(specifications, keySpecs);
+    const rows = buildProductSpecExportRows(
+      specifications,
+      keySpecs,
+      categorySlug
+    );
     const headers = [
       'Slug',
       'Product',
@@ -289,6 +347,10 @@ export default function ProductSpecsExportToolbar({
 
   const handleDownloadSpecsJson = () => {
     if (typeof document === 'undefined') return;
+    const scoped = applyCategorySpecTemplate(categorySlug, {
+      specifications,
+      key_specs: keySpecs,
+    });
     const payload = {
       slug: safeSlug,
       name: safeProductName,
@@ -296,8 +358,8 @@ export default function ProductSpecsExportToolbar({
       schema: 'Rate.vn 10-Field-Groups (GSMArena + PhoneArena)',
       exported_at: new Date().toISOString(),
       deal_radar: radarExportFields(radarSignal),
-      key_specs: keySpecs,
-      specifications,
+      key_specs: scoped.key_specs,
+      specifications: scoped.specifications,
     };
     const blob = new Blob([JSON.stringify(payload, null, 2)], {
       type: 'application/json;charset=utf-8;',

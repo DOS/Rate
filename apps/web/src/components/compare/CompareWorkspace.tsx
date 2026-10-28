@@ -24,6 +24,13 @@ import type {
   ProductSpecifications,
 } from '@repo/shared-data';
 import {
+  applyCategorySpecTemplate,
+  getCategorySpecTemplate,
+  specFieldApplies,
+  type CategorySpecTemplate,
+  type SpecGroupKey,
+} from '@repo/shared-data/rules';
+import {
   type CanonicalCategorySlug,
   MAX_VALID_VND_PRICE,
   buildPopular1v1BattlesForCategory,
@@ -75,6 +82,8 @@ interface SpecRowDef {
   renderValue: (p: MasterProduct) => string;
   numericValue?: (p: MasterProduct) => number | null;
   higherIsBetter?: boolean;
+  /** Whether the category's spec template has this row (DOS/Rate#1166). */
+  appliesTo?: (template: CategorySpecTemplate) => boolean;
 }
 
 interface SpecGroupDef {
@@ -167,7 +176,7 @@ function buildCategoryTabs(t: CompareTranslator): Array<{
   ];
 }
 
-function buildSpecGroups(t: CompareTranslator): SpecGroupDef[] {
+export function buildSpecGroups(t: CompareTranslator): SpecGroupDef[] {
   return [
     {
       id: 'market_trust',
@@ -295,6 +304,7 @@ function buildSpecGroups(t: CompareTranslator): SpecGroupDef[] {
         {
           id: 'display_size',
           label: t('rowDisplaySize'),
+          appliesTo: (tpl) => tpl.screen,
           renderValue: (p) => {
             const size = resolveCompareDisplaySizeInch(p);
             return size != null ? `${size}"` : '-';
@@ -373,6 +383,7 @@ function buildSpecGroups(t: CompareTranslator): SpecGroupDef[] {
         },
         {
           id: 'hw_cpu_gpu',
+          appliesTo: (tpl) => specFieldApplies(tpl, 'hardware', 'cpu'),
           label: t('rowHwCpuGpu'),
           renderValue: (p) => {
             const specs = (p.specifications || {}) as ProductSpecifications;
@@ -384,6 +395,7 @@ function buildSpecGroups(t: CompareTranslator): SpecGroupDef[] {
         },
         {
           id: 'hw_ram',
+          appliesTo: (tpl) => tpl.ram,
           label: t('rowHwRam'),
           renderValue: (p) => {
             const ram = resolveCompareRamGb(p);
@@ -394,6 +406,7 @@ function buildSpecGroups(t: CompareTranslator): SpecGroupDef[] {
         },
         {
           id: 'hw_storage',
+          appliesTo: (tpl) => tpl.storage,
           label: t('rowHwStorage'),
           renderValue: (p) => {
             const rom = resolveCompareStorageGb(p);
@@ -405,6 +418,9 @@ function buildSpecGroups(t: CompareTranslator): SpecGroupDef[] {
         },
         {
           id: 'hw_os_exp',
+          appliesTo: (tpl) =>
+            specFieldApplies(tpl, 'hardware', 'os') ||
+            specFieldApplies(tpl, 'hardware', 'storage_expansion'),
           label: t('rowHwOsExp'),
           renderValue: (p) => {
             const specs = (p.specifications || {}) as ProductSpecifications;
@@ -599,6 +615,7 @@ function buildSpecGroups(t: CompareTranslator): SpecGroupDef[] {
       rows: [
         {
           id: 'cell_5g',
+          appliesTo: (tpl) => tpl.has5g,
           label: t('rowCell5g'),
           renderValue: (p) => {
             const specs = (p.specifications || {}) as ProductSpecifications;
@@ -655,6 +672,7 @@ function buildSpecGroups(t: CompareTranslator): SpecGroupDef[] {
         },
         {
           id: 'conn_nfc',
+          appliesTo: (tpl) => specFieldApplies(tpl, 'connectivity', 'nfc'),
           label: t('rowConnNfc'),
           renderValue: (p) => {
             const specs = (p.specifications || {}) as ProductSpecifications;
@@ -768,6 +786,28 @@ function buildSpecGroups(t: CompareTranslator): SpecGroupDef[] {
   ];
 }
 
+/**
+ * The spec groups and rows a category's template has, in its order, so an
+ * earbud shows no screen, RAM or camera row and a watch no 5G row
+ * (DOS/Rate#1142, DOS/Rate#1166). The market group always comes first.
+ */
+export function filterSpecGroupsForCategory(
+  groups: readonly SpecGroupDef[],
+  categorySlug: string
+): SpecGroupDef[] {
+  const template = getCategorySpecTemplate(categorySlug);
+  const order = (id: string) =>
+    id === 'market_trust' ? -1 : template.groups.indexOf(id as SpecGroupKey);
+  return groups
+    .filter((group) => order(group.id) !== -1 || group.id === 'market_trust')
+    .sort((a, b) => order(a.id) - order(b.id))
+    .map((group) => ({
+      ...group,
+      rows: group.rows.filter((row) => row.appliesTo?.(template) ?? true),
+    }))
+    .filter((group) => group.rows.length > 0);
+}
+
 export default function CompareWorkspace({
   initialProducts,
   catalogCandidates,
@@ -779,14 +819,14 @@ export default function CompareWorkspace({
   const router = useRouter();
   const specDict = useMemo(() => getSpecUiDictionary(locale), [locale]);
   const categoryTabs = useMemo(() => buildCategoryTabs(t), [t]);
-  const specGroups = useMemo(() => buildSpecGroups(t), [t]);
+  const allSpecGroups = useMemo(() => buildSpecGroups(t), [t]);
   const [activeCategory, setActiveCategory] = useState<CanonicalCategorySlug>(
     () =>
       initialProducts.length > 0
         ? getMasterProductCategorySlug(initialProducts[0]!)
         : initialCategory
   );
-  const [products, setProducts] = useState<MasterProduct[]>(() => {
+  const [storedProducts, setProducts] = useState<MasterProduct[]>(() => {
     const targetCat =
       initialProducts.length > 0
         ? getMasterProductCategorySlug(initialProducts[0]!)
@@ -806,6 +846,17 @@ export default function CompareWorkspace({
   const [highlightWinners, setHighlightWinners] = useState(true);
   const [copiedLink, setCopiedLink] = useState(false);
   const radarIndex = useDealRadarIndex();
+  // Every row, verdict and export reads the category's view of a product,
+  // like the product page (DOS/Rate#1166).
+  const products = useMemo(
+    () =>
+      storedProducts.map((p) => applyCategorySpecTemplate(activeCategory, p)),
+    [storedProducts, activeCategory]
+  );
+  const specGroups = useMemo(
+    () => filterSpecGroupsForCategory(allSpecGroups, activeCategory),
+    [allSpecGroups, activeCategory]
+  );
 
   const searchInputRef = useRef<HTMLInputElement | null>(null);
   const searchBoxRef = useRef<HTMLDivElement | null>(null);

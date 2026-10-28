@@ -942,6 +942,45 @@ function testCategorySpecTemplates(): void {
   assert.equal(watchStoredSpecs.hardware?.gpu, 'g');
   assert.equal(watchStoredSpecs.camera, undefined);
 
+  // The free-text network fields lose their 5G parts on the page only
+  // (DOS/Rate#1166); a 5GHz Wi-Fi mention is not 5G.
+  const lteWatch = {
+    specifications: {
+      cellular: {
+        technology: 'LTE / 5G',
+        data_speed: 'LTE Cat 4, 5G NR',
+        sim_type: 'eSIM',
+      },
+      connectivity: { wlan: 'Wi-Fi 802.11 b/g/n, 5GHz' },
+    },
+  };
+  const lteWatchShown = rules.applyCategorySpecTemplate(
+    'smartwatches',
+    lteWatch
+  ).specifications as unknown as Record<string, Record<string, unknown>>;
+  assert.deepEqual(lteWatchShown.cellular, {
+    technology: 'LTE',
+    data_speed: 'LTE Cat 4',
+    sim_type: 'eSIM',
+  });
+  assert.deepEqual(
+    lteWatchShown.connectivity,
+    lteWatch.specifications.connectivity
+  );
+  assert.deepEqual(
+    rules.applyCategorySpecTemplate('smartwatches', {
+      specifications: { cellular: { technology: '5G' } },
+    }).specifications,
+    { cellular: {} }
+  );
+  assert.deepEqual(
+    rules.applyCategorySpecTemplate('smartwatches', lteWatch, {
+      forStorage: true,
+    }).specifications,
+    lteWatch.specifications
+  );
+  assert.equal(lteWatch.specifications.cellular.technology, 'LTE / 5G');
+
   // Idempotent, never mutates the input, and leaves absent columns absent.
   assert.deepEqual(rules.applyCategorySpecTemplate('earbuds', buds), buds);
   assert.equal(phoneShaped.ram_gb, 1);
