@@ -1213,14 +1213,20 @@ function readAppleSize(model: string, title: string): string {
       const ranged = bandEnd && WATCH_RANGE_SEP.test(sep) && LONE_WATCH_SIZE.test(part);
       if (bandList && ((/^[,|]$/.test(sep) && listed) || ranged)) {
         outside.push('');
+        // "42mm S/M, 44mm - 46mm" ranges on from the listed size; "44mm M/L - 46mm" does not.
+        bandEnd = LAST_WATCH_SIZE.test(part);
         continue;
       }
       const [before, ...band] = part.split(WATCH_BAND_WORD);
       // Walk back over the bare sizes listed before this band ("40mm, 44mm Dây"): k ends
       // at the first of them, and the part before it may end in one more ("GPS 40mm") if
       // it has no band of its own. A part before the list that names the case ("(Vỏ nhôm)
-      // 46mm, 42mm Dây") keeps the list's first size as the case's.
-      const sizeBeforeBand = band.length > 0 && LONE_WATCH_SIZE.test(before!);
+      // 46mm, 42mm Dây") keeps the list's first size as the case's, and a band that names
+      // the case ("42mm Dây Sport Band mặt 46mm") starts no walk.
+      const sizeBeforeBand =
+        band.length > 0 &&
+        LONE_WATCH_SIZE.test(before!) &&
+        !WATCH_CASE_WORD.test(part.normalize('NFC'));
       const listSepAt = (n: number) =>
         /^[,|]$/.test(parts[2 * n - 1]!) || WATCH_RANGE_SEP.test(parts[2 * n - 1]!);
       let k = outside.length;

@@ -528,6 +528,16 @@ async function runSuite() {
       'Apple Watch Series 10 (Vỏ nhôm) 46mm, 42mm Dây Sport Band',
       'apple:watch-series-10-46mm:unknown',
     ],
+    [
+      'Apple Watch Series 10 GPS 46mm, 42mm Dây Sport Band mặt 46mm',
+      'apple:watch-series-10-46mm:unknown',
+    ],
+    // A range runs on from a listed bare size, not from one with a fit after it.
+    ['Apple Watch Series 10 Sport Band 42mm S/M, 44mm - 46mm', 'apple:watch-series-10:unknown'],
+    [
+      'Apple Watch Series 10 Sport Band 42mm, 44mm M/L - 46mm',
+      'apple:watch-series-10-46mm:unknown',
+    ],
     // A size with a band of its own is no list item: the size before it is the case's.
     [
       'Apple Watch Series 10 GPS 46mm Dây Sport Band, 42mm Dây Cao Su',
