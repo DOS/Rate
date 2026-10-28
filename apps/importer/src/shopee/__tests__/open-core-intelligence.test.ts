@@ -503,6 +503,31 @@ async function runSuite() {
   for (const [title, expectedKey] of watchBandListKeys1137) {
     assert.equal(keyOf(title), expectedKey, title);
   }
+  // DOS/Rate#1162: a range of bare band sizes, or two or more sizes listed right before a
+  // band word, names no case.
+  const watchBandRangeKeys1162: Array<[string, string]> = [
+    // The titles of the issue.
+    ['Apple Watch Series 10 Sport Loop 42mm - 46mm', 'apple:watch-series-10:unknown'],
+    ['Apple Watch SE 3 GPS 40mm, 44mm Dây Sport Band', 'apple:watch-se-3:unknown'],
+    // An en dash range keys like " - "; a pipe or longer list keys like a comma list.
+    ['Apple Watch Series 10 Sport Loop 42mm \u2013 46mm', 'apple:watch-series-10:unknown'],
+    ['Apple Watch Series 10 GPS, 42mm, 46mm Dây Sport Loop', 'apple:watch-series-10:unknown'],
+    ['Apple Watch Series 10 GPS 42mm | 46mm Dây Cao Su', 'apple:watch-series-10:unknown'],
+    ['Apple Watch Series 10 GPS 46mm - 42mm Dây Sport Band', 'apple:watch-series-10:unknown'],
+    // A size after the dash with more text, a single size before the band, a size the
+    // case names or a size cut off by ")" is still the case's.
+    ['Apple Watch Series 10 Sport Loop 42mm - 46mm GPS', 'apple:watch-series-10-46mm:unknown'],
+    ['Apple Watch Series 10 GPS, 44mm Dây Sport Band', 'apple:watch-series-10-44mm:unknown'],
+    [
+      'Apple Watch Series 10 Vỏ nhôm 46mm, 42mm Dây Sport Band',
+      'apple:watch-series-10-46mm:unknown',
+    ],
+    ['Apple Watch Series 10 (GPS 46mm) 42mm Dây Sport', 'apple:watch-series-10-46mm:unknown'],
+    ['Apple Watch Series 10 GPS 46mm, 46mm Dây Cao Su', 'apple:watch-series-10-46mm:unknown'],
+  ];
+  for (const [title, expectedKey] of watchBandRangeKeys1162) {
+    assert.equal(keyOf(title), expectedKey, title);
+  }
   // The registry has one entry per line: a sized title keeps the line's benchmark, but
   // the entry's screen and battery describe only the size it was written for.
   assert.equal(
