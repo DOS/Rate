@@ -537,8 +537,8 @@ export class ShopeeIngestionPipeline {
         .from('master_products')
         .select(
           itemModel === 'off'
-            ? 'id, specifications'
-            : 'id, specifications, status, item_id, variant_key'
+            ? 'id, specifications, storage_gb'
+            : 'id, specifications, storage_gb, status, item_id, variant_key'
         )
         .eq('id', safeMasterIdHint)
         .maybeSingle();
@@ -553,10 +553,33 @@ export class ShopeeIngestionPipeline {
         status?: unknown;
         item_id?: unknown;
         variant_key?: unknown;
+        storage_gb?: unknown;
       } | null;
+      // The page states a storage the hinted master does not have (a 1TB page
+      // hinted to the 512GB master): the hint is not applied and the listing is
+      // matched like any other (DOS/Rate#1197). A page with no stated storage
+      // keeps the hint.
+      const hintStorageGb = Number(hintMeta?.storage_gb);
+      const storageConflict =
+        candidate.variant_source === 'title' &&
+        typeof candidate.storage_gb === 'number' &&
+        candidate.storage_gb > 0 &&
+        Number.isFinite(hintStorageGb) &&
+        hintStorageGb > 0 &&
+        candidate.storage_gb !== hintStorageGb;
       const hintItemId =
         itemModel === 'off' ? null : sanitizeIngestionEntityId(hintMeta?.item_id, 128);
-      if (hintRow?.id && itemModel !== 'off' && hintMeta?.status === 'archived') {
+      if (hintRow?.id && storageConflict) {
+        platLogger.warn(
+          'ingest.master_hint_storage_conflict',
+          `masterIdHint ${hintRow.id} ignored: the page states ${candidate.storage_gb}GB, the master is ${hintStorageGb}GB`,
+          {
+            masterId: hintRow.id,
+            pageStorageGb: candidate.storage_gb,
+            hintStorageGb,
+          }
+        );
+      } else if (hintRow?.id && itemModel !== 'off' && hintMeta?.status === 'archived') {
         // A retired master (an Item's `unknown` variant after M3) must not take the
         // listing back: the hint maps to its Item, and the variant comes from the title.
         platLogger.info(

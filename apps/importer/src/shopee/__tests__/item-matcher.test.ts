@@ -825,7 +825,7 @@ async function run() {
     assert.equal(offHint.listing?.cluster_id, 'master-zenbook-unknown');
     assert.equal(
       offHint.calls.find(c => c.table === 'master_products' && filter(c, 'id'))?.cols,
-      'id, specifications'
+      'id, specifications, storage_gb'
     );
   }
   {

@@ -50,7 +50,7 @@ function createBaseProduct(overrides: Partial<ShopeeProduct> = {}): ShopeeProduc
 
 interface StubPipelineOptions {
   categoriesErr?: { message: string } | null;
-  hintRow?: { id: string } | null;
+  hintRow?: { id: string; storage_gb?: number | null } | null;
   hintErr?: { message: string } | null;
   exactMasterRow?: { id: string; name: string; model_key: string } | null;
   recordPriceRpcResult?: { data: string | null; error: { code?: string; message: string } | null };
@@ -141,7 +141,7 @@ function createPipelineStubSupabase(opts: StubPipelineOptions = {}) {
               eq(col: string, val: string) {
                 return {
                   maybeSingle() {
-                    if (col === 'id' && (cols === 'id' || cols === 'id, specifications')) {
+                    if (col === 'id' && (cols === 'id' || cols.startsWith('id, specifications'))) {
                       return Promise.resolve({
                         data: opts.hintRow ?? null,
                         error: opts.hintErr ?? null,
@@ -518,6 +518,59 @@ async function runTests() {
     null,
     'A malformed label is dropped instead of failing the ingest'
   );
+
+  // A hint whose master has another storage than the page states is not
+  // applied: the listing is matched normally (DOS/Rate#1197).
+  const { stub: conflictStub, events: conflictEvents } = createPipelineStubSupabase({
+    hintRow: { id: 'master-hint-512', storage_gb: 512 },
+  });
+  const conflictRes = await new ShopeeIngestionPipeline({
+    supabaseClient: conflictStub,
+    apiKey: '',
+  }).ingestProduct(
+    createBaseProduct({
+      title: 'Điện thoại Apple iPhone 16 Pro Max 1TB Chính hãng VN/A',
+      models: [{ modelId: 'm-1', name: 'Titan Tự Nhiên - 1TB', price: 28990000, stock: 15 }],
+    }),
+    undefined,
+    { masterIdHint: 'master-hint-512' }
+  );
+  assert.notEqual(
+    conflictRes.masterId,
+    'master-hint-512',
+    'a 1TB page must not join the 512GB master'
+  );
+  assert.equal(conflictRes.masterId, 'master-exact-1', 'it falls back to normal matching');
+  assert.equal(conflictEvents.productUpserts[0]?.cluster_id, 'master-exact-1');
+
+  // A page that states no storage keeps the hint.
+  const { stub: noStorageStub } = createPipelineStubSupabase({
+    hintRow: { id: 'master-hint-512', storage_gb: 512 },
+  });
+  const noStorageRes = await new ShopeeIngestionPipeline({
+    supabaseClient: noStorageStub,
+    apiKey: '',
+  }).ingestProduct(
+    createBaseProduct({
+      title: 'Điện thoại Apple iPhone 16 Pro Max Chính hãng VN/A',
+      models: [{ modelId: 'm-1', name: 'Titan Tự Nhiên', price: 28990000, stock: 15 }],
+    }),
+    undefined,
+    { masterIdHint: 'master-hint-512' }
+  );
+  assert.equal(noStorageRes.masterId, 'master-hint-512');
+
+  // The same storage, or a master with no storage, keeps the hint too.
+  for (const storage_gb of [256, null]) {
+    const { stub: sameStub } = createPipelineStubSupabase({
+      hintRow: { id: 'master-hint-256', storage_gb },
+    });
+    const sameRes = await new ShopeeIngestionPipeline({
+      supabaseClient: sameStub,
+      apiKey: '',
+    }).ingestProduct(createBaseProduct(), undefined, { masterIdHint: 'master-hint-256' });
+    assert.equal(sameRes.masterId, 'master-hint-256', `hint kept for storage_gb=${storage_gb}`);
+  }
   console.log('  ✅ [3/6] masterIdHint preservation & DB error abort passed');
 
   // 4. Smart Delta Price Compression: client-side 7-day fallback & 23505 race recovery
