@@ -225,6 +225,30 @@ async function testCompareUnknownSpecs() {
     }),
     'USB-C 3.2 | GPS'
   );
+  // The resolution text that names its ppi keeps one (DOS/Rate#1214).
+  const display = (resolution: string) =>
+    render('display_resolution', {
+      specifications: { display: { resolution, ppi: 460 } },
+    });
+  assert.equal(
+    display('1290 x 2796 pixels, 19.5:9 ratio (~460 ppi density)'),
+    '1290 x 2796 pixels, 19.5:9 ratio (~460 ppi density)'
+  );
+  assert.equal(display('1290 x 2796 pixels'), '1290 x 2796 pixels (460 ppi)');
+  // A bare "No" card slot reaches the localizer spelled out.
+  const tValues = ((key: string, values?: { value?: string }) =>
+    values?.value ? `${key}: ${values.value}` : key) as unknown as Parameters<
+    typeof buildSpecGroups
+  >[0];
+  const osExp = buildSpecGroups(tValues)
+    .flatMap((g) => g.rows)
+    .find((r) => r.id === 'hw_os_exp')!;
+  assert.equal(
+    osExp.renderValue({
+      specifications: { hardware: { os: 'iOS 20', storage_expansion: 'No' } },
+    } as never),
+    'iOS 20 | valCardSlotPrefix: No card slot'
+  );
   console.warn('  ✅ Compare shows no invented value for unknown specs');
 }
 

@@ -4,7 +4,11 @@ import {
   type CategorySpecTemplate,
   type SpecGroupKey,
 } from '@repo/shared-data/rules';
-import { localizeSpecValue, type SpecUiDictionary } from './spec-localizer';
+import {
+  localizeSpecValue,
+  normalizeStorageExpansion,
+  type SpecUiDictionary,
+} from './spec-localizer';
 
 export interface ProductSpecRow {
   label: string;
@@ -134,7 +138,10 @@ export function buildProductSpecGroups({
       },
       shows('hardware', 'storage_expansion') && {
         label: f.storageExpansion,
-        value: loc(s.hardware?.storage_expansion),
+        value: loc(
+          s.hardware?.storage_expansion &&
+            normalizeStorageExpansion(s.hardware.storage_expansion)
+        ),
       },
       shows('hardware', 'os') && { label: f.os, value: loc(s.hardware?.os) },
     ],

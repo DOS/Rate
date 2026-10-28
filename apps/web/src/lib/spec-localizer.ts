@@ -387,7 +387,7 @@ const VI_SPEC_REPLACEMENTS: Array<[RegExp, string]> = [
   [/\bSingle Camera\b/gi, 'Camera đơn'],
   [/\bAvailable\.\s*Released\s+/gi, 'Đang kinh doanh - Phát hành '],
   [/\bAvailable\b/gi, 'Đang kinh doanh'],
-  [/\bNo card slot\b/gi, 'Không hỗ trợ khe thẻ nhớ'],
+  [/\bNo card slot\b/gi, 'Không hỗ trợ thẻ nhớ'],
   [/\bnon-removable\b/gi, 'liền máy'],
   [/\bdust\/water resistant\b/gi, 'kháng bụi và nước'],
   [/\bwater resistant\b/gi, 'kháng nước'],
@@ -421,8 +421,9 @@ const VI_SPEC_REPLACEMENTS: Array<[RegExp, string]> = [
   [/\(variable aperture\)/gi, '(khẩu độ biến thiên)'],
   [/\bmulti-directional PDAF\b/gi, 'lấy nét đa hướng PDAF'],
   [/\bdual pixel PDAF\b/gi, 'lấy nét Dual Pixel PDAF'],
-  [/\bsensor-shift OIS\b/gi, 'chống rung dịch chuyển cảm biến OIS'],
-  [/\bOIS\b/g, 'chống rung quang học OIS'],
+  [/\bsensor-shift OIS\b/gi, 'chống rung dịch chuyển cảm biến (OIS)'],
+  // The rule above already names the OIS it rewrites (DOS/Rate#1210).
+  [/(?<!cảm biến \()\bOIS\b/g, 'chống rung quang học OIS'],
   [/(\d+(?:\.\d+)?x)\s+optical zoom\b/gi, 'zoom quang $1'],
   [/\boptical zoom\b/gi, 'zoom quang học'],
   [/\bDual-LED dual-tone flash\b/gi, 'Đèn flash LED kép 2 tông màu'],
@@ -546,6 +547,14 @@ const CS_SPEC_REPLACEMENTS: Array<[RegExp, string]> = [
   [/\(telephoto\)/gi, '(teleobjektiv)'],
   [/\boptical zoom\b/gi, 'optický zoom'],
 ];
+
+/**
+ * Spells out a storage expansion value stored as a bare "No", which means
+ * no card slot, so `localizeSpecValue` can translate it (DOS/Rate#1214).
+ */
+export function normalizeStorageExpansion(raw: string): string {
+  return raw.replace(/^\s*No(?=\s*(?:[(,;]|$))/i, 'No card slot');
+}
 
 const DISALLOWED_SPEC_TEXT_REGEX =
   /^(?:null|undefined|nan|none|n\/a|infinity|-infinity|__proto__|constructor|prototype)$/i;
