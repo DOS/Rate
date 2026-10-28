@@ -39,7 +39,8 @@ export function parseBooleanFlag(raw: string | null): boolean | undefined {
 }
 
 const SCOPED_ALL_PAGE_SIZE = 500;
-const SCOPED_ALL_MAX_PAGES = 200;
+// 20k rows, well above the catalogue; bounds the cost of a deep offset.
+const SCOPED_ALL_MAX_PAGES = 40;
 
 /**
  * `category=all` with a spec filter some category lacks: only products whose

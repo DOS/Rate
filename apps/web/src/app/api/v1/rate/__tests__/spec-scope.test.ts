@@ -202,6 +202,12 @@ async function testProductFilters() {
     [PHONE.slug]
   );
   catalog = [WATCH, PHONE, EARBUD, PHONE_2];
+  // Watches have NFC, earbuds do not.
+  ({ body } = await listProducts('category=all&nfc=1'));
+  assert.deepEqual(
+    body.data.map((p: { slug: string }) => p.slug),
+    [WATCH.slug, PHONE.slug, PHONE_2.slug]
+  );
   // A watch has RAM, earbuds do not.
   ({ body } = await listProducts('category=all&ram=1'));
   assert.deepEqual(
