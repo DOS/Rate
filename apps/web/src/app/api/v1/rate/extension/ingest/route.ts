@@ -56,7 +56,10 @@ const CrowdIngestSchema = z.object({
   userConsentOptIn: z.boolean(),
 });
 
-// Bounded per-IP sliding window rate limiter for crowd ingest quarantine
+// Per-IP sliding window, kept in this serverless instance's memory: each
+// warm instance has its own buckets, so it is a best-effort brake, not a
+// global per-IP limit. The global bound is the enqueue_crowd_verify_signal
+// RPC cap of 120 crowd jobs per minute in total (DOS/Rate#1234).
 const ingestRateLimiter = new BoundedSlidingWindowRateLimiter({
   windowMs: 60_000,
   maxRequests: 15,
@@ -75,7 +78,8 @@ export async function OPTIONS() {
  * Zero-Trust Crowdsourced Signal Quarantine Endpoint (Two-Speed Hybrid Architecture v2).
  * Enforces:
  * - Explicit Opt-In Consent check (`userConsentOptIn === true`)
- * - Zod schema validation & sliding-window IP rate limit + DB-side global rate limit
+ * - Zod schema validation, a best-effort per-instance IP rate limit and the
+ *   DB-side global cap (120 crowd jobs per minute in total)
  * - Accessory / Junk Gatekeeper
  * - Platform Capability Matrix check (only queues platforms with active verification workers)
  * - 100% Quarantine: Enqueues into `rate.crawl_jobs` via narrow `enqueue_crowd_verify_signal` RPC without `service_role`; NEVER mutates canonical prices directly.
@@ -88,7 +92,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         {
           ok: false,
-          error: 'Rate limit exceeded. Maximum 15 crowd signals per minute.',
+          error:
+            'Rate limit exceeded. Too many crowd signals from this address; try again in a minute.',
         },
         { status: 429, headers: CORS_HEADERS }
       );

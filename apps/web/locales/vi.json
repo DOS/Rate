@@ -1405,6 +1405,8 @@
     "privacyS3Desc": "Nút \"Hữu ích\" và \"Báo cáo\" cần đăng nhập bằng tài khoản DOS ID (tạo ít nhất 7 ngày, đã xác minh email hoặc số điện thoại). Rate.vn lưu bình chọn kèm mã tài khoản để mỗi tài khoản chỉ bình chọn một lần cho mỗi đánh giá, và không lưu địa chỉ IP của bạn.",
     "privacyS4Title": "4. Thông tin riêng của gian hàng",
     "privacyS4Desc": "Thông tin riêng của gian hàng (số điện thoại, tài khoản ngân hàng) nằm ở các trường mà công chúng không đọc được. Trang web và API chỉ đọc được các trường công khai.",
+    "privacyS5Title": "5. Tiện ích trình duyệt Rate.vn",
+    "privacyS5Desc": "Trên trang sản phẩm của 10 sàn được hỗ trợ, tiện ích gửi cho Rate.vn sàn, URL sản phẩm đã cắt tham số theo dõi, tên sản phẩm, mã sản phẩm và mã gian hàng, phiên bản đang chọn, giá bán và giá gốc để tra lịch sử giá; việc tra cứu này bật sẵn, chỉ đọc và không cần tài khoản. Chỉ khi bạn bật \"Đóng góp phát hiện sản phẩm mới (Opt-In)\" (mặc định tắt), tiện ích còn gửi tin bán đó kèm số sao và số lượt đánh giá vào hàng đợi kiểm duyệt; dữ liệu này không tự đổi giá công khai. Tiện ích không gửi tài khoản hay thông tin cá nhân, không mở trang bạn không mở, và chỉ lưu trên trình duyệt của bạn địa chỉ máy chủ, lựa chọn có đóng góp hay không, cùng bộ nhớ tạm theo phiên gồm các sản phẩm bạn vừa xem và kết quả tra cứu. Nội dung bạn gõ vào ô tìm kiếm của tiện ích cũng được gửi để tra cứu.",
     "privacySide1Title": "Kiểm tra mã nguồn công khai",
     "privacySide1Desc": "Quy tắc phân quyền dữ liệu và cách lưu bình chọn đều công khai trong repository trên GitHub.",
     "privacySide1Btn": "Xem tài liệu kỹ thuật và API",

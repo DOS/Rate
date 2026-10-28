@@ -3016,9 +3016,20 @@ async function runCoreArchitectureSuite() {
     );
     if (rlRes.status === 429) {
       hit429 = true;
+      // The limit is per instance, so the reply promises no global cap
+      // (DOS/Rate#1234).
+      const rlBody = (await rlRes.json()) as { error: string };
+      assert.ok(!/Maximum 15/.test(rlBody.error), rlBody.error);
       break;
     }
   }
+  assert.match(
+    String(
+      openApi.paths['/api/v1/rate/extension/ingest']?.post?.responses?.['429']
+        ?.description
+    ),
+    /each server instance/
+  );
   assert.equal(
     hit429,
     true,
