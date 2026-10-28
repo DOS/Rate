@@ -48,6 +48,13 @@ function testProductPage() {
   assert.deepEqual(labelsOf(watch, 'availability'), [
     ui.fields.commercialStatus,
   ]);
+  // A cellular watch keeps its 4G bands under the 4G-only label.
+  const lte = groupsFor('smartwatches', {
+    cellular: { has_5g: true, bands_4g: 'B1/B3', bands_5g: 'n78' },
+  });
+  assert.deepEqual(lte.find((g) => g.group === 'cellular')?.rows, [
+    { label: ui.fields.bands4g, value: 'B1/B3' },
+  ]);
   for (const { rows } of watch) {
     for (const { value } of rows) {
       assert.ok(!isEmptySpecValue(value), `empty row: ${value}`);

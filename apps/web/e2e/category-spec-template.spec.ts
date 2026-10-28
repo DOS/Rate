@@ -11,7 +11,10 @@ test('earbud page shows audio specs and no phone fields', async ({ page }) => {
   const specs = page.locator('#specs-section');
   const headings = specs.locator('h3');
   await expect(headings.first()).toHaveText(/^1\. Âm thanh/);
-  await expect(headings).toHaveCount(7);
+  // Groups with no value are hidden (DOS/Rate#1186): the seeded bud has
+  // audio, battery, Bluetooth and the default sale status, nothing else.
+  await expect(headings).toHaveCount(4);
+  await expect(headings.nth(1)).toHaveText(/^2\. Pin/);
   await expect(specs).toContainText('E2E 10.5mm driver');
   await expect(specs).toContainText('E2E ANC');
   for (const text of [
@@ -24,6 +27,8 @@ test('earbud page shows audio specs and no phone fields', async ({ page }) => {
     'E2E Mic Array',
     'E2E Audio Engine',
     '5G',
+    'Phần cứng',
+    'Pháp lý',
   ]) {
     await expect(specs).not.toContainText(text);
   }
@@ -53,9 +58,11 @@ test('a watch page never shows 5G', async ({ page }) => {
   await expect(meta).toContainText('Apple');
   await expect(meta).not.toContainText('5G');
   const specs = page.locator('#specs-section');
-  await expect(specs).toContainText('Mạng Di động (Cellular)');
-  // The bands row stays, as 4G only.
-  await expect(specs).toContainText('Băng tần 4G');
+  await expect(specs).toContainText('Màn hình (Display)');
+  // The seeded phone has no network value left once 5G is dropped, so the
+  // cellular group is hidden (DOS/Rate#1186); the 4G-only bands label is
+  // covered by product-spec-rows.test.ts.
+  await expect(specs).not.toContainText('Mạng Di động');
   await expect(specs).not.toContainText('5G');
   await expect(specs).not.toContainText('Camera');
 });
