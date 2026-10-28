@@ -243,9 +243,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
         const outcome = await fetchExtensionLookup(signal, 'pill');
         // Fire-and-forget Opt-In Quarantine Crowd Signal if user enabled it.
-        // Sent whatever the lookup answered, as before (#1175): the error
-        // states below change only what the user sees (#1300).
-        void maybeSendOptInCrowdSignal(signal);
+        // Sent whenever the server answered, as before (#1175): a network
+        // error threw before it then, so it still sends nothing (#1300).
+        if (outcome.ok || outcome.status !== null) {
+          void maybeSendOptInCrowdSignal(signal);
+        }
         // A failed lookup clears the previous product's badge (#1300).
         const lookup = outcome.ok ? outcome.data : null;
         if (!isLatest()) {
