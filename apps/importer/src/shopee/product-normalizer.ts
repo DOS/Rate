@@ -1954,7 +1954,7 @@ export class ProductNormalizer {
     // (DOS/Rate#1196).
     const has5g: boolean | null = benchmark
       ? benchmark.has_5g
-      : /\b5g\b/i.test(title)
+      : /\b5 ?g\b/i.test(title)
         ? true
         : categorySlug === 'smartphones' || categorySlug === 'tablets'
           ? null

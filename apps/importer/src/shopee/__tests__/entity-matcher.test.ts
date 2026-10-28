@@ -472,6 +472,14 @@ async function runEntityMatcherSuite() {
   assert.equal(no5gInfo.has_5g, null, 'a phone title with no 5G says nothing about it');
   assert.deepEqual(no5gInfo.specifications.cellular ?? {}, {});
   assert.equal(
+    normalizer.normalize(createShopeeListing('Samsung Galaxy A26 128GB 5 G')).has_5g,
+    true
+  );
+  assert.equal(
+    normalizer.normalize(createShopeeListing('Samsung Galaxy A26 5 GB RAM')).has_5g,
+    null
+  );
+  assert.equal(
     normalizer.normalize(createShopeeListing('Samsung Galaxy A26 5G 128GB')).has_5g,
     true
   );
@@ -598,6 +606,19 @@ async function runEntityMatcherSuite() {
   });
   assert.equal(parsedMaster.status, 'draft');
   assert.equal(parsedMaster.average_rating, null);
+  // A master whose 5G is unknown parses (DOS/Rate#1196).
+  assert.equal(
+    MasterProductSchema.parse({
+      id: '018f1a50-0000-7000-8000-000000000002',
+      brand: 'Samsung',
+      model: 'Galaxy A26',
+      model_key: 'samsung:galaxy-a26:128gb',
+      name: 'Samsung Galaxy A26 128GB',
+      slug: 'samsung-galaxy-a26-128gb',
+      has_5g: null,
+    }).has_5g,
+    null
+  );
 
   const reviewJsonSchema = getAiReviewBatchJsonSchema();
   assert.equal(reviewJsonSchema.type, 'object');
