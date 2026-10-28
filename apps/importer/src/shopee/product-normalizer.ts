@@ -1217,19 +1217,24 @@ function readAppleSize(model: string, title: string): string {
       }
       const [before, ...band] = part.split(WATCH_BAND_WORD);
       // Walk back over the bare sizes listed before this band ("40mm, 44mm Dây"): k ends
-      // at the first of them, and the part before it may end in one more ("GPS 40mm").
+      // at the first of them, and the part before it may end in one more ("GPS 40mm") if
+      // it has no band of its own. A part before the list that names the case ("(Vỏ nhôm)
+      // 46mm, 42mm Dây") keeps the list's first size as the case's.
       const sizeBeforeBand = band.length > 0 && LONE_WATCH_SIZE.test(before!);
       const listSepAt = (n: number) =>
         /^[,|]$/.test(parts[2 * n - 1]!) || WATCH_RANGE_SEP.test(parts[2 * n - 1]!);
       let k = outside.length;
       while (sizeBeforeBand && k > 0 && listSepAt(k) && LONE_WATCH_SIZE.test(outside[k - 1]!)) k--;
+      const head = k > 0 ? parts[2 * k - 2]! : '';
+      const headCase = WATCH_CASE_WORD.test(head.normalize('NFC'));
       const headListed =
         sizeBeforeBand &&
         k > 0 &&
         listSepAt(k) &&
-        LAST_WATCH_SIZE.test(outside[k - 1]!) &&
-        !WATCH_CASE_WORD.test(parts[2 * k - 2]!.normalize('NFC'));
-      if (k < outside.length || headListed) {
+        LAST_WATCH_SIZE.test(head) &&
+        !WATCH_BAND_WORD.test(head) &&
+        !headCase;
+      if ((k < outside.length && !headCase) || headListed) {
         for (let j = k; j < outside.length; j++) outside[j] = '';
         if (headListed) outside[k - 1] = outside[k - 1]!.replace(LAST_WATCH_SIZE, '');
         outside.push('');

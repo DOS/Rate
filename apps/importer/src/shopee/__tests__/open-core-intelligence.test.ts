@@ -524,6 +524,15 @@ async function runSuite() {
     ],
     ['Apple Watch Series 10 (GPS 46mm) 42mm Dây Sport', 'apple:watch-series-10-46mm:unknown'],
     ['Apple Watch Series 10 GPS 46mm, 46mm Dây Cao Su', 'apple:watch-series-10-46mm:unknown'],
+    [
+      'Apple Watch Series 10 (Vỏ nhôm) 46mm, 42mm Dây Sport Band',
+      'apple:watch-series-10-46mm:unknown',
+    ],
+    // A size with a band of its own is no list item: the size before it is the case's.
+    [
+      'Apple Watch Series 10 GPS 46mm Dây Sport Band, 42mm Dây Cao Su',
+      'apple:watch-series-10-46mm:unknown',
+    ],
   ];
   for (const [title, expectedKey] of watchBandRangeKeys1162) {
     assert.equal(keyOf(title), expectedKey, title);
