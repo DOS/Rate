@@ -9,6 +9,7 @@ import {
   jsonApiError,
   parseBoundedStringParam,
   parseOptionalVndPriceParam,
+  withPublicReviewRisk,
 } from '@/server/rate/api-handler';
 
 const CORS_HEADERS = {
@@ -99,7 +100,12 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(
       {
         ok: true,
-        data: result,
+        data: result.merchantProfile
+          ? {
+              ...result,
+              merchantProfile: withPublicReviewRisk(result.merchantProfile),
+            }
+          : result,
       },
       {
         status: 200,

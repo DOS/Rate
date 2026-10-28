@@ -24,7 +24,10 @@ import {
   type MerchantSeedingTier,
   type MerchantSortOption,
 } from '@/lib/merchant-directory';
-import { hasReviewRiskEvidence } from '@/lib/merchant-risk-tone';
+import {
+  hasReviewRiskEvidence,
+  reviewRiskScoreOrNull,
+} from '@/lib/merchant-risk-tone';
 import { selectMerchantRadar } from '@/lib/deal-radar';
 import { useDealRadarPayload } from '@/components/radar/use-deal-radar';
 import { useLocale, useTranslations } from 'next-intl';
@@ -479,6 +482,8 @@ export default function MerchantDirectoryExplorer({
       merchantCount: filteredMerchants.length,
       merchants: filteredMerchants.map((m) => ({
         ...m,
+        // Null without analysed reviews (DOS/Rate#1258).
+        review_risk_score: reviewRiskScoreOrNull(m),
         dealRadarStats: getMerchantRadarStats(m),
       })),
     };

@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict';
 import { filterMerchantDirectory } from '../merchant-directory';
-import { hasReviewRiskEvidence } from '../merchant-risk-tone';
+import {
+  hasReviewRiskEvidence,
+  reviewRiskScoreOrNull,
+} from '../merchant-risk-tone';
 import { filterAndSortMerchants, type MerchantSummary } from '../rate-domain';
 
 // A store with no analysed reviews has no measured review risk: no number,
@@ -42,8 +45,48 @@ async function main() {
   assert.equal(hasReviewRiskEvidence({ total_reviews: 3 }), true);
   assert.equal(hasReviewRiskEvidence({ total_reviews: 0 }), false);
   assert.equal(hasReviewRiskEvidence({ total_reviews: Number.NaN }), false);
-  assert.equal(hasReviewRiskEvidence(null), false);
-  assert.equal(hasReviewRiskEvidence(undefined), false);
+  assert.equal(hasReviewRiskEvidence({ total_reviews: '0' }), false);
+  // No breakdown or no count says nothing: a stored score stays (#1258).
+  assert.equal(hasReviewRiskEvidence(null), true);
+  assert.equal(hasReviewRiskEvidence(undefined), true);
+  assert.equal(hasReviewRiskEvidence({}), true);
+
+  // Public payloads carry null instead of a baseline (DOS/Rate#1258).
+  assert.equal(
+    reviewRiskScoreOrNull({
+      review_risk_score: 4,
+      review_risk_breakdown: { total_reviews: 0 },
+    }),
+    null
+  );
+  assert.equal(
+    reviewRiskScoreOrNull({
+      review_risk_score: 30.4,
+      review_risk_breakdown: { total_reviews: 12 },
+    }),
+    30
+  );
+  assert.equal(
+    reviewRiskScoreOrNull({
+      review_risk_score: 68,
+      review_risk_breakdown: null,
+    }),
+    68
+  );
+  assert.equal(
+    reviewRiskScoreOrNull({
+      review_risk_score: null,
+      review_risk_breakdown: null,
+    }),
+    null
+  );
+  assert.equal(
+    reviewRiskScoreOrNull({
+      review_risk_score: 140,
+      review_risk_breakdown: { total_reviews: 3 },
+    }),
+    100
+  );
 
   // FPT Shop case: a 4/100 baseline with no reviews against measured stores.
   const noReviews = merchant('none', 4, 0, 96);
