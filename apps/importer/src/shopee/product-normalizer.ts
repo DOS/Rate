@@ -223,6 +223,8 @@ const APPLE_FAMILIES: ReadonlyArray<readonly [RegExp, string]> = [
   [/\bimac\b/i, 'iMac'],
   [/homepod\s*mini/i, 'HomePod mini'],
   [/homepod/i, 'HomePod'],
+  // An Apple Pencil is never the iPhone a title with no line falls back to (DOS/Rate#1194).
+  [/\bpencil\b/i, 'Pencil'],
 ];
 
 const APPLE_GENERATION_BY_YEAR: Readonly<Record<string, string>> = {
@@ -231,6 +233,52 @@ const APPLE_GENERATION_BY_YEAR: Readonly<Record<string, string>> = {
   'TV 4K 2022': '3',
   'HomePod 2018': '1',
   'HomePod 2023': '2',
+};
+
+/** "Apple TV 4K II" is the 2nd generation (DOS/Rate#1194). */
+const ROMAN_GENERATIONS: Readonly<Record<string, string>> = { ii: '2', iii: '3', iv: '4' };
+
+/**
+ * A chip that names the generation of a line a title states without one: the Apple TV 4K
+ * (A15) is the 3rd (2022). Read only when the title names no generation (DOS/Rate#1194).
+ */
+const APPLE_CHIP_GENERATIONS: ReadonlyArray<readonly [string, RegExp, string]> = [
+  ['TV 4K', /\ba15\b/i, 'TV 4K 3'],
+  ['TV 4K', /\ba12\b/i, 'TV 4K 2'],
+  ['TV 4K', /\ba10x\b/i, 'TV 4K 1'],
+  ['AirPods Pro', /\bh2\b/i, 'AirPods Pro 2'],
+  ['AirPods', /\bh2\b/i, 'AirPods 4'],
+  ['HomePod', /\bs7\b/i, 'HomePod 2'],
+];
+
+/**
+ * Apple part numbers (the 5 characters before the region suffix, "MN873SA/A") that name
+ * a line's generation: [line without a generation, line with it] (DOS/Rate#1194).
+ */
+const APPLE_PART_NUMBERS: Readonly<Record<string, readonly [string, string]>> = {
+  MQD22: ['TV 4K', 'TV 4K 1'],
+  MP7P2: ['TV 4K', 'TV 4K 1'],
+  MXGY2: ['TV 4K', 'TV 4K 2'],
+  MXH02: ['TV 4K', 'TV 4K 2'],
+  MN873: ['TV 4K', 'TV 4K 3'],
+  MN893: ['TV 4K', 'TV 4K 3'],
+  MV7N2: ['AirPods', 'AirPods 2'],
+  MRXJ2: ['AirPods', 'AirPods 2'],
+  MME73: ['AirPods', 'AirPods 3'],
+  MPNY3: ['AirPods', 'AirPods 3'],
+  MXP63: ['AirPods', 'AirPods 4'],
+  MXP93: ['AirPods', 'AirPods 4'],
+  MQD83: ['AirPods Pro', 'AirPods Pro 2'],
+  MTJV3: ['AirPods Pro', 'AirPods Pro 2'],
+  MQHV2: ['HomePod', 'HomePod 1'],
+  MQHW2: ['HomePod', 'HomePod 1'],
+  MQJ73: ['HomePod', 'HomePod 2'],
+  MQJ83: ['HomePod', 'HomePod 2'],
+  MK0C2: ['Pencil', 'Pencil 1'],
+  MQLY3: ['Pencil', 'Pencil 1'],
+  MU8F2: ['Pencil', 'Pencil 2'],
+  MUWA3: ['Pencil', 'Pencil USB-C'],
+  MX2D3: ['Pencil', 'Pencil Pro'],
 };
 
 /**
@@ -1372,15 +1420,23 @@ export class ProductNormalizer {
       // "Watch Ultra 2", "AirPods Pro (2nd generation)" is "AirPods Pro 2" (DOS/Rate#817).
       // One optional space before the "(" keeps a single space in the name; a leading
       // `\s*` would be quadratic on long whitespace (CodeQL js/polynomial-redos).
-      let appleTitle = modelTitle.replace(
-        / ?\(\s*(\d{1,2})(?:st|nd|rd|th)\s*gen(?:eration)?\s*\)/gi,
-        ' $1'
-      );
+      let appleTitle = modelTitle
+        .replace(/ ?\(\s*(\d{1,2})(?:st|nd|rd|th)\s*gen(?:eration)?\s*\)/gi, ' $1')
+        // Generation words read as the number: "Apple TV 4K thế hệ 3", "Gen 3", "3rd Gen"
+        // and "II" are the 3rd and 2nd generation (DOS/Rate#1194).
+        .replace(/\bthế\s*hệ\s*(?:thứ\s*)?(\d{1,2})\b/gi, '$1')
+        .replace(/\b(\d{1,2})(?:st|nd|rd|th)\s*gen(?:eration)?\b/gi, '$1')
+        .replace(/\bgen(?:eration)?\s*(\d{1,2})\b/gi, '$1')
+        .replace(
+          /\b(pro|ultra|se|4k|homepod|airpods|pencil|max|mini|air) (ii|iii|iv)\b/gi,
+          (_: string, line: string, roman: string) =>
+            `${line} ${ROMAN_GENERATIONS[roman.toLowerCase()]}`
+        );
       // An iPhone or iPad named after another Apple product as what it fits is not the
       // product: "AirPods Pro 2 cho iPhone Air" is the AirPods (DOS/Rate#819).
       const fitsAt = appleTitle.search(/ (?:cho|for) (?:iphone|ipad)\b/i);
       // Only another family counts: "Ốp lưng iPhone cho iPhone 15" is still the iPhone 15.
-      if (fitsAt > 0 && /airpods|\bwatch\b|macbook/i.test(appleTitle.slice(0, fitsAt)))
+      if (fitsAt > 0 && /airpods|\bwatch\b|macbook|\bpencil\b/i.test(appleTitle.slice(0, fitsAt)))
         appleTitle = appleTitle.slice(0, fitsAt);
       const iphoneMatch = appleTitle.match(
         /iphone\s*(\d+e\b|\d+(?:\s*(?:pro\s*max|pro|plus|mini|air)|\+(?= ?(?:$|[-,]|\d+(?:[.,]\d+)? ?(?:gb|tb)\b|[45]g\b|lte\b|chính\b)))?|air\b|duo\b|se(?:\s*(?:\(\s*(?:2020|2022|2025)\s*\)|(?:2020|2022|2025)\b|(?:gen\s*)?[234]\b))?)/i
@@ -1404,6 +1460,8 @@ export class ProductNormalizer {
         /airpods\s*(?:(pro)(?:\s*(?:(?:gen|thế\s*hệ)\s*|\(\s*)?(\d+))?|(max)|(?:(?:gen|thế\s*hệ)\s*)?(\d+))/i
       );
 
+      // True when no Apple line is named and the model fell back to the iPhone.
+      let noLine = false;
       // Retail titles often put the chip after the screen size ("iPad Pro 11 inch M4",
       // "MacBook Air 13 inch M3"); pick it up wherever it sits.
       const chipMatch = modelTitle.match(/\b(M\d)(?:\s+(Pro|Max))?\b/i);
@@ -1521,11 +1579,32 @@ export class ProductNormalizer {
         if (/^(?:Mac mini|Mac Studio|iMac)$/.test(model) && chip)
           model = `${model} ${chip}${chipMatch?.[2] ? ` ${chipMatch[2]}` : ''}`;
         else if (
-          /^(?:TV|TV 4K|HomePod|HomePod mini|Mac mini|Mac Studio|iMac)$/.test(model) &&
+          /^(?:TV|TV 4K|HomePod|HomePod mini|Mac mini|Mac Studio|iMac|Pencil)$/.test(model) &&
           generation
         )
           // Retailers name an Apple TV 4K or HomePod by its year as often as by its generation.
           model = `${model} ${APPLE_GENERATION_BY_YEAR[`${model} ${generation[1]}`] ?? generation[1]}`;
+        else if (model === 'Pencil') {
+          const pencil = appleTitle.slice(familyEnd).match(/^ ?\(? ?(pro|usb-?c)\b/i);
+          if (pencil) model = /^pro$/i.test(pencil[1]!) ? 'Pencil Pro' : 'Pencil USB-C';
+        }
+        noLine = first === Infinity;
+      }
+      // A part number or chip names the generation a title leaves out: "Apple TV 4K
+      // MN873SA/A" and "Apple TV 4K (A15)" are the 3rd (2022). A part number also names a
+      // title with no line. A stated generation always wins (DOS/Rate#1194).
+      const part = Array.from(appleTitle.matchAll(/\b(m[a-z0-9]{4})(?:[a-z]{1,2}\/a)?\b/gi), m => {
+        const partNumber = m[1]!.toUpperCase();
+        return Object.hasOwn(APPLE_PART_NUMBERS, partNumber)
+          ? APPLE_PART_NUMBERS[partNumber]
+          : undefined;
+      }).find(Boolean);
+      if (part && (model === part[0] || noLine)) model = part[1];
+      else {
+        const chipGeneration = APPLE_CHIP_GENERATIONS.find(
+          ([line, chipPattern]) => model === line && chipPattern.test(appleTitle)
+        );
+        if (chipGeneration) model = chipGeneration[2];
       }
       // A line Apple sells in more than one size keys each size apart: the 11 and 13 inch
       // iPad Pro, or the 42 and 46mm Watch Series, are two products at two prices. A title
