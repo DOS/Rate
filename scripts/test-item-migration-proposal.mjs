@@ -163,6 +163,32 @@ try {
       ),
     /permission denied for table items/
   );
+  // It may update an Item's specs (RS#700), never its status or key.
+  asRole(
+    'rate_worker',
+    `UPDATE rate.items SET key_specs = key_specs || '{"os": "Windows 11"}' WHERE item_key = 'asus:zenbook-s-14'`
+  );
+  assert.equal(
+    sql(
+      `SELECT key_specs ->> 'os' FROM rate.items WHERE item_key = 'asus:zenbook-s-14'`
+    ),
+    'Windows 11'
+  );
+  for (const change of [
+    `status = 'archived'`,
+    `item_key = 'x:y'`,
+    `min_price = 1`,
+  ]) {
+    assert.throws(
+      () =>
+        asRole(
+          'rate_worker',
+          `UPDATE rate.items SET ${change} WHERE item_key = 'asus:zenbook-s-14'`
+        ),
+      /permission denied for table items/,
+      change
+    );
+  }
   asRole(
     'rate_worker',
     `INSERT INTO rate.master_products (brand, model, model_key, name, slug, category_id, status)

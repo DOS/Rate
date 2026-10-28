@@ -147,6 +147,16 @@ CREATE POLICY "Rate worker read items" ON rate.items
 GRANT SELECT ON rate.items TO anon, authenticated;
 GRANT ALL ON rate.items TO service_role;
 GRANT SELECT ON rate.items TO rate_worker;
+-- Rate Services updates Item specs before the flag goes on (RS#700): spec and description
+-- columns only. Identity, status, prices, counts and ratings stay with the triggers and
+-- RPCs, so the worker cannot publish or re-key an Item.
+REVOKE UPDATE ON rate.items FROM rate_worker;
+GRANT UPDATE (description, specifications, key_specs, spec_provenance, images, thumbnail,
+              metadata, updated_at)
+  ON rate.items TO rate_worker;
+DROP POLICY IF EXISTS "Rate worker update items" ON rate.items;
+CREATE POLICY "Rate worker update items" ON rate.items
+  FOR UPDATE TO rate_worker USING (true) WITH CHECK (true);
 
 DROP TRIGGER IF EXISTS trg_rate_items_set_updated_at ON rate.items;
 CREATE TRIGGER trg_rate_items_set_updated_at
