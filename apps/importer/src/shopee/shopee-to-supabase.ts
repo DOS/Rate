@@ -603,6 +603,8 @@ export class ShopeeIngestionPipeline {
     // The variant and Item the listing had before this crawl, so their stats follow a move.
     let previousClusterId: string | null = null;
     let previousItemId: string | null = null;
+    // True when itemId comes from a kept variant: then it is written even when null.
+    let itemIdFromKeptVariant = false;
     if (itemModel !== 'off') {
       // A variant set by hand is evidence, never undone by a later page that just
       // does not state the size (design doc 4.4): only listing evidence
@@ -655,6 +657,7 @@ export class ShopeeIngestionPipeline {
           );
         }
         itemId = keptItemId;
+        itemIdFromKeptVariant = true;
       }
     }
     platLogger.info(
@@ -665,9 +668,10 @@ export class ShopeeIngestionPipeline {
     await report?.('master');
 
     // Item columns exist only once the DOS-Me Item migration is applied (DOS/Rate#1150).
-    const itemColumns: { item_id?: string; variant_source?: string | null } = {};
+    const itemColumns: { item_id?: string | null; variant_source?: string | null } = {};
     if (itemModel !== 'off') {
-      if (itemId) itemColumns.item_id = itemId;
+      // A kept variant with no Item clears a stale item_id rather than leave it.
+      if (itemId || itemIdFromKeptVariant) itemColumns.item_id = itemId;
       if (variantSourceToWrite !== undefined) itemColumns.variant_source = variantSourceToWrite;
     }
 

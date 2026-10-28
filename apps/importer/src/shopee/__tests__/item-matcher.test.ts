@@ -538,7 +538,7 @@ async function run() {
     mode: 'off' | 'item' | 'nullable_variant',
     title: string,
     item: ItemDb,
-    extra: { hint?: Row | null; stored?: Row | null } = {},
+    extra: { hint?: Row | null; stored?: Row | null; failOn?: 'stored' | 'kept' } = {},
     options: { masterIdHint?: string; itemIdHint?: string } = {}
   ) => {
     const db = createDb(call => {
@@ -550,10 +550,12 @@ async function run() {
         return { data: { id: 'product-1' }, error: null };
       }
       if (call.table === 'products' && call.op === 'select') {
+        if (extra.failOn === 'stored') return { data: null, error: { message: 'boom' } };
         return { data: extra.stored ?? null, error: null };
       }
       if (call.table === 'record_price_observation') return { data: 'inserted', error: null };
       if (call.table === 'master_products' && call.op === 'select' && call.cols === 'id, item_id') {
+        if (extra.failOn === 'kept') return { data: null, error: { message: 'boom' } };
         const variant = (item.variants ?? []).find(v => v.id === filter(call, 'id'));
         return { data: variant ? { id: variant.id, item_id: variant.item_id } : null, error: null };
       }
@@ -708,12 +710,26 @@ async function run() {
       assert.equal(evidence.listing?.cluster_id, vivobook512.id, mode);
       assert.equal(evidence.listing?.item_id, vivobook.id, mode);
     }
-    // A kept variant with no Item yet writes no item_id rather than the title's.
+    // A kept variant with no Item clears a stale item_id rather than write the title's.
     const orphan = await ingest('item', bareTitle, zenbook, {
-      stored: { cluster_id: 'master-zenbook-512', variant_source: 'manual' },
+      stored: { cluster_id: 'master-zenbook-512', variant_source: 'manual', item_id: vivobook.id },
     });
-    assert.ok(!('item_id' in (orphan.listing ?? {})));
+    assert.ok(orphan.listing && 'item_id' in orphan.listing);
+    assert.equal(orphan.listing?.item_id, null);
     assert.equal(orphan.result.itemId, null);
+    assert.deepEqual(itemStats(orphan.calls), [vivobook.id]);
+
+    // A failed read of the stored listing or the kept variant fails the ingest.
+    for (const failOn of ['stored', 'kept'] as const) {
+      await assert.rejects(
+        ingest('item', bareTitle, zenbook, {
+          stored: { cluster_id: ZENBOOK_1TB.id, variant_source: 'manual' },
+          failOn,
+        }),
+        /boom/,
+        failOn
+      );
+    }
 
     // DOS/Rate#1185: the Item a listing leaves is refreshed too.
     const movedItem = await ingest('item', 'Laptop ASUS Zenbook S 14 UX5406AA 1TB', twoItems, {
