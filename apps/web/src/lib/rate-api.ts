@@ -2283,6 +2283,8 @@ export interface MerchantProductListing {
   rating_count: number;
   url: string;
   image: string | null;
+  /** Sold out at the store (DOS/Rate#1248); null when not recorded. */
+  availability: OfferAvailability | null;
   master_product: {
     id: string;
     slug: string;
@@ -2348,6 +2350,7 @@ interface RawProductRow {
   images?: string[] | null;
   url: string;
   cluster_id?: string | null;
+  availability?: unknown;
 }
 
 export function normalizeMasterProductRow(
@@ -3169,7 +3172,7 @@ export async function getMerchantProfileBase(
       supabase
         .from('products')
         .select(
-          'id, merchant_id, platform, platform_item_id, title, price_current, price_original, stock, historical_sold, historical_sold_display, rating_star, rating_count, images, url, cluster_id'
+          'id, merchant_id, platform, platform_item_id, title, price_current, price_original, stock, historical_sold, historical_sold_display, rating_star, rating_count, images, url, cluster_id, availability'
         )
         .eq('merchant_id', merchantId)
         .order('price_current', { ascending: true })
@@ -3339,6 +3342,7 @@ export async function getMerchantProfileBase(
       rating_count: toSafeNonNegativeVoteCount(p.rating_count, 100_000_000),
       url: sanitizeOfferUrl(p.url),
       image: firstImageUrl(p.images),
+      availability: toOfferAvailability(p.availability),
       master_product: masterInfo,
       discount_analysis: null,
     };

@@ -934,6 +934,7 @@
     "colAuditAndSource": "Kontrola a zdroj",
     "itemMetaLine": "ID položky:",
     "soldLabel": "Prodáno:",
+    "listingSoldOutBadge": "Vyprodáno",
     "lowestMarketPriceLabel": "Nejnižší tržní cena:",
     "unclusteredLabel": "Nepřiřazeno",
     "historicalLowObs": "Historické minimum: {price} ₫ ({count} měření)",

@@ -6,6 +6,7 @@ import { formatSoldCount } from '@/lib/sold-count';
 import AnalyzerText from '@/components/reviews/AnalyzerText';
 import { Link } from '@/lib/navigation';
 import { getCategoryRouteHref, resolveProductImageUrl } from '@/lib/rate-api';
+import { isOfferUnavailable } from '@/lib/product-market-stats';
 import {
   getCachedMerchantProfileById,
   getCrossPlatformDealRadar,
@@ -842,180 +843,198 @@ export default async function MerchantProfilePage({
                     </tr>
                   </thead>
                   <tbody>
-                    {merchant.listings.map((item) => {
-                      const priceText =
-                        item.price_current.toLocaleString('vi-VN');
-                      const origText = item.price_original
-                        ? item.price_original.toLocaleString('vi-VN')
-                        : null;
-                      const da = item.discount_analysis;
-                      const badgeClass =
-                        da?.verdict === 'fake_discount'
-                          ? 'bg-danger text-white'
-                          : da?.verdict === 'suspicious_discount'
-                            ? 'bg-warning text-dark'
-                            : da?.verdict === 'genuine_deal'
-                              ? 'bg-success text-white'
-                              : 'bg-light text-secondary border';
-                      const resolvedImg = resolveProductImageUrl(
-                        item.master_product?.slug,
-                        item.image
-                      );
-                      // The category read with the master, not one guessed
-                      // from its name, which linked earbuds and others under
-                      // /smartphones (DOS/Rate#769).
-                      const masterCatSlug =
-                        item.master_product?.category_slug || 'smartphones';
-                      const masterBaseHref =
-                        getCategoryRouteHref(masterCatSlug);
+                    {/* In-stock listings first; a sold-out one is marked and
+                        its price is not read as a deal (DOS/Rate#1248). */}
+                    {[...merchant.listings]
+                      .sort(
+                        (a, b) =>
+                          Number(isOfferUnavailable(a)) -
+                          Number(isOfferUnavailable(b))
+                      )
+                      .map((item) => {
+                        const soldOut = isOfferUnavailable(item);
+                        const priceText =
+                          item.price_current.toLocaleString('vi-VN');
+                        const origText = item.price_original
+                          ? item.price_original.toLocaleString('vi-VN')
+                          : null;
+                        const da = item.discount_analysis;
+                        const badgeClass =
+                          da?.verdict === 'fake_discount'
+                            ? 'bg-danger text-white'
+                            : da?.verdict === 'suspicious_discount'
+                              ? 'bg-warning text-dark'
+                              : da?.verdict === 'genuine_deal'
+                                ? 'bg-success text-white'
+                                : 'bg-light text-secondary border';
+                        const resolvedImg = resolveProductImageUrl(
+                          item.master_product?.slug,
+                          item.image
+                        );
+                        // The category read with the master, not one guessed
+                        // from its name, which linked earbuds and others under
+                        // /smartphones (DOS/Rate#769).
+                        const masterCatSlug =
+                          item.master_product?.category_slug || 'smartphones';
+                        const masterBaseHref =
+                          getCategoryRouteHref(masterCatSlug);
 
-                      return (
-                        <tr key={item.id}>
-                          <td>
-                            <div className="d-flex align-items-center gap-3">
-                              {resolvedImg && (
-                                <img
-                                  loading="lazy"
-                                  decoding="async"
-                                  src={resolvedImg}
-                                  alt={item.title}
-                                  lang={contentLang(item.title, locale)}
-                                  className="rounded border bg-white p-1"
-                                  style={{
-                                    width: '52px',
-                                    height: '52px',
-                                    objectFit: 'contain',
-                                  }}
-                                />
-                              )}
-                              <div>
-                                <div
-                                  className="fw-semibold small text-dark"
-                                  lang={contentLang(item.title, locale)}
-                                >
-                                  {item.title}
-                                </div>
-                                <div
-                                  className="text-muted"
-                                  style={{ fontSize: '0.8125rem' }}
-                                >
-                                  {t('itemMetaLine')}{' '}
-                                  <code>{item.platform_item_id}</code> •{' '}
-                                  {t('soldLabel')}{' '}
-                                  {formatSoldCount(
-                                    item.historical_sold,
-                                    item.historical_sold_display,
-                                    locale
-                                  )}{' '}
-                                  • ★ {item.rating_star.toFixed(1)} (
-                                  {item.rating_count})
-                                </div>
-                              </div>
-                            </div>
-                          </td>
-                          <td>
-                            {item.master_product ? (
-                              <div>
-                                <div className="d-flex align-items-center flex-wrap gap-1">
-                                  <Link
-                                    href={`${masterBaseHref}/${item.master_product.slug}`}
-                                    className="fw-semibold text-primary text-decoration-none small"
-                                  >
-                                    {item.master_product.name}
-                                  </Link>
-                                  <RadarBadge
-                                    signal={getRadarSignal(
-                                      radarIndex,
-                                      item.master_product.slug
-                                    )}
+                        return (
+                          <tr key={item.id}>
+                            <td>
+                              <div className="d-flex align-items-center gap-3">
+                                {resolvedImg && (
+                                  <img
+                                    loading="lazy"
+                                    decoding="async"
+                                    src={resolvedImg}
+                                    alt={item.title}
+                                    lang={contentLang(item.title, locale)}
+                                    className="rounded border bg-white p-1"
+                                    style={{
+                                      width: '52px',
+                                      height: '52px',
+                                      objectFit: 'contain',
+                                    }}
                                   />
-                                </div>
-                                <div
-                                  className="text-muted"
-                                  style={{ fontSize: '0.8125rem' }}
-                                >
-                                  {t('lowestMarketPriceLabel')}{' '}
-                                  <strong className="font-monospace">
-                                    {item.master_product.market_min_price.toLocaleString(
-                                      'vi-VN'
+                                )}
+                                <div>
+                                  <div
+                                    className="fw-semibold small text-dark"
+                                    lang={contentLang(item.title, locale)}
+                                  >
+                                    {item.title}
+                                  </div>
+                                  <div
+                                    className="text-muted"
+                                    style={{ fontSize: '0.8125rem' }}
+                                  >
+                                    {t('itemMetaLine')}{' '}
+                                    <code>{item.platform_item_id}</code> •{' '}
+                                    {t('soldLabel')}{' '}
+                                    {formatSoldCount(
+                                      item.historical_sold,
+                                      item.historical_sold_display,
+                                      locale
                                     )}{' '}
-                                    ₫
-                                  </strong>
+                                    • ★ {item.rating_star.toFixed(1)} (
+                                    {item.rating_count})
+                                  </div>
                                 </div>
                               </div>
-                            ) : (
-                              <span className="text-muted small">
-                                {t('unclusteredLabel')}
-                              </span>
-                            )}
-                          </td>
-                          <td>
-                            <div className="fw-bold text-dark font-monospace">
-                              {priceText} ₫
-                            </div>
-                            {origText && (
-                              <div className="text-muted small text-decoration-line-through font-monospace">
-                                {origText} ₫
-                              </div>
-                            )}
-                          </td>
-                          <td>
-                            {da ? (
-                              <div>
-                                <span
-                                  className={`badge ${badgeClass} rounded-pill small px-3 py-1`}
-                                  title={
-                                    discountVerdictCopy(tVerdict, da)
-                                      .explanation
-                                  }
-                                >
-                                  {discountVerdictCopy(tVerdict, da).label}
-                                </span>
-                                <div
-                                  className="text-muted mt-1"
-                                  style={{
-                                    fontSize: '0.8125rem',
-                                    maxWidth: '280px',
-                                  }}
-                                >
-                                  {t('historicalLowObs', {
-                                    price:
-                                      da.historical_min_price.toLocaleString(
+                            </td>
+                            <td>
+                              {item.master_product ? (
+                                <div>
+                                  <div className="d-flex align-items-center flex-wrap gap-1">
+                                    <Link
+                                      href={`${masterBaseHref}/${item.master_product.slug}`}
+                                      className="fw-semibold text-primary text-decoration-none small"
+                                    >
+                                      {item.master_product.name}
+                                    </Link>
+                                    <RadarBadge
+                                      signal={getRadarSignal(
+                                        radarIndex,
+                                        item.master_product.slug
+                                      )}
+                                    />
+                                  </div>
+                                  <div
+                                    className="text-muted"
+                                    style={{ fontSize: '0.8125rem' }}
+                                  >
+                                    {t('lowestMarketPriceLabel')}{' '}
+                                    <strong className="font-monospace">
+                                      {item.master_product.market_min_price.toLocaleString(
                                         'vi-VN'
-                                      ),
-                                    count: da.observation_count,
-                                  })}
+                                      )}{' '}
+                                      ₫
+                                    </strong>
+                                  </div>
                                 </div>
-                              </div>
-                            ) : (
-                              <span className="badge bg-light text-muted small border">
-                                {t('collectingHistoryBadge')}
-                              </span>
-                            )}
-                          </td>
-                          <td className="text-end">
-                            <div className="d-flex justify-content-end gap-2">
-                              {item.master_product && (
-                                <Link
-                                  href={`${masterBaseHref}/${item.master_product.slug}#jreviews-section`}
-                                  className="btn btn-sm btn-outline-primary rounded-pill px-3"
-                                >
-                                  {t('viewReviewsAndPricesBtn')}
-                                </Link>
+                              ) : (
+                                <span className="text-muted small">
+                                  {t('unclusteredLabel')}
+                                </span>
                               )}
-                              <a
-                                href={item.url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="btn btn-sm btn-outline-secondary rounded-pill px-3"
+                            </td>
+                            <td>
+                              <div
+                                className={`fw-bold font-monospace ${soldOut ? 'text-muted' : 'text-dark'}`}
                               >
-                                {t('verifySourceBtn')}
-                              </a>
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })}
+                                {priceText} ₫
+                              </div>
+                              {origText && (
+                                <div className="text-muted small text-decoration-line-through font-monospace">
+                                  {origText} ₫
+                                </div>
+                              )}
+                            </td>
+                            <td>
+                              {soldOut ? (
+                                <span
+                                  className="badge bg-secondary-subtle text-secondary rounded-pill small border px-3 py-1"
+                                  data-testid="merchant-listing-sold-out"
+                                >
+                                  {t('listingSoldOutBadge')}
+                                </span>
+                              ) : da ? (
+                                <div>
+                                  <span
+                                    className={`badge ${badgeClass} rounded-pill small px-3 py-1`}
+                                    title={
+                                      discountVerdictCopy(tVerdict, da)
+                                        .explanation
+                                    }
+                                  >
+                                    {discountVerdictCopy(tVerdict, da).label}
+                                  </span>
+                                  <div
+                                    className="text-muted mt-1"
+                                    style={{
+                                      fontSize: '0.8125rem',
+                                      maxWidth: '280px',
+                                    }}
+                                  >
+                                    {t('historicalLowObs', {
+                                      price:
+                                        da.historical_min_price.toLocaleString(
+                                          'vi-VN'
+                                        ),
+                                      count: da.observation_count,
+                                    })}
+                                  </div>
+                                </div>
+                              ) : (
+                                <span className="badge bg-light text-muted small border">
+                                  {t('collectingHistoryBadge')}
+                                </span>
+                              )}
+                            </td>
+                            <td className="text-end">
+                              <div className="d-flex justify-content-end gap-2">
+                                {item.master_product && (
+                                  <Link
+                                    href={`${masterBaseHref}/${item.master_product.slug}#jreviews-section`}
+                                    className="btn btn-sm btn-outline-primary rounded-pill px-3"
+                                  >
+                                    {t('viewReviewsAndPricesBtn')}
+                                  </Link>
+                                )}
+                                <a
+                                  href={item.url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="btn btn-sm btn-outline-secondary rounded-pill px-3"
+                                >
+                                  {t('verifySourceBtn')}
+                                </a>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
                   </tbody>
                 </table>
               </div>
