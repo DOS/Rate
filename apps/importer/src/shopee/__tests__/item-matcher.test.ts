@@ -18,6 +18,7 @@ import { ITEM_MODEL_ENV, resolveItemModelMode } from '../item-model-flag.js';
 import { ProductNormalizer, UnkeyableProductTitleError } from '../product-normalizer.js';
 import { ShopeeIngestionPipeline } from '../shopee-to-supabase.js';
 import { AiSpecEnricher } from '../ai-spec-enricher.js';
+import { AiReviewAnalyzer } from '../ai-review-analyzer.js';
 import type { RateSupabaseClient, ShopeeProduct } from '../types.js';
 
 type Row = Record<string, unknown>;
@@ -1088,8 +1089,30 @@ async function run() {
     }).resolveItemAndVariant(vivobook, 'cat-laptops');
     assert.deepEqual(seen, [{ perItem: true }, { perItem: false }]);
   }
+  // Item-level rating (Q4): a listing with no variant refreshes its Item; with a
+  // variant the master RPC (Item-aware in M2) runs as before; no Item, no Item RPC.
+  {
+    const persist = async (ids: { masterId?: string | null; itemId?: string | null }) => {
+      const db = createDb(call =>
+        call.table === 'reviews' && call.op === 'select' ? { data: [], error: null } : undefined
+      );
+      await new AiReviewAnalyzer({ apiKey: '' }).persistAnalysisToSupabase(db.client, {
+        productId: 'product-1152',
+        reviews: [],
+        ...ids,
+      });
+      return db.calls.filter(c => c.op === 'rpc').map(c => [c.table, c.payload] as const);
+    };
+    assert.deepEqual(await persist({ masterId: null, itemId: 'item-zenbook' }), [
+      ['refresh_item_stats', { p_item_id: 'item-zenbook' }],
+    ]);
+    assert.deepEqual(await persist({ masterId: 'master-zenbook-1tb', itemId: 'item-zenbook' }), [
+      ['refresh_master_product_rating', { p_master_id: 'master-zenbook-1tb' }],
+    ]);
+    assert.deepEqual(await persist({ masterId: null }), []);
+  }
   console.log(
-    '  ✅ [6/6] Seeds grouped by Item; Item specs from the seeds; enrichment per Item (#1152)'
+    '  ✅ [6/6] Seeds grouped by Item; Item specs from the seeds; enrichment and rating per Item (#1152)'
   );
   console.log('🎉 All item-first matcher tests passed!');
 }
