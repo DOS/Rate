@@ -1290,7 +1290,9 @@ export default function LeaderboardExplorer({
                             </span>
                             <span className="rate-score-badge-expert">
                               {entry.expertScore10 != null
-                                ? `Expert ${entry.expertScore10.toFixed(1)}/10`
+                                ? t('expertScoreShort', {
+                                    score: entry.expertScore10.toFixed(1),
+                                  })
                                 : t('expertUnrated')}
                             </span>
                             <RadarBadge
@@ -1604,14 +1606,18 @@ export default function LeaderboardExplorer({
                         <BsStarFill className="text-warning" />
                         <span>
                           {entry.userScore5 > 0
-                            ? `User ${entry.userScore5.toFixed(2)}/5.0`
+                            ? t('userScoreShort', {
+                                score: entry.userScore5.toFixed(2),
+                              })
                             : t('userUnrated')}
                         </span>
                       </span>
                       <span className="rate-score-badge-expert">
                         <span>
                           {entry.expertScore10 != null
-                            ? `Expert ${entry.expertScore10.toFixed(1)}/10`
+                            ? t('expertScoreShort', {
+                                score: entry.expertScore10.toFixed(1),
+                              })
                             : t('expertUnrated')}
                         </span>
                       </span>
@@ -1621,7 +1627,15 @@ export default function LeaderboardExplorer({
                         [
                           { key: 'screen', short: t('shortDisplay') },
                           { key: 'performance', short: t('shortPerf') },
-                          { key: 'camera', short: t('shortCamAnc') },
+                          {
+                            key: 'camera',
+                            // Earbuds score noise cancelling here, the
+                            // others their cameras (DOS/Rate#1250).
+                            short:
+                              activeCategory === 'earbuds'
+                                ? t('shortAnc')
+                                : t('shortCamera'),
+                          },
                           { key: 'battery', short: t('shortBattery') },
                           { key: 'value', short: t('shortValue') },
                         ] as const

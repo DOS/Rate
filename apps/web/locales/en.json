@@ -340,7 +340,7 @@
     "metaTitle": "Tech device leaderboard | Rate.vn",
     "metaDescription": "Independent rankings by category: expert and verified buyer scores across 5 criteria, with no ads or affiliate bias.",
     "kicker": "Independent device rankings",
-    "title": "Independent 10.0 device leaderboard",
+    "title": "Independent device leaderboard",
     "subtitle": "Objective rankings by category that keep verified buyer scores, lab expert scores and 5 sub-criteria separate from store prices.",
     "home": "Home",
     "breadcrumb": "Leaderboard",
@@ -411,7 +411,6 @@
     "critValue": "Value for money",
     "shortDisplay": "Display",
     "shortPerf": "Perf",
-    "shortCamAnc": "Cam/ANC",
     "shortBattery": "Battery",
     "shortValue": "Value",
     "unratedShort": "unrated",
@@ -428,7 +427,11 @@
     "showdownsHeading": "Head-to-head matchups between top-ranked devices",
     "openCompareMatrixBtn": "Compare in detail →",
     "view1v1DeepBtn": "View 1v1 Head-to-Head",
-    "categoryTabsAria": "Choose a category"
+    "categoryTabsAria": "Choose a category",
+    "shortCamera": "Camera",
+    "shortAnc": "ANC",
+    "userScoreShort": "User {score}/5.0",
+    "expertScoreShort": "Expert {score}/10"
   },
   "reviews": {
     "criteriaScreen": "Display & visuals",
