@@ -1146,8 +1146,20 @@ async function runSuite() {
   assert.ok(synced.specifications.camera?.third_camera?.startsWith('200 MP'));
   assert.equal(synced.specifications.battery?.fast_charging_w, 100);
   assert.equal(synced.specifications.battery?.reverse_charging, true);
+  // The page states no network: 5G is unknown and no cellular group is invented (#1196).
+  assert.equal(synced.has5g, null);
   assert.equal(
     countPopulatedFieldGroups(synced.specifications as unknown as Record<string, unknown>),
+    9
+  );
+  const syncedWithNetwork = parseGsmArenaHtmlToSpecs(
+    `${sampleGsmHtml}<td data-spec="nettech">GSM / CDMA / HSPA / LTE / 5G</td>`
+  );
+  assert.equal(syncedWithNetwork.has5g, true);
+  assert.equal(
+    countPopulatedFieldGroups(
+      syncedWithNetwork.specifications as unknown as Record<string, unknown>
+    ),
     10
   );
 

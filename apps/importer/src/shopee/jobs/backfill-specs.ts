@@ -56,7 +56,7 @@ export interface BackfillSpecsResult {
 }
 
 /** Item specs carry no storage or RAM: those are per variant (design doc 4.1). */
-function withoutVariantSpecs(specs: ProductSpecifications): ProductSpecifications {
+export function withoutVariantSpecs(specs: ProductSpecifications): ProductSpecifications {
   if (!specs.hardware) return specs;
   const hardware = { ...specs.hardware };
   delete hardware.storage_gb;
@@ -64,7 +64,7 @@ function withoutVariantSpecs(specs: ProductSpecifications): ProductSpecification
   return { ...specs, hardware };
 }
 
-function withoutVariantKeySpecs(keySpecs: Record<string, unknown>): Record<string, unknown> {
+export function withoutVariantKeySpecs(keySpecs: Record<string, unknown>): Record<string, unknown> {
   const rest = { ...keySpecs };
   delete rest.storage;
   delete rest.ram;
