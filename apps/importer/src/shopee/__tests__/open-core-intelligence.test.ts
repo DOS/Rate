@@ -648,6 +648,16 @@ async function runSuite() {
       'Apple Watch Series 10 GPS 46mm (Sport Band 45mm, fits 42mm case)',
       'apple:watch-series-10-46mm:64gb',
     ],
+    // A gifted or bundled case is not the watch's (DOS/Rate#1263).
+    ['Apple Watch Series 10 42mm GPS | Case 46mm', 'apple:watch-series-10-42mm:64gb'],
+    ['Apple Watch Series 10 42mm GPS, tặng Silicone Case 46mm', 'apple:watch-series-10-42mm:64gb'],
+    ['Apple Watch Series 10 42mm GPS tặng ốp 46mm', 'apple:watch-series-10-42mm:64gb'],
+    ['Apple Watch Series 10 42mm GPS | Ốp TPU Case 46mm', 'apple:watch-series-10-42mm:64gb'],
+    ['Apple Watch Series 10 42mm GPS | Bao da Case 46mm', 'apple:watch-series-10-42mm:64gb'],
+    ['Apple Watch Series 10 GPS, tặng Silicone Case 46mm', 'apple:watch-series-10:64gb'],
+    ['Apple Watch Series 10 GPS kèm ốp 46mm', 'apple:watch-series-10:64gb'],
+    // Still the watch's: a named case after a band size, or a lone "| 46mm" case.
+    ['Apple Watch Series 10 GPS | Case 46mm', 'apple:watch-series-10-46mm:64gb'],
   ];
   for (const [title, expectedKey] of namedCaseKeys1223) {
     assert.equal(keyOf(title), expectedKey, title);

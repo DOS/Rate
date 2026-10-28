@@ -1276,9 +1276,10 @@ const WATCH_CASE_WORD = /(?<![\p{L}\d])(?:case|mặt|vỏ)(?![\p{L}\d])/iu;
 // (DOS/Rate#1223). At most two words between the size and a case word that follows it.
 const NAMED_CASE_SIZE =
   /(?<!\d)(38|4[0-2]|4[4-6]) ?mm(?: [\p{L}\d-]+){0,2} (?:case|vỏ|viền)(?![\p{L}\d])|(?<![\p{L}\d])(?:case|vỏ|viền|mặt) (38|4[0-2]|4[4-6]) ?mm\b/iu;
-// A part about a box, a cover or a fit names no case of the watch itself.
+// A part about a box, a cover, a gift or a fit names no case of the watch itself
+// ("tặng Silicone Case 46mm", "ốp TPU 46mm", DOS/Rate#1263).
 const CASE_ACCESSORY_WORD =
-  /(?<![\p{L}\d])(?:fits?|hộp|ốp|kèm|compatible|tương thích|cho|for)(?![\p{L}\d])/iu;
+  /(?<![\p{L}\d])(?:fits?|hộp|ốp|kèm|tặng|quà|gift|silicone|silicon|tpu|bao da|compatible|tương thích|cho|for)(?![\p{L}\d])/iu;
 const APPLE_SIZE_PATTERNS: Record<string, [RegExp, RegExp]> = {
   ipad: sizePatterns(IPAD_SIZE),
   'macbook air': sizePatterns(MACBOOK_AIR_SIZE),
@@ -1306,7 +1307,10 @@ function readAppleSize(model: string, title: string): string {
   if (!family) return '';
   const at = title.search(new RegExp(`\\b${family.split(' ')[0]}\\b`, 'i'));
   // A bundle's "+ bàn phím 11 inch" is another product; "GPS + Cellular" is the watch.
-  const own = title.slice(Math.max(0, at)).split(/ (?:cho|for) | ?\+ (?!cellular|lte)/i)[0]!;
+  // So is what is gifted or bundled: ", tặng Silicone Case 46mm" (DOS/Rate#1263).
+  const own = title
+    .slice(Math.max(0, at))
+    .split(/ (?:cho|for) | ?\+ (?!cellular|lte)|[ ,|]+(?:quà tặng|tặng|kèm)(?![\p{L}\d])/iu)[0]!;
   if (family === 'watch') {
     // A size outside a band phrase ("dây", "band", "strap", "loop" or "bracelet" up to the
     // next ")", ",", "|", ";", en dash or " - ") is the case's. A band is sold by the case
@@ -1371,9 +1375,27 @@ function readAppleSize(model: string, title: string): string {
     // Titanium Case" is the 46mm (DOS/Rate#1223).
     // The size must sit next to the case word, and the part must not be about a box, a
     // cover or what something fits ("kèm vỏ hộp 42mm", "fits 42mm case").
+    // A "| Case 46mm" after a part that already gives the watch a size outside any band
+    // ("Series 10 42mm GPS | Case 46mm") is a bundled case, not the watch's (DOS/Rate#1263).
+    const sizedBeforePipe = (i: number) =>
+      parts.some(
+        (sep, j) =>
+          j < i &&
+          sep === '|' &&
+          parts
+            .slice(0, j)
+            .some(
+              (p, k) =>
+                k % 2 === 0 &&
+                WATCH_SIZE.test(p) &&
+                !WATCH_BAND_WORD.test(p) &&
+                !CASE_ACCESSORY_WORD.test(p.normalize('NFC'))
+            )
+      );
     const namedCase = parts
-      .filter((_, i) => i % 2 === 0)
-      .map(part => part.normalize('NFC'))
+      .map((part, i) => ({ part: part.normalize('NFC'), i }))
+      .filter(({ i }) => i % 2 === 0 && !sizedBeforePipe(i))
+      .map(({ part }) => part)
       .filter(
         part =>
           !WATCH_BAND_WORD.test(part) &&
