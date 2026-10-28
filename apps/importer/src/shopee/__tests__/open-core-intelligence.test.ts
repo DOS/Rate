@@ -638,6 +638,16 @@ async function runSuite() {
     ],
     ['Apple Watch SE 3 44mm Sport Band, 40mm Case', 'apple:watch-se-3-40mm:unknown'],
     ['Apple Watch Series 11 45mm Sport Band | Case 42mm', 'apple:watch-series-11-42mm:64gb'],
+    [
+      'Apple Watch Series 11 GPS 45mm Sport Band, 46mm Viền Titanium',
+      'apple:watch-series-11-46mm:64gb',
+    ],
+    // A box, a cover or a fit names no case of the watch itself.
+    ['Apple Watch Series 10 GPS 46mm, kèm vỏ hộp 42mm', 'apple:watch-series-10-46mm:64gb'],
+    [
+      'Apple Watch Series 10 GPS 46mm (Sport Band 45mm, fits 42mm case)',
+      'apple:watch-series-10-46mm:64gb',
+    ],
   ];
   for (const [title, expectedKey] of namedCaseKeys1223) {
     assert.equal(keyOf(title), expectedKey, title);
