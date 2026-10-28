@@ -13427,6 +13427,7 @@ async function runCoreArchitectureSuite() {
     const { selectBestOfferFromListings } =
       await import('@/server/rate/api-handler');
 
+    const origFetch1170 = globalThis.fetch;
     const json1170 = (body: unknown, status = 200) =>
       new Response(JSON.stringify(body), {
         status,
@@ -13666,6 +13667,7 @@ async function runCoreArchitectureSuite() {
       },
     ] as unknown as Parameters<typeof selectBestOfferFromListings>[0]);
     assert.equal(unknown1171.bestOffer?.id, 'only');
+    globalThis.fetch = origFetch1170;
 
     console.log(
       '  ✅ [126k/135] Batch offer availability, sold-out radar and best offer, stock 0 (#1170, #1171, #1174) passed'
