@@ -48,3 +48,39 @@ SELECT rate.refresh_item_stats(id) FROM rate.items WHERE item_key LIKE 'e2e:%';
 -- An admin unpublishes the Item; its variant stays published (the variant lookup alone
 -- would still find it).
 UPDATE rate.items SET status = 'draft' WHERE item_key = 'e2e:item-draft';
+
+-- A six-size Item (DOS/Rate#1285): above the lazy threshold, so its page renders only the
+-- default size's panels and loads the others from /api/v1/rate/item-size/{slug}. Six
+-- listings per size with ten history points each, so the payload difference shows.
+INSERT INTO rate.master_products (id, brand, model, model_key, name, slug, category_id, status,
+                                  storage_gb, min_price, max_price, merchant_count)
+SELECT ('17e00000-0000-4000-8000-0000000b' || lpad(g::text, 4, '0'))::uuid, 'E2E', 'Item Big',
+       'e2e:item-big:' || (64 * 2 ^ (g - 1))::int || 'gb',
+       'E2E Item Big ' || (64 * 2 ^ (g - 1))::int || 'GB',
+       'e2e-item-big-' || (64 * 2 ^ (g - 1))::int || 'gb',
+       'c0000000-0000-4000-8000-000000000001', 'published', (64 * 2 ^ (g - 1))::int,
+       10000000 + g * 1000000, 10000000 + g * 1000000 + 500000, 2
+FROM generate_series(1, 6) AS g
+ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO rate.products (id, merchant_id, platform, platform_item_id, title, brand,
+                           category_id, price_current, url, cluster_id)
+SELECT ('27e00000-0000-4000-8000-0000000b' || lpad((g * 10 + l)::text, 4, '0'))::uuid,
+       CASE WHEN l % 2 = 0 THEN '11111111-1111-4111-8111-111111111111'::uuid
+            ELSE '11111111-1111-4111-8111-111111111112'::uuid END,
+       CASE WHEN l % 2 = 0 THEN 'shopee' ELSE 'tiki' END,
+       'e2e_item_big_' || g || '_' || l,
+       'E2E Item Big ' || (64 * 2 ^ (g - 1))::int || 'GB listing ' || l,
+       'E2E', 'c0000000-0000-4000-8000-000000000001',
+       10000000 + g * 1000000 + l * 100000,
+       'https://shopee.vn/e2e-item-big-' || g || '-' || l,
+       ('17e00000-0000-4000-8000-0000000b' || lpad(g::text, 4, '0'))::uuid
+FROM generate_series(1, 6) AS g, generate_series(1, 6) AS l
+ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO rate.price_history (product_id, price, recorded_at)
+SELECT ('27e00000-0000-4000-8000-0000000b' || lpad((g * 10 + l)::text, 4, '0'))::uuid,
+       10000000 + g * 1000000 + l * 100000 + d * 50000, now() - (d || ' days')::interval
+FROM generate_series(1, 6) AS g, generate_series(1, 6) AS l, generate_series(1, 10) AS d;
+
+SELECT rate.refresh_item_stats(id) FROM rate.items WHERE item_key = 'e2e:item-big';

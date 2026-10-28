@@ -552,7 +552,30 @@ async function main() {
       slugs: ['apple-iphone-16-128gb'],
     }).tags.includes(productCacheTag('apple-iphone-16'))
   );
+  // The size route answers one size's panel data while the flag is on.
+  const sizeRouteMod =
+    await import('../../../app/api/v1/rate/item-size/[slug]/route');
+  const sizeGet = (slug: string) =>
+    sizeRouteMod.GET(new Request('http://localhost/x'), {
+      params: Promise.resolve({ slug }),
+    });
+  let sizeRes = await sizeGet('apple-iphone-16-128gb');
+  assert.equal(sizeRes.status, 200);
+  const sizeBody = (await sizeRes.json()) as {
+    data: import('../../../lib/item-size-panel').ItemSizePanelData;
+  };
+  assert.equal(sizeBody.data.product.slug, 'apple-iphone-16-128gb');
+  assert.ok(Array.isArray(sizeBody.data.offers));
+  assert.ok(
+    sizeBody.data.priceHistory && 'byOffer' in sizeBody.data.priceHistory
+  );
+  assert.equal(typeof sizeBody.data.saleState, 'string');
+  assert.match(sizeRes.headers.get('cache-control') ?? '', /s-maxage=300/);
+  assert.equal((await sizeGet('../etc')).status, 400);
+  assert.equal((await sizeGet('no-such-product')).status, 404);
   delete process.env.RATE_ITEM_MODEL;
+  sizeRes = await sizeGet('apple-iphone-16-128gb');
+  assert.equal(sizeRes.status, 404, 'flag off: the size route answers nothing');
 
   // Product routes stay ISR whatever the flag: no request-time API (query
   // string, headers, cookies) and no dynamic opt-in. `?v=` is client-side.
@@ -573,6 +596,7 @@ async function main() {
     'selected-variant.ts',
     'ItemVariantPicker.tsx',
     'ItemVariantPanels.tsx',
+    'ItemLazySizePanel.tsx',
   ].map((f) =>
     path.resolve(__dirname, `../../../components/product/item/${f}`)
   )) {
@@ -591,11 +615,34 @@ async function main() {
     assert.doesNotMatch(src, /searchParams|\bheaders\(|\bcookies\(/, file);
     assert.doesNotMatch(src, /export const dynamic\b|force-dynamic/, file);
   }
-  for (const file of productRouteFiles) {
+  // The size route is cached too: it reads only its path (DOS/Rate#1285).
+  const sizeRoute = path.resolve(
+    __dirname,
+    '../../../app/api/v1/rate/item-size/[slug]/route.ts'
+  );
+  for (const file of [...productRouteFiles, sizeRoute]) {
     const src = fs.readFileSync(file, 'utf8');
     assert.match(src, /export const revalidate = 300;/, file);
     assert.match(src, /export function generateStaticParams\(/, file);
   }
+  {
+    const src = fs.readFileSync(sizeRoute, 'utf8');
+    assert.doesNotMatch(src, /searchParams|\bheaders\(|\bcookies\(/);
+    assert.doesNotMatch(src, /export const dynamic\b|force-dynamic/);
+    assert.doesNotMatch(src, /_request\.(url|nextUrl|headers)/);
+  }
+
+  // Lazy sizes (DOS/Rate#1285): above 4 sizes, or ~150 KB of other sizes.
+  const lazy = await import('../../../lib/item-size-panel');
+  assert.equal(lazy.shouldLazyLoadSizes(4, 0), false);
+  assert.equal(lazy.shouldLazyLoadSizes(5, 0), true);
+  assert.equal(lazy.shouldLazyLoadSizes(2, 149_999), false);
+  assert.equal(lazy.shouldLazyLoadSizes(2, 150_000), true);
+  assert.equal(lazy.shouldLazyLoadSizes(1, 500_000), false);
+  assert.equal(
+    lazy.itemSizePanelPath('apple-iphone-16-256gb'),
+    '/api/v1/rate/item-size/apple-iphone-16-256gb'
+  );
   // The page renders a size that loaded: the planned one, else a priced one.
   const { pickRenderedSize } = await import('../item-page');
   const size = (slug: string, min_price: number) =>

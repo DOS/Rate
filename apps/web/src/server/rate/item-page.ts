@@ -17,7 +17,19 @@ import {
   getCachedMasterProductPriceHistory,
 } from '@/server/rate';
 import type { RadarSignal } from '@/lib/deal-radar';
-import { isOfferUnavailable } from '@/lib/product-market-stats';
+import {
+  isOfferUnavailable,
+  productMarketStats,
+} from '@/lib/product-market-stats';
+import type { ProductSpecifications } from '@repo/shared-data';
+import type { ItemSizePanelData } from '@/lib/item-size-panel';
+import {
+  listingCountForSaleState,
+  masterSaleState,
+  saleStateLabelKey,
+} from '@/lib/sale-state';
+import { productImageUrl } from '@/lib/rate-domain-core';
+import { isItemModelOn } from './item-model';
 import { createLogger } from '@/lib/logger';
 import {
   RATE_CACHE_TAGS,
@@ -178,4 +190,84 @@ export async function loadItemPageContext(
     unknownOffers,
     unknownByOffer,
   };
+}
+
+/**
+ * One size's panels as plain data (DOS/Rate#1285): what the price strip, the
+ * history chart and the offer table need, with the same stats and sale state
+ * the server-rendered panels use.
+ */
+export function toItemSizePanelData(v: {
+  product: MasterProduct;
+  offers: MerchantOffer[];
+  priceHistory: MasterProductPriceHistorySummary;
+  radarSignal: RadarSignal;
+}): ItemSizePanelData {
+  const inStock = v.offers.filter((o) => !isOfferUnavailable(o));
+  const stats = productMarketStats(v.product);
+  const saleState = masterSaleState({
+    minPrice: stats.minPrice,
+    listingCount: listingCountForSaleState(v.offers.length, inStock.length),
+    metadata: v.product.metadata,
+    availabilityStatus: (v.product.specifications as ProductSpecifications)
+      ?.availability?.status,
+  });
+  return {
+    product: {
+      id: v.product.id,
+      slug: v.product.slug,
+      name: v.product.name,
+      brand: v.product.brand,
+      model_key: v.product.model_key,
+      image: productImageUrl(v.product),
+    },
+    offers: v.offers,
+    priceHistory: v.priceHistory,
+    radarSignal: v.radarSignal,
+    stats: {
+      minPrice: stats.minPrice,
+      maxPrice: stats.maxPrice,
+      sellerCount: stats.sellerCount,
+    },
+    saleState,
+    saleStateKey: saleState === 'on_sale' ? null : saleStateLabelKey(saleState),
+  };
+}
+
+/** About how many bytes the given sizes' panel data adds to a page. */
+export function itemSizePanelBytes(
+  variants: readonly ItemPageVariant[]
+): number {
+  return variants.reduce(
+    (sum, v) =>
+      sum +
+      JSON.stringify(v.offers).length +
+      JSON.stringify(v.priceHistory).length,
+    0
+  );
+}
+
+/**
+ * One size's panel data for `/api/v1/rate/item-size/{slug}`, through the same
+ * cached readers as the page. Null while `RATE_ITEM_MODEL` is off or the
+ * slug is no published product.
+ */
+export async function loadItemSizePanel(
+  variantSlug: string
+): Promise<ItemSizePanelData | null> {
+  if (!isItemModelOn()) return null;
+  const product = await getCachedMasterProductBySlug(variantSlug);
+  if (!product) return null;
+  const offers = await getCachedMasterProductOffers(product.id);
+  const priceHistory = await getCachedMasterProductPriceHistory(
+    product.id,
+    offers
+  );
+  const inStock = offers.filter((o) => !isOfferUnavailable(o));
+  return toItemSizePanelData({
+    product,
+    offers,
+    priceHistory,
+    radarSignal: computeProductRadarSignal(product, inStock),
+  });
 }

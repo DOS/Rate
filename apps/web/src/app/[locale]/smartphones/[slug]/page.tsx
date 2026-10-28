@@ -5,6 +5,7 @@ import { Link } from '@/lib/navigation';
 import { notFound, permanentRedirect } from 'next/navigation';
 import { resolveItemRoute } from '@/server/rate/item-route';
 import {
+  itemSizePanelBytes,
   loadItemPageContext,
   pickRenderedSize,
   type ItemPageVariant,
@@ -17,6 +18,10 @@ import {
 } from '@/lib/item-page';
 import ItemVariantPicker from '@/components/product/item/ItemVariantPicker';
 import ItemVariantPanels from '@/components/product/item/ItemVariantPanels';
+import ItemLazySizePanel, {
+  type ItemSizePanelKind,
+} from '@/components/product/item/ItemLazySizePanel';
+import { shouldLazyLoadSizes } from '@/lib/item-size-panel';
 import {
   getCrossPlatformDealRadar,
   getCachedMasterProductBySlug,
@@ -632,6 +637,50 @@ export async function ProductDetailView({
   const defaultVariantKey =
     renderedSize?.variant.variant_key ??
     (itemRoute?.kind === 'render' ? itemRoute.variantKey : '');
+  // An Item with many sizes (above 4, or about 150 KB of other sizes' data)
+  // renders only its default size here; the others load when picked, from a
+  // cached route, so the payload does not grow with every size (#1285).
+  const defaultSize = itemVariants.find(
+    (v) => v.variant.variant_key === defaultVariantKey
+  );
+  const lazySizes =
+    isItemGroup &&
+    defaultSize !== undefined &&
+    shouldLazyLoadSizes(
+      itemVariants.length,
+      itemSizePanelBytes(itemVariants.filter((v) => v !== defaultSize))
+    );
+  const sizeSlugs = Object.fromEntries(
+    itemVariants.map((v) => [v.variant.variant_key, v.variant.slug])
+  );
+  const sizeStripContext = {
+    categoryPath: categoryBasePath,
+    userScore5: Number(displayUserRating.toFixed(2)),
+    expertScore10: expertRating10,
+    authenticReviews: authenticCount,
+    keySpecLine,
+  };
+  const renderSizePanels = (
+    kind: ItemSizePanelKind,
+    render: (v: ItemPageVariant) => React.ReactNode
+  ) =>
+    lazySizes && defaultSize ? (
+      <ItemLazySizePanel
+        kind={kind}
+        defaultKey={defaultVariantKey}
+        defaultNode={render(defaultSize)}
+        slugs={sizeSlugs}
+        context={sizeStripContext}
+      />
+    ) : (
+      <ItemVariantPanels
+        defaultKey={defaultVariantKey}
+        panels={itemVariants.map((v) => ({
+          key: v.variant.variant_key,
+          node: render(v),
+        }))}
+      />
+    );
 
   return (
     <ClientMessages scope="productDetail">
@@ -1180,25 +1229,19 @@ export async function ProductDetailView({
               </div>
 
               {/* Neutral Market Price Reference Strip (De-commercialized per DESIGN.md v3.0) */}
-              {isItemGroup ? (
-                <ItemVariantPanels
-                  defaultKey={defaultVariantKey}
-                  panels={itemVariants.map((v) => ({
-                    key: v.variant.variant_key,
-                    node: renderPriceStrip(variantStripInput(v)),
-                  }))}
-                />
-              ) : (
-                renderPriceStrip({
-                  product,
-                  offers,
-                  priceHistory,
-                  radarSignal,
-                  stats: marketStats,
-                  saleState,
-                  saleStateKey,
-                })
-              )}
+              {isItemGroup
+                ? renderSizePanels('strip', (v) =>
+                    renderPriceStrip(variantStripInput(v))
+                  )
+                : renderPriceStrip({
+                    product,
+                    offers,
+                    priceHistory,
+                    radarSignal,
+                    stats: marketStats,
+                    saleState,
+                    saleStateKey,
+                  })}
 
               <details className="rate-pdv-devinfo">
                 <summary>{t('devInfoToggle')}</summary>
@@ -1313,45 +1356,33 @@ export async function ProductDetailView({
           })()}
 
           {/* SECTION #3: Time-Series Price History Chart, Fake Discount Detector & Neutral Merchant Audit */}
-          {isItemGroup ? (
-            <ItemVariantPanels
-              defaultKey={defaultVariantKey}
-              panels={itemVariants.map((v) => ({
-                key: v.variant.variant_key,
-                node: renderPriceHistory(variantPanelInput(v)),
-              }))}
-            />
-          ) : (
-            renderPriceHistory({
-              product,
-              priceHistory,
-              minPrice: currentMinPrice,
-              radarSignal,
-            })
-          )}
+          {isItemGroup
+            ? renderSizePanels('history', (v) =>
+                renderPriceHistory(variantPanelInput(v))
+              )
+            : renderPriceHistory({
+                product,
+                priceHistory,
+                minPrice: currentMinPrice,
+                radarSignal,
+              })}
 
           {/* Neutral Merchant Reference & Trust Audit Table */}
           <div
             id="offers-table"
             className="card rounded-4 p-md-5 mt-4 mb-5 border-0 p-4 shadow-sm"
           >
-            {isItemGroup ? (
-              <ItemVariantPanels
-                defaultKey={defaultVariantKey}
-                panels={itemVariants.map((v) => ({
-                  key: v.variant.variant_key,
-                  node: renderOffersBody(variantPanelInput(v)),
-                }))}
-              />
-            ) : (
-              renderOffersBody({
-                product,
-                offers,
-                priceHistory,
-                radarSignal,
-                emptyText: pageEmptyOffersText,
-              })
-            )}
+            {isItemGroup
+              ? renderSizePanels('offers', (v) =>
+                  renderOffersBody(variantPanelInput(v))
+                )
+              : renderOffersBody({
+                  product,
+                  offers,
+                  priceHistory,
+                  radarSignal,
+                  emptyText: pageEmptyOffersText,
+                })}
           </div>
 
           {/* Listings whose size is not stated: their own group, never part
