@@ -1157,6 +1157,9 @@ const WATCH_BAND_WORD =
   /(?<!kh[\p{L}\p{M}]{1,3}ng )(?:d(?:\u00e2|a\u0302)y|band|strap|loop|bracelet)(?![\p{L}\d])/iu;
 const WATCH_SIZE = /(?<!\d)(38|4[0-2]|4[4-6]) ?mm\b/i;
 const LIST_WATCH_SIZE = /^ ?(?:38|4[0-2]|4[4-6]) ?mm\b/i;
+const LONE_WATCH_SIZE = /^ ?(?:38|4[0-2]|4[4-6]) ?mm ?$/i;
+const LAST_WATCH_SIZE = /(?<!\d)(?:38|4[0-2]|4[4-6]) ?mm ?$/i;
+const WATCH_RANGE_SEP = /^(?: - |\u2013)$/;
 const WATCH_CASE_WORD = /(?<![\p{L}\d])(?:case|mặt|vỏ)(?![\p{L}\d])/iu;
 const APPLE_SIZE_PATTERNS: Record<string, [RegExp, RegExp]> = {
   ipad: sizePatterns(IPAD_SIZE),
@@ -1194,17 +1197,56 @@ function readAppleSize(model: string, title: string): string {
     // A band phrase with a size runs on over the parts after it that start with a size
     // and follow "," or "|": "Sport Loop 42mm | 46mm" or "Dây 42mm S/M, 46mm M/L" names
     // two band sizes, not a case (DOS/Rate#1137). A part that names the case ("46mm, 42mm
-    // Aluminum Case") ends the list.
+    // Aluminum Case") ends the list. An en dash or " - " between a band size and a bare
+    // size is a range of band sizes ("Sport Loop 42mm - 46mm"), and two or more sizes
+    // listed right before a band word are the band's ("GPS 40mm, 44mm Dây Sport Band"); a
+    // size after the dash with more text ("Dây Vải 45mm - 46mm GPS") or a single size
+    // before the band ("GPS 46mm, Dây Cao Su 46mm S/M") is still the case's (DOS/Rate#1162).
     const parts = own.split(/([),|;\u2013]| - )/);
     const outside: string[] = [];
     let bandList = false;
+    let bandEnd = false;
     for (let i = 0; i < parts.length; i += 2) {
       const part = parts[i]!;
+      const sep = parts[i - 1] ?? '';
       const listed = LIST_WATCH_SIZE.test(part) && !WATCH_CASE_WORD.test(part.normalize('NFC'));
-      if (bandList && /^[,|]$/.test(parts[i - 1]!) && listed) continue;
+      const ranged = bandEnd && WATCH_RANGE_SEP.test(sep) && LONE_WATCH_SIZE.test(part);
+      if (bandList && ((/^[,|]$/.test(sep) && listed) || ranged)) {
+        outside.push('');
+        // "42mm S/M, 44mm - 46mm" ranges on from the listed size; "44mm M/L - 46mm" does not.
+        bandEnd = LAST_WATCH_SIZE.test(part);
+        continue;
+      }
       const [before, ...band] = part.split(WATCH_BAND_WORD);
-      outside.push(before!);
+      // Walk back over the bare sizes listed before this band ("40mm, 44mm Dây"): k ends
+      // at the first of them, and the part before it may end in one more ("GPS 40mm") if
+      // it has no band of its own. A part before the list that names the case ("(Vỏ nhôm)
+      // 46mm, 42mm Dây") keeps the list's first size as the case's, and a band that names
+      // the case ("42mm Dây Sport Band mặt 46mm") starts no walk.
+      const sizeBeforeBand =
+        band.length > 0 &&
+        LONE_WATCH_SIZE.test(before!) &&
+        !WATCH_CASE_WORD.test(part.normalize('NFC'));
+      const listSepAt = (n: number) =>
+        /^[,|]$/.test(parts[2 * n - 1]!) || WATCH_RANGE_SEP.test(parts[2 * n - 1]!);
+      let k = outside.length;
+      while (sizeBeforeBand && k > 0 && listSepAt(k) && LONE_WATCH_SIZE.test(outside[k - 1]!)) k--;
+      const head = k > 0 ? parts[2 * k - 2]! : '';
+      const headCase = WATCH_CASE_WORD.test(head.normalize('NFC'));
+      const headListed =
+        sizeBeforeBand &&
+        k > 0 &&
+        listSepAt(k) &&
+        LAST_WATCH_SIZE.test(head) &&
+        !WATCH_BAND_WORD.test(head) &&
+        !headCase;
+      if ((k < outside.length && !headCase) || headListed) {
+        for (let j = k; j < outside.length; j++) outside[j] = '';
+        if (headListed) outside[k - 1] = outside[k - 1]!.replace(LAST_WATCH_SIZE, '');
+        outside.push('');
+      } else outside.push(before!);
       bandList = WATCH_SIZE.test(band.join(' '));
+      bandEnd = LAST_WATCH_SIZE.test(band.join(' '));
     }
     const caseSize = outside.join(' ').match(WATCH_SIZE)?.[1];
     if (caseSize) return `${caseSize}mm`;
