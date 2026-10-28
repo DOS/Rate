@@ -1253,16 +1253,18 @@ function isProductCodeToken(token: string): boolean {
 // part code ("Z15S"), after "RAM" or an OS name ("macOS 14"), or before a storage, a
 // RAM/ROM pair or a core count ("16GB", "16G", "16/512", "16-core", "16 nhân CPU").
 // Titles carry single spaces, so each gap is one optional space (CodeQL
-// js/polynomial-redos).
+// js/polynomial-redos). A unit ends where a letter does, Vietnamese ones included: "13
+// tặng" or "13 hãng" is a bare 13, not "13 t(b)" or "13 h" (DOS/Rate#1291).
+const UNIT_END = String.raw`(?![\p{L}\p{M}\d])`;
 const SIZE_NOT_PRECEDED_BY = String.raw`(?<![\d.,a-z])(?<!(?:ram|os) )`;
-const SIZE_NOT_FOLLOWED_BY = String.raw`(?![.,]?\d|[a-z]| ?(?:gb?\b|tb?\b|th\b|gen|mm|w\b|h\b|\/|-? ?(?:core|nhân|lõi)|cpu|gpu|tiếng|giờ))`;
-const SIZE_MARKER = String.raw` ?(?:-? ?inch|in\b|"|''|”|″)`;
+const SIZE_NOT_FOLLOWED_BY = String.raw`(?![.,]?\d|[a-z]| ?(?:gb?${UNIT_END}|tb?${UNIT_END}|th${UNIT_END}|gen|mm|w${UNIT_END}|h${UNIT_END}|\/|-? ?(?:core|nhân|lõi)|cpu|gpu|tiếng|giờ))`;
+const SIZE_MARKER = String.raw` ?(?:-? ?inch|in${UNIT_END}|"|''|”|″)`;
 const IPAD_SIZE = String.raw`(11|12[.,]9|13)(?:[.,]0)?`;
 const MACBOOK_AIR_SIZE = String.raw`(13|15)(?:[.,]\d)?`;
 const MACBOOK_PRO_SIZE = String.raw`(1[3-6])(?:[.,]\d)?`;
 const sizePatterns = (size: string): [RegExp, RegExp] => [
-  new RegExp(String.raw`(?<![\d.,])` + size + SIZE_MARKER, 'i'),
-  new RegExp(SIZE_NOT_PRECEDED_BY + size + SIZE_NOT_FOLLOWED_BY, 'i'),
+  new RegExp(String.raw`(?<![\d.,])` + size + SIZE_MARKER, 'iu'),
+  new RegExp(SIZE_NOT_PRECEDED_BY + size + SIZE_NOT_FOLLOWED_BY, 'iu'),
 ];
 const WATCH_BAND_WORD =
   /(?<!kh[\p{L}\p{M}]{1,3}ng )(?:d(?:\u00e2|a\u0302)y|band|strap|loop|bracelet)(?![\p{L}\d])/iu;
@@ -1280,9 +1282,26 @@ const NAMED_CASE_SIZE =
 // ("tặng Silicone Case 46mm", "ốp TPU 46mm", DOS/Rate#1263).
 const CASE_ACCESSORY_WORD =
   /(?<![\p{L}\d])(?:fits?|hộp|ốp|kèm|tặng|quà|gift|silicone|silicon|tpu|bao da|compatible|tương thích|cho|for)(?![\p{L}\d])/iu;
-// "tặng/kèm" and up to four words, then a watch or screen size.
-const GIFTED_ACCESSORY_SIZE =
-  /(?<![\p{L}\d])(quà tặng|tặng|kèm)((?: [\p{L}-]+){1,4}?) ?(?:(?:38|4[0-2]|4[4-6]) ?mm\b|\d{1,2}(?:[.,]\d)? ?(?:inch\b|in\b|"))/giu;
+// "tặng/kèm" and up to four words, then a watch or screen size, or a list of them
+// ("tặng ốp 42mm / 46mm", "tặng ốp 11 inch/13 inch", DOS/Rate#1291).
+const GIFT_SIZE = String.raw`(?:(?:38|4[0-2]|4[4-6]) ?mm\b|\d{1,2}(?:[.,]\d)? ?(?:inch\b|in\b|"))`;
+const GIFTED_ACCESSORY_SIZE = new RegExp(
+  String.raw`(?<![\p{L}\d])(quà tặng|tặng|kèm)((?: [\p{L}-]+){1,4}?) ?${GIFT_SIZE}(?: ?(?:\/|hoặc|or) ?${GIFT_SIZE})*`,
+  'giu'
+);
+// The sizes a gift names: a watch case ("46mm") or a screen ("11", "12.9").
+const GIFT_SIZE_VALUE =
+  /(?<!\d)((?:38|4[0-2]|4[4-6]) ?mm|\d{1,2}(?:[.,]\d)?(?= ?(?:inch|in|")))/giu;
+// A size the product's part names in a form no size reading takes, so a gift's size must
+// not stand in for it (DOS/Rate#1291): for a watch a bare case number or "size 46"
+// ("Series 10 size 46 tặng ốp 42mm"); for an iPad or a MacBook a bare screen number or
+// one with a decimal ("iPad Air 10.9 tặng ốp 11 inch"), never a storage, a RAM/ROM pair
+// or a core count.
+const WATCH_BARE_SIZE = /(?<![\p{L}\d.,])(?:38|4[0-2]|4[4-6])(?![.,]?\d|\p{L}| ?mm)/iu;
+const SCREEN_BARE_SIZE =
+  /(?<![\p{L}\d.,])1[0-6](?:[.,]\d)?(?![.,]?\d|\p{L}| ?(?:[gt]b?(?![\p{L}\d])|\/|-? ?(?:core|nhân|lõi)))/iu;
+// "size 46" names the watch's case when nothing else does.
+const WATCH_SIZE_WORD = /(?<![\p{L}\d])size ?(38|4[0-2]|4[4-6])(?![.,]?\d|\p{L})/giu;
 // An accessory sold by the size it fits: a case, cover, film or box.
 const GIFT_ACCESSORY_NOUN =
   /(?<![\p{L}\d])(?:ốp|case|bao da|silicone|silicon|tpu|cường lực|kính|miếng dán|vỏ|hộp|túi)(?![\p{L}\d])/iu;
@@ -1322,33 +1341,57 @@ function readAppleSize(model: string, rawTitle: string): string {
   // The size of a gifted or bundled accessory is not the product's: "tặng Silicone Case
   // 46mm", "kèm ốp 46mm" lose that size; "kèm sạc 46mm GPS" and "kèm bút 13 inch" name
   // no accessory with a size of its own and keep it (DOS/Rate#1263).
-  const withoutGift = title
-    .slice(Math.max(0, at))
-    .replace(GIFTED_ACCESSORY_SIZE, (m, word: string, words: string) =>
-      (family === 'watch' ? WATCH_GIFT_ACCESSORY_NOUN : GIFT_ACCESSORY_NOUN).test(words)
-        ? `${word}${words}`
-        : m
-    );
-  // A size only the gift names is still the best evidence of the product's: an 11 inch
-  // case fits an 11 inch iPad (DOS/Rate#1277).
   const productPart = title.slice(Math.max(0, at));
-  // Only when the rest names no size at all: a size it names but leaves unresolved (a
-  // band list, "mặt 46mm" inside a band phrase) is never replaced by the gift's.
+  const giftSizes = new Set<string>();
+  const stripGift = (scope: string, noun: RegExp, sizes = new Set<string>()) =>
+    scope.replace(GIFTED_ACCESSORY_SIZE, (m, word: string, words: string) => {
+      if (!noun.test(words)) return m;
+      for (const s of m.slice(word.length + words.length).matchAll(GIFT_SIZE_VALUE)) {
+        sizes.add(s[1]!.replace(/ /g, '').replace(',', '.').toLowerCase());
+      }
+      return `${word}${words}`;
+    });
+  const withoutGift = stripGift(
+    productPart,
+    family === 'watch' ? WATCH_GIFT_ACCESSORY_NOUN : GIFT_ACCESSORY_NOUN,
+    giftSizes
+  );
+  // For a watch, "kèm vỏ nhôm 46mm" or "kèm hộp 46mm" names the watch's case only when the
+  // rest of the title gives it no case of its own: "Series 10 kèm hộp 46mm, GPS 42mm" is
+  // the 42mm (DOS/Rate#1291). A band size alone does not count as its own (DOS/Rate#1277).
+  if (family === 'watch') {
+    const withoutBox = stripGift(withoutGift, GIFT_ACCESSORY_NOUN);
+    const own = withoutBox !== withoutGift ? readFamilySize(family, withoutBox, false) : '';
+    if (own) return own;
+  }
+  const read = readFamilySize(family, withoutGift);
+  if (read) return read;
+  // The same part the size is read from: not what follows "cho/for" or "+".
+  const ownPart = withoutGift.split(/ (?:cho|for) | ?\+ (?!cellular|lte)/i)[0]!;
+  if (family === 'watch') {
+    const worded = new Set([...ownPart.matchAll(WATCH_SIZE_WORD)].map(m => m[1]));
+    if (worded.size === 1) return `${[...worded][0]}mm`;
+  }
+  // A size only the gift names is still the best evidence of the product's: an 11 inch
+  // case fits an 11 inch iPad (DOS/Rate#1277). Only when the rest names no size at all (a
+  // size it names but leaves unresolved, such as a band list or "mặt 46mm" inside a band
+  // phrase, or one in a form no reading takes, such as "size 46" or "10.9", is never
+  // replaced by the gift's), and only when the gift names one size ("tặng ốp 42mm /
+  // 46mm" fits either).
   const namesSize =
     family === 'watch'
-      ? WATCH_SIZE.test(withoutGift)
-      : // The same part the size is read from: not what follows "cho/for" or "+".
-        APPLE_SIZE_PATTERNS[family]!.some(re =>
-          re.test(withoutGift.split(/ (?:cho|for) | ?\+ (?!cellular|lte)/i)[0]!)
-        );
-  return (
-    readFamilySize(family, withoutGift) ||
-    (namesSize || withoutGift === productPart ? '' : readFamilySize(family, productPart))
-  );
+      ? WATCH_SIZE.test(withoutGift) || WATCH_BARE_SIZE.test(ownPart)
+      : APPLE_SIZE_PATTERNS[family]!.some(re => re.test(ownPart)) || SCREEN_BARE_SIZE.test(ownPart);
+  return namesSize || withoutGift === productPart || giftSizes.size !== 1
+    ? ''
+    : readFamilySize(family, productPart);
 }
 
-/** `readAppleSize` over one reading of the product's part of the title. */
-function readFamilySize(family: string, scope: string): string {
+/**
+ * `readAppleSize` over one reading of the product's part of the title. `withBand` false
+ * leaves out a watch size only a band names.
+ */
+function readFamilySize(family: string, scope: string, withBand = true): string {
   const own = scope.split(/ (?:cho|for) | ?\+ (?!cellular|lte)/i)[0]!;
   if (family === 'watch') {
     // A size outside a band phrase ("dây", "band", "strap", "loop" or "bracelet" up to the
@@ -1455,7 +1498,7 @@ function readFamilySize(family: string, scope: string): string {
     if (caseSize) return `${caseSize}mm`;
     const bandSize = own.match(WATCH_SIZE)?.[1];
     const sizes = new Set([...scope.matchAll(new RegExp(WATCH_SIZE, 'gi'))].map(m => m[1]));
-    return bandSize && sizes.size === 1 ? `${bandSize}mm` : '';
+    return withBand && bandSize && sizes.size === 1 ? `${bandSize}mm` : '';
   }
   const [marked, bare] = APPLE_SIZE_PATTERNS[family]!;
   const size = (own.match(marked) ?? own.match(bare))?.[1];
