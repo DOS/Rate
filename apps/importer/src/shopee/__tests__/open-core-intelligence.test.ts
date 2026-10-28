@@ -495,35 +495,35 @@ async function runSuite() {
       'apple:watch-series-11-46mm:64gb',
     ],
     ['Apple Watch Series 11 GPS 46mm viền nhôm dây thể thao', 'apple:watch-series-11-46mm:64gb'],
-    ['Apple Watch Series 10 42mm (GPS) Viền Nhôm - Dây Vải', 'apple:watch-series-10-42mm:unknown'],
+    ['Apple Watch Series 10 42mm (GPS) Viền Nhôm - Dây Vải', 'apple:watch-series-10-42mm:64gb'],
     ['Apple Watch Series 11 42mm viền thép dây Link Bracelet', 'apple:watch-series-11-42mm:64gb'],
     // Two sizes, one of them the band's, leave the size-less key (Tier 2).
-    ['Apple Watch Series 10 dây Sport Band 45mm cho mặt 42mm', 'apple:watch-series-10:unknown'],
-    ['Apple Watch Series 10 Sport Loop 45mm cho mặt 46mm', 'apple:watch-series-10:unknown'],
-    ['Apple Watch Series 10 Sport Band 45mm cho mặt 42mm', 'apple:watch-series-10:unknown'],
+    ['Apple Watch Series 10 dây Sport Band 45mm cho mặt 42mm', 'apple:watch-series-10:64gb'],
+    ['Apple Watch Series 10 Sport Loop 45mm cho mặt 46mm', 'apple:watch-series-10:64gb'],
+    ['Apple Watch Series 10 Sport Band 45mm cho mặt 42mm', 'apple:watch-series-10:64gb'],
     ['Apple Watch SE 3 GPS Strap 40mm for 44mm case', 'apple:watch-se-3:unknown'],
-    ['Apple Watch Series 10 Bracelet 42mm | 46mm', 'apple:watch-series-10:unknown'],
+    ['Apple Watch Series 10 Bracelet 42mm | 46mm', 'apple:watch-series-10:64gb'],
     // A band is sold by the case it fits: a band's size alone is the case's.
     [
       'Apple Watch Series 10 GPS Dây Cao Su 46mm Chính Hãng VN/A',
-      'apple:watch-series-10-46mm:unknown',
+      'apple:watch-series-10-46mm:64gb',
     ],
     ['Apple Watch Series 9 GPS Sport Loop 45mm', 'apple:watch-series-9-45mm:unknown'],
     ['Apple Watch Series 11 GPS Viền Nhôm Dây Silicone 42mm', 'apple:watch-series-11-42mm:64gb'],
     // The band phrase ends at ")", ",", "|", ";", an en dash or " - ": a case size after it
     // wins over the band's.
     ['Apple Watch Series 11 GPS (Viền nhôm, dây cao su) 46mm', 'apple:watch-series-11-46mm:64gb'],
-    ['Apple Watch Series 10 dây Sport Band 45mm, mặt 42mm', 'apple:watch-series-10-42mm:unknown'],
-    ['Apple Watch Series 10 Dây Vải 45mm - 46mm GPS', 'apple:watch-series-10-46mm:unknown'],
-    ['Apple Watch Series 10 Dây Vải 45mm; 46mm GPS', 'apple:watch-series-10-46mm:unknown'],
-    ['Apple Watch Series 10 Dây Vải 45mm \u2013 46mm GPS', 'apple:watch-series-10-46mm:unknown'],
-    ['Apple Watch Series 10 (dây vải 45mm) 46mm', 'apple:watch-series-10-46mm:unknown'],
+    ['Apple Watch Series 10 dây Sport Band 45mm, mặt 42mm', 'apple:watch-series-10-42mm:64gb'],
+    ['Apple Watch Series 10 Dây Vải 45mm - 46mm GPS', 'apple:watch-series-10-46mm:64gb'],
+    ['Apple Watch Series 10 Dây Vải 45mm; 46mm GPS', 'apple:watch-series-10-46mm:64gb'],
+    ['Apple Watch Series 10 Dây Vải 45mm \u2013 46mm GPS', 'apple:watch-series-10-46mm:64gb'],
+    ['Apple Watch Series 10 (dây vải 45mm) 46mm', 'apple:watch-series-10-46mm:64gb'],
     // A glued "Sportband" is a band; "không dây" is wireless, no band.
-    ['Apple Watch Series 10 Sportband 45mm cho mặt 42mm', 'apple:watch-series-10:unknown'],
-    ['Apple Watch Series 10 sạc không dây 46mm cho dây 42mm', 'apple:watch-series-10-46mm:unknown'],
+    ['Apple Watch Series 10 Sportband 45mm cho mặt 42mm', 'apple:watch-series-10:64gb'],
+    ['Apple Watch Series 10 sạc không dây 46mm cho dây 42mm', 'apple:watch-series-10-46mm:64gb'],
     [
       'Apple Watch Series 10 sạc kho\u0302ng dây 46mm cho dây 42mm',
-      'apple:watch-series-10-46mm:unknown',
+      'apple:watch-series-10-46mm:64gb',
     ],
     // A size in brackets after the band is the case's when it is the only one.
     [
@@ -532,9 +532,9 @@ async function runSuite() {
     ],
     // A decomposed or upper-case "dây" is the same word, so "42mm" after its comma is a
     // second band size (DOS/Rate#1137); "Bandit" is no band.
-    ['Apple Watch Series 10 da\u0302y vải 45mm, 42mm', 'apple:watch-series-10:unknown'],
-    ['APPLE WATCH SERIES 10 DÂY VẢI 45MM, 42MM', 'apple:watch-series-10:unknown'],
-    ['Apple Watch Series 10 Bandit 46mm cho mặt 42mm', 'apple:watch-series-10-46mm:unknown'],
+    ['Apple Watch Series 10 da\u0302y vải 45mm, 42mm', 'apple:watch-series-10:64gb'],
+    ['APPLE WATCH SERIES 10 DÂY VẢI 45MM, 42MM', 'apple:watch-series-10:64gb'],
+    ['Apple Watch Series 10 Bandit 46mm cho mặt 42mm', 'apple:watch-series-10-46mm:64gb'],
   ];
   for (const [title, expectedKey] of watchBandSizeKeys1124) {
     assert.equal(keyOf(title), expectedKey, title);
@@ -550,38 +550,35 @@ async function runSuite() {
     ['Apple Watch Series 11 GPS Nhôm Dây Sport Loop 42mm | 46mm', 'apple:watch-series-11:64gb'],
     ['Apple Watch Series 11 Dây Vải 42mm 46mm', 'apple:watch-series-11:64gb'],
     // The list runs on over every listed size, and a pipe list keys like a comma list.
-    ['Apple Watch Series 10 Sport Band 42mm, 46mm, 42mm', 'apple:watch-series-10:unknown'],
-    ['Apple Watch Series 10 Dây Vải 42mm | 46mm | Chính Hãng', 'apple:watch-series-10:unknown'],
-    [
-      'Apple Watch Series 10 Sport Band 42mm, 46mm | mặt 46mm',
-      'apple:watch-series-10-46mm:unknown',
-    ],
+    ['Apple Watch Series 10 Sport Band 42mm, 46mm, 42mm', 'apple:watch-series-10:64gb'],
+    ['Apple Watch Series 10 Dây Vải 42mm | 46mm | Chính Hãng', 'apple:watch-series-10:64gb'],
+    ['Apple Watch Series 10 Sport Band 42mm, 46mm | mặt 46mm', 'apple:watch-series-10-46mm:64gb'],
     // A band phrase without a size starts no list: the size after its comma is the case's.
-    ['Apple Watch Series 10 Dây Cao Su, 46mm', 'apple:watch-series-10-46mm:unknown'],
-    ['Apple Watch Series 10 Dây Cao Su | 42mm GPS', 'apple:watch-series-10-42mm:unknown'],
-    ['Apple Watch Series 10 Dây Cao Su S/M, 46mm', 'apple:watch-series-10-46mm:unknown'],
+    ['Apple Watch Series 10 Dây Cao Su, 46mm', 'apple:watch-series-10-46mm:64gb'],
+    ['Apple Watch Series 10 Dây Cao Su | 42mm GPS', 'apple:watch-series-10-42mm:64gb'],
+    ['Apple Watch Series 10 Dây Cao Su S/M, 46mm', 'apple:watch-series-10-46mm:64gb'],
     // A listed size keeps its band's fit, a bracket or text after it.
-    ['Apple Watch Series 10 Sport Band 45mm, 46mm GPS', 'apple:watch-series-10:unknown'],
+    ['Apple Watch Series 10 Sport Band 45mm, 46mm GPS', 'apple:watch-series-10:64gb'],
     [
       'Apple Watch Series 10 GPS Dây Cao Su 42mm, 46mm Chính Hãng VN/A',
-      'apple:watch-series-10:unknown',
+      'apple:watch-series-10:64gb',
     ],
-    ['Apple Watch Series 10 Sport Band 42mm S/M, 46mm M/L', 'apple:watch-series-10:unknown'],
-    ['Apple Watch Series 10 Sport Band 42mm | 46mm (S/M)', 'apple:watch-series-10:unknown'],
-    ['Apple Watch Series 10 [Sport Band 42mm, 46mm] Mới 100%', 'apple:watch-series-10:unknown'],
-    ['Apple Watch Series 10 Dây Sport Band 46mm, 42mm.', 'apple:watch-series-10:unknown'],
+    ['Apple Watch Series 10 Sport Band 42mm S/M, 46mm M/L', 'apple:watch-series-10:64gb'],
+    ['Apple Watch Series 10 Sport Band 42mm | 46mm (S/M)', 'apple:watch-series-10:64gb'],
+    ['Apple Watch Series 10 [Sport Band 42mm, 46mm] Mới 100%', 'apple:watch-series-10:64gb'],
+    ['Apple Watch Series 10 Dây Sport Band 46mm, 42mm.', 'apple:watch-series-10:64gb'],
     // A case size before the band phrase still wins.
     ['Apple Watch Series 11 GPS 46mm, Dây Cao Su 46mm S/M', 'apple:watch-series-11-46mm:64gb'],
     // ")", ";", an en dash or " - " still end the band phrase and its list.
-    ['Apple Watch Series 10 (Sport Band 45mm) 46mm, 42mm', 'apple:watch-series-10-46mm:unknown'],
+    ['Apple Watch Series 10 (Sport Band 45mm) 46mm, 42mm', 'apple:watch-series-10-46mm:64gb'],
     // A listed part that names the case ("case", "mặt", "vỏ") is the case's.
     [
       'Apple Watch Series 11 GPS Sport Band 46mm, 42mm Aluminum Case',
       'apple:watch-series-11-42mm:64gb',
     ],
     ['Apple Watch Series 11 GPS Sport Band 46mm | 42mm Case', 'apple:watch-series-11-42mm:64gb'],
-    ['Apple Watch Series 10 Dây Vải 45mm, 42mm mặt nhôm', 'apple:watch-series-10-42mm:unknown'],
-    ['Apple Watch Series 10 Dây Vải 45mm, 46mm vỏ nhôm', 'apple:watch-series-10-46mm:unknown'],
+    ['Apple Watch Series 10 Dây Vải 45mm, 42mm mặt nhôm', 'apple:watch-series-10-42mm:64gb'],
+    ['Apple Watch Series 10 Dây Vải 45mm, 46mm vỏ nhôm', 'apple:watch-series-10-46mm:64gb'],
   ];
   for (const [title, expectedKey] of watchBandListKeys1137) {
     assert.equal(keyOf(title), expectedKey, title);
@@ -590,41 +587,35 @@ async function runSuite() {
   // band word, names no case.
   const watchBandRangeKeys1162: Array<[string, string]> = [
     // The titles of the issue.
-    ['Apple Watch Series 10 Sport Loop 42mm - 46mm', 'apple:watch-series-10:unknown'],
+    ['Apple Watch Series 10 Sport Loop 42mm - 46mm', 'apple:watch-series-10:64gb'],
     ['Apple Watch SE 3 GPS 40mm, 44mm Dây Sport Band', 'apple:watch-se-3:unknown'],
     // An en dash range keys like " - "; a pipe or longer list keys like a comma list.
-    ['Apple Watch Series 10 Sport Loop 42mm \u2013 46mm', 'apple:watch-series-10:unknown'],
-    ['Apple Watch Series 10 GPS, 42mm, 46mm Dây Sport Loop', 'apple:watch-series-10:unknown'],
-    ['Apple Watch Series 10 GPS 42mm | 46mm Dây Cao Su', 'apple:watch-series-10:unknown'],
-    ['Apple Watch Series 10 GPS 46mm - 42mm Dây Sport Band', 'apple:watch-series-10:unknown'],
+    ['Apple Watch Series 10 Sport Loop 42mm \u2013 46mm', 'apple:watch-series-10:64gb'],
+    ['Apple Watch Series 10 GPS, 42mm, 46mm Dây Sport Loop', 'apple:watch-series-10:64gb'],
+    ['Apple Watch Series 10 GPS 42mm | 46mm Dây Cao Su', 'apple:watch-series-10:64gb'],
+    ['Apple Watch Series 10 GPS 46mm - 42mm Dây Sport Band', 'apple:watch-series-10:64gb'],
     // A size after the dash with more text, a single size before the band, a size the
     // case names or a size cut off by ")" is still the case's.
-    ['Apple Watch Series 10 Sport Loop 42mm - 46mm GPS', 'apple:watch-series-10-46mm:unknown'],
-    ['Apple Watch Series 10 GPS, 44mm Dây Sport Band', 'apple:watch-series-10-44mm:unknown'],
-    [
-      'Apple Watch Series 10 Vỏ nhôm 46mm, 42mm Dây Sport Band',
-      'apple:watch-series-10-46mm:unknown',
-    ],
-    ['Apple Watch Series 10 (GPS 46mm) 42mm Dây Sport', 'apple:watch-series-10-46mm:unknown'],
-    ['Apple Watch Series 10 GPS 46mm, 46mm Dây Cao Su', 'apple:watch-series-10-46mm:unknown'],
+    ['Apple Watch Series 10 Sport Loop 42mm - 46mm GPS', 'apple:watch-series-10-46mm:64gb'],
+    ['Apple Watch Series 10 GPS, 44mm Dây Sport Band', 'apple:watch-series-10-44mm:64gb'],
+    ['Apple Watch Series 10 Vỏ nhôm 46mm, 42mm Dây Sport Band', 'apple:watch-series-10-46mm:64gb'],
+    ['Apple Watch Series 10 (GPS 46mm) 42mm Dây Sport', 'apple:watch-series-10-46mm:64gb'],
+    ['Apple Watch Series 10 GPS 46mm, 46mm Dây Cao Su', 'apple:watch-series-10-46mm:64gb'],
     [
       'Apple Watch Series 10 (Vỏ nhôm) 46mm, 42mm Dây Sport Band',
-      'apple:watch-series-10-46mm:unknown',
+      'apple:watch-series-10-46mm:64gb',
     ],
     [
       'Apple Watch Series 10 GPS 46mm, 42mm Dây Sport Band mặt 46mm',
-      'apple:watch-series-10-46mm:unknown',
+      'apple:watch-series-10-46mm:64gb',
     ],
     // A range runs on from a listed bare size, not from one with a fit after it.
-    ['Apple Watch Series 10 Sport Band 42mm S/M, 44mm - 46mm', 'apple:watch-series-10:unknown'],
-    [
-      'Apple Watch Series 10 Sport Band 42mm, 44mm M/L - 46mm',
-      'apple:watch-series-10-46mm:unknown',
-    ],
+    ['Apple Watch Series 10 Sport Band 42mm S/M, 44mm - 46mm', 'apple:watch-series-10:64gb'],
+    ['Apple Watch Series 10 Sport Band 42mm, 44mm M/L - 46mm', 'apple:watch-series-10-46mm:64gb'],
     // A size with a band of its own is no list item: the size before it is the case's.
     [
       'Apple Watch Series 10 GPS 46mm Dây Sport Band, 42mm Dây Cao Su',
-      'apple:watch-series-10-46mm:unknown',
+      'apple:watch-series-10-46mm:64gb',
     ],
   ];
   for (const [title, expectedKey] of watchBandRangeKeys1162) {

@@ -1,4 +1,4 @@
-import type { ProductSpecifications, KeySpecs } from '@repo/shared-data';
+import { splitModelKey, type ProductSpecifications, type KeySpecs } from '@repo/shared-data';
 
 /**
  * Spec-only device catalog entry. It deliberately carries no listings, prices, merchants,
@@ -3881,3 +3881,58 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
     },
   },
 ];
+
+/**
+ * A seed Item with its variants (design doc 4.1, 5.3, DOS/Rate#1152): Item-level specs
+ * come from the first variant without its storage, which stays a variant override.
+ */
+export interface FlagshipItemSeed {
+  itemKey: string;
+  categorySlug: FlagshipDeviceSeed['categorySlug'];
+  brand: string;
+  model: string;
+  /** The first variant's name without its storage label. */
+  name: string;
+  description: string;
+  images: string[];
+  specifications: ProductSpecifications;
+  key_specs: KeySpecs;
+  variants: FlagshipDeviceSeed[];
+}
+
+/** Groups the flat seed list by Item (`brand:model`, the key's first two segments). */
+export function flagshipSeedsByItem(
+  seeds: readonly FlagshipDeviceSeed[] = FLAGSHIP_DEVICES_TO_SEED
+): FlagshipItemSeed[] {
+  const items = new Map<string, FlagshipItemSeed>();
+  for (const seed of seeds) {
+    const parts = splitModelKey(seed.model_key);
+    if (!parts) continue;
+    const existing = items.get(parts.itemKey);
+    if (existing) {
+      existing.variants.push(seed);
+      continue;
+    }
+    const hardware = { ...seed.specifications.hardware };
+    delete hardware.storage_gb;
+    const keySpecs = { ...seed.key_specs };
+    delete keySpecs.storage;
+    const label = seed.variant_name.trim();
+    items.set(parts.itemKey, {
+      itemKey: parts.itemKey,
+      categorySlug: seed.categorySlug,
+      brand: seed.brand,
+      model: seed.model,
+      name:
+        label && seed.name.endsWith(` ${label}`)
+          ? seed.name.slice(0, -label.length - 1)
+          : seed.name,
+      description: seed.description,
+      images: seed.images,
+      specifications: { ...seed.specifications, hardware },
+      key_specs: keySpecs as KeySpecs,
+      variants: [seed],
+    });
+  }
+  return [...items.values()];
+}

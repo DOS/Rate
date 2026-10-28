@@ -6,10 +6,14 @@
  * 4. Modes item / nullable_variant: Item tiers, exact variant, size not stated (#1105), hints
  * 5. Pipeline: item_id / variant_source / nullable cluster_id writes, archived masterIdHint,
  *    a manual variant is kept, unkeyable titles are rejected before any write
+ * 6. Seeds as Item plus variants, Item specs from the seeds; a new variant of a known
+ *    Item inherits its specs and publish state (DOS/Rate#1152, group 4)
  */
 import assert from 'node:assert/strict';
 import { composeModelKey, splitModelKey } from '@repo/shared-data';
 import { EntityMatcher } from '../entity-matcher.js';
+import { FLAGSHIP_DEVICES_TO_SEED, flagshipSeedsByItem } from '../flagship-seed-data.js';
+import { syncItemSeedSpecs } from '../jobs/backfill-specs.js';
 import { ITEM_MODEL_ENV, resolveItemModelMode } from '../item-model-flag.js';
 import { ProductNormalizer, UnkeyableProductTitleError } from '../product-normalizer.js';
 import { ShopeeIngestionPipeline } from '../shopee-to-supabase.js';
@@ -153,7 +157,7 @@ async function run() {
   assert.equal(resolveItemModelMode(' Nullable-Variant '), 'nullable_variant');
   assert.equal(resolveItemModelMode('nullable'), 'off', 'a typo must never enable writes');
   assert.equal(resolveItemModelMode(true), 'off');
-  console.log('  ✅ [1/5] RATE_ITEM_MODEL defaults to off');
+  console.log('  ✅ [1/6] RATE_ITEM_MODEL defaults to off');
 
   // 2. Normalizer Item fields
   const cases: Array<[string, Row]> = [
@@ -215,7 +219,7 @@ async function run() {
     assert.equal(parts.variantKey, c.variant_key);
     assert.equal(composeModelKey(c.item_key as string, c.variant_key as string), c.model_key);
   }
-  console.log('  ✅ [2/5] Normalizer emits item_key/variant_key and never an empty segment');
+  console.log('  ✅ [2/6] Normalizer emits item_key/variant_key and never an empty segment');
 
   // 3. Mode off: today's matcher, no rate.items access
   {
@@ -247,7 +251,7 @@ async function run() {
       UnkeyableProductTitleError
     );
   }
-  console.log('  ✅ [3/5] Mode off keeps the master matcher and never reads rate.items');
+  console.log('  ✅ [3/6] Mode off keeps the master matcher and never reads rate.items');
 
   // 4. Item modes
   {
@@ -593,7 +597,7 @@ async function run() {
     assert.equal(result.masterId, 'master-app2-std');
     assert.ok(!db.calls.some(c => c.op === 'upsert'));
   }
-  console.log('  ✅ [4/5] Item tiers, exact variants, size not stated (#1105) and hints');
+  console.log('  ✅ [4/6] Item tiers, exact variants, size not stated (#1105) and hints');
 
   // 5. Pipeline writes
   const product = (title: string): ShopeeProduct => ({
@@ -967,8 +971,75 @@ async function run() {
     assert.equal(hintedRefresh.listing?.cluster_id, 'master-legacy');
   }
   console.log(
-    '  ✅ [5/5] Pipeline writes item_id, nullable cluster_id and keeps hand-set variants'
+    '  ✅ [5/6] Pipeline writes item_id, nullable cluster_id and keeps hand-set variants'
   );
+  // 6. Seeds as Item plus variants, Item specs from the seeds (DOS/Rate#1152)
+  {
+    const itemSeeds = flagshipSeedsByItem();
+    const seen = new Set<string>();
+    for (const item of itemSeeds) {
+      assert.ok(!seen.has(item.itemKey), `one Item per key: ${item.itemKey}`);
+      seen.add(item.itemKey);
+      assert.ok(item.variants.length > 0);
+      for (const variant of item.variants) {
+        assert.equal(splitModelKey(variant.model_key)?.itemKey, item.itemKey);
+      }
+      assert.equal(item.specifications.hardware?.storage_gb, undefined, item.itemKey);
+      assert.equal(item.key_specs.storage, undefined, item.itemKey);
+    }
+    assert.equal(
+      itemSeeds.reduce((n, item) => n + item.variants.length, 0),
+      FLAGSHIP_DEVICES_TO_SEED.length,
+      'every seed is a variant of exactly one Item'
+    );
+    const series10 = itemSeeds.find(i => i.itemKey === 'apple:watch-series-10-42mm');
+    assert.equal(series10?.name, 'Apple Watch Series 10 42mm GPS');
+    // The variant keeps its storage; the Item does not.
+    assert.equal(series10?.variants[0]?.storage_gb, 64);
+
+    // The registry knows the Series 10's one storage, so a bare title keys like its seed.
+    assert.equal(
+      normalizer.normalize({ title: 'Apple Watch Series 10 42mm GPS' } as ShopeeProduct).model_key,
+      'apple:watch-series-10-42mm:64gb'
+    );
+
+    // Item specs: dry-run writes nothing, apply updates the Items that exist and lists
+    // the missing ones (Items are created by the M1 trigger, never here).
+    const seeds = itemSeeds.filter(i =>
+      ['apple:watch-series-10-42mm', 'asus:zenbook-s-14'].includes(i.itemKey)
+    );
+    const seedDb = (present: string[]) =>
+      createDb(call =>
+        call.table === 'items' && call.op === 'select'
+          ? {
+              data: present.includes(String(filter(call, 'item_key')))
+                ? {
+                    id: `item-${String(filter(call, 'item_key'))}`,
+                    specifications: {},
+                    key_specs: {},
+                  }
+                : null,
+              error: null,
+            }
+          : undefined
+      );
+    const dry = seedDb(['asus:zenbook-s-14']);
+    const dryRun = await syncItemSeedSpecs(dry.client, { seeds });
+    assert.deepEqual(dryRun, { updated: 1, missing: ['apple:watch-series-10-42mm'] });
+    assert.ok(!dry.calls.some(c => c.op === 'update'));
+    const applied = seedDb(['asus:zenbook-s-14', 'apple:watch-series-10-42mm']);
+    const applyRun = await syncItemSeedSpecs(applied.client, { seeds, apply: true });
+    assert.equal(applyRun.updated, 2);
+    const update = applied.calls.find(c => c.op === 'update' && c.table === 'items');
+    assert.ok(update?.payload?.specifications);
+    assert.equal(
+      (update?.payload?.specifications as { hardware?: Row }).hardware?.storage_gb,
+      undefined,
+      'storage is never written on an Item'
+    );
+    assert.ok(!applied.calls.some(c => c.op === 'insert' || c.op === 'upsert'));
+  }
+  console.log('  ✅ [6/6] Seeds grouped by Item; Item specs from the seeds (#1152)');
   console.log('🎉 All item-first matcher tests passed!');
 }
 

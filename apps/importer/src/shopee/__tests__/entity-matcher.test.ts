@@ -449,23 +449,24 @@ async function runEntityMatcherSuite() {
     offlineEnricher
   ).resolveOrCreateMasterProduct(earbuds);
   assert.deepEqual(earbudsRes, { masterId: 'master-wf1000xm5', isNew: false });
-  // Watches too: Series 10 has one storage and no only_storage_gb benchmark.
-  const watch = normalizer.normalize(createShopeeListing('Apple Watch Series 10 42mm GPS'));
+  // Watches too: a line with one storage and no only_storage_gb benchmark (Series 9)
+  // still takes its legacy sized seed.
+  const watch = normalizer.normalize(createShopeeListing('Apple Watch Series 9 41mm GPS'));
   assert.equal(watch.storage_gb, null);
   const watchRes = await new EntityMatcher(
     createMockSupabase({
       fuzzyMatches: [
         {
-          master_id: 'master-series-10-42',
-          name: 'Apple Watch Series 10 42mm',
+          master_id: 'master-series-9-41',
+          name: 'Apple Watch Series 9 41mm',
           similarity: 0.9,
-          model_key: 'apple:watch-series-10-42mm:64gb',
+          model_key: 'apple:watch-series-9-41mm:64gb',
         },
       ],
     }).client,
     offlineEnricher
   ).resolveOrCreateMasterProduct(watch);
-  assert.deepEqual(watchRes, { masterId: 'master-series-10-42', isNew: false });
+  assert.deepEqual(watchRes, { masterId: 'master-series-9-41', isNew: false });
   // DOS/Rate#1196: an unknown 5G stays null through the normalizer, the enricher and the
   // seed; known values are kept.
   const no5gInfo = normalizer.normalize(createShopeeListing('Samsung Galaxy A26 128GB'));
