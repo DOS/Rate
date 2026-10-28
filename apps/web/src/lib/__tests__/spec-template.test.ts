@@ -216,7 +216,7 @@ async function testSurfaces() {
   // Compare headings come from the template too: no "5G" heading for a watch.
   assert.match(
     compare,
-    /specGroupHeading\(\s*specDict,\s*group\.id as SpecGroupKey,\s*groupIndex,\s*getCategorySpecTemplate\(activeCategory\)\.has5g\s*\)/
+    /specGroupHeading\(\s*specDict,\s*group\.id as SpecGroupKey,\s*numberedSpecGroups\.indexOf\(group\) \+ 1,\s*getCategorySpecTemplate\(activeCategory\)\.has5g\s*\)/
   );
   const detail = readSource('../../app/[locale]/smartphones/[slug]/page.tsx');
   assert.match(detail, /categorySlug=\{categorySlug\}/);
@@ -304,7 +304,10 @@ async function main() {
     /const product = applyCategorySpecTemplate\(categorySlug, storedProduct\)/
   );
   assert.match(detail, /applyCategorySpecTemplate\(categorySlug, peer\)/);
-  assert.match(detail, /specTemplate\.groups\.map\(/);
+  assert.match(
+    detail,
+    /buildProductSpecGroups\(\{[^}]*template: specTemplate,/
+  );
   assert.doesNotMatch(detail, /specUi\.groups\.\w+\}/);
   const catalog = readSource('../../app/[locale]/smartphones/page.tsx');
   assert.match(

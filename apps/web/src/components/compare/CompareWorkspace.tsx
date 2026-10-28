@@ -67,6 +67,7 @@ import {
   localizeSpecValue,
   specGroupHeading,
 } from '@/lib/spec-localizer';
+import { compareRowIsShown } from '@/lib/product-spec-rows';
 import ContentText from '@/components/elementary/ContentText';
 import { productImageUrl } from '@/lib/rate-domain-core';
 
@@ -860,6 +861,24 @@ export default function CompareWorkspace({
   const specGroups = useMemo(
     () => filterSpecGroupsForCategory(allSpecGroups, activeCategory),
     [allSpecGroups, activeCategory]
+  );
+
+  // No row that every column leaves empty, and with `showDiffOnly` no row
+  // where every column agrees (DOS/Rate#1186).
+  const visibleSpecGroups = specGroups
+    .map((group) => ({
+      ...group,
+      rows: group.rows.filter((row) =>
+        compareRowIsShown(
+          products.map((p) => row.renderValue(p)),
+          showDiffOnly
+        )
+      ),
+    }))
+    .filter((group) => group.rows.length > 0);
+  // Spec groups are numbered from 1 after the market group.
+  const numberedSpecGroups = visibleSpecGroups.filter(
+    (group) => group.id !== 'market_trust'
   );
 
   const searchInputRef = useRef<HTMLInputElement | null>(null);
@@ -2257,20 +2276,8 @@ export default function CompareWorkspace({
                     <td className="bg-light text-muted small">-</td>
                   )}
                 </tr>
-                {specGroups.map((group, groupIndex) => {
-                  // Filter rows when `showDiffOnly` is enabled
-                  const visibleRows = group.rows.filter((row) => {
-                    if (!showDiffOnly || products.length < 2) return true;
-                    const rendered = products.map((p) =>
-                      row.renderValue(p).trim()
-                    );
-                    const uniqueVals = new Set(rendered);
-                    return uniqueVals.size > 1;
-                  });
-
-                  if (visibleRows.length === 0) {
-                    return null;
-                  }
+                {visibleSpecGroups.map((group) => {
+                  const visibleRows = group.rows;
 
                   const totalCols =
                     products.length +
@@ -2285,7 +2292,7 @@ export default function CompareWorkspace({
                       ? specGroupHeading(
                           specDict,
                           group.id as SpecGroupKey,
-                          groupIndex,
+                          numberedSpecGroups.indexOf(group) + 1,
                           getCategorySpecTemplate(activeCategory).has5g
                         )
                       : group.title;
