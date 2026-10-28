@@ -207,7 +207,7 @@ export function buildRateOpenApiSpec(
           summary:
             'List standardized master products with 10-group spec filters',
           description:
-            'Queries `rate.master_products` with multi-dimensional filtering across category, brand, price range, RAM/storage options, refresh rate, 5G, IP rating, charging wattage, and JReviews weighted score.',
+            'Queries `rate.master_products` with multi-dimensional filtering across category, brand, price range, RAM/storage options, refresh rate, 5G, IP rating, charging wattage, and JReviews weighted score. Each product carries its category spec view (earbuds have no screen, RAM or storage; watches show no 5G). A spec filter the category does not have, such as `has5g` on `smartwatches` or `ramGb` and `compactScreen` on `earbuds`, returns 400. On `all` such a filter keeps only products whose own category has it (`has5g=1` returns 5G phones, tablets and laptops, never watches or earbuds).',
           tags: ['Products & Specs'],
           parameters: [
             {
@@ -363,6 +363,10 @@ export function buildRateOpenApiSpec(
                   },
                 },
               },
+            },
+            '400': {
+              description:
+                'Invalid category or price range, or a spec filter the category does not have.',
             },
           },
         },

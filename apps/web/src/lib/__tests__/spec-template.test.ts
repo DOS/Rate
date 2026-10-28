@@ -199,8 +199,8 @@ async function testSurfaces() {
     'H2 • 1GB • 64GB • 500 mAh'
   );
 
-  // The leaderboard rows, the export toolbar on the product page and REST
-  // API v1 read the scoped product.
+  // The leaderboard rows and the export toolbar on the product page read the
+  // scoped product.
   const leaderboard = readSource(
     '../../components/leaderboard/LeaderboardExplorer.tsx'
   );
@@ -221,24 +221,9 @@ async function testSurfaces() {
   const detail = readSource('../../app/[locale]/smartphones/[slug]/page.tsx');
   assert.match(detail, /categorySlug=\{categorySlug\}/);
   assert.match(detail, /buildKeySpecLine\(product, categorySlug\)/);
-  const apiList = readSource('../../app/api/v1/rate/products/route.ts');
-  assert.match(
-    apiList,
-    /\.\.\.applyCategorySpecTemplate\(getMasterProductCategorySlug\(p\), p\)/
-  );
-  const apiDetail = readSource(
-    '../../app/api/v1/rate/products/[slug]/route.ts'
-  );
-  assert.match(
-    apiDetail,
-    /const product = applyCategorySpecTemplate\(\s*getMasterProductCategorySlug\(storedProduct\),\s*storedProduct\s*\)/
-  );
-  const apiCompare = readSource('../../app/api/v1/rate/compare/route.ts');
-  assert.match(
-    apiCompare,
-    /\.\.\.applyCategorySpecTemplate\(lockedCategory, p\)/
-  );
-  console.warn('  ✅ Compare, leaderboard, export and API v1 scoped');
+  // REST API v1 and the extension lookup have behaviour tests in
+  // app/api/v1/rate/__tests__/spec-scope.test.ts (DOS/Rate#1184).
+  console.warn('  ✅ Compare, leaderboard and export scoped');
 }
 
 async function main() {

@@ -1,5 +1,7 @@
 import 'server-only';
 import {
+  applyCategorySpecTemplate,
+  getCategorySpecTemplate,
   isImplausiblyLowPrice,
   minimumListingPriceVnd,
   plausibleOffers,
@@ -1205,9 +1207,19 @@ export async function lookupExtensionProduct(
     };
   }
 
+  const categoryPath = getMasterProductCategorySlug(matchedMaster);
+  // Storage tiers only for a category that has storage: an earbud's stored
+  // "64GB" is enricher noise (DOS/Rate#1184).
+  const hasStorage = getCategorySpecTemplate(categoryPath).storage;
+  // Several sizes in an earbud title are not storage variants either.
+  if (!hasStorage && matchStatus === 'ambiguous_variant') {
+    matchStatus = 'canonical_model';
+  }
+
   // Build variant candidates across same model family
   const sameFamilyVariants = catalogCandidates.filter(
     (c) =>
+      hasStorage &&
       c.brand.toLowerCase() === matchedMaster!.brand.toLowerCase() &&
       c.model.toLowerCase() === matchedMaster!.model.toLowerCase() &&
       typeof c.storage_gb === 'number'
@@ -1246,8 +1258,6 @@ export async function lookupExtensionProduct(
   ) {
     matchStatus = 'exact_listing';
   }
-
-  const categoryPath = getMasterProductCategorySlug(matchedMaster);
 
   const [priceHistory, reviews, sameCategoryPeers] = await Promise.all([
     getMasterProductPriceHistory(matchedMaster.id, offers),
@@ -1357,12 +1367,16 @@ export async function lookupExtensionProduct(
     platform,
     capability,
     canonicalUrl,
-    detectedStorageGb: storageGb ?? matchedMaster.storage_gb ?? null,
+    detectedStorageGb: hasStorage
+      ? (storageGb ?? matchedMaster.storage_gb ?? null)
+      : null,
     isAccessoryOrPart: false,
     accessoryReason: null,
     variantCandidates,
     priceAssessment,
-    masterProduct: matchedMaster,
+    // The category's spec view, as rate.vn shows it: no earbud screen, RAM,
+    // storage or camera, no watch 5G (DOS/Rate#1184).
+    masterProduct: applyCategorySpecTemplate(categoryPath, matchedMaster),
     matchedOffer,
     topCheaperOffers,
     allOffers: mode === 'full' ? offers : topCheaperOffers,
