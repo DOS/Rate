@@ -213,6 +213,11 @@ async function testSurfaces() {
     compare,
     /storedProducts\.map\(\(p\) => applyCategorySpecTemplate\(activeCategory, p\)\)/
   );
+  // Compare headings come from the template too: no "5G" heading for a watch.
+  assert.match(
+    compare,
+    /specGroupHeading\(\s*specDict,\s*group\.id as SpecGroupKey,\s*groupIndex,\s*getCategorySpecTemplate\(activeCategory\)\.has5g\s*\)/
+  );
   const detail = readSource('../../app/[locale]/smartphones/[slug]/page.tsx');
   assert.match(detail, /categorySlug=\{categorySlug\}/);
   assert.match(detail, /buildKeySpecLine\(product, categorySlug\)/);

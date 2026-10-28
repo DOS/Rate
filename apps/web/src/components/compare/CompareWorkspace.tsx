@@ -62,7 +62,11 @@ import {
   setCompareTray,
 } from './compare-tray';
 import { upsertWatchlistItem } from '@/components/watchlist/watchlist-store';
-import { getSpecUiDictionary, localizeSpecValue } from '@/lib/spec-localizer';
+import {
+  getSpecUiDictionary,
+  localizeSpecValue,
+  specGroupHeading,
+} from '@/lib/spec-localizer';
 import ContentText from '@/components/elementary/ContentText';
 import { productImageUrl } from '@/lib/rate-domain-core';
 
@@ -2253,7 +2257,7 @@ export default function CompareWorkspace({
                     <td className="bg-light text-muted small">-</td>
                   )}
                 </tr>
-                {specGroups.map((group) => {
+                {specGroups.map((group, groupIndex) => {
                   // Filter rows when `showDiffOnly` is enabled
                   const visibleRows = group.rows.filter((row) => {
                     if (!showDiffOnly || products.length < 2) return true;
@@ -2273,11 +2277,17 @@ export default function CompareWorkspace({
                     1 +
                     (products.length < MAX_COMPARE_ITEMS ? 1 : 0);
 
+                  // Numbered in the category's order, and a watch's
+                  // cellular heading without "5G" (DOS/Rate#1166). The
+                  // market group comes first, so spec groups start at 1.
                   const groupTitle =
                     group.id in specDict.groups
-                      ? specDict.groups[
-                          group.id as keyof typeof specDict.groups
-                        ]
+                      ? specGroupHeading(
+                          specDict,
+                          group.id as SpecGroupKey,
+                          groupIndex,
+                          getCategorySpecTemplate(activeCategory).has5g
+                        )
                       : group.title;
 
                   return (

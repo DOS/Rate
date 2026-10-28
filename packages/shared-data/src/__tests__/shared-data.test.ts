@@ -980,6 +980,31 @@ function testCategorySpecTemplates(): void {
     lteWatch.specifications
   );
   assert.equal(lteWatch.specifications.cellular.technology, 'LTE / 5G');
+  // 5G qualifiers and bracketed notes go with it; other text stays.
+  const shownTech = (technology: string) =>
+    (
+      rules.applyCategorySpecTemplate('smartwatches', {
+        specifications: { cellular: { technology } },
+      }).specifications as { cellular: { technology?: string } }
+    ).cellular.technology;
+  assert.equal(shownTech('HSPA, LTE-A, 5G SA/NSA/Sub6'), 'HSPA, LTE-A');
+  assert.equal(shownTech('LTE / 5G NR Sub-6'), 'LTE');
+  assert.equal(shownTech('LTE (5G RedCap)'), 'LTE');
+  assert.equal(shownTech('5G-ready LTE'), 'LTE');
+  assert.equal(shownTech('LTE (Cat 4) / 5G'), 'LTE (Cat 4)');
+  assert.equal(shownTech('GSM / LTE'), 'GSM / LTE');
+  assert.equal(
+    shownTech(shownTech('HSPA, LTE-A, 5G SA/NSA/Sub6') ?? ''),
+    'HSPA, LTE-A'
+  );
+  assert.equal(
+    (
+      rules.applyCategorySpecTemplate('smartwatches', {
+        specifications: { cellular: { sim_type: 'eSIM (5G)' } },
+      }).specifications as { cellular: { sim_type?: string } }
+    ).cellular.sim_type,
+    'eSIM'
+  );
 
   // Idempotent, never mutates the input, and leaves absent columns absent.
   assert.deepEqual(rules.applyCategorySpecTemplate('earbuds', buds), buds);

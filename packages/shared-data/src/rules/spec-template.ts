@@ -187,16 +187,27 @@ const isRecord = (v: unknown): v is Record<string, unknown> =>
 
 // Free-text cellular fields the enricher writes for a watch, such as
 // "LTE / 5G" (DOS/Rate#1166).
-const FREE_TEXT_CELLULAR_FIELDS = ['technology', 'data_speed'];
+const FREE_TEXT_CELLULAR_FIELDS = ['technology', 'data_speed', 'sim_type'];
 const CELLULAR_SEPARATOR_RE = /\s*[/,|;]\s*/;
-const FIVE_G_TOKEN_RE = /\b5G(?:\s*(?:NR|SA|NSA|RedCap))*\b/gi;
+// A bracketed 5G note, as in "LTE (5G RedCap)".
+const FIVE_G_BRACKET_RE = /\s*\([^()]*\b5G\b[^()]*\)/gi;
+// "5G" with its qualifiers, also slash-joined ones: "5G SA/NSA/Sub6",
+// "5G NR Sub-6", "5G-ready".
+const FIVE_G_PHRASE_RE =
+  /\b5G\b(?:(?:\s*\/\s*|[\s-]*)(?:NR|SA|NSA|Sub-?6(?:\s*GHz)?|mmWave|RedCap|ready)\b)*/gi;
 
 /** The text without its 5G parts, or null when nothing else is left. */
 const withoutFiveG = (text: string): string | null => {
-  const parts = text.split(CELLULAR_SEPARATOR_RE);
-  const kept = parts
+  const stripped = text
+    .replace(FIVE_G_BRACKET_RE, '')
+    .replace(FIVE_G_PHRASE_RE, '');
+  const kept = stripped
+    .split(CELLULAR_SEPARATOR_RE)
     .map((part) =>
-      part.replace(FIVE_G_TOKEN_RE, '').replace(/\s+/g, ' ').trim()
+      part
+        .replace(/\s+/g, ' ')
+        .replace(/^[\s-]+|[\s(-]+$/g, '')
+        .trim()
     )
     .filter(Boolean);
   if (kept.length === 0) return null;

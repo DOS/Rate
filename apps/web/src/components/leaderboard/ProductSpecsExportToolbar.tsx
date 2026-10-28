@@ -93,7 +93,10 @@ const exportRowApplies = (
   template: CategorySpecTemplate,
   index: number
 ): boolean => {
-  const [group, fields] = EXPORT_ROW_FIELDS[index] ?? ['display', []];
+  const entry = EXPORT_ROW_FIELDS[index];
+  // A row added without an entry stays visible rather than vanishing.
+  if (!entry) return true;
+  const [group, fields] = entry;
   return fields.some((field) => specFieldApplies(template, group, field));
 };
 
@@ -355,7 +358,7 @@ export default function ProductSpecsExportToolbar({
       slug: safeSlug,
       name: safeProductName,
       brand: safeBrand,
-      schema: 'Rate.vn 10-Field-Groups (GSMArena + PhoneArena)',
+      schema: 'Rate.vn spec field groups (GSMArena + PhoneArena)',
       exported_at: new Date().toISOString(),
       deal_radar: radarExportFields(radarSignal),
       key_specs: scoped.key_specs,
