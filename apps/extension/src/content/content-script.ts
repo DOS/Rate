@@ -217,6 +217,9 @@ function renderShadowTrustPill(lookup: ExtensionLookupData): void {
   });
 }
 
+// Lookups sent from this page, so a late answer for an earlier product is
+// ignored (DOS/Rate#1300).
+let detectGeneration = 0;
 let lastProcessedSignature = '';
 
 async function inspectCurrentPage(): Promise<void> {
@@ -231,6 +234,9 @@ async function inspectCurrentPage(): Promise<void> {
     const signature = `${signal.canonicalUrl}|${signal.selectedVariant || ''}|${signal.price || ''}`;
     if (signature === lastProcessedSignature) return;
     lastProcessedSignature = signature;
+    // Only the latest page's answer may draw or clear the pill: on a
+    // single-page shop an earlier lookup can answer after a later one.
+    const generation = ++detectGeneration;
 
     try {
       const response = (await chrome.runtime.sendMessage({
@@ -238,6 +244,7 @@ async function inspectCurrentPage(): Promise<void> {
         signal,
       })) as { ok?: boolean; data?: ExtensionLookupData | null };
 
+      if (generation !== detectGeneration) return;
       if (response?.ok && response.data) {
         renderShadowTrustPill(response.data);
       } else {
@@ -248,7 +255,7 @@ async function inspectCurrentPage(): Promise<void> {
     } catch {
       // Messaging failed (page unloading, worker restarting): drop the pill
       // rather than show a stale one (DOS/Rate#1300).
-      removeTrustPillHost();
+      if (generation === detectGeneration) removeTrustPillHost();
     }
   });
 }

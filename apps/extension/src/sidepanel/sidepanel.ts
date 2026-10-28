@@ -579,7 +579,12 @@ function renderPanelContent(
   root.innerHTML = `
     <div class="card">
       <div style="display:flex;flex-wrap:wrap;gap:4px;align-items:center;">
-        <span class="verdict-pill verdict-${sanitizeVerdictClassSuffix(assessment.verdict)}">${escapeHtml(assessment.badgeLabel)}</span>
+        <span class="verdict-pill verdict-${
+          // A bait price warns in amber, as the badge and pill do (#1298).
+          assessment.implausiblyLow
+            ? 'implausibly_low'
+            : sanitizeVerdictClassSuffix(assessment.verdict)
+        }">${escapeHtml(assessment.badgeLabel)}</span>
         ${radarPillHtml}
       </div>
       <div class="product-name">${escapeHtml((sizeUnknown ? lookup.item?.name : master?.name) || signal.title)}</div>

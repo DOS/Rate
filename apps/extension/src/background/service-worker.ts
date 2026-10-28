@@ -118,6 +118,9 @@ const SUPPORTED_CROWD_PLATFORMS = new Set([
   'phongvu',
 ]);
 
+// The latest product lookup per tab (DOS/Rate#1300).
+let detectRequestCounter = 0;
+const latestDetectByTab = new Map<number, number>();
 async function maybeSendOptInCrowdSignal(
   rawSignal: ExtractedPageProductSignal
 ): Promise<void> {
@@ -205,6 +208,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
 
   if (msgType === 'RATE_PRODUCT_DETECTED') {
+    const requestId = ++detectRequestCounter;
+    if (sender.tab?.id) latestDetectByTab.set(sender.tab.id, requestId);
+    // Only the tab's latest lookup may set its badge, stored lookup or
+    // panel: an earlier one can answer after a later one (DOS/Rate#1300).
+    const isLatest = () =>
+      !sender.tab?.id || latestDetectByTab.get(sender.tab.id) === requestId;
     (async () => {
       try {
         const signal = sanitizeExtensionProductSignal(
@@ -233,10 +242,23 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         await chrome.storage.session.set(signalPayload);
 
         const outcome = await fetchExtensionLookup(signal, 'pill');
+        // Fire-and-forget Opt-In Quarantine Crowd Signal if user enabled it.
+        // Sent whatever the lookup answered, as before (#1175): the error
+        // states below change only what the user sees (#1300).
+        void maybeSendOptInCrowdSignal(signal);
         // A failed lookup clears the previous product's badge (#1300).
         const lookup = outcome.ok ? outcome.data : null;
+        if (!isLatest()) {
+          sendResponse({ ok: outcome.ok, data: lookup, stale: true });
+          return;
+        }
         await updateActionBadge(tabId, lookup);
         if (!outcome.ok) {
+          // An open side panel reloads for this page instead of keeping the
+          // previous product (it listens to this key).
+          if (!isBackgroundTab) {
+            await chrome.storage.session.set({ lookup_tab_latest: null });
+          }
           sendResponse({
             ok: false,
             status: outcome.status,
@@ -255,12 +277,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           await chrome.storage.session.set(lookupPayload);
         }
 
-        // Fire-and-forget Opt-In Quarantine Crowd Signal if user enabled it
-        void maybeSendOptInCrowdSignal(signal);
-
         sendResponse({ ok: true, data: lookup });
       } catch (err) {
-        await updateActionBadge(sender.tab?.id, null);
+        if (isLatest()) await updateActionBadge(sender.tab?.id, null);
         sendResponse({
           ok: false,
           status: null,
