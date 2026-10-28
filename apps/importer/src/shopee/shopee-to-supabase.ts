@@ -451,7 +451,8 @@ export class ShopeeIngestionPipeline {
     });
 
     // Normalize first: a title with no keyable brand or model is rejected
-    // (UnkeyableProductTitleError) before anything is written.
+    // (UnkeyableProductTitleError) before anything is written. With a masterIdHint
+    // whose row is gone, the matcher throws it after the merchant upsert instead.
     const candidate = this.normalizer.normalize(product);
     // With a masterIdHint the title's key is not used; the matcher still rejects
     // the candidate if the hint does not resolve.
@@ -512,7 +513,8 @@ export class ShopeeIngestionPipeline {
     // A caller that already verified the master (coverage discovery, or a refresh of
     // a listing that is already clustered) keeps the listing on it instead of
     // re-matching every crawl, which can split it onto a new draft master.
-    const itemModel = this.matcher.itemModel;
+    // A matcher with no mode (e.g. a test double) reads as the flag's default, off.
+    const itemModel: ItemModelMode = this.matcher.itemModel ?? 'off';
     let hinted: ItemMatchResult | null = null;
     // undefined = leave the stored variant_source as it is.
     let hintedVariantSource: ItemMatchResult['variantSource'] | undefined;
@@ -594,18 +596,20 @@ export class ShopeeIngestionPipeline {
         product.title,
         { itemIdHint: safeItemIdHint || null }
       ));
-    const { itemId, isNew } = resolved;
+    const { isNew } = resolved;
+    let itemId = resolved.itemId;
     let masterId = resolved.masterId;
     let variantSourceToWrite = hinted ? hintedVariantSource : resolved.variantSource;
-    // The variant the listing had before this crawl, so its stats follow a move.
+    // The variant and Item the listing had before this crawl, so their stats follow a move.
     let previousClusterId: string | null = null;
-    if (itemModel !== 'off' && !hinted) {
+    let previousItemId: string | null = null;
+    if (itemModel !== 'off') {
       // A variant set by hand is evidence, never undone by a later page that just
       // does not state the size (design doc 4.4): only listing evidence
       // (variant_source set) may move it.
       const { data: stored, error: storedErr } = await this.supabase
         .from('products')
-        .select('cluster_id, variant_source')
+        .select('cluster_id, variant_source, item_id')
         .eq('platform', platform)
         .eq('platform_item_id', product.itemId)
         .maybeSingle();
@@ -614,17 +618,43 @@ export class ShopeeIngestionPipeline {
       }
       const storedClusterId = sanitizeIngestionEntityId(stored?.cluster_id, 128);
       previousClusterId = storedClusterId;
+      previousItemId = sanitizeIngestionEntityId(stored?.item_id, 128);
       // A hand-set variant always stays. A variant backed by listing evidence stays
       // when this crawl has none; a `legacy` or NULL-source link (e.g. a #1105
-      // fuzzy link) does not.
+      // fuzzy link) does not. A caller hint is not overridden.
       const storedSource = stored?.variant_source;
       const keepStored =
-        storedSource === 'manual' ||
-        (!resolved.variantSource &&
-          (storedSource === 'title' || storedSource === 'sku' || storedSource === 'single_size'));
+        !hinted &&
+        (storedSource === 'manual' ||
+          (!resolved.variantSource &&
+            (storedSource === 'title' ||
+              storedSource === 'sku' ||
+              storedSource === 'single_size')));
       if (storedClusterId && keepStored) {
         masterId = storedClusterId;
         variantSourceToWrite = undefined;
+        // The kept variant brings its own Item: the title may now resolve to another
+        // one (a repurposed listing), and a variant never sits under a foreign Item.
+        const { data: keptVariant, error: keptErr } = await this.supabase
+          .from('master_products')
+          .select('id, item_id')
+          .eq('id', storedClusterId)
+          .maybeSingle();
+        if (keptErr) {
+          throw new Error(`Failed to read the kept variant's Item: ${keptErr.message}`);
+        }
+        const keptItemId = sanitizeIngestionEntityId(
+          (keptVariant as { item_id?: unknown } | null)?.item_id,
+          128
+        );
+        if (keptItemId !== itemId) {
+          platLogger.info(
+            'ingest.kept_variant_item',
+            `Kept variant ${storedClusterId} belongs to Item ${keptItemId ?? '(none)'}, not the title's ${itemId ?? '(none)'}`,
+            { masterId: storedClusterId, itemId: keptItemId, titleItemId: itemId }
+          );
+        }
+        itemId = keptItemId;
       }
     }
     platLogger.info(
@@ -703,16 +733,23 @@ export class ShopeeIngestionPipeline {
         );
       }
     }
-    // Then the Item roll-up (DOS-Me M2 `refresh_item_stats`, design doc 4.1).
-    if (typeof this.supabase.rpc === 'function' && itemModel !== 'off' && itemId) {
+    // Then the Item roll-up (DOS-Me M2 `refresh_item_stats`, design doc 4.1), for the
+    // Item the listing just left too.
+    const statsItemIds =
+      itemModel === 'off'
+        ? []
+        : [itemId, previousItemId].filter(
+            (id, i, all): id is string => Boolean(id) && all.indexOf(id) === i
+          );
+    for (const statsItemId of typeof this.supabase.rpc === 'function' ? statsItemIds : []) {
       const { error: itemStatsErr } = await this.supabase.rpc('refresh_item_stats', {
-        p_item_id: itemId,
+        p_item_id: statsItemId,
       });
       if (itemStatsErr) {
         platLogger.warn(
           'ingest.item_stats_rpc_warn',
           `Could not refresh Item stats via RPC: ${itemStatsErr.message}`,
-          { itemId }
+          { itemId: statsItemId }
         );
       }
     }

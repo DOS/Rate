@@ -553,6 +553,10 @@ async function run() {
         return { data: extra.stored ?? null, error: null };
       }
       if (call.table === 'record_price_observation') return { data: 'inserted', error: null };
+      if (call.table === 'master_products' && call.op === 'select' && call.cols === 'id, item_id') {
+        const variant = (item.variants ?? []).find(v => v.id === filter(call, 'id'));
+        return { data: variant ? { id: variant.id, item_id: variant.item_id } : null, error: null };
+      }
       if (
         call.table === 'master_products' &&
         call.op === 'select' &&
@@ -673,6 +677,88 @@ async function run() {
         .map(c => c.payload?.p_master_id),
       ['master-zenbook-unknown']
     );
+  }
+  {
+    // DOS/Rate#1185: a kept variant brings its own Item, never the title's.
+    const vivobook = { id: 'item-vivobook', item_key: 'asus:vivobook-15' };
+    const vivobook512 = {
+      id: 'master-vivobook-512',
+      item_id: 'item-vivobook',
+      variant_key: '512gb',
+    };
+    const twoItems = { items: [ZENBOOK_ITEM, vivobook], variants: [ZENBOOK_1TB, vivobook512] };
+    const itemStats = (calls: Call[]) =>
+      calls
+        .filter(c => c.op === 'rpc' && c.table === 'refresh_item_stats')
+        .map(c => c.payload?.p_item_id);
+    for (const mode of ['item', 'nullable_variant'] as const) {
+      // A repurposed listing: the title now names the Zenbook, the hand-set variant is a Vivobook.
+      const repurposed = await ingest(mode, bareTitle, twoItems, {
+        stored: { cluster_id: vivobook512.id, variant_source: 'manual', item_id: vivobook.id },
+      });
+      assert.equal(repurposed.listing?.cluster_id, vivobook512.id, mode);
+      assert.equal(repurposed.listing?.item_id, vivobook.id, mode);
+      assert.equal(repurposed.result.itemId, vivobook.id, mode);
+      assert.deepEqual(itemStats(repurposed.calls), [vivobook.id], mode);
+
+      // Title evidence kept on a crawl without a size: same rule.
+      const evidence = await ingest(mode, bareTitle, twoItems, {
+        stored: { cluster_id: vivobook512.id, variant_source: 'title', item_id: vivobook.id },
+      });
+      assert.equal(evidence.listing?.cluster_id, vivobook512.id, mode);
+      assert.equal(evidence.listing?.item_id, vivobook.id, mode);
+    }
+    // A kept variant with no Item yet writes no item_id rather than the title's.
+    const orphan = await ingest('item', bareTitle, zenbook, {
+      stored: { cluster_id: 'master-zenbook-512', variant_source: 'manual' },
+    });
+    assert.ok(!('item_id' in (orphan.listing ?? {})));
+    assert.equal(orphan.result.itemId, null);
+
+    // DOS/Rate#1185: the Item a listing leaves is refreshed too.
+    const movedItem = await ingest('item', 'Laptop ASUS Zenbook S 14 UX5406AA 1TB', twoItems, {
+      stored: { cluster_id: vivobook512.id, variant_source: 'title', item_id: vivobook.id },
+    });
+    assert.equal(movedItem.listing?.item_id, ZENBOOK_ITEM.id);
+    assert.deepEqual(itemStats(movedItem.calls), [ZENBOOK_ITEM.id, vivobook.id]);
+    // ...also from a variant of A to no variant under B (nullable_variant).
+    const toNoVariant = await ingest('nullable_variant', bareTitle, twoItems, {
+      stored: { cluster_id: vivobook512.id, variant_source: 'legacy', item_id: vivobook.id },
+    });
+    assert.equal(toNoVariant.listing?.cluster_id, null);
+    assert.deepEqual(itemStats(toNoVariant.calls), [ZENBOOK_ITEM.id, vivobook.id]);
+    // ...and when a caller hint moves it.
+    const hintMove = await ingest(
+      'item',
+      'Laptop ASUS Zenbook S 14 UX5406AA 1TB',
+      twoItems,
+      {
+        hint: {
+          id: ZENBOOK_1TB.id,
+          specifications: { display: { size: 'x' } },
+          status: 'published',
+          item_id: ZENBOOK_ITEM.id,
+          variant_key: '1024gb',
+        },
+        stored: { cluster_id: vivobook512.id, variant_source: 'manual', item_id: vivobook.id },
+      },
+      { masterIdHint: ZENBOOK_1TB.id }
+    );
+    assert.equal(hintMove.listing?.cluster_id, ZENBOOK_1TB.id, 'a hint is not overridden');
+    assert.deepEqual(itemStats(hintMove.calls), [ZENBOOK_ITEM.id, vivobook.id]);
+    // Same Item: one refresh, no duplicate.
+    const sameItem = await ingest('item', 'Laptop ASUS Zenbook S 14 UX5406AA 1TB', zenbook, {
+      stored: { cluster_id: ZENBOOK_1TB.id, variant_source: 'title', item_id: ZENBOOK_ITEM.id },
+    });
+    assert.deepEqual(itemStats(sameItem.calls), [ZENBOOK_ITEM.id]);
+
+    // Flag off: the stored listing is never read and no Item is refreshed.
+    const off = await ingest('off', 'Laptop ASUS Zenbook S 14 UX5406AA 1TB', twoItems, {
+      stored: { cluster_id: vivobook512.id, variant_source: 'manual', item_id: vivobook.id },
+    });
+    assert.ok(!off.calls.some(c => c.table === 'products' && c.op === 'select'));
+    assert.deepEqual(itemStats(off.calls), []);
+    assert.ok(off.listing && !('item_id' in off.listing));
   }
   {
     // An archived masterIdHint maps to its Item; a live one is kept.
