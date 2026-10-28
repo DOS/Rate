@@ -13675,6 +13675,196 @@ async function runCoreArchitectureSuite() {
   }
 
   // -------------------------------------------------------------------------
+  // 126l. Extension verdict, cheaper-elsewhere and fallback match skip
+  // sold-out listings (#1177)
+  // -------------------------------------------------------------------------
+  {
+    const { evaluateExtensionPriceVerdict, lookupExtensionProduct } =
+      await import('@/server/rate/extension');
+
+    const offer1177 = (
+      id: string,
+      price: number,
+      availability: string | null
+    ) =>
+      ({
+        id,
+        platform: 'shopee',
+        url: `https://shopee.vn/i.1177.${id}`,
+        price_current: price,
+        price_original: null,
+        availability,
+        merchant: {
+          id: `m-${id}`,
+          name: `Shop ${id}`,
+          risk_score: 5,
+          is_official: true,
+        },
+      }) as never;
+    const offers1177 = [
+      offer1177('fpt-sold', 2_694_000, 'out_of_stock'),
+      offer1177('fpt-gone', 3_032_000, 'discontinued'),
+      offer1177('tgdd', 3_140_000, 'in_stock'),
+      offer1177('cps', 3_690_000, null),
+    ];
+    const verdict1177 = evaluateExtensionPriceVerdict({
+      isAccessory: false,
+      accessoryReason: null,
+      isAmbiguousVariant: false,
+      observedPrice: 3_140_000,
+      observedOriginalPrice: null,
+      offers: offers1177,
+      observedOfferId: 'tgdd',
+      priceHistory: null,
+    });
+    assert.equal(verdict1177.marketMinPrice, 3_140_000);
+    assert.equal(verdict1177.marketMaxPrice, 3_690_000);
+    assert.equal(verdict1177.cheaperOfferCount, 0);
+    assert.equal(verdict1177.maxSavingsAmount, 0);
+    // A sold-out listing's own page is judged against the in-stock market.
+    const soldPage1177 = evaluateExtensionPriceVerdict({
+      isAccessory: false,
+      accessoryReason: null,
+      isAmbiguousVariant: false,
+      observedPrice: 3_690_000,
+      observedOriginalPrice: null,
+      offers: offers1177,
+      observedOfferId: 'cps',
+      priceHistory: null,
+    });
+    assert.equal(soldPage1177.cheaperOfferCount, 1);
+    assert.equal(soldPage1177.maxSavingsAmount, 550_000);
+
+    const origFetch1177 = globalThis.fetch;
+    const itemIds1177: Record<string, number> = {
+      'fpt-sold': 117711,
+      'fpt-gone': 117712,
+      tgdd: 117713,
+      cps: 117714,
+    };
+    const viewRow1177 = (id: string, price: number) => ({
+      id,
+      cluster_id: 'master-1177',
+      merchant_id: `m-${id}`,
+      platform: 'shopee',
+      title: 'Samsung Galaxy Buds3 Pro',
+      price_current: price,
+      stock: 0,
+      url: `https://shopee.vn/product-i.1177.${itemIds1177[id]}`,
+      threat_risk_score: 5,
+      threat_source: 'dosafe',
+      dosafe_risk_score: 5,
+      review_risk_score: 5,
+      review_risk_breakdown: { total_reviews: 3 },
+    });
+    const json1177 = (body: unknown) =>
+      new Response(JSON.stringify(body), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      });
+    try {
+      globalThis.fetch = (async (input: RequestInfo | URL) => {
+        const url = new URL(
+          typeof input === 'string'
+            ? input
+            : input instanceof URL
+              ? input.toString()
+              : input.url
+        );
+        const firstPage = Number(url.searchParams.get('offset') ?? 0) === 0;
+        const select = url.searchParams.get('select') ?? '';
+        if (
+          url.pathname.endsWith('/products') &&
+          url.searchParams.has('platform_item_id')
+        ) {
+          return json1177([
+            { cluster_id: 'master-1177', platform_item_id: '1177_117714' },
+          ]);
+        }
+        if (
+          url.pathname.endsWith('/master_products') &&
+          url.searchParams.get('id') === 'eq.master-1177'
+        ) {
+          return json1177({
+            id: 'master-1177',
+            slug: 'samsung-galaxy-buds3-pro',
+            name: 'Samsung Galaxy Buds3 Pro',
+            brand: 'Samsung',
+            model: 'Galaxy Buds3 Pro',
+            images: [],
+            key_specs: {},
+            specifications: {},
+            min_price: 3_140_000,
+            max_price: 3_690_000,
+            category_id: 'cat-earbuds',
+          });
+        }
+        if (url.pathname.endsWith('/v_products_with_merchant_trust')) {
+          return json1177(
+            firstPage
+              ? [
+                  viewRow1177('fpt-sold', 2_694_000),
+                  viewRow1177('fpt-gone', 3_032_000),
+                  viewRow1177('tgdd', 3_140_000),
+                  viewRow1177('cps', 3_690_000),
+                ]
+              : []
+          );
+        }
+        if (
+          url.pathname.endsWith('/products') &&
+          select === 'id,availability'
+        ) {
+          return json1177(
+            firstPage
+              ? [
+                  { id: 'fpt-sold', availability: 'out_of_stock' },
+                  { id: 'fpt-gone', availability: 'discontinued' },
+                  { id: 'tgdd', availability: 'in_stock' },
+                  { id: 'cps', availability: 'in_stock' },
+                ]
+              : []
+          );
+        }
+        return json1177([]);
+      }) as typeof fetch;
+
+      // On the CellphoneS listing: the sold-out FPT listings are not cheaper.
+      const onCps1177 = await lookupExtensionProduct({
+        platform: 'shopee',
+        externalId: '1177_117714',
+        mode: 'pill',
+      });
+      assert.equal(onCps1177.masterProduct?.id, 'master-1177');
+      assert.equal(onCps1177.matchedOffer?.id, 'cps');
+      assert.deepEqual(
+        onCps1177.topCheaperOffers.map((o) => o.id),
+        ['tgdd']
+      );
+      assert.equal(onCps1177.priceAssessment.marketMinPrice, 3_140_000);
+
+      // No listing matches: the fallback is the cheapest in-stock offer.
+      const unmatched1177 = await lookupExtensionProduct({
+        platform: 'shopee',
+        externalId: '1177_117799',
+        mode: 'pill',
+      });
+      assert.equal(unmatched1177.matchedOffer?.id, 'tgdd');
+      assert.ok(
+        unmatched1177.topCheaperOffers.every(
+          (o) => o.id !== 'fpt-sold' && o.id !== 'fpt-gone'
+        )
+      );
+    } finally {
+      globalThis.fetch = origFetch1177;
+    }
+
+    console.log(
+      '  ✅ [126l/135] Extension verdict, cheaper-elsewhere and fallback match skip sold-out listings (#1177) passed'
+    );
+  }
+
+  // -------------------------------------------------------------------------
   // 127. Rate Server Index & Extension Entity, Slug, and Category Bounds (#1029)
   // -------------------------------------------------------------------------
   {

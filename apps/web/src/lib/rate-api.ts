@@ -3914,10 +3914,11 @@ export async function inspectProductOrShopUrl(
           getMasterProductPriceHistory(masterProduct.id, offers),
           getMasterProductReviewSummary(masterProduct.id, reviews),
         ]);
-        // No bait-price listing as the fallback match (DOS/Rate#797).
+        // No bait-price or sold-out listing as the fallback match
+        // (DOS/Rate#797, #1177).
         const matchedOffer =
           offers.find((o) => o.id === matchedProd.id) ||
-          plausibleOffers(offers)[0] ||
+          plausibleOffers(offers.filter((o) => !isOfferUnavailable(o)))[0] ||
           null;
         const discountAnalysis = matchedOffer
           ? priceHistory.byOffer[matchedOffer.id] || null
@@ -4023,8 +4024,11 @@ export async function inspectProductOrShopUrl(
       );
       if (byShopMerchant) return byShopMerchant;
     }
-    // The cheapest plausible offer, never a bait-price listing (DOS/Rate#797).
-    return plausibleOffers(offers)[0] || null;
+    // The cheapest plausible in-stock offer, never a bait-price or sold-out
+    // listing (DOS/Rate#797, #1177).
+    return (
+      plausibleOffers(offers.filter((o) => !isOfferUnavailable(o)))[0] || null
+    );
   };
 
   // 3. Internal slug or exact master product slug match (including slugified URL keyword)
