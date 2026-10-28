@@ -2,6 +2,7 @@ import 'server-only';
 import { cache } from 'react';
 import {
   getItemUnknownVariantOffers as _getItemUnknownVariantOffers,
+  getMasterProductPriceHistory as _getPriceHistoryForOffers,
   type MasterProduct,
   type MerchantOffer,
   type MasterProductPriceHistorySummary,
@@ -40,6 +41,8 @@ export interface ItemPageContext {
   variants: ItemPageVariant[];
   /** Listings of the Item whose size is not stated (Q2): never a "from". */
   unknownOffers: MerchantOffer[];
+  /** The price-history verdict of each of those listings (DOS/Rate#1281). */
+  unknownByOffer: MasterProductPriceHistorySummary['byOffer'];
 }
 
 /**
@@ -72,6 +75,33 @@ const _getCachedUnknownOffers = cache((itemId: string, itemSlug: string) =>
       ],
     }
   )(itemId)
+);
+
+// The history verdicts of the unknown-size listings, keyed by Item and by the
+// listings' current prices, like a variant's history (DOS/Rate#1281). Only
+// `byOffer` is used, so the all-time low/high reads are skipped.
+const _getCachedUnknownByOffer = cache(
+  (itemId: string, itemSlug: string, offers: MerchantOffer[]) =>
+    withRateDataCache(
+      async (id: string) =>
+        (await _getPriceHistoryForOffers(id, offers, { allTime: false }))
+          .byOffer,
+      [
+        'rate-item-unknown-history',
+        itemId,
+        offers
+          .map((o) => `${o.id}:${o.price_current}:${o.price_original ?? ''}`)
+          .join('|'),
+      ],
+      {
+        revalidate: 600,
+        tags: [
+          RATE_CACHE_TAGS.PRICE_HISTORY,
+          RATE_CACHE_TAGS.OFFERS,
+          productCacheTag(itemSlug),
+        ],
+      }
+    )(itemId)
 );
 
 /**
@@ -122,9 +152,22 @@ export async function loadItemPageContext(
       return [] as MerchantOffer[];
     }),
   ]);
+  const unknownByOffer =
+    unknownOffers.length === 0
+      ? {}
+      : await _getCachedUnknownByOffer(item.id, item.slug, unknownOffers).catch(
+          (err: unknown) => {
+            log.error('unknown-size history read failed; no verdicts', {
+              item: item.slug,
+              message: err instanceof Error ? err.message : String(err),
+            });
+            return {};
+          }
+        );
   return {
     item,
     variants: loaded.filter((v): v is ItemPageVariant => v !== null),
     unknownOffers,
+    unknownByOffer,
   };
 }

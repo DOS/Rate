@@ -1365,7 +1365,7 @@ export async function ProductDetailView({
                 productName={displayName}
                 productSlug={itemPage.item.slug}
                 offers={itemPage.unknownOffers}
-                byOffer={{}}
+                byOffer={itemPage.unknownByOffer}
               />
             </div>
           )}

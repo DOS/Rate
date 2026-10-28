@@ -76,14 +76,28 @@ export function planItemRoute(input: {
   requestedVariant: string | null;
   categoryBasePath: string;
   variants: readonly RateItemVariant[];
+  /**
+   * The Item's own category path (`/tablets`), from its `category_id`:
+   * `undefined` or null when it has none (no check), `false` when its
+   * category is no catalogue category (the URL is not found).
+   */
+  itemCategoryPath?: string | null | false;
 }): ItemRoutePlan {
   const { resolution, requestedSlug, requestedVariant, categoryBasePath } =
     input;
   if (!resolution) return { kind: 'not_found' };
   if (resolution.kind === 'unlinked') return { kind: 'legacy' };
   const { item } = resolution;
+  if (input.itemCategoryPath === false) return { kind: 'not_found' };
+  // An Item lives under its own category: `/tablets/<phone-item>` and an old
+  // variant URL under another category 308 there (design doc 5.1,
+  // DOS/Rate#1281). Without a category the requested one is kept.
+  const ownBase = (input.itemCategoryPath || categoryBasePath).replace(
+    /\/+$/,
+    ''
+  );
   if (resolution.kind === 'variant' && item.slug !== requestedSlug) {
-    const base = categoryBasePath.replace(/\/+$/, '');
+    const base = ownBase;
     const itemUrl = `${base}/${encodeURIComponent(item.slug)}`;
     // A retired size (an archived `unknown`) is no size to preselect.
     return {
@@ -91,6 +105,19 @@ export function planItemRoute(input: {
       to: resolution.retired
         ? itemUrl
         : `${itemUrl}?v=${encodeURIComponent(resolution.variant.variant_key)}`,
+    };
+  }
+  if (ownBase !== categoryBasePath.replace(/\/+$/, '')) {
+    // The server never reads `?v=`, so a wrong-category Item URL keeps the
+    // size it names only when it was an old variant slug.
+    const keepSize = resolution.kind === 'variant' && !resolution.retired;
+    return {
+      kind: 'redirect',
+      to: `${ownBase}/${encodeURIComponent(item.slug)}${
+        keepSize
+          ? `?v=${encodeURIComponent(resolution.variant.variant_key)}`
+          : ''
+      }`,
     };
   }
   const variants = input.variants;
