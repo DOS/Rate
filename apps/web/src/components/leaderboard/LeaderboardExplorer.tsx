@@ -393,12 +393,13 @@ export default function LeaderboardExplorer({
         expert: t('critExpert'),
         screen: t('critScreen'),
         performance: t('critPerformance'),
-        camera: t('critCamera'),
+        // Earbuds score noise cancelling here (DOS/Rate#1250).
+        camera: activeCategory === 'earbuds' ? t('critAnc') : t('critCamera'),
         battery: t('critBattery'),
         value: t('critValue'),
       },
     }),
-    [t]
+    [t, activeCategory]
   );
 
   const categoryCounts = useMemo(() => {
