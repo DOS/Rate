@@ -456,6 +456,16 @@ async function main() {
     assert.match(src, /export const revalidate = 300;/, file);
     assert.match(src, /export function generateStaticParams\(/, file);
   }
+  // The page renders a size that loaded: the planned one, else a priced one.
+  const { pickRenderedSize } = await import('../item-page');
+  const size = (slug: string, min_price: number) =>
+    ({ variant: { slug }, product: { min_price } }) as unknown as Parameters<
+      typeof pickRenderedSize
+    >[0][number];
+  const loaded = [size('a-128gb', 0), size('a-256gb', 24990000)];
+  assert.equal(pickRenderedSize(loaded, 'a-128gb')?.variant.slug, 'a-128gb');
+  assert.equal(pickRenderedSize(loaded, 'a-512gb')?.variant.slug, 'a-256gb');
+  assert.equal(pickRenderedSize([], 'a-512gb'), null);
   // Item page helpers (#1154).
   const page = await import('../../../lib/item-page');
   assert.equal(

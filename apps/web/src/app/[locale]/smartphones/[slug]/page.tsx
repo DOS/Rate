@@ -6,6 +6,7 @@ import { notFound, permanentRedirect } from 'next/navigation';
 import { resolveItemRoute } from '@/server/rate/item-route';
 import {
   loadItemPageContext,
+  pickRenderedSize,
   type ItemPageVariant,
 } from '@/server/rate/item-page';
 import {
@@ -127,11 +128,21 @@ export async function generateCategoryProductMetadata(
   // RATE_ITEM_MODEL on: an Item URL describes its selected variant and is
   // canonical (Q1, DOS/Rate#1153). Off: null, the page as before.
   const itemRoute = await resolveItemRoute({ slug, categoryBasePath });
+  // The sizes the page itself shows, so the title quotes the same "from".
+  const itemPage =
+    itemRoute?.kind === 'render' && itemRoute.variants.length > 1
+      ? await loadItemPageContext(itemRoute.item, itemRoute.variants)
+      : null;
+  const renderedSize =
+    itemPage && itemRoute?.kind === 'render'
+      ? pickRenderedSize(itemPage.variants, itemRoute.variantSlug)
+      : null;
   const product =
     itemRoute?.kind === 'not_found'
       ? null
       : await getCachedMasterProductBySlug(
-          itemRoute?.kind === 'render' ? itemRoute.variantSlug : slug
+          renderedSize?.variant.slug ??
+            (itemRoute?.kind === 'render' ? itemRoute.variantSlug : slug)
         );
   if (!product) {
     return {
@@ -141,15 +152,13 @@ export async function generateCategoryProductMetadata(
   // The stored stats, like every other page shows (DOS/Rate#1141). An Item
   // URL is the Item: its name and the "from" price over its sizes (#1154).
   const itemMeta = itemRoute?.kind === 'render' ? itemRoute.item : null;
+  const isItemGroup = (itemPage?.variants.length ?? 0) > 1;
   const marketStats =
-    itemRoute?.kind === 'render' && itemRoute.variants.length > 1
-      ? itemFromStats(itemRoute.variants)
+    itemPage && isItemGroup
+      ? itemFromStats(itemPage.variants.map((v) => v.product))
       : productMarketStats(product);
   const hasPrice = marketStats.minPrice > 0;
-  const name =
-    (itemRoute?.kind === 'render' && itemRoute.variants.length > 1
-      ? itemMeta?.name
-      : null) || product.name;
+  const name = (isItemGroup ? itemMeta?.name : null) || product.name;
   const minPrice = marketStats.minPrice.toLocaleString('vi-VN');
   const canonicalUrl = `https://rate.vn${categoryBasePath}/${
     itemRoute?.kind === 'render' ? itemRoute.itemSlug : product.slug
@@ -217,8 +226,20 @@ export async function ProductDetailView({
   // Neither a published Item nor a variant of one: no fallback to the old
   // master lookup, which would show a variant of an unpublished Item.
   if (itemRoute?.kind === 'not_found') notFound();
+  // RATE_ITEM_MODEL on and an Item URL: every size's offers and history, and
+  // the listings whose size is not stated (#1154). Null otherwise. A size
+  // whose read failed is left out, and the page renders a size that loaded.
+  const itemPage =
+    itemRoute?.kind === 'render' && itemRoute.variants.length > 0
+      ? await loadItemPageContext(itemRoute.item, itemRoute.variants)
+      : null;
+  const renderedSize =
+    itemPage && itemRoute?.kind === 'render'
+      ? pickRenderedSize(itemPage.variants, itemRoute.variantSlug)
+      : null;
   const productSlug =
-    itemRoute?.kind === 'render' ? itemRoute.variantSlug : slug;
+    renderedSize?.variant.slug ??
+    (itemRoute?.kind === 'render' ? itemRoute.variantSlug : slug);
   const [t, tNav, tSale, storedProduct] = await Promise.all([
     getTranslations({ locale, namespace: 'productDetail' }),
     getTranslations({ locale, namespace: 'rate.nav' }),
@@ -229,12 +250,6 @@ export async function ProductDetailView({
   if (!storedProduct) {
     notFound();
   }
-  // RATE_ITEM_MODEL on and an Item URL: every size's offers and history, and
-  // the listings whose size is not stated (#1154). Null otherwise.
-  const itemPage =
-    itemRoute?.kind === 'render' && itemRoute.variants.length > 0
-      ? await loadItemPageContext(itemRoute.item, itemRoute.variants)
-      : null;
   const itemVariants = itemPage?.variants ?? [];
   const isItemGroup = itemVariants.length > 1;
 
@@ -608,7 +623,8 @@ export async function ProductDetailView({
     };
   };
   const defaultVariantKey =
-    itemRoute?.kind === 'render' ? itemRoute.variantKey : '';
+    renderedSize?.variant.variant_key ??
+    (itemRoute?.kind === 'render' ? itemRoute.variantKey : '');
 
   return (
     <ClientMessages scope="productDetail">

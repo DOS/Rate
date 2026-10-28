@@ -42,6 +42,23 @@ export interface ItemPageContext {
   unknownOffers: MerchantOffer[];
 }
 
+/**
+ * The size an Item URL renders: the planned one while its read succeeded,
+ * else the first loaded size with a price, else the first loaded size. Null
+ * when no size loaded, and the page reads the planned size as before.
+ */
+export function pickRenderedSize(
+  loaded: readonly ItemPageVariant[],
+  plannedSlug: string
+): ItemPageVariant | null {
+  return (
+    loaded.find((v) => v.variant.slug === plannedSlug) ??
+    loaded.find((v) => Number(v.product.min_price) > 0) ??
+    loaded[0] ??
+    null
+  );
+}
+
 const _getCachedUnknownOffers = cache((itemId: string, itemSlug: string) =>
   withRateDataCache(
     _getItemUnknownVariantOffers,
