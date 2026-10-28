@@ -4728,7 +4728,10 @@ async function getItemUnknownVariantOffers(
         .eq('item_id', itemId)
         .is('cluster_id', null)
         .order('id')
-        .range(from, to) as unknown as PromiseLike<{
+        .range(from, to)
+        .then(
+          throwIfItemSchemaMissing('item unknown-variant listings')
+        ) as unknown as PromiseLike<{
         data: unknown[] | null;
         error: { message: string } | null;
       }>
@@ -4870,8 +4873,12 @@ export async function listItems(params: ItemListParams): Promise<RateItem[]> {
     .trim()
     .slice(0, 160);
   if (search) query = query.ilike('name', `%${search}%`);
-  if (typeof params.minPrice === 'number') {
-    query = query.gte('min_price', params.minPrice);
+  // A price filter means a price: an Item with none (0) is no match.
+  if (
+    typeof params.minPrice === 'number' ||
+    typeof params.maxPrice === 'number'
+  ) {
+    query = query.gte('min_price', Math.max(1, params.minPrice ?? 1));
   }
   if (typeof params.maxPrice === 'number') {
     query = query.lte('min_price', params.maxPrice);

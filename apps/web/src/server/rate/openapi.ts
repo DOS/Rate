@@ -1,5 +1,6 @@
 import 'server-only';
 import { EXTENSION_CAPABILITY_MATRIX } from './extension';
+import { isItemModelOn } from './item-model';
 
 export interface OpenApiParameter {
   name: string;
@@ -131,7 +132,7 @@ export function normalizeOpenApiServerOrigin(
   }
 }
 
-export function buildRateOpenApiSpec(
+function buildBaseRateOpenApiSpec(
   baseUrl = 'https://rate.vn'
 ): RateOpenApiDocument {
   const safeBaseUrl = normalizeOpenApiServerOrigin(baseUrl);
@@ -309,17 +310,6 @@ export function buildRateOpenApiSpec(
               schema: { type: 'boolean' },
             },
             {
-              name: 'group',
-              in: 'query',
-              description:
-                'Set to `item` to list Items (one row per product line, with its size variants) instead of variants. Takes `category`, `brands`, `q`, `minPrice`, `maxPrice` and the price, merchant and newest sorts; spec filters and `rating_desc` answer 400. Available while rate.vn runs the Item model; otherwise ignored, and the default stays `variant` (DOS/Rate#1158).',
-              schema: {
-                type: 'string',
-                enum: ['variant', 'item'],
-                default: 'variant',
-              },
-            },
-            {
               name: 'sort',
               in: 'query',
               description: 'Sort order for returned master products',
@@ -352,7 +342,7 @@ export function buildRateOpenApiSpec(
           responses: {
             '200': {
               description:
-                'Paginated list of standardized master products with facet counts and per-product `deal_radar` / `radar_signal`. With `group=item`: `group` is `item` and `data` holds `RateItem` rows, each with `variants` (`RateItemVariant[]`).',
+                'Paginated list of standardized master products with facet counts and per-product `deal_radar` / `radar_signal`.',
               content: {
                 'application/json': {
                   schema: {
@@ -399,14 +389,7 @@ export function buildRateOpenApiSpec(
               in: 'path',
               required: true,
               description:
-                'Product slug (e.g. apple-iphone-16-128gb). Under the Item model it may also be an Item slug (e.g. apple-iphone-16).',
-              schema: { type: 'string' },
-            },
-            {
-              name: 'v',
-              in: 'query',
-              description:
-                'Item model only: the variant key to answer with (e.g. `256gb`). Without it, an old variant slug answers its own size and an Item slug its default variant.',
+                'Canonical product slug or model_key (e.g. apple-iphone-16-128gb)',
               schema: { type: 'string' },
             },
           ],
@@ -428,36 +411,11 @@ export function buildRateOpenApiSpec(
                         properties: {
                           product: {
                             type: 'object',
-                            description:
-                              'The product; under the Item model, the selected variant.',
                             properties: {
                               sale_state: {
                                 $ref: '#/components/schemas/ProductSaleState',
                               },
                             },
-                          },
-                          item: {
-                            $ref: '#/components/schemas/RateItem',
-                          },
-                          variants: {
-                            type: 'array',
-                            description:
-                              'Item model only: every published size of the Item.',
-                            items: {
-                              $ref: '#/components/schemas/RateItemVariant',
-                            },
-                          },
-                          selected_variant: {
-                            type: 'string',
-                            nullable: true,
-                            description:
-                              'Item model only: the variant key `product` is.',
-                          },
-                          unknown_variant_offers: {
-                            type: 'array',
-                            description:
-                              'Item model only: offers whose listing states no size. They never feed a variant price.',
-                            items: { type: 'object' },
                           },
                         },
                       },
@@ -938,15 +896,6 @@ export function buildRateOpenApiSpec(
                       ok: { type: 'boolean', example: true },
                       radar_signal: {
                         $ref: '#/components/schemas/ProductDealRadarSignal',
-                      },
-                      item: {
-                        $ref: '#/components/schemas/RateItem',
-                      },
-                      selectedVariant: {
-                        type: 'string',
-                        nullable: true,
-                        description:
-                          'Item model only: the variant key the page or listing states; null when no size is stated, and `variantCandidates` then lists every size of the Item.',
                       },
                     },
                   },
@@ -1619,41 +1568,6 @@ export function buildRateOpenApiSpec(
         },
       },
       schemas: {
-        RateItem: {
-          type: 'object',
-          description:
-            'Item model only (DOS/Rate#1158): a product line across its sizes. Prices are "from" prices over its published variants; counts include listings with no stated size.',
-          properties: {
-            id: { type: 'string', format: 'uuid' },
-            item_key: { type: 'string', example: 'apple:iphone-16' },
-            slug: { type: 'string', example: 'apple-iphone-16' },
-            name: { type: 'string' },
-            brand: { type: 'string' },
-            model: { type: 'string' },
-            category_id: { type: 'string', format: 'uuid', nullable: true },
-            min_price: { type: 'number' },
-            max_price: { type: 'number' },
-            price_variant_count: { type: 'integer' },
-            merchant_count: { type: 'integer' },
-            listing_count: { type: 'integer' },
-            unknown_variant_listing_count: { type: 'integer' },
-          },
-        },
-        RateItemVariant: {
-          type: 'object',
-          description: 'Item model only: one size of an Item.',
-          properties: {
-            id: { type: 'string', format: 'uuid' },
-            slug: { type: 'string', example: 'apple-iphone-16-256gb' },
-            name: { type: 'string' },
-            variant_key: { type: 'string', example: '256gb' },
-            variant_name: { type: 'string', nullable: true },
-            storage_gb: { type: 'integer', nullable: true },
-            min_price: { type: 'number' },
-            max_price: { type: 'number' },
-            merchant_count: { type: 'integer' },
-          },
-        },
         SupportedEcommercePlatform: {
           type: 'string',
           enum: supportedPlatforms,
@@ -1795,4 +1709,143 @@ export function buildRateOpenApiSpec(
       },
     },
   };
+}
+
+/**
+ * The OpenAPI document. The Item model's parameters, fields and schemas are
+ * documented only while `RATE_ITEM_MODEL` is on, so with the flag off the
+ * document is exactly as before (DOS/Rate#1158).
+ */
+export function buildRateOpenApiSpec(
+  ...args: Parameters<typeof buildBaseRateOpenApiSpec>
+): RateOpenApiDocument {
+  const spec = buildBaseRateOpenApiSpec(...args);
+  return isItemModelOn() ? withItemModelDocs(spec) : spec;
+}
+
+type JsonObject = Record<string, unknown>;
+
+const responseSchema = (op: OpenApiOperation | undefined): JsonObject | null =>
+  (op?.responses['200']?.content?.['application/json']?.schema as
+    JsonObject | undefined) ?? null;
+
+const propertiesOf = (schema: JsonObject | null): JsonObject | null =>
+  schema && typeof schema.properties === 'object' && schema.properties
+    ? (schema.properties as JsonObject)
+    : null;
+
+/** Adds the Item model's API v1 surface to the document (design doc 5.2). */
+export function withItemModelDocs(
+  spec: RateOpenApiDocument
+): RateOpenApiDocument {
+  const list = spec.paths['/api/v1/rate/products']?.get;
+  if (list) {
+    const params = list.parameters ?? [];
+    const at = params.findIndex((p) => p.name === 'sort');
+    params.splice(at < 0 ? params.length : at, 0, {
+      name: 'group',
+      in: 'query',
+      description:
+        'Set to `item` to list Items (one row per product line, with its size variants) instead of variants. Takes `category`, `brands`, `q`, `minPrice`, `maxPrice` (on the Item "from" price) and the price, merchant and newest sorts; spec filters and `rating_desc` answer 400. The default stays `variant`.',
+      schema: { type: 'string', enum: ['variant', 'item'], default: 'variant' },
+    });
+    list.parameters = params;
+    const ok = list.responses['200'];
+    if (ok) {
+      ok.description = `${ok.description} With \`group=item\`: \`group\` is \`item\` and \`data\` holds \`RateItem\` rows, each with \`variants\` (\`RateItemVariant[]\`).`;
+    }
+  }
+
+  const detail = spec.paths['/api/v1/rate/products/{slug}']?.get;
+  if (detail) {
+    const slug = detail.parameters?.find((p) => p.name === 'slug');
+    if (slug) {
+      slug.description =
+        'Product slug (e.g. apple-iphone-16-128gb) or Item slug (e.g. apple-iphone-16).';
+    }
+    detail.parameters = [
+      ...(detail.parameters ?? []),
+      {
+        name: 'v',
+        in: 'query',
+        description:
+          'The variant key to answer with (e.g. `256gb`). Without it, an old variant slug answers its own size and an Item slug its default variant.',
+        schema: { type: 'string' },
+      },
+    ];
+    const data = propertiesOf(
+      (propertiesOf(responseSchema(detail))?.data as JsonObject) ?? null
+    );
+    if (data) {
+      const product = data.product as JsonObject | undefined;
+      if (product) {
+        product.description =
+          "The selected variant (`?v=`, the slug's own size, else the Item's default).";
+      }
+      data.item = { $ref: '#/components/schemas/RateItem' };
+      data.variants = {
+        type: 'array',
+        description: 'Every published size of the Item.',
+        items: { $ref: '#/components/schemas/RateItemVariant' },
+      };
+      data.selected_variant = {
+        type: 'string',
+        description: 'The variant key `product` is.',
+      };
+      data.unknown_variant_offers = {
+        type: 'array',
+        description:
+          'Offers of the Item whose listing states no size, in the same shape as `offers`. They never feed a variant price.',
+        items: { type: 'object' },
+      };
+    }
+  }
+
+  const lookup = spec.paths['/api/v1/rate/extension/lookup']?.get;
+  const lookupProps = propertiesOf(responseSchema(lookup));
+  if (lookupProps) {
+    lookupProps.item = { $ref: '#/components/schemas/RateItem' };
+    lookupProps.selectedVariant = {
+      type: ['string', 'null'],
+      description:
+        "The variant key of the size the listing or page states, or of the Item's only variant; null when it is not known (`matchStatus` is then `ambiguous_variant` when the Item has several sizes). `variantCandidates` lists the Item's sized variants, empty for a category without storage.",
+    };
+  }
+
+  spec.components.schemas.RateItem = {
+    type: 'object',
+    description:
+      'A product line across its sizes. Prices are "from" prices over its published variants; counts include listings with no stated size.',
+    properties: {
+      id: { type: 'string', format: 'uuid' },
+      item_key: { type: 'string', example: 'apple:iphone-16' },
+      slug: { type: 'string', example: 'apple-iphone-16' },
+      name: { type: 'string' },
+      brand: { type: 'string' },
+      model: { type: 'string' },
+      category_id: { type: ['string', 'null'], format: 'uuid' },
+      min_price: { type: 'number' },
+      max_price: { type: 'number' },
+      price_variant_count: { type: 'integer' },
+      merchant_count: { type: 'integer' },
+      listing_count: { type: 'integer' },
+      unknown_variant_listing_count: { type: 'integer' },
+    },
+  };
+  spec.components.schemas.RateItemVariant = {
+    type: 'object',
+    description: 'One size of an Item.',
+    properties: {
+      id: { type: 'string', format: 'uuid' },
+      slug: { type: 'string', example: 'apple-iphone-16-256gb' },
+      name: { type: 'string' },
+      variant_key: { type: 'string', example: '256gb' },
+      variant_name: { type: ['string', 'null'] },
+      storage_gb: { type: ['integer', 'null'] },
+      min_price: { type: 'number' },
+      max_price: { type: 'number' },
+      merchant_count: { type: 'integer' },
+    },
+  };
+  return spec;
 }

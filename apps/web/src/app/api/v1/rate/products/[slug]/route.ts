@@ -62,10 +62,16 @@ export async function GET(request: NextRequest, context: RouteContext) {
       );
     }
 
-    const itemContext = await resolveApiItemContext(
+    let itemContext = await resolveApiItemContext(
       cleanSlug,
       request.nextUrl?.searchParams?.get('v')
     );
+    // Read before the product, so missing Item columns fall back to the
+    // whole response as before, not only to fewer fields.
+    const itemFields = itemContext
+      ? await buildApiItemFields(itemContext)
+      : null;
+    if (!itemFields) itemContext = null;
     const storedProduct = await getCachedMasterProductBySlug(
       itemContext ? itemContext.selected.slug : cleanSlug
     );
@@ -86,10 +92,9 @@ export async function GET(request: NextRequest, context: RouteContext) {
       getCachedMasterProductReviews(product.id),
     ]);
 
-    const [reviewSummary, priceHistory, itemFields] = await Promise.all([
+    const [reviewSummary, priceHistory] = await Promise.all([
       getCachedMasterProductReviewSummary(product.id, reviews),
       getCachedMasterProductPriceHistory(product.id, offers),
-      itemContext ? buildApiItemFields(itemContext) : Promise.resolve(null),
     ]);
     // A sold-out listing's last price is no deal (DOS/Rate#1141).
     const radarSignal = computeProductRadarSignal(

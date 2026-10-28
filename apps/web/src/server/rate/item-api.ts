@@ -33,6 +33,8 @@ export interface ApiItemContext {
   selected: RateItemVariant;
   /** True when the slug or `?v=` named the size; false for a default pick. */
   sizeChosen: boolean;
+  /** The page states a size the Item does not have: no variant may be judged. */
+  sizeMismatch?: boolean;
 }
 
 /** The public Item object of API v1. */
@@ -163,18 +165,22 @@ export async function resolveApiItemContext(
   });
 }
 
-/** The Item fields of `/products/{slug}` for a resolved context. */
+/**
+ * The Item fields of `/products/{slug}` for a resolved context, or null when
+ * the Item columns turn out to be missing (the route then answers as before).
+ */
 export async function buildApiItemFields(
   context: ApiItemContext
-): Promise<ApiItemFields> {
+): Promise<ApiItemFields | null> {
   const offers = await orUnavailable('offers', () =>
     getItemOffers(context.item.id, [])
   );
+  if (!offers) return null;
   return {
     item: toApiItem(context.item),
     variants: context.variants.map(toApiItemVariant),
     selected_variant: context.selected.variant_key,
-    unknown_variant_offers: offers?.unknownVariant ?? [],
+    unknown_variant_offers: offers.unknownVariant,
   };
 }
 
@@ -197,14 +203,53 @@ const MISSING_SCHEMA_CODES = new Set([
 ]);
 
 /**
+ * The variant an extension lookup answers with (design doc 4.4, 5.2):
+ * - the listing's own variant when the listing has one (`listingVariantId`);
+ * - else the one variant of the size the page states, when exactly one has it;
+ *   a stated size the Item lacks (or shares between variants) chooses none and
+ *   sets `sizeMismatch` when no variant has it;
+ * - else the Item's only variant, when it has one;
+ * - else none: the default variant is shown with no size chosen.
+ */
+export function chooseItemVariant(
+  context: ApiItemContext,
+  page: { storageGb: number | null; listingVariantId: string | null }
+): ApiItemContext {
+  const base = {
+    ...context,
+    sizeChosen: false,
+    sizeMismatch: false,
+  };
+  const own = page.listingVariantId
+    ? context.variants.find((v) => v.id === page.listingVariantId)
+    : undefined;
+  if (own) return { ...base, selected: own, sizeChosen: true };
+  if (page.storageGb) {
+    const sized = context.variants.filter(
+      (v) => v.storage_gb === page.storageGb
+    );
+    if (sized.length === 1) {
+      return { ...base, selected: sized[0]!, sizeChosen: true };
+    }
+    return { ...base, sizeMismatch: sized.length === 0 };
+  }
+  if (context.variants.length === 1) {
+    return { ...base, selected: context.variants[0]!, sizeChosen: true };
+  }
+  return base;
+}
+
+/**
  * The Item of a marketplace listing with no variant (`cluster_id` NULL,
- * `item_id` set, design doc 4.4), answered with the Item's default variant
- * and no size chosen. Null while the flag is off, the columns are missing, or
- * no such listing exists.
+ * `item_id` set, design doc 4.4), with the Item's default variant and no
+ * size chosen yet. `'no_variant'` when the listing's Item is known but has no
+ * published variant (or is not published): the lookup must not guess another
+ * product then. Null while the flag is off, the columns are missing, or no
+ * such listing exists.
  */
 export async function resolveListingItemContext(
   platformItemIds: readonly string[]
-): Promise<ApiItemContext | null> {
+): Promise<ApiItemContext | 'no_variant' | null> {
   if (!isItemModelOn() || platformItemIds.length === 0) return null;
   const client = getRateClient();
   if (!client) return null;
@@ -256,32 +301,32 @@ export async function resolveListingItemContext(
   if (!itemId) return null;
   return orUnavailable('listing item', async () => {
     const item = await getItemById(itemId);
-    if (!item) return null;
+    if (!item) return 'no_variant' as const;
     const variants = await getItemVariants(item.id);
     const selected =
       variants.find((v) => v.id === item.default_variant_id) ?? variants[0];
-    return selected ? { item, variants, selected, sizeChosen: false } : null;
+    return selected
+      ? { item, variants, selected, sizeChosen: false }
+      : ('no_variant' as const);
   });
 }
 
 /**
- * A matched variant's Item context. The size counts as chosen only when the
- * listing itself is that variant (`exactListing`) or the page states a size
- * the Item has, which then selects that variant; a catalogue guess from a
- * title without a size chooses none.
+ * A matched variant's Item context, its variant chosen by `chooseItemVariant`:
+ * `listingVariantId` is the variant the listing itself is on (an exact
+ * listing match), null for a catalogue guess.
  */
 export async function resolveVariantItemContext(
   variantSlug: string,
   storageGb: number | null,
-  exactListing: boolean
+  listingVariantId: string | null
 ): Promise<ApiItemContext | null> {
   const context = await resolveApiItemContext(variantSlug);
   if (!context) return null;
-  const sized = storageGb
-    ? context.variants.find((v) => v.storage_gb === storageGb)
-    : undefined;
-  if (sized) return { ...context, selected: sized, sizeChosen: true };
-  return { ...context, sizeChosen: exactListing };
+  return chooseItemVariant(
+    { ...context, selected: context.selected },
+    { storageGb, listingVariantId }
+  );
 }
 
 /** One row of `/products?group=item`: the Item and its variants. */

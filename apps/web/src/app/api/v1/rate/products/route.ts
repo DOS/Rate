@@ -103,14 +103,6 @@ async function answerItemGroup(
     filterParams.maxScreenSizeInch !== undefined && 'compactScreen',
     filterParams.sort === 'rating_desc' && 'sort=rating_desc',
   ].filter((f): f is string => typeof f === 'string');
-  if (specFilters.length > 0) {
-    return jsonApiError(
-      400,
-      `Filters not available with group=item: ${specFilters.join(', ')}`,
-      undefined,
-      PUBLIC_API_CORS_HEADERS
-    );
-  }
   const sort = filterParams.sort ?? 'default';
   const rows = await listApiItems(categorySlug, {
     brands: filterParams.brands,
@@ -121,7 +113,17 @@ async function answerItemGroup(
     limit: filterParams.limit ?? 24,
     offset: filterParams.offset ?? 0,
   });
+  // Only once the Item tables answered: without them the request is the
+  // variant list as before, filters included (DOS/Rate#1158).
   if (rows === null) return null;
+  if (specFilters.length > 0) {
+    return jsonApiError(
+      400,
+      `Filters not available with group=item: ${specFilters.join(', ')}`,
+      undefined,
+      PUBLIC_API_CORS_HEADERS
+    );
+  }
   return NextResponse.json(
     {
       ok: true,

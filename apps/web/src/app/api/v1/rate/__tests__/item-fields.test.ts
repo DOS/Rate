@@ -62,6 +62,18 @@ const M256 = master(V256, 256);
 
 let calls: string[] = [];
 let schemaMissing = false;
+// Only `products.item_id` is missing (the unknown-variant offers read).
+let offersSchemaMissing = false;
+// The Item's published variants: both sizes, one, or none.
+let variantSet: 'both' | 'one' | 'none' = 'both';
+const OTHER = {
+  ...master('55555555-5555-4555-8555-555555555555', 256),
+  item_id: null,
+  slug: 'samsung-galaxy-s25-256gb',
+  name: 'Samsung Galaxy S25 256GB',
+  brand: 'Samsung',
+  model: 'Galaxy S25',
+};
 // What the catalogue search RPC answers (the extension's model guess).
 let catalog: unknown[] = [];
 
@@ -86,7 +98,13 @@ globalThis.fetch = (async (input: RequestInfo | URL) => {
     (url.pathname === '/rest/v1/master_products' &&
       (q.includes('item_id') || q.includes('variant_key'))) ||
     (url.pathname === '/rest/v1/products' && q.includes('item_id'));
-  if (schemaMissing && itemTable) {
+  if (
+    (schemaMissing && itemTable) ||
+    (offersSchemaMissing &&
+      url.pathname === '/rest/v1/products' &&
+      q.includes('cluster_id=is.null') &&
+      q.includes('item_id=eq.'))
+  ) {
     return new Response(
       JSON.stringify({
         code: 'PGRST205',
@@ -101,15 +119,32 @@ globalThis.fetch = (async (input: RequestInfo | URL) => {
     case '/rest/v1/items':
       if (/slug=eq\.apple-iphone-16(&|$)/.test(q)) return json([itemRow]);
       if (q.includes(`id=eq.${ITEM_ID}`)) return json([itemRow]);
-      if (!q.includes('slug=') && !q.includes('id=eq.')) return json([itemRow]);
+      // The Item list: published only.
+      if (q.includes('status=eq.published') && !q.includes('slug='))
+        return json([itemRow]);
       return json([]);
-    case '/rest/v1/master_products':
+    case '/rest/v1/master_products': {
+      const variants =
+        variantSet === 'both'
+          ? [M256, M128]
+          : variantSet === 'one'
+            ? [M256]
+            : [];
       if (q.includes('slug=eq.apple-iphone-16-128gb')) return json([M128]);
       if (q.includes('slug=eq.apple-iphone-16-256gb')) return json([M256]);
-      if (q.includes(`item_id=eq.${ITEM_ID}`) || q.includes(ITEM_ID))
-        return json([M256, M128]);
+      if (q.includes(`slug=eq.${OTHER.slug}`)) return json([OTHER]);
+      if (q.includes(`id=eq.${V128}`)) return json([M128]);
+      if (
+        q.includes(`item_id=eq.${ITEM_ID}`) ||
+        q.includes(`item_id=in.(${ITEM_ID})`)
+      )
+        return json(variants);
       return json([]);
+    }
     case '/rest/v1/products':
+      // A listing on the 128GB variant.
+      if (q.includes('111222333') && q.includes('cluster_id=not.is.null'))
+        return json([{ cluster_id: V128, platform_item_id: '111222333' }]);
       if (
         q.includes('cluster_id=is.null') &&
         q.includes(`item_id=eq.${ITEM_ID}`)
@@ -196,7 +231,20 @@ async function testFlagOffUnchanged() {
   schemaMissing = true;
   const missing = await detail('apple-iphone-16-128gb');
   assert.equal(missing.text, off.text);
+  // `group=item` with a spec filter: the variant list as before, not a 400.
+  setFlag(undefined);
+  catalog = [M128];
+  const offFiltered = await list('category=all&group=item&ram=8');
+  setFlag('item');
+  const missingFiltered = await list('category=all&group=item&ram=8');
+  assert.equal(missingFiltered.status, 200);
+  assert.equal(missingFiltered.text, offFiltered.text);
+  catalog = [];
   schemaMissing = false;
+  // Only the unknown-variant offers read fails: the whole response is as before.
+  offersSchemaMissing = true;
+  assert.equal((await detail('apple-iphone-16-128gb')).text, off.text);
+  offersSchemaMissing = false;
 
   // `group=item` with the flag off answers the variant list, byte for byte.
   setFlag(undefined);
@@ -212,7 +260,34 @@ async function testFlagOffUnchanged() {
     mode: 'pill',
   });
   assert.ok(!('item' in lookup) && !('selectedVariant' in lookup));
+  // Today's lookup: siblings from the search hits, the first hit's page.
   assert.equal(lookup.productDetailUrl, '/smartphones/apple-iphone-16-128gb');
+  assert.equal(lookup.matchStatus, 'ambiguous_variant');
+  assert.deepEqual(
+    lookup.variantCandidates.map((v) => [v.storageGb, v.slug]),
+    [
+      [128, 'apple-iphone-16-128gb'],
+      [256, 'apple-iphone-16-256gb'],
+    ]
+  );
+
+  // The OpenAPI document is unchanged with the flag off.
+  const { buildRateOpenApiSpec } = await import('@/server/rate/openapi');
+  const offSpec = JSON.stringify(buildRateOpenApiSpec('https://rate.vn'));
+  assert.ok(!offSpec.includes('RateItem'));
+  setFlag('item');
+  const onSpec = buildRateOpenApiSpec('https://rate.vn');
+  assert.ok(onSpec.components.schemas.RateItem);
+  assert.ok(
+    onSpec.paths['/api/v1/rate/products']!.get!.parameters!.some(
+      (p) => p.name === 'group'
+    )
+  );
+  setFlag(undefined);
+  assert.equal(
+    JSON.stringify(buildRateOpenApiSpec('https://rate.vn')),
+    offSpec
+  );
   assert.ok(!calls.some((c) => c.startsWith('/rest/v1/items')));
   catalog = [];
   console.warn(
@@ -288,7 +363,7 @@ async function testGroupItem() {
   ]) {
     res = await list(`category=all&group=item&${query}`);
     assert.equal(res.status, 400, query);
-    assert.ok(!calls.some((c) => c.startsWith('/rest/v1/items')), query);
+    assert.match(JSON.parse(res.text).error, /group=item/, query);
   }
 
   // Without `group=item`, the flag-on list is the variant list.
@@ -343,6 +418,60 @@ async function testExtensionLookup() {
   assert.equal(lookup.matchStatus, 'ambiguous_variant');
   assert.equal(lookup.masterProduct?.slug, 'apple-iphone-16-256gb');
   assert.equal(lookup.variantCandidates.length, 2);
+
+  // ... and a size the page states selects that variant.
+  lookup = await lookupExtensionProduct({
+    url: 'https://shopee.vn/product/1/999888777',
+    title: 'iPhone 16 128GB chính hãng',
+    mode: 'pill',
+  });
+  assert.equal(lookup.masterProduct?.slug, 'apple-iphone-16-128gb');
+  assert.equal(lookup.selectedVariant, '128gb');
+  assert.notEqual(lookup.matchStatus, 'ambiguous_variant');
+
+  // A listing on a variant keeps it, whatever size its title names.
+  lookup = await lookupExtensionProduct({
+    url: 'https://shopee.vn/product/1/111222333',
+    title: 'iPhone 16 256GB chính hãng',
+    mode: 'pill',
+  });
+  assert.equal(lookup.masterProduct?.slug, 'apple-iphone-16-128gb');
+  assert.equal(lookup.selectedVariant, '128gb');
+
+  // A size the Item does not have is no size: no variant judges the page.
+  catalog = [M128];
+  lookup = await lookupExtensionProduct({
+    title: 'Apple iPhone 16 512GB',
+    price: 30000000,
+    mode: 'pill',
+  });
+  assert.equal(lookup.matchStatus, 'ambiguous_variant');
+  assert.equal(lookup.selectedVariant, null);
+  // An ambiguous size gets no market verdict.
+  assert.equal(lookup.priceAssessment.verdict, 'insufficient_data');
+
+  // A single-variant Item: its one size is the size.
+  variantSet = 'one';
+  catalog = [M256];
+  lookup = await lookupExtensionProduct({
+    title: 'Apple iPhone 16',
+    mode: 'pill',
+  });
+  assert.equal(lookup.selectedVariant, '256gb');
+  assert.notEqual(lookup.matchStatus, 'ambiguous_variant');
+
+  // The listing's Item has no published variant: no guess at another product.
+  variantSet = 'none';
+  catalog = [OTHER];
+  lookup = await lookupExtensionProduct({
+    url: 'https://shopee.vn/product/1/999888777',
+    title: 'Samsung Galaxy S25 256GB',
+    mode: 'pill',
+  });
+  assert.equal(lookup.matchStatus, 'not_found');
+  assert.equal(lookup.masterProduct, null);
+  variantSet = 'both';
+  catalog = [];
   setFlag(undefined);
   console.warn('  ✅ Extension lookup returns the Item and all its sizes');
 }

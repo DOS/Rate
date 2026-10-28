@@ -39,6 +39,7 @@ import { computeProductRadarSignal } from './deals';
 import type { RadarSignal } from '../../lib/deal-radar';
 import { createLogger } from '@/lib/logger';
 import {
+  chooseItemVariant,
   itemProductPath,
   resolveListingItemContext,
   resolveVariantItemContext,
@@ -1170,14 +1171,20 @@ export async function lookupExtensionProduct(
     !listingOfUnpublishedModel &&
     candidateItemIds.size > 0
   ) {
-    itemContext = await resolveListingItemContext(Array.from(candidateItemIds));
-    if (itemContext) {
-      const byVariant = await getMasterProductBySlug(itemContext.selected.slug);
+    const listingItem = await resolveListingItemContext(
+      Array.from(candidateItemIds)
+    );
+    if (listingItem === 'no_variant') {
+      // The listing's Item is known but has no page yet: no catalogue guess.
+      listingOfUnpublishedModel = true;
+    } else if (listingItem) {
+      const byVariant = await getMasterProductBySlug(listingItem.selected.slug);
       if (byVariant) {
+        itemContext = listingItem;
         matchedMaster = byVariant;
-        matchStatus = 'ambiguous_variant';
+        matchStatus = 'canonical_model';
       } else {
-        itemContext = null;
+        listingOfUnpublishedModel = true;
       }
     }
   }
@@ -1249,18 +1256,20 @@ export async function lookupExtensionProduct(
   }
 
   // The Item and all its variants from the DB, not only the siblings among the
-  // search hits; a stated size picks that variant (RATE_ITEM_MODEL on).
-  if (!itemContext) {
-    itemContext = await resolveVariantItemContext(
-      matchedMaster.slug,
-      hasStorage ? storageGb : null,
-      matchStatus === 'exact_listing'
-    );
-    if (itemContext && itemContext.selected.slug !== matchedMaster.slug) {
-      const sized = await getMasterProductBySlug(itemContext.selected.slug);
-      if (sized) matchedMaster = sized;
-      else itemContext = { ...itemContext, sizeChosen: false };
-    }
+  // search hits. The listing's own variant wins, then a stated size the Item
+  // has once, then a single-variant Item (RATE_ITEM_MODEL on).
+  const pageSize = { storageGb: hasStorage ? storageGb : null };
+  itemContext = itemContext
+    ? chooseItemVariant(itemContext, { ...pageSize, listingVariantId: null })
+    : await resolveVariantItemContext(
+        matchedMaster.slug,
+        pageSize.storageGb,
+        matchStatus === 'exact_listing' ? matchedMaster.id : null
+      );
+  if (itemContext && itemContext.selected.slug !== matchedMaster.slug) {
+    const chosen = await getMasterProductBySlug(itemContext.selected.slug);
+    if (chosen) matchedMaster = chosen;
+    else itemContext = { ...itemContext, sizeChosen: false };
   }
 
   // Build variant candidates across same model family
@@ -1293,13 +1302,16 @@ export async function lookupExtensionProduct(
       }));
 
   if (itemContext) {
-    // Ambiguous only when neither the page nor the listing states the size.
-    matchStatus =
-      variantCandidates.length > 1 && !storageGb && !itemContext.sizeChosen
-        ? 'ambiguous_variant'
-        : matchStatus === 'ambiguous_variant' && itemContext.sizeChosen
-          ? 'canonical_model'
-          : matchStatus;
+    // Ambiguous when no size is known among several, or the page states a size
+    // the Item does not have: then no variant's prices may judge the page.
+    if (
+      itemContext.sizeMismatch ||
+      (!itemContext.sizeChosen && variantCandidates.length > 1)
+    ) {
+      matchStatus = 'ambiguous_variant';
+    } else if (matchStatus === 'ambiguous_variant') {
+      matchStatus = 'canonical_model';
+    }
   } else if (variantCandidates.length > 1 && !storageGb) {
     matchStatus = 'ambiguous_variant';
   }
