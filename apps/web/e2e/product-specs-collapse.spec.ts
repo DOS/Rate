@@ -27,9 +27,18 @@ test('phone shows three spec groups and expands to all', async ({ page }) => {
     });
   }).toPass();
   await expect(groups.nth(total - 1)).toBeVisible();
-  // Collapsed, the section is far shorter than the full ten-group stack.
+  // Collapsed, the section is shorter by the groups it hid. Empty groups are
+  // left out (DOS/Rate#1186), so the seeded phone has five short groups, not
+  // ten full ones, and a fixed ratio no longer says anything.
   const expandedHeight = (await section.boundingBox())?.height ?? 0;
-  expect(collapsedHeight).toBeLessThan(expandedHeight * 0.6);
+  let hiddenHeight = 0;
+  for (let i = 3; i < total; i++) {
+    hiddenHeight += (await groups.nth(i).boundingBox())?.height ?? 0;
+  }
+  expect(hiddenHeight).toBeGreaterThan(0);
+  expect(expandedHeight - collapsedHeight).toBeGreaterThanOrEqual(
+    hiddenHeight * 0.9
+  );
 });
 
 test('desktop shows every spec group and no toggle', async ({ page }) => {

@@ -1007,6 +1007,7 @@ export async function ProductDetailView({
                   showMoreLabel={t('specsShowAll')}
                   showLessLabel={t('specsShowLess')}
                   openOnHash="#specs-section"
+                  collapsible={specGroups.length > 3}
                 >
                   {specGroups.map(({ group, rows }, i) => (
                     <div key={group} className="col-md-6 col-12">
