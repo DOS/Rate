@@ -67,7 +67,7 @@ import {
   localizeSpecValue,
   specGroupHeading,
 } from '@/lib/spec-localizer';
-import { compareRowIsShown } from '@/lib/product-spec-rows';
+import { compareRowIsShown, known5g } from '@/lib/product-spec-rows';
 import ContentText from '@/components/elementary/ContentText';
 import { productImageUrl } from '@/lib/rate-domain-core';
 
@@ -625,7 +625,7 @@ export function buildSpecGroups(t: CompareTranslator): SpecGroupDef[] {
           renderValue: (p) => {
             const specs = (p.specifications || {}) as ProductSpecifications;
             // Unknown stays empty, not "4G LTE" (DOS/Rate#1193).
-            const has5g = specs.cellular?.has_5g ?? p.has_5g;
+            const has5g = known5g(specs.cellular?.has_5g, p.has_5g);
             if (has5g === true) return t('valHas5g');
             return has5g === false ? t('val4gLte') : '-';
           },

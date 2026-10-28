@@ -113,6 +113,22 @@ function testProductPage() {
     no5g.find((g) => g.group === 'cellular')?.rows.map((r) => r.value),
     [ui.no]
   );
+  const nestedYes = groupsFor(
+    'smartphones',
+    { cellular: { has_5g: 'yes' } },
+    {},
+    { has_5g: false }
+  );
+  assert.equal(
+    nestedYes.find((g) => g.group === 'cellular')?.rows[0]?.value,
+    ui.has5gYes
+  );
+  const status = groupsFor('smartphones', {
+    availability: { status: 'Available' },
+  });
+  assert.deepEqual(labelsOf(status, 'availability'), [
+    ui.fields.commercialStatus,
+  ]);
   console.warn('  ✅ Product page leaves out empty rows and groups');
 }
 
@@ -162,7 +178,39 @@ async function testCompareUnknownSpecs() {
   ]) {
     assert.equal(render(id, unknown), '-', id);
   }
-  // Known values are unchanged.
+  // An all-unknown row is hidden in compare.
+  assert.equal(
+    compareRowIsShown(
+      [render('mm_speaker', unknown), render('mm_speaker', unknown)],
+      false
+    ),
+    false
+  );
+  // Known values are unchanged; the nested 5G flag wins over the flat one,
+  // and older text flags still read.
+  assert.equal(
+    render('cell_5g', {
+      specifications: { cellular: { has_5g: false } },
+      has_5g: true,
+    }),
+    'val4gLte'
+  );
+  assert.equal(
+    render('cell_5g', { specifications: { cellular: { has_5g: 'true' } } }),
+    'valHas5g'
+  );
+  assert.equal(
+    render('avail_announced', {
+      specifications: { availability: { announced: '2025' } },
+    }),
+    '2025'
+  );
+  assert.equal(
+    render('reg_cert', {
+      specifications: { regulatory: { certifications: 'CE' } },
+    }),
+    'CE'
+  );
   assert.equal(render('cell_5g', { ...unknown, has_5g: false }), 'val4gLte');
   assert.equal(render('cell_5g', { ...unknown, has_5g: true }), 'valHas5g');
   assert.equal(
