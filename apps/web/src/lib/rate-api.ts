@@ -2,6 +2,7 @@ import { createClient } from '@supabase/supabase-js';
 import type { Database, MasterProduct } from '@repo/shared-data';
 import { createLogger } from '@/lib/logger';
 import { isPendingReview } from '@/lib/review-display';
+import { listingReviewSummary } from '@/lib/analyzer-copy';
 import {
   implausiblyLowOfferIds,
   plausibleOffers,
@@ -1730,7 +1731,8 @@ export async function getMasterProductReviewSummary(
           Number(row.authenticity_score ?? fallbackAuthenticPct) *
           Math.max(1, count);
         if (!latestSummary && row.ai_summary) {
-          latestSummary = String(row.ai_summary);
+          // Says it covers one listing, old rows too (DOS/Rate#1225).
+          latestSummary = listingReviewSummary(String(row.ai_summary));
         }
         if (Array.isArray(row.pros)) {
           for (const p of row.pros) {

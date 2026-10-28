@@ -1975,10 +1975,13 @@ Return ONLY valid JSON matching:
         ? Number(((positiveAuthenticCount / authenticCount) * 100).toFixed(2))
         : 100;
 
+    // One listing's latest batch, not the product; the batch's weighted
+    // score is not the product score, so it stays out (DOS/Rate#1225).
+    // apps/web/src/lib/analyzer-copy.ts reads these sentences.
     const defaultSummary =
       authenticCount > 0
-        ? `Đã phân tích ${safeReviews.length} đánh giá: giữ lại ${authenticCount} đánh giá thực chất (điểm JReviews có trọng số: ${weightedUserRating}/5★) và loại bỏ ${ignoredCount} đánh giá rác/nhận xu/seeding/bom hàng khỏi điểm tổng.`
-        : `Chưa có đánh giá thực chất sau khi lọc ${ignoredCount} bình luận rác/nhận xu.`;
+        ? `Lần phân tích gần nhất (một nơi bán) đã xét ${safeReviews.length} đánh giá: giữ lại ${authenticCount} đánh giá thực chất và loại bỏ ${ignoredCount} đánh giá rác, nhận xu, ảo hoặc bom hàng.`
+        : `Lần phân tích gần nhất (một nơi bán) chưa thấy đánh giá thực chất sau khi lọc ${ignoredCount} bình luận rác/nhận xu.`;
 
     const cleanPros = Array.from(
       new Set(
