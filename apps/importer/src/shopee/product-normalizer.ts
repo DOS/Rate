@@ -381,6 +381,10 @@ const CANONICAL_PHONE_REGISTRY: Record<
     // title that names no storage still knows it. A model sold in several sizes has none:
     // its storage-less title keys as ':unknown' (DOS/Rate#1094).
     only_storage_gb?: number;
+    // The watch case (mm) the size-dependent specs (screen, battery, weight, dimensions)
+    // describe. A title naming another case gets none of them and is not benchmark
+    // enriched (DOS/Rate#1152).
+    case_mm?: number;
   }
 > = {
   'apple:iphone-16-pro-max': {
@@ -1119,8 +1123,9 @@ const CANONICAL_PHONE_REGISTRY: Record<
     ip_rating: 'Precision-machined aluminum enclosure (Space Black anodized seal)',
   },
   // One storage (64GB), so a title without it keys like the `:64gb` seed (M0 inventory,
-  // DOS/Rate#1148, #1152). Sizes from the 42mm seed; the 46mm reads its own from the title.
+  // DOS/Rate#1148, #1152). Size-dependent specs are the 42mm's (`case_mm`).
   'apple:watch-series-10': {
+    case_mm: 42,
     screen_size_inch: 1.77,
     battery_mah: 327,
     ram_gb: 2,
@@ -1999,8 +2004,14 @@ export class ProductNormalizer {
     // The registry describes one size of a line: its screen and battery do not describe
     // the other size ("iPad Pro M4 13" is not the 11 inch entry) (DOS/Rate#1113).
     const appleInches = appleSize && !appleSize.endsWith('mm') ? parseFloat(appleSize) : null;
+    // A watch registry entry pinned to one case does not describe another one.
+    const caseMismatch =
+      benchmark?.case_mm !== undefined &&
+      appleSize.endsWith('mm') &&
+      parseInt(appleSize, 10) !== benchmark.case_mm;
     const benchmarkSized =
       benchmark &&
+      !caseMismatch &&
       (appleInches === null ||
         Math.floor(benchmark.screen_size_inch ?? NaN) === Math.floor(appleInches))
         ? benchmark
@@ -2194,8 +2205,8 @@ export class ProductNormalizer {
         prices_msrp: `${storageDisplay}: ${safePriceMin.toLocaleString('vi-VN')}₫`,
       },
       design: {
-        dimensions: benchmark?.dimensions || undefined,
-        weight_g: benchmark?.weight_g || undefined,
+        dimensions: (caseMismatch ? undefined : benchmark?.dimensions) || undefined,
+        weight_g: (caseMismatch ? undefined : benchmark?.weight_g) || undefined,
         materials: isSmartphone
           ? isApple
             ? 'Ceramic Shield front, glass back, metal frame'
@@ -2360,8 +2371,8 @@ export class ProductNormalizer {
       key_specs: keySpecs,
       description:
         sanitizedDescription && sanitizedDescription.length > 0 ? sanitizedDescription : undefined,
-      is_benchmark_enriched: Boolean(benchmark),
-      spec_source: benchmark ? 'benchmark_registry' : 'crawled_title',
+      is_benchmark_enriched: Boolean(benchmark) && !caseMismatch,
+      spec_source: benchmark && !caseMismatch ? 'benchmark_registry' : 'crawled_title',
     };
   }
 }

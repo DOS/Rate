@@ -22,7 +22,7 @@ import {
   flagshipSeedsByItem,
   type FlagshipItemSeed,
 } from '../flagship-seed-data.js';
-import { resolveItemModelMode } from '../item-model-flag.js';
+import { resolveItemModelMode, type ItemModelMode } from '../item-model-flag.js';
 import { createImporterLogger } from '../logger.js';
 import { scopeSupabaseToRate, type RateSupabaseClient } from '../types.js';
 
@@ -55,6 +55,22 @@ export interface BackfillSpecsResult {
   readonly totalAudited: number;
 }
 
+/** Item specs carry no storage or RAM: those are per variant (design doc 4.1). */
+function withoutVariantSpecs(specs: ProductSpecifications): ProductSpecifications {
+  if (!specs.hardware) return specs;
+  const hardware = { ...specs.hardware };
+  delete hardware.storage_gb;
+  delete hardware.ram_gb;
+  return { ...specs, hardware };
+}
+
+function withoutVariantKeySpecs(keySpecs: Record<string, unknown>): Record<string, unknown> {
+  const rest = { ...keySpecs };
+  delete rest.storage;
+  delete rest.ram;
+  return rest;
+}
+
 /**
  * Writes each seed Item's specs, key specs, description and images onto its `rate.items`
  * row (design doc 4.1, 5.3, DOS/Rate#1152). Variant-only fields (storage) stay on the
@@ -63,8 +79,14 @@ export interface BackfillSpecsResult {
  */
 export async function syncItemSeedSpecs(
   supabase: RateSupabaseClient,
-  options: { apply?: boolean; seeds?: readonly FlagshipItemSeed[] } = {}
+  options: {
+    apply?: boolean;
+    seeds?: readonly FlagshipItemSeed[];
+    itemModel?: ItemModelMode;
+  } = {}
 ): Promise<{ updated: number; missing: string[] }> {
+  // Items exist only with the Item model on: with it off this writes nothing.
+  if ((options.itemModel ?? resolveItemModelMode()) === 'off') return { updated: 0, missing: [] };
   const apply = options.apply === true;
   const missing: string[] = [];
   let updated = 0;
@@ -87,10 +109,11 @@ export async function syncItemSeedSpecs(
         .from('items')
         .update({
           description: seed.description,
-          specifications: mergeProductSpecifications(row.specifications, seed.specifications),
-          key_specs: mergeKeySpecs(
-            row.key_specs,
-            seed.key_specs as unknown as Record<string, unknown>
+          specifications: withoutVariantSpecs(
+            mergeProductSpecifications(row.specifications, seed.specifications)
+          ),
+          key_specs: withoutVariantKeySpecs(
+            mergeKeySpecs(row.key_specs, seed.key_specs as unknown as Record<string, unknown>)
           ),
           ...(seed.images.length > 0 ? { images: seed.images, thumbnail: seed.images[0] } : {}),
           updated_at: new Date().toISOString(),
@@ -421,8 +444,7 @@ export async function runMasterSpecsBackfill(
   }
 
   // Item-level specs from the seeds, once Items exist (RATE_ITEM_MODEL on, DOS/Rate#1152).
-  const itemsUpdated =
-    resolveItemModelMode() === 'off' ? 0 : (await syncItemSeedSpecs(supabase, { apply })).updated;
+  const itemsUpdated = (await syncItemSeedSpecs(supabase, { apply })).updated;
 
   const masters = await fetchAllPages('Failed to fetch master_products', (from, to) =>
     supabase

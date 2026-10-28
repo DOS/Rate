@@ -179,11 +179,12 @@ type MatchedItem = { id: string; itemKey: string };
 
 /**
  * A variant candidate with its Item's specs, description, key specs and images; the
- * variant keeps its own storage and RAM (design doc 4.1 "overrides only").
+ * variant keeps its own storage and RAM (design doc 4.1 "overrides only"). The flat
+ * columns follow the inherited specs so they never disagree with them.
  */
 function inheritItemProfile(
   candidate: NormalizedProductCandidate,
-  profile: ItemProfile
+  profile: ItemSpecProfile
 ): NormalizedProductCandidate {
   const specifications = mergeProductSpecifications(
     candidate.specifications,
@@ -194,28 +195,44 @@ function inheritItemProfile(
   specifications.hardware = {
     ...hardware,
     storage_gb: ownHardware.storage_gb,
-    ram_gb: ownHardware.ram_gb ?? hardware.ram_gb,
+    ram_gb: ownHardware.ram_gb,
   };
-  const ownStorage = (candidate.key_specs as Record<string, unknown> | undefined)?.storage;
+  const ownKeySpecs = (candidate.key_specs ?? {}) as Record<string, unknown>;
+  const itemKeySpecs = { ...profile.keySpecs };
+  delete itemKeySpecs.storage;
+  delete itemKeySpecs.ram;
+  const display = profile.specifications.display;
+  const battery = profile.specifications.battery;
+  const cellular = profile.specifications.cellular;
   return {
     ...candidate,
     description: profile.description ?? candidate.description,
+    screen_size_inch: display?.size_inch ?? candidate.screen_size_inch,
+    battery_mah: battery?.capacity_mah ?? candidate.battery_mah,
+    has_5g: typeof cellular?.has_5g === 'boolean' ? cellular.has_5g : candidate.has_5g,
     specifications: specifications as NormalizedProductCandidate['specifications'],
     key_specs: {
-      ...profile.keySpecs,
-      ...(ownStorage !== undefined ? { storage: ownStorage } : {}),
+      ...itemKeySpecs,
+      ...(ownKeySpecs.storage !== undefined ? { storage: ownKeySpecs.storage } : {}),
+      ...(ownKeySpecs.ram !== undefined ? { ram: ownKeySpecs.ram } : {}),
     } as NormalizedProductCandidate['key_specs'],
     images: profile.images.length > 0 ? profile.images : candidate.images,
   };
 }
 
-/** Item-level fields a new variant inherits (design doc 4.1, DOS/Rate#1152). */
-type ItemProfile = {
-  status: string | null;
+/** Item-level specs a new variant inherits (design doc 4.1, DOS/Rate#1152). */
+type ItemSpecProfile = {
   description: string | null;
   specifications: ReturnType<typeof mergeProductSpecifications>;
   keySpecs: Record<string, unknown>;
   images: string[];
+};
+
+/** The Item a new variant is created under: its status, and its specs when it has any. */
+type ParentItem = {
+  status: string | null;
+  profile: ItemSpecProfile | null;
+  variantKnown: boolean;
 };
 
 export class EntityMatcher {
@@ -404,14 +421,14 @@ export class EntityMatcher {
     // Item's publish state: a new size of a published Item is published (design doc
     // 4.5 step 2, DOS/Rate#1152).
     const variantModelKey = composeModelKey(item.itemKey, targetVariantKey);
-    const profile = await this.itemProfile(item.id);
+    const parent = await this.parentItem(item.id, variantKnown);
     const seeded = await this.seedMasterProduct(
       { ...candidate, model_key: variantModelKey },
       variantModelKey,
       safeCategoryId,
       safeRawTitle,
       ambiguousFuzzy,
-      profile ? { profile, publish: variantKnown && profile.status === 'published' } : undefined
+      parent
     );
     logger.info(
       'entity_match.variant_created',
@@ -485,11 +502,11 @@ export class EntityMatcher {
   }
 
   /**
-   * The Item-level fields a new variant inherits (design doc 4.1). Null when the Item
-   * has no specs yet (a draft Item the M1 trigger just created): the variant is then
-   * enriched and seeded as before.
+   * The Item a new variant goes under: its status, and the Item-level fields the variant
+   * inherits (design doc 4.1). `profile` is null when the Item has no specs yet (a draft
+   * Item the M1 trigger just created): the variant is then enriched as before.
    */
-  private async itemProfile(itemId: string): Promise<ItemProfile | null> {
+  private async parentItem(itemId: string, variantKnown: boolean): Promise<ParentItem> {
     const { data, error } = await this.supabase
       .from('items')
       .select('id, status, description, specifications, key_specs, images')
@@ -499,8 +516,8 @@ export class EntityMatcher {
       throw new Error(`[EntityMatcher] Item profile lookup for ${itemId} failed: ${error.message}`);
     }
     const row = data as Record<string, unknown> | null;
-    if (!row) return null;
-    const specifications = mergeProductSpecifications(undefined, row.specifications);
+    const status = typeof row?.status === 'string' ? row.status : null;
+    const specifications = mergeProductSpecifications(undefined, row?.specifications);
     const hasSpecs = Object.entries(specifications).some(
       ([group, fields]) =>
         group !== 'category_slug' &&
@@ -508,17 +525,19 @@ export class EntityMatcher {
         typeof fields === 'object' &&
         Object.values(fields as Record<string, unknown>).some(v => v !== undefined && v !== null)
     );
-    if (!hasSpecs) return null;
-    return {
-      status: typeof row.status === 'string' ? row.status : null,
-      description: typeof row.description === 'string' ? row.description : null,
-      specifications,
-      keySpecs:
-        row.key_specs && typeof row.key_specs === 'object' && !Array.isArray(row.key_specs)
-          ? (row.key_specs as Record<string, unknown>)
-          : {},
-      images: sanitizeHttpUrlList(row.images),
-    };
+    const profile: ItemSpecProfile | null =
+      row && hasSpecs
+        ? {
+            description: typeof row.description === 'string' ? row.description : null,
+            specifications,
+            keySpecs:
+              row.key_specs && typeof row.key_specs === 'object' && !Array.isArray(row.key_specs)
+                ? (row.key_specs as Record<string, unknown>)
+                : {},
+            images: sanitizeHttpUrlList(row.images),
+          }
+        : null;
+    return { status, profile, variantKnown };
   }
 
   private async listItemVariants(
@@ -725,13 +744,14 @@ export class EntityMatcher {
     safeCategoryId: string | undefined,
     safeRawTitle: string | undefined,
     ambiguousFuzzy: boolean,
-    inherit?: { profile: ItemProfile; publish: boolean }
+    parent?: ParentItem
   ): Promise<{ masterId: string; isNew: boolean }> {
     // Tier 3: No existing master product matches -> Enrich with AI Spec Enricher (if not in local benchmark registry)
     // and seed a new Master Product. A variant of a known Item takes the Item's specs
     // instead: no AI call, and only storage and RAM are its own (DOS/Rate#1152).
-    candidate = inherit
-      ? inheritItemProfile(candidate, inherit.profile)
+    const inherited = parent?.profile ?? null;
+    candidate = inherited
+      ? inheritItemProfile(candidate, inherited)
       : await this.enricher.enrichCandidate(candidate, safeRawTitle, {
           perItem: this.itemModel !== 'off',
         });
@@ -748,13 +768,22 @@ export class EntityMatcher {
       !candidate.is_benchmark_enriched;
     // A stated size of a published Item is published like its Item, unless the listing
     // itself is not a new device.
-    const seedStatus = inherit
-      ? inherit.publish && (candidate.condition ?? 'new') === 'new'
-        ? 'published'
-        : 'draft'
-      : candidate.needs_review || ambiguousFuzzy || isUnverifiedSpec
+    // Under an Item that is not published (draft or archived) a new variant is a draft.
+    // Under a published Item, an inherited variant is published for a stated size of a
+    // new device; one with no Item specs yet follows the Tier 3 rule.
+    const tier3Status =
+      candidate.needs_review || ambiguousFuzzy || isUnverifiedSpec ? 'draft' : 'published';
+    const seedStatus = !parent
+      ? tier3Status
+      : parent.status !== 'published'
         ? 'draft'
-        : 'published';
+        : !inherited
+          ? tier3Status
+          : parent.variantKnown &&
+              !candidate.needs_review &&
+              (candidate.condition ?? 'new') === 'new'
+            ? 'published'
+            : 'draft';
     logger.info(
       'entity_match.tier3_create_start',
       `Tier 3: Creating new canonical Master Product: ${candidate.name} (status: ${seedStatus}, spec_source: ${candidate.spec_source ?? 'unknown'})...`,

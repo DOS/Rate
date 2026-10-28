@@ -331,6 +331,9 @@ async function run() {
     assert.equal(seededSpecs.hardware?.ram_gb, 16, 'RAM is the variant own value');
     const seededKeySpecs = seeded.key_specs as Row;
     assert.equal(seededKeySpecs.chipset, 'Core Ultra 7 258V');
+    assert.equal(seeded.battery_mah, 4700, 'flat battery follows the inherited specs');
+    assert.equal(seeded.screen_size_inch, 14);
+    assert.equal(seeded.ram_gb, 16);
     assert.notEqual(seededKeySpecs.storage, '1TB');
     assert.equal(enrichCalls, 0, 'an inherited variant needs no AI enrichment');
 
@@ -360,6 +363,20 @@ async function run() {
     }).resolveItemAndVariant(candidateFor(title), 'cat-laptops');
     assert.equal(enrichCalls, 1);
     assert.equal(bareDb.calls.find(c => c.op === 'upsert')?.payload?.status, 'published');
+    for (const status of ['draft', 'archived']) {
+      const unpublishedDb = createItemDb({
+        items: [{ ...ZENBOOK_ITEM, status }],
+        variants: [ZENBOOK_1TB],
+      });
+      await new EntityMatcher(unpublishedDb.client, countingEnricher, {
+        itemModel: 'item',
+      }).resolveItemAndVariant(candidateFor(title), 'cat-laptops');
+      assert.equal(
+        unpublishedDb.calls.find(c => c.op === 'upsert')?.payload?.status,
+        'draft',
+        `a new variant of a ${status} Item stays a draft`
+      );
+    }
   }
   {
     // #1105: a storage-less title on a multi-size Item never lands on the sized variant.
@@ -995,6 +1012,15 @@ async function run() {
     );
     const series10 = itemSeeds.find(i => i.itemKey === 'apple:watch-series-10-42mm');
     assert.equal(series10?.name, 'Apple Watch Series 10 42mm GPS');
+    assert.equal(
+      itemSeeds.find(i => i.itemKey === 'apple:watch-series-11-46mm')?.name,
+      'Apple Watch Series 11 46mm GPS'
+    );
+    assert.equal(itemSeeds.find(i => i.itemKey === 'xiaomi:18-pro-max')?.name, 'Xiaomi 18 Pro Max');
+    for (const item of itemSeeds) {
+      assert.equal(item.specifications.hardware?.ram_gb, undefined, `no RAM on ${item.itemKey}`);
+      assert.equal(item.key_specs.ram, undefined, `no RAM key spec on ${item.itemKey}`);
+    }
     // The variant keeps its storage; the Item does not.
     assert.equal(series10?.variants[0]?.storage_gb, 64);
 
@@ -1016,8 +1042,8 @@ async function run() {
               data: present.includes(String(filter(call, 'item_key')))
                 ? {
                     id: `item-${String(filter(call, 'item_key'))}`,
-                    specifications: {},
-                    key_specs: {},
+                    specifications: { hardware: { storage_gb: 1024, ram_gb: 32 } },
+                    key_specs: { storage: '1TB', ram: '32GB' },
                   }
                 : null,
               error: null,
@@ -1025,19 +1051,32 @@ async function run() {
           : undefined
       );
     const dry = seedDb(['asus:zenbook-s-14']);
-    const dryRun = await syncItemSeedSpecs(dry.client, { seeds });
+    const offRun = await syncItemSeedSpecs(dry.client, { seeds, apply: true, itemModel: 'off' });
+    assert.deepEqual(offRun, { updated: 0, missing: [] });
+    assert.equal(dry.calls.length, 0, 'flag off: no Item read or write');
+    const dryRun = await syncItemSeedSpecs(dry.client, { seeds, itemModel: 'item' });
     assert.deepEqual(dryRun, { updated: 1, missing: ['apple:watch-series-10-42mm'] });
     assert.ok(!dry.calls.some(c => c.op === 'update'));
     const applied = seedDb(['asus:zenbook-s-14', 'apple:watch-series-10-42mm']);
-    const applyRun = await syncItemSeedSpecs(applied.client, { seeds, apply: true });
+    const applyRun = await syncItemSeedSpecs(applied.client, {
+      seeds,
+      apply: true,
+      itemModel: 'item',
+    });
     assert.equal(applyRun.updated, 2);
     const update = applied.calls.find(c => c.op === 'update' && c.table === 'items');
     assert.ok(update?.payload?.specifications);
     assert.equal(
       (update?.payload?.specifications as { hardware?: Row }).hardware?.storage_gb,
       undefined,
-      'storage is never written on an Item'
+      'storage is never written on an Item, even one already there'
     );
+    assert.equal(
+      (update?.payload?.specifications as { hardware?: Row }).hardware?.ram_gb,
+      undefined
+    );
+    assert.equal((update?.payload?.key_specs as Row).storage, undefined);
+    assert.equal((update?.payload?.key_specs as Row).ram, undefined);
     assert.ok(!applied.calls.some(c => c.op === 'insert' || c.op === 'upsert'));
   }
   // Spec enrichment per Item: one AI ask per Item (no size in the prompt or cache key);
@@ -1065,6 +1104,11 @@ async function run() {
     assert.deepEqual(asks.at(-1), { storageGb: null, ramGb: null });
     assert.equal(perItem.storage_gb, 512);
     assert.equal(perItem.ram_gb, 16);
+    const bare = candidateFor('Laptop ASUS Vivobook 15 X1504VA');
+    const bareItem = await enricher.enrichCandidate(bare, undefined, { perItem: true });
+    assert.equal(bareItem.storage_gb, bare.storage_gb, 'no AI storage on a variant');
+    assert.notEqual(bareItem.storage_gb, 1024);
+    assert.notEqual(bareItem.key_specs.storage, '1TB');
     assert.equal(perItem.specifications.hardware?.storage_gb, 512);
     assert.equal(perItem.specifications.hardware?.ram_gb, 16);
     assert.equal(perItem.specifications.hardware?.chipset, 'Intel Core i5-1335U');
@@ -1092,7 +1136,20 @@ async function run() {
   // Item-level rating (Q4): a listing with no variant refreshes its Item; with a
   // variant the master RPC (Item-aware in M2) runs as before; no Item, no Item RPC.
   {
-    const persist = async (ids: { masterId?: string | null; itemId?: string | null }) => {
+    const persist = async (
+      ids: { masterId?: string | null; itemId?: string | null },
+      mode = 'nullable_variant'
+    ) => {
+      const saved = process.env[ITEM_MODEL_ENV];
+      process.env[ITEM_MODEL_ENV] = mode;
+      try {
+        return await persistOnce(ids);
+      } finally {
+        if (saved === undefined) delete process.env[ITEM_MODEL_ENV];
+        else process.env[ITEM_MODEL_ENV] = saved;
+      }
+    };
+    const persistOnce = async (ids: { masterId?: string | null; itemId?: string | null }) => {
       const db = createDb(call =>
         call.table === 'reviews' && call.op === 'select' ? { data: [], error: null } : undefined
       );
@@ -1110,6 +1167,7 @@ async function run() {
       ['refresh_master_product_rating', { p_master_id: 'master-zenbook-1tb' }],
     ]);
     assert.deepEqual(await persist({ masterId: null }), []);
+    assert.deepEqual(await persist({ masterId: null, itemId: 'item-zenbook' }, 'off'), []);
   }
   console.log(
     '  ✅ [6/6] Seeds grouped by Item; Item specs from the seeds; enrichment and rating per Item (#1152)'

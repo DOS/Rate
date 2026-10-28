@@ -1196,6 +1196,7 @@ export class ShopeeIngestionPipeline {
             {
               productId,
               masterId,
+              itemId,
               merchantId,
               reviews: analysisInput,
               entityName: candidate.name,

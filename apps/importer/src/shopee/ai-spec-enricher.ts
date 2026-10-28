@@ -383,6 +383,14 @@ function mergeSpecGroupRecord(
  * Deep-merges two 10-Field-Group `ProductSpecifications` objects without allowing
  * `undefined`, `null`, or empty incoming fields to overwrite defined base fields.
  */
+/** Key specs without the per-size ones (storage, RAM), for an Item-level answer. */
+function withoutSizeKeySpecs(keySpecs: Record<string, string>): Record<string, string> {
+  const rest = { ...keySpecs };
+  delete rest.storage;
+  delete rest.ram;
+  return rest;
+}
+
 export function mergeProductSpecifications(
   base: unknown,
   incoming: unknown,
@@ -1082,7 +1090,7 @@ REQUIRED JSON SCHEMA:
       mergedSpecifications.hardware = {
         ...mergedSpecifications.hardware,
         storage_gb: ownHardware?.storage_gb,
-        ram_gb: ownHardware?.ram_gb ?? mergedSpecifications.hardware?.ram_gb,
+        ram_gb: ownHardware?.ram_gb,
       };
     }
 
@@ -1107,21 +1115,28 @@ REQUIRED JSON SCHEMA:
     return {
       ...candidate,
       colors: safeColors,
-      ram_gb: validCandidateRam ?? toBoundedIntOrUndefined(aiResult.ram_gb, 2048) ?? null,
-      storage_gb:
-        validCandidateStorage ?? toBoundedIntOrUndefined(aiResult.storage_gb, 65536) ?? null,
+      // Per Item, the answer names no size: the variant's own (possibly unknown) storage
+      // and RAM are kept, never the AI's.
+      ram_gb: perItem
+        ? validCandidateRam
+        : (validCandidateRam ?? toBoundedIntOrUndefined(aiResult.ram_gb, 2048) ?? null),
+      storage_gb: perItem
+        ? validCandidateStorage
+        : (validCandidateStorage ?? toBoundedIntOrUndefined(aiResult.storage_gb, 65536) ?? null),
       screen_size_inch:
         toBoundedNumberOrUndefined(aiResult.screen_size_inch, 120) ?? validCandidateScreen,
       battery_mah: toBoundedIntOrUndefined(aiResult.battery_mah, 500000) ?? validCandidateBattery,
       has_5g: aiResult.has_5g ?? toBooleanOrUndefined(candidate.has_5g) ?? null,
       specifications: mergedSpecifications,
-      key_specs: {
-        ...baseKeySpecs,
-        ...incomingKeySpecs,
-        ...(perItem && typeof baseKeySpecs.storage === 'string'
-          ? { storage: baseKeySpecs.storage }
-          : {}),
-      },
+      key_specs: perItem
+        ? {
+            ...baseKeySpecs,
+            ...withoutSizeKeySpecs(incomingKeySpecs),
+          }
+        : {
+            ...baseKeySpecs,
+            ...incomingKeySpecs,
+          },
       spec_source: 'ai_unverified',
       spec_enrichment_meta: {
         provider: this.provider,

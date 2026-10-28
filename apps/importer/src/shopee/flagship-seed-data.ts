@@ -3891,7 +3891,7 @@ export interface FlagshipItemSeed {
   categorySlug: FlagshipDeviceSeed['categorySlug'];
   brand: string;
   model: string;
-  /** The first variant's name without its storage label. */
+  /** The first variant's name without its trailing storage. */
   name: string;
   description: string;
   images: string[];
@@ -3913,20 +3913,21 @@ export function flagshipSeedsByItem(
       existing.variants.push(seed);
       continue;
     }
+    // Storage and RAM are per variant (design doc 4.1): never on the Item.
     const hardware = { ...seed.specifications.hardware };
     delete hardware.storage_gb;
+    delete hardware.ram_gb;
     const keySpecs = { ...seed.key_specs };
     delete keySpecs.storage;
-    const label = seed.variant_name.trim();
+    delete keySpecs.ram;
     items.set(parts.itemKey, {
       itemKey: parts.itemKey,
       categorySlug: seed.categorySlug,
       brand: seed.brand,
       model: seed.model,
-      name:
-        label && seed.name.endsWith(` ${label}`)
-          ? seed.name.slice(0, -label.length - 1)
-          : seed.name,
+      // Only a trailing storage leaves the name: "Watch Series 11 46mm GPS 64GB" keeps
+      // its case size, "Xiaomi 18 Pro Max 512GB" (variant "16GB/512GB") loses the 512GB.
+      name: seed.name.replace(/ \d+(?:[.,]\d+)? ?(?:GB|TB)$/i, ''),
       description: seed.description,
       images: seed.images,
       specifications: { ...seed.specifications, hardware },
