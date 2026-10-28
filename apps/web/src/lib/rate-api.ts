@@ -4554,6 +4554,9 @@ type UntypedRateQuery = {
   eq: (col: string, val: unknown) => UntypedRateQuery;
   is: (col: string, val: null) => UntypedRateQuery;
   in: (col: string, vals: readonly unknown[]) => UntypedRateQuery;
+  gte: (col: string, val: unknown) => UntypedRateQuery;
+  lte: (col: string, val: unknown) => UntypedRateQuery;
+  ilike: (col: string, pattern: string) => UntypedRateQuery;
   order: (
     col: string,
     opts?: { ascending?: boolean; nullsFirst?: boolean }
@@ -4726,7 +4729,10 @@ export async function getItemUnknownVariantOffers(
         .eq('item_id', itemId)
         .is('cluster_id', null)
         .order('id')
-        .range(from, to) as unknown as PromiseLike<{
+        .range(from, to)
+        .then(
+          throwIfItemSchemaMissing('item unknown-variant listings')
+        ) as unknown as PromiseLike<{
         data: unknown[] | null;
         error: { message: string } | null;
       }>
@@ -4881,7 +4887,7 @@ export async function getItemLinksForMasters(
   const itemIds = Array.from(new Set(itemIdByMaster.values()));
   if (itemIds.length === 0) return links;
 
-  const [itemRows, variantRows] = await Promise.all([
+  const [itemRows, variantsByItem] = await Promise.all([
     read('items', itemIds, (chunk) =>
       db
         .from('items')
@@ -4889,33 +4895,19 @@ export async function getItemLinksForMasters(
         .in('id', chunk)
         .eq('status', 'published')
     ),
-    read('item variants', itemIds, (chunk) =>
-      db
-        .from('master_products')
-        .select(ITEM_VARIANT_SELECT)
-        .in('item_id', chunk)
-        .eq('status', 'published')
-    ),
+    getItemVariantsBatch(itemIds),
   ]);
   const itemsById = new Map<string, RateItem>();
   for (const raw of itemRows) {
     const item = mapItemRow(raw);
     if (item) itemsById.set(item.id, item);
   }
-  const variantsByItem = new Map<string, RateItemVariant[]>();
-  for (const raw of variantRows) {
-    const variant = mapItemVariantRow(raw);
-    if (!variant) continue;
-    const list = variantsByItem.get(variant.item_id) ?? [];
-    list.push(variant);
-    variantsByItem.set(variant.item_id, list);
-  }
   for (const [masterId, itemId] of itemIdByMaster) {
     const item = itemsById.get(itemId);
     if (!item) continue;
     links.set(masterId, {
       item,
-      variants: sortItemVariants(variantsByItem.get(itemId) ?? []),
+      variants: variantsByItem.get(itemId) ?? [],
     });
   }
   return links;
@@ -5058,4 +5050,107 @@ export async function getItemSlugByVariantSlug(): Promise<Map<string, string>> {
     }
   }
   return out;
+}
+
+/** `listItems` filters: what API v1 `group=item` supports (DOS/Rate#1158). */
+export interface ItemListParams {
+  categoryId?: string | null;
+  brands?: readonly string[];
+  search?: string;
+  minPrice?: number;
+  maxPrice?: number;
+  sort?: 'default' | 'price_asc' | 'price_desc' | 'merchants_desc' | 'newest';
+  limit: number;
+  offset: number;
+}
+
+/**
+ * Published Items for API v1 `group=item`, one row per Item with its "from"
+ * price. Spec filters stay variant-level until `search_items_v1` (#1155).
+ * Needs M1+M2 (#1150).
+ */
+export async function listItems(params: ItemListParams): Promise<RateItem[]> {
+  let query = untypedRate()
+    .from('items')
+    .select(ITEM_SELECT)
+    .eq('status', 'published');
+  const categoryId = params.categoryId
+    ? sanitizeRateEntityId(params.categoryId)
+    : '';
+  if (categoryId) query = query.eq('category_id', categoryId);
+  if (params.brands && params.brands.length > 0) {
+    query = query.in('brand', params.brands.slice(0, 50));
+  }
+  const search = (params.search ?? '')
+    .replace(/\p{Cc}+/gu, ' ')
+    // LIKE wildcards, escapes and PostgREST filter syntax are no search text.
+    .replace(/[%_*\\,()]/g, ' ')
+    .trim()
+    .slice(0, 160);
+  if (search) query = query.ilike('name', `%${search}%`);
+  // A price filter means a price: an Item with none (0) is no match.
+  if (
+    typeof params.minPrice === 'number' ||
+    typeof params.maxPrice === 'number'
+  ) {
+    query = query.gte('min_price', Math.max(1, params.minPrice ?? 1));
+  }
+  if (typeof params.maxPrice === 'number') {
+    query = query.lte('min_price', params.maxPrice);
+  }
+  const sort = params.sort ?? 'default';
+  query =
+    sort === 'price_asc'
+      ? query.order('min_price', { ascending: true })
+      : sort === 'price_desc'
+        ? query.order('min_price', { ascending: false })
+        : sort === 'merchants_desc'
+          ? query.order('merchant_count', { ascending: false })
+          : sort === 'newest'
+            ? query.order('updated_at', { ascending: false })
+            : query.order('listing_count', { ascending: false });
+  const { data, error } = await query
+    .order('id')
+    .range(params.offset, params.offset + params.limit - 1);
+  if (error) {
+    log.error('item list failed', { message: error.message });
+    throw itemReadError('items', error as { message: string; code?: string });
+  }
+  return (data ?? []).map(mapItemRow).filter((i): i is RateItem => i !== null);
+}
+
+/**
+ * The published variants of several Items, by Item id, each in variant order
+ * (DOS/Rate#1158; shared with `getItemLinksForMasters`, #1155). Needs M1+M2
+ * (#1150); a missing table or column throws ItemModelUnavailableError.
+ */
+export async function getItemVariantsBatch(
+  itemIds: readonly string[]
+): Promise<Map<string, RateItemVariant[]>> {
+  const ids = Array.from(
+    new Set(itemIds.map((id) => sanitizeRateEntityId(id)).filter(Boolean))
+  );
+  const byItem = new Map<string, RateItemVariant[]>(ids.map((id) => [id, []]));
+  if (ids.length === 0) return byItem;
+  const rows = await readInChunks(
+    ids,
+    'item variants',
+    (chunk) =>
+      untypedRate()
+        .from('master_products')
+        .select(ITEM_VARIANT_SELECT)
+        .in('item_id', chunk)
+        .eq('status', 'published')
+        .then(throwIfItemSchemaMissing('item variants')) as PromiseLike<{
+        data: unknown[] | null;
+        error: { message?: string } | null;
+      }>
+  );
+  for (const variant of rows.map(mapItemVariantRow)) {
+    if (variant) byItem.get(variant.item_id)?.push(variant);
+  }
+  for (const [id, variants] of byItem) {
+    byItem.set(id, sortItemVariants(variants));
+  }
+  return byItem;
 }

@@ -15,6 +15,10 @@ import {
   PUBLIC_API_CORS_HEADERS,
   jsonApiError,
 } from '@/server/rate/api-handler';
+import {
+  buildApiItemFields,
+  resolveApiItemContext,
+} from '@/server/rate/item-api';
 
 type RouteContext = {
   params: Promise<{ slug: string }>;
@@ -35,8 +39,13 @@ export async function OPTIONS() {
  * The product carries the category's spec view, as rate.vn shows it: no
  * screen, RAM, storage or camera for earbuds and no 5G for a watch
  * (DOS/Rate#1166).
+ * With `RATE_ITEM_MODEL` on, the slug may be an Item's or an old variant's;
+ * `product` is the selected variant (`?v=`, the slug's own, else the Item's
+ * default) and the response adds `item`, `variants`, `selected_variant` and
+ * `unknown_variant_offers` (DOS/Rate#1158). With the flag off the response
+ * is unchanged.
  */
-export async function GET(_request: NextRequest, context: RouteContext) {
+export async function GET(request: NextRequest, context: RouteContext) {
   try {
     const { slug } = await context.params;
     const cleanSlug = (slug ?? '').trim();
@@ -53,7 +62,19 @@ export async function GET(_request: NextRequest, context: RouteContext) {
       );
     }
 
-    const storedProduct = await getCachedMasterProductBySlug(cleanSlug);
+    let itemContext = await resolveApiItemContext(
+      cleanSlug,
+      request.nextUrl?.searchParams?.get('v')
+    );
+    // Read before the product, so missing Item columns fall back to the
+    // whole response as before, not only to fewer fields.
+    const itemFields = itemContext
+      ? await buildApiItemFields(itemContext)
+      : null;
+    if (!itemFields) itemContext = null;
+    const storedProduct = await getCachedMasterProductBySlug(
+      itemContext ? itemContext.selected.slug : cleanSlug
+    );
 
     if (!storedProduct) {
       return NextResponse.json(
@@ -101,6 +122,7 @@ export async function GET(_request: NextRequest, context: RouteContext) {
           reviewSummary,
           reviews,
           radarSignal,
+          ...(itemFields ?? {}),
         },
       },
       {

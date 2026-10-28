@@ -182,6 +182,46 @@ export default function WatchlistWorkspace({
     });
   };
 
+  // `/watchlist?add=<slug>` (the browser extension's link, DOS/Rate#1158): add
+  // that product once, then drop the parameter so a reload adds nothing. The
+  // add is idempotent (by slug), so a second effect run (Strict Mode) is safe.
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    if (!url.searchParams.has('add')) return;
+    const raw = (url.searchParams.get('add') ?? '').trim();
+    // The product route's own slug rule.
+    const slug = /^[a-zA-Z0-9._-]{1,120}$/.test(raw) ? raw : '';
+    const dropParam = () => {
+      const now = new URL(window.location.href);
+      now.searchParams.delete('add');
+      window.history.replaceState(
+        null,
+        '',
+        `${now.pathname}${now.search}${now.hash}`
+      );
+    };
+    if (!slug || getWatchlist().some((x) => x.slug === slug)) {
+      dropParam();
+      return;
+    }
+    fetch(`/api/v1/rate/products/${encodeURIComponent(slug)}`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((json) => {
+        const product = json?.ok ? (json.data?.product as MasterProduct) : null;
+        if (
+          product?.slug === slug &&
+          !getWatchlist().some((x) => x.slug === slug)
+        ) {
+          handleQuickAddCatalog(product);
+        }
+      })
+      .catch(() => {
+        // An unknown or unreachable product adds nothing.
+      })
+      .finally(dropParam);
+    // Runs once per page load.
+  }, []);
+
   const handleUpdateTarget = async (item: WatchlistItem) => {
     const cleanTarget = sanitizeWatchlistTargetPrice(
       editTarget,
