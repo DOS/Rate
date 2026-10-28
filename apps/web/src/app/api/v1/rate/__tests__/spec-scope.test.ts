@@ -67,6 +67,8 @@ let catalog: unknown[] = [];
 // What a `master_products` read answers (detail and compare routes).
 let masterRows: unknown[] = [];
 let calls: string[] = [];
+// The last `search_master_products` arguments, to see the filters reach SQL.
+let searchArgs: Record<string, unknown> = {};
 
 const jsonResponse = (status: number, json: unknown) =>
   new Response(JSON.stringify(json), {
@@ -74,7 +76,7 @@ const jsonResponse = (status: number, json: unknown) =>
     headers: { 'Content-Type': 'application/json' },
   });
 
-globalThis.fetch = (async (input: RequestInfo | URL) => {
+globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
   const url =
     typeof input === 'string'
       ? input
@@ -87,6 +89,7 @@ globalThis.fetch = (async (input: RequestInfo | URL) => {
     return jsonResponse(200, [{ id: 'cat-1' }]);
   }
   if (pathname === '/rest/v1/rpc/search_master_products') {
+    searchArgs = typeof init?.body === 'string' ? JSON.parse(init.body) : {};
     return jsonResponse(200, catalog);
   }
   if (pathname === '/rest/v1/master_products') {
@@ -115,6 +118,11 @@ async function testProductFilters() {
     'category=earbuds&hz=60',
     'category=earbuds&compactScreen=true',
     'category=earbuds&nfc=1',
+    'category=earbuds&highRefresh=1',
+    // `all` mixes categories, so a filter must apply to every one.
+    'category=all&has5g=1',
+    'category=all&ram=1',
+    'category=all&compact=1',
   ]) {
     const { status, body } = await listProducts(query);
     assert.equal(status, 400, query);
@@ -132,6 +140,9 @@ async function testProductFilters() {
     'category=smartwatches&ram=1&hz=60&compactScreen=2'
   );
   assert.equal(status, 200);
+  assert.deepEqual(searchArgs.p_ram_gb, [1]);
+  assert.equal(searchArgs.p_min_refresh_rate_hz, 60);
+  assert.equal(searchArgs.p_max_screen_size_inch, 2);
   assert.equal(body.data.length, 1);
   assert.equal(body.data[0].ram_gb, 1);
   assert.equal(body.data[0].has_5g, false);
@@ -149,12 +160,33 @@ async function testProductFilters() {
   assert.equal(bud.specifications.display, undefined);
   assert.equal(bud.specifications.camera, undefined);
 
-  // Phones keep every filter.
-  catalog = [];
-  ({ status } = await listProducts(
-    'category=smartphones&has5g=true&ram=8&rom=256&hz=120&compact=1&nfc=1'
+  // Filters every category has still run on `all`.
+  catalog = [EARBUD];
+  ({ status } = await listProducts('category=all&fastCharge=1&battery=400'));
+  assert.equal(status, 200);
+
+  // Phones keep every filter and the stored body.
+  const PHONE = phoneShaped(
+    '33333333-3333-4333-8333-333333333333',
+    'apple-iphone-16-128gb',
+    'smartphones'
+  );
+  catalog = [PHONE];
+  ({ status, body } = await listProducts(
+    'category=smartphones&has5g=true&ram=1&rom=64&hz=60&compact=1&nfc=1'
   ));
   assert.equal(status, 200);
+  assert.equal(searchArgs.p_has_5g, true);
+  assert.deepEqual(searchArgs.p_ram_gb, [1]);
+  assert.deepEqual(searchArgs.p_storage_gb, [64]);
+  assert.equal(searchArgs.p_min_refresh_rate_hz, 60);
+  assert.equal(searchArgs.p_max_screen_size_inch, 6.2);
+  assert.equal(searchArgs.p_has_nfc, true);
+  assert.equal(body.data.length, 1);
+  assert.equal(body.data[0].has_5g, true);
+  assert.equal(body.data[0].ram_gb, 1);
+  assert.equal(body.data[0].screen_size_inch, 1);
+  assert.deepEqual(body.data[0].specifications, PHONE.specifications);
   console.warn('  ✅ API v1 product filters agree with the scoped body');
 }
 
@@ -214,6 +246,13 @@ async function testExtensionLookup() {
   ]);
   assert.equal(bud.detectedStorageGb, null);
   assert.deepEqual(bud.variantCandidates, []);
+
+  // Two sizes in an earbud title are not storage variants.
+  const twoSizes = await lookupExtensionProduct({
+    title: 'Apple AirPods Pro 2 64GB 128GB',
+    mode: 'pill',
+  });
+  assert.notEqual(twoSizes.matchStatus, 'ambiguous_variant');
 
   catalog = [WATCH];
   const watch = await lookupExtensionProduct({

@@ -76,12 +76,23 @@ export function jsonApiError(
  * template does not have, by their documented query names (DOS/Rate#1184).
  * The body carries the category's spec view, so such a filter would match
  * stored values the body no longer shows (`has5g` on a watch, `ramGb` on
- * earbuds); the route answers 400 for them instead.
+ * earbuds); the route answers 400 for them instead. `all` mixes categories,
+ * so there a filter must apply to every one of them.
  */
 export function specFiltersOutsideCategory(
   categorySlug: string,
   filters: MasterProductFilterParams
 ): string[] {
+  if (categorySlug === 'all') {
+    const outside = new Set<string>();
+    for (const slug of VALID_PRODUCT_CATEGORY_SLUGS) {
+      if (slug === 'all') continue;
+      for (const name of specFiltersOutsideCategory(slug, filters)) {
+        outside.add(name);
+      }
+    }
+    return [...outside];
+  }
   const template = getCategorySpecTemplate(categorySlug);
   const used: [boolean, boolean, string][] = [
     [Boolean(filters.ramGb?.length), template.ram, 'ramGb'],

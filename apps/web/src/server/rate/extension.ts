@@ -1211,6 +1211,10 @@ export async function lookupExtensionProduct(
   // Storage tiers only for a category that has storage: an earbud's stored
   // "64GB" is enricher noise (DOS/Rate#1184).
   const hasStorage = getCategorySpecTemplate(categoryPath).storage;
+  // Several sizes in an earbud title are not storage variants either.
+  if (!hasStorage && matchStatus === 'ambiguous_variant') {
+    matchStatus = 'canonical_model';
+  }
 
   // Build variant candidates across same model family
   const sameFamilyVariants = catalogCandidates.filter(

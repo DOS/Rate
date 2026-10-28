@@ -55,7 +55,8 @@ const VALID_PRODUCT_SORTS = new Set<
  * (DOS/Rate#1166). A spec filter the category's template does not have
  * (`has5g` on smartwatches, `ramGb` or `compactScreen` on earbuds) answers
  * 400, so a filter never returns a product whose body contradicts it
- * (DOS/Rate#1184).
+ * (DOS/Rate#1184). On `category=all` a spec filter must apply to every
+ * category.
  */
 export async function GET(request: NextRequest) {
   try {

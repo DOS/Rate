@@ -207,7 +207,7 @@ export function buildRateOpenApiSpec(
           summary:
             'List standardized master products with 10-group spec filters',
           description:
-            'Queries `rate.master_products` with multi-dimensional filtering across category, brand, price range, RAM/storage options, refresh rate, 5G, IP rating, charging wattage, and JReviews weighted score. Each product carries its category spec view (earbuds have no screen, RAM or storage; watches show no 5G). A spec filter the category does not have, such as `has5g` on `smartwatches` or `ramGb` and `compactScreen` on `earbuds`, returns 400.',
+            'Queries `rate.master_products` with multi-dimensional filtering across category, brand, price range, RAM/storage options, refresh rate, 5G, IP rating, charging wattage, and JReviews weighted score. Each product carries its category spec view (earbuds have no screen, RAM or storage; watches show no 5G). A spec filter the category does not have, such as `has5g` on `smartwatches` or `ramGb` and `compactScreen` on `earbuds`, returns 400; on `all` a spec filter must apply to every category.',
           tags: ['Products & Specs'],
           parameters: [
             {
