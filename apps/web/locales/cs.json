@@ -1875,8 +1875,8 @@
     "reasonCommunityAdLinkExcluded": "Zjištěn reklamní odkaz nebo přesměrování mimo platformu, vynecháno z průměru.",
     "reasonCommunityCompetitorExcluded": "Podezření na přesměrování ke konkurenci, vynecháno z průměru.",
     "reasonCommunityTooShortExcluded": "Příliš krátké na ověření zkušenosti, vynecháno z průměru.",
-    "summaryDefault": "Analyzováno {total} recenzí: ponecháno {kept} skutečných recenzí (vážené skóre JReviews: {rating}/5★) a z celkového skóre vyřazeno {removed} spamových, odměnových, falešných nebo bombardujících recenzí.",
-    "summaryNoAuthentic": "Po odfiltrování {removed} spamových nebo odměnových komentářů zatím žádné skutečné recenze.",
+    "summaryDefault": "Poslední analýza (jeden obchod) prověřila {total} recenzí: ponecháno {kept} skutečných recenzí a vyřazeno {removed} spamových, odměnových, falešných nebo bombardujících recenzí.",
+    "summaryNoAuthentic": "Poslední analýza (jeden obchod) po odfiltrování {removed} spamových nebo odměnových komentářů nenašla žádné skutečné recenze.",
     "proPositiveFeedback": "Pozitivní zpětná vazba od skutečných uživatelů",
     "originalVietnamese": "vietnamsky"
   },

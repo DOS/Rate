@@ -1875,8 +1875,8 @@
     "reasonCommunityAdLinkExcluded": "Advertising link or off-platform redirect detected, left out of the average.",
     "reasonCommunityCompetitorExcluded": "Suspected redirect to a competitor, left out of the average.",
     "reasonCommunityTooShortExcluded": "Too short to verify the experience, left out of the average.",
-    "summaryDefault": "Analyzed {total} reviews: kept {kept} genuine reviews (weighted JReviews score: {rating}/5★) and removed {removed} spam, coin-farming, fake or review-bombing reviews from the overall score.",
-    "summaryNoAuthentic": "No genuine reviews yet after filtering {removed} spam or coin-farming comments.",
+    "summaryDefault": "The latest analysis (one store) checked {total} reviews: kept {kept} genuine reviews and removed {removed} spam, coin-farming, fake or review-bombing reviews.",
+    "summaryNoAuthentic": "The latest analysis (one store) found no genuine reviews after filtering {removed} spam or coin-farming comments.",
     "proPositiveFeedback": "Positive feedback from real users",
     "originalVietnamese": "in Vietnamese"
   },

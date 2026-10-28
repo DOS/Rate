@@ -124,6 +124,14 @@ function main() {
       'Phát hiện đường dẫn quảng cáo hoặc điều hướng ngoài luồng nghi vấn Seeding.',
     summaryDefault:
       'Đã phân tích {total} đánh giá: giữ lại {kept} đánh giá thực chất (điểm JReviews có trọng số: {rating}/5★) và loại bỏ {removed} đánh giá rác/nhận xu/seeding/bom hàng khỏi điểm tổng.',
+    // The UI says it covers one store's latest batch (DOS/Rate#1216).
+    summaryNoAuthentic:
+      'Chưa có đánh giá thực chất sau khi lọc {removed} bình luận rác/nhận xu.',
+  };
+  // Values the UI leaves out on purpose: the summary speaks for one store's
+  // latest batch, whose rating is not the product's score (DOS/Rate#1216).
+  const dropped: Partial<Record<string, string[]>> = {
+    summaryDefault: ['rating'],
   };
   const covered = new Set<string>();
   for (const [text, key] of samples) {
@@ -138,7 +146,9 @@ function main() {
       assert.ok(!/seeding/i.test(vi[copy.key]!), `${key} still says seeding`);
       assert.deepEqual(
         placeholders(vi[copy.key]!),
-        placeholders(template),
+        placeholders(template).filter(
+          (p) => !(dropped[copy.key] ?? []).includes(p ?? '')
+        ),
         `${key} uses every value the stored string carries`
       );
     }
