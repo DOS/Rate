@@ -23,31 +23,38 @@ export default function ItemVariantPicker({
     options.map((o) => o.key),
     defaultKey
   );
+  const current = options.find((o) => o.key === selected);
   return (
-    <div
-      className="rate-pdv-variants d-flex mb-3 flex-wrap gap-2"
-      role="group"
-      aria-label={label}
-      data-testid="pdv-variant-picker"
-    >
-      {options.map((option) => {
-        const active = option.key === selected;
-        return (
-          <button
-            key={option.key}
-            type="button"
-            className={`btn btn-sm rounded-pill d-flex flex-column align-items-start px-3 py-1 ${
-              active ? 'btn-dark' : 'btn-outline-secondary'
-            }`}
-            aria-pressed={active}
-            data-variant={option.key}
-            onClick={() => selectVariant(option.key)}
-          >
-            <span className="fw-semibold">{option.label}</span>
-            <span className="small rate-tabular">{option.priceLabel}</span>
-          </button>
-        );
-      })}
-    </div>
+    <>
+      <div
+        className="rate-pdv-variants d-flex mb-3 flex-wrap gap-2"
+        role="group"
+        aria-label={label}
+        data-testid="pdv-variant-picker"
+      >
+        {options.map((option) => {
+          const active = option.key === selected;
+          return (
+            <button
+              key={option.key}
+              type="button"
+              className={`btn btn-sm rounded-pill d-flex flex-column align-items-start px-3 py-1 ${
+                active ? 'btn-dark' : 'btn-outline-secondary'
+              }`}
+              aria-pressed={active}
+              data-variant={option.key}
+              onClick={() => selectVariant(option.key)}
+            >
+              <span className="fw-semibold">{option.label}</span>
+              <span className="small rate-tabular">{option.priceLabel}</span>
+            </button>
+          );
+        })}
+      </div>
+      {/* The price history and offers below switch with the size. */}
+      <span className="visually-hidden" aria-live="polite">
+        {current ? `${current.label}: ${current.priceLabel}` : ''}
+      </span>
+    </>
   );
 }

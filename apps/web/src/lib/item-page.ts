@@ -37,6 +37,34 @@ export function itemVariantLabel(variant: {
   return variant.variant_key;
 }
 
+/**
+ * The Item's "from" stats over its sized variants only: the cheapest priced
+ * size, the top of the dearest, and the most sellers any one size has (a
+ * floor for distinct sellers). Listings whose size is not stated never count
+ * (Q2); the Item row's merchant_count includes them, so it is not used.
+ */
+export function itemFromStats(
+  variants: readonly {
+    min_price?: number | null;
+    max_price?: number | null;
+    merchant_count?: number | null;
+  }[]
+): { minPrice: number; maxPrice: number; sellerCount: number } {
+  const priced = variants.filter((v) => Number(v.min_price) > 0);
+  if (priced.length === 0) return { minPrice: 0, maxPrice: 0, sellerCount: 0 };
+  const minPrice = Math.min(...priced.map((v) => Number(v.min_price)));
+  const maxPrice = Math.max(
+    ...priced.map((v) =>
+      Math.max(Number(v.max_price) || 0, Number(v.min_price))
+    )
+  );
+  const sellerCount = Math.max(
+    1,
+    ...priced.map((v) => Math.max(0, Math.floor(Number(v.merchant_count) || 0)))
+  );
+  return { minPrice, maxPrice, sellerCount };
+}
+
 /** Category peers without the Item's own sizes: a sibling is no competitor. */
 export function withoutItemSiblings<T extends { slug: string }>(
   peers: readonly T[],
@@ -55,8 +83,9 @@ export interface ItemJsonLdVariant {
 }
 
 /**
- * The schema.org `ProductGroup` node of an Item page: one Product per size,
- * each with its own sku and AggregateOffer, and one Item-level rating (Q4).
+ * The schema.org `ProductGroup` node of an Item page: one Product per priced
+ * size, each with its own sku and AggregateOffer, and one Item-level rating
+ * (Q4). A size with no price is left out: a variant Product needs an offer.
  * The variant URLs carry `?v=`, and the group URL is the canonical (Q1).
  */
 export function buildItemProductGroupNode(input: {
@@ -78,25 +107,24 @@ export function buildItemProductGroupNode(input: {
     description: input.description,
     image: [...input.images],
     variesBy: ['https://schema.org/size'],
-    hasVariant: input.variants.map((v) => ({
-      '@type': 'Product',
-      name: `${input.name} ${v.label}`,
-      sku: `${input.itemKey}:${v.variantKey}`,
-      size: v.label,
-      url: `${input.canonicalUrl}?v=${encodeURIComponent(v.variantKey)}`,
-      // Only with a buyable price: a lowPrice of 0 is not an offer.
-      ...(v.minPrice > 0
-        ? {
-            offers: {
-              '@type': 'AggregateOffer',
-              priceCurrency: 'VND',
-              lowPrice: v.minPrice,
-              highPrice: Math.max(v.maxPrice, v.minPrice),
-              offerCount: v.sellerCount,
-            },
-          }
-        : {}),
-    })),
+    hasVariant: input.variants
+      .filter((v) => v.minPrice > 0)
+      .map((v) => ({
+        '@type': 'Product',
+        name: `${input.name} ${v.label}`,
+        sku: `${input.itemKey}:${v.variantKey}`,
+        inProductGroupWithID: input.itemKey,
+        size: v.label,
+        url: `${input.canonicalUrl}?v=${encodeURIComponent(v.variantKey)}`,
+        ...(input.images.length > 0 ? { image: [...input.images] } : {}),
+        offers: {
+          '@type': 'AggregateOffer',
+          priceCurrency: 'VND',
+          lowPrice: v.minPrice,
+          highPrice: Math.max(v.maxPrice, v.minPrice),
+          offerCount: v.sellerCount,
+        },
+      })),
     ...(input.aggregateRating
       ? { aggregateRating: input.aggregateRating }
       : {}),

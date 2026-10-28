@@ -260,6 +260,16 @@ async function main() {
     'an unknown ?v= falls back to the default'
   );
   assert.equal(render(null, []).kind, 'not_found');
+  // A sold-out default size (256gb) gives way to the first priced one.
+  assert.equal(
+    (
+      render(
+        null,
+        variants.map((v) => (v.id === V256 ? { ...v, min_price: 0 } : v))
+      ) as { variantKey: string }
+    ).variantKey,
+    '128gb'
+  );
   // A retired size redirects to the Item with no size preselected.
   assert.deepEqual(
     planItemRoute({
@@ -531,7 +541,20 @@ async function main() {
     'https://rate.vn/smartphones/apple-iphone-16?v=128gb'
   );
   assert.equal(group.hasVariant[0]!.offers?.lowPrice, 21990000);
-  assert.equal(group.hasVariant[1]!.offers, undefined, 'no 0 ₫ offer');
+  assert.equal(group.hasVariant.length, 1, 'a size with no price is left out');
+  assert.deepEqual(
+    page.itemFromStats([
+      { min_price: 24990000, max_price: 25990000, merchant_count: 2 },
+      { min_price: 21990000, max_price: 23990000, merchant_count: 4 },
+      { min_price: 0, max_price: 0, merchant_count: 0 },
+    ]),
+    { minPrice: 21990000, maxPrice: 25990000, sellerCount: 4 }
+  );
+  assert.deepEqual(page.itemFromStats([{ min_price: null }]), {
+    minPrice: 0,
+    maxPrice: 0,
+    sellerCount: 0,
+  });
   console.warn('✅ Item web data layer suite passed');
 }
 

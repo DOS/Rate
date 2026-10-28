@@ -11,6 +11,7 @@ import {
 import {
   buildItemProductGroupNode,
   itemVariantLabel,
+  itemFromStats,
   withoutItemSiblings,
 } from '@/lib/item-page';
 import ItemVariantPicker from '@/components/product/item/ItemVariantPicker';
@@ -140,11 +141,15 @@ export async function generateCategoryProductMetadata(
   // The stored stats, like every other page shows (DOS/Rate#1141). An Item
   // URL is the Item: its name and the "from" price over its sizes (#1154).
   const itemMeta = itemRoute?.kind === 'render' ? itemRoute.item : null;
-  const marketStats = itemMeta
-    ? productMarketStats(itemMeta)
-    : productMarketStats(product);
+  const marketStats =
+    itemRoute?.kind === 'render' && itemRoute.variants.length > 1
+      ? itemFromStats(itemRoute.variants)
+      : productMarketStats(product);
   const hasPrice = marketStats.minPrice > 0;
-  const name = itemMeta?.name || product.name;
+  const name =
+    (itemRoute?.kind === 'render' && itemRoute.variants.length > 1
+      ? itemMeta?.name
+      : null) || product.name;
   const minPrice = marketStats.minPrice.toLocaleString('vi-VN');
   const canonicalUrl = `https://rate.vn${categoryBasePath}/${
     itemRoute?.kind === 'render' ? itemRoute.itemSlug : product.slug
@@ -295,11 +300,12 @@ export async function ProductDetailView({
   );
   // The Item page's name and "from" price span its sizes.
   const displayName = itemPage?.item.name || product.name;
-  const heroStats = itemPage ? productMarketStats(itemPage.item) : marketStats;
+  const heroStats = isItemGroup
+    ? itemFromStats(itemVariants.map((v) => v.product))
+    : marketStats;
 
   const specs = product.specifications as ProductSpecifications;
   const keySpecs = product.key_specs as KeySpecs;
-  const minPriceFormatted = currentMinPrice.toLocaleString('vi-VN');
   const sellerCount = marketStats.sellerCount;
   const heroMinPriceFormatted = heroStats.minPrice.toLocaleString('vi-VN');
   // Why there is no price, when there is none (DOS/Rate#1188).
@@ -311,7 +317,6 @@ export async function ProductDetailView({
   });
   const saleStateKey =
     saleState === 'on_sale' ? null : saleStateLabelKey(saleState);
-  const maxPriceFormatted = marketStats.maxPrice.toLocaleString('vi-VN');
 
   const authenticCount =
     product.authentic_review_count && product.authentic_review_count > 0
@@ -366,12 +371,12 @@ export async function ProductDetailView({
             heroStats.minPrice > 0
               ? t('metaDesc', {
                   name: displayName,
-                  brand: product.brand,
+                  brand: itemPage.item.brand || product.brand,
                   merchantCount: heroStats.sellerCount,
                 })
               : t('metaDescNoStock', {
                   name: displayName,
-                  brand: product.brand,
+                  brand: itemPage.item.brand || product.brand,
                 }),
           images: usableImageUrls(product.images).map(absoluteUrl),
           variants: itemVariants.map((v) => {
@@ -510,6 +515,98 @@ export async function ProductDetailView({
     emptyText:
       v.product.id === product.id ? pageEmptyOffersText : t('noOffersYet'),
   });
+  // The price strip of one size: price, range, all-time low, price watch and
+  // the share card; an Item page renders it once per size (#1154).
+  const renderPriceStrip = (v: {
+    product: typeof product;
+    offers: typeof offers;
+    priceHistory: typeof priceHistory;
+    radarSignal: typeof radarSignal;
+    stats: typeof marketStats;
+    saleState: typeof saleState;
+    saleStateKey: typeof saleStateKey;
+  }) => (
+    <div className="rounded-4 bg-light mb-2 border p-3">
+      <div className="d-flex flex-column flex-sm-row justify-content-between align-items-start align-items-sm-center gap-2">
+        <div>
+          <div className="text-muted small">
+            {t('priceReferenceLabel', { count: v.stats.sellerCount })}
+          </div>
+          <div className="fw-bold text-dark rate-tabular fs-5">
+            {v.stats.minPrice > 0 ? (
+              `${v.stats.minPrice.toLocaleString('vi-VN')} ₫`
+            ) : v.saleStateKey ? (
+              <span data-sale-state={v.saleState}>{tSale(v.saleStateKey)}</span>
+            ) : (
+              t('priceNoneInStock')
+            )}
+            {v.stats.minPrice > 0 && v.stats.minPrice !== v.stats.maxPrice && (
+              <span className="small fw-normal text-muted ms-2">
+                ~ {v.stats.maxPrice.toLocaleString('vi-VN')} ₫
+              </span>
+            )}
+            {v.priceHistory.lowestEverPrice != null && (
+              <span className="badge bg-success-subtle text-success fw-normal ms-2">
+                {t('allTimeLowBadge', {
+                  price: v.priceHistory.lowestEverPrice.toLocaleString('vi-VN'),
+                })}
+              </span>
+            )}
+          </div>
+        </div>
+        <div className="d-flex align-items-center flex-wrap gap-2">
+          <PriceWatchButton
+            slug={v.product.slug}
+            name={v.product.name}
+            brand={v.product.brand}
+            categoryPath={categoryBasePath}
+            thumbnail={productImageUrl(v.product)}
+            currentMinPrice={v.stats.minPrice}
+            size="sm"
+          />
+          <a
+            href="#price-history-section"
+            className="btn btn-sm btn-outline-secondary rounded-pill px-3"
+          >
+            {t('auditPriceBtn', { count: v.offers.length })}
+          </a>
+          <ProductShareAuditButton
+            name={v.product.name}
+            brand={v.product.brand}
+            modelKey={v.product.model_key}
+            userScore5={Number(displayUserRating.toFixed(2))}
+            expertScore10={expertRating10}
+            authenticReviews={authenticCount}
+            minPriceVnd={v.stats.minPrice}
+            offerCount={v.stats.sellerCount}
+            keySpecLine={keySpecLine}
+            radarSignal={v.radarSignal}
+          />
+        </div>
+      </div>
+    </div>
+  );
+  const variantStripInput = (v: ItemPageVariant) => {
+    const inStock = v.offers.filter((o) => !isOfferUnavailable(o));
+    const stats = productMarketStats(v.product);
+    const sizeSaleState = masterSaleState({
+      minPrice: stats.minPrice,
+      listingCount: listingCountForSaleState(v.offers.length, inStock.length),
+      metadata: v.product.metadata,
+      availabilityStatus: (v.product.specifications as ProductSpecifications)
+        ?.availability?.status,
+    });
+    return {
+      product: v.product,
+      offers: v.offers,
+      priceHistory: v.priceHistory,
+      radarSignal: v.radarSignal,
+      stats,
+      saleState: sizeSaleState,
+      saleStateKey:
+        sizeSaleState === 'on_sale' ? null : saleStateLabelKey(sizeSaleState),
+    };
+  };
   const defaultVariantKey =
     itemRoute?.kind === 'render' ? itemRoute.variantKey : '';
 
@@ -1060,71 +1157,25 @@ export async function ProductDetailView({
               </div>
 
               {/* Neutral Market Price Reference Strip (De-commercialized per DESIGN.md v3.0) */}
-              <div className="rounded-4 bg-light mb-2 border p-3">
-                <div className="d-flex flex-column flex-sm-row justify-content-between align-items-start align-items-sm-center gap-2">
-                  <div>
-                    <div className="text-muted small">
-                      {t('priceReferenceLabel', { count: sellerCount })}
-                    </div>
-                    <div className="fw-bold text-dark rate-tabular fs-5">
-                      {currentMinPrice > 0 ? (
-                        `${minPriceFormatted} ₫`
-                      ) : saleStateKey ? (
-                        <span data-sale-state={saleState}>
-                          {tSale(saleStateKey)}
-                        </span>
-                      ) : (
-                        t('priceNoneInStock')
-                      )}
-                      {currentMinPrice > 0 &&
-                        currentMinPrice !== marketStats.maxPrice && (
-                          <span className="small fw-normal text-muted ms-2">
-                            ~ {maxPriceFormatted} ₫
-                          </span>
-                        )}
-                      {priceHistory.lowestEverPrice != null && (
-                        <span className="badge bg-success-subtle text-success fw-normal ms-2">
-                          {t('allTimeLowBadge', {
-                            price:
-                              priceHistory.lowestEverPrice.toLocaleString(
-                                'vi-VN'
-                              ),
-                          })}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                  <div className="d-flex align-items-center flex-wrap gap-2">
-                    <PriceWatchButton
-                      slug={product.slug}
-                      name={product.name}
-                      brand={product.brand}
-                      categoryPath={categoryBasePath}
-                      thumbnail={productImageUrl(product)}
-                      currentMinPrice={currentMinPrice}
-                      size="sm"
-                    />
-                    <a
-                      href="#price-history-section"
-                      className="btn btn-sm btn-outline-secondary rounded-pill px-3"
-                    >
-                      {t('auditPriceBtn', { count: offers.length })}
-                    </a>
-                    <ProductShareAuditButton
-                      name={product.name}
-                      brand={product.brand}
-                      modelKey={product.model_key}
-                      userScore5={Number(displayUserRating.toFixed(2))}
-                      expertScore10={expertRating10}
-                      authenticReviews={authenticCount}
-                      minPriceVnd={currentMinPrice}
-                      offerCount={sellerCount}
-                      keySpecLine={keySpecLine}
-                      radarSignal={radarSignal}
-                    />
-                  </div>
-                </div>
-              </div>
+              {isItemGroup ? (
+                <ItemVariantPanels
+                  defaultKey={defaultVariantKey}
+                  panels={itemVariants.map((v) => ({
+                    key: v.variant.variant_key,
+                    node: renderPriceStrip(variantStripInput(v)),
+                  }))}
+                />
+              ) : (
+                renderPriceStrip({
+                  product,
+                  offers,
+                  priceHistory,
+                  radarSignal,
+                  stats: marketStats,
+                  saleState,
+                  saleStateKey,
+                })
+              )}
 
               <details className="rate-pdv-devinfo">
                 <summary>{t('devInfoToggle')}</summary>

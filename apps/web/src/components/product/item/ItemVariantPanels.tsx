@@ -1,6 +1,6 @@
 'use client';
 
-import type { ReactNode } from 'react';
+import { Fragment, type ReactNode } from 'react';
 import { useSelectedVariant } from './selected-variant';
 
 /**
@@ -21,5 +21,7 @@ export default function ItemVariantPanels({
   const panel =
     panels.find((p) => p.key === selected) ??
     panels.find((p) => p.key === defaultKey);
-  return <>{panel?.node ?? null}</>;
+  // Keyed per size, so a panel's own state (a chosen offer, a filter) does
+  // not carry over to another size's data.
+  return panel ? <Fragment key={panel.key}>{panel.node}</Fragment> : null;
 }

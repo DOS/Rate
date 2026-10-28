@@ -101,6 +101,10 @@ export function planItemRoute(input: {
     (requestedVariant
       ? variants.find((v) => v.variant_key === requestedVariant)
       : undefined) ??
+    // The Item's default size while it has a price, else the first priced
+    // size, so the first view never says "sold out" beside a "from" price.
+    variants.find((v) => v.id === item.default_variant_id && v.min_price > 0) ??
+    variants.find((v) => v.min_price > 0) ??
     variants.find((v) => v.id === item.default_variant_id) ??
     variants[0];
   if (!chosen) return { kind: 'not_found' };
