@@ -23,7 +23,10 @@ const SLUG_REGEX = /^[a-z0-9][a-z0-9._-]{0,159}$/;
 async function resolveSlug(slug: string): Promise<CompareResolution> {
   if (!SLUG_REGEX.test(slug)) return null;
   const resolution = await getCachedCatalogSlugResolution(slug);
-  if (!resolution) return null;
+  // No published Item for this slug: it compares as a plain master, as with
+  // the flag off (a master of a draft Item, or an unknown slug that the
+  // compare read then drops) (#1275).
+  if (!resolution) return { kind: 'unlinked' };
   if (resolution.kind === 'unlinked') return { kind: 'unlinked' };
   const variants = await getCachedItemVariants(resolution.item);
   return resolution.kind === 'item'

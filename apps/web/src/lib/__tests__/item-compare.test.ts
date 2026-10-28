@@ -164,6 +164,27 @@ function main() {
     { kind: 'not_found' }
   );
 
+  // An Item slug holding "-vs-" keeps its variant slug as the side (#1275).
+  const vsItem: CompareResolution = {
+    kind: 'item',
+    item: { id: 'item-vs', slug: 'case-vs-cover', default_variant_id: null },
+    variants: [
+      { id: 'cv', slug: 'case-vs-cover-std', variant_key: 'standard' },
+    ],
+  };
+  assert.deepEqual(
+    planVersusRoute(
+      { slug: 'case-vs-cover-std', resolution: vsItem },
+      { slug: 'samsung-galaxy-s24', resolution: s24 }
+    ),
+    {
+      kind: 'render',
+      slugA: 'case-vs-cover-std',
+      slugB: 'samsung-galaxy-s24-256gb',
+      canonical: '/compare/case-vs-cover-std-vs-samsung-galaxy-s24',
+    }
+  );
+
   console.warn('  ✅ item compare suite passed');
 }
 
