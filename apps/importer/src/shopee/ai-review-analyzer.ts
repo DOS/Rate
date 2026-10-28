@@ -8,7 +8,7 @@ import {
 } from './ai-spec-enricher.js';
 import type { RateSupabaseClient, ScrapedReviewer } from './types.js';
 import { computeRetryDelayMs, sanitizeAiGeneratedText } from './logger.js';
-import { resolveItemModelMode } from './item-model-flag.js';
+import { resolveItemModelMode, type ItemModelMode } from './item-model-flag.js';
 export { computeRetryDelayMs, sanitizeAiGeneratedText } from './logger.js';
 
 /**
@@ -2249,6 +2249,8 @@ Return ONLY valid JSON matching:
        * Item's rating, which pools every size (design doc 4.1, Q4, DOS/Rate#1152).
        */
       itemId?: string | null;
+      /** The caller's Item model mode; defaults to RATE_ITEM_MODEL. */
+      itemModel?: ItemModelMode;
       merchantId?: string | null;
       reviews: ReviewInputItem[];
       entityName?: string;
@@ -2440,7 +2442,7 @@ Return ONLY valid JSON matching:
     if (
       !safeMasterId &&
       safeItemId &&
-      resolveItemModelMode() !== 'off' &&
+      (params?.itemModel ?? resolveItemModelMode()) !== 'off' &&
       typeof supabase.rpc === 'function'
     ) {
       const { error: itemRpcErr } = await supabase.rpc('refresh_item_stats', {

@@ -2231,7 +2231,7 @@ export class ProductNormalizer {
       display: {
         size_inch: categorySlug === 'earbuds' ? undefined : screenSize || undefined,
         type: benchmark?.screen_type || fallbackScreenType,
-        resolution: benchmark?.resolution || undefined,
+        resolution: (caseMismatch ? undefined : benchmark?.resolution) || undefined,
         refresh_rate_hz:
           categorySlug === 'earbuds'
             ? undefined

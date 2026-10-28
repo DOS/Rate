@@ -1030,6 +1030,18 @@ async function run() {
       'apple:watch-series-10-42mm:64gb'
     );
 
+    // The registry describes the 42mm case: a 46mm title gets none of its size specs and
+    // is not benchmark-enriched (so it is never published on 42mm data).
+    const series10Big = normalizer.normalize({
+      title: 'Apple Watch Series 10 46mm GPS',
+    } as ShopeeProduct);
+    assert.equal(series10Big.model_key, 'apple:watch-series-10-46mm:64gb');
+    assert.equal(series10Big.is_benchmark_enriched, false);
+    assert.equal(series10Big.battery_mah, null);
+    assert.notEqual(series10Big.screen_size_inch, 1.77);
+    assert.equal(series10Big.specifications.display?.resolution, undefined);
+    assert.equal(series10Big.specifications.design?.weight_g, undefined);
+
     // Item specs: dry-run writes nothing, apply updates the Items that exist and lists
     // the missing ones (Items are created by the M1 trigger, never here).
     const seeds = itemSeeds.filter(i =>
@@ -1137,7 +1149,11 @@ async function run() {
   // variant the master RPC (Item-aware in M2) runs as before; no Item, no Item RPC.
   {
     const persist = async (
-      ids: { masterId?: string | null; itemId?: string | null },
+      ids: {
+        masterId?: string | null;
+        itemId?: string | null;
+        itemModel?: 'off' | 'item' | 'nullable_variant';
+      },
       mode = 'nullable_variant'
     ) => {
       const saved = process.env[ITEM_MODEL_ENV];
@@ -1149,7 +1165,11 @@ async function run() {
         else process.env[ITEM_MODEL_ENV] = saved;
       }
     };
-    const persistOnce = async (ids: { masterId?: string | null; itemId?: string | null }) => {
+    const persistOnce = async (ids: {
+      masterId?: string | null;
+      itemId?: string | null;
+      itemModel?: 'off' | 'item' | 'nullable_variant';
+    }) => {
       const db = createDb(call =>
         call.table === 'reviews' && call.op === 'select' ? { data: [], error: null } : undefined
       );
@@ -1168,6 +1188,14 @@ async function run() {
     ]);
     assert.deepEqual(await persist({ masterId: null }), []);
     assert.deepEqual(await persist({ masterId: null, itemId: 'item-zenbook' }, 'off'), []);
+    // The pipeline's own mode wins over the env (a pipeline configured with the model on).
+    assert.deepEqual(
+      await persist(
+        { masterId: null, itemId: 'item-zenbook', itemModel: 'nullable_variant' },
+        'off'
+      ),
+      [['refresh_item_stats', { p_item_id: 'item-zenbook' }]]
+    );
   }
   console.log(
     '  ✅ [6/6] Seeds grouped by Item; Item specs from the seeds; enrichment and rating per Item (#1152)'
