@@ -935,7 +935,7 @@
     "itemMetaLine": "Item ID:",
     "soldLabel": "Sold:",
     "lowestMarketPriceLabel": "Market lowest price:",
-    "unclusteredLabel": "Unclustered",
+    "unclusteredLabel": "Not matched to a model yet",
     "historicalLowObs": "All-time low: {price} ₫ ({count} points)",
     "collectingHistoryBadge": "Collecting price history",
     "viewReviewsAndPricesBtn": "★ Reviews & price",

@@ -849,6 +849,11 @@ export default async function MerchantProfilePage({
                         ? item.price_original.toLocaleString('vi-VN')
                         : null;
                       const da = item.discount_analysis;
+                      const soldText = formatSoldCount(
+                        item.historical_sold,
+                        item.historical_sold_display,
+                        locale
+                      );
                       const badgeClass =
                         da?.verdict === 'fake_discount'
                           ? 'bg-danger text-white'
@@ -901,13 +906,14 @@ export default async function MerchantProfilePage({
                                 >
                                   {t('itemMetaLine')}{' '}
                                   <code>{item.platform_item_id}</code> •{' '}
-                                  {t('soldLabel')}{' '}
-                                  {formatSoldCount(
-                                    item.historical_sold,
-                                    item.historical_sold_display,
-                                    locale
-                                  )}{' '}
-                                  • ★ {item.rating_star.toFixed(1)} (
+                                  {/* Retail sites publish no sold count: no
+                                      "Đã bán: 0" then (DOS/Rate#1252). */}
+                                  {soldText !== '0' && (
+                                    <>
+                                      {t('soldLabel')} {soldText} •{' '}
+                                    </>
+                                  )}
+                                  ★ {item.rating_star.toFixed(1)} (
                                   {item.rating_count})
                                 </div>
                               </div>
