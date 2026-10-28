@@ -2712,6 +2712,60 @@ async function runTests() {
         externalShopId: null,
       }
     );
+    // TikTok Shop's pdp pages carry the id last (DOS/Rate#1245).
+    for (const url of [
+      'https://www.tiktok.com/shop/vn/pdp/apple-iphone-16-128gb/1729384756',
+      'https://www.tiktok.com/shop/pdp/apple-iphone-16-128gb/1729384756',
+    ]) {
+      assert.equal(
+        extractIdsFromUrl('tiktok', url).externalItemId,
+        '1729384756',
+        url
+      );
+    }
+    // Brand and category listings are not products; product slugs still
+    // are (DOS/Rate#1246).
+    for (const [platform, url] of [
+      ['cellphones', 'https://cellphones.com.vn/mobile/apple.html'],
+      ['cellphones', 'https://cellphones.com.vn/mobile/apple/iphone-16.html'],
+      ['cellphones', 'https://cellphones.com.vn/laptop/mac.html'],
+      ['fptshop', 'https://fptshop.com.vn/dien-thoai/samsung'],
+      ['hoangha', 'https://hoanghamobile.com/dien-thoai-di-dong/xiaomi'],
+      ['didongviet', 'https://didongviet.vn/dien-thoai/oppo.html'],
+      ['tgdd', 'https://www.thegioididong.com/dtdd/apple'],
+      ['fptshop', 'https://fptshop.com.vn/dien-thoai/iphone-16-series'],
+    ] as const) {
+      assert.equal(extractIdsFromUrl(platform, url).externalItemId, null, url);
+    }
+    for (const [platform, url, id] of [
+      [
+        'cellphones',
+        'https://cellphones.com.vn/iphone-16-pro-max.html',
+        'iphone-16-pro-max',
+      ],
+      [
+        'fptshop',
+        'https://fptshop.com.vn/dien-thoai/iphone-16-pro-max',
+        'iphone-16-pro-max',
+      ],
+      [
+        'didongviet',
+        'https://didongviet.vn/dien-thoai/iphone-16.html',
+        'iphone-16',
+      ],
+      [
+        'phongvu',
+        'https://phongvu.vn/apple-iphone-16e-128gb--s2502001',
+        'apple-iphone-16e-128gb--s2502001',
+      ],
+      [
+        'tgdd',
+        'https://www.thegioididong.com/dtdd/samsung-galaxy-s25',
+        'samsung-galaxy-s25',
+      ],
+    ] as const) {
+      assert.equal(extractIdsFromUrl(platform, url).externalItemId, id, url);
+    }
     assert.deepEqual(
       extractIdsFromUrl(
         'cellphones',

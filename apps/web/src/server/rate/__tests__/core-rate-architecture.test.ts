@@ -11726,6 +11726,17 @@ async function runCoreArchitectureSuite() {
       ).platformShopId,
       null
     );
+    // TikTok Shop's pdp pages carry the id last (DOS/Rate#1245).
+    for (const url of [
+      'https://www.tiktok.com/shop/vn/pdp/apple-iphone-16-128gb/1729384756',
+      'https://www.tiktok.com/shop/pdp/apple-iphone-16-128gb/1729384756',
+    ]) {
+      assert.equal(
+        parseEcommerceUrlOrQuery986(url).platformItemId,
+        '1729384756',
+        url
+      );
+    }
     assert.equal(
       parseEcommerceUrlOrQuery986('https://cellphones.com.vn/..')
         .platformItemId,

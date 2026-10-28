@@ -1588,7 +1588,9 @@ export function parseEcommerceUrlOrQuery(raw: string): ParsedEcommerceUrl {
       }
       const prodMatch =
         parsedPathname.match(/\/product\/(\d+)/i) ||
-        parsedPathname.match(/\/view\/product\/(\d+)/i);
+        parsedPathname.match(/\/view\/product\/(\d+)/i) ||
+        // TikTok Shop's newer product pages (DOS/Rate#1245).
+        parsedPathname.match(/\/shop\/(?:[a-z]{2}\/)?pdp\/[^/]+\/(\d+)/i);
       const shopMatch = parsedPathname.match(/\/@([a-zA-Z0-9_.-]{1,64})/);
       const rawShopHandle = shopMatch?.[1] || null;
       const safeShopHandle =

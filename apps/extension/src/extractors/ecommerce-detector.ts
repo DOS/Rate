@@ -140,6 +140,49 @@ const RETAIL_CATEGORY_ROOT_SLUGS = new Set([
   'airpods',
 ]);
 
+// A path ending in a bare brand lists that brand's products, as in
+// cellphones.com.vn/mobile/apple.html or fptshop.com.vn/dien-thoai/samsung;
+// no product slug is a brand alone (DOS/Rate#1246).
+const RETAIL_BRAND_LISTING_SLUGS = new Set([
+  'apple',
+  'samsung',
+  'xiaomi',
+  'redmi',
+  'poco',
+  'oppo',
+  'vivo',
+  'realme',
+  'oneplus',
+  'honor',
+  'huawei',
+  'nokia',
+  'motorola',
+  'sony',
+  'google',
+  'asus',
+  'acer',
+  'lenovo',
+  'dell',
+  'hp',
+  'msi',
+  'lg',
+  'tecno',
+  'infinix',
+  'itel',
+  'nubia',
+  'zte',
+  'masstel',
+  'benco',
+  'garmin',
+  'amazfit',
+  'jbl',
+  'marshall',
+  'anker',
+  'baseus',
+  'ugreen',
+  'mac',
+]);
+
 export function extractIdsFromUrl(
   platform: SupportedEcommercePlatform,
   canonicalUrl: string
@@ -191,7 +234,9 @@ export function extractIdsFromUrl(
     }
     const prodMatch =
       canonicalUrl.match(/\/product\/(\d+)/i) ||
-      canonicalUrl.match(/\/view\/product\/(\d+)/i);
+      canonicalUrl.match(/\/view\/product\/(\d+)/i) ||
+      // TikTok Shop's newer product pages (DOS/Rate#1245).
+      canonicalUrl.match(/\/shop\/(?:[a-z]{2}\/)?pdp\/[^/]+\/(\d+)/i);
     const shopMatch = canonicalUrl.match(/\/@([a-zA-Z0-9_.-]+)/);
     const itemId = isPositiveDigits(prodMatch?.[1]) ? prodMatch![1]! : null;
     const rawShop = shopMatch?.[1] || '';
@@ -239,7 +284,12 @@ export function extractIdsFromUrl(
     !RETAIL_NON_PRODUCT_FIRST_SEGMENTS.has(firstSegLower) &&
     !RETAIL_NON_PRODUCT_FIRST_SEGMENTS.has(lastSegLower) &&
     !(segments.length === 1 && RETAIL_CATEGORY_ROOT_SLUGS.has(firstSegLower)) &&
-    !(platform === 'tgdd' && segments.length < 2);
+    !RETAIL_BRAND_LISTING_SLUGS.has(lastSegLower) &&
+    !/-series$/.test(lastSegLower) &&
+    !(platform === 'tgdd' && segments.length < 2) &&
+    // CellphoneS product pages sit at the root ("/iphone-16-pro-max.html");
+    // deeper paths are category listings (DOS/Rate#1246).
+    !(platform === 'cellphones' && segments.length > 1);
   return {
     externalItemId: isValidItemSlug ? lastSegment : null,
     externalShopId: null,
