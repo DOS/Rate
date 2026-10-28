@@ -63,7 +63,12 @@ function createShopeeListing(
 interface MockDbOptions {
   exactMatch?: { id: string; name: string; model_key: string } | null;
   exactErr?: { message: string } | null;
-  fuzzyMatches?: Array<{ master_id: string; name: string; similarity: number }>;
+  fuzzyMatches?: Array<{
+    master_id: string;
+    name: string;
+    similarity: number;
+    model_key?: string;
+  }>;
   fuzzyErr?: { message: string } | null;
   upsertRows?: Array<{ id: string }>;
   winnerRow?: { id: string } | null;
@@ -379,6 +384,71 @@ async function runEntityMatcherSuite() {
     'draft',
     'Ambiguous Tier 2 similarity (0.65..0.69) must seed new Master Product as draft'
   );
+  // DOS/Rate#1200 (#1105 option (a)): a title with no storage never links to a sized
+  // master; it seeds a draft. A ':unknown' master still takes it, and earbuds keep
+  // their legacy ':64gb' seed keys.
+  const zenbookBare = normalizer.normalize(
+    createShopeeListing('Laptop ASUS Zenbook S 14 UX5406AA-SU348W')
+  );
+  assert.equal(zenbookBare.storage_gb, null);
+  const zenbook1tb = {
+    master_id: 'master-zenbook-1tb',
+    name: 'Asus Zenbook S 14 1TB',
+    similarity: 0.86,
+    model_key: 'asus:zenbook-s-14:1024gb',
+  };
+  const storagelessDb = createMockSupabase({ fuzzyMatches: [zenbook1tb] });
+  const storagelessRes = await new EntityMatcher(
+    storagelessDb.client,
+    offlineEnricher
+  ).resolveOrCreateMasterProduct(zenbookBare);
+  assert.equal(storagelessRes.isNew, true, 'a storage-less title must not link to the 1TB master');
+  assert.notEqual(storagelessRes.masterId, 'master-zenbook-1tb');
+  assert.equal(storagelessDb.capturedUpserts[0]?.payload.model_key, 'asus:zenbook-s-14:unknown');
+  assert.equal(storagelessDb.capturedUpserts[0]?.payload.status, 'draft');
+
+  const unknownMasterRes = await new EntityMatcher(
+    createMockSupabase({
+      fuzzyMatches: [
+        zenbook1tb,
+        {
+          master_id: 'master-zenbook-unknown',
+          name: 'Asus Zenbook S 14',
+          similarity: 0.8,
+          model_key: 'asus:zenbook-s-14:unknown',
+        },
+      ],
+    }).client,
+    offlineEnricher
+  ).resolveOrCreateMasterProduct(zenbookBare);
+  assert.deepEqual(unknownMasterRes, { masterId: 'master-zenbook-unknown', isNew: false });
+
+  // A title that states its storage matches a sized master as before.
+  const zenbookSized = normalizer.normalize(
+    createShopeeListing('Laptop ASUS Zenbook S 14 UX5406AA 32GB 1TB')
+  );
+  const sizedRes = await new EntityMatcher(
+    createMockSupabase({ fuzzyMatches: [zenbook1tb] }).client,
+    offlineEnricher
+  ).resolveOrCreateMasterProduct(zenbookSized);
+  assert.deepEqual(sizedRes, { masterId: 'master-zenbook-1tb', isNew: false });
+
+  const earbuds = normalizer.normalize(createShopeeListing('Tai nghe Sony WF-1000XM5 chính hãng'));
+  assert.equal(earbuds.storage_gb, null);
+  const earbudsRes = await new EntityMatcher(
+    createMockSupabase({
+      fuzzyMatches: [
+        {
+          master_id: 'master-wf1000xm5',
+          name: 'Sony WF-1000XM5',
+          similarity: 0.9,
+          model_key: 'sony:wf-1000xm5:64gb',
+        },
+      ],
+    }).client,
+    offlineEnricher
+  ).resolveOrCreateMasterProduct(earbuds);
+  assert.deepEqual(earbudsRes, { masterId: 'master-wf1000xm5', isNew: false });
   console.log('  ✅ [3/7] Tier 2 fuzzy match threshold & ambiguous draft fallback passed');
 
   // 4. Tier 3 Creation Status: benchmark_registry (new) -> published; non-new or crawled_title -> draft
