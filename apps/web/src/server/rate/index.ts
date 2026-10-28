@@ -13,6 +13,8 @@ import {
   getMasterProductReviews as _getMasterProductReviews,
   getMasterProductReviewSummary as _getMasterProductReviewSummary,
   getMasterProducts as _getMasterProducts,
+  attachMerchantDiscountAnalysis as _attachMerchantDiscountAnalysis,
+  getMerchantProfileBase as _getMerchantProfileBase,
   getMerchantProfileById as _getMerchantProfileById,
   getMerchantsList as _getMerchantsList,
   getRatePlatformStats as _getRatePlatformStats,
@@ -477,25 +479,31 @@ export async function getCachedMerchantsList(
   return all;
 }
 
-// The profile reads each listed master through the product pages' cached
-// readers: a cold profile reuses their warm entries instead of re-reading
-// offers and price history per master (DOS/Rate#1217).
-const _getMerchantProfileWithCachedMasters = (cleanId: string) =>
-  _getMerchantProfileById(cleanId, {
-    offers: getCachedMasterProductOffers,
-    priceHistory: getCachedMasterProductPriceHistory,
-  });
-
-const _getCachedMerchantProfileByIdKey = cache((cleanId: string) =>
+// The profile entry holds no discount analysis: it is added per request from
+// the product pages' cached offers and price history. Read inside the
+// profile's unstable_cache those would skip their cache (nested entries do),
+// so a cold profile would re-read every master (DOS/Rate#1217).
+const _getCachedMerchantProfileBaseByKey = (cleanId: string) =>
   withRateDataCache(
-    _getMerchantProfileWithCachedMasters,
-    ['rate-merchant-profile', cleanId],
+    _getMerchantProfileBase,
+    ['rate-merchant-profile-base', cleanId],
     {
       revalidate: 600,
       tags: [RATE_CACHE_TAGS.MERCHANTS, merchantCacheTag(cleanId)],
     }
-  )(cleanId)
-);
+  )(cleanId);
+
+const CACHED_MASTER_READERS = {
+  offers: getCachedMasterProductOffers,
+  priceHistory: getCachedMasterProductPriceHistory,
+};
+
+const _getCachedMerchantProfileByIdKey = cache(async (cleanId: string) => {
+  const base = await _getCachedMerchantProfileBaseByKey(cleanId);
+  return base
+    ? _attachMerchantDiscountAnalysis(base, CACHED_MASTER_READERS)
+    : null;
+});
 
 export function getCachedMerchantProfileById(merchantId: string) {
   const cleanId = sanitizeCachedEntityId(merchantId);

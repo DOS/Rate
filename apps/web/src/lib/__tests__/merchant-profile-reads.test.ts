@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict';
 
 // A merchant profile on a cold render must not wait on one database round trip
-// after another: it reads its listings while the merchant loads, analyses its
-// masters while the other reads run, and takes each master's offers and price
-// history from the readers it is given (DOS/Rate#1217).
+// after another: it reads its listings while the merchant loads, and its
+// discount analysis is added outside its cache entry from the readers it is
+// given, so the product pages' cached entries are reused (DOS/Rate#1217).
 
 process.env.NEXT_PUBLIC_SUPABASE_URL = 'https://stub.supabase.co';
 process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = 'stub-anon-key';
@@ -40,6 +40,8 @@ const listingRow = {
   cluster_id: MASTER_ID,
 };
 
+const listingUrls: string[] = [];
+
 type Route = 'merchant' | 'merchantBySlug' | 'listings' | 'other';
 
 interface Recorded {
@@ -60,6 +62,7 @@ function routeOf(url: URL): string {
 
 function installFetch(options: {
   merchantFound?: (route: Route | string) => boolean;
+  listingsFail?: boolean;
   delayMs?: number;
 }) {
   const calls: Recorded[] = [];
@@ -74,11 +77,18 @@ function installFetch(options: {
           : input.url
     );
     const route = routeOf(url);
+    if (route === 'listings') listingUrls.push(url.search);
     const entry: Recorded = { route, start: clock++, end: -1 };
     calls.push(entry);
     await new Promise((resolve) => setTimeout(resolve, delay));
     entry.end = clock++;
     const offset = Number(url.searchParams.get('offset') ?? 0);
+    if (route === 'listings' && options.listingsFail) {
+      return new Response(JSON.stringify({ message: 'listings down' }), {
+        status: 500,
+        headers: { 'content-type': 'application/json' },
+      });
+    }
     let body: unknown = [];
     if (route === 'merchant' || route === 'merchantBySlug') {
       body = options.merchantFound?.(route) === false ? [] : [merchantRow];
@@ -112,7 +122,13 @@ function installFetch(options: {
 
 async function main() {
   console.warn('🧪 merchant profile reads suite (DOS/Rate#1217)');
-  const { getMerchantProfileById } = await import('../rate-api');
+  const {
+    attachMerchantDiscountAnalysis,
+    getMerchantProfileBase,
+    getMerchantProfileById,
+  } = await import('../rate-api');
+  const unhandled: unknown[] = [];
+  process.on('unhandledRejection', (reason) => unhandled.push(reason));
 
   const analysis = {
     product_id: LISTING_ID,
@@ -141,39 +157,18 @@ async function main() {
     genuineDealCount: 0,
   };
 
-  // 1. The given readers serve each master: no offers or price-history reads
-  //    of its own, and the analysis comes from the reader.
+  // 1. The base profile reads no offers or price history and carries no
+  //    analysis; it records each listing's master instead.
   {
     const calls = installFetch({});
-    const readerCalls: string[] = [];
-    let readerStart = -1;
-    const profile = await getMerchantProfileById(MERCHANT_ID, {
-      offers: async (id) => {
-        readerCalls.push(`offers:${id}`);
-        readerStart = calls.length;
-        return [];
-      },
-      priceHistory: async (id, offers) => {
-        readerCalls.push(`history:${id}:${offers.length}`);
-        return { ...emptyHistory, byOffer: { [LISTING_ID]: analysis } };
-      },
-    });
-    assert.ok(profile);
-    assert.deepEqual(readerCalls, [
-      `offers:${MASTER_ID}`,
-      `history:${MASTER_ID}:0`,
-    ]);
-    assert.equal(
-      profile.listings[0]?.discount_analysis?.verdict,
-      'fake_discount'
-    );
-    assert.equal(profile.listings[0]?.master_product?.slug, 'phone-1217');
+    const base = await getMerchantProfileBase(MERCHANT_ID);
+    assert.ok(base);
+    assert.deepEqual(base.listingMasterIds, { [LISTING_ID]: MASTER_ID });
+    assert.equal(base.profile.listings[0]?.discount_analysis, null);
+    assert.equal(base.profile.listings[0]?.master_product?.slug, 'phone-1217');
     const routes = calls.map((c) => c.route);
     for (const own of ['v_products_with_merchant_trust', 'price_history']) {
-      assert.ok(
-        !routes.includes(own),
-        `a profile with readers must not read ${own} itself`
-      );
+      assert.ok(!routes.includes(own), `the base profile must not read ${own}`);
     }
 
     // 2. The listings read starts before the merchant read has answered.
@@ -190,22 +185,41 @@ async function main() {
       'the merchant row is read once'
     );
 
-    // 3. The master analysis starts before the master, category and review
-    //    reads have answered.
-    const masters = calls.find((c) => c.route === 'master_products');
-    assert.ok(masters);
-    assert.ok(
-      readerStart >= 0 && readerStart <= masters.start + 1,
-      'the master analysis must start alongside the master read'
+    // 3. The analysis comes from the readers, once per master.
+    const readerCalls: string[] = [];
+    const profile = await attachMerchantDiscountAnalysis(base, {
+      offers: async (id) => {
+        readerCalls.push(`offers:${id}`);
+        return [];
+      },
+      priceHistory: async (id, offers) => {
+        readerCalls.push(`history:${id}:${offers.length}`);
+        return { ...emptyHistory, byOffer: { [LISTING_ID]: analysis } };
+      },
+    });
+    assert.deepEqual(readerCalls, [
+      `offers:${MASTER_ID}`,
+      `history:${MASTER_ID}:0`,
+    ]);
+    assert.equal(
+      profile.listings[0]?.discount_analysis?.verdict,
+      'fake_discount'
+    );
+    assert.equal(
+      base.profile.listings[0]?.discount_analysis,
+      null,
+      'the cached base is not mutated'
     );
   }
 
-  // 4. A failed reader fails the profile: it must not be cached without its
+  // 4. A failed reader fails the profile: it is never served without its
   //    analysis (DOS/Rate#329).
   {
     installFetch({});
+    const base = await getMerchantProfileBase(MERCHANT_ID);
+    assert.ok(base);
     await assert.rejects(
-      getMerchantProfileById(MERCHANT_ID, {
+      attachMerchantDiscountAnalysis(base, {
         offers: async () => {
           throw new Error('offers unavailable');
         },
@@ -221,30 +235,45 @@ async function main() {
     const calls = installFetch({
       merchantFound: (route) => route !== 'merchant',
     });
-    const profile = await getMerchantProfileById(
-      '00000000-0000-4000-8000-0000000000aa',
-      {
-        offers: async () => [],
-        priceHistory: async () => ({ ...emptyHistory, byOffer: {} }),
-      }
+    const base = await getMerchantProfileBase(
+      '00000000-0000-4000-8000-0000000000aa'
     );
-    assert.ok(profile);
-    assert.equal(profile.id, MERCHANT_ID);
+    assert.ok(base);
+    assert.equal(base.profile.id, MERCHANT_ID);
     const listingReads = calls.filter((c) => c.route === 'listings');
     // Page and end-of-list read for the guessed id, then for the real one.
     assert.equal(listingReads.length, 4);
-    assert.equal(profile.listings.length, 1);
+    assert.ok(
+      decodeURIComponent(listingUrls.at(-1) ?? '').includes(
+        `merchant_id=eq.${MERCHANT_ID}`
+      ),
+      'the listings used are read for the merchant found'
+    );
+    assert.equal(base.profile.listings.length, 1);
   }
 
-  // 6. An unknown merchant is null, and the early listings read does not
-  //    surface as an error.
+  // 6. An unknown merchant is null, even when the early listings read fails.
   {
     installFetch({ merchantFound: () => false });
     assert.equal(
       await getMerchantProfileById('00000000-0000-4000-8000-0000000000bb'),
       null
     );
+    installFetch({ merchantFound: () => false, listingsFail: true });
+    assert.equal(
+      await getMerchantProfileBase('00000000-0000-4000-8000-0000000000cc'),
+      null
+    );
   }
+
+  // 7. A failed listings read for the merchant found fails the profile.
+  {
+    installFetch({ listingsFail: true });
+    await assert.rejects(getMerchantProfileBase(MERCHANT_ID));
+  }
+
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  assert.deepEqual(unhandled, [], 'no read may fail unhandled');
 
   console.warn('  ✅ merchant profile reads suite passed');
 }

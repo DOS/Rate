@@ -3069,10 +3069,8 @@ async function readInChunks(
 }
 
 /**
- * Per-master readers a merchant profile uses for its listings' discount
- * analysis. The server layer passes the cached readers the product pages use,
- * so a profile reuses their warm entries instead of re-reading every master
- * (DOS/Rate#1217).
+ * Per-master readers for a merchant profile's discount analysis. The server
+ * layer passes the cached readers the product pages use (DOS/Rate#1217).
  */
 export interface MerchantProfileMasterReaders {
   offers: (masterId: string) => Promise<MerchantOffer[]>;
@@ -3090,13 +3088,65 @@ const UNCACHED_MASTER_READERS: MerchantProfileMasterReaders = {
 };
 
 /**
+ * A merchant profile without its listings' discount analysis, plus the master
+ * each listing belongs to (published or not), so the analysis can be added
+ * after the profile leaves the Data Cache.
+ */
+export interface MerchantProfileBase {
+  profile: MerchantProfileDetail;
+  listingMasterIds: Record<string, string>;
+}
+
+/**
  * Fetch detailed profile for a single Merchant by UUID id, slug, or platform_shop_id,
  * including all listings with Fake Discount verdicts and buyer reviews with AI flags.
  */
 export async function getMerchantProfileById(
-  idOrSlug: string,
-  masterReaders: MerchantProfileMasterReaders = UNCACHED_MASTER_READERS
+  idOrSlug: string
 ): Promise<MerchantProfileDetail | null> {
+  const base = await getMerchantProfileBase(idOrSlug);
+  return base
+    ? attachMerchantDiscountAnalysis(base, UNCACHED_MASTER_READERS)
+    : null;
+}
+
+/**
+ * Adds each listing's discount analysis, read per master through `readers`.
+ * Runs outside the profile's own cache entry: a nested unstable_cache skips
+ * the cache read, so the product pages' warm entries are reachable only from
+ * here (DOS/Rate#1217). A failed read throws, never a profile without its
+ * analysis (DOS/Rate#329).
+ */
+export async function attachMerchantDiscountAnalysis(
+  base: MerchantProfileBase,
+  readers: MerchantProfileMasterReaders
+): Promise<MerchantProfileDetail> {
+  const masterIds = Array.from(new Set(Object.values(base.listingMasterIds)));
+  const discountByOfferId = new Map<string, OfferDiscountAnalysis>();
+  await forEachWithConcurrency(
+    masterIds,
+    PRICE_HISTORY_CONCURRENCY,
+    async (masterId) => {
+      const offers = await readers.offers(masterId);
+      const ph = await readers.priceHistory(masterId, offers);
+      for (const [offerId, analysis] of Object.entries(ph.byOffer)) {
+        discountByOfferId.set(offerId, analysis);
+      }
+    }
+  );
+  return {
+    ...base.profile,
+    listings: base.profile.listings.map((listing) => ({
+      ...listing,
+      discount_analysis: discountByOfferId.get(listing.id) || null,
+    })),
+  };
+}
+
+/** The merchant profile without discount analysis; see MerchantProfileBase. */
+export async function getMerchantProfileBase(
+  idOrSlug: string
+): Promise<MerchantProfileBase | null> {
   const cleaned = sanitizeRateEntityId(idOrSlug);
   if (!cleaned || cleaned.includes('..')) return null;
 
@@ -3175,26 +3225,6 @@ export async function getMerchantProfileById(
     new Set(rawProducts.map((p) => p.cluster_id).filter(Boolean))
   ) as string[];
   const productIds = rawProducts.map((p) => p.id);
-
-  // Price history / Fake Discount analysis per master product. Started
-  // before the master, category and review reads it does not depend on, so
-  // both run at once (DOS/Rate#1217).
-  const discountByOfferId = new Map<string, OfferDiscountAnalysis>();
-  // A failure throws: the profile must not be cached without its analysis.
-  const discountAnalysis = forEachWithConcurrency(
-    clusterIds,
-    PRICE_HISTORY_CONCURRENCY,
-    async (cId) => {
-      const offers = await masterReaders.offers(cId);
-      const ph = await masterReaders.priceHistory(cId, offers);
-      for (const [offerId, analysis] of Object.entries(ph.byOffer)) {
-        discountByOfferId.set(offerId, analysis);
-      }
-    }
-  );
-  // Settled here so a failure is never unhandled while the reads below run;
-  // it is rethrown where the analysis is awaited.
-  discountAnalysis.catch(() => undefined);
 
   const [masterRows, catsRes, reviewRows] = await Promise.all([
     // Published only: the product page serves no other status, so a draft
@@ -3278,8 +3308,6 @@ export async function getMerchantProfileById(
     });
   }
 
-  await discountAnalysis;
-
   const listings: MerchantProductListing[] = rawProducts.map((p) => {
     const masterInfo = p.cluster_id
       ? masterById.get(p.cluster_id) || null
@@ -3310,7 +3338,7 @@ export async function getMerchantProfileById(
       url: sanitizeOfferUrl(p.url),
       image: firstImageUrl(p.images),
       master_product: masterInfo,
-      discount_analysis: discountByOfferId.get(p.id) || null,
+      discount_analysis: null,
     };
   });
 
@@ -3427,7 +3455,7 @@ export async function getMerchantProfileById(
     .map((l) => l.price_current)
     .filter((p) => Number.isFinite(p) && p > 0 && p <= MAX_VALID_VND_PRICE);
 
-  return {
+  const profile: MerchantProfileDetail = {
     id: merchantRow.id,
     platform: merchantRow.platform,
     platform_shop_id: merchantRow.platform_shop_id,
@@ -3460,6 +3488,12 @@ export async function getMerchantProfileById(
     listings,
     recent_reviews: recentReviews,
   };
+
+  const listingMasterIds: Record<string, string> = {};
+  for (const p of rawProducts) {
+    if (p.cluster_id) listingMasterIds[p.id] = p.cluster_id;
+  }
+  return { profile, listingMasterIds };
 }
 
 /** Counters shown when platform stats cannot be read; never cached. */
