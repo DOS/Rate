@@ -934,6 +934,7 @@
     "colAuditAndSource": "Check and source",
     "itemMetaLine": "Item ID:",
     "soldLabel": "Sold:",
+    "listingSoldOutBadge": "Out of stock",
     "lowestMarketPriceLabel": "Market lowest price:",
     "unclusteredLabel": "Unclustered",
     "historicalLowObs": "All-time low: {price} ₫ ({count} points)",

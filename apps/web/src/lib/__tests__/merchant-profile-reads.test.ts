@@ -38,6 +38,7 @@ const listingRow = {
   images: [],
   url: 'https://shopee.vn/product/1217/1',
   cluster_id: MASTER_ID,
+  availability: 'out_of_stock',
 };
 
 const listingUrls: string[] = [];
@@ -166,6 +167,14 @@ async function main() {
     assert.deepEqual(base.listingMasterIds, { [LISTING_ID]: MASTER_ID });
     assert.equal(base.profile.listings[0]?.discount_analysis, null);
     assert.equal(base.profile.listings[0]?.master_product?.slug, 'phone-1217');
+    // A sold-out listing says so (DOS/Rate#1248).
+    assert.equal(base.profile.listings[0]?.availability, 'out_of_stock');
+    assert.ok(
+      listingUrls.some((q) =>
+        /select=[^&]*availability/.test(decodeURIComponent(q))
+      ),
+      'the listings read selects availability'
+    );
     const routes = calls.map((c) => c.route);
     for (const own of ['v_products_with_merchant_trust', 'price_history']) {
       assert.ok(!routes.includes(own), `the base profile must not read ${own}`);

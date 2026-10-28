@@ -934,6 +934,7 @@
     "colAuditAndSource": "Kiểm tra và nguồn",
     "itemMetaLine": "Mã sàn:",
     "soldLabel": "Đã bán:",
+    "listingSoldOutBadge": "Hết hàng",
     "lowestMarketPriceLabel": "Giá thấp nhất thị trường:",
     "unclusteredLabel": "Chưa gom cụm",
     "historicalLowObs": "Đáy lịch sử: {price} ₫ ({count} mốc đo)",
