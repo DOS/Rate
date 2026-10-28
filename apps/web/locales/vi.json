@@ -935,7 +935,7 @@
     "itemMetaLine": "Mã sàn:",
     "soldLabel": "Đã bán:",
     "lowestMarketPriceLabel": "Giá thấp nhất thị trường:",
-    "unclusteredLabel": "Chưa gom cụm",
+    "unclusteredLabel": "Chưa ghép với dòng máy nào",
     "historicalLowObs": "Đáy lịch sử: {price} ₫ ({count} mốc đo)",
     "collectingHistoryBadge": "Đang thu thập lịch sử giá",
     "viewReviewsAndPricesBtn": "★ Xem đánh giá và giá",

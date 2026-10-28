@@ -935,7 +935,7 @@
     "itemMetaLine": "ID položky:",
     "soldLabel": "Prodáno:",
     "lowestMarketPriceLabel": "Nejnižší tržní cena:",
-    "unclusteredLabel": "Nepřiřazeno",
+    "unclusteredLabel": "Zatím nepřiřazeno k modelu",
     "historicalLowObs": "Historické minimum: {price} ₫ ({count} měření)",
     "collectingHistoryBadge": "Sběr historie cen",
     "viewReviewsAndPricesBtn": "★ Recenze a Ceny",
