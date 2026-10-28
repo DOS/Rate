@@ -5,6 +5,7 @@ import {
   countBrandsByItem,
   groupRowsByItem,
   itemSizeChips,
+  sortItemRows,
   sitemapRowsByItem,
   type ItemLinkInput,
 } from '../item-directory';
@@ -61,12 +62,16 @@ function main() {
   );
   assert.deepEqual(
     grouped.map((r) => r.id),
-    ['m-256', 'm-other'],
-    'one row per Item, at its best-ranked variant'
+    ['m-128', 'm-other'],
+    'one row per Item, where its best-ranked variant was, standing for its cheapest size'
   );
   const card = grouped[0]!;
   assert.equal(card.name, 'Apple iPhone 15');
-  assert.equal(card.slug, 'apple-iphone-15-256gb', 'radar keys stay variant');
+  assert.equal(
+    card.slug,
+    'apple-iphone-15-128gb',
+    'compare and watch keys are the cheapest variant, whose price the card shows'
+  );
   assert.equal(card.item_slug, 'apple-iphone-15');
   assert.equal(card.min_price, 18_000_000, 'from price over its variants');
   assert.equal(card.max_price, 23_000_000);
@@ -152,6 +157,45 @@ function main() {
       { slug: 'apple-iphone-15', updated_at: '2026-10-05T00:00:00Z' },
       { slug: 'galaxy-s24', updated_at: '2026-10-02T00:00:00Z' },
     ]
+  );
+
+  // Price sorts follow the Item's "from" price, not its first variant: a
+  // descending read meets an Item's dearest size first (Codex review).
+  const desc = groupRowsByItem(
+    [
+      row('m-256', 'a-256', 30_000_000),
+      row('m-other', 'b', 20_000_000),
+      row('m-128', 'a-128', 5_000_000),
+    ],
+    links
+  );
+  assert.deepEqual(
+    sortItemRows(desc, 'price_desc').map((r) => r.id),
+    ['m-other', 'm-128']
+  );
+  assert.deepEqual(
+    sortItemRows(
+      [
+        { ...row('few', 'few', 1), merchant_count: 2 },
+        { ...card, merchant_count: 7 },
+      ],
+      'merchants_desc'
+    ).map((r) => r.id),
+    ['m-128', 'few'],
+    'merchant sort by the count the card shows'
+  );
+  assert.deepEqual(
+    sortItemRows(
+      [row('z', 'z', 0), row('y', 'y', 2), row('x', 'x', 1)],
+      'price_asc'
+    ).map((r) => r.id),
+    ['x', 'y', 'z'],
+    'unpriced rows last'
+  );
+  assert.deepEqual(
+    sortItemRows(desc, 'rating_desc').map((r) => r.id),
+    desc.map((r) => r.id),
+    'other sorts keep the read order'
   );
 
   console.warn('  ✅ item directory suite passed');

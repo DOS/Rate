@@ -232,9 +232,10 @@ export async function CategoryCatalogContent({
     // RATE_ITEM_MODEL on: one card per Item, so the page is cut after
     // grouping every matching variant (DOS/Rate#1155); off: as before.
     getItemCatalogPage(
-      () => readVariants({ ...filterParams, limit: 500, offset: 0 }),
+      (offset, limit) => readVariants({ ...filterParams, limit, offset }),
       filterParams.offset ?? 0,
-      filterParams.limit ?? CATALOG_PAGE_SIZE + 1
+      filterParams.limit ?? CATALOG_PAGE_SIZE + 1,
+      filterParams.sort
     ).then((itemRows) => itemRows ?? readVariants(filterParams)),
     getCrossPlatformDealRadar({
       categorySlug: categorySlug as CanonicalCategorySlug,
@@ -385,7 +386,7 @@ export async function CategoryCatalogContent({
           '@type': 'ListItem',
           position: (page - 1) * CATALOG_PAGE_SIZE + index + 1,
           name: item.name,
-          url: absoluteUrl(`${basePath}/${item.slug}`),
+          url: absoluteUrl(`${basePath}/${catalogRowSlug(item)}`),
         })),
       },
     ],

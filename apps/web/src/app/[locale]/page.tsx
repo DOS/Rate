@@ -17,7 +17,8 @@ import {
   type MerchantSummary,
   type RatePlatformStats,
 } from '@/server/rate';
-import { catalogRowSlug } from '@/lib/item-directory';
+import { catalogRowSlug, itemSizeChips } from '@/lib/item-directory';
+import { formatStorageLabel } from '@/lib/category-filters';
 import type { MasterProduct } from '@repo/shared-data';
 import {
   BsArrowLeftRight,
@@ -260,8 +261,9 @@ export default async function Home({
               <div className="col-xl-9 col-lg-10 col-md-12 col-sm-12">
                 <HeroSearchInspector
                   initialProducts={toHeroProductSuggestions(
-                    // One suggestion per Item, linking to it (#1155).
-                    gridProducts.map((p) => ({ ...p, slug: catalogRowSlug(p) }))
+                    // One suggestion per Item (#1155). Its slug stays the
+                    // variant's: compare, watchlist and radar are keyed by it.
+                    gridProducts
                   )}
                   initialMerchants={toHeroMerchantSuggestions(
                     merchants.slice(0, HERO_MERCHANT_PRELOAD)
@@ -531,8 +533,13 @@ export default async function Home({
                       <ProductCard
                         slug={item.slug}
                         href={productHref}
+                        sizeChips={itemSizeChips(
+                          storedItem,
+                          productHref,
+                          formatStorageLabel
+                        )}
                         categoryPath={
-                          productHref.replace(`/${item.slug}`, '') ||
+                          productHref.replace(`/${catalogRowSlug(item)}`, '') ||
                           '/smartphones'
                         }
                         name={item.name}

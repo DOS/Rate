@@ -9,7 +9,11 @@ import {
   getItemSlugByVariantSlug as _getItemSlugByVariantSlug,
   type MasterItemLink,
 } from '../../lib/rate-api';
-import { groupRowsByItem, type ItemCatalogRow } from '@/lib/item-directory';
+import {
+  groupRowsByItem,
+  sortItemRows,
+  type ItemCatalogRow,
+} from '@/lib/item-directory';
 import { createLogger } from '@/lib/logger';
 import { RATE_CACHE_TAGS, withRateDataCache } from './cache-tags';
 import { isItemModelOn } from './item-model';
@@ -30,14 +34,15 @@ async function whenItemModel<T>(
   try {
     return await read();
   } catch (err) {
+    // Any failed Item read shows the variant pages, which still work: a
+    // listing, facet or stats outage must not follow from the Item layer.
+    const message = err instanceof Error ? err.message : String(err);
     if (err instanceof ItemModelUnavailableError) {
-      log.warn('item model unavailable, showing variants', {
-        what,
-        message: err.message,
-      });
-      return null;
+      log.warn('item model unavailable, showing variants', { what, message });
+    } else {
+      log.error('item read failed, showing variants', { what, message });
     }
-    throw err;
+    return null;
   }
 }
 
@@ -72,24 +77,43 @@ export async function groupCatalogRowsByItem<T extends MasterProduct>(
   return grouped ?? (rows as Array<T & ItemCatalogRow>);
 }
 
+// The catalogue read returns at most 500 variants; a category is read in
+// batches until one comes back short. 20 batches (10,000 variants) is far
+// above the catalogue; past it the page is cut and logged.
+const CATALOG_BATCH_SIZE = 500;
+const MAX_CATALOG_BATCHES = 20;
+
 /**
- * One page of Item cards, or null while the Item model is off. Pages are
- * cut after grouping: `readAll` returns every matching variant (up to the
- * catalogue read's 500-row bound), so a page holds `limit` Items, not
- * `limit` variants.
+ * One page of Item cards, or null while the Item model is off. Every
+ * matching variant is read (`readBatch(offset, limit)`, in batches), grouped
+ * into Items, ordered by the Item's price for price sorts, and only then
+ * cut, so a page holds `limit` Items and no Item falls between pages.
  */
 export async function getItemCatalogPage<T extends MasterProduct>(
-  readAll: () => Promise<T[]>,
+  readBatch: (offset: number, limit: number) => Promise<T[]>,
   offset: number,
-  limit: number
+  limit: number,
+  sort?: string
 ): Promise<Array<T & ItemCatalogRow> | null> {
   return whenItemModel('catalogue page', async () => {
-    const rows = await readAll();
+    const rows: T[] = [];
+    for (let batch = 0; ; batch++) {
+      if (batch === MAX_CATALOG_BATCHES) {
+        log.warn('item catalogue read cut', { variants: rows.length });
+        break;
+      }
+      const page = await readBatch(
+        batch * CATALOG_BATCH_SIZE,
+        CATALOG_BATCH_SIZE
+      );
+      rows.push(...page);
+      if (page.length < CATALOG_BATCH_SIZE) break;
+    }
     const grouped = groupRowsByItem(
       rows,
       await getCachedItemLinks(rows.map((r) => r.id).filter(Boolean))
     );
-    return grouped.slice(offset, offset + limit);
+    return sortItemRows(grouped, sort).slice(offset, offset + limit);
   });
 }
 

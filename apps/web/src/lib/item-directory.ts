@@ -84,8 +84,22 @@ export function groupRowsByItem<T extends MasterProduct>(
     }
     const card = out[at]!;
     const cardMin = positivePrice(card.min_price);
-    if (min > 0 && (cardMin === 0 || min < cardMin)) card.min_price = min;
-    if (max > positivePrice(card.max_price)) card.max_price = max;
+    const cardMax = Math.max(positivePrice(card.max_price), max);
+    if (min > 0 && (cardMin === 0 || min < cardMin)) {
+      // The cheapest size stands for the Item: its slug is what compare and
+      // the watchlist save, so the card's "from" price is that size's price.
+      out[at] = {
+        ...row,
+        name: card.name,
+        min_price: min,
+        max_price: cardMax,
+        merchant_count: card.merchant_count,
+        item_slug: card.item_slug,
+        item_variants: card.item_variants,
+      };
+    } else {
+      card.max_price = cardMax;
+    }
   }
   return out;
 }
@@ -177,4 +191,44 @@ export function itemSizeChips(
     label: formatStorage(v.storage_gb as number),
     href: `${itemHref}?v=${encodeURIComponent(v.variant_key)}`,
   }));
+}
+
+/**
+ * Item rows in the order a price or merchant sort promises, by the numbers
+ * the card shows: grouping keeps each Item where its first variant ranked,
+ * which for a descending price sort is its dearest size (DOS/Rate#1155).
+ * Stable, unpriced rows last; any other sort keeps the read's order.
+ */
+export function sortItemRows<T extends { min_price?: unknown }>(
+  rows: readonly T[],
+  sort: string | undefined
+): T[] {
+  if (sort === 'merchants_desc') {
+    // By the merchant count the card shows (the Item's, all listings).
+    return rows
+      .map((row, index) => ({ row, index }))
+      .sort(
+        (a, b) =>
+          positivePrice(
+            (b.row as { merchant_count?: unknown }).merchant_count
+          ) -
+            positivePrice(
+              (a.row as { merchant_count?: unknown }).merchant_count
+            ) || a.index - b.index
+      )
+      .map((e) => e.row);
+  }
+  if (sort !== 'price_asc' && sort !== 'price_desc') return [...rows];
+  const dir = sort === 'price_asc' ? 1 : -1;
+  return rows
+    .map((row, index) => ({ row, index, price: positivePrice(row.min_price) }))
+    .sort((a, b) => {
+      if (a.price === 0 || b.price === 0) {
+        return (
+          (a.price === 0 ? 1 : 0) - (b.price === 0 ? 1 : 0) || a.index - b.index
+        );
+      }
+      return (a.price - b.price) * dir || a.index - b.index;
+    })
+    .map((e) => e.row);
 }

@@ -284,6 +284,13 @@ const _getCachedCategoryDirectoryFacetsByKey = cache(
     )(cleanCat)
 );
 
+/** Facets counted in variants whatever the Item flag (API v1, #1155). */
+export function getCachedVariantCategoryDirectoryFacets(categorySlug?: string) {
+  return _getCachedCategoryDirectoryFacetsByKey(
+    normalizeCachedFacetCategory(categorySlug)
+  );
+}
+
 export const getCachedCategoryDirectoryFacets = cache(
   async (categorySlug?: string) => {
     const facets = await _getCachedCategoryDirectoryFacetsByKey(

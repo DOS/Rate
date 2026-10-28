@@ -217,6 +217,7 @@ export default function ProductCard({
               <li key={chip.href}>
                 <Link
                   href={chip.href}
+                  aria-label={`${name} ${chip.label}`}
                   className="badge rounded-pill border text-body text-decoration-none fw-normal"
                 >
                   {chip.label}

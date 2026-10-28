@@ -3,7 +3,6 @@ import {
   computeProductRadarSignal,
   getCachedFilteredReviewCountsByMaster,
   getCachedMasterProducts,
-  groupCatalogRowsByItem,
   getMasterProductOffersBatch,
 } from '@/server/rate';
 import { radarExportFields } from '@/lib/deal-radar';
@@ -61,8 +60,7 @@ export async function GET(req: NextRequest) {
         categorySlug: category,
         limit: 500,
         sort: 'rating_desc',
-        // RATE_ITEM_MODEL on: one entry per Item (DOS/Rate#1155).
-      }).then(groupCatalogRowsByItem),
+      }),
       // A failed count read shows no blocked count (still true) instead of
       // failing the whole ranking (DOS/Rate#1139).
       getCachedFilteredReviewCountsByMaster().catch(

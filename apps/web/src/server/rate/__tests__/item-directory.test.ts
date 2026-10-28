@@ -49,6 +49,7 @@ const variantRow = (id: string, gb: number) => ({
 
 let calls: string[] = [];
 let schemaMissing = false;
+let itemsDown = false;
 globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
   const url = new URL(
     typeof input === 'string'
@@ -69,6 +70,12 @@ globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
       },
     });
   if (Number(url.searchParams.get('offset') ?? 0) > 0) return json([]);
+  if (itemsDown && url.pathname === '/rest/v1/items') {
+    return new Response(
+      JSON.stringify({ code: '57014', message: 'canceling statement' }),
+      { status: 500, headers: { 'content-type': 'application/json' } }
+    );
+  }
   if (
     schemaMissing &&
     (url.pathname === '/rest/v1/items' || q.includes('item_id'))
@@ -162,7 +169,7 @@ async function main() {
   assert.deepEqual(
     grouped.map((r) => [r.id, r.item_slug ?? null]),
     [
-      [V256, 'apple-iphone-16'],
+      [V128, 'apple-iphone-16'],
       [LONE, null],
     ]
   );
@@ -171,12 +178,34 @@ async function main() {
     grouped[0]!.item_variants!.map((v) => v.variant_key),
     ['128gb', '256gb']
   );
-  const page2 = await dir.getItemCatalogPage(async () => rows, 1, 5);
+  const page2 = await dir.getItemCatalogPage(
+    async (offset) => (offset === 0 ? rows : []),
+    1,
+    5
+  );
   assert.deepEqual(
     page2!.map((r) => r.id),
     [LONE],
     'offset counts Items, not variants'
   );
+
+  // Past 500 variants the read continues in batches, so no Item falls off
+  // the last page (Codex review): 600 lone variants, 2 batches, page 2.
+  const many = Array.from({ length: 600 }, (_, i) =>
+    row(`lone-${i}`, `lone-${i}`, 1000 + i)
+  );
+  const batches: number[] = [];
+  const tail = await dir.getItemCatalogPage(
+    async (offset, limit) => {
+      batches.push(offset);
+      return many.slice(offset, offset + limit);
+    },
+    580,
+    30
+  );
+  assert.deepEqual(batches, [0, 500]);
+  assert.equal(tail!.length, 20);
+  assert.equal(tail!.at(-1)!.id, 'lone-599');
 
   // Brand facets in Items; a master of a draft Item counts as itself.
   assert.deepEqual(await api.getCategoryItemBrandFacets(CATEGORY), [
@@ -197,6 +226,13 @@ async function main() {
   assert.equal(await dir.getItemBrandFacets(CATEGORY, 'smartphones'), null);
   assert.equal(await dir.getItemCount(), null);
   schemaMissing = false;
+
+  // Flag on, an Item read failing for another reason: variants too, never a
+  // failed page (review round 1).
+  itemsDown = true;
+  assert.equal(await dir.groupCatalogRowsByItem(rows), rows);
+  assert.equal(await dir.getItemCount(), null);
+  itemsDown = false;
   delete process.env.RATE_ITEM_MODEL;
 
   // The cached pages this touches keep their cache mode: the leaderboard
