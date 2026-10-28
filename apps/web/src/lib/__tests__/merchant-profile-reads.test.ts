@@ -1,4 +1,6 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 
 // A merchant profile on a cold render must not wait on one database round trip
 // after another: it reads its listings while the merchant loads, and its
@@ -11,6 +13,9 @@ process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = 'stub-anon-key';
 const MERCHANT_ID = '00000000-0000-4000-8000-000000001217';
 const MASTER_ID = '00000000-0000-4000-9000-000000001217';
 const LISTING_ID = '00000000-0000-4000-a000-000000001217';
+const SECOND_LISTING_ID = '00000000-0000-4000-a000-000000001240';
+const UNCLUSTERED_LISTING_ID = '00000000-0000-4000-a000-000000001241';
+const OTHER_LISTING_ID = '00000000-0000-4000-a000-0000000000ff';
 
 const merchantRow = {
   id: MERCHANT_ID,
@@ -63,6 +68,8 @@ function routeOf(url: URL): string {
 function installFetch(options: {
   merchantFound?: (route: Route | string) => boolean;
   listingsFail?: boolean;
+  /** Listings of MERCHANT_ID; any other merchant id lists OTHER_LISTING_ID. */
+  listings?: unknown[];
   delayMs?: number;
 }) {
   const calls: Recorded[] = [];
@@ -93,7 +100,15 @@ function installFetch(options: {
     if (route === 'merchant' || route === 'merchantBySlug') {
       body = options.merchantFound?.(route) === false ? [] : [merchantRow];
     } else if (route === 'listings') {
-      body = offset > 0 ? [] : [listingRow];
+      const ownListings = decodeURIComponent(url.search).includes(
+        `merchant_id=eq.${MERCHANT_ID}`
+      );
+      body =
+        offset > 0
+          ? []
+          : ownListings
+            ? (options.listings ?? [listingRow])
+            : [{ ...listingRow, id: OTHER_LISTING_ID }];
     } else if (route === 'master_products') {
       body = [
         {
@@ -118,6 +133,21 @@ function installFetch(options: {
     });
   }) as typeof fetch;
   return calls;
+}
+
+/** Error-level log lines written while `run` runs. */
+async function captureErrorLogs(run: () => Promise<void>): Promise<string[]> {
+  const lines: string[] = [];
+  const original = console.error;
+  console.error = (...args: unknown[]) => {
+    lines.push(args.map(String).join(' '));
+  };
+  try {
+    await run();
+  } finally {
+    console.error = original;
+  }
+  return lines;
 }
 
 async function main() {
@@ -249,7 +279,105 @@ async function main() {
       ),
       'the listings used are read for the merchant found'
     );
-    assert.equal(base.profile.listings.length, 1);
+    assert.deepEqual(
+      base.profile.listings.map((l) => l.id),
+      [LISTING_ID],
+      'the guessed id listings are discarded'
+    );
+  }
+
+  // 5b. Offers reach the price-history reader; two listings of one master
+  //     read it once; an unclustered listing has no master and no analysis;
+  //     a listing takes its price from the offers its verdict used (#1240).
+  {
+    installFetch({
+      listings: [
+        listingRow,
+        { ...listingRow, id: SECOND_LISTING_ID, price_current: 9_500_000 },
+        {
+          ...listingRow,
+          id: UNCLUSTERED_LISTING_ID,
+          price_current: 20_000_000,
+          cluster_id: null,
+        },
+      ],
+    });
+    const base = await getMerchantProfileBase(MERCHANT_ID);
+    assert.ok(base);
+    assert.deepEqual(base.listingMasterIds, {
+      [LISTING_ID]: MASTER_ID,
+      [SECOND_LISTING_ID]: MASTER_ID,
+    });
+    const offer = {
+      id: LISTING_ID,
+      platform: 'shopee',
+      title: 'Phone 1217',
+      price_current: 8_500_000,
+      price_original: 12_000_000,
+      stock: 3,
+      rating_star: 5,
+      rating_count: 1,
+      url: 'https://shopee.vn/product/1217/1',
+      merchant: {
+        id: MERCHANT_ID,
+        name: 'Shop 1217',
+        platform: 'shopee',
+        is_official: false,
+        rating_star: null,
+        follower_count: 0,
+        location: null,
+        risk_score: 10,
+        dosafe_risk_score: 10,
+        review_risk_score: 5,
+        review_risk_breakdown: null,
+      },
+    } as unknown as Parameters<
+      Parameters<typeof attachMerchantDiscountAnalysis>[1]['priceHistory']
+    >[1][number];
+    let offersCalls = 0;
+    const seenOffers: string[][] = [];
+    const profile = await attachMerchantDiscountAnalysis(base, {
+      offers: async () => {
+        offersCalls += 1;
+        return [offer];
+      },
+      priceHistory: async (_id, offers) => {
+        seenOffers.push(offers.map((o) => o.id));
+        return { ...emptyHistory, byOffer: { [LISTING_ID]: analysis } };
+      },
+    });
+    assert.equal(offersCalls, 1, 'one read per master, not per listing');
+    assert.deepEqual(seenOffers, [[LISTING_ID]]);
+    const byId = new Map(profile.listings.map((l) => [l.id, l]));
+    assert.equal(byId.get(LISTING_ID)?.price_current, 8_500_000);
+    assert.equal(byId.get(SECOND_LISTING_ID)?.price_current, 9_500_000);
+    assert.equal(byId.get(SECOND_LISTING_ID)?.discount_analysis, null);
+    assert.equal(byId.get(UNCLUSTERED_LISTING_ID)?.discount_analysis, null);
+    assert.equal(profile.min_price, 8_500_000);
+    assert.equal(profile.max_price, 20_000_000);
+  }
+
+  // 5c. The server layer attaches the analysis outside the profile's cache
+  //     entry: a nested unstable_cache skips its cache read, so the product
+  //     pages' entries would never be reused (DOS/Rate#1217).
+  {
+    const source = readFileSync(
+      join(__dirname, '../../server/rate/index.ts'),
+      'utf8'
+    );
+    const baseEntry = source.match(
+      /withRateDataCache\(\s*_getMerchantProfileBase,[\s\S]*?\)\(cleanId\)/
+    );
+    assert.ok(baseEntry, 'the base profile is a cache entry of its own');
+    assert.ok(
+      !baseEntry[0].includes('_attachMerchantDiscountAnalysis'),
+      'the analysis must not run inside the profile cache entry'
+    );
+    assert.match(
+      source,
+      /await _getCachedMerchantProfileBaseByKey\(cleanId\);\s*return base\s*\?\s*_attachMerchantDiscountAnalysis\(base, CACHED_MASTER_READERS\)/,
+      'getCachedMerchantProfileById attaches the analysis after the cache read'
+    );
   }
 
   // 6. An unknown merchant is null, even when the early listings read fails.
@@ -260,16 +388,30 @@ async function main() {
       null
     );
     installFetch({ merchantFound: () => false, listingsFail: true });
-    assert.equal(
-      await getMerchantProfileBase('00000000-0000-4000-8000-0000000000cc'),
-      null
+    const errors = await captureErrorLogs(async () => {
+      assert.equal(
+        await getMerchantProfileBase('00000000-0000-4000-8000-0000000000cc'),
+        null
+      );
+    });
+    assert.deepEqual(
+      errors,
+      [],
+      'a discarded speculative read logs nothing (#1240)'
     );
   }
 
-  // 7. A failed listings read for the merchant found fails the profile.
+  // 7. A failed listings read for the merchant found fails the profile, and
+  //    is logged once.
   {
     installFetch({ listingsFail: true });
-    await assert.rejects(getMerchantProfileBase(MERCHANT_ID));
+    const errors = await captureErrorLogs(async () => {
+      await assert.rejects(getMerchantProfileBase(MERCHANT_ID));
+    });
+    assert.equal(
+      errors.filter((line) => line.includes('merchant listings')).length,
+      1
+    );
   }
 
   await new Promise((resolve) => setTimeout(resolve, 50));
