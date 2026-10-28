@@ -177,6 +177,47 @@ export interface ItemMatchResult {
 
 type MatchedItem = { id: string; itemKey: string };
 
+/**
+ * A variant candidate with its Item's specs, description, key specs and images; the
+ * variant keeps its own storage and RAM (design doc 4.1 "overrides only").
+ */
+function inheritItemProfile(
+  candidate: NormalizedProductCandidate,
+  profile: ItemProfile
+): NormalizedProductCandidate {
+  const specifications = mergeProductSpecifications(
+    candidate.specifications,
+    profile.specifications
+  ) as Record<string, unknown>;
+  const hardware = (specifications.hardware ?? {}) as Record<string, unknown>;
+  const ownHardware = (candidate.specifications?.hardware ?? {}) as Record<string, unknown>;
+  specifications.hardware = {
+    ...hardware,
+    storage_gb: ownHardware.storage_gb,
+    ram_gb: ownHardware.ram_gb ?? hardware.ram_gb,
+  };
+  const ownStorage = (candidate.key_specs as Record<string, unknown> | undefined)?.storage;
+  return {
+    ...candidate,
+    description: profile.description ?? candidate.description,
+    specifications: specifications as NormalizedProductCandidate['specifications'],
+    key_specs: {
+      ...profile.keySpecs,
+      ...(ownStorage !== undefined ? { storage: ownStorage } : {}),
+    } as NormalizedProductCandidate['key_specs'],
+    images: profile.images.length > 0 ? profile.images : candidate.images,
+  };
+}
+
+/** Item-level fields a new variant inherits (design doc 4.1, DOS/Rate#1152). */
+type ItemProfile = {
+  status: string | null;
+  description: string | null;
+  specifications: ReturnType<typeof mergeProductSpecifications>;
+  keySpecs: Record<string, unknown>;
+  images: string[];
+};
+
 export class EntityMatcher {
   private enricher: AiSpecEnricher;
   public readonly itemModel: ItemModelMode;
@@ -358,14 +399,19 @@ export class EntityMatcher {
     // ("iPhone 15 Pro Max" ~ "iPhone 15 Pro"), so a new variant gets its own key.
     if (fuzzyItem) return seedOwnKey();
 
-    // Missing variant of a known Item: create it under the Item's own key.
+    // Missing variant of a known Item: create it under the Item's own key. It takes the
+    // Item's specs (only storage and RAM are its own) and, for a stated size, the
+    // Item's publish state: a new size of a published Item is published (design doc
+    // 4.5 step 2, DOS/Rate#1152).
     const variantModelKey = composeModelKey(item.itemKey, targetVariantKey);
+    const profile = await this.itemProfile(item.id);
     const seeded = await this.seedMasterProduct(
       { ...candidate, model_key: variantModelKey },
       variantModelKey,
       safeCategoryId,
       safeRawTitle,
-      ambiguousFuzzy
+      ambiguousFuzzy,
+      profile ? { profile, publish: variantKnown && profile.status === 'published' } : undefined
     );
     logger.info(
       'entity_match.variant_created',
@@ -436,6 +482,43 @@ export class EntityMatcher {
       { itemId: item.id, similarity: sim }
     );
     return { item, ambiguous: false };
+  }
+
+  /**
+   * The Item-level fields a new variant inherits (design doc 4.1). Null when the Item
+   * has no specs yet (a draft Item the M1 trigger just created): the variant is then
+   * enriched and seeded as before.
+   */
+  private async itemProfile(itemId: string): Promise<ItemProfile | null> {
+    const { data, error } = await this.supabase
+      .from('items')
+      .select('id, status, description, specifications, key_specs, images')
+      .eq('id', itemId)
+      .maybeSingle();
+    if (error) {
+      throw new Error(`[EntityMatcher] Item profile lookup for ${itemId} failed: ${error.message}`);
+    }
+    const row = data as Record<string, unknown> | null;
+    if (!row) return null;
+    const specifications = mergeProductSpecifications(undefined, row.specifications);
+    const hasSpecs = Object.entries(specifications).some(
+      ([group, fields]) =>
+        group !== 'category_slug' &&
+        Boolean(fields) &&
+        typeof fields === 'object' &&
+        Object.values(fields as Record<string, unknown>).some(v => v !== undefined && v !== null)
+    );
+    if (!hasSpecs) return null;
+    return {
+      status: typeof row.status === 'string' ? row.status : null,
+      description: typeof row.description === 'string' ? row.description : null,
+      specifications,
+      keySpecs:
+        row.key_specs && typeof row.key_specs === 'object' && !Array.isArray(row.key_specs)
+          ? (row.key_specs as Record<string, unknown>)
+          : {},
+      images: sanitizeHttpUrlList(row.images),
+    };
   }
 
   private async listItemVariants(
@@ -641,11 +724,15 @@ export class EntityMatcher {
     safeModelKey: string,
     safeCategoryId: string | undefined,
     safeRawTitle: string | undefined,
-    ambiguousFuzzy: boolean
+    ambiguousFuzzy: boolean,
+    inherit?: { profile: ItemProfile; publish: boolean }
   ): Promise<{ masterId: string; isNew: boolean }> {
     // Tier 3: No existing master product matches -> Enrich with AI Spec Enricher (if not in local benchmark registry)
-    // and seed a new Master Product.
-    candidate = await this.enricher.enrichCandidate(candidate, safeRawTitle);
+    // and seed a new Master Product. A variant of a known Item takes the Item's specs
+    // instead: no AI call, and only storage and RAM are its own (DOS/Rate#1152).
+    candidate = inherit
+      ? inheritItemProfile(candidate, inherit.profile)
+      : await this.enricher.enrichCandidate(candidate, safeRawTitle);
 
     // - Upsert on model_key (unique) so a concurrent crawler inserting the same
     //   canonical entity resolves instead of crashing (plan v7 §5.1 / Gemini B3).
@@ -657,8 +744,15 @@ export class EntityMatcher {
       candidate.spec_source === 'ai_unverified' ||
       candidate.spec_source === 'crawled_title' ||
       !candidate.is_benchmark_enriched;
-    const seedStatus =
-      candidate.needs_review || ambiguousFuzzy || isUnverifiedSpec ? 'draft' : 'published';
+    // A stated size of a published Item is published like its Item, unless the listing
+    // itself is not a new device.
+    const seedStatus = inherit
+      ? inherit.publish && (candidate.condition ?? 'new') === 'new'
+        ? 'published'
+        : 'draft'
+      : candidate.needs_review || ambiguousFuzzy || isUnverifiedSpec
+        ? 'draft'
+        : 'published';
     logger.info(
       'entity_match.tier3_create_start',
       `Tier 3: Creating new canonical Master Product: ${candidate.name} (status: ${seedStatus}, spec_source: ${candidate.spec_source ?? 'unknown'})...`,

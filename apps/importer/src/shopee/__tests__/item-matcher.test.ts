@@ -87,7 +87,15 @@ const normalizer = new ProductNormalizer();
 const candidateFor = (title: string) => normalizer.normalize({ title } as ShopeeProduct);
 
 interface ItemDb {
-  items?: Array<{ id: string; item_key: string }>;
+  items?: Array<{
+    id: string;
+    item_key: string;
+    status?: string;
+    description?: string;
+    specifications?: Row;
+    key_specs?: Row;
+    images?: string[];
+  }>;
   variants?: Array<{ id: string; item_id: string; variant_key: string; status?: string }>;
   matchItem?: Row[];
   matchItemErr?: { message: string };
@@ -275,6 +283,78 @@ async function run() {
       db.calls.find(c => c.op === 'upsert')?.payload?.model_key,
       'asus:zenbook-s-14:512gb'
     );
+  }
+  {
+    // DOS/Rate#1152: a new size of a known Item takes the Item's specs and, for a
+    // published Item, its publish state; no AI call. Storage and RAM stay its own.
+    let enrichCalls = 0;
+    const countingEnricher = {
+      enrichCandidate: async <T>(candidate: T) => {
+        enrichCalls += 1;
+        return candidate;
+      },
+    } as unknown as AiSpecEnricher;
+    const itemSpecs = {
+      display: { size_inch: 14, type: 'OLED 3K' },
+      hardware: { chipset: 'Intel Core Ultra 7 258V', ram_gb: 32, storage_gb: 1024 },
+      battery: { capacity_mah: 4700 },
+    };
+    const publishedItem = {
+      ...ZENBOOK_ITEM,
+      status: 'published',
+      description: 'Zenbook S 14 (item description)',
+      specifications: itemSpecs,
+      key_specs: { chipset: 'Core Ultra 7 258V', storage: '1TB' },
+      images: ['https://rate.vn/img/zenbook-s-14.jpg'],
+    };
+    const title = 'Laptop ASUS Zenbook S 14 UX5406AA 16GB 512GB SSD';
+    const db = createItemDb({ items: [publishedItem], variants: [ZENBOOK_1TB] });
+    const result = await new EntityMatcher(db.client, countingEnricher, {
+      itemModel: 'item',
+    }).resolveItemAndVariant(candidateFor(title), 'cat-laptops');
+    assert.equal(result.masterId, 'seeded-master');
+    const seeded = db.calls.find(c => c.op === 'upsert')?.payload as Row;
+    assert.equal(seeded.model_key, 'asus:zenbook-s-14:512gb');
+    assert.equal(seeded.status, 'published', 'a new size of a published Item is published');
+    assert.equal(seeded.storage_gb, 512);
+    assert.equal(seeded.description, 'Zenbook S 14 (item description)');
+    assert.deepEqual(seeded.images, ['https://rate.vn/img/zenbook-s-14.jpg']);
+    const seededSpecs = seeded.specifications as { display?: Row; hardware?: Row };
+    assert.equal(seededSpecs.display?.type, 'OLED 3K');
+    assert.equal(seededSpecs.hardware?.chipset, 'Intel Core Ultra 7 258V');
+    assert.equal(seededSpecs.hardware?.storage_gb, 512, 'storage is the variant own value');
+    assert.equal(seededSpecs.hardware?.ram_gb, 16, 'RAM is the variant own value');
+    const seededKeySpecs = seeded.key_specs as Row;
+    assert.equal(seededKeySpecs.chipset, 'Core Ultra 7 258V');
+    assert.notEqual(seededKeySpecs.storage, '1TB');
+    assert.equal(enrichCalls, 0, 'an inherited variant needs no AI enrichment');
+
+    // A draft Item keeps its new variant a draft; a used listing never publishes one.
+    const draftDb = createItemDb({
+      items: [{ ...publishedItem, status: 'draft' }],
+      variants: [ZENBOOK_1TB],
+    });
+    await new EntityMatcher(draftDb.client, countingEnricher, {
+      itemModel: 'item',
+    }).resolveItemAndVariant(candidateFor(title), 'cat-laptops');
+    assert.equal(draftDb.calls.find(c => c.op === 'upsert')?.payload?.status, 'draft');
+    const usedDb = createItemDb({ items: [publishedItem], variants: [ZENBOOK_1TB] });
+    await new EntityMatcher(usedDb.client, countingEnricher, {
+      itemModel: 'item',
+    }).resolveItemAndVariant(candidateFor(`${title} cũ đẹp 99%`), 'cat-laptops');
+    assert.equal(usedDb.calls.find(c => c.op === 'upsert')?.payload?.status, 'draft');
+
+    // An Item with no specs yet: the variant is enriched and seeded as before (the
+    // Zenbook is a registry model, so the old rule publishes it).
+    const bareDb = createItemDb({
+      items: [{ ...ZENBOOK_ITEM, status: 'published' }],
+      variants: [ZENBOOK_1TB],
+    });
+    await new EntityMatcher(bareDb.client, countingEnricher, {
+      itemModel: 'item',
+    }).resolveItemAndVariant(candidateFor(title), 'cat-laptops');
+    assert.equal(enrichCalls, 1);
+    assert.equal(bareDb.calls.find(c => c.op === 'upsert')?.payload?.status, 'published');
   }
   {
     // #1105: a storage-less title on a multi-size Item never lands on the sized variant.
