@@ -858,7 +858,18 @@ async function runSuite() {
     assert.equal(fr265s.is_benchmark_enriched, false, title);
     assert.equal(fr265s.battery_mah, null, title);
   }
-  assert.equal(keyOf('Garmin Forerunner 265 Sport'), 'garmin:forerunner-265:8gb');
+  // A word that starts with S is no 265S suffix, Vietnamese ones included (DOS/Rate#1262).
+  for (const title of [
+    'Garmin Forerunner 265 Sport',
+    'Garmin Forerunner 265 Sạc nhanh',
+    'Garmin Forerunner 265 sale',
+    'Garmin Forerunner 265 Sạc',
+    'Garmin Forerunner 265 Sắc nét',
+    'Garmin Forerunner 265 S/M',
+  ]) {
+    assert.equal(keyOf(title), 'garmin:forerunner-265:8gb', title);
+  }
+  assert.equal(keyOf('Garmin Forerunner 265 S'), 'garmin:forerunner-265s:unknown');
   // A band size "S/M" after the 265 is no 265S.
   assert.equal(keyOf('Garmin Forerunner 265 S/M band'), 'garmin:forerunner-265:8gb');
   assert.equal(keyOf('Garmin Forerunner 265 S-M band'), 'garmin:forerunner-265:8gb');

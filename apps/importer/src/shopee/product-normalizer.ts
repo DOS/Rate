@@ -1728,10 +1728,11 @@ export class ProductNormalizer {
       model = 'ThinkPad X1 Carbon Gen 12';
     } else if (
       brand === 'Garmin' &&
-      /forerunner\s*265[ -]?s(?![a-z])(?! ?[/-] ?[a-z])/i.test(modelTitle)
+      /forerunner\s*265[ -]?s(?![\p{L}\p{M}])(?! ?[/-] ?[a-z])/iu.test(modelTitle)
     ) {
       // The 265S is the 42mm model, not the 46mm 265 (DOS/Rate#1222): "265S", "265 S",
-      // "265-S", "265S42mm", but not a "265 S/M" band size or a word ("265 Sport").
+      // "265-S", "265S42mm", but not a "265 S/M" band size or a word ("265 Sport", and
+      // "265 Sạc nhanh", whose next letter is not ASCII, DOS/Rate#1262).
       model = 'Forerunner 265S';
     } else if (brand === 'Garmin' && /forerunner\s*265/i.test(modelTitle)) {
       model = 'Forerunner 265';
