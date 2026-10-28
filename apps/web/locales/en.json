@@ -129,6 +129,7 @@
     "tieDeltaNote": "(same score with the current weights)",
     "tie1v1Badge": "1v1 Tie",
     "versusAutoVerdictTie": "Automatic verdict: the two models are level on overall score ({score}/5.0); choose on price and the specs you need.",
+    "versusVerdictWeights": "(Weights: {weights}.)",
     "compareMetaTitleWithNames": "Compare {names} - Ratings and 10 spec groups | Rate.vn",
     "compareMetaTitleWithNamesShort": "{names} | Rate.vn",
     "compareMetaDescWithNames": "Compare real review scores, 10 spec groups and reference prices for {names} on Rate.vn.",

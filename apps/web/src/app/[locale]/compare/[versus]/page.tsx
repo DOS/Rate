@@ -1,7 +1,6 @@
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { getTranslations, setRequestLocale } from 'next-intl/server';
-import { isVersusScoreTie } from '@/lib/versus-verdict';
 import { BsTrophy } from 'react-icons/bs';
 import { Link } from '@/lib/navigation';
 import {
@@ -12,10 +11,7 @@ import {
 } from '@/server/rate';
 import { normalizeRateLocale } from '@/lib/rate-i18n';
 import { defaultOpenGraph, fitTitle, fitDescription } from '@/lib/seo';
-import {
-  comparePositiveMinPrices,
-  scoreMasterProductForLeaderboard,
-} from '@/lib/leaderboard-engine';
+import { scoreMasterProductForLeaderboard } from '@/lib/leaderboard-engine';
 import PageShell from '../../components/page-shell';
 import CompareWorkspace from '@/components/compare/CompareWorkspace';
 import CompareTrayBar from '@/components/compare/CompareTrayBar';
@@ -133,19 +129,6 @@ export default async function VersusComparePage({ params }: VersusPageProps) {
   const scoreA = scoreMasterProductForLeaderboard(prodA, 'combined');
   const scoreB = scoreMasterProductForLeaderboard(prodB, 'combined');
 
-  const tiePriceSide = comparePositiveMinPrices(
-    scoreA.minPrice,
-    scoreB.minPrice
-  );
-  const overallWinner =
-    scoreA.combinedScore5 > scoreB.combinedScore5
-      ? scoreA
-      : scoreB.combinedScore5 > scoreA.combinedScore5
-        ? scoreB
-        : tiePriceSide === 'B'
-          ? scoreB
-          : scoreA;
-
   // Summary ItemList: each item links to its product page, which carries the
   // Product markup (DOS/Rate#1059).
   const itemListSchema = {
@@ -213,21 +196,6 @@ export default async function VersusComparePage({ params }: VersusPageProps) {
               {scoreA.name} <span className="text-danger mx-1">vs</span>{' '}
               {scoreB.name}
             </h1>
-
-            <p className="text-white-50 small mb-4">
-              {isVersusScoreTie(scoreA.combinedScore5, scoreB.combinedScore5)
-                ? t('versusAutoVerdictTie', {
-                    score: scoreA.combinedScore5.toFixed(2),
-                  })
-                : t('versusAutoVerdict', {
-                    winner: overallWinner.name,
-                    score: overallWinner.combinedScore5.toFixed(2),
-                    expertSuffix:
-                      overallWinner.expertScore10 != null
-                        ? ` (${overallWinner.expertScore10.toFixed(1)}/10 Lab)`
-                        : '',
-                  })}
-            </p>
 
             <VersusInteractiveScoreboard
               scoreA={scoreA}
