@@ -10,22 +10,23 @@ import {
   filterValidSparklinePrices,
   formatSafeExtensionVnd,
   formatSafeNumber,
-  normalizeFiveStarRating,
   resolveSafeApiRelativeUrl,
   sanitizeVerdictClassSuffix,
 } from '../security-guards.js';
+import {
+  classifyLookupFailure,
+  escapeHtml,
+  isLookupWithoutProduct,
+  renderActionRowsHtml,
+  renderLookupErrorHtml,
+  renderNotFoundHtml,
+  renderOffersCardHtml,
+  renderReviewCardHtml,
+  type PanelActionLink,
+} from './panel-view.js';
 
 function formatVnd(val: number | null | undefined): string {
   return formatSafeExtensionVnd(val);
-}
-
-function escapeHtml(raw: string): string {
-  return raw
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
 }
 
 function buildSvgSparkline(points: ExtensionPriceHistoryPoint[]): string {
@@ -160,7 +161,7 @@ async function fetchAndRenderDealRadar(
                     <div>
                       <div class="offer-shop">${escapeHtml(s.productName)}</div>
                       <div class="offer-meta" style="color:#93c5fd;">
-                        ${escapeHtml(s.cheapestPlatform.toUpperCase())} (${formatVnd(s.minPrice)}) vs ${escapeHtml(s.priciestPlatform.toUpperCase())} (${formatVnd(s.maxPrice)})
+                        ${escapeHtml(s.cheapestPlatform.toUpperCase())} (${formatVnd(s.minPrice)}) so với ${escapeHtml(s.priciestPlatform.toUpperCase())} (${formatVnd(s.maxPrice)})
                       </div>
                     </div>
                     <a href="${escapeSafeExternalHref(s.cheapestOfferUrl)}" target="_blank" rel="noopener noreferrer" class="offer-price" style="text-decoration:none;color:#60a5fa;">
@@ -178,7 +179,7 @@ async function fetchAndRenderDealRadar(
           traps.length > 0
             ? `
             <div style="margin-top:10px;padding-top:8px;border-top:1px solid #2a2f3a;">
-              <div class="card-title" style="color:#f87171;">⚠️ Cảnh Báo Bẫy Nâng Giá Gốc (Fake Sale)</div>
+              <div class="card-title" style="color:#f87171;">⚠️ Cảnh Báo Giảm Giá Ảo</div>
               ${traps
                 .slice(0, 2)
                 .map(
@@ -283,14 +284,14 @@ async function fetchAndRenderMerchantTrustDirectory(
                     <a href="${detailHref}" target="_blank" rel="noopener noreferrer" style="color:#f3f4f6;text-decoration:none;">
                       ${escapeHtml(m.name)}
                     </a>
-                    ${m.is_official ? '<span style="color:#34d399;font-size: 13px;">[Mall]</span>' : ''}
+                    ${m.is_official ? '<span style="color:#34d399;font-size: 13px;">Chính hãng</span>' : ''}
                   </div>
                   <div class="offer-meta">
                     ${escapeHtml(m.platform.toUpperCase())} (${formatSafeNumber(m.product_count, { min: 0 })} SP) - Rủi ro lừa đảo: ${formatSafeNumber(m.dosafe_risk_score, { min: 0, max: 100 })} | Rủi ro đánh giá: ${reviewRiskText(m.review_risk_score)}
                   </div>
                 </div>
                 <a href="${detailHref}" target="_blank" rel="noopener noreferrer" class="offer-price" style="text-decoration:none;color:${trustColor};">
-                  Trust ${formatSafeNumber(m.trust_score, { min: 0, max: 100 })}/100
+                  Tin cậy ${formatSafeNumber(m.trust_score, { min: 0, max: 100 })}/100
                 </a>
               </div>
             `;
@@ -326,15 +327,18 @@ function renderPanelContent(
     return;
   }
 
-  if (!lookup) {
+  // Not found or an accessory: a short state with a search link, no product
+  // card and no product buttons (DOS/Rate#1299). A failed lookup never gets
+  // here; it renders an error card (DOS/Rate#1300).
+  if (!lookup || isLookupWithoutProduct(lookup)) {
+    const accessory = Boolean(
+      lookup &&
+      (lookup.isAccessoryOrPart ||
+        lookup.matchStatus === 'accessory_skip' ||
+        lookup.priceAssessment?.verdict === 'accessory_skip')
+    );
     root.innerHTML = `
-      <div class="card">
-        <div class="card-title">Không kết nối được Rate API</div>
-        <div class="product-name">${escapeHtml(signal.title)}</div>
-        <p style="color: #9ca3af;">
-          Kiểm tra lại địa chỉ máy chủ Rate API (${escapeHtml(settings.apiBaseUrl)}).
-        </p>
-      </div>
+      ${renderNotFoundHtml(signal, settings.apiBaseUrl, accessory)}
       <div id="deal-radar-slot"></div>
       <div id="merchant-trust-slot"></div>
     `;
@@ -408,66 +412,17 @@ function renderPanelContent(
   const offersList =
     lookup.allOffers.length > 0 ? lookup.allOffers : lookup.topCheaperOffers;
 
-  const offersHtml =
-    offersList.length > 0
-      ? `
-      <div class="card">
-        <div class="card-title">So Sánh Giá Các Gian Hàng (${offersList.length})</div>
-        ${offersList
-          .slice(0, 5)
-          .map(
-            (off) => `
-            <div class="offer-item">
-              <div>
-                <div class="offer-shop">
-                  ${escapeHtml(off.merchant.name)}
-                  ${off.merchant.is_official ? '<span style="color:#34d399;font-size: 13px;">[Mall]</span>' : ''}
-                </div>
-                <div class="offer-meta">
-                  ${escapeHtml(off.platform.toUpperCase())} - ★ ${formatSafeNumber(off.rating_star, { min: 0, max: 5, decimals: 1 })} - Rủi ro shop: ${formatSafeNumber(off.merchant.risk_score, { min: 0, max: 100 })}/100
-                </div>
-              </div>
-              <a href="${escapeSafeExternalHref(off.url)}" target="_blank" rel="noopener noreferrer" class="offer-price" style="text-decoration:none;">
-                ${formatVnd(off.price_current)}
-              </a>
-            </div>
-          `
-          )
-          .join('')}
-      </div>
-    `
-      : '';
+  const offersHtml = renderOffersCardHtml(offersList);
 
-  const reviewHtml = reviews
-    ? `
-      <div class="card">
-        <div class="card-title">Chất lượng đánh giá (đã lọc đánh giá ảo)</div>
-        <div class="stats-grid">
-          <div class="stat-box">
-            <div class="stat-label">Điểm User Đã Lọc</div>
-            <div class="stat-val" style="color: #fbbf24;">★ ${formatSafeNumber(normalizeFiveStarRating(master?.user_rating_weighted || master?.average_rating) ?? 0, { min: 0, max: 5, decimals: 1 })} / 5</div>
-          </div>
-          <div class="stat-box">
-            <div class="stat-label">Tỷ Lệ Đánh Giá Thật</div>
-            <div class="stat-val" style="color: #34d399;">${formatSafeNumber(reviews.authentic_pct, { min: 0, max: 100 })}% (${formatSafeNumber(reviews.total_analyzed, { min: 0 })} đánh giá)</div>
-          </div>
-        </div>
-        ${
-          reviews.ai_summary
-            ? `<p style="margin-top: 8px; color: #d1d5db; font-size: 13px;">${escapeHtml(reviews.ai_summary)}</p>`
-            : ''
-        }
-      </div>
-    `
-    : '';
+  const reviewHtml = renderReviewCardHtml(reviews, master);
 
   const merchantRiskHtml = merchant
     ? `
       <div class="card">
-        <div class="card-title">Độ Tin Cậy Gian Hàng (Dual Risk Score)</div>
+        <div class="card-title">Độ Tin Cậy Gian Hàng</div>
         <div class="stats-grid">
           <div class="stat-box">
-            <div class="stat-label">Trust Score</div>
+            <div class="stat-label">Điểm tin cậy</div>
             <div class="stat-val" style="color: #34d399;">${formatSafeNumber(merchant.trust_score, { min: 0, max: 100 })}/100</div>
           </div>
           <div class="stat-box">
@@ -565,7 +520,8 @@ function renderPanelContent(
   const compareUrl = resolveSafeApiRelativeUrl(
     settings.apiBaseUrl,
     lookup.compareUrl,
-    `/compare?cat=${categorySlug}`
+    // The compare page reads `category` (DOS/Rate#1299).
+    `/compare?category=${categorySlug}`
   );
   const leaderboardUrl = resolveSafeApiRelativeUrl(
     settings.apiBaseUrl,
@@ -576,7 +532,7 @@ function renderPanelContent(
     ? resolveSafeApiRelativeUrl(
         settings.apiBaseUrl,
         lookup.versusUrl,
-        `/compare?cat=${categorySlug}`
+        `/compare?category=${categorySlug}`
       )
     : null;
   const inspectUrl = resolveSafeApiRelativeUrl(
@@ -609,6 +565,17 @@ function renderPanelContent(
           : ''
     : '';
 
+  // Each link once; with no rival the versus slot is simply absent
+  // (DOS/Rate#1299).
+  const actionLinks: PanelActionLink[] = [
+    { href: detailUrl, label: 'Xem Trên Rate.vn', primary: true },
+    { href: compareUrl, label: 'So Sánh Cấu Hình' },
+    { href: leaderboardUrl, label: '🏆 Bảng Xếp Hạng' },
+    ...(versusUrl ? [{ href: versusUrl, label: '⚔️ Đối Đầu 1v1' }] : []),
+    { href: inspectUrl, label: '🔬 Kiểm tra chi tiết' },
+    { href: watchlistUrl, label: '🔔 Canh Giá Thật' },
+  ];
+
   root.innerHTML = `
     <div class="card">
       <div style="display:flex;flex-wrap:wrap;gap:4px;align-items:center;">
@@ -627,22 +594,7 @@ function renderPanelContent(
           <div class="stat-val">${formatVnd(assessment.marketMedianPrice)}</div>
         </div>
       </div>
-      <div class="btn-row">
-        <a class="btn-primary" href="${detailUrl}" target="_blank" rel="noopener noreferrer">Xem Trên Rate.vn</a>
-        <a class="btn-secondary" href="${compareUrl}" target="_blank" rel="noopener noreferrer">So Sánh Cấu Hình</a>
-      </div>
-      <div class="btn-row" style="margin-top: 6px;">
-        <a class="btn-secondary" href="${leaderboardUrl}" target="_blank" rel="noopener noreferrer">🏆 Bảng Xếp Hạng</a>
-        ${
-          versusUrl
-            ? `<a class="btn-secondary" href="${versusUrl}" target="_blank" rel="noopener noreferrer">⚔️ Đối Đầu 1v1</a>`
-            : `<a class="btn-secondary" href="${inspectUrl}" target="_blank" rel="noopener noreferrer">🔬 Kiểm tra chi tiết</a>`
-        }
-      </div>
-      <div class="btn-row" style="margin-top: 6px;">
-        <a class="btn-secondary" href="${inspectUrl}" target="_blank" rel="noopener noreferrer">🔬 Kiểm tra chi tiết</a>
-        <a class="btn-secondary" href="${watchlistUrl}" target="_blank" rel="noopener noreferrer">🔔 Canh Giá Thật</a>
-      </div>
+      ${renderActionRowsHtml(actionLinks)}
     </div>
     ${leaderboardCardHtml}
     ${variantButtonsHtml}
@@ -687,6 +639,7 @@ async function loadSidePanel(selectedVariant?: string): Promise<void> {
       settings?: ExtensionSettings;
       signal?: ExtractedPageProductSignal | null;
       data?: ExtensionLookupData | null;
+      status?: number | null;
     };
 
     const settings: ExtensionSettings = res?.settings || {
@@ -701,6 +654,13 @@ async function loadSidePanel(selectedVariant?: string): Promise<void> {
       inpApiBase.value = settings.apiBaseUrl;
     }
 
+    if (res?.ok === false) {
+      renderLookupError(root, res.status, res.signal?.title, () => {
+        void loadSidePanel(selectedVariant);
+      });
+      return;
+    }
+
     renderPanelContent(
       root,
       res?.signal || null,
@@ -710,14 +670,30 @@ async function loadSidePanel(selectedVariant?: string): Promise<void> {
         void loadSidePanel(variantLabel);
       }
     );
-  } catch (err) {
-    root.innerHTML = `
-      <div class="card">
-        <div class="card-title">Lỗi tải dữ liệu</div>
-        <p style="color: #9ca3af;">${escapeHtml(err instanceof Error ? err.message : 'Không thể tải dữ liệu.')}</p>
-      </div>
-    `;
+  } catch {
+    renderLookupError(root, null, null, () => {
+      void loadSidePanel(selectedVariant);
+    });
   }
+}
+
+/**
+ * A failed lookup shows why and a retry button, never "not a product page"
+ * or the server settings hint (DOS/Rate#1300).
+ */
+function renderLookupError(
+  root: HTMLElement,
+  status: number | null | undefined,
+  productTitle: string | null | undefined,
+  retry: () => void
+): void {
+  root.innerHTML = renderLookupErrorHtml(
+    classifyLookupFailure(status),
+    productTitle
+  );
+  root
+    .querySelector<HTMLButtonElement>('[data-action="retry"]')
+    ?.addEventListener('click', retry);
 }
 
 async function runQuickQuery(query: string): Promise<void> {
@@ -740,12 +716,20 @@ async function runQuickQuery(query: string): Promise<void> {
       signal?: ExtractedPageProductSignal | null;
       data?: ExtensionLookupData | null;
       error?: string;
+      status?: number | null;
     };
 
     const settings: ExtensionSettings = res?.settings || {
       apiBaseUrl: DEFAULT_API_BASE_URL,
       crowdContributeOptIn: false,
     };
+
+    if (res?.ok === false) {
+      renderLookupError(root, res.status, res.signal?.title ?? query, () => {
+        void runQuickQuery(query);
+      });
+      return;
+    }
 
     renderPanelContent(
       root,
@@ -756,13 +740,10 @@ async function runQuickQuery(query: string): Promise<void> {
         void loadSidePanel(variantLabel);
       }
     );
-  } catch (err) {
-    root.innerHTML = `
-      <div class="card">
-        <div class="card-title">Lỗi tra cứu nhanh</div>
-        <p style="color: #9ca3af;">${escapeHtml(err instanceof Error ? err.message : 'Không thể kiểm tra sản phẩm.')}</p>
-      </div>
-    `;
+  } catch {
+    renderLookupError(root, null, query, () => {
+      void runQuickQuery(query);
+    });
   }
 }
 

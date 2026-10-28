@@ -25,6 +25,11 @@ import {
   selectFreshestSessionSignal,
   shouldRenderTrustPill,
 } from './security-guards.js';
+import type {
+  ExtensionLookupData,
+  ExtensionOfferItem,
+  ExtensionPriceVerdict,
+} from './types.js';
 import * as extModule from '../../web/src/server/rate/extension.js';
 import * as rateApiRootMod from '../../web/src/lib/rate-api.js';
 const {
@@ -3667,6 +3672,393 @@ async function runTests() {
 
     console.log(
       '  \u2705 [Rate-Domain & Spec-Localizer Numeric, Key-Spec, and Sentinel Bounds (#1038)] Verified'
+    );
+  }
+
+  // Side panel price list: order and marks (DOS/Rate#1297)
+  {
+    const {
+      cheapestBuyableOfferId,
+      offerMarks,
+      orderOffersForPanel,
+      renderOffersCardHtml,
+    } = await import('./sidepanel/panel-view.js');
+    const offer = (
+      id: string,
+      price: number,
+      extra: Partial<ExtensionOfferItem> = {}
+    ): ExtensionOfferItem => ({
+      id,
+      platform: 'shopee',
+      title: id,
+      price_current: price,
+      price_original: null,
+      rating_star: 4.8,
+      rating_count: 10,
+      historical_sold: 0,
+      url: `https://shopee.vn/${id}-i.1.2`,
+      merchant: {
+        id: `m-${id}`,
+        name: `Shop ${id}`,
+        is_official: false,
+        risk_score: 12,
+        dosafe_risk_score: 5,
+        review_risk_score: null,
+      },
+      ...extra,
+    });
+    const offers = [
+      offer('sold', 9_000_000, { availability: 'out_of_stock' }),
+      offer('bait', 2_000_000, { implausiblyLow: true }),
+      offer('b', 21_000_000),
+      offer('gone', 8_000_000, { availability: 'discontinued' }),
+      offer('a', 20_000_000, { availability: 'in_stock' }),
+      offer('a2', 20_000_000),
+    ];
+    assert.deepEqual(
+      orderOffersForPanel(offers).map((o) => o.id),
+      ['a', 'a2', 'b', 'bait', 'gone', 'sold'],
+      'in-stock plausible offers first, by price, ties in server order'
+    );
+    assert.equal(cheapestBuyableOfferId(offers), 'a');
+    assert.equal(
+      cheapestBuyableOfferId([offers[0]!, offers[1]!]),
+      null,
+      'a sold-out or bait row is never the cheapest'
+    );
+    assert.deepEqual(offerMarks(offers[0]!), ['Hết hàng']);
+    assert.deepEqual(offerMarks(offers[3]!), ['Ngừng bán']);
+    assert.deepEqual(offerMarks(offers[1]!), ['Giá thấp bất thường']);
+    assert.deepEqual(offerMarks(offers[2]!), []);
+
+    const html = renderOffersCardHtml(offers);
+    assert.ok(html.includes('So Sánh Giá Các Gian Hàng (6)'));
+    assert.ok(
+      html.indexOf('Shop a\n') < html.indexOf('Shop bait'),
+      'the cheapest real offer is listed before the bait row'
+    );
+    assert.ok(html.includes('Giá thấp bất thường'));
+    assert.ok(html.includes('Ngừng bán'));
+    assert.ok(
+      !html.includes('Shop sold'),
+      'only the first five rows show; the sold-out row is last'
+    );
+    assert.equal((html.match(/Rẻ nhất/g) || []).length, 1);
+    assert.ok(
+      /Shop a\s+(?:<span[^>]*>Rẻ nhất)/.test(html),
+      'the cheapest mark sits on the in-stock row'
+    );
+    assert.equal((html.match(/offer-price-muted/g) || []).length, 2);
+    assert.ok(html.includes('Rủi ro tổng hợp: 12/100'), '#1280 wording');
+    assert.ok(!html.includes('Rủi ro shop'));
+    assert.ok(!html.includes('[Mall]'));
+    assert.equal(renderOffersCardHtml([]), '');
+    const escaped = renderOffersCardHtml([
+      offer('x', 1_000_000, {
+        merchant: { ...offer('x', 1).merchant, name: '<img onerror=1>' },
+      }),
+    ]);
+    assert.ok(!escaped.includes('<img'), 'merchant names are escaped');
+    console.log(
+      '  ✅ [Side panel price list orders and marks offers (#1297)] Verified'
+    );
+  }
+
+  // Toolbar badge and pill theme per verdict (DOS/Rate#1298)
+  {
+    const { resolveActionBadge, resolvePillTheme } =
+      await import('./verdict-display.js');
+    const lookup = (
+      verdict: ExtensionPriceVerdict,
+      extra: Partial<ExtensionLookupData> = {},
+      implausiblyLow?: boolean
+    ) =>
+      ({
+        matchStatus: 'exact_listing',
+        isAccessoryOrPart: false,
+        priceAssessment: { verdict, implausiblyLow },
+        ...extra,
+      }) as unknown as ExtensionLookupData;
+    assert.deepEqual(resolveActionBadge(null), { text: '', color: null });
+    assert.deepEqual(
+      resolveActionBadge(lookup('insufficient_data', {}, true)),
+      { text: '!', color: '#f59e0b' },
+      'a bait price warns'
+    );
+    assert.equal(resolveActionBadge(lookup('insufficient_data')).text, '?');
+    assert.equal(resolveActionBadge(lookup('accessory_skip')).text, '');
+    assert.equal(
+      resolveActionBadge(
+        lookup('fair_market_price', { matchStatus: 'accessory_skip' })
+      ).text,
+      ''
+    );
+    assert.equal(
+      resolveActionBadge(
+        lookup('fair_market_price', { isAccessoryOrPart: true })
+      ).text,
+      ''
+    );
+    assert.equal(
+      resolveActionBadge(lookup('genuine_deal', { matchStatus: 'not_found' }))
+        .text,
+      ''
+    );
+    assert.equal(resolveActionBadge(lookup('inflated_fake_sale')).text, 'ẢO!');
+    assert.equal(resolveActionBadge(lookup('genuine_deal')).text, 'TỐT');
+    assert.equal(resolveActionBadge(lookup('above_market')).text, 'CAO');
+    assert.equal(resolveActionBadge(lookup('fair_market_price')).text, 'OK');
+    for (const verdict of [
+      'insufficient_data',
+      'accessory_skip',
+    ] as ExtensionPriceVerdict[]) {
+      assert.notEqual(resolveActionBadge(lookup(verdict)).text, 'OK', verdict);
+    }
+    assert.equal(
+      resolvePillTheme('insufficient_data', true).border,
+      '#f59e0b',
+      'a bait price uses the warning pill'
+    );
+    assert.equal(resolvePillTheme('insufficient_data').border, '#3b82f6');
+    assert.equal(resolvePillTheme('inflated_fake_sale').border, '#d83030');
+    console.log('  ✅ [Badge and pill per verdict (#1298)] Verified');
+  }
+
+  // Not found and accessory states, action links (DOS/Rate#1299)
+  {
+    const { isLookupWithoutProduct, renderActionRowsHtml, renderNotFoundHtml } =
+      await import('./sidepanel/panel-view.js');
+    const base = {
+      matchStatus: 'exact_listing',
+      isAccessoryOrPart: false,
+      priceAssessment: { verdict: 'fair_market_price' },
+    } as unknown as ExtensionLookupData;
+    assert.equal(isLookupWithoutProduct(null), true);
+    assert.equal(isLookupWithoutProduct(base), false);
+    assert.equal(
+      isLookupWithoutProduct({ ...base, matchStatus: 'not_found' }),
+      true
+    );
+    assert.equal(
+      isLookupWithoutProduct({ ...base, matchStatus: 'accessory_skip' }),
+      true
+    );
+    assert.equal(
+      isLookupWithoutProduct({ ...base, isAccessoryOrPart: true }),
+      true
+    );
+    assert.equal(
+      isLookupWithoutProduct({
+        ...base,
+        priceAssessment: {
+          ...base.priceAssessment,
+          verdict: 'accessory_skip',
+        },
+      }),
+      true
+    );
+    const notFound = renderNotFoundHtml(
+      { title: 'Ốp lưng iPhone 16 & <b>' },
+      'https://rate.vn',
+      false
+    );
+    assert.ok(notFound.includes('Chưa có sản phẩm này trên Rate.vn'));
+    assert.ok(
+      notFound.includes(
+        `https://rate.vn/inspect?q=${encodeURIComponent('Ốp lưng iPhone 16 & <b>').replace(/&/g, '&amp;')}`
+      ),
+      'search link carries the page title'
+    );
+    assert.ok(!notFound.includes('<b>'), 'the title is escaped');
+    for (const product of [
+      'Trung Vị Thị Trường',
+      'smartphones',
+      'Bảng Xếp Hạng',
+      'Canh Giá',
+    ]) {
+      assert.ok(!notFound.includes(product), `no product UI: ${product}`);
+    }
+    assert.ok(
+      renderNotFoundHtml(
+        { title: 'Cáp sạc' },
+        'https://rate.vn',
+        true
+      ).includes('phụ kiện')
+    );
+    const rows = renderActionRowsHtml([
+      { href: 'https://rate.vn/p', label: 'Xem Trên Rate.vn', primary: true },
+      { href: 'https://rate.vn/compare?category=tablets', label: 'So Sánh' },
+      { href: 'https://rate.vn/leaderboard', label: 'Bảng Xếp Hạng' },
+      { href: 'https://rate.vn/inspect?q=x', label: '🔬 Kiểm tra chi tiết' },
+      { href: 'https://rate.vn/watchlist', label: '🔔 Canh Giá Thật' },
+    ]);
+    assert.equal((rows.match(/Kiểm tra chi tiết/g) || []).length, 1);
+    assert.equal((rows.match(/class="btn-row"/g) || []).length, 3);
+    assert.ok(rows.includes('Canh Giá Thật'));
+    const panelSource = fs.readFileSync(
+      path.resolve(__dirname, 'sidepanel/sidepanel.ts'),
+      'utf8'
+    );
+    assert.ok(
+      !/\/compare\?cat=/.test(panelSource),
+      'the compare page reads ?category='
+    );
+    console.log(
+      '  ✅ [Not found and accessory states, single inspect link (#1299)] Verified'
+    );
+  }
+
+  // Lookup error states (DOS/Rate#1300)
+  {
+    const { classifyLookupFailure, renderLookupErrorHtml } =
+      await import('./sidepanel/panel-view.js');
+    assert.equal(classifyLookupFailure(429), 'rate_limited');
+    assert.equal(classifyLookupFailure(500), 'server');
+    assert.equal(classifyLookupFailure(503), 'server');
+    assert.equal(classifyLookupFailure(null), 'network');
+    assert.equal(classifyLookupFailure(undefined), 'network');
+    assert.equal(classifyLookupFailure(404), 'other');
+    const limited = renderLookupErrorHtml('rate_limited', 'iPhone 16');
+    assert.ok(limited.includes('Bạn tra cứu hơi nhanh, thử lại sau ít phút'));
+    assert.ok(limited.includes('data-action="retry"'));
+    assert.ok(limited.includes('iPhone 16'));
+    assert.ok(
+      renderLookupErrorHtml('server').includes('Rate.vn đang gặp sự cố')
+    );
+    assert.ok(
+      renderLookupErrorHtml('network').includes('Không kết nối được Rate.vn')
+    );
+    for (const kind of ['rate_limited', 'server', 'network'] as const) {
+      const html = renderLookupErrorHtml(kind);
+      assert.ok(!html.includes('Chưa nhận diện trang sản phẩm'), kind);
+      assert.ok(!/máy chủ|Rate API/.test(html), `${kind}: no settings hint`);
+    }
+    // The content script drops the pill and the worker clears the badge on
+    // any failure, not only on an empty answer.
+    const contentSource = fs.readFileSync(
+      path.resolve(__dirname, 'content/content-script.ts'),
+      'utf8'
+    );
+    assert.ok(!contentSource.includes('response?.ok && !response.data'));
+    const workerSource = fs.readFileSync(
+      path.resolve(__dirname, 'background/service-worker.ts'),
+      'utf8'
+    );
+    assert.ok(workerSource.includes('status: outcome.status'));
+    assert.ok(
+      workerSource.includes('await updateActionBadge(sender.tab?.id, null)')
+    );
+    console.log(
+      '  ✅ [Lookup error states and stale pill clearing (#1300)] Verified'
+    );
+  }
+
+  // Empty reviews and unknown ratings (DOS/Rate#1301)
+  {
+    const { ratingStarText, renderReviewCardHtml } =
+      await import('./sidepanel/panel-view.js');
+    const empty = renderReviewCardHtml(
+      {
+        total_analyzed: 0,
+        authentic_pct: 100,
+        suspicious_pct: 0,
+        fake_pct: 0,
+        pros: [],
+        cons: [],
+        ai_summary: null,
+      },
+      { user_rating_weighted: 0, average_rating: 0 }
+    );
+    assert.ok(empty.includes('Chưa có đánh giá'));
+    assert.ok(!empty.includes('100%'), 'no percentage when nothing analysed');
+    assert.ok(!empty.includes('★'), 'no star for an unknown rating');
+    assert.ok(!empty.includes('0.0'));
+    const filled = renderReviewCardHtml(
+      {
+        total_analyzed: 40,
+        authentic_pct: 85,
+        suspicious_pct: 10,
+        fake_pct: 5,
+        pros: [],
+        cons: [],
+        ai_summary: null,
+      },
+      { user_rating_weighted: 4.6, average_rating: 4.5 }
+    );
+    assert.ok(filled.includes('★ 4.6 / 5'));
+    assert.ok(filled.includes('85% (40 đánh giá)'));
+    assert.equal(ratingStarText(0), null);
+    assert.equal(ratingStarText(null), null);
+    assert.equal(ratingStarText(4.75), '★ 4.8');
+    console.log('  ✅ [Empty reviews and unknown ratings (#1301)] Verified');
+  }
+
+  // Vietnamese labels and accessible names (DOS/Rate#1302)
+  {
+    const { buildPillAriaLabel } = await import('./verdict-display.js');
+    const panelHtml = fs.readFileSync(
+      path.resolve(__dirname, 'sidepanel/sidepanel.html'),
+      'utf8'
+    );
+    const panelSource = fs.readFileSync(
+      path.resolve(__dirname, 'sidepanel/sidepanel.ts'),
+      'utf8'
+    );
+    const viewSource = fs.readFileSync(
+      path.resolve(__dirname, 'sidepanel/panel-view.ts'),
+      'utf8'
+    );
+    for (const english of [
+      'Rate.vn Intelligence',
+      'Dual Risk Score',
+      'Trust Score',
+      'Trust ${',
+      'Fake Sale',
+      '[Mall]',
+      'Rate API BFF',
+      'Rủi ro shop',
+      'Opt-In',
+      'Điểm User',
+    ]) {
+      for (const [name, text] of [
+        ['sidepanel.html', panelHtml],
+        ['sidepanel.ts', panelSource],
+        ['panel-view.ts', viewSource],
+      ] as const) {
+        assert.ok(!text.includes(english), `${name} still says "${english}"`);
+      }
+    }
+    assert.ok(panelSource.includes('Điểm tin cậy'));
+    assert.ok(
+      /<div id="panel-root" aria-live="polite">/.test(panelHtml),
+      'results are announced'
+    );
+    const quickInput = panelHtml.slice(
+      panelHtml.indexOf('id="inp-quick-query"'),
+      panelHtml.indexOf('/>', panelHtml.indexOf('id="inp-quick-query"'))
+    );
+    assert.ok(
+      /aria-label="[^"]+"/.test(quickInput),
+      'quick lookup is labelled'
+    );
+    const pillLabel = buildPillAriaLabel(
+      'Giá thấp bất thường',
+      'Đáy thị trường: 20.000.000 ₫'
+    );
+    assert.ok(pillLabel.includes('Giá thấp bất thường'), 'verdict is spoken');
+    assert.ok(pillLabel.includes('Mở bảng phân tích giá'));
+    const contentSource = fs.readFileSync(
+      path.resolve(__dirname, 'content/content-script.ts'),
+      'utf8'
+    );
+    assert.ok(
+      contentSource.includes(
+        'aria-label="${escapeHtml(buildPillAriaLabel(assessment.badgeLabel, cheaperSummary))}"'
+      ),
+      'the pill names its verdict'
+    );
+    console.log(
+      '  ✅ [Vietnamese labels and accessible names (#1302)] Verified'
     );
   }
 

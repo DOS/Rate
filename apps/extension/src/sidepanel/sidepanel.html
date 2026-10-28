@@ -182,6 +182,31 @@
       color: #34d399;
       white-space: nowrap;
     }
+    /* Sold-out, discontinued and bait rows: a last price, not an offer (DOS/Rate#1297). */
+    .offer-price-muted {
+      color: var(--text-muted);
+      font-weight: 600;
+    }
+    .offer-mark {
+      display: inline-block;
+      font-size: 12px;
+      font-weight: 700;
+      padding: 1px 6px;
+      border-radius: 999px;
+      margin-left: 4px;
+    }
+    .offer-mark-muted {
+      background: rgba(156, 163, 175, 0.18);
+      color: #d1d5db;
+    }
+    .offer-mark-warn {
+      background: rgba(245, 158, 11, 0.18);
+      color: #fbbf24;
+    }
+    .offer-mark-best {
+      background: rgba(45, 186, 105, 0.18);
+      color: #34d399;
+    }
     .btn-row {
       display: flex;
       gap: 8px;
@@ -213,6 +238,9 @@
       text-align: center;
       text-decoration: none;
     }
+    button.btn-secondary {
+      font-family: inherit;
+    }
     .privacy-row {
       display: flex;
       align-items: flex-start;
@@ -237,7 +265,7 @@
   <div class="topbar">
     <div class="brand">
       <span class="brand-dot"></span>
-      <span>Rate.vn Intelligence</span>
+      <span>Rate.vn</span>
     </div>
     <button id="btn-refresh" class="refresh-btn" type="button">Làm mới</button>
   </div>
@@ -247,6 +275,7 @@
     <form id="form-quick-inspect" style="display: flex; gap: 6px;">
       <input
         id="inp-quick-query"
+        aria-label="Link sản phẩm hoặc tên máy cần tra cứu"
         class="input-url"
         style="margin-top: 0; flex: 1;"
         type="text"
@@ -262,7 +291,7 @@
     </form>
   </div>
 
-  <div id="panel-root">
+  <div id="panel-root" aria-live="polite">
     <div class="card">
       <p style="color: #9ca3af;">Đang đồng bộ thông tin sản phẩm từ trang đang mở...</p>
     </div>
@@ -273,12 +302,12 @@
     <label class="privacy-row">
       <input type="checkbox" id="chk-crowd-optin" style="margin-top: 3px;" />
       <span>
-        <strong>Đóng góp phát hiện sản phẩm mới (Opt-In):</strong>
+        <strong>Đóng góp phát hiện sản phẩm mới (chỉ khi bạn bật):</strong>
         Khi bật, mỗi tin bán bạn mở còn được gửi vào hàng đợi kiểm duyệt độc lập của Rate.vn với: sàn, mã sản phẩm, mã gian hàng, URL đã cắt tham số theo dõi, tên sản phẩm, phiên bản đang chọn, giá bán, giá gốc, số sao và số lượt đánh giá. Không kèm tài khoản hay thông tin cá nhân.
       </span>
     </label>
     <div style="margin-top: 10px;">
-      <label for="inp-api-base" style="font-size: 13px; color: #9ca3af;">Máy chủ Rate API BFF:</label>
+      <label for="inp-api-base" style="font-size: 13px; color: #9ca3af;">Địa chỉ máy chủ Rate.vn:</label>
       <input id="inp-api-base" class="input-url" type="url" placeholder="https://rate.vn" />
     </div>
   </div>

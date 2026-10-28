@@ -48,6 +48,11 @@ export interface ExtensionPriceAssessment {
   historicalMaxPrice: number | null;
   cheaperOfferCount: number;
   maxSavingsAmount: number;
+  /**
+   * Set with `insufficient_data` when the page's price is far below every
+   * other store (DOS/Rate#797): a warning, never "OK" (DOS/Rate#1298).
+   */
+  implausiblyLow?: boolean;
 }
 
 export interface ExtensionOfferItem {
@@ -60,6 +65,13 @@ export interface ExtensionOfferItem {
   rating_count: number;
   historical_sold: number;
   url: string;
+  /**
+   * A sold-out or discontinued listing keeps its last price
+   * (DOS/Rate#1141, #1297); absent when the server did not read it.
+   */
+  availability?: 'in_stock' | 'out_of_stock' | 'discontinued' | null;
+  /** A bait price far below every other in-stock store (DOS/Rate#1297). */
+  implausiblyLow?: boolean;
   merchant: {
     id: string;
     name: string;

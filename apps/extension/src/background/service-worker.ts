@@ -17,6 +17,7 @@ import {
   sanitizeExtensionProductSignal,
   selectFreshestSessionSignal,
 } from '../security-guards.js';
+import { resolveActionBadge } from '../verdict-display.js';
 
 const DEFAULT_SETTINGS: ExtensionSettings = {
   apiBaseUrl: DEFAULT_API_BASE_URL,
@@ -40,10 +41,46 @@ async function getSettings(): Promise<ExtensionSettings> {
   }
 }
 
+/**
+ * A lookup either answers (data may be null: nothing matched) or fails with
+ * the HTTP status, `null` for a network error or timeout, so the panel can
+ * say which (DOS/Rate#1300).
+ */
+type LookupOutcome =
+  | { ok: true; data: ExtensionLookupData | null }
+  | { ok: false; status: number | null };
+
+async function requestLookup(endpoint: string): Promise<LookupOutcome> {
+  let response: Response;
+  try {
+    response = await fetch(endpoint, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Rate-Extension-Version': '2.0.0',
+      },
+      signal: AbortSignal.timeout(10_000),
+    });
+  } catch {
+    return { ok: false, status: null };
+  }
+  if (!response.ok) return { ok: false, status: response.status };
+  try {
+    const json = (await response.json()) as {
+      ok?: boolean;
+      data?: ExtensionLookupData;
+    };
+    if (json.ok === false) return { ok: false, status: response.status };
+    return { ok: true, data: json.data ?? null };
+  } catch {
+    return { ok: false, status: response.status };
+  }
+}
+
 async function fetchExtensionLookup(
   rawSignal: ExtractedPageProductSignal,
   mode: 'pill' | 'full'
-): Promise<ExtensionLookupData | null> {
+): Promise<LookupOutcome> {
   const signal = sanitizeExtensionProductSignal(rawSignal);
   const settings = await getSettings();
   const params = new URLSearchParams();
@@ -63,22 +100,9 @@ async function fetchExtensionLookup(
     params.set('originalPrice', String(signal.originalPrice));
   }
 
-  const endpoint = `${settings.apiBaseUrl}${RATE_API_V1_ENDPOINTS.EXTENSION_LOOKUP}?${params.toString()}`;
-  const response = await fetch(endpoint, {
-    method: 'GET',
-    headers: {
-      'Content-Type': 'application/json',
-      'X-Rate-Extension-Version': '2.0.0',
-    },
-    signal: AbortSignal.timeout(10_000),
-  });
-
-  if (!response.ok) return null;
-  const json = (await response.json()) as {
-    ok?: boolean;
-    data?: ExtensionLookupData;
-  };
-  return json.ok && json.data ? json.data : null;
+  return requestLookup(
+    `${settings.apiBaseUrl}${RATE_API_V1_ENDPOINTS.EXTENSION_LOOKUP}?${params.toString()}`
+  );
 }
 
 const SUPPORTED_CROWD_PLATFORMS = new Set([
@@ -129,23 +153,13 @@ async function updateActionBadge(
 ): Promise<void> {
   if (!tabId) return;
   try {
-    if (!lookup || lookup.matchStatus === 'not_found') {
-      await chrome.action.setBadgeText({ text: '', tabId });
-      return;
-    }
-    const verdict = lookup.priceAssessment.verdict;
-    if (verdict === 'inflated_fake_sale') {
-      await chrome.action.setBadgeText({ text: 'ẢO!', tabId });
-      await chrome.action.setBadgeBackgroundColor({ color: '#d83030', tabId });
-    } else if (verdict === 'genuine_deal') {
-      await chrome.action.setBadgeText({ text: 'TỐT', tabId });
-      await chrome.action.setBadgeBackgroundColor({ color: '#2dba69', tabId });
-    } else if (verdict === 'above_market') {
-      await chrome.action.setBadgeText({ text: 'CAO', tabId });
-      await chrome.action.setBadgeBackgroundColor({ color: '#f59e0b', tabId });
-    } else {
-      await chrome.action.setBadgeText({ text: 'OK', tabId });
-      await chrome.action.setBadgeBackgroundColor({ color: '#3b82f6', tabId });
+    const badge = resolveActionBadge(lookup);
+    await chrome.action.setBadgeText({ text: badge.text, tabId });
+    if (badge.color) {
+      await chrome.action.setBadgeBackgroundColor({
+        color: badge.color,
+        tabId,
+      });
     }
   } catch {
     // Ignore badge errors if tab closed
@@ -218,8 +232,18 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         }
         await chrome.storage.session.set(signalPayload);
 
-        const lookup = await fetchExtensionLookup(signal, 'pill');
+        const outcome = await fetchExtensionLookup(signal, 'pill');
+        // A failed lookup clears the previous product's badge (#1300).
+        const lookup = outcome.ok ? outcome.data : null;
         await updateActionBadge(tabId, lookup);
+        if (!outcome.ok) {
+          sendResponse({
+            ok: false,
+            status: outcome.status,
+            error: 'Lookup failed',
+          });
+          return;
+        }
 
         if (lookup) {
           const lookupPayload: Record<string, unknown> = {
@@ -236,8 +260,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
         sendResponse({ ok: true, data: lookup });
       } catch (err) {
+        await updateActionBadge(sender.tab?.id, null);
         sendResponse({
           ok: false,
+          status: null,
           error: err instanceof Error ? err.message : 'Lookup failed',
         });
       }
@@ -335,16 +361,26 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           }
         }
 
-        const fullLookup = await fetchExtensionLookup(effectiveSignal, 'full');
-        sendResponse({
-          ok: true,
-          settings,
-          signal: effectiveSignal,
-          data: fullLookup,
-        });
+        const outcome = await fetchExtensionLookup(effectiveSignal, 'full');
+        sendResponse(
+          outcome.ok
+            ? {
+                ok: true,
+                settings,
+                signal: effectiveSignal,
+                data: outcome.data,
+              }
+            : {
+                ok: false,
+                status: outcome.status,
+                settings,
+                signal: effectiveSignal,
+              }
+        );
       } catch (err) {
         sendResponse({
           ok: false,
+          status: null,
           error: err instanceof Error ? err.message : 'Full lookup failed',
         });
       }
@@ -417,31 +453,21 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         }
         params.set('title', rawQuery);
 
-        const endpoint = `${settings.apiBaseUrl}${RATE_API_V1_ENDPOINTS.EXTENSION_LOOKUP}?${params.toString()}`;
-        const response = await fetch(endpoint, {
-          method: 'GET',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-Rate-Extension-Version': '2.0.0',
-          },
-          signal: AbortSignal.timeout(10_000),
-        });
-
-        if (!response.ok) {
+        const outcome = await requestLookup(
+          `${settings.apiBaseUrl}${RATE_API_V1_ENDPOINTS.EXTENSION_LOOKUP}?${params.toString()}`
+        );
+        if (!outcome.ok) {
+          // The panel tells a rate limit, a server error and a network
+          // error apart (DOS/Rate#1300).
           sendResponse({
-            ok: true,
+            ok: false,
+            status: outcome.status,
             settings,
             signal: syntheticSignal,
-            data: null,
           });
           return;
         }
-
-        const json = (await response.json()) as {
-          ok?: boolean;
-          data?: ExtensionLookupData;
-        };
-        const fullLookup = json.ok && json.data ? json.data : null;
+        const fullLookup = outcome.data;
 
         if (fullLookup?.platform) {
           syntheticSignal.platform = fullLookup.platform;
@@ -465,6 +491,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       } catch (err) {
         sendResponse({
           ok: false,
+          status: null,
           error:
             err instanceof Error ? err.message : 'Quick query lookup failed',
         });
