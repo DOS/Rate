@@ -11007,6 +11007,22 @@ async function runCoreArchitectureSuite() {
       equalWeightsRes.finalB,
       'computeVersusWeightedResult must fall back to equal criteria average for product B when all custom weights are 0'
     );
+    // A model against itself is level: a tie, not a lead (DOS/Rate#1209).
+    const selfRes = computeVersusWeightedResult(
+      scoreItemA,
+      { ...scoreItemA, slug: `${scoreItemA.slug}-copy` },
+      { screen: 20, performance: 20, camera: 20, battery: 20, value: 20 },
+      'custom'
+    );
+    assert.equal(selfRes.tie, true);
+    assert.equal(selfRes.delta, '0.00');
+    const { isVersusScoreTie } = await import('../../../lib/versus-verdict');
+    assert.equal(isVersusScoreTie(5, 4.996), true, 'equal at two decimals');
+    assert.equal(isVersusScoreTie(4.98, 4.97), false);
+    assert.equal(isVersusScoreTie(Number.NaN, 5), false);
+    const enCompare = (enMessages as { compare: Record<string, string> })
+      .compare;
+    assert.ok(!/ đ$/.test(enCompare.scoreDeltaBadge ?? ''));
 
     console.log(
       '  ✅ [118/119] ProductValueCalculator, DealFinderWorkspace & VersusInteractiveScoreboard Bounds (#960) passed'

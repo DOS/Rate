@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { getTranslations, setRequestLocale } from 'next-intl/server';
+import { isVersusScoreTie } from '@/lib/versus-verdict';
 import { BsTrophy } from 'react-icons/bs';
 import { Link } from '@/lib/navigation';
 import {
@@ -214,14 +215,18 @@ export default async function VersusComparePage({ params }: VersusPageProps) {
             </h1>
 
             <p className="text-white-50 small mb-4">
-              {t('versusAutoVerdict', {
-                winner: overallWinner.name,
-                score: overallWinner.combinedScore5.toFixed(2),
-                expertSuffix:
-                  overallWinner.expertScore10 != null
-                    ? ` (${overallWinner.expertScore10.toFixed(1)}/10 Lab)`
-                    : '',
-              })}
+              {isVersusScoreTie(scoreA.combinedScore5, scoreB.combinedScore5)
+                ? t('versusAutoVerdictTie', {
+                    score: scoreA.combinedScore5.toFixed(2),
+                  })
+                : t('versusAutoVerdict', {
+                    winner: overallWinner.name,
+                    score: overallWinner.combinedScore5.toFixed(2),
+                    expertSuffix:
+                      overallWinner.expertScore10 != null
+                        ? ` (${overallWinner.expertScore10.toFixed(1)}/10 Lab)`
+                        : '',
+                  })}
             </p>
 
             <VersusInteractiveScoreboard
