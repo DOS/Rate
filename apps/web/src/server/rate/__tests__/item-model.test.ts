@@ -45,6 +45,10 @@ const variantRow = (id: string, gb: number, sort: number | null) => ({
   merchant_count: 2,
 });
 
+const CAT_PHONES = '55555555-5555-4555-8555-000000000001';
+const CAT_TABLETS = '55555555-5555-4555-8555-000000000002';
+const CAT_OTHER = '55555555-5555-4555-8555-000000000003';
+const CAT_NEW = '55555555-5555-4555-8555-000000000004';
 let calls: string[] = [];
 // Answer as a database without M1+M2 (PostgREST schema-cache miss).
 let schemaMissing = false;
@@ -86,6 +90,14 @@ globalThis.fetch = (async (input: RequestInfo | URL) => {
     );
   }
   switch (url.pathname) {
+    case '/rest/v1/categories':
+      // A category the cached list does not know yet, read by id.
+      if (q.includes(`id=eq.${CAT_NEW}`)) return json([{ slug: 'tablets' }]);
+      return json([
+        { id: CAT_PHONES, slug: 'smartphones' },
+        { id: CAT_TABLETS, slug: 'tablets' },
+        { id: CAT_OTHER, slug: 'cameras' },
+      ]);
     case '/rest/v1/items':
       if (
         q.includes('slug=eq.apple-iphone-16&') ||
@@ -289,6 +301,70 @@ async function main() {
     }),
     { kind: 'redirect', to: '/smartphones/apple-iphone-16' }
   );
+  // The Item's own category wins over the requested one (DOS/Rate#1281).
+  assert.deepEqual(
+    planItemRoute({
+      ...base,
+      categoryBasePath: '/tablets',
+      itemCategoryPath: '/smartphones',
+      resolution: { kind: 'item', item, variant: null },
+      requestedSlug: 'apple-iphone-16',
+      requestedVariant: null,
+    }),
+    { kind: 'redirect', to: '/smartphones/apple-iphone-16' },
+    'a phone Item under /tablets 308s to /smartphones'
+  );
+  assert.deepEqual(
+    planItemRoute({
+      ...base,
+      categoryBasePath: '/tablets',
+      itemCategoryPath: '/smartphones',
+      resolution: {
+        kind: 'variant',
+        item,
+        variant: variants[0]!,
+        retired: false,
+      },
+      requestedSlug: 'apple-iphone-16-128gb',
+      requestedVariant: null,
+    }),
+    { kind: 'redirect', to: '/smartphones/apple-iphone-16?v=128gb' },
+    'an old variant URL under another category 308s to the Item category'
+  );
+  assert.deepEqual(
+    planItemRoute({
+      ...base,
+      categoryBasePath: '/tablets',
+      itemCategoryPath: '/smartphones',
+      resolution: { kind: 'variant', item, variant: shared, retired: false },
+      requestedSlug: 'apple-iphone-16',
+      requestedVariant: null,
+    }),
+    { kind: 'redirect', to: '/smartphones/apple-iphone-16?v=128gb' },
+    'a shared-slug Item under another category 308s too, no loop'
+  );
+  assert.equal(
+    planItemRoute({
+      ...base,
+      itemCategoryPath: '/smartphones',
+      resolution: { kind: 'item', item, variant: null },
+      requestedSlug: 'apple-iphone-16',
+      requestedVariant: null,
+    }).kind,
+    'render',
+    'the right category renders'
+  );
+  assert.deepEqual(
+    planItemRoute({
+      ...base,
+      itemCategoryPath: false,
+      resolution: { kind: 'item', item, variant: null },
+      requestedSlug: 'apple-iphone-16',
+      requestedVariant: null,
+    }),
+    { kind: 'not_found' },
+    'an Item in no catalogue category is not found'
+  );
   assert.equal(
     flag.itemSlugFromVariantSlug('apple-iphone-16-1024gb'),
     'apple-iphone-16'
@@ -366,6 +442,70 @@ async function main() {
     }),
     { kind: 'redirect', to: '/smartphones/apple-iphone-16' }
   );
+  // The Item's category_id is checked against the route (DOS/Rate#1281).
+  (itemRow as { category_id: string | null }).category_id = CAT_PHONES;
+  assert.deepEqual(
+    await resolveItemRoute({
+      slug: 'apple-iphone-16',
+      categoryBasePath: '/tablets',
+    }),
+    { kind: 'redirect', to: '/smartphones/apple-iphone-16' }
+  );
+  assert.deepEqual(
+    await resolveItemRoute({
+      slug: 'apple-iphone-16-128gb',
+      categoryBasePath: '/tablets',
+    }),
+    { kind: 'redirect', to: '/smartphones/apple-iphone-16?v=128gb' }
+  );
+  assert.equal(
+    (
+      await resolveItemRoute({
+        slug: 'apple-iphone-16',
+        categoryBasePath: '/smartphones',
+      })
+    )?.kind,
+    'render'
+  );
+  (itemRow as { category_id: string | null }).category_id = CAT_NEW;
+  assert.deepEqual(
+    await resolveItemRoute({
+      slug: 'apple-iphone-16',
+      categoryBasePath: '/smartphones',
+    }),
+    { kind: 'redirect', to: '/tablets/apple-iphone-16' },
+    'a category missing from the cached map is read, not a 404'
+  );
+  (itemRow as { category_id: string | null }).category_id = CAT_OTHER;
+  assert.deepEqual(
+    await resolveItemRoute({
+      slug: 'apple-iphone-16',
+      categoryBasePath: '/smartphones',
+    }),
+    { kind: 'not_found' }
+  );
+  (itemRow as { category_id: string | null }).category_id = null;
+
+  // The unknown-size group carries its listings' history verdicts (#1281).
+  const { loadItemPageContext } = await import('../item-page');
+  calls = [];
+  const pageContext = await loadItemPageContext(
+    itemRow as never,
+    await api.getItemVariants(ITEM_ID)
+  );
+  assert.equal(pageContext.unknownOffers.length, 1);
+  assert.ok(
+    UNKNOWN_LISTING in pageContext.unknownByOffer,
+    'the unknown-size listing has a history verdict'
+  );
+  assert.ok(
+    calls.some(
+      (c) =>
+        c.startsWith('/rest/v1/price_history?') && c.includes(UNKNOWN_LISTING)
+    ),
+    'its price history is read'
+  );
+
   // Flag on without M1+M2: the page falls back to today's variant page.
   schemaMissing = true;
   await assert.rejects(
