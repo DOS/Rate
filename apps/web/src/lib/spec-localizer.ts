@@ -8,7 +8,6 @@ export interface SpecUiDictionary {
   yes: string;
   no: string;
   supported: string;
-  availableStatus: string;
   has5gYes: string;
   /** The cellular group heading of a category without 5G (smartwatches). */
   cellularNo5gGroup: string;
@@ -92,7 +91,6 @@ const SPEC_UI_DICTS: Record<RateLocale, SpecUiDictionary> = {
     yes: 'Có',
     no: 'Không',
     supported: 'Có hỗ trợ',
-    availableStatus: 'Đang kinh doanh',
     has5gYes: 'Có (5G Sub-6 / mmWave)',
     cellularNo5gGroup: '6. Mạng Di động (Cellular)',
     groups: {
@@ -173,7 +171,6 @@ const SPEC_UI_DICTS: Record<RateLocale, SpecUiDictionary> = {
     yes: 'Yes',
     no: 'No',
     supported: 'Supported',
-    availableStatus: 'Available',
     has5gYes: 'Yes (5G Sub-6 / mmWave)',
     cellularNo5gGroup: '6. Cellular network',
     groups: {
@@ -254,7 +251,6 @@ const SPEC_UI_DICTS: Record<RateLocale, SpecUiDictionary> = {
     yes: 'Ano',
     no: 'Ne',
     supported: 'Podporováno',
-    availableStatus: 'V prodeji',
     has5gYes: 'Ano (5G Sub-6 / mmWave)',
     cellularNo5gGroup: '6. Mobilní sítě',
     groups: {

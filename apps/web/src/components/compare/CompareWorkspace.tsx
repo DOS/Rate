@@ -67,7 +67,7 @@ import {
   localizeSpecValue,
   specGroupHeading,
 } from '@/lib/spec-localizer';
-import { compareRowIsShown } from '@/lib/product-spec-rows';
+import { compareRowIsShown, known5g } from '@/lib/product-spec-rows';
 import ContentText from '@/components/elementary/ContentText';
 import { productImageUrl } from '@/lib/rate-domain-core';
 
@@ -624,8 +624,10 @@ export function buildSpecGroups(t: CompareTranslator): SpecGroupDef[] {
           label: t('rowCell5g'),
           renderValue: (p) => {
             const specs = (p.specifications || {}) as ProductSpecifications;
-            const has5g = specs.cellular?.has_5g ?? p.has_5g;
-            return has5g ? t('valHas5g') : t('val4gLte');
+            // Unknown stays empty, not "4G LTE" (DOS/Rate#1193).
+            const has5g = known5g(specs.cellular?.has_5g, p.has_5g);
+            if (has5g === true) return t('valHas5g');
+            return has5g === false ? t('val4gLte') : '-';
           },
         },
         {
@@ -690,11 +692,11 @@ export function buildSpecGroups(t: CompareTranslator): SpecGroupDef[] {
           renderValue: (p) => {
             const specs = (p.specifications || {}) as ProductSpecifications;
             const parts = [
-              specs.connectivity?.usb || 'USB Type-C',
+              specs.connectivity?.usb,
               specs.connectivity?.location,
               specs.connectivity?.sensors,
             ].filter(Boolean);
-            return parts.join(' | ');
+            return parts.join(' | ') || '-';
           },
         },
       ],
@@ -709,7 +711,7 @@ export function buildSpecGroups(t: CompareTranslator): SpecGroupDef[] {
           label: t('rowMmSpeaker'),
           renderValue: (p) => {
             const specs = (p.specifications || {}) as ProductSpecifications;
-            return specs.multimedia?.loudspeaker || t('valDefaultStereo');
+            return specs.multimedia?.loudspeaker || '-';
           },
         },
         {
@@ -743,9 +745,7 @@ export function buildSpecGroups(t: CompareTranslator): SpecGroupDef[] {
               specs.availability?.announced,
               specs.availability?.status,
             ].filter(Boolean);
-            return parts.length > 0
-              ? parts.join(' | ')
-              : t('valDefaultAvailable');
+            return parts.length > 0 ? parts.join(' | ') : '-';
           },
         },
         {
@@ -781,9 +781,7 @@ export function buildSpecGroups(t: CompareTranslator): SpecGroupDef[] {
                 ? t('valSarBodyPrefix', { value: specs.regulatory.sar_body })
                 : null,
             ].filter(Boolean);
-            return parts.length > 0
-              ? parts.join(' | ')
-              : t('valDefaultRegulatory');
+            return parts.length > 0 ? parts.join(' | ') : '-';
           },
         },
       ],

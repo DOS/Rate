@@ -46,6 +46,23 @@ export function compareRowIsShown(
   return new Set(values.map((v) => v.trim())).size > 1;
 }
 
+/**
+ * A stored 5G flag as known true, known false or unknown (null). Older
+ * enricher rows may hold "true" / "yes" as text; anything else is unknown
+ * (DOS/Rate#1193). The nested spec wins over the flat column.
+ */
+export function known5g(nested: unknown, flat: unknown): boolean | null {
+  const read = (v: unknown): boolean | null => {
+    if (typeof v === 'boolean') return v;
+    if (typeof v !== 'string') return null;
+    const text = v.trim().toLowerCase();
+    if (['true', 'yes', 'có'].includes(text)) return true;
+    if (['false', 'no', 'không'].includes(text)) return false;
+    return null;
+  };
+  return read(nested) ?? read(flat);
+}
+
 const joined = (parts: unknown[], separator: string): string =>
   parts.filter(Boolean).join(separator);
 
@@ -173,9 +190,10 @@ export function buildProductSpecGroups({
       { label: f.physicalKeys, value: loc(s.design?.keys) },
     ],
     cellular: [
+      // Unknown is empty, not "No" (DOS/Rate#1193).
       shows('cellular', 'has_5g') && {
         label: f.support5g,
-        value: (s.cellular?.has_5g ?? product.has_5g) ? ui.has5gYes : ui.no,
+        value: yesNo(known5g(s.cellular?.has_5g, product.has_5g), ui.has5gYes),
       },
       { label: f.networkTech, value: loc(s.cellular?.technology) },
       { label: f.simType, value: loc(s.cellular?.sim_type) },
@@ -234,9 +252,7 @@ export function buildProductSpecGroups({
       { label: f.announcedDate, value: loc(s.availability?.announced) },
       {
         label: f.commercialStatus,
-        value: s.availability?.status
-          ? loc(s.availability.status)
-          : ui.availableStatus,
+        value: loc(s.availability?.status),
       },
       { label: f.msrpPrice, value: loc(s.availability?.prices_msrp) },
     ],

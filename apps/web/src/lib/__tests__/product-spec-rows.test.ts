@@ -44,10 +44,9 @@ function testProductPage() {
     ui.fields.panelType,
   ]);
   assert.deepEqual(labelsOf(watch, 'hardware'), [ui.fields.chipset]);
-  // Availability keeps its default commercial status.
-  assert.deepEqual(labelsOf(watch, 'availability'), [
-    ui.fields.commercialStatus,
-  ]);
+  // No invented commercial status: an empty availability group is gone
+  // (DOS/Rate#1193).
+  assert.equal(labelsOf(watch, 'availability'), null);
   // A cellular watch keeps its 4G bands under the 4G-only label.
   const lte = groupsFor('smartwatches', {
     cellular: { has_5g: true, bands_4g: 'B1/B3', bands_5g: 'n78' },
@@ -76,7 +75,7 @@ function testProductPage() {
   assert.deepEqual(labelsOf(buds, 'hardware'), [ui.fields.chipset]);
   assert.deepEqual(
     buds.map((g) => g.group),
-    ['multimedia', 'battery', 'hardware', 'availability', 'regulatory']
+    ['multimedia', 'battery', 'hardware', 'regulatory']
   );
 
   // A group with nothing but empty values disappears.
@@ -100,6 +99,36 @@ function testProductPage() {
     phone.find((g) => g.group === 'cellular')?.rows[0]?.value,
     ui.has5gYes
   );
+
+  // 5G: unknown is no row, a known false still reads "No".
+  const unknown5g = groupsFor('smartphones', { cellular: {} }, {}, {});
+  assert.equal(labelsOf(unknown5g, 'cellular'), null);
+  const no5g = groupsFor(
+    'smartphones',
+    { cellular: {} },
+    {},
+    { has_5g: false }
+  );
+  assert.deepEqual(
+    no5g.find((g) => g.group === 'cellular')?.rows.map((r) => r.value),
+    [ui.no]
+  );
+  const nestedYes = groupsFor(
+    'smartphones',
+    { cellular: { has_5g: 'yes' } },
+    {},
+    { has_5g: false }
+  );
+  assert.equal(
+    nestedYes.find((g) => g.group === 'cellular')?.rows[0]?.value,
+    ui.has5gYes
+  );
+  const status = groupsFor('smartphones', {
+    availability: { status: 'Available' },
+  });
+  assert.deepEqual(labelsOf(status, 'availability'), [
+    ui.fields.commercialStatus,
+  ]);
   console.warn('  ✅ Product page leaves out empty rows and groups');
 }
 
@@ -116,10 +145,97 @@ function testCompare() {
   console.warn('  ✅ Compare keeps "-" only beside a value');
 }
 
-function main() {
+// Compare prints no invented value for an unknown spec (DOS/Rate#1193).
+async function testCompareUnknownSpecs() {
+  const nodeModule = await import('node:module');
+  const extMap = (
+    nodeModule.default as unknown as {
+      _extensions?: Record<string, (mod: { exports: unknown }) => void>;
+    }
+  )._extensions;
+  if (extMap && !extMap['.css']) {
+    extMap['.css'] = (mod) => {
+      mod.exports = {};
+    };
+  }
+  const { buildSpecGroups } =
+    await import('../../components/compare/CompareWorkspace');
+  const t = ((key: string) => key) as unknown as Parameters<
+    typeof buildSpecGroups
+  >[0];
+  const rows = new Map(
+    buildSpecGroups(t).flatMap((g) => g.rows.map((r) => [r.id, r]))
+  );
+  const render = (id: string, product: Record<string, unknown>) =>
+    rows.get(id)!.renderValue(product as never);
+  const unknown = { slug: 'x', specifications: {} };
+  for (const id of [
+    'cell_5g',
+    'mm_speaker',
+    'conn_usb_gps',
+    'avail_announced',
+    'reg_cert',
+  ]) {
+    assert.equal(render(id, unknown), '-', id);
+  }
+  // An all-unknown row is hidden in compare.
+  assert.equal(
+    compareRowIsShown(
+      [render('mm_speaker', unknown), render('mm_speaker', unknown)],
+      false
+    ),
+    false
+  );
+  // Known values are unchanged; the nested 5G flag wins over the flat one,
+  // and older text flags still read.
+  assert.equal(
+    render('cell_5g', {
+      specifications: { cellular: { has_5g: false } },
+      has_5g: true,
+    }),
+    'val4gLte'
+  );
+  assert.equal(
+    render('cell_5g', { specifications: { cellular: { has_5g: 'true' } } }),
+    'valHas5g'
+  );
+  assert.equal(
+    render('avail_announced', {
+      specifications: { availability: { announced: '2025' } },
+    }),
+    '2025'
+  );
+  assert.equal(
+    render('reg_cert', {
+      specifications: { regulatory: { certifications: 'CE' } },
+    }),
+    'CE'
+  );
+  assert.equal(render('cell_5g', { ...unknown, has_5g: false }), 'val4gLte');
+  assert.equal(render('cell_5g', { ...unknown, has_5g: true }), 'valHas5g');
+  assert.equal(
+    render('mm_speaker', {
+      specifications: { multimedia: { loudspeaker: 'Mono' } },
+    }),
+    'Mono'
+  );
+  assert.equal(
+    render('conn_usb_gps', {
+      specifications: { connectivity: { usb: 'USB-C 3.2', location: 'GPS' } },
+    }),
+    'USB-C 3.2 | GPS'
+  );
+  console.warn('  ✅ Compare shows no invented value for unknown specs');
+}
+
+async function main() {
   console.warn('🧪 Product spec rows suite (DOS/Rate#1186)');
   testProductPage();
   testCompare();
+  await testCompareUnknownSpecs();
 }
 
-main();
+main().catch((err) => {
+  console.error(err);
+  process.exit(1);
+});
