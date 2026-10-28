@@ -261,7 +261,9 @@ VALUES
 -- A phone whose cheapest listing is a bait price, 1,250,000: under 40% of
 -- the others' lower median (3,140,000) and above the 1,200,000 accessory
 -- floor (see bait-price.spec.ts). It must not set the "from" price and is labelled
--- (DOS/Rate#797). Old created_at keeps it last in default orderings. Four
+-- (DOS/Rate#797). Its stored min_price is 3,030,000, what
+-- rate.refresh_master_market_stats writes since DOS-Me 20261024060000
+-- (DOS/Rate#802): every page reads the stored stats (DOS/Rate#1141). Old created_at keeps it last in default orderings. Four
 -- short-named stores of its own keep the other merchants' cards unchanged.
 INSERT INTO rate.merchants (id, platform, platform_shop_id, name, slug, is_official)
 VALUES
@@ -272,7 +274,7 @@ VALUES
 INSERT INTO rate.master_products
   (id, category_id, brand, model, model_key, name, slug, min_price, max_price, merchant_count, status, metadata, created_at)
 VALUES ('22222222-2222-4222-8222-222222220797', 'c0000000-0000-4000-8000-000000000001', 'E2E', 'Bait Price Phone',
-  'e2e_bait_price_phone', 'E2E Bait Price Phone', 'e2e-bait-price-phone', 1250000, 3690000, 4, 'published',
+  'e2e_bait_price_phone', 'E2E Bait Price Phone', 'e2e-bait-price-phone', 3030000, 3690000, 4, 'published',
   '{"category_slug": "smartphones"}', timestamptz '2026-01-01 00:00:00+00');
 INSERT INTO rate.products (id, merchant_id, platform, platform_item_id, title, category_id, price_current, url, cluster_id)
 VALUES

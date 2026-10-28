@@ -67,7 +67,10 @@ import ProductValueCalculator from '@/components/leaderboard/ProductValueCalcula
 import ProductOffersExplorer from '@/components/leaderboard/ProductOffersExplorer';
 import ProductSpecsExportToolbar from '@/components/leaderboard/ProductSpecsExportToolbar';
 import ClientMessages from '@/components/providers/ClientMessages';
-import { plausibleMinPrice } from '@repo/shared-data/rules';
+import {
+  isOfferUnavailable,
+  productMarketStats,
+} from '@/lib/product-market-stats';
 import {
   firstImageUrl,
   usableImageUrls,
@@ -98,29 +101,33 @@ export async function generateCategoryProductMetadata(
       title: t('notFoundTitle'),
     };
   }
-  // A bait-price listing does not set the "from" price (DOS/Rate#797).
-  const offers = await getCachedMasterProductOffers(product.id);
-  const minPrice = plausibleMinPrice(
-    Number(product.min_price || 0),
-    offers
-  ).toLocaleString('vi-VN');
+  // The stored stats, like every other page shows (DOS/Rate#1141).
+  const marketStats = productMarketStats(product);
+  const hasPrice = marketStats.minPrice > 0;
+  const minPrice = marketStats.minPrice.toLocaleString('vi-VN');
   const canonicalUrl = `https://rate.vn${categoryBasePath}/${product.slug}`;
 
   return {
     // The product name first; the site name, then the price give way to fit
-    // a search result (DOS/Rate#782).
+    // a search result (DOS/Rate#782). No "from 0 ₫" without a price.
     title: fitTitle([
-      t('metaTitle', { name: product.name, minPrice }),
-      t('metaTitleShort', { name: product.name, minPrice }),
+      ...(hasPrice
+        ? [
+            t('metaTitle', { name: product.name, minPrice }),
+            t('metaTitleShort', { name: product.name, minPrice }),
+          ]
+        : []),
       `${product.name} | Rate.vn`,
       product.name,
     ]),
     description: fitDescription(
-      t('metaDesc', {
-        name: product.name,
-        brand: product.brand,
-        merchantCount: product.merchant_count || 0,
-      })
+      hasPrice
+        ? t('metaDesc', {
+            name: product.name,
+            brand: product.brand,
+            merchantCount: marketStats.sellerCount,
+          })
+        : t('metaDescNoStock', { name: product.name, brand: product.brand })
     ),
     alternates: {
       canonical: canonicalUrl,
@@ -128,7 +135,7 @@ export async function generateCategoryProductMetadata(
     openGraph: {
       ...defaultOpenGraph(lang),
       title: t('ogTitle', { name: product.name }),
-      description: t('ogDesc', { minPrice }),
+      description: hasPrice ? t('ogDesc', { minPrice }) : t('ogDescNoStock'),
       url: canonicalUrl,
       images: [firstImageUrl(product.images) ?? SHARE_IMAGE],
     },
@@ -192,7 +199,9 @@ export async function ProductDetailView({
     getCachedMasterProductPriceHistory(product.id, offers),
   ]);
 
-  const radarSignal = computeProductRadarSignal(product, offers);
+  // A sold-out listing's last price is no deal (DOS/Rate#1141).
+  const inStockOffers = offers.filter((o) => !isOfferUnavailable(o));
+  const radarSignal = computeProductRadarSignal(product, inStockOffers);
   const radarNote = radarExplanation(radarSignal);
   const peerRadarIndex = buildRadarIndex(categoryDealRadar);
 
@@ -200,12 +209,11 @@ export async function ProductDetailView({
     product,
     categoryPeers
   );
-  // The lowest plausible offer: a bait-price listing far below every other
-  // store does not set the "from" price (DOS/Rate#797).
-  const currentMinPrice = plausibleMinPrice(
-    Number(product.min_price || 0),
-    offers
-  );
+  // "From" price, range and seller count: the stored stats every other page
+  // shows (in-stock listings, no bait prices), not the offer list below,
+  // which also holds sold-out listings at their last price (DOS/Rate#1141).
+  const marketStats = productMarketStats(product);
+  const currentMinPrice = marketStats.minPrice;
   const relatedCompetitors = rankRelatedCompetitors(
     categoryPeers,
     product.slug,
@@ -215,14 +223,8 @@ export async function ProductDetailView({
   const specs = product.specifications as ProductSpecifications;
   const keySpecs = product.key_specs as KeySpecs;
   const minPriceFormatted = currentMinPrice.toLocaleString('vi-VN');
-  // Same meaning as the catalogue card's seller count (distinct merchants with
-  // a price), not the number of listings.
-  const sellerCount = new Set(
-    offers
-      .filter((o) => Number(o.price_current) > 0)
-      .map((o) => o.merchant?.id || o.id)
-  ).size;
-  const maxPriceFormatted = Number(product.max_price).toLocaleString('vi-VN');
+  const sellerCount = marketStats.sellerCount;
+  const maxPriceFormatted = marketStats.maxPrice.toLocaleString('vi-VN');
 
   const authenticCount =
     product.authentic_review_count && product.authentic_review_count > 0
@@ -278,19 +280,32 @@ export async function ProductDetailView({
         },
         sku: product.model_key,
         url: canonicalUrl,
-        description: t('metaDesc', {
-          name: product.name,
-          brand: product.brand,
-          merchantCount: product.merchant_count || 0,
-        }),
+        description:
+          currentMinPrice > 0
+            ? t('metaDesc', {
+                name: product.name,
+                brand: product.brand,
+                merchantCount: sellerCount,
+              })
+            : t('metaDescNoStock', {
+                name: product.name,
+                brand: product.brand,
+              }),
         image: usableImageUrls(product.images).map(absoluteUrl),
-        offers: {
-          '@type': 'AggregateOffer',
-          priceCurrency: 'VND',
-          lowPrice: currentMinPrice,
-          highPrice: Number(product.max_price || product.min_price || 0),
-          offerCount: offers.length || product.merchant_count || 0,
-        },
+        // Only with a buyable price: a lowPrice of 0 is not an offer.
+        ...(currentMinPrice > 0
+          ? {
+              offers: {
+                '@type': 'AggregateOffer',
+                priceCurrency: 'VND',
+                lowPrice: currentMinPrice,
+                highPrice: marketStats.maxPrice,
+                // Sellers, like "N nơi bán": one store's several listings of
+                // the model are one offer to a shopper.
+                offerCount: sellerCount,
+              },
+            }
+          : {}),
         ...(displayUserRating > 0 && authenticCount > 0
           ? {
               aggregateRating: {
@@ -834,15 +849,18 @@ export async function ProductDetailView({
                 <div className="d-flex flex-column flex-sm-row justify-content-between align-items-start align-items-sm-center gap-2">
                   <div>
                     <div className="text-muted small">
-                      {t('priceReferenceLabel', { count: offers.length })}
+                      {t('priceReferenceLabel', { count: sellerCount })}
                     </div>
                     <div className="fw-bold text-dark rate-tabular fs-5">
-                      {minPriceFormatted} ₫
-                      {currentMinPrice !== Number(product.max_price || 0) && (
-                        <span className="small fw-normal text-muted ms-2">
-                          ~ {maxPriceFormatted} ₫
-                        </span>
-                      )}
+                      {currentMinPrice > 0
+                        ? `${minPriceFormatted} ₫`
+                        : t('priceNoneInStock')}
+                      {currentMinPrice > 0 &&
+                        currentMinPrice !== marketStats.maxPrice && (
+                          <span className="small fw-normal text-muted ms-2">
+                            ~ {maxPriceFormatted} ₫
+                          </span>
+                        )}
                       {priceHistory.lowestEverPrice != null && (
                         <span className="badge bg-success-subtle text-success fw-normal ms-2">
                           {t('allTimeLowBadge', {
@@ -879,7 +897,7 @@ export async function ProductDetailView({
                       expertScore10={expertRating10}
                       authenticReviews={authenticCount}
                       minPriceVnd={currentMinPrice}
-                      offerCount={offers.length}
+                      offerCount={sellerCount}
                       keySpecLine={keySpecLine}
                       radarSignal={radarSignal}
                     />
@@ -1484,7 +1502,11 @@ export async function ProductDetailView({
           {/* SECTION #3: Time-Series Price History Chart, Fake Discount Detector & Neutral Merchant Audit */}
           <PriceHistorySection
             productName={product.name}
-            history={priceHistory}
+            // Its "current lowest" is the page's "from" price (DOS/Rate#1141).
+            history={{
+              ...priceHistory,
+              currentMinPrice: currentMinPrice > 0 ? currentMinPrice : null,
+            }}
             radarSignal={radarSignal}
           />
 
@@ -1533,9 +1555,7 @@ export async function ProductDetailView({
                 brand={product.brand}
                 categorySlug={categorySlug}
                 minPriceVnd={currentMinPrice}
-                maxPriceVnd={Number(
-                  product.max_price || product.min_price || 0
-                )}
+                maxPriceVnd={marketStats.maxPrice}
                 userScore5={lbScored.userScore5}
                 expertScore10={lbScored.expertScore10}
                 valueCriterionScore5={lbScored.criteria.value}

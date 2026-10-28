@@ -25,6 +25,7 @@ import {
 } from '@/lib/deal-radar';
 import { escapeCsvCell } from '@/lib/csv-safe';
 import { implausiblyLowOfferIds } from '@repo/shared-data/rules';
+import { isOfferUnavailable } from '@/lib/product-market-stats';
 import { contentLang } from '@/lib/content-lang';
 import ContentText from '@/components/elementary/ContentText';
 
@@ -123,7 +124,8 @@ export function computeOffersPriceSpreadAudit(
       Number.isFinite(p) &&
       p > 0 &&
       p <= MAX_VALID_VND_PRICE &&
-      !implausibleOfferIds.has(o.id)
+      !implausibleOfferIds.has(o.id) &&
+      !isOfferUnavailable(o)
     );
   });
   if (valid.length < 2) return null;
@@ -183,9 +185,11 @@ export default function ProductOffersExplorer({
   }, [safeOffers]);
 
   // Bait-price listings far below every other store (DOS/Rate#797): labelled,
-  // listed after the plausible offers and left out of the price spread.
+  // listed after the plausible offers and left out of the price spread. Judged
+  // among the in-stock listings, as the stored min_price is (DOS/Rate#1141).
   const implausibleOfferIds = useMemo(
-    () => implausiblyLowOfferIds(safeOffers),
+    () =>
+      implausiblyLowOfferIds(safeOffers.filter((o) => !isOfferUnavailable(o))),
     [safeOffers]
   );
 
@@ -212,6 +216,10 @@ export default function ProductOffersExplorer({
     });
 
     return [...base].sort((a, b) => {
+      // Sold-out listings keep their last price: listed last (DOS/Rate#1141).
+      const unavailableA = isOfferUnavailable(a) ? 1 : 0;
+      const unavailableB = isOfferUnavailable(b) ? 1 : 0;
+      if (unavailableA !== unavailableB) return unavailableA - unavailableB;
       const implausibleA = implausibleOfferIds.has(a.id) ? 1 : 0;
       const implausibleB = implausibleOfferIds.has(b.id) ? 1 : 0;
       if (implausibleA !== implausibleB) return implausibleA - implausibleB;
@@ -708,6 +716,15 @@ export default function ProductOffersExplorer({
                               title={t('offersImplausiblyLowTitle')}
                             >
                               {t('offersImplausiblyLowBadge')}
+                            </span>
+                          )}
+                          {isOfferUnavailable(offer) && (
+                            <span
+                              className="badge bg-secondary-subtle text-secondary small"
+                              data-testid="offer-unavailable"
+                              title={t('offersUnavailableTitle')}
+                            >
+                              {t('offersUnavailableBadge')}
                             </span>
                           )}
                         </div>
