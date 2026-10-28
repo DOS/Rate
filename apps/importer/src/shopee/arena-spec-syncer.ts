@@ -54,7 +54,9 @@ export interface ArenaMemoryVariant {
 }
 
 const ARENA_STORAGE_REGEX = /(\d+(?:\.\d+)?)\s*(GB|TB)(?!\s*RAM)/gi;
-const ARENA_RAM_REGEX = /(\d+(?:\.\d+)?)\s*GB\s*RAM/gi;
+// A RAM group, including the slash form of several options (`8GB/12GB RAM`, `8/12GB RAM`).
+const ARENA_RAM_GROUP_REGEX =
+  /\d+(?:\.\d+)?(?:\s*GB)?(?:\s*\/\s*\d+(?:\.\d+)?(?:\s*GB)?)*\s*GB\s*RAM/gi;
 
 /**
  * Splits a memory line (`128GB 8GB RAM, 256GB 8GB RAM, 256GB 12GB RAM`) into storage
@@ -65,11 +67,20 @@ export function parseArenaMemoryVariants(memRaw: string): ArenaMemoryVariant[] {
   if (typeof memRaw !== 'string' || !memRaw.trim()) return [];
   const ramsByStorage = new Map<number, Set<number | null>>();
   for (const segment of memRaw.slice(0, 2000).split(/[,;\n]/)) {
-    const rams = Array.from(segment.matchAll(ARENA_RAM_REGEX))
-      .map(m => Number(m[1]))
-      .filter(v => Number.isInteger(v) && v >= 1 && v <= 2048);
-    const ram = rams.length === 1 ? rams[0]! : null;
-    for (const m of segment.matchAll(ARENA_STORAGE_REGEX)) {
+    // Every RAM figure of the segment; its numbers are never read as storage.
+    const rams = new Set<number>();
+    for (const group of segment.match(ARENA_RAM_GROUP_REGEX) ?? []) {
+      for (const n of group.match(/\d+(?:\.\d+)?/g) ?? []) rams.add(Number(n));
+    }
+    const ramValues = [...rams];
+    const ram =
+      ramValues.length === 1 && Number.isInteger(ramValues[0]) && ramValues[0]! >= 1
+        ? ramValues[0]! <= 2048
+          ? ramValues[0]!
+          : null
+        : null;
+    const storageText = segment.replace(ARENA_RAM_GROUP_REGEX, ' ');
+    for (const m of storageText.matchAll(ARENA_STORAGE_REGEX)) {
       const val = m[2]?.toUpperCase() === 'TB' ? Number(m[1]) * 1024 : Number(m[1]);
       if (!Number.isInteger(val) || val < 1 || val > 65536) continue;
       const set = ramsByStorage.get(val) ?? new Set<number | null>();
@@ -530,7 +541,8 @@ export function parseGsmArenaHtmlToSpecs(
     screenSizeInch,
     batteryMah,
     has5g,
-    memoryVariants: parseArenaMemoryVariants(memRaw),
+    // GSMArena's memory line only: PhoneArena's RAM field carries no "RAM" word.
+    memoryVariants: parseArenaMemoryVariants(d['internalmemory'] || ''),
     specifications: validatedSpecs,
     keySpecs,
   };
@@ -910,6 +922,14 @@ export class ArenaSpecSyncer {
       for (const item of items) {
         if (!item || typeof item !== 'object' || Array.isArray(item)) continue;
         const safeItemKey = sanitizeAuditToken(item.item_key, 200).toLowerCase();
+        const reportedItemKey =
+          safeItemKey ||
+          (typeof item.item_key === 'string'
+            ? item.item_key
+                .replace(/\p{Cc}+/gu, '')
+                .trim()
+                .slice(0, 200)
+            : '');
         if (safeItemKey && isItemKey(safeItemKey)) existingItemKeys.add(safeItemKey);
         const populatedGroups = countPopulatedFieldGroups(item.specifications);
         if (populatedGroups < 10) {
@@ -922,7 +942,7 @@ export class ArenaSpecSyncer {
                     .trim()
                     .slice(0, 300)
                 : '',
-            item_key: safeItemKey,
+            item_key: reportedItemKey,
             populatedGroups,
           });
         }
@@ -951,9 +971,44 @@ export interface ArenaItemSyncResult {
   status: 'skipped' | 'item_missing' | 'synced';
   apply: boolean;
   itemKey: string | null;
+  /** The Item was (apply) or would be (dry-run) updated. */
   itemUpdated: boolean;
+  /** Variants that were (apply) or would be (dry-run) updated. */
   variantsUpdated: number;
+  /** Rows another writer changed between the read and the write: left as they are. */
+  conflicts: number;
 }
+
+/**
+ * Compare-and-swap on `updated_at`: the update applies only to the row as it was read
+ * (and, for a variant, still not archived). Returns false when nothing matched.
+ */
+async function updateIfUnchanged(
+  supabase: RateSupabaseClient,
+  table: 'items' | 'master_products',
+  id: string,
+  readUpdatedAt: unknown,
+  payload: Record<string, unknown>
+): Promise<boolean> {
+  let query = supabase
+    .from(table)
+    .update({ ...payload, updated_at: new Date().toISOString() })
+    .eq('id', id);
+  query =
+    typeof readUpdatedAt === 'string' && readUpdatedAt
+      ? query.eq('updated_at', readUpdatedAt)
+      : query.is('updated_at', null);
+  if (table === 'master_products') query = query.neq('status', 'archived');
+  const { data, error } = await query.select('id');
+  if (error) throw new Error(`Failed to update ${table} ${id}: ${error.message}`);
+  return Array.isArray(data) && data.length > 0;
+}
+
+/** `12GB` → 12; anything else → null. */
+const gbOfLabel = (raw: unknown): number | null => {
+  const m = typeof raw === 'string' ? /^\s*(\d+)\s*GB\s*$/i.exec(raw) : null;
+  return m ? toPositiveInt(Number(m[1]), 2048) : null;
+};
 
 const toPositiveInt = (raw: unknown, max: number): number | null => {
   const n = typeof raw === 'number' ? raw : typeof raw === 'string' ? Number(raw.trim()) : NaN;
@@ -978,6 +1033,9 @@ const formatStorage = (gb: number): string =>
  * - each sized variant of the Item gets only its own overrides, and only where they are
  *   still empty: `storage_gb` from its `variant_key`, `ram_gb` when the page pairs one
  *   RAM with that size, and the matching `key_specs.storage`/`key_specs.ram`.
+ * A stored RAM (number or label) wins over Arena's. Each write is a compare-and-swap on
+ * `updated_at`, so a row another writer changed (or archived) after the read is left
+ * alone and counted in `conflicts`.
  * `key` is an `item_key` or a `model_key`. Items are never created (the M1 sync trigger
  * and the M2 backfill own that). Dry-run unless `apply`; with RATE_ITEM_MODEL off it
  * reads and writes nothing.
@@ -998,6 +1056,7 @@ export async function syncArenaSpecsToItem(
     itemKey: null,
     itemUpdated: false,
     variantsUpdated: 0,
+    conflicts: 0,
   };
   if ((safeOptions.itemModel ?? resolveItemModelMode()) === 'off') return result;
   if (!spec || typeof spec !== 'object' || Array.isArray(spec)) return result;
@@ -1008,11 +1067,16 @@ export async function syncArenaSpecsToItem(
 
   const { data: item, error: itemErr } = await supabase
     .from('items')
-    .select('id, specifications, key_specs')
+    .select('id, specifications, key_specs, updated_at')
     .eq('item_key', itemKey)
     .maybeSingle();
   if (itemErr) throw new Error(`Failed to look up Item ${itemKey}: ${itemErr.message}`);
-  const itemRow = item as { id?: unknown; specifications?: unknown; key_specs?: unknown } | null;
+  const itemRow = item as {
+    id?: unknown;
+    specifications?: unknown;
+    key_specs?: unknown;
+    updated_at?: unknown;
+  } | null;
   const itemId = typeof itemRow?.id === 'string' && itemRow.id.trim() ? itemRow.id.trim() : null;
   if (!itemRow || !itemId) {
     result.status = 'item_missing';
@@ -1020,26 +1084,26 @@ export async function syncArenaSpecsToItem(
   }
   result.status = 'synced';
 
-  if (apply) {
-    const { error: upErr } = await supabase
-      .from('items')
-      .update({
-        specifications: withoutVariantSpecs(
-          mergeProductSpecifications(itemRow.specifications, spec.specifications)
-        ),
-        key_specs: withoutVariantKeySpecs(
-          mergeKeySpecs(itemRow.key_specs, spec.keySpecs as unknown as Record<string, unknown>)
-        ),
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', itemId);
-    if (upErr) throw new Error(`Failed to update Item specs of ${itemKey}: ${upErr.message}`);
+  const itemPayload = {
+    specifications: withoutVariantSpecs(
+      mergeProductSpecifications(itemRow.specifications, spec.specifications)
+    ),
+    key_specs: withoutVariantKeySpecs(
+      mergeKeySpecs(itemRow.key_specs, spec.keySpecs as unknown as Record<string, unknown>)
+    ),
+  };
+  if (
+    !apply ||
+    (await updateIfUnchanged(supabase, 'items', itemId, itemRow.updated_at, itemPayload))
+  ) {
+    result.itemUpdated = true;
+  } else {
+    result.conflicts++;
   }
-  result.itemUpdated = true;
 
   const { data: variants, error: varErr } = await supabase
     .from('master_products')
-    .select('id, variant_key, status, storage_gb, ram_gb, key_specs')
+    .select('id, variant_key, status, storage_gb, ram_gb, key_specs, updated_at')
     .eq('item_id', itemId);
   if (varErr) throw new Error(`Failed to read the variants of ${itemKey}: ${varErr.message}`);
   const ramByStorage = new Map(
@@ -1057,21 +1121,27 @@ export async function syncArenaSpecsToItem(
       storage_gb?: unknown;
       ram_gb?: unknown;
       key_specs?: unknown;
+      updated_at?: unknown;
     };
     const variantId = typeof row.id === 'string' && row.id.trim() ? row.id.trim() : null;
     const storageGb = storageGbOfVariantKey(row.variant_key);
     if (!variantId || !storageGb || row.status === 'archived') continue;
-    const ramGb = toPositiveInt(ramByStorage.get(storageGb), 2048);
     const keySpecs =
       row.key_specs && typeof row.key_specs === 'object' && !Array.isArray(row.key_specs)
         ? (row.key_specs as Record<string, unknown>)
         : {};
+    // One RAM per variant: a stored value (number, else label) wins over Arena's, so
+    // the number and the label never disagree.
+    const storedRamGb = toPositiveInt(row.ram_gb, 2048);
+    const ramGb =
+      storedRamGb ?? gbOfLabel(keySpecs.ram) ?? toPositiveInt(ramByStorage.get(storageGb), 2048);
+    const storedStorageGb = toPositiveInt(row.storage_gb, 65536);
     const update: Record<string, unknown> = {};
     const keySpecUpdate: Record<string, unknown> = {};
-    if (toPositiveInt(row.storage_gb, 65536) === null) update.storage_gb = storageGb;
-    if (ramGb !== null && toPositiveInt(row.ram_gb, 2048) === null) update.ram_gb = ramGb;
+    if (storedStorageGb === null) update.storage_gb = storageGb;
+    if (ramGb !== null && storedRamGb === null) update.ram_gb = ramGb;
     if (typeof keySpecs.storage !== 'string' || !keySpecs.storage.trim()) {
-      keySpecUpdate.storage = formatStorage(storageGb);
+      keySpecUpdate.storage = formatStorage(storedStorageGb ?? storageGb);
     }
     if (ramGb !== null && (typeof keySpecs.ram !== 'string' || !keySpecs.ram.trim())) {
       keySpecUpdate.ram = `${ramGb}GB`;
@@ -1080,12 +1150,12 @@ export async function syncArenaSpecsToItem(
       update.key_specs = mergeKeySpecs(keySpecs, keySpecUpdate);
     }
     if (Object.keys(update).length === 0) continue;
-    if (apply) {
-      const { error: vErr } = await supabase
-        .from('master_products')
-        .update({ ...update, updated_at: new Date().toISOString() })
-        .eq('id', variantId);
-      if (vErr) throw new Error(`Failed to update variant ${variantId}: ${vErr.message}`);
+    if (
+      apply &&
+      !(await updateIfUnchanged(supabase, 'master_products', variantId, row.updated_at, update))
+    ) {
+      result.conflicts++;
+      continue;
     }
     result.variantsUpdated++;
   }
