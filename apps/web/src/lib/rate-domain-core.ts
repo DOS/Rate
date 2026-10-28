@@ -1344,7 +1344,11 @@ export function filterAndSortMerchants(
             safeNum(b.trust_score) - safeNum(a.trust_score)
           );
         case 'seeding_asc':
+          // Measured scores first: no reviews is not the lowest risk
+          // (DOS/Rate#1249).
           return (
+            Number(!hasReviewRiskEvidence(a.review_risk_breakdown)) -
+              Number(!hasReviewRiskEvidence(b.review_risk_breakdown)) ||
             safeNum(a.review_risk_score, 100) -
               safeNum(b.review_risk_score, 100) ||
             safeNum(b.trust_score) - safeNum(a.trust_score)
@@ -1931,4 +1935,17 @@ export function extractProductKeywordFromUrl(rawUrl?: string | null): string {
   } catch {
     return '';
   }
+}
+
+/**
+ * Whether a merchant's review risk score was measured on analysed reviews.
+ * With none, the score is only a platform baseline: it is shown as "not
+ * enough data", and is neither a low-risk filter match nor sorted as the
+ * lowest risk (DOS/Rate#1249).
+ */
+export function hasReviewRiskEvidence(
+  breakdown: { total_reviews?: unknown } | null | undefined
+): boolean {
+  const total = Number(breakdown?.total_reviews);
+  return Number.isFinite(total) && total > 0;
 }

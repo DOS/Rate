@@ -2287,6 +2287,8 @@ export interface MerchantProductListing {
   rating_count: number;
   url: string;
   image: string | null;
+  /** As the retailer last reported it; null when unknown (counts as in stock). */
+  availability: OfferAvailability | null;
   master_product: {
     id: string;
     slug: string;
@@ -2352,6 +2354,7 @@ interface RawProductRow {
   images?: string[] | null;
   url: string;
   cluster_id?: string | null;
+  availability?: string | null;
 }
 
 export function normalizeMasterProductRow(
@@ -3147,7 +3150,11 @@ export async function attachMerchantDiscountAnalysis(
   // and title stay as the profile read them.
   const listings = base.profile.listings
     .map((listing) => {
-      const analysis = discountByOfferId.get(listing.id) || null;
+      // A sold-out listing's last price is no deal and no historical low
+      // (DOS/Rate#1248): it gets no verdict.
+      const analysis = isOfferUnavailable(listing)
+        ? null
+        : discountByOfferId.get(listing.id) || null;
       return {
         ...listing,
         ...(analysis
@@ -3159,9 +3166,14 @@ export async function attachMerchantDiscountAnalysis(
         discount_analysis: analysis,
       };
     })
-    // Stable: equal prices keep the profile's id order.
-    .sort((a, b) => a.price_current - b.price_current);
+    // Stable: equal prices keep the profile's id order. Sold-out last.
+    .sort(
+      (a, b) =>
+        Number(isOfferUnavailable(a)) - Number(isOfferUnavailable(b)) ||
+        a.price_current - b.price_current
+    );
   const prices = listings
+    .filter((l) => !isOfferUnavailable(l))
     .map((l) => l.price_current)
     .filter((p) => Number.isFinite(p) && p > 0 && p <= MAX_VALID_VND_PRICE);
   return {
@@ -3198,7 +3210,7 @@ export async function getMerchantProfileBase(
         supabase
           .from('products')
           .select(
-            'id, merchant_id, platform, platform_item_id, title, price_current, price_original, stock, historical_sold, historical_sold_display, rating_star, rating_count, images, url, cluster_id'
+            'id, merchant_id, platform, platform_item_id, title, price_current, price_original, stock, historical_sold, historical_sold_display, rating_star, rating_count, images, url, cluster_id, availability'
           )
           .eq('merchant_id', merchantId)
           .order('price_current', { ascending: true })
@@ -3378,10 +3390,16 @@ export async function getMerchantProfileBase(
       rating_count: toSafeNonNegativeVoteCount(p.rating_count, 100_000_000),
       url: sanitizeOfferUrl(p.url),
       image: firstImageUrl(p.images),
+      availability: toOfferAvailability(p.availability),
       master_product: masterInfo,
       discount_analysis: null,
     };
   });
+  // Sold-out listings keep their last price: listed after the buyable ones,
+  // as on the product page (DOS/Rate#1248). Stable, so price order stays.
+  listings.sort(
+    (a, b) => Number(isOfferUnavailable(a)) - Number(isOfferUnavailable(b))
+  );
 
   const prodById = new Map(listings.map((l) => [l.id, l]));
   const recentReviews: MerchantProfileDetail['recent_reviews'] = (
@@ -3492,7 +3510,9 @@ export async function getMerchantProfileBase(
     Math.max(baseRisk, dosafeRisk, effectiveReviewRisk, metaCombined)
   );
   const trustScore = Math.max(0, 100 - combinedRisk);
+  // The store's price range is what it sells now: sold-out listings are out.
   const prices = listings
+    .filter((l) => !isOfferUnavailable(l))
     .map((l) => l.price_current)
     .filter((p) => Number.isFinite(p) && p > 0 && p <= MAX_VALID_VND_PRICE);
 

@@ -140,17 +140,23 @@ export default function MerchantShareAuditButton({
           label: safeTrustLevelLabel,
         }),
         t('mdDosafeLine', { score: safeDosafeRisk }),
-        t('mdSeedingLine', { score: safeSeedingRisk }),
+        // No analysed reviews: neither a risk number nor "100% genuine"
+        // (DOS/Rate#1249).
+        safeTotalReviews > 0
+          ? t('mdSeedingLine', { score: safeSeedingRisk })
+          : t('mdSeedingLineNoReviews'),
         t('mdRadarLine', {
           genuine: safeGenuineDeals,
           traps: safeFakeTraps,
         }),
-        t('mdAuthenticLine', {
-          pct: authenticPct,
-          auth: safeAuthenticReviews,
-          total: safeTotalReviews,
-          flagged: safeFlaggedReviews,
-        }),
+        safeTotalReviews > 0
+          ? t('mdAuthenticLine', {
+              pct: authenticPct,
+              auth: safeAuthenticReviews,
+              total: safeTotalReviews,
+              flagged: safeFlaggedReviews,
+            })
+          : t('mdAuthenticLineNoReviews'),
         t('mdProductsLine', { count: safeProductCount }),
         t('mdUrlLine', { url: window.location.href }),
       ];

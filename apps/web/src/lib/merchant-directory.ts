@@ -1,4 +1,5 @@
 import type { MerchantSummary } from './rate-domain';
+import { hasReviewRiskEvidence } from './merchant-risk-tone';
 
 // Filters, sort and paging of the /merchants directory, shared by the page,
 // its API (/api/v1/rate/merchants/directory) and the explorer. The page and
@@ -320,13 +321,23 @@ export function filterMerchantDirectory(
     if (officialOnly && !isOfficialMerchantFlag(m.is_official)) return false;
     const trustScore = toSafeScore100(m.trust_score);
     const reviewRiskScore = toSafeScore100(m.review_risk_score);
+    // A store with no analysed reviews has no measured review risk: it
+    // matches neither review tier (DOS/Rate#1249).
+    const reviewRiskKnown = hasReviewRiskEvidence(m.review_risk_breakdown);
     if (riskTier === 'safe' && trustScore < 80) return false;
     if (riskTier === 'moderate' && (trustScore < 60 || trustScore >= 80)) {
       return false;
     }
     if (riskTier === 'warning' && trustScore >= 60) return false;
-    if (seedingTier === 'low' && reviewRiskScore > 15) return false;
-    if (seedingTier === 'elevated' && reviewRiskScore <= 15) return false;
+    if (seedingTier === 'low' && (!reviewRiskKnown || reviewRiskScore > 15)) {
+      return false;
+    }
+    if (
+      seedingTier === 'elevated' &&
+      (!reviewRiskKnown || reviewRiskScore <= 15)
+    ) {
+      return false;
+    }
     if (kw) {
       const hit =
         toCleanLower(m.name).includes(kw) ||
@@ -348,9 +359,13 @@ export function filterMerchantDirectory(
       case 'products_desc':
         return bProducts - aProducts || bTrust - aTrust;
       case 'seeding_asc':
+        // Measured scores first: no reviews is not the lowest risk (#1249).
         return (
+          Number(!hasReviewRiskEvidence(a.review_risk_breakdown)) -
+            Number(!hasReviewRiskEvidence(b.review_risk_breakdown)) ||
           toSafeScore100(a.review_risk_score) -
-            toSafeScore100(b.review_risk_score) || bTrust - aTrust
+            toSafeScore100(b.review_risk_score) ||
+          bTrust - aTrust
         );
       case 'followers_desc':
         return (

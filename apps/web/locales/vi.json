@@ -857,7 +857,6 @@
     "dosafeAlert": "Có cảnh báo lừa đảo",
     "authenticLabel": "Thực chất:",
     "filteredSpamCount": "{count} đánh giá ảo hoặc spam đã lọc",
-    "noAbnormalReviews": "Chưa phát hiện đánh giá bất thường",
     "priceRangeLabel": "Biên độ giá tham chiếu:",
     "radarGenuineBadge": "{count} tin bán dưới giá trung vị (-{pct}%)",
     "radarFakeBadge": "{count} Cảnh báo kê khống giá gốc",
@@ -935,7 +934,7 @@
     "itemMetaLine": "Mã sàn:",
     "soldLabel": "Đã bán:",
     "lowestMarketPriceLabel": "Giá thấp nhất thị trường:",
-    "unclusteredLabel": "Chưa gom cụm",
+    "unclusteredLabel": "Chưa ghép với dòng máy nào",
     "historicalLowObs": "Đáy lịch sử: {price} ₫ ({count} mốc đo)",
     "collectingHistoryBadge": "Đang thu thập lịch sử giá",
     "viewReviewsAndPricesBtn": "★ Xem đánh giá và giá",
@@ -960,7 +959,15 @@
     "riskReviewLabel": "Rủi ro đánh giá",
     "trustBadge": "Tin cậy: {score}/100",
     "scamRiskBadge": "Rủi ro lừa đảo: {score}/100",
-    "reviewRiskBadge": "Rủi ro đánh giá: {score}/100"
+    "reviewRiskBadge": "Rủi ro đánh giá: {score}/100",
+    "reviewRiskNoData": "Rủi ro đánh giá: chưa đủ dữ liệu",
+    "reviewRiskNoDataShort": "Chưa đủ dữ liệu",
+    "profileMetaDescNoReviews": "Hồ sơ gian hàng {name}: rủi ro lừa đảo DOSafe ({dosafe}/100) và lịch sử giá {count} sản phẩm trên Rate.vn. Chưa có đánh giá để phân tích.",
+    "mdSeedingLineNoReviews": "- **Rủi ro đánh giá:** chưa đủ dữ liệu (chưa có đánh giá để phân tích)",
+    "mdAuthenticLineNoReviews": "- **Tỷ lệ đánh giá thật:** chưa có đánh giá",
+    "listingUnavailableBadge": "Hết hàng",
+    "listingUnavailableTitle": "Gian hàng báo hết hàng hoặc ngừng bán. Giá là giá ghi nhận lần cuối, không phải giá đang bán.",
+    "listingUnavailableAudit": "Hết hàng, không xét khuyến mãi"
   },
   "productDetail": {
     "notFoundTitle": "Không tìm thấy sản phẩm | Rate.vn",

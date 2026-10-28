@@ -857,7 +857,6 @@
     "dosafeAlert": "Scam alerts reported",
     "authenticLabel": "Authentic:",
     "filteredSpamCount": "{count, plural, one {# fake or spam review filtered} other {# fake or spam reviews filtered}}",
-    "noAbnormalReviews": "No abnormal review patterns detected",
     "priceRangeLabel": "Reference price range:",
     "radarGenuineBadge": "{count} below-median deals (-{pct}%)",
     "radarFakeBadge": "{count} fake-sale markup alerts",
@@ -935,7 +934,7 @@
     "itemMetaLine": "Item ID:",
     "soldLabel": "Sold:",
     "lowestMarketPriceLabel": "Market lowest price:",
-    "unclusteredLabel": "Unclustered",
+    "unclusteredLabel": "Not matched to a model yet",
     "historicalLowObs": "All-time low: {price} ₫ ({count} points)",
     "collectingHistoryBadge": "Collecting price history",
     "viewReviewsAndPricesBtn": "★ Reviews & price",
@@ -960,7 +959,15 @@
     "riskReviewLabel": "Review risk",
     "trustBadge": "Trust: {score}/100",
     "scamRiskBadge": "Scam risk: {score}/100",
-    "reviewRiskBadge": "Review risk: {score}/100"
+    "reviewRiskBadge": "Review risk: {score}/100",
+    "reviewRiskNoData": "Review risk: not enough data",
+    "reviewRiskNoDataShort": "Not enough data",
+    "profileMetaDescNoReviews": "Seller profile for {name}: DOSafe scam risk ({dosafe}/100) and price history across {count} products on Rate.vn. No reviews to analyse yet.",
+    "mdSeedingLineNoReviews": "- **Review risk:** not enough data (no reviews to analyse yet)",
+    "mdAuthenticLineNoReviews": "- **Genuine review share:** no reviews yet",
+    "listingUnavailableBadge": "Out of stock",
+    "listingUnavailableTitle": "The store reports it sold out or discontinued. The price is the last one seen, not a current price.",
+    "listingUnavailableAudit": "Out of stock, no deal check"
   },
   "productDetail": {
     "notFoundTitle": "Product not found | Rate.vn",
