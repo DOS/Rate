@@ -197,7 +197,13 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
             // Two sizes of one Item are no versus, and a pair is listed once.
             // One entry per Item pair, whichever way round it was ranked.
             const pairKey = [slugA, slugB].sort().join('|');
-            if (itemSlugs && (slugA === slugB || versusSeen.has(pairKey))) {
+            if (
+              itemSlugs &&
+              (slugA === slugB ||
+                versusSeen.has(pairKey) ||
+                slugA.includes('-vs-') ||
+                slugB.includes('-vs-'))
+            ) {
               return [];
             }
             versusSeen.add(pairKey);

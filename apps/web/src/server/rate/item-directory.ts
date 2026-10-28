@@ -115,9 +115,12 @@ export async function getItemCatalogPage<T extends MasterProduct>(
     const links = await getCachedItemLinks(
       rows.map((r) => r.id).filter(Boolean)
     ).catch((err: unknown) => {
-      log.warn('item links unavailable, showing variants', {
-        message: err instanceof Error ? err.message : String(err),
-      });
+      const message = err instanceof Error ? err.message : String(err);
+      if (err instanceof ItemModelUnavailableError) {
+        log.warn('item links unavailable, showing variants', { message });
+      } else {
+        log.error('item links read failed, showing variants', { message });
+      }
       return null;
     });
     if (!links) {

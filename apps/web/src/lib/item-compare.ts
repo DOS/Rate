@@ -126,12 +126,13 @@ export function planVersusRoute(
   if (!a || !b) return { kind: 'not_found' };
   if (!a.itemId && !b.itemId) return { kind: 'legacy' };
   if (a.itemId && a.itemId === b.itemId) return { kind: 'not_found' };
-  // An Item slug holding "-vs-" cannot name a versus side: that side keeps
-  // its variant slug (#1275).
-  const side = (t: { itemSlug: string | null; variantSlug: string }) =>
-    t.itemSlug && !t.itemSlug.includes('-vs-') ? t.itemSlug : t.variantSlug;
-  const urlSlugA = side(a);
-  const urlSlugB = side(b);
+  const urlSlugA = a.itemSlug ?? a.variantSlug;
+  const urlSlugB = b.itemSlug ?? b.variantSlug;
+  // A slug holding "-vs-" cannot be one side of a versus URL (it would not
+  // parse back), so there is no versus page for it (#1275).
+  if (urlSlugA.includes('-vs-') || urlSlugB.includes('-vs-')) {
+    return { kind: 'not_found' };
+  }
   const canonical = `/compare/${urlSlugA}-vs-${urlSlugB}`;
   if (urlSlugA !== sideA.slug || urlSlugB !== sideB.slug) {
     return { kind: 'redirect', to: canonical };
