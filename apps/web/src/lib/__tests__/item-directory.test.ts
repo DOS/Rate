@@ -5,6 +5,7 @@ import {
   countBrandsByItem,
   groupRowsByItem,
   itemSizeChips,
+  sumCountsByItemRow,
   sortItemRows,
   sitemapRowsByItem,
   type ItemLinkInput,
@@ -42,8 +43,18 @@ function main() {
       merchant_count: 7,
     },
     variants: [
-      { variant_key: '128gb', storage_gb: 128, min_price: 18_000_000 },
-      { variant_key: '256gb', storage_gb: 256, min_price: 21_000_000 },
+      {
+        id: 'm-128',
+        variant_key: '128gb',
+        storage_gb: 128,
+        min_price: 18_000_000,
+      },
+      {
+        id: 'm-256',
+        variant_key: '256gb',
+        storage_gb: 256,
+        min_price: 21_000_000,
+      },
     ],
   };
   const links = new Map<string, ItemLinkInput>([
@@ -112,8 +123,8 @@ function main() {
       {
         ...card,
         item_variants: [
-          { variant_key: 'unknown', storage_gb: null, min_price: 0 },
-          { variant_key: 'standard', storage_gb: null, min_price: 0 },
+          { id: 'u', variant_key: 'unknown', storage_gb: null, min_price: 0 },
+          { id: 's', variant_key: 'standard', storage_gb: null, min_price: 0 },
         ],
       },
       '/x',
@@ -123,6 +134,32 @@ function main() {
     'earbuds and other sizeless Items get no chips'
   );
   assert.deepEqual(itemSizeChips(grouped[1]!, '/x', String), []);
+  // One chip per label: a later connectivity axis (Q3) reads the same.
+  assert.deepEqual(
+    itemSizeChips(
+      {
+        ...card,
+        item_variants: [
+          ...card.item_variants!,
+          {
+            id: 'm-256c',
+            variant_key: '256gb-cellular',
+            storage_gb: 256,
+            min_price: 0,
+          },
+        ],
+      },
+      '/x',
+      (gb) => `${gb}GB`
+    ).map((c) => c.href),
+    ['/x?v=128gb', '/x?v=256gb']
+  );
+
+  // Reviews kept out of an Item's rating are all its sizes' (#1275).
+  assert.deepEqual(
+    sumCountsByItemRow(grouped, { 'm-128': 2, 'm-256': 3, 'm-other': 1 }),
+    { 'm-128': 5, 'm-256': 3, 'm-other': 1 }
+  );
 
   // Brand facets: one count per Item, not per variant.
   assert.deepEqual(
