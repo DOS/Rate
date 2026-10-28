@@ -48,6 +48,11 @@ function hasControlOrSpaceChar(val: string): boolean {
   return /[\p{Cc}\s]/u.test(val);
 }
 
+/** True when a model_key's last segment is a storage size ("asus:zenbook-s-14:1024gb"). */
+function isStorageKeyed(modelKey: unknown): boolean {
+  return typeof modelKey === 'string' && /:\d+(?:gb|tb)$/i.test(modelKey);
+}
+
 export function sanitizeMatcherEntityId(raw: unknown, maxLen = 128): string {
   const str =
     typeof raw === 'number' && Number.isSafeInteger(raw) && raw > 0
@@ -513,7 +518,7 @@ export class EntityMatcher {
       throw new Error(`[EntityMatcher] Tier 2 fuzzy match failed: ${fuzzyErr.message}`);
     }
     let ambiguousFuzzy = false;
-    const validFuzzyMatches = Array.isArray(fuzzyMatches)
+    const scoredFuzzyMatches = Array.isArray(fuzzyMatches)
       ? fuzzyMatches.filter(m => {
           if (!m || typeof m !== 'object' || Array.isArray(m)) return false;
           const masterId = sanitizeMatcherEntityId(m.master_id, 128);
@@ -522,6 +527,27 @@ export class EntityMatcher {
           return Number.isFinite(sim) && sim >= ENTITY_MATCH_CANDIDATE_FLOOR && sim <= 1;
         })
       : [];
+    // A title that states no storage never links to a master keyed by a storage: the
+    // RPC drops its storage filter for a NULL size, so "Asus Zenbook S 14" would score
+    // high against "Asus Zenbook S 14 1TB". Such a hit only makes the seed a draft
+    // (DOS/Rate#1105 option (a), #1200). The item-first matcher (#1151) handles it with
+    // RATE_ITEM_MODEL on. Earbuds and watches are sold in one storage per model, so
+    // their legacy `:64gb` seed keys ("apple:watch-series-10-42mm:64gb") still take a
+    // size-less title.
+    const validFuzzyMatches =
+      candidate.storage_gb == null &&
+      candidate.category_slug !== 'earbuds' &&
+      candidate.category_slug !== 'smartwatches'
+        ? scoredFuzzyMatches.filter(m => !isStorageKeyed(m.model_key))
+        : scoredFuzzyMatches;
+    if (validFuzzyMatches.length < scoredFuzzyMatches.length) {
+      ambiguousFuzzy = true;
+      logger.warn(
+        'entity_match.tier2_storage_less',
+        `Tier 2 skipped ${scoredFuzzyMatches.length - validFuzzyMatches.length} sized master(s) for a title with no storage: seeding as draft if new.`,
+        { modelKey: candidate.model_key }
+      );
+    }
     if (validFuzzyMatches.length > 0) {
       const topMatch = validFuzzyMatches[0]!;
       const topMasterId = sanitizeMatcherEntityId(topMatch.master_id, 128);
