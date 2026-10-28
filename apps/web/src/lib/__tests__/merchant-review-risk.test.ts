@@ -141,6 +141,7 @@ async function main() {
   );
 
   await directoryReadsReviewsForStoredScores();
+  await offerSellersWithoutReviewsReadAsNoData();
 
   console.warn('  ✅ merchant review risk suite passed');
 }
@@ -234,6 +235,90 @@ async function directoryReadsReviewsForStoredScores() {
   assert.equal(stored.review_risk_score, 30, 'the stored score is kept');
   assert.equal(hasReviewRiskEvidence(stored.review_risk_breakdown), true);
   assert.equal(hasReviewRiskEvidence(none.review_risk_breakdown), false);
+}
+
+// A seller the importer never scored gets the baseline score on offer lines,
+// with a breakdown counting no review, so the product page says "not enough
+// data" as the merchant page does (DOS/Rate#1258).
+async function offerSellersWithoutReviewsReadAsNoData() {
+  const { mapTrustViewRowToMerchantOffer, mapOfferRowToMerchantOffer } =
+    await import('../rate-api');
+  const row = {
+    id: 'o1',
+    merchant_id: 'm1',
+    platform: 'shopee',
+    title: 'Phone',
+    price_current: 1_000_000,
+    url: 'https://shopee.vn/p',
+    merchant_name: 'Shop',
+    merchant_is_official: false,
+    price_original: null,
+    stock: 1,
+    rating_star: 5,
+    rating_count: 1,
+  };
+  const unscored = mapTrustViewRowToMerchantOffer(
+    { ...row, review_risk_score: 0, review_risk_breakdown: {} },
+    0
+  );
+  assert.equal(
+    hasReviewRiskEvidence(unscored.merchant.review_risk_breakdown),
+    false
+  );
+  const scored = mapTrustViewRowToMerchantOffer(
+    {
+      ...row,
+      review_risk_score: 30,
+      review_risk_breakdown: { total_reviews: 12 },
+    },
+    0
+  );
+  assert.equal(scored.merchant.review_risk_score, 30);
+  assert.equal(
+    hasReviewRiskEvidence(scored.merchant.review_risk_breakdown),
+    true
+  );
+
+  const fallbackBaseline = mapOfferRowToMerchantOffer({
+    id: 'o2',
+    platform: 'shopee',
+    title: 'Phone',
+    price_current: 1_000_000,
+    url: 'https://shopee.vn/p',
+    merchants: {
+      id: 'm2',
+      name: 'Shop',
+      platform: 'shopee',
+      review_risk_score: 0,
+      review_risk_breakdown: {},
+      metadata: {},
+    },
+  } as unknown as Parameters<typeof mapOfferRowToMerchantOffer>[0]);
+  assert.equal(
+    hasReviewRiskEvidence(fallbackBaseline.merchant.review_risk_breakdown),
+    false
+  );
+  const fallbackStored = mapOfferRowToMerchantOffer({
+    id: 'o3',
+    platform: 'shopee',
+    title: 'Phone',
+    price_current: 1_000_000,
+    url: 'https://shopee.vn/p',
+    merchants: {
+      id: 'm3',
+      name: 'Shop',
+      platform: 'shopee',
+      review_risk_score: null,
+      review_risk_breakdown: null,
+      metadata: { review_risk_score: 25 },
+    },
+  } as unknown as Parameters<typeof mapOfferRowToMerchantOffer>[0]);
+  assert.equal(fallbackStored.merchant.review_risk_score, 25);
+  assert.equal(
+    hasReviewRiskEvidence(fallbackStored.merchant.review_risk_breakdown),
+    true,
+    'a stored score without a breakdown stays'
+  );
 }
 
 main().catch((err) => {

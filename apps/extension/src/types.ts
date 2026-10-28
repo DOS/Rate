@@ -125,7 +125,8 @@ export interface ExtensionLookupData {
     trust_score: number;
     risk_score: number;
     dosafe_risk_score: number;
-    review_risk_score: number;
+    /** Null when the store has no analysed review (DOS/Rate#1258). */
+    review_risk_score: number | null;
   } | null;
   reviewSummary: {
     total_analyzed: number;

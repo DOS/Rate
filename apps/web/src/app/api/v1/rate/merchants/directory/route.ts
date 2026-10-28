@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getCachedMerchantsList } from '@/server/rate';
 import {
   PUBLIC_API_CORS_HEADERS,
+  withPublicReviewRisk,
   jsonApiError,
   parseBoundedIntParam,
 } from '@/server/rate/api-handler';
@@ -32,7 +33,10 @@ export async function GET(request: NextRequest) {
     const merchants = await getCachedMerchantsList();
     const page = pageMerchantDirectory(merchants, filters, offset, limit);
     return NextResponse.json(
-      { ok: true, data: page },
+      {
+        ok: true,
+        data: { ...page, items: page.items.map(withPublicReviewRisk) },
+      },
       {
         status: 200,
         headers: {

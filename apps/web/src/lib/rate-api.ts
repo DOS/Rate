@@ -1069,6 +1069,16 @@ async function sellerExtrasForTrustViewRows(
   return extras;
 }
 
+/** The breakdown of a seller with no analysed review (DOS/Rate#1258). */
+const NO_ANALYSED_REVIEWS_BREAKDOWN: Readonly<Record<string, number>> = {
+  total_reviews: 0,
+  authentic_count: 0,
+  coin_spam_count: 0,
+  seeding_fake_count: 0,
+  sabotage_or_bombing_count: 0,
+  suspicious_ratio_pct: 0,
+};
+
 export function mapTrustViewRowToMerchantOffer(
   row: RawTrustViewRow,
   followerCount?: number,
@@ -1103,12 +1113,16 @@ export function mapTrustViewRowToMerchantOffer(
   const priceCurrent = toSafeOfferPrice(safeRow.price_current);
   const cleanPlatform = sanitizeOfferString(safeRow.platform).toLowerCase();
   const cleanLocation = sanitizeOfferString(safeRow.merchant_location);
+  // A baseline seller carries a breakdown counting no review, so every
+  // surface reads its score as "not enough data" (DOS/Rate#1258).
   const safeBreakdown =
-    safeRow.review_risk_breakdown &&
-    typeof safeRow.review_risk_breakdown === 'object' &&
-    !Array.isArray(safeRow.review_risk_breakdown)
-      ? safeRow.review_risk_breakdown
-      : null;
+    isUnscoredTrustViewRow(safeRow) && hasSeller
+      ? { ...NO_ANALYSED_REVIEWS_BREAKDOWN }
+      : safeRow.review_risk_breakdown &&
+          typeof safeRow.review_risk_breakdown === 'object' &&
+          !Array.isArray(safeRow.review_risk_breakdown)
+        ? safeRow.review_risk_breakdown
+        : null;
   return {
     id: sanitizeOfferString(safeRow.id),
     platform: cleanPlatform,
@@ -1179,6 +1193,13 @@ export function mapOfferRowToMerchantOffer(item: RawOfferRow): MerchantOffer {
     0
   );
   // An offer with no merchant row has no seller to give a baseline (#1099).
+  const hasStoredScore =
+    (merchantObj?.review_risk_score != null &&
+      hasPersistedReviewRisk(
+        columnReviewRisk,
+        merchantObj.review_risk_breakdown
+      )) ||
+    typeof meta?.review_risk_score === 'number';
   const reviewRisk =
     merchantObj?.review_risk_score != null &&
     hasPersistedReviewRisk(columnReviewRisk, merchantObj.review_risk_breakdown)
@@ -1210,18 +1231,21 @@ export function mapOfferRowToMerchantOffer(item: RawOfferRow): MerchantOffer {
     Object.keys(merchantObj.review_risk_breakdown).length > 0
       ? merchantObj.review_risk_breakdown
       : null;
+  // A baseline seller carries a breakdown counting no review (#1258).
   const breakdown =
-    topLevelBreakdown ??
-    (meta?.review_risk_breakdown &&
-    typeof meta.review_risk_breakdown === 'object' &&
-    !Array.isArray(meta.review_risk_breakdown) &&
-    Object.keys(meta.review_risk_breakdown as Record<string, unknown>).length >
-      0
-      ? (meta.review_risk_breakdown as Record<string, unknown>)
-      : meta &&
-          ('review_risk_score' in meta || 'seeding_spam_ratio_pct' in meta)
-        ? meta
-        : null);
+    merchantObj && !hasStoredScore
+      ? { ...NO_ANALYSED_REVIEWS_BREAKDOWN }
+      : (topLevelBreakdown ??
+        (meta?.review_risk_breakdown &&
+        typeof meta.review_risk_breakdown === 'object' &&
+        !Array.isArray(meta.review_risk_breakdown) &&
+        Object.keys(meta.review_risk_breakdown as Record<string, unknown>)
+          .length > 0
+          ? (meta.review_risk_breakdown as Record<string, unknown>)
+          : meta &&
+              ('review_risk_score' in meta || 'seeding_spam_ratio_pct' in meta)
+            ? meta
+            : null));
   const priceCurrent = toSafeOfferPrice(safeItem.price_current);
   const rawMerchantRating =
     typeof merchantObj?.rating_star === 'number' ||

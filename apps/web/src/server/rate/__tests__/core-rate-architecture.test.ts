@@ -9496,7 +9496,14 @@ async function runCoreArchitectureSuite() {
     assert.equal(trustOffer.rating_star, 0);
     assert.equal(trustOffer.merchant.follower_count, 0);
     assert.equal(trustOffer.merchant.location, null);
-    assert.equal(trustOffer.merchant.review_risk_breakdown, null);
+    // A never-scored seller (no score, malformed breakdown) carries a
+    // breakdown counting no review, so its baseline reads as no data
+    // (DOS/Rate#1258).
+    assert.equal(
+      (trustOffer.merchant.review_risk_breakdown as { total_reviews?: number })
+        ?.total_reviews,
+      0
+    );
 
     const mappedOffer = rateApiMod.mapOfferRowToMerchantOffer({
       id: 'off-2\u0000',

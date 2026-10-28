@@ -10,6 +10,7 @@ import {
 import {
   PUBLIC_API_CORS_HEADERS,
   jsonApiError,
+  withPublicReviewRisk,
   parseBoundedStringParam,
   parseOptionalVndPriceParam,
   resolveInspectObservedPrices,
@@ -100,6 +101,9 @@ export async function GET(request: NextRequest) {
         ok: true,
         data: {
           ...inspection,
+          merchantProfile: inspection.merchantProfile
+            ? withPublicReviewRisk(inspection.merchantProfile)
+            : null,
           canonicalUrl,
           gatekeeper,
           priceVerdict,
