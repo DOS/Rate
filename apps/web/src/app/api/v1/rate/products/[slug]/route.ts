@@ -8,6 +8,8 @@ import {
 } from '@/server/rate';
 import { computeProductRadarSignal } from '@/server/rate/deals';
 import { isOfferUnavailable } from '@/lib/product-market-stats';
+import { getMasterProductCategorySlug } from '@/lib/rate-domain';
+import { applyCategorySpecTemplate } from '@repo/shared-data/rules';
 import {
   PUBLIC_API_CORS_HEADERS,
   jsonApiError,
@@ -29,6 +31,9 @@ export async function OPTIONS() {
  * Returns canonical Master Product (10 Field Groups), cross-platform merchant offers,
  * time-series Price History + Fake Discount Detection, and JReviews Dual-Rating & AI Review Summary.
  * Designed for Rate Web UI, Rate Browser Extension (MV3), and ecosystem consumers.
+ * The product carries the category's spec view, as rate.vn shows it: no
+ * screen, RAM, storage or camera for earbuds and no 5G for a watch
+ * (DOS/Rate#1166).
  */
 export async function GET(_request: NextRequest, context: RouteContext) {
   try {
@@ -47,15 +52,19 @@ export async function GET(_request: NextRequest, context: RouteContext) {
       );
     }
 
-    const product = await getCachedMasterProductBySlug(cleanSlug);
+    const storedProduct = await getCachedMasterProductBySlug(cleanSlug);
 
-    if (!product) {
+    if (!storedProduct) {
       return NextResponse.json(
         { ok: false, error: 'Product not found', code: 'NOT_FOUND' },
         { status: 404, headers: PUBLIC_API_CORS_HEADERS }
       );
     }
 
+    const product = applyCategorySpecTemplate(
+      getMasterProductCategorySlug(storedProduct),
+      storedProduct
+    );
     const [offers, reviews] = await Promise.all([
       getCachedMasterProductOffers(product.id),
       getCachedMasterProductReviews(product.id),

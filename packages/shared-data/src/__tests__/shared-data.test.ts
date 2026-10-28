@@ -942,6 +942,70 @@ function testCategorySpecTemplates(): void {
   assert.equal(watchStoredSpecs.hardware?.gpu, 'g');
   assert.equal(watchStoredSpecs.camera, undefined);
 
+  // The free-text network fields lose their 5G parts on the page only
+  // (DOS/Rate#1166); a 5GHz Wi-Fi mention is not 5G.
+  const lteWatch = {
+    specifications: {
+      cellular: {
+        technology: 'LTE / 5G',
+        data_speed: 'LTE Cat 4, 5G NR',
+        sim_type: 'eSIM',
+      },
+      connectivity: { wlan: 'Wi-Fi 802.11 b/g/n, 5GHz' },
+    },
+  };
+  const lteWatchShown = rules.applyCategorySpecTemplate(
+    'smartwatches',
+    lteWatch
+  ).specifications as unknown as Record<string, Record<string, unknown>>;
+  assert.deepEqual(lteWatchShown.cellular, {
+    technology: 'LTE',
+    data_speed: 'LTE Cat 4',
+    sim_type: 'eSIM',
+  });
+  assert.deepEqual(
+    lteWatchShown.connectivity,
+    lteWatch.specifications.connectivity
+  );
+  assert.deepEqual(
+    rules.applyCategorySpecTemplate('smartwatches', {
+      specifications: { cellular: { technology: '5G' } },
+    }).specifications,
+    { cellular: {} }
+  );
+  assert.deepEqual(
+    rules.applyCategorySpecTemplate('smartwatches', lteWatch, {
+      forStorage: true,
+    }).specifications,
+    lteWatch.specifications
+  );
+  assert.equal(lteWatch.specifications.cellular.technology, 'LTE / 5G');
+  // 5G qualifiers and bracketed notes go with it; other text stays.
+  const shownTech = (technology: string) =>
+    (
+      rules.applyCategorySpecTemplate('smartwatches', {
+        specifications: { cellular: { technology } },
+      }).specifications as { cellular: { technology?: string } }
+    ).cellular.technology;
+  assert.equal(shownTech('HSPA, LTE-A, 5G SA/NSA/Sub6'), 'HSPA, LTE-A');
+  assert.equal(shownTech('LTE / 5G NR Sub-6'), 'LTE');
+  assert.equal(shownTech('LTE (5G RedCap)'), 'LTE');
+  assert.equal(shownTech('5G-ready LTE'), 'LTE');
+  assert.equal(shownTech('LTE (Cat 4) / 5G'), 'LTE (Cat 4)');
+  assert.equal(shownTech('GSM / LTE'), 'GSM / LTE');
+  assert.equal(
+    shownTech(shownTech('HSPA, LTE-A, 5G SA/NSA/Sub6') ?? ''),
+    'HSPA, LTE-A'
+  );
+  assert.equal(
+    (
+      rules.applyCategorySpecTemplate('smartwatches', {
+        specifications: { cellular: { sim_type: 'eSIM (5G)' } },
+      }).specifications as { cellular: { sim_type?: string } }
+    ).cellular.sim_type,
+    'eSIM'
+  );
+
   // Idempotent, never mutates the input, and leaves absent columns absent.
   assert.deepEqual(rules.applyCategorySpecTemplate('earbuds', buds), buds);
   assert.equal(phoneShaped.ram_gb, 1);

@@ -185,11 +185,57 @@ export interface CategoryScopedSpecs {
 const isRecord = (v: unknown): v is Record<string, unknown> =>
   Boolean(v) && typeof v === 'object' && !Array.isArray(v);
 
+// Free-text cellular fields the enricher writes for a watch, such as
+// "LTE / 5G" (DOS/Rate#1166).
+const FREE_TEXT_CELLULAR_FIELDS = ['technology', 'data_speed', 'sim_type'];
+const CELLULAR_SEPARATOR_RE = /\s*[/,|;]\s*/;
+// A bracketed 5G note, as in "LTE (5G RedCap)".
+const FIVE_G_BRACKET_RE = /\s*\([^()]*\b5G\b[^()]*\)/gi;
+// "5G" with its qualifiers, also slash-joined ones: "5G SA/NSA/Sub6",
+// "5G NR Sub-6", "5G-ready".
+const FIVE_G_PHRASE_RE =
+  /\b5G\b(?:(?:\s*\/\s*|[\s-]*)(?:NR|SA|NSA|Sub-?6(?:\s*GHz)?|mmWave|RedCap|ready)\b)*/gi;
+
+/** The text without its 5G parts, or null when nothing else is left. */
+const withoutFiveG = (text: string): string | null => {
+  const stripped = text
+    .replace(FIVE_G_BRACKET_RE, '')
+    .replace(FIVE_G_PHRASE_RE, '');
+  const kept = stripped
+    .split(CELLULAR_SEPARATOR_RE)
+    .map((part) =>
+      part
+        .replace(/\s+/g, ' ')
+        .replace(/^[\s-]+|[\s(-]+$/g, '')
+        .trim()
+    )
+    .filter(Boolean);
+  if (kept.length === 0) return null;
+  const separator = CELLULAR_SEPARATOR_RE.exec(text)?.[0] ?? ' / ';
+  return kept.join(separator);
+};
+
+const withoutFiveGText = (
+  cellular: Record<string, unknown>
+): Record<string, unknown> => {
+  const out: Record<string, unknown> = { ...cellular };
+  for (const field of FREE_TEXT_CELLULAR_FIELDS) {
+    const value = out[field];
+    if (typeof value !== 'string' || !/\b5G\b/i.test(value)) continue;
+    const cleaned = withoutFiveG(value);
+    if (cleaned === null) delete out[field];
+    else out[field] = cleaned;
+  }
+  return out;
+};
+
 /**
  * A copy of a product with the spec groups, fields and flat columns its
  * category does not have removed. Fields outside the ten groups (such as
- * `category_slug`) are kept. Values the category has are never changed, so
- * applying it twice gives the same result. It only narrows: removed flat
+ * `category_slug`) are kept. Values the category has are never changed,
+ * except that display mode drops the 5G parts of a free-text network field
+ * ("LTE / 5G" becomes "LTE") for a category that hides 5G, so applying it
+ * twice gives the same result. It only narrows: removed flat
  * columns become `null` (`has_5g` becomes `false`) and groups lose keys, so
  * callers should type those fields as nullable, as the row types do.
  *
@@ -221,6 +267,12 @@ export function applyCategorySpecTemplate<T extends CategoryScopedSpecs>(
       } else {
         specs[group] = value;
       }
+    }
+    // The page hides 5G for the category, so it also leaves it out of the
+    // free-text network fields.
+    const shownCellular = specs.cellular;
+    if (!forStorage && !template.has5g && isRecord(shownCellular)) {
+      specs.cellular = withoutFiveGText(shownCellular);
     }
     out.specifications = specs;
   }

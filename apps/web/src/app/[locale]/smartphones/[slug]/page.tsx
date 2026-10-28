@@ -258,7 +258,7 @@ export async function ProductDetailView({
       ? bayesianSummary.bayesianRating
       : rawUserRating;
 
-  const keySpecLine = buildKeySpecLine(product);
+  const keySpecLine = buildKeySpecLine(product, categorySlug);
   const mainImage = firstImageUrl(product.images);
 
   const canonicalUrl = `https://rate.vn${categoryBasePath}/${product.slug}`;
@@ -1562,6 +1562,7 @@ export async function ProductDetailView({
                       brand={product.brand}
                       specifications={specs || {}}
                       keySpecs={keySpecs || {}}
+                      categorySlug={categorySlug}
                       radarSignal={radarSignal}
                     />
                     <span className="badge bg-dark-subtle text-dark rounded-pill px-3 py-2">

@@ -3,6 +3,7 @@ import type {
   MasterProduct,
   ProductSpecifications,
 } from '@repo/shared-data';
+import { applyCategorySpecTemplate } from '@repo/shared-data/rules';
 import {
   resolveCompareBatteryMah,
   resolveCompareRamGb,
@@ -103,16 +104,24 @@ export function peerPriceDelta(
 
 /**
  * "Chip • RAM • storage • battery" for the share card, from key_specs with a
- * fallback to the 10-group specifications and top-level columns.
+ * fallback to the 10-group specifications and top-level columns. With a
+ * category it reads only what the category's spec template has, so an
+ * earbud never shows RAM or storage (DOS/Rate#1166).
  */
 export function buildKeySpecLine(
-  product: Pick<
+  storedProduct: Pick<
     MasterProduct,
     'key_specs' | 'specifications' | 'ram_gb' | 'storage_gb' | 'battery_mah'
-  >
+  >,
+  categorySlug?: string | null
 ): string {
-  if (!product || typeof product !== 'object' || Array.isArray(product))
+  if (
+    !storedProduct ||
+    typeof storedProduct !== 'object' ||
+    Array.isArray(storedProduct)
+  )
     return '';
+  const product = applyCategorySpecTemplate(categorySlug, storedProduct);
   const keySpecs = (
     product.key_specs &&
     typeof product.key_specs === 'object' &&
