@@ -126,29 +126,41 @@ const sizesOfToken = (list: string): number[] => {
 
 /**
  * The storage sizes, in GB, a title names (DOS/Rate#1197), RAM left out.
- * A RAM or SSD/ROM label binds to the size after it when the title writes
- * labels first ("RAM 16GB SSD 512GB"), else to the size before it ("64GB RAM
- * 1TB SSD"). Token by token, so the cost stays linear in the title.
+ * A RAM label next to a size binds to it when no other size sits on the
+ * label's far side ("RAM 16GB", "64GB RAM"). Between two sizes it binds by
+ * the title's habit: after it when the title writes labels first ("SSD 512GB
+ * RAM 16GB"), else before it ("64GB RAM 1TB SSD"). Token by token, so the cost
+ * stays linear in the title.
  */
 export function titleStorageSizesGb(title: string): number[] {
   const tokens = title
     .slice(0, MAX_TITLE_SCAN)
-    .replace(/(\d)\s+(GB|TB)\b/gi, '$1$2')
-    .replace(/ *([/+]) */g, '$1')
+    .replace(/\s+/g, ' ')
+    .replace(/(\d) (GB|TB)\b/gi, '$1$2')
+    .replace(/ ?([/+]) ?/g, '$1')
+    // A unit followed by a suffix: "512GB-VN/A", "1TB.".
+    .replace(/(\d(?:GB|TB))[-.:!]/gi, '$1 ')
     .split(/[\s,;|()[\]]+/)
     .filter(Boolean);
-  const isLabel = (t: string | undefined) =>
-    t !== undefined && (RAM_LABEL_RE.test(t) || STORAGE_LABEL_RE.test(t));
-  const firstLabel = tokens.findIndex(t => isLabel(t));
-  const firstSize = tokens.findIndex(t => SIZE_TOKEN_RE.test(t));
+  const isSize = (i: number) => i >= 0 && i < tokens.length && SIZE_TOKEN_RE.test(tokens[i]);
+  const isRamLabel = (i: number) => i >= 0 && i < tokens.length && RAM_LABEL_RE.test(tokens[i]);
+  const isLabel = (t: string) => RAM_LABEL_RE.test(t) || STORAGE_LABEL_RE.test(t);
+  const firstLabel = tokens.findIndex(isLabel);
+  const firstSize = tokens.findIndex((_, i) => isSize(i));
   const labelsFirst = firstLabel !== -1 && firstLabel < firstSize;
+  // Whether the RAM label at `label` names the size at `size` (a neighbour).
+  const ramNames = (label: number, size: number) => {
+    if (!isRamLabel(label)) return false;
+    const far = label + (label - size);
+    if (!isSize(far)) return true;
+    return labelsFirst ? label < size : label > size;
+  };
   const sizes: number[] = [];
   tokens.forEach((token, i) => {
     const size = SIZE_TOKEN_RE.exec(token);
     if (!size) return;
     const glued = token.length !== size[1].length;
-    const label = labelsFirst ? tokens[i - 1] : tokens[i + 1];
-    const isRam = !glued && label !== undefined && RAM_LABEL_RE.test(label);
+    const isRam = !glued && (ramNames(i - 1, i) || ramNames(i + 1, i));
     if (!isRam) sizes.push(...sizesOfToken(size[1]));
   });
   return sizes;

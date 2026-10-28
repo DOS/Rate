@@ -574,6 +574,10 @@ async function runTests() {
     ['iPhone 256GB | 512GB', [256, 512]],
     ['Ổ cứng 1 TB', [1024]],
     ['Galaxy S25 128 / 256 / 512GB', [128, 256, 512]],
+    ['Laptop Lenovo ThinkPad P16 SSD 1TB 64GB RAM', [1024]],
+    ['Apple iPhone 16 Pro Max 256/512GB-VN/A', [256, 512]],
+    ['Laptop 64GB RAM 1TB SSD', [1024]],
+    ['iPhone 16 Pro 1TB.', [1024]],
   ] as const) {
     assert.deepEqual(titleStorageSizesGb(title), sizes, title);
   }
