@@ -531,10 +531,13 @@ export class EntityMatcher {
     // RPC drops its storage filter for a NULL size, so "Asus Zenbook S 14" would score
     // high against "Asus Zenbook S 14 1TB". Such a hit only makes the seed a draft
     // (DOS/Rate#1105 option (a), #1200). The item-first matcher (#1151) handles it with
-    // RATE_ITEM_MODEL on. Earbuds have no storage axis: their legacy `:64gb` seed keys
-    // still take a size-less title.
+    // RATE_ITEM_MODEL on. Earbuds and watches are sold in one storage per model, so
+    // their legacy `:64gb` seed keys ("apple:watch-series-10-42mm:64gb") still take a
+    // size-less title.
     const validFuzzyMatches =
-      candidate.storage_gb == null && candidate.category_slug !== 'earbuds'
+      candidate.storage_gb == null &&
+      candidate.category_slug !== 'earbuds' &&
+      candidate.category_slug !== 'smartwatches'
         ? scoredFuzzyMatches.filter(m => !isStorageKeyed(m.model_key))
         : scoredFuzzyMatches;
     if (validFuzzyMatches.length < scoredFuzzyMatches.length) {

@@ -449,6 +449,23 @@ async function runEntityMatcherSuite() {
     offlineEnricher
   ).resolveOrCreateMasterProduct(earbuds);
   assert.deepEqual(earbudsRes, { masterId: 'master-wf1000xm5', isNew: false });
+  // Watches too: Series 10 has one storage and no only_storage_gb benchmark.
+  const watch = normalizer.normalize(createShopeeListing('Apple Watch Series 10 42mm GPS'));
+  assert.equal(watch.storage_gb, null);
+  const watchRes = await new EntityMatcher(
+    createMockSupabase({
+      fuzzyMatches: [
+        {
+          master_id: 'master-series-10-42',
+          name: 'Apple Watch Series 10 42mm',
+          similarity: 0.9,
+          model_key: 'apple:watch-series-10-42mm:64gb',
+        },
+      ],
+    }).client,
+    offlineEnricher
+  ).resolveOrCreateMasterProduct(watch);
+  assert.deepEqual(watchRes, { masterId: 'master-series-10-42', isNew: false });
   console.log('  ✅ [3/7] Tier 2 fuzzy match threshold & ambiguous draft fallback passed');
 
   // 4. Tier 3 Creation Status: benchmark_registry (new) -> published; non-new or crawled_title -> draft
