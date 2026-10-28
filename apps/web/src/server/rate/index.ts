@@ -631,6 +631,7 @@ export const getCachedSitemapRows = cache(async (): Promise<SitemapRows> => {
       : rows.products,
     merchants: rows.merchants,
     categorySlugById: new Map(rows.categories),
+    itemSlugByVariantSlug: itemSlugs,
   };
 });
 

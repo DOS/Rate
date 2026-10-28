@@ -7,7 +7,6 @@ import {
   getMasterProductCategorySlug,
   getMasterProductHref,
 } from '@/server/rate';
-import { getItemSlugByVariantSlug } from '@/server/rate/item-directory';
 import {
   buildPopular1v1BattlesForCategory,
   VALID_LEADERBOARD_CATEGORIES,
@@ -141,12 +140,13 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   try {
     // Product and merchant URLs come from the whole catalogue; the curated
     // 1v1 battles only need the top-ranked products.
-    const [rows, products, itemSlugs] = await Promise.all([
+    const [rows, products] = await Promise.all([
       getCachedSitemapRows(),
       getCachedMasterProducts({ categorySlug: 'all', limit: 500 }),
-      // RATE_ITEM_MODEL on: versus pairs name Items (DOS/Rate#1156); off: null.
-      getItemSlugByVariantSlug(),
     ]);
+    // RATE_ITEM_MODEL on: versus pairs name Items with the map the product
+    // URLs were built from (DOS/Rate#1156, #1275); off: null.
+    const itemSlugs = rows.itemSlugByVariantSlug ?? null;
     const catSlugById = rows.categorySlugById;
 
     const dates = buildSitemapLastModified(
@@ -197,7 +197,13 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
             // Two sizes of one Item are no versus, and a pair is listed once.
             // One entry per Item pair, whichever way round it was ranked.
             const pairKey = [slugA, slugB].sort().join('|');
-            if (itemSlugs && (slugA === slugB || versusSeen.has(pairKey))) {
+            if (
+              itemSlugs &&
+              (slugA === slugB ||
+                versusSeen.has(pairKey) ||
+                slugA.includes('-vs-') ||
+                slugB.includes('-vs-'))
+            ) {
               return [];
             }
             versusSeen.add(pairKey);

@@ -164,6 +164,22 @@ function main() {
     { kind: 'not_found' }
   );
 
+  // A slug holding "-vs-" cannot be a versus side: no versus page (#1275).
+  const vsItem: CompareResolution = {
+    kind: 'item',
+    item: { id: 'item-vs', slug: 'case-vs-cover', default_variant_id: null },
+    variants: [
+      { id: 'cv', slug: 'case-vs-cover-std', variant_key: 'standard' },
+    ],
+  };
+  assert.deepEqual(
+    planVersusRoute(
+      { slug: 'case-vs-cover-std', resolution: vsItem },
+      { slug: 'samsung-galaxy-s24', resolution: s24 }
+    ),
+    { kind: 'not_found' }
+  );
+
   console.warn('  ✅ item compare suite passed');
 }
 

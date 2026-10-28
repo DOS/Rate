@@ -222,7 +222,11 @@ async function main() {
   // Flag on, Item tables missing (M1+M2 not applied): variants as before.
   schemaMissing = true;
   assert.equal(await dir.groupCatalogRowsByItem(rows), rows);
-  assert.equal(await dir.getItemCatalogPage(async () => rows, 0, 10), null);
+  // The variants already read are the page, ungrouped (#1275).
+  assert.deepEqual(
+    (await dir.getItemCatalogPage(async () => rows, 0, 10))?.map((r) => r.id),
+    rows.map((r) => r.id)
+  );
   assert.equal(await dir.getItemBrandFacets(CATEGORY, 'smartphones'), null);
   assert.equal(await dir.getItemCount(), null);
   schemaMissing = false;
@@ -230,6 +234,23 @@ async function main() {
   // Flag on, an Item read failing for another reason: variants too, never a
   // failed page (review round 1).
   itemsDown = true;
+  // The catalogue page cuts the variants it read instead of reading them
+  // again when the Item links fail (#1275).
+  let catalogueReads = 0;
+  assert.deepEqual(
+    (
+      await dir.getItemCatalogPage(
+        async () => {
+          catalogueReads += 1;
+          return rows;
+        },
+        0,
+        2
+      )
+    )?.map((r) => r.id),
+    [V256, LONE]
+  );
+  assert.equal(catalogueReads, 1);
   assert.equal(await dir.groupCatalogRowsByItem(rows), rows);
   assert.equal(await dir.getItemCount(), null);
   itemsDown = false;

@@ -109,11 +109,27 @@ export async function getItemCatalogPage<T extends MasterProduct>(
       rows.push(...page);
       if (page.length < CATALOG_BATCH_SIZE) break;
     }
-    const grouped = groupRowsByItem(
-      rows,
-      await getCachedItemLinks(rows.map((r) => r.id).filter(Boolean))
+    // The variants are read already: if the Item links fail, this page is
+    // the variant page the caller would read again (same filters, sort and
+    // window), so it is cut from them instead (#1275).
+    const links = await getCachedItemLinks(
+      rows.map((r) => r.id).filter(Boolean)
+    ).catch((err: unknown) => {
+      const message = err instanceof Error ? err.message : String(err);
+      if (err instanceof ItemModelUnavailableError) {
+        log.warn('item links unavailable, showing variants', { message });
+      } else {
+        log.error('item links read failed, showing variants', { message });
+      }
+      return null;
+    });
+    if (!links) {
+      return rows.slice(offset, offset + limit) as Array<T & ItemCatalogRow>;
+    }
+    return sortItemRows(groupRowsByItem(rows, links), sort).slice(
+      offset,
+      offset + limit
     );
-    return sortItemRows(grouped, sort).slice(offset, offset + limit);
   });
 }
 

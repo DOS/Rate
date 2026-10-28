@@ -2482,6 +2482,11 @@ export interface SitemapRows {
   }>;
   merchants: Array<{ id: string; updated_at: string | null }>;
   categorySlugById: Map<string, string>;
+  /**
+   * RATE_ITEM_MODEL on: variant slug to Item slug, the map the product rows
+   * were grouped with, so the sitemap's versus pairs use the same (#1275).
+   */
+  itemSlugByVariantSlug?: ReadonlyMap<string, string> | null;
 }
 
 /**
