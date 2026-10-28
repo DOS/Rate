@@ -1258,7 +1258,7 @@ function isProductCodeToken(token: string): boolean {
 // or "15 gói" is no size (DOS/Rate#1291).
 const UNIT_END = String.raw`(?![\p{L}\p{M}\d])`;
 const SIZE_NOT_PRECEDED_BY = String.raw`(?<![\d.,a-z])(?<!(?:ram|os) )`;
-const SIZE_NOT_FOLLOWED_BY = String.raw`(?![.,]?\d|[a-z]| ?(?:gb?${UNIT_END}|tb?${UNIT_END}|th${UNIT_END}|gen|mm|w${UNIT_END}|h${UNIT_END}|\/|-? ?(?:core|nhân|lõi)|cpu|gpu|tiếng|giờ|%|(?:tháng|ngày|tuần|năm|phút|gói)${UNIT_END}))`;
+const SIZE_NOT_FOLLOWED_BY = String.raw`(?![.,]?\d|[a-z]| ?(?:gb?${UNIT_END}|tb?${UNIT_END}|th${UNIT_END}|gen|mm|w${UNIT_END}|h${UNIT_END}|\/|-? ?(?:core|nhân|lõi)|cpu|gpu|tiếng|giờ|%|(?:tháng|ngày|tuần|năm|phút|gói|kỳ)${UNIT_END}))`;
 const SIZE_MARKER = String.raw` ?(?:-? ?inch|in${UNIT_END}|"|''|”|″)`;
 const IPAD_SIZE = String.raw`(11|12[.,]9|13)(?:[.,]0)?`;
 const MACBOOK_AIR_SIZE = String.raw`(13|15)(?:[.,]\d)?`;
@@ -1309,7 +1309,8 @@ const SCREEN_BARE_SIZE = new RegExp(
 // A lone size listed right after a gift's ("kèm hộp 46mm | 42mm"): a list of sizes.
 const LISTED_AFTER_GIFT = /^ ?[,|/] ?(?:38|4[0-2]|4[4-6]) ?mm ?(?:[),|;]|$)/i;
 // "size 46" names the watch's case when nothing else does.
-const WATCH_SIZE_WORD = /(?<![\p{L}\d])size ?(38|4[0-2]|4[4-6])(?![.,]?\d|\p{L})/giu;
+// "size 42/46" lists two sizes.
+const WATCH_SIZE_WORD = /(?<![\p{L}\d])size ?(38|4[0-2]|4[4-6])(?![.,]?\d|\p{L}| ?[/,-] ?\d)/giu;
 // An accessory sold by the size it fits: a case, cover, film or box.
 const GIFT_ACCESSORY_NOUN =
   /(?<![\p{L}\d])(?:ốp|case|bao da|silicone|silicon|tpu|cường lực|kính|miếng dán|vỏ|hộp|túi)(?![\p{L}\d])/iu;
@@ -1417,9 +1418,10 @@ function readAppleSize(model: string, rawTitle: string): string {
 function readWordedWatchSize(scope: string): string {
   const own = scope.split(/ (?:cho|for) | ?\+ (?!cellular|lte)/i)[0]!;
   const sizes = new Set<string>();
-  for (const part of own.split(/[),|;–]| - /)) {
+  for (const part of own.split(/[),|;\u2013]| - /)) {
     for (const m of part.matchAll(WATCH_SIZE_WORD)) {
-      if (WATCH_BAND_WORD.test(part.slice(0, m.index))) return '';
+      const before = part.slice(0, m.index).normalize('NFC');
+      if (WATCH_BAND_WORD.test(before) || CASE_ACCESSORY_WORD.test(before)) return '';
       sizes.add(m[1]!);
     }
   }

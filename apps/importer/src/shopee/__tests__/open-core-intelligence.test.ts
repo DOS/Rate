@@ -469,6 +469,7 @@ async function runSuite() {
     ['iPad Air M2 128GB Đổi trả 15 ngày tặng ốp 11 inch', 'apple:ipad-air-m2-11:128gb'],
     ['iPad Pro M4 256GB Pin 10 giờ tặng bao da 13 inch', 'apple:ipad-pro-m4-13:256gb'],
     ['iPad Air M2 128GB giảm 10% tặng ốp 11 inch', 'apple:ipad-air-m2-11:128gb'],
+    ['iPad Air M2 128GB hỗ trợ trả góp 12 kỳ tặng ốp 11 inch', 'apple:ipad-air-m2-11:128gb'],
     ['MacBook Air M3 RAM 16 tặng túi 13 inch', 'apple:macbook-air-m3-13:unknown'],
     ['MacBook Air M3 macOS 15 tặng túi 13 inch', 'apple:macbook-air-m3-13:unknown'],
     ['MacBook Air M3 15 W tặng túi 13 inch', 'apple:macbook-air-m3-13:unknown'],
@@ -740,6 +741,8 @@ async function runSuite() {
     ['Apple Watch Series 10 kèm hộp 42mm, size 46 GPS', 'apple:watch-series-10-46mm:64gb'],
     ['Apple Watch Series 10 kèm vỏ nhôm 42mm, size 46 GPS', 'apple:watch-series-10-46mm:64gb'],
     ['Apple Watch Series 10 Sport Band size 42 cho mặt 46mm', 'apple:watch-series-10:64gb'],
+    ['Apple Watch Series 10 GPS 46 tặng ốp size 42', 'apple:watch-series-10:64gb'],
+    ['Apple Watch Series 10 GPS size 42/46', 'apple:watch-series-10:64gb'],
     // A bundle word before no sized accessory keeps the product's size.
     ['Apple Watch Series 10 kèm sạc 46mm GPS', 'apple:watch-series-10-46mm:64gb'],
     ['Apple Watch Series 10, kèm sạc 46mm GPS', 'apple:watch-series-10-46mm:64gb'],
