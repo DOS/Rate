@@ -5936,7 +5936,11 @@ async function runCoreArchitectureSuite() {
             { status: 200, headers: { 'content-type': 'application/json' } }
           );
         }
-        if (url.includes('/rest/v1/products') && url.includes('id=in.')) {
+        if (
+          url.includes('/rest/v1/products') &&
+          url.includes('id=in.') &&
+          !url.includes('cluster_id=in.')
+        ) {
           return new Response(
             JSON.stringify([
               {
@@ -13405,6 +13409,268 @@ async function runCoreArchitectureSuite() {
 
     console.log(
       '  ✅ [126j/135] View offers select threat_source and read merchants.metadata (#1108) passed'
+    );
+  }
+
+  // -------------------------------------------------------------------------
+  // 126k. Batch offers read availability; radar and best offer skip sold-out
+  // listings; stock 0 is not sold out (#1170, #1171, #1174)
+  // -------------------------------------------------------------------------
+  {
+    const {
+      RateDataUnavailableError,
+      getMasterProductOffers,
+      getMasterProductOffersBatch,
+    } = await import('@/lib/rate-api');
+    const { computeCrossPlatformDealRadarFromData } =
+      await import('@/server/rate/deals');
+    const { selectBestOfferFromListings } =
+      await import('@/server/rate/api-handler');
+
+    const origFetch1170 = globalThis.fetch;
+    const json1170 = (body: unknown, status = 200) =>
+      new Response(JSON.stringify(body), {
+        status,
+        headers: { 'content-type': 'application/json' },
+      });
+    const viewRow1170 = (id: string, clusterId: string, price: number) => ({
+      id,
+      cluster_id: clusterId,
+      merchant_id: `m-${id}`,
+      platform: 'shopee',
+      title: 't',
+      price_current: price,
+      stock: 0,
+      url: 'https://shopee.vn/p',
+      threat_risk_score: 5,
+      threat_source: 'dosafe',
+      dosafe_risk_score: 5,
+      review_risk_score: 5,
+      review_risk_breakdown: { total_reviews: 3 },
+    });
+    const availabilityReads1170: string[] = [];
+    const mockOffers1170 = (opts: {
+      viewFails?: boolean;
+      availabilityFails?: boolean;
+    }) => {
+      availabilityReads1170.length = 0;
+      globalThis.fetch = (async (input: RequestInfo | URL) => {
+        const url = new URL(
+          typeof input === 'string'
+            ? input
+            : input instanceof URL
+              ? input.toString()
+              : input.url
+        );
+        const firstPage = Number(url.searchParams.get('offset') ?? 0) === 0;
+        if (url.pathname.endsWith('/v_products_with_merchant_trust')) {
+          if (opts.viewFails) return json1170({ message: 'view down' }, 500);
+          return json1170(
+            firstPage
+              ? [
+                  viewRow1170('a-sold', 'master-a', 2_694_000),
+                  viewRow1170('a-in', 'master-a', 3_140_000),
+                  viewRow1170('b-new', 'master-b', 5_000_000),
+                ]
+              : []
+          );
+        }
+        if (url.pathname.endsWith('/products')) {
+          const select = url.searchParams.get('select') ?? '';
+          if (select === 'id,availability') {
+            if (firstPage) {
+              availabilityReads1170.push(
+                url.searchParams.get('cluster_id') ?? ''
+              );
+            }
+            if (opts.availabilityFails) {
+              return json1170(
+                { message: 'column products.availability does not exist' },
+                400
+              );
+            }
+            return json1170(
+              firstPage
+                ? [
+                    { id: 'a-sold', availability: 'out_of_stock' },
+                    { id: 'a-in', availability: 'in_stock' },
+                    { id: 'b-new', availability: null },
+                  ]
+                : []
+            );
+          }
+          // The offer fallback when the trust view fails.
+          return json1170(
+            firstPage
+              ? [
+                  {
+                    id: 'a-sold',
+                    cluster_id: 'master-a',
+                    platform: 'fptshop',
+                    title: 't',
+                    price_current: 2_694_000,
+                    stock: 0,
+                    url: 'https://fptshop.com.vn/p',
+                    merchants: { id: 'm-1', name: 'FPT Shop' },
+                  },
+                ]
+              : []
+          );
+        }
+        return json1170([]);
+      }) as typeof fetch;
+    };
+
+    // The batch read attaches availability per chunk, like the single read.
+    mockOffers1170({});
+    const batch1170 = await getMasterProductOffersBatch([
+      'master-a',
+      'master-b',
+    ]);
+    assert.deepEqual(availabilityReads1170, ['in.(master-a,master-b)']);
+    assert.deepEqual(
+      (batch1170.get('master-a') ?? []).map((o) => [o.id, o.availability]),
+      [
+        ['a-sold', 'out_of_stock'],
+        ['a-in', 'in_stock'],
+      ]
+    );
+    assert.deepEqual(
+      (batch1170.get('master-b') ?? []).map((o) => [o.id, o.availability]),
+      [['b-new', null]]
+    );
+    mockOffers1170({ viewFails: true });
+    const fallback1170 = await getMasterProductOffersBatch(['master-a']);
+    assert.deepEqual(
+      (fallback1170.get('master-a') ?? []).map((o) => [o.id, o.availability]),
+      [['a-sold', 'out_of_stock']]
+    );
+
+    // No missing-column fallback: a failed availability read fails the
+    // offer read, single and batch, with or without the trust view (#1174).
+    for (const viewFails of [false, true]) {
+      mockOffers1170({ viewFails, availabilityFails: true });
+      await assert.rejects(
+        () => getMasterProductOffers('master-a'),
+        (err: unknown) => err instanceof RateDataUnavailableError
+      );
+      await assert.rejects(
+        () => getMasterProductOffersBatch(['master-a']),
+        (err: unknown) => err instanceof RateDataUnavailableError
+      );
+    }
+
+    // The radar never cites a sold-out or discontinued listing (#1170).
+    const radarMaster1170 = {
+      id: 'master-a',
+      slug: 'samsung-galaxy-buds3-pro',
+      name: 'Samsung Galaxy Buds3 Pro',
+      brand: 'Samsung',
+      min_price: 3_140_000,
+      max_price: 3_690_000,
+    } as unknown as Parameters<
+      typeof computeCrossPlatformDealRadarFromData
+    >[0][number]['master'];
+    const radarOffer1170 = (
+      id: string,
+      platform: string,
+      price: number,
+      availability: string | null
+    ) =>
+      ({
+        id,
+        platform,
+        title: `Offer ${id}`,
+        price_current: price,
+        price_original: 4_490_000,
+        stock: 0,
+        url: `https://example.com/${id}`,
+        availability,
+        merchant: {
+          id: `m-${id}`,
+          name: `Merchant ${id}`,
+          platform,
+          is_official: true,
+          risk_score: 5,
+        },
+      }) as never;
+    const radar1170 = computeCrossPlatformDealRadarFromData(
+      [
+        {
+          master: radarMaster1170,
+          offers: [
+            radarOffer1170('fpt-sold', 'fptshop', 2_694_000, 'out_of_stock'),
+            radarOffer1170('fpt-gone', 'fptshop', 3_032_000, 'discontinued'),
+            radarOffer1170('tgdd', 'tgdd', 3_140_000, 'in_stock'),
+            radarOffer1170('cps', 'cellphones', 3_690_000, null),
+          ],
+        },
+      ],
+      { categorySlug: 'all', limit: 10 }
+    );
+    const radarText1170 = JSON.stringify(radar1170);
+    assert.ok(radar1170.priceSpreadLeaders.length > 0, radarText1170);
+    assert.ok(!radarText1170.includes('fpt-sold'), radarText1170);
+    assert.ok(!radarText1170.includes('fpt-gone'), radarText1170);
+    assert.ok(!radarText1170.includes('2694000'), radarText1170);
+    assert.equal(radar1170.totalOffersAnalyzed, 2);
+
+    // stock 0 means "no count read", not sold out; availability decides (#1171).
+    const best1171 = selectBestOfferFromListings([
+      {
+        id: 'fpt-sold',
+        title: 'Buds3 Pro',
+        price_current: 2_694_000,
+        stock: 0,
+        availability: 'out_of_stock',
+        url: 'https://fptshop.com.vn/p',
+        platform: 'fptshop',
+      },
+      {
+        id: 'fpt-gone',
+        title: 'Buds3 Pro',
+        price_current: 3_032_000,
+        availability: 'discontinued',
+        url: 'https://fptshop.com.vn/q',
+        platform: 'fptshop',
+      },
+      {
+        id: 'tgdd',
+        title: 'Buds3 Pro',
+        price_current: 3_140_000,
+        stock: 0,
+        availability: 'in_stock',
+        url: 'https://www.thegioididong.com/p',
+        platform: 'tgdd',
+      },
+      {
+        id: 'cps',
+        title: 'Buds3 Pro',
+        price_current: 3_690_000,
+        stock: 0,
+        url: 'https://cellphones.com.vn/p',
+        platform: 'cellphones',
+      },
+    ] as unknown as Parameters<typeof selectBestOfferFromListings>[0]);
+    assert.equal(best1171.bestOffer?.id, 'tgdd');
+    assert.equal(best1171.bestOffer?.price, 3_140_000);
+    assert.deepEqual(best1171.offerPlatforms, ['tgdd', 'cellphones']);
+    // An unknown availability with stock 0 is still buyable.
+    const unknown1171 = selectBestOfferFromListings([
+      {
+        id: 'only',
+        title: 'Buds3 Pro',
+        price_current: 3_140_000,
+        stock: 0,
+        url: 'https://www.thegioididong.com/p',
+        platform: 'tgdd',
+      },
+    ] as unknown as Parameters<typeof selectBestOfferFromListings>[0]);
+    assert.equal(unknown1171.bestOffer?.id, 'only');
+    globalThis.fetch = origFetch1170;
+
+    console.log(
+      '  ✅ [126k/135] Batch offer availability, sold-out radar and best offer, stock 0 (#1170, #1171, #1174) passed'
     );
   }
 

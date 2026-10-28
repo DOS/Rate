@@ -5,6 +5,10 @@ import {
   MAX_VALID_VND_PRICE,
   normalizeOfferOriginalPrice,
 } from '@/lib/rate-api';
+import {
+  isOfferUnavailable,
+  type OfferAvailability,
+} from '@/lib/product-market-stats';
 
 export const PUBLIC_API_CORS_HEADERS: Record<string, string> = {
   'Access-Control-Allow-Origin': '*',
@@ -243,6 +247,7 @@ export interface WatchlistCandidateOffer {
   price_current: number;
   price_original?: unknown;
   stock?: unknown;
+  availability?: OfferAvailability | null;
   url?: unknown;
   platform?: unknown;
   merchant?: {
@@ -274,19 +279,16 @@ export function withPlausibleMinPrice<T extends { min_price?: unknown }>(
 export function selectBestOfferFromListings(
   offers: readonly WatchlistCandidateOffer[]
 ): { bestOffer: WatchlistBestOffer | null; offerPlatforms: string[] } {
-  const safeOffers = Array.isArray(offers) ? offers : [];
+  // A sold-out or discontinued listing is never the best offer. stock is no
+  // signal: the crawlers report 0 when they read no count (DOS/Rate#1171).
+  const safeOffers = (Array.isArray(offers) ? offers : []).filter(
+    (o) => !isOfferUnavailable(o)
+  );
   // A bait-price listing is never the best offer (DOS/Rate#797).
   const valid = plausibleOffers(safeOffers).filter((o) => {
     if (!o || typeof o !== 'object') return false;
     const price = parseFiniteDecimalInput(o.price_current);
-    const stock = o.stock == null ? 1 : parseFiniteDecimalInput(o.stock);
-    return (
-      Number.isFinite(stock) &&
-      stock > 0 &&
-      Number.isFinite(price) &&
-      price > 0 &&
-      price <= MAX_VALID_VND_PRICE
-    );
+    return Number.isFinite(price) && price > 0 && price <= MAX_VALID_VND_PRICE;
   });
   const normalizeOfferPlatform = (o: WatchlistCandidateOffer): string =>
     String(o.merchant?.platform || o.platform || 'shopee')
