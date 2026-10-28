@@ -9044,6 +9044,16 @@ async function runCoreArchitectureSuite() {
       'x-forwarded-for': ' 203.0.113.10\t99 , 10.0.0.1 ',
     });
     assert.equal(extractClientRateLimitKey(wsHeaders), '203.0.113.1099');
+    // The platform-set IP wins over a client-supplied forwarded chain (#1307).
+    assert.equal(
+      extractClientRateLimitKey(
+        new Headers({
+          'x-vercel-forwarded-for': '198.51.100.7',
+          'x-forwarded-for': '203.0.113.10, 10.0.0.1',
+        })
+      ),
+      '198.51.100.7'
+    );
 
     const plausibleBoolMaster = withPlausibleMinPrice(
       { min_price: true as unknown as number },

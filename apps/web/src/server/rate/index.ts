@@ -1,4 +1,5 @@
 import 'server-only';
+import { createHash } from 'node:crypto';
 import { cache } from 'react';
 import { sitemapRowsByItem } from '@/lib/item-directory';
 import {
@@ -565,9 +566,31 @@ export const getCachedFilteredReviewCountsByMaster = cache(() =>
   )()
 );
 
-export const getCachedInspectProductOrShopUrl = cache(
-  inspectProductOrShopUrlWithRadar
+// One Data Cache entry per normalized query for 2 minutes, so repeating a
+// query does not rerun its reads (DOS/Rate#1307). The key is a hash: the
+// query is up to 2 KB of caller text.
+const _getCachedInspectionByKey = cache((query: string) =>
+  withRateDataCache(
+    inspectProductOrShopUrlWithRadar,
+    [
+      'rate-inspect',
+      createHash('sha256').update(query).digest('hex').slice(0, 32),
+    ],
+    {
+      revalidate: 120,
+      tags: [
+        RATE_CACHE_TAGS.PRODUCTS,
+        RATE_CACHE_TAGS.OFFERS,
+        RATE_CACHE_TAGS.REVIEWS,
+        RATE_CACHE_TAGS.MERCHANTS,
+      ],
+    }
+  )(query)
 );
+
+export function getCachedInspectProductOrShopUrl(rawQuery: string) {
+  return _getCachedInspectionByKey(sanitizeCachedInspectQuery(rawQuery));
+}
 
 // A product URL only needs its category, so only category_slug is kept from
 // metadata and specifications: whole spec sheets would push the entry past
