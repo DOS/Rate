@@ -1875,7 +1875,7 @@
     "reasonCommunityAdLinkExcluded": "Phát hiện đường dẫn quảng cáo hoặc điều hướng ngoài luồng, loại khỏi điểm trung bình.",
     "reasonCommunityCompetitorExcluded": "Nghi vấn điều hướng sang đối thủ, loại khỏi điểm trung bình.",
     "reasonCommunityTooShortExcluded": "Nội dung quá ngắn để kiểm chứng trải nghiệm, loại khỏi điểm trung bình.",
-    "summaryDefault": "Lần phân tích gần nhất (một nơi bán) xét {total} đánh giá: giữ lại {kept} đánh giá thực chất và loại bỏ {removed} đánh giá rác, nhận xu, ảo hoặc bom hàng.",
+    "summaryDefault": "Lần phân tích gần nhất (một nơi bán) đã xét {total} đánh giá: giữ lại {kept} đánh giá thực chất và loại bỏ {removed} đánh giá rác, nhận xu, ảo hoặc bom hàng.",
     "summaryNoAuthentic": "Lần phân tích gần nhất (một nơi bán) chưa thấy đánh giá thực chất sau khi lọc {removed} bình luận rác/nhận xu.",
     "proPositiveFeedback": "Nhận phản hồi tích cực từ người dùng thực tế",
     "originalVietnamese": "tiếng Việt"

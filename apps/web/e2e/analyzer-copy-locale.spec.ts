@@ -7,7 +7,7 @@ const PRODUCT = '/smartphones/e2e-review-labels-phone';
 const COPY = {
   vi: {
     summary:
-      'Lần phân tích gần nhất (một nơi bán) xét 6 đánh giá: giữ lại 6 đánh giá thực chất',
+      'Lần phân tích gần nhất (một nơi bán) đã xét 6 đánh giá: giữ lại 6 đánh giá thực chất',
     pro: 'Nhận phản hồi tích cực từ người dùng thực tế',
     reason: 'Đánh giá chi tiết, hợp lệ từ người dùng thực tế.',
   },
