@@ -1727,6 +1727,7 @@ export async function getMasterProductReviewSummary(
       let totalAnalyzed = 0;
       let weightedAuthenticity = 0;
       let latestSummary: string | null = null;
+      let summaryTaken = false;
 
       for (const row of typedAnalyses) {
         const count = Number(row.total_reviews_analyzed || 0);
@@ -1734,8 +1735,11 @@ export async function getMasterProductReviewSummary(
         weightedAuthenticity +=
           Number(row.authenticity_score ?? fallbackAuthenticPct) *
           Math.max(1, count);
-        if (!latestSummary && row.ai_summary) {
-          // Says it covers one listing, old rows too (DOS/Rate#1225).
+        if (!summaryTaken && row.ai_summary) {
+          // Says it covers one listing, old rows too (DOS/Rate#1225). Only the
+          // latest row: a hidden one does not fall back to an older batch
+          // (DOS/Rate#1244).
+          summaryTaken = true;
           latestSummary = listingReviewSummary(String(row.ai_summary));
         }
         if (Array.isArray(row.pros)) {

@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { LLM_REVIEW_SUMMARY_PREFIX } from '@repo/shared-data/rules';
 import {
   KNOWN_LOCAL_DEVICE_IMAGES,
   computeJReviewsWeight,
@@ -4174,7 +4175,11 @@ async function runCoreArchitectureSuite() {
       2,
       'getMasterProductReviewSummary must chunk 160 productIds into 2 requests of <=150 IDs (#344)'
     );
-    assert.equal(chunkedSummary344.ai_summary, 'Summary from chunk 2');
+    // Free text is shown with the one-listing scope (DOS/Rate#1244).
+    assert.equal(
+      chunkedSummary344.ai_summary,
+      `${LLM_REVIEW_SUMMARY_PREFIX}Summary from chunk 2`
+    );
     assert.deepEqual(chunkedSummary344.pros, ['Pro 2', 'Pro 1']);
 
     const mockOffers344 = manyListingRows344.map((r, idx) => ({

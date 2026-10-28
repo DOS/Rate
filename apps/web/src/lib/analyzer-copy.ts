@@ -8,6 +8,7 @@
  * The Vietnamese messages may word a template more plainly than the stored
  * text (no "seeding", DOS/Rate#656); the patterns below match the stored text.
  */
+import { scopeLlmReviewSummary } from '@repo/shared-data/rules';
 import { isVietnamese } from './content-lang';
 
 export type AnalyzerCopyKey =
@@ -181,8 +182,10 @@ const VI_SUMMARY: Partial<Record<AnalyzerCopyKey, string>> = {
  * The stored review summary as surfaces without a locale (API v1, the
  * extension) print it. A templated summary, old rows included, is reworded
  * to say it covers one listing's latest batch and loses the batch's
- * weighted score, which is not the product's (DOS/Rate#1225). Free text is
- * returned as stored.
+ * weighted score, which is not the product's (DOS/Rate#1225). Free text
+ * from the LLM pass, old rows included, gets the same one-listing scope
+ * prefix, and is not shown (null) when it quotes a score or count
+ * (DOS/Rate#1244).
  */
 export function listingReviewSummary(
   text: string | null | undefined
@@ -190,7 +193,7 @@ export function listingReviewSummary(
   if (typeof text !== 'string' || !text.trim()) return null;
   const copy = analyzerCopy(text);
   const template = 'key' in copy ? VI_SUMMARY[copy.key] : undefined;
-  if (!template || !('key' in copy)) return text;
+  if (!template || !('key' in copy)) return scopeLlmReviewSummary(text);
   return template.replace(
     /\{(\w+)\}/g,
     (_, name: string) => copy.values[name] ?? ''
