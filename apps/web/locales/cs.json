@@ -803,7 +803,8 @@
     "checkedStatus": "Zkontrolováno",
     "errInspectFailed": "Tento odkaz se nepodařilo zkontrolovat.",
     "errNetwork": "Chyba sítě, zkuste to znovu.",
-    "loading": "Načítání..."
+    "loading": "Načítání...",
+    "reviewRiskNoData": "nedostatek dat"
   },
   "merchants": {
     "dirMetaTitle": "Důvěryhodnost prodejců | Rate.vn",
@@ -870,7 +871,7 @@
     "notFoundTitle": "Obchod nenalezen | Rate.vn",
     "profileMetaTitle": "{name} ({platform}) - Důvěra {score}/100 | Rate.vn",
     "profileMetaTitleShort": "{name} - Důvěra {score}/100",
-    "profileMetaDesc": "Profil prodejce {name}: riziko podvodu DOSafe ({dosafe}/100), riziko recenzí ({seeding}/100) a historie cen {count} produktů na Rate.vn.",
+    "profileMetaDesc": "Profil prodejce {name}: riziko podvodu DOSafe ({dosafe}/100), riziko recenzí ({seeding}) a historie cen {count} produktů na Rate.vn.",
     "trustHigh": "Vysoká důvěryhodnost (Bezpečný)",
     "trustModerate": "Střední důvěryhodnost",
     "trustRisk": "Varování: Vysoké riziko",
@@ -950,7 +951,7 @@
     "mdCategoryLine": "- **Kategorie:** {type} | Shop ID: `{shopId}`",
     "mdTrustLine": "- **Skóre důvěry:** **{score}/100** ({label})",
     "mdDosafeLine": "- **Riziko podvodu (DOSafe):** {score}/100",
-    "mdSeedingLine": "- **Riziko recenzí:** {score}/100",
+    "mdSeedingLine": "- **Riziko recenzí:** {score}",
     "mdRadarLine": "- **Cenové signály:** 🟢 {genuine} minim napříč obchody | 🚨 {traps} falešných slev",
     "mdAuthenticLine": "- **Podíl skutečných recenzí:** {pct}% ({auth}/{total} skutečných, odfiltrováno {flagged} falešných/spamových)",
     "mdProductsLine": "- **Sledované standardizované modely:** {count} modelů",
@@ -960,7 +961,9 @@
     "riskReviewLabel": "Riziko recenzí",
     "trustBadge": "Důvěra: {score}/100",
     "scamRiskBadge": "Riziko podvodu: {score}/100",
-    "reviewRiskBadge": "Riziko recenzí: {score}/100"
+    "reviewRiskBadge": "Riziko recenzí: {score}/100",
+    "reviewRiskNoData": "nedostatek dat",
+    "reviewRiskNoDataBadge": "Riziko recenzí: nedostatek dat"
   },
   "productDetail": {
     "notFoundTitle": "Produkt nenalezen | Rate.vn",
@@ -1227,7 +1230,8 @@
     "reviewRiskLabel": "Riziko recenzí",
     "officialMallBadge": "Official Mall",
     "authenticBadge": "Autentická recenze",
-    "starsAria": "{count} z 5 hvězdiček"
+    "starsAria": "{count} z 5 hvězdiček",
+    "reviewRiskNoData": "Nedostatek dat"
   },
   "developers": {
     "seoTitle": "Dokumentace REST API v1 pro vývojáře | Rate.vn",
@@ -1768,9 +1772,10 @@
     "unmatchedDesc": "Můžete vyhledat odpovídající normalizované modely nebo prohlédnout profily ověřených prodejců níže.",
     "searchInSmartphonesBtn": "Hledat v katalogu telefonů →",
     "trustBadge": "Důvěra: {score}/100",
-    "merchantRiskLine": "Riziko podvodu: <b>{scam}/100</b> • Riziko recenzí: <b>{review}/100</b>",
+    "merchantRiskLine": "Riziko podvodu: <b>{scam}/100</b> • Riziko recenzí: <b>{review}</b>",
     "officialMallBadge": "Oficiální Mall",
-    "scamRiskShort": "Riziko podvodu: {score}/100"
+    "scamRiskShort": "Riziko podvodu: {score}/100",
+    "reviewRiskNoData": "nedostatek dat"
   },
   "authPortal": {
     "metaLoginTitle": "Přihlášení k účtu | Rate.vn",

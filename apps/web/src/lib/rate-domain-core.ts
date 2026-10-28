@@ -1344,9 +1344,10 @@ export function filterAndSortMerchants(
             safeNum(b.trust_score) - safeNum(a.trust_score)
           );
         case 'seeding_asc':
+          // A store with no analysed review goes last (DOS/Rate#1249).
           return (
-            safeNum(a.review_risk_score, 100) -
-              safeNum(b.review_risk_score, 100) ||
+            (reviewRiskScoreOrNull(a) ?? 101) -
+              (reviewRiskScoreOrNull(b) ?? 101) ||
             safeNum(b.trust_score) - safeNum(a.trust_score)
           );
         case 'followers_desc':
@@ -1931,4 +1932,29 @@ export function extractProductKeywordFromUrl(rawUrl?: string | null): string {
   } catch {
     return '';
   }
+}
+
+/**
+ * A store's review risk score, or null when it has no analysed review to
+ * score (DOS/Rate#1249): "Rủi ro đánh giá: 4/100" next to "Chưa có đánh giá
+ * để phân tích" claimed a measurement the data does not have. A store whose
+ * breakdown is missing keeps its stored score.
+ */
+export function reviewRiskScoreOrNull(merchant: {
+  review_risk_score?: number | string | null;
+  review_risk_breakdown?: object | null;
+}): number | null {
+  const breakdown = merchant?.review_risk_breakdown as
+    { total_reviews?: unknown } | null | undefined;
+  const rawTotal = breakdown?.total_reviews;
+  // A count stored as text ("0") counts too; a malformed one is no data.
+  if (rawTotal != null) {
+    const total = Number(rawTotal);
+    if (!Number.isFinite(total) || total <= 0) return null;
+  }
+  const score = Number(merchant?.review_risk_score);
+  if (merchant?.review_risk_score == null || !Number.isFinite(score)) {
+    return null;
+  }
+  return Math.max(0, Math.min(100, Math.round(score)));
 }

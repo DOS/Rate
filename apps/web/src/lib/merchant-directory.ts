@@ -1,3 +1,4 @@
+import { reviewRiskScoreOrNull } from './merchant-review-risk';
 import type { MerchantSummary } from './rate-domain';
 
 // Filters, sort and paging of the /merchants directory, shared by the page,
@@ -319,12 +320,15 @@ export function filterMerchantDirectory(
     }
     if (officialOnly && !isOfficialMerchantFlag(m.is_official)) return false;
     const trustScore = toSafeScore100(m.trust_score);
-    const reviewRiskScore = toSafeScore100(m.review_risk_score);
+    // No analysed review: in neither review tier (DOS/Rate#1249).
+    const reviewRisk = reviewRiskScoreOrNull(m);
+    const reviewRiskScore = reviewRisk ?? 0;
     if (riskTier === 'safe' && trustScore < 80) return false;
     if (riskTier === 'moderate' && (trustScore < 60 || trustScore >= 80)) {
       return false;
     }
     if (riskTier === 'warning' && trustScore >= 60) return false;
+    if (seedingTier !== 'all' && reviewRisk == null) return false;
     if (seedingTier === 'low' && reviewRiskScore > 15) return false;
     if (seedingTier === 'elevated' && reviewRiskScore <= 15) return false;
     if (kw) {
@@ -347,11 +351,12 @@ export function filterMerchantDirectory(
         return bTrust - aTrust || bProducts - aProducts;
       case 'products_desc':
         return bProducts - aProducts || bTrust - aTrust;
-      case 'seeding_asc':
-        return (
-          toSafeScore100(a.review_risk_score) -
-            toSafeScore100(b.review_risk_score) || bTrust - aTrust
-        );
+      case 'seeding_asc': {
+        // A store with no analysed review is not "lowest risk": it goes last.
+        const aRisk = reviewRiskScoreOrNull(a) ?? 101;
+        const bRisk = reviewRiskScoreOrNull(b) ?? 101;
+        return aRisk - bRisk || bTrust - aTrust;
+      }
       case 'followers_desc':
         return (
           toSafeCount(b.follower_count) - toSafeCount(a.follower_count) ||

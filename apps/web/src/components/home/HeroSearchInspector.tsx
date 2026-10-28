@@ -1,5 +1,6 @@
 'use client';
 
+import { reviewRiskScoreOrNull } from '@/lib/merchant-review-risk';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
 import { discountVerdictCopy } from '@/lib/discount-verdict-copy';
@@ -895,7 +896,11 @@ export default function HeroSearchInspector({
                         {t.rich('merchantRiskLine', {
                           scam: inspectResult.merchantProfile.dosafe_risk_score,
                           review:
-                            inspectResult.merchantProfile.review_risk_score,
+                            reviewRiskScoreOrNull(
+                              inspectResult.merchantProfile
+                            ) == null
+                              ? t('reviewRiskNoData')
+                              : `${reviewRiskScoreOrNull(inspectResult.merchantProfile)}/100`,
                           b: (chunks) => <strong>{chunks}</strong>,
                         })}{' '}
                         •{' '}

@@ -1,5 +1,6 @@
 'use client';
 
+import { reviewRiskScoreOrNull } from '@/lib/merchant-review-risk';
 import { useMemo, useState } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
 import ExportMenu from '@/components/elementary/ExportMenu';
@@ -358,7 +359,7 @@ export default function ProductOffersExplorer({
         o.merchant.is_official ? 'true' : 'false',
         String(trust),
         offerRiskScoreCsvCell(o.merchant.dosafe_risk_score),
-        offerRiskScoreCsvCell(o.merchant.review_risk_score),
+        offerRiskScoreCsvCell(reviewRiskScoreOrNull(o.merchant)),
         String(o.price_current),
         hasValidOrig ? String(o.price_original) : '',
         implausibleOfferIds.has(o.id)
@@ -764,7 +765,7 @@ export default function ProductOffersExplorer({
                           )}
                           /100 | Review Risk:{' '}
                           {formatOfferRiskScore100(
-                            offer.merchant.review_risk_score
+                            reviewRiskScoreOrNull(offer.merchant)
                           )}
                           /100
                         </div>
