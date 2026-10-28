@@ -635,6 +635,11 @@ async function runSuite() {
   assert.notEqual(series11Small.screen_size_inch, 1.96);
   assert.equal(series11Small.specifications.design?.weight_g, undefined);
   assert.equal(series11Small.specifications.display?.resolution, undefined);
+  assert.equal(series11Small.specifications.design?.dimensions, undefined);
+  // A title with no case size keeps the entry as before.
+  const series11Bare = normalizer.normalize(createDummyShopeeProduct('Apple Watch Series 11 GPS'));
+  assert.equal(series11Bare.model_key, 'apple:watch-series-11:64gb');
+  assert.equal(series11Bare.is_benchmark_enriched, true);
   const series11Big = normalizer.normalize(
     createDummyShopeeProduct('Apple Watch Series 11 GPS 46mm')
   );
