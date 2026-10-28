@@ -2429,6 +2429,7 @@ async function runCoreArchitectureSuite() {
 
   // 48. Unified API v1 Error Sanitizer & Bounded Query Parsers (T9) + Pure Domain Module rate-domain.ts (T12) (#170)
   const {
+    PublicApiError,
     sanitizePublicApiError,
     jsonApiError,
     parseBoundedIntParam,
@@ -2444,11 +2445,54 @@ async function runCoreArchitectureSuite() {
   );
   assert.equal(
     sanitizePublicApiError(
-      new Error('Missing required slug parameter'),
+      new PublicApiError('Missing required slug parameter'),
       'Fallback error'
     ),
     'Missing required slug parameter',
-    'Must preserve short, non-DB validation messages'
+    'Must preserve short validation messages written for clients'
+  );
+  // Allow-list, not deny-list: any other error, even a harmless-looking one,
+  // answers with the fallback (DOS/Rate#1310).
+  assert.equal(
+    sanitizePublicApiError(
+      new Error('Missing required slug parameter'),
+      'Fallback error'
+    ),
+    'Fallback error'
+  );
+  assert.equal(
+    sanitizePublicApiError(
+      new TypeError("Cannot read properties of undefined (reading 'id')"),
+      'Fallback error'
+    ),
+    'Fallback error'
+  );
+  assert.equal(
+    sanitizePublicApiError(
+      new PublicApiError('PGRST116: relation "rate.items" does not exist'),
+      'Fallback error'
+    ),
+    'Fallback error',
+    'a public error that looks internal is still masked'
+  );
+  // A 5xx never carries the error's message, even a public one.
+  const err5xx = jsonApiError(
+    503,
+    'Service unavailable',
+    new PublicApiError('Upstream shop timed out')
+  );
+  assert.equal(
+    ((await err5xx.json()) as { error: string }).error,
+    'Service unavailable'
+  );
+  const err4xx = jsonApiError(
+    400,
+    'Bad request',
+    new PublicApiError('Invalid slug')
+  );
+  assert.equal(
+    ((await err4xx.json()) as { error: string }).error,
+    'Invalid slug'
   );
   assert.equal(parseBoundedIntParam('999', 24, 1, 100), 100);
   assert.equal(parseBoundedIntParam('-5', 24, 1, 100), 1);
@@ -9244,7 +9288,7 @@ async function runCoreArchitectureSuite() {
     );
     assert.equal(
       apiHandlerMod.sanitizePublicApiError(
-        new Error('Invalid\u0000\r\nquery param')
+        new apiHandlerMod.PublicApiError('Invalid\u0000\r\nquery param')
       ),
       'Invalid query param'
     );
