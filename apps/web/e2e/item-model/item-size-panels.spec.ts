@@ -42,7 +42,7 @@ test('a six-size Item ships only its default size and loads the others on demand
   });
   // Printed too, so the CI log carries the numbers (the line reporter does not
   // print annotations).
-  console.log(
+  console.warn(
     `[#1285] RSC bytes: six-size Item (lazy) ${big}, two-size Item (eager) ${small}; size-route JSON bytes for the five other sizes ${others}`
   );
 
