@@ -1186,7 +1186,14 @@
     "exportMenu": "Exportovat data",
     "offersReviewRiskLabel": "Riziko recenzí",
     "offersReviewRiskNoData": "nedostatek dat",
-    "offersDiscontinuedBadge": "Ukončený prodej"
+    "offersDiscontinuedBadge": "Ukončený prodej",
+    "offersTrustBadge": "Důvěryhodnost: {score} %",
+    "offersScamRiskLabel": "Riziko podvodu",
+    "itemVariantLabel": "Úložiště",
+    "itemVariantPrice": "Od {price} ₫",
+    "itemVariantNoPrice": "Zatím bez ceny",
+    "unknownSizeTitle": "Neuvedené úložiště ({count} zdrojů)",
+    "unknownSizeNote": "Prodejce neuvádí velikost úložiště, proto tyto ceny nejsou součástí ceny „od“ produktu."
   },
   "homePage": {
     "catDescSmartphones": "Filtrovat podle čipsetu, RAM/ROM, obnovovací frekvence Hz, baterie mAh a nabíjení W",
@@ -1866,7 +1873,9 @@
     "priceHistory": "Historie cen",
     "priceHistoryTitle": "Ověřit historii cen a odhalit falešné slevy",
     "noImage": "Bez obrázku",
-    "verified": "Normalizované parametry"
+    "verified": "Normalizované parametry",
+    "fromPrice": "Cena od",
+    "sizesLabel": "Varianty úložiště"
   },
   "priceVerdict": {
     "labelFake": "Varování: falešná sleva",

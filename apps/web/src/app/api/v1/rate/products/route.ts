@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import {
-  getCachedCategoryDirectoryFacets,
+  getCachedVariantCategoryDirectoryFacets,
   getMasterProductOffersBatch,
   getMasterProducts,
   type MasterProductFilterParams,
@@ -276,7 +276,9 @@ export async function GET(request: NextRequest) {
         ? getAllCategoryProductsWithSpecFilters(filterParams)
         : getMasterProducts(filterParams),
       includeFacets
-        ? getCachedCategoryDirectoryFacets(categorySlug)
+        ? // Variant counts: API v1 stays per variant until `group=item`
+          // (design doc 5.2, task 11).
+          getCachedVariantCategoryDirectoryFacets(categorySlug)
         : Promise.resolve(null),
     ]);
     const offersByMasterId = await getMasterProductOffersBatch(

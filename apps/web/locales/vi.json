@@ -1186,7 +1186,14 @@
     "exportMenu": "Xuất dữ liệu",
     "offersReviewRiskLabel": "Rủi ro đánh giá",
     "offersReviewRiskNoData": "chưa đủ dữ liệu",
-    "offersDiscontinuedBadge": "Ngừng bán"
+    "offersDiscontinuedBadge": "Ngừng bán",
+    "offersTrustBadge": "Độ tin cậy: {score}%",
+    "offersScamRiskLabel": "Rủi ro lừa đảo",
+    "itemVariantLabel": "Dung lượng",
+    "itemVariantPrice": "Từ {price} ₫",
+    "itemVariantNoPrice": "Chưa có giá",
+    "unknownSizeTitle": "Chưa rõ dung lượng ({count} nguồn)",
+    "unknownSizeNote": "Người bán không ghi rõ dung lượng, nên các giá này không tính vào giá \"từ\" của sản phẩm."
   },
   "homePage": {
     "catDescSmartphones": "Lọc theo chipset, RAM/ROM, tần số quét Hz, pin mAh & sạc nhanh W",
@@ -1866,7 +1873,9 @@
     "priceHistory": "Lịch sử giá",
     "priceHistoryTitle": "Xem lịch sử giá và phát hiện giảm giá ảo",
     "noImage": "Chưa có ảnh",
-    "verified": "Đã chuẩn hóa thông số"
+    "verified": "Đã chuẩn hóa thông số",
+    "fromPrice": "Giá từ",
+    "sizesLabel": "Các dung lượng"
   },
   "priceVerdict": {
     "labelFake": "Cảnh báo giảm giá ảo",

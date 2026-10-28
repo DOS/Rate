@@ -4,7 +4,7 @@
 -- prod). Zero DDL on prod from DOS/Rate. Rollback: 2026-10-28-dos-me-m1-m2-items-rollback.sql.
 -- Verification: 2026-10-28-dos-me-m1-m2-items-verify.sql.
 --
--- Order: DOS/Rate#1123 (re-key of the six drifted seed masters, M0) runs first, so the Items
+-- Order: M0 (2026-10-29-dos-me-m0-seed-rekey.sql, DOS/Rate#1212 / #1123) runs first, so the Items
 -- are created with the normalizer's Item keys.
 --
 -- Idempotent: every step is IF NOT EXISTS, guarded by pg_constraint / pg_trigger, CREATE OR

@@ -1,6 +1,7 @@
 import 'server-only';
 import type {
   CatalogSlugResolution,
+  RateItem,
   RateItemVariant,
 } from '../../lib/rate-api';
 
@@ -57,6 +58,9 @@ export type ItemRoutePlan =
       variantSlug: string;
       itemSlug: string;
       variantKey: string;
+      item: RateItem;
+      /** Published variants in display order; empty for a shared-slug Item. */
+      variants: readonly RateItemVariant[];
     };
 
 /**
@@ -97,6 +101,10 @@ export function planItemRoute(input: {
     (requestedVariant
       ? variants.find((v) => v.variant_key === requestedVariant)
       : undefined) ??
+    // The Item's default size while it has a price, else the first priced
+    // size, so the first view never says "sold out" beside a "from" price.
+    variants.find((v) => v.id === item.default_variant_id && v.min_price > 0) ??
+    variants.find((v) => v.min_price > 0) ??
     variants.find((v) => v.id === item.default_variant_id) ??
     variants[0];
   if (!chosen) return { kind: 'not_found' };
@@ -105,6 +113,8 @@ export function planItemRoute(input: {
     variantSlug: chosen.slug,
     itemSlug: item.slug,
     variantKey: chosen.variant_key,
+    item,
+    variants,
   };
 }
 

@@ -9,8 +9,11 @@
 //   3. `next build` (unless --skip-build) and `next start` against that proxy.
 //   4. Playwright specs in apps/web/e2e.
 //
-// Usage: node scripts/e2e/run.mjs [--skip-build] [--serve] [-- <playwright args>]
+// Usage: node scripts/e2e/run.mjs [--skip-build] [--serve] [--item-model] [-- <playwright args>]
 //   --serve keeps the stack up for manual debugging instead of running the specs.
+//   --item-model (DOS/Rate#1159) also applies the DOS-Me M0 + M1+M2 proposals and
+//     apps/web/e2e/item-model/seed.sql, serves the app with RATE_ITEM_MODEL=nullable_variant
+//     and runs only the specs in apps/web/e2e/item-model.
 // Needs Docker and a Playwright Chromium (`pnpm exec playwright install chromium`).
 
 import { spawn, spawnSync } from 'node:child_process';
@@ -26,6 +29,7 @@ import { pruneStaleStacks } from './stale-stacks.mjs';
 const args = process.argv.slice(2);
 const skipBuild = args.includes('--skip-build');
 const serveOnly = args.includes('--serve');
+const itemModel = args.includes('--item-model');
 const playwrightArgs = args.includes('--')
   ? args.slice(args.indexOf('--') + 1)
   : [];
@@ -120,6 +124,23 @@ const SUPABASE_PORT_FILE = path.join(
   'e2e-supabase-port'
 );
 const isValidPort = (p) => Number.isInteger(p) && p > 0 && p < 65536;
+// The mode the last build served (DOS/Rate#1159): its ISR pages and redirects are cached
+// under .next, so a --skip-build run in the other mode would serve them.
+const MODE_FILE = path.join(repoRoot, 'apps', 'web', '.next', 'e2e-mode');
+const runMode = itemModel ? 'item-model' : 'default';
+if (skipBuild) {
+  let builtMode = 'default';
+  try {
+    builtMode = readFileSync(MODE_FILE, 'utf8').trim() || 'default';
+  } catch {
+    // a build from before the mode file: the default mode
+  }
+  if (builtMode !== runMode) {
+    throw new Error(
+      `--skip-build reuses a ${builtMode} build; this is a ${runMode} run, rebuild without --skip-build`
+    );
+  }
+}
 
 function recordedSupabasePort() {
   try {
@@ -335,6 +356,16 @@ try {
   db.sql(
     readFileSync(path.join(repoRoot, 'apps', 'web', 'e2e', 'seed.sql'), 'utf8')
   );
+  if (itemModel) {
+    // The proposals in the order JOY applies them, then the Item fixture.
+    for (const file of [
+      ['Docs', 'Proposals', '2026-10-29-dos-me-m0-seed-rekey.sql'],
+      ['Docs', 'Proposals', '2026-10-28-dos-me-m1-m2-items.sql'],
+      ['apps', 'web', 'e2e', 'item-model', 'seed.sql'],
+    ]) {
+      db.sql(readFileSync(path.join(repoRoot, ...file), 'utf8'));
+    }
+  }
 
   docker(
     [
@@ -393,6 +424,9 @@ try {
     // only fills keys that are absent): default output, local public URL.
     NEXT_OUTPUT: '',
     APP_PUBLIC_URL: 'http://localhost',
+    // --item-model only; read per request by the web app, set for the build too
+    // so both agree. The default run sets nothing here.
+    ...(itemModel ? { RATE_ITEM_MODEL: 'nullable_variant' } : {}),
   };
   if (!skipBuild) {
     // --ui=stream: turbo's TUI would take over the terminal from a detached child.
@@ -404,6 +438,7 @@ try {
       throw new Error(`next build failed: ${err.message}`);
     });
     writeFileSync(SUPABASE_PORT_FILE, String(supabasePort));
+    writeFileSync(MODE_FILE, runMode);
   }
 
   // unstable_cache persists in .next/cache/fetch-cache, outside the build
@@ -445,7 +480,9 @@ try {
       'playwright',
       'test',
       '-c',
-      'apps/web/e2e/playwright.config.ts',
+      itemModel
+        ? 'apps/web/e2e/item-model/playwright.config.ts'
+        : 'apps/web/e2e/playwright.config.ts',
       ...playwrightArgs,
     ],
     {

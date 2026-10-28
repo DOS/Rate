@@ -12,10 +12,13 @@ import {
   getCachedMerchantsList,
   getCachedRatePlatformStats,
   getCrossPlatformDealRadar,
+  groupCatalogRowsByItem,
   type CrossPlatformDealRadarResponse,
   type MerchantSummary,
   type RatePlatformStats,
 } from '@/server/rate';
+import { catalogRowSlug, itemSizeChips } from '@/lib/item-directory';
+import { formatStorageLabel } from '@/lib/category-filters';
 import type { MasterProduct } from '@repo/shared-data';
 import {
   BsArrowLeftRight,
@@ -168,6 +171,10 @@ export default async function Home({
     catSlugById.set(c.id, c.slug);
   }
 
+  // RATE_ITEM_MODEL on: one grid card per Item (DOS/Rate#1155).
+  const gridProducts = await groupCatalogRowsByItem(masterProducts).catch(
+    () => masterProducts
+  );
   const quickCompareSlugs = masterProducts
     .filter((p) =>
       getMasterProductHref(p, catSlugById).startsWith('/smartphones/')
@@ -253,7 +260,11 @@ export default async function Home({
             <div className="row justify-content-center align-items-center">
               <div className="col-xl-9 col-lg-10 col-md-12 col-sm-12">
                 <HeroSearchInspector
-                  initialProducts={toHeroProductSuggestions(masterProducts)}
+                  initialProducts={toHeroProductSuggestions(
+                    // One suggestion per Item (#1155). Its slug stays the
+                    // variant's: compare, watchlist and radar are keyed by it.
+                    gridProducts
+                  )}
                   initialMerchants={toHeroMerchantSuggestions(
                     merchants.slice(0, HERO_MERCHANT_PRELOAD)
                   )}
@@ -474,7 +485,7 @@ export default async function Home({
               </div>
 
               <div className="row g-4">
-                {masterProducts.slice(0, 6).map((storedItem) => {
+                {gridProducts.slice(0, 6).map((storedItem) => {
                   // An earbud card carries no RAM, storage or screen chip
                   // (DOS/Rate#1142).
                   const item = applyCategorySpecTemplate(
@@ -483,7 +494,10 @@ export default async function Home({
                   );
                   const thumb = productImageUrl(item);
                   const keySpecs = item.key_specs || {};
-                  const productHref = getMasterProductHref(item, catSlugById);
+                  const productHref = getMasterProductHref(
+                    { ...item, slug: catalogRowSlug(item) },
+                    catSlugById
+                  );
                   const rawUser = Number(
                     item.user_rating_weighted || item.average_rating || 0
                   );
@@ -519,8 +533,13 @@ export default async function Home({
                       <ProductCard
                         slug={item.slug}
                         href={productHref}
+                        sizeChips={itemSizeChips(
+                          storedItem,
+                          productHref,
+                          formatStorageLabel
+                        )}
                         categoryPath={
-                          productHref.replace(`/${item.slug}`, '') ||
+                          productHref.replace(`/${catalogRowSlug(item)}`, '') ||
                           '/smartphones'
                         }
                         name={item.name}

@@ -1,5 +1,11 @@
 import 'server-only';
 import { cache } from 'react';
+import { sitemapRowsByItem } from '@/lib/item-directory';
+import {
+  getItemBrandFacets,
+  getItemCount,
+  getItemSlugByVariantSlug,
+} from './item-directory';
 import {
   compareMasterProducts as _compareMasterProducts,
   getCategoryDirectoryFacets as _getCategoryDirectoryFacets,
@@ -278,11 +284,31 @@ const _getCachedCategoryDirectoryFacetsByKey = cache(
     )(cleanCat)
 );
 
-export function getCachedCategoryDirectoryFacets(categorySlug?: string) {
+/** Facets counted in variants whatever the Item flag (API v1, #1155). */
+export function getCachedVariantCategoryDirectoryFacets(categorySlug?: string) {
   return _getCachedCategoryDirectoryFacetsByKey(
     normalizeCachedFacetCategory(categorySlug)
   );
 }
+
+export const getCachedCategoryDirectoryFacets = cache(
+  async (categorySlug?: string) => {
+    const facets = await _getCachedCategoryDirectoryFacetsByKey(
+      normalizeCachedFacetCategory(categorySlug)
+    );
+    // RATE_ITEM_MODEL on: brand counts and the total are Items (#1155).
+    const current = facets.currentCategory;
+    const itemFacets = current
+      ? await getItemBrandFacets(current.id, current.slug)
+      : null;
+    if (!itemFacets) return facets;
+    return {
+      ...facets,
+      brands: itemFacets.brands,
+      totalUnfiltered: itemFacets.brands.reduce((acc, b) => acc + b.count, 0),
+    };
+  }
+);
 
 const _getCachedMasterProductOffersByKey = cache((cleanId: string) =>
   withRateDataCache(
@@ -511,12 +537,21 @@ export function getCachedMerchantProfileById(merchantId: string) {
   return _getCachedMerchantProfileByIdKey(cleanId);
 }
 
-export const getCachedRatePlatformStats = cache(() =>
-  withRateDataCache(_getRatePlatformStats, ['rate-platform-stats'], {
-    revalidate: 600,
-    tags: [RATE_CACHE_TAGS.STATS],
-  })()
-);
+export const getCachedRatePlatformStats = cache(async () => {
+  const stats = await withRateDataCache(
+    _getRatePlatformStats,
+    ['rate-platform-stats'],
+    {
+      revalidate: 600,
+      tags: [RATE_CACHE_TAGS.STATS],
+    }
+  )();
+  // RATE_ITEM_MODEL on: "products tracked" counts Items (#1155).
+  const itemCount = await getItemCount();
+  return itemCount == null
+    ? stats
+    : { ...stats, masterProductsCount: itemCount };
+});
 
 /** Stored reviews kept out of the rating, per master id (DOS/Rate#1139). */
 export const getCachedFilteredReviewCountsByMaster = cache(() =>
@@ -588,8 +623,12 @@ const _getCachedSitemapRowsData = withRateDataCache(
  */
 export const getCachedSitemapRows = cache(async (): Promise<SitemapRows> => {
   const rows = await _getCachedSitemapRowsData();
+  // RATE_ITEM_MODEL on: one URL per Item, dated by its newest variant (#1155).
+  const itemSlugs = await getItemSlugByVariantSlug();
   return {
-    products: rows.products,
+    products: itemSlugs
+      ? sitemapRowsByItem(rows.products, itemSlugs)
+      : rows.products,
     merchants: rows.merchants,
     categorySlugById: new Map(rows.categories),
   };
@@ -644,3 +683,6 @@ export {
   type CrossPlatformPriceSpreadItem,
   type DealRadarVerdict,
 } from './deals';
+
+export { getItemCatalogPage, groupCatalogRowsByItem } from './item-directory';
+export type { ItemCatalogRow } from '@/lib/item-directory';

@@ -438,6 +438,15 @@ async function runSuite() {
     ['Apple Watch Series 11 46mm GPS 64GB', 'apple:watch-series-11-46mm:64gb'],
     // The other size is another product.
     ['iPad Pro M4 13 inch 512GB', 'apple:ipad-pro-m4-13:512gb'],
+    // A bundle word inside the product's own part keeps its size (DOS/Rate#1263).
+    ['iPad Pro M4 kèm bút 13 inch WiFi 256GB', 'apple:ipad-pro-m4-13:256gb'],
+    ['MacBook Air M3 kèm chuột 15 inch 16GB 512GB', 'apple:macbook-air-m3-15:512gb'],
+    ['iPad Pro M4 | tặng bút 13 inch WiFi 256GB', 'apple:ipad-pro-m4-13:256gb'],
+    ['MacBook Air M3, kèm chuột 15 inch 16GB 512GB', 'apple:macbook-air-m3-15:512gb'],
+    ['iPad Pro M4 11 inch tặng bao da 13 inch 256GB', 'apple:ipad-pro-m4-11:256gb'],
+    // "bao test" (guaranteed testing) is no accessory.
+    ['iPad Pro M4 kèm bao test 13 inch WiFi 256GB', 'apple:ipad-pro-m4-13:256gb'],
+    ['MacBook Air M3 kèm bao test 15 inch 16GB 512GB', 'apple:macbook-air-m3-15:512gb'],
     ['iPad Pro 13" M5 1TB', 'apple:ipad-pro-m5-13:1024gb'],
     ['iPad Pro 11 2024 M4 256GB', 'apple:ipad-pro-m4-11:256gb'],
     ['iPad Pro 12.9 inch M2 128GB', 'apple:ipad-pro-m2-129:128gb'],
@@ -648,6 +657,28 @@ async function runSuite() {
       'Apple Watch Series 10 GPS 46mm (Sport Band 45mm, fits 42mm case)',
       'apple:watch-series-10-46mm:64gb',
     ],
+    // A gifted or bundled case is not the watch's (DOS/Rate#1263).
+    ['Apple Watch Series 10 42mm GPS | Case 46mm', 'apple:watch-series-10-42mm:64gb'],
+    ['Apple Watch Series 10 42mm GPS, tặng Silicone Case 46mm', 'apple:watch-series-10-42mm:64gb'],
+    ['Apple Watch Series 10 42mm GPS tặng ốp 46mm', 'apple:watch-series-10-42mm:64gb'],
+    ['Apple Watch Series 10 42mm GPS | Ốp TPU Case 46mm', 'apple:watch-series-10-42mm:64gb'],
+    ['Apple Watch Series 10 42mm GPS | Bao da Case 46mm', 'apple:watch-series-10-42mm:64gb'],
+    ['Apple Watch Series 10 GPS, tặng Silicone Case 46mm', 'apple:watch-series-10:64gb'],
+    ['Apple Watch Series 10 GPS | kèm ốp 46mm', 'apple:watch-series-10:64gb'],
+    [
+      'Apple Watch Series 10 GPS, tặng Silicone Case 46mm'.normalize('NFD'),
+      'apple:watch-series-10:64gb',
+    ],
+    [
+      'Apple Watch Series 10 GPS Silicone Band 42mm, tặng Silicone Case 46mm',
+      'apple:watch-series-10-42mm:64gb',
+    ],
+    ['Apple Watch Series 10 GPS kèm ốp 46mm', 'apple:watch-series-10:64gb'],
+    // A bundle word before no sized accessory keeps the product's size.
+    ['Apple Watch Series 10 kèm sạc 46mm GPS', 'apple:watch-series-10-46mm:64gb'],
+    ['Apple Watch Series 10, kèm sạc 46mm GPS', 'apple:watch-series-10-46mm:64gb'],
+    // Still the watch's: a named case after a band size, or a lone "| 46mm" case.
+    ['Apple Watch Series 10 GPS | Case 46mm', 'apple:watch-series-10-46mm:64gb'],
   ];
   for (const [title, expectedKey] of namedCaseKeys1223) {
     assert.equal(keyOf(title), expectedKey, title);
@@ -858,7 +889,18 @@ async function runSuite() {
     assert.equal(fr265s.is_benchmark_enriched, false, title);
     assert.equal(fr265s.battery_mah, null, title);
   }
-  assert.equal(keyOf('Garmin Forerunner 265 Sport'), 'garmin:forerunner-265:8gb');
+  // A word that starts with S is no 265S suffix, Vietnamese ones included (DOS/Rate#1262).
+  for (const title of [
+    'Garmin Forerunner 265 Sport',
+    'Garmin Forerunner 265 Sạc nhanh',
+    'Garmin Forerunner 265 sale',
+    'Garmin Forerunner 265 Sạc',
+    'Garmin Forerunner 265 Sắc nét',
+    'Garmin Forerunner 265 S/M',
+  ]) {
+    assert.equal(keyOf(title), 'garmin:forerunner-265:8gb', title);
+  }
+  assert.equal(keyOf('Garmin Forerunner 265 S'), 'garmin:forerunner-265s:unknown');
   // A band size "S/M" after the 265 is no 265S.
   assert.equal(keyOf('Garmin Forerunner 265 S/M band'), 'garmin:forerunner-265:8gb');
   assert.equal(keyOf('Garmin Forerunner 265 S-M band'), 'garmin:forerunner-265:8gb');

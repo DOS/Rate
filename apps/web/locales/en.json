@@ -1186,7 +1186,14 @@
     "exportMenu": "Export data",
     "offersReviewRiskLabel": "Review risk",
     "offersReviewRiskNoData": "not enough data",
-    "offersDiscontinuedBadge": "Discontinued"
+    "offersDiscontinuedBadge": "Discontinued",
+    "offersTrustBadge": "Trust: {score}%",
+    "offersScamRiskLabel": "Scam risk",
+    "itemVariantLabel": "Storage",
+    "itemVariantPrice": "From {price} ₫",
+    "itemVariantNoPrice": "No price yet",
+    "unknownSizeTitle": "Storage not stated ({count} sources)",
+    "unknownSizeNote": "The seller does not state the storage, so these prices are not part of the product's \"from\" price."
   },
   "homePage": {
     "catDescSmartphones": "Filter by chipset, RAM/ROM, refresh rate Hz, battery mAh & fast charge W",
@@ -1866,7 +1873,9 @@
     "priceHistory": "Price history",
     "priceHistoryTitle": "Check the price history and spot fake discounts",
     "noImage": "No image",
-    "verified": "Specs normalized"
+    "verified": "Specs normalized",
+    "fromPrice": "From",
+    "sizesLabel": "Sizes"
   },
   "priceVerdict": {
     "labelFake": "Fake discount alert",

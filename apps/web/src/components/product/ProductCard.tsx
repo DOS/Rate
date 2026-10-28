@@ -40,6 +40,11 @@ export interface ProductCardProps {
    */
   readonly saleState?: SaleState;
   readonly verified?: boolean;
+  /**
+   * An Item's sizes, each linking to the Item with that size preselected
+   * (DOS/Rate#1155). With them the price reads "from".
+   */
+  readonly sizeChips?: readonly { label: string; href: string }[];
 }
 
 export function sanitizeProductCardPriceVnd(value: unknown): number {
@@ -100,6 +105,7 @@ export default function ProductCard({
   merchantCount,
   saleState = 'on_sale',
   verified = false,
+  sizeChips = [],
 }: ProductCardProps) {
   const t = useTranslations('productCard');
   const tSale = useTranslations('saleState');
@@ -202,12 +208,33 @@ export default function ProductCard({
           </ul>
         )}
 
+        {sizeChips.length > 0 && (
+          <ul
+            className="rate-product-card-sizes list-unstyled d-flex flex-wrap gap-1 mb-2"
+            aria-label={t('sizesLabel')}
+          >
+            {sizeChips.map((chip) => (
+              <li key={chip.href}>
+                <Link
+                  href={chip.href}
+                  aria-label={`${name} ${chip.label}`}
+                  className="badge rounded-pill border text-body text-decoration-none fw-normal"
+                >
+                  {chip.label}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        )}
+
         <div className="rate-product-card-footer">
           <div className="rate-product-card-price-row">
             <div>
               {saleState === 'on_sale' && safeMinPrice > 0 ? (
                 <>
-                  <div className="rate-product-card-muted">{t('refPrice')}</div>
+                  <div className="rate-product-card-muted">
+                    {sizeChips.length > 0 ? t('fromPrice') : t('refPrice')}
+                  </div>
                   <div className="rate-product-card-price">
                     {formatProductCardVnd(safeMinPrice)}
                   </div>

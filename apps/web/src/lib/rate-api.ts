@@ -3,6 +3,7 @@ import type { Database, MasterProduct } from '@repo/shared-data';
 import { createLogger } from '@/lib/logger';
 import { isPendingReview } from '@/lib/review-display';
 import { listingReviewSummary } from '@/lib/analyzer-copy';
+import { countBrandsByItem } from '@/lib/item-directory';
 import {
   implausiblyLowOfferIds,
   plausibleOffers,
@@ -4716,7 +4717,7 @@ export function sortItemVariants(
  * NULL). The trust view has no `item_id` (#1242 leaves it unchanged), so the
  * listing ids come from rate.products and their offers from the view.
  */
-async function getItemUnknownVariantOffers(
+export async function getItemUnknownVariantOffers(
   itemId: string
 ): Promise<MerchantOffer[]> {
   const idRows = await fetchAllRows(
@@ -4837,6 +4838,220 @@ export async function resolveCatalogSlug(
   return { kind: 'variant', item: owner, variant, retired };
 }
 
+/** A catalogue master's Item, with every published variant of that Item. */
+export interface MasterItemLink {
+  item: RateItem;
+  variants: RateItemVariant[];
+}
+
+/**
+ * The published Item of each master, by master id, with the Item's
+ * published variants (DOS/Rate#1155). A master with no Item yet, or whose
+ * Item is not published, is absent: it stays its own catalogue entry.
+ * Needs M1+M2 (#1150); a missing table or column throws
+ * ItemModelUnavailableError.
+ */
+export async function getItemLinksForMasters(
+  masterIds: readonly string[]
+): Promise<Map<string, MasterItemLink>> {
+  const ids = Array.from(
+    new Set(masterIds.map((id) => sanitizeRateEntityId(id)).filter(Boolean))
+  );
+  const links = new Map<string, MasterItemLink>();
+  if (ids.length === 0) return links;
+  const db = untypedRate();
+  const read = async (
+    what: string,
+    keys: readonly string[],
+    query: (chunk: string[]) => UntypedRateQuery
+  ): Promise<unknown[]> =>
+    readInChunks(
+      keys,
+      what,
+      (chunk) =>
+        query(chunk).then(throwIfItemSchemaMissing(what)) as PromiseLike<{
+          data: unknown[] | null;
+          error: { message?: string } | null;
+        }>
+    );
+
+  const masterRows = (await read('item links', ids, (chunk) =>
+    db.from('master_products').select('id, item_id').in('id', chunk)
+  )) as Array<{ id?: unknown; item_id?: unknown }>;
+  const itemIdByMaster = new Map<string, string>();
+  for (const row of masterRows) {
+    const id = sanitizeRateEntityId(row.id);
+    const itemId = sanitizeRateEntityId(row.item_id);
+    if (id && itemId) itemIdByMaster.set(id, itemId);
+  }
+  const itemIds = Array.from(new Set(itemIdByMaster.values()));
+  if (itemIds.length === 0) return links;
+
+  const [itemRows, variantsByItem] = await Promise.all([
+    read('items', itemIds, (chunk) =>
+      db
+        .from('items')
+        .select(ITEM_SELECT)
+        .in('id', chunk)
+        .eq('status', 'published')
+    ),
+    getItemVariantsBatch(itemIds),
+  ]);
+  const itemsById = new Map<string, RateItem>();
+  for (const raw of itemRows) {
+    const item = mapItemRow(raw);
+    if (item) itemsById.set(item.id, item);
+  }
+  for (const [masterId, itemId] of itemIdByMaster) {
+    const item = itemsById.get(itemId);
+    if (!item) continue;
+    links.set(masterId, {
+      item,
+      variants: variantsByItem.get(itemId) ?? [],
+    });
+  }
+  return links;
+}
+
+/**
+ * Brand facets counted in Items, not variants (DOS/Rate#1155): one count per
+ * published Item of the category, and one per published master not linked
+ * to an Item yet. Needs M1+M2 (#1150).
+ */
+export async function getCategoryItemBrandFacets(
+  categoryId: string
+): Promise<{ name: string; count: number }[]> {
+  const cleanId = sanitizeRateEntityId(categoryId);
+  if (!cleanId) return [];
+  const rows = (await fetchAllRows(
+    'item brand facets',
+    (from, to) =>
+      untypedRate()
+        .from('master_products')
+        .select('id, brand, item_id')
+        .eq('category_id', cleanId)
+        .eq('status', 'published')
+        .order('id')
+        .range(from, to)
+        .then(
+          throwIfItemSchemaMissing('item brand facets')
+        ) as unknown as PromiseLike<{
+        data: unknown[] | null;
+        error: { message: string } | null;
+      }>
+  )) as Array<{ id?: unknown; brand?: unknown; item_id?: unknown }>;
+  const linkedIds = Array.from(
+    new Set(rows.map((r) => sanitizeRateEntityId(r.item_id)).filter(Boolean))
+  );
+  const publishedItems = new Set<string>();
+  if (linkedIds.length > 0) {
+    const itemRows = (await readInChunks(
+      linkedIds,
+      'item brand facets',
+      (chunk) =>
+        untypedRate()
+          .from('items')
+          .select('id')
+          .in('id', chunk)
+          .eq('status', 'published')
+          .then(throwIfItemSchemaMissing('item brand facets')) as PromiseLike<{
+          data: unknown[] | null;
+          error: { message?: string } | null;
+        }>
+    )) as Array<{ id?: unknown }>;
+    for (const r of itemRows) {
+      const id = sanitizeRateEntityId(r.id);
+      if (id) publishedItems.add(id);
+    }
+  }
+  return countBrandsByItem(
+    rows.map((r) => {
+      const itemId = sanitizeRateEntityId(r.item_id);
+      return {
+        brand: typeof r.brand === 'string' ? r.brand : '',
+        // A master whose Item is not published counts as itself.
+        key:
+          itemId && publishedItems.has(itemId)
+            ? `item:${itemId}`
+            : `master:${String(r.id ?? '')}`,
+      };
+    })
+  );
+}
+
+/** Published Items, for "products tracked" (DOS/Rate#1155). Needs M1+M2. */
+export async function countPublishedItems(): Promise<number> {
+  const { count, error } = await (
+    getRateClient() as unknown as {
+      from: (table: string) => {
+        select: (
+          cols: string,
+          opts: { count: 'exact'; head: true }
+        ) => {
+          eq: (
+            col: string,
+            val: unknown
+          ) => PromiseLike<{
+            count: number | null;
+            error: { message: string; code?: string } | null;
+          }>;
+        };
+      };
+    }
+  )
+    .from('items')
+    .select('id', { count: 'exact', head: true })
+    .eq('status', 'published');
+  if (error) throw itemReadError('item count', error);
+  return typeof count === 'number' && count > 0 ? count : 0;
+}
+
+/**
+ * Variant slug to published Item slug, over every published master linked
+ * to a published Item (DOS/Rate#1155: the sitemap lists Item URLs). Needs
+ * M1+M2 (#1150).
+ */
+export async function getItemSlugByVariantSlug(): Promise<Map<string, string>> {
+  const db = untypedRate();
+  const page =
+    (what: string, table: string, cols: string) => (from: number, to: number) =>
+      db
+        .from(table)
+        .select(cols)
+        .eq('status', 'published')
+        .order('id')
+        .range(from, to)
+        .then(throwIfItemSchemaMissing(what)) as unknown as PromiseLike<{
+        data: unknown[] | null;
+        error: { message: string } | null;
+      }>;
+  const [masterRows, itemRows] = await Promise.all([
+    fetchAllRows(
+      'sitemap item links',
+      page('sitemap item links', 'master_products', 'slug, item_id')
+    ),
+    fetchAllRows('sitemap items', page('sitemap items', 'items', 'id, slug')),
+  ]);
+  const itemSlugById = new Map<string, string>();
+  for (const raw of itemRows as Array<{ id?: unknown; slug?: unknown }>) {
+    const id = sanitizeRateEntityId(raw.id);
+    if (id && typeof raw.slug === 'string' && raw.slug) {
+      itemSlugById.set(id, raw.slug);
+    }
+  }
+  const out = new Map<string, string>();
+  for (const raw of masterRows as Array<{
+    slug?: unknown;
+    item_id?: unknown;
+  }>) {
+    const itemSlug = itemSlugById.get(sanitizeRateEntityId(raw.item_id));
+    if (itemSlug && typeof raw.slug === 'string' && raw.slug) {
+      out.set(raw.slug, itemSlug);
+    }
+  }
+  return out;
+}
+
 /** `listItems` filters: what API v1 `group=item` supports (DOS/Rate#1158). */
 export interface ItemListParams {
   categoryId?: string | null;
@@ -4904,36 +5119,38 @@ export async function listItems(params: ItemListParams): Promise<RateItem[]> {
   return (data ?? []).map(mapItemRow).filter((i): i is RateItem => i !== null);
 }
 
-/** The published variants of several Items, by Item id, each in variant order. */
+/**
+ * The published variants of several Items, by Item id, each in variant order
+ * (DOS/Rate#1158; shared with `getItemLinksForMasters`, #1155). Needs M1+M2
+ * (#1150); a missing table or column throws ItemModelUnavailableError.
+ */
 export async function getItemVariantsBatch(
   itemIds: readonly string[]
 ): Promise<Map<string, RateItemVariant[]>> {
   const ids = Array.from(
-    new Set(itemIds.map(sanitizeRateEntityId).filter(Boolean))
+    new Set(itemIds.map((id) => sanitizeRateEntityId(id)).filter(Boolean))
   );
   const byItem = new Map<string, RateItemVariant[]>(ids.map((id) => [id, []]));
   if (ids.length === 0) return byItem;
-  const rows = await fetchAllRows(
+  const rows = await readInChunks(
+    ids,
     'item variants',
-    (from, to) =>
+    (chunk) =>
       untypedRate()
         .from('master_products')
         .select(ITEM_VARIANT_SELECT)
-        .in('item_id', ids)
+        .in('item_id', chunk)
         .eq('status', 'published')
-        .order('id')
-        .range(from, to)
-        .then(
-          throwIfItemSchemaMissing('item variants')
-        ) as unknown as PromiseLike<{
+        .then(throwIfItemSchemaMissing('item variants')) as PromiseLike<{
         data: unknown[] | null;
-        error: { message: string } | null;
+        error: { message?: string } | null;
       }>
   );
   for (const variant of rows.map(mapItemVariantRow)) {
     if (variant) byItem.get(variant.item_id)?.push(variant);
   }
-  for (const [id, variants] of byItem)
+  for (const [id, variants] of byItem) {
     byItem.set(id, sortItemVariants(variants));
+  }
   return byItem;
 }
