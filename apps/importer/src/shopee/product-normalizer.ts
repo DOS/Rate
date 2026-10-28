@@ -207,6 +207,37 @@ export function detectProductOrigin(title: string, description?: string): Produc
   return 'unknown';
 }
 
+/** Apple apps and services a device can support or run. */
+const APPLE_SERVICE = String.raw`apple\s?(?:tv\+?|music|airplay\s?\d?|home(?:kit)?|arcade)|airplay\s?\d?|homekit|siri`;
+/** Ends a service name: "TV+" keeps its "+", which would otherwise read as a Plus model. */
+const SERVICE_END = String.raw`(?![a-z0-9+])`;
+/** "hỗ trợ Apple TV", "tích hợp: AirPlay 2", "có ứng dụng Apple TV", "works with Siri". */
+const SERVICE_MENTION_RE = new RegExp(
+  String.raw`\b(?:hỗ trợ|tích hợp|có sẵn|cài sẵn|ứng dụng|app|kết nối|tương thích(?: với)?|supports?|works with|compatible with):? (?:(?:ứng dụng|app) )?(?:${APPLE_SERVICE})${SERVICE_END}`,
+  'gi'
+);
+/**
+ * A television of another brand: an "Apple TV" in it is the app, never the Apple TV box
+ * ("Apple TV 4K - Smart TV Box" names no other brand and stays the box).
+ */
+const TELEVISION_TITLE_RE = /\btivi\b|\b(?:smart|google|android|qled|oled) ?tv\b/i;
+const TELEVISION_BRAND_RE =
+  /\b(?:samsung|lg|sony|tcl|xiaomi|casper|panasonic|sharp|toshiba|philips|hisense|coocaa|aqua|skyworth|ffalcon|asanzo|nanoco)\b/i;
+const APPLE_SERVICE_RE = new RegExp(String.raw`\b(?:${APPLE_SERVICE})${SERVICE_END}`, 'gi');
+
+/**
+ * Drops the apps and services a title says the product supports, so they set no brand or
+ * model: "Smart Tivi Samsung 55 inch hỗ trợ Apple TV" is a Samsung, not an Apple TV
+ * (DOS/Rate#1195). `title` has single spaces.
+ */
+function stripServiceMentions(title: string): string {
+  const stripped = title.replace(SERVICE_MENTION_RE, ' ');
+  const otherBrandTv = TELEVISION_TITLE_RE.test(stripped) && TELEVISION_BRAND_RE.test(stripped);
+  return (otherBrandTv ? stripped.replace(APPLE_SERVICE_RE, ' ') : stripped)
+    .replace(/ {2,}/g, ' ')
+    .trim();
+}
+
 /** Apple product families, for a title whose line no Apple pattern matched (DOS/Rate#817). */
 const APPLE_FAMILIES: ReadonlyArray<readonly [RegExp, string]> = [
   [/iphone/i, 'iPhone'],
@@ -1344,39 +1375,45 @@ export class ProductNormalizer {
     const categorySlug = detectCategorySlug(title);
 
     // 1. Extract Brand
+    // An app or service the product supports names no brand or model: "Smart Tivi Samsung
+    // ... hỗ trợ Apple TV" is a Samsung TV (DOS/Rate#1195).
+    const identityTitle = stripServiceMentions(title);
     let brand = 'Khác';
     // Not the "ipad" in Xiaomi's "Mipad" (DOS/Rate#826).
-    if (/apple|iphone|(?<![a-z])ipad|macbook|airpods/i.test(title)) brand = 'Apple';
-    else if (/samsung|galaxy/i.test(title)) brand = 'Samsung';
-    else if (/xiaomi|redmi|poco|\bmi\s*pad\b/i.test(title)) brand = 'Xiaomi';
-    else if (/\bsony\b|w[fh]-1000|w[fh]1000xm|xperia/i.test(title)) brand = 'Sony';
+    if (/apple|iphone|(?<![a-z])ipad|macbook|airpods/i.test(identityTitle)) brand = 'Apple';
+    else if (/samsung|galaxy/i.test(identityTitle)) brand = 'Samsung';
+    else if (/xiaomi|redmi|poco|\bmi\s*pad\b/i.test(identityTitle)) brand = 'Xiaomi';
+    else if (/\bsony\b|w[fh]-1000|w[fh]1000xm|xperia/i.test(identityTitle)) brand = 'Sony';
     else if (
-      /\bgarmin\b|forerunner|fenix|venu|vivo(?:active|smart|move|fit|sport|life)/i.test(title)
+      /\bgarmin\b|forerunner|fenix|venu|vivo(?:active|smart|move|fit|sport|life)/i.test(
+        identityTitle
+      )
     )
       brand = 'Garmin';
-    else if (/\blenovo\b|thinkpad|ideapad|legion/i.test(title)) brand = 'Lenovo';
-    else if (/oppo/i.test(title)) brand = 'OPPO';
+    else if (/\blenovo\b|thinkpad|ideapad|legion/i.test(identityTitle)) brand = 'Lenovo';
+    else if (/oppo/i.test(identityTitle)) brand = 'OPPO';
     // Not "Vivobook" / "Vivo Book" (Asus) (DOS/Rate#761); Garmin's Vivo lines are matched above.
-    else if (/\bvivo(?!\s*book)/i.test(title)) brand = 'Vivo';
-    else if (/realme/i.test(title)) brand = 'Realme';
-    else if (/google|pixel/i.test(title)) brand = 'Google';
-    else if (/\basus\b|\brog\b|zenbook|vivo\s*book|tuf\s*gaming/i.test(title)) brand = 'Asus';
-    else if (/\bdell\b|inspiron|\bxps\b|alienware|latitude/i.test(title)) brand = 'Dell';
+    else if (/\bvivo(?!\s*book)/i.test(identityTitle)) brand = 'Vivo';
+    else if (/realme/i.test(identityTitle)) brand = 'Realme';
+    else if (/google|pixel/i.test(identityTitle)) brand = 'Google';
+    else if (/\basus\b|\brog\b|zenbook|vivo\s*book|tuf\s*gaming/i.test(identityTitle))
+      brand = 'Asus';
+    else if (/\bdell\b|inspiron|\bxps\b|alienware|latitude/i.test(identityTitle)) brand = 'Dell';
     // "Omen" as a word: Sennheiser "Momentum" is not HP.
-    else if (/\bhp\b|pavilion|victus|\bomen\b|elitebook|envy/i.test(title)) brand = 'HP';
-    else if (/\bacer\b|nitro\s*\d|swift|predator|aspire/i.test(title)) brand = 'Acer';
-    else if (/\bmsi\b|katana|cyborg|stealth|prestige/i.test(title)) brand = 'MSI';
-    else if (/\bhuawei\b|matepad|freebuds|watch\s*gt/i.test(title)) brand = 'Huawei';
-    else if (/\bbose\b|quietcomfort/i.test(title)) brand = 'Bose';
-    else if (/\bjbl\b|tour\s*pro|tune\s*\d+/i.test(title)) brand = 'JBL';
-    else if (/sennheiser|momentum/i.test(title)) brand = 'Sennheiser';
-    else if (/oneplus/i.test(title)) brand = 'OnePlus';
-    else if (/\bhonor\b|magicbook/i.test(title)) brand = 'Honor';
+    else if (/\bhp\b|pavilion|victus|\bomen\b|elitebook|envy/i.test(identityTitle)) brand = 'HP';
+    else if (/\bacer\b|nitro\s*\d|swift|predator|aspire/i.test(identityTitle)) brand = 'Acer';
+    else if (/\bmsi\b|katana|cyborg|stealth|prestige/i.test(identityTitle)) brand = 'MSI';
+    else if (/\bhuawei\b|matepad|freebuds|watch\s*gt/i.test(identityTitle)) brand = 'Huawei';
+    else if (/\bbose\b|quietcomfort/i.test(identityTitle)) brand = 'Bose';
+    else if (/\bjbl\b|tour\s*pro|tune\s*\d+/i.test(identityTitle)) brand = 'JBL';
+    else if (/sennheiser|momentum/i.test(identityTitle)) brand = 'Sennheiser';
+    else if (/oneplus/i.test(identityTitle)) brand = 'OnePlus';
+    else if (/\bhonor\b|magicbook/i.test(identityTitle)) brand = 'Honor';
     // Apple's desktops and speakers, last so another brand wins, and not when the title
     // only names what it fits or looks like ("Bàn phím cho Mac mini") (DOS/Rate#819).
     else if (
-      /\bimac\b|\bmac\s*(?:mini|studio)\b|homepod|\bvision\s*pro\b/i.test(title) &&
-      !/\b(?:cho|for|giống)\s+(?:imac|mac|homepod|vision)/i.test(title)
+      /\bimac\b|\bmac\s*(?:mini|studio)\b|homepod|\bvision\s*pro\b/i.test(identityTitle) &&
+      !/\b(?:cho|for|giống)\s+(?:imac|mac|homepod|vision)/i.test(identityTitle)
     )
       brand = 'Apple';
 
@@ -1389,7 +1426,7 @@ export class ProductNormalizer {
     // separator, a size ("256GB"), a RAM/ROM pair ("8/256"), a network or "Chính hãng"
     // follows, so "Tab S9 - Ultra slim case", "Tab S9 - Ultra 2-in-1 case" and "A55 + Tặng"
     // keep their keys.
-    let modelTitle = title
+    let modelTitle = identityTitle
       // "15 - ProMax", "S24-Ultra" and "15 (ProMax)" are "15 ProMax" and "S24 Ultra".
       .replace(
         /(?<=\d[a-z]?) ?- ?(pro ?max|pro|plus|ultra|mini|lite|fe)\b(?= ?(?:$|[-,(]|\d+(?:[.,]\d+)? ?(?:gb|tb)\b|\d+ ?\/ ?\d+|[45]g\b|lte\b|chính\b))/gi,
