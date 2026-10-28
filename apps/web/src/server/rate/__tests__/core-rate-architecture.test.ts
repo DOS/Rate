@@ -13722,6 +13722,20 @@ async function runCoreArchitectureSuite() {
     assert.equal(verdict1177.cheaperOfferCount, 0);
     assert.equal(verdict1177.maxSavingsAmount, 0);
     // A sold-out listing's own page is judged against the in-stock market.
+    const ownSold1177 = evaluateExtensionPriceVerdict({
+      isAccessory: false,
+      accessoryReason: null,
+      isAmbiguousVariant: false,
+      observedPrice: 3_032_000,
+      observedOriginalPrice: null,
+      offers: offers1177,
+      observedOfferId: 'fpt-gone',
+      priceHistory: null,
+    });
+    assert.equal(ownSold1177.marketMinPrice, 3_140_000);
+    assert.equal(ownSold1177.cheaperOfferCount, 0);
+    assert.notEqual(ownSold1177.badgeLabel, 'Giá thấp bất thường');
+    // From the dearest in-stock page, only the in-stock store is cheaper.
     const soldPage1177 = evaluateExtensionPriceVerdict({
       isAccessory: false,
       accessoryReason: null,
