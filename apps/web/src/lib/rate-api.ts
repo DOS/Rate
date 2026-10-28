@@ -3943,8 +3943,17 @@ export async function getRatePlatformStats(): Promise<RatePlatformStats> {
     });
   }
 
-  const mappedReviews: RatePlatformStats['recentReviewsSample'] =
-    rawReviews.map((r) => {
+  // A review of a listing whose product is not published (draft, archived) is
+  // not sampled; an unclustered listing's is (DOS/Rate#1309). masterRows holds
+  // the published masters only.
+  const sampledListingIds = new Set(
+    prodRows
+      .filter((p) => !p.cluster_id || masterSlugById.has(p.cluster_id))
+      .map((p) => p.id)
+  );
+  const mappedReviews: RatePlatformStats['recentReviewsSample'] = rawReviews
+    .filter((r) => sampledListingIds.has(r.product_id))
+    .map((r) => {
       const rawVf = Array.isArray(r.review_flags)
         ? r.review_flags[0]
         : r.review_flags;

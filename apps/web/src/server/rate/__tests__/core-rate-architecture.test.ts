@@ -4725,6 +4725,16 @@ async function runCoreArchitectureSuite() {
               created_at: '2026-10-18T10:00:00.000Z',
               review_flags: [],
             },
+            // A review of a draft product's listing (DOS/Rate#1309).
+            {
+              id: 'rev-stats-draft',
+              product_id: 'prod-sample-draft',
+              author_name: 'An',
+              rating_star: 1,
+              comment: 'Bản nháp, chưa được xuất bản.',
+              created_at: '2026-10-18T11:00:00.000Z',
+              review_flags: [],
+            },
           ]),
           { status: 200, headers: { 'content-type': 'application/json' } }
         );
@@ -4740,6 +4750,11 @@ async function runCoreArchitectureSuite() {
               id: 'prod-sample-1',
               title: 'Samsung Galaxy S24 Ultra 256GB Chính Hãng',
               cluster_id: 'mp-stats-1',
+            },
+            {
+              id: 'prod-sample-draft',
+              title: 'Samsung Galaxy S25 Edge (draft)',
+              cluster_id: 'mp-stats-draft',
             },
           ]),
           { status: 200, headers: { 'content-type': 'application/json' } }
@@ -4766,6 +4781,11 @@ async function runCoreArchitectureSuite() {
       platformStats.recentReviewsSample[0]?.masterSlug,
       'samsung-galaxy-s24-ultra',
       'getRatePlatformStats must resolve recent review masterSlug via scoped .in(id, sampleProductIds) (#386)'
+    );
+    assert.deepEqual(
+      platformStats.recentReviewsSample.map((r) => r.id),
+      ['rev-stats-1'],
+      'a review of an unpublished product is not sampled (DOS/Rate#1309)'
     );
     assert.ok(
       !statsFetchedUrls.some(
