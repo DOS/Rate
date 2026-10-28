@@ -498,7 +498,7 @@ async function runTests() {
       new RegExp(
         `^${pattern
           .replace(/[.+?^${}()|[\]\\]/g, '\\$&')
-          .replace('://\\*\\.', '://(?:[^/]+\\.)?')
+          .replace('://*\\.', '://(?:[^/]+\\.)?')
           .replace(/\*/g, '.*')}$`
       ).test(url);
     for (const url of [
