@@ -58,3 +58,32 @@ export function versusVerdictCopy(
     weightsLabel: input.weightsLabel,
   };
 }
+
+/**
+ * `versusVerdictCopy` for a scoreboard result: the leader's score under the
+ * weights in use, and the weights' label unless they are the default ones
+ * (a persona without its own label reads as custom weights).
+ */
+export function versusVerdictFor(
+  result: {
+    tie: boolean;
+    finalA: number;
+    finalB: number;
+    winner: { slug: string; name: string; expertScore10?: number | null };
+  },
+  slugA: string,
+  persona: string,
+  labels: Partial<Record<string, string>> & { custom: string }
+): VersusVerdictCopy {
+  return versusVerdictCopy({
+    tie: result.tie,
+    score:
+      result.tie || result.winner.slug === slugA
+        ? result.finalA
+        : result.finalB,
+    winnerName: result.winner.name,
+    winnerExpertScore10: result.winner.expertScore10,
+    weightsLabel:
+      persona === 'default' ? null : (labels[persona] ?? labels.custom),
+  });
+}

@@ -17,7 +17,7 @@ import {
   radarMarkdownCell,
 } from '@/lib/deal-radar';
 import { escapeCsvCell } from '@/lib/csv-safe';
-import { isVersusScoreTie, versusVerdictCopy } from '@/lib/versus-verdict';
+import { isVersusScoreTie, versusVerdictFor } from '@/lib/versus-verdict';
 import RadarBadge from '@/components/radar/RadarBadge';
 import { useDealRadarIndex } from '@/components/radar/use-deal-radar';
 
@@ -436,7 +436,9 @@ export default function VersusInteractiveScoreboard({
     URL.revokeObjectURL(url);
   };
 
-  const personaLabels: Partial<Record<PersonaPresetKey, string>> = {
+  const personaLabels: Partial<Record<PersonaPresetKey, string>> & {
+    custom: string;
+  } = {
     default: t('personaDefault'),
     photography: t('personaPhotography'),
     gaming: t('personaGaming'),
@@ -444,26 +446,23 @@ export default function VersusInteractiveScoreboard({
     value_hunter: t('personaValueHunter'),
     custom: t('customWeightsActive'),
   };
-  const verdict = versusVerdictCopy({
-    tie: weightedResult.tie,
-    score:
-      weightedResult.tie || weightedResult.winner.slug === scoreA.slug
-        ? weightedResult.finalA
-        : weightedResult.finalB,
-    winnerName: weightedResult.winner.name,
-    winnerExpertScore10: weightedResult.winner.expertScore10,
-    weightsLabel:
-      persona === 'default'
-        ? null
-        : (personaLabels[persona] ?? t('customWeightsActive')),
-  });
+  const verdict = versusVerdictFor(
+    weightedResult,
+    scoreA.slug,
+    persona,
+    personaLabels
+  );
 
   return (
     <>
       {/* The verdict reads the scoreboard's own result, so it follows the
           weights the reader picks; other weights than the default are named
           (DOS/Rate#1235). */}
-      <p className="text-white-50 small mb-4" data-testid="versus-verdict">
+      <p
+        className="text-white-50 small mb-4"
+        data-testid="versus-verdict"
+        aria-live="polite"
+      >
         {/* Narrows the values to each key's own placeholders. */}
         {verdict.key === 'versusAutoVerdictTie'
           ? t(verdict.key, verdict.values)

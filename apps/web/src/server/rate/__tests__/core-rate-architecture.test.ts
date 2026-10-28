@@ -11034,7 +11034,8 @@ async function runCoreArchitectureSuite() {
     // The verdict follows the persona: A leads on the default weights, B on
     // the camera persona, and the verdict names each in turn with its
     // weights (DOS/Rate#1235).
-    const { versusVerdictCopy } = await import('../../../lib/versus-verdict');
+    const { versusVerdictCopy, versusVerdictFor } =
+      await import('../../../lib/versus-verdict');
     const camA = {
       ...scoreItemA,
       slug: 'cam-a',
@@ -11053,21 +11054,22 @@ async function runCoreArchitectureSuite() {
     };
     const { PERSONA_WEIGHTS } =
       await import('../../../components/compare/VersusInteractiveScoreboard');
-    const verdictFor = (persona: 'default' | 'photography') => {
-      const r = computeVersusWeightedResult(
-        camA,
-        camB,
-        PERSONA_WEIGHTS[persona],
-        persona
-      );
-      return versusVerdictCopy({
-        tie: r.tie,
-        score: r.winner.slug === camA.slug ? r.finalA : r.finalB,
-        winnerName: r.winner.name,
-        winnerExpertScore10: r.winner.expertScore10,
-        weightsLabel: persona === 'default' ? null : 'Chụp ảnh / Âm thanh',
-      });
+    const labels = {
+      photography: 'Chụp ảnh / Âm thanh',
+      custom: 'Trọng số tùy chỉnh',
     };
+    const verdictFor = (persona: 'default' | 'photography' | 'business') =>
+      versusVerdictFor(
+        computeVersusWeightedResult(
+          camA,
+          camB,
+          PERSONA_WEIGHTS[persona],
+          persona
+        ),
+        camA.slug,
+        persona,
+        labels
+      );
     const byDefault = verdictFor('default');
     const byCamera = verdictFor('photography');
     assert.equal(byDefault.key, 'versusAutoVerdict');
@@ -11079,9 +11081,12 @@ async function runCoreArchitectureSuite() {
       assert.equal(byDefault.values.winner, 'Model A');
       assert.equal(byDefault.values.score, '4.90');
       assert.equal(byCamera.values.winner, 'Model B');
+      assert.equal(byCamera.values.score, '4.50');
     }
     assert.equal(byDefault.weightsLabel, null);
     assert.equal(byCamera.weightsLabel, 'Chụp ảnh / Âm thanh');
+    // A persona without its own label reads as custom weights.
+    assert.equal(verdictFor('business').weightsLabel, 'Trọng số tùy chỉnh');
     assert.deepEqual(
       versusVerdictCopy({
         tie: true,
