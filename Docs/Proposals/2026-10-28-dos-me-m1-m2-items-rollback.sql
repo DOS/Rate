@@ -165,9 +165,13 @@ SET status = mp.metadata ->> 'status_before_retire',
 WHERE mp.metadata ->> 'retired_by' = 'retire_item_unknown_variant'
   AND mp.metadata ? 'status_before_retire';
 UPDATE rate.products p
-SET cluster_id = (p.metadata ->> 'retired_unknown_variant')::uuid,
+SET cluster_id = mp.id,
     metadata = p.metadata - 'retired_unknown_variant' - 'variant_source_before_retire'
-WHERE p.cluster_id IS NULL AND p.metadata ? 'retired_unknown_variant';
+FROM rate.master_products mp
+WHERE p.cluster_id IS NULL
+  AND p.metadata ? 'retired_unknown_variant'
+  AND mp.id = (p.metadata ->> 'retired_unknown_variant')::uuid
+  AND mp.item_id IS NOT DISTINCT FROM p.item_id;
 DO $$
 DECLARE
   v_id uuid;

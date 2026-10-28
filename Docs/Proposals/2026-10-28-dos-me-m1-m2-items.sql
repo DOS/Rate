@@ -269,17 +269,24 @@ BEGIN
     NEW.item_id := OLD.item_id;
   END IF;
   IF NEW.cluster_id IS NOT NULL THEN
-    -- FOR SHARE waits for a running retire (which holds the variant FOR UPDATE), so a
-    -- writer that read the variant id before the retire cannot put the listing back on it.
+    -- No lock here: an INSERT ... ON CONFLICT runs this before it locks the conflicting
+    -- listing, so locking the variant would invert the listing -> variant lock order.
+    -- A write that races a running retire is swept up by the retire itself (it re-sweeps
+    -- after archiving, and a later call sweeps a retired variant again).
     SELECT mp.item_id, mp.status, mp.variant_key INTO NEW.item_id, v_status, v_variant_key
-    FROM rate.master_products mp WHERE mp.id = NEW.cluster_id
-    FOR SHARE;
+    FROM rate.master_products mp WHERE mp.id = NEW.cluster_id;
     IF v_status = 'archived' AND v_variant_key = 'unknown'
        AND (TG_OP = 'INSERT' OR NEW.cluster_id IS DISTINCT FROM OLD.cluster_id) THEN
       -- A retired `unknown` variant takes no listing: the listing keeps the Item only.
       NEW.cluster_id := NULL;
       NEW.variant_source := NULL;
     END IF;
+  END IF;
+  -- The retire markers describe one move; any later variant or Item change voids them, so
+  -- the rollback never puts a listing back on a variant of another Item.
+  IF TG_OP = 'UPDATE' AND NEW.metadata ? 'retired_unknown_variant'
+     AND (NEW.cluster_id IS NOT NULL OR NEW.item_id IS DISTINCT FROM OLD.item_id) THEN
+    NEW.metadata := NEW.metadata - 'retired_unknown_variant' - 'variant_source_before_retire';
   END IF;
   RETURN NEW;
 END $$;
@@ -343,12 +350,21 @@ BEGIN
     AND COALESCE(f.include_in_rating, true)
     AND r.helpfulness_weight > 0;
 
+  -- Mirror onto the variants in id order. A variant another transaction holds is skipped:
+  -- that transaction is a refresh of the same Item (every variant write here goes through
+  -- refresh_master_market_stats or this function) and mirrors when it gets here, so two
+  -- refreshes of sibling variants never wait on each other.
   UPDATE rate.master_products m
   SET user_rating_weighted = v_weighted,
       authentic_review_count = v_n,
       updated_at = now()
-  WHERE m.item_id = p_item_id
-    AND (m.user_rating_weighted, m.authentic_review_count) IS DISTINCT FROM (v_weighted, v_n);
+  WHERE m.id IN (
+    SELECT mp.id FROM rate.master_products mp
+    WHERE mp.item_id = p_item_id
+      AND (mp.user_rating_weighted, mp.authentic_review_count) IS DISTINCT FROM (v_weighted, v_n)
+    ORDER BY mp.id
+    FOR UPDATE SKIP LOCKED
+  );
 
   UPDATE rate.items i
   SET user_rating_weighted = v_weighted,
@@ -606,6 +622,7 @@ DECLARE
   v_unknown  uuid;
   v_status   text;
   v_moved    integer := 0;
+  v_swept    integer := 0;
   v_override text := COALESCE(current_setting('rate.variant_override', true), '');
 BEGIN
   IF EXISTS (SELECT 1 FROM rate.items i JOIN rate.categories c ON c.id = i.category_id
@@ -616,7 +633,29 @@ BEGIN
   FROM rate.master_products mp
   WHERE mp.item_id = p_item_id AND mp.variant_key = 'unknown' AND mp.status <> 'archived';
   IF v_unknown IS NULL THEN
-    RETURN 0;
+    -- Already retired: move any listing a racing writer put back on it.
+    SELECT mp.id INTO v_unknown
+    FROM rate.master_products mp
+    WHERE mp.item_id = p_item_id AND mp.variant_key = 'unknown' AND mp.status = 'archived'
+      AND mp.metadata ->> 'retired_by' = 'retire_item_unknown_variant';
+    IF v_unknown IS NULL THEN
+      RETURN 0;
+    END IF;
+    PERFORM set_config('rate.variant_override', 'on', true);
+    UPDATE rate.products p
+    SET cluster_id = NULL,
+        variant_source = NULL,
+        metadata = COALESCE(p.metadata, '{}'::jsonb)
+          || jsonb_build_object('retired_unknown_variant', v_unknown,
+                                'variant_source_before_retire', p.variant_source)
+    WHERE p.cluster_id = v_unknown;
+    GET DIAGNOSTICS v_moved = ROW_COUNT;
+    PERFORM set_config('rate.variant_override', v_override, true);
+    IF v_moved > 0 THEN
+      PERFORM rate.refresh_master_market_stats(v_unknown);
+      PERFORM rate.refresh_item_stats(p_item_id);
+    END IF;
+    RETURN v_moved;
   END IF;
   PERFORM 1 FROM rate.products p WHERE p.cluster_id = v_unknown ORDER BY p.id FOR UPDATE;
   SELECT mp.status INTO v_status FROM rate.master_products mp WHERE mp.id = v_unknown FOR UPDATE;
@@ -643,6 +682,19 @@ BEGIN
       metadata = COALESCE(mp.metadata, '{}'::jsonb)
         || jsonb_build_object('status_before_retire', v_status, 'retired_by', 'retire_item_unknown_variant')
   WHERE mp.id = v_unknown;
+  -- Sweep again: a listing written onto the variant while this ran (its writer read the
+  -- variant before the archive) is moved too; later writes see it archived.
+  PERFORM set_config('rate.variant_override', 'on', true);
+  UPDATE rate.products p
+  SET cluster_id = NULL,
+      variant_source = NULL,
+      metadata = COALESCE(p.metadata, '{}'::jsonb)
+        || jsonb_build_object('retired_unknown_variant', v_unknown,
+                              'variant_source_before_retire', p.variant_source)
+  WHERE p.cluster_id = v_unknown;
+  GET DIAGNOSTICS v_swept = ROW_COUNT;
+  PERFORM set_config('rate.variant_override', v_override, true);
+  v_moved := v_moved + v_swept;
   PERFORM rate.refresh_master_market_stats(v_unknown);
   PERFORM rate.refresh_item_stats(p_item_id);
   RETURN v_moved;
