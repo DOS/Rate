@@ -808,7 +808,8 @@
     "checkedStatus": "Checked",
     "errInspectFailed": "Could not check this link.",
     "errNetwork": "Network error, please try again.",
-    "loading": "Loading..."
+    "loading": "Loading...",
+    "reviewRiskNoData": "not enough data"
   },
   "merchants": {
     "dirMetaTitle": "Seller trust directory | Rate.vn",
@@ -972,7 +973,8 @@
     "mdAuthenticLineNoReviews": "- **Genuine review share:** no reviews yet",
     "listingUnavailableBadge": "Out of stock",
     "listingUnavailableTitle": "The store reports it sold out or discontinued. The price is the last one seen, not a current price.",
-    "listingUnavailableAudit": "Out of stock, no deal check"
+    "listingUnavailableAudit": "Out of stock, no deal check",
+    "listingDiscontinuedBadge": "Discontinued"
   },
   "productDetail": {
     "notFoundTitle": "Product not found | Rate.vn",
@@ -1181,7 +1183,10 @@
     "heroPriceLine": "From <strong>{price} ₫</strong> · {count, plural, one {# seller} other {# sellers}}",
     "specsShowAll": "Show all specs",
     "specsShowLess": "Show fewer specs",
-    "exportMenu": "Export data"
+    "exportMenu": "Export data",
+    "offersReviewRiskLabel": "Review risk",
+    "offersReviewRiskNoData": "not enough data",
+    "offersDiscontinuedBadge": "Discontinued"
   },
   "homePage": {
     "catDescSmartphones": "Filter by chipset, RAM/ROM, refresh rate Hz, battery mAh & fast charge W",
@@ -1784,7 +1789,8 @@
     "trustBadge": "Trust: {score}/100",
     "merchantRiskLine": "Scam risk: <b>{scam}/100</b> • Review risk: <b>{review}/100</b>",
     "officialMallBadge": "Official Mall",
-    "scamRiskShort": "Scam risk: {score}/100"
+    "scamRiskShort": "Scam risk: {score}/100",
+    "merchantRiskLineNoReviews": "Scam risk: <b>{scam}/100</b> • Review risk: <b>not enough data</b>"
   },
   "authPortal": {
     "metaLoginTitle": "Sign in | Rate.vn",

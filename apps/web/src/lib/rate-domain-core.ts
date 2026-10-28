@@ -1938,14 +1938,34 @@ export function extractProductKeywordFromUrl(rawUrl?: string | null): string {
 }
 
 /**
- * Whether a merchant's review risk score was measured on analysed reviews.
- * With none, the score is only a platform baseline: it is shown as "not
- * enough data", and is neither a low-risk filter match nor sorted as the
- * lowest risk (DOS/Rate#1249).
+ * Whether a merchant's review risk score may be shown as a measurement. A
+ * breakdown that counts no analysed review (0, or a malformed count) means
+ * the score is only a platform baseline: it is shown as "not enough data",
+ * and is neither a low-risk filter match nor sorted as the lowest risk
+ * (DOS/Rate#1249). A missing breakdown or count says nothing either way, so
+ * a stored score stays (an offer's seller often carries no breakdown).
  */
 export function hasReviewRiskEvidence(
   breakdown: { total_reviews?: unknown } | null | undefined
 ): boolean {
-  const total = Number(breakdown?.total_reviews);
+  const rawTotal = breakdown?.total_reviews;
+  if (rawTotal == null) return true;
+  const total = Number(rawTotal);
   return Number.isFinite(total) && total > 0;
+}
+
+/**
+ * The review risk score a public payload carries: null when the store has no
+ * analysed review to score (DOS/Rate#1258), else the score clamped to 0-100.
+ */
+export function reviewRiskScoreOrNull(merchant: {
+  review_risk_score?: number | string | null;
+  review_risk_breakdown?: { total_reviews?: unknown } | null;
+}): number | null {
+  if (!hasReviewRiskEvidence(merchant?.review_risk_breakdown)) return null;
+  const raw = merchant?.review_risk_score;
+  const score = Number(raw);
+  if (raw == null || (typeof raw === 'string' && !raw.trim())) return null;
+  if (!Number.isFinite(score)) return null;
+  return Math.max(0, Math.min(100, Math.round(score)));
 }

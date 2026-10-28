@@ -808,7 +808,8 @@
     "checkedStatus": "Zkontrolováno",
     "errInspectFailed": "Tento odkaz se nepodařilo zkontrolovat.",
     "errNetwork": "Chyba sítě, zkuste to znovu.",
-    "loading": "Načítání..."
+    "loading": "Načítání...",
+    "reviewRiskNoData": "nedostatek dat"
   },
   "merchants": {
     "dirMetaTitle": "Důvěryhodnost prodejců | Rate.vn",
@@ -972,7 +973,8 @@
     "mdAuthenticLineNoReviews": "- **Podíl skutečných recenzí:** zatím žádné recenze",
     "listingUnavailableBadge": "Není skladem",
     "listingUnavailableTitle": "Obchod jej hlásí jako vyprodaný nebo ukončený. Cena je naposledy zjištěná, ne aktuální.",
-    "listingUnavailableAudit": "Není skladem, sleva se neposuzuje"
+    "listingUnavailableAudit": "Není skladem, sleva se neposuzuje",
+    "listingDiscontinuedBadge": "Ukončený prodej"
   },
   "productDetail": {
     "notFoundTitle": "Produkt nenalezen | Rate.vn",
@@ -1181,7 +1183,10 @@
     "heroPriceLine": "Od <strong>{price} ₫</strong> · {count, plural, one {# prodejce} few {# prodejci} other {# prodejců}}",
     "specsShowAll": "Zobrazit všechny parametry",
     "specsShowLess": "Zobrazit méně parametrů",
-    "exportMenu": "Exportovat data"
+    "exportMenu": "Exportovat data",
+    "offersReviewRiskLabel": "Riziko recenzí",
+    "offersReviewRiskNoData": "nedostatek dat",
+    "offersDiscontinuedBadge": "Ukončený prodej"
   },
   "homePage": {
     "catDescSmartphones": "Filtrovat podle čipsetu, RAM/ROM, obnovovací frekvence Hz, baterie mAh a nabíjení W",
@@ -1784,7 +1789,8 @@
     "trustBadge": "Důvěra: {score}/100",
     "merchantRiskLine": "Riziko podvodu: <b>{scam}/100</b> • Riziko recenzí: <b>{review}/100</b>",
     "officialMallBadge": "Oficiální Mall",
-    "scamRiskShort": "Riziko podvodu: {score}/100"
+    "scamRiskShort": "Riziko podvodu: {score}/100",
+    "merchantRiskLineNoReviews": "Riziko podvodu: <b>{scam}/100</b> • Riziko recenzí: <b>nedostatek dat</b>"
   },
   "authPortal": {
     "metaLoginTitle": "Přihlášení k účtu | Rate.vn",

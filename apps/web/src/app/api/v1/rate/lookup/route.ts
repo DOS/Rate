@@ -6,6 +6,7 @@ import {
 import {
   PUBLIC_API_CORS_HEADERS,
   jsonApiError,
+  withPublicReviewRisk,
   parseBoundedStringParam,
 } from '@/server/rate/api-handler';
 
@@ -49,6 +50,9 @@ export async function GET(request: NextRequest) {
         ok: true,
         data: {
           ...result,
+          merchantProfile: result.merchantProfile
+            ? withPublicReviewRisk(result.merchantProfile)
+            : null,
           radarSignal,
         },
       },

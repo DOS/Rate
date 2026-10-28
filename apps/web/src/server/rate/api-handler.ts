@@ -1,5 +1,6 @@
 import 'server-only';
 import { NextResponse } from 'next/server';
+import { reviewRiskScoreOrNull } from '@/lib/merchant-risk-tone';
 import {
   getCategorySpecTemplate,
   plausibleMinPrice,
@@ -15,6 +16,24 @@ import {
   isOfferUnavailable,
   type OfferAvailability,
 } from '@/lib/product-market-stats';
+
+/**
+ * A merchant as public payloads carry it: `review_risk_score` is null when
+ * the store has no analysed review, so no client reads a platform baseline
+ * as a measurement (DOS/Rate#1258).
+ */
+export function withPublicReviewRisk<
+  T extends {
+    review_risk_score?: number | string | null;
+    review_risk_breakdown?: { total_reviews?: unknown } | null;
+  },
+>(
+  merchant: T
+): Omit<T, 'review_risk_score'> & {
+  review_risk_score: number | null;
+} {
+  return { ...merchant, review_risk_score: reviewRiskScoreOrNull(merchant) };
+}
 
 export const PUBLIC_API_CORS_HEADERS: Record<string, string> = {
   'Access-Control-Allow-Origin': '*',

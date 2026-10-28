@@ -1069,6 +1069,16 @@ async function sellerExtrasForTrustViewRows(
   return extras;
 }
 
+/** The breakdown of a seller with no analysed review (DOS/Rate#1258). */
+const NO_ANALYSED_REVIEWS_BREAKDOWN: Readonly<Record<string, number>> = {
+  total_reviews: 0,
+  authentic_count: 0,
+  coin_spam_count: 0,
+  seeding_fake_count: 0,
+  sabotage_or_bombing_count: 0,
+  suspicious_ratio_pct: 0,
+};
+
 export function mapTrustViewRowToMerchantOffer(
   row: RawTrustViewRow,
   followerCount?: number,
@@ -1103,12 +1113,16 @@ export function mapTrustViewRowToMerchantOffer(
   const priceCurrent = toSafeOfferPrice(safeRow.price_current);
   const cleanPlatform = sanitizeOfferString(safeRow.platform).toLowerCase();
   const cleanLocation = sanitizeOfferString(safeRow.merchant_location);
+  // A baseline seller carries a breakdown counting no review, so every
+  // surface reads its score as "not enough data" (DOS/Rate#1258).
   const safeBreakdown =
-    safeRow.review_risk_breakdown &&
-    typeof safeRow.review_risk_breakdown === 'object' &&
-    !Array.isArray(safeRow.review_risk_breakdown)
-      ? safeRow.review_risk_breakdown
-      : null;
+    isUnscoredTrustViewRow(safeRow) && hasSeller
+      ? { ...NO_ANALYSED_REVIEWS_BREAKDOWN }
+      : safeRow.review_risk_breakdown &&
+          typeof safeRow.review_risk_breakdown === 'object' &&
+          !Array.isArray(safeRow.review_risk_breakdown)
+        ? safeRow.review_risk_breakdown
+        : null;
   return {
     id: sanitizeOfferString(safeRow.id),
     platform: cleanPlatform,
@@ -1179,6 +1193,13 @@ export function mapOfferRowToMerchantOffer(item: RawOfferRow): MerchantOffer {
     0
   );
   // An offer with no merchant row has no seller to give a baseline (#1099).
+  const hasStoredScore =
+    (merchantObj?.review_risk_score != null &&
+      hasPersistedReviewRisk(
+        columnReviewRisk,
+        merchantObj.review_risk_breakdown
+      )) ||
+    typeof meta?.review_risk_score === 'number';
   const reviewRisk =
     merchantObj?.review_risk_score != null &&
     hasPersistedReviewRisk(columnReviewRisk, merchantObj.review_risk_breakdown)
@@ -1210,18 +1231,21 @@ export function mapOfferRowToMerchantOffer(item: RawOfferRow): MerchantOffer {
     Object.keys(merchantObj.review_risk_breakdown).length > 0
       ? merchantObj.review_risk_breakdown
       : null;
+  // A baseline seller carries a breakdown counting no review (#1258).
   const breakdown =
-    topLevelBreakdown ??
-    (meta?.review_risk_breakdown &&
-    typeof meta.review_risk_breakdown === 'object' &&
-    !Array.isArray(meta.review_risk_breakdown) &&
-    Object.keys(meta.review_risk_breakdown as Record<string, unknown>).length >
-      0
-      ? (meta.review_risk_breakdown as Record<string, unknown>)
-      : meta &&
-          ('review_risk_score' in meta || 'seeding_spam_ratio_pct' in meta)
-        ? meta
-        : null);
+    merchantObj && !hasStoredScore
+      ? { ...NO_ANALYSED_REVIEWS_BREAKDOWN }
+      : (topLevelBreakdown ??
+        (meta?.review_risk_breakdown &&
+        typeof meta.review_risk_breakdown === 'object' &&
+        !Array.isArray(meta.review_risk_breakdown) &&
+        Object.keys(meta.review_risk_breakdown as Record<string, unknown>)
+          .length > 0
+          ? (meta.review_risk_breakdown as Record<string, unknown>)
+          : meta &&
+              ('review_risk_score' in meta || 'seeding_spam_ratio_pct' in meta)
+            ? meta
+            : null));
   const priceCurrent = toSafeOfferPrice(safeItem.price_current);
   const rawMerchantRating =
     typeof merchantObj?.rating_star === 'number' ||
@@ -2872,9 +2896,12 @@ export async function getMerchantsList(
     productIdsByMerchant.set(p.merchant_id, idList);
   }
 
+  // Reviews are read for every store without a persisted breakdown, also
+  // one with a stored score: the breakdown says whether reviews were
+  // analysed, as on the profile, which reads them too (DOS/Rate#1258).
   const unscoredProductIds: string[] = [];
   for (const m of merchants) {
-    if (!extractPersistedBreakdown(m) && !hasStoredReviewRisk(m)) {
+    if (!extractPersistedBreakdown(m)) {
       const mProdIds = productIdsByMerchant.get(m.id);
       if (mProdIds && mProdIds.length > 0) {
         unscoredProductIds.push(...mProdIds);
@@ -2963,14 +2990,13 @@ export async function getMerchantsList(
     const livePrices = livePricesByMerchant.get(m.id) ?? [];
     const persistedBreakdown = extractPersistedBreakdown(m);
     const mReviews = mappedReviewsByMerchant.get(m.id) ?? [];
-    const dynamicRisk =
-      persistedBreakdown || hasStoredReviewRisk(m)
-        ? null
-        : computeDynamicReviewRisk(mReviews, {
-            isOfficial: isStrictOfferOfficialFlag(m.is_official),
-            platform: m.platform,
-            followerCount: Number(m.follower_count) || 0,
-          });
+    const dynamicRisk = persistedBreakdown
+      ? null
+      : computeDynamicReviewRisk(mReviews, {
+          isOfficial: isStrictOfferOfficialFlag(m.is_official),
+          platform: m.platform,
+          followerCount: Number(m.follower_count) || 0,
+        });
     const meta = (
       m.metadata && typeof m.metadata === 'object' && !Array.isArray(m.metadata)
         ? m.metadata
@@ -2983,10 +3009,12 @@ export async function getMerchantsList(
         ? toSafeRiskScore100(meta.dosafe_risk_score, 0)
         : baseRisk;
     const persistedReviewRisk = persistedReviewRiskOf(m);
-    const effectiveReviewRisk = Math.max(
-      dynamicRisk?.reviewRiskScore ?? 0,
-      persistedReviewRisk
-    );
+    // A stored score covers all of the seller's reviews: it wins over the
+    // one computed here, as on the profile (#684).
+    const effectiveReviewRisk =
+      persistedBreakdown || hasStoredReviewRisk(m)
+        ? persistedReviewRisk
+        : Math.max(dynamicRisk?.reviewRiskScore ?? 0, persistedReviewRisk);
     const breakdown = persistedBreakdown ??
       dynamicRisk?.breakdown ?? {
         total_reviews: 0,

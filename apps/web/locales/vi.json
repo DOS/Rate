@@ -808,7 +808,8 @@
     "checkedStatus": "Đã kiểm tra",
     "errInspectFailed": "Không kiểm tra được link này.",
     "errNetwork": "Lỗi mạng, vui lòng thử lại.",
-    "loading": "Đang tải..."
+    "loading": "Đang tải...",
+    "reviewRiskNoData": "chưa đủ dữ liệu"
   },
   "merchants": {
     "dirMetaTitle": "Độ tin cậy gian hàng trên các sàn | Rate.vn",
@@ -972,7 +973,8 @@
     "mdAuthenticLineNoReviews": "- **Tỷ lệ đánh giá thật:** chưa có đánh giá",
     "listingUnavailableBadge": "Hết hàng",
     "listingUnavailableTitle": "Gian hàng báo hết hàng hoặc ngừng bán. Giá là giá ghi nhận lần cuối, không phải giá đang bán.",
-    "listingUnavailableAudit": "Hết hàng, không xét khuyến mãi"
+    "listingUnavailableAudit": "Hết hàng, không xét khuyến mãi",
+    "listingDiscontinuedBadge": "Ngừng bán"
   },
   "productDetail": {
     "notFoundTitle": "Không tìm thấy sản phẩm | Rate.vn",
@@ -1181,7 +1183,10 @@
     "heroPriceLine": "Từ <strong>{price} ₫</strong> · {count} nơi bán",
     "specsShowAll": "Xem toàn bộ thông số",
     "specsShowLess": "Thu gọn thông số",
-    "exportMenu": "Xuất dữ liệu"
+    "exportMenu": "Xuất dữ liệu",
+    "offersReviewRiskLabel": "Rủi ro đánh giá",
+    "offersReviewRiskNoData": "chưa đủ dữ liệu",
+    "offersDiscontinuedBadge": "Ngừng bán"
   },
   "homePage": {
     "catDescSmartphones": "Lọc theo chipset, RAM/ROM, tần số quét Hz, pin mAh & sạc nhanh W",
@@ -1784,7 +1789,8 @@
     "trustBadge": "Tin cậy: {score}/100",
     "merchantRiskLine": "Rủi ro lừa đảo: <b>{scam}/100</b> • Rủi ro đánh giá: <b>{review}/100</b>",
     "officialMallBadge": "Mall chính hãng",
-    "scamRiskShort": "Rủi ro lừa đảo: {score}/100"
+    "scamRiskShort": "Rủi ro lừa đảo: {score}/100",
+    "merchantRiskLineNoReviews": "Rủi ro lừa đảo: <b>{scam}/100</b> • Rủi ro đánh giá: <b>chưa đủ dữ liệu</b>"
   },
   "authPortal": {
     "metaLoginTitle": "Đăng nhập tài khoản | Rate.vn",

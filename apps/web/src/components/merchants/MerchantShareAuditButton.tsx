@@ -205,7 +205,8 @@ export default function MerchantShareAuditButton({
       safeTrustScore,
       safeTrustLevelLabel,
       safeDosafeRisk,
-      safeSeedingRisk,
+      // Empty without analysed reviews: no measured risk (DOS/Rate#1258).
+      safeTotalReviews > 0 ? safeSeedingRisk : '',
       safeGenuineDeals,
       safeFakeTraps,
       safeAuthenticReviews,
@@ -238,7 +239,7 @@ export default function MerchantShareAuditButton({
         trustScore: safeTrustScore,
         trustLevelLabel: safeTrustLevelLabel,
         dosafeRiskScore: safeDosafeRisk,
-        reviewSeedingRiskScore: safeSeedingRisk,
+        reviewSeedingRiskScore: safeTotalReviews > 0 ? safeSeedingRisk : null,
         genuineDealCount: safeGenuineDeals,
         fakeSaleTrapCount: safeFakeTraps,
         authenticReviews: safeAuthenticReviews,

@@ -24,7 +24,10 @@ import {
   type MerchantSeedingTier,
   type MerchantSortOption,
 } from '@/lib/merchant-directory';
-import { hasReviewRiskEvidence } from '@/lib/merchant-risk-tone';
+import {
+  hasReviewRiskEvidence,
+  reviewRiskScoreOrNull,
+} from '@/lib/merchant-risk-tone';
 import { selectMerchantRadar } from '@/lib/deal-radar';
 import { useDealRadarPayload } from '@/components/radar/use-deal-radar';
 import { useLocale, useTranslations } from 'next-intl';
@@ -435,7 +438,10 @@ export default function MerchantDirectoryExplorer({
         sanitizeMerchantAuditText(m.platform_shop_id, '', 80),
         m.is_official ? 'true' : 'false',
         String(sanitizeMerchantScore100(m.trust_score)),
-        String(sanitizeMerchantScore100(m.review_risk_score)),
+        // Empty without analysed reviews (DOS/Rate#1258).
+        hasReviewRiskEvidence(m.review_risk_breakdown)
+          ? String(sanitizeMerchantScore100(m.review_risk_score))
+          : '',
         String(sanitizeMerchantCount(rStats.genuineDealCount)),
         String(sanitizeMerchantCount(rStats.fakeTrapCount)),
         String(sanitizeMerchantCount(m.review_risk_breakdown?.authentic_count)),
@@ -476,6 +482,8 @@ export default function MerchantDirectoryExplorer({
       merchantCount: filteredMerchants.length,
       merchants: filteredMerchants.map((m) => ({
         ...m,
+        // Null without analysed reviews (DOS/Rate#1258).
+        review_risk_score: reviewRiskScoreOrNull(m),
         dealRadarStats: getMerchantRadarStats(m),
       })),
     };

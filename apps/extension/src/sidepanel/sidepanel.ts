@@ -213,10 +213,18 @@ interface MerchantTrustFeedItem {
   slug: string | null;
   is_official: boolean;
   dosafe_risk_score: number;
-  review_risk_score: number;
+  /** Null when the store has no analysed review (DOS/Rate#1258). */
+  review_risk_score: number | null;
   risk_score: number;
   trust_score: number;
   product_count: number;
+}
+
+// A store with no analysed review has no review risk score (DOS/Rate#1258).
+function reviewRiskText(score: number | null | undefined): string {
+  return score == null
+    ? 'chưa đủ dữ liệu'
+    : formatSafeNumber(score, { min: 0, max: 100 });
 }
 
 async function fetchAndRenderMerchantTrustDirectory(
@@ -278,7 +286,7 @@ async function fetchAndRenderMerchantTrustDirectory(
                     ${m.is_official ? '<span style="color:#34d399;font-size: 13px;">[Mall]</span>' : ''}
                   </div>
                   <div class="offer-meta">
-                    ${escapeHtml(m.platform.toUpperCase())} (${formatSafeNumber(m.product_count, { min: 0 })} SP) - Rủi ro lừa đảo: ${formatSafeNumber(m.dosafe_risk_score, { min: 0, max: 100 })} | Rủi ro đánh giá: ${formatSafeNumber(m.review_risk_score, { min: 0, max: 100 })}
+                    ${escapeHtml(m.platform.toUpperCase())} (${formatSafeNumber(m.product_count, { min: 0 })} SP) - Rủi ro lừa đảo: ${formatSafeNumber(m.dosafe_risk_score, { min: 0, max: 100 })} | Rủi ro đánh giá: ${reviewRiskText(m.review_risk_score)}
                   </div>
                 </div>
                 <a href="${detailHref}" target="_blank" rel="noopener noreferrer" class="offer-price" style="text-decoration:none;color:${trustColor};">
@@ -464,7 +472,7 @@ function renderPanelContent(
           </div>
           <div class="stat-box">
             <div class="stat-label">Rủi ro lừa đảo / đánh giá</div>
-            <div class="stat-val">${formatSafeNumber(merchant.dosafe_risk_score, { min: 0, max: 100 })} / ${formatSafeNumber(merchant.review_risk_score, { min: 0, max: 100 })}</div>
+            <div class="stat-val">${formatSafeNumber(merchant.dosafe_risk_score, { min: 0, max: 100 })} / ${reviewRiskText(merchant.review_risk_score)}</div>
           </div>
         </div>
       </div>
