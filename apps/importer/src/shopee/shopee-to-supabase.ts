@@ -97,21 +97,39 @@ const SPEC_FIELD_GROUP_KEYS = [
   'regulatory',
 ] as const;
 
+// A size or a slash list of sizes with its unit at the end ("1TB",
+// "128/256/512GB", "1.5/2TB", "512GB/1TB"), not glued to a model name and not
+// RAM ("64GB RAM", "RAM 16GB").
+const TITLE_SIZE_LIST_RE =
+  /(?<![\w.,])(?<!(?<!\d\s*(?:GB|TB)\s*)RAM\s{0,3})((?:\d+(?:[.,]\d+)?\s*(?:GB|TB)?\s*\/\s*)*\d+(?:[.,]\d+)?)\s*(GB|TB)\b(?!\s*RAM)/gi;
+
+/** The storage sizes, in GB, a title names (DOS/Rate#1197). */
+export function titleStorageSizesGb(title: string): number[] {
+  const sizes: number[] = [];
+  for (const match of title.matchAll(TITLE_SIZE_LIST_RE)) {
+    const listUnit = match[2].toUpperCase();
+    for (const part of match[1].split('/')) {
+      const sized = /(\d+(?:[.,]\d+)?)\s*(GB|TB)?/i.exec(part.trim());
+      if (!sized) continue;
+      const unit = (sized[2] ?? listUnit).toUpperCase();
+      const value = parseFloat(sized[1].replace(',', '.'));
+      if (Number.isFinite(value) && value > 0) {
+        sizes.push(Math.round(unit === 'TB' ? value * 1024 : value));
+      }
+    }
+  }
+  return sizes;
+}
+
+/** Whether a title names a storage size, also as one of a list. */
+export function titleNamesStorage(title: string, storageGb: number): boolean {
+  return titleStorageSizesGb(title).includes(storageGb);
+}
+
 /**
  * Returns true if at least one of the 10 specification field groups contains a
  * non-empty value (ignoring top-level metadata keys such as `category_slug`).
  */
-/**
- * Whether a title names a storage size, also as one of a list such as
- * "256/512GB" (DOS/Rate#1197).
- */
-export function titleNamesStorage(title: string, storageGb: number): boolean {
-  if (!Number.isInteger(storageGb) || storageGb <= 0) return false;
-  const forms = [`${storageGb}\\s*GB`, `${storageGb}\\s*\\/\\s*\\d+(?:[.,]\\d+)?\\s*(?:GB|TB)`];
-  if (storageGb % 1024 === 0) forms.push(`${storageGb / 1024}\\s*TB`);
-  return new RegExp(`(?<![\\d.,])(?:${forms.join('|')})\\b`, 'i').test(title);
-}
-
 export function hasPopulatedSpecificationGroups(specs: unknown): boolean {
   if (!specs || typeof specs !== 'object' || Array.isArray(specs)) return false;
   const record = specs as Record<string, unknown>;

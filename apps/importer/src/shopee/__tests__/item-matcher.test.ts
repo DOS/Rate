@@ -818,7 +818,7 @@ async function run() {
     // the listing is matched under the hint's Item (DOS/Rate#1197).
     const conflict = await ingest(
       'item',
-      'Laptop ASUS Zenbook S 14 UX5406AA 1TB',
+      'Laptop ASUS UX5406AA 1TB chính hãng',
       zenbook,
       {
         hint: {

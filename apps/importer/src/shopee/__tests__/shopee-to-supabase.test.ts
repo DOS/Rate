@@ -12,6 +12,7 @@ import {
   ShopeeIngestionPipeline,
   hasPopulatedSpecificationGroups,
   titleNamesStorage,
+  titleStorageSizesGb,
   normalizeScrapedProductPrices,
   platformReviewIdFor,
 } from '../shopee-to-supabase.js';
@@ -554,6 +555,15 @@ async function runTests() {
   assert.equal(titleNamesStorage('ThinkPad X1 Carbon Gen 12 1TB SSD', 512), false);
   assert.equal(titleNamesStorage('Model 2512GB', 512), false);
   assert.equal(titleNamesStorage('Model 1.5TB', 512), false);
+  assert.equal(titleNamesStorage('Galaxy S25 128/256/512GB', 128), true);
+  assert.equal(titleNamesStorage('Ổ cứng 1/2TB', 1024), true);
+  assert.equal(titleNamesStorage('SSD 1.5/2TB', 1536), true);
+  assert.equal(titleNamesStorage('iPhone 512GB/1TB', 1024), true);
+  // RAM and digits glued to a model name are not storage.
+  assert.equal(titleNamesStorage('Laptop Lenovo ThinkPad P16 64GB RAM 1TB SSD', 64), false);
+  assert.equal(titleNamesStorage('Laptop RAM 16GB SSD 512GB', 16), false);
+  assert.equal(titleNamesStorage('Tecno Spark64/128GB', 64), false);
+  assert.deepEqual(titleStorageSizesGb('Laptop Lenovo ThinkPad P16 64GB RAM 1TB SSD'), [1024]);
   const { stub: listStub } = createPipelineStubSupabase({
     hintRow: { id: 'master-hint-256', storage_gb: 256 },
   });
