@@ -10,5 +10,6 @@ export function compareCategoryParam(params: {
 }): string | undefined {
   const first = (v: string | string[] | undefined) =>
     Array.isArray(v) ? v[0] : v;
-  return first(params.category) ?? first(params.cat);
+  // An empty value is no value, as in the API routes.
+  return first(params.category) || first(params.cat) || undefined;
 }

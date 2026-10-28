@@ -1,4 +1,3 @@
-import { compareCategoryParam } from '@/lib/compare-params';
 import type { Metadata } from 'next';
 import { getTranslations, setRequestLocale } from 'next-intl/server';
 import { Link } from '@/lib/navigation';
@@ -10,6 +9,7 @@ import {
 } from '@/server/rate';
 import { resolveCompareSlugs } from '@/server/rate/item-compare';
 import { getItemSlugsFor } from '@/server/rate/item-directory';
+import { compareCategoryParam } from '@/lib/compare-params';
 import { normalizeRateLocale } from '@/lib/rate-i18n';
 import { defaultOpenGraph, fitTitle, fitDescription } from '@/lib/seo';
 import CompareWorkspace from '@/components/compare/CompareWorkspace';

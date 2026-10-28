@@ -11,4 +11,5 @@ assert.equal(
 );
 assert.equal(compareCategoryParam({ cat: ['tablets', 'x'] }), 'tablets');
 assert.equal(compareCategoryParam({}), undefined);
+assert.equal(compareCategoryParam({ category: '', cat: 'earbuds' }), 'earbuds');
 console.log('✅ compare params');
