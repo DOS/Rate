@@ -36,6 +36,7 @@ const USER = {
   email: 'owner@rate.test',
 };
 const MASTER_ID = '99999999-8888-4777-8666-555555555555';
+const DRAFT_MASTER_ID = '99999999-8888-4777-8666-444444444444';
 
 process.env.NEXT_PUBLIC_SUPABASE_URL = SUPABASE_URL;
 process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = ANON_KEY;
@@ -123,6 +124,18 @@ globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
   if (pathname.startsWith('/rest/v1/rpc/')) {
     const r = rpcResponder(pathname.slice('/rest/v1/rpc/'.length), body);
     return jsonResponse(r.status, r.json);
+  }
+  // A draft product: a status-filtered read finds nothing (DOS/Rate#1309).
+  if (
+    pathname === '/rest/v1/master_products' &&
+    new URL(url).searchParams.get('id') === `eq.${DRAFT_MASTER_ID}`
+  ) {
+    return jsonResponse(
+      200,
+      new URL(url).searchParams.get('status') === 'eq.published'
+        ? null
+        : { id: DRAFT_MASTER_ID, status: 'draft' }
+    );
   }
   if (pathname === '/rest/v1/master_products') {
     return jsonResponse(200, [
@@ -324,6 +337,46 @@ async function testReviews() {
 
   console.log(
     '  ✅ POST /api/v1/rate/reviews requires a user, runs as that user and never fakes success'
+  );
+}
+
+// GET reviews by id serves published products only, like the slug path (DOS/Rate#1309).
+async function testReviewsByIdPublishedOnly() {
+  const { GET } = await import('../reviews/route');
+  type Req = Parameters<typeof GET>[0];
+  const get = (id: string) =>
+    GET({
+      nextUrl: new URL(
+        `http://localhost/api/v1/rate/reviews?masterProductId=${id}`
+      ),
+      headers: new Headers(),
+    } as unknown as Req);
+
+  calls = [];
+  let res = await get(DRAFT_MASTER_ID);
+  assert.equal(res.status, 404);
+  assert.equal((await res.json()).code, 'NOT_FOUND');
+  const statusRead = calls.find((c) =>
+    c.url.includes('/rest/v1/master_products')
+  );
+  assert.ok(
+    statusRead?.url.includes('status=eq.published'),
+    'the id is checked against published products'
+  );
+  assert.equal(
+    calls.filter(
+      (c) => c.url.includes('/rest/v1/products') || c.url.includes('/reviews')
+    ).length,
+    0,
+    'no listing or review is read for a draft product'
+  );
+
+  calls = [];
+  res = await get(MASTER_ID);
+  assert.equal(res.status, 200);
+  assert.equal((await res.json()).masterProductId, MASTER_ID);
+  console.log(
+    '  ✅ GET /api/v1/rate/reviews?masterProductId= serves published products only (#1309)'
   );
 }
 
@@ -1549,6 +1602,7 @@ async function testMerchantCacheRevalidateAndDomainBounds() {
 async function main() {
   console.log('🧪 Public write-path security suite (#155)');
   await testReviews();
+  await testReviewsByIdPublishedOnly();
   await testWatchlist();
   await testCookieSessions();
   await testFilterBoundsAndWatchlistPrices();

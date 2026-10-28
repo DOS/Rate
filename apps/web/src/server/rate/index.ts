@@ -17,6 +17,7 @@ import {
   getMasterProductOffersBatch as _getMasterProductOffersBatch,
   getMasterProductPriceHistory as _getMasterProductPriceHistory,
   getMasterProductReviews as _getMasterProductReviews,
+  isPublishedMasterProduct as _isPublishedMasterProduct,
   getMasterProductReviewSummary as _getMasterProductReviewSummary,
   getMasterProducts as _getMasterProducts,
   attachMerchantDiscountAnalysis as _attachMerchantDiscountAnalysis,
@@ -337,6 +338,24 @@ const _getCachedMasterProductReviewsByKey = cache((cleanId: string) =>
     }
   )(cleanId)
 );
+
+const _getCachedIsPublishedMasterProductByKey = cache((cleanId: string) =>
+  withRateDataCache(
+    _isPublishedMasterProduct,
+    ['rate-master-product-published', cleanId],
+    {
+      revalidate: 300,
+      tags: [RATE_CACHE_TAGS.PRODUCTS],
+    }
+  )(cleanId)
+);
+
+/** Whether the id names a published master product (DOS/Rate#1309). */
+export function isCachedPublishedMasterProduct(masterProductId: string) {
+  const cleanId = sanitizeCachedEntityId(masterProductId);
+  if (!cleanId) return Promise.resolve(false);
+  return _getCachedIsPublishedMasterProductByKey(cleanId);
+}
 
 export function getCachedMasterProductReviews(masterProductId: string) {
   const cleanId = sanitizeCachedEntityId(masterProductId);

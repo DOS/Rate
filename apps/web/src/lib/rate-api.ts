@@ -1599,6 +1599,31 @@ export function resolveIncludeInRating(
  * Fetch reviews across listings grouped under a master product,
  * including JReviews vote metrics and AI transparency flags.
  */
+/**
+ * Whether a master product id names a published product. Reads that take an id
+ * from a request (reviews by `masterProductId`) serve only what the slug path
+ * would (DOS/Rate#1309).
+ */
+export async function isPublishedMasterProduct(
+  masterId: string
+): Promise<boolean> {
+  const supabase = getRateClient();
+  const { data, error } = await supabase
+    .from('master_products')
+    .select('id')
+    .eq('id', masterId)
+    .eq('status', 'published')
+    .maybeSingle();
+  if (error) {
+    log.error('master product status lookup failed', {
+      masterId,
+      message: error.message,
+    });
+    throw new RateDataUnavailableError('master product', error);
+  }
+  return Boolean(data);
+}
+
 export async function getMasterProductReviews(
   masterId: string
 ): Promise<ReviewItem[]> {
