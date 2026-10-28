@@ -1,5 +1,6 @@
 'use client';
 
+import { reviewRiskScoreOrNull } from '@/lib/merchant-review-risk';
 import React, { useEffect, useState } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
 import { discountVerdictCopy } from '@/lib/discount-verdict-copy';
@@ -278,7 +279,7 @@ export default function DeepInspectWorkspace({
           : []),
         ...(merchant
           ? [
-              `- **${t('mdSeller')}:** ${merchant.name} (${merchant.platform.toUpperCase()}) | ${t('mdTrustScore')}: **${merchant.trust_score}/100** (${t('dosafeRiskLabel')}: ${merchant.dosafe_risk_score}/100, ${t('reviewRiskLabel')}: ${merchant.review_risk_score}/100)`,
+              `- **${t('mdSeller')}:** ${merchant.name} (${merchant.platform.toUpperCase()}) | ${t('mdTrustScore')}: **${merchant.trust_score}/100** (${t('dosafeRiskLabel')}: ${merchant.dosafe_risk_score}/100, ${t('reviewRiskLabel')}: ${reviewRiskScoreOrNull(merchant) == null ? t('reviewRiskNoData') : `${reviewRiskScoreOrNull(merchant)}/100`})`,
             ]
           : []),
         `- **${t('mdLink')}:** ${shareUrl}`,
@@ -948,7 +949,9 @@ export default function DeepInspectWorkspace({
                             : 'text-primary'
                         }
                       >
-                        {Number(merchant.review_risk_score || 0).toFixed(0)}/100
+                        {reviewRiskScoreOrNull(merchant) == null
+                          ? t('reviewRiskNoData')
+                          : `${reviewRiskScoreOrNull(merchant)}/100`}
                       </strong>
                     </div>
                     <div className="progress" style={{ height: 8 }}>

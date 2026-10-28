@@ -803,7 +803,8 @@
     "checkedStatus": "Đã kiểm tra",
     "errInspectFailed": "Không kiểm tra được link này.",
     "errNetwork": "Lỗi mạng, vui lòng thử lại.",
-    "loading": "Đang tải..."
+    "loading": "Đang tải...",
+    "reviewRiskNoData": "chưa đủ dữ liệu"
   },
   "merchants": {
     "dirMetaTitle": "Độ tin cậy gian hàng trên các sàn | Rate.vn",
@@ -870,7 +871,7 @@
     "notFoundTitle": "Không tìm thấy gian hàng | Rate.vn",
     "profileMetaTitle": "{name} ({platform}) - Tin cậy {score}/100 | Rate.vn",
     "profileMetaTitleShort": "{name} - Tin cậy {score}/100",
-    "profileMetaDesc": "Hồ sơ gian hàng {name}: rủi ro lừa đảo DOSafe ({dosafe}/100), rủi ro đánh giá ({seeding}/100) và lịch sử giá {count} sản phẩm trên Rate.vn.",
+    "profileMetaDesc": "Hồ sơ gian hàng {name}: rủi ro lừa đảo DOSafe ({dosafe}/100), rủi ro đánh giá ({seeding}) và lịch sử giá {count} sản phẩm trên Rate.vn.",
     "trustHigh": "Độ tin cậy cao (An toàn)",
     "trustModerate": "Độ tin cậy trung bình (Cần lưu ý)",
     "trustRisk": "Cảnh báo rủi ro cao",
@@ -950,7 +951,7 @@
     "mdCategoryLine": "- **Phân loại:** {type} | Shop ID: `{shopId}`",
     "mdTrustLine": "- **Điểm tin cậy:** **{score}/100** ({label})",
     "mdDosafeLine": "- **Rủi ro lừa đảo (DOSafe):** {score}/100",
-    "mdSeedingLine": "- **Rủi ro đánh giá:** {score}/100",
+    "mdSeedingLine": "- **Rủi ro đánh giá:** {score}",
     "mdRadarLine": "- **Tín hiệu giá:** 🟢 {genuine} giá đáy đa sàn | 🚨 {traps} cảnh báo giá gốc bị nâng khống",
     "mdAuthenticLine": "- **Tỷ lệ đánh giá thật:** {pct}% ({auth}/{total} đánh giá thật, đã lọc {flagged} đánh giá ảo/spam)",
     "mdProductsLine": "- **Số thiết bị đang theo dõi giá:** {count} mẫu chuẩn hóa",
@@ -960,7 +961,9 @@
     "riskReviewLabel": "Rủi ro đánh giá",
     "trustBadge": "Tin cậy: {score}/100",
     "scamRiskBadge": "Rủi ro lừa đảo: {score}/100",
-    "reviewRiskBadge": "Rủi ro đánh giá: {score}/100"
+    "reviewRiskBadge": "Rủi ro đánh giá: {score}/100",
+    "reviewRiskNoData": "chưa đủ dữ liệu",
+    "reviewRiskNoDataBadge": "Rủi ro đánh giá: chưa đủ dữ liệu"
   },
   "productDetail": {
     "notFoundTitle": "Không tìm thấy sản phẩm | Rate.vn",
@@ -1227,7 +1230,8 @@
     "reviewRiskLabel": "Rủi ro đánh giá",
     "officialMallBadge": "Official Mall",
     "authenticBadge": "Đánh giá thực chất",
-    "starsAria": "{count} trên 5 sao"
+    "starsAria": "{count} trên 5 sao",
+    "reviewRiskNoData": "Chưa đủ dữ liệu"
   },
   "developers": {
     "seoTitle": "Tài liệu REST API v1 cho nhà phát triển | Rate.vn",
@@ -1766,9 +1770,10 @@
     "unmatchedDesc": "Bạn có thể tra cứu các dòng máy chuẩn hóa tương đương hoặc xem hồ sơ các gian hàng chính hãng bên dưới.",
     "searchInSmartphonesBtn": "Tìm trong danh mục điện thoại →",
     "trustBadge": "Tin cậy: {score}/100",
-    "merchantRiskLine": "Rủi ro lừa đảo: <b>{scam}/100</b> • Rủi ro đánh giá: <b>{review}/100</b>",
+    "merchantRiskLine": "Rủi ro lừa đảo: <b>{scam}/100</b> • Rủi ro đánh giá: <b>{review}</b>",
     "officialMallBadge": "Mall chính hãng",
-    "scamRiskShort": "Rủi ro lừa đảo: {score}/100"
+    "scamRiskShort": "Rủi ro lừa đảo: {score}/100",
+    "reviewRiskNoData": "chưa đủ dữ liệu"
   },
   "authPortal": {
     "metaLoginTitle": "Đăng nhập tài khoản | Rate.vn",

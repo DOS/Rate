@@ -803,7 +803,8 @@
     "checkedStatus": "Checked",
     "errInspectFailed": "Could not check this link.",
     "errNetwork": "Network error, please try again.",
-    "loading": "Loading..."
+    "loading": "Loading...",
+    "reviewRiskNoData": "not enough data"
   },
   "merchants": {
     "dirMetaTitle": "Seller trust directory | Rate.vn",
@@ -870,7 +871,7 @@
     "notFoundTitle": "Merchant not found | Rate.vn",
     "profileMetaTitle": "{name} ({platform}) - Trust {score}/100 | Rate.vn",
     "profileMetaTitleShort": "{name} - Trust {score}/100",
-    "profileMetaDesc": "Seller profile for {name}: DOSafe scam risk ({dosafe}/100), review risk ({seeding}/100) and price history across {count} products on Rate.vn.",
+    "profileMetaDesc": "Seller profile for {name}: DOSafe scam risk ({dosafe}/100), review risk ({seeding}) and price history across {count} products on Rate.vn.",
     "trustHigh": "High trust (verified safe)",
     "trustModerate": "Moderate trust (monitor)",
     "trustRisk": "High risk alert",
@@ -950,7 +951,7 @@
     "mdCategoryLine": "- **Tier:** {type} | Shop ID: `{shopId}`",
     "mdTrustLine": "- **Trust score:** **{score}/100** ({label})",
     "mdDosafeLine": "- **Scam risk (DOSafe):** {score}/100",
-    "mdSeedingLine": "- **Review risk:** {score}/100",
+    "mdSeedingLine": "- **Review risk:** {score}",
     "mdRadarLine": "- **Price signals:** 🟢 {genuine} cross-store lows | 🚨 {traps} fake-sale warnings",
     "mdAuthenticLine": "- **Genuine review share:** {pct}% ({auth}/{total} genuine reviews, {flagged} fake/spam filtered)",
     "mdProductsLine": "- **Tracked canonical products:** {count} models",
@@ -960,7 +961,9 @@
     "riskReviewLabel": "Review risk",
     "trustBadge": "Trust: {score}/100",
     "scamRiskBadge": "Scam risk: {score}/100",
-    "reviewRiskBadge": "Review risk: {score}/100"
+    "reviewRiskBadge": "Review risk: {score}/100",
+    "reviewRiskNoData": "not enough data",
+    "reviewRiskNoDataBadge": "Review risk: not enough data"
   },
   "productDetail": {
     "notFoundTitle": "Product not found | Rate.vn",
@@ -1227,7 +1230,8 @@
     "reviewRiskLabel": "Review risk",
     "officialMallBadge": "Official Mall",
     "authenticBadge": "Authentic review",
-    "starsAria": "{count} out of 5 stars"
+    "starsAria": "{count} out of 5 stars",
+    "reviewRiskNoData": "Not enough data"
   },
   "developers": {
     "seoTitle": "REST API v1 docs for developers | Rate.vn",
@@ -1766,9 +1770,10 @@
     "unmatchedDesc": "You can search equivalent normalized models or browse verified merchant profiles below.",
     "searchInSmartphonesBtn": "Search in smartphone catalog →",
     "trustBadge": "Trust: {score}/100",
-    "merchantRiskLine": "Scam risk: <b>{scam}/100</b> • Review risk: <b>{review}/100</b>",
+    "merchantRiskLine": "Scam risk: <b>{scam}/100</b> • Review risk: <b>{review}</b>",
     "officialMallBadge": "Official Mall",
-    "scamRiskShort": "Scam risk: {score}/100"
+    "scamRiskShort": "Scam risk: {score}/100",
+    "reviewRiskNoData": "not enough data"
   },
   "authPortal": {
     "metaLoginTitle": "Sign in | Rate.vn",

@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { reviewRiskScoreOrNull } from '@/lib/merchant-review-risk';
 import { getTranslations, setRequestLocale } from 'next-intl/server';
 import { Link } from '@/lib/navigation';
 import PageShell from './components/page-shell';
@@ -923,8 +924,14 @@ export default async function Home({
                           </div>
                           <div>
                             <dt>{tHome('reviewRiskLabel')}</dt>
-                            <dd className={tone(merchant.review_risk_score)}>
-                              {merchant.review_risk_score}/100
+                            <dd
+                              className={tone(
+                                reviewRiskScoreOrNull(merchant) ?? Number.NaN
+                              )}
+                            >
+                              {reviewRiskScoreOrNull(merchant) == null
+                                ? tHome('reviewRiskNoData')
+                                : `${reviewRiskScoreOrNull(merchant)}/100`}
                             </dd>
                             <dd className="rate-merchant-note">
                               {tHome('flaggedReviewsRatio', {

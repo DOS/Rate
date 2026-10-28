@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { reviewRiskScoreOrNull } from '@/lib/merchant-review-risk';
 import { getTranslations, setRequestLocale } from 'next-intl/server';
 import { notFound } from 'next/navigation';
 import { discountVerdictCopy } from '@/lib/discount-verdict-copy';
@@ -76,7 +77,10 @@ export async function generateMetadata({
     t('profileMetaDesc', {
       name: merchant.name,
       dosafe: merchant.dosafe_risk_score,
-      seeding: merchant.review_risk_score,
+      seeding:
+        reviewRiskScoreOrNull(merchant) == null
+          ? t('reviewRiskNoData')
+          : `${reviewRiskScoreOrNull(merchant)}/100`,
       count: merchant.product_count,
     })
   );
@@ -146,6 +150,7 @@ export default async function MerchantProfilePage({
         : 'bg-danger text-white';
 
   const brk = merchant.review_risk_breakdown;
+  const reviewRisk = reviewRiskScoreOrNull(merchant);
   // No ratio without analysed reviews: 0 of 0 is not "100% authentic".
   const authenticPct =
     brk.total_reviews > 0
@@ -367,7 +372,7 @@ export default async function MerchantProfilePage({
                     trustScore={merchant.trust_score}
                     trustLevelLabel={trustLevelLabel}
                     dosafeRiskScore={merchant.dosafe_risk_score}
-                    reviewSeedingRiskScore={merchant.review_risk_score}
+                    reviewSeedingRiskScore={reviewRiskScoreOrNull(merchant)}
                     authenticReviews={brk.authentic_count}
                     totalReviews={brk.total_reviews}
                     flaggedReviews={Math.max(
@@ -470,19 +475,24 @@ export default async function MerchantProfilePage({
                       {t('layer2Title')}
                     </h2>
                   </div>
-                  <span
-                    className={`badge rounded-pill fs-6 px-3 py-2 ${
-                      merchant.review_risk_score <= 15
-                        ? 'bg-success-subtle text-success'
-                        : merchant.review_risk_score <= 40
-                          ? 'bg-warning-subtle text-warning-emphasis'
-                          : 'bg-danger text-white'
-                    }`}
-                  >
-                    {t('reviewRiskBadge', {
-                      score: merchant.review_risk_score,
-                    })}
-                  </span>
+                  {/* No analysed review, no score (DOS/Rate#1249). */}
+                  {reviewRisk == null ? (
+                    <span className="badge rounded-pill fs-6 bg-light text-secondary border px-3 py-2">
+                      {t('reviewRiskNoDataBadge')}
+                    </span>
+                  ) : (
+                    <span
+                      className={`badge rounded-pill fs-6 px-3 py-2 ${
+                        reviewRisk <= 15
+                          ? 'bg-success-subtle text-success'
+                          : reviewRisk <= 40
+                            ? 'bg-warning-subtle text-warning-emphasis'
+                            : 'bg-danger text-white'
+                      }`}
+                    >
+                      {t('reviewRiskBadge', { score: reviewRisk })}
+                    </span>
+                  )}
                 </div>
 
                 <p

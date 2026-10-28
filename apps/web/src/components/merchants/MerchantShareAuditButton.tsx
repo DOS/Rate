@@ -66,7 +66,8 @@ interface MerchantShareAuditButtonProps {
   readonly trustScore: number;
   readonly trustLevelLabel: string;
   readonly dosafeRiskScore: number;
-  readonly reviewSeedingRiskScore: number;
+  /** null when the store has no analysed review (DOS/Rate#1249). */
+  readonly reviewSeedingRiskScore: number | null;
   readonly authenticReviews: number;
   readonly totalReviews: number;
   readonly flaggedReviews: number;
@@ -105,7 +106,10 @@ export default function MerchantShareAuditButton({
   );
   const safeTrustScore = sanitizeMerchantScore100(trustScore);
   const safeDosafeRisk = sanitizeMerchantScore100(dosafeRiskScore);
-  const safeSeedingRisk = sanitizeMerchantScore100(reviewSeedingRiskScore);
+  const safeSeedingRisk =
+    reviewSeedingRiskScore == null
+      ? null
+      : sanitizeMerchantScore100(reviewSeedingRiskScore);
   const safeTotalReviews = sanitizeMerchantCount(totalReviews);
   const safeAuthenticReviews = Math.min(
     safeTotalReviews > 0
@@ -140,7 +144,12 @@ export default function MerchantShareAuditButton({
           label: safeTrustLevelLabel,
         }),
         t('mdDosafeLine', { score: safeDosafeRisk }),
-        t('mdSeedingLine', { score: safeSeedingRisk }),
+        t('mdSeedingLine', {
+          score:
+            safeSeedingRisk == null
+              ? t('reviewRiskNoData')
+              : `${safeSeedingRisk}/100`,
+        }),
         t('mdRadarLine', {
           genuine: safeGenuineDeals,
           traps: safeFakeTraps,

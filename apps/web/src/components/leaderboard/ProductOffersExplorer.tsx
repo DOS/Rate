@@ -1,5 +1,6 @@
 'use client';
 
+import { reviewRiskScoreOrNull } from '@/lib/merchant-review-risk';
 import { useMemo, useState } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
 import ExportMenu from '@/components/elementary/ExportMenu';
@@ -764,7 +765,7 @@ export default function ProductOffersExplorer({
                           )}
                           /100 | Review Risk:{' '}
                           {formatOfferRiskScore100(
-                            offer.merchant.review_risk_score
+                            reviewRiskScoreOrNull(offer.merchant)
                           )}
                           /100
                         </div>

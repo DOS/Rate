@@ -1,5 +1,6 @@
 'use client';
 
+import { reviewRiskScoreOrNull } from '@/lib/merchant-review-risk';
 import {
   Suspense,
   useCallback,
@@ -252,6 +253,7 @@ export default function MerchantDirectoryExplorer({
       sortTrust: t('sortTrust'),
       sortProducts: t('sortProducts'),
       sortSeeding: t('sortSeeding'),
+      reviewRiskNoData: t('reviewRiskNoData'),
       sortFollowers: t('sortFollowers'),
       resetFilters: t('resetFilters'),
       showingCount: t('showingCount'),
@@ -909,17 +911,23 @@ export default function MerchantDirectoryExplorer({
                               <BsRobot aria-hidden="true" className="me-1" />
                               {labels.riskReviewLabel}
                             </span>
-                            <span
-                              className={`badge rounded-pill rate-tabular ${
-                                merchant.review_risk_score <= 15
-                                  ? 'bg-success-subtle text-success'
-                                  : merchant.review_risk_score <= 40
-                                    ? 'bg-warning-subtle text-warning-emphasis'
-                                    : 'bg-danger-subtle text-danger'
-                              }`}
-                            >
-                              {merchant.review_risk_score}/100
-                            </span>
+                            {reviewRiskScoreOrNull(merchant) == null ? (
+                              <span className="badge rounded-pill bg-light text-secondary border">
+                                {labels.reviewRiskNoData}
+                              </span>
+                            ) : (
+                              <span
+                                className={`badge rounded-pill rate-tabular ${
+                                  merchant.review_risk_score <= 15
+                                    ? 'bg-success-subtle text-success'
+                                    : merchant.review_risk_score <= 40
+                                      ? 'bg-warning-subtle text-warning-emphasis'
+                                      : 'bg-danger-subtle text-danger'
+                                }`}
+                              >
+                                {merchant.review_risk_score}/100
+                              </span>
+                            )}
                           </div>
                           <div
                             className="small text-muted d-none d-sm-block"
