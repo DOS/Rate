@@ -33,7 +33,10 @@ GRANT ALL ON rate.m3_unknown_variant_backup TO service_role;
 
 -- Preconditions (design 7.3): no earbuds master with a sized key (seed drift, fixed by M0),
 -- and no price alert on an unknown variant M3 would archive (an alert needs a size; JOY
--- decides per alert before M3: move it to a sized variant or close it).
+-- decides per alert before M3: move it to a sized variant or close it). The web keeps
+-- running, so price_alerts is locked against writes (reads continue) until M3 commits: no
+-- alert can appear between this check and the retire.
+LOCK TABLE rate.price_alerts IN SHARE MODE;
 DO $$
 DECLARE
   v_sized_earbuds text;
@@ -179,7 +182,7 @@ END $$;
 REVOKE EXECUTE ON FUNCTION rate.items_fill_default_variant() FROM PUBLIC, anon, authenticated;
 DROP TRIGGER IF EXISTS trg_master_products_fill_default_variant ON rate.master_products;
 CREATE TRIGGER trg_master_products_fill_default_variant
-  AFTER INSERT OR UPDATE OF status, item_id ON rate.master_products
+  AFTER INSERT OR UPDATE OF status, item_id, model_key ON rate.master_products
   FOR EACH ROW EXECUTE FUNCTION rate.items_fill_default_variant();
 
 COMMIT;

@@ -66,7 +66,7 @@ SECURITY INVOKER
 SET search_path = ''
 AS $$
   WITH v AS (
-    SELECT m.id, m.slug, m.item_id, m.variant_key, m.min_price, m.storage_gb, m.sort_order,
+    SELECT m.id, m.slug, m.item_id, m.variant_key, m.min_price, m.max_price, m.storage_gb, m.sort_order,
            COALESCE(
              (p_storage_gb IS NULL OR cardinality(p_storage_gb) = 0 OR m.storage_gb = ANY (p_storage_gb))
              AND (p_has_5g IS NULL OR p_has_5g = false OR m.has_5g = true),
@@ -83,7 +83,7 @@ AS $$
       pg_catalog.array_agg(v.variant_key ORDER BY v.sort_order NULLS LAST, v.storage_gb NULLS LAST, v.variant_key)
         FILTER (WHERE v.matching) AS matching_variant_keys,
       min(v.min_price) FILTER (WHERE v.matching AND v.min_price > 0) AS matching_min_price,
-      max(v.min_price) FILTER (WHERE v.matching AND v.min_price > 0) AS matching_max_price,
+      max(GREATEST(v.max_price, v.min_price)) FILTER (WHERE v.matching AND v.min_price > 0) AS matching_max_price,
       (pg_catalog.array_agg(v.id ORDER BY (v.min_price > 0) DESC NULLS LAST, v.min_price NULLS LAST,
          v.sort_order NULLS LAST, v.storage_gb NULLS LAST, v.variant_key) FILTER (WHERE v.matching))[1]
         AS representative_variant_id,

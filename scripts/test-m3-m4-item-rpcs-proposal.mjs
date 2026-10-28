@@ -78,7 +78,7 @@ try {
       ('${m.p128}', 'Acme', 'Phone X', 'acme:phone-x:128gb', 'Acme Phone X 128GB', 'acme-phone-x-128gb',
        '${PHONES}', 'published', 128, 10000000, 10000000, true, '{"chip": "Acme A1"}'),
       ('${m.p256}', 'Acme', 'Phone X', 'acme:phone-x:256gb', 'Acme Phone X 256GB', 'acme-phone-x-256gb',
-       '${PHONES}', 'published', 256, 12000000, 12000000, true, '{"chip": "Acme A1"}'),
+       '${PHONES}', 'published', 256, 12000000, 15000000, true, '{"chip": "Acme A1"}'),
       ('${m.pUnknown}', 'Acme', 'Phone X', 'acme:phone-x:unknown', 'Acme Phone X', 'acme-phone-x-unknown',
        '${PHONES}', 'published', NULL, 0, 0, true, '{}'),
       ('${m.buds}', 'Acme', 'Buds', 'acme:buds:unknown', 'Acme Buds', 'acme-buds',
@@ -140,7 +140,7 @@ try {
                FROM jsonb_array_elements(chips) c)
        FROM rate.search_items_v1(p_category_id => '${PHONES}', p_storage_gb => ARRAY[256])`
     ),
-    'acme-phone-x-256gb|12000000|128gb:false,256gb:true,unknown:false',
+    'acme-phone-x-256gb|15000000|128gb:false,256gb:true,unknown:false',
     'the card links to the cheapest matching variant and shows every size as a chip'
   );
   assert.equal(
