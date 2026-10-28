@@ -9044,16 +9044,18 @@ async function runCoreArchitectureSuite() {
       'x-forwarded-for': ' 203.0.113.10\t99 , 10.0.0.1 ',
     });
     assert.equal(extractClientRateLimitKey(wsHeaders), '203.0.113.1099');
-    // The platform-set IP wins over a client-supplied forwarded chain (#1307).
-    assert.equal(
-      extractClientRateLimitKey(
-        new Headers({
-          'x-vercel-forwarded-for': '198.51.100.7',
-          'x-forwarded-for': '203.0.113.10, 10.0.0.1',
-        })
-      ),
-      '198.51.100.7'
-    );
+    // On Vercel the platform-set IP wins over a client-supplied forwarded
+    // chain; elsewhere that header is client input and ignored (#1307).
+    const vercelHeaders = new Headers({
+      'x-vercel-forwarded-for': '198.51.100.7',
+      'x-forwarded-for': '203.0.113.10, 10.0.0.1',
+    });
+    const previousVercel = process.env.VERCEL;
+    process.env.VERCEL = '1';
+    assert.equal(extractClientRateLimitKey(vercelHeaders), '198.51.100.7');
+    delete process.env.VERCEL;
+    assert.equal(extractClientRateLimitKey(vercelHeaders), '203.0.113.10');
+    if (previousVercel !== undefined) process.env.VERCEL = previousVercel;
 
     const plausibleBoolMaster = withPlausibleMinPrice(
       { min_price: true as unknown as number },

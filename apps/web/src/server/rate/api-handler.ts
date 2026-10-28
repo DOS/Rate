@@ -710,12 +710,15 @@ export function extractClientRateLimitKey(
       .replace(/\s+/g, '')
       .slice(0, 128);
   };
-  // The platform-set client IP first (Vercel writes it; a client cannot), then
-  // the forwarded chain (DOS/Rate#1307).
-  const platformIp = sanitizeIpCandidate(
-    headers.get('x-vercel-forwarded-for')?.split(',')[0]
-  );
-  if (platformIp) return platformIp;
+  // On Vercel, the platform-set client IP first (a client cannot set it
+  // there); anywhere else that header is ordinary client input and ignored
+  // (DOS/Rate#1307).
+  if (process.env.VERCEL === '1') {
+    const platformIp = sanitizeIpCandidate(
+      headers.get('x-vercel-forwarded-for')?.split(',')[0]
+    );
+    if (platformIp) return platformIp;
+  }
   const forwardedFor = headers.get('x-forwarded-for');
   if (forwardedFor) {
     const firstIp = sanitizeIpCandidate(forwardedFor.split(',')[0]);

@@ -329,7 +329,7 @@ async function testInspectRateLimit() {
   const ask = (route: typeof inspect | typeof lookup, ip: string) =>
     route.GET(
       new NextRequest('http://localhost/api/v1/rate/inspect?q=iphone', {
-        headers: { 'x-vercel-forwarded-for': ip },
+        headers: { 'x-forwarded-for': ip },
       })
     );
   for (let i = 0; i < 30; i++) {
