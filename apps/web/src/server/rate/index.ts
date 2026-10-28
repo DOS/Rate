@@ -486,7 +486,8 @@ export async function getCachedMerchantsList(
 const _getCachedMerchantProfileBaseByKey = (cleanId: string) =>
   withRateDataCache(
     _getMerchantProfileBase,
-    ['rate-merchant-profile-base', cleanId],
+    // v2: listings carry availability (DOS/Rate#1248).
+    ['rate-merchant-profile-base-v2', cleanId],
     {
       revalidate: 600,
       tags: [RATE_CACHE_TAGS.MERCHANTS, merchantCacheTag(cleanId)],

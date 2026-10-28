@@ -3143,7 +3143,10 @@ export async function attachMerchantDiscountAnalysis(
     ...base.profile,
     listings: base.profile.listings.map((listing) => ({
       ...listing,
-      discount_analysis: discountByOfferId.get(listing.id) || null,
+      // A sold-out listing gets no deal verdict (DOS/Rate#1248).
+      discount_analysis: isOfferUnavailable(listing)
+        ? null
+        : discountByOfferId.get(listing.id) || null,
     })),
   };
 }
