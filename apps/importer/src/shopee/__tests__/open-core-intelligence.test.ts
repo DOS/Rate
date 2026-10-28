@@ -333,8 +333,23 @@ async function runSuite() {
     // A stated generation wins over a chip or part number.
     ['Apple TV 4K 2022 Wi-Fi 64GB MXH02', 'apple:tv-4k-3:64gb'],
     ['AirPods Pro II', 'apple:airpods-pro-2:unknown'],
-    ['AirPods Pro (H2)', 'apple:airpods-pro-2:unknown'],
+    // H2 is in the AirPods Pro 2 and 3 alike: it names no Pro generation.
+    ['AirPods Pro (H2)', 'apple:airpods-pro:unknown'],
     ['AirPods Pro MTJV3', 'apple:airpods-pro-2:unknown'],
+    ['Apple TV 4K MN873SA', 'apple:tv-4k-3:unknown'],
+    // A parenthesised generation word reads like a bare one.
+    ['AirPods (thế hệ thứ 3)', 'apple:airpods-3:unknown'],
+    ['Apple Watch Ultra (thế hệ thứ 2)', 'apple:watch-ultra-2:64gb'],
+    ['Apple Watch SE (thế hệ thứ 2) 40mm', 'apple:watch-se-2-40mm:unknown'],
+    ['Apple TV 4K (Gen 3) 64GB', 'apple:tv-4k-3:64gb'],
+    // A chip or part number of a bundled or fitted accessory names nothing.
+    [
+      'Tai nghe Apple AirPods Pro chip H1 + ốp silicon tương thích MTJV3',
+      'apple:airpods-pro:unknown',
+    ],
+    ['Combo iPad Gen 10 + Apple Pencil 1 MQLY3', 'apple:ipad-10:unknown'],
+    // A stylus that does not say "Apple Pencil" is not one.
+    ['Bút cảm ứng Stylus Pencil Gen 2 cho iPad Gen 9', 'apple:ipad-9:unknown'],
     ['AirPods (H2)', 'apple:airpods-4:unknown'],
     ['AirPods thế hệ 3', 'apple:airpods-3:unknown'],
     ['HomePod thế hệ 2', 'apple:homepod-2:unknown'],

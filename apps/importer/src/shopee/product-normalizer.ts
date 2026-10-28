@@ -223,8 +223,9 @@ const APPLE_FAMILIES: ReadonlyArray<readonly [RegExp, string]> = [
   [/\bimac\b/i, 'iMac'],
   [/homepod\s*mini/i, 'HomePod mini'],
   [/homepod/i, 'HomePod'],
-  // An Apple Pencil is never the iPhone a title with no line falls back to (DOS/Rate#1194).
-  [/\bpencil\b/i, 'Pencil'],
+  // An Apple Pencil is never the iPhone a title with no line falls back to; a stylus that
+  // only says "Pencil" is not Apple's (DOS/Rate#1194).
+  [/apple\s*pencil/i, 'Pencil'],
 ];
 
 const APPLE_GENERATION_BY_YEAR: Readonly<Record<string, string>> = {
@@ -246,7 +247,6 @@ const APPLE_CHIP_GENERATIONS: ReadonlyArray<readonly [string, RegExp, string]> =
   ['TV 4K', /\ba15\b/i, 'TV 4K 3'],
   ['TV 4K', /\ba12\b/i, 'TV 4K 2'],
   ['TV 4K', /\ba10x\b/i, 'TV 4K 1'],
-  ['AirPods Pro', /\bh2\b/i, 'AirPods Pro 2'],
   ['AirPods', /\bh2\b/i, 'AirPods 4'],
   ['HomePod', /\bs7\b/i, 'HomePod 2'],
 ];
@@ -1423,7 +1423,9 @@ export class ProductNormalizer {
       let appleTitle = modelTitle
         .replace(/ ?\(\s*(\d{1,2})(?:st|nd|rd|th)\s*gen(?:eration)?\s*\)/gi, ' $1')
         // Generation words read as the number: "Apple TV 4K thế hệ 3", "Gen 3", "3rd Gen"
-        // and "II" are the 3rd and 2nd generation (DOS/Rate#1194).
+        // and "II" are the 3rd and 2nd generation, in parentheses too: "AirPods (thế hệ
+        // thứ 3)" is the "AirPods 3" (DOS/Rate#1194).
+        .replace(/ ?\(\s*(?:thế\s*hệ\s*(?:thứ\s*)?|gen(?:eration)?\s*)(\d{1,2})\s*\)/gi, ' $1')
         .replace(/\bthế\s*hệ\s*(?:thứ\s*)?(\d{1,2})\b/gi, '$1')
         .replace(/\b(\d{1,2})(?:st|nd|rd|th)\s*gen(?:eration)?\b/gi, '$1')
         .replace(/\bgen(?:eration)?\s*(\d{1,2})\b/gi, '$1')
@@ -1436,7 +1438,10 @@ export class ProductNormalizer {
       // product: "AirPods Pro 2 cho iPhone Air" is the AirPods (DOS/Rate#819).
       const fitsAt = appleTitle.search(/ (?:cho|for) (?:iphone|ipad)\b/i);
       // Only another family counts: "Ốp lưng iPhone cho iPhone 15" is still the iPhone 15.
-      if (fitsAt > 0 && /airpods|\bwatch\b|macbook|\bpencil\b/i.test(appleTitle.slice(0, fitsAt)))
+      if (
+        fitsAt > 0 &&
+        /airpods|\bwatch\b|macbook|apple\s*pencil/i.test(appleTitle.slice(0, fitsAt))
+      )
         appleTitle = appleTitle.slice(0, fitsAt);
       const iphoneMatch = appleTitle.match(
         /iphone\s*(\d+e\b|\d+(?:\s*(?:pro\s*max|pro|plus|mini|air)|\+(?= ?(?:$|[-,]|\d+(?:[.,]\d+)? ?(?:gb|tb)\b|[45]g\b|lte\b|chính\b)))?|air\b|duo\b|se(?:\s*(?:\(\s*(?:2020|2022|2025)\s*\)|(?:2020|2022|2025)\b|(?:gen\s*)?[234]\b))?)/i
@@ -1592,17 +1597,22 @@ export class ProductNormalizer {
       }
       // A part number or chip names the generation a title leaves out: "Apple TV 4K
       // MN873SA/A" and "Apple TV 4K (A15)" are the 3rd (2022). A part number also names a
-      // title with no line. A stated generation always wins (DOS/Rate#1194).
-      const part = Array.from(appleTitle.matchAll(/\b(m[a-z0-9]{4})(?:[a-z]{1,2}\/a)?\b/gi), m => {
-        const partNumber = m[1]!.toUpperCase();
-        return Object.hasOwn(APPLE_PART_NUMBERS, partNumber)
-          ? APPLE_PART_NUMBERS[partNumber]
-          : undefined;
-      }).find(Boolean);
+      // title with no line. A stated generation always wins, and only the product's own
+      // part of the title counts, before a "+" bundle or what it fits (DOS/Rate#1194).
+      const ownTitle = appleTitle.split(/ ?\+ | (?:cho|for|tương thích|dùng cho|kèm|tặng) /i)[0]!;
+      const part = Array.from(
+        ownTitle.matchAll(/\b(m[a-z0-9]{4})(?:[a-z]{1,2}(?:\/a)?)?\b/gi),
+        m => {
+          const partNumber = m[1]!.toUpperCase();
+          return Object.hasOwn(APPLE_PART_NUMBERS, partNumber)
+            ? APPLE_PART_NUMBERS[partNumber]
+            : undefined;
+        }
+      ).find(Boolean);
       if (part && (model === part[0] || noLine)) model = part[1];
       else {
         const chipGeneration = APPLE_CHIP_GENERATIONS.find(
-          ([line, chipPattern]) => model === line && chipPattern.test(appleTitle)
+          ([line, chipPattern]) => model === line && chipPattern.test(ownTitle)
         );
         if (chipGeneration) model = chipGeneration[2];
       }
