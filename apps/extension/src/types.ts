@@ -147,6 +147,19 @@ export interface ExtensionLookupData {
     'smartphones' | 'tablets' | 'laptops' | 'smartwatches' | 'earbuds';
   compareUrl: string | null;
   productDetailUrl: string | null;
+  /**
+   * Set when rate.vn runs the Item model (DOS/Rate#1158): the product line
+   * across sizes, and the size the page states (null: not stated).
+   */
+  item?: {
+    id: string;
+    slug: string;
+    name: string;
+    min_price: number;
+    max_price: number;
+    price_variant_count: number;
+  };
+  selectedVariant?: string | null;
   leaderboardUrl?: string | null;
   versusUrl?: string | null;
   topRivalName?: string | null;

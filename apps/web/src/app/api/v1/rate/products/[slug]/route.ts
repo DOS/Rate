@@ -15,6 +15,10 @@ import {
   PUBLIC_API_CORS_HEADERS,
   jsonApiError,
 } from '@/server/rate/api-handler';
+import {
+  buildApiItemFields,
+  resolveApiItemContext,
+} from '@/server/rate/item-api';
 
 type RouteContext = {
   params: Promise<{ slug: string }>;
@@ -35,8 +39,13 @@ export async function OPTIONS() {
  * The product carries the category's spec view, as rate.vn shows it: no
  * screen, RAM, storage or camera for earbuds and no 5G for a watch
  * (DOS/Rate#1166).
+ * With `RATE_ITEM_MODEL` on, the slug may be an Item's or an old variant's;
+ * `product` is the selected variant (`?v=`, the slug's own, else the Item's
+ * default) and the response adds `item`, `variants`, `selected_variant` and
+ * `unknown_variant_offers` (DOS/Rate#1158). With the flag off the response
+ * is unchanged.
  */
-export async function GET(_request: NextRequest, context: RouteContext) {
+export async function GET(request: NextRequest, context: RouteContext) {
   try {
     const { slug } = await context.params;
     const cleanSlug = (slug ?? '').trim();
@@ -53,7 +62,13 @@ export async function GET(_request: NextRequest, context: RouteContext) {
       );
     }
 
-    const storedProduct = await getCachedMasterProductBySlug(cleanSlug);
+    const itemContext = await resolveApiItemContext(
+      cleanSlug,
+      request.nextUrl?.searchParams?.get('v')
+    );
+    const storedProduct = await getCachedMasterProductBySlug(
+      itemContext ? itemContext.selected.slug : cleanSlug
+    );
 
     if (!storedProduct) {
       return NextResponse.json(
@@ -71,9 +86,10 @@ export async function GET(_request: NextRequest, context: RouteContext) {
       getCachedMasterProductReviews(product.id),
     ]);
 
-    const [reviewSummary, priceHistory] = await Promise.all([
+    const [reviewSummary, priceHistory, itemFields] = await Promise.all([
       getCachedMasterProductReviewSummary(product.id, reviews),
       getCachedMasterProductPriceHistory(product.id, offers),
+      itemContext ? buildApiItemFields(itemContext) : Promise.resolve(null),
     ]);
     // A sold-out listing's last price is no deal (DOS/Rate#1141).
     const radarSignal = computeProductRadarSignal(
@@ -101,6 +117,7 @@ export async function GET(_request: NextRequest, context: RouteContext) {
           reviewSummary,
           reviews,
           radarSignal,
+          ...(itemFields ?? {}),
         },
       },
       {

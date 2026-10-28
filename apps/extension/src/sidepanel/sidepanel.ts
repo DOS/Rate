@@ -586,9 +586,12 @@ function renderPanelContent(
     )}`,
     '/inspect'
   );
+  // Alerts are per size: an Item page with no stated size adds nothing until
+  // a size is picked (DOS/Rate#1158).
+  const sizeUnknown = Boolean(lookup.item) && !lookup.selectedVariant;
   const watchlistUrl = resolveSafeApiRelativeUrl(
     settings.apiBaseUrl,
-    master?.slug
+    master?.slug && !sizeUnknown
       ? `/watchlist?add=${encodeURIComponent(master.slug)}`
       : '/watchlist',
     '/watchlist'
@@ -612,7 +615,7 @@ function renderPanelContent(
         <span class="verdict-pill verdict-${sanitizeVerdictClassSuffix(assessment.verdict)}">${escapeHtml(assessment.badgeLabel)}</span>
         ${radarPillHtml}
       </div>
-      <div class="product-name">${escapeHtml(master?.name || signal.title)}</div>
+      <div class="product-name">${escapeHtml((sizeUnknown ? lookup.item?.name : master?.name) || signal.title)}</div>
       <p style="color: #d1d5db; font-size: 13px;">${escapeHtml(assessment.explanation)}</p>
       <div class="stats-grid">
         <div class="stat-box">

@@ -4553,6 +4553,9 @@ type UntypedRateQuery = {
   eq: (col: string, val: unknown) => UntypedRateQuery;
   is: (col: string, val: null) => UntypedRateQuery;
   in: (col: string, vals: readonly unknown[]) => UntypedRateQuery;
+  gte: (col: string, val: unknown) => UntypedRateQuery;
+  lte: (col: string, val: unknown) => UntypedRateQuery;
+  ilike: (col: string, pattern: string) => UntypedRateQuery;
   order: (
     col: string,
     opts?: { ascending?: boolean; nullsFirst?: boolean }
@@ -4829,4 +4832,101 @@ export async function resolveCatalogSlug(
   if (!owner) return null;
   const retired = (data as { status?: unknown }).status === 'archived';
   return { kind: 'variant', item: owner, variant, retired };
+}
+
+/** `listItems` filters: what API v1 `group=item` supports (DOS/Rate#1158). */
+export interface ItemListParams {
+  categoryId?: string | null;
+  brands?: readonly string[];
+  search?: string;
+  minPrice?: number;
+  maxPrice?: number;
+  sort?: 'default' | 'price_asc' | 'price_desc' | 'merchants_desc' | 'newest';
+  limit: number;
+  offset: number;
+}
+
+/**
+ * Published Items for API v1 `group=item`, one row per Item with its "from"
+ * price. Spec filters stay variant-level until `search_items_v1` (#1155).
+ * Needs M1+M2 (#1150).
+ */
+export async function listItems(params: ItemListParams): Promise<RateItem[]> {
+  let query = untypedRate()
+    .from('items')
+    .select(ITEM_SELECT)
+    .eq('status', 'published');
+  const categoryId = params.categoryId
+    ? sanitizeRateEntityId(params.categoryId)
+    : '';
+  if (categoryId) query = query.eq('category_id', categoryId);
+  if (params.brands && params.brands.length > 0) {
+    query = query.in('brand', params.brands.slice(0, 50));
+  }
+  const search = (params.search ?? '')
+    .replace(/\p{Cc}+/gu, ' ')
+    // LIKE wildcards, escapes and PostgREST filter syntax are no search text.
+    .replace(/[%_*\\,()]/g, ' ')
+    .trim()
+    .slice(0, 160);
+  if (search) query = query.ilike('name', `%${search}%`);
+  if (typeof params.minPrice === 'number') {
+    query = query.gte('min_price', params.minPrice);
+  }
+  if (typeof params.maxPrice === 'number') {
+    query = query.lte('min_price', params.maxPrice);
+  }
+  const sort = params.sort ?? 'default';
+  query =
+    sort === 'price_asc'
+      ? query.order('min_price', { ascending: true })
+      : sort === 'price_desc'
+        ? query.order('min_price', { ascending: false })
+        : sort === 'merchants_desc'
+          ? query.order('merchant_count', { ascending: false })
+          : sort === 'newest'
+            ? query.order('updated_at', { ascending: false })
+            : query.order('listing_count', { ascending: false });
+  const { data, error } = await query
+    .order('id')
+    .range(params.offset, params.offset + params.limit - 1);
+  if (error) {
+    log.error('item list failed', { message: error.message });
+    throw itemReadError('items', error as { message: string; code?: string });
+  }
+  return (data ?? []).map(mapItemRow).filter((i): i is RateItem => i !== null);
+}
+
+/** The published variants of several Items, by Item id, each in variant order. */
+export async function getItemVariantsBatch(
+  itemIds: readonly string[]
+): Promise<Map<string, RateItemVariant[]>> {
+  const ids = Array.from(
+    new Set(itemIds.map(sanitizeRateEntityId).filter(Boolean))
+  );
+  const byItem = new Map<string, RateItemVariant[]>(ids.map((id) => [id, []]));
+  if (ids.length === 0) return byItem;
+  const rows = await fetchAllRows(
+    'item variants',
+    (from, to) =>
+      untypedRate()
+        .from('master_products')
+        .select(ITEM_VARIANT_SELECT)
+        .in('item_id', ids)
+        .eq('status', 'published')
+        .order('id')
+        .range(from, to)
+        .then(
+          throwIfItemSchemaMissing('item variants')
+        ) as unknown as PromiseLike<{
+        data: unknown[] | null;
+        error: { message: string } | null;
+      }>
+  );
+  for (const variant of rows.map(mapItemVariantRow)) {
+    if (variant) byItem.get(variant.item_id)?.push(variant);
+  }
+  for (const [id, variants] of byItem)
+    byItem.set(id, sortItemVariants(variants));
+  return byItem;
 }

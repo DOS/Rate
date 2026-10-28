@@ -182,6 +182,38 @@ export default function WatchlistWorkspace({
     });
   };
 
+  // `/watchlist?add=<slug>` (the browser extension's link, DOS/Rate#1158): add
+  // that product once, then drop the parameter so a reload adds nothing.
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    if (!url.searchParams.has('add')) return;
+    const raw = (url.searchParams.get('add') ?? '').trim();
+    // The product route's own slug rule.
+    const slug = /^[a-zA-Z0-9._-]{1,120}$/.test(raw) ? raw : '';
+    url.searchParams.delete('add');
+    window.history.replaceState(
+      null,
+      '',
+      `${url.pathname}${url.search}${url.hash}`
+    );
+    if (!slug || getWatchlist().some((x) => x.slug === slug)) return;
+    let cancelled = false;
+    fetch(`/api/v1/rate/products/${encodeURIComponent(slug)}`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((json) => {
+        const product = json?.ok ? (json.data?.product as MasterProduct) : null;
+        if (!cancelled && product?.slug === slug)
+          handleQuickAddCatalog(product);
+      })
+      .catch(() => {
+        // An unknown or unreachable product adds nothing.
+      });
+    return () => {
+      cancelled = true;
+    };
+    // Runs once per page load.
+  }, []);
+
   const handleUpdateTarget = async (item: WatchlistItem) => {
     const cleanTarget = sanitizeWatchlistTargetPrice(
       editTarget,

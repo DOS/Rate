@@ -22,6 +22,8 @@ import {
   specFiltersOutsideCategory,
 } from '@/server/rate/api-handler';
 import type { MasterProduct } from '@/lib/rate-api';
+import { listApiItems } from '@/server/rate/item-api';
+import { isItemModelOn } from '@/server/rate/item-model';
 
 export async function OPTIONS() {
   return new NextResponse(null, {
@@ -71,6 +73,74 @@ async function getAllCategoryProductsWithSpecFilters(
   return kept.slice(offset, wanted);
 }
 
+const ITEM_GROUP_SORTS = new Set([
+  'default',
+  'price_asc',
+  'price_desc',
+  'merchants_desc',
+  'newest',
+] as const);
+
+/**
+ * `group=item`, or null to answer the variant list (flag off, or the Item
+ * tables missing). Spec filters and rating sort are per variant until
+ * `search_items_v1` (#1155), so they answer 400 here.
+ */
+async function answerItemGroup(
+  categorySlug: string,
+  filterParams: MasterProductFilterParams
+): Promise<NextResponse | null> {
+  if (!isItemModelOn()) return null;
+  const specFilters = [
+    filterParams.minRating !== undefined && 'minRating',
+    filterParams.ramGb?.length && 'ramGb',
+    filterParams.storageGb?.length && 'storageGb',
+    filterParams.minBatteryMah !== undefined && 'minBatteryMah',
+    filterParams.minRefreshRateHz !== undefined && 'minRefreshHz',
+    filterParams.minFastChargingW !== undefined && 'minFastChargeW',
+    filterParams.has5g && 'has5g',
+    filterParams.hasNfc && 'hasNfc',
+    filterParams.maxScreenSizeInch !== undefined && 'compactScreen',
+    filterParams.sort === 'rating_desc' && 'sort=rating_desc',
+  ].filter((f): f is string => typeof f === 'string');
+  if (specFilters.length > 0) {
+    return jsonApiError(
+      400,
+      `Filters not available with group=item: ${specFilters.join(', ')}`,
+      undefined,
+      PUBLIC_API_CORS_HEADERS
+    );
+  }
+  const sort = filterParams.sort ?? 'default';
+  const rows = await listApiItems(categorySlug, {
+    brands: filterParams.brands,
+    search: filterParams.search,
+    minPrice: filterParams.minPrice,
+    maxPrice: filterParams.maxPrice,
+    sort: ITEM_GROUP_SORTS.has(sort as never) ? (sort as 'default') : 'default',
+    limit: filterParams.limit ?? 24,
+    offset: filterParams.offset ?? 0,
+  });
+  if (rows === null) return null;
+  return NextResponse.json(
+    {
+      ok: true,
+      category: categorySlug,
+      group: 'item',
+      count: rows.length,
+      offset: filterParams.offset ?? 0,
+      data: rows,
+    },
+    {
+      status: 200,
+      headers: {
+        ...PUBLIC_API_CORS_HEADERS,
+        'Cache-Control': 'public, s-maxage=60, stale-while-revalidate=300',
+      },
+    }
+  );
+}
+
 const VALID_PRODUCT_SORTS = new Set<
   NonNullable<MasterProductFilterParams['sort']>
 >([
@@ -93,6 +163,11 @@ const VALID_PRODUCT_SORTS = new Set<
  * (DOS/Rate#1184). On `category=all` such a filter keeps only products whose
  * own category has it: `has5g=1` returns 5G phones, tablets and laptops,
  * never watches or earbuds.
+ * With `RATE_ITEM_MODEL` on, `group=item` lists Items (one row per product
+ * line, with its variants) instead of variants; it takes the category, brand,
+ * search, price and sort filters, and answers 400 for spec filters, which
+ * stay per variant. Without `group=item`, or with the flag off, the response
+ * is the variant list as before (DOS/Rate#1158, Q7).
  */
 export async function GET(request: NextRequest) {
   try {
@@ -170,6 +245,16 @@ export async function GET(request: NextRequest) {
       limit,
       offset,
     };
+
+    if (
+      (sp.get('group') ?? '')
+        .replace(/\p{Cc}+/gu, '')
+        .trim()
+        .toLowerCase() === 'item'
+    ) {
+      const itemResponse = await answerItemGroup(categorySlug, filterParams);
+      if (itemResponse) return itemResponse;
+    }
 
     const unsupportedFilters = specFiltersOutsideCategory(
       categorySlug,

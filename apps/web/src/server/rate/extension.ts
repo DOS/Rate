@@ -38,6 +38,14 @@ import {
 import { computeProductRadarSignal } from './deals';
 import type { RadarSignal } from '../../lib/deal-radar';
 import { createLogger } from '@/lib/logger';
+import {
+  itemProductPath,
+  resolveListingItemContext,
+  resolveVariantItemContext,
+  toApiItem,
+  type ApiItem,
+  type ApiItemContext,
+} from './item-api';
 
 const log = createLogger('server.extension');
 
@@ -227,6 +235,10 @@ export interface ExtensionLookupResponse {
   topRivalName?: string | null;
   leaderboardStandings?: ProductLeaderboardBadgeInfo[] | null;
   radarSignal?: RadarSignal | null;
+  /** RATE_ITEM_MODEL on only: the matched Item (DOS/Rate#1158). */
+  item?: ApiItem;
+  /** RATE_ITEM_MODEL on only: the variant key the page states, or null. */
+  selectedVariant?: string | null;
 }
 
 const ACCESSORY_KEYWORDS_VI_EN = [
@@ -1150,6 +1162,26 @@ export async function lookupExtensionProduct(
     }
   }
 
+  // A listing with no stated size is still its Item's (RATE_ITEM_MODEL on,
+  // design doc 5.2): shown with the default variant and no size chosen.
+  let itemContext: ApiItemContext | null = null;
+  if (
+    !matchedMaster &&
+    !listingOfUnpublishedModel &&
+    candidateItemIds.size > 0
+  ) {
+    itemContext = await resolveListingItemContext(Array.from(candidateItemIds));
+    if (itemContext) {
+      const byVariant = await getMasterProductBySlug(itemContext.selected.slug);
+      if (byVariant) {
+        matchedMaster = byVariant;
+        matchStatus = 'ambiguous_variant';
+      } else {
+        itemContext = null;
+      }
+    }
+  }
+
   // Filter catalog candidates by storageGb if known
   if (
     !matchedMaster &&
@@ -1216,6 +1248,21 @@ export async function lookupExtensionProduct(
     matchStatus = 'canonical_model';
   }
 
+  // The Item and all its variants from the DB, not only the siblings among the
+  // search hits; a stated size picks that variant (RATE_ITEM_MODEL on).
+  if (!itemContext) {
+    itemContext = await resolveVariantItemContext(
+      matchedMaster.slug,
+      hasStorage ? storageGb : null,
+      matchStatus === 'exact_listing'
+    );
+    if (itemContext && itemContext.selected.slug !== matchedMaster.slug) {
+      const sized = await getMasterProductBySlug(itemContext.selected.slug);
+      if (sized) matchedMaster = sized;
+      else itemContext = { ...itemContext, sizeChosen: false };
+    }
+  }
+
   // Build variant candidates across same model family
   const sameFamilyVariants = catalogCandidates.filter(
     (c) =>
@@ -1224,17 +1271,36 @@ export async function lookupExtensionProduct(
       c.model.toLowerCase() === matchedMaster!.model.toLowerCase() &&
       typeof c.storage_gb === 'number'
   );
-  const variantCandidates: ExtensionVariantCandidate[] = sameFamilyVariants.map(
-    (v) => ({
-      storageGb: v.storage_gb || 256,
-      label: `${v.storage_gb || 256}GB`,
-      slug: v.slug,
-      minPrice: v.min_price,
-      maxPrice: v.max_price,
-    })
-  );
+  const variantCandidates: ExtensionVariantCandidate[] = itemContext
+    ? // Sized variants only: an unknown size is never shown as 256GB.
+      hasStorage
+      ? itemContext.variants
+          .filter((v) => typeof v.storage_gb === 'number' && v.storage_gb > 0)
+          .map((v) => ({
+            storageGb: v.storage_gb!,
+            label: v.variant_name || `${v.storage_gb}GB`,
+            slug: v.slug,
+            minPrice: v.min_price,
+            maxPrice: v.max_price,
+          }))
+      : []
+    : sameFamilyVariants.map((v) => ({
+        storageGb: v.storage_gb || 256,
+        label: `${v.storage_gb || 256}GB`,
+        slug: v.slug,
+        minPrice: v.min_price,
+        maxPrice: v.max_price,
+      }));
 
-  if (variantCandidates.length > 1 && !storageGb) {
+  if (itemContext) {
+    // Ambiguous only when neither the page nor the listing states the size.
+    matchStatus =
+      variantCandidates.length > 1 && !storageGb && !itemContext.sizeChosen
+        ? 'ambiguous_variant'
+        : matchStatus === 'ambiguous_variant' && itemContext.sizeChosen
+          ? 'canonical_model'
+          : matchStatus;
+  } else if (variantCandidates.length > 1 && !storageGb) {
     matchStatus = 'ambiguous_variant';
   }
 
@@ -1385,7 +1451,13 @@ export async function lookupExtensionProduct(
     priceHistory: mode === 'full' ? priceHistory : null,
     categorySlug: categoryPath,
     compareUrl: `/compare?cat=${categoryPath}&slugs=${encodeURIComponent(matchedMaster.slug)}`,
-    productDetailUrl: `/${categoryPath}/${encodeURIComponent(matchedMaster.slug)}`,
+    productDetailUrl: itemContext
+      ? itemProductPath(
+          categoryPath,
+          itemContext.item.slug,
+          itemContext.sizeChosen ? itemContext.selected.variant_key : null
+        )
+      : `/${categoryPath}/${encodeURIComponent(matchedMaster.slug)}`,
     leaderboardUrl: `/leaderboard?cat=${categoryPath}`,
     versusUrl: topRival
       ? `/compare/${encodeURIComponent(matchedMaster.slug)}-vs-${encodeURIComponent(topRival.slug)}`
@@ -1393,6 +1465,14 @@ export async function lookupExtensionProduct(
     topRivalName: topRival?.name || null,
     leaderboardStandings,
     radarSignal,
+    ...(itemContext
+      ? {
+          item: toApiItem(itemContext.item),
+          selectedVariant: itemContext.sizeChosen
+            ? itemContext.selected.variant_key
+            : null,
+        }
+      : {}),
   };
 }
 
