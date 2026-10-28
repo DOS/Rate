@@ -1866,7 +1866,9 @@
     "priceHistory": "Lịch sử giá",
     "priceHistoryTitle": "Xem lịch sử giá và phát hiện giảm giá ảo",
     "noImage": "Chưa có ảnh",
-    "verified": "Đã chuẩn hóa thông số"
+    "verified": "Đã chuẩn hóa thông số",
+    "fromPrice": "Giá từ",
+    "sizesLabel": "Các dung lượng"
   },
   "priceVerdict": {
     "labelFake": "Cảnh báo giảm giá ảo",

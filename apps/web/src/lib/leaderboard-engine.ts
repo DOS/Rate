@@ -4,6 +4,7 @@ import {
   getMasterProductHref,
   resolveProductImageUrl,
 } from './rate-domain-core';
+import { catalogRowSlug, type ItemCatalogRow } from './item-directory';
 import type { CanonicalCategorySlug, MasterProduct } from './rate-api';
 import type { KeySpecs, ProductSpecifications } from '@repo/shared-data';
 
@@ -399,7 +400,11 @@ export function scoreMasterProductForLeaderboard(
   const safeCriterion = normalizeLeaderboardCriterion(criterion);
   const categorySlug = getMasterProductCategorySlug(safeItem);
   const categoryPath = getCategoryRouteHref(categorySlug);
-  const productHref = getMasterProductHref(safeItem);
+  // An Item's row links to the Item (DOS/Rate#1155).
+  const productHref = getMasterProductHref({
+    ...safeItem,
+    slug: catalogRowSlug(safeItem as ItemCatalogRow),
+  });
   const thumbnail =
     resolveProductImageUrl({
       slug: safeItem.slug,

@@ -5,6 +5,7 @@ import { Link } from '@/lib/navigation';
 import {
   getCachedCategoryDirectoryFacets,
   getCachedMasterProducts,
+  getItemCatalogPage,
   getCrossPlatformDealRadar,
   getMasterProducts,
   type MasterProductFilterParams,
@@ -24,6 +25,7 @@ import {
   SORT_OPTIONS,
   type ProductSortOption,
 } from '@/lib/category-filters';
+import { catalogRowSlug, itemSizeChips } from '@/lib/item-directory';
 import PageShell from '../components/page-shell';
 import ListSidebarOne from '../components/list-sidebar-one';
 import CompareTrayBar from '@/components/compare/CompareTrayBar';
@@ -217,15 +219,23 @@ export async function CategoryCatalogContent({
     offset: (page - 1) * CATALOG_PAGE_SIZE,
   };
 
+  // The plain listing (only the bounded page and a known sort) is most of
+  // the traffic and shares the data cache. Filtered reads stay uncached:
+  // free-form values (search, prices, brands) would each create an entry
+  // (DOS/Rate#495).
+  const readVariants = (params: MasterProductFilterParams) =>
+    isPlainListing(params)
+      ? getCachedMasterProducts(params)
+      : getMasterProducts(params);
   const [facets, pageRows, categoryDealRadar] = await Promise.all([
     getCachedCategoryDirectoryFacets(categorySlug),
-    // The plain listing (only the bounded page and a known sort) is most of
-    // the traffic and shares the data cache. Filtered reads stay uncached:
-    // free-form values (search, prices, brands) would each create an entry
-    // (DOS/Rate#495).
-    isPlainListing(filterParams)
-      ? getCachedMasterProducts(filterParams)
-      : getMasterProducts(filterParams),
+    // RATE_ITEM_MODEL on: one card per Item, so the page is cut after
+    // grouping every matching variant (DOS/Rate#1155); off: as before.
+    getItemCatalogPage(
+      () => readVariants({ ...filterParams, limit: 500, offset: 0 }),
+      filterParams.offset ?? 0,
+      filterParams.limit ?? CATALOG_PAGE_SIZE + 1
+    ).then((itemRows) => itemRows ?? readVariants(filterParams)),
     getCrossPlatformDealRadar({
       categorySlug: categorySlug as CanonicalCategorySlug,
       // Max page size: card badges and exports need a signal for EVERY product,
@@ -849,7 +859,12 @@ export async function CategoryCatalogContent({
                         <div key={item.id}>
                           <ProductCard
                             slug={item.slug}
-                            href={`${basePath}/${item.slug}`}
+                            href={`${basePath}/${catalogRowSlug(item)}`}
+                            sizeChips={itemSizeChips(
+                              item,
+                              `${basePath}/${catalogRowSlug(item)}`,
+                              formatStorageLabel
+                            )}
                             categoryPath={basePath}
                             name={item.name}
                             brand={item.brand}
