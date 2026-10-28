@@ -1,9 +1,15 @@
 import 'server-only';
 import { NextResponse } from 'next/server';
-import { plausibleMinPrice, plausibleOffers } from '@repo/shared-data/rules';
+import {
+  getCategorySpecTemplate,
+  plausibleMinPrice,
+  plausibleOffers,
+  specFieldApplies,
+} from '@repo/shared-data/rules';
 import {
   MAX_VALID_VND_PRICE,
   normalizeOfferOriginalPrice,
+  type MasterProductFilterParams,
 } from '@/lib/rate-api';
 import {
   isOfferUnavailable,
@@ -63,6 +69,53 @@ export function jsonApiError(
       },
     }
   );
+}
+
+/**
+ * The spec filters of `GET /api/v1/rate/products` that the category's spec
+ * template does not have, by their documented query names (DOS/Rate#1184).
+ * The body carries the category's spec view, so such a filter would match
+ * stored values the body no longer shows (`has5g` on a watch, `ramGb` on
+ * earbuds); the route answers 400 for them instead.
+ */
+export function specFiltersOutsideCategory(
+  categorySlug: string,
+  filters: MasterProductFilterParams
+): string[] {
+  const template = getCategorySpecTemplate(categorySlug);
+  const used: [boolean, boolean, string][] = [
+    [Boolean(filters.ramGb?.length), template.ram, 'ramGb'],
+    [Boolean(filters.storageGb?.length), template.storage, 'storageGb'],
+    [filters.has5g === true, template.has5g, 'has5g'],
+    [
+      typeof filters.maxScreenSizeInch === 'number',
+      template.screen,
+      'compactScreen',
+    ],
+    [
+      typeof filters.minRefreshRateHz === 'number',
+      specFieldApplies(template, 'display', 'refresh_rate_hz'),
+      'minRefreshHz',
+    ],
+    [
+      filters.hasNfc === true,
+      specFieldApplies(template, 'connectivity', 'nfc'),
+      'hasNfc',
+    ],
+    [
+      typeof filters.minBatteryMah === 'number',
+      specFieldApplies(template, 'battery', 'capacity_mah'),
+      'minBatteryMah',
+    ],
+    [
+      typeof filters.minFastChargingW === 'number',
+      specFieldApplies(template, 'battery', 'fast_charging_w'),
+      'minFastChargeW',
+    ],
+  ];
+  return used
+    .filter(([requested, applies]) => requested && !applies)
+    .map(([, , name]) => name);
 }
 
 function parseFiniteDecimalInput(raw: unknown): number {

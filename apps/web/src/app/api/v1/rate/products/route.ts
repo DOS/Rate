@@ -17,6 +17,7 @@ import {
   parseBoundedPositiveIntArrayParam,
   parseBoundedStringParam,
   parseProductsFilterBounds,
+  specFiltersOutsideCategory,
 } from '@/server/rate/api-handler';
 
 export async function OPTIONS() {
@@ -51,7 +52,10 @@ const VALID_PRODUCT_SORTS = new Set<
  * Structured JSON Backend API for Web Client, Browser Extension MV3, and Partners.
  * Supports 10-Field-Groups multi-criteria filtering, sorting, and optional directory facets.
  * Each product carries its category's spec view, as rate.vn shows it
- * (DOS/Rate#1166); filters still match the stored columns.
+ * (DOS/Rate#1166). A spec filter the category's template does not have
+ * (`has5g` on smartwatches, `ramGb` or `compactScreen` on earbuds) answers
+ * 400, so a filter never returns a product whose body contradicts it
+ * (DOS/Rate#1184).
  */
 export async function GET(request: NextRequest) {
   try {
@@ -129,6 +133,19 @@ export async function GET(request: NextRequest) {
       limit,
       offset,
     };
+
+    const unsupportedFilters = specFiltersOutsideCategory(
+      categorySlug,
+      filterParams
+    );
+    if (unsupportedFilters.length > 0) {
+      return jsonApiError(
+        400,
+        `Filters not available for category ${categorySlug}: ${unsupportedFilters.join(', ')}`,
+        undefined,
+        PUBLIC_API_CORS_HEADERS
+      );
+    }
 
     const [products, facets] = await Promise.all([
       getMasterProducts(filterParams),
