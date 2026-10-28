@@ -5289,11 +5289,15 @@ async function runCoreArchitectureSuite() {
       path.join(repoRoot, 'apps/web/src/app/api/reviews/[id]/vote/route.ts'),
       'utf8'
     );
+    // A vote flushes only the review caches and its product's page, not the
+    // global stats (DOS/Rate#1306); a new review still refreshes the stats.
     assert.ok(
       reviewsRouteSrc402.includes('RATE_CACHE_TAGS.STATS') &&
-        voteRouteSrc402.includes('RATE_CACHE_TAGS.STATS') &&
+        voteRouteSrc402.includes('RATE_CACHE_TAGS.REVIEWS') &&
+        voteRouteSrc402.includes('productCacheTag(') &&
+        !voteRouteSrc402.includes('RATE_CACHE_TAGS.PRODUCTS') &&
         voteRouteSrc402.includes('authenticateRateRequest('),
-      'POST /api/v1/rate/reviews and POST /api/reviews/[id]/vote must revalidate RATE_CACHE_TAGS.STATS and use authenticateRateRequest (#402)'
+      'POST /api/v1/rate/reviews must revalidate RATE_CACHE_TAGS.STATS; POST /api/reviews/[id]/vote must revalidate the review caches and its product tag only, and use authenticateRateRequest (#402, #1306)'
     );
   }
 
