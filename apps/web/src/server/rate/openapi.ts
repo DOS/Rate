@@ -935,7 +935,7 @@ export function buildRateOpenApiSpec(
             },
             '429': {
               description:
-                'Rate limit exceeded: a best-effort per-IP limit of 15 signals/min, counted separately on each server instance, or the global cap of 120 crowd jobs/min.',
+                'Rate limit exceeded: a best-effort per-IP limit of 15 signals/min, counted separately on each server instance. The global cap of 120 crowd jobs/min is reported as a 200 with `jobState: "queue_error"`.',
             },
           },
         },
