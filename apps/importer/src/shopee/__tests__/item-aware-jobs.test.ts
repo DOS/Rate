@@ -50,13 +50,13 @@ function createDb(handler: (call: Call) => Result | undefined) {
   const run = (call: Call): Result => handler(call) ?? { data: null, error: null };
   const builder = (call: Call) => {
     const b: Record<string, unknown> = {};
-    for (const name of ['eq', 'in', 'is', 'gt', 'lte']) {
+    for (const name of ['eq', 'neq', 'in', 'is', 'gt', 'lte']) {
       b[name] = (col: string, val: unknown) => {
         call.filters.push([name, col, val]);
         return b;
       };
     }
-    for (const name of ['order', 'limit']) b[name] = () => b;
+    for (const name of ['order', 'limit', 'select']) b[name] = () => b;
     // One page of rows: later pages are empty.
     b.range = (from: number) => Promise.resolve(from > 0 ? { data: [], error: null } : run(call));
     b.maybeSingle = () => Promise.resolve(run(call));
@@ -159,6 +159,14 @@ async function run() {
       ],
       'a size with two RAM options, or none, has no known RAM'
     );
+    assert.deepEqual(
+      parseArenaMemoryVariants('256GB 8GB/12GB RAM, 512GB 8/12GB RAM'),
+      [
+        { storageGb: 256, ramGb: null },
+        { storageGb: 512, ramGb: null },
+      ],
+      'slash RAM options are RAM, not storage, and name no single RAM'
+    );
     assert.deepEqual(parseArenaMemoryVariants(''), []);
     assert.deepEqual(parseArenaMemoryVariants(undefined as unknown as string), []);
   }
@@ -192,9 +200,25 @@ async function run() {
       },
       { id: 'v-unknown', variant_key: 'unknown', status: 'published', storage_gb: null },
       { id: 'v-old', variant_key: '128gb', status: 'archived', storage_gb: null },
+      // A stored RAM number: the label follows it, not Arena.
+      { id: 'v-2048', variant_key: '2048gb', status: 'draft', ram_gb: 8, key_specs: {} },
+      // A stored RAM label: the number follows it, not Arena.
+      {
+        id: 'v-4096',
+        variant_key: '4096gb',
+        status: 'draft',
+        storage_gb: 4096,
+        key_specs: { storage: '4TB', ram: '8GB' },
+        updated_at: '2026-10-28T00:00:00.000Z',
+      },
     ];
-    const catalogDb = (opts: { item?: Row | null; itemErr?: string } = {}) =>
+    const catalogDb = (opts: { item?: Row | null; itemErr?: string; changedIds?: string[] } = {}) =>
       createDb(call => {
+        if (call.op === 'update') {
+          // Compare-and-swap: a row another writer changed matches nothing.
+          const id = filterValue(call, 'id') as string;
+          return { data: opts.changedIds?.includes(id) ? [] : [{ id }], error: null };
+        }
         if (call.table === 'items' && call.op === 'select') {
           if (opts.itemErr) return { data: null, error: { message: opts.itemErr } };
           return { data: opts.item === undefined ? itemRow : opts.item, error: null };
@@ -258,7 +282,8 @@ async function run() {
       apply: false,
       itemKey: 'xiaomi:18-pro-max',
       itemUpdated: true,
-      variantsUpdated: 2,
+      variantsUpdated: 4,
+      conflicts: 0,
     });
     assert.equal(filterValue(dry.calls[0], 'item_key'), 'xiaomi:18-pro-max');
     assert.ok(!dry.calls.some(c => c.op !== 'select'), 'dry run writes nothing');
@@ -268,10 +293,16 @@ async function run() {
     const appliedRun = await withFlag('nullable_variant', () =>
       syncArenaSpecsToItem(applied.client, spec, { key: 'xiaomi:18-pro-max', apply: true })
     );
-    assert.equal(appliedRun.variantsUpdated, 2);
+    assert.equal(appliedRun.variantsUpdated, 4);
+    assert.equal(appliedRun.conflicts, 0);
     assert.ok(!applied.calls.some(c => c.op === 'insert' || c.op === 'upsert'), 'no inserts');
     const itemUpdate = applied.calls.find(c => c.op === 'update' && c.table === 'items');
     assert.equal(filterValue(itemUpdate, 'id'), 'item-x18');
+    assert.deepEqual(
+      itemUpdate?.filters.find(([op, col]) => op === 'is' && col === 'updated_at'),
+      ['is', 'updated_at', null],
+      'the Item write only applies to the row as it was read'
+    );
     const itemSpecs = itemUpdate?.payload?.specifications as Record<string, Row>;
     assert.equal(itemSpecs.hardware?.storage_gb, undefined, 'no storage on an Item');
     assert.equal(itemSpecs.hardware?.ram_gb, undefined, 'no RAM on an Item');
@@ -293,7 +324,7 @@ async function run() {
     );
     assert.deepEqual(
       variantUpdates.map(c => filterValue(c, 'id')),
-      ['v-256', 'v-1024'],
+      ['v-256', 'v-1024', 'v-2048', 'v-4096'],
       'unknown, archived and filled variants are left alone'
     );
     const withoutStamp = (payload: Row | undefined) => {
@@ -314,6 +345,35 @@ async function run() {
       { ram_gb: 16, key_specs: { storage: '1TB', ram: '16GB' } },
       'only the empty RAM is filled; the stored storage stays'
     );
+    assert.deepEqual(withoutStamp(variantUpdates[2]?.payload), {
+      storage_gb: 2048,
+      key_specs: { storage: '2TB', ram: '8GB' },
+    });
+    assert.deepEqual(withoutStamp(variantUpdates[3]?.payload), { ram_gb: 8 });
+    for (const update of variantUpdates) {
+      assert.ok(
+        update.filters.some(
+          ([op, col, val]) => op === 'neq' && col === 'status' && val === 'archived'
+        ),
+        'a variant archived after the read is never written'
+      );
+    }
+    assert.equal(
+      filterValue(variantUpdates[3], 'updated_at'),
+      '2026-10-28T00:00:00.000Z',
+      'compare-and-swap on the updated_at that was read'
+    );
+
+    // Another writer changed rows between the read and the write: left alone.
+    const raced = catalogDb({ changedIds: ['item-x18', 'v-256'] });
+    const racedRun = await syncArenaSpecsToItem(raced.client, spec, {
+      key: 'xiaomi:18-pro-max',
+      apply: true,
+      itemModel: 'item',
+    });
+    assert.equal(racedRun.itemUpdated, false);
+    assert.equal(racedRun.variantsUpdated, 3);
+    assert.equal(racedRun.conflicts, 2);
   }
   console.log('  ✅ [2/5] Arena specs go to the Item, variants get only their own overrides');
 
