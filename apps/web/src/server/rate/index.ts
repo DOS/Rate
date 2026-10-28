@@ -477,9 +477,18 @@ export async function getCachedMerchantsList(
   return all;
 }
 
+// The profile reads each listed master through the product pages' cached
+// readers: a cold profile reuses their warm entries instead of re-reading
+// offers and price history per master (DOS/Rate#1217).
+const _getMerchantProfileWithCachedMasters = (cleanId: string) =>
+  _getMerchantProfileById(cleanId, {
+    offers: getCachedMasterProductOffers,
+    priceHistory: getCachedMasterProductPriceHistory,
+  });
+
 const _getCachedMerchantProfileByIdKey = cache((cleanId: string) =>
   withRateDataCache(
-    _getMerchantProfileById,
+    _getMerchantProfileWithCachedMasters,
     ['rate-merchant-profile', cleanId],
     {
       revalidate: 600,

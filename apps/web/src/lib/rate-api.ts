@@ -3069,11 +3069,33 @@ async function readInChunks(
 }
 
 /**
+ * Per-master readers a merchant profile uses for its listings' discount
+ * analysis. The server layer passes the cached readers the product pages use,
+ * so a profile reuses their warm entries instead of re-reading every master
+ * (DOS/Rate#1217).
+ */
+export interface MerchantProfileMasterReaders {
+  offers: (masterId: string) => Promise<MerchantOffer[]>;
+  priceHistory: (
+    masterId: string,
+    offers: MerchantOffer[]
+  ) => Promise<MasterProductPriceHistorySummary>;
+}
+
+const UNCACHED_MASTER_READERS: MerchantProfileMasterReaders = {
+  offers: (masterId) => getMasterProductOffers(masterId),
+  // Only byOffer is used here: skip the all-time low/high reads.
+  priceHistory: (masterId, offers) =>
+    getMasterProductPriceHistory(masterId, offers, { allTime: false }),
+};
+
+/**
  * Fetch detailed profile for a single Merchant by UUID id, slug, or platform_shop_id,
  * including all listings with Fake Discount verdicts and buyer reviews with AI flags.
  */
 export async function getMerchantProfileById(
-  idOrSlug: string
+  idOrSlug: string,
+  masterReaders: MerchantProfileMasterReaders = UNCACHED_MASTER_READERS
 ): Promise<MerchantProfileDetail | null> {
   const cleaned = sanitizeRateEntityId(idOrSlug);
   if (!cleaned || cleaned.includes('..')) return null;
@@ -3087,9 +3109,33 @@ export async function getMerchantProfileById(
   const selectCols =
     'id, platform, platform_shop_id, name, slug, url, is_official, rating_star, follower_count, location, risk_score, review_risk_score, review_risk_breakdown, metadata, created_at, updated_at';
 
+  // Secondary reads throw too: a profile with silently empty listings or
+  // reviews would otherwise be cached as if it were true (DOS/Rate#329).
+  // Paged: retailers can list more than PostgREST's 1000-row cap.
+  const readListings = (merchantId: string) =>
+    fetchAllRows('merchant listings', (from, to) =>
+      supabase
+        .from('products')
+        .select(
+          'id, merchant_id, platform, platform_item_id, title, price_current, price_original, stock, historical_sold, historical_sold_display, rating_star, rating_count, images, url, cluster_id'
+        )
+        .eq('merchant_id', merchantId)
+        .order('price_current', { ascending: true })
+        .order('id')
+        .range(from, to)
+    );
+
   let merchantRow: RawMerchantSafeRow | null = null;
+  // A UUID is almost always the merchant's own id: read its listings while
+  // the merchant row loads instead of after it, one round trip fewer on a
+  // cold render (DOS/Rate#1217). Used only when the id matches.
+  let listingsByUuid: Promise<unknown[]> | null = null;
 
   if (isUuid) {
+    listingsByUuid = readListings(cleaned);
+    // Settled here so a failure is never unhandled while the merchant loads;
+    // it is rethrown below when these listings are used.
+    listingsByUuid.catch(() => undefined);
     const { data, error } = await supabase
       .from('merchants')
       .select(selectCols)
@@ -3118,27 +3164,37 @@ export async function getMerchantProfileById(
     return null;
   }
 
-  // Secondary reads throw too: a profile with silently empty listings or
-  // reviews would otherwise be cached as if it were true (DOS/Rate#329).
-  // Paged: retailers can list more than PostgREST's 1000-row cap.
   const merchantId = merchantRow.id;
-  const prodRows = await fetchAllRows('merchant listings', (from, to) =>
-    supabase
-      .from('products')
-      .select(
-        'id, merchant_id, platform, platform_item_id, title, price_current, price_original, stock, historical_sold, historical_sold_display, rating_star, rating_count, images, url, cluster_id'
-      )
-      .eq('merchant_id', merchantId)
-      .order('price_current', { ascending: true })
-      .order('id')
-      .range(from, to)
-  );
+  const prodRows =
+    listingsByUuid && merchantId.toLowerCase() === cleaned.toLowerCase()
+      ? await listingsByUuid
+      : await readListings(merchantId);
 
   const rawProducts = prodRows as unknown as RawProductRow[];
   const clusterIds = Array.from(
     new Set(rawProducts.map((p) => p.cluster_id).filter(Boolean))
   ) as string[];
   const productIds = rawProducts.map((p) => p.id);
+
+  // Price history / Fake Discount analysis per master product. Started
+  // before the master, category and review reads it does not depend on, so
+  // both run at once (DOS/Rate#1217).
+  const discountByOfferId = new Map<string, OfferDiscountAnalysis>();
+  // A failure throws: the profile must not be cached without its analysis.
+  const discountAnalysis = forEachWithConcurrency(
+    clusterIds,
+    PRICE_HISTORY_CONCURRENCY,
+    async (cId) => {
+      const offers = await masterReaders.offers(cId);
+      const ph = await masterReaders.priceHistory(cId, offers);
+      for (const [offerId, analysis] of Object.entries(ph.byOffer)) {
+        discountByOfferId.set(offerId, analysis);
+      }
+    }
+  );
+  // Settled here so a failure is never unhandled while the reads below run;
+  // it is rethrown where the analysis is awaited.
+  discountAnalysis.catch(() => undefined);
 
   const [masterRows, catsRes, reviewRows] = await Promise.all([
     // Published only: the product page serves no other status, so a draft
@@ -3222,22 +3278,7 @@ export async function getMerchantProfileById(
     });
   }
 
-  // Compute price history / Fake Discount analysis per master product
-  const discountByOfferId = new Map<string, OfferDiscountAnalysis>();
-  // A failure throws: the profile must not be cached without its analysis.
-  await forEachWithConcurrency(
-    clusterIds,
-    PRICE_HISTORY_CONCURRENCY,
-    async (cId) => {
-      // Only byOffer is used here: skip the all-time low/high reads.
-      const ph = await getMasterProductPriceHistory(cId, undefined, {
-        allTime: false,
-      });
-      for (const [offerId, analysis] of Object.entries(ph.byOffer)) {
-        discountByOfferId.set(offerId, analysis);
-      }
-    }
-  );
+  await discountAnalysis;
 
   const listings: MerchantProductListing[] = rawProducts.map((p) => {
     const masterInfo = p.cluster_id
