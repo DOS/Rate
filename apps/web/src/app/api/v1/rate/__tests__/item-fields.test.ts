@@ -239,6 +239,14 @@ async function testFlagOffUnchanged() {
   const missingFiltered = await list('category=all&group=item&ram=8');
   assert.equal(missingFiltered.status, 200);
   assert.equal(missingFiltered.text, offFiltered.text);
+  // Also for a category with no row: the tables are checked before an empty list.
+  setFlag(undefined);
+  const offCategory = await list('category=smartphones&group=item&ram=8');
+  setFlag('item');
+  assert.equal(
+    (await list('category=smartphones&group=item&ram=8')).text,
+    offCategory.text
+  );
   catalog = [];
   schemaMissing = false;
   // Only the unknown-variant offers read fails: the whole response is as before.

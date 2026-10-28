@@ -354,7 +354,12 @@ export async function listApiItems(
         .eq('slug', categorySlug)
         .maybeSingle();
       if (error) throw new RateDataUnavailableError('categories', error);
-      if (!data) return [];
+      if (!data) {
+        // An unknown category lists nothing, but only once the Item tables
+        // are known to exist: without them the route answers as before.
+        await listItems({ limit: 1, offset: 0 });
+        return [];
+      }
       categoryId = (data as { id: string }).id;
     }
     const items = await listItems({ ...params, categoryId });
