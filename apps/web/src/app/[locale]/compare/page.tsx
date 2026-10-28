@@ -9,6 +9,7 @@ import {
 } from '@/server/rate';
 import { resolveCompareSlugs } from '@/server/rate/item-compare';
 import { getItemSlugsFor } from '@/server/rate/item-directory';
+import { compareCategoryParam } from '@/lib/compare-params';
 import { normalizeRateLocale } from '@/lib/rate-i18n';
 import { defaultOpenGraph, fitTitle, fitDescription } from '@/lib/seo';
 import CompareWorkspace from '@/components/compare/CompareWorkspace';
@@ -22,7 +23,7 @@ export const dynamic = 'force-dynamic';
 
 type PageProps = {
   params: Promise<{ locale: string }>;
-  searchParams: Promise<{ slugs?: string; category?: string }>;
+  searchParams: Promise<{ slugs?: string; category?: string; cat?: string }>;
 };
 
 const VALID_CATEGORIES = new Set<CanonicalCategorySlug>([
@@ -121,7 +122,9 @@ export default async function ComparePhonesPage({
   setRequestLocale(locale);
   const lang = normalizeRateLocale(locale);
   const t = await getTranslations({ locale: lang, namespace: 'compare' });
-  const { slugs: slugsParam, category: categoryParam } = await searchParams;
+  const resolvedSearch = await searchParams;
+  const slugsParam = resolvedSearch.slugs;
+  const categoryParam = compareCategoryParam(resolvedSearch);
   const requestedSlugs = parseSlugsCsv(slugsParam);
 
   const [catalogCandidates, requestedProducts] = await Promise.all([
