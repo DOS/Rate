@@ -492,6 +492,15 @@ async function runSuite() {
     ['MacBook Pro M3 16 RAM 512 SSD tặng túi 14 inch', 'apple:macbook-pro-m3-14:unknown'],
     ['MacBook Air M3 macOS Sonoma 14 tặng túi 13 inch', 'apple:macbook-air-m3-13:unknown'],
     ['iPad Air M2 BH 12 months tặng ốp 11 inch', 'apple:ipad-air-m2-11:unknown'],
+    // ...but a size before "RAM 8GB" (a RAM size follows), "SSD" or "ROM" is the
+    // screen's, and short words like "Tr", "k", "đ" are no unit.
+    ['iPad Pro M4 11 RAM 8GB ROM 256GB tặng ốp 13 inch', 'apple:ipad-pro-m4-11:256gb'],
+    ['Macbook Air M2 13 RAM 8GB SSD 256GB', 'apple:macbook-air-m2-13:256gb'],
+    ['MacBook Pro M3 14 RAM 18GB 512GB', 'apple:macbook-pro-m3-14:512gb'],
+    ['MacBook Air M1 13 SSD 256GB', 'apple:macbook-air-m1-13:256gb'],
+    ['iPad Pro M4 11 ROM 256GB', 'apple:ipad-pro-m4-11:256gb'],
+    ['MacBook Pro 14 Tr M3 8GB 512GB', 'apple:macbook-pro-m3-14:512gb'],
+    ['iPad Pro 11 k M4 256GB', 'apple:ipad-pro-m4-11:256gb'],
     // A bare gift number is the gift's: the product's own size after it wins.
     ['iPad Pro M4 tặng ốp 11 | 13 WiFi', 'apple:ipad-pro-m4-13:unknown'],
     ['iPad Pro M4 13 tặng ốp 11 tặng bút', 'apple:ipad-pro-m4-13:unknown'],
