@@ -1186,7 +1186,9 @@
     "exportMenu": "Exportovat data",
     "offersReviewRiskLabel": "Riziko recenzí",
     "offersReviewRiskNoData": "nedostatek dat",
-    "offersDiscontinuedBadge": "Ukončený prodej"
+    "offersDiscontinuedBadge": "Ukončený prodej",
+    "offersTrustBadge": "Důvěryhodnost: {score} %",
+    "offersScamRiskLabel": "Riziko podvodu"
   },
   "homePage": {
     "catDescSmartphones": "Filtrovat podle čipsetu, RAM/ROM, obnovovací frekvence Hz, baterie mAh a nabíjení W",

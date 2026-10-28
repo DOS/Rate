@@ -1186,7 +1186,9 @@
     "exportMenu": "Export data",
     "offersReviewRiskLabel": "Review risk",
     "offersReviewRiskNoData": "not enough data",
-    "offersDiscontinuedBadge": "Discontinued"
+    "offersDiscontinuedBadge": "Discontinued",
+    "offersTrustBadge": "Trust: {score}%",
+    "offersScamRiskLabel": "Scam risk"
   },
   "homePage": {
     "catDescSmartphones": "Filter by chipset, RAM/ROM, refresh rate Hz, battery mAh & fast charge W",

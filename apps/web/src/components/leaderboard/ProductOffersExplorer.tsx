@@ -751,11 +751,11 @@ export default function ProductOffersExplorer({
                               className={`badge ${trustBadgeClass} text-decoration-none small`}
                               title={t('offersMerchantTrustTitle')}
                             >
-                              Trust: {trustScore}% ↗
+                              {t('offersTrustBadge', { score: trustScore })} ↗
                             </Link>
                           ) : (
                             <span className={`badge ${trustBadgeClass} small`}>
-                              Trust: {trustScore}%
+                              {t('offersTrustBadge', { score: trustScore })}
                             </span>
                           )}
                         </div>
@@ -763,7 +763,8 @@ export default function ProductOffersExplorer({
                           className="text-muted"
                           style={{ fontSize: '0.8125rem' }}
                         >
-                          DOSafe:{' '}
+                          {/* Every label from the catalogue (DOS/Rate#1269). */}
+                          {t('offersScamRiskLabel')}:{' '}
                           {formatOfferRiskScore100(
                             offer.merchant.dosafe_risk_score
                           )}

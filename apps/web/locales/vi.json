@@ -1186,7 +1186,9 @@
     "exportMenu": "Xuất dữ liệu",
     "offersReviewRiskLabel": "Rủi ro đánh giá",
     "offersReviewRiskNoData": "chưa đủ dữ liệu",
-    "offersDiscontinuedBadge": "Ngừng bán"
+    "offersDiscontinuedBadge": "Ngừng bán",
+    "offersTrustBadge": "Độ tin cậy: {score}%",
+    "offersScamRiskLabel": "Rủi ro lừa đảo"
   },
   "homePage": {
     "catDescSmartphones": "Lọc theo chipset, RAM/ROM, tần số quét Hz, pin mAh & sạc nhanh W",
