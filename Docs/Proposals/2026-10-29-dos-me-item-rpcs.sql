@@ -12,8 +12,11 @@ BEGIN;
 -- 1. search_items_v1: one row per published Item, with the published variants the filters
 -- match. Same filter names as search_master_products where they apply; `p_storage_gb` means
 -- "has a variant of that size" (design 5.1); price filters and sorts use the cheapest priced
--- matching variant (`matching_min_price`). `total_count` is the number of matching Items
--- (for paging), the same on every row.
+-- matching variant (`matching_min_price`). `p_search` matches the Item's and its published
+-- variants' names, keys and chips. The card links to the representative variant (the
+-- cheapest priced matching one, else the first matching one) and shows `chips`, one per
+-- published variant with `matching` set. `total_count` is the number of matching Items (for
+-- paging), the same on every row.
 CREATE OR REPLACE FUNCTION rate.search_items_v1(
   p_category_id UUID DEFAULT NULL,
   p_brands TEXT[] DEFAULT NULL,
@@ -39,14 +42,21 @@ RETURNS TABLE (
   min_price NUMERIC,
   max_price NUMERIC,
   matching_min_price NUMERIC,
+  matching_max_price NUMERIC,
   price_variant_count INTEGER,
   merchant_count INTEGER,
   listing_count INTEGER,
   user_rating_weighted NUMERIC,
   authentic_review_count INTEGER,
+  expert_rating NUMERIC,
+  average_rating NUMERIC,
+  total_reviews INTEGER,
   default_variant_id UUID,
+  representative_variant_id UUID,
+  representative_variant_slug TEXT,
   variant_keys TEXT[],
   matching_variant_keys TEXT[],
+  chips JSONB,
   created_at TIMESTAMPTZ,
   total_count BIGINT
 )
@@ -56,7 +66,12 @@ SECURITY INVOKER
 SET search_path = ''
 AS $$
   WITH v AS (
-    SELECT m.item_id, m.variant_key, m.min_price, m.storage_gb, m.has_5g, m.sort_order
+    SELECT m.id, m.slug, m.item_id, m.variant_key, m.min_price, m.storage_gb, m.sort_order,
+           COALESCE(
+             (p_storage_gb IS NULL OR cardinality(p_storage_gb) = 0 OR m.storage_gb = ANY (p_storage_gb))
+             AND (p_has_5g IS NULL OR p_has_5g = false OR m.has_5g = true),
+             false) AS matching,
+           pg_catalog.concat_ws(' ', m.name, m.model_key, COALESCE(m.key_specs ->> 'chip', '')) AS search_text
     FROM rate.master_products m
     WHERE m.status = 'published' AND m.item_id IS NOT NULL
   ),
@@ -66,19 +81,23 @@ AS $$
       pg_catalog.array_agg(v.variant_key ORDER BY v.sort_order NULLS LAST, v.storage_gb NULLS LAST, v.variant_key)
         AS variant_keys,
       pg_catalog.array_agg(v.variant_key ORDER BY v.sort_order NULLS LAST, v.storage_gb NULLS LAST, v.variant_key)
-        FILTER (WHERE
-          (p_storage_gb IS NULL OR cardinality(p_storage_gb) = 0 OR v.storage_gb = ANY (p_storage_gb))
-          AND (p_has_5g IS NULL OR p_has_5g = false OR v.has_5g = true))
-        AS matching_variant_keys,
-      min(v.min_price) FILTER (WHERE v.min_price > 0
-          AND (p_storage_gb IS NULL OR cardinality(p_storage_gb) = 0 OR v.storage_gb = ANY (p_storage_gb))
-          AND (p_has_5g IS NULL OR p_has_5g = false OR v.has_5g = true))
-        AS matching_min_price
+        FILTER (WHERE v.matching) AS matching_variant_keys,
+      min(v.min_price) FILTER (WHERE v.matching AND v.min_price > 0) AS matching_min_price,
+      max(v.min_price) FILTER (WHERE v.matching AND v.min_price > 0) AS matching_max_price,
+      (pg_catalog.array_agg(v.id ORDER BY (v.min_price > 0) DESC NULLS LAST, v.min_price NULLS LAST,
+         v.sort_order NULLS LAST, v.storage_gb NULLS LAST, v.variant_key) FILTER (WHERE v.matching))[1]
+        AS representative_variant_id,
+      pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object(
+          'variant_id', v.id, 'variant_key', v.variant_key, 'slug', v.slug,
+          'storage_gb', v.storage_gb, 'min_price', NULLIF(v.min_price, 0), 'matching', v.matching)
+        ORDER BY v.sort_order NULLS LAST, v.storage_gb NULLS LAST, v.variant_key) AS chips,
+      pg_catalog.string_agg(v.search_text, ' ') AS variant_search_text
     FROM v
     GROUP BY v.item_id
   ),
   matched AS (
-    SELECT i.*, p.variant_keys, p.matching_variant_keys, p.matching_min_price
+    SELECT i.*, p.variant_keys, p.matching_variant_keys, p.matching_min_price, p.matching_max_price,
+           p.representative_variant_id, p.chips
     FROM rate.items i
     JOIN per_item p ON p.item_id = i.id
     WHERE i.status = 'published'
@@ -96,7 +115,8 @@ AS $$
         OR pg_catalog.btrim(p_search) = ''
         OR pg_catalog.concat_ws(' ', i.brand, i.name, i.model, i.item_key,
              COALESCE(i.key_specs ->> 'chip', ''),
-             COALESCE(i.specifications #>> '{hardware,chipset}', ''))
+             COALESCE(i.specifications #>> '{hardware,chipset}', ''),
+             p.variant_search_text)
            ILIKE '%' || pg_catalog.regexp_replace(pg_catalog.btrim(p_search), '([%_\\])', '\\\1', 'g') || '%' ESCAPE '\'
       )
       AND (p_min_price IS NULL OR p_min_price <= 0 OR p.matching_min_price >= p_min_price)
@@ -111,11 +131,14 @@ AS $$
   SELECT
     m.id, m.item_key, m.slug, m.name, m.brand, m.model, m.category_id,
     COALESCE(m.thumbnail, m.images[1]),
-    m.min_price, m.max_price, m.matching_min_price, m.price_variant_count, m.merchant_count,
-    m.listing_count, m.user_rating_weighted, m.authentic_review_count, m.default_variant_id,
-    m.variant_keys, m.matching_variant_keys, m.created_at,
+    m.min_price, m.max_price, m.matching_min_price, m.matching_max_price, m.price_variant_count,
+    m.merchant_count, m.listing_count, m.user_rating_weighted, m.authentic_review_count,
+    m.expert_rating, m.average_rating, m.total_reviews, m.default_variant_id,
+    m.representative_variant_id, rv.slug,
+    m.variant_keys, m.matching_variant_keys, m.chips, m.created_at,
     pg_catalog.count(*) OVER ()
   FROM matched m
+  LEFT JOIN rate.master_products rv ON rv.id = m.representative_variant_id
   ORDER BY
     CASE WHEN p_sort = 'price_asc' THEN m.matching_min_price END ASC NULLS LAST,
     CASE WHEN p_sort = 'price_desc' THEN m.matching_min_price END DESC NULLS LAST,

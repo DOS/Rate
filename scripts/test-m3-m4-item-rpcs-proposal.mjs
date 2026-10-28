@@ -128,6 +128,30 @@ try {
     ''
   );
   assert.equal(
+    search(`p_search => '256GB'`),
+    'acme-phone-x|128gb,256gb,unknown|10000000|1',
+    'the search reads variant names too'
+  );
+  assert.equal(
+    asRole(
+      'anon',
+      `SELECT representative_variant_slug || '|' || matching_max_price::bigint || '|' ||
+              (SELECT string_agg((c ->> 'variant_key') || ':' || (c ->> 'matching'), ',')
+               FROM jsonb_array_elements(chips) c)
+       FROM rate.search_items_v1(p_category_id => '${PHONES}', p_storage_gb => ARRAY[256])`
+    ),
+    'acme-phone-x-256gb|12000000|128gb:false,256gb:true,unknown:false',
+    'the card links to the cheapest matching variant and shows every size as a chip'
+  );
+  assert.equal(
+    asRole(
+      'anon',
+      `SELECT representative_variant_slug FROM rate.search_items_v1(p_category_id => '${PHONES}')`
+    ),
+    'acme-phone-x-128gb',
+    'an unpriced unknown variant is never the representative'
+  );
+  assert.equal(
     asRole(
       'anon',
       `SELECT brand || '=' || count FROM rate.get_category_brand_facets_v2('${PHONES}')`
@@ -196,12 +220,32 @@ try {
            VALUES ('e0000000-0000-4000-8000-000000000001', 'shopee', 'orphan', 'X', 1, 'https://shopee.vn/o')`),
     /products_item_id_not_null/
   );
+  // The M1 sync trigger re-derives item_id, so switch it off to reach the NOT NULL.
   assert.throws(
     () =>
-      sql(
-        `UPDATE rate.master_products SET item_id = NULL WHERE id = '${m.p128}'`
-      ),
+      sql(`BEGIN;
+           ALTER TABLE rate.master_products DISABLE TRIGGER trg_master_products_sync_item;
+           UPDATE rate.master_products SET item_id = NULL WHERE id = '${m.p128}';
+           COMMIT;`),
     /null value in column "item_id"/
+  );
+  sql('ROLLBACK;');
+  // A new variant of an Item without a default fills it in.
+  sql(
+    `UPDATE rate.items SET default_variant_id = NULL WHERE item_key = 'acme:phone-x'`
+  );
+  sql(
+    `UPDATE rate.master_products SET status = 'published' WHERE id = '${m.p256}'`
+  );
+  assert.equal(
+    sql(
+      `SELECT default_variant_id FROM rate.items WHERE item_key = 'acme:phone-x'`
+    ),
+    m.p256,
+    'the fill trigger names a default variant when it is missing'
+  );
+  sql(
+    `UPDATE rate.items SET default_variant_id = '${m.p128}' WHERE item_key = 'acme:phone-x'`
   );
   assert.throws(
     () =>
@@ -242,6 +286,16 @@ try {
     't'
   );
   sql(rpcs);
+  // An active price alert on an unknown variant M3 would retire stops M3 (design 7.2).
+  sql(`INSERT INTO rate.price_alerts (master_product_id, client_fingerprint, target_price)
+       VALUES ('${m.pUnknown}', 'fp-1', 9000000)`);
+  assert.throws(() => sql(m3m4), /price alerts on unknown variants/);
+  assert.equal(
+    sql(`SELECT status FROM rate.master_products WHERE id = '${m.pUnknown}'`),
+    'published',
+    'the aborted M3 changed nothing'
+  );
+  sql(`UPDATE rate.price_alerts SET is_active = false`);
   sql(m3m4);
   checkAll(m3m4Checks, 'rollback and re-apply');
 

@@ -667,7 +667,7 @@ BEGIN
   END IF;
   SELECT mp.id INTO v_unknown
   FROM rate.master_products mp
-  WHERE mp.item_id = p_item_id AND mp.variant_key = 'unknown' AND mp.status <> 'archived';
+  WHERE mp.item_id = p_item_id AND mp.variant_key = 'unknown' AND mp.status IS DISTINCT FROM 'archived';
   IF v_unknown IS NULL THEN
     -- Already retired: move any listing a racing writer put back on it.
     SELECT mp.id INTO v_unknown
@@ -697,9 +697,9 @@ BEGIN
   SELECT mp.status INTO v_status FROM rate.master_products mp WHERE mp.id = v_unknown FOR UPDATE;
   -- Re-check under the locks: a concurrent call may have retired it, or the sized variant
   -- may have been archived meanwhile.
-  IF v_status IS NULL OR v_status = 'archived' OR NOT EXISTS (
+  IF NOT FOUND OR v_status IS NOT DISTINCT FROM 'archived' OR NOT EXISTS (
        SELECT 1 FROM rate.master_products mp
-       WHERE mp.item_id = p_item_id AND mp.status <> 'archived'
+       WHERE mp.item_id = p_item_id AND mp.status IS DISTINCT FROM 'archived'
          AND mp.variant_key ~ '^[0-9]+(gb|tb)$') THEN
     RETURN 0;
   END IF;
