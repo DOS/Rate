@@ -425,6 +425,70 @@ async function run() {
     });
     assert.ok(!db.calls.some(c => c.table === 'match_item'));
   }
+  {
+    // A retired (archived) unknown variant is never seeded again or adopted.
+    const retired = {
+      items: [ZENBOOK_ITEM],
+      variants: [
+        ZENBOOK_1TB,
+        {
+          id: 'master-zenbook-unknown',
+          item_id: 'item-zenbook',
+          variant_key: 'unknown',
+          status: 'archived',
+        },
+      ],
+    };
+    const title = 'Laptop ASUS Zenbook S 14 UX5406AA-SU348W';
+    const itemDb = createItemDb(retired);
+    await assert.rejects(
+      new EntityMatcher(itemDb.client, passthroughEnricher, {
+        itemModel: 'item',
+      }).resolveItemAndVariant(candidateFor(title)),
+      /archived/
+    );
+    assert.ok(!itemDb.calls.some(c => c.op === 'upsert'));
+    const singleRetired = createItemDb({
+      items: [ZENBOOK_ITEM],
+      variants: [{ ...retired.variants[1]! }],
+    });
+    const none = await new EntityMatcher(singleRetired.client, passthroughEnricher, {
+      itemModel: 'nullable_variant',
+    }).resolveItemAndVariant(candidateFor(title));
+    assert.equal(none.masterId, null);
+    assert.ok(!singleRetired.calls.some(c => c.op === 'upsert'));
+  }
+  {
+    // A fuzzy Item hit never creates a variant under that Item's key.
+    const db = createItemDb({
+      items: [{ id: 'item-ip15p', item_key: 'apple:iphone-15-pro' }],
+      variants: [{ id: 'master-ip15p-128', item_id: 'item-ip15p', variant_key: '128gb' }],
+      matchItem: [
+        { item_id: 'item-ip15p', item_key: 'apple:iphone-15-pro', name: 'x', similarity: 0.9 },
+      ],
+      seededItemId: 'item-ip15pm',
+    });
+    const result = await new EntityMatcher(db.client, passthroughEnricher, {
+      itemModel: 'item',
+    }).resolveItemAndVariant(candidateFor('Apple iPhone 15 Pro Max 256GB Chính hãng VN/A'));
+    assert.equal(
+      db.calls.find(c => c.op === 'upsert')?.payload?.model_key,
+      'apple:iphone-15-pro-max:256gb'
+    );
+    assert.equal(result.itemId, 'item-ip15pm');
+  }
+  {
+    // A sizeless line keyed `unknown` reuses a seeded `standard` variant.
+    const db = createItemDb({
+      items: [{ id: 'item-app2', item_key: 'apple:airpods-pro-2' }],
+      variants: [{ id: 'master-app2-std', item_id: 'item-app2', variant_key: 'standard' }],
+    });
+    const result = await new EntityMatcher(db.client, passthroughEnricher, {
+      itemModel: 'item',
+    }).resolveItemAndVariant(candidateFor('Tai nghe Apple AirPods Pro 2 (USB-C) Chính hãng VN/A'));
+    assert.equal(result.masterId, 'master-app2-std');
+    assert.ok(!db.calls.some(c => c.op === 'upsert'));
+  }
   console.log('  ✅ [4/5] Item tiers, exact variants, size not stated (#1105) and hints');
 
   // 5. Pipeline writes
@@ -524,6 +588,45 @@ async function run() {
     });
     assert.equal(kept.listing?.cluster_id, ZENBOOK_1TB.id);
     assert.ok(!('variant_source' in (kept.listing ?? {})));
+
+    // Mode item too: the Item's unknown variant never replaces a hand-set one.
+    const keptItem = await ingest(
+      'item',
+      bareTitle,
+      {
+        ...zenbook,
+        variants: [
+          ZENBOOK_1TB,
+          { id: 'master-zenbook-unknown', item_id: 'item-zenbook', variant_key: 'unknown' },
+        ],
+      },
+      { stored: { cluster_id: ZENBOOK_1TB.id, variant_source: 'manual' } }
+    );
+    assert.equal(keptItem.listing?.cluster_id, ZENBOOK_1TB.id);
+    assert.ok(!('variant_source' in (keptItem.listing ?? {})));
+
+    // A size stated in the title is evidence and does move a hand-set variant.
+    const moved = await ingest('item', 'Laptop ASUS Zenbook S 14 UX5406AA 1TB', zenbook, {
+      stored: { cluster_id: 'master-zenbook-512', variant_source: 'manual' },
+    });
+    assert.equal(moved.listing?.cluster_id, ZENBOOK_1TB.id);
+    assert.equal(moved.listing?.variant_source, 'title');
+    // ...and the variant it left is refreshed as well as the new one.
+    const refreshed = moved.calls
+      .filter(c => c.op === 'rpc' && c.table === 'refresh_master_market_stats')
+      .map(c => c.payload?.p_master_id);
+    assert.deepEqual(refreshed, [ZENBOOK_1TB.id, 'master-zenbook-512']);
+
+    const left = await ingest('nullable_variant', bareTitle, zenbook, {
+      stored: { cluster_id: 'master-zenbook-unknown', variant_source: null },
+    });
+    assert.equal(left.listing?.cluster_id, null);
+    assert.deepEqual(
+      left.calls
+        .filter(c => c.op === 'rpc' && c.table === 'refresh_master_market_stats')
+        .map(c => c.payload?.p_master_id),
+      ['master-zenbook-unknown']
+    );
   }
   {
     // An archived masterIdHint maps to its Item; a live one is kept.

@@ -240,15 +240,17 @@ export class EntityMatcher {
         });
       }
     }
+    let fuzzyItem = false;
     if (!item) {
       const fuzzy = await this.fuzzyMatchItem(candidate);
       item = fuzzy.item;
+      fuzzyItem = Boolean(fuzzy.item);
       ambiguousFuzzy = fuzzy.ambiguous;
     }
 
     // 4. No Item: seed the master under the candidate's own key. A new Item's one
     // variant (sized or `unknown`) is its only variant until a sized one appears.
-    if (!item) {
+    const seedOwnKey = async (): Promise<ItemMatchResult> => {
       const seeded = await this.seedMasterProduct(
         candidate,
         safeModelKey,
@@ -258,7 +260,8 @@ export class EntityMatcher {
       );
       const itemId = await this.itemIdOfMaster(seeded.masterId);
       return { itemId, masterId: seeded.masterId, isNew: seeded.isNew, variantSource };
-    }
+    };
+    if (!item) return seedOwnKey();
     if (!isItemKey(item.itemKey)) {
       throw new Error(
         `[EntityMatcher] Item ${item.id} has no brand:model key (${JSON.stringify(item.itemKey)}); cannot place a variant under it`
@@ -270,7 +273,12 @@ export class EntityMatcher {
 
     if (variantKnown) {
       // 2. Known size: exact (item_id, variant_key), as Tier 1 matches an exact model_key.
-      const exact = variants.find(v => v.variant_key === keys.variantKey);
+      // A sizeless line keyed `unknown` also takes a live `standard` variant (seed keys).
+      const exact =
+        variants.find(v => v.variant_key === keys.variantKey) ??
+        (keys.variantKey === UNKNOWN_VARIANT_KEY
+          ? variants.find(v => v.variant_key === 'standard' && v.status !== 'archived')
+          : undefined);
       if (exact) {
         logger.info('entity_match.variant_exact', `Variant ${keys.variantKey} of ${item.itemKey}`, {
           itemId: item.id,
@@ -305,7 +313,22 @@ export class EntityMatcher {
         return { itemId: item.id, masterId: only.id, isNew: false, variantSource: null };
       }
       targetVariantKey = UNKNOWN_VARIANT_KEY;
+      // A retired `unknown` variant (M3) is never seeded again: the upsert would
+      // adopt the archived row.
+      if (variants.some(v => v.variant_key === UNKNOWN_VARIANT_KEY)) {
+        if (this.itemModel === 'nullable_variant') {
+          return { itemId: item.id, masterId: null, isNew: false, variantSource: null };
+        }
+        throw new Error(
+          `[EntityMatcher] ${item.itemKey}:unknown is archived; RATE_ITEM_MODEL=item cannot place a listing with no stated size`
+        );
+      }
     }
+
+    // A fuzzy Item hit only links to variants that exist, as Tier 2 only links to
+    // existing masters: the listing's own name and model may not be the Item's
+    // ("iPhone 15 Pro Max" ~ "iPhone 15 Pro"), so a new variant gets its own key.
+    if (fuzzyItem) return seedOwnKey();
 
     // Missing variant of a known Item: create it under the Item's own key.
     const variantModelKey = composeModelKey(item.itemKey, targetVariantKey);

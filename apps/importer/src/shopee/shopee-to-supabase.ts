@@ -593,9 +593,12 @@ export class ShopeeIngestionPipeline {
     const { itemId, isNew } = resolved;
     let masterId = resolved.masterId;
     let variantSourceToWrite = hinted ? hintedVariantSource : resolved.variantSource;
-    if (masterId === null) {
-      // No variant from this crawl: a variant set by hand is evidence, never undone
-      // by a later page that just does not state the size (design doc 4.4).
+    // The variant the listing had before this crawl, so its stats follow a move.
+    let previousClusterId: string | null = null;
+    if (itemModel !== 'off' && !hinted) {
+      // A variant set by hand is evidence, never undone by a later page that just
+      // does not state the size (design doc 4.4): only listing evidence
+      // (variant_source set) may move it.
       const { data: stored, error: storedErr } = await this.supabase
         .from('products')
         .select('cluster_id, variant_source')
@@ -606,7 +609,8 @@ export class ShopeeIngestionPipeline {
         throw new Error(`Failed to read the stored listing variant: ${storedErr.message}`);
       }
       const storedClusterId = sanitizeIngestionEntityId(stored?.cluster_id, 128);
-      if (storedClusterId && stored?.variant_source === 'manual') {
+      previousClusterId = storedClusterId;
+      if (storedClusterId && stored?.variant_source === 'manual' && !resolved.variantSource) {
         masterId = storedClusterId;
         variantSourceToWrite = undefined;
       }
@@ -671,15 +675,19 @@ export class ShopeeIngestionPipeline {
     });
 
     // 3b. Refresh canonical master_products market stats (min_price, max_price, merchant_count) via SQL RPC (Audit C5)
-    if (typeof this.supabase.rpc === 'function' && masterId) {
+    // A variant the listing just left is refreshed too, or it keeps the old price.
+    const statsMasterIds = [masterId, previousClusterId].filter(
+      (id, i, all): id is string => Boolean(id) && all.indexOf(id) === i
+    );
+    for (const statsMasterId of typeof this.supabase.rpc === 'function' ? statsMasterIds : []) {
       const { error: marketStatsErr } = await this.supabase.rpc('refresh_master_market_stats', {
-        p_master_id: masterId,
+        p_master_id: statsMasterId,
       });
       if (marketStatsErr) {
         platLogger.warn(
           'ingest.market_stats_rpc_warn',
           `Could not refresh master market stats via RPC: ${marketStatsErr.message}`,
-          { masterId }
+          { masterId: statsMasterId }
         );
       }
     }
