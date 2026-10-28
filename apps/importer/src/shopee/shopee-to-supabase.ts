@@ -101,6 +101,17 @@ const SPEC_FIELD_GROUP_KEYS = [
  * Returns true if at least one of the 10 specification field groups contains a
  * non-empty value (ignoring top-level metadata keys such as `category_slug`).
  */
+/**
+ * Whether a title names a storage size, also as one of a list such as
+ * "256/512GB" (DOS/Rate#1197).
+ */
+export function titleNamesStorage(title: string, storageGb: number): boolean {
+  if (!Number.isInteger(storageGb) || storageGb <= 0) return false;
+  const forms = [`${storageGb}\\s*GB`, `${storageGb}\\s*\\/\\s*\\d+(?:[.,]\\d+)?\\s*(?:GB|TB)`];
+  if (storageGb % 1024 === 0) forms.push(`${storageGb / 1024}\\s*TB`);
+  return new RegExp(`(?<![\\d.,])(?:${forms.join('|')})\\b`, 'i').test(title);
+}
+
 export function hasPopulatedSpecificationGroups(specs: unknown): boolean {
   if (!specs || typeof specs !== 'object' || Array.isArray(specs)) return false;
   const record = specs as Record<string, unknown>;
@@ -518,6 +529,8 @@ export class ShopeeIngestionPipeline {
     let hinted: ItemMatchResult | null = null;
     // undefined = leave the stored variant_source as it is.
     let hintedVariantSource: ItemMatchResult['variantSource'] | undefined;
+    // A hinted master left on a storage conflict: its stats follow the move.
+    let ignoredHintMasterId: string | null = null;
     let safeItemIdHint =
       typeof options.itemIdHint === 'string'
         ? (sanitizeIngestionEntityId(options.itemIdHint, 128) ?? '')
@@ -557,16 +570,19 @@ export class ShopeeIngestionPipeline {
       } | null;
       // The page states a storage the hinted master does not have (a 1TB page
       // hinted to the 512GB master): the hint is not applied and the listing is
-      // matched like any other (DOS/Rate#1197). A page with no stated storage
-      // keeps the hint.
+      // matched like any other (DOS/Rate#1197). A page with no stated storage,
+      // a title that also names the hinted size ("256/512GB") and a title too
+      // bare to match keep the hint.
       const hintStorageGb = Number(hintMeta?.storage_gb);
       const storageConflict =
+        candidate.keyable !== false &&
         candidate.variant_source === 'title' &&
         typeof candidate.storage_gb === 'number' &&
         candidate.storage_gb > 0 &&
         Number.isFinite(hintStorageGb) &&
         hintStorageGb > 0 &&
-        candidate.storage_gb !== hintStorageGb;
+        candidate.storage_gb !== hintStorageGb &&
+        !titleNamesStorage(product.title, hintStorageGb);
       const hintItemId =
         itemModel === 'off' ? null : sanitizeIngestionEntityId(hintMeta?.item_id, 128);
       if (hintRow?.id && storageConflict) {
@@ -579,6 +595,9 @@ export class ShopeeIngestionPipeline {
             hintStorageGb,
           }
         );
+        ignoredHintMasterId = hintRow.id;
+        // The hinted variant's Item still holds the listing's model.
+        if (hintItemId && !safeItemIdHint) safeItemIdHint = hintItemId;
       } else if (hintRow?.id && itemModel !== 'off' && hintMeta?.status === 'archived') {
         // A retired master (an Item's `unknown` variant after M3) must not take the
         // listing back: the hint maps to its Item, and the variant comes from the title.
@@ -628,6 +647,9 @@ export class ShopeeIngestionPipeline {
     let previousItemId: string | null = null;
     // True when itemId comes from a kept variant: then it is written even when null.
     let itemIdFromKeptVariant = false;
+    // Off mode reads no stored listing; the master a conflicting hint named is
+    // where the listing sat before.
+    if (itemModel === 'off' && ignoredHintMasterId) previousClusterId = ignoredHintMasterId;
     if (itemModel !== 'off') {
       // A variant set by hand is evidence, never undone by a later page that just
       // does not state the size (design doc 4.4): only listing evidence

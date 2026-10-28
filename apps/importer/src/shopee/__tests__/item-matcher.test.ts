@@ -813,6 +813,28 @@ async function run() {
     );
     assert.equal(live.listing?.cluster_id, ZENBOOK_1TB.id);
     assert.equal(live.listing?.variant_source, 'title');
+
+    // A 1TB page hinted to the Item's 512GB variant: the hint is not applied,
+    // the listing is matched under the hint's Item (DOS/Rate#1197).
+    const conflict = await ingest(
+      'item',
+      'Laptop ASUS Zenbook S 14 UX5406AA 1TB',
+      zenbook,
+      {
+        hint: {
+          id: 'master-zenbook-512',
+          specifications: { display: { size: 'x' } },
+          status: 'published',
+          item_id: 'item-zenbook',
+          variant_key: '512gb',
+          storage_gb: 512,
+        },
+      },
+      { masterIdHint: 'master-zenbook-512' }
+    );
+    assert.equal(conflict.listing?.cluster_id, ZENBOOK_1TB.id);
+    assert.equal(conflict.listing?.item_id, 'item-zenbook');
+    assert.equal(conflict.listing?.variant_source, 'title');
     assert.ok(!live.calls.some(c => c.table === 'items'), 'a live hint skips matching');
 
     const offHint = await ingest(

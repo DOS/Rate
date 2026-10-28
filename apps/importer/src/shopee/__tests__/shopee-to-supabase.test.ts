@@ -11,6 +11,7 @@ import { trimTrailingSlashes } from '../ai-spec-enricher.js';
 import {
   ShopeeIngestionPipeline,
   hasPopulatedSpecificationGroups,
+  titleNamesStorage,
   normalizeScrapedProductPrices,
   platformReviewIdFor,
 } from '../shopee-to-supabase.js';
@@ -542,6 +543,29 @@ async function runTests() {
   );
   assert.equal(conflictRes.masterId, 'master-exact-1', 'it falls back to normal matching');
   assert.equal(conflictEvents.productUpserts[0]?.cluster_id, 'master-exact-1');
+  // The master it left gets its stats refreshed too.
+  assert.ok(conflictEvents.marketStatsRefreshed.includes('master-hint-512'));
+  assert.ok(conflictEvents.marketStatsRefreshed.includes('master-exact-1'));
+
+  // A title that also names the hinted size is no conflict.
+  assert.equal(titleNamesStorage('iPhone 16 Pro Max 256/512GB', 256), true);
+  assert.equal(titleNamesStorage('iPhone 16 Pro Max 256/512GB', 512), true);
+  assert.equal(titleNamesStorage('ThinkPad X1 Carbon Gen 12 1TB SSD', 1024), true);
+  assert.equal(titleNamesStorage('ThinkPad X1 Carbon Gen 12 1TB SSD', 512), false);
+  assert.equal(titleNamesStorage('Model 2512GB', 512), false);
+  assert.equal(titleNamesStorage('Model 1.5TB', 512), false);
+  const { stub: listStub } = createPipelineStubSupabase({
+    hintRow: { id: 'master-hint-256', storage_gb: 256 },
+  });
+  const listRes = await new ShopeeIngestionPipeline({
+    supabaseClient: listStub,
+    apiKey: '',
+  }).ingestProduct(
+    createBaseProduct({ title: 'Điện thoại Apple iPhone 16 Pro Max 256/512GB Chính hãng VN/A' }),
+    undefined,
+    { masterIdHint: 'master-hint-256' }
+  );
+  assert.equal(listRes.masterId, 'master-hint-256');
 
   // A page that states no storage keeps the hint.
   const { stub: noStorageStub } = createPipelineStubSupabase({
