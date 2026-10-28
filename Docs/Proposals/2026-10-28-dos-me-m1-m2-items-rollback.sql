@@ -11,6 +11,7 @@
 BEGIN;
 
 -- 1. Triggers first, so the column drops below fire nothing.
+DROP TRIGGER IF EXISTS trg_products_recheck_retired_variant ON rate.products;
 DROP TRIGGER IF EXISTS trg_products_refresh_left ON rate.products;
 DROP TRIGGER IF EXISTS trg_products_sync_item ON rate.products;
 DROP TRIGGER IF EXISTS trg_master_products_move_listings ON rate.master_products;
@@ -196,6 +197,7 @@ DROP FUNCTION IF EXISTS rate.retire_item_unknown_variant(uuid);
 DROP FUNCTION IF EXISTS rate.match_item(text, text, text, real);
 DROP FUNCTION IF EXISTS rate.refresh_item_stats(uuid);
 DROP FUNCTION IF EXISTS rate.refresh_item_rating(uuid);
+DROP FUNCTION IF EXISTS rate.products_recheck_retired_variant();
 DROP FUNCTION IF EXISTS rate.products_refresh_left();
 DROP FUNCTION IF EXISTS rate.products_sync_item();
 DROP FUNCTION IF EXISTS rate.master_products_move_listings();

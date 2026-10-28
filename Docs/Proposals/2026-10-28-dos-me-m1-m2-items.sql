@@ -327,6 +327,32 @@ REVOKE EXECUTE ON FUNCTION rate.master_products_move_listings() FROM PUBLIC, ano
 REVOKE EXECUTE ON FUNCTION rate.products_sync_item() FROM PUBLIC, anon, authenticated;
 REVOKE EXECUTE ON FUNCTION rate.products_refresh_left() FROM PUBLIC, anon, authenticated;
 
+-- Re-check at commit: a write that read the variant before a running retire archived it
+-- (its BEFORE trigger saw it live) waits on the variant's FK lock until the retire commits,
+-- so at its own commit this deferred check sees the variant archived and moves the listing
+-- to "no variant, same Item". The retire's sweeps cover writes committed before it.
+CREATE OR REPLACE FUNCTION rate.products_recheck_retired_variant()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+DECLARE
+  v_override text := COALESCE(current_setting('rate.variant_override', true), '');
+BEGIN
+  IF NEW.cluster_id IS NOT NULL AND EXISTS (
+       SELECT 1 FROM rate.master_products mp
+       WHERE mp.id = NEW.cluster_id AND mp.status = 'archived' AND mp.variant_key = 'unknown') THEN
+    PERFORM set_config('rate.variant_override', 'on', true);
+    UPDATE rate.products p SET cluster_id = NULL, variant_source = NULL
+    WHERE p.id = NEW.id AND p.cluster_id = NEW.cluster_id;
+    PERFORM set_config('rate.variant_override', v_override, true);
+  END IF;
+  RETURN NULL;
+END $$;
+
+REVOKE EXECUTE ON FUNCTION rate.products_recheck_retired_variant() FROM PUBLIC, anon, authenticated;
+
 -- M2.1 Item rating and stats ---------------------------------------------------------------
 
 -- The Item's pooled rating over every crawled listing of the Item, including listings with
@@ -739,6 +765,11 @@ DROP TRIGGER IF EXISTS trg_products_refresh_left ON rate.products;
 CREATE TRIGGER trg_products_refresh_left
   AFTER UPDATE OF cluster_id, item_id ON rate.products
   FOR EACH ROW EXECUTE FUNCTION rate.products_refresh_left();
+DROP TRIGGER IF EXISTS trg_products_recheck_retired_variant ON rate.products;
+CREATE CONSTRAINT TRIGGER trg_products_recheck_retired_variant
+  AFTER INSERT OR UPDATE OF cluster_id ON rate.products
+  DEFERRABLE INITIALLY DEFERRED
+  FOR EACH ROW EXECUTE FUNCTION rate.products_recheck_retired_variant();
 
 -- M2.5 backfill (design 7.1) ---------------------------------------------------------------
 
