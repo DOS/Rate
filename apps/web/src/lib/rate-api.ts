@@ -1317,7 +1317,7 @@ export async function getMasterProductOffers(
     const rows = viewRows as unknown as RawTrustViewRow[];
     const [extras, availability] = await Promise.all([
       sellerExtrasForTrustViewRows(rows),
-      getListingAvailabilityForMaster(cleanMasterId),
+      getListingAvailability([cleanMasterId]),
     ]);
     return rows.map((row) =>
       withOfferAvailability(
@@ -1342,7 +1342,7 @@ export async function getMasterProductOffers(
         .order('id')
         .range(from, to)
     ),
-    getListingAvailabilityForMaster(cleanMasterId),
+    getListingAvailability([cleanMasterId]),
   ]);
   return (rows as unknown as RawOfferRow[]).map((row) =>
     withOfferAvailability(mapOfferRowToMerchantOffer(row), availability)
@@ -1350,53 +1350,34 @@ export async function getMasterProductOffers(
 }
 
 /**
- * Availability of every listing of a master, by listing id. The trust view
- * predates the column (DOS-Me 20261020230000), so it is read from
- * rate.products. A failed read, or a schema without the column (the E2E
- * stack built from this repo's migration copy, until DOS/Rate#1147), leaves
- * availability unknown: the offers still render, only without their sold-out
- * label, and the page's prices come from the stored stats either way.
+ * Availability of every listing under the given masters (at most
+ * IN_FILTER_CHUNK_SIZE), by listing id. The trust view predates the column
+ * (DOS-Me 20261020230000), so it is read from rate.products. A failed read
+ * throws like the offer reads it completes (DOS/Rate#1174).
  */
-async function getListingAvailabilityForMaster(
-  masterId: string
+async function getListingAvailability(
+  masterIds: readonly string[]
 ): Promise<Map<string, OfferAvailability>> {
   const supabase = getRateClient();
-  const byId = new Map<string, OfferAvailability>();
-  const pageSize = 1000;
-  try {
-    for (let from = 0, pages = 0; pages < FETCH_ALL_MAX_PAGES; pages++) {
-      const { data, error } = (await supabase
+  const rows = await fetchAllRows<{ id: unknown; availability: unknown }>(
+    'listing availability',
+    (from, to) =>
+      supabase
         .from('products')
         .select('id, availability')
-        .eq('cluster_id', masterId)
+        .in('cluster_id', [...masterIds])
         .order('id')
-        .range(from, from + pageSize - 1)) as unknown as {
-        data: { id: string; availability: unknown }[] | null;
+        .range(from, to) as unknown as PromiseLike<{
+        data: { id: unknown; availability: unknown }[] | null;
         error: { message: string } | null;
-      };
-      if (error) {
-        log.warn('listing availability unavailable', {
-          masterId,
-          message: error.message,
-        });
-        return new Map();
-      }
-      const page = data ?? [];
-      for (const row of page) {
-        const availability = toOfferAvailability(row?.availability);
-        if (availability && typeof row?.id === 'string') {
-          byId.set(row.id, availability);
-        }
-      }
-      if (page.length < pageSize) break;
-      from += page.length;
+      }>
+  );
+  const byId = new Map<string, OfferAvailability>();
+  for (const row of rows) {
+    const availability = toOfferAvailability(row?.availability);
+    if (availability && typeof row?.id === 'string') {
+      byId.set(row.id, availability);
     }
-  } catch (err) {
-    log.warn('listing availability unavailable', {
-      masterId,
-      message: err instanceof Error ? err.message : String(err),
-    });
-    return new Map();
   }
   return byId;
 }
@@ -1435,9 +1416,8 @@ export async function getMasterProductOffersBatch(
     const batchIds = uniqueIds.slice(i, i + chunkSize);
 
     // Paged per chunk: 150 masters can easily hold more than 1000 offers.
-    const viewData = await fetchAllRows(
-      'v_products_with_merchant_trust',
-      (from, to) =>
+    const [viewData, availability] = await Promise.all([
+      fetchAllRows('v_products_with_merchant_trust', (from, to) =>
         supabase
           .from('v_products_with_merchant_trust')
           .select(TRUST_VIEW_SELECT)
@@ -1445,7 +1425,9 @@ export async function getMasterProductOffersBatch(
           .order('price_current', { ascending: true })
           .order('id')
           .range(from, to)
-    ).catch(() => null);
+      ).catch(() => null),
+      getListingAvailability(batchIds),
+    ]);
 
     if (viewData) {
       const rows = viewData as unknown as RawTrustViewRow[];
@@ -1455,10 +1437,13 @@ export async function getMasterProductOffersBatch(
         if (!cid) continue;
         const list = offersByMaster.get(cid) ?? [];
         list.push(
-          mapTrustViewRowToMerchantOffer(
-            row,
-            extras.followerCounts.get(row.merchant_id),
-            extras.metadataDosafeRisks.get(row.merchant_id)
+          withOfferAvailability(
+            mapTrustViewRowToMerchantOffer(
+              row,
+              extras.followerCounts.get(row.merchant_id),
+              extras.metadataDosafeRisks.get(row.merchant_id)
+            ),
+            availability
           )
         );
         offersByMaster.set(cid, list);
@@ -1480,7 +1465,9 @@ export async function getMasterProductOffersBatch(
       const cid = item.cluster_id ? String(item.cluster_id) : '';
       if (!cid) continue;
       const list = offersByMaster.get(cid) ?? [];
-      list.push(mapOfferRowToMerchantOffer(item));
+      list.push(
+        withOfferAvailability(mapOfferRowToMerchantOffer(item), availability)
+      );
       offersByMaster.set(cid, list);
     }
   }

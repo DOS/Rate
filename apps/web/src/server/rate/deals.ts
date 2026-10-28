@@ -18,6 +18,7 @@ import {
   getRadarSignal,
   type RadarSignal,
 } from '../../lib/deal-radar';
+import { isOfferUnavailable } from '../../lib/product-market-stats';
 import { plausibleOffers } from '@repo/shared-data/rules';
 import {
   RATE_CACHE_TAGS,
@@ -302,12 +303,14 @@ export function computeCrossPlatformDealRadarFromData(
     const clusterOffers = Array.isArray(offers) ? offers : [];
 
     // Bait-price listings (far below every other store) set no market floor,
-    // spread, deal or trap (DOS/Rate#797).
+    // spread, deal or trap (DOS/Rate#797), and neither do sold-out or
+    // discontinued listings, which keep their last price (DOS/Rate#1170).
     const validOffers = plausibleOffers(
       clusterOffers
         .filter(
           (o): o is MerchantOffer =>
             Boolean(o && typeof o === 'object' && !Array.isArray(o)) &&
+            !isOfferUnavailable(o) &&
             typeof o.price_current === 'number' &&
             Number.isFinite(o.price_current) &&
             o.price_current > 0 &&
