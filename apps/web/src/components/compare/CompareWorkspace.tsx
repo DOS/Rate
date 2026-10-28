@@ -71,6 +71,7 @@ import {
 import { compareRowIsShown, known5g } from '@/lib/product-spec-rows';
 import ContentText from '@/components/elementary/ContentText';
 import { productImageUrl } from '@/lib/rate-domain-core';
+import { versusHref } from '@/lib/item-compare';
 
 interface CompareWorkspaceProps {
   initialProducts: MasterProduct[];
@@ -78,6 +79,8 @@ interface CompareWorkspaceProps {
   initialCategory?: CanonicalCategorySlug;
   hasExplicitSlugs?: boolean;
   locale?: string;
+  /** RATE_ITEM_MODEL on: variant slug to Item slug, for versus links. */
+  itemSlugBySlug?: Readonly<Record<string, string>>;
 }
 
 type CompareTranslator = ReturnType<typeof useTranslations<'compare'>>;
@@ -825,6 +828,7 @@ export default function CompareWorkspace({
   initialCategory = 'smartphones',
   hasExplicitSlugs = false,
   locale = 'vi',
+  itemSlugBySlug,
 }: CompareWorkspaceProps) {
   const t = useTranslations('compare');
   const router = useRouter();
@@ -1697,7 +1701,11 @@ export default function CompareWorkspace({
 
               {products.length === 2 && products[0] && products[1] && (
                 <Link
-                  href={`/compare/${products[0].slug}-vs-${products[1].slug}`}
+                  href={versusHref(
+                    products[0].slug,
+                    products[1].slug,
+                    itemSlugBySlug
+                  )}
                   className="btn btn-sm btn-dark rounded-pill fw-medium px-3 py-2"
                 >
                   {t('deep1v1PageBtn')}

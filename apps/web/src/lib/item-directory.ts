@@ -185,10 +185,17 @@ export interface ItemSizeChip {
 export function itemSizeChips(
   row: ItemCatalogRow,
   itemHref: string,
-  formatStorage: (gb: number) => string
+  formatStorage: (gb: number) => string,
+  /** A `?storage=` filter: only the matching sizes, as the price (#1290). */
+  onlyStorage?: readonly number[]
 ): ItemSizeChip[] {
+  const filter =
+    onlyStorage && onlyStorage.length > 0 ? new Set(onlyStorage) : null;
   const sized = (row.item_variants ?? []).filter(
-    (v) => typeof v.storage_gb === 'number' && v.storage_gb > 0
+    (v) =>
+      typeof v.storage_gb === 'number' &&
+      v.storage_gb > 0 &&
+      (!filter || filter.has(v.storage_gb))
   );
   // One chip per size label: `256gb` and a later `256gb-cellular` (design
   // Q3) would read the same, so the first in variant order stands.

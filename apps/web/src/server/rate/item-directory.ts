@@ -99,8 +99,13 @@ export async function getItemCatalogPage<T extends MasterProduct>(
     const rows: T[] = [];
     for (let batch = 0; ; batch++) {
       if (batch === MAX_CATALOG_BATCHES) {
-        log.warn('item catalogue read cut', { variants: rows.length });
-        break;
+        // Too many variants to group in the web: the variant listing,
+        // rather than a page cut short or empty (#1290). Needs the Item
+        // search RPCs (#1279).
+        log.error('item catalogue too large to group, showing variants', {
+          variants: rows.length,
+        });
+        return null;
       }
       const page = await readBatch(
         batch * CATALOG_BATCH_SIZE,
@@ -167,4 +172,21 @@ export function getItemSlugByVariantSlug() {
     )();
     return new Map(entries);
   });
+}
+
+/**
+ * Item slugs for the given variant slugs, for in-app versus links (#1290);
+ * null while the Item model is off, so pages pass nothing new.
+ */
+export async function getItemSlugsFor(
+  slugs: readonly string[]
+): Promise<Record<string, string> | null> {
+  const map = await getItemSlugByVariantSlug();
+  if (!map) return null;
+  const out: Record<string, string> = {};
+  for (const slug of slugs) {
+    const itemSlug = map.get(slug);
+    if (itemSlug) out[slug] = itemSlug;
+  }
+  return out;
 }

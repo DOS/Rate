@@ -11,6 +11,7 @@ import {
   type CanonicalCategorySlug,
   type MasterProduct,
 } from '@/lib/rate-domain';
+import { versusHref } from '@/lib/item-compare';
 
 export function formatVersusPeerPriceBadge(value: unknown): string {
   const num = Number(value);
@@ -45,6 +46,8 @@ interface VersusMatchupSwitcherProps {
   readonly categorySlug: CanonicalCategorySlug;
   readonly catalogCandidates: MasterProduct[];
   readonly locale?: string;
+  /** RATE_ITEM_MODEL on: variant slug to Item slug, for versus links. */
+  readonly itemSlugBySlug?: Readonly<Record<string, string>>;
 }
 
 export default function VersusMatchupSwitcher({
@@ -52,6 +55,7 @@ export default function VersusMatchupSwitcher({
   currentSlugB,
   categorySlug,
   catalogCandidates,
+  itemSlugBySlug,
 }: VersusMatchupSwitcherProps) {
   const t = useTranslations('compare');
   const router = useRouter();
@@ -79,8 +83,9 @@ export default function VersusMatchupSwitcher({
   const handleLaunchMatchup = (e: React.FormEvent) => {
     e.preventDefault();
     if (!canLaunchMatchup) return;
-    startNavigationProgress(`/compare/${effectiveSlugA}-vs-${effectiveSlugB}`);
-    router.push(`/compare/${effectiveSlugA}-vs-${effectiveSlugB}`);
+    const href = versusHref(effectiveSlugA, effectiveSlugB, itemSlugBySlug);
+    startNavigationProgress(href);
+    router.push(href);
   };
 
   if (sameCategoryPeers.length < 2) {

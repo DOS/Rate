@@ -144,3 +144,21 @@ export function planVersusRoute(
     canonical,
   };
 }
+
+/**
+ * A versus URL for two catalogue slugs, naming their Items when
+ * `itemSlugBySlug` maps them (RATE_ITEM_MODEL on), so in-app links need no
+ * 308 hop (DOS/Rate#1290). A side whose Item slug holds "-vs-" keeps its
+ * own slug; with no map the URL is as before.
+ */
+export function versusHref(
+  slugA: string,
+  slugB: string,
+  itemSlugBySlug?: Readonly<Record<string, string>> | null
+): string {
+  const side = (slug: string) => {
+    const itemSlug = itemSlugBySlug?.[slug];
+    return itemSlug && !itemSlug.includes('-vs-') ? itemSlug : slug;
+  };
+  return `/compare/${side(slugA)}-vs-${side(slugB)}`;
+}
