@@ -13,7 +13,10 @@ import {
   formatStorageLabel,
   getCategoryFilterSchema,
 } from '../../../lib/category-filters';
-import { foreignCategoryProductHref } from '../../../lib/rate-domain-core';
+import {
+  categorySlugOnly as categorySlugOnly1366,
+  foreignCategoryProductHref,
+} from '../../../lib/rate-domain-core';
 import csMessages from '../../../../locales/cs.json';
 import enMessages from '../../../../locales/en.json';
 import viMessages from '../../../../locales/vi.json';
@@ -186,6 +189,20 @@ async function runCoreArchitectureSuite() {
   assert.equal(
     foreignCategoryProductHref(tablet1366, '/smartphones', catMap1366),
     '/tablets/lenovo-tb350fu'
+  );
+  // Links read the hint the same way, so a link never takes a 308 hop.
+  assert.equal(
+    getMasterProductHref(tablet1366, catMap1366),
+    '/tablets/lenovo-tb350fu'
+  );
+  assert.equal(
+    getMasterProductHref({
+      slug: 'lenovo-tb350fu',
+      category_id: null,
+      metadata: categorySlugOnly1366({ category_slug: ' Tablets ' }),
+    }),
+    '/tablets/lenovo-tb350fu',
+    'the sitemap (hints reduced by categorySlugOnly) lists the same URL'
   );
   const fs1366 = require('node:fs') as typeof import('node:fs');
   const path1366 = require('node:path') as typeof import('node:path');

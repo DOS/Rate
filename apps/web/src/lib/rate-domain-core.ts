@@ -1064,7 +1064,19 @@ export function getMasterProductCategorySlug(
       .category_slug === 'string'
       ? (product.specifications as { category_slug: string }).category_slug
       : undefined;
-  const resolvedCat = catSlugFromMap || catSlugFromMeta || catSlugFromSpecs;
+  // Each hint trimmed and lower-cased, and the first canonical one wins, so
+  // links, the sitemap and the category-path redirect agree (DOS/Rate#1366).
+  const resolvedCat = [catSlugFromMap, catSlugFromMeta, catSlugFromSpecs]
+    .map((hint) =>
+      typeof hint === 'string'
+        ? hint
+            .replace(/\p{Cc}+/gu, '')
+            .trim()
+            .toLowerCase()
+            .slice(0, 64)
+        : undefined
+    )
+    .find((hint) => isCanonicalCategorySlug(hint));
 
   if (isCanonicalCategorySlug(resolvedCat)) {
     return resolvedCat;
@@ -1145,8 +1157,8 @@ export function getMasterProductHref(
 
 /**
  * A product's `metadata` or `specifications` reduced to its category hint,
- * trimmed, lower-case and canonical only (null otherwise). The sitemap and
- * the category-path redirect read hints this way (DOS/Rate#1366).
+ * trimmed, lower-case and canonical only (null otherwise), the way
+ * `getMasterProductCategorySlug` reads hints (DOS/Rate#1366).
  */
 export const categorySlugOnly = (
   value: Record<string, unknown> | null | undefined
@@ -1169,23 +1181,11 @@ export const categorySlugOnly = (
  * built: the page then renders as asked.
  */
 export function foreignCategoryProductHref(
-  product: Parameters<typeof getMasterProductHref>[0] & {
-    metadata?: Record<string, unknown> | null;
-    specifications?: Record<string, unknown> | null;
-  },
+  product: Parameters<typeof getMasterProductHref>[0],
   categoryBasePath: string,
   categorySlugById: ReadonlyMap<string, string>
 ): string | null {
-  // Hints read as the sitemap reads them, so the redirect lands on the URL
-  // it lists.
-  const href = getMasterProductHref(
-    {
-      ...product,
-      metadata: categorySlugOnly(product.metadata),
-      specifications: categorySlugOnly(product.specifications),
-    },
-    categorySlugById
-  );
+  const href = getMasterProductHref(product, categorySlugById);
   if (!/^\/[a-z]+\/[^/]+$/.test(href)) return null;
   return href.startsWith(`${categoryBasePath}/`) ? null : href;
 }
