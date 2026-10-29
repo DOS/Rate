@@ -32,7 +32,7 @@ import {
   resolveClusterPeerFloorPrice,
   type ClusterPeerPriceCandidate,
 } from './cluster-peer-floor.js';
-import { rescoreMerchantReviewRisk } from './merchant-review-risk.js';
+import { scoreSellerReviewRisk } from './merchant-review-risk.js';
 
 dotenv.config({ quiet: true });
 
@@ -1209,18 +1209,19 @@ export class ShopeeIngestionPipeline {
               followerCount: product.shop.followerCount,
             }
           );
-          // persistAnalysisToSupabase scored the seller from this product's
-          // reviews only; store the seller-wide score instead (DOS/Rate#698).
+          // Log the seller-wide score (DOS/Rate#698). It is not stored: Rate
+          // Services' MerchantRiskAuditor owns the merchant review risk and runs
+          // at the end of the Shopee job (DOS/Rate#1341).
           if (merchantId) {
             try {
-              const sellerWide = await rescoreMerchantReviewRisk(
+              const sellerWide = await scoreSellerReviewRisk(
                 this.supabase,
                 this.reviewAnalyzer,
                 merchantId
               );
               platLogger.info(
-                'ingest.review_risk_rescored',
-                `Seller review risk ${sellerWide?.risk.risk_score ?? 'n/a'} from ${sellerWide?.risk.total_reviews ?? 0} reviews.`,
+                'ingest.review_risk_scored',
+                `Seller review risk ${sellerWide?.risk.risk_score ?? 'n/a'} from ${sellerWide?.risk.total_reviews ?? 0} reviews (log only; the RS auditor stores it).`,
                 {
                   merchantId,
                   reviewRiskScore: sellerWide?.risk.risk_score ?? null,
@@ -1229,8 +1230,8 @@ export class ShopeeIngestionPipeline {
               );
             } catch (err: unknown) {
               platLogger.warn(
-                'ingest.review_risk_rescore_failed',
-                `Seller-wide review risk rescore failed (non-fatal): ${err instanceof Error ? err.message : String(err)}`,
+                'ingest.review_risk_score_failed',
+                `Seller-wide review risk scoring failed (non-fatal): ${err instanceof Error ? err.message : String(err)}`,
                 { merchantId }
               );
             }

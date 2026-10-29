@@ -684,15 +684,13 @@ async function run() {
           'user_rating_weighted' in (c.payload as Record<string, unknown>)
       )
     );
-    const merchUpdate = calls.find(
-      c => c.table === 'merchants' && c.op === 'update' && c.val === 'merch-1'
+    // The merchant's review risk is evaluated but never written: Rate Services'
+    // MerchantRiskAuditor owns it (DOS/Rate#1341).
+    assert.equal(
+      calls.filter(c => c.table === 'merchants').length,
+      0,
+      'persistAnalysisToSupabase writes nothing on merchants'
     );
-    assert.ok(merchUpdate, 'merchants update called');
-    const merchPayload = merchUpdate.payload as Record<string, unknown>;
-    assert.equal(typeof merchPayload.review_risk_score, 'number');
-    assert.equal(typeof merchPayload.review_risk_breakdown, 'object');
-    assert.equal(typeof merchPayload.review_risk_updated_at, 'string');
-    assert.equal('risk_score' in merchPayload, false, 'must NOT overwrite DOSafe risk_score');
     assert.equal(
       calls.filter(c => c.table === 'reviews' && c.op === 'update').length,
       input.length,
@@ -851,7 +849,7 @@ async function run() {
     existingFlagsError = null;
 
     console.log(
-      '✅ [Persist] review_flags / review_analysis / master_products (RPC & stub) / merchants (review_risk_score isolated) / reviews payloads valid; burst auditor flags preserved'
+      '✅ [Persist] review_flags / review_analysis / master_products (RPC & stub) / no merchants write (RS auditor owns review risk, #1341) / reviews payloads valid; burst auditor flags preserved'
     );
 
     console.log('\n================================================================');

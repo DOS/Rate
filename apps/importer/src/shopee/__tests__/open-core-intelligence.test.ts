@@ -1767,7 +1767,7 @@ async function runSuite() {
   // 13. AiReviewAnalyzer MerchantRiskBreakdown Schema Alignment (#521)
   // =========================================================================
   {
-    const { AiReviewAnalyzer } = await import('../ai-review-analyzer.js');
+    const { AiReviewAnalyzer, merchantRiskBreakdown } = await import('../ai-review-analyzer.js');
     const analyzer521 = new AiReviewAnalyzer({ apiKey: '' });
     const sampleResults521 = [
       {
@@ -1870,7 +1870,7 @@ async function runSuite() {
       rpc: async () => ({ error: null }),
     };
 
-    await analyzer521.persistAnalysisToSupabase(stub521 as never, {
+    const out521 = await analyzer521.persistAnalysisToSupabase(stub521 as never, {
       productId: 'prod-521',
       masterId: 'master-521',
       merchantId: 'merch-521',
@@ -1890,9 +1890,11 @@ async function runSuite() {
         },
       ],
     });
-    assert.ok(capturedMerchPayload, 'merchants.update must be invoked (#521)');
-    const brk521 = (capturedMerchPayload as Record<string, unknown>)
-      .review_risk_breakdown as Record<string, unknown>;
+    // The engine no longer writes the merchant risk; Rate Services' auditor
+    // owns it (DOS/Rate#1341). The breakdown it computes keeps its schema.
+    assert.equal(capturedMerchPayload, null, 'no merchants.update (#1341)');
+    assert.ok(out521.merchantRisk);
+    const brk521 = merchantRiskBreakdown(out521.merchantRisk!) as Record<string, unknown>;
     assert.equal(brk521.total_reviews, 2);
     assert.equal(brk521.authentic_count, 1);
     assert.equal(brk521.coin_spam_count, 1);
