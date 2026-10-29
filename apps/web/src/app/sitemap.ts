@@ -1,5 +1,8 @@
 import type { MetadataRoute } from 'next';
-import { canonicalVersusOrder } from '@/lib/item-compare';
+import {
+  canonicalVersusOrder,
+  isParseableVersusPair,
+} from '@/lib/item-compare';
 import { env } from '@/env.mjs';
 import { createLogger, serializeError } from '@/lib/logger';
 import {
@@ -204,7 +207,9 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
               (slugA === slugB ||
                 versusSeen.has(pairKey) ||
                 slugA.includes('-vs-') ||
-                slugB.includes('-vs-'))
+                slugB.includes('-vs-') ||
+                // Neither order parses back: no versus page (#1367).
+                !isParseableVersusPair(...canonicalVersusOrder(slugA, slugB)))
             ) {
               return [];
             }

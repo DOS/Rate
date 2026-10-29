@@ -142,7 +142,12 @@ export default async function VersusComparePage({ params }: VersusPageProps) {
       : `/compare/${canonicalVersusOrder(parsed[0], parsed[1]).join('-vs-')}`;
   const aliasHref = versusAliasRedirect(versus, canonicalPath);
   if (aliasHref) permanentRedirect(aliasHref);
-  const pair = plan?.kind === 'render' ? [plan.slugA, plan.slugB] : parsed;
+  // The page shows the pair in the canonical order its metadata uses, also
+  // when the URL was not redirected (a slug that is no plain catalogue slug).
+  const pair =
+    plan?.kind === 'render'
+      ? [plan.slugA, plan.slugB]
+      : canonicalVersusOrder(parsed[0], parsed[1]);
 
   const [compared, directory] = await Promise.all([
     getCachedCompareMasterProducts(pair.join(',')),
