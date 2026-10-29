@@ -36,8 +36,30 @@ for (const path of PATHS) {
       for (const directive of directives) {
         expect(meta?.[1]?.replace(/&#x27;/g, "'")).toContain(directive);
       }
-      expect(html).toMatch(/<script[^>]* nonce="[^"]+"/);
     }
     expect(headers['x-powered-by']).toBeUndefined();
   });
 }
+
+// The report-only nonce reaches the render of a page rendered per request:
+// every nonced script carries the nonce of its own response, and the next
+// request gets another one (DOS/Rate#1345). Cached (ISR) pages have no nonce
+// yet, see DOS/Rate#1348.
+test('csp nonce on a dynamic page matches its header', async ({ request }) => {
+  const seen = new Set<string>();
+  for (let i = 0; i < 2; i++) {
+    const res = await request.get('/inspect');
+    expect(res.status()).toBe(200);
+    const policy = res.headers()['content-security-policy-report-only'] ?? '';
+    const nonce = policy.match(/script-src [^;]*'nonce-([^']+)'/)?.[1];
+    expect(nonce).toBeTruthy();
+    const html = await res.text();
+    const attrs = [...html.matchAll(/<script[^>]* nonce="([^"]+)"/g)].map(
+      (m) => m[1]
+    );
+    expect(attrs.length).toBeGreaterThan(0);
+    expect(new Set(attrs)).toEqual(new Set([nonce]));
+    seen.add(nonce!);
+  }
+  expect(seen.size).toBe(2);
+});
