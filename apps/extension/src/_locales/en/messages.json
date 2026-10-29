@@ -138,7 +138,7 @@
     "message": "Genuine Review Share"
   },
   "reviewAuthenticValue": {
-    "message": "$PCT$% ($COUNT$ reviews)",
+    "message": "$PCT$% (reviews: $COUNT$)",
     "placeholders": {
       "pct": {
         "content": "$1"
@@ -182,7 +182,7 @@
     "message": "Try again"
   },
   "pillCheaperAt": {
-    "message": "Cheaper at $COUNT$ stores (-$AMOUNT$)",
+    "message": "Cheaper stores: $COUNT$ (-$AMOUNT$)",
     "placeholders": {
       "count": {
         "content": "$1"
@@ -324,7 +324,7 @@
     }
   },
   "merchantProductCount": {
-    "message": "$COUNT$ products",
+    "message": "Products: $COUNT$",
     "placeholders": {
       "count": {
         "content": "$1"
