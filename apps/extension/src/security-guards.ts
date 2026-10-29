@@ -2,6 +2,7 @@ import type {
   ExtractedPageProductSignal,
   SupportedEcommercePlatform,
 } from './types.js';
+import { t, type MessageKey } from './i18n.js';
 
 export const DEFAULT_API_BASE_URL = 'https://rate.vn';
 
@@ -320,7 +321,7 @@ export function escapeSafeExternalHref(
 
 export function formatSafeExtensionVnd(
   val: number | null | undefined,
-  fallbackText = 'Chưa có'
+  fallbackText = t('notAvailable')
 ): string {
   if (
     typeof val !== 'number' ||
@@ -500,22 +501,22 @@ export function shouldRenderTrustPill(
 }
 
 /**
- * What the opt-in crowd signal sends, with the words the side panel uses
- * for each field. The opt-in label lists every one, so a field added here
- * is disclosed too (DOS/Rate#1230).
+ * What the opt-in crowd signal sends, with the message key of the words the
+ * side panel uses for each field. The opt-in text in every locale names
+ * each one, so a field added here is disclosed too (DOS/Rate#1230, #1304).
  */
 export const CROWD_INGEST_FIELD_LABELS = {
-  platform: 'sàn',
-  externalItemId: 'mã sản phẩm',
-  externalShopId: 'mã gian hàng',
-  url: 'URL đã cắt tham số theo dõi',
-  title: 'tên sản phẩm',
-  selectedVariant: 'phiên bản đang chọn',
-  price: 'giá bán',
-  originalPrice: 'giá gốc',
-  ratingStar: 'số sao',
-  ratingCount: 'số lượt đánh giá',
-} as const;
+  platform: 'crowdFieldPlatform',
+  externalItemId: 'crowdFieldExternalItemId',
+  externalShopId: 'crowdFieldExternalShopId',
+  url: 'crowdFieldUrl',
+  title: 'crowdFieldTitle',
+  selectedVariant: 'crowdFieldSelectedVariant',
+  price: 'crowdFieldPrice',
+  originalPrice: 'crowdFieldOriginalPrice',
+  ratingStar: 'crowdFieldRatingStar',
+  ratingCount: 'crowdFieldRatingCount',
+} as const satisfies Record<string, MessageKey>;
 
 export function buildCrowdIngestPayload(
   signal: ExtractedPageProductSignal

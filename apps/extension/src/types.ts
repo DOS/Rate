@@ -287,6 +287,10 @@ declare global {
         ) => void;
       };
     };
+    /** Absent outside the extension, e.g. in tests (DOS/Rate#1304). */
+    i18n?: {
+      getMessage: (name: string, substitutions?: string | string[]) => string;
+    };
     tabs: {
       query: (queryInfo: {
         active?: boolean;
