@@ -47,6 +47,12 @@ test('the catalog filter drawer opens and closes on a phone', async ({
   await trigger.click();
   await page.keyboard.press('Escape');
   await expect(drawer).not.toHaveClass(/\bshow\b/);
+  // Space opens it as on a button.
+  await trigger.focus();
+  await page.keyboard.press(' ');
+  await expect(drawer).toHaveClass(/\bshow\b/);
+  await page.keyboard.press('Escape');
+  await expect(drawer).not.toHaveClass(/\bshow\b/);
   // While open it is a modal dialog and Tab stays inside it.
   await trigger.click();
   await expect(drawer).toHaveAttribute('role', 'dialog');

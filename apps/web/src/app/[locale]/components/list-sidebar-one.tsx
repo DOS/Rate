@@ -766,6 +766,13 @@ export default function ListSidebarOne({
           e.preventDefault();
           setDrawerOpen(true);
         }}
+        // A link opens on Enter only; as a button it opens on Space too.
+        onKeyDown={(e) => {
+          if (e.key === ' ') {
+            e.preventDefault();
+            setDrawerOpen(true);
+          }
+        }}
       >
         <BsFunnel className="me-1" />
         {t('sidebar.filterTitle')}
