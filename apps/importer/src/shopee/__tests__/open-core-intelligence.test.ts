@@ -486,6 +486,13 @@ async function runSuite() {
     ['iPad Air 11 năm 2024 M2 128GB', 'apple:ipad-air-m2-11:128gb'],
     ['iPad Pro 12.9 năm 2022 M2 128GB', 'apple:ipad-pro-m2-129:128gb'],
     ['MacBook Air M2 13 năm', 'apple:macbook-air-m2:unknown'],
+    // Any word or year form after "năm" keeps the size (DOS/Rate#1333).
+    ['iPad Pro 11 năm sx 2022', 'apple:ipad-pro-11:unknown'],
+    ['iPad Pro 12.9 năm sản xuất 2022', 'apple:ipad-pro-129:unknown'],
+    ['MacBook Air 13 năm ra mắt 2022', 'apple:macbook-air-13:unknown'],
+    ['iPad Pro 11 năm: 2022', 'apple:ipad-pro-11:unknown'],
+    ['iPad Pro 11 năm 22', 'apple:ipad-pro-11:unknown'],
+    ['iPad Pro M4 256GB 11 năm bảo hành tặng ốp 13 inch', 'apple:ipad-pro-m4-11:256gb'],
     // A date ("11/11"), RAM or SSD, a macOS name, a duration or an amount is no
     // size, so the gift's size still stands in.
     ['iPad Pro M4 Sale 11/11 tặng ốp 13 inch', 'apple:ipad-pro-m4-13:unknown'],
@@ -764,6 +771,8 @@ async function runSuite() {
     ['Apple Watch Series 10 GPS 46 tặng ốp 42mm', 'apple:watch-series-10:64gb'],
     ['Apple Watch Series 10 GPS giảm 40% tặng ốp 46mm', 'apple:watch-series-10-46mm:64gb'],
     ['Apple Watch Series 10 giảm 44 nghìn tặng ốp 46mm', 'apple:watch-series-10-46mm:64gb'],
+    // A bare size equal to the gift's is the same size (DOS/Rate#1333).
+    ['Apple Watch Series 10 tặng ốp 42mm 42 GPS', 'apple:watch-series-10-42mm:64gb'],
     // A size listed right after the box's is a list, not the watch's own case.
     ['Apple Watch Series 10 kèm hộp 46mm | 42mm', 'apple:watch-series-10-46mm:64gb'],
     // "size 46" beats a box's size; a band's "size 42" is not the watch's.

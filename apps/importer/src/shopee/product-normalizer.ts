@@ -1260,7 +1260,7 @@ function isProductCodeToken(token: string): boolean {
 // (DOS/Rate#1317).
 const UNIT_END = String.raw`(?![\p{L}\p{M}\d])`;
 const SIZE_NOT_PRECEDED_BY = String.raw`(?<![\d.,a-z])(?<!\d ?\/ ?)(?<!(?:ram|os|sonoma|sequoia|ventura|monterey|tahoe) )`;
-const SIZE_NOT_FOLLOWED_BY = String.raw`(?![.,]?\d|[a-z]| ?(?:gb?${UNIT_END}|tb?${UNIT_END}|th${UNIT_END}|gen|mm|w${UNIT_END}|h${UNIT_END}|\/|-? ?(?:core|nhân|lõi)|cpu|gpu|tiếng|giờ|%|(?:tháng|ngày|tuần|phút|gói|kỳ|nghìn|ngàn|triệu|vnd|months?|years?|days?|weeks?|hours?)${UNIT_END}|ram${UNIT_END}(?! ?\d{1,2}(?!\d))|năm${UNIT_END}(?! ?(?:19|20)\d\d)))`;
+const SIZE_NOT_FOLLOWED_BY = String.raw`(?![.,]?\d|[a-z]| ?(?:gb?${UNIT_END}|tb?${UNIT_END}|th${UNIT_END}|gen|mm|w${UNIT_END}|h${UNIT_END}|\/|-? ?(?:core|nhân|lõi)|cpu|gpu|tiếng|giờ|%|(?:tháng|ngày|tuần|phút|gói|kỳ|nghìn|ngàn|triệu|vnd|months?|years?|days?|weeks?|hours?)${UNIT_END}|ram${UNIT_END}(?! ?\d{1,2}(?!\d))|năm(?= ?(?:$|[,|;)/+]| - ))))`;
 const SIZE_MARKER = String.raw` ?(?:-? ?inch|in${UNIT_END}|"|''|”|″)`;
 const IPAD_SIZE = String.raw`(11|12[.,]9|13)(?:[.,]0)?`;
 const MACBOOK_AIR_SIZE = String.raw`(13|15)(?:[.,]\d)?`;
@@ -1408,10 +1408,16 @@ function readAppleSize(model: string, rawTitle: string): string {
   // phrase, or one in a form no reading takes, such as "size 46" or "10.9", is never
   // replaced by the gift's), and only when the gift names one size ("tặng ốp 42mm /
   // 46mm" fits either).
+  const giftSize = giftSizes.size === 1 ? [...giftSizes][0] : undefined;
+  const namesOtherBare = (bare: RegExp) =>
+    [...ownPart.matchAll(new RegExp(bare.source, 'giu'))].some(
+      m => m[0].replace(',', '.') !== giftSize
+    );
   const namesSize =
     family === 'watch'
-      ? WATCH_SIZE.test(withoutGift) || WATCH_BARE_SIZE.test(ownPart)
-      : APPLE_SIZE_PATTERNS[family]!.some(re => re.test(ownPart)) || SCREEN_BARE_SIZE.test(ownPart);
+      ? WATCH_SIZE.test(withoutGift) || namesOtherBare(WATCH_BARE_SIZE)
+      : APPLE_SIZE_PATTERNS[family]!.some(re => re.test(ownPart)) ||
+        namesOtherBare(SCREEN_BARE_SIZE);
   return namesSize || withoutGift === productPart || giftSizes.size !== 1
     ? ''
     : readFamilySize(family, productPart);
