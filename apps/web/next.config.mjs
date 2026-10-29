@@ -108,6 +108,18 @@ const nextConfig = {
           },
         ],
       })),
+      // Device photo renditions carry a hash of their source in the file name
+      // (scripts/device-images.mjs), so they never change in place. Listed
+      // after /img/:path* so this Cache-Control wins (DOS/Rate#1332).
+      {
+        source: "/img/devices/sized/:path*",
+        headers: [
+          {
+            key: "Cache-Control",
+            value: "public, max-age=31536000, immutable",
+          },
+        ],
+      },
       {
         source: "/(.*)",
         headers: [
