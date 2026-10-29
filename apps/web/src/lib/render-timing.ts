@@ -8,7 +8,8 @@ export interface RenderTiming {
   /**
    * Writes the one log line of the render: the total, every read settled so
    * far, the reads that failed and those still running. Only the first call
-   * writes.
+   * writes; a failed read writes it at once. Call it before a notFound() or
+   * redirect too.
    */
   done(): void;
 }
@@ -25,6 +26,18 @@ export function startRenderTiming(route: string, key: string): RenderTiming {
   const failed: string[] = [];
   const pending = new Set<string>();
   let logged = false;
+  const done = () => {
+    if (logged) return;
+    logged = true;
+    log.info('render reads', {
+      route,
+      key,
+      totalMs: Math.round(performance.now() - start),
+      reads,
+      failed,
+      pending: [...pending],
+    });
+  };
   return {
     time(name, read) {
       const begun = performance.now();
@@ -33,22 +46,14 @@ export function startRenderTiming(route: string, key: string): RenderTiming {
         pending.delete(name);
         if (logged) return;
         reads[name] = Math.round(performance.now() - begun);
-        if (!ok) failed.push(name);
+        if (ok) return;
+        // A failed read fails the render, which then never reaches done().
+        failed.push(name);
+        done();
       };
       read.then(settle(true), settle(false));
       return read;
     },
-    done() {
-      if (logged) return;
-      logged = true;
-      log.info('render reads', {
-        route,
-        key,
-        totalMs: Math.round(performance.now() - start),
-        reads,
-        failed,
-        pending: [...pending],
-      });
-    },
+    done,
   };
 }

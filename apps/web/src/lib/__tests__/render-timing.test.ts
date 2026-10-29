@@ -22,12 +22,13 @@ async function main() {
     const timing = startRenderTiming('product', 'apple-iphone-16-128gb');
     const value = await timing.time('product', Promise.resolve(42));
     assert.equal(value, 42, 'a timed read returns its value');
+    timing.time('radar', late);
+    // The failed read writes the line; done() then adds nothing.
     await assert.rejects(
       timing.time('offers', Promise.reject(new Error('boom'))),
       /boom/,
       'and its rejection'
     );
-    timing.time('radar', late);
     timing.done();
     timing.done();
     assert.equal(lines.length, 1, 'one line per render');
@@ -61,6 +62,20 @@ async function main() {
     await late;
     await Promise.resolve();
     assert.equal(lines.length, 1, 'a read settling after done() adds no line');
+
+    // A failed read writes the line at once: the render it fails never
+    // reaches done().
+    lines.length = 0;
+    const failing = startRenderTiming('product', 'x');
+    failing.time('product', Promise.resolve(1));
+    await failing
+      .time('peers', Promise.reject(new Error('down')))
+      .catch(() => undefined);
+    await Promise.resolve();
+    assert.equal(lines.length, 1, 'a failed read logs the render');
+    assert.deepEqual(lines[0]!.failed, ['peers']);
+    failing.done();
+    assert.equal(lines.length, 1, 'and done() adds nothing after it');
   } finally {
     console.log = original;
   }

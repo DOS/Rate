@@ -238,10 +238,16 @@ export async function ProductDetailView({
     'itemRoute',
     resolveItemRoute({ slug, categoryBasePath })
   );
-  if (itemRoute?.kind === 'redirect') permanentRedirect(itemRoute.to);
+  if (itemRoute?.kind === 'redirect') {
+    timing.done();
+    permanentRedirect(itemRoute.to);
+  }
   // Neither a published Item nor a variant of one: no fallback to the old
   // master lookup, which would show a variant of an unpublished Item.
-  if (itemRoute?.kind === 'not_found') notFound();
+  if (itemRoute?.kind === 'not_found') {
+    timing.done();
+    notFound();
+  }
   // The category peers depend on nothing below: read them alongside the item
   // and product reads instead of after them (DOS/Rate#1344). No fallback:
   // this page is cached, so an empty fallback would be served for the whole
@@ -277,6 +283,7 @@ export async function ProductDetailView({
   ]);
 
   if (!storedProduct) {
+    timing.done();
     notFound();
   }
   const itemVariants = itemPage?.variants ?? [];
