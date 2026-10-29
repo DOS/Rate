@@ -188,11 +188,28 @@ export default function ListSidebarOne({
   const drawerTriggerRef = useRef<HTMLAnchorElement>(null);
   const closeDrawer = () => {
     setDrawerOpen(false);
-    drawerTriggerRef.current?.focus();
+    // After the effect cleanup has lifted `inert` from the trigger.
+    requestAnimationFrame(() => drawerTriggerRef.current?.focus());
   };
   useEffect(() => {
     if (!drawerOpen) return;
-    drawerRef.current?.focus();
+    const drawer = drawerRef.current;
+    drawer?.focus();
+    // aria-modal: the rest of the page is inert while the drawer is open
+    // (every sibling along the drawer's path to <body>), and comes back on close.
+    const madeInert: Element[] = [];
+    for (
+      let node: Element | null = drawer;
+      node && node !== document.body;
+      node = node.parentElement
+    ) {
+      for (const sibling of Array.from(node.parentElement?.children ?? [])) {
+        if (sibling !== node && !sibling.hasAttribute('inert')) {
+          sibling.setAttribute('inert', '');
+          madeInert.push(sibling);
+        }
+      }
+    }
     // From 992px the panel is inline: a drawer left open would come back on
     // its own when the window narrows again, so close it.
     const wide = window.matchMedia('(min-width: 992px)');
@@ -202,8 +219,7 @@ export default function ListSidebarOne({
     // Escape closes; Tab stays inside the open drawer, as Bootstrap's did.
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
-        setDrawerOpen(false);
-        drawerTriggerRef.current?.focus();
+        closeDrawer();
         return;
       }
       if (e.key !== 'Tab' || !drawerRef.current) return;
@@ -230,6 +246,7 @@ export default function ListSidebarOne({
     wide.addEventListener('change', onWide);
     document.addEventListener('keydown', onKeyDown);
     return () => {
+      for (const el of madeInert) el.removeAttribute('inert');
       wide.removeEventListener('change', onWide);
       document.removeEventListener('keydown', onKeyDown);
     };
@@ -391,10 +408,12 @@ export default function ListSidebarOne({
           tabIndex={-1}
           {...(drawerOpen ? { role: 'dialog', 'aria-modal': true } : {})}
           id="filterSlider"
-          aria-labelledby="filterSliderLabel"
+          aria-labelledby="filterSliderTitle"
         >
           <div className="offcanvas-header border-bottom py-3">
-            <h2 className="h5 mb-0">{t('sidebar.filterTitle')}</h2>
+            <h2 id="filterSliderTitle" className="h5 mb-0">
+              {t('sidebar.filterTitle')}
+            </h2>
             <button
               type="button"
               className="btn-close d-lg-none text-sm"

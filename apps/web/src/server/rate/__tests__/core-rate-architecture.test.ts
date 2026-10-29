@@ -2140,7 +2140,9 @@ async function runCoreArchitectureSuite() {
   for (const file of walk1331(webSrc1331)) {
     const src = fs.readFileSync(file, 'utf8');
     assert.ok(
-      !/bootstrap\/dist\/js|bootstrap\.bundle|from ['"]bootstrap['"]/.test(src),
+      !/bootstrap\/(?:dist\/)?js\b|bootstrap\.bundle|(?:from|import)\s*\(?\s*['"]bootstrap['"]/.test(
+        src
+      ),
       `${file} loads Bootstrap JS (#1331)`
     );
     assert.ok(

@@ -57,6 +57,12 @@ test('the catalog filter drawer opens and closes on a phone', async ({
   await trigger.click();
   await expect(drawer).toHaveAttribute('role', 'dialog');
   await expect(drawer).toHaveAttribute('aria-modal', 'true');
+  await expect(drawer).toHaveAttribute('aria-labelledby', 'filterSliderTitle');
+  const pageInert = () =>
+    page.evaluate(
+      () => !!document.querySelector('#shortfilter')?.closest('[inert]')
+    );
+  expect(await pageInert(), 'the page behind the drawer is inert').toBe(true);
   for (let i = 0; i < 40; i++) await page.keyboard.press('Tab');
   expect(
     await page.evaluate(() =>
@@ -66,6 +72,7 @@ test('the catalog filter drawer opens and closes on a phone', async ({
   // Widening past 992px closes the drawer, so it does not come back later.
   await page.setViewportSize({ width: 1200, height: 844 });
   await expect(drawer).not.toHaveClass(/\bshow\b/);
+  expect(await pageInert(), 'closing lifts inert').toBe(false);
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(drawer).not.toHaveClass(/\bshow\b/);
 });
