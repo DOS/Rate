@@ -131,6 +131,15 @@ const nextConfig = {
             key: "Strict-Transport-Security",
             value: "max-age=63072000; includeSubDomains; preload",
           },
+        ],
+      },
+      // Every path the proxy does not serve (its matcher in src/proxy.ts):
+      // pages get it in a <meta> tag (PAGE_META_CSP). Vercel copies config
+      // headers onto the request, and an enforcing policy there hides the
+      // report-only one Next.js reads the nonce from (DOS/Rate#1345).
+      {
+        source: "/:path((?:_next|_vercel|api|monitoring|sitemap|.*\\.).*)",
+        headers: [
           {
             key: "Content-Security-Policy",
             value:
