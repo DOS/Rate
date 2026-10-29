@@ -749,10 +749,12 @@ async function runTests() {
     'Must refresh both verified=true and verified=false cohorts'
   );
   assert.deepEqual(reportedSections, ['merchant', 'master', 'listing', 'price', 'reviews']);
-  // An ingest that analyses reviews leaves the merchant's review risk to Rate
-  // Services' auditor (DOS/Rate#1341): no merchants update, and the shop
-  // upsert carries only the shop's own fields, never metadata or review_risk_*.
-  assert.deepEqual(revRaceEvents.merchantUpdates, [], 'no merchants update at ingest');
+  // The shop upsert carries only the shop's own fields, never metadata or
+  // review_risk_*: Rate Services' auditor owns the merchant review risk
+  // (DOS/Rate#1341). This stub does not reach the review analysis; that path
+  // (persistAnalysisToSupabase, scoreSellerReviewRisk) is checked in
+  // test-review-analyzer.ts and backfill-review-risk.test.ts.
+  assert.deepEqual(revRaceEvents.merchantUpdates, [], 'no merchants update');
   const MERCHANT_UPSERT_KEYS = [
     'entity_hash',
     'follower_count',
