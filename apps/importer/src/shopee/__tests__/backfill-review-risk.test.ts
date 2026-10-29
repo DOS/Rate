@@ -416,14 +416,16 @@ async function run() {
     const src = readFileSync(file, 'utf8')
       .replace(/\/\*[\s\S]*?\*\//g, '')
       .replace(/^\s*\/\/.*$/gm, '');
+    // Any object key review_risk_score / _breakdown / _updated_at (a type's
+    // optional `review_risk_score?:` is not a write).
     assert.doesNotMatch(
       src,
-      /\.(?:update|upsert)\(\s*\{[^)]*\breview_risk_(?:score|breakdown|updated_at)\s*:/,
+      /\breview_risk_(?:score|breakdown|updated_at)\s*:/,
       `${file} writes the merchant review risk`
     );
     assert.doesNotMatch(
       src,
-      /from\('merchants'\)[\s\S]{0,200}?\.(?:update|upsert)\(\s*\{[^)]*\bmetadata\s*:/,
+      /from\('merchants'\)[\s\S]{0,600}?\bmetadata\s*:/,
       `${file} writes merchants.metadata`
     );
   }
