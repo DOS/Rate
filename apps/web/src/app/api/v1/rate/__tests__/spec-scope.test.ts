@@ -321,6 +321,52 @@ async function testExtensionLookup() {
   console.warn('  ✅ Extension lookup returns the category spec view');
 }
 
+// The extension lookup and the public lookup pick the model a title names,
+// not the first model the search returns (DOS/Rate#1379, #594).
+async function testModelMatch() {
+  const { lookupExtensionProduct } = await import('@/server/rate/extension');
+  const { inspectProductOrShopUrl } = await import('@/lib/rate-api');
+  const named = (id: string, slug: string, name: string) => ({
+    ...phoneShaped(id, slug, 'smartphones'),
+    name,
+    model: name.replace(/^Apple /, '').replace(/ 128GB$/, ''),
+    storage_gb: 128,
+  });
+  const IPHONE_16E = named(
+    '55555555-5555-4555-8555-555555555555',
+    'apple-iphone-16e-128gb',
+    'Apple iPhone 16e 128GB'
+  );
+  const IPHONE_16 = named(
+    '66666666-6666-4666-8666-666666666666',
+    'apple-iphone-16-128gb',
+    'Apple iPhone 16 128GB'
+  );
+  // The search returns the 16e first, as it did on rate.vn.
+  catalog = [IPHONE_16E, IPHONE_16];
+  masterRows = [];
+
+  const ext16 = await lookupExtensionProduct({
+    title: 'Apple iPhone 16 128GB',
+    price: 19_990_000,
+    mode: 'pill',
+  });
+  assert.equal(ext16.masterProduct?.slug, IPHONE_16.slug);
+  const ext16e = await lookupExtensionProduct({
+    title: 'Apple iPhone 16e 128GB',
+    mode: 'pill',
+  });
+  assert.equal(ext16e.masterProduct?.slug, IPHONE_16E.slug);
+
+  const public16 = await inspectProductOrShopUrl('iphone 16');
+  assert.equal(public16.masterProduct?.slug, IPHONE_16.slug);
+  assert.equal(public16.suggestions[0]?.slug, IPHONE_16.slug);
+  const public16e = await inspectProductOrShopUrl('iphone 16e');
+  assert.equal(public16e.masterProduct?.slug, IPHONE_16E.slug);
+  catalog = [];
+  console.warn('  ✅ Extension and public lookup pick the named model');
+}
+
 // Inspect and lookup share a per-IP limit (DOS/Rate#1307).
 async function testInspectRateLimit() {
   const { NextRequest } = await import('next/server');
@@ -353,6 +399,7 @@ async function main() {
   await testProductFilters();
   await testDetailAndCompare();
   await testExtensionLookup();
+  await testModelMatch();
   await testInspectRateLimit();
 }
 

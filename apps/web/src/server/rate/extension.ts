@@ -39,6 +39,7 @@ import {
 import { computeProductRadarSignal } from './deals';
 import type { RadarSignal } from '../../lib/deal-radar';
 import { createLogger } from '@/lib/logger';
+import { rankModelCandidates } from '@/lib/model-match';
 import {
   chooseItemVariant,
   itemProductPath,
@@ -1098,8 +1099,15 @@ export async function lookupExtensionProduct(
 
   // Step 3: Search candidate Master Products in DB (Read-Only)
   const searchKeyword = cleanModelSearchQuery || effectiveTitle || '';
+  // The search returns every model whose text contains the title, in no
+  // useful order: rank them so the 16e never answers for the 16
+  // (DOS/Rate#1379), with the title's storage size breaking ties.
   const catalogCandidates = searchKeyword
-    ? await getMasterProducts({ search: searchKeyword, limit: 8 })
+    ? rankModelCandidates(
+        effectiveTitle || searchKeyword,
+        await getMasterProducts({ search: searchKeyword, limit: 8 }),
+        storageGb
+      )
     : [];
 
   let matchedMaster: MasterProduct | null = null;
