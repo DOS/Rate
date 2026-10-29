@@ -132,7 +132,7 @@ if (isDirectExecution) {
   })().catch((err: unknown) => {
     logger.error(
       'backfill.fatal',
-      `Review risk backfill failed: ${err instanceof Error ? err.message : String(err)}`
+      `Review risk report (read-only; Rate Services' MerchantRiskAuditor owns the stored risk) failed: ${err instanceof Error ? err.message : String(err)}`
     );
     process.exit(1);
   });

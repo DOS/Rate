@@ -1220,7 +1220,7 @@ export class ShopeeIngestionPipeline {
                 merchantId
               );
               platLogger.info(
-                'ingest.review_risk_scored',
+                'ingest.review_risk_rescored',
                 `Seller review risk ${sellerWide?.risk.risk_score ?? 'n/a'} from ${sellerWide?.risk.total_reviews ?? 0} reviews (log only; the RS auditor stores it).`,
                 {
                   merchantId,
@@ -1230,7 +1230,7 @@ export class ShopeeIngestionPipeline {
               );
             } catch (err: unknown) {
               platLogger.warn(
-                'ingest.review_risk_score_failed',
+                'ingest.review_risk_rescore_failed',
                 `Seller-wide review risk scoring failed (non-fatal): ${err instanceof Error ? err.message : String(err)}`,
                 { merchantId }
               );
