@@ -1499,8 +1499,11 @@ export async function ProductDetailView({
                                 loading="lazy"
                                 decoding="async"
                                 src={peerThumb}
-                                srcSet={deviceImageSrcSet(peerThumb) ?? undefined}
-                                sizes="160px"
+                                srcSet={
+                                  deviceImageSrcSet(peerThumb) ?? undefined
+                                }
+                                // 68 px box less padding and border.
+                                sizes="50px"
                                 alt={peer.name}
                                 style={{
                                   maxWidth: '100%',
