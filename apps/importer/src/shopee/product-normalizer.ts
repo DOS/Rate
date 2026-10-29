@@ -1256,11 +1256,13 @@ function isProductCodeToken(token: string): boolean {
 // js/polynomial-redos). A unit ends where a letter does, Vietnamese ones included: "13
 // tặng" or "13 hãng" is a bare 13, not "13 t(b)" or "13 h"; "15 tháng" (warranty), "10%"
 // or "15 gói" is no size (DOS/Rate#1291).
+// "năm" is a duration at the end, before a separator or a shop's age ("13 năm", "Shop
+// 13 năm kinh nghiệm"); any other word or a year after it keeps the size (DOS/Rate#1333).
 // "16 RAM 512" is the RAM; "13 RAM 8GB" (a RAM size follows) is the screen's 13
 // (DOS/Rate#1317).
 const UNIT_END = String.raw`(?![\p{L}\p{M}\d])`;
 const SIZE_NOT_PRECEDED_BY = String.raw`(?<![\d.,a-z])(?<!\d ?\/ ?)(?<!(?:ram|os|sonoma|sequoia|ventura|monterey|tahoe) )`;
-const SIZE_NOT_FOLLOWED_BY = String.raw`(?![.,]?\d|[a-z]| ?(?:gb?${UNIT_END}|tb?${UNIT_END}|th${UNIT_END}|gen|mm|w${UNIT_END}|h${UNIT_END}|\/|-? ?(?:core|nhân|lõi)|cpu|gpu|tiếng|giờ|%|(?:tháng|ngày|tuần|phút|gói|kỳ|nghìn|ngàn|triệu|vnd|months?|years?|days?|weeks?|hours?)${UNIT_END}|ram${UNIT_END}(?! ?\d{1,2}(?!\d))|năm(?= ?(?:$|[,|;)/+]| - ))))`;
+const SIZE_NOT_FOLLOWED_BY = String.raw`(?![.,]?\d|[a-z]| ?(?:gb?${UNIT_END}|tb?${UNIT_END}|th${UNIT_END}|gen|mm|w${UNIT_END}|h${UNIT_END}|\/|-? ?(?:core|nhân|lõi)|cpu|gpu|tiếng|giờ|%|(?:tháng|ngày|tuần|phút|gói|kỳ|nghìn|ngàn|triệu|vnd|months?|years?|days?|weeks?|hours?)${UNIT_END}|ram${UNIT_END}(?! ?\d{1,2}(?!\d))|năm(?= ?(?:$|[,|;)/+]| - |(?:kinh nghiệm|tuổi|hoạt động|uy tín|thành lập)(?![\p{L}\d])))))`;
 const SIZE_MARKER = String.raw` ?(?:-? ?inch|in${UNIT_END}|"|''|”|″)`;
 const IPAD_SIZE = String.raw`(11|12[.,]9|13)(?:[.,]0)?`;
 const MACBOOK_AIR_SIZE = String.raw`(13|15)(?:[.,]\d)?`;

@@ -492,6 +492,12 @@ async function runSuite() {
     ['MacBook Air 13 năm ra mắt 2022', 'apple:macbook-air-13:unknown'],
     ['iPad Pro 11 năm: 2022', 'apple:ipad-pro-11:unknown'],
     ['iPad Pro 11 năm 22', 'apple:ipad-pro-11:unknown'],
+    // A shop's age is no size: the gift's size stands in.
+    ['iPad Pro M4 256GB - Shop 13 năm kinh nghiệm - tặng ốp 11 inch', 'apple:ipad-pro-m4-11:256gb'],
+    [
+      'MacBook Air M2 256GB - Shop 14 năm kinh nghiệm - tặng túi 13 inch',
+      'apple:macbook-air-m2-13:256gb',
+    ],
     ['iPad Pro M4 256GB 11 năm bảo hành tặng ốp 13 inch', 'apple:ipad-pro-m4-11:256gb'],
     // A date ("11/11"), RAM or SSD, a macOS name, a duration or an amount is no
     // size, so the gift's size still stands in.
