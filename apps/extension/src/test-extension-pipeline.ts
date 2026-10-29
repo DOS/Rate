@@ -591,6 +591,19 @@ async function runTests() {
       'CHROMEWEBSTORE.md name must match _locales/vi extName'
     );
     assert.equal((manifestJson as { name?: string }).name, '__MSG_extName__');
+    // The store's short summary is the manifest description, within Chrome's
+    // 132 characters (DOS/Rate#1304).
+    const viDescription = readLocaleCatalogues().vi.extDescription?.message;
+    assert.equal(
+      storeDoc
+        .slice(storeDoc.indexOf('### Short Summary'))
+        .split('\n')
+        .map((line) => line.trim())
+        .filter(Boolean)[1],
+      viDescription,
+      'CHROMEWEBSTORE.md short summary must match _locales/vi extDescription'
+    );
+    assert.ok((viDescription ?? '').length <= 132);
     console.log(
       '  ✅ [Manifest, store doc and opt-in disclosure agree (#1230, #1231, #1232)] Verified'
     );
@@ -4145,6 +4158,10 @@ async function runTests() {
     // Chrome store limits for the localised manifest fields.
     for (const [locale, catalogue] of Object.entries(catalogues)) {
       assert.ok(catalogue.extName!.message.length <= 75, `${locale} extName`);
+      assert.ok(
+        catalogue.extDescription!.message.length <= 132,
+        `${locale} extDescription`
+      );
     }
     const manifestText = fs.readFileSync(
       path.resolve(__dirname, '../manifest.json'),
