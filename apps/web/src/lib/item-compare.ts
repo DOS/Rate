@@ -105,21 +105,36 @@ export function dedupeCompareTargets<
   return out;
 }
 
+/** True when `{a}-vs-{b}` parses back to exactly `a` and `b`. */
+function versusRoundTrips(slugA: string, slugB: string): boolean {
+  const parts = `${slugA}-vs-${slugB}`.split('-vs-');
+  return parts.length === 2 && parts[0] === slugA && parts[1] === slugB;
+}
+
 /**
- * A versus pair in its one canonical order, the two slugs sorted. Each pair
- * has a single URL: the other order 308s to it (DOS/Rate#1367).
+ * A versus pair in its one canonical order: the two slugs sorted (without
+ * regard to case). Each pair has a single URL; the other order 308s to it
+ * (DOS/Rate#1367). When the sorted URL would not parse back to the same two
+ * slugs (a slug ending in "-vs"), the order given is kept.
  */
 export function canonicalVersusOrder(
   slugA: string,
   slugB: string
 ): [string, string] {
-  return slugA <= slugB ? [slugA, slugB] : [slugB, slugA];
+  const sorted: [string, string] =
+    slugA.toLowerCase() <= slugB.toLowerCase()
+      ? [slugA, slugB]
+      : [slugB, slugA];
+  if (versusRoundTrips(sorted[0], sorted[1])) return sorted;
+  return versusRoundTrips(slugA, slugB) ? [slugA, slugB] : sorted;
 }
 
 /**
  * The two compared products in the URL's order. The compare read does not
  * keep the order it was asked in, and the page, its title and its canonical
- * must not flip with it (DOS/Rate#1367).
+ * must not flip with it (DOS/Rate#1367). A side the read did not return
+ * stays undefined, so the page 404s instead of comparing a product with
+ * itself.
  */
 export function inPairOrder<T extends { slug: string }>(
   compared: readonly T[],
@@ -129,21 +144,31 @@ export function inPairOrder<T extends { slug: string }>(
     slug === undefined
       ? undefined
       : compared.find((p) => p.slug.toLowerCase() === slug.toLowerCase());
-  const a = bySlug(pair[0]) ?? compared[0];
-  const b = bySlug(pair[1]) ?? compared.find((p) => p !== a);
-  return [a, b];
+  return [bySlug(pair[0]), bySlug(pair[1])];
 }
 
+// A catalogue slug as it may appear in a versus URL.
+const VERSUS_URL_SLUG = /^[a-z0-9][a-z0-9._-]*$/;
+
 /**
- * Master-product route: the URL of the pair in its canonical order (slugs
- * sorted) when the request named it the other way round, else null
- * (DOS/Rate#1367). The Item route sorts in planVersusRoute.
+ * The canonical versus URL when the request named the pair any other way
+ * (the other order, other letter case, percent-encoding), else null
+ * (DOS/Rate#1367). `requested` is the raw `[versus]` segment. A pair whose
+ * canonical slugs are not plain catalogue slugs is not redirected: the page
+ * 404s as before.
  */
-export function legacyVersusRedirect(
-  pair: readonly [string, string]
+export function versusAliasRedirect(
+  requested: string,
+  canonicalPath: string
 ): string | null {
-  const [first, second] = canonicalVersusOrder(pair[0], pair[1]);
-  return first === pair[0] ? null : `/compare/${first}-vs-${second}`;
+  const slugs = canonicalPath.replace(/^\/compare\//, '').split('-vs-');
+  if (
+    slugs.length !== 2 ||
+    !slugs.every((slug) => VERSUS_URL_SLUG.test(slug) && !slug.includes('..'))
+  ) {
+    return null;
+  }
+  return `/compare/${requested}` === canonicalPath ? null : canonicalPath;
 }
 
 export type VersusPlan =
@@ -175,7 +200,7 @@ export function planVersusRoute(
     return { kind: 'not_found' };
   }
   // One URL per pair, the slugs sorted; the other order 308s there (#1367).
-  const swapped = urlSlugA > urlSlugB;
+  const swapped = canonicalVersusOrder(urlSlugA, urlSlugB)[0] !== urlSlugA;
   const [first, second] = swapped ? [b, a] : [a, b];
   const [firstSlug, secondSlug] = swapped
     ? [urlSlugB, urlSlugA]

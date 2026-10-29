@@ -6,8 +6,8 @@ import {
   pickItemVariant,
   canonicalVersusOrder,
   inPairOrder,
-  legacyVersusRedirect,
   planVersusRoute,
+  versusAliasRedirect,
   versusHref,
   itemSlugFromProductAnswer,
   type CompareResolution,
@@ -218,21 +218,48 @@ function main() {
     '/compare/apple-iphone-16-vs-pixel-10',
     'sorted on the Item slugs the URL shows'
   );
-  // Master-product route: the reverse order redirects, the sorted one renders.
+  // The other order, letter case or encoding redirects; the canonical
+  // renders; a slug that is no plain catalogue slug is left to 404.
+  const macbookVsAsus =
+    '/compare/apple-macbook-pro-m4-pro-14-inch-512gb-vs-asus-zenbook-s-14-1tb';
   assert.equal(
-    legacyVersusRedirect([
-      'asus-zenbook-s-14-1tb',
-      'apple-macbook-pro-m4-pro-14-inch-512gb',
-    ]),
-    '/compare/apple-macbook-pro-m4-pro-14-inch-512gb-vs-asus-zenbook-s-14-1tb'
+    versusAliasRedirect(
+      'asus-zenbook-s-14-1tb-vs-apple-macbook-pro-m4-pro-14-inch-512gb',
+      macbookVsAsus
+    ),
+    macbookVsAsus
   );
   assert.equal(
-    legacyVersusRedirect([
-      'apple-macbook-pro-m4-pro-14-inch-512gb',
-      'asus-zenbook-s-14-1tb',
-    ]),
+    versusAliasRedirect(
+      'Apple-MacBook-Pro-M4-Pro-14-inch-512GB-vs-asus-zenbook-s-14-1tb',
+      macbookVsAsus
+    ),
+    macbookVsAsus,
+    'letter case'
+  );
+  assert.equal(
+    versusAliasRedirect(
+      'apple-macbook-pro-m4-pro-14-inch-512gb-vs-asus-zenbook-s-14-1tb',
+      macbookVsAsus
+    ),
     null
   );
+  assert.equal(
+    versusAliasRedirect('zz-junk-vs-aa")x', '/compare/aa")x-vs-zz-junk'),
+    null,
+    'no 308 to a path built from junk'
+  );
+  assert.equal(versusAliasRedirect('b-vs-a..b', '/compare/a..b-vs-b'), null);
+  // A sorted URL that would not parse back keeps the order given (a slug
+  // ending in "-vs").
+  assert.deepEqual(canonicalVersusOrder('z-phone', 'a-phone-vs'), [
+    'z-phone',
+    'a-phone-vs',
+  ]);
+  assert.deepEqual(canonicalVersusOrder('B-Phone', 'a-phone'), [
+    'a-phone',
+    'B-Phone',
+  ]);
   // The compare read may answer in any order; the page keeps the URL's.
   const read = [{ slug: 'b-phone' }, { slug: 'a-phone' }];
   assert.deepEqual(
@@ -253,6 +280,13 @@ function main() {
     ),
     ['a-phone', undefined],
     'a missing side stays missing (the page 404s)'
+  );
+  assert.deepEqual(
+    inPairOrder([{ slug: 'b-phone' }], ['a-phone', 'b-phone']).map(
+      (p) => p?.slug
+    ),
+    [undefined, 'b-phone'],
+    'a missing first side is no B vs B'
   );
   // Item route: the reverse Item pair 308s to the sorted one.
   assert.deepEqual(

@@ -13,7 +13,7 @@ import { resolveVersusPlan } from '@/server/rate/item-compare';
 import {
   canonicalVersusOrder,
   inPairOrder,
-  legacyVersusRedirect,
+  versusAliasRedirect,
 } from '@/lib/item-compare';
 import { getItemSlugsFor } from '@/server/rate/item-directory';
 import { normalizeRateLocale } from '@/lib/rate-i18n';
@@ -134,11 +134,14 @@ export default async function VersusComparePage({ params }: VersusPageProps) {
   const plan = await resolveVersusPlan(parsed[0], parsed[1]);
   if (plan?.kind === 'redirect') permanentRedirect(plan.to);
   if (plan?.kind === 'not_found') notFound();
-  // Master-product route: one URL per pair, the slugs sorted (#1367).
-  if (!plan) {
-    const sortedHref = legacyVersusRedirect(parsed);
-    if (sortedHref) permanentRedirect(sortedHref);
-  }
+  // One URL per pair, its slugs sorted: the other order, letter case or
+  // encoding 308s there, on either route (#1367).
+  const canonicalPath =
+    plan?.kind === 'render'
+      ? plan.canonical
+      : `/compare/${canonicalVersusOrder(parsed[0], parsed[1]).join('-vs-')}`;
+  const aliasHref = versusAliasRedirect(versus, canonicalPath);
+  if (aliasHref) permanentRedirect(aliasHref);
   const pair = plan?.kind === 'render' ? [plan.slugA, plan.slugB] : parsed;
 
   const [compared, directory] = await Promise.all([

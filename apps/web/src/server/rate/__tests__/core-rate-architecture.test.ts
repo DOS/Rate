@@ -788,7 +788,7 @@ async function runCoreArchitectureSuite() {
   );
   assert.match(
     versusPageSrc1367,
-    /if \(!plan\) \{\s*const sortedHref = legacyVersusRedirect\(parsed\);\s*if \(sortedHref\) permanentRedirect\(sortedHref\);/
+    /const aliasHref = versusAliasRedirect\(versus, canonicalPath\);\s*if \(aliasHref\) permanentRedirect\(aliasHref\);/
   );
   assert.ok(
     !/compare\/\$\{a\.slug\}-vs-\$\{b\.slug\}/.test(versusPageSrc1367),
