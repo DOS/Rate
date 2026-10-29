@@ -4,9 +4,12 @@ import test from 'node:test';
 import {
   classify,
   getOnce,
+  isSitemapIndex,
   mapPool,
   MAX_CONCURRENCY,
+  checkErrors,
   notCached,
+  readSitemap,
   sitemapUrls,
   summarize,
   warmUrl,
@@ -25,11 +28,13 @@ test('reads the page URLs of the base origin only, without query strings', () =>
     <url><loc>https://user:pw@rate.vn/x</loc></url>
     <url><loc>not a url</loc></url>
     <url><loc>https://rate.vn/merchants/abc#top</loc></url>
+    <url><loc>https://rate.vn/a&#38;b</loc></url>
   </urlset>`;
   assert.deepEqual(sitemapUrls(xml, BASE), [
     'https://rate.vn/',
     'https://rate.vn/smartphones',
     'https://rate.vn/merchants/abc',
+    'https://rate.vn/a&b',
   ]);
 });
 
@@ -65,6 +70,11 @@ test('a 5xx is retried once and a 4xx is not', async () => {
     assert.equal(c.init.body, undefined);
     assert.equal('authorization' in c.init.headers, false);
     assert.equal('cookie' in c.init.headers, false);
+    assert.equal(
+      c.init.redirect,
+      'manual',
+      'never follows a redirect off the origin'
+    );
   }
   calls.length = 0;
   const gone = await warmUrl(`${BASE}/gone`, { timeoutMs: 1000, fetchImpl });
@@ -109,13 +119,59 @@ test('summary and the check pass', () => {
     ]),
     { ok: 2, cold: 1, error: 1 }
   );
-  assert.deepEqual(
-    notCached([
-      { url: 'a', cache: 'HIT' },
-      { url: 'b', cache: 'STALE' },
-      { url: 'c', cache: 'MISS' },
-      { url: 'd', error: 'timeout' },
-    ]),
-    ['c', 'd']
+  const checks = [
+    { url: 'a', status: 200, cache: 'HIT' },
+    { url: 'b', status: 200, cache: 'STALE' },
+    { url: 'e', status: 200, cache: 'PRERENDER' },
+    { url: 'c', status: 200, cache: 'MISS' },
+    { url: 'd', error: 'timeout' },
+    { url: 'f', status: 404, cache: 'HIT' },
+  ];
+  assert.deepEqual(notCached(checks), ['c']);
+  // A failing check (error, or a 4xx/5xx even with a HIT header) is an error.
+  assert.deepEqual(checkErrors(checks), ['d', 'f']);
+});
+
+test('the sitemap is retried once like a page, and an index is recognised', async () => {
+  let n = 0;
+  const fetchImpl = async () => {
+    n += 1;
+    return n === 1
+      ? new Response('', { status: 504 })
+      : new Response(
+          '<urlset><url><loc>https://rate.vn/</loc></url></urlset>',
+          { status: 200 }
+        );
+  };
+  const ok = await readSitemap(`${BASE}/sitemap.xml`, {
+    timeoutMs: 1000,
+    fetchImpl,
+  });
+  assert.equal(n, 2);
+  assert.match(ok.xml, /urlset/);
+  const down = await readSitemap(`${BASE}/sitemap.xml`, {
+    timeoutMs: 1000,
+    fetchImpl: async () => new Response('', { status: 503 }),
+  });
+  assert.match(down.error, /cannot read .*503 .* -> 503/);
+  assert.equal(
+    isSitemapIndex(
+      '<?xml?><sitemapindex><sitemap><loc>x</loc></sitemap></sitemapindex>'
+    ),
+    true
   );
+  assert.equal(isSitemapIndex('<urlset></urlset>'), false);
+});
+
+test('a Vercel challenge shows its x-vercel-mitigated header', async () => {
+  const r = await warmUrl(`${BASE}/x`, {
+    timeoutMs: 1000,
+    fetchImpl: async () =>
+      new Response('', {
+        status: 403,
+        headers: { 'x-vercel-mitigated': 'challenge' },
+      }),
+  });
+  assert.equal(r.outcome, 'error');
+  assert.equal(r.attempts[0].mitigated, 'challenge');
 });
