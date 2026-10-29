@@ -40,6 +40,11 @@ test('a six-size Item ships only its default size and loads the others on demand
     type: 'size-route json bytes, five other sizes',
     description: String(others),
   });
+  // Printed too, so the CI log carries the numbers (the line reporter does not
+  // print annotations).
+  console.warn(
+    `[#1285] RSC bytes: six-size Item (lazy) ${big}, two-size Item (eager) ${small}; size-route JSON bytes for the five other sizes ${others}`
+  );
 
   const html = await (await request.get(BIG)).text();
   expect(html).toContain(listing(64, 1));
