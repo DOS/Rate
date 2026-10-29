@@ -10,6 +10,7 @@ import { Link } from '@/lib/navigation';
 import {
   getCachedFilteredReviewCountsByMaster,
   getCachedMasterProducts,
+  getItemCatalogPage,
   getCrossPlatformDealRadar,
 } from '@/server/rate';
 import {
@@ -18,6 +19,7 @@ import {
 } from '@/lib/rate-api';
 import { normalizeRateLocale, type SupportedRateLocale } from '@/lib/rate-i18n';
 import { defaultOpenGraph } from '@/lib/seo';
+import { catalogRowSlug, sumCountsByItemRow } from '@/lib/item-directory';
 import PageShell from '../components/page-shell';
 import CompareTrayBar from '@/components/compare/CompareTrayBar';
 import LeaderboardExplorer from '@/components/leaderboard/LeaderboardExplorer';
@@ -88,11 +90,29 @@ export default async function LeaderboardPage({ params }: PageProps) {
     await Promise.all([
       Promise.all(
         [...VALID_CATEGORIES].map((categorySlug) =>
-          getCachedMasterProducts({
-            categorySlug,
-            limit: 100,
-            sort: 'rating_desc',
-          })
+          // RATE_ITEM_MODEL on: the 100 best-rated Items, read past the
+          // first 100 variants so sizes do not crowd a tab (#1155, #1275);
+          // off: null, and the 100 best-rated variants as before.
+          getItemCatalogPage(
+            (offset, limit) =>
+              getCachedMasterProducts({
+                categorySlug,
+                limit,
+                offset,
+                sort: 'rating_desc',
+              }),
+            0,
+            100,
+            'rating_desc'
+          ).then(
+            (items) =>
+              items ??
+              getCachedMasterProducts({
+                categorySlug,
+                limit: 100,
+                sort: 'rating_desc',
+              })
+          )
         )
       ),
       // No fallback: the page is cached, so a null radar would be served for
@@ -143,7 +163,7 @@ export default async function LeaderboardPage({ params }: PageProps) {
       '@type': 'ListItem',
       position: index + 1,
       name: p.name,
-      url: `${siteUrl}${getMasterProductHref(p)}`,
+      url: `${siteUrl}${getMasterProductHref({ ...p, slug: catalogRowSlug(p) })}`,
     })),
   };
 
@@ -352,7 +372,10 @@ export default async function LeaderboardPage({ params }: PageProps) {
             <LeaderboardExplorer
               products={products}
               dealRadar={dealRadar}
-              filteredReviewCounts={filteredReviewCounts}
+              filteredReviewCounts={sumCountsByItemRow(
+                products,
+                filteredReviewCounts
+              )}
               locale={resolvedLocale}
             />
           </section>

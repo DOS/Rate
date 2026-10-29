@@ -19,7 +19,10 @@ import { fetchAllPages, resolveBackfillSupabaseTarget } from '../paging.js';
 import {
   CANONICAL_BACKFILL_SPECS_BY_MODEL_KEY,
   FLAGSHIP_DEVICES_TO_SEED,
+  flagshipSeedsByItem,
+  type FlagshipItemSeed,
 } from '../flagship-seed-data.js';
+import { resolveItemModelMode, type ItemModelMode } from '../item-model-flag.js';
 import { createImporterLogger } from '../logger.js';
 import { scopeSupabaseToRate, type RateSupabaseClient } from '../types.js';
 
@@ -46,8 +49,93 @@ export interface BackfillSpecsResult {
   readonly apply: boolean;
   readonly catalogUpdated: number;
   readonly catalogInserted: number;
+  /** Items whose specs the seeds set (RATE_ITEM_MODEL on only; 0 otherwise). */
+  readonly itemsUpdated: number;
   readonly skipped: number;
   readonly totalAudited: number;
+}
+
+/** Item specs carry no storage or RAM: those are per variant (design doc 4.1). */
+export function withoutVariantSpecs(specs: ProductSpecifications): ProductSpecifications {
+  if (!specs.hardware) return specs;
+  const hardware = { ...specs.hardware };
+  delete hardware.storage_gb;
+  delete hardware.ram_gb;
+  return { ...specs, hardware };
+}
+
+export function withoutVariantKeySpecs(keySpecs: Record<string, unknown>): Record<string, unknown> {
+  const rest = { ...keySpecs };
+  delete rest.storage;
+  delete rest.ram;
+  return rest;
+}
+
+/**
+ * Writes each seed Item's specs, key specs, description and images onto its `rate.items`
+ * row (design doc 4.1, 5.3, DOS/Rate#1152). Variant-only fields (storage) stay on the
+ * variants. Items are never created here: the M1 sync trigger and M2 backfill own that,
+ * so an Item not found is skipped. Dry-run unless `apply` is true.
+ */
+export async function syncItemSeedSpecs(
+  supabase: RateSupabaseClient,
+  options: {
+    apply?: boolean;
+    seeds?: readonly FlagshipItemSeed[];
+    itemModel?: ItemModelMode;
+  } = {}
+): Promise<{ updated: number; missing: string[] }> {
+  // Items exist only with the Item model on: with it off this writes nothing.
+  if ((options.itemModel ?? resolveItemModelMode()) === 'off') return { updated: 0, missing: [] };
+  const apply = options.apply === true;
+  const missing: string[] = [];
+  let updated = 0;
+  for (const seed of options.seeds ?? flagshipSeedsByItem()) {
+    const { data: item, error: lookupErr } = await supabase
+      .from('items')
+      .select('id, specifications, key_specs')
+      .eq('item_key', seed.itemKey)
+      .maybeSingle();
+    if (lookupErr) {
+      throw new Error(`Failed to look up Item ${seed.itemKey}: ${lookupErr.message}`);
+    }
+    if (!item) {
+      missing.push(seed.itemKey);
+      continue;
+    }
+    const row = item as { id: string; specifications?: unknown; key_specs?: unknown };
+    if (apply) {
+      const { error: upErr } = await supabase
+        .from('items')
+        .update({
+          description: seed.description,
+          specifications: withoutVariantSpecs(
+            mergeProductSpecifications(row.specifications, seed.specifications)
+          ),
+          key_specs: withoutVariantKeySpecs(
+            mergeKeySpecs(row.key_specs, seed.key_specs as unknown as Record<string, unknown>)
+          ),
+          ...(seed.images.length > 0 ? { images: seed.images, thumbnail: seed.images[0] } : {}),
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', row.id);
+      if (upErr) {
+        throw new Error(`Failed to update Item specs of ${seed.itemKey}: ${upErr.message}`);
+      }
+    }
+    updated++;
+    logger.info(
+      'backfill.item_specs',
+      `[Item Specs] ${seed.name} (${seed.itemKey}): ${apply ? 'UPDATED' : 'DRY-RUN WOULD UPDATE'}`,
+      { itemKey: seed.itemKey, apply }
+    );
+  }
+  if (missing.length > 0) {
+    logger.warn('backfill.item_missing', `${missing.length} seed Item(s) have no rate.items row`, {
+      missing,
+    });
+  }
+  return { updated, missing };
 }
 
 /**
@@ -355,6 +443,9 @@ export async function runMasterSpecsBackfill(
     }
   }
 
+  // Item-level specs from the seeds, once Items exist (RATE_ITEM_MODEL on, DOS/Rate#1152).
+  const itemsUpdated = (await syncItemSeedSpecs(supabase, { apply })).updated;
+
   const masters = await fetchAllPages('Failed to fetch master_products', (from, to) =>
     supabase
       .from('master_products')
@@ -442,13 +533,14 @@ export async function runMasterSpecsBackfill(
   logger.info(
     'backfill.completed',
     `SPEC CATALOG SYNC COMPLETE [mode=${apply ? 'APPLY' : 'DRY-RUN'}]: ${catalogUpdated} updated, ${catalogInserted} inserted as draft, ${skipped} skipped; ${totalAudited}/${totalAudited} master products verified with 10/10 Field Groups.`,
-    { apply, catalogUpdated, catalogInserted, skipped, totalAudited }
+    { apply, catalogUpdated, catalogInserted, itemsUpdated, skipped, totalAudited }
   );
 
   return {
     apply,
     catalogUpdated,
     catalogInserted,
+    itemsUpdated,
     skipped,
     totalAudited,
   };

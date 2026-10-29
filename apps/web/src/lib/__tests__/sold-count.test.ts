@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { formatSoldCount } from '../sold-count';
+import { formatSoldCount, hasSoldCount } from '../sold-count';
 
 assert.equal(
   formatSoldCount(23873, null, 'vi'),
@@ -54,4 +54,12 @@ assert.equal(
   '23.873',
   'Invalid locale tags must safely fall back to vi-VN (#848)'
 );
+// A store that publishes no sold count shows no "Sold: 0" (DOS/Rate#1252).
+assert.equal(hasSoldCount(0), false);
+assert.equal(hasSoldCount(null), false);
+assert.equal(hasSoldCount(0.4), false);
+assert.equal(hasSoldCount(Number.NaN), false);
+assert.equal(hasSoldCount(-3), false);
+assert.equal(hasSoldCount(1), true);
+assert.equal(hasSoldCount('20000'), true);
 console.log('✅ sold-count display');

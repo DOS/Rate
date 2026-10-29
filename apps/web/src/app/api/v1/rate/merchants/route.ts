@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getCachedMerchantsList } from '@/server/rate';
 import {
   PUBLIC_API_CORS_HEADERS,
+  withPublicReviewRisk,
   jsonApiError,
   parseBoundedIntParam,
   parseBoundedNumberParam,
@@ -61,7 +62,7 @@ export async function GET(request: NextRequest) {
       {
         ok: true,
         count: merchants.length,
-        data: merchants,
+        data: merchants.map(withPublicReviewRisk),
       },
       {
         status: 200,

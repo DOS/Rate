@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="vi" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="color-scheme" content="dark" />
+  <title>Kế hoạch bật mô hình Item</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0f1113;
+      --surface: #161a1e;
+      --surface-2: #1d2228;
+      --border: #2a313a;
+      --text: #e8edf2;
+      --muted: #9ba5b0;
+      --accent: #FF2E29;
+      --accent-soft: rgba(255, 46, 41, 0.14);
+      --green: #22c55e;
+      --green-soft: rgba(34, 197, 94, 0.14);
+      --amber: #f59e0b;
+      --amber-soft: rgba(245, 158, 11, 0.14);
+      --code-bg: #0b0d0f;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 32px 16px 64px;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Inter, sans-serif;
+      line-height: 1.65;
+    }
+    .container { max-width: 960px; margin: 0 auto; }
+    h1 { font-size: 28px; margin: 12px 0 8px; letter-spacing: -0.02em; }
+    h2 { font-size: 20px; margin: 40px 0 12px; padding-bottom: 8px; border-bottom: 1px solid var(--border); color: #fff; }
+    h3 { font-size: 16px; margin: 22px 0 8px; color: #fff; }
+    p, li { color: var(--text); }
+    .muted { color: var(--muted); }
+    .badge { display: inline-block; padding: 4px 10px; border-radius: 6px; font-size: 12px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; }
+    .badge-accent { background: var(--accent-soft); color: var(--accent); border: 1px solid rgba(255,46,41,0.35); }
+    .badge-amber { background: var(--amber-soft); color: var(--amber); border: 1px solid rgba(245,158,11,0.35); }
+    .card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 16px 18px; margin: 14px 0; }
+    .card.rec { border-color: rgba(34,197,94,0.45); }
+    .card.warn { border-color: rgba(245,158,11,0.45); }
+    .card.key { border-color: rgba(255,46,41,0.45); }
+    .table-wrap { overflow-x: auto; margin: 12px 0; }
+    table { width: 100%; border-collapse: collapse; font-size: 14px; min-width: 620px; }
+    th, td { border: 1px solid var(--border); padding: 8px 10px; text-align: left; vertical-align: top; }
+    th { background: var(--surface-2); color: #fff; }
+    code { background: var(--code-bg); border: 1px solid var(--border); border-radius: 4px; padding: 1px 5px; font-size: 13px; overflow-wrap: anywhere; }
+    dl { margin: 0; }
+    dt { font-weight: 700; color: #fff; margin-top: 8px; }
+    dd { margin: 2px 0 0 0; }
+    .q { border-left: 3px solid var(--accent); padding-left: 12px; margin: 16px 0; }
+    .q strong { color: #fff; }
+    .rec-line { color: var(--green); font-weight: 600; }
+    a { color: #ff6b66; }
+  </style>
+</head>
+<body>
+<div class="container">
+  <span class="badge badge-accent">Chưa áp dụng gì</span>
+  <span class="badge badge-amber">Chờ JOY duyệt 9 quyết định</span>
+  <h1>Kế hoạch bật mô hình Item (sản phẩm, phiên bản, listing)</h1>
+  <p class="muted">Ngày 29/10/2026 - Issue <a href="https://github.com/DOS/Rate/issues/1150">DOS/Rate#1150</a> - Bản tiếng Anh: <a href="./2026-10-29-item-model-go-live.md">2026-10-29-item-model-go-live.md</a> - Người soạn: session Core của Rate Core PO</p>
+
+  <div class="card rec">
+    <h3>Tóm tắt</h3>
+    <p>Trang này gom toàn bộ các bước đưa mô hình Item lên thật vào một chỗ, để JOY duyệt một lần. <b>Item</b> là một sản phẩm (ví dụ iPhone 17 Pro), <b>phiên bản</b> (variant) là một dung lượng của nó (256GB), <b>listing</b> là một tin bán trên sàn. Có 9 bước theo thứ tự, mỗi bước ghi: thay đổi gì, kiểm tra thế nào (chỉ đọc), hoàn tác thế nào, ai chạy. Cuối trang là 9 quyết định JOY cần chốt, mỗi câu có khuyến nghị sẵn.</p>
+    <p>Mọi file SQL đã được chạy thử trong CI (kiểm thử tự động trên GitHub) trên một database tạm: chạy hai lần, kiểm tra, hoàn tác hai lần, chạy lại. Chưa bước nào đụng tới Supabase prod dùng chung.</p>
+  </div>
+
+  <h2>1. Luật chung cho mọi bước database</h2>
+  <ul>
+    <li><b>JOY áp dụng qua DOS-Me</b>: preview, rồi beta, rồi prod, kiểm tra sau mỗi chặng. DOS/Rate không bao giờ chạy DDL (lệnh đổi cấu trúc bảng) hay ghi dữ liệu lên prod. Luồng beta của DOS-Me vẫn đang khóa (ROADMAP 6.4), nên prod phải chờ luồng này mở lại.</li>
+    <li><b>File kiểm tra chỉ đọc</b> (chỉ có <code>SELECT</code>). Mọi dòng ghi "expect 0" phải trả về 0.</li>
+    <li>Sau mỗi lần áp dụng lên prod: chép file đã chạy vào <code>supabase/migrations/</code> và sinh lại <code>database.types.ts</code> (một PR bên Rate, giống #1147).</li>
+    <li><b>Tạm dừng các tiến trình ghi</b> nghĩa là dừng job importer và worker của Rate Services trong lúc chạy (web vẫn chạy bình thường).</li>
+    <li>Hoàn tác theo thứ tự ngược lại với lúc áp dụng.</li>
+  </ul>
+
+  <h2>2. Thứ tự tổng quát</h2>
+  <div class="table-wrap">
+  <table>
+    <tr><th>#</th><th>Bước</th><th>Ai chạy</th><th>Phải chờ</th></tr>
+    <tr><td>1</td><td>#1123 / M0: đổi khóa (key) seed lệch chuẩn, chỉ sửa dữ liệu</td><td>JOY qua DOS-Me</td><td>quyết định 8</td></tr>
+    <tr><td>2</td><td>PR sửa seed (<code>flagship-seed-data.ts</code>), ngay sau M0</td><td>Core mở PR, PO merge</td><td>bước 1 đã lên prod</td></tr>
+    <tr><td>3</td><td>M1+M2: bảng <code>rate.items</code>, cột mới, trigger, RPC, điền dữ liệu</td><td>JOY qua DOS-Me</td><td>bước 2; quyết định 1 đến 5</td></tr>
+    <tr><td>4</td><td>RPC danh mục Item (tìm kiếm, đếm theo hãng, gợi ý khi gõ)</td><td>JOY qua DOS-Me</td><td>bước 3</td></tr>
+    <tr><td>5</td><td>Rate Services nâng phiên bản <code>vendor/rate</code></td><td>Rate Services (RS PO mở PR), JOY merge</td><td>bước 3</td></tr>
+    <tr><td>6</td><td>Bật cờ <code>RATE_ITEM_MODEL=item</code>, rồi <code>nullable_variant</code></td><td>Biến môi trường importer (Rate Services), biến môi trường Vercel (web)</td><td>bước 4 và 5</td></tr>
+    <tr><td>7</td><td>Giai đoạn tương thích</td><td>mọi bên; PO theo dõi</td><td>bước 6, ít nhất một vòng promote và khoảng 30 ngày</td></tr>
+    <tr><td>8</td><td>M3: gỡ phiên bản "unknown" ở Item nhiều dung lượng</td><td>JOY qua DOS-Me, dừng tiến trình ghi</td><td>bước 7; quyết định 4</td></tr>
+    <tr><td>9</td><td>M4: ràng buộc và phiên bản mặc định</td><td>JOY qua DOS-Me</td><td>bước 8; quyết định 6, 7</td></tr>
+  </table>
+  </div>
+  <div class="card warn">
+    <p><b>Lưu ý về thứ tự.</b> #1123 và M0 là một bước: M0 là file SQL đã review cho #1123, cộng thêm ba khóa tai nghe lệch chuẩn khác. PR sửa seed phải merge <b>ngay sau M0, trước M1+M2</b>. Giữa M0 và PR seed tuyệt đối không chạy <code>jobs/backfill-specs.ts --apply</code>: job này tìm sản phẩm theo khóa seed cũ, không thấy sẽ tạo mới, sinh ra bản trùng.</p>
+  </div>
+
+  <h2>3. Chi tiết từng bước</h2>
+
+  <h3>Bước 1. #1123 / M0: đổi khóa seed</h3>
+  <dl>
+    <dt>Thay đổi</dt><dd>Sáu sản phẩm seed bị lệch được đổi sang khóa chuẩn của bộ chuẩn hóa (normalizer), sửa tại chỗ: id, slug, listing, cảnh báo giá, đánh giá giữ nguyên. Tai nghe đặt <code>storage_gb = NULL</code>. Ghi dấu vào <code>metadata.m0_rekeyed_from</code> và <code>m0_storage_gb_before</code> để hoàn tác. Nếu khóa đích đã có người dùng thì bỏ qua và báo NOTICE, không bao giờ tự gộp.</dd>
+    <dt>File</dt><dd><code>2026-10-29-dos-me-m0-seed-rekey.sql</code> (chỉ dữ liệu, một transaction, chạy lại an toàn).</dd>
+    <dt>Kiểm tra</dt><dd>Trước khi chạy: V5 trong <code>2026-10-29-dos-me-m0-seed-rekey-verify.sql</code>, so với bảng sáu dòng trong đề xuất M0. Sau khi chạy: V1 đến V4 trả về 0.</dd>
+    <dt>Hoàn tác</dt><dd><code>2026-10-29-dos-me-m0-seed-rekey-rollback.sql</code>, đồng thời revert PR seed. Chỉ làm được khi M1+M2 chưa áp dụng (nếu đã áp dụng thì hoàn tác M1+M2 trước).</dd>
+    <dt>Ai chạy</dt><dd>JOY qua DOS-Me.</dd>
+  </dl>
+
+  <h3>Bước 2. PR sửa seed</h3>
+  <dl>
+    <dt>Thay đổi</dt><dd><code>apps/importer/src/shopee/flagship-seed-data.ts</code> dùng sáu khóa mới; tai nghe <code>storage_gb: null</code>. Core mở PR khi JOY lên lịch M0; không được merge trước khi M0 lên prod.</dd>
+    <dt>Kiểm tra</dt><dd>CI xanh; truy vấn chỉ đọc xác nhận không có <code>model_key</code> nào xuất hiện hai lần trong <code>rate.master_products</code>.</dd>
+    <dt>Hoàn tác</dt><dd>Revert PR (cùng lúc với hoàn tác M0).</dd>
+    <dt>Ai chạy</dt><dd>Core mở, PO merge.</dd>
+  </dl>
+
+  <h3>Bước 3. M1+M2: bảng Item</h3>
+  <dl>
+    <dt>Thay đổi</dt><dd>Bảng <code>rate.items</code> (RLS, tức phân quyền theo dòng: ai cũng đọc được Item đã xuất bản; <code>rate_worker</code> đọc tất cả, chỉ được sửa cột thông số). Cột mới <code>master_products.item_id / variant_key / sort_order</code> và <code>products.item_id / variant_source</code>. Trigger đồng bộ: sản phẩm mới tự có Item theo khóa, listing đi theo. RPC <code>match_item</code>, <code>refresh_item_stats</code>, <code>retire_item_unknown_variant</code>; hàm điểm đánh giá và lượt vote hiểu Item nhưng giữ nguyên chữ ký. Điền dữ liệu cho bảng mới. Một transaction, chạy lại an toàn.</dd>
+    <dt>File</dt><dd><code>2026-10-28-dos-me-m1-m2-items.sql</code>.</dd>
+    <dt>Kiểm tra</dt><dd><code>2026-10-28-dos-me-m1-m2-items-verify.sql</code>, V1 đến V15, chạy trước và sau. Về sau file này cũng dùng làm bước đối soát.</dd>
+    <dt>Hoàn tác</dt><dd><code>2026-10-28-dos-me-m1-m2-items-rollback.sql</code>, dừng tiến trình ghi và tắt cờ về <code>off</code> trước. Khôi phục thân cũ của hai hàm điểm đánh giá. Không bao giờ <code>TRUNCATE rate.items</code>.</dd>
+    <dt>Ai chạy</dt><dd>JOY qua DOS-Me.</dd>
+  </dl>
+
+  <h3>Bước 4. RPC danh mục Item</h3>
+  <dl>
+    <dt>Thay đổi</dt><dd>Chỉ thêm hàm mới: <code>search_items_v1</code>, <code>get_category_brand_facets_v2</code>, <code>search_catalog_autocomplete_v2</code>; quyền gọi cho <code>anon</code>, <code>authenticated</code>, <code>service_role</code>, <code>rate_worker</code>. Các RPC cũ mà web dùng khi tắt cờ không bị đụng tới.</dd>
+    <dt>File</dt><dd><code>2026-10-29-dos-me-item-rpcs.sql</code>.</dd>
+    <dt>Kiểm tra (chỉ đọc)</dt><dd>Với vai trò <code>anon</code>: <code>SELECT count(*) FROM rate.search_items_v1(p_limit => 200)</code> lớn hơn 0, và <code>total_count</code> bằng số Item đã xuất bản có ít nhất một phiên bản đã xuất bản. <code>SELECT * FROM rate.search_catalog_autocomplete_v2('iphone', 5)</code> trả các dòng <code>entity_kind = 'item'</code>.</dd>
+    <dt>Hoàn tác</dt><dd>Tắt cờ web, rồi chạy <code>2026-10-29-dos-me-item-rpcs-rollback.sql</code>.</dd>
+    <dt>Ai chạy</dt><dd>JOY qua DOS-Me.</dd>
+  </dl>
+
+  <h3>Bước 5. Rate Services nâng <code>vendor/rate</code></h3>
+  <dl>
+    <dt>Thay đổi</dt><dd>Rate Services chuyển submodule <code>vendor/rate</code> sang một commit <code>dev</code> của DOS/Rate có importer hiểu Item (#1179, #1190, #1208, #1213 và các PR sau). Phần việc Item của chính Rate Services đã merge: RS#685 (<code>cluster_id</code> NULL nghĩa là chưa rõ phiên bản), RS#687 (xác minh theo Item, job mang id Item, làm mới theo Item), RS#689.</dd>
+    <dt>Kiểm tra</dt><dd>CI của Rate Services xanh; khi cờ vẫn <code>off</code>, một vòng promote bình thường không phát sinh lỗi mới.</dd>
+    <dt>Hoàn tác</dt><dd>Trả submodule về commit cũ.</dd>
+    <dt>Ai chạy</dt><dd>Rate Services (RS PO mở PR), JOY merge.</dd>
+  </dl>
+
+  <h3>Bước 6. Bật cờ</h3>
+  <p><code>RATE_ITEM_MODEL</code> có ba giá trị: <code>off</code> (mặc định; giá trị lạ cũng hiểu là <code>off</code>), <code>item</code> (ghép theo Item trước, ghi <code>item_id</code>; listing nào cũng vẫn có phiên bản), <code>nullable_variant</code> (như <code>item</code>, thêm: listing không ghi dung lượng thuộc Item nhiều dung lượng được ghi <code>cluster_id = NULL</code>).</p>
+  <dl>
+    <dt>Thứ tự</dt><dd>Importer <code>item</code>, rồi web <code>item</code> (Vercel Preview trước, kiểm tra, rồi Production), rồi importer <code>nullable_variant</code>.</dd>
+    <dt>Kiểm tra</dt><dd>Sau mỗi lần đổi: file kiểm tra M1+M2 trả 0 ở mọi dòng expect 0. Trên web, URL phiên bản cũ chuyển hướng 308 sang trang Item (job E2E Item trong CI đã kiểm tra việc này).</dd>
+    <dt>Hoàn tác</dt><dd>Đặt lại biến môi trường về <code>off</code> và deploy lại. Dữ liệu ghi trong lúc bật vẫn hợp lệ khi tắt (trigger đồng bộ giữ các cột cũ khớp nhau).</dd>
+    <dt>Ai chạy</dt><dd>Biến môi trường importer ở Rate Services; biến môi trường web ở Vercel (JOY).</dd>
+  </dl>
+
+  <h3>Bước 7. Giai đoạn tương thích (điều kiện trước M3/M4)</h3>
+  <ul>
+    <li>Cờ <code>RATE_ITEM_MODEL</code> đã bật cho importer và web qua ít nhất một vòng promote.</li>
+    <li>Code hiểu Item của Rate Services đã chạy (bước 5).</li>
+    <li>File kiểm tra M1+M2 trả 0 sau khi tiến trình ghi cuối cùng đã đổi code (bước đối soát).</li>
+    <li>Không còn listing thiếu Item: <code>SELECT count(*) FROM rate.products WHERE item_id IS NULL</code> bằng 0 (nếu không, M4 tự dừng).</li>
+    <li>Sitemap đã được Google crawl lại với URL Item (khoảng 30 ngày).</li>
+    <li>Các cảnh báo giá đang bật trên phiên bản "unknown" của Item nhiều dung lượng đã được xử lý (V7 trong file kiểm tra M3/M4): chuyển sang phiên bản có dung lượng hoặc đóng lại. Còn cái nào đang bật thì M3 tự dừng.</li>
+    <li><b>Hoàn tác giai đoạn này:</b> tắt cờ về <code>off</code>.</li>
+  </ul>
+
+  <h3>Bước 8. M3: gỡ phiên bản "unknown" ở Item nhiều dung lượng</h3>
+  <dl>
+    <dt>Thay đổi</dt><dd>Tự dừng nếu còn tai nghe mang khóa có dung lượng, hoặc còn cảnh báo giá đang bật trên phiên bản "unknown" sắp gỡ. Bảng <code>price_alerts</code> bị khóa ghi trong lúc chạy. Sau đó lưu trữ (archive) phiên bản "unknown" còn sống của mọi Item nhiều dung lượng qua <code>retire_item_unknown_variant</code>; listing của nó giữ Item nhưng không có phiên bản; số liệu được tính lại. Bảng sao lưu <code>rate.m3_unknown_variant_backup</code> (bật RLS, chỉ service role đọc) ghi đúng những gì đã đổi. Item một dung lượng (tai nghe, dòng không có dung lượng) không bị đụng.</dd>
+    <dt>File</dt><dd><code>2026-10-29-dos-me-m3-m4.sql</code>, transaction đầu. Dừng tiến trình ghi.</dd>
+    <dt>Kiểm tra</dt><dd><code>2026-10-29-dos-me-m3-m4-verify.sql</code>: V1 và V5 trả 0; V6 (việc đã làm) và V7 (cảnh báo giá) để tham khảo.</dd>
+    <dt>Hoàn tác</dt><dd><code>2026-10-29-dos-me-m3-m4-rollback.sql</code>, dừng tiến trình ghi: khôi phục phiên bản và chỉ những listing còn mang dấu của M3 (NOTICE báo số listing đã đổi sau đó), tính lại số liệu, xóa bảng sao lưu.</dd>
+    <dt>Ai chạy</dt><dd>JOY qua DOS-Me.</dd>
+  </dl>
+
+  <h3>Bước 9. M4: ràng buộc</h3>
+  <dl>
+    <dt>Thay đổi</dt><dd>Tự dừng nếu còn phiên bản hoặc listing thiếu Item. Sau đó: <code>master_products.item_id NOT NULL</code>; ràng buộc CHECK <code>products_item_id_not_null</code> (thêm ở dạng NOT VALID, kiểm tra trong transaction riêng nên bảng listing vẫn đọc ghi được); trigger chặn listing gắn phiên bản của Item khác; điền <code>items.default_variant_id</code>, kèm trigger tự điền cho Item mới.</dd>
+    <dt>File</dt><dd><code>2026-10-29-dos-me-m3-m4.sql</code>, transaction thứ hai và thứ ba.</dd>
+    <dt>Kiểm tra</dt><dd>V2, V3, V4 trong file kiểm tra M3/M4 trả 0, và chạy lại file kiểm tra M1+M2.</dd>
+    <dt>Hoàn tác</dt><dd>Transaction đầu của file hoàn tác M3/M4 chỉ gỡ M4; transaction thứ hai mới gỡ M3.</dd>
+    <dt>Ai chạy</dt><dd>JOY qua DOS-Me.</dd>
+  </dl>
+
+  <h2>4. Các quyết định JOY cần chốt</h2>
+  <p class="muted">Mỗi câu có khuyến nghị; nếu JOY đồng ý thì khuyến nghị là mặc định.</p>
+
+  <div class="q"><strong>1. (M1+M2) <code>match_item</code> lọc theo hãng, không theo model.</strong> Thiết kế có tham số model, nhưng lọc theo model thì chỉ tìm được đúng model đó, việc mà bước ghép chính xác (Tier 1) đã làm rồi. <span class="rec-line">Khuyến nghị: lọc theo hãng.</span></div>
+  <div class="q"><strong>2. (M1+M2) Item chưa có đánh giá lưu điểm 0</strong>, giống các cột của phiên bản hiện nay; web hiện "chưa có đánh giá" khi số đánh giá bằng 0. <span class="rec-line">Khuyến nghị: giữ 0.</span></div>
+  <div class="q"><strong>3. (M1+M2) Không sửa view <code>rate.v_products_with_merchant_trust</code>.</strong> Thêm <code>item_id</code> vào view làm hỏng việc chạy lại migration <code>20261018153000</code>; ai cần <code>item_id</code> thì đọc từ <code>rate.products</code>. <span class="rec-line">Khuyến nghị: giữ nguyên view.</span></div>
+  <div class="q"><strong>4. (M1+M2, M3 cập nhật) Cảnh báo giá trên phiên bản "unknown".</strong> Cảnh báo giá cần một dung lượng cụ thể. M1+M2 để nguyên cảnh báo trên phiên bản đó; M3 giờ từ chối chạy khi còn cảnh báo đang bật, nên trước M3 JOY xử lý từng cái: chuyển sang phiên bản có dung lượng hoặc đóng. <span class="rec-line">Khuyến nghị: xử lý từng cảnh báo theo V7 trước M3.</span></div>
+  <div class="q"><strong>5. (M1+M2) Tên công tắc cho admin: <code>rate.variant_override</code>.</strong> Công cụ admin nào gán lại phiên bản đã chọn tay thì bật công tắc này trong transaction của nó. <span class="rec-line">Khuyến nghị: duyệt tên này.</span></div>
+  <div class="q"><strong>6. (M3/M4) M4 giữ lại các trigger đồng bộ của M1.</strong> Thiết kế định bỏ chúng ở M4, nhưng importer vẫn dựa vào chúng để tạo Item mới khi seed sản phẩm. Trigger chặn của M4 làm lớp bảo vệ cuối; bỏ trigger đồng bộ để sau, khi importer tự tạo Item. <span class="rec-line">Khuyến nghị: giữ lại.</span></div>
+  <div class="q"><strong>7. (M3/M4) Không thêm trigger chặn phía phiên bản khi đổi Item của nó.</strong> Trigger dời listing của M1 đã dời listing ngay trong cùng câu lệnh, và V3 kiểm tra kết quả. <span class="rec-line">Khuyến nghị: không thêm.</span></div>
+  <div class="q"><strong>8. (M0) Duyệt việc ghi dữ liệu M0, kể cả gộp <code>apple:airpods-pro-2-usbc</code> thành Item <code>apple:airpods-pro-2</code>.</strong> Bộ chuẩn hóa không tách bản USB-C với Lightning; hàng mới hiện chỉ còn bản USB-C. <span class="rec-line">Khuyến nghị: duyệt.</span></div>
+  <div class="q"><strong>9. (CI) Đặt job <code>E2E (Playwright, Item model)</code> thành check bắt buộc trên <code>dev</code>.</strong> Job chạy xanh, không cần chạy lại, ở mọi lần CI của PR #1273 (khoảng 4 phút). Đây là cài đặt bảo vệ nhánh (branch protection) của repo. <span class="rec-line">Khuyến nghị: bắt buộc.</span></div>
+</div>
+</body>
+</html>

@@ -383,6 +383,14 @@ function mergeSpecGroupRecord(
  * Deep-merges two 10-Field-Group `ProductSpecifications` objects without allowing
  * `undefined`, `null`, or empty incoming fields to overwrite defined base fields.
  */
+/** Key specs without the per-size ones (storage, RAM), for an Item-level answer. */
+function withoutSizeKeySpecs(keySpecs: Record<string, string>): Record<string, string> {
+  const rest = { ...keySpecs };
+  delete rest.storage;
+  delete rest.ram;
+  return rest;
+}
+
 export function mergeProductSpecifications(
   base: unknown,
   incoming: unknown,
@@ -1025,15 +1033,20 @@ REQUIRED JSON SCHEMA:
    */
   public async enrichCandidate(
     candidate: NormalizedProductCandidate,
-    rawTitle?: string
+    rawTitle?: string,
+    options: { perItem?: boolean } = {}
   ): Promise<NormalizedProductCandidate> {
+    // Per Item (RATE_ITEM_MODEL on, design doc 5.3, DOS/Rate#1152): the AI is asked and
+    // cached for the Item, not the size, so every size shares one call; storage and RAM
+    // stay the variant's own.
+    const perItem = options?.perItem === true;
     if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)) {
       throw new Error('[AiSpecEnricher] candidate must be a non-null object');
     }
     if (candidate.is_benchmark_enriched === true) {
       return {
         ...candidate,
-        has_5g: toBooleanOrUndefined(candidate.has_5g) ?? false,
+        has_5g: toBooleanOrUndefined(candidate.has_5g) ?? null,
         colors: sanitizeColorList(candidate.colors) ?? [],
         spec_source: candidate.spec_source ?? 'benchmark_registry',
       };
@@ -1048,8 +1061,8 @@ REQUIRED JSON SCHEMA:
     const aiResult = await this.fetchSpecsFromAi({
       brand: candidate.brand,
       model: candidate.model,
-      storageGb: validCandidateStorage,
-      ramGb: validCandidateRam,
+      storageGb: perItem ? null : validCandidateStorage,
+      ramGb: perItem ? null : validCandidateRam,
       rawTitle,
       rawDescription: candidate.description,
       categorySlug: candidate.category_slug,
@@ -1058,7 +1071,7 @@ REQUIRED JSON SCHEMA:
     if (!aiResult) {
       return {
         ...candidate,
-        has_5g: toBooleanOrUndefined(candidate.has_5g) ?? false,
+        has_5g: toBooleanOrUndefined(candidate.has_5g) ?? null,
         colors: sanitizeColorList(candidate.colors) ?? [],
       };
     }
@@ -1071,6 +1084,15 @@ REQUIRED JSON SCHEMA:
       aiResult.specifications,
       safeColors
     );
+    if (perItem) {
+      // The Item's answer names no size: the variant's storage and RAM win.
+      const ownHardware = sanitizeSpecifications(candidate.specifications).hardware;
+      mergedSpecifications.hardware = {
+        ...mergedSpecifications.hardware,
+        storage_gb: ownHardware?.storage_gb,
+        ram_gb: ownHardware?.ram_gb,
+      };
+    }
 
     const baseKeySpecs =
       candidate.key_specs &&
@@ -1093,18 +1115,28 @@ REQUIRED JSON SCHEMA:
     return {
       ...candidate,
       colors: safeColors,
-      ram_gb: validCandidateRam ?? toBoundedIntOrUndefined(aiResult.ram_gb, 2048) ?? null,
-      storage_gb:
-        validCandidateStorage ?? toBoundedIntOrUndefined(aiResult.storage_gb, 65536) ?? null,
+      // Per Item, the answer names no size: the variant's own (possibly unknown) storage
+      // and RAM are kept, never the AI's.
+      ram_gb: perItem
+        ? validCandidateRam
+        : (validCandidateRam ?? toBoundedIntOrUndefined(aiResult.ram_gb, 2048) ?? null),
+      storage_gb: perItem
+        ? validCandidateStorage
+        : (validCandidateStorage ?? toBoundedIntOrUndefined(aiResult.storage_gb, 65536) ?? null),
       screen_size_inch:
         toBoundedNumberOrUndefined(aiResult.screen_size_inch, 120) ?? validCandidateScreen,
       battery_mah: toBoundedIntOrUndefined(aiResult.battery_mah, 500000) ?? validCandidateBattery,
-      has_5g: aiResult.has_5g ?? toBooleanOrUndefined(candidate.has_5g) ?? false,
+      has_5g: aiResult.has_5g ?? toBooleanOrUndefined(candidate.has_5g) ?? null,
       specifications: mergedSpecifications,
-      key_specs: {
-        ...baseKeySpecs,
-        ...incomingKeySpecs,
-      },
+      key_specs: perItem
+        ? {
+            ...baseKeySpecs,
+            ...withoutSizeKeySpecs(incomingKeySpecs),
+          }
+        : {
+            ...baseKeySpecs,
+            ...incomingKeySpecs,
+          },
       spec_source: 'ai_unverified',
       spec_enrichment_meta: {
         provider: this.provider,

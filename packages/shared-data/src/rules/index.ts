@@ -10,3 +10,4 @@ export * from './offer-plausibility.js';
 export * from './listing-price-floor.js';
 export * from './spec-template.js';
 export * from './model-key.js';
+export * from './review-summary.js';

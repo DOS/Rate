@@ -4,6 +4,7 @@ import {
   getMasterProductHref,
   resolveProductImageUrl,
 } from './rate-domain-core';
+import { catalogRowSlug, type ItemCatalogRow } from './item-directory';
 import type { CanonicalCategorySlug, MasterProduct } from './rate-api';
 import type { KeySpecs, ProductSpecifications } from '@repo/shared-data';
 
@@ -399,7 +400,11 @@ export function scoreMasterProductForLeaderboard(
   const safeCriterion = normalizeLeaderboardCriterion(criterion);
   const categorySlug = getMasterProductCategorySlug(safeItem);
   const categoryPath = getCategoryRouteHref(categorySlug);
-  const productHref = getMasterProductHref(safeItem);
+  // An Item's row links to the Item (DOS/Rate#1155).
+  const productHref = getMasterProductHref({
+    ...safeItem,
+    slug: catalogRowSlug(safeItem as ItemCatalogRow),
+  });
   const thumbnail =
     resolveProductImageUrl({
       slug: safeItem.slug,
@@ -808,7 +813,11 @@ export function buildPopular1v1BattlesForCategory(
     )
       continue;
 
-    const versusSlug = `${itemA.slug}-vs-${itemB.slug}`;
+    // The page each row links to names the versus side: its Item under the
+    // Item model, so the link needs no 308 hop (DOS/Rate#1275).
+    const sideSlug = (item: typeof itemA) =>
+      item.productHref.split('/').pop() || item.slug;
+    const versusSlug = `${sideSlug(itemA)}-vs-${sideSlug(itemB)}`;
     const scoreDelta5 = Number(
       Math.abs(itemA.combinedScore5 - itemB.combinedScore5).toFixed(2)
     );

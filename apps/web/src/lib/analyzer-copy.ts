@@ -8,6 +8,7 @@
  * The Vietnamese messages may word a template more plainly than the stored
  * text (no "seeding", DOS/Rate#656); the patterns below match the stored text.
  */
+import { scopeLlmReviewSummary } from '@repo/shared-data/rules';
 import { isVietnamese } from './content-lang';
 
 export type AnalyzerCopyKey =
@@ -79,6 +80,17 @@ const TEMPLATES: ReadonlyArray<readonly [RegExp, AnalyzerCopyKey]> = [
     /^Đánh giá bị cộng đồng Vote Down \/ Báo cáo nhiều nên giảm trọng số về 0\.$/u,
     'reasonCommunityDownvoted',
   ],
+  // Written since DOS/Rate#1225: the summary speaks for one listing's latest
+  // batch, not the product.
+  [
+    /^Lần phân tích gần nhất \(một nơi bán\) đã xét (?<total>\d+) đánh giá: giữ lại (?<kept>\d+) đánh giá thực chất và loại bỏ (?<removed>\d+) đánh giá rác, nhận xu, ảo hoặc bom hàng\.$/u,
+    'summaryDefault',
+  ],
+  [
+    /^Lần phân tích gần nhất \(một nơi bán\) chưa thấy đánh giá thực chất sau khi lọc (?<removed>\d+) bình luận rác\/nhận xu\.$/u,
+    'summaryNoAuthentic',
+  ],
+  // Rows stored before DOS/Rate#1225, read the same way.
   [
     /^Đã phân tích (?<total>\d+) đánh giá: giữ lại (?<kept>\d+) đánh giá thực chất \(điểm JReviews có trọng số: (?<rating>\d+(?:\.\d+)?)\/5★\) và loại bỏ (?<removed>\d+) đánh giá rác\/nhận xu\/seeding\/bom hàng khỏi điểm tổng\.$/u,
     'summaryDefault',
@@ -154,6 +166,36 @@ export function analyzerCopy(text: string): AnalyzerCopy {
     : { text: safeText };
 }
 
-export const ANALYZER_COPY_KEYS: readonly AnalyzerCopyKey[] = TEMPLATES.map(
-  ([, key]) => key
-);
+export const ANALYZER_COPY_KEYS: readonly AnalyzerCopyKey[] = [
+  ...new Set(TEMPLATES.map(([, key]) => key)),
+];
+
+// The Vietnamese wording of the review summary, as in vi.json analyzerCopy.
+const VI_SUMMARY: Partial<Record<AnalyzerCopyKey, string>> = {
+  summaryDefault:
+    'Lần phân tích gần nhất (một nơi bán) đã xét {total} đánh giá: giữ lại {kept} đánh giá thực chất và loại bỏ {removed} đánh giá rác, nhận xu, ảo hoặc bom hàng.',
+  summaryNoAuthentic:
+    'Lần phân tích gần nhất (một nơi bán) chưa thấy đánh giá thực chất sau khi lọc {removed} bình luận rác/nhận xu.',
+};
+
+/**
+ * The stored review summary as surfaces without a locale (API v1, the
+ * extension) print it. A templated summary, old rows included, is reworded
+ * to say it covers one listing's latest batch and loses the batch's
+ * weighted score, which is not the product's (DOS/Rate#1225). Free text
+ * from the LLM pass, old rows included, gets the same one-listing scope
+ * prefix, and is not shown (null) when it quotes a score or count
+ * (DOS/Rate#1244).
+ */
+export function listingReviewSummary(
+  text: string | null | undefined
+): string | null {
+  if (typeof text !== 'string' || !text.trim()) return null;
+  const copy = analyzerCopy(text);
+  const template = 'key' in copy ? VI_SUMMARY[copy.key] : undefined;
+  if (!template || !('key' in copy)) return scopeLlmReviewSummary(text);
+  return template.replace(
+    /\{(\w+)\}/g,
+    (_, name: string) => copy.values[name] ?? ''
+  );
+}

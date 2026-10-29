@@ -392,6 +392,11 @@ export async function GET(req: NextRequest) {
           productA: radarSignalA,
           productB: radarSignalB,
         },
+        // Level at two decimals: overall_winner is then only the tie-break
+        // (DOS/Rate#1209).
+        is_tie:
+          customScoreA5.toFixed(2) === customScoreB5.toFixed(2) &&
+          scoreA.combinedScore5.toFixed(2) === scoreB.combinedScore5.toFixed(2),
         overall_winner: {
           side: winnerSide,
           slug: winnerScore.slug,

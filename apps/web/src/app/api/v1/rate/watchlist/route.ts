@@ -7,6 +7,7 @@ import {
   getCachedMasterProductOffers,
   getMasterProductOffersBatch,
 } from '@/server/rate';
+import { resolveWatchlistSlug } from '@/server/rate/item-compare';
 import { radarExportFields } from '@/lib/deal-radar';
 import {
   PUBLIC_API_CORS_HEADERS,
@@ -110,9 +111,19 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    // RATE_ITEM_MODEL on: an Item slug watches its size, or its default
+    // size until one is chosen (`size_required`, DOS/Rate#1156); off: null.
+    const itemTargets = new Map<
+      string,
+      { variantSlug: string; sizeRequired: boolean }
+    >();
     const masterEntries = await Promise.all(
       slugs.map(async (slug) => {
-        const master = await getCachedMasterProductBySlug(slug);
+        const target = await resolveWatchlistSlug(slug);
+        if (target) itemTargets.set(slug, target);
+        const master = await getCachedMasterProductBySlug(
+          target?.variantSlug ?? slug
+        );
         return master ? ([slug, master] as const) : null;
       })
     );
@@ -155,6 +166,9 @@ export async function GET(request: NextRequest) {
           best_offer: bestOffer,
           deal_radar: radarExportFields(radarSignal),
           radar_signal: radarSignal,
+          ...(itemTargets.get(slug)?.sizeRequired
+            ? { size_required: true as const }
+            : {}),
         },
       ] as const;
     });
@@ -234,7 +248,22 @@ export async function POST(request: NextRequest) {
         { status: 400, headers: WATCHLIST_CORS_HEADERS }
       );
     }
-    const { slug, targetPrice, locale } = parsed.data;
+    const { slug: requestedSlug, targetPrice, locale } = parsed.data;
+
+    // RATE_ITEM_MODEL on: alerts stay per size (Q5). An Item with several
+    // sizes needs one chosen first (DOS/Rate#1156); off: the slug as sent.
+    const itemTarget = await resolveWatchlistSlug(requestedSlug);
+    if (itemTarget?.sizeRequired) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: 'Choose a size before setting a price alert',
+          code: 'SIZE_REQUIRED',
+        },
+        { status: 422, headers: WATCHLIST_CORS_HEADERS }
+      );
+    }
+    const slug = itemTarget?.variantSlug ?? requestedSlug;
 
     const masterProduct = await getCachedMasterProductBySlug(slug);
     if (!masterProduct) {

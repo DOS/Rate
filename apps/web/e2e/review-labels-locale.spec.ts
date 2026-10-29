@@ -59,8 +59,15 @@ for (const [locale, labels] of Object.entries(LABELS)) {
     const ratingWeight = page.getByTestId('review-rating-weight');
     await expect(ratingWeight).toHaveCount(6);
     await expect(ratingWeight.first()).toHaveText(
-      /^(Trọng số|Weight|Váha): \d\.\d\dx$/
+      /^(Trọng số tính điểm|Rating weight|Váha v hodnocení): \d\.\d\dx$/
     );
+    // The model's estimate is labelled as trust, never as a second weight
+    // (DOS/Rate#1215).
+    await expect(
+      page
+        .getByTestId('review-6axis-breakdown')
+        .filter({ hasText: /(Trọng số|Weight|Váha) \d/ })
+    ).toHaveCount(0);
     // The seeded phone has buyer reviews only, so the note is the user-only one.
     await expect(
       page.getByText(labels.blendNote, { exact: true })

@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { LLM_REVIEW_SUMMARY_PREFIX } from '@repo/shared-data/rules';
 import {
   KNOWN_LOCAL_DEVICE_IMAGES,
   computeJReviewsWeight,
@@ -366,6 +367,17 @@ async function runCoreArchitectureSuite() {
     'https://rate.vn/compare'
   );
   assert.equal(redirectCsCompare.cookies.get('NEXT_LOCALE')?.value, 'cs');
+  // A doubled slash after the locale stays on the site (no "//host" target).
+  const redirectEnDoubleSlash = middleware(
+    new NextRequest('https://rate.vn/en//evil.example/x', {
+      headers: { 'x-forwarded-proto': 'https', host: 'rate.vn' },
+    })
+  );
+  assert.equal(redirectEnDoubleSlash.status, 308);
+  assert.equal(
+    redirectEnDoubleSlash.headers.get('location'),
+    'https://rate.vn/evil.example/x'
+  );
 
   const unprefixedEnRes = middleware(
     new NextRequest('https://rate.vn/', {
@@ -2428,6 +2440,7 @@ async function runCoreArchitectureSuite() {
 
   // 48. Unified API v1 Error Sanitizer & Bounded Query Parsers (T9) + Pure Domain Module rate-domain.ts (T12) (#170)
   const {
+    PublicApiError,
     sanitizePublicApiError,
     jsonApiError,
     parseBoundedIntParam,
@@ -2443,11 +2456,54 @@ async function runCoreArchitectureSuite() {
   );
   assert.equal(
     sanitizePublicApiError(
-      new Error('Missing required slug parameter'),
+      new PublicApiError('Missing required slug parameter'),
       'Fallback error'
     ),
     'Missing required slug parameter',
-    'Must preserve short, non-DB validation messages'
+    'Must preserve short validation messages written for clients'
+  );
+  // Allow-list, not deny-list: any other error, even a harmless-looking one,
+  // answers with the fallback (DOS/Rate#1310).
+  assert.equal(
+    sanitizePublicApiError(
+      new Error('Missing required slug parameter'),
+      'Fallback error'
+    ),
+    'Fallback error'
+  );
+  assert.equal(
+    sanitizePublicApiError(
+      new TypeError("Cannot read properties of undefined (reading 'id')"),
+      'Fallback error'
+    ),
+    'Fallback error'
+  );
+  assert.equal(
+    sanitizePublicApiError(
+      new PublicApiError('PGRST116: relation "rate.items" does not exist'),
+      'Fallback error'
+    ),
+    'Fallback error',
+    'a public error that looks internal is still masked'
+  );
+  // A 5xx never carries the error's message, even a public one.
+  const err5xx = jsonApiError(
+    503,
+    'Service unavailable',
+    new PublicApiError('Upstream shop timed out')
+  );
+  assert.equal(
+    ((await err5xx.json()) as { error: string }).error,
+    'Service unavailable'
+  );
+  const err4xx = jsonApiError(
+    400,
+    'Bad request',
+    new PublicApiError('Invalid slug')
+  );
+  assert.equal(
+    ((await err4xx.json()) as { error: string }).error,
+    'Invalid slug'
   );
   assert.equal(parseBoundedIntParam('999', 24, 1, 100), 100);
   assert.equal(parseBoundedIntParam('-5', 24, 1, 100), 1);
@@ -3016,9 +3072,20 @@ async function runCoreArchitectureSuite() {
     );
     if (rlRes.status === 429) {
       hit429 = true;
+      // The limit is per instance, so the reply promises no global cap
+      // (DOS/Rate#1234).
+      const rlBody = (await rlRes.json()) as { error: string };
+      assert.ok(!/Maximum 15/.test(rlBody.error), rlBody.error);
       break;
     }
   }
+  assert.match(
+    String(
+      openApi.paths['/api/v1/rate/extension/ingest']?.post?.responses?.['429']
+        ?.description
+    ),
+    /each server instance/
+  );
   assert.equal(
     hit429,
     true,
@@ -4163,7 +4230,11 @@ async function runCoreArchitectureSuite() {
       2,
       'getMasterProductReviewSummary must chunk 160 productIds into 2 requests of <=150 IDs (#344)'
     );
-    assert.equal(chunkedSummary344.ai_summary, 'Summary from chunk 2');
+    // Free text is shown with the one-listing scope (DOS/Rate#1244).
+    assert.equal(
+      chunkedSummary344.ai_summary,
+      `${LLM_REVIEW_SUMMARY_PREFIX}Summary from chunk 2`
+    );
     assert.deepEqual(chunkedSummary344.pros, ['Pro 2', 'Pro 1']);
 
     const mockOffers344 = manyListingRows344.map((r, idx) => ({
@@ -4709,6 +4780,16 @@ async function runCoreArchitectureSuite() {
               created_at: '2026-10-18T10:00:00.000Z',
               review_flags: [],
             },
+            // A review of a draft product's listing (DOS/Rate#1309).
+            {
+              id: 'rev-stats-draft',
+              product_id: 'prod-sample-draft',
+              author_name: 'An',
+              rating_star: 1,
+              comment: 'Bản nháp, chưa được xuất bản.',
+              created_at: '2026-10-18T11:00:00.000Z',
+              review_flags: [],
+            },
           ]),
           { status: 200, headers: { 'content-type': 'application/json' } }
         );
@@ -4724,6 +4805,11 @@ async function runCoreArchitectureSuite() {
               id: 'prod-sample-1',
               title: 'Samsung Galaxy S24 Ultra 256GB Chính Hãng',
               cluster_id: 'mp-stats-1',
+            },
+            {
+              id: 'prod-sample-draft',
+              title: 'Samsung Galaxy S25 Edge (draft)',
+              cluster_id: 'mp-stats-draft',
             },
           ]),
           { status: 200, headers: { 'content-type': 'application/json' } }
@@ -4750,6 +4836,11 @@ async function runCoreArchitectureSuite() {
       platformStats.recentReviewsSample[0]?.masterSlug,
       'samsung-galaxy-s24-ultra',
       'getRatePlatformStats must resolve recent review masterSlug via scoped .in(id, sampleProductIds) (#386)'
+    );
+    assert.deepEqual(
+      platformStats.recentReviewsSample.map((r) => r.id),
+      ['rev-stats-1'],
+      'a review of an unpublished product is not sampled (DOS/Rate#1309)'
     );
     assert.ok(
       !statsFetchedUrls.some(
@@ -5273,11 +5364,16 @@ async function runCoreArchitectureSuite() {
       path.join(repoRoot, 'apps/web/src/app/api/reviews/[id]/vote/route.ts'),
       'utf8'
     );
+    // A vote flushes only the review caches and its product's page, not the
+    // global stats (DOS/Rate#1306); a new review still refreshes the stats.
     assert.ok(
       reviewsRouteSrc402.includes('RATE_CACHE_TAGS.STATS') &&
-        voteRouteSrc402.includes('RATE_CACHE_TAGS.STATS') &&
+        voteRouteSrc402.includes('masterReviewsCacheTag(') &&
+        !voteRouteSrc402.includes('RATE_CACHE_TAGS.REVIEWS') &&
+        voteRouteSrc402.includes('productCacheTag(') &&
+        !voteRouteSrc402.includes('RATE_CACHE_TAGS.PRODUCTS') &&
         voteRouteSrc402.includes('authenticateRateRequest('),
-      'POST /api/v1/rate/reviews and POST /api/reviews/[id]/vote must revalidate RATE_CACHE_TAGS.STATS and use authenticateRateRequest (#402)'
+      'POST /api/v1/rate/reviews must revalidate RATE_CACHE_TAGS.STATS; POST /api/reviews/[id]/vote must revalidate the review caches and its product tag only, and use authenticateRateRequest (#402, #1306)'
     );
   }
 
@@ -7564,7 +7660,7 @@ async function runCoreArchitectureSuite() {
     // keep their capitals; two or more other capitalised words in a row mean
     // Title Case.
     const names =
-      /Rate\.vn|Rate Lab|Rate Cloud|DOS ID|DOSafe|JReviews|Markdown|OpenAPI|Next\.js|PostgreSQL|Supabase|Authorization: Bearer|TikTok Shop|Official Mall|Apple Watch|Galaxy Watch|Galaxy Buds|Galaxy Tab|Xiaomi Watch|Xiaomi Pad|Huawei Watch|AirPods Pro|Hoang Ha Mobile|Hoang Ha|Di Dong Viet|The Gioi Di Dong|Phong Vu|Natural Titanium|Alex Nguyen|Shopee|Lazada|Tiki|Apple|iPhone|Pro|Max|Samsung|Galaxy|Xiaomi|Google|Pixel|Huawei|Garmin|Sony|Bose|Sennheiser|MacBook|iPad|Rate\b|Bayesian \w+|Helpful|Report|[A-Z]{2,}\w*|\w+-[A-Z]\w*/g;
+      /Rate\.vn|Rate Lab|Rate Cloud|DOS ID|DOSafe|JReviews|Markdown|OpenAPI|Next\.js|PostgreSQL|Supabase|Authorization: Bearer|TikTok Shop|Official Mall|Apple Watch|Galaxy Watch|Galaxy Buds|Galaxy Tab|Xiaomi Watch|Xiaomi Pad|Huawei Watch|AirPods Pro|Hoang Ha Mobile|Hoang Ha|Di Dong Viet|The Gioi Di Dong|Phong Vu|Natural Titanium|Alex Nguyen|Vietnam|Shopee|Lazada|Tiki|Apple|iPhone|Pro|Max|Samsung|Galaxy|Xiaomi|Google|Pixel|Huawei|Garmin|Sony|Bose|Sennheiser|MacBook|iPad|Rate\b|Bayesian \w+|Helpful|Report|[A-Z]{2,}\w*|\w+-[A-Z]\w*/g;
     const strip = (s: string) => s.replace(/\{[^}]+\}/g, '').replace(names, '');
     const titleCase =
       /\b[A-Z][a-z]+\b(\s+(&|and|of|to|for|in|the|a|on|with|by|or|from|vs|at)?\s*\b[A-Z][a-z]+\b)+/;
@@ -9028,6 +9124,18 @@ async function runCoreArchitectureSuite() {
       'x-forwarded-for': ' 203.0.113.10\t99 , 10.0.0.1 ',
     });
     assert.equal(extractClientRateLimitKey(wsHeaders), '203.0.113.1099');
+    // On Vercel the platform-set IP wins over a client-supplied forwarded
+    // chain; elsewhere that header is client input and ignored (#1307).
+    const vercelHeaders = new Headers({
+      'x-vercel-forwarded-for': '198.51.100.7',
+      'x-forwarded-for': '203.0.113.10, 10.0.0.1',
+    });
+    const previousVercel = process.env.VERCEL;
+    process.env.VERCEL = '1';
+    assert.equal(extractClientRateLimitKey(vercelHeaders), '198.51.100.7');
+    delete process.env.VERCEL;
+    assert.equal(extractClientRateLimitKey(vercelHeaders), '203.0.113.10');
+    if (previousVercel !== undefined) process.env.VERCEL = previousVercel;
 
     const plausibleBoolMaster = withPlausibleMinPrice(
       { min_price: true as unknown as number },
@@ -9228,7 +9336,7 @@ async function runCoreArchitectureSuite() {
     );
     assert.equal(
       apiHandlerMod.sanitizePublicApiError(
-        new Error('Invalid\u0000\r\nquery param')
+        new apiHandlerMod.PublicApiError('Invalid\u0000\r\nquery param')
       ),
       'Invalid query param'
     );
@@ -9480,7 +9588,14 @@ async function runCoreArchitectureSuite() {
     assert.equal(trustOffer.rating_star, 0);
     assert.equal(trustOffer.merchant.follower_count, 0);
     assert.equal(trustOffer.merchant.location, null);
-    assert.equal(trustOffer.merchant.review_risk_breakdown, null);
+    // A never-scored seller (no score, malformed breakdown) carries a
+    // breakdown counting no review, so its baseline reads as no data
+    // (DOS/Rate#1258).
+    assert.equal(
+      (trustOffer.merchant.review_risk_breakdown as { total_reviews?: number })
+        ?.total_reviews,
+      0
+    );
 
     const mappedOffer = rateApiMod.mapOfferRowToMerchantOffer({
       id: 'off-2\u0000',
@@ -11007,6 +11122,99 @@ async function runCoreArchitectureSuite() {
       equalWeightsRes.finalB,
       'computeVersusWeightedResult must fall back to equal criteria average for product B when all custom weights are 0'
     );
+    // A model against itself is level: a tie, not a lead (DOS/Rate#1209).
+    const selfRes = computeVersusWeightedResult(
+      scoreItemA,
+      { ...scoreItemA, slug: `${scoreItemA.slug}-copy` },
+      { screen: 20, performance: 20, camera: 20, battery: 20, value: 20 },
+      'custom'
+    );
+    assert.equal(selfRes.tie, true);
+    assert.equal(selfRes.delta, '0.00');
+    const { isVersusScoreTie } = await import('../../../lib/versus-verdict');
+    assert.equal(isVersusScoreTie(5, 4.996), true, 'equal at two decimals');
+    assert.equal(isVersusScoreTie(4.98, 4.97), false);
+    assert.equal(isVersusScoreTie(Number.NaN, 5), false);
+    // The verdict follows the persona: A leads on the default weights, B on
+    // the camera persona, and the verdict names each in turn with its
+    // weights (DOS/Rate#1235).
+    const { versusVerdictCopy, versusVerdictFor } =
+      await import('../../../lib/versus-verdict');
+    const camA = {
+      ...scoreItemA,
+      slug: 'cam-a',
+      name: 'Model A',
+      combinedScore5: 4.9,
+      expertScore10: null,
+      criteria: { screen: 5, performance: 5, camera: 3, battery: 5, value: 5 },
+    };
+    const camB = {
+      ...scoreItemB,
+      slug: 'cam-b',
+      name: 'Model B',
+      combinedScore5: 4.6,
+      expertScore10: null,
+      criteria: { screen: 4, performance: 4, camera: 5, battery: 4, value: 4 },
+    };
+    const { PERSONA_WEIGHTS } =
+      await import('../../../components/compare/VersusInteractiveScoreboard');
+    const labels = {
+      photography: 'Chụp ảnh / Âm thanh',
+      custom: 'Trọng số tùy chỉnh',
+    };
+    const verdictFor = (persona: 'default' | 'photography' | 'business') =>
+      versusVerdictFor(
+        computeVersusWeightedResult(
+          camA,
+          camB,
+          PERSONA_WEIGHTS[persona],
+          persona
+        ),
+        camA.slug,
+        persona,
+        labels
+      );
+    const byDefault = verdictFor('default');
+    const byCamera = verdictFor('photography');
+    assert.equal(byDefault.key, 'versusAutoVerdict');
+    assert.equal(byCamera.key, 'versusAutoVerdict');
+    if (
+      byDefault.key === 'versusAutoVerdict' &&
+      byCamera.key === 'versusAutoVerdict'
+    ) {
+      assert.equal(byDefault.values.winner, 'Model A');
+      assert.equal(byDefault.values.score, '4.90');
+      assert.equal(byCamera.values.winner, 'Model B');
+      assert.equal(byCamera.values.score, '4.50');
+    }
+    assert.equal(byDefault.weightsLabel, null);
+    assert.equal(byCamera.weightsLabel, 'Chụp ảnh / Âm thanh');
+    // A persona without its own label reads as custom weights.
+    assert.equal(verdictFor('business').weightsLabel, 'Trọng số tùy chỉnh');
+    assert.deepEqual(
+      versusVerdictCopy({
+        tie: true,
+        score: 5,
+        winnerName: 'x',
+        weightsLabel: null,
+      }),
+      {
+        key: 'versusAutoVerdictTie',
+        values: { score: '5.00' },
+        weightsLabel: null,
+      }
+    );
+    // The score gap reads as points, never as đồng.
+    const viCompare = (
+      (await import('../../../../locales/vi.json')).default as {
+        compare: Record<string, string>;
+      }
+    ).compare;
+    assert.ok(!/ đ$/.test(viCompare.scoreDeltaBadge ?? ''));
+    assert.equal(
+      viCompare.mdRowTie,
+      (viCompare.tie1v1Badge ?? '').replace(' 1v1', '')
+    );
 
     console.log(
       '  ✅ [118/119] ProductValueCalculator, DealFinderWorkspace & VersusInteractiveScoreboard Bounds (#960) passed'
@@ -11702,6 +11910,39 @@ async function runCoreArchitectureSuite() {
       ).platformShopId,
       null
     );
+    // Brand, series and CellphoneS sub-path listings are not products, as
+    // in the extension (DOS/Rate#1246).
+    for (const url of [
+      'https://cellphones.com.vn/mobile/apple.html',
+      'https://cellphones.com.vn/mobile/apple/iphone-16.html',
+      'https://fptshop.com.vn/dien-thoai/samsung',
+      'https://fptshop.com.vn/dien-thoai/iphone-16-series',
+    ]) {
+      assert.equal(parseEcommerceUrlOrQuery986(url).platformItemId, null, url);
+    }
+    assert.equal(
+      parseEcommerceUrlOrQuery986(
+        'https://cellphones.com.vn/op-lung-magsafe-iphone-16-series.html'
+      ).platformItemId,
+      'op-lung-magsafe-iphone-16-series'
+    );
+    assert.equal(
+      parseEcommerceUrlOrQuery986(
+        'https://cellphones.com.vn/iphone-16-pro-max.html'
+      ).platformItemId,
+      'iphone-16-pro-max'
+    );
+    // TikTok Shop's pdp pages carry the id last (DOS/Rate#1245).
+    for (const url of [
+      'https://www.tiktok.com/shop/vn/pdp/apple-iphone-16-128gb/1729384756',
+      'https://www.tiktok.com/shop/pdp/apple-iphone-16-128gb/1729384756',
+    ]) {
+      assert.equal(
+        parseEcommerceUrlOrQuery986(url).platformItemId,
+        '1729384756',
+        url
+      );
+    }
     assert.equal(
       parseEcommerceUrlOrQuery986('https://cellphones.com.vn/..')
         .platformItemId,
@@ -12723,6 +12964,17 @@ async function runCoreArchitectureSuite() {
     assert.equal(sanitizeAuthRedirectTarget('javascript:alert(1)'), '/');
     assert.equal(sanitizeAuthRedirectTarget(null), '/');
     assert.equal(sanitizeAuthRedirectTarget(`/${'a'.repeat(600)}`), '/');
+    // Dot segments that normalize to a protocol-relative path.
+    for (const target of [
+      '/.//evil.example/phish',
+      '/%2e//evil.example/phish',
+      '/%2E//evil.example',
+      '/a/..//evil.example/phish',
+      '/././/evil.example',
+    ]) {
+      assert.equal(sanitizeAuthRedirectTarget(target), '/', target);
+    }
+    assert.equal(sanitizeAuthRedirectTarget('/a/../watchlist'), '/watchlist');
 
     assert.equal(outcomeFromJobState('skipped_no_consent'), 'noConsent');
     assert.equal(outcomeFromJobState('rejected_invalid_url'), 'invalidUrl');

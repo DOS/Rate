@@ -8,7 +8,6 @@ export interface SpecUiDictionary {
   yes: string;
   no: string;
   supported: string;
-  availableStatus: string;
   has5gYes: string;
   /** The cellular group heading of a category without 5G (smartwatches). */
   cellularNo5gGroup: string;
@@ -92,7 +91,6 @@ const SPEC_UI_DICTS: Record<RateLocale, SpecUiDictionary> = {
     yes: 'Có',
     no: 'Không',
     supported: 'Có hỗ trợ',
-    availableStatus: 'Đang kinh doanh',
     has5gYes: 'Có (5G Sub-6 / mmWave)',
     cellularNo5gGroup: '6. Mạng Di động (Cellular)',
     groups: {
@@ -173,7 +171,6 @@ const SPEC_UI_DICTS: Record<RateLocale, SpecUiDictionary> = {
     yes: 'Yes',
     no: 'No',
     supported: 'Supported',
-    availableStatus: 'Available',
     has5gYes: 'Yes (5G Sub-6 / mmWave)',
     cellularNo5gGroup: '6. Cellular network',
     groups: {
@@ -254,7 +251,6 @@ const SPEC_UI_DICTS: Record<RateLocale, SpecUiDictionary> = {
     yes: 'Ano',
     no: 'Ne',
     supported: 'Podporováno',
-    availableStatus: 'V prodeji',
     has5gYes: 'Ano (5G Sub-6 / mmWave)',
     cellularNo5gGroup: '6. Mobilní sítě',
     groups: {
@@ -391,7 +387,7 @@ const VI_SPEC_REPLACEMENTS: Array<[RegExp, string]> = [
   [/\bSingle Camera\b/gi, 'Camera đơn'],
   [/\bAvailable\.\s*Released\s+/gi, 'Đang kinh doanh - Phát hành '],
   [/\bAvailable\b/gi, 'Đang kinh doanh'],
-  [/\bNo card slot\b/gi, 'Không hỗ trợ khe thẻ nhớ'],
+  [/\bNo card slot\b/gi, 'Không hỗ trợ thẻ nhớ'],
   [/\bnon-removable\b/gi, 'liền máy'],
   [/\bdust\/water resistant\b/gi, 'kháng bụi và nước'],
   [/\bwater resistant\b/gi, 'kháng nước'],
@@ -425,8 +421,9 @@ const VI_SPEC_REPLACEMENTS: Array<[RegExp, string]> = [
   [/\(variable aperture\)/gi, '(khẩu độ biến thiên)'],
   [/\bmulti-directional PDAF\b/gi, 'lấy nét đa hướng PDAF'],
   [/\bdual pixel PDAF\b/gi, 'lấy nét Dual Pixel PDAF'],
-  [/\bsensor-shift OIS\b/gi, 'chống rung dịch chuyển cảm biến OIS'],
-  [/\bOIS\b/g, 'chống rung quang học OIS'],
+  [/\bsensor-shift OIS\b/gi, 'chống rung dịch chuyển cảm biến (OIS)'],
+  // The rule above already names the OIS it rewrites (DOS/Rate#1210).
+  [/(?<!cảm biến \()\bOIS\b/g, 'chống rung quang học OIS'],
   [/(\d+(?:\.\d+)?x)\s+optical zoom\b/gi, 'zoom quang $1'],
   [/\boptical zoom\b/gi, 'zoom quang học'],
   [/\bDual-LED dual-tone flash\b/gi, 'Đèn flash LED kép 2 tông màu'],
@@ -440,10 +437,72 @@ const VI_SPEC_REPLACEMENTS: Array<[RegExp, string]> = [
   [/\(peak\)/gi, '(đỉnh)'],
   [/\(HBM\)/gi, '(HBM)'],
   [/\bratio\b/gi, 'tỷ lệ'],
+  [/\bpixels\b/gi, 'pixel'],
+  [/\bppi density\b/gi, 'ppi'],
+  [/\bdual-band\b/gi, 'băng tần kép'],
+  [/\bperformance\b/gi, 'hiệu năng'],
+  [/\befficiency\b/gi, 'tiết kiệm điện'],
+  [/\(photo\/panorama\)/gi, '(ảnh/toàn cảnh)'],
   [/\bOcta-core\b/gi, '8 nhân (Octa-core)'],
   [/\bHexa-core\b/gi, '6 nhân (Hexa-core)'],
   [/\bDeca-core\b/gi, '10 nhân (Deca-core)'],
 ];
+
+// A letter only Vietnamese uses among the spec languages.
+const VI_LETTER_RE =
+  /[ăâđêôơưạảấầẩẫậắằẳẵặẹẻẽếềểễệĩỉịọỏốồổỗộớờởỡợũụủứừửữựỳỵỷỹ]/i;
+
+// Lowercase tokens a translated value may keep: units and Wi-Fi standards.
+const UNTRANSLATED_TOKENS = new Set([
+  'mm',
+  'cm',
+  'nm',
+  'kg',
+  'mah',
+  'wh',
+  'hz',
+  'khz',
+  'mhz',
+  'ghz',
+  'nits',
+  'ppi',
+  'dpi',
+  'min',
+  'ms',
+  'gb',
+  'tb',
+  'mb',
+  'kb',
+  'mp',
+  'fps',
+  'db',
+  'dba',
+  'mw',
+  'kw',
+  'cd',
+  'in',
+  'oz',
+  'ac',
+  'ax',
+  'be',
+]);
+
+/**
+ * The lowercase English words the Vietnamese replacements leave behind, such
+ * as "fast charging" in "Wireless fast charging". Capitalised names (Retina,
+ * Digital Crown) and units do not count.
+ */
+export function untranslatedViWords(text: string): string[] {
+  let rest = text;
+  for (const [pattern] of VI_SPEC_REPLACEMENTS) {
+    rest = rest.replace(pattern, ' ');
+  }
+  // Whole words, Vietnamese letters included, so "thông" is not read as
+  // "th" and "ng".
+  return (rest.match(/\p{L}+/gu) ?? []).filter(
+    (word) => /^[a-z]{2,}$/.test(word) && !UNTRANSLATED_TOKENS.has(word)
+  );
+}
 
 const EN_SPEC_REPLACEMENTS: Array<[RegExp, string]> = [
   [/Không hỗ trợ thẻ nhớ/gi, 'No card slot'],
@@ -489,6 +548,14 @@ const CS_SPEC_REPLACEMENTS: Array<[RegExp, string]> = [
   [/\boptical zoom\b/gi, 'optický zoom'],
 ];
 
+/**
+ * Spells out a storage expansion value stored as a bare "No", which means
+ * no card slot, so `localizeSpecValue` can translate it (DOS/Rate#1214).
+ */
+export function normalizeStorageExpansion(raw: string): string {
+  return raw.replace(/^\s*No(?=\s*(?:[(,;]|$))/i, 'No card slot');
+}
+
 const DISALLOWED_SPEC_TEXT_REGEX =
   /^(?:null|undefined|nan|none|n\/a|infinity|-infinity|__proto__|constructor|prototype)$/i;
 
@@ -524,6 +591,14 @@ export function localizeSpecValue(
   }
 
   if (lang === 'vi') {
+    // A value the phrase map cannot cover stays whole in its source
+    // language rather than half translated, as in "không dây fast
+    // charging" (DOS/Rate#1187); checked before any rewrite, months too.
+    // A value already stored partly in Vietnamese is mixed at the source;
+    // translating its known phrases still leaves less English.
+    if (!VI_LETTER_RE.test(text) && untranslatedViWords(text).length > 0) {
+      return text;
+    }
     text = text.replace(
       /\b(January|February|March|April|May|June|July|August|September|October|November|December)\s+(\d{4})\b/gi,
       (_, m: string, y: string) => {

@@ -1,5 +1,6 @@
 import 'server-only';
 import { EXTENSION_CAPABILITY_MATRIX } from './extension';
+import { isItemModelOn } from './item-model';
 
 export interface OpenApiParameter {
   name: string;
@@ -131,7 +132,7 @@ export function normalizeOpenApiServerOrigin(
   }
 }
 
-export function buildRateOpenApiSpec(
+function buildBaseRateOpenApiSpec(
   baseUrl = 'https://rate.vn'
 ): RateOpenApiDocument {
   const safeBaseUrl = normalizeOpenApiServerOrigin(baseUrl);
@@ -207,7 +208,7 @@ export function buildRateOpenApiSpec(
           summary:
             'List standardized master products with 10-group spec filters',
           description:
-            'Queries `rate.master_products` with multi-dimensional filtering across category, brand, price range, RAM/storage options, refresh rate, 5G, IP rating, charging wattage, and JReviews weighted score.',
+            'Queries `rate.master_products` with multi-dimensional filtering across category, brand, price range, RAM/storage options, refresh rate, 5G, IP rating, charging wattage, and JReviews weighted score. Each product carries its category spec view (earbuds have no screen, RAM or storage; watches show no 5G). A spec filter the category does not have, such as `has5g` on `smartwatches` or `ramGb` and `compactScreen` on `earbuds`, returns 400. On `all` such a filter keeps only products whose own category has it (`has5g=1` returns 5G phones, tablets and laptops, never watches or earbuds).',
           tags: ['Products & Specs'],
           parameters: [
             {
@@ -356,6 +357,9 @@ export function buildRateOpenApiSpec(
                             radar_signal: {
                               $ref: '#/components/schemas/ProductDealRadarSignal',
                             },
+                            sale_state: {
+                              $ref: '#/components/schemas/ProductSaleState',
+                            },
                           },
                         },
                       },
@@ -363,6 +367,10 @@ export function buildRateOpenApiSpec(
                   },
                 },
               },
+            },
+            '400': {
+              description:
+                'Invalid category or price range, or a spec filter the category does not have.',
             },
           },
         },
@@ -397,6 +405,19 @@ export function buildRateOpenApiSpec(
                       ok: { type: 'boolean', example: true },
                       radar_signal: {
                         $ref: '#/components/schemas/ProductDealRadarSignal',
+                      },
+                      data: {
+                        type: 'object',
+                        properties: {
+                          product: {
+                            type: 'object',
+                            properties: {
+                              sale_state: {
+                                $ref: '#/components/schemas/ProductSaleState',
+                              },
+                            },
+                          },
+                        },
                       },
                     },
                   },
@@ -437,7 +458,17 @@ export function buildRateOpenApiSpec(
                     type: 'object',
                     properties: {
                       ok: { type: 'boolean', example: true },
-                      data: { type: 'array', items: { type: 'object' } },
+                      data: {
+                        type: 'array',
+                        items: {
+                          type: 'object',
+                          properties: {
+                            sale_state: {
+                              $ref: '#/components/schemas/ProductSaleState',
+                            },
+                          },
+                        },
+                      },
                       deal_radar: {
                         type: 'object',
                         additionalProperties: {
@@ -458,7 +489,7 @@ export function buildRateOpenApiSpec(
           summary:
             'Get programmatic 1v1 Head-to-Head JReviews verdict, 5-criteria scoreboard & price delta',
           description:
-            'Evaluates two same-category master products (`?pair=<slugA>-vs-<slugB>` or `?slugA=...&slugB=...`) with optional persona/custom 5-criteria weights (`persona`, `w_screen`, `w_performance`, `w_camera`, `w_battery`, `w_value`) and returns the overall winner, per-criterion head-to-head breakdown, price delta, Deal Radar signals (`deal_radar`), and 10-group specs.',
+            'Evaluates two same-category master products (`?pair=<slugA>-vs-<slugB>` or `?slugA=...&slugB=...`) with optional persona/custom 5-criteria weights (`persona`, `w_screen`, `w_performance`, `w_camera`, `w_battery`, `w_value`) and returns the overall winner (with `is_tie` true when both scores are level at two decimals; `overall_winner` is then only the price or side-A tie-break), per-criterion head-to-head breakdown, price delta, Deal Radar signals (`deal_radar`), and 10-group specs.',
           tags: ['Comparison & Watchlist'],
           parameters: [
             {
@@ -905,7 +936,7 @@ export function buildRateOpenApiSpec(
             },
             '429': {
               description:
-                'Per-IP sliding-window rate limit exceeded (max 15 signals/min).',
+                'Rate limit exceeded: a best-effort per-IP limit of 15 signals/min, counted separately on each server instance. The global cap of 120 crowd jobs/min is reported as a 200 with `jobState: "queue_error"`.',
             },
           },
         },
@@ -916,7 +947,7 @@ export function buildRateOpenApiSpec(
           summary:
             'List e-commerce merchants with Dual Risk Score (DOSafe + AI Seeding Risk)',
           description:
-            'Returns verified merchants (`rate.merchants`) with filter support for platform, Official Mall status, minimum trust score, search query, and sorting.',
+            'Returns verified merchants (`rate.merchants`) with filter support for platform, Official Mall status, minimum trust score, search query, and sorting. `risk_score` is the combined risk; `review_risk_score` is only the part measured on reviews, null for a store with no analysed review.',
           tags: ['Merchants & Dual Risk Score'],
           parameters: [
             {
@@ -983,7 +1014,7 @@ export function buildRateOpenApiSpec(
           summary:
             'Paginated merchant directory with risk tier, seeding tier & platform filters',
           description:
-            'Returns one page (`items`, `matched`, `offset`) of the `/merchants` directory filtered by search query, platform, Official Mall status, trust risk tier (`safe`, `moderate`, `warning`), AI seeding tier (`low`, `elevated`), and sort order.',
+            'Returns one page (`items`, `matched`, `offset`) of the `/merchants` directory filtered by search query, platform, Official Mall status, trust risk tier (`safe`, `moderate`, `warning`), AI seeding tier (`low`, `elevated`), and sort order. `risk_score` is the combined risk; `review_risk_score` is only the part measured on reviews, null for a store with no analysed review.',
           tags: ['Merchants & Dual Risk Score'],
           parameters: [
             {
@@ -1024,7 +1055,7 @@ export function buildRateOpenApiSpec(
               name: 'seeding',
               in: 'query',
               description:
-                'AI seeding risk tier (`all`, `low` <= 15, `elevated` > 15)',
+                'AI seeding risk tier (`all`, `low` <= 15, `elevated` > 15). Stores with no analysed reviews match neither tier.',
               schema: {
                 type: 'string',
                 enum: ['all', 'low', 'elevated'],
@@ -1073,7 +1104,7 @@ export function buildRateOpenApiSpec(
           summary:
             'Get detailed merchant audit profile, seeding breakdown & active listings',
           description:
-            'Fetches a single merchant by UUID, slug, or `platform_shop_id` along with its active marketplace listings and AI review seeding distribution.',
+            'Fetches a single merchant by UUID, slug, or `platform_shop_id` along with its active marketplace listings and AI review seeding distribution. `risk_score` is the combined risk; `review_risk_score` is only the part measured on reviews, null for a store with no analysed review.',
           tags: ['Merchants & Dual Risk Score'],
           parameters: [
             {
@@ -1637,6 +1668,19 @@ export function buildRateOpenApiSpec(
             },
           },
         },
+        ProductSaleState: {
+          type: 'string',
+          enum: [
+            'on_sale',
+            'sold_out',
+            'discontinued',
+            'coming_soon',
+            'not_listed',
+            'no_stock',
+          ],
+          description:
+            'Whether the model can be bought in Vietnam now: `on_sale` (an in-stock price), `discontinued` / `coming_soon` (curated, or from the launch status when no store has stock), `sold_out` (stores list it, none in stock), `not_listed` (no store lists it), `no_stock` (no in-stock store; whether any store lists it is not known, as in list bodies).',
+        },
         ProductDealRadarSignal: {
           type: 'object',
           required: ['verdict', 'savingsPct', 'fakeMarkupPct', 'spreadPct'],
@@ -1665,4 +1709,143 @@ export function buildRateOpenApiSpec(
       },
     },
   };
+}
+
+/**
+ * The OpenAPI document. The Item model's parameters, fields and schemas are
+ * documented only while `RATE_ITEM_MODEL` is on, so with the flag off the
+ * document is exactly as before (DOS/Rate#1158).
+ */
+export function buildRateOpenApiSpec(
+  ...args: Parameters<typeof buildBaseRateOpenApiSpec>
+): RateOpenApiDocument {
+  const spec = buildBaseRateOpenApiSpec(...args);
+  return isItemModelOn() ? withItemModelDocs(spec) : spec;
+}
+
+type JsonObject = Record<string, unknown>;
+
+const responseSchema = (op: OpenApiOperation | undefined): JsonObject | null =>
+  (op?.responses['200']?.content?.['application/json']?.schema as
+    JsonObject | undefined) ?? null;
+
+const propertiesOf = (schema: JsonObject | null): JsonObject | null =>
+  schema && typeof schema.properties === 'object' && schema.properties
+    ? (schema.properties as JsonObject)
+    : null;
+
+/** Adds the Item model's API v1 surface to the document (design doc 5.2). */
+export function withItemModelDocs(
+  spec: RateOpenApiDocument
+): RateOpenApiDocument {
+  const list = spec.paths['/api/v1/rate/products']?.get;
+  if (list) {
+    const params = list.parameters ?? [];
+    const at = params.findIndex((p) => p.name === 'sort');
+    params.splice(at < 0 ? params.length : at, 0, {
+      name: 'group',
+      in: 'query',
+      description:
+        'Set to `item` to list Items (one row per product line, with its size variants) instead of variants. Takes `category`, `brands`, `q`, `minPrice`, `maxPrice` (on the Item "from" price) and the price, merchant and newest sorts; spec filters and `rating_desc` answer 400. The default stays `variant`.',
+      schema: { type: 'string', enum: ['variant', 'item'], default: 'variant' },
+    });
+    list.parameters = params;
+    const ok = list.responses['200'];
+    if (ok) {
+      ok.description = `${ok.description} With \`group=item\`: \`group\` is \`item\` and \`data\` holds \`RateItem\` rows, each with \`variants\` (\`RateItemVariant[]\`).`;
+    }
+  }
+
+  const detail = spec.paths['/api/v1/rate/products/{slug}']?.get;
+  if (detail) {
+    const slug = detail.parameters?.find((p) => p.name === 'slug');
+    if (slug) {
+      slug.description =
+        'Product slug (e.g. apple-iphone-16-128gb) or Item slug (e.g. apple-iphone-16).';
+    }
+    detail.parameters = [
+      ...(detail.parameters ?? []),
+      {
+        name: 'v',
+        in: 'query',
+        description:
+          'The variant key to answer with (e.g. `256gb`). Without it, an old variant slug answers its own size and an Item slug its default variant.',
+        schema: { type: 'string' },
+      },
+    ];
+    const data = propertiesOf(
+      (propertiesOf(responseSchema(detail))?.data as JsonObject) ?? null
+    );
+    if (data) {
+      const product = data.product as JsonObject | undefined;
+      if (product) {
+        product.description =
+          "The selected variant (`?v=`, the slug's own size, else the Item's default).";
+      }
+      data.item = { $ref: '#/components/schemas/RateItem' };
+      data.variants = {
+        type: 'array',
+        description: 'Every published size of the Item.',
+        items: { $ref: '#/components/schemas/RateItemVariant' },
+      };
+      data.selected_variant = {
+        type: 'string',
+        description: 'The variant key `product` is.',
+      };
+      data.unknown_variant_offers = {
+        type: 'array',
+        description:
+          'Offers of the Item whose listing states no size, in the same shape as `offers`. They never feed a variant price.',
+        items: { type: 'object' },
+      };
+    }
+  }
+
+  const lookup = spec.paths['/api/v1/rate/extension/lookup']?.get;
+  const lookupProps = propertiesOf(responseSchema(lookup));
+  if (lookupProps) {
+    lookupProps.item = { $ref: '#/components/schemas/RateItem' };
+    lookupProps.selectedVariant = {
+      type: ['string', 'null'],
+      description:
+        "The variant key of the size the listing or page states, or of the Item's only variant; null when it is not known (`matchStatus` is then `ambiguous_variant` when the Item has several sizes). `variantCandidates` lists the Item's sized variants, empty for a category without storage.",
+    };
+  }
+
+  spec.components.schemas.RateItem = {
+    type: 'object',
+    description:
+      'A product line across its sizes. Prices are "from" prices over its published variants; counts include listings with no stated size.',
+    properties: {
+      id: { type: 'string', format: 'uuid' },
+      item_key: { type: 'string', example: 'apple:iphone-16' },
+      slug: { type: 'string', example: 'apple-iphone-16' },
+      name: { type: 'string' },
+      brand: { type: 'string' },
+      model: { type: 'string' },
+      category_id: { type: ['string', 'null'], format: 'uuid' },
+      min_price: { type: 'number' },
+      max_price: { type: 'number' },
+      price_variant_count: { type: 'integer' },
+      merchant_count: { type: 'integer' },
+      listing_count: { type: 'integer' },
+      unknown_variant_listing_count: { type: 'integer' },
+    },
+  };
+  spec.components.schemas.RateItemVariant = {
+    type: 'object',
+    description: 'One size of an Item.',
+    properties: {
+      id: { type: 'string', format: 'uuid' },
+      slug: { type: 'string', example: 'apple-iphone-16-256gb' },
+      name: { type: 'string' },
+      variant_key: { type: 'string', example: '256gb' },
+      variant_name: { type: ['string', 'null'] },
+      storage_gb: { type: ['integer', 'null'] },
+      min_price: { type: 'number' },
+      max_price: { type: 'number' },
+      merchant_count: { type: 'integer' },
+    },
+  };
+  return spec;
 }

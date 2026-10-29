@@ -12,6 +12,7 @@ export default function PhoneCollapsible({
   showMoreLabel,
   showLessLabel,
   openOnHash,
+  collapsible = true,
   children,
 }: {
   className: string;
@@ -19,6 +20,11 @@ export default function PhoneCollapsible({
   showLessLabel: string;
   /** Expand when the page is opened or navigated to this hash, e.g. "#specs". */
   openOnHash?: string;
+  /**
+   * False when there is nothing past the first three children: the list then
+   * shows whole, with no toggle (DOS/Rate#1186).
+   */
+  collapsible?: boolean;
   children: ReactNode;
 }) {
   const [open, setOpen] = useState(false);
@@ -45,6 +51,12 @@ export default function PhoneCollapsible({
       );
     }
   };
+
+  if (!collapsible) {
+    return (
+      <div className={`${className} rate-phone-collapsible`}>{children}</div>
+    );
+  }
 
   return (
     <>

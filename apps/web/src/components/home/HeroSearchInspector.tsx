@@ -2,6 +2,7 @@
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
+import { hasReviewRiskEvidence } from '@/lib/merchant-risk-tone';
 import { discountVerdictCopy } from '@/lib/discount-verdict-copy';
 import { Link, useRouter } from '@/lib/navigation';
 import { startNavigationProgress } from '@/components/elementary/NavigationProgress';
@@ -892,12 +893,23 @@ export default function HeroSearchInspector({
                         />
                       </h2>
                       <div className="text-muted small">
-                        {t.rich('merchantRiskLine', {
-                          scam: inspectResult.merchantProfile.dosafe_risk_score,
-                          review:
-                            inspectResult.merchantProfile.review_risk_score,
-                          b: (chunks) => <strong>{chunks}</strong>,
-                        })}{' '}
+                        {/* No analysed reviews: no review risk number
+                            (DOS/Rate#1258). */}
+                        {hasReviewRiskEvidence(
+                          inspectResult.merchantProfile.review_risk_breakdown
+                        )
+                          ? t.rich('merchantRiskLine', {
+                              scam: inspectResult.merchantProfile
+                                .dosafe_risk_score,
+                              review:
+                                inspectResult.merchantProfile.review_risk_score,
+                              b: (chunks) => <strong>{chunks}</strong>,
+                            })
+                          : t.rich('merchantRiskLineNoReviews', {
+                              scam: inspectResult.merchantProfile
+                                .dosafe_risk_score,
+                              b: (chunks) => <strong>{chunks}</strong>,
+                            })}{' '}
                         •{' '}
                         <strong>
                           {t('trackingProductsCount', {

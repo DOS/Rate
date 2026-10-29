@@ -1,5 +1,8 @@
 import 'server-only';
 import {
+  applyCategorySpecTemplate,
+  getCategorySpecTemplate,
+  implausiblyLowOfferIds,
   isImplausiblyLowPrice,
   minimumListingPriceVnd,
   plausibleOffers,
@@ -36,6 +39,15 @@ import {
 import { computeProductRadarSignal } from './deals';
 import type { RadarSignal } from '../../lib/deal-radar';
 import { createLogger } from '@/lib/logger';
+import {
+  chooseItemVariant,
+  itemProductPath,
+  resolveListingItemContext,
+  resolveVariantItemContext,
+  toApiItem,
+  type ApiItem,
+  type ApiItemContext,
+} from './item-api';
 
 const log = createLogger('server.extension');
 
@@ -200,6 +212,13 @@ export interface ExtensionPriceAssessment {
   implausiblyLow?: true;
 }
 
+/**
+ * An offer in the lookup's lists. `implausiblyLow` marks a bait price far
+ * below every other in-stock store, so the side panel can flag the row
+ * (DOS/Rate#797, #1297).
+ */
+export type ExtensionOffer = MerchantOffer & { implausiblyLow?: true };
+
 export interface ExtensionLookupResponse {
   matchStatus: ExtensionMatchStatus;
   platform: SupportedEcommercePlatform | null;
@@ -213,8 +232,8 @@ export interface ExtensionLookupResponse {
   priceAssessment: ExtensionPriceAssessment;
   masterProduct: MasterProduct | null;
   matchedOffer: MerchantOffer | null;
-  topCheaperOffers: MerchantOffer[];
-  allOffers: MerchantOffer[];
+  topCheaperOffers: ExtensionOffer[];
+  allOffers: ExtensionOffer[];
   merchantProfile: MerchantSummary | null;
   reviewSummary: ReviewAnalysisSummary | null;
   priceHistory: MasterProductPriceHistorySummary | null;
@@ -225,6 +244,10 @@ export interface ExtensionLookupResponse {
   topRivalName?: string | null;
   leaderboardStandings?: ProductLeaderboardBadgeInfo[] | null;
   radarSignal?: RadarSignal | null;
+  /** RATE_ITEM_MODEL on only: the matched Item (DOS/Rate#1158). */
+  item?: ApiItem;
+  /** RATE_ITEM_MODEL on only: the variant key the page states, or null. */
+  selectedVariant?: string | null;
 }
 
 const ACCESSORY_KEYWORDS_VI_EN = [
@@ -1148,6 +1171,32 @@ export async function lookupExtensionProduct(
     }
   }
 
+  // A listing with no stated size is still its Item's (RATE_ITEM_MODEL on,
+  // design doc 5.2): shown with the default variant and no size chosen.
+  let itemContext: ApiItemContext | null = null;
+  if (
+    !matchedMaster &&
+    !listingOfUnpublishedModel &&
+    candidateItemIds.size > 0
+  ) {
+    const listingItem = await resolveListingItemContext(
+      Array.from(candidateItemIds)
+    );
+    if (listingItem === 'no_variant') {
+      // The listing's Item is known but has no page yet: no catalogue guess.
+      listingOfUnpublishedModel = true;
+    } else if (listingItem) {
+      const byVariant = await getMasterProductBySlug(listingItem.selected.slug);
+      if (byVariant) {
+        itemContext = listingItem;
+        matchedMaster = byVariant;
+        matchStatus = 'canonical_model';
+      } else {
+        listingOfUnpublishedModel = true;
+      }
+    }
+  }
+
   // Filter catalog candidates by storageGb if known
   if (
     !matchedMaster &&
@@ -1205,24 +1254,73 @@ export async function lookupExtensionProduct(
     };
   }
 
+  const categoryPath = getMasterProductCategorySlug(matchedMaster);
+  // Storage tiers only for a category that has storage: an earbud's stored
+  // "64GB" is enricher noise (DOS/Rate#1184).
+  const hasStorage = getCategorySpecTemplate(categoryPath).storage;
+  // Several sizes in an earbud title are not storage variants either.
+  if (!hasStorage && matchStatus === 'ambiguous_variant') {
+    matchStatus = 'canonical_model';
+  }
+
+  // The Item and all its variants from the DB, not only the siblings among the
+  // search hits. The listing's own variant wins, then a stated size the Item
+  // has once, then a single-variant Item (RATE_ITEM_MODEL on).
+  const pageSize = { storageGb: hasStorage ? storageGb : null };
+  itemContext = itemContext
+    ? chooseItemVariant(itemContext, { ...pageSize, listingVariantId: null })
+    : await resolveVariantItemContext(
+        matchedMaster.slug,
+        pageSize.storageGb,
+        matchStatus === 'exact_listing' ? matchedMaster.id : null
+      );
+  if (itemContext && itemContext.selected.slug !== matchedMaster.slug) {
+    const chosen = await getMasterProductBySlug(itemContext.selected.slug);
+    if (chosen) matchedMaster = chosen;
+    else itemContext = { ...itemContext, sizeChosen: false };
+  }
+
   // Build variant candidates across same model family
   const sameFamilyVariants = catalogCandidates.filter(
     (c) =>
+      hasStorage &&
       c.brand.toLowerCase() === matchedMaster!.brand.toLowerCase() &&
       c.model.toLowerCase() === matchedMaster!.model.toLowerCase() &&
       typeof c.storage_gb === 'number'
   );
-  const variantCandidates: ExtensionVariantCandidate[] = sameFamilyVariants.map(
-    (v) => ({
-      storageGb: v.storage_gb || 256,
-      label: `${v.storage_gb || 256}GB`,
-      slug: v.slug,
-      minPrice: v.min_price,
-      maxPrice: v.max_price,
-    })
-  );
+  const variantCandidates: ExtensionVariantCandidate[] = itemContext
+    ? // Sized variants only: an unknown size is never shown as 256GB.
+      hasStorage
+      ? itemContext.variants
+          .filter((v) => typeof v.storage_gb === 'number' && v.storage_gb > 0)
+          .map((v) => ({
+            storageGb: v.storage_gb!,
+            label: v.variant_name || `${v.storage_gb}GB`,
+            slug: v.slug,
+            minPrice: v.min_price,
+            maxPrice: v.max_price,
+          }))
+      : []
+    : sameFamilyVariants.map((v) => ({
+        storageGb: v.storage_gb || 256,
+        label: `${v.storage_gb || 256}GB`,
+        slug: v.slug,
+        minPrice: v.min_price,
+        maxPrice: v.max_price,
+      }));
 
-  if (variantCandidates.length > 1 && !storageGb) {
+  if (itemContext) {
+    // Ambiguous when no size is known among several, or the page states a size
+    // the Item does not have: then no variant's prices may judge the page.
+    if (
+      itemContext.sizeMismatch ||
+      (!itemContext.sizeChosen && variantCandidates.length > 1)
+    ) {
+      matchStatus = 'ambiguous_variant';
+    } else if (matchStatus === 'ambiguous_variant') {
+      matchStatus = 'canonical_model';
+    }
+  } else if (variantCandidates.length > 1 && !storageGb) {
     matchStatus = 'ambiguous_variant';
   }
 
@@ -1246,8 +1344,6 @@ export async function lookupExtensionProduct(
   ) {
     matchStatus = 'exact_listing';
   }
-
-  const categoryPath = getMasterProductCategorySlug(matchedMaster);
 
   const [priceHistory, reviews, sameCategoryPeers] = await Promise.all([
     getMasterProductPriceHistory(matchedMaster.id, offers),
@@ -1352,26 +1448,43 @@ export async function lookupExtensionProduct(
     : null;
   const radarSignal = computeProductRadarSignal(matchedMaster, offers);
 
+  // Bait prices are judged among the in-stock listings, as the market numbers
+  // are; the flag lets the side panel mark the row (DOS/Rate#1297).
+  const baitIds = implausiblyLowOfferIds(inStockOffers);
+  const flagBait = (o: MerchantOffer): ExtensionOffer =>
+    baitIds.has(o.id) ? { ...o, implausiblyLow: true } : o;
+  const flaggedCheaperOffers = topCheaperOffers.map(flagBait);
+
   return {
     matchStatus,
     platform,
     capability,
     canonicalUrl,
-    detectedStorageGb: storageGb ?? matchedMaster.storage_gb ?? null,
+    detectedStorageGb: hasStorage
+      ? (storageGb ?? matchedMaster.storage_gb ?? null)
+      : null,
     isAccessoryOrPart: false,
     accessoryReason: null,
     variantCandidates,
     priceAssessment,
-    masterProduct: matchedMaster,
+    // The category's spec view, as rate.vn shows it: no earbud screen, RAM,
+    // storage or camera, no watch 5G (DOS/Rate#1184).
+    masterProduct: applyCategorySpecTemplate(categoryPath, matchedMaster),
     matchedOffer,
-    topCheaperOffers,
-    allOffers: mode === 'full' ? offers : topCheaperOffers,
+    topCheaperOffers: flaggedCheaperOffers,
+    allOffers: mode === 'full' ? offers.map(flagBait) : flaggedCheaperOffers,
     merchantProfile,
     reviewSummary,
     priceHistory: mode === 'full' ? priceHistory : null,
     categorySlug: categoryPath,
     compareUrl: `/compare?cat=${categoryPath}&slugs=${encodeURIComponent(matchedMaster.slug)}`,
-    productDetailUrl: `/${categoryPath}/${encodeURIComponent(matchedMaster.slug)}`,
+    productDetailUrl: itemContext
+      ? itemProductPath(
+          categoryPath,
+          itemContext.item.slug,
+          itemContext.sizeChosen ? itemContext.selected.variant_key : null
+        )
+      : `/${categoryPath}/${encodeURIComponent(matchedMaster.slug)}`,
     leaderboardUrl: `/leaderboard?cat=${categoryPath}`,
     versusUrl: topRival
       ? `/compare/${encodeURIComponent(matchedMaster.slug)}-vs-${encodeURIComponent(topRival.slug)}`
@@ -1379,6 +1492,14 @@ export async function lookupExtensionProduct(
     topRivalName: topRival?.name || null,
     leaderboardStandings,
     radarSignal,
+    ...(itemContext
+      ? {
+          item: toApiItem(itemContext.item),
+          selectedVariant: itemContext.sizeChosen
+            ? itemContext.selected.variant_key
+            : null,
+        }
+      : {}),
   };
 }
 

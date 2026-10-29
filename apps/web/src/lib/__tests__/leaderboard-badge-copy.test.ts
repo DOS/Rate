@@ -30,4 +30,51 @@ for (const locale of ['vi', 'en', 'cs'] as const) {
   }
 }
 
+// The Vietnamese leaderboard reads in Vietnamese, and no heading carries a
+// stray version number (DOS/Rate#1250, DOS/Rate#1251).
+{
+  const vi = JSON.parse(
+    readFileSync(
+      join(__dirname, '..', '..', '..', 'locales', 'vi.json'),
+      'utf8'
+    )
+  );
+  const lb = vi.leaderboard as Record<string, string>;
+  for (const key of [
+    'shortDisplay',
+    'shortPerf',
+    'shortCamera',
+    'shortAnc',
+    'shortBattery',
+    'shortValue',
+    'userUnrated',
+    'expertUnrated',
+    'userScoreShort',
+    'expertScoreShort',
+  ]) {
+    assert.ok(lb[key], `vi: missing leaderboard.${key}`);
+    assert.doesNotMatch(
+      lb[key]!,
+      /\b(Display|Perf|Battery|Value|User|Expert|Cam\/ANC)\b/,
+      `vi leaderboard.${key} is English`
+    );
+  }
+  for (const locale of ['vi', 'en', 'cs'] as const) {
+    const title = JSON.parse(
+      readFileSync(
+        join(__dirname, '..', '..', '..', 'locales', `${locale}.json`),
+        'utf8'
+      )
+    ).leaderboard.title as string;
+    assert.doesNotMatch(title, /\d+\.\d/, `${locale} leaderboard title`);
+  }
+  const features = vi.catalog.schemas.smartphones.features as Record<
+    string,
+    { desc?: string }
+  >;
+  for (const [key, f] of Object.entries(features)) {
+    assert.doesNotMatch(f.desc ?? '', /^[A-Z][a-z]+: /, `vi filter ${key}`);
+  }
+}
+
 console.log('leaderboard-badge-copy: ok');

@@ -12,10 +12,13 @@ import {
   getCachedMerchantsList,
   getCachedRatePlatformStats,
   getCrossPlatformDealRadar,
+  groupCatalogRowsByItem,
   type CrossPlatformDealRadarResponse,
   type MerchantSummary,
   type RatePlatformStats,
 } from '@/server/rate';
+import { catalogRowSlug, itemSizeChips } from '@/lib/item-directory';
+import { formatStorageLabel } from '@/lib/category-filters';
 import type { MasterProduct } from '@repo/shared-data';
 import {
   BsArrowLeftRight,
@@ -42,6 +45,7 @@ import CompareTrayBar from '@/components/compare/CompareTrayBar';
 import ProductCard, {
   type ProductCardSpec,
 } from '@/components/product/ProductCard';
+import { saleStateOfMaster } from '@/lib/sale-state';
 import { buildRadarIndex, getRadarSignal } from '@/lib/deal-radar';
 import { isPendingReview } from '@/lib/review-display';
 import {
@@ -58,7 +62,10 @@ import {
   productImageUrl,
 } from '@/lib/rate-domain-core';
 import { applyCategorySpecTemplate } from '@repo/shared-data/rules';
-import { merchantRiskTone } from '@/lib/merchant-risk-tone';
+import {
+  hasReviewRiskEvidence,
+  merchantRiskTone,
+} from '@/lib/merchant-risk-tone';
 
 // Cached after the first request, refreshed every 5 minutes or when the
 // worker revalidates its cache tags (DOS/Rate#491).
@@ -164,6 +171,10 @@ export default async function Home({
     catSlugById.set(c.id, c.slug);
   }
 
+  // RATE_ITEM_MODEL on: one grid card per Item (DOS/Rate#1155).
+  const gridProducts = await groupCatalogRowsByItem(masterProducts).catch(
+    () => masterProducts
+  );
   const quickCompareSlugs = masterProducts
     .filter((p) =>
       getMasterProductHref(p, catSlugById).startsWith('/smartphones/')
@@ -249,7 +260,11 @@ export default async function Home({
             <div className="row justify-content-center align-items-center">
               <div className="col-xl-9 col-lg-10 col-md-12 col-sm-12">
                 <HeroSearchInspector
-                  initialProducts={toHeroProductSuggestions(masterProducts)}
+                  initialProducts={toHeroProductSuggestions(
+                    // One suggestion per Item (#1155). Its slug stays the
+                    // variant's: compare, watchlist and radar are keyed by it.
+                    gridProducts
+                  )}
                   initialMerchants={toHeroMerchantSuggestions(
                     merchants.slice(0, HERO_MERCHANT_PRELOAD)
                   )}
@@ -470,7 +485,7 @@ export default async function Home({
               </div>
 
               <div className="row g-4">
-                {masterProducts.slice(0, 6).map((storedItem) => {
+                {gridProducts.slice(0, 6).map((storedItem) => {
                   // An earbud card carries no RAM, storage or screen chip
                   // (DOS/Rate#1142).
                   const item = applyCategorySpecTemplate(
@@ -479,7 +494,10 @@ export default async function Home({
                   );
                   const thumb = productImageUrl(item);
                   const keySpecs = item.key_specs || {};
-                  const productHref = getMasterProductHref(item, catSlugById);
+                  const productHref = getMasterProductHref(
+                    { ...item, slug: catalogRowSlug(item) },
+                    catSlugById
+                  );
                   const rawUser = Number(
                     item.user_rating_weighted || item.average_rating || 0
                   );
@@ -515,8 +533,13 @@ export default async function Home({
                       <ProductCard
                         slug={item.slug}
                         href={productHref}
+                        sizeChips={itemSizeChips(
+                          storedItem,
+                          productHref,
+                          formatStorageLabel
+                        )}
                         categoryPath={
-                          productHref.replace(`/${item.slug}`, '') ||
+                          productHref.replace(`/${catalogRowSlug(item)}`, '') ||
                           '/smartphones'
                         }
                         name={item.name}
@@ -536,6 +559,7 @@ export default async function Home({
                         minPrice={Number(item.min_price || 0)}
                         maxPrice={Number(item.max_price || 0)}
                         merchantCount={item.merchant_count || 0}
+                        saleState={saleStateOfMaster(item)}
                       />
                     </div>
                   );
@@ -921,15 +945,29 @@ export default async function Home({
                           </div>
                           <div>
                             <dt>{tHome('reviewRiskLabel')}</dt>
-                            <dd className={tone(merchant.review_risk_score)}>
-                              {merchant.review_risk_score}/100
-                            </dd>
-                            <dd className="rate-merchant-note">
-                              {tHome('flaggedReviewsRatio', {
-                                flagged: flaggedRevCount,
-                                total: totalRevAnalyzed,
-                              })}
-                            </dd>
+                            {/* No analysed reviews: no number (DOS/Rate#1249). */}
+                            {hasReviewRiskEvidence(breakdown) ? (
+                              <>
+                                <dd
+                                  className={tone(merchant.review_risk_score)}
+                                >
+                                  {merchant.review_risk_score}/100
+                                </dd>
+                                <dd className="rate-merchant-note">
+                                  {tHome('flaggedReviewsRatio', {
+                                    flagged: flaggedRevCount,
+                                    total: totalRevAnalyzed,
+                                  })}
+                                </dd>
+                              </>
+                            ) : (
+                              <>
+                                <dd>{tHome('reviewRiskNoData')}</dd>
+                                <dd className="rate-merchant-note">
+                                  {tHome('reviewRiskNoReviews')}
+                                </dd>
+                              </>
+                            )}
                           </div>
                           <div>
                             <dt>{tHome('ratingsAndProductsLabel')}</dt>

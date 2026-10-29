@@ -1,8 +1,27 @@
 import type { Metadata } from 'next';
-import { Fragment, type ReactNode } from 'react';
+import { Fragment } from 'react';
 import { getTranslations, setRequestLocale } from 'next-intl/server';
 import { Link } from '@/lib/navigation';
-import { notFound } from 'next/navigation';
+import { notFound, permanentRedirect } from 'next/navigation';
+import { resolveItemRoute } from '@/server/rate/item-route';
+import {
+  itemSizePanelBytes,
+  loadItemPageContext,
+  pickRenderedSize,
+  type ItemPageVariant,
+} from '@/server/rate/item-page';
+import {
+  buildItemProductGroupNode,
+  itemVariantLabel,
+  itemFromStats,
+  withoutItemSiblings,
+} from '@/lib/item-page';
+import ItemVariantPicker from '@/components/product/item/ItemVariantPicker';
+import ItemVariantPanels from '@/components/product/item/ItemVariantPanels';
+import ItemLazySizePanel, {
+  type ItemSizePanelKind,
+} from '@/components/product/item/ItemLazySizePanel';
+import { shouldLazyLoadSizes } from '@/lib/item-size-panel';
 import {
   getCrossPlatformDealRadar,
   getCachedMasterProductBySlug,
@@ -63,6 +82,12 @@ import {
 } from '@/lib/spec-localizer';
 import { contentLang } from '@/lib/content-lang';
 import ContentText from '@/components/elementary/ContentText';
+import { buildProductSpecGroups } from '@/lib/product-spec-rows';
+import {
+  listingCountForSaleState,
+  masterSaleState,
+  saleStateLabelKey,
+} from '@/lib/sale-state';
 import {
   computeProductStandingInCategory,
   scoreMasterProductForLeaderboard,
@@ -76,8 +101,6 @@ import ClientMessages from '@/components/providers/ClientMessages';
 import {
   applyCategorySpecTemplate,
   getCategorySpecTemplate,
-  specFieldApplies,
-  type SpecGroupKey,
 } from '@repo/shared-data/rules';
 import {
   isOfferUnavailable,
@@ -107,17 +130,51 @@ export async function generateCategoryProductMetadata(
   const { locale, slug } = await params;
   const lang = normalizeRateLocale(locale);
   const t = await getTranslations({ locale, namespace: 'productDetail' });
-  const product = await getCachedMasterProductBySlug(slug);
+  // RATE_ITEM_MODEL on: an Item URL describes its selected variant and is
+  // canonical (Q1, DOS/Rate#1153). Off: null, the page as before.
+  const itemRoute = await resolveItemRoute({ slug, categoryBasePath });
+  // A URL the page 308s away (an old variant URL, an Item under another
+  // category) is never its own canonical: it points where the page goes.
+  if (itemRoute?.kind === 'redirect') {
+    return {
+      alternates: { canonical: `https://rate.vn${itemRoute.to.split('?')[0]}` },
+    };
+  }
+  // The sizes the page itself shows, so the title quotes the same "from".
+  const itemPage =
+    itemRoute?.kind === 'render' && itemRoute.variants.length > 1
+      ? await loadItemPageContext(itemRoute.item, itemRoute.variants)
+      : null;
+  const renderedSize =
+    itemPage && itemRoute?.kind === 'render'
+      ? pickRenderedSize(itemPage.variants, itemRoute.variantSlug)
+      : null;
+  const product =
+    itemRoute?.kind === 'not_found'
+      ? null
+      : await getCachedMasterProductBySlug(
+          renderedSize?.variant.slug ??
+            (itemRoute?.kind === 'render' ? itemRoute.variantSlug : slug)
+        );
   if (!product) {
     return {
       title: t('notFoundTitle'),
     };
   }
-  // The stored stats, like every other page shows (DOS/Rate#1141).
-  const marketStats = productMarketStats(product);
+  // The stored stats, like every other page shows (DOS/Rate#1141). An Item
+  // URL is the Item: its name and the "from" price over its sizes (#1154).
+  const itemMeta = itemRoute?.kind === 'render' ? itemRoute.item : null;
+  const isItemGroup = (itemPage?.variants.length ?? 0) > 1;
+  const marketStats =
+    itemPage && isItemGroup
+      ? itemFromStats(itemPage.variants.map((v) => v.product))
+      : productMarketStats(product);
   const hasPrice = marketStats.minPrice > 0;
+  const name = (isItemGroup ? itemMeta?.name : null) || product.name;
   const minPrice = marketStats.minPrice.toLocaleString('vi-VN');
-  const canonicalUrl = `https://rate.vn${categoryBasePath}/${product.slug}`;
+  const canonicalUrl = `https://rate.vn${categoryBasePath}/${
+    itemRoute?.kind === 'render' ? itemRoute.itemSlug : product.slug
+  }`;
 
   return {
     // The product name first; the site name, then the price give way to fit
@@ -125,28 +182,28 @@ export async function generateCategoryProductMetadata(
     title: fitTitle([
       ...(hasPrice
         ? [
-            t('metaTitle', { name: product.name, minPrice }),
-            t('metaTitleShort', { name: product.name, minPrice }),
+            t('metaTitle', { name, minPrice }),
+            t('metaTitleShort', { name, minPrice }),
           ]
         : []),
-      `${product.name} | Rate.vn`,
-      product.name,
+      `${name} | Rate.vn`,
+      name,
     ]),
     description: fitDescription(
       hasPrice
         ? t('metaDesc', {
-            name: product.name,
+            name,
             brand: product.brand,
             merchantCount: marketStats.sellerCount,
           })
-        : t('metaDescNoStock', { name: product.name, brand: product.brand })
+        : t('metaDescNoStock', { name, brand: product.brand })
     ),
     alternates: {
       canonical: canonicalUrl,
     },
     openGraph: {
       ...defaultOpenGraph(lang),
-      title: t('ogTitle', { name: product.name }),
+      title: t('ogTitle', { name }),
       description: hasPrice ? t('ogDesc', { minPrice }) : t('ogDescNoStock'),
       url: canonicalUrl,
       images: [firstImageUrl(product.images) ?? SHARE_IMAGE],
@@ -173,15 +230,40 @@ export async function ProductDetailView({
 }) {
   const { locale, slug } = await params;
   setRequestLocale(locale);
-  const [t, tNav, storedProduct] = await Promise.all([
+  // RATE_ITEM_MODEL on: an old variant URL 308s to its Item URL with `?v=`,
+  // and an Item URL renders its selected variant until the Item page ships
+  // (Q1, DOS/Rate#1153, #1154). Off: null, and the page is as before.
+  const itemRoute = await resolveItemRoute({ slug, categoryBasePath });
+  if (itemRoute?.kind === 'redirect') permanentRedirect(itemRoute.to);
+  // Neither a published Item nor a variant of one: no fallback to the old
+  // master lookup, which would show a variant of an unpublished Item.
+  if (itemRoute?.kind === 'not_found') notFound();
+  // RATE_ITEM_MODEL on and an Item URL: every size's offers and history, and
+  // the listings whose size is not stated (#1154). Null otherwise. A size
+  // whose read failed is left out, and the page renders a size that loaded.
+  const itemPage =
+    itemRoute?.kind === 'render' && itemRoute.variants.length > 0
+      ? await loadItemPageContext(itemRoute.item, itemRoute.variants)
+      : null;
+  const renderedSize =
+    itemPage && itemRoute?.kind === 'render'
+      ? pickRenderedSize(itemPage.variants, itemRoute.variantSlug)
+      : null;
+  const productSlug =
+    renderedSize?.variant.slug ??
+    (itemRoute?.kind === 'render' ? itemRoute.variantSlug : slug);
+  const [t, tNav, tSale, storedProduct] = await Promise.all([
     getTranslations({ locale, namespace: 'productDetail' }),
     getTranslations({ locale, namespace: 'rate.nav' }),
-    getCachedMasterProductBySlug(slug),
+    getTranslations({ locale, namespace: 'saleState' }),
+    getCachedMasterProductBySlug(productSlug),
   ]);
 
   if (!storedProduct) {
     notFound();
   }
+  const itemVariants = itemPage?.variants ?? [];
+  const isItemGroup = itemVariants.length > 1;
 
   const categorySlug = categoryBasePath.replace(/^\//, '') || 'smartphones';
   // Each category shows only the spec groups and fields it has: earbuds have
@@ -232,17 +314,36 @@ export async function ProductDetailView({
   // which also holds sold-out listings at their last price (DOS/Rate#1141).
   const marketStats = productMarketStats(product);
   const currentMinPrice = marketStats.minPrice;
+  // An Item's other sizes are the same device, not competitors (#1154).
   const relatedCompetitors = rankRelatedCompetitors(
-    categoryPeers,
+    itemPage
+      ? withoutItemSiblings(
+          categoryPeers,
+          itemVariants.map((v) => v.variant.slug)
+        )
+      : categoryPeers,
     product.slug,
     currentMinPrice
   );
+  // The Item page's name and "from" price span its sizes.
+  const displayName = itemPage?.item.name || product.name;
+  const heroStats = isItemGroup
+    ? itemFromStats(itemVariants.map((v) => v.product))
+    : marketStats;
 
   const specs = product.specifications as ProductSpecifications;
   const keySpecs = product.key_specs as KeySpecs;
-  const minPriceFormatted = currentMinPrice.toLocaleString('vi-VN');
   const sellerCount = marketStats.sellerCount;
-  const maxPriceFormatted = marketStats.maxPrice.toLocaleString('vi-VN');
+  const heroMinPriceFormatted = heroStats.minPrice.toLocaleString('vi-VN');
+  // Why there is no price, when there is none (DOS/Rate#1188).
+  const saleState = masterSaleState({
+    minPrice: currentMinPrice,
+    listingCount: listingCountForSaleState(offers.length, inStockOffers.length),
+    metadata: product.metadata,
+    availabilityStatus: specs?.availability?.status,
+  });
+  const saleStateKey =
+    saleState === 'on_sale' ? null : saleStateLabelKey(saleState);
 
   const authenticCount =
     product.authentic_review_count && product.authentic_review_count > 0
@@ -258,10 +359,66 @@ export async function ProductDetailView({
       ? bayesianSummary.bayesianRating
       : rawUserRating;
 
-  const keySpecLine = buildKeySpecLine(product);
+  const keySpecLine = buildKeySpecLine(product, categorySlug);
   const mainImage = firstImageUrl(product.images);
 
-  const canonicalUrl = `https://rate.vn${categoryBasePath}/${product.slug}`;
+  const canonicalUrl = `https://rate.vn${categoryBasePath}/${
+    itemRoute?.kind === 'render' ? itemRoute.itemSlug : product.slug
+  }`;
+
+  const productDescription =
+    currentMinPrice > 0
+      ? t('metaDesc', {
+          name: product.name,
+          brand: product.brand,
+          merchantCount: sellerCount,
+        })
+      : t('metaDescNoStock', {
+          name: product.name,
+          brand: product.brand,
+        });
+  const aggregateRating =
+    displayUserRating > 0 && authenticCount > 0
+      ? {
+          '@type': 'AggregateRating',
+          ratingValue: Number(displayUserRating.toFixed(2)),
+          reviewCount: authenticCount,
+          bestRating: 5,
+          worstRating: 1,
+        }
+      : null;
+  const itemGroupNode =
+    itemPage && isItemGroup
+      ? buildItemProductGroupNode({
+          itemKey: itemPage.item.item_key,
+          name: displayName,
+          brand: itemPage.item.brand || product.brand,
+          canonicalUrl,
+          description:
+            heroStats.minPrice > 0
+              ? t('metaDesc', {
+                  name: displayName,
+                  brand: itemPage.item.brand || product.brand,
+                  merchantCount: heroStats.sellerCount,
+                })
+              : t('metaDescNoStock', {
+                  name: displayName,
+                  brand: itemPage.item.brand || product.brand,
+                }),
+          images: usableImageUrls(product.images).map(absoluteUrl),
+          variants: itemVariants.map((v) => {
+            const stats = productMarketStats(v.product);
+            return {
+              variantKey: v.variant.variant_key,
+              label: itemVariantLabel(v.variant),
+              minPrice: stats.minPrice,
+              maxPrice: stats.maxPrice,
+              sellerCount: stats.sellerCount,
+            };
+          }),
+          aggregateRating,
+        })
+      : null;
 
   const structuredDataGraph = {
     '@context': 'https://schema.org',
@@ -284,12 +441,12 @@ export async function ProductDetailView({
           {
             '@type': 'ListItem',
             position: 3,
-            name: product.name,
+            name: displayName,
             item: canonicalUrl,
           },
         ],
       },
-      {
+      itemGroupNode ?? {
         '@type': 'Product',
         name: product.name,
         brand: {
@@ -298,17 +455,7 @@ export async function ProductDetailView({
         },
         sku: product.model_key,
         url: canonicalUrl,
-        description:
-          currentMinPrice > 0
-            ? t('metaDesc', {
-                name: product.name,
-                brand: product.brand,
-                merchantCount: sellerCount,
-              })
-            : t('metaDescNoStock', {
-                name: product.name,
-                brand: product.brand,
-              }),
+        description: productDescription,
         image: usableImageUrls(product.images).map(absoluteUrl),
         // Only with a buyable price: a lowPrice of 0 is not an offer.
         ...(currentMinPrice > 0
@@ -324,20 +471,216 @@ export async function ProductDetailView({
               },
             }
           : {}),
-        ...(displayUserRating > 0 && authenticCount > 0
-          ? {
-              aggregateRating: {
-                '@type': 'AggregateRating',
-                ratingValue: Number(displayUserRating.toFixed(2)),
-                reviewCount: authenticCount,
-                bestRating: 5,
-                worstRating: 1,
-              },
-            }
-          : {}),
+        ...(aggregateRating ? { aggregateRating } : {}),
       },
     ],
   };
+
+  // The history chart and the offer table of one size; the variant page
+  // renders them for its own master, an Item page once per size (#1154).
+  const renderPriceHistory = (v: {
+    product: { name: string };
+    priceHistory: typeof priceHistory;
+    minPrice: number;
+    radarSignal: typeof radarSignal;
+  }) => (
+    <PriceHistorySection
+      productName={v.product.name}
+      // Its "current lowest" is the page's "from" price (DOS/Rate#1141).
+      history={{
+        ...v.priceHistory,
+        currentMinPrice: v.minPrice > 0 ? v.minPrice : null,
+      }}
+      radarSignal={v.radarSignal}
+    />
+  );
+  const renderOffersBody = (v: {
+    product: { name: string; slug: string };
+    offers: typeof offers;
+    priceHistory: typeof priceHistory;
+    radarSignal: typeof radarSignal;
+    emptyText: string;
+  }) => (
+    <>
+      <div className="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+        <div>
+          <span className="rate-eyebrow text-muted d-block mb-1">
+            {t('offersEyebrow')}
+          </span>
+          <h2 className="h4 fw-bold d-flex align-items-center mb-0 gap-2">
+            <BsShieldCheck aria-hidden="true" />{' '}
+            {t('offersTitle', { count: v.offers.length })}
+          </h2>
+        </div>
+        <span className="badge bg-light text-secondary rounded-pill border px-3 py-2">
+          {t('offersMedianBadge')}
+        </span>
+      </div>
+
+      {v.offers.length === 0 ? (
+        <p className="text-muted mb-0">{v.emptyText}</p>
+      ) : (
+        <ProductOffersExplorer
+          productName={v.product.name}
+          productSlug={v.product.slug}
+          offers={v.offers}
+          byOffer={v.priceHistory.byOffer}
+          radarSignal={v.radarSignal}
+        />
+      )}
+    </>
+  );
+  const pageEmptyOffersText = saleStateKey
+    ? tSale(`${saleStateKey}Hint`)
+    : t('noOffersYet');
+  const variantPanelInput = (v: ItemPageVariant) => ({
+    product: v.product,
+    offers: v.offers,
+    priceHistory: v.priceHistory,
+    radarSignal: v.radarSignal,
+    minPrice: productMarketStats(v.product).minPrice,
+    emptyText:
+      v.product.id === product.id ? pageEmptyOffersText : t('noOffersYet'),
+  });
+  // The price strip of one size: price, range, all-time low, price watch and
+  // the share card; an Item page renders it once per size (#1154).
+  const renderPriceStrip = (v: {
+    product: typeof product;
+    offers: typeof offers;
+    priceHistory: typeof priceHistory;
+    radarSignal: typeof radarSignal;
+    stats: typeof marketStats;
+    saleState: typeof saleState;
+    saleStateKey: typeof saleStateKey;
+  }) => (
+    <div className="rounded-4 bg-light mb-2 border p-3">
+      <div className="d-flex flex-column flex-sm-row justify-content-between align-items-start align-items-sm-center gap-2">
+        <div>
+          <div className="text-muted small">
+            {t('priceReferenceLabel', { count: v.stats.sellerCount })}
+          </div>
+          <div className="fw-bold text-dark rate-tabular fs-5">
+            {v.stats.minPrice > 0 ? (
+              `${v.stats.minPrice.toLocaleString('vi-VN')} ₫`
+            ) : v.saleStateKey ? (
+              <span data-sale-state={v.saleState}>{tSale(v.saleStateKey)}</span>
+            ) : (
+              t('priceNoneInStock')
+            )}
+            {v.stats.minPrice > 0 && v.stats.minPrice !== v.stats.maxPrice && (
+              <span className="small fw-normal text-muted ms-2">
+                ~ {v.stats.maxPrice.toLocaleString('vi-VN')} ₫
+              </span>
+            )}
+            {v.priceHistory.lowestEverPrice != null && (
+              <span className="badge bg-success-subtle text-success fw-normal ms-2">
+                {t('allTimeLowBadge', {
+                  price: v.priceHistory.lowestEverPrice.toLocaleString('vi-VN'),
+                })}
+              </span>
+            )}
+          </div>
+        </div>
+        <div className="d-flex align-items-center flex-wrap gap-2">
+          <PriceWatchButton
+            slug={v.product.slug}
+            name={v.product.name}
+            brand={v.product.brand}
+            categoryPath={categoryBasePath}
+            thumbnail={productImageUrl(v.product)}
+            currentMinPrice={v.stats.minPrice}
+            size="sm"
+          />
+          <a
+            href="#price-history-section"
+            className="btn btn-sm btn-outline-secondary rounded-pill px-3"
+          >
+            {t('auditPriceBtn', { count: v.offers.length })}
+          </a>
+          <ProductShareAuditButton
+            name={v.product.name}
+            brand={v.product.brand}
+            modelKey={v.product.model_key}
+            userScore5={Number(displayUserRating.toFixed(2))}
+            expertScore10={expertRating10}
+            authenticReviews={authenticCount}
+            minPriceVnd={v.stats.minPrice}
+            offerCount={v.stats.sellerCount}
+            keySpecLine={keySpecLine}
+            radarSignal={v.radarSignal}
+          />
+        </div>
+      </div>
+    </div>
+  );
+  const variantStripInput = (v: ItemPageVariant) => {
+    const inStock = v.offers.filter((o) => !isOfferUnavailable(o));
+    const stats = productMarketStats(v.product);
+    const sizeSaleState = masterSaleState({
+      minPrice: stats.minPrice,
+      listingCount: listingCountForSaleState(v.offers.length, inStock.length),
+      metadata: v.product.metadata,
+      availabilityStatus: (v.product.specifications as ProductSpecifications)
+        ?.availability?.status,
+    });
+    return {
+      product: v.product,
+      offers: v.offers,
+      priceHistory: v.priceHistory,
+      radarSignal: v.radarSignal,
+      stats,
+      saleState: sizeSaleState,
+      saleStateKey:
+        sizeSaleState === 'on_sale' ? null : saleStateLabelKey(sizeSaleState),
+    };
+  };
+  const defaultVariantKey =
+    renderedSize?.variant.variant_key ??
+    (itemRoute?.kind === 'render' ? itemRoute.variantKey : '');
+  // An Item with many sizes (above 4, or about 150 KB of other sizes' data)
+  // renders only its default size here; the others load when picked, from a
+  // cached route, so the payload does not grow with every size (#1285).
+  const defaultSize = itemVariants.find(
+    (v) => v.variant.variant_key === defaultVariantKey
+  );
+  const lazySizes =
+    isItemGroup &&
+    defaultSize !== undefined &&
+    shouldLazyLoadSizes(
+      itemVariants.length,
+      itemSizePanelBytes(itemVariants.filter((v) => v !== defaultSize))
+    );
+  const sizeSlugs = Object.fromEntries(
+    itemVariants.map((v) => [v.variant.variant_key, v.variant.slug])
+  );
+  const sizeStripContext = {
+    categoryPath: categoryBasePath,
+    userScore5: Number(displayUserRating.toFixed(2)),
+    expertScore10: expertRating10,
+    authenticReviews: authenticCount,
+    keySpecLine,
+  };
+  const renderSizePanels = (
+    kind: ItemSizePanelKind,
+    render: (v: ItemPageVariant) => React.ReactNode
+  ) =>
+    lazySizes && defaultSize ? (
+      <ItemLazySizePanel
+        kind={kind}
+        defaultKey={defaultVariantKey}
+        defaultNode={render(defaultSize)}
+        slugs={sizeSlugs}
+        context={sizeStripContext}
+      />
+    ) : (
+      <ItemVariantPanels
+        defaultKey={defaultVariantKey}
+        panels={itemVariants.map((v) => ({
+          key: v.variant.variant_key,
+          node: render(v),
+        }))}
+      />
+    );
 
   return (
     <ClientMessages scope="productDetail">
@@ -366,7 +709,7 @@ export async function ProductDetailView({
                 </Link>
               </li>
               <li className="breadcrumb-item active" aria-current="page">
-                {product.name}
+                {displayName}
               </li>
             </ol>
           </nav>
@@ -419,7 +762,7 @@ export async function ProductDetailView({
                 {[product.brand, product.has_5g ? '5G' : '']
                   .filter(Boolean)
                   .join(' · ')}
-                {product.variant_name && (
+                {product.variant_name && !isItemGroup && (
                   <>
                     {product.brand || product.has_5g ? ' · ' : ''}
                     <ContentText text={product.variant_name} locale={locale} />
@@ -427,19 +770,38 @@ export async function ProductDetailView({
                 )}
               </p>
 
-              <h1 className="h2 fw-bold text-dark mb-2">{product.name}</h1>
+              <h1 className="h2 fw-bold text-dark mb-2">{displayName}</h1>
               {/* Price in the first screen on phones, ahead of the scoreboard
             (DOS/Rate#605); the full price strip stays further down. */}
-              {currentMinPrice > 0 && sellerCount > 0 && (
+              {heroStats.minPrice > 0 && heroStats.sellerCount > 0 && (
                 <p className="rate-pdv-price-line mb-3">
                   {t.rich('heroPriceLine', {
-                    price: minPriceFormatted,
-                    count: sellerCount,
+                    price: heroMinPriceFormatted,
+                    count: heroStats.sellerCount,
                     strong: (chunks) => (
                       <strong className="rate-tabular">{chunks}</strong>
                     ),
                   })}
                 </p>
+              )}
+              {isItemGroup && (
+                <ItemVariantPicker
+                  label={t('itemVariantLabel')}
+                  defaultKey={defaultVariantKey}
+                  options={itemVariants.map((v) => {
+                    const stats = productMarketStats(v.product);
+                    return {
+                      key: v.variant.variant_key,
+                      label: itemVariantLabel(v.variant),
+                      priceLabel:
+                        stats.minPrice > 0
+                          ? t('itemVariantPrice', {
+                              price: stats.minPrice.toLocaleString('vi-VN'),
+                            })
+                          : t('itemVariantNoPrice'),
+                    };
+                  })}
+                />
               )}
               {/* Below lg the scoreboard starts past the first phone screen, so
             the buyer score is repeated next to the price (DOS/Rate#630). */}
@@ -855,10 +1217,9 @@ export async function ProductDetailView({
                     </div>
                     <div className="fw-semibold small">
                       <ContentText
-                        text={String(
-                          specs?.design?.resistance ||
-                            specs?.design?.materials ||
-                            '-'
+                        text={localizeSpecValue(
+                          specs?.design?.resistance || specs?.design?.materials,
+                          locale
                         )}
                         locale={locale}
                       />
@@ -868,65 +1229,19 @@ export async function ProductDetailView({
               </div>
 
               {/* Neutral Market Price Reference Strip (De-commercialized per DESIGN.md v3.0) */}
-              <div className="rounded-4 bg-light mb-2 border p-3">
-                <div className="d-flex flex-column flex-sm-row justify-content-between align-items-start align-items-sm-center gap-2">
-                  <div>
-                    <div className="text-muted small">
-                      {t('priceReferenceLabel', { count: sellerCount })}
-                    </div>
-                    <div className="fw-bold text-dark rate-tabular fs-5">
-                      {currentMinPrice > 0
-                        ? `${minPriceFormatted} ₫`
-                        : t('priceNoneInStock')}
-                      {currentMinPrice > 0 &&
-                        currentMinPrice !== marketStats.maxPrice && (
-                          <span className="small fw-normal text-muted ms-2">
-                            ~ {maxPriceFormatted} ₫
-                          </span>
-                        )}
-                      {priceHistory.lowestEverPrice != null && (
-                        <span className="badge bg-success-subtle text-success fw-normal ms-2">
-                          {t('allTimeLowBadge', {
-                            price:
-                              priceHistory.lowestEverPrice.toLocaleString(
-                                'vi-VN'
-                              ),
-                          })}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                  <div className="d-flex align-items-center flex-wrap gap-2">
-                    <PriceWatchButton
-                      slug={product.slug}
-                      name={product.name}
-                      brand={product.brand}
-                      categoryPath={categoryBasePath}
-                      thumbnail={productImageUrl(product)}
-                      currentMinPrice={currentMinPrice}
-                      size="sm"
-                    />
-                    <a
-                      href="#price-history-section"
-                      className="btn btn-sm btn-outline-secondary rounded-pill px-3"
-                    >
-                      {t('auditPriceBtn', { count: offers.length })}
-                    </a>
-                    <ProductShareAuditButton
-                      name={product.name}
-                      brand={product.brand}
-                      modelKey={product.model_key}
-                      userScore5={Number(displayUserRating.toFixed(2))}
-                      expertScore10={expertRating10}
-                      authenticReviews={authenticCount}
-                      minPriceVnd={currentMinPrice}
-                      offerCount={sellerCount}
-                      keySpecLine={keySpecLine}
-                      radarSignal={radarSignal}
-                    />
-                  </div>
-                </div>
-              </div>
+              {isItemGroup
+                ? renderSizePanels('strip', (v) =>
+                    renderPriceStrip(variantStripInput(v))
+                  )
+                : renderPriceStrip({
+                    product,
+                    offers,
+                    priceHistory,
+                    radarSignal,
+                    stats: marketStats,
+                    saleState,
+                    saleStateKey,
+                  })}
 
               <details className="rate-pdv-devinfo">
                 <summary>{t('devInfoToggle')}</summary>
@@ -963,583 +1278,16 @@ export async function ProductDetailView({
           {/* SECTION #2: Spec groups, per category template (DOS/Rate#1142) */}
           {(() => {
             const specUi = getSpecUiDictionary(locale);
-            const loc = (v: string | number | boolean | null | undefined) => (
-              <ContentText
-                text={localizeSpecValue(v, locale)}
-                locale={locale}
-              />
-            );
-            const groupHeading = (group: SpecGroupKey) =>
-              specGroupHeading(
-                specUi,
-                group,
-                specTemplate.groups.indexOf(group) + 1,
-                specTemplate.has5g
-              );
-            const shows = (group: SpecGroupKey, field: string) =>
-              specFieldApplies(specTemplate, group, field);
-            const groupNodes: Record<SpecGroupKey, ReactNode> = {
-              display: (
-                <div className="col-md-6 col-12">
-                  <div className="rounded-4 h-100 border bg-white p-4">
-                    <h3 className="h6 fw-bold text-primary mb-3">
-                      {groupHeading('display')}
-                    </h3>
-                    <dl className="row small mb-0">
-                      <dt className="text-muted col-5">
-                        {specUi.fields.screenSize}
-                      </dt>
-                      <dd className="fw-medium col-7">
-                        {specs?.display?.size_inch
-                          ? `${specs.display.size_inch} inch`
-                          : product.screen_size_inch
-                            ? `${product.screen_size_inch} inch`
-                            : '-'}
-                      </dd>
-                      <dt className="text-muted col-5">
-                        {specUi.fields.panelType}
-                      </dt>
-                      <dd className="fw-medium col-7">
-                        {loc(specs?.display?.type || keySpecs?.screen)}
-                      </dd>
-                      <dt className="text-muted col-5">
-                        {specUi.fields.resolution}
-                      </dt>
-                      <dd className="fw-medium col-7">
-                        {loc(specs?.display?.resolution)}
-                      </dd>
-                      <dt className="text-muted col-5">
-                        {specUi.fields.refreshRate}
-                      </dt>
-                      <dd className="fw-medium col-7">
-                        {specs?.display?.refresh_rate_hz
-                          ? `${specs.display.refresh_rate_hz} Hz`
-                          : '-'}
-                      </dd>
-                      <dt className="text-muted col-5">{specUi.fields.ppi}</dt>
-                      <dd className="fw-medium col-7">
-                        {specs?.display?.ppi ? `${specs.display.ppi} ppi` : '-'}
-                      </dd>
-                      <dt className="text-muted col-5">
-                        {specUi.fields.protection}
-                      </dt>
-                      <dd className="fw-medium col-7">
-                        {loc(specs?.display?.protection)}
-                      </dd>
-                      <dt className="text-muted col-5">
-                        {specUi.fields.displayFeatures}
-                      </dt>
-                      <dd className="fw-medium col-7">
-                        {loc(specs?.display?.features)}
-                      </dd>
-                    </dl>
-                  </div>
-                </div>
-              ),
-              hardware: (
-                <div className="col-md-6 col-12">
-                  <div className="rounded-4 h-100 border bg-white p-4">
-                    <h3 className="h6 fw-bold text-primary mb-3">
-                      {groupHeading('hardware')}
-                    </h3>
-                    <dl className="row small mb-0">
-                      <dt className="text-muted col-5">
-                        {specUi.fields.chipset}
-                      </dt>
-                      <dd className="fw-medium col-7">
-                        {loc(specs?.hardware?.chipset || keySpecs?.chip)}
-                      </dd>
-                      {shows('hardware', 'cpu') && (
-                        <>
-                          <dt className="text-muted col-5">
-                            {specUi.fields.cpu}
-                          </dt>
-                          <dd className="fw-medium col-7">
-                            {loc(specs?.hardware?.cpu)}
-                          </dd>
-                        </>
-                      )}
-                      {shows('hardware', 'gpu') && (
-                        <>
-                          <dt className="text-muted col-5">
-                            {specUi.fields.gpu}
-                          </dt>
-                          <dd className="fw-medium col-7">
-                            {loc(specs?.hardware?.gpu)}
-                          </dd>
-                        </>
-                      )}
-                      {shows('hardware', 'ram_gb') && (
-                        <>
-                          <dt className="text-muted col-5">
-                            {specUi.fields.ram}
-                          </dt>
-                          <dd className="fw-medium col-7">
-                            {specs?.hardware?.ram_gb
-                              ? `${specs.hardware.ram_gb} GB`
-                              : product.ram_gb
-                                ? `${product.ram_gb} GB`
-                                : '-'}
-                          </dd>
-                        </>
-                      )}
-                      {shows('hardware', 'storage_gb') && (
-                        <>
-                          <dt className="text-muted col-5">
-                            {specUi.fields.storage}
-                          </dt>
-                          <dd className="fw-medium col-7">
-                            {specs?.hardware?.storage_gb
-                              ? `${specs.hardware.storage_gb} GB`
-                              : product.storage_gb
-                                ? `${product.storage_gb} GB`
-                                : '-'}
-                          </dd>
-                        </>
-                      )}
-                      {shows('hardware', 'storage_expansion') && (
-                        <>
-                          <dt className="text-muted col-5">
-                            {specUi.fields.storageExpansion}
-                          </dt>
-                          <dd className="fw-medium col-7">
-                            {loc(specs?.hardware?.storage_expansion)}
-                          </dd>
-                        </>
-                      )}
-                      {shows('hardware', 'os') && (
-                        <>
-                          <dt className="text-muted col-5">
-                            {specUi.fields.os}
-                          </dt>
-                          <dd className="fw-medium col-7">
-                            {loc(specs?.hardware?.os)}
-                          </dd>
-                        </>
-                      )}
-                    </dl>
-                  </div>
-                </div>
-              ),
-              camera: (
-                <div className="col-md-6 col-12">
-                  <div className="rounded-4 h-100 border bg-white p-4">
-                    <h3 className="h6 fw-bold text-primary mb-3">
-                      {groupHeading('camera')}
-                    </h3>
-                    <dl className="row small mb-0">
-                      <dt className="text-muted col-5">
-                        {specUi.fields.rearSetup}
-                      </dt>
-                      <dd className="fw-medium col-7">
-                        {loc(specs?.camera?.rear_setup)}
-                      </dd>
-                      <dt className="text-muted col-5">
-                        {specUi.fields.mainCamera}
-                      </dt>
-                      <dd className="fw-medium col-7">
-                        {loc(specs?.camera?.main_camera || keySpecs?.camera)}
-                      </dd>
-                      <dt className="text-muted col-5">
-                        {specUi.fields.secondCamera}
-                      </dt>
-                      <dd className="fw-medium col-7">
-                        {loc(specs?.camera?.second_camera)}
-                      </dd>
-                      <dt className="text-muted col-5">
-                        {specUi.fields.thirdCamera}
-                      </dt>
-                      <dd className="fw-medium col-7">
-                        {loc(specs?.camera?.third_camera)}
-                      </dd>
-                      {specs?.camera?.fourth_camera && (
-                        <>
-                          <dt className="text-muted col-5">
-                            {specUi.fields.fourthCamera}
-                          </dt>
-                          <dd className="fw-medium col-7">
-                            {loc(specs.camera.fourth_camera)}
-                          </dd>
-                        </>
-                      )}
-                      <dt className="text-muted col-5">
-                        {specUi.fields.frontCamera}
-                      </dt>
-                      <dd className="fw-medium col-7">
-                        {loc(specs?.camera?.front_camera)}
-                      </dd>
-                      <dt className="text-muted col-5">
-                        {specUi.fields.videoAndFlash}
-                      </dt>
-                      <dd className="fw-medium col-7">
-                        {loc(
-                          [specs?.camera?.video_recording, specs?.camera?.flash]
-                            .filter(Boolean)
-                            .join(' | ')
-                        )}
-                      </dd>
-                    </dl>
-                  </div>
-                </div>
-              ),
-              battery: (
-                <div className="col-md-6 col-12">
-                  <div className="rounded-4 h-100 border bg-white p-4">
-                    <h3 className="h6 fw-bold text-primary mb-3">
-                      {groupHeading('battery')}
-                    </h3>
-                    <dl className="row small mb-0">
-                      <dt className="text-muted col-5">
-                        {specUi.fields.batteryCapacity}
-                      </dt>
-                      <dd className="fw-medium col-7">
-                        {specs?.battery?.capacity_mah
-                          ? `${specs.battery.capacity_mah} mAh`
-                          : product.battery_mah
-                            ? `${product.battery_mah} mAh`
-                            : loc(keySpecs?.battery)}
-                      </dd>
-                      <dt className="text-muted col-5">
-                        {specUi.fields.batteryType}
-                      </dt>
-                      <dd className="fw-medium col-7">
-                        {loc(specs?.battery?.type)}
-                      </dd>
-                      <dt className="text-muted col-5">
-                        {specUi.fields.chargingTech}
-                      </dt>
-                      <dd className="fw-medium col-7">
-                        {loc(specs?.battery?.charging)}
-                      </dd>
-                      <dt className="text-muted col-5">
-                        {specUi.fields.fastCharging}
-                      </dt>
-                      <dd className="fw-medium col-7">
-                        {specs?.battery?.fast_charging_w
-                          ? `${specs.battery.fast_charging_w} W`
-                          : '-'}
-                      </dd>
-                      <dt className="text-muted col-5">
-                        {specUi.fields.reverseCharging}
-                      </dt>
-                      <dd className="fw-medium col-7">
-                        {typeof specs?.battery?.reverse_charging === 'string'
-                          ? loc(specs.battery.reverse_charging)
-                          : specs?.battery?.reverse_charging === true
-                            ? specUi.supported
-                            : specs?.battery?.reverse_charging === false
-                              ? specUi.no
-                              : '-'}
-                      </dd>
-                    </dl>
-                  </div>
-                </div>
-              ),
-              design: (
-                <div className="col-md-6 col-12">
-                  <div className="rounded-4 h-100 border bg-white p-4">
-                    <h3 className="h6 fw-bold text-primary mb-3">
-                      {groupHeading('design')}
-                    </h3>
-                    <dl className="row small mb-0">
-                      <dt className="text-muted col-5">
-                        {specUi.fields.dimensions}
-                      </dt>
-                      <dd className="fw-medium col-7">
-                        {loc(specs?.design?.dimensions)}
-                      </dd>
-                      <dt className="text-muted col-5">
-                        {specUi.fields.weight}
-                      </dt>
-                      <dd className="fw-medium col-7">
-                        {specs?.design?.weight_g
-                          ? `${specs.design.weight_g} g`
-                          : '-'}
-                      </dd>
-                      <dt className="text-muted col-5">
-                        {specUi.fields.materialsAndBuild}
-                      </dt>
-                      <dd className="fw-medium col-7">
-                        {loc(
-                          [specs?.design?.materials, specs?.design?.build]
-                            .filter(Boolean)
-                            .join(' | ')
-                        )}
-                      </dd>
-                      <dt className="text-muted col-5">
-                        {specUi.fields.resistance}
-                      </dt>
-                      <dd className="fw-medium col-7">
-                        {loc(specs?.design?.resistance)}
-                      </dd>
-                      {shows('design', 'biometrics') && (
-                        <>
-                          <dt className="text-muted col-5">
-                            {specUi.fields.biometrics}
-                          </dt>
-                          <dd className="fw-medium col-7">
-                            {loc(specs?.design?.biometrics)}
-                          </dd>
-                        </>
-                      )}
-                      <dt className="text-muted col-5">
-                        {specUi.fields.physicalKeys}
-                      </dt>
-                      <dd className="fw-medium col-7">
-                        {loc(specs?.design?.keys)}
-                      </dd>
-                    </dl>
-                  </div>
-                </div>
-              ),
-              cellular: (
-                <div className="col-md-6 col-12">
-                  <div className="rounded-4 h-100 border bg-white p-4">
-                    <h3 className="h6 fw-bold text-primary mb-3">
-                      {groupHeading('cellular')}
-                    </h3>
-                    <dl className="row small mb-0">
-                      {shows('cellular', 'has_5g') && (
-                        <>
-                          <dt className="text-muted col-5">
-                            {specUi.fields.support5g}
-                          </dt>
-                          <dd className="fw-medium col-7">
-                            {(specs?.cellular?.has_5g ?? product.has_5g)
-                              ? specUi.has5gYes
-                              : specUi.no}
-                          </dd>
-                        </>
-                      )}
-                      <dt className="text-muted col-5">
-                        {specUi.fields.networkTech}
-                      </dt>
-                      <dd className="fw-medium col-7">
-                        {loc(specs?.cellular?.technology)}
-                      </dd>
-                      <dt className="text-muted col-5">
-                        {specUi.fields.simType}
-                      </dt>
-                      <dd className="fw-medium col-7">
-                        {loc(specs?.cellular?.sim_type)}
-                      </dd>
-                      <dt className="text-muted col-5">
-                        {specUi.fields.dataSpeed}
-                      </dt>
-                      <dd className="fw-medium col-7">
-                        {loc(specs?.cellular?.data_speed)}
-                      </dd>
-                      <dt className="text-muted col-5">
-                        {shows('cellular', 'bands_5g')
-                          ? specUi.fields.bands5g4g
-                          : specUi.fields.bands4g}
-                      </dt>
-                      <dd className="fw-medium col-7">
-                        {loc(
-                          [
-                            shows('cellular', 'bands_5g')
-                              ? specs?.cellular?.bands_5g
-                              : null,
-                            specs?.cellular?.bands_4g,
-                          ]
-                            .filter(Boolean)
-                            .join(' | ')
-                        )}
-                      </dd>
-                      <dt className="text-muted col-5">
-                        {specUi.fields.volteVowifi}
-                      </dt>
-                      <dd className="fw-medium col-7">
-                        {specs?.cellular?.volte || specs?.cellular?.vowifi
-                          ? [
-                              specs?.cellular?.volte ? 'VoLTE' : null,
-                              specs?.cellular?.vowifi ? 'VoWiFi' : null,
-                            ]
-                              .filter(Boolean)
-                              .join(' + ')
-                          : '-'}
-                      </dd>
-                    </dl>
-                  </div>
-                </div>
-              ),
-              connectivity: (
-                <div className="col-md-6 col-12">
-                  <div className="rounded-4 h-100 border bg-white p-4">
-                    <h3 className="h6 fw-bold text-primary mb-3">
-                      {groupHeading('connectivity')}
-                    </h3>
-                    <dl className="row small mb-0">
-                      {shows('connectivity', 'wlan') && (
-                        <>
-                          <dt className="text-muted col-5">
-                            {specUi.fields.wlan}
-                          </dt>
-                          <dd className="fw-medium col-7">
-                            {loc(specs?.connectivity?.wlan)}
-                          </dd>
-                        </>
-                      )}
-                      <dt className="text-muted col-5">
-                        {specUi.fields.bluetooth}
-                      </dt>
-                      <dd className="fw-medium col-7">
-                        {loc(specs?.connectivity?.bluetooth)}
-                      </dd>
-                      <dt className="text-muted col-5">
-                        {specUi.fields.usbPort}
-                      </dt>
-                      <dd className="fw-medium col-7">
-                        {loc(specs?.connectivity?.usb)}
-                      </dd>
-                      {shows('connectivity', 'nfc') && (
-                        <>
-                          <dt className="text-muted col-5">
-                            {specUi.fields.nfc}
-                          </dt>
-                          <dd className="fw-medium col-7">
-                            {specs?.connectivity?.nfc === true
-                              ? specUi.yes
-                              : specs?.connectivity?.nfc === false
-                                ? specUi.no
-                                : '-'}
-                          </dd>
-                        </>
-                      )}
-                      {shows('connectivity', 'location') && (
-                        <>
-                          <dt className="text-muted col-5">
-                            {specUi.fields.locationGps}
-                          </dt>
-                          <dd className="fw-medium col-7">
-                            {loc(specs?.connectivity?.location)}
-                          </dd>
-                        </>
-                      )}
-                      <dt className="text-muted col-5">
-                        {specUi.fields.sensorsAndOther}
-                      </dt>
-                      <dd className="fw-medium col-7">
-                        {loc(
-                          [
-                            specs?.connectivity?.sensors,
-                            specs?.connectivity?.other,
-                          ]
-                            .filter(Boolean)
-                            .join(' | ')
-                        )}
-                      </dd>
-                    </dl>
-                  </div>
-                </div>
-              ),
-              multimedia: (
-                <div className="col-md-6 col-12">
-                  <div className="rounded-4 h-100 border bg-white p-4">
-                    <h3 className="h6 fw-bold text-primary mb-3">
-                      {groupHeading('multimedia')}
-                    </h3>
-                    <dl className="row small mb-0">
-                      <dt className="text-muted col-5">
-                        {specUi.fields.loudspeaker}
-                      </dt>
-                      <dd className="fw-medium col-7">
-                        {loc(specs?.multimedia?.loudspeaker)}
-                      </dd>
-                      {shows('multimedia', 'headphone_jack_35mm') && (
-                        <>
-                          <dt className="text-muted col-5">
-                            {specUi.fields.jack35mm}
-                          </dt>
-                          <dd className="fw-medium col-7">
-                            {specs?.multimedia?.headphone_jack_35mm === true
-                              ? specUi.yes
-                              : specs?.multimedia?.headphone_jack_35mm === false
-                                ? specUi.no
-                                : '-'}
-                          </dd>
-                        </>
-                      )}
-                      <dt className="text-muted col-5">
-                        {specUi.fields.audioFeatures}
-                      </dt>
-                      <dd className="fw-medium col-7">
-                        {loc(specs?.multimedia?.audio_features)}
-                      </dd>
-                    </dl>
-                  </div>
-                </div>
-              ),
-              availability: (
-                <div className="col-md-6 col-12">
-                  <div className="rounded-4 h-100 border bg-white p-4">
-                    <h3 className="h6 fw-bold text-primary mb-3">
-                      {groupHeading('availability')}
-                    </h3>
-                    <dl className="row small mb-0">
-                      <dt className="text-muted col-5">
-                        {specUi.fields.announcedDate}
-                      </dt>
-                      <dd className="fw-medium col-7">
-                        {loc(specs?.availability?.announced)}
-                      </dd>
-                      <dt className="text-muted col-5">
-                        {specUi.fields.commercialStatus}
-                      </dt>
-                      <dd className="fw-medium col-7">
-                        {specs?.availability?.status
-                          ? loc(specs.availability.status)
-                          : specUi.availableStatus}
-                      </dd>
-                      <dt className="text-muted col-5">
-                        {specUi.fields.msrpPrice}
-                      </dt>
-                      <dd className="fw-medium col-7">
-                        {loc(specs?.availability?.prices_msrp)}
-                      </dd>
-                    </dl>
-                  </div>
-                </div>
-              ),
-              regulatory: (
-                <div className="col-md-6 col-12">
-                  <div className="rounded-4 h-100 border bg-white p-4">
-                    <h3 className="h6 fw-bold text-primary mb-3">
-                      {groupHeading('regulatory')}
-                    </h3>
-                    <dl className="row small mb-0">
-                      <dt className="text-muted col-5">
-                        {specUi.fields.certifications}
-                      </dt>
-                      <dd className="fw-medium col-7">
-                        {loc(specs?.regulatory?.certifications)}
-                      </dd>
-                      <dt className="text-muted col-5">
-                        {specUi.fields.fccApproval}
-                      </dt>
-                      <dd className="fw-medium col-7">
-                        {loc(specs?.regulatory?.fcc_approval)}
-                      </dd>
-                      <dt className="text-muted col-5">
-                        {specUi.fields.sarLevel}
-                      </dt>
-                      <dd className="fw-medium col-7">
-                        {[
-                          specs?.regulatory?.sar_head
-                            ? `${specUi.fields.sarHeadPrefix}: ${specs.regulatory.sar_head}`
-                            : null,
-                          specs?.regulatory?.sar_body
-                            ? `${specUi.fields.sarBodyPrefix}: ${specs.regulatory.sar_body}`
-                            : null,
-                        ]
-                          .filter(Boolean)
-                          .join(' | ') || '-'}
-                      </dd>
-                    </dl>
-                  </div>
-                </div>
-              ),
-            };
+            // Rows with no value and groups with no row are left out
+            // (DOS/Rate#1186).
+            const specGroups = buildProductSpecGroups({
+              specs,
+              keySpecs,
+              product,
+              template: specTemplate,
+              ui: specUi,
+              locale,
+            });
             return (
               <div
                 id="specs-section"
@@ -1562,10 +1310,11 @@ export async function ProductDetailView({
                       brand={product.brand}
                       specifications={specs || {}}
                       keySpecs={keySpecs || {}}
+                      categorySlug={categorySlug}
                       radarSignal={radarSignal}
                     />
                     <span className="badge bg-dark-subtle text-dark rounded-pill px-3 py-2">
-                      {specSectionBadge(specUi, specTemplate.groups.length)}
+                      {specSectionBadge(specUi, specGroups.length)}
                     </span>
                   </div>
                 </div>
@@ -1575,9 +1324,31 @@ export async function ProductDetailView({
                   showMoreLabel={t('specsShowAll')}
                   showLessLabel={t('specsShowLess')}
                   openOnHash="#specs-section"
+                  collapsible={specGroups.length > 3}
                 >
-                  {specTemplate.groups.map((group) => (
-                    <Fragment key={group}>{groupNodes[group]}</Fragment>
+                  {specGroups.map(({ group, rows }, i) => (
+                    <div key={group} className="col-md-6 col-12">
+                      <div className="rounded-4 h-100 border bg-white p-4">
+                        <h3 className="h6 fw-bold text-primary mb-3">
+                          {specGroupHeading(
+                            specUi,
+                            group,
+                            i + 1,
+                            specTemplate.has5g
+                          )}
+                        </h3>
+                        <dl className="row small mb-0">
+                          {rows.map(({ label, value }) => (
+                            <Fragment key={label}>
+                              <dt className="text-muted col-5">{label}</dt>
+                              <dd className="fw-medium col-7">
+                                <ContentText text={value} locale={locale} />
+                              </dd>
+                            </Fragment>
+                          ))}
+                        </dl>
+                      </div>
+                    </div>
                   ))}
                 </PhoneCollapsible>
               </div>
@@ -1585,48 +1356,57 @@ export async function ProductDetailView({
           })()}
 
           {/* SECTION #3: Time-Series Price History Chart, Fake Discount Detector & Neutral Merchant Audit */}
-          <PriceHistorySection
-            productName={product.name}
-            // Its "current lowest" is the page's "from" price (DOS/Rate#1141).
-            history={{
-              ...priceHistory,
-              currentMinPrice: currentMinPrice > 0 ? currentMinPrice : null,
-            }}
-            radarSignal={radarSignal}
-          />
+          {isItemGroup
+            ? renderSizePanels('history', (v) =>
+                renderPriceHistory(variantPanelInput(v))
+              )
+            : renderPriceHistory({
+                product,
+                priceHistory,
+                minPrice: currentMinPrice,
+                radarSignal,
+              })}
 
           {/* Neutral Merchant Reference & Trust Audit Table */}
           <div
             id="offers-table"
             className="card rounded-4 p-md-5 mt-4 mb-5 border-0 p-4 shadow-sm"
           >
-            <div className="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
-              <div>
-                <span className="rate-eyebrow text-muted d-block mb-1">
-                  {t('offersEyebrow')}
-                </span>
-                <h2 className="h4 fw-bold d-flex align-items-center mb-0 gap-2">
-                  <BsShieldCheck aria-hidden="true" />{' '}
-                  {t('offersTitle', { count: offers.length })}
-                </h2>
-              </div>
-              <span className="badge bg-light text-secondary rounded-pill border px-3 py-2">
-                {t('offersMedianBadge')}
-              </span>
-            </div>
-
-            {offers.length === 0 ? (
-              <p className="text-muted mb-0">{t('noOffersYet')}</p>
-            ) : (
-              <ProductOffersExplorer
-                productName={product.name}
-                productSlug={product.slug}
-                offers={offers}
-                byOffer={priceHistory.byOffer}
-                radarSignal={radarSignal}
-              />
-            )}
+            {isItemGroup
+              ? renderSizePanels('offers', (v) =>
+                  renderOffersBody(variantPanelInput(v))
+                )
+              : renderOffersBody({
+                  product,
+                  offers,
+                  priceHistory,
+                  radarSignal,
+                  emptyText: pageEmptyOffersText,
+                })}
           </div>
+
+          {/* Listings whose size is not stated: their own group, never part
+              of the "from" price (Q2, DOS/Rate#1154). */}
+          {itemPage && itemPage.unknownOffers.length > 0 && (
+            <div
+              id="offers-unknown-size"
+              className="card rounded-4 p-md-5 mb-5 border-0 p-4 shadow-sm"
+              data-testid="pdv-unknown-size-offers"
+            >
+              <h2 className="h5 fw-bold mb-1">
+                {t('unknownSizeTitle', {
+                  count: itemPage.unknownOffers.length,
+                })}
+              </h2>
+              <p className="text-muted small mb-3">{t('unknownSizeNote')}</p>
+              <ProductOffersExplorer
+                productName={displayName}
+                productSlug={itemPage.item.slug}
+                offers={itemPage.unknownOffers}
+                byOffer={itemPage.unknownByOffer}
+              />
+            </div>
+          )}
 
           {/* Interactive Value Efficiency & 2-Year Ownership Calculator (#62) */}
           {(() => {

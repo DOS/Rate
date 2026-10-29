@@ -48,6 +48,11 @@ export interface ExtensionPriceAssessment {
   historicalMaxPrice: number | null;
   cheaperOfferCount: number;
   maxSavingsAmount: number;
+  /**
+   * Set with `insufficient_data` when the page's price is far below every
+   * other store (DOS/Rate#797): a warning, never "OK" (DOS/Rate#1298).
+   */
+  implausiblyLow?: boolean;
 }
 
 export interface ExtensionOfferItem {
@@ -60,6 +65,13 @@ export interface ExtensionOfferItem {
   rating_count: number;
   historical_sold: number;
   url: string;
+  /**
+   * A sold-out or discontinued listing keeps its last price
+   * (DOS/Rate#1141, #1297); absent when the server did not read it.
+   */
+  availability?: 'in_stock' | 'out_of_stock' | 'discontinued' | null;
+  /** A bait price far below every other in-stock store (DOS/Rate#1297). */
+  implausiblyLow?: boolean;
   merchant: {
     id: string;
     name: string;
@@ -125,7 +137,8 @@ export interface ExtensionLookupData {
     trust_score: number;
     risk_score: number;
     dosafe_risk_score: number;
-    review_risk_score: number;
+    /** Null when the store has no analysed review (DOS/Rate#1258). */
+    review_risk_score: number | null;
   } | null;
   reviewSummary: {
     total_analyzed: number;
@@ -146,6 +159,19 @@ export interface ExtensionLookupData {
     'smartphones' | 'tablets' | 'laptops' | 'smartwatches' | 'earbuds';
   compareUrl: string | null;
   productDetailUrl: string | null;
+  /**
+   * Set when rate.vn runs the Item model (DOS/Rate#1158): the product line
+   * across sizes, and the size the page states (null: not stated).
+   */
+  item?: {
+    id: string;
+    slug: string;
+    name: string;
+    min_price: number;
+    max_price: number;
+    price_variant_count: number;
+  };
+  selectedVariant?: string | null;
   leaderboardUrl?: string | null;
   versusUrl?: string | null;
   topRivalName?: string | null;
@@ -260,6 +286,10 @@ declare global {
           callback: (tab: ChromeTab) => void | Promise<void>
         ) => void;
       };
+    };
+    /** Absent outside the extension, e.g. in tests (DOS/Rate#1304). */
+    i18n?: {
+      getMessage: (name: string, substitutions?: string | string[]) => string;
     };
     tabs: {
       query: (queryInfo: {

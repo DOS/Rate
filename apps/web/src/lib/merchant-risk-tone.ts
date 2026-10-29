@@ -15,3 +15,8 @@ export function merchantRiskTone(score: unknown): MerchantRiskTone {
   if (n < MERCHANT_RISK_CLEAN_BELOW) return 'good';
   return n < MERCHANT_RISK_ALERT_FROM ? 'warn' : 'bad';
 }
+
+export {
+  hasReviewRiskEvidence,
+  reviewRiskScoreOrNull,
+} from './rate-domain-core';

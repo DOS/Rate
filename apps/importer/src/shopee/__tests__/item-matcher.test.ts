@@ -6,14 +6,19 @@
  * 4. Modes item / nullable_variant: Item tiers, exact variant, size not stated (#1105), hints
  * 5. Pipeline: item_id / variant_source / nullable cluster_id writes, archived masterIdHint,
  *    a manual variant is kept, unkeyable titles are rejected before any write
+ * 6. Seeds as Item plus variants, Item specs from the seeds; a new variant of a known
+ *    Item inherits its specs and publish state (DOS/Rate#1152, group 4)
  */
 import assert from 'node:assert/strict';
 import { composeModelKey, splitModelKey } from '@repo/shared-data';
 import { EntityMatcher } from '../entity-matcher.js';
+import { FLAGSHIP_DEVICES_TO_SEED, flagshipSeedsByItem } from '../flagship-seed-data.js';
+import { syncItemSeedSpecs } from '../jobs/backfill-specs.js';
 import { ITEM_MODEL_ENV, resolveItemModelMode } from '../item-model-flag.js';
 import { ProductNormalizer, UnkeyableProductTitleError } from '../product-normalizer.js';
 import { ShopeeIngestionPipeline } from '../shopee-to-supabase.js';
-import type { AiSpecEnricher } from '../ai-spec-enricher.js';
+import { AiSpecEnricher } from '../ai-spec-enricher.js';
+import { AiReviewAnalyzer } from '../ai-review-analyzer.js';
 import type { RateSupabaseClient, ShopeeProduct } from '../types.js';
 
 type Row = Record<string, unknown>;
@@ -87,7 +92,15 @@ const normalizer = new ProductNormalizer();
 const candidateFor = (title: string) => normalizer.normalize({ title } as ShopeeProduct);
 
 interface ItemDb {
-  items?: Array<{ id: string; item_key: string }>;
+  items?: Array<{
+    id: string;
+    item_key: string;
+    status?: string;
+    description?: string;
+    specifications?: Row;
+    key_specs?: Row;
+    images?: string[];
+  }>;
   variants?: Array<{ id: string; item_id: string; variant_key: string; status?: string }>;
   matchItem?: Row[];
   matchItemErr?: { message: string };
@@ -145,7 +158,7 @@ async function run() {
   assert.equal(resolveItemModelMode(' Nullable-Variant '), 'nullable_variant');
   assert.equal(resolveItemModelMode('nullable'), 'off', 'a typo must never enable writes');
   assert.equal(resolveItemModelMode(true), 'off');
-  console.log('  ✅ [1/5] RATE_ITEM_MODEL defaults to off');
+  console.log('  ✅ [1/6] RATE_ITEM_MODEL defaults to off');
 
   // 2. Normalizer Item fields
   const cases: Array<[string, Row]> = [
@@ -207,7 +220,7 @@ async function run() {
     assert.equal(parts.variantKey, c.variant_key);
     assert.equal(composeModelKey(c.item_key as string, c.variant_key as string), c.model_key);
   }
-  console.log('  ✅ [2/5] Normalizer emits item_key/variant_key and never an empty segment');
+  console.log('  ✅ [2/6] Normalizer emits item_key/variant_key and never an empty segment');
 
   // 3. Mode off: today's matcher, no rate.items access
   {
@@ -239,7 +252,7 @@ async function run() {
       UnkeyableProductTitleError
     );
   }
-  console.log('  ✅ [3/5] Mode off keeps the master matcher and never reads rate.items');
+  console.log('  ✅ [3/6] Mode off keeps the master matcher and never reads rate.items');
 
   // 4. Item modes
   {
@@ -275,6 +288,95 @@ async function run() {
       db.calls.find(c => c.op === 'upsert')?.payload?.model_key,
       'asus:zenbook-s-14:512gb'
     );
+  }
+  {
+    // DOS/Rate#1152: a new size of a known Item takes the Item's specs and, for a
+    // published Item, its publish state; no AI call. Storage and RAM stay its own.
+    let enrichCalls = 0;
+    const countingEnricher = {
+      enrichCandidate: async <T>(candidate: T) => {
+        enrichCalls += 1;
+        return candidate;
+      },
+    } as unknown as AiSpecEnricher;
+    const itemSpecs = {
+      display: { size_inch: 14, type: 'OLED 3K' },
+      hardware: { chipset: 'Intel Core Ultra 7 258V', ram_gb: 32, storage_gb: 1024 },
+      battery: { capacity_mah: 4700 },
+    };
+    const publishedItem = {
+      ...ZENBOOK_ITEM,
+      status: 'published',
+      description: 'Zenbook S 14 (item description)',
+      specifications: itemSpecs,
+      key_specs: { chipset: 'Core Ultra 7 258V', storage: '1TB' },
+      images: ['https://rate.vn/img/zenbook-s-14.jpg'],
+    };
+    const title = 'Laptop ASUS Zenbook S 14 UX5406AA 16GB 512GB SSD';
+    const db = createItemDb({ items: [publishedItem], variants: [ZENBOOK_1TB] });
+    const result = await new EntityMatcher(db.client, countingEnricher, {
+      itemModel: 'item',
+    }).resolveItemAndVariant(candidateFor(title), 'cat-laptops');
+    assert.equal(result.masterId, 'seeded-master');
+    const seeded = db.calls.find(c => c.op === 'upsert')?.payload as Row;
+    assert.equal(seeded.model_key, 'asus:zenbook-s-14:512gb');
+    assert.equal(seeded.status, 'published', 'a new size of a published Item is published');
+    assert.equal(seeded.storage_gb, 512);
+    assert.equal(seeded.description, 'Zenbook S 14 (item description)');
+    assert.deepEqual(seeded.images, ['https://rate.vn/img/zenbook-s-14.jpg']);
+    const seededSpecs = seeded.specifications as { display?: Row; hardware?: Row };
+    assert.equal(seededSpecs.display?.type, 'OLED 3K');
+    assert.equal(seededSpecs.hardware?.chipset, 'Intel Core Ultra 7 258V');
+    assert.equal(seededSpecs.hardware?.storage_gb, 512, 'storage is the variant own value');
+    assert.equal(seededSpecs.hardware?.ram_gb, 16, 'RAM is the variant own value');
+    const seededKeySpecs = seeded.key_specs as Row;
+    assert.equal(seededKeySpecs.chipset, 'Core Ultra 7 258V');
+    assert.equal(seeded.battery_mah, 4700, 'flat battery follows the inherited specs');
+    assert.equal(seeded.screen_size_inch, 14);
+    assert.equal(seeded.ram_gb, 16);
+    assert.notEqual(seededKeySpecs.storage, '1TB');
+    assert.equal(enrichCalls, 0, 'an inherited variant needs no AI enrichment');
+
+    // A draft Item keeps its new variant a draft; a used listing never publishes one.
+    const draftDb = createItemDb({
+      items: [{ ...publishedItem, status: 'draft' }],
+      variants: [ZENBOOK_1TB],
+    });
+    await new EntityMatcher(draftDb.client, countingEnricher, {
+      itemModel: 'item',
+    }).resolveItemAndVariant(candidateFor(title), 'cat-laptops');
+    assert.equal(draftDb.calls.find(c => c.op === 'upsert')?.payload?.status, 'draft');
+    const usedDb = createItemDb({ items: [publishedItem], variants: [ZENBOOK_1TB] });
+    await new EntityMatcher(usedDb.client, countingEnricher, {
+      itemModel: 'item',
+    }).resolveItemAndVariant(candidateFor(`${title} cũ đẹp 99%`), 'cat-laptops');
+    assert.equal(usedDb.calls.find(c => c.op === 'upsert')?.payload?.status, 'draft');
+
+    // An Item with no specs yet: the variant is enriched and seeded as before (the
+    // Zenbook is a registry model, so the old rule publishes it).
+    const bareDb = createItemDb({
+      items: [{ ...ZENBOOK_ITEM, status: 'published' }],
+      variants: [ZENBOOK_1TB],
+    });
+    await new EntityMatcher(bareDb.client, countingEnricher, {
+      itemModel: 'item',
+    }).resolveItemAndVariant(candidateFor(title), 'cat-laptops');
+    assert.equal(enrichCalls, 1);
+    assert.equal(bareDb.calls.find(c => c.op === 'upsert')?.payload?.status, 'published');
+    for (const status of ['draft', 'archived']) {
+      const unpublishedDb = createItemDb({
+        items: [{ ...ZENBOOK_ITEM, status }],
+        variants: [ZENBOOK_1TB],
+      });
+      await new EntityMatcher(unpublishedDb.client, countingEnricher, {
+        itemModel: 'item',
+      }).resolveItemAndVariant(candidateFor(title), 'cat-laptops');
+      assert.equal(
+        unpublishedDb.calls.find(c => c.op === 'upsert')?.payload?.status,
+        'draft',
+        `a new variant of a ${status} Item stays a draft`
+      );
+    }
   }
   {
     // #1105: a storage-less title on a multi-size Item never lands on the sized variant.
@@ -513,7 +615,7 @@ async function run() {
     assert.equal(result.masterId, 'master-app2-std');
     assert.ok(!db.calls.some(c => c.op === 'upsert'));
   }
-  console.log('  ✅ [4/5] Item tiers, exact variants, size not stated (#1105) and hints');
+  console.log('  ✅ [4/6] Item tiers, exact variants, size not stated (#1105) and hints');
 
   // 5. Pipeline writes
   const product = (title: string): ShopeeProduct => ({
@@ -538,7 +640,7 @@ async function run() {
     mode: 'off' | 'item' | 'nullable_variant',
     title: string,
     item: ItemDb,
-    extra: { hint?: Row | null; stored?: Row | null } = {},
+    extra: { hint?: Row | null; stored?: Row | null; failOn?: 'stored' | 'kept' } = {},
     options: { masterIdHint?: string; itemIdHint?: string } = {}
   ) => {
     const db = createDb(call => {
@@ -550,9 +652,15 @@ async function run() {
         return { data: { id: 'product-1' }, error: null };
       }
       if (call.table === 'products' && call.op === 'select') {
+        if (extra.failOn === 'stored') return { data: null, error: { message: 'boom' } };
         return { data: extra.stored ?? null, error: null };
       }
       if (call.table === 'record_price_observation') return { data: 'inserted', error: null };
+      if (call.table === 'master_products' && call.op === 'select' && call.cols === 'id, item_id') {
+        if (extra.failOn === 'kept') return { data: null, error: { message: 'boom' } };
+        const variant = (item.variants ?? []).find(v => v.id === filter(call, 'id'));
+        return { data: variant ? { id: variant.id, item_id: variant.item_id } : null, error: null };
+      }
       if (
         call.table === 'master_products' &&
         call.op === 'select' &&
@@ -675,6 +783,102 @@ async function run() {
     );
   }
   {
+    // DOS/Rate#1185: a kept variant brings its own Item, never the title's.
+    const vivobook = { id: 'item-vivobook', item_key: 'asus:vivobook-15' };
+    const vivobook512 = {
+      id: 'master-vivobook-512',
+      item_id: 'item-vivobook',
+      variant_key: '512gb',
+    };
+    const twoItems = { items: [ZENBOOK_ITEM, vivobook], variants: [ZENBOOK_1TB, vivobook512] };
+    const itemStats = (calls: Call[]) =>
+      calls
+        .filter(c => c.op === 'rpc' && c.table === 'refresh_item_stats')
+        .map(c => c.payload?.p_item_id);
+    for (const mode of ['item', 'nullable_variant'] as const) {
+      // A repurposed listing: the title now names the Zenbook, the hand-set variant is a Vivobook.
+      const repurposed = await ingest(mode, bareTitle, twoItems, {
+        stored: { cluster_id: vivobook512.id, variant_source: 'manual', item_id: vivobook.id },
+      });
+      assert.equal(repurposed.listing?.cluster_id, vivobook512.id, mode);
+      assert.equal(repurposed.listing?.item_id, vivobook.id, mode);
+      assert.equal(repurposed.result.itemId, vivobook.id, mode);
+      assert.deepEqual(itemStats(repurposed.calls), [vivobook.id], mode);
+
+      // Title evidence kept on a crawl without a size: same rule.
+      const evidence = await ingest(mode, bareTitle, twoItems, {
+        stored: { cluster_id: vivobook512.id, variant_source: 'title', item_id: vivobook.id },
+      });
+      assert.equal(evidence.listing?.cluster_id, vivobook512.id, mode);
+      assert.equal(evidence.listing?.item_id, vivobook.id, mode);
+    }
+    // A kept variant with no Item clears a stale item_id rather than write the title's.
+    const orphan = await ingest('item', bareTitle, zenbook, {
+      stored: { cluster_id: 'master-zenbook-512', variant_source: 'manual', item_id: vivobook.id },
+    });
+    assert.ok(orphan.listing && 'item_id' in orphan.listing);
+    assert.equal(orphan.listing?.item_id, null);
+    assert.equal(orphan.result.itemId, null);
+    assert.deepEqual(itemStats(orphan.calls), [vivobook.id]);
+
+    // A failed read of the stored listing or the kept variant fails the ingest.
+    for (const failOn of ['stored', 'kept'] as const) {
+      await assert.rejects(
+        ingest('item', bareTitle, zenbook, {
+          stored: { cluster_id: ZENBOOK_1TB.id, variant_source: 'manual' },
+          failOn,
+        }),
+        /boom/,
+        failOn
+      );
+    }
+
+    // DOS/Rate#1185: the Item a listing leaves is refreshed too.
+    const movedItem = await ingest('item', 'Laptop ASUS Zenbook S 14 UX5406AA 1TB', twoItems, {
+      stored: { cluster_id: vivobook512.id, variant_source: 'title', item_id: vivobook.id },
+    });
+    assert.equal(movedItem.listing?.item_id, ZENBOOK_ITEM.id);
+    assert.deepEqual(itemStats(movedItem.calls), [ZENBOOK_ITEM.id, vivobook.id]);
+    // ...also from a variant of A to no variant under B (nullable_variant).
+    const toNoVariant = await ingest('nullable_variant', bareTitle, twoItems, {
+      stored: { cluster_id: vivobook512.id, variant_source: 'legacy', item_id: vivobook.id },
+    });
+    assert.equal(toNoVariant.listing?.cluster_id, null);
+    assert.deepEqual(itemStats(toNoVariant.calls), [ZENBOOK_ITEM.id, vivobook.id]);
+    // ...and when a caller hint moves it.
+    const hintMove = await ingest(
+      'item',
+      'Laptop ASUS Zenbook S 14 UX5406AA 1TB',
+      twoItems,
+      {
+        hint: {
+          id: ZENBOOK_1TB.id,
+          specifications: { display: { size: 'x' } },
+          status: 'published',
+          item_id: ZENBOOK_ITEM.id,
+          variant_key: '1024gb',
+        },
+        stored: { cluster_id: vivobook512.id, variant_source: 'manual', item_id: vivobook.id },
+      },
+      { masterIdHint: ZENBOOK_1TB.id }
+    );
+    assert.equal(hintMove.listing?.cluster_id, ZENBOOK_1TB.id, 'a hint is not overridden');
+    assert.deepEqual(itemStats(hintMove.calls), [ZENBOOK_ITEM.id, vivobook.id]);
+    // Same Item: one refresh, no duplicate.
+    const sameItem = await ingest('item', 'Laptop ASUS Zenbook S 14 UX5406AA 1TB', zenbook, {
+      stored: { cluster_id: ZENBOOK_1TB.id, variant_source: 'title', item_id: ZENBOOK_ITEM.id },
+    });
+    assert.deepEqual(itemStats(sameItem.calls), [ZENBOOK_ITEM.id]);
+
+    // Flag off: the stored listing is never read and no Item is refreshed.
+    const off = await ingest('off', 'Laptop ASUS Zenbook S 14 UX5406AA 1TB', twoItems, {
+      stored: { cluster_id: vivobook512.id, variant_source: 'manual', item_id: vivobook.id },
+    });
+    assert.ok(!off.calls.some(c => c.table === 'products' && c.op === 'select'));
+    assert.deepEqual(itemStats(off.calls), []);
+    assert.ok(off.listing && !('item_id' in off.listing));
+  }
+  {
     // An archived masterIdHint maps to its Item; a live one is kept.
     const archived = await ingest(
       'nullable_variant',
@@ -711,6 +915,28 @@ async function run() {
     );
     assert.equal(live.listing?.cluster_id, ZENBOOK_1TB.id);
     assert.equal(live.listing?.variant_source, 'title');
+
+    // A 1TB page hinted to the Item's 512GB variant: the hint is not applied,
+    // the listing is matched under the hint's Item (DOS/Rate#1197).
+    const conflict = await ingest(
+      'item',
+      'Laptop ASUS UX5406AA 1TB chính hãng',
+      zenbook,
+      {
+        hint: {
+          id: 'master-zenbook-512',
+          specifications: { display: { size: 'x' } },
+          status: 'published',
+          item_id: 'item-zenbook',
+          variant_key: '512gb',
+          storage_gb: 512,
+        },
+      },
+      { masterIdHint: 'master-zenbook-512' }
+    );
+    assert.equal(conflict.listing?.cluster_id, ZENBOOK_1TB.id);
+    assert.equal(conflict.listing?.item_id, 'item-zenbook');
+    assert.equal(conflict.listing?.variant_source, 'title');
     assert.ok(!live.calls.some(c => c.table === 'items'), 'a live hint skips matching');
 
     const offHint = await ingest(
@@ -723,7 +949,7 @@ async function run() {
     assert.equal(offHint.listing?.cluster_id, 'master-zenbook-unknown');
     assert.equal(
       offHint.calls.find(c => c.table === 'master_products' && filter(c, 'id'))?.cols,
-      'id, specifications'
+      'id, specifications, storage_gb'
     );
   }
   {
@@ -763,7 +989,216 @@ async function run() {
     assert.equal(hintedRefresh.listing?.cluster_id, 'master-legacy');
   }
   console.log(
-    '  ✅ [5/5] Pipeline writes item_id, nullable cluster_id and keeps hand-set variants'
+    '  ✅ [5/6] Pipeline writes item_id, nullable cluster_id and keeps hand-set variants'
+  );
+  // 6. Seeds as Item plus variants, Item specs from the seeds (DOS/Rate#1152)
+  {
+    const itemSeeds = flagshipSeedsByItem();
+    const seen = new Set<string>();
+    for (const item of itemSeeds) {
+      assert.ok(!seen.has(item.itemKey), `one Item per key: ${item.itemKey}`);
+      seen.add(item.itemKey);
+      assert.ok(item.variants.length > 0);
+      for (const variant of item.variants) {
+        assert.equal(splitModelKey(variant.model_key)?.itemKey, item.itemKey);
+      }
+      assert.equal(item.specifications.hardware?.storage_gb, undefined, item.itemKey);
+      assert.equal(item.key_specs.storage, undefined, item.itemKey);
+    }
+    assert.equal(
+      itemSeeds.reduce((n, item) => n + item.variants.length, 0),
+      FLAGSHIP_DEVICES_TO_SEED.length,
+      'every seed is a variant of exactly one Item'
+    );
+    const series10 = itemSeeds.find(i => i.itemKey === 'apple:watch-series-10-42mm');
+    assert.equal(series10?.name, 'Apple Watch Series 10 42mm GPS');
+    assert.equal(
+      itemSeeds.find(i => i.itemKey === 'apple:watch-series-11-46mm')?.name,
+      'Apple Watch Series 11 46mm GPS'
+    );
+    assert.equal(itemSeeds.find(i => i.itemKey === 'xiaomi:18-pro-max')?.name, 'Xiaomi 18 Pro Max');
+    for (const item of itemSeeds) {
+      assert.equal(item.specifications.hardware?.ram_gb, undefined, `no RAM on ${item.itemKey}`);
+      assert.equal(item.key_specs.ram, undefined, `no RAM key spec on ${item.itemKey}`);
+    }
+    // The variant keeps its storage; the Item does not.
+    assert.equal(series10?.variants[0]?.storage_gb, 64);
+
+    // The registry knows the Series 10's one storage, so a bare title keys like its seed.
+    assert.equal(
+      normalizer.normalize({ title: 'Apple Watch Series 10 42mm GPS' } as ShopeeProduct).model_key,
+      'apple:watch-series-10-42mm:64gb'
+    );
+
+    // The registry describes the 42mm case: a 46mm title gets none of its size specs and
+    // is not benchmark-enriched (so it is never published on 42mm data).
+    const series10Big = normalizer.normalize({
+      title: 'Apple Watch Series 10 46mm GPS',
+    } as ShopeeProduct);
+    assert.equal(series10Big.model_key, 'apple:watch-series-10-46mm:64gb');
+    assert.equal(series10Big.is_benchmark_enriched, false);
+    assert.equal(series10Big.battery_mah, null);
+    assert.notEqual(series10Big.screen_size_inch, 1.77);
+    assert.equal(series10Big.specifications.display?.resolution, undefined);
+    assert.equal(series10Big.specifications.design?.weight_g, undefined);
+
+    // Item specs: dry-run writes nothing, apply updates the Items that exist and lists
+    // the missing ones (Items are created by the M1 trigger, never here).
+    const seeds = itemSeeds.filter(i =>
+      ['apple:watch-series-10-42mm', 'asus:zenbook-s-14'].includes(i.itemKey)
+    );
+    const seedDb = (present: string[]) =>
+      createDb(call =>
+        call.table === 'items' && call.op === 'select'
+          ? {
+              data: present.includes(String(filter(call, 'item_key')))
+                ? {
+                    id: `item-${String(filter(call, 'item_key'))}`,
+                    specifications: { hardware: { storage_gb: 1024, ram_gb: 32 } },
+                    key_specs: { storage: '1TB', ram: '32GB' },
+                  }
+                : null,
+              error: null,
+            }
+          : undefined
+      );
+    const dry = seedDb(['asus:zenbook-s-14']);
+    const offRun = await syncItemSeedSpecs(dry.client, { seeds, apply: true, itemModel: 'off' });
+    assert.deepEqual(offRun, { updated: 0, missing: [] });
+    assert.equal(dry.calls.length, 0, 'flag off: no Item read or write');
+    const dryRun = await syncItemSeedSpecs(dry.client, { seeds, itemModel: 'item' });
+    assert.deepEqual(dryRun, { updated: 1, missing: ['apple:watch-series-10-42mm'] });
+    assert.ok(!dry.calls.some(c => c.op === 'update'));
+    const applied = seedDb(['asus:zenbook-s-14', 'apple:watch-series-10-42mm']);
+    const applyRun = await syncItemSeedSpecs(applied.client, {
+      seeds,
+      apply: true,
+      itemModel: 'item',
+    });
+    assert.equal(applyRun.updated, 2);
+    const update = applied.calls.find(c => c.op === 'update' && c.table === 'items');
+    assert.ok(update?.payload?.specifications);
+    assert.equal(
+      (update?.payload?.specifications as { hardware?: Row }).hardware?.storage_gb,
+      undefined,
+      'storage is never written on an Item, even one already there'
+    );
+    assert.equal(
+      (update?.payload?.specifications as { hardware?: Row }).hardware?.ram_gb,
+      undefined
+    );
+    assert.equal((update?.payload?.key_specs as Row).storage, undefined);
+    assert.equal((update?.payload?.key_specs as Row).ram, undefined);
+    assert.ok(!applied.calls.some(c => c.op === 'insert' || c.op === 'upsert'));
+  }
+  // Spec enrichment per Item: one AI ask per Item (no size in the prompt or cache key);
+  // the variant keeps its own storage and RAM. Mode off still asks per size.
+  {
+    const asks: Array<{ storageGb: number | null; ramGb: number | null }> = [];
+    const enricher = new AiSpecEnricher({ apiKey: '' });
+    (enricher as unknown as { fetchSpecsFromAi: unknown }).fetchSpecsFromAi = async (params: {
+      storageGb: number | null;
+      ramGb: number | null;
+    }) => {
+      asks.push({ storageGb: params.storageGb, ramGb: params.ramGb });
+      return {
+        storage_gb: 1024,
+        ram_gb: 32,
+        specifications: {
+          hardware: { chipset: 'Intel Core i5-1335U', storage_gb: 1024, ram_gb: 32 },
+        },
+        key_specs: { chip: 'Core i5-1335U', storage: '1TB' },
+      };
+    };
+    const vivobook = candidateFor('Laptop ASUS Vivobook 15 X1504VA 16GB 512GB');
+    assert.equal(vivobook.is_benchmark_enriched, false);
+    const perItem = await enricher.enrichCandidate(vivobook, undefined, { perItem: true });
+    assert.deepEqual(asks.at(-1), { storageGb: null, ramGb: null });
+    assert.equal(perItem.storage_gb, 512);
+    assert.equal(perItem.ram_gb, 16);
+    const bare = candidateFor('Laptop ASUS Vivobook 15 X1504VA');
+    const bareItem = await enricher.enrichCandidate(bare, undefined, { perItem: true });
+    assert.equal(bareItem.storage_gb, bare.storage_gb, 'no AI storage on a variant');
+    assert.notEqual(bareItem.storage_gb, 1024);
+    assert.notEqual(bareItem.key_specs.storage, '1TB');
+    assert.equal(perItem.specifications.hardware?.storage_gb, 512);
+    assert.equal(perItem.specifications.hardware?.ram_gb, 16);
+    assert.equal(perItem.specifications.hardware?.chipset, 'Intel Core i5-1335U');
+    assert.equal(perItem.key_specs.storage, vivobook.key_specs.storage);
+    assert.equal(perItem.key_specs.chip, 'Core i5-1335U');
+    await enricher.enrichCandidate(vivobook);
+    assert.deepEqual(asks.at(-1), { storageGb: 512, ramGb: 16 });
+
+    // The matcher asks per Item only with the flag on.
+    const seen: unknown[] = [];
+    const recording = {
+      enrichCandidate: async <T>(candidate: T, _title?: string, options?: unknown) => {
+        seen.push(options);
+        return candidate;
+      },
+    } as unknown as AiSpecEnricher;
+    await new EntityMatcher(createItemDb({ seededItemId: 'item-vivobook' }).client, recording, {
+      itemModel: 'item',
+    }).resolveItemAndVariant(vivobook, 'cat-laptops');
+    await new EntityMatcher(createItemDb().client, recording, {
+      itemModel: 'off',
+    }).resolveItemAndVariant(vivobook, 'cat-laptops');
+    assert.deepEqual(seen, [{ perItem: true }, { perItem: false }]);
+  }
+  // Item-level rating (Q4): a listing with no variant refreshes its Item; with a
+  // variant the master RPC (Item-aware in M2) runs as before; no Item, no Item RPC.
+  {
+    const persist = async (
+      ids: {
+        masterId?: string | null;
+        itemId?: string | null;
+        itemModel?: 'off' | 'item' | 'nullable_variant';
+      },
+      mode = 'nullable_variant'
+    ) => {
+      const saved = process.env[ITEM_MODEL_ENV];
+      process.env[ITEM_MODEL_ENV] = mode;
+      try {
+        return await persistOnce(ids);
+      } finally {
+        if (saved === undefined) delete process.env[ITEM_MODEL_ENV];
+        else process.env[ITEM_MODEL_ENV] = saved;
+      }
+    };
+    const persistOnce = async (ids: {
+      masterId?: string | null;
+      itemId?: string | null;
+      itemModel?: 'off' | 'item' | 'nullable_variant';
+    }) => {
+      const db = createDb(call =>
+        call.table === 'reviews' && call.op === 'select' ? { data: [], error: null } : undefined
+      );
+      await new AiReviewAnalyzer({ apiKey: '' }).persistAnalysisToSupabase(db.client, {
+        productId: 'product-1152',
+        reviews: [],
+        ...ids,
+      });
+      return db.calls.filter(c => c.op === 'rpc').map(c => [c.table, c.payload] as const);
+    };
+    assert.deepEqual(await persist({ masterId: null, itemId: 'item-zenbook' }), [
+      ['refresh_item_stats', { p_item_id: 'item-zenbook' }],
+    ]);
+    assert.deepEqual(await persist({ masterId: 'master-zenbook-1tb', itemId: 'item-zenbook' }), [
+      ['refresh_master_product_rating', { p_master_id: 'master-zenbook-1tb' }],
+    ]);
+    assert.deepEqual(await persist({ masterId: null }), []);
+    assert.deepEqual(await persist({ masterId: null, itemId: 'item-zenbook' }, 'off'), []);
+    // The pipeline's own mode wins over the env (a pipeline configured with the model on).
+    assert.deepEqual(
+      await persist(
+        { masterId: null, itemId: 'item-zenbook', itemModel: 'nullable_variant' },
+        'off'
+      ),
+      [['refresh_item_stats', { p_item_id: 'item-zenbook' }]]
+    );
+  }
+  console.log(
+    '  ✅ [6/6] Seeds grouped by Item; Item specs from the seeds; enrichment and rating per Item (#1152)'
   );
   console.log('🎉 All item-first matcher tests passed!');
 }

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getCachedMerchantProfileById } from '@/server/rate';
 import {
   PUBLIC_API_CORS_HEADERS,
+  withPublicReviewRisk,
   jsonApiError,
 } from '@/server/rate/api-handler';
 
@@ -54,7 +55,7 @@ export async function GET(_request: NextRequest, context: RouteContext) {
     return NextResponse.json(
       {
         ok: true,
-        data: profile,
+        data: withPublicReviewRisk(profile),
       },
       {
         status: 200,

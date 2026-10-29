@@ -1,5 +1,6 @@
 import 'server-only';
 import { unstable_cache } from 'next/cache';
+import { isItemModelOn, itemSlugFromVariantSlug } from './item-model';
 
 /**
  * Canonical Next.js Data Cache tags for Rate.vn (Audit C3 & Phase 7.3).
@@ -22,6 +23,18 @@ export type RateCanonicalCacheTag =
 
 export function productCacheTag(slug: string): string {
   return `rate:product:${String(slug ?? '')
+    .replace(/\p{Cc}+/gu, '')
+    .trim()
+    .toLowerCase()
+    .slice(0, 120)}`;
+}
+
+/**
+ * One product's (variant master's) reviews and review summary, so a vote can
+ * refresh them without flushing every product's reviews (DOS/Rate#1306).
+ */
+export function masterReviewsCacheTag(masterId: string): string {
+  return `rate:reviews:${String(masterId ?? '')
     .replace(/\p{Cc}+/gu, '')
     .trim()
     .toLowerCase()
@@ -175,6 +188,12 @@ export function resolveRevalidationTargets(input: RevalidationTargetsInput): {
       continue;
     }
     tagSet.add(productCacheTag(clean));
+    // RATE_ITEM_MODEL on: a variant's change also refreshes its Item page
+    // (design doc 5.1 "Cache", DOS/Rate#1153).
+    if (isItemModelOn()) {
+      const itemSlug = itemSlugFromVariantSlug(clean);
+      if (itemSlug !== clean) tagSet.add(productCacheTag(itemSlug));
+    }
     tagSet.add(RATE_CACHE_TAGS.PRODUCTS);
     tagSet.add(RATE_CACHE_TAGS.OFFERS);
     tagSet.add(RATE_CACHE_TAGS.PRICE_HISTORY);

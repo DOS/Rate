@@ -1,5 +1,12 @@
 import 'server-only';
+import { createHash } from 'node:crypto';
 import { cache } from 'react';
+import { sitemapRowsByItem } from '@/lib/item-directory';
+import {
+  getItemBrandFacets,
+  getItemCount,
+  getItemSlugByVariantSlug,
+} from './item-directory';
 import {
   compareMasterProducts as _compareMasterProducts,
   getCategoryDirectoryFacets as _getCategoryDirectoryFacets,
@@ -11,8 +18,11 @@ import {
   getMasterProductOffersBatch as _getMasterProductOffersBatch,
   getMasterProductPriceHistory as _getMasterProductPriceHistory,
   getMasterProductReviews as _getMasterProductReviews,
+  isPublishedMasterProduct as _isPublishedMasterProduct,
   getMasterProductReviewSummary as _getMasterProductReviewSummary,
   getMasterProducts as _getMasterProducts,
+  attachMerchantDiscountAnalysis as _attachMerchantDiscountAnalysis,
+  getMerchantProfileBase as _getMerchantProfileBase,
   getMerchantProfileById as _getMerchantProfileById,
   getMerchantsList as _getMerchantsList,
   getRatePlatformStats as _getRatePlatformStats,
@@ -76,6 +86,7 @@ import {
   canonicalizeCacheParams,
   categoryCacheTag,
   isSafeRevalidationPath,
+  masterReviewsCacheTag,
   merchantCacheTag,
   productCacheTag,
   resolveRevalidationTargets,
@@ -276,11 +287,31 @@ const _getCachedCategoryDirectoryFacetsByKey = cache(
     )(cleanCat)
 );
 
-export function getCachedCategoryDirectoryFacets(categorySlug?: string) {
+/** Facets counted in variants whatever the Item flag (API v1, #1155). */
+export function getCachedVariantCategoryDirectoryFacets(categorySlug?: string) {
   return _getCachedCategoryDirectoryFacetsByKey(
     normalizeCachedFacetCategory(categorySlug)
   );
 }
+
+export const getCachedCategoryDirectoryFacets = cache(
+  async (categorySlug?: string) => {
+    const facets = await _getCachedCategoryDirectoryFacetsByKey(
+      normalizeCachedFacetCategory(categorySlug)
+    );
+    // RATE_ITEM_MODEL on: brand counts and the total are Items (#1155).
+    const current = facets.currentCategory;
+    const itemFacets = current
+      ? await getItemBrandFacets(current.id, current.slug)
+      : null;
+    if (!itemFacets) return facets;
+    return {
+      ...facets,
+      brands: itemFacets.brands,
+      totalUnfiltered: itemFacets.brands.reduce((acc, b) => acc + b.count, 0),
+    };
+  }
+);
 
 const _getCachedMasterProductOffersByKey = cache((cleanId: string) =>
   withRateDataCache(
@@ -305,10 +336,28 @@ const _getCachedMasterProductReviewsByKey = cache((cleanId: string) =>
     ['rate-master-product-reviews', cleanId],
     {
       revalidate: 300,
-      tags: [RATE_CACHE_TAGS.REVIEWS],
+      tags: [RATE_CACHE_TAGS.REVIEWS, masterReviewsCacheTag(cleanId)],
     }
   )(cleanId)
 );
+
+const _getCachedIsPublishedMasterProductByKey = cache((cleanId: string) =>
+  withRateDataCache(
+    _isPublishedMasterProduct,
+    ['rate-master-product-published', cleanId],
+    {
+      revalidate: 300,
+      tags: [RATE_CACHE_TAGS.PRODUCTS],
+    }
+  )(cleanId)
+);
+
+/** Whether the id names a published master product (DOS/Rate#1309). */
+export function isCachedPublishedMasterProduct(masterProductId: string) {
+  const cleanId = sanitizeCachedEntityId(masterProductId);
+  if (!cleanId) return Promise.resolve(false);
+  return _getCachedIsPublishedMasterProductByKey(cleanId);
+}
 
 export function getCachedMasterProductReviews(masterProductId: string) {
   const cleanId = sanitizeCachedEntityId(masterProductId);
@@ -343,7 +392,7 @@ export const getCachedMasterProductReviewSummary = cache(
       ['rate-master-product-review-summary', cleanId, reviewsKey],
       {
         revalidate: 300,
-        tags: [RATE_CACHE_TAGS.REVIEWS],
+        tags: [RATE_CACHE_TAGS.REVIEWS, masterReviewsCacheTag(cleanId)],
       }
     )(cleanId);
   }
@@ -477,16 +526,31 @@ export async function getCachedMerchantsList(
   return all;
 }
 
-const _getCachedMerchantProfileByIdKey = cache((cleanId: string) =>
+// The profile entry holds no discount analysis: it is added per request from
+// the product pages' cached offers and price history. Read inside the
+// profile's unstable_cache those would skip their cache (nested entries do),
+// so a cold profile would re-read every master (DOS/Rate#1217).
+const _getCachedMerchantProfileBaseByKey = (cleanId: string) =>
   withRateDataCache(
-    _getMerchantProfileById,
-    ['rate-merchant-profile', cleanId],
+    _getMerchantProfileBase,
+    ['rate-merchant-profile-base', cleanId],
     {
       revalidate: 600,
       tags: [RATE_CACHE_TAGS.MERCHANTS, merchantCacheTag(cleanId)],
     }
-  )(cleanId)
-);
+  )(cleanId);
+
+const CACHED_MASTER_READERS = {
+  offers: getCachedMasterProductOffers,
+  priceHistory: getCachedMasterProductPriceHistory,
+};
+
+const _getCachedMerchantProfileByIdKey = cache(async (cleanId: string) => {
+  const base = await _getCachedMerchantProfileBaseByKey(cleanId);
+  return base
+    ? _attachMerchantDiscountAnalysis(base, CACHED_MASTER_READERS)
+    : null;
+});
 
 export function getCachedMerchantProfileById(merchantId: string) {
   const cleanId = sanitizeCachedEntityId(merchantId);
@@ -494,12 +558,21 @@ export function getCachedMerchantProfileById(merchantId: string) {
   return _getCachedMerchantProfileByIdKey(cleanId);
 }
 
-export const getCachedRatePlatformStats = cache(() =>
-  withRateDataCache(_getRatePlatformStats, ['rate-platform-stats'], {
-    revalidate: 600,
-    tags: [RATE_CACHE_TAGS.STATS],
-  })()
-);
+export const getCachedRatePlatformStats = cache(async () => {
+  const stats = await withRateDataCache(
+    _getRatePlatformStats,
+    ['rate-platform-stats'],
+    {
+      revalidate: 600,
+      tags: [RATE_CACHE_TAGS.STATS],
+    }
+  )();
+  // RATE_ITEM_MODEL on: "products tracked" counts Items (#1155).
+  const itemCount = await getItemCount();
+  return itemCount == null
+    ? stats
+    : { ...stats, masterProductsCount: itemCount };
+});
 
 /** Stored reviews kept out of the rating, per master id (DOS/Rate#1139). */
 export const getCachedFilteredReviewCountsByMaster = cache(() =>
@@ -513,9 +586,41 @@ export const getCachedFilteredReviewCountsByMaster = cache(() =>
   )()
 );
 
-export const getCachedInspectProductOrShopUrl = cache(
-  inspectProductOrShopUrlWithRadar
-);
+// One Data Cache entry per normalized query for 2 minutes, so repeating a
+// query does not rerun its reads (DOS/Rate#1307). The key is a hash: the
+// query is up to 2 KB of caller text. A result too large for an entry (Next
+// skips entries over 2 MB) is cached as a marker and read uncached.
+const INSPECT_CACHE_MAX_BYTES = 1_500_000;
+const _getCachedInspectionByKey = cache(async (query: string) => {
+  const cached = await withRateDataCache(
+    async (q: string) => {
+      const result = await inspectProductOrShopUrlWithRadar(q);
+      return JSON.stringify(result).length > INSPECT_CACHE_MAX_BYTES
+        ? { tooLarge: true as const }
+        : result;
+    },
+    [
+      'rate-inspect',
+      createHash('sha256').update(query).digest('hex').slice(0, 32),
+    ],
+    {
+      revalidate: 120,
+      tags: [
+        RATE_CACHE_TAGS.PRODUCTS,
+        RATE_CACHE_TAGS.OFFERS,
+        RATE_CACHE_TAGS.REVIEWS,
+        RATE_CACHE_TAGS.MERCHANTS,
+      ],
+    }
+  )(query);
+  return 'tooLarge' in cached
+    ? inspectProductOrShopUrlWithRadar(query)
+    : cached;
+});
+
+export function getCachedInspectProductOrShopUrl(rawQuery: string) {
+  return _getCachedInspectionByKey(sanitizeCachedInspectQuery(rawQuery));
+}
 
 // A product URL only needs its category, so only category_slug is kept from
 // metadata and specifications: whole spec sheets would push the entry past
@@ -571,10 +676,15 @@ const _getCachedSitemapRowsData = withRateDataCache(
  */
 export const getCachedSitemapRows = cache(async (): Promise<SitemapRows> => {
   const rows = await _getCachedSitemapRowsData();
+  // RATE_ITEM_MODEL on: one URL per Item, dated by its newest variant (#1155).
+  const itemSlugs = await getItemSlugByVariantSlug();
   return {
-    products: rows.products,
+    products: itemSlugs
+      ? sitemapRowsByItem(rows.products, itemSlugs)
+      : rows.products,
     merchants: rows.merchants,
     categorySlugById: new Map(rows.categories),
+    itemSlugByVariantSlug: itemSlugs,
   };
 });
 
@@ -627,3 +737,6 @@ export {
   type CrossPlatformPriceSpreadItem,
   type DealRadarVerdict,
 } from './deals';
+
+export { getItemCatalogPage, groupCatalogRowsByItem } from './item-directory';
+export type { ItemCatalogRow } from '@/lib/item-directory';

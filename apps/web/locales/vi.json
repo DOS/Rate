@@ -125,6 +125,11 @@
     "versusHeroBadge": "So sánh 1v1 • cùng danh mục ({category})",
     "viewCategoryLeaderboard": "Xem bảng xếp hạng cùng ngành",
     "versusAutoVerdict": "Kết luận tự động: {winner} dẫn trước với điểm tổng hợp {score}/5.0{expertSuffix}.",
+    "mdTieLine": "Ngang điểm ({score}/5.0)",
+    "tieDeltaNote": "(cùng điểm theo trọng số hiện tại)",
+    "tie1v1Badge": "Ngang điểm 1v1",
+    "versusAutoVerdictTie": "Kết luận tự động: hai mẫu ngang điểm tổng hợp ({score}/5.0), chọn theo giá và thông số bạn cần.",
+    "versusVerdictWeights": "(Theo trọng số: {weights}.)",
     "compareMetaTitleWithNames": "So sánh {names} - Điểm đánh giá và 10 nhóm thông số | Rate.vn",
     "compareMetaTitleWithNamesShort": "{names} | Rate.vn",
     "compareMetaDescWithNames": "So sánh điểm đánh giá thật, 10 nhóm thông số kỹ thuật và giá tham khảo giữa {names} trên Rate.vn.",
@@ -165,7 +170,7 @@
     "mdColCriterion": "Tiêu chí",
     "mdColAdvantage": "Ưu thế",
     "mdRowWeightedScore": "Điểm tổng hợp có trọng số",
-    "mdRowTie": "Cân bằng",
+    "mdRowTie": "Ngang điểm",
     "mdRowMinPrice": "Giá tham khảo thấp nhất",
     "mdRowDealRadar": "Tín hiệu giá",
     "csvColCriterion": "Tiêu chí",
@@ -239,15 +244,12 @@
     "rowConnNfc": "Thanh toán không chạm NFC",
     "rowConnUsbGps": "Cổng USB, định vị và cảm biến",
     "rowMmSpeaker": "Hệ thống loa ngoài",
-    "valDefaultStereo": "Loa kép stereo",
     "rowMmJackAudio": "Giắc tai nghe 3.5mm và chuẩn âm thanh",
     "rowAvailAnnounced": "Thời điểm công bố và trạng thái",
-    "valDefaultAvailable": "Đang mở bán chính hãng",
     "rowAvailMsrp": "Giá niêm yết gốc (MSRP) và mã mẫu máy",
     "rowRegCert": "Chứng nhận chất lượng và mức bức xạ SAR",
     "valSarHeadPrefix": "SAR đầu: {value}",
     "valSarBodyPrefix": "SAR thân: {value}",
-    "valDefaultRegulatory": "Đạt chuẩn hợp quy Bộ TT&TT Việt Nam",
     "categoryLockLabel": "Danh mục đang khóa đối chiếu (chỉ so sánh các thiết bị cùng loại):",
     "categoryTabsAria": "Chọn danh mục đối chiếu",
     "replacingDeviceLabel": "Đang chọn {unit} thay thế cho \"{name}\"",
@@ -276,7 +278,7 @@
     "popular1v1Eyebrow": "So sánh 1v1 nổi bật ({category})",
     "popular1v1Heading": "Các cặp so sánh được tìm nhiều nhất trong nhóm {category}",
     "viewLeaderboardCategoryBtn": "Xem bảng xếp hạng {category} →",
-    "scoreDeltaBadge": "Chênh {delta} đ",
+    "scoreDeltaBadge": "Chênh {delta} điểm",
     "loadIntoMatrixBtn": "Đưa vào bảng so sánh",
     "go1v1Btn": "So kè 1v1 →",
     "verdictBadge": "Chấm điểm so sánh ({category})",
@@ -339,7 +341,7 @@
     "metaTitle": "Bảng xếp hạng thiết bị công nghệ | Rate.vn",
     "metaDescription": "Bảng xếp hạng độc lập theo danh mục: điểm chuyên gia và điểm người mua thật theo 5 tiêu chí, không bị chi phối bởi quảng cáo hay link affiliate.",
     "kicker": "Bảng xếp hạng thiết bị độc lập",
-    "title": "Bảng xếp hạng thiết bị độc lập 10.0",
+    "title": "Bảng xếp hạng thiết bị độc lập",
     "subtitle": "Xếp hạng khách quan theo danh mục, tách riêng điểm người mua thật, điểm chuyên gia và 5 tiêu chí kỹ thuật khỏi giá bán của các sàn.",
     "home": "Trang chủ",
     "breadcrumb": "Bảng xếp hạng",
@@ -406,16 +408,16 @@
     "critScreen": "Màn hình & hiển thị",
     "critPerformance": "Hiệu năng & nhiệt độ",
     "critCamera": "Camera & quay chụp",
+    "critAnc": "Chống ồn & âm thanh",
     "critBattery": "Pin & sạc nhanh",
     "critValue": "Đáng đồng tiền",
-    "shortDisplay": "Display",
-    "shortPerf": "Perf",
-    "shortCamAnc": "Cam/ANC",
-    "shortBattery": "Battery",
-    "shortValue": "Value",
+    "shortDisplay": "Màn hình",
+    "shortPerf": "Hiệu năng",
+    "shortBattery": "Pin",
+    "shortValue": "Đáng tiền",
     "unratedShort": "chưa có",
-    "expertUnrated": "Expert: chưa có",
-    "userUnrated": "User: chưa có",
+    "expertUnrated": "Chuyên gia: chưa có",
+    "userUnrated": "Người mua: chưa có",
     "copiedLeaderboardMd": "Đã chép BXH Markdown!",
     "copyLeaderboardMdBtn": "Sao chép BXH Markdown",
     "exportCsvBtn": "Xuất bảng CSV",
@@ -427,7 +429,11 @@
     "showdownsHeading": "So kè trực tiếp các thiết bị dẫn đầu cùng danh mục",
     "openCompareMatrixBtn": "So sánh chi tiết →",
     "view1v1DeepBtn": "Xem đối đầu 1v1 chuyên sâu",
-    "categoryTabsAria": "Chọn ngành hàng"
+    "categoryTabsAria": "Chọn ngành hàng",
+    "shortCamera": "Camera",
+    "shortAnc": "Chống ồn",
+    "userScoreShort": "Người mua {score}/5.0",
+    "expertScoreShort": "Chuyên gia {score}/10"
   },
   "reviews": {
     "criteriaScreen": "Màn hình & hiển thị",
@@ -537,20 +543,20 @@
     "sponsorshipBadgeIncentivized": "Đổi quà / Nhận ưu đãi",
     "sponsorshipBadgeAffiliate": "Tiếp thị liên kết",
     "starAnomalyWarning": "Cảnh báo phân bố sao bất thường: {fiveStarPct}% đánh giá là 5 sao tuyệt đối ({lowEffortPct}% chỉ chấm sao hoặc thiếu chi tiết trải nghiệm)",
-    "weightExplanationShippingOnly": "Trọng số 0.00x cho sản phẩm: chỉ nhận xét giao hàng/đóng gói (chuyển sang điểm người bán)",
-    "weightExplanationFiller": "Trọng số 0.00x: bình luận cày xu / không mô tả trải nghiệm sản phẩm",
-    "weightExplanationSabotage": "Trọng số 0.00x: nghi vấn đối thủ dìm hàng thiếu căn cứ",
-    "weightExplanationBombing": "Trọng số 0.00x: đánh giá bất thường / bom đơn",
-    "weightExplanationSeeding": "Trọng số 0.00x: nghi là đánh giá ảo hoặc văn mẫu trùng lặp",
-    "weightExplanationStarsOnly": "Trọng số {weight}x: chỉ chấm sao, không có nội dung (C=0.25)",
-    "weightExplanationPlatformLabel": "Trọng số {weight}x: nhãn mặc định theo số sao của sàn (C=0.25)",
-    "weightExplanationLowEffort": "Trọng số {weight}x: nhận xét ngắn, ít chi tiết kỹ thuật (C=0.50)",
+    "weightExplanationShippingOnly": "Ước tính 0.00x cho sản phẩm: chỉ nhận xét giao hàng/đóng gói (chuyển sang điểm người bán)",
+    "weightExplanationFiller": "Ước tính 0.00x: bình luận cày xu / không mô tả trải nghiệm sản phẩm",
+    "weightExplanationSabotage": "Ước tính 0.00x: nghi vấn đối thủ dìm hàng thiếu căn cứ",
+    "weightExplanationBombing": "Ước tính 0.00x: đánh giá bất thường / bom đơn",
+    "weightExplanationSeeding": "Ước tính 0.00x: nghi là đánh giá ảo hoặc văn mẫu trùng lặp",
+    "weightExplanationStarsOnly": "Ước tính {weight}x: chỉ chấm sao, không có nội dung (C=0.25)",
+    "weightExplanationPlatformLabel": "Ước tính {weight}x: nhãn mặc định theo số sao của sàn (C=0.25)",
+    "weightExplanationLowEffort": "Ước tính {weight}x: nhận xét ngắn, ít chi tiết kỹ thuật (C=0.50)",
     "blendNoteBlended": "Tỷ trọng: 60% người mua thực chất + 40% chuyên gia Rate Lab (độ tin cậy ≥ 60%)",
     "blendNoteSeparateLowConfidence": "Hiển thị riêng điểm chuyên gia và điểm người mua (gộp 60/40 khi độ tin cậy người mua đạt mức trung bình, độ tin cậy ≥ 60%)",
     "blendNoteUserOnly": "Tỷ trọng: 100% người mua thực chất (đã lọc đánh giá ảo và spam nhận xu)",
     "blendNoteExpertOnly": "Tỷ trọng: 100% đánh giá chuyên gia Rate Lab",
     "blendNoteInsufficientData": "Chưa đủ dữ liệu đánh giá thực chất",
-    "ratingWeightBadge": "Trọng số: {weight}x",
+    "ratingWeightBadge": "Trọng số tính điểm: {weight}x",
     "ratingWeightTitle": "Trọng số dùng để tính điểm sản phẩm (đã tính phiếu hữu ích và báo cáo)",
     "trustModelBadge": "Kiểm tra độ tin cậy (6 yếu tố): {explanation}",
     "variationPrefix": "Phân loại: <value>{variation}</value>",
@@ -652,7 +658,11 @@
     "quickToggleBtnWatched": "Đang canh giá",
     "quickToggleBtnUnwatched": "Canh giá",
     "quickToggleShortUnwatched": "Canh giá",
-    "quickToggleShortWatched": "Đang canh"
+    "quickToggleShortWatched": "Đang canh",
+    "sizeRequiredTitle": "Chọn dung lượng để theo dõi giá: cảnh báo giá đặt theo từng dung lượng.",
+    "sizeRequiredCta": "Chọn dung lượng",
+    "sizeRequiredUnavailable": "Chưa tải được danh sách dung lượng.",
+    "sizeRequiredProductLink": "Mở trang sản phẩm"
   },
   "deals": {
     "metaTitle": "Deal công nghệ đã kiểm tra trên 10 sàn | Rate.vn",
@@ -688,7 +698,7 @@
     "dealsMdTableHead": "| Hạng | Thiết bị | Hãng | Điểm theo nhu cầu | Điểm JReviews | Giá thấp nhất | Tiết kiệm giữa các sàn | Tín hiệu giá |",
     "samePrice": "Đồng giá",
     "filterBadge": "Tìm deal đã kiểm tra trên 10 sàn",
-    "showingCount": "Đang hiển thị {visible}/{count} thiết bị thỏa mãn ngân sách",
+    "showingCount": "Hiển thị {visible} trên {count} thiết bị trong ngân sách",
     "copiedMdBtn": "✓ Đã sao chép Markdown!",
     "copyMdBtn": "Sao chép Markdown",
     "exportCsvBtn": "Xuất CSV ({count})",
@@ -802,7 +812,8 @@
     "checkedStatus": "Đã kiểm tra",
     "errInspectFailed": "Không kiểm tra được link này.",
     "errNetwork": "Lỗi mạng, vui lòng thử lại.",
-    "loading": "Đang tải..."
+    "loading": "Đang tải...",
+    "reviewRiskNoData": "chưa đủ dữ liệu"
   },
   "merchants": {
     "dirMetaTitle": "Độ tin cậy gian hàng trên các sàn | Rate.vn",
@@ -856,7 +867,6 @@
     "dosafeAlert": "Có cảnh báo lừa đảo",
     "authenticLabel": "Thực chất:",
     "filteredSpamCount": "{count} đánh giá ảo hoặc spam đã lọc",
-    "noAbnormalReviews": "Chưa phát hiện đánh giá bất thường",
     "priceRangeLabel": "Biên độ giá tham chiếu:",
     "radarGenuineBadge": "{count} tin bán dưới giá trung vị (-{pct}%)",
     "radarFakeBadge": "{count} Cảnh báo kê khống giá gốc",
@@ -919,7 +929,7 @@
     "noReviewsYet": "Chưa có đánh giá nào được ghi nhận cho gian hàng này.",
     "flagCoinSpam": "Bình luận rác nhận xu (trọng số 0.0)",
     "flagSeedingFake": "Nghi là đánh giá ảo (trọng số 0.0)",
-    "flagAuthenticWeight": "✓ Đánh giá thật (trọng số {weight})",
+    "flagAuthenticWeight": "✓ Đánh giá thật (trọng số tính điểm {weight})",
     "flagPendingAnalysis": "Đang chờ phân tích",
     "noCommentBody": "(Không có nội dung bình luận)",
     "listingsSectionEyebrow": "Biên độ giá và giá gốc bị nâng khống",
@@ -934,7 +944,7 @@
     "itemMetaLine": "Mã sàn:",
     "soldLabel": "Đã bán:",
     "lowestMarketPriceLabel": "Giá thấp nhất thị trường:",
-    "unclusteredLabel": "Chưa gom cụm",
+    "unclusteredLabel": "Chưa ghép với dòng máy nào",
     "historicalLowObs": "Đáy lịch sử: {price} ₫ ({count} mốc đo)",
     "collectingHistoryBadge": "Đang thu thập lịch sử giá",
     "viewReviewsAndPricesBtn": "★ Xem đánh giá và giá",
@@ -959,7 +969,16 @@
     "riskReviewLabel": "Rủi ro đánh giá",
     "trustBadge": "Tin cậy: {score}/100",
     "scamRiskBadge": "Rủi ro lừa đảo: {score}/100",
-    "reviewRiskBadge": "Rủi ro đánh giá: {score}/100"
+    "reviewRiskBadge": "Rủi ro đánh giá: {score}/100",
+    "reviewRiskNoData": "Rủi ro đánh giá: chưa đủ dữ liệu",
+    "reviewRiskNoDataShort": "Chưa đủ dữ liệu",
+    "profileMetaDescNoReviews": "Hồ sơ gian hàng {name}: rủi ro lừa đảo DOSafe ({dosafe}/100) và lịch sử giá {count} sản phẩm trên Rate.vn. Chưa có đánh giá để phân tích.",
+    "mdSeedingLineNoReviews": "- **Rủi ro đánh giá:** chưa đủ dữ liệu (chưa có đánh giá để phân tích)",
+    "mdAuthenticLineNoReviews": "- **Tỷ lệ đánh giá thật:** chưa có đánh giá",
+    "listingUnavailableBadge": "Hết hàng",
+    "listingUnavailableTitle": "Gian hàng báo hết hàng hoặc ngừng bán. Giá là giá ghi nhận lần cuối, không phải giá đang bán.",
+    "listingUnavailableAudit": "Hết hàng, không xét khuyến mãi",
+    "listingDiscontinuedBadge": "Ngừng bán"
   },
   "productDetail": {
     "notFoundTitle": "Không tìm thấy sản phẩm | Rate.vn",
@@ -1168,7 +1187,21 @@
     "heroPriceLine": "Từ <strong>{price} ₫</strong> · {count} nơi bán",
     "specsShowAll": "Xem toàn bộ thông số",
     "specsShowLess": "Thu gọn thông số",
-    "exportMenu": "Xuất dữ liệu"
+    "exportMenu": "Xuất dữ liệu",
+    "offersCombinedRiskLabel": "Rủi ro tổng hợp",
+    "offersReviewRiskLabel": "Rủi ro đánh giá",
+    "offersReviewRiskNoData": "chưa đủ dữ liệu",
+    "offersDiscontinuedBadge": "Ngừng bán",
+    "offersTrustBadge": "Độ tin cậy: {score}%",
+    "offersScamRiskLabel": "Rủi ro lừa đảo",
+    "itemVariantLabel": "Dung lượng",
+    "itemVariantPrice": "Từ {price} ₫",
+    "itemVariantNoPrice": "Chưa có giá",
+    "unknownSizeTitle": "Chưa rõ dung lượng ({count} nguồn)",
+    "unknownSizeNote": "Người bán không ghi rõ dung lượng, nên các giá này không tính vào giá \"từ\" của sản phẩm.",
+    "sizePanelLoading": "Đang tải phiên bản này…",
+    "sizePanelLoadFailed": "Không tải được phiên bản này.",
+    "sizePanelRetry": "Thử lại"
   },
   "homePage": {
     "catDescSmartphones": "Lọc theo chipset, RAM/ROM, tần số quét Hz, pin mAh & sạc nhanh W",
@@ -1226,7 +1259,9 @@
     "reviewRiskLabel": "Rủi ro đánh giá",
     "officialMallBadge": "Official Mall",
     "authenticBadge": "Đánh giá thực chất",
-    "starsAria": "{count} trên 5 sao"
+    "starsAria": "{count} trên 5 sao",
+    "reviewRiskNoData": "Chưa đủ dữ liệu",
+    "reviewRiskNoReviews": "Chưa có đánh giá để phân tích"
   },
   "developers": {
     "seoTitle": "Tài liệu REST API v1 cho nhà phát triển | Rate.vn",
@@ -1408,6 +1443,8 @@
     "privacyS3Desc": "Nút \"Hữu ích\" và \"Báo cáo\" cần đăng nhập bằng tài khoản DOS ID (tạo ít nhất 7 ngày, đã xác minh email hoặc số điện thoại). Rate.vn lưu bình chọn kèm mã tài khoản để mỗi tài khoản chỉ bình chọn một lần cho mỗi đánh giá, và không lưu địa chỉ IP của bạn.",
     "privacyS4Title": "4. Thông tin riêng của gian hàng",
     "privacyS4Desc": "Thông tin riêng của gian hàng (số điện thoại, tài khoản ngân hàng) nằm ở các trường mà công chúng không đọc được. Trang web và API chỉ đọc được các trường công khai.",
+    "privacyS5Title": "5. Tiện ích trình duyệt Rate.vn",
+    "privacyS5Desc": "Trên trang sản phẩm của 10 sàn được hỗ trợ, tiện ích gửi cho Rate.vn sàn, URL sản phẩm đã cắt tham số theo dõi, tên sản phẩm, mã sản phẩm và mã gian hàng, phiên bản đang chọn, giá bán và giá gốc để tra lịch sử giá; việc tra cứu này bật sẵn, chỉ đọc và không cần tài khoản. Chỉ khi bạn bật \"Đóng góp phát hiện sản phẩm mới (Opt-In)\" (mặc định tắt), tiện ích còn gửi tin bán đó kèm số sao và số lượt đánh giá vào hàng đợi kiểm duyệt; dữ liệu này không tự đổi giá công khai. Tiện ích không gửi tài khoản hay thông tin cá nhân, không mở trang bạn không mở, và chỉ lưu trên trình duyệt của bạn địa chỉ máy chủ, lựa chọn có đóng góp hay không, cùng bộ nhớ tạm theo phiên gồm các sản phẩm bạn vừa xem, lần tìm kiếm gần nhất và kết quả tra cứu. Nội dung bạn gõ vào ô tìm kiếm của tiện ích cũng được gửi để tra cứu.",
     "privacySide1Title": "Kiểm tra mã nguồn công khai",
     "privacySide1Desc": "Quy tắc phân quyền dữ liệu và cách lưu bình chọn đều công khai trong repository trên GitHub.",
     "privacySide1Btn": "Xem tài liệu kỹ thuật và API",
@@ -1540,27 +1577,27 @@
         "features": {
           "has5g": {
             "label": "Hỗ trợ 5G",
-            "desc": "Cellular: Kết nối mạng di động 5G tốc độ cao"
+            "desc": "Kết nối mạng di động 5G tốc độ cao"
           },
           "highRefresh": {
             "label": "Màn hình 120Hz+",
-            "desc": "Display: Tần số quét từ 120Hz trở lên"
+            "desc": "Tần số quét từ 120Hz trở lên"
           },
           "bigBattery": {
             "label": "Pin >= 5000mAh",
-            "desc": "Battery: Dung lượng pin từ 5000 mAh trở lên"
+            "desc": "Dung lượng pin từ 5000 mAh trở lên"
           },
           "fastCharge": {
             "label": "Sạc nhanh >= 45W",
-            "desc": "Battery: Công suất sạc nhanh từ 45W trở lên"
+            "desc": "Công suất sạc nhanh từ 45W trở lên"
           },
           "hasNfc": {
             "label": "Có NFC",
-            "desc": "Connectivity: Thanh toán chạm & đọc CCCD gắn chip"
+            "desc": "Thanh toán chạm & đọc CCCD gắn chip"
           },
           "compactScreen": {
             "label": "Nhỏ gọn (<= 6.2\")",
-            "desc": "Display: Màn hình gọn dễ cầm một tay (<= 6.2 inch)"
+            "desc": "Màn hình gọn dễ cầm một tay (<= 6.2 inch)"
           }
         }
       },
@@ -1767,7 +1804,8 @@
     "trustBadge": "Tin cậy: {score}/100",
     "merchantRiskLine": "Rủi ro lừa đảo: <b>{scam}/100</b> • Rủi ro đánh giá: <b>{review}/100</b>",
     "officialMallBadge": "Mall chính hãng",
-    "scamRiskShort": "Rủi ro lừa đảo: {score}/100"
+    "scamRiskShort": "Rủi ro lừa đảo: {score}/100",
+    "merchantRiskLineNoReviews": "Rủi ro lừa đảo: <b>{scam}/100</b> • Rủi ro đánh giá: <b>chưa đủ dữ liệu</b>"
   },
   "authPortal": {
     "metaLoginTitle": "Đăng nhập tài khoản | Rate.vn",
@@ -1843,7 +1881,9 @@
     "priceHistory": "Lịch sử giá",
     "priceHistoryTitle": "Xem lịch sử giá và phát hiện giảm giá ảo",
     "noImage": "Chưa có ảnh",
-    "verified": "Đã chuẩn hóa thông số"
+    "verified": "Đã chuẩn hóa thông số",
+    "fromPrice": "Giá từ",
+    "sizesLabel": "Các dung lượng"
   },
   "priceVerdict": {
     "labelFake": "Cảnh báo giảm giá ảo",
@@ -1878,9 +1918,21 @@
     "reasonCommunityAdLinkExcluded": "Phát hiện đường dẫn quảng cáo hoặc điều hướng ngoài luồng, loại khỏi điểm trung bình.",
     "reasonCommunityCompetitorExcluded": "Nghi vấn điều hướng sang đối thủ, loại khỏi điểm trung bình.",
     "reasonCommunityTooShortExcluded": "Nội dung quá ngắn để kiểm chứng trải nghiệm, loại khỏi điểm trung bình.",
-    "summaryDefault": "Đã phân tích {total} đánh giá: giữ lại {kept} đánh giá thực chất (điểm JReviews có trọng số: {rating}/5★) và loại bỏ {removed} đánh giá rác, nhận xu, ảo hoặc bom hàng khỏi điểm tổng.",
-    "summaryNoAuthentic": "Chưa có đánh giá thực chất sau khi lọc {removed} bình luận rác/nhận xu.",
+    "summaryDefault": "Lần phân tích gần nhất (một nơi bán) đã xét {total} đánh giá: giữ lại {kept} đánh giá thực chất và loại bỏ {removed} đánh giá rác, nhận xu, ảo hoặc bom hàng.",
+    "summaryNoAuthentic": "Lần phân tích gần nhất (một nơi bán) chưa thấy đánh giá thực chất sau khi lọc {removed} bình luận rác/nhận xu.",
     "proPositiveFeedback": "Nhận phản hồi tích cực từ người dùng thực tế",
     "originalVietnamese": "tiếng Việt"
+  },
+  "saleState": {
+    "soldOut": "Tạm hết hàng ở mọi nơi bán",
+    "soldOutHint": "Các nơi bán đã ghi nhận hiện đều hết hàng.",
+    "discontinued": "Ngừng kinh doanh tại Việt Nam",
+    "discontinuedHint": "Mẫu này không còn được bán mới tại các nơi bán ở Việt Nam.",
+    "comingSoon": "Sắp về Việt Nam",
+    "comingSoonHint": "Mẫu này chưa được bán chính hãng tại Việt Nam.",
+    "notListed": "Chưa có nơi bán tại Việt Nam",
+    "notListedHint": "Rate chưa ghi nhận nơi bán nào tại Việt Nam cho mẫu này.",
+    "noStock": "Chưa có nơi bán còn hàng",
+    "noStockHint": "Không có nơi bán nào đang còn hàng."
   }
 }

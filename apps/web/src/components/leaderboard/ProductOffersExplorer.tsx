@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
+import { hasReviewRiskEvidence } from '@/lib/merchant-risk-tone';
 import ExportMenu from '@/components/elementary/ExportMenu';
 import {
   BsBarChart,
@@ -336,6 +337,7 @@ export default function ProductOffersExplorer({
       'IsOfficialMall',
       'TrustScorePercent',
       'DosafeRiskScore',
+      'CombinedRiskScore',
       'ReviewRiskScore',
       'PriceCurrentVND',
       'PriceOriginalVND',
@@ -358,7 +360,10 @@ export default function ProductOffersExplorer({
         o.merchant.is_official ? 'true' : 'false',
         String(trust),
         offerRiskScoreCsvCell(o.merchant.dosafe_risk_score),
-        offerRiskScoreCsvCell(o.merchant.review_risk_score),
+        offerRiskScoreCsvCell(o.merchant.risk_score),
+        hasReviewRiskEvidence(o.merchant.review_risk_breakdown)
+          ? offerRiskScoreCsvCell(o.merchant.review_risk_score)
+          : '',
         String(o.price_current),
         hasValidOrig ? String(o.price_original) : '',
         implausibleOfferIds.has(o.id)
@@ -724,7 +729,9 @@ export default function ProductOffersExplorer({
                               data-testid="offer-unavailable"
                               title={t('offersUnavailableTitle')}
                             >
-                              {t('offersUnavailableBadge')}
+                              {offer.availability === 'discontinued'
+                                ? t('offersDiscontinuedBadge')
+                                : t('offersUnavailableBadge')}
                             </span>
                           )}
                         </div>
@@ -746,11 +753,11 @@ export default function ProductOffersExplorer({
                               className={`badge ${trustBadgeClass} text-decoration-none small`}
                               title={t('offersMerchantTrustTitle')}
                             >
-                              Trust: {trustScore}% ↗
+                              {t('offersTrustBadge', { score: trustScore })} ↗
                             </Link>
                           ) : (
                             <span className={`badge ${trustBadgeClass} small`}>
-                              Trust: {trustScore}%
+                              {t('offersTrustBadge', { score: trustScore })}
                             </span>
                           )}
                         </div>
@@ -758,15 +765,22 @@ export default function ProductOffersExplorer({
                           className="text-muted"
                           style={{ fontSize: '0.8125rem' }}
                         >
-                          DOSafe:{' '}
+                          {/* Every label from the catalogue (DOS/Rate#1269). */}
+                          {t('offersScamRiskLabel')}:{' '}
                           {formatOfferRiskScore100(
                             offer.merchant.dosafe_risk_score
                           )}
-                          /100 | Review Risk:{' '}
-                          {formatOfferRiskScore100(
-                            offer.merchant.review_risk_score
-                          )}
-                          /100
+                          /100 | {t('offersCombinedRiskLabel')}:{' '}
+                          {formatOfferRiskScore100(offer.merchant.risk_score)}
+                          /100 | {t('offersReviewRiskLabel')}:{' '}
+                          {/* No analysed reviews: no number (#1258). */}
+                          {hasReviewRiskEvidence(
+                            offer.merchant.review_risk_breakdown
+                          )
+                            ? `${formatOfferRiskScore100(
+                                offer.merchant.review_risk_score
+                              )}/100`
+                            : t('offersReviewRiskNoData')}
                         </div>
                       </div>
                     </td>

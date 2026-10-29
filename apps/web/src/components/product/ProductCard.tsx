@@ -1,6 +1,7 @@
 import React from 'react';
 import { useLocale, useTranslations } from 'next-intl';
 import { BsGraphUpArrow, BsPatchCheckFill } from 'react-icons/bs';
+import { saleStateLabelKey, type SaleState } from '@/lib/sale-state';
 import { Link } from '@/lib/navigation';
 import CompareQuickToggle from '@/components/compare/CompareQuickToggle';
 import RadarBadge from '@/components/radar/RadarBadge';
@@ -33,7 +34,17 @@ export interface ProductCardProps {
   readonly minPrice: number;
   readonly maxPrice: number;
   readonly merchantCount: number;
+  /**
+   * Shown instead of the price when no store has it in stock
+   * (DOS/Rate#1188); defaults to on sale.
+   */
+  readonly saleState?: SaleState;
   readonly verified?: boolean;
+  /**
+   * An Item's sizes, each linking to the Item with that size preselected
+   * (DOS/Rate#1155). With them the price reads "from".
+   */
+  readonly sizeChips?: readonly { label: string; href: string }[];
 }
 
 export function sanitizeProductCardPriceVnd(value: unknown): number {
@@ -92,9 +103,12 @@ export default function ProductCard({
   minPrice,
   maxPrice,
   merchantCount,
+  saleState = 'on_sale',
   verified = false,
+  sizeChips = [],
 }: ProductCardProps) {
   const t = useTranslations('productCard');
+  const tSale = useTranslations('saleState');
   const locale = useLocale();
   const safeMinPrice = sanitizeProductCardPriceVnd(minPrice);
   const safeMaxPrice = sanitizeProductCardPriceVnd(maxPrice);
@@ -194,13 +208,49 @@ export default function ProductCard({
           </ul>
         )}
 
+        {sizeChips.length > 0 && (
+          <ul
+            className="rate-product-card-sizes list-unstyled d-flex flex-wrap gap-1 mb-2"
+            aria-label={t('sizesLabel')}
+          >
+            {sizeChips.map((chip) => (
+              <li key={chip.href}>
+                <Link
+                  href={chip.href}
+                  aria-label={`${name} ${chip.label}`}
+                  className="badge rounded-pill border text-body text-decoration-none fw-normal"
+                >
+                  {chip.label}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        )}
+
         <div className="rate-product-card-footer">
           <div className="rate-product-card-price-row">
             <div>
-              <div className="rate-product-card-muted">{t('refPrice')}</div>
-              <div className="rate-product-card-price">
-                {formatProductCardVnd(safeMinPrice)}
-              </div>
+              {saleState === 'on_sale' && safeMinPrice > 0 ? (
+                <>
+                  <div className="rate-product-card-muted">
+                    {sizeChips.length > 0 ? t('fromPrice') : t('refPrice')}
+                  </div>
+                  <div className="rate-product-card-price">
+                    {formatProductCardVnd(safeMinPrice)}
+                  </div>
+                </>
+              ) : (
+                <div
+                  className="rate-product-card-muted fw-semibold"
+                  data-sale-state={saleState}
+                >
+                  {tSale(
+                    saleStateLabelKey(
+                      saleState === 'on_sale' ? 'no_stock' : saleState
+                    )
+                  )}
+                </div>
+              )}
             </div>
             <div className="rate-product-card-price-aside">
               {hasRange && (
@@ -210,7 +260,9 @@ export default function ProductCard({
                   })}
                 </div>
               )}
-              <div>{t('sources', { count: safeMerchantCount })}</div>
+              {safeMerchantCount > 0 && (
+                <div>{t('sources', { count: safeMerchantCount })}</div>
+              )}
             </div>
           </div>
 

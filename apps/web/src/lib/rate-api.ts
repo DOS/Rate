@@ -2,6 +2,8 @@ import { createClient } from '@supabase/supabase-js';
 import type { Database, MasterProduct } from '@repo/shared-data';
 import { createLogger } from '@/lib/logger';
 import { isPendingReview } from '@/lib/review-display';
+import { listingReviewSummary } from '@/lib/analyzer-copy';
+import { countBrandsByItem } from '@/lib/item-directory';
 import {
   implausiblyLowOfferIds,
   plausibleOffers,
@@ -23,6 +25,7 @@ import {
   getMasterProductCategorySlug,
   type MerchantListFilterParams,
   extractPersistedBreakdown,
+  storedRiskSplit,
   filterAndSortMerchants,
   sanitizePostgrestFilterToken,
   type ParsedEcommerceUrl,
@@ -52,6 +55,7 @@ export {
   getMasterProductCategorySlug,
   getMasterProductHref,
   extractPersistedBreakdown,
+  storedRiskSplit,
   filterAndSortMerchants,
   sanitizePostgrestFilterToken,
   parseEcommerceUrlOrQuery,
@@ -132,17 +136,21 @@ async function fetchAllRows<T>(
     from: number,
     to: number
   ) => PromiseLike<{ data: T[] | null; error: { message: string } | null }>,
-  pageSize = 1000
+  pageSize = 1000,
+  /** False for a speculative read whose caller logs a failure if it uses it. */
+  logFailure = true
 ): Promise<T[]> {
   const rows: T[] = [];
   for (let from = 0, pages = 0; ;) {
     const { data, error } = await buildPage(from, from + pageSize - 1);
     if (error) {
-      log.error('paged read failed', {
-        table: label,
-        row: from,
-        message: error.message,
-      });
+      if (logFailure) {
+        log.error('paged read failed', {
+          table: label,
+          row: from,
+          message: error.message,
+        });
+      }
       throw new RateDataUnavailableError(label, error);
     }
     const page = data ?? [];
@@ -1064,6 +1072,16 @@ async function sellerExtrasForTrustViewRows(
   return extras;
 }
 
+/** The breakdown of a seller with no analysed review (DOS/Rate#1258). */
+const NO_ANALYSED_REVIEWS_BREAKDOWN: Readonly<Record<string, number>> = {
+  total_reviews: 0,
+  authentic_count: 0,
+  coin_spam_count: 0,
+  seeding_fake_count: 0,
+  sabotage_or_bombing_count: 0,
+  suspicious_ratio_pct: 0,
+};
+
 export function mapTrustViewRowToMerchantOffer(
   row: RawTrustViewRow,
   followerCount?: number,
@@ -1086,24 +1104,37 @@ export function mapTrustViewRowToMerchantOffer(
   const hasSeller = sanitizeOfferString(safeRow.merchant_id) !== '';
   // The view reads 0 for a seller the importer never scored; use the same
   // baseline as the merchant pages (#685).
-  const reviewRisk = !isUnscoredTrustViewRow(safeRow)
-    ? persistedReviewRisk
-    : hasSeller
-      ? baselineReviewRisk({
-          isOfficial,
-          platform: safeRow.platform,
-          followerCount,
-        })
-      : null;
+  // RS#708: the column is the combined risk; the review-only part counts
+  // only with analysed reviews (DOS/Rate#1268).
+  const riskSplit = storedRiskSplit(
+    safeRow.review_risk_breakdown,
+    undefined,
+    safeRow.review_risk_score
+  );
+  const reviewRisk = riskSplit
+    ? (riskSplit.reviewOnly ?? 0)
+    : !isUnscoredTrustViewRow(safeRow)
+      ? persistedReviewRisk
+      : hasSeller
+        ? baselineReviewRisk({
+            isOfficial,
+            platform: safeRow.platform,
+            followerCount,
+          })
+        : null;
   const priceCurrent = toSafeOfferPrice(safeRow.price_current);
   const cleanPlatform = sanitizeOfferString(safeRow.platform).toLowerCase();
   const cleanLocation = sanitizeOfferString(safeRow.merchant_location);
+  // A baseline seller carries a breakdown counting no review, so every
+  // surface reads its score as "not enough data" (DOS/Rate#1258).
   const safeBreakdown =
-    safeRow.review_risk_breakdown &&
-    typeof safeRow.review_risk_breakdown === 'object' &&
-    !Array.isArray(safeRow.review_risk_breakdown)
-      ? safeRow.review_risk_breakdown
-      : null;
+    isUnscoredTrustViewRow(safeRow) && hasSeller
+      ? { ...NO_ANALYSED_REVIEWS_BREAKDOWN }
+      : safeRow.review_risk_breakdown &&
+          typeof safeRow.review_risk_breakdown === 'object' &&
+          !Array.isArray(safeRow.review_risk_breakdown)
+        ? safeRow.review_risk_breakdown
+        : null;
   return {
     id: sanitizeOfferString(safeRow.id),
     platform: cleanPlatform,
@@ -1125,11 +1156,13 @@ export function mapTrustViewRowToMerchantOffer(
       rating_star: null,
       follower_count: toSafeNonNegativeVoteCount(followerCount, 100_000_000),
       location: cleanLocation || null,
-      risk_score: Math.max(
-        combinedRisk,
-        dosafeRisk ?? 0,
-        reviewRisk ?? baselineReviewRisk({ platform: safeRow.platform })
-      ),
+      risk_score: riskSplit
+        ? Math.max(combinedRisk, dosafeRisk ?? 0, riskSplit.combined)
+        : Math.max(
+            combinedRisk,
+            dosafeRisk ?? 0,
+            reviewRisk ?? baselineReviewRisk({ platform: safeRow.platform })
+          ),
       dosafe_risk_score: dosafeRisk,
       review_risk_score: reviewRisk,
       review_risk_breakdown: safeBreakdown,
@@ -1173,10 +1206,29 @@ export function mapOfferRowToMerchantOffer(item: RawOfferRow): MerchantOffer {
     merchantObj?.review_risk_score,
     0
   );
+  // RS#708: the column is the combined risk; the review-only part counts
+  // only with analysed reviews (DOS/Rate#1268).
+  const riskSplit = storedRiskSplit(
+    merchantObj?.review_risk_breakdown,
+    meta,
+    merchantObj?.review_risk_score
+  );
   // An offer with no merchant row has no seller to give a baseline (#1099).
-  const reviewRisk =
-    merchantObj?.review_risk_score != null &&
-    hasPersistedReviewRisk(columnReviewRisk, merchantObj.review_risk_breakdown)
+  const hasStoredScore =
+    riskSplit != null ||
+    (merchantObj?.review_risk_score != null &&
+      hasPersistedReviewRisk(
+        columnReviewRisk,
+        merchantObj.review_risk_breakdown
+      )) ||
+    typeof meta?.review_risk_score === 'number';
+  const reviewRisk = riskSplit
+    ? (riskSplit.reviewOnly ?? 0)
+    : merchantObj?.review_risk_score != null &&
+        hasPersistedReviewRisk(
+          columnReviewRisk,
+          merchantObj.review_risk_breakdown
+        )
       ? columnReviewRisk
       : typeof meta?.review_risk_score === 'number'
         ? toSafeRiskScore100(meta.review_risk_score, 0)
@@ -1187,8 +1239,10 @@ export function mapOfferRowToMerchantOffer(item: RawOfferRow): MerchantOffer {
               followerCount: Number(merchantObj.follower_count) || 0,
             })
           : null;
-  const metaCombined =
-    typeof meta?.combined_risk_score === 'number'
+  // The split's combined score when there is one; older metadata otherwise.
+  const metaCombined = riskSplit
+    ? riskSplit.combined
+    : typeof meta?.combined_risk_score === 'number'
       ? toSafeRiskScore100(meta.combined_risk_score, 0)
       : 0;
   // An unknown seller is never safer than the baseline in trust and sorting.
@@ -1205,18 +1259,21 @@ export function mapOfferRowToMerchantOffer(item: RawOfferRow): MerchantOffer {
     Object.keys(merchantObj.review_risk_breakdown).length > 0
       ? merchantObj.review_risk_breakdown
       : null;
+  // A baseline seller carries a breakdown counting no review (#1258).
   const breakdown =
-    topLevelBreakdown ??
-    (meta?.review_risk_breakdown &&
-    typeof meta.review_risk_breakdown === 'object' &&
-    !Array.isArray(meta.review_risk_breakdown) &&
-    Object.keys(meta.review_risk_breakdown as Record<string, unknown>).length >
-      0
-      ? (meta.review_risk_breakdown as Record<string, unknown>)
-      : meta &&
-          ('review_risk_score' in meta || 'seeding_spam_ratio_pct' in meta)
-        ? meta
-        : null);
+    merchantObj && !hasStoredScore
+      ? { ...NO_ANALYSED_REVIEWS_BREAKDOWN }
+      : (topLevelBreakdown ??
+        (meta?.review_risk_breakdown &&
+        typeof meta.review_risk_breakdown === 'object' &&
+        !Array.isArray(meta.review_risk_breakdown) &&
+        Object.keys(meta.review_risk_breakdown as Record<string, unknown>)
+          .length > 0
+          ? (meta.review_risk_breakdown as Record<string, unknown>)
+          : meta &&
+              ('review_risk_score' in meta || 'seeding_spam_ratio_pct' in meta)
+            ? meta
+            : null));
   const priceCurrent = toSafeOfferPrice(safeItem.price_current);
   const rawMerchantRating =
     typeof merchantObj?.rating_star === 'number' ||
@@ -1542,6 +1599,31 @@ export function resolveIncludeInRating(
  * Fetch reviews across listings grouped under a master product,
  * including JReviews vote metrics and AI transparency flags.
  */
+/**
+ * Whether a master product id names a published product. Reads that take an id
+ * from a request (reviews by `masterProductId`) serve only what the slug path
+ * would (DOS/Rate#1309).
+ */
+export async function isPublishedMasterProduct(
+  masterId: string
+): Promise<boolean> {
+  const supabase = getRateClient();
+  const { data, error } = await supabase
+    .from('master_products')
+    .select('id')
+    .eq('id', masterId)
+    .eq('status', 'published')
+    .maybeSingle();
+  if (error) {
+    log.error('master product status lookup failed', {
+      masterId,
+      message: error.message,
+    });
+    throw new RateDataUnavailableError('master product', error);
+  }
+  return Boolean(data);
+}
+
 export async function getMasterProductReviews(
   masterId: string
 ): Promise<ReviewItem[]> {
@@ -1722,6 +1804,7 @@ export async function getMasterProductReviewSummary(
       let totalAnalyzed = 0;
       let weightedAuthenticity = 0;
       let latestSummary: string | null = null;
+      let summaryTaken = false;
 
       for (const row of typedAnalyses) {
         const count = Number(row.total_reviews_analyzed || 0);
@@ -1729,8 +1812,12 @@ export async function getMasterProductReviewSummary(
         weightedAuthenticity +=
           Number(row.authenticity_score ?? fallbackAuthenticPct) *
           Math.max(1, count);
-        if (!latestSummary && row.ai_summary) {
-          latestSummary = String(row.ai_summary);
+        if (!summaryTaken && row.ai_summary) {
+          // Says it covers one listing, old rows too (DOS/Rate#1225). Only the
+          // latest row: a hidden one does not fall back to an older batch
+          // (DOS/Rate#1244).
+          summaryTaken = true;
+          latestSummary = listingReviewSummary(String(row.ai_summary));
         }
         if (Array.isArray(row.pros)) {
           for (const p of row.pros) {
@@ -2281,6 +2368,8 @@ export interface MerchantProductListing {
   rating_count: number;
   url: string;
   image: string | null;
+  /** As the retailer last reported it; null when unknown (counts as in stock). */
+  availability: OfferAvailability | null;
   master_product: {
     id: string;
     slug: string;
@@ -2346,6 +2435,7 @@ interface RawProductRow {
   images?: string[] | null;
   url: string;
   cluster_id?: string | null;
+  availability?: string | null;
 }
 
 export function normalizeMasterProductRow(
@@ -2417,6 +2507,11 @@ export interface SitemapRows {
   }>;
   merchants: Array<{ id: string; updated_at: string | null }>;
   categorySlugById: Map<string, string>;
+  /**
+   * RATE_ITEM_MODEL on: variant slug to Item slug, the map the product rows
+   * were grouped with, so the sitemap's versus pairs use the same (#1275).
+   */
+  itemSlugByVariantSlug?: ReadonlyMap<string, string> | null;
 }
 
 /**
@@ -2535,6 +2630,9 @@ export function persistedReviewRiskOf(row: {
   metadata?: unknown;
 }): number {
   if (!row || typeof row !== 'object' || Array.isArray(row)) return 0;
+  // RS#708: the column is the combined risk, not the review-only part.
+  const split = storedRiskSplit(row.review_risk_breakdown, row.metadata);
+  if (split) return split.reviewOnly ?? 0;
   const column = toSafeRiskScore100(row.review_risk_score, 0);
   if (
     row.review_risk_score != null &&
@@ -2564,6 +2662,7 @@ export function hasStoredReviewRisk(row: {
   metadata?: unknown;
 }): boolean {
   if (!row || typeof row !== 'object' || Array.isArray(row)) return false;
+  if (storedRiskSplit(row.review_risk_breakdown, row.metadata)) return true;
   if (
     row.review_risk_score != null &&
     hasPersistedReviewRisk(
@@ -2815,7 +2914,7 @@ export async function getMerchantsList(
     (chunk, from, to) =>
       supabase
         .from('products')
-        .select('id, merchant_id, price_current')
+        .select('id, merchant_id, price_current, availability')
         .in('merchant_id', chunk)
         .order('id')
         .range(from, to)
@@ -2826,10 +2925,14 @@ export async function getMerchantsList(
       id: string;
       merchant_id: string;
       price_current: number | string;
+      availability?: unknown;
     }>) || [];
 
   const prodToMerchant = new Map<string, string>();
   const prodsByMerchant = new Map<string, number[]>();
+  // The price range is what the store sells now: sold-out listings keep
+  // their last price but count only as listings (DOS/Rate#1248).
+  const livePricesByMerchant = new Map<string, number[]>();
   const productIdsByMerchant = new Map<string, string[]>();
 
   for (const p of products) {
@@ -2838,6 +2941,15 @@ export async function getMerchantsList(
     const price = Number(p.price_current || 0);
     if (Number.isFinite(price) && price > 0 && price <= MAX_VALID_VND_PRICE) {
       list.push(price);
+      if (
+        !isOfferUnavailable({
+          availability: toOfferAvailability(p.availability),
+        })
+      ) {
+        const live = livePricesByMerchant.get(p.merchant_id) ?? [];
+        live.push(price);
+        livePricesByMerchant.set(p.merchant_id, live);
+      }
     }
     prodsByMerchant.set(p.merchant_id, list);
 
@@ -2846,9 +2958,12 @@ export async function getMerchantsList(
     productIdsByMerchant.set(p.merchant_id, idList);
   }
 
+  // Reviews are read for every store without a persisted breakdown, also
+  // one with a stored score: the breakdown says whether reviews were
+  // analysed, as on the profile, which reads them too (DOS/Rate#1258).
   const unscoredProductIds: string[] = [];
   for (const m of merchants) {
-    if (!extractPersistedBreakdown(m) && !hasStoredReviewRisk(m)) {
+    if (!extractPersistedBreakdown(m)) {
       const mProdIds = productIdsByMerchant.get(m.id);
       if (mProdIds && mProdIds.length > 0) {
         unscoredProductIds.push(...mProdIds);
@@ -2934,16 +3049,16 @@ export async function getMerchantsList(
 
   const results: MerchantSummary[] = merchants.map((m) => {
     const prices = prodsByMerchant.get(m.id) ?? [];
+    const livePrices = livePricesByMerchant.get(m.id) ?? [];
     const persistedBreakdown = extractPersistedBreakdown(m);
     const mReviews = mappedReviewsByMerchant.get(m.id) ?? [];
-    const dynamicRisk =
-      persistedBreakdown || hasStoredReviewRisk(m)
-        ? null
-        : computeDynamicReviewRisk(mReviews, {
-            isOfficial: isStrictOfferOfficialFlag(m.is_official),
-            platform: m.platform,
-            followerCount: Number(m.follower_count) || 0,
-          });
+    const dynamicRisk = persistedBreakdown
+      ? null
+      : computeDynamicReviewRisk(mReviews, {
+          isOfficial: isStrictOfferOfficialFlag(m.is_official),
+          platform: m.platform,
+          followerCount: Number(m.follower_count) || 0,
+        });
     const meta = (
       m.metadata && typeof m.metadata === 'object' && !Array.isArray(m.metadata)
         ? m.metadata
@@ -2956,10 +3071,12 @@ export async function getMerchantsList(
         ? toSafeRiskScore100(meta.dosafe_risk_score, 0)
         : baseRisk;
     const persistedReviewRisk = persistedReviewRiskOf(m);
-    const effectiveReviewRisk = Math.max(
-      dynamicRisk?.reviewRiskScore ?? 0,
-      persistedReviewRisk
-    );
+    // A stored score covers all of the seller's reviews: it wins over the
+    // one computed here, as on the profile (#684).
+    const effectiveReviewRisk =
+      persistedBreakdown || hasStoredReviewRisk(m)
+        ? persistedReviewRisk
+        : Math.max(dynamicRisk?.reviewRiskScore ?? 0, persistedReviewRisk);
     const breakdown = persistedBreakdown ??
       dynamicRisk?.breakdown ?? {
         total_reviews: 0,
@@ -2969,11 +3086,14 @@ export async function getMerchantsList(
         sabotage_or_bombing_count: 0,
         suspicious_ratio_pct: 0,
       };
+    // The split's combined score when there is one; older metadata otherwise.
     const metaCombined =
-      typeof meta.combined_risk_score === 'number' &&
+      storedRiskSplit(m.review_risk_breakdown, m.metadata, m.review_risk_score)
+        ?.combined ??
+      (typeof meta.combined_risk_score === 'number' &&
       Number.isFinite(meta.combined_risk_score)
         ? toSafeRiskScore100(meta.combined_risk_score, 0)
-        : 0;
+        : 0);
     const combinedRisk = Math.min(
       100,
       Math.max(baseRisk, dosafeRisk, effectiveReviewRisk, metaCombined)
@@ -3001,8 +3121,8 @@ export async function getMerchantsList(
       risk_score: combinedRisk,
       trust_score: trustScore,
       product_count: prices.length,
-      min_price: prices.length > 0 ? Math.min(...prices) : null,
-      max_price: prices.length > 0 ? Math.max(...prices) : null,
+      min_price: livePrices.length > 0 ? Math.min(...livePrices) : null,
+      max_price: livePrices.length > 0 ? Math.max(...livePrices) : null,
       review_risk_breakdown: breakdown,
       updated_at: m.updated_at || m.created_at || null,
     };
@@ -3069,12 +3189,116 @@ async function readInChunks(
 }
 
 /**
+ * Per-master readers for a merchant profile's discount analysis. The server
+ * layer passes the cached readers the product pages use (DOS/Rate#1217).
+ */
+export interface MerchantProfileMasterReaders {
+  offers: (masterId: string) => Promise<MerchantOffer[]>;
+  priceHistory: (
+    masterId: string,
+    offers: MerchantOffer[]
+  ) => Promise<MasterProductPriceHistorySummary>;
+}
+
+const UNCACHED_MASTER_READERS: MerchantProfileMasterReaders = {
+  offers: (masterId) => getMasterProductOffers(masterId),
+  // Only byOffer is used here: skip the all-time low/high reads.
+  priceHistory: (masterId, offers) =>
+    getMasterProductPriceHistory(masterId, offers, { allTime: false }),
+};
+
+/**
+ * A merchant profile without its listings' discount analysis, plus the master
+ * each listing belongs to (published or not), so the analysis can be added
+ * after the profile leaves the Data Cache.
+ */
+export interface MerchantProfileBase {
+  profile: MerchantProfileDetail;
+  listingMasterIds: Record<string, string>;
+}
+
+/**
  * Fetch detailed profile for a single Merchant by UUID id, slug, or platform_shop_id,
  * including all listings with Fake Discount verdicts and buyer reviews with AI flags.
  */
 export async function getMerchantProfileById(
   idOrSlug: string
 ): Promise<MerchantProfileDetail | null> {
+  const base = await getMerchantProfileBase(idOrSlug);
+  return base
+    ? attachMerchantDiscountAnalysis(base, UNCACHED_MASTER_READERS)
+    : null;
+}
+
+/**
+ * Adds each listing's discount analysis, read per master through `readers`.
+ * Runs outside the profile's own cache entry: a nested unstable_cache skips
+ * the cache read, so the product pages' warm entries are reachable only from
+ * here (DOS/Rate#1217). A failed read throws, never a profile without its
+ * analysis (DOS/Rate#329).
+ */
+export async function attachMerchantDiscountAnalysis(
+  base: MerchantProfileBase,
+  readers: MerchantProfileMasterReaders
+): Promise<MerchantProfileDetail> {
+  const masterIds = Array.from(new Set(Object.values(base.listingMasterIds)));
+  const discountByOfferId = new Map<string, OfferDiscountAnalysis>();
+  await forEachWithConcurrency(
+    masterIds,
+    PRICE_HISTORY_CONCURRENCY,
+    async (masterId) => {
+      const offers = await readers.offers(masterId);
+      const ph = await readers.priceHistory(masterId, offers);
+      for (const [offerId, analysis] of Object.entries(ph.byOffer)) {
+        discountByOfferId.set(offerId, analysis);
+      }
+    }
+  );
+  // A listing with a verdict shows the price the verdict was computed on: the
+  // profile entry and the price-history entry expire apart, and an old price
+  // next to a verdict quoting the new one would contradict itself
+  // (DOS/Rate#1240). A verdict's price is always a valid one. Stock, rating
+  // and title stay as the profile read them.
+  const listings = base.profile.listings
+    .map((listing) => {
+      // A sold-out listing's last price is no deal and no historical low
+      // (DOS/Rate#1248): it gets no verdict.
+      const analysis = isOfferUnavailable(listing)
+        ? null
+        : discountByOfferId.get(listing.id) || null;
+      return {
+        ...listing,
+        ...(analysis
+          ? {
+              price_current: analysis.price_current,
+              price_original: analysis.price_original,
+            }
+          : {}),
+        discount_analysis: analysis,
+      };
+    })
+    // Stable: equal prices keep the profile's id order. Sold-out last.
+    .sort(
+      (a, b) =>
+        Number(isOfferUnavailable(a)) - Number(isOfferUnavailable(b)) ||
+        a.price_current - b.price_current
+    );
+  const prices = listings
+    .filter((l) => !isOfferUnavailable(l))
+    .map((l) => l.price_current)
+    .filter((p) => Number.isFinite(p) && p > 0 && p <= MAX_VALID_VND_PRICE);
+  return {
+    ...base.profile,
+    min_price: prices.length > 0 ? Math.min(...prices) : null,
+    max_price: prices.length > 0 ? Math.max(...prices) : null,
+    listings,
+  };
+}
+
+/** The merchant profile without discount analysis; see MerchantProfileBase. */
+export async function getMerchantProfileBase(
+  idOrSlug: string
+): Promise<MerchantProfileBase | null> {
   const cleaned = sanitizeRateEntityId(idOrSlug);
   if (!cleaned || cleaned.includes('..')) return null;
 
@@ -3087,9 +3311,39 @@ export async function getMerchantProfileById(
   const selectCols =
     'id, platform, platform_shop_id, name, slug, url, is_official, rating_star, follower_count, location, risk_score, review_risk_score, review_risk_breakdown, metadata, created_at, updated_at';
 
+  // Secondary reads throw too: a profile with silently empty listings or
+  // reviews would otherwise be cached as if it were true (DOS/Rate#329).
+  // Paged: retailers can list more than PostgREST's 1000-row cap.
+  const readListings = (merchantId: string, logFailure = true) =>
+    fetchAllRows(
+      'merchant listings',
+      (from, to) =>
+        supabase
+          .from('products')
+          .select(
+            'id, merchant_id, platform, platform_item_id, title, price_current, price_original, stock, historical_sold, historical_sold_display, rating_star, rating_count, images, url, cluster_id, availability'
+          )
+          .eq('merchant_id', merchantId)
+          .order('price_current', { ascending: true })
+          .order('id')
+          .range(from, to),
+      undefined,
+      logFailure
+    );
+
   let merchantRow: RawMerchantSafeRow | null = null;
+  // A UUID is almost always the merchant's own id: read its listings while
+  // the merchant row loads instead of after it, one round trip fewer on a
+  // cold render (DOS/Rate#1217). Used only when the id matches.
+  let listingsByUuid: Promise<unknown[]> | null = null;
 
   if (isUuid) {
+    // Unlogged: a UUID that is no merchant id discards this read, failed or
+    // not (DOS/Rate#1240). A failure is logged below if the read is used.
+    listingsByUuid = readListings(cleaned, false);
+    // Settled here so a failure is never unhandled while the merchant loads;
+    // it is rethrown below when these listings are used.
+    listingsByUuid.catch(() => undefined);
     const { data, error } = await supabase
       .from('merchants')
       .select(selectCols)
@@ -3118,29 +3372,23 @@ export async function getMerchantProfileById(
     return null;
   }
 
-  // Secondary reads throw too: a profile with silently empty listings or
-  // reviews would otherwise be cached as if it were true (DOS/Rate#329).
-  // Paged: retailers can list more than PostgREST's 1000-row cap.
   const merchantId = merchantRow.id;
-  const prodRows = await fetchAllRows('merchant listings', (from, to) =>
-    supabase
-      .from('products')
-      .select(
-        'id, merchant_id, platform, platform_item_id, title, price_current, price_original, stock, historical_sold, historical_sold_display, rating_star, rating_count, images, url, cluster_id'
-      )
-      .eq('merchant_id', merchantId)
-      .order('price_current', { ascending: true })
-      .order('id')
-      .range(from, to)
-  );
+  const prodRows =
+    listingsByUuid && merchantId.toLowerCase() === cleaned.toLowerCase()
+      ? await listingsByUuid.catch((err: unknown) => {
+          log.error('paged read failed', {
+            table: 'merchant listings',
+            message: err instanceof Error ? err.message : String(err),
+          });
+          throw err;
+        })
+      : await readListings(merchantId);
 
   const rawProducts = prodRows as unknown as RawProductRow[];
   const clusterIds = Array.from(
     new Set(rawProducts.map((p) => p.cluster_id).filter(Boolean))
   ) as string[];
-  const productIds = rawProducts.map((p) => p.id);
-
-  const [masterRows, catsRes, reviewRows] = await Promise.all([
+  const [masterRows, catsRes] = await Promise.all([
     // Published only: the product page serves no other status, so a draft
     // master would be linked to a 404 (DOS/Rate#769). Its listings show as
     // unclustered.
@@ -3154,15 +3402,27 @@ export async function getMerchantProfileById(
         .eq('status', 'published')
     ),
     supabase.from('categories').select('id, slug'),
-    readInChunks(productIds, 'merchant profile', (chunk) =>
+  ]);
+  // Reviews of a listing whose product is not published (draft, archived) stay
+  // out, as on the product's own review paths (DOS/Rate#1309); an unclustered
+  // listing's reviews show.
+  const publishedMasterIds = new Set(
+    (masterRows as Array<{ id: string }>).map((m) => m.id)
+  );
+  const productIds = rawProducts
+    .filter((p) => !p.cluster_id || publishedMasterIds.has(p.cluster_id))
+    .map((p) => p.id);
+  const reviewRows = await readInChunks(
+    productIds,
+    'merchant profile',
+    (chunk) =>
       supabase
         .from('reviews')
         .select('*, review_flags(*)')
         .in('product_id', chunk)
         .order('created_at', { ascending: false })
         .limit(60)
-    ),
-  ]);
+  );
   if (catsRes.error) {
     throw new RateDataUnavailableError('merchant profile', catsRes.error);
   }
@@ -3222,23 +3482,6 @@ export async function getMerchantProfileById(
     });
   }
 
-  // Compute price history / Fake Discount analysis per master product
-  const discountByOfferId = new Map<string, OfferDiscountAnalysis>();
-  // A failure throws: the profile must not be cached without its analysis.
-  await forEachWithConcurrency(
-    clusterIds,
-    PRICE_HISTORY_CONCURRENCY,
-    async (cId) => {
-      // Only byOffer is used here: skip the all-time low/high reads.
-      const ph = await getMasterProductPriceHistory(cId, undefined, {
-        allTime: false,
-      });
-      for (const [offerId, analysis] of Object.entries(ph.byOffer)) {
-        discountByOfferId.set(offerId, analysis);
-      }
-    }
-  );
-
   const listings: MerchantProductListing[] = rawProducts.map((p) => {
     const masterInfo = p.cluster_id
       ? masterById.get(p.cluster_id) || null
@@ -3268,10 +3511,16 @@ export async function getMerchantProfileById(
       rating_count: toSafeNonNegativeVoteCount(p.rating_count, 100_000_000),
       url: sanitizeOfferUrl(p.url),
       image: firstImageUrl(p.images),
+      availability: toOfferAvailability(p.availability),
       master_product: masterInfo,
-      discount_analysis: discountByOfferId.get(p.id) || null,
+      discount_analysis: null,
     };
   });
+  // Sold-out listings keep their last price: listed after the buyable ones,
+  // as on the product page (DOS/Rate#1248). Stable, so price order stays.
+  listings.sort(
+    (a, b) => Number(isOfferUnavailable(a)) - Number(isOfferUnavailable(b))
+  );
 
   const prodById = new Map(listings.map((l) => [l.id, l]));
   const recentReviews: MerchantProfileDetail['recent_reviews'] = (
@@ -3372,21 +3621,29 @@ export async function getMerchantProfileById(
       ? persistedReviewRisk
       : Math.max(dynamicRisk.reviewRiskScore, persistedReviewRisk);
   const breakdown = persistedBreakdown ?? dynamicRisk.breakdown;
+  // The split's combined score when there is one; older metadata otherwise.
   const metaCombined =
-    typeof meta.combined_risk_score === 'number' &&
+    storedRiskSplit(
+      merchantRow.review_risk_breakdown,
+      merchantRow.metadata,
+      merchantRow.review_risk_score
+    )?.combined ??
+    (typeof meta.combined_risk_score === 'number' &&
     Number.isFinite(meta.combined_risk_score)
       ? toSafeRiskScore100(meta.combined_risk_score, 0)
-      : 0;
+      : 0);
   const combinedRisk = Math.min(
     100,
     Math.max(baseRisk, dosafeRisk, effectiveReviewRisk, metaCombined)
   );
   const trustScore = Math.max(0, 100 - combinedRisk);
+  // The store's price range is what it sells now: sold-out listings are out.
   const prices = listings
+    .filter((l) => !isOfferUnavailable(l))
     .map((l) => l.price_current)
     .filter((p) => Number.isFinite(p) && p > 0 && p <= MAX_VALID_VND_PRICE);
 
-  return {
+  const profile: MerchantProfileDetail = {
     id: merchantRow.id,
     platform: merchantRow.platform,
     platform_shop_id: merchantRow.platform_shop_id,
@@ -3419,6 +3676,12 @@ export async function getMerchantProfileById(
     listings,
     recent_reviews: recentReviews,
   };
+
+  const listingMasterIds: Record<string, string> = {};
+  for (const p of rawProducts) {
+    if (p.cluster_id) listingMasterIds[p.id] = p.cluster_id;
+  }
+  return { profile, listingMasterIds };
 }
 
 /** Counters shown when platform stats cannot be read; never cached. */
@@ -3680,8 +3943,17 @@ export async function getRatePlatformStats(): Promise<RatePlatformStats> {
     });
   }
 
-  const mappedReviews: RatePlatformStats['recentReviewsSample'] =
-    rawReviews.map((r) => {
+  // A review of a listing whose product is not published (draft, archived) is
+  // not sampled; an unclustered listing's is (DOS/Rate#1309). masterRows holds
+  // the published masters only.
+  const sampledListingIds = new Set(
+    prodRows
+      .filter((p) => !p.cluster_id || masterSlugById.has(p.cluster_id))
+      .map((p) => p.id)
+  );
+  const mappedReviews: RatePlatformStats['recentReviewsSample'] = rawReviews
+    .filter((r) => sampledListingIds.has(r.product_id))
+    .map((r) => {
       const rawVf = Array.isArray(r.review_flags)
         ? r.review_flags[0]
         : r.review_flags;
@@ -4246,4 +4518,728 @@ export async function inspectProductOrShopUrl(
     merchantProfile: null,
     suggestions: fallbackSuggestions,
   };
+}
+
+// ---------------------------------------------------------------------------
+// Item / variant / listing model (DOS/Rate#1153; design doc
+// `Docs/Proposals/2026-10-27-item-variant-listing-model.md`, sections 4, 5.1).
+// These read `rate.items`, `master_products.item_id` and `products.item_id`,
+// which exist only after the DOS-Me M1+M2 migration (#1150). Callers reach
+// them only through `server/rate/item-model.ts` while `RATE_ITEM_MODEL` is on;
+// with the flag off nothing here runs.
+// ---------------------------------------------------------------------------
+
+/** A published `rate.items` row, as the web reads it. */
+export interface RateItem {
+  id: string;
+  item_key: string;
+  slug: string;
+  name: string;
+  brand: string;
+  model: string;
+  category_id: string | null;
+  default_variant_id: string | null;
+  min_price: number;
+  max_price: number;
+  price_variant_count: number;
+  merchant_count: number;
+  listing_count: number;
+  unknown_variant_listing_count: number;
+  updated_at: string | null;
+}
+
+/** A published variant (`rate.master_products` row) of an Item. */
+export interface RateItemVariant {
+  id: string;
+  item_id: string;
+  slug: string;
+  name: string;
+  variant_key: string;
+  variant_name: string | null;
+  sort_order: number | null;
+  storage_gb: number | null;
+  min_price: number;
+  max_price: number;
+  merchant_count: number;
+}
+
+/** An Item's offers: per variant, and the listings with no stated size. */
+export interface RateItemOffers {
+  byVariant: Map<string, MerchantOffer[]>;
+  unknownVariant: MerchantOffer[];
+}
+
+/**
+ * `resolveCatalogSlug`: a catalogue slug is either an Item's own slug or an
+ * old variant slug (the URL every page used before Items, design doc 5.1).
+ */
+export type CatalogSlugResolution =
+  | { kind: 'item'; item: RateItem; variant: null }
+  | {
+      kind: 'variant';
+      item: RateItem;
+      variant: RateItemVariant;
+      /** An archived variant, e.g. a retired `unknown` (design doc 7.2). */
+      retired: boolean;
+    }
+  /**
+   * A master with no Item yet (`item_id` NULL before the backfill): its page
+   * stays today's variant page.
+   */
+  | { kind: 'unlinked'; item: null; variant: null };
+
+/**
+ * The Item tables or columns are missing (M1+M2 not applied where the flag
+ * is on). Callers treat it as "flag off" instead of failing every page.
+ */
+export class ItemModelUnavailableError extends Error {
+  constructor(what: string, cause: { message?: string; code?: string }) {
+    super(
+      `rate-api: item model unavailable (${what}): ${cause.code ?? ''} ${cause.message ?? ''}`.trim()
+    );
+    this.name = 'ItemModelUnavailableError';
+  }
+}
+
+// undefined_table, undefined_column, and PostgREST's schema-cache misses.
+const MISSING_SCHEMA_CODES = new Set([
+  '42P01',
+  '42703',
+  'PGRST204',
+  'PGRST205',
+]);
+
+/** Rethrows a missing-schema read error as ItemModelUnavailableError. */
+function throwIfItemSchemaMissing<R extends { error: unknown }>(
+  what: string
+): (result: R) => R {
+  return (result) => {
+    const error = result.error as { message: string; code?: string } | null;
+    if (error?.code && MISSING_SCHEMA_CODES.has(error.code)) {
+      throw new ItemModelUnavailableError(what, error);
+    }
+    return result;
+  };
+}
+
+function itemReadError(
+  what: string,
+  error: { message: string; code?: string }
+): Error {
+  return error.code && MISSING_SCHEMA_CODES.has(error.code)
+    ? new ItemModelUnavailableError(what, error)
+    : new RateDataUnavailableError(what, error);
+}
+
+const ITEM_SELECT =
+  'id, item_key, slug, name, brand, model, category_id, default_variant_id, min_price, max_price, price_variant_count, merchant_count, listing_count, unknown_variant_listing_count, updated_at';
+const ITEM_VARIANT_SELECT =
+  'id, item_id, slug, name, variant_key, variant_name, sort_order, storage_gb, min_price, max_price, merchant_count';
+
+// rate.items and the item columns are not in the generated Database types
+// until #1150 lands, so these reads go through an untyped view of the client.
+type UntypedRateQuery = {
+  select: (cols: string) => UntypedRateQuery;
+  eq: (col: string, val: unknown) => UntypedRateQuery;
+  is: (col: string, val: null) => UntypedRateQuery;
+  in: (col: string, vals: readonly unknown[]) => UntypedRateQuery;
+  gte: (col: string, val: unknown) => UntypedRateQuery;
+  lte: (col: string, val: unknown) => UntypedRateQuery;
+  ilike: (col: string, pattern: string) => UntypedRateQuery;
+  order: (
+    col: string,
+    opts?: { ascending?: boolean; nullsFirst?: boolean }
+  ) => UntypedRateQuery;
+  range: (from: number, to: number) => UntypedRateQuery;
+  maybeSingle: () => PromiseLike<{
+    data: unknown;
+    error: { message: string; code?: string } | null;
+  }>;
+} & PromiseLike<{ data: unknown[] | null; error: { message: string } | null }>;
+const untypedRate = (): { from: (table: string) => UntypedRateQuery } =>
+  getRateClient() as unknown as { from: (table: string) => UntypedRateQuery };
+
+const toNonNegative = (raw: unknown): number => {
+  const n = Number(raw);
+  return Number.isFinite(n) && n > 0 ? n : 0;
+};
+
+function mapItemRow(raw: unknown): RateItem | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const r = raw as Record<string, unknown>;
+  const id = sanitizeRateEntityId(r.id);
+  const slug = typeof r.slug === 'string' ? r.slug : '';
+  if (!id || !slug) return null;
+  const str = (v: unknown): string => (typeof v === 'string' ? v : '');
+  return {
+    id,
+    item_key: str(r.item_key),
+    slug,
+    name: str(r.name),
+    brand: str(r.brand),
+    model: str(r.model),
+    category_id: sanitizeRateEntityId(r.category_id) || null,
+    default_variant_id: sanitizeRateEntityId(r.default_variant_id) || null,
+    min_price: toNonNegative(r.min_price),
+    max_price: toNonNegative(r.max_price),
+    price_variant_count: toNonNegative(r.price_variant_count),
+    merchant_count: toNonNegative(r.merchant_count),
+    listing_count: toNonNegative(r.listing_count),
+    unknown_variant_listing_count: toNonNegative(
+      r.unknown_variant_listing_count
+    ),
+    updated_at: typeof r.updated_at === 'string' ? r.updated_at : null,
+  };
+}
+
+function mapItemVariantRow(raw: unknown): RateItemVariant | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const r = raw as Record<string, unknown>;
+  const id = sanitizeRateEntityId(r.id);
+  const itemId = sanitizeRateEntityId(r.item_id);
+  const slug = typeof r.slug === 'string' ? r.slug : '';
+  const variantKey = typeof r.variant_key === 'string' ? r.variant_key : '';
+  if (!id || !itemId || !slug || !variantKey) return null;
+  const sortOrder = Number(r.sort_order);
+  const storage = Number(r.storage_gb);
+  return {
+    id,
+    item_id: itemId,
+    slug,
+    name: typeof r.name === 'string' ? r.name : '',
+    variant_key: variantKey,
+    variant_name: typeof r.variant_name === 'string' ? r.variant_name : null,
+    sort_order:
+      r.sort_order != null && Number.isFinite(sortOrder) ? sortOrder : null,
+    storage_gb: Number.isFinite(storage) && storage > 0 ? storage : null,
+    min_price: toNonNegative(r.min_price),
+    max_price: toNonNegative(r.max_price),
+    merchant_count: toNonNegative(r.merchant_count),
+  };
+}
+
+const isSafeCatalogSlug = (slug: string): boolean =>
+  PRODUCT_SLUG_REGEX.test(slug) &&
+  !slug.includes('..') &&
+  !SENTINEL_RATE_API_TOKENS.has(slug.toLowerCase());
+
+async function readItem(
+  column: 'slug' | 'id',
+  value: string
+): Promise<RateItem | null> {
+  const { data, error } = await untypedRate()
+    .from('items')
+    .select(ITEM_SELECT)
+    .eq(column, value)
+    .eq('status', 'published')
+    .maybeSingle();
+  if (error) {
+    log.error('item lookup failed', { column, value, message: error.message });
+    throw itemReadError('item', error);
+  }
+  return mapItemRow(data);
+}
+
+/** A published Item by its own slug. Needs M1+M2 (#1150). */
+export async function getItemBySlug(slug: string): Promise<RateItem | null> {
+  const clean =
+    typeof slug === 'string' ? slug.replace(/\p{Cc}+/gu, '').trim() : '';
+  if (!isSafeCatalogSlug(clean)) return null;
+  return readItem('slug', clean);
+}
+
+/** A published Item by id. Needs M1+M2 (#1150). */
+export async function getItemById(itemId: string): Promise<RateItem | null> {
+  const clean = sanitizeRateEntityId(itemId);
+  if (!clean) return null;
+  return readItem('id', clean);
+}
+
+/**
+ * An Item's published variants: sized ones by storage, then the rest. A
+ * retired (archived) `unknown` variant is not one of them (design doc 4.4).
+ */
+export async function getItemVariants(
+  itemId: string
+): Promise<RateItemVariant[]> {
+  const clean = sanitizeRateEntityId(itemId);
+  if (!clean) return [];
+  const rows = await fetchAllRows(
+    'item variants',
+    (from, to) =>
+      untypedRate()
+        .from('master_products')
+        .select(ITEM_VARIANT_SELECT)
+        .eq('item_id', clean)
+        .eq('status', 'published')
+        .order('id')
+        .range(from, to)
+        .then(
+          throwIfItemSchemaMissing('item variants')
+        ) as unknown as PromiseLike<{
+        data: unknown[] | null;
+        error: { message: string } | null;
+      }>
+  );
+  return sortItemVariants(
+    rows.map(mapItemVariantRow).filter((v): v is RateItemVariant => v !== null)
+  );
+}
+
+/** sort_order first, then storage ascending, then the key, so the order is stable. */
+export function sortItemVariants(
+  variants: readonly RateItemVariant[]
+): RateItemVariant[] {
+  return [...variants].sort((a, b) => {
+    const ao = a.sort_order ?? Number.MAX_SAFE_INTEGER;
+    const bo = b.sort_order ?? Number.MAX_SAFE_INTEGER;
+    if (ao !== bo) return ao - bo;
+    const as = a.storage_gb ?? Number.MAX_SAFE_INTEGER;
+    const bs = b.storage_gb ?? Number.MAX_SAFE_INTEGER;
+    if (as !== bs) return as - bs;
+    return a.variant_key.localeCompare(b.variant_key);
+  });
+}
+
+/**
+ * The listings of an Item with no stated size (`item_id` set, `cluster_id`
+ * NULL). The trust view has no `item_id` (#1242 leaves it unchanged), so the
+ * listing ids come from rate.products and their offers from the view.
+ */
+export async function getItemUnknownVariantOffers(
+  itemId: string
+): Promise<MerchantOffer[]> {
+  const idRows = await fetchAllRows(
+    'item unknown-variant listings',
+    (from, to) =>
+      untypedRate()
+        .from('products')
+        .select('id, availability')
+        .eq('item_id', itemId)
+        .is('cluster_id', null)
+        .order('id')
+        .range(from, to)
+        .then(
+          throwIfItemSchemaMissing('item unknown-variant listings')
+        ) as unknown as PromiseLike<{
+        data: unknown[] | null;
+        error: { message: string } | null;
+      }>
+  );
+  const availability = new Map<string, OfferAvailability>();
+  const ids: string[] = [];
+  for (const raw of idRows as Array<{ id?: unknown; availability?: unknown }>) {
+    const id = typeof raw?.id === 'string' ? raw.id : '';
+    if (!id) continue;
+    ids.push(id);
+    const a = toOfferAvailability(raw.availability);
+    if (a) availability.set(id, a);
+  }
+  if (ids.length === 0) return [];
+  const supabase = getRateClient();
+  const viewRows: RawTrustViewRow[] = [];
+  for (let i = 0; i < ids.length; i += IN_FILTER_CHUNK_SIZE) {
+    const chunk = ids.slice(i, i + IN_FILTER_CHUNK_SIZE);
+    const rows = await fetchAllRows(
+      'v_products_with_merchant_trust',
+      (from, to) =>
+        supabase
+          .from('v_products_with_merchant_trust')
+          .select(TRUST_VIEW_SELECT)
+          .in('id', chunk)
+          .order('price_current', { ascending: true })
+          .order('id')
+          .range(from, to)
+    );
+    viewRows.push(...(rows as unknown as RawTrustViewRow[]));
+  }
+  const extras = await sellerExtrasForTrustViewRows(viewRows);
+  return viewRows
+    .map((row) =>
+      withOfferAvailability(
+        mapTrustViewRowToMerchantOffer(
+          row,
+          extras.followerCounts.get(row.merchant_id),
+          extras.metadataDosafeRisks.get(row.merchant_id)
+        ),
+        availability
+      )
+    )
+    .sort((a, b) => a.price_current - b.price_current);
+}
+
+/**
+ * An Item's offers grouped by variant, plus the "size not stated" group,
+ * which never feeds a variant's prices (design doc 4.4, Q2).
+ */
+export async function getItemOffers(
+  itemId: string,
+  variants: readonly RateItemVariant[]
+): Promise<RateItemOffers> {
+  const clean = sanitizeRateEntityId(itemId);
+  if (!clean) return { byVariant: new Map(), unknownVariant: [] };
+  const [byVariant, unknownVariant] = await Promise.all([
+    getMasterProductOffersBatch(variants.map((v) => v.id)),
+    getItemUnknownVariantOffers(clean),
+  ]);
+  return { byVariant, unknownVariant };
+}
+
+/**
+ * A catalogue slug as an Item: its own slug first, then an old variant slug
+ * (design doc 5.1, Q1). Null when neither is published. Needs M1+M2 (#1150).
+ */
+export async function resolveCatalogSlug(
+  slug: string
+): Promise<CatalogSlugResolution | null> {
+  const clean =
+    typeof slug === 'string' ? slug.replace(/\p{Cc}+/gu, '').trim() : '';
+  if (!isSafeCatalogSlug(clean)) return null;
+  const item = await readItem('slug', clean);
+  if (item) return { kind: 'item', item, variant: null };
+  // An archived variant (a retired `unknown`, an archived duplicate) still
+  // redirects its old URL to its Item; it is never offered as a size.
+  const { data, error } = await untypedRate()
+    .from('master_products')
+    .select(`${ITEM_VARIANT_SELECT}, status`)
+    .eq('slug', clean)
+    .in('status', ['published', 'archived'])
+    .maybeSingle();
+  if (error) {
+    log.error('variant slug lookup failed', {
+      slug: clean,
+      message: error.message,
+    });
+    throw itemReadError('variant', error);
+  }
+  const variant = mapItemVariantRow(data);
+  if (!variant) {
+    // A master not yet linked to an Item keeps its page; only a slug that is
+    // no master at all (or a malformed row) is unknown here.
+    const row = data as { id?: unknown; item_id?: unknown } | null;
+    return row && sanitizeRateEntityId(row.id) && row.item_id == null
+      ? { kind: 'unlinked', item: null, variant: null }
+      : null;
+  }
+  const owner = await readItem('id', variant.item_id);
+  if (!owner) return null;
+  const retired = (data as { status?: unknown }).status === 'archived';
+  return { kind: 'variant', item: owner, variant, retired };
+}
+
+/** A catalogue master's Item, with every published variant of that Item. */
+export interface MasterItemLink {
+  item: RateItem;
+  variants: RateItemVariant[];
+}
+
+/**
+ * The published Item of each master, by master id, with the Item's
+ * published variants (DOS/Rate#1155). A master with no Item yet, or whose
+ * Item is not published, is absent: it stays its own catalogue entry.
+ * Needs M1+M2 (#1150); a missing table or column throws
+ * ItemModelUnavailableError.
+ */
+export async function getItemLinksForMasters(
+  masterIds: readonly string[]
+): Promise<Map<string, MasterItemLink>> {
+  const ids = Array.from(
+    new Set(masterIds.map((id) => sanitizeRateEntityId(id)).filter(Boolean))
+  );
+  const links = new Map<string, MasterItemLink>();
+  if (ids.length === 0) return links;
+  const db = untypedRate();
+  const read = async (
+    what: string,
+    keys: readonly string[],
+    query: (chunk: string[]) => UntypedRateQuery
+  ): Promise<unknown[]> =>
+    readInChunks(
+      keys,
+      what,
+      (chunk) =>
+        query(chunk).then(throwIfItemSchemaMissing(what)) as PromiseLike<{
+          data: unknown[] | null;
+          error: { message?: string } | null;
+        }>
+    );
+
+  const masterRows = (await read('item links', ids, (chunk) =>
+    db.from('master_products').select('id, item_id').in('id', chunk)
+  )) as Array<{ id?: unknown; item_id?: unknown }>;
+  const itemIdByMaster = new Map<string, string>();
+  for (const row of masterRows) {
+    const id = sanitizeRateEntityId(row.id);
+    const itemId = sanitizeRateEntityId(row.item_id);
+    if (id && itemId) itemIdByMaster.set(id, itemId);
+  }
+  const itemIds = Array.from(new Set(itemIdByMaster.values()));
+  if (itemIds.length === 0) return links;
+
+  const [itemRows, variantsByItem] = await Promise.all([
+    read('items', itemIds, (chunk) =>
+      db
+        .from('items')
+        .select(ITEM_SELECT)
+        .in('id', chunk)
+        .eq('status', 'published')
+    ),
+    getItemVariantsBatch(itemIds),
+  ]);
+  const itemsById = new Map<string, RateItem>();
+  for (const raw of itemRows) {
+    const item = mapItemRow(raw);
+    if (item) itemsById.set(item.id, item);
+  }
+  for (const [masterId, itemId] of itemIdByMaster) {
+    const item = itemsById.get(itemId);
+    if (!item) continue;
+    links.set(masterId, {
+      item,
+      variants: variantsByItem.get(itemId) ?? [],
+    });
+  }
+  return links;
+}
+
+/**
+ * Brand facets counted in Items, not variants (DOS/Rate#1155): one count per
+ * published Item of the category, and one per published master not linked
+ * to an Item yet. Needs M1+M2 (#1150).
+ */
+export async function getCategoryItemBrandFacets(
+  categoryId: string
+): Promise<{ name: string; count: number }[]> {
+  const cleanId = sanitizeRateEntityId(categoryId);
+  if (!cleanId) return [];
+  const rows = (await fetchAllRows(
+    'item brand facets',
+    (from, to) =>
+      untypedRate()
+        .from('master_products')
+        .select('id, brand, item_id')
+        .eq('category_id', cleanId)
+        .eq('status', 'published')
+        .order('id')
+        .range(from, to)
+        .then(
+          throwIfItemSchemaMissing('item brand facets')
+        ) as unknown as PromiseLike<{
+        data: unknown[] | null;
+        error: { message: string } | null;
+      }>
+  )) as Array<{ id?: unknown; brand?: unknown; item_id?: unknown }>;
+  const linkedIds = Array.from(
+    new Set(rows.map((r) => sanitizeRateEntityId(r.item_id)).filter(Boolean))
+  );
+  const publishedItems = new Set<string>();
+  if (linkedIds.length > 0) {
+    const itemRows = (await readInChunks(
+      linkedIds,
+      'item brand facets',
+      (chunk) =>
+        untypedRate()
+          .from('items')
+          .select('id')
+          .in('id', chunk)
+          .eq('status', 'published')
+          .then(throwIfItemSchemaMissing('item brand facets')) as PromiseLike<{
+          data: unknown[] | null;
+          error: { message?: string } | null;
+        }>
+    )) as Array<{ id?: unknown }>;
+    for (const r of itemRows) {
+      const id = sanitizeRateEntityId(r.id);
+      if (id) publishedItems.add(id);
+    }
+  }
+  return countBrandsByItem(
+    rows.map((r) => {
+      const itemId = sanitizeRateEntityId(r.item_id);
+      return {
+        brand: typeof r.brand === 'string' ? r.brand : '',
+        // A master whose Item is not published counts as itself.
+        key:
+          itemId && publishedItems.has(itemId)
+            ? `item:${itemId}`
+            : `master:${String(r.id ?? '')}`,
+      };
+    })
+  );
+}
+
+/** Published Items, for "products tracked" (DOS/Rate#1155). Needs M1+M2. */
+export async function countPublishedItems(): Promise<number> {
+  const { count, error } = await (
+    getRateClient() as unknown as {
+      from: (table: string) => {
+        select: (
+          cols: string,
+          opts: { count: 'exact'; head: true }
+        ) => {
+          eq: (
+            col: string,
+            val: unknown
+          ) => PromiseLike<{
+            count: number | null;
+            error: { message: string; code?: string } | null;
+          }>;
+        };
+      };
+    }
+  )
+    .from('items')
+    .select('id', { count: 'exact', head: true })
+    .eq('status', 'published');
+  if (error) throw itemReadError('item count', error);
+  return typeof count === 'number' && count > 0 ? count : 0;
+}
+
+/**
+ * Variant slug to published Item slug, over every published master linked
+ * to a published Item (DOS/Rate#1155: the sitemap lists Item URLs). Needs
+ * M1+M2 (#1150).
+ */
+export async function getItemSlugByVariantSlug(): Promise<Map<string, string>> {
+  const db = untypedRate();
+  const page =
+    (what: string, table: string, cols: string) => (from: number, to: number) =>
+      db
+        .from(table)
+        .select(cols)
+        .eq('status', 'published')
+        .order('id')
+        .range(from, to)
+        .then(throwIfItemSchemaMissing(what)) as unknown as PromiseLike<{
+        data: unknown[] | null;
+        error: { message: string } | null;
+      }>;
+  const [masterRows, itemRows] = await Promise.all([
+    fetchAllRows(
+      'sitemap item links',
+      page('sitemap item links', 'master_products', 'slug, item_id')
+    ),
+    fetchAllRows('sitemap items', page('sitemap items', 'items', 'id, slug')),
+  ]);
+  const itemSlugById = new Map<string, string>();
+  for (const raw of itemRows as Array<{ id?: unknown; slug?: unknown }>) {
+    const id = sanitizeRateEntityId(raw.id);
+    if (id && typeof raw.slug === 'string' && raw.slug) {
+      itemSlugById.set(id, raw.slug);
+    }
+  }
+  const out = new Map<string, string>();
+  for (const raw of masterRows as Array<{
+    slug?: unknown;
+    item_id?: unknown;
+  }>) {
+    const itemSlug = itemSlugById.get(sanitizeRateEntityId(raw.item_id));
+    if (itemSlug && typeof raw.slug === 'string' && raw.slug) {
+      out.set(raw.slug, itemSlug);
+    }
+  }
+  return out;
+}
+
+/** `listItems` filters: what API v1 `group=item` supports (DOS/Rate#1158). */
+export interface ItemListParams {
+  categoryId?: string | null;
+  brands?: readonly string[];
+  search?: string;
+  minPrice?: number;
+  maxPrice?: number;
+  sort?: 'default' | 'price_asc' | 'price_desc' | 'merchants_desc' | 'newest';
+  limit: number;
+  offset: number;
+}
+
+/**
+ * Published Items for API v1 `group=item`, one row per Item with its "from"
+ * price. Spec filters stay variant-level until `search_items_v1` (#1155).
+ * Needs M1+M2 (#1150).
+ */
+export async function listItems(params: ItemListParams): Promise<RateItem[]> {
+  let query = untypedRate()
+    .from('items')
+    .select(ITEM_SELECT)
+    .eq('status', 'published');
+  const categoryId = params.categoryId
+    ? sanitizeRateEntityId(params.categoryId)
+    : '';
+  if (categoryId) query = query.eq('category_id', categoryId);
+  if (params.brands && params.brands.length > 0) {
+    query = query.in('brand', params.brands.slice(0, 50));
+  }
+  const search = (params.search ?? '')
+    .replace(/\p{Cc}+/gu, ' ')
+    // LIKE wildcards, escapes and PostgREST filter syntax are no search text.
+    .replace(/[%_*\\,()]/g, ' ')
+    .trim()
+    .slice(0, 160);
+  if (search) query = query.ilike('name', `%${search}%`);
+  // A price filter means a price: an Item with none (0) is no match.
+  if (
+    typeof params.minPrice === 'number' ||
+    typeof params.maxPrice === 'number'
+  ) {
+    query = query.gte('min_price', Math.max(1, params.minPrice ?? 1));
+  }
+  if (typeof params.maxPrice === 'number') {
+    query = query.lte('min_price', params.maxPrice);
+  }
+  const sort = params.sort ?? 'default';
+  query =
+    sort === 'price_asc'
+      ? query.order('min_price', { ascending: true })
+      : sort === 'price_desc'
+        ? query.order('min_price', { ascending: false })
+        : sort === 'merchants_desc'
+          ? query.order('merchant_count', { ascending: false })
+          : sort === 'newest'
+            ? query.order('updated_at', { ascending: false })
+            : query.order('listing_count', { ascending: false });
+  const { data, error } = await query
+    .order('id')
+    .range(params.offset, params.offset + params.limit - 1);
+  if (error) {
+    log.error('item list failed', { message: error.message });
+    throw itemReadError('items', error as { message: string; code?: string });
+  }
+  return (data ?? []).map(mapItemRow).filter((i): i is RateItem => i !== null);
+}
+
+/**
+ * The published variants of several Items, by Item id, each in variant order
+ * (DOS/Rate#1158; shared with `getItemLinksForMasters`, #1155). Needs M1+M2
+ * (#1150); a missing table or column throws ItemModelUnavailableError.
+ */
+export async function getItemVariantsBatch(
+  itemIds: readonly string[]
+): Promise<Map<string, RateItemVariant[]>> {
+  const ids = Array.from(
+    new Set(itemIds.map((id) => sanitizeRateEntityId(id)).filter(Boolean))
+  );
+  const byItem = new Map<string, RateItemVariant[]>(ids.map((id) => [id, []]));
+  if (ids.length === 0) return byItem;
+  const rows = await readInChunks(
+    ids,
+    'item variants',
+    (chunk) =>
+      untypedRate()
+        .from('master_products')
+        .select(ITEM_VARIANT_SELECT)
+        .in('item_id', chunk)
+        .eq('status', 'published')
+        .then(throwIfItemSchemaMissing('item variants')) as PromiseLike<{
+        data: unknown[] | null;
+        error: { message?: string } | null;
+      }>
+  );
+  for (const variant of rows.map(mapItemVariantRow)) {
+    if (variant) byItem.get(variant.item_id)?.push(variant);
+  }
+  for (const [id, variants] of byItem) {
+    byItem.set(id, sortItemVariants(variants));
+  }
+  return byItem;
 }

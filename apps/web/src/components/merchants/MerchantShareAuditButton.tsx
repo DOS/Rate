@@ -140,17 +140,23 @@ export default function MerchantShareAuditButton({
           label: safeTrustLevelLabel,
         }),
         t('mdDosafeLine', { score: safeDosafeRisk }),
-        t('mdSeedingLine', { score: safeSeedingRisk }),
+        // No analysed reviews: neither a risk number nor "100% genuine"
+        // (DOS/Rate#1249).
+        safeTotalReviews > 0
+          ? t('mdSeedingLine', { score: safeSeedingRisk })
+          : t('mdSeedingLineNoReviews'),
         t('mdRadarLine', {
           genuine: safeGenuineDeals,
           traps: safeFakeTraps,
         }),
-        t('mdAuthenticLine', {
-          pct: authenticPct,
-          auth: safeAuthenticReviews,
-          total: safeTotalReviews,
-          flagged: safeFlaggedReviews,
-        }),
+        safeTotalReviews > 0
+          ? t('mdAuthenticLine', {
+              pct: authenticPct,
+              auth: safeAuthenticReviews,
+              total: safeTotalReviews,
+              flagged: safeFlaggedReviews,
+            })
+          : t('mdAuthenticLineNoReviews'),
         t('mdProductsLine', { count: safeProductCount }),
         t('mdUrlLine', { url: window.location.href }),
       ];
@@ -199,7 +205,8 @@ export default function MerchantShareAuditButton({
       safeTrustScore,
       safeTrustLevelLabel,
       safeDosafeRisk,
-      safeSeedingRisk,
+      // Empty without analysed reviews: no measured risk (DOS/Rate#1258).
+      safeTotalReviews > 0 ? safeSeedingRisk : '',
       safeGenuineDeals,
       safeFakeTraps,
       safeAuthenticReviews,
@@ -232,7 +239,7 @@ export default function MerchantShareAuditButton({
         trustScore: safeTrustScore,
         trustLevelLabel: safeTrustLevelLabel,
         dosafeRiskScore: safeDosafeRisk,
-        reviewSeedingRiskScore: safeSeedingRisk,
+        reviewSeedingRiskScore: safeTotalReviews > 0 ? safeSeedingRisk : null,
         genuineDealCount: safeGenuineDeals,
         fakeSaleTrapCount: safeFakeTraps,
         authenticReviews: safeAuthenticReviews,

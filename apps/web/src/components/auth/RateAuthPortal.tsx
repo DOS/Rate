@@ -46,7 +46,13 @@ export function sanitizeAuthRedirectTarget(rawTarget: unknown): string {
   }
   try {
     const parsed = new URL(cleaned, 'https://rate.vn');
-    if (parsed.origin !== 'https://rate.vn') {
+    // Dot segments ("/.//x", "/%2e//x", "/a/..//x") normalize to a "//x" path,
+    // which a router reads as another host: never a target.
+    if (
+      parsed.origin !== 'https://rate.vn' ||
+      parsed.pathname.startsWith('//') ||
+      parsed.pathname.includes('\\')
+    ) {
       return '/';
     }
     return `${parsed.pathname}${parsed.search}${parsed.hash}`;

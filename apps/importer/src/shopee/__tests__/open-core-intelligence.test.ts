@@ -312,11 +312,94 @@ async function runSuite() {
     ['Apple iMac M4 24 inch 256GB', 'apple:imac-m4:256gb'],
     ['Mac Studio M4 Max 512GB', 'apple:mac-studio-m4-max:512gb'],
     ['Loa Apple HomePod mini', 'apple:homepod-mini:unknown'],
+    // An app the product supports sets no brand: a TV naming "Apple TV" is the TV's
+    // brand, never `apple:tv`; an Apple product naming Siri stays itself (DOS/Rate#1195).
+    [
+      'Smart Tivi Samsung 4K 55 inch UA55DU7000 hỗ trợ Apple TV',
+      'samsung:smart-tivi-samsung-4k:unknown',
+    ],
+    [
+      'Smart Tivi Samsung QLED 4K 65 inch QA65Q60D tích hợp Apple TV, AirPlay 2',
+      'samsung:smart-tivi-samsung-qled:unknown',
+    ],
+    [
+      'Google Tivi Sony 4K 55 inch K-55S30 có ứng dụng Apple TV',
+      'sony:google-tivi-sony-4k:unknown',
+    ],
+    [
+      'Smart Tivi Samsung 55 inch Apple TV Netflix YouTube',
+      'samsung:smart-tivi-samsung-55:unknown',
+    ],
+    ['Tivi LG OLED 55 inch hỗ trợ Apple AirPlay', 'khac:tivi-lg:unknown'],
+    ['Apple TV 4K hỗ trợ Siri 64GB', 'apple:tv-4k:64gb'],
+    ['Loa Apple HomePod mini hỗ trợ Apple Music', 'apple:homepod-mini:unknown'],
+    ['iPad Air M2 tặng Apple TV+', 'apple:ipad-air-m2:unknown'],
+    // The "+" of "Apple TV+" goes with it, never a Plus model.
+    ['iPhone 16 hỗ trợ Apple TV+ 128GB', 'apple:iphone-16:128gb'],
+    ['Loa Samsung HW-Q990D hỗ trợ: Apple AirPlay 2', 'samsung:loa-samsung-hw-q990d:unknown'],
+    // An Apple TV box sold as a "Smart TV" box names no other TV brand and stays the box.
+    ['Apple TV 4K 64GB - Smart TV Box with Siri Remote', 'apple:tv-4k:64gb'],
+    ['Smart TV Apple TV 4K 128GB bản Wifi', 'apple:tv-4k:128gb'],
+    // A bundled Magic Keyboard after the name keeps the iMac.
+    ['Apple iMac M4 24 inch 256GB kèm Magic Keyboard', 'apple:imac-m4:256gb'],
+    ['iMac M4 24 inch 16GB 256GB Magic Keyboard Touch ID', 'apple:imac-m4:256gb'],
     // A generation or year after the line keeps generations apart.
     ['Apple HomePod 2', 'apple:homepod-2:unknown'],
     ['Apple HomePod (2nd generation)', 'apple:homepod-2:unknown'],
     ['Apple TV 4K 2022 128GB', 'apple:tv-4k-3:128gb'],
     ['Apple TV 4K (2022) 128GB', 'apple:tv-4k-3:128gb'],
+    // Generation words, Roman numerals, chips and part numbers name the generation too
+    // (DOS/Rate#1194).
+    ['Apple TV 4K thế hệ 3 Wi-Fi 64GB', 'apple:tv-4k-3:64gb'],
+    ['Apple TV 4K Gen 3 Wi-Fi + Ethernet 128GB', 'apple:tv-4k-3:128gb'],
+    ['Apple TV 4K 3rd Gen 128GB', 'apple:tv-4k-3:128gb'],
+    ['Apple TV 4K (A15) 64GB', 'apple:tv-4k-3:64gb'],
+    ['Apple TV 4K chip A15 Bionic 128GB', 'apple:tv-4k-3:128gb'],
+    ['Apple TV 4K MN873 64GB', 'apple:tv-4k-3:64gb'],
+    ['Apple TV 4K Wi-Fi 64GB MN873SA/A', 'apple:tv-4k-3:64gb'],
+    ['Apple MN873SA/A', 'apple:tv-4k-3:unknown'],
+    ['Apple TV 4K II 32GB', 'apple:tv-4k-2:32gb'],
+    ['Apple TV 4K (A12) 32GB', 'apple:tv-4k-2:32gb'],
+    ['Apple TV 4K 64GB', 'apple:tv-4k:64gb'],
+    // A stated generation wins over a chip or part number.
+    ['Apple TV 4K 2022 Wi-Fi 64GB MXH02', 'apple:tv-4k-3:64gb'],
+    ['AirPods Pro II', 'apple:airpods-pro-2:unknown'],
+    // H2 is in the AirPods Pro 2 and 3 alike: it names no Pro generation.
+    ['AirPods Pro (H2)', 'apple:airpods-pro:unknown'],
+    ['AirPods Pro MTJV3', 'apple:airpods-pro-2:unknown'],
+    ['Apple TV 4K MN873SA', 'apple:tv-4k-3:unknown'],
+    // A parenthesised generation word reads like a bare one.
+    ['AirPods (thế hệ thứ 3)', 'apple:airpods-3:unknown'],
+    ['Apple Watch Ultra (thế hệ thứ 2)', 'apple:watch-ultra-2:64gb'],
+    ['Apple Watch SE (thế hệ thứ 2) 40mm', 'apple:watch-se-2-40mm:unknown'],
+    ['Apple TV 4K (Gen 3) 64GB', 'apple:tv-4k-3:64gb'],
+    // A chip or part number of a bundled or fitted accessory names nothing.
+    [
+      'Tai nghe Apple AirPods Pro chip H1 + ốp silicon tương thích MTJV3',
+      'apple:airpods-pro:unknown',
+    ],
+    ['Combo iPad Gen 10 + Apple Pencil 1 MQLY3', 'apple:ipad-10:unknown'],
+    // A stylus that does not say "Apple Pencil" is not one.
+    ['Bút cảm ứng Stylus Pencil Gen 2 cho iPad Gen 9', 'apple:ipad-9:unknown'],
+    ['AirPods (H2)', 'apple:airpods-4:unknown'],
+    ['AirPods thế hệ 3', 'apple:airpods-3:unknown'],
+    ['HomePod thế hệ 2', 'apple:homepod-2:unknown'],
+    ['HomePod 2nd Gen', 'apple:homepod-2:unknown'],
+    ['iPad thế hệ 10 64GB', 'apple:ipad-10:64gb'],
+    ['iPad Air thế hệ 5 64GB', 'apple:ipad-air-5:64gb'],
+    ['iPad mini thế hệ 6 64GB', 'apple:ipad-mini-6:64gb'],
+    ['iPhone SE thế hệ 3 64GB', 'apple:iphone-se-3:64gb'],
+    ['iPhone SE 3rd Gen 64GB', 'apple:iphone-se-3:64gb'],
+    ['Apple Watch SE thế hệ 2 40mm', 'apple:watch-se-2-40mm:unknown'],
+    ['Apple Watch Ultra II 49mm', 'apple:watch-ultra-2:64gb'],
+    // An Apple Pencil is its own line, never the iPhone fallback, nor the iPad it fits.
+    ['Apple Pencil 2', 'apple:pencil-2:unknown'],
+    ['Apple Pencil thế hệ 2', 'apple:pencil-2:unknown'],
+    ['Apple Pencil (2nd generation)', 'apple:pencil-2:unknown'],
+    ['Apple Pencil MU8F2ZA/A', 'apple:pencil-2:unknown'],
+    ['Apple Pencil 2 cho iPad Air M2', 'apple:pencil-2:unknown'],
+    ['Apple Pencil Pro', 'apple:pencil-pro:unknown'],
+    ['Apple Pencil (USB-C)', 'apple:pencil-usb-c:unknown'],
     ['Vision Pro 256GB', 'apple:vision-pro:256gb'],
     // A chip named for a bundled accessory is not the Air's.
     ['iPad Air 5 64GB + ốp lưng cho iPad Pro M4', 'apple:ipad-air-5:64gb'],
@@ -355,6 +438,83 @@ async function runSuite() {
     ['Apple Watch Series 11 46mm GPS 64GB', 'apple:watch-series-11-46mm:64gb'],
     // The other size is another product.
     ['iPad Pro M4 13 inch 512GB', 'apple:ipad-pro-m4-13:512gb'],
+    // A bundle word inside the product's own part keeps its size (DOS/Rate#1263).
+    ['iPad Pro M4 kèm bút 13 inch WiFi 256GB', 'apple:ipad-pro-m4-13:256gb'],
+    ['MacBook Air M3 kèm chuột 15 inch 16GB 512GB', 'apple:macbook-air-m3-15:512gb'],
+    ['iPad Pro M4 | tặng bút 13 inch WiFi 256GB', 'apple:ipad-pro-m4-13:256gb'],
+    ['MacBook Air M3, kèm chuột 15 inch 16GB 512GB', 'apple:macbook-air-m3-15:512gb'],
+    ['iPad Pro M4 11 inch tặng bao da 13 inch 256GB', 'apple:ipad-pro-m4-11:256gb'],
+    // "bao test" (guaranteed testing) is no accessory.
+    ['iPad Pro M4 kèm bao test 13 inch WiFi 256GB', 'apple:ipad-pro-m4-13:256gb'],
+    // A size only the gift names: an 11 inch case fits the 11 inch iPad (DOS/Rate#1277).
+    ['iPad Pro M4 Wifi kèm bao da 11 inch 256GB', 'apple:ipad-pro-m4-11:256gb'],
+    ['MacBook Air tặng ốp 13 inch M4 16GB 512GB', 'apple:macbook-air-m4-13:512gb'],
+    // For an iPad or a MacBook, a "vỏ"/"hộp" gift is an accessory whatever its material.
+    ['iPad Pro M4 13 kèm vỏ nhôm 11 inch 256GB', 'apple:ipad-pro-m4-13:256gb'],
+    ['MacBook Air M4 13 kèm hộp 15 inch 16GB 512GB', 'apple:macbook-air-m4-13:512gb'],
+    // A bare size before a Vietnamese word is still the product's, never the gift's
+    // (DOS/Rate#1291).
+    ['MacBook Air M3 13 tặng túi 15 inch', 'apple:macbook-air-m3-13:unknown'],
+    ['MacBook Air M3 13 hãng tặng túi 15 inch', 'apple:macbook-air-m3-13:unknown'],
+    ['iPad Pro M4 13 tặng ốp 11 inch', 'apple:ipad-pro-m4-13:unknown'],
+    // A size the reader does not take ("10.9") or a gift listing several sizes: no size.
+    ['iPad Air 10.9 tặng ốp 11 inch', 'apple:ipad-air:unknown'],
+    ['iPad Pro M4 tặng ốp 11 inch/13 inch', 'apple:ipad-pro-m4:unknown'],
+    ['iPad Pro M4 tặng ốp 11 inch / 11.0 inch', 'apple:ipad-pro-m4-11:unknown'],
+    ['iPad Pro M4 tặng ốp 11 inch, 13 inch', 'apple:ipad-pro-m4:unknown'],
+    ['MacBook Pro M4 512GB macOS 14 tặng túi 16 inch', 'apple:macbook-pro-m4-16:512gb'],
+    // Warranty, return days, battery hours, a discount, RAM, an OS version or a charger's
+    // watts are no screen size: the gift's size still stands in.
+    ['iPad Air M2 128GB Chính hãng BH 12 tháng tặng ốp 11 inch', 'apple:ipad-air-m2-11:128gb'],
+    ['iPad Air M2 128GB Đổi trả 15 ngày tặng ốp 11 inch', 'apple:ipad-air-m2-11:128gb'],
+    ['iPad Pro M4 256GB Pin 10 giờ tặng bao da 13 inch', 'apple:ipad-pro-m4-13:256gb'],
+    ['iPad Air M2 128GB giảm 10% tặng ốp 11 inch', 'apple:ipad-air-m2-11:128gb'],
+    ['iPad Air M2 128GB hỗ trợ trả góp 12 kỳ tặng ốp 11 inch', 'apple:ipad-air-m2-11:128gb'],
+    ['MacBook Air M3 RAM 16 tặng túi 13 inch', 'apple:macbook-air-m3-13:unknown'],
+    ['MacBook Air M3 macOS 15 tặng túi 13 inch', 'apple:macbook-air-m3-13:unknown'],
+    ['MacBook Air M3 15 W tặng túi 13 inch', 'apple:macbook-air-m3-13:unknown'],
+    // ...and never a size of its own.
+    ['MacBook Air M2 8GB 256GB bảo hành 15 tháng', 'apple:macbook-air-m2:256gb'],
+    ['MacBook Pro M3 18GB 512GB bảo hành 14 tháng', 'apple:macbook-pro-m3:512gb'],
+    ['MacBook Air M2 8GB 256GB 15 gói quà', 'apple:macbook-air-m2:256gb'],
+    // "<size> năm <year>" names the size and the year (DOS/Rate#1317); a "năm"
+    // with no year after it is a duration.
+    ['Máy tính bảng Apple iPad Pro 11 năm 2022 M2 128GB Wifi', 'apple:ipad-pro-m2-11:128gb'],
+    ['Laptop Apple MacBook Pro 14 năm 2023 M3 8GB 512GB', 'apple:macbook-pro-m3-14:512gb'],
+    ['MacBook Air 13 năm 2022 M2 8GB 256GB', 'apple:macbook-air-m2-13:256gb'],
+    ['MacBook Air 15 năm 2023 M2 8GB 256GB', 'apple:macbook-air-m2-15:256gb'],
+    ['iPad Air 11 năm 2024 M2 128GB', 'apple:ipad-air-m2-11:128gb'],
+    ['iPad Pro 12.9 năm 2022 M2 128GB', 'apple:ipad-pro-m2-129:128gb'],
+    ['MacBook Air M2 13 năm', 'apple:macbook-air-m2:unknown'],
+    // A date ("11/11"), RAM or SSD, a macOS name, a duration or an amount is no
+    // size, so the gift's size still stands in.
+    ['iPad Pro M4 Sale 11/11 tặng ốp 13 inch', 'apple:ipad-pro-m4-13:unknown'],
+    ['MacBook Pro M3 16 RAM 512 SSD tặng túi 14 inch', 'apple:macbook-pro-m3-14:unknown'],
+    ['MacBook Air M3 macOS Sonoma 14 tặng túi 13 inch', 'apple:macbook-air-m3-13:unknown'],
+    ['iPad Air M2 BH 12 months tặng ốp 11 inch', 'apple:ipad-air-m2-11:unknown'],
+    // ...but a size before "RAM 8GB" (a RAM size follows), "SSD" or "ROM" is the
+    // screen's, and short words like "Tr", "k", "đ" are no unit.
+    ['iPad Pro M4 11 RAM 8GB ROM 256GB tặng ốp 13 inch', 'apple:ipad-pro-m4-11:256gb'],
+    ['Macbook Air M2 13 RAM 8GB SSD 256GB', 'apple:macbook-air-m2-13:256gb'],
+    ['MacBook Pro M3 14 RAM 18GB 512GB', 'apple:macbook-pro-m3-14:512gb'],
+    ['MacBook Air M1 13 SSD 256GB', 'apple:macbook-air-m1-13:256gb'],
+    ['iPad Pro M4 11 ROM 256GB', 'apple:ipad-pro-m4-11:256gb'],
+    ['MacBook Pro 14 Tr M3 8GB 512GB', 'apple:macbook-pro-m3-14:512gb'],
+    ['iPad Pro 11 k M4 256GB', 'apple:ipad-pro-m4-11:256gb'],
+    // A bare gift number is the gift's: the product's own size after it wins.
+    ['iPad Pro M4 tặng ốp 11 | 13 WiFi', 'apple:ipad-pro-m4-13:unknown'],
+    ['iPad Pro M4 13 tặng ốp 11 tặng bút', 'apple:ipad-pro-m4-13:unknown'],
+    ['iPad Pro M4 tặng ốp 11 tặng bút', 'apple:ipad-pro-m4-11:unknown'],
+    // A number after "cho/for" (a school year, an age) is no size of the product.
+    [
+      'iPad Pro M4 Wifi 256GB tặng bao da 13 inch cho học sinh lớp 11',
+      'apple:ipad-pro-m4-13:256gb',
+    ],
+    [
+      'MacBook Air M4 16GB 512GB tặng ốp 13 inch for students from 15',
+      'apple:macbook-air-m4-13:512gb',
+    ],
+    ['MacBook Air M3 kèm bao test 15 inch 16GB 512GB', 'apple:macbook-air-m3-15:512gb'],
     ['iPad Pro 13" M5 1TB', 'apple:ipad-pro-m5-13:1024gb'],
     ['iPad Pro 11 2024 M4 256GB', 'apple:ipad-pro-m4-11:256gb'],
     ['iPad Pro 12.9 inch M2 128GB', 'apple:ipad-pro-m2-129:128gb'],
@@ -412,35 +572,35 @@ async function runSuite() {
       'apple:watch-series-11-46mm:64gb',
     ],
     ['Apple Watch Series 11 GPS 46mm viền nhôm dây thể thao', 'apple:watch-series-11-46mm:64gb'],
-    ['Apple Watch Series 10 42mm (GPS) Viền Nhôm - Dây Vải', 'apple:watch-series-10-42mm:unknown'],
+    ['Apple Watch Series 10 42mm (GPS) Viền Nhôm - Dây Vải', 'apple:watch-series-10-42mm:64gb'],
     ['Apple Watch Series 11 42mm viền thép dây Link Bracelet', 'apple:watch-series-11-42mm:64gb'],
     // Two sizes, one of them the band's, leave the size-less key (Tier 2).
-    ['Apple Watch Series 10 dây Sport Band 45mm cho mặt 42mm', 'apple:watch-series-10:unknown'],
-    ['Apple Watch Series 10 Sport Loop 45mm cho mặt 46mm', 'apple:watch-series-10:unknown'],
-    ['Apple Watch Series 10 Sport Band 45mm cho mặt 42mm', 'apple:watch-series-10:unknown'],
+    ['Apple Watch Series 10 dây Sport Band 45mm cho mặt 42mm', 'apple:watch-series-10:64gb'],
+    ['Apple Watch Series 10 Sport Loop 45mm cho mặt 46mm', 'apple:watch-series-10:64gb'],
+    ['Apple Watch Series 10 Sport Band 45mm cho mặt 42mm', 'apple:watch-series-10:64gb'],
     ['Apple Watch SE 3 GPS Strap 40mm for 44mm case', 'apple:watch-se-3:unknown'],
-    ['Apple Watch Series 10 Bracelet 42mm | 46mm', 'apple:watch-series-10:unknown'],
+    ['Apple Watch Series 10 Bracelet 42mm | 46mm', 'apple:watch-series-10:64gb'],
     // A band is sold by the case it fits: a band's size alone is the case's.
     [
       'Apple Watch Series 10 GPS Dây Cao Su 46mm Chính Hãng VN/A',
-      'apple:watch-series-10-46mm:unknown',
+      'apple:watch-series-10-46mm:64gb',
     ],
     ['Apple Watch Series 9 GPS Sport Loop 45mm', 'apple:watch-series-9-45mm:unknown'],
     ['Apple Watch Series 11 GPS Viền Nhôm Dây Silicone 42mm', 'apple:watch-series-11-42mm:64gb'],
     // The band phrase ends at ")", ",", "|", ";", an en dash or " - ": a case size after it
     // wins over the band's.
     ['Apple Watch Series 11 GPS (Viền nhôm, dây cao su) 46mm', 'apple:watch-series-11-46mm:64gb'],
-    ['Apple Watch Series 10 dây Sport Band 45mm, mặt 42mm', 'apple:watch-series-10-42mm:unknown'],
-    ['Apple Watch Series 10 Dây Vải 45mm - 46mm GPS', 'apple:watch-series-10-46mm:unknown'],
-    ['Apple Watch Series 10 Dây Vải 45mm; 46mm GPS', 'apple:watch-series-10-46mm:unknown'],
-    ['Apple Watch Series 10 Dây Vải 45mm \u2013 46mm GPS', 'apple:watch-series-10-46mm:unknown'],
-    ['Apple Watch Series 10 (dây vải 45mm) 46mm', 'apple:watch-series-10-46mm:unknown'],
+    ['Apple Watch Series 10 dây Sport Band 45mm, mặt 42mm', 'apple:watch-series-10-42mm:64gb'],
+    ['Apple Watch Series 10 Dây Vải 45mm - 46mm GPS', 'apple:watch-series-10-46mm:64gb'],
+    ['Apple Watch Series 10 Dây Vải 45mm; 46mm GPS', 'apple:watch-series-10-46mm:64gb'],
+    ['Apple Watch Series 10 Dây Vải 45mm \u2013 46mm GPS', 'apple:watch-series-10-46mm:64gb'],
+    ['Apple Watch Series 10 (dây vải 45mm) 46mm', 'apple:watch-series-10-46mm:64gb'],
     // A glued "Sportband" is a band; "không dây" is wireless, no band.
-    ['Apple Watch Series 10 Sportband 45mm cho mặt 42mm', 'apple:watch-series-10:unknown'],
-    ['Apple Watch Series 10 sạc không dây 46mm cho dây 42mm', 'apple:watch-series-10-46mm:unknown'],
+    ['Apple Watch Series 10 Sportband 45mm cho mặt 42mm', 'apple:watch-series-10:64gb'],
+    ['Apple Watch Series 10 sạc không dây 46mm cho dây 42mm', 'apple:watch-series-10-46mm:64gb'],
     [
       'Apple Watch Series 10 sạc kho\u0302ng dây 46mm cho dây 42mm',
-      'apple:watch-series-10-46mm:unknown',
+      'apple:watch-series-10-46mm:64gb',
     ],
     // A size in brackets after the band is the case's when it is the only one.
     [
@@ -449,9 +609,9 @@ async function runSuite() {
     ],
     // A decomposed or upper-case "dây" is the same word, so "42mm" after its comma is a
     // second band size (DOS/Rate#1137); "Bandit" is no band.
-    ['Apple Watch Series 10 da\u0302y vải 45mm, 42mm', 'apple:watch-series-10:unknown'],
-    ['APPLE WATCH SERIES 10 DÂY VẢI 45MM, 42MM', 'apple:watch-series-10:unknown'],
-    ['Apple Watch Series 10 Bandit 46mm cho mặt 42mm', 'apple:watch-series-10-46mm:unknown'],
+    ['Apple Watch Series 10 da\u0302y vải 45mm, 42mm', 'apple:watch-series-10:64gb'],
+    ['APPLE WATCH SERIES 10 DÂY VẢI 45MM, 42MM', 'apple:watch-series-10:64gb'],
+    ['Apple Watch Series 10 Bandit 46mm cho mặt 42mm', 'apple:watch-series-10-46mm:64gb'],
   ];
   for (const [title, expectedKey] of watchBandSizeKeys1124) {
     assert.equal(keyOf(title), expectedKey, title);
@@ -467,49 +627,196 @@ async function runSuite() {
     ['Apple Watch Series 11 GPS Nhôm Dây Sport Loop 42mm | 46mm', 'apple:watch-series-11:64gb'],
     ['Apple Watch Series 11 Dây Vải 42mm 46mm', 'apple:watch-series-11:64gb'],
     // The list runs on over every listed size, and a pipe list keys like a comma list.
-    ['Apple Watch Series 10 Sport Band 42mm, 46mm, 42mm', 'apple:watch-series-10:unknown'],
-    ['Apple Watch Series 10 Dây Vải 42mm | 46mm | Chính Hãng', 'apple:watch-series-10:unknown'],
-    [
-      'Apple Watch Series 10 Sport Band 42mm, 46mm | mặt 46mm',
-      'apple:watch-series-10-46mm:unknown',
-    ],
+    ['Apple Watch Series 10 Sport Band 42mm, 46mm, 42mm', 'apple:watch-series-10:64gb'],
+    ['Apple Watch Series 10 Dây Vải 42mm | 46mm | Chính Hãng', 'apple:watch-series-10:64gb'],
+    ['Apple Watch Series 10 Sport Band 42mm, 46mm | mặt 46mm', 'apple:watch-series-10-46mm:64gb'],
     // A band phrase without a size starts no list: the size after its comma is the case's.
-    ['Apple Watch Series 10 Dây Cao Su, 46mm', 'apple:watch-series-10-46mm:unknown'],
-    ['Apple Watch Series 10 Dây Cao Su | 42mm GPS', 'apple:watch-series-10-42mm:unknown'],
-    ['Apple Watch Series 10 Dây Cao Su S/M, 46mm', 'apple:watch-series-10-46mm:unknown'],
+    ['Apple Watch Series 10 Dây Cao Su, 46mm', 'apple:watch-series-10-46mm:64gb'],
+    ['Apple Watch Series 10 Dây Cao Su | 42mm GPS', 'apple:watch-series-10-42mm:64gb'],
+    ['Apple Watch Series 10 Dây Cao Su S/M, 46mm', 'apple:watch-series-10-46mm:64gb'],
     // A listed size keeps its band's fit, a bracket or text after it.
-    ['Apple Watch Series 10 Sport Band 45mm, 46mm GPS', 'apple:watch-series-10:unknown'],
+    ['Apple Watch Series 10 Sport Band 45mm, 46mm GPS', 'apple:watch-series-10:64gb'],
     [
       'Apple Watch Series 10 GPS Dây Cao Su 42mm, 46mm Chính Hãng VN/A',
-      'apple:watch-series-10:unknown',
+      'apple:watch-series-10:64gb',
     ],
-    ['Apple Watch Series 10 Sport Band 42mm S/M, 46mm M/L', 'apple:watch-series-10:unknown'],
-    ['Apple Watch Series 10 Sport Band 42mm | 46mm (S/M)', 'apple:watch-series-10:unknown'],
-    ['Apple Watch Series 10 [Sport Band 42mm, 46mm] Mới 100%', 'apple:watch-series-10:unknown'],
-    ['Apple Watch Series 10 Dây Sport Band 46mm, 42mm.', 'apple:watch-series-10:unknown'],
+    ['Apple Watch Series 10 Sport Band 42mm S/M, 46mm M/L', 'apple:watch-series-10:64gb'],
+    ['Apple Watch Series 10 Sport Band 42mm | 46mm (S/M)', 'apple:watch-series-10:64gb'],
+    ['Apple Watch Series 10 [Sport Band 42mm, 46mm] Mới 100%', 'apple:watch-series-10:64gb'],
+    ['Apple Watch Series 10 Dây Sport Band 46mm, 42mm.', 'apple:watch-series-10:64gb'],
     // A case size before the band phrase still wins.
     ['Apple Watch Series 11 GPS 46mm, Dây Cao Su 46mm S/M', 'apple:watch-series-11-46mm:64gb'],
     // ")", ";", an en dash or " - " still end the band phrase and its list.
-    ['Apple Watch Series 10 (Sport Band 45mm) 46mm, 42mm', 'apple:watch-series-10-46mm:unknown'],
+    ['Apple Watch Series 10 (Sport Band 45mm) 46mm, 42mm', 'apple:watch-series-10-46mm:64gb'],
     // A listed part that names the case ("case", "mặt", "vỏ") is the case's.
     [
       'Apple Watch Series 11 GPS Sport Band 46mm, 42mm Aluminum Case',
       'apple:watch-series-11-42mm:64gb',
     ],
     ['Apple Watch Series 11 GPS Sport Band 46mm | 42mm Case', 'apple:watch-series-11-42mm:64gb'],
-    ['Apple Watch Series 10 Dây Vải 45mm, 42mm mặt nhôm', 'apple:watch-series-10-42mm:unknown'],
-    ['Apple Watch Series 10 Dây Vải 45mm, 46mm vỏ nhôm', 'apple:watch-series-10-46mm:unknown'],
+    ['Apple Watch Series 10 Dây Vải 45mm, 42mm mặt nhôm', 'apple:watch-series-10-42mm:64gb'],
+    ['Apple Watch Series 10 Dây Vải 45mm, 46mm vỏ nhôm', 'apple:watch-series-10-46mm:64gb'],
   ];
   for (const [title, expectedKey] of watchBandListKeys1137) {
     assert.equal(keyOf(title), expectedKey, title);
   }
+  // DOS/Rate#1162: a range of bare band sizes, or two or more sizes listed right before a
+  // band word, names no case.
+  const watchBandRangeKeys1162: Array<[string, string]> = [
+    // The titles of the issue.
+    ['Apple Watch Series 10 Sport Loop 42mm - 46mm', 'apple:watch-series-10:64gb'],
+    ['Apple Watch SE 3 GPS 40mm, 44mm Dây Sport Band', 'apple:watch-se-3:unknown'],
+    // An en dash range keys like " - "; a pipe or longer list keys like a comma list.
+    ['Apple Watch Series 10 Sport Loop 42mm \u2013 46mm', 'apple:watch-series-10:64gb'],
+    ['Apple Watch Series 10 GPS, 42mm, 46mm Dây Sport Loop', 'apple:watch-series-10:64gb'],
+    ['Apple Watch Series 10 GPS 42mm | 46mm Dây Cao Su', 'apple:watch-series-10:64gb'],
+    ['Apple Watch Series 10 GPS 46mm - 42mm Dây Sport Band', 'apple:watch-series-10:64gb'],
+    // A size after the dash with more text, a single size before the band, a size the
+    // case names or a size cut off by ")" is still the case's.
+    ['Apple Watch Series 10 Sport Loop 42mm - 46mm GPS', 'apple:watch-series-10-46mm:64gb'],
+    ['Apple Watch Series 10 GPS, 44mm Dây Sport Band', 'apple:watch-series-10-44mm:64gb'],
+    ['Apple Watch Series 10 Vỏ nhôm 46mm, 42mm Dây Sport Band', 'apple:watch-series-10-46mm:64gb'],
+    ['Apple Watch Series 10 (GPS 46mm) 42mm Dây Sport', 'apple:watch-series-10-46mm:64gb'],
+    ['Apple Watch Series 10 GPS 46mm, 46mm Dây Cao Su', 'apple:watch-series-10-46mm:64gb'],
+    [
+      'Apple Watch Series 10 (Vỏ nhôm) 46mm, 42mm Dây Sport Band',
+      'apple:watch-series-10-46mm:64gb',
+    ],
+    [
+      'Apple Watch Series 10 GPS 46mm, 42mm Dây Sport Band mặt 46mm',
+      'apple:watch-series-10-46mm:64gb',
+    ],
+    // A range runs on from a listed bare size, not from one with a fit after it.
+    ['Apple Watch Series 10 Sport Band 42mm S/M, 44mm - 46mm', 'apple:watch-series-10:64gb'],
+    ['Apple Watch Series 10 Sport Band 42mm, 44mm M/L - 46mm', 'apple:watch-series-10-46mm:64gb'],
+    // A size with a band of its own is no list item: the size before it is the case's.
+    [
+      'Apple Watch Series 10 GPS 46mm Dây Sport Band, 42mm Dây Cao Su',
+      'apple:watch-series-10-46mm:64gb',
+    ],
+  ];
+  for (const [title, expectedKey] of watchBandRangeKeys1162) {
+    assert.equal(keyOf(title), expectedKey, title);
+  }
+  // DOS/Rate#1223: a part that names the case with its size wins over a band size
+  // written before it, in either order.
+  const namedCaseKeys1223: Array<[string, string]> = [
+    [
+      'Apple Watch Series 11 GPS + Cellular 45mm Sport Band, 46mm Titanium Case',
+      'apple:watch-series-11-46mm:64gb',
+    ],
+    [
+      'Apple Watch Series 11 GPS + Cellular 46mm Titanium Case, 45mm Sport Band',
+      'apple:watch-series-11-46mm:64gb',
+    ],
+    [
+      'Apple Watch Series 10 42mm Sport Loop, 46mm Aluminium Case',
+      'apple:watch-series-10-46mm:64gb',
+    ],
+    ['Apple Watch SE 3 44mm Sport Band, 40mm Case', 'apple:watch-se-3-40mm:unknown'],
+    ['Apple Watch Series 11 45mm Sport Band | Case 42mm', 'apple:watch-series-11-42mm:64gb'],
+    [
+      'Apple Watch Series 11 GPS 45mm Sport Band, 46mm Viền Titanium',
+      'apple:watch-series-11-46mm:64gb',
+    ],
+    // A box, a cover or a fit names no case of the watch itself.
+    ['Apple Watch Series 10 GPS 46mm, kèm vỏ hộp 42mm', 'apple:watch-series-10-46mm:64gb'],
+    [
+      'Apple Watch Series 10 GPS 46mm (Sport Band 45mm, fits 42mm case)',
+      'apple:watch-series-10-46mm:64gb',
+    ],
+    // A gifted or bundled case is not the watch's (DOS/Rate#1263).
+    ['Apple Watch Series 10 42mm GPS | Case 46mm', 'apple:watch-series-10-42mm:64gb'],
+    ['Apple Watch Series 10 42mm GPS, tặng Silicone Case 46mm', 'apple:watch-series-10-42mm:64gb'],
+    ['Apple Watch Series 10 42mm GPS tặng ốp 46mm', 'apple:watch-series-10-42mm:64gb'],
+    ['Apple Watch Series 10 42mm GPS | Ốp TPU Case 46mm', 'apple:watch-series-10-42mm:64gb'],
+    ['Apple Watch Series 10 42mm GPS | Bao da Case 46mm', 'apple:watch-series-10-42mm:64gb'],
+    // A size only the gift names is the best evidence left: a 46mm case fits the 46mm
+    // watch (DOS/Rate#1277).
+    ['Apple Watch Series 10 GPS, tặng Silicone Case 46mm', 'apple:watch-series-10-46mm:64gb'],
+    ['Apple Watch Series 10 GPS | kèm ốp 46mm', 'apple:watch-series-10-46mm:64gb'],
+    [
+      'Apple Watch Series 10 GPS, tặng Silicone Case 46mm'.normalize('NFD'),
+      'apple:watch-series-10-46mm:64gb',
+    ],
+    [
+      'Apple Watch Series 10 GPS Silicone Band 42mm, tặng Silicone Case 46mm',
+      'apple:watch-series-10-42mm:64gb',
+    ],
+    ['Apple Watch Series 10 GPS kèm ốp 46mm', 'apple:watch-series-10-46mm:64gb'],
+    // "vỏ" with a material is the watch's own case, and "hộp" (box) no accessory size.
+    ['Apple Watch Series 10 GPS kèm vỏ nhôm 46mm', 'apple:watch-series-10-46mm:64gb'],
+    ['Apple Watch Series 10 42mm GPS kèm vỏ titan 42mm', 'apple:watch-series-10-42mm:64gb'],
+    ['Apple Watch Series 10 GPS kèm hộp 42mm', 'apple:watch-series-10-42mm:64gb'],
+    // A gifted size never overrides a size the watch names itself.
+    ['Apple Watch Series 10 46mm GPS, tặng ốp 42mm', 'apple:watch-series-10-46mm:64gb'],
+    // A size the rest names but leaves open is never replaced by the gift's.
+    [
+      'Apple Watch Series 10 GPS Sport Band 42mm mặt 46mm, tặng ốp 42mm',
+      'apple:watch-series-10:64gb',
+    ],
+    // "size 46" is the watch's; a box or "vỏ nhôm" gift yields to a case the rest names;
+    // a gift listing several sizes fits either, so no size (DOS/Rate#1291).
+    ['Apple Watch Series 10 size 46 tặng ốp 42mm', 'apple:watch-series-10-46mm:64gb'],
+    ['Apple Watch Series 10 kèm hộp 46mm, GPS 42mm', 'apple:watch-series-10-42mm:64gb'],
+    ['Apple Watch Series 10 kèm vỏ nhôm 46mm, GPS 42mm', 'apple:watch-series-10-42mm:64gb'],
+    ['Apple Watch Series 10 GPS tặng ốp 42mm / 46mm', 'apple:watch-series-10:64gb'],
+    ['Apple Watch Series 10 GPS 46 tặng ốp 42mm', 'apple:watch-series-10:64gb'],
+    ['Apple Watch Series 10 GPS giảm 40% tặng ốp 46mm', 'apple:watch-series-10-46mm:64gb'],
+    ['Apple Watch Series 10 giảm 44 nghìn tặng ốp 46mm', 'apple:watch-series-10-46mm:64gb'],
+    // A size listed right after the box's is a list, not the watch's own case.
+    ['Apple Watch Series 10 kèm hộp 46mm | 42mm', 'apple:watch-series-10-46mm:64gb'],
+    // "size 46" beats a box's size; a band's "size 42" is not the watch's.
+    ['Apple Watch Series 10 kèm hộp 42mm, size 46 GPS', 'apple:watch-series-10-46mm:64gb'],
+    ['Apple Watch Series 10 kèm vỏ nhôm 42mm, size 46 GPS', 'apple:watch-series-10-46mm:64gb'],
+    ['Apple Watch Series 10 Sport Band size 42 cho mặt 46mm', 'apple:watch-series-10:64gb'],
+    ['Apple Watch Series 10 GPS 46 tặng ốp size 42', 'apple:watch-series-10:64gb'],
+    ['Apple Watch Series 10 GPS size 42/46', 'apple:watch-series-10:64gb'],
+    // A bundle word before no sized accessory keeps the product's size.
+    ['Apple Watch Series 10 kèm sạc 46mm GPS', 'apple:watch-series-10-46mm:64gb'],
+    ['Apple Watch Series 10, kèm sạc 46mm GPS', 'apple:watch-series-10-46mm:64gb'],
+    // Still the watch's: a named case after a band size, or a lone "| 46mm" case.
+    ['Apple Watch Series 10 GPS | Case 46mm', 'apple:watch-series-10-46mm:64gb'],
+  ];
+  for (const [title, expectedKey] of namedCaseKeys1223) {
+    assert.equal(keyOf(title), expectedKey, title);
+  }
+  // The "| Case" check is linear in the parts: a 250-part title stays fast (it took
+  // about 29 ms when it was cubic, DOS/Rate#1277).
+  // Worst case: no sized part before the "|"s, so the old check rescanned them all.
+  const manyParts = `Apple Watch Series 10 GPS 42mm Sport Band${' | a'.repeat(250)}`;
+  keyOf(manyParts);
+  const runs = Array.from({ length: 5 }, () => {
+    const t0 = performance.now();
+    keyOf(manyParts);
+    return performance.now() - t0;
+  }).sort((x, y) => x - y);
+  assert.ok(runs[2]! < 10, `250-part title took ${runs[2]!.toFixed(1)} ms`);
   // The registry has one entry per line: a sized title keeps the line's benchmark, but
-  // the entry's screen and battery describe only the size it was written for.
-  assert.equal(
-    normalizer.normalize(createDummyShopeeProduct('Apple Watch Series 11 GPS 42mm'))
-      .is_benchmark_enriched,
-    true
+  // the entry's screen and battery describe only the size it was written for. A watch
+  // entry pinned to one case (`case_mm`) does not describe another case at all: the
+  // Series 11 entry is the 46mm, so a 42mm title is not benchmark-enriched and gets none
+  // of its size specs (DOS/Rate#1211).
+  const series11Small = normalizer.normalize(
+    createDummyShopeeProduct('Apple Watch Series 11 GPS 42mm')
   );
+  assert.equal(series11Small.model_key, 'apple:watch-series-11-42mm:64gb');
+  assert.equal(series11Small.is_benchmark_enriched, false);
+  assert.equal(series11Small.battery_mah, null);
+  assert.notEqual(series11Small.screen_size_inch, 1.96);
+  assert.equal(series11Small.specifications.design?.weight_g, undefined);
+  assert.equal(series11Small.specifications.display?.resolution, undefined);
+  assert.equal(series11Small.specifications.design?.dimensions, undefined);
+  // A title with no case size keeps the entry as before.
+  const series11Bare = normalizer.normalize(createDummyShopeeProduct('Apple Watch Series 11 GPS'));
+  assert.equal(series11Bare.model_key, 'apple:watch-series-11:64gb');
+  assert.equal(series11Bare.is_benchmark_enriched, true);
+  const series11Big = normalizer.normalize(
+    createDummyShopeeProduct('Apple Watch Series 11 GPS 46mm')
+  );
+  assert.equal(series11Big.is_benchmark_enriched, true);
+  assert.equal(series11Big.screen_size_inch, 1.96);
+  assert.equal(series11Big.battery_mah, 345);
   const ipadPro13 = normalizer.normalize(
     createDummyShopeeProduct('iPad Pro M4 13 inch WiFi 256GB')
   );
@@ -677,6 +984,35 @@ async function runSuite() {
     'samsung:galaxy-watch-fe-2024:unknown'
   );
   assert.equal(keyOf('Đồng hồ Garmin Forerunner 265'), 'garmin:forerunner-265:8gb');
+  // The 265S (42mm) is its own model and never takes the 265's 46mm specs (DOS/Rate#1222).
+  for (const title of [
+    'Garmin Forerunner 265S 42mm',
+    'Đồng hồ Garmin Forerunner 265S',
+    'Garmin Forerunner 265 S Music',
+    'Garmin Forerunner 265s Đen',
+    'Garmin Forerunner 265S42mm',
+    'Garmin Forerunner 265-S 42mm',
+  ]) {
+    const fr265s = normalizer.normalize(createDummyShopeeProduct(title));
+    assert.equal(fr265s.model_key, 'garmin:forerunner-265s:unknown', title);
+    assert.equal(fr265s.is_benchmark_enriched, false, title);
+    assert.equal(fr265s.battery_mah, null, title);
+  }
+  // A word that starts with S is no 265S suffix, Vietnamese ones included (DOS/Rate#1262).
+  for (const title of [
+    'Garmin Forerunner 265 Sport',
+    'Garmin Forerunner 265 Sạc nhanh',
+    'Garmin Forerunner 265 sale',
+    'Garmin Forerunner 265 Sạc',
+    'Garmin Forerunner 265 Sắc nét',
+    'Garmin Forerunner 265 S/M',
+  ]) {
+    assert.equal(keyOf(title), 'garmin:forerunner-265:8gb', title);
+  }
+  assert.equal(keyOf('Garmin Forerunner 265 S'), 'garmin:forerunner-265s:unknown');
+  // A band size "S/M" after the 265 is no 265S.
+  assert.equal(keyOf('Garmin Forerunner 265 S/M band'), 'garmin:forerunner-265:8gb');
+  assert.equal(keyOf('Garmin Forerunner 265 S-M band'), 'garmin:forerunner-265:8gb');
   assert.equal(
     keyOf('Điện thoại Samsung Galaxy S25 Ultra, Điện thoại AI, Tìm kiếm thông minh'),
     'samsung:galaxy-s25-ultra:unknown'
@@ -799,6 +1135,12 @@ async function runSuite() {
     ['Apple iPhone 18 Pro Max', 'apple:iphone-18-pro-max:unknown'],
     ['Apple iPhone 18 Pro', 'apple:iphone-18-pro:unknown'],
     ['Lenovo ThinkPad X1 Carbon Gen 12 Ultra 7 155U', 'lenovo:thinkpad-x1-carbon-gen-12:unknown'],
+    // DOS/Rate#1189: CellphoneS SKU 21KC008PVN is the 1TB config; before #1094 this
+    // title keyed at the registry default and logged "Storage: 512GB" on 2026-10-25.
+    [
+      'Laptop Lenovo ThinkPad X1 Carbon Gen 12 21KC008PVN',
+      'lenovo:thinkpad-x1-carbon-gen-12:unknown',
+    ],
     ['Máy tính bảng iPad Pro M5 11 inch WiFi', 'apple:ipad-pro-m5-11:unknown'],
     ['Máy tính bảng Xiaomi Pad 7 Pro', 'xiaomi:pad-7-pro:unknown'],
   ];
@@ -810,6 +1152,13 @@ async function runSuite() {
     assert.equal(storageless.is_benchmark_enriched, true, title);
     assert.equal(storageless.specifications.hardware?.storage_gb, undefined, title);
   }
+  // The same SKU with its configuration in the title keys at 1TB, never the 512GB master.
+  assert.equal(
+    keyOf(
+      'Laptop Lenovo ThinkPad X1 Carbon Gen 12 21KC008PVN (Ultra 7 155H/ 32GB/ 1TB SSD/ 14 inch 2.8K OLED/ Win 11 Pro)'
+    ),
+    'lenovo:thinkpad-x1-carbon-gen-12:1024gb'
+  );
   const storagelessZenbook = normalizer.normalize(
     createDummyShopeeProduct('Laptop ASUS Zenbook S 14 UX5406AA-SU348W')
   );
@@ -948,8 +1297,20 @@ async function runSuite() {
   assert.ok(synced.specifications.camera?.third_camera?.startsWith('200 MP'));
   assert.equal(synced.specifications.battery?.fast_charging_w, 100);
   assert.equal(synced.specifications.battery?.reverse_charging, true);
+  // The page states no network: 5G is unknown and no cellular group is invented (#1196).
+  assert.equal(synced.has5g, null);
   assert.equal(
     countPopulatedFieldGroups(synced.specifications as unknown as Record<string, unknown>),
+    9
+  );
+  const syncedWithNetwork = parseGsmArenaHtmlToSpecs(
+    `${sampleGsmHtml}<td data-spec="nettech">GSM / CDMA / HSPA / LTE / 5G</td>`
+  );
+  assert.equal(syncedWithNetwork.has5g, true);
+  assert.equal(
+    countPopulatedFieldGroups(
+      syncedWithNetwork.specifications as unknown as Record<string, unknown>
+    ),
     10
   );
 

@@ -60,7 +60,10 @@ export default async function PrivacyPolicyPage({
                 <p className="text-secondary mb-4">{t('privacyS3Desc')}</p>
 
                 <h2 className="h5 fw-bold mb-3">{t('privacyS4Title')}</h2>
-                <p className="text-secondary mb-0">{t('privacyS4Desc')}</p>
+                <p className="text-secondary mb-4">{t('privacyS4Desc')}</p>
+
+                <h2 className="h5 fw-bold mb-3">{t('privacyS5Title')}</h2>
+                <p className="text-secondary mb-0">{t('privacyS5Desc')}</p>
               </div>
             </div>
 

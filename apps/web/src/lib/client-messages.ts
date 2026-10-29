@@ -23,6 +23,8 @@ export const CLIENT_MESSAGE_SCOPES = {
   catalog: ['catalog.sidebar', 'catalog.toolbar', 'catalog.schemas'],
   productDetail: [
     'productDetail',
+    // Sale-state labels of a size loaded on demand (DOS/Rate#1285).
+    'saleState',
     'reviews',
     'analyzerCopy',
     'priceVerdict',

@@ -7,6 +7,9 @@ import {
   getCachedMasterProducts,
   getMasterProductCategorySlug,
 } from '@/server/rate';
+import { resolveCompareSlugs } from '@/server/rate/item-compare';
+import { getItemSlugsFor } from '@/server/rate/item-directory';
+import { compareCategoryParam } from '@/lib/compare-params';
 import { normalizeRateLocale } from '@/lib/rate-i18n';
 import { defaultOpenGraph, fitTitle, fitDescription } from '@/lib/seo';
 import CompareWorkspace from '@/components/compare/CompareWorkspace';
@@ -20,7 +23,7 @@ export const dynamic = 'force-dynamic';
 
 type PageProps = {
   params: Promise<{ locale: string }>;
-  searchParams: Promise<{ slugs?: string; category?: string }>;
+  searchParams: Promise<{ slugs?: string; category?: string; cat?: string }>;
 };
 
 const VALID_CATEGORIES = new Set<CanonicalCategorySlug>([
@@ -50,6 +53,14 @@ function parseSlugsCsv(slugsParam?: string): string[] {
   ).slice(0, 4);
 }
 
+/**
+ * The slugs to compare. RATE_ITEM_MODEL on: Item or variant slugs, with
+ * `slug@256gb` pinning a size, one per Item (DOS/Rate#1156); off: as sent.
+ */
+async function comparedSlugs(requested: string[]): Promise<string[]> {
+  return (await resolveCompareSlugs(requested)) ?? requested;
+}
+
 export async function generateMetadata({
   params,
   searchParams,
@@ -64,7 +75,7 @@ export async function generateMetadata({
 
   if (requestedSlugs.length >= 2) {
     const compared = await getCachedCompareMasterProducts(
-      requestedSlugs.join(',')
+      (await comparedSlugs(requestedSlugs)).join(',')
     );
     if (compared.length >= 2) {
       const names = compared.map((p) => p.name).join(' vs ');
@@ -111,14 +122,18 @@ export default async function ComparePhonesPage({
   setRequestLocale(locale);
   const lang = normalizeRateLocale(locale);
   const t = await getTranslations({ locale: lang, namespace: 'compare' });
-  const { slugs: slugsParam, category: categoryParam } = await searchParams;
+  const resolvedSearch = await searchParams;
+  const slugsParam = resolvedSearch.slugs;
+  const categoryParam = compareCategoryParam(resolvedSearch);
   const requestedSlugs = parseSlugsCsv(slugsParam);
 
   const [catalogCandidates, requestedProducts] = await Promise.all([
     // Fixed key, so it shares the data cache; only the compared slugs vary.
     getCachedMasterProducts({ categorySlug: 'all', limit: 50 }),
     requestedSlugs.length > 0
-      ? getCachedCompareMasterProducts(requestedSlugs.join(','))
+      ? comparedSlugs(requestedSlugs).then((slugs) =>
+          getCachedCompareMasterProducts(slugs.join(','))
+        )
       : Promise.resolve([]),
   ]);
 
@@ -138,6 +153,10 @@ export default async function ComparePhonesPage({
           (p) => getMasterProductCategorySlug(p) === activeCategory
         )
       : sameCategoryCandidates.slice(0, 3);
+  // RATE_ITEM_MODEL on: versus links name Items (DOS/Rate#1290); off: null.
+  const itemSlugBySlug = await getItemSlugsFor(
+    initialProducts.map((p) => p.slug)
+  );
 
   return (
     <ClientMessages scope="compare">
@@ -182,6 +201,7 @@ export default async function ComparePhonesPage({
               initialCategory={activeCategory}
               hasExplicitSlugs={requestedSlugs.length > 0}
               locale={locale}
+              {...(itemSlugBySlug ? { itemSlugBySlug } : {})}
             />
           </div>
         </div>

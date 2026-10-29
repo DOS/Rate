@@ -1,14 +1,39 @@
 import 'server-only';
 import { NextResponse } from 'next/server';
-import { plausibleMinPrice, plausibleOffers } from '@repo/shared-data/rules';
+import { reviewRiskScoreOrNull } from '@/lib/merchant-risk-tone';
+import {
+  getCategorySpecTemplate,
+  plausibleMinPrice,
+  plausibleOffers,
+  specFieldApplies,
+} from '@repo/shared-data/rules';
 import {
   MAX_VALID_VND_PRICE,
   normalizeOfferOriginalPrice,
+  type MasterProductFilterParams,
 } from '@/lib/rate-api';
 import {
   isOfferUnavailable,
   type OfferAvailability,
 } from '@/lib/product-market-stats';
+
+/**
+ * A merchant as public payloads carry it: `review_risk_score` is null when
+ * the store has no analysed review, so no client reads a platform baseline
+ * as a measurement (DOS/Rate#1258).
+ */
+export function withPublicReviewRisk<
+  T extends {
+    review_risk_score?: number | string | null;
+    review_risk_breakdown?: { total_reviews?: unknown } | null;
+  },
+>(
+  merchant: T
+): Omit<T, 'review_risk_score'> & {
+  review_risk_score: number | null;
+} {
+  return { ...merchant, review_risk_score: reviewRiskScoreOrNull(merchant) };
+}
 
 export const PUBLIC_API_CORS_HEADERS: Record<string, string> = {
   'Access-Control-Allow-Origin': '*',
@@ -21,14 +46,27 @@ const DB_INTERNAL_ERROR_REGEX =
   /PGRST\d+|relation\s+"[^"]+"|column\s+"[^"]+"|permission denied|syntax error at|duplicate key value|violates foreign key|violates check constraint|schema\s+"rate"|rate-api:\s*failed to/i;
 
 /**
+ * An error whose message is written for API clients (a validation message). Only
+ * these reach a response body; any other error answers with the route's fixed
+ * message (DOS/Rate#1310).
+ */
+export class PublicApiError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'PublicApiError';
+  }
+}
+
+/**
  * Audit T9: Prevent leaking internal PostgreSQL / PostgREST / Supabase schema or query errors
- * to public API consumers while preserving safe validation messages.
+ * to public API consumers. Allow-list: only a `PublicApiError` message passes, and even
+ * then not one that looks internal or is too long (DOS/Rate#1310).
  */
 export function sanitizePublicApiError(
   err: unknown,
   fallbackMessage = 'Internal server error'
 ): string {
-  if (!(err instanceof Error) || typeof err.message !== 'string') {
+  if (!(err instanceof PublicApiError) || typeof err.message !== 'string') {
     return fallbackMessage;
   }
   const msg = err.message
@@ -47,9 +85,11 @@ export function jsonApiError(
   err?: unknown,
   extraHeaders?: Record<string, string>
 ) {
-  const safeError = err
-    ? sanitizePublicApiError(err, fallbackMessage)
-    : fallbackMessage;
+  // A 5xx always answers with the fixed message: its cause is never the client's.
+  const safeError =
+    err && status < 500
+      ? sanitizePublicApiError(err, fallbackMessage)
+      : fallbackMessage;
   return NextResponse.json(
     {
       ok: false,
@@ -63,6 +103,65 @@ export function jsonApiError(
       },
     }
   );
+}
+
+/**
+ * The spec filters of `GET /api/v1/rate/products` that the category's spec
+ * template does not have, by their documented query names (DOS/Rate#1184).
+ * The body carries the category's spec view, so such a filter would match
+ * stored values the body no longer shows (`has5g` on a watch, `ramGb` on
+ * earbuds); the route answers 400 for them instead, and on `all` keeps
+ * only products whose category has every requested filter.
+ */
+export function specFiltersOutsideCategory(
+  categorySlug: string,
+  filters: MasterProductFilterParams
+): string[] {
+  const template = getCategorySpecTemplate(categorySlug);
+  const used: [boolean, boolean, string][] = [
+    [Boolean(filters.ramGb?.length), template.ram, 'ramGb'],
+    [Boolean(filters.storageGb?.length), template.storage, 'storageGb'],
+    [filters.has5g === true, template.has5g, 'has5g'],
+    [
+      typeof filters.maxScreenSizeInch === 'number',
+      template.screen,
+      'compactScreen',
+    ],
+    [
+      typeof filters.minRefreshRateHz === 'number',
+      specFieldApplies(template, 'display', 'refresh_rate_hz'),
+      'minRefreshHz',
+    ],
+    [
+      filters.hasNfc === true,
+      specFieldApplies(template, 'connectivity', 'nfc'),
+      'hasNfc',
+    ],
+    [
+      typeof filters.minBatteryMah === 'number',
+      specFieldApplies(template, 'battery', 'capacity_mah'),
+      'minBatteryMah',
+    ],
+    [
+      typeof filters.minFastChargingW === 'number',
+      specFieldApplies(template, 'battery', 'fast_charging_w'),
+      'minFastChargeW',
+    ],
+  ];
+  return used
+    .filter(([requested, applies]) => requested && !applies)
+    .map(([, , name]) => name);
+}
+
+/** Whether some category lacks one of the requested spec filters. */
+export function hasCategoryScopedSpecFilter(
+  filters: MasterProductFilterParams
+): boolean {
+  for (const slug of VALID_PRODUCT_CATEGORY_SLUGS) {
+    if (slug === 'all') continue;
+    if (specFiltersOutsideCategory(slug, filters).length > 0) return true;
+  }
+  return false;
 }
 
 function parseFiniteDecimalInput(raw: unknown): number {
@@ -626,6 +725,15 @@ export function extractClientRateLimitKey(
       .replace(/\s+/g, '')
       .slice(0, 128);
   };
+  // On Vercel, the platform-set client IP first (a client cannot set it
+  // there); anywhere else that header is ordinary client input and ignored
+  // (DOS/Rate#1307).
+  if (process.env.VERCEL === '1') {
+    const platformIp = sanitizeIpCandidate(
+      headers.get('x-vercel-forwarded-for')?.split(',')[0]
+    );
+    if (platformIp) return platformIp;
+  }
   const forwardedFor = headers.get('x-forwarded-for');
   if (forwardedFor) {
     const firstIp = sanitizeIpCandidate(forwardedFor.split(',')[0]);
@@ -634,6 +742,30 @@ export function extractClientRateLimitKey(
   const realIp = sanitizeIpCandidate(headers.get('x-real-ip'));
   if (realIp) return realIp;
   return 'anon';
+}
+
+/**
+ * Per-IP limit of the uncached inspection routes (`/inspect`, `/lookup`),
+ * per server instance (DOS/Rate#1307). A durable shared limit is #1247.
+ */
+export const inspectRateLimiter = new BoundedSlidingWindowRateLimiter({
+  windowMs: 60_000,
+  maxRequests: 30,
+  maxBuckets: 5_000,
+});
+
+/** The 429 the inspection routes answer past `inspectRateLimiter`. */
+export function inspectRateLimitResponse(
+  headers: Record<string, string>
+): NextResponse {
+  return NextResponse.json(
+    {
+      ok: false,
+      error: 'Rate limit exceeded. Maximum 30 inspections per minute.',
+      code: 'RATE_LIMIT_EXCEEDED',
+    },
+    { status: 429, headers: { ...headers, 'Retry-After': '60' } }
+  );
 }
 
 export type ReviewVoteAction = 'up' | 'down' | 'report' | 'clear';

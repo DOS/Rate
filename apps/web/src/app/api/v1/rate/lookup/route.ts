@@ -5,7 +5,11 @@ import {
 } from '@/server/rate';
 import {
   PUBLIC_API_CORS_HEADERS,
+  extractClientRateLimitKey,
+  inspectRateLimitResponse,
+  inspectRateLimiter,
   jsonApiError,
+  withPublicReviewRisk,
   parseBoundedStringParam,
 } from '@/server/rate/api-handler';
 
@@ -24,6 +28,9 @@ export async function OPTIONS() {
  */
 export async function GET(request: NextRequest) {
   try {
+    if (!inspectRateLimiter.allow(extractClientRateLimitKey(request.headers))) {
+      return inspectRateLimitResponse(PUBLIC_API_CORS_HEADERS);
+    }
     const sp = request.nextUrl.searchParams;
     const rawQuery = parseBoundedStringParam(
       sp.get('q') || sp.get('url'),
@@ -49,6 +56,9 @@ export async function GET(request: NextRequest) {
         ok: true,
         data: {
           ...result,
+          merchantProfile: result.merchantProfile
+            ? withPublicReviewRisk(result.merchantProfile)
+            : null,
           radarSignal,
         },
       },

@@ -193,7 +193,16 @@ function main() {
     const copy = weightExplanationCopy(breakdown);
     const text =
       'key' in copy ? fill(vi.reviews[copy.key]!, copy.values) : copy.text;
-    assert.equal(text, breakdown.explanationVi, kind);
+    // The UI calls this the trust level, apart from the rating weight on
+    // the badge (DOS/Rate#1215); the rest is the server's text.
+    assert.equal(
+      text,
+      'key' in copy
+        ? breakdown.explanationVi.replace(/^Trọng số /, 'Ước tính ')
+        : breakdown.explanationVi,
+      kind
+    );
+    assert.ok(!text.startsWith('Trọng số'), `${kind} says Trọng số`);
     assert.equal('key' in copy, kind !== 'formula', `${kind} is localized`);
   }
   // Reviews that cover the product as well as delivery are not shipping-only

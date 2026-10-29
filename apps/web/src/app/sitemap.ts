@@ -144,6 +144,9 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       getCachedSitemapRows(),
       getCachedMasterProducts({ categorySlug: 'all', limit: 500 }),
     ]);
+    // RATE_ITEM_MODEL on: versus pairs name Items with the map the product
+    // URLs were built from (DOS/Rate#1156, #1275); off: null.
+    const itemSlugs = rows.itemSlugByVariantSlug ?? null;
     const catSlugById = rows.categorySlugById;
 
     const dates = buildSitemapLastModified(
@@ -179,21 +182,40 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       }
     );
 
+    const versusSeen = new Set<string>();
     const versusEntries: MetadataRoute.Sitemap =
       VALID_LEADERBOARD_CATEGORIES.flatMap((category) =>
-        buildPopular1v1BattlesForCategory(stampedProducts, category, 3).map(
+        buildPopular1v1BattlesForCategory(stampedProducts, category, 3).flatMap(
           (pair) => {
-            const lastModified = versusLastModified(
-              dates,
-              pair.productA.slug,
-              pair.productB.slug
-            );
-            return {
-              url: `${baseUrl}${pair.versusHref}`,
-              ...(lastModified ? { lastModified } : {}),
-              changeFrequency: 'daily' as const,
-              priority: 0.83,
-            };
+            const slugA =
+              itemSlugs?.get(pair.productA.slug) ?? pair.productA.slug;
+            const slugB =
+              itemSlugs?.get(pair.productB.slug) ?? pair.productB.slug;
+            const href = itemSlugs
+              ? `/compare/${slugA}-vs-${slugB}`
+              : pair.versusHref;
+            // Two sizes of one Item are no versus, and a pair is listed once.
+            // One entry per Item pair, whichever way round it was ranked.
+            const pairKey = [slugA, slugB].sort().join('|');
+            if (
+              itemSlugs &&
+              (slugA === slugB ||
+                versusSeen.has(pairKey) ||
+                slugA.includes('-vs-') ||
+                slugB.includes('-vs-'))
+            ) {
+              return [];
+            }
+            versusSeen.add(pairKey);
+            const lastModified = versusLastModified(dates, slugA, slugB);
+            return [
+              {
+                url: `${baseUrl}${href}`,
+                ...(lastModified ? { lastModified } : {}),
+                changeFrequency: 'daily' as const,
+                priority: 0.83,
+              },
+            ];
           }
         )
       );

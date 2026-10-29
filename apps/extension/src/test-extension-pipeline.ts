@@ -25,6 +25,11 @@ import {
   selectFreshestSessionSignal,
   shouldRenderTrustPill,
 } from './security-guards.js';
+import type {
+  ExtensionLookupData,
+  ExtensionOfferItem,
+  ExtensionPriceVerdict,
+} from './types.js';
 import * as extModule from '../../web/src/server/rate/extension.js';
 import * as rateApiRootMod from '../../web/src/lib/rate-api.js';
 const {
@@ -477,12 +482,132 @@ async function runTests() {
   );
   const manifestJson = JSON.parse(
     fs.readFileSync(path.resolve(__dirname, '../manifest.json'), 'utf8')
-  ) as { permissions?: string[] };
+  ) as {
+    permissions?: string[];
+    host_permissions?: string[];
+    content_scripts?: Array<{ matches?: string[] }>;
+  };
   assert.deepEqual(
     manifestJson.permissions,
     ['storage', 'sidePanel'],
     'manifest.json must request only least-privilege storage and sidePanel permissions without tabs (Audit C7, #174)'
   );
+  {
+    // TikTok is limited to the hosts its product pages use (DOS/Rate#1232).
+    const hosts = manifestJson.host_permissions ?? [];
+    const matches = manifestJson.content_scripts?.[0]?.matches ?? [];
+    for (const pattern of [...hosts, ...matches]) {
+      assert.ok(!pattern.includes('*.tiktok.com'), pattern);
+    }
+    const matchesPattern = (pattern: string, url: string) =>
+      new RegExp(
+        `^${pattern
+          .replace(/[.+?^${}()|[\]\\]/g, '\\$&')
+          .replace('://*\\.', '://(?:[^/]+\\.)?')
+          .replace(/\*/g, '.*')}$`
+      ).test(url);
+    for (const url of [
+      'https://www.tiktok.com/@appleflagship/product/1729384756',
+      'https://www.tiktok.com/view/product/1729384756',
+      'https://shop.tiktok.com/view/product/1729401928401',
+    ]) {
+      assert.ok(
+        matches.some((p) => matchesPattern(p, url)),
+        `content script must run on ${url}`
+      );
+      assert.ok(
+        hosts.some((p) => matchesPattern(p, url)),
+        url
+      );
+    }
+
+    // CHROMEWEBSTORE.md justifies exactly what the manifest requests
+    // (DOS/Rate#1231).
+    const storeDoc = fs.readFileSync(
+      path.resolve(__dirname, '../CHROMEWEBSTORE.md'),
+      'utf8'
+    );
+    const permissionSection = storeDoc.slice(
+      storeDoc.indexOf('## 2. Permissions'),
+      storeDoc.indexOf('## 3.')
+    );
+    const justified = [
+      ...permissionSection.matchAll(/^\|\s*(`[^|]+)\|/gm),
+    ].flatMap((row) => [...row[1]!.matchAll(/`([^`]+)`/g)].map((m) => m[1]));
+    assert.deepEqual(
+      [...justified].sort(),
+      [...(manifestJson.permissions ?? []), ...hosts].sort(),
+      'CHROMEWEBSTORE.md permission table must match manifest.json'
+    );
+    assert.deepEqual(
+      [...matches].sort(),
+      hosts.filter((h) => !/rate\.vn/.test(h)).sort()
+    );
+
+    // The opt-in label names every field the crowd signal sends
+    // (DOS/Rate#1230).
+    const { buildCrowdIngestPayload, CROWD_INGEST_FIELD_LABELS } =
+      await import('./security-guards.js');
+    const payload = buildCrowdIngestPayload({
+      platform: 'shopee',
+      canonicalUrl: 'https://shopee.vn/x-i.1.2',
+      title: 'iPhone 16',
+    } as never);
+    assert.deepEqual(
+      Object.keys(payload).sort(),
+      [...Object.keys(CROWD_INGEST_FIELD_LABELS), 'userConsentOptIn'].sort()
+    );
+    const panelHtml = fs.readFileSync(
+      path.resolve(__dirname, 'sidepanel/sidepanel.html'),
+      'utf8'
+    );
+    const optInLabel = panelHtml.slice(
+      panelHtml.indexOf('id="chk-crowd-optin"'),
+      panelHtml.indexOf('</label>', panelHtml.indexOf('id="chk-crowd-optin"'))
+    );
+    assert.ok(optInLabel.includes('data-i18n="optInBody"'));
+    // Every locale's opt-in text names every field (DOS/Rate#1304).
+    for (const [locale, catalogue] of Object.entries(readLocaleCatalogues())) {
+      const optInText = catalogue.optInBody?.message ?? '';
+      for (const key of Object.values(CROWD_INGEST_FIELD_LABELS)) {
+        const label = catalogue[key]?.message ?? '';
+        assert.ok(label, `${locale} lacks ${key}`);
+        assert.ok(
+          optInText.includes(label),
+          `${locale} opt-in text lacks "${label}"`
+        );
+      }
+      assert.ok(!/Chỉ gửi URL/.test(optInText));
+    }
+    // The store listing names the extension as the vi catalogue does.
+    const viName = readLocaleCatalogues().vi.extName?.message;
+    assert.equal(
+      storeDoc
+        .slice(storeDoc.indexOf('### Extension Name'))
+        .split('\n')
+        .map((line) => line.trim())
+        .filter(Boolean)[1],
+      viName,
+      'CHROMEWEBSTORE.md name must match _locales/vi extName'
+    );
+    assert.equal((manifestJson as { name?: string }).name, '__MSG_extName__');
+    // The store's short summary is the manifest description, within Chrome's
+    // 132 characters (DOS/Rate#1304).
+    const viDescription = readLocaleCatalogues().vi.extDescription?.message;
+    assert.equal(
+      storeDoc
+        .slice(storeDoc.indexOf('### Short Summary'))
+        .split('\n')
+        .map((line) => line.trim())
+        .filter(Boolean)[1],
+      viDescription,
+      'CHROMEWEBSTORE.md short summary must match _locales/vi extDescription'
+    );
+    assert.ok((viDescription ?? '').length <= 132);
+    console.log(
+      '  ✅ [Manifest, store doc and opt-in disclosure agree (#1230, #1231, #1232)] Verified'
+    );
+  }
   if (fs.existsSync(path.resolve(__dirname, '../dist/manifest.json'))) {
     // esbuild bundles each entry (#238): no output may import another file,
     // and the content script (no module support in MV3) must not use import/export.
@@ -505,6 +630,15 @@ async function runTests() {
       assert.ok(
         out.includes(marker),
         `dist/${rel} must contain its bundled dependencies ("${marker}")`
+      );
+    }
+    // The build ships the chrome.i18n catalogues (DOS/Rate#1304).
+    for (const locale of ['vi', 'en', 'cs']) {
+      assert.ok(
+        fs.existsSync(
+          path.resolve(__dirname, `../dist/_locales/${locale}/messages.json`)
+        ),
+        `dist/_locales/${locale}/messages.json`
       );
     }
   }
@@ -2712,6 +2846,65 @@ async function runTests() {
         externalShopId: null,
       }
     );
+    // TikTok Shop's pdp pages carry the id last (DOS/Rate#1245).
+    for (const url of [
+      'https://www.tiktok.com/shop/vn/pdp/apple-iphone-16-128gb/1729384756',
+      'https://www.tiktok.com/shop/pdp/apple-iphone-16-128gb/1729384756',
+    ]) {
+      assert.equal(
+        extractIdsFromUrl('tiktok', url).externalItemId,
+        '1729384756',
+        url
+      );
+    }
+    // Brand and category listings are not products; product slugs still
+    // are (DOS/Rate#1246).
+    for (const [platform, url] of [
+      ['cellphones', 'https://cellphones.com.vn/mobile/apple.html'],
+      ['cellphones', 'https://cellphones.com.vn/mobile/apple/iphone-16.html'],
+      ['cellphones', 'https://cellphones.com.vn/laptop/mac.html'],
+      ['fptshop', 'https://fptshop.com.vn/dien-thoai/samsung'],
+      ['hoangha', 'https://hoanghamobile.com/dien-thoai-di-dong/xiaomi'],
+      ['didongviet', 'https://didongviet.vn/dien-thoai/oppo.html'],
+      ['tgdd', 'https://www.thegioididong.com/dtdd/apple'],
+      ['fptshop', 'https://fptshop.com.vn/dien-thoai/iphone-16-series'],
+    ] as const) {
+      assert.equal(extractIdsFromUrl(platform, url).externalItemId, null, url);
+    }
+    for (const [platform, url, id] of [
+      [
+        'cellphones',
+        'https://cellphones.com.vn/iphone-16-pro-max.html',
+        'iphone-16-pro-max',
+      ],
+      [
+        'fptshop',
+        'https://fptshop.com.vn/dien-thoai/iphone-16-pro-max',
+        'iphone-16-pro-max',
+      ],
+      [
+        'didongviet',
+        'https://didongviet.vn/dien-thoai/iphone-16.html',
+        'iphone-16',
+      ],
+      [
+        'phongvu',
+        'https://phongvu.vn/apple-iphone-16e-128gb--s2502001',
+        'apple-iphone-16e-128gb--s2502001',
+      ],
+      [
+        'tgdd',
+        'https://www.thegioididong.com/dtdd/samsung-galaxy-s25',
+        'samsung-galaxy-s25',
+      ],
+      [
+        'cellphones',
+        'https://cellphones.com.vn/op-lung-magsafe-iphone-16-series.html',
+        'op-lung-magsafe-iphone-16-series',
+      ],
+    ] as const) {
+      assert.equal(extractIdsFromUrl(platform, url).externalItemId, id, url);
+    }
     assert.deepEqual(
       extractIdsFromUrl(
         'cellphones',
@@ -3526,7 +3719,605 @@ async function runTests() {
     );
   }
 
+  // Side panel price list: order and marks (DOS/Rate#1297)
+  {
+    const {
+      cheapestBuyableOfferId,
+      offerMarks,
+      orderOffersForPanel,
+      renderOffersCardHtml,
+    } = await import('./sidepanel/panel-view.js');
+    const offer = (
+      id: string,
+      price: number,
+      extra: Partial<ExtensionOfferItem> = {}
+    ): ExtensionOfferItem => ({
+      id,
+      platform: 'shopee',
+      title: id,
+      price_current: price,
+      price_original: null,
+      rating_star: 4.8,
+      rating_count: 10,
+      historical_sold: 0,
+      url: `https://shopee.vn/${id}-i.1.2`,
+      merchant: {
+        id: `m-${id}`,
+        name: `Shop ${id}`,
+        is_official: false,
+        risk_score: 12,
+        dosafe_risk_score: 5,
+        review_risk_score: null,
+      },
+      ...extra,
+    });
+    const offers = [
+      offer('sold', 9_000_000, { availability: 'out_of_stock' }),
+      offer('bait', 2_000_000, { implausiblyLow: true }),
+      offer('b', 21_000_000),
+      offer('gone', 8_000_000, { availability: 'discontinued' }),
+      offer('a', 20_000_000, { availability: 'in_stock' }),
+      offer('a2', 20_000_000),
+    ];
+    assert.deepEqual(
+      orderOffersForPanel(offers).map((o) => o.id),
+      ['a', 'a2', 'b', 'bait', 'gone', 'sold'],
+      'in-stock plausible offers first, by price, ties in server order'
+    );
+    assert.equal(cheapestBuyableOfferId(offers), 'a');
+    assert.equal(
+      cheapestBuyableOfferId([offers[0]!, offers[1]!]),
+      null,
+      'a sold-out or bait row is never the cheapest'
+    );
+    assert.deepEqual(offerMarks(offers[0]!), ['Hết hàng']);
+    assert.deepEqual(offerMarks(offers[3]!), ['Ngừng bán']);
+    assert.deepEqual(offerMarks(offers[1]!), ['Giá thấp bất thường']);
+    assert.deepEqual(offerMarks(offers[2]!), []);
+
+    const html = renderOffersCardHtml(offers);
+    assert.ok(html.includes('So Sánh Giá Các Gian Hàng (6)'));
+    assert.ok(
+      html.indexOf('Shop a\n') < html.indexOf('Shop bait'),
+      'the cheapest real offer is listed before the bait row'
+    );
+    assert.ok(html.includes('Giá thấp bất thường'));
+    assert.ok(html.includes('Ngừng bán'));
+    assert.ok(
+      !html.includes('Shop sold'),
+      'only the first five rows show; the sold-out row is last'
+    );
+    assert.equal((html.match(/Rẻ nhất/g) || []).length, 1);
+    assert.ok(
+      /Shop a\s+(?:<span[^>]*>Rẻ nhất)/.test(html),
+      'the cheapest mark sits on the in-stock row'
+    );
+    assert.equal((html.match(/offer-price-muted/g) || []).length, 2);
+    assert.ok(html.includes('Rủi ro tổng hợp: 12/100'), '#1280 wording');
+    assert.ok(!html.includes('Rủi ro shop'));
+    assert.ok(!html.includes('[Mall]'));
+    assert.equal(renderOffersCardHtml([]), '');
+    const escaped = renderOffersCardHtml([
+      offer('x', 1_000_000, {
+        merchant: { ...offer('x', 1).merchant, name: '<img onerror=1>' },
+      }),
+    ]);
+    assert.ok(!escaped.includes('<img'), 'merchant names are escaped');
+    console.log(
+      '  ✅ [Side panel price list orders and marks offers (#1297)] Verified'
+    );
+  }
+
+  // Toolbar badge and pill theme per verdict (DOS/Rate#1298)
+  {
+    const { resolveActionBadge, resolvePillTheme } =
+      await import('./verdict-display.js');
+    const lookup = (
+      verdict: ExtensionPriceVerdict,
+      extra: Partial<ExtensionLookupData> = {},
+      implausiblyLow?: boolean
+    ) =>
+      ({
+        matchStatus: 'exact_listing',
+        isAccessoryOrPart: false,
+        priceAssessment: { verdict, implausiblyLow },
+        ...extra,
+      }) as unknown as ExtensionLookupData;
+    assert.deepEqual(resolveActionBadge(null), { text: '', color: null });
+    assert.deepEqual(
+      resolveActionBadge(lookup('insufficient_data', {}, true)),
+      { text: '!', color: '#f59e0b' },
+      'a bait price warns'
+    );
+    assert.equal(resolveActionBadge(lookup('insufficient_data')).text, '?');
+    assert.equal(resolveActionBadge(lookup('accessory_skip')).text, '');
+    assert.equal(
+      resolveActionBadge(
+        lookup('fair_market_price', { matchStatus: 'accessory_skip' })
+      ).text,
+      ''
+    );
+    assert.equal(
+      resolveActionBadge(
+        lookup('fair_market_price', { isAccessoryOrPart: true })
+      ).text,
+      ''
+    );
+    assert.equal(
+      resolveActionBadge(lookup('genuine_deal', { matchStatus: 'not_found' }))
+        .text,
+      ''
+    );
+    assert.equal(resolveActionBadge(lookup('inflated_fake_sale')).text, 'ẢO!');
+    assert.equal(resolveActionBadge(lookup('genuine_deal')).text, 'TỐT');
+    assert.equal(resolveActionBadge(lookup('above_market')).text, 'CAO');
+    assert.equal(resolveActionBadge(lookup('fair_market_price')).text, 'OK');
+    for (const verdict of [
+      'insufficient_data',
+      'accessory_skip',
+    ] as ExtensionPriceVerdict[]) {
+      assert.notEqual(resolveActionBadge(lookup(verdict)).text, 'OK', verdict);
+    }
+    assert.equal(
+      resolvePillTheme('insufficient_data', true).border,
+      '#f59e0b',
+      'a bait price uses the warning pill'
+    );
+    assert.equal(resolvePillTheme('insufficient_data').border, '#3b82f6');
+    assert.equal(resolvePillTheme('inflated_fake_sale').border, '#d83030');
+    console.log('  ✅ [Badge and pill per verdict (#1298)] Verified');
+  }
+
+  // Not found and accessory states, action links (DOS/Rate#1299)
+  {
+    const { isLookupWithoutProduct, renderActionRowsHtml, renderNotFoundHtml } =
+      await import('./sidepanel/panel-view.js');
+    const base = {
+      matchStatus: 'exact_listing',
+      isAccessoryOrPart: false,
+      priceAssessment: { verdict: 'fair_market_price' },
+    } as unknown as ExtensionLookupData;
+    assert.equal(isLookupWithoutProduct(null), true);
+    assert.equal(isLookupWithoutProduct(base), false);
+    assert.equal(
+      isLookupWithoutProduct({ ...base, matchStatus: 'not_found' }),
+      true
+    );
+    assert.equal(
+      isLookupWithoutProduct({ ...base, matchStatus: 'accessory_skip' }),
+      true
+    );
+    assert.equal(
+      isLookupWithoutProduct({ ...base, isAccessoryOrPart: true }),
+      true
+    );
+    assert.equal(
+      isLookupWithoutProduct({
+        ...base,
+        priceAssessment: {
+          ...base.priceAssessment,
+          verdict: 'accessory_skip',
+        },
+      }),
+      true
+    );
+    const notFound = renderNotFoundHtml(
+      { title: 'Ốp lưng iPhone 16 & <b>' },
+      'https://rate.vn',
+      false
+    );
+    assert.ok(notFound.includes('Chưa có sản phẩm này trên Rate.vn'));
+    assert.ok(
+      notFound.includes(
+        `https://rate.vn/inspect?q=${encodeURIComponent('Ốp lưng iPhone 16 & <b>').replace(/&/g, '&amp;')}`
+      ),
+      'search link carries the page title'
+    );
+    assert.ok(!notFound.includes('<b>'), 'the title is escaped');
+    for (const product of [
+      'Trung Vị Thị Trường',
+      'smartphones',
+      'Bảng Xếp Hạng',
+      'Canh Giá',
+    ]) {
+      assert.ok(!notFound.includes(product), `no product UI: ${product}`);
+    }
+    assert.ok(
+      renderNotFoundHtml(
+        { title: 'Cáp sạc' },
+        'https://rate.vn',
+        true
+      ).includes('phụ kiện')
+    );
+    const rows = renderActionRowsHtml([
+      { href: 'https://rate.vn/p', label: 'Xem Trên Rate.vn', primary: true },
+      { href: 'https://rate.vn/compare?category=tablets', label: 'So Sánh' },
+      { href: 'https://rate.vn/leaderboard', label: 'Bảng Xếp Hạng' },
+      { href: 'https://rate.vn/inspect?q=x', label: '🔬 Kiểm tra chi tiết' },
+      { href: 'https://rate.vn/watchlist', label: '🔔 Canh Giá Thật' },
+    ]);
+    assert.equal((rows.match(/Kiểm tra chi tiết/g) || []).length, 1);
+    assert.equal((rows.match(/class="btn-row"/g) || []).length, 3);
+    assert.ok(rows.includes('Canh Giá Thật'));
+    const panelSource = fs.readFileSync(
+      path.resolve(__dirname, 'sidepanel/sidepanel.ts'),
+      'utf8'
+    );
+    assert.ok(
+      !/\/compare\?cat=/.test(panelSource),
+      'the compare page reads ?category='
+    );
+    console.log(
+      '  ✅ [Not found and accessory states, single inspect link (#1299)] Verified'
+    );
+  }
+
+  // Lookup error states (DOS/Rate#1300)
+  {
+    const { classifyLookupFailure, renderLookupErrorHtml } =
+      await import('./sidepanel/panel-view.js');
+    assert.equal(classifyLookupFailure(429), 'rate_limited');
+    assert.equal(classifyLookupFailure(500), 'server');
+    assert.equal(classifyLookupFailure(503), 'server');
+    assert.equal(classifyLookupFailure(null), 'network');
+    assert.equal(classifyLookupFailure(undefined), 'network');
+    assert.equal(classifyLookupFailure(404), 'other');
+    const limited = renderLookupErrorHtml('rate_limited', 'iPhone 16');
+    assert.ok(limited.includes('Bạn tra cứu hơi nhanh, thử lại sau ít phút'));
+    assert.ok(limited.includes('data-action="retry"'));
+    assert.ok(limited.includes('iPhone 16'));
+    assert.ok(
+      renderLookupErrorHtml('server').includes('Rate.vn đang gặp sự cố')
+    );
+    assert.ok(
+      renderLookupErrorHtml('network').includes('Không kết nối được Rate.vn')
+    );
+    for (const kind of ['rate_limited', 'server', 'network'] as const) {
+      const html = renderLookupErrorHtml(kind);
+      assert.ok(!html.includes('Chưa nhận diện trang sản phẩm'), kind);
+      assert.ok(!/máy chủ|Rate API/.test(html), `${kind}: no settings hint`);
+    }
+    // The content script drops the pill and the worker clears the badge on
+    // any failure, not only on an empty answer.
+    const contentSource = fs.readFileSync(
+      path.resolve(__dirname, 'content/content-script.ts'),
+      'utf8'
+    );
+    assert.ok(!contentSource.includes('response?.ok && !response.data'));
+    const workerSource = fs.readFileSync(
+      path.resolve(__dirname, 'background/service-worker.ts'),
+      'utf8'
+    );
+    assert.ok(workerSource.includes('status: outcome.status'));
+    assert.ok(
+      workerSource.includes('await updateActionBadge(sender.tab?.id, null)')
+    );
+    console.log(
+      '  ✅ [Lookup error states and stale pill clearing (#1300)] Verified'
+    );
+  }
+
+  // Empty reviews and unknown ratings (DOS/Rate#1301)
+  {
+    const { ratingStarText, renderReviewCardHtml } =
+      await import('./sidepanel/panel-view.js');
+    const empty = renderReviewCardHtml(
+      {
+        total_analyzed: 0,
+        authentic_pct: 100,
+        suspicious_pct: 0,
+        fake_pct: 0,
+        pros: [],
+        cons: [],
+        ai_summary: null,
+      },
+      { user_rating_weighted: 0, average_rating: 0 }
+    );
+    assert.ok(empty.includes('Chưa có đánh giá'));
+    assert.ok(!empty.includes('100%'), 'no percentage when nothing analysed');
+    assert.ok(!empty.includes('★'), 'no star for an unknown rating');
+    assert.ok(!empty.includes('0.0'));
+    const filled = renderReviewCardHtml(
+      {
+        total_analyzed: 40,
+        authentic_pct: 85,
+        suspicious_pct: 10,
+        fake_pct: 5,
+        pros: [],
+        cons: [],
+        ai_summary: null,
+      },
+      { user_rating_weighted: 4.6, average_rating: 4.5 }
+    );
+    assert.ok(filled.includes('★ 4.6 / 5'));
+    assert.ok(filled.includes('85% (40 đánh giá)'));
+    assert.equal(ratingStarText(0), null);
+    assert.equal(ratingStarText(null), null);
+    assert.equal(ratingStarText(4.75), '★ 4.8');
+    console.log('  ✅ [Empty reviews and unknown ratings (#1301)] Verified');
+  }
+
+  // Vietnamese labels and accessible names (DOS/Rate#1302)
+  {
+    const { buildPillAriaLabel } = await import('./verdict-display.js');
+    const panelHtml = fs.readFileSync(
+      path.resolve(__dirname, 'sidepanel/sidepanel.html'),
+      'utf8'
+    );
+    const panelSource = fs.readFileSync(
+      path.resolve(__dirname, 'sidepanel/sidepanel.ts'),
+      'utf8'
+    );
+    const viewSource = fs.readFileSync(
+      path.resolve(__dirname, 'sidepanel/panel-view.ts'),
+      'utf8'
+    );
+    for (const english of [
+      'Rate.vn Intelligence',
+      'Dual Risk Score',
+      'Trust Score',
+      'Trust ${',
+      'Fake Sale',
+      '[Mall]',
+      'Rate API BFF',
+      'Rủi ro shop',
+      'Opt-In',
+      'Điểm User',
+    ]) {
+      for (const [name, text] of [
+        ['sidepanel.html', panelHtml],
+        ['sidepanel.ts', panelSource],
+        ['panel-view.ts', viewSource],
+      ] as const) {
+        assert.ok(!text.includes(english), `${name} still says "${english}"`);
+      }
+    }
+    const viCatalogue = fs.readFileSync(
+      path.resolve(__dirname, '_locales/vi/messages.json'),
+      'utf8'
+    );
+    for (const english of ['Rate.vn Intelligence', 'Trust Score', 'Opt-In']) {
+      assert.ok(!viCatalogue.includes(english), `vi still says "${english}"`);
+    }
+    assert.equal(
+      readLocaleCatalogues().vi.merchantTrustScore?.message,
+      'Điểm tin cậy'
+    );
+    assert.ok(panelSource.includes("t('merchantTrustScore')"));
+    assert.ok(
+      /<div id="panel-root" aria-live="polite">/.test(panelHtml),
+      'results are announced'
+    );
+    const quickInput = panelHtml.slice(
+      panelHtml.indexOf('id="inp-quick-query"'),
+      panelHtml.indexOf('/>', panelHtml.indexOf('id="inp-quick-query"'))
+    );
+    assert.ok(
+      /data-i18n-aria-label="[^"]+"/.test(quickInput),
+      'quick lookup is labelled'
+    );
+    const pillLabel = buildPillAriaLabel(
+      'Giá thấp bất thường',
+      'Đáy thị trường: 20.000.000 ₫'
+    );
+    assert.ok(pillLabel.includes('Giá thấp bất thường'), 'verdict is spoken');
+    assert.ok(pillLabel.includes('Mở bảng phân tích giá'));
+    const contentSource = fs.readFileSync(
+      path.resolve(__dirname, 'content/content-script.ts'),
+      'utf8'
+    );
+    assert.ok(
+      contentSource.includes(
+        'aria-label="${escapeHtml(buildPillAriaLabel(assessment.badgeLabel, cheaperSummary))}"'
+      ),
+      'the pill names its verdict'
+    );
+    console.log(
+      '  ✅ [Vietnamese labels and accessible names (#1302)] Verified'
+    );
+  }
+
+  // vi, en and cs through chrome.i18n (DOS/Rate#1304)
+  {
+    const catalogues = readLocaleCatalogues();
+    const viKeys = Object.keys(catalogues.vi).sort();
+    const placeholderShape = (entry: LocaleMessage) =>
+      JSON.stringify(
+        Object.entries(entry.placeholders ?? {})
+          .map(([name, p]) => [name, p.content])
+          .sort()
+      );
+    const usedPlaceholders = (message: string) =>
+      [...message.matchAll(/\$([A-Za-z0-9_@]+)\$/g)]
+        .map((m) => m[1]!.toLowerCase())
+        .sort();
+    for (const [locale, catalogue] of Object.entries(catalogues)) {
+      assert.deepEqual(
+        Object.keys(catalogue).sort(),
+        viKeys,
+        `${locale} has the same keys as vi`
+      );
+      for (const [key, entry] of Object.entries(catalogue)) {
+        assert.ok(entry.message.trim(), `${locale}.${key} is empty`);
+        assert.ok(
+          !/[\u2013\u2014]/.test(entry.message),
+          `${locale}.${key} has an en or em dash`
+        );
+        assert.equal(
+          placeholderShape(entry),
+          placeholderShape(catalogues.vi[key]!),
+          `${locale}.${key} placeholders match vi`
+        );
+        assert.deepEqual(
+          [...new Set(usedPlaceholders(entry.message))],
+          Object.keys(entry.placeholders ?? {}).sort(),
+          `${locale}.${key} uses each placeholder it defines`
+        );
+      }
+    }
+    // Chrome store limits for the localised manifest fields.
+    for (const [locale, catalogue] of Object.entries(catalogues)) {
+      assert.ok(catalogue.extName!.message.length <= 75, `${locale} extName`);
+      assert.ok(
+        catalogue.extDescription!.message.length <= 132,
+        `${locale} extDescription`
+      );
+    }
+    const manifestText = fs.readFileSync(
+      path.resolve(__dirname, '../manifest.json'),
+      'utf8'
+    );
+    const manifest = JSON.parse(manifestText) as {
+      default_locale?: string;
+      description?: string;
+      action?: { default_title?: string };
+    };
+    assert.equal(manifest.default_locale, 'vi');
+    assert.equal(manifest.description, '__MSG_extDescription__');
+    assert.equal(manifest.action?.default_title, '__MSG_actionTitle__');
+    for (const m of manifestText.matchAll(/__MSG_(\w+)__/g)) {
+      assert.ok(m[1]! in catalogues.vi, `manifest uses unknown ${m[1]}`);
+    }
+
+    // Every data-i18n* key in the side panel page exists.
+    const html = fs.readFileSync(
+      path.resolve(__dirname, 'sidepanel/sidepanel.html'),
+      'utf8'
+    );
+    const htmlKeys = [...html.matchAll(/data-i18n[\w-]*="([^"]+)"/g)].map(
+      (m) => m[1]!
+    );
+    assert.ok(htmlKeys.length >= 10);
+    for (const key of htmlKeys) {
+      assert.ok(key in catalogues.vi, `sidepanel.html uses unknown ${key}`);
+    }
+
+    // Every t('key') / tHtml('key') in src names a real message.
+    const sourceFiles = listExtensionSourceFiles();
+    for (const file of sourceFiles) {
+      if (file.endsWith('test-extension-pipeline.ts')) continue;
+      const text = fs.readFileSync(file, 'utf8');
+      for (const m of text.matchAll(/\btHtml?\(\s*'([A-Za-z0-9_]+)'/g)) {
+        assert.ok(m[1]! in catalogues.vi, `${file} uses unknown ${m[1]}`);
+      }
+    }
+
+    // No hard-coded Vietnamese user-visible text is left in src: comments
+    // and this test are skipped, and the allowlist holds only text that
+    // parses store pages and is never shown.
+    const VIETNAMESE_LETTER =
+      /[àáâãèéêìíòóôõùúýăđĩũơưÀÁÂÃÈÉÊÌÍÒÓÔÕÙÚÝĂĐĨŨƠƯẠ-ỹ]/;
+    const ALLOWED_VIETNAMESE: Array<[file: string, fragment: string]> = [
+      // Strips "| Thế Giới Di Động" style store suffixes from page titles.
+      ['extractors/ecommerce-detector.ts', 'Thế\\s*Giới\\s*Di\\s*Động'],
+    ];
+    const offenders: string[] = [];
+    for (const file of sourceFiles) {
+      const rel = path.relative(__dirname, file).replace(/\\/g, '/');
+      if (rel === 'test-extension-pipeline.ts') continue;
+      const lines = fs
+        .readFileSync(file, 'utf8')
+        .replace(/\/\*[\s\S]*?\*\//g, (block) => block.replace(/[^\n]/g, ''))
+        .replace(/<!--[\s\S]*?-->/g, (block) => block.replace(/[^\n]/g, ''))
+        .split('\n');
+      lines.forEach((raw, index) => {
+        const line = raw.replace(/(^|\s)\/\/.*$/, '');
+        if (!VIETNAMESE_LETTER.test(line)) return;
+        if (
+          ALLOWED_VIETNAMESE.some(
+            ([allowedFile, fragment]) =>
+              rel === allowedFile && line.includes(fragment)
+          )
+        ) {
+          return;
+        }
+        offenders.push(`${rel}:${index + 1}: ${line.trim()}`);
+      });
+    }
+    assert.deepEqual(offenders, [], 'Vietnamese text belongs in _locales');
+
+    // Without chrome.i18n the helper falls back to the vi catalogue, with
+    // its placeholders filled; with it, the browser's language wins.
+    const { t, tHtml, formatCatalogueEntry } = await import('./i18n.js');
+    assert.equal(t('offerOutOfStock'), 'Hết hàng');
+    assert.equal(
+      t('pillCheaperAt', [3, '1.000.000 ₫']),
+      'Rẻ hơn tại 3 nơi (-1.000.000 ₫)'
+    );
+    assert.equal(
+      tHtml('noProductBody', ['<b>A</b>', '<b>B</b>', '<b>C</b>']),
+      'Hãy mở một trang chi tiết sản phẩm trên <b>A</b> hoặc <b>B</b>, hoặc dán link/tên máy vào ô <b>C</b> phía trên.'
+    );
+    assert.equal(
+      formatCatalogueEntry(catalogues.en.reviewAuthenticValue!, ['85', '40']),
+      '85% (reviews: 40)'
+    );
+    assert.equal(
+      formatCatalogueEntry(catalogues.cs.offerOutOfStock!),
+      'Není skladem'
+    );
+    const globalWithChrome = globalThis as { chrome?: unknown };
+    const previousChrome = globalWithChrome.chrome;
+    globalWithChrome.chrome = {
+      i18n: {
+        getMessage: (name: string, subs?: string[]) =>
+          name === 'offerOutOfStock'
+            ? 'Out of stock'
+            : name === 'pillMarketLow'
+              ? `Market low: ${subs?.[0]}`
+              : '',
+      },
+    };
+    try {
+      assert.equal(t('offerOutOfStock'), 'Out of stock');
+      assert.equal(t('pillMarketLow', ['5 ₫']), 'Market low: 5 ₫');
+      // An unknown message in the browser still shows the vi text.
+      assert.equal(t('offerDiscontinued'), 'Ngừng bán');
+      assert.equal(
+        tHtml('offerOutOfStock', []),
+        'Out of stock',
+        'tHtml goes through chrome.i18n too'
+      );
+    } finally {
+      globalWithChrome.chrome = previousChrome;
+    }
+    console.log('  ✅ [vi, en and cs through chrome.i18n (#1304)] Verified');
+  }
+
   console.log('🎉 All Rate Browser Extension MV3 v2 tests passed!');
+}
+
+interface LocaleMessage {
+  message: string;
+  placeholders?: Record<string, { content: string }>;
+}
+
+function readLocaleCatalogues(): Record<
+  'vi' | 'en' | 'cs',
+  Record<string, LocaleMessage>
+> {
+  const read = (locale: string) =>
+    JSON.parse(
+      fs.readFileSync(
+        path.resolve(__dirname, `_locales/${locale}/messages.json`),
+        'utf8'
+      )
+    ) as Record<string, LocaleMessage>;
+  return { vi: read('vi'), en: read('en'), cs: read('cs') };
+}
+
+/** The extension's own .ts and .html sources under src. */
+function listExtensionSourceFiles(): string[] {
+  const files: string[] = [];
+  const walk = (dir: string) => {
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) walk(full);
+      else if (/\.(ts|html)$/.test(entry.name)) files.push(full);
+    }
+  };
+  walk(__dirname);
+  return files;
 }
 
 runTests().catch((err) => {

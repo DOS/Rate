@@ -99,7 +99,8 @@ export interface NormalizedProductCandidate {
   ram_gb: number | null;
   screen_size_inch: number | null;
   battery_mah: number | null;
-  has_5g: boolean;
+  /** null = not known: no registry entry and no 5G in a phone or tablet title (DOS/Rate#1196). */
+  has_5g: boolean | null;
   colors: string[];
   images: string[];
   specifications: ProductSpecifications;
@@ -207,6 +208,37 @@ export function detectProductOrigin(title: string, description?: string): Produc
   return 'unknown';
 }
 
+/** Apple apps and services a device can support or run. */
+const APPLE_SERVICE = String.raw`apple\s?(?:tv\+?|music|airplay\s?\d?|home(?:kit)?|arcade)|airplay\s?\d?|homekit|siri`;
+/** Ends a service name: "TV+" keeps its "+", which would otherwise read as a Plus model. */
+const SERVICE_END = String.raw`(?![a-z0-9+])`;
+/** "hỗ trợ Apple TV", "tích hợp: AirPlay 2", "có ứng dụng Apple TV", "works with Siri". */
+const SERVICE_MENTION_RE = new RegExp(
+  String.raw`\b(?:hỗ trợ|tích hợp|có sẵn|cài sẵn|ứng dụng|app|kết nối|tương thích(?: với)?|supports?|works with|compatible with):? (?:(?:ứng dụng|app) )?(?:${APPLE_SERVICE})${SERVICE_END}`,
+  'gi'
+);
+/**
+ * A television of another brand: an "Apple TV" in it is the app, never the Apple TV box
+ * ("Apple TV 4K - Smart TV Box" names no other brand and stays the box).
+ */
+const TELEVISION_TITLE_RE = /\btivi\b|\b(?:smart|google|android|qled|oled) ?tv\b/i;
+const TELEVISION_BRAND_RE =
+  /\b(?:samsung|lg|sony|tcl|xiaomi|casper|panasonic|sharp|toshiba|philips|hisense|coocaa|aqua|skyworth|ffalcon|asanzo|nanoco)\b/i;
+const APPLE_SERVICE_RE = new RegExp(String.raw`\b(?:${APPLE_SERVICE})${SERVICE_END}`, 'gi');
+
+/**
+ * Drops the apps and services a title says the product supports, so they set no brand or
+ * model: "Smart Tivi Samsung 55 inch hỗ trợ Apple TV" is a Samsung, not an Apple TV
+ * (DOS/Rate#1195). `title` has single spaces.
+ */
+function stripServiceMentions(title: string): string {
+  const stripped = title.replace(SERVICE_MENTION_RE, ' ');
+  const otherBrandTv = TELEVISION_TITLE_RE.test(stripped) && TELEVISION_BRAND_RE.test(stripped);
+  return (otherBrandTv ? stripped.replace(APPLE_SERVICE_RE, ' ') : stripped)
+    .replace(/ {2,}/g, ' ')
+    .trim();
+}
+
 /** Apple product families, for a title whose line no Apple pattern matched (DOS/Rate#817). */
 const APPLE_FAMILIES: ReadonlyArray<readonly [RegExp, string]> = [
   [/iphone/i, 'iPhone'],
@@ -223,6 +255,9 @@ const APPLE_FAMILIES: ReadonlyArray<readonly [RegExp, string]> = [
   [/\bimac\b/i, 'iMac'],
   [/homepod\s*mini/i, 'HomePod mini'],
   [/homepod/i, 'HomePod'],
+  // An Apple Pencil is never the iPhone a title with no line falls back to; a stylus that
+  // only says "Pencil" is not Apple's (DOS/Rate#1194).
+  [/apple\s*pencil/i, 'Pencil'],
 ];
 
 const APPLE_GENERATION_BY_YEAR: Readonly<Record<string, string>> = {
@@ -231,6 +266,51 @@ const APPLE_GENERATION_BY_YEAR: Readonly<Record<string, string>> = {
   'TV 4K 2022': '3',
   'HomePod 2018': '1',
   'HomePod 2023': '2',
+};
+
+/** "Apple TV 4K II" is the 2nd generation (DOS/Rate#1194). */
+const ROMAN_GENERATIONS: Readonly<Record<string, string>> = { ii: '2', iii: '3', iv: '4' };
+
+/**
+ * A chip that names the generation of a line a title states without one: the Apple TV 4K
+ * (A15) is the 3rd (2022). Read only when the title names no generation (DOS/Rate#1194).
+ */
+const APPLE_CHIP_GENERATIONS: ReadonlyArray<readonly [string, RegExp, string]> = [
+  ['TV 4K', /\ba15\b/i, 'TV 4K 3'],
+  ['TV 4K', /\ba12\b/i, 'TV 4K 2'],
+  ['TV 4K', /\ba10x\b/i, 'TV 4K 1'],
+  ['AirPods', /\bh2\b/i, 'AirPods 4'],
+  ['HomePod', /\bs7\b/i, 'HomePod 2'],
+];
+
+/**
+ * Apple part numbers (the 5 characters before the region suffix, "MN873SA/A") that name
+ * a line's generation: [line without a generation, line with it] (DOS/Rate#1194).
+ */
+const APPLE_PART_NUMBERS: Readonly<Record<string, readonly [string, string]>> = {
+  MQD22: ['TV 4K', 'TV 4K 1'],
+  MP7P2: ['TV 4K', 'TV 4K 1'],
+  MXGY2: ['TV 4K', 'TV 4K 2'],
+  MXH02: ['TV 4K', 'TV 4K 2'],
+  MN873: ['TV 4K', 'TV 4K 3'],
+  MN893: ['TV 4K', 'TV 4K 3'],
+  MV7N2: ['AirPods', 'AirPods 2'],
+  MRXJ2: ['AirPods', 'AirPods 2'],
+  MME73: ['AirPods', 'AirPods 3'],
+  MPNY3: ['AirPods', 'AirPods 3'],
+  MXP63: ['AirPods', 'AirPods 4'],
+  MXP93: ['AirPods', 'AirPods 4'],
+  MQD83: ['AirPods Pro', 'AirPods Pro 2'],
+  MTJV3: ['AirPods Pro', 'AirPods Pro 2'],
+  MQHV2: ['HomePod', 'HomePod 1'],
+  MQHW2: ['HomePod', 'HomePod 1'],
+  MQJ73: ['HomePod', 'HomePod 2'],
+  MQJ83: ['HomePod', 'HomePod 2'],
+  MK0C2: ['Pencil', 'Pencil 1'],
+  MQLY3: ['Pencil', 'Pencil 1'],
+  MU8F2: ['Pencil', 'Pencil 2'],
+  MUWA3: ['Pencil', 'Pencil USB-C'],
+  MX2D3: ['Pencil', 'Pencil Pro'],
 };
 
 /**
@@ -301,6 +381,10 @@ const CANONICAL_PHONE_REGISTRY: Record<
     // title that names no storage still knows it. A model sold in several sizes has none:
     // its storage-less title keys as ':unknown' (DOS/Rate#1094).
     only_storage_gb?: number;
+    // The watch case (mm) the size-dependent specs (screen, battery, weight, dimensions)
+    // describe. A title naming another case gets none of them and is not benchmark
+    // enriched (DOS/Rate#1152).
+    case_mm?: number;
   }
 > = {
   'apple:iphone-16-pro-max': {
@@ -1038,7 +1122,34 @@ const CANONICAL_PHONE_REGISTRY: Record<
     release_date: 'November 2024',
     ip_rating: 'Precision-machined aluminum enclosure (Space Black anodized seal)',
   },
+  // One storage (64GB), so a title without it keys like the `:64gb` seed (M0 inventory,
+  // DOS/Rate#1148, #1152). Size-dependent specs are the 42mm's (`case_mm`).
+  'apple:watch-series-10': {
+    case_mm: 42,
+    screen_size_inch: 1.77,
+    battery_mah: 327,
+    ram_gb: 2,
+    chipset: 'Apple S10 SiP (64-bit dual-core processor)',
+    cpu: 'Dual-core S10 with 4-core Neural Engine',
+    gpu: 'Apple Watch integrated GPU',
+    os: 'watchOS 11',
+    weight_g: 30,
+    dimensions: '42.0 x 36.0 x 9.7 mm',
+    resolution: '374 x 446 pixels (~326 ppi)',
+    screen_type: 'Wide-angle LTPO3 OLED Always-On Retina display, 1-60Hz, 2000 nits (peak)',
+    refresh_rate_hz: 60,
+    rear_camera: 'Optical Heart Sensor Gen 3 + Electrical Heart Sensor (ECG)',
+    second_camera: 'Depth gauge (6m) + Water temperature sensor',
+    front_camera: 'Ambient light & Double Tap gesture sensor',
+    charging_w: 15,
+    has_5g: false,
+    release_date: 'September 2024',
+    ip_rating: 'WR50 water resistant (50m) + IP6X dust resistant',
+    only_storage_gb: 64,
+  },
+  // Size-dependent specs are the 46mm's (`case_mm`, DOS/Rate#1211).
   'apple:watch-series-11': {
+    case_mm: 46,
     screen_size_inch: 1.96,
     battery_mah: 345,
     ram_gb: 2,
@@ -1142,22 +1253,76 @@ function isProductCodeToken(token: string): boolean {
 // part code ("Z15S"), after "RAM" or an OS name ("macOS 14"), or before a storage, a
 // RAM/ROM pair or a core count ("16GB", "16G", "16/512", "16-core", "16 nhân CPU").
 // Titles carry single spaces, so each gap is one optional space (CodeQL
-// js/polynomial-redos).
-const SIZE_NOT_PRECEDED_BY = String.raw`(?<![\d.,a-z])(?<!(?:ram|os) )`;
-const SIZE_NOT_FOLLOWED_BY = String.raw`(?![.,]?\d|[a-z]| ?(?:gb?\b|tb?\b|th\b|gen|mm|w\b|h\b|\/|-? ?(?:core|nhân|lõi)|cpu|gpu|tiếng|giờ))`;
-const SIZE_MARKER = String.raw` ?(?:-? ?inch|in\b|"|''|”|″)`;
+// js/polynomial-redos). A unit ends where a letter does, Vietnamese ones included: "13
+// tặng" or "13 hãng" is a bare 13, not "13 t(b)" or "13 h"; "15 tháng" (warranty), "10%"
+// or "15 gói" is no size (DOS/Rate#1291).
+// "16 RAM 512" is the RAM; "13 RAM 8GB" (a RAM size follows) is the screen's 13
+// (DOS/Rate#1317).
+const UNIT_END = String.raw`(?![\p{L}\p{M}\d])`;
+const SIZE_NOT_PRECEDED_BY = String.raw`(?<![\d.,a-z])(?<!\d ?\/ ?)(?<!(?:ram|os|sonoma|sequoia|ventura|monterey|tahoe) )`;
+const SIZE_NOT_FOLLOWED_BY = String.raw`(?![.,]?\d|[a-z]| ?(?:gb?${UNIT_END}|tb?${UNIT_END}|th${UNIT_END}|gen|mm|w${UNIT_END}|h${UNIT_END}|\/|-? ?(?:core|nhân|lõi)|cpu|gpu|tiếng|giờ|%|(?:tháng|ngày|tuần|phút|gói|kỳ|nghìn|ngàn|triệu|vnd|months?|years?|days?|weeks?|hours?)${UNIT_END}|ram${UNIT_END}(?! ?\d{1,2}(?!\d))|năm${UNIT_END}(?! ?(?:19|20)\d\d)))`;
+const SIZE_MARKER = String.raw` ?(?:-? ?inch|in${UNIT_END}|"|''|”|″)`;
 const IPAD_SIZE = String.raw`(11|12[.,]9|13)(?:[.,]0)?`;
 const MACBOOK_AIR_SIZE = String.raw`(13|15)(?:[.,]\d)?`;
 const MACBOOK_PRO_SIZE = String.raw`(1[3-6])(?:[.,]\d)?`;
 const sizePatterns = (size: string): [RegExp, RegExp] => [
-  new RegExp(String.raw`(?<![\d.,])` + size + SIZE_MARKER, 'i'),
-  new RegExp(SIZE_NOT_PRECEDED_BY + size + SIZE_NOT_FOLLOWED_BY, 'i'),
+  new RegExp(String.raw`(?<![\d.,])` + size + SIZE_MARKER, 'iu'),
+  new RegExp(SIZE_NOT_PRECEDED_BY + size + SIZE_NOT_FOLLOWED_BY, 'iu'),
 ];
 const WATCH_BAND_WORD =
   /(?<!kh[\p{L}\p{M}]{1,3}ng )(?:d(?:\u00e2|a\u0302)y|band|strap|loop|bracelet)(?![\p{L}\d])/iu;
 const WATCH_SIZE = /(?<!\d)(38|4[0-2]|4[4-6]) ?mm\b/i;
 const LIST_WATCH_SIZE = /^ ?(?:38|4[0-2]|4[4-6]) ?mm\b/i;
+const LONE_WATCH_SIZE = /^ ?(?:38|4[0-2]|4[4-6]) ?mm ?$/i;
+const LAST_WATCH_SIZE = /(?<!\d)(?:38|4[0-2]|4[4-6]) ?mm ?$/i;
+const WATCH_RANGE_SEP = /^(?: - |\u2013)$/;
 const WATCH_CASE_WORD = /(?<![\p{L}\d])(?:case|mặt|vỏ)(?![\p{L}\d])/iu;
+// A size naming the case: "46mm Titanium Case", "46mm Viền Titanium", "Case 42mm"
+// (DOS/Rate#1223). At most two words between the size and a case word that follows it.
+const NAMED_CASE_SIZE =
+  /(?<!\d)(38|4[0-2]|4[4-6]) ?mm(?: [\p{L}\d-]+){0,2} (?:case|vỏ|viền)(?![\p{L}\d])|(?<![\p{L}\d])(?:case|vỏ|viền|mặt) (38|4[0-2]|4[4-6]) ?mm\b/iu;
+// A part about a box, a cover, a gift or a fit names no case of the watch itself
+// ("tặng Silicone Case 46mm", "ốp TPU 46mm", DOS/Rate#1263).
+const CASE_ACCESSORY_WORD =
+  /(?<![\p{L}\d])(?:fits?|hộp|ốp|kèm|tặng|quà|gift|silicone|silicon|tpu|bao da|compatible|tương thích|cho|for)(?![\p{L}\d])/iu;
+// "tặng/kèm" and up to four words, then a watch or screen size, or a list of them
+// ("tặng ốp 42mm / 46mm", "tặng ốp 11 inch, 13 inch", DOS/Rate#1291).
+const GIFT_BARE_END = String.raw`(?= ?(?:$|[,|;)+/]|(?:tặng|kèm|quà)(?![\p{L}\d])))`;
+const GIFT_SIZE = String.raw`(?:(?:38|4[0-2]|4[4-6]) ?mm\b|\d{1,2}(?:[.,]\d)? ?(?:inch\b|in\b|")|(?:38|4[0-2]|4[4-6]|1[0-6](?:[.,]\d)?)${GIFT_BARE_END})`;
+const GIFTED_ACCESSORY_SIZE = new RegExp(
+  String.raw`(?<![\p{L}\d])(quà tặng|tặng|kèm)((?: [\p{L}-]+){1,4}?) ?${GIFT_SIZE}(?: ?(?:\/|,|hoặc|or) ?${GIFT_SIZE})*`,
+  'giu'
+);
+// The sizes a gift names: a watch case ("46mm") or a screen ("11", "12.9").
+const GIFT_SIZE_VALUE = new RegExp(
+  String.raw`(?<!\d)((?:38|4[0-2]|4[4-6]) ?mm|\d{1,2}(?:[.,]\d)?(?= ?(?:inch|in|"))|(?:38|4[0-2]|4[4-6]|1[0-6](?:[.,]\d)?)${GIFT_BARE_END})`,
+  'giu'
+);
+// A size the product's part names in a form no size reading takes, so a gift's size must
+// not stand in for it (DOS/Rate#1291): for a watch a bare case number or "size 46"
+// ("Series 10 size 46 tặng ốp 42mm"); for an iPad or a MacBook a bare screen number or
+// one with a decimal ("iPad Air 10.9 tặng ốp 11 inch"), with the guards of a bare size
+// above (no storage, RAM, OS version, warranty or percentage).
+const WATCH_BARE_SIZE = new RegExp(
+  SIZE_NOT_PRECEDED_BY + String.raw`(?:38|4[0-2]|4[4-6])` + SIZE_NOT_FOLLOWED_BY,
+  'iu'
+);
+const SCREEN_BARE_SIZE = new RegExp(
+  SIZE_NOT_PRECEDED_BY + String.raw`1[0-6](?:[.,]\d)?` + SIZE_NOT_FOLLOWED_BY,
+  'iu'
+);
+// A lone size listed right after a gift's ("kèm hộp 46mm | 42mm"): a list of sizes.
+const LISTED_AFTER_GIFT = /^ ?[,|/] ?(?:38|4[0-2]|4[4-6]) ?mm ?(?:[),|;]|$)/i;
+// "size 46" names the watch's case when nothing else does.
+// "size 42/46" lists two sizes.
+const WATCH_SIZE_WORD = /(?<![\p{L}\d])size ?(38|4[0-2]|4[4-6])(?![.,]?\d|\p{L}| ?[/,-] ?\d)/giu;
+// An accessory sold by the size it fits: a case, cover, film or box.
+const GIFT_ACCESSORY_NOUN =
+  /(?<![\p{L}\d])(?:ốp|case|bao da|silicone|silicon|tpu|cường lực|kính|miếng dán|vỏ|hộp|túi)(?![\p{L}\d])/iu;
+// For a watch, "vỏ" with a material ("kèm vỏ nhôm 46mm") is the watch's own case, and a
+// box ("hộp") is sold by no case size (DOS/Rate#1277).
+const WATCH_GIFT_ACCESSORY_NOUN =
+  /(?<![\p{L}\d])(?:ốp|case|bao da|silicone|silicon|tpu|cường lực|kính|miếng dán|vỏ(?! (?:nhôm|titan|titanium|thép|nhựa|aluminum|aluminium|stainless|steel)(?![\p{L}\d]))|túi)(?![\p{L}\d])/iu;
 const APPLE_SIZE_PATTERNS: Record<string, [RegExp, RegExp]> = {
   ipad: sizePatterns(IPAD_SIZE),
   'macbook air': sizePatterns(MACBOOK_AIR_SIZE),
@@ -1172,7 +1337,9 @@ const APPLE_SIZE_PATTERNS: Record<string, [RegExp, RegExp]> = {
  * "inch" wins over
  * a bare number (DOS/Rate#1113).
  */
-function readAppleSize(model: string, title: string): string {
+function readAppleSize(model: string, rawTitle: string): string {
+  // Composed form, so "tặng" is found in a decomposed (NFD) title too.
+  const title = rawTitle.normalize('NFC');
   const family = /^ipad (?:pro|air)\b/i.test(model)
     ? 'ipad'
     : /^macbook air\b/i.test(model)
@@ -1185,7 +1352,94 @@ function readAppleSize(model: string, title: string): string {
   if (!family) return '';
   const at = title.search(new RegExp(`\\b${family.split(' ')[0]}\\b`, 'i'));
   // A bundle's "+ bàn phím 11 inch" is another product; "GPS + Cellular" is the watch.
-  const own = title.slice(Math.max(0, at)).split(/ (?:cho|for) | ?\+ (?!cellular|lte)/i)[0]!;
+  // The size of a gifted or bundled accessory is not the product's: "tặng Silicone Case
+  // 46mm", "kèm ốp 46mm" lose that size; "kèm sạc 46mm GPS" and "kèm bút 13 inch" name
+  // no accessory with a size of its own and keep it (DOS/Rate#1263).
+  const productPart = title.slice(Math.max(0, at));
+  const giftSizes = new Set<string>();
+  const stripGift = (scope: string, noun: RegExp, sizes = new Set<string>()) =>
+    scope.replace(GIFTED_ACCESSORY_SIZE, (m, word: string, words: string) => {
+      if (!noun.test(words)) return m;
+      for (const s of m.slice(word.length + words.length).matchAll(GIFT_SIZE_VALUE)) {
+        sizes.add(
+          s[1]!
+            .replace(/ /g, '')
+            .replace(',', '.')
+            .replace(/\.0(?=mm|$)/, '')
+            .replace(/mm$/, '')
+            .toLowerCase()
+        );
+      }
+      return `${word}${words}`;
+    });
+  const withoutGift = stripGift(
+    productPart,
+    family === 'watch' ? WATCH_GIFT_ACCESSORY_NOUN : GIFT_ACCESSORY_NOUN,
+    giftSizes
+  );
+  // For a watch, "kèm vỏ nhôm 46mm" or "kèm hộp 46mm" names the watch's case only when the
+  // rest of the title gives it no case of its own: "Series 10 kèm hộp 46mm, GPS 42mm" is
+  // the 42mm (DOS/Rate#1291). A band size alone does not count as its own (DOS/Rate#1277).
+  if (family === 'watch') {
+    // A size listed right after the gift's ("kèm hộp 46mm | 42mm") is a list, not the case.
+    const withoutBox = withoutGift.replace(
+      GIFTED_ACCESSORY_SIZE,
+      (m, word: string, words: string, offset: number, whole: string) =>
+        GIFT_ACCESSORY_NOUN.test(words) && !LISTED_AFTER_GIFT.test(whole.slice(offset + m.length))
+          ? `${word}${words}`
+          : m
+    );
+    if (withoutBox !== withoutGift) {
+      const own = readFamilySize(family, withoutBox, false) || readWordedWatchSize(withoutBox);
+      if (own) return own;
+    }
+  }
+  const read = readFamilySize(family, withoutGift);
+  if (read) return read;
+  // The same part the size is read from: not what follows "cho/for" or "+".
+  const ownPart = withoutGift.split(/ (?:cho|for) | ?\+ (?!cellular|lte)/i)[0]!;
+  if (family === 'watch') {
+    const worded = readWordedWatchSize(withoutGift);
+    if (worded) return worded;
+  }
+  // A size only the gift names is still the best evidence of the product's: an 11 inch
+  // case fits an 11 inch iPad (DOS/Rate#1277). Only when the rest names no size at all (a
+  // size it names but leaves unresolved, such as a band list or "mặt 46mm" inside a band
+  // phrase, or one in a form no reading takes, such as "size 46" or "10.9", is never
+  // replaced by the gift's), and only when the gift names one size ("tặng ốp 42mm /
+  // 46mm" fits either).
+  const namesSize =
+    family === 'watch'
+      ? WATCH_SIZE.test(withoutGift) || WATCH_BARE_SIZE.test(ownPart)
+      : APPLE_SIZE_PATTERNS[family]!.some(re => re.test(ownPart)) || SCREEN_BARE_SIZE.test(ownPart);
+  return namesSize || withoutGift === productPart || giftSizes.size !== 1
+    ? ''
+    : readFamilySize(family, productPart);
+}
+
+/**
+ * A watch's "size 46" in the product's own part, outside a band phrase ("Sport Band size
+ * 42 cho mặt 46mm" names the band's), when it names one size (DOS/Rate#1291).
+ */
+function readWordedWatchSize(scope: string): string {
+  const own = scope.split(/ (?:cho|for) | ?\+ (?!cellular|lte)/i)[0]!;
+  const sizes = new Set<string>();
+  for (const part of own.split(/[),|;\u2013]| - /)) {
+    for (const m of part.matchAll(WATCH_SIZE_WORD)) {
+      const before = part.slice(0, m.index).normalize('NFC');
+      if (WATCH_BAND_WORD.test(before) || CASE_ACCESSORY_WORD.test(before)) return '';
+      sizes.add(m[1]!);
+    }
+  }
+  return sizes.size === 1 ? `${[...sizes][0]}mm` : '';
+}
+
+/**
+ * `readAppleSize` over one reading of the product's part of the title. `withBand` false
+ * leaves out a watch size only a band names.
+ */
+function readFamilySize(family: string, scope: string, withBand = true): string {
+  const own = scope.split(/ (?:cho|for) | ?\+ (?!cellular|lte)/i)[0]!;
   if (family === 'watch') {
     // A size outside a band phrase ("dây", "band", "strap", "loop" or "bracelet" up to the
     // next ")", ",", "|", ";", en dash or " - ") is the case's. A band is sold by the case
@@ -1194,25 +1448,104 @@ function readAppleSize(model: string, title: string): string {
     // A band phrase with a size runs on over the parts after it that start with a size
     // and follow "," or "|": "Sport Loop 42mm | 46mm" or "Dây 42mm S/M, 46mm M/L" names
     // two band sizes, not a case (DOS/Rate#1137). A part that names the case ("46mm, 42mm
-    // Aluminum Case") ends the list.
+    // Aluminum Case") ends the list. An en dash or " - " between a band size and a bare
+    // size is a range of band sizes ("Sport Loop 42mm - 46mm"), and two or more sizes
+    // listed right before a band word are the band's ("GPS 40mm, 44mm Dây Sport Band"); a
+    // size after the dash with more text ("Dây Vải 45mm - 46mm GPS") or a single size
+    // before the band ("GPS 46mm, Dây Cao Su 46mm S/M") is still the case's (DOS/Rate#1162).
     const parts = own.split(/([),|;\u2013]| - )/);
     const outside: string[] = [];
     let bandList = false;
+    let bandEnd = false;
     for (let i = 0; i < parts.length; i += 2) {
       const part = parts[i]!;
+      const sep = parts[i - 1] ?? '';
       const listed = LIST_WATCH_SIZE.test(part) && !WATCH_CASE_WORD.test(part.normalize('NFC'));
-      if (bandList && /^[,|]$/.test(parts[i - 1]!) && listed) continue;
+      const ranged = bandEnd && WATCH_RANGE_SEP.test(sep) && LONE_WATCH_SIZE.test(part);
+      if (bandList && ((/^[,|]$/.test(sep) && listed) || ranged)) {
+        outside.push('');
+        // "42mm S/M, 44mm - 46mm" ranges on from the listed size; "44mm M/L - 46mm" does not.
+        bandEnd = LAST_WATCH_SIZE.test(part);
+        continue;
+      }
       const [before, ...band] = part.split(WATCH_BAND_WORD);
-      outside.push(before!);
+      // Walk back over the bare sizes listed before this band ("40mm, 44mm Dây"): k ends
+      // at the first of them, and the part before it may end in one more ("GPS 40mm") if
+      // it has no band of its own. A part before the list that names the case ("(Vỏ nhôm)
+      // 46mm, 42mm Dây") keeps the list's first size as the case's, and a band that names
+      // the case ("42mm Dây Sport Band mặt 46mm") starts no walk.
+      const sizeBeforeBand =
+        band.length > 0 &&
+        LONE_WATCH_SIZE.test(before!) &&
+        !WATCH_CASE_WORD.test(part.normalize('NFC'));
+      const listSepAt = (n: number) =>
+        /^[,|]$/.test(parts[2 * n - 1]!) || WATCH_RANGE_SEP.test(parts[2 * n - 1]!);
+      let k = outside.length;
+      while (sizeBeforeBand && k > 0 && listSepAt(k) && LONE_WATCH_SIZE.test(outside[k - 1]!)) k--;
+      const head = k > 0 ? parts[2 * k - 2]! : '';
+      const headCase = WATCH_CASE_WORD.test(head.normalize('NFC'));
+      const headListed =
+        sizeBeforeBand &&
+        k > 0 &&
+        listSepAt(k) &&
+        LAST_WATCH_SIZE.test(head) &&
+        !WATCH_BAND_WORD.test(head) &&
+        !headCase;
+      if ((k < outside.length && !headCase) || headListed) {
+        for (let j = k; j < outside.length; j++) outside[j] = '';
+        if (headListed) outside[k - 1] = outside[k - 1]!.replace(LAST_WATCH_SIZE, '');
+        outside.push('');
+      } else outside.push(before!);
       bandList = WATCH_SIZE.test(band.join(' '));
+      bandEnd = LAST_WATCH_SIZE.test(band.join(' '));
     }
+    // A part that names the case with one size ("46mm Titanium Case", "Case 42mm") says
+    // the watch's size, whatever band size comes before it: "45mm Sport Band, 46mm
+    // Titanium Case" is the 46mm (DOS/Rate#1223).
+    // The size must sit next to the case word, and the part must not be about a box, a
+    // cover or what something fits ("kèm vỏ hộp 42mm", "fits 42mm case").
+    // A "| Case 46mm" after a part that already gives the watch a size outside any band
+    // ("Series 10 42mm GPS | Case 46mm") is a bundled case, not the watch's (DOS/Rate#1263).
+    // One pass: a part is after such a "|" once a sized part came before a "|" before it
+    // (linear in the parts, DOS/Rate#1277).
+    const afterSizedPipe: boolean[] = [];
+    let sizedSeen = false;
+    let armed = false;
+    parts.forEach((p, k) => {
+      if (k % 2 === 1) {
+        if (p === '|' && sizedSeen) armed = true;
+        return;
+      }
+      afterSizedPipe[k] = armed;
+      if (
+        WATCH_SIZE.test(p) &&
+        !WATCH_BAND_WORD.test(p) &&
+        !CASE_ACCESSORY_WORD.test(p.normalize('NFC'))
+      ) {
+        sizedSeen = true;
+      }
+    });
+    const namedCase = parts
+      .map((part, i) => ({ part: part.normalize('NFC'), i }))
+      .filter(({ i }) => i % 2 === 0 && !afterSizedPipe[i])
+      .map(({ part }) => part)
+      .filter(
+        part =>
+          !WATCH_BAND_WORD.test(part) &&
+          !CASE_ACCESSORY_WORD.test(part) &&
+          [...part.matchAll(new RegExp(WATCH_SIZE, 'gi'))].length === 1
+      )
+      .map(part => {
+        const m = part.match(NAMED_CASE_SIZE);
+        return m?.[1] ?? m?.[2];
+      })
+      .filter(Boolean);
+    if (namedCase.length === 1 && namedCase[0]) return `${namedCase[0]}mm`;
     const caseSize = outside.join(' ').match(WATCH_SIZE)?.[1];
     if (caseSize) return `${caseSize}mm`;
     const bandSize = own.match(WATCH_SIZE)?.[1];
-    const sizes = new Set(
-      [...title.slice(Math.max(0, at)).matchAll(new RegExp(WATCH_SIZE, 'gi'))].map(m => m[1])
-    );
-    return bandSize && sizes.size === 1 ? `${bandSize}mm` : '';
+    const sizes = new Set([...scope.matchAll(new RegExp(WATCH_SIZE, 'gi'))].map(m => m[1]));
+    return withBand && bandSize && sizes.size === 1 ? `${bandSize}mm` : '';
   }
   const [marked, bare] = APPLE_SIZE_PATTERNS[family]!;
   const size = (own.match(marked) ?? own.match(bare))?.[1];
@@ -1254,39 +1587,45 @@ export class ProductNormalizer {
     const categorySlug = detectCategorySlug(title);
 
     // 1. Extract Brand
+    // An app or service the product supports names no brand or model: "Smart Tivi Samsung
+    // ... hỗ trợ Apple TV" is a Samsung TV (DOS/Rate#1195).
+    const identityTitle = stripServiceMentions(title);
     let brand = 'Khác';
     // Not the "ipad" in Xiaomi's "Mipad" (DOS/Rate#826).
-    if (/apple|iphone|(?<![a-z])ipad|macbook|airpods/i.test(title)) brand = 'Apple';
-    else if (/samsung|galaxy/i.test(title)) brand = 'Samsung';
-    else if (/xiaomi|redmi|poco|\bmi\s*pad\b/i.test(title)) brand = 'Xiaomi';
-    else if (/\bsony\b|w[fh]-1000|w[fh]1000xm|xperia/i.test(title)) brand = 'Sony';
+    if (/apple|iphone|(?<![a-z])ipad|macbook|airpods/i.test(identityTitle)) brand = 'Apple';
+    else if (/samsung|galaxy/i.test(identityTitle)) brand = 'Samsung';
+    else if (/xiaomi|redmi|poco|\bmi\s*pad\b/i.test(identityTitle)) brand = 'Xiaomi';
+    else if (/\bsony\b|w[fh]-1000|w[fh]1000xm|xperia/i.test(identityTitle)) brand = 'Sony';
     else if (
-      /\bgarmin\b|forerunner|fenix|venu|vivo(?:active|smart|move|fit|sport|life)/i.test(title)
+      /\bgarmin\b|forerunner|fenix|venu|vivo(?:active|smart|move|fit|sport|life)/i.test(
+        identityTitle
+      )
     )
       brand = 'Garmin';
-    else if (/\blenovo\b|thinkpad|ideapad|legion/i.test(title)) brand = 'Lenovo';
-    else if (/oppo/i.test(title)) brand = 'OPPO';
+    else if (/\blenovo\b|thinkpad|ideapad|legion/i.test(identityTitle)) brand = 'Lenovo';
+    else if (/oppo/i.test(identityTitle)) brand = 'OPPO';
     // Not "Vivobook" / "Vivo Book" (Asus) (DOS/Rate#761); Garmin's Vivo lines are matched above.
-    else if (/\bvivo(?!\s*book)/i.test(title)) brand = 'Vivo';
-    else if (/realme/i.test(title)) brand = 'Realme';
-    else if (/google|pixel/i.test(title)) brand = 'Google';
-    else if (/\basus\b|\brog\b|zenbook|vivo\s*book|tuf\s*gaming/i.test(title)) brand = 'Asus';
-    else if (/\bdell\b|inspiron|\bxps\b|alienware|latitude/i.test(title)) brand = 'Dell';
+    else if (/\bvivo(?!\s*book)/i.test(identityTitle)) brand = 'Vivo';
+    else if (/realme/i.test(identityTitle)) brand = 'Realme';
+    else if (/google|pixel/i.test(identityTitle)) brand = 'Google';
+    else if (/\basus\b|\brog\b|zenbook|vivo\s*book|tuf\s*gaming/i.test(identityTitle))
+      brand = 'Asus';
+    else if (/\bdell\b|inspiron|\bxps\b|alienware|latitude/i.test(identityTitle)) brand = 'Dell';
     // "Omen" as a word: Sennheiser "Momentum" is not HP.
-    else if (/\bhp\b|pavilion|victus|\bomen\b|elitebook|envy/i.test(title)) brand = 'HP';
-    else if (/\bacer\b|nitro\s*\d|swift|predator|aspire/i.test(title)) brand = 'Acer';
-    else if (/\bmsi\b|katana|cyborg|stealth|prestige/i.test(title)) brand = 'MSI';
-    else if (/\bhuawei\b|matepad|freebuds|watch\s*gt/i.test(title)) brand = 'Huawei';
-    else if (/\bbose\b|quietcomfort/i.test(title)) brand = 'Bose';
-    else if (/\bjbl\b|tour\s*pro|tune\s*\d+/i.test(title)) brand = 'JBL';
-    else if (/sennheiser|momentum/i.test(title)) brand = 'Sennheiser';
-    else if (/oneplus/i.test(title)) brand = 'OnePlus';
-    else if (/\bhonor\b|magicbook/i.test(title)) brand = 'Honor';
+    else if (/\bhp\b|pavilion|victus|\bomen\b|elitebook|envy/i.test(identityTitle)) brand = 'HP';
+    else if (/\bacer\b|nitro\s*\d|swift|predator|aspire/i.test(identityTitle)) brand = 'Acer';
+    else if (/\bmsi\b|katana|cyborg|stealth|prestige/i.test(identityTitle)) brand = 'MSI';
+    else if (/\bhuawei\b|matepad|freebuds|watch\s*gt/i.test(identityTitle)) brand = 'Huawei';
+    else if (/\bbose\b|quietcomfort/i.test(identityTitle)) brand = 'Bose';
+    else if (/\bjbl\b|tour\s*pro|tune\s*\d+/i.test(identityTitle)) brand = 'JBL';
+    else if (/sennheiser|momentum/i.test(identityTitle)) brand = 'Sennheiser';
+    else if (/oneplus/i.test(identityTitle)) brand = 'OnePlus';
+    else if (/\bhonor\b|magicbook/i.test(identityTitle)) brand = 'Honor';
     // Apple's desktops and speakers, last so another brand wins, and not when the title
     // only names what it fits or looks like ("Bàn phím cho Mac mini") (DOS/Rate#819).
     else if (
-      /\bimac\b|\bmac\s*(?:mini|studio)\b|homepod|\bvision\s*pro\b/i.test(title) &&
-      !/\b(?:cho|for|giống)\s+(?:imac|mac|homepod|vision)/i.test(title)
+      /\bimac\b|\bmac\s*(?:mini|studio)\b|homepod|\bvision\s*pro\b/i.test(identityTitle) &&
+      !/\b(?:cho|for|giống)\s+(?:imac|mac|homepod|vision)/i.test(identityTitle)
     )
       brand = 'Apple';
 
@@ -1299,7 +1638,7 @@ export class ProductNormalizer {
     // separator, a size ("256GB"), a RAM/ROM pair ("8/256"), a network or "Chính hãng"
     // follows, so "Tab S9 - Ultra slim case", "Tab S9 - Ultra 2-in-1 case" and "A55 + Tặng"
     // keep their keys.
-    let modelTitle = title
+    let modelTitle = identityTitle
       // "15 - ProMax", "S24-Ultra" and "15 (ProMax)" are "15 ProMax" and "S24 Ultra".
       .replace(
         /(?<=\d[a-z]?) ?- ?(pro ?max|pro|plus|ultra|mini|lite|fe)\b(?= ?(?:$|[-,(]|\d+(?:[.,]\d+)? ?(?:gb|tb)\b|\d+ ?\/ ?\d+|[45]g\b|lte\b|chính\b))/gi,
@@ -1330,15 +1669,28 @@ export class ProductNormalizer {
       // "Watch Ultra 2", "AirPods Pro (2nd generation)" is "AirPods Pro 2" (DOS/Rate#817).
       // One optional space before the "(" keeps a single space in the name; a leading
       // `\s*` would be quadratic on long whitespace (CodeQL js/polynomial-redos).
-      let appleTitle = modelTitle.replace(
-        / ?\(\s*(\d{1,2})(?:st|nd|rd|th)\s*gen(?:eration)?\s*\)/gi,
-        ' $1'
-      );
+      let appleTitle = modelTitle
+        .replace(/ ?\(\s*(\d{1,2})(?:st|nd|rd|th)\s*gen(?:eration)?\s*\)/gi, ' $1')
+        // Generation words read as the number: "Apple TV 4K thế hệ 3", "Gen 3", "3rd Gen"
+        // and "II" are the 3rd and 2nd generation, in parentheses too: "AirPods (thế hệ
+        // thứ 3)" is the "AirPods 3" (DOS/Rate#1194).
+        .replace(/ ?\(\s*(?:thế\s*hệ\s*(?:thứ\s*)?|gen(?:eration)?\s*)(\d{1,2})\s*\)/gi, ' $1')
+        .replace(/\bthế\s*hệ\s*(?:thứ\s*)?(\d{1,2})\b/gi, '$1')
+        .replace(/\b(\d{1,2})(?:st|nd|rd|th)\s*gen(?:eration)?\b/gi, '$1')
+        .replace(/\bgen(?:eration)?\s*(\d{1,2})\b/gi, '$1')
+        .replace(
+          /\b(pro|ultra|se|4k|homepod|airpods|pencil|max|mini|air) (ii|iii|iv)\b/gi,
+          (_: string, line: string, roman: string) =>
+            `${line} ${ROMAN_GENERATIONS[roman.toLowerCase()]}`
+        );
       // An iPhone or iPad named after another Apple product as what it fits is not the
       // product: "AirPods Pro 2 cho iPhone Air" is the AirPods (DOS/Rate#819).
       const fitsAt = appleTitle.search(/ (?:cho|for) (?:iphone|ipad)\b/i);
       // Only another family counts: "Ốp lưng iPhone cho iPhone 15" is still the iPhone 15.
-      if (fitsAt > 0 && /airpods|\bwatch\b|macbook/i.test(appleTitle.slice(0, fitsAt)))
+      if (
+        fitsAt > 0 &&
+        /airpods|\bwatch\b|macbook|apple\s*pencil/i.test(appleTitle.slice(0, fitsAt))
+      )
         appleTitle = appleTitle.slice(0, fitsAt);
       const iphoneMatch = appleTitle.match(
         /iphone\s*(\d+e\b|\d+(?:\s*(?:pro\s*max|pro|plus|mini|air)|\+(?= ?(?:$|[-,]|\d+(?:[.,]\d+)? ?(?:gb|tb)\b|[45]g\b|lte\b|chính\b)))?|air\b|duo\b|se(?:\s*(?:\(\s*(?:2020|2022|2025)\s*\)|(?:2020|2022|2025)\b|(?:gen\s*)?[234]\b))?)/i
@@ -1362,6 +1714,8 @@ export class ProductNormalizer {
         /airpods\s*(?:(pro)(?:\s*(?:(?:gen|thế\s*hệ)\s*|\(\s*)?(\d+))?|(max)|(?:(?:gen|thế\s*hệ)\s*)?(\d+))/i
       );
 
+      // True when no Apple line is named and the model fell back to the iPhone.
+      let noLine = false;
       // Retail titles often put the chip after the screen size ("iPad Pro 11 inch M4",
       // "MacBook Air 13 inch M3"); pick it up wherever it sits.
       const chipMatch = modelTitle.match(/\b(M\d)(?:\s+(Pro|Max))?\b/i);
@@ -1479,11 +1833,37 @@ export class ProductNormalizer {
         if (/^(?:Mac mini|Mac Studio|iMac)$/.test(model) && chip)
           model = `${model} ${chip}${chipMatch?.[2] ? ` ${chipMatch[2]}` : ''}`;
         else if (
-          /^(?:TV|TV 4K|HomePod|HomePod mini|Mac mini|Mac Studio|iMac)$/.test(model) &&
+          /^(?:TV|TV 4K|HomePod|HomePod mini|Mac mini|Mac Studio|iMac|Pencil)$/.test(model) &&
           generation
         )
           // Retailers name an Apple TV 4K or HomePod by its year as often as by its generation.
           model = `${model} ${APPLE_GENERATION_BY_YEAR[`${model} ${generation[1]}`] ?? generation[1]}`;
+        else if (model === 'Pencil') {
+          const pencil = appleTitle.slice(familyEnd).match(/^ ?\(? ?(pro|usb-?c)\b/i);
+          if (pencil) model = /^pro$/i.test(pencil[1]!) ? 'Pencil Pro' : 'Pencil USB-C';
+        }
+        noLine = first === Infinity;
+      }
+      // A part number or chip names the generation a title leaves out: "Apple TV 4K
+      // MN873SA/A" and "Apple TV 4K (A15)" are the 3rd (2022). A part number also names a
+      // title with no line. A stated generation always wins, and only the product's own
+      // part of the title counts, before a "+" bundle or what it fits (DOS/Rate#1194).
+      const ownTitle = appleTitle.split(/ ?\+ | (?:cho|for|tương thích|dùng cho|kèm|tặng) /i)[0]!;
+      const part = Array.from(
+        ownTitle.matchAll(/\b(m[a-z0-9]{4})(?:[a-z]{1,2}(?:\/a)?)?\b/gi),
+        m => {
+          const partNumber = m[1]!.toUpperCase();
+          return Object.hasOwn(APPLE_PART_NUMBERS, partNumber)
+            ? APPLE_PART_NUMBERS[partNumber]
+            : undefined;
+        }
+      ).find(Boolean);
+      if (part && (model === part[0] || noLine)) model = part[1];
+      else {
+        const chipGeneration = APPLE_CHIP_GENERATIONS.find(
+          ([line, chipPattern]) => model === line && chipPattern.test(ownTitle)
+        );
+        if (chipGeneration) model = chipGeneration[2];
       }
       // A line Apple sells in more than one size keys each size apart: the 11 and 13 inch
       // iPad Pro, or the 42 and 46mm Watch Series, are two products at two prices. A title
@@ -1499,6 +1879,14 @@ export class ProductNormalizer {
       model = 'Zenbook S 14';
     } else if (brand === 'Lenovo' && /thinkpad\s*x1\s*carbon\s*gen\s*12/i.test(modelTitle)) {
       model = 'ThinkPad X1 Carbon Gen 12';
+    } else if (
+      brand === 'Garmin' &&
+      /forerunner\s*265[ -]?s(?![\p{L}\p{M}])(?! ?[/-] ?[a-z])/iu.test(modelTitle)
+    ) {
+      // The 265S is the 42mm model, not the 46mm 265 (DOS/Rate#1222): "265S", "265 S",
+      // "265-S", "265S42mm", but not a "265 S/M" band size or a word ("265 Sport", and
+      // "265 Sạc nhanh", whose next letter is not ASCII, DOS/Rate#1262).
+      model = 'Forerunner 265S';
     } else if (brand === 'Garmin' && /forerunner\s*265/i.test(modelTitle)) {
       model = 'Forerunner 265';
     } else if (brand === 'Samsung' && /galaxy\s*watch\s*ultra/i.test(modelTitle)) {
@@ -1806,8 +2194,14 @@ export class ProductNormalizer {
     // The registry describes one size of a line: its screen and battery do not describe
     // the other size ("iPad Pro M4 13" is not the 11 inch entry) (DOS/Rate#1113).
     const appleInches = appleSize && !appleSize.endsWith('mm') ? parseFloat(appleSize) : null;
+    // A watch registry entry pinned to one case does not describe another one.
+    const caseMismatch =
+      benchmark?.case_mm !== undefined &&
+      appleSize.endsWith('mm') &&
+      parseInt(appleSize, 10) !== benchmark.case_mm;
     const benchmarkSized =
       benchmark &&
+      !caseMismatch &&
       (appleInches === null ||
         Math.floor(benchmark.screen_size_inch ?? NaN) === Math.floor(appleInches))
         ? benchmark
@@ -1817,9 +2211,16 @@ export class ProductNormalizer {
         ? null
         : (benchmarkSized?.screen_size_inch ?? titleScreenSize ?? appleInches);
     const batteryMah = benchmarkSized ? benchmarkSized.battery_mah : null;
-    const has5g = benchmark
+    // A phone or tablet title that names no 5G does not say it lacks it: unknown, not
+    // false (and not true for every phone). Laptops, watches and earbuds have no 5G
+    // (DOS/Rate#1196).
+    const has5g: boolean | null = benchmark
       ? benchmark.has_5g
-      : categorySlug === 'smartphones' || /\b5g\b/i.test(title);
+      : /\b5 ?g\b/i.test(title)
+        ? true
+        : categorySlug === 'smartphones' || categorySlug === 'tablets'
+          ? null
+          : false;
 
     const fallbackOs =
       categorySlug === 'laptops'
@@ -1994,8 +2395,8 @@ export class ProductNormalizer {
         prices_msrp: `${storageDisplay}: ${safePriceMin.toLocaleString('vi-VN')}₫`,
       },
       design: {
-        dimensions: benchmark?.dimensions || undefined,
-        weight_g: benchmark?.weight_g || undefined,
+        dimensions: (caseMismatch ? undefined : benchmark?.dimensions) || undefined,
+        weight_g: (caseMismatch ? undefined : benchmark?.weight_g) || undefined,
         materials: isSmartphone
           ? isApple
             ? 'Ceramic Shield front, glass back, metal frame'
@@ -2020,7 +2421,7 @@ export class ProductNormalizer {
       display: {
         size_inch: categorySlug === 'earbuds' ? undefined : screenSize || undefined,
         type: benchmark?.screen_type || fallbackScreenType,
-        resolution: benchmark?.resolution || undefined,
+        resolution: (caseMismatch ? undefined : benchmark?.resolution) || undefined,
         refresh_rate_hz:
           categorySlug === 'earbuds'
             ? undefined
@@ -2076,27 +2477,30 @@ export class ProductNormalizer {
         nfc: true,
         other: isApple ? 'Ultra Wideband (UWB), SOS vệ tinh' : 'Hỗ trợ OTG, Chia sẻ nhanh',
       },
+      // Nothing is known about the network of a phone or tablet whose 5G is unknown.
       cellular:
-        !has5g && categorySlug !== 'smartphones'
-          ? {
-              has_5g: false,
-              technology:
-                categorySlug === 'earbuds' || categorySlug === 'laptops'
-                  ? 'Wi-Fi / Bluetooth (No Cellular)'
-                  : 'Wi-Fi / Bluetooth',
-              sim_type: 'No SIM',
-              volte: false,
-              vowifi: false,
-            }
-          : {
-              has_5g: has5g,
-              bands_5g: has5g ? 'SA/NSA/Sub6' : undefined,
-              bands_4g: 'LTE Cat 20',
-              technology: has5g ? 'GSM / HSPA / LTE / 5G' : 'GSM / HSPA / LTE',
-              sim_type: '2 Nano-SIM + eSIM',
-              volte: true,
-              vowifi: true,
-            },
+        has5g === null
+          ? {}
+          : !has5g && categorySlug !== 'smartphones'
+            ? {
+                has_5g: false,
+                technology:
+                  categorySlug === 'earbuds' || categorySlug === 'laptops'
+                    ? 'Wi-Fi / Bluetooth (No Cellular)'
+                    : 'Wi-Fi / Bluetooth',
+                sim_type: 'No SIM',
+                volte: false,
+                vowifi: false,
+              }
+            : {
+                has_5g: has5g,
+                bands_5g: has5g ? 'SA/NSA/Sub6' : undefined,
+                bands_4g: 'LTE Cat 20',
+                technology: has5g ? 'GSM / HSPA / LTE / 5G' : 'GSM / HSPA / LTE',
+                sim_type: '2 Nano-SIM + eSIM',
+                volte: true,
+                vowifi: true,
+              },
       multimedia: {
         loudspeaker: 'Loa kép Stereo đa chiều',
         headphone_jack_35mm: false,
@@ -2157,8 +2561,8 @@ export class ProductNormalizer {
       key_specs: keySpecs,
       description:
         sanitizedDescription && sanitizedDescription.length > 0 ? sanitizedDescription : undefined,
-      is_benchmark_enriched: Boolean(benchmark),
-      spec_source: benchmark ? 'benchmark_registry' : 'crawled_title',
+      is_benchmark_enriched: Boolean(benchmark) && !caseMismatch,
+      spec_source: benchmark && !caseMismatch ? 'benchmark_registry' : 'crawled_title',
     };
   }
 }

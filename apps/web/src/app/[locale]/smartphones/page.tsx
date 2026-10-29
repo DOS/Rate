@@ -5,6 +5,7 @@ import { Link } from '@/lib/navigation';
 import {
   getCachedCategoryDirectoryFacets,
   getCachedMasterProducts,
+  getItemCatalogPage,
   getCrossPlatformDealRadar,
   getMasterProducts,
   type MasterProductFilterParams,
@@ -16,6 +17,7 @@ import { buildRadarIndex, getRadarSignal } from '@/lib/deal-radar';
 import ProductCard, {
   type ProductCardSpec,
 } from '@/components/product/ProductCard';
+import { saleStateOfMaster } from '@/lib/sale-state';
 import {
   formatStorageLabel,
   getCategoryFilterSchema,
@@ -23,6 +25,7 @@ import {
   SORT_OPTIONS,
   type ProductSortOption,
 } from '@/lib/category-filters';
+import { catalogRowSlug, itemSizeChips } from '@/lib/item-directory';
 import PageShell from '../components/page-shell';
 import ListSidebarOne from '../components/list-sidebar-one';
 import CompareTrayBar from '@/components/compare/CompareTrayBar';
@@ -216,15 +219,24 @@ export async function CategoryCatalogContent({
     offset: (page - 1) * CATALOG_PAGE_SIZE,
   };
 
+  // The plain listing (only the bounded page and a known sort) is most of
+  // the traffic and shares the data cache. Filtered reads stay uncached:
+  // free-form values (search, prices, brands) would each create an entry
+  // (DOS/Rate#495).
+  const readVariants = (params: MasterProductFilterParams) =>
+    isPlainListing(params)
+      ? getCachedMasterProducts(params)
+      : getMasterProducts(params);
   const [facets, pageRows, categoryDealRadar] = await Promise.all([
     getCachedCategoryDirectoryFacets(categorySlug),
-    // The plain listing (only the bounded page and a known sort) is most of
-    // the traffic and shares the data cache. Filtered reads stay uncached:
-    // free-form values (search, prices, brands) would each create an entry
-    // (DOS/Rate#495).
-    isPlainListing(filterParams)
-      ? getCachedMasterProducts(filterParams)
-      : getMasterProducts(filterParams),
+    // RATE_ITEM_MODEL on: one card per Item, so the page is cut after
+    // grouping every matching variant (DOS/Rate#1155); off: as before.
+    getItemCatalogPage(
+      (offset, limit) => readVariants({ ...filterParams, limit, offset }),
+      filterParams.offset ?? 0,
+      filterParams.limit ?? CATALOG_PAGE_SIZE + 1,
+      filterParams.sort
+    ).then((itemRows) => itemRows ?? readVariants(filterParams)),
     getCrossPlatformDealRadar({
       categorySlug: categorySlug as CanonicalCategorySlug,
       // Max page size: card badges and exports need a signal for EVERY product,
@@ -374,7 +386,7 @@ export async function CategoryCatalogContent({
           '@type': 'ListItem',
           position: (page - 1) * CATALOG_PAGE_SIZE + index + 1,
           name: item.name,
-          url: absoluteUrl(`${basePath}/${item.slug}`),
+          url: absoluteUrl(`${basePath}/${catalogRowSlug(item)}`),
         })),
       },
     ],
@@ -848,7 +860,13 @@ export async function CategoryCatalogContent({
                         <div key={item.id}>
                           <ProductCard
                             slug={item.slug}
-                            href={`${basePath}/${item.slug}`}
+                            href={`${basePath}/${catalogRowSlug(item)}`}
+                            sizeChips={itemSizeChips(
+                              item,
+                              `${basePath}/${catalogRowSlug(item)}`,
+                              formatStorageLabel,
+                              storageGb
+                            )}
                             categoryPath={basePath}
                             name={item.name}
                             brand={item.brand}
@@ -866,6 +884,7 @@ export async function CategoryCatalogContent({
                             minPrice={Number(item.min_price || 0)}
                             maxPrice={Number(item.max_price || 0)}
                             merchantCount={item.merchant_count || 0}
+                            saleState={saleStateOfMaster(item)}
                             verified
                           />
                         </div>

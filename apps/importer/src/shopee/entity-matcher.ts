@@ -48,6 +48,11 @@ function hasControlOrSpaceChar(val: string): boolean {
   return /[\p{Cc}\s]/u.test(val);
 }
 
+/** True when a model_key's last segment is a storage size ("asus:zenbook-s-14:1024gb"). */
+function isStorageKeyed(modelKey: unknown): boolean {
+  return typeof modelKey === 'string' && /:\d+(?:gb|tb)$/i.test(modelKey);
+}
+
 export function sanitizeMatcherEntityId(raw: unknown, maxLen = 128): string {
   const str =
     typeof raw === 'number' && Number.isSafeInteger(raw) && raw > 0
@@ -77,6 +82,18 @@ function isStrictBoolean(val: unknown): boolean {
     return lower === 'true' || lower === '1';
   }
   return false;
+}
+
+/** A known boolean, or null when the value says nothing (DOS/Rate#1196). */
+function toBooleanOrNull(val: unknown): boolean | null {
+  if (typeof val === 'boolean') return val;
+  if (typeof val === 'number') return val === 1 ? true : val === 0 ? false : null;
+  if (typeof val === 'string') {
+    const lower = val.trim().toLowerCase();
+    if (lower === 'true' || lower === '1') return true;
+    if (lower === 'false' || lower === '0') return false;
+  }
+  return null;
 }
 
 export function sanitizeHttpUrl(raw: unknown): string | null {
@@ -159,6 +176,64 @@ export interface ItemMatchResult {
 }
 
 type MatchedItem = { id: string; itemKey: string };
+
+/**
+ * A variant candidate with its Item's specs, description, key specs and images; the
+ * variant keeps its own storage and RAM (design doc 4.1 "overrides only"). The flat
+ * columns follow the inherited specs so they never disagree with them.
+ */
+function inheritItemProfile(
+  candidate: NormalizedProductCandidate,
+  profile: ItemSpecProfile
+): NormalizedProductCandidate {
+  const specifications = mergeProductSpecifications(
+    candidate.specifications,
+    profile.specifications
+  ) as Record<string, unknown>;
+  const hardware = (specifications.hardware ?? {}) as Record<string, unknown>;
+  const ownHardware = (candidate.specifications?.hardware ?? {}) as Record<string, unknown>;
+  specifications.hardware = {
+    ...hardware,
+    storage_gb: ownHardware.storage_gb,
+    ram_gb: ownHardware.ram_gb,
+  };
+  const ownKeySpecs = (candidate.key_specs ?? {}) as Record<string, unknown>;
+  const itemKeySpecs = { ...profile.keySpecs };
+  delete itemKeySpecs.storage;
+  delete itemKeySpecs.ram;
+  const display = profile.specifications.display;
+  const battery = profile.specifications.battery;
+  const cellular = profile.specifications.cellular;
+  return {
+    ...candidate,
+    description: profile.description ?? candidate.description,
+    screen_size_inch: display?.size_inch ?? candidate.screen_size_inch,
+    battery_mah: battery?.capacity_mah ?? candidate.battery_mah,
+    has_5g: typeof cellular?.has_5g === 'boolean' ? cellular.has_5g : candidate.has_5g,
+    specifications: specifications as NormalizedProductCandidate['specifications'],
+    key_specs: {
+      ...itemKeySpecs,
+      ...(ownKeySpecs.storage !== undefined ? { storage: ownKeySpecs.storage } : {}),
+      ...(ownKeySpecs.ram !== undefined ? { ram: ownKeySpecs.ram } : {}),
+    } as NormalizedProductCandidate['key_specs'],
+    images: profile.images.length > 0 ? profile.images : candidate.images,
+  };
+}
+
+/** Item-level specs a new variant inherits (design doc 4.1, DOS/Rate#1152). */
+type ItemSpecProfile = {
+  description: string | null;
+  specifications: ReturnType<typeof mergeProductSpecifications>;
+  keySpecs: Record<string, unknown>;
+  images: string[];
+};
+
+/** The Item a new variant is created under: its status, and its specs when it has any. */
+type ParentItem = {
+  status: string | null;
+  profile: ItemSpecProfile | null;
+  variantKnown: boolean;
+};
 
 export class EntityMatcher {
   private enricher: AiSpecEnricher;
@@ -341,14 +416,19 @@ export class EntityMatcher {
     // ("iPhone 15 Pro Max" ~ "iPhone 15 Pro"), so a new variant gets its own key.
     if (fuzzyItem) return seedOwnKey();
 
-    // Missing variant of a known Item: create it under the Item's own key.
+    // Missing variant of a known Item: create it under the Item's own key. It takes the
+    // Item's specs (only storage and RAM are its own) and, for a stated size, the
+    // Item's publish state: a new size of a published Item is published (design doc
+    // 4.5 step 2, DOS/Rate#1152).
     const variantModelKey = composeModelKey(item.itemKey, targetVariantKey);
+    const parent = await this.parentItem(item.id, variantKnown);
     const seeded = await this.seedMasterProduct(
       { ...candidate, model_key: variantModelKey },
       variantModelKey,
       safeCategoryId,
       safeRawTitle,
-      ambiguousFuzzy
+      ambiguousFuzzy,
+      parent
     );
     logger.info(
       'entity_match.variant_created',
@@ -419,6 +499,45 @@ export class EntityMatcher {
       { itemId: item.id, similarity: sim }
     );
     return { item, ambiguous: false };
+  }
+
+  /**
+   * The Item a new variant goes under: its status, and the Item-level fields the variant
+   * inherits (design doc 4.1). `profile` is null when the Item has no specs yet (a draft
+   * Item the M1 trigger just created): the variant is then enriched as before.
+   */
+  private async parentItem(itemId: string, variantKnown: boolean): Promise<ParentItem> {
+    const { data, error } = await this.supabase
+      .from('items')
+      .select('id, status, description, specifications, key_specs, images')
+      .eq('id', itemId)
+      .maybeSingle();
+    if (error) {
+      throw new Error(`[EntityMatcher] Item profile lookup for ${itemId} failed: ${error.message}`);
+    }
+    const row = data as Record<string, unknown> | null;
+    const status = typeof row?.status === 'string' ? row.status : null;
+    const specifications = mergeProductSpecifications(undefined, row?.specifications);
+    const hasSpecs = Object.entries(specifications).some(
+      ([group, fields]) =>
+        group !== 'category_slug' &&
+        Boolean(fields) &&
+        typeof fields === 'object' &&
+        Object.values(fields as Record<string, unknown>).some(v => v !== undefined && v !== null)
+    );
+    const profile: ItemSpecProfile | null =
+      row && hasSpecs
+        ? {
+            description: typeof row.description === 'string' ? row.description : null,
+            specifications,
+            keySpecs:
+              row.key_specs && typeof row.key_specs === 'object' && !Array.isArray(row.key_specs)
+                ? (row.key_specs as Record<string, unknown>)
+                : {},
+            images: sanitizeHttpUrlList(row.images),
+          }
+        : null;
+    return { status, profile, variantKnown };
   }
 
   private async listItemVariants(
@@ -513,7 +632,7 @@ export class EntityMatcher {
       throw new Error(`[EntityMatcher] Tier 2 fuzzy match failed: ${fuzzyErr.message}`);
     }
     let ambiguousFuzzy = false;
-    const validFuzzyMatches = Array.isArray(fuzzyMatches)
+    const scoredFuzzyMatches = Array.isArray(fuzzyMatches)
       ? fuzzyMatches.filter(m => {
           if (!m || typeof m !== 'object' || Array.isArray(m)) return false;
           const masterId = sanitizeMatcherEntityId(m.master_id, 128);
@@ -522,6 +641,27 @@ export class EntityMatcher {
           return Number.isFinite(sim) && sim >= ENTITY_MATCH_CANDIDATE_FLOOR && sim <= 1;
         })
       : [];
+    // A title that states no storage never links to a master keyed by a storage: the
+    // RPC drops its storage filter for a NULL size, so "Asus Zenbook S 14" would score
+    // high against "Asus Zenbook S 14 1TB". Such a hit only makes the seed a draft
+    // (DOS/Rate#1105 option (a), #1200). The item-first matcher (#1151) handles it with
+    // RATE_ITEM_MODEL on. Earbuds and watches are sold in one storage per model, so
+    // their legacy `:64gb` seed keys ("apple:watch-series-10-42mm:64gb") still take a
+    // size-less title.
+    const validFuzzyMatches =
+      candidate.storage_gb == null &&
+      candidate.category_slug !== 'earbuds' &&
+      candidate.category_slug !== 'smartwatches'
+        ? scoredFuzzyMatches.filter(m => !isStorageKeyed(m.model_key))
+        : scoredFuzzyMatches;
+    if (validFuzzyMatches.length < scoredFuzzyMatches.length) {
+      ambiguousFuzzy = true;
+      logger.warn(
+        'entity_match.tier2_storage_less',
+        `Tier 2 skipped ${scoredFuzzyMatches.length - validFuzzyMatches.length} sized master(s) for a title with no storage: seeding as draft if new.`,
+        { modelKey: candidate.model_key }
+      );
+    }
     if (validFuzzyMatches.length > 0) {
       const topMatch = validFuzzyMatches[0]!;
       const topMasterId = sanitizeMatcherEntityId(topMatch.master_id, 128);
@@ -603,11 +743,18 @@ export class EntityMatcher {
     safeModelKey: string,
     safeCategoryId: string | undefined,
     safeRawTitle: string | undefined,
-    ambiguousFuzzy: boolean
+    ambiguousFuzzy: boolean,
+    parent?: ParentItem
   ): Promise<{ masterId: string; isNew: boolean }> {
     // Tier 3: No existing master product matches -> Enrich with AI Spec Enricher (if not in local benchmark registry)
-    // and seed a new Master Product.
-    candidate = await this.enricher.enrichCandidate(candidate, safeRawTitle);
+    // and seed a new Master Product. A variant of a known Item takes the Item's specs
+    // instead: no AI call, and only storage and RAM are its own (DOS/Rate#1152).
+    const inherited = parent?.profile ?? null;
+    candidate = inherited
+      ? inheritItemProfile(candidate, inherited)
+      : await this.enricher.enrichCandidate(candidate, safeRawTitle, {
+          perItem: this.itemModel !== 'off',
+        });
 
     // - Upsert on model_key (unique) so a concurrent crawler inserting the same
     //   canonical entity resolves instead of crashing (plan v7 §5.1 / Gemini B3).
@@ -619,8 +766,24 @@ export class EntityMatcher {
       candidate.spec_source === 'ai_unverified' ||
       candidate.spec_source === 'crawled_title' ||
       !candidate.is_benchmark_enriched;
-    const seedStatus =
+    // A stated size of a published Item is published like its Item, unless the listing
+    // itself is not a new device.
+    // Under an Item that is not published (draft or archived) a new variant is a draft.
+    // Under a published Item, an inherited variant is published for a stated size of a
+    // new device; one with no Item specs yet follows the Tier 3 rule.
+    const tier3Status =
       candidate.needs_review || ambiguousFuzzy || isUnverifiedSpec ? 'draft' : 'published';
+    const seedStatus = !parent
+      ? tier3Status
+      : parent.status !== 'published'
+        ? 'draft'
+        : !inherited
+          ? tier3Status
+          : parent.variantKnown &&
+              !candidate.needs_review &&
+              (candidate.condition ?? 'new') === 'new'
+            ? 'published'
+            : 'draft';
     logger.info(
       'entity_match.tier3_create_start',
       `Tier 3: Creating new canonical Master Product: ${candidate.name} (status: ${seedStatus}, spec_source: ${candidate.spec_source ?? 'unknown'})...`,
@@ -701,7 +864,7 @@ export class EntityMatcher {
         storage_gb: toBoundedPositiveInt(candidate.storage_gb, MAX_STORAGE_GB),
         screen_size_inch: toBoundedPositiveNumber(candidate.screen_size_inch, MAX_SCREEN_SIZE_INCH),
         battery_mah: toBoundedPositiveInt(candidate.battery_mah, MAX_BATTERY_MAH),
-        has_5g: isStrictBoolean(candidate.has_5g),
+        has_5g: toBooleanOrNull(candidate.has_5g),
         specifications: candidate.specifications,
         key_specs: candidate.key_specs,
         images: safeImages,
@@ -904,9 +1067,10 @@ export class EntityMatcher {
               toBoundedPositiveNumber(aiResult.screen_size_inch, MAX_SCREEN_SIZE_INCH),
             battery_mah:
               existingBatteryMah ?? toBoundedPositiveInt(aiResult.battery_mah, MAX_BATTERY_MAH),
+            // Unknown stays null rather than false (DOS/Rate#1196).
             has_5g: isStrictBoolean(row.has_5g)
               ? true
-              : isStrictBoolean(aiResult.has_5g ?? row.has_5g),
+              : (toBooleanOrNull(aiResult.has_5g) ?? toBooleanOrNull(row.has_5g)),
             specifications: mergedSpecifications,
             key_specs: mergedKeySpecs,
             updated_at: new Date().toISOString(),

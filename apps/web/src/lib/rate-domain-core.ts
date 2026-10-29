@@ -1344,7 +1344,11 @@ export function filterAndSortMerchants(
             safeNum(b.trust_score) - safeNum(a.trust_score)
           );
         case 'seeding_asc':
+          // Measured scores first: no reviews is not the lowest risk
+          // (DOS/Rate#1249).
           return (
+            Number(!hasReviewRiskEvidence(a.review_risk_breakdown)) -
+              Number(!hasReviewRiskEvidence(b.review_risk_breakdown)) ||
             safeNum(a.review_risk_score, 100) -
               safeNum(b.review_risk_score, 100) ||
             safeNum(b.trust_score) - safeNum(a.trust_score)
@@ -1428,6 +1432,57 @@ const RETAIL_NON_PRODUCT_FIRST_SEGMENTS = new Set([
   'collection',
   'c',
 ]);
+
+// A path ending in a bare brand lists that brand's products, as in
+// cellphones.com.vn/mobile/apple.html or fptshop.com.vn/dien-thoai/samsung;
+// no product slug is a brand alone (DOS/Rate#1246). Keep these rules in
+// sync with extractIdsFromUrl in apps/extension/src/extractors/ecommerce-detector.ts.
+const RETAIL_BRAND_LISTING_SLUGS = new Set([
+  'apple',
+  'samsung',
+  'xiaomi',
+  'redmi',
+  'poco',
+  'oppo',
+  'vivo',
+  'realme',
+  'oneplus',
+  'honor',
+  'huawei',
+  'nokia',
+  'motorola',
+  'sony',
+  'google',
+  'asus',
+  'acer',
+  'lenovo',
+  'dell',
+  'hp',
+  'msi',
+  'lg',
+  'tecno',
+  'infinix',
+  'itel',
+  'nubia',
+  'zte',
+  'masstel',
+  'benco',
+  'garmin',
+  'amazfit',
+  'jbl',
+  'marshall',
+  'anker',
+  'baseus',
+  'ugreen',
+  'mac',
+]);
+
+// "iphone-16-series" lists a series; a case or screen protector for it
+// ("op-lung-iphone-16-series") is a product.
+const ACCESSORY_SLUG_PREFIX =
+  /^(?:op|bao|cuong-luc|kinh|mieng-dan|dan|sac|cu-sac|cap|day|tui|vo|ban-phim|chuot)-/;
+const isSeriesListingSlug = (slug: string) =>
+  /-series$/.test(slug) && !ACCESSORY_SLUG_PREFIX.test(slug);
 
 const RETAIL_CATEGORY_ROOT_SLUGS = new Set([
   'dtdd',
@@ -1588,7 +1643,9 @@ export function parseEcommerceUrlOrQuery(raw: string): ParsedEcommerceUrl {
       }
       const prodMatch =
         parsedPathname.match(/\/product\/(\d+)/i) ||
-        parsedPathname.match(/\/view\/product\/(\d+)/i);
+        parsedPathname.match(/\/view\/product\/(\d+)/i) ||
+        // TikTok Shop's newer product pages (DOS/Rate#1245).
+        parsedPathname.match(/\/shop\/(?:[a-z]{2}\/)?pdp\/[^/]+\/(\d+)/i);
       const shopMatch = parsedPathname.match(/\/@([a-zA-Z0-9_.-]{1,64})/);
       const rawShopHandle = shopMatch?.[1] || null;
       const safeShopHandle =
@@ -1652,7 +1709,11 @@ export function parseEcommerceUrlOrQuery(raw: string): ParsedEcommerceUrl {
         !(
           segments.length === 1 && RETAIL_CATEGORY_ROOT_SLUGS.has(firstSegLower)
         ) &&
-        !(retailPlatform === 'tgdd' && segments.length < 2);
+        !RETAIL_BRAND_LISTING_SLUGS.has(lastSegLower) &&
+        !isSeriesListingSlug(lastSegLower) &&
+        !(retailPlatform === 'tgdd' && segments.length < 2) &&
+        // CellphoneS product pages sit at the root (DOS/Rate#1246).
+        !(retailPlatform === 'cellphones' && segments.length > 1);
       return {
         isUrl: true,
         platform: retailPlatform,
@@ -1874,4 +1935,81 @@ export function extractProductKeywordFromUrl(rawUrl?: string | null): string {
   } catch {
     return '';
   }
+}
+
+/**
+ * The merchant risk split Rate Services writes (RS#708, DOS/Rate#1268): the
+ * `review_risk_score` column is the combined risk, and the breakdown (which
+ * metadata mirrors) carries `combined_risk_score` and the review-only
+ * `review_risk_score`, measured over `total_reviews` (0 when none). A source
+ * counts as the split only with numeric `combined_risk_score`,
+ * `review_risk_score` and `total_reviews`: older metadata already carried a combined score next to a
+ * review score, and keeps today's reading, as does an older breakdown. The
+ * combined score is never below the column (`column`), should they drift.
+ */
+export function storedRiskSplit(
+  breakdown: unknown,
+  metadata?: unknown,
+  column?: unknown
+): { combined: number; reviewOnly: number | null } | null {
+  const asRecord = (raw: unknown): Record<string, unknown> | null =>
+    raw && typeof raw === 'object' && !Array.isArray(raw)
+      ? (raw as Record<string, unknown>)
+      : null;
+  const score = (raw: unknown): number | null =>
+    typeof raw === 'number' && Number.isFinite(raw)
+      ? Math.max(0, Math.min(100, Math.round(raw)))
+      : null;
+  // The column breakdown, then the one nested in metadata, then metadata's
+  // top level, as extractPersistedBreakdown reads them.
+  const meta = asRecord(metadata);
+  for (const source of [
+    asRecord(breakdown),
+    asRecord(meta?.review_risk_breakdown),
+    meta,
+  ]) {
+    const combined = score(source?.combined_risk_score);
+    const total = source?.total_reviews;
+    if (!source || combined == null) continue;
+    if (typeof total !== 'number' || !Number.isFinite(total)) continue;
+    if (score(source.review_risk_score) == null) continue;
+    return {
+      combined: Math.max(combined, score(column) ?? 0),
+      reviewOnly: total > 0 ? score(source.review_risk_score) : null,
+    };
+  }
+  return null;
+}
+
+/**
+ * Whether a merchant's review risk score may be shown as a measurement. A
+ * breakdown that counts no analysed review (0, or a malformed count) means
+ * the score is only a platform baseline: it is shown as "not enough data",
+ * and is neither a low-risk filter match nor sorted as the lowest risk
+ * (DOS/Rate#1249). A missing breakdown or count says nothing either way, so
+ * a stored score stays (an offer's seller often carries no breakdown).
+ */
+export function hasReviewRiskEvidence(
+  breakdown: { total_reviews?: unknown } | null | undefined
+): boolean {
+  const rawTotal = breakdown?.total_reviews;
+  if (rawTotal == null) return true;
+  const total = Number(rawTotal);
+  return Number.isFinite(total) && total > 0;
+}
+
+/**
+ * The review risk score a public payload carries: null when the store has no
+ * analysed review to score (DOS/Rate#1258), else the score clamped to 0-100.
+ */
+export function reviewRiskScoreOrNull(merchant: {
+  review_risk_score?: number | string | null;
+  review_risk_breakdown?: { total_reviews?: unknown } | null;
+}): number | null {
+  if (!hasReviewRiskEvidence(merchant?.review_risk_breakdown)) return null;
+  const raw = merchant?.review_risk_score;
+  const score = Number(raw);
+  if (raw == null || (typeof raw === 'string' && !raw.trim())) return null;
+  if (!Number.isFinite(score)) return null;
+  return Math.max(0, Math.min(100, Math.round(score)));
 }

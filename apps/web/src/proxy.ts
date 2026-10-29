@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import createMiddleware from 'next-intl/middleware';
 
+import {
+  CSP_HEADER,
+  buildContentSecurityPolicy,
+  createCspNonce,
+} from './lib/csp';
 import { isDevelopment } from './lib/general-helpers';
 import { routing } from './lib/navigation';
 import {
@@ -65,7 +70,8 @@ export function localeProxy(req: NextRequest): NextResponse {
   const localePrefixMatch = pathname.match(/^\/(vi|en|cs)(\/.*)?$/);
   if (localePrefixMatch) {
     const matchedLocale = localePrefixMatch[1]!;
-    const cleanPath = localePrefixMatch[2] || '/';
+    // One leading slash: "/en//host" must not become a protocol-relative Location.
+    const cleanPath = `/${(localePrefixMatch[2] ?? '').replace(/^\/+/, '')}`;
     const redirectUrl = req.nextUrl.clone();
     redirectUrl.pathname = cleanPath;
     const response = NextResponse.redirect(redirectUrl, 308);
@@ -88,7 +94,16 @@ export function localeProxy(req: NextRequest): NextResponse {
     req.cookies.set('NEXT_LOCALE', routing.defaultLocale);
   }
 
-  return intlMiddleware(req);
+  // A nonce per request: on the request so Next.js puts it on its scripts (it
+  // reads the report-only header too), and on the response (DOS/Rate#1311).
+  const csp = buildContentSecurityPolicy(createCspNonce(), {
+    dev: isDevelopment(),
+    supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL,
+  });
+  req.headers.set(CSP_HEADER, csp);
+  const response = intlMiddleware(req);
+  response.headers.set(CSP_HEADER, csp);
+  return response;
 }
 
 export async function proxy(req: NextRequest): Promise<NextResponse> {

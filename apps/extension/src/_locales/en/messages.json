@@ -1,0 +1,515 @@
+{
+  "extName": {
+    "message": "Rate.vn - Price Comparison, Price History & AI Fake Review Filter"
+  },
+  "extDescription": {
+    "message": "Check 90-day price history, spot fake discounts, find cheaper sellers and filter fake reviews with AI on 10 Vietnamese stores."
+  },
+  "actionTitle": {
+    "message": "Open the Rate.vn price and trust panel"
+  },
+  "langCode": {
+    "message": "en"
+  },
+  "panelTitle": {
+    "message": "Rate.vn - Price History & Fake Discount Assistant"
+  },
+  "refresh": {
+    "message": "Refresh"
+  },
+  "quickLookupTitle": {
+    "message": "Quick Lookup: Store Link or Device Name"
+  },
+  "quickLookupAria": {
+    "message": "Product link or device name to look up"
+  },
+  "quickLookupPlaceholder": {
+    "message": "Paste a Shopee/TikTok/Lazada link or type iPhone 16 Pro Max..."
+  },
+  "quickLookupSubmit": {
+    "message": "Check"
+  },
+  "quickLookupBoxName": {
+    "message": "Quick lookup"
+  },
+  "quickLookupLoading": {
+    "message": "Checking data for \"$QUERY$\"...",
+    "placeholders": {
+      "query": {
+        "content": "$1"
+      }
+    }
+  },
+  "quickQueryEmpty": {
+    "message": "Enter a product name or paste a store link."
+  },
+  "panelLoading": {
+    "message": "Syncing product details from the open page..."
+  },
+  "privacyTitle": {
+    "message": "Privacy & Connection Settings"
+  },
+  "optInTitle": {
+    "message": "Help find new products (only when you turn it on):"
+  },
+  "optInBody": {
+    "message": "When on, every listing you open is also sent to the independent Rate.vn review queue with: store, product ID, shop ID, URL with tracking parameters removed, product name, selected variant, price, original price, star rating and number of reviews. No account or personal data is included."
+  },
+  "crowdFieldPlatform": {
+    "message": "store"
+  },
+  "crowdFieldExternalItemId": {
+    "message": "product ID"
+  },
+  "crowdFieldExternalShopId": {
+    "message": "shop ID"
+  },
+  "crowdFieldUrl": {
+    "message": "URL with tracking parameters removed"
+  },
+  "crowdFieldTitle": {
+    "message": "product name"
+  },
+  "crowdFieldSelectedVariant": {
+    "message": "selected variant"
+  },
+  "crowdFieldPrice": {
+    "message": "price"
+  },
+  "crowdFieldOriginalPrice": {
+    "message": "original price"
+  },
+  "crowdFieldRatingStar": {
+    "message": "star rating"
+  },
+  "crowdFieldRatingCount": {
+    "message": "number of reviews"
+  },
+  "apiBaseLabel": {
+    "message": "Rate.vn server address:"
+  },
+  "notAvailable": {
+    "message": "N/A"
+  },
+  "priceUpdating": {
+    "message": "Updating"
+  },
+  "offerOutOfStock": {
+    "message": "Out of stock"
+  },
+  "offerDiscontinued": {
+    "message": "Discontinued"
+  },
+  "offerImplausiblyLow": {
+    "message": "Suspiciously low price"
+  },
+  "offerCheapest": {
+    "message": "Cheapest"
+  },
+  "officialStore": {
+    "message": "Official"
+  },
+  "offerCombinedRisk": {
+    "message": "Combined risk: $SCORE$/100",
+    "placeholders": {
+      "score": {
+        "content": "$1"
+      }
+    }
+  },
+  "offerLastSeenPrice": {
+    "message": "Last recorded price, not a current offer"
+  },
+  "offersCardTitle": {
+    "message": "Store Price Comparison ($COUNT$)",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
+  },
+  "reviewCardTitle": {
+    "message": "Review quality (fake reviews filtered)"
+  },
+  "reviewUserScore": {
+    "message": "Buyer score (filtered)"
+  },
+  "reviewAuthenticShare": {
+    "message": "Genuine Review Share"
+  },
+  "reviewAuthenticValue": {
+    "message": "$PCT$% (reviews: $COUNT$)",
+    "placeholders": {
+      "pct": {
+        "content": "$1"
+      },
+      "count": {
+        "content": "$2"
+      }
+    }
+  },
+  "reviewNone": {
+    "message": "No reviews yet"
+  },
+  "notFoundTitle": {
+    "message": "This product is not on Rate.vn yet"
+  },
+  "notFoundAccessory": {
+    "message": "This looks like an accessory or a part. Rate.vn does not compare prices for this kind of item yet."
+  },
+  "notFoundNoData": {
+    "message": "Rate.vn has no price or review data for this product yet."
+  },
+  "notFoundSearch": {
+    "message": "Search on Rate.vn"
+  },
+  "lookupErrorTitle": {
+    "message": "Lookup failed"
+  },
+  "lookupErrorRateLimited": {
+    "message": "You are looking things up a little fast. Try again in a few minutes."
+  },
+  "lookupErrorServer": {
+    "message": "Rate.vn is having trouble. Try again later."
+  },
+  "lookupErrorNetwork": {
+    "message": "Could not reach Rate.vn. Check your connection and try again."
+  },
+  "lookupErrorOther": {
+    "message": "This product cannot be looked up right now."
+  },
+  "retry": {
+    "message": "Try again"
+  },
+  "pillCheaperAt": {
+    "message": "Cheaper stores: $COUNT$ (-$AMOUNT$)",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      },
+      "amount": {
+        "content": "$2"
+      }
+    }
+  },
+  "pillMarketLow": {
+    "message": "Market low: $PRICE$",
+    "placeholders": {
+      "price": {
+        "content": "$1"
+      }
+    }
+  },
+  "pillPrompt": {
+    "message": "Click for price history & fake review filter"
+  },
+  "pillRadarDeal": {
+    "message": "Cross-store low (-$PCT$%)",
+    "placeholders": {
+      "pct": {
+        "content": "$1"
+      }
+    }
+  },
+  "pillRadarTrap": {
+    "message": "Fake sale (+$PCT$%)",
+    "placeholders": {
+      "pct": {
+        "content": "$1"
+      }
+    }
+  },
+  "pillRadarSpread": {
+    "message": "Spread $PCT$%",
+    "placeholders": {
+      "pct": {
+        "content": "$1"
+      }
+    }
+  },
+  "pillAuthentic": {
+    "message": "($PCT$% genuine)",
+    "placeholders": {
+      "pct": {
+        "content": "$1"
+      }
+    }
+  },
+  "pillDetails": {
+    "message": "Details"
+  },
+  "pillOpenPanel": {
+    "message": "Open the price analysis panel"
+  },
+  "badgeFakeSale": {
+    "message": "FAKE"
+  },
+  "badgeGenuineDeal": {
+    "message": "DEAL"
+  },
+  "badgeAboveMarket": {
+    "message": "HIGH"
+  },
+  "badgeFairPrice": {
+    "message": "OK"
+  },
+  "historyAccumulating": {
+    "message": "Still collecting price history points."
+  },
+  "radarDealsTitle": {
+    "message": "Lowest price across 10 stores"
+  },
+  "radarSavings": {
+    "message": "Save $AMOUNT$ (-$PCT$%)",
+    "placeholders": {
+      "amount": {
+        "content": "$1"
+      },
+      "pct": {
+        "content": "$2"
+      }
+    }
+  },
+  "radarSpreadTitle": {
+    "message": "Biggest Cross-Store Price Gaps"
+  },
+  "radarSpreadVersus": {
+    "message": "$CHEAPEST$ ($MIN$) vs $PRICIEST$ ($MAX$)",
+    "placeholders": {
+      "cheapest": {
+        "content": "$1"
+      },
+      "min": {
+        "content": "$2"
+      },
+      "priciest": {
+        "content": "$3"
+      },
+      "max": {
+        "content": "$4"
+      }
+    }
+  },
+  "radarSpreadAmount": {
+    "message": "Gap $AMOUNT$",
+    "placeholders": {
+      "amount": {
+        "content": "$1"
+      }
+    }
+  },
+  "radarTrapsTitle": {
+    "message": "Fake Discount Alerts"
+  },
+  "radarTrapMarkup": {
+    "message": "Inflated original price +$PCT$% ($PRICE$)",
+    "placeholders": {
+      "pct": {
+        "content": "$1"
+      },
+      "price": {
+        "content": "$2"
+      }
+    }
+  },
+  "reviewRiskNoData": {
+    "message": "not enough data"
+  },
+  "merchantDirTitle": {
+    "message": "Seller trust across 10 stores ($COUNT$)",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
+  },
+  "merchantProductCount": {
+    "message": "Products: $COUNT$",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
+  },
+  "merchantScamRisk": {
+    "message": "Scam risk: $SCORE$",
+    "placeholders": {
+      "score": {
+        "content": "$1"
+      }
+    }
+  },
+  "merchantReviewRisk": {
+    "message": "Review risk: $SCORE$",
+    "placeholders": {
+      "score": {
+        "content": "$1"
+      }
+    }
+  },
+  "merchantTrust": {
+    "message": "Trust $SCORE$/100",
+    "placeholders": {
+      "score": {
+        "content": "$1"
+      }
+    }
+  },
+  "noProductTitle": {
+    "message": "No product page detected"
+  },
+  "noProductBody": {
+    "message": "Open a product page on $STORES$ or $LAST_STORE$, or paste a link or device name into the $BOX$ box above.",
+    "placeholders": {
+      "stores": {
+        "content": "$1"
+      },
+      "last_store": {
+        "content": "$2"
+      },
+      "box": {
+        "content": "$3"
+      }
+    }
+  },
+  "noProductStores": {
+    "message": "Shopee, Lazada, Tiki, TikTok Shop, CellphoneS, Thế Giới Di Động, FPT Shop, Hoàng Hà Mobile, Di Động Việt"
+  },
+  "noProductLastStore": {
+    "message": "Phong Vũ"
+  },
+  "variantPickerTitle": {
+    "message": "Choose the Storage Variant You Are Viewing"
+  },
+  "keySpecsTitle": {
+    "message": "Summary of the 10 Spec Groups"
+  },
+  "specScreen": {
+    "message": "Display"
+  },
+  "specChip": {
+    "message": "Chip"
+  },
+  "specCamera": {
+    "message": "Camera"
+  },
+  "specBattery": {
+    "message": "Battery & Charging"
+  },
+  "merchantCardTitle": {
+    "message": "Seller Trust"
+  },
+  "merchantTrustScore": {
+    "message": "Trust score"
+  },
+  "merchantRiskPair": {
+    "message": "Scam / review risk"
+  },
+  "historyTitle": {
+    "message": "Price History"
+  },
+  "historyLow": {
+    "message": "All-Time Low"
+  },
+  "historyHigh": {
+    "message": "All-Time High"
+  },
+  "categorySmartphones": {
+    "message": "Smartphones"
+  },
+  "categoryTablets": {
+    "message": "Tablets"
+  },
+  "categoryLaptops": {
+    "message": "Laptops"
+  },
+  "categorySmartwatches": {
+    "message": "Smartwatches"
+  },
+  "categoryEarbuds": {
+    "message": "Wireless earbuds"
+  },
+  "categoryFallback": {
+    "message": "Devices"
+  },
+  "focusCombined": {
+    "message": "Overall"
+  },
+  "focusScreen": {
+    "message": "Display"
+  },
+  "focusPerformance": {
+    "message": "Performance"
+  },
+  "focusCamera": {
+    "message": "Camera / Audio"
+  },
+  "focusBattery": {
+    "message": "Battery & Charging"
+  },
+  "focusValue": {
+    "message": "Value"
+  },
+  "leaderboardCardTitle": {
+    "message": "In-Depth Ranking ($CATEGORY$)",
+    "placeholders": {
+      "category": {
+        "content": "$1"
+      }
+    }
+  },
+  "leaderboardRank": {
+    "message": "Category Rank"
+  },
+  "leaderboardScore": {
+    "message": "Overall Score"
+  },
+  "radarPillDeal": {
+    "message": "Cross-store price low (-$PCT$%)",
+    "placeholders": {
+      "pct": {
+        "content": "$1"
+      }
+    }
+  },
+  "radarPillTrap": {
+    "message": "Fake discount alert (+$PCT$%)",
+    "placeholders": {
+      "pct": {
+        "content": "$1"
+      }
+    }
+  },
+  "radarPillSpread": {
+    "message": "10-store gap $PCT$%",
+    "placeholders": {
+      "pct": {
+        "content": "$1"
+      }
+    }
+  },
+  "linkDetail": {
+    "message": "View on Rate.vn"
+  },
+  "linkCompare": {
+    "message": "Compare Specs"
+  },
+  "linkLeaderboard": {
+    "message": "Leaderboard"
+  },
+  "linkVersus": {
+    "message": "Compare 1v1"
+  },
+  "linkInspect": {
+    "message": "Inspect in detail"
+  },
+  "linkWatch": {
+    "message": "Watch Price"
+  },
+  "observedPrice": {
+    "message": "Price You Are Viewing"
+  },
+  "marketMedian": {
+    "message": "Market Median"
+  }
+}

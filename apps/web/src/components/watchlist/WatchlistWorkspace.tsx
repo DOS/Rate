@@ -38,6 +38,12 @@ import {
   jsonWriteHeaders,
 } from '@/lib/auth/access-token';
 import { productImageUrl } from '@/lib/rate-domain-core';
+import { formatStorageLabel } from '@/lib/category-filters';
+import {
+  isSizeRequiredAnswer,
+  watchlistSizeChoices,
+  type WatchlistSizeChoice,
+} from '@/lib/watchlist-sizes';
 
 interface WatchlistWorkspaceProps {
   catalogProducts: MasterProduct[];
@@ -62,6 +68,8 @@ interface LiveWatchlistDeal {
     is_official_mall: boolean;
   } | null;
   radar_signal?: RadarSignal;
+  /** The entry names an Item with several sizes (DOS/Rate#1278). */
+  size_required?: true;
 }
 
 const PLATFORM_DISPLAY_LABELS: Record<string, string> = {
@@ -182,6 +190,113 @@ export default function WatchlistWorkspace({
     });
   };
 
+  // `/watchlist?add=<slug>` (the browser extension's link, DOS/Rate#1158): add
+  // that product once, then drop the parameter so a reload adds nothing. The
+  // add is idempotent (by slug), so a second effect run (Strict Mode) is safe.
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    if (!url.searchParams.has('add')) return;
+    const raw = (url.searchParams.get('add') ?? '').trim();
+    // The product route's own slug rule.
+    const slug = /^[a-zA-Z0-9._-]{1,120}$/.test(raw) ? raw : '';
+    const dropParam = () => {
+      const now = new URL(window.location.href);
+      now.searchParams.delete('add');
+      window.history.replaceState(
+        null,
+        '',
+        `${now.pathname}${now.search}${now.hash}`
+      );
+    };
+    if (!slug || getWatchlist().some((x) => x.slug === slug)) {
+      dropParam();
+      return;
+    }
+    fetch(`/api/v1/rate/products/${encodeURIComponent(slug)}`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((json) => {
+        const product = json?.ok ? (json.data?.product as MasterProduct) : null;
+        if (
+          product?.slug === slug &&
+          !getWatchlist().some((x) => x.slug === slug)
+        ) {
+          handleQuickAddCatalog(product);
+        }
+      })
+      .catch(() => {
+        // An unknown or unreachable product adds nothing.
+      })
+      .finally(dropParam);
+    // Runs once per page load.
+  }, []);
+
+  // An entry naming a whole Item needs a size: alerts stay per size
+  // (DOS/Rate#1278). The sizes come from the product API's `variants`.
+  const [sizePicker, setSizePicker] = useState<{
+    slug: string;
+    choices: WatchlistSizeChoice[];
+  } | null>(null);
+
+  // The entry whose sizes could not be read: it links to its product page.
+  const [sizePickerFailed, setSizePickerFailed] = useState<string | null>(null);
+
+  const openSizePicker = (slug: string) => {
+    setSizePickerFailed(null);
+    const fail = () => {
+      setSizePickerFailed(slug);
+      setSizePicker((open) => (open?.slug === slug ? null : open));
+    };
+    fetch(`/api/v1/rate/products/${encodeURIComponent(slug)}`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((json) => {
+        const choices = watchlistSizeChoices(
+          json?.ok ? json.data?.variants : null,
+          formatStorageLabel
+        );
+        if (choices.length > 0) setSizePicker({ slug, choices });
+        else fail();
+      })
+      .catch(fail);
+  };
+
+  const chooseSize = async (
+    item: WatchlistItem,
+    choice: WatchlistSizeChoice
+  ) => {
+    setSizePicker(null);
+    // A size already watched keeps its own entry and target.
+    const already = getWatchlist().find((x) => x.slug === choice.slug);
+    removeWatchlistItem(item.slug);
+    if (already) return;
+    const targetPrice =
+      choice.minPrice > 0
+        ? computeWatchlistTargetPrice(choice.minPrice, 5)
+        : item.targetPrice;
+    upsertWatchlistItem({
+      ...item,
+      slug: choice.slug,
+      name: choice.name,
+      priceWhenAdded: choice.minPrice || item.priceWhenAdded,
+      targetPrice,
+    });
+    // The cloud alert moves to the chosen size too, when signed in.
+    const headers = await authorizedJsonHeaders();
+    if (!headers) return;
+    try {
+      await fetch('/api/v1/rate/watchlist', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          slug: choice.slug,
+          targetPrice,
+          locale: locale || 'vi',
+        }),
+      });
+    } catch {
+      // Local watchlist already updated
+    }
+  };
+
   const handleUpdateTarget = async (item: WatchlistItem) => {
     const cleanTarget = sanitizeWatchlistTargetPrice(
       editTarget,
@@ -196,7 +311,7 @@ export default function WatchlistWorkspace({
     const headers = await authorizedJsonHeaders();
     if (!headers) return;
     try {
-      await fetch('/api/v1/rate/watchlist', {
+      const res = await fetch('/api/v1/rate/watchlist', {
         method: 'POST',
         headers,
         body: JSON.stringify({
@@ -205,6 +320,12 @@ export default function WatchlistWorkspace({
           locale: locale || 'vi',
         }),
       });
+      if (res.status === 422) {
+        const payload = await res.json().catch(() => null);
+        if (isSizeRequiredAnswer(res.status, payload)) {
+          openSizePicker(item.slug);
+        }
+      }
     } catch {
       // Local watchlist already updated
     }
@@ -235,6 +356,7 @@ export default function WatchlistWorkspace({
             ok?: boolean;
             persistedInCloud?: boolean;
             error?: string;
+            code?: string;
           } | null;
           return {
             unauthorized: res.status === 401,
@@ -242,7 +364,11 @@ export default function WatchlistWorkspace({
               res.ok &&
               payload?.ok === true &&
               payload.persistedInCloud === true,
-            error: typeof payload?.error === 'string' ? payload.error : null,
+            error: isSizeRequiredAnswer(res.status, payload)
+              ? t('sizeRequiredTitle')
+              : typeof payload?.error === 'string'
+                ? payload.error
+                : null,
           };
         })
       );
@@ -1006,6 +1132,57 @@ export default function WatchlistWorkspace({
                       </div>
                     </div>
                   </div>
+
+                  {(dealInfo?.size_required ||
+                    sizePicker?.slug === item.slug) && (
+                    <div
+                      className="rounded-3 bg-warning-subtle border-warning-subtle mb-3 border px-3 py-2"
+                      data-testid="watchlist-size-required"
+                    >
+                      <div
+                        className="small fw-semibold mb-1"
+                        id={`size-required-${item.slug}`}
+                      >
+                        {t('sizeRequiredTitle')}
+                      </div>
+                      {sizePickerFailed === item.slug && (
+                        <div className="small mb-1">
+                          {t('sizeRequiredUnavailable')}{' '}
+                          <Link href={detailHref}>
+                            {t('sizeRequiredProductLink')}
+                          </Link>
+                        </div>
+                      )}
+                      {sizePicker?.slug === item.slug ? (
+                        <div
+                          className="d-flex flex-wrap gap-2"
+                          role="group"
+                          aria-labelledby={`size-required-${item.slug}`}
+                        >
+                          {sizePicker.choices.map((choice) => (
+                            <button
+                              key={choice.slug}
+                              type="button"
+                              className="btn btn-outline-primary btn-sm rounded-pill"
+                              onClick={() => void chooseSize(item, choice)}
+                            >
+                              {choice.label}
+                              {choice.minPrice > 0 &&
+                                ` · ${choice.minPrice.toLocaleString('vi-VN')} ₫`}
+                            </button>
+                          ))}
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          className="btn btn-primary btn-sm rounded-pill"
+                          onClick={() => openSizePicker(item.slug)}
+                        >
+                          {t('sizeRequiredCta')}
+                        </button>
+                      )}
+                    </div>
+                  )}
 
                   {bestOffer && (
                     <div

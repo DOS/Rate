@@ -18,6 +18,12 @@ import {
   z,
 } from '../index.js';
 import { getAdminClient, getRateClient, getDosafeClient } from '../server.js';
+import {
+  LLM_REVIEW_SUMMARY_PREFIX,
+  hasReviewScoreClaim,
+  isScopedLlmReviewSummary,
+  scopeLlmReviewSummary,
+} from '../rules/index.js';
 import * as rules from '../rules/index.js';
 import { readdirSync, readFileSync } from 'node:fs';
 
@@ -942,6 +948,70 @@ function testCategorySpecTemplates(): void {
   assert.equal(watchStoredSpecs.hardware?.gpu, 'g');
   assert.equal(watchStoredSpecs.camera, undefined);
 
+  // The free-text network fields lose their 5G parts on the page only
+  // (DOS/Rate#1166); a 5GHz Wi-Fi mention is not 5G.
+  const lteWatch = {
+    specifications: {
+      cellular: {
+        technology: 'LTE / 5G',
+        data_speed: 'LTE Cat 4, 5G NR',
+        sim_type: 'eSIM',
+      },
+      connectivity: { wlan: 'Wi-Fi 802.11 b/g/n, 5GHz' },
+    },
+  };
+  const lteWatchShown = rules.applyCategorySpecTemplate(
+    'smartwatches',
+    lteWatch
+  ).specifications as unknown as Record<string, Record<string, unknown>>;
+  assert.deepEqual(lteWatchShown.cellular, {
+    technology: 'LTE',
+    data_speed: 'LTE Cat 4',
+    sim_type: 'eSIM',
+  });
+  assert.deepEqual(
+    lteWatchShown.connectivity,
+    lteWatch.specifications.connectivity
+  );
+  assert.deepEqual(
+    rules.applyCategorySpecTemplate('smartwatches', {
+      specifications: { cellular: { technology: '5G' } },
+    }).specifications,
+    { cellular: {} }
+  );
+  assert.deepEqual(
+    rules.applyCategorySpecTemplate('smartwatches', lteWatch, {
+      forStorage: true,
+    }).specifications,
+    lteWatch.specifications
+  );
+  assert.equal(lteWatch.specifications.cellular.technology, 'LTE / 5G');
+  // 5G qualifiers and bracketed notes go with it; other text stays.
+  const shownTech = (technology: string) =>
+    (
+      rules.applyCategorySpecTemplate('smartwatches', {
+        specifications: { cellular: { technology } },
+      }).specifications as { cellular: { technology?: string } }
+    ).cellular.technology;
+  assert.equal(shownTech('HSPA, LTE-A, 5G SA/NSA/Sub6'), 'HSPA, LTE-A');
+  assert.equal(shownTech('LTE / 5G NR Sub-6'), 'LTE');
+  assert.equal(shownTech('LTE (5G RedCap)'), 'LTE');
+  assert.equal(shownTech('5G-ready LTE'), 'LTE');
+  assert.equal(shownTech('LTE (Cat 4) / 5G'), 'LTE (Cat 4)');
+  assert.equal(shownTech('GSM / LTE'), 'GSM / LTE');
+  assert.equal(
+    shownTech(shownTech('HSPA, LTE-A, 5G SA/NSA/Sub6') ?? ''),
+    'HSPA, LTE-A'
+  );
+  assert.equal(
+    (
+      rules.applyCategorySpecTemplate('smartwatches', {
+        specifications: { cellular: { sim_type: 'eSIM (5G)' } },
+      }).specifications as { cellular: { sim_type?: string } }
+    ).cellular.sim_type,
+    'eSIM'
+  );
+
   // Idempotent, never mutates the input, and leaves absent columns absent.
   assert.deepEqual(rules.applyCategorySpecTemplate('earbuds', buds), buds);
   assert.equal(phoneShaped.ram_gb, 1);
@@ -1191,6 +1261,126 @@ function testItemVariantKeys(): void {
   ]);
 }
 
+function testLlmReviewSummaryScope(): void {
+  // Qualitative text is kept, after the one-listing scope prefix, once.
+  const plain = 'Pin trâu, camera đêm tốt, máy hơi nóng khi chơi game 2 tiếng.';
+  const scoped = scopeLlmReviewSummary(`  ${plain}
+`);
+  assert.equal(scoped, `${LLM_REVIEW_SUMMARY_PREFIX}${plain}`);
+  assert.ok(isScopedLlmReviewSummary(scoped));
+  assert.equal(scopeLlmReviewSummary(scoped), scoped, 'never prefixed twice');
+  // Spec numbers are not claims.
+  for (const ok of [
+    'Pin 5000mAh, sạc 65W, RAM 8GB, màn 120Hz, dùng 6 tháng vẫn ổn.',
+    'Pin còn 90% sau 1 năm.',
+    'Sạc từ 0 lên 100% trong 1 tiếng.',
+    'Có 2 điểm trừ: nóng và nặng.',
+    '1 lượt sạc dùng 2 ngày.',
+    'Shop hỗ trợ 24/7.',
+    'Giao ngày 28/10 đúng hẹn.',
+    'Máy dùng được cho 2 người.',
+    'Pin trung bình 2 ngày.',
+    'Camera 50MP chụp đẹp, dùng 2 năm chưa lỗi.',
+    'Pin dùng được 2/3 ngày.',
+    'Pin tụt 10% sau một giờ.',
+    'Màn hình có 1000 điểm ảnh bị lỗi.',
+    'Máy hỗ trợ 2 sao lưu tự động.',
+    'Người mua cho biết pin tụt 10% sau một giờ.',
+    'Khách khen pin còn 90% sau một năm.',
+    'Màn hình có 2 điểm chết.',
+    'Có 2 điểm sáng: pin và camera.',
+    'Giao hàng ngày 5/10 đúng hẹn.',
+    'Pin dùng được 3/5 ngày.',
+  ]) {
+    assert.equal(hasReviewScoreClaim(ok), false, ok);
+  }
+  // Scores, shares and counts (vi and en) are claims: never stored or shown.
+  for (const claim of [
+    'Đạt 4.8/5.',
+    '4,8 trên 5 điểm.',
+    'Được chấm 5 sao.',
+    '5★ từ người mua.',
+    '90% khen pin.',
+    'Có 120 đánh giá tích cực.',
+    '30 người mua phàn nàn.',
+    'Điểm trung bình cao.',
+    'Điểm JReviews có trọng số tốt.',
+    'Rated 4.7 out of 5.',
+    '120 reviews praise the battery.',
+    'Weighted score is high.',
+    'Đánh giá trung bình 4.8.',
+    'Điểm 4,8.',
+    'Rated 4.7.',
+    'Score of 4.7.',
+    'Average of 4.7.',
+    '80 phần trăm người mua khen pin.',
+    '30 khách hàng phàn nàn.',
+    'Trong 120 bài đánh giá, nhiều người khen.',
+    '50 phản hồi tích cực.',
+    'Hầu hết đều cho năm sao.',
+    'Most buyers gave five stars.',
+    '4.8 🌟.',
+    'Đạt 9/10.',
+    'Có 30 người khen pin.',
+    '95% các khách hàng hài lòng.',
+    'Được đánh giá 4.8.',
+    'Chấm 4/5.',
+    '85/100 điểm.',
+    'rating 4.8',
+    'điểm 9',
+    'hơn trăm người khen pin.',
+    'Hàng nghìn đánh giá tốt.',
+    'Hundreds of buyers like it.',
+    '95 percent of buyers are satisfied.',
+    '95 phần trăm người mua hài lòng.',
+    '４.８⭐',
+    '4​.8/5',
+  ]) {
+    assert.equal(hasReviewScoreClaim(claim), true, claim);
+    assert.equal(scopeLlmReviewSummary(claim), null, claim);
+  }
+  assert.equal(
+    scopeLlmReviewSummary(`${LLM_REVIEW_SUMMARY_PREFIX}Đạt 4.8/5.`),
+    null,
+    'a scoped row is checked too'
+  );
+  for (const empty of [
+    null,
+    undefined,
+    '',
+    '   ',
+    42,
+    LLM_REVIEW_SUMMARY_PREFIX,
+  ]) {
+    assert.equal(scopeLlmReviewSummary(empty), null);
+  }
+  const long = scopeLlmReviewSummary('Máy dùng tốt. '.repeat(100))!;
+  assert.ok(long.length <= 600 && long.endsWith('…'));
+  const emoji = scopeLlmReviewSummary('😀'.repeat(400))!;
+  // A pair cut in half upstream: the lone half is dropped.
+  const loneHigh = scopeLlmReviewSummary(
+    `${LLM_REVIEW_SUMMARY_PREFIX}a${'😀'.repeat(10)}${String.fromCharCode(0xd83d)}`
+  )!;
+  const lastUnit = loneHigh.charCodeAt(loneHigh.length - 1);
+  assert.ok(
+    !(lastUnit >= 0xd800 && lastUnit <= 0xdbff),
+    'a cut-off pair is dropped'
+  );
+  const beforeEllipsis = emoji.charCodeAt(emoji.length - 2);
+  assert.ok(emoji.length <= 600 && emoji.endsWith('…'));
+  assert.ok(
+    !(beforeEllipsis >= 0xd800 && beforeEllipsis <= 0xdbff),
+    'no lone surrogate'
+  );
+  assert.equal(
+    scopeLlmReviewSummary(
+      `${LLM_REVIEW_SUMMARY_PREFIX}${LLM_REVIEW_SUMMARY_PREFIX}Pin tốt.`
+    ),
+    `${LLM_REVIEW_SUMMARY_PREFIX}Pin tốt.`,
+    'repeated prefixes collapse to one'
+  );
+}
+
 function main(): void {
   console.log('🧪 Running @repo/shared-data unit tests...');
   testVersionAndZeroStrapiExports();
@@ -1221,6 +1411,8 @@ function main(): void {
   );
   testCategorySpecTemplates();
   console.log('  ✅ [9/9] Category spec templates (DOS/Rate#1142) verified');
+  testLlmReviewSummaryScope();
+  console.log('  ✅ [10/10] LLM review summary scope (DOS/Rate#1244) verified');
   console.log('🎉 All @repo/shared-data tests passed!');
 }
 

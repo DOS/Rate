@@ -63,7 +63,12 @@ function createShopeeListing(
 interface MockDbOptions {
   exactMatch?: { id: string; name: string; model_key: string } | null;
   exactErr?: { message: string } | null;
-  fuzzyMatches?: Array<{ master_id: string; name: string; similarity: number }>;
+  fuzzyMatches?: Array<{
+    master_id: string;
+    name: string;
+    similarity: number;
+    model_key?: string;
+  }>;
   fuzzyErr?: { message: string } | null;
   upsertRows?: Array<{ id: string }>;
   winnerRow?: { id: string } | null;
@@ -379,6 +384,133 @@ async function runEntityMatcherSuite() {
     'draft',
     'Ambiguous Tier 2 similarity (0.65..0.69) must seed new Master Product as draft'
   );
+  // DOS/Rate#1200 (#1105 option (a)): a title with no storage never links to a sized
+  // master; it seeds a draft. A ':unknown' master still takes it, and earbuds keep
+  // their legacy ':64gb' seed keys.
+  const zenbookBare = normalizer.normalize(
+    createShopeeListing('Laptop ASUS Zenbook S 14 UX5406AA-SU348W')
+  );
+  assert.equal(zenbookBare.storage_gb, null);
+  const zenbook1tb = {
+    master_id: 'master-zenbook-1tb',
+    name: 'Asus Zenbook S 14 1TB',
+    similarity: 0.86,
+    model_key: 'asus:zenbook-s-14:1024gb',
+  };
+  const storagelessDb = createMockSupabase({ fuzzyMatches: [zenbook1tb] });
+  const storagelessRes = await new EntityMatcher(
+    storagelessDb.client,
+    offlineEnricher
+  ).resolveOrCreateMasterProduct(zenbookBare);
+  assert.equal(storagelessRes.isNew, true, 'a storage-less title must not link to the 1TB master');
+  assert.notEqual(storagelessRes.masterId, 'master-zenbook-1tb');
+  assert.equal(storagelessDb.capturedUpserts[0]?.payload.model_key, 'asus:zenbook-s-14:unknown');
+  assert.equal(storagelessDb.capturedUpserts[0]?.payload.status, 'draft');
+
+  const unknownMasterRes = await new EntityMatcher(
+    createMockSupabase({
+      fuzzyMatches: [
+        zenbook1tb,
+        {
+          master_id: 'master-zenbook-unknown',
+          name: 'Asus Zenbook S 14',
+          similarity: 0.8,
+          model_key: 'asus:zenbook-s-14:unknown',
+        },
+      ],
+    }).client,
+    offlineEnricher
+  ).resolveOrCreateMasterProduct(zenbookBare);
+  assert.deepEqual(unknownMasterRes, { masterId: 'master-zenbook-unknown', isNew: false });
+
+  // A title that states its storage matches a sized master as before.
+  const zenbookSized = normalizer.normalize(
+    createShopeeListing('Laptop ASUS Zenbook S 14 UX5406AA 32GB 1TB')
+  );
+  const sizedRes = await new EntityMatcher(
+    createMockSupabase({ fuzzyMatches: [zenbook1tb] }).client,
+    offlineEnricher
+  ).resolveOrCreateMasterProduct(zenbookSized);
+  assert.deepEqual(sizedRes, { masterId: 'master-zenbook-1tb', isNew: false });
+
+  const earbuds = normalizer.normalize(createShopeeListing('Tai nghe Sony WF-1000XM5 chính hãng'));
+  assert.equal(earbuds.storage_gb, null);
+  const earbudsRes = await new EntityMatcher(
+    createMockSupabase({
+      fuzzyMatches: [
+        {
+          master_id: 'master-wf1000xm5',
+          name: 'Sony WF-1000XM5',
+          similarity: 0.9,
+          model_key: 'sony:wf-1000xm5:64gb',
+        },
+      ],
+    }).client,
+    offlineEnricher
+  ).resolveOrCreateMasterProduct(earbuds);
+  assert.deepEqual(earbudsRes, { masterId: 'master-wf1000xm5', isNew: false });
+  // Watches too: a line with one storage and no only_storage_gb benchmark (Series 9)
+  // still takes its legacy sized seed.
+  const watch = normalizer.normalize(createShopeeListing('Apple Watch Series 9 41mm GPS'));
+  assert.equal(watch.storage_gb, null);
+  const watchRes = await new EntityMatcher(
+    createMockSupabase({
+      fuzzyMatches: [
+        {
+          master_id: 'master-series-9-41',
+          name: 'Apple Watch Series 9 41mm',
+          similarity: 0.9,
+          model_key: 'apple:watch-series-9-41mm:64gb',
+        },
+      ],
+    }).client,
+    offlineEnricher
+  ).resolveOrCreateMasterProduct(watch);
+  assert.deepEqual(watchRes, { masterId: 'master-series-9-41', isNew: false });
+  // DOS/Rate#1196: an unknown 5G stays null through the normalizer, the enricher and the
+  // seed; known values are kept.
+  const no5gInfo = normalizer.normalize(createShopeeListing('Samsung Galaxy A26 128GB'));
+  assert.equal(no5gInfo.has_5g, null, 'a phone title with no 5G says nothing about it');
+  assert.deepEqual(no5gInfo.specifications.cellular ?? {}, {});
+  assert.equal(
+    normalizer.normalize(createShopeeListing('Samsung Galaxy A26 128GB 5 G')).has_5g,
+    true
+  );
+  assert.equal(
+    normalizer.normalize(createShopeeListing('Samsung Galaxy A26 5 GB RAM')).has_5g,
+    null
+  );
+  assert.equal(
+    normalizer.normalize(createShopeeListing('Samsung Galaxy A26 5G 128GB')).has_5g,
+    true
+  );
+  assert.equal(normalizer.normalize(createShopeeListing('Xiaomi Pad 7 128GB')).has_5g, null);
+  assert.equal(
+    normalizer.normalize(createShopeeListing('Laptop ASUS Vivobook 15 X1504VA 512GB')).has_5g,
+    false
+  );
+  assert.equal(
+    normalizer.normalize(createShopeeListing('Samsung Galaxy S24 Ultra 256GB')).has_5g,
+    true,
+    'a registry model keeps its known 5G'
+  );
+  const enrichedNo5g = await offlineEnricher.enrichCandidate(no5gInfo, 'Samsung Galaxy A26 128GB');
+  assert.equal(enrichedNo5g.has_5g, null, 'the enricher must not turn an unknown 5G into false');
+  assert.equal(
+    (await offlineEnricher.enrichCandidate({ ...no5gInfo, has_5g: false })).has_5g,
+    false
+  );
+  assert.equal((await offlineEnricher.enrichCandidate({ ...no5gInfo, has_5g: true })).has_5g, true);
+  const no5gSeedDb = createMockSupabase();
+  await new EntityMatcher(no5gSeedDb.client, offlineEnricher).resolveOrCreateMasterProduct(
+    no5gInfo
+  );
+  assert.equal(no5gSeedDb.capturedUpserts[0]?.payload.has_5g, null);
+  const known5gSeedDb = createMockSupabase();
+  await new EntityMatcher(known5gSeedDb.client, offlineEnricher).resolveOrCreateMasterProduct(
+    normalizer.normalize(createShopeeListing('Samsung Galaxy A26 5G 128GB'))
+  );
+  assert.equal(known5gSeedDb.capturedUpserts[0]?.payload.has_5g, true);
   console.log('  ✅ [3/7] Tier 2 fuzzy match threshold & ambiguous draft fallback passed');
 
   // 4. Tier 3 Creation Status: benchmark_registry (new) -> published; non-new or crawled_title -> draft
@@ -475,6 +607,19 @@ async function runEntityMatcherSuite() {
   });
   assert.equal(parsedMaster.status, 'draft');
   assert.equal(parsedMaster.average_rating, null);
+  // A master whose 5G is unknown parses (DOS/Rate#1196).
+  assert.equal(
+    MasterProductSchema.parse({
+      id: '018f1a50-0000-7000-8000-000000000002',
+      brand: 'Samsung',
+      model: 'Galaxy A26',
+      model_key: 'samsung:galaxy-a26:128gb',
+      name: 'Samsung Galaxy A26 128GB',
+      slug: 'samsung-galaxy-a26-128gb',
+      has_5g: null,
+    }).has_5g,
+    null
+  );
 
   const reviewJsonSchema = getAiReviewBatchJsonSchema();
   assert.equal(reviewJsonSchema.type, 'object');

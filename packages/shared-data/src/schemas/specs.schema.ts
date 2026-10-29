@@ -140,7 +140,8 @@ export const MasterProductSchema = z.object({
   storage_gb: z.number().positive().max(65536).nullable().optional(),
   screen_size_inch: z.number().positive().max(120).nullable().optional(),
   battery_mah: z.number().positive().max(500000).nullable().optional(),
-  has_5g: z.boolean().default(false),
+  // null = not known (DOS/Rate#1196); an omitted value defaults like the column.
+  has_5g: z.boolean().nullable().default(false),
   specifications: ProductSpecificationsSchema.default({}),
   key_specs: KeySpecsSchema.default({}),
   images: z.array(HttpUrlSchema).max(100).default([]),

@@ -1,5 +1,6 @@
 import crypto from 'node:crypto';
 import { z, MAX_VALID_VND_PRICE, seedingRiskPenalty } from '@repo/shared-data';
+import { scopeLlmReviewSummary } from '@repo/shared-data/rules';
 import {
   resolveValidHttpBaseUrl,
   extractJsonObjectString,
@@ -8,6 +9,7 @@ import {
 } from './ai-spec-enricher.js';
 import type { RateSupabaseClient, ScrapedReviewer } from './types.js';
 import { computeRetryDelayMs, sanitizeAiGeneratedText } from './logger.js';
+import { resolveItemModelMode, type ItemModelMode } from './item-model-flag.js';
 export { computeRetryDelayMs, sanitizeAiGeneratedText } from './logger.js';
 
 /**
@@ -1533,7 +1535,9 @@ Return ONLY valid JSON matching:
   "pros": ["string (Vietnamese)"],
   "cons": ["string (Vietnamese)"],
   "ai_summary": "string (2-3 sentences in Vietnamese summarizing authentic buyer feedback)"
-}`;
+}
+
+Rules for "ai_summary": these reviews come from ONE listing's latest batch, not from every buyer of the product. Describe only what these buyers say about their experience (quality, battery, defects, accuracy of the description). Never state star ratings, scores, percentages, review or buyer counts, and never give an overall verdict on the product as a whole.`;
 
       interface RawAiReviewItem {
         review_id?: string;
@@ -1974,10 +1978,13 @@ Return ONLY valid JSON matching:
         ? Number(((positiveAuthenticCount / authenticCount) * 100).toFixed(2))
         : 100;
 
+    // One listing's latest batch, not the product; the batch's weighted
+    // score is not the product score, so it stays out (DOS/Rate#1225).
+    // apps/web/src/lib/analyzer-copy.ts reads these sentences.
     const defaultSummary =
       authenticCount > 0
-        ? `Đã phân tích ${safeReviews.length} đánh giá: giữ lại ${authenticCount} đánh giá thực chất (điểm JReviews có trọng số: ${weightedUserRating}/5★) và loại bỏ ${ignoredCount} đánh giá rác/nhận xu/seeding/bom hàng khỏi điểm tổng.`
-        : `Chưa có đánh giá thực chất sau khi lọc ${ignoredCount} bình luận rác/nhận xu.`;
+        ? `Lần phân tích gần nhất (một nơi bán) đã xét ${safeReviews.length} đánh giá: giữ lại ${authenticCount} đánh giá thực chất và loại bỏ ${ignoredCount} đánh giá rác, nhận xu, ảo hoặc bom hàng.`
+        : `Lần phân tích gần nhất (một nơi bán) chưa thấy đánh giá thực chất sau khi lọc ${ignoredCount} bình luận rác/nhận xu.`;
 
     const cleanPros = Array.from(
       new Set(
@@ -1993,7 +2000,9 @@ Return ONLY valid JSON matching:
           .filter(Boolean)
       )
     ).slice(0, 6);
-    const cleanSummaryText = sanitizeAiGeneratedText(aiSummaryText, 600);
+    // LLM text covers the same one-listing batch: stored after a scope prefix, and
+    // dropped for the templated sentence when it quotes a score or count (DOS/Rate#1244).
+    const cleanSummaryText = scopeLlmReviewSummary(sanitizeAiGeneratedText(aiSummaryText, 600));
 
     return {
       total_reviews_analyzed: safeReviews.length,
@@ -2243,6 +2252,13 @@ Return ONLY valid JSON matching:
     params: {
       productId: string;
       masterId?: string | null;
+      /**
+       * The listing's Item (RATE_ITEM_MODEL on). A listing with no variant refreshes its
+       * Item's rating, which pools every size (design doc 4.1, Q4, DOS/Rate#1152).
+       */
+      itemId?: string | null;
+      /** The caller's Item model mode; defaults to RATE_ITEM_MODEL. */
+      itemModel?: ItemModelMode;
       merchantId?: string | null;
       reviews: ReviewInputItem[];
       entityName?: string;
@@ -2262,6 +2278,7 @@ Return ONLY valid JSON matching:
       throw new Error('[AiReviewAnalyzer] productId must be a valid non-empty string');
     }
     const safeMasterId = normalizeSafeDbId(params?.masterId);
+    const safeItemId = normalizeSafeDbId(params?.itemId);
     const safeMerchantId = normalizeSafeDbId(params?.merchantId);
     const safePlatform =
       typeof params?.platform === 'string'
@@ -2424,6 +2441,25 @@ Return ONLY valid JSON matching:
             `[AiReviewAnalyzer] Failed to update master_products rating: ${masterErr.message}`
           );
         }
+      }
+    }
+
+    // 3b. A listing with no variant still rates its Item: the M2 `refresh_item_stats`
+    // recomputes the Item's pooled rating over all its listings. With a variant,
+    // `refresh_master_product_rating` above resolves the Item itself (M2 body).
+    if (
+      !safeMasterId &&
+      safeItemId &&
+      (params?.itemModel ?? resolveItemModelMode()) !== 'off' &&
+      typeof supabase.rpc === 'function'
+    ) {
+      const { error: itemRpcErr } = await supabase.rpc('refresh_item_stats', {
+        p_item_id: safeItemId,
+      });
+      if (itemRpcErr) {
+        throw new Error(
+          `[AiReviewAnalyzer] Failed to refresh the Item rating via RPC: ${itemRpcErr.message}`
+        );
       }
     }
 

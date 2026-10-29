@@ -24,6 +24,13 @@ import type {
   ProductSpecifications,
 } from '@repo/shared-data';
 import {
+  applyCategorySpecTemplate,
+  getCategorySpecTemplate,
+  specFieldApplies,
+  type CategorySpecTemplate,
+  type SpecGroupKey,
+} from '@repo/shared-data/rules';
+import {
   type CanonicalCategorySlug,
   MAX_VALID_VND_PRICE,
   buildPopular1v1BattlesForCategory,
@@ -55,9 +62,16 @@ import {
   setCompareTray,
 } from './compare-tray';
 import { upsertWatchlistItem } from '@/components/watchlist/watchlist-store';
-import { getSpecUiDictionary, localizeSpecValue } from '@/lib/spec-localizer';
+import {
+  getSpecUiDictionary,
+  localizeSpecValue,
+  normalizeStorageExpansion,
+  specGroupHeading,
+} from '@/lib/spec-localizer';
+import { compareRowIsShown, known5g } from '@/lib/product-spec-rows';
 import ContentText from '@/components/elementary/ContentText';
 import { productImageUrl } from '@/lib/rate-domain-core';
+import { itemSlugFromProductAnswer, versusHref } from '@/lib/item-compare';
 
 interface CompareWorkspaceProps {
   initialProducts: MasterProduct[];
@@ -65,6 +79,8 @@ interface CompareWorkspaceProps {
   initialCategory?: CanonicalCategorySlug;
   hasExplicitSlugs?: boolean;
   locale?: string;
+  /** RATE_ITEM_MODEL on: variant slug to Item slug, for versus links. */
+  itemSlugBySlug?: Readonly<Record<string, string>>;
 }
 
 type CompareTranslator = ReturnType<typeof useTranslations<'compare'>>;
@@ -75,6 +91,8 @@ interface SpecRowDef {
   renderValue: (p: MasterProduct) => string;
   numericValue?: (p: MasterProduct) => number | null;
   higherIsBetter?: boolean;
+  /** Whether the category's spec template has this row (DOS/Rate#1166). */
+  appliesTo?: (template: CategorySpecTemplate) => boolean;
 }
 
 interface SpecGroupDef {
@@ -167,7 +185,7 @@ function buildCategoryTabs(t: CompareTranslator): Array<{
   ];
 }
 
-function buildSpecGroups(t: CompareTranslator): SpecGroupDef[] {
+export function buildSpecGroups(t: CompareTranslator): SpecGroupDef[] {
   return [
     {
       id: 'market_trust',
@@ -295,6 +313,7 @@ function buildSpecGroups(t: CompareTranslator): SpecGroupDef[] {
         {
           id: 'display_size',
           label: t('rowDisplaySize'),
+          appliesTo: (tpl) => tpl.screen,
           renderValue: (p) => {
             const size = resolveCompareDisplaySizeInch(p);
             return size != null ? `${size}"` : '-';
@@ -317,7 +336,12 @@ function buildSpecGroups(t: CompareTranslator): SpecGroupDef[] {
           renderValue: (p) => {
             const specs = (p.specifications || {}) as ProductSpecifications;
             const res = specs.display?.resolution || '-';
-            const ppi = specs.display?.ppi ? ` (${specs.display.ppi} ppi)` : '';
+            // A resolution text that already names its density keeps it
+            // once (DOS/Rate#1214).
+            const ppi =
+              specs.display?.ppi && !/ppi\b/i.test(res)
+                ? ` (${specs.display.ppi} ppi)`
+                : '';
             return res === '-' && !ppi ? '-' : `${res}${ppi}`;
           },
           numericValue: (p) => {
@@ -373,6 +397,7 @@ function buildSpecGroups(t: CompareTranslator): SpecGroupDef[] {
         },
         {
           id: 'hw_cpu_gpu',
+          appliesTo: (tpl) => specFieldApplies(tpl, 'hardware', 'cpu'),
           label: t('rowHwCpuGpu'),
           renderValue: (p) => {
             const specs = (p.specifications || {}) as ProductSpecifications;
@@ -384,6 +409,7 @@ function buildSpecGroups(t: CompareTranslator): SpecGroupDef[] {
         },
         {
           id: 'hw_ram',
+          appliesTo: (tpl) => tpl.ram,
           label: t('rowHwRam'),
           renderValue: (p) => {
             const ram = resolveCompareRamGb(p);
@@ -394,6 +420,7 @@ function buildSpecGroups(t: CompareTranslator): SpecGroupDef[] {
         },
         {
           id: 'hw_storage',
+          appliesTo: (tpl) => tpl.storage,
           label: t('rowHwStorage'),
           renderValue: (p) => {
             const rom = resolveCompareStorageGb(p);
@@ -405,6 +432,9 @@ function buildSpecGroups(t: CompareTranslator): SpecGroupDef[] {
         },
         {
           id: 'hw_os_exp',
+          appliesTo: (tpl) =>
+            specFieldApplies(tpl, 'hardware', 'os') ||
+            specFieldApplies(tpl, 'hardware', 'storage_expansion'),
           label: t('rowHwOsExp'),
           renderValue: (p) => {
             const specs = (p.specifications || {}) as ProductSpecifications;
@@ -412,7 +442,9 @@ function buildSpecGroups(t: CompareTranslator): SpecGroupDef[] {
               specs.hardware?.os,
               specs.hardware?.storage_expansion
                 ? t('valCardSlotPrefix', {
-                    value: specs.hardware.storage_expansion,
+                    value: normalizeStorageExpansion(
+                      specs.hardware.storage_expansion
+                    ),
                   })
                 : null,
             ].filter(Boolean);
@@ -599,11 +631,14 @@ function buildSpecGroups(t: CompareTranslator): SpecGroupDef[] {
       rows: [
         {
           id: 'cell_5g',
+          appliesTo: (tpl) => tpl.has5g,
           label: t('rowCell5g'),
           renderValue: (p) => {
             const specs = (p.specifications || {}) as ProductSpecifications;
-            const has5g = specs.cellular?.has_5g ?? p.has_5g;
-            return has5g ? t('valHas5g') : t('val4gLte');
+            // Unknown stays empty, not "4G LTE" (DOS/Rate#1193).
+            const has5g = known5g(specs.cellular?.has_5g, p.has_5g);
+            if (has5g === true) return t('valHas5g');
+            return has5g === false ? t('val4gLte') : '-';
           },
         },
         {
@@ -655,6 +690,7 @@ function buildSpecGroups(t: CompareTranslator): SpecGroupDef[] {
         },
         {
           id: 'conn_nfc',
+          appliesTo: (tpl) => specFieldApplies(tpl, 'connectivity', 'nfc'),
           label: t('rowConnNfc'),
           renderValue: (p) => {
             const specs = (p.specifications || {}) as ProductSpecifications;
@@ -667,11 +703,11 @@ function buildSpecGroups(t: CompareTranslator): SpecGroupDef[] {
           renderValue: (p) => {
             const specs = (p.specifications || {}) as ProductSpecifications;
             const parts = [
-              specs.connectivity?.usb || 'USB Type-C',
+              specs.connectivity?.usb,
               specs.connectivity?.location,
               specs.connectivity?.sensors,
             ].filter(Boolean);
-            return parts.join(' | ');
+            return parts.join(' | ') || '-';
           },
         },
       ],
@@ -686,7 +722,7 @@ function buildSpecGroups(t: CompareTranslator): SpecGroupDef[] {
           label: t('rowMmSpeaker'),
           renderValue: (p) => {
             const specs = (p.specifications || {}) as ProductSpecifications;
-            return specs.multimedia?.loudspeaker || t('valDefaultStereo');
+            return specs.multimedia?.loudspeaker || '-';
           },
         },
         {
@@ -720,9 +756,7 @@ function buildSpecGroups(t: CompareTranslator): SpecGroupDef[] {
               specs.availability?.announced,
               specs.availability?.status,
             ].filter(Boolean);
-            return parts.length > 0
-              ? parts.join(' | ')
-              : t('valDefaultAvailable');
+            return parts.length > 0 ? parts.join(' | ') : '-';
           },
         },
         {
@@ -758,14 +792,34 @@ function buildSpecGroups(t: CompareTranslator): SpecGroupDef[] {
                 ? t('valSarBodyPrefix', { value: specs.regulatory.sar_body })
                 : null,
             ].filter(Boolean);
-            return parts.length > 0
-              ? parts.join(' | ')
-              : t('valDefaultRegulatory');
+            return parts.length > 0 ? parts.join(' | ') : '-';
           },
         },
       ],
     },
   ];
+}
+
+/**
+ * The spec groups and rows a category's template has, in its order, so an
+ * earbud shows no screen, RAM or camera row and a watch no 5G row
+ * (DOS/Rate#1142, DOS/Rate#1166). The market group always comes first.
+ */
+export function filterSpecGroupsForCategory(
+  groups: readonly SpecGroupDef[],
+  categorySlug: string
+): SpecGroupDef[] {
+  const template = getCategorySpecTemplate(categorySlug);
+  const order = (id: string) =>
+    id === 'market_trust' ? -1 : template.groups.indexOf(id as SpecGroupKey);
+  return groups
+    .filter((group) => order(group.id) !== -1 || group.id === 'market_trust')
+    .sort((a, b) => order(a.id) - order(b.id))
+    .map((group) => ({
+      ...group,
+      rows: group.rows.filter((row) => row.appliesTo?.(template) ?? true),
+    }))
+    .filter((group) => group.rows.length > 0);
 }
 
 export default function CompareWorkspace({
@@ -774,19 +828,20 @@ export default function CompareWorkspace({
   initialCategory = 'smartphones',
   hasExplicitSlugs = false,
   locale = 'vi',
+  itemSlugBySlug,
 }: CompareWorkspaceProps) {
   const t = useTranslations('compare');
   const router = useRouter();
   const specDict = useMemo(() => getSpecUiDictionary(locale), [locale]);
   const categoryTabs = useMemo(() => buildCategoryTabs(t), [t]);
-  const specGroups = useMemo(() => buildSpecGroups(t), [t]);
+  const allSpecGroups = useMemo(() => buildSpecGroups(t), [t]);
   const [activeCategory, setActiveCategory] = useState<CanonicalCategorySlug>(
     () =>
       initialProducts.length > 0
         ? getMasterProductCategorySlug(initialProducts[0]!)
         : initialCategory
   );
-  const [products, setProducts] = useState<MasterProduct[]>(() => {
+  const [storedProducts, setProducts] = useState<MasterProduct[]>(() => {
     const targetCat =
       initialProducts.length > 0
         ? getMasterProductCategorySlug(initialProducts[0]!)
@@ -806,6 +861,76 @@ export default function CompareWorkspace({
   const [highlightWinners, setHighlightWinners] = useState(true);
   const [copiedLink, setCopiedLink] = useState(false);
   const radarIndex = useDealRadarIndex();
+  // Every row, verdict and export reads the category's view of a product,
+  // like the product page (DOS/Rate#1166).
+  const products = useMemo(
+    () =>
+      storedProducts.map((p) => applyCategorySpecTemplate(activeCategory, p)),
+    [storedProducts, activeCategory]
+  );
+  // RATE_ITEM_MODEL on (the page passed a map): products the client added
+  // or restored from the tray are read as Items too, so the 1v1 link names
+  // the Item pair without a 308 (DOS/Rate#1294). Off: no map, no reads.
+  const [clientItemSlugs, setClientItemSlugs] = useState<
+    Record<string, string>
+  >({});
+  const pairSlugA = products.length === 2 ? (products[0]?.slug ?? '') : '';
+  const pairSlugB = products.length === 2 ? (products[1]?.slug ?? '') : '';
+  useEffect(() => {
+    if (!itemSlugBySlug || !pairSlugA || !pairSlugB) return;
+    const missing = [pairSlugA, pairSlugB].filter(
+      (slug) => !itemSlugBySlug[slug] && !(slug in clientItemSlugs)
+    );
+    if (missing.length === 0) return;
+    let cancelled = false;
+    void Promise.all(
+      missing.map((slug) =>
+        fetch(`/api/v1/rate/products/${encodeURIComponent(slug)}`)
+          .then((res) => (res.ok ? res.json() : null))
+          .then((json: unknown) => [
+            slug,
+            itemSlugFromProductAnswer(json, slug),
+          ])
+          .catch(() => [slug, slug])
+      )
+    ).then((entries) => {
+      if (!cancelled) {
+        setClientItemSlugs((prev) => ({
+          ...prev,
+          ...Object.fromEntries(entries),
+        }));
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [itemSlugBySlug, pairSlugA, pairSlugB, clientItemSlugs]);
+  const versusSlugMap = itemSlugBySlug
+    ? { ...itemSlugBySlug, ...clientItemSlugs }
+    : undefined;
+  const specGroups = useMemo(
+    () => filterSpecGroupsForCategory(allSpecGroups, activeCategory),
+    [allSpecGroups, activeCategory]
+  );
+
+  // No row that every column leaves empty, and with `showDiffOnly` no row
+  // where every column agrees (DOS/Rate#1186).
+  const visibleSpecGroups = specGroups
+    .map((group) => ({
+      ...group,
+      rows: group.rows.filter((row) =>
+        compareRowIsShown(
+          // The cells show the localized text, where "N/A" becomes "-".
+          products.map((p) => localizeSpecValue(row.renderValue(p), locale)),
+          showDiffOnly
+        )
+      ),
+    }))
+    .filter((group) => group.rows.length > 0);
+  // Spec groups are numbered from 1 after the market group.
+  const numberedSpecGroups = visibleSpecGroups.filter(
+    (group) => group.id !== 'market_trust'
+  );
 
   const searchInputRef = useRef<HTMLInputElement | null>(null);
   const searchBoxRef = useRef<HTMLDivElement | null>(null);
@@ -1219,13 +1344,21 @@ export default function CompareWorkspace({
       matrix: specGroups.map((group) => ({
         groupId: group.id,
         groupTitle: group.title,
-        rows: group.rows.map((row) => ({
-          id: row.id,
-          label: row.label,
-          values: Object.fromEntries(
-            products.map((p) => [p.slug, row.renderValue(p)])
-          ),
-        })),
+        // Like the CSV, no row that every product leaves empty.
+        rows: group.rows
+          .filter((row) =>
+            compareRowIsShown(
+              products.map((p) => row.renderValue(p)),
+              false
+            )
+          )
+          .map((row) => ({
+            id: row.id,
+            label: row.label,
+            values: Object.fromEntries(
+              products.map((p) => [p.slug, row.renderValue(p)])
+            ),
+          })),
       })),
     };
     const blob = new Blob([JSON.stringify(payload, null, 2)], {
@@ -1608,7 +1741,11 @@ export default function CompareWorkspace({
 
               {products.length === 2 && products[0] && products[1] && (
                 <Link
-                  href={`/compare/${products[0].slug}-vs-${products[1].slug}`}
+                  href={versusHref(
+                    products[0].slug,
+                    products[1].slug,
+                    versusSlugMap
+                  )}
                   className="btn btn-sm btn-dark rounded-pill fw-medium px-3 py-2"
                 >
                   {t('deep1v1PageBtn')}
@@ -1693,9 +1830,12 @@ export default function CompareWorkspace({
                         {activeCategoryMeta.label}
                       </span>
                       <span className="badge bg-danger-subtle text-danger rounded-pill small rate-tabular">
-                        {t('scoreDeltaBadge', {
-                          delta: battle.scoreDelta5.toFixed(2),
-                        })}
+                        {/* A 0.00 gap is a tie, as on the home page (DOS/Rate#1209). */}
+                        {battle.scoreDelta5 > 0.005
+                          ? t('scoreDeltaBadge', {
+                              delta: battle.scoreDelta5.toFixed(2),
+                            })
+                          : t('mdRowTie')}
                       </span>
                     </div>
 
@@ -2202,31 +2342,25 @@ export default function CompareWorkspace({
                     <td className="bg-light text-muted small">-</td>
                   )}
                 </tr>
-                {specGroups.map((group) => {
-                  // Filter rows when `showDiffOnly` is enabled
-                  const visibleRows = group.rows.filter((row) => {
-                    if (!showDiffOnly || products.length < 2) return true;
-                    const rendered = products.map((p) =>
-                      row.renderValue(p).trim()
-                    );
-                    const uniqueVals = new Set(rendered);
-                    return uniqueVals.size > 1;
-                  });
-
-                  if (visibleRows.length === 0) {
-                    return null;
-                  }
+                {visibleSpecGroups.map((group) => {
+                  const visibleRows = group.rows;
 
                   const totalCols =
                     products.length +
                     1 +
                     (products.length < MAX_COMPARE_ITEMS ? 1 : 0);
 
+                  // Numbered in the category's order, and a watch's
+                  // cellular heading without "5G" (DOS/Rate#1166). The
+                  // market group comes first, so spec groups start at 1.
                   const groupTitle =
                     group.id in specDict.groups
-                      ? specDict.groups[
-                          group.id as keyof typeof specDict.groups
-                        ]
+                      ? specGroupHeading(
+                          specDict,
+                          group.id as SpecGroupKey,
+                          numberedSpecGroups.indexOf(group) + 1,
+                          getCategorySpecTemplate(activeCategory).has5g
+                        )
                       : group.title;
 
                   return (
