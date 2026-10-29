@@ -99,9 +99,12 @@ export default function CatalogSortDropdown({
       ref={rootRef}
       className="dropdown d-inline-flex mw-100 p-0"
       onBlur={(e) => {
-        if (!rootRef.current?.contains(e.relatedTarget as Node | null)) {
-          setOpen(false);
-        }
+        // Only focus moving to another element outside closes it (Tab out).
+        // A mouse press moves focus nowhere in Safari (relatedTarget null);
+        // closing then would drop the click on an item, and the pointerdown
+        // listener already handles clicks outside.
+        const next = e.relatedTarget as Node | null;
+        if (next && !rootRef.current?.contains(next)) setOpen(false);
       }}
     >
       <button
