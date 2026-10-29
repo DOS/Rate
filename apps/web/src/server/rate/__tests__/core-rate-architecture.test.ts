@@ -2024,8 +2024,10 @@ async function runCoreArchitectureSuite() {
     'ProductOffersExplorer and ProductValueCalculator must include unified Deal Radar columns in exports (#127)'
   );
   assert.ok(
-    pdvSrc127.includes('peerRadarIndex') &&
-      /getRadarSignal\(\s*peerRadarIndex,\s*peer\.slug\s*\)/.test(pdvSrc127),
+    // Streamed since #1344: the page does not wait on the radar.
+    /<PeerRadarBadge\s+categorySlug=\{categorySlug\}\s+slug=\{peer\.slug\}/.test(
+      pdvSrc127
+    ) && /getRadarSignal\(radar, slug\)/.test(pdvSrc127),
     'ProductDetailView relatedCompetitors cards must render per-product RadarBadge (#127)'
   );
   console.log(
