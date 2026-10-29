@@ -987,10 +987,20 @@ export function sizedStoreImageUrl(
   }
   if (parsed.protocol !== 'https:') return url;
   if (parsed.hostname === 'cdn2.fptshop.com.vn') {
-    const m = /^\/unsafe\/(?:\d+x\d+\/)?(?:filters:[^/]*\/)?(.+)$/.exec(
+    // Only the plain form `/unsafe/[WxH/][filters:.../]image` is rewritten.
+    // Other Thumbor options (fit-in, smart, trim, crop, align, meta) would be
+    // read as part of the image path, so those URLs are left as they are.
+    const m = /^\/unsafe\/(?:-?\d*x-?\d*\/)?(?:filters:[^/]*\/)?(.+)$/.exec(
       parsed.pathname
     );
-    if (!m) return url;
+    if (!m?.[1]) return url;
+    if (
+      /^(?:(?:adaptive-|full-)?fit-in|smart|trim(?::[^/]*)?|meta|left|right|center|top|middle|bottom|-?\d*x-?\d*|\d+x\d+:\d+x\d+|filters:[^/]*)(?:\/|$)/.test(
+        m[1]
+      )
+    ) {
+      return url;
+    }
     parsed.pathname = `/unsafe/${w}x0/filters:format(webp)/${m[1]}`;
     return parsed.toString();
   }

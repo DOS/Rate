@@ -25,6 +25,11 @@ function main() {
     'an existing size and filter are replaced, not stacked'
   );
   assert.equal(
+    sizedStoreImageUrl('https://cdn2.fptshop.com.vn/unsafe/800x/uploads/a.png', 128),
+    'https://cdn2.fptshop.com.vn/unsafe/128x0/filters:format(webp)/uploads/a.png',
+    'a width-only size is replaced and a folder path is kept'
+  );
+  assert.equal(
     sizedStoreImageUrl(
       'https://cdn2.cellphones.com.vn/200x/media/catalog/product/i/p/x.png',
       128
@@ -43,6 +48,14 @@ function main() {
     '/img/devices/apple-iphone-16-128gb.jpg',
     'http://cdn2.fptshop.com.vn/unsafe/a.png',
     'https://cdn2.fptshop.com.vn/other/a.png',
+    // Thumbor options this rewrite does not model stay untouched.
+    'https://cdn2.fptshop.com.vn/unsafe/fit-in/800x800/a.png',
+    'https://cdn2.fptshop.com.vn/unsafe/full-fit-in/800x800/a.png',
+    'https://cdn2.fptshop.com.vn/unsafe/smart/a.png',
+    'https://cdn2.fptshop.com.vn/unsafe/trim/800x0/a.png',
+    'https://cdn2.fptshop.com.vn/unsafe/10x10:300x300/800x0/a.png',
+    'https://cdn2.fptshop.com.vn/unsafe/800x800/smart/a.png',
+    'https://cdn2.fptshop.com.vn/unsafe/800x0/left/top/a.png',
   ]) {
     assert.equal(sizedStoreImageUrl(other, 128), other, other);
   }
