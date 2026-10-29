@@ -200,14 +200,19 @@ function usage(message) {
 }
 
 async function main() {
-  const { values } = parseArgs({
-    options: {
-      'base-url': { type: 'string' },
-      concurrency: { type: 'string', default: String(MAX_CONCURRENCY) },
-      timeout: { type: 'string', default: String(DEFAULT_TIMEOUT_S) },
-      check: { type: 'boolean', default: false },
-    },
-  });
+  let values;
+  try {
+    ({ values } = parseArgs({
+      options: {
+        'base-url': { type: 'string' },
+        concurrency: { type: 'string', default: String(MAX_CONCURRENCY) },
+        timeout: { type: 'string', default: String(DEFAULT_TIMEOUT_S) },
+        check: { type: 'boolean', default: false },
+      },
+    }));
+  } catch (err) {
+    usage(err?.message ?? String(err));
+  }
   if (!values['base-url'])
     usage('--base-url is required (the host is never assumed)');
   let base;
