@@ -170,6 +170,23 @@ async function runCoreArchitectureSuite() {
     null,
     'no product URL can be built: no redirect to a category page'
   );
+  // Hints are read as the sitemap reads them: a 'Tablets' hint with no
+  // category_id lists /tablets/..., so that URL renders, and the phone path
+  // 308s there instead of the name heuristic's guess.
+  const tablet1366 = {
+    slug: 'lenovo-tb350fu',
+    category_id: null,
+    metadata: { category_slug: ' Tablets ' },
+  };
+  assert.equal(
+    foreignCategoryProductHref(tablet1366, '/tablets', catMap1366),
+    null,
+    'a mixed-case hint names the category the sitemap lists'
+  );
+  assert.equal(
+    foreignCategoryProductHref(tablet1366, '/smartphones', catMap1366),
+    '/tablets/lenovo-tb350fu'
+  );
   const fs1366 = require('node:fs') as typeof import('node:fs');
   const path1366 = require('node:path') as typeof import('node:path');
   const detailSrc1366 = fs1366.readFileSync(

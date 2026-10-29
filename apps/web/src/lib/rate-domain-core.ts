@@ -1144,6 +1144,24 @@ export function getMasterProductHref(
 }
 
 /**
+ * A product's `metadata` or `specifications` reduced to its category hint,
+ * trimmed, lower-case and canonical only (null otherwise). The sitemap and
+ * the category-path redirect read hints this way (DOS/Rate#1366).
+ */
+export const categorySlugOnly = (
+  value: Record<string, unknown> | null | undefined
+): { category_slug: string } | null => {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  if (typeof value.category_slug !== 'string') return null;
+  const slug = value.category_slug
+    .replace(/\p{Cc}+/gu, '')
+    .trim()
+    .toLowerCase()
+    .slice(0, 64);
+  return isCanonicalCategorySlug(slug) ? { category_slug: slug } : null;
+};
+
+/**
  * The product's own URL when it is asked for under another category's path
  * (`/laptops/<phone>`), else null. Built with `getMasterProductHref`, the way
  * the site links products and lists them in the sitemap, so a redirect lands
@@ -1151,11 +1169,23 @@ export function getMasterProductHref(
  * built: the page then renders as asked.
  */
 export function foreignCategoryProductHref(
-  product: Parameters<typeof getMasterProductHref>[0],
+  product: Parameters<typeof getMasterProductHref>[0] & {
+    metadata?: Record<string, unknown> | null;
+    specifications?: Record<string, unknown> | null;
+  },
   categoryBasePath: string,
   categorySlugById: ReadonlyMap<string, string>
 ): string | null {
-  const href = getMasterProductHref(product, categorySlugById);
+  // Hints read as the sitemap reads them, so the redirect lands on the URL
+  // it lists.
+  const href = getMasterProductHref(
+    {
+      ...product,
+      metadata: categorySlugOnly(product.metadata),
+      specifications: categorySlugOnly(product.specifications),
+    },
+    categorySlugById
+  );
   if (!/^\/[a-z]+\/[^/]+$/.test(href)) return null;
   return href.startsWith(`${categoryBasePath}/`) ? null : href;
 }
