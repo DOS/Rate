@@ -115,7 +115,7 @@ function versusRoundTrips(slugA: string, slugB: string): boolean {
  * A versus pair in its one canonical order: the two slugs sorted (without
  * regard to case). Each pair has a single URL; the other order 308s to it
  * (DOS/Rate#1367). When the sorted URL would not parse back to the same two
- * slugs (a slug ending in "-vs"), the order given is kept.
+ * slugs (a slug ending in "-vs"), the other order is used if it does.
  */
 export function canonicalVersusOrder(
   slugA: string,
@@ -126,7 +126,13 @@ export function canonicalVersusOrder(
       ? [slugA, slugB]
       : [slugB, slugA];
   if (versusRoundTrips(sorted[0], sorted[1])) return sorted;
-  return versusRoundTrips(slugA, slugB) ? [slugA, slugB] : sorted;
+  const reversed: [string, string] = [sorted[1], sorted[0]];
+  return versusRoundTrips(reversed[0], reversed[1]) ? reversed : sorted;
+}
+
+/** True when the pair, in this order, makes a versus URL that parses back. */
+export function isParseableVersusPair(slugA: string, slugB: string): boolean {
+  return versusRoundTrips(slugA, slugB);
 }
 
 /**
@@ -152,8 +158,9 @@ const VERSUS_URL_SLUG = /^[a-z0-9][a-z0-9._-]*$/;
 
 /**
  * The canonical versus URL when the request named the pair any other way
- * (the other order, other letter case, percent-encoding), else null
- * (DOS/Rate#1367). `requested` is the raw `[versus]` segment. A pair whose
+ * (the other order, other letter case), else null (DOS/Rate#1367).
+ * `requested` is the `[versus]` param, which Next has already decoded, so a
+ * percent-encoded alias renders with the canonical tag instead of a 308. A pair whose
  * canonical slugs are not plain catalogue slugs is not redirected: the page
  * 404s as before.
  */
@@ -201,6 +208,16 @@ export function planVersusRoute(
   }
   // One URL per pair, the slugs sorted; the other order 308s there (#1367).
   const swapped = canonicalVersusOrder(urlSlugA, urlSlugB)[0] !== urlSlugA;
+  // Neither order makes a URL that parses back (a slug ending in "-vs"):
+  // no versus page for it, as for a slug holding "-vs-" (#1275).
+  if (
+    !isParseableVersusPair(
+      swapped ? urlSlugB : urlSlugA,
+      swapped ? urlSlugA : urlSlugB
+    )
+  ) {
+    return { kind: 'not_found' };
+  }
   const [first, second] = swapped ? [b, a] : [a, b];
   const [firstSlug, secondSlug] = swapped
     ? [urlSlugB, urlSlugA]

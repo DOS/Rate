@@ -250,12 +250,31 @@ function main() {
     'no 308 to a path built from junk'
   );
   assert.equal(versusAliasRedirect('b-vs-a..b', '/compare/a..b-vs-b'), null);
-  // A sorted URL that would not parse back keeps the order given (a slug
-  // ending in "-vs").
+  // A sorted URL that would not parse back (a slug ending in "-vs") takes
+  // the other order, whichever order it was given in.
   assert.deepEqual(canonicalVersusOrder('z-phone', 'a-phone-vs'), [
     'z-phone',
     'a-phone-vs',
   ]);
+  assert.deepEqual(canonicalVersusOrder('a-phone-vs', 'z-phone'), [
+    'z-phone',
+    'a-phone-vs',
+  ]);
+  // Item route: an Item slug ending in "-vs" redirects only to a URL that
+  // parses back, or has no versus page.
+  const vsEndItem: CompareResolution = {
+    kind: 'item',
+    item: { id: 'item-vse', slug: 'a-phone-vs', default_variant_id: null },
+    variants: [{ id: 'av', slug: 'a-phone-standard', variant_key: 'standard' }],
+  };
+  const plan1367 = planVersusRoute(
+    { slug: 'a-phone-standard', resolution: vsEndItem },
+    { slug: 'samsung-galaxy-s24', resolution: s24 }
+  );
+  assert.deepEqual(plan1367, {
+    kind: 'redirect',
+    to: '/compare/samsung-galaxy-s24-vs-a-phone-vs',
+  });
   assert.deepEqual(canonicalVersusOrder('B-Phone', 'a-phone'), [
     'a-phone',
     'B-Phone',
