@@ -1323,7 +1323,7 @@
     "ep15Summary": "Souboj dvou produktů ze stejné kategorie: vítěz podle skóre JReviews, skóre podle kritérií, cenový rozdíl a signál výhodné ceny u každého modelu.",
     "ep16Params": "slug nebo masterProductId, hideFake, limit",
     "ep16Summary": "Recenze produktu, každá s AI kontrolou seedingu, a souhrn recenzí.",
-    "ep17Params": "category, criterion, price, brand, limit",
+    "ep17Params": "category, criterion, price, brand, q, limit",
     "ep17Summary": "Žebříček JReviews v kategorii podle celkového, uživatelského nebo expertního skóre či podle jednoho kritéria, s první trojicí.",
     "ep18Params": "category, platform, limit",
     "ep18Summary": "Skutečné slevy napříč tržišti a pasti falešných slev, měřené proti mediánu ceny u prodejců.",

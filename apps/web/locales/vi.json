@@ -1323,7 +1323,7 @@
     "ep15Summary": "So sánh 1 đối 1 hai sản phẩm cùng ngành hàng: máy thắng theo điểm JReviews, điểm từng tiêu chí, chênh lệch giá và tín hiệu giá tốt của từng máy.",
     "ep16Params": "slug hoặc masterProductId, hideFake, limit",
     "ep16Summary": "Danh sách đánh giá của một sản phẩm, mỗi đánh giá kèm kết quả AI kiểm tra seeding, cùng phần tóm tắt đánh giá.",
-    "ep17Params": "category, criterion, price, brand, limit",
+    "ep17Params": "category, criterion, price, brand, q, limit",
     "ep17Summary": "Bảng xếp hạng JReviews trong một ngành hàng theo điểm tổng hợp, điểm người dùng, điểm chuyên gia hoặc từng tiêu chí, kèm top 3.",
     "ep18Params": "category, platform, limit",
     "ep18Summary": "Các deal giá tốt thật trên nhiều sàn và các bẫy giảm giá ảo, so với giá trung vị giữa các nơi bán.",

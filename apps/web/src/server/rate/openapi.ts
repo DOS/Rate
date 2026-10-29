@@ -303,7 +303,8 @@ function buildBaseRateOpenApiSpec(
             {
               name: 'minRefreshHz',
               in: 'query',
-              description: 'Minimum display refresh rate in Hz (1-500)',
+              description:
+                'Minimum display refresh rate in Hz (clamped to 30-1000; `highRefresh=true` means 120)',
               schema: { type: 'number' },
             },
             {
@@ -315,7 +316,8 @@ function buildBaseRateOpenApiSpec(
             {
               name: 'minBatteryMah',
               in: 'query',
-              description: 'Minimum battery capacity in mAh (1-100000)',
+              description:
+                'Minimum battery capacity in mAh (clamped to 100-100000; `bigBattery=true` means 5000)',
               schema: { type: 'number' },
             },
             {
@@ -797,6 +799,9 @@ function buildBaseRateOpenApiSpec(
             ),
             '429': errorResponse(
               'More than 100 active alerts (`code: "RATE_LIMITED"`).'
+            ),
+            '502': errorResponse(
+              'The alert could not be stored (database error); nothing was saved.'
             ),
           },
         },
@@ -1370,7 +1375,8 @@ function buildBaseRateOpenApiSpec(
                   },
                   totalCount: {
                     type: 'integer',
-                    description: 'All reviews of the product.',
+                    description:
+                      'Reviews read for the product before `hideFake` and `limit`: the newest, at most 50.',
                   },
                   summary: {
                     anyOf: [
@@ -1492,6 +1498,9 @@ function buildBaseRateOpenApiSpec(
             '200': {
               description: 'Updated helpful/report counters for the review.',
             },
+            '400': errorResponse(
+              'Invalid review id or body, or the database rejected the vote (`code: "VOTE_REJECTED"`).'
+            ),
             '401': errorResponse('Missing or invalid bearer token.'),
             '403': errorResponse(
               'Voter account is ineligible (< 7 days old or unverified contact).'
@@ -1499,6 +1508,7 @@ function buildBaseRateOpenApiSpec(
             '429': errorResponse(
               'Rate limit exceeded (maximum 60 vote actions per hour).'
             ),
+            '404': errorResponse('Review not found.'),
           },
         },
       },
@@ -1556,6 +1566,13 @@ function buildBaseRateOpenApiSpec(
                 ],
                 default: 'combined',
               },
+            },
+            {
+              name: 'q',
+              in: 'query',
+              description:
+                'Case-insensitive text filter on the ranked products (name, brand, model, slug, model key, chip, screen), up to 160 characters.',
+              schema: { type: 'string' },
             },
             {
               name: 'price',
@@ -1993,7 +2010,7 @@ function buildBaseRateOpenApiSpec(
             rating_star: { type: ['number', 'null'] },
             follower_count: { type: 'integer' },
             location: { type: ['string', 'null'] },
-            dosafe_risk_score: { type: 'integer', minimum: 0, maximum: 100 },
+            dosafe_risk_score: { type: 'number', minimum: 0, maximum: 100 },
             review_risk_score: {
               type: ['integer', 'null'],
               minimum: 0,
@@ -2002,12 +2019,13 @@ function buildBaseRateOpenApiSpec(
                 'Risk measured on the store reviews only; null for a store with no analysed review.',
             },
             risk_score: {
-              type: 'integer',
+              type: 'number',
               minimum: 0,
               maximum: 100,
-              description: 'Combined risk (DOSafe and review risk).',
+              description:
+                'Combined risk (DOSafe and review risk); may carry decimals.',
             },
-            trust_score: { type: 'integer', minimum: 0, maximum: 100 },
+            trust_score: { type: 'number', minimum: 0, maximum: 100 },
             product_count: { type: 'integer' },
             min_price: { type: ['number', 'null'] },
             max_price: { type: ['number', 'null'] },

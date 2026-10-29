@@ -1323,7 +1323,7 @@
     "ep15Summary": "One-on-one comparison of two products in the same category: the winner by JReviews score, scores per criterion, the price gap and the deal signal of each model.",
     "ep16Params": "slug or masterProductId, hideFake, limit",
     "ep16Summary": "A product's reviews, each with its AI seeding check, and the review summary.",
-    "ep17Params": "category, criterion, price, brand, limit",
+    "ep17Params": "category, criterion, price, brand, q, limit",
     "ep17Summary": "JReviews ranking within a category by combined, user or expert score or by one criterion, with the top 3.",
     "ep18Params": "category, platform, limit",
     "ep18Summary": "Genuine deals across marketplaces and fake-sale traps, measured against the median price across sellers.",
