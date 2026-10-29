@@ -97,7 +97,24 @@ globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
     );
   }
   if (pathname === '/rest/v1/master_products') {
-    return jsonResponse(200, masterRows);
+    // Honour a slug filter (`eq.` or `in.(...)`) so unknown slugs miss.
+    const slugFilter = new URL(url).searchParams.get('slug');
+    const wanted = slugFilter?.startsWith('eq.')
+      ? [slugFilter.slice(3)]
+      : slugFilter?.startsWith('in.(')
+        ? slugFilter
+            .slice(4, -1)
+            .split(',')
+            .map((s) => s.replace(/^"|"$/g, ''))
+        : null;
+    return jsonResponse(
+      200,
+      wanted
+        ? masterRows.filter((row) =>
+            wanted.includes((row as { slug: string }).slug)
+          )
+        : masterRows
+    );
   }
   return jsonResponse(200, []);
 }) as typeof fetch;
@@ -265,6 +282,24 @@ async function testDetailAndCompare() {
   assert.equal(cmpBody.data.length, 1);
   assert.equal(cmpBody.data[0].has_5g, false);
   assert.equal(cmpBody.data[0].specifications.cellular.technology, 'LTE');
+  assert.deepEqual(cmpBody.not_found_slugs, []);
+
+  // Another category's product is excluded by the lock; a slug with no
+  // published product is not found, not cross-category (DOS/Rate#1364).
+  masterRows = [WATCH, EARBUD];
+  const mixed = await compare.GET(
+    new NextRequest(
+      `http://localhost/api/v1/rate/compare?slugs=${WATCH.slug},${EARBUD.slug},does-not-exist-xyz`
+    )
+  );
+  assert.equal(mixed.status, 200);
+  const mixedBody = await mixed.json();
+  assert.deepEqual(
+    mixedBody.data.map((p: { slug: string }) => p.slug),
+    [WATCH.slug]
+  );
+  assert.deepEqual(mixedBody.excluded_cross_category_slugs, [EARBUD.slug]);
+  assert.deepEqual(mixedBody.not_found_slugs, ['does-not-exist-xyz']);
   masterRows = [];
   console.warn('  ✅ API v1 detail and compare return the scoped view');
 }

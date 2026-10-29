@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import {
   getCachedCompareMasterProducts,
+  getCachedMasterProductBySlug,
   getMasterProductCategorySlug,
   getMasterProductHref,
   getMasterProductOffersBatch,
@@ -46,12 +47,18 @@ export async function GET(request: NextRequest) {
     const lockedCategory = products[0]
       ? getMasterProductCategorySlug(products[0])
       : null;
-    const excludedCrossCategorySlugs = slugs.filter(
-      (s) => !returnedSlugSet.has(s)
+    // A requested slug that did not come back is either a published product
+    // of another category, dropped by the lock, or no published product at
+    // all (DOS/Rate#1364).
+    const missingSlugs = slugs.filter((s) => !returnedSlugSet.has(s));
+    const [offersByMasterId, missingProducts] = await Promise.all([
+      getMasterProductOffersBatch(products.map((p) => p.id)),
+      Promise.all(missingSlugs.map((s) => getCachedMasterProductBySlug(s))),
+    ]);
+    const excludedCrossCategorySlugs = missingSlugs.filter(
+      (_, i) => missingProducts[i]
     );
-    const offersByMasterId = await getMasterProductOffersBatch(
-      products.map((p) => p.id)
-    );
+    const notFoundSlugs = missingSlugs.filter((_, i) => !missingProducts[i]);
 
     return NextResponse.json(
       {
@@ -60,6 +67,7 @@ export async function GET(request: NextRequest) {
         locked_category: lockedCategory,
         requested_slugs: slugs,
         excluded_cross_category_slugs: excludedCrossCategorySlugs,
+        not_found_slugs: notFoundSlugs,
         data: products.map((p) => {
           const offers = offersByMasterId.get(p.id) ?? [];
           return {
