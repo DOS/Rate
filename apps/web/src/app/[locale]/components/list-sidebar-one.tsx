@@ -211,7 +211,9 @@ export default function ListSidebarOne({
       }
     }
     // From 992px the panel is inline: a drawer left open would come back on
-    // its own when the window narrows again, so close it.
+    // its own when the window narrows again, so close it. Focus is not moved
+    // to the trigger here: at that width the trigger is hidden (d-lg-none)
+    // and the panel the focus is in stays on screen inline.
     const wide = window.matchMedia('(min-width: 992px)');
     const onWide = () => {
       if (wide.matches) setDrawerOpen(false);
