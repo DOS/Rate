@@ -13,10 +13,12 @@ import {
   resolveSafeApiRelativeUrl,
   sanitizeVerdictClassSuffix,
 } from '../security-guards.js';
+import { applyDocumentMessages, t, tHtml, type MessageKey } from '../i18n.js';
 import {
   classifyLookupFailure,
   escapeHtml,
   isLookupWithoutProduct,
+  officialBadgeHtml,
   renderActionRowsHtml,
   renderLookupErrorHtml,
   renderNotFoundHtml,
@@ -31,7 +33,7 @@ function formatVnd(val: number | null | undefined): string {
 
 function buildSvgSparkline(points: ExtensionPriceHistoryPoint[]): string {
   if (!points || points.length < 2) {
-    return `<div style="font-size: 13px; color: #9ca3af; padding: 8px 0;">Đang tích lũy thêm các mốc thời gian lịch sử giá.</div>`;
+    return `<div style="font-size: 13px; color: #9ca3af; padding: 8px 0;">${escapeHtml(t('historyAccumulating'))}</div>`;
   }
   const prices = filterValidSparklinePrices(points);
   if (prices.length < 2) return '';
@@ -125,7 +127,7 @@ async function fetchAndRenderDealRadar(
 
     slot.innerHTML = `
       <div class="card">
-        <div class="card-title">🔥 Giá thấp nhất giữa 10 sàn</div>
+        <div class="card-title">🔥 ${escapeHtml(t('radarDealsTitle'))}</div>
         ${deals
           .slice(0, 4)
           .map(
@@ -138,7 +140,7 @@ async function fetchAndRenderDealRadar(
                   </a>
                 </div>
                 <div class="offer-meta">
-                  ${escapeHtml(d.platform.toUpperCase())} (${escapeHtml(d.merchantName)}) - Tiết kiệm ${formatVnd(d.savingsVsMedianVnd)} (-${formatSafeNumber(d.savingsVsMedianPct, { min: 0, max: 100 })}%)
+                  ${escapeHtml(d.platform.toUpperCase())} (${escapeHtml(d.merchantName)}) - ${escapeHtml(t('radarSavings', [formatVnd(d.savingsVsMedianVnd), formatSafeNumber(d.savingsVsMedianPct, { min: 0, max: 100 })]))}
                 </div>
               </div>
               <a href="${escapeSafeExternalHref(d.offerUrl)}" target="_blank" rel="noopener noreferrer" class="offer-price" style="text-decoration:none;color:#34d399;">
@@ -152,7 +154,7 @@ async function fetchAndRenderDealRadar(
           spreads.length > 0
             ? `
             <div style="margin-top:10px;padding-top:8px;border-top:1px solid #2a2f3a;">
-              <div class="card-title" style="color:#60a5fa;">📊 Chênh Lệch Giá Đa Sàn Lớn Nhất</div>
+              <div class="card-title" style="color:#60a5fa;">📊 ${escapeHtml(t('radarSpreadTitle'))}</div>
               ${spreads
                 .slice(0, 2)
                 .map(
@@ -161,11 +163,11 @@ async function fetchAndRenderDealRadar(
                     <div>
                       <div class="offer-shop">${escapeHtml(s.productName)}</div>
                       <div class="offer-meta" style="color:#93c5fd;">
-                        ${escapeHtml(s.cheapestPlatform.toUpperCase())} (${formatVnd(s.minPrice)}) so với ${escapeHtml(s.priciestPlatform.toUpperCase())} (${formatVnd(s.maxPrice)})
+                        ${escapeHtml(t('radarSpreadVersus', [s.cheapestPlatform.toUpperCase(), formatVnd(s.minPrice), s.priciestPlatform.toUpperCase(), formatVnd(s.maxPrice)]))}
                       </div>
                     </div>
                     <a href="${escapeSafeExternalHref(s.cheapestOfferUrl)}" target="_blank" rel="noopener noreferrer" class="offer-price" style="text-decoration:none;color:#60a5fa;">
-                      Lệch ${formatVnd(s.spreadVnd)}
+                      ${escapeHtml(t('radarSpreadAmount', [formatVnd(s.spreadVnd)]))}
                     </a>
                   </div>
                 `
@@ -179,19 +181,19 @@ async function fetchAndRenderDealRadar(
           traps.length > 0
             ? `
             <div style="margin-top:10px;padding-top:8px;border-top:1px solid #2a2f3a;">
-              <div class="card-title" style="color:#f87171;">⚠️ Cảnh Báo Giảm Giá Ảo</div>
+              <div class="card-title" style="color:#f87171;">⚠️ ${escapeHtml(t('radarTrapsTitle'))}</div>
               ${traps
                 .slice(0, 2)
                 .map(
-                  (t) => `
+                  (trap) => `
                   <div class="offer-item">
                     <div>
-                      <div class="offer-shop">${escapeHtml(t.productName)}</div>
+                      <div class="offer-shop">${escapeHtml(trap.productName)}</div>
                       <div class="offer-meta" style="color:#fca5a5;">
-                        ${escapeHtml(t.platform.toUpperCase())} - Giá gốc kê khống +${formatSafeNumber(t.fakeMarkupPct, { min: 0, max: 10000 })}% (${formatVnd(t.priceOriginal)})
+                        ${escapeHtml(trap.platform.toUpperCase())} - ${escapeHtml(t('radarTrapMarkup', [formatSafeNumber(trap.fakeMarkupPct, { min: 0, max: 10000 }), formatVnd(trap.priceOriginal)]))}
                       </div>
                     </div>
-                    <span class="offer-price" style="color:#f87171;">${formatVnd(t.priceCurrent)}</span>
+                    <span class="offer-price" style="color:#f87171;">${formatVnd(trap.priceCurrent)}</span>
                   </div>
                 `
                 )
@@ -224,7 +226,7 @@ interface MerchantTrustFeedItem {
 // A store with no analysed review has no review risk score (DOS/Rate#1258).
 function reviewRiskText(score: number | null | undefined): string {
   return score == null
-    ? 'chưa đủ dữ liệu'
+    ? t('reviewRiskNoData')
     : formatSafeNumber(score, { min: 0, max: 100 });
 }
 
@@ -261,7 +263,7 @@ async function fetchAndRenderMerchantTrustDirectory(
 
     slot.innerHTML = `
       <div class="card">
-        <div class="card-title">🛡️ Độ tin cậy gian hàng trên 10 sàn (${allMerchants.length})</div>
+        <div class="card-title">🛡️ ${escapeHtml(t('merchantDirTitle', [formatSafeNumber(allMerchants.length, { min: 0 })]))}</div>
         ${sorted
           .slice(0, 5)
           .map((m) => {
@@ -284,14 +286,14 @@ async function fetchAndRenderMerchantTrustDirectory(
                     <a href="${detailHref}" target="_blank" rel="noopener noreferrer" style="color:#f3f4f6;text-decoration:none;">
                       ${escapeHtml(m.name)}
                     </a>
-                    ${m.is_official ? '<span style="color:#34d399;font-size: 13px;">Chính hãng</span>' : ''}
+                    ${m.is_official ? officialBadgeHtml() : ''}
                   </div>
                   <div class="offer-meta">
-                    ${escapeHtml(m.platform.toUpperCase())} (${formatSafeNumber(m.product_count, { min: 0 })} SP) - Rủi ro lừa đảo: ${formatSafeNumber(m.dosafe_risk_score, { min: 0, max: 100 })} | Rủi ro đánh giá: ${reviewRiskText(m.review_risk_score)}
+                    ${escapeHtml(m.platform.toUpperCase())} (${escapeHtml(t('merchantProductCount', [formatSafeNumber(m.product_count, { min: 0 })]))}) - ${escapeHtml(t('merchantScamRisk', [formatSafeNumber(m.dosafe_risk_score, { min: 0, max: 100 })]))} | ${escapeHtml(t('merchantReviewRisk', [reviewRiskText(m.review_risk_score)]))}
                   </div>
                 </div>
                 <a href="${detailHref}" target="_blank" rel="noopener noreferrer" class="offer-price" style="text-decoration:none;color:${trustColor};">
-                  Tin cậy ${formatSafeNumber(m.trust_score, { min: 0, max: 100 })}/100
+                  ${escapeHtml(t('merchantTrust', [formatSafeNumber(m.trust_score, { min: 0, max: 100 })]))}
                 </a>
               </div>
             `;
@@ -314,9 +316,13 @@ function renderPanelContent(
   if (!signal) {
     root.innerHTML = `
       <div class="card">
-        <div class="card-title">Chưa nhận diện trang sản phẩm</div>
+        <div class="card-title">${escapeHtml(t('noProductTitle'))}</div>
         <p style="color: #9ca3af;">
-          Hãy mở một trang chi tiết sản phẩm trên <strong>Shopee, Lazada, Tiki, TikTok Shop, CellphoneS, Thế Giới Di Động, FPT Shop, Hoàng Hà Mobile, Di Động Việt</strong> hoặc <strong>Phong Vũ</strong>, hoặc dán link/tên máy vào ô <strong>Tra cứu nhanh</strong> phía trên.
+          ${tHtml('noProductBody', [
+            `<strong>${escapeHtml(t('noProductStores'))}</strong>`,
+            `<strong>${escapeHtml(t('noProductLastStore'))}</strong>`,
+            `<strong>${escapeHtml(t('quickLookupBoxName'))}</strong>`,
+          ])}
         </p>
       </div>
       <div id="deal-radar-slot"></div>
@@ -356,7 +362,7 @@ function renderPanelContent(
     lookup.variantCandidates.length > 1
       ? `
       <div class="card">
-        <div class="card-title">Chọn Phiên Bản Bộ Nhớ Đang Xem</div>
+        <div class="card-title">${escapeHtml(t('variantPickerTitle'))}</div>
         <div class="variant-row">
           ${lookup.variantCandidates
             .map(
@@ -382,26 +388,26 @@ function renderPanelContent(
     (keySpecs.screen || keySpecs.chip || keySpecs.camera || keySpecs.battery)
       ? `
       <div class="card">
-        <div class="card-title">Tóm Tắt 10 Nhóm Thông Số Chuẩn</div>
+        <div class="card-title">${escapeHtml(t('keySpecsTitle'))}</div>
         <div class="stats-grid">
           ${
             keySpecs.screen
-              ? `<div class="stat-box"><div class="stat-label">Màn hình</div><div class="stat-val" style="font-size: 13px;">${escapeHtml(keySpecs.screen)}</div></div>`
+              ? `<div class="stat-box"><div class="stat-label">${escapeHtml(t('specScreen'))}</div><div class="stat-val" style="font-size: 13px;">${escapeHtml(keySpecs.screen)}</div></div>`
               : ''
           }
           ${
             keySpecs.chip
-              ? `<div class="stat-box"><div class="stat-label">Vi xử lý</div><div class="stat-val" style="font-size: 13px;">${escapeHtml(keySpecs.chip)}</div></div>`
+              ? `<div class="stat-box"><div class="stat-label">${escapeHtml(t('specChip'))}</div><div class="stat-val" style="font-size: 13px;">${escapeHtml(keySpecs.chip)}</div></div>`
               : ''
           }
           ${
             keySpecs.camera
-              ? `<div class="stat-box"><div class="stat-label">Camera</div><div class="stat-val" style="font-size: 13px;">${escapeHtml(keySpecs.camera)}</div></div>`
+              ? `<div class="stat-box"><div class="stat-label">${escapeHtml(t('specCamera'))}</div><div class="stat-val" style="font-size: 13px;">${escapeHtml(keySpecs.camera)}</div></div>`
               : ''
           }
           ${
             keySpecs.battery
-              ? `<div class="stat-box"><div class="stat-label">Pin &amp; Sạc</div><div class="stat-val" style="font-size: 13px;">${escapeHtml(keySpecs.battery)}</div></div>`
+              ? `<div class="stat-box"><div class="stat-label">${escapeHtml(t('specBattery'))}</div><div class="stat-val" style="font-size: 13px;">${escapeHtml(keySpecs.battery)}</div></div>`
               : ''
           }
         </div>
@@ -419,15 +425,15 @@ function renderPanelContent(
   const merchantRiskHtml = merchant
     ? `
       <div class="card">
-        <div class="card-title">Độ Tin Cậy Gian Hàng</div>
+        <div class="card-title">${escapeHtml(t('merchantCardTitle'))}</div>
         <div class="stats-grid">
           <div class="stat-box">
-            <div class="stat-label">Điểm tin cậy</div>
+            <div class="stat-label">${escapeHtml(t('merchantTrustScore'))}</div>
             <div class="stat-val" style="color: #34d399;">${formatSafeNumber(merchant.trust_score, { min: 0, max: 100 })}/100</div>
           </div>
           <div class="stat-box">
-            <div class="stat-label">Rủi ro lừa đảo / đánh giá</div>
-            <div class="stat-val">${formatSafeNumber(merchant.dosafe_risk_score, { min: 0, max: 100 })} / ${reviewRiskText(merchant.review_risk_score)}</div>
+            <div class="stat-label">${escapeHtml(t('merchantRiskPair'))}</div>
+            <div class="stat-val">${formatSafeNumber(merchant.dosafe_risk_score, { min: 0, max: 100 })} / ${escapeHtml(reviewRiskText(merchant.review_risk_score))}</div>
           </div>
         </div>
       </div>
@@ -437,15 +443,15 @@ function renderPanelContent(
   const historyHtml = lookup.priceHistory
     ? `
       <div class="card">
-        <div class="card-title">Biến Động Lịch Sử Giá</div>
+        <div class="card-title">${escapeHtml(t('historyTitle'))}</div>
         ${buildSvgSparkline(lookup.priceHistory.points)}
         <div class="stats-grid">
           <div class="stat-box">
-            <div class="stat-label">Đáy Lịch Sử</div>
+            <div class="stat-label">${escapeHtml(t('historyLow'))}</div>
             <div class="stat-val" style="color: #34d399;">${formatVnd(lookup.priceHistory.lowestEverPrice)}</div>
           </div>
           <div class="stat-box">
-            <div class="stat-label">Đỉnh Lịch Sử</div>
+            <div class="stat-label">${escapeHtml(t('historyHigh'))}</div>
             <div class="stat-val">${formatVnd(lookup.priceHistory.highestEverPrice)}</div>
           </div>
         </div>
@@ -453,12 +459,12 @@ function renderPanelContent(
     `
     : '';
 
-  const categoryNameMap: Record<string, string> = {
-    smartphones: 'Điện thoại',
-    tablets: 'Máy tính bảng',
-    laptops: 'Laptop',
-    smartwatches: 'Đồng hồ thông minh',
-    earbuds: 'Tai nghe không dây',
+  const categoryNameMap: Record<string, MessageKey> = {
+    smartphones: 'categorySmartphones',
+    tablets: 'categoryTablets',
+    laptops: 'categoryLaptops',
+    smartwatches: 'categorySmartwatches',
+    earbuds: 'categoryEarbuds',
   };
   const rawCategorySlug = lookup.categorySlug || 'smartphones';
   const categorySlug = Object.prototype.hasOwnProperty.call(
@@ -467,13 +473,19 @@ function renderPanelContent(
   )
     ? rawCategorySlug
     : 'smartphones';
-  const focusLabelMap: Record<string, string> = {
-    combined: 'Tổng hợp',
-    screen: 'Màn hình',
-    performance: 'Hiệu năng',
-    camera: 'Camera / Âm thanh',
-    battery: 'Pin & Sạc',
-    value: 'Đáng tiền',
+  const focusLabelMap: Record<string, MessageKey> = {
+    combined: 'focusCombined',
+    screen: 'focusScreen',
+    performance: 'focusPerformance',
+    camera: 'focusCamera',
+    battery: 'focusBattery',
+    value: 'focusValue',
+  };
+  const focusLabel = (criterion: string) => {
+    const key = Object.prototype.hasOwnProperty.call(focusLabelMap, criterion)
+      ? focusLabelMap[criterion]
+      : undefined;
+    return key ? t(key) : criterion;
   };
 
   const standings = lookup.leaderboardStandings;
@@ -485,14 +497,14 @@ function renderPanelContent(
   const leaderboardCardHtml = overallBadge
     ? `
       <div class="card">
-        <div class="card-title">Xếp Hạng Chuyên Sâu (${escapeHtml(categoryNameMap[categorySlug] || 'Thiết bị')})</div>
+        <div class="card-title">${escapeHtml(t('leaderboardCardTitle', [t(categoryNameMap[categorySlug] ?? 'categoryFallback')]))}</div>
         <div class="stats-grid">
           <div class="stat-box">
-            <div class="stat-label">Hạng Danh Mục</div>
+            <div class="stat-label">${escapeHtml(t('leaderboardRank'))}</div>
             <div class="stat-val" style="color: #ff6b6b;">#${formatSafeNumber(overallBadge.rank, { min: 1 })} / ${formatSafeNumber(overallBadge.totalInCategory, { min: 1 })}</div>
           </div>
           <div class="stat-box">
-            <div class="stat-label">Điểm Tổng Hợp</div>
+            <div class="stat-label">${escapeHtml(t('leaderboardScore'))}</div>
             <div class="stat-val" style="color: #34d399;">${formatSafeNumber(overallBadge.score10, { min: 0, max: 10, decimals: 1 })} / 10</div>
           </div>
         </div>
@@ -502,7 +514,7 @@ function renderPanelContent(
                 ${subBadges
                   .map(
                     (sr) =>
-                      `<span style="font-size: 13px;background:#181c24;border:1px solid #2a2f3a;color:#e5e7eb;padding:3px 7px;border-radius:6px;">🏆 #${formatSafeNumber(sr.rank, { min: 1 })} ${escapeHtml(focusLabelMap[sr.criterion] || sr.criterion)} (${formatSafeNumber(sr.score10, { min: 0, max: 10, decimals: 1 })})</span>`
+                      `<span style="font-size: 13px;background:#181c24;border:1px solid #2a2f3a;color:#e5e7eb;padding:3px 7px;border-radius:6px;">🏆 #${formatSafeNumber(sr.rank, { min: 1 })} ${escapeHtml(focusLabel(sr.criterion))} (${formatSafeNumber(sr.score10, { min: 0, max: 10, decimals: 1 })})</span>`
                   )
                   .join('')}
               </div>`
@@ -557,23 +569,23 @@ function renderPanelContent(
   const radarSpreadPct = Number(radarSig?.spreadPct ?? 0);
   const radarPillHtml = radarSig
     ? radarSig.verdict === 'genuine_deal'
-      ? `<span class="verdict-pill verdict-genuine_deal" style="margin-left:6px;">🔥 Đáy giá đa sàn (-${formatSafeNumber(radarSig.savingsPct, { min: 0, max: 100 })}%)</span>`
+      ? `<span class="verdict-pill verdict-genuine_deal" style="margin-left:6px;">🔥 ${escapeHtml(t('radarPillDeal', [formatSafeNumber(radarSig.savingsPct, { min: 0, max: 100 })]))}</span>`
       : radarSig.verdict === 'fake_sale_trap'
-        ? `<span class="verdict-pill verdict-inflated_fake_sale" style="margin-left:6px;">🚨 Cảnh báo giảm giá ảo (+${formatSafeNumber(radarSig.fakeMarkupPct, { min: 0, max: 10000 })}%)</span>`
+        ? `<span class="verdict-pill verdict-inflated_fake_sale" style="margin-left:6px;">🚨 ${escapeHtml(t('radarPillTrap', [formatSafeNumber(radarSig.fakeMarkupPct, { min: 0, max: 10000 })]))}</span>`
         : Number.isFinite(radarSpreadPct) && radarSpreadPct >= 5
-          ? `<span class="verdict-pill" style="margin-left:6px;background:#1e293b;color:#38bdf8;border:1px solid #0284c7;">📊 Lệch 10 sàn ${formatSafeNumber(radarSig.spreadPct, { min: 0, max: 10000 })}%</span>`
+          ? `<span class="verdict-pill" style="margin-left:6px;background:#1e293b;color:#38bdf8;border:1px solid #0284c7;">📊 ${escapeHtml(t('radarPillSpread', [formatSafeNumber(radarSig.spreadPct, { min: 0, max: 10000 })]))}</span>`
           : ''
     : '';
 
   // Each link once; with no rival the versus slot is simply absent
   // (DOS/Rate#1299).
   const actionLinks: PanelActionLink[] = [
-    { href: detailUrl, label: 'Xem Trên Rate.vn', primary: true },
-    { href: compareUrl, label: 'So Sánh Cấu Hình' },
-    { href: leaderboardUrl, label: '🏆 Bảng Xếp Hạng' },
-    ...(versusUrl ? [{ href: versusUrl, label: '⚔️ Đối Đầu 1v1' }] : []),
-    { href: inspectUrl, label: '🔬 Kiểm tra chi tiết' },
-    { href: watchlistUrl, label: '🔔 Canh Giá Thật' },
+    { href: detailUrl, label: t('linkDetail'), primary: true },
+    { href: compareUrl, label: t('linkCompare') },
+    { href: leaderboardUrl, label: `🏆 ${t('linkLeaderboard')}` },
+    ...(versusUrl ? [{ href: versusUrl, label: `⚔️ ${t('linkVersus')}` }] : []),
+    { href: inspectUrl, label: `🔬 ${t('linkInspect')}` },
+    { href: watchlistUrl, label: `🔔 ${t('linkWatch')}` },
   ];
 
   root.innerHTML = `
@@ -591,11 +603,11 @@ function renderPanelContent(
       <p style="color: #d1d5db; font-size: 13px;">${escapeHtml(assessment.explanation)}</p>
       <div class="stats-grid">
         <div class="stat-box">
-          <div class="stat-label">Giá Đang Xem</div>
+          <div class="stat-label">${escapeHtml(t('observedPrice'))}</div>
           <div class="stat-val">${formatVnd(assessment.observedPrice ?? signal.price)}</div>
         </div>
         <div class="stat-box">
-          <div class="stat-label">Trung Vị Thị Trường</div>
+          <div class="stat-label">${escapeHtml(t('marketMedian'))}</div>
           <div class="stat-val">${formatVnd(assessment.marketMedianPrice)}</div>
         </div>
       </div>
@@ -707,7 +719,7 @@ async function runQuickQuery(query: string): Promise<void> {
 
   root.innerHTML = `
     <div class="card">
-      <p style="color: #9ca3af;">Đang kiểm tra nhanh dữ liệu cho "${escapeHtml(query.trim())}"...</p>
+      <p style="color: #9ca3af;">${escapeHtml(t('quickLookupLoading', [query.trim()]))}</p>
     </div>
   `;
 
@@ -753,6 +765,7 @@ async function runQuickQuery(query: string): Promise<void> {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
+  applyDocumentMessages(document);
   const btnRefresh = document.getElementById('btn-refresh');
   const formQuickInspect = document.getElementById(
     'form-quick-inspect'

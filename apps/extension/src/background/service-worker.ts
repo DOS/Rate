@@ -17,6 +17,7 @@ import {
   sanitizeExtensionProductSignal,
   selectFreshestSessionSignal,
 } from '../security-guards.js';
+import { t } from '../i18n.js';
 import { resolveActionBadge } from '../verdict-display.js';
 
 const DEFAULT_SETTINGS: ExtensionSettings = {
@@ -431,7 +432,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         if (!rawQuery) {
           sendResponse({
             ok: false,
-            error: 'Vui lòng nhập tên sản phẩm hoặc dán link TMĐT.',
+            error: t('quickQueryEmpty'),
           });
           return;
         }

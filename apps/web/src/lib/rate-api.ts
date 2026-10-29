@@ -1599,6 +1599,31 @@ export function resolveIncludeInRating(
  * Fetch reviews across listings grouped under a master product,
  * including JReviews vote metrics and AI transparency flags.
  */
+/**
+ * Whether a master product id names a published product. Reads that take an id
+ * from a request (reviews by `masterProductId`) serve only what the slug path
+ * would (DOS/Rate#1309).
+ */
+export async function isPublishedMasterProduct(
+  masterId: string
+): Promise<boolean> {
+  const supabase = getRateClient();
+  const { data, error } = await supabase
+    .from('master_products')
+    .select('id')
+    .eq('id', masterId)
+    .eq('status', 'published')
+    .maybeSingle();
+  if (error) {
+    log.error('master product status lookup failed', {
+      masterId,
+      message: error.message,
+    });
+    throw new RateDataUnavailableError('master product', error);
+  }
+  return Boolean(data);
+}
+
 export async function getMasterProductReviews(
   masterId: string
 ): Promise<ReviewItem[]> {
@@ -3363,9 +3388,7 @@ export async function getMerchantProfileBase(
   const clusterIds = Array.from(
     new Set(rawProducts.map((p) => p.cluster_id).filter(Boolean))
   ) as string[];
-  const productIds = rawProducts.map((p) => p.id);
-
-  const [masterRows, catsRes, reviewRows] = await Promise.all([
+  const [masterRows, catsRes] = await Promise.all([
     // Published only: the product page serves no other status, so a draft
     // master would be linked to a 404 (DOS/Rate#769). Its listings show as
     // unclustered.
@@ -3379,15 +3402,27 @@ export async function getMerchantProfileBase(
         .eq('status', 'published')
     ),
     supabase.from('categories').select('id, slug'),
-    readInChunks(productIds, 'merchant profile', (chunk) =>
+  ]);
+  // Reviews of a listing whose product is not published (draft, archived) stay
+  // out, as on the product's own review paths (DOS/Rate#1309); an unclustered
+  // listing's reviews show.
+  const publishedMasterIds = new Set(
+    (masterRows as Array<{ id: string }>).map((m) => m.id)
+  );
+  const productIds = rawProducts
+    .filter((p) => !p.cluster_id || publishedMasterIds.has(p.cluster_id))
+    .map((p) => p.id);
+  const reviewRows = await readInChunks(
+    productIds,
+    'merchant profile',
+    (chunk) =>
       supabase
         .from('reviews')
         .select('*, review_flags(*)')
         .in('product_id', chunk)
         .order('created_at', { ascending: false })
         .limit(60)
-    ),
-  ]);
+  );
   if (catsRes.error) {
     throw new RateDataUnavailableError('merchant profile', catsRes.error);
   }
@@ -3908,8 +3943,17 @@ export async function getRatePlatformStats(): Promise<RatePlatformStats> {
     });
   }
 
-  const mappedReviews: RatePlatformStats['recentReviewsSample'] =
-    rawReviews.map((r) => {
+  // A review of a listing whose product is not published (draft, archived) is
+  // not sampled; an unclustered listing's is (DOS/Rate#1309). masterRows holds
+  // the published masters only.
+  const sampledListingIds = new Set(
+    prodRows
+      .filter((p) => !p.cluster_id || masterSlugById.has(p.cluster_id))
+      .map((p) => p.id)
+  );
+  const mappedReviews: RatePlatformStats['recentReviewsSample'] = rawReviews
+    .filter((r) => sampledListingIds.has(r.product_id))
+    .map((r) => {
       const rawVf = Array.isArray(r.review_flags)
         ? r.review_flags[0]
         : r.review_flags;

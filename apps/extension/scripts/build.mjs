@@ -31,7 +31,13 @@ async function main() {
     );
   }
 
-  // 3. Bundle each entry with esbuild so every output is self-contained.
+  // 3. Copy the chrome.i18n catalogues (manifest default_locale "vi",
+  //    DOS/Rate#1304); Chrome reads them from _locales next to manifest.json.
+  fs.cpSync(path.join(srcDir, '_locales'), path.join(distDir, '_locales'), {
+    recursive: true,
+  });
+
+  // 4. Bundle each entry with esbuild so every output is self-contained.
   //    The service worker and side panel load as ES modules (manifest
   //    "type": "module", <script type="module">); content scripts cannot use
   //    import, so that entry is an IIFE.

@@ -14,7 +14,7 @@ Rate.vn - So Sánh Giá, Lịch Sử Giá & Lọc Đánh Giá Ảo AI
 
 ### Short Summary (<= 132 characters)
 
-Kiểm tra lịch sử giá 90 ngày, phát hiện giảm giá ảo, tìm nơi bán rẻ hơn và lọc đánh giá seeding bằng AI trên Shopee, Lazada, Tiki.
+Xem lịch sử giá 90 ngày, phát hiện giảm giá ảo, tìm nơi bán rẻ hơn, lọc đánh giá ảo bằng AI trên 10 sàn và chuỗi bán lẻ Việt Nam.
 
 ### Detailed Description
 

@@ -384,12 +384,40 @@ async function testBoundedInputs() {
   console.warn('  ✅ Offsets, platforms and body sizes are bounded');
 }
 
+// Inspect and lookup share a per-IP limit (DOS/Rate#1307).
+async function testInspectRateLimit() {
+  const { NextRequest } = await import('next/server');
+  const inspect = await import('../inspect/route');
+  const lookup = await import('../lookup/route');
+  const ask = (route: typeof inspect | typeof lookup, ip: string) =>
+    route.GET(
+      new NextRequest('http://localhost/api/v1/rate/inspect?q=iphone', {
+        headers: { 'x-forwarded-for': ip },
+      })
+    );
+  for (let i = 0; i < 30; i++) {
+    const res = await ask(i % 2 ? inspect : lookup, '198.51.100.20');
+    assert.notEqual(res.status, 429, `request ${i + 1}`);
+  }
+  const limited = await ask(inspect, '198.51.100.20');
+  assert.equal(limited.status, 429);
+  assert.equal(limited.headers.get('retry-after'), '60');
+  assert.equal((await ask(lookup, '198.51.100.20')).status, 429);
+  assert.notEqual(
+    (await ask(inspect, '198.51.100.21')).status,
+    429,
+    'another client is not limited'
+  );
+  console.warn('  ✅ Inspect and lookup are rate-limited per client IP');
+}
+
 async function main() {
   console.warn('🧪 API v1 category spec view suite (DOS/Rate#1184)');
   await testProductFilters();
   await testDetailAndCompare();
   await testExtensionLookup();
   await testBoundedInputs();
+  await testInspectRateLimit();
 }
 
 main().catch((err) => {

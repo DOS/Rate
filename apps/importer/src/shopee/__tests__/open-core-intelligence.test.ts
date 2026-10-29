@@ -477,6 +477,34 @@ async function runSuite() {
     ['MacBook Air M2 8GB 256GB bảo hành 15 tháng', 'apple:macbook-air-m2:256gb'],
     ['MacBook Pro M3 18GB 512GB bảo hành 14 tháng', 'apple:macbook-pro-m3:512gb'],
     ['MacBook Air M2 8GB 256GB 15 gói quà', 'apple:macbook-air-m2:256gb'],
+    // "<size> năm <year>" names the size and the year (DOS/Rate#1317); a "năm"
+    // with no year after it is a duration.
+    ['Máy tính bảng Apple iPad Pro 11 năm 2022 M2 128GB Wifi', 'apple:ipad-pro-m2-11:128gb'],
+    ['Laptop Apple MacBook Pro 14 năm 2023 M3 8GB 512GB', 'apple:macbook-pro-m3-14:512gb'],
+    ['MacBook Air 13 năm 2022 M2 8GB 256GB', 'apple:macbook-air-m2-13:256gb'],
+    ['MacBook Air 15 năm 2023 M2 8GB 256GB', 'apple:macbook-air-m2-15:256gb'],
+    ['iPad Air 11 năm 2024 M2 128GB', 'apple:ipad-air-m2-11:128gb'],
+    ['iPad Pro 12.9 năm 2022 M2 128GB', 'apple:ipad-pro-m2-129:128gb'],
+    ['MacBook Air M2 13 năm', 'apple:macbook-air-m2:unknown'],
+    // A date ("11/11"), RAM or SSD, a macOS name, a duration or an amount is no
+    // size, so the gift's size still stands in.
+    ['iPad Pro M4 Sale 11/11 tặng ốp 13 inch', 'apple:ipad-pro-m4-13:unknown'],
+    ['MacBook Pro M3 16 RAM 512 SSD tặng túi 14 inch', 'apple:macbook-pro-m3-14:unknown'],
+    ['MacBook Air M3 macOS Sonoma 14 tặng túi 13 inch', 'apple:macbook-air-m3-13:unknown'],
+    ['iPad Air M2 BH 12 months tặng ốp 11 inch', 'apple:ipad-air-m2-11:unknown'],
+    // ...but a size before "RAM 8GB" (a RAM size follows), "SSD" or "ROM" is the
+    // screen's, and short words like "Tr", "k", "đ" are no unit.
+    ['iPad Pro M4 11 RAM 8GB ROM 256GB tặng ốp 13 inch', 'apple:ipad-pro-m4-11:256gb'],
+    ['Macbook Air M2 13 RAM 8GB SSD 256GB', 'apple:macbook-air-m2-13:256gb'],
+    ['MacBook Pro M3 14 RAM 18GB 512GB', 'apple:macbook-pro-m3-14:512gb'],
+    ['MacBook Air M1 13 SSD 256GB', 'apple:macbook-air-m1-13:256gb'],
+    ['iPad Pro M4 11 ROM 256GB', 'apple:ipad-pro-m4-11:256gb'],
+    ['MacBook Pro 14 Tr M3 8GB 512GB', 'apple:macbook-pro-m3-14:512gb'],
+    ['iPad Pro 11 k M4 256GB', 'apple:ipad-pro-m4-11:256gb'],
+    // A bare gift number is the gift's: the product's own size after it wins.
+    ['iPad Pro M4 tặng ốp 11 | 13 WiFi', 'apple:ipad-pro-m4-13:unknown'],
+    ['iPad Pro M4 13 tặng ốp 11 tặng bút', 'apple:ipad-pro-m4-13:unknown'],
+    ['iPad Pro M4 tặng ốp 11 tặng bút', 'apple:ipad-pro-m4-11:unknown'],
     // A number after "cho/for" (a school year, an age) is no size of the product.
     [
       'iPad Pro M4 Wifi 256GB tặng bao da 13 inch cho học sinh lớp 11',
@@ -735,6 +763,7 @@ async function runSuite() {
     ['Apple Watch Series 10 GPS tặng ốp 42mm / 46mm', 'apple:watch-series-10:64gb'],
     ['Apple Watch Series 10 GPS 46 tặng ốp 42mm', 'apple:watch-series-10:64gb'],
     ['Apple Watch Series 10 GPS giảm 40% tặng ốp 46mm', 'apple:watch-series-10-46mm:64gb'],
+    ['Apple Watch Series 10 giảm 44 nghìn tặng ốp 46mm', 'apple:watch-series-10-46mm:64gb'],
     // A size listed right after the box's is a list, not the watch's own case.
     ['Apple Watch Series 10 kèm hộp 46mm | 42mm', 'apple:watch-series-10-46mm:64gb'],
     // "size 46" beats a box's size; a band's "size 42" is not the watch's.

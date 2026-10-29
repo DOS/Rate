@@ -5,6 +5,7 @@ import {
   normalizeFiveStarRating,
   shouldRenderTrustPill,
 } from '../security-guards.js';
+import { escapeHtml, t } from '../i18n.js';
 import type { ExtensionLookupData } from '../types.js';
 import { buildPillAriaLabel, resolvePillTheme } from '../verdict-display.js';
 
@@ -16,16 +17,7 @@ function removeTrustPillHost(): void {
 }
 
 function formatCurrencyVnd(amount: number | null | undefined): string {
-  return formatSafeExtensionVnd(amount, 'Đang cập nhật');
-}
-
-function escapeHtml(raw: string): string {
-  return raw
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
+  return formatSafeExtensionVnd(amount, t('priceUpdating'));
 }
 
 /**
@@ -67,19 +59,22 @@ function renderShadowTrustPill(lookup: ExtensionLookupData): void {
 
     const cheaperSummary =
       assessment.cheaperOfferCount > 0 && assessment.maxSavingsAmount > 0
-        ? `Rẻ hơn tại ${formatSafeNumber(assessment.cheaperOfferCount, { min: 1 })} nơi (-${formatCurrencyVnd(assessment.maxSavingsAmount)})`
+        ? t('pillCheaperAt', [
+            formatSafeNumber(assessment.cheaperOfferCount, { min: 1 }),
+            formatCurrencyVnd(assessment.maxSavingsAmount),
+          ])
         : assessment.marketMinPrice
-          ? `Đáy thị trường: ${formatCurrencyVnd(assessment.marketMinPrice)}`
-          : 'Bấm để xem lịch sử giá & lọc review ảo';
+          ? t('pillMarketLow', [formatCurrencyVnd(assessment.marketMinPrice)])
+          : t('pillPrompt');
     const radarSig = lookup.radarSignal;
     const radarSpreadPct = Number(radarSig?.spreadPct ?? 0);
     const radarChipHtml = radarSig
       ? radarSig.verdict === 'genuine_deal'
-        ? `<span class="radar-chip radar-deal">🔥 Đáy đa sàn (-${formatSafeNumber(radarSig.savingsPct, { min: 0, max: 100 })}%)</span>`
+        ? `<span class="radar-chip radar-deal">🔥 ${escapeHtml(t('pillRadarDeal', [formatSafeNumber(radarSig.savingsPct, { min: 0, max: 100 })]))}</span>`
         : radarSig.verdict === 'fake_sale_trap'
-          ? `<span class="radar-chip radar-trap">🚨 Bẫy Sale (+${formatSafeNumber(radarSig.fakeMarkupPct, { min: 0, max: 10000 })}%)</span>`
+          ? `<span class="radar-chip radar-trap">🚨 ${escapeHtml(t('pillRadarTrap', [formatSafeNumber(radarSig.fakeMarkupPct, { min: 0, max: 10000 })]))}</span>`
           : Number.isFinite(radarSpreadPct) && radarSpreadPct >= 5
-            ? `<span class="radar-chip radar-spread">📊 Lệch ${formatSafeNumber(radarSig.spreadPct, { min: 0, max: 10000 })}%</span>`
+            ? `<span class="radar-chip radar-spread">📊 ${escapeHtml(t('pillRadarSpread', [formatSafeNumber(radarSig.spreadPct, { min: 0, max: 10000 })]))}</span>`
             : ''
       : '';
 
@@ -191,13 +186,13 @@ function renderShadowTrustPill(lookup: ExtensionLookupData): void {
             ${radarChipHtml}
             ${
               trustedRating
-                ? `<span class="rating-tag">★ ${formatSafeNumber(trustedRating, { min: 0, max: 5, decimals: 1 })}${authenticRatio == null ? '' : ` (${formatSafeNumber(authenticRatio, { min: 0, max: 100 })}% thật)`}</span>`
+                ? `<span class="rating-tag">★ ${formatSafeNumber(trustedRating, { min: 0, max: 5, decimals: 1 })}${authenticRatio == null ? '' : ` ${escapeHtml(t('pillAuthentic', [formatSafeNumber(authenticRatio, { min: 0, max: 100 })]))}`}</span>`
                 : ''
             }
           </div>
           <div class="sub-row">${escapeHtml(cheaperSummary)}</div>
         </div>
-        <span class="cta-btn" aria-hidden="true">Chi tiết</span>
+        <span class="cta-btn" aria-hidden="true">${escapeHtml(t('pillDetails'))}</span>
       </div>
     `;
 

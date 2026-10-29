@@ -46,6 +46,7 @@ const listingRow = {
 };
 
 const listingUrls: string[] = [];
+const reviewQueries: string[] = [];
 
 type Route = 'merchant' | 'merchantBySlug' | 'listings' | 'other';
 
@@ -85,6 +86,7 @@ function installFetch(options: {
     );
     const route = routeOf(url);
     if (route === 'listings') listingUrls.push(url.search);
+    if (route === 'reviews') reviewQueries.push(decodeURIComponent(url.search));
     const entry: Recorded = { route, start: clock++, end: -1 };
     calls.push(entry);
     await new Promise((resolve) => setTimeout(resolve, delay));
@@ -500,6 +502,33 @@ async function main() {
 
   await new Promise((resolve) => setTimeout(resolve, 50));
   assert.deepEqual(unhandled, [], 'no read may fail unhandled');
+
+  // 6. Reviews of a listing whose product is not published stay out of the
+  //    profile; an unclustered listing's reviews are read (DOS/Rate#1309).
+  {
+    const DRAFT_LISTING_ID = '00000000-0000-4000-a000-000000001309';
+    installFetch({
+      listings: [
+        listingRow,
+        {
+          ...listingRow,
+          id: DRAFT_LISTING_ID,
+          cluster_id: '00000000-0000-4000-9000-000000001309',
+        },
+        { ...listingRow, id: UNCLUSTERED_LISTING_ID, cluster_id: null },
+      ],
+    });
+    reviewQueries.length = 0;
+    const base = await getMerchantProfileBase(MERCHANT_ID);
+    assert.ok(base);
+    const read = reviewQueries.join(' ');
+    assert.ok(read.includes(LISTING_ID), 'a published listing is read');
+    assert.ok(read.includes(UNCLUSTERED_LISTING_ID), 'an unclustered one too');
+    assert.ok(
+      !read.includes(DRAFT_LISTING_ID),
+      'a listing of an unpublished product has no review read'
+    );
+  }
 
   console.warn('  ✅ merchant profile reads suite passed');
 }

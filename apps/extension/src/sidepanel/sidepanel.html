@@ -4,7 +4,8 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="color-scheme" content="dark" />
-  <title>Rate.vn - Trợ Lý Lịch Sử Giá &amp; Chống Giảm Giá Ảo</title>
+  <!-- Text comes from _locales through data-i18n* at load (DOS/Rate#1304). -->
+  <title>Rate.vn</title>
   <style>
     :root {
       --bg-base: #0f1113;
@@ -268,47 +269,46 @@
       <span class="brand-dot"></span>
       <span>Rate.vn</span>
     </div>
-    <button id="btn-refresh" class="refresh-btn" type="button">Làm mới</button>
+    <button id="btn-refresh" class="refresh-btn" type="button" data-i18n="refresh"></button>
   </div>
 
   <div class="card">
-    <div class="card-title">Tra Cứu Nhanh Link TMĐT Hoặc Tên Máy</div>
+    <div class="card-title" data-i18n="quickLookupTitle"></div>
     <form id="form-quick-inspect" style="display: flex; gap: 6px;">
       <input
         id="inp-quick-query"
-        aria-label="Link sản phẩm hoặc tên máy cần tra cứu"
+        data-i18n-aria-label="quickLookupAria"
+        data-i18n-placeholder="quickLookupPlaceholder"
         class="input-url"
         style="margin-top: 0; flex: 1;"
         type="text"
-        placeholder="Dán link Shopee/TikTok/Lazada hoặc gõ iPhone 16 Pro Max..."
       />
       <button
         id="btn-quick-query"
         type="submit"
         style="background: var(--accent); color: #fff; border: none; border-radius: 8px; padding: 7px 12px; font-size: 13px; font-weight: 700; cursor: pointer; white-space: nowrap;"
-      >
-        Kiểm tra
-      </button>
+        data-i18n="quickLookupSubmit"
+      ></button>
     </form>
   </div>
 
   <div id="panel-root" aria-live="polite">
     <div class="card">
-      <p style="color: #9ca3af;">Đang đồng bộ thông tin sản phẩm từ trang đang mở...</p>
+      <p style="color: #9ca3af;" data-i18n="panelLoading"></p>
     </div>
   </div>
 
   <div class="card">
-    <div class="card-title">Quyền Riêng Tư &amp; Cấu Hình Kết Nối</div>
+    <div class="card-title" data-i18n="privacyTitle"></div>
     <label class="privacy-row">
       <input type="checkbox" id="chk-crowd-optin" style="margin-top: 3px;" />
       <span>
-        <strong>Đóng góp phát hiện sản phẩm mới (chỉ khi bạn bật):</strong>
-        Khi bật, mỗi tin bán bạn mở còn được gửi vào hàng đợi kiểm duyệt độc lập của Rate.vn với: sàn, mã sản phẩm, mã gian hàng, URL đã cắt tham số theo dõi, tên sản phẩm, phiên bản đang chọn, giá bán, giá gốc, số sao và số lượt đánh giá. Không kèm tài khoản hay thông tin cá nhân.
+        <strong data-i18n="optInTitle"></strong>
+        <span data-i18n="optInBody"></span>
       </span>
     </label>
     <div style="margin-top: 10px;">
-      <label for="inp-api-base" style="font-size: 13px; color: #9ca3af;">Địa chỉ máy chủ Rate.vn:</label>
+      <label for="inp-api-base" style="font-size: 13px; color: #9ca3af;" data-i18n="apiBaseLabel"></label>
       <input id="inp-api-base" class="input-url" type="url" placeholder="https://rate.vn" />
     </div>
   </div>

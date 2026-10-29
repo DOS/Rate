@@ -325,6 +325,44 @@ async function main() {
   assert.match(versus, /export const revalidate = 60;/);
   assert.doesNotMatch(versus, /searchParams|force-dynamic/);
   assert.doesNotMatch(leaderboard, /force-dynamic/);
+  // The home page and the [locale] layout stay ISR: no request-time API and no
+  // dynamic opt-in, so the proxy's per-request CSP nonce never turns them
+  // dynamic (DOS/Rate#1323). The category pages read searchParams and render
+  // per request on purpose (#491), so their HTML carries the current nonce;
+  // a change to either mode must be deliberate.
+  const appPage = (rel: string) =>
+    fs.readFileSync(
+      path.resolve(__dirname, `../../../app/[locale]/${rel}`),
+      'utf8'
+    );
+  const home = appPage('page.tsx');
+  assert.match(home, /export const revalidate = 300;/);
+  const layout = appPage('layout.tsx');
+  assert.match(layout, /export const revalidate = 86400;/);
+  assert.match(layout, /export function generateStaticParams\(/);
+  for (const [name, src] of [
+    ['home', home],
+    ['layout', layout],
+  ] as const) {
+    assert.doesNotMatch(
+      src,
+      /searchParams:|\bheaders\(|\bcookies\(|export const dynamic\b|force-dynamic/,
+      name
+    );
+  }
+  for (const category of [
+    'smartphones',
+    'tablets',
+    'laptops',
+    'earbuds',
+    'smartwatches',
+  ]) {
+    assert.match(
+      appPage(`${category}/page.tsx`),
+      /export const dynamic = 'force-dynamic';/,
+      `${category} renders per request`
+    );
+  }
   for (const file of [
     path.resolve(__dirname, '../item-directory.ts'),
     path.resolve(__dirname, '../item-compare.ts'),

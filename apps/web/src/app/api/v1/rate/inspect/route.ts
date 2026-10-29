@@ -9,6 +9,9 @@ import {
 } from '@/server/rate/extension';
 import {
   PUBLIC_API_CORS_HEADERS,
+  extractClientRateLimitKey,
+  inspectRateLimitResponse,
+  inspectRateLimiter,
   jsonApiError,
   withPublicReviewRisk,
   parseBoundedStringParam,
@@ -31,6 +34,9 @@ export async function OPTIONS() {
  */
 export async function GET(request: NextRequest) {
   try {
+    if (!inspectRateLimiter.allow(extractClientRateLimitKey(request.headers))) {
+      return inspectRateLimitResponse(PUBLIC_API_CORS_HEADERS);
+    }
     const sp = request.nextUrl.searchParams;
     const rawQuery = parseBoundedStringParam(
       sp.get('q') || sp.get('url'),

@@ -46,14 +46,27 @@ const DB_INTERNAL_ERROR_REGEX =
   /PGRST\d+|relation\s+"[^"]+"|column\s+"[^"]+"|permission denied|syntax error at|duplicate key value|violates foreign key|violates check constraint|schema\s+"rate"|rate-api:\s*failed to/i;
 
 /**
+ * An error whose message is written for API clients (a validation message). Only
+ * these reach a response body; any other error answers with the route's fixed
+ * message (DOS/Rate#1310).
+ */
+export class PublicApiError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'PublicApiError';
+  }
+}
+
+/**
  * Audit T9: Prevent leaking internal PostgreSQL / PostgREST / Supabase schema or query errors
- * to public API consumers while preserving safe validation messages.
+ * to public API consumers. Allow-list: only a `PublicApiError` message passes, and even
+ * then not one that looks internal or is too long (DOS/Rate#1310).
  */
 export function sanitizePublicApiError(
   err: unknown,
   fallbackMessage = 'Internal server error'
 ): string {
-  if (!(err instanceof Error) || typeof err.message !== 'string') {
+  if (!(err instanceof PublicApiError) || typeof err.message !== 'string') {
     return fallbackMessage;
   }
   const msg = err.message
@@ -72,9 +85,11 @@ export function jsonApiError(
   err?: unknown,
   extraHeaders?: Record<string, string>
 ) {
-  const safeError = err
-    ? sanitizePublicApiError(err, fallbackMessage)
-    : fallbackMessage;
+  // A 5xx always answers with the fixed message: its cause is never the client's.
+  const safeError =
+    err && status < 500
+      ? sanitizePublicApiError(err, fallbackMessage)
+      : fallbackMessage;
   return NextResponse.json(
     {
       ok: false,
@@ -710,6 +725,15 @@ export function extractClientRateLimitKey(
       .replace(/\s+/g, '')
       .slice(0, 128);
   };
+  // On Vercel, the platform-set client IP first (a client cannot set it
+  // there); anywhere else that header is ordinary client input and ignored
+  // (DOS/Rate#1307).
+  if (process.env.VERCEL === '1') {
+    const platformIp = sanitizeIpCandidate(
+      headers.get('x-vercel-forwarded-for')?.split(',')[0]
+    );
+    if (platformIp) return platformIp;
+  }
   const forwardedFor = headers.get('x-forwarded-for');
   if (forwardedFor) {
     const firstIp = sanitizeIpCandidate(forwardedFor.split(',')[0]);
@@ -791,6 +815,30 @@ export function payloadTooLargeResponse(
   return NextResponse.json(
     { ok: false, error: 'Request body too large', code: 'PAYLOAD_TOO_LARGE' },
     { status: 413, headers }
+  );
+}
+
+/**
+ * Per-IP limit of the uncached inspection routes (`/inspect`, `/lookup`),
+ * per server instance (DOS/Rate#1307). A durable shared limit is #1247.
+ */
+export const inspectRateLimiter = new BoundedSlidingWindowRateLimiter({
+  windowMs: 60_000,
+  maxRequests: 30,
+  maxBuckets: 5_000,
+});
+
+/** The 429 the inspection routes answer past `inspectRateLimiter`. */
+export function inspectRateLimitResponse(
+  headers: Record<string, string>
+): NextResponse {
+  return NextResponse.json(
+    {
+      ok: false,
+      error: 'Rate limit exceeded. Maximum 30 inspections per minute.',
+      code: 'RATE_LIMIT_EXCEEDED',
+    },
+    { status: 429, headers: { ...headers, 'Retry-After': '60' } }
   );
 }
 

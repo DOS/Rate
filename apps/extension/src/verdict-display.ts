@@ -1,3 +1,4 @@
+import { t } from './i18n.js';
 import type { ExtensionLookupData } from './types.js';
 
 type BadgeLookup = Pick<
@@ -36,13 +37,13 @@ export function resolveActionBadge(
   }
   switch (verdict) {
     case 'inflated_fake_sale':
-      return { text: 'ẢO!', color: '#d83030' };
+      return { text: t('badgeFakeSale'), color: '#d83030' };
     case 'genuine_deal':
-      return { text: 'TỐT', color: '#2dba69' };
+      return { text: t('badgeGenuineDeal'), color: '#2dba69' };
     case 'above_market':
-      return { text: 'CAO', color: WARNING_COLOR };
+      return { text: t('badgeAboveMarket'), color: WARNING_COLOR };
     case 'fair_market_price':
-      return { text: 'OK', color: '#3b82f6' };
+      return { text: t('badgeFairPrice'), color: '#3b82f6' };
     default:
       return { text: '?', color: '#6b7280' };
   }
@@ -105,6 +106,6 @@ export function buildPillAriaLabel(
 ): string {
   const parts = [`Rate.vn: ${badgeLabel.trim()}`];
   if (summary.trim()) parts.push(summary.trim());
-  parts.push('Mở bảng phân tích giá');
+  parts.push(t('pillOpenPanel'));
   return parts.join('. ');
 }

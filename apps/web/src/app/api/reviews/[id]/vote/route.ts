@@ -1,7 +1,11 @@
 import { revalidateTag } from 'next/cache';
 import { NextRequest, NextResponse } from 'next/server';
-import { RATE_CACHE_TAGS } from '@/server/rate';
 import {
+  masterReviewsCacheTag,
+  productCacheTag,
+} from '@/server/rate/cache-tags';
+import {
+  BoundedSlidingWindowRateLimiter,
   resolveReviewVoteInput,
   sanitizePublicApiError,
   type ReviewReportReason,
@@ -12,6 +16,16 @@ import { authenticateRateRequest } from '@/server/rate/request-auth';
 import { createLogger, serializeError } from '@/lib/logger';
 
 const log = createLogger('api.reviews.vote');
+
+// Cache flushes per voter (DOS/Rate#1306): a vote that changes counts
+// revalidates the review caches and its product's page, at most this often
+// per voter on one instance. Votes past it still count; the caches catch up
+// at their own revalidate interval.
+const voteRevalidationLimiter = new BoundedSlidingWindowRateLimiter({
+  windowMs: 60_000,
+  maxRequests: 6,
+  maxBuckets: 5_000,
+});
 
 const REVIEW_VOTE_CORS_HEADERS: Record<string, string> = {
   'Access-Control-Allow-Origin': '*',
@@ -208,6 +222,25 @@ export async function POST(
         );
       }
     } else {
+      // The same vote again changes nothing: no write, no cache flush. Its
+      // own row is readable to the voter (RLS); if it is not, vote as before.
+      const { data: current } = await rateClient
+        .from('review_votes')
+        .select('vote, reported, report_reason')
+        .eq('review_id', reviewId)
+        .eq('voter_id', voterId)
+        .maybeSingle();
+      const sameVote =
+        current !== null &&
+        current !== undefined &&
+        (voteType === 'report'
+          ? current.reported === true &&
+            (current.vote ?? null) === null &&
+            (current.report_reason ?? null) === reportReason
+          : current.vote === voteType && current.reported !== true);
+      if (sameVote) votesChanged = false;
+    }
+    if (voteType !== 'clear' && votesChanged) {
       const votePayload: {
         review_id: string;
         voter_id: string;
@@ -291,13 +324,14 @@ export async function POST(
       );
     }
 
-    for (const tag of votesChanged
-      ? [
-          RATE_CACHE_TAGS.REVIEWS,
-          RATE_CACHE_TAGS.PRODUCTS,
-          RATE_CACHE_TAGS.STATS,
-        ]
-      : []) {
+    // This product's reviews and page only, not the whole catalogue
+    // (DOS/Rate#1306); global review lists and stats catch up on their own
+    // interval.
+    const revalidate =
+      votesChanged && voteRevalidationLimiter.allow(voterId)
+        ? await reviewProductTags(rateClient, reviewId)
+        : [];
+    for (const tag of revalidate) {
       try {
         revalidateTag(tag, 'max');
       } catch {
@@ -329,9 +363,51 @@ export async function POST(
     return NextResponse.json(
       {
         ok: false,
-        error: sanitizePublicApiError(error, 'Failed to vote on review'),
+        error: 'Failed to vote on review',
       },
       { status: 500, headers: REVIEW_VOTE_CORS_HEADERS }
     );
+  }
+}
+
+/**
+ * The cache tags of a review's product (its variant master): its reviews and
+ * its page. None when they cannot be read; the caches then catch up on their
+ * own interval.
+ */
+async function reviewProductTags(
+  rateClient: Awaited<
+    ReturnType<typeof authenticateRateRequest>
+  > extends infer A
+    ? A extends { ok: true; rateClient: infer C }
+      ? C
+      : never
+    : never,
+  reviewId: string
+): Promise<string[]> {
+  try {
+    const { data: review } = await rateClient
+      .from('reviews')
+      .select('product_id')
+      .eq('id', reviewId)
+      .maybeSingle();
+    if (!review?.product_id) return [];
+    const { data: listing } = await rateClient
+      .from('products')
+      .select('cluster_id')
+      .eq('id', review.product_id)
+      .maybeSingle();
+    if (!listing?.cluster_id) return [];
+    const { data: master } = await rateClient
+      .from('master_products')
+      .select('slug')
+      .eq('id', listing.cluster_id)
+      .maybeSingle();
+    return [
+      masterReviewsCacheTag(listing.cluster_id),
+      ...(master?.slug ? [productCacheTag(master.slug)] : []),
+    ];
+  } catch {
+    return [];
   }
 }

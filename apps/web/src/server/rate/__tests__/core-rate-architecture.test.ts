@@ -367,6 +367,17 @@ async function runCoreArchitectureSuite() {
     'https://rate.vn/compare'
   );
   assert.equal(redirectCsCompare.cookies.get('NEXT_LOCALE')?.value, 'cs');
+  // A doubled slash after the locale stays on the site (no "//host" target).
+  const redirectEnDoubleSlash = middleware(
+    new NextRequest('https://rate.vn/en//evil.example/x', {
+      headers: { 'x-forwarded-proto': 'https', host: 'rate.vn' },
+    })
+  );
+  assert.equal(redirectEnDoubleSlash.status, 308);
+  assert.equal(
+    redirectEnDoubleSlash.headers.get('location'),
+    'https://rate.vn/evil.example/x'
+  );
 
   const unprefixedEnRes = middleware(
     new NextRequest('https://rate.vn/', {
@@ -2429,6 +2440,7 @@ async function runCoreArchitectureSuite() {
 
   // 48. Unified API v1 Error Sanitizer & Bounded Query Parsers (T9) + Pure Domain Module rate-domain.ts (T12) (#170)
   const {
+    PublicApiError,
     sanitizePublicApiError,
     jsonApiError,
     parseBoundedIntParam,
@@ -2444,11 +2456,54 @@ async function runCoreArchitectureSuite() {
   );
   assert.equal(
     sanitizePublicApiError(
-      new Error('Missing required slug parameter'),
+      new PublicApiError('Missing required slug parameter'),
       'Fallback error'
     ),
     'Missing required slug parameter',
-    'Must preserve short, non-DB validation messages'
+    'Must preserve short validation messages written for clients'
+  );
+  // Allow-list, not deny-list: any other error, even a harmless-looking one,
+  // answers with the fallback (DOS/Rate#1310).
+  assert.equal(
+    sanitizePublicApiError(
+      new Error('Missing required slug parameter'),
+      'Fallback error'
+    ),
+    'Fallback error'
+  );
+  assert.equal(
+    sanitizePublicApiError(
+      new TypeError("Cannot read properties of undefined (reading 'id')"),
+      'Fallback error'
+    ),
+    'Fallback error'
+  );
+  assert.equal(
+    sanitizePublicApiError(
+      new PublicApiError('PGRST116: relation "rate.items" does not exist'),
+      'Fallback error'
+    ),
+    'Fallback error',
+    'a public error that looks internal is still masked'
+  );
+  // A 5xx never carries the error's message, even a public one.
+  const err5xx = jsonApiError(
+    503,
+    'Service unavailable',
+    new PublicApiError('Upstream shop timed out')
+  );
+  assert.equal(
+    ((await err5xx.json()) as { error: string }).error,
+    'Service unavailable'
+  );
+  const err4xx = jsonApiError(
+    400,
+    'Bad request',
+    new PublicApiError('Invalid slug')
+  );
+  assert.equal(
+    ((await err4xx.json()) as { error: string }).error,
+    'Invalid slug'
   );
   assert.equal(parseBoundedIntParam('999', 24, 1, 100), 100);
   assert.equal(parseBoundedIntParam('-5', 24, 1, 100), 1);
@@ -4725,6 +4780,16 @@ async function runCoreArchitectureSuite() {
               created_at: '2026-10-18T10:00:00.000Z',
               review_flags: [],
             },
+            // A review of a draft product's listing (DOS/Rate#1309).
+            {
+              id: 'rev-stats-draft',
+              product_id: 'prod-sample-draft',
+              author_name: 'An',
+              rating_star: 1,
+              comment: 'Bản nháp, chưa được xuất bản.',
+              created_at: '2026-10-18T11:00:00.000Z',
+              review_flags: [],
+            },
           ]),
           { status: 200, headers: { 'content-type': 'application/json' } }
         );
@@ -4740,6 +4805,11 @@ async function runCoreArchitectureSuite() {
               id: 'prod-sample-1',
               title: 'Samsung Galaxy S24 Ultra 256GB Chính Hãng',
               cluster_id: 'mp-stats-1',
+            },
+            {
+              id: 'prod-sample-draft',
+              title: 'Samsung Galaxy S25 Edge (draft)',
+              cluster_id: 'mp-stats-draft',
             },
           ]),
           { status: 200, headers: { 'content-type': 'application/json' } }
@@ -4766,6 +4836,11 @@ async function runCoreArchitectureSuite() {
       platformStats.recentReviewsSample[0]?.masterSlug,
       'samsung-galaxy-s24-ultra',
       'getRatePlatformStats must resolve recent review masterSlug via scoped .in(id, sampleProductIds) (#386)'
+    );
+    assert.deepEqual(
+      platformStats.recentReviewsSample.map((r) => r.id),
+      ['rev-stats-1'],
+      'a review of an unpublished product is not sampled (DOS/Rate#1309)'
     );
     assert.ok(
       !statsFetchedUrls.some(
@@ -5289,11 +5364,16 @@ async function runCoreArchitectureSuite() {
       path.join(repoRoot, 'apps/web/src/app/api/reviews/[id]/vote/route.ts'),
       'utf8'
     );
+    // A vote flushes only the review caches and its product's page, not the
+    // global stats (DOS/Rate#1306); a new review still refreshes the stats.
     assert.ok(
       reviewsRouteSrc402.includes('RATE_CACHE_TAGS.STATS') &&
-        voteRouteSrc402.includes('RATE_CACHE_TAGS.STATS') &&
+        voteRouteSrc402.includes('masterReviewsCacheTag(') &&
+        !voteRouteSrc402.includes('RATE_CACHE_TAGS.REVIEWS') &&
+        voteRouteSrc402.includes('productCacheTag(') &&
+        !voteRouteSrc402.includes('RATE_CACHE_TAGS.PRODUCTS') &&
         voteRouteSrc402.includes('authenticateRateRequest('),
-      'POST /api/v1/rate/reviews and POST /api/reviews/[id]/vote must revalidate RATE_CACHE_TAGS.STATS and use authenticateRateRequest (#402)'
+      'POST /api/v1/rate/reviews must revalidate RATE_CACHE_TAGS.STATS; POST /api/reviews/[id]/vote must revalidate the review caches and its product tag only, and use authenticateRateRequest (#402, #1306)'
     );
   }
 
@@ -9044,6 +9124,18 @@ async function runCoreArchitectureSuite() {
       'x-forwarded-for': ' 203.0.113.10\t99 , 10.0.0.1 ',
     });
     assert.equal(extractClientRateLimitKey(wsHeaders), '203.0.113.1099');
+    // On Vercel the platform-set IP wins over a client-supplied forwarded
+    // chain; elsewhere that header is client input and ignored (#1307).
+    const vercelHeaders = new Headers({
+      'x-vercel-forwarded-for': '198.51.100.7',
+      'x-forwarded-for': '203.0.113.10, 10.0.0.1',
+    });
+    const previousVercel = process.env.VERCEL;
+    process.env.VERCEL = '1';
+    assert.equal(extractClientRateLimitKey(vercelHeaders), '198.51.100.7');
+    delete process.env.VERCEL;
+    assert.equal(extractClientRateLimitKey(vercelHeaders), '203.0.113.10');
+    if (previousVercel !== undefined) process.env.VERCEL = previousVercel;
 
     const plausibleBoolMaster = withPlausibleMinPrice(
       { min_price: true as unknown as number },
@@ -9244,7 +9336,7 @@ async function runCoreArchitectureSuite() {
     );
     assert.equal(
       apiHandlerMod.sanitizePublicApiError(
-        new Error('Invalid\u0000\r\nquery param')
+        new apiHandlerMod.PublicApiError('Invalid\u0000\r\nquery param')
       ),
       'Invalid query param'
     );
@@ -12872,6 +12964,17 @@ async function runCoreArchitectureSuite() {
     assert.equal(sanitizeAuthRedirectTarget('javascript:alert(1)'), '/');
     assert.equal(sanitizeAuthRedirectTarget(null), '/');
     assert.equal(sanitizeAuthRedirectTarget(`/${'a'.repeat(600)}`), '/');
+    // Dot segments that normalize to a protocol-relative path.
+    for (const target of [
+      '/.//evil.example/phish',
+      '/%2e//evil.example/phish',
+      '/%2E//evil.example',
+      '/a/..//evil.example/phish',
+      '/././/evil.example',
+    ]) {
+      assert.equal(sanitizeAuthRedirectTarget(target), '/', target);
+    }
+    assert.equal(sanitizeAuthRedirectTarget('/a/../watchlist'), '/watchlist');
 
     assert.equal(outcomeFromJobState('skipped_no_consent'), 'noConsent');
     assert.equal(outcomeFromJobState('rejected_invalid_url'), 'invalidUrl');
