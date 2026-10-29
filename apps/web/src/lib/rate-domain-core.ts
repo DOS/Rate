@@ -1143,6 +1143,23 @@ export function getMasterProductHref(
     : `/${catSlug}`;
 }
 
+/**
+ * The product's own URL when it is asked for under another category's path
+ * (`/laptops/<phone>`), else null. Built with `getMasterProductHref`, the way
+ * the site links products and lists them in the sitemap, so a redirect lands
+ * on the listed URL (DOS/Rate#1366). Null too when no product URL can be
+ * built: the page then renders as asked.
+ */
+export function foreignCategoryProductHref(
+  product: Parameters<typeof getMasterProductHref>[0],
+  categoryBasePath: string,
+  categorySlugById: ReadonlyMap<string, string>
+): string | null {
+  const href = getMasterProductHref(product, categorySlugById);
+  if (!/^\/[a-z]+\/[^/]+$/.test(href)) return null;
+  return href.startsWith(`${categoryBasePath}/`) ? null : href;
+}
+
 export interface MerchantListFilterParams {
   q?: string;
   platform?: string;
