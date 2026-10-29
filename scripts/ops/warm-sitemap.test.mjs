@@ -83,12 +83,19 @@ test('a 5xx is retried once and a 4xx is not', async () => {
 });
 
 test('a timeout is reported as such', async () => {
+  // AbortSignal.timeout's timer does not keep the event loop alive (a real
+  // fetch's socket does), so hold it open while the fake request hangs.
+  const keepAlive = setTimeout(() => {}, 5000);
   const fetchImpl = (_url, init) =>
     new Promise((_resolve, reject) => {
       init.signal.addEventListener('abort', () => reject(init.signal.reason));
     });
-  const r = await getOnce(`${BASE}/slow`, { timeoutMs: 20, fetchImpl });
-  assert.deepEqual(r, { error: 'timeout' });
+  try {
+    const r = await getOnce(`${BASE}/slow`, { timeoutMs: 20, fetchImpl });
+    assert.deepEqual(r, { error: 'timeout' });
+  } finally {
+    clearTimeout(keepAlive);
+  }
 });
 
 test('never more than the given number of requests at once, results in order', async () => {
