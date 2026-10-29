@@ -1,9 +1,15 @@
 'use client';
-import React, { useEffect, useId, useState, useTransition } from 'react';
+import React, {
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  useTransition,
+} from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useLocale, useTranslations } from 'next-intl';
 import { BsFunnel, BsStarFill } from 'react-icons/bs';
-import { Link, usePathname, useRouter } from '@/lib/navigation';
+import { usePathname, useRouter } from '@/lib/navigation';
 import { startNavigationProgress } from '@/components/elementary/NavigationProgress';
 import RangeSlider from './range-slider';
 import {
@@ -174,6 +180,29 @@ export default function ListSidebarOne({
     setKeyword(currentQ);
   }, [currentQ]);
 
+  // The filter drawer on small screens, driven by React state instead of
+  // Bootstrap's JS bundle (DOS/Rate#1331); Bootstrap's CSS still styles
+  // `.offcanvas.show`. From 992px the panel is inline (`.largeshow`).
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const drawerRef = useRef<HTMLDivElement>(null);
+  const drawerTriggerRef = useRef<HTMLAnchorElement>(null);
+  const closeDrawer = () => {
+    setDrawerOpen(false);
+    drawerTriggerRef.current?.focus();
+  };
+  useEffect(() => {
+    if (!drawerOpen) return;
+    drawerRef.current?.focus();
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setDrawerOpen(false);
+        drawerTriggerRef.current?.focus();
+      }
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [drawerOpen]);
+
   useEffect(() => {
     setPriceRange([urlMinMillion, urlMaxMillion]);
   }, [urlMinMillion, urlMaxMillion]);
@@ -325,8 +354,8 @@ export default function ListSidebarOne({
     <>
       <div className="searchingSidebar">
         <div
-          className="offcanvas offcanvas-start largeshow"
-          data-bs-scroll="true"
+          ref={drawerRef}
+          className={`offcanvas offcanvas-start largeshow${drawerOpen ? ' show' : ''}`}
           tabIndex={-1}
           id="filterSlider"
           aria-labelledby="filterSliderLabel"
@@ -336,9 +365,8 @@ export default function ListSidebarOne({
             <button
               type="button"
               className="btn-close d-lg-none text-sm"
-              data-bs-dismiss="offcanvas"
-              data-bs-target="#filterSlider"
               aria-label={t('sidebar.closeAria')}
+              onClick={closeDrawer}
             ></button>
           </div>
           <div
@@ -687,16 +715,28 @@ export default function ListSidebarOne({
           </div>
         </div>
       </div>
-      <Link
+      {drawerOpen && (
+        <div
+          className="offcanvas-backdrop fade show d-lg-none"
+          onClick={closeDrawer}
+          aria-hidden="true"
+        />
+      )}
+      <a
+        ref={drawerTriggerRef}
         href="#filterSlider"
-        data-bs-toggle="offcanvas"
-        data-bs-target="#filterSlider"
+        role="button"
         aria-controls="filterSlider"
+        aria-expanded={drawerOpen}
         className="fixed-bottom z-sticky d-lg-none filterButtons"
+        onClick={(e) => {
+          e.preventDefault();
+          setDrawerOpen(true);
+        }}
       >
         <BsFunnel className="me-1" />
         {t('sidebar.filterTitle')}
-      </Link>
+      </a>
     </>
   );
 }
