@@ -403,24 +403,71 @@ function specSchemaAt(spec: Json, schema: unknown, path: string[]): unknown {
   return nodes[0] ?? null;
 }
 
-/** The value at `path` in a response body (`[]` and `*` take the first). */
-function bodyHas(body: unknown, path: string[]): boolean {
-  let node: unknown = body;
+/**
+ * Every value at `path` in a response body: `[]` takes every array element
+ * and `*` every object value. Empty when the path is missing.
+ */
+function bodyValuesAt(body: unknown, path: string[]): unknown[] {
+  let nodes: unknown[] = [body];
   for (const seg of path) {
-    if (!node || typeof node !== 'object') return false;
-    if (seg === '[]') {
-      if (!Array.isArray(node) || node.length === 0) return false;
-      node = node[0];
-    } else if (seg === '*') {
-      const values = Object.values(node as Json);
-      if (values.length === 0) return false;
-      node = values[0];
-    } else {
-      if (!(seg in (node as Json))) return false;
-      node = (node as Json)[seg];
+    const next: unknown[] = [];
+    for (const node of nodes) {
+      if (!node || typeof node !== 'object') continue;
+      if (seg === '[]') {
+        if (Array.isArray(node)) next.push(...node);
+      } else if (seg === '*') {
+        next.push(...Object.values(node as Json));
+      } else if (seg in (node as Json)) {
+        next.push((node as Json)[seg]);
+      }
+    }
+    nodes = next;
+  }
+  return nodes;
+}
+
+/**
+ * Whether `value` fits the documented schema's `type` (`integer` must be a
+ * whole number, `null` must be listed) and `enum`, following `$ref`, `allOf`
+ * and `anyOf`/`oneOf`. A schema without a type accepts anything.
+ */
+function valueFits(spec: Json, schema: unknown, value: unknown): boolean {
+  if (!schema || typeof schema !== 'object') return true;
+  const s = schema as Json;
+  if (typeof s.$ref === 'string') {
+    const name = s.$ref.replace('#/components/schemas/', '');
+    return valueFits(
+      spec,
+      ((spec.components as Json).schemas as Json)[name],
+      value
+    );
+  }
+  for (const key of ['anyOf', 'oneOf'] as const) {
+    if (Array.isArray(s[key])) {
+      return (s[key] as unknown[]).some((b) => valueFits(spec, b, value));
     }
   }
-  return true;
+  if (Array.isArray(s.allOf)) {
+    if (!(s.allOf as unknown[]).every((b) => valueFits(spec, b, value))) {
+      return false;
+    }
+  }
+  if (Array.isArray(s.enum) && !(s.enum as unknown[]).includes(value)) {
+    return false;
+  }
+  if (s.type === undefined) return true;
+  const types = Array.isArray(s.type)
+    ? (s.type as string[])
+    : [s.type as string];
+  const kind =
+    value === null ? 'null' : Array.isArray(value) ? 'array' : typeof value;
+  return types.some((t) =>
+    t === 'integer'
+      ? typeof value === 'number' && Number.isInteger(value)
+      : t === 'number'
+        ? typeof value === 'number'
+        : t === kind
+  );
 }
 
 // The OpenAPI document describes what the routes answer (DOS/Rate#1357,
@@ -451,10 +498,24 @@ async function testSpecMatchesBodies() {
         specSchemaAt(spec, okSchema(route, 'get', status), path),
         `${route} ${status}: the document has ${dotted}`
       );
+      const values = bodyValuesAt(body, path);
       assert.ok(
-        bodyHas(body, path),
+        values.length > 0,
         `${route} ${status}: the body has ${dotted}`
       );
+      // The values fit the documented type, nullability and enum, so an
+      // integer documented for a decimal (or a missing null) fails here.
+      const documentedSchema = specSchemaAt(
+        spec,
+        okSchema(route, 'get', status),
+        path
+      );
+      for (const value of values) {
+        assert.ok(
+          valueFits(spec, documentedSchema, value),
+          `${route} ${status}: ${dotted} = ${JSON.stringify(value)} does not fit the document`
+        );
+      }
     }
   };
   const radar = ['verdict', 'savingsPct', 'fakeMarkupPct', 'spreadPct'];
@@ -618,7 +679,8 @@ async function testSpecMatchesBodies() {
     name: 'Analysed store',
     is_official: true,
     follower_count: 10,
-    risk_score: 6,
+    // A decimal combined score and an integer review score, as stored.
+    risk_score: 6.5,
     review_risk_score: 6,
     review_risk_breakdown: { total_reviews: 12 },
   };
