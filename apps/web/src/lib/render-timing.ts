@@ -6,8 +6,9 @@ export interface RenderTiming {
   /** Records how long `read` takes under `name`, and returns it unchanged. */
   time<T>(name: string, read: Promise<T>): Promise<T>;
   /**
-   * Writes one log line with the total, every read settled so far and the
-   * names of those still running. Only the first call writes.
+   * Writes the one log line of the render: the total, every read settled so
+   * far, the reads that failed and those still running. Only the first call
+   * writes.
    */
   done(): void;
 }
@@ -21,21 +22,20 @@ export interface RenderTiming {
 export function startRenderTiming(route: string, key: string): RenderTiming {
   const start = performance.now();
   const reads: Record<string, number> = {};
+  const failed: string[] = [];
   const pending = new Set<string>();
   let logged = false;
   return {
     time(name, read) {
       const begun = performance.now();
       pending.add(name);
-      const record = () => {
-        const ms = Math.round(performance.now() - begun);
+      const settle = (ok: boolean) => () => {
         pending.delete(name);
-        // A read still running at done() (a streamed section) gets a line
-        // of its own when it settles.
-        if (logged) log.info('render read', { route, key, read: name, ms });
-        else reads[name] = ms;
+        if (logged) return;
+        reads[name] = Math.round(performance.now() - begun);
+        if (!ok) failed.push(name);
       };
-      read.then(record, record);
+      read.then(settle(true), settle(false));
       return read;
     },
     done() {
@@ -46,6 +46,7 @@ export function startRenderTiming(route: string, key: string): RenderTiming {
         key,
         totalMs: Math.round(performance.now() - start),
         reads,
+        failed,
         pending: [...pending],
       });
     },
