@@ -63,6 +63,26 @@ assert.equal(
 assert.equal(best('Samsung Galaxy S24 256GB', [S24_ULTRA, S24]), S24.slug);
 // "e-SIM" is not the 16e.
 assert.equal(best('iPhone 16 128GB e-SIM', searched), IPHONE_16.slug);
+// "+" is Plus.
+const S24_PLUS = m(
+  'samsung-galaxy-s24-plus-256gb',
+  'Samsung Galaxy S24+ 256GB',
+  256
+);
+assert.equal(best('Samsung Galaxy S24 256GB', [S24_PLUS, S24]), S24.slug);
+assert.equal(best('Galaxy S24+', [S24, S24_PLUS]), S24_PLUS.slug);
+assert.equal(best('Galaxy S24 Plus', [S24, S24_PLUS]), S24_PLUS.slug);
+// Letters glued to the model number make another model.
+const X14 = m('xiaomi-14-256gb', 'Xiaomi 14 256GB', 256);
+const X14T = m('xiaomi-14t-256gb', 'Xiaomi 14T 256GB', 256);
+const X14T_PRO = m('xiaomi-14t-pro-512gb', 'Xiaomi 14T Pro 512GB', 512);
+assert.equal(best('Xiaomi 14 5G', [X14T, X14T_PRO, X14]), X14.slug);
+assert.equal(best('Xiaomi 14T 256GB', [X14, X14T_PRO, X14T]), X14T.slug);
+assert.equal(best('Xiaomi 14T Pro 1TB', [X14T, X14, X14T_PRO]), X14T_PRO.slug);
+const R13 = m('xiaomi-redmi-13-128gb', 'Xiaomi Redmi 13 128GB');
+const R13C = m('xiaomi-redmi-13c-128gb', 'Xiaomi Redmi 13C 128GB');
+assert.equal(best('Xiaomi Redmi 13', [R13C, R13]), R13.slug);
+assert.equal(best('Redmi 13C', [R13, R13C]), R13C.slug);
 
 // The storage size breaks a tie between sizes of one model.
 assert.equal(
@@ -77,8 +97,9 @@ assert.deepEqual(modelTokens('Apple iPhone 16e 128GB'), [
   'apple',
   'iphone',
   '16',
-  'e',
+  '~e',
 ]);
+assert.deepEqual(modelTokens('Galaxy S24+ 1TB 5G'), ['galaxy', 's24', 'plus']);
 assert.deepEqual(modelTokens('Điện thoại'), ['dien', 'thoai']);
 
 console.warn('  ✅ lookup ranks the model a title names first (#1379)');

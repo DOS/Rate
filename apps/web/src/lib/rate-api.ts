@@ -4394,7 +4394,8 @@ export async function inspectProductOrShopUrl(
               limit: 1,
             })
           : Promise.resolve([]),
-        getMasterProducts({ search: effectiveSearchQuery, limit: 6 }),
+        // More rows than are shown, so the ranking sees an older exact model.
+        getMasterProducts({ search: effectiveSearchQuery, limit: 48 }),
       ])
     : [[], [], []];
   // Best model match first, the same ranking as the extension lookup: the
@@ -4402,7 +4403,7 @@ export async function inspectProductOrShopUrl(
   const matchedProducts = rankModelCandidates(
     effectiveSearchQuery,
     searchedProducts
-  );
+  ).slice(0, 6);
   const matchedMerchantByName =
     matchedMerchantByShopId ?? nameMatches[0] ?? shopMatches[0] ?? null;
   const merchantById = async (id: string) =>
