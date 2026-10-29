@@ -300,6 +300,20 @@ async function testDetailAndCompare() {
   );
   assert.deepEqual(mixedBody.excluded_cross_category_slugs, [EARBUD.slug]);
   assert.deepEqual(mixedBody.not_found_slugs, ['does-not-exist-xyz']);
+  // A slug in another case is the same product, compared once and not listed.
+  const upper = await compare.GET(
+    new NextRequest(
+      `http://localhost/api/v1/rate/compare?slugs=${WATCH.slug.toUpperCase()},${WATCH.slug}`
+    )
+  );
+  const upperBody = await upper.json();
+  assert.deepEqual(
+    upperBody.data.map((p: { slug: string }) => p.slug),
+    [WATCH.slug]
+  );
+  assert.deepEqual(upperBody.excluded_cross_category_slugs, []);
+  assert.deepEqual(upperBody.not_found_slugs, []);
+  assert.equal(upperBody.requested_slugs.length, 1);
   masterRows = [];
   console.warn('  ✅ API v1 detail and compare return the scoped view');
 }

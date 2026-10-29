@@ -43,22 +43,33 @@ export async function GET(request: NextRequest) {
     }
 
     const products = await getCachedCompareMasterProducts(slugs.join(','));
-    const returnedSlugSet = new Set(products.map((p) => p.slug));
+    // Slugs are looked up lowercased, so `IPhone-16` came back as `iphone-16`.
+    const returnedSlugSet = new Set(products.map((p) => p.slug.toLowerCase()));
     const lockedCategory = products[0]
       ? getMasterProductCategorySlug(products[0])
       : null;
     // A requested slug that did not come back is either a published product
     // of another category, dropped by the lock, or no published product at
-    // all (DOS/Rate#1364).
-    const missingSlugs = slugs.filter((s) => !returnedSlugSet.has(s));
-    const [offersByMasterId, missingProducts] = await Promise.all([
+    // all (DOS/Rate#1364). The lookup only labels the slug: if it fails, the
+    // slug stays where it was listed before, with the exclusions.
+    const missingSlugs = slugs.filter(
+      (s) => !returnedSlugSet.has(s.toLowerCase())
+    );
+    const [offersByMasterId, missingFound] = await Promise.all([
       getMasterProductOffersBatch(products.map((p) => p.id)),
-      Promise.all(missingSlugs.map((s) => getCachedMasterProductBySlug(s))),
+      Promise.all(
+        missingSlugs.map((s) =>
+          getCachedMasterProductBySlug(s).then(
+            (product) => product !== null,
+            () => true
+          )
+        )
+      ),
     ]);
     const excludedCrossCategorySlugs = missingSlugs.filter(
-      (_, i) => missingProducts[i]
+      (_, i) => missingFound[i]
     );
-    const notFoundSlugs = missingSlugs.filter((_, i) => !missingProducts[i]);
+    const notFoundSlugs = missingSlugs.filter((_, i) => !missingFound[i]);
 
     return NextResponse.json(
       {
