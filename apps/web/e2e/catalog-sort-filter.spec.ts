@@ -19,6 +19,16 @@ test('the catalog sort dropdown opens and closes', async ({ page }) => {
   await toggle.click();
   await page.locator('h1').first().click();
   await expect(menu).not.toHaveClass(/\bshow\b/);
+  // Keyboard: ArrowDown opens on the first item, arrows move, Tab out closes.
+  await toggle.focus();
+  await page.keyboard.press('ArrowDown');
+  await expect(menu).toHaveClass(/\bshow\b/);
+  await expect(menu.locator('.dropdown-item').first()).toBeFocused();
+  await page.keyboard.press('ArrowDown');
+  await expect(menu.locator('.dropdown-item').nth(1)).toBeFocused();
+  await page.keyboard.press('End');
+  await page.keyboard.press('Tab');
+  await expect(menu).not.toHaveClass(/\bshow\b/);
 });
 
 test('the catalog filter drawer opens and closes on a phone', async ({
@@ -36,6 +46,21 @@ test('the catalog filter drawer opens and closes on a phone', async ({
   await expect(trigger).toBeFocused();
   await trigger.click();
   await page.keyboard.press('Escape');
+  await expect(drawer).not.toHaveClass(/\bshow\b/);
+  // While open it is a modal dialog and Tab stays inside it.
+  await trigger.click();
+  await expect(drawer).toHaveAttribute('role', 'dialog');
+  await expect(drawer).toHaveAttribute('aria-modal', 'true');
+  for (let i = 0; i < 40; i++) await page.keyboard.press('Tab');
+  expect(
+    await page.evaluate(() =>
+      document.getElementById('filterSlider')?.contains(document.activeElement)
+    )
+  ).toBe(true);
+  // Widening past 992px closes the drawer, so it does not come back later.
+  await page.setViewportSize({ width: 1200, height: 844 });
+  await expect(drawer).not.toHaveClass(/\bshow\b/);
+  await page.setViewportSize({ width: 390, height: 844 });
   await expect(drawer).not.toHaveClass(/\bshow\b/);
 });
 

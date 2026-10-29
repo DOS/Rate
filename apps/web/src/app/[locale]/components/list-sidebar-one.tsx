@@ -193,14 +193,46 @@ export default function ListSidebarOne({
   useEffect(() => {
     if (!drawerOpen) return;
     drawerRef.current?.focus();
+    // From 992px the panel is inline: a drawer left open would come back on
+    // its own when the window narrows again, so close it.
+    const wide = window.matchMedia('(min-width: 992px)');
+    const onWide = () => {
+      if (wide.matches) setDrawerOpen(false);
+    };
+    // Escape closes; Tab stays inside the open drawer, as Bootstrap's did.
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         setDrawerOpen(false);
         drawerTriggerRef.current?.focus();
+        return;
+      }
+      if (e.key !== 'Tab' || !drawerRef.current) return;
+      const focusables = Array.from(
+        drawerRef.current.querySelectorAll<HTMLElement>(
+          'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+        )
+      ).filter((el) => el.offsetParent !== null);
+      if (focusables.length === 0) return;
+      const first = focusables[0]!;
+      const last = focusables[focusables.length - 1]!;
+      const active = document.activeElement;
+      if (e.shiftKey && (active === first || active === drawerRef.current)) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && active === last) {
+        e.preventDefault();
+        first.focus();
+      } else if (!drawerRef.current.contains(active)) {
+        e.preventDefault();
+        first.focus();
       }
     };
+    wide.addEventListener('change', onWide);
     document.addEventListener('keydown', onKeyDown);
-    return () => document.removeEventListener('keydown', onKeyDown);
+    return () => {
+      wide.removeEventListener('change', onWide);
+      document.removeEventListener('keydown', onKeyDown);
+    };
   }, [drawerOpen]);
 
   useEffect(() => {
@@ -357,6 +389,7 @@ export default function ListSidebarOne({
           ref={drawerRef}
           className={`offcanvas offcanvas-start largeshow${drawerOpen ? ' show' : ''}`}
           tabIndex={-1}
+          {...(drawerOpen ? { role: 'dialog', 'aria-modal': true } : {})}
           id="filterSlider"
           aria-labelledby="filterSliderLabel"
         >
