@@ -337,7 +337,7 @@ async function testBoundedInputs() {
     );
   assert.equal((await ask('platform=not-a-platform')).status, 400);
   assert.notEqual((await ask('platform=Shopee')).status, 400);
-  // JSON write bodies are read up to 16 KB.
+  // JSON write bodies are read up to 32 KB.
   const { readBoundedJsonBody, MAX_JSON_BODY_BYTES } =
     await import('@/server/rate/api-handler');
   const post = (body: string, headers: Record<string, string> = {}) =>
@@ -350,6 +350,19 @@ async function testBoundedInputs() {
     tooLarge: false,
     value: null,
   });
+  // A longest review with every non-ASCII character escaped still fits.
+  const escapedReview = JSON.stringify({
+    masterProductId: '11111111-1111-4111-8111-111111111111',
+    comment: 'ệ'.repeat(3000),
+    authorName: 'ệ'.repeat(120),
+    variation: 'ệ'.repeat(200),
+  }).replace(
+    /[^\x20-\x7e]/g,
+    (c) => `\\u${c.charCodeAt(0).toString(16).padStart(4, '0')}`
+  );
+  assert.ok(escapedReview.length > 16_384, 'the escaped body is over 16 KB');
+  const escapedRead = await readBoundedJsonBody(post(escapedReview));
+  assert.equal(escapedRead.tooLarge, false, 'an escaped longest review fits');
   const big = JSON.stringify({ a: 'x'.repeat(MAX_JSON_BODY_BYTES) });
   assert.deepEqual(await readBoundedJsonBody(post(big)), { tooLarge: true });
   assert.deepEqual(

@@ -734,8 +734,12 @@ export const SUPPORTED_PLATFORM_SLUGS: ReadonlySet<string> = new Set([
   'phongvu',
 ]);
 
-/** JSON write bodies are small: a review is the largest, about 4 KB. */
-export const MAX_JSON_BODY_BYTES = 16_384;
+/**
+ * JSON write bodies are small: a review is the largest. Its 3,000-character
+ * comment is about 18 KB when a client escapes every non-ASCII character as
+ * a \u escape (Python's json.dumps does), so the cap leaves room for that.
+ */
+export const MAX_JSON_BODY_BYTES = 32_768;
 
 /**
  * A request's JSON body, read up to `maxBytes` (DOS/Rate#1308): a larger body
