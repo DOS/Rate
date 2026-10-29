@@ -83,6 +83,28 @@ const R13 = m('xiaomi-redmi-13-128gb', 'Xiaomi Redmi 13 128GB');
 const R13C = m('xiaomi-redmi-13c-128gb', 'Xiaomi Redmi 13C 128GB');
 assert.equal(best('Xiaomi Redmi 13', [R13C, R13]), R13.slug);
 assert.equal(best('Redmi 13C', [R13, R13C]), R13C.slug);
+// A repeated suffix counts twice: the M4 Pro chip is not the M4.
+const MBP_M4 = m(
+  'apple-macbook-pro-m4-512gb',
+  'Apple MacBook Pro M4 512GB',
+  512
+);
+const MBP_M4_PRO = m(
+  'apple-macbook-pro-m4-pro-512gb',
+  'Apple MacBook Pro M4 Pro 512GB',
+  512
+);
+assert.equal(best('MacBook Pro M4', [MBP_M4_PRO, MBP_M4]), MBP_M4.slug);
+assert.equal(best('MacBook Pro M4 Pro', [MBP_M4, MBP_M4_PRO]), MBP_M4_PRO.slug);
+// A region label in the name is not a model letter.
+const IPHONE_16_VNA = m(
+  'apple-iphone-16-128gb-vn',
+  'Apple iPhone 16 VN/A 128GB'
+);
+assert.equal(
+  best('iPhone 16', [IPHONE_16E, IPHONE_16_VNA]),
+  IPHONE_16_VNA.slug
+);
 
 // The storage size breaks a tie between sizes of one model.
 assert.equal(

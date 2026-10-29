@@ -37,12 +37,19 @@ const SIZE_TOKEN =
 /** Letters glued to a model number ("16e", "14T", "13C") make a model. */
 const GLUED_MARK = '~';
 
+// A lone letter ("VN/A", "Galaxy Z") is not counted: it is noise as often as
+// a model letter.
 function isSuffix(token: string): boolean {
-  return (
-    MODEL_SUFFIXES.has(token) ||
-    token.startsWith(GLUED_MARK) ||
-    /^[a-z]$/.test(token)
-  );
+  return MODEL_SUFFIXES.has(token) || token.startsWith(GLUED_MARK);
+}
+
+/** How many times each model suffix occurs: "MacBook Pro M4 Pro" has two. */
+function suffixCounts(tokens: readonly string[]): Map<string, number> {
+  const counts = new Map<string, number>();
+  for (const t of tokens) {
+    if (isSuffix(t)) counts.set(t, (counts.get(t) ?? 0) + 1);
+  }
+  return counts;
 }
 
 export function modelTokens(text: string): string[] {
@@ -74,14 +81,15 @@ export interface ModelCandidate {
   storage_gb?: number | null;
 }
 
-function candidateTokens(candidate: ModelCandidate): Set<string> {
-  return new Set(
-    modelTokens(
-      [candidate.brand, candidate.model, candidate.name]
-        .filter((s): s is string => typeof s === 'string')
-        .join(' ')
-    )
-  );
+// The name alone: it already holds the brand and the model, and reading them
+// again would double the suffix counts.
+function candidateTokens(candidate: ModelCandidate): string[] {
+  const text =
+    candidate.name ||
+    [candidate.brand, candidate.model]
+      .filter((s): s is string => typeof s === 'string')
+      .join(' ');
+  return modelTokens(text);
 }
 
 /**
@@ -97,25 +105,19 @@ export function rankModelCandidates<T extends ModelCandidate>(
   candidates: readonly T[],
   storageGb?: number | null
 ): T[] {
-  const queryTokens = new Set(modelTokens(query));
-  const querySuffixes = [...queryTokens].filter(isSuffix);
+  const wanted = suffixCounts(modelTokens(query));
   return candidates
     .map((candidate, index) => {
-      const tokens = candidateTokens(candidate);
-      const extraSuffixes = [...tokens].filter(
-        (t) => isSuffix(t) && !queryTokens.has(t)
-      ).length;
-      const missingSuffixes = querySuffixes.filter(
-        (t) => !tokens.has(t)
-      ).length;
+      const found = suffixCounts(candidateTokens(candidate));
+      let mismatch = 0;
+      for (const suffix of new Set([...wanted.keys(), ...found.keys()])) {
+        mismatch += Math.abs(
+          (wanted.get(suffix) ?? 0) - (found.get(suffix) ?? 0)
+        );
+      }
       const storageMiss =
         storageGb && candidate.storage_gb !== storageGb ? 1 : 0;
-      return {
-        candidate,
-        index,
-        mismatch: extraSuffixes + missingSuffixes,
-        storageMiss,
-      };
+      return { candidate, index, mismatch, storageMiss };
     })
     .sort(
       (a, b) =>
