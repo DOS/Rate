@@ -7,6 +7,7 @@ import {
   getCachedMasterProductBySlug,
   getCachedMasterProductReviews,
   getCachedMasterProductReviewSummary,
+  isCachedPublishedMasterProduct,
 } from '@/server/rate';
 import {
   PUBLIC_API_CORS_HEADERS,
@@ -55,6 +56,15 @@ export async function GET(request: NextRequest) {
 
     let resolvedMasterId: string;
     if (parsedQuery.masterProductId) {
+      // Same answer as the slug path: a draft or archived product is not found.
+      if (
+        !(await isCachedPublishedMasterProduct(parsedQuery.masterProductId))
+      ) {
+        return NextResponse.json(
+          { ok: false, error: 'Product not found', code: 'NOT_FOUND' },
+          { status: 404, headers: REVIEWS_CORS_HEADERS }
+        );
+      }
       resolvedMasterId = parsedQuery.masterProductId;
     } else {
       const product = await getCachedMasterProductBySlug(parsedQuery.slug!);
