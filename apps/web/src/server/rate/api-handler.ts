@@ -710,6 +710,15 @@ export function extractClientRateLimitKey(
       .replace(/\s+/g, '')
       .slice(0, 128);
   };
+  // On Vercel, the platform-set client IP first (a client cannot set it
+  // there); anywhere else that header is ordinary client input and ignored
+  // (DOS/Rate#1307).
+  if (process.env.VERCEL === '1') {
+    const platformIp = sanitizeIpCandidate(
+      headers.get('x-vercel-forwarded-for')?.split(',')[0]
+    );
+    if (platformIp) return platformIp;
+  }
   const forwardedFor = headers.get('x-forwarded-for');
   if (forwardedFor) {
     const firstIp = sanitizeIpCandidate(forwardedFor.split(',')[0]);
@@ -718,6 +727,30 @@ export function extractClientRateLimitKey(
   const realIp = sanitizeIpCandidate(headers.get('x-real-ip'));
   if (realIp) return realIp;
   return 'anon';
+}
+
+/**
+ * Per-IP limit of the uncached inspection routes (`/inspect`, `/lookup`),
+ * per server instance (DOS/Rate#1307). A durable shared limit is #1247.
+ */
+export const inspectRateLimiter = new BoundedSlidingWindowRateLimiter({
+  windowMs: 60_000,
+  maxRequests: 30,
+  maxBuckets: 5_000,
+});
+
+/** The 429 the inspection routes answer past `inspectRateLimiter`. */
+export function inspectRateLimitResponse(
+  headers: Record<string, string>
+): NextResponse {
+  return NextResponse.json(
+    {
+      ok: false,
+      error: 'Rate limit exceeded. Maximum 30 inspections per minute.',
+      code: 'RATE_LIMIT_EXCEEDED',
+    },
+    { status: 429, headers: { ...headers, 'Retry-After': '60' } }
+  );
 }
 
 export type ReviewVoteAction = 'up' | 'down' | 'report' | 'clear';

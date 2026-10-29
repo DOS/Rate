@@ -1,4 +1,5 @@
 import 'server-only';
+import { createHash } from 'node:crypto';
 import { cache } from 'react';
 import { sitemapRowsByItem } from '@/lib/item-directory';
 import {
@@ -585,9 +586,41 @@ export const getCachedFilteredReviewCountsByMaster = cache(() =>
   )()
 );
 
-export const getCachedInspectProductOrShopUrl = cache(
-  inspectProductOrShopUrlWithRadar
-);
+// One Data Cache entry per normalized query for 2 minutes, so repeating a
+// query does not rerun its reads (DOS/Rate#1307). The key is a hash: the
+// query is up to 2 KB of caller text. A result too large for an entry (Next
+// skips entries over 2 MB) is cached as a marker and read uncached.
+const INSPECT_CACHE_MAX_BYTES = 1_500_000;
+const _getCachedInspectionByKey = cache(async (query: string) => {
+  const cached = await withRateDataCache(
+    async (q: string) => {
+      const result = await inspectProductOrShopUrlWithRadar(q);
+      return JSON.stringify(result).length > INSPECT_CACHE_MAX_BYTES
+        ? { tooLarge: true as const }
+        : result;
+    },
+    [
+      'rate-inspect',
+      createHash('sha256').update(query).digest('hex').slice(0, 32),
+    ],
+    {
+      revalidate: 120,
+      tags: [
+        RATE_CACHE_TAGS.PRODUCTS,
+        RATE_CACHE_TAGS.OFFERS,
+        RATE_CACHE_TAGS.REVIEWS,
+        RATE_CACHE_TAGS.MERCHANTS,
+      ],
+    }
+  )(query);
+  return 'tooLarge' in cached
+    ? inspectProductOrShopUrlWithRadar(query)
+    : cached;
+});
+
+export function getCachedInspectProductOrShopUrl(rawQuery: string) {
+  return _getCachedInspectionByKey(sanitizeCachedInspectQuery(rawQuery));
+}
 
 // A product URL only needs its category, so only category_slug is kept from
 // metadata and specifications: whole spec sheets would push the entry past
