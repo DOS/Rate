@@ -5,6 +5,8 @@ import {
   resolveReviewVoteInput,
   sanitizePublicApiError,
   type ReviewReportReason,
+  payloadTooLargeResponse,
+  readBoundedJsonBody,
 } from '@/server/rate/api-handler';
 import { authenticateRateRequest } from '@/server/rate/request-auth';
 import { createLogger, serializeError } from '@/lib/logger';
@@ -134,7 +136,10 @@ export async function POST(
   }
 
   try {
-    const rawBody = await request.json().catch(() => null);
+    const bodyRead = await readBoundedJsonBody(request);
+    if (bodyRead.tooLarge)
+      return payloadTooLargeResponse(REVIEW_VOTE_CORS_HEADERS);
+    const rawBody = bodyRead.value;
 
     const auth = await authenticateRateRequest(
       request,

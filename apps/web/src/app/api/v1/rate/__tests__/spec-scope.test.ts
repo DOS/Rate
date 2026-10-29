@@ -321,11 +321,62 @@ async function testExtensionLookup() {
   console.warn('  ✅ Extension lookup returns the category spec view');
 }
 
+// Caller-controlled work is bounded (DOS/Rate#1308).
+async function testBoundedInputs() {
+  const { NextRequest } = await import('next/server');
+  // category=all with a spec filter pages in process: its offset is capped.
+  let res = await listProducts('category=all&has5g=1&offset=2001');
+  assert.equal(res.status, 400);
+  res = await listProducts('category=all&has5g=1&offset=2000');
+  assert.equal(res.status, 200);
+  // A merchants platform must be a tracked one.
+  const merchants = await import('../merchants/route');
+  const ask = (q: string) =>
+    merchants.GET(
+      new NextRequest(`http://localhost/api/v1/rate/merchants?${q}`)
+    );
+  assert.equal((await ask('platform=not-a-platform')).status, 400);
+  assert.notEqual((await ask('platform=Shopee')).status, 400);
+  // JSON write bodies are read up to 16 KB.
+  const { readBoundedJsonBody, MAX_JSON_BODY_BYTES } =
+    await import('@/server/rate/api-handler');
+  const post = (body: string, headers: Record<string, string> = {}) =>
+    new Request('http://localhost/x', { method: 'POST', body, headers });
+  assert.deepEqual(await readBoundedJsonBody(post('{"a":1}')), {
+    tooLarge: false,
+    value: { a: 1 },
+  });
+  assert.deepEqual(await readBoundedJsonBody(post('not json')), {
+    tooLarge: false,
+    value: null,
+  });
+  const big = JSON.stringify({ a: 'x'.repeat(MAX_JSON_BODY_BYTES) });
+  assert.deepEqual(await readBoundedJsonBody(post(big)), { tooLarge: true });
+  assert.deepEqual(
+    await readBoundedJsonBody(
+      post('{}', { 'content-length': String(MAX_JSON_BODY_BYTES + 1) })
+    ),
+    { tooLarge: true },
+    'a declared length over the cap is not read'
+  );
+  const ingest = await import('../extension/ingest/route');
+  const tooBig = await ingest.POST(
+    new NextRequest('http://localhost/api/v1/rate/extension/ingest', {
+      method: 'POST',
+      body: big,
+      headers: { 'content-type': 'application/json' },
+    })
+  );
+  assert.equal(tooBig.status, 413);
+  console.warn('  ✅ Offsets, platforms and body sizes are bounded');
+}
+
 async function main() {
   console.warn('🧪 API v1 category spec view suite (DOS/Rate#1184)');
   await testProductFilters();
   await testDetailAndCompare();
   await testExtensionLookup();
+  await testBoundedInputs();
 }
 
 main().catch((err) => {

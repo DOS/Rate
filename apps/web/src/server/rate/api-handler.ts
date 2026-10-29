@@ -720,6 +720,76 @@ export function extractClientRateLimitKey(
   return 'anon';
 }
 
+/** The 10 marketplaces and retailers Rate tracks (DOS/Rate#1308). */
+export const SUPPORTED_PLATFORM_SLUGS: ReadonlySet<string> = new Set([
+  'shopee',
+  'lazada',
+  'tiki',
+  'tiktok',
+  'cellphones',
+  'tgdd',
+  'fptshop',
+  'hoangha',
+  'didongviet',
+  'phongvu',
+]);
+
+/** JSON write bodies are small: a review is the largest, about 4 KB. */
+export const MAX_JSON_BODY_BYTES = 16_384;
+
+/**
+ * A request's JSON body, read up to `maxBytes` (DOS/Rate#1308): a larger body
+ * (by Content-Length, or by what is actually sent) is `tooLarge` and is not
+ * read further; a body that is no JSON is `value: null`.
+ */
+export async function readBoundedJsonBody(
+  request: Request,
+  maxBytes = MAX_JSON_BODY_BYTES
+): Promise<{ tooLarge: true } | { tooLarge: false; value: unknown }> {
+  const declared = Number(request.headers.get('content-length'));
+  if (Number.isFinite(declared) && declared > maxBytes) {
+    return { tooLarge: true };
+  }
+  if (!request.body) return { tooLarge: false, value: null };
+  const reader = request.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    size += value.byteLength;
+    if (size > maxBytes) {
+      await reader.cancel().catch(() => undefined);
+      return { tooLarge: true };
+    }
+    chunks.push(value);
+  }
+  const bytes = new Uint8Array(size);
+  let at = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, at);
+    at += chunk.byteLength;
+  }
+  try {
+    return {
+      tooLarge: false,
+      value: JSON.parse(new TextDecoder().decode(bytes)) as unknown,
+    };
+  } catch {
+    return { tooLarge: false, value: null };
+  }
+}
+
+/** The 413 a write route answers for a body over `MAX_JSON_BODY_BYTES`. */
+export function payloadTooLargeResponse(
+  headers: Record<string, string>
+): NextResponse {
+  return NextResponse.json(
+    { ok: false, error: 'Request body too large', code: 'PAYLOAD_TOO_LARGE' },
+    { status: 413, headers }
+  );
+}
+
 export type ReviewVoteAction = 'up' | 'down' | 'report' | 'clear';
 export type ReviewReportReason =
   'spam' | 'fake' | 'offensive' | 'off_topic' | 'other';
