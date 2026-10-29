@@ -23,6 +23,15 @@ const nextConfig = {
   reactCompiler: true,
   experimental: { externalDir: true },
   transpilePackages: ["@repo/design-system"],
+  // Bootstrap 5.3 is built from its SCSS (style/scss/bootstrap.scss), which
+  // still uses @import and the global color functions. Its partials import
+  // each other by bare name ("variables-dark"), which the webpack importer
+  // does not resolve, so the scss folder is a load path.
+  sassOptions: {
+    loadPaths: [path.join(__dirname, "node_modules/bootstrap/scss")],
+    quietDeps: true,
+    silenceDeprecations: ["import", "global-builtin", "color-functions"],
+  },
   turbopack: {
     resolveAlias: {
       "next-intl/config": "./src/i18n/request.ts",
