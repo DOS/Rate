@@ -4108,7 +4108,7 @@ async function runTests() {
     );
     assert.ok(
       contentSource.includes(
-        'aria-label="${escapeHtml(buildPillAriaLabel(assessment.badgeLabel, cheaperSummary))}"'
+        'aria-label="${escapeHtml(buildPillAriaLabel(verdict.label, cheaperSummary))}"'
       ),
       'the pill names its verdict'
     );
@@ -4282,6 +4282,246 @@ async function runTests() {
       globalWithChrome.chrome = previousChrome;
     }
     console.log('  ✅ [vi, en and cs through chrome.i18n (#1304)] Verified');
+  }
+
+  // The verdict label and explanation in the extension's language, from the
+  // server's message key and params (DOS/Rate#1326).
+  {
+    const catalogues = readLocaleCatalogues();
+    const { formatCatalogueEntry } = await import('./i18n.js');
+    const { VERDICT_MESSAGES, verdictTexts } =
+      await import('./verdict-display.js');
+    const mkOffer = (id: string, price: number) =>
+      ({
+        id,
+        platform: 'shopee',
+        url: 'https://example.test/1326/' + id,
+        price_current: price,
+        price_original: null,
+        merchant: {
+          id: 'm-' + id,
+          name: 'Shop ' + id,
+          risk_score: 5,
+          is_official: true,
+        },
+      }) as never;
+    const offers = [
+      mkOffer('a', 20_000_000),
+      mkOffer('b', 21_000_000),
+      mkOffer('c', 22_000_000),
+    ];
+    const judge = (
+      overrides: Partial<Parameters<typeof evaluateExtensionPriceVerdict>[0]>
+    ) =>
+      evaluateExtensionPriceVerdict({
+        isAccessory: false,
+        accessoryReason: null,
+        isAmbiguousVariant: false,
+        observedPrice: null,
+        observedOriginalPrice: null,
+        offers,
+        priceHistory: null,
+        ...overrides,
+      });
+    const keywordGate = detectAccessoryOrJunk({
+      title: 'Ốp lưng silicon chống sốc cho iPhone 16 Pro Max',
+      price: 89_000,
+    });
+    const floorGate = detectAccessoryOrJunk({
+      title: 'Điện thoại Apple iPhone 16 128GB',
+      price: 50_000,
+    });
+    const serverAssessments = [
+      judge({ isAccessory: true }),
+      judge({
+        isAccessory: true,
+        accessoryReason: keywordGate.reason,
+        accessoryMessage: keywordGate.message,
+      }),
+      judge({
+        isAccessory: true,
+        accessoryReason: floorGate.reason,
+        accessoryMessage: floorGate.message,
+      }),
+      judge({ observedPrice: 21_000_000, isAmbiguousVariant: true }),
+      judge({ observedPrice: 5_000_000 }),
+      judge({ observedPrice: 21_000_000, offers: [] }),
+      judge({ observedPrice: 21_500_000, observedOriginalPrice: 26_000_000 }),
+      judge({ observedPrice: 20_000_000 }),
+      judge({ observedPrice: 23_000_000 }),
+      judge({ observedPrice: 21_200_000 }),
+    ];
+    const seenKeys = new Set<string>();
+    for (const assessment of serverAssessments) {
+      assert.ok(assessment.messageKey, `${assessment.badgeLabel} has a key`);
+      seenKeys.add(assessment.messageKey!);
+      // The vi catalogue filled with the params is the server's own text.
+      assert.deepEqual(
+        verdictTexts(assessment),
+        { label: assessment.badgeLabel, explanation: assessment.explanation },
+        `vi text for ${assessment.messageKey}`
+      );
+    }
+    assert.deepEqual(
+      [...seenKeys].sort(),
+      Object.keys(VERDICT_MESSAGES).sort(),
+      'every server key is rendered and tested'
+    );
+
+    // Every locale has each message with one placeholder per param.
+    const placeholderCount = (key: string, locale: 'vi' | 'en' | 'cs') =>
+      Object.keys(catalogues[locale][key]?.placeholders ?? {}).length;
+    for (const spec of Object.values(VERDICT_MESSAGES)) {
+      for (const locale of ['vi', 'en', 'cs'] as const) {
+        assert.ok(catalogues[locale][spec.label], `${locale}.${spec.label}`);
+        assert.ok(
+          catalogues[locale][spec.explanation],
+          `${locale}.${spec.explanation}`
+        );
+        assert.equal(
+          placeholderCount(spec.label, locale),
+          spec.labelParams.length
+        );
+        assert.equal(
+          placeholderCount(spec.explanation, locale),
+          spec.explanationParams.length
+        );
+      }
+    }
+
+    // With an English or Czech browser the verdict reads in that language.
+    const globalWithChrome = globalThis as { chrome?: unknown };
+    const previousChrome = globalWithChrome.chrome;
+    const useLocale = (locale: 'en' | 'cs') => {
+      globalWithChrome.chrome = {
+        i18n: {
+          getMessage: (name: string, subs?: string[]) => {
+            const entry = catalogues[locale][name];
+            return entry ? formatCatalogueEntry(entry, subs ?? []) : '';
+          },
+        },
+      };
+    };
+    const above = serverAssessments[8]!;
+    const fake = serverAssessments[6]!;
+    const keyword = serverAssessments[1]!;
+    try {
+      useLocale('en');
+      assert.deepEqual(verdictTexts(above), {
+        label: 'Above market +9.5%',
+        explanation:
+          'The price shown (23.000.000 ₫) is about 9.5% above the market median (21.000.000 ₫), but the store shows no inflated list price.',
+      });
+      assert.equal(verdictTexts(fake).label, 'Fake discount alert');
+      assert.ok(verdictTexts(fake).explanation.includes('(-17.3%)'));
+      assert.equal(
+        verdictTexts(keyword).explanation,
+        'The product title contains the accessory or part keyword "ốp lưng".'
+      );
+      useLocale('cs');
+      assert.equal(verdictTexts(above).label, 'Nad trhem +9.5 %');
+      assert.equal(
+        verdictTexts(serverAssessments[9]!).label,
+        'Férová tržní cena'
+      );
+    } finally {
+      globalWithChrome.chrome = previousChrome;
+    }
+
+    // An older server, an unknown key or a bad value keeps the server text.
+    const serverText = {
+      badgeLabel: 'Nhãn từ máy chủ',
+      explanation: 'Giải thích từ máy chủ',
+    };
+    const asServer = {
+      label: 'Nhãn từ máy chủ',
+      explanation: 'Giải thích từ máy chủ',
+    };
+    assert.deepEqual(verdictTexts(serverText), asServer);
+    assert.deepEqual(
+      verdictTexts({ ...serverText, messageKey: 'new_verdict_kind' }),
+      asServer
+    );
+    assert.deepEqual(
+      verdictTexts({ ...serverText, messageKey: '__proto__' }),
+      asServer
+    );
+    assert.deepEqual(
+      verdictTexts({
+        ...serverText,
+        messageKey: 'fair_market',
+        messageParams: { effectivePrice: '1' as never, marketMedianPrice: 2 },
+      }),
+      asServer
+    );
+    assert.deepEqual(
+      verdictTexts({
+        ...serverText,
+        messageKey: 'above_market',
+        messageParams: { effectivePrice: 1, marketMedianPrice: 2 },
+      }),
+      asServer,
+      'a missing param keeps the server text'
+    );
+    assert.deepEqual(
+      verdictTexts({ ...serverText, messageKey: 'genuine_deal' }),
+      asServer
+    );
+    // Shown text is escaped where it is placed.
+    const contentSource = fs.readFileSync(
+      path.resolve(__dirname, 'content/content-script.ts'),
+      'utf8'
+    );
+    const panelSource = fs.readFileSync(
+      path.resolve(__dirname, 'sidepanel/sidepanel.ts'),
+      'utf8'
+    );
+    assert.ok(
+      contentSource.includes(
+        '<span class="verdict-badge">${escapeHtml(verdict.label)}</span>'
+      )
+    );
+    assert.ok(panelSource.includes('}">${escapeHtml(verdict.label)}</span>'));
+    assert.ok(panelSource.includes('${escapeHtml(verdict.explanation)}</p>'));
+    for (const text of [contentSource, panelSource]) {
+      assert.ok(!/assessment\.(badgeLabel|explanation)\b/.test(text));
+    }
+
+    // The request is unchanged: no locale or language leaves the extension
+    // (DOS/Rate#1175).
+    const workerSource = fs.readFileSync(
+      path.resolve(__dirname, 'background/service-worker.ts'),
+      'utf8'
+    );
+    const sentParams = [
+      ...new Set(
+        [...workerSource.matchAll(/params\.set\(\s*'([^']+)'/g)].map(
+          (m) => m[1]!
+        )
+      ),
+    ].sort();
+    assert.deepEqual(sentParams, [
+      'externalId',
+      'mode',
+      'originalPrice',
+      'platform',
+      'price',
+      'selectedVariant',
+      'shopId',
+      'title',
+      'url',
+    ]);
+    for (const file of listExtensionSourceFiles()) {
+      if (file.endsWith('test-extension-pipeline.ts')) continue;
+      const text = fs.readFileSync(file, 'utf8');
+      assert.ok(
+        !/getUILanguage|navigator\.languages?\b|Accept-Language/i.test(text),
+        `${file} reads or sends the browser language`
+      );
+    }
+    console.log(
+      '  ✅ [Verdict text in the extension language (#1326)] Verified'
+    );
   }
 
   console.log('🎉 All Rate Browser Extension MV3 v2 tests passed!');

@@ -897,6 +897,59 @@ function buildBaseRateOpenApiSpec(
                       radar_signal: {
                         $ref: '#/components/schemas/ProductDealRadarSignal',
                       },
+                      data: {
+                        type: 'object',
+                        properties: {
+                          priceAssessment: {
+                            type: 'object',
+                            description:
+                              'Price verdict. `badgeLabel` and `explanation` are Vietnamese; `messageKey` and `messageParams` let a client show the same text in its own language (DOS/Rate#1326).',
+                            properties: {
+                              verdict: {
+                                type: 'string',
+                                enum: [
+                                  'genuine_deal',
+                                  'fair_market_price',
+                                  'above_market',
+                                  'inflated_fake_sale',
+                                  'insufficient_data',
+                                  'accessory_skip',
+                                ],
+                              },
+                              badgeLabel: { type: 'string' },
+                              explanation: { type: 'string' },
+                              messageKey: {
+                                type: 'string',
+                                description:
+                                  'Absent when an accessory reason is free text.',
+                                enum: [
+                                  'accessory',
+                                  'accessory_keyword',
+                                  'accessory_price_floor',
+                                  'ambiguous_variant',
+                                  'implausibly_low',
+                                  'insufficient_history',
+                                  'fake_discount',
+                                  'genuine_deal',
+                                  'above_market',
+                                  'fair_market',
+                                ],
+                              },
+                              messageParams: {
+                                type: 'object',
+                                description:
+                                  'The values the text interpolates: prices in VND and percentages as numbers, plus `keyword` (string) for `accessory_keyword`.',
+                                additionalProperties: {
+                                  oneOf: [
+                                    { type: 'number' },
+                                    { type: 'string' },
+                                  ],
+                                },
+                              },
+                            },
+                          },
+                        },
+                      },
                     },
                   },
                 },
