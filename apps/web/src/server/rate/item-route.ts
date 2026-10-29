@@ -63,6 +63,16 @@ const _getCachedCategorySlugs = cache(() =>
 );
 
 /**
+ * Category id to slug, from the same cached read the Item route uses. The
+ * master-product route checks its category against it (DOS/Rate#1366).
+ */
+export async function getCachedCategorySlugById(): Promise<
+  ReadonlyMap<string, string>
+> {
+  return new Map(await _getCachedCategorySlugs());
+}
+
+/**
  * The Item's category path (`/tablets`): null when it has no category, false
  * when its category is no catalogue category (DOS/Rate#1281).
  */
