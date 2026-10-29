@@ -48,6 +48,7 @@ import {
   type ApiItem,
   type ApiItemContext,
 } from './item-api';
+import { canonicalVersusOrder } from '../../lib/item-compare';
 
 const log = createLogger('server.extension');
 
@@ -1486,8 +1487,11 @@ export async function lookupExtensionProduct(
         )
       : `/${categoryPath}/${encodeURIComponent(matchedMaster.slug)}`,
     leaderboardUrl: `/leaderboard?cat=${categoryPath}`,
+    // The pair's one canonical URL, sides sorted (DOS/Rate#1367).
     versusUrl: topRival
-      ? `/compare/${encodeURIComponent(matchedMaster.slug)}-vs-${encodeURIComponent(topRival.slug)}`
+      ? `/compare/${canonicalVersusOrder(matchedMaster.slug, topRival.slug)
+          .map(encodeURIComponent)
+          .join('-vs-')}`
       : null,
     topRivalName: topRival?.name || null,
     leaderboardStandings,

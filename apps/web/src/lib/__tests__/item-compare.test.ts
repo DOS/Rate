@@ -4,6 +4,9 @@ import {
   dedupeCompareTargets,
   parseCompareToken,
   pickItemVariant,
+  canonicalVersusOrder,
+  inPairOrder,
+  legacyVersusRedirect,
   planVersusRoute,
   versusHref,
   itemSlugFromProductAnswer,
@@ -200,6 +203,64 @@ function main() {
     versusHref('case-a-std', 'pixel-10', map),
     '/compare/case-a-std-vs-pixel-10',
     'an Item slug holding -vs- keeps the variant slug'
+  );
+
+  // One URL per pair, the slugs sorted; the other order 308s there (#1367).
+  assert.deepEqual(canonicalVersusOrder('b', 'a'), ['a', 'b']);
+  assert.deepEqual(canonicalVersusOrder('a', 'b'), ['a', 'b']);
+  assert.equal(
+    versusHref('pixel-10', 'apple-iphone-16-128gb'),
+    '/compare/apple-iphone-16-128gb-vs-pixel-10',
+    'links name the pair in its canonical order'
+  );
+  assert.equal(
+    versusHref('pixel-10', 'apple-iphone-16-128gb', map),
+    '/compare/apple-iphone-16-vs-pixel-10',
+    'sorted on the Item slugs the URL shows'
+  );
+  // Master-product route: the reverse order redirects, the sorted one renders.
+  assert.equal(
+    legacyVersusRedirect([
+      'asus-zenbook-s-14-1tb',
+      'apple-macbook-pro-m4-pro-14-inch-512gb',
+    ]),
+    '/compare/apple-macbook-pro-m4-pro-14-inch-512gb-vs-asus-zenbook-s-14-1tb'
+  );
+  assert.equal(
+    legacyVersusRedirect([
+      'apple-macbook-pro-m4-pro-14-inch-512gb',
+      'asus-zenbook-s-14-1tb',
+    ]),
+    null
+  );
+  // The compare read may answer in any order; the page keeps the URL's.
+  const read = [{ slug: 'b-phone' }, { slug: 'a-phone' }];
+  assert.deepEqual(
+    inPairOrder(read, ['a-phone', 'b-phone']).map((p) => p?.slug),
+    ['a-phone', 'b-phone']
+  );
+  assert.deepEqual(
+    inPairOrder(
+      [{ slug: 'A-Phone' }, { slug: 'b-phone' }],
+      ['a-phone', 'b-phone']
+    ).map((p) => p?.slug),
+    ['A-Phone', 'b-phone'],
+    'slugs match without regard to case'
+  );
+  assert.deepEqual(
+    inPairOrder([{ slug: 'a-phone' }], ['a-phone', 'b-phone']).map(
+      (p) => p?.slug
+    ),
+    ['a-phone', undefined],
+    'a missing side stays missing (the page 404s)'
+  );
+  // Item route: the reverse Item pair 308s to the sorted one.
+  assert.deepEqual(
+    planVersusRoute(
+      { slug: 'samsung-galaxy-s24', resolution: s24 },
+      { slug: 'apple-iphone-16', resolution: asItem }
+    ),
+    { kind: 'redirect', to: '/compare/apple-iphone-16-vs-samsung-galaxy-s24' }
   );
 
   // A restored tray product reads its Item from the product API (#1294).

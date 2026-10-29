@@ -761,7 +761,8 @@ async function runCoreArchitectureSuite() {
   assert.ok(
     versusPageSource.includes('parseVersusSlugs') &&
       versusPageSource.includes('1V1 HEAD-TO-HEAD AUDIT') &&
-      smartphoneDetailSrc.includes('/compare/${product.slug}-vs-${peer.slug}'),
+      // Peer links name the pair in its canonical order (#1367).
+      smartphoneDetailSrc.includes('versusHref(product.slug, peer.slug)'),
     '/compare/[versus] 1v1 route and ProductDetailView 1v1 links must be wired'
   );
   console.log(
@@ -778,6 +779,20 @@ async function runCoreArchitectureSuite() {
   assert.equal(
     popularPairs[0]?.versusHref,
     '/compare/apple-iphone-18-pro-max-256gb-vs-samsung-galaxy-s26-ultra-256gb'
+  );
+  // One URL per versus pair, sides sorted: the master-product route 308s the
+  // other order and takes its canonical from the URL, not the read (#1367).
+  const versusPageSrc1367 = fs.readFileSync(
+    path.join(repoRoot, 'apps/web/src/app/[locale]/compare/[versus]/page.tsx'),
+    'utf8'
+  );
+  assert.match(
+    versusPageSrc1367,
+    /if \(!plan\) \{\s*const sortedHref = legacyVersusRedirect\(parsed\);\s*if \(sortedHref\) permanentRedirect\(sortedHref\);/
+  );
+  assert.ok(
+    !/compare\/\$\{a\.slug\}-vs-\$\{b\.slug\}/.test(versusPageSrc1367),
+    'the canonical is not built from the compare read order'
   );
   const compareWorkspaceSrc = fs.readFileSync(
     path.join(repoRoot, 'apps/web/src/components/compare/CompareWorkspace.tsx'),
@@ -825,8 +840,9 @@ async function runCoreArchitectureSuite() {
   );
   assert.ok(
     homePageSrc.includes('popularHomeBattles') &&
+      // In the pair's canonical order (#1367).
       categoryPageSrc.includes(
-        '/compare/${products[0].slug}-vs-${products[1].slug}'
+        'versusHref(products[0].slug, products[1].slug)'
       ),
     'Homepage and Category Catalogs must surface 1v1 Flagship Showdowns'
   );

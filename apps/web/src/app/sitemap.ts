@@ -1,4 +1,5 @@
 import type { MetadataRoute } from 'next';
+import { canonicalVersusOrder } from '@/lib/item-compare';
 import { env } from '@/env.mjs';
 import { createLogger, serializeError } from '@/lib/logger';
 import {
@@ -191,8 +192,9 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
               itemSlugs?.get(pair.productA.slug) ?? pair.productA.slug;
             const slugB =
               itemSlugs?.get(pair.productB.slug) ?? pair.productB.slug;
+            // Sides sorted: the pair's one canonical URL (DOS/Rate#1367).
             const href = itemSlugs
-              ? `/compare/${slugA}-vs-${slugB}`
+              ? `/compare/${canonicalVersusOrder(slugA, slugB).join('-vs-')}`
               : pair.versusHref;
             // Two sizes of one Item are no versus, and a pair is listed once.
             // One entry per Item pair, whichever way round it was ranked.

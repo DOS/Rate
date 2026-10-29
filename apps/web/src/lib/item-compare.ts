@@ -105,6 +105,47 @@ export function dedupeCompareTargets<
   return out;
 }
 
+/**
+ * A versus pair in its one canonical order, the two slugs sorted. Each pair
+ * has a single URL: the other order 308s to it (DOS/Rate#1367).
+ */
+export function canonicalVersusOrder(
+  slugA: string,
+  slugB: string
+): [string, string] {
+  return slugA <= slugB ? [slugA, slugB] : [slugB, slugA];
+}
+
+/**
+ * The two compared products in the URL's order. The compare read does not
+ * keep the order it was asked in, and the page, its title and its canonical
+ * must not flip with it (DOS/Rate#1367).
+ */
+export function inPairOrder<T extends { slug: string }>(
+  compared: readonly T[],
+  pair: readonly string[]
+): [T | undefined, T | undefined] {
+  const bySlug = (slug: string | undefined) =>
+    slug === undefined
+      ? undefined
+      : compared.find((p) => p.slug.toLowerCase() === slug.toLowerCase());
+  const a = bySlug(pair[0]) ?? compared[0];
+  const b = bySlug(pair[1]) ?? compared.find((p) => p !== a);
+  return [a, b];
+}
+
+/**
+ * Master-product route: the URL of the pair in its canonical order (slugs
+ * sorted) when the request named it the other way round, else null
+ * (DOS/Rate#1367). The Item route sorts in planVersusRoute.
+ */
+export function legacyVersusRedirect(
+  pair: readonly [string, string]
+): string | null {
+  const [first, second] = canonicalVersusOrder(pair[0], pair[1]);
+  return first === pair[0] ? null : `/compare/${first}-vs-${second}`;
+}
+
 export type VersusPlan =
   /** Neither side has an Item: today's versus page. */
   | { kind: 'legacy' }
@@ -133,23 +174,29 @@ export function planVersusRoute(
   if (urlSlugA.includes('-vs-') || urlSlugB.includes('-vs-')) {
     return { kind: 'not_found' };
   }
-  const canonical = `/compare/${urlSlugA}-vs-${urlSlugB}`;
-  if (urlSlugA !== sideA.slug || urlSlugB !== sideB.slug) {
+  // One URL per pair, the slugs sorted; the other order 308s there (#1367).
+  const swapped = urlSlugA > urlSlugB;
+  const [first, second] = swapped ? [b, a] : [a, b];
+  const [firstSlug, secondSlug] = swapped
+    ? [urlSlugB, urlSlugA]
+    : [urlSlugA, urlSlugB];
+  const canonical = `/compare/${firstSlug}-vs-${secondSlug}`;
+  if (firstSlug !== sideA.slug || secondSlug !== sideB.slug) {
     return { kind: 'redirect', to: canonical };
   }
   return {
     kind: 'render',
-    slugA: a.variantSlug,
-    slugB: b.variantSlug,
+    slugA: first.variantSlug,
+    slugB: second.variantSlug,
     canonical,
   };
 }
 
 /**
- * A versus URL for two catalogue slugs, naming their Items when
- * `itemSlugBySlug` maps them (RATE_ITEM_MODEL on), so in-app links need no
- * 308 hop (DOS/Rate#1290). A side whose Item slug holds "-vs-" keeps its
- * own slug; with no map the URL is as before.
+ * The canonical versus URL for two catalogue slugs: the sides in sorted
+ * order (#1367), each named by its Item when `itemSlugBySlug` maps it
+ * (RATE_ITEM_MODEL on), so in-app links need no 308 hop (DOS/Rate#1290). A
+ * side whose Item slug holds "-vs-" keeps its own slug.
  */
 export function versusHref(
   slugA: string,
@@ -160,7 +207,8 @@ export function versusHref(
     const itemSlug = itemSlugBySlug?.[slug];
     return itemSlug && !itemSlug.includes('-vs-') ? itemSlug : slug;
   };
-  return `/compare/${side(slugA)}-vs-${side(slugB)}`;
+  const [first, second] = canonicalVersusOrder(side(slugA), side(slugB));
+  return `/compare/${first}-vs-${second}`;
 }
 
 /**

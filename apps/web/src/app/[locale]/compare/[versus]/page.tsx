@@ -10,6 +10,11 @@ import {
   getMasterProductHref,
 } from '@/server/rate';
 import { resolveVersusPlan } from '@/server/rate/item-compare';
+import {
+  canonicalVersusOrder,
+  inPairOrder,
+  legacyVersusRedirect,
+} from '@/lib/item-compare';
 import { getItemSlugsFor } from '@/server/rate/item-directory';
 import { normalizeRateLocale } from '@/lib/rate-i18n';
 import { defaultOpenGraph, fitTitle, fitDescription } from '@/lib/seo';
@@ -69,18 +74,20 @@ export async function generateMetadata({
   if (plan && plan.kind !== 'render') {
     return notFoundMeta();
   }
-  const compared = await getCachedCompareMasterProducts(
-    (plan ? [plan.slugA, plan.slugB] : parsed).join(',')
-  );
-  const a = compared[0];
-  const b = compared[1];
+  // Master-product route: the canonical order, whichever way the URL named
+  // the pair (the other order 308s there, #1367).
+  const pair = plan
+    ? [plan.slugA, plan.slugB]
+    : canonicalVersusOrder(parsed[0], parsed[1]);
+  const compared = await getCachedCompareMasterProducts(pair.join(','));
+  const [a, b] = inPairOrder(compared, pair);
   if (!a || !b) {
     return notFoundMeta();
   }
 
   const canonicalUrl = plan
     ? `https://rate.vn${plan.canonical}`
-    : `https://rate.vn/compare/${a.slug}-vs-${b.slug}`;
+    : `https://rate.vn/compare/${pair[0]}-vs-${pair[1]}`;
   const fullTitle = t('versusMetaTitle', { nameA: a.name, nameB: b.name });
   // Both names first; the fixed text, then the site name, give way to fit a
   // search result (DOS/Rate#777). The share card keeps the full title.
@@ -127,6 +134,11 @@ export default async function VersusComparePage({ params }: VersusPageProps) {
   const plan = await resolveVersusPlan(parsed[0], parsed[1]);
   if (plan?.kind === 'redirect') permanentRedirect(plan.to);
   if (plan?.kind === 'not_found') notFound();
+  // Master-product route: one URL per pair, the slugs sorted (#1367).
+  if (!plan) {
+    const sortedHref = legacyVersusRedirect(parsed);
+    if (sortedHref) permanentRedirect(sortedHref);
+  }
   const pair = plan?.kind === 'render' ? [plan.slugA, plan.slugB] : parsed;
 
   const [compared, directory] = await Promise.all([
@@ -142,8 +154,10 @@ export default async function VersusComparePage({ params }: VersusPageProps) {
     notFound();
   }
 
-  const prodA = compared[0];
-  const prodB = compared[1];
+  const [prodA, prodB] = inPairOrder(compared, pair);
+  if (!prodA || !prodB) {
+    notFound();
+  }
   const catSlug = getMasterProductCategorySlug(prodA);
   const scoreA = scoreMasterProductForLeaderboard(prodA, 'combined');
   const scoreB = scoreMasterProductForLeaderboard(prodB, 'combined');
@@ -226,7 +240,6 @@ export default async function VersusComparePage({ params }: VersusPageProps) {
               scoreA={scoreA}
               scoreB={scoreB}
               locale={locale}
-              {...itemSlugProps}
             />
 
             <VersusMatchupSwitcher
@@ -243,7 +256,7 @@ export default async function VersusComparePage({ params }: VersusPageProps) {
         <section className="bg-light py-5">
           <div className="container">
             <CompareWorkspace
-              initialProducts={compared}
+              initialProducts={[prodA, prodB]}
               catalogCandidates={directory}
               initialCategory={catSlug}
               hasExplicitSlugs={true}
