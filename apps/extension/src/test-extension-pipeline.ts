@@ -4419,7 +4419,7 @@ async function runTests() {
         'The product title contains the accessory or part keyword "ốp lưng".'
       );
       useLocale('cs');
-      assert.equal(verdictTexts(above).label, 'Nad trhem +9.5 %');
+      assert.equal(verdictTexts(above).label, 'Nad trhem +9,5 %');
       assert.equal(
         verdictTexts(serverAssessments[9]!).label,
         'Férová tržní cena'

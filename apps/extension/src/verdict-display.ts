@@ -120,8 +120,13 @@ function formatVerdictParam(
         ? `${value.toLocaleString('vi-VN')} ₫`
         : null;
     case 'pct':
+      // vi and en print the server's decimal point; Czech writes a comma, as
+      // the site does (DOS/Rate#1326). The catalogue's own language decides,
+      // so nothing is read from the browser.
       return typeof value === 'number' && Number.isFinite(value)
-        ? String(value)
+        ? t('langCode') === 'cs'
+          ? String(value).replace('.', ',')
+          : String(value)
         : null;
     case 'text': {
       if (typeof value !== 'string') return null;
