@@ -5,6 +5,7 @@ import { discountVerdictCopy } from '@/lib/discount-verdict-copy';
 import { formatSoldCount, hasSoldCount } from '@/lib/sold-count';
 import AnalyzerText from '@/components/reviews/AnalyzerText';
 import { Link } from '@/lib/navigation';
+import { IntentLink } from '@/components/elementary/IntentLink';
 import { getCategoryRouteHref, resolveProductImageUrl } from '@/lib/rate-api';
 import {
   getCachedMerchantProfileById,
@@ -602,12 +603,12 @@ export default async function MerchantProfilePage({
                       })
                     : t('profileRadarZeroFake')}
                 </span>
-                <Link
+                <IntentLink
                   href="/deals"
                   className="btn btn-sm btn-outline-danger rounded-pill fw-semibold px-3"
                 >
                   {t('openRadar10PlatformsBtn')}
-                </Link>
+                </IntentLink>
               </div>
             </div>
             {merchantGenuineDeals.length > 0 || merchantFakeTraps.length > 0 ? (

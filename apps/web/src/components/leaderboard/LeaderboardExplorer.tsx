@@ -11,6 +11,7 @@ import { useSearchParams } from 'next/navigation';
 import { useLocale, useTranslations } from 'next-intl';
 import type { IconType } from 'react-icons';
 import { Link } from '@/lib/navigation';
+import { IntentLink } from '@/components/elementary/IntentLink';
 import {
   MAX_VALID_VND_PRICE,
   getMasterProductCategorySlug,
@@ -1463,13 +1464,13 @@ export default function LeaderboardExplorer({
                       </div>
 
                       <div className="border-top mt-2 pt-2 text-end">
-                        <Link
+                        <IntentLink
                           href={vHref}
                           className="btn btn-sm btn-dark rounded-pill small fw-semibold w-100"
                         >
                           <BsArrowLeftRight className="me-1" />
                           {t('view1v1DeepBtn')}
-                        </Link>
+                        </IntentLink>
                       </div>
                     </div>
                   </div>

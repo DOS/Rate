@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { Fragment } from 'react';
 import { getTranslations, setRequestLocale } from 'next-intl/server';
 import { Link } from '@/lib/navigation';
+import { IntentLink } from '@/components/elementary/IntentLink';
 import { notFound, permanentRedirect } from 'next/navigation';
 import { resolveItemRoute } from '@/server/rate/item-route';
 import {
@@ -1586,12 +1587,12 @@ export async function ProductDetailView({
                         </div>
 
                         <div className="d-flex mt-auto gap-2">
-                          <Link
+                          <IntentLink
                             href={`/compare/${product.slug}-vs-${peer.slug}`}
                             className="btn btn-sm btn-outline-primary rounded-pill fw-semibold flex-grow-1"
                           >
                             {t('compare1v1Btn')}
-                          </Link>
+                          </IntentLink>
                           <Link
                             href={`${categoryBasePath}/${peer.slug}`}
                             className="btn btn-sm btn-light rounded-pill border px-3"

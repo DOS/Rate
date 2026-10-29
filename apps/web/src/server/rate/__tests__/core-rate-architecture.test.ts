@@ -14377,6 +14377,34 @@ async function runCoreArchitectureSuite() {
     );
   }
 
+  // 130. Header and footer links prefetch on intent, not on sight (#1330)
+  {
+    const readWeb1330 = (rel: string) =>
+      fs.readFileSync(path.join(repoRoot, 'apps/web/src', rel), 'utf8');
+    const intentLinkSrc = readWeb1330('components/elementary/IntentLink.tsx');
+    assert.ok(
+      intentLinkSrc.includes('prefetch={intent ? null : false}') &&
+        /onPointerEnter=/.test(intentLinkSrc) &&
+        /onFocus=/.test(intentLinkSrc) &&
+        /onTouchStart=/.test(intentLinkSrc),
+      'IntentLink prefetches only after pointer, focus or touch intent'
+    );
+    for (const rel of [
+      'app/[locale]/components/navbar/NavbarDarkDynamic.tsx',
+      'app/[locale]/components/footer/FooterDynamic.tsx',
+      'app/[locale]/components/footer-top.tsx',
+    ]) {
+      const src = readWeb1330(rel);
+      assert.ok(
+        src.includes('<IntentLink') && !/<Link[\s>]/.test(src),
+        `${rel} renders every link as an IntentLink (viewport prefetch fetched each route on every page view)`
+      );
+    }
+    console.log(
+      '  ✅ [130/130] Header and footer links prefetch on intent, not on sight (#1330) passed'
+    );
+  }
+
   console.log('🎉 All Rate.vn Core Architecture tests passed!');
 }
 
