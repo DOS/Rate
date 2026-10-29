@@ -142,6 +142,14 @@ export default async function DevelopersPage({
     },
     {
       method: 'GET',
+      path: '/api/v1/rate/versus',
+      auth: 'Public (CORS)',
+      cache: 's-maxage=60, stale-while-revalidate=300',
+      queryParams: t('ep15Params'),
+      summary: t('ep15Summary'),
+    },
+    {
+      method: 'GET',
       path: '/api/v1/rate/watchlist',
       auth: 'Public (CORS)',
       cache: 's-maxage=30, stale-while-revalidate=120',
@@ -195,6 +203,38 @@ export default async function DevelopersPage({
       cache: 's-maxage=60, stale-while-revalidate=300',
       queryParams: t('ep10Params'),
       summary: t('ep10Summary'),
+    },
+    {
+      method: 'GET',
+      path: '/api/v1/rate/merchants/directory',
+      auth: 'Public (CORS)',
+      cache: 's-maxage=60, stale-while-revalidate=300',
+      queryParams: t('ep19Params'),
+      summary: t('ep19Summary'),
+    },
+    {
+      method: 'GET',
+      path: '/api/v1/rate/reviews',
+      auth: 'Public (CORS)',
+      cache: 's-maxage=60, stale-while-revalidate=300',
+      queryParams: t('ep16Params'),
+      summary: t('ep16Summary'),
+    },
+    {
+      method: 'GET',
+      path: '/api/v1/rate/leaderboard',
+      auth: 'Public (CORS)',
+      cache: 's-maxage=60, stale-while-revalidate=300',
+      queryParams: t('ep17Params'),
+      summary: t('ep17Summary'),
+    },
+    {
+      method: 'GET',
+      path: '/api/v1/rate/deals',
+      auth: 'Public (CORS)',
+      cache: 's-maxage=120, stale-while-revalidate=300',
+      queryParams: t('ep18Params'),
+      summary: t('ep18Summary'),
     },
     {
       method: 'GET',
@@ -344,7 +384,16 @@ export default async function DevelopersPage({
                 {t('endpointsBadge')}
               </span>
               <h2 className="h3 fw-bold mb-1">{t('endpointsTitle')}</h2>
-              <p className="text-muted mb-0">{t('endpointsSubtitle')}</p>
+              <p className="text-muted mb-2">{t('endpointsSubtitle')}</p>
+              <p className="text-muted small mb-0">
+                <a
+                  href="/api/v1/rate/openapi.json"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  {t('endpointsFullReference')}
+                </a>
+              </p>
             </div>
 
             <div className="table-responsive rounded-4 border shadow-sm">
@@ -362,7 +411,7 @@ export default async function DevelopersPage({
                 </thead>
                 <tbody>
                   {apiEndpointsSpec.map((ep) => (
-                    <tr key={ep.path}>
+                    <tr key={`${ep.method} ${ep.path}`}>
                       <td>
                         <span
                           className={`badge rounded-pill px-3 py-2 ${
