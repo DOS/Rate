@@ -4250,7 +4250,7 @@ async function runTests() {
     );
     assert.equal(
       formatCatalogueEntry(catalogues.en.reviewAuthenticValue!, ['85', '40']),
-      '85% (40 reviews)'
+      '85% (reviews: 40)'
     );
     assert.equal(
       formatCatalogueEntry(catalogues.cs.offerOutOfStock!),
