@@ -1,4 +1,5 @@
 import { splitModelKey, type ProductSpecifications, type KeySpecs } from '@repo/shared-data';
+import { SOURCED_SEEDS_2026 } from './flagship-seed-sourced-2026.js';
 
 /**
  * Spec-only device catalog entry. It deliberately carries no listings, prices, merchants,
@@ -22,6 +23,17 @@ export interface FlagshipDeviceSeed {
   images: string[];
   specifications: ProductSpecifications;
   key_specs: KeySpecs;
+  /** Where each spec value comes from: field path (or whole group) -> source URL. */
+  sources?: Readonly<Record<string, string>>;
+  /** Retail-style titles that must key exactly as `model_key` (checked by the tests). */
+  aliases?: readonly string[];
+  /**
+   * Spec paths ("battery.fast_charging_w", "key_specs.ram") an earlier, unsourced version of
+   * this seed wrote and the sources do not support. The backfill removes them from the
+   * existing master and Item rather than keeping them through its field-by-field merge,
+   * and rewrites the master's variant name.
+   */
+  retract_spec_fields?: readonly string[];
 }
 
 /**
@@ -2653,338 +2665,6 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
   },
   {
     categorySlug: 'smartphones',
-    brand: 'Apple',
-    model: 'iPhone 18 Pro Max',
-    variant_name: '256GB',
-    model_key: 'apple:iphone-18-pro-max:256gb',
-    name: 'Apple iPhone 18 Pro Max 256GB',
-    slug: 'apple-iphone-18-pro-max-256gb',
-    description:
-      'Flagship đầu bảng Apple iPhone 18 Pro Max 256GB chính hãng VN/A trang bị chip Apple A20 Pro tiến trình 2nm TSMC, RAM 12GB, cụm 3 camera 48MP Pro Fusion với ống kính chính khẩu độ biến thiên f/1.4-f/4.0, Face ID ẩn dưới màn hình và pin 5567mAh.',
-    ram_gb: 12,
-    storage_gb: 256,
-    screen_size_inch: 6.9,
-    battery_mah: 5567,
-    has_5g: true,
-    colors: ['Titan Đen Không Gian', 'Titan Trắng Ánh Sao', 'Titan Tự Nhiên', 'Titan Đỏ Burgundy'],
-    images: ['/img/devices/apple-iphone-18-pro-max-256gb.jpg'],
-    key_specs: {
-      screen: '6.9" LTPO Super Retina XDR OLED 120Hz (3000 nits, Ceramic Shield 2)',
-      chip: 'Apple A20 Pro (2 nm TSMC N2)',
-      ram: '12GB LPDDR5X',
-      storage: '256GB NVMe',
-      camera: '3x 48MP Pro Fusion (Khẩu độ biến thiên f/1.4-4.0 + Tele 5x + Ultrawide) + LiDAR',
-      battery: '5567 mAh, Sạc nhanh 35W PD3.1 & 25W MagSafe',
-    },
-    specifications: {
-      display: {
-        size_inch: 6.9,
-        type: 'LTPO Super Retina XDR OLED, 120Hz ProMotion, HDR10, Dolby Vision, 2000 nits (HBM), 3000 nits (peak)',
-        resolution: '1320 x 2868 pixels, 19.5:9 ratio (~460 ppi)',
-        refresh_rate_hz: 120,
-        ppi: 460,
-        protection: 'Ceramic Shield 2 glass (2026 gen, anti-reflective coating)',
-        features: 'Always-On display, Compact Dynamic Island with Under-Display Face ID IR',
-      },
-      hardware: {
-        chipset: 'Apple A20 Pro (2 nm)',
-        cpu: 'Hexa-core (2x4.40 GHz performance + 4x2.85 GHz efficiency)',
-        gpu: 'Apple GPU (6-core graphics, Hardware Ray Tracing Gen 3)',
-        ram_gb: 12,
-        storage_gb: 256,
-        storage_expansion: 'No (NVMe)',
-        os: 'iOS 20',
-      },
-      camera: {
-        rear_setup: 'Triple Camera (3 ống kính 48MP Pro Fusion + LiDAR 3D)',
-        main_camera:
-          '48 MP, f/1.4-f/4.0 (variable aperture), 24mm (wide), 1/1.28", 1.22µm, dual pixel PDAF, sensor-shift OIS',
-        second_camera: '48 MP, f/2.2, 13mm, 120˚ (ultrawide), 0.7µm, dual pixel PDAF',
-        third_camera:
-          '48 MP, f/2.6, 120mm (periscope tetraprism telephoto), 1/2.55", 5x optical zoom, 3D sensor-shift OIS, dual pixel PDAF',
-        fourth_camera: 'TOF 3D LiDAR scanner (depth)',
-        video_recording:
-          '4K@24/25/30/60/100/120fps, 1080p@25/30/60/120/240fps, 10-bit HDR, Dolby Vision HDR, ProRes Log, 3D Spatial Video, 4-mic studio audio',
-        front_camera:
-          '24 MP, f/1.9, 23mm (wide), 1/3.2", PDAF, OIS, SL 3D depth/biometrics sensor, 4K@60fps Dolby Vision',
-        flash: 'Dual-LED dual-tone flash, HDR (photo/panorama)',
-      },
-      battery: {
-        capacity_mah: 5567,
-        type: 'Li-Ion 5567 mAh, non-removable (Stacked battery architecture)',
-        charging:
-          '35W wired PD3.1 (50% in 22 min), 25W wireless MagSafe, 15W wireless Qi2, 4.5W reverse wired',
-        fast_charging_w: 35,
-        reverse_charging: true,
-      },
-      design: {
-        dimensions: '163.0 x 77.6 x 8.25 mm',
-        weight_g: 229,
-        materials:
-          'Glass front (Ceramic Shield 2), textured matte glass back, Grade 5 titanium frame',
-        resistance: 'IP68 dust tight and water resistant (immersible up to 6m for 30 min)',
-        biometrics: 'Face ID (Under-display TrueDepth IR system)',
-        colors: [
-          'Titan Đen Không Gian',
-          'Titan Trắng Ánh Sao',
-          'Titan Tự Nhiên',
-          'Titan Đỏ Burgundy',
-        ],
-      },
-      cellular: {
-        has_5g: true,
-        bands_5g:
-          '1, 2, 3, 5, 7, 8, 12, 20, 25, 26, 28, 30, 38, 40, 41, 48, 66, 70, 77, 78, 79 SA/NSA/Sub6',
-        sim_type: 'Nano-SIM + eSIM (Dual eSIM support)',
-        data_speed: 'HSPA, LTE-A, 5G, EV-DO Rev.A 3.1 Mbps (Apple C2 5G Modem)',
-        technology: 'GSM / CDMA / HSPA / EVDO / LTE / 5G',
-      },
-      connectivity: {
-        bluetooth: '6.0, A2DP, LE',
-        wlan: 'Wi-Fi 802.11 a/b/g/n/ac/6e/7, tri-band, hotspot (Apple N1 wireless chip)',
-        usb: 'USB Type-C 3.2 Gen 2 (10Gbps), DisplayPort',
-        nfc: true,
-        location: 'GPS (L1+L5), GLONASS, GALILEO, BDS, QZSS, NavIC',
-        sensors:
-          'Face ID, accelerometer, gyro, proximity, compass, barometer, Ultra Wideband (UWB) gen 3, Emergency SOS via satellite',
-      },
-      multimedia: {
-        loudspeaker: 'Yes, with stereo speakers (Spatial Audio & Dolby Atmos)',
-        headphone_jack_35mm: false,
-        audio_features: 'Spatial Audio playback, 4-studio mic array with Audio Mix',
-      },
-      availability: {
-        announced: '2026, September 18',
-        status: 'Available. Released 2026, September 25',
-        prices_msrp: '35.990.000 ₫ (256GB VN/A)',
-      },
-      regulatory: {
-        sar_head: '1.14 W/kg',
-        sar_body: '1.18 W/kg',
-        certifications: 'FCC, CE, IC, QCVN (BTTTT Vietnam - Mã VN/A)',
-      },
-    },
-  },
-  {
-    categorySlug: 'smartphones',
-    brand: 'Apple',
-    model: 'iPhone 18 Pro',
-    variant_name: '256GB',
-    model_key: 'apple:iphone-18-pro:256gb',
-    name: 'Apple iPhone 18 Pro 256GB',
-    slug: 'apple-iphone-18-pro-256gb',
-    description:
-      'Apple iPhone 18 Pro 256GB VN/A gọn gàng với màn hình 6.3 inch Super Retina XDR 120Hz, chip A20 Pro (2nm), RAM 12GB, cụm 3 camera 48MP Pro Fusion khẩu độ biến thiên f/1.4-f/4.0 và khung Titan Grade 5.',
-    ram_gb: 12,
-    storage_gb: 256,
-    screen_size_inch: 6.3,
-    battery_mah: 4056,
-    has_5g: true,
-    colors: ['Titan Đen Không Gian', 'Titan Trắng Ánh Sao', 'Titan Tự Nhiên', 'Titan Đỏ Burgundy'],
-    images: ['/img/devices/apple-iphone-18-pro-256gb.jpg'],
-    key_specs: {
-      screen: '6.3" LTPO Super Retina XDR OLED 120Hz (3000 nits, Ceramic Shield 2)',
-      chip: 'Apple A20 Pro (2 nm TSMC N2)',
-      ram: '12GB LPDDR5X',
-      storage: '256GB NVMe',
-      camera: '3x 48MP Pro Fusion (Khẩu độ biến thiên f/1.4-4.0 + Tele 5x + Ultrawide) + LiDAR',
-      battery: '4056 mAh, Sạc nhanh 35W PD3.1 & 25W MagSafe',
-    },
-    specifications: {
-      display: {
-        size_inch: 6.3,
-        type: 'LTPO Super Retina XDR OLED, 120Hz ProMotion, HDR10, Dolby Vision, 3000 nits (peak)',
-        resolution: '1206 x 2622 pixels, 19.5:9 ratio (~460 ppi)',
-        refresh_rate_hz: 120,
-        ppi: 460,
-        protection: 'Ceramic Shield 2 glass (2026 gen)',
-        features: 'Always-On display, Compact Dynamic Island with Under-Display Face ID IR',
-      },
-      hardware: {
-        chipset: 'Apple A20 Pro (2 nm)',
-        cpu: 'Hexa-core (2x4.40 GHz performance + 4x2.85 GHz efficiency)',
-        gpu: 'Apple GPU (6-core graphics, Hardware Ray Tracing Gen 3)',
-        ram_gb: 12,
-        storage_gb: 256,
-        storage_expansion: 'No (NVMe)',
-        os: 'iOS 20',
-      },
-      camera: {
-        rear_setup: 'Triple Camera (3 ống kính 48MP Pro Fusion + LiDAR 3D)',
-        main_camera:
-          '48 MP, f/1.4-f/4.0 (variable aperture), 24mm (wide), 1/1.28", 1.22µm, dual pixel PDAF, sensor-shift OIS',
-        second_camera: '48 MP, f/2.2, 13mm, 120˚ (ultrawide), dual pixel PDAF',
-        third_camera:
-          '48 MP, f/2.6, 120mm (periscope tetraprism telephoto), 5x optical zoom, 3D sensor-shift OIS',
-        fourth_camera: 'TOF 3D LiDAR scanner (depth)',
-        video_recording:
-          '4K@24/25/30/60/100/120fps, 10-bit Dolby Vision HDR, ProRes Log, Spatial Video',
-        front_camera: '24 MP, f/1.9, 23mm (wide), PDAF, OIS, 4K@60fps',
-        flash: 'Dual-LED dual-tone flash, HDR',
-      },
-      battery: {
-        capacity_mah: 4056,
-        type: 'Li-Ion 4056 mAh, non-removable',
-        charging: '35W wired PD3.1, 25W wireless MagSafe, 15W wireless Qi2',
-        fast_charging_w: 35,
-        reverse_charging: true,
-      },
-      design: {
-        dimensions: '149.6 x 71.5 x 8.25 mm',
-        weight_g: 199,
-        materials:
-          'Glass front (Ceramic Shield 2), textured matte glass back, Grade 5 titanium frame',
-        resistance: 'IP68 dust tight and water resistant (immersible up to 6m for 30 min)',
-        biometrics: 'Face ID (Under-display TrueDepth IR)',
-        colors: [
-          'Titan Đen Không Gian',
-          'Titan Trắng Ánh Sao',
-          'Titan Tự Nhiên',
-          'Titan Đỏ Burgundy',
-        ],
-      },
-      cellular: {
-        has_5g: true,
-        bands_5g:
-          '1, 2, 3, 5, 7, 8, 12, 20, 25, 26, 28, 30, 38, 40, 41, 48, 66, 77, 78, 79 SA/NSA/Sub6',
-        sim_type: 'Nano-SIM + eSIM (Dual eSIM support)',
-        data_speed: 'HSPA, LTE-A, 5G (Apple C2 Modem)',
-        technology: 'GSM / CDMA / HSPA / EVDO / LTE / 5G',
-      },
-      connectivity: {
-        bluetooth: '6.0, A2DP, LE',
-        wlan: 'Wi-Fi 802.11 a/b/g/n/ac/6e/7, tri-band',
-        usb: 'USB Type-C 3.2 Gen 2 (10Gbps), DisplayPort',
-        nfc: true,
-        location: 'GPS (L1+L5), GLONASS, GALILEO, BDS, QZSS, NavIC',
-        sensors: 'Face ID, accelerometer, gyro, proximity, compass, barometer, UWB gen 3',
-      },
-      multimedia: {
-        loudspeaker: 'Yes, with stereo speakers (Dolby Atmos)',
-        headphone_jack_35mm: false,
-        audio_features: 'Spatial Audio playback, 4-studio mic array',
-      },
-      availability: {
-        announced: '2026, September 18',
-        status: 'Available. Released 2026, September 25',
-        prices_msrp: '29.990.000 ₫ (256GB VN/A)',
-      },
-      regulatory: {
-        sar_head: '1.15 W/kg',
-        sar_body: '1.16 W/kg',
-        certifications: 'FCC, CE, IC, QCVN (BTTTT Vietnam - Mã VN/A)',
-      },
-    },
-  },
-  {
-    categorySlug: 'smartphones',
-    brand: 'Samsung',
-    model: 'Galaxy S26 Ultra',
-    variant_name: '16GB/256GB',
-    model_key: 'samsung:galaxy-s26-ultra:256gb',
-    name: 'Samsung Galaxy S26 Ultra 256GB',
-    slug: 'samsung-galaxy-s26-ultra-256gb',
-    description:
-      'Siêu phẩm Samsung Galaxy S26 Ultra 256GB (16GB RAM) năm 2026 với vi xử lý Snapdragon 8 Elite Gen 5 for Galaxy (3nm), màn hình Dynamic LTPO AMOLED 2X 6.9 inch phủ kính chống phản chiếu Gorilla Armor 2, bút S-Pen tích hợp, hệ thống 4 camera 200MP và sạc nhanh 65W.',
-    ram_gb: 16,
-    storage_gb: 256,
-    screen_size_inch: 6.9,
-    battery_mah: 5200,
-    has_5g: true,
-    colors: ['Titan Đen Tuyền', 'Titan Xám Bạc', 'Titan Xanh Băng Giá', 'Titan Tím Ánh Kim'],
-    images: ['/img/devices/samsung-galaxy-s26-ultra-256gb.jpg'],
-    key_specs: {
-      screen: '6.9" Dynamic LTPO AMOLED 2X 120Hz (3200 nits, Gorilla Armor 2)',
-      chip: 'Snapdragon 8 Elite Gen 5 for Galaxy (3 nm)',
-      ram: '16GB LPDDR5X',
-      storage: '256GB UFS 4.1',
-      camera: '200MP OIS + 50MP Periscope 5x + 12MP Tele 3x + 50MP Ultrawide',
-      battery: '5200 mAh, Sạc nhanh 65W & 25W Qi2.2 không dây',
-    },
-    specifications: {
-      display: {
-        size_inch: 6.9,
-        type: 'Dynamic LTPO AMOLED 2X, 120Hz, HDR10+, 3200 nits (peak)',
-        resolution: '1440 x 3120 pixels, 19.5:9 ratio (~498 ppi)',
-        refresh_rate_hz: 120,
-        ppi: 498,
-        protection: 'Corning Gorilla Armor 2 (DX anti-reflective glass)',
-        features: 'Always-on display, Ultra-low reflection coating (<1.2% reflectance)',
-      },
-      hardware: {
-        chipset: 'Qualcomm Snapdragon 8 Elite Gen 5 for Galaxy (3 nm)',
-        cpu: 'Octa-core (2x4.72 GHz Oryon V2 for Galaxy + 6x3.65 GHz Oryon V2)',
-        gpu: 'Adreno 840 (Overclocked for Galaxy)',
-        ram_gb: 16,
-        storage_gb: 256,
-        storage_expansion: 'No (UFS 4.1)',
-        os: 'Android 16, One UI 8 (7 major Android upgrades)',
-      },
-      camera: {
-        rear_setup: 'Quad Camera (4 ống kính ProVisual Engine AI)',
-        main_camera: '200 MP, f/1.7, 24mm (wide), 1/1.3", 0.6µm, multi-directional PDAF, OIS',
-        second_camera: '50 MP, f/1.9, 120˚ (ultrawide), 0.7µm, dual pixel PDAF, Super Steady video',
-        third_camera:
-          '50 MP, f/3.4, 111mm (periscope telephoto), 1/2.52", 0.7µm, PDAF, OIS, 5x optical zoom',
-        fourth_camera:
-          '12 MP, f/2.4, 67mm (telephoto), 1/3.52", Dual Pixel PDAF, OIS, 3x optical zoom',
-        video_recording:
-          '8K@24/30fps, 4K@30/60/120fps, 10-bit HDR, Galaxy Log, stereo sound rec., gyro-EIS',
-        front_camera: '12 MP, f/2.2, 26mm (wide), dual pixel PDAF, 4K@60fps',
-        flash: 'LED flash, auto-HDR, panorama',
-      },
-      battery: {
-        capacity_mah: 5200,
-        type: 'Li-Ion 5200 mAh, non-removable',
-        charging: '65W wired PD3.0 (75% in 30 min), 25W wireless (Qi2.2), 4.5W reverse wireless',
-        fast_charging_w: 65,
-        reverse_charging: true,
-      },
-      design: {
-        dimensions: '162.6 x 77.6 x 8.1 mm',
-        weight_g: 217,
-        materials:
-          'Glass front (Gorilla Armor 2), glass back (Gorilla Glass Victus 2), Grade 5 titanium frame',
-        resistance:
-          'IP68 dust tight and water resistant (immersible up to 1.5m for 30 min), Built-in S-Pen stylus',
-        biometrics: 'Under-display Qualcomm 3D Sonic Max ultrasonic fingerprint, Face Unlock',
-        colors: ['Titan Đen Tuyền', 'Titan Xám Bạc', 'Titan Xanh Băng Giá', 'Titan Tím Ánh Kim'],
-      },
-      cellular: {
-        has_5g: true,
-        bands_5g: '1, 2, 3, 5, 7, 8, 12, 20, 25, 28, 38, 40, 41, 66, 75, 77, 78 SA/NSA/Sub6',
-        sim_type: 'Nano-SIM + Nano-SIM + eSIM (max 2 active)',
-        data_speed: 'HSPA, LTE-A (up to 7CA), 5G',
-        technology: 'GSM / CDMA / HSPA / EVDO / LTE / 5G',
-      },
-      connectivity: {
-        bluetooth: '5.4, A2DP, LE',
-        wlan: 'Wi-Fi 802.11 a/b/g/n/ac/6e/7, tri-band, Wi-Fi Direct',
-        usb: 'USB Type-C 3.2, DisplayPort 1.2, OTG (Samsung DeX)',
-        nfc: true,
-        location: 'GPS, GLONASS, BDS, GALILEO, QZSS',
-        sensors:
-          'Fingerprint (under display, ultrasonic), accelerometer, gyro, proximity, compass, barometer, Ultra Wideband (UWB)',
-      },
-      multimedia: {
-        loudspeaker: 'Yes, with stereo speakers (Tuned by AKG, Dolby Atmos)',
-        headphone_jack_35mm: false,
-        audio_features: '32-bit/384kHz audio, Samsung Seamless Codec UHQ',
-      },
-      availability: {
-        announced: '2026, February 25',
-        status: 'Available. Released 2026, March',
-        prices_msrp: '33.990.000 ₫ (16GB/256GB)',
-      },
-      regulatory: {
-        sar_head: '0.96 W/kg',
-        sar_body: '1.08 W/kg',
-        certifications: 'FCC, CE, QCVN (Samsung Electronics Vietnam Thái Nguyên)',
-      },
-    },
-  },
-  {
-    categorySlug: 'smartphones',
     brand: 'OPPO',
     model: 'Find X9 Pro',
     variant_name: '16GB/512GB',
@@ -3880,6 +3560,9 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
       },
     },
   },
+  // Sourced iPhone 18 Pro, 18 Pro Max and Galaxy S26 Ultra 256GB seeds (flagship-seed-sourced-
+  // 2026.ts), in place of the earlier unsourced entries.
+  ...SOURCED_SEEDS_2026,
 ];
 
 /**
@@ -3897,6 +3580,8 @@ export interface FlagshipItemSeed {
   images: string[];
   specifications: ProductSpecifications;
   key_specs: KeySpecs;
+  /** The retracted spec paths of its variants (FlagshipDeviceSeed.retract_spec_fields). */
+  retract_spec_fields: readonly string[];
   variants: FlagshipDeviceSeed[];
 }
 
@@ -3911,6 +3596,9 @@ export function flagshipSeedsByItem(
     const existing = items.get(parts.itemKey);
     if (existing) {
       existing.variants.push(seed);
+      existing.retract_spec_fields = [
+        ...new Set([...existing.retract_spec_fields, ...(seed.retract_spec_fields ?? [])]),
+      ];
       continue;
     }
     // Storage and RAM are per variant (design doc 4.1): never on the Item.
@@ -3932,6 +3620,7 @@ export function flagshipSeedsByItem(
       images: seed.images,
       specifications: { ...seed.specifications, hardware },
       key_specs: keySpecs as KeySpecs,
+      retract_spec_fields: [...(seed.retract_spec_fields ?? [])],
       variants: [seed],
     });
   }
