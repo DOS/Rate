@@ -1367,6 +1367,10 @@ async function runSuite() {
     ['Nothing Phone (3) 256GB tặng CMF Buds Pro 2', 'nothing:phone-3:256gb'],
     ['Nothing Phone (3a) (Pro) 256GB', 'nothing:phone-3a-pro:256gb'],
     ['Nothing Phone (2a) + 256GB', 'nothing:phone-2a-plus:256gb'],
+    ['NothingPhone (3) 256GB', 'nothing:phone-3:256gb'],
+    ['NothingPhone (3a) Pro 256GB', 'nothing:phone-3a-pro:256gb'],
+    ['Nothing - Phone (3) 256GB tặng CMF Buds Pro 2', 'nothing:phone-3:256gb'],
+    ['[Nothing tặng ốp] Nothing - Phone (3) 256GB', 'nothing:phone-3:256gb'],
   ] as const)
     assert.equal(keyOf(title), key, title);
   // "nothing" as a word is no brand.

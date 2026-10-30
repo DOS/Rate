@@ -317,7 +317,7 @@ function namesProduct(text: string): boolean {
  * Book") falls to the phone default, as it does with no gift.
  */
 const PHONE_BRAND_RE =
-  /\b(?:samsung|galaxy|xiaomi|redmi|poco|oppo|vivo(?!\s*book)|realme|pixel|oneplus|honor|xperia|nokia|motorola|tecno|infinix|nothing\s*phone|cmf\s*phone)\b/i;
+  /\b(?:samsung|galaxy|xiaomi|redmi|poco|oppo|vivo(?!\s*book)|realme|pixel|oneplus|honor|xperia|nokia|motorola|tecno|infinix|nothing\s*(?:-\s*)?phone|cmf\s*phone)\b/i;
 
 /**
  * Where a gift or bundle starts: "tặng" / "kèm" as words, a "+" with spaces round it, or a
@@ -1859,6 +1859,8 @@ export class ProductNormalizer {
       brand === 'Nothing'
         ? identityTitle
             .replace(/\bcmf by nothing\b/gi, 'Nothing CMF')
+            // "Nothing - Phone (3)" and "NothingPhone (3)" are "Nothing Phone (3)".
+            .replace(/\bnothing ?(?:- ?)?(?=phone|ear|headphone|cmf)/gi, 'Nothing ')
             .replace(
               /\b(phone|ear|headphone|watch|buds) ?\( ?(\d{1,2}[a-z]?|[a-z]|open|stick) ?\)/gi,
               '$1 $2'
