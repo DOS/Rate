@@ -504,7 +504,7 @@ function fakeGitHub({ mergeableState = 'clean', onCommits, onRules } = {}) {
       return [{ message: 'fix(web): a thing' }];
     },
     gh: (args) => {
-      writes.push(args[3]);
+      writes.push(args.find((a) => a.startsWith('repos/')));
       return { status: 0, stdout: 'merged-sha\n', stderr: '' };
     },
   };
