@@ -1243,7 +1243,7 @@ export default function LeaderboardExplorer({
                       border:
                         idx === 0
                           ? '1.5px solid rgba(245, 158, 11, 0.55)'
-                          : '1px solid rgba(255, 255, 255, 0.12)',
+                          : '1px solid var(--rate-glass-border)',
                     }}
                   >
                     <div>
@@ -1325,7 +1325,7 @@ export default function LeaderboardExplorer({
                       {/* Mini 5-Criteria Bars */}
                       <div
                         className="rounded-3 mb-3 p-2 px-3"
-                        style={{ background: 'rgba(15, 23, 42, 0.55)' }}
+                        style={{ background: 'var(--rate-glass-bg)' }}
                       >
                         {(
                           [

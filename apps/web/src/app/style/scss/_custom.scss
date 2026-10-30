@@ -132,9 +132,10 @@
   --rate-bg-elevated: #181d29;
   --rate-border-subtle: rgba(255, 255, 255, 0.08);
   --rate-border-strong: rgba(255, 255, 255, 0.16);
+  // Same values as rate-dark-tokens in _theme.scss.
   --rate-fg-primary: #f8fafc;
-  --rate-fg-secondary: #94a3b8;
-  --rate-fg-muted: #64748b;
+  --rate-fg-secondary: #a3b0c2;
+  --rate-fg-muted: #8b97a8;
   --rate-fg-paragraph: #cbd5e1;
   --rate-brand-bg: rgba(216, 48, 48, 0.14);
   --rate-glass-bg: rgba(255, 255, 255, 0.05);
@@ -257,13 +258,13 @@
 // The score badges carry light-only literal tints; on the dark surface they
 // switch to the soft tints above with the light inks used on obsidian grounds.
 .rate-surface-dark .rate-score-badge-user {
-  color: #34d399;
+  color: var(--rate-ink-success);
   background-color: var(--rate-score-user-bg);
   border-color: #2dba69;
 }
 
 .rate-surface-dark .rate-score-badge-expert {
-  color: #a5b4fc;
+  color: var(--rate-ink-expert);
   background-color: var(--rate-score-expert-bg);
   border-color: #6366f1;
 }

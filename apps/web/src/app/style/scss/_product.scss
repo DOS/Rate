@@ -88,11 +88,11 @@
   font-weight: 600;
 
   &.is-user {
-    color: #fcd34d;
+    color: var(--rate-ink-warning);
   }
 
   &.is-expert {
-    color: #a5b4fc;
+    color: var(--rate-ink-expert);
   }
 }
 

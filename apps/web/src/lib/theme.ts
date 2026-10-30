@@ -51,7 +51,13 @@ export function applyThemeChoice(choice: ThemeChoice): void {
   } catch {
     // Storage blocked (private mode): the choice holds for this page only.
   }
+  window.dispatchEvent(
+    new CustomEvent<ThemeChoice>(THEME_CHANGE_EVENT, { detail: choice })
+  );
 }
+
+/** Fired on window when a choice is made, so every toggle shows it. */
+export const THEME_CHANGE_EVENT = 'rate-theme-change';
 
 /**
  * While the choice is "system", follows a change of the OS setting without

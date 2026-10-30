@@ -62,7 +62,9 @@
   --bs-body-bg-rgb: 11, 13, 17;
   --bs-card-bg: #12161f;
   --bs-secondary-bg: #181d29;
+  --bs-secondary-bg-rgb: 24, 29, 41;
   --bs-tertiary-bg: #12161f;
+  --bs-tertiary-bg-rgb: 18, 22, 31;
   --bs-emphasis-color: #ffffff;
   --bs-secondary-color: #a3b0c2;
   --bs-heading-color: #f8fafc;
@@ -170,6 +172,14 @@
     --bs-btn-hover-color: var(--rate-bg-canvas);
     color: var(--rate-fg-primary);
     border-color: var(--rate-border-strong);
+
+    &:hover,
+    &:focus-visible,
+    &:active {
+      color: var(--rate-bg-canvas);
+      background-color: var(--rate-fg-primary);
+      border-color: var(--rate-fg-primary);
+    }
   }
 
   // A dark pill (the active filter) on the dark canvas inverts, so it still
@@ -186,6 +196,12 @@
     --bs-btn-active-color: #0b0d11;
     background-color: #f1f5f9 !important;
     color: #0b0d11 !important;
+    --rate-ink-primary: #b42828;
+    --rate-ink-success: #146c43;
+    --rate-ink-danger: #b02a37;
+    --rate-ink-secondary: #545b62;
+    --rate-ink-warning: #7a5000;
+    --rate-ink-info: #0a6c7d;
   }
 
   // The brand red reads ~4:1 on obsidian; outlined red text takes the light
@@ -196,6 +212,28 @@
     --bs-btn-border-color: var(--rate-crimson-text);
     color: var(--rate-crimson-text);
     border-color: var(--rate-crimson-text);
+
+    &:hover,
+    &:focus-visible,
+    &:active {
+      color: #ffffff;
+      background-color: var(--rate-brand);
+      border-color: var(--rate-brand);
+    }
+  }
+
+  // Light islands on obsidian grounds (_custom.scss) are dark on the dark
+  // theme, so their inks go back to the light ones.
+  :is(.rate-surface-dark, .rate-scoreboard-dark, .rate-ink-on-dark, .bg-dark)
+    :is(.bg-white, .bg-light):not([class*='bg-opacity']),
+  .rate-ink-on-dark :is(.card, .dropdown-menu):not(.bg-dark, .text-bg-dark) {
+    --rate-ink-primary: #ff6b6b;
+    --rate-ink-success: #34d399;
+    --rate-ink-danger: #ff6b6b;
+    --rate-ink-secondary: #a3b0c2;
+    --rate-ink-warning: #ffc107;
+    --rate-ink-info: #0dcaf0;
+    --bs-code-color: #a5b4fc;
   }
 
   // Dark ink on a light fill (yellow badges and buttons) stays dark.
@@ -236,6 +274,7 @@
   // tile on the dark theme.
   .rate-product-card-media-link img,
   .rate-pdv-media img {
+    mix-blend-mode: normal;
     background-color: #ffffff;
     border-radius: 0.5rem;
   }
@@ -278,6 +317,13 @@
   &:focus-visible {
     outline: 2px solid var(--rate-focus-ring);
     outline-offset: 1px;
+  }
+}
+
+@media (max-width: 991.98px) {
+  .rate-theme-toggle-btn {
+    min-height: 44px;
+    padding: 0 0.75rem;
   }
 }
 
@@ -367,8 +413,11 @@
   }
 }
 
-// Outline-light buttons are made for dark grounds, which turn light here.
-:root[data-bs-theme='light'] .btn-outline-light {
+// Outline-light buttons are made for dark grounds: on the ones that turn
+// light here they take dark ink. A .bg-dark block stays dark and keeps them.
+:root[data-bs-theme='light']
+  :is(.rate-surface-dark, .rate-scoreboard-dark, .rate-ink-on-dark)
+  .btn-outline-light:not(.bg-dark .btn-outline-light) {
   --bs-btn-color: var(--rate-fg-primary);
   --bs-btn-border-color: var(--rate-border-strong);
   --bs-btn-hover-bg: var(--rate-fg-primary);
@@ -376,6 +425,14 @@
   --bs-btn-hover-border-color: var(--rate-fg-primary);
   color: var(--rate-fg-primary);
   border-color: var(--rate-border-strong);
+
+  &:hover,
+  &:focus-visible,
+  &:active {
+    color: #ffffff;
+    background-color: var(--rate-fg-primary);
+    border-color: var(--rate-fg-primary);
+  }
 }
 
 // Page heroes keep a soft brand wash instead of the dark gradient.

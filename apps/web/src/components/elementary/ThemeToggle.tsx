@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { BsCircleHalf, BsMoonStarsFill, BsSunFill } from 'react-icons/bs';
 
@@ -8,6 +8,9 @@ import {
   applyThemeChoice,
   followSystemTheme,
   readThemeChoice,
+  resolveTheme,
+  THEME_CHANGE_EVENT,
+  THEME_STORAGE_KEY,
   type ThemeChoice,
 } from '@/lib/theme';
 
@@ -28,14 +31,30 @@ const OPTIONS: {
  */
 function useThemeChoice() {
   const [choice, setChoice] = useState<ThemeChoice | null>(null);
+  // The choice as this page knows it, also when storage is blocked.
+  const current = useRef<ThemeChoice>('system');
   useEffect(() => {
-    setChoice(readThemeChoice());
-    return followSystemTheme(readThemeChoice);
+    current.current = readThemeChoice();
+    setChoice(current.current);
+    // The desktop and phone controls are both mounted, and another tab may
+    // choose too: each control follows every change.
+    const onChange = (event: Event) => {
+      current.current = (event as CustomEvent<ThemeChoice>).detail;
+      setChoice(current.current);
+    };
+    const onStorage = (event: StorageEvent) => {
+      if (event.key === THEME_STORAGE_KEY) applyThemeChoice(readThemeChoice());
+    };
+    window.addEventListener(THEME_CHANGE_EVENT, onChange);
+    window.addEventListener('storage', onStorage);
+    const stopFollowing = followSystemTheme(() => current.current);
+    return () => {
+      window.removeEventListener(THEME_CHANGE_EVENT, onChange);
+      window.removeEventListener('storage', onStorage);
+      stopFollowing();
+    };
   }, []);
-  const choose = (next: ThemeChoice) => {
-    applyThemeChoice(next);
-    setChoice(next);
-  };
+  const choose = (next: ThemeChoice) => applyThemeChoice(next);
   return [choice, choose] as const;
 }
 
@@ -76,16 +95,23 @@ export default function ThemeToggle({
 }
 
 /**
- * One icon button for the desktop navbar, which has no room for three: each
- * click moves to the next choice (light, dark, system). Its name says the
- * current choice.
+ * One icon button for the desktop navbar, which has no room for three. From
+ * "system" a click goes to the theme not on screen, then light, dark and
+ * back to system. Its name says the current choice.
  */
 export function ThemeCycleButton({ className = '' }: { className?: string }) {
   const t = useTranslations('rate.nav');
   const [choice, choose] = useThemeChoice();
   const index = OPTIONS.findIndex((o) => o.choice === (choice ?? 'system'));
   const current = OPTIONS[index]!;
-  const next = OPTIONS[(index + 1) % OPTIONS.length]!;
+  const next =
+    current.choice === 'system'
+      ? resolveTheme('system') === 'dark'
+        ? OPTIONS[0]!
+        : OPTIONS[1]!
+      : current.choice === 'light'
+        ? OPTIONS[1]!
+        : OPTIONS[2]!;
   const Icon = current.Icon;
 
   return (

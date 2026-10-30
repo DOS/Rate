@@ -63,12 +63,10 @@ test('the toggle choice is kept and applied before the body on the next page', a
   await page.setViewportSize({ width: 1280, height: 800 });
   await page.emulateMedia({ colorScheme: 'light' });
   await page.goto(PRODUCT);
-  // The desktop navbar has one button that cycles light, dark, system; with
-  // no choice made it starts at system.
+  // The desktop navbar has one button that cycles the choice. With none
+  // made it shows system; on a light system the first click picks dark.
   const cycle = page.getByTestId('theme-cycle');
   await expect(cycle).toHaveAttribute('data-theme-choice', 'system');
-  await cycle.click();
-  await expect(cycle).toHaveAttribute('data-theme-choice', 'light');
   await cycle.click();
   await expect(cycle).toHaveAttribute('data-theme-choice', 'dark');
   await expect(page.locator('html')).toHaveAttribute('data-bs-theme', 'dark');
@@ -85,7 +83,12 @@ test('the toggle choice is kept and applied before the body on the next page', a
     await page.evaluate(() => getComputedStyle(document.body).backgroundColor)
   ).toBe(darkBg);
 
-  // Back to the system: the choice is dropped and light follows.
+  // Back to the system (dark -> system): the choice is dropped and light
+  // follows. Wait for hydration first: a click before it is lost.
+  await expect(page.getByTestId('theme-cycle')).toHaveAttribute(
+    'data-theme-choice',
+    'dark'
+  );
   await page.getByTestId('theme-cycle').click();
   await expect(page.getByTestId('theme-cycle')).toHaveAttribute(
     'data-theme-choice',
