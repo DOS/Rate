@@ -1400,7 +1400,25 @@
     "pgPreset12Title": "Real deals and fake sales on 10 marketplaces (/deals)",
     "pgPreset12Desc": "Scans prices across 10 marketplaces to find genuinely low prices (genuineDeals) and inflated original prices (fakeSaleTraps).",
     "pgPreset13Title": "OpenAPI 3.1.0 spec (/openapi.json)",
-    "pgPreset13Desc": "Returns the OpenAPI 3.1.0 spec in JSON for the Rate.vn REST API v1 endpoints."
+    "pgPreset13Desc": "Returns the OpenAPI 3.1.0 spec in JSON for the Rate.vn REST API v1 endpoints.",
+    "authPublic": "Public (CORS)",
+    "authOptIn": "Opt-in consent required",
+    "authBearer": "Bearer token (Supabase Auth)",
+    "cacheNoStoreQueue": "no-store (queues rate.crawl_jobs)",
+    "cacheNoStoreRpc": "no-store (RPC rate.submit_community_review)",
+    "cacheNoStoreTrigger": "no-store (database trigger)",
+    "groupTitles": {
+      "launch": "Launch & availability",
+      "body": "Body & durability",
+      "display": "Display & panel",
+      "platform": "Platform & chipset",
+      "memory": "Memory & storage",
+      "cameras": "Cameras (PhoneArena split)",
+      "audio": "Sound & acoustics",
+      "connectivity": "Comms & connectivity",
+      "battery": "Battery & charging",
+      "misc": "Sensors, SAR & regulatory"
+    }
   },
   "staticPages": {
     "aboutSeoTitle": "About Rate.vn - Spec, price and review comparison | Rate.vn",
