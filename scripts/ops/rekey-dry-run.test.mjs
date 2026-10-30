@@ -687,16 +687,21 @@ test('the PostgREST fetch refuses anything but a plain GET or HEAD', async () =>
       getFetch('https://db.example/rest/v1/rpc/refresh_master_market_stats'),
     /RPC/
   );
+  assert.throws(
+    () => getFetch('http://db.example/rest/v1/products'),
+    /non-https/
+  );
   assert.deepEqual(seen, ['GET', 'HEAD']);
 });
 
-test('the PostgREST mode needs a rate_worker-like token, not service_role or anon', () => {
+test('the PostgREST mode accepts only a rate_worker token', () => {
   assert.equal(jwtRole(jwt('rate_worker')), 'rate_worker');
   assert.equal(jwtRole('not-a-jwt'), null);
   assert.match(checkRestRole('rate_worker'), /GET requests only/);
   assert.throws(() => checkRestRole('service_role'), /service_role/);
-  assert.throws(() => checkRestRole('anon'), /only published rows/);
-  assert.throws(() => checkRestRole(null), /not a JWT/);
+  assert.throws(() => checkRestRole('anon'), /not rate_worker/);
+  assert.throws(() => checkRestRole('authenticated'), /not rate_worker/);
+  assert.throws(() => checkRestRole(null), /missing/);
 });
 
 test('reads through PostgREST page by page, with GET only, into the plan input', async () => {

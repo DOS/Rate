@@ -604,6 +604,8 @@ export async function loadKeyOf(normalizerPath) {
 // cannot serve it. Here read-only is structural instead: every request goes
 // through getOnlyFetch, which refuses any method but GET/HEAD, any body, any
 // Prefer header and any /rpc/ path. No Supabase client library is used.
+// The three tables are read one after another, not in one snapshot: run it when
+// no crawl is writing, or expect listings created mid-run to be left out.
 // ---------------------------------------------------------------------------
 
 export const ENV_REST = {
@@ -631,9 +633,20 @@ export function createGetOnlyFetch(fetchImpl = globalThis.fetch) {
     if (/\/rpc\//i.test(new URL(url).pathname)) {
       throw new Error('refusing an RPC call: this dry run only reads');
     }
-    // A redirect is refused, not followed: no response can turn a read into
-    // another request.
-    return fetchImpl(url, { method, headers, redirect: 'error' });
+    // Only https, so the token never travels in clear text.
+    if (new URL(url).protocol !== 'https:') {
+      throw new Error(
+        'refusing a non-https request: the token would be sent in clear'
+      );
+    }
+    // A redirect is refused, not followed: no response can send the read
+    // elsewhere. A request that hangs fails after a minute.
+    return fetchImpl(url, {
+      method,
+      headers,
+      redirect: 'error',
+      signal: AbortSignal.timeout(60_000),
+    });
   };
 }
 
@@ -652,21 +665,17 @@ export function jwtRole(token) {
 }
 
 /**
- * Refuses a token whose role bypasses row security (service_role) or sees only
- * published rows (anon), so the counts are neither unguarded nor partial.
+ * Accepts only rate_worker: service_role bypasses row security, and other roles
+ * (anon, authenticated, other workers) may see only some rows, which would make
+ * the counts silently partial. rate_worker reads every row of these tables.
  */
 export function checkRestRole(role) {
-  if (role === 'service_role') {
+  if (role !== 'rate_worker') {
     throw new Error(
-      'refusing to run: the access token is service_role. Use the rate_worker session.'
+      `refusing to run: the access token's role is ${role ?? 'missing (not a JWT)'}, not rate_worker. Use the rate_worker session.`
     );
   }
-  if (!role || role === 'anon') {
-    throw new Error(
-      `refusing to run: the access token is ${role ?? 'not a JWT'}, which sees only published rows. Use the rate_worker session.`
-    );
-  }
-  return `PostgREST as ${role}, GET requests only`;
+  return 'PostgREST as rate_worker, GET requests only';
 }
 
 /**
@@ -680,7 +689,8 @@ export async function readTable(
   { url, anonKey, accessToken },
   table,
   query,
-  pageSize = 1000
+  pageSize = 1000,
+  onPage = null
 ) {
   const rows = [];
   let after = null;
@@ -710,7 +720,9 @@ export async function readTable(
       throw new Error(`PostgREST read of rate.${table} returned no rows array`);
     }
     if (page.length === 0) return rows;
-    rows.push(...page);
+    // With onPage the caller folds each page, so a large table is never held.
+    if (onPage) onPage(page);
+    else rows.push(...page);
     const last = page[page.length - 1]?.id;
     if (last === undefined || last === null || String(last) === String(after)) {
       throw new Error(`PostgREST read of rate.${table} did not advance by id`);
@@ -744,16 +756,18 @@ export async function readViaPostgrest(
     },
     pageSize
   );
-  const history = await readTable(
+  const counts = new Map();
+  await readTable(
     getFetch,
     rest,
     'price_history',
     { select: 'id,product_id' },
-    pageSize
+    pageSize,
+    (page) => {
+      for (const h of page)
+        counts.set(h.product_id, (counts.get(h.product_id) ?? 0) + 1);
+    }
   );
-  const counts = new Map();
-  for (const h of history)
-    counts.set(h.product_id, (counts.get(h.product_id) ?? 0) + 1);
   return {
     role,
     data: {
