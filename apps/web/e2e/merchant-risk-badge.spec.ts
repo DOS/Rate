@@ -30,3 +30,20 @@ test('a 60/100 DOSafe store shows the scam warning', async ({ page }) => {
   await expect(status).toHaveText('Có cảnh báo rủi ro');
   await expect(status).toHaveClass(/text-danger/);
 });
+
+// A store with no DOSafe score (the column's default 0, no metadata score) is
+// neither clean nor a scam warning: no number at all (DOS/Rate#1479).
+const UNKNOWN = '/merchants/11111111-1111-4111-8111-111111111111';
+
+test('a store with no DOSafe score shows no score and no tone', async ({
+  page,
+}) => {
+  expect((await page.goto(UNKNOWN))?.status()).toBe(200);
+  const badge = page.getByTestId('merchant-scam-badge');
+  await expect(badge).toHaveText('Rủi ro lừa đảo: chưa đủ dữ liệu');
+  await expect(badge).toHaveAttribute('data-tone', 'unknown');
+  await expect(badge).not.toContainText('/100');
+  const status = page.getByTestId('merchant-scam-status');
+  await expect(status).toHaveText('Chưa có dữ liệu DOSafe');
+  await expect(status).not.toHaveClass(/text-success/);
+});

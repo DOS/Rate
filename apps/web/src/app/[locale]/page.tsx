@@ -64,6 +64,7 @@ import {
 import { applyCategorySpecTemplate } from '@repo/shared-data/rules';
 import {
   hasReviewRiskEvidence,
+  knownDosafeRiskScore,
   merchantRiskTone,
 } from '@/lib/merchant-risk-tone';
 import {
@@ -934,6 +935,7 @@ export default async function Home({
                 .map((merchant) => {
                   const tone = (risk: number) => `is-${merchantRiskTone(risk)}`;
                   const overallTone = tone(merchant.risk_score);
+                  const dosafeScore = knownDosafeRiskScore(merchant);
                   const trustLabel =
                     overallTone === 'is-good'
                       ? tHome('merchantTrustedLabel')
@@ -987,14 +989,21 @@ export default async function Home({
                         <dl className="rate-merchant-metrics">
                           <div>
                             <dt>{tHome('dosafeRiskLabel')}</dt>
-                            <dd className={tone(merchant.dosafe_risk_score)}>
-                              {merchant.dosafe_risk_score}/100
-                            </dd>
-                            {merchantRiskTone(merchant.dosafe_risk_score) ===
-                              'good' && (
-                              <dd className="rate-merchant-note">
-                                {tHome('noScamDetected')}
-                              </dd>
+                            {/* No DOSafe score: no number, and no "no scam
+                                detected" (DOS/Rate#1479). */}
+                            {dosafeScore == null ? (
+                              <dd>{tHome('reviewRiskNoData')}</dd>
+                            ) : (
+                              <>
+                                <dd className={tone(dosafeScore)}>
+                                  {dosafeScore}/100
+                                </dd>
+                                {merchantRiskTone(dosafeScore) === 'good' && (
+                                  <dd className="rate-merchant-note">
+                                    {tHome('noScamDetected')}
+                                  </dd>
+                                )}
+                              </>
                             )}
                           </div>
                           <div>
