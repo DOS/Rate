@@ -118,6 +118,17 @@ export default function HeroSearchInspector({
   const locale = useLocale();
   const radarIndex = useDealRadarIndex();
   const [mode, setMode] = useState<'search' | 'inspect'>('search');
+  // Phones get a hint short enough to read whole: the long one needs about
+  // 460px and the input has about 160px at 360 (DOS/Rate#1488). Wider
+  // screens, and the server render, keep the long hint with its examples.
+  const [narrowHint, setNarrowHint] = useState(false);
+  useEffect(() => {
+    const query = window.matchMedia('(max-width: 575.98px)');
+    const sync = () => setNarrowHint(query.matches);
+    sync();
+    query.addEventListener('change', sync);
+    return () => query.removeEventListener('change', sync);
+  }, []);
   const [query, setQuery] = useState('');
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(-1);
@@ -336,7 +347,9 @@ export default function HeroSearchInspector({
                   }}
                   onKeyDown={handleSearchKeyDown}
                   className="form-control fw-medium rounded-pill border-0 ps-2 shadow-none"
-                  placeholder={t('searchPlaceholder')}
+                  placeholder={t(
+                    narrowHint ? 'searchPlaceholderShort' : 'searchPlaceholder'
+                  )}
                   aria-label={t('searchAriaLabel')}
                   autoComplete="off"
                 />

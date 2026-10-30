@@ -281,6 +281,7 @@ export default async function VersusComparePage({ params }: VersusPageProps) {
               initialCategory={catSlug}
               hasExplicitSlugs={true}
               locale={locale}
+              layout="versus"
               {...itemSlugProps}
             />
           </div>

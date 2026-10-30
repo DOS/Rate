@@ -1,7 +1,9 @@
 import { expect, test } from '@playwright/test';
 
 // The back-to-top control is a labelled button in the page language and
-// leaves the URL alone (DOS/Rate#740).
+// leaves the URL alone (DOS/Rate#740). It shows only when the reader scrolls
+// back up from more than a screen down, so it does not cover the content on
+// the way down (DOS/Rate#1487).
 for (const [locale, label] of [
   ['vi', 'Lên đầu trang'],
   ['en', 'Back to top'],
@@ -17,6 +19,16 @@ for (const [locale, label] of [
     const button = page.getByRole('button', { name: label });
     await expect(button).toBeHidden();
     await page.mouse.wheel(0, 1500);
+    await expect
+      .poll(() => page.evaluate(() => window.scrollY))
+      .toBeGreaterThan(1000);
+    // Off screen on the way down, but still reachable from the keyboard.
+    await expect(button).toHaveClass(/visually-hidden-focusable/);
+    await button.focus();
+    await expect(button).toBeInViewport({ ratio: 1 });
+    await button.blur();
+    await page.mouse.wheel(0, -200);
+    await expect(button).not.toHaveClass(/visually-hidden-focusable/);
     await expect(button).toBeVisible();
     await button.click();
     await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
