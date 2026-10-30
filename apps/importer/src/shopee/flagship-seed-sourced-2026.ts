@@ -66,7 +66,6 @@ export const SOURCED_SEEDS_2026: FlagshipDeviceSeed[] = [
         second_camera: '48 MP Fusion Ultra Wide, f/2.2, 13mm, 120°, 1/2.55", 0.7µm, PDAF',
         third_camera:
           '48 MP Fusion Telephoto, f/2.8, 100mm (4x), tetraprism periscope, 1/2.55", 3D sensor-shift OIS',
-        fourth_camera: 'TOF 3D LiDAR scanner (depth)',
         flash: 'Adaptive True Tone flash',
         video_recording:
           '4K Dolby Vision 24/25/30/60/100/120fps, 1080p 25/30/60/120/240fps, ProRes and ProRes RAW up to 4K120 (external recording), Apple Log 2, ACES, Genlock, spatial video, 4 studio-quality mics',
@@ -220,7 +219,6 @@ export const SOURCED_SEEDS_2026: FlagshipDeviceSeed[] = [
         second_camera: '48 MP Fusion Ultra Wide, f/2.2, 13mm, 120°, PDAF',
         third_camera:
           '48 MP Fusion Telephoto, f/2.8, 100mm (4x), tetraprism periscope, 3D sensor-shift OIS',
-        fourth_camera: 'TOF 3D LiDAR scanner (depth)',
         flash: 'Adaptive True Tone flash',
         video_recording:
           '4K Dolby Vision 24/25/30/60/100/120fps, 1080p 25/30/60/120/240fps, ProRes and ProRes RAW up to 4K120 (external recording), Apple Log 2, ACES, Genlock, spatial video, 4 studio-quality mics',

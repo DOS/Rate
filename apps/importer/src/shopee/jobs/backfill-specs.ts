@@ -23,6 +23,9 @@ import {
   type FlagshipDeviceSeed,
   type FlagshipItemSeed,
 } from '../flagship-seed-data.js';
+import { withoutRetractedSpecs } from '../spec-retraction.js';
+
+export { withoutRetractedSpecs };
 import { resolveItemModelMode, type ItemModelMode } from '../item-model-flag.js';
 import { createImporterLogger } from '../logger.js';
 import { scopeSupabaseToRate, type RateSupabaseClient } from '../types.js';
@@ -73,34 +76,30 @@ export function withoutVariantKeySpecs(keySpecs: Record<string, unknown>): Recor
 }
 
 /**
- * Removes the retracted paths ("battery.fast_charging_w", "key_specs.ram") from specs and
- * key specs: a value an earlier, unsourced seed wrote that the merge would otherwise keep
- * (catalog expansion A1-A3).
+ * The leaf paths an update changes on a stored row, with their old and new values
+ * ("specifications.battery.capacity_mah: 5200 -> 5000"), for the dry-run log.
  */
-export function withoutRetractedSpecs<T>(
-  value: T,
-  paths: readonly string[] | undefined,
-  scope: 'specifications' | 'key_specs'
-): T {
-  if (!paths || paths.length === 0 || !value || typeof value !== 'object') return value;
-  const copy = structuredClone(value) as Record<string, unknown>;
-  for (const path of paths) {
-    const parts = path.split('.');
-    const own = scope === 'key_specs' ? parts[0] === 'key_specs' : parts[0] !== 'key_specs';
-    if (!own) continue;
-    const [group, field] = scope === 'key_specs' ? [parts[1], undefined] : [parts[0], parts[1]];
-    if (!group) continue;
-    if (field === undefined) {
-      delete copy[group];
-      continue;
-    }
-    const record = copy[group];
-    if (record && typeof record === 'object' && !Array.isArray(record)) {
-      delete (record as Record<string, unknown>)[field];
-      if (Object.keys(record).length === 0) delete copy[group];
-    }
+export function specUpdateChanges(
+  stored: Record<string, unknown> | null | undefined,
+  update: Record<string, unknown>
+): string[] {
+  const leaves = (value: unknown, path: string, out: Map<string, unknown>) => {
+    if (value && typeof value === 'object' && !Array.isArray(value)) {
+      for (const [k, v] of Object.entries(value)) leaves(v, path ? `${path}.${k}` : k, out);
+    } else out.set(path, value);
+    return out;
+  };
+  const before = new Map<string, unknown>();
+  const after = new Map<string, unknown>();
+  for (const key of Object.keys(update)) {
+    leaves(stored?.[key], key, before);
+    leaves(update[key], key, after);
   }
-  return copy as T;
+  const show = (v: unknown) => (v === undefined ? '(none)' : JSON.stringify(v));
+  return [...new Set([...before.keys(), ...after.keys()])]
+    .filter(path => JSON.stringify(before.get(path)) !== JSON.stringify(after.get(path)))
+    .sort()
+    .map(path => `${path}: ${show(before.get(path))} -> ${show(after.get(path))}`);
 }
 
 /**
@@ -452,7 +451,9 @@ export async function runMasterSpecsBackfill(
 
     const { data: existing, error: lookupErr } = await supabase
       .from('master_products')
-      .select('id, key_specs, specifications')
+      .select(
+        'id, key_specs, specifications, variant_name, description, ram_gb, storage_gb, screen_size_inch, battery_mah, has_5g, colors'
+      )
       .eq('model_key', device.model_key)
       .maybeSingle();
     if (lookupErr) {
@@ -477,6 +478,24 @@ export async function runMasterSpecsBackfill(
         }
       }
       catalogUpdated++;
+      // A replaced seed shows exactly what it changes, so a dry-run can be checked against
+      // the expected diff before an apply (DOS/Rate#1459).
+      if (device.retract_spec_fields) {
+        logger.info(
+          'backfill.catalog_diff',
+          `[Catalog Specs] ${device.model_key}: ${apply ? 'changed' : 'would change'}`,
+          {
+            modelKey: device.model_key,
+            changes: specUpdateChanges(
+              existing as Record<string, unknown>,
+              seedMasterSpecUpdate(
+                existing as { specifications?: unknown; key_specs?: unknown },
+                device
+              )
+            ),
+          }
+        );
+      }
       logger.info(
         'backfill.catalog_updated',
         `[Catalog Specs] ${device.name} (${device.model_key}): ${apply ? 'UPDATED' : 'DRY-RUN WOULD UPDATE'}`,
@@ -653,12 +672,13 @@ export async function runQuickSpecSyncAndAudit(
       }
       const { error: upErr } = await supabase
         .from('master_products')
-        .update(
-          seedMasterSpecUpdate(
+        .update({
+          ...seedMasterSpecUpdate(
             existingRow as { specifications?: unknown; key_specs?: unknown } | null,
             seed
-          )
-        )
+          ),
+          updated_at: new Date().toISOString(),
+        })
         .eq('model_key', seed.model_key);
       if (upErr) {
         throw new Error(`Failed to sync specs of ${seed.model_key}: ${upErr.message}`);
