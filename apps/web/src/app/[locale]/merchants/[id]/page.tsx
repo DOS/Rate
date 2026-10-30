@@ -36,6 +36,7 @@ import {
 import { isPendingReview } from '@/lib/review-display';
 import {
   hasReviewRiskEvidence,
+  knownDosafeRiskScore,
   merchantRiskTone,
 } from '@/lib/merchant-risk-tone';
 import { isOfferUnavailable } from '@/lib/product-market-stats';
@@ -86,20 +87,34 @@ export async function generateMetadata({
     name: merchant.name,
     score: merchant.trust_score,
   });
-  // No review risk number without analysed reviews (DOS/Rate#1249).
+  // No review risk number without analysed reviews (DOS/Rate#1249), and no
+  // DOSafe number without a DOSafe score (DOS/Rate#1479).
+  const dosafeScore = knownDosafeRiskScore(merchant);
+  const hasReviews = hasReviewRiskEvidence(merchant.review_risk_breakdown);
   const description = fitDescription(
-    hasReviewRiskEvidence(merchant.review_risk_breakdown)
-      ? t('profileMetaDesc', {
-          name: merchant.name,
-          dosafe: merchant.dosafe_risk_score,
-          seeding: merchant.review_risk_score,
-          count: merchant.product_count,
-        })
-      : t('profileMetaDescNoReviews', {
-          name: merchant.name,
-          dosafe: merchant.dosafe_risk_score,
-          count: merchant.product_count,
-        })
+    dosafeScore == null
+      ? hasReviews
+        ? t('profileMetaDescNoDosafe', {
+            name: merchant.name,
+            seeding: merchant.review_risk_score,
+            count: merchant.product_count,
+          })
+        : t('profileMetaDescNoData', {
+            name: merchant.name,
+            count: merchant.product_count,
+          })
+      : hasReviews
+        ? t('profileMetaDesc', {
+            name: merchant.name,
+            dosafe: dosafeScore,
+            seeding: merchant.review_risk_score,
+            count: merchant.product_count,
+          })
+        : t('profileMetaDescNoReviews', {
+            name: merchant.name,
+            dosafe: dosafeScore,
+            count: merchant.product_count,
+          })
   );
 
   return {
@@ -180,8 +195,11 @@ export default async function MerchantProfilePage({
     brk.total_reviews > 0
       ? Math.round((brk.authentic_count / brk.total_reviews) * 1000) / 10
       : null;
-  // Same cut-offs as the home merchant cards (DOS/Rate#1140).
-  const scamTone = merchantRiskTone(merchant.dosafe_risk_score);
+  // Same cut-offs as the home merchant cards (DOS/Rate#1140). A seller with
+  // no DOSafe score has no tone: neither clean nor an alert (DOS/Rate#1479).
+  const dosafeScore = knownDosafeRiskScore(merchant);
+  const scamTone =
+    dosafeScore == null ? 'unknown' : merchantRiskTone(dosafeScore);
 
   const canonicalUrl = `https://rate.vn/merchants/${merchant.id}`;
 
@@ -404,7 +422,7 @@ export default async function MerchantProfilePage({
                     isOfficial={merchant.is_official}
                     trustScore={merchant.trust_score}
                     trustLevelLabel={trustLevelLabel}
-                    dosafeRiskScore={merchant.dosafe_risk_score}
+                    dosafeRiskScore={dosafeScore}
                     reviewSeedingRiskScore={merchant.review_risk_score}
                     authenticReviews={brk.authentic_count}
                     totalReviews={brk.total_reviews}
@@ -438,16 +456,20 @@ export default async function MerchantProfilePage({
                   </div>
                   <span
                     className={`badge rounded-pill fs-6 px-3 py-2 ${
-                      scamTone === 'good'
-                        ? 'bg-success-subtle text-success'
-                        : scamTone === 'warn'
-                          ? 'bg-warning-subtle text-warning-emphasis'
-                          : 'bg-danger text-white'
+                      scamTone === 'unknown'
+                        ? 'bg-light text-muted border'
+                        : scamTone === 'good'
+                          ? 'bg-success-subtle text-success'
+                          : scamTone === 'warn'
+                            ? 'bg-warning-subtle text-warning-emphasis'
+                            : 'bg-danger text-white'
                     }`}
                     data-testid="merchant-scam-badge"
                     data-tone={scamTone}
                   >
-                    {t('scamRiskBadge', { score: merchant.dosafe_risk_score })}
+                    {dosafeScore == null
+                      ? t('scamRiskBadgeNoData')
+                      : t('scamRiskBadge', { score: dosafeScore })}
                   </span>
                 </div>
 
@@ -458,19 +480,23 @@ export default async function MerchantProfilePage({
                     <span className="text-muted">{t('scamStatusLabel')}</span>
                     <span
                       className={`fw-semibold ${
-                        scamTone === 'good'
-                          ? 'text-success'
-                          : scamTone === 'warn'
-                            ? 'text-warning-emphasis'
-                            : 'text-danger'
+                        scamTone === 'unknown'
+                          ? 'text-muted'
+                          : scamTone === 'good'
+                            ? 'text-success'
+                            : scamTone === 'warn'
+                              ? 'text-warning-emphasis'
+                              : 'text-danger'
                       }`}
                       data-testid="merchant-scam-status"
                     >
-                      {scamTone === 'good'
-                        ? t('scamStatusClean')
-                        : scamTone === 'warn'
-                          ? t('scamStatusCaution')
-                          : t('scamStatusAlert')}
+                      {scamTone === 'unknown'
+                        ? t('scamStatusNoData')
+                        : scamTone === 'good'
+                          ? t('scamStatusClean')
+                          : scamTone === 'warn'
+                            ? t('scamStatusCaution')
+                            : t('scamStatusAlert')}
                     </span>
                   </div>
                   <div className="d-flex align-items-center justify-content-between small mb-2">

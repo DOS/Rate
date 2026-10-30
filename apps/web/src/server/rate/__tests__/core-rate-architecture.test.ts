@@ -9069,6 +9069,44 @@ async function runCoreArchitectureSuite() {
     assert.equal(heroMerchants856[0]?.name, 'Store 0');
     assert.equal(heroMerchants856[0]?.trust_score, 100);
     assert.equal(heroMerchants856[0]?.dosafe_risk_score, 0);
+    // A store with no DOSafe score stays unknown in the hero dropdown, never 0
+    // (DOS/Rate#1479); a known 0 stays 0.
+    const heroUnknown1479 = toHeroMerchantSuggestions([
+      {
+        id: 'm-unknown',
+        name: 'No DOSafe',
+        platform: 'shopee',
+        platform_shop_id: 'shop-unknown',
+        is_official: false,
+        trust_score: 80,
+        dosafe_risk_score: 0,
+        dosafe_risk_known: false,
+      },
+      {
+        id: 'm-null',
+        name: 'Null DOSafe',
+        platform: 'shopee',
+        platform_shop_id: 'shop-null',
+        is_official: false,
+        trust_score: 80,
+        dosafe_risk_score: null,
+      },
+      {
+        id: 'm-zero',
+        name: 'Clean',
+        platform: 'shopee',
+        platform_shop_id: 'shop-zero',
+        is_official: false,
+        trust_score: 80,
+        dosafe_risk_score: 0,
+        dosafe_risk_known: true,
+      },
+    ]);
+    assert.deepEqual(
+      heroUnknown1479.map((m) => m.dosafe_risk_score),
+      [null, null, 0]
+    );
+    assert.equal('dosafe_risk_known' in heroUnknown1479[0]!, false);
 
     const heroProducts856 = toHeroProductSuggestions(
       Array.from({ length: MAX_HERO_PRODUCTS + 5 }, (_, idx) => ({

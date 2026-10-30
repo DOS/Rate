@@ -65,7 +65,8 @@ interface MerchantShareAuditButtonProps {
   readonly isOfficial: boolean;
   readonly trustScore: number;
   readonly trustLevelLabel: string;
-  readonly dosafeRiskScore: number;
+  /** Null when the seller has no DOSafe score (DOS/Rate#1479). */
+  readonly dosafeRiskScore: number | null;
   readonly reviewSeedingRiskScore: number;
   readonly authenticReviews: number;
   readonly totalReviews: number;
@@ -104,7 +105,8 @@ export default function MerchantShareAuditButton({
     80
   );
   const safeTrustScore = sanitizeMerchantScore100(trustScore);
-  const safeDosafeRisk = sanitizeMerchantScore100(dosafeRiskScore);
+  const safeDosafeRisk =
+    dosafeRiskScore == null ? null : sanitizeMerchantScore100(dosafeRiskScore);
   const safeSeedingRisk = sanitizeMerchantScore100(reviewSeedingRiskScore);
   const safeTotalReviews = sanitizeMerchantCount(totalReviews);
   const safeAuthenticReviews = Math.min(
@@ -139,7 +141,9 @@ export default function MerchantShareAuditButton({
           score: safeTrustScore,
           label: safeTrustLevelLabel,
         }),
-        t('mdDosafeLine', { score: safeDosafeRisk }),
+        safeDosafeRisk == null
+          ? t('mdDosafeLineNoData')
+          : t('mdDosafeLine', { score: safeDosafeRisk }),
         // No analysed reviews: neither a risk number nor "100% genuine"
         // (DOS/Rate#1249).
         safeTotalReviews > 0
@@ -204,7 +208,8 @@ export default function MerchantShareAuditButton({
       isOfficial ? 'Official Mall' : 'Standard',
       safeTrustScore,
       safeTrustLevelLabel,
-      safeDosafeRisk,
+      // Empty without a DOSafe score (DOS/Rate#1479).
+      safeDosafeRisk ?? '',
       // Empty without analysed reviews: no measured risk (DOS/Rate#1258).
       safeTotalReviews > 0 ? safeSeedingRisk : '',
       safeGenuineDeals,

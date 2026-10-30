@@ -71,7 +71,9 @@ const merchantPage = readFileSync(
   'utf8'
 );
 assert.ok(
-  merchantPage.includes('merchantRiskTone(merchant.dosafe_risk_score)') &&
+  // A known DOSafe score only: an unknown one has no tone (DOS/Rate#1479).
+  merchantPage.includes('merchantRiskTone(dosafeScore)') &&
+    merchantPage.includes('knownDosafeRiskScore(merchant)') &&
     !merchantPage.includes('dosafe_risk_score === 0'),
   'the merchant page must use the shared risk cut-off, not "any non-zero score"'
 );
