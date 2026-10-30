@@ -84,18 +84,35 @@ function main() {
     storeImageSrcSet(
       'https://cdn2.cellphones.com.vn/200x/media/catalog/product/x.png'
     ),
-    [200, 400, 600, 800]
+    [200, 400, 600]
       .map(
         (w) =>
           `https://cdn2.cellphones.com.vn/${w}x/media/catalog/product/x.png ${w}w`
       )
       .join(', '),
-    'a URL already at one of the widths still gets every width'
+    'CellphoneS stops at 600 (it never enlarges); a sized URL gets every width'
+  );
+  assert.equal(
+    storeImageSrcSet(
+      'https://cdn2.fptshop.com.vn/unsafe/800x0/filters:format(webp)/a.png'
+    ),
+    [200, 400, 600, 800]
+      .map(
+        (w) =>
+          `https://cdn2.fptshop.com.vn/unsafe/${w}x0/filters:format(webp)/a.png ${w}w`
+      )
+      .join(', ')
   );
   for (const other of [
     'https://cdn.tgdd.vn/a.jpg',
     '/img/devices/apple-iphone-16-128gb.jpg',
     'https://cdn2.fptshop.com.vn/unsafe/fit-in/800x800/a.png',
+    'http://cdn2.fptshop.com.vn/unsafe/a.png',
+    'https://cdn2.cellphones.com.vn/catalog/x.png',
+    // A filter that changes the picture would be lost in the resize.
+    'https://cdn2.fptshop.com.vn/unsafe/800x800/filters:rotate(90)/a.png',
+    'https://cdn2.fptshop.com.vn/unsafe/filters:quality(90):fill(white)/a.png',
+    'not a url',
     '',
     null,
     undefined,

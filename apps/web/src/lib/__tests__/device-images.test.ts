@@ -117,21 +117,32 @@ async function main() {
   const imgTags = (rel: string) =>
     [...readFileSync(join(webSrc, rel), 'utf8').matchAll(/<img\b[\s\S]*?\/>/g)]
       .map((m) => m[0])
-      .filter((tag) => tag.includes('deviceImageSrcSet('));
+      .filter(
+        (tag) =>
+          tag.includes('deviceImageSrcSet(') || tag.includes('heroSrcSet')
+      );
   const productPage = imgTags('app/[locale]/smartphones/[slug]/page.tsx');
   const cards = imgTags('components/product/ProductCard.tsx');
-  assert.ok(
-    productPage.some((tag) => tag.includes('deviceImageSrcSet(mainImage)')),
-    'the product hero names the WebP renditions'
-  );
-  // A store CDN hero names the CDN's resized copies instead (DOS/Rate#1417).
+  // The hero names the WebP renditions of a device photo, or a store CDN's
+  // resized copies (DOS/Rate#1417), each with its own sizes.
   assert.ok(
     productPage.some(
       (tag) =>
-        tag.includes('deviceImageSrcSet(mainImage)') &&
-        tag.includes('storeImageSrcSet(mainImage)')
+        tag.includes('srcSet={heroSrcSet}') && tag.includes('sizes={heroSizes}')
     ),
-    'the product hero names the store CDN renditions'
+    'the product hero names its sized copies'
+  );
+  const productSource = readFileSync(
+    join(webSrc, 'app/[locale]/smartphones/[slug]/page.tsx'),
+    'utf8'
+  );
+  assert.match(
+    productSource,
+    /const heroDeviceSrcSet = deviceImageSrcSet\(mainImage\);\s*const heroStoreSrcSet = heroDeviceSrcSet \? null : storeImageSrcSet\(mainImage\);/
+  );
+  assert.match(
+    productSource,
+    /const heroSizes = heroDeviceSrcSet\s*\? deviceImageSizesForHeight\(mainImage, \{ phone: 190, other: 350 \}\)\s*: heroStoreSrcSet\s*\? STORE_HERO_SIZES/
   );
   assert.equal(productPage.length, 2, 'hero and peer cards');
   assert.equal(cards.length, 1);

@@ -134,6 +134,13 @@ import { versusHref } from '@/lib/item-compare';
 // worker revalidates its cache tags (DOS/Rate#491).
 export const revalidate = 300;
 
+// The `sizes` of a store CDN hero image, whose aspect is not known: the hero
+// column's width (col-lg-5, the full row below lg), so a landscape photo keeps
+// the width it had without a srcSet. A square one is capped at 350 px tall
+// (190 px on phones) and gets a little more than it shows (DOS/Rate#1417).
+const STORE_HERO_SIZES =
+  '(max-width: 767.98px) calc(100vw - 56px), (max-width: 991.98px) 690px, (max-width: 1199.98px) 360px, 430px';
+
 // Nothing is prerendered at build; each slug renders on its first request.
 export function generateStaticParams(): { slug: string }[] {
   return [];
@@ -462,6 +469,17 @@ export async function ProductDetailView({
 
   const keySpecLine = buildKeySpecLine(product, categorySlug);
   const mainImage = firstImageUrl(product.images);
+  // The hero's sized copies: the local WebP renditions of a device photo, or
+  // a store CDN's own resized copies (#1413, #1417). The box caps the photo
+  // at 350 px tall, 190 px on phones (_product.scss).
+  const heroDeviceSrcSet = deviceImageSrcSet(mainImage);
+  const heroStoreSrcSet = heroDeviceSrcSet ? null : storeImageSrcSet(mainImage);
+  const heroSrcSet = heroDeviceSrcSet ?? heroStoreSrcSet ?? undefined;
+  const heroSizes = heroDeviceSrcSet
+    ? deviceImageSizesForHeight(mainImage, { phone: 190, other: 350 })
+    : heroStoreSrcSet
+      ? STORE_HERO_SIZES
+      : undefined;
 
   const canonicalUrl = `https://rate.vn${categoryBasePath}/${
     itemRoute?.kind === 'render' ? itemRoute.itemSlug : product.slug
@@ -825,26 +843,11 @@ export async function ProductDetailView({
                     // The main product image is the page's largest paint: fetch it
                     // ahead of the below-the-fold peer and offer thumbnails.
                     // React emits a preload for it into the page payload, which a
-                    // prefetch applies too, so it names the sized WebP renditions:
-                    // a prefetched page never pulls the full JPEG (#1413). The box
-                    // caps it at 350 px tall, 190 px on phones (_product.scss).
-                    // A store CDN image names the CDN's own resized copies, sized
-                    // as a square photo: its aspect is not known (#1417).
+                    // prefetch applies too, so it names sized copies (heroSrcSet):
+                    // a prefetched page never pulls the full image (#1413, #1417).
                     <img
-                      srcSet={
-                        deviceImageSrcSet(mainImage) ??
-                        storeImageSrcSet(mainImage) ??
-                        undefined
-                      }
-                      sizes={
-                        deviceImageSizesForHeight(mainImage, {
-                          phone: 190,
-                          other: 350,
-                        }) ??
-                        (storeImageSrcSet(mainImage)
-                          ? '(max-width: 767.98px) 190px, 350px'
-                          : undefined)
-                      }
+                      srcSet={heroSrcSet}
+                      sizes={heroSizes}
                       src={mainImage}
                       alt={product.name}
                       fetchPriority="high"
