@@ -79,7 +79,11 @@ import {
   type CompareCellSegment,
 } from '@/lib/compare-cell';
 import { productImageUrl } from '@/lib/rate-domain-core';
-import { itemSlugFromProductAnswer, versusHref } from '@/lib/item-compare';
+import {
+  itemSlugFromProductAnswer,
+  productFromProductAnswer,
+  versusHref,
+} from '@/lib/item-compare';
 import {
   formatDecimal,
   formatNumber,
@@ -1073,6 +1077,54 @@ export default function CompareWorkspace({
     [catalogCandidates, activeCategory]
   );
 
+  // Rows known to carry their full spec sheet: the page's own and the search
+  // API's. A picker candidate carries only the ranking fields (DOS/Rate#1515),
+  // so a candidate that joins the comparison has its sheet read from the
+  // products API; the exports wait for it.
+  const fullRowsRef = useRef(new Map<string, MasterProduct>());
+  const [specsLoading, setSpecsLoading] = useState(false);
+  useEffect(() => {
+    for (const p of initialProducts) fullRowsRef.current.set(p.slug, p);
+  }, [initialProducts]);
+  useEffect(() => {
+    for (const p of remoteResults ?? []) fullRowsRef.current.set(p.slug, p);
+  }, [remoteResults]);
+  useEffect(() => {
+    const known = fullRowsRef.current;
+    if (
+      storedProducts.some((p) => known.has(p.slug) && known.get(p.slug) !== p)
+    ) {
+      setProducts((prev) => prev.map((p) => known.get(p.slug) ?? p));
+      return;
+    }
+    const missing = storedProducts
+      .map((p) => p.slug)
+      .filter((slug) => !known.has(slug));
+    setSpecsLoading(missing.length > 0);
+    if (missing.length === 0) return;
+    let cancelled = false;
+    void Promise.all(
+      missing.map((slug) =>
+        fetch(`/api/v1/rate/products/${encodeURIComponent(slug)}`)
+          .then((res) => (res.ok ? res.json() : null))
+          .then((json: unknown) =>
+            productFromProductAnswer<MasterProduct>(json, slug)
+          )
+          .catch(() => null)
+      )
+    ).then((rows) => {
+      if (cancelled) return;
+      for (const row of rows) if (row) known.set(row.slug, row);
+      if (rows.some(Boolean)) {
+        setProducts((prev) => prev.map((p) => known.get(p.slug) ?? p));
+      }
+      setSpecsLoading(false);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [storedProducts]);
+
   // Sync local products state when server initialProducts prop updates (e.g. Back/Forward navigation)
   useEffect(() => {
     if (initialProducts.length > 0) {
@@ -1836,6 +1888,7 @@ export default function CompareWorkspace({
                   <button
                     type="button"
                     onClick={handleCopyMarkdownReport}
+                    disabled={specsLoading}
                     className="btn btn-sm btn-outline-danger rounded-pill fw-medium px-3 py-2"
                   >
                     {copiedMarkdown
@@ -1845,6 +1898,7 @@ export default function CompareWorkspace({
                   <button
                     type="button"
                     onClick={handleDownloadCompareCsv}
+                    disabled={specsLoading}
                     data-testid="compare-export-csv-btn"
                     className="btn btn-sm btn-outline-dark rounded-pill fw-medium px-3 py-2"
                   >
@@ -1853,6 +1907,7 @@ export default function CompareWorkspace({
                   <button
                     type="button"
                     onClick={handleDownloadCompareJson}
+                    disabled={specsLoading}
                     data-testid="compare-export-json-btn"
                     className="btn btn-sm btn-outline-dark rounded-pill fw-medium px-3 py-2"
                   >
