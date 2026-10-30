@@ -631,7 +631,9 @@ export function createGetOnlyFetch(fetchImpl = globalThis.fetch) {
     if (/\/rpc\//i.test(new URL(url).pathname)) {
       throw new Error('refusing an RPC call: this dry run only reads');
     }
-    return fetchImpl(url, { method, headers });
+    // A redirect is refused, not followed: no response can turn a read into
+    // another request.
+    return fetchImpl(url, { method, headers, redirect: 'error' });
   };
 }
 
@@ -667,7 +669,12 @@ export function checkRestRole(role) {
   return `PostgREST as ${role}, GET requests only`;
 }
 
-/** Reads every row of a table page by page, in a stable order. */
+/**
+ * Reads every row of a table page by page, by id (keyset: `id=gt.<last id>`),
+ * so rows the crawler inserts meanwhile shift no page, and until an empty page,
+ * so a server row cap below `pageSize` does not end the read early. `select`
+ * must include `id`.
+ */
 export async function readTable(
   getFetch,
   { url, anonKey, accessToken },
@@ -676,11 +683,13 @@ export async function readTable(
   pageSize = 1000
 ) {
   const rows = [];
-  for (let offset = 0; ; offset += pageSize) {
+  let after = null;
+  for (;;) {
     const target = new URL(`/rest/v1/${table}`, url);
     for (const [k, v] of Object.entries(query)) target.searchParams.set(k, v);
+    target.searchParams.set('order', 'id.asc');
     target.searchParams.set('limit', String(pageSize));
-    target.searchParams.set('offset', String(offset));
+    if (after !== null) target.searchParams.set('id', `gt.${after}`);
     const res = await getFetch(target.toString(), {
       method: 'GET',
       headers: {
@@ -700,8 +709,13 @@ export async function readTable(
     if (!Array.isArray(page)) {
       throw new Error(`PostgREST read of rate.${table} returned no rows array`);
     }
+    if (page.length === 0) return rows;
     rows.push(...page);
-    if (page.length < pageSize) return rows;
+    const last = page[page.length - 1]?.id;
+    if (last === undefined || last === null || String(last) === String(after)) {
+      throw new Error(`PostgREST read of rate.${table} did not advance by id`);
+    }
+    after = last;
   }
 }
 
@@ -717,7 +731,7 @@ export async function readViaPostgrest(
     getFetch,
     rest,
     'master_products',
-    { select: 'id,model_key,status', order: 'id.asc' },
+    { select: 'id,model_key,status' },
     pageSize
   );
   const products = await readTable(
@@ -727,7 +741,6 @@ export async function readViaPostgrest(
     {
       select: 'id,cluster_id,title',
       cluster_id: 'not.is.null',
-      order: 'id.asc',
     },
     pageSize
   );
@@ -735,7 +748,7 @@ export async function readViaPostgrest(
     getFetch,
     rest,
     'price_history',
-    { select: 'product_id', order: 'id.asc' },
+    { select: 'id,product_id' },
     pageSize
   );
   const counts = new Map();

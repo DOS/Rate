@@ -714,23 +714,31 @@ test('reads through PostgREST page by page, with GET only, into the plan input',
       { id: 'p3', cluster_id: 'm1', title: '5G 1' },
     ],
     price_history: [
-      { product_id: 'p3' },
-      { product_id: 'p3' },
-      { product_id: 'p1' },
+      { id: 'h1', product_id: 'p3' },
+      { id: 'h2', product_id: 'p3' },
+      { id: 'h3', product_id: 'p1' },
     ],
   };
   const requests = [];
+  // A fake PostgREST: keyset pages by id, capped at one row per page below the
+  // requested limit for products, like a server max-rows setting.
   const fetchImpl = async (url, init) => {
     const u = new URL(url);
     requests.push({
       method: init.method,
       path: u.pathname,
       headers: init.headers,
+      redirect: init.redirect,
+      order: u.searchParams.get('order'),
     });
-    const rows = tables[u.pathname.split('/').pop()];
-    const offset = Number(u.searchParams.get('offset'));
-    const limit = Number(u.searchParams.get('limit'));
-    return new Response(JSON.stringify(rows.slice(offset, offset + limit)));
+    const table = u.pathname.split('/').pop();
+    const after = u.searchParams.get('id')?.replace(/^gt\./, '');
+    const cap = table === 'products' ? 1 : Infinity;
+    const limit = Math.min(Number(u.searchParams.get('limit')), cap);
+    const left = tables[table].filter(
+      (r) => after === undefined || r.id > after
+    );
+    return new Response(JSON.stringify(left.slice(0, limit)));
   };
   const { role, data } = await readViaPostgrest(
     {
@@ -750,8 +758,12 @@ test('reads through PostgREST page by page, with GET only, into the plan input',
   assert.ok(requests.every((r) => r.headers.get('accept-profile') === 'rate'));
   assert.ok(requests.every((r) => !r.headers.has('prefer')));
   assert.ok(requests.every((r) => !r.path.includes('/rpc/')));
-  // One page of masters, two of products and two of price history (page size 2).
-  assert.equal(requests.length, 5);
+  // Redirects are refused, and pages go by id.
+  assert.ok(requests.every((r) => r.redirect === 'error'));
+  assert.ok(requests.every((r) => r.order === 'id.asc'));
+  // Pages run until an empty one, so the server's one-row cap on products still
+  // reads all three: masters 2 requests, products 4, price history 3.
+  assert.equal(requests.length, 9);
   assert.deepEqual(
     data.listings.map((l) => l.key),
     [
