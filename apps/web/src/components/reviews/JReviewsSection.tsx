@@ -1627,18 +1627,6 @@ export default function JReviewsSection({
                           ),
                         })}
                       </span>
-                      {/* The 6-axis trust model is a separate estimate with its
-                          own weight, so it gets its own labelled badge rather
-                          than explaining the rating weight (DOS/Rate#596). */}
-                      <span
-                        className="badge rounded-pill small bg-light text-muted border"
-                        title={weightExplanation}
-                        data-testid="review-6axis-breakdown"
-                      >
-                        {t('trustModelBadge', {
-                          explanation: weightExplanation,
-                        })}
-                      </span>
                     </div>
 
                     {rev.variation && (
@@ -1682,13 +1670,32 @@ export default function JReviewsSection({
                       {rev.comment || t('emptyCommentPlaceholder')}
                     </p>
 
-                    {/* AI Flag Reason Transparency Note */}
-                    {rev.reason && (
-                      <div className="rounded-3 bg-light small text-secondary mb-2 border p-2">
-                        <strong>{t('aiReasonPrefix')}</strong>{' '}
-                        <AnalyzerText text={rev.reason} />
-                      </div>
-                    )}
+                    {/* Why this weight: the AI note and the 6-factor model's
+                        estimate, folded so the card shows one weight, the one
+                        used. The estimate is labelled as reference, since it
+                        is not what the rating counts (DOS/Rate#1471, #596). */}
+                    <details
+                      className="rounded-3 bg-light small text-secondary mb-2 border p-2"
+                      open={isZeroWeight || isFilteredOutReview(rev)}
+                    >
+                      <summary className="fw-semibold">
+                        {t('weightWhySummary')}
+                      </summary>
+                      {rev.reason && (
+                        <p className="mb-1 mt-2">
+                          <strong>{t('aiReasonPrefix')}</strong>{' '}
+                          <AnalyzerText text={rev.reason} />
+                        </p>
+                      )}
+                      <p
+                        className="mb-0 mt-2"
+                        data-testid="review-6axis-breakdown"
+                      >
+                        {t('trustModelBadge', {
+                          explanation: weightExplanation,
+                        })}
+                      </p>
+                    </details>
                   </div>
 
                   {/* Bottom Row: JReviews Vote Bar (Helpful Up / Down / Report) */}
