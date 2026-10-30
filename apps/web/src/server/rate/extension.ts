@@ -161,13 +161,20 @@ export const EXTENSION_CAPABILITY_MATRIX: Record<
   },
 };
 
-export type ExtensionPriceVerdict =
-  | 'genuine_deal'
-  | 'fair_market_price'
-  | 'above_market'
-  | 'inflated_fake_sale'
-  | 'insufficient_data'
-  | 'accessory_skip';
+/**
+ * Every price verdict the lookup and inspect answers carry, in the order the
+ * OpenAPI `PriceVerdictLevel` lists them (DOS/Rate#1377).
+ */
+export const EXTENSION_PRICE_VERDICTS = [
+  'genuine_deal',
+  'fair_market_price',
+  'above_market',
+  'inflated_fake_sale',
+  'insufficient_data',
+  'accessory_skip',
+] as const;
+
+export type ExtensionPriceVerdict = (typeof EXTENSION_PRICE_VERDICTS)[number];
 
 export type ExtensionMatchStatus =
   | 'exact_listing'
