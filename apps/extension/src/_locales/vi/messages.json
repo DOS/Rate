@@ -166,8 +166,16 @@
   "lookupErrorTitle": {
     "message": "Chưa tra cứu được"
   },
+  "lookupErrorRateLimitedWait": {
+    "message": "Bạn tra cứu hơi nhanh, hãy thử lại sau $SECONDS$ giây.",
+    "placeholders": {
+      "seconds": {
+        "content": "$1"
+      }
+    }
+  },
   "lookupErrorRateLimited": {
-    "message": "Bạn tra cứu hơi nhanh, thử lại sau ít phút."
+    "message": "Bạn tra cứu hơi nhanh, hãy thử lại sau một lát."
   },
   "lookupErrorServer": {
     "message": "Rate.vn đang gặp sự cố, thử lại sau."
