@@ -276,7 +276,12 @@ function ownProductPart(title: string): string {
   // Galaxy Tab S9" the tablet, but "(AirPods Pro 2 tặng dây Apple Watch) Chính hãng" names
   // the product inside the brackets (DOS/Rate#1407, #1422).
   const block = /^\s*(?:\[[^\]]*\]|\([^)]*\)|【[^】]*】)/u.exec(composed)?.[0].length ?? 0;
-  const body = block > 0 && namesProduct(composed.slice(block)) ? composed.slice(block) : composed;
+  // Only the part right after the brackets counts, before its own gift: "[iPhone 16 256GB]
+  // Điện thoại tặng tai nghe" keeps the brackets, which name the product.
+  const rest = composed.slice(block);
+  const restCut = rest.search(GIFT_CUT);
+  const body =
+    block > 0 && namesProduct(restCut > 0 ? rest.slice(0, restCut) : rest) ? rest : composed;
   const at = body.search(GIFT_CUT);
   if (at > 0) {
     // "AirPods 4 tặng kèm khi mua iPhone 16 Pro Max" sells what follows "khi mua"; "tặng
@@ -328,10 +333,11 @@ const GIFT_CUT_ALL = new RegExp(GIFT_CUT.source, 'giu');
 
 /**
  * Where a gift phrase ends: a closing bracket, a "|" separator, a comma, or a " - " that
- * does not run on into a model range ("ốp iPhone 13 - 15 Pro Max") (DOS/Rate#1422).
+ * is not a model range between two numbers ("ốp iPhone 13 - 15 Pro Max"); "AirPods - 15"
+ * ends the gift (DOS/Rate#1422).
  */
 const GIFT_PHRASE_END =
-  /[)\]】,|]| [-–] (?!\d{1,2}(?: ?(?:pro|plus|max|mini)(?![\p{L}\d])| ?(?:$|[,|)\]】])))/iu;
+  /[)\]】,|]|(?<!\d) [-–] |(?<=\d) [-–] (?!\d{1,2}(?: ?(?:pro|plus|max|mini)(?![\p{L}\d])| ?(?:$|[,|)\]】])))/iu;
 
 /** True when the text names an Apple family other than `line` (DOS/Rate#1407). */
 function namesAppleFamilyOtherThan(text: string, line: string): boolean {
@@ -1539,7 +1545,9 @@ function readAppleSize(model: string, rawTitle: string): string {
       const segment = segmentEnd < 0 ? after : after.slice(0, segmentEnd);
       if (
         !/^[,]| [-–] /u.test(productPart.slice(end)) ||
-        !namesAppleFamilyOtherThan(segment, familyName)
+        !namesAppleFamilyOtherThan(segment, familyName) ||
+        // "bản 15 inch hỗ trợ iPhone Mirroring" states the product's own size.
+        /\d+(?:[.,]\d+)? ?(?:inch|in|"|''|mm)/iu.test(segment)
       )
         break;
       end = productPart.length - after.length;

@@ -1214,6 +1214,12 @@ async function runSuite() {
       'apple:macbook-air-m3:unknown',
     ],
     ['MacBook Air M3 tặng AirPods, 15 inch 16GB 512GB', 'apple:macbook-air-m3-15:512gb'],
+    ['MacBook Air M3 tặng AirPods - 15, RAM 16GB SSD 512GB', 'apple:macbook-air-m3-15:512gb'],
+    [
+      'MacBook Air M3 16GB 512GB tặng AirPods, bản 15 inch hỗ trợ iPhone Mirroring',
+      'apple:macbook-air-m3-15:512gb',
+    ],
+    ['[iPhone 16 256GB] Điện thoại chính hãng tặng tai nghe Bluetooth', 'apple:iphone-16:256gb'],
     [
       'Apple Watch Series 10 GPS + 5 năm bảo hành 46mm tặng AirPods',
       'apple:watch-series-10-46mm:64gb',
@@ -1229,6 +1235,10 @@ async function runSuite() {
     'smartphones'
   );
   assert.equal(detectCategorySlug('[Samsung tặng tai nghe] Galaxy Tab S9 8GB 128GB'), 'tablets');
+  assert.equal(
+    detectCategorySlug('[iPhone 16 256GB] Điện thoại chính hãng tặng tai nghe Bluetooth'),
+    'smartphones'
+  );
   assert.equal(
     detectCategorySlug('[Samsung tặng bao da] Máy tính bảng Galaxy Tab S9 8GB 128GB'),
     'tablets'
