@@ -62,6 +62,12 @@ import {
   BsTrophyFill,
 } from 'react-icons/bs';
 import ContentText from '@/components/elementary/ContentText';
+import {
+  formatDecimal,
+  formatNumber,
+  formatPercent,
+  formatPriceVnd,
+} from '@/lib/locale-format';
 
 export type { LeaderboardCriterionKey, LeaderboardPriceSegment };
 
@@ -86,8 +92,11 @@ export function sanitizeLeaderboardPriceVnd(value: unknown): number {
   return Math.round(num);
 }
 
-export function formatLeaderboardPriceVnd(value: unknown): string {
-  return `${sanitizeLeaderboardPriceVnd(value).toLocaleString('vi-VN')} ₫`;
+export function formatLeaderboardPriceVnd(
+  value: unknown,
+  locale?: string | null
+): string {
+  return formatPriceVnd(sanitizeLeaderboardPriceVnd(value), locale);
 }
 
 export function sanitizeLeaderboardMarkdownCell(
@@ -1011,7 +1020,7 @@ export default function LeaderboardExplorer({
                     <div className="d-flex justify-content-between small fw-semibold mb-1">
                       <span>{slider.label}</span>
                       <span className="rate-tabular text-danger">
-                        {customWeights[slider.key]}%
+                        {formatPercent(customWeights[slider.key], locale)}
                       </span>
                     </div>
                     <input
@@ -1125,7 +1134,7 @@ export default function LeaderboardExplorer({
                   {rankedEntries.map((entry, idx) => (
                     <option key={entry.product.slug} value={entry.product.slug}>
                       #{idx + 1} {entry.product.name} (
-                      {entry.activeScore5.toFixed(2)}★)
+                      {formatDecimal(entry.activeScore5, locale, 2)}★)
                     </option>
                   ))}
                 </select>
@@ -1149,7 +1158,7 @@ export default function LeaderboardExplorer({
                           value={entry.product.slug}
                         >
                           #{rankIdx + 1} {entry.product.name} (
-                          {entry.activeScore5.toFixed(2)}★)
+                          {formatDecimal(entry.activeScore5, locale, 2)}★)
                         </option>
                       );
                     })}
@@ -1246,8 +1255,10 @@ export default function LeaderboardExplorer({
                         </span>
                         <div className="text-end">
                           <div className="fs-4 fw-bold text-warning rate-tabular lh-1">
-                            {entry.activeScore5.toFixed(2)}
-                            <span className="fs-6 text-white-50">/5.0</span>
+                            {formatDecimal(entry.activeScore5, locale, 2)}
+                            <span className="fs-6 text-white-50">
+                              /{formatDecimal(5, locale, 1)}
+                            </span>
                           </div>
                         </div>
                       </div>
@@ -1286,13 +1297,17 @@ export default function LeaderboardExplorer({
                             <span className="rate-score-badge-user">
                               ★{' '}
                               {entry.userScore5 > 0
-                                ? `${entry.userScore5.toFixed(2)}/5.0`
+                                ? `${formatDecimal(entry.userScore5, locale, 2)}/${formatDecimal(5, locale, 1)}`
                                 : t('unratedShort')}
                             </span>
                             <span className="rate-score-badge-expert">
                               {entry.expertScore10 != null
                                 ? t('expertScoreShort', {
-                                    score: entry.expertScore10.toFixed(1),
+                                    score: formatDecimal(
+                                      entry.expertScore10,
+                                      locale,
+                                      1
+                                    ),
                                   })
                                 : t('expertUnrated')}
                             </span>
@@ -1332,7 +1347,7 @@ export default function LeaderboardExplorer({
                               >
                                 <span>{c.label}</span>
                                 <strong className="rate-tabular text-white">
-                                  {val.toFixed(2)}
+                                  {formatDecimal(val, locale, 2)}
                                 </strong>
                               </div>
                               <div
@@ -1369,7 +1384,10 @@ export default function LeaderboardExplorer({
 
                     <div className="border-top border-secondary border-opacity-25 d-flex justify-content-between align-items-center flex-wrap gap-2 pt-2">
                       <span className="small text-white-50 rate-tabular">
-                        {formatLeaderboardPriceVnd(entry.product.min_price)}
+                        {formatLeaderboardPriceVnd(
+                          entry.product.min_price,
+                          locale
+                        )}
                       </span>
                       <Link
                         href={entry.productHref}
@@ -1425,7 +1443,9 @@ export default function LeaderboardExplorer({
                 const a = rankedEntries[iA]!;
                 const b = rankedEntries[iB]!;
                 const vHref = `/compare/${a.product.slug}-vs-${b.product.slug}`;
-                const delta = Math.abs(a.activeScore5 - b.activeScore5).toFixed(
+                const delta = formatDecimal(
+                  Math.abs(a.activeScore5 - b.activeScore5),
+                  locale,
                   2
                 );
                 return (
@@ -1436,7 +1456,7 @@ export default function LeaderboardExplorer({
                           #{iA + 1} vs #{iB + 1}
                         </span>
                         <span className="badge bg-danger-subtle text-danger rounded-pill small rate-tabular">
-                          Δ {delta} / 5.0
+                          Δ {delta} / {formatDecimal(5, locale, 1)}
                         </span>
                       </div>
 
@@ -1446,7 +1466,7 @@ export default function LeaderboardExplorer({
                             {a.product.name}
                           </div>
                           <div className="small text-secondary rate-tabular">
-                            ★ {a.activeScore5.toFixed(2)}
+                            ★ {formatDecimal(a.activeScore5, locale, 2)}
                           </div>
                         </div>
                         <span className="badge bg-secondary rounded-pill flex-shrink-0">
@@ -1457,7 +1477,7 @@ export default function LeaderboardExplorer({
                             {b.product.name}
                           </div>
                           <div className="small text-secondary rate-tabular">
-                            ★ {b.activeScore5.toFixed(2)}
+                            ★ {formatDecimal(b.activeScore5, locale, 2)}
                           </div>
                         </div>
                       </div>
@@ -1496,7 +1516,7 @@ export default function LeaderboardExplorer({
           const safeRowPrice = sanitizeLeaderboardPriceVnd(
             entry.product.min_price
           );
-          const minPriceText = safeRowPrice.toLocaleString('vi-VN');
+          const minPriceText = formatNumber(safeRowPrice, locale);
           const rowRadarSignal = getRadarSignal(radarIndex, entry.product.slug);
 
           return (
@@ -1608,7 +1628,11 @@ export default function LeaderboardExplorer({
                         <span>
                           {entry.userScore5 > 0
                             ? t('userScoreShort', {
-                                score: entry.userScore5.toFixed(2),
+                                score: formatDecimal(
+                                  entry.userScore5,
+                                  locale,
+                                  2
+                                ),
                               })
                             : t('userUnrated')}
                         </span>
@@ -1617,7 +1641,11 @@ export default function LeaderboardExplorer({
                         <span>
                           {entry.expertScore10 != null
                             ? t('expertScoreShort', {
-                                score: entry.expertScore10.toFixed(1),
+                                score: formatDecimal(
+                                  entry.expertScore10,
+                                  locale,
+                                  1
+                                ),
                               })
                             : t('expertUnrated')}
                         </span>
@@ -1660,7 +1688,7 @@ export default function LeaderboardExplorer({
                             style={{ fontSize: '0.8125rem' }}
                           >
                             {entry.criteria[c.key] > 0
-                              ? entry.criteria[c.key].toFixed(2)
+                              ? formatDecimal(entry.criteria[c.key], locale, 2)
                               : t('unratedShort')}
                           </strong>
                         </div>
@@ -1677,8 +1705,10 @@ export default function LeaderboardExplorer({
                         {copy.critLabels[activeCriterion]}
                       </div>
                       <div className="h4 fw-bold text-danger rate-tabular mb-0">
-                        {entry.activeScore5.toFixed(2)}
-                        <span className="fs-6 text-muted fw-normal">/5.0</span>
+                        {formatDecimal(entry.activeScore5, locale, 2)}
+                        <span className="fs-6 text-muted fw-normal">
+                          /{formatDecimal(5, locale, 1)}
+                        </span>
                       </div>
                       <div className="small text-secondary rate-tabular">
                         {minPriceText} ₫ ({entry.product.merchant_count || 0}{' '}

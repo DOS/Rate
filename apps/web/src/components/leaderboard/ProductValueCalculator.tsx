@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import {
   RADAR_CSV_HEADERS,
   radarCsvCells,
@@ -10,6 +10,12 @@ import {
 } from '@/lib/deal-radar';
 import { escapeCsvCell } from '@/lib/csv-safe';
 import { MAX_VALID_VND_PRICE } from '@/lib/rate-domain';
+import {
+  formatDecimal,
+  formatNumber,
+  formatPlainNumber,
+  formatPriceVnd,
+} from '@/lib/locale-format';
 
 interface ProductValueCalculatorProps {
   readonly productName: string;
@@ -160,6 +166,7 @@ export default function ProductValueCalculator({
   radarSignal,
 }: ProductValueCalculatorProps) {
   const t = useTranslations('productDetail');
+  const locale = useLocale();
   const [months, setMonths] = useState<HorizonMonths>(24);
   const [includeResale, setIncludeResale] = useState<boolean>(true);
 
@@ -277,7 +284,7 @@ export default function ProductValueCalculator({
           </h3>
           <p className="text-muted small mb-0">
             {t('valueCalcSubtitle', {
-              price: metrics.safeMinPrice.toLocaleString('vi-VN'),
+              price: formatNumber(metrics.safeMinPrice, locale),
               score:
                 metrics.combined10 > 0
                   ? `${metrics.combined10}/10`
@@ -315,7 +322,9 @@ export default function ProductValueCalculator({
             }`}
           >
             {includeResale
-              ? t('valueCalcIncludeResaleOn', { pct: metrics.retentionPct })
+              ? t('valueCalcIncludeResaleOn', {
+                  pct: formatPlainNumber(metrics.retentionPct, locale),
+                })
               : t('valueCalcIncludeResaleOff')}
           </button>
 
@@ -346,7 +355,7 @@ export default function ProductValueCalculator({
             </div>
             <div className="h5 fw-bold rate-tabular text-dark mb-1">
               {metrics.costPerPoint10 > 0
-                ? `${metrics.costPerPoint10.toLocaleString('vi-VN')} ₫`
+                ? formatPriceVnd(metrics.costPerPoint10, locale)
                 : t('valueCalcNotAvailable')}
             </div>
             <div className="small text-secondary">
@@ -365,11 +374,11 @@ export default function ProductValueCalculator({
               {t('valueCalcCardDailyCostTitle', { months })}
             </div>
             <div className="h5 fw-bold rate-tabular text-danger mb-1">
-              {metrics.dailyCostVnd.toLocaleString('vi-VN')}{' '}
+              {formatNumber(metrics.dailyCostVnd, locale)}{' '}
               {t('valueCalcPerDayUnit')}
             </div>
             <div className="small text-secondary rate-tabular">
-              ~{metrics.monthlyCostVnd.toLocaleString('vi-VN')}{' '}
+              ~{formatNumber(metrics.monthlyCostVnd, locale)}{' '}
               {t('valueCalcPerMonthUnit')}
             </div>
           </div>
@@ -382,13 +391,13 @@ export default function ProductValueCalculator({
             </div>
             <div className="h5 fw-bold rate-tabular text-success mb-1">
               {includeResale
-                ? `${metrics.estimatedResaleVnd.toLocaleString('vi-VN')} ₫`
+                ? formatPriceVnd(metrics.estimatedResaleVnd, locale)
                 : '0 ₫'}
             </div>
             <div className="small text-secondary">
               {includeResale
                 ? t('valueCalcCardResaleSubOn', {
-                    pct: metrics.retentionPct,
+                    pct: formatPlainNumber(metrics.retentionPct, locale),
                     brand,
                   })
                 : t('valueCalcCardResaleSubOff')}
@@ -403,13 +412,13 @@ export default function ProductValueCalculator({
             </div>
             <div className="h5 fw-bold rate-tabular text-primary mb-1">
               {safeValueCriterionScore5 > 0
-                ? `★ ${safeValueCriterionScore5.toFixed(1)}/5.0`
+                ? `★ ${formatDecimal(safeValueCriterionScore5, locale, 1)}/${formatDecimal(5, locale, 1)}`
                 : t('valueCalcNotAvailable')}
             </div>
             <div className="small text-secondary rate-tabular">
               {metrics.maxSpreadSavingsVnd > 0
                 ? t('valueCalcSpreadSavingsSub', {
-                    amount: metrics.maxSpreadSavingsVnd.toLocaleString('vi-VN'),
+                    amount: formatNumber(metrics.maxSpreadSavingsVnd, locale),
                   })
                 : t('valueCalcUniformPriceSub')}
             </div>

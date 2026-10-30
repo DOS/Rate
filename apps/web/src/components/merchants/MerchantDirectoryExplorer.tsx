@@ -53,6 +53,12 @@ import {
   sanitizeMerchantCount,
   sanitizeMerchantScore100,
 } from '@/components/merchants/MerchantShareAuditButton';
+import {
+  formatDecimal,
+  formatNumber,
+  formatPlainNumber,
+  formatPriceVnd,
+} from '@/lib/locale-format';
 
 // Rows per request when an export collects every matching store.
 const EXPORT_PAGE_SIZE = 500;
@@ -786,11 +792,11 @@ export default function MerchantDirectoryExplorer({
                     : 'bg-danger text-white';
 
               const minPriceText = merchant.min_price
-                ? `${merchant.min_price.toLocaleString('vi-VN')} ₫`
+                ? formatPriceVnd(merchant.min_price, locale)
                 : null;
               const maxPriceText =
                 merchant.max_price && merchant.max_price !== merchant.min_price
-                  ? `${merchant.max_price.toLocaleString('vi-VN')} ₫`
+                  ? formatPriceVnd(merchant.max_price, locale)
                   : null;
 
               return (
@@ -857,7 +863,7 @@ export default function MerchantDirectoryExplorer({
                         </span>
                         <strong>
                           {merchant.rating_star
-                            ? `${merchant.rating_star.toFixed(2)} / 5.0`
+                            ? `${formatDecimal(merchant.rating_star, locale, 2)} / ${formatDecimal(5, locale, 1)}`
                             : labels.noRating}
                         </strong>
                       </li>
@@ -871,7 +877,7 @@ export default function MerchantDirectoryExplorer({
                             {labels.followers}:
                           </span>
                           <strong>
-                            {merchant.follower_count.toLocaleString('vi-VN')}
+                            {formatNumber(merchant.follower_count, locale)}
                           </strong>
                         </li>
                       )}
@@ -996,7 +1002,10 @@ export default function MerchantDirectoryExplorer({
                             <span className="badge bg-success-subtle text-success border-success-subtle rounded-pill border px-2 py-1">
                               {t('radarGenuineBadge', {
                                 count: rStats.genuineDealCount,
-                                pct: rStats.bestSavingsPct,
+                                pct: formatPlainNumber(
+                                  rStats.bestSavingsPct,
+                                  locale
+                                ),
                               })}
                             </span>
                           )}

@@ -59,6 +59,13 @@ import {
 } from '@repo/shared-data/rules';
 import { isOfferUnavailable } from '@/lib/product-market-stats';
 import { productImageUrl } from '@/lib/rate-domain-core';
+import {
+  formatDecimal,
+  formatNumber,
+  formatPercent,
+  formatPlainNumber,
+  formatPriceVnd,
+} from '@/lib/locale-format';
 
 const INSPECT_CONTROL_CHARS_RE = /\p{Cc}+/gu;
 
@@ -541,7 +548,7 @@ export default function DeepInspectWorkspace({
                     ) : discount?.verdict === 'suspicious_discount' ? (
                       <span className="badge bg-warning text-dark rounded-pill px-3 py-2">
                         <BsExclamationTriangleFill className="me-1" />
-                        {discountVerdictCopy(tVerdict, discount).label}
+                        {discountVerdictCopy(tVerdict, discount, locale).label}
                       </span>
                     ) : discount ? (
                       <span className="badge bg-success bg-opacity-10 text-success rounded-pill px-3 py-2">
@@ -558,11 +565,14 @@ export default function DeepInspectWorkspace({
                           {t('currentPriceLabel')}
                         </div>
                         <div className="h5 fw-bold text-danger rate-tabular mb-0">
-                          {Number(
-                            matchedOffer?.price_current ||
-                              master?.min_price ||
-                              0
-                          ).toLocaleString('vi-VN')}{' '}
+                          {formatNumber(
+                            Number(
+                              matchedOffer?.price_current ||
+                                master?.min_price ||
+                                0
+                            ),
+                            locale
+                          )}{' '}
                           ₫
                         </div>
                       </div>
@@ -575,9 +585,10 @@ export default function DeepInspectWorkspace({
                         </div>
                         <div className="h6 fw-semibold text-secondary text-decoration-line-through rate-tabular mb-0">
                           {matchedOffer?.price_original
-                            ? `${Number(
-                                matchedOffer.price_original
-                              ).toLocaleString('vi-VN')} ₫`
+                            ? formatPriceVnd(
+                                Number(matchedOffer.price_original),
+                                locale
+                              )
                             : 'N/A'}
                         </div>
                       </div>
@@ -590,12 +601,14 @@ export default function DeepInspectWorkspace({
                         </div>
                         <div className="h6 fw-bold text-success rate-tabular mb-0">
                           {priceHistory?.lowestEverPrice
-                            ? `${Number(
-                                priceHistory.lowestEverPrice
-                              ).toLocaleString('vi-VN')} ₫`
-                            : `${Number(master?.min_price || 0).toLocaleString(
-                                'vi-VN'
-                              )} ₫`}
+                            ? formatPriceVnd(
+                                Number(priceHistory.lowestEverPrice),
+                                locale
+                              )
+                            : formatPriceVnd(
+                                Number(master?.min_price || 0),
+                                locale
+                              )}
                         </div>
                       </div>
                     </div>
@@ -607,12 +620,14 @@ export default function DeepInspectWorkspace({
                         </div>
                         <div className="h6 fw-bold text-dark rate-tabular mb-0">
                           {priceHistory?.highestEverPrice
-                            ? `${Number(
-                                priceHistory.highestEverPrice
-                              ).toLocaleString('vi-VN')} ₫`
-                            : `${Number(master?.max_price || 0).toLocaleString(
-                                'vi-VN'
-                              )} ₫`}
+                            ? formatPriceVnd(
+                                Number(priceHistory.highestEverPrice),
+                                locale
+                              )
+                            : formatPriceVnd(
+                                Number(master?.max_price || 0),
+                                locale
+                              )}
                         </div>
                       </div>
                     </div>
@@ -629,9 +644,12 @@ export default function DeepInspectWorkspace({
                       }`}
                     >
                       <strong>
-                        {discountVerdictCopy(tVerdict, discount).label}:
+                        {discountVerdictCopy(tVerdict, discount, locale).label}:
                       </strong>{' '}
-                      {discountVerdictCopy(tVerdict, discount).explanation}
+                      {
+                        discountVerdictCopy(tVerdict, discount, locale)
+                          .explanation
+                      }
                     </div>
                   )}
 
@@ -657,20 +675,26 @@ export default function DeepInspectWorkspace({
                         {matchedGenuineDeal && (
                           <span className="badge bg-success-subtle text-success border-success-subtle rounded-pill border px-3 py-2">
                             {t('radarGenuinePill', {
-                              pct: matchedGenuineDeal.savingsVsMedianPct,
+                              pct: formatPlainNumber(
+                                matchedGenuineDeal.savingsVsMedianPct,
+                                locale
+                              ),
                               platform:
                                 matchedGenuineDeal.platform.toUpperCase(),
-                              price:
-                                matchedGenuineDeal.priceCurrent.toLocaleString(
-                                  'vi-VN'
-                                ),
+                              price: formatNumber(
+                                matchedGenuineDeal.priceCurrent,
+                                locale
+                              ),
                             })}
                           </span>
                         )}
                         {matchedFakeTrap && (
                           <span className="badge bg-danger-subtle text-danger border-danger-subtle rounded-pill border px-3 py-2">
                             {t('radarFakePill', {
-                              pct: matchedFakeTrap.fakeMarkupPct,
+                              pct: formatPlainNumber(
+                                matchedFakeTrap.fakeMarkupPct,
+                                locale
+                              ),
                               platform: matchedFakeTrap.platform.toUpperCase(),
                             })}
                           </span>
@@ -678,9 +702,13 @@ export default function DeepInspectWorkspace({
                         {matchedPriceSpread && (
                           <span className="badge bg-warning-subtle text-dark border-warning-subtle rounded-pill border px-3 py-2">
                             {t('radarSpreadPill', {
-                              pct: matchedPriceSpread.spreadPct,
-                              vnd: matchedPriceSpread.spreadVnd.toLocaleString(
-                                'vi-VN'
+                              pct: formatPlainNumber(
+                                matchedPriceSpread.spreadPct,
+                                locale
+                              ),
+                              vnd: formatNumber(
+                                matchedPriceSpread.spreadVnd,
+                                locale
                               ),
                               cheapest:
                                 matchedPriceSpread.cheapestPlatform.toUpperCase(),
@@ -775,7 +803,7 @@ export default function DeepInspectWorkspace({
                         <BsStarFill className="text-warning" />
                         <span>
                           {masterUserRating > 0
-                            ? `${masterUserRating.toFixed(1)}/5.0`
+                            ? `${formatDecimal(masterUserRating, locale, 1)}/${formatDecimal(5, locale, 1)}`
                             : t('userNoScore')}
                         </span>
                       </span>
@@ -784,7 +812,7 @@ export default function DeepInspectWorkspace({
                           {t('expertLabel')}{' '}
                           {masterExpertRating10 != null &&
                           masterExpertRating10 > 0
-                            ? `${masterExpertRating10.toFixed(1)}/10`
+                            ? `${formatDecimal(masterExpertRating10, locale, 1)}/10`
                             : t('expertNoScore')}
                         </span>
                       </span>
@@ -851,8 +879,9 @@ export default function DeepInspectWorkspace({
                               {offer.title}
                             </td>
                             <td className="fw-bold text-danger">
-                              {Number(offer.price_current).toLocaleString(
-                                'vi-VN'
+                              {formatNumber(
+                                Number(offer.price_current),
+                                locale
                               )}{' '}
                               ₫
                               {implausibleOfferIds.has(offer.id) && (
@@ -867,9 +896,10 @@ export default function DeepInspectWorkspace({
                             </td>
                             <td className="small text-muted text-decoration-line-through">
                               {offer.price_original
-                                ? `${Number(
-                                    offer.price_original
-                                  ).toLocaleString('vi-VN')} ₫`
+                                ? formatPriceVnd(
+                                    Number(offer.price_original),
+                                    locale
+                                  )
                                 : '-'}
                             </td>
                             <td>
@@ -1007,21 +1037,27 @@ export default function DeepInspectWorkspace({
                         <BsCheckCircle aria-hidden="true" className="me-1" />
                         {t('authenticLabel')}
                       </span>
-                      <span>{reviewSummary.authentic_pct}%</span>
+                      <span>
+                        {formatPercent(reviewSummary.authentic_pct, locale)}
+                      </span>
                     </div>
                     <div className="d-flex justify-content-between rounded-3 bg-warning bg-opacity-10 text-dark p-2">
                       <span>
                         <BsCoin aria-hidden="true" className="me-1" />
                         {t('coinSpamLabel')}
                       </span>
-                      <strong>{reviewSummary.suspicious_pct}%</strong>
+                      <strong>
+                        {formatPercent(reviewSummary.suspicious_pct, locale)}
+                      </strong>
                     </div>
                     <div className="d-flex justify-content-between rounded-3 bg-danger bg-opacity-10 text-danger p-2">
                       <span>
                         <BsRobot aria-hidden="true" className="me-1" />
                         {t('seedingFakeLabel')}
                       </span>
-                      <strong>{reviewSummary.fake_pct}%</strong>
+                      <strong>
+                        {formatPercent(reviewSummary.fake_pct, locale)}
+                      </strong>
                     </div>
                     <div className="d-flex justify-content-between rounded-3 bg-secondary bg-opacity-10 text-secondary p-2">
                       <span>
@@ -1056,7 +1092,7 @@ export default function DeepInspectWorkspace({
                       className="btn btn-outline-danger rounded-pill btn-sm px-3"
                     >
                       {item.name} (
-                      {Number(item.min_price).toLocaleString('vi-VN')} ₫)
+                      {formatPriceVnd(Number(item.min_price), locale)})
                     </Link>
                   ))}
                 </div>

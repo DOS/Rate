@@ -29,6 +29,11 @@ import { implausiblyLowOfferIds } from '@repo/shared-data/rules';
 import { isOfferUnavailable } from '@/lib/product-market-stats';
 import { contentLang } from '@/lib/content-lang';
 import ContentText from '@/components/elementary/ContentText';
+import {
+  formatNumber,
+  formatPercent,
+  formatPriceVnd,
+} from '@/lib/locale-format';
 
 interface ProductOffersExplorerProps {
   readonly productName: string;
@@ -462,8 +467,8 @@ export default function ProductOffersExplorer({
             <strong className="text-dark small">
               {t('offersSpreadSavePrefix')}{' '}
               <span className="text-success rate-tabular">
-                {priceSpreadAudit.spreadVnd.toLocaleString('vi-VN')} ₫ (
-                {priceSpreadAudit.spreadPct}%)
+                {formatPriceVnd(priceSpreadAudit.spreadVnd, locale)} (
+                {formatPercent(priceSpreadAudit.spreadPct, locale)})
               </span>{' '}
               {t('offersSpreadBuyAt')}{' '}
               <span className="text-uppercase">
@@ -483,13 +488,11 @@ export default function ProductOffersExplorer({
           <div className="small rate-tabular text-secondary">
             {t('offersSpreadLowLabel')}{' '}
             <strong className="text-success">
-              {priceSpreadAudit.cheapest.price_current.toLocaleString('vi-VN')}{' '}
-              ₫
+              {formatNumber(priceSpreadAudit.cheapest.price_current, locale)} ₫
             </strong>{' '}
             • {t('offersSpreadHighLabel')}{' '}
             <strong className="text-danger">
-              {priceSpreadAudit.priciest.price_current.toLocaleString('vi-VN')}{' '}
-              ₫
+              {formatNumber(priceSpreadAudit.priciest.price_current, locale)} ₫
             </strong>
           </div>
         </div>
@@ -644,13 +647,13 @@ export default function ProductOffersExplorer({
             </thead>
             <tbody>
               {filteredOffers.map((offer) => {
-                const price = offer.price_current.toLocaleString('vi-VN');
+                const price = formatNumber(offer.price_current, locale);
                 const origPrice =
                   offer.price_original != null &&
                   Number.isFinite(Number(offer.price_original)) &&
                   Number(offer.price_original) > offer.price_current &&
                   Number(offer.price_original) <= MAX_VALID_VND_PRICE
-                    ? offer.price_original.toLocaleString('vi-VN')
+                    ? formatNumber(offer.price_original, locale)
                     : null;
                 const trustScore = computeMerchantTrustScore(
                   offer.merchant.risk_score
@@ -798,16 +801,22 @@ export default function ProductOffersExplorer({
                           <a
                             href="#price-history-section"
                             title={
-                              discountVerdictCopy(tVerdict, discountAnalysis)
-                                .explanation
+                              discountVerdictCopy(
+                                tVerdict,
+                                discountAnalysis,
+                                locale
+                              ).explanation
                             }
                             className={`badge ${discountBadgeClass} text-decoration-none rounded-pill small`}
                             style={{ fontSize: '0.8125rem' }}
                           >
                             <DiscountIcon aria-hidden="true" className="me-1" />
                             {
-                              discountVerdictCopy(tVerdict, discountAnalysis)
-                                .label
+                              discountVerdictCopy(
+                                tVerdict,
+                                discountAnalysis,
+                                locale
+                              ).label
                             }
                           </a>
                         </div>

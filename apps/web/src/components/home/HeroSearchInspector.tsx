@@ -37,6 +37,11 @@ import {
 } from 'react-icons/bs';
 import ContentText from '@/components/elementary/ContentText';
 import { firstImageUrl, productImageUrl } from '@/lib/rate-domain-core';
+import {
+  formatDecimal,
+  formatNumber,
+  formatPlainNumber,
+} from '@/lib/locale-format';
 
 interface HeroSearchInspectorProps {
   initialProducts: HeroProductSuggestion[];
@@ -425,7 +430,7 @@ export default function HeroSearchInspector({
                       const safeMinPrice = sanitizeHeroInspectorPriceVnd(
                         item.min_price
                       );
-                      const minPrice = safeMinPrice.toLocaleString('vi-VN');
+                      const minPrice = formatNumber(safeMinPrice, locale);
                       const rating = sanitizeHeroInspectorRating(
                         item.user_rating_weighted,
                         item.average_rating
@@ -500,7 +505,7 @@ export default function HeroSearchInspector({
                                 )}
                                 {rating > 0 && (
                                   <span className="text-warning-emphasis fw-semibold">
-                                    ★ {rating.toFixed(1)}
+                                    ★ {formatDecimal(rating, locale, 1)}
                                   </span>
                                 )}
                                 <RadarBadge
@@ -735,7 +740,8 @@ export default function HeroSearchInspector({
                                 {
                                   discountVerdictCopy(
                                     tVerdict,
-                                    inspectResult.discountAnalysis
+                                    inspectResult.discountAnalysis,
+                                    locale
                                   ).label
                                 }
                               </span>
@@ -764,17 +770,18 @@ export default function HeroSearchInspector({
 
                           <div className="text-danger fw-bold fs-5 mb-1">
                             {t('bestPriceLabel')}{' '}
-                            {Number(
-                              inspectResult.masterProduct.min_price
-                            ).toLocaleString('vi-VN')}{' '}
+                            {formatNumber(
+                              Number(inspectResult.masterProduct.min_price),
+                              locale
+                            )}{' '}
                             ₫
                             {inspectResult.priceHistory?.lowestEverPrice && (
                               <span className="text-success small fw-semibold ms-2">
                                 {t('lowestEverPriceLabel', {
-                                  price:
-                                    inspectResult.priceHistory.lowestEverPrice.toLocaleString(
-                                      'vi-VN'
-                                    ),
+                                  price: formatNumber(
+                                    inspectResult.priceHistory.lowestEverPrice,
+                                    locale
+                                  ),
                                 })}
                               </span>
                             )}
@@ -785,7 +792,8 @@ export default function HeroSearchInspector({
                               {
                                 discountVerdictCopy(
                                   tVerdict,
-                                  inspectResult.discountAnalysis
+                                  inspectResult.discountAnalysis,
+                                  locale
                                 ).explanation
                               }
                             </p>
@@ -831,7 +839,10 @@ export default function HeroSearchInspector({
                             </span>
                             <span className="fw-bold text-success">
                               {t('aiReviewAuthValue', {
-                                pct: inspectResult.reviewSummary.authentic_pct,
+                                pct: formatPlainNumber(
+                                  inspectResult.reviewSummary.authentic_pct,
+                                  locale
+                                ),
                                 total:
                                   inspectResult.reviewSummary.total_analyzed,
                               })}

@@ -7,6 +7,7 @@ import type {
   ProductLeaderboardBadgeInfo,
 } from '@/lib/leaderboard-engine';
 import { BsAwardFill, BsTrophyFill } from 'react-icons/bs';
+import { formatDecimal } from '@/lib/locale-format';
 
 const VALID_BADGE_CATEGORIES = new Set<CanonicalCategorySlug>([
   'smartphones',
@@ -173,7 +174,7 @@ export default async function ProductLeaderboardBadges({
                 fontSize: '0.8125rem',
               }}
             >
-              ({b.score5.toFixed(2)}/5.0) ↗
+              ({formatDecimal(b.score5, lang, 2)}/{formatDecimal(5, lang, 1)}) ↗
             </span>
           </Link>
         );
