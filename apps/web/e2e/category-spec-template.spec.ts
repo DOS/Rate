@@ -53,15 +53,17 @@ test('earbud card carries no RAM or storage chip', async ({ page }) => {
 });
 
 test('a watch page never shows 5G', async ({ page }) => {
-  // The seeded phone is 5G; read through the smartwatch template, the flag
-  // and the 5G group label are gone while the rest of the page still renders.
-  await page.goto('/smartwatches/iphone-16-pro-max-256gb');
+  // The seeded watch is stored with a 5G flag; read through the smartwatch
+  // template, the flag and the 5G group label are gone while the rest of the
+  // page still renders. (A phone under /smartwatches 308s to its own
+  // category since DOS/Rate#1366.)
+  await page.goto('/smartwatches/apple-watch-e2e-cellular');
   const meta = page.locator('.rate-pdv-meta');
   await expect(meta).toContainText('Apple');
   await expect(meta).not.toContainText('5G');
   const specs = page.locator('#specs-section');
   await expect(specs).toContainText('Màn hình (Display)');
-  // The seeded phone has no network value left once 5G is dropped, so the
+  // The seeded watch has no network value left once 5G is dropped, so the
   // cellular group is hidden (DOS/Rate#1186); the 4G-only bands label is
   // covered by product-spec-rows.test.ts.
   await expect(specs).not.toContainText('Mạng Di động');

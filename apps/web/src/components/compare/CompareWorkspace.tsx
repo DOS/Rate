@@ -18,6 +18,7 @@ import {
   BsVolumeUp,
 } from 'react-icons/bs';
 import { Link, useRouter } from '@/lib/navigation';
+import { IntentLink } from '@/components/elementary/IntentLink';
 import type {
   KeySpecs,
   MasterProduct,
@@ -1809,14 +1810,14 @@ export default function CompareWorkspace({
                 })}
               </h2>
             </div>
-            <Link
+            <IntentLink
               href={`/leaderboard?cat=${activeCategory}`}
               className="btn btn-sm btn-outline-dark rounded-pill px-3"
             >
               {t('viewLeaderboardCategoryBtn', {
                 category: activeCategoryMeta.label,
               })}
-            </Link>
+            </IntentLink>
           </div>
 
           <div className="row g-3">
@@ -1905,12 +1906,12 @@ export default function CompareWorkspace({
                     >
                       {t('loadIntoMatrixBtn')}
                     </button>
-                    <Link
+                    <IntentLink
                       href={battle.versusHref}
                       className="btn btn-sm btn-dark rounded-pill small fw-semibold px-3"
                     >
                       {t('go1v1Btn')}
-                    </Link>
+                    </IntentLink>
                   </div>
                 </div>
               </div>

@@ -1,5 +1,5 @@
 import { getLocale, getTranslations } from 'next-intl/server';
-import { Link } from '@/lib/navigation';
+import { IntentLink } from '@/components/elementary/IntentLink';
 import {
   BsArrowLeftRight,
   BsBell,
@@ -36,27 +36,27 @@ export default async function FooterTop({
 
           <div className="col-lg-5 col-md-12">
             <div className="rate-footer-cta-actions">
-              <Link href="/inspect" className="btn btn-primary fw-semibold">
+              <IntentLink href="/inspect" className="btn btn-primary fw-semibold">
                 <BsShieldCheck aria-hidden="true" />
                 {tFooter('bannerInspectCta')}
-              </Link>
-              <Link
+              </IntentLink>
+              <IntentLink
                 href="/compare"
                 className="btn btn-outline-light fw-semibold"
               >
                 <BsArrowLeftRight aria-hidden="true" />
                 {tFooter('bannerCompareCta')}
-              </Link>
+              </IntentLink>
             </div>
             <div className="rate-section-links rate-footer-cta-links">
-              <Link href="/watchlist">
+              <IntentLink href="/watchlist">
                 <BsBell aria-hidden="true" />
                 {tFooter('bannerCta')}
-              </Link>
-              <Link href="/developers">
+              </IntentLink>
+              <IntentLink href="/developers">
                 <BsCodeSlash aria-hidden="true" />
                 {tFooter('bannerApiLink')}
-              </Link>
+              </IntentLink>
             </div>
           </div>
         </div>
