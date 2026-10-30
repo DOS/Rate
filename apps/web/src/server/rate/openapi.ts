@@ -2105,7 +2105,13 @@ function buildBaseRateOpenApiSpec(
                 id: { type: 'string' },
                 name: { type: 'string' },
                 is_official: { type: 'boolean' },
-                risk_score: { type: 'number', minimum: 0, maximum: 100 },
+                risk_score: {
+                  type: ['number', 'null'],
+                  minimum: 0,
+                  maximum: 100,
+                  description:
+                    'Combined seller risk; null for a seller with no DOSafe score and no stored review score (DOS/Rate#1484).',
+                },
                 dosafe_risk_score: {
                   type: ['number', 'null'],
                   minimum: 0,
