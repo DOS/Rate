@@ -407,11 +407,22 @@ const APPLE_PART_NUMBERS: Readonly<Record<string, readonly [string, string]>> = 
 // ("Op lung"), count too.
 const ACCESSORY_OPENER =
   /^(?:(?:combo|bộ|set|hàng\s*chính\s*hãng)\s+)?(?:(?:vỏ\s*)?ốp(?:\s*lưng)?|op\s*lung|bao\s*(?:da|đựng)|túi\s*(?:chống\s*sốc|đựng)|kính\s*(?:cường\s*lực|camera|bảo\s*vệ)|cường\s*lực|(?:miếng|bộ)\s*dán|dán\s*(?:màn\s*hình|lưng|camera|ppf)|phim\s*dán|skin(?:\s*dán)?|bút|bàn\s*phím|magic\s*keyboard|(?:củ|đế)\s*sạc|sạc|cáp|dây|giá\s*đỡ|(?:silicone\s*|clear\s*|leather\s*|magsafe\s*)?cases?|covers?|folio|(?:tempered\s*)?glass|screen\s*protectors?|stylus|keyboard|charger|cable)(?![\p{L}\d])/iu;
-// A pen sold as itself: "Bút cảm ứng (chính hãng) Apple Pencil Pro" is the Apple Pencil,
-// its own product, but a case "có khe đựng Apple Pencil" or a pen "cho iPad như Apple
-// Pencil" is not.
-const APPLE_PENCIL_OPENER =
-  /^(?:(?:bút(?:\s*cảm\s*ứng)?|stylus)(?:\s+(?!(?:cho|for|thay|như|giống|kiểu|dùng)(?![\p{L}\d]))[\p{L}\d-]+){0,2}\s+)?apple\s*pencil(?![\p{L}])/iu;
+// Words that make "Apple Pencil" what something fits or copies, not what it is.
+const PENCIL_FIT_WORD =
+  /(?<![\p{L}\d])(?:cho|for|thay|như|giống|kiểu|dùng|tương\s*thích|compatible|khe|đựng|ngăn)(?![\p{L}\d])/iu;
+
+/**
+ * A pen sold as itself: "Bút cảm ứng (chính hãng) Apple Pencil Pro" is the Apple Pencil,
+ * its own product. Only the pen word and promo words may come before "Apple Pencil"; a
+ * case "có khe đựng Apple Pencil" or a pen "cho iPad như Apple Pencil" is not one.
+ */
+function opensWithApplePencil(opening: string): boolean {
+  const at = /apple\s*pencil(?![\p{L}])/iu.exec(opening)?.index;
+  if (at === undefined) return false;
+  const before = opening.slice(0, at);
+  if (!/^(?:(?:bút|stylus)(?![\p{L}\d])|$)/iu.test(before.trim())) return false;
+  return !PENCIL_FIT_WORD.test(before) && !namesProduct(before);
+}
 
 /**
  * The title from its first product word: emoji, punctuation and promo brackets before it
@@ -444,7 +455,7 @@ export function isAccessoryTitle(title: string): boolean {
   // What the title sells, not a gift it opens with: "Ốp lưng tặng kèm khi mua iPhone 16 Pro
   // Max" sells the iPhone (DOS/Rate#1407).
   const opening = openingWords(ownProductPart(t));
-  if (!ACCESSORY_OPENER.test(opening) || APPLE_PENCIL_OPENER.test(opening)) return false;
+  if (!ACCESSORY_OPENER.test(opening) || opensWithApplePencil(opening)) return false;
   // The part before a gift stops at the "+", so the bundle is read on the whole title.
   const whole = openingWords(t);
   const plus = whole.indexOf('+');

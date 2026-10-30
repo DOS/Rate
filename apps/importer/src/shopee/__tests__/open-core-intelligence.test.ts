@@ -696,6 +696,7 @@ async function runSuite() {
     'Bao da iPad Pro M4 11 inch có khe đựng Apple Pencil',
     'Kính cường lực iPad Pro M4 13 inch dùng được Apple Pencil',
     'Ốp Apple Pencil 2 silicon',
+    'Bút cảm ứng cho iPad thay thế Apple Pencil',
     'Cáp sạc Apple Pencil 1',
     'Vỏ ốp iPhone 16 Pro Max',
     'Bộ dán PPF iPhone 16 Pro',
@@ -729,6 +730,8 @@ async function runSuite() {
     ['Sạc nhanh + iPhone 16 Pro Max 256GB', 'apple:iphone-16-pro-max:256gb'],
     ['Stylus Apple Pencil Pro', 'apple:pencil-pro:unknown'],
     ['Bút cảm ứng chính hãng Apple Pencil Pro', 'apple:pencil-pro:unknown'],
+    ['Bút cảm ứng (chính hãng) Apple Pencil Pro', 'apple:pencil-pro:unknown'],
+    ['Bút cảm ứng cao cấp chính hãng Apple Pencil Pro', 'apple:pencil-pro:unknown'],
     // A gift that opens the title is not what it sells.
     ['Ốp lưng tặng kèm khi mua iPhone 16 Pro Max 256GB', 'apple:iphone-16-pro-max:256gb'],
   ] as const) {
