@@ -92,6 +92,7 @@ import {
   computeProductStandingInCategory,
   scoreMasterProductForLeaderboard,
 } from '@/lib/leaderboard-engine';
+import { deviceImageSrcSet } from '@/lib/device-images';
 import ProductLeaderboardBadges from '@/components/leaderboard/ProductLeaderboardBadges';
 import ProductShareAuditButton from '@/components/leaderboard/ProductShareAuditButton';
 import ProductValueCalculator from '@/components/leaderboard/ProductValueCalculator';
@@ -1498,6 +1499,11 @@ export async function ProductDetailView({
                                 loading="lazy"
                                 decoding="async"
                                 src={peerThumb}
+                                srcSet={
+                                  deviceImageSrcSet(peerThumb) ?? undefined
+                                }
+                                // 68 px box less padding and border.
+                                sizes="50px"
                                 alt={peer.name}
                                 style={{
                                   maxWidth: '100%',
