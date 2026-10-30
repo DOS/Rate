@@ -1077,6 +1077,15 @@ async function runSuite() {
     ['Samsung GPS 5G Galaxy Watch7 44mm', 'samsung:galaxy-watch7:unknown'],
     // Nor is a size or storage after Garmin's GPS.
     ['Garmin GPS 47mm Fenix 7', 'garmin:fenix-7:unknown'],
+    // Only the handheld numbers count; a storage or a case size is skipped (DOS/Rate#1467).
+    ['Garmin GPS 32 GB Fenix 7X Sapphire Solar', 'garmin:fenix-7x-sapphire-solar:32gb'],
+    ['Garmin GPS 64 GB Edge 1040', 'garmin:edge-1040:64gb'],
+    ['Garmin GPS 42 Venu 3S', 'garmin:venu-3s:unknown'],
+    ['Garmin GPS 66sr', 'garmin:gps-66sr:unknown'],
+    // A comma after the number, or a "Máy định vị" prefix, keeps the GPS model.
+    ['Garmin GPS 73, Máy định vị cầm tay', 'garmin:gps-73:unknown'],
+    ['Máy định vị Garmin GPS 73', 'garmin:gps-73:unknown'],
+    ['Máy định vị cầm tay Garmin GPS 64s', 'garmin:gps-64s:unknown'],
     ['Samsung Galaxy S24 + Plus 256GB', 'samsung:galaxy-s24-plus:256gb'],
     ['Samsung (Hàng chính hãng) Galaxy A55 256GB', 'samsung:galaxy-a55:256gb'],
     ['Samsung 256GB', 'samsung:unkeyed:256gb'],
@@ -1120,6 +1129,10 @@ async function runSuite() {
     ['Samsung A06 4/64GB/6/128GB', ':64gb'],
     // Storage first, the list still keys as its first variant (DOS/Rate#1457).
     ['Samsung Galaxy Tab A9 64GB/4GB/128GB/8GB', ':64gb'],
+    // So does a three-digit storage first, but two storages list no pair (DOS/Rate#1467).
+    ['Samsung Galaxy A16 128GB/4GB/256GB/8GB', ':128gb'],
+    ['Samsung Galaxy Tab S9 FE 128GB/6GB/256GB/8GB', ':128gb'],
+    ['Samsung Galaxy S24 128GB/256GB/512GB', ':unknown'],
   ] as const) {
     assert.ok(keyOf(title).endsWith(storage), `${title} -> ${keyOf(title)}`);
   }
@@ -1161,6 +1174,16 @@ async function runSuite() {
     ['Lenovo ThinkPad T14 RAM - 32GB/16GB/512GB SSD', 'lenovo:thinkpad-t14:512gb'],
     ['Lenovo ThinkPad T14 RAM-32GB/16GB/512GB SSD', 'lenovo:thinkpad-t14:512gb'],
     ['Samsung Galaxy Tab A9 64GB/4GB/128GB/8GB', 'samsung:galaxy-tab-a9:64gb'],
+    // A memory type after the RAM word still names a RAM (DOS/Rate#1467).
+    ['Lenovo ThinkPad T14 RAM DDR4 32GB/16GB/512GB SSD', 'lenovo:thinkpad-t14:512gb'],
+    // A shop word glued to the run is no model word; a word glued to a storage alone,
+    // or to a shop word, is; "S24+" keeps its plus.
+    ['Samsung Galaxy A55 ChínhHãng/8GB/256GB', 'samsung:galaxy-a55:256gb'],
+    ['Xiaomi Redmi Note 13 Pro Plus/256GB', 'xiaomi:redmi-note-13-pro-plus:256gb'],
+    ['Xiaomi Redmi Note 13 Pro Plus/Mới 100%', 'xiaomi:redmi-note-13-pro-plus:unknown'],
+    ['Samsung Galaxy S24+/12GB/256GB', 'samsung:galaxy-s24-plus:256gb'],
+    ['Samsung Galaxy A55/256GB', 'samsung:galaxy-a55:256gb'],
+    ['Samsung Galaxy A55 ROM128/256GB', 'samsung:galaxy-a55:256gb'],
   ] as const) {
     assert.equal(keyOf(title), key, title);
   }
