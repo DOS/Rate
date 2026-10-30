@@ -1445,6 +1445,11 @@ const WATCH_GIFT_ACCESSORY_NOUN =
 const GARMIN_LINES =
   /^(?:Venu|Fenix|Fēnix|Forerunner|Vivoactive|Vivomove|Vivosmart|Instinct|Epix|Enduro|Approach|Lily|Edge|Descent|Quatix|Tactix|Marq|Bounce)\b/i;
 
+// Colour words a shop glues to the RAM/ROM run ("Đen/256GB", "Xanh/8GB/128GB"): never
+// the model's last word (DOS/Rate#1481).
+const GLUED_COLOURS =
+  /^(?:Đen|Trắng|Xanh|Bạc|Vàng|Hồng|Tím|Đỏ|Xám|Cam|Nâu|Kem|Black|White|Blue|Silver|Gold|Pink|Purple|Red|Gray|Grey|Green|Graphite|Midnight|Starlight|Mint|Cream|Titan|Titanium)$/iu;
+
 const LEADING_PROMO_GROUPS = /^(?:\s*(?:\[[^\]]*\]|\([^)]*\)|【[^】]*】|\{[^}]*\}))+\s*/;
 // So is a promo word right before the brand or its line: "Live Samsung Galaxy S26
 // Ultra", "Hot Sale Samsung …", "Flash Sale Điện thoại Samsung …", "Sale Galaxy S26
@@ -2151,7 +2156,7 @@ export class ProductNormalizer {
       const cleaned = withoutLeadingPromo
         .replace(
           new RegExp(
-            `^(?:(?:Hàng\\s+)?Chính\\s+hãng\\s+)?(?:(?:Điện\\s+thoại(?:\\s+thông\\s+minh|\\s+di\\s+động)?|Smartphone|Máy\\s+tính\\s+bảng|Tablet|Laptop|Máy\\s+tính\\s+xách\\s+tay|Đồng\\s+hồ(?:\\s+đeo\\s+tay)?(?:\\s+thông\\s+minh)?|Vòng\\s+đeo\\s+tay(?:\\s+thông\\s+minh)?|Vòng\\s+tay\\s+thông\\s+minh|Smartwatch|Tai\\s+nghe(?:\\s+Bluetooth|\\s+chống\\s+ồn|\\s+không\\s+dây)?|Earbuds|Máy\\s+định\\s+vị(?:\\s+cầm\\s+tay)?)\\s+(?:(?:Hàng\\s+)?Chính\\s+hãng\\s+)?)?(?:${brand}\\b\\s*)?`,
+            `^(?:(?:Hàng\\s+)?Chính\\s+hãng\\s+)?(?:(?:Điện\\s+thoại(?:\\s+thông\\s+minh|\\s+di\\s+động)?|Smartphone|Máy\\s+tính\\s+bảng|Tablet|Laptop|Máy\\s+tính\\s+xách\\s+tay|Đồng\\s+hồ(?:\\s+đeo\\s+tay)?(?:\\s+thông\\s+minh)?|Vòng\\s+đeo\\s+tay(?:\\s+thông\\s+minh)?|Vòng\\s+tay\\s+thông\\s+minh|Smartwatch|Tai\\s+nghe(?:\\s+Bluetooth|\\s+chống\\s+ồn|\\s+không\\s+dây)?|Earbuds|Máy\\s+định\\s+vị(?:\\s+cầm\\s+tay)?(?:\\s+GPS(?=\\s+${brand}\\b))?)\\s+(?:(?:Hàng\\s+)?Chính\\s+hãng\\s+)?)?(?:${brand}\\b\\s*)?`,
             'i'
           ),
           ''
@@ -2278,7 +2283,9 @@ export class ProductNormalizer {
           if (
             !/^(?:(?:LTE|GPS|RAM|ROM|OLED|WiFi)(?:\d\w*|DDR\w*)?|Chính\p{L}*|Hàng\p{L}*|Quốc\p{L}*|Bản|Mới|Fullbox|Likenew|Like|Cũ|VNA)$/iu.test(
               wordHead[1]!
-            )
+            ) &&
+            // Nor is a colour: "Galaxy A55 Đen/256GB" is the A55 (DOS/Rate#1481).
+            !GLUED_COLOURS.test(wordHead[1]!)
           ) {
             modelTokens.push(wordHead[1]!);
           }

@@ -1092,6 +1092,9 @@ async function runSuite() {
     // A comma after the number, or a "Máy định vị" prefix, keeps the GPS model.
     ['Garmin GPS 73, Máy định vị cầm tay', 'garmin:gps-73:unknown'],
     ['Máy định vị Garmin GPS 73', 'garmin:gps-73:unknown'],
+    // A "GPS" between the prefix and the brand goes with the prefix (DOS/Rate#1481).
+    ['Máy định vị GPS Garmin GPS 73', 'garmin:gps-73:unknown'],
+    ['Máy định vị GPS Garmin eTrex 22x', 'garmin:etrex-22x:unknown'],
     ['Máy định vị cầm tay Garmin GPS 64s', 'garmin:gps-64s:unknown'],
     ['Samsung Galaxy S24 + Plus 256GB', 'samsung:galaxy-s24-plus:256gb'],
     ['Samsung (Hàng chính hãng) Galaxy A55 256GB', 'samsung:galaxy-a55:256gb'],
@@ -1193,6 +1196,11 @@ async function runSuite() {
     ['Samsung Galaxy A55 ROM128/256GB', 'samsung:galaxy-a55:256gb'],
     ['Samsung Galaxy A55 RAM8GB/256GB', 'samsung:galaxy-a55:256gb'],
     ['Samsung Galaxy A55 Quốctế/256GB', 'samsung:galaxy-a55:256gb'],
+    // Nor is a colour (DOS/Rate#1481).
+    ['Samsung Galaxy A55 Đen/256GB', 'samsung:galaxy-a55:256gb'],
+    ['Samsung Galaxy A55 Xanh/8GB/128GB', 'samsung:galaxy-a55:128gb'],
+    ['Samsung Galaxy A55 Trắng/256GB', 'samsung:galaxy-a55:256gb'],
+    ['Apple iPhone 15 Black/128GB', 'apple:iphone-15:128gb'],
     ['Xiaomi Pad 6 WiFi6/8GB/256GB', 'xiaomi:pad-6:256gb'],
     ['Lenovo ThinkPad P16 RAM 128GB/16GB RAM SSD 1TB', 'lenovo:thinkpad-p16:1024gb'],
     ['Lenovo ThinkPad T14 RAM DDR 32GB/16GB/512GB SSD', 'lenovo:thinkpad-t14:512gb'],
