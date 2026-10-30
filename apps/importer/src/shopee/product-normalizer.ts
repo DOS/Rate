@@ -476,7 +476,10 @@ const CANONICAL_PHONE_REGISTRY: Record<
     third_camera?: string;
     fourth_camera?: string;
     front_camera: string;
-    charging_w: number;
+    /** Wired charging wattage, when a source states it. */
+    charging_w?: number;
+    /** RAM of the storages that differ from `ram_gb` (the S26 Ultra 1TB has 16GB). */
+    ram_by_storage_gb?: Readonly<Record<number, number>>;
     has_5g: boolean;
     release_date: string;
     ip_rating: string;
@@ -1045,75 +1048,81 @@ const CANONICAL_PHONE_REGISTRY: Record<
     ip_rating: 'IP68 dust/water resistant (up to 1.5m for 30 min)',
   },
   'apple:iphone-18-pro-max': {
+    // Sourced with the seeds (flagship-seed-sourced-2026.ts); Apple and
+    // GSMArena publish no charging wattage for this model.
     screen_size_inch: 6.9,
-    battery_mah: 4950,
+    battery_mah: 5391,
     ram_gb: 12,
-    chipset: 'Apple A20 Pro (2 nm TSMC N2)',
-    cpu: 'Hexa-core (2x4.40 GHz + 4x2.85 GHz)',
-    gpu: 'Apple GPU (6-core graphics with hardware ray tracing)',
-    os: 'iOS 20',
-    weight_g: 225,
-    dimensions: '163.0 x 77.6 x 8.2 mm',
+    chipset: 'Apple A20 Pro (2 nm)',
+    cpu: 'Hexa-core (2x4.93 GHz + 4x2.64 GHz)',
+    gpu: 'Apple 7-core GPU with Neural Accelerators, hardware-accelerated ray tracing',
+    os: 'iOS 27',
+    weight_g: 249,
+    dimensions: '163.4 x 78.0 x 8.75 mm',
     resolution: '1320 x 2868 pixels (~460 ppi)',
     screen_type:
-      'LTPO Super Retina XDR OLED, 120Hz ProMotion, Under-Display Face ID, 3000 nits (peak)',
+      'LTPO Super Retina XDR OLED, ProMotion up to 120Hz, HDR, Dolby Vision, 3000 nits (outdoor peak)',
     refresh_rate_hz: 120,
-    rear_camera: '48 MP, f/1.4-2.8, 24mm (wide), variable aperture, sensor-shift OIS',
-    second_camera:
-      '48 MP, f/2.6, 120mm (periscope telephoto), 5x optical zoom, 3D sensor-shift OIS',
-    third_camera: '48 MP, f/2.0, 13mm (ultrawide), PDAF + TOF 3D LiDAR scanner',
-    front_camera: '24 MP, f/1.9, 23mm (wide), PDAF, OIS + Under-Display SL 3D',
-    charging_w: 45,
+    rear_camera:
+      '48 MP Fusion Main, variable aperture f/1.48-f/4.0, 24mm, 1/1.28", dual pixel PDAF, sensor-shift OIS',
+    second_camera: '48 MP Fusion Ultra Wide, f/2.2, 13mm, 120°, PDAF',
+    third_camera:
+      '48 MP Fusion Telephoto, f/2.8, 100mm (4x), tetraprism periscope, 3D sensor-shift OIS',
+    front_camera: '18 MP Center Stage, f/1.9, 20mm, PDAF',
     has_5g: true,
     release_date: 'September 2026',
-    ip_rating: 'IP68 dust/water resistant (up to 6m for 30 min)',
+    ip_rating: 'IP68 (up to 6 m for 30 min)',
   },
   'apple:iphone-18-pro': {
+    // Sourced with the seeds (flagship-seed-sourced-2026.ts); Apple and
+    // GSMArena publish no charging wattage for this model.
     screen_size_inch: 6.3,
-    battery_mah: 3850,
+    battery_mah: 4056,
     ram_gb: 12,
-    chipset: 'Apple A20 Pro (2 nm TSMC N2)',
-    cpu: 'Hexa-core (2x4.40 GHz + 4x2.85 GHz)',
-    gpu: 'Apple GPU (6-core graphics with hardware ray tracing)',
-    os: 'iOS 20',
-    weight_g: 198,
-    dimensions: '149.6 x 71.5 x 8.2 mm',
+    chipset: 'Apple A20 Pro (2 nm)',
+    cpu: 'Hexa-core (2x4.93 GHz + 4x2.64 GHz)',
+    gpu: 'Apple 7-core GPU with Neural Accelerators, hardware-accelerated ray tracing',
+    os: 'iOS 27',
+    weight_g: 211,
+    dimensions: '150.0 x 71.9 x 8.75 mm',
     resolution: '1206 x 2622 pixels (~460 ppi)',
     screen_type:
-      'LTPO Super Retina XDR OLED, 120Hz ProMotion, Under-Display Face ID, 3000 nits (peak)',
+      'LTPO Super Retina XDR OLED, ProMotion up to 120Hz, HDR, Dolby Vision, 3000 nits (outdoor peak)',
     refresh_rate_hz: 120,
-    rear_camera: '48 MP, f/1.4-2.8, 24mm (wide), variable aperture, sensor-shift OIS',
-    second_camera:
-      '48 MP, f/2.6, 120mm (periscope telephoto), 5x optical zoom, 3D sensor-shift OIS',
-    third_camera: '48 MP, f/2.0, 13mm (ultrawide), PDAF + TOF 3D LiDAR scanner',
-    front_camera: '24 MP, f/1.9, 23mm (wide), PDAF, OIS + Under-Display SL 3D',
-    charging_w: 40,
+    rear_camera:
+      '48 MP Fusion Main, variable aperture f/1.48-f/4.0, 24mm, 1/1.28", dual pixel PDAF, sensor-shift OIS',
+    second_camera: '48 MP Fusion Ultra Wide, f/2.2, 13mm, 120°, PDAF',
+    third_camera:
+      '48 MP Fusion Telephoto, f/2.8, 100mm (4x), tetraprism periscope, 3D sensor-shift OIS',
+    front_camera: '18 MP Center Stage, f/1.9, 20mm, PDAF',
     has_5g: true,
     release_date: 'September 2026',
-    ip_rating: 'IP68 dust/water resistant (up to 6m for 30 min)',
+    ip_rating: 'IP68 (up to 6 m for 30 min)',
   },
   'samsung:galaxy-s26-ultra': {
+    // Sourced with the seeds (flagship-seed-sourced-2026.ts).
     screen_size_inch: 6.9,
-    battery_mah: 5500,
-    ram_gb: 16,
-    chipset: 'Qualcomm Snapdragon 8 Elite Gen 2 for Galaxy (2 nm)',
-    cpu: 'Octa-core (2x4.74 GHz Oryon V2 + 6x3.85 GHz Oryon V2)',
-    gpu: 'Adreno 840 (for Galaxy)',
-    os: 'Android 16, One UI 8.1',
-    weight_g: 218,
-    dimensions: '162.6 x 77.6 x 8.1 mm',
-    resolution: '1440 x 3120 pixels (~505 ppi)',
-    screen_type: 'Dynamic LTPO AMOLED 2X, 120Hz, HDR10+, Gorilla Armor 2, 3200 nits (peak)',
+    battery_mah: 5000,
+    ram_gb: 12,
+    chipset: 'Qualcomm Snapdragon 8 Elite Gen 5 for Galaxy (3 nm)',
+    cpu: 'Octa-core (2x4.74 GHz Oryon V3 Phoenix L + 6x3.62 GHz Oryon V3 Phoenix M)',
+    gpu: 'Adreno 840 (1.3 GHz)',
+    os: 'Android 16, One UI 8.5',
+    weight_g: 214,
+    dimensions: '163.6 x 78.1 x 7.9 mm',
+    resolution: '1440 x 3120 pixels (~500 ppi)',
+    screen_type: 'Dynamic LTPO AMOLED 2X, 120Hz, HDR10+, 2600 nits (peak)',
     refresh_rate_hz: 120,
-    rear_camera: '200 MP, f/1.6, 23mm (wide), ISOCELL HP9, multi-directional PDAF, OIS',
-    second_camera: '50 MP, f/3.2, 115mm (periscope telephoto), PDAF, OIS, 5x optical zoom',
-    third_camera: '50 MP, f/2.4, 67mm (telephoto), PDAF, OIS, 3x optical zoom',
-    fourth_camera: '50 MP, f/1.9, 13mm, 120˚ (ultrawide), Dual Pixel PDAF, Super Steady video',
-    front_camera: '12 MP, f/2.2, 26mm (wide), Dual Pixel PDAF',
-    charging_w: 65,
+    rear_camera: '200 MP, f/1.4, 23mm (wide), 1/1.3", multi-directional PDAF, OIS',
+    second_camera: '50 MP, f/1.9, 120˚ (ultrawide), 1/2.5", dual pixel PDAF',
+    third_camera: '50 MP, f/2.9, 111mm (periscope telephoto), PDAF, OIS, 5x optical zoom',
+    fourth_camera: '10 MP, f/2.4, 67mm (telephoto), PDAF, OIS, 3x optical zoom',
+    front_camera: '12 MP, f/2.2, 23mm (wide), dual pixel PDAF',
+    charging_w: 60,
+    ram_by_storage_gb: { 1024: 16 },
     has_5g: true,
     release_date: 'February 2026',
-    ip_rating: 'IP68 dust/water resistant (up to 1.5m for 30 min, Titanium Grade 5 + S Pen)',
+    ip_rating: 'IP68 dust/water resistant (up to 1.5m for 30 min)',
   },
   'oppo:find-x9-pro': {
     screen_size_inch: 6.82,
@@ -2049,16 +2058,34 @@ export class ProductNormalizer {
         // "iPad mini (2026)" is the mini 8, so the chains that write the year key like the
         // ones that write the number (DOS/Rate#1491). The older years keep their stored
         // "ipad-mini" key ("iPad mini 2024", DOS/Rate#819) until a re-key decides otherwise.
+        // Its chip names it too: FPT Shop and TGDD write "iPad mini A20 Pro", as A17 Pro
+        // names the mini 7 (DOS/Rate#1502). Only the chip in the product's own part counts,
+        // the first one: not a gift or bundle ("tặng ốp Galaxy A20", "+ Galaxy A20") nor
+        // what a comparison names ("A20 Pro so sánh A17 Pro").
         const mini = line.match(/^mini\s*([1-9])?$/i);
+        const miniChip = mini
+          ? appleTitle
+              .slice((ipadMatch.index ?? 0) + ipadMatch[0].length)
+              .normalize('NFC')
+              // A "+" with or without spaces, and a gift or fit word before a space or
+              // a colon; "cho bé" or "for kids" names who it is for, not another product.
+              .split(
+                /\s*\+|\s(?:tương thích|dùng cho|kèm|tặng)(?!\p{L})|\bipad\b|so sánh|\bvs\b/iu
+              )[0]!
+              .match(/\ba(17\s*pro|20(?:\s*pro)?)\b/i)?.[1]
+              ?.slice(0, 2)
+          : undefined;
         if (mini)
           line = `mini${
             mini[1]
               ? ` ${mini[1]}`
-              : /\ba17\s*pro\b/i.test(appleTitle)
-                ? ' 7'
-                : /\bmini\s*\(?\s*2026\s*\)?(?![\d\p{L}])/iu.test(appleTitle)
-                  ? ' 8'
-                  : ''
+              : miniChip === '20'
+                ? ' 8'
+                : miniChip === '17' || /\ba17\s*pro\b/i.test(appleTitle)
+                  ? ' 7'
+                  : /\bmini\s*\(?\s*2026\s*\)?(?![\d\p{L}])/iu.test(appleTitle)
+                    ? ' 8'
+                    : ''
           }`;
         model = /^(pro|air)$/i.test(line) && chip ? `iPad ${line} ${chip}` : `iPad ${line}`;
       } else if (macbookMatch && macbookMatch[1]) {
@@ -2666,7 +2693,10 @@ export class ProductNormalizer {
     const ramGb =
       categorySlug === 'earbuds' || categorySlug === 'smartwatches'
         ? null
-        : (validClaimedRam ?? benchmark?.ram_gb ?? null);
+        : (validClaimedRam ??
+          (storageGb !== null ? benchmark?.ram_by_storage_gb?.[storageGb] : undefined) ??
+          benchmark?.ram_gb ??
+          null);
     // The registry describes one size of a line: its screen and battery do not describe
     // the other size ("iPad Pro M4 13" is not the 11 inch entry) (DOS/Rate#1113).
     const appleInches = appleSize && !appleSize.endsWith('mm') ? parseFloat(appleSize) : null;
@@ -2825,9 +2855,10 @@ export class ProductNormalizer {
                 ? 3561
                 : 5000);
 
-    const fallbackChargingW =
-      benchmark?.charging_w ||
-      (categorySlug === 'laptops'
+    // A registry model whose sources state no wattage gets none, not a category default.
+    const fallbackChargingW = benchmark
+      ? benchmark.charging_w
+      : categorySlug === 'laptops'
         ? 65
         : categorySlug === 'tablets'
           ? 30
@@ -2837,7 +2868,7 @@ export class ProductNormalizer {
               ? 5
               : isApple
                 ? 25
-                : 45);
+                : 45;
 
     const cameraCount = benchmark
       ? [
@@ -2996,7 +3027,7 @@ export class ProductNormalizer {
           : `${fallbackScreenSize}" ${benchmark?.screen_type?.split(',')[0] || fallbackScreenType.split(',')[0]}`,
       chip: benchmark?.chipset?.split('(')[0]?.trim() || fallbackChip,
       camera: benchmark?.rear_camera ? benchmark.rear_camera.split(',')[0] : fallbackKeyCamera,
-      battery: `${fallbackBatteryMah} mAh (${fallbackChargingW}W)`,
+      battery: `${fallbackBatteryMah} mAh${fallbackChargingW ? ` (${fallbackChargingW}W)` : ''}`,
       storage: storageDisplay,
       ram: ramGb ? `${ramGb}GB` : undefined,
     };

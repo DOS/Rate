@@ -21,6 +21,8 @@ import {
   withoutVariantKeySpecs,
   withoutVariantSpecs,
 } from './jobs/backfill-specs.js';
+import { flagshipSeedsByItem } from './flagship-seed-data.js';
+import { specPageMatchesItem, withoutRetractedSpecs } from './spec-retraction.js';
 import { fetchAllPages } from './paging.js';
 import type { RateSupabaseClient } from './types.js';
 
@@ -968,7 +970,7 @@ export class ArenaSpecSyncer {
 
 export interface ArenaItemSyncResult {
   /** `skipped`: flag off or no usable key; `item_missing`: no `rate.items` row. */
-  status: 'skipped' | 'item_missing' | 'synced';
+  status: 'skipped' | 'item_missing' | 'synced' | 'model_mismatch';
   apply: boolean;
   itemKey: string | null;
   /** The Item was (apply) or would be (dry-run) updated. */
@@ -1064,6 +1066,16 @@ export async function syncArenaSpecsToItem(
   const itemKey = isItemKey(rawKey) ? rawKey : (splitModelKey(rawKey)?.itemKey ?? null);
   if (!itemKey) return result;
   result.itemKey = itemKey;
+  // A page for another device (a wrong or reused URL) is never synced onto the Item
+  // (DOS/Rate#1459).
+  if (!specPageMatchesItem(spec.modelName, itemKey)) {
+    result.status = 'model_mismatch';
+    return result;
+  }
+  // What a replaced, unsourced seed wrote stays retracted (DOS/Rate#1459).
+  const retracted = flagshipSeedsByItem().find(
+    seed => seed.itemKey === itemKey
+  )?.retract_spec_fields;
 
   const { data: item, error: itemErr } = await supabase
     .from('items')
@@ -1085,11 +1097,17 @@ export async function syncArenaSpecsToItem(
   result.status = 'synced';
 
   const itemPayload = {
-    specifications: withoutVariantSpecs(
-      mergeProductSpecifications(itemRow.specifications, spec.specifications)
+    specifications: withoutRetractedSpecs(
+      withoutVariantSpecs(mergeProductSpecifications(itemRow.specifications, spec.specifications)),
+      retracted,
+      'specifications'
     ),
-    key_specs: withoutVariantKeySpecs(
-      mergeKeySpecs(itemRow.key_specs, spec.keySpecs as unknown as Record<string, unknown>)
+    key_specs: withoutRetractedSpecs(
+      withoutVariantKeySpecs(
+        mergeKeySpecs(itemRow.key_specs, spec.keySpecs as unknown as Record<string, unknown>)
+      ),
+      retracted,
+      'key_specs'
     ),
   };
   if (
@@ -1198,7 +1216,7 @@ export const UPSTREAM_2026_ARENA_REFERENCE_URLS: ReadonlyArray<{
     slug: 'apple-iphone-18-pro-max-256gb',
     name: 'Apple iPhone 18 Pro Max 256GB',
     announced: '2026, September 18',
-    gsmarenaUrl: 'https://www.gsmarena.com/apple_iphone_18_pro_max-14210.php',
+    gsmarenaUrl: 'https://www.gsmarena.com/apple_iphone_18_pro_max-14716.php',
     phonearenaUrl: 'https://www.phonearena.com/phones/Apple-iPhone-18-Pro-Max_id12540',
   },
   {
@@ -1207,7 +1225,7 @@ export const UPSTREAM_2026_ARENA_REFERENCE_URLS: ReadonlyArray<{
     slug: 'apple-iphone-18-pro-256gb',
     name: 'Apple iPhone 18 Pro 256GB',
     announced: '2026, September 18',
-    gsmarenaUrl: 'https://www.gsmarena.com/apple_iphone_18_pro-14209.php',
+    gsmarenaUrl: 'https://www.gsmarena.com/apple_iphone_18_pro_5g-14934.php',
     phonearenaUrl: 'https://www.phonearena.com/phones/Apple-iPhone-18-Pro_id12539',
   },
   {
@@ -1216,7 +1234,7 @@ export const UPSTREAM_2026_ARENA_REFERENCE_URLS: ReadonlyArray<{
     slug: 'samsung-galaxy-s26-ultra-256gb',
     name: 'Samsung Galaxy S26 Ultra 256GB',
     announced: '2026, February 25',
-    gsmarenaUrl: 'https://www.gsmarena.com/samsung_galaxy_s26_ultra-14015.php',
+    gsmarenaUrl: 'https://www.gsmarena.com/samsung_galaxy_s26_ultra_5g-14320.php',
     phonearenaUrl: 'https://www.phonearena.com/phones/Samsung-Galaxy-S26-Ultra_id12621',
   },
   {

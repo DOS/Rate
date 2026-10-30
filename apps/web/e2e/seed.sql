@@ -45,6 +45,14 @@ VALUES
    'Samsung Galaxy S25 Ultra 256GB', 'c0000000-0000-4000-8000-000000000001', 'Samsung', 26490000, 33990000,
    'https://tiki.vn/item-3', '22222222-2222-4222-8222-222222222222');
 
+-- The Apple Flagship Store has a stored review risk and no DOSafe score: a seller with a
+-- real score, so the deal radar may call its cheaper offer a genuine deal; with no score
+-- at all it could not (DOS/Rate#1484). Its DOSafe score stays unknown (DOS/Rate#1479).
+UPDATE rate.merchants
+SET review_risk_score = 8,
+    review_risk_breakdown = '{"total_reviews": 12, "authentic_count": 11, "coin_spam_count": 1, "seeding_fake_count": 0, "sabotage_or_bombing_count": 0, "suspicious_ratio_pct": 8}'
+WHERE id = '11111111-1111-4111-8111-111111111111';
+
 INSERT INTO rate.price_history (product_id, price, price_original, recorded_at)
 SELECT p.id, p.price_current + d.days * 100000, p.price_original, now() - make_interval(days => d.days)
 FROM rate.products p
@@ -269,12 +277,14 @@ VALUES ('cccccccc-cccc-4ccc-8ccc-ccccccc07692', 'Draft Links', 4, 'Máy dùng �
 -- name, the medium ones the short forms that keep the score or the price. The
 -- phones have no offers and no reviews, so they stay off the deals and the
 -- leaderboard, and their old created_at keeps them last in default orderings.
-INSERT INTO rate.merchants (id, platform, platform_shop_id, name, slug, is_official)
+-- The medium-name store has a DOSafe score, so its title keeps a trust score; a store
+-- with no data has none (DOS/Rate#1484).
+INSERT INTO rate.merchants (id, platform, platform_shop_id, name, slug, is_official, risk_score)
 VALUES
   ('ffffffff-ffff-4fff-8fff-ffffffff0782', 'shopee', 'shop_long_name',
-   'Cửa Hàng Ủy Quyền Chính Hãng Điện Thoại Di Động Toàn Quốc', 'long-name-store', false),
+   'Cửa Hàng Ủy Quyền Chính Hãng Điện Thoại Di Động Toàn Quốc', 'long-name-store', false, 0),
   ('ffffffff-ffff-4fff-8fff-ffffffff0783', 'shopee', 'shop_medium_name',
-   'Cửa Hàng Điện Thoại Chính Hãng Hà Nội 24h', 'medium-name-store', false);
+   'Cửa Hàng Điện Thoại Chính Hãng Hà Nội 24h', 'medium-name-store', false, 12);
 INSERT INTO rate.master_products
   (id, category_id, brand, model, model_key, name, slug, min_price, max_price, merchant_count, status, metadata, created_at)
 VALUES
