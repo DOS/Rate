@@ -1547,7 +1547,7 @@ function readAppleSize(model: string, rawTitle: string): string {
         !/^[,]| [-–] /u.test(productPart.slice(end)) ||
         !namesAppleFamilyOtherThan(segment, familyName) ||
         // "bản 15 inch hỗ trợ iPhone Mirroring" states the product's own size.
-        /\d+(?:[.,]\d+)? ?(?:inch|in|"|''|mm)/iu.test(segment)
+        /\d+(?:[.,]\d+)? ?(?:inch|in(?![\p{L}\d])|"|''|mm(?![\p{L}\d]))/iu.test(segment)
       )
         break;
       end = productPart.length - after.length;
