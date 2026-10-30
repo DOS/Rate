@@ -1112,6 +1112,18 @@ async function runSuite() {
   ] as const) {
     assert.ok(keyOf(title).endsWith(storage), `${title} -> ${keyOf(title)}`);
   }
+  // A number glued to a RAM/ROM chain is the model's number when the model has none
+  // yet, and a screen size after a numbered model (DOS/Rate#1448).
+  for (const [title, key] of [
+    ['Xiaomi Redmi 13/8GB/256GB', 'xiaomi:redmi-13:256gb'],
+    ['Asus Vivobook 14/8GB/512GB', 'asus:vivobook-14:512gb'],
+    ['Lenovo LOQ 15/16GB/512GB/RTX 4050', 'lenovo:loq-15:512gb'],
+    ['Samsung Galaxy Tab S9 11/8GB/128GB', 'samsung:galaxy-tab-s9:128gb'],
+    ['Xiaomi Pad 6 11/8GB/256GB', 'xiaomi:pad-6:256gb'],
+    ['Realme GT 6 16/12GB/512GB', 'realme:gt-6:512gb'],
+  ] as const) {
+    assert.equal(keyOf(title), key, title);
+  }
   // A long run of promo words costs linear time (CodeQL js/polynomial-redos).
   {
     const started = performance.now();
@@ -1331,7 +1343,10 @@ async function runSuite() {
   assert.equal(detectCategorySlug('AirPods Pro 2 tặng dây Apple Watch Series 10'), 'earbuds');
   assert.equal(detectCategorySlug('iPad Pro M4 tặng Apple Watch Series 10'), 'tablets');
   assert.equal(detectCategorySlug('MacBook Air M3 + Apple Watch Series 10'), 'laptops');
-  assert.equal(detectCategorySlug('Apple iPhone 15 Plus 128GB tặng đồng hồ thông minh'), 'smartphones');
+  assert.equal(
+    detectCategorySlug('Apple iPhone 15 Plus 128GB tặng đồng hồ thông minh'),
+    'smartphones'
+  );
   assert.equal(detectCategorySlug('Apple Watch Series 10 46mm tặng AirPods Pro 2'), 'smartwatches');
   assert.equal(detectCategorySlug('Sale sốc tặng quà Apple Watch S10 46mm'), 'smartwatches');
   assert.equal(

@@ -2187,6 +2187,16 @@ export class ProductNormalizer {
         // A "+" before "Plus" is the Plus written twice ("Galaxy S24 + Plus"), no bundle.
         if (tok === '+' && /^plus[,;]?$/i.test(rawTokens[i + 1] ?? '')) continue;
         if (/^(?:tặng|kèm|quà|\+)$/iu.test(tok.normalize('NFC'))) break;
+        // A number glued to a RAM/ROM chain ("Redmi 13/8GB/256GB") is the model's number
+        // when the model has none yet; after a numbered model ("Galaxy Tab S9 11/8GB/128GB")
+        // it is a screen size. Either way the chain ends the model (DOS/Rate#1448).
+        const chainHead = /^(\d{1,2})\/\d+(?:[.,]\d+)?(?:GB|TB)?\/\d/i.exec(tok);
+        if (chainHead) {
+          if (modelTokens.length > 0 && !modelTokens.some(t => /\d/.test(t))) {
+            modelTokens.push(chainHead[1]!);
+          }
+          break;
+        }
         const stop =
           /^(?:\d+(?:[.,]\d+)?(?:GB|TB)|\d+\/\d+(?:GB|TB)?|\d{2}mm|5G|4G|LTE|GPS|RAM|ROM|OLED|WiFi|Chính|Quốc|Bản|Mới|Fullbox|Likenew|Like|Cũ|99%|98%|VN\/A|VNA|LL\/A|\(|\[|-)/i.exec(
             tok
