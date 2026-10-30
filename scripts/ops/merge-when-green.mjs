@@ -346,17 +346,24 @@ export function decide(pr, checks, blockedPolls) {
   return { action: 'merge' };
 }
 
-function readHead(repo, number) {
-  const pr = ghJson(['api', `repos/${repo}/pulls/${number}`]);
+function readHead(
+  repo,
+  number,
+  {
+    ghJson: ghJsonCall = ghJson,
+    ghPaginated: ghPaginatedCall = ghPaginated,
+  } = {}
+) {
+  const pr = ghJsonCall(['api', `repos/${repo}/pulls/${number}`]);
   if (pr.state !== 'open') return { pr, runs: [], statuses: [], required: [] };
-  const runs = ghPaginated(
+  const runs = ghPaginatedCall(
     `repos/${repo}/commits/${pr.head.sha}/check-runs?per_page=100`,
     '.check_runs[] | {id, name, status, conclusion}'
   );
   const statuses =
-    ghJson(['api', `repos/${repo}/commits/${pr.head.sha}/status`])?.statuses ??
-    [];
-  const rules = ghJson([
+    ghJsonCall(['api', `repos/${repo}/commits/${pr.head.sha}/status`])
+      ?.statuses ?? [];
+  const rules = ghJsonCall([
     'api',
     `repos/${repo}/rules/branches/${encodeRef(pr.base.ref)}`,
   ]);
@@ -372,8 +379,22 @@ export async function mergeWhenGreen({
   intervalMs = 30_000,
   timeoutMs = 60 * 60_000,
   lint = lintHeader,
+  // GitHub calls, sleep and the clock, replaceable in tests (DOS/Rate#1513).
+  io: {
+    gh: ghCall = gh,
+    ghJson: ghJsonCall = ghJson,
+    ghPaginated: ghPaginatedCall = ghPaginated,
+    sleep: sleepCall = sleep,
+    now = Date.now,
+  } = {},
 } = {}) {
-  const deadline = Date.now() + timeoutMs;
+  const io = {
+    gh: ghCall,
+    ghJson: ghJsonCall,
+    ghPaginated: ghPaginatedCall,
+    sleep: sleepCall,
+  };
+  const deadline = now() + timeoutMs;
   const timedOut = () => ({
     ok: false,
     message: `PR ${number} still not mergeable after ${timeoutMs / 60_000} min`,
@@ -387,7 +408,7 @@ export async function mergeWhenGreen({
   let lastUpdatedSha = null;
   for (;;) {
     // Every path back to the top of the loop is bounded by this deadline.
-    if (Date.now() > deadline) {
+    if (now() > deadline) {
       return {
         ok: false,
         message: `PR ${number} still not mergeable after ${timeoutMs / 60_000} min`,
@@ -395,13 +416,13 @@ export async function mergeWhenGreen({
     }
     let head;
     try {
-      head = readHead(repo, number);
+      head = readHead(repo, number, io);
       apiErrors = 0;
     } catch (err) {
       if (++apiErrors >= MAX_API_ERRORS) {
         return { ok: false, message: `PR ${number}: ${err.message}` };
       }
-      await sleep(intervalMs);
+      await io.sleep(intervalMs);
       continue;
     }
     const { pr } = head;
@@ -452,7 +473,7 @@ export async function mergeWhenGreen({
       // update-branch is asynchronous: until the new head appears, the old
       // head still reads as behind. Wait for it instead of updating again.
       if (pr.head.sha === lastUpdatedSha) {
-        await sleep(intervalMs);
+        await io.sleep(intervalMs);
         continue;
       }
       if (++branchUpdates > MAX_BRANCH_UPDATES) {
@@ -461,8 +482,8 @@ export async function mergeWhenGreen({
           message: `PR ${number} is still behind ${pr.base.ref} after ${MAX_BRANCH_UPDATES} updates (the base keeps moving)`,
         };
       }
-      if (Date.now() > deadline) return timedOut();
-      const updated = gh(
+      if (now() > deadline) return timedOut();
+      const updated = io.gh(
         [
           'api',
           '-X',
@@ -481,7 +502,7 @@ export async function mergeWhenGreen({
       }
       lastUpdatedSha = pr.head.sha;
       console.log(`PR ${number} was behind ${pr.base.ref}: branch updated`);
-      await sleep(intervalMs);
+      await io.sleep(intervalMs);
       continue;
     }
     if (next.action === 'merge') {
@@ -491,10 +512,12 @@ export async function mergeWhenGreen({
       if (method === 'squash') {
         let messages;
         try {
-          messages = ghPaginated(
-            `repos/${repo}/pulls/${number}/commits?per_page=100`,
-            '.[] | {message: .commit.message}'
-          ).map((c) => c.message);
+          messages = io
+            .ghPaginated(
+              `repos/${repo}/pulls/${number}/commits?per_page=100`,
+              '.[] | {message: .commit.message}'
+            )
+            .map((c) => c.message);
           commitListErrors = 0;
         } catch (err) {
           if (++commitListErrors >= MAX_API_ERRORS) {
@@ -503,7 +526,7 @@ export async function mergeWhenGreen({
               message: `PR ${number}: cannot list its commits: ${err.message}`,
             };
           }
-          await sleep(intervalMs);
+          await io.sleep(intervalMs);
           continue;
         }
         // The commits API stops at 250: never write a body that drops some.
@@ -518,10 +541,10 @@ export async function mergeWhenGreen({
       }
       // The lint and the commit listing may have taken a while: no write to
       // GitHub, this merge or the branch update above, goes out past the deadline.
-      if (Date.now() > deadline) return timedOut();
+      if (now() > deadline) return timedOut();
       // The fields go as JSON on stdin: a long squash message is over the
       // Windows command line limit.
-      const merged = gh(
+      const merged = io.gh(
         [
           'api',
           '-X',
@@ -545,7 +568,7 @@ export async function mergeWhenGreen({
         // A check re-queued after the last read (for example by a PR edit)
         // makes GitHub refuse briefly: read the head again before giving up.
         if (++mergeRefusals < MAX_MERGE_REFUSALS) {
-          await sleep(intervalMs);
+          await io.sleep(intervalMs);
           continue;
         }
         return {
@@ -561,7 +584,7 @@ export async function mergeWhenGreen({
           baseRepo: pr.base.repo.full_name,
         })
       ) {
-        gh(
+        io.gh(
           [
             'api',
             '-X',
@@ -577,7 +600,7 @@ export async function mergeWhenGreen({
       };
     }
     blockedPolls = next.blocked ? blockedPolls + 1 : 0;
-    if (Date.now() > deadline) {
+    if (now() > deadline) {
       const waiting = checks.pending?.length
         ? ` (waiting on ${checks.pending.join(', ')})`
         : '';
@@ -586,7 +609,7 @@ export async function mergeWhenGreen({
         message: `PR ${number} still not green after ${timeoutMs / 60_000} min${waiting}`,
       };
     }
-    await sleep(intervalMs);
+    await io.sleep(intervalMs);
   }
 }
 
