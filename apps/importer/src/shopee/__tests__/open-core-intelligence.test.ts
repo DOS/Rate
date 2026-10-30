@@ -494,6 +494,22 @@ async function runSuite() {
     ['iPad Pro 11 năm 22', 'apple:ipad-pro-11:unknown'],
     // A shop's age is no size: the gift's size stands in.
     ['iPad Pro M4 256GB - Shop 13 năm kinh nghiệm - tặng ốp 11 inch', 'apple:ipad-pro-m4-11:256gb'],
+    // "Shop N năm" is the shop's age whatever follows; "năm" before a mark or
+    // another shop-age word is a duration (DOS/Rate#1386).
+    ['iPad Pro M4 256GB - Shop 13 năm bán hàng - tặng ốp 11 inch', 'apple:ipad-pro-m4-11:256gb'],
+    [
+      'MacBook Pro M3 512GB Shop 16 năm chuyên hàng Apple tặng túi 14 inch',
+      'apple:macbook-pro-m3-14:512gb',
+    ],
+    ['MacBook Air M2 cửa hàng 15 năm uy tín 13 inch', 'apple:macbook-air-m2-13:unknown'],
+    ['iPad Pro M4 256GB 13 năm phát triển tặng ốp 11 inch', 'apple:ipad-pro-m4-11:256gb'],
+    ['iPad Pro M4 256GB 13 năm. tặng ốp 11 inch', 'apple:ipad-pro-m4-11:256gb'],
+    ['iPad Pro M4 256GB 13 năm! tặng ốp 11 inch', 'apple:ipad-pro-m4-11:256gb'],
+    ['iPad Pro M4 256GB 13 năm- tặng ốp 11 inch', 'apple:ipad-pro-m4-11:256gb'],
+    ['iPad Pro M4 256GB [13 năm] tặng ốp 11 inch', 'apple:ipad-pro-m4-11:256gb'],
+    ['iPad Pro M4 256GB 13 năm: tặng ốp 11 inch', 'apple:ipad-pro-m4-11:256gb'],
+    // A screen size after "Shop" with no "năm" stays the product's.
+    ['iPad Pro M4 Shop 11 inch', 'apple:ipad-pro-m4-11:unknown'],
     [
       'MacBook Air M2 256GB - Shop 14 năm kinh nghiệm - tặng túi 13 inch',
       'apple:macbook-air-m2-13:256gb',
