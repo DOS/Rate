@@ -4039,9 +4039,36 @@ async function runTests() {
 
   // Vietnamese server text in an English or Czech panel (DOS/Rate#1374)
   {
-    const { renderReviewCardHtml } = await import('./sidepanel/panel-view.js');
-    const { contentLangAttr, formatCatalogueEntry, isVietnameseText } =
-      await import('./i18n.js');
+    const { renderOffersCardHtml, renderReviewCardHtml } =
+      await import('./sidepanel/panel-view.js');
+    const {
+      contentLangAttr,
+      contentTextHtml,
+      formatCatalogueEntry,
+      isVietnameseText,
+    } = await import('./i18n.js');
+    const offerFor = (
+      merchantName: string,
+      price: number
+    ): ExtensionOfferItem => ({
+      id: merchantName,
+      platform: 'shopee',
+      title: merchantName,
+      price_current: price,
+      price_original: null,
+      rating_star: 4.8,
+      rating_count: 10,
+      historical_sold: 0,
+      url: 'https://shopee.vn/x-i.1.2',
+      merchant: {
+        id: `m-${merchantName}`,
+        name: merchantName,
+        is_official: false,
+        risk_score: 12,
+        dosafe_risk_score: 5,
+        review_risk_score: null,
+      },
+    });
     const catalogues = readLocaleCatalogues();
     const viSummary =
       'Lần phân tích gần nhất (một nơi bán) đã xét 6 đánh giá: giữ lại 6 đánh giá thực chất và loại bỏ 0 đánh giá rác';
@@ -4088,7 +4115,32 @@ async function runTests() {
         assert.ok(card(english).includes(english), `${locale}: non-vi shown`);
         assert.equal(contentLangAttr('Sạc nhanh 35W'), ' lang="vi"');
         assert.equal(contentLangAttr('A18 chip, 6-core GPU'), '');
+        // Store names in the offers card are marked, English ones are not.
+        const offersHtml = renderOffersCardHtml([
+          offerFor('Hoàng Hà Mobile', 20_000_000),
+          offerFor('Apple Flagship Store', 21_000_000),
+        ]);
+        assert.ok(
+          offersHtml.includes('<span lang="vi">Hoàng Hà Mobile</span>')
+        );
+        assert.ok(!offersHtml.includes('<span lang="vi">Apple Flagship'));
+        assert.equal(
+          contentTextHtml('Đáy <giá>'),
+          '<span lang="vi">Đáy &lt;giá&gt;</span>',
+          'still escaped'
+        );
       }
+      // A Vietnamese panel through chrome.i18n marks nothing and hides nothing.
+      globalWithChrome.chrome = {
+        i18n: {
+          getMessage: (name: string, subs?: string[]) => {
+            const entry = catalogues.vi[name];
+            return entry ? formatCatalogueEntry(entry, subs ?? []) : '';
+          },
+        },
+      };
+      assert.ok(card(viSummary).includes(viSummary));
+      assert.equal(contentTextHtml('Hoàng Hà Mobile'), 'Hoàng Hà Mobile');
     } finally {
       globalWithChrome.chrome = previousChrome;
     }
@@ -4541,8 +4593,13 @@ async function runTests() {
         '<span class="verdict-badge">${escapeHtml(verdict.label)}</span>'
       )
     );
-    assert.ok(panelSource.includes('}">${escapeHtml(verdict.label)}</span>'));
-    assert.ok(panelSource.includes('${escapeHtml(verdict.explanation)}</p>'));
+    // The panel marks a Vietnamese fallback label as such (DOS/Rate#1374).
+    assert.ok(
+      panelSource.includes('}">${contentTextHtml(verdict.label)}</span>')
+    );
+    assert.ok(
+      panelSource.includes('${contentTextHtml(verdict.explanation)}</p>')
+    );
     for (const text of [contentSource, panelSource]) {
       assert.ok(!/assessment\.(badgeLabel|explanation)\b/.test(text));
     }

@@ -15,7 +15,13 @@ import {
   normalizeFiveStarRating,
   resolveSafeApiRelativeUrl,
 } from '../security-guards.js';
-import { escapeHtml, isVietnameseText, t, type MessageKey } from '../i18n.js';
+import {
+  contentTextHtml,
+  escapeHtml,
+  isForeignVietnamese,
+  t,
+  type MessageKey,
+} from '../i18n.js';
 
 export { escapeHtml };
 
@@ -146,7 +152,7 @@ function renderOfferRowHtml(
             <div class="offer-item${muted ? ' offer-item-muted' : ''}">
               <div>
                 <div class="offer-shop">
-                  ${escapeHtml(off.merchant.name)}
+                  ${contentTextHtml(off.merchant.name)}
                   ${off.merchant.is_official ? officialBadgeHtml() : ''}
                   ${marksHtml}
                 </div>
@@ -198,9 +204,7 @@ export function renderReviewCardHtml(
   // or Czech panel it is left out rather than machine-translated: the
   // genuine share and the count above already say the same (DOS/Rate#1374).
   const summary =
-    hasReviews &&
-    reviews.ai_summary &&
-    !(t('langCode') !== 'vi' && isVietnameseText(reviews.ai_summary))
+    hasReviews && reviews.ai_summary && !isForeignVietnamese(reviews.ai_summary)
       ? reviews.ai_summary
       : null;
   return `
@@ -262,7 +266,7 @@ export function renderNotFoundHtml(
   return `
       <div class="card">
         <div class="card-title">${escapeHtml(t('notFoundTitle'))}</div>
-        ${query ? `<div class="product-name">${escapeHtml(query)}</div>` : ''}
+        ${query ? `<div class="product-name">${contentTextHtml(query)}</div>` : ''}
         <p style="color: #9ca3af;">
           ${escapeHtml(t(accessory ? 'notFoundAccessory' : 'notFoundNoData'))}
         </p>
@@ -303,7 +307,7 @@ export function renderLookupErrorHtml(
   return `
       <div class="card" role="alert">
         <div class="card-title">${escapeHtml(t('lookupErrorTitle'))}</div>
-        ${title ? `<div class="product-name">${escapeHtml(title)}</div>` : ''}
+        ${title ? `<div class="product-name">${contentTextHtml(title)}</div>` : ''}
         <p style="color: #9ca3af;">${escapeHtml(t(LOOKUP_FAILURE_MESSAGE[kind]))}</p>
         <div class="btn-row">
           <button type="button" class="btn-secondary" data-action="retry">${escapeHtml(t('retry'))}</button>

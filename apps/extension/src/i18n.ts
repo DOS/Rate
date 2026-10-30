@@ -74,6 +74,9 @@ export function tHtml(key: MessageKey, htmlParts: readonly string[]): string {
 
 // Marks that occur in Vietnamese and not in Czech or English, once the text
 // is decomposed: grave, circumflex, tilde, breve, hook, horn, dot below.
+// French, Spanish or Slovak names ("Lancôme", "São") match too, and
+// Vietnamese written without these marks ("Sac nhanh") does not; both are
+// rare in what the panel shows.
 const VIETNAMESE_MARKS =
   /\u0111|\u0110|\u0300|\u0302|\u0303|\u0306|\u0309|\u031b|\u0323/;
 
@@ -87,7 +90,18 @@ export function isVietnameseText(text: string): boolean {
  * so screen readers read it as Vietnamese (DOS/Rate#1374); empty otherwise.
  */
 export function contentLangAttr(text: string): string {
-  return t('langCode') !== 'vi' && isVietnameseText(text) ? ' lang="vi"' : '';
+  return isForeignVietnamese(text) ? ' lang="vi"' : '';
+}
+
+/** Vietnamese server text in a panel shown in another language. */
+export function isForeignVietnamese(text: string): boolean {
+  return t('langCode') !== 'vi' && isVietnameseText(text);
+}
+
+/** Server text as escaped HTML, in a `lang="vi"` span when it needs one. */
+export function contentTextHtml(text: string): string {
+  const html = escapeHtml(text);
+  return isForeignVietnamese(text) ? `<span lang="vi">${html}</span>` : html;
 }
 
 /** Fills `data-i18n*` attributes of a static page (DOS/Rate#1304). */

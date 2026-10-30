@@ -16,6 +16,7 @@ import {
 import {
   applyDocumentMessages,
   contentLangAttr,
+  contentTextHtml,
   t,
   tHtml,
   type MessageKey,
@@ -143,11 +144,11 @@ async function fetchAndRenderDealRadar(
               <div>
                 <div class="offer-shop">
                   <a href="${resolveSafeApiRelativeUrl(settings.apiBaseUrl, d.productHref)}" target="_blank" rel="noopener noreferrer" style="color:#f3f4f6;text-decoration:none;">
-                    ${escapeHtml(d.productName)}
+                    ${contentTextHtml(d.productName)}
                   </a>
                 </div>
                 <div class="offer-meta">
-                  ${escapeHtml(d.platform.toUpperCase())} (${escapeHtml(d.merchantName)}) - ${escapeHtml(t('radarSavings', [formatVnd(d.savingsVsMedianVnd), formatSafeNumber(d.savingsVsMedianPct, { min: 0, max: 100 })]))}
+                  ${escapeHtml(d.platform.toUpperCase())} (${contentTextHtml(d.merchantName)}) - ${escapeHtml(t('radarSavings', [formatVnd(d.savingsVsMedianVnd), formatSafeNumber(d.savingsVsMedianPct, { min: 0, max: 100 })]))}
                 </div>
               </div>
               <a href="${escapeSafeExternalHref(d.offerUrl)}" target="_blank" rel="noopener noreferrer" class="offer-price" style="text-decoration:none;color:#34d399;">
@@ -168,7 +169,7 @@ async function fetchAndRenderDealRadar(
                   (s) => `
                   <div class="offer-item">
                     <div>
-                      <div class="offer-shop">${escapeHtml(s.productName)}</div>
+                      <div class="offer-shop">${contentTextHtml(s.productName)}</div>
                       <div class="offer-meta" style="color:#93c5fd;">
                         ${escapeHtml(t('radarSpreadVersus', [s.cheapestPlatform.toUpperCase(), formatVnd(s.minPrice), s.priciestPlatform.toUpperCase(), formatVnd(s.maxPrice)]))}
                       </div>
@@ -195,7 +196,7 @@ async function fetchAndRenderDealRadar(
                   (trap) => `
                   <div class="offer-item">
                     <div>
-                      <div class="offer-shop">${escapeHtml(trap.productName)}</div>
+                      <div class="offer-shop">${contentTextHtml(trap.productName)}</div>
                       <div class="offer-meta" style="color:#fca5a5;">
                         ${escapeHtml(trap.platform.toUpperCase())} - ${escapeHtml(t('radarTrapMarkup', [formatSafeNumber(trap.fakeMarkupPct, { min: 0, max: 10000 }), formatVnd(trap.priceOriginal)]))}
                       </div>
@@ -291,7 +292,7 @@ async function fetchAndRenderMerchantTrustDirectory(
                 <div>
                   <div class="offer-shop">
                     <a href="${detailHref}" target="_blank" rel="noopener noreferrer" style="color:#f3f4f6;text-decoration:none;">
-                      ${escapeHtml(m.name)}
+                      ${contentTextHtml(m.name)}
                     </a>
                     ${m.is_official ? officialBadgeHtml() : ''}
                   </div>
@@ -381,7 +382,7 @@ function renderPanelContent(
                 class="variant-btn ${lookup.detectedStorageGb === v.storageGb ? 'active' : ''}"
                 data-variant="${escapeHtml(v.label)}"
               >
-                ${escapeHtml(v.label)} (${formatVnd(v.minPrice)})
+                ${contentTextHtml(v.label)} (${formatVnd(v.minPrice)})
               </button>
             `
             )
@@ -605,11 +606,11 @@ function renderPanelContent(
           assessment.implausiblyLow
             ? 'implausibly_low'
             : sanitizeVerdictClassSuffix(assessment.verdict)
-        }">${escapeHtml(verdict.label)}</span>
+        }">${contentTextHtml(verdict.label)}</span>
         ${radarPillHtml}
       </div>
-      <div class="product-name">${escapeHtml((sizeUnknown ? lookup.item?.name : master?.name) || signal.title)}</div>
-      <p style="color: #d1d5db; font-size: 13px;">${escapeHtml(verdict.explanation)}</p>
+      <div class="product-name">${contentTextHtml((sizeUnknown ? lookup.item?.name : master?.name) || signal.title)}</div>
+      <p style="color: #d1d5db; font-size: 13px;">${contentTextHtml(verdict.explanation)}</p>
       <div class="stats-grid">
         <div class="stat-box">
           <div class="stat-label">${escapeHtml(t('observedPrice'))}</div>
