@@ -95,7 +95,10 @@ import {
   computeProductStandingInCategory,
   scoreMasterProductForLeaderboard,
 } from '@/lib/leaderboard-engine';
-import { deviceImageSrcSet } from '@/lib/device-images';
+import {
+  deviceImageSizesForHeight,
+  deviceImageSrcSet,
+} from '@/lib/device-images';
 import ProductLeaderboardBadges from '@/components/leaderboard/ProductLeaderboardBadges';
 import ProductShareAuditButton from '@/components/leaderboard/ProductShareAuditButton';
 import ProductValueCalculator from '@/components/leaderboard/ProductValueCalculator';
@@ -822,11 +825,14 @@ export async function ProductDetailView({
                     // ahead of the below-the-fold peer and offer thumbnails.
                     // React emits a preload for it into the page payload, which a
                     // prefetch applies too, so it names the sized WebP renditions:
-                    // a prefetched page never pulls the full JPEG (#1413). It is
-                    // shown at most 350 px tall, 190 px on phones.
+                    // a prefetched page never pulls the full JPEG (#1413). The box
+                    // caps it at 350 px tall, 190 px on phones (_product.scss).
                     <img
                       srcSet={deviceImageSrcSet(mainImage) ?? undefined}
-                      sizes="(max-width: 767.98px) 190px, 350px"
+                      sizes={deviceImageSizesForHeight(mainImage, {
+                        phone: 190,
+                        other: 350,
+                      })}
                       src={mainImage}
                       alt={product.name}
                       fetchPriority="high"
