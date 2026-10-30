@@ -11576,6 +11576,7 @@ async function runCoreArchitectureSuite() {
     assert.deepEqual(detectAccessoryOrJunk(null as never), {
       isAccessory: false,
       reason: null,
+      message: null,
     });
     assert.equal(extractStorageAndAmbiguity([] as never).storageGb, null);
 
@@ -14374,6 +14375,163 @@ async function runCoreArchitectureSuite() {
 
     console.log(
       '  ✅ [129/129] Rate-Domain & Spec-Localizer Numeric, Key-Spec, and Sentinel Bounds (#1038) passed'
+    );
+  }
+
+  // 130. Every verdict names its text with a message key and the values the
+  // Vietnamese text interpolates, so the extension can show it in its own
+  // language (DOS/Rate#1326).
+  {
+    const mkOffer1326 = (id: string, price: number) =>
+      ({
+        id,
+        platform: 'shopee',
+        url: 'https://example.test/1326/' + id,
+        price_current: price,
+        price_original: null,
+        merchant: {
+          id: 'm-' + id,
+          name: 'Shop ' + id,
+          risk_score: 5,
+          is_official: true,
+        },
+      }) as never;
+    const offers1326 = [
+      mkOffer1326('a', 20_000_000),
+      mkOffer1326('b', 21_000_000),
+      mkOffer1326('c', 22_000_000),
+    ];
+    const judge1326 = (
+      overrides: Partial<Parameters<typeof evaluateExtensionPriceVerdict>[0]>
+    ) =>
+      evaluateExtensionPriceVerdict({
+        isAccessory: false,
+        accessoryReason: null,
+        isAmbiguousVariant: false,
+        observedPrice: null,
+        observedOriginalPrice: null,
+        offers: offers1326,
+        priceHistory: null,
+        ...overrides,
+      });
+    const vnd1326 = (n: number) => `${n.toLocaleString('vi-VN')} ₫`;
+
+    const fair = judge1326({ observedPrice: 21_200_000 });
+    assert.equal(fair.verdict, 'fair_market_price');
+    assert.equal(fair.messageKey, 'fair_market');
+    assert.deepEqual(fair.messageParams, {
+      effectivePrice: 21_200_000,
+      marketMedianPrice: 21_000_000,
+    });
+    assert.equal(fair.badgeLabel, 'Giá Chuẩn Thị Trường');
+    assert.ok(fair.explanation.includes(vnd1326(21_200_000)));
+
+    const deal = judge1326({ observedPrice: 20_000_000 });
+    assert.equal(deal.verdict, 'genuine_deal');
+    assert.equal(deal.messageKey, 'genuine_deal');
+    assert.deepEqual(deal.messageParams, {
+      effectivePrice: 20_000_000,
+      marketMedianPrice: 21_000_000,
+    });
+
+    const above = judge1326({ observedPrice: 23_000_000 });
+    assert.equal(above.verdict, 'above_market');
+    assert.equal(above.messageKey, 'above_market');
+    assert.deepEqual(above.messageParams, {
+      effectivePrice: 23_000_000,
+      marketMedianPrice: 21_000_000,
+      vsMarketMedianPct: 9.5,
+    });
+    assert.equal(above.badgeLabel, 'Cao hơn thị trường +9.5%');
+
+    const fake = judge1326({
+      observedPrice: 21_500_000,
+      observedOriginalPrice: 26_000_000,
+    });
+    assert.equal(fake.verdict, 'inflated_fake_sale');
+    assert.equal(fake.messageKey, 'fake_discount');
+    assert.deepEqual(fake.messageParams, {
+      originalPrice: 26_000_000,
+      claimedDiscountPct: 17.3,
+      effectivePrice: 21_500_000,
+      marketMedianPrice: 21_000_000,
+      histMax: 22_000_000,
+    });
+    assert.ok(fake.explanation.includes('(-17.3%)'));
+
+    const noHistory = judge1326({ observedPrice: 21_000_000, offers: [] });
+    assert.equal(noHistory.messageKey, 'insufficient_history');
+    assert.deepEqual(noHistory.messageParams, {});
+    assert.equal(noHistory.badgeLabel, 'Chưa đủ lịch sử giá');
+
+    const ambiguous = judge1326({
+      observedPrice: 21_000_000,
+      isAmbiguousVariant: true,
+    });
+    assert.equal(ambiguous.messageKey, 'ambiguous_variant');
+    assert.deepEqual(ambiguous.messageParams, {});
+
+    const bait = judge1326({ observedPrice: 5_000_000 });
+    assert.equal(bait.implausiblyLow, true);
+    assert.equal(bait.messageKey, 'implausibly_low');
+    assert.deepEqual(bait.messageParams, {
+      observedPrice: 5_000_000,
+      marketMedianPrice: 21_000_000,
+    });
+
+    const accessory = judge1326({ isAccessory: true });
+    assert.equal(accessory.messageKey, 'accessory');
+    assert.deepEqual(accessory.messageParams, {});
+
+    const keywordGate = detectAccessoryOrJunk({
+      title: 'Ốp lưng silicon chống sốc cho iPhone 16 Pro Max',
+      price: 89_000,
+    });
+    assert.deepEqual(keywordGate.message, {
+      messageKey: 'accessory_keyword',
+      messageParams: { keyword: 'ốp lưng' },
+    });
+    const keywordVerdict = judge1326({
+      isAccessory: true,
+      accessoryReason: keywordGate.reason,
+      accessoryMessage: keywordGate.message,
+    });
+    assert.equal(keywordVerdict.explanation, keywordGate.reason);
+    assert.equal(keywordVerdict.messageKey, 'accessory_keyword');
+    assert.deepEqual(keywordVerdict.messageParams, { keyword: 'ốp lưng' });
+
+    const floorGate = detectAccessoryOrJunk({
+      title: 'Điện thoại Apple iPhone 16 128GB',
+      price: 50_000,
+    });
+    assert.equal(floorGate.isAccessory, true);
+    assert.equal(floorGate.message?.messageKey, 'accessory_price_floor');
+    const floorParams = floorGate.message?.messageParams ?? {};
+    assert.equal(floorParams.observedPrice, 50_000);
+    assert.equal(typeof floorParams.minimumPrice, 'number');
+    assert.ok(
+      floorGate.reason?.includes(vnd1326(floorParams.minimumPrice as number))
+    );
+
+    // A free-text reason has no key: clients show the server's text.
+    const freeText = judge1326({
+      isAccessory: true,
+      accessoryReason: 'Lý do khác.',
+    });
+    assert.equal(freeText.explanation, 'Lý do khác.');
+    assert.equal(freeText.messageKey, undefined);
+    assert.equal(freeText.messageParams, undefined);
+
+    assert.deepEqual(
+      detectAccessoryOrJunk({
+        title: 'Điện thoại Apple iPhone 16 128GB Chính hãng VN/A',
+        price: 21_990_000,
+      }).message,
+      null
+    );
+
+    console.log(
+      '  ✅ [130] Verdict message keys and params for the extension (#1326) passed'
     );
   }
 
