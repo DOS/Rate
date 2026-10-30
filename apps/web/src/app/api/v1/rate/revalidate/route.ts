@@ -101,6 +101,13 @@ export function extractProvidedToken(request: NextRequest): string | null {
   return null;
 }
 
+/**
+ * The largest revalidation body read (DOS/Rate#1404). A batch filled to every
+ * schema limit is about 16 KB of ASCII, and about 34 KB when a client escapes
+ * non-ASCII paths as \u escapes, so the shared 32 KB write cap is too small.
+ */
+const REVALIDATE_MAX_BODY_BYTES = 65_536;
+
 export async function OPTIONS() {
   return new NextResponse(null, {
     status: 204,
@@ -135,8 +142,11 @@ export async function POST(request: NextRequest) {
   }
 
   // Capped like every other JSON write, even behind the secret
-  // (DOS/Rate#1404).
-  const bodyRead = await readBoundedJsonBody(request);
+  // (DOS/Rate#1404), with room for the largest batch the schema allows.
+  const bodyRead = await readBoundedJsonBody(
+    request,
+    REVALIDATE_MAX_BODY_BYTES
+  );
   if (bodyRead.tooLarge) {
     return payloadTooLargeResponse(REVALIDATE_CORS_HEADERS);
   }
