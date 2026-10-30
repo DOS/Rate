@@ -199,6 +199,8 @@ const SUBMIT_ERROR_KEYS = new Map<string, SubmitErrorKey>([
   ['FORBIDDEN', 'errRealAccountRequired'],
   ['DUPLICATE_REVIEW', 'errDuplicateReview'],
   ['RATE_LIMITED', 'errRateLimited'],
+  // The code since #1400; RATE_LIMITED is kept for older answers.
+  ['RATE_LIMIT_EXCEEDED', 'errRateLimited'],
   ['REJECTED', 'errInvalidReview'],
   ['INVALID_BODY', 'errInvalidReview'],
 ]);
