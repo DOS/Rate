@@ -275,7 +275,7 @@ export default async function MerchantProfilePage({
                       height: '72px',
                       background:
                         'linear-gradient(135deg, rgba(216, 48, 48, 0.25), rgba(99, 102, 241, 0.25))',
-                      border: '1px solid rgba(255, 255, 255, 0.14)',
+                      border: '1px solid var(--rate-glass-border)',
                     }}
                   >
                     <BsShop />
@@ -290,7 +290,7 @@ export default async function MerchantProfilePage({
                           className="badge rounded-pill d-inline-flex align-items-center gap-1 px-3 py-1"
                           style={{
                             backgroundColor: 'rgba(45, 186, 105, 0.16)',
-                            color: '#34d399',
+                            color: 'var(--rate-ink-success)',
                             border: '1px solid rgba(45, 186, 105, 0.35)',
                           }}
                         >
@@ -300,9 +300,9 @@ export default async function MerchantProfilePage({
                       <span
                         className="badge rounded-pill px-3 py-1"
                         style={{
-                          backgroundColor: 'rgba(255, 255, 255, 0.08)',
-                          color: '#cbd5e1',
-                          border: '1px solid rgba(255, 255, 255, 0.14)',
+                          backgroundColor: 'var(--rate-glass-bg)',
+                          color: 'var(--rate-fg-paragraph)',
+                          border: '1px solid var(--rate-glass-border)',
                         }}
                       >
                         Shop ID: <code>{merchant.platform_shop_id}</code>
@@ -313,7 +313,7 @@ export default async function MerchantProfilePage({
                     </h1>
                     <div
                       className="d-flex align-items-center small flex-wrap gap-3"
-                      style={{ color: '#94a3b8' }}
+                      style={{ color: 'var(--rate-fg-secondary)' }}
                     >
                       {/* Items wrap: "Hodnocení tržiště: Neaktualizováno" is wider
                           than a 320px header column (DOS/Rate#1084). */}
@@ -353,18 +353,21 @@ export default async function MerchantProfilePage({
                 <div
                   className="rounded-4 p-3 text-center"
                   style={{
-                    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-                    border: '1px solid rgba(255, 255, 255, 0.12)',
+                    backgroundColor: 'var(--rate-glass-bg)',
+                    border: '1px solid var(--rate-glass-border)',
                   }}
                 >
-                  <div className="small mb-1" style={{ color: '#94a3b8' }}>
+                  <div
+                    className="small mb-1"
+                    style={{ color: 'var(--rate-fg-secondary)' }}
+                  >
                     {t('compositeTrustScoreLabel')}
                   </div>
                   <div className="display-6 fw-bold font-monospace mb-1 text-white">
                     {merchant.trust_score}
                     <span
                       className="fs-5 fw-normal"
-                      style={{ color: '#94a3b8' }}
+                      style={{ color: 'var(--rate-fg-secondary)' }}
                     >
                       /100
                     </span>

@@ -223,7 +223,9 @@ export function LocaleSwitcher({
           backgroundColor: isDarkHeader
             ? 'rgba(255, 255, 255, 0.12)'
             : 'var(--bs-card-bg, #ffffff)',
-          borderColor: isDarkHeader ? 'rgba(255, 255, 255, 0.25)' : '#cbd5e1',
+          borderColor: isDarkHeader
+            ? 'rgba(255, 255, 255, 0.25)'
+            : 'var(--rate-border-strong)',
           color: isDarkHeader ? '#ffffff' : 'var(--bs-body-color, #1e293b)',
           fontSize: compact ? '13px' : '14px',
           fontWeight: 600,
@@ -250,8 +252,8 @@ export function LocaleSwitcher({
             top: 'calc(100% + 6px)',
             right: 0,
             left: 'auto',
-            backgroundColor: '#ffffff',
-            borderColor: '#e2e8f0',
+            backgroundColor: 'var(--rate-bg-surface)',
+            borderColor: 'var(--rate-border-subtle)',
           }}
         >
           {routing.locales.map((loc) => {

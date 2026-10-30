@@ -1,3 +1,5 @@
+import { THEME_INIT_SCRIPT_HASH } from './theme';
+
 /**
  * Content Security Policy for the pages (DOS/Rate#1311). The proxy sends it as
  * `Content-Security-Policy-Report-Only` with a fresh nonce per request, and puts
@@ -69,7 +71,14 @@ export function buildContentSecurityPolicy(
     connect.push(supabase, supabase.replace(/^http/, 'ws'));
   }
   if (options.dev) connect.push('ws:');
-  const script = ["'self'", `'nonce-${nonce}'`, "'strict-dynamic'"];
+  // The theme script in <head> runs before paint on cached pages too, which
+  // carry no nonce, so it is allowed by its hash (DOS/Rate#1435).
+  const script = [
+    "'self'",
+    `'nonce-${nonce}'`,
+    THEME_INIT_SCRIPT_HASH,
+    "'strict-dynamic'",
+  ];
   // React Refresh evaluates code in development.
   if (options.dev) script.push("'unsafe-eval'");
   return [

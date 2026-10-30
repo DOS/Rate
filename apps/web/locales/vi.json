@@ -23,7 +23,12 @@
       "menuCloseAria": "Đóng menu",
       "categories": "Danh mục",
       "backToTop": "Lên đầu trang",
-      "skipToContent": "Chuyển đến nội dung chính"
+      "skipToContent": "Chuyển đến nội dung chính",
+      "themeGroupAria": "Giao diện sáng hoặc tối",
+      "themeLight": "Sáng",
+      "themeDark": "Tối",
+      "themeSystem": "Theo hệ thống",
+      "themeCycleAria": "Giao diện: {theme}. Bấm để đổi"
     },
     "footer": {
       "copyRight": "© {YEAR} Rate.vn, thuộc hệ sinh thái DOS. So sánh thông số, lịch sử giá thật và đánh giá từ nhiều sàn.",

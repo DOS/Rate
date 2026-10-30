@@ -157,6 +157,17 @@ jobs:
             test-results/e2e/
           retention-days: 7
 
+      # Light and dark screenshots of the main pages, for theme reviews
+      # (apps/web/e2e/theme-screenshots.spec.ts, DOS/Rate#1435).
+      - name: Upload theme screenshots
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: theme-screenshots
+          path: test-results/e2e/theme-screenshots/
+          if-no-files-found: ignore
+          retention-days: 7
+
   # RATE_ITEM_MODEL=nullable_variant on the DOS-Me M0 + M1+M2 proposals (DOS/Rate#1159):
   # the Item routes, redirects and canonicals. The default E2E job above stays flag-off.
   e2e-item-model:

@@ -215,13 +215,13 @@ export default async function VersusComparePage({ params }: VersusPageProps) {
 
         {/* DESIGN.md v3.0 1v1 Head-to-Head Hero Scoreboard */}
         <section
-          className="rate-ink-on-dark"
+          className="rate-surface-dark rate-ink-on-dark"
           style={{
             background:
               'linear-gradient(135deg, #0b0d10 0%, #12161f 55%, #181c26 100%)',
-            color: '#f8fafc',
+            color: 'var(--rate-fg-primary)',
             padding: '40px 0 36px',
-            borderBottom: '1px solid rgba(255,255,255,0.08)',
+            borderBottom: '1px solid var(--rate-glass-border)',
           }}
         >
           <div className="container">
@@ -231,7 +231,7 @@ export default async function VersusComparePage({ params }: VersusPageProps) {
                 style={{
                   background: 'rgba(216, 48, 48, 0.16)',
                   border: '1px solid rgba(216, 48, 48, 0.4)',
-                  color: '#ff6b66',
+                  color: 'var(--rate-ink-primary)',
                   fontSize: '0.8125rem',
                   fontWeight: 700,
                 }}

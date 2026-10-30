@@ -2058,7 +2058,7 @@ export default function CompareWorkspace({
                 className="badge rounded-pill fw-semibold px-3 py-1"
                 style={{
                   backgroundColor: 'rgba(45, 186, 105, 0.16)',
-                  color: '#34d399',
+                  color: 'var(--rate-ink-success)',
                   border: '1px solid rgba(45, 186, 105, 0.3)',
                 }}
               >
@@ -2084,13 +2084,13 @@ export default function CompareWorkspace({
                 <div
                   className="rounded-3 h-100 p-3"
                   style={{
-                    backgroundColor: 'rgba(255, 255, 255, 0.04)',
-                    border: '1px solid rgba(255, 255, 255, 0.08)',
+                    backgroundColor: 'var(--rate-glass-bg)',
+                    border: '1px solid var(--rate-glass-border)',
                   }}
                 >
                   <div
                     className="small fw-bold mb-1"
-                    style={{ color: '#34d399' }}
+                    style={{ color: 'var(--rate-ink-success)' }}
                   >
                     {t('verdictHighestRatedTitle')}
                   </div>
@@ -2114,13 +2114,13 @@ export default function CompareWorkspace({
                 <div
                   className="rounded-3 h-100 p-3"
                   style={{
-                    backgroundColor: 'rgba(255, 255, 255, 0.04)',
-                    border: '1px solid rgba(255, 255, 255, 0.08)',
+                    backgroundColor: 'var(--rate-glass-bg)',
+                    border: '1px solid var(--rate-glass-border)',
                   }}
                 >
                   <div
                     className="small fw-bold mb-1"
-                    style={{ color: '#818cf8' }}
+                    style={{ color: 'var(--rate-ink-expert)' }}
                   >
                     {t('verdictTopHardwareTitle')}
                   </div>
@@ -2152,13 +2152,13 @@ export default function CompareWorkspace({
                 <div
                   className="rounded-3 h-100 p-3"
                   style={{
-                    backgroundColor: 'rgba(255, 255, 255, 0.04)',
-                    border: '1px solid rgba(255, 255, 255, 0.08)',
+                    backgroundColor: 'var(--rate-glass-bg)',
+                    border: '1px solid var(--rate-glass-border)',
                   }}
                 >
                   <div
                     className="small fw-bold mb-1"
-                    style={{ color: '#fbbf24' }}
+                    style={{ color: 'var(--rate-ink-warning)' }}
                   >
                     {t('verdictBestBatteryTitle')}
                   </div>
@@ -2183,13 +2183,13 @@ export default function CompareWorkspace({
                 <div
                   className="rounded-3 h-100 p-3"
                   style={{
-                    backgroundColor: 'rgba(255, 255, 255, 0.04)',
-                    border: '1px solid rgba(255, 255, 255, 0.08)',
+                    backgroundColor: 'var(--rate-glass-bg)',
+                    border: '1px solid var(--rate-glass-border)',
                   }}
                 >
                   <div
                     className="small fw-bold mb-1"
-                    style={{ color: '#94a3b8' }}
+                    style={{ color: 'var(--rate-fg-secondary)' }}
                   >
                     {t('verdictLowestPriceTitle')}
                   </div>

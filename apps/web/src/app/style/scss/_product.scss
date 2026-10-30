@@ -39,26 +39,26 @@
 
   &.is-good,
   &.is-high {
-    color: #6ee7b7;
+    color: var(--rate-ink-success);
     background-color: rgba(45, 186, 105, 0.14);
     border-color: rgba(45, 186, 105, 0.35);
   }
 
   &.is-medium {
-    color: #7dd3fc;
+    color: var(--rate-ink-info);
     background-color: rgba(56, 189, 248, 0.14);
     border-color: rgba(56, 189, 248, 0.32);
   }
 
   &.is-low,
   &.is-insufficient_data {
-    color: #fde68a;
+    color: var(--rate-ink-warning);
     background-color: rgba(251, 191, 36, 0.12);
     border-color: rgba(251, 191, 36, 0.3);
   }
 
   &.is-bad {
-    color: #fda4af;
+    color: var(--rate-ink-danger);
     background-color: rgba(244, 63, 94, 0.14);
     border-color: rgba(244, 63, 94, 0.32);
   }
@@ -88,11 +88,11 @@
   font-weight: 600;
 
   &.is-user {
-    color: #fcd34d;
+    color: var(--rate-ink-warning);
   }
 
   &.is-expert {
-    color: #a5b4fc;
+    color: var(--rate-ink-expert);
   }
 }
 
