@@ -85,7 +85,8 @@ export interface NormalizedProductCandidate {
   /** How the variant was found; null when it is not known. */
   variant_source?: Extract<VariantSource, 'title' | 'single_size' | 'single_variant'> | null;
   /**
-   * False when the title gives no model segment. The key then carries the
+   * False when the title gives no model segment, or sells an accessory for a device
+   * (`isAccessoryTitle`, DOS/Rate#1505). The key then carries the
    * `unkeyed` placeholder model instead of an empty segment (`samsung::unknown`),
    * and the pipeline and matcher reject the candidate (UnkeyableProductTitleError).
    */
@@ -396,6 +397,77 @@ const APPLE_PART_NUMBERS: Readonly<Record<string, readonly [string, string]>> = 
   MUWA3: ['Pencil', 'Pencil USB-C'],
   MX2D3: ['Pencil', 'Pencil Pro'],
 };
+
+// An accessory named first: the title sells a case, a cover, a screen protector, a
+// stylus, a keyboard, a charger or a strap for a device, not the device ("Ốp lưng iPad
+// mini A20 Pro", "Kính cường lực iPhone 16 Pro Max", DOS/Rate#1505). Only the opening
+// words count, so a gift after the device ("iPad mini A20 Pro tặng ốp lưng") and a
+// watch's own case ("Apple Watch Series 10 46mm Titanium Case") keep the device. A
+// "combo", "bộ" or "set" before the accessory, and titles typed without diacritics
+// ("Op lung"), count too.
+const ACCESSORY_OPENER =
+  /^(?:(?:combo|bộ|set|hàng\s*chính\s*hãng)\s+)?(?:(?:vỏ\s*)?ốp(?:\s*lưng)?|op\s*lung|bao\s*(?:da|đựng)|túi\s*(?:chống\s*sốc|đựng)|kính\s*(?:cường\s*lực|camera|bảo\s*vệ)|cường\s*lực|(?:miếng|bộ)\s*dán|dán\s*(?:màn\s*hình|lưng|camera|ppf)|phim\s*dán|skin(?:\s*dán)?|bút|bàn\s*phím|magic\s*keyboard|(?:củ|đế)\s*sạc|sạc|cáp|dây|giá\s*đỡ|(?:silicone\s*|clear\s*|leather\s*|magsafe\s*)?cases?|covers?|folio|(?:tempered\s*)?glass|screen\s*protectors?|stylus|keyboard|charger|cable)(?![\p{L}\d])/iu;
+// Words that make "Apple Pencil" what something fits or copies, not what it is.
+const PENCIL_FIT_WORD =
+  /(?<![\p{L}\d])(?:cho|for|thay|như|giống|kiểu|dùng|tương\s*thích|compatible|khe|đựng|ngăn)(?![\p{L}\d])/iu;
+
+/**
+ * A pen sold as itself: "Bút cảm ứng (chính hãng) Apple Pencil Pro" is the Apple Pencil,
+ * its own product. Only the pen word and promo words may come before "Apple Pencil"; a
+ * case "có khe đựng Apple Pencil" or a pen "cho iPad như Apple Pencil" is not one.
+ */
+function opensWithApplePencil(opening: string): boolean {
+  const at = /apple\s*pencil(?![\p{L}])/iu.exec(opening)?.index;
+  if (at === undefined) return false;
+  const before = opening.slice(0, at);
+  if (!/^(?:(?:bút|stylus)(?![\p{L}\d])|$)/iu.test(before.trim())) return false;
+  return !PENCIL_FIT_WORD.test(before) && !namesProduct(before);
+}
+
+/**
+ * The title from its first product word: emoji, punctuation and promo brackets before it
+ * dropped. A bracket is dropped only when a product follows it ("[Chính hãng] Ốp lưng
+ * iPhone 16"); one that holds the product ("[Ốp lưng iPhone 16 Pro Max] Trong suốt") is
+ * read without its brackets.
+ */
+function openingWords(text: string): string {
+  let rest = text;
+  for (;;) {
+    const before = rest;
+    rest = rest.replace(/^(?:(?![[(【])[\s\p{P}\p{S}])+/u, '');
+    const block = /^(?:\[([^\]]*)\]|\(([^)]*)\)|【([^】]*)】)/u.exec(rest);
+    if (block) {
+      const after = rest.slice(block[0].length);
+      rest = namesProduct(after) ? after : `${block[1] ?? block[2] ?? block[3] ?? ''} ${after}`;
+    }
+    if (rest === before) return rest.trim();
+  }
+}
+
+/**
+ * Whether a title sells an accessory for a device rather than the device: it opens with
+ * the accessory (DOS/Rate#1505). Opening promo brackets ("[Hàng chính hãng]") are skipped.
+ * An Apple Pencil is its own product, and a bundle that puts the device after a short
+ * accessory and a "+" ("Sạc nhanh + iPhone 16 Pro Max 256GB") sells the device.
+ */
+export function isAccessoryTitle(title: string): boolean {
+  const t = typeof title === 'string' ? title.normalize('NFC') : '';
+  // What the title sells, not a gift it opens with: "Ốp lưng tặng kèm khi mua iPhone 16 Pro
+  // Max" sells the iPhone (DOS/Rate#1407).
+  const opening = openingWords(ownProductPart(t));
+  if (!ACCESSORY_OPENER.test(opening) || opensWithApplePencil(opening)) return false;
+  // The part before a gift stops at the "+", so the bundle is read on the whole title.
+  const whole = openingWords(t);
+  const plus = whole.indexOf('+');
+  if (plus > 0) {
+    const before = whole.slice(0, plus);
+    const after = whole.slice(plus + 1).trim();
+    if (!namesProduct(before) && namesProduct(after) && !ACCESSORY_OPENER.test(after)) {
+      return false;
+    }
+  }
+  return true;
+}
 
 /**
  * Detect canonical category slug from product title across all 5 tech categories.
@@ -2670,7 +2742,9 @@ export class ProductNormalizer {
     // (':unknown') instead of guessing a default (plan v7 §5.2).
     // An empty key segment ("samsung::unknown") is never emitted: a title with no
     // model keys on a placeholder and is marked unkeyable (DOS/Rate#1151).
-    const keyable = Boolean(slugify(brand) && slugify(model));
+    // An accessory for a device is not the device: it gets no key, so it never joins the
+    // device's master or Item (DOS/Rate#1505).
+    const keyable = Boolean(slugify(brand) && slugify(model)) && !isAccessoryTitle(title);
     const itemKey = keyable ? baseKey : `${slugify(brand) || 'khac'}:${UNKEYED_MODEL_SEGMENT}`;
     const variantKey = storageKnown ? `${storageGb}gb` : UNKNOWN_VARIANT_KEY;
     const modelKey = `${itemKey}:${variantKey}`;
