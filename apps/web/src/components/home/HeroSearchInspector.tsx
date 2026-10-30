@@ -2,7 +2,10 @@
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
-import { hasReviewRiskEvidence } from '@/lib/merchant-risk-tone';
+import {
+  hasReviewRiskEvidence,
+  knownDosafeRiskScore,
+} from '@/lib/merchant-risk-tone';
 import { discountVerdictCopy } from '@/lib/discount-verdict-copy';
 import { Link, useRouter } from '@/lib/navigation';
 import { startNavigationProgress } from '@/components/elementary/NavigationProgress';
@@ -593,7 +596,11 @@ export default function HeroSearchInspector({
                             className="text-muted"
                             style={{ fontSize: '0.8125rem' }}
                           >
-                            {t('scamRiskShort', { score: m.dosafe_risk_score })}
+                            {knownDosafeRiskScore(m) == null
+                              ? t('scamRiskShortNoData')
+                              : t('scamRiskShort', {
+                                  score: knownDosafeRiskScore(m) ?? 0,
+                                })}
                           </span>
                         </div>
                       </Link>
@@ -906,21 +913,31 @@ export default function HeroSearchInspector({
                       <div className="text-muted small">
                         {/* No analysed reviews: no review risk number
                             (DOS/Rate#1258). */}
-                        {hasReviewRiskEvidence(
-                          inspectResult.merchantProfile.review_risk_breakdown
-                        )
-                          ? t.rich('merchantRiskLine', {
-                              scam: inspectResult.merchantProfile
-                                .dosafe_risk_score,
-                              review:
-                                inspectResult.merchantProfile.review_risk_score,
-                              b: (chunks) => <strong>{chunks}</strong>,
-                            })
-                          : t.rich('merchantRiskLineNoReviews', {
-                              scam: inspectResult.merchantProfile
-                                .dosafe_risk_score,
-                              b: (chunks) => <strong>{chunks}</strong>,
-                            })}{' '}
+                        {/* No DOSafe score: no number either (DOS/Rate#1465). */}
+                        {(() => {
+                          const profile = inspectResult.merchantProfile;
+                          const scam = knownDosafeRiskScore(profile);
+                          const b = (chunks: React.ReactNode) => (
+                            <strong>{chunks}</strong>
+                          );
+                          if (
+                            hasReviewRiskEvidence(profile.review_risk_breakdown)
+                          ) {
+                            return scam == null
+                              ? t.rich('merchantRiskLineNoScam', {
+                                  review: profile.review_risk_score,
+                                  b,
+                                })
+                              : t.rich('merchantRiskLine', {
+                                  scam,
+                                  review: profile.review_risk_score,
+                                  b,
+                                });
+                          }
+                          return scam == null
+                            ? t.rich('merchantRiskLineNoData', { b })
+                            : t.rich('merchantRiskLineNoReviews', { scam, b });
+                        })()}{' '}
                         •{' '}
                         <strong>
                           {t('trackingProductsCount', {

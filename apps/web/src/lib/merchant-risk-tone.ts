@@ -18,5 +18,6 @@ export function merchantRiskTone(score: unknown): MerchantRiskTone {
 
 export {
   hasReviewRiskEvidence,
+  knownDosafeRiskScore,
   reviewRiskScoreOrNull,
 } from './rate-domain-core';

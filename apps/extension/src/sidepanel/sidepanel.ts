@@ -32,6 +32,7 @@ import {
   renderOffersCardHtml,
   renderReviewCardHtml,
   type PanelActionLink,
+  riskScoreText,
 } from './panel-view.js';
 import { verdictTexts } from '../verdict-display.js';
 
@@ -223,19 +224,13 @@ interface MerchantTrustFeedItem {
   name: string;
   slug: string | null;
   is_official: boolean;
-  dosafe_risk_score: number;
+  /** Null when no DOSafe score is known (DOS/Rate#1465). */
+  dosafe_risk_score: number | null;
   /** Null when the store has no analysed review (DOS/Rate#1258). */
   review_risk_score: number | null;
   risk_score: number;
   trust_score: number;
   product_count: number;
-}
-
-// A store with no analysed review has no review risk score (DOS/Rate#1258).
-function reviewRiskText(score: number | null | undefined): string {
-  return score == null
-    ? t('reviewRiskNoData')
-    : formatSafeNumber(score, { min: 0, max: 100 });
 }
 
 async function fetchAndRenderMerchantTrustDirectory(
@@ -297,7 +292,7 @@ async function fetchAndRenderMerchantTrustDirectory(
                     ${m.is_official ? officialBadgeHtml() : ''}
                   </div>
                   <div class="offer-meta">
-                    ${escapeHtml(m.platform.toUpperCase())} (${escapeHtml(t('merchantProductCount', [formatSafeNumber(m.product_count, { min: 0 })]))}) - ${escapeHtml(t('merchantScamRisk', [formatSafeNumber(m.dosafe_risk_score, { min: 0, max: 100 })]))} | ${escapeHtml(t('merchantReviewRisk', [reviewRiskText(m.review_risk_score)]))}
+                    ${escapeHtml(m.platform.toUpperCase())} (${escapeHtml(t('merchantProductCount', [formatSafeNumber(m.product_count, { min: 0 })]))}) - ${escapeHtml(t('merchantScamRisk', [riskScoreText(m.dosafe_risk_score)]))} | ${escapeHtml(t('merchantReviewRisk', [riskScoreText(m.review_risk_score)]))}
                   </div>
                 </div>
                 <a href="${detailHref}" target="_blank" rel="noopener noreferrer" class="offer-price" style="text-decoration:none;color:${trustColor};">
@@ -443,7 +438,7 @@ function renderPanelContent(
           </div>
           <div class="stat-box">
             <div class="stat-label">${escapeHtml(t('merchantRiskPair'))}</div>
-            <div class="stat-val">${formatSafeNumber(merchant.dosafe_risk_score, { min: 0, max: 100 })} / ${escapeHtml(reviewRiskText(merchant.review_risk_score))}</div>
+            <div class="stat-val">${escapeHtml(riskScoreText(merchant.dosafe_risk_score))} / ${escapeHtml(riskScoreText(merchant.review_risk_score))}</div>
           </div>
         </div>
       </div>

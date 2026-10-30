@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { filterMerchantDirectory } from '../merchant-directory';
 import {
   hasReviewRiskEvidence,
+  knownDosafeRiskScore,
   reviewRiskScoreOrNull,
 } from '../merchant-risk-tone';
 import { filterAndSortMerchants, type MerchantSummary } from '../rate-domain';
@@ -496,6 +497,50 @@ async function publicOffersSayNoneWithoutReviews() {
     await import('../rate-api');
   const { withPublicOfferReviewRisk } =
     await import('../../server/rate/api-handler');
+  // A seller with no known DOSafe score answers null in public payloads, never the
+  // column's default 0; the internal flag never leaves (DOS/Rate#1465).
+  {
+    const { withPublicReviewRisk } =
+      await import('../../server/rate/api-handler');
+    const base = {
+      review_risk_score: 12,
+      review_risk_breakdown: { total_reviews: 5 },
+    };
+    const unknown = withPublicReviewRisk({
+      ...base,
+      dosafe_risk_score: 0,
+      dosafe_risk_known: false,
+    });
+    assert.equal(unknown.dosafe_risk_score, null);
+    assert.equal('dosafe_risk_known' in unknown, false);
+    const known = withPublicReviewRisk({
+      ...base,
+      dosafe_risk_score: 0,
+      dosafe_risk_known: true,
+    });
+    assert.equal(known.dosafe_risk_score, 0);
+    assert.equal('dosafe_risk_known' in known, false);
+    // A payload without the flag keeps its score.
+    assert.equal(
+      withPublicReviewRisk({ ...base, dosafe_risk_score: 7 }).dosafe_risk_score,
+      7
+    );
+    // Cards read the server-side flag and the public null alike, so a seller
+    // reads the same before and after a client fetch (DOS/Rate#1465).
+    assert.equal(
+      knownDosafeRiskScore({ dosafe_risk_score: 0, dosafe_risk_known: false }),
+      null
+    );
+    assert.equal(knownDosafeRiskScore({ dosafe_risk_score: null }), null);
+    assert.equal(knownDosafeRiskScore({}), null);
+    assert.equal(
+      knownDosafeRiskScore({ dosafe_risk_score: 0, dosafe_risk_known: true }),
+      0
+    );
+    assert.equal(knownDosafeRiskScore({ dosafe_risk_score: 0 }), 0);
+    assert.equal(knownDosafeRiskScore({ dosafe_risk_score: '35' }), 35);
+    assert.equal(knownDosafeRiskScore({ dosafe_risk_score: 140 }), 100);
+  }
   const noReviews = {
     combined_risk_score: 42,
     review_risk_score: 15,

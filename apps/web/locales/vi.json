@@ -1840,7 +1840,10 @@
     "merchantRiskLine": "Rủi ro lừa đảo: <b>{scam}/100</b> • Rủi ro đánh giá: <b>{review}/100</b>",
     "officialMallBadge": "Mall chính hãng",
     "scamRiskShort": "Rủi ro lừa đảo: {score}/100",
-    "merchantRiskLineNoReviews": "Rủi ro lừa đảo: <b>{scam}/100</b> • Rủi ro đánh giá: <b>chưa đủ dữ liệu</b>"
+    "merchantRiskLineNoReviews": "Rủi ro lừa đảo: <b>{scam}/100</b> • Rủi ro đánh giá: <b>chưa đủ dữ liệu</b>",
+    "scamRiskShortNoData": "Rủi ro lừa đảo: chưa đủ dữ liệu",
+    "merchantRiskLineNoScam": "Rủi ro lừa đảo: <b>chưa đủ dữ liệu</b> • Rủi ro đánh giá: <b>{review}/100</b>",
+    "merchantRiskLineNoData": "Rủi ro lừa đảo: <b>chưa đủ dữ liệu</b> • Rủi ro đánh giá: <b>chưa đủ dữ liệu</b>"
   },
   "authPortal": {
     "metaLoginTitle": "Đăng nhập tài khoản | Rate.vn",
