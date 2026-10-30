@@ -384,6 +384,16 @@ async function main() {
     assert.equal(plan.kind, 'render', start);
     assert.ok(hops <= 1, `${start} needs at most one hop`);
   }
+  // A capitalised alias of a lower-case side next to an Item slug with
+  // capitals 308s to the canonical, which then renders as itself.
+  assert.equal(
+    versusAliasRedirect('A-phone-vs-Z-PHONE', '/compare/A-phone-vs-z-phone'),
+    '/compare/A-phone-vs-z-phone'
+  );
+  assert.equal(
+    versusAliasRedirect('A-phone-vs-z-phone', '/compare/A-phone-vs-z-phone'),
+    null
+  );
   // The lower-case variant URL still 308s to the Item URL, so both show the
   // same size under the one canonical.
   assert.equal(follow1383('/compare/a-phone-vs-z-phone').hops, 1);

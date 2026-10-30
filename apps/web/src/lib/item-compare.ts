@@ -162,7 +162,10 @@ export function inPairOrder<T extends { slug: string }>(
 }
 
 // A catalogue slug as it may appear in a versus URL.
-const VERSUS_URL_SLUG = /^[a-z0-9][a-z0-9._-]*$/;
+// Capitals allowed: an Item slug may carry them, and the requested URL is
+// compared exactly with the canonical, so the canonical never redirects to
+// itself (DOS/Rate#1383).
+const VERSUS_URL_SLUG = /^[a-zA-Z0-9][a-zA-Z0-9._-]*$/;
 
 /**
  * The canonical versus URL when the request named the pair any other way
