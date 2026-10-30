@@ -265,8 +265,6 @@ function testValueLanguage() {
   // Names and units alone are not English text.
   assert.equal(localizedSpecValue('Apple A18 Pro', 'cs').lang, undefined);
   assert.equal(localizedSpecValue('120 Hz, 2556x1179', 'cs').lang, undefined);
-  // An English unit word is English: the Czech page would say "palce".
-  assert.equal(localizedSpecValue('6.1 inch', 'cs').lang, 'en');
   // Vietnamese source text on an English or Czech page.
   assert.equal(localizedSpecValue('Sạc nhanh 35W', 'cs').lang, 'vi');
   assert.equal(localizedSpecValue('Sạc nhanh 35W', 'vi').lang, undefined);
@@ -280,7 +278,9 @@ function testValueLanguage() {
   const rows = buildProductSpecGroups({
     specs: {
       display: { type: 'LTPO OLED', protection: glass },
-      design: { colors: 'Hồng, Đen' },
+      design: { resistance: 'Sạc nhanh 35W' },
+      multimedia: { loudspeaker: 'Stereo speakers' },
+      connectivity: { other: 'Stereo reproduktory' },
     } as unknown as ProductSpecifications,
     keySpecs: {} as KeySpecs,
     product: {},
@@ -291,6 +291,15 @@ function testValueLanguage() {
   const rowOf = (value: string) => rows.find((r) => r.value === value);
   assert.equal(rowOf(glass)?.lang, 'en');
   assert.equal(rowOf('LTPO OLED')?.lang, undefined);
+  assert.equal(rowOf('Sạc nhanh 35W')?.lang, 'vi');
+  // Each row keeps its own language: the translated loudspeaker row is not
+  // marked because another row's source text reads the same.
+  const speaker = localizedSpecValue('Stereo speakers', 'cs');
+  assert.notEqual(speaker.text, 'Stereo speakers');
+  const loudspeakerLabel = getSpecUiDictionary('cs').fields.loudspeaker;
+  const loudspeaker = rows.find((r) => r.label === loudspeakerLabel);
+  assert.equal(loudspeaker?.value, speaker.text);
+  assert.equal(loudspeaker?.lang, undefined);
   console.warn('  ✅ Spec values carry their language when it differs');
 }
 

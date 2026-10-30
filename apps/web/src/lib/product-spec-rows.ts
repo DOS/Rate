@@ -95,13 +95,15 @@ export function buildProductSpecGroups({
   const s = specs ?? ({} as ProductSpecifications);
   const k = keySpecs ?? ({} as KeySpecs);
   const f = ui.fields;
-  // The language of each value as the localizer returned it, read back for
-  // the rows that show it unchanged (DOS/Rate#1371).
-  const valueLangs = new Map<string, 'en' | 'vi'>();
-  const loc = (v: string | number | boolean | null | undefined) => {
+  const loc = (v: string | number | boolean | null | undefined) =>
+    localizedSpecValue(v, locale).text;
+  // A row's value with its language when that is not the page's, kept with
+  // the row it belongs to (DOS/Rate#1371).
+  const locRow = (
+    v: string | number | boolean | null | undefined
+  ): Pick<ProductSpecRow, 'value' | 'lang'> => {
     const { text, lang } = localizedSpecValue(v, locale);
-    if (lang) valueLangs.set(text, lang);
-    return text;
+    return lang ? { value: text, lang } : { value: text };
   };
   const shows = (group: SpecGroupKey, field: string) =>
     specFieldApplies(template, group, field);
@@ -119,20 +121,20 @@ export function buildProductSpecGroups({
           withUnit(s.display?.size_inch, 'inch') ||
           withUnit(product.screen_size_inch, 'inch'),
       },
-      { label: f.panelType, value: loc(s.display?.type || k.screen) },
-      { label: f.resolution, value: loc(s.display?.resolution) },
+      { label: f.panelType, ...locRow(s.display?.type || k.screen) },
+      { label: f.resolution, ...locRow(s.display?.resolution) },
       {
         label: f.refreshRate,
         value: withUnit(s.display?.refresh_rate_hz, 'Hz'),
       },
       { label: f.ppi, value: withUnit(s.display?.ppi, 'ppi') },
-      { label: f.protection, value: loc(s.display?.protection) },
-      { label: f.displayFeatures, value: loc(s.display?.features) },
+      { label: f.protection, ...locRow(s.display?.protection) },
+      { label: f.displayFeatures, ...locRow(s.display?.features) },
     ],
     hardware: [
-      { label: f.chipset, value: loc(s.hardware?.chipset || k.chip) },
-      shows('hardware', 'cpu') && { label: f.cpu, value: loc(s.hardware?.cpu) },
-      shows('hardware', 'gpu') && { label: f.gpu, value: loc(s.hardware?.gpu) },
+      { label: f.chipset, ...locRow(s.hardware?.chipset || k.chip) },
+      shows('hardware', 'cpu') && { label: f.cpu, ...locRow(s.hardware?.cpu) },
+      shows('hardware', 'gpu') && { label: f.gpu, ...locRow(s.hardware?.gpu) },
       shows('hardware', 'ram_gb') && {
         label: f.ram,
         value:
@@ -146,26 +148,26 @@ export function buildProductSpecGroups({
       },
       shows('hardware', 'storage_expansion') && {
         label: f.storageExpansion,
-        value: loc(
+        ...locRow(
           s.hardware?.storage_expansion &&
             normalizeStorageExpansion(s.hardware.storage_expansion)
         ),
       },
-      shows('hardware', 'os') && { label: f.os, value: loc(s.hardware?.os) },
+      shows('hardware', 'os') && { label: f.os, ...locRow(s.hardware?.os) },
     ],
     camera: [
-      { label: f.rearSetup, value: loc(s.camera?.rear_setup) },
+      { label: f.rearSetup, ...locRow(s.camera?.rear_setup) },
       {
         label: f.mainCamera,
-        value: loc(s.camera?.main_camera || k.camera),
+        ...locRow(s.camera?.main_camera || k.camera),
       },
-      { label: f.secondCamera, value: loc(s.camera?.second_camera) },
-      { label: f.thirdCamera, value: loc(s.camera?.third_camera) },
-      { label: f.fourthCamera, value: loc(s.camera?.fourth_camera) },
-      { label: f.frontCamera, value: loc(s.camera?.front_camera) },
+      { label: f.secondCamera, ...locRow(s.camera?.second_camera) },
+      { label: f.thirdCamera, ...locRow(s.camera?.third_camera) },
+      { label: f.fourthCamera, ...locRow(s.camera?.fourth_camera) },
+      { label: f.frontCamera, ...locRow(s.camera?.front_camera) },
       {
         label: f.videoAndFlash,
-        value: loc(joined([s.camera?.video_recording, s.camera?.flash], ' | ')),
+        ...locRow(joined([s.camera?.video_recording, s.camera?.flash], ' | ')),
       },
     ],
     battery: [
@@ -176,8 +178,8 @@ export function buildProductSpecGroups({
           withUnit(product.battery_mah, 'mAh') ||
           loc(k.battery),
       },
-      { label: f.batteryType, value: loc(s.battery?.type) },
-      { label: f.chargingTech, value: loc(s.battery?.charging) },
+      { label: f.batteryType, ...locRow(s.battery?.type) },
+      { label: f.chargingTech, ...locRow(s.battery?.charging) },
       {
         label: f.fastCharging,
         value: withUnit(s.battery?.fast_charging_w, 'W'),
@@ -191,18 +193,18 @@ export function buildProductSpecGroups({
       },
     ],
     design: [
-      { label: f.dimensions, value: loc(s.design?.dimensions) },
+      { label: f.dimensions, ...locRow(s.design?.dimensions) },
       { label: f.weight, value: withUnit(s.design?.weight_g, 'g') },
       {
         label: f.materialsAndBuild,
-        value: loc(joined([s.design?.materials, s.design?.build], ' | ')),
+        ...locRow(joined([s.design?.materials, s.design?.build], ' | ')),
       },
-      { label: f.resistance, value: loc(s.design?.resistance) },
+      { label: f.resistance, ...locRow(s.design?.resistance) },
       shows('design', 'biometrics') && {
         label: f.biometrics,
-        value: loc(s.design?.biometrics),
+        ...locRow(s.design?.biometrics),
       },
-      { label: f.physicalKeys, value: loc(s.design?.keys) },
+      { label: f.physicalKeys, ...locRow(s.design?.keys) },
     ],
     cellular: [
       // Unknown is empty, not "No" (DOS/Rate#1193).
@@ -210,12 +212,12 @@ export function buildProductSpecGroups({
         label: f.support5g,
         value: yesNo(known5g(s.cellular?.has_5g, product.has_5g), ui.has5gYes),
       },
-      { label: f.networkTech, value: loc(s.cellular?.technology) },
-      { label: f.simType, value: loc(s.cellular?.sim_type) },
-      { label: f.dataSpeed, value: loc(s.cellular?.data_speed) },
+      { label: f.networkTech, ...locRow(s.cellular?.technology) },
+      { label: f.simType, ...locRow(s.cellular?.sim_type) },
+      { label: f.dataSpeed, ...locRow(s.cellular?.data_speed) },
       {
         label: showBands5g ? f.bands5g4g : f.bands4g,
-        value: loc(
+        ...locRow(
           joined(
             [showBands5g ? s.cellular?.bands_5g : null, s.cellular?.bands_4g],
             ' | '
@@ -236,47 +238,47 @@ export function buildProductSpecGroups({
     connectivity: [
       shows('connectivity', 'wlan') && {
         label: f.wlan,
-        value: loc(s.connectivity?.wlan),
+        ...locRow(s.connectivity?.wlan),
       },
-      { label: f.bluetooth, value: loc(s.connectivity?.bluetooth) },
-      { label: f.usbPort, value: loc(s.connectivity?.usb) },
+      { label: f.bluetooth, ...locRow(s.connectivity?.bluetooth) },
+      { label: f.usbPort, ...locRow(s.connectivity?.usb) },
       shows('connectivity', 'nfc') && {
         label: f.nfc,
         value: yesNo(s.connectivity?.nfc),
       },
       shows('connectivity', 'location') && {
         label: f.locationGps,
-        value: loc(s.connectivity?.location),
+        ...locRow(s.connectivity?.location),
       },
       {
         label: f.sensorsAndOther,
-        value: loc(
+        ...locRow(
           joined([s.connectivity?.sensors, s.connectivity?.other], ' | ')
         ),
       },
     ],
     multimedia: [
-      { label: f.loudspeaker, value: loc(s.multimedia?.loudspeaker) },
+      { label: f.loudspeaker, ...locRow(s.multimedia?.loudspeaker) },
       shows('multimedia', 'headphone_jack_35mm') && {
         label: f.jack35mm,
         value: yesNo(s.multimedia?.headphone_jack_35mm),
       },
-      { label: f.audioFeatures, value: loc(s.multimedia?.audio_features) },
+      { label: f.audioFeatures, ...locRow(s.multimedia?.audio_features) },
     ],
     availability: [
-      { label: f.announcedDate, value: loc(s.availability?.announced) },
+      { label: f.announcedDate, ...locRow(s.availability?.announced) },
       {
         label: f.commercialStatus,
-        value: loc(s.availability?.status),
+        ...locRow(s.availability?.status),
       },
-      { label: f.msrpPrice, value: loc(s.availability?.prices_msrp) },
+      { label: f.msrpPrice, ...locRow(s.availability?.prices_msrp) },
     ],
     regulatory: [
       {
         label: f.certifications,
-        value: loc(s.regulatory?.certifications),
+        ...locRow(s.regulatory?.certifications),
       },
-      { label: f.fccApproval, value: loc(s.regulatory?.fcc_approval) },
+      { label: f.fccApproval, ...locRow(s.regulatory?.fcc_approval) },
       {
         label: f.sarLevel,
         value: joined(
@@ -297,15 +299,10 @@ export function buildProductSpecGroups({
   return template.groups
     .map((group) => ({
       group,
-      rows: groups[group]
-        .filter(
-          (row): row is ProductSpecRow =>
-            row !== false && !isEmptySpecValue(row.value)
-        )
-        .map((row) => {
-          const lang = valueLangs.get(row.value);
-          return lang ? { ...row, lang } : row;
-        }),
+      rows: groups[group].filter(
+        (row): row is ProductSpecRow =>
+          row !== false && !isEmptySpecValue(row.value)
+      ),
     }))
     .filter(({ rows }) => rows.length > 0);
 }
