@@ -7,6 +7,7 @@ import AnalyzerText from '@/components/reviews/AnalyzerText';
 import { Link } from '@/lib/navigation';
 import { IntentLink } from '@/components/elementary/IntentLink';
 import { getCategoryRouteHref, resolveProductImageUrl } from '@/lib/rate-api';
+import { sizedStoreImageUrl } from '@/lib/rate-domain-core';
 import {
   getCachedMerchantProfileById,
   getCrossPlatformDealRadar,
@@ -870,9 +871,14 @@ export default async function MerchantProfilePage({
                             : da?.verdict === 'genuine_deal'
                               ? 'bg-success text-white'
                               : 'bg-light text-secondary border';
-                      const resolvedImg = resolveProductImageUrl(
-                        item.master_product?.slug,
-                        item.image
+                      // A 52 px thumbnail: the store CDN's small rendition,
+                      // not its 600-800 px original (DOS/Rate#1328).
+                      const resolvedImg = sizedStoreImageUrl(
+                        resolveProductImageUrl(
+                          item.master_product?.slug,
+                          item.image
+                        ),
+                        128
                       );
                       // The category read with the master, not one guessed
                       // from its name, which linked earbuds and others under

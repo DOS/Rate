@@ -7,8 +7,13 @@ import assert from 'node:assert/strict';
 process.env.NEXT_PUBLIC_SUPABASE_URL = 'https://abc.supabase.co';
 
 async function main() {
-  const { buildContentSecurityPolicy, createCspNonce, CSP_HEADER } =
-    await import('../csp');
+  const {
+    buildContentSecurityPolicy,
+    createCspNonce,
+    CSP_HEADER,
+    PAGE_META_CSP,
+    STATIC_CSP,
+  } = await import('../csp');
 
   const a = createCspNonce();
   const b = createCspNonce();
@@ -65,11 +70,110 @@ async function main() {
     sent,
     'Next.js reads the same nonce from the request'
   );
+  const fs = await import('node:fs');
+  const path = await import('node:path');
+  // No enforcing policy header on a page: Next.js copies the proxy's response
+  // headers onto the request, where it would hide the nonce (DOS/Rate#1345).
   assert.equal(
     res.headers.get('content-security-policy'),
     null,
-    'nothing is enforced yet'
+    'nothing is enforced by header on a page'
   );
+  // A client-sent enforcing policy does not reach the render either.
+  const spoofed = localeProxy(
+    new NextRequest('https://rate.vn/smartphones', {
+      headers: {
+        host: 'rate.vn',
+        'x-forwarded-proto': 'https',
+        'content-security-policy': "script-src 'nonce-chosen'",
+      },
+    })
+  );
+  assert.equal(
+    spoofed.headers.get('x-middleware-request-content-security-policy'),
+    null
+  );
+  assert.doesNotMatch(
+    spoofed.headers.get('x-middleware-override-headers') ?? '',
+    /(^|,)content-security-policy(,|$)/
+  );
+  assert.doesNotMatch(STATIC_CSP, /script-src|default-src/);
+  assert.equal(
+    PAGE_META_CSP,
+    STATIC_CSP.replace("frame-ancestors 'self'; ", '').replace(/;$/, ''),
+    'pages get the static policy in a <meta> tag, less frame-ancestors'
+  );
+  for (const file of [
+    '../../app/[locale]/layout.tsx',
+    '../../app/not-found.tsx',
+    '../../app/global-error.tsx',
+  ]) {
+    assert.match(
+      fs.readFileSync(path.join(__dirname, file), 'utf8'),
+      /<meta httpEquiv="Content-Security-Policy" content=\{PAGE_META_CSP\} \/>/,
+      `${file} carries the page policy`
+    );
+  }
+
+  // next.config.mjs sets the static policy header only on the paths the proxy
+  // does not serve: Vercel copies config headers onto the request too.
+  const { pathToRegexp } = await import(
+    'next/dist/compiled/path-to-regexp' as string
+  );
+  const nextConfig = fs.readFileSync(
+    path.join(__dirname, '../../../next.config.mjs'),
+    'utf8'
+  );
+  const rule = nextConfig.match(
+    /source: ("[^"]+"),\s*headers: \[\s*\{\s*key: "Content-Security-Policy",\s*value:\s*("[^"]+")/
+  );
+  assert.ok(rule, 'next.config.mjs has one Content-Security-Policy rule');
+  assert.equal(JSON.parse(rule[2]!), STATIC_CSP, 'the same static policy');
+  assert.equal(
+    nextConfig.match(/key: "Content-Security-Policy"/g)?.length,
+    1,
+    'and no other'
+  );
+  const configPaths = pathToRegexp(JSON.parse(rule[1]!), [], {
+    strict: true,
+    sensitive: false,
+    delimiter: '/',
+  }) as RegExp;
+  const { config: proxyConfig } = await import('../../proxy');
+  const proxied = proxyConfig.matcher.map(
+    (m) =>
+      pathToRegexp(m, [], {
+        strict: true,
+        sensitive: false,
+        delimiter: '/',
+      }) as RegExp
+  );
+  for (const p of [
+    '/',
+    '/smartphones',
+    '/smartphones/iphone-16-pro-max-256gb',
+    '/inspect',
+    '/compare',
+    '/api/health',
+    '/_next/static/chunks/a.js',
+    '/robots.txt',
+    '/robots-txt',
+    '/favicon.ico',
+    '/apple-touch-icon.png',
+    '/apisomething',
+    '/smartphones/',
+    '/en/smartphones',
+    '/sitemap.xml',
+    '/monitoring',
+    '/img/logo.png',
+  ]) {
+    const byProxy = proxied.some((re) => re.test(p));
+    assert.notEqual(
+      configPaths.test(p),
+      byProxy,
+      `${p}: next.config.mjs sets the policy header exactly where the proxy does not run`
+    );
+  }
   const res2 = localeProxy(
     new NextRequest('https://rate.vn/smartphones', {
       headers: { host: 'rate.vn', 'x-forwarded-proto': 'https' },

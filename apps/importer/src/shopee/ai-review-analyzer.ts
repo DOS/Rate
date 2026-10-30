@@ -242,7 +242,11 @@ function normalizeSafeDbId(raw: unknown): string {
   return trimmed;
 }
 
-/** The `review_risk_breakdown` stored with `review_risk_score` on rate.merchants. */
+/**
+ * The engine's breakdown of a merchant's review risk, for logs and reports. It is
+ * not stored: Rate Services' MerchantRiskAuditor writes `review_risk_breakdown`
+ * on rate.merchants in its own shape (DOS/Rate#1341).
+ */
 export function merchantRiskBreakdown(risk: MerchantRiskEvaluation) {
   const safeRisk =
     risk && typeof risk === 'object' && !Array.isArray(risk)
@@ -2244,8 +2248,10 @@ Rules for "ai_summary": these reviews come from ONE listing's latest batch, not 
   }
 
   /**
-   * Persists review flags, updates review helpfulness weights, review_analysis,
-   * master_products weighted rating, and merchant risk_score in Supabase `rate` schema
+   * Persists review flags, updates review helpfulness weights, review_analysis and
+   * the master_products weighted rating in the Supabase `rate` schema. The merchant's
+   * review risk is evaluated and returned, never written: Rate Services'
+   * MerchantRiskAuditor owns it (DOS/Rate#1341).
    */
   public async persistAnalysisToSupabase(
     supabase: RateSupabaseClient,
@@ -2463,7 +2469,10 @@ Rules for "ai_summary": these reviews come from ONE listing's latest batch, not 
       }
     }
 
-    // 4. Evaluate and update merchant review_risk_score (leaving risk_score for DOSafe threat_intel)
+    // 4. Evaluate the merchant's review risk for the caller's log. Nothing is
+    // written: Rate Services' MerchantRiskAuditor is the single writer of
+    // review_risk_score / review_risk_breakdown and the risk keys in
+    // merchants.metadata (DOS/Rate#1341, DOS/Rate-Services#724).
     let merchantRisk: MerchantRiskEvaluation | undefined;
     if (safeMerchantId) {
       merchantRisk = this.evaluateMerchantRisk({
@@ -2476,42 +2485,6 @@ Rules for "ai_summary": these reviews come from ONE listing's latest batch, not 
         reviewResults: results,
         rawReviews: safeReviews,
       });
-
-      const nowIso = new Date().toISOString();
-      const breakdownPayload = merchantRiskBreakdown(merchantRisk);
-      const { error: merchErr } = await supabase
-        .from('merchants')
-        .update({
-          review_risk_score: merchantRisk.risk_score,
-          review_risk_breakdown: breakdownPayload,
-          review_risk_updated_at: nowIso,
-          updated_at: nowIso,
-        })
-        .eq('id', safeMerchantId);
-      if (merchErr) {
-        if (/review_risk_score|schema cache/i.test(merchErr.message)) {
-          const { error: fallbackErr } = await supabase
-            .from('merchants')
-            .update({
-              metadata: {
-                review_risk_score: merchantRisk.risk_score,
-                review_risk_breakdown: breakdownPayload,
-                review_risk_updated_at: nowIso,
-              },
-              updated_at: nowIso,
-            })
-            .eq('id', safeMerchantId);
-          if (fallbackErr) {
-            throw new Error(
-              `[AiReviewAnalyzer] Failed to update merchant metadata risk fallback: ${fallbackErr.message}`
-            );
-          }
-        } else {
-          throw new Error(
-            `[AiReviewAnalyzer] Failed to update merchant review_risk_score: ${merchErr.message}`
-          );
-        }
-      }
     }
 
     return { summary, merchantRisk };

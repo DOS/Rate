@@ -5,6 +5,7 @@ import {
   resolveProductImageUrl,
 } from './rate-domain-core';
 import { catalogRowSlug, type ItemCatalogRow } from './item-directory';
+import { canonicalVersusOrder } from './item-compare';
 import type { CanonicalCategorySlug, MasterProduct } from './rate-api';
 import type { KeySpecs, ProductSpecifications } from '@repo/shared-data';
 
@@ -817,7 +818,12 @@ export function buildPopular1v1BattlesForCategory(
     // Item model, so the link needs no 308 hop (DOS/Rate#1275).
     const sideSlug = (item: typeof itemA) =>
       item.productHref.split('/').pop() || item.slug;
-    const versusSlug = `${sideSlug(itemA)}-vs-${sideSlug(itemB)}`;
+    // One URL per pair, sides sorted (DOS/Rate#1367).
+    const [firstSide, secondSide] = canonicalVersusOrder(
+      sideSlug(itemA),
+      sideSlug(itemB)
+    );
+    const versusSlug = `${firstSide}-vs-${secondSide}`;
     const scoreDelta5 = Number(
       Math.abs(itemA.combinedScore5 - itemB.combinedScore5).toFixed(2)
     );

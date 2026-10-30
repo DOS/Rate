@@ -93,6 +93,7 @@ import {
   computeProductStandingInCategory,
   scoreMasterProductForLeaderboard,
 } from '@/lib/leaderboard-engine';
+import { deviceImageSrcSet } from '@/lib/device-images';
 import ProductLeaderboardBadges from '@/components/leaderboard/ProductLeaderboardBadges';
 import ProductShareAuditButton from '@/components/leaderboard/ProductShareAuditButton';
 import ProductValueCalculator from '@/components/leaderboard/ProductValueCalculator';
@@ -112,6 +113,7 @@ import {
   usableImageUrls,
   productImageUrl,
 } from '@/lib/rate-domain-core';
+import { versusHref } from '@/lib/item-compare';
 
 // Cached after the first request, refreshed every 5 minutes or when the
 // worker revalidates its cache tags (DOS/Rate#491).
@@ -1499,6 +1501,11 @@ export async function ProductDetailView({
                                 loading="lazy"
                                 decoding="async"
                                 src={peerThumb}
+                                srcSet={
+                                  deviceImageSrcSet(peerThumb) ?? undefined
+                                }
+                                // 68 px box less padding and border.
+                                sizes="50px"
                                 alt={peer.name}
                                 style={{
                                   maxWidth: '100%',
@@ -1588,7 +1595,7 @@ export async function ProductDetailView({
 
                         <div className="d-flex mt-auto gap-2">
                           <IntentLink
-                            href={`/compare/${product.slug}-vs-${peer.slug}`}
+                            href={versusHref(product.slug, peer.slug)}
                             className="btn btn-sm btn-outline-primary rounded-pill fw-semibold flex-grow-1"
                           >
                             {t('compare1v1Btn')}

@@ -13,6 +13,8 @@ import {
   PUBLIC_API_CORS_HEADERS,
   jsonApiError,
   parseReviewsQueryParams,
+  payloadTooLargeResponse,
+  readBoundedJsonBody,
 } from '@/server/rate/api-handler';
 import {
   authenticateRateRequest,
@@ -134,7 +136,7 @@ const SubmitReviewSchema = z.object({
     .string()
     .trim()
     .uuid('Mã sản phẩm chuẩn hóa (masterProductId) không hợp lệ.'),
-  authorName: z.string().optional(),
+  authorName: z.string().max(120).optional(),
   ratingStar: z.preprocess(
     (val) =>
       val === null || (typeof val === 'string' && !val.trim())
@@ -156,8 +158,12 @@ const SubmitReviewSchema = z.object({
         .min(15, 'Nội dung đánh giá phải có độ dài từ 15 đến 3.000 ký tự.')
         .max(3000, 'Nội dung đánh giá phải có độ dài từ 15 đến 3.000 ký tự.')
     ),
-  variation: z.string().optional(),
-  criteriaRatings: z.record(z.string(), z.unknown()).optional(),
+  variation: z.string().max(200).optional(),
+  // Only the known criteria are read; a record of many keys is no review.
+  criteriaRatings: z
+    .record(z.string().max(40), z.unknown())
+    .refine((r) => Object.keys(r).length <= 20)
+    .optional(),
 });
 
 const FLAG_CATEGORIES = new Set<ReviewFlagCategory>([
@@ -357,7 +363,10 @@ export function toReviewItem(
  */
 export async function POST(request: NextRequest) {
   try {
-    const rawBody: unknown = await request.json().catch(() => null);
+    const bodyRead = await readBoundedJsonBody(request);
+    if (bodyRead.tooLarge)
+      return payloadTooLargeResponse(PUBLIC_API_CORS_HEADERS);
+    const rawBody: unknown = bodyRead.value;
 
     const auth = await authenticateRateRequest(
       request,

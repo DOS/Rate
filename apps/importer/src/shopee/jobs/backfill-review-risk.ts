@@ -1,18 +1,17 @@
 /**
- * Merchant review risk backfill (DOS/Rate#691)
+ * Merchant review risk report (DOS/Rate#691)
  *
  * Usage:
- *   pnpm --filter @repo/crawlers exec tsx src/shopee/jobs/backfill-review-risk.ts          (Dry-run, zero DB writes)
- *   pnpm --filter @repo/crawlers exec tsx src/shopee/jobs/backfill-review-risk.ts --apply  (Write rate.merchants)
+ *   pnpm --filter @repo/crawlers exec tsx src/shopee/jobs/backfill-review-risk.ts
  *
  * Scores every seller that has analyzed reviews over all of its reviews with
- * the scoring ingestion also uses (../merchant-review-risk.ts), so every page
- * reads the same persisted number.
+ * the scoring ingestion logs (../merchant-review-risk.ts) and reports how it
+ * differs from the stored score.
  *
- * Safety invariant:
- * - Dry-run by default: never writes unless `--apply` is passed.
- * - Writes only review_risk_score, review_risk_breakdown, review_risk_updated_at
- *   and updated_at on rate.merchants. No DDL, no other table.
+ * Read-only: Rate Services' MerchantRiskAuditor is the single writer of
+ * review_risk_score, review_risk_breakdown and the risk keys in
+ * merchants.metadata (DOS/Rate#1341, DOS/Rate-Services#724). `--apply` is
+ * refused.
  */
 import { pathToFileURL } from 'node:url';
 import dotenv from 'dotenv';
@@ -24,7 +23,6 @@ import {
   REVIEW_RISK_SELECT,
   scoreMerchants,
   toValidPrice,
-  writeMerchantReviewRisk,
   type MerchantRow,
   type MerchantScore,
   type ProductRow,
@@ -44,6 +42,9 @@ export {
 } from '../merchant-review-risk.js';
 
 const logger = createImporterLogger('BackfillReviewRiskJob');
+
+export const REVIEW_RISK_OWNER_MESSAGE =
+  "Merchant review risk is written by Rate Services' MerchantRiskAuditor (DOS/Rate#1341); this job only reports.";
 
 export async function loadAndScore(supabase: RateSupabaseClient): Promise<MerchantScore[]> {
   const merchants = await fetchAllPages<MerchantRow>('merchants', (from, to) =>
@@ -83,7 +84,10 @@ export async function runReviewRiskBackfill(
 ): Promise<{ apply: boolean; scored: number; changed: number; written: number }> {
   const safeOptions =
     options && typeof options === 'object' && !Array.isArray(options) ? options : {};
-  const apply = safeOptions.apply === true;
+  if (safeOptions.apply === true) {
+    throw new Error(REVIEW_RISK_OWNER_MESSAGE);
+  }
+  const apply = false;
   const scores = await loadAndScore(supabase);
   const changed = scores.filter(s => s.previousScore !== s.risk.risk_score);
   for (const s of changed.slice(0, 25)) {
@@ -93,17 +97,10 @@ export async function runReviewRiskBackfill(
       { merchantId: s.merchantId }
     );
   }
-  let written = 0;
-  if (apply) {
-    const nowIso = new Date().toISOString();
-    for (const s of scores) {
-      await writeMerchantReviewRisk(supabase, s.merchantId, s.risk, nowIso);
-      written += 1;
-    }
-  }
+  const written = 0;
   logger.info(
     'backfill.summary',
-    `Review risk backfill [mode=${apply ? 'APPLY' : 'DRY-RUN'}]: ${scores.length} sellers scored, ${changed.length} change, ${written} written.`,
+    `Review risk report [read-only]: ${scores.length} sellers scored, ${changed.length} differ from the stored score.`,
     { apply, scored: scores.length, changed: changed.length, written }
   );
   return { apply, scored: scores.length, changed: changed.length, written };
@@ -129,17 +126,13 @@ if (isDirectExecution) {
     const supabase = scopeSupabaseToRate(
       createClient(url, key, { auth: { persistSession: false } })
     );
-    const apply = process.argv.includes('--apply');
-    // The host is not secret; it shows which project an --apply run writes to.
-    logger.info('backfill.target', `Target: ${host} (apply=${apply})`, {
-      host,
-      apply,
-    });
-    await runReviewRiskBackfill(supabase, { apply });
+    // The host is not secret; it shows which project the report reads.
+    logger.info('backfill.target', `Target: ${host} (read-only)`, { host });
+    await runReviewRiskBackfill(supabase, { apply: process.argv.includes('--apply') });
   })().catch((err: unknown) => {
     logger.error(
       'backfill.fatal',
-      `Review risk backfill failed: ${err instanceof Error ? err.message : String(err)}`
+      `Review risk report (read-only; Rate Services' MerchantRiskAuditor owns the stored risk) failed: ${err instanceof Error ? err.message : String(err)}`
     );
     process.exit(1);
   });
