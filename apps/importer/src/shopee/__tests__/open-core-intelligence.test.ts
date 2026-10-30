@@ -1112,6 +1112,36 @@ async function runSuite() {
   ] as const) {
     assert.ok(keyOf(title).endsWith(storage), `${title} -> ${keyOf(title)}`);
   }
+  // A number glued to a RAM/ROM chain is the model's number when the model has none
+  // yet, and a screen size after a numbered model (DOS/Rate#1448).
+  for (const [title, key] of [
+    ['Xiaomi Redmi 13/8GB/256GB', 'xiaomi:redmi-13:256gb'],
+    ['Asus Vivobook 14/8GB/512GB', 'asus:vivobook-14:512gb'],
+    ['Lenovo LOQ 15/16GB/512GB/RTX 4050', 'lenovo:loq-15:512gb'],
+    ['Samsung Galaxy Tab S9 11/8GB/128GB', 'samsung:galaxy-tab-s9:128gb'],
+    ['Xiaomi Pad 6 11/8GB/256GB', 'xiaomi:pad-6:256gb'],
+    ['Realme GT 6 16/12GB/512GB', 'realme:gt-6:512gb'],
+    ['Xiaomi Redmi 13/8/256GB', 'xiaomi:redmi-13:256gb'],
+    // A lettered head is the model's too; a decimal head is a screen size.
+    ['Xiaomi Redmi 13C/8GB/256GB', 'xiaomi:redmi-13c:256gb'],
+    ['Xiaomi Redmi A3/4GB/64GB', 'xiaomi:redmi-a3:64gb'],
+    ['Honor X9/8GB/256GB', 'honor:x9:256gb'],
+    ['Asus Vivobook 15.6/8GB/512GB', 'asus:vivobook:512gb'],
+    // A RAM then a non-storage ("5G", mAh, inches) is no chain: no model number.
+    ['Xiaomi Redmi 8/256GB/5G', 'xiaomi:redmi:256gb'],
+    ['Oppo Reno 12/256GB/5G', 'oppo:reno:256gb'],
+    ['Xiaomi Redmi Note 8/128GB/5000mAh', 'xiaomi:redmi-note:128gb'],
+    ['Samsung Galaxy Fold 12/512GB/5G', 'samsung:galaxy-fold:512gb'],
+    // Nor is a date.
+    ['Samsung Galaxy Fold 11/11/2026 12GB 512GB', 'samsung:galaxy-fold:512gb'],
+    // A bare number right after the brand names no model.
+    ['Samsung 13/8GB/256GB', 'samsung:unkeyed:256gb'],
+    // Nor is a network.
+    ['Xiaomi 5G/8GB/256GB', 'xiaomi:unkeyed:256gb'],
+    ['Samsung Galaxy A55 5G/8GB/256GB', 'samsung:galaxy-a55:256gb'],
+  ] as const) {
+    assert.equal(keyOf(title), key, title);
+  }
   // A long run of promo words costs linear time (CodeQL js/polynomial-redos).
   {
     const started = performance.now();
@@ -1331,7 +1361,10 @@ async function runSuite() {
   assert.equal(detectCategorySlug('AirPods Pro 2 tặng dây Apple Watch Series 10'), 'earbuds');
   assert.equal(detectCategorySlug('iPad Pro M4 tặng Apple Watch Series 10'), 'tablets');
   assert.equal(detectCategorySlug('MacBook Air M3 + Apple Watch Series 10'), 'laptops');
-  assert.equal(detectCategorySlug('Apple iPhone 15 Plus 128GB tặng đồng hồ thông minh'), 'smartphones');
+  assert.equal(
+    detectCategorySlug('Apple iPhone 15 Plus 128GB tặng đồng hồ thông minh'),
+    'smartphones'
+  );
   assert.equal(detectCategorySlug('Apple Watch Series 10 46mm tặng AirPods Pro 2'), 'smartwatches');
   assert.equal(detectCategorySlug('Sale sốc tặng quà Apple Watch S10 46mm'), 'smartwatches');
   assert.equal(

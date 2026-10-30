@@ -2187,6 +2187,29 @@ export class ProductNormalizer {
         // A "+" before "Plus" is the Plus written twice ("Galaxy S24 + Plus"), no bundle.
         if (tok === '+' && /^plus[,;]?$/i.test(rawTokens[i + 1] ?? '')) continue;
         if (/^(?:tặng|kèm|quà|\+)$/iu.test(tok.normalize('NFC'))) break;
+        // A model number glued to a RAM/ROM pair ("Redmi 13/8GB/256GB", "Redmi 13C/…",
+        // "Honor X9/…") is the model's when the model has none yet; after a numbered model
+        // ("Galaxy Tab S9 11/8GB/128GB") or as a decimal ("15.6/8GB/512GB") it is a screen
+        // size. Either way the chain ends the model. Only a RAM (one or two digits) then a
+        // storage with GB or TB count, so "Redmi 8/256GB/5G" is no "Redmi 8" (DOS/Rate#1448).
+        const chainHead =
+          /^([a-z]?\d{1,2}[a-z]?|\d{1,2}[.,]\d)\/\d{1,2}(?:GB)?\/\d+(?:[.,]\d+)?(?:GB|TB)(?![a-z\d])/i.exec(
+            tok
+          );
+        if (chainHead) {
+          // Right after the brand a lettered head is the model itself ("Honor X9/8GB/256GB");
+          // a bare number there names no model ("Samsung 13/…" stays unkeyable).
+          const head = chainHead[1]!;
+          // A network ("5G/8GB/256GB") is no model number either.
+          if (
+            !/[.,]/.test(head) &&
+            !/^[2-5]G$/i.test(head) &&
+            (modelTokens.length > 0 ? !modelTokens.some(t => /\d/.test(t)) : /[a-z]/i.test(head))
+          ) {
+            modelTokens.push(head);
+          }
+          break;
+        }
         const stop =
           /^(?:\d+(?:[.,]\d+)?(?:GB|TB)|\d+\/\d+(?:GB|TB)?|\d{2}mm|5G|4G|LTE|GPS|RAM|ROM|OLED|WiFi|Chính|Quốc|Bản|Mới|Fullbox|Likenew|Like|Cũ|99%|98%|VN\/A|VNA|LL\/A|\(|\[|-)/i.exec(
             tok
