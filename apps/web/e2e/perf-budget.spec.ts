@@ -99,11 +99,13 @@ for (const [name, { path, budget, photo }] of Object.entries(PAGES)) {
   test(`${name} stays within its phone budget`, async ({ page }) => {
     const { transfers, inFlight } = await recordTransfers(page);
     const fullSizePhotos: string[] = [];
+    const sizedPhotos: string[] = [];
     page.on('request', (req) => {
-      const slug = /^\/img\/devices\/([a-z0-9-]+)\.jpg$/.exec(
-        new URL(req.url()).pathname
-      )?.[1];
+      const { pathname } = new URL(req.url());
+      const slug = /^\/img\/devices\/([a-z0-9-]+)\.jpg$/.exec(pathname)?.[1];
       if (slug && DEVICE_IMAGE_RENDITIONS[slug]) fullSizePhotos.push(slug);
+      if (photo && pathname.startsWith(`/img/devices/sized/${photo}-`))
+        sizedPhotos.push(pathname);
     });
     expect((await page.goto(path))?.status()).toBe(200);
     // No hover or touch: what loads here loads for every visitor. Prefetches
@@ -126,15 +128,18 @@ for (const [name, { path, budget, photo }] of Object.entries(PAGES)) {
     // its full-size JPEG (#1332, #1415, #1419). The merchant page lists one
     // (seed.sql, #1500); its thumbnail is lazy, so it is brought into view
     // once the totals above are read, and its WebP must load.
+    // Recorded from the start: Chrome may load a lazy image near the fold
+    // during the first load already.
     if (photo) {
-      const sized = page.waitForRequest((req) =>
-        new URL(req.url()).pathname.startsWith(`/img/devices/sized/${photo}-`)
-      );
       await page
         .locator(`img[src="/img/devices/${photo}.jpg"]`)
         .first()
         .scrollIntoViewIfNeeded();
-      await sized;
+      await expect
+        .poll(() => sizedPhotos.length, {
+          message: `${name} never loaded the sized WebP of ${photo}`,
+        })
+        .toBeGreaterThan(0);
       await page.waitForLoadState('networkidle');
     }
     expect
