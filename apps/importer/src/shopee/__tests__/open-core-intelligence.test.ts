@@ -523,6 +523,15 @@ async function runSuite() {
     ['iPad Pro M4 256GB Shop 13+ năm tặng ốp 11 inch', 'apple:ipad-pro-m4-11:256gb'],
     ['iPad Pro M4 256GB Shop hơn 13 năm chăm sóc tặng ốp 11 inch', 'apple:ipad-pro-m4-11:256gb'],
     ['iPad Pro M4 256GB Shop trên 13 năm tặng ốp 11 inch', 'apple:ipad-pro-m4-11:256gb'],
+    ['iPad Pro M4 256GB Shop:13 năm tặng ốp 11 inch', 'apple:ipad-pro-m4-11:256gb'],
+    ['iPad Pro M4 256GB Shop : 13 năm tặng ốp 11 inch', 'apple:ipad-pro-m4-11:256gb'],
+    ['iPad Pro M4 256GB Shop 13 + năm tặng ốp 11 inch', 'apple:ipad-pro-m4-11:256gb'],
+    // A percentage, a count or a bare two-digit number after it is no year.
+    ['iPad Pro M4 256GB Shop 13 năm 99% tặng ốp 11 inch', 'apple:ipad-pro-m4-11:256gb'],
+    ['iPad Pro M4 256GB Shop 13 năm 100 đánh giá tặng ốp 11 inch', 'apple:ipad-pro-m4-11:256gb'],
+    ['iPad Pro M4 Shop 13 năm 20', 'apple:ipad-pro-m4:unknown'],
+    ['iPad Pro M4 256GB - 13 năm - 100 đánh giá tặng ốp 11 inch', 'apple:ipad-pro-m4-11:256gb'],
+    ['iPad Pro M4 256GB 13 năm/100 đánh giá tặng ốp 11 inch', 'apple:ipad-pro-m4-11:256gb'],
     // A production year after a shop's "năm" keeps the size.
     ['iPad Pro M4 Apple Store 13 năm.2024 256GB', 'apple:ipad-pro-m4-13:256gb'],
     ['iPad Pro M4 Shop 13 năm: 22', 'apple:ipad-pro-m4-13:unknown'],
