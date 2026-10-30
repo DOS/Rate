@@ -167,7 +167,7 @@
     "message": "Lookup failed"
   },
   "lookupErrorRateLimitedWait": {
-    "message": "You are looking things up a little fast. Try again in $SECONDS$ seconds.",
+    "message": "You are looking things up a little fast. Try again in $SECONDS$ s.",
     "placeholders": {
       "seconds": {
         "content": "$1"

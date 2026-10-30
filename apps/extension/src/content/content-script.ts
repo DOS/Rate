@@ -243,9 +243,15 @@ async function inspectCurrentPage(): Promise<void> {
       const response = (await chrome.runtime.sendMessage({
         type: 'RATE_PRODUCT_DETECTED',
         signal,
-      })) as { ok?: boolean; data?: ExtensionLookupData | null };
+      })) as {
+        ok?: boolean;
+        data?: ExtensionLookupData | null;
+        status?: number | null;
+        retryAfterSeconds?: number;
+      };
 
       if (generation !== detectGeneration) return;
+      scheduleRetryAfterRateLimit(response);
       if (response?.ok && response.data) {
         renderShadowTrustPill(response.data);
       } else {
@@ -259,6 +265,36 @@ async function inspectCurrentPage(): Promise<void> {
       if (generation === detectGeneration) removeTrustPillHost();
     }
   });
+}
+
+// After a rate limit the same product is looked up again once the wait is over, so its pill
+// comes back without a navigation (DOS/Rate#1466).
+let rateLimitRetryTimer: ReturnType<typeof setTimeout> | null = null;
+function scheduleRetryAfterRateLimit(response: {
+  ok?: boolean;
+  status?: number | null;
+  retryAfterSeconds?: number;
+}): void {
+  if (rateLimitRetryTimer) clearTimeout(rateLimitRetryTimer);
+  rateLimitRetryTimer = null;
+  const wait = response?.retryAfterSeconds;
+  if (
+    response?.ok !== false ||
+    response.status !== 429 ||
+    typeof wait !== 'number' ||
+    !Number.isFinite(wait) ||
+    wait <= 0
+  ) {
+    return;
+  }
+  rateLimitRetryTimer = setTimeout(
+    () => {
+      rateLimitRetryTimer = null;
+      lastProcessedSignature = '';
+      void inspectCurrentPage();
+    },
+    (Math.min(wait, 600) + 1) * 1000
+  );
 }
 
 // Initial inspection + lightweight observation for SPA route/variant selection changes

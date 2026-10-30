@@ -17,7 +17,7 @@ import {
   sanitizeExtensionProductSignal,
   selectFreshestSessionSignal,
 } from '../security-guards.js';
-import { cooldownSecondsLeft, rateLimitedUntilMs } from '../rate-limit.js';
+import { LookupCooldown } from '../rate-limit.js';
 import { t } from '../i18n.js';
 import { resolveActionBadge } from '../verdict-display.js';
 
@@ -64,25 +64,16 @@ const EXTENSION_VERSION = chrome.runtime.getManifest().version;
 // After a 429 no lookup is sent until the server's Retry-After has passed: kept in memory
 // and in session storage, so a restarted worker keeps waiting (DOS/Rate#1466).
 const RATE_LIMIT_KEY = 'lookup_rate_limited_until';
-let rateLimitedUntil = 0;
-
-async function lookupCooldownSeconds(): Promise<number> {
-  const now = Date.now();
-  if (cooldownSecondsLeft(rateLimitedUntil, now) > 0) {
-    return cooldownSecondsLeft(rateLimitedUntil, now);
-  }
-  try {
-    const stored = await chrome.storage.session.get(RATE_LIMIT_KEY);
-    const until = stored?.[RATE_LIMIT_KEY];
-    if (typeof until === 'number') rateLimitedUntil = until;
-  } catch {
-    // No session storage: the in-memory value stands.
-  }
-  return cooldownSecondsLeft(rateLimitedUntil, now);
-}
+const lookupCooldown = new LookupCooldown({
+  get: async () =>
+    (await chrome.storage.session.get(RATE_LIMIT_KEY))?.[RATE_LIMIT_KEY],
+  set: async (untilMs) => {
+    await chrome.storage.session.set({ [RATE_LIMIT_KEY]: untilMs });
+  },
+});
 
 async function requestLookup(endpoint: string): Promise<LookupOutcome> {
-  const waitSeconds = await lookupCooldownSeconds();
+  const waitSeconds = await lookupCooldown.secondsLeft();
   if (waitSeconds > 0) {
     return { ok: false, status: 429, retryAfterSeconds: waitSeconds };
   }
@@ -100,20 +91,12 @@ async function requestLookup(endpoint: string): Promise<LookupOutcome> {
     return { ok: false, status: null };
   }
   if (response.status === 429) {
-    const now = Date.now();
-    rateLimitedUntil = rateLimitedUntilMs(
-      response.headers.get('Retry-After'),
-      now
-    );
-    try {
-      await chrome.storage.session.set({ [RATE_LIMIT_KEY]: rateLimitedUntil });
-    } catch {
-      // The in-memory cooldown still holds this worker.
-    }
     return {
       ok: false,
       status: 429,
-      retryAfterSeconds: cooldownSecondsLeft(rateLimitedUntil, now),
+      retryAfterSeconds: await lookupCooldown.hold(
+        response.headers.get('Retry-After')
+      ),
     };
   }
   if (!response.ok) return { ok: false, status: response.status };
@@ -176,6 +159,9 @@ const latestDetectByTab = new Map<number, number>();
 async function maybeSendOptInCrowdSignal(
   rawSignal: ExtractedPageProductSignal
 ): Promise<void> {
+  // Nothing is sent while lookups are rate-limited, even after a lookup that left before
+  // the 429 (DOS/Rate#1466).
+  if ((await lookupCooldown.secondsLeft()) > 0) return;
   const signal = sanitizeExtensionProductSignal(rawSignal);
   const settings = await getSettings();
   // Strict Privacy Gate: Only send crowd verification signal if user explicitly opted in
@@ -595,6 +581,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           nextSettings.apiBaseUrl = normalizeAllowedApiBaseUrl(
             message.apiBaseUrl
           );
+          // The cooldown was another server's (DOS/Rate#1466).
+          await lookupCooldown.clear();
         }
         if (typeof message.crowdContributeOptIn === 'boolean') {
           nextSettings.crowdContributeOptIn = message.crowdContributeOptIn;

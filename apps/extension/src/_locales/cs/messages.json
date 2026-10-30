@@ -167,7 +167,7 @@
     "message": "Vyhledání se nezdařilo"
   },
   "lookupErrorRateLimitedWait": {
-    "message": "Vyhledáváte trochu rychle. Zkuste to znovu za $SECONDS$ s.",
+    "message": "Vyhledáváte trochu rychle. Zkuste to znovu za $SECONDS$ s.",
     "placeholders": {
       "seconds": {
         "content": "$1"

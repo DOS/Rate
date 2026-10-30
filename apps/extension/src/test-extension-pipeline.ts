@@ -4008,6 +4008,7 @@ async function runTests() {
       cooldownSecondsLeft,
       DEFAULT_RATE_LIMIT_COOLDOWN_SECONDS,
       MAX_RATE_LIMIT_COOLDOWN_SECONDS,
+      LookupCooldown,
     } = await import('./rate-limit.js');
     const now = Date.parse('2026-10-30T10:00:00Z');
     assert.equal(parseRetryAfterSeconds('60', now), 60);
@@ -4024,6 +4025,11 @@ async function runTests() {
       parseRetryAfterSeconds('999999', now),
       MAX_RATE_LIMIT_COOLDOWN_SECONDS
     );
+    assert.equal(parseRetryAfterSeconds('0000120', now), 120);
+    assert.equal(
+      parseRetryAfterSeconds('1234567', now),
+      MAX_RATE_LIMIT_COOLDOWN_SECONDS
+    );
     for (const bad of [null, undefined, '', 'soon', '-5', '1.5']) {
       assert.equal(parseRetryAfterSeconds(bad, now), null, String(bad));
     }
@@ -4036,9 +4042,62 @@ async function runTests() {
     assert.equal(cooldownSecondsLeft(now - 1, now), 0);
     assert.equal(cooldownSecondsLeft(undefined, now), 0);
 
+    // The shared cooldown, with a fake clock and a fake session store.
+    {
+      let clock = now;
+      let stored: unknown;
+      const store = {
+        get: async () => stored,
+        set: async (v: number) => {
+          stored = v;
+        },
+      };
+      const cooldown = new LookupCooldown(store, () => clock);
+      assert.equal(await cooldown.secondsLeft(), 0);
+      assert.equal(await cooldown.hold('60'), 60);
+      assert.equal(stored, now + 60_000);
+      // A later, shorter Retry-After never shortens the wait.
+      assert.equal(await cooldown.hold('1'), 60);
+      // A stale stored value read during the wait never clears it.
+      stored = 0;
+      assert.equal(await cooldown.secondsLeft(), 60);
+      // A restarted worker (new instance) picks the wait up from the store.
+      stored = now + 30_000;
+      const restarted = new LookupCooldown(store, () => clock);
+      assert.equal(await restarted.secondsLeft(), 30);
+      // The wait ends.
+      clock = now + 61_000;
+      assert.equal(await cooldown.secondsLeft(), 0);
+      // A deadline beyond the cap (a clock moved back, a corrupt value) is dropped.
+      stored = clock + 3_600_000;
+      assert.equal(
+        await new LookupCooldown(store, () => clock).secondsLeft(),
+        0
+      );
+      // Another server: no wait.
+      await cooldown.hold('120');
+      await cooldown.clear();
+      assert.equal(stored, 0);
+      assert.equal(await cooldown.secondsLeft(), 0);
+      // A failing store never blocks lookups.
+      const broken = new LookupCooldown(
+        {
+          get: async () => {
+            throw new Error('no session');
+          },
+          set: async () => {
+            throw new Error('no session');
+          },
+        },
+        () => clock
+      );
+      assert.equal(await broken.hold('60'), 60);
+      assert.equal(await broken.secondsLeft(), 60);
+    }
+
     const { renderLookupErrorHtml } = await import('./sidepanel/panel-view.js');
     const waiting = renderLookupErrorHtml('rate_limited', 'iPhone 16', 42);
-    assert.ok(waiting.includes('Thử lại sau 42 giây'), waiting);
+    assert.ok(waiting.includes('hãy thử lại sau 42\u00a0giây'), waiting);
     assert.ok(waiting.includes('data-action="retry"'));
     // No wait known, or another failure: the plain message.
     assert.ok(
@@ -4067,9 +4126,25 @@ async function runTests() {
       workerSource.indexOf('async function fetchExtensionLookup(')
     );
     assert.ok(
-      requestLookupBody.indexOf('lookupCooldownSeconds()') <
+      requestLookupBody.indexOf('lookupCooldown.secondsLeft()') <
         requestLookupBody.indexOf('await fetch(')
     );
+    // No crowd signal while lookups wait; another server clears the wait; the pill
+    // looks the product up again once the wait is over.
+    const crowdBody = workerSource.slice(
+      workerSource.indexOf('async function maybeSendOptInCrowdSignal('),
+      workerSource.indexOf(
+        'await fetch(',
+        workerSource.indexOf('async function maybeSendOptInCrowdSignal(')
+      )
+    );
+    assert.ok(crowdBody.includes('lookupCooldown.secondsLeft()'));
+    assert.ok(workerSource.includes('await lookupCooldown.clear()'));
+    const contentScript = fs.readFileSync(
+      path.resolve(__dirname, 'content/content-script.ts'),
+      'utf8'
+    );
+    assert.ok(contentScript.includes('scheduleRetryAfterRateLimit(response)'));
     assert.ok(
       requestLookupBody.includes("response.headers.get('Retry-After')")
     );
