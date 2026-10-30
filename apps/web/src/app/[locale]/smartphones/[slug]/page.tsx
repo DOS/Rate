@@ -358,49 +358,72 @@ export async function ProductDetailView({
     categorySlug === 'earbuds'
       ? tNav(categorySlug)
       : categoryLabel;
-  const [offers, reviews, storedCategoryPeers] = await Promise.all([
-    timing.time('offers', getCachedMasterProductOffers(product.id)),
-    timing.time('reviews', getCachedMasterProductReviews(product.id)),
-    peersRead,
-  ]);
-  const categoryPeers = storedCategoryPeers.map((peer) =>
-    applyCategorySpecTemplate(categorySlug, peer)
-  );
-  // "From" price, range and seller count: the stored stats every other page
-  // shows (in-stock listings, no bait prices), not the offer list below,
-  // which also holds sold-out listings at their last price (DOS/Rate#1141).
+  // Three independent chains, each started as soon as its input is known:
+  // offers -> price history, reviews -> review summary, and peers ->
+  // competitors -> their offers. Awaited in one stage after the product read
+  // rather than in two, so the competitors' offers no longer wait for this
+  // product's offers and reviews (DOS/Rate#1344).
   const marketStats = productMarketStats(product);
   const currentMinPrice = marketStats.minPrice;
-  // An Item's other sizes are the same device, not competitors (#1154).
-  const relatedCompetitors = rankRelatedCompetitors(
-    itemPage
-      ? withoutItemSiblings(
-          categoryPeers,
-          itemVariants.map((v) => v.variant.slug)
-        )
-      : categoryPeers,
-    product.slug,
-    currentMinPrice
+  const offersRead = timing.time(
+    'offers',
+    getCachedMasterProductOffers(product.id)
   );
-  const [reviewSummary, priceHistory, competitorOffers] = await Promise.all([
-    timing.time(
-      'reviewSummary',
-      getCachedMasterProductReviewSummary(product.id, reviews)
-    ),
+  const reviewsRead = timing.time(
+    'reviews',
+    getCachedMasterProductReviews(product.id)
+  );
+  const priceHistoryRead = offersRead.then((offers) =>
     timing.time(
       'priceHistory',
       getCachedMasterProductPriceHistory(product.id, offers)
-    ),
-    // Each competitor card's radar badge comes from that product's own
-    // offers, as this product's signal does, instead of from the category
-    // deal radar, which took 3.5-4 s cold before the first byte
-    // (DOS/Rate#1344).
+    )
+  );
+  const reviewSummaryRead = reviewsRead.then((reviews) =>
     timing.time(
+      'reviewSummary',
+      getCachedMasterProductReviewSummary(product.id, reviews)
+    )
+  );
+  const competitorsRead = peersRead.then(async (storedCategoryPeers) => {
+    const categoryPeers = storedCategoryPeers.map((peer) =>
+      applyCategorySpecTemplate(categorySlug, peer)
+    );
+    // An Item's other sizes are the same device, not competitors (#1154).
+    // "From" price: the stored stats every other page shows (in-stock
+    // listings, no bait prices), not the offer list (DOS/Rate#1141).
+    const relatedCompetitors = rankRelatedCompetitors(
+      itemPage
+        ? withoutItemSiblings(
+            categoryPeers,
+            itemVariants.map((v) => v.variant.slug)
+          )
+        : categoryPeers,
+      product.slug,
+      currentMinPrice
+    );
+    // Each competitor card's radar badge comes from that product's own
+    // offers, as this product's signal does (DOS/Rate#1344).
+    const competitorOffers = await timing.time(
       'competitorOffers',
       Promise.all(
         relatedCompetitors.map((peer) => getCachedMasterProductOffers(peer.id))
       )
-    ),
+    );
+    return { categoryPeers, relatedCompetitors, competitorOffers };
+  });
+  const [
+    offers,
+    reviews,
+    priceHistory,
+    reviewSummary,
+    { categoryPeers, relatedCompetitors, competitorOffers },
+  ] = await Promise.all([
+    offersRead,
+    reviewsRead,
+    priceHistoryRead,
+    reviewSummaryRead,
+    competitorsRead,
   ]);
   timing.done();
   const peerRadarIndex: RadarIndex = new Map(

@@ -125,6 +125,11 @@ export function resetRateClientForTests(): void {
  * the number of rows actually returned, which also works if max-rows is lowered.
  * A failed page throws RateDataUnavailableError: a partial list would otherwise
  * be cached as if it were complete (DOS/Rate#333).
+ *
+ * A read that asks for the exact count (`select(..., { count: 'exact' })`)
+ * stops once it holds that many rows, without the extra request for an empty
+ * page; a cold product render made that extra round trip in every paged read
+ * (DOS/Rate#1344). Without a count it pages until an empty page, as before.
  */
 // Non-empty pages one paged read may take: a server (or test mock) that
 // ignores .range() would otherwise loop until memory runs out (DOS/Rate#485).
@@ -136,14 +141,18 @@ async function fetchAllRows<T>(
   buildPage: (
     from: number,
     to: number
-  ) => PromiseLike<{ data: T[] | null; error: { message: string } | null }>,
+  ) => PromiseLike<{
+    data: T[] | null;
+    error: { message: string } | null;
+    count?: number | null;
+  }>,
   pageSize = 1000,
   /** False for a speculative read whose caller logs a failure if it uses it. */
   logFailure = true
 ): Promise<T[]> {
   const rows: T[] = [];
   for (let from = 0, pages = 0; ;) {
-    const { data, error } = await buildPage(from, from + pageSize - 1);
+    const { data, error, count } = await buildPage(from, from + pageSize - 1);
     if (error) {
       if (logFailure) {
         log.error('paged read failed', {
@@ -164,6 +173,8 @@ async function fetchAllRows<T>(
     }
     rows.push(...page);
     from += page.length;
+    // The server said how many rows match: no request for an empty page.
+    if (typeof count === 'number' && rows.length >= count) return rows;
   }
 }
 
@@ -1373,7 +1384,7 @@ export async function getMasterProductOffers(
     (from, to) =>
       supabase
         .from('v_products_with_merchant_trust')
-        .select(TRUST_VIEW_SELECT)
+        .select(TRUST_VIEW_SELECT, { count: 'exact' })
         .eq('cluster_id', cleanMasterId)
         .order('price_current', { ascending: true })
         .order('id')
@@ -1402,7 +1413,7 @@ export async function getMasterProductOffers(
     fetchAllRows('product offers', (from, to) =>
       supabase
         .from('products')
-        .select(OFFER_FALLBACK_SELECT)
+        .select(OFFER_FALLBACK_SELECT, { count: 'exact' })
         .eq('cluster_id', cleanMasterId)
         .order('price_current', { ascending: true })
         .order('id')
@@ -1430,12 +1441,13 @@ async function getListingAvailability(
     (from, to) =>
       supabase
         .from('products')
-        .select('id, availability')
+        .select('id, availability', { count: 'exact' })
         .in('cluster_id', [...masterIds])
         .order('id')
         .range(from, to) as unknown as PromiseLike<{
         data: { id: unknown; availability: unknown }[] | null;
         error: { message: string } | null;
+        count: number | null;
       }>
   );
   const byId = new Map<string, OfferAvailability>();
@@ -1581,7 +1593,7 @@ async function getListingIdsForMaster(
   const rows = await fetchAllRows<{ id: string }>(label, (from, to) =>
     supabase
       .from('products')
-      .select('id')
+      .select('id', { count: 'exact' })
       .eq('cluster_id', cleanMasterId)
       .order('id')
       .range(from, to)

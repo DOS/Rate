@@ -37,6 +37,7 @@ async function main() {
     assert.equal(line!.route, 'product');
     assert.equal(line!.key, 'apple-iphone-16-128gb');
     assert.equal(typeof line!.totalMs, 'number');
+    assert.equal(typeof line!.processUptimeMs, 'number', 'cold start shows');
     const reads = line!.reads as Record<string, number>;
     assert.deepEqual(Object.keys(reads).sort(), ['offers', 'product']);
     assert.deepEqual(line!.failed, ['offers']);
@@ -49,6 +50,7 @@ async function main() {
         'level',
         'msg',
         'pending',
+        'processUptimeMs',
         'reads',
         'route',
         'scope',
