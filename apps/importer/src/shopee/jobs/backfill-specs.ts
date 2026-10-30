@@ -20,6 +20,7 @@ import {
   CANONICAL_BACKFILL_SPECS_BY_MODEL_KEY,
   FLAGSHIP_DEVICES_TO_SEED,
   flagshipSeedsByItem,
+  type FlagshipDeviceSeed,
   type FlagshipItemSeed,
 } from '../flagship-seed-data.js';
 import { resolveItemModelMode, type ItemModelMode } from '../item-model-flag.js';
@@ -100,6 +101,31 @@ export function withoutRetractedSpecs<T>(
     }
   }
   return copy as T;
+}
+
+/**
+ * The spec columns a seed writes onto its existing master: specs and key specs merged into
+ * the stored ones, minus the seed's retracted paths, and the variant name of a replaced
+ * seed. Shared by the full backfill and the quick sync, so neither keeps a retracted value.
+ */
+export function seedMasterSpecUpdate(
+  existing: { specifications?: unknown; key_specs?: unknown } | null | undefined,
+  seed: FlagshipDeviceSeed
+): { specifications: unknown; key_specs: unknown; variant_name?: string } {
+  return {
+    specifications: withoutRetractedSpecs(
+      mergeProductSpecifications(existing?.specifications, seed.specifications, seed.colors),
+      seed.retract_spec_fields,
+      'specifications'
+    ),
+    key_specs: withoutRetractedSpecs(
+      mergeKeySpecs(existing?.key_specs, seed.key_specs as unknown as Record<string, unknown>),
+      seed.retract_spec_fields,
+      'key_specs'
+    ),
+    // A replaced, unsourced seed's label ("16GB/256GB") follows the new one.
+    ...(seed.retract_spec_fields ? { variant_name: seed.variant_name } : {}),
+  };
 }
 
 /**
@@ -427,25 +453,10 @@ export async function runMasterSpecsBackfill(
           .from('master_products')
           .update({
             ...specFields,
-            specifications: withoutRetractedSpecs(
-              mergeProductSpecifications(
-                (existing as { specifications?: unknown }).specifications,
-                device.specifications,
-                device.colors
-              ),
-              device.retract_spec_fields,
-              'specifications'
+            ...seedMasterSpecUpdate(
+              existing as { specifications?: unknown; key_specs?: unknown },
+              device
             ),
-            key_specs: withoutRetractedSpecs(
-              mergeKeySpecs(
-                (existing as { key_specs?: unknown }).key_specs,
-                device.key_specs as unknown as Record<string, unknown>
-              ),
-              device.retract_spec_fields,
-              'key_specs'
-            ),
-            // A replaced, unsourced seed's label ("16GB/256GB") follows the new one.
-            ...(device.retract_spec_fields ? { variant_name: device.variant_name } : {}),
             ...(categoryId ? { category_id: categoryId } : {}),
           })
           .eq('id', existing.id);
@@ -630,17 +641,12 @@ export async function runQuickSpecSyncAndAudit(
       }
       const { error: upErr } = await supabase
         .from('master_products')
-        .update({
-          specifications: mergeProductSpecifications(
-            (existingRow as { specifications?: unknown } | null)?.specifications,
-            seed.specifications,
-            seed.colors
-          ),
-          key_specs: mergeKeySpecs(
-            (existingRow as { key_specs?: unknown } | null)?.key_specs,
-            seed.key_specs as unknown as Record<string, unknown>
-          ),
-        })
+        .update(
+          seedMasterSpecUpdate(
+            existingRow as { specifications?: unknown; key_specs?: unknown } | null,
+            seed
+          )
+        )
         .eq('model_key', seed.model_key);
       if (upErr) {
         throw new Error(`Failed to sync specs of ${seed.model_key}: ${upErr.message}`);

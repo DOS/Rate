@@ -9,7 +9,7 @@ import { KeySpecsSchema, ProductSpecificationsSchema, splitModelKey } from '@rep
 import { FLAGSHIP_DEVICES_TO_SEED, flagshipSeedsByItem } from '../flagship-seed-data.js';
 import { CATALOG_EXPANSION_2026_SEEDS } from '../flagship-seed-catalog-2026.js';
 import { ProductNormalizer, detectCategorySlug } from '../product-normalizer.js';
-import { withoutRetractedSpecs } from '../jobs/backfill-specs.js';
+import { seedMasterSpecUpdate, withoutRetractedSpecs } from '../jobs/backfill-specs.js';
 import type { ShopeeProduct } from '../types.js';
 
 const normalizer = new ProductNormalizer();
@@ -185,6 +185,36 @@ for (const key of [
   }
   const item = flagshipSeedsByItem().find(i => key.startsWith(`${i.itemKey}:`))!;
   assert.deepEqual(item.retract_spec_fields, seed.retract_spec_fields, key);
+}
+
+// The master update both backfill entry points write, from a row the old unsourced seed
+// wrote: the retracted values go, the label follows, and the stored input is untouched.
+{
+  const seed = CATALOG_EXPANSION_2026_SEEDS.find(
+    s => s.model_key === 'samsung:galaxy-s26-ultra:256gb'
+  )!;
+  const stored = {
+    specifications: {
+      battery: { capacity_mah: 5200, fast_charging_w: 65 },
+      regulatory: { certifications: 'FCC, CE, QCVN' },
+    },
+    key_specs: { ram: '16GB' },
+  };
+  const before = JSON.stringify(stored);
+  const update = seedMasterSpecUpdate(stored, seed) as {
+    specifications: Record<string, Record<string, unknown> | undefined>;
+    key_specs: Record<string, unknown>;
+    variant_name?: string;
+  };
+  assert.equal(update.variant_name, '12GB/256GB');
+  assert.equal(update.specifications.battery?.capacity_mah, 5000);
+  assert.equal(update.specifications.battery?.fast_charging_w, 60);
+  assert.equal(update.specifications.regulatory?.certifications, undefined);
+  assert.equal(update.key_specs.ram, '12GB');
+  assert.equal(JSON.stringify(stored), before, 'the stored row is not mutated');
+  // A seed with nothing to retract keeps its stored label.
+  const plain = CATALOG_EXPANSION_2026_SEEDS.find(s => s.model_key === 'apple:iphone-17:256gb')!;
+  assert.equal('variant_name' in seedMasterSpecUpdate(null, plain), false);
 }
 
 console.warn(`✅ Catalog expansion seeds (${CATALOG_EXPANSION_2026_SEEDS.length} variants) passed`);
