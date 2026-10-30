@@ -21,24 +21,27 @@ const KB = 1024;
 // 43.5 / 3.4. Budgets add about 10%. How many links a page prefetches on
 // its own depends on timing, so prefetch takes the highest run plus 25%, at
 // least 4 KB: a full page prefetched on sight is tens of KB.
-const PAGES: Record<string, { path: string; budget: Budget }> = {
-  home: {
-    path: '/',
-    budget: { html: 44 * KB, js: 353 * KB, css: 48 * KB, prefetch: 4 * KB },
-  },
-  category: {
-    path: '/smartphones',
-    budget: { html: 44 * KB, js: 373 * KB, css: 50 * KB, prefetch: 10 * KB },
-  },
-  product: {
-    path: '/smartphones/iphone-16-pro-max-256gb',
-    budget: { html: 56 * KB, js: 388 * KB, css: 48 * KB, prefetch: 8 * KB },
-  },
-  merchant: {
-    path: '/merchants/11111111-1111-4111-8111-111111111111',
-    budget: { html: 33 * KB, js: 346 * KB, css: 48 * KB, prefetch: 5 * KB },
-  },
-};
+// photo: a device photo with sized renditions the page lists.
+const PAGES: Record<string, { path: string; budget: Budget; photo?: string }> =
+  {
+    home: {
+      path: '/',
+      budget: { html: 44 * KB, js: 353 * KB, css: 48 * KB, prefetch: 4 * KB },
+    },
+    category: {
+      path: '/smartphones',
+      budget: { html: 44 * KB, js: 373 * KB, css: 50 * KB, prefetch: 10 * KB },
+    },
+    product: {
+      path: '/smartphones/iphone-16-pro-max-256gb',
+      budget: { html: 56 * KB, js: 388 * KB, css: 48 * KB, prefetch: 8 * KB },
+    },
+    merchant: {
+      path: '/merchants/11111111-1111-4111-8111-111111111111',
+      budget: { html: 33 * KB, js: 346 * KB, css: 48 * KB, prefetch: 5 * KB },
+      photo: 'apple-iphone-16-pro-max-256gb',
+    },
+  };
 
 type Transfer = { url: string; kind: Kind | 'other'; bytes: number };
 
@@ -92,7 +95,7 @@ function summary(transfers: Transfer[], kind: Kind) {
   return { total, largest };
 }
 
-for (const [name, { path, budget }] of Object.entries(PAGES)) {
+for (const [name, { path, budget, photo }] of Object.entries(PAGES)) {
   test(`${name} stays within its phone budget`, async ({ page }) => {
     const { transfers, inFlight } = await recordTransfers(page);
     const fullSizePhotos: string[] = [];
@@ -120,8 +123,20 @@ for (const [name, { path, budget }] of Object.entries(PAGES)) {
         .toBeLessThanOrEqual(budget[kind]);
     }
     // A device photo with pre-sized WebP renditions loads one of those, never
-    // its full-size JPEG (#1332, #1415, #1419). The seeded pages above show
-    // no such photo today, so this guards pages and seeds that add one.
+    // its full-size JPEG (#1332, #1415, #1419). The merchant page lists one
+    // (seed.sql, #1500); its thumbnail is lazy, so it is brought into view
+    // once the totals above are read, and its WebP must load.
+    if (photo) {
+      const sized = page.waitForRequest((req) =>
+        new URL(req.url()).pathname.startsWith(`/img/devices/sized/${photo}-`)
+      );
+      await page
+        .locator(`img[src="/img/devices/${photo}.jpg"]`)
+        .first()
+        .scrollIntoViewIfNeeded();
+      await sized;
+      await page.waitForLoadState('networkidle');
+    }
     expect
       .soft(fullSizePhotos, `${name} requested full-size device photos`)
       .toEqual([]);

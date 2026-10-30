@@ -373,3 +373,9 @@ VALUES
   ('22222222-2222-4222-8222-222222221439', 'c0000000-0000-4000-8000-000000000001', 'E2E', 'Solo Phone',
    'e2e:solo-phone:128gb', 'E2E Solo Phone 128GB', 'e2e-solo-phone-128gb', 128, 7990000, 7990000, 1, 'published',
    '{"category_slug": "smartphones"}');
+
+-- A listing on the budget merchant page shows a device photo with sized
+-- renditions, so perf-budget.spec's full-size JPEG check covers that page
+-- (DOS/Rate#1500). The product page shows no listing images.
+UPDATE rate.products SET images = ARRAY['/img/devices/apple-iphone-16-pro-max-256gb.jpg']
+WHERE id = '33333333-3333-4333-8333-333333333331';
