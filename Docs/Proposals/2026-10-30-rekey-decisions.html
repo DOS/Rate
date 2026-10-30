@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="vi" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="color-scheme" content="dark" />
+  <title>Quyết định re-key danh mục</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0f1113;
+      --surface: #161a1e;
+      --surface-2: #1d2228;
+      --border: #2a313a;
+      --text: #e8edf2;
+      --muted: #9ba5b0;
+      --accent: #FF2E29;
+      --accent-soft: rgba(255, 46, 41, 0.14);
+      --green: #22c55e;
+      --amber: #f59e0b;
+      --amber-soft: rgba(245, 158, 11, 0.14);
+      --code-bg: #0b0d0f;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 32px 16px 64px;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Inter, sans-serif;
+      line-height: 1.65;
+    }
+    .container { max-width: 960px; margin: 0 auto; }
+    h1 { font-size: 28px; margin: 12px 0 8px; letter-spacing: -0.02em; }
+    h2 { font-size: 20px; margin: 40px 0 12px; padding-bottom: 8px; border-bottom: 1px solid var(--border); color: #fff; }
+    p, li { color: var(--text); }
+    .muted { color: var(--muted); }
+    .badge { display: inline-block; padding: 4px 10px; border-radius: 6px; font-size: 12px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; }
+    .badge-accent { background: var(--accent-soft); color: var(--accent); border: 1px solid rgba(255,46,41,0.35); }
+    .badge-amber { background: var(--amber-soft); color: var(--amber); border: 1px solid rgba(245,158,11,0.35); }
+    .card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 16px 18px; margin: 14px 0; }
+    .card.warn { border-color: rgba(245,158,11,0.45); }
+    .table-wrap { overflow-x: auto; margin: 12px 0; }
+    table { width: 100%; border-collapse: collapse; font-size: 14px; min-width: 620px; }
+    th, td { border: 1px solid var(--border); padding: 8px 10px; text-align: left; vertical-align: top; }
+    th { background: var(--surface-2); color: #fff; }
+    h3 { font-size: 16px; margin: 24px 0 8px; color: #fff; }
+    code { background: var(--code-bg); border: 1px solid var(--border); border-radius: 4px; padding: 1px 5px; font-size: 13px; overflow-wrap: anywhere; }
+    .q { border-left: 3px solid var(--accent); padding-left: 12px; margin: 16px 0; }
+    .q strong { color: #fff; }
+    .rec-line { color: var(--green); font-weight: 600; }
+    a { color: #ff6b66; }
+  </style>
+</head>
+<body>
+<div class="container">
+  <span class="badge badge-accent">Quyết định</span>
+  <span class="badge badge-amber">Cần JOY quyết</span>
+  <h1>Re-key danh mục: cách viết đồng hồ, chữ quà tặng trong key, máy cũ</h1>
+  <p class="muted">Ngày 30/10/2026. Người soạn: Core (Rate). Chưa áp dụng gì lên database. Bản tiếng Anh: <code>2026-10-30-rekey-decisions.md</code>. Gồm #1407 (nửa SE2 / Series10), #1441 (chữ quà tặng trong key máy không phải Apple), #1430 (máy cũ, like new kéo giá máy mới) và #1491 (c), (d) (iPad Wi-Fi và 5G, MacBook nhiều mức RAM).</p>
+
+  <h2>1. Vì sao phải chờ JOY</h2>
+  <p>Listing crawl về chỉ được gắn vào sản phẩm khi <strong>key khớp chính xác</strong>. Khi bộ chuẩn hoá đổi cách sinh key cho cùng một máy:</p>
+  <ul>
+    <li>Listing mới đi theo key mới.</li>
+    <li>Nếu chưa có sản phẩm mang key mới, hệ thống tạo một sản phẩm mới.</li>
+    <li>Sản phẩm cũ không nhận thêm listing nào, nên giá và danh sách chỗ bán cũ dần.</li>
+  </ul>
+  <p>Nghĩa là chỉ sửa code thôi thì một máy sẽ bị tách làm hai trang. Mỗi mục dưới đây cần một <strong>bước sửa dữ liệu production</strong> (đổi key, hoặc gộp hai sản phẩm), chạy qua DOS-Me trong cùng đợt phát hành với phần sửa code. Việc này do JOY quyết.</p>
+  <p>Tiền lệ là M0 (#1123):</p>
+  <ul>
+    <li>một giao dịch SQL, chạy lại nhiều lần vẫn an toàn;</li>
+    <li>đổi key tại chỗ, nên id, slug, listing, đánh giá và cảnh báo giá giữ nguyên;</li>
+    <li>nếu key đích đã có thì bỏ qua và báo lại; việc gộp phải xem tay, không bao giờ tự động;</li>
+    <li>có file kiểm tra, file hoàn tác và test chạy lại trên CI.</li>
+  </ul>
+
+  <h2>2. #1407: cùng một đồng hồ, hai cách viết, hai key</h2>
+  <ul>
+    <li>"Apple Watch SE2 40mm" ra <code>watch-se2-40mm</code>, còn "SE 2 40mm" ra <code>watch-se-2-40mm</code>. SE3 và SE2022 cũng vậy.</li>
+    <li>"Series10 46mm" ra <code>watch-series10</code>, còn "Series 10 46mm" ra <code>watch-series-10-46mm</code>.</li>
+    <li>Phần sửa code chỉ một dòng; nó bị giữ lại khỏi PR #1405 chính vì lý do trên.</li>
+  </ul>
+  <div class="q"><strong>Phương án.</strong>
+    <ul>
+      <li>(A) Đếm số sản phẩm đang mang key viết liền. Sau đó đổi key, hoặc gộp vào bản có dấu cách nếu bản đó đã có. Rồi phát hành dòng code sửa trong cùng đợt.</li>
+      <li>(B) Thêm bảng ánh xạ key cũ sang key mới trong bộ so khớp. Không phải sửa dữ liệu, nhưng bảng này tồn tại mãi, và mọi chỗ đọc key đều phải biết đến nó.</li>
+      <li>(C) Để nguyên: hai cách viết vẫn là hai sản phẩm.</li>
+    </ul>
+    <span class="rec-line">Đề xuất: A.</span>
+  </div>
+
+  <h2>3. #1441: chữ quà tặng dính vào key</h2>
+  <div class="card warn">PR #1433 (#1429, đã merge) đã cắt model ở chữ "tặng", "kèm", "quà" và "+". Listing mới giờ ra key gọn, ví dụ <code>samsung:galaxy-s25</code> thay vì <code>samsung:galaxy-s25-tang-tai</code>.<br>Vì vậy, sản phẩm nào đã lưu với key dính chữ quà tặng thì <strong>đã ngừng nhận listing mới</strong>; listing mới đi sang key gọn. Việc sửa dữ liệu vì thế gấp hơn lúc tạo issue.<br>Trên 1.208 tiêu đề của RS, thay đổi này làm đổi 3 key loại này. Chưa đếm được trên dữ liệu thật vì Core không có quyền đọc database.</div>
+  <div class="q"><strong>Các bước đề xuất.</strong>
+    <ol>
+      <li>Phía DOS-Me / JOY đếm (chỉ đọc) các sản phẩm và listing có key chứa <code>-tang</code>, <code>-kem</code> hoặc <code>-qua</code>.</li>
+      <li>Một bước sửa dữ liệu kiểu M0:
+        <ul>
+          <li>key gọn còn trống thì đổi key tại chỗ;</li>
+          <li>key gọn đã có thì chuyển listing sang, cập nhật lại giá của cả hai sản phẩm, rồi lưu trữ (archive) bản cũ.</li>
+        </ul>
+      </li>
+      <li>Hai mục còn lại của #1441 (nhận diện loại máy cho các dòng Redmi Watch, Galaxy Book, Pixel Watch...; và kích thước bị nuốt khi đứng ngay sau quà tặng) chỉ là sửa code. Core làm sau bước 2.</li>
+    </ol>
+  </div>
+
+  <h2>4. #1430: máy cũ, like new kéo giá máy mới</h2>
+  <ul>
+    <li>Bộ chuẩn hoá có nhận ra tình trạng máy (mới, like new 99%, cũ, tân trang).</li>
+    <li>Nhưng bộ so khớp chỉ dùng thông tin này khi tạo sản phẩm mới. Listing máy cũ gắn vào sản phẩm máy mới đã có thì vẫn được tính như máy mới.</li>
+    <li>Phần tính giá không xét tình trạng máy. Vì vậy giá máy cũ có thể thành "giá thấp nhất" của máy mới và kéo theo cả radar khuyến mãi.</li>
+  </ul>
+  <div class="q"><strong>Phương án.</strong>
+    <ul>
+      <li>(A) Bỏ qua listing không phải máy mới ngay khi nhập. Chỉ sửa code, không đổi cấu trúc database. Máy cũ tạm vắng trên rate.vn.</li>
+      <li>(B) Thêm cột tình trạng máy vào listing (đổi cấu trúc database qua DOS-Me). Phần tính giá và radar bỏ qua máy cũ, và trang sản phẩm có thể hiện máy cũ thành một nhóm riêng.</li>
+      <li>(C) Vẫn gắn nhưng đánh dấu. Cần cùng cột như B, nên làm riêng thì không thêm được gì.</li>
+    </ul>
+    <span class="rec-line">Đề xuất: làm A ngay, rồi lên kế hoạch B như một migration DOS-Me.</span> Trước khi làm, phía DOS-Me / JOY đếm (chỉ đọc) số listing có dấu hiệu máy cũ trong tiêu đề.
+  </div>
+
+  <h2>5. #1491 (c) và (d): iPad Wi-Fi và 5G, MacBook nhiều mức RAM</h2>
+  <p>PR #1493 (đã merge) đã sửa phần (a) và (b) của #1491. Phần (c) và (d) thêm một chiều mới vào key, nên làm đổi chỗ gắn của listing iPad và MacBook đang có. Vì vậy hai phần này nằm ở đây, chưa sửa code.</p>
+
+  <h3>5.1 Vấn đề</h3>
+  <ul>
+    <li><strong>(c) iPad:</strong> bản Wi-Fi và bản 5G (Cellular) của cùng model và dung lượng chung một key. Bản 5G đắt hơn khoảng một phần ba, nên một sản phẩm trộn hai mức giá. Bộ kiểm chênh giá đọc thành khuyến mãi ảo, còn "giá từ" là giá bản Wi-Fi.</li>
+    <li><strong>(d) MacBook:</strong> các bản RAM của cùng model và SSD chung một key, ví dụ 24GB và 48GB cùng nằm dưới <code>macbook-pro-m5-pro-14:1024gb</code>. Giá chênh nhau 25-50%.</li>
+  </ul>
+
+  <h3>5.2 Cách thêm hậu tố đề xuất</h3>
+  <p>Bản cơ bản giữ nguyên key hiện tại, chỉ bản còn lại được thêm hậu tố. Sản phẩm có cả hai bản thì giữ key, chỉ mất listing của bản còn lại sang một sản phẩm mới. Sản phẩm <strong>chỉ có</strong> bản còn lại thì chuyển cả sang key có hậu tố, và bước chạy thử hiện nó thành một lần đổi tên (5.4).</p>
+  <div class="table-wrap">
+  <table>
+    <tr><th>Phần</th><th>Bản cơ bản (giữ key)</th><th>Bản còn lại (key mới)</th></tr>
+    <tr><td>(c)</td><td>Wi-Fi: <code>apple:ipad-air-m4-11:128gb</code></td><td>5G/Cellular: <code>apple:ipad-air-m4-11-5g:128gb</code></td></tr>
+    <tr><td>(d)</td><td>RAM cơ bản (16GB): <code>apple:macbook-air-m3-13:256gb</code></td><td>RAM khác (8GB): <code>apple:macbook-air-m3-13-8gb-ram:256gb</code></td></tr>
+  </table>
+  </div>
+  <ul>
+    <li><strong>(c)</strong> không cần bảng phụ. Tiêu đề ghi 5G, Cellular hoặc LTE thì thêm hậu tố, còn lại là Wi-Fi như hiện nay.</li>
+    <li><strong>(d)</strong> cần bảng RAM cơ bản cho từng model MacBook, tức là phải viết thêm code và dữ liệu. RAM cơ bản lấy theo thông số của sản phẩm tạo sẵn, để không sản phẩm nào mất chính các listing mà thông số của nó mô tả. Ví dụ sản phẩm tạo sẵn <code>apple:macbook-air-m3-13:256gb</code> là bản 16GB, nên 16GB giữ key, còn 8GB thêm hậu tố. Tiêu đề không ghi RAM thì giữ key cơ bản như hiện nay.</li>
+  </ul>
+
+  <h3>5.3 Key và listing bị ảnh hưởng (ước tính từ code và kho tiêu đề RS, chỉ số đếm)</h3>
+  <ul>
+    <li><strong>(c) iPad, 6 key đang trộn Wi-Fi với 5G:</strong> <code>apple:ipad-mini-7:128gb</code>, <code>apple:ipad-pro-m4-11:256gb</code>, <code>apple:ipad-pro-m4-11:unknown</code>, <code>apple:ipad-pro-m5-11:1024gb</code>, <code>apple:ipad-pro-m5-11:unknown</code> và <code>apple:ipad-air-m3-11:128gb</code>. Mỗi key giữ nguyên, chỉ mất các listing bản 5G sang sản phẩm <code>-5g</code>.</li>
+    <li><strong>(c) iPad, 8 key toàn tiêu đề 5G:</strong> sản phẩm mang một trong các key này chuyển cả sang key <code>-5g</code>, tức là một lần đổi tên theo cách hiểu của bước chạy thử.</li>
+    <li><strong>(d) MacBook, 1 key đang trộn RAM:</strong> <code>apple:macbook-air-m3-13:256gb</code> (8GB và 16GB). Bốn key khác chỉ có một mức RAM trong tiêu đề. Sản phẩm mang các key đó chỉ bị đổi tên nếu mức RAM ấy khác RAM cơ bản trong bảng.</li>
+    <li><strong>Sản phẩm tạo sẵn bị ảnh hưởng:</strong>
+      <ul>
+        <li><code>apple:ipad-pro-m5-11:256gb</code> (đã xuất bản) và <code>apple:ipad-pro-m4-11:256gb</code>, chỉ qua các listing bản 5G;</li>
+        <li><code>apple:macbook-air-m3-13:256gb</code>, qua các listing bản 8GB.</li>
+      </ul>
+    </li>
+    <li>Core không có quyền đọc database. Số liệu thật lấy từ bước chạy thử (5.4).</li>
+  </ul>
+
+  <h3>5.4 Bước chạy thử (PR #1456) liệt kê chúng thế nào</h3>
+  <p>Bước chạy thử chỉ đọc. Nó so key đang lưu của từng sản phẩm với key mà bộ chuẩn hoá sinh ra từ tiêu đề listing của chính sản phẩm đó. Để liệt kê (c) và (d):</p>
+  <ol>
+    <li>Build bộ chuẩn hoá từ nhánh có thêm hậu tố (chưa merge), rồi chỉ bước chạy thử vào bản build đó bằng <code>--normalizer &lt;đường dẫn&gt;</code>.</li>
+    <li>Sản phẩm mà <strong>phần lớn</strong> listing là bản còn lại (các key toàn 5G) sẽ hiện thành đề xuất chuyển sang key <code>-5g</code>, kèm số listing và số dòng lịch sử giá.</li>
+    <li>Sản phẩm mà <strong>phần lớn</strong> listing là bản cơ bản thì giữ key, nên bước chạy thử hiện tại chưa liệt kê phần thiểu số sẽ rời đi. Cần một phần mở rộng nhỏ, vẫn chỉ đọc, in ra cho từng sản phẩm các listing có key mới khác key cũ. Phần này chạy trước khi JOY quyết D5 và D6.</li>
+  </ol>
+  <p>Sau khi JOY đồng ý, bước sửa dữ liệu theo kiểu M0:</p>
+  <ul>
+    <li>tạo các sản phẩm mới;</li>
+    <li>chuyển listing của bản còn lại sang;</li>
+    <li>tính lại số liệu thị trường (giá, số chỗ bán) của cả hai sản phẩm;</li>
+    <li>kèm file kiểm tra, file hoàn tác và test chạy lại trên CI.</li>
+  </ul>
+  <p>Phần sửa bộ chuẩn hoá phát hành cùng đợt.</p>
+
+  <h2>6. JOY cần quyết</h2>
+  <div class="q"><strong>D1. Cách viết đồng hồ (#1407):</strong> A, B hay C. <span class="rec-line">Đề xuất A.</span></div>
+  <div class="q"><strong>D2. Chữ quà tặng trong key (#1441):</strong> duyệt bước đếm ngay, rồi bước sửa dữ liệu kiểu M0. <span class="rec-line">Đề xuất: đồng ý, vì key đã bắt đầu tách từ khi PR #1433 merge.</span></div>
+  <div class="q"><strong>D3. Máy cũ (#1430):</strong> A ngay rồi B sau, B ngay, hay để nguyên. <span class="rec-line">Đề xuất: A ngay, B sau.</span></div>
+  <div class="q"><strong>D4. Ai chạy các bước đếm:</strong> cần quyền đọc production, mà Core không có. <span class="rec-line">Đề xuất: phía DOS-Me chạy. Core soạn sẵn câu SQL trong PR đề xuất của từng bước sửa dữ liệu.</span> Áp dụng cả cho D5 và D6.</div>
+  <div class="q"><strong>D5. iPad Wi-Fi và 5G (#1491 c), làm hai bước.</strong>
+    <ul>
+      <li>Bây giờ: duyệt bước chạy thử chỉ đọc ở mục 5.4, dùng nhánh có hậu tố.</li>
+      <li>Sau đó, dựa trên số liệu: chọn thêm hậu tố như mục 5.2 (Wi-Fi giữ key, 5G thêm <code>-5g</code>), hay để chung một key.</li>
+    </ul>
+    <span class="rec-line">Đề xuất: thêm hậu tố.</span> Việc này quyết định đợt 1b của kế hoạch mở rộng danh mục.
+  </div>
+  <div class="q"><strong>D6. MacBook nhiều mức RAM (#1491 d), làm hai bước.</strong>
+    <ul>
+      <li>Bây giờ: Core viết bảng RAM cơ bản và test, để JOY xem từng mức RAM cơ bản, rồi bước chạy thử liệt kê các listing sẽ chuyển.</li>
+      <li>Sau đó: chọn thêm hậu tố hay để nguyên.</li>
+    </ul>
+    <span class="rec-line">Đề xuất: thêm hậu tố.</span>
+  </div>
+
+  <h2>7. Thứ tự</h2>
+  <ol>
+    <li>JOY quyết D1 đến D4, và duyệt bước đầu của D5 và D6.</li>
+    <li>Phía DOS-Me / JOY chạy các bước đếm chỉ đọc, gồm cả bước chạy thử ở 5.4. Sau đó JOY quyết bước thứ hai của D5 và D6.</li>
+    <li>Core soạn từng bước sửa dữ liệu, kèm file kiểm tra, hoàn tác và test CI, trong một PR đề xuất. PO duyệt PR; JOY áp dụng qua DOS-Me theo thứ tự preview, beta, rồi prod.</li>
+    <li>Cùng đợt đó, Core phát hành phần sửa code tương ứng, kèm so sánh key (chỉ số đếm).</li>
+    <li>RS cập nhật engine, chạy kiểm danh mục (audit-catalog), và kiểm không sản phẩm nào bị mất listing.</li>
+  </ol>
+</div>
+</body>
+</html>

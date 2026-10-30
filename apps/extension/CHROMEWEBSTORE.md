@@ -54,4 +54,6 @@ This table lists exactly what `manifest.json` requests; `test-extension-pipeline
 
 ## 4. Version History
 
+The release checklist and the store changelog for the next upload, in Vietnamese and English, are in [`RELEASE.md`](./RELEASE.md).
+
 - **2.0.0 (2026-10-14):** Complete Manifest V3 rewrite in TypeScript 7.0.2 featuring the Two-Speed Hybrid Lookup Pipeline, Shadow DOM Floating Trust Pill, Chrome Native Side Panel, Accessory Gatekeeper, Variant Disambiguation, Evidence-Based 5-Level Price Verdict, and Opt-In Quarantine Crowd Queue.

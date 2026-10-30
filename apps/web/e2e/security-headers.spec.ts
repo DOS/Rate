@@ -57,6 +57,13 @@ for (const path of ['/inspect', '/smartphones']) {
       const policy = res.headers()['content-security-policy-report-only'] ?? '';
       const nonce = policy.match(/script-src [^;]*'nonce-([^']+)'/)?.[1];
       expect(nonce).toBeTruthy();
+      // The measured inline-script policy rides in the same header, after the
+      // nonce one, so the nonce above is still the first script-src
+      // (DOS/Rate#1323).
+      expect(policy.split(', ')).toHaveLength(2);
+      expect(policy).toMatch(
+        /, script-src 'self' 'unsafe-inline'; worker-src 'self' blob:; report-uri \/api\/csp-report\?policy=inline$/
+      );
       const html = await res.text();
       const attrs = [...html.matchAll(/<script[^>]* nonce="([^"]+)"/g)].map(
         (m) => m[1]

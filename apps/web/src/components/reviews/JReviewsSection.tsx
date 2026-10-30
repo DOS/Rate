@@ -3,6 +3,7 @@
 import React, { useEffect, useId, useMemo, useState } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
 import ExportMenu from '@/components/elementary/ExportMenu';
+import PhoneCollapsible from '@/components/product/PhoneCollapsible';
 import {
   BsBarChart,
   BsCheckCircle,
@@ -1532,7 +1533,16 @@ export default function JReviewsSection({
           <p className="text-muted mb-0">{t('noMatchingReviews')}</p>
         </div>
       ) : (
-        <div className="row g-3">
+        // Phones show the first three reviews until the reader expands the
+        // rest; all stay in the HTML (DOS/Rate#1469).
+        <PhoneCollapsible
+          className="row g-3"
+          showMoreLabel={t('reviewsShowMore', {
+            count: filteredAndSortedReviews.length - 3,
+          })}
+          showLessLabel={t('reviewsShowLess')}
+          collapsible={filteredAndSortedReviews.length > 3}
+        >
           {filteredAndSortedReviews.map((rev) => {
             const flagMeta =
               flagMetaMap[reviewBadgeKind(rev)] || flagMetaMap.authentic;
@@ -1627,18 +1637,6 @@ export default function JReviewsSection({
                           ),
                         })}
                       </span>
-                      {/* The 6-axis trust model is a separate estimate with its
-                          own weight, so it gets its own labelled badge rather
-                          than explaining the rating weight (DOS/Rate#596). */}
-                      <span
-                        className="badge rounded-pill small bg-light text-muted border"
-                        title={weightExplanation}
-                        data-testid="review-6axis-breakdown"
-                      >
-                        {t('trustModelBadge', {
-                          explanation: weightExplanation,
-                        })}
-                      </span>
                     </div>
 
                     {rev.variation && (
@@ -1689,6 +1687,21 @@ export default function JReviewsSection({
                         <AnalyzerText text={rev.reason} />
                       </div>
                     )}
+
+                    {/* The 6-factor model's estimate is a reference, not the
+                        weight the rating uses, so it is folded and says so;
+                        the card shows one weight (DOS/Rate#1471, #596). */}
+                    <details className="small text-secondary mb-2">
+                      <summary>{t('weightWhySummary')}</summary>
+                      <p
+                        className="mb-0 mt-1"
+                        data-testid="review-6axis-breakdown"
+                      >
+                        {t('trustModelBadge', {
+                          explanation: weightExplanation,
+                        })}
+                      </p>
+                    </details>
                   </div>
 
                   {/* Bottom Row: JReviews Vote Bar (Helpful Up / Down / Report) */}
@@ -1757,7 +1770,7 @@ export default function JReviewsSection({
               </div>
             );
           })}
-        </div>
+        </PhoneCollapsible>
       )}
     </div>
   );

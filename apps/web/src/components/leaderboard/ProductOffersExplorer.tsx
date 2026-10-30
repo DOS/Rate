@@ -49,6 +49,15 @@ export function computeMerchantTrustScore(riskScore: unknown): number {
   return 100 - clampedRisk;
 }
 
+/**
+ * An offer seller's trust, or null when the seller has no score at all: no
+ * DOSafe score and no stored review score (DOS/Rate#1484). Never 100 from no data.
+ */
+export function offerTrustScore(riskScore: unknown): number | null {
+  if (riskScore == null || riskScore === '') return null;
+  return computeMerchantTrustScore(riskScore);
+}
+
 export function sanitizeOfferRiskScore100(value: unknown): number {
   const num = typeof value === 'number' ? value : Number(value);
   if (!Number.isFinite(num) || num <= 0) return 0;
@@ -210,8 +219,8 @@ export default function ProductOffersExplorer({
       if (officialOnly && !o.merchant.is_official) {
         return false;
       }
-      const trustScore = computeMerchantTrustScore(o.merchant.risk_score);
-      if (highTrustOnly && trustScore < 80) {
+      const trustScore = offerTrustScore(o.merchant.risk_score);
+      if (highTrustOnly && (trustScore == null || trustScore < 80)) {
         return false;
       }
       return true;
@@ -225,8 +234,9 @@ export default function ProductOffersExplorer({
       const implausibleA = implausibleOfferIds.has(a.id) ? 1 : 0;
       const implausibleB = implausibleOfferIds.has(b.id) ? 1 : 0;
       if (implausibleA !== implausibleB) return implausibleA - implausibleB;
-      const trustA = computeMerchantTrustScore(a.merchant.risk_score);
-      const trustB = computeMerchantTrustScore(b.merchant.risk_score);
+      // A seller with no score sorts after every scored one (DOS/Rate#1484).
+      const trustA = offerTrustScore(a.merchant.risk_score) ?? -1;
+      const trustB = offerTrustScore(b.merchant.risk_score) ?? -1;
       const discA =
         a.price_original && a.price_original > a.price_current
           ? (a.price_original - a.price_current) / a.price_original
@@ -268,7 +278,7 @@ export default function ProductOffersExplorer({
     ];
     const sep = headers.map(() => '---');
     const rows = filteredOffers.map((o) => {
-      const trust = computeMerchantTrustScore(o.merchant.risk_score);
+      const trust = offerTrustScore(o.merchant.risk_score);
       const analysis = byOffer[o.id];
       const hasValidOrig =
         o.price_original != null &&
@@ -284,7 +294,7 @@ export default function ProductOffersExplorer({
         sanitizeOffersMarkdownCell(o.platform.toUpperCase()),
         sanitizeOffersMarkdownCell(o.merchant.name),
         o.merchant.is_official ? 'Yes' : 'No',
-        `${trust}%`,
+        trust == null ? t('offersTrustBadgeNoData') : `${trust}%`,
         `${o.price_current.toLocaleString('vi-VN')} ₫`,
         hasValidOrig ? `${o.price_original!.toLocaleString('vi-VN')} ₫` : '-',
         sanitizeOffersMarkdownCell(verdictCell),
@@ -347,7 +357,7 @@ export default function ProductOffersExplorer({
       ...(radarSignal ? RADAR_CSV_HEADERS : []),
     ];
     const rows = filteredOffers.map((o) => {
-      const trust = computeMerchantTrustScore(o.merchant.risk_score);
+      const trust = offerTrustScore(o.merchant.risk_score);
       const analysis = byOffer[o.id];
       const hasValidOrig =
         o.price_original != null &&
@@ -359,7 +369,7 @@ export default function ProductOffersExplorer({
         o.platform,
         o.merchant.name,
         o.merchant.is_official ? 'true' : 'false',
-        String(trust),
+        trust == null ? '' : String(trust),
         offerRiskScoreCsvCell(o.merchant.dosafe_risk_score),
         offerRiskScoreCsvCell(o.merchant.risk_score),
         hasReviewRiskEvidence(o.merchant.review_risk_breakdown)
@@ -425,7 +435,7 @@ export default function ProductOffersExplorer({
           platform: o.platform,
           merchantName: o.merchant.name,
           isOfficialMall: o.merchant.is_official,
-          trustScorePercent: computeMerchantTrustScore(o.merchant.risk_score),
+          trustScorePercent: offerTrustScore(o.merchant.risk_score),
           priceCurrentVnd: o.price_current,
           priceOriginalVnd: hasValidOrig ? o.price_original : null,
           verdict: implausibleOfferIds.has(o.id)
@@ -651,18 +661,22 @@ export default function ProductOffersExplorer({
                   Number(offer.price_original) <= MAX_VALID_VND_PRICE
                     ? formatPriceVnd(offer.price_original, locale)
                     : null;
-                const trustScore = computeMerchantTrustScore(
-                  offer.merchant.risk_score
-                );
+                const trustScore = offerTrustScore(offer.merchant.risk_score);
                 const safeOfferUrl = isSafeExternalOfferUrl(offer.url)
                   ? offer.url.trim()
                   : null;
                 const trustBadgeClass =
-                  trustScore >= 80
-                    ? 'bg-success-subtle text-success'
-                    : trustScore >= 50
-                      ? 'bg-warning-subtle text-warning-emphasis'
-                      : 'bg-danger-subtle text-danger';
+                  trustScore == null
+                    ? 'bg-light text-muted border'
+                    : trustScore >= 80
+                      ? 'bg-success-subtle text-success'
+                      : trustScore >= 50
+                        ? 'bg-warning-subtle text-warning-emphasis'
+                        : 'bg-danger-subtle text-danger';
+                const trustBadgeText =
+                  trustScore == null
+                    ? t('offersTrustBadgeNoData')
+                    : t('offersTrustBadge', { score: trustScore });
 
                 const discountAnalysis = byOffer[offer.id];
                 const discountBadgeClass =
@@ -752,11 +766,11 @@ export default function ProductOffersExplorer({
                               className={`badge ${trustBadgeClass} text-decoration-none small`}
                               title={t('offersMerchantTrustTitle')}
                             >
-                              {t('offersTrustBadge', { score: trustScore })} ↗
+                              {trustBadgeText} ↗
                             </Link>
                           ) : (
                             <span className={`badge ${trustBadgeClass} small`}>
-                              {t('offersTrustBadge', { score: trustScore })}
+                              {trustBadgeText}
                             </span>
                           )}
                         </div>

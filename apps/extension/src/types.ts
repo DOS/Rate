@@ -84,7 +84,8 @@ export interface ExtensionOfferItem {
     id: string;
     name: string;
     is_official: boolean;
-    risk_score: number;
+    /** Null for a seller with no DOSafe score and no stored review score (DOS/Rate#1484). */
+    risk_score: number | null;
     /** `null` when the seller has no stored score (DOS/Rate#1099). */
     dosafe_risk_score: number | null;
     review_risk_score: number | null;
@@ -142,9 +143,11 @@ export interface ExtensionLookupData {
     id: string;
     name: string;
     is_official: boolean;
-    trust_score: number;
-    risk_score: number;
-    dosafe_risk_score: number;
+    /** Null for a store with neither a DOSafe score nor analysed reviews (DOS/Rate#1484). */
+    trust_score: number | null;
+    risk_score: number | null;
+    /** Null when no DOSafe score is known (DOS/Rate#1465). */
+    dosafe_risk_score: number | null;
     /** Null when the store has no analysed review (DOS/Rate#1258). */
     review_risk_score: number | null;
   } | null;
@@ -236,6 +239,7 @@ declare global {
     runtime: {
       id: string;
       getURL: (path: string) => string;
+      getManifest: () => { version: string };
       sendMessage: <T = unknown>(message: unknown) => Promise<T>;
       onMessage: {
         addListener: (

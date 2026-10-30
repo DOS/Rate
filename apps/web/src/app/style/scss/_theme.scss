@@ -1,0 +1,503 @@
+// Light and dark theme (DOS/Rate#1435). The theme script in <head> always sets
+// data-bs-theme on <html> before the first paint (src/lib/theme.ts), so every
+// rule here keys off that attribute. `:root[data-bs-theme]` (0,2,0) outranks
+// the light tokens on `:root` in _custom.scss and Bootstrap's own color-mode
+// blocks; the element rules below add the attribute for the same reason.
+// The light-ground rules match `:not([data-bs-theme='dark'])`, so a visitor
+// without JavaScript (no attribute) gets one consistent light page
+// (DOS/Rate#1461).
+
+// The obsidian palette, also used by .rate-surface-dark in _custom.scss.
+@mixin rate-dark-tokens {
+  --rate-bg-canvas: #0b0d11;
+  --rate-bg-surface: #12161f;
+  --rate-bg-elevated: #181d29;
+  --rate-border-subtle: rgba(255, 255, 255, 0.08);
+  --rate-border-strong: rgba(255, 255, 255, 0.16);
+  --rate-input-border: #6b7586;
+  --rate-input-bg: #181d29;
+  --rate-fg-primary: #f8fafc;
+  --rate-fg-secondary: #a3b0c2;
+  --rate-fg-muted: #8b97a8;
+  --rate-fg-paragraph: #cbd5e1;
+  --rate-brand-bg: rgba(216, 48, 48, 0.14);
+  --rate-glass-bg: rgba(255, 255, 255, 0.05);
+  --rate-glass-border: rgba(255, 255, 255, 0.12);
+  --rate-ink-expert: #a5b4fc;
+  --rate-score-user-bg: rgba(45, 186, 105, 0.14);
+  --rate-score-expert-bg: rgba(99, 102, 241, 0.14);
+  --rate-score-star-bg: rgba(245, 158, 11, 0.14);
+  --rate-risk-danger-bg: rgba(244, 63, 94, 0.14);
+  --rate-status-good-fg: #4ade80;
+  --rate-status-good-bg: rgba(34, 197, 94, 0.14);
+  --rate-status-warn-fg: #fbbf24;
+  --rate-status-warn-bg: rgba(245, 158, 11, 0.14);
+  --rate-status-bad-fg: #fca5a5;
+  --rate-status-bad-bg: rgba(239, 68, 68, 0.16);
+  // #d83030 is only ~3.8:1 on #12161f; the hero highlight color reads ~6.5:1
+  --rate-crimson-text: #ff6b6b;
+  --rate-focus-ring: #ff6b6b;
+  // Light inks on obsidian (all at least 6:1 on #181d29)
+  --rate-ink-primary: #ff6b6b;
+  --rate-ink-success: #34d399;
+  --rate-ink-danger: #ff6b6b;
+  --rate-ink-secondary: #a3b0c2;
+  --rate-ink-warning: #ffc107;
+  --rate-ink-info: #0dcaf0;
+  --bs-code-color: #a5b4fc;
+  --headingColor: #f8fafc;
+  // Element rules in style.scss read these Bootstrap/template variables
+  --paragraphColor: #cbd5e1;
+  --bs-body-color: #f8fafc;
+  --bs-body-color-rgb: 248, 250, 252;
+  --bs-link-color: #f8fafc;
+  --bs-link-color-rgb: 248, 250, 252;
+  --bs-link-hover-color: #ff6b6b;
+  --bs-link-hover-color-rgb: 255, 107, 107;
+}
+
+:root[data-bs-theme='dark'] {
+  @include rate-dark-tokens;
+  color-scheme: dark;
+  // The page canvas and Bootstrap's own surfaces (cards, tables, forms,
+  // dropdowns, list groups) read these.
+  --bs-body-bg: #0b0d11;
+  --bs-body-bg-rgb: 11, 13, 17;
+  --bs-card-bg: #12161f;
+  --bs-secondary-bg: #181d29;
+  --bs-secondary-bg-rgb: 24, 29, 41;
+  --bs-tertiary-bg: #12161f;
+  --bs-tertiary-bg-rgb: 18, 22, 31;
+  --bs-emphasis-color: #ffffff;
+  --bs-secondary-color: #a3b0c2;
+  --bs-heading-color: #f8fafc;
+  --bs-dark-text: #f8fafc;
+  --bs-muted: #a3b0c2;
+  --bs-muted-2: #8b97a8;
+  --bs-nav-color: #f8fafc;
+  --bs-form-color: #f8fafc;
+  --bs-border-color: rgba(255, 255, 255, 0.12);
+  --bs-border-color-translucent: rgba(255, 255, 255, 0.1);
+  --bs-highlight-color: #f8fafc;
+  --bs-highlight-bg: rgba(245, 158, 11, 0.25);
+  --bs-primary-bg-subtle: rgba(216, 48, 48, 0.16);
+  --bs-primary-border-subtle: rgba(216, 48, 48, 0.35);
+  --bs-danger-bg-subtle: rgba(216, 48, 48, 0.16);
+  --bs-primary-text-emphasis: #ff8a8a;
+  --bs-light-gray: rgba(255, 255, 255, 0.12);
+}
+
+:root:not([data-bs-theme='dark']) {
+  color-scheme: light;
+}
+
+// Bootstrap's fixed-color utilities ignore color modes: on the dark theme
+// they take the obsidian surfaces and light ink.
+:root[data-bs-theme='dark'] {
+  .bg-white:not([class*='bg-opacity-']),
+  .text-bg-light {
+    background-color: var(--rate-bg-surface) !important;
+  }
+
+  .bg-light:not([class*='bg-opacity-']) {
+    background-color: var(--rate-bg-elevated) !important;
+  }
+
+  .text-dark,
+  .text-body,
+  .text-black,
+  .link-dark,
+  .text-bg-light {
+    color: var(--rate-fg-primary) !important;
+  }
+
+  .text-muted,
+  .text-body-secondary,
+  .text-black-50 {
+    color: var(--rate-fg-secondary) !important;
+  }
+
+  .border,
+  .border-top,
+  .border-bottom,
+  .border-start,
+  .border-end,
+  .border-light {
+    border-color: var(--rate-border-subtle) !important;
+  }
+
+  .card,
+  .list-group-item,
+  .dropdown-menu,
+  .modal-content,
+  .offcanvas {
+    background-color: var(--rate-bg-surface);
+    color: var(--rate-fg-primary);
+    border-color: var(--rate-border-subtle);
+  }
+
+  .table {
+    --bs-table-bg: transparent;
+    --bs-table-color: var(--rate-fg-primary);
+    --bs-table-striped-bg: rgba(255, 255, 255, 0.03);
+    --bs-table-hover-bg: rgba(255, 255, 255, 0.05);
+    --bs-table-border-color: var(--rate-border-subtle);
+  }
+
+  .table-light {
+    --bs-table-bg: var(--rate-bg-elevated);
+    --bs-table-color: var(--rate-fg-primary);
+  }
+
+  .form-control,
+  .form-select {
+    background-color: var(--rate-bg-elevated);
+    color: var(--rate-fg-primary);
+    border-color: var(--rate-input-border);
+
+    &::placeholder {
+      color: var(--rate-fg-muted);
+    }
+  }
+
+  .btn-light {
+    --bs-btn-bg: var(--rate-bg-elevated);
+    --bs-btn-color: var(--rate-fg-primary);
+    --bs-btn-border-color: var(--rate-border-strong);
+    --bs-btn-hover-bg: #232a3a;
+    --bs-btn-hover-color: #ffffff;
+  }
+
+  .btn-outline-dark {
+    --bs-btn-color: var(--rate-fg-primary);
+    --bs-btn-border-color: var(--rate-border-strong);
+    --bs-btn-hover-bg: var(--rate-fg-primary);
+    --bs-btn-hover-color: var(--rate-bg-canvas);
+    color: var(--rate-fg-primary);
+    border-color: var(--rate-border-strong);
+
+    &:hover,
+    &:focus-visible,
+    &:active {
+      color: var(--rate-bg-canvas);
+      background-color: var(--rate-fg-primary);
+      border-color: var(--rate-fg-primary);
+    }
+  }
+
+  // A dark pill (the active filter) on the dark canvas inverts, so it still
+  // stands out.
+  .btn-dark,
+  .badge.bg-dark,
+  .text-bg-dark {
+    --bs-btn-bg: #f1f5f9;
+    --bs-btn-color: #0b0d11;
+    --bs-btn-border-color: #f1f5f9;
+    --bs-btn-hover-bg: #ffffff;
+    --bs-btn-hover-color: #0b0d11;
+    --bs-btn-active-bg: #ffffff;
+    --bs-btn-active-color: #0b0d11;
+    background-color: #f1f5f9 !important;
+    color: #0b0d11 !important;
+    --rate-ink-primary: #b42828;
+    --rate-ink-success: #146c43;
+    --rate-ink-danger: #b02a37;
+    --rate-ink-secondary: #545b62;
+    --rate-ink-warning: #7a5000;
+    --rate-ink-info: #0a6c7d;
+  }
+
+  // The brand red reads ~4:1 on obsidian; outlined red text takes the light
+  // crimson ink (6.5:1).
+  .btn-outline-primary,
+  .btn-outline-danger {
+    --bs-btn-color: var(--rate-crimson-text);
+    --bs-btn-border-color: var(--rate-crimson-text);
+    color: var(--rate-crimson-text);
+    border-color: var(--rate-crimson-text);
+
+    &:hover,
+    &:focus-visible,
+    &:active {
+      color: #ffffff;
+      background-color: var(--rate-brand);
+      border-color: var(--rate-brand);
+    }
+  }
+
+  // Light islands on obsidian grounds (_custom.scss) are dark on the dark
+  // theme, so their inks go back to the light ones.
+  :is(.rate-surface-dark, .rate-scoreboard-dark, .rate-ink-on-dark, .bg-dark)
+    :is(.bg-white, .bg-light):not([class*='bg-opacity']),
+  .rate-ink-on-dark :is(.card, .dropdown-menu):not(.bg-dark, .text-bg-dark) {
+    --rate-ink-primary: #ff6b6b;
+    --rate-ink-success: #34d399;
+    --rate-ink-danger: #ff6b6b;
+    --rate-ink-secondary: #a3b0c2;
+    --rate-ink-warning: #ffc107;
+    --rate-ink-info: #0dcaf0;
+    --bs-code-color: #a5b4fc;
+  }
+
+  // Dark ink on a light fill (yellow badges and buttons) stays dark.
+  :is(
+    .bg-warning,
+    .btn-warning,
+    .text-bg-warning,
+    .bg-info,
+    .text-bg-info
+  ).text-dark,
+  :is(.bg-warning, .btn-warning, .text-bg-warning, .bg-info, .text-bg-info)
+    .text-dark {
+    color: #0f172a !important;
+  }
+
+  .bg-primary-subtle,
+  .bg-danger-subtle {
+    background-color: rgba(216, 48, 48, 0.16) !important;
+  }
+
+  .bg-success-subtle {
+    background-color: rgba(34, 197, 94, 0.14) !important;
+  }
+
+  .bg-warning-subtle {
+    background-color: rgba(245, 158, 11, 0.14) !important;
+  }
+
+  .bg-info-subtle {
+    background-color: rgba(13, 202, 240, 0.12) !important;
+  }
+
+  .bg-secondary-subtle {
+    background-color: rgba(148, 163, 184, 0.14) !important;
+  }
+
+  // Device and store photos are drawn for a white page: they keep a light
+  // tile on the dark theme.
+  .rate-product-card-media-link img,
+  .rate-pdv-media img {
+    mix-blend-mode: normal;
+    background-color: #ffffff;
+    border-radius: 0.5rem;
+  }
+}
+
+// Theme toggle: three icon buttons; the phone menu shows their names.
+.rate-theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--rate-border-strong);
+  border-radius: var(--rate-radius-btn);
+}
+
+.rate-theme-toggle-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  min-width: 32px;
+  min-height: 32px;
+  padding: 0 0.5rem;
+  border: 0;
+  border-radius: calc(var(--rate-radius-btn) - 2px);
+  background: transparent;
+  color: var(--rate-fg-secondary);
+  font-size: var(--rate-text-min);
+  font-weight: 600;
+  line-height: 1;
+
+  &:hover {
+    color: var(--rate-fg-primary);
+  }
+
+  &.is-active {
+    background: var(--rate-bg-elevated);
+    color: var(--rate-fg-primary);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--rate-focus-ring);
+    outline-offset: 1px;
+  }
+}
+
+@media (max-width: 991.98px) {
+  .rate-theme-toggle-btn {
+    min-height: 44px;
+    padding: 0 0.75rem;
+  }
+}
+
+// Desktop navbar: one icon button that cycles the choice.
+.rate-theme-cycle {
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid var(--rate-border-strong);
+  border-radius: var(--rate-radius-btn);
+  background: transparent;
+  color: var(--rate-fg-primary);
+
+  &:hover {
+    background: var(--rate-bg-elevated);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--rate-focus-ring);
+    outline-offset: 1px;
+  }
+}
+
+// The light palette of :root in _custom.scss, for obsidian sections that turn
+// light on the light theme.
+@mixin rate-light-tokens {
+  --rate-bg-canvas: #f8fafc;
+  --rate-bg-surface: #ffffff;
+  --rate-bg-elevated: #f1f5f9;
+  --rate-border-subtle: #e2e8f0;
+  --rate-border-strong: #cbd5e1;
+  --rate-input-border: #868e9c;
+  --rate-fg-primary: #0f172a;
+  --rate-fg-secondary: #475569;
+  --rate-fg-muted: #64748b;
+  --rate-fg-paragraph: #334155;
+  --rate-brand-bg: #fff1f2;
+  --rate-glass-bg: rgba(255, 255, 255, 0.75);
+  --rate-glass-border: #e2e8f0;
+  --rate-score-user-bg: #ecfdf5;
+  --rate-score-expert-bg: #eef2ff;
+  --rate-score-star-bg: #fffbeb;
+  --rate-risk-danger-bg: #fff1f2;
+  --rate-crimson-text: #d83030;
+  --rate-focus-ring: #d83030;
+  --rate-ink-primary: #b42828;
+  --rate-ink-success: #146c43;
+  --rate-ink-danger: #b02a37;
+  --rate-ink-secondary: #545b62;
+  --rate-ink-warning: #7a5000;
+  --rate-ink-info: #0a6c7d;
+  --rate-ink-expert: #4f46e5;
+  --bs-code-color: #4f46e5;
+  --headingColor: #0f172a;
+  --paragraphColor: #334155;
+  --bs-body-color: #0f172a;
+  --bs-body-color-rgb: 15, 23, 42;
+  --bs-link-color: #0f172a;
+  --bs-link-color-rgb: 15, 23, 42;
+  --bs-link-hover-color: #d83030;
+  --bs-link-hover-color-rgb: 216, 48, 48;
+}
+
+// Light theme: the obsidian heroes, scoreboards and banners take the light
+// palette and a light ground. Their inline dark gradients need !important.
+:root:not([data-bs-theme='dark'])
+  :is(.rate-surface-dark, .rate-scoreboard-dark, .rate-ink-on-dark) {
+  @include rate-light-tokens;
+  background: var(--rate-bg-elevated) !important;
+  color: var(--rate-fg-primary);
+  border-color: var(--rate-border-subtle);
+
+  // A .bg-dark chip or block stays dark, so its white text stays too.
+  .text-white:not(.btn, .badge, .bg-dark, .bg-dark *),
+  .text-light:not(.btn, .badge, .bg-dark, .bg-dark *) {
+    color: var(--rate-fg-primary) !important;
+  }
+
+  .text-white-50:not(.bg-dark, .bg-dark *) {
+    color: var(--rate-fg-secondary) !important;
+  }
+
+  .border-light,
+  .border-white {
+    border-color: var(--rate-border-subtle) !important;
+  }
+}
+
+// Outline-light buttons are made for dark grounds: on the ones that turn
+// light here they take dark ink. A .bg-dark block stays dark and keeps them.
+:root:not([data-bs-theme='dark'])
+  :is(.rate-surface-dark, .rate-scoreboard-dark, .rate-ink-on-dark)
+  .btn-outline-light:not(.bg-dark .btn-outline-light) {
+  --bs-btn-color: var(--rate-fg-primary);
+  --bs-btn-border-color: var(--rate-border-strong);
+  --bs-btn-hover-bg: var(--rate-fg-primary);
+  --bs-btn-hover-color: #ffffff;
+  --bs-btn-hover-border-color: var(--rate-fg-primary);
+  color: var(--rate-fg-primary);
+  border-color: var(--rate-border-strong);
+
+  &:hover,
+  &:focus-visible,
+  &:active {
+    color: #ffffff;
+    background-color: var(--rate-fg-primary);
+    border-color: var(--rate-fg-primary);
+  }
+}
+
+// The site footer follows the theme too (DOS/Rate#1461): the design docs
+// keep only the homepage hero, the scoreboards and the extension panel
+// obsidian, and those follow the theme since #1435.
+:root:not([data-bs-theme='dark']) footer.skin-dark-footer {
+  background: var(--rate-bg-elevated);
+  border-top: 1px solid var(--rate-border-subtle);
+
+  .rate-wordmark-light {
+    color: var(--rate-fg-primary);
+  }
+
+  .footer-widget .widget-title {
+    color: var(--rate-fg-primary);
+  }
+
+  .footer-widget ul li a,
+  .footer-widget .footerText p,
+  .contactInfowrap .singleinfo .caps .title,
+  .contactInfowrap .singleinfo .caps .subs {
+    color: var(--rate-fg-secondary);
+  }
+
+  .footer-widget ul li a:hover,
+  .footer-widget ul li a:focus {
+    color: var(--rate-fg-primary);
+  }
+
+  .contactInfowrap .singleinfo .icons {
+    background: rgba(15, 23, 42, 0.05);
+    color: var(--rate-ink-primary);
+  }
+
+  .footer-widget .footerSocialwrap .footersocial li .social-link {
+    background-color: var(--rate-bg-surface);
+    color: var(--rate-fg-primary);
+
+    &:hover,
+    &:focus,
+    &:active {
+      background-color: var(--rate-fg-primary);
+      border-color: var(--rate-fg-primary);
+      color: #ffffff;
+    }
+  }
+}
+
+// Page heroes keep a soft brand wash instead of the dark gradient.
+:root:not([data-bs-theme='dark'])
+  :is(.hero-header, .hero-banner).rate-ink-on-dark {
+  background:
+    radial-gradient(
+      circle at 20% 20%,
+      rgba(216, 48, 48, 0.08),
+      transparent 45%
+    ),
+    radial-gradient(
+      circle at 80% 15%,
+      rgba(99, 102, 241, 0.07),
+      transparent 42%
+    ),
+    var(--rate-bg-elevated) !important;
+}

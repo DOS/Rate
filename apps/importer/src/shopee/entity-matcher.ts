@@ -16,7 +16,7 @@ import {
 import { applyCategorySpecTemplate } from '@repo/shared-data/rules';
 import { AiSpecEnricher, mergeProductSpecifications } from './ai-spec-enricher.js';
 import { mergeKeySpecs } from './jobs/backfill-specs.js';
-import { createImporterLogger } from './logger.js';
+import { createImporterLogger, errorDetail } from './logger.js';
 import { resolveItemModelMode, type ItemModelMode } from './item-model-flag.js';
 import type { RateSupabaseClient } from './types.js';
 
@@ -72,16 +72,6 @@ export function sanitizeMatcherEntityId(raw: unknown, maxLen = 128): string {
     return '';
   }
   return trimmed;
-}
-
-function isStrictBoolean(val: unknown): boolean {
-  if (typeof val === 'boolean') return val;
-  if (typeof val === 'number') return val === 1;
-  if (typeof val === 'string') {
-    const lower = val.trim().toLowerCase();
-    return lower === 'true' || lower === '1';
-  }
-  return false;
 }
 
 /** A known boolean, or null when the value says nothing (DOS/Rate#1196). */
@@ -445,7 +435,9 @@ export class EntityMatcher {
       .eq(column, value)
       .maybeSingle();
     if (error) {
-      throw new Error(`[EntityMatcher] Item lookup by ${column} failed: ${error.message}`);
+      throw new Error(
+        `[EntityMatcher] Item lookup by ${column} ${value} failed${errorDetail(error)}`
+      );
     }
     const row = data as { id?: unknown; item_key?: unknown } | null;
     const id = sanitizeMatcherEntityId(row?.id, 128);
@@ -468,7 +460,9 @@ export class EntityMatcher {
     });
     // As in Tier 2: an RPC failure aborts instead of seeding a duplicate Item.
     if (error) {
-      throw new Error(`[EntityMatcher] Item Tier 2 fuzzy match failed: ${error.message}`);
+      throw new Error(
+        `[EntityMatcher] Item Tier 2 fuzzy match failed (model_key ${candidate.model_key})${errorDetail(error)}`
+      );
     }
     const rows = Array.isArray(data)
       ? data.filter(m => {
@@ -903,7 +897,9 @@ export class EntityMatcher {
     }
 
     if (createErr) {
-      throw new Error(`Failed to create master product: ${createErr.message}`);
+      throw new Error(
+        `Failed to create master product (model_key ${candidate.model_key})${errorDetail(createErr)}`
+      );
     }
     if (Array.isArray(createdRows) && createdRows.length > 0) {
       const createdMaster = createdRows[0];
@@ -923,7 +919,9 @@ export class EntityMatcher {
       .eq('model_key', candidate.model_key)
       .maybeSingle();
     if (winnerErr || !winner) {
-      throw new Error(`Master product race lost and winner fetch failed: ${winnerErr?.message}`);
+      throw new Error(
+        `Master product race lost and winner fetch failed (model_key ${candidate.model_key})${errorDetail(winnerErr)}`
+      );
     }
     logger.info(
       'entity_match.tier3_race_winner',
@@ -1067,10 +1065,9 @@ export class EntityMatcher {
               toBoundedPositiveNumber(aiResult.screen_size_inch, MAX_SCREEN_SIZE_INCH),
             battery_mah:
               existingBatteryMah ?? toBoundedPositiveInt(aiResult.battery_mah, MAX_BATTERY_MAH),
-            // Unknown stays null rather than false (DOS/Rate#1196).
-            has_5g: isStrictBoolean(row.has_5g)
-              ? true
-              : (toBooleanOrNull(aiResult.has_5g) ?? toBooleanOrNull(row.has_5g)),
+            // Unknown stays null rather than false (DOS/Rate#1196). A stored answer wins
+            // like the other columns: the AI only fills a null (DOS/Rate#1451).
+            has_5g: toBooleanOrNull(row.has_5g) ?? toBooleanOrNull(aiResult.has_5g),
             specifications: mergedSpecifications,
             key_specs: mergedKeySpecs,
             updated_at: new Date().toISOString(),

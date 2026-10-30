@@ -32,6 +32,8 @@ import {
   renderOffersCardHtml,
   renderReviewCardHtml,
   type PanelActionLink,
+  riskScoreText,
+  trustText,
 } from './panel-view.js';
 import { verdictTexts } from '../verdict-display.js';
 
@@ -223,19 +225,14 @@ interface MerchantTrustFeedItem {
   name: string;
   slug: string | null;
   is_official: boolean;
-  dosafe_risk_score: number;
+  /** Null when no DOSafe score is known (DOS/Rate#1465). */
+  dosafe_risk_score: number | null;
   /** Null when the store has no analysed review (DOS/Rate#1258). */
   review_risk_score: number | null;
-  risk_score: number;
-  trust_score: number;
+  /** Null for a store with neither a DOSafe score nor analysed reviews (DOS/Rate#1484). */
+  risk_score: number | null;
+  trust_score: number | null;
   product_count: number;
-}
-
-// A store with no analysed review has no review risk score (DOS/Rate#1258).
-function reviewRiskText(score: number | null | undefined): string {
-  return score == null
-    ? t('reviewRiskNoData')
-    : formatSafeNumber(score, { min: 0, max: 100 });
 }
 
 async function fetchAndRenderMerchantTrustDirectory(
@@ -266,7 +263,11 @@ async function fetchAndRenderMerchantTrustDirectory(
           b.platform.toLowerCase() === platform.toLowerCase() ? 1 : 0;
         if (aMatch !== bMatch) return bMatch - aMatch;
       }
-      return b.trust_score - a.trust_score || b.product_count - a.product_count;
+      // A store with no trust score sorts last (DOS/Rate#1484).
+      return (
+        (b.trust_score ?? -1) - (a.trust_score ?? -1) ||
+        b.product_count - a.product_count
+      );
     });
 
     slot.innerHTML = `
@@ -280,13 +281,15 @@ async function fetchAndRenderMerchantTrustDirectory(
               `/merchants/${encodeURIComponent(m.slug || m.id)}`,
               '/merchants'
             );
-            const trustScoreNum = Number(m.trust_score);
+            const trustScoreNum = m.trust_score;
             const trustColor =
-              trustScoreNum >= 85
-                ? '#34d399'
-                : trustScoreNum >= 65
-                  ? '#fbbf24'
-                  : '#f87171';
+              trustScoreNum == null
+                ? '#9ca3af'
+                : trustScoreNum >= 85
+                  ? '#34d399'
+                  : trustScoreNum >= 65
+                    ? '#fbbf24'
+                    : '#f87171';
             return `
               <div class="offer-item">
                 <div>
@@ -297,11 +300,11 @@ async function fetchAndRenderMerchantTrustDirectory(
                     ${m.is_official ? officialBadgeHtml() : ''}
                   </div>
                   <div class="offer-meta">
-                    ${escapeHtml(m.platform.toUpperCase())} (${escapeHtml(t('merchantProductCount', [formatSafeNumber(m.product_count, { min: 0 })]))}) - ${escapeHtml(t('merchantScamRisk', [formatSafeNumber(m.dosafe_risk_score, { min: 0, max: 100 })]))} | ${escapeHtml(t('merchantReviewRisk', [reviewRiskText(m.review_risk_score)]))}
+                    ${escapeHtml(m.platform.toUpperCase())} (${escapeHtml(t('merchantProductCount', [formatSafeNumber(m.product_count, { min: 0 })]))}) - ${escapeHtml(t('merchantScamRisk', [riskScoreText(m.dosafe_risk_score)]))} | ${escapeHtml(t('merchantReviewRisk', [riskScoreText(m.review_risk_score)]))}
                   </div>
                 </div>
                 <a href="${detailHref}" target="_blank" rel="noopener noreferrer" class="offer-price" style="text-decoration:none;color:${trustColor};">
-                  ${escapeHtml(t('merchantTrust', [formatSafeNumber(m.trust_score, { min: 0, max: 100 })]))}
+                  ${escapeHtml(trustText(m.trust_score))}
                 </a>
               </div>
             `;
@@ -439,11 +442,11 @@ function renderPanelContent(
         <div class="stats-grid">
           <div class="stat-box">
             <div class="stat-label">${escapeHtml(t('merchantTrustScore'))}</div>
-            <div class="stat-val" style="color: #34d399;">${formatSafeNumber(merchant.trust_score, { min: 0, max: 100 })}/100</div>
+            <div class="stat-val" style="color: ${merchant.trust_score == null ? '#9ca3af' : '#34d399'};">${escapeHtml(merchant.trust_score == null ? t('noDataYet') : `${formatSafeNumber(merchant.trust_score, { min: 0, max: 100 })}/100`)}</div>
           </div>
           <div class="stat-box">
             <div class="stat-label">${escapeHtml(t('merchantRiskPair'))}</div>
-            <div class="stat-val">${formatSafeNumber(merchant.dosafe_risk_score, { min: 0, max: 100 })} / ${escapeHtml(reviewRiskText(merchant.review_risk_score))}</div>
+            <div class="stat-val">${escapeHtml(riskScoreText(merchant.dosafe_risk_score))} / ${escapeHtml(riskScoreText(merchant.review_risk_score))}</div>
           </div>
         </div>
       </div>
@@ -667,6 +670,7 @@ async function loadSidePanel(selectedVariant?: string): Promise<void> {
       signal?: ExtractedPageProductSignal | null;
       data?: ExtensionLookupData | null;
       status?: number | null;
+      retryAfterSeconds?: number;
     };
 
     const settings: ExtensionSettings = res?.settings || {
@@ -682,9 +686,15 @@ async function loadSidePanel(selectedVariant?: string): Promise<void> {
     }
 
     if (res?.ok === false) {
-      renderLookupError(root, res.status, res.signal?.title, () => {
-        void loadSidePanel(selectedVariant);
-      });
+      renderLookupError(
+        root,
+        res.status,
+        res.signal?.title,
+        () => {
+          void loadSidePanel(selectedVariant);
+        },
+        res.retryAfterSeconds
+      );
       return;
     }
 
@@ -712,11 +722,13 @@ function renderLookupError(
   root: HTMLElement,
   status: number | null | undefined,
   productTitle: string | null | undefined,
-  retry: () => void
+  retry: () => void,
+  retryAfterSeconds?: number | null
 ): void {
   root.innerHTML = renderLookupErrorHtml(
     classifyLookupFailure(status),
-    productTitle
+    productTitle,
+    retryAfterSeconds
   );
   root
     .querySelector<HTMLButtonElement>('[data-action="retry"]')
@@ -744,6 +756,7 @@ async function runQuickQuery(query: string): Promise<void> {
       data?: ExtensionLookupData | null;
       error?: string;
       status?: number | null;
+      retryAfterSeconds?: number;
     };
 
     const settings: ExtensionSettings = res?.settings || {
@@ -752,9 +765,15 @@ async function runQuickQuery(query: string): Promise<void> {
     };
 
     if (res?.ok === false) {
-      renderLookupError(root, res.status, res.signal?.title ?? query, () => {
-        void runQuickQuery(query);
-      });
+      renderLookupError(
+        root,
+        res.status,
+        res.signal?.title ?? query,
+        () => {
+          void runQuickQuery(query);
+        },
+        res.retryAfterSeconds
+      );
       return;
     }
 

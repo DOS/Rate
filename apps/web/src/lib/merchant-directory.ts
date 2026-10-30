@@ -36,7 +36,8 @@ export interface MerchantDirectorySummary {
   total: number;
   official: number;
   safe: number;
-  avgTrust: number;
+  /** Over the stores that have a trust score; null when none has (DOS/Rate#1484). */
+  avgTrust: number | null;
   platformCounts: Record<string, number>;
 }
 
@@ -231,6 +232,7 @@ export function summarizeMerchantDirectory(
   let official = 0;
   let safe = 0;
   let trustSum = 0;
+  let scored = 0;
   for (const m of safeMerchants) {
     const p = (typeof m.platform === 'string' ? m.platform : '')
       .replace(/\p{Cc}+/gu, '')
@@ -243,16 +245,20 @@ export function summarizeMerchantDirectory(
       platformCounts[p] = prev + 1;
     }
     if (isOfficialMerchantFlag(m.is_official)) official += 1;
+    // A store with no trust score is neither safe nor part of the average
+    // (DOS/Rate#1484).
+    if (m.trust_score == null) continue;
     const trustScore = toSafeScore100(m.trust_score);
     if (trustScore >= 80) safe += 1;
     trustSum += trustScore;
+    scored += 1;
   }
   const total = safeMerchants.length;
   return {
     total,
     official,
     safe,
-    avgTrust: total > 0 ? Math.round(trustSum / total) : 100,
+    avgTrust: scored > 0 ? Math.round(trustSum / scored) : null,
     platformCounts,
   };
 }
@@ -320,10 +326,13 @@ export function filterMerchantDirectory(
     }
     if (officialOnly && !isOfficialMerchantFlag(m.is_official)) return false;
     const trustScore = toSafeScore100(m.trust_score);
+    // No trust score matches no risk tier (DOS/Rate#1484).
+    const trustKnown = m.trust_score != null;
     const reviewRiskScore = toSafeScore100(m.review_risk_score);
     // A store with no analysed reviews has no measured review risk: it
     // matches neither review tier (DOS/Rate#1249).
     const reviewRiskKnown = hasReviewRiskEvidence(m.review_risk_breakdown);
+    if (riskTier !== 'all' && !trustKnown) return false;
     if (riskTier === 'safe' && trustScore < 80) return false;
     if (riskTier === 'moderate' && (trustScore < 60 || trustScore >= 80)) {
       return false;
@@ -349,8 +358,9 @@ export function filterMerchantDirectory(
     return true;
   });
   return filtered.sort((a, b) => {
-    const aTrust = toSafeScore100(a.trust_score);
-    const bTrust = toSafeScore100(b.trust_score);
+    // A store with no trust score sorts after every scored one (DOS/Rate#1484).
+    const aTrust = a.trust_score == null ? -1 : toSafeScore100(a.trust_score);
+    const bTrust = b.trust_score == null ? -1 : toSafeScore100(b.trust_score);
     const aProducts = toSafeCount(a.product_count);
     const bProducts = toSafeCount(b.product_count);
     switch (sortBy) {

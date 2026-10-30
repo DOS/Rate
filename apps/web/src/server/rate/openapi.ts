@@ -2105,7 +2105,13 @@ function buildBaseRateOpenApiSpec(
                 id: { type: 'string' },
                 name: { type: 'string' },
                 is_official: { type: 'boolean' },
-                risk_score: { type: 'number', minimum: 0, maximum: 100 },
+                risk_score: {
+                  type: ['number', 'null'],
+                  minimum: 0,
+                  maximum: 100,
+                  description:
+                    'Combined seller risk; null for a seller with no DOSafe score and no stored review score (DOS/Rate#1484).',
+                },
                 dosafe_risk_score: {
                   type: ['number', 'null'],
                   minimum: 0,
@@ -2138,7 +2144,13 @@ function buildBaseRateOpenApiSpec(
             rating_star: { type: ['number', 'null'] },
             follower_count: { type: 'integer' },
             location: { type: ['string', 'null'] },
-            dosafe_risk_score: { type: 'number', minimum: 0, maximum: 100 },
+            dosafe_risk_score: {
+              type: ['number', 'null'],
+              minimum: 0,
+              maximum: 100,
+              description:
+                'DOSafe scam risk; null for a seller with no DOSafe score (DOS/Rate#1465).',
+            },
             review_risk_score: {
               type: ['integer', 'null'],
               minimum: 0,
@@ -2147,13 +2159,19 @@ function buildBaseRateOpenApiSpec(
                 'Risk measured on the store reviews only; null for a store with no analysed review.',
             },
             risk_score: {
-              type: 'number',
+              type: ['number', 'null'],
               minimum: 0,
               maximum: 100,
               description:
-                'Combined risk (DOSafe and review risk); may carry decimals.',
+                'Combined risk from the known signals (DOSafe score, analysed reviews); may carry decimals. Null when neither is known (DOS/Rate#1484).',
             },
-            trust_score: { type: 'number', minimum: 0, maximum: 100 },
+            trust_score: {
+              type: ['number', 'null'],
+              minimum: 0,
+              maximum: 100,
+              description:
+                '100 minus `risk_score`. Null for a store with neither a DOSafe score nor analysed reviews; such stores sort last by trust and count in no risk tier (DOS/Rate#1484).',
+            },
             product_count: { type: 'integer' },
             min_price: { type: ['number', 'null'] },
             max_price: { type: ['number', 'null'] },

@@ -36,6 +36,7 @@ import {
 import { isPendingReview } from '@/lib/review-display';
 import {
   hasReviewRiskEvidence,
+  knownDosafeRiskScore,
   merchantRiskTone,
 } from '@/lib/merchant-risk-tone';
 import { isOfferUnavailable } from '@/lib/product-market-stats';
@@ -77,29 +78,53 @@ export async function generateMetadata({
     };
   }
   const canonicalUrl = `https://rate.vn/merchants/${merchant.id}`;
-  const fullTitle = t('profileMetaTitle', {
-    name: merchant.name,
-    platform: merchant.platform.toUpperCase(),
-    score: merchant.trust_score,
-  });
-  const shortTitle = t('profileMetaTitleShort', {
-    name: merchant.name,
-    score: merchant.trust_score,
-  });
-  // No review risk number without analysed reviews (DOS/Rate#1249).
+  // No trust number for a store with no data (DOS/Rate#1484).
+  const fullTitle =
+    merchant.trust_score == null
+      ? t('profileMetaTitleNoScore', {
+          name: merchant.name,
+          platform: merchant.platform.toUpperCase(),
+        })
+      : t('profileMetaTitle', {
+          name: merchant.name,
+          platform: merchant.platform.toUpperCase(),
+          score: merchant.trust_score,
+        });
+  const shortTitle =
+    merchant.trust_score == null
+      ? t('profileMetaTitleShortNoScore', { name: merchant.name })
+      : t('profileMetaTitleShort', {
+          name: merchant.name,
+          score: merchant.trust_score,
+        });
+  // No review risk number without analysed reviews (DOS/Rate#1249), and no
+  // DOSafe number without a DOSafe score (DOS/Rate#1479).
+  const dosafeScore = knownDosafeRiskScore(merchant);
+  const hasReviews = hasReviewRiskEvidence(merchant.review_risk_breakdown);
   const description = fitDescription(
-    hasReviewRiskEvidence(merchant.review_risk_breakdown)
-      ? t('profileMetaDesc', {
-          name: merchant.name,
-          dosafe: merchant.dosafe_risk_score,
-          seeding: merchant.review_risk_score,
-          count: merchant.product_count,
-        })
-      : t('profileMetaDescNoReviews', {
-          name: merchant.name,
-          dosafe: merchant.dosafe_risk_score,
-          count: merchant.product_count,
-        })
+    dosafeScore == null
+      ? hasReviews
+        ? t('profileMetaDescNoDosafe', {
+            name: merchant.name,
+            seeding: merchant.review_risk_score,
+            count: merchant.product_count,
+          })
+        : t('profileMetaDescNoData', {
+            name: merchant.name,
+            count: merchant.product_count,
+          })
+      : hasReviews
+        ? t('profileMetaDesc', {
+            name: merchant.name,
+            dosafe: dosafeScore,
+            seeding: merchant.review_risk_score,
+            count: merchant.product_count,
+          })
+        : t('profileMetaDescNoReviews', {
+            name: merchant.name,
+            dosafe: dosafeScore,
+            count: merchant.product_count,
+          })
   );
 
   return {
@@ -160,19 +185,26 @@ export default async function MerchantProfilePage({
   const merchantGenuineDeals = merchantRadar.genuineDeals;
   const merchantFakeTraps = merchantRadar.fakeSaleTraps;
 
+  // A store with neither a DOSafe score nor analysed reviews has no trust
+  // score: a neutral "no data" tag, never "high trust" (DOS/Rate#1484).
+  const trustScore = merchant.trust_score;
   const trustLevelLabel =
-    merchant.trust_score >= 80
-      ? t('trustHigh')
-      : merchant.trust_score >= 50
-        ? t('trustModerate')
-        : t('trustRisk');
+    trustScore == null
+      ? t('trustNoData')
+      : trustScore >= 80
+        ? t('trustHigh')
+        : trustScore >= 50
+          ? t('trustModerate')
+          : t('trustRisk');
 
   const trustBadgeClass =
-    merchant.trust_score >= 80
-      ? 'bg-success text-white'
-      : merchant.trust_score >= 50
-        ? 'bg-warning text-dark'
-        : 'bg-danger text-white';
+    trustScore == null
+      ? 'bg-secondary text-white'
+      : trustScore >= 80
+        ? 'bg-success text-white'
+        : trustScore >= 50
+          ? 'bg-warning text-dark'
+          : 'bg-danger text-white';
 
   const brk = merchant.review_risk_breakdown;
   // No ratio without analysed reviews: 0 of 0 is not "100% authentic".
@@ -180,8 +212,11 @@ export default async function MerchantProfilePage({
     brk.total_reviews > 0
       ? Math.round((brk.authentic_count / brk.total_reviews) * 1000) / 10
       : null;
-  // Same cut-offs as the home merchant cards (DOS/Rate#1140).
-  const scamTone = merchantRiskTone(merchant.dosafe_risk_score);
+  // Same cut-offs as the home merchant cards (DOS/Rate#1140). A seller with
+  // no DOSafe score has no tone: neither clean nor an alert (DOS/Rate#1479).
+  const dosafeScore = knownDosafeRiskScore(merchant);
+  const scamTone =
+    dosafeScore == null ? 'unknown' : merchantRiskTone(dosafeScore);
 
   const canonicalUrl = `https://rate.vn/merchants/${merchant.id}`;
 
@@ -267,7 +302,10 @@ export default async function MerchantProfilePage({
           <div className="rate-scoreboard-dark p-md-5 mb-4 p-4">
             <div className="row g-4 align-items-center">
               <div className="col-lg-8">
-                <div className="d-flex align-items-start gap-3">
+                {/* Phones stack the icon above the text, and the text column
+                    may shrink, so a long name wraps instead of pushing the
+                    card past a 360px screen (DOS/Rate#1472). */}
+                <div className="d-flex flex-column flex-sm-row align-items-start gap-3">
                   <div
                     className="rounded-4 d-flex align-items-center justify-content-center fs-2 flex-shrink-0 text-white shadow-sm"
                     style={{
@@ -275,12 +313,12 @@ export default async function MerchantProfilePage({
                       height: '72px',
                       background:
                         'linear-gradient(135deg, rgba(216, 48, 48, 0.25), rgba(99, 102, 241, 0.25))',
-                      border: '1px solid rgba(255, 255, 255, 0.14)',
+                      border: '1px solid var(--rate-glass-border)',
                     }}
                   >
                     <BsShop />
                   </div>
-                  <div>
+                  <div style={{ minWidth: 0 }}>
                     <div className="d-flex align-items-center mb-2 flex-wrap gap-2">
                       <span className="badge bg-danger text-uppercase rounded-pill px-3 py-1">
                         {merchant.platform}
@@ -290,7 +328,7 @@ export default async function MerchantProfilePage({
                           className="badge rounded-pill d-inline-flex align-items-center gap-1 px-3 py-1"
                           style={{
                             backgroundColor: 'rgba(45, 186, 105, 0.16)',
-                            color: '#34d399',
+                            color: 'var(--rate-ink-success)',
                             border: '1px solid rgba(45, 186, 105, 0.35)',
                           }}
                         >
@@ -298,22 +336,25 @@ export default async function MerchantProfilePage({
                         </span>
                       )}
                       <span
-                        className="badge rounded-pill px-3 py-1"
+                        className="badge rounded-pill text-wrap text-break px-3 py-1"
                         style={{
-                          backgroundColor: 'rgba(255, 255, 255, 0.08)',
-                          color: '#cbd5e1',
-                          border: '1px solid rgba(255, 255, 255, 0.14)',
+                          backgroundColor: 'var(--rate-glass-bg)',
+                          color: 'var(--rate-fg-paragraph)',
+                          border: '1px solid var(--rate-glass-border)',
                         }}
                       >
                         Shop ID: <code>{merchant.platform_shop_id}</code>
                       </span>
                     </div>
-                    <h1 className="h2 fw-bold mb-2 text-white">
+                    <h1
+                      className="h2 fw-bold mb-2 text-white"
+                      style={{ overflowWrap: 'anywhere' }}
+                    >
                       <ContentText text={merchant.name} locale={locale} />
                     </h1>
                     <div
                       className="d-flex align-items-center small flex-wrap gap-3"
-                      style={{ color: '#94a3b8' }}
+                      style={{ color: 'var(--rate-fg-secondary)' }}
                     >
                       {/* Items wrap: "Hodnocení tržiště: Neaktualizováno" is wider
                           than a 320px header column (DOS/Rate#1084). */}
@@ -353,25 +394,34 @@ export default async function MerchantProfilePage({
                 <div
                   className="rounded-4 p-3 text-center"
                   style={{
-                    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-                    border: '1px solid rgba(255, 255, 255, 0.12)',
+                    backgroundColor: 'var(--rate-glass-bg)',
+                    border: '1px solid var(--rate-glass-border)',
                   }}
                 >
-                  <div className="small mb-1" style={{ color: '#94a3b8' }}>
+                  <div
+                    className="small mb-1"
+                    style={{ color: 'var(--rate-fg-secondary)' }}
+                  >
                     {t('compositeTrustScoreLabel')}
                   </div>
-                  <div className="display-6 fw-bold font-monospace mb-1 text-white">
-                    {merchant.trust_score}
-                    <span
-                      className="fs-5 fw-normal"
-                      style={{ color: '#94a3b8' }}
+                  {trustScore != null && (
+                    <div
+                      className="display-6 fw-bold font-monospace mb-1 text-white"
+                      data-testid="merchant-trust-score"
                     >
-                      /100
-                    </span>
-                  </div>
+                      {trustScore}
+                      <span
+                        className="fs-5 fw-normal"
+                        style={{ color: 'var(--rate-fg-secondary)' }}
+                      >
+                        /100
+                      </span>
+                    </div>
+                  )}
                   <div className="mb-3">
                     <span
                       className={`badge ${trustBadgeClass} rounded-pill px-3 py-2`}
+                      data-testid="merchant-trust-label"
                     >
                       {trustLevelLabel}
                     </span>
@@ -393,9 +443,9 @@ export default async function MerchantProfilePage({
                     platform={merchant.platform}
                     platformShopId={merchant.platform_shop_id}
                     isOfficial={merchant.is_official}
-                    trustScore={merchant.trust_score}
+                    trustScore={trustScore}
                     trustLevelLabel={trustLevelLabel}
-                    dosafeRiskScore={merchant.dosafe_risk_score}
+                    dosafeRiskScore={dosafeScore}
                     reviewSeedingRiskScore={merchant.review_risk_score}
                     authenticReviews={brk.authentic_count}
                     totalReviews={brk.total_reviews}
@@ -429,16 +479,20 @@ export default async function MerchantProfilePage({
                   </div>
                   <span
                     className={`badge rounded-pill fs-6 px-3 py-2 ${
-                      scamTone === 'good'
-                        ? 'bg-success-subtle text-success'
-                        : scamTone === 'warn'
-                          ? 'bg-warning-subtle text-warning-emphasis'
-                          : 'bg-danger text-white'
+                      scamTone === 'unknown'
+                        ? 'bg-light text-muted border'
+                        : scamTone === 'good'
+                          ? 'bg-success-subtle text-success'
+                          : scamTone === 'warn'
+                            ? 'bg-warning-subtle text-warning-emphasis'
+                            : 'bg-danger text-white'
                     }`}
                     data-testid="merchant-scam-badge"
                     data-tone={scamTone}
                   >
-                    {t('scamRiskBadge', { score: merchant.dosafe_risk_score })}
+                    {dosafeScore == null
+                      ? t('scamRiskBadgeNoData')
+                      : t('scamRiskBadge', { score: dosafeScore })}
                   </span>
                 </div>
 
@@ -449,19 +503,23 @@ export default async function MerchantProfilePage({
                     <span className="text-muted">{t('scamStatusLabel')}</span>
                     <span
                       className={`fw-semibold ${
-                        scamTone === 'good'
-                          ? 'text-success'
-                          : scamTone === 'warn'
-                            ? 'text-warning-emphasis'
-                            : 'text-danger'
+                        scamTone === 'unknown'
+                          ? 'text-muted'
+                          : scamTone === 'good'
+                            ? 'text-success'
+                            : scamTone === 'warn'
+                              ? 'text-warning-emphasis'
+                              : 'text-danger'
                       }`}
                       data-testid="merchant-scam-status"
                     >
-                      {scamTone === 'good'
-                        ? t('scamStatusClean')
-                        : scamTone === 'warn'
-                          ? t('scamStatusCaution')
-                          : t('scamStatusAlert')}
+                      {scamTone === 'unknown'
+                        ? t('scamStatusNoData')
+                        : scamTone === 'good'
+                          ? t('scamStatusClean')
+                          : scamTone === 'warn'
+                            ? t('scamStatusCaution')
+                            : t('scamStatusAlert')}
                     </span>
                   </div>
                   <div className="d-flex align-items-center justify-content-between small mb-2">

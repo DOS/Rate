@@ -9,6 +9,7 @@ process.env.NEXT_PUBLIC_SUPABASE_URL = 'https://abc.supabase.co';
 async function main() {
   const {
     buildContentSecurityPolicy,
+    buildReportOnlyCsp,
     createCspNonce,
     CSP_HEADER,
     PAGE_META_CSP,
@@ -28,10 +29,19 @@ async function main() {
       .split('; ')
       .find((d) => d.startsWith(`${name} `))
       ?.slice(name.length + 1);
+  const { THEME_INIT_SCRIPT, THEME_INIT_SCRIPT_HASH } =
+    await import('../theme');
   assert.equal(
     directive('script-src'),
-    "'self' 'nonce-n0nce' 'strict-dynamic'",
-    'scripts: the nonce, never unsafe-inline or unsafe-eval in production'
+    `'self' 'nonce-n0nce' ${THEME_INIT_SCRIPT_HASH} 'strict-dynamic'`,
+    'scripts: the nonce and the theme script hash, never unsafe-inline or unsafe-eval in production'
+  );
+  // The hash must be the theme script's own, or the script is blocked once
+  // the policy is enforced (DOS/Rate#1435).
+  const { createHash } = await import('node:crypto');
+  assert.equal(
+    THEME_INIT_SCRIPT_HASH,
+    `'sha256-${createHash('sha256').update(THEME_INIT_SCRIPT).digest('base64')}'`
   );
   assert.equal(directive('default-src'), "'self'");
   assert.equal(
@@ -43,7 +53,7 @@ async function main() {
   assert.equal(directive('report-uri'), '/api/csp-report');
   assert.match(
     buildContentSecurityPolicy('x', { dev: true }),
-    /script-src 'self' 'nonce-x' 'strict-dynamic' 'unsafe-eval'/
+    /script-src 'self' 'nonce-x' 'sha256-[A-Za-z0-9+/=]+' 'strict-dynamic' 'unsafe-eval'/
   );
   assert.doesNotMatch(
     buildContentSecurityPolicy('x', { supabaseUrl: 'javascript:alert(1)' }),
@@ -63,12 +73,41 @@ async function main() {
   assert.ok(sent, 'pages carry the report-only policy');
   assert.match(
     sent,
-    /script-src 'self' 'nonce-[A-Za-z0-9+/=]+' 'strict-dynamic'/
+    /script-src 'self' 'nonce-[A-Za-z0-9+/=]+' 'sha256-[A-Za-z0-9+/=]+' 'strict-dynamic'/
   );
   assert.equal(
     res.headers.get(`x-middleware-request-${CSP_HEADER.toLowerCase()}`),
     sent,
     'Next.js reads the same nonce from the request'
+  );
+  // Both report-only policies in the one header, the nonce one first, so Next.js
+  // still finds the nonce (it reads the first script-src); the measured inline
+  // policy reports with its own tag (DOS/Rate#1323).
+  const policies = sent.split(', ');
+  assert.equal(policies.length, 2, 'two report-only policies');
+  assert.match(policies[0]!, /^default-src 'self'; script-src 'self' 'nonce-/);
+  assert.equal(
+    policies[1],
+    "script-src 'self' 'unsafe-inline'; worker-src 'self' blob:; report-uri /api/csp-report?policy=inline"
+  );
+  const { getScriptNonceFromHeader } = (await import(
+    'next/dist/server/app-render/get-script-nonce-from-header' as string
+  )) as { getScriptNonceFromHeader: (header: string) => string | undefined };
+  const nonce = /'nonce-([A-Za-z0-9+/=]+)'/.exec(policies[0]!)?.[1];
+  assert.ok(nonce);
+  assert.equal(
+    getScriptNonceFromHeader(sent),
+    nonce,
+    'Next.js extracts the per-request nonce from the combined header'
+  );
+  assert.equal(
+    getScriptNonceFromHeader(buildReportOnlyCsp('n0nce', { dev: true })),
+    'n0nce'
+  );
+  assert.match(
+    buildReportOnlyCsp('n0nce', { dev: true }),
+    /, script-src 'self' 'unsafe-inline' 'unsafe-eval'; worker-src/,
+    'development keeps eval in the measured policy too'
   );
   const fs = await import('node:fs');
   const path = await import('node:path');
@@ -260,6 +299,21 @@ async function main() {
     assert.equal(huge.status, 204);
     assert.ok(pulled <= 16 * 1024, `read ${pulled} bytes of an oversized body`);
     assert.equal(lines.length, before, 'no further log line');
+    // The same violation from the measured inline policy is its own line, tagged.
+    await POST(
+      new Request('https://rate.vn/api/csp-report?policy=inline', {
+        method: 'POST',
+        body: JSON.stringify({
+          'csp-report': {
+            'document-uri': 'https://rate.vn/smartphones',
+            'effective-directive': 'script-src-elem',
+            'blocked-uri': 'inline',
+          },
+        }),
+      })
+    );
+    assert.equal(lines.length, before + 1, 'the inline policy logs apart');
+    assert.match(lines[lines.length - 1]!, /"policy":"inline"/);
   } finally {
     console.error = original;
   }

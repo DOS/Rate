@@ -499,7 +499,7 @@ async function run() {
           itemModel: 'item',
         }
       ).resolveItemAndVariant(candidateFor('Apple iPhone 15 Plus 128GB')),
-      /Item Tier 2 fuzzy match failed: boom/
+      /Item Tier 2 fuzzy match failed \(model_key apple:iphone-15-plus:128gb\): boom/
     );
     await assert.rejects(
       new EntityMatcher(createItemDb().client, passthroughEnricher, {
