@@ -129,3 +129,59 @@ test('the theme script is allowed by its CSP hash', async ({ request }) => {
   const hash = createHash('sha256').update(script!).digest('base64');
   expect(policy).toContain(`'sha256-${hash}'`);
 });
+
+// The page brightness of a computed background color (0 black, 255 white).
+const brightness = (color: string) => {
+  const [r, g, b] = (color.match(/\d+(\.\d+)?/g) ?? []).map(Number);
+  return 0.299 * (r ?? 0) + 0.587 * (g ?? 0) + 0.114 * (b ?? 0);
+};
+
+// The footer follows the theme like the rest of the page (DOS/Rate#1461).
+for (const colorScheme of ['light', 'dark'] as const) {
+  test(`the footer is ${colorScheme} on the ${colorScheme} theme`, async ({
+    page,
+  }) => {
+    await page.emulateMedia({ colorScheme });
+    await page.goto('/faq');
+    await expect(page.locator('html')).toHaveAttribute(
+      'data-bs-theme',
+      colorScheme
+    );
+    const bg = await page
+      .locator('footer.skin-dark-footer')
+      .evaluate((el) => getComputedStyle(el).backgroundColor);
+    if (colorScheme === 'light') expect(brightness(bg)).toBeGreaterThan(200);
+    else expect(brightness(bg)).toBeLessThan(60);
+  });
+}
+
+test.describe('without JavaScript', () => {
+  test.use({ javaScriptEnabled: false });
+
+  // No theme script: no attribute, and one consistent light page, heroes
+  // and footer included (DOS/Rate#1461).
+  test('the page is light throughout, heroes and footer included', async ({
+    page,
+  }) => {
+    await page.emulateMedia({ colorScheme: 'dark' });
+    await page.goto('/');
+    expect(
+      await page.evaluate(() =>
+        document.documentElement.getAttribute('data-bs-theme')
+      )
+    ).toBeNull();
+    for (const selector of [
+      'body',
+      '.hero-header',
+      'footer.skin-dark-footer',
+    ]) {
+      const bg = await page
+        .locator(selector)
+        .first()
+        .evaluate((el) => getComputedStyle(el).backgroundColor);
+      // The light hero paints its wash over a light base color; the dark
+      // one is a gradient with no base color (transparent).
+      expect(brightness(bg), selector).toBeGreaterThan(200);
+    }
+  });
+});

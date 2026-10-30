@@ -3,6 +3,9 @@
 // rule here keys off that attribute. `:root[data-bs-theme]` (0,2,0) outranks
 // the light tokens on `:root` in _custom.scss and Bootstrap's own color-mode
 // blocks; the element rules below add the attribute for the same reason.
+// The light-ground rules match `:not([data-bs-theme='dark'])`, so a visitor
+// without JavaScript (no attribute) gets one consistent light page
+// (DOS/Rate#1461).
 
 // The obsidian palette, also used by .rate-surface-dark in _custom.scss.
 @mixin rate-dark-tokens {
@@ -84,7 +87,7 @@
   --bs-light-gray: rgba(255, 255, 255, 0.12);
 }
 
-:root[data-bs-theme='light'] {
+:root:not([data-bs-theme='dark']) {
   color-scheme: light;
 }
 
@@ -391,7 +394,7 @@
 
 // Light theme: the obsidian heroes, scoreboards and banners take the light
 // palette and a light ground. Their inline dark gradients need !important.
-:root[data-bs-theme='light']
+:root:not([data-bs-theme='dark'])
   :is(.rate-surface-dark, .rate-scoreboard-dark, .rate-ink-on-dark) {
   @include rate-light-tokens;
   background: var(--rate-bg-elevated) !important;
@@ -416,7 +419,7 @@
 
 // Outline-light buttons are made for dark grounds: on the ones that turn
 // light here they take dark ink. A .bg-dark block stays dark and keeps them.
-:root[data-bs-theme='light']
+:root:not([data-bs-theme='dark'])
   :is(.rate-surface-dark, .rate-scoreboard-dark, .rate-ink-on-dark)
   .btn-outline-light:not(.bg-dark .btn-outline-light) {
   --bs-btn-color: var(--rate-fg-primary);
@@ -436,8 +439,55 @@
   }
 }
 
+// The site footer follows the theme too (DOS/Rate#1461): the design docs
+// keep only the homepage hero, the scoreboards and the extension panel
+// obsidian, and those follow the theme since #1435.
+:root:not([data-bs-theme='dark']) footer.skin-dark-footer {
+  background: var(--rate-bg-elevated);
+  border-top: 1px solid var(--rate-border-subtle);
+
+  .rate-wordmark-light {
+    color: var(--rate-fg-primary);
+  }
+
+  .footer-widget .widget-title {
+    color: var(--rate-fg-primary);
+  }
+
+  .footer-widget ul li a,
+  .footer-widget .footerText p,
+  .contactInfowrap .singleinfo .caps .title,
+  .contactInfowrap .singleinfo .caps .subs {
+    color: var(--rate-fg-secondary);
+  }
+
+  .footer-widget ul li a:hover,
+  .footer-widget ul li a:focus {
+    color: var(--rate-fg-primary);
+  }
+
+  .contactInfowrap .singleinfo .icons {
+    background: rgba(15, 23, 42, 0.05);
+    color: var(--rate-ink-primary);
+  }
+
+  .footer-widget .footerSocialwrap .footersocial li .social-link {
+    background-color: var(--rate-bg-surface);
+    color: var(--rate-fg-primary);
+
+    &:hover,
+    &:focus,
+    &:active {
+      background-color: var(--rate-fg-primary);
+      border-color: var(--rate-fg-primary);
+      color: #ffffff;
+    }
+  }
+}
+
 // Page heroes keep a soft brand wash instead of the dark gradient.
-:root[data-bs-theme='light'] :is(.hero-header, .hero-banner).rate-ink-on-dark {
+:root:not([data-bs-theme='dark'])
+  :is(.hero-header, .hero-banner).rate-ink-on-dark {
   background:
     radial-gradient(
       circle at 20% 20%,
