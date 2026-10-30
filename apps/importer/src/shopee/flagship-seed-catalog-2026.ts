@@ -347,7 +347,6 @@ export const CATALOG_EXPANSION_2026_SEEDS: FlagshipDeviceSeed[] = [
         second_camera: '48 MP Fusion Ultra Wide, f/2.2, 13mm, 120˚ (ultrawide)',
         third_camera:
           '48 MP Fusion Telephoto, f/2.8, 100mm (tetraprism), 1/2.55", 4x optical zoom, 3D sensor-shift OIS; 8x optical-quality 12MP crop, up to 40x digital',
-        fourth_camera: 'TOF 3D LiDAR scanner (depth)',
         flash: 'Dual-LED dual-tone flash, HDR (photo/panorama)',
         video_recording:
           '4K Dolby Vision up to 120fps, 1080p slo-mo up to 240fps, 10-bit HDR, ProRes, ProRes RAW, Apple Log 2, Cinematic 4K@30fps, spatial video/audio',
@@ -490,7 +489,6 @@ export const CATALOG_EXPANSION_2026_SEEDS: FlagshipDeviceSeed[] = [
         second_camera: '48 MP Fusion Ultra Wide, f/2.2, 13mm, 120˚ (ultrawide)',
         third_camera:
           '48 MP Fusion Telephoto, f/2.8, 100mm (tetraprism), 1/2.55", 4x optical zoom, 3D sensor-shift OIS; 8x optical-quality 12MP crop, up to 40x digital',
-        fourth_camera: 'TOF 3D LiDAR scanner (depth)',
         flash: 'Dual-LED dual-tone flash, HDR (photo/panorama)',
         video_recording:
           '4K Dolby Vision up to 120fps, 1080p slo-mo up to 240fps, 10-bit HDR, ProRes, ProRes RAW, Apple Log 2, Cinematic 4K@30fps, spatial video/audio',
@@ -633,7 +631,6 @@ export const CATALOG_EXPANSION_2026_SEEDS: FlagshipDeviceSeed[] = [
         second_camera: '48 MP Fusion Ultra Wide, f/2.2, 13mm, 120˚ (ultrawide)',
         third_camera:
           '48 MP Fusion Telephoto, f/2.8, 100mm (tetraprism), 1/2.55", 4x optical zoom, 3D sensor-shift OIS; 8x optical-quality 12MP crop, up to 40x digital',
-        fourth_camera: 'TOF 3D LiDAR scanner (depth)',
         flash: 'Dual-LED dual-tone flash, HDR (photo/panorama)',
         video_recording:
           '4K Dolby Vision up to 120fps, 1080p slo-mo up to 240fps, 10-bit HDR, ProRes, ProRes RAW, Apple Log 2, Cinematic 4K@30fps, spatial video/audio',
@@ -773,7 +770,6 @@ export const CATALOG_EXPANSION_2026_SEEDS: FlagshipDeviceSeed[] = [
         second_camera: '48 MP Fusion Ultra Wide, f/2.2, 13mm, 120˚ (ultrawide)',
         third_camera:
           '48 MP Telephoto, f/2.8, 100mm (periscope), 4x optical zoom, 3D sensor-shift OIS; 8x (200mm) optical-quality 12MP crop, up to 40x digital',
-        fourth_camera: 'TOF 3D LiDAR scanner (depth)',
         flash: 'Dual-LED dual-tone flash, HDR',
         video_recording:
           '4K Dolby Vision up to 120fps, 1080p slo-mo up to 240fps, 10-bit HDR, ProRes, ProRes RAW, Apple Log 2, Cinematic 4K@30fps, Action mode 2.8K@60fps, spatial video/audio',
@@ -917,7 +913,6 @@ export const CATALOG_EXPANSION_2026_SEEDS: FlagshipDeviceSeed[] = [
         second_camera: '48 MP Fusion Ultra Wide, f/2.2, 13mm, 120˚ (ultrawide)',
         third_camera:
           '48 MP Telephoto, f/2.8, 100mm (periscope), 4x optical zoom, 3D sensor-shift OIS; 8x (200mm) optical-quality 12MP crop, up to 40x digital',
-        fourth_camera: 'TOF 3D LiDAR scanner (depth)',
         flash: 'Dual-LED dual-tone flash, HDR',
         video_recording:
           '4K Dolby Vision up to 120fps, 1080p slo-mo up to 240fps, 10-bit HDR, ProRes, ProRes RAW, Apple Log 2, Cinematic 4K@30fps, Action mode 2.8K@60fps, spatial video/audio',
@@ -1061,7 +1056,6 @@ export const CATALOG_EXPANSION_2026_SEEDS: FlagshipDeviceSeed[] = [
         second_camera: '48 MP Fusion Ultra Wide, f/2.2, 13mm, 120˚ (ultrawide)',
         third_camera:
           '48 MP Telephoto, f/2.8, 100mm (periscope), 4x optical zoom, 3D sensor-shift OIS; 8x (200mm) optical-quality 12MP crop, up to 40x digital',
-        fourth_camera: 'TOF 3D LiDAR scanner (depth)',
         flash: 'Dual-LED dual-tone flash, HDR',
         video_recording:
           '4K Dolby Vision up to 120fps, 1080p slo-mo up to 240fps, 10-bit HDR, ProRes, ProRes RAW, Apple Log 2, Cinematic 4K@30fps, Action mode 2.8K@60fps, spatial video/audio',
@@ -1202,7 +1196,6 @@ export const CATALOG_EXPANSION_2026_SEEDS: FlagshipDeviceSeed[] = [
         second_camera: '48 MP Fusion Ultra Wide, f/2.2, 13mm, 120˚ (ultrawide)',
         third_camera:
           '48 MP Telephoto, f/2.8, 100mm (periscope), 4x optical zoom, 3D sensor-shift OIS; 8x (200mm) optical-quality 12MP crop, up to 40x digital',
-        fourth_camera: 'TOF 3D LiDAR scanner (depth)',
         flash: 'Dual-LED dual-tone flash, HDR',
         video_recording:
           '4K Dolby Vision up to 120fps, 1080p slo-mo up to 240fps, 10-bit HDR, ProRes, ProRes RAW, Apple Log 2, Cinematic 4K@30fps, Action mode 2.8K@60fps, spatial video/audio',
@@ -1348,7 +1341,6 @@ export const CATALOG_EXPANSION_2026_SEEDS: FlagshipDeviceSeed[] = [
         second_camera: '48 MP Fusion Ultra Wide, f/2.2, 13mm, 120°, 1/2.55", 0.7µm, PDAF',
         third_camera:
           '48 MP Fusion Telephoto, f/2.8, 100mm (4x), tetraprism periscope, 1/2.55", 3D sensor-shift OIS',
-        fourth_camera: 'TOF 3D LiDAR scanner (depth)',
         flash: 'Adaptive True Tone flash',
         video_recording:
           '4K Dolby Vision 24/25/30/60/100/120fps, 1080p 25/30/60/120/240fps, ProRes and ProRes RAW up to 4K120 (external recording), Apple Log 2, ACES, Genlock, spatial video, 4 studio-quality mics',
@@ -1501,7 +1493,6 @@ export const CATALOG_EXPANSION_2026_SEEDS: FlagshipDeviceSeed[] = [
         second_camera: '48 MP Fusion Ultra Wide, f/2.2, 13mm, 120°, 1/2.55", 0.7µm, PDAF',
         third_camera:
           '48 MP Fusion Telephoto, f/2.8, 100mm (4x), tetraprism periscope, 1/2.55", 3D sensor-shift OIS',
-        fourth_camera: 'TOF 3D LiDAR scanner (depth)',
         flash: 'Adaptive True Tone flash',
         video_recording:
           '4K Dolby Vision 24/25/30/60/100/120fps, 1080p 25/30/60/120/240fps, ProRes and ProRes RAW up to 4K120 (external recording), Apple Log 2, ACES, Genlock, spatial video, 4 studio-quality mics',
@@ -1651,7 +1642,6 @@ export const CATALOG_EXPANSION_2026_SEEDS: FlagshipDeviceSeed[] = [
         second_camera: '48 MP Fusion Ultra Wide, f/2.2, 13mm, 120°, 1/2.55", 0.7µm, PDAF',
         third_camera:
           '48 MP Fusion Telephoto, f/2.8, 100mm (4x), tetraprism periscope, 1/2.55", 3D sensor-shift OIS',
-        fourth_camera: 'TOF 3D LiDAR scanner (depth)',
         flash: 'Adaptive True Tone flash',
         video_recording:
           '4K Dolby Vision 24/25/30/60/100/120fps, 1080p 25/30/60/120/240fps, ProRes and ProRes RAW up to 4K120 (external recording), Apple Log 2, ACES, Genlock, spatial video, 4 studio-quality mics',
@@ -1801,7 +1791,6 @@ export const CATALOG_EXPANSION_2026_SEEDS: FlagshipDeviceSeed[] = [
         second_camera: '48 MP Fusion Ultra Wide, f/2.2, 13mm, 120°, PDAF',
         third_camera:
           '48 MP Fusion Telephoto, f/2.8, 100mm (4x), tetraprism periscope, 3D sensor-shift OIS',
-        fourth_camera: 'TOF 3D LiDAR scanner (depth)',
         flash: 'Adaptive True Tone flash',
         video_recording:
           '4K Dolby Vision 24/25/30/60/100/120fps, 1080p 25/30/60/120/240fps, ProRes and ProRes RAW up to 4K120 (external recording), Apple Log 2, ACES, Genlock, spatial video, 4 studio-quality mics',
@@ -1948,7 +1937,6 @@ export const CATALOG_EXPANSION_2026_SEEDS: FlagshipDeviceSeed[] = [
         second_camera: '48 MP Fusion Ultra Wide, f/2.2, 13mm, 120°, PDAF',
         third_camera:
           '48 MP Fusion Telephoto, f/2.8, 100mm (4x), tetraprism periscope, 3D sensor-shift OIS',
-        fourth_camera: 'TOF 3D LiDAR scanner (depth)',
         flash: 'Adaptive True Tone flash',
         video_recording:
           '4K Dolby Vision 24/25/30/60/100/120fps, 1080p 25/30/60/120/240fps, ProRes and ProRes RAW up to 4K120 (external recording), Apple Log 2, ACES, Genlock, spatial video, 4 studio-quality mics',
@@ -2095,7 +2083,6 @@ export const CATALOG_EXPANSION_2026_SEEDS: FlagshipDeviceSeed[] = [
         second_camera: '48 MP Fusion Ultra Wide, f/2.2, 13mm, 120°, PDAF',
         third_camera:
           '48 MP Fusion Telephoto, f/2.8, 100mm (4x), tetraprism periscope, 3D sensor-shift OIS',
-        fourth_camera: 'TOF 3D LiDAR scanner (depth)',
         flash: 'Adaptive True Tone flash',
         video_recording:
           '4K Dolby Vision 24/25/30/60/100/120fps, 1080p 25/30/60/120/240fps, ProRes and ProRes RAW up to 4K120 (external recording), Apple Log 2, ACES, Genlock, spatial video, 4 studio-quality mics',
