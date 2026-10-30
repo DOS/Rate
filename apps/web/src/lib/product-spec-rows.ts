@@ -95,8 +95,6 @@ export function buildProductSpecGroups({
   const s = specs ?? ({} as ProductSpecifications);
   const k = keySpecs ?? ({} as KeySpecs);
   const f = ui.fields;
-  const loc = (v: string | number | boolean | null | undefined) =>
-    localizedSpecValue(v, locale).text;
   // A row's value with its language when that is not the page's, kept with
   // the row it belongs to (DOS/Rate#1371).
   const locRow = (
@@ -112,6 +110,9 @@ export function buildProductSpecGroups({
   const yesNo = (value: unknown, yes = ui.yes) =>
     value === true ? yes : value === false ? ui.no : '';
   const showBands5g = shows('cellular', 'bands_5g');
+  const batteryCapacity =
+    withUnit(s.battery?.capacity_mah, 'mAh') ||
+    withUnit(product.battery_mah, 'mAh');
 
   const groups: Record<SpecGroupKey, (ProductSpecRow | false)[]> = {
     display: [
@@ -173,10 +174,7 @@ export function buildProductSpecGroups({
     battery: [
       {
         label: f.batteryCapacity,
-        value:
-          withUnit(s.battery?.capacity_mah, 'mAh') ||
-          withUnit(product.battery_mah, 'mAh') ||
-          loc(k.battery),
+        ...(batteryCapacity ? { value: batteryCapacity } : locRow(k.battery)),
       },
       { label: f.batteryType, ...locRow(s.battery?.type) },
       { label: f.chargingTech, ...locRow(s.battery?.charging) },
@@ -186,10 +184,9 @@ export function buildProductSpecGroups({
       },
       {
         label: f.reverseCharging,
-        value:
-          typeof s.battery?.reverse_charging === 'string'
-            ? loc(s.battery.reverse_charging)
-            : yesNo(s.battery?.reverse_charging, ui.supported),
+        ...(typeof s.battery?.reverse_charging === 'string'
+          ? locRow(s.battery.reverse_charging)
+          : { value: yesNo(s.battery?.reverse_charging, ui.supported) }),
       },
     ],
     design: [

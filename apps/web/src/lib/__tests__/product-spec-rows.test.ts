@@ -280,9 +280,10 @@ function testValueLanguage() {
       display: { type: 'LTPO OLED', protection: glass },
       design: { resistance: 'Sạc nhanh 35W' },
       multimedia: { loudspeaker: 'Stereo speakers' },
+      battery: { reverse_charging: 'Reverse wireless charging 4.5W' },
       connectivity: { other: 'Stereo reproduktory' },
     } as unknown as ProductSpecifications,
-    keySpecs: {} as KeySpecs,
+    keySpecs: { battery: 'Up to 20 hours of video playback' } as KeySpecs,
     product: {},
     template: getCategorySpecTemplate('smartphones'),
     ui: getSpecUiDictionary('cs'),
@@ -292,6 +293,9 @@ function testValueLanguage() {
   assert.equal(rowOf(glass)?.lang, 'en');
   assert.equal(rowOf('LTPO OLED')?.lang, undefined);
   assert.equal(rowOf('Sạc nhanh 35W')?.lang, 'vi');
+  // Values from the key specs fallback and a reverse-charging sentence too.
+  assert.equal(rowOf('Reverse wireless charging 4.5W')?.lang, 'en');
+  assert.equal(rowOf('Up to 20 hours of video playback')?.lang, 'en');
   // Each row keeps its own language: the translated loudspeaker row is not
   // marked because another row's source text reads the same.
   const speaker = localizedSpecValue('Stereo speakers', 'cs');
