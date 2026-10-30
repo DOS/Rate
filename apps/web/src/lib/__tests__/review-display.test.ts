@@ -65,6 +65,7 @@ function main() {
   assert.equal(submitErrorKey('FORBIDDEN'), 'errRealAccountRequired');
   assert.equal(submitErrorKey('DUPLICATE_REVIEW'), 'errDuplicateReview');
   assert.equal(submitErrorKey('RATE_LIMITED'), 'errRateLimited');
+  assert.equal(submitErrorKey('RATE_LIMIT_EXCEEDED'), 'errRateLimited');
   assert.equal(submitErrorKey('REJECTED'), 'errInvalidReview');
   assert.equal(submitErrorKey('INVALID_BODY'), 'errInvalidReview');
   assert.equal(submitErrorKey('PERSIST_FAILED'), 'errSubmitFailed');
