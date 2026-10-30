@@ -1140,6 +1140,125 @@ async function runSuite() {
     detectCategorySlug('[Apple Watch Series 10 46mm tặng AirPods] Chính hãng VN/A'),
     'smartwatches'
   );
+  // An iPhone, iPad or MacBook in a gift is not the product either, nor is its size; a
+  // "+" with a space on one side is a bundle; a non-Apple phone with a gift stays a phone
+  // (DOS/Rate#1422).
+  assert.equal(keyOf('AirPods Pro 2 tặng ốp iPhone 16'), 'apple:airpods-pro-2:unknown');
+  assert.equal(
+    keyOf('Apple Watch Series 10 46mm tặng ốp iPhone 16'),
+    'apple:watch-series-10-46mm:64gb'
+  );
+  assert.equal(keyOf('MacBook Air M3 tặng ốp iPhone 15'), 'apple:macbook-air-m3:unknown');
+  assert.equal(keyOf('MacBook Air M3 15 inch kèm ốp iPhone 13'), 'apple:macbook-air-m3-15:unknown');
+  assert.equal(keyOf('MacBook Pro M4 14 inch tặng AirPods 4'), 'apple:macbook-pro-m4-14:unknown');
+  assert.equal(keyOf('iPad Pro M4 13 inch tặng Apple Pencil Pro'), 'apple:ipad-pro-m4-13:unknown');
+  assert.equal(keyOf('AirPods 4 tặng ốp iPhone'), 'apple:airpods-4:unknown');
+  assert.equal(keyOf('HomePod mini +Apple Watch Series 10 42mm'), 'apple:homepod-mini:unknown');
+  assert.equal(keyOf('iPhone 15+ 128GB'), 'apple:iphone-15-plus:128gb');
+  assert.equal(keyOf('Combo iPhone 15 + AirPods'), 'apple:iphone-15:unknown');
+  assert.equal(
+    keyOf('Apple Watch Series 10 GPS +Cellular 46mm'),
+    'apple:watch-series-10-46mm:64gb'
+  );
+  assert.equal(detectCategorySlug('HomePod mini +Apple Watch Series 10 42mm'), 'smartphones');
+  assert.equal(detectCategorySlug('AirPods Pro 2 tặng ốp iPhone 16'), 'earbuds');
+  assert.equal(detectCategorySlug('Samsung Galaxy S25 tặng tai nghe Galaxy Buds 3'), 'smartphones');
+  assert.equal(detectCategorySlug('Xiaomi Redmi Note 13 tặng đồng hồ thông minh'), 'smartphones');
+  assert.equal(
+    detectCategorySlug('Samsung Galaxy S24 Ultra 256GB | Tặng Galaxy Watch7'),
+    'smartphones'
+  );
+  assert.equal(detectCategorySlug('Samsung Galaxy Watch 7 tặng sạc'), 'smartwatches');
+  assert.equal(detectCategorySlug('Galaxy Buds 3 Pro tặng ốp'), 'earbuds');
+  assert.equal(detectCategorySlug('Laptop Asus Vivobook 14 tặng chuột'), 'laptops');
+  assert.equal(detectCategorySlug('Sale sốc tặng quà Galaxy Watch 7'), 'smartwatches');
+  // Only the gifted product's phrase is dropped: a size before or after it, or after "+
+  // Cellular", is the product's own (DOS/Rate#1422).
+  for (const [title, key] of [
+    [
+      'Apple Watch Series 10 Nhôm GPS + Cellular 42mm | Tặng ốp iPhone',
+      'apple:watch-series-10-42mm:64gb',
+    ],
+    [
+      'Apple Watch Series 10 GPS + Cellular 46mm tặng ốp iPhone 16',
+      'apple:watch-series-10-46mm:64gb',
+    ],
+    [
+      'Apple Watch Series 10 GPS +Cellular 46mm tặng ốp iPhone 16',
+      'apple:watch-series-10-46mm:64gb',
+    ],
+    ['Apple Watch Series 10 [Tặng ốp iPhone] 46mm', 'apple:watch-series-10-46mm:64gb'],
+    ['Apple Watch SE 2 GPS + Cellular 44mm tặng AirPods 4', 'apple:watch-se-2-44mm:unknown'],
+    ['MacBook Air M3 (Tặng AirPods) 15 inch 8GB 256GB', 'apple:macbook-air-m3-15:256gb'],
+    ['MacBook Air M3 2024 - Tặng AirPods 4 - 15 inch 16GB 512GB', 'apple:macbook-air-m3-15:512gb'],
+    ['MacBook Air M3 kèm sạc 15 inch tặng AirPods', 'apple:macbook-air-m3-15:unknown'],
+    ['iPad Pro M4 (Tặng Apple Pencil Pro) 11 inch Wi-Fi 256GB', 'apple:ipad-pro-m4-11:256gb'],
+    ['iPad Air M2 Wi-Fi + Cellular 13 inch tặng Apple Pencil Pro', 'apple:ipad-air-m2-13:unknown'],
+    ['iPad Pro M4 Wi-Fi 256GB kèm bút 13 inch tặng AirPods', 'apple:ipad-pro-m4-13:256gb'],
+    // A "+" written for "Plus" keeps it.
+    ['Galaxy S24 + 256GB', 'samsung:galaxy-s24-plus:256gb'],
+    ['Redmi Note 13 Pro +5G', 'xiaomi:redmi-note-13-pro-plus:unknown'],
+  ] as const)
+    assert.equal(keyOf(title), key, title);
+  assert.equal(detectCategorySlug('Galaxy S24 + tặng Galaxy Buds 3'), 'smartphones');
+  // Several gifts, a model range in a gift, "khi mua" and "+ 5 năm" (DOS/Rate#1422).
+  for (const [title, key] of [
+    ['AirPods 4 tặng kèm khi mua iPhone 16 Pro Max 256GB', 'apple:iphone-16-pro-max:256gb'],
+    ['iPhone 16 256GB tặng kèm khi mua online: tai nghe AirPods 4', 'apple:iphone-16:256gb'],
+    ['[Samsung tặng tai nghe] Galaxy Tab S9 8GB 128GB', 'samsung:galaxy-tab-s9:128gb'],
+    ['MacBook Air M3 tặng ốp iPhone 13 - 15 Pro Max', 'apple:macbook-air-m3:unknown'],
+    ['MacBook Air M3 tặng ốp iPhone 13 – 15 Pro Max', 'apple:macbook-air-m3:unknown'],
+    ['MacBook Air M3 tặng AirPods, ốp iPhone 15', 'apple:macbook-air-m3:unknown'],
+    [
+      'MacBook Air M3 tặng hộp AirPods, tặng bao da iPad, tặng dây Apple Watch, tặng hộp Apple Pencil, tặng ốp iPhone 15',
+      'apple:macbook-air-m3:unknown',
+    ],
+    ['MacBook Air M3 tặng AirPods, 15 inch 16GB 512GB', 'apple:macbook-air-m3-15:512gb'],
+    ['MacBook Air M3 tặng AirPods - 15, RAM 16GB SSD 512GB', 'apple:macbook-air-m3-15:512gb'],
+    [
+      'MacBook Air M3 16GB 512GB tặng AirPods, bản 15 inch hỗ trợ iPhone Mirroring',
+      'apple:macbook-air-m3-15:512gb',
+    ],
+    ['[iPhone 16 256GB] Điện thoại chính hãng tặng tai nghe Bluetooth', 'apple:iphone-16:256gb'],
+    [
+      'Apple Watch Series 10 GPS + 5 năm bảo hành 46mm tặng AirPods',
+      'apple:watch-series-10-46mm:64gb',
+    ],
+  ] as const)
+    assert.equal(keyOf(title), key, title);
+  assert.equal(
+    detectCategorySlug('AirPods 4 tặng kèm khi mua iPhone 16 Pro Max 256GB'),
+    'smartphones'
+  );
+  assert.equal(
+    detectCategorySlug('iPhone 16 256GB tặng kèm khi mua online: tai nghe AirPods 4'),
+    'smartphones'
+  );
+  assert.equal(detectCategorySlug('[Samsung tặng tai nghe] Galaxy Tab S9 8GB 128GB'), 'tablets');
+  assert.equal(
+    detectCategorySlug('[iPhone 16 256GB] Điện thoại chính hãng tặng tai nghe Bluetooth'),
+    'smartphones'
+  );
+  assert.equal(
+    detectCategorySlug('[Samsung tặng bao da] Máy tính bảng Galaxy Tab S9 8GB 128GB'),
+    'tablets'
+  );
+  assert.equal(
+    detectCategorySlug('[Honor tặng chuột] Laptop Honor MagicBook X16 16GB 512GB'),
+    'laptops'
+  );
+  assert.equal(
+    keyOf('AirPods 4 tặng kèm khi mua iPhone 16 Pro Max'),
+    'apple:iphone-16-pro-max:unknown'
+  );
+  assert.equal(
+    keyOf('Apple Watch Series 10 GPS +Cellular 46mm tặng AirPods'),
+    'apple:watch-series-10-46mm:64gb'
+  );
+  assert.equal(
+    keyOf('iPad Pro M4 (Tặng Apple Pencil Pro) 13 inch 256GB'),
+    'apple:ipad-pro-m4-13:256gb'
+  );
   // The cut stays linear on a long run of separators.
   const cutStart = Date.now();
   detectCategorySlug(`Apple Watch Series 10 46mm${','.repeat(64_000)}x`);

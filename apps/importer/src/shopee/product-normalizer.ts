@@ -263,23 +263,81 @@ const APPLE_FAMILIES: ReadonlyArray<readonly [RegExp, string]> = [
 /**
  * The product's own part of a title, before a gift or bundle after it: "HomePod mini" in
  * "HomePod mini tặng dây Apple Watch Series 10", "MacBook Air M3" in "MacBook Air M3 +
- * Apple Watch", "HomePod mini (Tặng dây Apple Watch)". A marker that opens the title
+ * Apple Watch" and "HomePod mini +Apple Watch", "HomePod mini (Tặng dây Apple Watch)". A
+ * marker that opens the title
  * ("Tặng ốp - Apple Watch", "[Tặng ốp] Apple Watch") leaves it whole; one after only a
  * word ("Quà tặng Apple Watch") leaves a part that names no product. Composed
  * form, so "tặng" is found in a decomposed (NFD) title too (DOS/Rate#1407).
  */
 function ownProductPart(title: string): string {
   const composed = title.normalize('NFC');
-  // A bracketed promo that opens the title is skipped when the product follows it: "[Sạc
-  // Apple Watch tặng kèm] AirPods Pro 2" is the AirPods, but "(AirPods Pro 2 tặng dây
-  // Apple Watch) Chính hãng" names the product inside the brackets.
+  // A bracketed promo that opens the title is dropped when the product follows it: "[Sạc
+  // Apple Watch tặng kèm] AirPods Pro 2" is the AirPods and "[Samsung tặng tai nghe]
+  // Galaxy Tab S9" the tablet, but "(AirPods Pro 2 tặng dây Apple Watch) Chính hãng" names
+  // the product inside the brackets (DOS/Rate#1407, #1422).
   const block = /^\s*(?:\[[^\]]*\]|\([^)]*\)|【[^】]*】)/u.exec(composed)?.[0].length ?? 0;
-  const lead =
-    block > 0 && APPLE_FAMILIES.some(([family]) => family.test(composed.slice(block))) ? block : 0;
-  const found = composed.slice(lead).search(/(?<![\p{L}\d])(?:tặng|kèm)(?![\p{L}\d])| ?\+ /iu);
-  const at = found < 0 ? -1 : lead + found;
-  return at > 0 ? composed.slice(0, at) : composed;
+  // Only the part right after the brackets counts, before its own gift: "[iPhone 16 256GB]
+  // Điện thoại tặng tai nghe" keeps the brackets, which name the product.
+  const rest = composed.slice(block);
+  const restCut = rest.search(GIFT_CUT);
+  const body =
+    block > 0 && namesProduct(restCut > 0 ? rest.slice(0, restCut) : rest) ? rest : composed;
+  const at = body.search(GIFT_CUT);
+  if (at > 0) {
+    // "AirPods 4 tặng kèm khi mua iPhone 16 Pro Max" sells what follows "khi mua"; "tặng
+    // kèm khi mua online: tai nghe" names no product right there and cuts as usual
+    // (DOS/Rate#1422).
+    const buying = /^(?:(?:tặng|kèm)\s*)*(?:khi|lúc)\s+mua\s+/iu.exec(body.slice(at));
+    const sold = buying ? body.slice(at + buying[0].length) : '';
+    const soldName = sold.replace(/^(?:apple|điện thoại|máy)\s+/iu, '');
+    if (
+      soldName &&
+      (APPLE_FAMILIES.some(([family]) => soldName.search(family) === 0) ||
+        soldName.search(PHONE_BRAND_RE) === 0)
+    )
+      return sold;
+  }
+  return at > 0 ? body.slice(0, at) : body;
 }
+
+/** True when the text names a product: an Apple family, a phone brand or a category. */
+function namesProduct(text: string): boolean {
+  return (
+    APPLE_FAMILIES.some(([family]) => family.test(text)) ||
+    PHONE_BRAND_RE.test(text) ||
+    categorySlugOf(text.toLowerCase()) !== null
+  );
+}
+
+/**
+ * Phone brands: an own part that names one and no category of its own keeps the phone
+ * default, so "Samsung Galaxy S25 tặng tai nghe Galaxy Buds 3" is not earbuds
+ * (DOS/Rate#1422). A line of these brands with a category pattern ("Galaxy Watch",
+ * "Galaxy Buds", "Galaxy Tab") matches it first; one with none ("Redmi Watch", "Galaxy
+ * Book") falls to the phone default, as it does with no gift.
+ */
+const PHONE_BRAND_RE =
+  /\b(?:samsung|galaxy|xiaomi|redmi|poco|oppo|vivo(?!\s*book)|realme|pixel|oneplus|honor|xperia|nokia|motorola|tecno|infinix)\b/i;
+
+/**
+ * Where a gift or bundle starts: "tặng" / "kèm" as words, a "+" with spaces round it, or a
+ * " +" right before a letter ("HomePod mini +Apple Watch"). A "+" glued on both sides is
+ * part of a name ("iPhone 15+128GB"), and "+ Cellular" / "+ LTE" / "+ 5 năm" belong to the
+ * product, as in OWN_PART_END (DOS/Rate#1407, #1422).
+ */
+const GIFT_CUT =
+  /(?<![\p{L}\d])(?:tặng|kèm)(?![\p{L}\d])| ?\+ (?!cellular|lte|(?:\d+ ?)?năm(?![\p{L}\d]))| \+(?!cellular|lte)(?=\p{L})/iu;
+
+/** The same markers, every one, to find the last before a gifted product (DOS/Rate#1422). */
+const GIFT_CUT_ALL = new RegExp(GIFT_CUT.source, 'giu');
+
+/**
+ * Where a gift phrase ends: a closing bracket, a "|" separator, a comma, or a " - " that
+ * is not a model range between two numbers ("ốp iPhone 13 - 15 Pro Max"); "AirPods - 15"
+ * ends the gift (DOS/Rate#1422).
+ */
+const GIFT_PHRASE_END =
+  /[)\]】,|]|(?<!\d) [-–] |(?<=\d) [-–] (?!\d{1,2}(?: ?(?:pro|plus|max|mini)(?![\p{L}\d])| ?(?:$|[,|)\]】])))/iu;
 
 /** True when the text names an Apple family other than `line` (DOS/Rate#1407). */
 function namesAppleFamilyOtherThan(text: string, line: string): boolean {
@@ -347,12 +405,16 @@ export function detectCategorySlug(title: string): CanonicalCategorySlug {
   // A gift or bundle after the product is not its category: "AirPods Pro 2 tặng dây Apple
   // Watch" is earbuds, "Apple iPhone 16 tặng smartwatch" a phone (DOS/Rate#1407). An own
   // part that names no category falls back to the whole title, unless it names another
-  // Apple product.
+  // Apple product or a phone brand, which keeps the phone default (DOS/Rate#1422).
   const own = ownProductPart(t);
   if (own !== t) {
     const ownSlug = categorySlugOf(own);
     if (ownSlug) return ownSlug;
-    if (namesAppleFamilyOtherThan(own, 'Watch')) return 'smartphones';
+    // A cut inside an opening promo bracket ("[Samsung tặng bao da] Galaxy Tab S9") leaves
+    // no product to go by, so the whole title decides.
+    const insidePromo = /^\s*(?:\[[^\]]*|\([^)]*|【[^】]*)$/u.test(own);
+    if (!insidePromo && (namesAppleFamilyOtherThan(own, 'Watch') || PHONE_BRAND_RE.test(own)))
+      return 'smartphones';
   }
   return categorySlugOf(t) ?? 'smartphones';
 }
@@ -1408,7 +1470,7 @@ const withoutLeadingPromoWords = (title: string, brand: string): string => {
   }
   return rest !== title && brandHead(brand).test(rest) ? rest : title;
 };
-const OWN_PART_END = / (?:cho|for) | ?\+ (?!cellular|lte|năm(?![\p{L}\d]))/iu;
+const OWN_PART_END = / (?:cho|for) | ?\+ (?!cellular|lte|(?:\d+ ?)?năm(?![\p{L}\d]))/iu;
 const APPLE_SIZE_PATTERNS: Record<string, [RegExp, RegExp]> = {
   ipad: sizePatterns(IPAD_SIZE),
   'macbook air': sizePatterns(MACBOOK_AIR_SIZE),
@@ -1441,7 +1503,57 @@ function readAppleSize(model: string, rawTitle: string): string {
   // The size of a gifted or bundled accessory is not the product's: "tặng Silicone Case
   // 46mm", "kèm ốp 46mm" lose that size; "kèm sạc 46mm GPS" and "kèm bút 13 inch" name
   // no accessory with a size of its own and keep it (DOS/Rate#1263).
-  const productPart = title.slice(Math.max(0, at));
+  let productPart = title.slice(Math.max(0, at));
+  // A gifted or bundled Apple product is not this one, and nor is its size: "MacBook Air
+  // M3 tặng ốp iPhone 15" has no 15 inch screen. Only that gift's phrase goes, from the
+  // last marker before the other product to the phrase's end, so a size before or after
+  // it stays: "Watch Series 10 GPS + Cellular 42mm | Tặng ốp iPhone", "MacBook Air M3
+  // (Tặng AirPods) 15 inch" (DOS/Rate#1422).
+  const familyName = family === 'ipad' ? 'iPad' : family === 'watch' ? 'Watch' : 'MacBook';
+  // The gift phrase runs on past a comma or " - " that leads to another Apple product of
+  // the same gift ("tặng AirPods, ốp iPhone 15"). Each pass drops one gift; a title with
+  // more than eight loses everything from the last gift found on.
+  const giftStart = () => {
+    let otherAt = -1;
+    for (const [pattern, name] of APPLE_FAMILIES) {
+      if (name === familyName) continue;
+      const found = productPart.search(pattern);
+      if (found > 0 && (otherAt < 0 || found < otherAt)) otherAt = found;
+    }
+    if (otherAt < 0) return null;
+    const markers = Array.from(productPart.slice(0, otherAt).matchAll(GIFT_CUT_ALL));
+    const start = markers.length > 0 ? markers[markers.length - 1]!.index! : -1;
+    return start > 0 ? { start, otherAt } : null;
+  };
+  for (let pass = 0; ; pass++) {
+    const gift = giftStart();
+    if (!gift) break;
+    if (pass === 8) {
+      productPart = productPart.slice(0, gift.start);
+      break;
+    }
+    let end = gift.otherAt;
+    for (;;) {
+      const next = productPart.slice(end).search(GIFT_PHRASE_END);
+      if (next < 0) {
+        end = -1;
+        break;
+      }
+      end += next;
+      const after = productPart.slice(end).replace(/^[,|)\]】]| [-–] /u, '');
+      const segmentEnd = after.search(GIFT_PHRASE_END);
+      const segment = segmentEnd < 0 ? after : after.slice(0, segmentEnd);
+      if (
+        !/^[,]| [-–] /u.test(productPart.slice(end)) ||
+        !namesAppleFamilyOtherThan(segment, familyName) ||
+        // "bản 15 inch hỗ trợ iPhone Mirroring" states the product's own size.
+        /\d+(?:[.,]\d+)? ?(?:inch|in(?![\p{L}\d])|"|''|mm(?![\p{L}\d]))/iu.test(segment)
+      )
+        break;
+      end = productPart.length - after.length;
+    }
+    productPart = productPart.slice(0, gift.start) + (end < 0 ? '' : ' ' + productPart.slice(end));
+  }
   const giftSizes = new Set<string>();
   const stripGift = (scope: string, noun: RegExp, sizes = new Set<string>()) =>
     scope.replace(GIFTED_ACCESSORY_SIZE, (m, word: string, words: string) => {
@@ -1784,24 +1896,25 @@ export class ProductNormalizer {
         /airpods|\bwatch\b|macbook|apple\s*pencil/i.test(appleTitle.slice(0, fitsAt))
       )
         appleTitle = appleTitle.slice(0, fitsAt);
-      const iphoneMatch = appleTitle.match(
+      // An Apple line in a gift or bundle after another Apple product is not the product:
+      // "HomePod mini tặng dây Apple Watch Series 10" is the HomePod mini, "Apple TV 4K tặng
+      // AirPods Pro 2" the Apple TV (DOS/Rate#1407), "AirPods Pro 2 tặng ốp iPhone 16" the
+      // AirPods (DOS/Rate#1422).
+      const ownAppleTitle = ownProductPart(appleTitle);
+      const lineTitle = (line: string) =>
+        namesAppleFamilyOtherThan(ownAppleTitle, line) ? ownAppleTitle : appleTitle;
+      const iphoneMatch = lineTitle('iPhone').match(
         /iphone\s*(\d+e\b|\d+(?:\s*(?:pro\s*max|pro|plus|mini|air)|\+(?= ?(?:$|[-,]|\d+(?:[.,]\d+)? ?(?:gb|tb)\b|[45]g\b|lte\b|chính\b)))?|air\b|duo\b|se(?:\s*(?:\(\s*(?:2020|2022|2025)\s*\)|(?:2020|2022|2025)\b|(?:gen\s*)?[234]\b))?)/i
       );
       // The base iPad by its chip, "iPad A16" or "iPad (A16)", and "iPad Gen 10" like
       // "iPad 10" (DOS/Rate#817).
-      const ipadMatch = appleTitle.match(
+      const ipadMatch = lineTitle('iPad').match(
         // A screen size before the line ("iPad 11 Pro M4") is skipped (DOS/Rate#819).
         /ipad\s*(?:\(\s*)?(?:\d{2}(?:[.,]\d)?\s*(?:inch\s*)?(?=pro|air|mini))?(pro\s*m\d+|air\s*m\d+|air\s*[1-9](?!\d|[.,]\d|g\b|\s*(?:gb|tb|inch\b|in\b|"|''))|pro|air|mini(?:\s*[1-9](?!\d|[.,]\d|g\b|\s*(?:gb|tb|inch\b|in\b|"|'')))?|gen\s*\d+|a\d{2}\b|\d+(?!\d|\s*(?:pro|air|mini)\b))/i
       );
-      const macbookMatch = appleTitle.match(
+      const macbookMatch = lineTitle('MacBook').match(
         /macbook\s*(pro\s*m\d+(?:\s*(?:pro|max))?|air\s*m\d+|air|pro|neo\b)/i
       );
-      // A watch or AirPods in a gift or bundle after another Apple product is not the
-      // product: "HomePod mini tặng dây Apple Watch Series 10" is the HomePod mini, "Apple
-      // TV 4K tặng AirPods Pro 2" the Apple TV (DOS/Rate#1407).
-      const ownAppleTitle = ownProductPart(appleTitle);
-      const lineTitle = (line: string) =>
-        namesAppleFamilyOtherThan(ownAppleTitle, line) ? ownAppleTitle : appleTitle;
       const watchMatch = lineTitle('Watch').match(
         // "Ultra 49mm" is the case size, not a generation (DOS/Rate#819). "Watch S10" is
         // the Series 10; only a generation (1 to 19) right after "Watch", with no unit or
