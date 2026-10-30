@@ -307,12 +307,213 @@ function testValueLanguage() {
   console.warn('  ✅ Spec values carry their language when it differs');
 }
 
+// Compare matrix cells mark their spec values, so only those get a language;
+// the Czech catalogue text around them does not (DOS/Rate#1392).
+async function testCompareCellLanguage() {
+  const { createTranslator } = await import('next-intl');
+  const { compareCellSegments, plainCompareCell } =
+    await import('../compare-cell');
+  const { buildSpecGroups } =
+    await import('../../components/compare/CompareWorkspace');
+  const csMessages = JSON.parse(
+    (await import('node:fs')).readFileSync(
+      (await import('node:path')).join(__dirname, '../../../locales/cs.json'),
+      'utf8'
+    )
+  );
+  const cs = createTranslator({
+    locale: 'cs',
+    messages: csMessages,
+    namespace: 'compare',
+  });
+  const t = cs as unknown as Parameters<typeof buildSpecGroups>[0];
+  const rows = new Map(
+    buildSpecGroups(t).flatMap((g) => g.rows.map((r) => [r.id, r]))
+  );
+  const product = {
+    slug: 'x',
+    specifications: {
+      hardware: {
+        os: 'iOS 18',
+        storage_expansion: 'microSDXC (dedicated slot)',
+      },
+      design: { colors: ['Desert titanium', 'Black'], biometrics: 'Face ID' },
+      display: { protection: 'Ceramic Shield glass' },
+    },
+  } as never;
+
+  const osExp = rows.get('hw_os_exp')!;
+  const plain = osExp.renderValue(product);
+  assert.doesNotMatch(plain, /[\uE000\uE001]/, 'renderValue is plain text');
+  assert.equal(plain, plainCompareCell(osExp.renderCell!(product)));
+  const segments = compareCellSegments(osExp.renderCell!(product));
+  const prefix = segments.find((s) => !s.spec && /karta/i.test(s.text));
+  assert.ok(prefix, 'the Czech card-slot prefix is catalogue text');
+  const slot = segments.find((s) => s.spec && /microSDXC/.test(s.text));
+  assert.ok(slot, 'the card-slot value is a spec part');
+  assert.equal(localizedSpecValue(slot.text, 'cs').lang, 'en');
+
+  const colorsCell = compareCellSegments(
+    rows.get('design_bio_colors')!.renderCell!(product)
+  );
+  assert.ok(
+    colorsCell.some((s) => s.spec && s.text === 'Desert titanium, Black')
+  );
+  assert.ok(colorsCell.some((s) => !s.spec && /Barvy/.test(s.text)));
+
+  // Every row, with every field set: no Czech catalogue prefix ends up inside
+  // a spec part, and a boolean is catalogue text.
+  const full = {
+    slug: 'z',
+    specifications: {
+      display: {
+        type: 'LTPO OLED',
+        resolution: '1179x2556',
+        protection: 'Ceramic Shield glass',
+        features: 'Dynamic Island',
+      },
+      hardware: {
+        chipset: 'Apple A18',
+        cpu: 'Hexa-core',
+        gpu: 'Apple GPU',
+        os: 'iOS 18',
+        storage_expansion: 'No card slot',
+      },
+      camera: {
+        main_camera: '48 MP',
+        second_camera: '12 MP',
+        third_camera: '12 MP tele',
+        fourth_camera: 'LiDAR',
+        video_recording: '4K@60fps',
+        flash: 'Dual LED',
+        front_camera: '12 MP',
+      },
+      battery: {
+        type: 'Li-Ion, non-removable',
+        charging: 'Wireless fast charging',
+        reverse_charging: 'Reverse wireless charging 4.5W',
+      },
+      design: {
+        dimensions: '147.6 x 71.6 x 7.8 mm',
+        materials: 'Glass front',
+        resistance: 'IP68 dust/water resistant',
+        biometrics: 'Face ID',
+        colors: ['Black'],
+      },
+      cellular: {
+        sim_type: 'Nano-SIM and eSIM',
+        technology: 'GSM / LTE / 5G',
+        bands_5g: 'n1, n78',
+        data_speed: '5G',
+      },
+      connectivity: {
+        wlan: 'Wi-Fi 7',
+        bluetooth: '5.3',
+        nfc: true,
+        usb: 'USB-C',
+        location: 'GPS',
+        sensors: 'Face ID, accelerometer',
+      },
+      multimedia: {
+        loudspeaker: 'Stereo speakers',
+        headphone_jack_35mm: false,
+        audio_features: 'Spatial audio',
+      },
+      availability: {
+        announced: '2024, September',
+        status: 'Available',
+        prices_msrp: '$799',
+      },
+      regulatory: {
+        certifications: 'CE',
+        fcc_approval: 'BCG-E8726A',
+        sar_head: '1.2 W/kg',
+        sar_body: '1.1 W/kg',
+      },
+    },
+  } as never;
+  const prefixes = [
+    'valCardSlotPrefix',
+    'valColorsPrefix',
+    'valReverseChargePrefix',
+    'valSarHeadPrefix',
+    'valSarBodyPrefix',
+  ].map((key) =>
+    (csMessages.compare[key] as string).split('{value}')[0]!.trim()
+  );
+  const yes = csMessages.compare.boolYes as string;
+  const no = csMessages.compare.boolNo as string;
+  for (const [id, row] of rows) {
+    if (!row.renderCell) continue;
+    for (const segment of compareCellSegments(row.renderCell(full))) {
+      if (!segment.spec) continue;
+      for (const prefix of prefixes) {
+        assert.ok(
+          !segment.text.includes(prefix),
+          `${id}: "${prefix}" inside a spec part`
+        );
+      }
+      assert.notEqual(segment.text, yes, `${id}: Yes is catalogue text`);
+      assert.notEqual(segment.text, no, `${id}: No is catalogue text`);
+    }
+  }
+  // A prefixed value of "-" leaves its prefix catalogue text too.
+  const dashed = {
+    slug: 'd',
+    specifications: {
+      hardware: { os: 'iOS 18', storage_expansion: '-' },
+      regulatory: { certifications: 'CE', sar_head: '-' },
+    },
+  } as never;
+  for (const id of ['hw_os_exp', 'reg_cert']) {
+    for (const segment of compareCellSegments(
+      rows.get(id)!.renderCell!(dashed)
+    )) {
+      if (!segment.spec) continue;
+      for (const prefix of prefixes) {
+        assert.ok(
+          !segment.text.includes(prefix),
+          `${id}: "${prefix}" inside a spec part`
+        );
+      }
+    }
+  }
+  const battery = compareCellSegments(
+    rows.get('bat_details')!.renderCell!(full)
+  );
+  assert.ok(
+    battery.some((s) => s.spec && s.text === 'Reverse wireless charging 4.5W')
+  );
+  // A raw string is a spec value; a boolean is not.
+  const nfc = compareCellSegments(
+    rows.get('conn_nfc')!.renderCell!({
+      slug: 'n',
+      specifications: { connectivity: { nfc: 'Yes, market dependent' } },
+    } as never)
+  );
+  assert.deepEqual(nfc, [{ text: 'Yes, market dependent', spec: true }]);
+
+  // A catalogue-only cell has no spec part at all.
+  const reviews = compareCellSegments(
+    rows.get('rating_weighted')!.renderCell!({
+      slug: 'y',
+      specifications: {},
+    } as never)
+  );
+  assert.ok(
+    reviews.every((s) => !s.spec),
+    'no spec part in a review cell'
+  );
+  console.warn('  ✅ Compare cells mark only their spec values');
+}
+
 async function main() {
   console.warn('🧪 Product spec rows suite (DOS/Rate#1186)');
   testProductPage();
   testCompare();
   testValueLanguage();
   await testCompareUnknownSpecs();
+  await testCompareCellLanguage();
 }
 
 main().catch((err) => {

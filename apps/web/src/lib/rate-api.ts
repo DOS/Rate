@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 import type { Database, MasterProduct } from '@repo/shared-data';
 import { createLogger } from '@/lib/logger';
+import { timeStep } from '@/lib/server-timing';
 import { rankModelCandidates } from '@/lib/model-match';
 import { isPendingReview } from '@/lib/review-display';
 import { listingReviewSummary } from '@/lib/analyzer-copy';
@@ -125,25 +126,38 @@ export function resetRateClientForTests(): void {
  * the number of rows actually returned, which also works if max-rows is lowered.
  * A failed page throws RateDataUnavailableError: a partial list would otherwise
  * be cached as if it were complete (DOS/Rate#333).
+ *
+ * A read that asks for the exact count (`select(..., { count: 'exact' })`)
+ * stops once it holds that many rows, without the extra request for an empty
+ * page; a cold product render made that extra round trip in every paged read
+ * (DOS/Rate#1344). Without a count it pages until an empty page, as before.
  */
 // Non-empty pages one paged read may take: a server (or test mock) that
 // ignores .range() would otherwise loop until memory runs out (DOS/Rate#485).
 // 500 x 1000 rows is far above any table this app reads in full.
 const FETCH_ALL_MAX_PAGES = 500;
 
-async function fetchAllRows<T>(
+export async function fetchAllRows<T>(
   label: string,
   buildPage: (
     from: number,
     to: number
-  ) => PromiseLike<{ data: T[] | null; error: { message: string } | null }>,
+  ) => PromiseLike<{
+    data: T[] | null;
+    error: { message: string; code?: string } | null;
+    count?: number | null;
+  }>,
   pageSize = 1000,
   /** False for a speculative read whose caller logs a failure if it uses it. */
   logFailure = true
 ): Promise<T[]> {
   const rows: T[] = [];
   for (let from = 0, pages = 0; ;) {
-    const { data, error } = await buildPage(from, from + pageSize - 1);
+    const { data, error, count } = await buildPage(from, from + pageSize - 1);
+    // With a count, PostgREST answers 416 rather than an empty page once the
+    // offset is past the end (rows left the filter mid-read): the read ends
+    // there, as an empty page would end it.
+    if (error?.code === 'PGRST103' && from > 0) return rows;
     if (error) {
       if (logFailure) {
         log.error('paged read failed', {
@@ -164,6 +178,8 @@ async function fetchAllRows<T>(
     }
     rows.push(...page);
     from += page.length;
+    // The server said how many rows match: no request for an empty page.
+    if (typeof count === 'number' && rows.length >= count) return rows;
   }
 }
 
@@ -374,6 +390,9 @@ export async function getCategoryDirectoryFacets(
 /**
  * Fetch list of master products with 10-Field-Groups multi-criteria filtering & sorting
  */
+/** When the RPC fallback was last logged (DOS/Rate#1353). */
+let searchRpcFallbackLoggedAt = Number.NEGATIVE_INFINITY;
+
 export async function getMasterProducts(
   params?: MasterProductFilterParams
 ): Promise<MasterProduct[]> {
@@ -389,11 +408,13 @@ export async function getMasterProducts(
       : '';
 
   if (cleanCategorySlug && cleanCategorySlug !== 'all') {
-    const { data: catRow, error: catErr } = await supabase
-      .from('categories')
-      .select('id')
-      .eq('slug', cleanCategorySlug)
-      .maybeSingle();
+    const { data: catRow, error: catErr } = await timeStep('category', () =>
+      supabase
+        .from('categories')
+        .select('id')
+        .eq('slug', cleanCategorySlug)
+        .maybeSingle()
+    );
 
     if (catErr) {
       log.error('category slug lookup failed', {
@@ -456,9 +477,11 @@ export async function getMasterProducts(
   // Every filter defaults to NULL in SQL, so an omitted (undefined) filter is
   // the same as passing null.
   {
-    const { data: rpcRows, error: rpcErr } = await supabase.rpc(
-      'search_master_products',
-      {
+    // The slug map is read alongside the RPC, not after it: one round trip
+    // less on a cold instance (DOS/Rate#1353). It never rejects.
+    const categorySlugMapRead = timeStep('slug-map', getCategorySlugMap);
+    const { data: rpcRows, error: rpcErr } = await timeStep('search-rpc', () =>
+      supabase.rpc('search_master_products', {
         p_category_id: resolvedCategoryId ?? undefined,
         p_brands: brandList && brandList.length > 0 ? brandList : undefined,
         p_search: cleanSearch || undefined,
@@ -480,13 +503,23 @@ export async function getMasterProducts(
         p_sort: params?.sort || 'default',
         p_limit: boundedLimit,
         p_offset: boundedOffset,
-      }
+      })
     );
     if (!rpcErr && Array.isArray(rpcRows)) {
-      const categorySlugById = await getCategorySlugMap();
+      const categorySlugById = await categorySlugMapRead;
       return (rpcRows as MasterProduct[]).map((r) =>
         normalizeMasterProductRow(r, categoryHint, categorySlugById)
       );
+    }
+    // The fallback reads every matching row in this process: say why, so a
+    // slow catalogue is not blamed on the RPC when it never ran (#1353). Once
+    // a minute per instance, so a missing RPC does not log every request.
+    if (Date.now() - searchRpcFallbackLoggedAt >= 60_000) {
+      searchRpcFallbackLoggedAt = Date.now();
+      log.warn('search_master_products failed; using the fallback query', {
+        message: rpcErr?.message ?? 'no rows array',
+        code: rpcErr?.code,
+      });
     }
   }
 
@@ -1373,7 +1406,7 @@ export async function getMasterProductOffers(
     (from, to) =>
       supabase
         .from('v_products_with_merchant_trust')
-        .select(TRUST_VIEW_SELECT)
+        .select(TRUST_VIEW_SELECT, { count: 'exact' })
         .eq('cluster_id', cleanMasterId)
         .order('price_current', { ascending: true })
         .order('id')
@@ -1402,7 +1435,7 @@ export async function getMasterProductOffers(
     fetchAllRows('product offers', (from, to) =>
       supabase
         .from('products')
-        .select(OFFER_FALLBACK_SELECT)
+        .select(OFFER_FALLBACK_SELECT, { count: 'exact' })
         .eq('cluster_id', cleanMasterId)
         .order('price_current', { ascending: true })
         .order('id')
@@ -1430,12 +1463,13 @@ async function getListingAvailability(
     (from, to) =>
       supabase
         .from('products')
-        .select('id, availability')
+        .select('id, availability', { count: 'exact' })
         .in('cluster_id', [...masterIds])
         .order('id')
         .range(from, to) as unknown as PromiseLike<{
         data: { id: unknown; availability: unknown }[] | null;
         error: { message: string } | null;
+        count: number | null;
       }>
   );
   const byId = new Map<string, OfferAvailability>();
@@ -1483,21 +1517,25 @@ export async function getMasterProductOffersBatch(
 
     // Paged per chunk: 150 masters can easily hold more than 1000 offers.
     const [viewData, availability] = await Promise.all([
-      fetchAllRows('v_products_with_merchant_trust', (from, to) =>
-        supabase
-          .from('v_products_with_merchant_trust')
-          .select(TRUST_VIEW_SELECT)
-          .in('cluster_id', batchIds)
-          .order('price_current', { ascending: true })
-          .order('id')
-          .range(from, to)
-      ).catch(() => null),
-      getListingAvailability(batchIds),
+      timeStep('offers-view', () =>
+        fetchAllRows('v_products_with_merchant_trust', (from, to) =>
+          supabase
+            .from('v_products_with_merchant_trust')
+            .select(TRUST_VIEW_SELECT)
+            .in('cluster_id', batchIds)
+            .order('price_current', { ascending: true })
+            .order('id')
+            .range(from, to)
+        ).catch(() => null)
+      ),
+      timeStep('availability', () => getListingAvailability(batchIds)),
     ]);
 
     if (viewData) {
       const rows = viewData as unknown as RawTrustViewRow[];
-      const extras = await sellerExtrasForTrustViewRows(rows);
+      const extras = await timeStep('seller-extras', () =>
+        sellerExtrasForTrustViewRows(rows)
+      );
       for (const row of rows) {
         const cid = row.cluster_id ? String(row.cluster_id) : '';
         if (!cid) continue;
@@ -1581,7 +1619,7 @@ async function getListingIdsForMaster(
   const rows = await fetchAllRows<{ id: string }>(label, (from, to) =>
     supabase
       .from('products')
-      .select('id')
+      .select('id', { count: 'exact' })
       .eq('cluster_id', cleanMasterId)
       .order('id')
       .range(from, to)

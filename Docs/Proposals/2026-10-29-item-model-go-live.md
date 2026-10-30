@@ -1,6 +1,6 @@
 # Runbook: Item model go-live (DOS/Rate#1150)
 
-**Status:** runbook for JOY, **nothing applied**. One page to approve the whole Item / variant / listing rollout in one pass. Vietnamese version for JOY: [`2026-10-29-item-model-go-live.html`](./2026-10-29-item-model-go-live.html).
+**Status:** runbook for JOY, **nothing applied** (updated 2026-10-30, see Readiness). One page to approve the whole Item / variant / listing rollout in one pass. Vietnamese version for JOY: [`2026-10-29-item-model-go-live.html`](./2026-10-29-item-model-go-live.html).
 
 Design (approved 2026-10-27, #1129): [`2026-10-27-item-variant-listing-model.md`](./2026-10-27-item-variant-listing-model.md). Per-step proposals:
 
@@ -9,6 +9,33 @@ Design (approved 2026-10-27, #1129): [`2026-10-27-item-variant-listing-model.md`
 - Item RPCs, M3, M4: [`2026-10-29-dos-me-m3-m4.md`](./2026-10-29-dos-me-m3-m4.md) (#1160, PR #1279)
 
 Every SQL file is replayed in CI on a throwaway PostgreSQL 17 stack (apply twice, checks, rollback twice, re-apply). No step has touched the shared prod Supabase.
+
+## Readiness (updated 2026-10-30)
+
+The code and docs side is done. What remains waits on JOY: the decisions below and the DOS-Me beta flow. `RATE_ITEM_MODEL` is off everywhere.
+
+| Item                                                                    | Status                                   | Evidence                                                                                                                                                                                                                                                                                                                                                                                                  |
+| :---------------------------------------------------------------------- | :--------------------------------------- | :-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Versus route loop on an Item slug with capitals (was a go-live blocker) | Fixed                                    | #1383 closed by PR #1395, merged 2026-10-30                                                                                                                                                                                                                                                                                                                                                               |
+| `rate_worker` narrowed on `rate.items` in M1+M2                         | Fixed in the proposal (not applied)      | PR #1394, merged 2026-10-30, as JOY approved in DOS/Rate-Services#739. The CI replay gives the worker the old wider grants and checks the re-apply narrows them.                                                                                                                                                                                                                                          |
+| RS#739's three crawl-queue read RPCs                                    | Approved by JOY; no DOS-Me migration yet | DOS/Rate-Services#739 (approved 2026-10-30), proposal PR RS#740, consumer PR RS#756 (prints "not deployed" until the functions exist). Ordering with M1+M2: below.                                                                                                                                                                                                                                        |
+| CI job `E2E (Playwright, Item model)`                                   | Runs on every PR, stable                 | 132 PR runs from 2026-10-28 ([first](https://github.com/DOS/Rate/actions/runs/40740690991)) to 2026-10-30: 129 green, 0 failed, 0 re-runs; 2 cancelled by a newer push to the same branch ([example](https://github.com/DOS/Rate/actions/runs/41010256926)), 1 in progress at count time ([latest](https://github.com/DOS/Rate/actions/runs/41015404690), green since). Job time: median 97 s, max 142 s. |
+| Step 5: Rate Services on the Item-aware importer                        | Pinned, flag off                         | Rate Services `main` pins `vendor/rate` at `855fbfdb` (RS#758, 2026-10-30), which includes #1179, #1190, #1208. Left: the RS PO confirms one promote cycle with no new errors.                                                                                                                                                                                                                            |
+| Step 1: #1123 / M0                                                      | Waits on decision 8                      | #1123 open                                                                                                                                                                                                                                                                                                                                                                                                |
+| DOS-Me beta flow                                                        | Still locked                             | ROADMAP 6.4: `beta-migrations.yml` locked, so prod waits                                                                                                                                                                                                                                                                                                                                                  |
+| Item E2E as a required check                                            | Not yet                                  | On `dev`, the `dev-main-light` ruleset requires `Typecheck & Build Monorepo`, `E2E (Playwright)` and `Secret scan (gitleaks)`; `dev-task-claim` requires `task-claim`. No ruleset has the Item E2E job (decision 9).                                                                                                                                                                                      |
+
+**Still blocking go-live:**
+
+- Decision 8 (M0), then decisions 1 to 5 (M1+M2). Decisions 6 and 7 are needed only before M3/M4.
+- The DOS-Me beta flow reopening (ROADMAP 6.4), to reach prod.
+- No code blocker is left: #1383 is the only DOS/Rate issue marked "Item go-live blocker", and it is closed.
+
+**Ordering of the RS#739 migration and M1+M2:**
+
+- **Two separate DOS-Me migrations, not one**, so each keeps its own verify and rollback. The three RS#739 functions (`crawl_queue_summary`, `crawl_job_failures`, `crawl_job_repeat_failures`) read only `rate.crawl_jobs` and do not depend on `rate.items`. They can go before M1+M2 or between steps, as long as each goes through preview, beta and prod.
+- **The `rate.items` grants live in M1+M2 itself**, not in the RS#739 migration: a grant needs the table. Apply M1+M2 from the file as of PR #1394. If preview ever ran the older file, re-running the new one narrows the grants (its `REVOKE`s are already there).
+- Rate Services does not wait on either: RS#756 prints "not deployed" while the functions are missing, and its Item code runs only with the flag on, after M1+M2.
 
 ## Rules for every database step
 
@@ -53,7 +80,7 @@ Note on the order: #1123 and M0 are one step (M0 is the reviewed SQL for #1123, 
 
 ### 3. M1+M2: Items
 
-- **Changes:** `rate.items` (RLS: public reads published; `rate_worker` reads all, updates spec columns only), `master_products.item_id / variant_key / sort_order`, `products.item_id / variant_source`, sync triggers (a master gets its Item from its key; listings follow), RPCs `match_item`, `refresh_item_stats`, `retire_item_unknown_variant`, Item-aware rating and vote functions with the same signatures, and the backfill. One transaction, idempotent.
+- **Changes:** `rate.items` (RLS: public reads published; `rate_worker` reads all, updates only `description, specifications, key_specs, images, thumbnail, updated_at`, and executes only `match_item` and `refresh_item_stats`, per PR #1394), `master_products.item_id / variant_key / sort_order`, `products.item_id / variant_source`, sync triggers (a master gets its Item from its key; listings follow), RPCs `match_item`, `refresh_item_stats`, `retire_item_unknown_variant`, Item-aware rating and vote functions with the same signatures, and the backfill. One transaction, idempotent.
 - **File:** `2026-10-28-dos-me-m1-m2-items.sql`.
 - **Verify:** `2026-10-28-dos-me-m1-m2-items-verify.sql`, V1 to V15, before and after (the same file is the reconciliation later).
 - **Roll back:** `2026-10-28-dos-me-m1-m2-items-rollback.sql`, writers paused and the flags `off` first. Restores the two rating functions' previous bodies. Never `TRUNCATE rate.items`.
@@ -69,7 +96,7 @@ Note on the order: #1123 and M0 are one step (M0 is the reviewed SQL for #1123, 
 
 ### 5. Rate Services bump
 
-- **Changes:** Rate Services moves its `vendor/rate` pin to a DOS/Rate `dev` commit with the Item-aware importer (#1179, #1190, #1208, #1213 and later). Its own Item work already merged (RS#685 NULL `cluster_id` is "no variant", RS#687 Item verification, job Item ids, Item refresh, RS#689).
+- **Changes:** Rate Services moves its `vendor/rate` pin to a DOS/Rate `dev` commit with the Item-aware importer (#1179, #1190, #1208, #1213 and later). Its own Item work already merged (RS#685 NULL `cluster_id` is "no variant", RS#687 Item verification, job Item ids, Item refresh, RS#689). **Update 2026-10-30:** pinned at `855fbfdb` (RS#758), flag off; one promote cycle still to confirm.
 - **Verify:** Rate Services CI green on the bump; with the flag still `off`, one normal promote cycle shows no new errors.
 - **Roll back:** revert the pin.
 - **Who:** Rate Services (RS PO opens the PR), JOY merges.
@@ -111,14 +138,14 @@ Note on the order: #1123 and M0 are one step (M0 is the reviewed SQL for #1123, 
 
 ## Open decisions for JOY
 
-Each has a recommendation, which is the default if JOY agrees.
+Each has a recommendation, which is the default if JOY agrees. Reviewed 2026-10-30: all nine still apply; none is moot. The `rate_worker` grants on `rate.items` are not among them: JOY settled them in DOS/Rate-Services#739 and the file follows (PR #1394).
 
 1. **(M1+M2) `match_item` filters by brand, not by model.** The design names a model argument; filtering by it only finds the exact model, which Tier 1 already does. **Recommend: brand.**
 2. **(M1+M2) An Item with no reviews stores rating 0**, like the variant columns today; the web shows "no rating" when the review count is 0. **Recommend: keep 0.**
 3. **(M1+M2) `rate.v_products_with_merchant_trust` is not changed.** Adding `item_id` breaks a re-run of `20261018153000`; readers take `item_id` from `rate.products`. **Recommend: leave the view.**
 4. **(M1+M2, updated by M3) Price alerts on an `unknown` variant.** An alert needs a size. M1+M2 leaves them on the variant; M3 now refuses to run while one is active, so JOY decides each one before M3: move it to a sized variant or close it. **Recommend: decide per alert from V7 before M3.**
 5. **(M1+M2) Admin override name `rate.variant_override`.** Any admin tool that re-assigns a hand-set variant sets it locally. **Recommend: approve the name.**
-6. **(M3/M4) M4 keeps the M1 sync triggers.** The design drops them; the importer still relies on them to create a new Item when it seeds a master. The M4 guard is the backstop; dropping them waits until the importer inserts Items itself. **Recommend: keep them.**
+6. **(M3/M4) M4 keeps the M1 sync triggers.** The design drops them; the importer still relies on them to create a new Item when it seeds a master (as of 2026-10-30 it only updates the specs of existing Items and never creates one). The M4 guard is the backstop; dropping them waits until the importer inserts Items itself. **Recommend: keep them.**
 7. **(M3/M4) No master-side guard on a variant's Item change.** M1's move-listings trigger moves the listings in the same statement, and V3 checks the result. **Recommend: no extra guard.**
 8. **(M0) Approve the M0 data write, including `apple:airpods-pro-2-usbc` becoming Item `apple:airpods-pro-2`** (the normalizer does not split USB-C from Lightning; only USB-C is sold new). **Recommend: approve.**
-9. **(CI) Make `E2E (Playwright, Item model)` a required check on `dev`.** It ran green with no retry on every run of PR #1273 (about 4 minutes). Branch protection is a repository setting. **Recommend: required.**
+9. **(CI) Make `E2E (Playwright, Item model)` a required check on `dev`.** From 2026-10-28 to 2026-10-30 it ran on 132 PR runs: 129 green, 0 failed, no re-run needed (2 cancelled by a newer push), about 1.5 to 2.5 minutes each (see Readiness). Branch protection is a repository setting. **Recommend: required.**

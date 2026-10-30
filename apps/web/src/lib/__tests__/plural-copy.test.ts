@@ -239,6 +239,186 @@ function main() {
     'Checked 1,234 store listings'
   );
 
+  // Watchlist, merchants, deals, home and the developers playground
+  // (DOS/Rate#1398).
+  const rest: Array<[string, Record<string, number | string>, string]> = [
+    ['watchlist.statWatchingValue', { count: 1 }, '1 model'],
+    ['watchlist.statReachedValue', { count: 3 }, '3 modely na cíli'],
+    ['watchlist.sellersCountSub', { count: 2 }, '2 prodejci'],
+    [
+      'watchlist.cloudSavedAll',
+      { saved: 1 },
+      'Uloženo 1 cenové upozornění do Rate Cloud. Notifikace budou zaslány na váš e-mail.',
+    ],
+    [
+      'watchlist.cloudSavedAll',
+      { saved: 3 },
+      'Uložena 3 cenová upozornění do Rate Cloud. Notifikace budou zaslány na váš e-mail.',
+    ],
+    [
+      'merchants.profileRadarGenuineCount',
+      { count: 4 },
+      '4 nabídky pod mediánem',
+    ],
+    ['merchants.showMoreMerchants', { count: 1 }, 'Zobrazit další (1 obchod)'],
+    ['merchants.modelsCountUnit', { count: 6 }, '6 modelů'],
+    [
+      'deals.radarScannedSummary',
+      { offers: 1, clusters: 1 },
+      'Prohledána 1 nabídka napříč 1 produktovým klastrem',
+    ],
+    [
+      'deals.radarScannedSummary',
+      { offers: 72, clusters: 13 },
+      'Prohledáno 72 nabídek napříč 13 produktovými klastry',
+    ],
+    [
+      'homePage.radarHomeAnalyzed',
+      { offers: 1, merchants: 1, clusters: 2 },
+      'Automatické porovnání 1 nabídky od 1 prodejce napříč 2 produktovými klastry',
+    ],
+    [
+      'homePage.authenticReviewsStatBadge',
+      { count: 2, pct: 90 },
+      '2 autentické recenze (90 %)',
+    ],
+    ['heroSearch.trackingProductsCount', { count: 3 }, 'Sledovány 3 produkty'],
+    [
+      'heroSearch.aiReviewAuthValue',
+      { pct: 80, total: 1 },
+      '✓ 80 % autentických (z 1 recenze)',
+    ],
+    [
+      'developers.pgSelectPresetLabel',
+      { count: 13 },
+      'Vyberte vzorový požadavek (13 vzorů):',
+    ],
+    [
+      'developers.pgMdTitle',
+      { count: 2 },
+      '### 🔌 Rate.vn REST API v1 (2 vzorové požadavky)',
+    ],
+  ];
+  for (const [key, values, expected] of rest) {
+    assert.equal(
+      cs(key as never, values as never),
+      expected,
+      `cs ${key} ${JSON.stringify(values)}`
+    );
+  }
+  const restEn: Array<[string, Record<string, number | string>, string]> = [
+    [
+      'watchlist.compareSameCatBtn',
+      { count: 1 },
+      'Compare 1 same-category device',
+    ],
+    [
+      'merchants.historicalLowObs',
+      { price: '1.000', count: 1 },
+      'All-time low: 1.000 ₫ (1 point)',
+    ],
+    [
+      'deals.showingCount',
+      { visible: 1, count: 1 },
+      'Showing 1 of 1 device within your budget',
+    ],
+    [
+      'homePage.radarHomeAnalyzed',
+      { offers: 1, merchants: 2, clusters: 1 },
+      'Automatically cross-checking 1 listing from 2 merchants across 1 product cluster',
+    ],
+    [
+      'heroSearch.aiReviewAuthValue',
+      { pct: 80, total: 1 },
+      '✓ 80% authentic (across 1 review)',
+    ],
+  ];
+  for (const [key, values, expected] of restEn) {
+    assert.equal(
+      en(key as never, values as never),
+      expected,
+      `en ${key} ${JSON.stringify(values)}`
+    );
+  }
+
+  const more1398: Array<[string, Record<string, number | string>, string]> = [
+    [
+      'merchants.profileRadarAnalyzed',
+      { count: 1 },
+      'Automaticky porovnáno napříč 1 nabídkou',
+    ],
+    [
+      'merchants.mdRadarLine',
+      { genuine: 1, traps: 0 },
+      '- **Cenové signály:** 🟢 1 minimum napříč obchody | 🚨 0 falešných slev',
+    ],
+    [
+      'merchants.mdAuthenticLine',
+      { pct: 90, auth: 9, total: 10, flagged: 1 },
+      '- **Podíl skutečných recenzí:** 90 % (9/10 skutečných, odfiltrována 1 falešná/spamová)',
+    ],
+    [
+      'watchlist.bestOfferPrefix',
+      { count: 1 },
+      'Nejnižší cena napříč 1 platformou/prodejcem:',
+    ],
+    ['homePage.followersCountText', { count: 2 }, '2 sledující'],
+    ['homePage.followersCountText', { count: 1500 }, '1 500 sledujících'],
+    [
+      'watchlist.cloudSavedAll',
+      { saved: 7 },
+      'Uloženo 7 cenových upozornění do Rate Cloud. Notifikace budou zaslány na váš e-mail.',
+    ],
+  ];
+  for (const [key, values, expected] of more1398) {
+    assert.equal(
+      cs(key as never, values as never),
+      expected,
+      `cs ${key} ${JSON.stringify(values)}`
+    );
+  }
+  assert.equal(
+    en('homePage.filteredSeedingStatBadge' as never, { count: 1 } as never),
+    '1 coin-farming or fake review filtered'
+  );
+  assert.equal(
+    en(
+      'merchants.profileMetaDesc' as never,
+      { name: 'X', dosafe: 1, seeding: 2, count: 1 } as never
+    ).includes('across 1 product on'),
+    true
+  );
+  assert.equal(
+    vi('homePage.followersCountText' as never, { count: 1500 } as never),
+    '1.500 người theo dõi'
+  );
+
+  // Every plural has its one and other forms.
+  const pluralArgs = (text: string) => [
+    ...text.matchAll(/\{(\w+), plural,([^]*?)\}\}/g),
+  ];
+  const walk = (node: unknown, out: string[] = []): string[] => {
+    if (typeof node === 'string') out.push(node);
+    else if (node && typeof node === 'object')
+      for (const v of Object.values(node)) walk(v, out);
+    return out;
+  };
+  // A count that is never 1 may name its exact value (=2) instead.
+  const hasOneAndOther = (forms: string) =>
+    (forms.includes('one {') || /=\d+ \{/.test(forms)) &&
+    forms.includes('other {');
+  for (const text of walk(read('cs'))) {
+    for (const m of pluralArgs(text)) {
+      // "few" may be left out where it reads as "other", as after "z".
+      assert.ok(hasOneAndOther(m[2]!), `cs plural: ${text}`);
+    }
+  }
+  for (const text of walk(read('en'))) {
+    for (const m of pluralArgs(text)) {
+      assert.ok(hasOneAndOther(m[2]!), `en plural: ${text}`);
+    }
+  }
+
   // Vietnamese has one form and keeps its plain placeholders.
   const viMessages = read('vi');
   for (const key of [

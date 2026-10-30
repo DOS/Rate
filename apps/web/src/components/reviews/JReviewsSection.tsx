@@ -1095,7 +1095,11 @@ export default function JReviewsSection({
               <div className="small text-secondary mb-2">
                 {t('basedOnAuthenticReviews', {
                   count: counts.authentic,
-                  weightSum: liveScores.userWeightSum,
+                  // The cs decimal comma, as avgScore (DOS/Rate#1411).
+                  weightSum: formatPlainNumber(
+                    liveScores.userWeightSum,
+                    locale
+                  ),
                   avgScore:
                     liveScores.user != null
                       ? formatDecimal(liveScores.user, locale, 2)

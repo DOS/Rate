@@ -8,6 +8,7 @@ import React, {
 } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useLocale, useTranslations } from 'next-intl';
+import { formatDecimal } from '@/lib/locale-format';
 import { BsFunnel, BsStarFill } from 'react-icons/bs';
 import { usePathname, useRouter } from '@/lib/navigation';
 import { startNavigationProgress } from '@/components/elementary/NavigationProgress';
@@ -482,7 +483,8 @@ export default function ListSidebarOne({
                             <BsStarFill className="me-1" />
                             {opt.value === 0
                               ? t('sidebar.ratingAll')
-                              : opt.label}
+                              : // "4,5+" on cs (DOS/Rate#1411).
+                                `${formatDecimal(opt.value, locale, 1)}+`}
                           </label>
                         </div>
                       );

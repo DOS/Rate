@@ -160,7 +160,8 @@ for (const locale of LOCALES) {
   );
   const home = messages.homePage!.radarHomeAnalyzed!;
   assert.ok(
-    home.includes('{offers}') && home.includes('{merchants}'),
+    // A plain or a plural argument (DOS/Rate#1398).
+    /\{offers[},]/.test(home) && /\{merchants[},]/.test(home),
     `${locale}: the home radar line needs both offers and merchants`
   );
 }

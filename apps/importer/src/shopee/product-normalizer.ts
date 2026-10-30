@@ -260,6 +260,32 @@ const APPLE_FAMILIES: ReadonlyArray<readonly [RegExp, string]> = [
   [/apple\s*pencil/i, 'Pencil'],
 ];
 
+/**
+ * The product's own part of a title, before a gift or bundle after it: "HomePod mini" in
+ * "HomePod mini tặng dây Apple Watch Series 10", "MacBook Air M3" in "MacBook Air M3 +
+ * Apple Watch", "HomePod mini (Tặng dây Apple Watch)". A marker that opens the title
+ * ("Tặng ốp - Apple Watch", "[Tặng ốp] Apple Watch") leaves it whole; one after only a
+ * word ("Quà tặng Apple Watch") leaves a part that names no product. Composed
+ * form, so "tặng" is found in a decomposed (NFD) title too (DOS/Rate#1407).
+ */
+function ownProductPart(title: string): string {
+  const composed = title.normalize('NFC');
+  // A bracketed promo that opens the title is skipped when the product follows it: "[Sạc
+  // Apple Watch tặng kèm] AirPods Pro 2" is the AirPods, but "(AirPods Pro 2 tặng dây
+  // Apple Watch) Chính hãng" names the product inside the brackets.
+  const block = /^\s*(?:\[[^\]]*\]|\([^)]*\)|【[^】]*】)/u.exec(composed)?.[0].length ?? 0;
+  const lead =
+    block > 0 && APPLE_FAMILIES.some(([family]) => family.test(composed.slice(block))) ? block : 0;
+  const found = composed.slice(lead).search(/(?<![\p{L}\d])(?:tặng|kèm)(?![\p{L}\d])| ?\+ /iu);
+  const at = found < 0 ? -1 : lead + found;
+  return at > 0 ? composed.slice(0, at) : composed;
+}
+
+/** True when the text names an Apple family other than `line` (DOS/Rate#1407). */
+function namesAppleFamilyOtherThan(text: string, line: string): boolean {
+  return APPLE_FAMILIES.some(([family, name]) => name !== line && family.test(text));
+}
+
 const APPLE_GENERATION_BY_YEAR: Readonly<Record<string, string>> = {
   'TV 4K 2017': '1',
   'TV 4K 2021': '2',
@@ -317,7 +343,22 @@ const APPLE_PART_NUMBERS: Readonly<Record<string, readonly [string, string]>> = 
  * Detect canonical category slug from product title across all 5 tech categories.
  */
 export function detectCategorySlug(title: string): CanonicalCategorySlug {
-  const t = typeof title === 'string' ? title.toLowerCase() : '';
+  const t = typeof title === 'string' ? title.normalize('NFC').toLowerCase() : '';
+  // A gift or bundle after the product is not its category: "AirPods Pro 2 tặng dây Apple
+  // Watch" is earbuds, "Apple iPhone 16 tặng smartwatch" a phone (DOS/Rate#1407). An own
+  // part that names no category falls back to the whole title, unless it names another
+  // Apple product.
+  const own = ownProductPart(t);
+  if (own !== t) {
+    const ownSlug = categorySlugOf(own);
+    if (ownSlug) return ownSlug;
+    if (namesAppleFamilyOtherThan(own, 'Watch')) return 'smartphones';
+  }
+  return categorySlugOf(t) ?? 'smartphones';
+}
+
+/** The category a lower-cased title names, or null (DOS/Rate#1407). */
+function categorySlugOf(t: string): CanonicalCategorySlug | null {
   if (
     /airpods|galaxy\s*buds|w[fh]1000xm|wf-\d+|wh-\d+|tai\s*nghe|earbuds?|freebuds|soundcore|quietcomfort|momentum\s*true/i.test(
       t
@@ -346,7 +387,7 @@ export function detectCategorySlug(title: string): CanonicalCategorySlug {
   ) {
     return 'tablets';
   }
-  return 'smartphones';
+  return null;
 }
 
 /**
@@ -1256,17 +1297,21 @@ function isProductCodeToken(token: string): boolean {
 // js/polynomial-redos). A unit ends where a letter does, Vietnamese ones included: "13
 // tặng" or "13 hãng" is a bare 13, not "13 t(b)" or "13 h"; "15 tháng" (warranty), "10%"
 // or "15 gói" is no size (DOS/Rate#1291).
-// "năm" is a duration at the end, before a separator or a shop's age ("13 năm", "Shop
-// 13 năm kinh nghiệm"); any other word or a year after it keeps the size (DOS/Rate#1333).
-// A shop's age reads "Shop 13 năm", "Shop: 13 năm", "Shop 13+ năm" or "Shop hơn 13 năm"
-// ("shop" a word of its own, so not "workshop"); a year after it ("Store 13 năm.2024",
-// "Shop 13 năm 2024") is a production year, so the size stays, but "99%" or "100" is no
-// year (DOS/Rate#1389).
+// A number right before "năm" is a duration or a shop's age ("13 năm", "Shop 13 năm",
+// "iStore 13+ năm"), never a size (DOS/Rate#1410). The one exception is the release-year
+// form, the size right after the line (up to three chip, storage, network or generation
+// words between) and a four-digit year after "năm" that is no count ("2000 đơn"): "iPad
+// Pro 11 năm 2022", "MacBook Air chip M2 13 năm sản xuất 2022", "iPad Pro M4 13 năm-2024"
+// (DOS/Rate#1317). A shop-age word after the year ("13 năm 2024 uy tín") keeps it a
+// shop's age.
 // "16 RAM 512" is the RAM; "13 RAM 8GB" (a RAM size follows) is the screen's 13
 // (DOS/Rate#1317).
 const UNIT_END = String.raw`(?![\p{L}\p{M}\d])`;
-const SIZE_NOT_PRECEDED_BY = String.raw`(?<![\d.,a-z])(?<!\d ?\/ ?)(?<!(?:ram|os|sonoma|sequoia|ventura|monterey|tahoe) )(?!(?<=(?<![\p{L}\d])(?:shop|cửa hàng|store)(?: ?: ?| )(?:(?:hơn|trên) )?)\d{1,2}(?: ?\+)? ?năm(?![\p{L}\d])(?! ?(?:[.:/-] ?(?:19|20)?|(?:19|20))\d\d(?![\p{L}\d%])))`;
-const SIZE_NOT_FOLLOWED_BY = String.raw`(?![.,]?\d|[a-z]| ?(?:gb?${UNIT_END}|tb?${UNIT_END}|th${UNIT_END}|gen|mm|w${UNIT_END}|h${UNIT_END}|\/|-? ?(?:core|nhân|lõi)|cpu|gpu|tiếng|giờ|%|(?:tháng|ngày|tuần|phút|gói|kỳ|nghìn|ngàn|triệu|vnd|months?|years?|days?|weeks?|hours?)${UNIT_END}|ram${UNIT_END}(?! ?\d{1,2}(?!\d))|năm(?= ?(?:$|[,|;)+!\]]|(?:[.:/-]| - )(?! ?(?:19|20)?\d\d(?![\d%]))|(?:kinh nghiệm|tuổi|hoạt động|uy tín|thành lập|bán hàng|chuyên|kinh doanh|phát triển)(?![\p{L}\d])))))`;
+const NAM_AFTER_SIZE = String.raw`\d{1,2}(?:[.,]\d)?(?: ?\+)? ?năm(?![\p{L}\d])`;
+const LINE_BEFORE_SIZE = String.raw`(?:ipad (?:pro|air)|macbook (?:pro|air))(?: (?:\(?(?:chip )?m\d{1,2}(?: pro| max)?\)?|\d{2,4} ?(?:gb|tb)|wi-?fi|5g|4g|lte|cellular|gen ?\d{1,2}|\d{1,2})){0,3} `;
+const YEAR_AFTER_NAM = String.raw` ?(?:(?:sx|sản xuất|ra mắt|phát hành) ?)?(?:[.:/–-] ?)?(?:19|20)\d\d(?:\/(?:19|20)\d\d)?(?![\p{L}\d%/])(?! (?:đơn|khách|người|lượt|máy|sản phẩm|đánh giá|review|kinh nghiệm|uy tín|hoạt động|thành lập|bán hàng|chuyên|kinh doanh|phát triển)(?![\p{L}\d]))`;
+const SIZE_NOT_PRECEDED_BY = String.raw`(?<![\d.,a-z])(?<!\d ?\/ ?)(?<!(?:ram|os|sonoma|sequoia|ventura|monterey|tahoe) )(?!(?<!${LINE_BEFORE_SIZE})${NAM_AFTER_SIZE})(?!${NAM_AFTER_SIZE}(?!${YEAR_AFTER_NAM}))`;
+const SIZE_NOT_FOLLOWED_BY = String.raw`(?![.,]?\d|[a-z]| ?(?:gb?${UNIT_END}|tb?${UNIT_END}|th${UNIT_END}|gen|mm|w${UNIT_END}|h${UNIT_END}|\/|-? ?(?:core|nhân|lõi)|cpu|gpu|tiếng|giờ|%|(?:tháng|ngày|tuần|phút|gói|kỳ|nghìn|ngàn|triệu|vnd|months?|years?|days?|weeks?|hours?)${UNIT_END}|ram${UNIT_END}(?! ?\d{1,2}(?!\d))))`;
 const SIZE_MARKER = String.raw` ?(?:-? ?inch|in${UNIT_END}|"|''|”|″)`;
 const IPAD_SIZE = String.raw`(11|12[.,]9|13)(?:[.,]0)?`;
 const MACBOOK_AIR_SIZE = String.raw`(13|15)(?:[.,]\d)?`;
@@ -1331,6 +1376,38 @@ const WATCH_GIFT_ACCESSORY_NOUN =
   /(?<![\p{L}\d])(?:ốp|case|bao da|silicone|silicon|tpu|cường lực|kính|miếng dán|vỏ(?! (?:nhôm|titan|titanium|thép|nhựa|aluminum|aluminium|stainless|steel)(?![\p{L}\d]))|túi)(?![\p{L}\d])/iu;
 // The product's own part ends where "cho/for" or "+" starts another product; "GPS +
 // Cellular" is the watch and "13+ năm" a shop's age (DOS/Rate#1389).
+// A promo tag in front of the title is no part of the model: "[Mã giảm 50K]",
+// "(Hàng mới)", "【Hot】" or "{ Kích T10 }" (DOS/Rate#1421).
+const LEADING_PROMO_GROUPS = /^(?:\s*(?:\[[^\]]*\]|\([^)]*\)|【[^】]*】|\{[^}]*\}))+\s*/;
+// So is a promo word right before the brand or its line: "Live Samsung Galaxy S26
+// Ultra", "Hot Sale Samsung …", "Flash Sale Điện thoại Samsung …", "Sale Galaxy S26
+// Ultra" (DOS/Rate#1421). Only then: "JBL Live Pro 2" or "Live Beam 3 - JBL" keep
+// their "Live", and "Hotwav" is no "Hot". One promo word is matched at a time, so a
+// long run of them costs linear time (CodeQL js/polynomial-redos).
+const LEADING_PROMO_WORD =
+  /^(?:live(?:stream)?|(?:hot|flash|big|siêu|mega) sale|sale(?: (?:off|sốc|sock))?|hot|deal(?: hot)?|giảm giá|xả kho)(?![\p{L}\d])(?: ?\d{1,2} ?%)?[\s:!|-]*/iu;
+const MAX_LEADING_PROMO_WORDS = 4;
+// A line name that stands for the brand at the start of a title.
+const BRAND_LINES: Readonly<Record<string, readonly string[]>> = {
+  Samsung: ['galaxy'],
+  Xiaomi: ['redmi', 'poco'],
+};
+const BRAND_HEAD_PREFIX = String.raw`^(?:(?:điện thoại(?: thông minh| di động)?|smartphone|máy tính bảng|tablet|laptop|đồng hồ(?: thông minh)?|tai nghe) )?(?:(?:hàng )?chính hãng )?`;
+const escapeRegExp = (text: string): string => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const brandHead = (brand: string): RegExp =>
+  new RegExp(
+    `${BRAND_HEAD_PREFIX}(?:${[brand, ...(BRAND_LINES[brand] ?? [])].map(escapeRegExp).join('|')})(?![\\p{L}\\d])`,
+    'iu'
+  );
+const withoutLeadingPromoWords = (title: string, brand: string): string => {
+  let rest = title;
+  for (let i = 0; i < MAX_LEADING_PROMO_WORDS; i++) {
+    const promo = rest.match(LEADING_PROMO_WORD);
+    if (!promo) break;
+    rest = rest.slice(promo[0].length);
+  }
+  return rest !== title && brandHead(brand).test(rest) ? rest : title;
+};
 const OWN_PART_END = / (?:cho|for) | ?\+ (?!cellular|lte|năm(?![\p{L}\d]))/iu;
 const APPLE_SIZE_PATTERNS: Record<string, [RegExp, RegExp]> = {
   ipad: sizePatterns(IPAD_SIZE),
@@ -1719,11 +1796,20 @@ export class ProductNormalizer {
       const macbookMatch = appleTitle.match(
         /macbook\s*(pro\s*m\d+(?:\s*(?:pro|max))?|air\s*m\d+|air|pro|neo\b)/i
       );
-      const watchMatch = appleTitle.match(
-        // "Ultra 49mm" is the case size, not a generation (DOS/Rate#819).
-        /(?:apple\s*)?watch\s*(ultra(?:\s*\d+(?!\d|\s*mm\b))?|series\s*\d+|se(?:\s*\d+(?!\d|\s*(?:mm|gb|tb)\b)|(?![a-z])))/i
+      // A watch or AirPods in a gift or bundle after another Apple product is not the
+      // product: "HomePod mini tặng dây Apple Watch Series 10" is the HomePod mini, "Apple
+      // TV 4K tặng AirPods Pro 2" the Apple TV (DOS/Rate#1407).
+      const ownAppleTitle = ownProductPart(appleTitle);
+      const lineTitle = (line: string) =>
+        namesAppleFamilyOtherThan(ownAppleTitle, line) ? ownAppleTitle : appleTitle;
+      const watchMatch = lineTitle('Watch').match(
+        // "Ultra 49mm" is the case size, not a generation (DOS/Rate#819). "Watch S10" is
+        // the Series 10; only a generation (1 to 19) right after "Watch", with no unit or
+        // letter after it, counts, so an "S 42mm" size, a "S 16cm" or "S 14-16cm" band
+        // length or a "S/M" band is no series (DOS/Rate#1402).
+        /(?:apple\s*)?watch\s*(ultra(?:\s*\d+(?!\d|\s*mm\b))?|series\s*\d+|se(?:\s*\d+(?!\d|\s*(?:mm|gb|tb)\b)|(?![a-z]))|s ?(?:1\d|[1-9])(?![\d.,a-z]|\s*(?:mm|cm|gb|tb|inch)\b| ?[-–] ?\d+(?:[.,]\d+)? ?cm\b))/i
       );
-      const airpodsMatch = appleTitle.match(
+      const airpodsMatch = lineTitle('AirPods').match(
         // Each run of spaces has exactly one `\s*` that can match it, so long
         // whitespace cannot backtrack polynomially (CodeQL js/polynomial-redos).
         /airpods\s*(?:(pro)(?:\s*(?:(?:gen|thế\s*hệ)\s*|\(\s*)?(\d+))?|(max)|(?:(?:gen|thế\s*hệ)\s*)?(\d+))/i
@@ -1814,7 +1900,8 @@ export class ProductNormalizer {
             ? `MacBook ${line} ${chip}${chipMatch?.[2] ? ` ${chipMatch[2]}` : ''}`
             : `MacBook ${line}`;
       } else if (watchMatch && watchMatch[1]) {
-        model = `Watch ${watchMatch[1].trim()}`;
+        // "S10" keys like "Series 10" (DOS/Rate#1402).
+        model = `Watch ${watchMatch[1].trim().replace(/^s ?(?=\d)/i, 'Series ')}`;
       } else if (airpodsMatch) {
         if (airpodsMatch[1]) {
           const rawGen = airpodsMatch[2];
@@ -1915,9 +2002,10 @@ export class ProductNormalizer {
     } else if (brand === 'Xiaomi' && /pad\s*7\s*pro/i.test(modelTitle)) {
       model = 'Pad 7 Pro';
     } else {
-      const withoutLeadingPromo = modelTitle
-        .replace(/^(?:\s*(?:\[[^\]]*\]|\([^)]*\)|【[^】]*】))+\s*/, '')
-        .trim();
+      const withoutLeadingPromo = withoutLeadingPromoWords(
+        modelTitle.replace(LEADING_PROMO_GROUPS, '').trim(),
+        brand
+      );
       const cleaned = withoutLeadingPromo
         .replace(
           new RegExp(
@@ -1926,7 +2014,7 @@ export class ProductNormalizer {
           ),
           ''
         )
-        .replace(/^(?:\s*(?:\[[^\]]*\]|\([^)]*\)|【[^】]*】))+\s*/, '')
+        .replace(LEADING_PROMO_GROUPS, '')
         // "Vivo Book 15" is the Asus Vivobook line: key it like "Vivobook 15" (DOS/Rate#774).
         .replace(/\bvivo\s+book\b/gi, 'Vivobook')
         // "17 ProMax" keys like "17 Pro Max" (DOS/Rate#815).
@@ -2031,8 +2119,14 @@ export class ProductNormalizer {
     );
 
     const slashRamRom = title.match(/\b(\d{1,2})\s*(?:GB\s*)?\/\s*(\d+(?:[.,]\d+)?)\s*(TB|GB)\b/i);
+    // Storage first ("64GB/4GB") reads the same pair the other way round (DOS/Rate#1421).
+    const slashSecondGb = slashRamRom
+      ? parseFloat(slashRamRom[2].replace(',', '.')) *
+        (slashRamRom[3].toUpperCase() === 'TB' ? 1024 : 1)
+      : 0;
+    const slashReversed = slashRamRom !== null && parseInt(slashRamRom[1], 10) > slashSecondGb;
     if (slashRamRom && ramPhrases.length === 0) {
-      const slashRam = parseInt(slashRamRom[1], 10);
+      const slashRam = slashReversed ? slashSecondGb : parseInt(slashRamRom[1], 10);
       for (const c of claimable) {
         if (!c.claimed && c.value === slashRam) {
           c.claimed = true;
@@ -2044,6 +2138,9 @@ export class ProductNormalizer {
       const between = title.slice(first.index + first.raw.length, second.index);
       if (first.value <= 32 && second.value >= 64 && /^[\s/,-]+$/.test(between)) {
         first.claimed = true;
+      } else if (first.value >= 64 && second.value <= 32 && /^\s*\/\s*$/.test(between)) {
+        // Storage first, RAM second: "256GB/12GB" is 256GB with 12GB RAM (DOS/Rate#1421).
+        second.claimed = true;
       }
     } else if (
       ramPhrases.length === 0 &&
@@ -2101,8 +2198,7 @@ export class ProductNormalizer {
       }
     } else if (slashRamRom) {
       const candidateStorage = toValidStorageGb(
-        parseFloat(slashRamRom[2].replace(',', '.')) *
-          (slashRamRom[3].toUpperCase() === 'TB' ? 1024 : 1)
+        slashReversed ? parseInt(slashRamRom[1], 10) : slashSecondGb
       );
       if (candidateStorage !== null) {
         storageGb = candidateStorage;

@@ -477,83 +477,119 @@ async function runSuite() {
     ['MacBook Air M2 8GB 256GB bảo hành 15 tháng', 'apple:macbook-air-m2:256gb'],
     ['MacBook Pro M3 18GB 512GB bảo hành 14 tháng', 'apple:macbook-pro-m3:512gb'],
     ['MacBook Air M2 8GB 256GB 15 gói quà', 'apple:macbook-air-m2:256gb'],
-    // "<size> năm <year>" names the size and the year (DOS/Rate#1317); a "năm"
-    // with no year after it is a duration.
+    // A number right before "năm" is a duration or a shop's age, never a size
+    // (DOS/Rate#1410): the gift's size stands in, or the title stays size-less.
+    // The one exception is the release-year form: the size right after the line and a
+    // four-digit year after "năm" (DOS/Rate#1317, #1333).
     ['Máy tính bảng Apple iPad Pro 11 năm 2022 M2 128GB Wifi', 'apple:ipad-pro-m2-11:128gb'],
     ['Laptop Apple MacBook Pro 14 năm 2023 M3 8GB 512GB', 'apple:macbook-pro-m3-14:512gb'],
     ['MacBook Air 13 năm 2022 M2 8GB 256GB', 'apple:macbook-air-m2-13:256gb'],
     ['MacBook Air 15 năm 2023 M2 8GB 256GB', 'apple:macbook-air-m2-15:256gb'],
     ['iPad Air 11 năm 2024 M2 128GB', 'apple:ipad-air-m2-11:128gb'],
     ['iPad Pro 12.9 năm 2022 M2 128GB', 'apple:ipad-pro-m2-129:128gb'],
-    ['MacBook Air M2 13 năm', 'apple:macbook-air-m2:unknown'],
-    // Any word or year form after "năm" keeps the size (DOS/Rate#1333).
     ['iPad Pro 11 năm sx 2022', 'apple:ipad-pro-11:unknown'],
     ['iPad Pro 12.9 năm sản xuất 2022', 'apple:ipad-pro-129:unknown'],
     ['MacBook Air 13 năm ra mắt 2022', 'apple:macbook-air-13:unknown'],
     ['iPad Pro 11 năm: 2022', 'apple:ipad-pro-11:unknown'],
-    ['iPad Pro 11 năm 22', 'apple:ipad-pro-11:unknown'],
-    // A shop's age is no size: the gift's size stands in.
+    ['iPad Pro M4 13 năm-2024', 'apple:ipad-pro-m4-13:unknown'],
+    ['Máy tính bảng Apple iPad Pro 11 năm-2022 M2 128GB Wifi', 'apple:ipad-pro-m2-11:128gb'],
+    ['iPad Pro M4 13 năm.2024', 'apple:ipad-pro-m4-13:unknown'],
+    ['iPad Pro M4 13 năm - 2024', 'apple:ipad-pro-m4-13:unknown'],
+    ['iPad Pro M4 13 năm – 2024', 'apple:ipad-pro-m4-13:unknown'],
+    ['iPad Pro M4 13 năm/2024', 'apple:ipad-pro-m4-13:unknown'],
+    ['MacBook Pro M3 Max 16 năm 2023 1TB', 'apple:macbook-pro-m3-max-16:1024gb'],
+    // Chip, storage, network or generation words may sit between the line and the size.
+    ['iPad Pro M2 128GB 11 năm 2022 tặng ốp 13 inch', 'apple:ipad-pro-m2-11:128gb'],
+    ['MacBook Air chip M2 13 năm 2022 256GB tặng túi 15 inch', 'apple:macbook-air-m2-13:256gb'],
+    ['iPad Pro (M4) 11 năm 2024', 'apple:ipad-pro-m4-11:unknown'],
+    ['iPad Pro Wifi 11 năm 2022', 'apple:ipad-pro-11:unknown'],
+    ['iPad Pro 5G 11 năm 2022 M2', 'apple:ipad-pro-m2-11:unknown'],
+    ['iPad Pro Gen 4 11 năm 2022', 'apple:ipad-pro-11:unknown'],
+    ['iPad Air 5 11 năm 2022', 'apple:ipad-air-5-11:unknown'],
+    ['MacBook Air 13 năm phát hành 2022', 'apple:macbook-air-13:unknown'],
+    ['iPad Pro 11 năm 2022/2023', 'apple:ipad-pro-11:unknown'],
+    // A count or a shop-age word after the year is no release year.
+    ['iPad Pro M4 256GB 13 năm 2024 uy tín', 'apple:ipad-pro-m4:256gb'],
+    ['iPad Pro M4 Wifi 13 năm 2024 kinh nghiệm tặng ốp 11 inch', 'apple:ipad-pro-m4-11:unknown'],
+    ['iPad Pro M4 13 năm 2000 đơn 256GB tặng ốp 11 inch', 'apple:ipad-pro-m4-11:256gb'],
+    ['MacBook Air M2 15 năm 2000 khách 256GB tặng túi 13 inch', 'apple:macbook-air-m2-13:256gb'],
+    ['MacBook Pro M3 14 năm 2000 đơn tặng túi 16 inch', 'apple:macbook-pro-m3-16:unknown'],
+    // A two-digit year is too close to a count to count.
+    ['iPad Pro 11 năm 22', 'apple:ipad-pro:unknown'],
+    ['MacBook Air M2 13 năm', 'apple:macbook-air-m2:unknown'],
+    ['iPad Pro M4 13 năm.', 'apple:ipad-pro-m4:unknown'],
+    // A shop's age, whatever its form or what follows it.
     ['iPad Pro M4 256GB - Shop 13 năm kinh nghiệm - tặng ốp 11 inch', 'apple:ipad-pro-m4-11:256gb'],
-    // "Shop N năm" is the shop's age whatever follows; "năm" before a mark or
-    // another shop-age word is a duration (DOS/Rate#1386).
     ['iPad Pro M4 256GB - Shop 13 năm bán hàng - tặng ốp 11 inch', 'apple:ipad-pro-m4-11:256gb'],
     [
       'MacBook Pro M3 512GB Shop 16 năm chuyên hàng Apple tặng túi 14 inch',
       'apple:macbook-pro-m3-14:512gb',
     ],
     ['MacBook Air M2 cửa hàng 15 năm uy tín 13 inch', 'apple:macbook-air-m2-13:unknown'],
+    [
+      'iPad Pro M4 256GB Shop 13 năm chăm sóc khách hàng tặng ốp 11 inch',
+      'apple:ipad-pro-m4-11:256gb',
+    ],
+    ['iPad Pro M4 256GB Apple Store 13 năm tặng ốp 11 inch', 'apple:ipad-pro-m4-11:256gb'],
+    ['iPad Pro M4 256GB Shop: 13 năm tặng ốp 11 inch', 'apple:ipad-pro-m4-11:256gb'],
+    ['iPad Pro M4 256GB Shop:13 năm tặng ốp 11 inch', 'apple:ipad-pro-m4-11:256gb'],
+    ['iPad Pro M4 256GB Shop : 13 năm tặng ốp 11 inch', 'apple:ipad-pro-m4-11:256gb'],
+    ['iPad Pro M4 256GB Shop 13+ năm tặng ốp 11 inch', 'apple:ipad-pro-m4-11:256gb'],
+    ['iPad Pro M4 256GB Shop 13 + năm tặng ốp 11 inch', 'apple:ipad-pro-m4-11:256gb'],
+    ['iPad Pro M4 256GB 13+ năm tặng ốp 11 inch', 'apple:ipad-pro-m4-11:256gb'],
+    ['iPad Pro M4 256GB Shop hơn 13 năm chăm sóc tặng ốp 11 inch', 'apple:ipad-pro-m4-11:256gb'],
+    ['iPad Pro M4 256GB Shop trên 13 năm tặng ốp 11 inch', 'apple:ipad-pro-m4-11:256gb'],
+    ['iPad Pro M4 256GB Shop gần 13 năm tặng ốp 11 inch', 'apple:ipad-pro-m4-11:256gb'],
+    ['iPad Pro M4 256GB Shop đã 13 năm tặng ốp 11 inch', 'apple:ipad-pro-m4-11:256gb'],
+    ['iPad Pro M4 256GB Shop tròn 13 năm tặng ốp 11 inch', 'apple:ipad-pro-m4-11:256gb'],
+    ['iPad Pro M4 256GB Shop uy tín 13 năm tặng ốp 11 inch', 'apple:ipad-pro-m4-11:256gb'],
+    ['iPad Pro M4 256GB iStore 13 năm tặng ốp 11 inch', 'apple:ipad-pro-m4-11:256gb'],
+    ['iPad Pro M4 256GB Macstore 13 năm tặng ốp 11 inch', 'apple:ipad-pro-m4-11:256gb'],
+    ['iPad Pro M4 256GB TechStore 13 năm tặng ốp 11 inch', 'apple:ipad-pro-m4-11:256gb'],
+    ['iPad Pro M4 256GB OneShop 13 năm tặng ốp 11 inch', 'apple:ipad-pro-m4-11:256gb'],
+    ['iPad Pro M4 256GB Phoneshop 13 năm tặng ốp 11 inch', 'apple:ipad-pro-m4-11:256gb'],
+    ['iPad Pro M4 workshop 13 năm tặng ốp 11 inch', 'apple:ipad-pro-m4-11:unknown'],
+    ['iPad Pro M4 appstore 13 năm tặng ốp 11 inch', 'apple:ipad-pro-m4-11:unknown'],
+    // A year after a shop's age does not make it a size.
+    ['iPad Pro M4 256GB Shop 13 năm 2024 tặng ốp 11 inch', 'apple:ipad-pro-m4-11:256gb'],
+    ['MacBook Air M2 Shop 13 năm 2022 tặng túi 15 inch', 'apple:macbook-air-m2-15:unknown'],
+    ['iPad Pro M4 256GB Shop 13 năm 2023', 'apple:ipad-pro-m4:256gb'],
+    ['iPad Pro M4 Apple Store 13 năm.2024 256GB', 'apple:ipad-pro-m4:256gb'],
+    ['iPad Pro M4 Shop 13 năm/2024', 'apple:ipad-pro-m4:unknown'],
+    ['iPad Pro M4 Shop 13 năm 2024 256GB', 'apple:ipad-pro-m4:256gb'],
+    ['iPad Pro M4 Shop 13 năm: 22', 'apple:ipad-pro-m4:unknown'],
+    ['iPad Pro M4 Shop 13 năm 20', 'apple:ipad-pro-m4:unknown'],
+    // Counts, dates and durations after "năm" are no year.
+    ['iPad Pro M4 256GB Shop 13 năm - 12 tháng', 'apple:ipad-pro-m4:256gb'],
+    ['iPad Pro M4 256GB Shop 13 năm – 12 tháng', 'apple:ipad-pro-m4:256gb'],
+    ['iPad Pro M4 256GB 13 năm/24/7', 'apple:ipad-pro-m4:256gb'],
+    ['iPad Pro M4 256GB 13 năm 2000 đơn', 'apple:ipad-pro-m4:256gb'],
+    ['iPad Pro M4 256GB 13 năm - 24h', 'apple:ipad-pro-m4:256gb'],
+    ['iPad Pro M4 256GB 13 năm - 20 máy', 'apple:ipad-pro-m4:256gb'],
+    ['iPad Pro M4 256GB Shop 13 năm/11/11', 'apple:ipad-pro-m4:256gb'],
+    ['iPad Pro M4 256GB Shop 13 năm 99% tặng ốp 11 inch', 'apple:ipad-pro-m4-11:256gb'],
+    ['iPad Pro M4 256GB Shop 13 năm 100 đánh giá tặng ốp 11 inch', 'apple:ipad-pro-m4-11:256gb'],
+    ['iPad Pro M4 256GB - 13 năm - 100 đánh giá tặng ốp 11 inch', 'apple:ipad-pro-m4-11:256gb'],
+    ['iPad Pro M4 256GB 13 năm/100 đánh giá tặng ốp 11 inch', 'apple:ipad-pro-m4-11:256gb'],
+    ['iPad Pro M4 256GB 13 năm 2000 đơn tặng ốp 11 inch', 'apple:ipad-pro-m4-11:256gb'],
+    // A duration with any mark or word after it.
     ['iPad Pro M4 256GB 13 năm phát triển tặng ốp 11 inch', 'apple:ipad-pro-m4-11:256gb'],
     ['iPad Pro M4 256GB 13 năm. tặng ốp 11 inch', 'apple:ipad-pro-m4-11:256gb'],
     ['iPad Pro M4 256GB 13 năm! tặng ốp 11 inch', 'apple:ipad-pro-m4-11:256gb'],
     ['iPad Pro M4 256GB 13 năm- tặng ốp 11 inch', 'apple:ipad-pro-m4-11:256gb'],
     ['iPad Pro M4 256GB [13 năm] tặng ốp 11 inch', 'apple:ipad-pro-m4-11:256gb'],
     ['iPad Pro M4 256GB 13 năm: tặng ốp 11 inch', 'apple:ipad-pro-m4-11:256gb'],
-    // The shop rule alone: no duration word after "năm".
-    [
-      'iPad Pro M4 256GB Shop 13 năm chăm sóc khách hàng tặng ốp 11 inch',
-      'apple:ipad-pro-m4-11:256gb',
-    ],
-    ['iPad Pro M4 256GB Apple Store 13 năm tặng ốp 11 inch', 'apple:ipad-pro-m4-11:256gb'],
-    // A year after "năm" with a mark between keeps the size.
-    ['iPad Pro M4 13 năm-2024', 'apple:ipad-pro-m4-13:unknown'],
-    ['Máy tính bảng Apple iPad Pro 11 năm-2022 M2 128GB Wifi', 'apple:ipad-pro-m2-11:128gb'],
-    ['iPad Pro M4 13 năm.2024', 'apple:ipad-pro-m4-13:unknown'],
-    // Shop ages with a colon, a "+" or "hơn" / "trên" (DOS/Rate#1389).
-    ['iPad Pro M4 256GB Shop: 13 năm tặng ốp 11 inch', 'apple:ipad-pro-m4-11:256gb'],
-    ['iPad Pro M4 256GB Shop 13+ năm tặng ốp 11 inch', 'apple:ipad-pro-m4-11:256gb'],
-    ['iPad Pro M4 256GB Shop hơn 13 năm chăm sóc tặng ốp 11 inch', 'apple:ipad-pro-m4-11:256gb'],
-    ['iPad Pro M4 256GB Shop trên 13 năm tặng ốp 11 inch', 'apple:ipad-pro-m4-11:256gb'],
-    ['iPad Pro M4 256GB Shop:13 năm tặng ốp 11 inch', 'apple:ipad-pro-m4-11:256gb'],
-    ['iPad Pro M4 256GB Shop : 13 năm tặng ốp 11 inch', 'apple:ipad-pro-m4-11:256gb'],
-    ['iPad Pro M4 256GB Shop 13 + năm tặng ốp 11 inch', 'apple:ipad-pro-m4-11:256gb'],
-    // A percentage, a count or a bare two-digit number after it is no year.
-    ['iPad Pro M4 256GB Shop 13 năm 99% tặng ốp 11 inch', 'apple:ipad-pro-m4-11:256gb'],
-    ['iPad Pro M4 256GB Shop 13 năm 100 đánh giá tặng ốp 11 inch', 'apple:ipad-pro-m4-11:256gb'],
-    ['iPad Pro M4 Shop 13 năm 20', 'apple:ipad-pro-m4:unknown'],
-    ['iPad Pro M4 256GB - 13 năm - 100 đánh giá tặng ốp 11 inch', 'apple:ipad-pro-m4-11:256gb'],
-    ['iPad Pro M4 256GB 13 năm/100 đánh giá tặng ốp 11 inch', 'apple:ipad-pro-m4-11:256gb'],
-    // A production year after a shop's "năm" keeps the size.
-    ['iPad Pro M4 Apple Store 13 năm.2024 256GB', 'apple:ipad-pro-m4-13:256gb'],
-    ['iPad Pro M4 Shop 13 năm: 22', 'apple:ipad-pro-m4-13:unknown'],
-    ['iPad Pro M4 Shop 13 năm/2024', 'apple:ipad-pro-m4-13:unknown'],
-    ['iPad Pro M4 Shop 13 năm 2024 256GB', 'apple:ipad-pro-m4-13:256gb'],
-    // "/" and " - " before a year keep the size like "-" does.
-    ['iPad Pro M4 13 năm - 2024', 'apple:ipad-pro-m4-13:unknown'],
-    ['iPad Pro M4 13 năm/2024', 'apple:ipad-pro-m4-13:unknown'],
     ['iPad Pro M4 256GB 13 năm/ tặng ốp 11 inch', 'apple:ipad-pro-m4-11:256gb'],
     ['iPad Pro M4 256GB 13 năm - tặng ốp 11 inch', 'apple:ipad-pro-m4-11:256gb'],
-    // "13 năm." at the end is a duration, like "13 năm" (DOS/Rate#1333).
-    ['iPad Pro M4 13 năm.', 'apple:ipad-pro-m4:unknown'],
-    // "shop" inside a word is no shop: "năm" with no duration word keeps the size.
-    ['iPad Pro M4 workshop 13 năm tặng ốp 11 inch', 'apple:ipad-pro-m4-13:unknown'],
-    ['iPad Pro M4 appstore 13 năm tặng ốp 11 inch', 'apple:ipad-pro-m4-13:unknown'],
+    // A real size before the shop's age stays the product's.
+    ['iPad Pro M4 13 inch 256GB Shop 13 năm', 'apple:ipad-pro-m4-13:256gb'],
     // A screen size after "Shop" with no "năm" stays the product's.
     ['iPad Pro M4 Shop 11 inch', 'apple:ipad-pro-m4-11:unknown'],
     [
       'MacBook Air M2 256GB - Shop 14 năm kinh nghiệm - tặng túi 13 inch',
       'apple:macbook-air-m2-13:256gb',
     ],
-    ['iPad Pro M4 256GB 11 năm bảo hành tặng ốp 13 inch', 'apple:ipad-pro-m4-11:256gb'],
+    ['iPad Pro M4 256GB 11 năm bảo hành tặng ốp 13 inch', 'apple:ipad-pro-m4-13:256gb'],
     // A date ("11/11"), RAM or SSD, a macOS name, a duration or an amount is no
     // size, so the gift's size still stands in.
     ['iPad Pro M4 Sale 11/11 tặng ốp 13 inch', 'apple:ipad-pro-m4-13:unknown'],
@@ -964,7 +1000,170 @@ async function runSuite() {
   assert.equal(keyOf('Apple Watch SE 3rd Gen 44mm'), 'apple:watch-se-3-44mm:unknown');
   assert.equal(keyOf('Apple Watch SE 2022 40mm'), 'apple:watch-se-2022-40mm:unknown');
   assert.equal(keyOf('Apple Watch SE 32GB'), 'apple:watch-se:32gb');
+  // Stored SE keys stay as they are: re-keying "SE2" to "SE 2" needs a data step first.
   assert.equal(keyOf('Apple Watch SE2 40mm'), 'apple:watch-se2-40mm:unknown');
+  assert.equal(keyOf('Apple Watch SE3 40mm GPS'), 'apple:watch-se3-40mm:unknown');
+  // "S10" keys like "Series 10" (DOS/Rate#1402). A size ("S 42mm"), a band length ("S
+  // 16cm"), a band size ("S/M") or another brand's S line is no Apple Watch series.
+  assert.equal(keyOf('Apple Watch S8 45mm'), 'apple:watch-series-8-45mm:unknown');
+  assert.equal(keyOf('Apple Watch S9 41mm GPS'), 'apple:watch-series-9-41mm:unknown');
+  assert.equal(keyOf('Apple Watch S10 46mm'), 'apple:watch-series-10-46mm:64gb');
+  assert.equal(keyOf('Apple Watch S10 46mm Shop 10+ năm'), 'apple:watch-series-10-46mm:64gb');
+  assert.equal(keyOf('Apple Watch S 10 42mm GPS'), 'apple:watch-series-10-42mm:64gb');
+  assert.equal(
+    keyOf('Đồng hồ Apple Watch S10 GPS 46mm viền nhôm'),
+    'apple:watch-series-10-46mm:64gb'
+  );
+  assert.equal(keyOf('Apple Watch S11 42mm GPS 64GB'), 'apple:watch-series-11-42mm:64gb');
+  assert.equal(keyOf('Apple Watch S 42mm'), 'apple:watch:unknown');
+  assert.equal(keyOf('Dây đeo Apple Watch S 16cm 42mm'), 'apple:watch:unknown');
+  assert.equal(keyOf('Dây đeo Apple Watch S 16 cm 42mm'), 'apple:watch:unknown');
+  assert.equal(keyOf('Dây đeo Apple Watch S 14-16cm 42mm'), 'apple:watch:unknown');
+  assert.equal(keyOf('Dây đeo Apple Watch S 14 - 16 cm 42mm'), 'apple:watch:unknown');
+  assert.equal(keyOf('Apple Watch S10 - 46mm GPS'), 'apple:watch-series-10-46mm:64gb');
+  assert.equal(keyOf('Apple Watch S10x 46mm'), 'apple:watch:unknown');
+  assert.equal(keyOf('Dây Apple Watch S/M 42mm'), 'apple:watch:unknown');
+  assert.equal(keyOf('Apple Watch S10.46mm'), 'apple:watch:unknown');
+  assert.equal(keyOf('Samsung Galaxy S10 128GB'), 'samsung:galaxy-s10:128gb');
+  assert.equal(keyOf('Xiaomi Watch S1 Active'), 'xiaomi:watch-s1-active:unknown');
+  // A leading "{...}" promo group or a promo word before the brand is no model
+  // (DOS/Rate#1421); "256GB/12GB" names the storage first.
+  for (const title of [
+    '{ Kích T10 } Điện Thoại Samsung Galaxy S26 Ultra 5G 12GB/256GB Chính Hãng',
+    '{ Kích T10 - Full VAT } Điện Thoại Samsung Galaxy S26 Ultra 5G 12GB/256GB Chính Hãng',
+    'Live Samsung Galaxy S26 Ultra 5G 256GB/12GB',
+    'Hot Sale Samsung Galaxy S26 Ultra 12GB/256GB',
+    'Flash Sale Điện thoại Samsung Galaxy S26 Ultra 12GB/256GB',
+    'Sale Samsung Galaxy S26 Ultra 12GB 256GB',
+    'Samsung Galaxy S26 Ultra 256GB / 12GB',
+  ]) {
+    assert.equal(keyOf(title), 'samsung:galaxy-s26-ultra:256gb', title);
+  }
+  assert.equal(keyOf('Live Xiaomi Redmi Note 14 8GB/256GB'), 'xiaomi:redmi-note-14:256gb');
+  // The brand's line stands for it; promo phrases with "Off", "Sốc" or a percentage.
+  assert.equal(keyOf('Sale Galaxy S26 Ultra 12GB/256GB'), 'samsung:galaxy-s26-ultra:256gb');
+  assert.equal(keyOf('Live Điện thoại Redmi Note 14 8GB/256GB'), 'xiaomi:redmi-note-14:256gb');
+  assert.equal(keyOf('Sale Off Xiaomi 15T 12GB/512GB'), 'xiaomi:15t:512gb');
+  assert.equal(keyOf('Sale Sốc Xiaomi 15T 12GB/512GB'), 'xiaomi:15t:512gb');
+  assert.equal(
+    keyOf('Sale off 50% Samsung Galaxy S26 Ultra 256GB'),
+    'samsung:galaxy-s26-ultra:256gb'
+  );
+  // A promo word not right before the brand is part of the model: JBL's Live line.
+  assert.equal(keyOf('Live Pro 2 - JBL chính hãng'), 'jbl:live-pro-2:unknown');
+  assert.equal(keyOf('Live Beam 3 - JBL chính hãng'), 'jbl:live-beam-3:unknown');
+  assert.equal(keyOf('Samsung Galaxy Buds Live'), 'samsung:galaxy-buds-live:unknown');
+  // A two-digit storage first: "64GB/4GB" is 64GB with 4GB RAM.
+  assert.equal(keyOf('Samsung Galaxy A05 64GB/4GB'), 'samsung:galaxy-a05:64gb');
+  // A long run of promo words costs linear time (CodeQL js/polynomial-redos).
+  {
+    const started = performance.now();
+    keyOf('Hot Sale '.repeat(40) + 'Galaxy S26 Ultra 256GB');
+    assert.ok(performance.now() - started < 200, 'leading promo words take linear time');
+  }
+  // A brand or model that only starts like a promo word is kept.
+  assert.equal(keyOf('Hotwav Cyber 15 8GB/256GB'), 'khac:hotwav-cyber-15:256gb');
+  // Two sizes with no slash between stay unresolved, as before.
+  assert.equal(keyOf('Samsung Galaxy S26 Ultra 256GB 12GB'), 'samsung:galaxy-s26-ultra:unknown');
+  // A watch in a gift or bundle after another Apple product is not the product; the
+  // category goes by the product's own part too (DOS/Rate#1407).
+  assert.equal(
+    keyOf('HomePod mini tặng dây Apple Watch Series 10 42mm'),
+    'apple:homepod-mini:unknown'
+  );
+  assert.equal(
+    keyOf('AirPods Pro 2 tặng dây Apple Watch Series 10'),
+    'apple:airpods-pro-2:unknown'
+  );
+  assert.equal(keyOf('AirPods Pro 2 kèm Apple Watch Series 10'), 'apple:airpods-pro-2:unknown');
+  assert.equal(keyOf('Apple TV 4K tặng Apple Watch SE'), 'apple:tv-4k:unknown');
+  assert.equal(keyOf('MacBook Air M3 + Apple Watch Series 10'), 'apple:macbook-air-m3:unknown');
+  assert.equal(keyOf('iPad Pro M4 tặng Apple Watch Series 10'), 'apple:ipad-pro-m4:unknown');
+  assert.equal(keyOf('AirPods Pro 2 kèm sạc Apple Watch S10'), 'apple:airpods-pro-2:unknown');
+  assert.equal(keyOf('HomePod 2 + Apple Watch Series 10 46mm'), 'apple:homepod-2:unknown');
+  assert.equal(
+    keyOf('HomePod mini (Tặng dây Apple Watch Series 10 42mm)'),
+    'apple:homepod-mini:unknown'
+  );
+  assert.equal(
+    keyOf('HomePod mini [Tặng dây Apple Watch Series 10]'),
+    'apple:homepod-mini:unknown'
+  );
+  assert.equal(keyOf('HomePod mini TẶNG dây Apple Watch Series 10'), 'apple:homepod-mini:unknown');
+  assert.equal(
+    keyOf('HomePod mini tặng dây Apple Watch Series 10 42mm'.normalize('NFD')),
+    'apple:homepod-mini:unknown'
+  );
+  // So are AirPods: "Apple TV 4K tặng AirPods Pro 2" is the Apple TV.
+  assert.equal(keyOf('HomePod mini tặng AirPods 4'), 'apple:homepod-mini:unknown');
+  assert.equal(keyOf('Apple TV 4K tặng AirPods Pro 2'), 'apple:tv-4k:unknown');
+  assert.equal(keyOf('AirPods 4 tặng ốp'), 'apple:airpods-4:unknown');
+  // A watch before the gift, or a gift marker that opens the title, keeps the watch.
+  assert.equal(
+    keyOf('Apple Watch Series 10 46mm tặng AirPods Pro 2'),
+    'apple:watch-series-10-46mm:64gb'
+  );
+  assert.equal(
+    keyOf('[Tặng ốp lưng] Apple Watch Series 10 GPS 46mm'),
+    'apple:watch-series-10-46mm:64gb'
+  );
+  assert.equal(keyOf('Sale sốc tặng quà Apple Watch S10 46mm'), 'apple:watch-series-10-46mm:64gb');
+  assert.equal(keyOf('Quà tặng Apple Watch Series 10 46mm'), 'apple:watch-series-10-46mm:64gb');
+  assert.equal(
+    keyOf('Mua kèm iPhone giảm 500k Apple Watch Series 10 46mm'),
+    'apple:watch-series-10-46mm:64gb'
+  );
+  assert.equal(keyOf('Dây Apple Watch Series 10 46mm tặng ốp'), 'apple:watch-series-10-46mm:64gb');
+  assert.equal(
+    keyOf('Apple Watch Series 10 GPS + Cellular 46mm'),
+    'apple:watch-series-10-46mm:64gb'
+  );
+  // A bundle inside a gift that opens the title is not the product's own part.
+  assert.equal(
+    keyOf('[Tặng ốp iPhone + dây đeo] Apple Watch Series 10 46mm'),
+    'apple:watch-series-10-46mm:64gb'
+  );
+  assert.equal(keyOf('[Sạc Apple Watch tặng kèm] AirPods Pro 2'), 'apple:airpods-pro-2:unknown');
+  assert.equal(
+    keyOf('[Tặng ốp iPhone] AirPods Pro 2 tặng dây Apple Watch Series 10'),
+    'apple:airpods-pro-2:unknown'
+  );
+  assert.equal(
+    keyOf('(AirPods Pro 2 tặng dây Apple Watch Series 10) Chính hãng VN/A'),
+    'apple:airpods-pro-2:unknown'
+  );
+  assert.equal(
+    keyOf('[Apple Watch Series 10 46mm tặng AirPods] Chính hãng VN/A'),
+    'apple:watch-series-10-46mm:64gb'
+  );
+  assert.equal(
+    detectCategorySlug('[Apple Watch Series 10 46mm tặng AirPods] Chính hãng VN/A'),
+    'smartwatches'
+  );
+  // The cut stays linear on a long run of separators.
+  const cutStart = Date.now();
+  detectCategorySlug(`Apple Watch Series 10 46mm${','.repeat(64_000)}x`);
+  detectCategorySlug(`HomePod mini${' +'.repeat(32_000)}x`);
+  detectCategorySlug(`[${'['.repeat(64_000)}x`);
+  assert.ok(Date.now() - cutStart < 500, 'gift cut is linear');
+  // The gifted AirPods no longer make the watch earbuds, so it keys like the bare title.
+  assert.equal(keyOf('Apple Watch Ultra 2 49mm tặng AirPods'), keyOf('Apple Watch Ultra 2 49mm'));
+  assert.equal(
+    detectCategorySlug('HomePod mini tặng dây Apple Watch Series 10 42mm'),
+    'smartphones'
+  );
+  assert.equal(detectCategorySlug('AirPods Pro 2 tặng dây Apple Watch Series 10'), 'earbuds');
+  assert.equal(detectCategorySlug('iPad Pro M4 tặng Apple Watch Series 10'), 'tablets');
+  assert.equal(detectCategorySlug('MacBook Air M3 + Apple Watch Series 10'), 'laptops');
+  assert.equal(detectCategorySlug('Apple iPhone 16 tặng smartwatch'), 'smartphones');
+  assert.equal(detectCategorySlug('Apple Watch Series 10 46mm tặng AirPods Pro 2'), 'smartwatches');
+  assert.equal(detectCategorySlug('Sale sốc tặng quà Apple Watch S10 46mm'), 'smartwatches');
+  assert.equal(
+    detectCategorySlug('AirPods Pro 2 kèm Apple Watch Series 10'.normalize('NFD')),
+    'earbuds'
+  );
+  assert.equal(detectCategorySlug('HomePod mini (Tặng dây Apple Watch Series 10)'), 'smartphones');
+  assert.equal(detectCategorySlug('[Tặng ốp lưng] Apple Watch Series 10 GPS 46mm'), 'smartwatches');
   // With no line matched, the family the title names first, else iPhone.
   assert.equal(keyOf('MacBook M4'), 'apple:macbook:unknown');
   assert.equal(keyOf('Apple "iPad" 256GB'), 'apple:ipad:256gb');
