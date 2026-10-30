@@ -897,14 +897,18 @@ async function runCoreArchitectureSuite() {
   const versusLayout = compareWorkspaceSrc.slice(
     compareWorkspaceSrc.indexOf("if (layout === 'versus')")
   );
-  const versusReturn = versusLayout.slice(0, versusLayout.indexOf('  }'));
+  const versusReturn = versusLayout.slice(
+    0,
+    versusLayout.indexOf('{summaryBlock}')
+  );
   assert.ok(
     versusReturn.indexOf('{matrixBlock}') > 0 &&
       versusReturn.indexOf('{matrixBlock}') <
         versusReturn.indexOf('{controlsBlock}') &&
       versusReturn.indexOf('{controlsBlock}') <
         versusReturn.indexOf('{popularBlock}') &&
-      !versusReturn.includes('{summaryBlock}'),
+      versusLayout.indexOf('{summaryBlock}') >
+        versusLayout.search(/\n {2}return \(/),
     'versus: matrix, then picker, then popular pairs, no second summary'
   );
   const sitemapSrc = fs.readFileSync(
