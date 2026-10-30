@@ -2049,6 +2049,8 @@ export class ProductNormalizer {
         // "iPad mini (2026)" is the mini 8, so the chains that write the year key like the
         // ones that write the number (DOS/Rate#1491). The older years keep their stored
         // "ipad-mini" key ("iPad mini 2024", DOS/Rate#819) until a re-key decides otherwise.
+        // Its chip names it too: FPT Shop and TGDD write "iPad mini A20 Pro", as A17 Pro
+        // names the mini 7 (DOS/Rate#1502).
         const mini = line.match(/^mini\s*([1-9])?$/i);
         if (mini)
           line = `mini${
@@ -2056,7 +2058,8 @@ export class ProductNormalizer {
               ? ` ${mini[1]}`
               : /\ba17\s*pro\b/i.test(appleTitle)
                 ? ' 7'
-                : /\bmini\s*\(?\s*2026\s*\)?(?![\d\p{L}])/iu.test(appleTitle)
+                : /\ba20(?:\s*pro)?\b/i.test(appleTitle) ||
+                    /\bmini\s*\(?\s*2026\s*\)?(?![\d\p{L}])/iu.test(appleTitle)
                   ? ' 8'
                   : ''
           }`;
