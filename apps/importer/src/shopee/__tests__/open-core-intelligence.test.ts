@@ -1258,6 +1258,28 @@ async function runSuite() {
   ] as const) {
     assert.equal(keyOf(title), key, title);
   }
+  // "Titanium" and "Titan" are laptop model words, not colours; "Jade", "Gem" and "Sky"
+  // start two-word colours; Garmin's GPS prefixes and its "GPS 73" (DOS/Rate#1495).
+  for (const [title, key] of [
+    ['Lenovo ThinkPad X1 Titanium/16GB/512GB', 'lenovo:thinkpad-x1-titanium:512gb'],
+    ['Lenovo ThinkPad X1 Titanium 16GB/512GB', 'lenovo:thinkpad-x1-titanium:512gb'],
+    ['ThinkPad X1 Yoga Titanium Bạc/16GB/512GB', 'lenovo:thinkpad-x1-yoga-titanium:512gb'],
+    ['MSI GT77 Titan Đen/32GB/1TB', 'msi:gt77-titan:1024gb'],
+    // A phone's "Titan" still starts its colour.
+    ['Samsung Galaxy S24 Ultra Titan Đen/256GB', 'samsung:galaxy-s24-ultra:256gb'],
+    ['Samsung Galaxy S24 Ultra Titan Gray/256GB', 'samsung:galaxy-s24-ultra:256gb'],
+    ['iPhone 16 Pro Max Titan Đen/256GB', 'apple:iphone-16-pro-max:256gb'],
+    ['Samsung Galaxy S24 Jade Green/256GB', 'samsung:galaxy-s24:256gb'],
+    ['Samsung Galaxy A55 Gem Green/8GB/256GB', 'samsung:galaxy-a55:256gb'],
+    ['Samsung Galaxy S24 Sky Blue/256GB', 'samsung:galaxy-s24:256gb'],
+    ['Máy định vị GPS cầm tay Garmin GPSMAP 66i', 'garmin:gpsmap-66i:unknown'],
+    ['Thiết bị định vị GPS Garmin GPS 73', 'garmin:gps-73:unknown'],
+    ['Garmin GPS 73', 'garmin:gps-73:unknown'],
+    // A GPS device title that names no model stays unkeyable.
+    ['Máy định vị GPS Garmin', 'garmin:unkeyed:unknown'],
+  ] as const) {
+    assert.equal(keyOf(title), key, title);
+  }
   // A long run of promo words costs linear time (CodeQL js/polynomial-redos).
   {
     const started = performance.now();
