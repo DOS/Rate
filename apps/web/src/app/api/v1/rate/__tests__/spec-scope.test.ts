@@ -321,6 +321,69 @@ async function testExtensionLookup() {
   console.warn('  ✅ Extension lookup returns the category spec view');
 }
 
+// Caller-controlled work is bounded (DOS/Rate#1308).
+async function testBoundedInputs() {
+  const { NextRequest } = await import('next/server');
+  // category=all with a spec filter pages in process: its offset is capped.
+  let res = await listProducts('category=all&has5g=1&offset=2001');
+  assert.equal(res.status, 400);
+  res = await listProducts('category=all&has5g=1&offset=2000');
+  assert.equal(res.status, 200);
+  // A merchants platform must be a tracked one.
+  const merchants = await import('../merchants/route');
+  const ask = (q: string) =>
+    merchants.GET(
+      new NextRequest(`http://localhost/api/v1/rate/merchants?${q}`)
+    );
+  assert.equal((await ask('platform=not-a-platform')).status, 400);
+  assert.notEqual((await ask('platform=Shopee')).status, 400);
+  // JSON write bodies are read up to 32 KB.
+  const { readBoundedJsonBody, MAX_JSON_BODY_BYTES } =
+    await import('@/server/rate/api-handler');
+  const post = (body: string, headers: Record<string, string> = {}) =>
+    new Request('http://localhost/x', { method: 'POST', body, headers });
+  assert.deepEqual(await readBoundedJsonBody(post('{"a":1}')), {
+    tooLarge: false,
+    value: { a: 1 },
+  });
+  assert.deepEqual(await readBoundedJsonBody(post('not json')), {
+    tooLarge: false,
+    value: null,
+  });
+  // A longest review with every non-ASCII character escaped still fits.
+  const escapedReview = JSON.stringify({
+    masterProductId: '11111111-1111-4111-8111-111111111111',
+    comment: 'ệ'.repeat(3000),
+    authorName: 'ệ'.repeat(120),
+    variation: 'ệ'.repeat(200),
+  }).replace(
+    /[^\x20-\x7e]/g,
+    (c) => `\\u${c.charCodeAt(0).toString(16).padStart(4, '0')}`
+  );
+  assert.ok(escapedReview.length > 16_384, 'the escaped body is over 16 KB');
+  const escapedRead = await readBoundedJsonBody(post(escapedReview));
+  assert.equal(escapedRead.tooLarge, false, 'an escaped longest review fits');
+  const big = JSON.stringify({ a: 'x'.repeat(MAX_JSON_BODY_BYTES) });
+  assert.deepEqual(await readBoundedJsonBody(post(big)), { tooLarge: true });
+  assert.deepEqual(
+    await readBoundedJsonBody(
+      post('{}', { 'content-length': String(MAX_JSON_BODY_BYTES + 1) })
+    ),
+    { tooLarge: true },
+    'a declared length over the cap is not read'
+  );
+  const ingest = await import('../extension/ingest/route');
+  const tooBig = await ingest.POST(
+    new NextRequest('http://localhost/api/v1/rate/extension/ingest', {
+      method: 'POST',
+      body: big,
+      headers: { 'content-type': 'application/json' },
+    })
+  );
+  assert.equal(tooBig.status, 413);
+  console.warn('  ✅ Offsets, platforms and body sizes are bounded');
+}
+
 // Inspect and lookup share a per-IP limit (DOS/Rate#1307).
 async function testInspectRateLimit() {
   const { NextRequest } = await import('next/server');
@@ -353,6 +416,7 @@ async function main() {
   await testProductFilters();
   await testDetailAndCompare();
   await testExtensionLookup();
+  await testBoundedInputs();
   await testInspectRateLimit();
 }
 

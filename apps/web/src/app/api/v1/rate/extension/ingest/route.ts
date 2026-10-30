@@ -9,6 +9,8 @@ import {
   extractClientRateLimitKey,
   isSafeCrowdIngestHttpUrl,
   jsonApiError,
+  payloadTooLargeResponse,
+  readBoundedJsonBody,
 } from '@/server/rate/api-handler';
 import { parseEcommerceUrlOrQuery } from '@/lib/rate-api';
 
@@ -99,7 +101,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const body: unknown = await request.json().catch(() => null);
+    const bodyRead = await readBoundedJsonBody(request);
+    if (bodyRead.tooLarge) return payloadTooLargeResponse(CORS_HEADERS);
+    const body: unknown = bodyRead.value;
     const parsed = CrowdIngestSchema.safeParse(body);
 
     if (!parsed.success) {
