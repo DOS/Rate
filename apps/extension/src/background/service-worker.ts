@@ -17,6 +17,7 @@ import {
   sanitizeExtensionProductSignal,
   selectFreshestSessionSignal,
 } from '../security-guards.js';
+import { LookupCooldown } from '../rate-limit.js';
 import { t } from '../i18n.js';
 import { resolveActionBadge } from '../verdict-display.js';
 
@@ -49,21 +50,54 @@ async function getSettings(): Promise<ExtensionSettings> {
  */
 type LookupOutcome =
   | { ok: true; data: ExtensionLookupData | null }
-  | { ok: false; status: number | null };
+  | {
+      ok: false;
+      status: number | null;
+      /** Seconds until lookups resume after a 429 (DOS/Rate#1466). */
+      retryAfterSeconds?: number;
+    };
+
+// The version the API sees, from the manifest, so a release bump reaches the header
+// (DOS/Rate#1466).
+const EXTENSION_VERSION = chrome.runtime.getManifest().version;
+
+// After a 429 no lookup is sent until the server's Retry-After has passed: kept in memory
+// and in session storage, so a restarted worker keeps waiting (DOS/Rate#1466).
+const RATE_LIMIT_KEY = 'lookup_rate_limited_until';
+const lookupCooldown = new LookupCooldown({
+  get: async () =>
+    (await chrome.storage.session.get(RATE_LIMIT_KEY))?.[RATE_LIMIT_KEY],
+  set: async (untilMs) => {
+    await chrome.storage.session.set({ [RATE_LIMIT_KEY]: untilMs });
+  },
+});
 
 async function requestLookup(endpoint: string): Promise<LookupOutcome> {
+  const waitSeconds = await lookupCooldown.secondsLeft();
+  if (waitSeconds > 0) {
+    return { ok: false, status: 429, retryAfterSeconds: waitSeconds };
+  }
   let response: Response;
   try {
     response = await fetch(endpoint, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
-        'X-Rate-Extension-Version': '2.0.0',
+        'X-Rate-Extension-Version': EXTENSION_VERSION,
       },
       signal: AbortSignal.timeout(10_000),
     });
   } catch {
     return { ok: false, status: null };
+  }
+  if (response.status === 429) {
+    return {
+      ok: false,
+      status: 429,
+      retryAfterSeconds: await lookupCooldown.hold(
+        response.headers.get('Retry-After')
+      ),
+    };
   }
   if (!response.ok) return { ok: false, status: response.status };
   try {
@@ -125,6 +159,9 @@ const latestDetectByTab = new Map<number, number>();
 async function maybeSendOptInCrowdSignal(
   rawSignal: ExtractedPageProductSignal
 ): Promise<void> {
+  // Nothing is sent while lookups are rate-limited, even after a lookup that left before
+  // the 429 (DOS/Rate#1466).
+  if ((await lookupCooldown.secondsLeft()) > 0) return;
   const signal = sanitizeExtensionProductSignal(rawSignal);
   const settings = await getSettings();
   // Strict Privacy Gate: Only send crowd verification signal if user explicitly opted in
@@ -132,6 +169,8 @@ async function maybeSendOptInCrowdSignal(
   if (!settings.crowdContributeOptIn) return;
   if (!SUPPORTED_CROWD_PLATFORMS.has(signal.platform)) return;
   if (!signal.externalItemId || !signal.price || signal.price <= 0) return;
+  // A 429 may have come back while the settings were read.
+  if ((await lookupCooldown.secondsLeft()) > 0) return;
 
   try {
     await fetch(
@@ -140,7 +179,7 @@ async function maybeSendOptInCrowdSignal(
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'X-Rate-Extension-Version': '2.0.0',
+          'X-Rate-Extension-Version': EXTENSION_VERSION,
         },
         signal: AbortSignal.timeout(8_000),
         body: JSON.stringify(buildCrowdIngestPayload(signal)),
@@ -246,7 +285,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         // Fire-and-forget Opt-In Quarantine Crowd Signal if user enabled it.
         // Sent whenever the server answered, as before (#1175): a network
         // error threw before it then, so it still sends nothing (#1300).
-        if (outcome.ok || outcome.status !== null) {
+        // Never while lookups are rate-limited (DOS/Rate#1466).
+        if (outcome.ok || (outcome.status !== null && outcome.status !== 429)) {
           void maybeSendOptInCrowdSignal(signal);
         }
         // A failed lookup clears the previous product's badge (#1300).
@@ -265,6 +305,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           sendResponse({
             ok: false,
             status: outcome.status,
+            retryAfterSeconds: outcome.retryAfterSeconds,
             error: 'Lookup failed',
           });
           return;
@@ -395,6 +436,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             : {
                 ok: false,
                 status: outcome.status,
+                retryAfterSeconds: outcome.retryAfterSeconds,
                 settings,
                 signal: effectiveSignal,
               }
@@ -484,6 +526,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           sendResponse({
             ok: false,
             status: outcome.status,
+            retryAfterSeconds: outcome.retryAfterSeconds,
             settings,
             signal: syntheticSignal,
           });
@@ -540,6 +583,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           nextSettings.apiBaseUrl = normalizeAllowedApiBaseUrl(
             message.apiBaseUrl
           );
+          // The cooldown was another server's (DOS/Rate#1466); saving the same one keeps it.
+          if (nextSettings.apiBaseUrl !== (await getSettings()).apiBaseUrl) {
+            await lookupCooldown.clear();
+          }
         }
         if (typeof message.crowdContributeOptIn === 'boolean') {
           nextSettings.crowdContributeOptIn = message.crowdContributeOptIn;

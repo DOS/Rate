@@ -237,6 +237,7 @@ declare global {
     runtime: {
       id: string;
       getURL: (path: string) => string;
+      getManifest: () => { version: string };
       sendMessage: <T = unknown>(message: unknown) => Promise<T>;
       onMessage: {
         addListener: (

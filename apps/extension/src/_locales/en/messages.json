@@ -166,8 +166,16 @@
   "lookupErrorTitle": {
     "message": "Lookup failed"
   },
+  "lookupErrorRateLimitedWait": {
+    "message": "You are looking things up a little fast. Try again in $SECONDS$ s.",
+    "placeholders": {
+      "seconds": {
+        "content": "$1"
+      }
+    }
+  },
   "lookupErrorRateLimited": {
-    "message": "You are looking things up a little fast. Try again in a few minutes."
+    "message": "You are looking things up a little fast. Try again in a moment."
   },
   "lookupErrorServer": {
     "message": "Rate.vn is having trouble. Try again later."

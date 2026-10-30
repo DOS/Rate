@@ -3963,7 +3963,9 @@ async function runTests() {
     assert.equal(classifyLookupFailure(undefined), 'network');
     assert.equal(classifyLookupFailure(404), 'other');
     const limited = renderLookupErrorHtml('rate_limited', 'iPhone 16');
-    assert.ok(limited.includes('Bạn tra cứu hơi nhanh, thử lại sau ít phút'));
+    assert.ok(
+      limited.includes('Bạn tra cứu hơi nhanh, hãy thử lại sau một lát')
+    );
     assert.ok(limited.includes('data-action="retry"'));
     assert.ok(limited.includes('iPhone 16'));
     assert.ok(
@@ -3994,6 +3996,289 @@ async function runTests() {
     );
     console.log(
       '  ✅ [Lookup error states and stale pill clearing (#1300)] Verified'
+    );
+  }
+
+  // A 429 holds lookups until the server's Retry-After has passed, the panel says how
+  // long, and the version header comes from the manifest (DOS/Rate#1466).
+  {
+    const {
+      parseRetryAfterSeconds,
+      rateLimitedUntilMs,
+      cooldownSecondsLeft,
+      DEFAULT_RATE_LIMIT_COOLDOWN_SECONDS,
+      MAX_RATE_LIMIT_COOLDOWN_SECONDS,
+      LookupCooldown,
+      RateLimitRetry,
+      MAX_RATE_LIMIT_AUTO_RETRIES,
+    } = await import('./rate-limit.js');
+    const now = Date.parse('2026-10-30T10:00:00Z');
+    assert.equal(parseRetryAfterSeconds('60', now), 60);
+    assert.equal(parseRetryAfterSeconds(' 5 ', now), 5);
+    assert.equal(
+      parseRetryAfterSeconds('Fri, 30 Oct 2026 10:01:30 GMT', now),
+      90
+    );
+    assert.equal(
+      parseRetryAfterSeconds('Fri, 30 Oct 2026 09:00:00 GMT', now),
+      0
+    );
+    assert.equal(
+      parseRetryAfterSeconds('999999', now),
+      MAX_RATE_LIMIT_COOLDOWN_SECONDS
+    );
+    assert.equal(parseRetryAfterSeconds('0000120', now), 120);
+    assert.equal(
+      parseRetryAfterSeconds('1234567', now),
+      MAX_RATE_LIMIT_COOLDOWN_SECONDS
+    );
+    for (const bad of [null, undefined, '', 'soon', '-5', '1.5']) {
+      assert.equal(parseRetryAfterSeconds(bad, now), null, String(bad));
+    }
+    assert.equal(rateLimitedUntilMs('60', now), now + 60_000);
+    assert.equal(
+      rateLimitedUntilMs(null, now),
+      now + DEFAULT_RATE_LIMIT_COOLDOWN_SECONDS * 1000
+    );
+    assert.equal(cooldownSecondsLeft(now + 30_500, now), 31);
+    assert.equal(cooldownSecondsLeft(now - 1, now), 0);
+    assert.equal(cooldownSecondsLeft(undefined, now), 0);
+
+    // The shared cooldown, with a fake clock and a fake session store.
+    {
+      let clock = now;
+      let stored: unknown;
+      const store = {
+        get: async () => stored,
+        set: async (v: number) => {
+          stored = v;
+        },
+      };
+      const cooldown = new LookupCooldown(store, () => clock);
+      assert.equal(await cooldown.secondsLeft(), 0);
+      assert.equal(await cooldown.hold('60'), 60);
+      assert.equal(stored, now + 60_000);
+      // A later, shorter Retry-After never shortens the wait.
+      assert.equal(await cooldown.hold('1'), 60);
+      // A stale stored value read during the wait never clears it.
+      stored = 0;
+      assert.equal(await cooldown.secondsLeft(), 60);
+      // A restarted worker (new instance) picks the wait up from the store.
+      stored = now + 30_000;
+      const restarted = new LookupCooldown(store, () => clock);
+      assert.equal(await restarted.secondsLeft(), 30);
+      // The wait ends.
+      clock = now + 61_000;
+      assert.equal(await cooldown.secondsLeft(), 0);
+      // A deadline beyond the cap (a clock moved back, a corrupt value) is dropped.
+      stored = clock + 3_600_000;
+      assert.equal(
+        await new LookupCooldown(store, () => clock).secondsLeft(),
+        0
+      );
+      // Another server: no wait.
+      await cooldown.hold('120');
+      await cooldown.clear();
+      assert.equal(stored, 0);
+      assert.equal(await cooldown.secondsLeft(), 0);
+      // A failing store never blocks lookups.
+      const broken = new LookupCooldown(
+        {
+          get: async () => {
+            throw new Error('no session');
+          },
+          set: async () => {
+            throw new Error('no session');
+          },
+        },
+        () => clock
+      );
+      assert.equal(await broken.hold('60'), 60);
+      assert.equal(await broken.secondsLeft(), 60);
+
+      // A store read that began before clear() never brings the cleared wait back.
+      let release: (v: unknown) => void = () => {};
+      const slow = new LookupCooldown(
+        {
+          get: () => new Promise((resolve) => (release = resolve)),
+          set: async () => {},
+        },
+        () => clock
+      );
+      const pending = slow.secondsLeft();
+      await slow.clear();
+      release(clock + 60_000);
+      assert.equal(await pending, 0);
+    }
+
+    // The pill's retry after a 429, with fake timers.
+    {
+      const planned = new Map<number, () => void>();
+      let nextHandle = 1;
+      const timers = {
+        set: (run: () => void) => {
+          planned.set(nextHandle, run);
+          return nextHandle++;
+        },
+        clear: (handle: unknown) => {
+          planned.delete(handle as number);
+        },
+      };
+      const fire = () => {
+        const runs = [...planned.values()];
+        planned.clear();
+        runs.forEach((run) => run());
+      };
+      const retried: string[] = [];
+      const limited = { ok: false, status: 429, retryAfterSeconds: 60 };
+      const retry = new RateLimitRetry(timers);
+
+      // Product A is limited; the page moves to B before the wait ends: no retry of B.
+      retry.track('A');
+      assert.equal(
+        retry.after('A', limited, () => retried.push('A')),
+        61_000
+      );
+      retry.track('B');
+      assert.equal(planned.size, 0);
+      fire();
+      assert.deepEqual(retried, []);
+
+      // Retry-After: 0 (or a past date) still retries, one second later.
+      assert.equal(
+        retry.after('B', { ...limited, retryAfterSeconds: 0 }, () =>
+          retried.push('B')
+        ),
+        1_000
+      );
+      fire();
+      assert.deepEqual(retried, ['B']);
+
+      // A server that keeps answering 429 gets a bounded number of retries.
+      for (let i = 1; i < MAX_RATE_LIMIT_AUTO_RETRIES; i += 1) {
+        assert.ok(retry.after('B', limited, () => retried.push('B')));
+        fire();
+      }
+      assert.equal(retried.length, MAX_RATE_LIMIT_AUTO_RETRIES);
+      assert.equal(
+        retry.after('B', limited, () => retried.push('B')),
+        null
+      );
+      assert.equal(planned.size, 0);
+      // An answer that is not a 429 resets the count.
+      assert.equal(
+        retry.after('B', { ok: true }, () => {}),
+        null
+      );
+      assert.ok(retry.after('B', limited, () => retried.push('B')));
+      // A late answer for an earlier product plans nothing.
+      assert.equal(
+        retry.after('A', limited, () => retried.push('A')),
+        null
+      );
+    }
+
+    const { renderLookupErrorHtml } = await import('./sidepanel/panel-view.js');
+    const waiting = renderLookupErrorHtml('rate_limited', 'iPhone 16', 42);
+    assert.ok(waiting.includes('hãy thử lại sau 42\u00a0giây'), waiting);
+    assert.ok(waiting.includes('data-action="retry"'));
+    // No wait known, or another failure: the plain message.
+    assert.ok(
+      renderLookupErrorHtml('rate_limited', null, 0).includes(
+        'hãy thử lại sau một lát'
+      )
+    );
+    assert.ok(!renderLookupErrorHtml('server', null, 42).includes('42'));
+
+    const workerSource = fs.readFileSync(
+      path.resolve(__dirname, 'background/service-worker.ts'),
+      'utf8'
+    );
+    assert.ok(!workerSource.includes("'X-Rate-Extension-Version': '2.0.0'"));
+    assert.equal(
+      (
+        workerSource.match(/'X-Rate-Extension-Version': EXTENSION_VERSION/g) ??
+        []
+      ).length,
+      2
+    );
+    assert.ok(workerSource.includes('chrome.runtime.getManifest().version'));
+    // The cooldown is checked before any fetch, and a 429 sets it from Retry-After.
+    const requestLookupBody = workerSource.slice(
+      workerSource.indexOf('async function requestLookup('),
+      workerSource.indexOf('async function fetchExtensionLookup(')
+    );
+    const cooldownCheck = requestLookupBody.indexOf(
+      'await lookupCooldown.secondsLeft()'
+    );
+    assert.ok(cooldownCheck >= 0);
+    assert.ok(cooldownCheck < requestLookupBody.indexOf('await fetch('));
+    // No crowd signal while lookups wait; another server clears the wait; the pill
+    // looks the product up again once the wait is over.
+    const crowdBody = workerSource.slice(
+      workerSource.indexOf('async function maybeSendOptInCrowdSignal('),
+      workerSource.indexOf(
+        'await fetch(',
+        workerSource.indexOf('async function maybeSendOptInCrowdSignal(')
+      )
+    );
+    // Checked again right before the POST: a 429 may come back while settings load.
+    const lastCrowdCheck = crowdBody.lastIndexOf(
+      'await lookupCooldown.secondsLeft()'
+    );
+    assert.ok(lastCrowdCheck > crowdBody.indexOf('await getSettings()'));
+    // Only another server clears the wait.
+    assert.ok(
+      /if \(nextSettings\.apiBaseUrl !== \(await getSettings\(\)\)\.apiBaseUrl\) \{\s*await lookupCooldown\.clear\(\);/.test(
+        workerSource
+      )
+    );
+    const contentScript = fs.readFileSync(
+      path.resolve(__dirname, 'content/content-script.ts'),
+      'utf8'
+    );
+    assert.ok(contentScript.includes('rateLimitRetry.track(signature)'));
+    assert.ok(
+      contentScript.includes('rateLimitRetry.after(signature, response')
+    );
+    assert.ok(
+      requestLookupBody.includes("response.headers.get('Retry-After')")
+    );
+    // Each failure the panel sees carries the wait.
+    assert.equal(
+      (
+        workerSource.match(/retryAfterSeconds: outcome\.retryAfterSeconds/g) ??
+        []
+      ).length,
+      3
+    );
+    for (const locale of ['vi', 'en', 'cs']) {
+      const messages = JSON.parse(
+        fs.readFileSync(
+          path.resolve(__dirname, `_locales/${locale}/messages.json`),
+          'utf8'
+        )
+      ) as Record<
+        string,
+        { message: string; placeholders?: Record<string, unknown> }
+      >;
+      assert.ok(
+        messages.lookupErrorRateLimitedWait?.message.includes('$SECONDS$'),
+        locale
+      );
+      assert.deepEqual(
+        Object.keys(messages.lookupErrorRateLimitedWait?.placeholders ?? {}),
+        ['seconds']
+      );
+      assert.ok(
+        !/ít phút|few minutes|pár minut/.test(
+          messages.lookupErrorRateLimited!.message
+        ),
+        locale
+      );
+    }
+    console.log(
+      '  ✅ [Retry-After cooldown, wait message and manifest version (#1466)] Verified'
     );
   }
 
