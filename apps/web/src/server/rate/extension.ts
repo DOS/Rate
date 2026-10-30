@@ -20,6 +20,7 @@ import {
   getMasterProducts,
   getMerchantsList,
   getRateClient,
+  getCategorySlugMap,
   normalizeMasterProductRow,
   parseEcommerceUrlOrQuery,
   RateDataUnavailableError,
@@ -1248,7 +1249,11 @@ export async function lookupExtensionProduct(
           throw new RateDataUnavailableError('master_products', masterErr);
         }
         if (masterRow) {
-          matchedMaster = normalizeMasterProductRow(masterRow as MasterProduct);
+          matchedMaster = normalizeMasterProductRow(
+            masterRow as MasterProduct,
+            null,
+            await getCategorySlugMap()
+          );
           matchStatus = 'exact_listing';
         } else {
           listingOfUnpublishedModel = true;

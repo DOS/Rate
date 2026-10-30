@@ -4781,6 +4781,58 @@ async function runCoreArchitectureSuite() {
       'laptops',
       'normalizeMasterProductRow must stamp metadata.category_slug when categorySlugHint is passed (#386)'
     );
+    // The category row wins over a stale hint and the name heuristic, so a
+    // link built without the category map names the sitemap's category and
+    // takes no 308 hop (DOS/Rate#1380).
+    const catMap1380 = new Map([
+      ['cat-laptop', 'laptops'],
+      ['cat-gadget', 'gadgets'],
+    ]);
+    const galaxyBook1380 = {
+      id: 'mp-galaxy-book',
+      slug: 'samsung-galaxy-book-5',
+      name: 'Samsung Galaxy Book 5',
+      brand: 'Samsung',
+      model: 'Galaxy Book 5',
+      category_id: 'cat-laptop',
+      metadata: { category_slug: 'smartphones' },
+    } as unknown as Parameters<typeof normalizeMasterProductRow>[0];
+    assert.equal(
+      getMasterProductHref(galaxyBook1380),
+      '/smartphones/samsung-galaxy-book-5',
+      'unstamped, the link follows the stale hint'
+    );
+    const stamped1380 = normalizeMasterProductRow(
+      galaxyBook1380,
+      null,
+      catMap1380
+    );
+    assert.equal(
+      getMasterProductHref(stamped1380),
+      '/laptops/samsung-galaxy-book-5',
+      'stamped, a link built without the map names the category row'
+    );
+    assert.equal(
+      getMasterProductHref(stamped1380),
+      getMasterProductHref(galaxyBook1380, catMap1380),
+      'the same URL as with the map (sitemap, redirect)'
+    );
+    assert.equal(
+      (
+        normalizeMasterProductRow(
+          { ...galaxyBook1380, category_id: 'cat-gadget' },
+          null,
+          catMap1380
+        ).metadata as Record<string, unknown>
+      )?.category_slug,
+      'smartphones',
+      'a non-catalogue category row leaves the hint as it was'
+    );
+    assert.equal(
+      normalizeMasterProductRow(galaxyBook1380, null, null),
+      galaxyBook1380,
+      'no map: the row is as before'
+    );
     assert.equal(
       getMasterProductCategorySlug({
         slug: 'dell-latitude-7450',
