@@ -1,5 +1,6 @@
 import type { MasterProduct } from '@repo/shared-data';
 import { isCanonicalCategorySlug, usableImageUrls } from './rate-domain-core';
+import { leaderboardSpecsOnly } from './leaderboard-engine';
 
 /**
  * The product fields the hero search box shows, filters on and links with.
@@ -103,4 +104,41 @@ export function toHeroProductSuggestions(
       metadata: categorySlugOnly(p.metadata),
       specifications: categorySlugOnly(p.specifications),
     }));
+}
+
+/**
+ * A catalog row for a client list that shows names, prices, ratings and links:
+ * the spec sheet and the long expert texts dropped, the category slug kept for
+ * links. They were 27% of the watchlist page's HTML and 8% of a category
+ * page's (DOS/Rate#1353).
+ */
+export type WithoutSpecSheet<T extends MasterProduct> = Omit<
+  T,
+  'description' | 'expert_review_summary'
+> & { description: null; expert_review_summary: null };
+
+export function withoutSpecSheet<T extends MasterProduct>(
+  p: T
+): WithoutSpecSheet<T> {
+  return {
+    ...p,
+    specifications: categorySlugOnly(p.specifications),
+    spec_provenance: {},
+    expert_review_summary: null,
+    description: null,
+  };
+}
+
+/**
+ * A catalog row for a client that ranks or pairs products (the leaderboard, the
+ * compare picker): like withoutSpecSheet, but it keeps the spec fields the
+ * scores read, so ranks and popular pairs come out the same (DOS/Rate#1515).
+ */
+export function withScoringSpecs<T extends MasterProduct>(
+  p: T
+): WithoutSpecSheet<T> {
+  return {
+    ...withoutSpecSheet(p),
+    specifications: leaderboardSpecsOnly(p.specifications),
+  };
 }

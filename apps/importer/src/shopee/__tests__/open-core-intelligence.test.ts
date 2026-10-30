@@ -119,6 +119,7 @@ async function runSuite() {
   // Brand and model keys of the generic model fallback (DOS/Rate#761, #762).
   const keyOf = (title: string) => normalizer.normalize(createDummyShopeeProduct(title)).model_key;
   const brandOf = (title: string) => normalizer.normalize(createDummyShopeeProduct(title)).brand;
+  const nameOf = (title: string) => normalizer.normalize(createDummyShopeeProduct(title)).name;
   // "Vivobook" / "Vivo Book" are Asus and Garmin's Vivo lines are Garmin; vivo phones stay vivo.
   assert.equal(
     keyOf('Laptop Asus Vivobook 14 X1407AA-LY360W (Ultra 5-325/ 16GB/ 512GB/ Windows 11 Home)'),
@@ -380,8 +381,9 @@ async function runSuite() {
       'apple:airpods-pro:unknown',
     ],
     ['Combo iPad Gen 10 + Apple Pencil 1 MQLY3', 'apple:ipad-10:unknown'],
-    // A stylus that does not say "Apple Pencil" is not one.
-    ['Bút cảm ứng Stylus Pencil Gen 2 cho iPad Gen 9', 'apple:ipad-9:unknown'],
+    // A stylus that does not say "Apple Pencil" is not one; it is an accessory for the
+    // iPad, so it gets no key (DOS/Rate#1505).
+    ['Bút cảm ứng Stylus Pencil Gen 2 cho iPad Gen 9', 'apple:unkeyed:unknown'],
     ['AirPods (H2)', 'apple:airpods-4:unknown'],
     ['AirPods thế hệ 3', 'apple:airpods-3:unknown'],
     ['HomePod thế hệ 2', 'apple:homepod-2:unknown'],
@@ -405,10 +407,10 @@ async function runSuite() {
     // A chip named for a bundled accessory is not the Air's.
     ['iPad Air 5 64GB + ốp lưng cho iPad Pro M4', 'apple:ipad-air-5:64gb'],
     // Another brand, or a title that only names what it fits, is not an Apple desktop.
-    ['Ốp Samsung Galaxy S24 imac', 'samsung:op-samsung-galaxy-s24:unknown'],
-    // An accessory naming its own family before "cho" keeps the model it fits.
-    ['Ốp lưng iPhone cho iPhone 15 Pro Max', 'apple:iphone-15-pro-max:unknown'],
-    ['Bao da iPad cho iPad Air 5', 'apple:ipad-air-5:unknown'],
+    ['Ốp Samsung Galaxy S24 imac', 'samsung:unkeyed:unknown'],
+    // An accessory gets no key (DOS/Rate#1505); the model it fits is checked by name below.
+    ['Ốp lưng iPhone cho iPhone 15 Pro Max', 'apple:unkeyed:unknown'],
+    ['Bao da iPad cho iPad Air 5', 'apple:unkeyed:unknown'],
     // An iPhone named only as what an accessory fits is not the product.
     ['Tai nghe AirPods Pro 2 cho iPhone Air', 'apple:airpods-pro-2:unknown'],
     ['Tai nghe AirPods Pro 2 cho iPhone 17', 'apple:airpods-pro-2:unknown'],
@@ -662,10 +664,77 @@ async function runSuite() {
     ['iPad Air 5 10.9 inch 64GB', 'apple:ipad-air-5:64gb'],
     ['iPad mini 7 8.3 inch 128GB', 'apple:ipad-mini-7:128gb'],
     ['MacBook Neo 13 inch 256GB', 'apple:macbook-neo:256gb'],
-    // A size after "cho" belongs to the product the accessory fits.
-    ['Ốp lưng iPad Pro M4 13 inch cho iPad Pro 11', 'apple:ipad-pro-m4-13:unknown'],
+    ['Ốp lưng iPad Pro M4 13 inch cho iPad Pro 11', 'apple:unkeyed:unknown'],
   ];
   for (const [title, expectedKey] of appleSizeKeys1113) {
+    assert.equal(keyOf(title), expectedKey, title);
+  }
+  // An accessory naming its own family before "cho" still reads the model it fits, and a
+  // size after "cho" belongs to that model; only the key is withheld (DOS/Rate#1505).
+  assert.equal(nameOf('Ốp lưng iPhone cho iPhone 15 Pro Max'), 'Apple iPhone 15 Pro Max');
+  assert.equal(nameOf('Bao da iPad cho iPad Air 5'), 'Apple iPad Air 5');
+  assert.equal(nameOf('Ốp lưng iPad Pro M4 13 inch cho iPad Pro 11'), 'Apple iPad Pro M4 13');
+
+  // DOS/Rate#1505: a title that opens with an accessory sells the accessory, not the device
+  // it fits. It gets no key, so it never joins the device's master or Item; a gift after
+  // the device, a watch's own case and an Apple Pencil keep theirs.
+  const accessoryTitles1505 = [
+    'Ốp lưng iPad mini A20 Pro',
+    'Bao da iPad mini A20 Pro',
+    'Kính cường lực iPad mini A20 Pro',
+    '[Chính hãng] Ốp lưng iPhone 16 Pro Max',
+    'Miếng dán màn hình Apple Watch Ultra 49mm',
+    'Ốp lưng Samsung Galaxy S25 Ultra',
+    'Bao da Samsung Galaxy Tab S10 Ultra',
+    'Bàn phím Bluetooth cho Samsung Galaxy Tab S10 Ultra',
+    'Bút cảm ứng cho Xiaomi Pad 7 Pro',
+    'Dây đeo Apple Watch S 16cm 42mm',
+    'Củ sạc Apple 20W không kèm cáp sạc',
+    'Tempered Glass Screen Protector for iPhone 16 Pro',
+    'Clear Case for iPhone 16 Pro Max MagSafe',
+    // A case or film made for the Apple Pencil is still a case (review of #1505).
+    'Bao da iPad Pro M4 11 inch có khe đựng Apple Pencil',
+    'Kính cường lực iPad Pro M4 13 inch dùng được Apple Pencil',
+    'Ốp Apple Pencil 2 silicon',
+    'Bút cảm ứng cho iPad thay thế Apple Pencil',
+    'Cáp sạc Apple Pencil 1',
+    'Vỏ ốp iPhone 16 Pro Max',
+    'Bộ dán PPF iPhone 16 Pro',
+    'Skin dán Galaxy Tab S10 Ultra',
+    'Kính camera iPhone 16 Pro Max',
+    'Op lung iPhone 15 Pro Max',
+    'Combo ốp lưng và cường lực iPhone 16',
+    'Cases for Galaxy S25 Ultra',
+    'Magic Keyboard iPad Pro M4 11 inch',
+    'Bút S Pen Galaxy Tab S10 Ultra',
+    'Đế sạc Apple Watch Series 10',
+    // Codex review of #1507.
+    '[Ốp lưng iPhone 16 Pro Max] Trong suốt chống sốc',
+    'Dây cao su Apple Watch Ultra 2 49mm',
+    'Dây Apple Watch S/M 42mm',
+    'Dây Apple Watch Series 10 46mm tặng ốp',
+    '🔥 [Chính hãng] Ốp lưng iPhone 16 Pro Max',
+  ];
+  for (const title of accessoryTitles1505) {
+    const accessory = normalizer.normalize(createDummyShopeeProduct(title));
+    assert.equal(accessory.keyable, false, title);
+    assert.match(accessory.model_key, /^[a-z0-9-]+:unkeyed:/, title);
+  }
+  for (const [title, expectedKey] of [
+    ['iPad mini A20 Pro 256GB tặng ốp lưng', 'apple:ipad-mini-8:256gb'],
+    ['iPad 10 64GB - Tặng bao da dùng chung iPad A16', 'apple:ipad-10:64gb'],
+    ['Apple Watch Series 10 46mm Titanium Case', 'apple:watch-series-10-46mm:64gb'],
+    ['Bút cảm ứng Apple Pencil Pro', 'apple:pencil-pro:unknown'],
+    ['[Tặng ốp lưng] iPhone 16 Pro Max 256GB', 'apple:iphone-16-pro-max:256gb'],
+    // A bundle with the device after a short accessory and a "+" sells the device.
+    ['Sạc nhanh + iPhone 16 Pro Max 256GB', 'apple:iphone-16-pro-max:256gb'],
+    ['Stylus Apple Pencil Pro', 'apple:pencil-pro:unknown'],
+    ['Bút cảm ứng chính hãng Apple Pencil Pro', 'apple:pencil-pro:unknown'],
+    ['Bút cảm ứng (chính hãng) Apple Pencil Pro', 'apple:pencil-pro:unknown'],
+    ['Bút cảm ứng cao cấp chính hãng Apple Pencil Pro', 'apple:pencil-pro:unknown'],
+    // A gift that opens the title is not what it sells.
+    ['Ốp lưng tặng kèm khi mua iPhone 16 Pro Max 256GB', 'apple:iphone-16-pro-max:256gb'],
+  ] as const) {
     assert.equal(keyOf(title), expectedKey, title);
   }
   // DOS/Rate#1124: a size outside a band phrase is the case's; a band's size counts only
@@ -1017,13 +1086,13 @@ async function runSuite() {
   );
   assert.equal(keyOf('Apple Watch S11 42mm GPS 64GB'), 'apple:watch-series-11-42mm:64gb');
   assert.equal(keyOf('Apple Watch S 42mm'), 'apple:watch:unknown');
-  assert.equal(keyOf('Dây đeo Apple Watch S 16cm 42mm'), 'apple:watch:unknown');
-  assert.equal(keyOf('Dây đeo Apple Watch S 16 cm 42mm'), 'apple:watch:unknown');
-  assert.equal(keyOf('Dây đeo Apple Watch S 14-16cm 42mm'), 'apple:watch:unknown');
-  assert.equal(keyOf('Dây đeo Apple Watch S 14 - 16 cm 42mm'), 'apple:watch:unknown');
+  assert.equal(keyOf('Apple Watch S 16cm 42mm'), 'apple:watch:unknown');
+  assert.equal(keyOf('Apple Watch S 16 cm 42mm'), 'apple:watch:unknown');
+  assert.equal(keyOf('Apple Watch S 14-16cm 42mm'), 'apple:watch:unknown');
+  assert.equal(keyOf('Apple Watch S 14 - 16 cm 42mm'), 'apple:watch:unknown');
   assert.equal(keyOf('Apple Watch S10 - 46mm GPS'), 'apple:watch-series-10-46mm:64gb');
   assert.equal(keyOf('Apple Watch S10x 46mm'), 'apple:watch:unknown');
-  assert.equal(keyOf('Dây Apple Watch S/M 42mm'), 'apple:watch:unknown');
+  assert.equal(keyOf('Apple Watch S/M 42mm'), 'apple:watch:unknown');
   assert.equal(keyOf('Apple Watch S10.46mm'), 'apple:watch:unknown');
   assert.equal(keyOf('Samsung Galaxy S10 128GB'), 'samsung:galaxy-s10:128gb');
   assert.equal(keyOf('Xiaomi Watch S1 Active'), 'xiaomi:watch-s1-active:unknown');
@@ -1281,6 +1350,71 @@ async function runSuite() {
     ['iPad mini 7 A17 Pro 128GB', 'apple:ipad-mini-7:128gb'],
     ['Apple iPad mini 8.3 inch (A17 Pro) Wi-Fi 128GB', 'apple:ipad-mini-7:128gb'],
     ['Apple iPad mini 2024 128GB', 'apple:ipad-mini:128gb'],
+    // A gift in brackets or without diacritics, a "|" bundle and a Galaxy model are no
+    // chip; the first chip counts; "+ Cellular" is the iPad's own; a launch year
+    // before the chip names an older mini; a chip only in a gift names none
+    // (DOS/Rate#1510).
+    ['iPad mini 64GB (Tặng ốp Galaxy A20)', 'apple:ipad-mini:64gb'],
+    ['iPad mini 64GB tang op lung Galaxy A20', 'apple:ipad-mini:64gb'],
+    ['iPad mini 128GB | Galaxy A20', 'apple:ipad-mini:128gb'],
+    ['iPad mini A15/A20 Pro 64GB', 'apple:ipad-mini:64gb'],
+    ['iPad mini Wi-Fi + Cellular 128GB (A20 Pro)', 'apple:ipad-mini-8:128gb'],
+    ['iPad mini 2019 A20', 'apple:ipad-mini:unknown'],
+    ['iPad mini 128GB kèm bút A17 Pro', 'apple:ipad-mini:128gb'],
+    // The A17 Pro names the mini 7 whatever the year; a "|" separates specs; a lone
+    // "Kem" is a colour, not a gift.
+    ['iPad mini 2024 A17 Pro 128GB', 'apple:ipad-mini-7:128gb'],
+    ['iPad mini (2024) A17 Pro 128GB', 'apple:ipad-mini-7:128gb'],
+    ['iPad mini (2026) A17 Pro 128GB', 'apple:ipad-mini-7:128gb'],
+    ['iPad mini | A17 Pro | 128GB', 'apple:ipad-mini-7:128gb'],
+    ['iPad mini 128GB | A20 Pro', 'apple:ipad-mini-8:128gb'],
+    ['iPad mini Kem A20 Pro 128GB', 'apple:ipad-mini-8:128gb'],
+    ['iPad mini màu Vàng Kem chip A17 Pro 128GB', 'apple:ipad-mini-7:128gb'],
+    ['iPad mini | A20 Pro | 128GB', 'apple:ipad-mini-8:128gb'],
+    // "Dùng cho" names a use unless another product follows it.
+    ['iPad mini dùng cho học tập, chip A17 Pro 128GB', 'apple:ipad-mini-7:128gb'],
+    ['iPad mini 64GB dùng cho Galaxy A20', 'apple:ipad-mini:64gb'],
+  ] as const) {
+    assert.equal(keyOf(title), key, title);
+  }
+  // "Titanium" and "Titan" are laptop model words, not colours; "Jade", "Gem" and "Sky"
+  // start two-word colours; Garmin's GPS prefixes and its "GPS 73" (DOS/Rate#1495).
+  for (const [title, key] of [
+    ['Lenovo ThinkPad X1 Titanium/16GB/512GB', 'lenovo:thinkpad-x1-titanium:512gb'],
+    ['Lenovo ThinkPad X1 Titanium 16GB/512GB', 'lenovo:thinkpad-x1-titanium:512gb'],
+    ['ThinkPad X1 Yoga Titanium Bạc/16GB/512GB', 'lenovo:thinkpad-x1-yoga-titanium:512gb'],
+    ['MSI GT77 Titan Đen/32GB/1TB', 'msi:gt77-titan:1024gb'],
+    // A phone's "Titan" still starts its colour.
+    ['Samsung Galaxy S24 Ultra Titan Đen/256GB', 'samsung:galaxy-s24-ultra:256gb'],
+    ['Samsung Galaxy S24 Ultra Titan Gray/256GB', 'samsung:galaxy-s24-ultra:256gb'],
+    ['iPhone 16 Pro Max Titan Đen/256GB', 'apple:iphone-16-pro-max:256gb'],
+    ['Samsung Galaxy S24 Jade Green/256GB', 'samsung:galaxy-s24:256gb'],
+    ['Samsung Galaxy A55 Gem Green/8GB/256GB', 'samsung:galaxy-a55:256gb'],
+    ['Samsung Galaxy S24 Sky Blue/256GB', 'samsung:galaxy-s24:256gb'],
+    ['Máy định vị GPS cầm tay Garmin GPSMAP 66i', 'garmin:gpsmap-66i:unknown'],
+    ['Thiết bị định vị GPS Garmin GPS 73', 'garmin:gps-73:unknown'],
+    ['Garmin GPS 73', 'garmin:gps-73:unknown'],
+    // "Jade", "Gem" and "Sky" only start their own colour: "Galaxy Sky" and "Liquid Jade"
+    // are models.
+    ['Samsung Galaxy Sky Black/16GB', 'samsung:galaxy-sky:16gb'],
+    ['Acer Liquid Jade Black/16GB', 'acer:liquid-jade:16gb'],
+    // Phantom is a colour name at Samsung and Asus, a line at Tecno (DOS/Rate#1495).
+    ['Samsung Galaxy S23 Phantom Black/256GB', 'samsung:galaxy-s23:256gb'],
+    ['Samsung Galaxy S22 Ultra Phantom Đen/256GB', 'samsung:galaxy-s22-ultra:256gb'],
+    ['Tecno Phantom Black/12GB/256GB', 'khac:tecno-phantom:256gb'],
+    ['MSI Pulse GL66 Titanium Gray/16GB/512GB', 'msi:pulse-gl66:512gb'],
+    // A laptop's "Titan Gray" or "Titanium Gray" is still its colour name.
+    ['Laptop Dell Latitude 7440 Titan Gray/16GB/512GB', 'dell:latitude-7440:512gb'],
+    ['Laptop Lenovo Yoga Slim 7 Titanium Gray/16GB/512GB', 'lenovo:yoga-slim-7:512gb'],
+    ['MSI Prestige 14 Titan Gray/16GB/512GB', 'msi:prestige-14:512gb'],
+    // Nor is it a model word in other laptop lines, before a Vietnamese colour or after one.
+    ['Laptop Dell Latitude 7440 Titan Xám/16GB/512GB', 'dell:latitude-7440:512gb'],
+    ['Laptop Dell Latitude 7440 Gray Titanium/16GB/512GB', 'dell:latitude-7440:512gb'],
+    ['Laptop Dell Latitude 7440 Black Titanium/16GB/512GB', 'dell:latitude-7440:512gb'],
+    // "chính hãng" between the GPS prefix and the brand.
+    ['Thiết bị định vị GPS chính hãng Garmin GPSMAP 65s', 'garmin:gpsmap-65s:unknown'],
+    // A GPS device title that names no model stays unkeyable.
+    ['Máy định vị GPS Garmin', 'garmin:unkeyed:unknown'],
   ] as const) {
     assert.equal(keyOf(title), key, title);
   }
@@ -1342,7 +1476,7 @@ async function runSuite() {
     keyOf('Mua kèm iPhone giảm 500k Apple Watch Series 10 46mm'),
     'apple:watch-series-10-46mm:64gb'
   );
-  assert.equal(keyOf('Dây Apple Watch Series 10 46mm tặng ốp'), 'apple:watch-series-10-46mm:64gb');
+  assert.equal(keyOf('Apple Watch Series 10 46mm tặng ốp'), 'apple:watch-series-10-46mm:64gb');
   assert.equal(
     keyOf('Apple Watch Series 10 GPS + Cellular 46mm'),
     'apple:watch-series-10-46mm:64gb'
@@ -2604,8 +2738,8 @@ async function runSuite() {
     assert.equal(brandOf('Please wait a moment'), 'Khác');
     assert.equal(keyOf('Just a moment...'), 'khac:just-a-moment:unknown');
     assert.equal(
-      keyOf('Bàn phím dành cho Laptop Lenovo ThinkPad X1'),
-      'lenovo:ban-phim-danh-cho:unknown'
+      keyOf('Laptop Lenovo ThinkPad X1 dành cho doanh nhân'),
+      'lenovo:thinkpad-x1-danh-cho:unknown'
     );
     assert.equal(keyOf('Đồng hồ Samsung Galaxy Watch7 44mm'), 'samsung:galaxy-watch7:unknown');
 

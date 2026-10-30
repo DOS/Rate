@@ -25,6 +25,7 @@ import CompareTrayBar from '@/components/compare/CompareTrayBar';
 import VersusInteractiveScoreboard from '@/components/compare/VersusInteractiveScoreboard';
 import VersusMatchupSwitcher from '@/components/compare/VersusMatchupSwitcher';
 import ClientMessages from '@/components/providers/ClientMessages';
+import { withScoringSpecs } from '@/lib/hero-products';
 
 export const revalidate = 60;
 
@@ -187,6 +188,9 @@ export default async function VersusComparePage({ params }: VersusPageProps) {
     ...directory.map((p) => p.slug),
   ]);
   const itemSlugProps = itemSlugBySlug ? { itemSlugBySlug } : {};
+  // The picker and switcher rank and list the directory; an added product gets
+  // its full sheet from the page the selection navigates to (DOS/Rate#1515).
+  const candidateRows = directory.map(withScoringSpecs);
 
   // Summary ItemList: each item links to its product page, which carries the
   // Product markup (DOS/Rate#1059).
@@ -266,7 +270,7 @@ export default async function VersusComparePage({ params }: VersusPageProps) {
               currentSlugA={scoreA.slug}
               currentSlugB={scoreB.slug}
               categorySlug={catSlug}
-              catalogCandidates={directory}
+              catalogCandidates={candidateRows}
               locale={locale}
               {...itemSlugProps}
             />
@@ -277,7 +281,7 @@ export default async function VersusComparePage({ params }: VersusPageProps) {
           <div className="container">
             <CompareWorkspace
               initialProducts={[prodA, prodB]}
-              catalogCandidates={directory}
+              catalogCandidates={candidateRows}
               initialCategory={catSlug}
               hasExplicitSlugs={true}
               locale={locale}

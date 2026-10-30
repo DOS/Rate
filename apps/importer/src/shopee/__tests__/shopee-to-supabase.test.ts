@@ -17,6 +17,7 @@ import {
   normalizeScrapedProductPrices,
   platformReviewIdFor,
 } from '../shopee-to-supabase.js';
+import { UnkeyableProductTitleError } from '../product-normalizer.js';
 import type { RateSupabaseClient, ShopeeProduct, ShopeeReview } from '../types.js';
 
 function createBaseProduct(overrides: Partial<ShopeeProduct> = {}): ShopeeProduct {
@@ -517,6 +518,20 @@ async function runTests() {
     masterIdHint: 'master-hint-verified',
   });
   assert.equal(hintedRes.masterId, 'master-hint-verified');
+  // An accessory found by a crawl for the device is rejected even with the device's hint,
+  // before anything is written (DOS/Rate#1505).
+  const { stub: accessoryStub, events: accessoryEvents } = createPipelineStubSupabase({
+    hintRow: { id: 'master-hint-verified' },
+  });
+  await assert.rejects(
+    new ShopeeIngestionPipeline({ supabaseClient: accessoryStub, apiKey: '' }).ingestProduct(
+      createBaseProduct({ title: 'Ốp lưng iPad Pro M4 256GB' }),
+      undefined,
+      { masterIdHint: 'master-hint-verified' }
+    ),
+    UnkeyableProductTitleError
+  );
+  assert.equal(accessoryEvents.productUpserts.length, 0);
   assert.equal(hintOkEvents.productUpserts[0]?.cluster_id, 'master-hint-verified');
   assert.equal(hintOkEvents.productUpserts[0]?.category_id, 'cat-smartphones');
   assert.equal(

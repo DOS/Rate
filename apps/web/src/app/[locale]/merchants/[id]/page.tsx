@@ -79,15 +79,25 @@ export async function generateMetadata({
     };
   }
   const canonicalUrl = `https://rate.vn/merchants/${merchant.id}`;
-  const fullTitle = t('profileMetaTitle', {
-    name: merchant.name,
-    platform: merchant.platform.toUpperCase(),
-    score: merchant.trust_score,
-  });
-  const shortTitle = t('profileMetaTitleShort', {
-    name: merchant.name,
-    score: merchant.trust_score,
-  });
+  // No trust number for a store with no data (DOS/Rate#1484).
+  const fullTitle =
+    merchant.trust_score == null
+      ? t('profileMetaTitleNoScore', {
+          name: merchant.name,
+          platform: merchant.platform.toUpperCase(),
+        })
+      : t('profileMetaTitle', {
+          name: merchant.name,
+          platform: merchant.platform.toUpperCase(),
+          score: merchant.trust_score,
+        });
+  const shortTitle =
+    merchant.trust_score == null
+      ? t('profileMetaTitleShortNoScore', { name: merchant.name })
+      : t('profileMetaTitleShort', {
+          name: merchant.name,
+          score: merchant.trust_score,
+        });
   // No review risk number without analysed reviews (DOS/Rate#1249), and no
   // DOSafe number without a DOSafe score (DOS/Rate#1479).
   const dosafeScore = knownDosafeRiskScore(merchant);
@@ -176,19 +186,26 @@ export default async function MerchantProfilePage({
   const merchantGenuineDeals = merchantRadar.genuineDeals;
   const merchantFakeTraps = merchantRadar.fakeSaleTraps;
 
+  // A store with neither a DOSafe score nor analysed reviews has no trust
+  // score: a neutral "no data" tag, never "high trust" (DOS/Rate#1484).
+  const trustScore = merchant.trust_score;
   const trustLevelLabel =
-    merchant.trust_score >= 80
-      ? t('trustHigh')
-      : merchant.trust_score >= 50
-        ? t('trustModerate')
-        : t('trustRisk');
+    trustScore == null
+      ? t('trustNoData')
+      : trustScore >= 80
+        ? t('trustHigh')
+        : trustScore >= 50
+          ? t('trustModerate')
+          : t('trustRisk');
 
   const trustBadgeClass =
-    merchant.trust_score >= 80
-      ? 'bg-success text-white'
-      : merchant.trust_score >= 50
-        ? 'bg-warning text-dark'
-        : 'bg-danger text-white';
+    trustScore == null
+      ? 'bg-secondary text-white'
+      : trustScore >= 80
+        ? 'bg-success text-white'
+        : trustScore >= 50
+          ? 'bg-warning text-dark'
+          : 'bg-danger text-white';
 
   const brk = merchant.review_risk_breakdown;
   // No ratio without analysed reviews: 0 of 0 is not "100% authentic".
@@ -388,18 +405,24 @@ export default async function MerchantProfilePage({
                   >
                     {t('compositeTrustScoreLabel')}
                   </div>
-                  <div className="display-6 fw-bold font-monospace mb-1 text-white">
-                    {merchant.trust_score}
-                    <span
-                      className="fs-5 fw-normal"
-                      style={{ color: 'var(--rate-fg-secondary)' }}
+                  {trustScore != null && (
+                    <div
+                      className="display-6 fw-bold font-monospace mb-1 text-white"
+                      data-testid="merchant-trust-score"
                     >
-                      /100
-                    </span>
-                  </div>
+                      {trustScore}
+                      <span
+                        className="fs-5 fw-normal"
+                        style={{ color: 'var(--rate-fg-secondary)' }}
+                      >
+                        /100
+                      </span>
+                    </div>
+                  )}
                   <div className="mb-3">
                     <span
                       className={`badge ${trustBadgeClass} rounded-pill px-3 py-2`}
+                      data-testid="merchant-trust-label"
                     >
                       {trustLevelLabel}
                     </span>
@@ -421,7 +444,7 @@ export default async function MerchantProfilePage({
                     platform={merchant.platform}
                     platformShopId={merchant.platform_shop_id}
                     isOfficial={merchant.is_official}
-                    trustScore={merchant.trust_score}
+                    trustScore={trustScore}
                     trustLevelLabel={trustLevelLabel}
                     dosafeRiskScore={dosafeScore}
                     reviewSeedingRiskScore={merchant.review_risk_score}

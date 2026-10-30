@@ -934,14 +934,20 @@ export default async function Home({
                 .slice(0, HOME_MERCHANT_PREVIEW_COUNT)
                 .map((merchant) => {
                   const tone = (risk: number) => `is-${merchantRiskTone(risk)}`;
-                  const overallTone = tone(merchant.risk_score);
+                  // No data at all: no tone and no number (DOS/Rate#1484).
+                  const overallTone =
+                    merchant.risk_score == null
+                      ? ''
+                      : tone(merchant.risk_score);
                   const dosafeScore = knownDosafeRiskScore(merchant);
                   const trustLabel =
-                    overallTone === 'is-good'
-                      ? tHome('merchantTrustedLabel')
-                      : overallTone === 'is-warn'
-                        ? tHome('merchantCautionLabel')
-                        : tHome('merchantHighRiskLabel');
+                    merchant.trust_score == null
+                      ? tHome('merchantNoDataLabel')
+                      : overallTone === 'is-good'
+                        ? tHome('merchantTrustedLabel')
+                        : overallTone === 'is-warn'
+                          ? tHome('merchantCautionLabel')
+                          : tHome('merchantHighRiskLabel');
                   const breakdown = merchant.review_risk_breakdown;
                   const totalRevAnalyzed = breakdown?.total_reviews ?? 0;
                   const flaggedRevCount =
@@ -982,7 +988,9 @@ export default async function Home({
                             </div>
                           </div>
                           <span className={`rate-radar-tag ${overallTone}`}>
-                            {trustLabel} · {merchant.trust_score}/100
+                            {merchant.trust_score == null
+                              ? trustLabel
+                              : `${trustLabel} · ${merchant.trust_score}/100`}
                           </span>
                         </div>
 

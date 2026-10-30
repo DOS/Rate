@@ -85,7 +85,8 @@ export interface NormalizedProductCandidate {
   /** How the variant was found; null when it is not known. */
   variant_source?: Extract<VariantSource, 'title' | 'single_size' | 'single_variant'> | null;
   /**
-   * False when the title gives no model segment. The key then carries the
+   * False when the title gives no model segment, or sells an accessory for a device
+   * (`isAccessoryTitle`, DOS/Rate#1505). The key then carries the
    * `unkeyed` placeholder model instead of an empty segment (`samsung::unknown`),
    * and the pipeline and matcher reject the candidate (UnkeyableProductTitleError).
    */
@@ -396,6 +397,77 @@ const APPLE_PART_NUMBERS: Readonly<Record<string, readonly [string, string]>> = 
   MUWA3: ['Pencil', 'Pencil USB-C'],
   MX2D3: ['Pencil', 'Pencil Pro'],
 };
+
+// An accessory named first: the title sells a case, a cover, a screen protector, a
+// stylus, a keyboard, a charger or a strap for a device, not the device ("Ốp lưng iPad
+// mini A20 Pro", "Kính cường lực iPhone 16 Pro Max", DOS/Rate#1505). Only the opening
+// words count, so a gift after the device ("iPad mini A20 Pro tặng ốp lưng") and a
+// watch's own case ("Apple Watch Series 10 46mm Titanium Case") keep the device. A
+// "combo", "bộ" or "set" before the accessory, and titles typed without diacritics
+// ("Op lung"), count too.
+const ACCESSORY_OPENER =
+  /^(?:(?:combo|bộ|set|hàng\s*chính\s*hãng)\s+)?(?:(?:vỏ\s*)?ốp(?:\s*lưng)?|op\s*lung|bao\s*(?:da|đựng)|túi\s*(?:chống\s*sốc|đựng)|kính\s*(?:cường\s*lực|camera|bảo\s*vệ)|cường\s*lực|(?:miếng|bộ)\s*dán|dán\s*(?:màn\s*hình|lưng|camera|ppf)|phim\s*dán|skin(?:\s*dán)?|bút|bàn\s*phím|magic\s*keyboard|(?:củ|đế)\s*sạc|sạc|cáp|dây|giá\s*đỡ|(?:silicone\s*|clear\s*|leather\s*|magsafe\s*)?cases?|covers?|folio|(?:tempered\s*)?glass|screen\s*protectors?|stylus|keyboard|charger|cable)(?![\p{L}\d])/iu;
+// Words that make "Apple Pencil" what something fits or copies, not what it is.
+const PENCIL_FIT_WORD =
+  /(?<![\p{L}\d])(?:cho|for|thay|như|giống|kiểu|dùng|tương\s*thích|compatible|khe|đựng|ngăn)(?![\p{L}\d])/iu;
+
+/**
+ * A pen sold as itself: "Bút cảm ứng (chính hãng) Apple Pencil Pro" is the Apple Pencil,
+ * its own product. Only the pen word and promo words may come before "Apple Pencil"; a
+ * case "có khe đựng Apple Pencil" or a pen "cho iPad như Apple Pencil" is not one.
+ */
+function opensWithApplePencil(opening: string): boolean {
+  const at = /apple\s*pencil(?![\p{L}])/iu.exec(opening)?.index;
+  if (at === undefined) return false;
+  const before = opening.slice(0, at);
+  if (!/^(?:(?:bút|stylus)(?![\p{L}\d])|$)/iu.test(before.trim())) return false;
+  return !PENCIL_FIT_WORD.test(before) && !namesProduct(before);
+}
+
+/**
+ * The title from its first product word: emoji, punctuation and promo brackets before it
+ * dropped. A bracket is dropped only when a product follows it ("[Chính hãng] Ốp lưng
+ * iPhone 16"); one that holds the product ("[Ốp lưng iPhone 16 Pro Max] Trong suốt") is
+ * read without its brackets.
+ */
+function openingWords(text: string): string {
+  let rest = text;
+  for (;;) {
+    const before = rest;
+    rest = rest.replace(/^(?:(?![[(【])[\s\p{P}\p{S}])+/u, '');
+    const block = /^(?:\[([^\]]*)\]|\(([^)]*)\)|【([^】]*)】)/u.exec(rest);
+    if (block) {
+      const after = rest.slice(block[0].length);
+      rest = namesProduct(after) ? after : `${block[1] ?? block[2] ?? block[3] ?? ''} ${after}`;
+    }
+    if (rest === before) return rest.trim();
+  }
+}
+
+/**
+ * Whether a title sells an accessory for a device rather than the device: it opens with
+ * the accessory (DOS/Rate#1505). Opening promo brackets ("[Hàng chính hãng]") are skipped.
+ * An Apple Pencil is its own product, and a bundle that puts the device after a short
+ * accessory and a "+" ("Sạc nhanh + iPhone 16 Pro Max 256GB") sells the device.
+ */
+export function isAccessoryTitle(title: string): boolean {
+  const t = typeof title === 'string' ? title.normalize('NFC') : '';
+  // What the title sells, not a gift it opens with: "Ốp lưng tặng kèm khi mua iPhone 16 Pro
+  // Max" sells the iPhone (DOS/Rate#1407).
+  const opening = openingWords(ownProductPart(t));
+  if (!ACCESSORY_OPENER.test(opening) || opensWithApplePencil(opening)) return false;
+  // The part before a gift stops at the "+", so the bundle is read on the whole title.
+  const whole = openingWords(t);
+  const plus = whole.indexOf('+');
+  if (plus > 0) {
+    const before = whole.slice(0, plus);
+    const after = whole.slice(plus + 1).trim();
+    if (!namesProduct(before) && namesProduct(after) && !ACCESSORY_OPENER.test(after)) {
+      return false;
+    }
+  }
+  return true;
+}
 
 /**
  * Detect canonical category slug from product title across all 5 tech categories.
@@ -1461,6 +1533,20 @@ const GLUED_COLOURS =
   /^(?:Đen|Trắng|Xanh|Bạc|Vàng|Hồng|Tím|Đỏ|Xám|Ghi|Cam|Nâu|Kem|Black|White|Blue|Navy|Silver|Gold|Pink|Purple|Lavender|Violet|Red|Gray|Grey|Green|Yellow|Graphite|Midnight|Starlight|Mint|Cream|Onyx|Cobalt|Icy|Amber|Titanium)$/iu;
 // "Titan" alone is a model word (MSI GT77 Titan), but starts a colour before one.
 const GLUED_COLOUR_FIRST_WORDS = new RegExp(`${GLUED_COLOURS.source.slice(0, -2)}|Titan)$`, 'iu');
+// Samsung's "Jade Green", "Gem Green" and "Sky Blue": these first words go with their own
+// second word only, as "Galaxy Sky" and "Liquid Jade" are models too (DOS/Rate#1495).
+const GLUED_COLOUR_PAIRS = /^(?:jade green|gem green|sky blue)$/i;
+// Samsung's and Asus's "Phantom Black", "Phantom Silver", "Phantom Đen": a colour name
+// there, while Tecno's Phantom is a line (DOS/Rate#1495).
+const PHANTOM_COLOUR_BRANDS = new Set(['Samsung', 'Asus']);
+const isPhantomColour = (first: string, second: string, brand: string): boolean =>
+  PHANTOM_COLOUR_BRANDS.has(brand) && /^phantom$/i.test(first) && isGluedColour(second);
+// In some laptop lines "Titan" and "Titanium" name the model, not its colour: "ThinkPad X1
+// Titanium/16GB/512GB", "X1 Yoga Titanium Bạc/…", "MSI GT77 Titan Đen/…" (DOS/Rate#1495).
+const LAPTOP_TITAN_WORD = /^titan(?:ium)?$/i;
+// English colour words: after "Titan" or "Titanium" they make a colour name ("Titan Gray").
+const ENGLISH_GLUED_COLOURS =
+  /^(?:Black|White|Blue|Navy|Silver|Gold|Pink|Purple|Lavender|Violet|Red|Gray|Grey|Green|Yellow|Graphite|Midnight|Starlight|Mint|Cream|Onyx|Cobalt|Icy|Amber|Shadow)$/i;
 const GLUED_COLOUR_SECOND_WORDS = /^(?:Dương|Lá|Ngọc|Đậm|Nhạt|Shadow)$/iu;
 const isGluedColour = (word: string | undefined): boolean =>
   word !== undefined && (GLUED_COLOURS.test(word) || GLUED_COLOUR_SECOND_WORDS.test(word));
@@ -2062,28 +2148,42 @@ export class ProductNormalizer {
         // names the mini 7 (DOS/Rate#1502). Only the chip in the product's own part counts,
         // the first one: not a gift or bundle ("tặng ốp Galaxy A20", "+ Galaxy A20") nor
         // what a comparison names ("A20 Pro so sánh A17 Pro").
+        // The own part ends at a "+" (but "+ Cellular" is the iPad's own), a gift or fit
+        // word after any non-letter ("(Tặng"), a gift written without diacritics before
+        // what is given ("tang op", "kem but"; a lone "Kem" is a colour), another iPad or
+        // a comparison. A "|" is a spec separator and does not end it. Its first A-chip
+        // counts, and a Galaxy model ("Galaxy A20") is none; "A15/A20" is the A15, no
+        // mini 8 (DOS/Rate#1510).
         const mini = line.match(/^mini\s*([1-9])?$/i);
-        const miniChip = mini
+        const ownPart = mini
           ? appleTitle
               .slice((ipadMatch.index ?? 0) + ipadMatch[0].length)
               .normalize('NFC')
-              // A "+" with or without spaces, and a gift or fit word before a space or
-              // a colon; "cho bé" or "for kids" names who it is for, not another product.
               .split(
-                /\s*\+|\s(?:tương thích|dùng cho|kèm|tặng)(?!\p{L})|\bipad\b|so sánh|\bvs\b/iu
+                /\s*\+(?!\s*(?:cellular|lte|5g|4g)\b)|(?<![\p{L}\d])(?:kèm|tặng)(?!\p{L})|(?<![\p{L}\d])(?:tương thích|dùng cho)(?:\s+(?:với|cho))?\s+(?:ipad|iphone|galaxy|samsung|apple|macbook|xiaomi|oppo|vivo|huawei|máy)(?!\p{L})|(?<![\p{L}\d])(?:tang|kem|qua tang)\s+(?:op|but|sac|cap|tai|day|bao|kinh|cuong luc|phu kien)\b|\bipad\b|so sánh|\bvs\b/iu
               )[0]!
-              .match(/\ba(17\s*pro|20(?:\s*pro)?)\b/i)?.[1]
-              ?.slice(0, 2)
-          : undefined;
+          : '';
+        const chipMatch_ = /(?<!galaxy\s{0,3})\ba(\d{2})(\s*pro)?\b/iu.exec(ownPart);
+        const miniChip =
+          chipMatch_?.[1] === '20'
+            ? '20'
+            : chipMatch_?.[1] === '17' && chipMatch_[2]
+              ? '17'
+              : undefined;
+        // The A17 Pro names the mini 7 whatever year is written. A launch year other than
+        // 2026 overrules only an A20: "iPad mini 2019 A20" is no mini 8 (DOS/Rate#1510).
+        const miniYear = /^\s*\(?\s*(20\d\d)\s*\)?(?![\d\p{L}])/iu.exec(ownPart)?.[1];
         if (mini)
           line = `mini${
             mini[1]
               ? ` ${mini[1]}`
-              : miniChip === '20'
-                ? ' 8'
-                : miniChip === '17' || /\ba17\s*pro\b/i.test(appleTitle)
-                  ? ' 7'
-                  : /\bmini\s*\(?\s*2026\s*\)?(?![\d\p{L}])/iu.test(appleTitle)
+              : miniChip === '17'
+                ? ' 7'
+                : miniChip === '20'
+                  ? miniYear && miniYear !== '2026'
+                    ? ''
+                    : ' 8'
+                  : miniYear === '2026'
                     ? ' 8'
                     : ''
           }`;
@@ -2204,7 +2304,7 @@ export class ProductNormalizer {
       const cleaned = withoutLeadingPromo
         .replace(
           new RegExp(
-            `^(?:(?:Hàng\\s+)?Chính\\s+hãng\\s+)?(?:(?:Điện\\s+thoại(?:\\s+thông\\s+minh|\\s+di\\s+động)?|Smartphone|Máy\\s+tính\\s+bảng|Tablet|Laptop|Máy\\s+tính\\s+xách\\s+tay|Đồng\\s+hồ(?:\\s+đeo\\s+tay)?(?:\\s+thông\\s+minh)?|Vòng\\s+đeo\\s+tay(?:\\s+thông\\s+minh)?|Vòng\\s+tay\\s+thông\\s+minh|Smartwatch|Tai\\s+nghe(?:\\s+Bluetooth|\\s+chống\\s+ồn|\\s+không\\s+dây)?|Earbuds|Máy\\s+định\\s+vị(?:\\s+cầm\\s+tay)?(?:\\s+GPS(?=\\s+${brand}\\b))?)\\s+(?:(?:Hàng\\s+)?Chính\\s+hãng\\s+)?)?(?:${brand}\\b\\s*)?`,
+            `^(?:(?:Hàng\\s+)?Chính\\s+hãng\\s+)?(?:(?:Điện\\s+thoại(?:\\s+thông\\s+minh|\\s+di\\s+động)?|Smartphone|Máy\\s+tính\\s+bảng|Tablet|Laptop|Máy\\s+tính\\s+xách\\s+tay|Đồng\\s+hồ(?:\\s+đeo\\s+tay)?(?:\\s+thông\\s+minh)?|Vòng\\s+đeo\\s+tay(?:\\s+thông\\s+minh)?|Vòng\\s+tay\\s+thông\\s+minh|Smartwatch|Tai\\s+nghe(?:\\s+Bluetooth|\\s+chống\\s+ồn|\\s+không\\s+dây)?|Earbuds|(?:Máy|Thiết\\s+bị)\\s+định\\s+vị(?:\\s+GPS(?=\\s+(?:cầm\\s+tay\\s+)?(?:(?:Hàng\\s+)?Chính\\s+hãng\\s+)?${brand}\\b))?(?:\\s+cầm\\s+tay)?(?:\\s+GPS(?=\\s+(?:(?:Hàng\\s+)?Chính\\s+hãng\\s+)?${brand}\\b))?)\\s+(?:(?:Hàng\\s+)?Chính\\s+hãng\\s+)?)?(?:${brand}\\b\\s*)?`,
             'i'
           ),
           ''
@@ -2227,6 +2327,11 @@ export class ProductNormalizer {
         .trim();
       const rawTokens = cleaned.split(/\s+/).filter(Boolean);
       const modelTokens: string[] = [];
+      // Only the lines Titan or Titanium names: Lenovo's ThinkPad X1 Titanium and MSI's
+      // GT and Titan laptops. Elsewhere ("Dell Latitude 7440 Titan Xám/") it is a colour.
+      const titanIsModelWord =
+        (brand === 'Lenovo' && /\bX1\b/i.test(modelTitle)) ||
+        (brand === 'MSI' && /\b(?:GT\d{2,3}|Titan\s+\d{2})\b/i.test(modelTitle));
       let hasProductCode = false;
       // A model whose first word only starts with a stop word ("GPSMAP") keeps two
       // words, as it keyed before (DOS/Rate#1429): "GPSMAP 67", not its description.
@@ -2360,7 +2465,14 @@ export class ProductNormalizer {
               wordHead[1]!
             ) &&
             // Nor is a colour: "Galaxy A55 Đen/256GB" is the A55 (DOS/Rate#1481).
-            !GLUED_COLOURS.test(wordHead[1]!) &&
+            // Nor is "Titanium" after a colour word ("Black Titanium/", "Natural Titanium/").
+            (!GLUED_COLOURS.test(wordHead[1]!) ||
+              (titanIsModelWord &&
+                LAPTOP_TITAN_WORD.test(wordHead[1]!) &&
+                !/^(?:natural|desert)$/i.test(modelTokens[modelTokens.length - 1] ?? '') &&
+                !GLUED_COLOURS.test(
+                  (modelTokens[modelTokens.length - 1] ?? '').normalize('NFC')
+                ))) &&
             !(
               GLUED_COLOUR_SECOND_WORDS.test(wordHead[1]!) &&
               GLUED_COLOUR_FIRST_WORDS.test(
@@ -2372,7 +2484,16 @@ export class ProductNormalizer {
           } else if (
             isGluedColour(wordHead[1]) &&
             modelTokens.length > 1 &&
-            GLUED_COLOUR_FIRST_WORDS.test(modelTokens[modelTokens.length - 1]!.normalize('NFC'))
+            (GLUED_COLOUR_FIRST_WORDS.test(modelTokens[modelTokens.length - 1]!.normalize('NFC')) ||
+              GLUED_COLOUR_PAIRS.test(`${modelTokens[modelTokens.length - 1]} ${wordHead[1]}`) ||
+              isPhantomColour(modelTokens[modelTokens.length - 1]!, wordHead[1]!, brand)) &&
+            // A laptop's "Titanium Bạc/" or "Titan Đen/" keeps its model word, but "Titan
+            // Gray/" is Dell's and Lenovo's colour name: Titan leaves with it.
+            !(
+              titanIsModelWord &&
+              LAPTOP_TITAN_WORD.test(modelTokens[modelTokens.length - 1]!) &&
+              !ENGLISH_GLUED_COLOURS.test(wordHead[1]!)
+            )
           ) {
             // "Titan Gray/256GB": the colour's first word leaves the model too.
             modelTokens.pop();
@@ -2641,7 +2762,9 @@ export class ProductNormalizer {
     // (':unknown') instead of guessing a default (plan v7 §5.2).
     // An empty key segment ("samsung::unknown") is never emitted: a title with no
     // model keys on a placeholder and is marked unkeyable (DOS/Rate#1151).
-    const keyable = Boolean(slugify(brand) && slugify(model));
+    // An accessory for a device is not the device: it gets no key, so it never joins the
+    // device's master or Item (DOS/Rate#1505).
+    const keyable = Boolean(slugify(brand) && slugify(model)) && !isAccessoryTitle(title);
     const itemKey = keyable ? baseKey : `${slugify(brand) || 'khac'}:${UNKEYED_MODEL_SEGMENT}`;
     const variantKey = storageKnown ? `${storageGb}gb` : UNKNOWN_VARIANT_KEY;
     const modelKey = `${itemKey}:${variantKey}`;

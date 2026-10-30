@@ -13,6 +13,10 @@
 // --ignore lets a known-broken, non-required check through; name it in the PR.
 // Prints one line and exits 0 when merged, 1 when it cannot merge.
 
+import { spawnSync } from 'node:child_process';
+import { existsSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 import {
   DEFAULT_REPO,
@@ -203,6 +207,64 @@ export function squashTitle(title, number) {
     : null;
 }
 
+const REPO_ROOT = fileURLToPath(new URL('../../', import.meta.url));
+const COMMITLINT_CLI = 'node_modules/@commitlint/cli/cli.js';
+export const LINT_TIMEOUT_MS = 60_000;
+
+/**
+ * Lints a squash header with the repository's own commitlint config
+ * (commitlint.config.ts), as the commitlint check will: type-enum, case,
+ * length and the rest. The shape check in squashTitle let "ux(web): ..." through
+ * (DOS/Rate#1513). Fails closed when commitlint cannot run, so no header is
+ * merged unchecked. `problems` holds commitlint's own lines.
+ */
+export function lintHeader(
+  header,
+  { cwd = REPO_ROOT, spawnFn = spawnSync } = {}
+) {
+  if (!existsSync(path.join(cwd, COMMITLINT_CLI))) {
+    return {
+      ok: false,
+      problems: [
+        `commitlint is not installed (${COMMITLINT_CLI}): run pnpm install`,
+      ],
+    };
+  }
+  // A hung commitlint fails closed after a minute instead of holding the merge.
+  const r = spawnFn(process.execPath, [COMMITLINT_CLI], {
+    cwd,
+    input: header,
+    encoding: 'utf8',
+    timeout: LINT_TIMEOUT_MS,
+  });
+  if (r.error || r.status === null) {
+    return { ok: false, problems: ['commitlint could not run or timed out'] };
+  }
+  if (r.status === 0) return { ok: true, problems: [] };
+  // commitlint prints "✖   <problem> [rule]" lines, coloured on a terminal.
+  // eslint-disable-next-line no-control-regex
+  const plain = `${r.stdout}\n${r.stderr}`.replace(/\u001b\[[0-9;]*m/g, '');
+  const problems = plain
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter((l) => /^✖\s+/.test(l) && !/found \d+ problems?/.test(l))
+    .map((l) => l.replace(/^✖\s+/, ''));
+  // With no "✖" line (a broken config, say), the first lines of its output say why.
+  const head = plain
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter(Boolean)
+    .slice(0, 3)
+    .join(' | ');
+  return {
+    ok: false,
+    problems:
+      problems.length > 0
+        ? problems
+        : [`commitlint exited ${r.status}${head ? `: ${head}` : ''}`],
+  };
+}
+
 /**
  * The squash commit's body, like GitHub's default (each commit as a list
  * item), with every line wrapped to the limit and the commits' co-author and
@@ -284,17 +346,24 @@ export function decide(pr, checks, blockedPolls) {
   return { action: 'merge' };
 }
 
-function readHead(repo, number) {
-  const pr = ghJson(['api', `repos/${repo}/pulls/${number}`]);
+function readHead(
+  repo,
+  number,
+  {
+    ghJson: ghJsonCall = ghJson,
+    ghPaginated: ghPaginatedCall = ghPaginated,
+  } = {}
+) {
+  const pr = ghJsonCall(['api', `repos/${repo}/pulls/${number}`]);
   if (pr.state !== 'open') return { pr, runs: [], statuses: [], required: [] };
-  const runs = ghPaginated(
+  const runs = ghPaginatedCall(
     `repos/${repo}/commits/${pr.head.sha}/check-runs?per_page=100`,
     '.check_runs[] | {id, name, status, conclusion}'
   );
   const statuses =
-    ghJson(['api', `repos/${repo}/commits/${pr.head.sha}/status`])?.statuses ??
-    [];
-  const rules = ghJson([
+    ghJsonCall(['api', `repos/${repo}/commits/${pr.head.sha}/status`])
+      ?.statuses ?? [];
+  const rules = ghJsonCall([
     'api',
     `repos/${repo}/rules/branches/${encodeRef(pr.base.ref)}`,
   ]);
@@ -309,8 +378,28 @@ export async function mergeWhenGreen({
   ignore = [],
   intervalMs = 30_000,
   timeoutMs = 60 * 60_000,
+  lint = lintHeader,
+  // GitHub calls, sleep and the clock, replaceable in tests (DOS/Rate#1513).
+  io: {
+    gh: ghCall = gh,
+    ghJson: ghJsonCall = ghJson,
+    ghPaginated: ghPaginatedCall = ghPaginated,
+    sleep: sleepCall = sleep,
+    now = Date.now,
+  } = {},
 } = {}) {
-  const deadline = Date.now() + timeoutMs;
+  const io = {
+    gh: ghCall,
+    ghJson: ghJsonCall,
+    ghPaginated: ghPaginatedCall,
+    sleep: sleepCall,
+  };
+  const deadline = now() + timeoutMs;
+  const timedOut = () => ({
+    ok: false,
+    message: `PR ${number} still not mergeable after ${timeoutMs / 60_000} min`,
+  });
+  const headerLints = new Map();
   let blockedPolls = 0;
   let apiErrors = 0;
   let mergeRefusals = 0;
@@ -319,7 +408,7 @@ export async function mergeWhenGreen({
   let lastUpdatedSha = null;
   for (;;) {
     // Every path back to the top of the loop is bounded by this deadline.
-    if (Date.now() > deadline) {
+    if (now() > deadline) {
       return {
         ok: false,
         message: `PR ${number} still not mergeable after ${timeoutMs / 60_000} min`,
@@ -327,13 +416,13 @@ export async function mergeWhenGreen({
     }
     let head;
     try {
-      head = readHead(repo, number);
+      head = readHead(repo, number, io);
       apiErrors = 0;
     } catch (err) {
       if (++apiErrors >= MAX_API_ERRORS) {
         return { ok: false, message: `PR ${number}: ${err.message}` };
       }
-      await sleep(intervalMs);
+      await io.sleep(intervalMs);
       continue;
     }
     const { pr } = head;
@@ -354,11 +443,23 @@ export async function mergeWhenGreen({
           message: `PR ${number}: cannot --ignore required check(s) ${conflict.join(', ')}`,
         };
       }
-      if (method === 'squash' && !squashTitle(pr.title, number)) {
-        return {
-          ok: false,
-          message: `PR ${number}: its title must be a conventional header that fits "<title> (#${number})" in ${MAX_LINE} characters, so the squash commit passes commitlint`,
-        };
+      if (method === 'squash') {
+        const header = squashTitle(pr.title, number);
+        if (!header) {
+          return {
+            ok: false,
+            message: `PR ${number}: its title must be a conventional header that fits "<title> (#${number})" in ${MAX_LINE} characters, so the squash commit passes commitlint`,
+          };
+        }
+        // Linted once per header: the title is re-read each poll and may change.
+        if (!headerLints.has(header)) headerLints.set(header, lint(header));
+        const linted = headerLints.get(header);
+        if (!linted.ok) {
+          return {
+            ok: false,
+            message: `PR ${number}: commitlint rejects the squash header "${header}": ${linted.problems.join('; ')}`,
+          };
+        }
       }
     }
     const checks = evaluateChecks(head.runs, head.statuses, {
@@ -372,7 +473,7 @@ export async function mergeWhenGreen({
       // update-branch is asynchronous: until the new head appears, the old
       // head still reads as behind. Wait for it instead of updating again.
       if (pr.head.sha === lastUpdatedSha) {
-        await sleep(intervalMs);
+        await io.sleep(intervalMs);
         continue;
       }
       if (++branchUpdates > MAX_BRANCH_UPDATES) {
@@ -381,7 +482,8 @@ export async function mergeWhenGreen({
           message: `PR ${number} is still behind ${pr.base.ref} after ${MAX_BRANCH_UPDATES} updates (the base keeps moving)`,
         };
       }
-      const updated = gh(
+      if (now() > deadline) return timedOut();
+      const updated = io.gh(
         [
           'api',
           '-X',
@@ -400,7 +502,7 @@ export async function mergeWhenGreen({
       }
       lastUpdatedSha = pr.head.sha;
       console.log(`PR ${number} was behind ${pr.base.ref}: branch updated`);
-      await sleep(intervalMs);
+      await io.sleep(intervalMs);
       continue;
     }
     if (next.action === 'merge') {
@@ -410,10 +512,12 @@ export async function mergeWhenGreen({
       if (method === 'squash') {
         let messages;
         try {
-          messages = ghPaginated(
-            `repos/${repo}/pulls/${number}/commits?per_page=100`,
-            '.[] | {message: .commit.message}'
-          ).map((c) => c.message);
+          messages = io
+            .ghPaginated(
+              `repos/${repo}/pulls/${number}/commits?per_page=100`,
+              '.[] | {message: .commit.message}'
+            )
+            .map((c) => c.message);
           commitListErrors = 0;
         } catch (err) {
           if (++commitListErrors >= MAX_API_ERRORS) {
@@ -422,7 +526,7 @@ export async function mergeWhenGreen({
               message: `PR ${number}: cannot list its commits: ${err.message}`,
             };
           }
-          await sleep(intervalMs);
+          await io.sleep(intervalMs);
           continue;
         }
         // The commits API stops at 250: never write a body that drops some.
@@ -435,9 +539,12 @@ export async function mergeWhenGreen({
         squash.commit_title = squashTitle(pr.title, number);
         squash.commit_message = squashBody(messages);
       }
+      // The lint and the commit listing may have taken a while: no write to
+      // GitHub, this merge or the branch update above, goes out past the deadline.
+      if (now() > deadline) return timedOut();
       // The fields go as JSON on stdin: a long squash message is over the
       // Windows command line limit.
-      const merged = gh(
+      const merged = io.gh(
         [
           'api',
           '-X',
@@ -461,7 +568,7 @@ export async function mergeWhenGreen({
         // A check re-queued after the last read (for example by a PR edit)
         // makes GitHub refuse briefly: read the head again before giving up.
         if (++mergeRefusals < MAX_MERGE_REFUSALS) {
-          await sleep(intervalMs);
+          await io.sleep(intervalMs);
           continue;
         }
         return {
@@ -477,7 +584,7 @@ export async function mergeWhenGreen({
           baseRepo: pr.base.repo.full_name,
         })
       ) {
-        gh(
+        io.gh(
           [
             'api',
             '-X',
@@ -493,7 +600,7 @@ export async function mergeWhenGreen({
       };
     }
     blockedPolls = next.blocked ? blockedPolls + 1 : 0;
-    if (Date.now() > deadline) {
+    if (now() > deadline) {
       const waiting = checks.pending?.length
         ? ` (waiting on ${checks.pending.join(', ')})`
         : '';
@@ -502,7 +609,7 @@ export async function mergeWhenGreen({
         message: `PR ${number} still not green after ${timeoutMs / 60_000} min${waiting}`,
       };
     }
-    await sleep(intervalMs);
+    await io.sleep(intervalMs);
   }
 }
 

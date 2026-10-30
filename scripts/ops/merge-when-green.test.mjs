@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
+import os from 'node:os';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 
@@ -14,6 +15,9 @@ import {
   requiredChecksFromRules,
   shouldDeleteBranch,
   squashBody,
+  LINT_TIMEOUT_MS,
+  lintHeader,
+  mergeWhenGreen,
   squashTitle,
   wrapLine,
 } from './merge-when-green.mjs';
@@ -397,4 +401,163 @@ test('the squash message of PR bodies with lines over 100 characters passes comm
   const result = commitlint(message);
   assert.ok(result.ok, result.output);
   assert.doesNotMatch(result.output, /warning/);
+});
+
+test('lints the squash header with the repository commitlint, type-enum included', () => {
+  // A valid header passes.
+  assert.deepEqual(lintHeader('fix(web): a thing (#7)'), {
+    ok: true,
+    problems: [],
+  });
+  // "ux" fits the shape check but not commitlint's type-enum (DOS/Rate#1513).
+  const ux = lintHeader('ux(web): the same product shows one rating (#1475)');
+  assert.equal(
+    squashTitle('ux(web): the same product shows one rating', 1475),
+    'ux(web): the same product shows one rating (#1475)'
+  );
+  assert.equal(ux.ok, false);
+  assert.ok(
+    ux.problems.some(
+      (p) => /type must be one of/.test(p) && /type-enum/.test(p)
+    ),
+    ux.problems.join('\n')
+  );
+  // A start-case subject is refused with commitlint's reason.
+  const startCase = lintHeader('fix(web): Add a sentence-case subject (#8)');
+  assert.equal(startCase.ok, false);
+  assert.ok(
+    startCase.problems.some((p) => /subject-case/.test(p)),
+    startCase.problems.join('\n')
+  );
+});
+
+test('a squash header is refused, not merged, when commitlint cannot run', () => {
+  const missing = lintHeader('fix(web): a thing (#7)', { cwd: os.tmpdir() });
+  assert.equal(missing.ok, false);
+  assert.match(missing.problems[0], /commitlint is not installed/);
+  const failed = lintHeader('fix(web): a thing (#7)', {
+    spawnFn: () => ({ error: new Error('spawn failed'), status: null }),
+  });
+  assert.deepEqual(failed, {
+    ok: false,
+    problems: ['commitlint could not run or timed out'],
+  });
+  const silent = lintHeader('fix(web): a thing (#7)', {
+    spawnFn: () => ({ status: 2, stdout: '', stderr: '' }),
+  });
+  assert.deepEqual(silent, { ok: false, problems: ['commitlint exited 2'] });
+  // A broken config says why in its first lines, and the lint is bounded in time.
+  const broken = lintHeader('fix(web): a thing (#7)', {
+    spawnFn: (_cmd, _args, opts) => {
+      assert.equal(opts.timeout, LINT_TIMEOUT_MS);
+      return {
+        status: 9,
+        stdout: '',
+        stderr: 'Error: cannot load config\n  at x',
+      };
+    },
+  });
+  assert.deepEqual(broken, {
+    ok: false,
+    problems: ['commitlint exited 9: Error: cannot load config | at x'],
+  });
+});
+
+/**
+ * A fake GitHub for mergeWhenGreen: a green squash PR into dev, a clock that
+ * moves only when told, and a record of every write (DOS/Rate#1513).
+ */
+function fakeGitHub({ mergeableState = 'clean', onCommits, onRules } = {}) {
+  let clock = 0;
+  const writes = [];
+  const pr = {
+    number: 41,
+    state: 'open',
+    merged: false,
+    mergeable_state: mergeableState,
+    title: 'fix(web): a thing',
+    commits: 1,
+    head: { sha: 'abc1234567', ref: 'feat/x', repo: { full_name: 'DOS/Rate' } },
+    base: { ref: 'dev', repo: { full_name: 'DOS/Rate' } },
+  };
+  const io = {
+    now: () => clock,
+    sleep: async (ms) => {
+      clock += ms;
+    },
+    ghJson: (args) => {
+      const url = args[1];
+      if (url.endsWith('/status')) return { statuses: [] };
+      if (url.includes('/rules/branches/')) {
+        onRules?.(() => (clock += 1_000));
+        return [];
+      }
+      return pr;
+    },
+    ghPaginated: (url) => {
+      if (url.includes('/check-runs')) {
+        return [
+          { id: 1, name: 'build', status: 'completed', conclusion: 'success' },
+        ];
+      }
+      onCommits?.(() => (clock += 1_000));
+      return [{ message: 'fix(web): a thing' }];
+    },
+    gh: (args) => {
+      writes.push(args.find((a) => a.startsWith('repos/')));
+      return { status: 0, stdout: 'merged-sha\n', stderr: '' };
+    },
+  };
+  return { io, writes };
+}
+
+const lintOk = () => ({ ok: true, problems: [] });
+
+test('merges a green PR once, with the fake GitHub', async () => {
+  const { io, writes } = fakeGitHub();
+  const result = await mergeWhenGreen({
+    number: 41,
+    timeoutMs: 500,
+    intervalMs: 10,
+    lint: lintOk,
+    io,
+  });
+  assert.deepEqual(result, { ok: true, message: 'PR 41 MERGED merged-sha' });
+  assert.deepEqual(writes, [
+    'repos/DOS/Rate/pulls/41/merge',
+    'repos/DOS/Rate/git/refs/heads/feat/x',
+  ]);
+});
+
+test('no merge goes out when the deadline passes while the commits are listed', async () => {
+  // The listing takes 1 s against a 500 ms deadline.
+  const { io, writes } = fakeGitHub({ onCommits: (tick) => tick() });
+  const result = await mergeWhenGreen({
+    number: 41,
+    timeoutMs: 500,
+    intervalMs: 10,
+    lint: lintOk,
+    io,
+  });
+  assert.equal(result.ok, false);
+  assert.match(result.message, /still not mergeable after/);
+  assert.deepEqual(writes, [], 'nothing was written to GitHub');
+});
+
+test('no branch update goes out once the deadline has passed', async () => {
+  // A behind branch; the read of the rules takes 1 s against a 500 ms deadline.
+  const { io, writes } = fakeGitHub({
+    mergeableState: 'behind',
+    onRules: (tick) => tick(),
+  });
+  const result = await mergeWhenGreen({
+    number: 41,
+    timeoutMs: 500,
+    intervalMs: 10,
+    lint: lintOk,
+    io,
+  });
+  assert.equal(result.ok, false);
+  assert.match(result.message, /still not mergeable after/);
+  assert.deepEqual(writes, [], 'the branch was not updated');
 });
