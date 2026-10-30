@@ -1440,6 +1440,11 @@ const WATCH_GIFT_ACCESSORY_NOUN =
 // Cellular" is the watch and "13+ năm" a shop's age (DOS/Rate#1389).
 // A promo tag in front of the title is no part of the model: "[Mã giảm 50K]",
 // "(Hàng mới)", "【Hot】" or "{ Kích T10 }" (DOS/Rate#1421).
+// Garmin's watch and bike lines: a bare number before one of them is a case size, not
+// a GPS model number (DOS/Rate#1467).
+const GARMIN_LINES =
+  /^(?:Venu|Fenix|Fēnix|Forerunner|Vivoactive|Vivomove|Vivosmart|Instinct|Epix|Enduro|Approach|Lily|Edge|Descent|Quatix|Tactix|Marq|Bounce)\b/i;
+
 const LEADING_PROMO_GROUPS = /^(?:\s*(?:\[[^\]]*\]|\([^)]*\)|【[^】]*】|\{[^}]*\}))+\s*/;
 // So is a promo word right before the brand or its line: "Live Samsung Galaxy S26
 // Ultra", "Hot Sale Samsung …", "Flash Sale Điện thoại Samsung …", "Sale Galaxy S26
@@ -2176,29 +2181,27 @@ export class ProductNormalizer {
         if (modelTokens.length === 0) {
           // A Garmin "GPS" before a model number is the model's own word: "Garmin GPS 73",
           // "Garmin GPS 64s" key as "gps-73" and "gps-64s", as before DOS/Rate#1429. Other
-          // brands' "GPS 5G" or "GPS 44 mm" stay options (DOS/Rate#1457). Only the
-          // handheld line's numbers count (GPS 64-66, 72-79), so a case size ("GPS 42
-          // Venu 3S") or a storage ("GPS 32 GB", "GPS 64 GB Edge") is none (DOS/Rate#1467).
-          if (
+          // brands' "GPS 5G" or "GPS 44 mm" stay options (DOS/Rate#1457). A storage ("GPS
+          // 32 GB", "GPS 64 GB Edge") is no model number, and a number before another
+          // Garmin line is that watch's case size: "GPS 42 Venu 3S" is the Venu 3S
+          // (DOS/Rate#1467).
+          const gpsNumber =
             brand === 'Garmin' &&
             /^GPS$/i.test(tok) &&
-            /^(?:6[4-6]|7[2-9])[a-z]{0,2}[,;]?$/i.test(rawTokens[i + 1] ?? '') &&
-            !/^(?:mm|GB|TB)\b/i.test(rawTokens[i + 2] ?? '')
-          ) {
-            modelTokens.push(tok);
-            maxModelTokens = 2;
-            continue;
-          }
-          // Any other bare number after Garmin's GPS, before a model name, is a case size:
-          // "Garmin GPS 42 Venu 3S" is the Venu 3S (DOS/Rate#1467).
+            /^\d{2,3}[a-z]{0,3}[,;]?$/i.test(rawTokens[i + 1] ?? '') &&
+            !/\d(?:mm|gb|tb|g)[,;]?$/i.test(rawTokens[i + 1] ?? '') &&
+            !/^(?:mm|GB|TB)\b/i.test(rawTokens[i + 2] ?? '');
           if (
-            brand === 'Garmin' &&
-            /^GPS$/i.test(tok) &&
+            gpsNumber &&
             /^\d{2}$/.test(rawTokens[i + 1] ?? '') &&
-            /^\p{L}/u.test(rawTokens[i + 2] ?? '') &&
-            !/^(?:mm|GB|TB)\b/i.test(rawTokens[i + 2] ?? '')
+            GARMIN_LINES.test(rawTokens[i + 2] ?? '')
           ) {
             i++;
+            continue;
+          }
+          if (gpsNumber) {
+            modelTokens.push(tok);
+            maxModelTokens = 2;
             continue;
           }
           if (
@@ -2273,7 +2276,7 @@ export class ProductNormalizer {
           );
         if (wordHead && modelTokens.length > 0) {
           if (
-            !/^(?:LTE|GPS|(?:RAM|ROM)\d*|OLED|WiFi|Chính\p{L}*|Hàng\p{L}*|Quốc|Bản|Mới|Fullbox|Likenew|Like|Cũ|VNA)$/iu.test(
+            !/^(?:LTE|GPS|(?:RAM|ROM)(?:\d+(?:GB|TB)?)?|OLED|WiFi|Chính\p{L}*|Hàng\p{L}*|Quốc|Bản|Mới|Fullbox|Likenew|Like|Cũ|VNA)$/iu.test(
               wordHead[1]!
             )
           ) {
@@ -2370,11 +2373,12 @@ export class ProductNormalizer {
     // pair, the chain's last link (DOS/Rate#1438). A pair that starts on a stated storage
     // ("64GB/4GB/128GB/8GB") is that storage first, so the list keys as its first variant,
     // 64GB, not the 128GB of the next pair (DOS/Rate#1457). A three- or four-digit storage
-    // only starts a pair before a RAM ("128GB/4GB/256GB/8GB" is 128GB), never before
-    // another storage ("128GB/256GB" lists two) (DOS/Rate#1467).
+    // only starts a pair before a RAM under 30GB ("128GB/4GB/256GB/8GB" is 128GB), never
+    // before another storage ("128GB/256GB" lists two) or a workstation RAM ("RAM
+    // 128GB/32GB") (DOS/Rate#1467).
     const slashPairs = [
       ...title.matchAll(
-        /(?=(\b(\d{1,2}|\d{3,4}(?=\s*GB\s*\/\s*\d{1,2}\s*GB\b))\s*(GB\s*)?\/\s*(\d+(?:[.,]\d+)?)\s*(TB|GB)\b))/gi
+        /(?=(\b(\d{1,2}|\d{3,4}(?=\s*GB\s*\/\s*(?:[1-9]|[12]\d)\s*GB\b))\s*(GB\s*)?\/\s*(\d+(?:[.,]\d+)?)\s*(TB|GB)\b))/gi
       ),
     ];
     const lastSlashPair =

@@ -1082,6 +1082,8 @@ async function runSuite() {
     ['Garmin GPS 64 GB Edge 1040', 'garmin:edge-1040:64gb'],
     ['Garmin GPS 42 Venu 3S', 'garmin:venu-3s:unknown'],
     ['Garmin GPS 66sr', 'garmin:gps-66sr:unknown'],
+    ['Garmin GPS 60 Black', 'garmin:gps-60:unknown'],
+    ['Garmin GPS 42 Fenix 7', 'garmin:fenix-7:unknown'],
     // A comma after the number, or a "Máy định vị" prefix, keeps the GPS model.
     ['Garmin GPS 73, Máy định vị cầm tay', 'garmin:gps-73:unknown'],
     ['Máy định vị Garmin GPS 73', 'garmin:gps-73:unknown'],
@@ -1184,6 +1186,8 @@ async function runSuite() {
     ['Samsung Galaxy S24+/12GB/256GB', 'samsung:galaxy-s24-plus:256gb'],
     ['Samsung Galaxy A55/256GB', 'samsung:galaxy-a55:256gb'],
     ['Samsung Galaxy A55 ROM128/256GB', 'samsung:galaxy-a55:256gb'],
+    ['Samsung Galaxy A55 RAM8GB/256GB', 'samsung:galaxy-a55:256gb'],
+    ['Lenovo ThinkPad P16 RAM 128GB/32GB RAM SSD 1TB', 'lenovo:thinkpad-p16:1024gb'],
   ] as const) {
     assert.equal(keyOf(title), key, title);
   }
