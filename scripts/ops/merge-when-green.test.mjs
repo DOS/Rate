@@ -15,6 +15,7 @@ import {
   requiredChecksFromRules,
   shouldDeleteBranch,
   squashBody,
+  LINT_TIMEOUT_MS,
   lintHeader,
   squashTitle,
   wrapLine,
@@ -438,10 +439,25 @@ test('a squash header is refused, not merged, when commitlint cannot run', () =>
   });
   assert.deepEqual(failed, {
     ok: false,
-    problems: ['commitlint could not run'],
+    problems: ['commitlint could not run or timed out'],
   });
   const silent = lintHeader('fix(web): a thing (#7)', {
     spawnFn: () => ({ status: 2, stdout: '', stderr: '' }),
   });
   assert.deepEqual(silent, { ok: false, problems: ['commitlint exited 2'] });
+  // A broken config says why in its first lines, and the lint is bounded in time.
+  const broken = lintHeader('fix(web): a thing (#7)', {
+    spawnFn: (_cmd, _args, opts) => {
+      assert.equal(opts.timeout, LINT_TIMEOUT_MS);
+      return {
+        status: 9,
+        stdout: '',
+        stderr: 'Error: cannot load config\n  at x',
+      };
+    },
+  });
+  assert.deepEqual(broken, {
+    ok: false,
+    problems: ['commitlint exited 9: Error: cannot load config | at x'],
+  });
 });

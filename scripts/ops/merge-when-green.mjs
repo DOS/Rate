@@ -209,6 +209,7 @@ export function squashTitle(title, number) {
 
 const REPO_ROOT = fileURLToPath(new URL('../../', import.meta.url));
 const COMMITLINT_CLI = 'node_modules/@commitlint/cli/cli.js';
+export const LINT_TIMEOUT_MS = 60_000;
 
 /**
  * Lints a squash header with the repository's own commitlint config
@@ -229,13 +230,15 @@ export function lintHeader(
       ],
     };
   }
+  // A hung commitlint fails closed after a minute instead of holding the merge.
   const r = spawnFn(process.execPath, [COMMITLINT_CLI], {
     cwd,
     input: header,
     encoding: 'utf8',
+    timeout: LINT_TIMEOUT_MS,
   });
   if (r.error || r.status === null) {
-    return { ok: false, problems: ['commitlint could not run'] };
+    return { ok: false, problems: ['commitlint could not run or timed out'] };
   }
   if (r.status === 0) return { ok: true, problems: [] };
   // commitlint prints "✖   <problem> [rule]" lines, coloured on a terminal.
@@ -246,10 +249,19 @@ export function lintHeader(
     .map((l) => l.trim())
     .filter((l) => /^✖\s+/.test(l) && !/found \d+ problems?/.test(l))
     .map((l) => l.replace(/^✖\s+/, ''));
+  // With no "✖" line (a broken config, say), the first lines of its output say why.
+  const head = plain
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter(Boolean)
+    .slice(0, 3)
+    .join(' | ');
   return {
     ok: false,
     problems:
-      problems.length > 0 ? problems : [`commitlint exited ${r.status}`],
+      problems.length > 0
+        ? problems
+        : [`commitlint exited ${r.status}${head ? `: ${head}` : ''}`],
   };
 }
 
@@ -468,6 +480,13 @@ export async function mergeWhenGreen({
       continue;
     }
     if (next.action === 'merge') {
+      // The lint above may have taken a while: never merge past the deadline.
+      if (Date.now() > deadline) {
+        return {
+          ok: false,
+          message: `PR ${number} still not mergeable after ${timeoutMs / 60_000} min`,
+        };
+      }
       // GitHub's default squash message keeps the commits' long lines and
       // mixes their trailers into the body: send one commitlint accepts.
       const squash = {};
