@@ -4037,6 +4037,66 @@ async function runTests() {
     console.log('  ✅ [Empty reviews and unknown ratings (#1301)] Verified');
   }
 
+  // Vietnamese server text in an English or Czech panel (DOS/Rate#1374)
+  {
+    const { renderReviewCardHtml } = await import('./sidepanel/panel-view.js');
+    const { contentLangAttr, formatCatalogueEntry, isVietnameseText } =
+      await import('./i18n.js');
+    const catalogues = readLocaleCatalogues();
+    const viSummary =
+      'Lần phân tích gần nhất (một nơi bán) đã xét 6 đánh giá: giữ lại 6 đánh giá thực chất và loại bỏ 0 đánh giá rác';
+    const card = (summary: string) =>
+      renderReviewCardHtml(
+        {
+          total_analyzed: 6,
+          authentic_pct: 100,
+          suspicious_pct: 0,
+          fake_pct: 0,
+          pros: [],
+          cons: [],
+          ai_summary: summary,
+        },
+        { user_rating_weighted: 4.8, average_rating: 4.8 }
+      );
+    assert.ok(isVietnameseText(viSummary));
+    assert.ok(
+      isVietnameseText('6.5h (Tai nghe) / 32h (Hộp sạc MagSafe USB-C)')
+    );
+    assert.ok(!isVietnameseText('6.1" Super Retina XDR OLED'));
+    assert.ok(!isVietnameseText('Ověřené recenze, dvě nabídky, žádné'));
+
+    // Vietnamese panel (no chrome.i18n): the summary is shown, unmarked.
+    assert.ok(card(viSummary).includes(viSummary));
+    assert.equal(contentLangAttr('Sạc nhanh 35W'), '');
+
+    const globalWithChrome = globalThis as { chrome?: unknown };
+    const previousChrome = globalWithChrome.chrome;
+    try {
+      for (const locale of ['en', 'cs'] as const) {
+        globalWithChrome.chrome = {
+          i18n: {
+            getMessage: (name: string, subs?: string[]) => {
+              const entry = catalogues[locale][name];
+              return entry ? formatCatalogueEntry(entry, subs ?? []) : '';
+            },
+          },
+        };
+        const html = card(viSummary);
+        assert.ok(!html.includes('Lần phân tích'), `${locale}: no vi summary`);
+        assert.match(html, /100\s?%/, `${locale}: the genuine share stays`);
+        const english = 'Most buyers praise the battery.';
+        assert.ok(card(english).includes(english), `${locale}: non-vi shown`);
+        assert.equal(contentLangAttr('Sạc nhanh 35W'), ' lang="vi"');
+        assert.equal(contentLangAttr('A18 chip, 6-core GPU'), '');
+      }
+    } finally {
+      globalWithChrome.chrome = previousChrome;
+    }
+    console.log(
+      '  ✅ [Vietnamese server text in an en or cs panel (#1374)] Verified'
+    );
+  }
+
   // Vietnamese labels and accessible names (DOS/Rate#1302)
   {
     const { buildPillAriaLabel } = await import('./verdict-display.js');

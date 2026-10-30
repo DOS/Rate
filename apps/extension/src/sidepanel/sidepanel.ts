@@ -13,7 +13,13 @@ import {
   resolveSafeApiRelativeUrl,
   sanitizeVerdictClassSuffix,
 } from '../security-guards.js';
-import { applyDocumentMessages, t, tHtml, type MessageKey } from '../i18n.js';
+import {
+  applyDocumentMessages,
+  contentLangAttr,
+  t,
+  tHtml,
+  type MessageKey,
+} from '../i18n.js';
 import {
   classifyLookupFailure,
   escapeHtml,
@@ -395,22 +401,22 @@ function renderPanelContent(
         <div class="stats-grid">
           ${
             keySpecs.screen
-              ? `<div class="stat-box"><div class="stat-label">${escapeHtml(t('specScreen'))}</div><div class="stat-val" style="font-size: 13px;">${escapeHtml(keySpecs.screen)}</div></div>`
+              ? `<div class="stat-box"><div class="stat-label">${escapeHtml(t('specScreen'))}</div><div class="stat-val" style="font-size: 13px;"${contentLangAttr(keySpecs.screen)}>${escapeHtml(keySpecs.screen)}</div></div>`
               : ''
           }
           ${
             keySpecs.chip
-              ? `<div class="stat-box"><div class="stat-label">${escapeHtml(t('specChip'))}</div><div class="stat-val" style="font-size: 13px;">${escapeHtml(keySpecs.chip)}</div></div>`
+              ? `<div class="stat-box"><div class="stat-label">${escapeHtml(t('specChip'))}</div><div class="stat-val" style="font-size: 13px;"${contentLangAttr(keySpecs.chip)}>${escapeHtml(keySpecs.chip)}</div></div>`
               : ''
           }
           ${
             keySpecs.camera
-              ? `<div class="stat-box"><div class="stat-label">${escapeHtml(t('specCamera'))}</div><div class="stat-val" style="font-size: 13px;">${escapeHtml(keySpecs.camera)}</div></div>`
+              ? `<div class="stat-box"><div class="stat-label">${escapeHtml(t('specCamera'))}</div><div class="stat-val" style="font-size: 13px;"${contentLangAttr(keySpecs.camera)}>${escapeHtml(keySpecs.camera)}</div></div>`
               : ''
           }
           ${
             keySpecs.battery
-              ? `<div class="stat-box"><div class="stat-label">${escapeHtml(t('specBattery'))}</div><div class="stat-val" style="font-size: 13px;">${escapeHtml(keySpecs.battery)}</div></div>`
+              ? `<div class="stat-box"><div class="stat-label">${escapeHtml(t('specBattery'))}</div><div class="stat-val" style="font-size: 13px;"${contentLangAttr(keySpecs.battery)}>${escapeHtml(keySpecs.battery)}</div></div>`
               : ''
           }
         </div>

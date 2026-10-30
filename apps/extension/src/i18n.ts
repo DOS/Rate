@@ -72,6 +72,24 @@ export function tHtml(key: MessageKey, htmlParts: readonly string[]): string {
   );
 }
 
+// Marks that occur in Vietnamese and not in Czech or English, once the text
+// is decomposed: grave, circumflex, tilde, breve, hook, horn, dot below.
+const VIETNAMESE_MARKS =
+  /\u0111|\u0110|\u0300|\u0302|\u0303|\u0306|\u0309|\u031b|\u0323/;
+
+/** Whether server text is Vietnamese, as marketplace data and summaries are. */
+export function isVietnameseText(text: string): boolean {
+  return VIETNAMESE_MARKS.test(text.normalize('NFD'));
+}
+
+/**
+ * ` lang="vi"` for Vietnamese server text shown in an English or Czech panel,
+ * so screen readers read it as Vietnamese (DOS/Rate#1374); empty otherwise.
+ */
+export function contentLangAttr(text: string): string {
+  return t('langCode') !== 'vi' && isVietnameseText(text) ? ' lang="vi"' : '';
+}
+
 /** Fills `data-i18n*` attributes of a static page (DOS/Rate#1304). */
 export function applyDocumentMessages(root: Document): void {
   root.documentElement.lang = t('langCode');

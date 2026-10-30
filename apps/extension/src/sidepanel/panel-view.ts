@@ -15,7 +15,7 @@ import {
   normalizeFiveStarRating,
   resolveSafeApiRelativeUrl,
 } from '../security-guards.js';
-import { escapeHtml, t, type MessageKey } from '../i18n.js';
+import { escapeHtml, isVietnameseText, t, type MessageKey } from '../i18n.js';
 
 export { escapeHtml };
 
@@ -194,6 +194,15 @@ export function renderReviewCardHtml(
   );
   const analysed = Number(reviews.total_analyzed);
   const hasReviews = Number.isFinite(analysed) && analysed > 0;
+  // The summary is a sentence the server writes in Vietnamese. In an English
+  // or Czech panel it is left out rather than machine-translated: the
+  // genuine share and the count above already say the same (DOS/Rate#1374).
+  const summary =
+    hasReviews &&
+    reviews.ai_summary &&
+    !(t('langCode') !== 'vi' && isVietnameseText(reviews.ai_summary))
+      ? reviews.ai_summary
+      : null;
   return `
       <div class="card">
         <div class="card-title">${escapeHtml(t('reviewCardTitle'))}</div>
@@ -212,8 +221,8 @@ export function renderReviewCardHtml(
           </div>
         </div>
         ${
-          hasReviews && reviews.ai_summary
-            ? `<p style="margin-top: 8px; color: #d1d5db; font-size: 13px;">${escapeHtml(reviews.ai_summary)}</p>`
+          summary
+            ? `<p style="margin-top: 8px; color: #d1d5db; font-size: 13px;">${escapeHtml(summary)}</p>`
             : ''
         }
       </div>
