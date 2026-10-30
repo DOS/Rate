@@ -1,11 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import createMiddleware from 'next-intl/middleware';
 
-import {
-  CSP_HEADER,
-  buildContentSecurityPolicy,
-  createCspNonce,
-} from './lib/csp';
+import { CSP_HEADER, buildReportOnlyCsp, createCspNonce } from './lib/csp';
 import { isDevelopment } from './lib/general-helpers';
 import { routing } from './lib/navigation';
 import {
@@ -95,8 +91,10 @@ export function localeProxy(req: NextRequest): NextResponse {
   }
 
   // A nonce per request: on the request so Next.js puts it on its scripts (it
-  // reads the report-only header too), and on the response (DOS/Rate#1311).
-  const csp = buildContentSecurityPolicy(createCspNonce(), {
+  // reads the report-only header too), and on the response (DOS/Rate#1311). The
+  // header also carries the measured inline-script policy, after the nonce one
+  // (DOS/Rate#1323).
+  const csp = buildReportOnlyCsp(createCspNonce(), {
     dev: isDevelopment(),
     supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL,
   });

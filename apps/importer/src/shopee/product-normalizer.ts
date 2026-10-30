@@ -317,7 +317,7 @@ function namesProduct(text: string): boolean {
  * Book") falls to the phone default, as it does with no gift.
  */
 const PHONE_BRAND_RE =
-  /\b(?:samsung|galaxy|xiaomi|redmi|poco|oppo|vivo(?!\s*book)|realme|pixel|oneplus|honor|xperia|nokia|motorola|tecno|infinix)\b/i;
+  /\b(?:samsung|galaxy|xiaomi|redmi|poco|oppo|vivo(?!\s*book)|realme|pixel|oneplus|honor|xperia|nokia|motorola|tecno|infinix|nothing\s*(?:-\s*)?phone|cmf\s*phone)\b/i;
 
 /**
  * Where a gift or bundle starts: "tặng" / "kèm" as words, a "+" with spaces round it, or a
@@ -422,14 +422,14 @@ export function detectCategorySlug(title: string): CanonicalCategorySlug {
 /** The category a lower-cased title names, or null (DOS/Rate#1407). */
 function categorySlugOf(t: string): CanonicalCategorySlug | null {
   if (
-    /airpods|galaxy\s*buds|w[fh]1000xm|wf-\d+|wh-\d+|tai\s*nghe|earbuds?|freebuds|soundcore|quietcomfort|momentum\s*true/i.test(
+    /airpods|galaxy\s*buds|nothing\s*(?:ear|headphone)\b|cmf\s*(?:by\s*nothing\s*)?buds|w[fh]1000xm|wf-\d+|wh-\d+|tai\s*nghe|earbuds?|freebuds|soundcore|quietcomfort|momentum\s*true/i.test(
       t
     )
   ) {
     return 'earbuds';
   }
   if (
-    /apple\s*watch|galaxy\s*watch|\bgarmin\b|forerunner|fenix|venu|vivo(?:active|smart|move|fit|sport|life)|watch\s*(?:ultra|series|gt|fit|se)|đồng\s*hồ\s*thông\s*minh|vòng\s*(?:đeo\s*)?tay\s*thông\s*minh|smartwatch|amazfit|coros/i.test(
+    /apple\s*watch|galaxy\s*watch|cmf\s*(?:by\s*nothing\s*)?watch|\bgarmin\b|forerunner|fenix|venu|vivo(?:active|smart|move|fit|sport|life)|watch\s*(?:ultra|series|gt|fit|se)|đồng\s*hồ\s*thông\s*minh|vòng\s*(?:đeo\s*)?tay\s*thông\s*minh|smartwatch|amazfit|coros/i.test(
       t
     )
   ) {
@@ -1048,8 +1048,8 @@ const CANONICAL_PHONE_REGISTRY: Record<
     ip_rating: 'IP68 dust/water resistant (up to 1.5m for 30 min)',
   },
   'apple:iphone-18-pro-max': {
-    // Sourced with the catalog seeds (flagship-seed-catalog-2026.ts); Apple and
-    // GSMArena publish no charging wattage for this model (catalog expansion A2).
+    // Sourced with the seeds (flagship-seed-sourced-2026.ts); Apple and
+    // GSMArena publish no charging wattage for this model.
     screen_size_inch: 6.9,
     battery_mah: 5391,
     ram_gb: 12,
@@ -1075,8 +1075,8 @@ const CANONICAL_PHONE_REGISTRY: Record<
     ip_rating: 'IP68 (up to 6 m for 30 min)',
   },
   'apple:iphone-18-pro': {
-    // Sourced with the catalog seeds (flagship-seed-catalog-2026.ts); Apple and
-    // GSMArena publish no charging wattage for this model (catalog expansion A2).
+    // Sourced with the seeds (flagship-seed-sourced-2026.ts); Apple and
+    // GSMArena publish no charging wattage for this model.
     screen_size_inch: 6.3,
     battery_mah: 4056,
     ram_gb: 12,
@@ -1102,7 +1102,7 @@ const CANONICAL_PHONE_REGISTRY: Record<
     ip_rating: 'IP68 (up to 6 m for 30 min)',
   },
   'samsung:galaxy-s26-ultra': {
-    // Sourced with the catalog seeds (flagship-seed-catalog-2026.ts, catalog expansion A3).
+    // Sourced with the seeds (flagship-seed-sourced-2026.ts).
     screen_size_inch: 6.9,
     battery_mah: 5000,
     ram_gb: 12,
@@ -1460,10 +1460,14 @@ const LEADING_PROMO_GROUPS = /^(?:\s*(?:\[[^\]]*\]|\([^)]*\)|【[^】]*】|\{[^}
 const LEADING_PROMO_WORD =
   /^(?:live(?:stream)?|(?:hot|flash|big|siêu|mega) sale|sale(?: (?:off|sốc|sock))?|hot|deal(?: hot)?|giảm giá|xả kho)(?![\p{L}\d])(?: ?\d{1,2} ?%)?[\s:!|-]*/iu;
 const MAX_LEADING_PROMO_WORDS = 4;
+// Nothing and its CMF line, named before one of their product lines (DOS/Rate#1446).
+const NOTHING_BRAND =
+  /(?<![\p{L}\d])(?:nothing ?(?:- ?)?(?:phone|ear|headphone|cmf)|cmf (?:by nothing|phone|watch|buds))(?![\p{L}\d-])/iu;
 // A line name that stands for the brand at the start of a title.
 const BRAND_LINES: Readonly<Record<string, readonly string[]>> = {
   Samsung: ['galaxy'],
   Xiaomi: ['redmi', 'poco'],
+  Nothing: ['cmf'],
 };
 const BRAND_HEAD_PREFIX = String.raw`^(?:(?:điện thoại(?: thông minh| di động)?|smartphone|máy tính bảng|tablet|laptop|đồng hồ(?: thông minh)?|tai nghe) )?(?:(?:hàng )?chính hãng )?`;
 const escapeRegExp = (text: string): string => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -1835,6 +1839,11 @@ export class ProductNormalizer {
     else if (/\bjbl\b|tour\s*pro|tune\s*\d+/i.test(identityTitle)) brand = 'JBL';
     else if (/sennheiser|momentum/i.test(identityTitle)) brand = 'Sennheiser';
     else if (/oneplus/i.test(identityTitle)) brand = 'OnePlus';
+    // Nothing and its CMF line, only with a product line after the name: "nothing" alone
+    // is an English word. "Nothing Phone (3)", "CMF by Nothing Phone 2 Pro", "CMF Phone 1".
+    // Read from the product's own part, so "Honor X9c kèm tai nghe Nothing Ear (a)" stays
+    // the Honor (DOS/Rate#1446).
+    else if (NOTHING_BRAND.test(ownProductPart(identityTitle))) brand = 'Nothing';
     else if (/\bhonor\b|magicbook/i.test(identityTitle)) brand = 'Honor';
     // Apple's desktops and speakers, last so another brand wins, and not when the title
     // only names what it fits or looks like ("Bàn phím cho Mac mini") (DOS/Rate#819).
@@ -1853,7 +1862,22 @@ export class ProductNormalizer {
     // separator, a size ("256GB"), a RAM/ROM pair ("8/256"), a network or "Chính hãng"
     // follows, so "Tab S9 - Ultra slim case", "Tab S9 - Ultra 2-in-1 case" and "A55 + Tặng"
     // keep their keys.
-    let modelTitle = identityTitle
+    // Nothing writes the generation in brackets: "Phone (3a)" keys like "Phone 3a", "Ear
+    // (a)" like "Ear a" and "Ear (open)" like "Ear open", as the bracketed generations of
+    // #1194 do; before the tier rewrites, so "Phone (3a) (Pro)" keeps its Pro. "CMF by
+    // Nothing" is its CMF line (DOS/Rate#1446).
+    let modelTitle = (
+      brand === 'Nothing'
+        ? identityTitle
+            .replace(/\bcmf by nothing\b/gi, 'Nothing CMF')
+            // "Nothing - Phone (3)" and "NothingPhone (3)" are "Nothing Phone (3)".
+            .replace(/\bnothing ?(?:- ?)?(?=phone|ear|headphone|cmf)/gi, 'Nothing ')
+            .replace(
+              /\b(phone|ear|headphone|watch|buds) ?\( ?(\d{1,2}[a-z]?|[a-z]|open|stick) ?\)/gi,
+              '$1 $2'
+            )
+        : identityTitle
+    )
       // "15 - ProMax", "S24-Ultra" and "15 (ProMax)" are "15 ProMax" and "S24 Ultra".
       .replace(
         /(?<=\d[a-z]?) ?- ?(pro ?max|pro|plus|ultra|mini|lite|fe)\b(?= ?(?:$|[-,(]|\d+(?:[.,]\d+)? ?(?:gb|tb)\b|\d+ ?\/ ?\d+|[45]g\b|lte\b|chính\b))/gi,
@@ -2198,6 +2222,29 @@ export class ProductNormalizer {
         // A "+" before "Plus" is the Plus written twice ("Galaxy S24 + Plus"), no bundle.
         if (tok === '+' && /^plus[,;]?$/i.test(rawTokens[i + 1] ?? '')) continue;
         if (/^(?:tặng|kèm|quà|\+)$/iu.test(tok.normalize('NFC'))) break;
+        // A model number glued to a RAM/ROM pair ("Redmi 13/8GB/256GB", "Redmi 13C/…",
+        // "Honor X9/…") is the model's when the model has none yet; after a numbered model
+        // ("Galaxy Tab S9 11/8GB/128GB") or as a decimal ("15.6/8GB/512GB") it is a screen
+        // size. Either way the chain ends the model. Only a RAM (one or two digits) then a
+        // storage with GB or TB count, so "Redmi 8/256GB/5G" is no "Redmi 8" (DOS/Rate#1448).
+        const chainHead =
+          /^([a-z]?\d{1,2}[a-z]?|\d{1,2}[.,]\d)\/\d{1,2}(?:GB)?\/\d+(?:[.,]\d+)?(?:GB|TB)(?![a-z\d])/i.exec(
+            tok
+          );
+        if (chainHead) {
+          // Right after the brand a lettered head is the model itself ("Honor X9/8GB/256GB");
+          // a bare number there names no model ("Samsung 13/…" stays unkeyable).
+          const head = chainHead[1]!;
+          // A network ("5G/8GB/256GB") is no model number either.
+          if (
+            !/[.,]/.test(head) &&
+            !/^[2-5]G$/i.test(head) &&
+            (modelTokens.length > 0 ? !modelTokens.some(t => /\d/.test(t)) : /[a-z]/i.test(head))
+          ) {
+            modelTokens.push(head);
+          }
+          break;
+        }
         const stop =
           /^(?:\d+(?:[.,]\d+)?(?:GB|TB)|\d+\/\d+(?:GB|TB)?|\d{2}mm|5G|4G|LTE|GPS|RAM|ROM|OLED|WiFi|Chính|Quốc|Bản|Mới|Fullbox|Likenew|Like|Cũ|99%|98%|VN\/A|VNA|LL\/A|\(|\[|-)/i.exec(
             tok

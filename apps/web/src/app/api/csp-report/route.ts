@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { CSP_INLINE_POLICY_TAG } from '@/lib/csp';
 import { createLogger } from '@/lib/logger';
 
 const log = createLogger('csp');
@@ -94,10 +95,20 @@ export async function POST(request: Request) {
     }
     const blocked = shortUrl(report['blocked-uri']);
     const source = shortUrl(report['source-file']);
+    // Which report-only policy sent it: the measured inline-script one tags its
+    // report-uri; any other value, or none, is the strict nonce policy (DOS/Rate#1323).
+    const policy =
+      new URL(request.url).searchParams.get('policy') === CSP_INLINE_POLICY_TAG
+        ? CSP_INLINE_POLICY_TAG
+        : 'strict';
     if (
-      firstInWindow(`${directive}|${blocked}|${page}|${source}`, Date.now())
+      firstInWindow(
+        `${policy}|${directive}|${blocked}|${page}|${source}`,
+        Date.now()
+      )
     ) {
       log.warn('csp violation', {
+        policy,
         directive,
         blocked,
         page,
