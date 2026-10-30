@@ -96,6 +96,50 @@ function inspectRateLimitedResponse(): OpenApiResponse {
   );
 }
 
+const LEADERBOARD_ENTRY = {
+  type: 'object',
+  additionalProperties: true,
+  properties: {
+    slug: { type: 'string' },
+    deal_radar: RADAR_REF,
+    radar_signal: RADAR_REF,
+  },
+} as const;
+
+/** The `/leaderboard` payload under `data` (DOS/Rate#1377). */
+const LEADERBOARD_PAYLOAD_PROPERTIES: Record<
+  string,
+  Record<string, unknown>
+> = {
+  directory: { type: 'string', example: 'tech_electronics' },
+  category: { type: 'string' },
+  criterion: { type: 'string' },
+  price_segment: { type: 'string' },
+  brand: { type: 'string' },
+  total_matched: { type: 'integer' },
+  returned_count: { type: 'integer' },
+  compare_top_3_url: { type: ['string', 'null'] },
+  podium_top_3: { type: 'array', items: LEADERBOARD_ENTRY },
+  items: { type: 'array', items: LEADERBOARD_ENTRY },
+};
+
+/**
+ * The same payload repeated at the top level for older clients, each field
+ * deprecated in favour of `data` (DOS/Rate#1377).
+ */
+function leaderboardTopLevelMirror(): Record<string, Record<string, unknown>> {
+  return Object.fromEntries(
+    Object.entries(LEADERBOARD_PAYLOAD_PROPERTIES).map(([key, schema]) => [
+      key,
+      {
+        ...schema,
+        deprecated: true,
+        description: `The same as \`data.${key}\`, kept for older clients.`,
+      },
+    ])
+  );
+}
+
 function jsonBody(schema: Record<string, unknown>) {
   return { 'application/json': { schema } } as const;
 }
@@ -240,7 +284,7 @@ function buildBaseRateOpenApiSpec(
       {
         name: 'URL Inspector & Extension MV3',
         description:
-          'Real-time URL/SKU canonicalization, 10-platform hybrid lookup, 5-level price verdict, and zero-trust quarantine ingestion.',
+          'Real-time URL/SKU canonicalization, 10-platform hybrid lookup, evidence-based price verdict, and zero-trust quarantine ingestion.',
       },
       {
         name: 'Merchants & Dual Risk Score',
@@ -878,9 +922,9 @@ function buildBaseRateOpenApiSpec(
         get: {
           operationId: 'inspectProductUrlAndVerdict',
           summary:
-            'Full Web Product & URL Inspector with 5-level price verdict and price history chart',
+            'Full Web Product & URL Inspector with price verdict and price history chart',
           description:
-            'Runs the complete hybrid lookup pipeline for the `/inspect` web portal: canonicalizes 10 supported e-commerce/retailer platforms, blocks non-hardware accessories, resolves SKU variant capacity, computes the 5-level price verdict, and returns full product detail with the Deal Radar signal (`data.radarSignal`, null when no product matched). One of `q` or `url` is required. Limited to 30 requests per minute per client IP (shared with `/lookup`, counted on each server instance); past it the answer is 429 with `Retry-After`.',
+            'Runs the complete hybrid lookup pipeline for the `/inspect` web portal: canonicalizes 10 supported e-commerce/retailer platforms, blocks non-hardware accessories, resolves SKU variant capacity, computes the price verdict (`PriceVerdictLevel`), and returns full product detail with the Deal Radar signal (`data.radarSignal`, null when no product matched). One of `q` or `url` is required. Limited to 30 requests per minute per client IP (shared with `/lookup`, counted on each server instance); past it the answer is 429 with `Retry-After`.',
           tags: ['URL Inspector & Extension MV3'],
           parameters: [
             {
@@ -917,7 +961,7 @@ function buildBaseRateOpenApiSpec(
           responses: {
             '200': {
               description:
-                'Complete inspection payload: the lookup result plus `canonicalUrl`, the accessory `gatekeeper`, the 5-level `priceVerdict` and `radarSignal`, all under `data`.',
+                'Complete inspection payload: the lookup result plus `canonicalUrl`, the accessory `gatekeeper`, the `priceVerdict` (`PriceVerdictLevel`) and `radarSignal`, all under `data`.',
               content: jsonBody({
                 type: 'object',
                 properties: {
@@ -966,7 +1010,7 @@ function buildBaseRateOpenApiSpec(
           summary:
             'Low-latency Hybrid Lookup for Rate Browser Extension Manifest V3',
           description:
-            'Dedicated read-only lookup endpoint for the Rate Browser Extension MV3 across 10 platforms (`shopee`, `lazada`, `tiki`, `tiktok`, `cellphones`, `tgdd`, `fptshop`, `hoangha`, `didongviet`, `phongvu`). Performs deterministic `platform_item_id` lookup, canonical model fallback, accessory gatekeeping, 5-level price verdict calculation, and returns the Deal Radar signal as `data.radarSignal`.',
+            'Dedicated read-only lookup endpoint for the Rate Browser Extension MV3 across 10 platforms (`shopee`, `lazada`, `tiki`, `tiktok`, `cellphones`, `tgdd`, `fptshop`, `hoangha`, `didongviet`, `phongvu`). Performs deterministic `platform_item_id` lookup, canonical model fallback, accessory gatekeeping, price verdict calculation (`PriceVerdictLevel`), and returns the Deal Radar signal as `data.radarSignal`.',
           tags: ['URL Inspector & Extension MV3'],
           parameters: [
             {
@@ -1602,7 +1646,7 @@ function buildBaseRateOpenApiSpec(
               name: 'category',
               in: 'query',
               description:
-                'Canonical category slug (`smartphones`, `tablets`, `laptops`, `smartwatches`, `earbuds`, or `all`).',
+                'Canonical category slug (`smartphones`, `tablets`, `laptops`, `smartwatches`, `earbuds`, or `all`). `cat` is accepted as an alias.',
               schema: {
                 type: 'string',
                 enum: [...categorySlugs, 'all'],
@@ -1676,29 +1720,10 @@ function buildBaseRateOpenApiSpec(
                     type: 'object',
                     properties: {
                       ok: { type: 'boolean', example: true },
-                      items: {
-                        type: 'array',
-                        deprecated: true,
-                        description:
-                          'The same as `data.items`, kept for older clients.',
-                        items: { type: 'object', additionalProperties: true },
-                      },
+                      ...leaderboardTopLevelMirror(),
                       data: {
                         type: 'object',
-                        properties: {
-                          items: {
-                            type: 'array',
-                            items: {
-                              type: 'object',
-                              additionalProperties: true,
-                              properties: {
-                                slug: { type: 'string' },
-                                deal_radar: RADAR_REF,
-                                radar_signal: RADAR_REF,
-                              },
-                            },
-                          },
-                        },
+                        properties: LEADERBOARD_PAYLOAD_PROPERTIES,
                       },
                     },
                   },
