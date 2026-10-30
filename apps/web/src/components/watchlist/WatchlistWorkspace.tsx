@@ -58,6 +58,8 @@ interface WatchlistWorkspaceProps {
 }
 
 interface LiveWatchlistDeal {
+  /** The product page in its own category (#1380). */
+  product_href?: string;
   slug: string;
   current_min_price: number;
   current_max_price: number;
@@ -908,9 +910,14 @@ export default function WatchlistWorkspace({
             const diffFromTarget = currentMin - item.targetPrice;
             const targetReached =
               currentMin > 0 && currentMin <= item.targetPrice;
+            // The live read names the product's own category; the stored
+            // path is the last resort (#1380).
             const detailHref = live
               ? getMasterProductHref(live)
-              : `${item.categoryPath || '/smartphones'}/${item.slug}`;
+              : typeof dealInfo?.product_href === 'string' &&
+                  /^\/[a-z]+\/[^/?#\s]+$/.test(dealInfo.product_href)
+                ? dealInfo.product_href
+                : `${item.categoryPath || '/smartphones'}/${item.slug}`;
             const bestOffer = dealInfo?.best_offer || null;
             const bestOfferSafeUrl = bestOffer
               ? sanitizeWatchlistBestOfferUrl(bestOffer.url)

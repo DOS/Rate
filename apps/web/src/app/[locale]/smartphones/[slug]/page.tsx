@@ -79,7 +79,7 @@ import type { KeySpecs, ProductSpecifications } from '@repo/shared-data';
 import { normalizeRateLocale } from '@/lib/rate-i18n';
 import {
   getSpecUiDictionary,
-  localizeSpecValue,
+  localizedSpecValue,
   specGroupHeading,
   specSectionBadge,
 } from '@/lib/spec-localizer';
@@ -1318,7 +1318,7 @@ export async function ProductDetailView({
                     </div>
                     <div className="fw-semibold small">
                       <ContentText
-                        text={localizeSpecValue(
+                        {...localizedSpecValue(
                           specs?.design?.resistance || specs?.design?.materials,
                           locale
                         )}
@@ -1439,11 +1439,15 @@ export async function ProductDetailView({
                           )}
                         </h3>
                         <dl className="row small mb-0">
-                          {rows.map(({ label, value }) => (
+                          {rows.map(({ label, value, lang }) => (
                             <Fragment key={label}>
                               <dt className="text-muted col-5">{label}</dt>
                               <dd className="fw-medium col-7">
-                                <ContentText text={value} locale={locale} />
+                                <ContentText
+                                  text={value}
+                                  lang={lang}
+                                  locale={locale}
+                                />
                               </dd>
                             </Fragment>
                           ))}
