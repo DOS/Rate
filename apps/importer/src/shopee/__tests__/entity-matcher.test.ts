@@ -914,6 +914,20 @@ async function runEntityMatcherSuite() {
   // page hides them, and the camera it cannot have is dropped.
   assert.equal(watchRow?.has_5g, true);
   assert.equal(watchRow?.storage_gb, 64);
+  // Only an unknown (null) has_5g takes the AI's answer (DOS/Rate#1451).
+  const unknown5gRow = await enrichByCategory(
+    {
+      id: 'phone-1451',
+      brand: 'Samsung',
+      model: 'Galaxy S24',
+      name: 'Samsung Galaxy S24 256GB',
+      has_5g: null,
+      specifications: { category_slug: 'smartphones' },
+      key_specs: {},
+    },
+    phoneShapedAi
+  );
+  assert.equal(unknown5gRow?.has_5g, true);
   const watchSpecs = watchRow?.specifications as Record<string, Record<string, unknown>>;
   assert.equal(watchSpecs.camera, undefined);
   assert.equal(watchSpecs.cellular?.has_5g, true);
