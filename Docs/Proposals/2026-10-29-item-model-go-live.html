@@ -63,12 +63,44 @@
   <span class="badge badge-accent">Chưa áp dụng gì</span>
   <span class="badge badge-amber">Chờ JOY duyệt 9 quyết định</span>
   <h1>Kế hoạch bật mô hình Item (sản phẩm, phiên bản, listing)</h1>
-  <p class="muted">Ngày 29/10/2026 - Issue <a href="https://github.com/DOS/Rate/issues/1150">DOS/Rate#1150</a> - Bản tiếng Anh: <a href="./2026-10-29-item-model-go-live.md">2026-10-29-item-model-go-live.md</a> - Người soạn: session Core của Rate Core PO</p>
+  <p class="muted">Ngày 29/10/2026, cập nhật 30/10/2026 - Issue <a href="https://github.com/DOS/Rate/issues/1150">DOS/Rate#1150</a> - Bản tiếng Anh: <a href="./2026-10-29-item-model-go-live.md">2026-10-29-item-model-go-live.md</a> - Người soạn: session Core của Rate Core PO</p>
 
   <div class="card rec">
     <h3>Tóm tắt</h3>
     <p>Trang này gom toàn bộ các bước đưa mô hình Item lên thật vào một chỗ, để JOY duyệt một lần. <b>Item</b> là một sản phẩm (ví dụ iPhone 17 Pro), <b>phiên bản</b> (variant) là một dung lượng của nó (256GB), <b>listing</b> là một tin bán trên sàn. Có 9 bước theo thứ tự, mỗi bước ghi: thay đổi gì, kiểm tra thế nào (chỉ đọc), hoàn tác thế nào, ai chạy. Cuối trang là 9 quyết định JOY cần chốt, mỗi câu có khuyến nghị sẵn.</p>
     <p>Mọi file SQL đã được chạy thử trong CI (kiểm thử tự động trên GitHub) trên một database tạm: chạy hai lần, kiểm tra, hoàn tác hai lần, chạy lại. Chưa bước nào đụng tới Supabase prod dùng chung.</p>
+  </div>
+
+  <h2>0. Trạng thái sẵn sàng (cập nhật 30/10/2026)</h2>
+  <p>Phía code và tài liệu đã xong phần việc của mình. Còn chờ JOY: các quyết định ở mục 4 và luồng beta của DOS-Me. Cờ <code>RATE_ITEM_MODEL</code> vẫn tắt ở mọi nơi.</p>
+  <div class="table-wrap">
+  <table>
+    <tr><th>Mục</th><th>Trạng thái</th><th>Bằng chứng</th></tr>
+    <tr><td>Trang so sánh lặp vô hạn với slug Item có chữ hoa (từng chặn go-live)</td><td>Đã sửa</td><td>Issue <a href="https://github.com/DOS/Rate/issues/1383">#1383</a> đóng bởi PR <a href="https://github.com/DOS/Rate/pull/1395">#1395</a>, merge 30/10</td></tr>
+    <tr><td>Thu hẹp quyền của <code>rate_worker</code> trên <code>rate.items</code> trong M1+M2</td><td>Đã sửa trong file đề xuất (chưa áp dụng)</td><td>PR <a href="https://github.com/DOS/Rate/pull/1394">#1394</a>, merge 30/10, theo đúng phần JOY duyệt trong <a href="https://github.com/DOS/Rate-Services/issues/739">RS#739</a>. CI chạy lại file với quyền cũ rộng hơn và xác nhận lần chạy thứ hai thu hẹp lại.</td></tr>
+    <tr><td>3 RPC đọc hàng đợi crawl của RS#739</td><td>JOY đã duyệt; chưa có migration DOS-Me</td><td><a href="https://github.com/DOS/Rate-Services/issues/739">RS#739</a> (duyệt 30/10), PR đề xuất RS#740, PR code gọi hàm RS#756 (có đường lùi "not deployed"). Thứ tự với M1+M2: xem khung bên dưới.</td></tr>
+    <tr><td>Job CI <code>E2E (Playwright, Item model)</code></td><td>Chạy trên mọi PR, ổn định</td><td>132 lần chạy trên PR từ 28/10 (<a href="https://github.com/DOS/Rate/actions/runs/40740690991">lần đầu</a>) đến 30/10: 129 xanh, 0 lỗi, 0 lần chạy lại; 2 lần bị hủy vì có lần push mới hơn trên cùng nhánh (<a href="https://github.com/DOS/Rate/actions/runs/41010256926">ví dụ</a>), 1 lần đang chạy (<a href="https://github.com/DOS/Rate/actions/runs/41015404690">lần gần nhất</a>, sau đó xanh). Thời gian job: trung vị 97 giây, lâu nhất 142 giây.</td></tr>
+    <tr><td>Bước 5: Rate Services dùng importer hiểu Item</td><td>Đã ghim, cờ vẫn tắt</td><td><code>vendor/rate</code> trên nhánh <code>main</code> của Rate Services trỏ tới <code>855fbfdb</code> (RS#758, 30/10), đã chứa #1179, #1190, #1208. Còn lại: RS PO xác nhận một vòng promote không có lỗi mới.</td></tr>
+    <tr><td>Bước 1: #1123 / M0</td><td>Chờ quyết định 8</td><td>Issue <a href="https://github.com/DOS/Rate/issues/1123">#1123</a> còn mở</td></tr>
+    <tr><td>Luồng beta của DOS-Me</td><td>Vẫn khóa</td><td>ROADMAP 6.4: <code>beta-migrations.yml</code> bị khóa, nên prod phải chờ</td></tr>
+    <tr><td>Job E2E Item là check bắt buộc</td><td>Chưa</td><td>Ruleset <code>dev-main-light</code> chỉ bắt buộc <code>Typecheck &amp; Build Monorepo</code>, <code>E2E (Playwright)</code>, <code>Secret scan (gitleaks)</code>, <code>task-claim</code> (quyết định 9)</td></tr>
+  </table>
+  </div>
+  <div class="card key">
+    <h3>Còn chặn go-live</h3>
+    <ul>
+      <li>Quyết định 8 (M0), rồi quyết định 1 đến 5 (M1+M2). Quyết định 6, 7 chỉ cần trước M3/M4.</li>
+      <li>Luồng beta của DOS-Me mở lại (ROADMAP 6.4), để đi được tới prod.</li>
+      <li>Không còn lỗi code nào chặn: trong DOS/Rate, issue duy nhất ghi "Item go-live blocker" là #1383, và đã đóng.</li>
+    </ul>
+  </div>
+  <div class="card warn">
+    <h3>Thứ tự giữa migration RS#739 và M1+M2</h3>
+    <ul>
+      <li><b>Hai migration DOS-Me riêng, không gộp</b>, để mỗi cái có file kiểm tra và hoàn tác riêng. Ba hàm của RS#739 (<code>crawl_queue_summary</code>, <code>crawl_job_failures</code>, <code>crawl_job_repeat_failures</code>) chỉ đọc <code>rate.crawl_jobs</code>, không phụ thuộc <code>rate.items</code>, nên có thể áp dụng trước M1+M2 hay xen giữa các bước, miễn đi đủ preview, beta, prod.</li>
+      <li><b>Quyền trên <code>rate.items</code> nằm trong chính M1+M2</b>, không ở migration RS#739: bảng chưa có thì không cấp quyền được. Áp dụng M1+M2 từ file sau PR #1394. Nếu preview từng chạy bản cũ, chạy lại file mới sẽ thu hẹp quyền (lệnh <code>REVOKE</code> đã có sẵn).</li>
+      <li>Phía Rate Services không cần chờ: RS#756 in "not deployed" khi hàm chưa có, và code Item của RS chỉ chạy khi cờ bật (sau M1+M2).</li>
+    </ul>
   </div>
 
   <h2>1. Luật chung cho mọi bước database</h2>
@@ -120,7 +152,7 @@
 
   <h3>Bước 3. M1+M2: bảng Item</h3>
   <dl>
-    <dt>Thay đổi</dt><dd>Bảng <code>rate.items</code> (RLS, tức phân quyền theo dòng: ai cũng đọc được Item đã xuất bản; <code>rate_worker</code> đọc tất cả, chỉ được sửa cột thông số). Cột mới <code>master_products.item_id / variant_key / sort_order</code> và <code>products.item_id / variant_source</code>. Trigger đồng bộ: sản phẩm mới tự có Item theo khóa, listing đi theo. RPC <code>match_item</code>, <code>refresh_item_stats</code>, <code>retire_item_unknown_variant</code>; hàm điểm đánh giá và lượt vote hiểu Item nhưng giữ nguyên chữ ký. Điền dữ liệu cho bảng mới. Một transaction, chạy lại an toàn.</dd>
+    <dt>Thay đổi</dt><dd>Bảng <code>rate.items</code> (RLS, tức phân quyền theo dòng: ai cũng đọc được Item đã xuất bản; <code>rate_worker</code> đọc tất cả, chỉ được sửa sáu cột <code>description, specifications, key_specs, images, thumbnail, updated_at</code>, và chỉ được gọi <code>match_item</code>, <code>refresh_item_stats</code>, theo PR #1394). Cột mới <code>master_products.item_id / variant_key / sort_order</code> và <code>products.item_id / variant_source</code>. Trigger đồng bộ: sản phẩm mới tự có Item theo khóa, listing đi theo. RPC <code>match_item</code>, <code>refresh_item_stats</code>, <code>retire_item_unknown_variant</code>; hàm điểm đánh giá và lượt vote hiểu Item nhưng giữ nguyên chữ ký. Điền dữ liệu cho bảng mới. Một transaction, chạy lại an toàn.</dd>
     <dt>File</dt><dd><code>2026-10-28-dos-me-m1-m2-items.sql</code>.</dd>
     <dt>Kiểm tra</dt><dd><code>2026-10-28-dos-me-m1-m2-items-verify.sql</code>, V1 đến V15, chạy trước và sau. Về sau file này cũng dùng làm bước đối soát.</dd>
     <dt>Hoàn tác</dt><dd><code>2026-10-28-dos-me-m1-m2-items-rollback.sql</code>, dừng tiến trình ghi và tắt cờ về <code>off</code> trước. Khôi phục thân cũ của hai hàm điểm đánh giá. Không bao giờ <code>TRUNCATE rate.items</code>.</dd>
@@ -138,7 +170,7 @@
 
   <h3>Bước 5. Rate Services nâng <code>vendor/rate</code></h3>
   <dl>
-    <dt>Thay đổi</dt><dd>Rate Services chuyển submodule <code>vendor/rate</code> sang một commit <code>dev</code> của DOS/Rate có importer hiểu Item (#1179, #1190, #1208, #1213 và các PR sau). Phần việc Item của chính Rate Services đã merge: RS#685 (<code>cluster_id</code> NULL nghĩa là chưa rõ phiên bản), RS#687 (xác minh theo Item, job mang id Item, làm mới theo Item), RS#689.</dd>
+    <dt>Thay đổi</dt><dd>Rate Services chuyển submodule <code>vendor/rate</code> sang một commit <code>dev</code> của DOS/Rate có importer hiểu Item (#1179, #1190, #1208, #1213 và các PR sau). Phần việc Item của chính Rate Services đã merge: RS#685 (<code>cluster_id</code> NULL nghĩa là chưa rõ phiên bản), RS#687 (xác minh theo Item, job mang id Item, làm mới theo Item), RS#689. <b>Cập nhật 30/10:</b> đã ghim <code>855fbfdb</code> (RS#758), cờ vẫn tắt; còn chờ một vòng promote xác nhận.</dd>
     <dt>Kiểm tra</dt><dd>CI của Rate Services xanh; khi cờ vẫn <code>off</code>, một vòng promote bình thường không phát sinh lỗi mới.</dd>
     <dt>Hoàn tác</dt><dd>Trả submodule về commit cũ.</dd>
     <dt>Ai chạy</dt><dd>Rate Services (RS PO mở PR), JOY merge.</dd>
@@ -183,17 +215,17 @@
   </dl>
 
   <h2>4. Các quyết định JOY cần chốt</h2>
-  <p class="muted">Mỗi câu có khuyến nghị; nếu JOY đồng ý thì khuyến nghị là mặc định.</p>
+  <p class="muted">Mỗi câu có khuyến nghị; nếu JOY đồng ý thì khuyến nghị là mặc định. Rà lại ngày 30/10/2026: cả 9 câu vẫn còn hiệu lực, chưa câu nào thừa. Riêng quyền của <code>rate_worker</code> trên <code>rate.items</code> không nằm trong 9 câu này: JOY đã chốt trong RS#739 và file đã sửa (PR #1394).</p>
 
   <div class="q"><strong>1. (M1+M2) <code>match_item</code> lọc theo hãng, không theo model.</strong> Thiết kế có tham số model, nhưng lọc theo model thì chỉ tìm được đúng model đó, việc mà bước ghép chính xác (Tier 1) đã làm rồi. <span class="rec-line">Khuyến nghị: lọc theo hãng.</span></div>
   <div class="q"><strong>2. (M1+M2) Item chưa có đánh giá lưu điểm 0</strong>, giống các cột của phiên bản hiện nay; web hiện "chưa có đánh giá" khi số đánh giá bằng 0. <span class="rec-line">Khuyến nghị: giữ 0.</span></div>
   <div class="q"><strong>3. (M1+M2) Không sửa view <code>rate.v_products_with_merchant_trust</code>.</strong> Thêm <code>item_id</code> vào view làm hỏng việc chạy lại migration <code>20261018153000</code>; ai cần <code>item_id</code> thì đọc từ <code>rate.products</code>. <span class="rec-line">Khuyến nghị: giữ nguyên view.</span></div>
   <div class="q"><strong>4. (M1+M2, M3 cập nhật) Cảnh báo giá trên phiên bản "unknown".</strong> Cảnh báo giá cần một dung lượng cụ thể. M1+M2 để nguyên cảnh báo trên phiên bản đó; M3 giờ từ chối chạy khi còn cảnh báo đang bật, nên trước M3 JOY xử lý từng cái: chuyển sang phiên bản có dung lượng hoặc đóng. <span class="rec-line">Khuyến nghị: xử lý từng cảnh báo theo V7 trước M3.</span></div>
   <div class="q"><strong>5. (M1+M2) Tên công tắc cho admin: <code>rate.variant_override</code>.</strong> Công cụ admin nào gán lại phiên bản đã chọn tay thì bật công tắc này trong transaction của nó. <span class="rec-line">Khuyến nghị: duyệt tên này.</span></div>
-  <div class="q"><strong>6. (M3/M4) M4 giữ lại các trigger đồng bộ của M1.</strong> Thiết kế định bỏ chúng ở M4, nhưng importer vẫn dựa vào chúng để tạo Item mới khi seed sản phẩm. Trigger chặn của M4 làm lớp bảo vệ cuối; bỏ trigger đồng bộ để sau, khi importer tự tạo Item. <span class="rec-line">Khuyến nghị: giữ lại.</span></div>
+  <div class="q"><strong>6. (M3/M4) M4 giữ lại các trigger đồng bộ của M1.</strong> Thiết kế định bỏ chúng ở M4, nhưng importer vẫn dựa vào chúng để tạo Item mới khi seed sản phẩm (ngày 30/10 importer vẫn chưa tự ghi vào <code>rate.items</code>). Trigger chặn của M4 làm lớp bảo vệ cuối; bỏ trigger đồng bộ để sau, khi importer tự tạo Item. <span class="rec-line">Khuyến nghị: giữ lại.</span></div>
   <div class="q"><strong>7. (M3/M4) Không thêm trigger chặn phía phiên bản khi đổi Item của nó.</strong> Trigger dời listing của M1 đã dời listing ngay trong cùng câu lệnh, và V3 kiểm tra kết quả. <span class="rec-line">Khuyến nghị: không thêm.</span></div>
   <div class="q"><strong>8. (M0) Duyệt việc ghi dữ liệu M0, kể cả gộp <code>apple:airpods-pro-2-usbc</code> thành Item <code>apple:airpods-pro-2</code>.</strong> Bộ chuẩn hóa không tách bản USB-C với Lightning; hàng mới hiện chỉ còn bản USB-C. <span class="rec-line">Khuyến nghị: duyệt.</span></div>
-  <div class="q"><strong>9. (CI) Đặt job <code>E2E (Playwright, Item model)</code> thành check bắt buộc trên <code>dev</code>.</strong> Job chạy xanh, không cần chạy lại, ở mọi lần CI của PR #1273 (khoảng 4 phút). Đây là cài đặt bảo vệ nhánh (branch protection) của repo. <span class="rec-line">Khuyến nghị: bắt buộc.</span></div>
+  <div class="q"><strong>9. (CI) Đặt job <code>E2E (Playwright, Item model)</code> thành check bắt buộc trên <code>dev</code>.</strong> Từ 28/10 đến 30/10, job chạy trên 132 lần CI của PR: 129 xanh, 0 lỗi, không cần chạy lại lần nào (2 lần bị hủy vì có push mới hơn), mỗi lần khoảng 1,5 đến 2,5 phút (mục 0). Đây là cài đặt bảo vệ nhánh (branch protection) của repo. <span class="rec-line">Khuyến nghị: bắt buộc.</span></div>
 </div>
 </body>
 </html>
