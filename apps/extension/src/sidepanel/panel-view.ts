@@ -15,13 +15,7 @@ import {
   normalizeFiveStarRating,
   resolveSafeApiRelativeUrl,
 } from '../security-guards.js';
-import {
-  contentTextHtml,
-  escapeHtml,
-  isForeignVietnameseSentence,
-  t,
-  type MessageKey,
-} from '../i18n.js';
+import { contentTextHtml, escapeHtml, t, type MessageKey } from '../i18n.js';
 
 export { escapeHtml };
 
@@ -200,13 +194,12 @@ export function renderReviewCardHtml(
   );
   const analysed = Number(reviews.total_analyzed);
   const hasReviews = Number.isFinite(analysed) && analysed > 0;
-  // The summary is a sentence the server writes in Vietnamese. In an English
-  // or Czech panel it is left out rather than machine-translated: the
-  // genuine share and the count above already say the same (DOS/Rate#1374).
+  // The server writes the summary in Vietnamese only. An English or Czech
+  // panel leaves it out rather than machine-translating it or guessing its
+  // language: the genuine share and the count above say the same
+  // (DOS/Rate#1374).
   const summary =
-    hasReviews &&
-    reviews.ai_summary &&
-    !isForeignVietnameseSentence(reviews.ai_summary)
+    hasReviews && reviews.ai_summary && t('langCode') === 'vi'
       ? reviews.ai_summary
       : null;
   return `

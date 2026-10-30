@@ -4045,7 +4045,6 @@ async function runTests() {
       contentLangAttr,
       contentTextHtml,
       formatCatalogueEntry,
-      isVietnameseSentence,
       isVietnameseText,
     } = await import('./i18n.js');
     const offerFor = (
@@ -4092,12 +4091,11 @@ async function runTests() {
     );
     assert.ok(!isVietnameseText('6.1" Super Retina XDR OLED'));
     assert.ok(!isVietnameseText('Ověřené recenze, dvě nabídky, žádné'));
-    // Acute-only Vietnamese is recognised by its words; one grave in an
-    // English sentence does not hide it.
+    // Acute-only Vietnamese is recognised by its words.
     assert.ok(isVietnameseText('Camera kép 12 MP'));
-    assert.ok(isVietnameseSentence('Giá khá cao, máy nóng.'));
-    assert.ok(!isVietnameseSentence('Buyers describe the design as déjà vu.'));
+    assert.ok(isVietnameseText('Giá khá cao, máy nóng.'));
     assert.ok(!isVietnameseText('Pokémon Nestlé edition'));
+    assert.ok(!isVietnameseText('MUA reviewers praise the camera'));
 
     // Vietnamese panel (no chrome.i18n): the summary is shown, unmarked.
     assert.ok(card(viSummary).includes(viSummary));
@@ -4118,11 +4116,10 @@ async function runTests() {
         const html = card(viSummary);
         assert.ok(!html.includes('Lần phân tích'), `${locale}: no vi summary`);
         assert.match(html, /100\s?%/, `${locale}: the genuine share stays`);
-        const english = 'Most buyers praise the battery.';
-        assert.ok(card(english).includes(english), `${locale}: non-vi shown`);
-        const dejaVu = 'Buyers describe the design as déjà vu.';
-        assert.ok(card(dejaVu).includes('déjà vu'), `${locale}: one mark kept`);
-        assert.ok(!card('Giá khá cao, máy nóng.').includes('Giá khá'));
+        // Whatever it looks like: the server only writes Vietnamese ones.
+        for (const other of ['Pin tốt.', 'Most buyers praise the battery.']) {
+          assert.ok(!card(other).includes(other), `${locale}: ${other}`);
+        }
         assert.equal(contentLangAttr('Sạc nhanh 35W'), ' lang="vi"');
         assert.equal(contentLangAttr('A18 chip, 6-core GPU'), '');
         // Store names in the offers card are marked, English ones are not.

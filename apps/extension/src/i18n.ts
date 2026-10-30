@@ -90,7 +90,6 @@ const VIETNAMESE_WORDS = new Set([
   'n\u00f3ng',
   'nhanh',
   'nghe',
-  'mua',
 ]);
 
 function vietnameseEvidence(text: string): { marks: number; word: boolean } {
@@ -103,19 +102,14 @@ function vietnameseEvidence(text: string): { marks: number; word: boolean } {
   return { marks, word };
 }
 
-/** Whether server text looks Vietnamese, as marketplace data does. */
+/**
+ * Whether server text looks Vietnamese, as marketplace data does. It only
+ * decides a lang attribute, where a miss or a stray match costs little; it
+ * never decides what is shown.
+ */
 export function isVietnameseText(text: string): boolean {
   const { marks, word } = vietnameseEvidence(text);
   return marks > 0 || word;
-}
-
-/**
- * Whether a sentence is Vietnamese, with more evidence than one mark: an
- * English summary quoting "déjà vu" is not hidden (DOS/Rate#1374).
- */
-export function isVietnameseSentence(text: string): boolean {
-  const { marks, word } = vietnameseEvidence(text);
-  return marks > 1 || word;
 }
 
 /**
@@ -129,11 +123,6 @@ export function contentLangAttr(text: string): string {
 /** Vietnamese server text in a panel shown in another language. */
 export function isForeignVietnamese(text: string): boolean {
   return t('langCode') !== 'vi' && isVietnameseText(text);
-}
-
-/** A Vietnamese sentence in a panel shown in another language. */
-export function isForeignVietnameseSentence(text: string): boolean {
-  return t('langCode') !== 'vi' && isVietnameseSentence(text);
 }
 
 /** Server text as escaped HTML, in a `lang="vi"` span when it needs one. */
