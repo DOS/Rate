@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
+import os from 'node:os';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 
@@ -14,6 +15,7 @@ import {
   requiredChecksFromRules,
   shouldDeleteBranch,
   squashBody,
+  lintHeader,
   squashTitle,
   wrapLine,
 } from './merge-when-green.mjs';
@@ -397,4 +399,49 @@ test('the squash message of PR bodies with lines over 100 characters passes comm
   const result = commitlint(message);
   assert.ok(result.ok, result.output);
   assert.doesNotMatch(result.output, /warning/);
+});
+
+test('lints the squash header with the repository commitlint, type-enum included', () => {
+  // A valid header passes.
+  assert.deepEqual(lintHeader('fix(web): a thing (#7)'), {
+    ok: true,
+    problems: [],
+  });
+  // "ux" fits the shape check but not commitlint's type-enum (DOS/Rate#1513).
+  const ux = lintHeader('ux(web): the same product shows one rating (#1475)');
+  assert.equal(
+    squashTitle('ux(web): the same product shows one rating', 1475),
+    'ux(web): the same product shows one rating (#1475)'
+  );
+  assert.equal(ux.ok, false);
+  assert.ok(
+    ux.problems.some(
+      (p) => /type must be one of/.test(p) && /type-enum/.test(p)
+    ),
+    ux.problems.join('\n')
+  );
+  // A start-case subject is refused with commitlint's reason.
+  const startCase = lintHeader('fix(web): Add a sentence-case subject (#8)');
+  assert.equal(startCase.ok, false);
+  assert.ok(
+    startCase.problems.some((p) => /subject-case/.test(p)),
+    startCase.problems.join('\n')
+  );
+});
+
+test('a squash header is refused, not merged, when commitlint cannot run', () => {
+  const missing = lintHeader('fix(web): a thing (#7)', { cwd: os.tmpdir() });
+  assert.equal(missing.ok, false);
+  assert.match(missing.problems[0], /commitlint is not installed/);
+  const failed = lintHeader('fix(web): a thing (#7)', {
+    spawnFn: () => ({ error: new Error('spawn failed'), status: null }),
+  });
+  assert.deepEqual(failed, {
+    ok: false,
+    problems: ['commitlint could not run'],
+  });
+  const silent = lintHeader('fix(web): a thing (#7)', {
+    spawnFn: () => ({ status: 2, stdout: '', stderr: '' }),
+  });
+  assert.deepEqual(silent, { ok: false, problems: ['commitlint exited 2'] });
 });

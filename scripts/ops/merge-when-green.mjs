@@ -13,6 +13,10 @@
 // --ignore lets a known-broken, non-required check through; name it in the PR.
 // Prints one line and exits 0 when merged, 1 when it cannot merge.
 
+import { spawnSync } from 'node:child_process';
+import { existsSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 import {
   DEFAULT_REPO,
@@ -203,6 +207,52 @@ export function squashTitle(title, number) {
     : null;
 }
 
+const REPO_ROOT = fileURLToPath(new URL('../../', import.meta.url));
+const COMMITLINT_CLI = 'node_modules/@commitlint/cli/cli.js';
+
+/**
+ * Lints a squash header with the repository's own commitlint config
+ * (commitlint.config.ts), as the commitlint check will: type-enum, case,
+ * length and the rest. The shape check in squashTitle let "ux(web): ..." through
+ * (DOS/Rate#1513). Fails closed when commitlint cannot run, so no header is
+ * merged unchecked. `problems` holds commitlint's own lines.
+ */
+export function lintHeader(
+  header,
+  { cwd = REPO_ROOT, spawnFn = spawnSync } = {}
+) {
+  if (!existsSync(path.join(cwd, COMMITLINT_CLI))) {
+    return {
+      ok: false,
+      problems: [
+        `commitlint is not installed (${COMMITLINT_CLI}): run pnpm install`,
+      ],
+    };
+  }
+  const r = spawnFn(process.execPath, [COMMITLINT_CLI], {
+    cwd,
+    input: header,
+    encoding: 'utf8',
+  });
+  if (r.error || r.status === null) {
+    return { ok: false, problems: ['commitlint could not run'] };
+  }
+  if (r.status === 0) return { ok: true, problems: [] };
+  // commitlint prints "✖   <problem> [rule]" lines, coloured on a terminal.
+  // eslint-disable-next-line no-control-regex
+  const plain = `${r.stdout}\n${r.stderr}`.replace(/\u001b\[[0-9;]*m/g, '');
+  const problems = plain
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter((l) => /^✖\s+/.test(l) && !/found \d+ problems?/.test(l))
+    .map((l) => l.replace(/^✖\s+/, ''));
+  return {
+    ok: false,
+    problems:
+      problems.length > 0 ? problems : [`commitlint exited ${r.status}`],
+  };
+}
+
 /**
  * The squash commit's body, like GitHub's default (each commit as a list
  * item), with every line wrapped to the limit and the commits' co-author and
@@ -309,8 +359,10 @@ export async function mergeWhenGreen({
   ignore = [],
   intervalMs = 30_000,
   timeoutMs = 60 * 60_000,
+  lint = lintHeader,
 } = {}) {
   const deadline = Date.now() + timeoutMs;
+  const headerLints = new Map();
   let blockedPolls = 0;
   let apiErrors = 0;
   let mergeRefusals = 0;
@@ -354,11 +406,23 @@ export async function mergeWhenGreen({
           message: `PR ${number}: cannot --ignore required check(s) ${conflict.join(', ')}`,
         };
       }
-      if (method === 'squash' && !squashTitle(pr.title, number)) {
-        return {
-          ok: false,
-          message: `PR ${number}: its title must be a conventional header that fits "<title> (#${number})" in ${MAX_LINE} characters, so the squash commit passes commitlint`,
-        };
+      if (method === 'squash') {
+        const header = squashTitle(pr.title, number);
+        if (!header) {
+          return {
+            ok: false,
+            message: `PR ${number}: its title must be a conventional header that fits "<title> (#${number})" in ${MAX_LINE} characters, so the squash commit passes commitlint`,
+          };
+        }
+        // Linted once per header: the title is re-read each poll and may change.
+        if (!headerLints.has(header)) headerLints.set(header, lint(header));
+        const linted = headerLints.get(header);
+        if (!linted.ok) {
+          return {
+            ok: false,
+            message: `PR ${number}: commitlint rejects the squash header "${header}": ${linted.problems.join('; ')}`,
+          };
+        }
       }
     }
     const checks = evaluateChecks(head.runs, head.statuses, {
