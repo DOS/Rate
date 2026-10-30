@@ -1800,6 +1800,7 @@
     "modeSearchBtn": "Hledat produkty a parametry",
     "modeInspectBtn": "Vložit odkaz pro kontrolu falešných slev a důvěryhodnosti",
     "searchPlaceholder": "Hledat model, čipset (např. iPhone 16, Apple A18) nebo vložit odkaz Shopee...",
+    "searchPlaceholderShort": "Model nebo odkaz",
     "searchAriaLabel": "Hledat technologické produkty nebo vložit odkaz ke kontrole",
     "clearKeywordAria": "Vymazat klíčové slovo",
     "searchSubmitBtn": "Hledat",
