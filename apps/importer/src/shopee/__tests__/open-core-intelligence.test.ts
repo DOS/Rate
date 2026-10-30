@@ -1236,9 +1236,22 @@ async function runSuite() {
     ['Apple iPad mini (2026) Wi-Fi 128GB', 'apple:ipad-mini-8:128gb'],
     ['iPad mini 2026 128GB', 'apple:ipad-mini-8:128gb'],
     ['Apple iPad mini 8 Wi-Fi 128GB', 'apple:ipad-mini-8:128gb'],
-    // Another brand's "Flip 6" and a date after "Fold" are left alone.
+    // Another brand's "Flip 6" and a date after "Fold" are left alone, and so are the
+    // older "Galaxy Fold 2" and "Galaxy Flip 3" keys and the first "Galaxy Fold 5G".
     ['JBL Flip 6 tặng dây', 'jbl:flip-6:unknown'],
     ['Samsung Galaxy Fold 12/512GB/5G', 'samsung:galaxy-fold:512gb'],
+    ['Samsung Galaxy Fold 2 256GB', 'samsung:galaxy-fold-2:256gb'],
+    ['Samsung Galaxy Flip 3 128GB', 'samsung:galaxy-flip-3:128gb'],
+    ['Samsung Galaxy Fold 5G 512GB', 'samsung:galaxy-fold:512gb'],
+    // The model ends after the number and an "Ultra" or "FE".
+    ['Samsung Galaxy Z Fold 8 Xanh 256GB', 'samsung:galaxy-z-fold8:256gb'],
+    ['Samsung Galaxy Z Fold 8 7.6 inch 256GB', 'samsung:galaxy-z-fold8:256gb'],
+    ['Samsung Galaxy Z Flip 8 8 256GB', 'samsung:galaxy-z-flip8:256gb'],
+    ['Samsung Galaxy Z Fold 8 2026 256GB', 'samsung:galaxy-z-fold8:256gb'],
+    ['Samsung Galaxy Z Fold 8 Ultra Đen 512GB', 'samsung:galaxy-z-fold8-ultra:512gb'],
+    ['Samsung Galaxy Z Fold6 Silver Shadow 12GB 256GB', 'samsung:galaxy-z-fold6:256gb'],
+    ['Samsung Galaxy Z Fold 8, 256GB', 'samsung:galaxy-z-fold8:256gb'],
+    ['Apple iPad mini 2026k 64GB', 'apple:ipad-mini:64gb'],
     ['iPad mini (A17 Pro) Wi-Fi 128GB', 'apple:ipad-mini-7:128gb'],
   ] as const) {
     assert.equal(keyOf(title), key, title);
