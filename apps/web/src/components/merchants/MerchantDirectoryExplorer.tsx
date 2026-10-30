@@ -541,7 +541,10 @@ export default function MerchantDirectoryExplorer({
         <div className="col-md-3 col-6">
           <div className="card rounded-4 h-100 border bg-white p-3 shadow-sm">
             <div className="text-muted small">{labels.highTrustShops}</div>
-            <div className="fs-4 fw-bold text-primary d-flex align-items-center gap-2">
+            <div
+              className="fs-4 fw-bold text-primary d-flex align-items-center gap-2"
+              data-testid="merchant-safe-count"
+            >
               <BsShieldCheck />
               {summaryStats.safe}
             </div>
