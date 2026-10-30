@@ -16,7 +16,11 @@ import {
   type SupportedEcommercePlatform,
   type ValidatedScrapedProduct,
 } from './types.js';
-import { ProductNormalizer, UnkeyableProductTitleError } from './product-normalizer.js';
+import {
+  isAccessoryTitle,
+  ProductNormalizer,
+  UnkeyableProductTitleError,
+} from './product-normalizer.js';
 import {
   EntityMatcher,
   sanitizeHttpUrl,
@@ -529,8 +533,9 @@ export class ShopeeIngestionPipeline {
     // whose row is gone, the matcher throws it after the merchant upsert instead.
     const candidate = this.normalizer.normalize(product);
     // With a masterIdHint the title's key is not used; the matcher still rejects
-    // the candidate if the hint does not resolve.
-    if (candidate.keyable === false && !options.masterIdHint) {
+    // the candidate if the hint does not resolve. An accessory is rejected even with a
+    // hint: a crawl for a device's master also finds its cases (DOS/Rate#1505).
+    if (candidate.keyable === false && (!options.masterIdHint || isAccessoryTitle(product.title))) {
       throw new UnkeyableProductTitleError(product.title);
     }
 

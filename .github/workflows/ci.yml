@@ -59,7 +59,7 @@ jobs:
         run: node --test scripts/e2e/stale-stacks.test.mjs
 
       - name: Test the agent release scripts
-        run: node --test scripts/ops/merge-when-green.test.mjs scripts/ops/board.test.mjs scripts/ops/promote.test.mjs scripts/ops/verify-live.test.mjs scripts/ops/incident-report.test.mjs scripts/ops/warm-sitemap.test.mjs
+        run: node --test scripts/ops/merge-when-green.test.mjs scripts/ops/board.test.mjs scripts/ops/promote.test.mjs scripts/ops/verify-live.test.mjs scripts/ops/incident-report.test.mjs scripts/ops/warm-sitemap.test.mjs scripts/ops/rekey-dry-run.test.mjs
 
       - name: Replay rate migrations on PostgreSQL 17 (Docker)
         run: node scripts/test-migration-replay.mjs
@@ -155,6 +155,17 @@ jobs:
           path: |
             playwright-report/
             test-results/e2e/
+          retention-days: 7
+
+      # Light and dark screenshots of the main pages, for theme reviews
+      # (apps/web/e2e/theme-screenshots.spec.ts, DOS/Rate#1435).
+      - name: Upload theme screenshots
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: theme-screenshots
+          path: test-results/e2e/theme-screenshots/
+          if-no-files-found: ignore
           retention-days: 7
 
   # RATE_ITEM_MODEL=nullable_variant on the DOS-Me M0 + M1+M2 proposals (DOS/Rate#1159):

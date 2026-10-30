@@ -39,26 +39,26 @@
 
   &.is-good,
   &.is-high {
-    color: #6ee7b7;
+    color: var(--rate-ink-success);
     background-color: rgba(45, 186, 105, 0.14);
     border-color: rgba(45, 186, 105, 0.35);
   }
 
   &.is-medium {
-    color: #7dd3fc;
+    color: var(--rate-ink-info);
     background-color: rgba(56, 189, 248, 0.14);
     border-color: rgba(56, 189, 248, 0.32);
   }
 
   &.is-low,
   &.is-insufficient_data {
-    color: #fde68a;
+    color: var(--rate-ink-warning);
     background-color: rgba(251, 191, 36, 0.12);
     border-color: rgba(251, 191, 36, 0.3);
   }
 
   &.is-bad {
-    color: #fda4af;
+    color: var(--rate-ink-danger);
     background-color: rgba(244, 63, 94, 0.14);
     border-color: rgba(244, 63, 94, 0.32);
   }
@@ -88,11 +88,11 @@
   font-weight: 600;
 
   &.is-user {
-    color: #fcd34d;
+    color: var(--rate-ink-warning);
   }
 
   &.is-expert {
-    color: #a5b4fc;
+    color: var(--rate-ink-expert);
   }
 }
 
@@ -279,4 +279,58 @@
   .rate-phone-collapsible.is-collapsed > :nth-child(n + 4) {
     display: none;
   }
+}
+
+// Jump row under the price box (DOS/Rate#1469): one line of chips that
+// scrolls sideways on phones instead of wrapping.
+.rate-pdv-jumpnav {
+  display: flex;
+  gap: 0.5rem;
+  margin: 0 0 1.5rem;
+  overflow-x: auto;
+  scrollbar-width: none;
+
+  &::-webkit-scrollbar {
+    display: none;
+  }
+
+  // Phones: the chips run past the edge; a fade says the row scrolls.
+  @media (max-width: 767.98px) {
+    mask-image: linear-gradient(to right, #000 85%, transparent);
+  }
+
+  a {
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+    padding: 0 1rem;
+    border: 1px solid var(--rate-border-strong);
+    border-radius: 999px;
+    background: var(--rate-bg-surface);
+    color: var(--rate-fg-primary);
+    font-size: 0.875rem;
+    font-weight: 600;
+    text-decoration: none;
+    white-space: nowrap;
+
+    &:hover {
+      border-color: var(--rate-fg-primary);
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--rate-focus-ring);
+      outline-offset: 2px;
+    }
+  }
+}
+
+// The jump row's targets clear the sticky navbar (about 73px) when reached
+// by an anchor (DOS/Rate#1469).
+#offers-table,
+#pdv-price-history,
+#price-history-section,
+#specs-section,
+#jreviews-section {
+  scroll-margin-top: 5rem;
 }

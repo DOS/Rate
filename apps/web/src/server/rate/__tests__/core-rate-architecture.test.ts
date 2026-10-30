@@ -563,7 +563,8 @@ async function runCoreArchitectureSuite() {
     'earbuds'
   );
 
-  // Verify ProductDetailView places #specs-section (SECTION #1) before JReviewsSection (SECTION #2) and #offers-table (SECTION #3): specs before reviews (DOS/Rate#1436)
+  // ProductDetailView reads: sellers (#offers-table), then specs, then reviews
+  // (DOS/Rate#1436, #1469).
   const detailPagePath = path.resolve(
     __dirname,
     '../../../app/[locale]/smartphones/[slug]/page.tsx'
@@ -573,8 +574,8 @@ async function runCoreArchitectureSuite() {
   const idxSpecs = detailPageSrc.indexOf('id="specs-section"');
   const idxOffers = detailPageSrc.indexOf('id="offers-table"');
   assert.ok(
-    idxSpecs > 0 && idxJReviews > idxSpecs && idxOffers > idxJReviews,
-    'ProductDetailView must render #specs-section (Section #1) before <JReviewsSection /> (Section #2) and #offers-table (Section #3)'
+    idxOffers > 0 && idxSpecs > idxOffers && idxJReviews > idxSpecs,
+    'ProductDetailView must render #offers-table before #specs-section, and #specs-section before <JReviewsSection />'
   );
 
   console.log(
@@ -888,6 +889,27 @@ async function runCoreArchitectureSuite() {
     compareWorkspaceSrc.includes('handleCopyMarkdownReport') &&
       compareWorkspaceSrc.includes('popularBattles'),
     'CompareWorkspace must include 1-click Markdown Audit export and Popular 1v1 Battles Hub'
+  );
+  // The versus page scores the pair in its hero, so its workspace shows the
+  // matrix first, then the picker and other pairs, and no second summary
+  // (DOS/Rate#1473).
+  assert.ok(versusPageSrc1367.includes('layout="versus"'));
+  const versusLayout = compareWorkspaceSrc.slice(
+    compareWorkspaceSrc.indexOf("if (layout === 'versus')")
+  );
+  const versusReturn = versusLayout.slice(
+    0,
+    versusLayout.indexOf('{summaryBlock}')
+  );
+  assert.ok(
+    versusReturn.indexOf('{matrixBlock}') > 0 &&
+      versusReturn.indexOf('{matrixBlock}') <
+        versusReturn.indexOf('{controlsBlock}') &&
+      versusReturn.indexOf('{controlsBlock}') <
+        versusReturn.indexOf('{popularBlock}') &&
+      versusLayout.indexOf('{summaryBlock}') >
+        versusLayout.search(/\n {2}return \(/),
+    'versus: matrix, then picker, then popular pairs, no second summary'
   );
   const sitemapSrc = fs.readFileSync(
     path.join(repoRoot, 'apps/web/src/app/sitemap.ts'),
@@ -9047,6 +9069,44 @@ async function runCoreArchitectureSuite() {
     assert.equal(heroMerchants856[0]?.name, 'Store 0');
     assert.equal(heroMerchants856[0]?.trust_score, 100);
     assert.equal(heroMerchants856[0]?.dosafe_risk_score, 0);
+    // A store with no DOSafe score stays unknown in the hero dropdown, never 0
+    // (DOS/Rate#1479); a known 0 stays 0.
+    const heroUnknown1479 = toHeroMerchantSuggestions([
+      {
+        id: 'm-unknown',
+        name: 'No DOSafe',
+        platform: 'shopee',
+        platform_shop_id: 'shop-unknown',
+        is_official: false,
+        trust_score: 80,
+        dosafe_risk_score: 0,
+        dosafe_risk_known: false,
+      },
+      {
+        id: 'm-null',
+        name: 'Null DOSafe',
+        platform: 'shopee',
+        platform_shop_id: 'shop-null',
+        is_official: false,
+        trust_score: 80,
+        dosafe_risk_score: null,
+      },
+      {
+        id: 'm-zero',
+        name: 'Clean',
+        platform: 'shopee',
+        platform_shop_id: 'shop-zero',
+        is_official: false,
+        trust_score: 80,
+        dosafe_risk_score: 0,
+        dosafe_risk_known: true,
+      },
+    ]);
+    assert.deepEqual(
+      heroUnknown1479.map((m) => m.dosafe_risk_score),
+      [null, null, 0]
+    );
+    assert.equal('dosafe_risk_known' in heroUnknown1479[0]!, false);
 
     const heroProducts856 = toHeroProductSuggestions(
       Array.from({ length: MAX_HERO_PRODUCTS + 5 }, (_, idx) => ({
@@ -9618,7 +9678,8 @@ async function runCoreArchitectureSuite() {
               id: 'm-1',
               name: 'Shopee Mall',
               is_official: true,
-              risk_score: true as unknown as number,
+              // A real score: junk is no score, so no low-risk deal (#1484).
+              risk_score: 5,
               dosafe_risk_score: '90' as unknown as number,
               review_risk_score: false as unknown as number,
             },
@@ -11015,9 +11076,9 @@ async function runCoreArchitectureSuite() {
       },
     ]);
     assert.equal(radarFromMalformed.totalClustersAnalyzed, 1);
-    assert.equal(radarFromMalformed.genuineDeals.length, 1);
-    assert.equal(radarFromMalformed.genuineDeals[0]?.platform, 'shopee');
-    assert.equal(radarFromMalformed.genuineDeals[0]?.merchantName, 'SHOPEE');
+    // An offer with no seller has no score, so it is no low-risk deal
+    // (DOS/Rate#1484); the scored Tiki offer sits above the median.
+    assert.equal(radarFromMalformed.genuineDeals.length, 0);
 
     const emptySignal = dealsMod.computeProductRadarSignal(
       null as unknown as never,
@@ -11835,7 +11896,13 @@ async function runCoreArchitectureSuite() {
             price_current: 20_000_000,
             price_original: 22_000_000,
             url: 'javascript:alert(1)',
-            merchant: { id: 'm1', name: 'Shop A', is_official: true },
+            // A scored seller: no score is no low-risk deal (DOS/Rate#1484).
+            merchant: {
+              id: 'm1',
+              name: 'Shop A',
+              is_official: true,
+              risk_score: 5,
+            },
           } as never,
           {
             id: 'o2',
@@ -13552,13 +13619,17 @@ async function runCoreArchitectureSuite() {
       viewMerchant({ dosafe_risk_score: '  ' }).dosafe_risk_score,
       null
     );
-    assert.equal(viewMerchant({}).risk_score, 15);
+    // No DOSafe score and no stored review score: no combined risk, so no
+    // offer reads "trust 100%" from a 0 baseline (DOS/Rate#1484; was #685's 15).
+    assert.equal(viewMerchant({}).risk_score, null);
     // A stored review risk still wins over the baseline (#685).
     assert.equal(viewMerchant({ review_risk_score: 42 }).review_risk_score, 42);
     // A view row with no seller has no review baseline to show, but its trust
     // is never better than the baseline's.
     assert.equal(viewMerchant({ merchant_id: '' }).review_risk_score, null);
-    assert.equal(viewMerchant({ merchant_id: '' }).risk_score, 15);
+    // No DOSafe score and no stored review score: no combined risk, so no
+    // offer reads "trust 100%" from a 0 baseline (DOS/Rate#1484; was #685's 15).
+    assert.equal(viewMerchant({ merchant_id: '' }).risk_score, null);
 
     const rawMerchant = (merchants: unknown) =>
       mapOfferRowToMerchantOffer({
@@ -13613,7 +13684,9 @@ async function runCoreArchitectureSuite() {
     assert.equal(rawMerchant(null).dosafe_risk_score, null);
     assert.equal(rawMerchant(null).review_risk_score, null);
     // ...yet an unknown seller never ranks as more trusted than the baseline.
-    assert.equal(rawMerchant(null).risk_score, 15);
+    // No DOSafe score and no stored review score: no combined risk, so no
+    // offer reads "trust 100%" from a 0 baseline (DOS/Rate#1484; was #685's 15).
+    assert.equal(rawMerchant(null).risk_score, null);
 
     // The UI shows "-" and the CSV an empty cell for the same missing score.
     for (const v of [null, undefined, '', Number.NaN]) {
@@ -13684,6 +13757,8 @@ async function runCoreArchitectureSuite() {
       viewMerchant({ dosafe_risk_score: 0 }, 7).dosafe_risk_score,
       7
     );
+    // A known DOSafe score (metadata 7) keeps the seller scored; the review
+    // baseline stays a floor (DOS/Rate#1484).
     assert.equal(viewMerchant({ dosafe_risk_score: 0 }, 7).risk_score, 15);
     assert.equal(viewMerchant({}, 60).risk_score, 60);
     assert.equal(

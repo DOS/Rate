@@ -67,7 +67,7 @@ export default async function MerchantsDirectoryPage({
               'radial-gradient(circle at 18% 22%, rgba(216, 48, 48, 0.16), transparent 45%), radial-gradient(circle at 82% 18%, rgba(45, 186, 105, 0.14), transparent 42%), linear-gradient(180deg, #0f1113 0%, #141821 100%)',
             paddingTop: '3.5rem',
             paddingBottom: '3.75rem',
-            borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
+            borderBottom: '1px solid var(--rate-glass-border)',
           }}
         >
           <div className="position-relative z-1 container">
@@ -88,7 +88,10 @@ export default async function MerchantsDirectoryPage({
                   </h1>
                   <p
                     className="fs-6 mb-0"
-                    style={{ color: '#94a3b8', maxWidth: '760px' }}
+                    style={{
+                      color: 'var(--rate-fg-secondary)',
+                      maxWidth: '760px',
+                    }}
                   >
                     {t('dirHeroSubtitle')}
                   </p>

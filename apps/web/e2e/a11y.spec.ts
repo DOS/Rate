@@ -43,33 +43,40 @@ const VIEWPORTS = [
   { name: 'phone', width: 390, height: 844 },
 ];
 
-for (const viewport of VIEWPORTS) {
-  for (const { path, status = 200 } of PAGES) {
-    test(`no accessibility violations on ${path} (${viewport.name})`, async ({
-      page,
-    }) => {
-      // color-contrast checks every text node; the home page and the merchant
-      // directory render thousands, which takes longer than the 30s default.
-      test.setTimeout(120_000);
-      await page.setViewportSize({
-        width: viewport.width,
-        height: viewport.height,
+// Both themes, picked through the system setting the theme script follows
+// (DOS/Rate#1435).
+const THEMES = ['light', 'dark'] as const;
+
+for (const theme of THEMES) {
+  for (const viewport of VIEWPORTS) {
+    for (const { path, status = 200 } of PAGES) {
+      test(`no accessibility violations on ${path} (${viewport.name}, ${theme})`, async ({
+        page,
+      }) => {
+        // color-contrast checks every text node; the home page and the merchant
+        // directory render thousands, which takes longer than the 30s default.
+        test.setTimeout(120_000);
+        await page.emulateMedia({ colorScheme: theme });
+        await page.setViewportSize({
+          width: viewport.width,
+          height: viewport.height,
+        });
+        const res = await page.goto(path);
+        expect(res?.status()).toBe(status);
+        // Scan the hydrated page: effects add DOM after load.
+        await page.waitForLoadState('networkidle');
+        const { violations } = await new AxeBuilder({ page })
+          .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
+          .analyze();
+        const summary = violations.map(
+          (v) =>
+            `${v.impact} ${v.id}: ${v.nodes
+              .slice(0, 3)
+              .map((n) => n.target.join(' '))
+              .join(' | ')}`
+        );
+        expect(summary).toEqual([]);
       });
-      const res = await page.goto(path);
-      expect(res?.status()).toBe(status);
-      // Scan the hydrated page: effects add DOM after load.
-      await page.waitForLoadState('networkidle');
-      const { violations } = await new AxeBuilder({ page })
-        .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
-        .analyze();
-      const summary = violations.map(
-        (v) =>
-          `${v.impact} ${v.id}: ${v.nodes
-            .slice(0, 3)
-            .map((n) => n.target.join(' '))
-            .join(' | ')}`
-      );
-      expect(summary).toEqual([]);
-    });
+    }
   }
 }

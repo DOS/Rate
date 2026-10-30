@@ -7,6 +7,7 @@ import {
 } from '../security-guards.js';
 import { escapeHtml, t } from '../i18n.js';
 import type { ExtensionLookupData } from '../types.js';
+import { RateLimitRetry } from '../rate-limit.js';
 import {
   buildPillAriaLabel,
   resolvePillTheme,
@@ -222,12 +223,16 @@ function renderShadowTrustPill(lookup: ExtensionLookupData): void {
 // ignored (DOS/Rate#1300).
 let detectGeneration = 0;
 let lastProcessedSignature = '';
+// After a rate limit the same product is looked up again once the wait is over
+// (DOS/Rate#1466).
+const rateLimitRetry = new RateLimitRetry();
 
 async function inspectCurrentPage(): Promise<void> {
   requestAnimationFrame(async () => {
     const signal = extractProductSignalFromDom(document, window.location.href);
     if (!signal) {
       lastProcessedSignature = '';
+      rateLimitRetry.track('');
       removeTrustPillHost();
       return;
     }
@@ -235,6 +240,7 @@ async function inspectCurrentPage(): Promise<void> {
     const signature = `${signal.canonicalUrl}|${signal.selectedVariant || ''}|${signal.price || ''}`;
     if (signature === lastProcessedSignature) return;
     lastProcessedSignature = signature;
+    rateLimitRetry.track(signature);
     // Only the latest page's answer may draw or clear the pill: on a
     // single-page shop an earlier lookup can answer after a later one.
     const generation = ++detectGeneration;
@@ -243,9 +249,18 @@ async function inspectCurrentPage(): Promise<void> {
       const response = (await chrome.runtime.sendMessage({
         type: 'RATE_PRODUCT_DETECTED',
         signal,
-      })) as { ok?: boolean; data?: ExtensionLookupData | null };
+      })) as {
+        ok?: boolean;
+        data?: ExtensionLookupData | null;
+        status?: number | null;
+        retryAfterSeconds?: number;
+      };
 
       if (generation !== detectGeneration) return;
+      rateLimitRetry.after(signature, response, () => {
+        lastProcessedSignature = '';
+        void inspectCurrentPage();
+      });
       if (response?.ok && response.data) {
         renderShadowTrustPill(response.data);
       } else {

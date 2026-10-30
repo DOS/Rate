@@ -109,6 +109,9 @@
   "officialStore": {
     "message": "Oficiální"
   },
+  "offerCombinedRiskNoData": {
+    "message": "Celkové riziko: zatím bez dat"
+  },
   "offerCombinedRisk": {
     "message": "Celkové riziko: $SCORE$/100",
     "placeholders": {
@@ -166,8 +169,16 @@
   "lookupErrorTitle": {
     "message": "Vyhledání se nezdařilo"
   },
+  "lookupErrorRateLimitedWait": {
+    "message": "Vyhledáváte trochu rychle. Zkuste to znovu za $SECONDS$ s.",
+    "placeholders": {
+      "seconds": {
+        "content": "$1"
+      }
+    }
+  },
   "lookupErrorRateLimited": {
-    "message": "Vyhledáváte trochu rychle. Zkuste to znovu za pár minut."
+    "message": "Vyhledáváte trochu rychle. Zkuste to znovu za chvíli."
   },
   "lookupErrorServer": {
     "message": "Rate.vn má potíže. Zkuste to později."
@@ -346,6 +357,12 @@
         "content": "$1"
       }
     }
+  },
+  "noDataYet": {
+    "message": "Zatím bez dat"
+  },
+  "merchantTrustNoData": {
+    "message": "Důvěra: zatím bez dat"
   },
   "merchantTrust": {
     "message": "Důvěra $SCORE$/100",

@@ -109,6 +109,9 @@
   "officialStore": {
     "message": "Official"
   },
+  "offerCombinedRiskNoData": {
+    "message": "Combined risk: no data yet"
+  },
   "offerCombinedRisk": {
     "message": "Combined risk: $SCORE$/100",
     "placeholders": {
@@ -166,8 +169,16 @@
   "lookupErrorTitle": {
     "message": "Lookup failed"
   },
+  "lookupErrorRateLimitedWait": {
+    "message": "You are looking things up a little fast. Try again in $SECONDS$ s.",
+    "placeholders": {
+      "seconds": {
+        "content": "$1"
+      }
+    }
+  },
   "lookupErrorRateLimited": {
-    "message": "You are looking things up a little fast. Try again in a few minutes."
+    "message": "You are looking things up a little fast. Try again in a moment."
   },
   "lookupErrorServer": {
     "message": "Rate.vn is having trouble. Try again later."
@@ -346,6 +357,12 @@
         "content": "$1"
       }
     }
+  },
+  "noDataYet": {
+    "message": "No data yet"
+  },
+  "merchantTrustNoData": {
+    "message": "Trust: no data yet"
   },
   "merchantTrust": {
     "message": "Trust $SCORE$/100",

@@ -11,6 +11,7 @@ import { pickClientMessages } from '@/lib/client-messages';
 import { PAGE_META_CSP } from '@/lib/csp';
 import { fontFaces } from '@/lib/fonts';
 import { routing } from '@/lib/navigation';
+import { THEME_INIT_SCRIPT } from '@/lib/theme';
 import { defaultOpenGraph } from '@/lib/seo';
 
 // No locale is prerendered at build, which needs no database then. Each page
@@ -65,8 +66,13 @@ export default async function LocaleLayout({
     <html
       lang={locale}
       className={fontFaces.map((font) => font.variable).join(' ')}
+      // The theme script may set data-bs-theme before hydration (#1435).
+      suppressHydrationWarning
     >
       <head>
+        {/* Sets data-bs-theme before the body paints: the stored choice,
+        else prefers-color-scheme (DOS/Rate#1435). */}
+        <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
         {/* Not a header: see PAGE_META_CSP (DOS/Rate#1345). */}
         <meta httpEquiv="Content-Security-Policy" content={PAGE_META_CSP} />
       </head>

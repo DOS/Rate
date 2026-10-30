@@ -2,7 +2,10 @@
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
-import { hasReviewRiskEvidence } from '@/lib/merchant-risk-tone';
+import {
+  hasReviewRiskEvidence,
+  knownDosafeRiskScore,
+} from '@/lib/merchant-risk-tone';
 import { discountVerdictCopy } from '@/lib/discount-verdict-copy';
 import { Link, useRouter } from '@/lib/navigation';
 import { startNavigationProgress } from '@/components/elementary/NavigationProgress';
@@ -115,6 +118,17 @@ export default function HeroSearchInspector({
   const locale = useLocale();
   const radarIndex = useDealRadarIndex();
   const [mode, setMode] = useState<'search' | 'inspect'>('search');
+  // Phones get a hint short enough to read whole: the long one needs about
+  // 460px and the input has about 160px at 360 (DOS/Rate#1488). Wider
+  // screens, and the server render, keep the long hint with its examples.
+  const [narrowHint, setNarrowHint] = useState(false);
+  useEffect(() => {
+    const query = window.matchMedia('(max-width: 575.98px)');
+    const sync = () => setNarrowHint(query.matches);
+    sync();
+    query.addEventListener('change', sync);
+    return () => query.removeEventListener('change', sync);
+  }, []);
   const [query, setQuery] = useState('');
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(-1);
@@ -333,7 +347,9 @@ export default function HeroSearchInspector({
                   }}
                   onKeyDown={handleSearchKeyDown}
                   className="form-control fw-medium rounded-pill border-0 ps-2 shadow-none"
-                  placeholder={t('searchPlaceholder')}
+                  placeholder={t(
+                    narrowHint ? 'searchPlaceholderShort' : 'searchPlaceholder'
+                  )}
                   aria-label={t('searchAriaLabel')}
                   autoComplete="off"
                 />
@@ -586,14 +602,24 @@ export default function HeroSearchInspector({
                           )}
                         </div>
                         <div className="d-flex align-items-center small gap-2">
-                          <span className="badge bg-success-subtle text-success rounded-pill">
-                            {t('trustBadge', { score: m.trust_score })}
-                          </span>
+                          {m.trust_score == null ? (
+                            <span className="badge bg-light text-muted border rounded-pill">
+                              {t('trustBadgeNoData')}
+                            </span>
+                          ) : (
+                            <span className="badge bg-success-subtle text-success rounded-pill">
+                              {t('trustBadge', { score: m.trust_score })}
+                            </span>
+                          )}
                           <span
                             className="text-muted"
                             style={{ fontSize: '0.8125rem' }}
                           >
-                            {t('scamRiskShort', { score: m.dosafe_risk_score })}
+                            {knownDosafeRiskScore(m) == null
+                              ? t('scamRiskShortNoData')
+                              : t('scamRiskShort', {
+                                  score: knownDosafeRiskScore(m) ?? 0,
+                                })}
                           </span>
                         </div>
                       </Link>
@@ -823,12 +849,19 @@ export default function HeroSearchInspector({
                                 <BsCheckCircleFill className="text-success ms-1" />
                               )}
                             </div>
-                            <span className="badge bg-success rounded-pill text-white">
-                              {t('trustBadge', {
-                                score:
-                                  inspectResult.merchantProfile.trust_score,
-                              })}
-                            </span>
+                            {inspectResult.merchantProfile.trust_score ==
+                            null ? (
+                              <span className="badge bg-light text-muted border rounded-pill">
+                                {t('trustBadgeNoData')}
+                              </span>
+                            ) : (
+                              <span className="badge bg-success rounded-pill text-white">
+                                {t('trustBadge', {
+                                  score:
+                                    inspectResult.merchantProfile.trust_score,
+                                })}
+                              </span>
+                            )}
                           </div>
                         )}
 
@@ -890,11 +923,17 @@ export default function HeroSearchInspector({
                             {t('officialMallBadge')}
                           </span>
                         )}
-                        <span className="badge bg-success rounded-pill text-white">
-                          {t('trustBadge', {
-                            score: inspectResult.merchantProfile.trust_score,
-                          })}
-                        </span>
+                        {inspectResult.merchantProfile.trust_score == null ? (
+                          <span className="badge bg-light text-muted border rounded-pill">
+                            {t('trustBadgeNoData')}
+                          </span>
+                        ) : (
+                          <span className="badge bg-success rounded-pill text-white">
+                            {t('trustBadge', {
+                              score: inspectResult.merchantProfile.trust_score,
+                            })}
+                          </span>
+                        )}
                       </div>
                       <h2 className="h5 fw-bold mb-1">
                         <BsShop className="text-primary me-2" />
@@ -906,21 +945,31 @@ export default function HeroSearchInspector({
                       <div className="text-muted small">
                         {/* No analysed reviews: no review risk number
                             (DOS/Rate#1258). */}
-                        {hasReviewRiskEvidence(
-                          inspectResult.merchantProfile.review_risk_breakdown
-                        )
-                          ? t.rich('merchantRiskLine', {
-                              scam: inspectResult.merchantProfile
-                                .dosafe_risk_score,
-                              review:
-                                inspectResult.merchantProfile.review_risk_score,
-                              b: (chunks) => <strong>{chunks}</strong>,
-                            })
-                          : t.rich('merchantRiskLineNoReviews', {
-                              scam: inspectResult.merchantProfile
-                                .dosafe_risk_score,
-                              b: (chunks) => <strong>{chunks}</strong>,
-                            })}{' '}
+                        {/* No DOSafe score: no number either (DOS/Rate#1465). */}
+                        {(() => {
+                          const profile = inspectResult.merchantProfile;
+                          const scam = knownDosafeRiskScore(profile);
+                          const b = (chunks: React.ReactNode) => (
+                            <strong>{chunks}</strong>
+                          );
+                          if (
+                            hasReviewRiskEvidence(profile.review_risk_breakdown)
+                          ) {
+                            return scam == null
+                              ? t.rich('merchantRiskLineNoScam', {
+                                  review: profile.review_risk_score,
+                                  b,
+                                })
+                              : t.rich('merchantRiskLine', {
+                                  scam,
+                                  review: profile.review_risk_score,
+                                  b,
+                                });
+                          }
+                          return scam == null
+                            ? t.rich('merchantRiskLineNoData', { b })
+                            : t.rich('merchantRiskLineNoReviews', { scam, b });
+                        })()}{' '}
                         •{' '}
                         <strong>
                           {t('trackingProductsCount', {

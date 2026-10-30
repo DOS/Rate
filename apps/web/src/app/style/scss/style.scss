@@ -30,6 +30,7 @@ Default Style
 @use'custom';
 @use'product';
 @use'catalog';
+@use'theme';
 
 /* ----------------- Default Style: Typography Styles ----------------------- */
 body {
@@ -91,7 +92,7 @@ a {
 
   &:hover,
   &:focus {
-    color: var(--bs-primary);
+    color: var(--rate-crimson-text);
   }
 }
 
@@ -352,7 +353,7 @@ blockquote:not(:last-child) {
 .btn-outline-primary {
   background: var(--bs-body-bg);
   border-color: var(--bs-primary);
-  color: var(--bs-primary);
+  color: var(--rate-crimson-text);
 
   &:hover {
     background: var(--bs-primary) !important;
@@ -573,13 +574,13 @@ blockquote:not(:last-child) {
   &:hover {
     background: var(--bs-light) !important;
     border-color: var(--bs-light) !important;
-    color: var(--bs-primary) !important;
+    color: var(--rate-crimson-text) !important;
   }
 
   &:focus {
     background: var(--bs-light) !important;
     border-color: var(--bs-light) !important;
-    color: var(--bs-primary) !important;
+    color: var(--rate-crimson-text) !important;
   }
 }
 
@@ -1332,7 +1333,7 @@ table.table tr th {
 
 .btn-check+.btn:hover,
 .btn-check+.btn:focus {
-  color: var(--bs-primary);
+  color: var(--rate-crimson-text);
   cursor: pointer;
   background: var(--bs-primary-bg-subtle);
   border-color: var(--bs-primary-bg-subtle);
@@ -1593,7 +1594,7 @@ nav a:hover {
   margin: 10px 7px;
   display: none;
   float: right;
-  color: var(--bs-primary);
+  color: var(--rate-crimson-text);
   font-size: 13px;
   cursor: pointer;
   background: var(--bs-primary-bg-subtle);
@@ -1614,7 +1615,7 @@ nav a:hover {
   margin: 10px 0px;
   display: none;
   float: left;
-  color: var(--bs-primary);
+  color: var(--rate-crimson-text);
   background-color: transparent;
   font-size: 13px;
   cursor: pointer;
@@ -1687,12 +1688,12 @@ nav a:hover {
 }
 @media (max-width: 991.98px) {
   .navigation .nav-menu>li.active>a {
-   color: var( --bs-primary) !important;
+   color: var(--rate-crimson-text) !important;
   }
 }
 @media (max-width: 991.98px) {
   .navigation .nav-dropdown > li.active > a {
-    color: var( --bs-primary) !important;
+    color: var(--rate-crimson-text) !important;
   }
 }
 
@@ -1997,16 +1998,16 @@ nav a {
           border-bottom: 1px solid rgba(255, 255, 255, 0.1);
 
           &:hover {
-            color: var(--bs-primary);
+            color: var(--rate-crimson-text);
           }
 
           &:focus {
-            color: var(--bs-primary);
+            color: var(--rate-crimson-text);
           }
         }
 
         .active {
-          color: var(--bs-primary);
+          color: var(--rate-crimson-text);
 
           &:hover {
             color: var(--bs-white);
@@ -2131,13 +2132,13 @@ Intro Banner & Hero Header
   &:hover {
     background-color: var(--bs-primary-bg-subtle);
     border-color: var(--bs-primary-border-subtle);
-    color: var(--bs-primary);
+    color: var(--rate-crimson-text);
   }
 
   &:focus {
     background-color: var(--bs-primary-bg-subtle);
     border-color: var(--bs-primary-border-subtle);
-    color: var(--bs-primary);
+    color: var(--rate-crimson-text);
   }
 }
 
@@ -2237,7 +2238,7 @@ ListingHub Elements Styles
 .cluster div {
   text-align: center;
   font-size: 15px !important;
-  color: var(--bs-primary) ! important;
+  color: var(--rate-crimson-text) ! important;
   background: var(--bs-primary-bg-subtle);
   font-weight: 600;
   border-radius: 100%;
@@ -2414,15 +2415,15 @@ footer {
           font-weight: 400;
 
           &:hover {
-            color: var(--bs-primary);
+            color: var(--rate-crimson-text);
           }
 
           &:focus {
-            color: var(--bs-primary);
+            color: var(--rate-crimson-text);
           }
 
           &.active {
-            color: var(--bs-primary);
+            color: var(--rate-crimson-text);
           }
         }
 
@@ -2451,7 +2452,7 @@ footer {
           border-radius: 50%;
           font-size: 14px;
           background: var(--bs-primary-bg-subtle);
-          color: var(--bs-primary);
+          color: var(--rate-crimson-text);
           display: inline-flex;
           align-items: center;
           justify-content: center;
@@ -2504,7 +2505,7 @@ footer {
             font-size: 13px;
             background-color: var(--bs-primary-bg-subtle);
             border-color: var(--bs-primary-border-subtle);
-            color: var(--bs-primary);
+            color: var(--rate-crimson-text);
             transition: all ease 0.4s;
 
             &:hover {
@@ -2561,7 +2562,7 @@ footer {
 
         .icons {
           background: rgba(255, 255, 255, 0.05);
-          color: var(--bs-primary);
+          color: var(--rate-crimson-text);
         }
 
         .caps {
@@ -2596,19 +2597,19 @@ footer {
               &:hover {
                 background-color: var(--bs-white);
                 border-color: var(--bs-white);
-                color: var(--bs-primary);
+                color: #b42828;
               }
 
               &:focus {
                 background-color: var(--bs-white);
                 border-color: var(--bs-white);
-                color: var(--bs-primary);
+                color: #b42828;
               }
 
               &:active {
                 background-color: var(--bs-white);
                 border-color: var(--bs-white);
-                color: var(--bs-primary);
+                color: #b42828;
               }
             }
           }
@@ -2767,15 +2768,15 @@ Responsiveness Start
   .header.header-light.header-fixed .nav-menu>.active>a,
   .header.header-light.header-fixed .nav-menu>li:focus>a,
   .header.header-light.header-fixed .nav-menu>li:hover>a {
-    color: var(--bs-primary);
+    color: var(--rate-crimson-text);
   }
   .nav-dropdown >li:hover > a,
   .nav-dropdown >li.active >a{
-    color: var(--bs-primary) !important;
+    color: var(--rate-crimson-text) !important;
   }
   @media (max-width: 991.98px) {
     .navigation .nav-dropdown > li.active > a {
-      color: var(--bs-primary) !important;
+      color: var(--rate-crimson-text) !important;
     }
   }
 
@@ -3141,6 +3142,13 @@ Responsiveness Start
   justify-content: center;
   align-items: center;
   border-radius: 50%;
+
+  // A 44px tap area on touch screens, like the other touch targets
+  // (DOS/Rate#717, #1487).
+  @media (pointer: coarse) {
+    width: 44px;
+    height: 44px;
+  }
 
   .backIcon{
    color: var( --bs-white); 
