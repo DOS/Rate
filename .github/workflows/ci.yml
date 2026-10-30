@@ -59,7 +59,7 @@ jobs:
         run: node --test scripts/e2e/stale-stacks.test.mjs
 
       - name: Test the agent release scripts
-        run: node --test scripts/ops/merge-when-green.test.mjs scripts/ops/board.test.mjs scripts/ops/promote.test.mjs scripts/ops/verify-live.test.mjs scripts/ops/incident-report.test.mjs scripts/ops/warm-sitemap.test.mjs
+        run: node --test scripts/ops/merge-when-green.test.mjs scripts/ops/board.test.mjs scripts/ops/promote.test.mjs scripts/ops/verify-live.test.mjs scripts/ops/incident-report.test.mjs scripts/ops/warm-sitemap.test.mjs scripts/ops/rekey-dry-run.test.mjs
 
       - name: Replay rate migrations on PostgreSQL 17 (Docker)
         run: node scripts/test-migration-replay.mjs
