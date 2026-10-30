@@ -143,6 +143,7 @@ async function main() {
   await directoryReadsReviewsForStoredScores();
   await offerSellersWithoutReviewsReadAsNoData();
   await combinedColumnIsNotReviewRisk();
+  await publicOffersSayNoneWithoutReviews();
 
   console.warn('  ✅ merchant review risk suite passed');
 }
@@ -486,6 +487,109 @@ async function combinedColumnIsNotReviewRisk() {
     persistedReviewRiskOf({ ...merchantRow, review_risk_breakdown: measured }),
     28
   );
+}
+
+// Public offers carry the seller's review risk as every merchant surface does:
+// null with no analysed review, the review-only score with some (#1376).
+async function publicOffersSayNoneWithoutReviews() {
+  const { mapTrustViewRowToMerchantOffer, mapOfferRowToMerchantOffer } =
+    await import('../rate-api');
+  const { withPublicOfferReviewRisk } =
+    await import('../../server/rate/api-handler');
+  const noReviews = {
+    combined_risk_score: 42,
+    review_risk_score: 15,
+    total_reviews: 0,
+    authentic_count: 0,
+  };
+  const measured = { ...noReviews, review_risk_score: 28, total_reviews: 40 };
+  const row = {
+    id: 'o1',
+    merchant_id: 'm1',
+    platform: 'shopee',
+    title: 'Phone',
+    price_current: 1_000_000,
+    url: 'https://shopee.vn/p',
+    merchant_name: 'Shop',
+    merchant_is_official: false,
+    price_original: null,
+    stock: 1,
+    rating_star: 5,
+    rating_count: 1,
+  };
+  // The trust view (the live read) and the merchants fallback alike.
+  const viewOffer = mapTrustViewRowToMerchantOffer(
+    { ...row, review_risk_score: 42, review_risk_breakdown: noReviews },
+    0
+  );
+  assert.equal(
+    withPublicOfferReviewRisk(viewOffer).merchant.review_risk_score,
+    null,
+    'a seller with total_reviews 0 has no review risk'
+  );
+  const fallbackOffer = mapOfferRowToMerchantOffer({
+    id: 'o2',
+    platform: 'shopee',
+    title: 'Phone',
+    price_current: 1_000_000,
+    url: 'https://shopee.vn/p',
+    merchants: {
+      id: 'm2',
+      name: 'Shop',
+      platform: 'shopee',
+      review_risk_score: 42,
+      review_risk_breakdown: noReviews,
+      metadata: {},
+    },
+  } as unknown as Parameters<typeof mapOfferRowToMerchantOffer>[0]);
+  assert.equal(
+    withPublicOfferReviewRisk(fallbackOffer).merchant.review_risk_score,
+    null
+  );
+  // A never-scored seller gets a baseline that counts no review: null too.
+  const unscored = mapTrustViewRowToMerchantOffer(
+    { ...row, review_risk_score: 0, review_risk_breakdown: {} },
+    0
+  );
+  assert.equal(
+    withPublicOfferReviewRisk(unscored).merchant.review_risk_score,
+    null,
+    'a baseline is no measurement'
+  );
+  // Measured reviews keep the review-only score; the rest of the offer stays.
+  const measuredOffer = withPublicOfferReviewRisk(
+    mapTrustViewRowToMerchantOffer(
+      { ...row, review_risk_score: 42, review_risk_breakdown: measured },
+      0
+    )
+  );
+  assert.equal(measuredOffer.merchant.review_risk_score, 28);
+  assert.equal(measuredOffer.merchant.risk_score, 42);
+  assert.equal(measuredOffer.price_current, 1_000_000);
+  // An offer with no seller passes through.
+  const sellerless = { id: 'o3', merchant: null };
+  assert.equal(withPublicOfferReviewRisk(sellerless), sellerless);
+
+  // Every public route that returns offers passes them through it.
+  const { readFileSync } = await import('node:fs');
+  const { dirname, join } = await import('node:path');
+  const { fileURLToPath } = await import('node:url');
+  const apiDir = join(
+    dirname(fileURLToPath(import.meta.url)),
+    '../../app/api/v1/rate'
+  );
+  for (const route of [
+    'products/[slug]/route.ts',
+    'item-size/[slug]/route.ts',
+    'inspect/route.ts',
+    'extension/lookup/route.ts',
+  ]) {
+    assert.match(
+      readFileSync(join(apiDir, route), 'utf8'),
+      /\.map\(withPublicOfferReviewRisk\)/,
+      `${route} returns offers through withPublicOfferReviewRisk`
+    );
+  }
 }
 
 main().catch((err) => {

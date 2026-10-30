@@ -17,6 +17,7 @@ import {
   parseBoundedStringParam,
   parseOptionalVndPriceParam,
   resolveInspectObservedPrices,
+  withPublicOfferReviewRisk,
 } from '@/server/rate/api-handler';
 
 export async function OPTIONS() {
@@ -108,6 +109,11 @@ export async function GET(request: NextRequest) {
         ok: true,
         data: {
           ...inspection,
+          // A seller with no analysed review has no review risk (#1376).
+          matchedOffer: inspection.matchedOffer
+            ? withPublicOfferReviewRisk(inspection.matchedOffer)
+            : null,
+          allOffers: inspection.allOffers.map(withPublicOfferReviewRisk),
           merchantProfile: inspection.merchantProfile
             ? withPublicReviewRisk(inspection.merchantProfile)
             : null,

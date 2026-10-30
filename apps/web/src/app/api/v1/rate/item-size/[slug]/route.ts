@@ -3,6 +3,7 @@ import { loadItemSizePanel } from '@/server/rate/item-page';
 import {
   PUBLIC_API_CORS_HEADERS,
   jsonApiError,
+  withPublicOfferReviewRisk,
 } from '@/server/rate/api-handler';
 
 // Cached like the product pages: the route reads nothing from the request but
@@ -45,7 +46,11 @@ export async function GET(_request: Request, context: RouteContext) {
       );
     }
     return NextResponse.json(
-      { ok: true, data },
+      {
+        ok: true,
+        // A seller with no analysed review has no review risk (#1376).
+        data: { ...data, offers: data.offers.map(withPublicOfferReviewRisk) },
+      },
       {
         status: 200,
         headers: {
