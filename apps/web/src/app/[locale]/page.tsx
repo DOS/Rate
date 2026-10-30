@@ -203,13 +203,13 @@ export default async function Home({
 
         {/* Hero Section with Interactive Autocomplete & E-commerce Link Inspector (DESIGN.md v2.0 Dark Obsidian + DOS Crimson Glow) */}
         <div
-          className="hero-header rate-ink-on-dark position-relative overflow-hidden"
+          className="hero-header rate-surface-dark rate-ink-on-dark position-relative overflow-hidden"
           style={{
             background:
               'radial-gradient(circle at 20% 20%, rgba(216, 48, 48, 0.16), transparent 45%), radial-gradient(circle at 80% 15%, rgba(99, 102, 241, 0.14), transparent 42%), linear-gradient(180deg, #0f1113 0%, #141821 100%)',
             paddingTop: '4.5rem',
             paddingBottom: '5rem',
-            borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
+            borderBottom: '1px solid var(--rate-glass-border)',
           }}
         >
           <div className="position-relative z-1 container">
@@ -219,9 +219,9 @@ export default async function Home({
                   <div
                     className="d-inline-flex align-items-center rounded-pill small fw-semibold mb-3 gap-2 px-3 py-2"
                     style={{
-                      backgroundColor: 'rgba(255, 255, 255, 0.06)',
-                      border: '1px solid rgba(255, 255, 255, 0.14)',
-                      color: '#f8fafc',
+                      backgroundColor: 'var(--rate-glass-bg)',
+                      border: '1px solid var(--rate-glass-border)',
+                      color: 'var(--rate-fg-primary)',
                       backdropFilter: 'blur(12px)',
                     }}
                   >
@@ -243,7 +243,7 @@ export default async function Home({
                         background:
                           'linear-gradient(135deg, rgba(216, 48, 48, 0.22), rgba(225, 29, 72, 0.12))',
                         border: '1px solid rgba(216, 48, 48, 0.45)',
-                        color: '#ff6b6b',
+                        color: 'var(--rate-crimson-text)',
                       }}
                     >
                       {tRate('home.heroTitleHighlight')}
@@ -253,7 +253,7 @@ export default async function Home({
                   <p
                     className="fs-5 mb-0"
                     style={{
-                      color: '#94a3b8',
+                      color: 'var(--rate-fg-secondary)',
                       maxWidth: '780px',
                       margin: '0 auto',
                     }}
@@ -287,19 +287,25 @@ export default async function Home({
                     <div
                       className="rounded-4 h-100 p-3 text-white"
                       style={{
-                        backgroundColor: 'rgba(22, 25, 30, 0.78)',
-                        border: '1px solid rgba(255, 255, 255, 0.08)',
+                        backgroundColor: 'var(--rate-glass-bg)',
+                        border: '1px solid var(--rate-glass-border)',
                         backdropFilter: 'blur(12px)',
                         fontVariantNumeric: 'tabular-nums',
                       }}
                     >
                       <div
                         className="fw-bold fs-4"
-                        style={{ color: '#ff6b6b', letterSpacing: '-0.02em' }}
+                        style={{
+                          color: 'var(--rate-crimson-text)',
+                          letterSpacing: '-0.02em',
+                        }}
                       >
                         {platformStats.masterProductsCount}
                       </div>
-                      <div className="small" style={{ color: '#94a3b8' }}>
+                      <div
+                        className="small"
+                        style={{ color: 'var(--rate-fg-secondary)' }}
+                      >
                         {tRate('home.statProducts')}
                       </div>
                     </div>
@@ -308,19 +314,25 @@ export default async function Home({
                     <div
                       className="rounded-4 h-100 p-3 text-white"
                       style={{
-                        backgroundColor: 'rgba(22, 25, 30, 0.78)',
-                        border: '1px solid rgba(255, 255, 255, 0.08)',
+                        backgroundColor: 'var(--rate-glass-bg)',
+                        border: '1px solid var(--rate-glass-border)',
                         backdropFilter: 'blur(12px)',
                         fontVariantNumeric: 'tabular-nums',
                       }}
                     >
                       <div
                         className="fw-bold fs-4"
-                        style={{ color: '#38bdf8', letterSpacing: '-0.02em' }}
+                        style={{
+                          color: 'var(--rate-ink-info)',
+                          letterSpacing: '-0.02em',
+                        }}
                       >
                         {platformStats.priceObservationsCount}
                       </div>
-                      <div className="small" style={{ color: '#94a3b8' }}>
+                      <div
+                        className="small"
+                        style={{ color: 'var(--rate-fg-secondary)' }}
+                      >
                         {tRate('home.statPricePoints')}
                       </div>
                     </div>
@@ -329,19 +341,25 @@ export default async function Home({
                     <div
                       className="rounded-4 h-100 p-3 text-white"
                       style={{
-                        backgroundColor: 'rgba(22, 25, 30, 0.78)',
-                        border: '1px solid rgba(255, 255, 255, 0.08)',
+                        backgroundColor: 'var(--rate-glass-bg)',
+                        border: '1px solid var(--rate-glass-border)',
                         backdropFilter: 'blur(12px)',
                         fontVariantNumeric: 'tabular-nums',
                       }}
                     >
                       <div
                         className="fw-bold fs-4"
-                        style={{ color: '#2dba69', letterSpacing: '-0.02em' }}
+                        style={{
+                          color: 'var(--rate-ink-success)',
+                          letterSpacing: '-0.02em',
+                        }}
                       >
                         {platformStats.totalReviewsCount}
                       </div>
-                      <div className="small" style={{ color: '#94a3b8' }}>
+                      <div
+                        className="small"
+                        style={{ color: 'var(--rate-fg-secondary)' }}
+                      >
                         {tRate('home.statReviews')}
                       </div>
                     </div>
@@ -350,19 +368,25 @@ export default async function Home({
                     <div
                       className="rounded-4 h-100 p-3 text-white"
                       style={{
-                        backgroundColor: 'rgba(22, 25, 30, 0.78)',
-                        border: '1px solid rgba(255, 255, 255, 0.08)',
+                        backgroundColor: 'var(--rate-glass-bg)',
+                        border: '1px solid var(--rate-glass-border)',
                         backdropFilter: 'blur(12px)',
                         fontVariantNumeric: 'tabular-nums',
                       }}
                     >
                       <div
                         className="fw-bold fs-4"
-                        style={{ color: '#f8fafc', letterSpacing: '-0.02em' }}
+                        style={{
+                          color: 'var(--rate-fg-primary)',
+                          letterSpacing: '-0.02em',
+                        }}
                       >
                         {platformStats.merchantsCount}
                       </div>
-                      <div className="small" style={{ color: '#94a3b8' }}>
+                      <div
+                        className="small"
+                        style={{ color: 'var(--rate-fg-secondary)' }}
+                      >
                         {tRate('home.statMerchants')}
                       </div>
                     </div>

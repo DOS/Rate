@@ -118,14 +118,14 @@ export default async function ProductLeaderboardBadges({
     <div
       className="d-flex align-items-center mt-3 flex-wrap gap-2 pt-3"
       style={{
-        borderTop: '1px solid rgba(255,255,255,0.09)',
+        borderTop: '1px solid var(--rate-glass-border)',
       }}
     >
       <span
         className="d-inline-flex align-items-center fw-semibold gap-1"
         style={{
           fontSize: '0.8125rem',
-          color: '#cbd5e1',
+          color: 'var(--rate-fg-paragraph)',
           letterSpacing: '0.02em',
         }}
       >
@@ -158,7 +158,11 @@ export default async function ProductLeaderboardBadges({
                 : isCombined
                   ? '1px solid rgba(56,189,248,0.38)'
                   : '1px solid rgba(45, 186, 105, 0.35)',
-              color: isFirst ? '#fde68a' : isCombined ? '#7dd3fc' : '#6ee7b7',
+              color: isFirst
+                ? 'var(--rate-ink-warning)'
+                : isCombined
+                  ? 'var(--rate-ink-info)'
+                  : 'var(--rate-ink-success)',
             }}
           >
             {isFirst ? (

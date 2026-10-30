@@ -67,6 +67,11 @@
   --rate-risk-danger: #f43f5e;
   --rate-risk-danger-bg: #fff1f2;
   --rate-fg-paragraph: #334155;
+  // Translucent panels on heroes (stats, badges) and their outline.
+  --rate-glass-bg: rgba(255, 255, 255, 0.75);
+  --rate-glass-border: #e2e8f0;
+  // Indigo text for expert scores: 6.3:1 on white.
+  --rate-ink-expert: #4f46e5;
   // Buttons use a small corner radius (no pill buttons)
   --rate-radius-btn: 8px;
   // Smallest UI text size (labels, chips, captions)
@@ -132,6 +137,9 @@
   --rate-fg-muted: #64748b;
   --rate-fg-paragraph: #cbd5e1;
   --rate-brand-bg: rgba(216, 48, 48, 0.14);
+  --rate-glass-bg: rgba(255, 255, 255, 0.05);
+  --rate-glass-border: rgba(255, 255, 255, 0.12);
+  --rate-ink-expert: #a5b4fc;
   --rate-score-user-bg: rgba(45, 186, 105, 0.14);
   --rate-score-expert-bg: rgba(99, 102, 241, 0.14);
   --rate-score-star-bg: rgba(245, 158, 11, 0.14);
@@ -395,7 +403,7 @@
     text-decoration: none;
 
     &:hover {
-      color: var(--rate-brand);
+      color: var(--rate-crimson-text);
     }
 
     // The line clamp needs overflow: hidden, so draw the ring inside.
@@ -408,7 +416,7 @@
 .rate-product-card-verified {
   margin-left: 0.3rem;
   font-size: 0.875rem;
-  color: var(--rate-brand);
+  color: var(--rate-crimson-text);
   vertical-align: -0.1em;
 }
 
@@ -579,7 +587,7 @@
   width: 2.75rem;
   height: 2.75rem;
   font-size: 1.375rem;
-  color: var(--rate-brand);
+  color: var(--rate-crimson-text);
   background-color: var(--rate-brand-bg);
   border-radius: 10px;
 }
@@ -616,7 +624,7 @@
   margin-top: auto;
   font-size: 0.875rem;
   font-weight: 600;
-  color: var(--rate-brand);
+  color: var(--rate-crimson-text);
   transition: gap 0.15s ease;
 }
 
@@ -773,7 +781,7 @@
   }
 
   &.is-bad svg {
-    color: var(--rate-brand);
+    color: var(--rate-crimson-text);
   }
 }
 

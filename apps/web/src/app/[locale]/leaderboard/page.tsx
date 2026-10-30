@@ -172,7 +172,7 @@ export default async function LeaderboardPage({ params }: PageProps) {
       <PageShell locale={locale}>
         <div
           style={{
-            background: '#f8fafc',
+            background: 'var(--rate-bg-canvas)',
             minHeight: '100vh',
             paddingBottom: '72px',
           }}
@@ -186,13 +186,13 @@ export default async function LeaderboardPage({ params }: PageProps) {
 
           {/* DESIGN.md v3.0 Dark Obsidian Hero */}
           <section
-            className="rate-ink-on-dark"
+            className="rate-surface-dark rate-ink-on-dark"
             style={{
               background:
                 'linear-gradient(135deg, #0b0d10 0%, #12151a 60%, #191d24 100%)',
-              color: '#f8fafc',
+              color: 'var(--rate-fg-primary)',
               padding: '40px 0 36px',
-              borderBottom: '1px solid rgba(255,255,255,0.08)',
+              borderBottom: '1px solid var(--rate-glass-border)',
             }}
           >
             <div className="container">
@@ -205,7 +205,7 @@ export default async function LeaderboardPage({ params }: PageProps) {
                     <Link
                       href="/"
                       className="text-decoration-none"
-                      style={{ color: '#94a3b8' }}
+                      style={{ color: 'var(--rate-fg-secondary)' }}
                     >
                       {copy.home}
                     </Link>
@@ -213,7 +213,7 @@ export default async function LeaderboardPage({ params }: PageProps) {
                   <li
                     className="breadcrumb-item active"
                     aria-current="page"
-                    style={{ color: '#f8fafc', fontWeight: 600 }}
+                    style={{ color: 'var(--rate-fg-primary)', fontWeight: 600 }}
                   >
                     {copy.breadcrumb}
                   </li>
@@ -227,7 +227,7 @@ export default async function LeaderboardPage({ params }: PageProps) {
                     style={{
                       background: 'rgba(216, 48, 48, 0.14)',
                       border: '1px solid rgba(216, 48, 48, 0.35)',
-                      color: '#ff6b66',
+                      color: 'var(--rate-crimson-text)',
                       fontSize: '0.8125rem',
                       fontWeight: 700,
                       letterSpacing: '0.06em',
@@ -242,7 +242,7 @@ export default async function LeaderboardPage({ params }: PageProps) {
                     style={{
                       fontSize: 'clamp(1.75rem, 3vw, 2.5rem)',
                       letterSpacing: '-0.02em',
-                      color: '#ffffff',
+                      color: 'var(--rate-fg-primary)',
                     }}
                   >
                     {copy.title}
@@ -250,7 +250,7 @@ export default async function LeaderboardPage({ params }: PageProps) {
                   <p
                     className="mb-0"
                     style={{
-                      color: '#94a3b8',
+                      color: 'var(--rate-fg-secondary)',
                       fontSize: '15px',
                       maxWidth: '740px',
                       lineHeight: 1.6,
@@ -264,8 +264,8 @@ export default async function LeaderboardPage({ params }: PageProps) {
                   <div
                     className="rounded-4 p-3"
                     style={{
-                      background: 'rgba(255,255,255,0.04)',
-                      border: '1px solid rgba(255,255,255,0.1)',
+                      background: 'var(--rate-glass-bg)',
+                      border: '1px solid var(--rate-glass-border)',
                     }}
                   >
                     <div className="row g-2 mb-3 text-center">
@@ -274,14 +274,17 @@ export default async function LeaderboardPage({ params }: PageProps) {
                           className="fw-bold"
                           style={{
                             fontSize: '20px',
-                            color: '#38bdf8',
+                            color: 'var(--rate-ink-info)',
                             fontFamily: 'var(--font-mono, monospace)',
                           }}
                         >
                           {products.length}
                         </div>
                         <div
-                          style={{ fontSize: '0.8125rem', color: '#94a3b8' }}
+                          style={{
+                            fontSize: '0.8125rem',
+                            color: 'var(--rate-fg-secondary)',
+                          }}
                         >
                           {copy.statProducts}
                         </div>
@@ -291,14 +294,17 @@ export default async function LeaderboardPage({ params }: PageProps) {
                           className="fw-bold"
                           style={{
                             fontSize: '20px',
-                            color: '#34d399',
+                            color: 'var(--rate-ink-success)',
                             fontFamily: 'var(--font-mono, monospace)',
                           }}
                         >
                           5
                         </div>
                         <div
-                          style={{ fontSize: '0.8125rem', color: '#94a3b8' }}
+                          style={{
+                            fontSize: '0.8125rem',
+                            color: 'var(--rate-fg-secondary)',
+                          }}
                         >
                           {copy.statCategories}
                         </div>
@@ -308,14 +314,17 @@ export default async function LeaderboardPage({ params }: PageProps) {
                           className="fw-bold"
                           style={{
                             fontSize: '20px',
-                            color: '#fbbf24',
+                            color: 'var(--rate-ink-warning)',
                             fontFamily: 'var(--font-mono, monospace)',
                           }}
                         >
                           8
                         </div>
                         <div
-                          style={{ fontSize: '0.8125rem', color: '#94a3b8' }}
+                          style={{
+                            fontSize: '0.8125rem',
+                            color: 'var(--rate-fg-secondary)',
+                          }}
                         >
                           {copy.statCriteria}
                         </div>
@@ -327,7 +336,7 @@ export default async function LeaderboardPage({ params }: PageProps) {
                         className="badge rounded-pill"
                         style={{
                           background: 'rgba(45, 186, 105, 0.15)',
-                          color: '#34d399',
+                          color: 'var(--rate-ink-success)',
                           fontSize: '0.8125rem',
                         }}
                       >
