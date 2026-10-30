@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="vi" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="color-scheme" content="dark" />
+  <title>Mở rộng danh mục điện thoại đời mới</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0f1113;
+      --surface: #161a1e;
+      --surface-2: #1d2228;
+      --border: #2a313a;
+      --text: #e8edf2;
+      --muted: #9ba5b0;
+      --accent: #FF2E29;
+      --accent-soft: rgba(255, 46, 41, 0.14);
+      --green: #22c55e;
+      --amber: #f59e0b;
+      --amber-soft: rgba(245, 158, 11, 0.14);
+      --code-bg: #0b0d0f;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 32px 16px 64px;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Inter, sans-serif;
+      line-height: 1.65;
+    }
+    .container { max-width: 960px; margin: 0 auto; }
+    h1 { font-size: 28px; margin: 12px 0 8px; letter-spacing: -0.02em; }
+    h2 { font-size: 20px; margin: 40px 0 12px; padding-bottom: 8px; border-bottom: 1px solid var(--border); color: #fff; }
+    p, li { color: var(--text); }
+    .muted { color: var(--muted); }
+    .badge { display: inline-block; padding: 4px 10px; border-radius: 6px; font-size: 12px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; }
+    .badge-accent { background: var(--accent-soft); color: var(--accent); border: 1px solid rgba(255,46,41,0.35); }
+    .badge-amber { background: var(--amber-soft); color: var(--amber); border: 1px solid rgba(245,158,11,0.35); }
+    .card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 16px 18px; margin: 14px 0; }
+    .card.warn { border-color: rgba(245,158,11,0.45); }
+    .table-wrap { overflow-x: auto; margin: 12px 0; }
+    table { width: 100%; border-collapse: collapse; font-size: 14px; min-width: 620px; }
+    th, td { border: 1px solid var(--border); padding: 8px 10px; text-align: left; vertical-align: top; }
+    th { background: var(--surface-2); color: #fff; }
+    code { background: var(--code-bg); border: 1px solid var(--border); border-radius: 4px; padding: 1px 5px; font-size: 13px; overflow-wrap: anywhere; }
+    .q { border-left: 3px solid var(--accent); padding-left: 12px; margin: 16px 0; }
+    .q strong { color: #fff; }
+    .rec-line { color: var(--green); font-weight: 600; }
+    a { color: #ff6b66; }
+  </style>
+</head>
+<body>
+<div class="container">
+  <span class="badge badge-accent">Đề xuất</span>
+  <span class="badge badge-amber">Cần JOY quyết định</span>
+  <h1>Mở rộng danh mục: điện thoại đời mới</h1>
+  <p class="muted">Ngày 30/10/2026. Người soạn: Core (Rate). Chỉ tìm hiểu, không đọc và không ghi database. Bản tiếng Anh: <code>2026-10-30-catalog-expansion.md</code>.</p>
+
+  <h2>1. Vì sao chưa thấy iPhone 18, 18 Pro Max</h2>
+  <p>rate.vn đang xuất bản 16 sản phẩm. Điện thoại gồm iPhone 15, 16, 16 Plus, 16 Pro Max, 16e, 18 Pro 256GB, 18 Pro Max 256GB và Galaxy S24 Ultra. Galaxy S26 Ultra đã có nhưng còn ở trạng thái nháp (RS#762).</p>
+  <p>Có ba chỗ hở:</p>
+  <ul>
+    <li><strong>Mỗi dòng máy chỉ được tạo một dung lượng.</strong> Ví dụ iPhone 18 Pro Max chỉ có bản 256GB, trong khi máy bán cả 256GB, 512GB, 1TB và 2TB.</li>
+    <li><strong>Dòng iPhone 17 chưa có trong danh sách tạo sẵn.</strong> Đây là dòng bán chạy nhất năm 2026.</li>
+    <li><strong>Sản phẩm tạo sẵn nằm ở trạng thái nháp</strong> và chưa có bước nào tự đưa nó lên trang khi đã có giá.</li>
+  </ul>
+
+  <h2>2. Nên thêm gì, xếp theo nhu cầu</h2>
+  <p class="muted">Thứ hạng dựa trên doanh số toàn cầu (Counterpoint: iPhone 17 bán chạy nhất thế giới quý 1 và quý 2/2026; Galaxy S26 Ultra là máy Android bán chạy nhất quý 2) và tin bán lẻ Việt Nam (iPhone 17 luôn nằm trong top bán chạy ở CellphoneS, Thế Giới Di Động, FPT Shop; S26 Ultra được quan tâm mạnh khi ra mắt). Đây không phải số liệu riêng Việt Nam, nên sau lần crawl đầu sẽ đối chiếu lại bằng số listing RS tìm được.</p>
+  <div class="table-wrap">
+  <table>
+    <tr><th>Nhóm</th><th>Dòng máy</th><th>Dung lượng cần tạo</th><th>Ghi chú</th></tr>
+    <tr><td>A1</td><td>iPhone 17, 17 Pro, 17 Pro Max</td><td>17: 256GB, 512GB. 17 Pro: 256GB, 512GB, 1TB. 17 Pro Max: 256GB, 512GB, 1TB, 2TB</td><td>Bán chạy nhất 2026, hiện chưa có trong danh sách tạo sẵn.</td></tr>
+    <tr><td>A2</td><td>iPhone 18 Pro, 18 Pro Max</td><td>256GB, 512GB, 1TB, 2TB (cả hai)</td><td>Bán tại Việt Nam từ 18/9/2026. Giá ra mắt của 18 Pro Max: 41.999.000đ, 48.499.000đ, 61.499.000đ và 80.999.000đ. Hiện mới có bản 256GB.</td></tr>
+    <tr><td>A3</td><td>Galaxy S26 Ultra, S26+, S26</td><td>Ultra: 256GB, 512GB, 1TB. S26+ và S26: 256GB, 512GB</td><td>Ultra đang là bản nháp (RS#762). S26 và S26+ chưa có.</td></tr>
+    <tr><td>B1</td><td>iPhone Duo (màn gập)</td><td>256GB, 512GB, 1TB, 2TB</td><td>Ra mắt 9/2026, từ 64.999.000đ. Bán ít nhưng được tìm nhiều.</td></tr>
+    <tr><td>B2</td><td>iPhone Air, iPhone 17e</td><td>Air: 256GB, 512GB, 1TB. 17e: kiểm lại trên trang chuỗi bán lẻ</td><td>Kiểm lại dung lượng và tình trạng bán tại Việt Nam trước khi tạo.</td></tr>
+    <tr><td>B3</td><td>Galaxy Z Fold8, Z Flip8</td><td>Fold8: 256GB, 512GB. Flip8: 256GB, 512GB</td><td>Đang được các chuỗi niêm yết.</td></tr>
+    <tr><td>C</td><td>Xiaomi 17 series, OPPO Find X9 / X9 Pro, vivo X300 / X300 Pro, Galaxy A57 / A37</td><td>Kiểm lại từng máy</td><td>Dòng A tầm trung bán số lượng lớn ở Việt Nam. Xiaomi 17 Pro Max và OPPO Find X9 Pro đã có một dung lượng.</td></tr>
+  </table>
+  </div>
+  <div class="card warn">Chưa nên tạo: iPhone 18 bản thường và 18e. Các nguồn tìm được chỉ ghi 18 Pro, 18 Pro Max và Duo đang bán. Chờ đến khi chuỗi bán lẻ Việt Nam bán rồi mới tạo.</div>
+  <p>Mọi sản phẩm tạo sẵn phải dùng đúng key mà bộ chuẩn hoá sinh ra, ví dụ <code>apple:iphone-18-pro-max:512gb</code>. Lý do: listing crawl về chỉ được gắn vào sản phẩm khi key khớp chính xác.</p>
+
+  <h2>3. Sản phẩm được tạo ra sao (không đổi cấu trúc database)</h2>
+  <ol>
+    <li><strong>Thông số và danh sách tạo sẵn (PR của Core).</strong> Thêm từng dòng máy vào bảng thông số và từng dung lượng vào danh sách tạo sẵn trong <code>flagship-seed-data.ts</code>.
+      <ul>
+        <li>Thông số lấy từ GSMArena / PhoneArena, đủ 10 nhóm.</li>
+        <li>Không có giá, listing, cửa hàng hay đánh giá: những thứ đó chỉ đến từ crawl thật.</li>
+        <li>Test hiện có tự kiểm mọi key khớp với bộ chuẩn hoá.</li>
+      </ul>
+    </li>
+    <li><strong>Chạy job tạo sản phẩm trên production (cần JOY duyệt).</strong> Job <code>backfill-specs</code>:
+      <ul>
+        <li>Chạy thử trước: chỉ in ra danh sách máy "SẼ THÊM", không ghi gì.</li>
+        <li>Chạy thật với <code>--apply</code>: thêm các sản phẩm còn thiếu ở trạng thái nháp, kèm thông số.</li>
+        <li>Đây là ghi dữ liệu production, không phải đổi cấu trúc database.</li>
+      </ul>
+    </li>
+    <li><strong>Crawl (RS).</strong> RS tìm trên các trang bán lẻ theo tên từng sản phẩm. Listing đúng máy được gắn vào, rồi giá, số cửa hàng và lịch sử giá tự điền dần.</li>
+    <li><strong>Xuất bản (đang thiếu).</strong> Sản phẩm tạo sẵn vẫn ở trạng thái nháp, kể cả khi đã có giá. Hiện chỉ những sản phẩm do importer tự tạo từ listing thật (có thông số đã kiểm, máy mới) mới được xuất bản ngay. Xem quyết định D2.</li>
+  </ol>
+  <p class="muted">Chỉ thêm thông số thôi thì listing nào RS tình cờ gặp đã có thể tạo sản phẩm được xuất bản. Nhưng RS chỉ đi tìm theo những sản phẩm đã có, nên vẫn cần danh sách tạo sẵn.</p>
+
+  <h2>4. Vai trò của mô hình Item</h2>
+  <ul>
+    <li><strong>Một Item là một dòng máy</strong> (ví dụ iPhone 18 Pro Max); mỗi dung lượng là một biến thể của nó.</li>
+    <li><strong>Job tạo sản phẩm gom theo Item:</strong> thông số được đặt một lần cho Item, và mỗi dung lượng thành một biến thể.</li>
+    <li><strong>Trang sản phẩm là theo Item,</strong> có nút chọn dung lượng. Tạo đủ dung lượng thì nút chọn đầy đủ, thay vì sinh ra nhiều trang mỏng.</li>
+    <li><strong>Item được xuất bản cùng các biến thể của nó.</strong></li>
+  </ul>
+
+  <h2>5. Rate Services cần làm gì</h2>
+  <ol>
+    <li><strong>Cập nhật engine</strong> lên sha có danh sách tạo sẵn mới.</li>
+    <li><strong>Chạy dò tìm cho các sản phẩm mới</strong> (<code>probe-discovery</code>) để kiểm mỗi máy có trang bán trên các chuỗi RS đang phủ: FPT, CellphoneS, Thế Giới Di Động, Di Động Việt, Hoàng Hà, Shopee, Lazada và các chuỗi khác. Báo lại máy nào không tìm thấy.</li>
+    <li><strong>Theo dõi tải crawl.</strong> Khoảng 40 sản phẩm mới làm tăng số job mỗi chu kỳ.</li>
+    <li><strong>Chạy kiểm danh mục (audit-catalog) sau vài chu kỳ.</strong> Số sản phẩm chưa có listing phải giảm dần, và không có listing nào gắn sai máy.</li>
+  </ol>
+
+  <h2>6. Những điều JOY cần quyết</h2>
+  <div class="q"><strong>D1. Phạm vi đợt đầu.</strong> <span class="rec-line">Đề xuất: nhóm A1 đến A3, khoảng 25 dung lượng.</span> Nhóm B và C làm sau, khi nhóm A đã có giá và lên trang.</div>
+  <div class="q"><strong>D2. Cách xuất bản.</strong>
+    <ul>
+      <li>(a) Tự xuất bản sản phẩm tạo sẵn khi đã có ít nhất một listing còn hàng, được crawl thật và đúng máy. Đây là sửa code ở RS hoặc importer, không đổi cấu trúc database.</li>
+      <li>(b) Xuất bản bằng tay theo từng đợt sau khi kiểm. Mỗi lần là một bước sửa dữ liệu.</li>
+    </ul>
+    <span class="rec-line">Đề xuất: (a), riêng nhóm C cần tối thiểu 2 cửa hàng.</span>
+  </div>
+  <div class="q"><strong>D3. Duyệt chạy job tạo sản phẩm trên production</strong> cho đợt được chọn. Đây là ghi dữ liệu, không phải đổi cấu trúc database.</div>
+  <div class="q"><strong>D4. Dung lượng chưa có giá.</strong> Hiện trong nút chọn với chữ "chưa có giá", hay ẩn đi cho đến khi có giá. <span class="rec-line">Đề xuất: hiện, để người mua biết có bản đó.</span></div>
+  <div class="q"><strong>D5. iPhone 18 bản thường và 18e.</strong> Chờ chuỗi bán lẻ Việt Nam bán rồi mới tạo, hay tạo sẵn ở dạng nháp từ bây giờ để RS bắt đầu tìm sớm. <span class="rec-line">Đề xuất: chờ.</span></div>
+
+  <h2>Nguồn</h2>
+  <ul class="muted">
+    <li><a href="https://news.tuoitre.vn/iphone-18-lineup-prices-in-vietnam-iphone-duo-tops-4000-103260910153921165.htm">Tuổi Trẻ: giá dòng iPhone 18 tại Việt Nam</a></li>
+    <li><a href="https://vietnamnet.vn/en/apple-reveals-vietnam-prices-for-iphone-18-pro-and-foldable-duo-2553978.html">VietNamNet: giá iPhone 18 Pro và iPhone Duo</a></li>
+    <li><a href="https://fptshop.com.vn/tin-tuc/danh-gia/bang-gia-iphone-18-212900">FPT Shop: bảng giá iPhone 18 Pro</a></li>
+    <li><a href="https://counterpointresearch.com/en/insights/iphone-17-global-best-selling-smartphone-in-q2-2026">Counterpoint: iPhone 17 bán chạy nhất quý 2/2026</a></li>
+    <li><a href="https://news.laodong.vn/cong-nghe/nguoi-tieu-dung-viet-nam-dang-dich-chuyen-len-smartphone-cao-cap-1757322.ldo">Lao Động: người Việt chuyển sang điện thoại cao cấp</a></li>
+    <li><a href="https://www.viettablet.com/dien-thoai/dien-thoai-samsung-1/galaxy-s26-series">Viettablet: Galaxy S26 series</a></li>
+  </ul>
+</div>
+</body>
+</html>
