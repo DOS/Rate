@@ -17,6 +17,8 @@ const PHONE_PAGES = [
   // (DOS/Rate#1084).
   '/cs/leaderboard',
   '/cs/merchants/excluded-review-store',
+  // A long unbroken store name wraps in the header (DOS/Rate#1472).
+  '/merchants/long-name-store',
 ];
 
 for (const path of PHONE_PAGES) {

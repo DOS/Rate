@@ -326,6 +326,11 @@ VALUES
 -- leaderboard, and its reviews are older than every other review.
 INSERT INTO rate.merchants (id, platform, platform_shop_id, name, slug, is_official)
 VALUES ('ffffffff-ffff-4fff-8fff-ffffffff0811', 'shopee', 'shop_excluded_review', 'Excluded Review Store', 'excluded-review-store', false);
+
+-- One long unbroken store name: the merchant header wraps it instead of
+-- pushing the page sideways on a phone (DOS/Rate#1472).
+INSERT INTO rate.merchants (id, platform, platform_shop_id, name, slug, is_official)
+VALUES ('ffffffff-ffff-4fff-8fff-ffffffff1472', 'lazada', '1000118502', 'Didongthongminhchinhhang.vn', 'long-name-store', false);
 INSERT INTO rate.master_products
   (id, category_id, brand, model, model_key, name, slug, min_price, max_price, merchant_count, status, metadata)
 VALUES ('22222222-2222-4222-8222-222222220811', 'c0000000-0000-4000-8000-000000000001', 'E2E', 'Excluded Review Phone',
