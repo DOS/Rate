@@ -1201,6 +1201,26 @@ async function runSuite() {
   ] as const)
     assert.equal(keyOf(title), key, title);
   assert.equal(detectCategorySlug('Galaxy S24 + tặng Galaxy Buds 3'), 'smartphones');
+  assert.equal(
+    detectCategorySlug('[Samsung tặng bao da] Máy tính bảng Galaxy Tab S9 8GB 128GB'),
+    'tablets'
+  );
+  assert.equal(
+    detectCategorySlug('[Honor tặng chuột] Laptop Honor MagicBook X16 16GB 512GB'),
+    'laptops'
+  );
+  assert.equal(
+    keyOf('AirPods 4 tặng kèm khi mua iPhone 16 Pro Max'),
+    'apple:iphone-16-pro-max:unknown'
+  );
+  assert.equal(
+    keyOf('Apple Watch Series 10 GPS +Cellular 46mm tặng AirPods'),
+    'apple:watch-series-10-46mm:64gb'
+  );
+  assert.equal(
+    keyOf('iPad Pro M4 (Tặng Apple Pencil Pro) 13 inch 256GB'),
+    'apple:ipad-pro-m4-13:256gb'
+  );
   // The cut stays linear on a long run of separators.
   const cutStart = Date.now();
   detectCategorySlug(`Apple Watch Series 10 46mm${','.repeat(64_000)}x`);

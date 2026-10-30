@@ -279,6 +279,10 @@ function ownProductPart(title: string): string {
     block > 0 && APPLE_FAMILIES.some(([family]) => family.test(composed.slice(block))) ? block : 0;
   const found = composed.slice(lead).search(GIFT_CUT);
   const at = found < 0 ? -1 : lead + found;
+  // "AirPods 4 tặng kèm khi mua iPhone 16 Pro Max" sells what follows: the gift comes
+  // first, so the whole title is the product's (DOS/Rate#1422).
+  if (at > 0 && /^(?:tặng|kèm|\s)*(?:khi|lúc)\s+mua(?![\p{L}\d])/iu.test(composed.slice(at)))
+    return composed;
   return at > 0 ? composed.slice(0, at) : composed;
 }
 
@@ -378,7 +382,11 @@ export function detectCategorySlug(title: string): CanonicalCategorySlug {
   if (own !== t) {
     const ownSlug = categorySlugOf(own);
     if (ownSlug) return ownSlug;
-    if (namesAppleFamilyOtherThan(own, 'Watch') || PHONE_BRAND_RE.test(own)) return 'smartphones';
+    // A cut inside an opening promo bracket ("[Samsung tặng bao da] Galaxy Tab S9") leaves
+    // no product to go by, so the whole title decides.
+    const insidePromo = /^\s*(?:\[[^\]]*|\([^)]*|【[^】]*)$/u.test(own);
+    if (!insidePromo && (namesAppleFamilyOtherThan(own, 'Watch') || PHONE_BRAND_RE.test(own)))
+      return 'smartphones';
   }
   return categorySlugOf(t) ?? 'smartphones';
 }
