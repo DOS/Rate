@@ -28,6 +28,11 @@
 //   REKEY_DATABASE_URL=postgresql://readonly_user:...@host:5432/postgres \
 //     node scripts/ops/rekey-dry-run.mjs [--json] [--normalizer <path>]
 //
+// For Rate Services' rate_worker session, which reads through PostgREST and cannot
+// log in to Postgres: --via-postgrest reads with GET requests only (see below).
+//   REKEY_SUPABASE_URL=... REKEY_SUPABASE_ANON_KEY=... REKEY_SUPABASE_ACCESS_TOKEN=... \
+//     node scripts/ops/rekey-dry-run.mjs --via-postgrest [--json] [--normalizer <path>]
+//
 // Not covered: listings with no master (cluster_id NULL), and rate.items, whose
 // Item follows its masters' keys through the M1 sync trigger once they are re-keyed.
 
@@ -592,10 +597,172 @@ export async function loadKeyOf(normalizerPath) {
   };
 }
 
+// ---------------------------------------------------------------------------
+// PostgREST read mode (--via-postgrest), for Rate Services' audit-catalog job,
+// which reads as rate_worker through PostgREST. rate_worker cannot log in to
+// Postgres (NOLOGIN) and holds INSERT/UPDATE on these tables, so the psql guard
+// cannot serve it. Here read-only is structural instead: every request goes
+// through getOnlyFetch, which refuses any method but GET/HEAD, any body, any
+// Prefer header and any /rpc/ path. No Supabase client library is used.
+// ---------------------------------------------------------------------------
+
+export const ENV_REST = {
+  url: 'REKEY_SUPABASE_URL',
+  anonKey: 'REKEY_SUPABASE_ANON_KEY',
+  accessToken: 'REKEY_SUPABASE_ACCESS_TOKEN',
+};
+
+/** A fetch that can only read. Throws before any request that could write. */
+export function createGetOnlyFetch(fetchImpl = globalThis.fetch) {
+  return (url, init = {}) => {
+    const method = String(init.method ?? 'GET').toUpperCase();
+    if (method !== 'GET' && method !== 'HEAD') {
+      throw new Error(`refusing a ${method} request: this dry run only reads`);
+    }
+    if (init.body !== undefined && init.body !== null) {
+      throw new Error(
+        'refusing a request with a body: this dry run only reads'
+      );
+    }
+    const headers = new Headers(init.headers ?? {});
+    if (headers.has('prefer')) {
+      throw new Error('refusing a Prefer header: this dry run only reads');
+    }
+    if (/\/rpc\//i.test(new URL(url).pathname)) {
+      throw new Error('refusing an RPC call: this dry run only reads');
+    }
+    return fetchImpl(url, { method, headers });
+  };
+}
+
+/** The JWT's role claim, without verifying it (PostgREST does that). */
+export function jwtRole(token) {
+  try {
+    const payload = String(token).split('.')[1] ?? '';
+    const json = Buffer.from(
+      payload.replace(/-/g, '+').replace(/_/g, '/'),
+      'base64'
+    ).toString('utf8');
+    return JSON.parse(json).role ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Refuses a token whose role bypasses row security (service_role) or sees only
+ * published rows (anon), so the counts are neither unguarded nor partial.
+ */
+export function checkRestRole(role) {
+  if (role === 'service_role') {
+    throw new Error(
+      'refusing to run: the access token is service_role. Use the rate_worker session.'
+    );
+  }
+  if (!role || role === 'anon') {
+    throw new Error(
+      `refusing to run: the access token is ${role ?? 'not a JWT'}, which sees only published rows. Use the rate_worker session.`
+    );
+  }
+  return `PostgREST as ${role}, GET requests only`;
+}
+
+/** Reads every row of a table page by page, in a stable order. */
+export async function readTable(
+  getFetch,
+  { url, anonKey, accessToken },
+  table,
+  query,
+  pageSize = 1000
+) {
+  const rows = [];
+  for (let offset = 0; ; offset += pageSize) {
+    const target = new URL(`/rest/v1/${table}`, url);
+    for (const [k, v] of Object.entries(query)) target.searchParams.set(k, v);
+    target.searchParams.set('limit', String(pageSize));
+    target.searchParams.set('offset', String(offset));
+    const res = await getFetch(target.toString(), {
+      method: 'GET',
+      headers: {
+        apikey: anonKey,
+        Authorization: `Bearer ${accessToken}`,
+        'Accept-Profile': 'rate',
+        Accept: 'application/json',
+      },
+    });
+    if (!res.ok) {
+      // The response body is not echoed: it can quote the request.
+      throw new Error(
+        `PostgREST read of rate.${table} failed (HTTP ${res.status})`
+      );
+    }
+    const page = await res.json();
+    if (!Array.isArray(page)) {
+      throw new Error(`PostgREST read of rate.${table} returned no rows array`);
+    }
+    rows.push(...page);
+    if (page.length < pageSize) return rows;
+  }
+}
+
+/** The dry run's input, read through PostgREST with GET requests only. */
+export async function readViaPostgrest(
+  rest,
+  keyOf,
+  { fetchImpl = globalThis.fetch, pageSize = 1000 } = {}
+) {
+  const role = checkRestRole(jwtRole(rest.accessToken));
+  const getFetch = createGetOnlyFetch(fetchImpl);
+  const masters = await readTable(
+    getFetch,
+    rest,
+    'master_products',
+    { select: 'id,model_key,status', order: 'id.asc' },
+    pageSize
+  );
+  const products = await readTable(
+    getFetch,
+    rest,
+    'products',
+    {
+      select: 'id,cluster_id,title',
+      cluster_id: 'not.is.null',
+      order: 'id.asc',
+    },
+    pageSize
+  );
+  const history = await readTable(
+    getFetch,
+    rest,
+    'price_history',
+    { select: 'product_id', order: 'id.asc' },
+    pageSize
+  );
+  const counts = new Map();
+  for (const h of history)
+    counts.set(h.product_id, (counts.get(h.product_id) ?? 0) + 1);
+  return {
+    role,
+    data: {
+      masters,
+      listings: products.map((p) => ({
+        id: p.id,
+        master_id: p.cluster_id,
+        key: keyOf(p.title ?? ''),
+      })),
+      priceRows: [...counts].map(([product_id, rows]) => ({
+        product_id,
+        rows,
+      })),
+    },
+  };
+}
+
 function usage(message) {
   console.error(message);
   console.error(
-    `usage: ${ENV_URL}=postgresql://... node scripts/ops/rekey-dry-run.mjs [--json] [--normalizer <path>] [--allow-write-capable-role]`
+    `usage: ${ENV_URL}=postgresql://... node scripts/ops/rekey-dry-run.mjs [--json] [--normalizer <path>] [--allow-write-capable-role]\n` +
+      `   or: ${ENV_REST.url}=... ${ENV_REST.anonKey}=... ${ENV_REST.accessToken}=... node scripts/ops/rekey-dry-run.mjs --via-postgrest [--json] [--normalizer <path>]`
   );
   process.exit(2);
 }
@@ -619,10 +786,35 @@ async function main() {
           ),
         },
         'allow-write-capable-role': { type: 'boolean', default: false },
+        'via-postgrest': { type: 'boolean', default: false },
       },
     }));
   } catch (err) {
     usage(err?.message ?? String(err));
+  }
+  if (values['via-postgrest']) {
+    const rest = {
+      url: process.env[ENV_REST.url],
+      anonKey: process.env[ENV_REST.anonKey],
+      accessToken: process.env[ENV_REST.accessToken],
+    };
+    for (const [k, name] of Object.entries(ENV_REST))
+      if (!rest[k]) usage(`${name} is required with --via-postgrest`);
+    try {
+      new URL(rest.url);
+    } catch {
+      usage(`${ENV_REST.url} is not a valid URL`);
+    }
+    const keyOf = await loadKeyOf(values.normalizer);
+    const { role, data } = await readViaPostgrest(rest, keyOf);
+    const plan = planRekeys(data);
+    if (values.json) {
+      console.log(JSON.stringify({ role, ...plan }, null, 2));
+    } else {
+      console.log(`Read-only check: ${role}.`);
+      for (const line of formatPlan(plan)) console.log(line);
+    }
+    return;
   }
   const url = process.env[ENV_URL];
   if (!url) usage(`${ENV_URL} is required (a read-only connection string)`);

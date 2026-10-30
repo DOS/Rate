@@ -11,7 +11,11 @@ import {
   SESSION_SQL,
   categoryOf,
   checkReadOnly,
+  checkRestRole,
   createCollector,
+  createGetOnlyFetch,
+  jwtRole,
+  readViaPostgrest,
   formatPlan,
   loadKeyOf,
   pgEnvFromUrl,
@@ -657,3 +661,142 @@ test(
     );
   }
 );
+
+const jwt = (role) =>
+  `h.${Buffer.from(JSON.stringify({ role })).toString('base64url')}.s`;
+
+test('the PostgREST fetch refuses anything but a plain GET or HEAD', async () => {
+  const seen = [];
+  const getFetch = createGetOnlyFetch(async (url, init) => {
+    seen.push(init.method);
+    return new Response('[]');
+  });
+  const base = 'https://db.example/rest/v1/products';
+  await getFetch(base);
+  await getFetch(base, { method: 'head' });
+  for (const method of ['POST', 'PATCH', 'PUT', 'DELETE']) {
+    assert.throws(() => getFetch(base, { method }), /only reads/);
+  }
+  assert.throws(() => getFetch(base, { body: '{}' }), /body/);
+  assert.throws(
+    () => getFetch(base, { headers: { Prefer: 'return=minimal' } }),
+    /Prefer/
+  );
+  assert.throws(
+    () =>
+      getFetch('https://db.example/rest/v1/rpc/refresh_master_market_stats'),
+    /RPC/
+  );
+  assert.deepEqual(seen, ['GET', 'HEAD']);
+});
+
+test('the PostgREST mode needs a rate_worker-like token, not service_role or anon', () => {
+  assert.equal(jwtRole(jwt('rate_worker')), 'rate_worker');
+  assert.equal(jwtRole('not-a-jwt'), null);
+  assert.match(checkRestRole('rate_worker'), /GET requests only/);
+  assert.throws(() => checkRestRole('service_role'), /service_role/);
+  assert.throws(() => checkRestRole('anon'), /only published rows/);
+  assert.throws(() => checkRestRole(null), /not a JWT/);
+});
+
+test('reads through PostgREST page by page, with GET only, into the plan input', async () => {
+  const tables = {
+    master_products: [
+      {
+        id: 'm1',
+        model_key: 'apple:ipad-pro-m4-11:256gb',
+        status: 'published',
+      },
+    ],
+    products: [
+      { id: 'p1', cluster_id: 'm1', title: 'Wi-Fi 1' },
+      { id: 'p2', cluster_id: 'm1', title: 'Wi-Fi 2' },
+      { id: 'p3', cluster_id: 'm1', title: '5G 1' },
+    ],
+    price_history: [
+      { product_id: 'p3' },
+      { product_id: 'p3' },
+      { product_id: 'p1' },
+    ],
+  };
+  const requests = [];
+  const fetchImpl = async (url, init) => {
+    const u = new URL(url);
+    requests.push({
+      method: init.method,
+      path: u.pathname,
+      headers: init.headers,
+    });
+    const rows = tables[u.pathname.split('/').pop()];
+    const offset = Number(u.searchParams.get('offset'));
+    const limit = Number(u.searchParams.get('limit'));
+    return new Response(JSON.stringify(rows.slice(offset, offset + limit)));
+  };
+  const { role, data } = await readViaPostgrest(
+    {
+      url: 'https://db.example',
+      anonKey: 'anon-key-value',
+      accessToken: jwt('rate_worker'),
+    },
+    (title) =>
+      title.startsWith('5G')
+        ? 'apple:ipad-pro-m4-11-5g:256gb'
+        : 'apple:ipad-pro-m4-11:256gb',
+    { fetchImpl, pageSize: 2 }
+  );
+  assert.equal(role, 'PostgREST as rate_worker, GET requests only');
+  // Every request is a GET on the rate schema, with no Prefer header and no RPC.
+  assert.ok(requests.every((r) => r.method === 'GET'));
+  assert.ok(requests.every((r) => r.headers.get('accept-profile') === 'rate'));
+  assert.ok(requests.every((r) => !r.headers.has('prefer')));
+  assert.ok(requests.every((r) => !r.path.includes('/rpc/')));
+  // One page of masters, two of products and two of price history (page size 2).
+  assert.equal(requests.length, 5);
+  assert.deepEqual(
+    data.listings.map((l) => l.key),
+    [
+      'apple:ipad-pro-m4-11:256gb',
+      'apple:ipad-pro-m4-11:256gb',
+      'apple:ipad-pro-m4-11-5g:256gb',
+    ]
+  );
+  assert.deepEqual(data.priceRows, [
+    { product_id: 'p3', rows: 2 },
+    { product_id: 'p1', rows: 1 },
+  ]);
+  const plan = planRekeys(data);
+  assert.equal(
+    plan.splits[0].groups[0].newKey,
+    'apple:ipad-pro-m4-11-5g:256gb'
+  );
+  assert.equal(plan.splits[0].groups[0].priceRows, 2);
+});
+
+test('a refused or failed PostgREST read sends nothing and echoes no secret', async () => {
+  let calls = 0;
+  const fetchImpl = async () => {
+    calls += 1;
+    return new Response('{"message":"JWT anon-key-value"}', { status: 401 });
+  };
+  const rest = { url: 'https://db.example', anonKey: 'anon-key-value' };
+  await assert.rejects(
+    readViaPostgrest(
+      { ...rest, accessToken: jwt('service_role') },
+      () => null,
+      {
+        fetchImpl,
+      }
+    ),
+    /service_role/
+  );
+  assert.equal(calls, 0, 'a refused token sends no request');
+  await assert.rejects(
+    readViaPostgrest({ ...rest, accessToken: jwt('rate_worker') }, () => null, {
+      fetchImpl,
+    }),
+    (err) =>
+      /HTTP 401/.test(err.message) &&
+      !err.message.includes('anon-key-value') &&
+      !err.message.includes('db.example')
+  );
+});
