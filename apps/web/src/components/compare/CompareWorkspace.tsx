@@ -66,11 +66,18 @@ import { upsertWatchlistItem } from '@/components/watchlist/watchlist-store';
 import {
   getSpecUiDictionary,
   localizeSpecValue,
+  localizedSpecValue,
   normalizeStorageExpansion,
   specGroupHeading,
 } from '@/lib/spec-localizer';
 import { compareRowIsShown, known5g } from '@/lib/product-spec-rows';
 import ContentText from '@/components/elementary/ContentText';
+import {
+  compareCellSegments,
+  plainCompareCell,
+  specPart,
+  type CompareCellSegment,
+} from '@/lib/compare-cell';
 import { productImageUrl } from '@/lib/rate-domain-core';
 import { itemSlugFromProductAnswer, versusHref } from '@/lib/item-compare';
 import {
@@ -94,7 +101,10 @@ type CompareTranslator = ReturnType<typeof useTranslations<'compare'>>;
 interface SpecRowDef {
   id: string;
   label: string;
+  /** The cell as plain text, for filters, exports and tests. */
   renderValue: (p: MasterProduct) => string;
+  /** The cell with its spec values marked (specPart), for the matrix. */
+  renderCell?: (p: MasterProduct) => string;
   numericValue?: (p: MasterProduct) => number | null;
   higherIsBetter?: boolean;
   /** Whether the category's spec template has this row (DOS/Rate#1166). */
@@ -108,6 +118,55 @@ interface SpecGroupDef {
   rows: SpecRowDef[];
 }
 
+/**
+ * A matrix cell: a cell with no marked spec value reads as before; otherwise
+ * each spec value is localized and marked with its language when that is not
+ * the page's, and the catalogue text around it is shown as is
+ * (DOS/Rate#1392).
+ */
+function compareCellShownText(cell: string, locale: string): string {
+  const segments = compareCellSegments(cell);
+  if (!segments.some((s) => s.spec)) {
+    return localizeSpecValue(plainCompareCell(cell), locale);
+  }
+  return segments
+    .map((s) => (s.spec ? localizedSpecValue(s.text, locale).text : s.text))
+    .join('');
+}
+
+function CompareCellText({
+  segments,
+  locale,
+}: {
+  segments: CompareCellSegment[];
+  locale: string;
+}) {
+  if (!segments.some((s) => s.spec)) {
+    const text = localizeSpecValue(
+      segments.map((s) => s.text).join(''),
+      locale
+    );
+    return <ContentText text={text} locale={locale} />;
+  }
+  return (
+    <>
+      {segments.map((segment, i) => {
+        if (!segment.spec)
+          return <React.Fragment key={i}>{segment.text}</React.Fragment>;
+        const shown = localizedSpecValue(segment.text, locale);
+        return (
+          <ContentText
+            key={i}
+            text={shown.text}
+            lang={shown.lang}
+            locale={locale}
+          />
+        );
+      })}
+    </>
+  );
+}
+
 function formatBool(
   val: boolean | string | undefined | null,
   t: CompareTranslator
@@ -116,6 +175,15 @@ function formatBool(
   if (val === true) return t('boolYes');
   if (val === false) return t('boolNo');
   return '-';
+}
+
+/** formatBool, with a raw string from the data marked as a spec value. */
+function formatBoolPart(
+  val: boolean | string | undefined | null,
+  t: CompareTranslator
+): string {
+  const text = formatBool(val, t);
+  return typeof val === 'string' && val.trim() ? specPart(text) : text;
 }
 
 function getEffectiveRating(p: MasterProduct): number {
@@ -194,11 +262,24 @@ function buildCategoryTabs(t: CompareTranslator): Array<{
   ];
 }
 
+// Rows mark their spec values; renderValue hands everything but the matrix
+// cells the plain text (DOS/Rate#1392).
+function withPlainValues(groups: SpecGroupDef[]): SpecGroupDef[] {
+  return groups.map((group) => ({
+    ...group,
+    rows: group.rows.map((row) => ({
+      ...row,
+      renderCell: row.renderValue,
+      renderValue: (p: MasterProduct) => plainCompareCell(row.renderValue(p)),
+    })),
+  }));
+}
+
 export function buildSpecGroups(
   t: CompareTranslator,
   locale?: string | null
 ): SpecGroupDef[] {
-  return [
+  return withPlainValues([
     {
       id: 'market_trust',
       title: t('group0Title'),
@@ -344,7 +425,7 @@ export function buildSpecGroups(
           renderValue: (p) => {
             const specs = (p.specifications || {}) as ProductSpecifications;
             const keySpecs = (p.key_specs || {}) as KeySpecs;
-            return specs.display?.type || keySpecs.screen || '-';
+            return specPart(specs.display?.type || keySpecs.screen || '-');
           },
         },
         {
@@ -359,7 +440,7 @@ export function buildSpecGroups(
               specs.display?.ppi && !/ppi\b/i.test(res)
                 ? ` (${specs.display.ppi} ppi)`
                 : '';
-            return res === '-' && !ppi ? '-' : `${res}${ppi}`;
+            return res === '-' && !ppi ? '-' : `${specPart(res)}${ppi}`;
           },
           numericValue: (p) => {
             const specs = (p.specifications || {}) as ProductSpecifications;
@@ -393,7 +474,7 @@ export function buildSpecGroups(
               specs.display?.protection,
               specs.display?.features,
             ].filter(Boolean);
-            return parts.length > 0 ? parts.join(' | ') : '-';
+            return parts.length > 0 ? parts.map(specPart).join(' | ') : '-';
           },
         },
       ],
@@ -409,7 +490,7 @@ export function buildSpecGroups(
           renderValue: (p) => {
             const specs = (p.specifications || {}) as ProductSpecifications;
             const keySpecs = (p.key_specs || {}) as KeySpecs;
-            return specs.hardware?.chipset || keySpecs.chip || '-';
+            return specPart(specs.hardware?.chipset || keySpecs.chip || '-');
           },
         },
         {
@@ -421,7 +502,7 @@ export function buildSpecGroups(
             const parts = [specs.hardware?.cpu, specs.hardware?.gpu].filter(
               Boolean
             );
-            return parts.length > 0 ? parts.join(' | ') : '-';
+            return parts.length > 0 ? parts.map(specPart).join(' | ') : '-';
           },
         },
         {
@@ -456,11 +537,13 @@ export function buildSpecGroups(
           renderValue: (p) => {
             const specs = (p.specifications || {}) as ProductSpecifications;
             const parts = [
-              specs.hardware?.os,
+              specPart(specs.hardware?.os),
               specs.hardware?.storage_expansion
                 ? t('valCardSlotPrefix', {
-                    value: normalizeStorageExpansion(
-                      specs.hardware.storage_expansion
+                    value: specPart(
+                      normalizeStorageExpansion(
+                        specs.hardware.storage_expansion
+                      )
                     ),
                   })
                 : null,
@@ -481,7 +564,9 @@ export function buildSpecGroups(
           renderValue: (p) => {
             const specs = (p.specifications || {}) as ProductSpecifications;
             const keySpecs = (p.key_specs || {}) as KeySpecs;
-            return specs.camera?.main_camera || keySpecs.camera || '-';
+            return specPart(
+              specs.camera?.main_camera || keySpecs.camera || '-'
+            );
           },
         },
         {
@@ -489,7 +574,7 @@ export function buildSpecGroups(
           label: t('rowCamSecond'),
           renderValue: (p) => {
             const specs = (p.specifications || {}) as ProductSpecifications;
-            return specs.camera?.second_camera || '-';
+            return specPart(specs.camera?.second_camera || '-');
           },
         },
         {
@@ -501,7 +586,7 @@ export function buildSpecGroups(
               specs.camera?.third_camera,
               specs.camera?.fourth_camera,
             ].filter(Boolean);
-            return parts.length > 0 ? parts.join(' + ') : '-';
+            return parts.length > 0 ? parts.map(specPart).join(' + ') : '-';
           },
         },
         {
@@ -513,7 +598,7 @@ export function buildSpecGroups(
               specs.camera?.video_recording,
               specs.camera?.flash,
             ].filter(Boolean);
-            return parts.length > 0 ? parts.join(' | ') : '-';
+            return parts.length > 0 ? parts.map(specPart).join(' | ') : '-';
           },
         },
         {
@@ -521,7 +606,7 @@ export function buildSpecGroups(
           label: t('rowCamFront'),
           renderValue: (p) => {
             const specs = (p.specifications || {}) as ProductSpecifications;
-            return specs.camera?.front_camera || '-';
+            return specPart(specs.camera?.front_camera || '-');
           },
         },
       ],
@@ -563,12 +648,14 @@ export function buildSpecGroups(
           label: t('rowBatDetails'),
           renderValue: (p) => {
             const specs = (p.specifications || {}) as ProductSpecifications;
+            // Each part marked on its own, the catalogue prefix left out
+            // (DOS/Rate#1392).
             const parts = [
-              specs.battery?.type,
-              specs.battery?.charging,
+              specPart(specs.battery?.type),
+              specPart(specs.battery?.charging),
               specs.battery?.reverse_charging
                 ? t('valReverseChargePrefix', {
-                    value: formatBool(specs.battery.reverse_charging, t),
+                    value: formatBoolPart(specs.battery.reverse_charging, t),
                   })
                 : null,
             ].filter(Boolean);
@@ -587,7 +674,7 @@ export function buildSpecGroups(
           label: t('rowDesignDim'),
           renderValue: (p) => {
             const specs = (p.specifications || {}) as ProductSpecifications;
-            return specs.design?.dimensions || '-';
+            return specPart(specs.design?.dimensions || '-');
           },
         },
         {
@@ -610,7 +697,9 @@ export function buildSpecGroups(
           label: t('rowDesignMaterials'),
           renderValue: (p) => {
             const specs = (p.specifications || {}) as ProductSpecifications;
-            return specs.design?.materials || specs.design?.build || '-';
+            return specPart(
+              specs.design?.materials || specs.design?.build || '-'
+            );
           },
         },
         {
@@ -618,7 +707,7 @@ export function buildSpecGroups(
           label: t('rowDesignResistance'),
           renderValue: (p) => {
             const specs = (p.specifications || {}) as ProductSpecifications;
-            return specs.design?.resistance || '-';
+            return specPart(specs.design?.resistance || '-');
           },
         },
         {
@@ -633,8 +722,8 @@ export function buildSpecGroups(
                   ? p.colors.join(', ')
                   : null;
             const parts = [
-              specs.design?.biometrics,
-              colors ? t('valColorsPrefix', { value: colors }) : null,
+              specPart(specs.design?.biometrics),
+              colors ? t('valColorsPrefix', { value: specPart(colors) }) : null,
             ].filter(Boolean);
             return parts.length > 0 ? parts.join(' | ') : '-';
           },
@@ -667,7 +756,7 @@ export function buildSpecGroups(
               specs.cellular?.sim_type,
               specs.cellular?.technology,
             ].filter(Boolean);
-            return parts.length > 0 ? parts.join(' | ') : '-';
+            return parts.length > 0 ? parts.map(specPart).join(' | ') : '-';
           },
         },
         {
@@ -679,7 +768,7 @@ export function buildSpecGroups(
               specs.cellular?.bands_5g,
               specs.cellular?.data_speed,
             ].filter(Boolean);
-            return parts.length > 0 ? parts.join(' | ') : '-';
+            return parts.length > 0 ? parts.map(specPart).join(' | ') : '-';
           },
         },
       ],
@@ -702,7 +791,7 @@ export function buildSpecGroups(
                 ? `BT: ${specs.connectivity.bluetooth}`
                 : null,
             ].filter(Boolean);
-            return parts.length > 0 ? parts.join(' | ') : '-';
+            return parts.length > 0 ? parts.map(specPart).join(' | ') : '-';
           },
         },
         {
@@ -711,7 +800,7 @@ export function buildSpecGroups(
           label: t('rowConnNfc'),
           renderValue: (p) => {
             const specs = (p.specifications || {}) as ProductSpecifications;
-            return formatBool(specs.connectivity?.nfc, t);
+            return formatBoolPart(specs.connectivity?.nfc, t);
           },
         },
         {
@@ -724,7 +813,7 @@ export function buildSpecGroups(
               specs.connectivity?.location,
               specs.connectivity?.sensors,
             ].filter(Boolean);
-            return parts.join(' | ') || '-';
+            return parts.map(specPart).join(' | ') || '-';
           },
         },
       ],
@@ -739,7 +828,7 @@ export function buildSpecGroups(
           label: t('rowMmSpeaker'),
           renderValue: (p) => {
             const specs = (p.specifications || {}) as ProductSpecifications;
-            return specs.multimedia?.loudspeaker || '-';
+            return specPart(specs.multimedia?.loudspeaker || '-');
           },
         },
         {
@@ -749,11 +838,12 @@ export function buildSpecGroups(
             const specs = (p.specifications || {}) as ProductSpecifications;
             const jack =
               specs.multimedia?.headphone_jack_35mm !== undefined
-                ? `3.5mm: ${formatBool(specs.multimedia.headphone_jack_35mm, t)}`
+                ? `3.5mm: ${formatBoolPart(specs.multimedia.headphone_jack_35mm, t)}`
                 : null;
-            const parts = [jack, specs.multimedia?.audio_features].filter(
-              Boolean
-            );
+            const parts = [
+              jack,
+              specPart(specs.multimedia?.audio_features),
+            ].filter(Boolean);
             return parts.length > 0 ? parts.join(' | ') : '-';
           },
         },
@@ -773,7 +863,7 @@ export function buildSpecGroups(
               specs.availability?.announced,
               specs.availability?.status,
             ].filter(Boolean);
-            return parts.length > 0 ? parts.join(' | ') : '-';
+            return parts.length > 0 ? parts.map(specPart).join(' | ') : '-';
           },
         },
         {
@@ -784,7 +874,7 @@ export function buildSpecGroups(
             const parts = [specs.availability?.prices_msrp, p.model_key].filter(
               Boolean
             );
-            return parts.join(' | ') || '-';
+            return parts.map(specPart).join(' | ') || '-';
           },
         },
       ],
@@ -799,14 +889,19 @@ export function buildSpecGroups(
           label: t('rowRegCert'),
           renderValue: (p) => {
             const specs = (p.specifications || {}) as ProductSpecifications;
+            // Parts marked one by one: a prefixed "-" stays catalogue text.
             const parts = [
-              specs.regulatory?.certifications,
-              specs.regulatory?.fcc_approval,
+              specPart(specs.regulatory?.certifications),
+              specPart(specs.regulatory?.fcc_approval),
               specs.regulatory?.sar_head
-                ? t('valSarHeadPrefix', { value: specs.regulatory.sar_head })
+                ? t('valSarHeadPrefix', {
+                    value: specPart(specs.regulatory.sar_head),
+                  })
                 : null,
               specs.regulatory?.sar_body
-                ? t('valSarBodyPrefix', { value: specs.regulatory.sar_body })
+                ? t('valSarBodyPrefix', {
+                    value: specPart(specs.regulatory.sar_body),
+                  })
                 : null,
             ].filter(Boolean);
             return parts.length > 0 ? parts.join(' | ') : '-';
@@ -814,7 +909,7 @@ export function buildSpecGroups(
         },
       ],
     },
-  ];
+  ]);
 }
 
 /**
@@ -937,8 +1032,11 @@ export default function CompareWorkspace({
       ...group,
       rows: group.rows.filter((row) =>
         compareRowIsShown(
-          // The cells show the localized text, where "N/A" becomes "-".
-          products.map((p) => localizeSpecValue(row.renderValue(p), locale)),
+          // The text the cells show, where "N/A" becomes "-", localized
+          // part by part as the cells do (DOS/Rate#1392).
+          products.map((p) =>
+            compareCellShownText((row.renderCell ?? row.renderValue)(p), locale)
+          ),
           showDiffOnly
         )
       ),
@@ -2438,10 +2536,10 @@ export default function CompareWorkspace({
                               {row.label}
                             </td>
                             {products.map((p) => {
-                              const textVal = localizeSpecValue(
-                                row.renderValue(p),
-                                locale
+                              const cell = (row.renderCell ?? row.renderValue)(
+                                p
                               );
+                              const segments = compareCellSegments(cell);
                               const numVal = row.numericValue?.(p) ?? null;
                               const isWinner =
                                 bestNumeric !== null &&
@@ -2457,7 +2555,10 @@ export default function CompareWorkspace({
                                       : 'text-dark'
                                   }`}
                                 >
-                                  <ContentText text={textVal} locale={locale} />
+                                  <CompareCellText
+                                    segments={segments}
+                                    locale={locale}
+                                  />
                                   {isWinner && (
                                     <span
                                       className="badge bg-success rounded-pill ms-1 text-white"
