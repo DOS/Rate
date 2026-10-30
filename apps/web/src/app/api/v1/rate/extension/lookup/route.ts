@@ -109,6 +109,9 @@ export async function GET(request: NextRequest) {
             ? withPublicOfferReviewRisk(result.matchedOffer)
             : null,
           allOffers: result.allOffers.map(withPublicOfferReviewRisk),
+          topCheaperOffers: result.topCheaperOffers.map(
+            withPublicOfferReviewRisk
+          ),
           merchantProfile: result.merchantProfile
             ? withPublicReviewRisk(result.merchantProfile)
             : null,

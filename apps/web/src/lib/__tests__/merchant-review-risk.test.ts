@@ -582,6 +582,7 @@ async function publicOffersSayNoneWithoutReviews() {
     'products/[slug]/route.ts',
     'item-size/[slug]/route.ts',
     'inspect/route.ts',
+    'lookup/route.ts',
     'extension/lookup/route.ts',
   ]) {
     assert.match(
@@ -590,6 +591,11 @@ async function publicOffersSayNoneWithoutReviews() {
       `${route} returns offers through withPublicOfferReviewRisk`
     );
   }
+  assert.match(
+    readFileSync(join(apiDir, 'extension/lookup/route.ts'), 'utf8'),
+    /topCheaperOffers: result\.topCheaperOffers\.map\(\s*withPublicOfferReviewRisk/,
+    'the extension lookup also passes its cheaper offers through it'
+  );
 }
 
 main().catch((err) => {
