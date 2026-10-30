@@ -337,10 +337,27 @@ export async function ProductDetailView({
     timing.done();
     notFound();
   }
+  // This product's offers and reviews depend only on its id: start them
+  // alongside the category check below rather than after it (DOS/Rate#1344).
+  // The rejection is handled where they are awaited; a redirect leaves them
+  // unused.
+  const offersRead = timing.time(
+    'offers',
+    getCachedMasterProductOffers(storedProduct.id)
+  );
+  const reviewsRead = timing.time(
+    'reviews',
+    getCachedMasterProductReviews(storedProduct.id)
+  );
+  offersRead.catch(() => undefined);
+  reviewsRead.catch(() => undefined);
   // Master-product route: a product asked for under another category's path
   // goes to its own (DOS/Rate#1366).
   if (!itemRoute) {
-    const ownHref = await foreignCategoryHref(storedProduct, categoryBasePath);
+    const ownHref = await timing.time(
+      'categorySlug',
+      foreignCategoryHref(storedProduct, categoryBasePath)
+    );
     if (ownHref) permanentRedirect(ownHref);
   }
   const itemVariants = itemPage?.variants ?? [];
@@ -365,14 +382,6 @@ export async function ProductDetailView({
   // product's offers and reviews (DOS/Rate#1344).
   const marketStats = productMarketStats(product);
   const currentMinPrice = marketStats.minPrice;
-  const offersRead = timing.time(
-    'offers',
-    getCachedMasterProductOffers(product.id)
-  );
-  const reviewsRead = timing.time(
-    'reviews',
-    getCachedMasterProductReviews(product.id)
-  );
   const priceHistoryRead = offersRead.then((offers) =>
     timing.time(
       'priceHistory',

@@ -139,8 +139,9 @@ export default async function MerchantProfilePage({
     namespace: 'priceVerdict',
   });
   // One log line of read timings per cache-miss render, as the product
-  // page writes (DOS/Rate#1344). The key is the merchant id from the URL.
-  const timing = startRenderTiming('merchant', id);
+  // page writes (DOS/Rate#1344). The key is the merchant id from the URL,
+  // cut short: any string reaches this page.
+  const timing = startRenderTiming('merchant', id.slice(0, 64));
   const [merchant, dealRadar] = await Promise.all([
     timing.time('merchant', getCachedMerchantProfileById(id)),
     timing.time(

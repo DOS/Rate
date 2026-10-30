@@ -136,14 +136,14 @@ export function resetRateClientForTests(): void {
 // 500 x 1000 rows is far above any table this app reads in full.
 const FETCH_ALL_MAX_PAGES = 500;
 
-async function fetchAllRows<T>(
+export async function fetchAllRows<T>(
   label: string,
   buildPage: (
     from: number,
     to: number
   ) => PromiseLike<{
     data: T[] | null;
-    error: { message: string } | null;
+    error: { message: string; code?: string } | null;
     count?: number | null;
   }>,
   pageSize = 1000,
@@ -153,6 +153,10 @@ async function fetchAllRows<T>(
   const rows: T[] = [];
   for (let from = 0, pages = 0; ;) {
     const { data, error, count } = await buildPage(from, from + pageSize - 1);
+    // With a count, PostgREST answers 416 rather than an empty page once the
+    // offset is past the end (rows left the filter mid-read): the read ends
+    // there, as an empty page would end it.
+    if (error?.code === 'PGRST103' && from > 0) return rows;
     if (error) {
       if (logFailure) {
         log.error('paged read failed', {

@@ -81,6 +81,71 @@ async function main() {
     'without a count, the empty page ends the read'
   );
 
+  const { fetchAllRows } = await import('../rate-api');
+  const rowsOf = (from: number, to: number, total: number) =>
+    Array.from(
+      { length: Math.max(0, Math.min(to, total - 1) - from + 1) },
+      (_, i) => from + i
+    );
+
+  // Several pages with a count: exactly 2000 rows take two requests, not three.
+  let calls = 0;
+  const twoPages = await fetchAllRows('t', async (from, to) => {
+    calls += 1;
+    return { data: rowsOf(from, to, 2000), error: null, count: 2000 };
+  });
+  assert.equal(twoPages.length, 2000);
+  assert.equal(calls, 2, '2000 rows with a count: two requests');
+
+  // A count that grows between pages keeps the read going.
+  calls = 0;
+  const grown = await fetchAllRows('t', async (from, to) => {
+    calls += 1;
+    const total = calls === 1 ? 1000 : 1500;
+    return { data: rowsOf(from, to, total), error: null, count: total };
+  });
+  assert.equal(grown.length, 1000, 'stops at the first count it reaches');
+  assert.equal(calls, 1);
+
+  // Rows left the filter mid-read: PostgREST answers 416 past the new end,
+  // which ends the read like an empty page.
+  calls = 0;
+  const shrunk = await fetchAllRows(
+    't',
+    async (from, to) => {
+      calls += 1;
+      if (from > 0) {
+        return {
+          data: null,
+          error: {
+            message: 'Requested range not satisfiable',
+            code: 'PGRST103',
+          },
+          count: null,
+        };
+      }
+      return { data: rowsOf(from, to, 1000), error: null, count: 1001 };
+    },
+    1000,
+    false
+  );
+  assert.equal(shrunk.length, 1000);
+  assert.equal(calls, 2);
+
+  // The same error on the first page is a failure, not an empty list.
+  await assert.rejects(
+    fetchAllRows(
+      't',
+      async () => ({
+        data: null,
+        error: { message: 'Requested range not satisfiable', code: 'PGRST103' },
+        count: null,
+      }),
+      1000,
+      false
+    )
+  );
+
   console.warn('  ✅ Paged reads stop at the exact count (#1344)');
 }
 
