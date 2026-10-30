@@ -247,7 +247,7 @@ async function main() {
   );
   // An Item slug with capitals on the product route: the old variant URL
   // 308s to the Item URL, which renders, so there is no loop (#1383).
-  const capsItem = { ...item, slug: 'Apple-iPhone-16' } as never;
+  const capsItem = { ...itemRow, slug: 'Apple-iPhone-16' } as never;
   assert.deepEqual(
     planItemRoute({
       ...base,
