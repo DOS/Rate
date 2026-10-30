@@ -66,6 +66,13 @@ import {
   hasReviewRiskEvidence,
   merchantRiskTone,
 } from '@/lib/merchant-risk-tone';
+import {
+  formatDate,
+  formatDecimal,
+  formatNumber,
+  formatPlainNumber,
+  formatPriceVnd,
+} from '@/lib/locale-format';
 
 // Cached after the first request, refreshed every 5 minutes or when the
 // worker revalidates its cache tags (DOS/Rate#491).
@@ -607,7 +614,11 @@ export default async function Home({
                             <span>
                               {battle.scoreDelta5 > 0.005
                                 ? tHome('scoreDeltaLabel', {
-                                    delta: battle.scoreDelta5.toFixed(2),
+                                    delta: formatDecimal(
+                                      battle.scoreDelta5,
+                                      locale,
+                                      2
+                                    ),
                                   })
                                 : tHome('scoreTieLabel')}
                             </span>
@@ -619,7 +630,12 @@ export default async function Home({
                                 {battle.productA.name}
                               </div>
                               <div className="rate-battle-score">
-                                ★ {battle.productA.combinedScore5.toFixed(2)}
+                                ★{' '}
+                                {formatDecimal(
+                                  battle.productA.combinedScore5,
+                                  locale,
+                                  2
+                                )}
                               </div>
                             </div>
                             <span className="rate-battle-vs" aria-hidden="true">
@@ -630,7 +646,12 @@ export default async function Home({
                                 {battle.productB.name}
                               </div>
                               <div className="rate-battle-score">
-                                ★ {battle.productB.combinedScore5.toFixed(2)}
+                                ★{' '}
+                                {formatDecimal(
+                                  battle.productB.combinedScore5,
+                                  locale,
+                                  2
+                                )}
                               </div>
                             </div>
                           </div>
@@ -708,20 +729,23 @@ export default async function Home({
                                     />{' '}
                                     ·{' '}
                                     {tHome('medianPriceInline', {
-                                      price:
-                                        g.marketMedianPrice.toLocaleString(
-                                          'vi-VN'
-                                        ),
+                                      price: formatNumber(
+                                        g.marketMedianPrice,
+                                        locale
+                                      ),
                                     })}
                                   </span>
                                 </div>
                                 <div className="rate-radar-item-side">
                                   <span className="rate-radar-price">
-                                    {g.priceCurrent.toLocaleString('vi-VN')} ₫
+                                    {formatPriceVnd(g.priceCurrent, locale)}
                                   </span>
                                   <span className="rate-radar-tag is-good">
                                     {tHome('vsMedianPctBadge', {
-                                      pct: g.savingsVsMedianPct,
+                                      pct: formatPlainNumber(
+                                        g.savingsVsMedianPct,
+                                        locale
+                                      ),
                                     })}
                                   </span>
                                 </div>
@@ -759,20 +783,23 @@ export default async function Home({
                                     />{' '}
                                     · {tHome('inflatedOrigInline')}{' '}
                                     <s>
-                                      {(
-                                        t.priceOriginal || t.priceCurrent
-                                      ).toLocaleString('vi-VN')}{' '}
-                                      ₫
+                                      {formatPriceVnd(
+                                        t.priceOriginal || t.priceCurrent,
+                                        locale
+                                      )}
                                     </s>
                                   </span>
                                 </div>
                                 <div className="rate-radar-item-side">
                                   <span className="rate-radar-price">
-                                    {t.priceCurrent.toLocaleString('vi-VN')} ₫
+                                    {formatPriceVnd(t.priceCurrent, locale)}
                                   </span>
                                   <span className="rate-radar-tag is-bad">
                                     {tHome('fakeMarkupPctBadge', {
-                                      pct: t.fakeMarkupPct,
+                                      pct: formatPlainNumber(
+                                        t.fakeMarkupPct,
+                                        locale
+                                      ),
                                     })}
                                   </span>
                                 </div>
@@ -826,11 +853,14 @@ export default async function Home({
                                     </div>
                                     <div className="rate-radar-item-side">
                                       <span className="rate-radar-price">
-                                        -{s.spreadVnd.toLocaleString('vi-VN')} ₫
+                                        -{formatPriceVnd(s.spreadVnd, locale)}
                                       </span>
                                       <span className="rate-radar-tag is-warn">
                                         {tHome('spreadPctBadge', {
-                                          pct: s.spreadPct,
+                                          pct: formatPlainNumber(
+                                            s.spreadPct,
+                                            locale
+                                          ),
                                         })}
                                       </span>
                                     </div>
@@ -973,7 +1003,7 @@ export default async function Home({
                             <dt>{tHome('ratingsAndProductsLabel')}</dt>
                             <dd>
                               {merchant.rating_star != null
-                                ? `★ ${merchant.rating_star.toFixed(1)} · `
+                                ? `★ ${formatDecimal(merchant.rating_star, locale, 1)} · `
                                 : ''}
                               {merchant.product_count}{' '}
                               {tHome('productsShortUnit')}
@@ -981,10 +1011,10 @@ export default async function Home({
                             <dd className="rate-merchant-note">
                               {merchant.follower_count > 0
                                 ? tHome('followersCountText', {
-                                    count:
-                                      merchant.follower_count.toLocaleString(
-                                        'vi-VN'
-                                      ),
+                                    count: formatNumber(
+                                      merchant.follower_count,
+                                      locale
+                                    ),
                                   })
                                 : tHome('periodicMonitoring')}
                             </dd>
@@ -995,9 +1025,7 @@ export default async function Home({
                           {merchant.updated_at ? (
                             <span>
                               {tHome('lastUpdatedLabel')}{' '}
-                              {new Date(merchant.updated_at).toLocaleDateString(
-                                'vi-VN'
-                              )}
+                              {formatDate(merchant.updated_at, locale)}
                             </span>
                           ) : (
                             <span />
@@ -1039,7 +1067,10 @@ export default async function Home({
                     <BsCheckCircleFill aria-hidden="true" />
                     {tHome('authenticReviewsStatBadge', {
                       count: platformStats.authenticReviewsCount,
-                      pct: platformStats.authenticRatioPct,
+                      pct: formatPlainNumber(
+                        platformStats.authenticRatioPct,
+                        locale
+                      ),
                     })}
                   </span>
                   {platformStats.filteredSeedingCount > 0 && (
@@ -1103,7 +1134,10 @@ export default async function Home({
                               <BsCheckCircleFill aria-hidden="true" />
                               {confidencePct != null
                                 ? tHome('authenticConfidenceBadge', {
-                                    pct: confidencePct,
+                                    pct: formatPlainNumber(
+                                      confidencePct,
+                                      locale
+                                    ),
                                   })
                                 : tHome('authenticBadge')}
                             </span>

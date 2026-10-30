@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import { Link } from '@/lib/navigation';
 import { MAX_VALID_VND_PRICE } from '@/lib/rate-domain';
 import {
@@ -16,6 +16,7 @@ import {
   upsertWatchlistItem,
   type WatchlistItem,
 } from './watchlist-store';
+import { formatNumber, formatPriceVnd } from '@/lib/locale-format';
 
 export function resolvePriceWatchStep(currentMinPrice: unknown): number {
   const safeCurrent = sanitizeWatchlistPrice(currentMinPrice);
@@ -56,6 +57,7 @@ export default function PriceWatchButton({
   size = 'md',
 }: PriceWatchButtonProps) {
   const t = useTranslations('watchlist');
+  const locale = useLocale();
   const safeSlug = sanitizeWatchlistSlug(slug);
   const safeCurrentMinPrice = sanitizeWatchlistPrice(currentMinPrice);
   const [watchedItem, setWatchedItem] = useState<WatchlistItem | null>(null);
@@ -118,9 +120,10 @@ export default function PriceWatchButton({
       >
         {watchedItem
           ? t('btnWatching', {
-              price: sanitizeWatchlistPrice(
-                watchedItem.targetPrice
-              ).toLocaleString('vi-VN'),
+              price: formatNumber(
+                sanitizeWatchlistPrice(watchedItem.targetPrice),
+                locale
+              ),
             })
           : t('btnWatch')}
       </button>
@@ -148,7 +151,7 @@ export default function PriceWatchButton({
           <p className="text-muted mb-2" style={{ fontSize: '0.8125rem' }}>
             {t('currentBestPrice')}{' '}
             <strong className="text-danger">
-              {safeCurrentMinPrice.toLocaleString('vi-VN')} ₫
+              {formatPriceVnd(safeCurrentMinPrice, locale)}
             </strong>
           </p>
 
@@ -159,7 +162,7 @@ export default function PriceWatchButton({
               className="btn btn-sm btn-light rounded-pill flex-fill border"
               style={{ fontSize: '0.8125rem' }}
             >
-              {t('preset5Pct', { price: preset5Pct.toLocaleString('vi-VN') })}
+              {t('preset5Pct', { price: formatNumber(preset5Pct, locale) })}
             </button>
             <button
               type="button"
@@ -167,7 +170,7 @@ export default function PriceWatchButton({
               className="btn btn-sm btn-light rounded-pill flex-fill border"
               style={{ fontSize: '0.8125rem' }}
             >
-              {t('preset10Pct', { price: preset10Pct.toLocaleString('vi-VN') })}
+              {t('preset10Pct', { price: formatNumber(preset10Pct, locale) })}
             </button>
           </div>
 

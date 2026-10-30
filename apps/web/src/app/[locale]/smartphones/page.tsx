@@ -49,6 +49,13 @@ import { applyCategorySpecTemplate } from '@repo/shared-data/rules';
 import ClientMessages from '@/components/providers/ClientMessages';
 import CatalogSortDropdown from '../components/catalog-sort-dropdown';
 import { productImageUrl } from '@/lib/rate-domain-core';
+import {
+  localizeDecimalPoints,
+  formatDecimal,
+  formatNumber,
+  formatPlainNumber,
+  formatPriceVnd,
+} from '@/lib/locale-format';
 import { versusHref } from '@/lib/item-compare';
 
 // Reads searchParams, so it renders per request. The [locale] layout's
@@ -290,7 +297,7 @@ export async function CategoryCatalogContent({
   if (minRating > 0) {
     activeChips.push({
       id: 'rating',
-      label: `★ ${minRating.toFixed(1)}+`,
+      label: `★ ${formatDecimal(minRating, locale, 1)}+`,
       removeHref: buildFilterHref(basePath, rawSearch, { rating: null }),
     });
   }
@@ -810,9 +817,9 @@ export async function CategoryCatalogContent({
                         });
                       }
                       const screen =
-                        keySpecs.screen ||
+                        localizeDecimalPoints(keySpecs.screen, locale) ||
                         (item.screen_size_inch
-                          ? `${item.screen_size_inch}"`
+                          ? `${formatPlainNumber(item.screen_size_inch, locale)}"`
                           : '');
                       if (screen) {
                         cardSpecs.push({
@@ -960,11 +967,14 @@ export async function CategoryCatalogContent({
                             </div>
                             <div className="rate-radar-item-side">
                               <span className="rate-radar-price">
-                                {g.priceCurrent.toLocaleString('vi-VN')} ₫
+                                {formatPriceVnd(g.priceCurrent, locale)}
                               </span>
                               <span className="rate-radar-tag is-good">
                                 {t('page.vsMedianBadge', {
-                                  pct: g.savingsVsMedianPct,
+                                  pct: formatPlainNumber(
+                                    g.savingsVsMedianPct,
+                                    locale
+                                  ),
                                 })}
                               </span>
                             </div>
@@ -1001,11 +1011,14 @@ export async function CategoryCatalogContent({
                               </div>
                               <div className="rate-radar-item-side">
                                 <span className="rate-radar-price">
-                                  {trap.priceCurrent.toLocaleString('vi-VN')} ₫
+                                  {formatPriceVnd(trap.priceCurrent, locale)}
                                 </span>
                                 <span className="rate-radar-tag is-bad">
                                   {t('page.fakeMarkupBadge', {
-                                    pct: trap.fakeMarkupPct,
+                                    pct: formatPlainNumber(
+                                      trap.fakeMarkupPct,
+                                      locale
+                                    ),
                                   })}
                                 </span>
                               </div>
@@ -1056,11 +1069,14 @@ export async function CategoryCatalogContent({
                                       <div className="rate-radar-item-side">
                                         <span className="rate-radar-tag is-warn">
                                           {t('page.spreadDiffBadge', {
-                                            pct: sp.spreadPct,
-                                            amount:
-                                              sp.spreadVnd.toLocaleString(
-                                                'vi-VN'
-                                              ),
+                                            pct: formatPlainNumber(
+                                              sp.spreadPct,
+                                              locale
+                                            ),
+                                            amount: formatNumber(
+                                              sp.spreadVnd,
+                                              locale
+                                            ),
                                           })}
                                         </span>
                                       </div>

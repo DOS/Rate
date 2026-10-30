@@ -116,6 +116,14 @@ import {
   usableImageUrls,
   productImageUrl,
 } from '@/lib/rate-domain-core';
+import {
+  localizeDecimalPoints,
+  formatDecimal,
+  formatNumber,
+  formatPercent,
+  formatPlainNumber,
+  formatPriceVnd,
+} from '@/lib/locale-format';
 import { versusHref } from '@/lib/item-compare';
 
 // Cached after the first request, refreshed every 5 minutes or when the
@@ -208,7 +216,7 @@ export async function generateCategoryProductMetadata(
       : productMarketStats(product);
   const hasPrice = marketStats.minPrice > 0;
   const name = (isItemGroup ? itemMeta?.name : null) || product.name;
-  const minPrice = marketStats.minPrice.toLocaleString('vi-VN');
+  const minPrice = formatNumber(marketStats.minPrice, locale);
   const canonicalUrl = `https://rate.vn${categoryBasePath}/${
     itemRoute?.kind === 'render' ? itemRoute.itemSlug : product.slug
   }`;
@@ -216,16 +224,20 @@ export async function generateCategoryProductMetadata(
   return {
     // The product name first; the site name, then the price give way to fit
     // a search result (DOS/Rate#782). No "from 0 ₫" without a price.
-    title: fitTitle([
-      ...(hasPrice
-        ? [
-            t('metaTitle', { name, minPrice }),
-            t('metaTitleShort', { name, minPrice }),
-          ]
-        : []),
-      `${name} | Rate.vn`,
-      name,
-    ]),
+    title: fitTitle(
+      [
+        ...(hasPrice
+          ? [
+              t('metaTitle', { name, minPrice }),
+              t('metaTitleShort', { name, minPrice }),
+            ]
+          : []),
+        `${name} | Rate.vn`,
+        name,
+      ],
+      undefined,
+      locale
+    ),
     description: fitDescription(
       hasPrice
         ? t('metaDesc', {
@@ -233,7 +245,8 @@ export async function generateCategoryProductMetadata(
             brand: product.brand,
             merchantCount: marketStats.sellerCount,
           })
-        : t('metaDescNoStock', { name, brand: product.brand })
+        : t('metaDescNoStock', { name, brand: product.brand }),
+      locale
     ),
     alternates: {
       canonical: canonicalUrl,
@@ -403,7 +416,7 @@ export async function ProductDetailView({
   // A sold-out listing's last price is no deal (DOS/Rate#1141).
   const inStockOffers = offers.filter((o) => !isOfferUnavailable(o));
   const radarSignal = computeProductRadarSignal(product, inStockOffers);
-  const radarNote = radarExplanation(radarSignal);
+  const radarNote = radarExplanation(radarSignal, locale);
 
   const leaderboardBadges = computeProductStandingInCategory(
     product,
@@ -418,7 +431,7 @@ export async function ProductDetailView({
   const specs = product.specifications as ProductSpecifications;
   const keySpecs = product.key_specs as KeySpecs;
   const sellerCount = marketStats.sellerCount;
-  const heroMinPriceFormatted = heroStats.minPrice.toLocaleString('vi-VN');
+  const heroMinPriceFormatted = formatNumber(heroStats.minPrice, locale);
   // Why there is no price, when there is none (DOS/Rate#1188).
   const saleState = masterSaleState({
     minPrice: currentMinPrice,
@@ -645,7 +658,7 @@ export async function ProductDetailView({
           </div>
           <div className="fw-bold text-dark rate-tabular fs-5">
             {v.stats.minPrice > 0 ? (
-              `${v.stats.minPrice.toLocaleString('vi-VN')} ₫`
+              formatPriceVnd(v.stats.minPrice, locale)
             ) : v.saleStateKey ? (
               <span data-sale-state={v.saleState}>{tSale(v.saleStateKey)}</span>
             ) : (
@@ -653,13 +666,13 @@ export async function ProductDetailView({
             )}
             {v.stats.minPrice > 0 && v.stats.minPrice !== v.stats.maxPrice && (
               <span className="small fw-normal text-muted ms-2">
-                ~ {v.stats.maxPrice.toLocaleString('vi-VN')} ₫
+                ~ {formatPriceVnd(v.stats.maxPrice, locale)}
               </span>
             )}
             {v.priceHistory.lowestEverPrice != null && (
               <span className="badge bg-success-subtle text-success fw-normal ms-2">
                 {t('allTimeLowBadge', {
-                  price: v.priceHistory.lowestEverPrice.toLocaleString('vi-VN'),
+                  price: formatNumber(v.priceHistory.lowestEverPrice, locale),
                 })}
               </span>
             )}
@@ -880,7 +893,7 @@ export async function ProductDetailView({
                       priceLabel:
                         stats.minPrice > 0
                           ? t('itemVariantPrice', {
-                              price: stats.minPrice.toLocaleString('vi-VN'),
+                              price: formatNumber(stats.minPrice, locale),
                             })
                           : t('itemVariantNoPrice'),
                     };
@@ -899,7 +912,7 @@ export async function ProductDetailView({
                     {t('userWeightedScoreLabel')}:
                   </span>
                   <strong className="rate-tabular">
-                    {displayUserRating.toFixed(1)}
+                    {formatDecimal(displayUserRating, locale, 1)}
                   </strong>
                   <span>
                     {t('verifiedReviewsCount', { count: authenticCount })}
@@ -959,7 +972,7 @@ export async function ProductDetailView({
                       {displayUserRating > 0 ? (
                         <div className="rate-pdv-score-row">
                           <span className="rate-pdv-score-value">
-                            {displayUserRating.toFixed(1)}
+                            {formatDecimal(displayUserRating, locale, 1)}
                           </span>
                           <span className="rate-pdv-score-sub">
                             {t('verifiedReviewsCount', {
@@ -983,7 +996,7 @@ export async function ProductDetailView({
                           className={`rate-pdv-tag is-${bayesianSummary.confidenceTier}`}
                           title={
                             bayesianSummary.effectiveWeightSum > 0
-                              ? `Σw=${bayesianSummary.effectiveWeightSum.toFixed(2)} · c=${Math.round(bayesianSummary.confidenceRatio * 100)}%`
+                              ? `Σw=${formatDecimal(bayesianSummary.effectiveWeightSum, locale, 2)} · c=${formatPercent(Math.round(bayesianSummary.confidenceRatio * 100), locale)}`
                               : undefined
                           }
                         >
@@ -992,8 +1005,12 @@ export async function ProductDetailView({
                             <span className="visually-hidden">
                               {' '}
                               (Σw=
-                              {bayesianSummary.effectiveWeightSum.toFixed(2)},
-                              c=
+                              {formatDecimal(
+                                bayesianSummary.effectiveWeightSum,
+                                locale,
+                                2
+                              )}
+                              , c=
                               {Math.round(
                                 bayesianSummary.confidenceRatio * 100
                               )}
@@ -1011,7 +1028,7 @@ export async function ProductDetailView({
                       {expertRating10 != null ? (
                         <div className="rate-pdv-score-row">
                           <span className="rate-pdv-score-value is-small">
-                            {expertRating10.toFixed(1)}
+                            {formatDecimal(expertRating10, locale, 1)}
                           </span>
                           <span className="rate-pdv-score-sub">
                             {t('tenGroupStandardWithSlash')}
@@ -1109,7 +1126,7 @@ export async function ProductDetailView({
                                   className={`rate-pdv-crit-value${val == null ? ' is-empty' : ''}`}
                                 >
                                   {val != null
-                                    ? `${val.toFixed(1)}/5`
+                                    ? `${formatDecimal(val, locale, 1)}/5`
                                     : t('notAvailableYet')}
                                 </span>
                               </div>
@@ -1201,9 +1218,9 @@ export async function ProductDetailView({
                     <div className="fw-semibold small">
                       <ContentText
                         text={String(
-                          keySpecs?.screen ||
+                          localizeDecimalPoints(keySpecs?.screen, locale) ||
                             (specs?.display?.size_inch
-                              ? `${specs.display.size_inch}" ${specs?.display?.type || ''}`.trim()
+                              ? `${formatPlainNumber(specs.display.size_inch, locale)}" ${specs?.display?.type || ''}`.trim()
                               : specs?.display?.type ||
                                 specs?.multimedia?.loudspeaker ||
                                 '-')
@@ -1613,7 +1630,7 @@ export async function ProductDetailView({
                               <span className="badge bg-warning-subtle text-dark small">
                                 ★{' '}
                                 {peerRating > 0
-                                  ? peerRating.toFixed(1)
+                                  ? formatDecimal(peerRating, locale, 1)
                                   : t('peerNoRating')}
                               </span>
                               <RadarBadge
@@ -1634,7 +1651,7 @@ export async function ProductDetailView({
                             <div className="d-flex align-items-center flex-wrap gap-2">
                               {peerPrice > 0 ? (
                                 <span className="text-danger fw-bold small rate-tabular">
-                                  {peerPrice.toLocaleString('vi-VN')} ₫
+                                  {formatPriceVnd(peerPrice, locale)}
                                 </span>
                               ) : (
                                 <span className="text-muted small">
@@ -1652,21 +1669,19 @@ export async function ProductDetailView({
                                 >
                                   {priceDelta < 0
                                     ? t('cheaperByBadge', {
-                                        amount:
-                                          Math.abs(priceDelta).toLocaleString(
-                                            'vi-VN'
-                                          ),
+                                        amount: formatNumber(
+                                          Math.abs(priceDelta),
+                                          locale
+                                        ),
                                       })
-                                    : `+${priceDelta.toLocaleString('vi-VN')} ₫`}
+                                    : `+${formatPriceVnd(priceDelta, locale)}`}
                                 </span>
                               )}
                             </div>
                             {peerCostPerPoint > 0 && (
                               <div className="text-muted small rate-tabular mt-1">
                                 {t('costPerPointUnit', {
-                                  cost: peerCostPerPoint.toLocaleString(
-                                    'vi-VN'
-                                  ),
+                                  cost: formatNumber(peerCostPerPoint, locale),
                                 })}
                                 {costPerPointDelta < 0 && (
                                   <span className="text-success fw-semibold ms-1">

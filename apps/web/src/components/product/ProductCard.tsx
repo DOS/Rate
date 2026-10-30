@@ -8,6 +8,7 @@ import RadarBadge from '@/components/radar/RadarBadge';
 import type { RadarSignal } from '@/lib/deal-radar';
 import { contentLang } from '@/lib/content-lang';
 import { MAX_VALID_VND_PRICE } from '@/lib/rate-domain';
+import { formatDecimal, formatPriceVnd } from '@/lib/locale-format';
 import { deviceImageSrcSet } from '@/lib/device-images';
 
 export interface ProductCardSpec {
@@ -56,8 +57,11 @@ export function sanitizeProductCardPriceVnd(value: unknown): number {
   return Math.round(num);
 }
 
-export function formatProductCardVnd(value: unknown): string {
-  return `${sanitizeProductCardPriceVnd(value).toLocaleString('vi-VN')} ₫`;
+export function formatProductCardVnd(
+  value: unknown,
+  locale?: string | null
+): string {
+  return formatPriceVnd(sanitizeProductCardPriceVnd(value), locale);
 }
 
 export function sanitizeProductCardScore(
@@ -179,7 +183,7 @@ export default function ProductCard({
           {safeUserScore != null ? (
             <>
               <span className="rate-score-badge-user">
-                ★ {safeUserScore.toFixed(1)}
+                ★ {formatDecimal(safeUserScore, locale, 1)}
               </span>
               <span className="rate-product-card-muted">
                 {t('reviewCount', { count: safeReviewCount })}
@@ -190,7 +194,9 @@ export default function ProductCard({
           )}
           {safeExpertScore != null && (
             <span className="rate-score-badge-expert">
-              {t('expertScore', { score: safeExpertScore.toFixed(1) })}
+              {t('expertScore', {
+                score: formatDecimal(safeExpertScore, locale, 1),
+              })}
             </span>
           )}
         </div>
@@ -245,7 +251,7 @@ export default function ProductCard({
                     {sizeChips.length > 0 ? t('fromPrice') : t('refPrice')}
                   </div>
                   <div className="rate-product-card-price">
-                    {formatProductCardVnd(safeMinPrice)}
+                    {formatProductCardVnd(safeMinPrice, locale)}
                   </div>
                 </>
               ) : (
@@ -265,7 +271,7 @@ export default function ProductCard({
               {hasRange && (
                 <div>
                   {t('priceUpTo', {
-                    price: formatProductCardVnd(safeMaxPrice),
+                    price: formatProductCardVnd(safeMaxPrice, locale),
                   })}
                 </div>
               )}
