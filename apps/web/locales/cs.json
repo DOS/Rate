@@ -1209,7 +1209,7 @@
     "offersReviewRiskNoData": "nedostatek dat",
     "offersDiscontinuedBadge": "Ukončený prodej",
     "offersTrustBadge": "Důvěryhodnost: {score} %",
-    "offersTrustBadgeNoData": "Důvěra: zatím bez dat",
+    "offersTrustBadgeNoData": "Důvěryhodnost: zatím bez dat",
     "offersScamRiskLabel": "Riziko podvodu",
     "variantLinksLabel": "Varianty",
     "variantLinksUnknownSize": "Velikost neuvedena",
