@@ -6,6 +6,11 @@
 // would respell, with the listings and price rows each change would move, and
 // prints a proposed old -> new mapping. It writes nothing.
 //
+// It also lists, for a master that keeps its key, the minority of its listings
+// that key elsewhere and would leave it, per target key (#1491 c, d: 5G iPads
+// under a key that stays Wi-Fi, other RAM under a MacBook key). Point --normalizer
+// at a build of the branch whose keys are being weighed.
+//
 // Read-only by construction:
 // - one psql session reads everything inside BEGIN READ ONLY ... ROLLBACK, and
 //   PGOPTIONS asks for default_transaction_read_only as well (a pooler may drop
@@ -218,6 +223,7 @@ export function planRekeys({ masters, listings, priceRows }) {
   const masterByKey = new Map(masters.map((m) => [m.model_key, m]));
   const changes = [];
   const unclear = [];
+  const splits = [];
   let unchanged = 0;
   let noListings = 0;
   for (const m of masters) {
@@ -266,6 +272,34 @@ export function planRekeys({ masters, listings, priceRows }) {
     const majority = top !== null && count * 2 > keyed;
     if (majority && top === stored.item) {
       unchanged += 1;
+      // The master keeps its key, but a minority of its listings may key elsewhere,
+      // such as 5G iPads under a key that stays Wi-Fi (#1491 c, d). They would leave
+      // it once the normalizer ships; list them per target key.
+      const leaving = new Map();
+      for (const l of own) {
+        if (!l.key) continue;
+        const { item } = splitKey(watchRespelling(l.key) ?? l.key);
+        if (item === stored.item) continue;
+        const newKey = stored.variant ? `${item}:${stored.variant}` : item;
+        const g = leaving.get(newKey) ?? { newKey, listings: 0, priceRows: 0 };
+        g.listings += 1;
+        g.priceRows += rowsByProduct.get(l.id) ?? 0;
+        leaving.set(newKey, g);
+      }
+      if (leaving.size > 0) {
+        splits.push({
+          masterId: m.id,
+          status: m.status,
+          key: m.model_key,
+          listings: own.length,
+          groups: [...leaving.values()]
+            .sort((a, b) => a.newKey.localeCompare(b.newKey))
+            .map((g) => ({
+              ...g,
+              target: masterByKey.get(g.newKey)?.id ?? null,
+            })),
+        });
+      }
       continue;
     }
     if (!majority && respelled) {
@@ -319,7 +353,8 @@ export function planRekeys({ masters, listings, priceRows }) {
     (a, b) =>
       a.category.localeCompare(b.category) || a.oldKey.localeCompare(b.oldKey)
   );
-  return { changes, unclear, unchanged, noListings };
+  splits.sort((a, b) => a.key.localeCompare(b.key));
+  return { changes, unclear, splits, unchanged, noListings };
 }
 
 /** The report as text lines. */
@@ -359,6 +394,27 @@ export function formatPlan(plan) {
       lines.push(
         `${u.oldKey}  [listings ${u.listings}, keyed ${u.keyed}; votes ${JSON.stringify(u.votes)}; master ${u.masterId}]`
       );
+    }
+  }
+  const splits = plan.splits ?? [];
+  if (splits.length > 0) {
+    const leaving = splits.reduce(
+      (n, s) => n + s.groups.reduce((m, g) => m + g.listings, 0),
+      0
+    );
+    lines.push(
+      '',
+      `## minority listings leaving a kept-key master (${splits.length} masters, ${leaving} listings; #1491 c, d)`
+    );
+    for (const s of splits) {
+      lines.push(
+        `${s.key}  [keeps its key; ${s.status}; listings ${s.listings}; master ${s.masterId}]`
+      );
+      for (const g of s.groups) {
+        lines.push(
+          `  -> ${g.newKey}: ${g.listings} listings, ${g.priceRows} price rows (${g.target ? `into existing master ${g.target}` : 'a new master'})`
+        );
+      }
     }
   }
   return lines;

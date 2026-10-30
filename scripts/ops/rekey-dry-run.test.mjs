@@ -410,6 +410,94 @@ test('plans renames and merges, counting what would move', () => {
   assert.match(text, /## unclear/);
 });
 
+test('lists the minority listings that would leave a kept-key master (#1491 c, d)', () => {
+  const plan = planRekeys({
+    masters: [
+      {
+        id: 'i1',
+        model_key: 'apple:ipad-pro-m4-11:256gb',
+        status: 'published',
+      },
+      { id: 'i2', model_key: 'apple:ipad-pro-m4-11-5g:256gb', status: 'draft' },
+      {
+        id: 'b1',
+        model_key: 'apple:macbook-air-m3-13:256gb',
+        status: 'published',
+      },
+      { id: 'q1', model_key: 'samsung:galaxy-a55:256gb', status: 'published' },
+    ],
+    listings: [
+      // A suffix-enabled build keys the 5G titles apart; the Wi-Fi majority stays.
+      { id: 'w1', master_id: 'i1', key: 'apple:ipad-pro-m4-11:256gb' },
+      { id: 'w2', master_id: 'i1', key: 'apple:ipad-pro-m4-11:256gb' },
+      { id: 'w3', master_id: 'i1', key: 'apple:ipad-pro-m4-11:unknown' },
+      { id: 'c1', master_id: 'i1', key: 'apple:ipad-pro-m4-11-5g:256gb' },
+      { id: 'w4', master_id: 'i1', key: null },
+      { id: 'g1', master_id: 'b1', key: 'apple:macbook-air-m3-13:256gb' },
+      { id: 'g2', master_id: 'b1', key: 'apple:macbook-air-m3-13:256gb' },
+      {
+        id: 'g3',
+        master_id: 'b1',
+        key: 'apple:macbook-air-m3-13-8gb-ram:256gb',
+      },
+      // A master whose listings all keep its key lists nothing.
+      { id: 'a1', master_id: 'q1', key: 'samsung:galaxy-a55:256gb' },
+    ],
+    priceRows: [
+      { product_id: 'c1', rows: 7 },
+      { product_id: 'g3', rows: '2' },
+      { product_id: 'w1', rows: 9 },
+    ],
+  });
+  assert.equal(plan.changes.length, 0, 'every master keeps its key');
+  assert.equal(plan.unchanged, 3, 'i1, b1, q1');
+  assert.equal(plan.noListings, 1, 'i2');
+  assert.deepEqual(plan.splits, [
+    {
+      masterId: 'i1',
+      status: 'published',
+      key: 'apple:ipad-pro-m4-11:256gb',
+      listings: 5,
+      groups: [
+        {
+          newKey: 'apple:ipad-pro-m4-11-5g:256gb',
+          listings: 1,
+          priceRows: 7,
+          target: 'i2',
+        },
+      ],
+    },
+    {
+      masterId: 'b1',
+      status: 'published',
+      key: 'apple:macbook-air-m3-13:256gb',
+      listings: 3,
+      groups: [
+        {
+          newKey: 'apple:macbook-air-m3-13-8gb-ram:256gb',
+          listings: 1,
+          priceRows: 2,
+          target: null,
+        },
+      ],
+    },
+  ]);
+  const text = formatPlan(plan).join('\n');
+  assert.match(
+    text,
+    /## minority listings leaving a kept-key master \(2 masters, 2 listings; #1491 c, d\)/
+  );
+  assert.match(
+    text,
+    /-> apple:ipad-pro-m4-11-5g:256gb: 1 listings, 7 price rows \(into existing master i2\)/
+  );
+  assert.match(
+    text,
+    /-> apple:macbook-air-m3-13-8gb-ram:256gb: 1 listings, 2 price rows \(a new master\)/
+  );
+  assert.match(text, /Proposed re-keys: 0 masters/);
+});
+
 test('a watch respelling keeps what the titles say, else falls back to the stored key', () => {
   const plan = planRekeys({
     masters: [
