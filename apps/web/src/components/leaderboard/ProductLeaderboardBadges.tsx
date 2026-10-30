@@ -173,7 +173,6 @@ export default async function ProductLeaderboardBadges({
             <span>{titleText}</span>
             <span
               style={{
-                opacity: 0.85,
                 fontFamily: 'var(--font-mono, monospace)',
                 fontSize: '0.8125rem',
               }}

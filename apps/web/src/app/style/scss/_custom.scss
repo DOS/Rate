@@ -1355,6 +1355,19 @@ body .input-group > .input-group-text {
   }
 }
 
+// Up to 1079px the theme button (DOS/Rate#1435) needs a few more pixels.
+@media (min-width: 992px) and (max-width: 1079.98px) {
+  .navigation .nav-menu > li > a,
+  .rate-nav-dropdown-toggle {
+    padding-left: 6px;
+    padding-right: 6px;
+  }
+
+  .navigation .nav-menu.nav-menu-social > li {
+    margin-right: 6px !important;
+  }
+}
+
 @media (max-width: 991.98px) {
   .rate-nav-dropdown-toggle {
     display: none;

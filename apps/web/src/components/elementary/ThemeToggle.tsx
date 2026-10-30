@@ -9,6 +9,7 @@ import {
   followSystemTheme,
   readThemeChoice,
   resolveTheme,
+  THEME_ATTRIBUTE,
   THEME_CHANGE_EVENT,
   THEME_STORAGE_KEY,
   type ThemeChoice,
@@ -36,6 +37,12 @@ function useThemeChoice() {
   useEffect(() => {
     current.current = readThemeChoice();
     setChoice(current.current);
+    // A 404 is served as Next's error shell and its <head> script, inserted
+    // by React, never runs: set the theme here, after the first paint.
+    const root = document.documentElement;
+    if (!root.hasAttribute(THEME_ATTRIBUTE)) {
+      root.setAttribute(THEME_ATTRIBUTE, resolveTheme(current.current));
+    }
     // The desktop and phone controls are both mounted, and another tab may
     // choose too: each control follows every change.
     const onChange = (event: Event) => {
