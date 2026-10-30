@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="vi" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="color-scheme" content="dark" />
+  <title>Chọn cách bật CSP</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0f1113;
+      --surface: #161a1e;
+      --surface-2: #1d2228;
+      --border: #2a313a;
+      --text: #e8edf2;
+      --muted: #9ba5b0;
+      --accent: #FF2E29;
+      --accent-soft: rgba(255, 46, 41, 0.14);
+      --green: #22c55e;
+      --green-soft: rgba(34, 197, 94, 0.14);
+      --amber: #f59e0b;
+      --amber-soft: rgba(245, 158, 11, 0.14);
+      --code-bg: #0b0d0f;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 32px 16px 64px;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Inter, sans-serif;
+      line-height: 1.65;
+    }
+    .container { max-width: 960px; margin: 0 auto; }
+    h1 { font-size: 28px; margin: 12px 0 8px; letter-spacing: -0.02em; }
+    h2 { font-size: 20px; margin: 40px 0 12px; padding-bottom: 8px; border-bottom: 1px solid var(--border); color: #fff; }
+    h3 { font-size: 16px; margin: 22px 0 8px; color: #fff; }
+    p, li { color: var(--text); }
+    .muted { color: var(--muted); }
+    .badge { display: inline-block; padding: 4px 10px; border-radius: 6px; font-size: 12px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; }
+    .badge-accent { background: var(--accent-soft); color: var(--accent); border: 1px solid rgba(255,46,41,0.35); }
+    .badge-amber { background: var(--amber-soft); color: var(--amber); border: 1px solid rgba(245,158,11,0.35); }
+    .card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 16px 18px; margin: 14px 0; }
+    .card.rec { border-color: rgba(34,197,94,0.45); }
+    .card.warn { border-color: rgba(245,158,11,0.45); }
+    .card.key { border-color: rgba(255,46,41,0.45); }
+    .table-wrap { overflow-x: auto; margin: 12px 0; }
+    table { width: 100%; border-collapse: collapse; font-size: 14px; min-width: 620px; }
+    th, td { border: 1px solid var(--border); padding: 8px 10px; text-align: left; vertical-align: top; }
+    th { background: var(--surface-2); color: #fff; }
+    code { background: var(--code-bg); border: 1px solid var(--border); border-radius: 4px; padding: 1px 5px; font-size: 13px; overflow-wrap: anywhere; }
+    dl { margin: 0; }
+    dt { font-weight: 700; color: #fff; margin-top: 8px; }
+    dd { margin: 2px 0 0 0; }
+    .q { border-left: 3px solid var(--accent); padding-left: 12px; margin: 16px 0; }
+    .q strong { color: #fff; }
+    .rec-line { color: var(--green); font-weight: 600; }
+    a { color: #ff6b66; }
+  </style>
+</head>
+<body>
+<div class="container">
+  <span class="badge badge-accent">Chưa áp dụng gì</span>
+  <span class="badge badge-amber">Chờ JOY chốt 4 quyết định</span>
+  <h1>Chọn cách bật CSP cho script trên rate.vn</h1>
+  <p class="muted">Ngày 30/10/2026 - Issue <a href="https://github.com/DOS/Rate/issues/1323">DOS/Rate#1323</a> và <a href="https://github.com/DOS/Rate/issues/1348">#1348</a> - Bản tiếng Anh: <a href="./2026-10-30-csp-enforce-options.md">2026-10-30-csp-enforce-options.md</a> - Người soạn: session Web của Rate Core PO</p>
+
+  <div class="card rec">
+    <h3>Tóm tắt</h3>
+    <p><b>CSP</b> (Content Security Policy, chính sách bảo mật nội dung) là header báo cho trình duyệt biết trang được chạy script từ đâu. Hiện rate.vn chỉ gửi CSP chặt ở chế độ <b>chỉ báo cáo</b> (report-only): trình duyệt không chặn gì, chỉ gửi báo cáo vi phạm về <code>/api/csp-report</code>.</p>
+    <p>Muốn bật chặn thật thì vướng một điều: các trang được cache (ISR) không mang <b>nonce</b> (mã ngẫu nhiên đổi theo từng request, chỉ script nào có đúng mã mới được chạy). Nếu bật ngay, mọi trang cache sẽ hỏng.</p>
+    <p class="rec-line">Khuyến nghị: làm phương án (c) ngay. Bật chặn thật một chính sách nới (<code>script-src 'self' 'unsafe-inline'</code>), giữ chính sách chặt ở chế độ chỉ báo cáo. Phương án (a) là đích lâu dài, chờ #1344 đưa thời gian render xuống dưới 2 giây. Bỏ phương án (b).</p>
+  </div>
+
+  <h2>1. Hiện trạng</h2>
+  <ul>
+    <li>Proxy (<code>apps/web/src/proxy.ts</code>) gửi chính sách chặt <code>script-src 'self' 'nonce-…' 'strict-dynamic'</code> ở chế độ chỉ báo cáo, mỗi request một nonce mới (<code>apps/web/src/lib/csp.ts</code>).</li>
+    <li>Phần đang chặn thật hôm nay chỉ có <code>frame-ancestors</code>, <code>base-uri</code>, <code>form-action</code>, <code>object-src</code>. Phần này nằm trong thẻ <code>&lt;meta&gt;</code> (<code>PAGE_META_CSP</code>) và <code>X-Frame-Options</code>, không nằm trong header. Lý do: header CSP chặn thật sẽ bị chép sang request, và Next.js sẽ đọc nonce từ đó (#1345).</li>
+    <li>Từ #1345, các trang render theo từng request đã mang nonce. Kiểm tra trực tiếp ngày 30/10 (chỉ đọc): <code>/smartphones</code> và <code>/inspect</code> có 27 đến 29 thuộc tính <code>nonce=</code>, khớp với header.</li>
+    <li>Các trang ISR (render một lần rồi phục vụ từ cache) không có nonce. Trang chủ có 9 script inline và 0 nonce. Danh sách: trang chủ, about-us, contact-us, developers, deals, leaderboard, merchants, merchants/[id], compare/[versus], watchlist, và 5 route trang sản phẩm.</li>
+  </ul>
+
+  <h2>2. Báo cáo vi phạm thật trên production</h2>
+  <p>Đọc bằng <code>vercel logs</code> (chỉ đọc), từ 18:54 ngày 29/10 đến 05:56 ngày 30/10 (giờ UTC). Gói Pro chỉ giữ log khoảng 12 giờ, nên không đọc được khung dài hơn. Mỗi vi phạm khác nhau chỉ được ghi một lần mỗi 10 phút trên mỗi instance, nên đây là số dòng log, không phải số lượt xem.</p>
+  <div class="table-wrap">
+  <table>
+    <tr><th>Loại</th><th>Số dòng</th></tr>
+    <tr><td>Tổng</td><td>2392</td></tr>
+    <tr><td><code>script-src-elem</code>, bị chặn là chunk <code>/_next/static</code> của chính Rate</td><td>2020</td></tr>
+    <tr><td><code>script-src-elem</code>, bị chặn là script inline</td><td>372</td></tr>
+    <tr><td>Mọi chỉ thị khác (ảnh, kết nối, style, frame...)</td><td><b>0</b></td></tr>
+    <tr><td>Script từ bên thứ ba</td><td><b>0</b> (69 dòng là chunk trên địa chỉ deployment <code>rate-*.vercel.app</code>)</td></tr>
+  </table>
+  </div>
+  <ul>
+    <li><b>Bản deploy trước khi sửa #1345</b> (đến 04:19): mọi trang đều bị báo, kể cả trang động: <code>/smartphones</code> 428, trang chủ 423, trang sản phẩm 269, <code>/leaderboard</code> 230, <code>/merchants/[id]</code> 219, <code>/compare</code> 197.</li>
+    <li><b>Bản deploy hiện tại</b> (từ 05:43): chỉ trang ISR bị báo: trang chủ 219, <code>/merchants/[id]</code> 76, trang sản phẩm 66, <code>/contact-us</code> 27. Khung này ngắn (13 phút), nhưng không có trang động nào.</li>
+  </ul>
+  <div class="card key">
+    <p><b>Ý nghĩa:</b> mọi báo cáo đến nay đều là script Next.js của chính Rate trên trang cache. Đó là dữ liệu trang dạng script inline (<code>self.__next_f.push</code>) và các chunk do nó nạp. Chưa thấy script của extension, bên thứ ba hay analytics nào, và không có vi phạm nào ngoài <code>script-src</code>. Nếu bật chặt ngay hôm nay, mọi trang ISR sẽ hỏng, ngoài ra không hỏng gì khác.</p>
+  </div>
+
+  <h2>3. Ba phương án</h2>
+
+  <h3>(a) Nonce ở mọi trang, render trang ISR theo từng request</h3>
+  <dl>
+    <dt>Cách làm</dt><dd>Bỏ cache ISR ở các route trên, để mỗi lần trả trang đều có nonce riêng, rồi bật chặn chính sách chặt.</dd>
+    <dt>Mức bảo vệ</dt><dd>Mạnh nhất: không script inline nào chạy được nếu thiếu nonce.</dd>
+    <dt>Chi phí (số đo từ #1344)</dt><dd>
+      <ul>
+        <li>Khi chưa có cache: trang sản phẩm mất <b>12,3 giây</b> mới có byte đầu tiên (TTFB), trong đó 7,1 giây là đọc dữ liệu. Trang cửa hàng mất <b>14,9 giây</b>. PR #1416 đã cho các lượt đọc chạy song song, nhưng chưa có số đo sau khi promote, và chưa đạt mục tiêu 2 giây.</li>
+        <li>Khi đã có cache: trang ISR trả trong <b>0,2 đến 0,5 giây</b>. Trang động <code>/smartphones</code> (dữ liệu đã có cache) trả trong <b>0,6 đến 0,7 giây</b>. Cùng mạng đo, 3 request mỗi trang.</li>
+        <li>Với (a), mọi lượt xem trang sản phẩm, cửa hàng, so sánh đều thành một lần chạy function. Lượt nào rơi vào instance nguội hoặc dữ liệu hết hạn cache sẽ phải chờ vài giây, thứ mà ISR đang che đi. Chi phí function và tải Supabase tăng theo lượng truy cập, thay vì theo số trang.</li>
+      </ul>
+    </dd>
+    <dt>Kết luận</dt><dd>Chưa làm lúc này. Đổi một lớp bảo vệ (chưa thấy kẻ tấn công nào trong báo cáo) lấy một trang web chậm hơn mà người dùng cảm nhận được. Xem lại khi #1344 đưa thời gian render nguội xuống dưới 2 giây.</dd>
+  </dl>
+
+  <h3>(b) Dùng mã băm (hash) thay nonce</h3>
+  <dl>
+    <dt>Cách làm</dt><dd>Bật <code>experimental.sri</code> của Next.js (Next 16.4 hỗ trợ cả khi build bằng Turbopack) để mỗi chunk có thuộc tính <code>integrity</code>, rồi liệt kê hash trong chính sách. Hoặc tự giữ một danh sách hash.</dd>
+    <dt>Cái gì hỏng</dt><dd>
+      <ul>
+        <li><b>Dữ liệu trang inline.</b> Mỗi trang có vài script <code>self.__next_f.push(...)</code> chứa dữ liệu của chính trang đó. Nội dung khác nhau theo từng trang và từng lần render lại, nên không thể đưa hash của chúng vào header (proxy chạy trước khi trang render). Cũng không đưa được vào thẻ <code>&lt;meta&gt;</code>, vì các script này được gửi sau <code>&lt;head&gt;</code>.</li>
+        <li><b>Giữ <code>'unsafe-inline'</code> làm dự phòng cũng không được.</b> Khi đã có hash hoặc nonce trong <code>script-src</code>, trình duyệt bỏ qua <code>'unsafe-inline'</code>, nên các script dữ liệu trang vẫn bị chặn.</li>
+        <li><b>Khớp script ngoài bằng hash</b> là tính năng CSP3, trình duyệt hỗ trợ chưa đều. Danh sách hash còn đổi theo mỗi lần build, phải sinh lại và đi đúng nhịp với deploy và rollback.</li>
+      </ul>
+    </dd>
+    <dt>Chi phí bảo trì</dt><dd>Thêm một bước build sinh danh sách hash, thêm test giữ nó khớp với chunk, mà vẫn không phủ được dữ liệu trang inline.</dd>
+    <dt>Kết luận</dt><dd>Không dùng được cho trang App Router. SRI có thể xem xét sau, chỉ để kiểm tra tính toàn vẹn của chunk.</dd>
+  </dl>
+
+  <h3>(c) Giữ chế độ chỉ báo cáo, cộng một danh sách cho phép dựa trên số liệu, chặn thật</h3>
+  <dl>
+    <dt>Cách làm</dt><dd>
+      <ol>
+        <li>Chặn thật <code>script-src 'self' 'unsafe-inline'</code> trên mọi trang: không <code>'unsafe-eval'</code>, không host nào khác. Đặt trong thẻ <code>&lt;meta&gt;</code> có sẵn (<code>PAGE_META_CSP</code>), không đặt trong header, nên không đụng tới việc truyền nonce của #1345. Chính sách này chặn script từ host lạ (kiểu tấn công chèn script để lấy dữ liệu hay gặp nhất), <code>eval</code> và plugin. Nó không chặn script inline bị chèn vào trang. Áp vào 2392 báo cáo ở trên, nó sẽ sinh ra <b>0</b> vi phạm.</li>
+        <li>Giữ chính sách chặt có nonce ở chế độ chỉ báo cáo, để vẫn thấy nguồn script mới nếu có. Có thể chỉ gửi nó trên trang động, để khoảng 2400 dòng log mỗi 12 giờ từ trang ISR (đã biết lý do) không che mất tín hiệu mới.</li>
+        <li>Khi #1344 làm render theo request đủ rẻ, chuyển dần từng route sang (a).</li>
+      </ol>
+    </dd>
+    <dt>Vị trí thẻ meta</dt><dd>Thẻ <code>&lt;meta&gt;</code> CSP chỉ áp dụng cho phần trình duyệt đọc sau nó. Trên trang chủ hiện tại, 16 thẻ <code>&lt;script&gt;</code> trong <code>&lt;head&gt;</code> nằm trước thẻ meta. Tất cả đều là chunk của chính Next.js trong <code>/_next/static</code>, vốn được chính sách cho phép. Toàn bộ <code>&lt;body&gt;</code>, nơi nội dung bị chèn sẽ nằm, đều ở sau thẻ meta. Kèm theo thay đổi là một bài kiểm tra e2e (tự động trên trình duyệt) xác nhận các route chính tải mà không có vi phạm nào.</dd>
+    <dt>Kết luận</dt><dd>Nên làm ngay. Chặn thật phần không tốn gì, giữ nguyên tốc độ hiện tại, và vẫn để chính sách chặt theo dõi.</dd>
+  </dl>
+
+  <h2>4. Khuyến nghị</h2>
+  <ol>
+    <li><b>Làm (c) ngay:</b> thêm <code>script-src 'self' 'unsafe-inline'</code> vào chính sách <code>&lt;meta&gt;</code> đang chặn thật, kèm bài e2e "không vi phạm" trên các route chính. Giữ chính sách chặt có nonce ở chế độ chỉ báo cáo.</li>
+    <li><b>Giữ (a) làm đích, chờ #1344:</b> chỉ chuyển một route sang render theo request khi trang nguội render dưới 2 giây. Bắt đầu từ các trang nhẹ: about-us, contact-us, developers.</li>
+    <li><b>Bỏ (b)</b> làm hướng chặn. <code>experimental.sri</code> chỉ xem xét sau, để kiểm tra tính toàn vẹn của chunk.</li>
+    <li><b>Thu hẹp #1348</b> thành bước 1. Giữ #1323 mở cho bước 2.</li>
+  </ol>
+
+  <h2>5. Các quyết định cho JOY</h2>
+  <div class="q"><strong>1. Script inline trên trang cache:</strong> tạm chấp nhận <code>'unsafe-inline'</code> trong chính sách chặn thật? Nghĩa là CSP chặn script từ host lạ và <code>eval</code>, nhưng không chặn script inline bị chèn. Lớp bảo vệ trước script inline bị chèn vẫn là việc React tự escape nội dung khi xuất HTML, như hiện nay. <span class="rec-line">Khuyến nghị: đồng ý.</span></div>
+  <div class="q"><strong>2. Render theo request (a):</strong> hoãn đến khi #1344 dưới 2 giây, và chấp nhận chính sách chặt chỉ ở chế độ báo cáo trên trang ISR đến lúc đó? <span class="rec-line">Khuyến nghị: đồng ý.</span></div>
+  <div class="q"><strong>3. Bớt nhiễu báo cáo:</strong> chỉ gửi chính sách chặt (chỉ báo cáo) trên trang động, để báo cáo chỉ còn nguồn script mới, không lặp lại lỗi ISR đã biết? Hay giữ trên mọi trang? <span class="rec-line">Khuyến nghị: chỉ trên trang động.</span></div>
+  <div class="q"><strong>4. Thời gian giữ log:</strong> gói Pro chỉ giữ log runtime khoảng 12 giờ, quá ngắn để đọc một "khung báo cáo sạch" nhiều ngày. Giữ nguyên (đọc theo từng khung 12 giờ) hay thêm log drain (đẩy log ra kho lưu trữ ngoài)? Log drain là quyết định hạ tầng và chi phí. <span class="rec-line">Khuyến nghị: giữ nguyên lúc này, đọc vài khung 12 giờ trước khi bật (c).</span></div>
+</div>
+</body>
+</html>
