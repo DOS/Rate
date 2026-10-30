@@ -26,6 +26,7 @@ import {
 } from '@/lib/merchant-directory';
 import {
   hasReviewRiskEvidence,
+  knownDosafeRiskScore,
   reviewRiskScoreOrNull,
 } from '@/lib/merchant-risk-tone';
 import { selectMerchantRadar } from '@/lib/deal-radar';
@@ -784,6 +785,7 @@ export default function MerchantDirectoryExplorer({
         <>
           <div className="row g-4">
             {visibleMerchants.map((merchant) => {
+              const dosafeScore = knownDosafeRiskScore(merchant);
               const trustBadgeClass =
                 merchant.trust_score >= 80
                   ? 'bg-success text-white'
@@ -901,24 +903,33 @@ export default function MerchantDirectoryExplorer({
                               <BsShield aria-hidden="true" className="me-1" />
                               {labels.riskScamLabel}
                             </span>
-                            <span
-                              className={`badge rounded-pill rate-tabular ${
-                                merchant.dosafe_risk_score === 0
-                                  ? 'bg-success-subtle text-success'
-                                  : 'bg-danger-subtle text-danger'
-                              }`}
+                            {dosafeScore == null ? (
+                              // No DOSafe score: no number, and no alert (#1465).
+                              <span className="badge rounded-pill bg-light text-muted border">
+                                {labels.reviewRiskNoData}
+                              </span>
+                            ) : (
+                              <span
+                                className={`badge rounded-pill rate-tabular ${
+                                  dosafeScore === 0
+                                    ? 'bg-success-subtle text-success'
+                                    : 'bg-danger-subtle text-danger'
+                                }`}
+                              >
+                                {dosafeScore}/100
+                              </span>
+                            )}
+                          </div>
+                          {dosafeScore != null && (
+                            <div
+                              className="small text-muted d-none d-sm-block"
+                              style={{ fontSize: '0.8125rem' }}
                             >
-                              {merchant.dosafe_risk_score}/100
-                            </span>
-                          </div>
-                          <div
-                            className="small text-muted d-none d-sm-block"
-                            style={{ fontSize: '0.8125rem' }}
-                          >
-                            {merchant.dosafe_risk_score === 0
-                              ? labels.dosafeZero
-                              : labels.dosafeAlert}
-                          </div>
+                              {dosafeScore === 0
+                                ? labels.dosafeZero
+                                : labels.dosafeAlert}
+                            </div>
+                          )}
                         </div>
 
                         <div className="col-sm-6 col-12">

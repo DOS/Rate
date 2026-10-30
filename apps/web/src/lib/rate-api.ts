@@ -3293,11 +3293,15 @@ export async function getMerchantsList(
         : {}
     ) as Record<string, unknown>;
     const baseRisk = toSafeRiskScore100(m.risk_score, 0);
-    const dosafeRisk =
+    const hasMetaDosafe =
       typeof meta.dosafe_risk_score === 'number' &&
-      Number.isFinite(meta.dosafe_risk_score)
-        ? toSafeRiskScore100(meta.dosafe_risk_score, 0)
-        : baseRisk;
+      Number.isFinite(meta.dosafe_risk_score);
+    const dosafeRisk = hasMetaDosafe
+      ? toSafeRiskScore100(meta.dosafe_risk_score, 0)
+      : baseRisk;
+    // The column's default 0 with no metadata score is a missing DOSafe score, as the
+    // view path reads it (#1099); public payloads answer null (DOS/Rate#1465).
+    const dosafeKnown = hasMetaDosafe || baseRisk > 0;
     const persistedReviewRisk = persistedReviewRiskOf(m);
     // A stored score covers all of the seller's reviews: it wins over the
     // one computed here, as on the profile (#684).
@@ -3345,6 +3349,7 @@ export async function getMerchantsList(
       follower_count: toSafeNonNegativeVoteCount(m.follower_count, 100_000_000),
       location: m.location || null,
       dosafe_risk_score: dosafeRisk,
+      dosafe_risk_known: dosafeKnown,
       review_risk_score: effectiveReviewRisk,
       risk_score: combinedRisk,
       trust_score: trustScore,
@@ -3840,6 +3845,11 @@ export async function getMerchantProfileBase(
     Number.isFinite(meta.dosafe_risk_score)
       ? toSafeRiskScore100(meta.dosafe_risk_score, 0)
       : baseRisk;
+  // As in getMerchantsList: the column's default 0 alone is no DOSafe score (#1465).
+  const dosafeKnown =
+    (typeof meta.dosafe_risk_score === 'number' &&
+      Number.isFinite(meta.dosafe_risk_score)) ||
+    baseRisk > 0;
   const persistedReviewRisk = persistedReviewRiskOf(merchantRow);
   // A persisted importer score covers all of the seller's reviews; the dynamic
   // one only the newest page. Use the persisted score when there is one, as
@@ -3893,6 +3903,7 @@ export async function getMerchantProfileBase(
     ),
     location: merchantRow.location || null,
     dosafe_risk_score: dosafeRisk,
+    dosafe_risk_known: dosafeKnown,
     review_risk_score: effectiveReviewRisk,
     risk_score: combinedRisk,
     trust_score: trustScore,

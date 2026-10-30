@@ -4282,6 +4282,32 @@ async function runTests() {
     );
   }
 
+  // An unknown risk score reads as no data, never as 0, the lowest risk: no analysed
+  // review (#1258) or no DOSafe score (#1465). Both side panel spots use it.
+  {
+    const { riskScoreText } = await import('./sidepanel/panel-view.js');
+    const { t } = await import('./i18n.js');
+    for (const missing of [null, undefined]) {
+      assert.equal(riskScoreText(missing), t('reviewRiskNoData'));
+      assert.notEqual(riskScoreText(missing), '0');
+    }
+    assert.equal(riskScoreText(0), '0');
+    assert.equal(riskScoreText(45), '45');
+    const panelSource = fs.readFileSync(
+      path.join(__dirname, 'sidepanel/sidepanel.ts'),
+      'utf8'
+    );
+    assert.ok(!/formatSafeNumber\([a-z]+\.dosafe_risk_score/.test(panelSource));
+    assert.equal(
+      (panelSource.match(/riskScoreText\([a-z]+\.dosafe_risk_score\)/g) ?? [])
+        .length,
+      2
+    );
+    console.log(
+      '  ✅ [Unknown DOSafe and review risk read as no data (#1465)] Verified'
+    );
+  }
+
   // Empty reviews and unknown ratings (DOS/Rate#1301)
   {
     const { ratingStarText, renderReviewCardHtml } =

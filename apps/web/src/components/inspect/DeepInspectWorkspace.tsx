@@ -2,7 +2,10 @@
 
 import React, { useEffect, useState } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
-import { hasReviewRiskEvidence } from '@/lib/merchant-risk-tone';
+import {
+  hasReviewRiskEvidence,
+  knownDosafeRiskScore,
+} from '@/lib/merchant-risk-tone';
 import { discountVerdictCopy } from '@/lib/discount-verdict-copy';
 import AnalyzerText from '@/components/reviews/AnalyzerText';
 import { useDetailsDismiss } from '@/components/elementary/use-details-dismiss';
@@ -286,7 +289,7 @@ export default function DeepInspectWorkspace({
           : []),
         ...(merchant
           ? [
-              `- **${t('mdSeller')}:** ${merchant.name} (${merchant.platform.toUpperCase()}) | ${t('mdTrustScore')}: **${merchant.trust_score}/100** (${t('dosafeRiskLabel')}: ${merchant.dosafe_risk_score}/100, ${t('reviewRiskLabel')}: ${hasReviewRiskEvidence(merchant.review_risk_breakdown) ? `${merchant.review_risk_score}/100` : t('reviewRiskNoData')})`,
+              `- **${t('mdSeller')}:** ${merchant.name} (${merchant.platform.toUpperCase()}) | ${t('mdTrustScore')}: **${merchant.trust_score}/100** (${t('dosafeRiskLabel')}: ${knownDosafeRiskScore(merchant) == null ? t('reviewRiskNoData') : `${knownDosafeRiskScore(merchant)}/100`}, ${t('reviewRiskLabel')}: ${hasReviewRiskEvidence(merchant.review_risk_breakdown) ? `${merchant.review_risk_score}/100` : t('reviewRiskNoData')})`,
             ]
           : []),
         `- **${t('mdLink')}:** ${shareUrl}`,
@@ -950,9 +953,17 @@ export default function DeepInspectWorkspace({
                   <div className="mb-3">
                     <div className="d-flex justify-content-between small mb-1">
                       <span className="text-muted">{t('dosafeRiskLabel')}</span>
-                      <strong className="text-success">
-                        {Number(merchant.dosafe_risk_score || 0).toFixed(0)}/100
-                      </strong>
+                      {/* No DOSafe score: no number, not 0 (DOS/Rate#1465). */}
+                      {knownDosafeRiskScore(merchant) == null ? (
+                        <span className="text-muted">
+                          {t('reviewRiskNoData')}
+                        </span>
+                      ) : (
+                        <strong className="text-success">
+                          {Number(knownDosafeRiskScore(merchant)).toFixed(0)}
+                          /100
+                        </strong>
+                      )}
                     </div>
                     <div className="progress" style={{ height: 8 }}>
                       <div
@@ -960,7 +971,7 @@ export default function DeepInspectWorkspace({
                         style={{
                           width: `${Math.min(
                             100,
-                            Math.max(4, Number(merchant.dosafe_risk_score || 0))
+                            Math.max(4, knownDosafeRiskScore(merchant) ?? 0)
                           )}%`,
                         }}
                       />

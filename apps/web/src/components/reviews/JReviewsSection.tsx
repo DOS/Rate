@@ -3,6 +3,7 @@
 import React, { useEffect, useId, useMemo, useState } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
 import ExportMenu from '@/components/elementary/ExportMenu';
+import PhoneCollapsible from '@/components/product/PhoneCollapsible';
 import {
   BsBarChart,
   BsCheckCircle,
@@ -1532,7 +1533,16 @@ export default function JReviewsSection({
           <p className="text-muted mb-0">{t('noMatchingReviews')}</p>
         </div>
       ) : (
-        <div className="row g-3">
+        // Phones show the first three reviews until the reader expands the
+        // rest; all stay in the HTML (DOS/Rate#1469).
+        <PhoneCollapsible
+          className="row g-3"
+          showMoreLabel={t('reviewsShowMore', {
+            count: filteredAndSortedReviews.length - 3,
+          })}
+          showLessLabel={t('reviewsShowLess')}
+          collapsible={filteredAndSortedReviews.length > 3}
+        >
           {filteredAndSortedReviews.map((rev) => {
             const flagMeta =
               flagMetaMap[reviewBadgeKind(rev)] || flagMetaMap.authentic;
@@ -1757,7 +1767,7 @@ export default function JReviewsSection({
               </div>
             );
           })}
-        </div>
+        </PhoneCollapsible>
       )}
     </div>
   );
