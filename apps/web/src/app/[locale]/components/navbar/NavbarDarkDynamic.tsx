@@ -11,7 +11,9 @@ import {
   BsShieldCheck,
 } from 'react-icons/bs';
 import LocaleSwitcher from '@/components/elementary/LocaleSwitcher';
-import ThemeToggle from '@/components/elementary/ThemeToggle';
+import ThemeToggle, {
+  ThemeCycleButton,
+} from '@/components/elementary/ThemeToggle';
 import RateWordmark from '@/components/brand/RateWordmark';
 import {
   inertOutside,
@@ -468,8 +470,11 @@ export function NavbarDarkDynamic({
               })()}
 
               <ul className="nav-menu nav-menu-social align-to-right d-flex align-items-center mb-0">
-                <li className="d-flex align-items-center me-3">
-                  <ThemeToggle />
+                <li className="d-flex align-items-center me-2">
+                  {/* One icon on desktop, three named choices in the phone
+                  menu (DOS/Rate#1435). */}
+                  <ThemeCycleButton className="d-none d-lg-inline-flex" />
+                  <ThemeToggle className="d-lg-none" />
                 </li>
                 <li className="d-flex align-items-center me-3">
                   <LocaleSwitcher isDarkHeader={false} />

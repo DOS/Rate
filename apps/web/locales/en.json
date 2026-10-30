@@ -27,7 +27,8 @@
       "themeGroupAria": "Light or dark theme",
       "themeLight": "Light",
       "themeDark": "Dark",
-      "themeSystem": "System"
+      "themeSystem": "System",
+      "themeCycleAria": "Theme: {theme}. Click to change"
     },
     "footer": {
       "copyRight": "© {YEAR} Rate.vn, part of the DOS ecosystem. Spec comparisons, real price history and reviews from many stores.",

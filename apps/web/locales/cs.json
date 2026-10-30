@@ -27,7 +27,8 @@
       "themeGroupAria": "Světlý nebo tmavý vzhled",
       "themeLight": "Světlý",
       "themeDark": "Tmavý",
-      "themeSystem": "Podle systému"
+      "themeSystem": "Podle systému",
+      "themeCycleAria": "Vzhled: {theme}. Kliknutím změníte"
     },
     "footer": {
       "copyRight": "© {YEAR} Rate.vn, součást ekosystému DOS. Porovnání parametrů, skutečná historie cen a recenze z mnoha obchodů.",

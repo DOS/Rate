@@ -13,14 +13,17 @@ async function watchFirstTheme(page: Page) {
     const w = window as unknown as {
       __firstTheme?: { theme: string | null; bodyParsed: boolean };
     };
+    // <html> does not exist yet when an init script runs: watch the whole
+    // document, so its attribute is seen once the parser creates it.
     new MutationObserver((_, observer) => {
       const theme = document.documentElement.getAttribute('data-bs-theme');
       if (theme && !w.__firstTheme) {
         w.__firstTheme = { theme, bodyParsed: document.body !== null };
         observer.disconnect();
       }
-    }).observe(document.documentElement, {
+    }).observe(document, {
       attributes: true,
+      subtree: true,
       attributeFilter: ['data-bs-theme'],
     });
   });
@@ -60,13 +63,15 @@ test('the toggle choice is kept and applied before the body on the next page', a
   await page.setViewportSize({ width: 1280, height: 800 });
   await page.emulateMedia({ colorScheme: 'light' });
   await page.goto(PRODUCT);
-  const toggle = page.getByTestId('theme-toggle').first();
-  await toggle.locator('[data-theme-choice="dark"]').click();
+  // The desktop navbar has one button that cycles light, dark, system; with
+  // no choice made it starts at system.
+  const cycle = page.getByTestId('theme-cycle');
+  await expect(cycle).toHaveAttribute('data-theme-choice', 'system');
+  await cycle.click();
+  await expect(cycle).toHaveAttribute('data-theme-choice', 'light');
+  await cycle.click();
+  await expect(cycle).toHaveAttribute('data-theme-choice', 'dark');
   await expect(page.locator('html')).toHaveAttribute('data-bs-theme', 'dark');
-  await expect(toggle.locator('[data-theme-choice="dark"]')).toHaveAttribute(
-    'aria-pressed',
-    'true'
-  );
   const darkBg = await page.evaluate(
     () => getComputedStyle(document.body).backgroundColor
   );
@@ -81,11 +86,11 @@ test('the toggle choice is kept and applied before the body on the next page', a
   ).toBe(darkBg);
 
   // Back to the system: the choice is dropped and light follows.
-  await page
-    .getByTestId('theme-toggle')
-    .first()
-    .locator('[data-theme-choice="system"]')
-    .click();
+  await page.getByTestId('theme-cycle').click();
+  await expect(page.getByTestId('theme-cycle')).toHaveAttribute(
+    'data-theme-choice',
+    'system'
+  );
   await expect(page.locator('html')).toHaveAttribute('data-bs-theme', 'light');
   expect(
     await page.evaluate(() => localStorage.getItem('rate-theme'))
@@ -115,9 +120,8 @@ test('the theme script is allowed by its CSP hash', async ({ request }) => {
   const res = await request.get('/');
   const policy = res.headers()['content-security-policy-report-only'] ?? '';
   const html = await res.text();
-  const script = html.match(
-    /<head>(?:<[^>]+>)*?<script>([^<]+)<\/script>/
-  )?.[1];
+  // The one inline script that sets the theme, wherever <head> puts it.
+  const script = html.match(/<script>([^<]*data-bs-theme[^<]*)<\/script>/)?.[1];
   expect(script).toContain('data-bs-theme');
   const hash = createHash('sha256').update(script!).digest('base64');
   expect(policy).toContain(`'sha256-${hash}'`);

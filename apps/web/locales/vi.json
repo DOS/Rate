@@ -27,7 +27,8 @@
       "themeGroupAria": "Giao diện sáng hoặc tối",
       "themeLight": "Sáng",
       "themeDark": "Tối",
-      "themeSystem": "Theo hệ thống"
+      "themeSystem": "Theo hệ thống",
+      "themeCycleAria": "Giao diện: {theme}. Bấm để đổi"
     },
     "footer": {
       "copyRight": "© {YEAR} Rate.vn, thuộc hệ sinh thái DOS. So sánh thông số, lịch sử giá thật và đánh giá từ nhiều sàn.",

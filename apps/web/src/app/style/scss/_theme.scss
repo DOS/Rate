@@ -12,6 +12,7 @@
   --rate-border-subtle: rgba(255, 255, 255, 0.08);
   --rate-border-strong: rgba(255, 255, 255, 0.16);
   --rate-input-border: #6b7586;
+  --rate-input-bg: #181d29;
   --rate-fg-primary: #f8fafc;
   --rate-fg-secondary: #a3b0c2;
   --rate-fg-muted: #8b97a8;
@@ -280,18 +281,25 @@
   }
 }
 
-// Desktop navbar: icons only; the names stay for screen readers.
-@media (min-width: 992px) {
-  .rate-theme-toggle-label {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    padding: 0;
-    margin: -1px;
-    overflow: hidden;
-    clip: rect(0, 0, 0, 0);
-    white-space: nowrap;
-    border: 0;
+// Desktop navbar: one icon button that cycles the choice.
+.rate-theme-cycle {
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid var(--rate-border-strong);
+  border-radius: var(--rate-radius-btn);
+  background: transparent;
+  color: var(--rate-fg-primary);
+
+  &:hover {
+    background: var(--rate-bg-elevated);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--rate-focus-ring);
+    outline-offset: 1px;
   }
 }
 
@@ -357,6 +365,17 @@
   .border-white {
     border-color: var(--rate-border-subtle) !important;
   }
+}
+
+// Outline-light buttons are made for dark grounds, which turn light here.
+:root[data-bs-theme='light'] .btn-outline-light {
+  --bs-btn-color: var(--rate-fg-primary);
+  --bs-btn-border-color: var(--rate-border-strong);
+  --bs-btn-hover-bg: var(--rate-fg-primary);
+  --bs-btn-hover-color: #ffffff;
+  --bs-btn-hover-border-color: var(--rate-fg-primary);
+  color: var(--rate-fg-primary);
+  border-color: var(--rate-border-strong);
 }
 
 // Page heroes keep a soft brand wash instead of the dark gradient.

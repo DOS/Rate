@@ -227,7 +227,7 @@ export default async function LeaderboardPage({ params }: PageProps) {
                     style={{
                       background: 'rgba(216, 48, 48, 0.14)',
                       border: '1px solid rgba(216, 48, 48, 0.35)',
-                      color: 'var(--rate-crimson-text)',
+                      color: 'var(--rate-ink-primary)',
                       fontSize: '0.8125rem',
                       fontWeight: 700,
                       letterSpacing: '0.06em',
