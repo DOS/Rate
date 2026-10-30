@@ -964,7 +964,27 @@ async function runSuite() {
   assert.equal(keyOf('Apple Watch SE 3rd Gen 44mm'), 'apple:watch-se-3-44mm:unknown');
   assert.equal(keyOf('Apple Watch SE 2022 40mm'), 'apple:watch-se-2022-40mm:unknown');
   assert.equal(keyOf('Apple Watch SE 32GB'), 'apple:watch-se:32gb');
-  assert.equal(keyOf('Apple Watch SE2 40mm'), 'apple:watch-se2-40mm:unknown');
+  // Shorthands key like the full name (DOS/Rate#1402): "SE2" is the SE 2, "S10" the
+  // Series 10. A size ("S 42mm"), a band size ("S/M") or another brand's S line is no
+  // Apple Watch series.
+  assert.equal(keyOf('Apple Watch SE2 40mm'), 'apple:watch-se-2-40mm:unknown');
+  assert.equal(keyOf('Apple Watch SE3 40mm GPS'), 'apple:watch-se-3-40mm:unknown');
+  assert.equal(keyOf('Apple Watch SE2022 40mm'), 'apple:watch-se-2022-40mm:unknown');
+  assert.equal(keyOf('Apple Watch S8 45mm'), 'apple:watch-series-8-45mm:unknown');
+  assert.equal(keyOf('Apple Watch S9 41mm GPS'), 'apple:watch-series-9-41mm:unknown');
+  assert.equal(keyOf('Apple Watch S10 46mm'), 'apple:watch-series-10-46mm:64gb');
+  assert.equal(keyOf('Apple Watch S10 46mm Shop 10+ năm'), 'apple:watch-series-10-46mm:64gb');
+  assert.equal(keyOf('Apple Watch S 10 42mm GPS'), 'apple:watch-series-10-42mm:64gb');
+  assert.equal(
+    keyOf('Đồng hồ Apple Watch S10 GPS 46mm viền nhôm'),
+    'apple:watch-series-10-46mm:64gb'
+  );
+  assert.equal(keyOf('Apple Watch S11 42mm GPS 64GB'), 'apple:watch-series-11-42mm:64gb');
+  assert.equal(keyOf('Apple Watch S 42mm'), 'apple:watch:unknown');
+  assert.equal(keyOf('Dây Apple Watch S/M 42mm'), 'apple:watch:unknown');
+  assert.equal(keyOf('Apple Watch S10.46mm'), 'apple:watch:unknown');
+  assert.equal(keyOf('Samsung Galaxy S10 128GB'), 'samsung:galaxy-s10:128gb');
+  assert.equal(keyOf('Xiaomi Watch S1 Active'), 'xiaomi:watch-s1-active:unknown');
   // With no line matched, the family the title names first, else iPhone.
   assert.equal(keyOf('MacBook M4'), 'apple:macbook:unknown');
   assert.equal(keyOf('Apple "iPad" 256GB'), 'apple:ipad:256gb');
