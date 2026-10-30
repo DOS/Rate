@@ -1,5 +1,6 @@
 import type { MasterProduct } from '@repo/shared-data';
 import { isCanonicalCategorySlug, usableImageUrls } from './rate-domain-core';
+import { leaderboardSpecsOnly } from './leaderboard-engine';
 
 /**
  * The product fields the hero search box shows, filters on and links with.
@@ -125,5 +126,19 @@ export function withoutSpecSheet<T extends MasterProduct>(
     spec_provenance: {},
     expert_review_summary: null,
     description: null,
+  };
+}
+
+/**
+ * A catalog row for a client that ranks or pairs products (the leaderboard, the
+ * compare picker): like withoutSpecSheet, but it keeps the spec fields the
+ * scores read, so ranks and popular pairs come out the same (DOS/Rate#1515).
+ */
+export function withScoringSpecs<T extends MasterProduct>(
+  p: T
+): WithoutSpecSheet<T> {
+  return {
+    ...withoutSpecSheet(p),
+    specifications: leaderboardSpecsOnly(p.specifications),
   };
 }

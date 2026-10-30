@@ -24,6 +24,7 @@ import PageShell from '../components/page-shell';
 import CompareTrayBar from '@/components/compare/CompareTrayBar';
 import LeaderboardExplorer from '@/components/leaderboard/LeaderboardExplorer';
 import ClientMessages from '@/components/providers/ClientMessages';
+import { withScoringSpecs } from '@/lib/hero-products';
 
 // Cached: the page renders the default tab, and LeaderboardExplorer applies
 // ?cat= / ?criterion= in the browser, so no request data is read here
@@ -379,7 +380,7 @@ export default async function LeaderboardPage({ params }: PageProps) {
           {/* Main Interactive 4-Tier Leaderboard Explorer */}
           <section className="container mt-4">
             <LeaderboardExplorer
-              products={products}
+              products={products.map(withScoringSpecs)}
               dealRadar={dealRadar}
               filteredReviewCounts={sumCountsByItemRow(
                 products,
