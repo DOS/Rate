@@ -483,8 +483,9 @@ export async function getMasterProducts(
       }
     );
     if (!rpcErr && Array.isArray(rpcRows)) {
+      const categorySlugById = await getCategorySlugMap();
       return (rpcRows as MasterProduct[]).map((r) =>
-        normalizeMasterProductRow(r, categoryHint)
+        normalizeMasterProductRow(r, categoryHint, categorySlugById)
       );
     }
   }
@@ -734,7 +735,10 @@ export async function getMasterProducts(
     ? items.slice(boundedOffset, boundedOffset + boundedLimit)
     : items.slice(0, boundedLimit);
 
-  return items.map((r) => normalizeMasterProductRow(r, categoryHint));
+  const categorySlugById = await getCategorySlugMap();
+  return items.map((r) =>
+    normalizeMasterProductRow(r, categoryHint, categorySlugById)
+  );
 }
 
 /**
@@ -825,7 +829,11 @@ export async function getMasterProductBySlug(
   if (!data) {
     return null;
   }
-  return normalizeMasterProductRow(data as MasterProduct);
+  return normalizeMasterProductRow(
+    data as MasterProduct,
+    null,
+    await getCategorySlugMap()
+  );
 }
 
 interface RawTrustViewRow {
@@ -1905,8 +1913,9 @@ export async function compareMasterProducts(
   if (!data) {
     return [];
   }
+  const categorySlugById = await getCategorySlugMap();
   const rows = (data as MasterProduct[]).map((row) =>
-    normalizeMasterProductRow(row)
+    normalizeMasterProductRow(row, null, categorySlugById)
   );
   const bySlug = new Map(rows.map((r) => [r.slug, r]));
   const ordered = uniqueSlugs
@@ -2439,9 +2448,93 @@ interface RawProductRow {
   availability?: string | null;
 }
 
+// Category id to slug, read at most every 5 minutes per server instance
+// (30 seconds after a failed read). Concurrent reads share one query. A
+// failed read keeps the last map, or none: rows then keep their own hints.
+const CATEGORY_SLUG_MAP_TTL_MS = 5 * 60_000;
+const CATEGORY_SLUG_MAP_RETRY_MS = 30_000;
+let categorySlugMapMemo: {
+  at: number;
+  ttl: number;
+  map: ReadonlyMap<string, string> | null;
+} | null = null;
+let categorySlugMapInFlight: Promise<ReadonlyMap<
+  string,
+  string
+> | null> | null = null;
+
+async function readCategorySlugMap(): Promise<ReadonlyMap<
+  string,
+  string
+> | null> {
+  const lastMap = categorySlugMapMemo?.map ?? null;
+  try {
+    const { data, error } = await getRateClient()
+      .from('categories')
+      .select('id, slug');
+    if (error || !Array.isArray(data)) {
+      categorySlugMapMemo = {
+        at: Date.now(),
+        ttl: CATEGORY_SLUG_MAP_RETRY_MS,
+        map: lastMap,
+      };
+      return lastMap;
+    }
+    const map = new Map<string, string>();
+    for (const c of data as Array<{ id?: unknown; slug?: unknown }>) {
+      if (typeof c?.id !== 'string' || typeof c?.slug !== 'string') continue;
+      // Read as getMasterProductCategorySlug reads a hint, so the stamp and
+      // the map-based links agree on a padded or capitalised slug.
+      map.set(
+        c.id,
+        c.slug
+          .replace(/\p{Cc}+/gu, '')
+          .trim()
+          .toLowerCase()
+      );
+    }
+    categorySlugMapMemo = {
+      at: Date.now(),
+      ttl: CATEGORY_SLUG_MAP_TTL_MS,
+      map,
+    };
+    return map;
+  } catch {
+    categorySlugMapMemo = {
+      at: Date.now(),
+      ttl: CATEGORY_SLUG_MAP_RETRY_MS,
+      map: lastMap,
+    };
+    return lastMap;
+  }
+}
+
+/**
+ * The `categories` id-to-slug map product reads stamp onto their rows, so a
+ * product link built without the map names the same category as the
+ * sitemap and the category-path redirect (DOS/Rate#1380). Null when it
+ * cannot be read.
+ */
+export async function getCategorySlugMap(): Promise<ReadonlyMap<
+  string,
+  string
+> | null> {
+  if (
+    categorySlugMapMemo &&
+    Date.now() - categorySlugMapMemo.at < categorySlugMapMemo.ttl
+  ) {
+    return categorySlugMapMemo.map;
+  }
+  categorySlugMapInFlight ??= readCategorySlugMap().finally(() => {
+    categorySlugMapInFlight = null;
+  });
+  return categorySlugMapInFlight;
+}
+
 export function normalizeMasterProductRow(
   row: MasterProduct,
-  categorySlugHint?: CanonicalCategorySlug | null
+  categorySlugHint?: CanonicalCategorySlug | null,
+  categorySlugById?: ReadonlyMap<string, string> | null
 ): MasterProduct {
   if (!row || typeof row !== 'object' || Array.isArray(row)) return row;
   const cleanSlug =
@@ -2483,6 +2576,26 @@ export function normalizeMasterProductRow(
     !Array.isArray(normalized.metadata)
       ? normalized.metadata
       : null;
+
+  // The category row wins: links built without the category map then name
+  // the category the sitemap and the category-path redirect use (#1380).
+  const idCatSlug =
+    typeof normalized.category_id === 'string'
+      ? categorySlugById
+          ?.get(normalized.category_id)
+          ?.replace(/\p{Cc}+/gu, '')
+          .trim()
+          .toLowerCase()
+      : undefined;
+  if (isCanonicalCategorySlug(idCatSlug)) {
+    if (existingMetaObj?.category_slug !== idCatSlug) {
+      normalized = {
+        ...normalized,
+        metadata: { ...(existingMetaObj ?? {}), category_slug: idCatSlug },
+      };
+    }
+    return normalized;
+  }
 
   if (effectiveCatHint && typeof existingMetaObj?.category_slug !== 'string') {
     normalized = {
@@ -4175,7 +4288,11 @@ export async function inspectProductOrShopUrl(
       }
 
       const masterProduct = masterData
-        ? normalizeMasterProductRow(masterData as MasterProduct)
+        ? normalizeMasterProductRow(
+            masterData as MasterProduct,
+            null,
+            await getCategorySlugMap()
+          )
         : null;
       if (masterProduct) {
         const [offers, reviews, merchantsList] = await Promise.all([
