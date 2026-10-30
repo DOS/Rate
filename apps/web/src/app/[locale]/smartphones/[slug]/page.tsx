@@ -1344,7 +1344,7 @@ export async function ProductDetailView({
             <a href="#offers-table">
               {t('jumpNavOffers', { count: offers.length })}
             </a>
-            <a href="#price-history-section">{t('jumpNavPriceHistory')}</a>
+            <a href="#pdv-price-history">{t('jumpNavPriceHistory')}</a>
             <a href="#specs-section">{t('jumpNavSpecs')}</a>
             <a href="#jreviews-section">
               {t('jumpNavReviews', { count: authenticCount })}
@@ -1354,7 +1354,7 @@ export async function ProductDetailView({
           {/* Neutral Merchant Reference & Trust Audit Table */}
           <div
             id="offers-table"
-            className="card rounded-4 p-md-5 mt-4 mb-5 border-0 p-4 shadow-sm"
+            className="card rounded-4 p-md-5 mb-5 border-0 p-4 shadow-sm"
           >
             {isItemGroup
               ? renderSizePanels('offers', (v) =>
@@ -1392,17 +1392,21 @@ export async function ProductDetailView({
             </div>
           )}
 
-          {/* Time-Series Price History Chart, Fake Discount Detector & Neutral Merchant Audit */}
-          {isItemGroup
-            ? renderSizePanels('history', (v) =>
-                renderPriceHistory(variantPanelInput(v))
-              )
-            : renderPriceHistory({
-                product,
-                priceHistory,
-                minPrice: currentMinPrice,
-                radarSignal,
-              })}
+          {/* Time-Series Price History Chart, Fake Discount Detector & Neutral
+          Merchant Audit. The wrapper is the jump row's target: a lazy size
+          panel has no #price-history-section until it loads (#1469). */}
+          <div id="pdv-price-history">
+            {isItemGroup
+              ? renderSizePanels('history', (v) =>
+                  renderPriceHistory(variantPanelInput(v))
+                )
+              : renderPriceHistory({
+                  product,
+                  priceHistory,
+                  minPrice: currentMinPrice,
+                  radarSignal,
+                })}
+          </div>
 
           {/* Spec groups, per category template (DOS/Rate#1142), before
           the reviews (DOS/Rate#1436) */}

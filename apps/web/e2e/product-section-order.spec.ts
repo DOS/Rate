@@ -8,7 +8,7 @@ const PRODUCT = '/smartphones/iphone-16-pro-max-256gb';
 const MANY_REVIEWS = '/smartphones/e2e-review-labels-phone';
 const ORDER = [
   'offers-table',
-  'price-history-section',
+  'pdv-price-history',
   'specs-section',
   'jreviews-section',
 ];
@@ -50,7 +50,15 @@ test('phones show three reviews until the rest are asked for', async ({
   await expect(cards.filter({ visible: true })).toHaveCount(3);
   const more = page.locator('#jreviews-section button[aria-expanded]');
   await expect(more).toHaveText(/3/);
-  await more.click();
+  // A click before hydration does nothing; retry until it opens.
+  await expect(async () => {
+    if ((await more.getAttribute('aria-expanded')) !== 'true') {
+      await more.click();
+    }
+    await expect(more).toHaveAttribute('aria-expanded', 'true', {
+      timeout: 500,
+    });
+  }).toPass();
   await expect(cards.filter({ visible: true })).toHaveCount(6);
 });
 

@@ -294,6 +294,11 @@
     display: none;
   }
 
+  // Phones: the chips run past the edge; a fade says the row scrolls.
+  @media (max-width: 767.98px) {
+    mask-image: linear-gradient(to right, #000 85%, transparent);
+  }
+
   a {
     flex: 0 0 auto;
     display: inline-flex;
@@ -318,4 +323,14 @@
       outline-offset: 2px;
     }
   }
+}
+
+// The jump row's targets clear the sticky navbar (about 73px) when reached
+// by an anchor (DOS/Rate#1469).
+#offers-table,
+#pdv-price-history,
+#price-history-section,
+#specs-section,
+#jreviews-section {
+  scroll-margin-top: 5rem;
 }
