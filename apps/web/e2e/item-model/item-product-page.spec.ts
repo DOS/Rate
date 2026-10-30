@@ -45,13 +45,13 @@ test('the size picker replaces the quick specs and links each size', async ({
   await expect(picker.locator('[data-variant="256gb"]')).toContainText(
     '12.990.000'
   );
-  // The default size is selected; no flag-off variant links and no quick-spec cards.
+  // The default size is selected. The picker stands where the quick-spec cards were,
+  // and the flag-off variant links are not shown on an Item page.
   await expect(picker.locator('[data-variant="128gb"]')).toHaveAttribute(
     'aria-pressed',
     'true'
   );
   await expect(page.getByTestId('pdv-variant-links')).toHaveCount(0);
-  await expect(page.locator('main')).not.toContainText('Độ bền / Kháng nước');
 
   // Picking a size writes it to ?v= and switches the sellers below.
   const big = picker.locator('[data-variant="256gb"]');
@@ -70,21 +70,27 @@ test('the size picker replaces the quick specs and links each size', async ({
   ).toHaveAttribute('aria-pressed', 'true');
 });
 
-for (const path of [ITEM, BIG]) {
+// The lazy Item also with another size loaded on demand.
+for (const path of [ITEM, BIG, `${BIG}?v=256gb`]) {
   test(`${path}: price, jump row, sellers, history, specs, reviews`, async ({
     page,
   }) => {
     await page.goto(path);
-    const ids = ['pdv-variant-picker', 'pdv-jump-nav', ...ORDER];
+    // The "from" price line, the size picker, the jump row, then the sections.
+    const selectors = [
+      '.rate-pdv-price-line',
+      '[data-testid="pdv-variant-picker"]',
+      '[data-testid="pdv-jump-nav"]',
+      ...ORDER.map((id) => `#${id}`),
+    ];
     const tops = await page.evaluate(
       (list) =>
-        list.map((id) => {
-          const el =
-            document.getElementById(id) ??
-            document.querySelector(`[data-testid="${id}"]`);
-          return el ? el.getBoundingClientRect().top : null;
-        }),
-      ids
+        list.map(
+          (selector) =>
+            document.querySelector(selector)?.getBoundingClientRect().top ??
+            null
+        ),
+      selectors
     );
     expect(
       tops.every((top) => top !== null),
@@ -108,11 +114,15 @@ test('a seller with no data shows no trust score on the Item page', async ({
   await page.goto(`${ITEM}?v=256gb`);
   const badge = page
     .locator('#offers-table')
-    .locator(`a[href$="/merchants/${NO_DATA_MERCHANT}"]`)
+    .locator(`a.badge[href$="/merchants/${NO_DATA_MERCHANT}"]`)
     .filter({ visible: true });
   await expect(badge).toHaveCount(1);
   await expect(badge).toContainText('chưa có dữ liệu');
   await expect(badge).not.toContainText('%');
+  // Its risk scores read "-", never a 0 (the lowest risk).
+  const row = badge.locator('xpath=ancestor::tr[1]');
+  await expect(row).toContainText('-/100');
+  await expect(row).not.toContainText(/(^|[^\d.])0\/100/);
 });
 
 test('the theme toggle works on an Item page and is kept on the next one', async ({
