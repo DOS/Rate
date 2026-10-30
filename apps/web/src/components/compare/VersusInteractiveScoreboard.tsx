@@ -20,7 +20,6 @@ import { escapeCsvCell } from '@/lib/csv-safe';
 import { isVersusScoreTie, versusVerdictFor } from '@/lib/versus-verdict';
 import RadarBadge from '@/components/radar/RadarBadge';
 import { useDealRadarIndex } from '@/components/radar/use-deal-radar';
-import { versusHref } from '@/lib/item-compare';
 
 export type ScoredVersusItem = Omit<ScoredLeaderboardItem, 'rank'>;
 
@@ -28,8 +27,6 @@ interface VersusInteractiveScoreboardProps {
   readonly scoreA: ScoredVersusItem;
   readonly scoreB: ScoredVersusItem;
   readonly locale?: string;
-  /** RATE_ITEM_MODEL on: variant slug to Item slug, for the swap link. */
-  readonly itemSlugBySlug?: Readonly<Record<string, string>>;
 }
 
 export type PersonaPresetKey =
@@ -172,10 +169,14 @@ export function computeVersusWeightedResult(
 }
 
 export default function VersusInteractiveScoreboard({
-  scoreA,
-  scoreB,
-  itemSlugBySlug,
+  scoreA: firstScore,
+  scoreB: secondScore,
 }: VersusInteractiveScoreboardProps) {
+  // A pair has one URL, its sides sorted (DOS/Rate#1367), so the swap button
+  // swaps the two sides here instead of linking to the other order.
+  const [swapped, setSwapped] = useState<boolean>(false);
+  const scoreA = swapped ? secondScore : firstScore;
+  const scoreB = swapped ? firstScore : secondScore;
   const t = useTranslations('compare');
   const locale = useLocale();
   const useCaseLabelId = useId();
@@ -559,13 +560,16 @@ export default function VersusInteractiveScoreboard({
             >
               JSON
             </button>
-            <Link
-              href={versusHref(scoreB.slug, scoreA.slug, itemSlugBySlug)}
+            <button
+              type="button"
+              onClick={() => setSwapped((prev) => !prev)}
+              aria-pressed={swapped}
+              data-testid="versus-swap-btn"
               className="btn btn-sm btn-outline-light rounded-pill px-3"
               title={t('swapDevicesTitle')}
             >
               ⇄ {t('swapAbBtn')}
-            </Link>
+            </button>
           </div>
         </div>
 

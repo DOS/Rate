@@ -44,6 +44,8 @@ export function parseBooleanFlag(raw: string | null): boolean | undefined {
 const SCOPED_ALL_PAGE_SIZE = 500;
 // 20k rows, well above the catalogue; bounds the cost of a deep offset.
 const SCOPED_ALL_MAX_PAGES = 40;
+/** The deepest offset `category=all` with a spec filter pages to (#1308). */
+export const SCOPED_ALL_MAX_OFFSET = 2_000;
 
 /**
  * `category=all` with a spec filter some category lacks: only products whose
@@ -266,6 +268,21 @@ export async function GET(request: NextRequest) {
       return jsonApiError(
         400,
         `Filters not available for category ${categorySlug}: ${unsupportedFilters.join(', ')}`,
+        undefined,
+        PUBLIC_API_CORS_HEADERS
+      );
+    }
+
+    // `category=all` with a spec filter pages through the catalogue in this
+    // process, so its offset is capped (DOS/Rate#1308).
+    if (
+      categorySlug === 'all' &&
+      hasCategoryScopedSpecFilter(filterParams) &&
+      offset > SCOPED_ALL_MAX_OFFSET
+    ) {
+      return jsonApiError(
+        400,
+        `offset above ${SCOPED_ALL_MAX_OFFSET} is not available for category=all with spec filters`,
         undefined,
         PUBLIC_API_CORS_HEADERS
       );

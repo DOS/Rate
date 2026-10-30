@@ -511,5 +511,129 @@
   },
   "marketMedian": {
     "message": "Market Median"
+  },
+  "verdictLabel_accessory": {
+    "message": "Accessory / part"
+  },
+  "verdictExplanation_accessory": {
+    "message": "This product is recognised as an accessory or a part, so the device price chart does not apply."
+  },
+  "verdictExplanation_accessory_keyword": {
+    "message": "The product title contains the accessory or part keyword \"$KEYWORD$\".",
+    "placeholders": {
+      "keyword": {
+        "content": "$1"
+      }
+    }
+  },
+  "verdictExplanation_accessory_price_floor": {
+    "message": "The price ($PRICE$) is below the minimum for a genuine device ($FLOOR$), so this is most likely an accessory or a part.",
+    "placeholders": {
+      "price": {
+        "content": "$1"
+      },
+      "floor": {
+        "content": "$2"
+      }
+    }
+  },
+  "verdictLabel_ambiguous_variant": {
+    "message": "Choose a storage size"
+  },
+  "verdictExplanation_ambiguous_variant": {
+    "message": "This page offers several storage options (128GB/256GB/512GB). Pick one on the page or in the Rate panel to compare the right version."
+  },
+  "verdictLabel_implausibly_low": {
+    "message": "Unusually low price"
+  },
+  "verdictExplanation_implausibly_low": {
+    "message": "The price $PRICE$ is far below other stores (median $MEDIAN$): it may be a counterfeit, an accessory or a bait listing. Check the store carefully before buying.",
+    "placeholders": {
+      "price": {
+        "content": "$1"
+      },
+      "median": {
+        "content": "$2"
+      }
+    }
+  },
+  "verdictLabel_insufficient_history": {
+    "message": "Not enough price history"
+  },
+  "verdictExplanation_insufficient_history": {
+    "message": "There are not enough verified price history points for this storage version yet."
+  },
+  "verdictLabel_fake_discount": {
+    "message": "Fake discount alert"
+  },
+  "verdictExplanation_fake_discount": {
+    "message": "The store shows a list price of $ORIGINAL$ (-$CLAIMED$%), but the selling price ($CURRENT$) is still at or above the market median ($MEDIAN$) and above the historical high ($MAX$).",
+    "placeholders": {
+      "original": {
+        "content": "$1"
+      },
+      "claimed": {
+        "content": "$2"
+      },
+      "current": {
+        "content": "$3"
+      },
+      "median": {
+        "content": "$4"
+      },
+      "max": {
+        "content": "$5"
+      }
+    }
+  },
+  "verdictLabel_genuine_deal": {
+    "message": "Genuinely good price"
+  },
+  "verdictExplanation_genuine_deal": {
+    "message": "The current price ($CURRENT$) is near its historic low (market median: $MEDIAN$).",
+    "placeholders": {
+      "current": {
+        "content": "$1"
+      },
+      "median": {
+        "content": "$2"
+      }
+    }
+  },
+  "verdictLabel_above_market": {
+    "message": "Above market +$PCT$%",
+    "placeholders": {
+      "pct": {
+        "content": "$1"
+      }
+    }
+  },
+  "verdictExplanation_above_market": {
+    "message": "The price shown ($CURRENT$) is about $PCT$% above the market median ($MEDIAN$), but the store shows no inflated list price.",
+    "placeholders": {
+      "current": {
+        "content": "$1"
+      },
+      "median": {
+        "content": "$2"
+      },
+      "pct": {
+        "content": "$3"
+      }
+    }
+  },
+  "verdictLabel_fair_market": {
+    "message": "Fair market price"
+  },
+  "verdictExplanation_fair_market": {
+    "message": "The current price ($CURRENT$) is within the stable range around the market median ($MEDIAN$).",
+    "placeholders": {
+      "current": {
+        "content": "$1"
+      },
+      "median": {
+        "content": "$2"
+      }
+    }
   }
 }

@@ -1,9 +1,15 @@
 'use client';
-import React, { useEffect, useId, useState, useTransition } from 'react';
+import React, {
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  useTransition,
+} from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useLocale, useTranslations } from 'next-intl';
 import { BsFunnel, BsStarFill } from 'react-icons/bs';
-import { Link, usePathname, useRouter } from '@/lib/navigation';
+import { usePathname, useRouter } from '@/lib/navigation';
 import { startNavigationProgress } from '@/components/elementary/NavigationProgress';
 import RangeSlider from './range-slider';
 import {
@@ -174,6 +180,80 @@ export default function ListSidebarOne({
     setKeyword(currentQ);
   }, [currentQ]);
 
+  // The filter drawer on small screens, driven by React state instead of
+  // Bootstrap's JS bundle (DOS/Rate#1331); Bootstrap's CSS still styles
+  // `.offcanvas.show`. From 992px the panel is inline (`.largeshow`).
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const drawerRef = useRef<HTMLDivElement>(null);
+  const drawerTriggerRef = useRef<HTMLAnchorElement>(null);
+  const closeDrawer = () => {
+    setDrawerOpen(false);
+    // After the effect cleanup has lifted `inert` from the trigger.
+    requestAnimationFrame(() => drawerTriggerRef.current?.focus());
+  };
+  useEffect(() => {
+    if (!drawerOpen) return;
+    const drawer = drawerRef.current;
+    drawer?.focus();
+    // aria-modal: the rest of the page is inert while the drawer is open
+    // (every sibling along the drawer's path to <body>), and comes back on close.
+    const madeInert: Element[] = [];
+    for (
+      let node: Element | null = drawer;
+      node && node !== document.body;
+      node = node.parentElement
+    ) {
+      for (const sibling of Array.from(node.parentElement?.children ?? [])) {
+        if (sibling !== node && !sibling.hasAttribute('inert')) {
+          sibling.setAttribute('inert', '');
+          madeInert.push(sibling);
+        }
+      }
+    }
+    // From 992px the panel is inline: a drawer left open would come back on
+    // its own when the window narrows again, so close it. Focus is not moved
+    // to the trigger here: at that width the trigger is hidden (d-lg-none)
+    // and the panel the focus is in stays on screen inline.
+    const wide = window.matchMedia('(min-width: 992px)');
+    const onWide = () => {
+      if (wide.matches) setDrawerOpen(false);
+    };
+    // Escape closes; Tab stays inside the open drawer, as Bootstrap's did.
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        closeDrawer();
+        return;
+      }
+      if (e.key !== 'Tab' || !drawerRef.current) return;
+      const focusables = Array.from(
+        drawerRef.current.querySelectorAll<HTMLElement>(
+          'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+        )
+      ).filter((el) => el.offsetParent !== null);
+      if (focusables.length === 0) return;
+      const first = focusables[0]!;
+      const last = focusables[focusables.length - 1]!;
+      const active = document.activeElement;
+      if (e.shiftKey && (active === first || active === drawerRef.current)) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && active === last) {
+        e.preventDefault();
+        first.focus();
+      } else if (!drawerRef.current.contains(active)) {
+        e.preventDefault();
+        first.focus();
+      }
+    };
+    wide.addEventListener('change', onWide);
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      for (const el of madeInert) el.removeAttribute('inert');
+      wide.removeEventListener('change', onWide);
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  }, [drawerOpen]);
+
   useEffect(() => {
     setPriceRange([urlMinMillion, urlMaxMillion]);
   }, [urlMinMillion, urlMaxMillion]);
@@ -325,20 +405,22 @@ export default function ListSidebarOne({
     <>
       <div className="searchingSidebar">
         <div
-          className="offcanvas offcanvas-start largeshow"
-          data-bs-scroll="true"
+          ref={drawerRef}
+          className={`offcanvas offcanvas-start largeshow${drawerOpen ? ' show' : ''}`}
           tabIndex={-1}
+          {...(drawerOpen ? { role: 'dialog', 'aria-modal': true } : {})}
           id="filterSlider"
-          aria-labelledby="filterSliderLabel"
+          aria-labelledby="filterSliderTitle"
         >
           <div className="offcanvas-header border-bottom py-3">
-            <h2 className="h5 mb-0">{t('sidebar.filterTitle')}</h2>
+            <h2 id="filterSliderTitle" className="h5 mb-0">
+              {t('sidebar.filterTitle')}
+            </h2>
             <button
               type="button"
               className="btn-close d-lg-none text-sm"
-              data-bs-dismiss="offcanvas"
-              data-bs-target="#filterSlider"
               aria-label={t('sidebar.closeAria')}
+              onClick={closeDrawer}
             ></button>
           </div>
           <div
@@ -687,16 +769,35 @@ export default function ListSidebarOne({
           </div>
         </div>
       </div>
-      <Link
+      {drawerOpen && (
+        <div
+          className="offcanvas-backdrop fade show d-lg-none"
+          onClick={closeDrawer}
+          aria-hidden="true"
+        />
+      )}
+      <a
+        ref={drawerTriggerRef}
         href="#filterSlider"
-        data-bs-toggle="offcanvas"
-        data-bs-target="#filterSlider"
+        role="button"
         aria-controls="filterSlider"
+        aria-expanded={drawerOpen}
         className="fixed-bottom z-sticky d-lg-none filterButtons"
+        onClick={(e) => {
+          e.preventDefault();
+          setDrawerOpen(true);
+        }}
+        // A link opens on Enter only; as a button it opens on Space too.
+        onKeyDown={(e) => {
+          if (e.key === ' ') {
+            e.preventDefault();
+            setDrawerOpen(true);
+          }
+        }}
       >
         <BsFunnel className="me-1" />
         {t('sidebar.filterTitle')}
-      </Link>
+      </a>
     </>
   );
 }
