@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 import type { Database, MasterProduct } from '@repo/shared-data';
 import { createLogger } from '@/lib/logger';
+import { rankModelCandidates } from '@/lib/model-match';
 import { isPendingReview } from '@/lib/review-display';
 import { listingReviewSummary } from '@/lib/analyzer-copy';
 import { countBrandsByItem } from '@/lib/item-directory';
@@ -966,7 +967,7 @@ function sanitizeOfferUrl(raw: unknown): string {
   }
 }
 
-/** True when the view row's seller has no review risk from the importer. */
+/** True when the view row's seller has no stored review risk (Rate Services' auditor writes it). */
 function isUnscoredTrustViewRow(row: RawTrustViewRow): boolean {
   return !hasPersistedReviewRisk(
     toSafeRiskScore100(row.review_risk_score, 0),
@@ -4379,7 +4380,7 @@ export async function inspectProductOrShopUrl(
   // lookups are filtered in the database: this public endpoint must not read
   // the whole directory on every request.
   const effectiveSearchQuery = parsedUrl.isUrl ? urlProductKeyword : query;
-  const [nameMatches, shopMatches, matchedProducts] = effectiveSearchQuery
+  const [nameMatches, shopMatches, searchedProducts] = effectiveSearchQuery
     ? await Promise.all([
         // No merchant name is this long; skipping also keeps a 1024-char query out
         // of the request URL.
@@ -4393,9 +4394,16 @@ export async function inspectProductOrShopUrl(
               limit: 1,
             })
           : Promise.resolve([]),
-        getMasterProducts({ search: effectiveSearchQuery, limit: 6 }),
+        // More rows than are shown, so the ranking sees an older exact model.
+        getMasterProducts({ search: effectiveSearchQuery, limit: 48 }),
       ])
     : [[], [], []];
+  // Best model match first, the same ranking as the extension lookup: the
+  // search returns "iPhone 16e" for "iPhone 16" too (DOS/Rate#1379).
+  const matchedProducts = rankModelCandidates(
+    effectiveSearchQuery,
+    searchedProducts
+  ).slice(0, 6);
   const matchedMerchantByName =
     matchedMerchantByShopId ?? nameMatches[0] ?? shopMatches[0] ?? null;
   const merchantById = async (id: string) =>

@@ -14,6 +14,7 @@ import { listingCountForSaleState, saleStateOfMaster } from '@/lib/sale-state';
 import {
   PUBLIC_API_CORS_HEADERS,
   jsonApiError,
+  withPublicOfferReviewRisk,
 } from '@/server/rate/api-handler';
 import {
   buildApiItemFields,
@@ -117,12 +118,20 @@ export async function GET(request: NextRequest, context: RouteContext) {
               )
             ),
           },
-          offers,
+          // A seller with no analysed review has no review risk (#1376).
+          offers: offers.map(withPublicOfferReviewRisk),
           priceHistory,
           reviewSummary,
           reviews,
           radarSignal,
-          ...(itemFields ?? {}),
+          ...(itemFields
+            ? {
+                ...itemFields,
+                unknown_variant_offers: itemFields.unknown_variant_offers.map(
+                  withPublicOfferReviewRisk
+                ),
+              }
+            : {}),
         },
       },
       {

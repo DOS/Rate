@@ -14,14 +14,14 @@ import { MAX_ENTITY_IMAGES, sanitizeHttpUrl, sanitizeHttpUrlList } from '../enti
 import { computeRetryDelayMs, redactSensitiveString, sanitizeLogMeta } from '../logger.js';
 import {
   loadAndScoreMerchant,
-  rescoreMerchantReviewRisk,
+  scoreSellerReviewRisk,
   toValidPrice,
   uniqueIds,
-  writeMerchantReviewRisk,
 } from '../merchant-review-risk.js';
 import { mergeKeySpecs } from '../jobs/backfill-specs.js';
 import {
   mapStoredReview,
+  REVIEW_RISK_OWNER_MESSAGE,
   runReviewRiskBackfill,
   scoreMerchants,
   type MerchantRow,
@@ -155,7 +155,8 @@ async function run() {
   assert.equal(byId.get('m-cheap')!.risk.price_anomaly_detected, true);
   assert.equal(byId.get('m-cheap')!.risk.risk_score, 60);
 
-  // Dry-run writes nothing; --apply writes only the review risk columns.
+  // The job only reports: Rate Services' MerchantRiskAuditor is the single
+  // writer of the merchant review risk (DOS/Rate#1341). --apply is refused.
   const updates: Array<{ id: string; patch: Record<string, unknown> }> = [];
   const table = (rows: unknown[]) => ({
     select: () => ({
@@ -184,21 +185,11 @@ async function run() {
   assert.equal(dry.scored, 3);
   assert.equal(updates.length, 0, 'dry-run writes nothing');
 
-  const applied = await runReviewRiskBackfill(fakeClient, { apply: true });
-  assert.equal(applied.written, 3);
-  assert.deepEqual(updates.map(u => u.id).sort(), ['m-cheap', 'm-off', 'm-seed']);
-  for (const u of updates) {
-    assert.deepEqual(Object.keys(u.patch).sort(), [
-      'review_risk_breakdown',
-      'review_risk_score',
-      'review_risk_updated_at',
-      'updated_at',
-    ]);
-    assert.equal(
-      (u.patch.review_risk_breakdown as { total_reviews: number }).total_reviews > 0,
-      true
-    );
-  }
+  await assert.rejects(
+    () => runReviewRiskBackfill(fakeClient, { apply: true }),
+    (err: unknown) => err instanceof Error && err.message === REVIEW_RISK_OWNER_MESSAGE
+  );
+  assert.equal(updates.length, 0, '--apply writes nothing either');
 
   // DOS/Rate#698: ingestion rescores one seller from a scoped read. It must
   // store exactly the seller's score from a full-table run, even with listings
@@ -318,19 +309,14 @@ async function run() {
     'peer official flags come embedded, not from a merchants read'
   );
 
-  // Ingestion stores the seller-wide score, overwriting a single-product one.
-  const rescored = await rescoreMerchantReviewRisk(scoped.client, new AiReviewAnalyzer(), 'm-seed');
-  assert.equal(rescored!.risk.risk_score, full.get('m-seed')!.risk.risk_score);
-  assert.equal(scoped.writes.length, 1);
-  assert.equal(scoped.writes[0]!.id, 'm-seed');
-  assert.equal(scoped.writes[0]!.patch.review_risk_score, full.get('m-seed')!.risk.risk_score);
-  assert.equal(
-    (scoped.writes[0]!.patch.review_risk_breakdown as { total_reviews: number }).total_reviews,
-    6,
-    'all six analyzed reviews of both listings'
-  );
-  await rescoreMerchantReviewRisk(scoped.client, new AiReviewAnalyzer(), 'm-none');
-  assert.equal(scoped.writes.length, 1, 'no write for a seller without analyzed reviews');
+  // Ingestion scores the seller-wide risk for its log and stores nothing, so
+  // an ingest after an audit leaves the auditor's values as they are
+  // (DOS/Rate#1341).
+  const scored = await scoreSellerReviewRisk(scoped.client, new AiReviewAnalyzer(), 'm-seed');
+  assert.equal(scored!.risk.risk_score, full.get('m-seed')!.risk.risk_score);
+  assert.equal(scored!.risk.total_reviews, 6, 'all six analyzed reviews of both listings');
+  assert.equal(await scoreSellerReviewRisk(scoped.client, new AiReviewAnalyzer(), 'm-none'), null);
+  assert.equal(scoped.writes.length, 0, 'scoring a seller writes nothing');
 
   // A large seller: 230 listings over 120 clusters (several in() chunks), a
   // peer without a merchant, an official peer setting one cluster's floor,
@@ -400,7 +386,7 @@ async function run() {
     .replace(/^\s*\/\/.*$/gm, '');
   const persistAt = pipelineSrc.indexOf('.persistAnalysisToSupabase(');
   const rescoreCall =
-    /await rescoreMerchantReviewRisk\(\s*this\.supabase,\s*this\.reviewAnalyzer,\s*merchantId\s*\)/g;
+    /await scoreSellerReviewRisk\(\s*this\.supabase,\s*this\.reviewAnalyzer,\s*merchantId\s*\)/g;
   rescoreCall.lastIndex = Math.max(persistAt, 0);
   const rescoreMatch = rescoreCall.exec(pipelineSrc);
   assert.equal(
@@ -408,6 +394,42 @@ async function run() {
     true,
     'ingestion awaits the seller rescore after persistAnalysisToSupabase'
   );
+
+  // No engine source writes the review risk the RS auditor owns (DOS/Rate#1341):
+  // no update or upsert payload carries review_risk_score, review_risk_breakdown
+  // or review_risk_updated_at, and no merchants.metadata write remains.
+  const { readdirSync, statSync } = await import('node:fs');
+  const srcRoot = fileURLToPath(new URL('../', import.meta.url));
+  const engineFiles: string[] = [];
+  const walk = (dir: string) => {
+    for (const name of readdirSync(dir)) {
+      const full = `${dir}/${name}`;
+      if (statSync(full).isDirectory()) {
+        if (name !== '__tests__') walk(full);
+      } else if (name.endsWith('.ts') && !name.startsWith('test-')) {
+        engineFiles.push(full);
+      }
+    }
+  };
+  walk(srcRoot.replace(/[\\/]$/, ''));
+  for (const file of engineFiles) {
+    const src = readFileSync(file, 'utf8')
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .replace(/^\s*\/\/.*$/gm, '');
+    // Any object key review_risk_score / _breakdown / _updated_at (a type's
+    // optional `review_risk_score?:` is not a write).
+    assert.doesNotMatch(
+      src,
+      /\breview_risk_(?:score|breakdown|updated_at)\s*:/,
+      `${file} writes the merchant review risk`
+    );
+    assert.doesNotMatch(
+      src,
+      /from\('merchants'\)[\s\S]{0,600}?\bmetadata\s*:/,
+      `${file} writes merchants.metadata`
+    );
+  }
+  assert.ok(engineFiles.length > 10, 'the scan saw the engine sources');
 
   // DOS/Rate#838: mapStoredReview vocabulary validation, follower_count ceiling, and mergeKeySpecs sanitization
   const badVocab = mapStoredReview({
@@ -606,16 +628,7 @@ async function run() {
 
   assert.deepEqual(uniqueIds(['  m-2  ', '', '   ', 'm-1\u0000bad', 'm-1', 'm-2']), ['m-1', 'm-2']);
   assert.equal(await loadAndScoreMerchant(scoped.client, new AiReviewAnalyzer(), '   '), null);
-  await assert.rejects(
-    () =>
-      writeMerchantReviewRisk(
-        scoped.client,
-        '   ',
-        boundedScoreMerchants[0]!.risk,
-        '2026-10-24T00:00:00.000Z'
-      ),
-    /Invalid merchantId/
-  );
+  assert.equal(await scoreSellerReviewRisk(scoped.client, new AiReviewAnalyzer(), '   '), null);
 
   assert.equal(sanitizeHttpUrl('https://user:pass@example.com/a.jpg'), null);
   const cappedImgs = sanitizeHttpUrlList(

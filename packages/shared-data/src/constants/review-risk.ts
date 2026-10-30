@@ -1,7 +1,8 @@
 /**
- * Review risk shared by the importer (which stores `merchants.review_risk_score`)
- * and the web (which computes it when nothing is stored), so both give the same
- * seeding contribution for the same reviews (DOS/Rate#671).
+ * Review risk shared by the importer (which scores it for its logs and reports;
+ * Rate Services' MerchantRiskAuditor stores `merchants.review_risk_score`,
+ * DOS/Rate#1341) and the web (which computes it when nothing is stored), so both
+ * give the same seeding contribution for the same reviews (DOS/Rate#671).
  */
 
 /** Most seeding can add to a merchant's review risk. */

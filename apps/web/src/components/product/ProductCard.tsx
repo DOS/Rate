@@ -9,6 +9,7 @@ import type { RadarSignal } from '@/lib/deal-radar';
 import { contentLang } from '@/lib/content-lang';
 import { MAX_VALID_VND_PRICE } from '@/lib/rate-domain';
 import { formatDecimal, formatPriceVnd } from '@/lib/locale-format';
+import { deviceImageSrcSet } from '@/lib/device-images';
 
 export interface ProductCardSpec {
   readonly key: string;
@@ -134,7 +135,15 @@ export default function ProductCard({
           aria-hidden="true"
         >
           {thumbnail ? (
-            <img src={thumbnail} alt="" loading="lazy" />
+            <img
+              src={thumbnail}
+              // Pre-sized WebP for local device photos; the card shows them
+              // at 132-176 px (DOS/Rate#1332).
+              srcSet={deviceImageSrcSet(thumbnail) ?? undefined}
+              sizes="176px"
+              alt=""
+              loading="lazy"
+            />
           ) : (
             <span className="rate-product-card-noimage">{t('noImage')}</span>
           )}

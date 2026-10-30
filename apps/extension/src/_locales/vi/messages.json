@@ -511,5 +511,129 @@
   },
   "marketMedian": {
     "message": "Trung Vị Thị Trường"
+  },
+  "verdictLabel_accessory": {
+    "message": "Phụ kiện / Linh kiện"
+  },
+  "verdictExplanation_accessory": {
+    "message": "Sản phẩm được nhận diện là phụ kiện/linh kiện, không áp dụng biểu đồ giá thân máy."
+  },
+  "verdictExplanation_accessory_keyword": {
+    "message": "Phát hiện từ khóa phụ kiện/linh kiện (\"$KEYWORD$\") trong tiêu đề sản phẩm.",
+    "placeholders": {
+      "keyword": {
+        "content": "$1"
+      }
+    }
+  },
+  "verdictExplanation_accessory_price_floor": {
+    "message": "Mức giá ($PRICE$) thấp hơn ngưỡng tối thiểu của thiết bị chính hãng ($FLOOR$) - khả năng cao là phụ kiện hoặc linh kiện.",
+    "placeholders": {
+      "price": {
+        "content": "$1"
+      },
+      "floor": {
+        "content": "$2"
+      }
+    }
+  },
+  "verdictLabel_ambiguous_variant": {
+    "message": "Chọn dung lượng bộ nhớ"
+  },
+  "verdictExplanation_ambiguous_variant": {
+    "message": "Trang sản phẩm có nhiều tùy chọn bộ nhớ (128GB/256GB/512GB). Hãy chọn phân loại trên trang hoặc trong bảng Rate để so sánh đúng phiên bản."
+  },
+  "verdictLabel_implausibly_low": {
+    "message": "Giá thấp bất thường"
+  },
+  "verdictExplanation_implausibly_low": {
+    "message": "Giá $PRICE$ thấp hơn nhiều so với các nơi bán khác (trung vị $MEDIAN$): có thể là hàng giả, phụ kiện hoặc tin câu khách. Hãy kiểm tra kỹ gian hàng trước khi mua.",
+    "placeholders": {
+      "price": {
+        "content": "$1"
+      },
+      "median": {
+        "content": "$2"
+      }
+    }
+  },
+  "verdictLabel_insufficient_history": {
+    "message": "Chưa đủ lịch sử giá"
+  },
+  "verdictExplanation_insufficient_history": {
+    "message": "Chưa có đủ điểm dữ liệu lịch sử giá đã xác minh cho phiên bản bộ nhớ này."
+  },
+  "verdictLabel_fake_discount": {
+    "message": "Cảnh báo giảm giá ảo"
+  },
+  "verdictExplanation_fake_discount": {
+    "message": "Gian hàng treo giá gạch ngang $ORIGINAL$ (-$CLAIMED$%), nhưng giá bán thực tế ($CURRENT$) vẫn cao hơn hoặc ngang trung vị thị trường ($MEDIAN$) và vượt đỉnh lịch sử ($MAX$).",
+    "placeholders": {
+      "original": {
+        "content": "$1"
+      },
+      "claimed": {
+        "content": "$2"
+      },
+      "current": {
+        "content": "$3"
+      },
+      "median": {
+        "content": "$4"
+      },
+      "max": {
+        "content": "$5"
+      }
+    }
+  },
+  "verdictLabel_genuine_deal": {
+    "message": "Giá Tốt Thực Sự"
+  },
+  "verdictExplanation_genuine_deal": {
+    "message": "Giá hiện tại ($CURRENT$) đang ở vùng đáy lịch sử (trung vị thị trường: $MEDIAN$).",
+    "placeholders": {
+      "current": {
+        "content": "$1"
+      },
+      "median": {
+        "content": "$2"
+      }
+    }
+  },
+  "verdictLabel_above_market": {
+    "message": "Cao hơn thị trường +$PCT$%",
+    "placeholders": {
+      "pct": {
+        "content": "$1"
+      }
+    }
+  },
+  "verdictExplanation_above_market": {
+    "message": "Giá đang xem ($CURRENT$) cao hơn trung vị thị trường ($MEDIAN$) khoảng $PCT$%, nhưng shop không treo giá gạch ngang khống.",
+    "placeholders": {
+      "current": {
+        "content": "$1"
+      },
+      "median": {
+        "content": "$2"
+      },
+      "pct": {
+        "content": "$3"
+      }
+    }
+  },
+  "verdictLabel_fair_market": {
+    "message": "Giá Chuẩn Thị Trường"
+  },
+  "verdictExplanation_fair_market": {
+    "message": "Giá hiện tại ($CURRENT$) nằm trong biên độ ổn định quanh trung vị thị trường ($MEDIAN$).",
+    "placeholders": {
+      "current": {
+        "content": "$1"
+      },
+      "median": {
+        "content": "$2"
+      }
+    }
   }
 }

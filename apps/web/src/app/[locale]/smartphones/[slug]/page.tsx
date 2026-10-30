@@ -2,8 +2,12 @@ import type { Metadata } from 'next';
 import { Fragment } from 'react';
 import { getTranslations, setRequestLocale } from 'next-intl/server';
 import { Link } from '@/lib/navigation';
+import { IntentLink } from '@/components/elementary/IntentLink';
 import { notFound, permanentRedirect } from 'next/navigation';
-import { resolveItemRoute } from '@/server/rate/item-route';
+import {
+  getCachedCategorySlugById,
+  resolveItemRoute,
+} from '@/server/rate/item-route';
 import {
   itemSizePanelBytes,
   loadItemPageContext,
@@ -23,7 +27,6 @@ import ItemLazySizePanel, {
 } from '@/components/product/item/ItemLazySizePanel';
 import { shouldLazyLoadSizes } from '@/lib/item-size-panel';
 import {
-  getCrossPlatformDealRadar,
   getCachedMasterProductBySlug,
   getCachedMasterProductOffers,
   getCachedMasterProductPriceHistory,
@@ -31,7 +34,6 @@ import {
   getCachedMasterProductReviewSummary,
   getCachedMasterProducts,
   computeProductRadarSignal,
-  type CanonicalCategorySlug,
 } from '@/server/rate';
 import { computeBayesianRatingSummary } from '@/lib/rate-api';
 import {
@@ -55,7 +57,8 @@ import {
   BsStarFill,
 } from 'react-icons/bs';
 import RadarBadge from '@/components/radar/RadarBadge';
-import { buildRadarIndex, getRadarSignal } from '@/lib/deal-radar';
+import { getRadarSignal, type RadarIndex } from '@/lib/deal-radar';
+import { startRenderTiming } from '@/lib/render-timing';
 import { bayesianTierKey, radarExplanation } from '@/lib/product-detail-copy';
 import {
   absoluteUrl,
@@ -92,6 +95,7 @@ import {
   computeProductStandingInCategory,
   scoreMasterProductForLeaderboard,
 } from '@/lib/leaderboard-engine';
+import { deviceImageSrcSet } from '@/lib/device-images';
 import ProductLeaderboardBadges from '@/components/leaderboard/ProductLeaderboardBadges';
 import ProductShareAuditButton from '@/components/leaderboard/ProductShareAuditButton';
 import ProductValueCalculator from '@/components/leaderboard/ProductValueCalculator';
@@ -108,6 +112,7 @@ import {
 } from '@/lib/product-market-stats';
 import {
   firstImageUrl,
+  foreignCategoryProductHref,
   usableImageUrls,
   productImageUrl,
 } from '@/lib/rate-domain-core';
@@ -119,6 +124,7 @@ import {
   formatPlainNumber,
   formatPriceVnd,
 } from '@/lib/locale-format';
+import { versusHref } from '@/lib/item-compare';
 
 // Cached after the first request, refreshed every 5 minutes or when the
 // worker revalidates its cache tags (DOS/Rate#491).
@@ -130,6 +136,29 @@ export function generateStaticParams(): { slug: string }[] {
 }
 
 export type PageParams = Promise<{ locale: string; slug: string }>;
+
+/**
+ * Master-product route: the product's own URL when it was asked for under
+ * another category's path, else null (DOS/Rate#1366; the Item route has its
+ * own check, #1281). When the category map cannot be read the page renders
+ * as asked rather than guess a category.
+ */
+async function foreignCategoryHref(
+  product: Parameters<typeof foreignCategoryProductHref>[0],
+  categoryBasePath: string
+): Promise<string | null> {
+  let categorySlugById: ReadonlyMap<string, string>;
+  try {
+    categorySlugById = await getCachedCategorySlugById();
+  } catch {
+    return null;
+  }
+  return foreignCategoryProductHref(
+    product,
+    categoryBasePath,
+    categorySlugById
+  );
+}
 
 export async function generateCategoryProductMetadata(
   params: PageParams,
@@ -168,6 +197,14 @@ export async function generateCategoryProductMetadata(
     return {
       title: t('notFoundTitle'),
     };
+  }
+  // A product under another category's path 308s to its own; that URL is
+  // the canonical (DOS/Rate#1366).
+  const ownHref = itemRoute
+    ? null
+    : await foreignCategoryHref(product, categoryBasePath);
+  if (ownHref) {
+    return { alternates: { canonical: `https://rate.vn${ownHref}` } };
   }
   // The stored stats, like every other page shows (DOS/Rate#1141). An Item
   // URL is the Item: its name and the "from" price over its sizes (#1154).
@@ -243,20 +280,44 @@ export async function ProductDetailView({
 }) {
   const { locale, slug } = await params;
   setRequestLocale(locale);
+  const timing = startRenderTiming('product', slug);
+  const categorySlug = categoryBasePath.replace(/^\//, '') || 'smartphones';
   // RATE_ITEM_MODEL on: an old variant URL 308s to its Item URL with `?v=`,
   // and an Item URL renders its selected variant until the Item page ships
   // (Q1, DOS/Rate#1153, #1154). Off: null, and the page is as before.
-  const itemRoute = await resolveItemRoute({ slug, categoryBasePath });
-  if (itemRoute?.kind === 'redirect') permanentRedirect(itemRoute.to);
+  const itemRoute = await timing.time(
+    'itemRoute',
+    resolveItemRoute({ slug, categoryBasePath })
+  );
+  if (itemRoute?.kind === 'redirect') {
+    timing.done();
+    permanentRedirect(itemRoute.to);
+  }
   // Neither a published Item nor a variant of one: no fallback to the old
   // master lookup, which would show a variant of an unpublished Item.
-  if (itemRoute?.kind === 'not_found') notFound();
+  if (itemRoute?.kind === 'not_found') {
+    timing.done();
+    notFound();
+  }
+  // The category peers depend on nothing below: read them alongside the item
+  // and product reads instead of after them (DOS/Rate#1344). No fallback:
+  // this page is cached, so an empty fallback would be served for the whole
+  // revalidate window, and a failed regeneration keeps the last good page
+  // instead (DOS/Rate#491). The rejection is handled where it is awaited.
+  const peersRead = timing.time(
+    'peers',
+    getCachedMasterProducts({ categorySlug, limit: 50 })
+  );
+  peersRead.catch(() => undefined);
   // RATE_ITEM_MODEL on and an Item URL: every size's offers and history, and
   // the listings whose size is not stated (#1154). Null otherwise. A size
   // whose read failed is left out, and the page renders a size that loaded.
   const itemPage =
     itemRoute?.kind === 'render' && itemRoute.variants.length > 0
-      ? await loadItemPageContext(itemRoute.item, itemRoute.variants)
+      ? await timing.time(
+          'itemPage',
+          loadItemPageContext(itemRoute.item, itemRoute.variants)
+        )
       : null;
   const renderedSize =
     itemPage && itemRoute?.kind === 'render'
@@ -269,16 +330,22 @@ export async function ProductDetailView({
     getTranslations({ locale, namespace: 'productDetail' }),
     getTranslations({ locale, namespace: 'rate.nav' }),
     getTranslations({ locale, namespace: 'saleState' }),
-    getCachedMasterProductBySlug(productSlug),
+    timing.time('product', getCachedMasterProductBySlug(productSlug)),
   ]);
 
   if (!storedProduct) {
+    timing.done();
     notFound();
+  }
+  // Master-product route: a product asked for under another category's path
+  // goes to its own (DOS/Rate#1366).
+  if (!itemRoute) {
+    const ownHref = await foreignCategoryHref(storedProduct, categoryBasePath);
+    if (ownHref) permanentRedirect(ownHref);
   }
   const itemVariants = itemPage?.variants ?? [];
   const isItemGroup = itemVariants.length > 1;
 
-  const categorySlug = categoryBasePath.replace(/^\//, '') || 'smartphones';
   // Each category shows only the spec groups and fields it has: earbuds have
   // no screen, RAM or camera, watches no 5G (DOS/Rate#1142).
   const specTemplate = getCategorySpecTemplate(categorySlug);
@@ -291,36 +358,13 @@ export async function ProductDetailView({
     categorySlug === 'earbuds'
       ? tNav(categorySlug)
       : categoryLabel;
-  const [offers, reviews, storedCategoryPeers, categoryDealRadar] =
-    await Promise.all([
-      getCachedMasterProductOffers(product.id),
-      getCachedMasterProductReviews(product.id),
-      // No fallbacks: this page is cached, so an empty fallback would be
-      // served for the whole revalidate window. A failed regeneration keeps
-      // the last good page instead (DOS/Rate#491).
-      getCachedMasterProducts({ categorySlug, limit: 50 }),
-      getCrossPlatformDealRadar({
-        categorySlug: categorySlug as CanonicalCategorySlug,
-        limit: 50,
-      }),
-    ]);
+  const [offers, reviews, storedCategoryPeers] = await Promise.all([
+    timing.time('offers', getCachedMasterProductOffers(product.id)),
+    timing.time('reviews', getCachedMasterProductReviews(product.id)),
+    peersRead,
+  ]);
   const categoryPeers = storedCategoryPeers.map((peer) =>
     applyCategorySpecTemplate(categorySlug, peer)
-  );
-  const [reviewSummary, priceHistory] = await Promise.all([
-    getCachedMasterProductReviewSummary(product.id, reviews),
-    getCachedMasterProductPriceHistory(product.id, offers),
-  ]);
-
-  // A sold-out listing's last price is no deal (DOS/Rate#1141).
-  const inStockOffers = offers.filter((o) => !isOfferUnavailable(o));
-  const radarSignal = computeProductRadarSignal(product, inStockOffers);
-  const radarNote = radarExplanation(radarSignal, locale);
-  const peerRadarIndex = buildRadarIndex(categoryDealRadar);
-
-  const leaderboardBadges = computeProductStandingInCategory(
-    product,
-    categoryPeers
   );
   // "From" price, range and seller count: the stored stats every other page
   // shows (in-stock listings, no bait prices), not the offer list below,
@@ -337,6 +381,46 @@ export async function ProductDetailView({
       : categoryPeers,
     product.slug,
     currentMinPrice
+  );
+  const [reviewSummary, priceHistory, competitorOffers] = await Promise.all([
+    timing.time(
+      'reviewSummary',
+      getCachedMasterProductReviewSummary(product.id, reviews)
+    ),
+    timing.time(
+      'priceHistory',
+      getCachedMasterProductPriceHistory(product.id, offers)
+    ),
+    // Each competitor card's radar badge comes from that product's own
+    // offers, as this product's signal does, instead of from the category
+    // deal radar, which took 3.5-4 s cold before the first byte
+    // (DOS/Rate#1344).
+    timing.time(
+      'competitorOffers',
+      Promise.all(
+        relatedCompetitors.map((peer) => getCachedMasterProductOffers(peer.id))
+      )
+    ),
+  ]);
+  timing.done();
+  const peerRadarIndex: RadarIndex = new Map(
+    relatedCompetitors.map((peer, i) => [
+      peer.slug,
+      computeProductRadarSignal(
+        peer,
+        (competitorOffers[i] ?? []).filter((o) => !isOfferUnavailable(o))
+      ),
+    ])
+  );
+
+  // A sold-out listing's last price is no deal (DOS/Rate#1141).
+  const inStockOffers = offers.filter((o) => !isOfferUnavailable(o));
+  const radarSignal = computeProductRadarSignal(product, inStockOffers);
+  const radarNote = radarExplanation(radarSignal, locale);
+
+  const leaderboardBadges = computeProductStandingInCategory(
+    product,
+    categoryPeers
   );
   // The Item page's name and "from" price span its sizes.
   const displayName = itemPage?.item.name || product.name;
@@ -1515,6 +1599,11 @@ export async function ProductDetailView({
                                 loading="lazy"
                                 decoding="async"
                                 src={peerThumb}
+                                srcSet={
+                                  deviceImageSrcSet(peerThumb) ?? undefined
+                                }
+                                // 68 px box less padding and border.
+                                sizes="50px"
                                 alt={peer.name}
                                 style={{
                                   maxWidth: '100%',
@@ -1601,12 +1690,12 @@ export async function ProductDetailView({
                         </div>
 
                         <div className="d-flex mt-auto gap-2">
-                          <Link
-                            href={`/compare/${product.slug}-vs-${peer.slug}`}
+                          <IntentLink
+                            href={versusHref(product.slug, peer.slug)}
                             className="btn btn-sm btn-outline-primary rounded-pill fw-semibold flex-grow-1"
                           >
                             {t('compare1v1Btn')}
-                          </Link>
+                          </IntentLink>
                           <Link
                             href={`${categoryBasePath}/${peer.slug}`}
                             className="btn btn-sm btn-light rounded-pill border px-3"

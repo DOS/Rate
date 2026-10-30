@@ -511,5 +511,129 @@
   },
   "marketMedian": {
     "message": "Tržní medián"
+  },
+  "verdictLabel_accessory": {
+    "message": "Příslušenství / díl"
+  },
+  "verdictExplanation_accessory": {
+    "message": "Produkt byl rozpoznán jako příslušenství nebo díl, graf cen zařízení se proto nepoužije."
+  },
+  "verdictExplanation_accessory_keyword": {
+    "message": "Název produktu obsahuje klíčové slovo příslušenství nebo dílu („$KEYWORD$“).",
+    "placeholders": {
+      "keyword": {
+        "content": "$1"
+      }
+    }
+  },
+  "verdictExplanation_accessory_price_floor": {
+    "message": "Cena ($PRICE$) je nižší než minimum pro originální zařízení ($FLOOR$), jde nejspíš o příslušenství nebo díl.",
+    "placeholders": {
+      "price": {
+        "content": "$1"
+      },
+      "floor": {
+        "content": "$2"
+      }
+    }
+  },
+  "verdictLabel_ambiguous_variant": {
+    "message": "Vyberte velikost úložiště"
+  },
+  "verdictExplanation_ambiguous_variant": {
+    "message": "Stránka nabízí více variant úložiště (128GB/256GB/512GB). Vyberte variantu na stránce nebo v panelu Rate, aby se porovnávala správná verze."
+  },
+  "verdictLabel_implausibly_low": {
+    "message": "Neobvykle nízká cena"
+  },
+  "verdictExplanation_implausibly_low": {
+    "message": "Cena $PRICE$ je výrazně nižší než v ostatních obchodech (medián $MEDIAN$): může jít o padělek, příslušenství nebo návnadu. Před nákupem obchod pečlivě ověřte.",
+    "placeholders": {
+      "price": {
+        "content": "$1"
+      },
+      "median": {
+        "content": "$2"
+      }
+    }
+  },
+  "verdictLabel_insufficient_history": {
+    "message": "Nedostatečná historie cen"
+  },
+  "verdictExplanation_insufficient_history": {
+    "message": "Pro tuto verzi úložiště zatím není dost ověřených údajů o historii cen."
+  },
+  "verdictLabel_fake_discount": {
+    "message": "Varování: falešná sleva"
+  },
+  "verdictExplanation_fake_discount": {
+    "message": "Obchod uvádí přeškrtnutou cenu $ORIGINAL$ (-$CLAIMED$ %), ale prodejní cena ($CURRENT$) je stále na úrovni mediánu trhu ($MEDIAN$) nebo nad ním a přesahuje historické maximum ($MAX$).",
+    "placeholders": {
+      "original": {
+        "content": "$1"
+      },
+      "claimed": {
+        "content": "$2"
+      },
+      "current": {
+        "content": "$3"
+      },
+      "median": {
+        "content": "$4"
+      },
+      "max": {
+        "content": "$5"
+      }
+    }
+  },
+  "verdictLabel_genuine_deal": {
+    "message": "Skutečně dobrá cena"
+  },
+  "verdictExplanation_genuine_deal": {
+    "message": "Aktuální cena ($CURRENT$) je blízko historického minima (medián trhu: $MEDIAN$).",
+    "placeholders": {
+      "current": {
+        "content": "$1"
+      },
+      "median": {
+        "content": "$2"
+      }
+    }
+  },
+  "verdictLabel_above_market": {
+    "message": "Nad trhem +$PCT$ %",
+    "placeholders": {
+      "pct": {
+        "content": "$1"
+      }
+    }
+  },
+  "verdictExplanation_above_market": {
+    "message": "Zobrazená cena ($CURRENT$) je asi o $PCT$ % vyšší než medián trhu ($MEDIAN$), ale obchod neuvádí nadsazenou přeškrtnutou cenu.",
+    "placeholders": {
+      "current": {
+        "content": "$1"
+      },
+      "median": {
+        "content": "$2"
+      },
+      "pct": {
+        "content": "$3"
+      }
+    }
+  },
+  "verdictLabel_fair_market": {
+    "message": "Férová tržní cena"
+  },
+  "verdictExplanation_fair_market": {
+    "message": "Aktuální cena ($CURRENT$) je ve stabilním pásmu kolem mediánu trhu ($MEDIAN$).",
+    "placeholders": {
+      "current": {
+        "content": "$1"
+      },
+      "median": {
+        "content": "$2"
+      }
+    }
   }
 }

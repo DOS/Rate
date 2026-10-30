@@ -18,6 +18,7 @@ import {
   parseBoundedStringParam,
   parseVersusQueryParams,
 } from '@/server/rate/api-handler';
+import { canonicalVersusOrder, versusHref } from '@/lib/item-compare';
 
 export { parseVersusQueryParams };
 
@@ -382,9 +383,15 @@ export async function GET(req: NextRequest) {
         ok: true,
         directory: 'tech_electronics',
         category,
-        versus_pair: `${scoreA.slug}-vs-${scoreB.slug}`,
-        swap_pair: `${scoreB.slug}-vs-${scoreA.slug}`,
-        versus_url: `/compare/${scoreA.slug}-vs-${scoreB.slug}`,
+        // The pair in its canonical order (sides sorted, the order of its
+        // one URL) and the other order (DOS/Rate#1367).
+        versus_pair: canonicalVersusOrder(scoreA.slug, scoreB.slug).join(
+          '-vs-'
+        ),
+        swap_pair: canonicalVersusOrder(scoreA.slug, scoreB.slug)
+          .reverse()
+          .join('-vs-'),
+        versus_url: versusHref(scoreA.slug, scoreB.slug),
         compare_matrix_url: `/compare?cat=${category}&slugs=${scoreA.slug},${scoreB.slug}`,
         persona: matchedPersona.id,
         weights: normalizedWeights,

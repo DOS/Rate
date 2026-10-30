@@ -7,7 +7,11 @@ import {
 } from '../security-guards.js';
 import { escapeHtml, t } from '../i18n.js';
 import type { ExtensionLookupData } from '../types.js';
-import { buildPillAriaLabel, resolvePillTheme } from '../verdict-display.js';
+import {
+  buildPillAriaLabel,
+  resolvePillTheme,
+  verdictTexts,
+} from '../verdict-display.js';
 
 const HOST_ID = 'rate-vn-trust-pill-host';
 
@@ -40,6 +44,8 @@ function renderShadowTrustPill(lookup: ExtensionLookupData): void {
 
     const shadow = host.shadowRoot || host.attachShadow({ mode: 'open' });
     const assessment = lookup.priceAssessment;
+    // The verdict in the extension's language (DOS/Rate#1326).
+    const verdict = verdictTexts(assessment);
     // A bait price uses the warning theme, not the neutral one (#1298).
     const theme = resolvePillTheme(
       assessment.verdict,
@@ -177,12 +183,12 @@ function renderShadowTrustPill(lookup: ExtensionLookupData): void {
           flex-shrink: 0;
         }
       </style>
-      <div class="pill-card" id="rate-pill-trigger" role="button" tabindex="0" aria-label="${escapeHtml(buildPillAriaLabel(assessment.badgeLabel, cheaperSummary))}">
+      <div class="pill-card" id="rate-pill-trigger" role="button" tabindex="0" aria-label="${escapeHtml(buildPillAriaLabel(verdict.label, cheaperSummary))}">
         <span class="brand-dot"></span>
         <div class="content">
           <div class="top-row">
             <span>Rate.vn</span>
-            <span class="verdict-badge">${escapeHtml(assessment.badgeLabel)}</span>
+            <span class="verdict-badge">${escapeHtml(verdict.label)}</span>
             ${radarChipHtml}
             ${
               trustedRating

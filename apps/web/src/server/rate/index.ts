@@ -42,6 +42,7 @@ import {
   type MerchantListFilterParams,
   type SitemapRows,
 } from '../../lib/rate-api';
+import { categorySlugOnly } from '../../lib/rate-domain-core';
 
 export type {
   CanonicalCategorySlug,
@@ -628,18 +629,8 @@ export function getCachedInspectProductOrShopUrl(rawQuery: string) {
 // JSON, so the category map travels as entries.
 const SITEMAP_CACHE_WARN_BYTES = 1_500_000;
 
-export const categorySlugOnly = (
-  value: Record<string, unknown> | null | undefined
-): { category_slug: string } | null => {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
-  if (typeof value.category_slug !== 'string') return null;
-  const slug = value.category_slug
-    .replace(/\p{Cc}+/gu, '')
-    .trim()
-    .toLowerCase()
-    .slice(0, 64);
-  return isCanonicalCategorySlug(slug) ? { category_slug: slug } : null;
-};
+// Shared with the category-path redirect (DOS/Rate#1366).
+export { categorySlugOnly };
 
 const _getCachedSitemapRowsData = withRateDataCache(
   async () => {

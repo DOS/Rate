@@ -13,6 +13,10 @@ import {
   formatStorageLabel,
   getCategoryFilterSchema,
 } from '../../../lib/category-filters';
+import {
+  categorySlugOnly as categorySlugOnly1366,
+  foreignCategoryProductHref,
+} from '../../../lib/rate-domain-core';
 import csMessages from '../../../../locales/cs.json';
 import enMessages from '../../../../locales/en.json';
 import viMessages from '../../../../locales/vi.json';
@@ -131,6 +135,88 @@ async function runCoreArchitectureSuite() {
       name: 'Apple MacBook Air M3',
     }),
     '/laptops/macbook-air-m3-16gb'
+  );
+  // A product asked for under another category's path goes to its own,
+  // the URL the site links and lists (DOS/Rate#1366).
+  const phone1366 = {
+    slug: 'apple-iphone-16-128gb',
+    category_id: 'cat-phone',
+  };
+  const catMap1366 = new Map([...catMap, ['cat-phone', 'smartphones']]);
+  for (const base of ['/laptops', '/tablets', '/earbuds', '/smartwatches']) {
+    assert.equal(
+      foreignCategoryProductHref(phone1366, base, catMap1366),
+      '/smartphones/apple-iphone-16-128gb',
+      `a phone under ${base} redirects to /smartphones`
+    );
+  }
+  assert.equal(
+    foreignCategoryProductHref(phone1366, '/smartphones', catMap1366),
+    null,
+    'a product under its own category renders'
+  );
+  assert.equal(
+    foreignCategoryProductHref(
+      { slug: 'Apple-iPhone-16-128GB', category_id: 'cat-phone' },
+      '/smartphones',
+      catMap1366
+    ),
+    null,
+    'a mixed-case slug under its own category is no foreign category'
+  );
+  assert.equal(
+    foreignCategoryProductHref(
+      { slug: '..', category_id: 'cat-phone' },
+      '/laptops',
+      catMap1366
+    ),
+    null,
+    'no product URL can be built: no redirect to a category page'
+  );
+  // Hints are read as the sitemap reads them: a 'Tablets' hint with no
+  // category_id lists /tablets/..., so that URL renders, and the phone path
+  // 308s there instead of the name heuristic's guess.
+  const tablet1366 = {
+    slug: 'lenovo-tb350fu',
+    category_id: null,
+    metadata: { category_slug: ' Tablets ' },
+  };
+  assert.equal(
+    foreignCategoryProductHref(tablet1366, '/tablets', catMap1366),
+    null,
+    'a mixed-case hint names the category the sitemap lists'
+  );
+  assert.equal(
+    foreignCategoryProductHref(tablet1366, '/smartphones', catMap1366),
+    '/tablets/lenovo-tb350fu'
+  );
+  // Links read the hint the same way, so a link never takes a 308 hop.
+  assert.equal(
+    getMasterProductHref(tablet1366, catMap1366),
+    '/tablets/lenovo-tb350fu'
+  );
+  assert.equal(
+    getMasterProductHref({
+      slug: 'lenovo-tb350fu',
+      category_id: null,
+      metadata: categorySlugOnly1366({ category_slug: ' Tablets ' }),
+    }),
+    '/tablets/lenovo-tb350fu',
+    'the sitemap (hints reduced by categorySlugOnly) lists the same URL'
+  );
+  const fs1366 = require('node:fs') as typeof import('node:fs');
+  const path1366 = require('node:path') as typeof import('node:path');
+  const detailSrc1366 = fs1366.readFileSync(
+    path1366.resolve(
+      __dirname,
+      '../../../app/[locale]/smartphones/[slug]/page.tsx'
+    ),
+    'utf8'
+  );
+  assert.match(
+    detailSrc1366,
+    /if \(!itemRoute\) \{\s*const ownHref = await foreignCategoryHref\(storedProduct, categoryBasePath\);\s*if \(ownHref\) permanentRedirect\(ownHref\);/,
+    'the master-product route 308s a foreign-category URL'
   );
   console.log(
     '  ✅ [2/7] Canonical 5-Category Routing (smartphones/tablets/laptops/smartwatches/earbuds) passed'
@@ -761,7 +847,8 @@ async function runCoreArchitectureSuite() {
   assert.ok(
     versusPageSource.includes('parseVersusSlugs') &&
       versusPageSource.includes('1V1 HEAD-TO-HEAD AUDIT') &&
-      smartphoneDetailSrc.includes('/compare/${product.slug}-vs-${peer.slug}'),
+      // Peer links name the pair in its canonical order (#1367).
+      smartphoneDetailSrc.includes('versusHref(product.slug, peer.slug)'),
     '/compare/[versus] 1v1 route and ProductDetailView 1v1 links must be wired'
   );
   console.log(
@@ -778,6 +865,20 @@ async function runCoreArchitectureSuite() {
   assert.equal(
     popularPairs[0]?.versusHref,
     '/compare/apple-iphone-18-pro-max-256gb-vs-samsung-galaxy-s26-ultra-256gb'
+  );
+  // One URL per versus pair, sides sorted: the master-product route 308s the
+  // other order and takes its canonical from the URL, not the read (#1367).
+  const versusPageSrc1367 = fs.readFileSync(
+    path.join(repoRoot, 'apps/web/src/app/[locale]/compare/[versus]/page.tsx'),
+    'utf8'
+  );
+  assert.match(
+    versusPageSrc1367,
+    /const aliasHref = versusAliasRedirect\(versus, canonicalPath\);\s*if \(aliasHref\) permanentRedirect\(aliasHref\);/
+  );
+  assert.ok(
+    !/compare\/\$\{a\.slug\}-vs-\$\{b\.slug\}/.test(versusPageSrc1367),
+    'the canonical is not built from the compare read order'
   );
   const compareWorkspaceSrc = fs.readFileSync(
     path.join(repoRoot, 'apps/web/src/components/compare/CompareWorkspace.tsx'),
@@ -825,8 +926,9 @@ async function runCoreArchitectureSuite() {
   );
   assert.ok(
     homePageSrc.includes('popularHomeBattles') &&
+      // In the pair's canonical order (#1367).
       categoryPageSrc.includes(
-        '/compare/${products[0].slug}-vs-${products[1].slug}'
+        'versusHref(products[0].slug, products[1].slug)'
       ),
     'Homepage and Category Catalogs must surface 1v1 Flagship Showdowns'
   );
@@ -2115,32 +2217,52 @@ async function runCoreArchitectureSuite() {
   console.log(
     '  ✅ [42/44] Unified Deal Radar exports in PriceHistorySection, JReviewsSection, ProductSpecsExportToolbar, Compare/Versus CSVs & OpenAPI 3.1.0 (#128) passed'
   );
-  // 43. Bootstrap JS ships from the installed package, not a CDN script (#145)
-  // The document shell (<html>, fonts, Bootstrap JS) lives in the [locale]
-  // layout since #491.
+  // 43. No Bootstrap JS at all: not from a CDN (#145), and not the bundled
+  // bootstrap.bundle (DOS/Rate#1331). The catalogue's sort dropdown and filter
+  // drawer run on React state; Bootstrap's CSS still styles them.
   const rootLayoutSrc145 = fs.readFileSync(
     path.join(repoRoot, 'apps/web/src/app/[locale]/layout.tsx'),
     'utf8'
   );
   assert.ok(
-    !/cdn\.jsdelivr\.net/.test(rootLayoutSrc145) &&
-      !rootLayoutSrc145.includes('<BootstrapClient />') &&
-      fs
-        .readFileSync(
-          path.join(repoRoot, 'apps/web/src/app/[locale]/smartphones/page.tsx'),
-          'utf8'
-        )
-        .includes('<BootstrapClient />') &&
-      fs
-        .readFileSync(
-          path.join(repoRoot, 'apps/web/src/app/BootstrapClient.tsx'),
-          'utf8'
-        )
-        .includes("import('bootstrap/dist/js/bootstrap.bundle.min.js')"),
-    'Only the catalog renders BootstrapClient (bundled bootstrap JS, #754), and nothing loads Bootstrap from cdn.jsdelivr.net (#145)'
+    !/cdn\.jsdelivr\.net/.test(rootLayoutSrc145),
+    'no Bootstrap from jsDelivr (#145)'
+  );
+  assert.ok(
+    !fs.existsSync(path.join(repoRoot, 'apps/web/src/app/BootstrapClient.tsx')),
+    'BootstrapClient is gone (#1331)'
+  );
+  const webSrc1331 = path.join(repoRoot, 'apps/web/src');
+  const walk1331 = (dir: string): string[] =>
+    fs.readdirSync(dir, { withFileTypes: true }).flatMap((e) => {
+      const full = path.join(dir, e.name);
+      if (e.isDirectory()) return e.name === '__tests__' ? [] : walk1331(full);
+      return /\.(tsx?|jsx?)$/.test(e.name) ? [full] : [];
+    });
+  for (const file of walk1331(webSrc1331)) {
+    const src = fs.readFileSync(file, 'utf8');
+    assert.ok(
+      !/bootstrap\/(?:dist\/)?js\b|bootstrap\.bundle|(?:from|import)\s*\(?\s*['"]bootstrap['"]/.test(
+        src
+      ),
+      `${file} loads Bootstrap JS (#1331)`
+    );
+    assert.ok(
+      !/data-bs-(toggle|dismiss|target)/.test(src),
+      `${file} relies on Bootstrap JS data attributes (#1331)`
+    );
+  }
+  assert.ok(
+    fs
+      .readFileSync(
+        path.join(repoRoot, 'apps/web/src/app/[locale]/smartphones/page.tsx'),
+        'utf8'
+      )
+      .includes('<CatalogSortDropdown'),
+    'the catalogue renders the React sort dropdown (#1331)'
   );
   console.log(
-    '  ✅ [43/44] Bootstrap JS bundled from the bootstrap package via BootstrapClient, no jsDelivr script in the root layout (#145) passed'
+    '  ✅ [43/44] No Bootstrap JS: no jsDelivr script (#145), no bundled bootstrap.bundle; catalogue sort and filter drawer on React state (#1331) passed'
   );
   // 44. Fonts are self-hosted by next/font, not @import-ed from Google (#147)
   const customScssSrc147 = fs.readFileSync(
@@ -11576,6 +11698,7 @@ async function runCoreArchitectureSuite() {
     assert.deepEqual(detectAccessoryOrJunk(null as never), {
       isAccessory: false,
       reason: null,
+      message: null,
     });
     assert.equal(extractStorageAndAmbiguity([] as never).storageGb, null);
 
@@ -14374,6 +14497,191 @@ async function runCoreArchitectureSuite() {
 
     console.log(
       '  ✅ [129/129] Rate-Domain & Spec-Localizer Numeric, Key-Spec, and Sentinel Bounds (#1038) passed'
+    );
+  }
+
+  // 131. Header and footer links prefetch on intent, not on sight (#1330)
+  {
+    const readWeb1330 = (rel: string) =>
+      fs.readFileSync(path.join(repoRoot, 'apps/web/src', rel), 'utf8');
+    const intentLinkSrc = readWeb1330('components/elementary/IntentLink.tsx');
+    assert.ok(
+      intentLinkSrc.includes('prefetch={intent ? null : false}') &&
+        /onPointerEnter=/.test(intentLinkSrc) &&
+        /onFocus=/.test(intentLinkSrc) &&
+        /onTouchStart=/.test(intentLinkSrc),
+      'IntentLink prefetches only after pointer, focus or touch intent'
+    );
+    for (const rel of [
+      'app/[locale]/components/navbar/NavbarDarkDynamic.tsx',
+      'app/[locale]/components/footer/FooterDynamic.tsx',
+      'app/[locale]/components/footer-top.tsx',
+    ]) {
+      const src = readWeb1330(rel);
+      assert.ok(
+        src.includes('<IntentLink') && !/<Link[\s>]/.test(src),
+        `${rel} renders every link as an IntentLink (viewport prefetch fetched each route on every page view)`
+      );
+    }
+    console.log(
+      '  ✅ [131] Header and footer links prefetch on intent, not on sight (#1330) passed'
+    );
+  }
+
+  // 130. Every verdict names its text with a message key and the values the
+  // Vietnamese text interpolates, so the extension can show it in its own
+  // language (DOS/Rate#1326).
+  {
+    const mkOffer1326 = (id: string, price: number) =>
+      ({
+        id,
+        platform: 'shopee',
+        url: 'https://example.test/1326/' + id,
+        price_current: price,
+        price_original: null,
+        merchant: {
+          id: 'm-' + id,
+          name: 'Shop ' + id,
+          risk_score: 5,
+          is_official: true,
+        },
+      }) as never;
+    const offers1326 = [
+      mkOffer1326('a', 20_000_000),
+      mkOffer1326('b', 21_000_000),
+      mkOffer1326('c', 22_000_000),
+    ];
+    const judge1326 = (
+      overrides: Partial<Parameters<typeof evaluateExtensionPriceVerdict>[0]>
+    ) =>
+      evaluateExtensionPriceVerdict({
+        isAccessory: false,
+        accessoryReason: null,
+        isAmbiguousVariant: false,
+        observedPrice: null,
+        observedOriginalPrice: null,
+        offers: offers1326,
+        priceHistory: null,
+        ...overrides,
+      });
+    const vnd1326 = (n: number) => `${n.toLocaleString('vi-VN')} ₫`;
+
+    const fair = judge1326({ observedPrice: 21_200_000 });
+    assert.equal(fair.verdict, 'fair_market_price');
+    assert.equal(fair.messageKey, 'fair_market');
+    assert.deepEqual(fair.messageParams, {
+      effectivePrice: 21_200_000,
+      marketMedianPrice: 21_000_000,
+    });
+    assert.equal(fair.badgeLabel, 'Giá Chuẩn Thị Trường');
+    assert.ok(fair.explanation.includes(vnd1326(21_200_000)));
+
+    const deal = judge1326({ observedPrice: 20_000_000 });
+    assert.equal(deal.verdict, 'genuine_deal');
+    assert.equal(deal.messageKey, 'genuine_deal');
+    assert.deepEqual(deal.messageParams, {
+      effectivePrice: 20_000_000,
+      marketMedianPrice: 21_000_000,
+    });
+
+    const above = judge1326({ observedPrice: 23_000_000 });
+    assert.equal(above.verdict, 'above_market');
+    assert.equal(above.messageKey, 'above_market');
+    assert.deepEqual(above.messageParams, {
+      effectivePrice: 23_000_000,
+      marketMedianPrice: 21_000_000,
+      vsMarketMedianPct: 9.5,
+    });
+    assert.equal(above.badgeLabel, 'Cao hơn thị trường +9.5%');
+
+    const fake = judge1326({
+      observedPrice: 21_500_000,
+      observedOriginalPrice: 26_000_000,
+    });
+    assert.equal(fake.verdict, 'inflated_fake_sale');
+    assert.equal(fake.messageKey, 'fake_discount');
+    assert.deepEqual(fake.messageParams, {
+      originalPrice: 26_000_000,
+      claimedDiscountPct: 17.3,
+      effectivePrice: 21_500_000,
+      marketMedianPrice: 21_000_000,
+      histMax: 22_000_000,
+    });
+    assert.ok(fake.explanation.includes('(-17.3%)'));
+
+    const noHistory = judge1326({ observedPrice: 21_000_000, offers: [] });
+    assert.equal(noHistory.messageKey, 'insufficient_history');
+    assert.deepEqual(noHistory.messageParams, {});
+    assert.equal(noHistory.badgeLabel, 'Chưa đủ lịch sử giá');
+
+    const ambiguous = judge1326({
+      observedPrice: 21_000_000,
+      isAmbiguousVariant: true,
+    });
+    assert.equal(ambiguous.messageKey, 'ambiguous_variant');
+    assert.deepEqual(ambiguous.messageParams, {});
+
+    const bait = judge1326({ observedPrice: 5_000_000 });
+    assert.equal(bait.implausiblyLow, true);
+    assert.equal(bait.messageKey, 'implausibly_low');
+    assert.deepEqual(bait.messageParams, {
+      observedPrice: 5_000_000,
+      marketMedianPrice: 21_000_000,
+    });
+
+    const accessory = judge1326({ isAccessory: true });
+    assert.equal(accessory.messageKey, 'accessory');
+    assert.deepEqual(accessory.messageParams, {});
+
+    const keywordGate = detectAccessoryOrJunk({
+      title: 'Ốp lưng silicon chống sốc cho iPhone 16 Pro Max',
+      price: 89_000,
+    });
+    assert.deepEqual(keywordGate.message, {
+      messageKey: 'accessory_keyword',
+      messageParams: { keyword: 'ốp lưng' },
+    });
+    const keywordVerdict = judge1326({
+      isAccessory: true,
+      accessoryReason: keywordGate.reason,
+      accessoryMessage: keywordGate.message,
+    });
+    assert.equal(keywordVerdict.explanation, keywordGate.reason);
+    assert.equal(keywordVerdict.messageKey, 'accessory_keyword');
+    assert.deepEqual(keywordVerdict.messageParams, { keyword: 'ốp lưng' });
+
+    const floorGate = detectAccessoryOrJunk({
+      title: 'Điện thoại Apple iPhone 16 128GB',
+      price: 50_000,
+    });
+    assert.equal(floorGate.isAccessory, true);
+    assert.equal(floorGate.message?.messageKey, 'accessory_price_floor');
+    const floorParams = floorGate.message?.messageParams ?? {};
+    assert.equal(floorParams.observedPrice, 50_000);
+    assert.equal(typeof floorParams.minimumPrice, 'number');
+    assert.ok(
+      floorGate.reason?.includes(vnd1326(floorParams.minimumPrice as number))
+    );
+
+    // A free-text reason has no key: clients show the server's text.
+    const freeText = judge1326({
+      isAccessory: true,
+      accessoryReason: 'Lý do khác.',
+    });
+    assert.equal(freeText.explanation, 'Lý do khác.');
+    assert.equal(freeText.messageKey, undefined);
+    assert.equal(freeText.messageParams, undefined);
+
+    assert.deepEqual(
+      detectAccessoryOrJunk({
+        title: 'Điện thoại Apple iPhone 16 128GB Chính hãng VN/A',
+        price: 21_990_000,
+      }).message,
+      null
+    );
+
+    console.log(
+      '  ✅ [130] Verdict message keys and params for the extension (#1326) passed'
     );
   }
 

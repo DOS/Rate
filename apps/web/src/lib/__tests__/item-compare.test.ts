@@ -4,7 +4,10 @@ import {
   dedupeCompareTargets,
   parseCompareToken,
   pickItemVariant,
+  canonicalVersusOrder,
+  inPairOrder,
   planVersusRoute,
+  versusAliasRedirect,
   versusHref,
   itemSlugFromProductAnswer,
   type CompareResolution,
@@ -200,6 +203,117 @@ function main() {
     versusHref('case-a-std', 'pixel-10', map),
     '/compare/case-a-std-vs-pixel-10',
     'an Item slug holding -vs- keeps the variant slug'
+  );
+
+  // One URL per pair, the slugs sorted; the other order 308s there (#1367).
+  assert.deepEqual(canonicalVersusOrder('b', 'a'), ['a', 'b']);
+  assert.deepEqual(canonicalVersusOrder('a', 'b'), ['a', 'b']);
+  assert.equal(
+    versusHref('pixel-10', 'apple-iphone-16-128gb'),
+    '/compare/apple-iphone-16-128gb-vs-pixel-10',
+    'links name the pair in its canonical order'
+  );
+  assert.equal(
+    versusHref('pixel-10', 'apple-iphone-16-128gb', map),
+    '/compare/apple-iphone-16-vs-pixel-10',
+    'sorted on the Item slugs the URL shows'
+  );
+  // The other order, letter case or encoding redirects; the canonical
+  // renders; a slug that is no plain catalogue slug is left to 404.
+  const macbookVsAsus =
+    '/compare/apple-macbook-pro-m4-pro-14-inch-512gb-vs-asus-zenbook-s-14-1tb';
+  assert.equal(
+    versusAliasRedirect(
+      'asus-zenbook-s-14-1tb-vs-apple-macbook-pro-m4-pro-14-inch-512gb',
+      macbookVsAsus
+    ),
+    macbookVsAsus
+  );
+  assert.equal(
+    versusAliasRedirect(
+      'Apple-MacBook-Pro-M4-Pro-14-inch-512GB-vs-asus-zenbook-s-14-1tb',
+      macbookVsAsus
+    ),
+    macbookVsAsus,
+    'letter case'
+  );
+  assert.equal(
+    versusAliasRedirect(
+      'apple-macbook-pro-m4-pro-14-inch-512gb-vs-asus-zenbook-s-14-1tb',
+      macbookVsAsus
+    ),
+    null
+  );
+  assert.equal(
+    versusAliasRedirect('zz-junk-vs-aa")x', '/compare/aa")x-vs-zz-junk'),
+    null,
+    'no 308 to a path built from junk'
+  );
+  assert.equal(versusAliasRedirect('b-vs-a..b', '/compare/a..b-vs-b'), null);
+  // A sorted URL that would not parse back (a slug ending in "-vs") takes
+  // the other order, whichever order it was given in.
+  assert.deepEqual(canonicalVersusOrder('z-phone', 'a-phone-vs'), [
+    'z-phone',
+    'a-phone-vs',
+  ]);
+  assert.deepEqual(canonicalVersusOrder('a-phone-vs', 'z-phone'), [
+    'z-phone',
+    'a-phone-vs',
+  ]);
+  // Item route: an Item slug ending in "-vs" redirects only to a URL that
+  // parses back, or has no versus page.
+  const vsEndItem: CompareResolution = {
+    kind: 'item',
+    item: { id: 'item-vse', slug: 'a-phone-vs', default_variant_id: null },
+    variants: [{ id: 'av', slug: 'a-phone-standard', variant_key: 'standard' }],
+  };
+  const plan1367 = planVersusRoute(
+    { slug: 'a-phone-standard', resolution: vsEndItem },
+    { slug: 'samsung-galaxy-s24', resolution: s24 }
+  );
+  assert.deepEqual(plan1367, {
+    kind: 'redirect',
+    to: '/compare/samsung-galaxy-s24-vs-a-phone-vs',
+  });
+  assert.deepEqual(canonicalVersusOrder('B-Phone', 'a-phone'), [
+    'a-phone',
+    'B-Phone',
+  ]);
+  // The compare read may answer in any order; the page keeps the URL's.
+  const read = [{ slug: 'b-phone' }, { slug: 'a-phone' }];
+  assert.deepEqual(
+    inPairOrder(read, ['a-phone', 'b-phone']).map((p) => p?.slug),
+    ['a-phone', 'b-phone']
+  );
+  assert.deepEqual(
+    inPairOrder(
+      [{ slug: 'A-Phone' }, { slug: 'b-phone' }],
+      ['a-phone', 'b-phone']
+    ).map((p) => p?.slug),
+    ['A-Phone', 'b-phone'],
+    'slugs match without regard to case'
+  );
+  assert.deepEqual(
+    inPairOrder([{ slug: 'a-phone' }], ['a-phone', 'b-phone']).map(
+      (p) => p?.slug
+    ),
+    ['a-phone', undefined],
+    'a missing side stays missing (the page 404s)'
+  );
+  assert.deepEqual(
+    inPairOrder([{ slug: 'b-phone' }], ['a-phone', 'b-phone']).map(
+      (p) => p?.slug
+    ),
+    [undefined, 'b-phone'],
+    'a missing first side is no B vs B'
+  );
+  // Item route: the reverse Item pair 308s to the sorted one.
+  assert.deepEqual(
+    planVersusRoute(
+      { slug: 'samsung-galaxy-s24', resolution: s24 },
+      { slug: 'apple-iphone-16', resolution: asItem }
+    ),
+    { kind: 'redirect', to: '/compare/apple-iphone-16-vs-samsung-galaxy-s24' }
   );
 
   // A restored tray product reads its Item from the product API (#1294).

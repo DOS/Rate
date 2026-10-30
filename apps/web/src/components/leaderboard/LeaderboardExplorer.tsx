@@ -11,6 +11,7 @@ import { useSearchParams } from 'next/navigation';
 import { useLocale, useTranslations } from 'next-intl';
 import type { IconType } from 'react-icons';
 import { Link } from '@/lib/navigation';
+import { IntentLink } from '@/components/elementary/IntentLink';
 import {
   MAX_VALID_VND_PRICE,
   getMasterProductCategorySlug,
@@ -68,6 +69,7 @@ import {
   formatPercent,
   formatPriceVnd,
 } from '@/lib/locale-format';
+import { versusHref } from '@/lib/item-compare';
 
 export type { LeaderboardCriterionKey, LeaderboardPriceSegment };
 
@@ -1167,7 +1169,7 @@ export default function LeaderboardExplorer({
               <div className="col-lg-2 col-md-2">
                 {effectiveVersusA && effectiveVersusB && (
                   <Link
-                    href={`/compare/${effectiveVersusA}-vs-${effectiveVersusB}`}
+                    href={versusHref(effectiveVersusA, effectiveVersusB)}
                     className="btn btn-sm btn-danger rounded-pill fw-bold w-100"
                     data-testid="leaderboard-1v1-go-btn"
                   >
@@ -1442,7 +1444,7 @@ export default function LeaderboardExplorer({
               .map(([iA, iB]) => {
                 const a = rankedEntries[iA]!;
                 const b = rankedEntries[iB]!;
-                const vHref = `/compare/${a.product.slug}-vs-${b.product.slug}`;
+                const vHref = versusHref(a.product.slug, b.product.slug);
                 const delta = formatDecimal(
                   Math.abs(a.activeScore5 - b.activeScore5),
                   locale,
@@ -1483,13 +1485,13 @@ export default function LeaderboardExplorer({
                       </div>
 
                       <div className="border-top mt-2 pt-2 text-end">
-                        <Link
+                        <IntentLink
                           href={vHref}
                           className="btn btn-sm btn-dark rounded-pill small fw-semibold w-100"
                         >
                           <BsArrowLeftRight className="me-1" />
                           {t('view1v1DeepBtn')}
-                        </Link>
+                        </IntentLink>
                       </div>
                     </div>
                   </div>

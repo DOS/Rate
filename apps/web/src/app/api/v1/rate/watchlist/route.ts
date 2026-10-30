@@ -15,6 +15,8 @@ import {
   parseWatchlistSlugsParam,
   resolveWatchlistMasterPriceBounds,
   selectBestOfferFromListings,
+  payloadTooLargeResponse,
+  readBoundedJsonBody,
 } from '@/server/rate/api-handler';
 import {
   authenticateRateRequest,
@@ -228,7 +230,10 @@ const PriceAlertBodySchema = z.object({
  */
 export async function POST(request: NextRequest) {
   try {
-    const rawBody: unknown = await request.json().catch(() => null);
+    const bodyRead = await readBoundedJsonBody(request);
+    if (bodyRead.tooLarge)
+      return payloadTooLargeResponse(WATCHLIST_CORS_HEADERS);
+    const rawBody: unknown = bodyRead.value;
 
     const auth = await authenticateRateRequest(
       request,

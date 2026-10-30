@@ -1,4 +1,4 @@
-import { Link } from '@/lib/navigation';
+import { IntentLink } from '@/components/elementary/IntentLink';
 import Image from 'next/image';
 import { getLocale, getTranslations } from 'next-intl/server';
 import { FaFacebookF, FaInstagram } from 'react-icons/fa';
@@ -196,22 +196,22 @@ export default async function FooterDynamic({
                         </a>
                       </li>
                       <li>
-                        <Link
+                        <IntentLink
                           href="/developers"
                           className="social-link"
                           aria-label={tFooter('links.developers')}
                         >
                           <BsCodeSlash />
-                        </Link>
+                        </IntentLink>
                       </li>
                       <li>
-                        <Link
+                        <IntentLink
                           href="/merchants"
                           className="social-link"
                           aria-label={tFooter('links.merchants')}
                         >
                           <BsShop />
-                        </Link>
+                        </IntentLink>
                       </li>
                     </>
                   )}
@@ -241,7 +241,7 @@ export default async function FooterDynamic({
                           {item.label}
                         </a>
                       ) : (
-                        <Link href={item.href!}>{item.label}</Link>
+                        <IntentLink href={item.href!}>{item.label}</IntentLink>
                       )}
                     </li>
                   ))}
@@ -270,7 +270,7 @@ export default async function FooterDynamic({
                           {item.label}
                         </a>
                       ) : (
-                        <Link href={item.href!}>{item.label}</Link>
+                        <IntentLink href={item.href!}>{item.label}</IntentLink>
                       )}
                     </li>
                   ))}
@@ -299,7 +299,7 @@ export default async function FooterDynamic({
                           {item.label}
                         </a>
                       ) : (
-                        <Link href={item.href!}>{item.label}</Link>
+                        <IntentLink href={item.href!}>{item.label}</IntentLink>
                       )}
                     </li>
                   ))}
