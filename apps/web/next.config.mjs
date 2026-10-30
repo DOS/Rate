@@ -23,6 +23,15 @@ const nextConfig = {
   reactCompiler: true,
   experimental: { externalDir: true },
   transpilePackages: ["@repo/design-system"],
+  // Bootstrap 5.3 is built from its SCSS (style/scss/bootstrap.scss), which
+  // still uses @import and the global color functions. Its partials import
+  // each other by bare name ("variables-dark"), which the webpack importer
+  // does not resolve, so the scss folder is a load path.
+  sassOptions: {
+    loadPaths: [path.join(__dirname, "node_modules/bootstrap/scss")],
+    quietDeps: true,
+    silenceDeprecations: ["import", "global-builtin", "color-functions"],
+  },
   turbopack: {
     resolveAlias: {
       "next-intl/config": "./src/i18n/request.ts",
@@ -108,6 +117,18 @@ const nextConfig = {
           },
         ],
       })),
+      // Device photo renditions carry a hash of their source in the file name
+      // (scripts/device-images.mjs), so they never change in place. Listed
+      // after /img/:path* so this Cache-Control wins (DOS/Rate#1332).
+      {
+        source: "/img/devices/sized/:path*",
+        headers: [
+          {
+            key: "Cache-Control",
+            value: "public, max-age=31536000, immutable",
+          },
+        ],
+      },
       {
         source: "/(.*)",
         headers: [
@@ -131,6 +152,15 @@ const nextConfig = {
             key: "Strict-Transport-Security",
             value: "max-age=63072000; includeSubDomains; preload",
           },
+        ],
+      },
+      // Every path the proxy does not serve (its matcher in src/proxy.ts):
+      // pages get it in a <meta> tag (PAGE_META_CSP). Vercel copies config
+      // headers onto the request, and an enforcing policy there hides the
+      // report-only one Next.js reads the nonce from (DOS/Rate#1345).
+      {
+        source: "/:path((?:_next|_vercel|api|monitoring|sitemap|.*\\.).*)",
+        headers: [
           {
             key: "Content-Security-Policy",
             value:

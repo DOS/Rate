@@ -26,6 +26,7 @@ import {
   renderReviewCardHtml,
   type PanelActionLink,
 } from './panel-view.js';
+import { verdictTexts } from '../verdict-display.js';
 
 function formatVnd(val: number | null | undefined): string {
   return formatSafeExtensionVnd(val);
@@ -354,6 +355,8 @@ function renderPanelContent(
   }
 
   const assessment = lookup.priceAssessment;
+  // The verdict in the extension's language (DOS/Rate#1326).
+  const verdict = verdictTexts(assessment);
   const master = lookup.masterProduct;
   const reviews = lookup.reviewSummary;
   const merchant = lookup.merchantProfile;
@@ -596,11 +599,11 @@ function renderPanelContent(
           assessment.implausiblyLow
             ? 'implausibly_low'
             : sanitizeVerdictClassSuffix(assessment.verdict)
-        }">${escapeHtml(assessment.badgeLabel)}</span>
+        }">${escapeHtml(verdict.label)}</span>
         ${radarPillHtml}
       </div>
       <div class="product-name">${escapeHtml((sizeUnknown ? lookup.item?.name : master?.name) || signal.title)}</div>
-      <p style="color: #d1d5db; font-size: 13px;">${escapeHtml(assessment.explanation)}</p>
+      <p style="color: #d1d5db; font-size: 13px;">${escapeHtml(verdict.explanation)}</p>
       <div class="stats-grid">
         <div class="stat-box">
           <div class="stat-label">${escapeHtml(t('observedPrice'))}</div>

@@ -81,6 +81,7 @@ export async function GET(request: NextRequest) {
     const priceVerdict = evaluateExtensionPriceVerdict({
       isAccessory: gatekeeper.isAccessory,
       accessoryReason: gatekeeper.reason,
+      accessoryMessage: gatekeeper.message,
       isAmbiguousVariant: false,
       observedPrice: observedPrice > 0 ? observedPrice : null,
       observedOriginalPrice:

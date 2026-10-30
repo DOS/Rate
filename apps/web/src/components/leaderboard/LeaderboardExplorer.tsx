@@ -62,6 +62,7 @@ import {
   BsTrophyFill,
 } from 'react-icons/bs';
 import ContentText from '@/components/elementary/ContentText';
+import { versusHref } from '@/lib/item-compare';
 
 export type { LeaderboardCriterionKey, LeaderboardPriceSegment };
 
@@ -1158,7 +1159,7 @@ export default function LeaderboardExplorer({
               <div className="col-lg-2 col-md-2">
                 {effectiveVersusA && effectiveVersusB && (
                   <Link
-                    href={`/compare/${effectiveVersusA}-vs-${effectiveVersusB}`}
+                    href={versusHref(effectiveVersusA, effectiveVersusB)}
                     className="btn btn-sm btn-danger rounded-pill fw-bold w-100"
                     data-testid="leaderboard-1v1-go-btn"
                   >
@@ -1424,7 +1425,7 @@ export default function LeaderboardExplorer({
               .map(([iA, iB]) => {
                 const a = rankedEntries[iA]!;
                 const b = rankedEntries[iB]!;
-                const vHref = `/compare/${a.product.slug}-vs-${b.product.slug}`;
+                const vHref = versusHref(a.product.slug, b.product.slug);
                 const delta = Math.abs(a.activeScore5 - b.activeScore5).toFixed(
                   2
                 );

@@ -48,6 +48,7 @@ import {
   type ApiItem,
   type ApiItemContext,
 } from './item-api';
+import { canonicalVersusOrder } from '../../lib/item-compare';
 
 const log = createLogger('server.extension');
 
@@ -193,10 +194,46 @@ export interface ExtensionLookupParams {
   mode?: 'pill' | 'full';
 }
 
+/**
+ * Stable names for the verdict text, so a client can show `badgeLabel` and
+ * `explanation` in its own language from `messageParams` (DOS/Rate#1326).
+ */
+export type ExtensionVerdictMessageKey =
+  | 'accessory'
+  | 'accessory_keyword'
+  | 'accessory_price_floor'
+  | 'ambiguous_variant'
+  | 'implausibly_low'
+  | 'insufficient_history'
+  | 'fake_discount'
+  | 'genuine_deal'
+  | 'above_market'
+  | 'fair_market';
+
+/**
+ * The values the Vietnamese text interpolates, unformatted: prices in VND
+ * and percentages as numbers. Only `keyword` (the matched accessory word)
+ * is a string.
+ */
+export type ExtensionVerdictMessageParams = Record<string, number | string>;
+
+export interface ExtensionVerdictMessage {
+  messageKey: ExtensionVerdictMessageKey;
+  messageParams: ExtensionVerdictMessageParams;
+}
+
 export interface ExtensionPriceAssessment {
   verdict: ExtensionPriceVerdict;
+  /** Vietnamese; kept for older extensions and other callers. */
   badgeLabel: string;
+  /** Vietnamese; kept for older extensions and other callers. */
   explanation: string;
+  /**
+   * Names the text of `badgeLabel` and `explanation`; absent only when an
+   * accessory reason came without one (DOS/Rate#1326).
+   */
+  messageKey?: ExtensionVerdictMessageKey;
+  messageParams?: ExtensionVerdictMessageParams;
   observedPrice: number | null;
   observedOriginalPrice: number | null;
   claimedDiscountPct: number;
@@ -448,7 +485,12 @@ export function detectAccessoryOrJunk(params: {
   title?: string | null;
   url?: string | null;
   price?: number | null;
-}): { isAccessory: boolean; reason: string | null } {
+}): {
+  isAccessory: boolean;
+  reason: string | null;
+  /** The reason as a message key and its values (DOS/Rate#1326). */
+  message: ExtensionVerdictMessage | null;
+} {
   const safeParams =
     params && typeof params === 'object' && !Array.isArray(params)
       ? params
@@ -473,6 +515,10 @@ export function detectAccessoryOrJunk(params: {
         return {
           isAccessory: true,
           reason: `Phát hiện từ khóa phụ kiện/linh kiện ("${kw}") trong tiêu đề sản phẩm.`,
+          message: {
+            messageKey: 'accessory_keyword',
+            messageParams: { keyword: kw },
+          },
         };
       }
     }
@@ -489,10 +535,17 @@ export function detectAccessoryOrJunk(params: {
     return {
       isAccessory: true,
       reason: `Mức giá (${safeParams.price.toLocaleString('vi-VN')} ₫) thấp hơn ngưỡng tối thiểu của thiết bị chính hãng (${minFloor.toLocaleString('vi-VN')} ₫) - khả năng cao là phụ kiện hoặc linh kiện.`,
+      message: {
+        messageKey: 'accessory_price_floor',
+        messageParams: {
+          observedPrice: safeParams.price,
+          minimumPrice: minFloor,
+        },
+      },
     };
   }
 
-  return { isAccessory: false, reason: null };
+  return { isAccessory: false, reason: null, message: null };
 }
 
 /**
@@ -608,6 +661,8 @@ function computeMedian(values: number[]): number {
 export function evaluateExtensionPriceVerdict(params: {
   isAccessory: boolean;
   accessoryReason: string | null;
+  /** `accessoryReason` as a message key, from detectAccessoryOrJunk. */
+  accessoryMessage?: ExtensionVerdictMessage | null;
   isAmbiguousVariant: boolean;
   observedPrice: number | null;
   observedOriginalPrice: number | null;
@@ -623,6 +678,7 @@ export function evaluateExtensionPriceVerdict(params: {
   const {
     isAccessory,
     accessoryReason,
+    accessoryMessage,
     isAmbiguousVariant,
     observedPrice,
     observedOriginalPrice,
@@ -637,12 +693,20 @@ export function evaluateExtensionPriceVerdict(params: {
   );
 
   if (isAccessory) {
+    // A reason without a message key is free text: the client shows it as
+    // sent (DOS/Rate#1326).
+    const message: ExtensionVerdictMessage | null = !accessoryReason
+      ? { messageKey: 'accessory', messageParams: {} }
+      : accessoryMessage && typeof accessoryMessage === 'object'
+        ? accessoryMessage
+        : null;
     return {
       verdict: 'accessory_skip',
       badgeLabel: 'Phụ kiện / Linh kiện',
       explanation:
         accessoryReason ||
         'Sản phẩm được nhận diện là phụ kiện/linh kiện, không áp dụng biểu đồ giá thân máy.',
+      ...(message ?? {}),
       observedPrice,
       observedOriginalPrice,
       claimedDiscountPct: 0,
@@ -700,6 +764,8 @@ export function evaluateExtensionPriceVerdict(params: {
       badgeLabel: 'Chọn dung lượng bộ nhớ',
       explanation:
         'Trang sản phẩm có nhiều tùy chọn bộ nhớ (128GB/256GB/512GB). Hãy chọn phân loại trên trang hoặc trong bảng Rate để so sánh đúng phiên bản.',
+      messageKey: 'ambiguous_variant',
+      messageParams: {},
       observedPrice,
       observedOriginalPrice,
       claimedDiscountPct: 0,
@@ -723,11 +789,14 @@ export function evaluateExtensionPriceVerdict(params: {
     ? safeOffers.filter((o) => o && o.id !== observedOfferId)
     : safeOffers;
   if (observedPrice && isImplausiblyLowPrice(observedPrice, otherOffers)) {
+    const roundedMedian = Math.round(marketMedianPrice ?? 0);
     return {
       verdict: 'insufficient_data',
       badgeLabel: 'Giá thấp bất thường',
       implausiblyLow: true,
-      explanation: `Giá ${observedPrice.toLocaleString('vi-VN')} ₫ thấp hơn nhiều so với các nơi bán khác (trung vị ${Math.round(marketMedianPrice ?? 0).toLocaleString('vi-VN')} ₫): có thể là hàng giả, phụ kiện hoặc tin câu khách. Hãy kiểm tra kỹ gian hàng trước khi mua.`,
+      explanation: `Giá ${observedPrice.toLocaleString('vi-VN')} ₫ thấp hơn nhiều so với các nơi bán khác (trung vị ${roundedMedian.toLocaleString('vi-VN')} ₫): có thể là hàng giả, phụ kiện hoặc tin câu khách. Hãy kiểm tra kỹ gian hàng trước khi mua.`,
+      messageKey: 'implausibly_low',
+      messageParams: { observedPrice, marketMedianPrice: roundedMedian },
       observedPrice,
       observedOriginalPrice,
       claimedDiscountPct: 0,
@@ -773,6 +842,8 @@ export function evaluateExtensionPriceVerdict(params: {
       badgeLabel: 'Chưa đủ lịch sử giá',
       explanation:
         'Chưa có đủ điểm dữ liệu lịch sử giá đã xác minh cho phiên bản bộ nhớ này.',
+      messageKey: 'insufficient_history',
+      messageParams: {},
       observedPrice: effectivePrice,
       observedOriginalPrice: effectiveOriginalPrice,
       claimedDiscountPct,
@@ -820,6 +891,14 @@ export function evaluateExtensionPriceVerdict(params: {
       verdict: 'inflated_fake_sale',
       badgeLabel: 'Cảnh báo giảm giá ảo',
       explanation: `Gian hàng treo giá gạch ngang ${effectiveOriginalPrice.toLocaleString('vi-VN')} ₫ (-${claimedDiscountPct}%), nhưng giá bán thực tế (${effectivePrice.toLocaleString('vi-VN')} ₫) vẫn cao hơn hoặc ngang trung vị thị trường (${marketMedianPrice.toLocaleString('vi-VN')} ₫) và vượt đỉnh lịch sử (${histMax.toLocaleString('vi-VN')} ₫).`,
+      messageKey: 'fake_discount',
+      messageParams: {
+        originalPrice: effectiveOriginalPrice,
+        claimedDiscountPct,
+        effectivePrice,
+        marketMedianPrice,
+        histMax,
+      },
       observedPrice: effectivePrice,
       observedOriginalPrice: effectiveOriginalPrice,
       claimedDiscountPct,
@@ -840,6 +919,8 @@ export function evaluateExtensionPriceVerdict(params: {
       verdict: 'genuine_deal',
       badgeLabel: 'Giá Tốt Thực Sự',
       explanation: `Giá hiện tại (${effectivePrice.toLocaleString('vi-VN')} ₫) đang ở vùng đáy lịch sử (trung vị thị trường: ${marketMedianPrice.toLocaleString('vi-VN')} ₫).`,
+      messageKey: 'genuine_deal',
+      messageParams: { effectivePrice, marketMedianPrice },
       observedPrice: effectivePrice,
       observedOriginalPrice: effectiveOriginalPrice,
       claimedDiscountPct,
@@ -860,6 +941,8 @@ export function evaluateExtensionPriceVerdict(params: {
       verdict: 'above_market',
       badgeLabel: `Cao hơn thị trường +${vsMarketMedianPct}%`,
       explanation: `Giá đang xem (${effectivePrice.toLocaleString('vi-VN')} ₫) cao hơn trung vị thị trường (${marketMedianPrice.toLocaleString('vi-VN')} ₫) khoảng ${vsMarketMedianPct}%, nhưng shop không treo giá gạch ngang khống.`,
+      messageKey: 'above_market',
+      messageParams: { effectivePrice, marketMedianPrice, vsMarketMedianPct },
       observedPrice: effectivePrice,
       observedOriginalPrice: effectiveOriginalPrice,
       claimedDiscountPct,
@@ -879,6 +962,8 @@ export function evaluateExtensionPriceVerdict(params: {
     verdict: 'fair_market_price',
     badgeLabel: 'Giá Chuẩn Thị Trường',
     explanation: `Giá hiện tại (${effectivePrice.toLocaleString('vi-VN')} ₫) nằm trong biên độ ổn định quanh trung vị thị trường (${marketMedianPrice.toLocaleString('vi-VN')} ₫).`,
+    messageKey: 'fair_market',
+    messageParams: { effectivePrice, marketMedianPrice },
     observedPrice: effectivePrice,
     observedOriginalPrice: effectiveOriginalPrice,
     claimedDiscountPct,
@@ -1041,6 +1126,7 @@ export async function lookupExtensionProduct(
       priceAssessment: evaluateExtensionPriceVerdict({
         isAccessory: true,
         accessoryReason: gatekeeper.reason,
+        accessoryMessage: gatekeeper.message,
         isAmbiguousVariant: false,
         observedPrice,
         observedOriginalPrice,
@@ -1486,8 +1572,11 @@ export async function lookupExtensionProduct(
         )
       : `/${categoryPath}/${encodeURIComponent(matchedMaster.slug)}`,
     leaderboardUrl: `/leaderboard?cat=${categoryPath}`,
+    // The pair's one canonical URL, sides sorted (DOS/Rate#1367).
     versusUrl: topRival
-      ? `/compare/${encodeURIComponent(matchedMaster.slug)}-vs-${encodeURIComponent(topRival.slug)}`
+      ? `/compare/${canonicalVersusOrder(matchedMaster.slug, topRival.slug)
+          .map(encodeURIComponent)
+          .join('-vs-')}`
       : null,
     topRivalName: topRival?.name || null,
     leaderboardStandings,

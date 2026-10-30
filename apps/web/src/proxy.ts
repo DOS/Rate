@@ -101,6 +101,9 @@ export function localeProxy(req: NextRequest): NextResponse {
     supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL,
   });
   req.headers.set(CSP_HEADER, csp);
+  // Next.js reads an enforcing policy before the report-only one, so one sent
+  // by the client must not pick the nonce (DOS/Rate#1345).
+  req.headers.delete('content-security-policy');
   const response = intlMiddleware(req);
   response.headers.set(CSP_HEADER, csp);
   return response;
@@ -118,6 +121,6 @@ export const config = {
   matcher: [
     '/',
     '/(cs|en|vi)/:path*',
-    '/((?!_next|_vercel|api|monitoring|robots.txt|favicon.ico|sitemap|.*\\..*).*)',
+    '/((?!_next|_vercel|api|monitoring|sitemap|.*\\..*).*)',
   ],
 };

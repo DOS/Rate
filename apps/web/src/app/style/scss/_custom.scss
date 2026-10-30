@@ -174,7 +174,7 @@
 // --rate-ink-* tokens instead (style.scss does the same for .text-primary and
 // the .btn-outline-* buttons). Backgrounds (bg-*, *-subtle, bg-opacity-*) keep
 // the brand and Bootstrap colors. Bootstrap's rules are !important too; this
-// file loads after bootstrap.css, so these win.
+// file loads after bootstrap.scss, so these win.
 .text-success {
   color: var(--rate-ink-success) !important;
 }
