@@ -29,17 +29,25 @@ export type CompareResolution =
   | null;
 
 // `slug@256gb` pins a size (design doc 5.1); the key is the literal segment.
-const PIN_REGEX = /^([a-z0-9][a-z0-9._-]{0,159})@([a-z0-9][a-z0-9-]{0,40})$/;
+const PIN_REGEX = /^([a-z0-9][a-z0-9._-]{0,159})@([a-z0-9][a-z0-9-]{0,40})$/i;
 
 /** A compare token: an Item or variant slug, optionally pinned to a size. */
-export function parseCompareToken(raw: string): {
+export function parseCompareToken(
+  raw: string,
+  /**
+   * Keep the slug's letter case, for the exact catalogue lookup (an Item
+   * slug with capitals, DOS/Rate#1383). The size key is always lower case.
+   */
+  keepCase = false
+): {
   slug: string;
   variantKey: string | null;
 } {
-  const clean = typeof raw === 'string' ? raw.trim().toLowerCase() : '';
+  const trimmed = typeof raw === 'string' ? raw.trim() : '';
+  const clean = keepCase ? trimmed : trimmed.toLowerCase();
   const pinned = PIN_REGEX.exec(clean);
   return pinned
-    ? { slug: pinned[1]!, variantKey: pinned[2]! }
+    ? { slug: pinned[1]!, variantKey: pinned[2]!.toLowerCase() }
     : { slug: clean, variantKey: null };
 }
 
@@ -154,7 +162,10 @@ export function inPairOrder<T extends { slug: string }>(
 }
 
 // A catalogue slug as it may appear in a versus URL.
-const VERSUS_URL_SLUG = /^[a-z0-9][a-z0-9._-]*$/;
+// Capitals allowed: an Item slug may carry them, and the requested URL is
+// compared exactly with the canonical, so the canonical never redirects to
+// itself (DOS/Rate#1383).
+const VERSUS_URL_SLUG = /^[a-zA-Z0-9][a-zA-Z0-9._-]*$/;
 
 /**
  * The canonical versus URL when the request named the pair any other way
@@ -176,6 +187,22 @@ export function versusAliasRedirect(
     return null;
   }
   return `/compare/${requested}` === canonicalPath ? null : canonicalPath;
+}
+
+/**
+ * A catalogue lookup without regard to letter case, given an exact one: the
+ * slug as typed first (an Item slug with capitals), then lower-cased (a
+ * capitalised alias of a lower-case slug). Returns the slug it was found
+ * under (DOS/Rate#1383).
+ */
+export async function lookupSlugAnyCase<T>(
+  slug: string,
+  lookupExact: (slug: string) => Promise<T | null>
+): Promise<{ slug: string; found: T | null }> {
+  const asTyped = await lookupExact(slug);
+  const lower = slug.toLowerCase();
+  if (asTyped || lower === slug) return { slug, found: asTyped };
+  return { slug: lower, found: await lookupExact(lower) };
 }
 
 export type VersusPlan =
@@ -223,6 +250,9 @@ export function planVersusRoute(
     ? [urlSlugB, urlSlugA]
     : [urlSlugA, urlSlugB];
   const canonical = `/compare/${firstSlug}-vs-${secondSlug}`;
+  // Each side comes looked up as typed (then lower-cased) under the slug it
+  // was found under, so the Item URL this redirects to resolves to itself
+  // and renders: no loop for an Item slug with capitals (DOS/Rate#1383).
   if (firstSlug !== sideA.slug || secondSlug !== sideB.slug) {
     return { kind: 'redirect', to: canonical };
   }
