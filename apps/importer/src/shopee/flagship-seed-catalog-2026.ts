@@ -3105,8 +3105,8 @@ export const CATALOG_EXPANSION_2026_SEEDS: FlagshipDeviceSeed[] = [
       },
       camera: {
         rear_setup: 'Single camera (48MP Fusion; 2x optical-quality from the main sensor)',
-        main_camera: '48 MP Fusion, f/1.6, 26mm (wide), OIS',
-        second_camera: '12 MP 2x Telephoto from the 48MP Fusion sensor (no separate lens)',
+        main_camera:
+          '48 MP Fusion, f/1.6, 26mm (wide), OIS; 12 MP 2x Telephoto from the same sensor (no separate lens)',
         flash: 'True Tone flash',
         video_recording:
           '4K Dolby Vision @24/25/30/60fps, 1080p@25/30/60fps, slo-mo 1080p@120/240fps',
@@ -3155,7 +3155,7 @@ export const CATALOG_EXPANSION_2026_SEEDS: FlagshipDeviceSeed[] = [
       },
       availability: {
         announced: '2026, March 02',
-        status: 'Available. Released 2026, March 11 (Vietnam: 2026, March 11)',
+        status: 'Available. Released 2026, March 11',
         prices_msrp:
           'Giá niêm yết khi mở bán tại Việt Nam: 256GB: 17.999.000 ₫; 512GB: 24.499.000 ₫',
       },
@@ -3174,7 +3174,7 @@ export const CATALOG_EXPANSION_2026_SEEDS: FlagshipDeviceSeed[] = [
       display: 'https://www.apple.com/iphone-17e/specs/',
       'display.refresh_rate_hz': 'https://www.gsmarena.com/apple_iphone_17e-14487.php',
       hardware: 'https://www.apple.com/iphone-17e/specs/',
-      'hardware.cpu_os': 'https://www.gsmarena.com/apple_iphone_17e-14487.php',
+      'hardware.cpu': 'https://www.gsmarena.com/apple_iphone_17e-14487.php',
       camera: 'https://www.apple.com/iphone-17e/specs/',
       battery: 'https://www.gsmarena.com/apple_iphone_17e-14487.php',
       'battery.charging': 'https://www.apple.com/vn/iphone-17e/specs/',
@@ -3234,8 +3234,8 @@ export const CATALOG_EXPANSION_2026_SEEDS: FlagshipDeviceSeed[] = [
       },
       camera: {
         rear_setup: 'Single camera (48MP Fusion; 2x optical-quality from the main sensor)',
-        main_camera: '48 MP Fusion, f/1.6, 26mm (wide), OIS',
-        second_camera: '12 MP 2x Telephoto from the 48MP Fusion sensor (no separate lens)',
+        main_camera:
+          '48 MP Fusion, f/1.6, 26mm (wide), OIS; 12 MP 2x Telephoto from the same sensor (no separate lens)',
         flash: 'True Tone flash',
         video_recording:
           '4K Dolby Vision @24/25/30/60fps, 1080p@25/30/60fps, slo-mo 1080p@120/240fps',
@@ -3284,7 +3284,7 @@ export const CATALOG_EXPANSION_2026_SEEDS: FlagshipDeviceSeed[] = [
       },
       availability: {
         announced: '2026, March 02',
-        status: 'Available. Released 2026, March 11 (Vietnam: 2026, March 11)',
+        status: 'Available. Released 2026, March 11',
         prices_msrp:
           'Giá niêm yết khi mở bán tại Việt Nam: 256GB: 17.999.000 ₫; 512GB: 24.499.000 ₫',
       },
@@ -3303,7 +3303,7 @@ export const CATALOG_EXPANSION_2026_SEEDS: FlagshipDeviceSeed[] = [
       display: 'https://www.apple.com/iphone-17e/specs/',
       'display.refresh_rate_hz': 'https://www.gsmarena.com/apple_iphone_17e-14487.php',
       hardware: 'https://www.apple.com/iphone-17e/specs/',
-      'hardware.cpu_os': 'https://www.gsmarena.com/apple_iphone_17e-14487.php',
+      'hardware.cpu': 'https://www.gsmarena.com/apple_iphone_17e-14487.php',
       camera: 'https://www.apple.com/iphone-17e/specs/',
       battery: 'https://www.gsmarena.com/apple_iphone_17e-14487.php',
       'battery.charging': 'https://www.apple.com/vn/iphone-17e/specs/',
@@ -3363,8 +3363,8 @@ export const CATALOG_EXPANSION_2026_SEEDS: FlagshipDeviceSeed[] = [
       },
       camera: {
         rear_setup: 'Single camera (48MP Fusion; 2x optical-quality from the main sensor)',
-        main_camera: '48 MP Fusion, f/1.6, 26mm (wide), sensor-shift OIS',
-        second_camera: '12 MP 2x Telephoto from the 48MP Fusion sensor (no separate lens)',
+        main_camera:
+          '48 MP Fusion, f/1.6, 26mm (wide), sensor-shift OIS; 12 MP 2x Telephoto from the same sensor (no separate lens)',
         flash: 'Dual-LED dual-tone flash',
         video_recording:
           '4K Dolby Vision up to 60fps, 1080p slo-mo @120/240fps, Action mode up to 2.8K@60fps',
@@ -3416,7 +3416,7 @@ export const CATALOG_EXPANSION_2026_SEEDS: FlagshipDeviceSeed[] = [
       },
       availability: {
         announced: '2025, September 09',
-        status: 'Available. Released 2025, September 19 (Vietnam: 2025, September 19)',
+        status: 'Available. Released 2025, September 19',
         prices_msrp:
           'Giá niêm yết khi mở bán tại Việt Nam: 256GB: 31.999.000 ₫; 512GB: 38.499.000 ₫; 1TB: 44.999.000 ₫',
       },
@@ -3494,8 +3494,8 @@ export const CATALOG_EXPANSION_2026_SEEDS: FlagshipDeviceSeed[] = [
       },
       camera: {
         rear_setup: 'Single camera (48MP Fusion; 2x optical-quality from the main sensor)',
-        main_camera: '48 MP Fusion, f/1.6, 26mm (wide), sensor-shift OIS',
-        second_camera: '12 MP 2x Telephoto from the 48MP Fusion sensor (no separate lens)',
+        main_camera:
+          '48 MP Fusion, f/1.6, 26mm (wide), sensor-shift OIS; 12 MP 2x Telephoto from the same sensor (no separate lens)',
         flash: 'Dual-LED dual-tone flash',
         video_recording:
           '4K Dolby Vision up to 60fps, 1080p slo-mo @120/240fps, Action mode up to 2.8K@60fps',
@@ -3547,7 +3547,7 @@ export const CATALOG_EXPANSION_2026_SEEDS: FlagshipDeviceSeed[] = [
       },
       availability: {
         announced: '2025, September 09',
-        status: 'Available. Released 2025, September 19 (Vietnam: 2025, September 19)',
+        status: 'Available. Released 2025, September 19',
         prices_msrp:
           'Giá niêm yết khi mở bán tại Việt Nam: 256GB: 31.999.000 ₫; 512GB: 38.499.000 ₫; 1TB: 44.999.000 ₫',
       },
@@ -3625,8 +3625,8 @@ export const CATALOG_EXPANSION_2026_SEEDS: FlagshipDeviceSeed[] = [
       },
       camera: {
         rear_setup: 'Single camera (48MP Fusion; 2x optical-quality from the main sensor)',
-        main_camera: '48 MP Fusion, f/1.6, 26mm (wide), sensor-shift OIS',
-        second_camera: '12 MP 2x Telephoto from the 48MP Fusion sensor (no separate lens)',
+        main_camera:
+          '48 MP Fusion, f/1.6, 26mm (wide), sensor-shift OIS; 12 MP 2x Telephoto from the same sensor (no separate lens)',
         flash: 'Dual-LED dual-tone flash',
         video_recording:
           '4K Dolby Vision up to 60fps, 1080p slo-mo @120/240fps, Action mode up to 2.8K@60fps',
@@ -3678,7 +3678,7 @@ export const CATALOG_EXPANSION_2026_SEEDS: FlagshipDeviceSeed[] = [
       },
       availability: {
         announced: '2025, September 09',
-        status: 'Available. Released 2025, September 19 (Vietnam: 2025, September 19)',
+        status: 'Available. Released 2025, September 19',
         prices_msrp:
           'Giá niêm yết khi mở bán tại Việt Nam: 256GB: 31.999.000 ₫; 512GB: 38.499.000 ₫; 1TB: 44.999.000 ₫',
       },
@@ -3808,7 +3808,7 @@ export const CATALOG_EXPANSION_2026_SEEDS: FlagshipDeviceSeed[] = [
       },
       availability: {
         announced: '2026, August 27',
-        status: 'Available. On sale in Vietnam from 2026, August 28',
+        status: 'Available. Released 2026, September 04',
         prices_msrp:
           'Giá niêm yết khi mở bán tại Việt Nam: 128GB: 18.990.000 ₫; 256GB: 21.990.000 ₫',
       },
@@ -3828,7 +3828,7 @@ export const CATALOG_EXPANSION_2026_SEEDS: FlagshipDeviceSeed[] = [
         'https://cellphones.com.vn/dien-thoai-samsung-galaxy-s26-fe.html',
       display:
         'https://www.samsung.com/vn/smartphones/galaxy-s/galaxy-s26-fe-blueberry-256gb-sm-s741bzvcxxv/',
-      'display.ppi_protection': 'https://www.gsmarena.com/samsung_galaxy_s26_fe_5g-14870.php',
+      'display.ppi': 'https://www.gsmarena.com/samsung_galaxy_s26_fe_5g-14870.php',
       hardware:
         'https://www.samsung.com/vn/smartphones/galaxy-s/galaxy-s26-fe-blueberry-256gb-sm-s741bzvcxxv/',
       'hardware.cpu': 'https://www.gsmarena.com/samsung_galaxy_s26_fe_5g-14870.php',
@@ -3947,7 +3947,7 @@ export const CATALOG_EXPANSION_2026_SEEDS: FlagshipDeviceSeed[] = [
       },
       availability: {
         announced: '2026, August 27',
-        status: 'Available. On sale in Vietnam from 2026, August 28',
+        status: 'Available. Released 2026, September 04',
         prices_msrp:
           'Giá niêm yết khi mở bán tại Việt Nam: 128GB: 18.990.000 ₫; 256GB: 21.990.000 ₫',
       },
@@ -3967,7 +3967,7 @@ export const CATALOG_EXPANSION_2026_SEEDS: FlagshipDeviceSeed[] = [
         'https://cellphones.com.vn/dien-thoai-samsung-galaxy-s26-fe.html',
       display:
         'https://www.samsung.com/vn/smartphones/galaxy-s/galaxy-s26-fe-blueberry-256gb-sm-s741bzvcxxv/',
-      'display.ppi_protection': 'https://www.gsmarena.com/samsung_galaxy_s26_fe_5g-14870.php',
+      'display.ppi': 'https://www.gsmarena.com/samsung_galaxy_s26_fe_5g-14870.php',
       hardware:
         'https://www.samsung.com/vn/smartphones/galaxy-s/galaxy-s26-fe-blueberry-256gb-sm-s741bzvcxxv/',
       'hardware.cpu': 'https://www.gsmarena.com/samsung_galaxy_s26_fe_5g-14870.php',
@@ -3991,6 +3991,8 @@ export const CATALOG_EXPANSION_2026_SEEDS: FlagshipDeviceSeed[] = [
   },
   // Wave 1a: the Galaxy Z Fold8, Z Fold8 Ultra and Z Flip8 (announced 2026-07-22). There is
   // no Z Flip8 FE this year.
+  // GSMArena keeps the Z Fold8 page at its rumoured name, samsung_galaxy_z_fold_wide_5g; the page
+  // itself is the "Samsung Galaxy Z Fold8", announced 2026-07-22.
   {
     categorySlug: 'smartphones',
     brand: 'Samsung',
@@ -4006,7 +4008,12 @@ export const CATALOG_EXPANSION_2026_SEEDS: FlagshipDeviceSeed[] = [
     screen_size_inch: 7.6,
     battery_mah: 4800,
     has_5g: true,
-    colors: ['Đen Graphite', 'Trắng Cream', 'Tím Lavender', 'Xanh Pistachio'],
+    colors: [
+      'Đen Graphite',
+      'Trắng Cream',
+      'Tím Lavender',
+      'Xanh Pistachio (chỉ bán trên Samsung.com)',
+    ],
     images: [],
     key_specs: {
       screen: '7.6" foldable Dynamic LTPO AMOLED 2X 120Hz (2448 x 1848) + 5.5" cover screen 120Hz',
@@ -4060,7 +4067,12 @@ export const CATALOG_EXPANSION_2026_SEEDS: FlagshipDeviceSeed[] = [
           'Glass front when folded (Gorilla Glass Ceramic 3), plastic front when unfolded, glass back (Gorilla Glass Victus 2), aluminum frame',
         resistance: 'IP48',
         biometrics: 'Fingerprint (side-mounted)',
-        colors: ['Đen Graphite', 'Trắng Cream', 'Tím Lavender', 'Xanh Pistachio'],
+        colors: [
+          'Đen Graphite',
+          'Trắng Cream',
+          'Tím Lavender',
+          'Xanh Pistachio (chỉ bán trên Samsung.com)',
+        ],
       },
       cellular: {
         has_5g: true,
@@ -4089,7 +4101,7 @@ export const CATALOG_EXPANSION_2026_SEEDS: FlagshipDeviceSeed[] = [
       },
       availability: {
         announced: '2026, July 22',
-        status: 'Available. Pre-orders in Vietnam from 2026, July 22',
+        status: 'Available. Released 2026, July 22',
         prices_msrp:
           'Giá niêm yết khi mở bán tại Việt Nam: 256GB: 46.990.000 ₫; 512GB: 52.990.000 ₫; 1TB: 61.990.000 ₫',
       },
@@ -4142,7 +4154,12 @@ export const CATALOG_EXPANSION_2026_SEEDS: FlagshipDeviceSeed[] = [
     screen_size_inch: 7.6,
     battery_mah: 4800,
     has_5g: true,
-    colors: ['Đen Graphite', 'Trắng Cream', 'Tím Lavender', 'Xanh Pistachio'],
+    colors: [
+      'Đen Graphite',
+      'Trắng Cream',
+      'Tím Lavender',
+      'Xanh Pistachio (chỉ bán trên Samsung.com)',
+    ],
     images: [],
     key_specs: {
       screen: '7.6" foldable Dynamic LTPO AMOLED 2X 120Hz (2448 x 1848) + 5.5" cover screen 120Hz',
@@ -4196,7 +4213,12 @@ export const CATALOG_EXPANSION_2026_SEEDS: FlagshipDeviceSeed[] = [
           'Glass front when folded (Gorilla Glass Ceramic 3), plastic front when unfolded, glass back (Gorilla Glass Victus 2), aluminum frame',
         resistance: 'IP48',
         biometrics: 'Fingerprint (side-mounted)',
-        colors: ['Đen Graphite', 'Trắng Cream', 'Tím Lavender', 'Xanh Pistachio'],
+        colors: [
+          'Đen Graphite',
+          'Trắng Cream',
+          'Tím Lavender',
+          'Xanh Pistachio (chỉ bán trên Samsung.com)',
+        ],
       },
       cellular: {
         has_5g: true,
@@ -4225,7 +4247,7 @@ export const CATALOG_EXPANSION_2026_SEEDS: FlagshipDeviceSeed[] = [
       },
       availability: {
         announced: '2026, July 22',
-        status: 'Available. Pre-orders in Vietnam from 2026, July 22',
+        status: 'Available. Released 2026, July 22',
         prices_msrp:
           'Giá niêm yết khi mở bán tại Việt Nam: 256GB: 46.990.000 ₫; 512GB: 52.990.000 ₫; 1TB: 61.990.000 ₫',
       },
@@ -4278,7 +4300,12 @@ export const CATALOG_EXPANSION_2026_SEEDS: FlagshipDeviceSeed[] = [
     screen_size_inch: 7.6,
     battery_mah: 4800,
     has_5g: true,
-    colors: ['Đen Graphite', 'Trắng Cream', 'Tím Lavender', 'Xanh Pistachio'],
+    colors: [
+      'Đen Graphite',
+      'Trắng Cream',
+      'Tím Lavender',
+      'Xanh Pistachio (chỉ bán trên Samsung.com)',
+    ],
     images: [],
     key_specs: {
       screen: '7.6" foldable Dynamic LTPO AMOLED 2X 120Hz (2448 x 1848) + 5.5" cover screen 120Hz',
@@ -4332,7 +4359,12 @@ export const CATALOG_EXPANSION_2026_SEEDS: FlagshipDeviceSeed[] = [
           'Glass front when folded (Gorilla Glass Ceramic 3), plastic front when unfolded, glass back (Gorilla Glass Victus 2), aluminum frame',
         resistance: 'IP48',
         biometrics: 'Fingerprint (side-mounted)',
-        colors: ['Đen Graphite', 'Trắng Cream', 'Tím Lavender', 'Xanh Pistachio'],
+        colors: [
+          'Đen Graphite',
+          'Trắng Cream',
+          'Tím Lavender',
+          'Xanh Pistachio (chỉ bán trên Samsung.com)',
+        ],
       },
       cellular: {
         has_5g: true,
@@ -4361,7 +4393,7 @@ export const CATALOG_EXPANSION_2026_SEEDS: FlagshipDeviceSeed[] = [
       },
       availability: {
         announced: '2026, July 22',
-        status: 'Available. Pre-orders in Vietnam from 2026, July 22',
+        status: 'Available. Released 2026, July 22',
         prices_msrp:
           'Giá niêm yết khi mở bán tại Việt Nam: 256GB: 46.990.000 ₫; 512GB: 52.990.000 ₫; 1TB: 61.990.000 ₫',
       },
@@ -4414,7 +4446,7 @@ export const CATALOG_EXPANSION_2026_SEEDS: FlagshipDeviceSeed[] = [
     screen_size_inch: 8.0,
     battery_mah: 5000,
     has_5g: true,
-    colors: ['Đen Graphite', 'Trắng Cream', 'Tím Shadow', 'Xanh Shadow'],
+    colors: ['Đen Graphite', 'Trắng Cream', 'Tím Shadow', 'Xanh Shadow (chỉ bán trên Samsung.com)'],
     images: [],
     key_specs: {
       screen: '8.0" foldable Dynamic LTPO AMOLED 2X 120Hz (2256 x 2504) + 6.5" cover screen 120Hz',
@@ -4471,7 +4503,12 @@ export const CATALOG_EXPANSION_2026_SEEDS: FlagshipDeviceSeed[] = [
           'Glass front when folded (Gorilla Glass Ceramic 3), plastic front when unfolded, glass back (Gorilla Glass Victus 2), aluminum frame',
         resistance: 'IP48',
         biometrics: 'Fingerprint (side-mounted)',
-        colors: ['Đen Graphite', 'Trắng Cream', 'Tím Shadow', 'Xanh Shadow'],
+        colors: [
+          'Đen Graphite',
+          'Trắng Cream',
+          'Tím Shadow',
+          'Xanh Shadow (chỉ bán trên Samsung.com)',
+        ],
       },
       cellular: {
         has_5g: true,
@@ -4500,7 +4537,7 @@ export const CATALOG_EXPANSION_2026_SEEDS: FlagshipDeviceSeed[] = [
       },
       availability: {
         announced: '2026, July 22',
-        status: 'Available. On sale in Vietnam from 2026, August',
+        status: 'Available. Released 2026, July 22',
         prices_msrp:
           'Giá niêm yết khi mở bán tại Việt Nam: 256GB: 52.990.000 ₫; 512GB: 58.990.000 ₫; 1TB: 67.990.000 ₫',
       },
@@ -4552,7 +4589,7 @@ export const CATALOG_EXPANSION_2026_SEEDS: FlagshipDeviceSeed[] = [
     screen_size_inch: 8.0,
     battery_mah: 5000,
     has_5g: true,
-    colors: ['Đen Graphite', 'Trắng Cream', 'Tím Shadow', 'Xanh Shadow'],
+    colors: ['Đen Graphite', 'Trắng Cream', 'Tím Shadow', 'Xanh Shadow (chỉ bán trên Samsung.com)'],
     images: [],
     key_specs: {
       screen: '8.0" foldable Dynamic LTPO AMOLED 2X 120Hz (2256 x 2504) + 6.5" cover screen 120Hz',
@@ -4609,7 +4646,12 @@ export const CATALOG_EXPANSION_2026_SEEDS: FlagshipDeviceSeed[] = [
           'Glass front when folded (Gorilla Glass Ceramic 3), plastic front when unfolded, glass back (Gorilla Glass Victus 2), aluminum frame',
         resistance: 'IP48',
         biometrics: 'Fingerprint (side-mounted)',
-        colors: ['Đen Graphite', 'Trắng Cream', 'Tím Shadow', 'Xanh Shadow'],
+        colors: [
+          'Đen Graphite',
+          'Trắng Cream',
+          'Tím Shadow',
+          'Xanh Shadow (chỉ bán trên Samsung.com)',
+        ],
       },
       cellular: {
         has_5g: true,
@@ -4638,7 +4680,7 @@ export const CATALOG_EXPANSION_2026_SEEDS: FlagshipDeviceSeed[] = [
       },
       availability: {
         announced: '2026, July 22',
-        status: 'Available. On sale in Vietnam from 2026, August',
+        status: 'Available. Released 2026, July 22',
         prices_msrp:
           'Giá niêm yết khi mở bán tại Việt Nam: 256GB: 52.990.000 ₫; 512GB: 58.990.000 ₫; 1TB: 67.990.000 ₫',
       },
@@ -4690,7 +4732,7 @@ export const CATALOG_EXPANSION_2026_SEEDS: FlagshipDeviceSeed[] = [
     screen_size_inch: 8.0,
     battery_mah: 5000,
     has_5g: true,
-    colors: ['Đen Graphite', 'Trắng Cream', 'Tím Shadow', 'Xanh Shadow'],
+    colors: ['Đen Graphite', 'Trắng Cream', 'Tím Shadow', 'Xanh Shadow (chỉ bán trên Samsung.com)'],
     images: [],
     key_specs: {
       screen: '8.0" foldable Dynamic LTPO AMOLED 2X 120Hz (2256 x 2504) + 6.5" cover screen 120Hz',
@@ -4747,7 +4789,12 @@ export const CATALOG_EXPANSION_2026_SEEDS: FlagshipDeviceSeed[] = [
           'Glass front when folded (Gorilla Glass Ceramic 3), plastic front when unfolded, glass back (Gorilla Glass Victus 2), aluminum frame',
         resistance: 'IP48',
         biometrics: 'Fingerprint (side-mounted)',
-        colors: ['Đen Graphite', 'Trắng Cream', 'Tím Shadow', 'Xanh Shadow'],
+        colors: [
+          'Đen Graphite',
+          'Trắng Cream',
+          'Tím Shadow',
+          'Xanh Shadow (chỉ bán trên Samsung.com)',
+        ],
       },
       cellular: {
         has_5g: true,
@@ -4776,7 +4823,7 @@ export const CATALOG_EXPANSION_2026_SEEDS: FlagshipDeviceSeed[] = [
       },
       availability: {
         announced: '2026, July 22',
-        status: 'Available. On sale in Vietnam from 2026, August',
+        status: 'Available. Released 2026, July 22',
         prices_msrp:
           'Giá niêm yết khi mở bán tại Việt Nam: 256GB: 52.990.000 ₫; 512GB: 58.990.000 ₫; 1TB: 67.990.000 ₫',
       },
@@ -4828,7 +4875,7 @@ export const CATALOG_EXPANSION_2026_SEEDS: FlagshipDeviceSeed[] = [
     screen_size_inch: 6.9,
     battery_mah: 4300,
     has_5g: true,
-    colors: ['Đen Graphite', 'Trắng Cream', 'Hồng Rosé', 'Xanh Mint'],
+    colors: ['Đen Graphite', 'Trắng Cream', 'Hồng Rosé', 'Xanh Mint (chỉ bán trên Samsung.com)'],
     images: [],
     key_specs: {
       screen: '6.9" foldable Dynamic LTPO AMOLED 2X 120Hz (1080 x 2520) + 4.1" FlexWindow 120Hz',
@@ -4881,7 +4928,12 @@ export const CATALOG_EXPANSION_2026_SEEDS: FlagshipDeviceSeed[] = [
           'Plastic front when unfolded, glass back (Gorilla Glass Victus 2), Armor Aluminum frame',
         resistance: 'IP48',
         biometrics: 'Fingerprint (side-mounted)',
-        colors: ['Đen Graphite', 'Trắng Cream', 'Hồng Rosé', 'Xanh Mint'],
+        colors: [
+          'Đen Graphite',
+          'Trắng Cream',
+          'Hồng Rosé',
+          'Xanh Mint (chỉ bán trên Samsung.com)',
+        ],
       },
       cellular: {
         has_5g: true,
@@ -4910,7 +4962,7 @@ export const CATALOG_EXPANSION_2026_SEEDS: FlagshipDeviceSeed[] = [
       },
       availability: {
         announced: '2026, July 22',
-        status: 'Available. Pre-orders in Vietnam from 2026, July 22',
+        status: 'Available. Released 2026, July 22',
         prices_msrp:
           'Giá niêm yết khi mở bán tại Việt Nam: 256GB: 31.990.000 ₫; 512GB: 37.990.000 ₫',
       },
@@ -4962,7 +5014,7 @@ export const CATALOG_EXPANSION_2026_SEEDS: FlagshipDeviceSeed[] = [
     screen_size_inch: 6.9,
     battery_mah: 4300,
     has_5g: true,
-    colors: ['Đen Graphite', 'Trắng Cream', 'Hồng Rosé', 'Xanh Mint'],
+    colors: ['Đen Graphite', 'Trắng Cream', 'Hồng Rosé', 'Xanh Mint (chỉ bán trên Samsung.com)'],
     images: [],
     key_specs: {
       screen: '6.9" foldable Dynamic LTPO AMOLED 2X 120Hz (1080 x 2520) + 4.1" FlexWindow 120Hz',
@@ -5015,7 +5067,12 @@ export const CATALOG_EXPANSION_2026_SEEDS: FlagshipDeviceSeed[] = [
           'Plastic front when unfolded, glass back (Gorilla Glass Victus 2), Armor Aluminum frame',
         resistance: 'IP48',
         biometrics: 'Fingerprint (side-mounted)',
-        colors: ['Đen Graphite', 'Trắng Cream', 'Hồng Rosé', 'Xanh Mint'],
+        colors: [
+          'Đen Graphite',
+          'Trắng Cream',
+          'Hồng Rosé',
+          'Xanh Mint (chỉ bán trên Samsung.com)',
+        ],
       },
       cellular: {
         has_5g: true,
@@ -5044,7 +5101,7 @@ export const CATALOG_EXPANSION_2026_SEEDS: FlagshipDeviceSeed[] = [
       },
       availability: {
         announced: '2026, July 22',
-        status: 'Available. Pre-orders in Vietnam from 2026, July 22',
+        status: 'Available. Released 2026, July 22',
         prices_msrp:
           'Giá niêm yết khi mở bán tại Việt Nam: 256GB: 31.990.000 ₫; 512GB: 37.990.000 ₫',
       },
