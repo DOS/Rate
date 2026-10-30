@@ -9,6 +9,7 @@ import { KeySpecsSchema, ProductSpecificationsSchema, splitModelKey } from '@rep
 import { FLAGSHIP_DEVICES_TO_SEED, flagshipSeedsByItem } from '../flagship-seed-data.js';
 import { CATALOG_EXPANSION_2026_SEEDS } from '../flagship-seed-catalog-2026.js';
 import { ProductNormalizer, detectCategorySlug } from '../product-normalizer.js';
+import { withoutRetractedSpecs } from '../jobs/backfill-specs.js';
 import type { ShopeeProduct } from '../types.js';
 
 const normalizer = new ProductNormalizer();
@@ -139,6 +140,51 @@ for (const key of [
     seed.specifications.hardware?.chipset?.replace(/ \(SM8850-1-AD, 3 nm\)$/, ' (3 nm)'),
     key
   );
+}
+
+// No charging wattage is invented for a registry model whose sources state none, and a
+// storage with its own RAM gets it when the title names no RAM.
+for (const title of ['Apple iPhone 18 Pro 256GB', 'Apple iPhone 18 Pro Max 1TB']) {
+  const phone = normalize(title);
+  assert.equal(phone.specifications.battery?.fast_charging_w, undefined, title);
+  assert.doesNotMatch(phone.key_specs.battery ?? '', /W\)/, title);
+}
+assert.equal(normalize('Samsung Galaxy S26 Ultra 1TB').ram_gb, 16);
+assert.equal(normalize('Samsung Galaxy S26 Ultra 512GB').ram_gb, 12);
+assert.equal(normalize('Samsung Galaxy S26 Ultra 12GB/1TB').ram_gb, 12);
+
+// The replaced 256GB entries retract what their unsourced versions wrote: the backfill's
+// merge would keep it otherwise, and the Item carries the paths of its variants.
+const retracted = withoutRetractedSpecs(
+  {
+    battery: { capacity_mah: 5391, fast_charging_w: 35 },
+    regulatory: { sar_head: '1.14 W/kg', sar_body: '1.18 W/kg' },
+  },
+  ['battery.fast_charging_w', 'regulatory.sar_head', 'regulatory.sar_body', 'key_specs.ram'],
+  'specifications'
+);
+assert.deepEqual(retracted, { battery: { capacity_mah: 5391 } });
+assert.deepEqual(
+  withoutRetractedSpecs({ ram: '16GB', chip: 'x' }, ['key_specs.ram', 'battery.type'], 'key_specs'),
+  { chip: 'x' }
+);
+for (const key of [
+  'apple:iphone-18-pro-max:256gb',
+  'apple:iphone-18-pro:256gb',
+  'samsung:galaxy-s26-ultra:256gb',
+]) {
+  const seed = CATALOG_EXPANSION_2026_SEEDS.find(s => s.model_key === key)!;
+  assert.ok((seed.retract_spec_fields ?? []).length > 0, key);
+  for (const path of seed.retract_spec_fields ?? []) {
+    const [group, field] = path.split('.') as [string, string];
+    assert.equal(
+      (seed.specifications as Record<string, Record<string, unknown> | undefined>)[group]?.[field],
+      undefined,
+      `${key} retracts ${path} but still sets it`
+    );
+  }
+  const item = flagshipSeedsByItem().find(i => key.startsWith(`${i.itemKey}:`))!;
+  assert.deepEqual(item.retract_spec_fields, seed.retract_spec_fields, key);
 }
 
 console.warn(`✅ Catalog expansion seeds (${CATALOG_EXPANSION_2026_SEEDS.length} variants) passed`);

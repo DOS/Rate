@@ -478,6 +478,8 @@ const CANONICAL_PHONE_REGISTRY: Record<
     front_camera: string;
     /** Wired charging wattage, when a source states it. */
     charging_w?: number;
+    /** RAM of the storages that differ from `ram_gb` (the S26 Ultra 1TB has 16GB). */
+    ram_by_storage_gb?: Readonly<Record<number, number>>;
     has_5g: boolean;
     release_date: string;
     ip_rating: string;
@@ -1119,6 +1121,7 @@ const CANONICAL_PHONE_REGISTRY: Record<
     fourth_camera: '10 MP, f/2.4, 67mm (telephoto), PDAF, OIS, 3x optical zoom',
     front_camera: '12 MP, f/2.2, 23mm (wide), dual pixel PDAF',
     charging_w: 60,
+    ram_by_storage_gb: { 1024: 16 },
     has_5g: true,
     release_date: 'February 2026',
     ip_rating: 'IP68 dust/water resistant (up to 1.5m for 30 min)',
@@ -2484,7 +2487,10 @@ export class ProductNormalizer {
     const ramGb =
       categorySlug === 'earbuds' || categorySlug === 'smartwatches'
         ? null
-        : (validClaimedRam ?? benchmark?.ram_gb ?? null);
+        : (validClaimedRam ??
+          (storageGb !== null ? benchmark?.ram_by_storage_gb?.[storageGb] : undefined) ??
+          benchmark?.ram_gb ??
+          null);
     // The registry describes one size of a line: its screen and battery do not describe
     // the other size ("iPad Pro M4 13" is not the 11 inch entry) (DOS/Rate#1113).
     const appleInches = appleSize && !appleSize.endsWith('mm') ? parseFloat(appleSize) : null;
@@ -2643,9 +2649,10 @@ export class ProductNormalizer {
                 ? 3561
                 : 5000);
 
-    const fallbackChargingW =
-      benchmark?.charging_w ||
-      (categorySlug === 'laptops'
+    // A registry model whose sources state no wattage gets none, not a category default.
+    const fallbackChargingW = benchmark
+      ? benchmark.charging_w
+      : categorySlug === 'laptops'
         ? 65
         : categorySlug === 'tablets'
           ? 30
@@ -2655,7 +2662,7 @@ export class ProductNormalizer {
               ? 5
               : isApple
                 ? 25
-                : 45);
+                : 45;
 
     const cameraCount = benchmark
       ? [
@@ -2814,7 +2821,7 @@ export class ProductNormalizer {
           : `${fallbackScreenSize}" ${benchmark?.screen_type?.split(',')[0] || fallbackScreenType.split(',')[0]}`,
       chip: benchmark?.chipset?.split('(')[0]?.trim() || fallbackChip,
       camera: benchmark?.rear_camera ? benchmark.rear_camera.split(',')[0] : fallbackKeyCamera,
-      battery: `${fallbackBatteryMah} mAh (${fallbackChargingW}W)`,
+      battery: `${fallbackBatteryMah} mAh${fallbackChargingW ? ` (${fallbackChargingW}W)` : ''}`,
       storage: storageDisplay,
       ram: ramGb ? `${ramGb}GB` : undefined,
     };

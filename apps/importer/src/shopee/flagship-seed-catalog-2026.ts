@@ -1446,6 +1446,7 @@ export const CATALOG_EXPANSION_2026_SEEDS: FlagshipDeviceSeed[] = [
       'Apple iPhone 18 Pro Max 256GB Chính hãng VN/A',
       'Điện thoại iPhone 18 Pro Max 256GB',
     ],
+    retract_spec_fields: ['battery.fast_charging_w', 'regulatory.sar_head', 'regulatory.sar_body'],
   },
   {
     categorySlug: 'smartphones',
@@ -2046,6 +2047,7 @@ export const CATALOG_EXPANSION_2026_SEEDS: FlagshipDeviceSeed[] = [
         'https://www.thegioididong.com/tin-tuc/bang-gia-iphone-18-pro-iphone-18-pro-max-1598480',
     },
     aliases: ['Apple iPhone 18 Pro 256GB Chính hãng VN/A', 'Điện thoại iPhone 18 Pro 256GB'],
+    retract_spec_fields: ['battery.fast_charging_w', 'regulatory.sar_head', 'regulatory.sar_body'],
   },
   {
     categorySlug: 'smartphones',
@@ -2641,6 +2643,7 @@ export const CATALOG_EXPANSION_2026_SEEDS: FlagshipDeviceSeed[] = [
       'Điện thoại Samsung Galaxy S26 Ultra 5G 12GB/256GB',
       'Samsung Galaxy S26 Ultra 256GB',
     ],
+    retract_spec_fields: ['regulatory.certifications'],
   },
   {
     categorySlug: 'smartphones',

@@ -72,6 +72,37 @@ export function withoutVariantKeySpecs(keySpecs: Record<string, unknown>): Recor
 }
 
 /**
+ * Removes the retracted paths ("battery.fast_charging_w", "key_specs.ram") from specs and
+ * key specs: a value an earlier, unsourced seed wrote that the merge would otherwise keep
+ * (catalog expansion A1-A3).
+ */
+export function withoutRetractedSpecs<T>(
+  value: T,
+  paths: readonly string[] | undefined,
+  scope: 'specifications' | 'key_specs'
+): T {
+  if (!paths || paths.length === 0 || !value || typeof value !== 'object') return value;
+  const copy = structuredClone(value) as Record<string, unknown>;
+  for (const path of paths) {
+    const parts = path.split('.');
+    const own = scope === 'key_specs' ? parts[0] === 'key_specs' : parts[0] !== 'key_specs';
+    if (!own) continue;
+    const [group, field] = scope === 'key_specs' ? [parts[1], undefined] : [parts[0], parts[1]];
+    if (!group) continue;
+    if (field === undefined) {
+      delete copy[group];
+      continue;
+    }
+    const record = copy[group];
+    if (record && typeof record === 'object' && !Array.isArray(record)) {
+      delete (record as Record<string, unknown>)[field];
+      if (Object.keys(record).length === 0) delete copy[group];
+    }
+  }
+  return copy as T;
+}
+
+/**
  * Writes each seed Item's specs, key specs, description and images onto its `rate.items`
  * row (design doc 4.1, 5.3, DOS/Rate#1152). Variant-only fields (storage) stay on the
  * variants. Items are never created here: the M1 sync trigger and M2 backfill own that,
@@ -109,11 +140,19 @@ export async function syncItemSeedSpecs(
         .from('items')
         .update({
           description: seed.description,
-          specifications: withoutVariantSpecs(
-            mergeProductSpecifications(row.specifications, seed.specifications)
+          specifications: withoutRetractedSpecs(
+            withoutVariantSpecs(
+              mergeProductSpecifications(row.specifications, seed.specifications)
+            ),
+            seed.retract_spec_fields,
+            'specifications'
           ),
-          key_specs: withoutVariantKeySpecs(
-            mergeKeySpecs(row.key_specs, seed.key_specs as unknown as Record<string, unknown>)
+          key_specs: withoutRetractedSpecs(
+            withoutVariantKeySpecs(
+              mergeKeySpecs(row.key_specs, seed.key_specs as unknown as Record<string, unknown>)
+            ),
+            seed.retract_spec_fields,
+            'key_specs'
           ),
           ...(seed.images.length > 0 ? { images: seed.images, thumbnail: seed.images[0] } : {}),
           updated_at: new Date().toISOString(),
@@ -388,15 +427,25 @@ export async function runMasterSpecsBackfill(
           .from('master_products')
           .update({
             ...specFields,
-            specifications: mergeProductSpecifications(
-              (existing as { specifications?: unknown }).specifications,
-              device.specifications,
-              device.colors
+            specifications: withoutRetractedSpecs(
+              mergeProductSpecifications(
+                (existing as { specifications?: unknown }).specifications,
+                device.specifications,
+                device.colors
+              ),
+              device.retract_spec_fields,
+              'specifications'
             ),
-            key_specs: mergeKeySpecs(
-              (existing as { key_specs?: unknown }).key_specs,
-              device.key_specs as unknown as Record<string, unknown>
+            key_specs: withoutRetractedSpecs(
+              mergeKeySpecs(
+                (existing as { key_specs?: unknown }).key_specs,
+                device.key_specs as unknown as Record<string, unknown>
+              ),
+              device.retract_spec_fields,
+              'key_specs'
             ),
+            // A replaced, unsourced seed's label ("16GB/256GB") follows the new one.
+            ...(device.retract_spec_fields ? { variant_name: device.variant_name } : {}),
             ...(categoryId ? { category_id: categoryId } : {}),
           })
           .eq('id', existing.id);

@@ -27,6 +27,13 @@ export interface FlagshipDeviceSeed {
   sources?: Readonly<Record<string, string>>;
   /** Retail-style titles that must key exactly as `model_key` (checked by the tests). */
   aliases?: readonly string[];
+  /**
+   * Spec paths ("battery.fast_charging_w", "key_specs.ram") an earlier, unsourced version of
+   * this seed wrote and the sources do not support. The backfill removes them from the
+   * existing master and Item rather than keeping them through its field-by-field merge,
+   * and rewrites the master's variant name.
+   */
+  retract_spec_fields?: readonly string[];
 }
 
 /**
@@ -3573,6 +3580,8 @@ export interface FlagshipItemSeed {
   images: string[];
   specifications: ProductSpecifications;
   key_specs: KeySpecs;
+  /** The retracted spec paths of its variants (FlagshipDeviceSeed.retract_spec_fields). */
+  retract_spec_fields: readonly string[];
   variants: FlagshipDeviceSeed[];
 }
 
@@ -3587,6 +3596,9 @@ export function flagshipSeedsByItem(
     const existing = items.get(parts.itemKey);
     if (existing) {
       existing.variants.push(seed);
+      existing.retract_spec_fields = [
+        ...new Set([...existing.retract_spec_fields, ...(seed.retract_spec_fields ?? [])]),
+      ];
       continue;
     }
     // Storage and RAM are per variant (design doc 4.1): never on the Item.
@@ -3608,6 +3620,7 @@ export function flagshipSeedsByItem(
       images: seed.images,
       specifications: { ...seed.specifications, hardware },
       key_specs: keySpecs as KeySpecs,
+      retract_spec_fields: [...(seed.retract_spec_fields ?? [])],
       variants: [seed],
     });
   }
