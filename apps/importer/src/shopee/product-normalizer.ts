@@ -2174,9 +2174,15 @@ export class ProductNormalizer {
         // "Chính hãng" / "Mới 100%" before the model has begun: "Samsung 256GB Galaxy
         // S24 Ultra", "Samsung - Galaxy A55", "Xiaomi 16GB/512GB 15 Ultra" (DOS/Rate#1429).
         if (modelTokens.length === 0) {
-          // "GPS" before a model number is the model's own word: "Garmin GPS 73", "Garmin
-          // GPS 64s" key as "gps-73" and "gps-64s", as before DOS/Rate#1429 (DOS/Rate#1457).
-          if (/^GPS$/i.test(tok) && /^\d+[a-z]?$/i.test(rawTokens[i + 1] ?? '')) {
+          // A Garmin "GPS" before a model number is the model's own word: "Garmin GPS 73",
+          // "Garmin GPS 64s" key as "gps-73" and "gps-64s", as before DOS/Rate#1429. Other
+          // brands' "GPS 5G" or "GPS 44 mm" stay options (DOS/Rate#1457).
+          if (
+            brand === 'Garmin' &&
+            /^GPS$/i.test(tok) &&
+            /^\d{2,3}[a-z]{0,2}$/i.test(rawTokens[i + 1] ?? '') &&
+            !/^mm\b/i.test(rawTokens[i + 2] ?? '')
+          ) {
             modelTokens.push(tok);
             maxModelTokens = 2;
             continue;
@@ -2208,7 +2214,7 @@ export class ProductNormalizer {
         // "Max" after "Pro": "Redmi Note 17 Pro Max" is not the Pro (DOS/Rate#815).
         if (
           modelTokens.length >= 4 &&
-          !(modelTokens.length === 4 && /^plus[,;]?$/i.test(tok)) &&
+          !(modelTokens.length === 4 && /^plus(?:[,;]?$|\/)/i.test(tok)) &&
           !(/^pro$/i.test(modelTokens[modelTokens.length - 1] ?? '') && /^max[,;]?$/i.test(tok)) &&
           !generation
         ) {

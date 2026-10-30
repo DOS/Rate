@@ -1072,6 +1072,9 @@ async function runSuite() {
     ['Garmin GPS 73 Máy định vị cầm tay', 'garmin:gps-73:unknown'],
     ['Garmin GPS 64s', 'garmin:gps-64s:unknown'],
     ['Samsung GPS 44mm Galaxy Watch7', 'samsung:galaxy-watch7:unknown'],
+    // Only Garmin's: a network after another brand's GPS is no model number.
+    ['Xiaomi GPS 4G Redmi Watch 5', 'xiaomi:redmi-watch-5:unknown'],
+    ['Samsung GPS 5G Galaxy Watch7 44mm', 'samsung:galaxy-watch7:unknown'],
     ['Samsung Galaxy S24 + Plus 256GB', 'samsung:galaxy-s24-plus:256gb'],
     ['Samsung (Hàng chính hãng) Galaxy A55 256GB', 'samsung:galaxy-a55:256gb'],
     ['Samsung 256GB', 'samsung:unkeyed:256gb'],
@@ -1147,6 +1150,7 @@ async function runSuite() {
     ['Samsung Galaxy A55 5G/8GB/256GB', 'samsung:galaxy-a55:256gb'],
     // A word glued to the chain is the model's last word (DOS/Rate#1457).
     ['Xiaomi Redmi Note 13 Pro/12GB/512GB', 'xiaomi:redmi-note-13-pro:512gb'],
+    ['Xiaomi Redmi Note 13 Pro Plus/12GB/512GB', 'xiaomi:redmi-note-13-pro-plus:512gb'],
     ['Samsung Galaxy Tab A9 64GB/4GB/128GB/8GB', 'samsung:galaxy-tab-a9:64gb'],
   ] as const) {
     assert.equal(keyOf(title), key, title);
