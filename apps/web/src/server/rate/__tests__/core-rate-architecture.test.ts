@@ -2115,32 +2115,52 @@ async function runCoreArchitectureSuite() {
   console.log(
     '  ✅ [42/44] Unified Deal Radar exports in PriceHistorySection, JReviewsSection, ProductSpecsExportToolbar, Compare/Versus CSVs & OpenAPI 3.1.0 (#128) passed'
   );
-  // 43. Bootstrap JS ships from the installed package, not a CDN script (#145)
-  // The document shell (<html>, fonts, Bootstrap JS) lives in the [locale]
-  // layout since #491.
+  // 43. No Bootstrap JS at all: not from a CDN (#145), and not the bundled
+  // bootstrap.bundle (DOS/Rate#1331). The catalogue's sort dropdown and filter
+  // drawer run on React state; Bootstrap's CSS still styles them.
   const rootLayoutSrc145 = fs.readFileSync(
     path.join(repoRoot, 'apps/web/src/app/[locale]/layout.tsx'),
     'utf8'
   );
   assert.ok(
-    !/cdn\.jsdelivr\.net/.test(rootLayoutSrc145) &&
-      !rootLayoutSrc145.includes('<BootstrapClient />') &&
-      fs
-        .readFileSync(
-          path.join(repoRoot, 'apps/web/src/app/[locale]/smartphones/page.tsx'),
-          'utf8'
-        )
-        .includes('<BootstrapClient />') &&
-      fs
-        .readFileSync(
-          path.join(repoRoot, 'apps/web/src/app/BootstrapClient.tsx'),
-          'utf8'
-        )
-        .includes("import('bootstrap/dist/js/bootstrap.bundle.min.js')"),
-    'Only the catalog renders BootstrapClient (bundled bootstrap JS, #754), and nothing loads Bootstrap from cdn.jsdelivr.net (#145)'
+    !/cdn\.jsdelivr\.net/.test(rootLayoutSrc145),
+    'no Bootstrap from jsDelivr (#145)'
+  );
+  assert.ok(
+    !fs.existsSync(path.join(repoRoot, 'apps/web/src/app/BootstrapClient.tsx')),
+    'BootstrapClient is gone (#1331)'
+  );
+  const webSrc1331 = path.join(repoRoot, 'apps/web/src');
+  const walk1331 = (dir: string): string[] =>
+    fs.readdirSync(dir, { withFileTypes: true }).flatMap((e) => {
+      const full = path.join(dir, e.name);
+      if (e.isDirectory()) return e.name === '__tests__' ? [] : walk1331(full);
+      return /\.(tsx?|jsx?)$/.test(e.name) ? [full] : [];
+    });
+  for (const file of walk1331(webSrc1331)) {
+    const src = fs.readFileSync(file, 'utf8');
+    assert.ok(
+      !/bootstrap\/(?:dist\/)?js\b|bootstrap\.bundle|(?:from|import)\s*\(?\s*['"]bootstrap['"]/.test(
+        src
+      ),
+      `${file} loads Bootstrap JS (#1331)`
+    );
+    assert.ok(
+      !/data-bs-(toggle|dismiss|target)/.test(src),
+      `${file} relies on Bootstrap JS data attributes (#1331)`
+    );
+  }
+  assert.ok(
+    fs
+      .readFileSync(
+        path.join(repoRoot, 'apps/web/src/app/[locale]/smartphones/page.tsx'),
+        'utf8'
+      )
+      .includes('<CatalogSortDropdown'),
+    'the catalogue renders the React sort dropdown (#1331)'
   );
   console.log(
-    '  ✅ [43/44] Bootstrap JS bundled from the bootstrap package via BootstrapClient, no jsDelivr script in the root layout (#145) passed'
+    '  ✅ [43/44] No Bootstrap JS: no jsDelivr script (#145), no bundled bootstrap.bundle; catalogue sort and filter drawer on React state (#1331) passed'
   );
   // 44. Fonts are self-hosted by next/font, not @import-ed from Google (#147)
   const customScssSrc147 = fs.readFileSync(
