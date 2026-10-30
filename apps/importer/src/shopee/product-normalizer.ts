@@ -2050,18 +2050,30 @@ export class ProductNormalizer {
         // ones that write the number (DOS/Rate#1491). The older years keep their stored
         // "ipad-mini" key ("iPad mini 2024", DOS/Rate#819) until a re-key decides otherwise.
         // Its chip names it too: FPT Shop and TGDD write "iPad mini A20 Pro", as A17 Pro
-        // names the mini 7 (DOS/Rate#1502).
+        // names the mini 7 (DOS/Rate#1502). Only the chip in the product's own part counts,
+        // the first one: not a gift or bundle ("tặng ốp Galaxy A20", "+ Galaxy A20") nor
+        // what a comparison names ("A20 Pro so sánh A17 Pro").
         const mini = line.match(/^mini\s*([1-9])?$/i);
+        const miniChip = mini
+          ? appleTitle
+              .slice((ipadMatch.index ?? 0) + ipadMatch[0].length)
+              .split(
+                / ?\+ | (?:cho|for|tương thích|dùng cho|kèm|tặng) |\bipad\b|so sánh|\bvs\b/i
+              )[0]!
+              .match(/\ba(17\s*pro|20(?:\s*pro)?)\b/i)?.[1]
+              ?.slice(0, 2)
+          : undefined;
         if (mini)
           line = `mini${
             mini[1]
               ? ` ${mini[1]}`
-              : /\ba17\s*pro\b/i.test(appleTitle)
-                ? ' 7'
-                : /\ba20(?:\s*pro)?\b/i.test(appleTitle) ||
-                    /\bmini\s*\(?\s*2026\s*\)?(?![\d\p{L}])/iu.test(appleTitle)
-                  ? ' 8'
-                  : ''
+              : miniChip === '20'
+                ? ' 8'
+                : miniChip === '17' || /\ba17\s*pro\b/i.test(appleTitle)
+                  ? ' 7'
+                  : /\bmini\s*\(?\s*2026\s*\)?(?![\d\p{L}])/iu.test(appleTitle)
+                    ? ' 8'
+                    : ''
           }`;
         model = /^(pro|air)$/i.test(line) && chip ? `iPad ${line} ${chip}` : `iPad ${line}`;
       } else if (macbookMatch && macbookMatch[1]) {

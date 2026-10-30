@@ -1263,6 +1263,13 @@ async function runSuite() {
     ['iPad mini 8.3 inch A20 Pro Wi-Fi 128GB', 'apple:ipad-mini-8:128gb'],
     ['iPad mini A20Pro 128GB', 'apple:ipad-mini-8:128gb'],
     ['iPad mini A20 128GB', 'apple:ipad-mini-8:128gb'],
+    ['Máy tính bảng iPad mini A20 Pro WiFi 128GB Chính hãng VN/A Tím', 'apple:ipad-mini-8:128gb'],
+    ['iPad mini A20 Pro 256GB WiFi tặng ốp lưng', 'apple:ipad-mini-8:256gb'],
+    ['iPad mini A20 Pro so sánh A17 Pro 128GB', 'apple:ipad-mini-8:128gb'],
+    // A part number, or an A20 in a gift or bundle, is no chip of this iPad.
+    ['iPad mini A2033 64GB', 'apple:ipad-mini:64gb'],
+    ['iPad mini WiFi 64GB tặng ốp Galaxy A20', 'apple:ipad-mini:64gb'],
+    ['iPad mini 64GB + Samsung Galaxy A20', 'apple:ipad-mini:64gb'],
     // A stated generation still wins, and a model without the chip keeps its key.
     ['iPad mini 7 A17 Pro 128GB', 'apple:ipad-mini-7:128gb'],
     ['Apple iPad mini 8.3 inch (A17 Pro) Wi-Fi 128GB', 'apple:ipad-mini-7:128gb'],
