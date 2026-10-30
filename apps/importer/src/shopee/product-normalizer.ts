@@ -270,9 +270,12 @@ const APPLE_FAMILIES: ReadonlyArray<readonly [RegExp, string]> = [
  */
 function ownProductPart(title: string): string {
   const composed = title.normalize('NFC');
-  // A bracketed promo that opens the title is skipped: "[Sạc Apple Watch tặng kèm]
-  // AirPods Pro 2" is the AirPods.
-  const lead = /^\s*(?:\[[^\]]*\]|\([^)]*\)|【[^】]*】)/u.exec(composed)?.[0].length ?? 0;
+  // A bracketed promo that opens the title is skipped when the product follows it: "[Sạc
+  // Apple Watch tặng kèm] AirPods Pro 2" is the AirPods, but "(AirPods Pro 2 tặng dây
+  // Apple Watch) Chính hãng" names the product inside the brackets.
+  const block = /^\s*(?:\[[^\]]*\]|\([^)]*\)|【[^】]*】)/u.exec(composed)?.[0].length ?? 0;
+  const lead =
+    block > 0 && APPLE_FAMILIES.some(([family]) => family.test(composed.slice(block))) ? block : 0;
   const found = composed.slice(lead).search(/(?<![\p{L}\d])(?:tặng|kèm)(?![\p{L}\d])| ?\+ /iu);
   const at = found < 0 ? -1 : lead + found;
   return at > 0 ? composed.slice(0, at) : composed;

@@ -1053,6 +1053,18 @@ async function runSuite() {
     keyOf('[Tặng ốp iPhone] AirPods Pro 2 tặng dây Apple Watch Series 10'),
     'apple:airpods-pro-2:unknown'
   );
+  assert.equal(
+    keyOf('(AirPods Pro 2 tặng dây Apple Watch Series 10) Chính hãng VN/A'),
+    'apple:airpods-pro-2:unknown'
+  );
+  assert.equal(
+    keyOf('[Apple Watch Series 10 46mm tặng AirPods] Chính hãng VN/A'),
+    'apple:watch-series-10-46mm:64gb'
+  );
+  assert.equal(
+    detectCategorySlug('[Apple Watch Series 10 46mm tặng AirPods] Chính hãng VN/A'),
+    'smartwatches'
+  );
   // The cut stays linear on a long run of separators.
   const cutStart = Date.now();
   detectCategorySlug(`Apple Watch Series 10 46mm${','.repeat(64_000)}x`);
