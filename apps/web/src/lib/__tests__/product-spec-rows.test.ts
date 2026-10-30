@@ -457,6 +457,27 @@ async function testCompareCellLanguage() {
       assert.notEqual(segment.text, no, `${id}: No is catalogue text`);
     }
   }
+  // A prefixed value of "-" leaves its prefix catalogue text too.
+  const dashed = {
+    slug: 'd',
+    specifications: {
+      hardware: { os: 'iOS 18', storage_expansion: '-' },
+      regulatory: { certifications: 'CE', sar_head: '-' },
+    },
+  } as never;
+  for (const id of ['hw_os_exp', 'reg_cert']) {
+    for (const segment of compareCellSegments(
+      rows.get(id)!.renderCell!(dashed)
+    )) {
+      if (!segment.spec) continue;
+      for (const prefix of prefixes) {
+        assert.ok(
+          !segment.text.includes(prefix),
+          `${id}: "${prefix}" inside a spec part`
+        );
+      }
+    }
+  }
   const battery = compareCellSegments(
     rows.get('bat_details')!.renderCell!(full)
   );

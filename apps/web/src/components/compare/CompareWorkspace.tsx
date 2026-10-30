@@ -521,7 +521,7 @@ export function buildSpecGroups(t: CompareTranslator): SpecGroupDef[] {
           renderValue: (p) => {
             const specs = (p.specifications || {}) as ProductSpecifications;
             const parts = [
-              specs.hardware?.os,
+              specPart(specs.hardware?.os),
               specs.hardware?.storage_expansion
                 ? t('valCardSlotPrefix', {
                     value: specPart(
@@ -532,7 +532,7 @@ export function buildSpecGroups(t: CompareTranslator): SpecGroupDef[] {
                   })
                 : null,
             ].filter(Boolean);
-            return parts.length > 0 ? parts.map(specPart).join(' | ') : '-';
+            return parts.length > 0 ? parts.join(' | ') : '-';
           },
         },
       ],
@@ -706,10 +706,10 @@ export function buildSpecGroups(t: CompareTranslator): SpecGroupDef[] {
                   ? p.colors.join(', ')
                   : null;
             const parts = [
-              specs.design?.biometrics,
+              specPart(specs.design?.biometrics),
               colors ? t('valColorsPrefix', { value: specPart(colors) }) : null,
             ].filter(Boolean);
-            return parts.length > 0 ? parts.map(specPart).join(' | ') : '-';
+            return parts.length > 0 ? parts.join(' | ') : '-';
           },
         },
       ],
@@ -873,9 +873,10 @@ export function buildSpecGroups(t: CompareTranslator): SpecGroupDef[] {
           label: t('rowRegCert'),
           renderValue: (p) => {
             const specs = (p.specifications || {}) as ProductSpecifications;
+            // Parts marked one by one: a prefixed "-" stays catalogue text.
             const parts = [
-              specs.regulatory?.certifications,
-              specs.regulatory?.fcc_approval,
+              specPart(specs.regulatory?.certifications),
+              specPart(specs.regulatory?.fcc_approval),
               specs.regulatory?.sar_head
                 ? t('valSarHeadPrefix', {
                     value: specPart(specs.regulatory.sar_head),
@@ -887,7 +888,7 @@ export function buildSpecGroups(t: CompareTranslator): SpecGroupDef[] {
                   })
                 : null,
             ].filter(Boolean);
-            return parts.length > 0 ? parts.map(specPart).join(' | ') : '-';
+            return parts.length > 0 ? parts.join(' | ') : '-';
           },
         },
       ],
