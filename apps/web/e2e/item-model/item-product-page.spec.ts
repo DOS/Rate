@@ -76,6 +76,12 @@ for (const path of [ITEM, BIG, `${BIG}?v=256gb`]) {
     page,
   }) => {
     await page.goto(path);
+    // A size loaded on demand is measured once its panel is in.
+    if (path.endsWith('?v=256gb')) {
+      await expect(
+        page.getByText('E2E Item Big 256GB listing 1').first()
+      ).toBeVisible();
+    }
     // The "from" price line, the size picker, the jump row, then the sections.
     const selectors = [
       '.rate-pdv-price-line',
