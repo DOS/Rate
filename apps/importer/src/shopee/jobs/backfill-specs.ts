@@ -20,6 +20,7 @@ import {
   CANONICAL_BACKFILL_SPECS_BY_MODEL_KEY,
   FLAGSHIP_DEVICES_TO_SEED,
   flagshipSeedsByItem,
+  type FlagshipDeviceSeed,
   type FlagshipItemSeed,
 } from '../flagship-seed-data.js';
 import { resolveItemModelMode, type ItemModelMode } from '../item-model-flag.js';
@@ -72,6 +73,62 @@ export function withoutVariantKeySpecs(keySpecs: Record<string, unknown>): Recor
 }
 
 /**
+ * Removes the retracted paths ("battery.fast_charging_w", "key_specs.ram") from specs and
+ * key specs: a value an earlier, unsourced seed wrote that the merge would otherwise keep
+ * (catalog expansion A1-A3).
+ */
+export function withoutRetractedSpecs<T>(
+  value: T,
+  paths: readonly string[] | undefined,
+  scope: 'specifications' | 'key_specs'
+): T {
+  if (!paths || paths.length === 0 || !value || typeof value !== 'object') return value;
+  const copy = structuredClone(value) as Record<string, unknown>;
+  for (const path of paths) {
+    const parts = path.split('.');
+    const own = scope === 'key_specs' ? parts[0] === 'key_specs' : parts[0] !== 'key_specs';
+    if (!own) continue;
+    const [group, field] = scope === 'key_specs' ? [parts[1], undefined] : [parts[0], parts[1]];
+    if (!group) continue;
+    if (field === undefined) {
+      delete copy[group];
+      continue;
+    }
+    const record = copy[group];
+    if (record && typeof record === 'object' && !Array.isArray(record)) {
+      delete (record as Record<string, unknown>)[field];
+      if (Object.keys(record).length === 0) delete copy[group];
+    }
+  }
+  return copy as T;
+}
+
+/**
+ * The spec columns a seed writes onto its existing master: specs and key specs merged into
+ * the stored ones, minus the seed's retracted paths, and the variant name of a replaced
+ * seed. Shared by the full backfill and the quick sync, so neither keeps a retracted value.
+ */
+export function seedMasterSpecUpdate(
+  existing: { specifications?: unknown; key_specs?: unknown } | null | undefined,
+  seed: FlagshipDeviceSeed
+): { specifications: unknown; key_specs: unknown; variant_name?: string } {
+  return {
+    specifications: withoutRetractedSpecs(
+      mergeProductSpecifications(existing?.specifications, seed.specifications, seed.colors),
+      seed.retract_spec_fields,
+      'specifications'
+    ),
+    key_specs: withoutRetractedSpecs(
+      mergeKeySpecs(existing?.key_specs, seed.key_specs as unknown as Record<string, unknown>),
+      seed.retract_spec_fields,
+      'key_specs'
+    ),
+    // A replaced, unsourced seed's label ("16GB/256GB") follows the new one.
+    ...(seed.retract_spec_fields ? { variant_name: seed.variant_name } : {}),
+  };
+}
+
+/**
  * Writes each seed Item's specs, key specs, description and images onto its `rate.items`
  * row (design doc 4.1, 5.3, DOS/Rate#1152). Variant-only fields (storage) stay on the
  * variants. Items are never created here: the M1 sync trigger and M2 backfill own that,
@@ -109,11 +166,19 @@ export async function syncItemSeedSpecs(
         .from('items')
         .update({
           description: seed.description,
-          specifications: withoutVariantSpecs(
-            mergeProductSpecifications(row.specifications, seed.specifications)
+          specifications: withoutRetractedSpecs(
+            withoutVariantSpecs(
+              mergeProductSpecifications(row.specifications, seed.specifications)
+            ),
+            seed.retract_spec_fields,
+            'specifications'
           ),
-          key_specs: withoutVariantKeySpecs(
-            mergeKeySpecs(row.key_specs, seed.key_specs as unknown as Record<string, unknown>)
+          key_specs: withoutRetractedSpecs(
+            withoutVariantKeySpecs(
+              mergeKeySpecs(row.key_specs, seed.key_specs as unknown as Record<string, unknown>)
+            ),
+            seed.retract_spec_fields,
+            'key_specs'
           ),
           ...(seed.images.length > 0 ? { images: seed.images, thumbnail: seed.images[0] } : {}),
           updated_at: new Date().toISOString(),
@@ -388,14 +453,9 @@ export async function runMasterSpecsBackfill(
           .from('master_products')
           .update({
             ...specFields,
-            specifications: mergeProductSpecifications(
-              (existing as { specifications?: unknown }).specifications,
-              device.specifications,
-              device.colors
-            ),
-            key_specs: mergeKeySpecs(
-              (existing as { key_specs?: unknown }).key_specs,
-              device.key_specs as unknown as Record<string, unknown>
+            ...seedMasterSpecUpdate(
+              existing as { specifications?: unknown; key_specs?: unknown },
+              device
             ),
             ...(categoryId ? { category_id: categoryId } : {}),
           })
@@ -581,17 +641,12 @@ export async function runQuickSpecSyncAndAudit(
       }
       const { error: upErr } = await supabase
         .from('master_products')
-        .update({
-          specifications: mergeProductSpecifications(
-            (existingRow as { specifications?: unknown } | null)?.specifications,
-            seed.specifications,
-            seed.colors
-          ),
-          key_specs: mergeKeySpecs(
-            (existingRow as { key_specs?: unknown } | null)?.key_specs,
-            seed.key_specs as unknown as Record<string, unknown>
-          ),
-        })
+        .update(
+          seedMasterSpecUpdate(
+            existingRow as { specifications?: unknown; key_specs?: unknown } | null,
+            seed
+          )
+        )
         .eq('model_key', seed.model_key);
       if (upErr) {
         throw new Error(`Failed to sync specs of ${seed.model_key}: ${upErr.message}`);
