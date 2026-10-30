@@ -44,8 +44,10 @@ for (const path of PATHS) {
 // The report-only nonce reaches the render of a page rendered per request:
 // every nonced script carries the nonce of its own response, and the next
 // request gets another one (DOS/Rate#1345). Cached (ISR) pages have no nonce
-// yet, see DOS/Rate#1348. The category page (force-dynamic, #491) is the one
-// the live check found without a nonce before the fix (DOS/Rate#1427).
+// yet, see DOS/Rate#1348. The category page (force-dynamic, #491) is covered
+// too (DOS/Rate#1427). The live cause of #1345 (Vercel copying config
+// headers onto the request) does not exist under `next start`, so this
+// checks the hand-off, not that cause.
 for (const path of ['/inspect', '/smartphones']) {
   test(`csp nonce on ${path} matches its header`, async ({ request }) => {
     const seen = new Set<string>();
