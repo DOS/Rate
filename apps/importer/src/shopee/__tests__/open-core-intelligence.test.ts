@@ -216,7 +216,8 @@ async function runSuite() {
     ['Samsung Galaxy S24 256GB', 'samsung:galaxy-s24:256gb'],
     ['iPhone 15 128GB', 'apple:iphone-15:128gb'],
     // A "+" before a gift or a word is not a Plus model (DOS/Rate#597).
-    ['Samsung Galaxy A55 + Tặng ốp', 'samsung:galaxy-a55-tang:unknown'],
+    // The gift no longer joins the model either (DOS/Rate#1429).
+    ['Samsung Galaxy A55 + Tặng ốp', 'samsung:galaxy-a55:unknown'],
     ['iPhone 15 128GB + Ốp lưng', 'apple:iphone-15:128gb'],
     ['iPhone 15 + Tặng sạc', 'apple:iphone-15:unknown'],
     ['Combo iPhone 15 + AirPods', 'apple:iphone-15:unknown'],
@@ -1040,6 +1041,39 @@ async function runSuite() {
     assert.equal(keyOf(title), 'samsung:galaxy-s26-ultra:256gb', title);
   }
   assert.equal(keyOf('Live Xiaomi Redmi Note 14 8GB/256GB'), 'xiaomi:redmi-note-14:256gb');
+  // A size, network or dash right after the brand does not end the model before it
+  // begins; with no model left the title is unkeyable, never two phones on one key
+  // (DOS/Rate#1429).
+  for (const [title, key] of [
+    ['Samsung 256GB Galaxy S24 Ultra', 'samsung:galaxy-s24-ultra:256gb'],
+    ['Samsung 256GB Galaxy A55 5G', 'samsung:galaxy-a55:256gb'],
+    ['Samsung - Galaxy A55 8GB 256GB', 'samsung:galaxy-a55:256gb'],
+    ['Samsung - Galaxy S24 Ultra 12GB 256GB', 'samsung:galaxy-s24-ultra:256gb'],
+    ['Samsung -Galaxy S24 Ultra 256GB', 'samsung:galaxy-s24-ultra:256gb'],
+    ['Samsung 256 GB Galaxy S24', 'samsung:galaxy-s24:256gb'],
+    ['Samsung 5G Galaxy A55 128GB', 'samsung:galaxy-a55:128gb'],
+    ['Samsung 8/256GB Galaxy A55', 'samsung:galaxy-a55:256gb'],
+    ['Xiaomi | Redmi Note 14 8GB/256GB', 'xiaomi:redmi-note-14:256gb'],
+    ['Xiaomi 16GB/512GB 15 Ultra', 'xiaomi:15-ultra:512gb'],
+    ['OPPO 8GB-256GB Reno12', 'oppo:reno12:256gb'],
+    ['vivo 5G| Y29 128GB', 'vivo:y29:128gb'],
+    ['Samsung 8GB RAM 256GB Galaxy A55', 'samsung:galaxy-a55:256gb'],
+    ['Samsung 44mm Galaxy Watch7', 'samsung:galaxy-watch7:unknown'],
+    ['Samsung Chính hãng Galaxy A55 256GB', 'samsung:galaxy-a55:256gb'],
+    ['OnePlus Chính hãng 13 256GB', 'oneplus:13:256gb'],
+    ['Samsung Mới 100% Galaxy S24', 'samsung:galaxy-s24:unknown'],
+    // A gift ends the model; a stop word only counts whole as the first word.
+    ['Xiaomi - 15T tặng ốp lưng 256GB', 'xiaomi:15t:256gb'],
+    ['Samsung 256GB Galaxy S24 Ultra tặng ốp lưng', 'samsung:galaxy-s24-ultra:256gb'],
+    ['JBL | Flip 6 tặng dây', 'jbl:flip-6:unknown'],
+    ['Garmin GPSMAP 67', 'garmin:gpsmap-67:unknown'],
+    ['Garmin GPSMAP 67 Máy định vị cầm tay', 'garmin:gpsmap-67:unknown'],
+    ['Samsung Galaxy S24 + Plus 256GB', 'samsung:galaxy-s24-plus:256gb'],
+    ['Samsung (Hàng chính hãng) Galaxy A55 256GB', 'samsung:galaxy-a55:256gb'],
+    ['Samsung 256GB', 'samsung:unkeyed:256gb'],
+  ] as const) {
+    assert.equal(keyOf(title), key, title);
+  }
   // The brand's line stands for it; promo phrases with "Off", "Sốc" or a percentage.
   assert.equal(keyOf('Sale Galaxy S26 Ultra 12GB/256GB'), 'samsung:galaxy-s26-ultra:256gb');
   assert.equal(keyOf('Live Điện thoại Redmi Note 14 8GB/256GB'), 'xiaomi:redmi-note-14:256gb');
@@ -1104,7 +1138,7 @@ async function runSuite() {
     'apple:watch-series-10-46mm:64gb'
   );
   assert.equal(
-    keyOf('[Tặng ốp lưng] Apple Watch Series 10 GPS 46mm'),
+    keyOf('[Tặng dây đeo] Apple Watch Series 10 GPS 46mm'),
     'apple:watch-series-10-46mm:64gb'
   );
   assert.equal(keyOf('Sale sốc tặng quà Apple Watch S10 46mm'), 'apple:watch-series-10-46mm:64gb');
@@ -1140,6 +1174,125 @@ async function runSuite() {
     detectCategorySlug('[Apple Watch Series 10 46mm tặng AirPods] Chính hãng VN/A'),
     'smartwatches'
   );
+  // An iPhone, iPad or MacBook in a gift is not the product either, nor is its size; a
+  // "+" with a space on one side is a bundle; a non-Apple phone with a gift stays a phone
+  // (DOS/Rate#1422).
+  assert.equal(keyOf('AirPods Pro 2 tặng ốp iPhone 16'), 'apple:airpods-pro-2:unknown');
+  assert.equal(
+    keyOf('Apple Watch Series 10 46mm tặng ốp iPhone 16'),
+    'apple:watch-series-10-46mm:64gb'
+  );
+  assert.equal(keyOf('MacBook Air M3 tặng ốp iPhone 15'), 'apple:macbook-air-m3:unknown');
+  assert.equal(keyOf('MacBook Air M3 15 inch kèm ốp iPhone 13'), 'apple:macbook-air-m3-15:unknown');
+  assert.equal(keyOf('MacBook Pro M4 14 inch tặng AirPods 4'), 'apple:macbook-pro-m4-14:unknown');
+  assert.equal(keyOf('iPad Pro M4 13 inch tặng Apple Pencil Pro'), 'apple:ipad-pro-m4-13:unknown');
+  assert.equal(keyOf('AirPods 4 tặng ốp iPhone'), 'apple:airpods-4:unknown');
+  assert.equal(keyOf('HomePod mini +Apple Watch Series 10 42mm'), 'apple:homepod-mini:unknown');
+  assert.equal(keyOf('iPhone 15+ 128GB'), 'apple:iphone-15-plus:128gb');
+  assert.equal(keyOf('Combo iPhone 15 + AirPods'), 'apple:iphone-15:unknown');
+  assert.equal(
+    keyOf('Apple Watch Series 10 GPS +Cellular 46mm'),
+    'apple:watch-series-10-46mm:64gb'
+  );
+  assert.equal(detectCategorySlug('HomePod mini +Apple Watch Series 10 42mm'), 'smartphones');
+  assert.equal(detectCategorySlug('AirPods Pro 2 tặng ốp iPhone 16'), 'earbuds');
+  assert.equal(detectCategorySlug('Samsung Galaxy S25 tặng tai nghe Galaxy Buds 3'), 'smartphones');
+  assert.equal(detectCategorySlug('Xiaomi Redmi Note 13 tặng đồng hồ thông minh'), 'smartphones');
+  assert.equal(
+    detectCategorySlug('Samsung Galaxy S23 FE 128GB | Tặng Galaxy Buds FE'),
+    'smartphones'
+  );
+  assert.equal(detectCategorySlug('Samsung Galaxy Watch 7 tặng sạc'), 'smartwatches');
+  assert.equal(detectCategorySlug('Galaxy Buds 3 Pro tặng ốp'), 'earbuds');
+  assert.equal(detectCategorySlug('Laptop Asus Vivobook 14 tặng chuột'), 'laptops');
+  assert.equal(detectCategorySlug('Sale sốc tặng quà Galaxy Watch 7'), 'smartwatches');
+  // Only the gifted product's phrase is dropped: a size before or after it, or after "+
+  // Cellular", is the product's own (DOS/Rate#1422).
+  for (const [title, key] of [
+    [
+      'Apple Watch Series 10 Nhôm GPS + Cellular 42mm | Tặng ốp iPhone',
+      'apple:watch-series-10-42mm:64gb',
+    ],
+    [
+      'Apple Watch Series 10 GPS + Cellular 46mm tặng ốp iPhone 16',
+      'apple:watch-series-10-46mm:64gb',
+    ],
+    [
+      'Apple Watch Series 10 GPS +Cellular 46mm tặng ốp iPhone 16',
+      'apple:watch-series-10-46mm:64gb',
+    ],
+    ['Apple Watch Series 10 [Tặng ốp iPhone] 46mm', 'apple:watch-series-10-46mm:64gb'],
+    ['Apple Watch SE 2 GPS + Cellular 44mm tặng AirPods 4', 'apple:watch-se-2-44mm:unknown'],
+    ['MacBook Air M3 (Tặng AirPods) 15 inch 8GB 256GB', 'apple:macbook-air-m3-15:256gb'],
+    ['MacBook Air M3 2024 - Tặng AirPods 4 - 15 inch 16GB 512GB', 'apple:macbook-air-m3-15:512gb'],
+    ['MacBook Air M3 kèm sạc 15 inch tặng AirPods', 'apple:macbook-air-m3-15:unknown'],
+    ['iPad Pro M4 (Tặng Apple Pencil Pro) 11 inch Wi-Fi 256GB', 'apple:ipad-pro-m4-11:256gb'],
+    ['iPad Air M2 Wi-Fi + Cellular 13 inch tặng Apple Pencil Pro', 'apple:ipad-air-m2-13:unknown'],
+    ['iPad Pro M4 Wi-Fi 256GB kèm bút 13 inch tặng AirPods', 'apple:ipad-pro-m4-13:256gb'],
+    // A "+" written for "Plus" keeps it.
+    ['Galaxy S24 + 256GB', 'samsung:galaxy-s24-plus:256gb'],
+    ['Redmi Note 13 Pro +5G', 'xiaomi:redmi-note-13-pro-plus:unknown'],
+  ] as const)
+    assert.equal(keyOf(title), key, title);
+  assert.equal(detectCategorySlug('Galaxy S24 + tặng Galaxy Buds 3'), 'smartphones');
+  // Several gifts, a model range in a gift, "khi mua" and "+ 5 năm" (DOS/Rate#1422).
+  for (const [title, key] of [
+    ['AirPods 4 tặng kèm khi mua iPhone 16 Pro Max 256GB', 'apple:iphone-16-pro-max:256gb'],
+    ['iPhone 16 256GB tặng kèm khi mua online: tai nghe AirPods 4', 'apple:iphone-16:256gb'],
+    ['[Samsung tặng tai nghe] Galaxy Tab S9 8GB 128GB', 'samsung:galaxy-tab-s9:128gb'],
+    ['MacBook Air M3 tặng ốp iPhone 13 - 15 Pro Max', 'apple:macbook-air-m3:unknown'],
+    ['MacBook Air M3 tặng ốp iPhone 13 – 15 Pro Max', 'apple:macbook-air-m3:unknown'],
+    ['MacBook Air M3 tặng AirPods, ốp iPhone 15', 'apple:macbook-air-m3:unknown'],
+    [
+      'MacBook Air M3 tặng hộp AirPods, tặng bao da iPad, tặng dây Apple Watch, tặng hộp Apple Pencil, tặng ốp iPhone 15',
+      'apple:macbook-air-m3:unknown',
+    ],
+    ['MacBook Air M3 tặng AirPods, 15 inch 16GB 512GB', 'apple:macbook-air-m3-15:512gb'],
+    ['MacBook Air M3 tặng AirPods - 15, RAM 16GB SSD 512GB', 'apple:macbook-air-m3-15:512gb'],
+    [
+      'MacBook Air M3 16GB 512GB tặng AirPods, bản 15 inch hỗ trợ iPhone Mirroring',
+      'apple:macbook-air-m3-15:512gb',
+    ],
+    ['[iPhone 16 256GB] Điện thoại chính hãng tặng tai nghe Bluetooth', 'apple:iphone-16:256gb'],
+    [
+      'Apple Watch Series 10 GPS + 5 năm bảo hành 46mm tặng AirPods',
+      'apple:watch-series-10-46mm:64gb',
+    ],
+  ] as const)
+    assert.equal(keyOf(title), key, title);
+  assert.equal(
+    detectCategorySlug('AirPods 4 tặng kèm khi mua iPhone 16 Pro Max 256GB'),
+    'smartphones'
+  );
+  assert.equal(
+    detectCategorySlug('iPhone 16 256GB tặng kèm khi mua online: tai nghe AirPods 4'),
+    'smartphones'
+  );
+  assert.equal(detectCategorySlug('[Samsung tặng tai nghe] Galaxy Tab S9 8GB 128GB'), 'tablets');
+  assert.equal(
+    detectCategorySlug('[iPhone 16 256GB] Điện thoại chính hãng tặng tai nghe Bluetooth'),
+    'smartphones'
+  );
+  assert.equal(
+    detectCategorySlug('[Samsung tặng bao da] Máy tính bảng Galaxy Tab S9 8GB 128GB'),
+    'tablets'
+  );
+  assert.equal(
+    detectCategorySlug('[Honor tặng chuột] Laptop Honor MagicBook X16 16GB 512GB'),
+    'laptops'
+  );
+  assert.equal(
+    keyOf('AirPods 4 tặng kèm khi mua iPhone 16 Pro Max'),
+    'apple:iphone-16-pro-max:unknown'
+  );
+  assert.equal(
+    keyOf('Apple Watch Series 10 GPS +Cellular 46mm tặng AirPods'),
+    'apple:watch-series-10-46mm:64gb'
+  );
+  assert.equal(
+    keyOf('iPad Pro M4 (Tặng Apple Pencil Pro) 13 inch 256GB'),
+    'apple:ipad-pro-m4-13:256gb'
+  );
   // The cut stays linear on a long run of separators.
   const cutStart = Date.now();
   detectCategorySlug(`Apple Watch Series 10 46mm${','.repeat(64_000)}x`);
@@ -1155,7 +1308,7 @@ async function runSuite() {
   assert.equal(detectCategorySlug('AirPods Pro 2 tặng dây Apple Watch Series 10'), 'earbuds');
   assert.equal(detectCategorySlug('iPad Pro M4 tặng Apple Watch Series 10'), 'tablets');
   assert.equal(detectCategorySlug('MacBook Air M3 + Apple Watch Series 10'), 'laptops');
-  assert.equal(detectCategorySlug('Apple iPhone 16 tặng smartwatch'), 'smartphones');
+  assert.equal(detectCategorySlug('Apple iPhone 15 Plus 128GB tặng đồng hồ thông minh'), 'smartphones');
   assert.equal(detectCategorySlug('Apple Watch Series 10 46mm tặng AirPods Pro 2'), 'smartwatches');
   assert.equal(detectCategorySlug('Sale sốc tặng quà Apple Watch S10 46mm'), 'smartwatches');
   assert.equal(
@@ -1163,7 +1316,7 @@ async function runSuite() {
     'earbuds'
   );
   assert.equal(detectCategorySlug('HomePod mini (Tặng dây Apple Watch Series 10)'), 'smartphones');
-  assert.equal(detectCategorySlug('[Tặng ốp lưng] Apple Watch Series 10 GPS 46mm'), 'smartwatches');
+  assert.equal(detectCategorySlug('[Tặng dây đeo] Apple Watch Series 10 GPS 46mm'), 'smartwatches');
   // With no line matched, the family the title names first, else iPhone.
   assert.equal(keyOf('MacBook M4'), 'apple:macbook:unknown');
   assert.equal(keyOf('Apple "iPad" 256GB'), 'apple:ipad:256gb');

@@ -22,6 +22,25 @@ This is the release workflow for `rate.vn`. It follows the same model as DOS/DOS
 6. Vercel builds `main` and assigns `rate.vn`. Verify the live revision (the deployment's Git SHA equals `main`), `/api/health`, the main routes and a browser check before calling the release done. `node scripts/ops/verify-live.mjs --wait 900` checks the first three: `/api/health` reports the deployment's `commit`, which must equal `main`, and `checks.database` must be `ok`. It re-reads `main` on every poll. Only when the live commit is behind `main` does it print `vercel promote <main's production deployment> --scope metados`; when live is ahead of or diverged from `main` it says to do nothing. Never redeploy or promote a deployment built from another commit: that rolls the release back. `promote` does not rebuild, and it turns production domain auto-assignment back on after a `vercel rollback`. To check a build before it takes traffic, create it from Git with `autoAssignCustomDomains: false` (Vercel API `POST /v13/deployments` with `gitSource` ref `main` and `target: "production"`), verify it with `vercel curl --deployment <id>`, then `vercel promote <id>`. Promoting an existing production deployment does not rebuild.
 7. Optional, after verify-live passes: warm the sitemap pages so visitors do not pay the cold render (Vercel keeps ISR per deployment, so every page is cold after a promote; a product page MISS takes 5-6 s, DOS/Rate#1344). `node scripts/ops/warm-sitemap.mjs --base-url https://rate.vn --check` reads `/sitemap.xml` and sends one plain GET to each page on that origin (no query strings, no credentials, redirects not followed, at most 4 at a time, a 30 s timeout, one retry on a timeout, a network error or a 5xx; the sitemap read is retried the same way), then prints each URL's status, `X-Vercel-Cache` (and `x-vercel-mitigated` when Vercel challenged the request) and time to first byte and a summary; `--check` reads every URL once more and lists those not served from the cache yet (`X-Vercel-Cache` other than `HIT`, `STALE`, `PRERENDER` or `REVALIDATED`); a URL failing in that pass (an error or a 4xx/5xx) counts as an error. It exits 1 only when a URL still fails after its retry, answers a 4xx, or the sitemap cannot be read (or is a sitemap index); a 5xx or timeout on the first (cold) request that the retry answers is counted as `cold`, not an error. The host is never assumed: `--base-url` is required. Run by whoever promotes; not wired into CI (DOS/Rate#1352).
 
+## Function region (`sin1`)
+
+Functions run in `sin1` (Singapore), next to the shared Supabase project (`ap-southeast-1`), set by `"regions": ["sin1"]` in `vercel.json`. In `iad1` every database round trip crossed the Pacific, at about 220 ms each (DOS/Rate#1217). The region belongs to each deployment, so it changes with the first promotion that carries it, and a rollback to an older deployment brings `iad1` back.
+
+The promotion that first carries `sin1` (or any later region change) needs these steps:
+
+1. **Before the promote:** record the `iad1` baseline on `rate.vn`. Previews have no database env and cannot measure the switch.
+   - The `X-Vercel-Id` header of a `MISS`, for example `/smartphones`: `hkg1::iad1::…`.
+   - The `render reads` lines (`vercel logs --scope metados --project rate --since 20m --query 'render reads'`) for the first render of one product page and one merchant page.
+   - The `Server-Timing` header of `/api/v1/rate/products?category=smartphones&limit=20&probe=<random>`. `probe` skips the CDN. The header lists only reads that reach the database, so it is empty when the data cache answers. On 2026-10-30 two such probes returned none, so check that it appears before relying on it.
+   - TTFB for those pages, `MISS` and then `HIT`.
+2. Promote, then run verify-live as in step 6. `/api/health` must report `checks.database` `ok` from the new region.
+3. **Warm the sitemap: required this time.** The Vercel Data Cache belongs to its region, so after the switch both the ISR pages and the data reads start cold everywhere: `node scripts/ops/warm-sitemap.mjs --base-url https://rate.vn --check`.
+4. **Check the switch:**
+   - `X-Vercel-Id` of a `MISS` now reads `…::sin1::…`.
+   - Repeat the step-1 measurements on the same pages, cold first. Expect the `render reads` totals and the `Server-Timing` steps to drop several-fold, and the cold product render to land near or under 2 s.
+   - Post the before/after table on DOS/Rate#1217 and #1344.
+5. **If something regresses** (database errors, slower renders): roll back to the last `iad1` production deployment, as in Rollback below, and revert `regions` in a PR to `dev`.
+
 ## Hotfix
 
 1. Branch from `main`: `hotfix/<short-name>`.
