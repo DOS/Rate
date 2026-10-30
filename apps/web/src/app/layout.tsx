@@ -1,4 +1,4 @@
-import 'bootstrap/dist/css/bootstrap.css';
+import './style/scss/bootstrap.scss';
 import './style/scss/style.scss';
 
 // <html> and <body> are rendered by app/[locale]/layout.tsx, which knows the

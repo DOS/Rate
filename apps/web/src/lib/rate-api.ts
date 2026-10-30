@@ -967,7 +967,7 @@ function sanitizeOfferUrl(raw: unknown): string {
   }
 }
 
-/** True when the view row's seller has no review risk from the importer. */
+/** True when the view row's seller has no stored review risk (Rate Services' auditor writes it). */
 function isUnscoredTrustViewRow(row: RawTrustViewRow): boolean {
   return !hasPersistedReviewRisk(
     toSafeRiskScore100(row.review_risk_score, 0),

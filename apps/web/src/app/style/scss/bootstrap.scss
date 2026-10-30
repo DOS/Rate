@@ -1,0 +1,70 @@
+// Bootstrap 5.3 built from source with only the parts the site renders
+// (DOS/Rate#1329). The full dist bootstrap.css was about 230 KB raw and
+// blocked the first paint on every page.
+//
+// Left out, because no page renders them: accordion, modal, tooltip, popover,
+// carousel, spinners. Add the partial back here before using one of them.
+
+@import 'bootstrap/scss/functions';
+@import 'bootstrap/scss/variables';
+@import 'bootstrap/scss/variables-dark';
+@import 'bootstrap/scss/maps';
+@import 'bootstrap/scss/mixins';
+@import 'bootstrap/scss/utilities';
+
+// Utility groups no page uses. Remove a name from this list before using one
+// of its classes (for example .float-end or .object-fit-cover).
+$utilities: map-remove(
+  $utilities,
+  'align-content',
+  'align-self',
+  'float',
+  'focus-ring',
+  'font-style',
+  'gradient',
+  'link-offset',
+  'link-opacity',
+  'link-underline',
+  'link-underline-opacity',
+  'max-height',
+  'min-viewport-width',
+  'object-fit',
+  'overflow-y',
+  'pointer-events',
+  'rounded-bottom',
+  'rounded-top',
+  'text-opacity',
+  'top',
+  'user-select',
+  'viewport-height',
+  'viewport-width',
+  'word-wrap'
+);
+
+@import 'bootstrap/scss/root';
+@import 'bootstrap/scss/reboot';
+@import 'bootstrap/scss/type';
+@import 'bootstrap/scss/images';
+@import 'bootstrap/scss/containers';
+@import 'bootstrap/scss/grid';
+@import 'bootstrap/scss/tables';
+@import 'bootstrap/scss/forms';
+@import 'bootstrap/scss/buttons';
+@import 'bootstrap/scss/transitions';
+@import 'bootstrap/scss/dropdown';
+@import 'bootstrap/scss/button-group';
+@import 'bootstrap/scss/nav';
+@import 'bootstrap/scss/navbar';
+@import 'bootstrap/scss/card';
+@import 'bootstrap/scss/breadcrumb';
+@import 'bootstrap/scss/pagination';
+@import 'bootstrap/scss/badge';
+@import 'bootstrap/scss/alert';
+@import 'bootstrap/scss/progress';
+@import 'bootstrap/scss/list-group';
+@import 'bootstrap/scss/close';
+@import 'bootstrap/scss/toasts';
+@import 'bootstrap/scss/offcanvas';
+@import 'bootstrap/scss/placeholders';
+@import 'bootstrap/scss/helpers';
+@import 'bootstrap/scss/utilities/api';
