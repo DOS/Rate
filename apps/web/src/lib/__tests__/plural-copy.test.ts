@@ -41,10 +41,11 @@ function main() {
       { count: 1 },
       'Odhalena 1 nabídka s uměle navýšenou původní cenou',
     ],
+    // Czech scores use a decimal comma (DOS/Rate#1369).
     [
       'productDetail.verifiedReviewsCount',
       { count: 4 },
-      '/ 5.0 (4 ověřené recenze)',
+      '/ 5,0 (4 ověřené recenze)',
     ],
     [
       'productDetail.verifiedReviewsCountNoScore',
@@ -84,8 +85,8 @@ function main() {
     ],
     [
       'compare.valAuthenticReviews',
-      { rating: '5.0', count: 1 },
-      '★ 5.0 / 5.0 (1 ověřená recenze)',
+      { rating: '5,0', count: 1 },
+      '★ 5,0 / 5,0 (1 ověřená recenze)',
     ],
     ['inspect.verifiedReviewsCount', { count: 3 }, '(3 ověřené recenze)'],
     [
