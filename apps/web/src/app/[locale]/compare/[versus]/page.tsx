@@ -55,23 +55,6 @@ export function parseVersusSlugs(
   return [slugA, slugB];
 }
 
-/**
- * The Item route's plan for a versus URL. The Item lookup is exact, so the
- * slugs are tried as typed first (an Item slug with capitals), then
- * lower-cased (a capitalised alias of a lower-case slug) (DOS/Rate#1383).
- */
-async function resolveVersusPlanAnyCase(
-  versus: string,
-  parsed: [string, string]
-): ReturnType<typeof resolveVersusPlan> {
-  const asTyped = parseVersusSlugs(versus, true);
-  if (asTyped && (asTyped[0] !== parsed[0] || asTyped[1] !== parsed[1])) {
-    const plan = await resolveVersusPlan(asTyped[0], asTyped[1]);
-    if (plan?.kind !== 'not_found') return plan;
-  }
-  return resolveVersusPlan(parsed[0], parsed[1]);
-}
-
 export async function generateMetadata({
   params,
 }: VersusPageProps): Promise<Metadata> {
@@ -93,7 +76,10 @@ export async function generateMetadata({
   }
 
   // RATE_ITEM_MODEL on: the Item pair is the page (DOS/Rate#1156).
-  const plan = await resolveVersusPlanAnyCase(versus, parsed);
+  // The Item lookup is exact: the slugs go as typed, each side falling back
+  // to lower case (DOS/Rate#1383).
+  const asTyped = parseVersusSlugs(versus, true) ?? parsed;
+  const plan = await resolveVersusPlan(asTyped[0], asTyped[1]);
   if (plan && plan.kind !== 'render') {
     return notFoundMeta();
   }
@@ -154,7 +140,10 @@ export default async function VersusComparePage({ params }: VersusPageProps) {
   // RATE_ITEM_MODEL on: versus URLs name Items, an old variant pair 308s to
   // its Item pair and a same-Item pair is no versus (DOS/Rate#1156); off:
   // null, and the page is as before.
-  const plan = await resolveVersusPlanAnyCase(versus, parsed);
+  // The Item lookup is exact: the slugs go as typed, each side falling back
+  // to lower case (DOS/Rate#1383).
+  const asTyped = parseVersusSlugs(versus, true) ?? parsed;
+  const plan = await resolveVersusPlan(asTyped[0], asTyped[1]);
   if (plan?.kind === 'redirect') permanentRedirect(plan.to);
   if (plan?.kind === 'not_found') notFound();
   // One URL per pair, its slugs sorted: the other order, letter case or

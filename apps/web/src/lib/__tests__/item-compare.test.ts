@@ -6,6 +6,7 @@ import {
   pickItemVariant,
   canonicalVersusOrder,
   inPairOrder,
+  lookupSlugAnyCase,
   planVersusRoute,
   versusAliasRedirect,
   versusHref,
@@ -58,7 +59,7 @@ const s24: CompareResolution = {
   ],
 };
 
-function main() {
+async function main() {
   console.warn('🧪 item compare suite (DOS/Rate#1156)');
 
   assert.deepEqual(parseCompareToken('apple-iphone-16@128gb'), {
@@ -68,6 +69,11 @@ function main() {
   assert.deepEqual(parseCompareToken(' Apple-iPhone-16 '), {
     slug: 'apple-iphone-16',
     variantKey: null,
+  });
+  // For the exact lookup the slug keeps its case; the size key never does.
+  assert.deepEqual(parseCompareToken(' Apple-iPhone-16@128GB ', true), {
+    slug: 'Apple-iPhone-16',
+    variantKey: '128gb',
   });
   assert.deepEqual(parseCompareToken('a@b@c'), {
     slug: 'a@b@c',
@@ -391,6 +397,27 @@ function main() {
     canonical: '/compare/A-phone-vs-z-phone',
   });
 
+  // The lookup itself, exact like the catalogue: an Item slug with capitals is
+  // found as typed, a capitalised alias of a lower-case slug lower-cased, and
+  // each side reports the slug it was found under (#1383).
+  const catalogue1383 = new Map<string, string>([
+    ['Apple-iPhone-16', 'item'],
+    ['z-phone', 'master'],
+  ]);
+  const exact1383 = async (slug: string) => catalogue1383.get(slug) ?? null;
+  assert.deepEqual(await lookupSlugAnyCase('Apple-iPhone-16', exact1383), {
+    slug: 'Apple-iPhone-16',
+    found: 'item',
+  });
+  assert.deepEqual(await lookupSlugAnyCase('Z-Phone', exact1383), {
+    slug: 'z-phone',
+    found: 'master',
+  });
+  assert.deepEqual(await lookupSlugAnyCase('apple-iphone-16', exact1383), {
+    slug: 'apple-iphone-16',
+    found: null,
+  });
+
   // A restored tray product reads its Item from the product API (#1294).
   assert.equal(
     itemSlugFromProductAnswer(
@@ -416,4 +443,7 @@ function main() {
   console.warn('  ✅ item compare suite passed');
 }
 
-main();
+main().catch((error) => {
+  console.error(error);
+  process.exit(1);
+});

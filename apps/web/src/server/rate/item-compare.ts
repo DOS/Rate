@@ -2,6 +2,7 @@ import 'server-only';
 import {
   compareTarget,
   dedupeCompareTargets,
+  lookupSlugAnyCase,
   parseCompareToken,
   pickItemVariant,
   planVersusRoute,
@@ -18,11 +19,29 @@ import {
 // (DOS/Rate#1156). Off, or with the Item tables missing or failing, every
 // helper returns null and the caller does exactly what it did before.
 
-const SLUG_REGEX = /^[a-z0-9][a-z0-9._-]{0,159}$/;
+// Capitals allowed: an Item slug may carry them, and the catalogue lookup is
+// exact (DOS/Rate#1383).
+const SLUG_REGEX = /^[a-zA-Z0-9][a-zA-Z0-9._-]{0,159}$/;
+
+async function resolveSlugAnyCase(
+  slug: string
+): Promise<{ slug: string; resolution: CompareResolution }> {
+  if (!SLUG_REGEX.test(slug)) return { slug, resolution: null };
+  // As typed, then lower-cased: the catalogue lookup is exact (#1383).
+  const found = await lookupSlugAnyCase(slug, getCachedCatalogSlugResolution);
+  return {
+    slug: found.slug,
+    resolution: await toCompareResolution(found.found),
+  };
+}
 
 async function resolveSlug(slug: string): Promise<CompareResolution> {
-  if (!SLUG_REGEX.test(slug)) return null;
-  const resolution = await getCachedCatalogSlugResolution(slug);
+  return (await resolveSlugAnyCase(slug)).resolution;
+}
+
+async function toCompareResolution(
+  resolution: Awaited<ReturnType<typeof getCachedCatalogSlugResolution>>
+): Promise<CompareResolution> {
   // No published Item for this slug: it compares as a plain master, as with
   // the flag off (a master of a draft Item, or an unknown slug that the
   // compare read then drops) (#1275).
@@ -52,7 +71,9 @@ export function resolveCompareSlugs(
     const targets = await Promise.all(
       tokens.map(async (raw) => {
         const token = parseCompareToken(raw);
-        return compareTarget(await resolveSlug(token.slug), token);
+        // Looked up as typed, then lower-cased (#1383).
+        const typed = parseCompareToken(raw, true).slug;
+        return compareTarget(await resolveSlug(typed), token);
       })
     );
     return dedupeCompareTargets(targets).map((t) => t.variantSlug);
@@ -65,14 +86,14 @@ export function resolveVersusPlan(
   slugB: string
 ): Promise<VersusPlan | null> {
   return whenItemModel('versus route', async () => {
-    const [resolutionA, resolutionB] = await Promise.all([
-      resolveSlug(parseCompareToken(slugA).slug),
-      resolveSlug(parseCompareToken(slugB).slug),
+    // Each side is looked up as typed, then lower-cased, and is planned under
+    // the slug it was found under, so an unlinked side keeps the case the
+    // compare read knows (DOS/Rate#1383).
+    const [sideA, sideB] = await Promise.all([
+      resolveSlugAnyCase(parseCompareToken(slugA, true).slug),
+      resolveSlugAnyCase(parseCompareToken(slugB, true).slug),
     ]);
-    const plan = planVersusRoute(
-      { slug: slugA, resolution: resolutionA },
-      { slug: slugB, resolution: resolutionB }
-    );
+    const plan = planVersusRoute(sideA, sideB);
     return plan.kind === 'legacy' ? null : plan;
   });
 }
