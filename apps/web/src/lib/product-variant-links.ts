@@ -5,6 +5,7 @@
  */
 import { itemVariantLabel } from './item-page';
 import { productMarketStats } from './product-market-stats';
+import { getMasterProductCategorySlug } from './rate-domain-core';
 
 /**
  * The model part of a `brand:model:variant` key, "apple:iphone-16e:" for
@@ -34,7 +35,6 @@ export interface ProductVariantLink {
 interface SiblingRow {
   slug: string;
   name: string;
-  category_id?: string | null;
   variant_name?: string | null;
   model_key: string;
   storage_gb?: number | null;
@@ -47,11 +47,29 @@ const isUnknownVariant = (row: SiblingRow) =>
   row.model_key.endsWith(':unknown');
 
 /**
+ * The siblings whose category, resolved the way the product route resolves it
+ * (category id, then the stored category hints), is the page's own: a link
+ * under this category's path never 308s to another (DOS/Rate#1366, #1436).
+ */
+export function siblingsInCategory<
+  T extends Parameters<typeof getMasterProductCategorySlug>[0],
+>(
+  siblings: readonly T[],
+  categorySlug: string,
+  categorySlugById: ReadonlyMap<string, string>
+): T[] {
+  return siblings.filter(
+    (row) =>
+      getMasterProductCategorySlug(row, categorySlugById) === categorySlug
+  );
+}
+
+/**
  * One link per variant of the page's own master, smallest storage first, the
  * current one marked; null when there is no other variant to offer, and the
  * area collapses. The current master is passed in itself, so a bounded read
- * that left it out still counts it. Only masters of its category count, so a
- * link never crosses to another category's path. A variant whose size is not
+ * that left it out still counts it. The siblings are of its category
+ * (siblingsInCategory), so every link stays under its path. A variant whose size is not
  * stated (`:unknown`) is no choice to offer and is left out, unless it is the
  * page's own. Two variants with the same label (colours with no name of their
  * own) fall back to their full names.
@@ -64,9 +82,7 @@ export function buildProductVariantLinks(
     .filter(
       (row, i, all) =>
         all.findIndex((other) => other.slug === row.slug) === i &&
-        (row.slug === current.slug ||
-          ((row.category_id ?? null) === (current.category_id ?? null) &&
-            !isUnknownVariant(row)))
+        (row.slug === current.slug || !isUnknownVariant(row))
     )
     .sort(
       (a, b) =>

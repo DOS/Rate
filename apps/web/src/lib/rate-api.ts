@@ -875,7 +875,11 @@ export interface MasterProductSibling {
   id: string;
   slug: string;
   name: string;
+  model: string | null;
   category_id: string | null;
+  /** Only the category hint the route resolves a category from. */
+  metadata: { category_slug?: string | null } | null;
+  specifications: { category_slug?: string | null } | null;
   variant_name: string | null;
   model_key: string;
   storage_gb: number | null;
@@ -903,7 +907,7 @@ export async function getMasterProductSiblings(
   const { data, error } = await supabase
     .from('master_products')
     .select(
-      'id, slug, name, category_id, variant_name, model_key, storage_gb, min_price, max_price, merchant_count'
+      'id, slug, name, model, category_id, meta_category_slug:metadata->>category_slug, spec_category_slug:specifications->>category_slug, variant_name, model_key, storage_gb, min_price, max_price, merchant_count'
     )
     // The prefix holds only [a-z0-9.:-], so it has no LIKE wildcard to escape.
     .like('model_key', `${keyPrefix}%`)
@@ -918,13 +922,27 @@ export async function getMasterProductSiblings(
     });
     throw new RateDataUnavailableError('master product siblings', error);
   }
-  return ((data ?? []) as MasterProductSibling[]).filter(
-    (row) =>
-      typeof row?.slug === 'string' &&
-      PRODUCT_SLUG_REGEX.test(row.slug) &&
-      typeof row.model_key === 'string' &&
-      row.model_key.startsWith(keyPrefix)
-  );
+  type Row = Omit<MasterProductSibling, 'metadata' | 'specifications'> & {
+    meta_category_slug?: string | null;
+    spec_category_slug?: string | null;
+  };
+  return ((data ?? []) as unknown as Row[])
+    .filter(
+      (row) =>
+        typeof row?.slug === 'string' &&
+        PRODUCT_SLUG_REGEX.test(row.slug) &&
+        typeof row.model_key === 'string' &&
+        row.model_key.startsWith(keyPrefix)
+    )
+    .map(({ meta_category_slug, spec_category_slug, ...row }) => ({
+      ...row,
+      metadata: meta_category_slug
+        ? { category_slug: meta_category_slug }
+        : null,
+      specifications: spec_category_slug
+        ? { category_slug: spec_category_slug }
+        : null,
+    }));
 }
 
 interface RawTrustViewRow {

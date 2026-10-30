@@ -71,7 +71,10 @@ import {
 import JReviewsSection from '@/components/reviews/JReviewsSection';
 import PhoneCollapsible from '@/components/product/PhoneCollapsible';
 import ProductVariantLinks from '@/components/product/ProductVariantLinks';
-import { buildProductVariantLinks } from '@/lib/product-variant-links';
+import {
+  buildProductVariantLinks,
+  siblingsInCategory,
+} from '@/lib/product-variant-links';
 import PriceHistorySection from '@/components/price-history/PriceHistorySection';
 import CompareQuickToggle from '@/components/compare/CompareQuickToggle';
 import CompareTrayBar from '@/components/compare/CompareTrayBar';
@@ -370,7 +373,16 @@ export async function ProductDetailView({
     ? Promise.resolve([])
     : timing.time(
         'siblings',
-        getCachedMasterProductSiblings(storedProduct.model_key)
+        getCachedMasterProductSiblings(storedProduct.model_key).then(
+          async (rows) =>
+            rows.length === 0
+              ? rows
+              : siblingsInCategory(
+                  rows,
+                  categorySlug,
+                  await getCachedCategorySlugById()
+                )
+        )
       );
   siblingsRead.catch(() => undefined);
   // Master-product route: a product asked for under another category's path

@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import {
   buildProductVariantLinks,
   masterSiblingKeyPrefix,
+  siblingsInCategory,
 } from '../product-variant-links';
 
 // The product page's variant links with the Item flag off (DOS/Rate#1436).
@@ -104,17 +105,6 @@ assert.deepEqual(
   buildProductVariantLinks(v256, [v512, v128])?.map((l) => l.slug),
   [v128.slug, v256.slug, v512.slug]
 );
-// A master of another category is never linked under this category's path.
-assert.deepEqual(
-  buildProductVariantLinks(v128, [
-    v256,
-    row('apple-iphone-16e-1tb', 'apple:iphone-16e:1tb', 1, {
-      storage_gb: 1024,
-      category_id: 'c-tablets',
-    }),
-  ])?.map((l) => l.slug),
-  [v128.slug, v256.slug]
-);
 // A stored name wins; 1024 GB reads as 1TB; equal labels fall back to names.
 const tb = row('a-1tb', 'apple:ipad-pro-m4-13:1tb', 50_000_000, {
   storage_gb: 1024,
@@ -142,5 +132,35 @@ assert.deepEqual(
 );
 // A slug read twice is one link.
 assert.equal(buildProductVariantLinks(v128, [v128, v128, v256])?.length, 2);
+
+// Siblings are kept only in the page's category, resolved as the route
+// resolves it: the category id first, then the stored hints, so a sibling
+// with no category id is placed by its hint, not dropped or mislinked.
+const bySlug = new Map([
+  ['c-phones', 'smartphones'],
+  ['c-tablets', 'tablets'],
+]);
+const sib = (
+  slug: string,
+  category_id: string | null,
+  hint: string | null
+) => ({
+  slug,
+  category_id,
+  metadata: hint ? { category_slug: hint } : null,
+});
+assert.deepEqual(
+  siblingsInCategory(
+    [
+      sib('phone-by-id', 'c-phones', null),
+      sib('tablet-by-id', 'c-tablets', null),
+      sib('phone-by-hint', null, 'smartphones'),
+      sib('tablet-by-hint', null, 'tablets'),
+    ],
+    'smartphones',
+    bySlug
+  ).map((row) => row.slug),
+  ['phone-by-id', 'phone-by-hint']
+);
 
 console.warn('✅ Product variant links suite passed');
