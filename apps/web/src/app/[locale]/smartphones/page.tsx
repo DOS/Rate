@@ -46,7 +46,7 @@ import {
 import type { KeySpecs, ProductSpecifications } from '@repo/shared-data';
 import { applyCategorySpecTemplate } from '@repo/shared-data/rules';
 import ClientMessages from '@/components/providers/ClientMessages';
-import BootstrapClient from '@/app/BootstrapClient';
+import CatalogSortDropdown from '../components/catalog-sort-dropdown';
 import { productImageUrl } from '@/lib/rate-domain-core';
 
 // Reads searchParams, so it renders per request. The [locale] layout's
@@ -401,9 +401,6 @@ export async function CategoryCatalogContent({
             __html: JSON.stringify(structuredData).replace(/</g, '\\u003c'),
           }}
         />
-        {/* Bootstrap JS (bundled, not a CDN) drives only the catalog's sort
-        dropdown and filter drawer, so other pages skip it (DOS/Rate#754). */}
-        <BootstrapClient />
 
         {/* Hero Banner (DESIGN.md v2.0 Dark Obsidian + DOS Crimson Glow) */}
         <div
@@ -689,42 +686,18 @@ export async function CategoryCatalogContent({
 
                   <div className="col-xl-5 col-lg-5 col-md-5 col-sm-12">
                     <div className="text-md-end">
-                      <div className="dropdown d-inline-flex mw-100 p-0">
-                        <a
-                          href="#shortfilter"
-                          className="dropdown-toggle toogleDrops px-3 py-2"
-                          id="shortfilter"
-                          data-bs-toggle="dropdown"
-                          aria-expanded="false"
-                        >
-                          {t('page.sortByPrefix', {
-                            label: currentSortOption.label,
-                          })}
-                        </a>
-                        <div className="dropdown-menu dropdown-menu-end border shadow-sm">
-                          <ul className="card rounded-0 list-unstyled mb-0 p-0">
-                            {SORT_OPTIONS.map((opt) => (
-                              <li key={opt.value}>
-                                <Link
-                                  href={buildFilterHref(basePath, rawSearch, {
-                                    sort:
-                                      opt.value === 'default'
-                                        ? null
-                                        : opt.value,
-                                  })}
-                                  className={`dropdown-item ${
-                                    currentSortOption.value === opt.value
-                                      ? 'active'
-                                      : ''
-                                  }`}
-                                >
-                                  {t(`sortOptions.${opt.value}`)}
-                                </Link>
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
-                      </div>
+                      <CatalogSortDropdown
+                        label={t('page.sortByPrefix', {
+                          label: currentSortOption.label,
+                        })}
+                        items={SORT_OPTIONS.map((opt) => ({
+                          href: buildFilterHref(basePath, rawSearch, {
+                            sort: opt.value === 'default' ? null : opt.value,
+                          }),
+                          label: t(`sortOptions.${opt.value}`),
+                          active: currentSortOption.value === opt.value,
+                        }))}
+                      />
                     </div>
                   </div>
                 </div>

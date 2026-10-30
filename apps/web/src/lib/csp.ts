@@ -14,6 +14,23 @@
  * - `connect-src` adds the Supabase project for the browser auth client.
  */
 export const CSP_HEADER = 'Content-Security-Policy-Report-Only';
+
+/**
+ * The enforced static policy, sent as a header by next.config.mjs on every
+ * path the proxy does not serve. A page must not carry an enforcing
+ * Content-Security-Policy header at all: Next.js copies the proxy's response
+ * headers onto the request, Vercel does the same with next.config.mjs
+ * headers, and Next.js reads the nonce from an enforcing request header
+ * before the report-only one. This policy has no script-src, so the pages
+ * lost their nonce (DOS/Rate#1345). Pages get PAGE_META_CSP in a <meta> tag
+ * instead, and X-Frame-Options keeps them from being framed.
+ */
+export const STATIC_CSP =
+  "frame-ancestors 'self'; base-uri 'self'; form-action 'self'; object-src 'none';";
+
+/** STATIC_CSP without frame-ancestors, which a <meta> policy ignores. */
+export const PAGE_META_CSP =
+  "base-uri 'self'; form-action 'self'; object-src 'none'";
 export const CSP_REPORT_PATH = '/api/csp-report';
 
 /** A base64 nonce from 128 random bits. */

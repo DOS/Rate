@@ -4,11 +4,67 @@ import {
   isImageUrl,
   productImageUrl,
   resolveProductImageUrl,
+  sizedStoreImageUrl,
   usableImageUrls,
 } from '../rate-domain-core';
 
 function main() {
   console.warn('🧪 Image URL suite');
+
+  // Store CDN thumbnails at the shown size (DOS/Rate#1328).
+  assert.equal(
+    sizedStoreImageUrl('https://cdn2.fptshop.com.vn/unsafe/a_b_1.png', 128),
+    'https://cdn2.fptshop.com.vn/unsafe/128x0/filters:format(webp)/a_b_1.png'
+  );
+  assert.equal(
+    sizedStoreImageUrl(
+      'https://cdn2.fptshop.com.vn/unsafe/800x0/filters:quality(90)/a.png',
+      128
+    ),
+    'https://cdn2.fptshop.com.vn/unsafe/128x0/filters:format(webp)/a.png',
+    'an existing size and filter are replaced, not stacked'
+  );
+  assert.equal(
+    sizedStoreImageUrl('https://cdn2.fptshop.com.vn/unsafe/800x/uploads/a.png', 128),
+    'https://cdn2.fptshop.com.vn/unsafe/128x0/filters:format(webp)/uploads/a.png',
+    'a width-only size is replaced and a folder path is kept'
+  );
+  assert.equal(
+    sizedStoreImageUrl(
+      'https://cdn2.cellphones.com.vn/200x/media/catalog/product/i/p/x.png',
+      128
+    ),
+    'https://cdn2.cellphones.com.vn/128x/media/catalog/product/i/p/x.png'
+  );
+  assert.equal(
+    sizedStoreImageUrl(
+      'https://cdn2.cellphones.com.vn/media/catalog/product/x.png',
+      128
+    ),
+    'https://cdn2.cellphones.com.vn/128x/media/catalog/product/x.png'
+  );
+  for (const other of [
+    'https://cdn.tgdd.vn/a.jpg',
+    '/img/devices/apple-iphone-16-128gb.jpg',
+    'http://cdn2.fptshop.com.vn/unsafe/a.png',
+    'https://cdn2.fptshop.com.vn/other/a.png',
+    // Thumbor options this rewrite does not model stay untouched.
+    'https://cdn2.fptshop.com.vn/unsafe/fit-in/800x800/a.png',
+    'https://cdn2.fptshop.com.vn/unsafe/full-fit-in/800x800/a.png',
+    'https://cdn2.fptshop.com.vn/unsafe/smart/a.png',
+    'https://cdn2.fptshop.com.vn/unsafe/trim/800x0/a.png',
+    'https://cdn2.fptshop.com.vn/unsafe/10x10:300x300/800x0/a.png',
+    'https://cdn2.fptshop.com.vn/unsafe/800x800/smart/a.png',
+    'https://cdn2.fptshop.com.vn/unsafe/800x0/left/top/a.png',
+  ]) {
+    assert.equal(sizedStoreImageUrl(other, 128), other, other);
+  }
+  assert.equal(sizedStoreImageUrl(null, 128), null);
+  assert.equal(
+    sizedStoreImageUrl('https://cdn2.fptshop.com.vn/unsafe/a.png', 5),
+    'https://cdn2.fptshop.com.vn/unsafe/32x0/filters:format(webp)/a.png',
+    'the width is kept within 32-1024'
+  );
 
   assert.equal(isImageUrl('https://cdn.tgdd.vn/a.jpg'), true);
   assert.equal(isImageUrl('http://example.com/a.png'), true);

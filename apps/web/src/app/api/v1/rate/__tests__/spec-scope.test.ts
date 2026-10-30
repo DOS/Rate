@@ -99,7 +99,24 @@ globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
     );
   }
   if (pathname === '/rest/v1/master_products') {
-    return jsonResponse(200, masterRows);
+    // Honour a slug filter (`eq.` or `in.(...)`) so unknown slugs miss.
+    const slugFilter = new URL(url).searchParams.get('slug');
+    const wanted = slugFilter?.startsWith('eq.')
+      ? [slugFilter.slice(3)]
+      : slugFilter?.startsWith('in.(')
+        ? slugFilter
+            .slice(4, -1)
+            .split(',')
+            .map((s) => s.replace(/^"|"$/g, ''))
+        : null;
+    return jsonResponse(
+      200,
+      wanted
+        ? masterRows.filter((row) =>
+            wanted.includes((row as { slug: string }).slug)
+          )
+        : masterRows
+    );
   }
   if (pathname === '/rest/v1/merchants') {
     // Paged reads (`.range()`) end on a short page.
@@ -274,6 +291,38 @@ async function testDetailAndCompare() {
   assert.equal(cmpBody.data.length, 1);
   assert.equal(cmpBody.data[0].has_5g, false);
   assert.equal(cmpBody.data[0].specifications.cellular.technology, 'LTE');
+  assert.deepEqual(cmpBody.not_found_slugs, []);
+
+  // Another category's product is excluded by the lock; a slug with no
+  // published product is not found, not cross-category (DOS/Rate#1364).
+  masterRows = [WATCH, EARBUD];
+  const mixed = await compare.GET(
+    new NextRequest(
+      `http://localhost/api/v1/rate/compare?slugs=${WATCH.slug},${EARBUD.slug},does-not-exist-xyz`
+    )
+  );
+  assert.equal(mixed.status, 200);
+  const mixedBody = await mixed.json();
+  assert.deepEqual(
+    mixedBody.data.map((p: { slug: string }) => p.slug),
+    [WATCH.slug]
+  );
+  assert.deepEqual(mixedBody.excluded_cross_category_slugs, [EARBUD.slug]);
+  assert.deepEqual(mixedBody.not_found_slugs, ['does-not-exist-xyz']);
+  // A slug in another case is the same product, compared once and not listed.
+  const upper = await compare.GET(
+    new NextRequest(
+      `http://localhost/api/v1/rate/compare?slugs=${WATCH.slug.toUpperCase()},${WATCH.slug}`
+    )
+  );
+  const upperBody = await upper.json();
+  assert.deepEqual(
+    upperBody.data.map((p: { slug: string }) => p.slug),
+    [WATCH.slug]
+  );
+  assert.deepEqual(upperBody.excluded_cross_category_slugs, []);
+  assert.deepEqual(upperBody.not_found_slugs, []);
+  assert.equal(upperBody.requested_slugs.length, 1);
   masterRows = [];
   console.warn('  ✅ API v1 detail and compare return the scoped view');
 }
@@ -328,6 +377,69 @@ async function testExtensionLookup() {
   assert.equal(watchProduct.ram_gb, 1);
   assert.equal(watchProduct.storage_gb, 64);
   console.warn('  ✅ Extension lookup returns the category spec view');
+}
+
+// Caller-controlled work is bounded (DOS/Rate#1308).
+async function testBoundedInputs() {
+  const { NextRequest } = await import('next/server');
+  // category=all with a spec filter pages in process: its offset is capped.
+  let res = await listProducts('category=all&has5g=1&offset=2001');
+  assert.equal(res.status, 400);
+  res = await listProducts('category=all&has5g=1&offset=2000');
+  assert.equal(res.status, 200);
+  // A merchants platform must be a tracked one.
+  const merchants = await import('../merchants/route');
+  const ask = (q: string) =>
+    merchants.GET(
+      new NextRequest(`http://localhost/api/v1/rate/merchants?${q}`)
+    );
+  assert.equal((await ask('platform=not-a-platform')).status, 400);
+  assert.notEqual((await ask('platform=Shopee')).status, 400);
+  // JSON write bodies are read up to 32 KB.
+  const { readBoundedJsonBody, MAX_JSON_BODY_BYTES } =
+    await import('@/server/rate/api-handler');
+  const post = (body: string, headers: Record<string, string> = {}) =>
+    new Request('http://localhost/x', { method: 'POST', body, headers });
+  assert.deepEqual(await readBoundedJsonBody(post('{"a":1}')), {
+    tooLarge: false,
+    value: { a: 1 },
+  });
+  assert.deepEqual(await readBoundedJsonBody(post('not json')), {
+    tooLarge: false,
+    value: null,
+  });
+  // A longest review with every non-ASCII character escaped still fits.
+  const escapedReview = JSON.stringify({
+    masterProductId: '11111111-1111-4111-8111-111111111111',
+    comment: 'ệ'.repeat(3000),
+    authorName: 'ệ'.repeat(120),
+    variation: 'ệ'.repeat(200),
+  }).replace(
+    /[^\x20-\x7e]/g,
+    (c) => `\\u${c.charCodeAt(0).toString(16).padStart(4, '0')}`
+  );
+  assert.ok(escapedReview.length > 16_384, 'the escaped body is over 16 KB');
+  const escapedRead = await readBoundedJsonBody(post(escapedReview));
+  assert.equal(escapedRead.tooLarge, false, 'an escaped longest review fits');
+  const big = JSON.stringify({ a: 'x'.repeat(MAX_JSON_BODY_BYTES) });
+  assert.deepEqual(await readBoundedJsonBody(post(big)), { tooLarge: true });
+  assert.deepEqual(
+    await readBoundedJsonBody(
+      post('{}', { 'content-length': String(MAX_JSON_BODY_BYTES + 1) })
+    ),
+    { tooLarge: true },
+    'a declared length over the cap is not read'
+  );
+  const ingest = await import('../extension/ingest/route');
+  const tooBig = await ingest.POST(
+    new NextRequest('http://localhost/api/v1/rate/extension/ingest', {
+      method: 'POST',
+      body: big,
+      headers: { 'content-type': 'application/json' },
+    })
+  );
+  assert.equal(tooBig.status, 413);
+  console.warn('  ✅ Offsets, platforms and body sizes are bounded');
 }
 
 // Inspect and lookup share a per-IP limit (DOS/Rate#1307).
@@ -845,6 +957,7 @@ async function main() {
   await testDetailAndCompare();
   await testExtensionLookup();
   await testSpecMatchesBodies();
+  await testBoundedInputs();
   await testInspectRateLimit();
 }
 

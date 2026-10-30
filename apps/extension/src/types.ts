@@ -35,8 +35,16 @@ export interface ExtensionVariantCandidate {
 
 export interface ExtensionPriceAssessment {
   verdict: ExtensionPriceVerdict;
+  /** Vietnamese text from the server; shown when `messageKey` is unknown. */
   badgeLabel: string;
   explanation: string;
+  /**
+   * Names the verdict text so the extension shows it in its own language
+   * (DOS/Rate#1326); absent from older servers.
+   */
+  messageKey?: string;
+  /** The values that text interpolates: numbers, or `keyword` as text. */
+  messageParams?: Record<string, number | string>;
   observedPrice: number | null;
   observedOriginalPrice: number | null;
   claimedDiscountPct: number;
