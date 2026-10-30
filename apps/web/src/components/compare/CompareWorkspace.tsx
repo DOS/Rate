@@ -94,6 +94,11 @@ interface CompareWorkspaceProps {
   locale?: string;
   /** RATE_ITEM_MODEL on: variant slug to Item slug, for versus links. */
   itemSlugBySlug?: Readonly<Record<string, string>>;
+  /**
+   * `versus`: the hero above already scores the pair, so the matrix comes
+   * first and the second summary is left out (DOS/Rate#1473).
+   */
+  layout?: 'compare' | 'versus';
 }
 
 type CompareTranslator = ReturnType<typeof useTranslations<'compare'>>;
@@ -941,6 +946,7 @@ export default function CompareWorkspace({
   hasExplicitSlugs = false,
   locale = 'vi',
   itemSlugBySlug,
+  layout = 'compare',
 }: CompareWorkspaceProps) {
   const t = useTranslations('compare');
   const router = useRouter();
@@ -1545,8 +1551,8 @@ export default function CompareWorkspace({
     };
   }, [products]);
 
-  return (
-    <div>
+  const controlsBlock = (
+    <>
       {/* 5-Category Lock Switcher Bar */}
       <div className="rate-card mb-3 p-3">
         <div className="d-flex flex-column flex-lg-row align-items-lg-center justify-content-between gap-2">
@@ -1908,7 +1914,11 @@ export default function CompareWorkspace({
           </div>
         )}
       </div>
+    </>
+  );
 
+  const popularBlock = (
+    <>
       {/* Popular 1v1 Head-to-Head Battles Hub for Active Category */}
       {popularBattles.length > 0 && (
         <div className="rate-card p-md-4 mb-4 p-3">
@@ -2048,7 +2058,11 @@ export default function CompareWorkspace({
           </div>
         </div>
       )}
+    </>
+  );
 
+  const summaryBlock = (
+    <>
       {/* Automated Head-to-Head 10-Group Verdict Summary Card */}
       {headToHeadSummary && (
         <div className="rate-scoreboard-dark p-md-4 mb-4 p-3 shadow-sm">
@@ -2208,7 +2222,11 @@ export default function CompareWorkspace({
           </div>
         </div>
       )}
+    </>
+  );
 
+  const matrixBlock = (
+    <>
       {/* Empty State if 0 products */}
       {products.length === 0 ? (
         <div className="rate-card p-5 text-center">
@@ -2584,6 +2602,28 @@ export default function CompareWorkspace({
           </div>
         </div>
       )}
+    </>
+  );
+
+  // The versus page already scores the pair in its hero, so it shows the
+  // comparison right after it, then the picker and other pairs; the
+  // second summary stays on /compare only (DOS/Rate#1473).
+  if (layout === 'versus') {
+    return (
+      <div>
+        {matrixBlock}
+        <div className="mt-4">{controlsBlock}</div>
+        {popularBlock}
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      {controlsBlock}
+      {popularBlock}
+      {summaryBlock}
+      {matrixBlock}
     </div>
   );
 }
