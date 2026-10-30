@@ -247,12 +247,10 @@ export function planVersusRoute(
     ? [urlSlugB, urlSlugA]
     : [urlSlugA, urlSlugB];
   const canonical = `/compare/${firstSlug}-vs-${secondSlug}`;
-  // Compared without regard to case: the page also reads the URL lower-cased,
-  // so a redirect for case alone would come back to itself (DOS/Rate#1383).
-  if (
-    firstSlug.toLowerCase() !== sideA.slug.toLowerCase() ||
-    secondSlug.toLowerCase() !== sideB.slug.toLowerCase()
-  ) {
+  // Each side comes looked up as typed (then lower-cased) under the slug it
+  // was found under, so the Item URL this redirects to resolves to itself
+  // and renders: no loop for an Item slug with capitals (DOS/Rate#1383).
+  if (firstSlug !== sideA.slug || secondSlug !== sideB.slug) {
     return { kind: 'redirect', to: canonical };
   }
   return {

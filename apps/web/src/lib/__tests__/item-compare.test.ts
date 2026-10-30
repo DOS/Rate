@@ -356,7 +356,7 @@ async function main() {
           ? zItem
           : null;
   // The page: lower-cased parse, then the slugs as typed, then lower-cased.
-  const follow1383 = (start: string, typedFirst = true) => {
+  const follow1383 = (start: string) => {
     let path = start;
     for (let hop = 0; hop < 5; hop++) {
       const raw = path.replace(/^\/compare\//, '');
@@ -367,7 +367,7 @@ async function main() {
           { slug: a, resolution: lookup1383(a) },
           { slug: b, resolution: lookup1383(b) }
         );
-      let plan = planFor(typedFirst ? asTyped : lower);
+      let plan = planFor(asTyped);
       if (plan.kind === 'not_found') plan = planFor(lower);
       if (plan.kind !== 'redirect') return { plan, hops: hop };
       path = plan.to;
@@ -384,12 +384,9 @@ async function main() {
     assert.equal(plan.kind, 'render', start);
     assert.ok(hops <= 1, `${start} needs at most one hop`);
   }
-  // Even read lower-cased only (the page before #1383), case alone no longer
-  // redirects, so the old loop is gone.
-  assert.equal(
-    follow1383('/compare/A-phone-vs-z-phone', false).plan.kind,
-    'render'
-  );
+  // The lower-case variant URL still 308s to the Item URL, so both show the
+  // same size under the one canonical.
+  assert.equal(follow1383('/compare/a-phone-vs-z-phone').hops, 1);
   assert.deepEqual(follow1383('/compare/A-phone-vs-z-phone').plan, {
     kind: 'render',
     slugA: 'a-phone',
