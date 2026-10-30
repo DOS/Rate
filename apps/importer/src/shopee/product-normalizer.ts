@@ -2200,8 +2200,10 @@ export class ProductNormalizer {
           // Right after the brand a lettered head is the model itself ("Honor X9/8GB/256GB");
           // a bare number there names no model ("Samsung 13/…" stays unkeyable).
           const head = chainHead[1]!;
+          // A network ("5G/8GB/256GB") is no model number either.
           if (
             !/[.,]/.test(head) &&
+            !/^[2-5]G$/i.test(head) &&
             (modelTokens.length > 0 ? !modelTokens.some(t => /\d/.test(t)) : /[a-z]/i.test(head))
           ) {
             modelTokens.push(head);

@@ -1136,6 +1136,9 @@ async function runSuite() {
     ['Samsung Galaxy Fold 11/11/2026 12GB 512GB', 'samsung:galaxy-fold:512gb'],
     // A bare number right after the brand names no model.
     ['Samsung 13/8GB/256GB', 'samsung:unkeyed:256gb'],
+    // Nor is a network.
+    ['Xiaomi 5G/8GB/256GB', 'xiaomi:unkeyed:256gb'],
+    ['Samsung Galaxy A55 5G/8GB/256GB', 'samsung:galaxy-a55:256gb'],
   ] as const) {
     assert.equal(keyOf(title), key, title);
   }
