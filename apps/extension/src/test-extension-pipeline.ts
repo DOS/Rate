@@ -3156,7 +3156,13 @@ async function runTests() {
               platform: '000',
               price_current: 20_000_000,
               url: 'https://shopee.vn/1',
-              merchant: { id: '000', name: 'Official', is_official: true },
+              // A scored seller: no score is no low-risk deal (DOS/Rate#1484).
+              merchant: {
+                id: '000',
+                name: 'Official',
+                is_official: true,
+                risk_score: 5,
+              },
             },
             {
               id: '..bad..',
@@ -4306,6 +4312,40 @@ async function runTests() {
     console.log(
       '  ✅ [Unknown DOSafe and review risk read as no data (#1465)] Verified'
     );
+  }
+
+  // A store with no data to score has no trust number: not "0/100", and it sorts
+  // last (DOS/Rate#1484).
+  {
+    const { trustText } = await import('./sidepanel/panel-view.js');
+    const { t } = await import('./i18n.js');
+    assert.equal(trustText(null), t('merchantTrustNoData'));
+    assert.equal(trustText(undefined), t('merchantTrustNoData'));
+    assert.ok(!trustText(null).includes('/100'));
+    assert.ok(trustText(0).includes('0/100'));
+    assert.ok(trustText(87).includes('87/100'));
+    const panelSource = fs.readFileSync(
+      path.join(__dirname, 'sidepanel/sidepanel.ts'),
+      'utf8'
+    );
+    assert.ok(!/formatSafeNumber\(m\.trust_score/.test(panelSource));
+    assert.ok(panelSource.includes('trustText(m.trust_score)'));
+    assert.ok(
+      panelSource.includes('(b.trust_score ?? -1) - (a.trust_score ?? -1)')
+    );
+    assert.ok(panelSource.includes('merchant.trust_score == null'));
+    const viewSource = fs.readFileSync(
+      path.join(__dirname, 'sidepanel/panel-view.ts'),
+      'utf8'
+    );
+    assert.ok(
+      /off\.merchant\.risk_score == null\s*\?\s*t\('offerCombinedRiskNoData'\)/.test(
+        viewSource
+      )
+    );
+    assert.ok(t('offerCombinedRiskNoData').length > 0);
+    assert.equal(t('noDataYet').includes('/100'), false);
+    console.log('  ✅ [Unknown trust score reads as no data (#1484)] Verified');
   }
 
   // Empty reviews and unknown ratings (DOS/Rate#1301)

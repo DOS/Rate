@@ -602,9 +602,15 @@ export default function HeroSearchInspector({
                           )}
                         </div>
                         <div className="d-flex align-items-center small gap-2">
-                          <span className="badge bg-success-subtle text-success rounded-pill">
-                            {t('trustBadge', { score: m.trust_score })}
-                          </span>
+                          {m.trust_score == null ? (
+                            <span className="badge bg-light text-muted border rounded-pill">
+                              {t('trustBadgeNoData')}
+                            </span>
+                          ) : (
+                            <span className="badge bg-success-subtle text-success rounded-pill">
+                              {t('trustBadge', { score: m.trust_score })}
+                            </span>
+                          )}
                           <span
                             className="text-muted"
                             style={{ fontSize: '0.8125rem' }}
@@ -843,12 +849,19 @@ export default function HeroSearchInspector({
                                 <BsCheckCircleFill className="text-success ms-1" />
                               )}
                             </div>
-                            <span className="badge bg-success rounded-pill text-white">
-                              {t('trustBadge', {
-                                score:
-                                  inspectResult.merchantProfile.trust_score,
-                              })}
-                            </span>
+                            {inspectResult.merchantProfile.trust_score ==
+                            null ? (
+                              <span className="badge bg-light text-muted border rounded-pill">
+                                {t('trustBadgeNoData')}
+                              </span>
+                            ) : (
+                              <span className="badge bg-success rounded-pill text-white">
+                                {t('trustBadge', {
+                                  score:
+                                    inspectResult.merchantProfile.trust_score,
+                                })}
+                              </span>
+                            )}
                           </div>
                         )}
 
@@ -910,11 +923,17 @@ export default function HeroSearchInspector({
                             {t('officialMallBadge')}
                           </span>
                         )}
-                        <span className="badge bg-success rounded-pill text-white">
-                          {t('trustBadge', {
-                            score: inspectResult.merchantProfile.trust_score,
-                          })}
-                        </span>
+                        {inspectResult.merchantProfile.trust_score == null ? (
+                          <span className="badge bg-light text-muted border rounded-pill">
+                            {t('trustBadgeNoData')}
+                          </span>
+                        ) : (
+                          <span className="badge bg-success rounded-pill text-white">
+                            {t('trustBadge', {
+                              score: inspectResult.merchantProfile.trust_score,
+                            })}
+                          </span>
+                        )}
                       </div>
                       <h2 className="h5 fw-bold mb-1">
                         <BsShop className="text-primary me-2" />

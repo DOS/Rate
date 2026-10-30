@@ -1308,6 +1308,43 @@ async function runSuite() {
   ] as const) {
     assert.equal(keyOf(title), key, title);
   }
+  // "Titanium" and "Titan" are laptop model words, not colours; "Jade", "Gem" and "Sky"
+  // start two-word colours; Garmin's GPS prefixes and its "GPS 73" (DOS/Rate#1495).
+  for (const [title, key] of [
+    ['Lenovo ThinkPad X1 Titanium/16GB/512GB', 'lenovo:thinkpad-x1-titanium:512gb'],
+    ['Lenovo ThinkPad X1 Titanium 16GB/512GB', 'lenovo:thinkpad-x1-titanium:512gb'],
+    ['ThinkPad X1 Yoga Titanium Bạc/16GB/512GB', 'lenovo:thinkpad-x1-yoga-titanium:512gb'],
+    ['MSI GT77 Titan Đen/32GB/1TB', 'msi:gt77-titan:1024gb'],
+    // A phone's "Titan" still starts its colour.
+    ['Samsung Galaxy S24 Ultra Titan Đen/256GB', 'samsung:galaxy-s24-ultra:256gb'],
+    ['Samsung Galaxy S24 Ultra Titan Gray/256GB', 'samsung:galaxy-s24-ultra:256gb'],
+    ['iPhone 16 Pro Max Titan Đen/256GB', 'apple:iphone-16-pro-max:256gb'],
+    ['Samsung Galaxy S24 Jade Green/256GB', 'samsung:galaxy-s24:256gb'],
+    ['Samsung Galaxy A55 Gem Green/8GB/256GB', 'samsung:galaxy-a55:256gb'],
+    ['Samsung Galaxy S24 Sky Blue/256GB', 'samsung:galaxy-s24:256gb'],
+    ['Máy định vị GPS cầm tay Garmin GPSMAP 66i', 'garmin:gpsmap-66i:unknown'],
+    ['Thiết bị định vị GPS Garmin GPS 73', 'garmin:gps-73:unknown'],
+    ['Garmin GPS 73', 'garmin:gps-73:unknown'],
+    // "Jade", "Gem" and "Sky" only start their own colour: "Galaxy Sky" and "Liquid Jade"
+    // are models.
+    ['Samsung Galaxy Sky Black/16GB', 'samsung:galaxy-sky:16gb'],
+    ['Acer Liquid Jade Black/16GB', 'acer:liquid-jade:16gb'],
+    ['MSI Pulse GL66 Titanium Gray/16GB/512GB', 'msi:pulse-gl66:512gb'],
+    // A laptop's "Titan Gray" or "Titanium Gray" is still its colour name.
+    ['Laptop Dell Latitude 7440 Titan Gray/16GB/512GB', 'dell:latitude-7440:512gb'],
+    ['Laptop Lenovo Yoga Slim 7 Titanium Gray/16GB/512GB', 'lenovo:yoga-slim-7:512gb'],
+    ['MSI Prestige 14 Titan Gray/16GB/512GB', 'msi:prestige-14:512gb'],
+    // Nor is it a model word in other laptop lines, before a Vietnamese colour or after one.
+    ['Laptop Dell Latitude 7440 Titan Xám/16GB/512GB', 'dell:latitude-7440:512gb'],
+    ['Laptop Dell Latitude 7440 Gray Titanium/16GB/512GB', 'dell:latitude-7440:512gb'],
+    ['Laptop Dell Latitude 7440 Black Titanium/16GB/512GB', 'dell:latitude-7440:512gb'],
+    // "chính hãng" between the GPS prefix and the brand.
+    ['Thiết bị định vị GPS chính hãng Garmin GPSMAP 65s', 'garmin:gpsmap-65s:unknown'],
+    // A GPS device title that names no model stays unkeyable.
+    ['Máy định vị GPS Garmin', 'garmin:unkeyed:unknown'],
+  ] as const) {
+    assert.equal(keyOf(title), key, title);
+  }
   // A long run of promo words costs linear time (CodeQL js/polynomial-redos).
   {
     const started = performance.now();

@@ -109,6 +109,9 @@
   "officialStore": {
     "message": "Chính hãng"
   },
+  "offerCombinedRiskNoData": {
+    "message": "Rủi ro tổng hợp: chưa có dữ liệu"
+  },
   "offerCombinedRisk": {
     "message": "Rủi ro tổng hợp: $SCORE$/100",
     "placeholders": {
@@ -354,6 +357,12 @@
         "content": "$1"
       }
     }
+  },
+  "noDataYet": {
+    "message": "Chưa có dữ liệu"
+  },
+  "merchantTrustNoData": {
+    "message": "Tin cậy: chưa có dữ liệu"
   },
   "merchantTrust": {
     "message": "Tin cậy $SCORE$/100",
