@@ -498,6 +498,20 @@ async function runSuite() {
     ['iPad Pro M4 13 năm – 2024', 'apple:ipad-pro-m4-13:unknown'],
     ['iPad Pro M4 13 năm/2024', 'apple:ipad-pro-m4-13:unknown'],
     ['MacBook Pro M3 Max 16 năm 2023 1TB', 'apple:macbook-pro-m3-max-16:1024gb'],
+    // Chip, storage, network or generation words may sit between the line and the size.
+    ['iPad Pro M2 128GB 11 năm 2022 tặng ốp 13 inch', 'apple:ipad-pro-m2-11:128gb'],
+    ['MacBook Air chip M2 13 năm 2022 256GB tặng túi 15 inch', 'apple:macbook-air-m2-13:256gb'],
+    ['iPad Pro (M4) 11 năm 2024', 'apple:ipad-pro-m4-11:unknown'],
+    ['iPad Pro Wifi 11 năm 2022', 'apple:ipad-pro-11:unknown'],
+    ['iPad Pro 5G 11 năm 2022 M2', 'apple:ipad-pro-m2-11:unknown'],
+    ['iPad Pro Gen 4 11 năm 2022', 'apple:ipad-pro-11:unknown'],
+    ['iPad Air 5 11 năm 2022', 'apple:ipad-air-5-11:unknown'],
+    ['MacBook Air 13 năm phát hành 2022', 'apple:macbook-air-13:unknown'],
+    ['iPad Pro 11 năm 2022/2023', 'apple:ipad-pro-11:unknown'],
+    // A count after the year is no release year.
+    ['iPad Pro M4 13 năm 2000 đơn 256GB tặng ốp 11 inch', 'apple:ipad-pro-m4-11:256gb'],
+    ['MacBook Air M2 15 năm 2000 khách 256GB tặng túi 13 inch', 'apple:macbook-air-m2-13:256gb'],
+    ['MacBook Pro M3 14 năm 2000 đơn tặng túi 16 inch', 'apple:macbook-pro-m3-16:unknown'],
     // A two-digit year is too close to a count to count.
     ['iPad Pro 11 năm 22', 'apple:ipad-pro:unknown'],
     ['MacBook Air M2 13 năm', 'apple:macbook-air-m2:unknown'],
