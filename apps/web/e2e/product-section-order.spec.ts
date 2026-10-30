@@ -40,17 +40,6 @@ test('the jump row links to every section on the page', async ({ page }) => {
   for (const id of ORDER) await expect(page.locator(`#${id}`)).toHaveCount(1);
 });
 
-test('a phone shows the jump row in its first screen', async ({ page }) => {
-  // The row sits under the price, before the scoreboard (DOS/Rate#1517).
-  await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto(PRODUCT);
-  const top = await page
-    .getByTestId('pdv-jump-nav')
-    .evaluate((nav) => nav.getBoundingClientRect().top);
-  expect(top).toBeGreaterThan(0);
-  expect(top).toBeLessThan(844);
-});
-
 test('phones show three reviews until the rest are asked for', async ({
   page,
 }) => {

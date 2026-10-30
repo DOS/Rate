@@ -287,6 +287,8 @@
   display: flex;
   gap: 0.5rem;
   margin: 0 0 1.5rem;
+  // Room for the chips' focus ring, which the horizontal scroll would clip.
+  padding-block: 4px;
   overflow-x: auto;
   scrollbar-width: none;
 

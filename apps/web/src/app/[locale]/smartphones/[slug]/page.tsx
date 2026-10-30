@@ -861,6 +861,24 @@ export async function ProductDetailView({
       />
     );
 
+  const colorsBlock = (visibility: string) =>
+    product.colors && product.colors.length > 0 ? (
+      <div className={`border-top mt-3 pt-3 text-start ${visibility}`}>
+        <div className="small text-muted mb-2">{t('availableColors')}</div>
+        <div className="rate-pdv-colors d-flex flex-wrap gap-2">
+          {product.colors.map((c, i) => (
+            <span
+              key={i}
+              className="badge text-dark rounded-pill small border bg-white px-3 py-2"
+              lang={contentLang(c, locale)}
+            >
+              {c}
+            </span>
+          ))}
+        </div>
+      </div>
+    ) : null;
+
   return (
     <ClientMessages scope="productDetail">
       <PageShell locale={locale}>
@@ -918,25 +936,9 @@ export async function ProductDetailView({
                   )}
                 </div>
 
-                {/* Colors */}
-                {product.colors && product.colors.length > 0 && (
-                  <div className="border-top mt-3 pt-3 text-start">
-                    <div className="small text-muted mb-2">
-                      {t('availableColors')}
-                    </div>
-                    <div className="rate-pdv-colors d-flex flex-wrap gap-2">
-                      {product.colors.map((c, i) => (
-                        <span
-                          key={i}
-                          className="badge text-dark rounded-pill small border bg-white px-3 py-2"
-                          lang={contentLang(c, locale)}
-                        >
-                          {c}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                )}
+                {/* Colors: under the photo on desktop; on a phone they move below the
+                scoreboard, so the jump row fits the first screen (DOS/Rate#1517). */}
+                {colorsBlock('d-none d-lg-block')}
               </div>
             </div>
 
@@ -1327,6 +1329,8 @@ export async function ProductDetailView({
                   locale={locale}
                 />
               </div>
+
+              {colorsBlock('d-lg-none mb-4')}
 
               {/* Neutral Market Price Reference Strip (De-commercialized per DESIGN.md v3.0) */}
               {isItemGroup
