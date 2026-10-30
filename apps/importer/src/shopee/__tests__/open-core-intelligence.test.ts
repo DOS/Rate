@@ -1040,6 +1040,23 @@ async function runSuite() {
     assert.equal(keyOf(title), 'samsung:galaxy-s26-ultra:256gb', title);
   }
   assert.equal(keyOf('Live Xiaomi Redmi Note 14 8GB/256GB'), 'xiaomi:redmi-note-14:256gb');
+  // A size, network or dash right after the brand does not end the model before it
+  // begins; with no model left the title is unkeyable, never two phones on one key
+  // (DOS/Rate#1429).
+  for (const [title, key] of [
+    ['Samsung 256GB Galaxy S24 Ultra', 'samsung:galaxy-s24-ultra:256gb'],
+    ['Samsung 256GB Galaxy A55 5G', 'samsung:galaxy-a55:256gb'],
+    ['Samsung - Galaxy A55 8GB 256GB', 'samsung:galaxy-a55:256gb'],
+    ['Samsung - Galaxy S24 Ultra 12GB 256GB', 'samsung:galaxy-s24-ultra:256gb'],
+    ['Samsung -Galaxy S24 Ultra 256GB', 'samsung:galaxy-s24-ultra:256gb'],
+    ['Samsung 256 GB Galaxy S24', 'samsung:galaxy-s24:256gb'],
+    ['Samsung 5G Galaxy A55 128GB', 'samsung:galaxy-a55:128gb'],
+    ['Samsung 8/256GB Galaxy A55', 'samsung:galaxy-a55:256gb'],
+    ['Xiaomi | Redmi Note 14 8GB/256GB', 'xiaomi:redmi-note-14:256gb'],
+    ['Samsung 256GB', 'samsung:unkeyed:256gb'],
+  ] as const) {
+    assert.equal(keyOf(title), key, title);
+  }
   // The brand's line stands for it; promo phrases with "Off", "Sốc" or a percentage.
   assert.equal(keyOf('Sale Galaxy S26 Ultra 12GB/256GB'), 'samsung:galaxy-s26-ultra:256gb');
   assert.equal(keyOf('Live Điện thoại Redmi Note 14 8GB/256GB'), 'xiaomi:redmi-note-14:256gb');

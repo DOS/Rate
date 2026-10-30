@@ -2024,9 +2024,22 @@ export class ProductNormalizer {
       const modelTokens: string[] = [];
       let hasProductCode = false;
       for (let i = 0; i < rawTokens.length; i++) {
-        const tok = rawTokens[i];
+        let tok = rawTokens[i];
         // "Samsung, Galaxy S25 Ultra": the brand's comma is not the end of the model.
         if (modelTokens.length === 0 && /^[,;]+$/.test(tok)) continue;
+        // "Samsung -Galaxy S24": a dash glued to the model's first word is no separator.
+        if (modelTokens.length === 0) tok = tok.replace(/^[-–|/]+(?=[\p{L}\d])/u, '');
+        // Nor does a size, a network or a dash before the model has begun: "Samsung
+        // 256GB Galaxy S24 Ultra", "Samsung - Galaxy A55" (DOS/Rate#1429).
+        if (modelTokens.length === 0) {
+          if (/^(?:\d+(?:[.,]\d+)?(?:GB|TB)|\d+\/\d+(?:GB|TB)?|[45]G|LTE|[-–|/])$/i.test(tok)) {
+            continue;
+          }
+          if (/^\d+(?:[.,]\d+)?$/.test(tok) && /^(?:GB|TB)$/i.test(rawTokens[i + 1] ?? '')) {
+            i++;
+            continue;
+          }
+        }
         const startsGeneration =
           /^gen$/i.test(tok) && /^\d{1,2}[,;]?$/.test(rawTokens[i + 1] ?? '');
         // A product code already names the generation: "IdeaPad Slim 3 15IAH8 Gen 8" and
@@ -2066,7 +2079,10 @@ export class ProductNormalizer {
         modelTokens.push(tok);
         hasProductCode ||= isProductCodeToken(tok);
       }
-      model = modelTokens.length > 0 ? modelTokens.join(' ') : rawTokens.slice(0, 2).join(' ');
+      // No model token is no model: the title is unkeyable (DOS/Rate#1151) rather than
+      // keyed on whatever came first, which linked different phones to one master
+      // (DOS/Rate#1429).
+      model = modelTokens.join(' ');
     }
     model = model.replace(/\s+/g, ' ').trim().slice(0, 120).trim();
 
