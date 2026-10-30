@@ -57,6 +57,7 @@ import {
   formatPriceVnd,
 } from '@/lib/locale-format';
 import { versusHref } from '@/lib/item-compare';
+import { withoutSpecSheet } from '@/lib/hero-products';
 
 // Reads searchParams, so it renders per request. The [locale] layout's
 // generateStaticParams would otherwise make it static, and the searchParams
@@ -719,7 +720,7 @@ export async function CategoryCatalogContent({
                   categoryTitle={
                     facets.currentCategory?.name || schema.categoryTitle
                   }
-                  products={products}
+                  products={products.map(withoutSpecSheet)}
                   dealRadar={categoryDealRadar}
                 />
 

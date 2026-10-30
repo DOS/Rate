@@ -6,6 +6,7 @@ import PageShell from '../components/page-shell';
 import CompareTrayBar from '@/components/compare/CompareTrayBar';
 import WatchlistWorkspace from '@/components/watchlist/WatchlistWorkspace';
 import ClientMessages from '@/components/providers/ClientMessages';
+import { withoutSpecSheet } from '@/lib/hero-products';
 
 // Cached after the first request, refreshed every 5 minutes or when the
 // worker revalidates its cache tags (DOS/Rate#491).
@@ -45,7 +46,10 @@ export default async function WatchlistPage({
   return (
     <ClientMessages scope="watchlist">
       <PageShell locale={locale}>
-        <WatchlistWorkspace catalogProducts={catalogProducts} locale={locale} />
+        <WatchlistWorkspace
+          catalogProducts={catalogProducts.map(withoutSpecSheet)}
+          locale={locale}
+        />
         <CompareTrayBar />
       </PageShell>
     </ClientMessages>

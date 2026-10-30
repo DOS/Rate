@@ -104,3 +104,19 @@ export function toHeroProductSuggestions(
       specifications: categorySlugOnly(p.specifications),
     }));
 }
+
+/**
+ * A catalog row for a client list that shows names, prices, ratings and links:
+ * the spec sheet and the long expert texts dropped, the category slug kept for
+ * links. They were 27% of the watchlist page's HTML and 8% of a category
+ * page's (DOS/Rate#1353).
+ */
+export function withoutSpecSheet<T extends MasterProduct>(p: T): T {
+  return {
+    ...p,
+    specifications: categorySlugOnly(p.specifications),
+    spec_provenance: {},
+    expert_review_summary: null,
+    description: null,
+  };
+}
