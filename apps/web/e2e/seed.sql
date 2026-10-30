@@ -83,6 +83,13 @@ VALUES ('cccccccc-cccc-4ccc-8ccc-ccccccccfa17', 'dddddddd-dddd-4ddd-8ddd-ddddddd
   'E2E Price Fault Phone', 'c0000000-0000-4000-8000-000000000001', 1000000, 'https://shopee.vn/item-fault',
   '22222222-2222-4222-8222-22222222fa17');
 
+-- A store with no data at all: no DOSafe score (risk_score left at its
+-- default 0, no metadata), no reviews and no stored combined score. It has no
+-- trust score, not "high trust 100/100", even as an Official Mall, whose
+-- review baseline is 0 (DOS/Rate#1484).
+INSERT INTO rate.merchants (id, platform, platform_shop_id, name, slug, is_official, follower_count)
+VALUES ('11111111-1111-4111-8111-111111111484', 'shopee', 'shop_no_data', 'No Data Store', 'no-data-store', true, 900000);
+
 -- 1100 small merchants push the directory past PostgREST's 1000-row cap, and
 -- "Last Ranked Shop" sorts after all of them (fewest followers), so an unpaged
 -- merchants read always drops it.
