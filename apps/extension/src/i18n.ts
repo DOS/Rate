@@ -74,15 +74,48 @@ export function tHtml(key: MessageKey, htmlParts: readonly string[]): string {
 
 // Marks that occur in Vietnamese and not in Czech or English, once the text
 // is decomposed: grave, circumflex, tilde, breve, hook, horn, dot below.
-// French, Spanish or Slovak names ("Lancôme", "São") match too, and
-// Vietnamese written without these marks ("Sac nhanh") does not; both are
-// rare in what the panel shows.
+// French, Spanish or Slovak names ("Lancôme", "São") carry them too.
 const VIETNAMESE_MARKS =
-  /\u0111|\u0110|\u0300|\u0302|\u0303|\u0306|\u0309|\u031b|\u0323/;
+  /\u0111|\u0110|\u0300|\u0302|\u0303|\u0306|\u0309|\u031b|\u0323/g;
 
-/** Whether server text is Vietnamese, as marketplace data and summaries are. */
+// Common Vietnamese words with no such mark (acute only, as Czech has, or
+// none), so "Camera kép" or "Giá khá cao" is still recognised.
+const VIETNAMESE_WORDS = new Set([
+  'gi\u00e1',
+  'kh\u00e1',
+  'm\u00e1y',
+  'k\u00e9p',
+  'c\u00f3',
+  'b\u00e1n',
+  'n\u00f3ng',
+  'nhanh',
+  'nghe',
+  'mua',
+]);
+
+function vietnameseEvidence(text: string): { marks: number; word: boolean } {
+  const marks = (text.normalize('NFD').match(VIETNAMESE_MARKS) ?? []).length;
+  const word = text
+    .normalize('NFC')
+    .toLowerCase()
+    .split(/[^\p{L}]+/u)
+    .some((w) => VIETNAMESE_WORDS.has(w));
+  return { marks, word };
+}
+
+/** Whether server text looks Vietnamese, as marketplace data does. */
 export function isVietnameseText(text: string): boolean {
-  return VIETNAMESE_MARKS.test(text.normalize('NFD'));
+  const { marks, word } = vietnameseEvidence(text);
+  return marks > 0 || word;
+}
+
+/**
+ * Whether a sentence is Vietnamese, with more evidence than one mark: an
+ * English summary quoting "déjà vu" is not hidden (DOS/Rate#1374).
+ */
+export function isVietnameseSentence(text: string): boolean {
+  const { marks, word } = vietnameseEvidence(text);
+  return marks > 1 || word;
 }
 
 /**
@@ -96,6 +129,11 @@ export function contentLangAttr(text: string): string {
 /** Vietnamese server text in a panel shown in another language. */
 export function isForeignVietnamese(text: string): boolean {
   return t('langCode') !== 'vi' && isVietnameseText(text);
+}
+
+/** A Vietnamese sentence in a panel shown in another language. */
+export function isForeignVietnameseSentence(text: string): boolean {
+  return t('langCode') !== 'vi' && isVietnameseSentence(text);
 }
 
 /** Server text as escaped HTML, in a `lang="vi"` span when it needs one. */

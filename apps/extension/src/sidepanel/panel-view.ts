@@ -18,7 +18,7 @@ import {
 import {
   contentTextHtml,
   escapeHtml,
-  isForeignVietnamese,
+  isForeignVietnameseSentence,
   t,
   type MessageKey,
 } from '../i18n.js';
@@ -204,7 +204,9 @@ export function renderReviewCardHtml(
   // or Czech panel it is left out rather than machine-translated: the
   // genuine share and the count above already say the same (DOS/Rate#1374).
   const summary =
-    hasReviews && reviews.ai_summary && !isForeignVietnamese(reviews.ai_summary)
+    hasReviews &&
+    reviews.ai_summary &&
+    !isForeignVietnameseSentence(reviews.ai_summary)
       ? reviews.ai_summary
       : null;
   return `
