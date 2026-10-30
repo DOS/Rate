@@ -7,6 +7,9 @@ import { FiArrowUp } from 'react-icons/fi';
 export default function BackToTop() {
   const t = useTranslations('rate.nav');
   const [scroll, setScroll] = useState<boolean>(false);
+  // More than a screen down: while hidden it stays in the Tab order and
+  // shows on focus, so keyboard readers still reach it.
+  const [deep, setDeep] = useState<boolean>(false);
 
   const scrollToTop = () => {
     const reduceMotion = window.matchMedia(
@@ -23,6 +26,10 @@ export default function BackToTop() {
     let lastY = window.scrollY;
     const handlerScroll = () => {
       const y = window.scrollY;
+      // iOS bounces past the end and back; that is not a scroll up.
+      const maxY = document.documentElement.scrollHeight - window.innerHeight;
+      if (y > maxY) return;
+      setDeep(y > window.innerHeight);
       if (y <= window.innerHeight) setScroll(false);
       else if (y < lastY) setScroll(true);
       else if (y > lastY) setScroll(false);
@@ -38,7 +45,9 @@ export default function BackToTop() {
     <button
       type="button"
       onClick={scrollToTop}
-      className={`top-scroll ${scroll ? 'd-flex' : 'd-none'}`}
+      className={`top-scroll ${
+        scroll ? 'd-flex' : deep ? 'd-flex visually-hidden-focusable' : 'd-none'
+      }`}
       title={t('backToTop')}
       aria-label={t('backToTop')}
     >

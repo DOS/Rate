@@ -22,8 +22,13 @@ for (const [locale, label] of [
     await expect
       .poll(() => page.evaluate(() => window.scrollY))
       .toBeGreaterThan(1000);
-    await expect(button).toBeHidden();
+    // Off screen on the way down, but still reachable from the keyboard.
+    await expect(button).toHaveClass(/visually-hidden-focusable/);
+    await button.focus();
+    await expect(button).toBeInViewport({ ratio: 1 });
+    await button.blur();
     await page.mouse.wheel(0, -200);
+    await expect(button).not.toHaveClass(/visually-hidden-focusable/);
     await expect(button).toBeVisible();
     await button.click();
     await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
