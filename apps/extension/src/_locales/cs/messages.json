@@ -109,6 +109,9 @@
   "officialStore": {
     "message": "Oficiální"
   },
+  "offerCombinedRiskNoData": {
+    "message": "Celkové riziko: zatím bez dat"
+  },
   "offerCombinedRisk": {
     "message": "Celkové riziko: $SCORE$/100",
     "placeholders": {
@@ -354,6 +357,9 @@
         "content": "$1"
       }
     }
+  },
+  "noDataYet": {
+    "message": "Zatím bez dat"
   },
   "merchantTrustNoData": {
     "message": "Důvěra: zatím bez dat"

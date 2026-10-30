@@ -442,7 +442,7 @@ function renderPanelContent(
         <div class="stats-grid">
           <div class="stat-box">
             <div class="stat-label">${escapeHtml(t('merchantTrustScore'))}</div>
-            <div class="stat-val" style="color: ${merchant.trust_score == null ? '#9ca3af' : '#34d399'};">${escapeHtml(merchant.trust_score == null ? t('reviewRiskNoData') : `${formatSafeNumber(merchant.trust_score, { min: 0, max: 100 })}/100`)}</div>
+            <div class="stat-val" style="color: ${merchant.trust_score == null ? '#9ca3af' : '#34d399'};">${escapeHtml(merchant.trust_score == null ? t('noDataYet') : `${formatSafeNumber(merchant.trust_score, { min: 0, max: 100 })}/100`)}</div>
           </div>
           <div class="stat-box">
             <div class="stat-label">${escapeHtml(t('merchantRiskPair'))}</div>

@@ -278,6 +278,7 @@ export default function MerchantDirectoryExplorer({
       authenticLabel: t('authenticLabel'),
       noReviewsToAnalyse: t('layer2NoReviews'),
       reviewRiskNoData: t('reviewRiskNoDataShort'),
+      trustNoData: t('trustNoData'),
       riskScamLabel: t('riskScamLabel'),
       riskReviewLabel: t('riskReviewLabel'),
       priceRangeLabel: t('priceRangeLabel'),
@@ -361,7 +362,10 @@ export default function MerchantDirectoryExplorer({
         sanitizeMerchantAuditText(m.name, 'Unknown'),
         sanitizeMerchantAuditText(m.platform, 'shopee', 32).toUpperCase(),
         m.is_official ? 'Yes' : 'No',
-        `${sanitizeMerchantScore100(m.trust_score)}/100`,
+        // No trust score: no number (DOS/Rate#1484).
+        m.trust_score == null
+          ? labels.trustNoData
+          : `${sanitizeMerchantScore100(m.trust_score)}/100`,
         hasReviewRiskEvidence(m.review_risk_breakdown)
           ? `${sanitizeMerchantScore100(m.review_risk_score)}/100`
           : labels.reviewRiskNoData,
@@ -444,7 +448,9 @@ export default function MerchantDirectoryExplorer({
         sanitizeMerchantAuditText(m.platform, 'shopee', 32),
         sanitizeMerchantAuditText(m.platform_shop_id, '', 80),
         m.is_official ? 'true' : 'false',
-        String(sanitizeMerchantScore100(m.trust_score)),
+        m.trust_score == null
+          ? ''
+          : String(sanitizeMerchantScore100(m.trust_score)),
         // Empty without analysed reviews (DOS/Rate#1258).
         hasReviewRiskEvidence(m.review_risk_breakdown)
           ? String(sanitizeMerchantScore100(m.review_risk_score))
@@ -546,7 +552,7 @@ export default function MerchantDirectoryExplorer({
             <div className="text-muted small">{labels.avgTrustScore}</div>
             {/* No store with a trust score: no average (DOS/Rate#1484). */}
             {summaryStats.avgTrust == null ? (
-              <div className="fs-6 text-muted">{labels.reviewRiskNoData}</div>
+              <div className="fs-6 text-muted">{labels.trustNoData}</div>
             ) : (
               <div className="fs-4 fw-bold text-dark">
                 {summaryStats.avgTrust}

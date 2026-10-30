@@ -289,7 +289,7 @@ export default function DeepInspectWorkspace({
           : []),
         ...(merchant
           ? [
-              `- **${t('mdSeller')}:** ${merchant.name} (${merchant.platform.toUpperCase()}) | ${t('mdTrustScore')}: ${merchant.trust_score == null ? t('reviewRiskNoData') : `**${merchant.trust_score}/100**`} (${t('dosafeRiskLabel')}: ${knownDosafeRiskScore(merchant) == null ? t('reviewRiskNoData') : `${knownDosafeRiskScore(merchant)}/100`}, ${t('reviewRiskLabel')}: ${hasReviewRiskEvidence(merchant.review_risk_breakdown) ? `${merchant.review_risk_score}/100` : t('reviewRiskNoData')})`,
+              `- **${t('mdSeller')}:** ${merchant.name} (${merchant.platform.toUpperCase()}) | ${t('mdTrustScore')}: ${merchant.trust_score == null ? t('trustNoData') : `**${merchant.trust_score}/100**`} (${t('dosafeRiskLabel')}: ${knownDosafeRiskScore(merchant) == null ? t('reviewRiskNoData') : `${knownDosafeRiskScore(merchant)}/100`}, ${t('reviewRiskLabel')}: ${hasReviewRiskEvidence(merchant.review_risk_breakdown) ? `${merchant.review_risk_score}/100` : t('reviewRiskNoData')})`,
             ]
           : []),
         `- **${t('mdLink')}:** ${shareUrl}`,

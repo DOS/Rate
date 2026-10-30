@@ -1471,13 +1471,13 @@ export function filterAndSortMerchants(
     Number.isFinite(safeParams.minTrust)
   ) {
     const safeMinTrust = Math.max(0, Math.min(100, safeParams.minTrust));
-    results = results.filter((m) => {
-      const trust =
-        typeof m.trust_score === 'number' && Number.isFinite(m.trust_score)
-          ? m.trust_score
-          : 0;
-      return trust >= safeMinTrust;
-    });
+    // Any threshold, 0 included, needs a real score (DOS/Rate#1484).
+    results = results.filter(
+      (m) =>
+        typeof m.trust_score === 'number' &&
+        Number.isFinite(m.trust_score) &&
+        m.trust_score >= safeMinTrust
+    );
   }
 
   if (safeParams?.sort) {
@@ -2153,14 +2153,16 @@ export function hasReviewRiskEvidence(
 }
 
 /**
- * A store's combined risk and trust from the signals that are known
- * (DOS/Rate#1484). An unknown signal never counts as 0 risk:
- * - neither the DOSafe score nor analysed reviews: no score at all (null);
- * - one of them: the score comes from that one alone;
- * - both: the higher risk, and a stored combined score (the importer's split)
- *   may raise it, as before.
- * `baseRisk` is the merchants.risk_score column, the DOSafe score's legacy
- * home; it counts only with a known DOSafe score.
+ * A store's combined risk and trust (DOS/Rate#1484). A store with neither a
+ * DOSafe score nor analysed reviews has no score at all (null), never risk 0
+ * and "high trust 100/100".
+ *
+ * With at least one signal the score is as before: the higher of the known
+ * risks, where the review side keeps its platform baseline when no review was
+ * analysed (#1249) and a stored combined score (the importer's split, RS#708)
+ * stays a floor. An unknown DOSafe score adds nothing (its column default is
+ * 0), so it never lowers the risk either. `baseRisk` is the merchants.risk_score
+ * column, the DOSafe score's legacy home.
  */
 export function merchantRiskFromSignals(signals: {
   dosafeKnown: boolean;
@@ -2170,17 +2172,11 @@ export function merchantRiskFromSignals(signals: {
   reviewRisk: number;
   storedCombined: number | null;
 }): { risk_score: number | null; trust_score: number | null } {
-  const parts: number[] = [];
-  if (signals.dosafeKnown) parts.push(signals.dosafeRisk, signals.baseRisk);
-  if (signals.reviewKnown) parts.push(signals.reviewRisk);
-  if (parts.length === 0) return { risk_score: null, trust_score: null };
-  if (
-    signals.dosafeKnown &&
-    signals.reviewKnown &&
-    signals.storedCombined != null
-  ) {
-    parts.push(signals.storedCombined);
+  if (!signals.dosafeKnown && !signals.reviewKnown) {
+    return { risk_score: null, trust_score: null };
   }
+  const parts = [signals.reviewRisk, signals.storedCombined ?? 0];
+  if (signals.dosafeKnown) parts.push(signals.dosafeRisk, signals.baseRisk);
   const finite = parts.filter((n) => Number.isFinite(n));
   const risk = Math.min(100, Math.max(0, ...finite));
   return { risk_score: risk, trust_score: Math.max(0, 100 - risk) };

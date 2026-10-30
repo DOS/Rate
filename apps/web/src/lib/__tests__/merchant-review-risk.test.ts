@@ -151,7 +151,7 @@ async function main() {
   await publicOffersSayNoneWithoutReviews();
 
   // A store with neither a DOSafe score nor analysed reviews has no trust
-  // score, not "high trust 100/100"; with one signal, that one alone counts
+  // score, not "high trust 100/100"; with one signal, the score is as before
   // (DOS/Rate#1484).
   {
     const none = {
@@ -166,15 +166,35 @@ async function main() {
       risk_score: null,
       trust_score: null,
     });
-    // DOSafe only: the review baseline and the stored split do not count.
+    // DOSafe only: the review baseline and the stored split stay floors, so
+    // no store's trust rises.
     assert.deepEqual(
       merchantRiskFromSignals({ ...none, dosafeKnown: true, dosafeRisk: 5 }),
-      { risk_score: 5, trust_score: 95 }
+      { risk_score: 30, trust_score: 70 }
     );
-    // Reviews only.
+    assert.deepEqual(
+      merchantRiskFromSignals({
+        ...none,
+        dosafeKnown: true,
+        dosafeRisk: 50,
+        storedCombined: null,
+      }),
+      { risk_score: 50, trust_score: 50 }
+    );
+    // Reviews only: the unknown DOSafe score adds nothing; the stored split
+    // stays a floor.
+    assert.deepEqual(
+      merchantRiskFromSignals({
+        ...none,
+        reviewKnown: true,
+        reviewRisk: 20,
+        storedCombined: null,
+      }),
+      { risk_score: 20, trust_score: 80 }
+    );
     assert.deepEqual(
       merchantRiskFromSignals({ ...none, reviewKnown: true, reviewRisk: 20 }),
-      { risk_score: 20, trust_score: 80 }
+      { risk_score: 30, trust_score: 70 }
     );
     // Both: the higher risk, raised by a stored combined score.
     assert.deepEqual(
@@ -223,6 +243,14 @@ async function main() {
         (m) => m.id
       ),
       ['h', 'l', 'n']
+    );
+    // Any trust threshold, 0 included, needs a real score; a real 0 passes 0.
+    const zero = merchant('z', 5, 10, 0);
+    assert.deepEqual(
+      filterAndSortMerchants([unscored, zero], { minTrust: 0 }).map(
+        (m) => m.id
+      ),
+      ['z']
     );
     // In no risk tier, "warning" included.
     for (const riskTier of ['safe', 'moderate', 'warning'] as const) {

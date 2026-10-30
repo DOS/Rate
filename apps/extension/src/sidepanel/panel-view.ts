@@ -122,10 +122,13 @@ function renderOfferRowHtml(
     escapeHtml(String(off.platform ?? '').toUpperCase()),
     star,
     // The combined score, as the product page labels it (DOS/Rate#1280).
+    // No score at all: "no data yet", never 0/100 (DOS/Rate#1484).
     escapeHtml(
-      t('offerCombinedRisk', [
-        formatSafeNumber(off.merchant.risk_score, { min: 0, max: 100 }),
-      ])
+      off.merchant.risk_score == null
+        ? t('offerCombinedRiskNoData')
+        : t('offerCombinedRisk', [
+            formatSafeNumber(off.merchant.risk_score, { min: 0, max: 100 }),
+          ])
     ),
   ].filter(Boolean);
   const marksHtml = [

@@ -4328,6 +4328,17 @@ async function runTests() {
       panelSource.includes('(b.trust_score ?? -1) - (a.trust_score ?? -1)')
     );
     assert.ok(panelSource.includes('merchant.trust_score == null'));
+    const viewSource = fs.readFileSync(
+      path.join(__dirname, 'sidepanel/panel-view.ts'),
+      'utf8'
+    );
+    assert.ok(
+      /off\.merchant\.risk_score == null\s*\?\s*t\('offerCombinedRiskNoData'\)/.test(
+        viewSource
+      )
+    );
+    assert.ok(t('offerCombinedRiskNoData').length > 0);
+    assert.equal(t('noDataYet').includes('/100'), false);
     console.log('  ✅ [Unknown trust score reads as no data (#1484)] Verified');
   }
 
