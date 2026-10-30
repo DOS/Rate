@@ -105,13 +105,13 @@ export function withoutRetractedSpecs<T>(
 
 /**
  * The spec columns a seed writes onto its existing master: specs and key specs merged into
- * the stored ones, minus the seed's retracted paths, and the variant name of a replaced
- * seed. Shared by the full backfill and the quick sync, so neither keeps a retracted value.
+ * the stored ones, minus the seed's retracted paths, and for a replaced seed its variant
+ * name and value columns. Shared by the full backfill and the quick sync, so neither keeps a retracted value.
  */
 export function seedMasterSpecUpdate(
   existing: { specifications?: unknown; key_specs?: unknown } | null | undefined,
   seed: FlagshipDeviceSeed
-): { specifications: unknown; key_specs: unknown; variant_name?: string } {
+): Record<string, unknown> {
   return {
     specifications: withoutRetractedSpecs(
       mergeProductSpecifications(existing?.specifications, seed.specifications, seed.colors),
@@ -123,8 +123,20 @@ export function seedMasterSpecUpdate(
       seed.retract_spec_fields,
       'key_specs'
     ),
-    // A replaced, unsourced seed's label ("16GB/256GB") follows the new one.
-    ...(seed.retract_spec_fields ? { variant_name: seed.variant_name } : {}),
+    // A replaced, unsourced seed's label ("16GB/256GB") and columns (RAM, battery, colours)
+    // follow the new one, on both entry points.
+    ...(seed.retract_spec_fields
+      ? {
+          variant_name: seed.variant_name,
+          description: seed.description,
+          ram_gb: seed.ram_gb,
+          storage_gb: seed.storage_gb,
+          screen_size_inch: seed.screen_size_inch,
+          battery_mah: seed.battery_mah,
+          has_5g: seed.has_5g,
+          colors: seed.colors,
+        }
+      : {}),
   };
 }
 
