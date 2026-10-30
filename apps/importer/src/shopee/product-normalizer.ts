@@ -2276,7 +2276,7 @@ export class ProductNormalizer {
           );
         if (wordHead && modelTokens.length > 0) {
           if (
-            !/^(?:LTE|GPS|(?:RAM|ROM)(?:\d+(?:GB|TB)?)?|OLED|WiFi|Chính\p{L}*|Hàng\p{L}*|Quốc\p{L}*|Bản|Mới|Fullbox|Likenew|Like|Cũ|VNA)$/iu.test(
+            !/^(?:(?:LTE|GPS|RAM|ROM|OLED|WiFi)(?:\d\w*|DDR\w*)?|Chính\p{L}*|Hàng\p{L}*|Quốc\p{L}*|Bản|Mới|Fullbox|Likenew|Like|Cũ|VNA)$/iu.test(
               wordHead[1]!
             )
           ) {
@@ -2380,7 +2380,13 @@ export class ProductNormalizer {
       ...title.matchAll(
         /(?=(\b(\d{1,2}|\d{3,4}(?=\s*GB\s*\/\s*(?:[1-9]|[12]\d)\s*GB\b))\s*(GB\s*)?\/\s*(\d+(?:[.,]\d+)?)\s*(TB|GB)\b))/gi
       ),
-    ];
+    ].filter(
+      m =>
+        m[2]!.length < 3 ||
+        !/\bRAM(?:\s*[:\-–]?\s*(?:LP)?DDR\w*(?:\s+\d+\s*MHz)?)?\s*[:\-–]?\s*$/i.test(
+          title.slice(0, m.index)
+        )
+    );
     const lastSlashPair =
       slashPairs.find(
         m =>

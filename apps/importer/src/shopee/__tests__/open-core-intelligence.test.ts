@@ -1193,6 +1193,8 @@ async function runSuite() {
     ['Samsung Galaxy A55 ROM128/256GB', 'samsung:galaxy-a55:256gb'],
     ['Samsung Galaxy A55 RAM8GB/256GB', 'samsung:galaxy-a55:256gb'],
     ['Samsung Galaxy A55 Quốctế/256GB', 'samsung:galaxy-a55:256gb'],
+    ['Xiaomi Pad 6 WiFi6/8GB/256GB', 'xiaomi:pad-6:256gb'],
+    ['Lenovo ThinkPad P16 RAM 128GB/16GB RAM SSD 1TB', 'lenovo:thinkpad-p16:1024gb'],
     ['Lenovo ThinkPad T14 RAM DDR 32GB/16GB/512GB SSD', 'lenovo:thinkpad-t14:512gb'],
     ['Lenovo ThinkPad T14 RAM DDR4 3200MHz 32GB/16GB/512GB', 'lenovo:thinkpad-t14:512gb'],
     // Two storages, largest first, form no pair: "128GB/64GB" lists two variants.
