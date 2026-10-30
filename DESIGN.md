@@ -121,17 +121,18 @@ To ensure Rate.vn is unmistakably a **Rating & Review Platform**, every Product 
    - **Compact Neutral Market Reference Strip:**
      - A single, understated horizontal bar at the bottom of the card showing the reference market price range (`Giá tham khảo trung lập từ N nguồn kiểm định`) with a subtle link to `#price-history-section`. No flashy red discount banners.
 
-### 4.2 Section #1 (Immediately Below Header): JReviews Community & Anti-Seeding Audit (`#jreviews-section`)
+### 4.2 Section #1 (Immediately Below Header): 10-Group Canonical Technical Specifications (`#specs-section`)
 
-- Placed **first** in the page body so users immediately engage with community ratings, AI seeding flags, pros/cons, and the interactive 5-criteria review submission form.
-- Includes filter tabs (`Tất cả`, `Review thật đã xác thực`, `Nghi vấn Seeding bị loại trừ`), helpful/report voting (`POST /api/reviews/[id]/vote`), and per-review AI confidence telemetry.
-
-### 4.3 Section #2: 10-Group Canonical Technical Specifications (`#specs-section`)
-
+- Placed **first** in the page body, before the reviews, as JOY decided on 2026-10-30 (DOS/Rate#1436). The above-the-fold card carries no quick-spec cards; in their place it links the model's other variants (storage, colour) with their "from" prices, the current one marked.
 - Renders all **10 canonical Field Groups** (`Display`, `Hardware`, `Camera`, `Battery`, `Design`, `Cellular`, `Connectivity`, `Multimedia`, `Availability`, `Regulatory`) in a unified **RTINGS/Linear two-column specification matrix**:
   - Clean slate card header with group index badge (`01` .. `10`).
   - Crisp `1px` row dividers, left column `38%` muted label, right column `62%` high-contrast tabular value.
   - Zero rainbow Bootstrap badges inside specification rows.
+
+### 4.3 Section #2: JReviews Community & Anti-Seeding Audit (`#jreviews-section`)
+
+- Placed right after the specifications, so users engage with community ratings, AI seeding flags, pros/cons, and the interactive 5-criteria review submission form.
+- Includes filter tabs (`Tất cả`, `Review thật đã xác thực`, `Nghi vấn Seeding bị loại trừ`), helpful/report voting (`POST /api/reviews/[id]/vote`), and per-review AI confidence telemetry.
 
 ### 4.4 Section #3 (Bottom Appendix): Price History Audit & Neutral Merchant Telemetry (`#price-history-section` & `#offers-table`)
 
