@@ -9,6 +9,7 @@ import { Link } from '@/lib/navigation';
 import { IntentLink } from '@/components/elementary/IntentLink';
 import { getCategoryRouteHref, resolveProductImageUrl } from '@/lib/rate-api';
 import { sizedStoreImageUrl } from '@/lib/rate-domain-core';
+import { deviceImageSrcSet } from '@/lib/device-images';
 import {
   getCachedMerchantProfileById,
   getCrossPlatformDealRadar,
@@ -981,9 +982,17 @@ export default async function MerchantProfilePage({
                           <td>
                             <div className="d-flex align-items-center gap-3">
                               {resolvedImg && (
+                                // A local device photo loads its pre-sized
+                                // WebP, not the full JPEG (DOS/Rate#1500,
+                                // #1332). srcSet and sizes come before src,
+                                // so the JPEG never starts (#1413).
                                 <img
                                   loading="lazy"
                                   decoding="async"
+                                  srcSet={
+                                    deviceImageSrcSet(resolvedImg) ?? undefined
+                                  }
+                                  sizes="52px"
                                   src={resolvedImg}
                                   alt={item.title}
                                   lang={contentLang(item.title, locale)}
