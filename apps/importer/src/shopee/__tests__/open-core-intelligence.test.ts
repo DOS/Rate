@@ -1398,6 +1398,10 @@ async function runSuite() {
     // are models.
     ['Samsung Galaxy Sky Black/16GB', 'samsung:galaxy-sky:16gb'],
     ['Acer Liquid Jade Black/16GB', 'acer:liquid-jade:16gb'],
+    // Phantom is a colour name at Samsung and Asus, a line at Tecno (DOS/Rate#1495).
+    ['Samsung Galaxy S23 Phantom Black/256GB', 'samsung:galaxy-s23:256gb'],
+    ['Samsung Galaxy S22 Ultra Phantom Đen/256GB', 'samsung:galaxy-s22-ultra:256gb'],
+    ['Tecno Phantom Black/12GB/256GB', 'khac:tecno-phantom:256gb'],
     ['MSI Pulse GL66 Titanium Gray/16GB/512GB', 'msi:pulse-gl66:512gb'],
     // A laptop's "Titan Gray" or "Titanium Gray" is still its colour name.
     ['Laptop Dell Latitude 7440 Titan Gray/16GB/512GB', 'dell:latitude-7440:512gb'],
