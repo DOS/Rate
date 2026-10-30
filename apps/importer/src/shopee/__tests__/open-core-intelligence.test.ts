@@ -1223,6 +1223,26 @@ async function runSuite() {
   ] as const) {
     assert.equal(keyOf(title), key, title);
   }
+  // A spaced Fold or Flip number keys like the glued one, and keeps its "Ultra" or "FE";
+  // the iPad mini's launch year names its generation (DOS/Rate#1491).
+  for (const [title, key] of [
+    ['Samsung Galaxy Z Fold 8 Ultra 5G 256GB', 'samsung:galaxy-z-fold8-ultra:256gb'],
+    ['Samsung Galaxy Z Fold8 Ultra 256GB', 'samsung:galaxy-z-fold8-ultra:256gb'],
+    ['Samsung Galaxy Fold8 Ultra 256GB', 'samsung:galaxy-z-fold8-ultra:256gb'],
+    ['Samsung Galaxy Z Fold 8 256GB', 'samsung:galaxy-z-fold8:256gb'],
+    ['Samsung Galaxy Z Flip 8 256GB', 'samsung:galaxy-z-flip8:256gb'],
+    ['Samsung Galaxy Z Flip 7 FE 128GB', 'samsung:galaxy-z-flip7-fe:128gb'],
+    ['Samsung Galaxy Z Fold Special Edition 512GB', 'samsung:galaxy-z-fold-special:512gb'],
+    ['Apple iPad mini (2026) Wi-Fi 128GB', 'apple:ipad-mini-8:128gb'],
+    ['iPad mini 2026 128GB', 'apple:ipad-mini-8:128gb'],
+    ['Apple iPad mini 8 Wi-Fi 128GB', 'apple:ipad-mini-8:128gb'],
+    // Another brand's "Flip 6" and a date after "Fold" are left alone.
+    ['JBL Flip 6 tặng dây', 'jbl:flip-6:unknown'],
+    ['Samsung Galaxy Fold 12/512GB/5G', 'samsung:galaxy-fold:512gb'],
+    ['iPad mini (A17 Pro) Wi-Fi 128GB', 'apple:ipad-mini-7:128gb'],
+  ] as const) {
+    assert.equal(keyOf(title), key, title);
+  }
   // A long run of promo words costs linear time (CodeQL js/polynomial-redos).
   {
     const started = performance.now();

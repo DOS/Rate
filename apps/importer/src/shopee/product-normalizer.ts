@@ -2046,9 +2046,20 @@ export class ProductNormalizer {
         // "iPad mini 6" and "iPad mini 7" are two models, not one "iPad mini"; Apple calls the
         // 7th "iPad mini (A17 Pro)", and "8.3 inch" or "8,3 inch" is the screen (DOS/Rate#819).
         // One digit, not a "5G" or "4G" network or a storage ("mini 64 Wifi").
+        // "iPad mini (2026)" is the mini 8, so the chains that write the year key like the
+        // ones that write the number (DOS/Rate#1491). The older years keep their stored
+        // "ipad-mini" key ("iPad mini 2024", DOS/Rate#819) until a re-key decides otherwise.
         const mini = line.match(/^mini\s*([1-9])?$/i);
         if (mini)
-          line = `mini${mini[1] ? ` ${mini[1]}` : /\ba17\s*pro\b/i.test(appleTitle) ? ' 7' : ''}`;
+          line = `mini${
+            mini[1]
+              ? ` ${mini[1]}`
+              : /\ba17\s*pro\b/i.test(appleTitle)
+                ? ' 7'
+                : /\bmini\s*\(?\s*2026\s*\)?(?!\d)/i.test(appleTitle)
+                  ? ' 8'
+                  : ''
+          }`;
         model = /^(pro|air)$/i.test(line) && chip ? `iPad ${line} ${chip}` : `iPad ${line}`;
       } else if (macbookMatch && macbookMatch[1]) {
         const line = macbookMatch[1].trim().replace(/^neo$/i, 'Neo');
@@ -2176,6 +2187,14 @@ export class ProductNormalizer {
         .replace(/\bvivo\s+book\b/gi, 'Vivobook')
         // "17 ProMax" keys like "17 Pro Max" (DOS/Rate#815).
         .replace(/\b(pro)(max)\b/gi, '$1 $2')
+        // "Z Fold 8 Ultra" and "Z Flip 8" key like "Z Fold8 Ultra" and "Z Flip8", the way
+        // Samsung and most chains write them (DOS/Rate#1491).
+        .replace(
+          /\b((?:Z|Galaxy)\s+(?:Fold|Flip))\s+(\d{1,2})(?![\d.,/]|\s*(?:\/|GB|TB|inch|in\b|"))/gi,
+          '$1$2'
+        )
+        // So does a numbered Fold or Flip written without its "Z" ("Galaxy Fold8 Ultra").
+        .replace(/\bGalaxy\s+(?=(?:Fold|Flip)\d)/gi, 'Galaxy Z ')
         .trim();
       const rawTokens = cleaned.split(/\s+/).filter(Boolean);
       const modelTokens: string[] = [];
