@@ -2270,15 +2270,40 @@ export class ProductNormalizer {
       /dung lượng\s*(?:[:-]\s*)?(\d+(?:[.,]\d+)?)\s*(TB|GB)(?!\s*(?:RAM|bộ\s*nhớ\s*RAM|dung\s*lượng\s*RAM))/i
     );
 
-    const slashRamRom = title.match(/\b(\d{1,2})\s*(?:GB\s*)?\/\s*(\d+(?:[.,]\d+)?)\s*(TB|GB)\b/i);
-    // Storage first ("64GB/4GB") reads the same pair the other way round (DOS/Rate#1421).
+    // The pair is the first one that ends on a storage (32GB or more): "Redmi 13/8GB/256GB"
+    // and "Realme GT 6 16/12GB/512GB" are 8GB and 12GB RAM, not a 13 or 16 before them, and
+    // a list of variants ("6GB/128GB/8GB/256GB") keys as its first, as before. With no such
+    // pair, the chain's last link (DOS/Rate#1438).
+    const slashPairs = [
+      ...title.matchAll(/(?=(\b(\d{1,2})\s*(GB\s*)?\/\s*(\d+(?:[.,]\d+)?)\s*(TB|GB)\b))/gi),
+    ];
+    const lastSlashPair =
+      slashPairs.find(m => /^TB$/i.test(m[5]!) || parseFloat(m[4]!.replace(',', '.')) >= 32) ??
+      slashPairs.find(m => !/^\s*\/\s*\d/.test(title.slice(m.index + m[1]!.length))) ??
+      slashPairs[0];
+    // "16/2GB RAM": the RAM word names the second number, so the first is the storage.
+    const ramAfterSlashPair =
+      lastSlashPair !== undefined &&
+      /^\s*RAM\b/i.test(title.slice(lastSlashPair.index + lastSlashPair[1]!.length));
+    const slashRamRom = lastSlashPair
+      ? ([lastSlashPair[1]!, lastSlashPair[2]!, lastSlashPair[4]!, lastSlashPair[5]!] as const)
+      : null;
+    // Storage first ("64GB/4GB") reads the same pair the other way round (DOS/Rate#1421), but
+    // only when the first number is a storage: it states GB, or it is 32 or more. A bare
+    // screen size or model number before a pair ("Vivobook 14/8GB") is no storage.
     const slashSecondGb = slashRamRom
       ? parseFloat(slashRamRom[2].replace(',', '.')) *
         (slashRamRom[3].toUpperCase() === 'TB' ? 1024 : 1)
       : 0;
-    const slashReversed = slashRamRom !== null && parseInt(slashRamRom[1], 10) > slashSecondGb;
+    const slashFirst = slashRamRom ? parseInt(slashRamRom[1], 10) : 0;
+    const slashReversed =
+      slashRamRom !== null &&
+      slashFirst > slashSecondGb &&
+      (Boolean(lastSlashPair?.[3]) || slashFirst >= 32 || ramAfterSlashPair);
+    // A bare number before a smaller RAM ("Vivobook 14/8GB") names no storage at all.
+    const slashNoStorage = slashRamRom !== null && slashFirst > slashSecondGb && !slashReversed;
     if (slashRamRom && ramPhrases.length === 0) {
-      const slashRam = slashReversed ? slashSecondGb : parseInt(slashRamRom[1], 10);
+      const slashRam = slashReversed || slashNoStorage ? slashSecondGb : slashFirst;
       for (const c of claimable) {
         if (!c.claimed && c.value === slashRam) {
           c.claimed = true;
@@ -2348,10 +2373,8 @@ export class ProductNormalizer {
         storageGb = candidateStorage;
         storageConfident = true;
       }
-    } else if (slashRamRom) {
-      const candidateStorage = toValidStorageGb(
-        slashReversed ? parseInt(slashRamRom[1], 10) : slashSecondGb
-      );
+    } else if (slashRamRom && !slashNoStorage) {
+      const candidateStorage = toValidStorageGb(slashReversed ? slashFirst : slashSecondGb);
       if (candidateStorage !== null) {
         storageGb = candidateStorage;
         storageConfident = true;
