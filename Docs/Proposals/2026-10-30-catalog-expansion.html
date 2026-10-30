@@ -44,6 +44,9 @@
     table { width: 100%; border-collapse: collapse; font-size: 14px; min-width: 620px; }
     th, td { border: 1px solid var(--border); padding: 8px 10px; text-align: left; vertical-align: top; }
     th { background: var(--surface-2); color: #fff; }
+    h3 { font-size: 16px; margin: 24px 0 8px; color: #fff; }
+    pre { background: var(--code-bg); border: 1px solid var(--border); border-radius: 8px; padding: 12px; overflow-x: auto; }
+    pre code { border: 0; padding: 0; }
     code { background: var(--code-bg); border: 1px solid var(--border); border-radius: 4px; padding: 1px 5px; font-size: 13px; overflow-wrap: anywhere; }
     .q { border-left: 3px solid var(--accent); padding-left: 12px; margin: 16px 0; }
     .q strong { color: #fff; }
@@ -122,7 +125,14 @@
   </ol>
 
   <h2>6. Những điều JOY cần quyết</h2>
-  <div class="q"><strong>D1. Phạm vi đợt đầu.</strong> <span class="rec-line">Đề xuất: nhóm A1 đến A3, khoảng 25 dung lượng.</span> Nhóm B và C làm sau, khi nhóm A đã có giá và lên trang.</div>
+  <div class="q"><strong>D1. Phạm vi đợt đầu (sửa lại theo danh sách thiếu của RS#790, mục 7).</strong> <span class="rec-line">Đề xuất: đợt 1 gồm 22 dòng máy và 68 key ở mục 7.2, chia làm hai bước.</span>
+    <ul>
+      <li><strong>Đợt 1a, điện thoại:</strong> 14 dòng máy, 39 key, trong đó 37 key mới. Bắt đầu khi bản sửa tên Fold/Flip viết cách (#1491 a) đã lên và Rate Services xác nhận đủ công suất crawl.</li>
+      <li><strong>Đợt 1b, iPad và MacBook:</strong> 8 dòng máy, 29 key. Chờ #1491 (c) và (d) tách iPad Wi-Fi/5G và các bản RAM MacBook thành key riêng. Nếu chưa tách, một sản phẩm sẽ trộn các cấu hình chênh giá 25-50%, và bộ kiểm chênh giá sẽ đọc thành khuyến mãi ảo.</li>
+      <li><strong>Đợt 2:</strong> Xiaomi, Honor, OPPO, MacBook Pro M5 Pro/Max và các cấu hình chỉ một chuỗi bán. Làm sau khi đợt 1 đã có giá và lên trang.</li>
+      <li>Đề xuất này thay cho "nhóm A1 đến A3, khoảng 25 dung lượng" trước đây.</li>
+    </ul>
+  </div>
   <div class="q"><strong>D2. Cách xuất bản.</strong>
     <ul>
       <li>(a) Tự xuất bản sản phẩm tạo sẵn khi đã có ít nhất một listing còn hàng, được crawl thật và đúng máy. Đây là sửa code ở RS hoặc importer, không đổi cấu trúc database.</li>
@@ -132,10 +142,90 @@
   </div>
   <div class="q"><strong>D3. Duyệt chạy job tạo sản phẩm trên production</strong> cho đợt được chọn. Đây là ghi dữ liệu, không phải đổi cấu trúc database.</div>
   <div class="q"><strong>D4. Dung lượng chưa có giá.</strong> Hiện trong nút chọn với chữ "chưa có giá", hay ẩn đi cho đến khi có giá. <span class="rec-line">Đề xuất: hiện, để người mua biết có bản đó.</span></div>
-  <div class="q"><strong>D5. iPhone 18 bản thường và 18e.</strong> Chờ chuỗi bán lẻ Việt Nam bán rồi mới tạo, hay tạo sẵn ở dạng nháp từ bây giờ để RS bắt đầu tìm sớm. <span class="rec-line">Đề xuất: chờ.</span></div>
+  <div class="q"><strong>D5. iPhone 18 bản thường và 18e.</strong> Chờ chuỗi bán lẻ Việt Nam bán rồi mới tạo, hay tạo sẵn ở dạng nháp từ bây giờ để RS bắt đầu tìm sớm. <span class="rec-line">Đề xuất: chờ.</span> RS#790 xác nhận chưa chuỗi nào trong sáu chuỗi bán iPhone 18 bản thường.</div>
+  <div class="q"><strong>D6. Sản phẩm nháp của máy chưa bán.</strong>
+    <ul>
+      <li><code>xiaomi:17-pro-max:512gb</code> và <code>xiaomi:18-pro-max:512gb</code> không có listing nào, và không chuỗi nào bán hai máy này.</li>
+      <li><code>apple:iphone-16-pro:256gb</code> cũng chưa có listing. Bản 16 Pro mới duy nhất đang bán là 128GB.</li>
+      <li>Chọn một trong hai: lưu trữ chúng (ghi dữ liệu), hoặc để nguyên dạng nháp. Khi còn tồn tại, mỗi chu kỳ RS vẫn tốn một lượt tìm cho từng sản phẩm.</li>
+    </ul>
+    <span class="rec-line">Đề xuất: lưu trữ.</span>
+  </div>
+
+  <h2>7. Danh sách thiếu đã đo (RS#790)</h2>
+  <p class="muted">Rate Services đã kiểm sáu chuỗi bán lẻ lớn ở Việt Nam đang bán những model đời mới nào, tạo key bằng bộ chuẩn hoá hiện tại, rồi so với các sản phẩm đang có trên rate.vn (DOS/Rate-Services#790, chỉ đọc, ngày 30/10/2026). Lần kiểm này chưa gồm các sàn thương mại điện tử. Ở đây chỉ giữ số tổng và tên model. Chi tiết lần quét nằm bên Rate Services.</p>
+
+  <h3>7.1 Quy mô chỗ thiếu</h3>
+  <div class="table-wrap">
+  <table>
+    <tr><th>Nhóm</th><th>Dòng máy</th><th>Key dung lượng</th><th>Đã có sản phẩm</th></tr>
+    <tr><td>Đời mới, từ 3 chuỗi trở lên</td><td>50</td><td>122</td><td>3</td></tr>
+    <tr><td>trong đó điện thoại</td><td>32</td><td>69</td><td>2</td></tr>
+    <tr><td>trong đó máy tính bảng</td><td>10</td><td>30</td><td>1</td></tr>
+    <tr><td>trong đó laptop</td><td>8</td><td>23</td><td>0</td></tr>
+    <tr><td>Đời mới, 2 chuỗi</td><td>7</td><td>11</td><td>0</td></tr>
+    <tr><td>Đời trước vẫn còn bán, từ 2 chuỗi</td><td>14</td><td>32</td><td>2</td></tr>
+  </table>
+  </div>
+  <ul>
+    <li><strong>Đang thiếu khoảng 119 sản phẩm</strong> đời mới được bán ở từ 3 chuỗi. Ba sản phẩm đã có là iPhone 18 Pro 256GB, iPhone 18 Pro Max 256GB và iPad Pro M5 11 256GB.</li>
+    <li><strong>Không chuỗi nào trong sáu chuỗi bán:</strong> iPhone 18 bản thường, Xiaomi 17 Pro Max, Xiaomi 18, Pixel 10 và Honor Magic8.</li>
+    <li><strong>Chỉ một chuỗi bán:</strong> iPhone Duo, vivo X300 Pro và X300 Ultra.</li>
+  </ul>
+
+  <h3>7.2 Danh sách đợt 1: 22 dòng máy, 68 key</h3>
+  <div class="table-wrap">
+  <table>
+    <tr><th>Nhóm</th><th>Dòng máy và dung lượng</th><th>Key</th></tr>
+    <tr><td>iPhone</td><td>17 (256GB, 512GB), 17 Pro (256GB, 512GB, 1TB), 17 Pro Max (256GB, 512GB, 1TB, 2TB), 17e (256GB, 512GB), Air (256GB, 512GB, 1TB), 18 Pro (256GB, 512GB, 1TB, 2TB), 18 Pro Max (256GB, 512GB, 1TB, 2TB)</td><td>22</td></tr>
+    <tr><td>Galaxy</td><td>S26 (256GB, 512GB), S26 Plus (256GB, 512GB), S26 Ultra (256GB, 512GB, 1TB), S26 FE (128GB, 256GB), Z Fold8 (256GB, 512GB, 1TB), Z Fold8 Ultra (256GB, 512GB, 1TB), Z Flip8 (256GB, 512GB)</td><td>17</td></tr>
+    <tr><td>iPad</td><td>A16 (128GB, 256GB, 512GB), Air M4 11 (128GB, 256GB, 512GB, 1TB), Air M4 13 (128GB, 256GB, 512GB, 1TB), Pro M5 11 (256GB, 512GB, 1TB, 2TB), Pro M5 13 (256GB, 512GB, 1TB, 2TB)</td><td>19</td></tr>
+    <tr><td>MacBook</td><td>Air M5 13 (512GB, 1TB, 2TB, 4TB), Air M5 15 (512GB, 1TB, 2TB, 4TB), Neo (256GB, 512GB)</td><td>10</td></tr>
+  </table>
+  </div>
+  <ul>
+    <li>65 trong 68 key là mới. Ba key còn lại là sản phẩm đã có.</li>
+    <li>Điện thoại là đợt 1a: 39 key, trong đó 37 key mới. iPad và MacBook là đợt 1b: 29 key (xem D1).</li>
+    <li>Công suất crawl cho đợt 1 do Rate Services lo và thống nhất bên đó.</li>
+  </ul>
+
+  <h3>7.3 Lỗi bộ chuẩn hoá cần sửa trước khi tạo hàng loạt (#1491)</h3>
+  <ul>
+    <li><strong>(a) Tên viết cách.</strong> "Z Fold 8" và "Z Fold 8 Ultra" cùng ra key <code>galaxy-z-fold-8</code>, trong khi các chuỗi khác viết "Fold8". Hệ quả là hai máy chung một key, và một máy có hai key.</li>
+    <li><strong>(b) iPad mini (2026).</strong> Ba chuỗi ra key <code>ipad-mini</code>, ba chuỗi còn lại ra <code>ipad-mini-8</code>.</li>
+    <li><strong>(c) iPad Wi-Fi và 5G.</strong> Hai bản chung một key, ví dụ <code>ipad-air-m4-11:128gb</code>, dù bản 5G đắt hơn khoảng một phần ba.</li>
+    <li><strong>(d) MacBook nhiều mức RAM.</strong> Các bản RAM chung một key, ví dụ bản 24GB và 48GB cùng nằm dưới <code>macbook-pro-m5-pro-14:1024gb</code>.</li>
+  </ul>
+  <p>(a) và (b) là sửa thường. (c) và (d) đổi key iPad và MacBook đang có, nên đi theo kế hoạch đổi key (<code>2026-10-30-rekey-decisions.md</code>) và chờ JOY duyệt.</p>
+
+  <h3>7.4 Kiểm trùng cho JOY (chỉ đọc)</h3>
+  <p>RS mới so được với 22 trong 37 sản phẩm: 16 sản phẩm đã xuất bản và 6 bản nháp chưa có listing. 15 bản nháp đã có listing cần đọc database từ phía Core.</p>
+  <p>Câu lệnh dưới đây chỉ đọc, chạy trong một giao dịch rồi huỷ (ROLLBACK). Nó liệt kê mọi sản phẩm đang có trong các dòng máy của đợt 1, kèm số listing:</p>
+  <pre><code>BEGIN READ ONLY;
+SELECT m.model_key, m.status, count(p.id) AS listings
+FROM rate.master_products m
+LEFT JOIN rate.products p ON p.cluster_id = m.id
+WHERE split_part(m.model_key, ':', 1) || ':' || split_part(m.model_key, ':', 2) = ANY (ARRAY[
+  'apple:iphone-17', 'apple:iphone-17-pro', 'apple:iphone-17-pro-max', 'apple:iphone-17e',
+  'apple:iphone-air', 'apple:iphone-18-pro', 'apple:iphone-18-pro-max',
+  'samsung:galaxy-s26', 'samsung:galaxy-s26-plus', 'samsung:galaxy-s26-ultra', 'samsung:galaxy-s26-fe',
+  'samsung:galaxy-z-fold8', 'samsung:galaxy-z-fold8-ultra', 'samsung:galaxy-z-flip8',
+  'samsung:galaxy-z-fold-8', 'samsung:galaxy-z-flip-8',
+  'apple:ipad-a16', 'apple:ipad-air-m4-11', 'apple:ipad-air-m4-13', 'apple:ipad-pro-m5-11',
+  'apple:ipad-pro-m5-13', 'apple:ipad-mini', 'apple:ipad-mini-8',
+  'apple:macbook-air-m5-13', 'apple:macbook-air-m5-15', 'apple:macbook-neo'])
+GROUP BY m.model_key, m.status
+ORDER BY m.model_key;
+ROLLBACK;</code></pre>
+  <p>Danh sách có cả key viết cách của Fold/Flip và cả hai key iPad mini, nên sản phẩm nào đã lỡ tạo theo key bị tách cũng hiện ra.</p>
+  <ul>
+    <li><strong>Key nào có trong kết quả là trùng:</strong> job tạo sản phẩm sẽ bỏ qua key đó, và listing đang gắn vẫn giữ nguyên.</li>
+    <li><strong>Key viết cách hoặc key bị tách mà đã có listing</strong> cần đổi key theo D1 của kế hoạch đổi key trước khi bắt đầu đợt 1.</li>
+  </ul>
 
   <h2>Nguồn</h2>
   <ul class="muted">
+    <li>DOS/Rate-Services#790: danh sách sản phẩm còn thiếu (Rate Services, 30/10/2026, chỉ đọc)</li>
     <li><a href="https://news.tuoitre.vn/iphone-18-lineup-prices-in-vietnam-iphone-duo-tops-4000-103260910153921165.htm">Tuổi Trẻ: giá dòng iPhone 18 tại Việt Nam</a></li>
     <li><a href="https://vietnamnet.vn/en/apple-reveals-vietnam-prices-for-iphone-18-pro-and-foldable-duo-2553978.html">VietNamNet: giá iPhone 18 Pro và iPhone Duo</a></li>
     <li><a href="https://fptshop.com.vn/tin-tuc/danh-gia/bang-gia-iphone-18-212900">FPT Shop: bảng giá iPhone 18 Pro</a></li>
