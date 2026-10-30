@@ -1726,6 +1726,16 @@ export class ProductNormalizer {
         // length or a "S/M" band is no series (DOS/Rate#1402).
         /(?:apple\s*)?watch\s*(ultra(?:\s*\d+(?!\d|\s*mm\b))?|series\s*\d+|se(?:\s*\d+(?!\d|\s*(?:mm|gb|tb)\b)|(?![a-z]))|s ?(?:1\d|[1-9])(?![\d.,a-z]|\s*(?:mm|cm|gb|tb|inch)\b| ?[-–] ?\d+(?:[.,]\d+)? ?cm\b))/i
       );
+      // A watch named only after "tặng", "kèm" or a "+" is a gift or a bundle when the
+      // product's own part names another Apple product: "HomePod mini tặng dây Apple Watch
+      // Series 10 42mm" is the HomePod mini (DOS/Rate#1407).
+      const giftPart = appleTitle.split(/ ?\+ | (?:kèm|tặng) /i)[0]!;
+      const watchIsGift =
+        watchMatch !== null &&
+        (watchMatch.index ?? 0) >= giftPart.length &&
+        /airpods|homepod|\bipad\b|\biphone\b|macbook|apple\s*tv|\bimac\b|\bmac\s*(?:mini|studio)\b|apple\s*pencil|vision\s*pro/i.test(
+          giftPart
+        );
       const airpodsMatch = appleTitle.match(
         // Each run of spaces has exactly one `\s*` that can match it, so long
         // whitespace cannot backtrack polynomially (CodeQL js/polynomial-redos).
@@ -1816,7 +1826,7 @@ export class ProductNormalizer {
           /^(pro|air)$/i.test(line) && chip
             ? `MacBook ${line} ${chip}${chipMatch?.[2] ? ` ${chipMatch[2]}` : ''}`
             : `MacBook ${line}`;
-      } else if (watchMatch && watchMatch[1]) {
+      } else if (watchMatch && watchMatch[1] && !watchIsGift) {
         // "S10" keys like "Series 10" (DOS/Rate#1402).
         model = `Watch ${watchMatch[1].trim().replace(/^s ?(?=\d)/i, 'Series ')}`;
       } else if (airpodsMatch) {

@@ -990,6 +990,24 @@ async function runSuite() {
   assert.equal(keyOf('Apple Watch S10.46mm'), 'apple:watch:unknown');
   assert.equal(keyOf('Samsung Galaxy S10 128GB'), 'samsung:galaxy-s10:128gb');
   assert.equal(keyOf('Xiaomi Watch S1 Active'), 'xiaomi:watch-s1-active:unknown');
+  // A watch named only after "tặng", "kèm" or "+" is a gift or a bundle when the
+  // product's own part names another Apple product (DOS/Rate#1407).
+  assert.equal(
+    keyOf('HomePod mini tặng dây Apple Watch Series 10 42mm'),
+    'apple:homepod-mini:unknown'
+  );
+  assert.equal(
+    keyOf('AirPods Pro 2 tặng dây Apple Watch Series 10'),
+    'apple:airpods-pro-2:unknown'
+  );
+  assert.equal(keyOf('AirPods Pro 2 kèm sạc Apple Watch S10'), 'apple:airpods-pro-2:unknown');
+  assert.equal(keyOf('HomePod 2 + Apple Watch Series 10 46mm'), 'apple:homepod-2:unknown');
+  assert.equal(keyOf('iPad Pro M4 tặng Apple Watch Series 10'), 'apple:ipad-pro-m4:unknown');
+  // The watch itself, with a gift after it or nothing else before it, stays the watch.
+  assert.equal(keyOf('Apple Watch Series 10 46mm tặng dây'), 'apple:watch-series-10-46mm:64gb');
+  assert.equal(keyOf('Quà tặng Apple Watch Series 10 46mm'), 'apple:watch-series-10-46mm:64gb');
+  assert.equal(keyOf('Dây Apple Watch Series 10 46mm tặng ốp'), 'apple:watch-series-10-46mm:64gb');
+  assert.equal(keyOf('Apple Watch Ultra 2 49mm tặng AirPods'), 'apple:watch-ultra-2:unknown');
   // With no line matched, the family the title names first, else iPhone.
   assert.equal(keyOf('MacBook M4'), 'apple:macbook:unknown');
   assert.equal(keyOf('Apple "iPad" 256GB'), 'apple:ipad:256gb');
