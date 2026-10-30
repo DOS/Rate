@@ -37,10 +37,16 @@ interface VersusPageProps {
   params: Promise<{ locale: string; versus: string }>;
 }
 
-export function parseVersusSlugs(rawVersus: string): [string, string] | null {
-  const cleaned = decodeURIComponent(rawVersus || '')
-    .toLowerCase()
-    .trim();
+/**
+ * The two slugs of a versus URL, lower-cased, or with their case kept for the
+ * catalogue lookup (Item slugs are matched exactly, DOS/Rate#1383).
+ */
+export function parseVersusSlugs(
+  rawVersus: string,
+  keepCase = false
+): [string, string] | null {
+  const decoded = decodeURIComponent(rawVersus || '').trim();
+  const cleaned = keepCase ? decoded : decoded.toLowerCase();
   const parts = cleaned.split('-vs-');
   if (parts.length !== 2) return null;
   const slugA = parts[0]?.trim() || '';
@@ -70,7 +76,10 @@ export async function generateMetadata({
   }
 
   // RATE_ITEM_MODEL on: the Item pair is the page (DOS/Rate#1156).
-  const plan = await resolveVersusPlan(parsed[0], parsed[1]);
+  // The Item lookup is exact: the slugs go as typed, each side falling back
+  // to lower case (DOS/Rate#1383).
+  const asTyped = parseVersusSlugs(versus, true) ?? parsed;
+  const plan = await resolveVersusPlan(asTyped[0], asTyped[1]);
   if (plan && plan.kind !== 'render') {
     return notFoundMeta();
   }
@@ -131,7 +140,10 @@ export default async function VersusComparePage({ params }: VersusPageProps) {
   // RATE_ITEM_MODEL on: versus URLs name Items, an old variant pair 308s to
   // its Item pair and a same-Item pair is no versus (DOS/Rate#1156); off:
   // null, and the page is as before.
-  const plan = await resolveVersusPlan(parsed[0], parsed[1]);
+  // The Item lookup is exact: the slugs go as typed, each side falling back
+  // to lower case (DOS/Rate#1383).
+  const asTyped = parseVersusSlugs(versus, true) ?? parsed;
+  const plan = await resolveVersusPlan(asTyped[0], asTyped[1]);
   if (plan?.kind === 'redirect') permanentRedirect(plan.to);
   if (plan?.kind === 'not_found') notFound();
   // One URL per pair, its slugs sorted: the other order, letter case or
