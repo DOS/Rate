@@ -264,13 +264,17 @@ const APPLE_FAMILIES: ReadonlyArray<readonly [RegExp, string]> = [
  * The product's own part of a title, before a gift or bundle after it: "HomePod mini" in
  * "HomePod mini tặng dây Apple Watch Series 10", "MacBook Air M3" in "MacBook Air M3 +
  * Apple Watch", "HomePod mini (Tặng dây Apple Watch)". A marker that opens the title
- * ("Tặng ốp - Apple Watch") leaves it whole; one after only a bracket or a word ("[Tặng
- * ốp] Apple Watch", "Quà tặng Apple Watch") leaves a part that names no product. Composed
+ * ("Tặng ốp - Apple Watch", "[Tặng ốp] Apple Watch") leaves it whole; one after only a
+ * word ("Quà tặng Apple Watch") leaves a part that names no product. Composed
  * form, so "tặng" is found in a decomposed (NFD) title too (DOS/Rate#1407).
  */
 function ownProductPart(title: string): string {
   const composed = title.normalize('NFC');
-  const at = composed.search(/(?<![\p{L}\d])(?:tặng|kèm)(?![\p{L}\d])| ?\+ /iu);
+  // A bracketed promo that opens the title is skipped: "[Sạc Apple Watch tặng kèm]
+  // AirPods Pro 2" is the AirPods.
+  const lead = /^\s*(?:\[[^\]]*\]|\([^)]*\)|【[^】]*】)/u.exec(composed)?.[0].length ?? 0;
+  const found = composed.slice(lead).search(/(?<![\p{L}\d])(?:tặng|kèm)(?![\p{L}\d])| ?\+ /iu);
+  const at = found < 0 ? -1 : lead + found;
   return at > 0 ? composed.slice(0, at) : composed;
 }
 

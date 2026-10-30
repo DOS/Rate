@@ -1048,10 +1048,16 @@ async function runSuite() {
     keyOf('[Tặng ốp iPhone + dây đeo] Apple Watch Series 10 46mm'),
     'apple:watch-series-10-46mm:64gb'
   );
+  assert.equal(keyOf('[Sạc Apple Watch tặng kèm] AirPods Pro 2'), 'apple:airpods-pro-2:unknown');
+  assert.equal(
+    keyOf('[Tặng ốp iPhone] AirPods Pro 2 tặng dây Apple Watch Series 10'),
+    'apple:airpods-pro-2:unknown'
+  );
   // The cut stays linear on a long run of separators.
   const cutStart = Date.now();
   detectCategorySlug(`Apple Watch Series 10 46mm${','.repeat(64_000)}x`);
   detectCategorySlug(`HomePod mini${' +'.repeat(32_000)}x`);
+  detectCategorySlug(`[${'['.repeat(64_000)}x`);
   assert.ok(Date.now() - cutStart < 500, 'gift cut is linear');
   // The gifted AirPods no longer make the watch earbuds, so it keys like the bare title.
   assert.equal(keyOf('Apple Watch Ultra 2 49mm tặng AirPods'), keyOf('Apple Watch Ultra 2 49mm'));
