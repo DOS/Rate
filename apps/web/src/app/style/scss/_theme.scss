@@ -398,12 +398,13 @@
   color: var(--rate-fg-primary);
   border-color: var(--rate-border-subtle);
 
-  .text-white:not(.btn, .badge),
-  .text-light:not(.btn, .badge) {
+  // A .bg-dark chip or block stays dark, so its white text stays too.
+  .text-white:not(.btn, .badge, .bg-dark, .bg-dark *),
+  .text-light:not(.btn, .badge, .bg-dark, .bg-dark *) {
     color: var(--rate-fg-primary) !important;
   }
 
-  .text-white-50 {
+  .text-white-50:not(.bg-dark, .bg-dark *) {
     color: var(--rate-fg-secondary) !important;
   }
 
