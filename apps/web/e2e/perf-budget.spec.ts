@@ -1,4 +1,5 @@
 import { devices, expect, test, type Page } from '@playwright/test';
+import { DEVICE_IMAGE_RENDITIONS } from '../src/lib/device-image-renditions';
 
 // Performance budget for the main pages on a phone (DOS/Rate#1496): what a
 // first load transfers, so this cycle's wins (#1330, #1415, #1416, #1419)
@@ -10,65 +11,74 @@ import { devices, expect, test, type Page } from '@playwright/test';
 const { defaultBrowserType: _, ...phone } = devices['Pixel 7'];
 test.use(phone);
 
-type Budget = { js: number; css: number; prefetch: number };
+type Kind = 'html' | 'js' | 'css' | 'prefetch';
+type Budget = Record<Kind, number>;
 
 const KB = 1024;
-// Measured on CI on 2026-10-30 (E2E job, PR #1497): JS / CSS / prefetch KB.
-// home 320.3 / 43.5 / 0; category 338.8 / 45.4 / 6.3-7.9; product
-// 352.1 / 43.5 / 1.7-4.2; merchant 313.7 / 43.5 / 3.4. Prefetches depend on
-// timing, so their budget is the highest run plus 10%, at least 4 KB.
+// Measured on CI on 2026-10-30 (E2E job, PR #1497): JS / CSS KB.
+// home 320.3 / 43.5; category 338.8 / 45.4; product 352.1 / 43.5;
+// merchant 313.7 / 43.5.
 const PAGES: Record<string, { path: string; budget: Budget }> = {
-  home: { path: '/', budget: { js: 353 * KB, css: 48 * KB, prefetch: 4 * KB } },
+  home: {
+    path: '/',
+    budget: { html: 1, js: 353 * KB, css: 48 * KB, prefetch: 1 },
+  },
   category: {
     path: '/smartphones',
-    budget: { js: 373 * KB, css: 50 * KB, prefetch: 9 * KB },
+    budget: { html: 1, js: 373 * KB, css: 50 * KB, prefetch: 1 },
   },
   product: {
     path: '/smartphones/iphone-16-pro-max-256gb',
-    budget: { js: 388 * KB, css: 48 * KB, prefetch: 5 * KB },
+    budget: { html: 1, js: 388 * KB, css: 48 * KB, prefetch: 1 },
   },
   merchant: {
     path: '/merchants/11111111-1111-4111-8111-111111111111',
-    budget: { js: 346 * KB, css: 48 * KB, prefetch: 4 * KB },
+    budget: { html: 1, js: 346 * KB, css: 48 * KB, prefetch: 1 },
   },
 };
 
-type Transfer = {
-  url: string;
-  kind: 'js' | 'css' | 'prefetch' | 'other';
-  bytes: number;
-};
+type Transfer = { url: string; kind: Kind | 'other'; bytes: number };
 
-/** Every response the page loads, with its bytes on the wire. */
-async function recordTransfers(page: Page): Promise<Transfer[]> {
+/**
+ * Every response the page loads, with its bytes on the wire (response
+ * headers included, the same on every run), and how many tracked requests
+ * are still loading.
+ */
+async function recordTransfers(page: Page) {
   const cdp = await page.context().newCDPSession(page);
   await cdp.send('Network.enable');
   const pending = new Map<string, Omit<Transfer, 'bytes'>>();
   const done: Transfer[] = [];
   cdp.on('Network.requestWillBeSent', (e) => {
-    const url = new URL(e.request.url);
-    const isPrefetch =
-      url.searchParams.has('_rsc') &&
-      Object.keys(e.request.headers).some(
-        (h) => h.toLowerCase() === 'next-router-prefetch'
-      );
-    const kind = isPrefetch
-      ? 'prefetch'
-      : e.type === 'Script'
-        ? 'js'
-        : e.type === 'Stylesheet'
-          ? 'css'
-          : 'other';
+    // The page never navigates here, so every RSC request is a prefetch,
+    // with or without the next-router-prefetch header (a full prefetch
+    // sends none).
+    const kind: Transfer['kind'] =
+      e.type === 'Document'
+        ? 'html'
+        : new URL(e.request.url).searchParams.has('_rsc')
+          ? 'prefetch'
+          : e.type === 'Script'
+            ? 'js'
+            : e.type === 'Stylesheet'
+              ? 'css'
+              : 'other';
     pending.set(e.requestId, { url: e.request.url, kind });
   });
   cdp.on('Network.loadingFinished', (e) => {
     const req = pending.get(e.requestId);
+    pending.delete(e.requestId);
     if (req) done.push({ ...req, bytes: e.encodedDataLength });
   });
-  return done;
+  cdp.on('Network.loadingFailed', (e) => {
+    pending.delete(e.requestId);
+  });
+  const inFlight = () =>
+    [...pending.values()].filter((r) => r.kind !== 'other').length;
+  return { transfers: done, inFlight };
 }
 
-function summary(transfers: Transfer[], kind: Transfer['kind']) {
+function summary(transfers: Transfer[], kind: Kind) {
   const files = transfers.filter((t) => t.kind === kind);
   const total = files.reduce((sum, t) => sum + t.bytes, 0);
   const largest = [...files]
@@ -81,19 +91,23 @@ function summary(transfers: Transfer[], kind: Transfer['kind']) {
 
 for (const [name, { path, budget }] of Object.entries(PAGES)) {
   test(`${name} stays within its phone budget`, async ({ page }) => {
-    const transfers = await recordTransfers(page);
-    const images: string[] = [];
+    const { transfers, inFlight } = await recordTransfers(page);
+    const fullSizePhotos: string[] = [];
     page.on('request', (req) => {
-      const url = new URL(req.url());
-      if (url.pathname.startsWith('/img/devices/')) images.push(url.pathname);
+      const slug = /^\/img\/devices\/([a-z0-9-]+)\.jpg$/.exec(
+        new URL(req.url()).pathname
+      )?.[1];
+      if (slug && DEVICE_IMAGE_RENDITIONS[slug]) fullSizePhotos.push(slug);
     });
     expect((await page.goto(path))?.status()).toBe(200);
     // No hover or touch: what loads here loads for every visitor. Prefetches
-    // start after hydration, on idle.
+    // start after hydration, on idle; one that starts in the wait is counted
+    // once it has finished.
     await page.waitForLoadState('networkidle');
     await page.waitForTimeout(1500);
+    await expect.poll(inFlight, { timeout: 10_000 }).toBe(0);
 
-    for (const kind of ['js', 'css', 'prefetch'] as const) {
+    for (const kind of ['html', 'js', 'css', 'prefetch'] as const) {
       const { total, largest } = summary(transfers, kind);
       expect
         .soft(
@@ -102,10 +116,11 @@ for (const [name, { path, budget }] of Object.entries(PAGES)) {
         )
         .toBeLessThanOrEqual(budget[kind]);
     }
-    // A device photo goes through the resized /_next/image path, never as
-    // the full-size original (#1415, #1419).
+    // A device photo with pre-sized WebP renditions loads one of those, never
+    // its full-size JPEG (#1332, #1415, #1419). The seeded pages above show
+    // no such photo today, so this guards pages and seeds that add one.
     expect
-      .soft(images, `${name} requested full-size device photos`)
+      .soft(fullSizePhotos, `${name} requested full-size device photos`)
       .toEqual([]);
   });
 }
