@@ -1255,6 +1255,32 @@ async function runSuite() {
     ['Samsung Galaxy Z Flip8 FE/8GB/256GB', 'samsung:galaxy-z-flip8-fe:256gb'],
     ['Apple iPad mini 2026k 64GB', 'apple:ipad-mini:64gb'],
     ['iPad mini (A17 Pro) Wi-Fi 128GB', 'apple:ipad-mini-7:128gb'],
+    // The mini 8 by its chip, as FPT Shop and TGDD title it (DOS/Rate#1502).
+    ['iPad mini A20 Pro WiFi 128GB', 'apple:ipad-mini-8:128gb'],
+    ['iPad mini A20 Pro 5G 256GB', 'apple:ipad-mini-8:256gb'],
+    ['Apple iPad mini (A20 Pro) Wi-Fi 512GB', 'apple:ipad-mini-8:512gb'],
+    ['Máy tính bảng iPad mini A20 Pro Wi-Fi + Cellular 128GB', 'apple:ipad-mini-8:128gb'],
+    ['iPad mini 8.3 inch A20 Pro Wi-Fi 128GB', 'apple:ipad-mini-8:128gb'],
+    ['iPad mini A20Pro 128GB', 'apple:ipad-mini-8:128gb'],
+    ['iPad mini A20 128GB', 'apple:ipad-mini-8:128gb'],
+    ['Máy tính bảng iPad mini A20 Pro WiFi 128GB Chính hãng VN/A Tím', 'apple:ipad-mini-8:128gb'],
+    ['iPad mini A20 Pro 256GB WiFi tặng ốp lưng', 'apple:ipad-mini-8:256gb'],
+    ['iPad mini A20 Pro so sánh A17 Pro 128GB', 'apple:ipad-mini-8:128gb'],
+    // A part number, or an A20 in a gift or bundle, is no chip of this iPad.
+    ['iPad mini A2033 64GB', 'apple:ipad-mini:64gb'],
+    ['iPad mini WiFi 64GB tặng ốp Galaxy A20', 'apple:ipad-mini:64gb'],
+    ['iPad mini 64GB + Samsung Galaxy A20', 'apple:ipad-mini:64gb'],
+    ['iPad mini 64GB tặng: ốp Galaxy A20', 'apple:ipad-mini:64gb'],
+    ['iPad mini 64GB+Samsung Galaxy A20', 'apple:ipad-mini:64gb'],
+    // A title in decomposed Unicode cuts at the gift like a composed one.
+    ['iPad mini 64GB tặng ốp Galaxy A20'.normalize('NFD'), 'apple:ipad-mini:64gb'],
+    // Who it is for is no other product: the chip after it still counts.
+    ['iPad mini cho bé A20 Pro 128GB', 'apple:ipad-mini-8:128gb'],
+    ['iPad mini for kids A20 Pro 128GB', 'apple:ipad-mini-8:128gb'],
+    // A stated generation still wins, and a model without the chip keeps its key.
+    ['iPad mini 7 A17 Pro 128GB', 'apple:ipad-mini-7:128gb'],
+    ['Apple iPad mini 8.3 inch (A17 Pro) Wi-Fi 128GB', 'apple:ipad-mini-7:128gb'],
+    ['Apple iPad mini 2024 128GB', 'apple:ipad-mini:128gb'],
   ] as const) {
     assert.equal(keyOf(title), key, title);
   }
