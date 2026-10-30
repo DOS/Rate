@@ -1095,6 +1095,11 @@ async function runSuite() {
     // A "GPS" between the prefix and the brand goes with the prefix (DOS/Rate#1481).
     ['Máy định vị GPS Garmin GPS 73', 'garmin:gps-73:unknown'],
     ['Máy định vị GPS Garmin eTrex 22x', 'garmin:etrex-22x:unknown'],
+    // "GPS cầm tay" and "Thiết bị định vị" prefixes too; a prefix with no model
+    // stays unkeyable (DOS/Rate#1495).
+    ['Máy định vị GPS cầm tay Garmin GPSMAP 66i', 'garmin:gpsmap-66i:unknown'],
+    ['Thiết bị định vị GPS Garmin GPS 73', 'garmin:gps-73:unknown'],
+    ['Máy định vị GPS Garmin', 'garmin:unkeyed:unknown'],
     ['Máy định vị cầm tay Garmin GPS 64s', 'garmin:gps-64s:unknown'],
     ['Samsung Galaxy S24 + Plus 256GB', 'samsung:galaxy-s24-plus:256gb'],
     ['Samsung (Hàng chính hãng) Galaxy A55 256GB', 'samsung:galaxy-a55:256gb'],
@@ -1210,6 +1215,17 @@ async function runSuite() {
     ['Oppo A58 Xanh Lá/128GB', 'oppo:a58:128gb'],
     // "Titan" alone is a model word.
     ['Laptop MSI GT77 Titan/32GB/1TB', 'msi:gt77-titan:1024gb'],
+    // "Titanium" is a model word too, and a model word before a colour stays; only
+    // an English colour after Titan/Titanium makes one colour (DOS/Rate#1495).
+    ['Lenovo ThinkPad X1 Titanium/16GB/512GB', 'lenovo:thinkpad-x1-titanium:512gb'],
+    ['Lenovo ThinkPad X1 Yoga Titanium Bạc/16GB/512GB', 'lenovo:thinkpad-x1-yoga-titanium:512gb'],
+    ['MSI GT77 Titan Đen/32GB/1TB', 'msi:gt77-titan:1024gb'],
+    ['Samsung Galaxy S24 Ultra Titanium/256GB', 'samsung:galaxy-s24-ultra:256gb'],
+    ['Samsung Galaxy S24 Ultra Titanium Black/256GB', 'samsung:galaxy-s24-ultra:256gb'],
+    // A colour's lead word before a colour leaves with it.
+    ['Oppo A58 Jade Green/128GB', 'oppo:a58:128gb'],
+    ['Xiaomi Redmi Note 13 Sky Blue/128GB', 'xiaomi:redmi-note-13:128gb'],
+    ['Vivo Y17s Gem Green/128GB', 'vivo:y17s:128gb'],
     ['Laptop MSI GT77 Titan RAM/32GB/1TB', 'msi:gt77-titan:1024gb'],
     // Two colours glued together are no glued run: the cap still holds.
     ['Samsung Galaxy Note 20 Ultra Black/White 12GB/256GB', 'samsung:galaxy-note-20-ultra:256gb'],
