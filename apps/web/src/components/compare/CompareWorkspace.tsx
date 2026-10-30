@@ -66,6 +66,7 @@ import { upsertWatchlistItem } from '@/components/watchlist/watchlist-store';
 import {
   getSpecUiDictionary,
   localizeSpecValue,
+  localizedSpecValue,
   normalizeStorageExpansion,
   specGroupHeading,
 } from '@/lib/spec-localizer';
@@ -2403,7 +2404,7 @@ export default function CompareWorkspace({
                               {row.label}
                             </td>
                             {products.map((p) => {
-                              const textVal = localizeSpecValue(
+                              const shown = localizedSpecValue(
                                 row.renderValue(p),
                                 locale
                               );
@@ -2422,7 +2423,11 @@ export default function CompareWorkspace({
                                       : 'text-dark'
                                   }`}
                                 >
-                                  <ContentText text={textVal} locale={locale} />
+                                  <ContentText
+                                    text={shown.text}
+                                    lang={shown.lang}
+                                    locale={locale}
+                                  />
                                   {isWinner && (
                                     <span
                                       className="badge bg-success rounded-pill ms-1 text-white"

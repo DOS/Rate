@@ -6,7 +6,7 @@ import {
   compareRowIsShown,
   isEmptySpecValue,
 } from '../product-spec-rows';
-import { getSpecUiDictionary } from '../spec-localizer';
+import { getSpecUiDictionary, localizedSpecValue } from '../spec-localizer';
 
 const groupsFor = (
   category: string,
@@ -252,10 +252,53 @@ async function testCompareUnknownSpecs() {
   console.warn('  ✅ Compare shows no invented value for unknown specs');
 }
 
+// English values the localizer leaves as they were are marked lang="en" on
+// a Czech or Vietnamese page, Vietnamese ones lang="vi" (DOS/Rate#1371).
+function testValueLanguage() {
+  const glass = 'Ceramic Shield glass (2024 generation)';
+  assert.deepEqual(localizedSpecValue(glass, 'cs'), {
+    text: glass,
+    lang: 'en',
+  });
+  assert.equal(localizedSpecValue(glass, 'en').lang, undefined);
+  assert.equal(localizedSpecValue(glass, 'vi').lang, 'en');
+  // Names and units alone are not English text.
+  assert.equal(localizedSpecValue('Apple A18 Pro', 'cs').lang, undefined);
+  assert.equal(localizedSpecValue('120 Hz, 2556x1179', 'cs').lang, undefined);
+  // An English unit word is English: the Czech page would say "palce".
+  assert.equal(localizedSpecValue('6.1 inch', 'cs').lang, 'en');
+  // Vietnamese source text on an English or Czech page.
+  assert.equal(localizedSpecValue('Sạc nhanh 35W', 'cs').lang, 'vi');
+  assert.equal(localizedSpecValue('Sạc nhanh 35W', 'vi').lang, undefined);
+  // A value the localizer changed is the page's language: no mark.
+  const yes = localizedSpecValue(true, 'cs');
+  assert.equal(yes.lang, undefined);
+  const translated = localizedSpecValue('September 2024', 'cs');
+  assert.notEqual(translated.text, 'September 2024');
+  assert.equal(translated.lang, undefined);
+
+  const rows = buildProductSpecGroups({
+    specs: {
+      display: { type: 'LTPO OLED', protection: glass },
+      design: { colors: 'Hồng, Đen' },
+    } as unknown as ProductSpecifications,
+    keySpecs: {} as KeySpecs,
+    product: {},
+    template: getCategorySpecTemplate('smartphones'),
+    ui: getSpecUiDictionary('cs'),
+    locale: 'cs',
+  }).flatMap((g) => g.rows);
+  const rowOf = (value: string) => rows.find((r) => r.value === value);
+  assert.equal(rowOf(glass)?.lang, 'en');
+  assert.equal(rowOf('LTPO OLED')?.lang, undefined);
+  console.warn('  ✅ Spec values carry their language when it differs');
+}
+
 async function main() {
   console.warn('🧪 Product spec rows suite (DOS/Rate#1186)');
   testProductPage();
   testCompare();
+  testValueLanguage();
   await testCompareUnknownSpecs();
 }
 

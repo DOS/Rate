@@ -7,10 +7,13 @@ import { contentLang } from '@/lib/content-lang';
 export default function ContentText({
   text,
   locale,
+  lang: knownLang,
 }: {
   text: string | number | null | undefined;
   locale: string;
+  /** A language the caller already knows, such as an English spec value. */
+  lang?: 'en' | 'vi';
 }) {
-  const lang = contentLang(text, locale);
+  const lang = knownLang ?? contentLang(text, locale);
   return lang ? <span lang={lang}>{text}</span> : <>{text}</>;
 }

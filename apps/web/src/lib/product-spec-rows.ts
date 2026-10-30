@@ -5,7 +5,7 @@ import {
   type SpecGroupKey,
 } from '@repo/shared-data/rules';
 import {
-  localizeSpecValue,
+  localizedSpecValue,
   normalizeStorageExpansion,
   type SpecUiDictionary,
 } from './spec-localizer';
@@ -13,6 +13,8 @@ import {
 export interface ProductSpecRow {
   label: string;
   value: string;
+  /** The value's language when it is not the page's (DOS/Rate#1371). */
+  lang?: 'en' | 'vi';
 }
 
 export interface ProductSpecGroup {
@@ -93,8 +95,14 @@ export function buildProductSpecGroups({
   const s = specs ?? ({} as ProductSpecifications);
   const k = keySpecs ?? ({} as KeySpecs);
   const f = ui.fields;
-  const loc = (v: string | number | boolean | null | undefined) =>
-    localizeSpecValue(v, locale);
+  // The language of each value as the localizer returned it, read back for
+  // the rows that show it unchanged (DOS/Rate#1371).
+  const valueLangs = new Map<string, 'en' | 'vi'>();
+  const loc = (v: string | number | boolean | null | undefined) => {
+    const { text, lang } = localizedSpecValue(v, locale);
+    if (lang) valueLangs.set(text, lang);
+    return text;
+  };
   const shows = (group: SpecGroupKey, field: string) =>
     specFieldApplies(template, group, field);
   const withUnit = (value: unknown, unit: string) =>
@@ -289,10 +297,15 @@ export function buildProductSpecGroups({
   return template.groups
     .map((group) => ({
       group,
-      rows: groups[group].filter(
-        (row): row is ProductSpecRow =>
-          row !== false && !isEmptySpecValue(row.value)
-      ),
+      rows: groups[group]
+        .filter(
+          (row): row is ProductSpecRow =>
+            row !== false && !isEmptySpecValue(row.value)
+        )
+        .map((row) => {
+          const lang = valueLangs.get(row.value);
+          return lang ? { ...row, lang } : row;
+        }),
     }))
     .filter(({ rows }) => rows.length > 0);
 }
