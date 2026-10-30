@@ -1075,6 +1075,8 @@ async function runSuite() {
     // Only Garmin's: a network after another brand's GPS is no model number.
     ['Xiaomi GPS 4G Redmi Watch 5', 'xiaomi:redmi-watch-5:unknown'],
     ['Samsung GPS 5G Galaxy Watch7 44mm', 'samsung:galaxy-watch7:unknown'],
+    // Nor is a size or storage after Garmin's GPS.
+    ['Garmin GPS 47mm Fenix 7', 'garmin:fenix-7:unknown'],
     ['Samsung Galaxy S24 + Plus 256GB', 'samsung:galaxy-s24-plus:256gb'],
     ['Samsung (Hàng chính hãng) Galaxy A55 256GB', 'samsung:galaxy-a55:256gb'],
     ['Samsung 256GB', 'samsung:unkeyed:256gb'],
@@ -1156,6 +1158,8 @@ async function runSuite() {
     ['Samsung Galaxy A55 Mới/8GB/256GB', 'samsung:galaxy-a55:256gb'],
     // A RAM word before a storage-first pair names a RAM.
     ['Lenovo ThinkPad T14 RAM 32GB/16GB/512GB SSD', 'lenovo:thinkpad-t14:512gb'],
+    ['Lenovo ThinkPad T14 RAM - 32GB/16GB/512GB SSD', 'lenovo:thinkpad-t14:512gb'],
+    ['Lenovo ThinkPad T14 RAM-32GB/16GB/512GB SSD', 'lenovo:thinkpad-t14:512gb'],
     ['Samsung Galaxy Tab A9 64GB/4GB/128GB/8GB', 'samsung:galaxy-tab-a9:64gb'],
   ] as const) {
     assert.equal(keyOf(title), key, title);

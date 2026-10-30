@@ -2181,6 +2181,8 @@ export class ProductNormalizer {
             brand === 'Garmin' &&
             /^GPS$/i.test(tok) &&
             /^\d{2,3}[a-z]{0,2}$/i.test(rawTokens[i + 1] ?? '') &&
+            // A size or storage ("47mm", "32GB") is no model number.
+            !/\d(?:mm|gb|tb|g)$/i.test(rawTokens[i + 1] ?? '') &&
             !/^mm\b/i.test(rawTokens[i + 2] ?? '')
           ) {
             modelTokens.push(tok);
@@ -2362,7 +2364,7 @@ export class ProductNormalizer {
           parseFloat(m[4]!.replace(',', '.')) >= 32 ||
           // A storage first, unless a RAM word names it ("RAM 32GB/16GB/512GB").
           (Boolean(m[3]) &&
-            !/\bRAM\s*:?\s*$/i.test(title.slice(0, m.index)) &&
+            !/\bRAM\s*[:\-–]?\s*$/i.test(title.slice(0, m.index)) &&
             parseInt(m[2]!, 10) >= 32 &&
             parseInt(m[2]!, 10) > parseFloat(m[4]!.replace(',', '.')))
       ) ??
