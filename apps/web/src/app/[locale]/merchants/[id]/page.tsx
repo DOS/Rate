@@ -267,7 +267,10 @@ export default async function MerchantProfilePage({
           <div className="rate-scoreboard-dark p-md-5 mb-4 p-4">
             <div className="row g-4 align-items-center">
               <div className="col-lg-8">
-                <div className="d-flex align-items-start gap-3">
+                {/* Phones stack the icon above the text, and the text column
+                    may shrink, so a long name wraps instead of pushing the
+                    card past a 360px screen (DOS/Rate#1472). */}
+                <div className="d-flex flex-column flex-sm-row align-items-start gap-3">
                   <div
                     className="rounded-4 d-flex align-items-center justify-content-center fs-2 flex-shrink-0 text-white shadow-sm"
                     style={{
@@ -280,7 +283,7 @@ export default async function MerchantProfilePage({
                   >
                     <BsShop />
                   </div>
-                  <div>
+                  <div style={{ minWidth: 0 }}>
                     <div className="d-flex align-items-center mb-2 flex-wrap gap-2">
                       <span className="badge bg-danger text-uppercase rounded-pill px-3 py-1">
                         {merchant.platform}
@@ -298,7 +301,7 @@ export default async function MerchantProfilePage({
                         </span>
                       )}
                       <span
-                        className="badge rounded-pill px-3 py-1"
+                        className="badge rounded-pill text-wrap text-break px-3 py-1"
                         style={{
                           backgroundColor: 'var(--rate-glass-bg)',
                           color: 'var(--rate-fg-paragraph)',
@@ -308,7 +311,10 @@ export default async function MerchantProfilePage({
                         Shop ID: <code>{merchant.platform_shop_id}</code>
                       </span>
                     </div>
-                    <h1 className="h2 fw-bold mb-2 text-white">
+                    <h1
+                      className="h2 fw-bold mb-2 text-white"
+                      style={{ overflowWrap: 'anywhere' }}
+                    >
                       <ContentText text={merchant.name} locale={locale} />
                     </h1>
                     <div
