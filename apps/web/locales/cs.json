@@ -548,9 +548,9 @@
     "weightExplanationSabotage": "Odhad 0.00x: podezření na nepodložené poškozování konkurencí",
     "weightExplanationBombing": "Odhad 0.00x: neobvyklé hodnocení / review bombing",
     "weightExplanationSeeding": "Odhad 0.00x: podezření na falešnou recenzi nebo duplicitní šablonový text",
-    "weightExplanationStarsOnly": "Odhad {weight}x: jen hvězdičky, bez textu (C=0.25)",
-    "weightExplanationPlatformLabel": "Odhad {weight}x: výchozí štítek platformy podle počtu hvězdiček (C=0.25)",
-    "weightExplanationLowEffort": "Odhad {weight}x: krátký komentář s málo technickými detaily (C=0.50)",
+    "weightExplanationStarsOnly": "Odhad {weight}x: jen hvězdičky, bez textu (C=0,25)",
+    "weightExplanationPlatformLabel": "Odhad {weight}x: výchozí štítek platformy podle počtu hvězdiček (C=0,25)",
+    "weightExplanationLowEffort": "Odhad {weight}x: krátký komentář s málo technickými detaily (C=0,50)",
     "blendNoteBlended": "Váhy: 60 % ověření kupující + 40 % experti Rate Lab (spolehlivost ≥ 60 %)",
     "blendNoteSeparateLowConfidence": "Skóre expertů a kupujících zvlášť (spojí se 60/40, až spolehlivost kupujících dosáhne střední úrovně, spolehlivost ≥ 60 %)",
     "blendNoteUserOnly": "Váhy: 100 % ověření kupující (falešné recenze a spam za odměny odfiltrovány)",
@@ -1625,8 +1625,8 @@
             "desc": "Connectivity: Bezkontaktní platby a čtení čipových dokladů"
           },
           "compactScreen": {
-            "label": "Kompaktní (<= 6.2\")",
-            "desc": "Display: Kompaktní obrazovka vhodná do jedné ruky (<= 6.2 palce)"
+            "label": "Kompaktní (<= 6,2\")",
+            "desc": "Display: Kompaktní obrazovka vhodná do jedné ruky (<= 6,2 palce)"
           }
         }
       },

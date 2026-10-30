@@ -1,4 +1,10 @@
 import { formatDecimal } from './locale-format';
+
+// The formula as the analyzer writes it, kind or not (cached rows).
+const FORMULA_RE = /^A=[\d.]+ · B=[\d.]+ /;
+
+const isCsLocale = (locale?: string | null) =>
+  typeof locale === 'string' && locale.toLowerCase().startsWith('cs');
 import type {
   CombinedDualScoreBlendMode,
   ReviewFlagCategory,
@@ -152,7 +158,14 @@ export function weightExplanationCopy(
             .trim()
             .slice(0, 300)
         : '';
-    return { text: cleanText };
+    // The 6-factor formula ("A=1 · C=1.2 -> 1.20x") is notation, not
+    // words: on cs its decimals take the comma (DOS/Rate#1411).
+    return {
+      text:
+        isCsLocale(locale) && (kind === 'formula' || FORMULA_RE.test(cleanText))
+          ? cleanText.replace(/(\d)\.(\d)/g, '$1,$2')
+          : cleanText,
+    };
   }
   const rawWeight = parseDecimalReviewNumber(breakdown.weight);
   const safeWeight = Number.isFinite(rawWeight)
