@@ -1270,6 +1270,13 @@ async function runSuite() {
     ['iPad mini A2033 64GB', 'apple:ipad-mini:64gb'],
     ['iPad mini WiFi 64GB tặng ốp Galaxy A20', 'apple:ipad-mini:64gb'],
     ['iPad mini 64GB + Samsung Galaxy A20', 'apple:ipad-mini:64gb'],
+    ['iPad mini 64GB tặng: ốp Galaxy A20', 'apple:ipad-mini:64gb'],
+    ['iPad mini 64GB+Samsung Galaxy A20', 'apple:ipad-mini:64gb'],
+    // A title in decomposed Unicode cuts at the gift like a composed one.
+    ['iPad mini 64GB tặng ốp Galaxy A20'.normalize('NFD'), 'apple:ipad-mini:64gb'],
+    // Who it is for is no other product: the chip after it still counts.
+    ['iPad mini cho bé A20 Pro 128GB', 'apple:ipad-mini-8:128gb'],
+    ['iPad mini for kids A20 Pro 128GB', 'apple:ipad-mini-8:128gb'],
     // A stated generation still wins, and a model without the chip keeps its key.
     ['iPad mini 7 A17 Pro 128GB', 'apple:ipad-mini-7:128gb'],
     ['Apple iPad mini 8.3 inch (A17 Pro) Wi-Fi 128GB', 'apple:ipad-mini-7:128gb'],

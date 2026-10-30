@@ -2057,8 +2057,11 @@ export class ProductNormalizer {
         const miniChip = mini
           ? appleTitle
               .slice((ipadMatch.index ?? 0) + ipadMatch[0].length)
+              .normalize('NFC')
+              // A "+" with or without spaces, and a gift or fit word before a space or
+              // a colon; "cho bé" or "for kids" names who it is for, not another product.
               .split(
-                / ?\+ | (?:cho|for|tương thích|dùng cho|kèm|tặng) |\bipad\b|so sánh|\bvs\b/i
+                /\s*\+|\s(?:tương thích|dùng cho|kèm|tặng)(?!\p{L})|\bipad\b|so sánh|\bvs\b/iu
               )[0]!
               .match(/\ba(17\s*pro|20(?:\s*pro)?)\b/i)?.[1]
               ?.slice(0, 2)
