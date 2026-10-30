@@ -430,7 +430,7 @@ try {
     'the pooled Item rating is not left on the variant'
   );
   sql(proposal);
-  // The importer retires the restored unknown variant again on its next write.
+  // An admin step (service role) retires the restored unknown variant again.
   sql(
     `SELECT rate.retire_item_unknown_variant(item_id) FROM rate.master_products WHERE id = '${unknownId}'`
   );
