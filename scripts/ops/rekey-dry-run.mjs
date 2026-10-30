@@ -614,28 +614,37 @@ export const ENV_REST = {
   accessToken: 'REKEY_SUPABASE_ACCESS_TOKEN',
 };
 
+/** A refusal by the read-only fetch wrapper. Its message names no URL or secret. */
+export class ReadOnlyRefusal extends Error {}
+
 /** A fetch that can only read. Throws before any request that could write. */
 export function createGetOnlyFetch(fetchImpl = globalThis.fetch) {
   return (url, init = {}) => {
     const method = String(init.method ?? 'GET').toUpperCase();
     if (method !== 'GET' && method !== 'HEAD') {
-      throw new Error(`refusing a ${method} request: this dry run only reads`);
+      throw new ReadOnlyRefusal(
+        `refusing a ${method} request: this dry run only reads`
+      );
     }
     if (init.body !== undefined && init.body !== null) {
-      throw new Error(
+      throw new ReadOnlyRefusal(
         'refusing a request with a body: this dry run only reads'
       );
     }
     const headers = new Headers(init.headers ?? {});
     if (headers.has('prefer')) {
-      throw new Error('refusing a Prefer header: this dry run only reads');
+      throw new ReadOnlyRefusal(
+        'refusing a Prefer header: this dry run only reads'
+      );
     }
     if (/\/rpc\//i.test(new URL(url).pathname)) {
-      throw new Error('refusing an RPC call: this dry run only reads');
+      throw new ReadOnlyRefusal(
+        'refusing an RPC call: this dry run only reads'
+      );
     }
     // Only https, so the token never travels in clear text.
     if (new URL(url).protocol !== 'https:') {
-      throw new Error(
+      throw new ReadOnlyRefusal(
         'refusing a non-https request: the token would be sent in clear'
       );
     }
@@ -714,8 +723,7 @@ export async function readTable(
     } catch (err) {
       // The wrapper's own refusals carry no secret; a transport error can quote
       // the URL, so it is replaced by a fixed message.
-      if (/this dry run only reads|non-https/.test(err?.message ?? ''))
-        throw err;
+      if (err instanceof ReadOnlyRefusal) throw err;
       throw new Error(`PostgREST read of rate.${table} could not be sent`);
     }
     if (!res.ok) {

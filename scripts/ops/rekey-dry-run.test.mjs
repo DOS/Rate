@@ -844,3 +844,25 @@ test('a PostgREST transport or JSON error is replaced by a fixed message', async
       !err.message.includes('anon-key-value')
   );
 });
+
+test('only the wrapper refusals pass through, whatever the host is called', async () => {
+  await assert.rejects(
+    readViaPostgrest(
+      {
+        url: 'https://non-https.db.example',
+        anonKey: 'k',
+        accessToken: jwt('rate_worker'),
+      },
+      () => null,
+      {
+        fetchImpl: async (url) => {
+          throw new TypeError('fetch failed for ' + url + ' secret-token');
+        },
+      }
+    ),
+    (err) =>
+      /could not be sent/.test(err.message) &&
+      !err.message.includes('non-https') &&
+      !err.message.includes('secret-token')
+  );
+});
