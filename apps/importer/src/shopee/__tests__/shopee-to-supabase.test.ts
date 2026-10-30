@@ -8,6 +8,7 @@
  */
 import assert from 'node:assert/strict';
 import { trimTrailingSlashes } from '../ai-spec-enricher.js';
+import { errorDetail } from '../logger.js';
 import {
   ShopeeIngestionPipeline,
   hasPopulatedSpecificationGroups,
@@ -63,6 +64,7 @@ interface StubPipelineOptions {
     recorded_at: string;
   }>;
   existingPriceObs?: Array<{ observation_id: string }>;
+  latestPriceObsErr?: { code?: string; message: string } | null;
   priceInsertErr?: { code?: string; message: string } | null;
   initialExistingReviewIds?: string[];
   afterRaceExistingReviewIds?: string[];
@@ -218,8 +220,8 @@ function createPipelineStubSupabase(opts: StubPipelineOptions = {}) {
                       return {
                         limit(_n: number) {
                           return Promise.resolve({
-                            data: opts.latestPriceObs ?? [],
-                            error: null,
+                            data: opts.latestPriceObsErr ? null : (opts.latestPriceObs ?? []),
+                            error: opts.latestPriceObsErr ?? null,
                           });
                         },
                       };
@@ -681,6 +683,27 @@ async function runTests() {
     1,
     'Concurrent 23505 price observation insert race must be treated as dedupe without throwing'
   );
+  // A failed read of the last observation stops the listing instead of writing a
+  // blind, possibly redundant history row, and names the product (DOS/Rate#1431).
+  const { stub: obsErrStub, events: obsErrEvents } = createPipelineStubSupabase({
+    recordPriceRpcResult: {
+      data: null,
+      error: { code: 'PGRST202', message: 'function record_price_observation does not exist' },
+    },
+    latestPriceObsErr: { code: '57014', message: 'canceling statement due to statement timeout' },
+  });
+  await assert.rejects(
+    () =>
+      new ShopeeIngestionPipeline({ supabaseClient: obsErrStub, apiKey: '' }).ingestProduct(
+        createBaseProduct()
+      ),
+    /Failed to read the latest price observation \(product product-uuid-1\): canceling statement due to statement timeout \(code 57014\)/
+  );
+  assert.equal(obsErrEvents.priceInserts.length, 0, 'no blind price_history insert');
+  // Error text carries the code when there is one, and names a missing row.
+  assert.equal(errorDetail({ message: 'boom', code: '23505' }), ': boom (code 23505)');
+  assert.equal(errorDetail({ message: 'boom' }), ': boom');
+  assert.equal(errorDetail(null), ': no row returned');
   console.log('  ✅ [4/6] Smart Delta Price Compression & 23505 race recovery passed');
 
   // 5. Review deduplication, 23505 race retry pass, is_verified_buyer refresh & section reporting

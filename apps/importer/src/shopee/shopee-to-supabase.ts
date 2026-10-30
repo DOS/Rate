@@ -26,7 +26,7 @@ import {
 import type { ItemModelMode } from './item-model-flag.js';
 import { AiSpecEnricher, type AiSpecEnricherConfig } from './ai-spec-enricher.js';
 import { AiReviewAnalyzer, type ReviewInputItem } from './ai-review-analyzer.js';
-import { createImporterLogger } from './logger.js';
+import { createImporterLogger, errorDetail } from './logger.js';
 import { resolveBackfillSupabaseTarget } from './paging.js';
 import {
   resolveClusterPeerFloorPrice,
@@ -557,7 +557,9 @@ export class ShopeeIngestionPipeline {
       .single();
 
     if (merchantErr || !merchant) {
-      throw new Error(`Failed to upsert merchant: ${merchantErr?.message}`);
+      throw new Error(
+        `Failed to upsert merchant (shop ${product.shop.shopId}, item ${product.itemId})${errorDetail(merchantErr)}`
+      );
     }
 
     const merchantId = merchant.id;
@@ -631,6 +633,15 @@ export class ShopeeIngestionPipeline {
         variant_key?: unknown;
         storage_gb?: unknown;
       } | null;
+      // A hint to a master that no longer exists is dropped: log it so a stale
+      // caller is found (DOS/Rate#1432).
+      if (!hintRow?.id) {
+        platLogger.warn(
+          'ingest.master_hint_missing',
+          `masterIdHint ${safeMasterIdHint} matches no master: matching from the title`,
+          { masterId: safeMasterIdHint, platformItemId: product.itemId }
+        );
+      }
       // The page states a storage the hinted master does not have (a 1TB page
       // hinted to the 512GB master): the hint is not applied and the listing is
       // matched like any other (DOS/Rate#1197). A page with no stated storage,
@@ -819,7 +830,9 @@ export class ShopeeIngestionPipeline {
       .single();
 
     if (productErr || !savedProduct) {
-      throw new Error(`Failed to upsert product listing: ${productErr?.message}`);
+      throw new Error(
+        `Failed to upsert product listing (item ${product.itemId}, model_key ${candidate.model_key}, master ${masterId ?? 'none'})${errorDetail(productErr)}`
+      );
     }
 
     const productId = savedProduct.id;
@@ -840,8 +853,8 @@ export class ShopeeIngestionPipeline {
       if (marketStatsErr) {
         platLogger.warn(
           'ingest.market_stats_rpc_warn',
-          `Could not refresh master market stats via RPC: ${marketStatsErr.message}`,
-          { masterId: statsMasterId }
+          `Could not refresh master market stats via RPC${errorDetail(marketStatsErr)}`,
+          { masterId: statsMasterId, productId, code: marketStatsErr.code }
         );
       }
     }
@@ -860,8 +873,8 @@ export class ShopeeIngestionPipeline {
       if (itemStatsErr) {
         platLogger.warn(
           'ingest.item_stats_rpc_warn',
-          `Could not refresh Item stats via RPC: ${itemStatsErr.message}`,
-          { itemId: statsItemId }
+          `Could not refresh Item stats via RPC${errorDetail(itemStatsErr)}`,
+          { itemId: statsItemId, productId, code: itemStatsErr.code }
         );
       }
     }
@@ -925,12 +938,19 @@ export class ShopeeIngestionPipeline {
     }
 
     if (!handledByObservationRpc) {
-      const { data: latestObsRows } = await this.supabase
+      const { data: latestObsRows, error: latestObsErr } = await this.supabase
         .from('price_history')
         .select('observation_id, price, price_original, recorded_at')
         .eq('product_id', productId)
         .order('recorded_at', { ascending: false })
         .limit(1);
+      // Without the last observation the unchanged-price check cannot run, and a
+      // blind insert would add a redundant history row (DOS/Rate#1431).
+      if (latestObsErr) {
+        throw new Error(
+          `Failed to read the latest price observation (product ${productId})${errorDetail(latestObsErr)}`
+        );
+      }
 
       const latestObs = Array.isArray(latestObsRows)
         ? (latestObsRows.find(row => row && typeof row === 'object' && !Array.isArray(row)) ?? null)
@@ -1054,7 +1074,9 @@ export class ShopeeIngestionPipeline {
           const code = (reviewErr as { code?: string }).code || '';
           const isRace = code === '23505' || /duplicate key/i.test(reviewErr.message);
           if (!isRace || pass > 0) {
-            throw new Error(`Failed to insert reviews: ${reviewErr.message}`);
+            throw new Error(
+              `Failed to insert reviews (product ${productId})${errorDetail(reviewErr)}`
+            );
           }
           platLogger.warn(
             'ingest.reviews_race_retry',
@@ -1148,8 +1170,14 @@ export class ShopeeIngestionPipeline {
           );
         } else if (analysisInput.length > 0) {
           // No variant: no peer floor, since peers and min price are per variant.
-          const [{ data: masterRow }, { data: peerRows }] = !masterId
-            ? [{ data: null }, { data: null }]
+          const [
+            { data: masterRow, error: masterPriceErr },
+            { data: peerRows, error: peerPriceErr },
+          ] = !masterId
+            ? [
+                { data: null, error: null },
+                { data: null, error: null },
+              ]
             : await Promise.all([
                 this.supabase
                   .from('master_products')
@@ -1171,6 +1199,20 @@ export class ShopeeIngestionPipeline {
                 })(),
               ]);
 
+          // A failed read leaves the price-anomaly signal out of the review risk:
+          // say so rather than let it drop silently (DOS/Rate#1431).
+          for (const [what, err] of [
+            ['master min_price', masterPriceErr],
+            ['peer prices', peerPriceErr],
+          ] as const) {
+            if (err) {
+              platLogger.warn(
+                'ingest.review_price_context_failed',
+                `Review analysis runs without ${what}${errorDetail(err)}`,
+                { productId, masterId, code: err.code }
+              );
+            }
+          }
           const rawMasterMinPrice = masterRow?.min_price;
           const parsedMasterMinPrice =
             typeof rawMasterMinPrice === 'number'

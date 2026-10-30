@@ -97,6 +97,15 @@ export const MAX_LOG_STRING_LENGTH = 8000;
 export const MAX_LOG_META_KEYS = 60;
 
 /**
+ * ": message (code X)" for a Supabase error, so a run log names what failed and how
+ * (DOS/Rate#1432). A missing error reads as a missing row.
+ */
+export function errorDetail(err: { message?: string; code?: string } | null | undefined): string {
+  if (!err) return ': no row returned';
+  return `: ${err.message ?? 'unknown error'}${err.code ? ` (code ${err.code})` : ''}`;
+}
+
+/**
  * Computes exponential backoff with full jitter for LLM / network retries on 429 or 5xx (Audit C8).
  */
 export function computeRetryDelayMs(
