@@ -2138,7 +2138,13 @@ function buildBaseRateOpenApiSpec(
             rating_star: { type: ['number', 'null'] },
             follower_count: { type: 'integer' },
             location: { type: ['string', 'null'] },
-            dosafe_risk_score: { type: 'number', minimum: 0, maximum: 100 },
+            dosafe_risk_score: {
+              type: ['number', 'null'],
+              minimum: 0,
+              maximum: 100,
+              description:
+                'DOSafe scam risk; null for a seller with no DOSafe score (DOS/Rate#1465).',
+            },
             review_risk_score: {
               type: ['integer', 'null'],
               minimum: 0,

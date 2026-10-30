@@ -803,6 +803,12 @@ export interface MerchantSummary {
   follower_count: number;
   location: string | null;
   dosafe_risk_score: number;
+  /**
+   * False when no DOSafe score is known: no metadata score and the column's default 0
+   * (#1099). Internal: public payloads turn it into a null `dosafe_risk_score`
+   * (`withPublicReviewRisk`, DOS/Rate#1465).
+   */
+  dosafe_risk_known?: boolean;
   review_risk_score: number;
   risk_score: number;
   trust_score: number;

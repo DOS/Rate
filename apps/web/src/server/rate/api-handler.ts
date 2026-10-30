@@ -26,13 +26,30 @@ export function withPublicReviewRisk<
   T extends {
     review_risk_score?: number | string | null;
     review_risk_breakdown?: { total_reviews?: unknown } | null;
+    dosafe_risk_score?: number | null;
+    dosafe_risk_known?: boolean;
   },
 >(
   merchant: T
-): Omit<T, 'review_risk_score'> & {
+): Omit<T, 'review_risk_score' | 'dosafe_risk_score' | 'dosafe_risk_known'> & {
   review_risk_score: number | null;
+  dosafe_risk_score: T['dosafe_risk_score'] | null;
 } {
-  return { ...merchant, review_risk_score: reviewRiskScoreOrNull(merchant) };
+  // A seller with no known DOSafe score answers null, never the column's default 0,
+  // the lowest risk (DOS/Rate#1465). The flag itself stays internal.
+  const { dosafe_risk_known: dosafeKnown, ...rest } = merchant;
+  return {
+    ...rest,
+    review_risk_score: reviewRiskScoreOrNull(merchant),
+    dosafe_risk_score:
+      dosafeKnown === false ? null : merchant.dosafe_risk_score,
+  } as Omit<
+    T,
+    'review_risk_score' | 'dosafe_risk_score' | 'dosafe_risk_known'
+  > & {
+    review_risk_score: number | null;
+    dosafe_risk_score: T['dosafe_risk_score'] | null;
+  };
 }
 
 /**
