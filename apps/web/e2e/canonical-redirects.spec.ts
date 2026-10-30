@@ -15,8 +15,16 @@ async function redirectTarget(
 ) {
   const res = await request.get(path, { maxRedirects: 0 });
   expect(res.status(), path).toBe(308);
-  const location = res.headers()['location'] ?? '';
-  return new URL(location, baseURL).pathname;
+  // `next start` sends the Location header twice (Vercel sends it once), and
+  // headers() would join the two: every copy must name the same target.
+  const targets = new Set(
+    res
+      .headersArray()
+      .filter(({ name }) => name.toLowerCase() === 'location')
+      .map(({ value }) => new URL(value, baseURL).pathname)
+  );
+  expect(targets.size, path).toBe(1);
+  return [...targets][0];
 }
 
 async function canonicalOf(request: APIRequestContext, path: string) {
