@@ -1,7 +1,7 @@
 'use client';
 
 import { Fragment, useEffect, useState, type ReactNode } from 'react';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import { BsShieldCheck } from 'react-icons/bs';
 import PriceHistorySection from '@/components/price-history/PriceHistorySection';
 import ProductOffersExplorer from '@/components/leaderboard/ProductOffersExplorer';
@@ -13,6 +13,7 @@ import {
   type ItemSizeStripContext,
 } from '@/lib/item-size-panel';
 import { useSelectedVariant } from './selected-variant';
+import { formatNumber, formatPriceVnd } from '@/lib/locale-format';
 
 export type ItemSizePanelKind = 'strip' | 'history' | 'offers';
 
@@ -74,6 +75,7 @@ export function ItemSizePriceStrip({
 }) {
   const t = useTranslations('productDetail');
   const tSale = useTranslations('saleState');
+  const locale = useLocale();
   const { stats, priceHistory, product } = data;
   return (
     <div className="rounded-4 bg-light mb-2 border p-3">
@@ -84,7 +86,7 @@ export function ItemSizePriceStrip({
           </div>
           <div className="fw-bold text-dark rate-tabular fs-5">
             {stats.minPrice > 0 ? (
-              `${stats.minPrice.toLocaleString('vi-VN')} ₫`
+              formatPriceVnd(stats.minPrice, locale)
             ) : data.saleStateKey ? (
               <span data-sale-state={data.saleState}>
                 {tSale(data.saleStateKey)}
@@ -94,13 +96,13 @@ export function ItemSizePriceStrip({
             )}
             {stats.minPrice > 0 && stats.minPrice !== stats.maxPrice && (
               <span className="small fw-normal text-muted ms-2">
-                ~ {stats.maxPrice.toLocaleString('vi-VN')} ₫
+                ~ {formatPriceVnd(stats.maxPrice, locale)}
               </span>
             )}
             {priceHistory.lowestEverPrice != null && (
               <span className="badge bg-success-subtle text-success fw-normal ms-2">
                 {t('allTimeLowBadge', {
-                  price: priceHistory.lowestEverPrice.toLocaleString('vi-VN'),
+                  price: formatNumber(priceHistory.lowestEverPrice, locale),
                 })}
               </span>
             )}

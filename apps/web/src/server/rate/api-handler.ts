@@ -849,12 +849,15 @@ export const inspectRateLimiter = new BoundedSlidingWindowRateLimiter({
 
 /**
  * The 429 a rate-limited public route answers: `code: RATE_LIMIT_EXCEEDED`
- * and `Retry-After` (seconds, the limiter's one-minute window), exposed to
- * cross-origin callers such as the extension (DOS/Rate#1322, #1377).
+ * and `Retry-After` (seconds; the limit's window, one minute by default),
+ * exposed to cross-origin callers such as the extension (DOS/Rate#1322,
+ * #1377, #1400).
  */
 export function rateLimitExceededResponse(
   message: string,
-  headers: Record<string, string>
+  headers: Record<string, string>,
+  /** The limit's window: the longest wait before a retry can pass. */
+  retryAfterSeconds = 60
 ): NextResponse {
   return NextResponse.json(
     { ok: false, error: message, code: 'RATE_LIMIT_EXCEEDED' },
@@ -862,7 +865,7 @@ export function rateLimitExceededResponse(
       status: 429,
       headers: {
         ...headers,
-        'Retry-After': '60',
+        'Retry-After': String(retryAfterSeconds),
         'Access-Control-Expose-Headers': 'Retry-After',
       },
     }

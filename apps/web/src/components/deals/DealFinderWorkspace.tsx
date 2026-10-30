@@ -33,6 +33,12 @@ import {
 import RadarBadge from '@/components/radar/RadarBadge';
 import { useDealRadarIndex } from '@/components/radar/use-deal-radar';
 import { escapeCsvCell } from '@/lib/csv-safe';
+import {
+  formatDecimal,
+  formatNumber,
+  formatPlainNumber,
+  formatPriceVnd,
+} from '@/lib/locale-format';
 
 interface DealFinderWorkspaceProps {
   readonly products: MasterProduct[];
@@ -621,7 +627,7 @@ export default function DealFinderWorkspace({
                 {t('maxBudgetLabel')}
               </span>
               <strong className="text-danger rate-tabular">
-                ≤ {maxBudgetVnd.toLocaleString('vi-VN')} ₫
+                ≤ {formatPriceVnd(maxBudgetVnd, locale)}
               </strong>
             </div>
             <input
@@ -722,18 +728,20 @@ export default function DealFinderWorkspace({
                             />{' '}
                             ·{' '}
                             {t('medianPriceLabel', {
-                              price:
-                                g.marketMedianPrice.toLocaleString('vi-VN'),
+                              price: formatNumber(g.marketMedianPrice, locale),
                             })}
                           </span>
                         </div>
                         <div className="rate-radar-item-side">
                           <span className="rate-radar-price">
-                            {g.priceCurrent.toLocaleString('vi-VN')} ₫
+                            {formatPriceVnd(g.priceCurrent, locale)}
                           </span>
                           <span className="rate-radar-tag is-good">
                             {t('savingsVsMedianBadge', {
-                              pct: g.savingsVsMedianPct,
+                              pct: formatPlainNumber(
+                                g.savingsVsMedianPct,
+                                locale
+                              ),
                             })}
                           </span>
                         </div>
@@ -773,19 +781,24 @@ export default function DealFinderWorkspace({
                             />{' '}
                             · {t('claimedOrigLabel')}{' '}
                             <s>
-                              {(
-                                trap.priceOriginal || trap.priceCurrent
-                              ).toLocaleString('vi-VN')}{' '}
-                              ₫
+                              {formatPriceVnd(
+                                trap.priceOriginal || trap.priceCurrent,
+                                locale
+                              )}
                             </s>
                           </span>
                         </div>
                         <div className="rate-radar-item-side">
                           <span className="rate-radar-price">
-                            {trap.priceCurrent.toLocaleString('vi-VN')} ₫
+                            {formatPriceVnd(trap.priceCurrent, locale)}
                           </span>
                           <span className="rate-radar-tag is-bad">
-                            {t('fakeMarkupBadge', { pct: trap.fakeMarkupPct })}
+                            {t('fakeMarkupBadge', {
+                              pct: formatPlainNumber(
+                                trap.fakeMarkupPct,
+                                locale
+                              ),
+                            })}
                           </span>
                         </div>
                       </li>
@@ -820,7 +833,7 @@ export default function DealFinderWorkspace({
                             <span className="rate-radar-platform">
                               {s.cheapestPlatform}
                             </span>
-                            ({s.minPrice.toLocaleString('vi-VN')} ₫) vs{' '}
+                            ({formatPriceVnd(s.minPrice, locale)}) vs{' '}
                             <span className="rate-radar-platform">
                               {s.priciestPlatform}
                             </span>
@@ -828,10 +841,12 @@ export default function DealFinderWorkspace({
                         </div>
                         <div className="rate-radar-item-side">
                           <span className="rate-radar-price">
-                            -{s.spreadVnd.toLocaleString('vi-VN')} ₫
+                            -{formatPriceVnd(s.spreadVnd, locale)}
                           </span>
                           <span className="rate-radar-tag is-warn">
-                            {t('spreadPctBadge', { pct: s.spreadPct })}
+                            {t('spreadPctBadge', {
+                              pct: formatPlainNumber(s.spreadPct, locale),
+                            })}
                           </span>
                         </div>
                       </div>
@@ -848,7 +863,7 @@ export default function DealFinderWorkspace({
         <div className="rate-card p-5 text-center">
           <p className="text-secondary mb-3">
             {t('emptyBudgetText', {
-              budget: maxBudgetVnd.toLocaleString('vi-VN'),
+              budget: formatNumber(maxBudgetVnd, locale),
             })}
           </p>
           <button
@@ -879,12 +894,12 @@ export default function DealFinderWorkspace({
                         <span className="rate-score-badge-user">
                           ★{' '}
                           {deal.personaScore5 > 0
-                            ? `${deal.personaScore5.toFixed(2)}/5.0`
+                            ? `${formatDecimal(deal.personaScore5, locale, 2)}/${formatDecimal(5, locale, 1)}`
                             : t('noScore')}
                         </span>
                         <span className="rate-score-badge-expert">
                           {deal.expertScore10 != null
-                            ? `Lab ${deal.expertScore10.toFixed(1)}/10`
+                            ? `Lab ${formatDecimal(deal.expertScore10, locale, 1)}/10`
                             : t('labNoScore')}
                         </span>
                         <RadarBadge
@@ -895,8 +910,7 @@ export default function DealFinderWorkspace({
                       {deal.spreadSavingsVnd > 0 && (
                         <span className="badge bg-success-subtle text-success rounded-pill rate-tabular">
                           {t('spreadSavingsBadge', {
-                            amount:
-                              deal.spreadSavingsVnd.toLocaleString('vi-VN'),
+                            amount: formatNumber(deal.spreadSavingsVnd, locale),
                           })}
                         </span>
                       )}
@@ -919,12 +933,13 @@ export default function DealFinderWorkspace({
                           {deal.name}
                         </Link>
                         <div className="text-danger fw-bold rate-tabular mt-1">
-                          {deal.minPrice.toLocaleString('vi-VN')} ₫{' '}
+                          {formatPriceVnd(deal.minPrice, locale)}{' '}
                           {deal.costPerPointVnd > 0 && (
                             <span className="text-secondary small fw-normal">
                               {t('costPerPointSub', {
-                                cost: deal.costPerPointVnd.toLocaleString(
-                                  'vi-VN'
+                                cost: formatNumber(
+                                  deal.costPerPointVnd,
+                                  locale
                                 ),
                               })}
                             </span>

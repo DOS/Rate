@@ -5,6 +5,7 @@
  * watchlist, inspect, compare, exports) must go through this module instead
  * of re-implementing fetch, slug lookup, labels or export columns.
  */
+import { formatPercent } from './locale-format';
 import type {
   CrossPlatformDealRadarItem,
   CrossPlatformDealRadarResponse,
@@ -243,19 +244,25 @@ export function radarLabel(
   if (verdict === 'genuine_deal') {
     const pct = safeSavingsPct.toFixed(1);
     if (loc === 'en') return `🔥 Cross-platform low (-${pct}%)`;
-    if (loc === 'cs') return `🔥 Minimum napříč obchody (-${pct}%)`;
+    if (loc === 'cs') {
+      return `🔥 Minimum napříč obchody (-${formatPercent(safeSavingsPct, loc, { digits: 1 })})`;
+    }
     return `🔥 Đáy giá đa sàn (-${pct}%)`;
   }
   if (verdict === 'fake_sale_trap') {
     const pct = safeFakeMarkupPct.toFixed(1);
     if (loc === 'en') return `🚨 Fake sale warning (+${pct}%)`;
-    if (loc === 'cs') return `🚨 Upozornění na falešnou slevu (+${pct}%)`;
+    if (loc === 'cs') {
+      return `🚨 Upozornění na falešnou slevu (+${formatPercent(safeFakeMarkupPct, loc, { digits: 1 })})`;
+    }
     return `🚨 Cảnh báo giảm giá ảo (+${pct}%)`;
   }
   if (safeSpreadPct > 0 && safeSpreadPct >= safeMinSpreadPct) {
     const pct = safeSpreadPct.toFixed(1);
     if (loc === 'en') return `📊 +${pct}% cross-platform spread`;
-    if (loc === 'cs') return `📊 +${pct}% rozdíl mezi e-shopy`;
+    if (loc === 'cs') {
+      return `📊 +${formatPercent(safeSpreadPct, loc, { digits: 1 })} rozdíl mezi e-shopy`;
+    }
     return `📊 Lệch giá +${pct}% đa sàn`;
   }
   return '';

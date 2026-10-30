@@ -48,6 +48,11 @@ import {
   type ReviewBadgeKind,
 } from '@/lib/review-display';
 import AnalyzerText, { analyzerText } from './AnalyzerText';
+import {
+  formatDecimal,
+  formatPercent,
+  formatPlainNumber,
+} from '@/lib/locale-format';
 
 type VoteChoice = 'up' | 'down' | 'report';
 type FilterTab = 'all' | 'authentic' | 'expert' | 'ignored';
@@ -633,7 +638,7 @@ export default function JReviewsSection({
           ? t('successPendingModeration')
           : newRev.include_in_rating
             ? t('successPublishedAuthentic', {
-                weight: newRev.helpfulness_weight.toFixed(2),
+                weight: formatDecimal(newRev.helpfulness_weight, locale, 2),
               })
             : t('successFlaggedFiltered', {
                 flag:
@@ -987,11 +992,13 @@ export default function JReviewsSection({
             <span className="text-muted small">
               {t('avg5CriteriaLabel')}{' '}
               <strong className="text-danger">
-                {(
+                {formatDecimal(
                   Object.values(criteriaScores).reduce((a, b) => a + b, 0) /
-                  Object.values(criteriaScores).length
-                ).toFixed(1)}{' '}
-                / 5.0 ★
+                    Object.values(criteriaScores).length,
+                  locale,
+                  1
+                )}{' '}
+                / {formatDecimal(5, locale, 1)} ★
               </strong>
             </span>
             <button
@@ -1032,10 +1039,12 @@ export default function JReviewsSection({
               <div className="d-flex align-items-baseline my-2 gap-2">
                 <span className="display-5 fw-bold font-monospace text-white">
                   {liveScores.overall > 0
-                    ? liveScores.overall.toFixed(1)
+                    ? formatDecimal(liveScores.overall, locale, 1)
                     : 'N/A'}
                 </span>
-                <span className="text-white-50 fw-medium">/ 5.0</span>
+                <span className="text-white-50 fw-medium">
+                  / {formatDecimal(5, locale, 1)}
+                </span>
               </div>
               <div className="text-warning fs-5 mb-2">
                 {'★'.repeat(Math.round(liveScores.overall || 5))}
@@ -1062,7 +1071,9 @@ export default function JReviewsSection({
                 </span>
                 <span className="rate-score-badge-user">
                   ★{' '}
-                  {liveScores.user != null ? liveScores.user.toFixed(2) : 'N/A'}
+                  {liveScores.user != null
+                    ? formatDecimal(liveScores.user, locale, 2)
+                    : 'N/A'}
                 </span>
               </div>
               <div className="d-flex align-items-baseline my-2 gap-2">
@@ -1074,10 +1085,12 @@ export default function JReviewsSection({
                   }`}
                 >
                   {liveScores.bayesianUser != null
-                    ? liveScores.bayesianUser.toFixed(2)
+                    ? formatDecimal(liveScores.bayesianUser, locale, 2)
                     : 'N/A'}
                 </span>
-                <span className="text-muted small">/ 5.0 (Bayes)</span>
+                <span className="text-muted small">
+                  / {formatDecimal(5, locale, 1)} (Bayes)
+                </span>
               </div>
               <div className="small text-secondary mb-2">
                 {t('basedOnAuthenticReviews', {
@@ -1085,7 +1098,7 @@ export default function JReviewsSection({
                   weightSum: liveScores.userWeightSum,
                   avgScore:
                     liveScores.user != null
-                      ? liveScores.user.toFixed(2)
+                      ? formatDecimal(liveScores.user, locale, 2)
                       : 'N/A',
                 })}
               </div>
@@ -1101,12 +1114,19 @@ export default function JReviewsSection({
                       : 'bg-secondary-subtle text-secondary'
                 }`}
                 title={t('bayesianConfidenceTooltip', {
-                  pct: Math.round(liveScores.bayesianConfidence * 100),
+                  pct: formatPlainNumber(
+                    Math.round(liveScores.bayesianConfidence * 100),
+                    locale
+                  ),
                 })}
               >
                 <BsBarChart aria-hidden="true" className="me-1" />
                 {liveScores.confidenceLabel} (
-                {Math.round(liveScores.bayesianConfidence * 100)}%)
+                {formatPercent(
+                  Math.round(liveScores.bayesianConfidence * 100),
+                  locale
+                )}
+                )
               </span>
               <span className="badge bg-success-subtle text-success small">
                 {t('validCountBadge', { count: counts.authentic })}
@@ -1131,7 +1151,7 @@ export default function JReviewsSection({
                 <span className="rate-score-badge-expert">
                   Expert{' '}
                   {liveScores.expert != null
-                    ? `${liveScores.expert.toFixed(1)}/5.0`
+                    ? `${formatDecimal(liveScores.expert, locale, 1)}/${formatDecimal(5, locale, 1)}`
                     : t('expertPendingShort')}
                 </span>
               </div>
@@ -1139,9 +1159,11 @@ export default function JReviewsSection({
                 <>
                   <div className="d-flex align-items-baseline my-2 gap-2">
                     <span className="display-6 fw-bold text-dark font-monospace">
-                      {liveScores.expert.toFixed(1)}
+                      {formatDecimal(liveScores.expert, locale, 1)}
                     </span>
-                    <span className="text-muted small">/ 5.0</span>
+                    <span className="text-muted small">
+                      / {formatDecimal(5, locale, 1)}
+                    </span>
                   </div>
                   <div className="small text-secondary">
                     {expertReviewSummary ? (
@@ -1199,7 +1221,7 @@ export default function JReviewsSection({
                     <span className="text-muted fw-medium">{crit.label}</span>
                     <strong className="text-dark font-monospace">
                       {crit.score != null
-                        ? `${crit.score.toFixed(1)}/5.0`
+                        ? `${formatDecimal(crit.score, locale, 1)}/${formatDecimal(5, locale, 1)}`
                         : t('notAvailableShort')}
                     </strong>
                   </div>
@@ -1227,8 +1249,14 @@ export default function JReviewsSection({
           <BsExclamationTriangle aria-hidden="true" className="flex-shrink-0" />
           <span>
             {t('starAnomalyWarning', {
-              fiveStarPct: liveScores.starAnomaly.fiveStarRatioPct,
-              lowEffortPct: liveScores.starAnomaly.lowEffortOrSeedingRatioPct,
+              fiveStarPct: formatPlainNumber(
+                liveScores.starAnomaly.fiveStarRatioPct,
+                locale
+              ),
+              lowEffortPct: formatPlainNumber(
+                liveScores.starAnomaly.lowEffortOrSeedingRatioPct,
+                locale
+              ),
             })}
           </span>
         </div>
@@ -1243,17 +1271,26 @@ export default function JReviewsSection({
           <div className="d-flex small flex-wrap gap-2">
             <span className="badge bg-success text-white">
               {t('authenticPctBadge', {
-                pct: sanitizeJReviewsPercentage(summary.authentic_pct),
+                pct: formatPlainNumber(
+                  sanitizeJReviewsPercentage(summary.authentic_pct),
+                  locale
+                ),
               })}
             </span>
             <span className="badge bg-warning text-dark">
               {t('suspiciousPctBadge', {
-                pct: sanitizeJReviewsPercentage(summary.suspicious_pct),
+                pct: formatPlainNumber(
+                  sanitizeJReviewsPercentage(summary.suspicious_pct),
+                  locale
+                ),
               })}
             </span>
             <span className="badge bg-danger text-white">
               {t('fakePctBadge', {
-                pct: sanitizeJReviewsPercentage(summary.fake_pct),
+                pct: formatPlainNumber(
+                  sanitizeJReviewsPercentage(summary.fake_pct),
+                  locale
+                ),
               })}
             </span>
           </div>
@@ -1272,7 +1309,10 @@ export default function JReviewsSection({
               width: `${sanitizeJReviewsPercentage(summary.authentic_pct)}%`,
             }}
             title={t('authenticPctBadge', {
-              pct: sanitizeJReviewsPercentage(summary.authentic_pct),
+              pct: formatPlainNumber(
+                sanitizeJReviewsPercentage(summary.authentic_pct),
+                locale
+              ),
             })}
           />
           <div
@@ -1281,7 +1321,10 @@ export default function JReviewsSection({
               width: `${sanitizeJReviewsPercentage(summary.suspicious_pct)}%`,
             }}
             title={t('suspiciousPctBadge', {
-              pct: sanitizeJReviewsPercentage(summary.suspicious_pct),
+              pct: formatPlainNumber(
+                sanitizeJReviewsPercentage(summary.suspicious_pct),
+                locale
+              ),
             })}
           />
           <div
@@ -1290,7 +1333,10 @@ export default function JReviewsSection({
               width: `${sanitizeJReviewsPercentage(summary.fake_pct)}%`,
             }}
             title={t('fakePctBadge', {
-              pct: sanitizeJReviewsPercentage(summary.fake_pct),
+              pct: formatPlainNumber(
+                sanitizeJReviewsPercentage(summary.fake_pct),
+                locale
+              ),
             })}
           />
         </div>
@@ -1489,7 +1535,10 @@ export default function JReviewsSection({
             const assessment =
               rev.trust_assessment ?? evaluateReviewTrustAssessment(rev);
             const sponsorshipKey = sponsorshipBadgeKey(assessment.independence);
-            const weightCopy = weightExplanationCopy(assessment.breakdown);
+            const weightCopy = weightExplanationCopy(
+              assessment.breakdown,
+              locale
+            );
             const weightExplanation =
               'key' in weightCopy
                 ? t(weightCopy.key, weightCopy.values)
@@ -1567,7 +1616,11 @@ export default function JReviewsSection({
                         data-testid="review-rating-weight"
                       >
                         {t('ratingWeightBadge', {
-                          weight: rev.helpfulness_weight.toFixed(2),
+                          weight: formatDecimal(
+                            rev.helpfulness_weight,
+                            locale,
+                            2
+                          ),
                         })}
                       </span>
                       {/* The 6-axis trust model is a separate estimate with its

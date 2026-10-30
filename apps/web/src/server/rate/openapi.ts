@@ -69,10 +69,13 @@ function errorResponse(description: string): OpenApiResponse {
 }
 
 /**
- * A per-IP rate limit's 429: `code: RATE_LIMIT_EXCEEDED` and `Retry-After`
- * (DOS/Rate#1307, #1377).
+ * A rate limit's 429: `code: RATE_LIMIT_EXCEEDED` and `Retry-After`, the
+ * limit's window in seconds (DOS/Rate#1307, #1377, #1400).
  */
-function rateLimitedResponse(description: string): OpenApiResponse {
+function rateLimitedResponse(
+  description: string,
+  retryAfterSeconds = 60
+): OpenApiResponse {
   return {
     ...errorResponse(
       `${description} The body has \`code: "RATE_LIMIT_EXCEEDED"\`.`
@@ -80,7 +83,7 @@ function rateLimitedResponse(description: string): OpenApiResponse {
     headers: {
       'Retry-After': {
         description: 'Seconds to wait before retrying.',
-        schema: { type: 'integer', example: 60 },
+        schema: { type: 'integer', example: retryAfterSeconds },
       },
     },
   };
@@ -1548,8 +1551,9 @@ function buildBaseRateOpenApiSpec(
               'Guest (anonymous) sign-ins and cross-site cookie requests cannot submit reviews.'
             ),
             '409': errorResponse('This user already reviewed the product.'),
-            '429': errorResponse(
-              'More than 5 reviews by this user in 24 hours.'
+            '429': rateLimitedResponse(
+              'More than 5 reviews by this user in 24 hours.',
+              86_400
             ),
             '502': { description: 'The review could not be stored.' },
             '503': { description: 'Review submission is not deployed here.' },
@@ -1611,8 +1615,9 @@ function buildBaseRateOpenApiSpec(
             '403': errorResponse(
               'Voter account is ineligible (< 7 days old or unverified contact).'
             ),
-            '429': errorResponse(
-              'Rate limit exceeded (maximum 60 vote actions per hour).'
+            '429': rateLimitedResponse(
+              'Rate limit exceeded (maximum 60 vote actions per hour).',
+              3600
             ),
             '404': errorResponse('Review not found.'),
           },

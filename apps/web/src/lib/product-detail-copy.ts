@@ -1,6 +1,7 @@
 import { MAX_VALID_VND_PRICE } from './rate-domain-core';
 import type { BayesianRatingSummary } from './rate-api';
 import type { RadarSignal } from './deal-radar';
+import { formatNumber, formatPlainNumber } from './locale-format';
 
 // rate-api and the deal radar build `tierLabelVi` / `explanationVi` in
 // Vietnamese only. The product page rebuilds them from the structured fields
@@ -69,19 +70,23 @@ export type RadarExplanation =
       };
     };
 
-const vnd = (value: unknown) => {
+const vnd = (value: unknown, locale?: string | null) => {
   const num = parseDecimalDetailNumber(value);
   const safe =
     Number.isFinite(num) && num > 0
       ? Math.min(Math.round(num), MAX_VALID_VND_PRICE)
       : 0;
-  return safe.toLocaleString('vi-VN');
+  return formatNumber(safe, locale);
 };
 
-const safePctString = (value: unknown, max = 10_000): string => {
+const safePctString = (
+  value: unknown,
+  locale?: string | null,
+  max = 10_000
+): string => {
   const num = parseDecimalDetailNumber(value);
   if (!Number.isFinite(num) || num <= 0) return '0';
-  return String(Math.min(num, max));
+  return formatPlainNumber(Math.min(num, max), locale);
 };
 
 const offerCountString = (value: unknown): string | null => {
@@ -102,7 +107,8 @@ const safeLabelText = (value: unknown, maxLen: number): string => {
  * are preformatted strings, matching the Vietnamese text `deals.ts` builds.
  */
 export function radarExplanation(
-  signal: Pick<RadarSignal, 'verdict' | 'genuineDeal' | 'fakeSaleTrap'>
+  signal: Pick<RadarSignal, 'verdict' | 'genuineDeal' | 'fakeSaleTrap'>,
+  locale?: string | null
 ): RadarExplanation | null {
   if (!signal || typeof signal !== 'object') return null;
   if (signal.verdict === 'genuine_deal' && signal.genuineDeal) {
@@ -113,8 +119,8 @@ export function radarExplanation(
     return {
       key: 'radarExplanationGenuineDeal',
       values: {
-        savings: vnd(deal.savingsVsMedianVnd),
-        pct: safePctString(deal.savingsVsMedianPct),
+        savings: vnd(deal.savingsVsMedianVnd, locale),
+        pct: safePctString(deal.savingsVsMedianPct, locale),
         merchant: safeLabelText(deal.merchantName, 200),
         platform: safeLabelText(deal.platform, 64).toUpperCase(),
         count,
@@ -133,10 +139,13 @@ export function radarExplanation(
     return {
       key: 'radarExplanationFakeSale',
       values: {
-        original: vnd(trap.priceOriginal),
-        markupPct: safePctString(trap.fakeMarkupPct),
-        claimedPct: safePctString(trap.claimedDiscountPct),
-        aboveFloor: vnd(Number.isFinite(rawDiff) && rawDiff > 0 ? rawDiff : 0),
+        original: vnd(trap.priceOriginal, locale),
+        markupPct: safePctString(trap.fakeMarkupPct, locale),
+        claimedPct: safePctString(trap.claimedDiscountPct, locale),
+        aboveFloor: vnd(
+          Number.isFinite(rawDiff) && rawDiff > 0 ? rawDiff : 0,
+          locale
+        ),
       },
     };
   }

@@ -1,3 +1,4 @@
+import { formatDecimal } from './locale-format';
 import type {
   CombinedDualScoreBlendMode,
   ReviewFlagCategory,
@@ -133,7 +134,8 @@ export type WeightExplanationCopy =
 export function weightExplanationCopy(
   breakdown: Pick<ReviewWeightBreakdown, 'weight' | 'explanationVi'> & {
     explanationKind?: ReviewWeightExplanationKind;
-  }
+  },
+  locale?: string | null
 ): WeightExplanationCopy {
   if (!breakdown || typeof breakdown !== 'object') return { text: '' };
   const kind = breakdown.explanationKind;
@@ -158,7 +160,7 @@ export function weightExplanationCopy(
     : 0;
   return {
     key: WEIGHT_EXPLANATION_KEYS[kind],
-    values: { weight: safeWeight.toFixed(2) },
+    values: { weight: formatDecimal(safeWeight, locale, 2) },
   };
 }
 
@@ -199,6 +201,8 @@ const SUBMIT_ERROR_KEYS = new Map<string, SubmitErrorKey>([
   ['FORBIDDEN', 'errRealAccountRequired'],
   ['DUPLICATE_REVIEW', 'errDuplicateReview'],
   ['RATE_LIMITED', 'errRateLimited'],
+  // The code since #1400; RATE_LIMITED is kept for older answers.
+  ['RATE_LIMIT_EXCEEDED', 'errRateLimited'],
   ['REJECTED', 'errInvalidReview'],
   ['INVALID_BODY', 'errInvalidReview'],
 ]);

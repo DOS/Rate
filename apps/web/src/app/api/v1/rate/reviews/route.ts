@@ -15,6 +15,7 @@ import {
   parseReviewsQueryParams,
   payloadTooLargeResponse,
   readBoundedJsonBody,
+  rateLimitExceededResponse,
 } from '@/server/rate/api-handler';
 import {
   authenticateRateRequest,
@@ -204,7 +205,7 @@ const RPC_REJECTIONS: Record<string, RpcRejection> = {
   // more than 5 reviews in 24h
   '54000': {
     status: 429,
-    code: 'RATE_LIMITED',
+    code: 'RATE_LIMIT_EXCEEDED',
     error: 'Bạn đã gửi quá 5 đánh giá trong 24 giờ, vui lòng thử lại sau.',
   },
 };
@@ -439,6 +440,14 @@ export async function POST(request: NextRequest) {
       }
       // Errors the RPC raises on purpose carry a user-facing Vietnamese message.
       const rejection = mapRpcRejection(rpcError, RPC_REJECTIONS);
+      // The database counts 5 reviews per rolling 24 hours (#1400).
+      if (rejection?.status === 429) {
+        return rateLimitExceededResponse(
+          rejection.error,
+          REVIEWS_CORS_HEADERS,
+          86_400
+        );
+      }
       if (rejection) {
         return NextResponse.json(
           { ok: false, error: rejection.error, code: rejection.code },

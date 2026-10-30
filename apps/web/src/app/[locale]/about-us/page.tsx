@@ -13,6 +13,7 @@ import {
   BsShieldCheck,
   BsShop,
 } from 'react-icons/bs';
+import { formatPercent } from '@/lib/locale-format';
 
 // Cached after the first request, refreshed every 5 minutes or when the
 // worker revalidates its cache tags (DOS/Rate#491).
@@ -103,7 +104,7 @@ export default async function AboutUsPage({
                   </div>
                   <div className="col-6">
                     <div className="h3 fw-bold text-success mb-0">
-                      {stats.authenticRatioPct}%
+                      {formatPercent(stats.authenticRatioPct, locale)}
                     </div>
                     <div className="small text-white-50">
                       {t('aboutStat3Label')}
