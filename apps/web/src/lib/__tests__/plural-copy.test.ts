@@ -238,6 +238,108 @@ function main() {
     'Checked 1,234 store listings'
   );
 
+  // Watchlist, merchants, deals, home and the developers playground
+  // (DOS/Rate#1398).
+  const rest: Array<[string, Record<string, number | string>, string]> = [
+    ['watchlist.statWatchingValue', { count: 1 }, '1 model'],
+    ['watchlist.statReachedValue', { count: 3 }, '3 modely na cíli'],
+    ['watchlist.sellersCountSub', { count: 2 }, '2 prodejci'],
+    [
+      'watchlist.cloudSavedAll',
+      { saved: 1 },
+      'Uloženo 1 cenové upozornění do Rate Cloud. Notifikace budou zaslány na váš e-mail.',
+    ],
+    [
+      'watchlist.cloudSavedAll',
+      { saved: 3 },
+      'Uložena 3 cenová upozornění do Rate Cloud. Notifikace budou zaslány na váš e-mail.',
+    ],
+    [
+      'merchants.profileRadarGenuineCount',
+      { count: 4 },
+      '4 nabídky pod mediánem',
+    ],
+    ['merchants.showMoreMerchants', { count: 1 }, 'Zobrazit další (1 obchod)'],
+    ['merchants.modelsCountUnit', { count: 6 }, '6 modelů'],
+    [
+      'deals.radarScannedSummary',
+      { offers: 1, clusters: 1 },
+      'Prohledána 1 nabídka napříč 1 produktovým klastrem',
+    ],
+    [
+      'deals.radarScannedSummary',
+      { offers: 72, clusters: 13 },
+      'Prohledáno 72 nabídek napříč 13 produktovými klastry',
+    ],
+    [
+      'homePage.radarHomeAnalyzed',
+      { offers: 1, merchants: 1, clusters: 2 },
+      'Automatické porovnání 1 nabídky od 1 prodejce napříč 2 produktovými klastry',
+    ],
+    [
+      'homePage.authenticReviewsStatBadge',
+      { count: 2, pct: 90 },
+      '2 autentické recenze (90%)',
+    ],
+    ['heroSearch.trackingProductsCount', { count: 3 }, 'Sledovány 3 produkty'],
+    [
+      'heroSearch.aiReviewAuthValue',
+      { pct: 80, total: 1 },
+      '✓ 80% autentických (z 1 recenze)',
+    ],
+    [
+      'developers.pgSelectPresetLabel',
+      { count: 13 },
+      'Vyberte vzorový požadavek (13 vzorů):',
+    ],
+    [
+      'developers.pgMdTitle',
+      { count: 2 },
+      '### 🔌 Rate.vn REST API v1 (2 vzorové požadavky)',
+    ],
+  ];
+  for (const [key, values, expected] of rest) {
+    assert.equal(
+      cs(key as never, values as never),
+      expected,
+      `cs ${key} ${JSON.stringify(values)}`
+    );
+  }
+  const restEn: Array<[string, Record<string, number | string>, string]> = [
+    [
+      'watchlist.compareSameCatBtn',
+      { count: 1 },
+      'Compare 1 same-category device',
+    ],
+    [
+      'merchants.historicalLowObs',
+      { price: '1.000', count: 1 },
+      'All-time low: 1.000 ₫ (1 point)',
+    ],
+    [
+      'deals.showingCount',
+      { visible: 1, count: 1 },
+      'Showing 1 of 1 device within your budget',
+    ],
+    [
+      'homePage.radarHomeAnalyzed',
+      { offers: 1, merchants: 2, clusters: 1 },
+      'Automatically cross-checking 1 listing from 2 merchants across 1 product cluster',
+    ],
+    [
+      'heroSearch.aiReviewAuthValue',
+      { pct: 80, total: 1 },
+      '✓ 80% authentic (across 1 review)',
+    ],
+  ];
+  for (const [key, values, expected] of restEn) {
+    assert.equal(
+      en(key as never, values as never),
+      expected,
+      `en ${key} ${JSON.stringify(values)}`
+    );
+  }
+
   // Vietnamese has one form and keeps its plain placeholders.
   const viMessages = read('vi');
   for (const key of [
