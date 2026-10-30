@@ -260,6 +260,32 @@ const APPLE_FAMILIES: ReadonlyArray<readonly [RegExp, string]> = [
   [/apple\s*pencil/i, 'Pencil'],
 ];
 
+/**
+ * The product's own part of a title, before a gift or bundle after it: "HomePod mini" in
+ * "HomePod mini tặng dây Apple Watch Series 10", "MacBook Air M3" in "MacBook Air M3 +
+ * Apple Watch", "HomePod mini (Tặng dây Apple Watch)". A marker that opens the title
+ * ("Tặng ốp - Apple Watch", "[Tặng ốp] Apple Watch") leaves it whole; one after only a
+ * word ("Quà tặng Apple Watch") leaves a part that names no product. Composed
+ * form, so "tặng" is found in a decomposed (NFD) title too (DOS/Rate#1407).
+ */
+function ownProductPart(title: string): string {
+  const composed = title.normalize('NFC');
+  // A bracketed promo that opens the title is skipped when the product follows it: "[Sạc
+  // Apple Watch tặng kèm] AirPods Pro 2" is the AirPods, but "(AirPods Pro 2 tặng dây
+  // Apple Watch) Chính hãng" names the product inside the brackets.
+  const block = /^\s*(?:\[[^\]]*\]|\([^)]*\)|【[^】]*】)/u.exec(composed)?.[0].length ?? 0;
+  const lead =
+    block > 0 && APPLE_FAMILIES.some(([family]) => family.test(composed.slice(block))) ? block : 0;
+  const found = composed.slice(lead).search(/(?<![\p{L}\d])(?:tặng|kèm)(?![\p{L}\d])| ?\+ /iu);
+  const at = found < 0 ? -1 : lead + found;
+  return at > 0 ? composed.slice(0, at) : composed;
+}
+
+/** True when the text names an Apple family other than `line` (DOS/Rate#1407). */
+function namesAppleFamilyOtherThan(text: string, line: string): boolean {
+  return APPLE_FAMILIES.some(([family, name]) => name !== line && family.test(text));
+}
+
 const APPLE_GENERATION_BY_YEAR: Readonly<Record<string, string>> = {
   'TV 4K 2017': '1',
   'TV 4K 2021': '2',
@@ -317,7 +343,22 @@ const APPLE_PART_NUMBERS: Readonly<Record<string, readonly [string, string]>> = 
  * Detect canonical category slug from product title across all 5 tech categories.
  */
 export function detectCategorySlug(title: string): CanonicalCategorySlug {
-  const t = typeof title === 'string' ? title.toLowerCase() : '';
+  const t = typeof title === 'string' ? title.normalize('NFC').toLowerCase() : '';
+  // A gift or bundle after the product is not its category: "AirPods Pro 2 tặng dây Apple
+  // Watch" is earbuds, "Apple iPhone 16 tặng smartwatch" a phone (DOS/Rate#1407). An own
+  // part that names no category falls back to the whole title, unless it names another
+  // Apple product.
+  const own = ownProductPart(t);
+  if (own !== t) {
+    const ownSlug = categorySlugOf(own);
+    if (ownSlug) return ownSlug;
+    if (namesAppleFamilyOtherThan(own, 'Watch')) return 'smartphones';
+  }
+  return categorySlugOf(t) ?? 'smartphones';
+}
+
+/** The category a lower-cased title names, or null (DOS/Rate#1407). */
+function categorySlugOf(t: string): CanonicalCategorySlug | null {
   if (
     /airpods|galaxy\s*buds|w[fh]1000xm|wf-\d+|wh-\d+|tai\s*nghe|earbuds?|freebuds|soundcore|quietcomfort|momentum\s*true/i.test(
       t
@@ -346,7 +387,7 @@ export function detectCategorySlug(title: string): CanonicalCategorySlug {
   ) {
     return 'tablets';
   }
-  return 'smartphones';
+  return null;
 }
 
 /**
@@ -1723,14 +1764,20 @@ export class ProductNormalizer {
       const macbookMatch = appleTitle.match(
         /macbook\s*(pro\s*m\d+(?:\s*(?:pro|max))?|air\s*m\d+|air|pro|neo\b)/i
       );
-      const watchMatch = appleTitle.match(
+      // A watch or AirPods in a gift or bundle after another Apple product is not the
+      // product: "HomePod mini tặng dây Apple Watch Series 10" is the HomePod mini, "Apple
+      // TV 4K tặng AirPods Pro 2" the Apple TV (DOS/Rate#1407).
+      const ownAppleTitle = ownProductPart(appleTitle);
+      const lineTitle = (line: string) =>
+        namesAppleFamilyOtherThan(ownAppleTitle, line) ? ownAppleTitle : appleTitle;
+      const watchMatch = lineTitle('Watch').match(
         // "Ultra 49mm" is the case size, not a generation (DOS/Rate#819). "Watch S10" is
         // the Series 10; only a generation (1 to 19) right after "Watch", with no unit or
         // letter after it, counts, so an "S 42mm" size, a "S 16cm" or "S 14-16cm" band
         // length or a "S/M" band is no series (DOS/Rate#1402).
         /(?:apple\s*)?watch\s*(ultra(?:\s*\d+(?!\d|\s*mm\b))?|series\s*\d+|se(?:\s*\d+(?!\d|\s*(?:mm|gb|tb)\b)|(?![a-z]))|s ?(?:1\d|[1-9])(?![\d.,a-z]|\s*(?:mm|cm|gb|tb|inch)\b| ?[-–] ?\d+(?:[.,]\d+)? ?cm\b))/i
       );
-      const airpodsMatch = appleTitle.match(
+      const airpodsMatch = lineTitle('AirPods').match(
         // Each run of spaces has exactly one `\s*` that can match it, so long
         // whitespace cannot backtrack polynomially (CodeQL js/polynomial-redos).
         /airpods\s*(?:(pro)(?:\s*(?:(?:gen|thế\s*hệ)\s*|\(\s*)?(\d+))?|(max)|(?:(?:gen|thế\s*hệ)\s*)?(\d+))/i

@@ -1026,6 +1026,105 @@ async function runSuite() {
   assert.equal(keyOf('Apple Watch S10.46mm'), 'apple:watch:unknown');
   assert.equal(keyOf('Samsung Galaxy S10 128GB'), 'samsung:galaxy-s10:128gb');
   assert.equal(keyOf('Xiaomi Watch S1 Active'), 'xiaomi:watch-s1-active:unknown');
+  // A watch in a gift or bundle after another Apple product is not the product; the
+  // category goes by the product's own part too (DOS/Rate#1407).
+  assert.equal(
+    keyOf('HomePod mini tặng dây Apple Watch Series 10 42mm'),
+    'apple:homepod-mini:unknown'
+  );
+  assert.equal(
+    keyOf('AirPods Pro 2 tặng dây Apple Watch Series 10'),
+    'apple:airpods-pro-2:unknown'
+  );
+  assert.equal(keyOf('AirPods Pro 2 kèm Apple Watch Series 10'), 'apple:airpods-pro-2:unknown');
+  assert.equal(keyOf('Apple TV 4K tặng Apple Watch SE'), 'apple:tv-4k:unknown');
+  assert.equal(keyOf('MacBook Air M3 + Apple Watch Series 10'), 'apple:macbook-air-m3:unknown');
+  assert.equal(keyOf('iPad Pro M4 tặng Apple Watch Series 10'), 'apple:ipad-pro-m4:unknown');
+  assert.equal(keyOf('AirPods Pro 2 kèm sạc Apple Watch S10'), 'apple:airpods-pro-2:unknown');
+  assert.equal(keyOf('HomePod 2 + Apple Watch Series 10 46mm'), 'apple:homepod-2:unknown');
+  assert.equal(
+    keyOf('HomePod mini (Tặng dây Apple Watch Series 10 42mm)'),
+    'apple:homepod-mini:unknown'
+  );
+  assert.equal(
+    keyOf('HomePod mini [Tặng dây Apple Watch Series 10]'),
+    'apple:homepod-mini:unknown'
+  );
+  assert.equal(keyOf('HomePod mini TẶNG dây Apple Watch Series 10'), 'apple:homepod-mini:unknown');
+  assert.equal(
+    keyOf('HomePod mini tặng dây Apple Watch Series 10 42mm'.normalize('NFD')),
+    'apple:homepod-mini:unknown'
+  );
+  // So are AirPods: "Apple TV 4K tặng AirPods Pro 2" is the Apple TV.
+  assert.equal(keyOf('HomePod mini tặng AirPods 4'), 'apple:homepod-mini:unknown');
+  assert.equal(keyOf('Apple TV 4K tặng AirPods Pro 2'), 'apple:tv-4k:unknown');
+  assert.equal(keyOf('AirPods 4 tặng ốp'), 'apple:airpods-4:unknown');
+  // A watch before the gift, or a gift marker that opens the title, keeps the watch.
+  assert.equal(
+    keyOf('Apple Watch Series 10 46mm tặng AirPods Pro 2'),
+    'apple:watch-series-10-46mm:64gb'
+  );
+  assert.equal(
+    keyOf('[Tặng ốp lưng] Apple Watch Series 10 GPS 46mm'),
+    'apple:watch-series-10-46mm:64gb'
+  );
+  assert.equal(keyOf('Sale sốc tặng quà Apple Watch S10 46mm'), 'apple:watch-series-10-46mm:64gb');
+  assert.equal(keyOf('Quà tặng Apple Watch Series 10 46mm'), 'apple:watch-series-10-46mm:64gb');
+  assert.equal(
+    keyOf('Mua kèm iPhone giảm 500k Apple Watch Series 10 46mm'),
+    'apple:watch-series-10-46mm:64gb'
+  );
+  assert.equal(keyOf('Dây Apple Watch Series 10 46mm tặng ốp'), 'apple:watch-series-10-46mm:64gb');
+  assert.equal(
+    keyOf('Apple Watch Series 10 GPS + Cellular 46mm'),
+    'apple:watch-series-10-46mm:64gb'
+  );
+  // A bundle inside a gift that opens the title is not the product's own part.
+  assert.equal(
+    keyOf('[Tặng ốp iPhone + dây đeo] Apple Watch Series 10 46mm'),
+    'apple:watch-series-10-46mm:64gb'
+  );
+  assert.equal(keyOf('[Sạc Apple Watch tặng kèm] AirPods Pro 2'), 'apple:airpods-pro-2:unknown');
+  assert.equal(
+    keyOf('[Tặng ốp iPhone] AirPods Pro 2 tặng dây Apple Watch Series 10'),
+    'apple:airpods-pro-2:unknown'
+  );
+  assert.equal(
+    keyOf('(AirPods Pro 2 tặng dây Apple Watch Series 10) Chính hãng VN/A'),
+    'apple:airpods-pro-2:unknown'
+  );
+  assert.equal(
+    keyOf('[Apple Watch Series 10 46mm tặng AirPods] Chính hãng VN/A'),
+    'apple:watch-series-10-46mm:64gb'
+  );
+  assert.equal(
+    detectCategorySlug('[Apple Watch Series 10 46mm tặng AirPods] Chính hãng VN/A'),
+    'smartwatches'
+  );
+  // The cut stays linear on a long run of separators.
+  const cutStart = Date.now();
+  detectCategorySlug(`Apple Watch Series 10 46mm${','.repeat(64_000)}x`);
+  detectCategorySlug(`HomePod mini${' +'.repeat(32_000)}x`);
+  detectCategorySlug(`[${'['.repeat(64_000)}x`);
+  assert.ok(Date.now() - cutStart < 500, 'gift cut is linear');
+  // The gifted AirPods no longer make the watch earbuds, so it keys like the bare title.
+  assert.equal(keyOf('Apple Watch Ultra 2 49mm tặng AirPods'), keyOf('Apple Watch Ultra 2 49mm'));
+  assert.equal(
+    detectCategorySlug('HomePod mini tặng dây Apple Watch Series 10 42mm'),
+    'smartphones'
+  );
+  assert.equal(detectCategorySlug('AirPods Pro 2 tặng dây Apple Watch Series 10'), 'earbuds');
+  assert.equal(detectCategorySlug('iPad Pro M4 tặng Apple Watch Series 10'), 'tablets');
+  assert.equal(detectCategorySlug('MacBook Air M3 + Apple Watch Series 10'), 'laptops');
+  assert.equal(detectCategorySlug('Apple iPhone 16 tặng smartwatch'), 'smartphones');
+  assert.equal(detectCategorySlug('Apple Watch Series 10 46mm tặng AirPods Pro 2'), 'smartwatches');
+  assert.equal(detectCategorySlug('Sale sốc tặng quà Apple Watch S10 46mm'), 'smartwatches');
+  assert.equal(
+    detectCategorySlug('AirPods Pro 2 kèm Apple Watch Series 10'.normalize('NFD')),
+    'earbuds'
+  );
+  assert.equal(detectCategorySlug('HomePod mini (Tặng dây Apple Watch Series 10)'), 'smartphones');
+  assert.equal(detectCategorySlug('[Tặng ốp lưng] Apple Watch Series 10 GPS 46mm'), 'smartwatches');
   // With no line matched, the family the title names first, else iPhone.
   assert.equal(keyOf('MacBook M4'), 'apple:macbook:unknown');
   assert.equal(keyOf('Apple "iPad" 256GB'), 'apple:ipad:256gb');
