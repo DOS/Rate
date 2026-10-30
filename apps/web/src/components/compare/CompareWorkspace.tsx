@@ -1980,9 +1980,9 @@ export default function CompareWorkspace({
                           <div className="small text-secondary rate-tabular">
                             ★{' '}
                             {formatDecimal(
-                              battle.productA.userScore5,
+                              battle.productA.combinedScore5,
                               locale,
-                              1
+                              2
                             )}
                           </div>
                         </div>
@@ -2000,9 +2000,9 @@ export default function CompareWorkspace({
                           <div className="small text-secondary rate-tabular">
                             ★{' '}
                             {formatDecimal(
-                              battle.productB.userScore5,
+                              battle.productB.combinedScore5,
                               locale,
-                              1
+                              2
                             )}
                           </div>
                         </div>

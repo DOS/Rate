@@ -11356,6 +11356,23 @@ async function runCoreArchitectureSuite() {
     assert.equal(isVersusScoreTie(5, 4.96), true, 'equal at one decimal');
     assert.equal(isVersusScoreTie(4.98, 5), true, '5.0 against 5.0');
     assert.equal(isVersusScoreTie(4.9, 4.8), false);
+    // A model with no buyer rating keeps its composite as the base, and the
+    // gap is the one between the scores as shown (DOS/Rate#1470).
+    const expertOnly = computeVersusWeightedResult(
+      { ...scoreItemA, userScore5: 0, combinedScore5: 4.5 },
+      { ...scoreItemB, userScore5: 4.2, combinedScore5: 4.2 },
+      { screen: 20, performance: 20, camera: 20, battery: 20, value: 20 },
+      'default'
+    );
+    assert.equal(expertOnly.finalA, 4.5);
+    assert.equal(expertOnly.delta, '0.3');
+    const shownGap = computeVersusWeightedResult(
+      { ...scoreItemA, userScore5: 4.46 },
+      { ...scoreItemB, userScore5: 4.34 },
+      { screen: 20, performance: 20, camera: 20, battery: 20, value: 20 },
+      'default'
+    );
+    assert.equal(shownGap.delta, '0.2', '4.5 against 4.3');
     assert.equal(isVersusScoreTie(Number.NaN, 5), false);
     // The verdict follows the persona: A leads on the default weights, B on
     // the camera persona, and the verdict names each in turn with its

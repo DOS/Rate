@@ -123,8 +123,11 @@ export function computeVersusWeightedResult(
   const rawSumW = wScreen + wPerf + wCam + wBat + wVal;
 
   const calcWeighted = (item: ScoredVersusItem): number => {
-    // The product's rating as every page shows it (DOS/Rate#1470).
-    const baseScore5 = sanitizeVersusScore5(item.userScore5);
+    // The product's rating as every page shows it (DOS/Rate#1470); a model
+    // with no buyer rating yet keeps its composite (expert or criteria).
+    const baseScore5 = sanitizeVersusScore5(
+      item.userScore5 > 0 ? item.userScore5 : item.combinedScore5
+    );
     if (persona === 'default') {
       return baseScore5;
     }
@@ -163,7 +166,10 @@ export function computeVersusWeightedResult(
   return {
     finalA,
     finalB,
-    delta: Math.abs(finalA - finalB).toFixed(1),
+    // The gap between the scores as shown, at one decimal.
+    delta: Math.abs(
+      Number(finalA.toFixed(1)) - Number(finalB.toFixed(1))
+    ).toFixed(1),
     winner,
     // Level at the shown precision: no lead for either (DOS/Rate#1209).
     tie: isVersusScoreTie(finalA, finalB),
@@ -410,7 +416,7 @@ export default function VersusInteractiveScoreboard({
         slug: safeSlugA,
         name: scoreA.name,
         brand: scoreA.brand,
-        weightedScore5: weightedResult.finalA,
+        weightedScore5: Number(weightedResult.finalA.toFixed(1)),
         expertScore10: scoreA.expertScore10,
         minPriceVnd: scoreA.minPrice,
         dealRadar: radarExportFields(sigA),
@@ -419,7 +425,7 @@ export default function VersusInteractiveScoreboard({
         slug: safeSlugB,
         name: scoreB.name,
         brand: scoreB.brand,
-        weightedScore5: weightedResult.finalB,
+        weightedScore5: Number(weightedResult.finalB.toFixed(1)),
         expertScore10: scoreB.expertScore10,
         minPriceVnd: scoreB.minPrice,
         dealRadar: radarExportFields(sigB),
@@ -635,7 +641,7 @@ export default function VersusInteractiveScoreboard({
                     delta: formatDecimal(
                       Number(weightedResult.delta),
                       locale,
-                      2
+                      1
                     ),
                   })}
                 </span>

@@ -656,9 +656,9 @@ export default async function Home({
                               <div className="rate-battle-score">
                                 ★{' '}
                                 {formatDecimal(
-                                  battle.productA.userScore5,
+                                  battle.productA.combinedScore5,
                                   locale,
-                                  1
+                                  2
                                 )}
                               </div>
                             </div>
@@ -672,9 +672,9 @@ export default async function Home({
                               <div className="rate-battle-score">
                                 ★{' '}
                                 {formatDecimal(
-                                  battle.productB.userScore5,
+                                  battle.productB.combinedScore5,
                                   locale,
-                                  1
+                                  2
                                 )}
                               </div>
                             </div>
