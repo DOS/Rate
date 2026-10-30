@@ -72,6 +72,65 @@ export function tHtml(key: MessageKey, htmlParts: readonly string[]): string {
   );
 }
 
+// Marks that occur in Vietnamese and not in Czech or English, once the text
+// is decomposed: grave, circumflex, tilde, breve, hook, horn, dot below.
+// French, Spanish or Slovak names ("Lancôme", "São") carry them too.
+const VIETNAMESE_MARKS =
+  /\u0111|\u0110|\u0300|\u0302|\u0303|\u0306|\u0309|\u031b|\u0323/g;
+
+// Common Vietnamese words with no such mark (acute only, as Czech has, or
+// none), so "Camera kép" or "Giá khá cao" is still recognised.
+const VIETNAMESE_WORDS = new Set([
+  'gi\u00e1',
+  'kh\u00e1',
+  'm\u00e1y',
+  'k\u00e9p',
+  'c\u00f3',
+  'b\u00e1n',
+  'n\u00f3ng',
+  'nhanh',
+  'nghe',
+]);
+
+function vietnameseEvidence(text: string): { marks: number; word: boolean } {
+  const marks = (text.normalize('NFD').match(VIETNAMESE_MARKS) ?? []).length;
+  const word = text
+    .normalize('NFC')
+    .toLowerCase()
+    .split(/[^\p{L}]+/u)
+    .some((w) => VIETNAMESE_WORDS.has(w));
+  return { marks, word };
+}
+
+/**
+ * Whether server text looks Vietnamese, as marketplace data does. It only
+ * decides a lang attribute, where a miss or a stray match costs little; it
+ * never decides what is shown.
+ */
+export function isVietnameseText(text: string): boolean {
+  const { marks, word } = vietnameseEvidence(text);
+  return marks > 0 || word;
+}
+
+/**
+ * ` lang="vi"` for Vietnamese server text shown in an English or Czech panel,
+ * so screen readers read it as Vietnamese (DOS/Rate#1374); empty otherwise.
+ */
+export function contentLangAttr(text: string): string {
+  return isForeignVietnamese(text) ? ' lang="vi"' : '';
+}
+
+/** Vietnamese server text in a panel shown in another language. */
+export function isForeignVietnamese(text: string): boolean {
+  return t('langCode') !== 'vi' && isVietnameseText(text);
+}
+
+/** Server text as escaped HTML, in a `lang="vi"` span when it needs one. */
+export function contentTextHtml(text: string): string {
+  const html = escapeHtml(text);
+  return isForeignVietnamese(text) ? `<span lang="vi">${html}</span>` : html;
+}
+
 /** Fills `data-i18n*` attributes of a static page (DOS/Rate#1304). */
 export function applyDocumentMessages(root: Document): void {
   root.documentElement.lang = t('langCode');
