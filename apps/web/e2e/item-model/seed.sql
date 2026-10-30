@@ -25,9 +25,22 @@ VALUES
    'published', 128, 8990000, 8990000, 1)
 ON CONFLICT (id) DO NOTHING;
 
+-- A seller with no data at all (DOS/Rate#1484): an Official Mall with no DOSafe score
+-- (risk_score left at its default 0), no reviews and no stored score. Its 256GB offer
+-- shows "no data yet", never "trust 100%" from the Official Mall's 0 review baseline.
+-- Dearer than the other 256GB offer, so the Item's prices do not change.
+INSERT INTO rate.merchants (id, platform, platform_shop_id, name, slug, is_official)
+VALUES ('17e00000-0000-4000-8000-0000000d1484', 'shopee', 'e2e_item_no_data',
+        'E2E Item No Data Mall', 'e2e-item-no-data-mall', true)
+ON CONFLICT (id) DO NOTHING;
+
 INSERT INTO rate.products (id, merchant_id, platform, platform_item_id, title, brand,
                            category_id, price_current, url, cluster_id)
 VALUES
+  ('27e00000-0000-4000-8000-0000000d1484', '17e00000-0000-4000-8000-0000000d1484', 'shopee',
+   'e2e_item_256_no_data', 'E2E Item Phone 256GB no-data seller', 'E2E',
+   'c0000000-0000-4000-8000-000000000001', 13490000, 'https://shopee.vn/e2e-item-256-no-data',
+   '17e00000-0000-4000-8000-000000000256'),
   ('27e00000-0000-4000-8000-000000000128', '11111111-1111-4111-8111-111111111111', 'shopee',
    'e2e_item_128', 'E2E Item Phone 128GB', 'E2E', 'c0000000-0000-4000-8000-000000000001',
    10990000, 'https://shopee.vn/e2e-item-128', '17e00000-0000-4000-8000-000000000128'),
