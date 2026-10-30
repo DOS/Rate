@@ -44,6 +44,7 @@
     table { width: 100%; border-collapse: collapse; font-size: 14px; min-width: 620px; }
     th, td { border: 1px solid var(--border); padding: 8px 10px; text-align: left; vertical-align: top; }
     th { background: var(--surface-2); color: #fff; }
+    h3 { font-size: 16px; margin: 24px 0 8px; color: #fff; }
     code { background: var(--code-bg); border: 1px solid var(--border); border-radius: 4px; padding: 1px 5px; font-size: 13px; overflow-wrap: anywhere; }
     .q { border-left: 3px solid var(--accent); padding-left: 12px; margin: 16px 0; }
     .q strong { color: #fff; }
@@ -56,7 +57,7 @@
   <span class="badge badge-accent">Quyết định</span>
   <span class="badge badge-amber">Cần JOY quyết</span>
   <h1>Re-key danh mục: cách viết đồng hồ, chữ quà tặng trong key, máy cũ</h1>
-  <p class="muted">Ngày 30/10/2026. Người soạn: Core (Rate). Chưa áp dụng gì lên database. Bản tiếng Anh: <code>2026-10-30-rekey-decisions.md</code>. Gồm #1407 (nửa SE2 / Series10), #1441 (chữ quà tặng trong key máy không phải Apple) và #1430 (máy cũ, like new kéo giá máy mới).</p>
+  <p class="muted">Ngày 30/10/2026. Người soạn: Core (Rate). Chưa áp dụng gì lên database. Bản tiếng Anh: <code>2026-10-30-rekey-decisions.md</code>. Gồm #1407 (nửa SE2 / Series10), #1441 (chữ quà tặng trong key máy không phải Apple), #1430 (máy cũ, like new kéo giá máy mới) và #1491 (c), (d) (iPad Wi-Fi và 5G, MacBook nhiều mức RAM).</p>
 
   <h2>1. Vì sao phải chờ JOY</h2>
   <p>Listing crawl về chỉ được gắn vào sản phẩm khi <strong>key khớp chính xác</strong>. Khi bộ chuẩn hoá đổi cách sinh key cho cùng một máy:</p>
@@ -119,15 +120,70 @@
     <span class="rec-line">Đề xuất: làm A ngay, rồi lên kế hoạch B như một migration DOS-Me.</span> Trước khi làm, phía DOS-Me / JOY đếm (chỉ đọc) số listing có dấu hiệu máy cũ trong tiêu đề.
   </div>
 
-  <h2>5. JOY cần quyết</h2>
+  <h2>5. #1491 (c) và (d): iPad Wi-Fi và 5G, MacBook nhiều mức RAM</h2>
+  <p>PR #1493 (đã merge) đã sửa phần (a) và (b) của #1491. Phần (c) và (d) thêm một chiều mới vào key, nên làm đổi chỗ gắn của listing iPad và MacBook đang có. Vì vậy hai phần này nằm ở đây, chưa sửa code.</p>
+
+  <h3>5.1 Vấn đề</h3>
+  <ul>
+    <li><strong>(c) iPad:</strong> bản Wi-Fi và bản 5G (Cellular) của cùng model và dung lượng chung một key. Bản 5G đắt hơn khoảng một phần ba, nên một sản phẩm trộn hai mức giá. Bộ kiểm chênh giá đọc thành khuyến mãi ảo, còn "giá từ" là giá bản Wi-Fi.</li>
+    <li><strong>(d) MacBook:</strong> các bản RAM của cùng model và SSD chung một key, ví dụ 24GB và 48GB cùng nằm dưới <code>macbook-pro-m5-pro-14:1024gb</code>. Giá chênh nhau 25-50%.</li>
+  </ul>
+
+  <h3>5.2 Cách thêm hậu tố đề xuất</h3>
+  <p>Bản cơ bản giữ nguyên key hiện tại, chỉ bản còn lại được thêm hậu tố. Không sản phẩm nào đang lưu bị đổi tên. Chỉ listing của bản còn lại chuyển sang một sản phẩm mới.</p>
+  <div class="table-wrap">
+  <table>
+    <tr><th>Phần</th><th>Bản cơ bản (giữ key)</th><th>Bản còn lại (key mới)</th></tr>
+    <tr><td>(c)</td><td>Wi-Fi: <code>apple:ipad-air-m4-11:128gb</code></td><td>5G/Cellular: <code>apple:ipad-air-m4-11-5g:128gb</code></td></tr>
+    <tr><td>(d)</td><td>RAM cơ bản: <code>apple:macbook-air-m3-13:256gb</code></td><td>RAM cao hơn: <code>apple:macbook-air-m3-13-16gb-ram:256gb</code></td></tr>
+  </table>
+  </div>
+  <ul>
+    <li><strong>(c)</strong> không cần bảng phụ. Tiêu đề ghi 5G, Cellular hoặc LTE thì thêm hậu tố, còn lại là Wi-Fi như hiện nay.</li>
+    <li><strong>(d)</strong> cần bảng RAM cơ bản cho từng model MacBook, tức là phải viết thêm code và dữ liệu. Tiêu đề không ghi RAM thì giữ key cơ bản như hiện nay.</li>
+  </ul>
+
+  <h3>5.3 Key và listing bị ảnh hưởng (ước tính từ code và kho tiêu đề RS, chỉ số đếm)</h3>
+  <ul>
+    <li><strong>(c) iPad, 6 key đang trộn Wi-Fi với 5G:</strong> <code>ipad-mini-7:128gb</code>, <code>ipad-pro-m4-11:256gb</code>, <code>ipad-pro-m4-11:unknown</code>, <code>ipad-pro-m5-11:1024gb</code>, <code>ipad-pro-m5-11:unknown</code> và <code>ipad-air-m3-11:128gb</code>. Trong kho tiêu đề, 16 trên 54 tiêu đề của các key này là bản 5G và sẽ chuyển sang key <code>-5g</code>.</li>
+    <li><strong>(c) iPad, 8 key toàn tiêu đề 5G:</strong> listing của các key này sẽ chuyển sang key <code>-5g</code> và rời sản phẩm Wi-Fi mang key đó, nếu có.</li>
+    <li><strong>(d) MacBook, 1 key đang trộn RAM:</strong> <code>macbook-air-m3-13:256gb</code> (8GB và 16GB). Bốn key khác chỉ có một mức RAM trong tiêu đề. Chúng chỉ đổi nếu RAM cơ bản trong bảng khác với mức đó.</li>
+    <li><strong>Sản phẩm tạo sẵn bị ảnh hưởng:</strong>
+      <ul>
+        <li><code>apple:ipad-pro-m5-11:256gb</code> (đã xuất bản) và <code>apple:ipad-pro-m4-11:256gb</code>, chỉ qua các listing bản 5G;</li>
+        <li><code>apple:macbook-air-m3-13:256gb</code>, qua các listing bản 16GB.</li>
+      </ul>
+    </li>
+    <li>Core không có quyền đọc database. Số liệu thật lấy từ bước chạy thử (5.4).</li>
+  </ul>
+
+  <h3>5.4 Bước chạy thử (PR #1456) liệt kê chúng thế nào</h3>
+  <p>Bước chạy thử chỉ đọc. Nó so key đang lưu của từng sản phẩm với key mà bộ chuẩn hoá sinh ra từ tiêu đề listing của chính sản phẩm đó. Để liệt kê (c) và (d):</p>
+  <ol>
+    <li>Build bộ chuẩn hoá từ nhánh có thêm hậu tố (chưa merge), rồi chỉ bước chạy thử vào bản build đó bằng <code>--normalizer &lt;đường dẫn&gt;</code>.</li>
+    <li>Sản phẩm mà <strong>phần lớn</strong> listing là bản còn lại (các key toàn 5G) sẽ hiện thành đề xuất chuyển sang key <code>-5g</code>, kèm số listing và số dòng lịch sử giá.</li>
+    <li>Sản phẩm mà <strong>phần lớn</strong> listing là bản cơ bản thì giữ key, nên bước chạy thử hiện tại chưa liệt kê phần thiểu số sẽ rời đi. Cần một phần mở rộng nhỏ, vẫn chỉ đọc, in ra cho từng sản phẩm các listing có key mới khác key cũ, trước khi JOY quyết.</li>
+  </ol>
+  <p>Sau khi JOY đồng ý, bước sửa dữ liệu theo kiểu M0:</p>
+  <ul>
+    <li>tạo các sản phẩm mới;</li>
+    <li>chuyển listing của bản còn lại sang;</li>
+    <li>cập nhật giá của cả hai sản phẩm;</li>
+    <li>kèm file kiểm tra, file hoàn tác và test chạy lại trên CI.</li>
+  </ul>
+  <p>Phần sửa bộ chuẩn hoá phát hành cùng đợt.</p>
+
+  <h2>6. JOY cần quyết</h2>
   <div class="q"><strong>D1. Cách viết đồng hồ (#1407):</strong> A, B hay C. <span class="rec-line">Đề xuất A.</span></div>
   <div class="q"><strong>D2. Chữ quà tặng trong key (#1441):</strong> duyệt bước đếm ngay, rồi bước sửa dữ liệu kiểu M0. <span class="rec-line">Đề xuất: đồng ý, vì key đã bắt đầu tách từ khi PR #1433 merge.</span></div>
   <div class="q"><strong>D3. Máy cũ (#1430):</strong> A ngay rồi B sau, B ngay, hay để nguyên. <span class="rec-line">Đề xuất: A ngay, B sau.</span></div>
-  <div class="q"><strong>D4. Ai chạy các bước đếm:</strong> cần quyền đọc production, mà Core không có. <span class="rec-line">Đề xuất: phía DOS-Me chạy. Core soạn sẵn câu SQL trong PR đề xuất của từng bước sửa dữ liệu.</span></div>
+  <div class="q"><strong>D4. Ai chạy các bước đếm:</strong> cần quyền đọc production, mà Core không có. <span class="rec-line">Đề xuất: phía DOS-Me chạy. Core soạn sẵn câu SQL trong PR đề xuất của từng bước sửa dữ liệu.</span> Áp dụng cả cho D5 và D6.</div>
+  <div class="q"><strong>D5. iPad Wi-Fi và 5G (#1491 c):</strong> thêm hậu tố như mục 5.2 (Wi-Fi giữ key, 5G thêm <code>-5g</code>), hay để chung một key. <span class="rec-line">Đề xuất: thêm hậu tố, sau bước chạy thử ở 5.4.</span> Việc này quyết định đợt 1b của kế hoạch mở rộng danh mục.</div>
+  <div class="q"><strong>D6. MacBook nhiều mức RAM (#1491 d):</strong> thêm hậu tố kèm bảng RAM cơ bản, hay để nguyên. <span class="rec-line">Đề xuất: thêm hậu tố.</span> Core viết bảng RAM và test trước, để JOY xem từng mức RAM cơ bản trước khi bất kỳ listing nào bị chuyển.</div>
 
-  <h2>6. Thứ tự</h2>
+  <h2>7. Thứ tự</h2>
   <ol>
-    <li>JOY quyết D1 đến D4.</li>
+    <li>JOY quyết D1 đến D6.</li>
     <li>Phía DOS-Me / JOY chạy các bước đếm, chỉ đọc.</li>
     <li>Core soạn từng bước sửa dữ liệu, kèm file kiểm tra, hoàn tác và test CI, trong một PR đề xuất. PO duyệt PR; JOY áp dụng qua DOS-Me theo thứ tự preview, beta, rồi prod.</li>
     <li>Cùng đợt đó, Core phát hành phần sửa code tương ứng, kèm so sánh key (chỉ số đếm).</li>

@@ -2,7 +2,7 @@
 
 Date: 2026-10-30. Author: Core (Rate). Status: decision document for JOY. Nothing in it is applied. The Vietnamese HTML twin is `2026-10-30-rekey-decisions.html`.
 
-Covers #1407 (the SE2 / Series10 half), #1441 (gift words in non-Apple keys) and #1430 (used and like-new listings feeding the new-device price).
+Covers #1407 (the SE2 / Series10 half), #1441 (gift words in non-Apple keys), #1430 (used and like-new listings feeding the new-device price) and #1491 (c) and (d) (iPad Wi-Fi vs 5G, MacBook RAM).
 
 ## 1. Why these wait for JOY
 
@@ -63,16 +63,67 @@ Options:
 
 Before either: a read-only count of stored listings whose title holds a used or like-new marker ("Like new", "99%", "Cũ", "Đã qua sử dụng"), on the DOS-Me / JOY side.
 
-## 5. Decisions for JOY
+## 5. #1491 (c) and (d): iPad Wi-Fi vs 5G, MacBook RAM
+
+PR #1493 (merged) fixed parts (a) and (b) of #1491. Parts (c) and (d) add a key dimension, so they change where existing iPad and MacBook listings link. That is why they are here and not in code.
+
+### 5.1 The problem
+
+- **(c) iPad.** The Wi-Fi and the 5G (Cellular) iPad of one model and storage share one key. The 5G model costs about a third more, so one master mixes two prices. The spread checks read that as a fake sale, and the "from" price is the Wi-Fi one.
+- **(d) MacBook.** RAM configurations of one model and SSD share one key, for example 24GB and 48GB under `macbook-pro-m5-pro-14:1024gb`. They are 25-50% apart in price.
+
+### 5.2 Proposed suffix scheme
+
+The scheme keeps today's key for the base configuration and adds a suffix only for the other one. No stored master is renamed. Only the listings of the other configuration move, to a new master.
+
+| Part | Base configuration (key unchanged)        | Other configuration (new key)                        |
+| :--- | :---------------------------------------- | :--------------------------------------------------- |
+| (c)  | Wi-Fi: `apple:ipad-air-m4-11:128gb`       | 5G/Cellular: `apple:ipad-air-m4-11-5g:128gb`         |
+| (d)  | Base RAM: `apple:macbook-air-m3-13:256gb` | Higher RAM: `apple:macbook-air-m3-13-16gb-ram:256gb` |
+
+- **(c)** needs no table: a title that says 5G, Cellular or LTE gets the suffix, and anything else is Wi-Fi, as today.
+- **(d)** needs a table of the base RAM per MacBook model, which is code plus data. A title with no RAM keeps the base key, as today.
+
+### 5.3 Keys and rows affected (estimated from code and the RS title corpus, counts only)
+
+- **(c) iPad, keys mixing Wi-Fi and 5G titles today: 6.** These are `ipad-mini-7:128gb`, `ipad-pro-m4-11:256gb`, `ipad-pro-m4-11:unknown`, `ipad-pro-m5-11:1024gb`, `ipad-pro-m5-11:unknown` and `ipad-air-m3-11:128gb`. In the corpus, 16 of their 54 titles are 5G and would move to a `-5g` key.
+- **(c) iPad, keys whose titles are all 5G: 8.** Their listings would move to the `-5g` key and leave any Wi-Fi master of that key.
+- **(d) MacBook, keys mixing RAM today: 1.** This is `macbook-air-m3-13:256gb` (8GB and 16GB). Four more keys carry a single RAM in their titles. They move only if the base RAM in the table differs from it.
+- **Seeded masters touched:**
+  - `apple:ipad-pro-m5-11:256gb` (published) and `apple:ipad-pro-m4-11:256gb`, only through their 5G listings;
+  - `apple:macbook-air-m3-13:256gb`, through its 16GB listings.
+- Core has no database access, so the stored counts come from the dry run (5.4).
+
+### 5.4 How the dry run (PR #1456) lists them
+
+The read-only dry run compares each master's stored key with what the normalizer gives for its own listings' titles. To list (c) and (d):
+
+1. Build the normalizer from the branch that adds the suffixes (not merged), and point the dry run at it with `--normalizer <path>`.
+2. A master whose listings are **mostly** the other configuration (all-5G keys) shows as a proposed move to the `-5g` key, with its listing and price-row counts.
+3. A master whose listings are **mostly** the base configuration keeps its key, so today's dry run does not list the minority that would leave. A small extension prints, per master, the listings whose new key differs, before any decision. It is still read-only.
+
+The data step after JOY's OK is M0-style:
+
+- create the new masters;
+- move the other configuration's listings;
+- refresh both masters' stats;
+- ship verify and rollback files and a CI replay.
+
+The normalizer change ships in the same release.
+
+## 6. Decisions for JOY
 
 - **D1. Watch spellings (#1407):** A (re-key and normalize), B (alias) or C (leave). Recommended: A.
 - **D2. Gift words in keys (#1441):** approve the read-only count now, then the M0-style data step. Recommended: yes. The split has already started since PR #1433.
 - **D3. Used listings (#1430):** A now and B later, B now, or leave. Recommended: A now, B as a planned DOS-Me migration.
-- **D4. Who runs the counts:** the read-only counts in D1 to D3 need SELECT access on production, which Core does not have. Recommended: the DOS-Me side runs them, and Core prepares the SQL in the same docs PR as each data step.
+- **D4. Who runs the counts:** the read-only counts in D1 to D3 (and D5, D6) need SELECT access on production, which Core does not have. Recommended: the DOS-Me side runs them, and Core prepares the SQL in the same docs PR as each data step.
 
-## 6. Order
+- **D5. iPad Wi-Fi vs 5G (#1491 c):** the suffix scheme of section 5.2 (Wi-Fi keeps its key, 5G gets `-5g`), or leave the two in one key. Recommended: the suffix scheme, after the dry run of 5.4. It gates wave 1b of the catalog expansion.
+- **D6. MacBook RAM (#1491 d):** the suffix scheme with a base-RAM table, or leave. Recommended: the suffix scheme. Core writes the table and its tests first, so JOY sees every base RAM before any listing moves.
 
-1. D1 to D4 decided.
+## 7. Order
+
+1. D1 to D6 decided.
 2. Read-only counts (DOS-Me / JOY).
 3. Core writes each data step with its verify, rollback and CI replay, in a proposal PR. The PO reviews it, and JOY applies it through DOS-Me (preview, beta, then prod).
 4. In the same release, Core ships the matching normalizer change, with a key diff over the fixtures and the RS corpus (counts only).
