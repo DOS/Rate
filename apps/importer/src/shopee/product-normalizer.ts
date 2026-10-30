@@ -422,14 +422,14 @@ export function detectCategorySlug(title: string): CanonicalCategorySlug {
 /** The category a lower-cased title names, or null (DOS/Rate#1407). */
 function categorySlugOf(t: string): CanonicalCategorySlug | null {
   if (
-    /airpods|galaxy\s*buds|w[fh]1000xm|wf-\d+|wh-\d+|tai\s*nghe|earbuds?|freebuds|soundcore|quietcomfort|momentum\s*true/i.test(
+    /airpods|galaxy\s*buds|nothing\s*(?:ear|headphone)\b|cmf\s*buds|w[fh]1000xm|wf-\d+|wh-\d+|tai\s*nghe|earbuds?|freebuds|soundcore|quietcomfort|momentum\s*true/i.test(
       t
     )
   ) {
     return 'earbuds';
   }
   if (
-    /apple\s*watch|galaxy\s*watch|\bgarmin\b|forerunner|fenix|venu|vivo(?:active|smart|move|fit|sport|life)|watch\s*(?:ultra|series|gt|fit|se)|đồng\s*hồ\s*thông\s*minh|vòng\s*(?:đeo\s*)?tay\s*thông\s*minh|smartwatch|amazfit|coros/i.test(
+    /apple\s*watch|galaxy\s*watch|cmf\s*watch|\bgarmin\b|forerunner|fenix|venu|vivo(?:active|smart|move|fit|sport|life)|watch\s*(?:ultra|series|gt|fit|se)|đồng\s*hồ\s*thông\s*minh|vòng\s*(?:đeo\s*)?tay\s*thông\s*minh|smartwatch|amazfit|coros/i.test(
       t
     )
   ) {
@@ -1449,6 +1449,9 @@ const LEADING_PROMO_GROUPS = /^(?:\s*(?:\[[^\]]*\]|\([^)]*\)|【[^】]*】|\{[^}
 const LEADING_PROMO_WORD =
   /^(?:live(?:stream)?|(?:hot|flash|big|siêu|mega) sale|sale(?: (?:off|sốc|sock))?|hot|deal(?: hot)?|giảm giá|xả kho)(?![\p{L}\d])(?: ?\d{1,2} ?%)?[\s:!|-]*/iu;
 const MAX_LEADING_PROMO_WORDS = 4;
+// Nothing and its CMF line, named before one of their product lines (DOS/Rate#1446).
+const NOTHING_BRAND =
+  /(?<![\p{L}\d])(?:nothing ?(?:- ?)?(?:phone|ear|headphone|cmf)|cmf (?:by nothing|phone|watch|buds))(?![\p{L}\d])/iu;
 // A line name that stands for the brand at the start of a title.
 const BRAND_LINES: Readonly<Record<string, readonly string[]>> = {
   Samsung: ['galaxy'],
@@ -1824,6 +1827,10 @@ export class ProductNormalizer {
     else if (/\bjbl\b|tour\s*pro|tune\s*\d+/i.test(identityTitle)) brand = 'JBL';
     else if (/sennheiser|momentum/i.test(identityTitle)) brand = 'Sennheiser';
     else if (/oneplus/i.test(identityTitle)) brand = 'OnePlus';
+    // Nothing and its CMF line, only with a product line after the name: "nothing" alone
+    // is an English word. "Nothing Phone (3)", "CMF by Nothing Phone 2 Pro", "CMF Phone 1"
+    // (DOS/Rate#1446).
+    else if (NOTHING_BRAND.test(identityTitle)) brand = 'Nothing';
     else if (/\bhonor\b|magicbook/i.test(identityTitle)) brand = 'Honor';
     // Apple's desktops and speakers, last so another brand wins, and not when the title
     // only names what it fits or looks like ("Bàn phím cho Mac mini") (DOS/Rate#819).
@@ -1868,6 +1875,13 @@ export class ProductNormalizer {
     // Samsung's "Galaxy S 24" and "Tab S 9" are the S24 and the Tab S9.
     if (brand === 'Samsung')
       modelTitle = modelTitle.replace(/\b(galaxy|tab) s (\d{1,2})\b/gi, '$1 S$2');
+    // Nothing writes the generation in brackets: "Phone (3a)" keys like "Phone 3a" and
+    // "Ear (a)" like "Ear a", as the bracketed generations of #1194 do. "CMF by Nothing"
+    // is its CMF line (DOS/Rate#1446).
+    if (brand === 'Nothing')
+      modelTitle = modelTitle
+        .replace(/\bcmf by nothing\b/gi, 'Nothing CMF')
+        .replace(/\b(phone|ear|headphone|watch|buds) ?\( ?(\d{1,2}[a-z]?|[a-z]) ?\)/gi, '$1 $2');
     if (brand === 'Apple') {
       // "(2nd generation)" is the generation number: "Watch Ultra (2nd generation)" is
       // "Watch Ultra 2", "AirPods Pro (2nd generation)" is "AirPods Pro 2" (DOS/Rate#817).

@@ -1308,7 +1308,10 @@ async function runSuite() {
   assert.equal(detectCategorySlug('AirPods Pro 2 tặng dây Apple Watch Series 10'), 'earbuds');
   assert.equal(detectCategorySlug('iPad Pro M4 tặng Apple Watch Series 10'), 'tablets');
   assert.equal(detectCategorySlug('MacBook Air M3 + Apple Watch Series 10'), 'laptops');
-  assert.equal(detectCategorySlug('Apple iPhone 15 Plus 128GB tặng đồng hồ thông minh'), 'smartphones');
+  assert.equal(
+    detectCategorySlug('Apple iPhone 15 Plus 128GB tặng đồng hồ thông minh'),
+    'smartphones'
+  );
   assert.equal(detectCategorySlug('Apple Watch Series 10 46mm tặng AirPods Pro 2'), 'smartwatches');
   assert.equal(detectCategorySlug('Sale sốc tặng quà Apple Watch S10 46mm'), 'smartwatches');
   assert.equal(
@@ -1317,6 +1320,26 @@ async function runSuite() {
   );
   assert.equal(detectCategorySlug('HomePod mini (Tặng dây Apple Watch Series 10)'), 'smartphones');
   assert.equal(detectCategorySlug('[Tặng dây đeo] Apple Watch Series 10 GPS 46mm'), 'smartwatches');
+  // Nothing is a brand of its own, CMF its line; a bracketed generation keys like a
+  // plain one, so Phone (3), (3a) and (2a) Plus are three phones (DOS/Rate#1446).
+  for (const [title, key] of [
+    ['Nothing Phone (3) 256GB', 'nothing:phone-3:256gb'],
+    ['Nothing Phone (3a) 256GB', 'nothing:phone-3a:256gb'],
+    ['Nothing Phone (2a) Plus 256GB', 'nothing:phone-2a-plus:256gb'],
+    ['Nothing - Phone (3) 256GB', 'nothing:phone-3:256gb'],
+    ['Nothing Phone 3a Pro 12GB 256GB', 'nothing:phone-3a-pro:256gb'],
+    ['Điện thoại Nothing Phone (3a) Pro 5G 12GB/256GB', 'nothing:phone-3a-pro:256gb'],
+    ['CMF Phone 1 8GB 128GB', 'nothing:cmf-phone-1:128gb'],
+    ['CMF by Nothing Phone 2 Pro 8GB 256GB', 'nothing:cmf-phone-2-pro:256gb'],
+    ['Nothing Ear (a)', 'nothing:ear-a:unknown'],
+    ['Nothing Headphone (1)', 'nothing:headphone-1:unknown'],
+    // "nothing" as a word is no brand.
+    ['I have nothing to say Samsung Galaxy S24', 'samsung:i-have-nothing-to:unknown'],
+  ] as const)
+    assert.equal(keyOf(title), key, title);
+  assert.equal(detectCategorySlug('Nothing Ear (2)'), 'earbuds');
+  assert.equal(detectCategorySlug('CMF Watch Pro 2'), 'smartwatches');
+  assert.equal(detectCategorySlug('Nothing Phone (3) 256GB'), 'smartphones');
   // With no line matched, the family the title names first, else iPhone.
   assert.equal(keyOf('MacBook M4'), 'apple:macbook:unknown');
   assert.equal(keyOf('Apple "iPad" 256GB'), 'apple:ipad:256gb');
