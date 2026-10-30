@@ -104,14 +104,15 @@ export function ThemeCycleButton({ className = '' }: { className?: string }) {
   const [choice, choose] = useThemeChoice();
   const index = OPTIONS.findIndex((o) => o.choice === (choice ?? 'system'));
   const current = OPTIONS[index]!;
-  const next =
+  // Worked out on click: the server has no window to resolve "system".
+  const nextChoice = (): ThemeChoice =>
     current.choice === 'system'
       ? resolveTheme('system') === 'dark'
-        ? OPTIONS[0]!
-        : OPTIONS[1]!
+        ? 'light'
+        : 'dark'
       : current.choice === 'light'
-        ? OPTIONS[1]!
-        : OPTIONS[2]!;
+        ? 'dark'
+        : 'system';
   const Icon = current.Icon;
 
   return (
@@ -122,7 +123,7 @@ export function ThemeCycleButton({ className = '' }: { className?: string }) {
       title={t('themeCycleAria', { theme: t(current.labelKey) })}
       data-testid="theme-cycle"
       data-theme-choice={choice ?? undefined}
-      onClick={() => choose(next.choice)}
+      onClick={() => choose(nextChoice())}
     >
       <Icon aria-hidden="true" />
     </button>
