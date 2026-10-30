@@ -548,6 +548,26 @@ test('a split onto a master or key that a re-key also touches is flagged', () =>
       ['xiaomi:15t:256gb', ['onto the key C moves to: resolve first']],
     ]
   );
+  // Two splits onto the same new key share one new master.
+  const shared = planRekeys({
+    masters: [
+      { id: 'A', model_key: 'apple:ipad-mini-7:unknown', status: 'draft' },
+      { id: 'B', model_key: 'apple:ipad-mini-7:256gb', status: 'draft' },
+    ],
+    listings: ['A', 'B'].flatMap((m) => [
+      { id: `${m}1`, master_id: m, key: 'apple:ipad-mini-7:256gb' },
+      { id: `${m}2`, master_id: m, key: 'apple:ipad-mini-7:256gb' },
+      { id: `${m}3`, master_id: m, key: 'apple:ipad-mini-7-5g:256gb' },
+    ]),
+    priceRows: [],
+  });
+  assert.deepEqual(
+    shared.splits.map((s) => [s.masterId, s.groups.map((g) => g.action)]),
+    [
+      ['B', ['one new master shared with the split from A']],
+      ['A', ['one new master shared with the split from B']],
+    ]
+  );
 });
 
 test('a watch respelling keeps what the titles say, else falls back to the stored key', () => {

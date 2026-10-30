@@ -359,9 +359,17 @@ export function planRekeys({ masters, listings, priceRows }) {
   );
   // Where a split's listings would go, knowing the re-keys above: into a master
   // that stays, into one that is re-keyed too, or onto a key a re-key also takes.
+  // Splits from several masters onto one new key make one new master, not several.
+  const splitTo = new Map();
+  for (const s of splits)
+    for (const g of s.groups)
+      splitTo.set(g.newKey, [...(splitTo.get(g.newKey) ?? []), s.masterId]);
   for (const s of splits) {
     for (const g of s.groups) {
       const target = masterByKey.get(g.newKey);
+      const sharedWith = splitTo
+        .get(g.newKey)
+        .filter((id) => id !== s.masterId);
       const alsoMovingHere = movingTo.get(g.newKey);
       if (target && moving.has(target.id)) {
         g.action = `into ${target.id} (that master is re-keyed too: resolve first)`;
@@ -369,6 +377,8 @@ export function planRekeys({ masters, listings, priceRows }) {
         g.action = `into existing master ${target.id}`;
       } else if (alsoMovingHere) {
         g.action = `onto the key ${alsoMovingHere.join(', ')} moves to: resolve first`;
+      } else if (sharedWith.length > 0) {
+        g.action = `one new master shared with the split from ${sharedWith.join(', ')}`;
       } else {
         g.action = 'a new master';
       }
