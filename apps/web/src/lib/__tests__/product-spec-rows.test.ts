@@ -307,12 +307,81 @@ function testValueLanguage() {
   console.warn('  ✅ Spec values carry their language when it differs');
 }
 
+// Compare matrix cells mark their spec values, so only those get a language;
+// the Czech catalogue text around them does not (DOS/Rate#1392).
+async function testCompareCellLanguage() {
+  const { createTranslator } = await import('next-intl');
+  const { compareCellSegments, plainCompareCell } =
+    await import('../compare-cell');
+  const { buildSpecGroups } =
+    await import('../../components/compare/CompareWorkspace');
+  const csMessages = JSON.parse(
+    (await import('node:fs')).readFileSync(
+      (await import('node:path')).join(__dirname, '../../../locales/cs.json'),
+      'utf8'
+    )
+  );
+  const cs = createTranslator({
+    locale: 'cs',
+    messages: csMessages,
+    namespace: 'compare',
+  });
+  const t = cs as unknown as Parameters<typeof buildSpecGroups>[0];
+  const rows = new Map(
+    buildSpecGroups(t).flatMap((g) => g.rows.map((r) => [r.id, r]))
+  );
+  const product = {
+    slug: 'x',
+    specifications: {
+      hardware: {
+        os: 'iOS 18',
+        storage_expansion: 'microSDXC (dedicated slot)',
+      },
+      design: { colors: ['Desert titanium', 'Black'], biometrics: 'Face ID' },
+      display: { protection: 'Ceramic Shield glass' },
+    },
+  } as never;
+
+  const osExp = rows.get('hw_os_exp')!;
+  const plain = osExp.renderValue(product);
+  assert.doesNotMatch(plain, /[]/, 'renderValue is plain text');
+  assert.equal(plain, plainCompareCell(osExp.renderCell!(product)));
+  const segments = compareCellSegments(osExp.renderCell!(product));
+  const prefix = segments.find((s) => !s.spec && /karta/i.test(s.text));
+  assert.ok(prefix, 'the Czech card-slot prefix is catalogue text');
+  const slot = segments.find((s) => s.spec && /microSDXC/.test(s.text));
+  assert.ok(slot, 'the card-slot value is a spec part');
+  assert.equal(localizedSpecValue(slot.text, 'cs').lang, 'en');
+
+  const colorsCell = compareCellSegments(
+    rows.get('design_bio_colors')!.renderCell!(product)
+  );
+  assert.ok(
+    colorsCell.some((s) => s.spec && s.text === 'Desert titanium, Black')
+  );
+  assert.ok(colorsCell.some((s) => !s.spec && /Barvy/.test(s.text)));
+
+  // A catalogue-only cell has no spec part at all.
+  const reviews = compareCellSegments(
+    rows.get('rating_weighted')!.renderCell!({
+      slug: 'y',
+      specifications: {},
+    } as never)
+  );
+  assert.ok(
+    reviews.every((s) => !s.spec),
+    'no spec part in a review cell'
+  );
+  console.warn('  ✅ Compare cells mark only their spec values');
+}
+
 async function main() {
   console.warn('🧪 Product spec rows suite (DOS/Rate#1186)');
   testProductPage();
   testCompare();
   testValueLanguage();
   await testCompareUnknownSpecs();
+  await testCompareCellLanguage();
 }
 
 main().catch((err) => {
