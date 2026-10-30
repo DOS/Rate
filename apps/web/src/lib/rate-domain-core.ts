@@ -1112,7 +1112,19 @@ export function getMasterProductCategorySlug(
       .category_slug === 'string'
       ? (product.specifications as { category_slug: string }).category_slug
       : undefined;
-  const resolvedCat = catSlugFromMap || catSlugFromMeta || catSlugFromSpecs;
+  // Each hint trimmed and lower-cased, and the first canonical one wins, so
+  // links, the sitemap and the category-path redirect agree (DOS/Rate#1366).
+  const resolvedCat = [catSlugFromMap, catSlugFromMeta, catSlugFromSpecs]
+    .map((hint) =>
+      typeof hint === 'string'
+        ? hint
+            .replace(/\p{Cc}+/gu, '')
+            .trim()
+            .toLowerCase()
+            .slice(0, 64)
+        : undefined
+    )
+    .find((hint) => isCanonicalCategorySlug(hint));
 
   if (isCanonicalCategorySlug(resolvedCat)) {
     return resolvedCat;
@@ -1189,6 +1201,41 @@ export function getMasterProductHref(
   return safeSlug
     ? `/${catSlug}/${encodeURIComponent(safeSlug)}`
     : `/${catSlug}`;
+}
+
+/**
+ * A product's `metadata` or `specifications` reduced to its category hint,
+ * trimmed, lower-case and canonical only (null otherwise), the way
+ * `getMasterProductCategorySlug` reads hints (DOS/Rate#1366).
+ */
+export const categorySlugOnly = (
+  value: Record<string, unknown> | null | undefined
+): { category_slug: string } | null => {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  if (typeof value.category_slug !== 'string') return null;
+  const slug = value.category_slug
+    .replace(/\p{Cc}+/gu, '')
+    .trim()
+    .toLowerCase()
+    .slice(0, 64);
+  return isCanonicalCategorySlug(slug) ? { category_slug: slug } : null;
+};
+
+/**
+ * The product's own URL when it is asked for under another category's path
+ * (`/laptops/<phone>`), else null. Built with `getMasterProductHref`, the way
+ * the site links products and lists them in the sitemap, so a redirect lands
+ * on the listed URL (DOS/Rate#1366). Null too when no product URL can be
+ * built: the page then renders as asked.
+ */
+export function foreignCategoryProductHref(
+  product: Parameters<typeof getMasterProductHref>[0],
+  categoryBasePath: string,
+  categorySlugById: ReadonlyMap<string, string>
+): string | null {
+  const href = getMasterProductHref(product, categorySlugById);
+  if (!/^\/[a-z]+\/[^/]+$/.test(href)) return null;
+  return href.startsWith(`${categoryBasePath}/`) ? null : href;
 }
 
 export interface MerchantListFilterParams {

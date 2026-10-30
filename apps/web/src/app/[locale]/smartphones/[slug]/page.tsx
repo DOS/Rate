@@ -3,7 +3,10 @@ import { Fragment } from 'react';
 import { getTranslations, setRequestLocale } from 'next-intl/server';
 import { Link } from '@/lib/navigation';
 import { notFound, permanentRedirect } from 'next/navigation';
-import { resolveItemRoute } from '@/server/rate/item-route';
+import {
+  getCachedCategorySlugById,
+  resolveItemRoute,
+} from '@/server/rate/item-route';
 import {
   itemSizePanelBytes,
   loadItemPageContext,
@@ -108,6 +111,7 @@ import {
 } from '@/lib/product-market-stats';
 import {
   firstImageUrl,
+  foreignCategoryProductHref,
   usableImageUrls,
   productImageUrl,
 } from '@/lib/rate-domain-core';
@@ -123,6 +127,29 @@ export function generateStaticParams(): { slug: string }[] {
 }
 
 export type PageParams = Promise<{ locale: string; slug: string }>;
+
+/**
+ * Master-product route: the product's own URL when it was asked for under
+ * another category's path, else null (DOS/Rate#1366; the Item route has its
+ * own check, #1281). When the category map cannot be read the page renders
+ * as asked rather than guess a category.
+ */
+async function foreignCategoryHref(
+  product: Parameters<typeof foreignCategoryProductHref>[0],
+  categoryBasePath: string
+): Promise<string | null> {
+  let categorySlugById: ReadonlyMap<string, string>;
+  try {
+    categorySlugById = await getCachedCategorySlugById();
+  } catch {
+    return null;
+  }
+  return foreignCategoryProductHref(
+    product,
+    categoryBasePath,
+    categorySlugById
+  );
+}
 
 export async function generateCategoryProductMetadata(
   params: PageParams,
@@ -161,6 +188,14 @@ export async function generateCategoryProductMetadata(
     return {
       title: t('notFoundTitle'),
     };
+  }
+  // A product under another category's path 308s to its own; that URL is
+  // the canonical (DOS/Rate#1366).
+  const ownHref = itemRoute
+    ? null
+    : await foreignCategoryHref(product, categoryBasePath);
+  if (ownHref) {
+    return { alternates: { canonical: `https://rate.vn${ownHref}` } };
   }
   // The stored stats, like every other page shows (DOS/Rate#1141). An Item
   // URL is the Item: its name and the "from" price over its sizes (#1154).
@@ -287,6 +322,12 @@ export async function ProductDetailView({
   if (!storedProduct) {
     timing.done();
     notFound();
+  }
+  // Master-product route: a product asked for under another category's path
+  // goes to its own (DOS/Rate#1366).
+  if (!itemRoute) {
+    const ownHref = await foreignCategoryHref(storedProduct, categoryBasePath);
+    if (ownHref) permanentRedirect(ownHref);
   }
   const itemVariants = itemPage?.variants ?? [];
   const isItemGroup = itemVariants.length > 1;

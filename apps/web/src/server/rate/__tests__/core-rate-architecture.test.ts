@@ -13,6 +13,10 @@ import {
   formatStorageLabel,
   getCategoryFilterSchema,
 } from '../../../lib/category-filters';
+import {
+  categorySlugOnly as categorySlugOnly1366,
+  foreignCategoryProductHref,
+} from '../../../lib/rate-domain-core';
 import csMessages from '../../../../locales/cs.json';
 import enMessages from '../../../../locales/en.json';
 import viMessages from '../../../../locales/vi.json';
@@ -131,6 +135,88 @@ async function runCoreArchitectureSuite() {
       name: 'Apple MacBook Air M3',
     }),
     '/laptops/macbook-air-m3-16gb'
+  );
+  // A product asked for under another category's path goes to its own,
+  // the URL the site links and lists (DOS/Rate#1366).
+  const phone1366 = {
+    slug: 'apple-iphone-16-128gb',
+    category_id: 'cat-phone',
+  };
+  const catMap1366 = new Map([...catMap, ['cat-phone', 'smartphones']]);
+  for (const base of ['/laptops', '/tablets', '/earbuds', '/smartwatches']) {
+    assert.equal(
+      foreignCategoryProductHref(phone1366, base, catMap1366),
+      '/smartphones/apple-iphone-16-128gb',
+      `a phone under ${base} redirects to /smartphones`
+    );
+  }
+  assert.equal(
+    foreignCategoryProductHref(phone1366, '/smartphones', catMap1366),
+    null,
+    'a product under its own category renders'
+  );
+  assert.equal(
+    foreignCategoryProductHref(
+      { slug: 'Apple-iPhone-16-128GB', category_id: 'cat-phone' },
+      '/smartphones',
+      catMap1366
+    ),
+    null,
+    'a mixed-case slug under its own category is no foreign category'
+  );
+  assert.equal(
+    foreignCategoryProductHref(
+      { slug: '..', category_id: 'cat-phone' },
+      '/laptops',
+      catMap1366
+    ),
+    null,
+    'no product URL can be built: no redirect to a category page'
+  );
+  // Hints are read as the sitemap reads them: a 'Tablets' hint with no
+  // category_id lists /tablets/..., so that URL renders, and the phone path
+  // 308s there instead of the name heuristic's guess.
+  const tablet1366 = {
+    slug: 'lenovo-tb350fu',
+    category_id: null,
+    metadata: { category_slug: ' Tablets ' },
+  };
+  assert.equal(
+    foreignCategoryProductHref(tablet1366, '/tablets', catMap1366),
+    null,
+    'a mixed-case hint names the category the sitemap lists'
+  );
+  assert.equal(
+    foreignCategoryProductHref(tablet1366, '/smartphones', catMap1366),
+    '/tablets/lenovo-tb350fu'
+  );
+  // Links read the hint the same way, so a link never takes a 308 hop.
+  assert.equal(
+    getMasterProductHref(tablet1366, catMap1366),
+    '/tablets/lenovo-tb350fu'
+  );
+  assert.equal(
+    getMasterProductHref({
+      slug: 'lenovo-tb350fu',
+      category_id: null,
+      metadata: categorySlugOnly1366({ category_slug: ' Tablets ' }),
+    }),
+    '/tablets/lenovo-tb350fu',
+    'the sitemap (hints reduced by categorySlugOnly) lists the same URL'
+  );
+  const fs1366 = require('node:fs') as typeof import('node:fs');
+  const path1366 = require('node:path') as typeof import('node:path');
+  const detailSrc1366 = fs1366.readFileSync(
+    path1366.resolve(
+      __dirname,
+      '../../../app/[locale]/smartphones/[slug]/page.tsx'
+    ),
+    'utf8'
+  );
+  assert.match(
+    detailSrc1366,
+    /if \(!itemRoute\) \{\s*const ownHref = await foreignCategoryHref\(storedProduct, categoryBasePath\);\s*if \(ownHref\) permanentRedirect\(ownHref\);/,
+    'the master-product route 308s a foreign-category URL'
   );
   console.log(
     '  ✅ [2/7] Canonical 5-Category Routing (smartphones/tablets/laptops/smartwatches/earbuds) passed'
