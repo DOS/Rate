@@ -1223,6 +1223,67 @@ async function runSuite() {
   ] as const) {
     assert.equal(keyOf(title), key, title);
   }
+  // A spaced Fold or Flip number keys like the glued one, and keeps its "Ultra" or "FE";
+  // the iPad mini's launch year names its generation (DOS/Rate#1491).
+  for (const [title, key] of [
+    ['Samsung Galaxy Z Fold 8 Ultra 5G 256GB', 'samsung:galaxy-z-fold8-ultra:256gb'],
+    ['Samsung Galaxy Z Fold8 Ultra 256GB', 'samsung:galaxy-z-fold8-ultra:256gb'],
+    ['Samsung Galaxy Fold8 Ultra 256GB', 'samsung:galaxy-z-fold8-ultra:256gb'],
+    ['Samsung Galaxy Z Fold 8 256GB', 'samsung:galaxy-z-fold8:256gb'],
+    ['Samsung Galaxy Z Flip 8 256GB', 'samsung:galaxy-z-flip8:256gb'],
+    ['Samsung Galaxy Z Flip 7 FE 128GB', 'samsung:galaxy-z-flip7-fe:128gb'],
+    ['Samsung Galaxy Z Fold Special Edition 512GB', 'samsung:galaxy-z-fold-special:512gb'],
+    ['Apple iPad mini (2026) Wi-Fi 128GB', 'apple:ipad-mini-8:128gb'],
+    ['iPad mini 2026 128GB', 'apple:ipad-mini-8:128gb'],
+    ['Apple iPad mini 8 Wi-Fi 128GB', 'apple:ipad-mini-8:128gb'],
+    // Another brand's "Flip 6" and a date after "Fold" are left alone, and so are the
+    // older "Galaxy Fold 2" and "Galaxy Flip 3" keys and the first "Galaxy Fold 5G".
+    ['JBL Flip 6 tặng dây', 'jbl:flip-6:unknown'],
+    ['Samsung Galaxy Fold 12/512GB/5G', 'samsung:galaxy-fold:512gb'],
+    ['Samsung Galaxy Fold 2 256GB', 'samsung:galaxy-fold-2:256gb'],
+    ['Samsung Galaxy Flip 3 128GB', 'samsung:galaxy-flip-3:128gb'],
+    ['Samsung Galaxy Fold 5G 512GB', 'samsung:galaxy-fold:512gb'],
+    // The model ends after the number and an "Ultra" or "FE".
+    ['Samsung Galaxy Z Fold 8 Xanh 256GB', 'samsung:galaxy-z-fold8:256gb'],
+    ['Samsung Galaxy Z Fold 8 7.6 inch 256GB', 'samsung:galaxy-z-fold8:256gb'],
+    ['Samsung Galaxy Z Flip 8 8 256GB', 'samsung:galaxy-z-flip8:256gb'],
+    ['Samsung Galaxy Z Fold 8 2026 256GB', 'samsung:galaxy-z-fold8:256gb'],
+    ['Samsung Galaxy Z Fold 8 Ultra Đen 512GB', 'samsung:galaxy-z-fold8-ultra:512gb'],
+    ['Samsung Galaxy Z Fold6 Silver Shadow 12GB 256GB', 'samsung:galaxy-z-fold6:256gb'],
+    ['Samsung Galaxy Z Fold 8, 256GB', 'samsung:galaxy-z-fold8:256gb'],
+    ['Samsung Galaxy Z Fold8 Ultra/12GB/256GB', 'samsung:galaxy-z-fold8-ultra:256gb'],
+    ['Samsung Galaxy Z Flip8 FE/8GB/256GB', 'samsung:galaxy-z-flip8-fe:256gb'],
+    ['Apple iPad mini 2026k 64GB', 'apple:ipad-mini:64gb'],
+    ['iPad mini (A17 Pro) Wi-Fi 128GB', 'apple:ipad-mini-7:128gb'],
+    // The mini 8 by its chip, as FPT Shop and TGDD title it (DOS/Rate#1502).
+    ['iPad mini A20 Pro WiFi 128GB', 'apple:ipad-mini-8:128gb'],
+    ['iPad mini A20 Pro 5G 256GB', 'apple:ipad-mini-8:256gb'],
+    ['Apple iPad mini (A20 Pro) Wi-Fi 512GB', 'apple:ipad-mini-8:512gb'],
+    ['Máy tính bảng iPad mini A20 Pro Wi-Fi + Cellular 128GB', 'apple:ipad-mini-8:128gb'],
+    ['iPad mini 8.3 inch A20 Pro Wi-Fi 128GB', 'apple:ipad-mini-8:128gb'],
+    ['iPad mini A20Pro 128GB', 'apple:ipad-mini-8:128gb'],
+    ['iPad mini A20 128GB', 'apple:ipad-mini-8:128gb'],
+    ['Máy tính bảng iPad mini A20 Pro WiFi 128GB Chính hãng VN/A Tím', 'apple:ipad-mini-8:128gb'],
+    ['iPad mini A20 Pro 256GB WiFi tặng ốp lưng', 'apple:ipad-mini-8:256gb'],
+    ['iPad mini A20 Pro so sánh A17 Pro 128GB', 'apple:ipad-mini-8:128gb'],
+    // A part number, or an A20 in a gift or bundle, is no chip of this iPad.
+    ['iPad mini A2033 64GB', 'apple:ipad-mini:64gb'],
+    ['iPad mini WiFi 64GB tặng ốp Galaxy A20', 'apple:ipad-mini:64gb'],
+    ['iPad mini 64GB + Samsung Galaxy A20', 'apple:ipad-mini:64gb'],
+    ['iPad mini 64GB tặng: ốp Galaxy A20', 'apple:ipad-mini:64gb'],
+    ['iPad mini 64GB+Samsung Galaxy A20', 'apple:ipad-mini:64gb'],
+    // A title in decomposed Unicode cuts at the gift like a composed one.
+    ['iPad mini 64GB tặng ốp Galaxy A20'.normalize('NFD'), 'apple:ipad-mini:64gb'],
+    // Who it is for is no other product: the chip after it still counts.
+    ['iPad mini cho bé A20 Pro 128GB', 'apple:ipad-mini-8:128gb'],
+    ['iPad mini for kids A20 Pro 128GB', 'apple:ipad-mini-8:128gb'],
+    // A stated generation still wins, and a model without the chip keeps its key.
+    ['iPad mini 7 A17 Pro 128GB', 'apple:ipad-mini-7:128gb'],
+    ['Apple iPad mini 8.3 inch (A17 Pro) Wi-Fi 128GB', 'apple:ipad-mini-7:128gb'],
+    ['Apple iPad mini 2024 128GB', 'apple:ipad-mini:128gb'],
+  ] as const) {
+    assert.equal(keyOf(title), key, title);
+  }
   // A long run of promo words costs linear time (CodeQL js/polynomial-redos).
   {
     const started = performance.now();
@@ -1930,7 +1991,7 @@ async function runSuite() {
   assert.equal(paCatalogItems.length, 1);
   assert.equal(paCatalogItems[0]?.name, 'Samsung Galaxy S26 Ultra');
 
-  // Ensure all 14 canonical 2026 upstream devices across 5 categories are present in FLAGSHIP_DEVICES_TO_SEED (33 seed entries -> 36 total master products)
+  // Ensure all 14 canonical 2026 upstream devices across 5 categories are present in FLAGSHIP_DEVICES_TO_SEED (33 seed entries)
   assert.equal(UPSTREAM_2026_ARENA_REFERENCE_URLS.length, 14);
   assert.equal(FLAGSHIP_DEVICES_TO_SEED.length, 33);
   const seededModelKeys = new Set(FLAGSHIP_DEVICES_TO_SEED.map(d => d.model_key));
@@ -2548,20 +2609,21 @@ async function runSuite() {
     );
     assert.equal(keyOf('Đồng hồ Samsung Galaxy Watch7 44mm'), 'samsung:galaxy-watch7:unknown');
 
-    // #657 Case 1: Title-stated RAM beats benchmark RAM
-    const s26Ultra12Gb = normalizer.normalize(
-      createDummyShopeeProduct('Samsung Galaxy S26 Ultra - 12GB/256GB')
+    // #657 Case 1: Title-stated RAM beats benchmark RAM. The benchmark (sourced, catalog
+    // expansion A3) has the 256GB's 12GB; the 1TB title states its own 16GB.
+    const s26Ultra16Gb = normalizer.normalize(
+      createDummyShopeeProduct('Samsung Galaxy S26 Ultra - 16GB/1TB')
     );
-    assert.equal(s26Ultra12Gb.model_key, 'samsung:galaxy-s26-ultra:256gb');
-    assert.equal(s26Ultra12Gb.ram_gb, 12);
-    assert.equal(s26Ultra12Gb.specifications.hardware?.ram_gb, 12);
-    assert.equal(s26Ultra12Gb.key_specs.ram, '12GB');
+    assert.equal(s26Ultra16Gb.model_key, 'samsung:galaxy-s26-ultra:1024gb');
+    assert.equal(s26Ultra16Gb.ram_gb, 16);
+    assert.equal(s26Ultra16Gb.specifications.hardware?.ram_gb, 16);
+    assert.equal(s26Ultra16Gb.key_specs.ram, '16GB');
 
     const s26UltraBenchmarkRam = normalizer.normalize(
       createDummyShopeeProduct('Samsung Galaxy S26 Ultra 256GB')
     );
-    assert.equal(s26UltraBenchmarkRam.ram_gb, 16);
-    assert.equal(s26UltraBenchmarkRam.specifications.hardware?.ram_gb, 16);
+    assert.equal(s26UltraBenchmarkRam.ram_gb, 12);
+    assert.equal(s26UltraBenchmarkRam.specifications.hardware?.ram_gb, 12);
 
     // #657 Case 2 & 3: Earbuds, watches, tablets, laptops get no phone-shaped storage/RAM/screen/SAR/Face ID
     const wf1000xm6 = normalizer.normalize(createDummyShopeeProduct('Tai nghe Sony WF-1000XM6'));
