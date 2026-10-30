@@ -65,7 +65,7 @@
 <div class="container">
   <span class="badge badge-accent">Cần JOY quyết</span>
   <h1>Các việc đang chờ JOY quyết (Rate)</h1>
-  <p class="muted">Ngày 30/10/2026. Người soạn: Web (Rate Core), theo yêu cầu của PO. Trang này chỉ gom lại để JOY trả lời một lượt; chi tiết nằm ở issue, PR và các trang đề xuất đã có. Xếp theo mức ảnh hưởng tới người mua và tới các việc khác, từ cao xuống thấp. Chưa có thao tác nào lên Production hay Supabase dùng chung.</p>
+  <p class="muted">Ngày 30/10/2026. Người soạn: Web (Rate Core), theo yêu cầu của PO. Trang này gom 15 mục lại để JOY trả lời một lượt; chi tiết nằm ở issue, PR và các trang đề xuất đã có. Xếp theo mức ảnh hưởng tới người mua và tới các việc khác, từ cao xuống thấp. Chưa có thao tác nào lên Production hay Supabase dùng chung.</p>
 
   <h2>Tóm tắt</h2>
   <div class="table-wrap">
@@ -75,16 +75,18 @@
         <tr><td>1</td><td>Sửa thông số iPhone 18 Pro, S26 Ultra (PR #1460, #1459, #1464)</td><td>Merge #1460, chạy backfill</td><td>Ghi dữ liệu Production</td><td>Cao</td></tr>
         <tr><td>2</td><td>Mở rộng danh mục D1-D5 (PR #1455)</td><td>D1 A1-A3, D2 (a), D3 có, D4 hiện "chưa có giá", D5 chờ</td><td>Ghi dữ liệu Production</td><td>Cao</td></tr>
         <tr><td>3</td><td>Re-key D1-D4 (#1407, #1441, #1430) và #1491 (c)(d)</td><td>D1 A, D2 có, D3 A rồi B, D4 phía DOS-Me</td><td>Dữ liệu và DDL qua DOS-Me</td><td>Cao</td></tr>
-        <tr><td>4</td><td>Đưa dev lên Production (promote)</td><td>Chỉ hỏi nếu <code>promote.mjs</code> bị từ chối</td><td>rate.vn</td><td>Cao</td></tr>
+        <tr><td>4</td><td>Đưa dev lên Production (promote), và quyền merge khi xanh</td><td>Duyệt đợt này; cân nhắc quy tắc cho phép</td><td>rate.vn</td><td>Cao</td></tr>
         <tr><td>5</td><td>DOS-Me M1+M2 và runbook Item model (#1150, #1123)</td><td>Duyệt quyết định 1-9, xếp lịch M0 rồi M1+M2</td><td>DDL và dữ liệu qua DOS-Me</td><td>Cao</td></tr>
-        <tr><td>6</td><td>Một con số điểm cho mọi trang (#1470, PR #1478)</td><td>Phương án 2 (Bayesian ở mọi nơi)</td><td>Web; phương án 2 cần DOS-Me</td><td>Vừa</td></tr>
+        <tr><td>6</td><td>Một con số điểm cho mọi trang (#1470, PR #1478) và điểm tiêu chí (#1143)</td><td>Phương án 2 (Bayesian ở mọi nơi); #1143 quyết cùng lúc</td><td>Web; phương án 2 cần DOS-Me</td><td>Vừa</td></tr>
         <tr><td>7</td><td>6 sản phẩm đã ngừng bán</td><td>Chưa có</td><td>Có thể đổi trạng thái dữ liệu</td><td>Vừa</td></tr>
         <tr><td>8</td><td>Đăng bản tiện ích mới lên Chrome Web Store</td><td>Đăng sau promote, gồm #1476, #1477</td><td>Trang cửa hàng công khai</td><td>Vừa</td></tr>
         <tr><td>9</td><td>CSP, quyết định 1-4 (#1323, #1348)</td><td>Có cho 1, 2, 3; 4 tuỳ JOY</td><td>Header web; 4 tốn phí</td><td>Vừa</td></tr>
         <tr><td>10</td><td>Backfill 5G (#1196)</td><td>Đếm trước, rồi ghi</td><td>Ghi dữ liệu Production</td><td>Thấp-vừa</td></tr>
-        <tr><td>11</td><td>Việc DB nhỏ: #1306, #1353, #1247, #1143, #1173</td><td>Xem từng mục</td><td>DDL hoặc truy vấn đọc trên DB dùng chung</td><td>Thấp-vừa</td></tr>
+        <tr><td>11</td><td>Việc DB nhỏ: #1306, #1353, #1247, #1173</td><td>Xem từng mục</td><td>DDL hoặc truy vấn đọc trên DB dùng chung</td><td>Thấp-vừa</td></tr>
         <tr><td>12</td><td>Báo lỗi Next.js lên repo công khai (#1373, #1463)</td><td>Tuỳ JOY; không cần đổi app</td><td>Repo bên thứ ba công khai</td><td>Thấp</td></tr>
-        <tr><td>13</td><td>Plugin cc-po</td><td>Cần PO nói rõ câu hỏi</td><td>Công cụ nội bộ</td><td>Thấp</td></tr>
+        <tr><td>13</td><td>10 việc đang bị giữ chỗ mà không ai làm</td><td>Cho PO giao lại hoặc nhả</td><td>Bảng Project #9</td><td>Thấp-vừa</td></tr>
+        <tr><td>14</td><td>Plugin cc-po</td><td>Giữ skill riêng của Rate lúc này</td><td>Công cụ nội bộ</td><td>Thấp</td></tr>
+        <tr><td>15</td><td>Đóng #1311 và #1373</td><td>Đóng</td><td>Issue</td><td>Thấp</td></tr>
       </tbody>
     </table>
   </div>
@@ -128,12 +130,12 @@
   </div>
 
   <div class="card">
-    <div class="head"><h3>4. Đưa dev lên Production (promote)</h3><span class="badge badge-accent">Cao</span></div>
+    <div class="head"><h3>4. Đưa dev lên Production (promote), và quyền merge khi xanh</h3><span class="badge badge-accent">Cao</span></div>
     <p class="muted">Lần promote gần nhất: <a href="https://github.com/DOS/Rate/pull/1443">PR #1443</a>. Hiện dev đi trước main 20 commit (giao diện sáng tối, sửa tiện ích #1476 và #1477, CSP bước 1 #1454, thứ tự trang sản phẩm #1475...).</p>
     <dl>
-      <dt>Câu hỏi</dt><dd>Theo AGENTS.md mục 0.2, promote do agent chạy theo đợt; JOY chỉ được hỏi khi <code>promote.mjs</code> bị từ chối. Nếu đã bị từ chối: cho chạy đợt này không?</dd>
-      <dt>Phương án</dt><dd>(a) Duyệt promote; (b) giữ lại.</dd>
-      <dt>Khuyến nghị</dt><dd class="rec">(a), nếu bị hỏi. PO xác nhận giúp là có bị từ chối hay không.</dd>
+      <dt>Câu hỏi</dt><dd>Cho chạy đợt promote này không? Lần nào cũng cần JOY: bộ phân loại của chế độ tự động chặn <code>promote.mjs</code> ("Production Deploy") nếu trong chat của PO không có lời của JOY, và đôi khi chặn cả merge ("Merge Without Review").</dd>
+      <dt>Phương án</dt><dd>(a) Duyệt đợt này; (b) giữ lại. Thêm: (c) JOY thêm một quy tắc cho phép qua <code>/permissions</code> cho <code>merge-when-green.mjs</code> và <code>promote.mjs</code>, để PO không phải hỏi lại mỗi lần.</dd>
+      <dt>Khuyến nghị</dt><dd class="rec">(a) ngay. (c) tuỳ JOY: đỡ chờ, nhưng các đợt promote sau sẽ không còn qua tay JOY.</dd>
       <dt>Nếu chờ</dt><dd>Các bản sửa chưa tới người dùng rate.vn; bản tiện ích mới (mục 8) cũng chờ theo.</dd>
       <dt>Chạm vào</dt><dd>Production rate.vn; không đụng DB.</dd>
     </dl>
@@ -152,12 +154,13 @@
   </div>
 
   <div class="card">
-    <div class="head"><h3>6. Một con số điểm cho mọi trang</h3><span class="badge badge-amber">Vừa</span></div>
+    <div class="head"><h3>6. Một con số điểm cho mọi trang, và điểm tiêu chí (#1143)</h3><span class="badge badge-amber">Vừa</span></div>
     <p class="muted"><a href="https://github.com/DOS/Rate/issues/1470">#1470</a>, <a href="https://github.com/DOS/Rate/pull/1478">PR #1478</a></p>
     <dl>
       <dt>Câu hỏi</dt><dd>Con số nào là điểm của sản phẩm ở mọi nơi; và PR #1478 (bảng so kè lấy điểm người mua, một chữ số thập phân) có được merge không?</dd>
       <dt>Phương án</dt><dd>(1) Điểm người mua đã lưu ở mọi nơi: đơn giản, nhưng bỏ con số Bayesian mà #1144 đã chọn cho trang sản phẩm. (2) Điểm Bayesian ở mọi nơi: cần lưu điểm ước tính (hoặc tổng trọng số) vào <code>master_products</code> qua hàm làm mới, một bước DOS-Me.</dd>
       <dt>Khuyến nghị</dt><dd class="rec">Web: phương án (2). PR #1478 độc lập, merge được ngay.</dd>
+      <dt>Kèm #1143</dt><dd><a href="https://github.com/DOS/Rate/issues/1143">#1143</a>: điểm từng tiêu chí đang suy ra từ số sao nên dồn về 5.00, tạo hoà và thứ hạng giả. Sửa nó làm đổi điểm người dùng thấy, nên theo quy tắc của PO là việc JOY quyết. Khuyến nghị: quyết cùng lúc với #1470.</dd>
       <dt>Nếu chờ</dt><dd>iPhone 16 128GB hiện 4.8 ở trang sản phẩm, 5.0 ở các chỗ khác. Gây khó hiểu, không sai dữ liệu.</dd>
       <dt>Chạm vào</dt><dd>Web; phương án (2) cần migration DOS-Me.</dd>
     </dl>
@@ -217,7 +220,6 @@
       <li><a href="https://github.com/DOS/Rate/issues/1306">#1306</a> trigger phiếu bầu: duyệt migration DOS-Me thêm bảng chỉ ghi thêm <code>rate.review_vote_actions</code>, để chốt chặn đếm theo hành động. Core đề xuất có. DDL. Nếu chờ: một người có thể bấm phiếu liên tục làm DB tải nặng.</li>
       <li><a href="https://github.com/DOS/Rate/issues/1353">#1353</a>: người có quyền DB chạy các lệnh <code>EXPLAIN (ANALYZE, BUFFERS)</code> chỉ đọc mà Core đã soạn (API trang sản phẩm 2,5-4,4 giây). Nếu chờ: chưa biết vì sao chậm, kéo theo #1344 và CSP phương án 2.</li>
       <li><a href="https://github.com/DOS/Rate/issues/1247">#1247</a> giới hạn nhận dữ liệu theo mạng: hàm trong DB hay KV dùng chung (thêm nhà cung cấp và secret). Chưa có khuyến nghị. Nếu chờ: một máy có thể lấp đầy hàng đợi 120 lượt mỗi phút.</li>
-      <li><a href="https://github.com/DOS/Rate/issues/1143">#1143</a> điểm tiêu chí tự suy ra (dồn về 5.00): issue chưa ghi câu hỏi cho JOY; nhiều khả năng là có ẩn tiêu chí chưa đo được hay không. PO xác nhận giúp.</li>
       <li><a href="https://github.com/DOS/Rate/issues/1173">#1173</a>: người có quyền Production chạy vài lệnh SELECT chỉ đọc về quyền trên <code>review_votes</code> và hai hàm làm mới, để kiểm tra có cấp quyền thừa không.</li>
     </ul>
   </div>
@@ -235,16 +237,51 @@
   </div>
 
   <div class="card">
-    <div class="head"><h3>13. Plugin cc-po</h3><span class="badge badge-blue">Thấp</span></div>
+    <div class="head"><h3>13. 10 việc đang bị giữ chỗ mà không ai làm</h3><span class="badge badge-blue">Thấp-vừa</span></div>
+    <p class="muted">Từ đợt rà soát bảng của phiên Core: các issue vẫn mang nhãn <code>agent:*</code> của một phiên không còn làm.</p>
+    <div class="table-wrap">
+      <table style="min-width: 0">
+        <thead><tr><th>Issue</th><th>Nội dung</th><th>Đang giữ</th></tr></thead>
+        <tbody>
+          <tr><td><a href="https://github.com/DOS/Rate/issues/191">#191</a></td><td>bật quét secret, CodeQL, Dependabot</td><td><code>agent:guard</code></td></tr>
+          <tr><td><a href="https://github.com/DOS/Rate/issues/594">#594</a></td><td>iPhone 16e bị gộp vào iPhone 16 (deal giả -43%)</td><td><code>agent:brand</code></td></tr>
+          <tr><td><a href="https://github.com/DOS/Rate/issues/887">#887</a></td><td>ảnh shop TGDĐ bị chặn hotlink</td><td><code>agent:brand</code></td></tr>
+          <tr><td><a href="https://github.com/DOS/Rate/issues/613">#613</a></td><td>điều kiện bỏ phiếu chỉ chặn ở route, chưa ở RLS</td><td><code>agent:guard</code></td></tr>
+          <tr><td><a href="https://github.com/DOS/Rate/issues/802">#802</a></td><td>min_price còn tính giá mồi</td><td><code>agent:guard</code></td></tr>
+          <tr><td><a href="https://github.com/DOS/Rate/issues/1120">#1120</a></td><td>view tin cậy nhân đôi chỗ bán</td><td><code>agent:guard</code></td></tr>
+          <tr><td><a href="https://github.com/DOS/Rate/issues/1173">#1173</a></td><td>kiểm tra quyền trên review_votes</td><td><code>agent:guard</code></td></tr>
+          <tr><td><a href="https://github.com/DOS/Rate/issues/1123">#1123</a></td><td>M0: đổi model_key tai nghe và Watch Ultra 3</td><td><code>agent:po</code></td></tr>
+          <tr><td><a href="https://github.com/DOS/Rate/issues/1143">#1143</a></td><td>điểm tiêu chí dồn về 5.00 (mục 6)</td><td><code>agent:audit</code></td></tr>
+          <tr><td><a href="https://github.com/DOS/Rate/issues/1145">#1145</a></td><td>câu "trung vị 10 sàn" khi chỉ có 2 chỗ bán</td><td><code>agent:web</code></td></tr>
+        </tbody>
+      </table>
+    </div>
     <dl>
-      <dt>Câu hỏi</dt><dd>Chưa tìm thấy câu hỏi ghi lại trong DOS/Rate. Nhiều khả năng: Rate có chuyển skill PO và task-claim sang bản cc-po công khai (chạy <code>cc-po:setup</code> để tạo <code>docs/product-owner-config.md</code>) như Second-Spawn đang làm không?</dd>
-      <dt>Khuyến nghị</dt><dd class="rec">PO nêu rõ câu hỏi; Web chưa có khuyến nghị.</dd>
+      <dt>Câu hỏi</dt><dd>Cho PO giao lại các việc này cho phiên đang chạy, hoặc nhả chúng về Backlog?</dd>
+      <dt>Khuyến nghị</dt><dd class="rec">Đồng ý cả lượt: PO giao lại việc còn giá trị, nhả phần còn lại.</dd>
+      <dt>Nếu chờ</dt><dd>Theo quy tắc nhận việc, không phiên nào được động vào issue người khác đang giữ, nên các việc này đứng yên, kể cả việc bảo mật #191 và #613.</dd>
+    </dl>
+  </div>
+
+  <div class="card">
+    <div class="head"><h3>14. Plugin cc-po</h3><span class="badge badge-blue">Thấp</span></div>
+    <dl>
+      <dt>Câu hỏi</dt><dd>PO đã hỏi trong chat ngày 30/10: Rate có chuyển sang plugin cc-po không? Tức là chạy <code>cc-po:setup</code> (tạo <code>docs/product-owner-config.md</code>) và khớp cách nhận việc bằng bình luận <code>claim:</code> của nó với nhãn <code>agent:*</code>, <code>status:*</code> và bước kiểm tra task-claim của Rate.</dd>
+      <dt>Khuyến nghị</dt><dd class="rec">PO: giữ skill riêng của Rate lúc này; chỉ chuyển sau một đề xuất ánh xạ hai cách nhận việc.</dd>
       <dt>Nếu chờ</dt><dd>Các phiên Rate có hai bản skill PO (bản trong repo và bản <code>cc-po:*</code> cài cho tổ chức), dễ lệch nhau.</dd>
       <dt>Chạm vào</dt><dd>Chỉ công cụ làm việc, không ảnh hưởng sản phẩm.</dd>
     </dl>
   </div>
 
-  <p class="muted">Ghi chú: các mục 4, 7, 11 (#1143) và 13 có chỗ chưa rõ trên GitHub; đã ghi rõ ở từng mục thay vì đoán.</p>
+  <div class="card">
+    <div class="head"><h3>15. Đóng #1311 và #1373</h3><span class="badge badge-blue">Thấp</span></div>
+    <dl>
+      <dt>Câu hỏi</dt><dd>Cho đóng <a href="https://github.com/DOS/Rate/issues/1311">#1311</a> (CSP chỉ báo cáo, đã xong) và <a href="https://github.com/DOS/Rate/issues/1373">#1373</a> (404 không có HTML khi tắt JavaScript, đã chọn để nguyên; nguyên nhân ghi ở #1463)? PO đóng thì bị bộ phân loại chặn.</dd>
+      <dt>Khuyến nghị</dt><dd class="rec">Đóng cả hai. Việc báo lỗi lên Next.js (mục 12) vẫn tách riêng.</dd>
+    </dl>
+  </div>
+
+  <p class="muted">Ghi chú: mục 7 chưa có khuyến nghị nào được ghi lại; gợi ý ở đó là của Web.</p>
 </div>
 </body>
 </html>
