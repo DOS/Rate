@@ -1024,6 +1024,24 @@ export async function ProductDetailView({
                 </p>
               )}
 
+              {/* Where to buy comes first, then the price history, specs and
+              reviews; this row jumps to each (DOS/Rate#1469). It sits under the
+              price, before the scoreboard, so a phone shows it in the first
+              screen (DOS/Rate#1517). */}
+              <nav
+                className="rate-pdv-jumpnav"
+                aria-label={t('jumpNavAria')}
+                data-testid="pdv-jump-nav"
+              >
+                <a href="#offers-table">
+                  {t('jumpNavOffers', { count: offers.length })}
+                </a>
+                <a href="#pdv-price-history">{t('jumpNavPriceHistory')}</a>
+                <a href="#specs-section">{t('jumpNavSpecs')}</a>
+                <a href="#jreviews-section">
+                  {t('jumpNavReviews', { count: authenticCount })}
+                </a>
+              </nav>
               {/* #1 Core Focus Above the Fold: JReviews Dual-Rating & 5-Criteria Scoreboard (DESIGN.md v3.0) */}
               <div className="rate-scoreboard-dark rate-surface-dark rate-pdv-board mb-4">
                 <div className="rate-pdv-board-head">
@@ -1333,23 +1351,6 @@ export async function ProductDetailView({
               </details>
             </div>
           </div>
-
-          {/* Where to buy comes first, then the price history, specs and
-          reviews; this row jumps to each (DOS/Rate#1469). */}
-          <nav
-            className="rate-pdv-jumpnav"
-            aria-label={t('jumpNavAria')}
-            data-testid="pdv-jump-nav"
-          >
-            <a href="#offers-table">
-              {t('jumpNavOffers', { count: offers.length })}
-            </a>
-            <a href="#pdv-price-history">{t('jumpNavPriceHistory')}</a>
-            <a href="#specs-section">{t('jumpNavSpecs')}</a>
-            <a href="#jreviews-section">
-              {t('jumpNavReviews', { count: authenticCount })}
-            </a>
-          </nav>
 
           {/* Neutral Merchant Reference & Trust Audit Table */}
           <div
