@@ -2046,9 +2046,20 @@ export class ProductNormalizer {
         // "iPad mini 6" and "iPad mini 7" are two models, not one "iPad mini"; Apple calls the
         // 7th "iPad mini (A17 Pro)", and "8.3 inch" or "8,3 inch" is the screen (DOS/Rate#819).
         // One digit, not a "5G" or "4G" network or a storage ("mini 64 Wifi").
+        // "iPad mini (2026)" is the mini 8, so the chains that write the year key like the
+        // ones that write the number (DOS/Rate#1491). The older years keep their stored
+        // "ipad-mini" key ("iPad mini 2024", DOS/Rate#819) until a re-key decides otherwise.
         const mini = line.match(/^mini\s*([1-9])?$/i);
         if (mini)
-          line = `mini${mini[1] ? ` ${mini[1]}` : /\ba17\s*pro\b/i.test(appleTitle) ? ' 7' : ''}`;
+          line = `mini${
+            mini[1]
+              ? ` ${mini[1]}`
+              : /\ba17\s*pro\b/i.test(appleTitle)
+                ? ' 7'
+                : /\bmini\s*\(?\s*2026\s*\)?(?![\d\p{L}])/iu.test(appleTitle)
+                  ? ' 8'
+                  : ''
+          }`;
         model = /^(pro|air)$/i.test(line) && chip ? `iPad ${line} ${chip}` : `iPad ${line}`;
       } else if (macbookMatch && macbookMatch[1]) {
         const line = macbookMatch[1].trim().replace(/^neo$/i, 'Neo');
@@ -2176,6 +2187,16 @@ export class ProductNormalizer {
         .replace(/\bvivo\s+book\b/gi, 'Vivobook')
         // "17 ProMax" keys like "17 Pro Max" (DOS/Rate#815).
         .replace(/\b(pro)(max)\b/gi, '$1 $2')
+        // "Z Fold 8 Ultra" and "Z Flip 8" key like "Z Fold8 Ultra" and "Z Flip8", the way
+        // Samsung and most chains write them (DOS/Rate#1491). Only after "Z": the older
+        // "Galaxy Fold 2" and "Galaxy Flip 3" keep their keys, and "Fold 5G" is a network.
+        .replace(
+          /\b(Z\s+(?:Fold|Flip))\s+(\d{1,2})(?![\d./\p{L}]|,\d|\s*(?:\/|GB|TB|inch|in\b|"))/giu,
+          '$1$2'
+        )
+        // So does a current Fold or Flip written glued but without its "Z" ("Galaxy
+        // Fold8 Ultra").
+        .replace(/\bGalaxy\s+(?=(?:Fold|Flip)(?:[5-9]|1\d)(?!\d))/gi, 'Galaxy Z ')
         .trim();
       const rawTokens = cleaned.split(/\s+/).filter(Boolean);
       const modelTokens: string[] = [];
@@ -2259,6 +2280,23 @@ export class ProductNormalizer {
         // A "+" before "Plus" is the Plus written twice ("Galaxy S24 + Plus"), no bundle.
         if (tok === '+' && /^plus[,;]?$/i.test(rawTokens[i + 1] ?? '')) continue;
         if (/^(?:tặng|kèm|quà|\+)$/iu.test(tok.normalize('NFC'))) break;
+        // A numbered Galaxy Fold or Flip ends after its number and an "Ultra" or "FE": a
+        // colour, RAM, year, size or shop word after it ("Z Fold8 Xanh", "Z Flip8 8 256GB")
+        // is none of the model (DOS/Rate#1491).
+        if (
+          /^(?:fold|flip)\d{1,2}$/i.test(modelTokens[modelTokens.length - 1] ?? '') &&
+          /^z$/i.test(modelTokens[modelTokens.length - 2] ?? '') &&
+          // "Ultra/12GB/256GB" glued to its run goes on to the glued-word rule below.
+          !/^(?:ultra|fe)(?:[,;]?$|\/)/i.test(tok)
+        ) {
+          break;
+        }
+        if (
+          /^(?:ultra|fe)$/i.test(modelTokens[modelTokens.length - 1] ?? '') &&
+          /^(?:fold|flip)\d{1,2}$/i.test(modelTokens[modelTokens.length - 2] ?? '')
+        ) {
+          break;
+        }
         // A model number glued to a RAM/ROM pair ("Redmi 13/8GB/256GB", "Redmi 13C/…",
         // "Honor X9/…") is the model's when the model has none yet; after a numbered model
         // ("Galaxy Tab S9 11/8GB/128GB") or as a decimal ("15.6/8GB/512GB") it is a screen
