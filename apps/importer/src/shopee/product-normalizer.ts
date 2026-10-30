@@ -1068,7 +1068,6 @@ const CANONICAL_PHONE_REGISTRY: Record<
     second_camera: '48 MP Fusion Ultra Wide, f/2.2, 13mm, 120°, PDAF',
     third_camera:
       '48 MP Fusion Telephoto, f/2.8, 100mm (4x), tetraprism periscope, 3D sensor-shift OIS',
-    fourth_camera: 'TOF 3D LiDAR scanner (depth)',
     front_camera: '18 MP Center Stage, f/1.9, 20mm, PDAF',
     has_5g: true,
     release_date: 'September 2026',
@@ -1095,7 +1094,6 @@ const CANONICAL_PHONE_REGISTRY: Record<
     second_camera: '48 MP Fusion Ultra Wide, f/2.2, 13mm, 120°, PDAF',
     third_camera:
       '48 MP Fusion Telephoto, f/2.8, 100mm (4x), tetraprism periscope, 3D sensor-shift OIS',
-    fourth_camera: 'TOF 3D LiDAR scanner (depth)',
     front_camera: '18 MP Center Stage, f/1.9, 20mm, PDAF',
     has_5g: true,
     release_date: 'September 2026',

@@ -214,11 +214,20 @@ for (const key of [
   assert.equal(update.specifications.regulatory?.certifications, undefined);
   assert.equal(update.key_specs.ram, '12GB');
   assert.equal(JSON.stringify(stored), before, 'the stored row is not mutated');
+  // The value columns follow too, so the quick sync leaves no 16GB / 5200 mAh row.
+  assert.equal((update as Record<string, unknown>).ram_gb, 12);
+  assert.equal((update as Record<string, unknown>).battery_mah, 5000);
+  assert.deepEqual((update as Record<string, unknown>).colors, seed.colors);
   // A seed with nothing to retract keeps its stored label.
   const plain = FLAGSHIP_DEVICES_TO_SEED.find(
     s => s.model_key === 'samsung:galaxy-s24-ultra:256gb'
   )!;
   assert.equal('variant_name' in seedMasterSpecUpdate(null, plain), false);
+}
+
+// The registry counts photo cameras: LiDAR is no fourth camera on the iPhones.
+for (const title of ['Apple iPhone 18 Pro 256GB', 'Apple iPhone 18 Pro Max 256GB']) {
+  assert.equal(normalize(title).specifications.camera?.rear_setup, 'Triple Camera', title);
 }
 
 console.warn(`✅ Sourced seeds (${SOURCED_SEEDS_2026.length}) passed`);
