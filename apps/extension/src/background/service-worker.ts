@@ -17,6 +17,7 @@ import {
   sanitizeExtensionProductSignal,
   selectFreshestSessionSignal,
 } from '../security-guards.js';
+import { cooldownSecondsLeft, rateLimitedUntilMs } from '../rate-limit.js';
 import { t } from '../i18n.js';
 import { resolveActionBadge } from '../verdict-display.js';
 
@@ -49,21 +50,71 @@ async function getSettings(): Promise<ExtensionSettings> {
  */
 type LookupOutcome =
   | { ok: true; data: ExtensionLookupData | null }
-  | { ok: false; status: number | null };
+  | {
+      ok: false;
+      status: number | null;
+      /** Seconds until lookups resume after a 429 (DOS/Rate#1466). */
+      retryAfterSeconds?: number;
+    };
+
+// The version the API sees, from the manifest, so a release bump reaches the header
+// (DOS/Rate#1466).
+const EXTENSION_VERSION = chrome.runtime.getManifest().version;
+
+// After a 429 no lookup is sent until the server's Retry-After has passed: kept in memory
+// and in session storage, so a restarted worker keeps waiting (DOS/Rate#1466).
+const RATE_LIMIT_KEY = 'lookup_rate_limited_until';
+let rateLimitedUntil = 0;
+
+async function lookupCooldownSeconds(): Promise<number> {
+  const now = Date.now();
+  if (cooldownSecondsLeft(rateLimitedUntil, now) > 0) {
+    return cooldownSecondsLeft(rateLimitedUntil, now);
+  }
+  try {
+    const stored = await chrome.storage.session.get(RATE_LIMIT_KEY);
+    const until = stored?.[RATE_LIMIT_KEY];
+    if (typeof until === 'number') rateLimitedUntil = until;
+  } catch {
+    // No session storage: the in-memory value stands.
+  }
+  return cooldownSecondsLeft(rateLimitedUntil, now);
+}
 
 async function requestLookup(endpoint: string): Promise<LookupOutcome> {
+  const waitSeconds = await lookupCooldownSeconds();
+  if (waitSeconds > 0) {
+    return { ok: false, status: 429, retryAfterSeconds: waitSeconds };
+  }
   let response: Response;
   try {
     response = await fetch(endpoint, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
-        'X-Rate-Extension-Version': '2.0.0',
+        'X-Rate-Extension-Version': EXTENSION_VERSION,
       },
       signal: AbortSignal.timeout(10_000),
     });
   } catch {
     return { ok: false, status: null };
+  }
+  if (response.status === 429) {
+    const now = Date.now();
+    rateLimitedUntil = rateLimitedUntilMs(
+      response.headers.get('Retry-After'),
+      now
+    );
+    try {
+      await chrome.storage.session.set({ [RATE_LIMIT_KEY]: rateLimitedUntil });
+    } catch {
+      // The in-memory cooldown still holds this worker.
+    }
+    return {
+      ok: false,
+      status: 429,
+      retryAfterSeconds: cooldownSecondsLeft(rateLimitedUntil, now),
+    };
   }
   if (!response.ok) return { ok: false, status: response.status };
   try {
@@ -140,7 +191,7 @@ async function maybeSendOptInCrowdSignal(
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'X-Rate-Extension-Version': '2.0.0',
+          'X-Rate-Extension-Version': EXTENSION_VERSION,
         },
         signal: AbortSignal.timeout(8_000),
         body: JSON.stringify(buildCrowdIngestPayload(signal)),
@@ -246,7 +297,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         // Fire-and-forget Opt-In Quarantine Crowd Signal if user enabled it.
         // Sent whenever the server answered, as before (#1175): a network
         // error threw before it then, so it still sends nothing (#1300).
-        if (outcome.ok || outcome.status !== null) {
+        // Never while lookups are rate-limited (DOS/Rate#1466).
+        if (outcome.ok || (outcome.status !== null && outcome.status !== 429)) {
           void maybeSendOptInCrowdSignal(signal);
         }
         // A failed lookup clears the previous product's badge (#1300).
@@ -265,6 +317,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           sendResponse({
             ok: false,
             status: outcome.status,
+            retryAfterSeconds: outcome.retryAfterSeconds,
             error: 'Lookup failed',
           });
           return;
@@ -395,6 +448,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             : {
                 ok: false,
                 status: outcome.status,
+                retryAfterSeconds: outcome.retryAfterSeconds,
                 settings,
                 signal: effectiveSignal,
               }
@@ -484,6 +538,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           sendResponse({
             ok: false,
             status: outcome.status,
+            retryAfterSeconds: outcome.retryAfterSeconds,
             settings,
             signal: syntheticSignal,
           });

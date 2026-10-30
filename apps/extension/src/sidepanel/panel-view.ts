@@ -296,14 +296,27 @@ const LOOKUP_FAILURE_MESSAGE = {
 /** An error card with a retry button (`data-action="retry"`), #1300. */
 export function renderLookupErrorHtml(
   kind: LookupFailureKind,
-  productTitle?: string | null
+  productTitle?: string | null,
+  retryAfterSeconds?: number | null
 ): string {
   const title = String(productTitle ?? '').trim();
+  // A rate limit says how long to wait when the server said so (DOS/Rate#1466).
+  const wait =
+    kind === 'rate_limited' &&
+    typeof retryAfterSeconds === 'number' &&
+    Number.isFinite(retryAfterSeconds) &&
+    retryAfterSeconds > 0
+      ? Math.ceil(retryAfterSeconds)
+      : null;
+  const message =
+    wait !== null
+      ? t('lookupErrorRateLimitedWait', [String(wait)])
+      : t(LOOKUP_FAILURE_MESSAGE[kind]);
   return `
       <div class="card" role="alert">
         <div class="card-title">${escapeHtml(t('lookupErrorTitle'))}</div>
         ${title ? `<div class="product-name">${contentTextHtml(title)}</div>` : ''}
-        <p style="color: #9ca3af;">${escapeHtml(t(LOOKUP_FAILURE_MESSAGE[kind]))}</p>
+        <p style="color: #9ca3af;">${escapeHtml(message)}</p>
         <div class="btn-row">
           <button type="button" class="btn-secondary" data-action="retry">${escapeHtml(t('retry'))}</button>
         </div>

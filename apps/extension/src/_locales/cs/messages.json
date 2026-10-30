@@ -166,8 +166,16 @@
   "lookupErrorTitle": {
     "message": "Vyhledání se nezdařilo"
   },
+  "lookupErrorRateLimitedWait": {
+    "message": "Vyhledáváte trochu rychle. Zkuste to znovu za $SECONDS$ s.",
+    "placeholders": {
+      "seconds": {
+        "content": "$1"
+      }
+    }
+  },
   "lookupErrorRateLimited": {
-    "message": "Vyhledáváte trochu rychle. Zkuste to znovu za pár minut."
+    "message": "Vyhledáváte trochu rychle. Zkuste to znovu za chvíli."
   },
   "lookupErrorServer": {
     "message": "Rate.vn má potíže. Zkuste to později."

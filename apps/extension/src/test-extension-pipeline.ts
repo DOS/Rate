@@ -3963,7 +3963,9 @@ async function runTests() {
     assert.equal(classifyLookupFailure(undefined), 'network');
     assert.equal(classifyLookupFailure(404), 'other');
     const limited = renderLookupErrorHtml('rate_limited', 'iPhone 16');
-    assert.ok(limited.includes('Bạn tra cứu hơi nhanh, thử lại sau ít phút'));
+    assert.ok(
+      limited.includes('Bạn tra cứu hơi nhanh, hãy thử lại sau một lát')
+    );
     assert.ok(limited.includes('data-action="retry"'));
     assert.ok(limited.includes('iPhone 16'));
     assert.ok(
@@ -3994,6 +3996,118 @@ async function runTests() {
     );
     console.log(
       '  ✅ [Lookup error states and stale pill clearing (#1300)] Verified'
+    );
+  }
+
+  // A 429 holds lookups until the server's Retry-After has passed, the panel says how
+  // long, and the version header comes from the manifest (DOS/Rate#1466).
+  {
+    const {
+      parseRetryAfterSeconds,
+      rateLimitedUntilMs,
+      cooldownSecondsLeft,
+      DEFAULT_RATE_LIMIT_COOLDOWN_SECONDS,
+      MAX_RATE_LIMIT_COOLDOWN_SECONDS,
+    } = await import('./rate-limit.js');
+    const now = Date.parse('2026-10-30T10:00:00Z');
+    assert.equal(parseRetryAfterSeconds('60', now), 60);
+    assert.equal(parseRetryAfterSeconds(' 5 ', now), 5);
+    assert.equal(
+      parseRetryAfterSeconds('Fri, 30 Oct 2026 10:01:30 GMT', now),
+      90
+    );
+    assert.equal(
+      parseRetryAfterSeconds('Fri, 30 Oct 2026 09:00:00 GMT', now),
+      0
+    );
+    assert.equal(
+      parseRetryAfterSeconds('999999', now),
+      MAX_RATE_LIMIT_COOLDOWN_SECONDS
+    );
+    for (const bad of [null, undefined, '', 'soon', '-5', '1.5']) {
+      assert.equal(parseRetryAfterSeconds(bad, now), null, String(bad));
+    }
+    assert.equal(rateLimitedUntilMs('60', now), now + 60_000);
+    assert.equal(
+      rateLimitedUntilMs(null, now),
+      now + DEFAULT_RATE_LIMIT_COOLDOWN_SECONDS * 1000
+    );
+    assert.equal(cooldownSecondsLeft(now + 30_500, now), 31);
+    assert.equal(cooldownSecondsLeft(now - 1, now), 0);
+    assert.equal(cooldownSecondsLeft(undefined, now), 0);
+
+    const { renderLookupErrorHtml } = await import('./sidepanel/panel-view.js');
+    const waiting = renderLookupErrorHtml('rate_limited', 'iPhone 16', 42);
+    assert.ok(waiting.includes('Thử lại sau 42 giây'), waiting);
+    assert.ok(waiting.includes('data-action="retry"'));
+    // No wait known, or another failure: the plain message.
+    assert.ok(
+      renderLookupErrorHtml('rate_limited', null, 0).includes(
+        'hãy thử lại sau một lát'
+      )
+    );
+    assert.ok(!renderLookupErrorHtml('server', null, 42).includes('42'));
+
+    const workerSource = fs.readFileSync(
+      path.resolve(__dirname, 'background/service-worker.ts'),
+      'utf8'
+    );
+    assert.ok(!workerSource.includes("'X-Rate-Extension-Version': '2.0.0'"));
+    assert.equal(
+      (
+        workerSource.match(/'X-Rate-Extension-Version': EXTENSION_VERSION/g) ??
+        []
+      ).length,
+      2
+    );
+    assert.ok(workerSource.includes('chrome.runtime.getManifest().version'));
+    // The cooldown is checked before any fetch, and a 429 sets it from Retry-After.
+    const requestLookupBody = workerSource.slice(
+      workerSource.indexOf('async function requestLookup('),
+      workerSource.indexOf('async function fetchExtensionLookup(')
+    );
+    assert.ok(
+      requestLookupBody.indexOf('lookupCooldownSeconds()') <
+        requestLookupBody.indexOf('await fetch(')
+    );
+    assert.ok(
+      requestLookupBody.includes("response.headers.get('Retry-After')")
+    );
+    // Each failure the panel sees carries the wait.
+    assert.equal(
+      (
+        workerSource.match(/retryAfterSeconds: outcome\.retryAfterSeconds/g) ??
+        []
+      ).length,
+      3
+    );
+    for (const locale of ['vi', 'en', 'cs']) {
+      const messages = JSON.parse(
+        fs.readFileSync(
+          path.resolve(__dirname, `_locales/${locale}/messages.json`),
+          'utf8'
+        )
+      ) as Record<
+        string,
+        { message: string; placeholders?: Record<string, unknown> }
+      >;
+      assert.ok(
+        messages.lookupErrorRateLimitedWait?.message.includes('$SECONDS$'),
+        locale
+      );
+      assert.deepEqual(
+        Object.keys(messages.lookupErrorRateLimitedWait?.placeholders ?? {}),
+        ['seconds']
+      );
+      assert.ok(
+        !/ít phút|few minutes|pár minut/.test(
+          messages.lookupErrorRateLimited!.message
+        ),
+        locale
+      );
+    }
+    console.log(
+      '  ✅ [Retry-After cooldown, wait message and manifest version (#1466)] Verified'
     );
   }
 

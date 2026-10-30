@@ -667,6 +667,7 @@ async function loadSidePanel(selectedVariant?: string): Promise<void> {
       signal?: ExtractedPageProductSignal | null;
       data?: ExtensionLookupData | null;
       status?: number | null;
+      retryAfterSeconds?: number;
     };
 
     const settings: ExtensionSettings = res?.settings || {
@@ -682,9 +683,15 @@ async function loadSidePanel(selectedVariant?: string): Promise<void> {
     }
 
     if (res?.ok === false) {
-      renderLookupError(root, res.status, res.signal?.title, () => {
-        void loadSidePanel(selectedVariant);
-      });
+      renderLookupError(
+        root,
+        res.status,
+        res.signal?.title,
+        () => {
+          void loadSidePanel(selectedVariant);
+        },
+        res.retryAfterSeconds
+      );
       return;
     }
 
@@ -712,11 +719,13 @@ function renderLookupError(
   root: HTMLElement,
   status: number | null | undefined,
   productTitle: string | null | undefined,
-  retry: () => void
+  retry: () => void,
+  retryAfterSeconds?: number | null
 ): void {
   root.innerHTML = renderLookupErrorHtml(
     classifyLookupFailure(status),
-    productTitle
+    productTitle,
+    retryAfterSeconds
   );
   root
     .querySelector<HTMLButtonElement>('[data-action="retry"]')
@@ -744,6 +753,7 @@ async function runQuickQuery(query: string): Promise<void> {
       data?: ExtensionLookupData | null;
       error?: string;
       status?: number | null;
+      retryAfterSeconds?: number;
     };
 
     const settings: ExtensionSettings = res?.settings || {
@@ -752,9 +762,15 @@ async function runQuickQuery(query: string): Promise<void> {
     };
 
     if (res?.ok === false) {
-      renderLookupError(root, res.status, res.signal?.title ?? query, () => {
-        void runQuickQuery(query);
-      });
+      renderLookupError(
+        root,
+        res.status,
+        res.signal?.title ?? query,
+        () => {
+          void runQuickQuery(query);
+        },
+        res.retryAfterSeconds
+      );
       return;
     }
 
