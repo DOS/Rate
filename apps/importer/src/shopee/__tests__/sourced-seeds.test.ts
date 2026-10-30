@@ -9,7 +9,15 @@ import { KeySpecsSchema, ProductSpecificationsSchema, splitModelKey } from '@rep
 import { FLAGSHIP_DEVICES_TO_SEED, flagshipSeedsByItem } from '../flagship-seed-data.js';
 import { SOURCED_SEEDS_2026 } from '../flagship-seed-sourced-2026.js';
 import { ProductNormalizer, detectCategorySlug } from '../product-normalizer.js';
-import { seedMasterSpecUpdate, withoutRetractedSpecs } from '../jobs/backfill-specs.js';
+import {
+  mergeKeySpecs,
+  seedMasterSpecUpdate,
+  specUpdateChanges,
+  withoutRetractedSpecs,
+} from '../jobs/backfill-specs.js';
+import { mergeProductSpecifications } from '../ai-spec-enricher.js';
+import { UPSTREAM_2026_ARENA_REFERENCE_URLS } from '../arena-spec-syncer.js';
+import { specPageMatchesItem } from '../spec-retraction.js';
 import type { ShopeeProduct } from '../types.js';
 
 const normalizer = new ProductNormalizer();
@@ -211,6 +219,80 @@ for (const key of [
 // The registry counts photo cameras: LiDAR is no fourth camera on the iPhones.
 for (const title of ['Apple iPhone 18 Pro 256GB', 'Apple iPhone 18 Pro Max 256GB']) {
   assert.equal(normalize(title).specifications.camera?.rear_setup, 'Triple Camera', title);
+}
+
+// Every other seed writes exactly what it wrote before: the merged specs and key specs,
+// nothing more, whatever the stored row holds (DOS/Rate#1459).
+for (const seed of FLAGSHIP_DEVICES_TO_SEED.filter(s => !s.retract_spec_fields)) {
+  for (const stored of [
+    null,
+    { specifications: seed.specifications, key_specs: seed.key_specs },
+    {
+      specifications: { battery: { fast_charging_w: 99 }, regulatory: { sar_head: 'x' } },
+      key_specs: { battery: 'old' },
+    },
+  ]) {
+    assert.deepEqual(
+      seedMasterSpecUpdate(stored, seed),
+      {
+        specifications: mergeProductSpecifications(
+          stored?.specifications,
+          seed.specifications,
+          seed.colors
+        ),
+        key_specs: mergeKeySpecs(
+          stored?.key_specs,
+          seed.key_specs as unknown as Record<string, unknown>
+        ),
+      },
+      seed.model_key
+    );
+  }
+}
+
+// The iPhones' old unsourced row: its 35W and SAR go, nothing else stale stays.
+for (const key of ['apple:iphone-18-pro-max:256gb', 'apple:iphone-18-pro:256gb']) {
+  const seed = SOURCED_SEEDS_2026.find(s => s.model_key === key)!;
+  const update = seedMasterSpecUpdate(
+    {
+      specifications: {
+        battery: { capacity_mah: 5567, fast_charging_w: 35 },
+        regulatory: { sar_head: '1.14 W/kg', sar_body: '1.18 W/kg' },
+      },
+      key_specs: { battery: '5567 mAh, Sạc nhanh 35W' },
+    },
+    seed
+  ) as { specifications: Record<string, Record<string, unknown> | undefined> };
+  assert.equal(update.specifications.battery?.fast_charging_w, undefined, key);
+  assert.equal(update.specifications.regulatory?.sar_head, undefined, key);
+  assert.equal(update.specifications.regulatory?.sar_body, undefined, key);
+}
+
+// The dry-run prints what changes.
+assert.deepEqual(
+  specUpdateChanges(
+    { ram_gb: 16, specifications: { battery: { capacity_mah: 5200, type: 'Li-Ion' } } },
+    { ram_gb: 12, specifications: { battery: { capacity_mah: 5000, type: 'Li-Ion' } } }
+  ),
+  ['ram_gb: 16 -> 12', 'specifications.battery.capacity_mah: 5200 -> 5000']
+);
+
+// The Arena sync takes a spec page only for its own Item: these three rows pointed at
+// other devices (itel A95, itel A90, Honor Pad GT2 Pro); their URLs are the seeds' sources.
+assert.equal(specPageMatchesItem('itel A95', 'apple:iphone-18-pro-max'), false);
+assert.equal(specPageMatchesItem('itel A90 Limited', 'apple:iphone-18-pro'), false);
+assert.equal(specPageMatchesItem('Honor Pad GT2 Pro', 'samsung:galaxy-s26-ultra'), false);
+assert.equal(specPageMatchesItem(undefined, 'apple:iphone-18-pro'), false);
+for (const ref of UPSTREAM_2026_ARENA_REFERENCE_URLS) {
+  const itemKey = splitModelKey(ref.model_key)!.itemKey;
+  assert.ok(specPageMatchesItem(ref.name, itemKey), `${ref.name} is ${itemKey}`);
+  const seed = SOURCED_SEEDS_2026.find(s => s.model_key === ref.model_key);
+  if (seed) {
+    assert.ok(
+      Object.values(seed.sources ?? {}).includes(ref.gsmarenaUrl),
+      `${ref.model_key}: Arena URL ${ref.gsmarenaUrl} is not the seed's source`
+    );
+  }
 }
 
 console.warn(`✅ Sourced seeds (${SOURCED_SEEDS_2026.length}) passed`);
