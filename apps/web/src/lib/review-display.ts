@@ -1,10 +1,4 @@
-import { formatDecimal } from './locale-format';
-
-// The formula as the analyzer writes it, kind or not (cached rows).
-const FORMULA_RE = /^A=[\d.]+ · B=[\d.]+ /;
-
-const isCsLocale = (locale?: string | null) =>
-  typeof locale === 'string' && locale.toLowerCase().startsWith('cs');
+import { formatDecimal, toFormatLocale } from './locale-format';
 import type {
   CombinedDualScoreBlendMode,
   ReviewFlagCategory,
@@ -19,6 +13,9 @@ import type {
  * excluded from the rating (DOS-Me 20261018100000) until an analyzer scores
  * them, so they get their own neutral state instead of the category fallback.
  */
+
+// The formula as the analyzer writes it, kind or not (cached rows).
+const FORMULA_RE = /^A=[\d.]+ · B=[\d.]+ /;
 export type ReviewBadgeKind = ReviewFlagCategory | 'pending';
 
 const VALID_REVIEW_FLAG_CATEGORIES = new Set<ReviewFlagCategory>([
@@ -162,7 +159,8 @@ export function weightExplanationCopy(
     // words: on cs its decimals take the comma (DOS/Rate#1411).
     return {
       text:
-        isCsLocale(locale) && (kind === 'formula' || FORMULA_RE.test(cleanText))
+        toFormatLocale(locale) === 'cs' &&
+        (kind === 'formula' || FORMULA_RE.test(cleanText))
           ? cleanText.replace(/(\d)\.(\d)/g, '$1,$2')
           : cleanText,
     };

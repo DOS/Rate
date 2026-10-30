@@ -404,12 +404,10 @@ function main() {
   const cs = JSON.parse(
     readFileSync(new URL('../../../locales/cs.json', import.meta.url), 'utf8')
   );
-  for (const key of [
-    'weightExplanationStarsOnly',
-    'weightExplanationPlatformLabel',
-    'weightExplanationLowEffort',
-  ]) {
-    assert.doesNotMatch(cs.reviews[key], /\d\.\d/, `cs reviews.${key}`);
+  // No dot decimal anywhere in the review section's Czech messages.
+  for (const [key, text] of Object.entries(cs.reviews)) {
+    if (typeof text !== 'string') continue;
+    assert.doesNotMatch(text, /\d\.\d/, `cs reviews.${key}`);
   }
 
   console.warn('✅ Review display suite passed');
