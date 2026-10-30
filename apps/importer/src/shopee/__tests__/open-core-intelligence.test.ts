@@ -119,6 +119,7 @@ async function runSuite() {
   // Brand and model keys of the generic model fallback (DOS/Rate#761, #762).
   const keyOf = (title: string) => normalizer.normalize(createDummyShopeeProduct(title)).model_key;
   const brandOf = (title: string) => normalizer.normalize(createDummyShopeeProduct(title)).brand;
+  const nameOf = (title: string) => normalizer.normalize(createDummyShopeeProduct(title)).name;
   // "Vivobook" / "Vivo Book" are Asus and Garmin's Vivo lines are Garmin; vivo phones stay vivo.
   assert.equal(
     keyOf('Laptop Asus Vivobook 14 X1407AA-LY360W (Ultra 5-325/ 16GB/ 512GB/ Windows 11 Home)'),
@@ -380,8 +381,9 @@ async function runSuite() {
       'apple:airpods-pro:unknown',
     ],
     ['Combo iPad Gen 10 + Apple Pencil 1 MQLY3', 'apple:ipad-10:unknown'],
-    // A stylus that does not say "Apple Pencil" is not one.
-    ['Bút cảm ứng Stylus Pencil Gen 2 cho iPad Gen 9', 'apple:ipad-9:unknown'],
+    // A stylus that does not say "Apple Pencil" is not one; it is an accessory for the
+    // iPad, so it gets no key (DOS/Rate#1505).
+    ['Bút cảm ứng Stylus Pencil Gen 2 cho iPad Gen 9', 'apple:unkeyed:unknown'],
     ['AirPods (H2)', 'apple:airpods-4:unknown'],
     ['AirPods thế hệ 3', 'apple:airpods-3:unknown'],
     ['HomePod thế hệ 2', 'apple:homepod-2:unknown'],
@@ -405,10 +407,10 @@ async function runSuite() {
     // A chip named for a bundled accessory is not the Air's.
     ['iPad Air 5 64GB + ốp lưng cho iPad Pro M4', 'apple:ipad-air-5:64gb'],
     // Another brand, or a title that only names what it fits, is not an Apple desktop.
-    ['Ốp Samsung Galaxy S24 imac', 'samsung:op-samsung-galaxy-s24:unknown'],
-    // An accessory naming its own family before "cho" keeps the model it fits.
-    ['Ốp lưng iPhone cho iPhone 15 Pro Max', 'apple:iphone-15-pro-max:unknown'],
-    ['Bao da iPad cho iPad Air 5', 'apple:ipad-air-5:unknown'],
+    ['Ốp Samsung Galaxy S24 imac', 'samsung:unkeyed:unknown'],
+    // An accessory gets no key (DOS/Rate#1505); the model it fits is checked by name below.
+    ['Ốp lưng iPhone cho iPhone 15 Pro Max', 'apple:unkeyed:unknown'],
+    ['Bao da iPad cho iPad Air 5', 'apple:unkeyed:unknown'],
     // An iPhone named only as what an accessory fits is not the product.
     ['Tai nghe AirPods Pro 2 cho iPhone Air', 'apple:airpods-pro-2:unknown'],
     ['Tai nghe AirPods Pro 2 cho iPhone 17', 'apple:airpods-pro-2:unknown'],
@@ -662,10 +664,47 @@ async function runSuite() {
     ['iPad Air 5 10.9 inch 64GB', 'apple:ipad-air-5:64gb'],
     ['iPad mini 7 8.3 inch 128GB', 'apple:ipad-mini-7:128gb'],
     ['MacBook Neo 13 inch 256GB', 'apple:macbook-neo:256gb'],
-    // A size after "cho" belongs to the product the accessory fits.
-    ['Ốp lưng iPad Pro M4 13 inch cho iPad Pro 11', 'apple:ipad-pro-m4-13:unknown'],
+    ['Ốp lưng iPad Pro M4 13 inch cho iPad Pro 11', 'apple:unkeyed:unknown'],
   ];
   for (const [title, expectedKey] of appleSizeKeys1113) {
+    assert.equal(keyOf(title), expectedKey, title);
+  }
+  // An accessory naming its own family before "cho" still reads the model it fits, and a
+  // size after "cho" belongs to that model; only the key is withheld (DOS/Rate#1505).
+  assert.equal(nameOf('Ốp lưng iPhone cho iPhone 15 Pro Max'), 'Apple iPhone 15 Pro Max');
+  assert.equal(nameOf('Bao da iPad cho iPad Air 5'), 'Apple iPad Air 5');
+  assert.equal(nameOf('Ốp lưng iPad Pro M4 13 inch cho iPad Pro 11'), 'Apple iPad Pro M4 13');
+
+  // DOS/Rate#1505: a title that opens with an accessory sells the accessory, not the device
+  // it fits. It gets no key, so it never joins the device's master or Item; a gift after
+  // the device, a watch's own case and an Apple Pencil keep theirs.
+  const accessoryTitles1505 = [
+    'Ốp lưng iPad mini A20 Pro',
+    'Bao da iPad mini A20 Pro',
+    'Kính cường lực iPad mini A20 Pro',
+    '[Chính hãng] Ốp lưng iPhone 16 Pro Max',
+    'Miếng dán màn hình Apple Watch Ultra 49mm',
+    'Ốp lưng Samsung Galaxy S25 Ultra',
+    'Bao da Samsung Galaxy Tab S10 Ultra',
+    'Bàn phím Bluetooth cho Samsung Galaxy Tab S10 Ultra',
+    'Bút cảm ứng cho Xiaomi Pad 7 Pro',
+    'Dây đeo Apple Watch S 16cm 42mm',
+    'Củ sạc Apple 20W không kèm cáp sạc',
+    'Tempered Glass Screen Protector for iPhone 16 Pro',
+    'Clear Case for iPhone 16 Pro Max MagSafe',
+  ];
+  for (const title of accessoryTitles1505) {
+    const accessory = normalizer.normalize(createDummyShopeeProduct(title));
+    assert.equal(accessory.keyable, false, title);
+    assert.match(accessory.model_key, /^[a-z0-9-]+:unkeyed:/, title);
+  }
+  for (const [title, expectedKey] of [
+    ['iPad mini A20 Pro 256GB tặng ốp lưng', 'apple:ipad-mini-8:256gb'],
+    ['iPad 10 64GB - Tặng bao da dùng chung iPad A16', 'apple:ipad-10:64gb'],
+    ['Apple Watch Series 10 46mm Titanium Case', 'apple:watch-series-10-46mm:64gb'],
+    ['Bút cảm ứng Apple Pencil Pro', 'apple:pencil-pro:unknown'],
+    ['[Tặng ốp lưng] iPhone 16 Pro Max 256GB', 'apple:iphone-16-pro-max:256gb'],
+  ] as const) {
     assert.equal(keyOf(title), expectedKey, title);
   }
   // DOS/Rate#1124: a size outside a band phrase is the case's; a band's size counts only
@@ -1017,10 +1056,10 @@ async function runSuite() {
   );
   assert.equal(keyOf('Apple Watch S11 42mm GPS 64GB'), 'apple:watch-series-11-42mm:64gb');
   assert.equal(keyOf('Apple Watch S 42mm'), 'apple:watch:unknown');
-  assert.equal(keyOf('Dây đeo Apple Watch S 16cm 42mm'), 'apple:watch:unknown');
-  assert.equal(keyOf('Dây đeo Apple Watch S 16 cm 42mm'), 'apple:watch:unknown');
-  assert.equal(keyOf('Dây đeo Apple Watch S 14-16cm 42mm'), 'apple:watch:unknown');
-  assert.equal(keyOf('Dây đeo Apple Watch S 14 - 16 cm 42mm'), 'apple:watch:unknown');
+  assert.equal(keyOf('Apple Watch S 16cm 42mm'), 'apple:watch:unknown');
+  assert.equal(keyOf('Apple Watch S 16 cm 42mm'), 'apple:watch:unknown');
+  assert.equal(keyOf('Apple Watch S 14-16cm 42mm'), 'apple:watch:unknown');
+  assert.equal(keyOf('Apple Watch S 14 - 16 cm 42mm'), 'apple:watch:unknown');
   assert.equal(keyOf('Apple Watch S10 - 46mm GPS'), 'apple:watch-series-10-46mm:64gb');
   assert.equal(keyOf('Apple Watch S10x 46mm'), 'apple:watch:unknown');
   assert.equal(keyOf('Dây Apple Watch S/M 42mm'), 'apple:watch:unknown');
@@ -2604,8 +2643,8 @@ async function runSuite() {
     assert.equal(brandOf('Please wait a moment'), 'Khác');
     assert.equal(keyOf('Just a moment...'), 'khac:just-a-moment:unknown');
     assert.equal(
-      keyOf('Bàn phím dành cho Laptop Lenovo ThinkPad X1'),
-      'lenovo:ban-phim-danh-cho:unknown'
+      keyOf('Laptop Lenovo ThinkPad X1 dành cho doanh nhân'),
+      'lenovo:thinkpad-x1-danh-cho:unknown'
     );
     assert.equal(keyOf('Đồng hồ Samsung Galaxy Watch7 44mm'), 'samsung:galaxy-watch7:unknown');
 

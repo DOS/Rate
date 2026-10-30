@@ -85,7 +85,8 @@ export interface NormalizedProductCandidate {
   /** How the variant was found; null when it is not known. */
   variant_source?: Extract<VariantSource, 'title' | 'single_size' | 'single_variant'> | null;
   /**
-   * False when the title gives no model segment. The key then carries the
+   * False when the title gives no model segment, or sells an accessory for a device
+   * (`isAccessoryTitle`, DOS/Rate#1505). The key then carries the
    * `unkeyed` placeholder model instead of an empty segment (`samsung::unknown`),
    * and the pipeline and matcher reject the candidate (UnkeyableProductTitleError).
    */
@@ -396,6 +397,28 @@ const APPLE_PART_NUMBERS: Readonly<Record<string, readonly [string, string]>> = 
   MUWA3: ['Pencil', 'Pencil USB-C'],
   MX2D3: ['Pencil', 'Pencil Pro'],
 };
+
+// An accessory named first: the title sells a case, a cover, a screen protector, a
+// stylus, a keyboard, a charger or a strap for a device, not the device ("Ốp lưng iPad
+// mini A20 Pro", "Kính cường lực iPhone 16 Pro Max", DOS/Rate#1505). Only the opening
+// words count, so a gift after the device ("iPad mini A20 Pro tặng ốp lưng") and a
+// watch's own case ("Apple Watch Series 10 46mm Titanium Case") keep the device.
+const ACCESSORY_OPENER =
+  /^(?:ốp(?:\s*lưng)?|bao\s*(?:da|đựng)|túi\s*(?:chống\s*sốc|đựng)|kính\s*cường\s*lực|cường\s*lực|miếng\s*dán|dán\s*(?:màn\s*hình|lưng|camera|ppf)|phim\s*dán|bút\s*cảm\s*ứng|bàn\s*phím|củ\s*sạc|sạc|cáp|dây\s*(?:đeo|sạc|cáp)|giá\s*đỡ|(?:silicone\s*|clear\s*|leather\s*|magsafe\s*)?case|cover|folio|(?:tempered\s*)?glass|screen\s*protector|stylus|keyboard|charger|cable)(?![\p{L}\d])/iu;
+
+/**
+ * Whether a title sells an accessory for a device rather than the device: it opens with
+ * the accessory (DOS/Rate#1505). Opening promo brackets ("[Hàng chính hãng]") are skipped.
+ * An Apple Pencil is its own product, so "Bút cảm ứng Apple Pencil Pro" is not one.
+ */
+export function isAccessoryTitle(title: string): boolean {
+  const t = typeof title === 'string' ? title.normalize('NFC') : '';
+  const opening = t
+    .replace(/^(?:\s*(?:\[[^\]]*\]|\([^)]*\)|【[^】]*】))+/u, '')
+    .replace(/^[\s\p{P}\p{S}]+/u, '');
+  if (!ACCESSORY_OPENER.test(opening)) return false;
+  return !/apple\s*pencil/i.test(ownProductPart(t));
+}
 
 /**
  * Detect canonical category slug from product title across all 5 tech categories.
@@ -2632,7 +2655,9 @@ export class ProductNormalizer {
     // (':unknown') instead of guessing a default (plan v7 §5.2).
     // An empty key segment ("samsung::unknown") is never emitted: a title with no
     // model keys on a placeholder and is marked unkeyable (DOS/Rate#1151).
-    const keyable = Boolean(slugify(brand) && slugify(model));
+    // An accessory for a device is not the device: it gets no key, so it never joins the
+    // device's master or Item (DOS/Rate#1505).
+    const keyable = Boolean(slugify(brand) && slugify(model)) && !isAccessoryTitle(title);
     const itemKey = keyable ? baseKey : `${slugify(brand) || 'khac'}:${UNKEYED_MODEL_SEGMENT}`;
     const variantKey = storageKnown ? `${storageGb}gb` : UNKNOWN_VARIANT_KEY;
     const modelKey = `${itemKey}:${variantKey}`;
