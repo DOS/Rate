@@ -215,7 +215,7 @@ async function runCoreArchitectureSuite() {
   );
   assert.match(
     detailSrc1366,
-    /if \(!itemRoute\) \{\s*const ownHref = await foreignCategoryHref\(storedProduct, categoryBasePath\);\s*if \(ownHref\) permanentRedirect\(ownHref\);/,
+    /if \(!itemRoute\) \{\s*const ownHref = await (?:timing\.time\(\s*'categorySlug',\s*)?foreignCategoryHref\(storedProduct, categoryBasePath\)\s*\)?;\s*if \(ownHref\) permanentRedirect\(ownHref\);/,
     'the master-product route 308s a foreign-category URL'
   );
   console.log(
