@@ -4308,6 +4308,29 @@ async function runTests() {
     );
   }
 
+  // A store with no data to score has no trust number: not "0/100", and it sorts
+  // last (DOS/Rate#1484).
+  {
+    const { trustText } = await import('./sidepanel/panel-view.js');
+    const { t } = await import('./i18n.js');
+    assert.equal(trustText(null), t('merchantTrustNoData'));
+    assert.equal(trustText(undefined), t('merchantTrustNoData'));
+    assert.ok(!trustText(null).includes('/100'));
+    assert.ok(trustText(0).includes('0/100'));
+    assert.ok(trustText(87).includes('87/100'));
+    const panelSource = fs.readFileSync(
+      path.join(__dirname, 'sidepanel/sidepanel.ts'),
+      'utf8'
+    );
+    assert.ok(!/formatSafeNumber\(m\.trust_score/.test(panelSource));
+    assert.ok(panelSource.includes('trustText(m.trust_score)'));
+    assert.ok(
+      panelSource.includes('(b.trust_score ?? -1) - (a.trust_score ?? -1)')
+    );
+    assert.ok(panelSource.includes('merchant.trust_score == null'));
+    console.log('  ✅ [Unknown trust score reads as no data (#1484)] Verified');
+  }
+
   // Empty reviews and unknown ratings (DOS/Rate#1301)
   {
     const { ratingStarText, renderReviewCardHtml } =
