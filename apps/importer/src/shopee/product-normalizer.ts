@@ -1446,9 +1446,13 @@ const GARMIN_LINES =
   /^(?:Venu|Fenix|Fēnix|Forerunner|Vivoactive|Vivomove|Vivosmart|Instinct|Epix|Enduro|Approach|Lily|Edge|Descent|Quatix|Tactix|Marq|Bounce)\b/i;
 
 // Colour words a shop glues to the RAM/ROM run ("Đen/256GB", "Xanh/8GB/128GB"): never
-// the model's last word (DOS/Rate#1481).
+// the model's last word (DOS/Rate#1481). The first word of a two-word colour ("Titan
+// Gray/", "Xanh Dương/", "Silver Shadow/") goes with it.
 const GLUED_COLOURS =
-  /^(?:Đen|Trắng|Xanh|Bạc|Vàng|Hồng|Tím|Đỏ|Xám|Cam|Nâu|Kem|Black|White|Blue|Silver|Gold|Pink|Purple|Red|Gray|Grey|Green|Graphite|Midnight|Starlight|Mint|Cream|Titan|Titanium)$/iu;
+  /^(?:Đen|Trắng|Xanh|Bạc|Vàng|Hồng|Tím|Đỏ|Xám|Ghi|Cam|Nâu|Kem|Black|White|Blue|Navy|Silver|Gold|Pink|Purple|Lavender|Violet|Red|Gray|Grey|Green|Yellow|Graphite|Midnight|Starlight|Mint|Cream|Onyx|Cobalt|Icy|Amber|Titanium)$/iu;
+// "Titan" alone is a model word (MSI GT77 Titan), but starts a colour before one.
+const GLUED_COLOUR_FIRST_WORDS = new RegExp(`${GLUED_COLOURS.source.slice(0, -2)}|Titan)$`, 'iu');
+const GLUED_COLOUR_SECOND_WORDS = /^(?:Dương|Lá|Ngọc|Đậm|Nhạt|Shadow)$/iu;
 
 const LEADING_PROMO_GROUPS = /^(?:\s*(?:\[[^\]]*\]|\([^)]*\)|【[^】]*】|\{[^}]*\}))+\s*/;
 // So is a promo word right before the brand or its line: "Live Samsung Galaxy S26
@@ -2237,6 +2241,13 @@ export class ProductNormalizer {
         if (
           modelTokens.length >= 4 &&
           !(modelTokens.length === 4 && /^plus(?:[,;]?$|\/)/i.test(tok)) &&
+          // A glued colour past the cap still takes its first word back out
+          // ("S24 Ultra Titan Gray/256GB", DOS/Rate#1481).
+          !(
+            /\//.test(tok) &&
+            (GLUED_COLOURS.test(tok.split('/')[0]!.normalize('NFC')) ||
+              GLUED_COLOUR_SECOND_WORDS.test(tok.split('/')[0]!.normalize('NFC')))
+          ) &&
           !(/^pro$/i.test(modelTokens[modelTokens.length - 1] ?? '') && /^max[,;]?$/i.test(tok)) &&
           !generation
         ) {
@@ -2285,9 +2296,21 @@ export class ProductNormalizer {
               wordHead[1]!
             ) &&
             // Nor is a colour: "Galaxy A55 Đen/256GB" is the A55 (DOS/Rate#1481).
-            !GLUED_COLOURS.test(wordHead[1]!)
+            !GLUED_COLOURS.test(wordHead[1]!) &&
+            !(
+              GLUED_COLOUR_SECOND_WORDS.test(wordHead[1]!) &&
+              GLUED_COLOUR_FIRST_WORDS.test(
+                (modelTokens[modelTokens.length - 1] ?? '').normalize('NFC')
+              )
+            )
           ) {
             modelTokens.push(wordHead[1]!);
+          } else if (
+            modelTokens.length > 1 &&
+            GLUED_COLOUR_FIRST_WORDS.test(modelTokens[modelTokens.length - 1]!.normalize('NFC'))
+          ) {
+            // "Titan Gray/256GB": the colour's first word leaves the model too.
+            modelTokens.pop();
           }
           break;
         }

@@ -1201,6 +1201,15 @@ async function runSuite() {
     ['Samsung Galaxy A55 Xanh/8GB/128GB', 'samsung:galaxy-a55:128gb'],
     ['Samsung Galaxy A55 Trắng/256GB', 'samsung:galaxy-a55:256gb'],
     ['Apple iPhone 15 Black/128GB', 'apple:iphone-15:128gb'],
+    ['Samsung Galaxy A55 Navy/256GB', 'samsung:galaxy-a55:256gb'],
+    // A two-word colour leaves the model whole.
+    ['Xiaomi 14T Titan Gray/256GB', 'xiaomi:14t:256gb'],
+    ['Samsung Galaxy S24 Ultra Titan Gray/256GB', 'samsung:galaxy-s24-ultra:256gb'],
+    ['Samsung Galaxy Z Flip6 Silver Shadow/256GB', 'samsung:galaxy-z-flip6:256gb'],
+    ['Samsung Galaxy A55 Xanh Dương/256GB', 'samsung:galaxy-a55:256gb'],
+    ['Oppo A58 Xanh Lá/128GB', 'oppo:a58:128gb'],
+    // "Titan" alone is a model word.
+    ['Laptop MSI GT77 Titan/32GB/1TB', 'msi:gt77-titan:1024gb'],
     ['Xiaomi Pad 6 WiFi6/8GB/256GB', 'xiaomi:pad-6:256gb'],
     ['Lenovo ThinkPad P16 RAM 128GB/16GB RAM SSD 1TB', 'lenovo:thinkpad-p16:1024gb'],
     ['Lenovo ThinkPad T14 RAM DDR 32GB/16GB/512GB SSD', 'lenovo:thinkpad-t14:512gb'],
