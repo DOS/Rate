@@ -87,7 +87,7 @@
   --bs-light-gray: rgba(255, 255, 255, 0.12);
 }
 
-:root[data-bs-theme='light'] {
+:root:not([data-bs-theme='dark']) {
   color-scheme: light;
 }
 
@@ -473,7 +473,6 @@
 
   .footer-widget .footerSocialwrap .footersocial li .social-link {
     background-color: var(--rate-bg-surface);
-    border-color: var(--rate-border-strong);
     color: var(--rate-fg-primary);
 
     &:hover,
