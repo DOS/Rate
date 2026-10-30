@@ -990,6 +990,41 @@ async function runSuite() {
   assert.equal(keyOf('Apple Watch S10.46mm'), 'apple:watch:unknown');
   assert.equal(keyOf('Samsung Galaxy S10 128GB'), 'samsung:galaxy-s10:128gb');
   assert.equal(keyOf('Xiaomi Watch S1 Active'), 'xiaomi:watch-s1-active:unknown');
+  // A watch in a gift or bundle after another Apple product is not the product; the
+  // category goes by the product's own part too (DOS/Rate#1407).
+  assert.equal(
+    keyOf('HomePod mini tặng dây Apple Watch Series 10 42mm'),
+    'apple:homepod-mini:unknown'
+  );
+  assert.equal(
+    keyOf('AirPods Pro 2 tặng dây Apple Watch Series 10'),
+    'apple:airpods-pro-2:unknown'
+  );
+  assert.equal(keyOf('AirPods Pro 2 kèm Apple Watch Series 10'), 'apple:airpods-pro-2:unknown');
+  assert.equal(keyOf('Apple TV 4K tặng Apple Watch SE'), 'apple:tv-4k:unknown');
+  assert.equal(keyOf('MacBook Air M3 + Apple Watch Series 10'), 'apple:macbook-air-m3:unknown');
+  assert.equal(keyOf('iPad Pro M4 tặng Apple Watch Series 10'), 'apple:ipad-pro-m4:unknown');
+  // A watch before the gift, or a gift marker that opens the title, keeps the watch.
+  assert.equal(
+    keyOf('Apple Watch Series 10 46mm tặng AirPods Pro 2'),
+    'apple:watch-series-10-46mm:64gb'
+  );
+  assert.equal(
+    keyOf('[Tặng ốp lưng] Apple Watch Series 10 GPS 46mm'),
+    'apple:watch-series-10-46mm:64gb'
+  );
+  assert.equal(keyOf('Sale sốc tặng quà Apple Watch S10 46mm'), 'apple:watch-series-10-46mm:64gb');
+  assert.equal(
+    detectCategorySlug('HomePod mini tặng dây Apple Watch Series 10 42mm'),
+    'smartphones'
+  );
+  assert.equal(detectCategorySlug('AirPods Pro 2 tặng dây Apple Watch Series 10'), 'earbuds');
+  assert.equal(detectCategorySlug('iPad Pro M4 tặng Apple Watch Series 10'), 'tablets');
+  assert.equal(detectCategorySlug('MacBook Air M3 + Apple Watch Series 10'), 'laptops');
+  assert.equal(detectCategorySlug('Apple iPhone 16 tặng smartwatch'), 'smartphones');
+  assert.equal(detectCategorySlug('Apple Watch Series 10 46mm tặng AirPods Pro 2'), 'smartwatches');
+  assert.equal(detectCategorySlug('Sale sốc tặng quà Apple Watch S10 46mm'), 'smartwatches');
+  assert.equal(detectCategorySlug('[Tặng ốp lưng] Apple Watch Series 10 GPS 46mm'), 'smartwatches');
   // With no line matched, the family the title names first, else iPhone.
   assert.equal(keyOf('MacBook M4'), 'apple:macbook:unknown');
   assert.equal(keyOf('Apple "iPad" 256GB'), 'apple:ipad:256gb');

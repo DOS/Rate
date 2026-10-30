@@ -260,6 +260,22 @@ const APPLE_FAMILIES: ReadonlyArray<readonly [RegExp, string]> = [
   [/apple\s*pencil/i, 'Pencil'],
 ];
 
+/**
+ * The product's own part of a title, before a gift or bundle after it: "HomePod mini" in
+ * "HomePod mini tặng dây Apple Watch Series 10", "MacBook Air M3" in "MacBook Air M3 +
+ * Apple Watch". A marker that opens the title ("[Tặng ốp] Apple Watch") leaves it whole
+ * (DOS/Rate#1407).
+ */
+function ownProductPart(title: string): string {
+  const at = title.search(/[\s,|]+(?:tặng|kèm)\s| ?\+ /iu);
+  return at > 0 ? title.slice(0, at) : title;
+}
+
+/** True when the text names an Apple family other than the Watch (DOS/Rate#1407). */
+function namesNonWatchAppleFamily(text: string): boolean {
+  return APPLE_FAMILIES.some(([family, name]) => name !== 'Watch' && family.test(text));
+}
+
 const APPLE_GENERATION_BY_YEAR: Readonly<Record<string, string>> = {
   'TV 4K 2017': '1',
   'TV 4K 2021': '2',
@@ -317,7 +333,22 @@ const APPLE_PART_NUMBERS: Readonly<Record<string, readonly [string, string]>> = 
  * Detect canonical category slug from product title across all 5 tech categories.
  */
 export function detectCategorySlug(title: string): CanonicalCategorySlug {
-  const t = typeof title === 'string' ? title.toLowerCase() : '';
+  const t = typeof title === 'string' ? title.normalize('NFC').toLowerCase() : '';
+  // A gift or bundle after the product is not its category: "AirPods Pro 2 tặng dây Apple
+  // Watch" is earbuds, "Apple iPhone 16 tặng smartwatch" a phone (DOS/Rate#1407). An own
+  // part that names no category falls back to the whole title, unless it names another
+  // Apple product.
+  const own = ownProductPart(t);
+  if (own !== t) {
+    const ownSlug = categorySlugOf(own);
+    if (ownSlug) return ownSlug;
+    if (namesNonWatchAppleFamily(own)) return 'smartphones';
+  }
+  return categorySlugOf(t) ?? 'smartphones';
+}
+
+/** The category a lower-cased title names, or null (DOS/Rate#1407). */
+function categorySlugOf(t: string): CanonicalCategorySlug | null {
   if (
     /airpods|galaxy\s*buds|w[fh]1000xm|wf-\d+|wh-\d+|tai\s*nghe|earbuds?|freebuds|soundcore|quietcomfort|momentum\s*true/i.test(
       t
@@ -346,7 +377,7 @@ export function detectCategorySlug(title: string): CanonicalCategorySlug {
   ) {
     return 'tablets';
   }
-  return 'smartphones';
+  return null;
 }
 
 /**
@@ -1719,7 +1750,12 @@ export class ProductNormalizer {
       const macbookMatch = appleTitle.match(
         /macbook\s*(pro\s*m\d+(?:\s*(?:pro|max))?|air\s*m\d+|air|pro|neo\b)/i
       );
-      const watchMatch = appleTitle.match(
+      // A watch in a gift or bundle after another Apple product is not the product:
+      // "HomePod mini tặng dây Apple Watch Series 10" is the HomePod mini (DOS/Rate#1407).
+      const ownAppleTitle = ownProductPart(appleTitle);
+      const watchMatch = (
+        namesNonWatchAppleFamily(ownAppleTitle) ? ownAppleTitle : appleTitle
+      ).match(
         // "Ultra 49mm" is the case size, not a generation (DOS/Rate#819). "Watch S10" is
         // the Series 10; only a generation (1 to 19) right after "Watch", with no unit or
         // letter after it, counts, so an "S 42mm" size, a "S 16cm" or "S 14-16cm" band
