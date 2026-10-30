@@ -1450,12 +1450,11 @@ const GARMIN_LINES =
 // Gray/", "Xanh Dương/", "Silver Shadow/") goes with it.
 const GLUED_COLOURS =
   /^(?:Đen|Trắng|Xanh|Bạc|Vàng|Hồng|Tím|Đỏ|Xám|Ghi|Cam|Nâu|Kem|Black|White|Blue|Navy|Silver|Gold|Pink|Purple|Lavender|Violet|Red|Gray|Grey|Green|Yellow|Graphite|Midnight|Starlight|Mint|Cream|Onyx|Cobalt|Icy|Amber|Titanium)$/iu;
-// "Titan" alone is a model word (MSI GT77 Titan), but starts a colour before one, and so
-// do "Jade", "Gem" and "Sky" ("Jade Green/", "Gem Green/", "Sky Blue/", DOS/Rate#1495).
-const GLUED_COLOUR_FIRST_WORDS = new RegExp(
-  `${GLUED_COLOURS.source.slice(0, -2)}|Titan|Jade|Gem|Sky)$`,
-  'iu'
-);
+// "Titan" alone is a model word (MSI GT77 Titan), but starts a colour before one.
+const GLUED_COLOUR_FIRST_WORDS = new RegExp(`${GLUED_COLOURS.source.slice(0, -2)}|Titan)$`, 'iu');
+// Samsung's "Jade Green", "Gem Green" and "Sky Blue": these first words go with their own
+// second word only, as "Galaxy Sky" and "Liquid Jade" are models too (DOS/Rate#1495).
+const GLUED_COLOUR_PAIRS = /^(?:jade green|gem green|sky blue)$/i;
 // In a laptop title "Titan" and "Titanium" name the model, not its colour: "ThinkPad X1
 // Titanium/16GB/512GB", "X1 Yoga Titanium Bạc/…", "MSI GT77 Titan Đen/…" (DOS/Rate#1495).
 const LAPTOP_TITAN_WORD = /^titan(?:ium)?$/i;
@@ -2358,7 +2357,8 @@ export class ProductNormalizer {
           } else if (
             isGluedColour(wordHead[1]) &&
             modelTokens.length > 1 &&
-            GLUED_COLOUR_FIRST_WORDS.test(modelTokens[modelTokens.length - 1]!.normalize('NFC')) &&
+            (GLUED_COLOUR_FIRST_WORDS.test(modelTokens[modelTokens.length - 1]!.normalize('NFC')) ||
+              GLUED_COLOUR_PAIRS.test(`${modelTokens[modelTokens.length - 1]} ${wordHead[1]}`)) &&
             // A laptop's "Titanium Bạc/" or "Titan Đen/" keeps its model word, but "Titan
             // Gray/" is Dell's and Lenovo's colour name: Titan leaves with it.
             !(

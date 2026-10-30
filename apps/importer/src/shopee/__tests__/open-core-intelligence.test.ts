@@ -1275,6 +1275,11 @@ async function runSuite() {
     ['Máy định vị GPS cầm tay Garmin GPSMAP 66i', 'garmin:gpsmap-66i:unknown'],
     ['Thiết bị định vị GPS Garmin GPS 73', 'garmin:gps-73:unknown'],
     ['Garmin GPS 73', 'garmin:gps-73:unknown'],
+    // "Jade", "Gem" and "Sky" only start their own colour: "Galaxy Sky" and "Liquid Jade"
+    // are models.
+    ['Samsung Galaxy Sky Black/16GB', 'samsung:galaxy-sky:16gb'],
+    ['Acer Liquid Jade Black/16GB', 'acer:liquid-jade:16gb'],
+    ['MSI Pulse GL66 Titanium Gray/16GB/512GB', 'msi:pulse-gl66:512gb'],
     // A laptop's "Titan Gray" or "Titanium Gray" is still its colour name.
     ['Laptop Dell Latitude 7440 Titan Gray/16GB/512GB', 'dell:latitude-7440:512gb'],
     ['Laptop Lenovo Yoga Slim 7 Titanium Gray/16GB/512GB', 'lenovo:yoga-slim-7:512gb'],
