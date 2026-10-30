@@ -1210,6 +1210,9 @@ async function runSuite() {
     ['Oppo A58 Xanh Lá/128GB', 'oppo:a58:128gb'],
     // "Titan" alone is a model word.
     ['Laptop MSI GT77 Titan/32GB/1TB', 'msi:gt77-titan:1024gb'],
+    ['Laptop MSI GT77 Titan RAM/32GB/1TB', 'msi:gt77-titan:1024gb'],
+    // Two colours glued together are no glued run: the cap still holds.
+    ['Samsung Galaxy Note 20 Ultra Black/White 12GB/256GB', 'samsung:galaxy-note-20-ultra:256gb'],
     ['Xiaomi Pad 6 WiFi6/8GB/256GB', 'xiaomi:pad-6:256gb'],
     ['Lenovo ThinkPad P16 RAM 128GB/16GB RAM SSD 1TB', 'lenovo:thinkpad-p16:1024gb'],
     ['Lenovo ThinkPad T14 RAM DDR 32GB/16GB/512GB SSD', 'lenovo:thinkpad-t14:512gb'],

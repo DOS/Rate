@@ -1453,6 +1453,12 @@ const GLUED_COLOURS =
 // "Titan" alone is a model word (MSI GT77 Titan), but starts a colour before one.
 const GLUED_COLOUR_FIRST_WORDS = new RegExp(`${GLUED_COLOURS.source.slice(0, -2)}|Titan)$`, 'iu');
 const GLUED_COLOUR_SECOND_WORDS = /^(?:Dương|Lá|Ngọc|Đậm|Nhạt|Shadow)$/iu;
+const isGluedColour = (word: string | undefined): boolean =>
+  word !== undefined && (GLUED_COLOURS.test(word) || GLUED_COLOUR_SECOND_WORDS.test(word));
+// A word glued to a RAM/ROM run, a storage alone or a shop word: "Pro/12GB/512GB",
+// "Plus/256GB", "Plus/Mới" (DOS/Rate#1457, #1467). Matched on NFC text.
+const GLUED_HEAD =
+  /^(\p{L}[\p{L}\d]*\+?)\/(?:(?:\d{1,2}(?:GB)?\/)?\d+(?:[.,]\d+)?(?:GB|TB)(?![a-z\d])|(?:Mới|Chính|Hàng|Fullbox|Likenew|Like|Cũ|New)(?![\p{L}\d]))/iu;
 
 const LEADING_PROMO_GROUPS = /^(?:\s*(?:\[[^\]]*\]|\([^)]*\)|【[^】]*】|\{[^}]*\}))+\s*/;
 // So is a promo word right before the brand or its line: "Live Samsung Galaxy S26
@@ -2243,11 +2249,7 @@ export class ProductNormalizer {
           !(modelTokens.length === 4 && /^plus(?:[,;]?$|\/)/i.test(tok)) &&
           // A glued colour past the cap still takes its first word back out
           // ("S24 Ultra Titan Gray/256GB", DOS/Rate#1481).
-          !(
-            /\//.test(tok) &&
-            (GLUED_COLOURS.test(tok.split('/')[0]!.normalize('NFC')) ||
-              GLUED_COLOUR_SECOND_WORDS.test(tok.split('/')[0]!.normalize('NFC')))
-          ) &&
+          !isGluedColour(GLUED_HEAD.exec(tok.normalize('NFC'))?.[1]) &&
           !(/^pro$/i.test(modelTokens[modelTokens.length - 1] ?? '') && /^max[,;]?$/i.test(tok)) &&
           !generation
         ) {
@@ -2286,10 +2288,7 @@ export class ProductNormalizer {
         // So is one glued to a storage alone ("Pro Plus/256GB") or to a shop word
         // ("Plus/Mới 100%"), and "S24+" keeps its plus; a shop word itself
         // ("ChínhHãng/8GB/256GB") is no model word (DOS/Rate#1467).
-        const wordHead =
-          /^(\p{L}[\p{L}\d]*\+?)\/(?:(?:\d{1,2}(?:GB)?\/)?\d+(?:[.,]\d+)?(?:GB|TB)(?![a-z\d])|(?:Mới|Chính|Hàng|Fullbox|Likenew|Like|Cũ|New)(?![\p{L}\d]))/iu.exec(
-            tok.normalize('NFC')
-          );
+        const wordHead = GLUED_HEAD.exec(tok.normalize('NFC'));
         if (wordHead && modelTokens.length > 0) {
           if (
             !/^(?:(?:LTE|GPS|RAM|ROM|OLED|WiFi)(?:\d\w*|DDR\w*)?|Chính\p{L}*|Hàng\p{L}*|Quốc\p{L}*|Bản|Mới|Fullbox|Likenew|Like|Cũ|VNA)$/iu.test(
@@ -2306,6 +2305,7 @@ export class ProductNormalizer {
           ) {
             modelTokens.push(wordHead[1]!);
           } else if (
+            isGluedColour(wordHead[1]) &&
             modelTokens.length > 1 &&
             GLUED_COLOUR_FIRST_WORDS.test(modelTokens[modelTokens.length - 1]!.normalize('NFC'))
           ) {
