@@ -563,7 +563,8 @@ async function runCoreArchitectureSuite() {
     'earbuds'
   );
 
-  // Verify ProductDetailView places #specs-section (SECTION #1) before JReviewsSection (SECTION #2) and #offers-table (SECTION #3): specs before reviews (DOS/Rate#1436)
+  // ProductDetailView reads: sellers (#offers-table), then specs, then reviews
+  // (DOS/Rate#1436, #1469).
   const detailPagePath = path.resolve(
     __dirname,
     '../../../app/[locale]/smartphones/[slug]/page.tsx'
@@ -573,8 +574,8 @@ async function runCoreArchitectureSuite() {
   const idxSpecs = detailPageSrc.indexOf('id="specs-section"');
   const idxOffers = detailPageSrc.indexOf('id="offers-table"');
   assert.ok(
-    idxSpecs > 0 && idxJReviews > idxSpecs && idxOffers > idxJReviews,
-    'ProductDetailView must render #specs-section (Section #1) before <JReviewsSection /> (Section #2) and #offers-table (Section #3)'
+    idxOffers > 0 && idxSpecs > idxOffers && idxJReviews > idxSpecs,
+    'ProductDetailView must render #offers-table before #specs-section, and #specs-section before <JReviewsSection />'
   );
 
   console.log(
