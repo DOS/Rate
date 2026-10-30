@@ -198,7 +198,7 @@
     "boolNo": "No",
     "group0Title": "0. Review scores and trust",
     "rowRatingWeighted": "Verified buyer score (fake reviews filtered)",
-    "valAuthenticReviews": "★ {rating} / 5.0 ({count} verified reviews)",
+    "valAuthenticReviews": "★ {rating} / 5.0 ({count, plural, one {# verified review} other {# verified reviews}})",
     "valNoReviews": "No reviews yet",
     "rowExpertRating": "Rate Lab expert score",
     "rowMinPrice": "Lowest checked reference price",
@@ -295,7 +295,7 @@
     "addDeviceQuickBtn": "+ Add {name}",
     "viewCategoryCatalogBtn": "Browse {category} catalog",
     "matrixHeaderTitle": "Ratings and 10 spec groups",
-    "matrixHeaderSubtitle": "Review scores and specs ({count} {unit})",
+    "matrixHeaderSubtitle": "Review scores and specs ({count, plural, one {# model} other {# models}})",
     "replaceDeviceTitle": "Replace with another {unit}",
     "replaceDeviceBtn": "Replace",
     "removeDeviceTitle": "Remove from comparison matrix",
@@ -498,7 +498,7 @@
     "submitJReviewsBtn": "Submit JReviews evaluation",
     "overallScoreTitle": "Combined Rate.vn score",
     "authenticUserScoreTitle": "Genuine buyer rating",
-    "basedOnAuthenticReviews": "Computed across {count} authentic reviews (Σw = {weightSum} · Weighted avg: {avgScore}).",
+    "basedOnAuthenticReviews": "Computed across {count, plural, one {# authentic review} other {# authentic reviews}} (Σw = {weightSum} · Weighted avg: {avgScore}).",
     "bayesianConfidenceTooltip": "Bayesian confidence c = Σw / (Σw + 3) = {pct}%",
     "validCountBadge": "✓ {count} Valid",
     "blockedSeedingBadge": "{count, plural, one {Filtered # fake or spam review} other {Filtered # fake or spam reviews}}",
@@ -770,7 +770,7 @@
     "masterProductSection": "Matched product (10 spec groups)",
     "userNoScore": "Buyers: no score",
     "expertNoScore": "no score",
-    "verifiedReviewsCount": "({count} verified reviews)",
+    "verifiedReviewsCount": "({count, plural, one {# verified review} other {# verified reviews}})",
     "viewFullSpecsBtn": "View 10 spec groups & full price history",
     "merchantAuditSection": "Seller trust",
     "dosafeRiskLabel": "Scam risk (DOSafe)",
@@ -993,12 +993,12 @@
     "noProductImage": "No product image available",
     "availableColors": "Available colors:",
     "scoreboardEyebrow": "Scores with fake reviews filtered out",
-    "authenticReviewsBadge": "{count} authentic buyer reviews",
+    "authenticReviewsBadge": "{count, plural, one {# authentic buyer review} other {# authentic buyer reviews}}",
     "filteredSeedingBadge": "{count, plural, one {Filtered # fake or spam review} other {Filtered # fake or spam reviews}}",
     "userWeightedScoreLabel": "Genuine buyer score (weighted)",
     "notAvailableYet": "N/A",
-    "verifiedReviewsCount": "/ 5.0 ({count} verified reviews)",
-    "verifiedReviewsCountNoScore": "({count} verified reviews)",
+    "verifiedReviewsCount": "/ 5.0 ({count, plural, one {# verified review} other {# verified reviews}})",
+    "verifiedReviewsCountNoScore": "({count, plural, one {# verified review} other {# verified reviews}})",
     "expertScoreLabel": "Rate Lab expert score",
     "tenGroupStandardWithSlash": "/ 5.0 across 10 groups",
     "tenGroupStandard": "10-group standard",
@@ -1151,9 +1151,9 @@
     "priceHistoryCopyMdBtn": "Copy price history Markdown",
     "priceHistoryExportCsvBtn": "Export price history CSV",
     "priceHistoryExportJsonBtn": "Export JSON",
-    "priceHistoryFakeAlertBadge": "Detected {count} listings with inflated original price / fake sale",
+    "priceHistoryFakeAlertBadge": "Detected {count, plural, one {# listing} other {# listings}} with inflated original price / fake sale",
     "priceHistoryCleanBadge": "✓ No inflated strikethrough price tricks detected",
-    "priceHistoryGenuineDealBadge": "{count} listings currently in genuine deal zone",
+    "priceHistoryGenuineDealBadge": "{count, plural, one {# listing} other {# listings}} currently in genuine deal zone",
     "priceHistoryKpiCurrentMinTitle": "Current best price",
     "priceHistoryKpiCurrentMinSub": "Aggregated across {count} merchants",
     "priceHistoryKpiLowestEverTitle": "Lowest price on record",
@@ -1540,27 +1540,27 @@
   "catalog": {
     "meta": {
       "smartphones": {
-        "titleCount": "Smartphone price comparison ({count} models) | Rate.vn",
+        "titleCount": "Smartphone price comparison ({count, plural, one {# model} other {# models}}) | Rate.vn",
         "titleDefault": "Smartphone price comparison and discount checks | Rate.vn",
         "description": "Filter smartphones by 10 standard spec groups (PhoneArena/GSMArena), see true price history and read reviews with fakes filtered out by AI on Rate.vn."
       },
       "tablets": {
-        "titleCount": "Tablet price comparison ({count} models) | Rate.vn",
+        "titleCount": "Tablet price comparison ({count, plural, one {# model} other {# models}}) | Rate.vn",
         "titleDefault": "Tablet price comparison and discount checks | Rate.vn",
         "description": "Search and filter tablets (iPad, Galaxy Tab, Xiaomi Pad) across 10 standard spec groups, see true price history and skip fake reviews on Rate.vn."
       },
       "laptops": {
-        "titleCount": "Laptop price comparison ({count} models) | Rate.vn",
+        "titleCount": "Laptop price comparison ({count, plural, one {# model} other {# models}}) | Rate.vn",
         "titleDefault": "Laptop price comparison and discount checks | Rate.vn",
         "description": "Search and filter laptops (MacBook, ThinkPad, ASUS ROG, Dell XPS) across 10 standard spec groups, see true price history and skip fake reviews on Rate.vn."
       },
       "smartwatches": {
-        "titleCount": "Smartwatch price comparison ({count} models) | Rate.vn",
+        "titleCount": "Smartwatch price comparison ({count, plural, one {# model} other {# models}}) | Rate.vn",
         "titleDefault": "Smartwatch price comparison and discount checks | Rate.vn",
         "description": "Filter smartwatches (Apple Watch, Galaxy Watch, Garmin, Xiaomi, Huawei) by 10 spec groups, with true price history and filtered reviews on Rate.vn."
       },
       "earbuds": {
-        "titleCount": "ANC earbuds price comparison ({count} models) | Rate.vn",
+        "titleCount": "ANC earbuds price comparison ({count, plural, one {# model} other {# models}}) | Rate.vn",
         "titleDefault": "ANC earbuds price comparison and discount checks | Rate.vn",
         "description": "Filter ANC wireless earbuds (AirPods Pro, Sony WF-1000XM5, Galaxy Buds, Bose) by 10 spec groups, with true price history and filtered reviews on Rate.vn."
       }
@@ -1716,7 +1716,7 @@
       "leaderboardBadge": "Leaderboard",
       "sortByPrefix": "Sort: {label}",
       "radarBannerBadge": "Price lows and fake-sale warnings ({title})",
-      "radarAnalyzedSub": "Checked {count} store listings",
+      "radarAnalyzedSub": "Checked {count, plural, one {# store listing} other {# store listings}}",
       "viewAllRadarBtn": "See all deals across 10 stores",
       "vsMedianBadge": "-{pct}% vs median",
       "fakeMarkupBadge": "Inflated +{pct}%",
@@ -1929,7 +1929,7 @@
     "reasonCommunityAdLinkExcluded": "Advertising link or off-platform redirect detected, left out of the average.",
     "reasonCommunityCompetitorExcluded": "Suspected redirect to a competitor, left out of the average.",
     "reasonCommunityTooShortExcluded": "Too short to verify the experience, left out of the average.",
-    "summaryDefault": "The latest analysis (one store) checked {total} reviews: kept {kept} genuine reviews and removed {removed} spam, coin-farming, fake or review-bombing reviews.",
+    "summaryDefault": "The latest analysis (one store) checked {total, plural, one {# review} other {# reviews}}: kept {kept, plural, one {# genuine review} other {# genuine reviews}} and removed {removed, plural, one {# spam, coin-farming, fake or review-bombing review} other {# spam, coin-farming, fake or review-bombing reviews}}.",
     "summaryNoAuthentic": "The latest analysis (one store) found no genuine reviews after filtering {removed} spam or coin-farming comments.",
     "proPositiveFeedback": "Positive feedback from real users",
     "originalVietnamese": "in Vietnamese"
