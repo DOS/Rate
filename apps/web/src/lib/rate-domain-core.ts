@@ -2146,6 +2146,23 @@ export function hasReviewRiskEvidence(
 }
 
 /**
+ * The DOSafe risk score a merchant card may show, or null when none is known:
+ * a public payload's null, or a server-side summary flagged unknown (the
+ * column's default 0). The same seller then reads alike before and after a
+ * client fetch, and never as 0, the lowest risk (DOS/Rate#1465).
+ */
+export function knownDosafeRiskScore(merchant: {
+  dosafe_risk_score?: number | string | null;
+  dosafe_risk_known?: boolean;
+}): number | null {
+  if (merchant.dosafe_risk_known === false) return null;
+  const raw = merchant.dosafe_risk_score;
+  if (raw == null || raw === '') return null;
+  const score = Number(raw);
+  return Number.isFinite(score) ? Math.min(100, Math.max(0, score)) : null;
+}
+
+/**
  * The review risk score a public payload carries: null when the store has no
  * analysed review to score (DOS/Rate#1258), else the score clamped to 0-100.
  */

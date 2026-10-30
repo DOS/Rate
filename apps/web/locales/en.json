@@ -1833,7 +1833,10 @@
     "merchantRiskLine": "Scam risk: <b>{scam}/100</b> • Review risk: <b>{review}/100</b>",
     "officialMallBadge": "Official Mall",
     "scamRiskShort": "Scam risk: {score}/100",
-    "merchantRiskLineNoReviews": "Scam risk: <b>{scam}/100</b> • Review risk: <b>not enough data</b>"
+    "merchantRiskLineNoReviews": "Scam risk: <b>{scam}/100</b> • Review risk: <b>not enough data</b>",
+    "scamRiskShortNoData": "Scam risk: not enough data",
+    "merchantRiskLineNoScam": "Scam risk: <b>not enough data</b> • Review risk: <b>{review}/100</b>",
+    "merchantRiskLineNoData": "Scam risk: <b>not enough data</b> • Review risk: <b>not enough data</b>"
   },
   "authPortal": {
     "metaLoginTitle": "Sign in | Rate.vn",

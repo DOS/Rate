@@ -1833,7 +1833,10 @@
     "merchantRiskLine": "Riziko podvodu: <b>{scam}/100</b> • Riziko recenzí: <b>{review}/100</b>",
     "officialMallBadge": "Oficiální Mall",
     "scamRiskShort": "Riziko podvodu: {score}/100",
-    "merchantRiskLineNoReviews": "Riziko podvodu: <b>{scam}/100</b> • Riziko recenzí: <b>nedostatek dat</b>"
+    "merchantRiskLineNoReviews": "Riziko podvodu: <b>{scam}/100</b> • Riziko recenzí: <b>nedostatek dat</b>",
+    "scamRiskShortNoData": "Riziko podvodu: nedostatek dat",
+    "merchantRiskLineNoScam": "Riziko podvodu: <b>nedostatek dat</b> • Riziko recenzí: <b>{review}/100</b>",
+    "merchantRiskLineNoData": "Riziko podvodu: <b>nedostatek dat</b> • Riziko recenzí: <b>nedostatek dat</b>"
   },
   "authPortal": {
     "metaLoginTitle": "Přihlášení k účtu | Rate.vn",
