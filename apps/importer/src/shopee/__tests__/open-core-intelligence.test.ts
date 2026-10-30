@@ -1275,6 +1275,12 @@ async function runSuite() {
     ['Máy định vị GPS cầm tay Garmin GPSMAP 66i', 'garmin:gpsmap-66i:unknown'],
     ['Thiết bị định vị GPS Garmin GPS 73', 'garmin:gps-73:unknown'],
     ['Garmin GPS 73', 'garmin:gps-73:unknown'],
+    // A laptop's "Titan Gray" or "Titanium Gray" is still its colour name.
+    ['Laptop Dell Latitude 7440 Titan Gray/16GB/512GB', 'dell:latitude-7440:512gb'],
+    ['Laptop Lenovo Yoga Slim 7 Titanium Gray/16GB/512GB', 'lenovo:yoga-slim-7:512gb'],
+    ['MSI Prestige 14 Titan Gray/16GB/512GB', 'msi:prestige-14:512gb'],
+    // "chính hãng" between the GPS prefix and the brand.
+    ['Thiết bị định vị GPS chính hãng Garmin GPSMAP 65s', 'garmin:gpsmap-65s:unknown'],
     // A GPS device title that names no model stays unkeyable.
     ['Máy định vị GPS Garmin', 'garmin:unkeyed:unknown'],
   ] as const) {

@@ -1459,6 +1459,9 @@ const GLUED_COLOUR_FIRST_WORDS = new RegExp(
 // In a laptop title "Titan" and "Titanium" name the model, not its colour: "ThinkPad X1
 // Titanium/16GB/512GB", "X1 Yoga Titanium Bạc/…", "MSI GT77 Titan Đen/…" (DOS/Rate#1495).
 const LAPTOP_TITAN_WORD = /^titan(?:ium)?$/i;
+// English colour words: after "Titan" or "Titanium" they make a colour name ("Titan Gray").
+const ENGLISH_GLUED_COLOURS =
+  /^(?:Black|White|Blue|Navy|Silver|Gold|Pink|Purple|Lavender|Violet|Red|Gray|Grey|Green|Yellow|Graphite|Midnight|Starlight|Mint|Cream|Onyx|Cobalt|Icy|Amber|Shadow)$/i;
 const GLUED_COLOUR_SECOND_WORDS = /^(?:Dương|Lá|Ngọc|Đậm|Nhạt|Shadow)$/iu;
 const isGluedColour = (word: string | undefined): boolean =>
   word !== undefined && (GLUED_COLOURS.test(word) || GLUED_COLOUR_SECOND_WORDS.test(word));
@@ -2184,7 +2187,7 @@ export class ProductNormalizer {
       const cleaned = withoutLeadingPromo
         .replace(
           new RegExp(
-            `^(?:(?:Hàng\\s+)?Chính\\s+hãng\\s+)?(?:(?:Điện\\s+thoại(?:\\s+thông\\s+minh|\\s+di\\s+động)?|Smartphone|Máy\\s+tính\\s+bảng|Tablet|Laptop|Máy\\s+tính\\s+xách\\s+tay|Đồng\\s+hồ(?:\\s+đeo\\s+tay)?(?:\\s+thông\\s+minh)?|Vòng\\s+đeo\\s+tay(?:\\s+thông\\s+minh)?|Vòng\\s+tay\\s+thông\\s+minh|Smartwatch|Tai\\s+nghe(?:\\s+Bluetooth|\\s+chống\\s+ồn|\\s+không\\s+dây)?|Earbuds|(?:Máy|Thiết\\s+bị)\\s+định\\s+vị(?:\\s+GPS(?=\\s+(?:cầm\\s+tay\\s+)?${brand}\\b))?(?:\\s+cầm\\s+tay)?(?:\\s+GPS(?=\\s+${brand}\\b))?)\\s+(?:(?:Hàng\\s+)?Chính\\s+hãng\\s+)?)?(?:${brand}\\b\\s*)?`,
+            `^(?:(?:Hàng\\s+)?Chính\\s+hãng\\s+)?(?:(?:Điện\\s+thoại(?:\\s+thông\\s+minh|\\s+di\\s+động)?|Smartphone|Máy\\s+tính\\s+bảng|Tablet|Laptop|Máy\\s+tính\\s+xách\\s+tay|Đồng\\s+hồ(?:\\s+đeo\\s+tay)?(?:\\s+thông\\s+minh)?|Vòng\\s+đeo\\s+tay(?:\\s+thông\\s+minh)?|Vòng\\s+tay\\s+thông\\s+minh|Smartwatch|Tai\\s+nghe(?:\\s+Bluetooth|\\s+chống\\s+ồn|\\s+không\\s+dây)?|Earbuds|(?:Máy|Thiết\\s+bị)\\s+định\\s+vị(?:\\s+GPS(?=\\s+(?:cầm\\s+tay\\s+)?(?:(?:Hàng\\s+)?Chính\\s+hãng\\s+)?${brand}\\b))?(?:\\s+cầm\\s+tay)?(?:\\s+GPS(?=\\s+(?:(?:Hàng\\s+)?Chính\\s+hãng\\s+)?${brand}\\b))?)\\s+(?:(?:Hàng\\s+)?Chính\\s+hãng\\s+)?)?(?:${brand}\\b\\s*)?`,
             'i'
           ),
           ''
@@ -2356,7 +2359,13 @@ export class ProductNormalizer {
             isGluedColour(wordHead[1]) &&
             modelTokens.length > 1 &&
             GLUED_COLOUR_FIRST_WORDS.test(modelTokens[modelTokens.length - 1]!.normalize('NFC')) &&
-            !(titanIsModelWord && LAPTOP_TITAN_WORD.test(modelTokens[modelTokens.length - 1]!))
+            // A laptop's "Titanium Bạc/" or "Titan Đen/" keeps its model word, but "Titan
+            // Gray/" is Dell's and Lenovo's colour name: Titan leaves with it.
+            !(
+              titanIsModelWord &&
+              LAPTOP_TITAN_WORD.test(modelTokens[modelTokens.length - 1]!) &&
+              !ENGLISH_GLUED_COLOURS.test(wordHead[1]!)
+            )
           ) {
             // "Titan Gray/256GB": the colour's first word leaves the model too.
             modelTokens.pop();
@@ -2369,15 +2378,11 @@ export class ProductNormalizer {
           );
         // As the model's first word, a stop word only counts whole: "Garmin GPSMAP 67"
         // is the GPSMAP, not a "GPS" option (DOS/Rate#1429).
-        // So is Garmin's "GPS 73" line: "GPS" then its number is the model (DOS/Rate#1495).
         const startsWithStopWord =
           modelTokens.length === 0 &&
           stop !== null &&
           /^[a-z]/i.test(stop[0]) &&
-          (/^[\p{L}\d]/u.test(tok.slice(stop[0].length)) ||
-            (brand === 'Garmin' &&
-              /^gps$/i.test(tok) &&
-              /^\d{2,3}[a-z]?$/i.test(rawTokens[i + 1] ?? '')));
+          /^[\p{L}\d]/u.test(tok.slice(stop[0].length));
         if (startsWithStopWord) maxModelTokens = 2;
         if (
           (stop && !startsWithStopWord) ||
