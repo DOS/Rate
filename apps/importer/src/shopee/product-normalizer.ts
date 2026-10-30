@@ -2074,7 +2074,7 @@ export class ProductNormalizer {
               .slice((ipadMatch.index ?? 0) + ipadMatch[0].length)
               .normalize('NFC')
               .split(
-                /\s*\+(?!\s*(?:cellular|lte|5g|4g)\b)|(?<![\p{L}\d])(?:tương thích|dùng cho|kèm|tặng)(?!\p{L})|(?<![\p{L}\d])(?:tang|kem|qua tang)\s+(?:op|but|sac|cap|tai|day|bao|kinh|cuong luc|phu kien)\b|\bipad\b|so sánh|\bvs\b/iu
+                /\s*\+(?!\s*(?:cellular|lte|5g|4g)\b)|(?<![\p{L}\d])(?:kèm|tặng)(?!\p{L})|(?<![\p{L}\d])(?:tương thích|dùng cho)(?:\s+(?:với|cho))?\s+(?:ipad|iphone|galaxy|samsung|apple|macbook|xiaomi|oppo|vivo|huawei|máy)(?!\p{L})|(?<![\p{L}\d])(?:tang|kem|qua tang)\s+(?:op|but|sac|cap|tai|day|bao|kinh|cuong luc|phu kien)\b|\bipad\b|so sánh|\bvs\b/iu
               )[0]!
           : '';
         const chipMatch_ = /(?<!galaxy\s{0,3})\ba(\d{2})(\s*pro)?\b/iu.exec(ownPart);

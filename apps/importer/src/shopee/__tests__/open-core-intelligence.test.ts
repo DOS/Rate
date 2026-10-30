@@ -1302,6 +1302,9 @@ async function runSuite() {
     ['iPad mini Kem A20 Pro 128GB', 'apple:ipad-mini-8:128gb'],
     ['iPad mini màu Vàng Kem chip A17 Pro 128GB', 'apple:ipad-mini-7:128gb'],
     ['iPad mini | A20 Pro | 128GB', 'apple:ipad-mini-8:128gb'],
+    // "Dùng cho" names a use unless another product follows it.
+    ['iPad mini dùng cho học tập, chip A17 Pro 128GB', 'apple:ipad-mini-7:128gb'],
+    ['iPad mini 64GB dùng cho Galaxy A20', 'apple:ipad-mini:64gb'],
   ] as const) {
     assert.equal(keyOf(title), key, title);
   }
