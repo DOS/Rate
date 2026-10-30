@@ -11,6 +11,7 @@ import {
   jsonApiError,
   withPublicReviewRisk,
   parseBoundedStringParam,
+  withPublicOfferReviewRisk,
 } from '@/server/rate/api-handler';
 
 export async function OPTIONS() {
@@ -56,6 +57,11 @@ export async function GET(request: NextRequest) {
         ok: true,
         data: {
           ...result,
+          // A seller with no analysed review has no review risk (#1376).
+          matchedOffer: result.matchedOffer
+            ? withPublicOfferReviewRisk(result.matchedOffer)
+            : null,
+          allOffers: result.allOffers.map(withPublicOfferReviewRisk),
           merchantProfile: result.merchantProfile
             ? withPublicReviewRisk(result.merchantProfile)
             : null,
