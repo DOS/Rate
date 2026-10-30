@@ -24,6 +24,7 @@ import {
 import type { MasterProduct } from '@/lib/rate-api';
 import { listApiItems } from '@/server/rate/item-api';
 import { isItemModelOn } from '@/server/rate/item-model';
+import { collectServerTiming, timeStep } from '@/lib/server-timing';
 
 export async function OPTIONS() {
   return new NextResponse(null, {
@@ -288,19 +289,29 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const [products, facets] = await Promise.all([
-      categorySlug === 'all' && hasCategoryScopedSpecFilter(filterParams)
-        ? getAllCategoryProductsWithSpecFilters(filterParams)
-        : getMasterProducts(filterParams),
-      includeFacets
-        ? // Variant counts: API v1 stays per variant until `group=item`
-          // (design doc 5.2, task 11).
-          getCachedVariantCategoryDirectoryFacets(categorySlug)
-        : Promise.resolve(null),
-    ]);
-    const offersByMasterId = await getMasterProductOffersBatch(
-      products.map((p) => p.id)
-    );
+    // Each database round trip is timed into a Server-Timing header, so a slow
+    // answer shows which read took the time (DOS/Rate#1353).
+    const {
+      result: { products, facets, offersByMasterId },
+      header: serverTiming,
+    } = await collectServerTiming(async () => {
+      const [products, facets] = await Promise.all([
+        categorySlug === 'all' && hasCategoryScopedSpecFilter(filterParams)
+          ? getAllCategoryProductsWithSpecFilters(filterParams)
+          : getMasterProducts(filterParams),
+        includeFacets
+          ? // Variant counts: API v1 stays per variant until `group=item`
+            // (design doc 5.2, task 11).
+            timeStep('facets', () =>
+              getCachedVariantCategoryDirectoryFacets(categorySlug)
+            )
+          : Promise.resolve(null),
+      ]);
+      const offersByMasterId = await getMasterProductOffersBatch(
+        products.map((p) => p.id)
+      );
+      return { products, facets, offersByMasterId };
+    });
 
     return NextResponse.json(
       {
@@ -323,6 +334,7 @@ export async function GET(request: NextRequest) {
         headers: {
           ...PUBLIC_API_CORS_HEADERS,
           'Cache-Control': 'public, s-maxage=60, stale-while-revalidate=300',
+          ...(serverTiming ? { 'Server-Timing': serverTiming } : {}),
         },
       }
     );
