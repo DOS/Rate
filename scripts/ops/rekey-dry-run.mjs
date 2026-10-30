@@ -2,26 +2,33 @@
 // Read-only re-key dry run (DOS/Rate#1441, #1407; decisions in
 // Docs/Proposals/2026-10-30-rekey-decisions.md). For JOY or the DB owner to run:
 // it lists the masters whose stored model_key no longer matches what the current
-// normalizer gives for their own listings' titles, with the listings and price
-// rows each change would move, and prints a proposed old -> new mapping. It
-// writes nothing.
+// normalizer gives for their own listings' titles, plus the watch keys #1407
+// would respell, with the listings and price rows each change would move, and
+// prints a proposed old -> new mapping. It writes nothing.
 //
 // Read-only by construction:
-// - every query is a single SELECT, sent through psql with
-//   PGOPTIONS=-c default_transaction_read_only=on, so the session cannot write;
-// - before any read it checks that the session is read-only and that the role is
-//   no superuser and holds no INSERT, UPDATE, DELETE or TRUNCATE on the tables it
-//   reads. A role that could write is refused unless --allow-write-capable-role is
-//   given (the session stays read-only either way).
-// The connection string comes from REKEY_DATABASE_URL and is never printed.
+// - one psql session reads everything inside BEGIN READ ONLY ... ROLLBACK, and
+//   PGOPTIONS asks for default_transaction_read_only as well (a pooler may drop
+//   startup options; the READ ONLY transaction does not depend on them);
+// - the first statement in that transaction is a guard: the run stops before any
+//   data is read unless the transaction is read-only and the role is no superuser
+//   and holds no INSERT, UPDATE, DELETE or TRUNCATE on the tables it reads (table
+//   or column grants). A role that could write is refused unless
+//   --allow-write-capable-role is given; the transaction stays read-only either way.
+// The connection string comes from REKEY_DATABASE_URL. It is handed to psql as PG*
+// environment variables, never on the command line, and never printed.
 //
 // Usage (build the normalizer first: pnpm --filter @repo/crawlers build):
 //   REKEY_DATABASE_URL=postgresql://readonly_user:...@host:5432/postgres \
 //     node scripts/ops/rekey-dry-run.mjs [--json] [--normalizer <path>]
+//
+// Not covered: listings with no master (cluster_id NULL), and rate.items, whose
+// Item follows its masters' keys through the M1 sync trigger once they are re-keyed.
 
-import { spawnSync } from 'node:child_process';
+import { spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
+import { createInterface } from 'node:readline';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { parseArgs } from 'node:util';
 
@@ -36,23 +43,29 @@ export const READ_TABLES = [
 
 const tableList = READ_TABLES.map((t) => `'${t}'`).join(', ');
 
-/** The SELECTs, each returning one JSON value. */
-export const QUERIES = {
-  guard: `SELECT json_build_object(
+/**
+ * The session's statements: the read-only transaction, the guard first, then one
+ * tagged JSON line per row, so a large table streams instead of building one value.
+ */
+export const SESSION_SQL = [
+  'BEGIN READ ONLY;',
+  `SELECT 'guard' || chr(9) || json_build_object(
     'read_only', current_setting('transaction_read_only'),
     'superuser', (SELECT rolsuper FROM pg_roles WHERE rolname = current_user),
     'writable', (SELECT coalesce(json_agg(t), '[]'::json) FROM unnest(ARRAY[${tableList}]) AS t
-                 WHERE has_table_privilege(current_user, t, 'INSERT, UPDATE, DELETE, TRUNCATE')))`,
-  masters: `SELECT coalesce(json_agg(json_build_object('id', id, 'model_key', model_key, 'status', status)
-    ORDER BY model_key), '[]'::json) FROM rate.master_products`,
-  listings: `SELECT coalesce(json_agg(json_build_object('id', id, 'master_id', cluster_id, 'title', title)),
-    '[]'::json) FROM rate.products WHERE cluster_id IS NOT NULL`,
-  priceRows: `SELECT coalesce(json_agg(json_build_object('product_id', product_id, 'rows', n)), '[]'::json)
-    FROM (SELECT product_id, count(*) AS n FROM rate.price_history GROUP BY product_id) c`,
-};
+                 WHERE has_table_privilege(current_user, t, 'INSERT, UPDATE, DELETE, TRUNCATE')
+                    OR has_any_column_privilege(current_user, t, 'INSERT, UPDATE')))::text;`,
+  `SELECT 'master' || chr(9) || json_build_object('id', id, 'model_key', model_key, 'status', status)::text
+    FROM rate.master_products;`,
+  `SELECT 'listing' || chr(9) || json_build_object('id', id, 'master_id', cluster_id, 'title', title)::text
+    FROM rate.products WHERE cluster_id IS NOT NULL;`,
+  `SELECT 'price' || chr(9) || json_build_object('product_id', product_id, 'rows', count(*))::text
+    FROM rate.price_history GROUP BY product_id;`,
+  'ROLLBACK;',
+].join('\n');
 
 /**
- * Throws unless the session is read-only and, without the override, the role
+ * Throws unless the transaction is read-only and, without the override, the role
  * cannot write. Returns a one-line note about the role.
  */
 export function checkReadOnly(guard, { allowWriteCapableRole = false } = {}) {
@@ -66,12 +79,45 @@ export function checkReadOnly(guard, { allowWriteCapableRole = false } = {}) {
   if (capable && !allowWriteCapableRole) {
     throw new Error(
       `refusing to run: the role can write (${guard.superuser ? 'superuser' : writable.join(', ')}). ` +
-        'Use a SELECT-only role, or pass --allow-write-capable-role (the session stays read-only).'
+        'Use a SELECT-only role, or pass --allow-write-capable-role (the transaction stays read-only).'
     );
   }
   return capable
-    ? 'role can write; session forced read-only'
+    ? 'role can write; transaction forced read-only'
     : 'SELECT-only role';
+}
+
+/**
+ * The connection string as libpq environment variables, so it never sits on a
+ * command line. Throws a message that names no part of it.
+ */
+export function pgEnvFromUrl(url) {
+  let parsed;
+  try {
+    parsed = new URL(url);
+  } catch {
+    throw new Error(`${ENV_URL} is not a valid postgresql:// URL`);
+  }
+  if (!/^postgres(?:ql)?:$/.test(parsed.protocol)) {
+    throw new Error(`${ENV_URL} must start with postgresql://`);
+  }
+  const decode = (value) => {
+    try {
+      return decodeURIComponent(value);
+    } catch {
+      throw new Error(`${ENV_URL} has a malformed percent-encoded part`);
+    }
+  };
+  const env = {
+    PGHOST: decode(parsed.hostname),
+    PGPORT: parsed.port || '5432',
+    PGUSER: decode(parsed.username),
+    PGPASSWORD: decode(parsed.password),
+    PGDATABASE: decode(parsed.pathname.replace(/^\//, '')) || 'postgres',
+  };
+  const sslmode = parsed.searchParams.get('sslmode');
+  if (sslmode) env.PGSSLMODE = sslmode;
+  return env;
 }
 
 /** brand:model of a model_key, and its variant (the third part, or ''). */
@@ -89,13 +135,23 @@ export function categoryOf(oldKey) {
 }
 
 /**
- * The proposed re-keys. Each master's listing titles go through `keyOf` (the
- * normalizer; null for an unkeyable title). When most keyed listings agree on a
- * brand:model that differs from the stored one, the master is proposed to move
- * to that brand:model with its stored variant. Only the brand:model part is
- * compared: a title that leaves out the storage must not move a variant.
+ * The key #1407 would give a watch spelled without its space ("se2", "series10"),
+ * or null. The normalizer change is not shipped, so this rule stands in for it.
  */
-export function planRekeys({ masters, listings, priceRows, keyOf }) {
+export function watchRespelling(key) {
+  const m = /^apple:watch-(se|series)(\d+)(.*)$/.exec(String(key));
+  return m ? `apple:watch-${m[1]}-${m[2]}${m[3]}` : null;
+}
+
+/**
+ * The proposed re-keys. Each master's listings carry `key`, the normalizer's
+ * model_key for their title (null when unkeyable). When more than half of the keyed
+ * listings agree on a brand:model that differs from the stored one, the master is
+ * proposed to move there with its stored variant; with no majority it is unclear.
+ * Only brand:model is compared: a title that leaves out the storage moves no
+ * variant. Watch keys #1407 would respell are proposed from the stored key.
+ */
+export function planRekeys({ masters, listings, priceRows }) {
   const byMaster = new Map();
   for (const l of listings) {
     if (!l?.master_id) continue;
@@ -113,6 +169,26 @@ export function planRekeys({ masters, listings, priceRows, keyOf }) {
   let noListings = 0;
   for (const m of masters) {
     const own = byMaster.get(m.id) ?? [];
+    const priceRowCount = own.reduce(
+      (sum, l) => sum + (rowsByProduct.get(l.id) ?? 0),
+      0
+    );
+    const respelled = watchRespelling(m.model_key);
+    if (respelled) {
+      changes.push({
+        masterId: m.id,
+        status: m.status,
+        oldKey: m.model_key,
+        newKey: respelled,
+        category: 'watch-spelling (#1407)',
+        source: 'spelling rule (normalizer change not shipped)',
+        listings: own.length,
+        agreeing: null,
+        keyed: null,
+        priceRows: priceRowCount,
+      });
+      continue;
+    }
     if (own.length === 0) {
       noListings += 1;
       continue;
@@ -120,44 +196,63 @@ export function planRekeys({ masters, listings, priceRows, keyOf }) {
     const votes = new Map();
     let keyed = 0;
     for (const l of own) {
-      const key = keyOf(l.title ?? '');
-      if (!key) continue;
+      if (!l.key) continue;
       keyed += 1;
-      const { item } = splitKey(key);
+      const { item } = splitKey(l.key);
       votes.set(item, (votes.get(item) ?? 0) + 1);
     }
     const stored = splitKey(m.model_key);
-    const [top, count] = [...votes].sort((a, b) => b[1] - a[1])[0] ?? [null, 0];
-    if (!top || top === stored.item) {
+    // Ties break by key, so the result does not depend on the row order.
+    const [top, count] = [...votes].sort(
+      (a, b) => b[1] - a[1] || a[0].localeCompare(b[0])
+    )[0] ?? [null, 0];
+    const majority = top !== null && count * 2 > keyed;
+    if (majority && top === stored.item) {
       unchanged += 1;
       continue;
     }
-    if (count * 2 <= keyed) {
-      unclear.push({
-        masterId: m.id,
-        oldKey: m.model_key,
-        listings: own.length,
-        votes: Object.fromEntries(votes),
-      });
+    if (!majority) {
+      if (top === null) unchanged += 1;
+      else
+        unclear.push({
+          masterId: m.id,
+          oldKey: m.model_key,
+          listings: own.length,
+          keyed,
+          votes: Object.fromEntries(votes),
+        });
       continue;
     }
-    const newKey = stored.variant ? `${top}:${stored.variant}` : top;
-    const target = masterByKey.get(newKey);
     changes.push({
       masterId: m.id,
       status: m.status,
       oldKey: m.model_key,
-      newKey,
+      newKey: stored.variant ? `${top}:${stored.variant}` : top,
       category: categoryOf(m.model_key),
-      action: target ? `merge into ${target.id}` : 'rename in place',
+      source: 'normalizer',
       listings: own.length,
       agreeing: count,
       keyed,
-      priceRows: own.reduce(
-        (sum, l) => sum + (rowsByProduct.get(l.id) ?? 0),
-        0
-      ),
+      priceRows: priceRowCount,
     });
+  }
+  // The action: a rename only when the target key is free and no other master
+  // moves there; otherwise a merge, reviewed by hand like M0 (DOS/Rate#1123).
+  const movingTo = new Map();
+  for (const c of changes)
+    movingTo.set(c.newKey, [...(movingTo.get(c.newKey) ?? []), c.masterId]);
+  const moving = new Set(changes.map((c) => c.masterId));
+  for (const c of changes) {
+    const target = masterByKey.get(c.newKey);
+    const group = movingTo.get(c.newKey);
+    if (target) {
+      c.action = `merge into ${target.id}${moving.has(target.id) ? ' (that master is re-keyed too: resolve first)' : ''}`;
+    } else if (group.length > 1) {
+      c.action = `merge with ${group.filter((id) => id !== c.masterId).join(', ')} into one new key`;
+    } else {
+      c.action = 'rename in place';
+    }
+    c.lowCoverage = c.keyed !== null && c.keyed * 2 < c.listings;
   }
   changes.sort(
     (a, b) =>
@@ -186,8 +281,12 @@ export function formatPlan(plan) {
       category = c.category;
       lines.push('', `## ${category}`);
     }
+    const agree =
+      c.keyed === null
+        ? c.source
+        : `${c.agreeing}/${c.keyed} keyed listings agree${c.lowCoverage ? ', LOW COVERAGE: under half the listings keyed' : ''}`;
     lines.push(
-      `${c.oldKey} -> ${c.newKey}  [${c.action}; ${c.status}; listings ${c.listings} (${c.agreeing}/${c.keyed} agree); price rows ${c.priceRows}; master ${c.masterId}]`
+      `${c.oldKey} -> ${c.newKey}  [${c.action}; ${c.status}; listings ${c.listings} (${agree}); price rows ${c.priceRows}; master ${c.masterId}]`
     );
   }
   if (plan.unclear.length > 0) {
@@ -197,35 +296,95 @@ export function formatPlan(plan) {
     );
     for (const u of plan.unclear) {
       lines.push(
-        `${u.oldKey}  [listings ${u.listings}; votes ${JSON.stringify(u.votes)}; master ${u.masterId}]`
+        `${u.oldKey}  [listings ${u.listings}, keyed ${u.keyed}; votes ${JSON.stringify(u.votes)}; master ${u.masterId}]`
       );
     }
   }
   return lines;
 }
 
-/** One SELECT through psql in a read-only session; its single JSON value. */
-export function psqlJson(url, sql, run = spawnSync) {
-  const r = run(
-    'psql',
-    [url, '-X', '-q', '-A', '-t', '-v', 'ON_ERROR_STOP=1', '-c', sql],
-    {
-      encoding: 'utf8',
-      maxBuffer: 256 * 1024 * 1024,
-      env: { ...process.env, PGOPTIONS: '-c default_transaction_read_only=on' },
-    }
-  );
-  if (r.error) throw new Error(`psql could not start: ${r.error.message}`);
-  if (r.status !== 0) {
-    // psql's own error text; the connection string is never echoed.
-    throw new Error(
-      `psql failed: ${String(r.stderr ?? '')
-        .split(url)
-        .join('<REKEY_DATABASE_URL>')
-        .trim()}`
+/**
+ * Collects the session's tagged lines: the guard (checked before any data line is
+ * kept), masters, listings with their normalizer key, and price-row counts.
+ * `onGuard` throws to stop the run.
+ */
+export function createCollector({ keyOf, onGuard }) {
+  const data = { masters: [], listings: [], priceRows: [] };
+  let guarded = false;
+  return {
+    data,
+    line(raw) {
+      const tab = raw.indexOf('\t');
+      if (tab < 0) return;
+      const tag = raw.slice(0, tab);
+      const value = JSON.parse(raw.slice(tab + 1));
+      if (tag === 'guard') {
+        onGuard(value);
+        guarded = true;
+        return;
+      }
+      if (!guarded)
+        throw new Error(
+          'refusing to run: data arrived before the read-only check'
+        );
+      if (tag === 'master') data.masters.push(value);
+      else if (tag === 'listing') {
+        data.listings.push({
+          id: value.id,
+          master_id: value.master_id,
+          key: keyOf(value.title ?? ''),
+        });
+      } else if (tag === 'price') data.priceRows.push(value);
+    },
+  };
+}
+
+/** Runs the session through psql, feeding each output line to `onLine`. */
+export function runSession(env, onLine, spawnFn = spawn) {
+  return new Promise((resolve, reject) => {
+    const child = spawnFn(
+      'psql',
+      ['-X', '-q', '-A', '-t', '-v', 'ON_ERROR_STOP=1', '-f', '-'],
+      {
+        env: {
+          ...process.env,
+          ...env,
+          PGOPTIONS: '-c default_transaction_read_only=on',
+        },
+        stdio: ['pipe', 'pipe', 'pipe'],
+      }
     );
-  }
-  return JSON.parse(String(r.stdout).trim() || 'null');
+    let failed = null;
+    let stderrLines = 0;
+    child.on('error', (err) =>
+      reject(new Error(`psql could not start: ${err.message}`))
+    );
+    createInterface({ input: child.stdout }).on('line', (line) => {
+      if (failed) return;
+      try {
+        onLine(line);
+      } catch (err) {
+        failed = err;
+        child.kill();
+      }
+    });
+    // psql's own error text can quote parts of the connection; only count it.
+    createInterface({ input: child.stderr }).on('line', () => {
+      stderrLines += 1;
+    });
+    child.on('close', (code) => {
+      if (failed) reject(failed);
+      else if (code !== 0) {
+        reject(
+          new Error(
+            `psql failed (exit ${code}, ${stderrLines} error line(s) withheld because they can quote the connection). ` +
+              'Check the connection with psql by hand.'
+          )
+        );
+      } else resolve();
+    });
+    child.stdin.end(SESSION_SQL);
+  });
 }
 
 /** The normalizer's keyOf, from the built @repo/crawlers package. */
@@ -285,17 +444,19 @@ async function main() {
   }
   const url = process.env[ENV_URL];
   if (!url) usage(`${ENV_URL} is required (a read-only connection string)`);
-
-  const role = checkReadOnly(psqlJson(url, QUERIES.guard), {
-    allowWriteCapableRole: values['allow-write-capable-role'],
-  });
+  const env = pgEnvFromUrl(url);
   const keyOf = await loadKeyOf(values.normalizer);
-  const plan = planRekeys({
-    masters: psqlJson(url, QUERIES.masters) ?? [],
-    listings: psqlJson(url, QUERIES.listings) ?? [],
-    priceRows: psqlJson(url, QUERIES.priceRows) ?? [],
+  let role = '';
+  const collector = createCollector({
     keyOf,
+    onGuard: (guard) => {
+      role = checkReadOnly(guard, {
+        allowWriteCapableRole: values['allow-write-capable-role'],
+      });
+    },
   });
+  await runSession(env, collector.line);
+  const plan = planRekeys(collector.data);
   if (values.json) {
     console.log(JSON.stringify({ role, ...plan }, null, 2));
   } else {

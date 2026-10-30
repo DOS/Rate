@@ -1,30 +1,45 @@
 import assert from 'node:assert/strict';
+import { EventEmitter } from 'node:events';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
+import { PassThrough } from 'node:stream';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 
 import {
-  QUERIES,
+  SESSION_SQL,
   categoryOf,
   checkReadOnly,
+  createCollector,
   formatPlan,
   loadKeyOf,
+  pgEnvFromUrl,
   planRekeys,
-  psqlJson,
+  runSession,
   splitKey,
+  watchRespelling,
 } from './rekey-dry-run.mjs';
 
-test('every query is a single SELECT', () => {
-  for (const [name, sql] of Object.entries(QUERIES)) {
-    assert.match(sql.trim(), /^SELECT\b/, name);
-    assert.doesNotMatch(sql, /;/, `${name}: one statement`);
+test('the session is one read-only transaction of SELECTs, guard first', () => {
+  const statements = SESSION_SQL.split(/;\s*\n/).map((s) =>
+    s.trim().replace(/;$/, '')
+  );
+  assert.equal(statements[0], 'BEGIN READ ONLY');
+  assert.equal(statements[statements.length - 1], 'ROLLBACK');
+  const reads = statements.slice(1, -1);
+  assert.match(reads[0], /^SELECT 'guard'/, 'the guard runs before any data');
+  for (const sql of reads) {
+    assert.match(sql, /^SELECT\b/);
     assert.doesNotMatch(
       sql,
-      /\b(?:INSERT\s+INTO|UPDATE\s+\w|DELETE\s+FROM|ALTER|DROP|TRUNCATE\s+\w|CREATE|GRANT|COPY)\b/i,
-      `${name}: no write statement`
+      /\b(?:INSERT\s+INTO|UPDATE\s+\w|DELETE\s+FROM|ALTER|DROP|TRUNCATE\s+\w|CREATE|GRANT|COPY)\b/i
     );
   }
+  assert.match(
+    reads[0],
+    /has_any_column_privilege\(current_user, t, 'INSERT, UPDATE'\)/,
+    'column grants count'
+  );
 });
 
 test('refuses a session that is not read-only, or a role that can write', () => {
@@ -55,44 +70,141 @@ test('refuses a session that is not read-only, or a role that can write', () => 
       { read_only: 'on', superuser: true, writable: [] },
       { allowWriteCapableRole: true }
     ),
-    'role can write; session forced read-only'
+    'role can write; transaction forced read-only'
   );
-  // The override never lifts the read-only session requirement.
   assert.throws(
     () =>
       checkReadOnly(
         { read_only: 'off', superuser: true, writable: [] },
         { allowWriteCapableRole: true }
       ),
-    /not read-only/
+    /not read-only/,
+    'the override never lifts the read-only transaction'
   );
 });
 
-test('psql runs read-only and never echoes the connection string', () => {
-  const url = 'postgresql://ro:secret@db.example:5432/postgres';
-  let call;
-  const ok = psqlJson(url, 'SELECT 1', (cmd, args, opts) => {
-    call = { cmd, args, opts };
-    return { status: 0, stdout: '[{"a":1}]\n', stderr: '' };
+test('the connection string becomes PG* variables and no error repeats it', () => {
+  assert.deepEqual(
+    pgEnvFromUrl(
+      'postgresql://ro%40x:s%23cret@db.example:6543/postgres?sslmode=require'
+    ),
+    {
+      PGHOST: 'db.example',
+      PGPORT: '6543',
+      PGUSER: 'ro@x',
+      PGPASSWORD: 's#cret',
+      PGDATABASE: 'postgres',
+      PGSSLMODE: 'require',
+    }
+  );
+  for (const bad of [
+    'postgresql://ro:secret%zz@db.example/postgres',
+    'not a url secret',
+    'https://ro:secret@x/y',
+  ]) {
+    assert.throws(
+      () => pgEnvFromUrl(bad),
+      (err) => !err.message.includes('secret')
+    );
+  }
+});
+
+/** A fake psql: prints `lines`, then exits with `code` (stderr gets `stderr`). */
+function fakeSpawn({ lines = [], code = 0, stderr = '' }) {
+  const calls = [];
+  const spawnFn = (cmd, args, opts) => {
+    const child = new EventEmitter();
+    child.stdout = new PassThrough();
+    child.stderr = new PassThrough();
+    child.stdin = new PassThrough();
+    child.kill = () => {
+      child.killed = true;
+    };
+    calls.push({ cmd, args, opts, child });
+    let script = '';
+    child.stdin.on('data', (d) => (script += d));
+    child.stdin.on('end', () => {
+      calls[calls.length - 1].script = script;
+      child.stdout.end(lines.join('\n') + '\n');
+      child.stderr.end(stderr);
+      setTimeout(() => child.emit('close', code), 10);
+    });
+    return child;
+  };
+  return { spawnFn, calls };
+}
+
+test('one psql session, read-only options, no URL on the command line', async () => {
+  const { spawnFn, calls } = fakeSpawn({
+    lines: [
+      'guard\t{"read_only":"on","superuser":false,"writable":[]}',
+      'master\t{"id":"m1","model_key":"samsung:galaxy-s25-tang-tai:unknown","status":"draft"}',
+      'listing\t{"id":"p1","master_id":"m1","title":"T1"}',
+      'price\t{"product_id":"p1","rows":4}',
+    ],
   });
-  assert.deepEqual(ok, [{ a: 1 }]);
-  assert.equal(call.cmd, 'psql');
-  assert.equal(call.opts.env.PGOPTIONS, '-c default_transaction_read_only=on');
-  assert.ok(call.args.includes('ON_ERROR_STOP=1'));
+  const collector = createCollector({
+    keyOf: () => 'samsung:galaxy-s25:unknown',
+    onGuard: (g) => checkReadOnly(g),
+  });
+  await runSession(
+    { PGHOST: 'db.example', PGPASSWORD: 'secret' },
+    collector.line,
+    spawnFn
+  );
+  assert.equal(calls.length, 1, 'one session');
+  assert.equal(calls[0].cmd, 'psql');
+  assert.ok(
+    !calls[0].args.join(' ').includes('secret'),
+    'no credential in the arguments'
+  );
+  assert.equal(
+    calls[0].opts.env.PGOPTIONS,
+    '-c default_transaction_read_only=on'
+  );
+  assert.equal(calls[0].opts.env.PGPASSWORD, 'secret');
+  assert.equal(calls[0].script, SESSION_SQL);
+  assert.deepEqual(collector.data.listings, [
+    { id: 'p1', master_id: 'm1', key: 'samsung:galaxy-s25:unknown' },
+  ]);
+  assert.deepEqual(collector.data.priceRows, [{ product_id: 'p1', rows: 4 }]);
+});
+
+test('a failing guard stops the session before data is kept; psql errors are withheld', async () => {
+  const writer = fakeSpawn({
+    lines: [
+      'guard\t{"read_only":"on","superuser":true,"writable":[]}',
+      'master\t{"id":"m1","model_key":"a:b:c","status":"draft"}',
+    ],
+  });
+  const collector = createCollector({
+    keyOf: () => null,
+    onGuard: (g) => checkReadOnly(g),
+  });
+  await assert.rejects(
+    runSession({}, collector.line, writer.spawnFn),
+    /superuser/
+  );
+  assert.equal(collector.data.masters.length, 0);
+  assert.ok(writer.calls[0].child.killed);
+  const noGuard = createCollector({ keyOf: () => null, onGuard: () => {} });
   assert.throws(
-    () =>
-      psqlJson(url, 'SELECT 1', () => ({
-        status: 2,
-        stdout: '',
-        stderr: `connection to ${url} failed`,
-      })),
+    () => noGuard.line('master\t{"id":"m1"}'),
+    /before the read-only check/
+  );
+  const broken = fakeSpawn({
+    code: 2,
+    stderr: 'invalid percent-encoded token: "secret%zz"\n',
+  });
+  await assert.rejects(
+    runSession({}, () => {}, broken.spawnFn),
     (err) =>
-      !err.message.includes('secret') &&
-      /<REKEY_DATABASE_URL>/.test(err.message)
+      /exit 2, 1 error line\(s\) withheld/.test(err.message) &&
+      !err.message.includes('secret')
   );
 });
 
-test('categories and key parts', () => {
+test('categories, key parts and the #1407 respelling', () => {
   assert.deepEqual(splitKey('samsung:galaxy-s25:256gb'), {
     item: 'samsung:galaxy-s25',
     variant: '256gb',
@@ -109,32 +221,35 @@ test('categories and key parts', () => {
     categoryOf('apple:watch-se2-40mm:unknown'),
     'watch-spelling (#1407)'
   );
-  assert.equal(
-    categoryOf('apple:watch-series10:unknown'),
-    'watch-spelling (#1407)'
-  );
   assert.equal(categoryOf('apple:watch-series-10-46mm:64gb'), 'other');
-  assert.equal(categoryOf('samsung:galaxy-tab-s9:128gb'), 'other');
+  assert.equal(
+    watchRespelling('apple:watch-se2-40mm:unknown'),
+    'apple:watch-se-2-40mm:unknown'
+  );
+  assert.equal(
+    watchRespelling('apple:watch-series10:unknown'),
+    'apple:watch-series-10:unknown'
+  );
+  assert.equal(
+    watchRespelling('apple:watch-se2022:unknown'),
+    'apple:watch-se-2022:unknown'
+  );
+  assert.equal(watchRespelling('apple:watch-series-10-46mm:64gb'), null);
+  assert.equal(watchRespelling('apple:watch-se-2-40mm:unknown'), null);
 });
 
-test('plans renames and merges from the listings, counting what would move', () => {
-  const keys = {
-    'S25 gift a': 'samsung:galaxy-s25:unknown',
-    'S25 gift b': 'samsung:galaxy-s25:unknown',
-    'S25 odd': 'samsung:galaxy-s25-tang-tai:unknown',
-    'SE2 a': 'apple:watch-se-2-40mm:unknown',
-    'A55 ok': 'samsung:galaxy-a55:256gb',
-    // A title without its storage keeps the stored variant: no move.
-    'A55 sizeless': 'samsung:galaxy-a55:unknown',
-    'split 1': 'oppo:reno-12:256gb',
-    'split 2': 'oppo:reno-12-pro:256gb',
-  };
+test('plans renames and merges, counting what would move', () => {
   const plan = planRekeys({
     masters: [
       {
         id: 'm1',
         model_key: 'samsung:galaxy-s25-tang-tai:unknown',
         status: 'published',
+      },
+      {
+        id: 'm1b',
+        model_key: 'samsung:galaxy-s25-kem-tai:unknown',
+        status: 'draft',
       },
       { id: 'm2', model_key: 'apple:watch-se2-40mm:unknown', status: 'draft' },
       {
@@ -145,76 +260,115 @@ test('plans renames and merges from the listings, counting what would move', () 
       { id: 'm4', model_key: 'samsung:galaxy-a55:256gb', status: 'published' },
       { id: 'm5', model_key: 'oppo:reno-12-x:256gb', status: 'draft' },
       { id: 'm6', model_key: 'xiaomi:15t:512gb', status: 'draft' },
+      {
+        id: 'm7',
+        model_key: 'asus:vivobook-14-tang-chuot:512gb',
+        status: 'draft',
+      },
     ],
     listings: [
-      { id: 'p1', master_id: 'm1', title: 'S25 gift a' },
-      { id: 'p2', master_id: 'm1', title: 'S25 gift b' },
-      { id: 'p3', master_id: 'm1', title: 'S25 odd' },
-      { id: 'p4', master_id: 'm2', title: 'SE2 a' },
-      { id: 'p5', master_id: 'm4', title: 'A55 ok' },
-      { id: 'p6', master_id: 'm4', title: 'A55 sizeless' },
-      { id: 'p7', master_id: 'm5', title: 'split 1' },
-      { id: 'p8', master_id: 'm5', title: 'split 2' },
-      { id: 'p9', master_id: 'm4', title: 'unkeyable' },
+      { id: 'p1', master_id: 'm1', key: 'samsung:galaxy-s25:unknown' },
+      { id: 'p2', master_id: 'm1', key: 'samsung:galaxy-s25:unknown' },
+      { id: 'p3', master_id: 'm1', key: 'samsung:galaxy-s25-tang-tai:unknown' },
+      { id: 'p3b', master_id: 'm1b', key: 'samsung:galaxy-s25:unknown' },
+      { id: 'p4', master_id: 'm2', key: 'apple:watch-se2-40mm:unknown' },
+      { id: 'p5', master_id: 'm4', key: 'samsung:galaxy-a55:256gb' },
+      // A title without its storage keeps the stored variant: no move.
+      { id: 'p6', master_id: 'm4', key: 'samsung:galaxy-a55:unknown' },
+      { id: 'p9', master_id: 'm4', key: null },
+      { id: 'p7', master_id: 'm5', key: 'oppo:reno-12:256gb' },
+      { id: 'p8', master_id: 'm5', key: 'oppo:reno-12-pro:256gb' },
+      // One keyed listing of three decides, flagged as low coverage.
+      { id: 'q1', master_id: 'm7', key: 'asus:vivobook-14:512gb' },
+      { id: 'q2', master_id: 'm7', key: null },
+      { id: 'q3', master_id: 'm7', key: null },
     ],
     priceRows: [
       { product_id: 'p1', rows: 3 },
       { product_id: 'p2', rows: '2' },
       { product_id: 'p4', rows: 5 },
     ],
-    keyOf: (title) => keys[title] ?? null,
   });
-  assert.deepEqual(
-    plan.changes.map((c) => [
-      c.oldKey,
-      c.newKey,
-      c.action,
-      c.listings,
-      c.agreeing,
-      c.keyed,
-      c.priceRows,
-    ]),
+  const row = (c) => [c.oldKey, c.newKey, c.action, c.listings, c.priceRows];
+  assert.deepEqual(plan.changes.map(row), [
     [
-      [
-        'samsung:galaxy-s25-tang-tai:unknown',
-        'samsung:galaxy-s25:unknown',
-        'rename in place',
-        3,
-        2,
-        3,
-        5,
-      ],
-      [
-        'apple:watch-se2-40mm:unknown',
-        'apple:watch-se-2-40mm:unknown',
-        'merge into m3',
-        1,
-        1,
-        1,
-        5,
-      ],
-    ]
+      'asus:vivobook-14-tang-chuot:512gb',
+      'asus:vivobook-14:512gb',
+      'rename in place',
+      3,
+      0,
+    ],
+    [
+      'samsung:galaxy-s25-kem-tai:unknown',
+      'samsung:galaxy-s25:unknown',
+      'merge with m1 into one new key',
+      1,
+      0,
+    ],
+    [
+      'samsung:galaxy-s25-tang-tai:unknown',
+      'samsung:galaxy-s25:unknown',
+      'merge with m1b into one new key',
+      3,
+      5,
+    ],
+    // The #1407 respelling comes from the stored key, as the normalizer change is not shipped.
+    [
+      'apple:watch-se2-40mm:unknown',
+      'apple:watch-se-2-40mm:unknown',
+      'merge into m3',
+      1,
+      5,
+    ],
+  ]);
+  assert.equal(plan.changes[0].lowCoverage, true);
+  assert.equal(plan.changes[2].lowCoverage, false);
+  assert.equal(
+    plan.changes[3].source,
+    'spelling rule (normalizer change not shipped)'
   );
-  assert.equal(plan.changes[0].category, 'gift-word (#1441)');
-  assert.equal(plan.changes[1].category, 'watch-spelling (#1407)');
   assert.deepEqual(
     plan.unclear.map((u) => u.oldKey),
     ['oppo:reno-12-x:256gb']
   );
-  assert.equal(
-    plan.unchanged,
-    1,
-    'm4: its listings agree, a sizeless title moves nothing'
-  );
+  assert.equal(plan.unchanged, 1, 'm4');
   assert.equal(plan.noListings, 2, 'm3 and m6');
   const text = formatPlan(plan).join('\n');
-  assert.match(text, /Proposed re-keys: 2 masters, 4 listings, 10 price rows/);
+  assert.match(text, /Proposed re-keys: 4 masters, 8 listings, 10 price rows/);
   assert.match(text, /Nothing was written\./);
-  assert.match(
-    text,
-    /apple:watch-se2-40mm:unknown -> apple:watch-se-2-40mm:unknown {2}\[merge into m3/
-  );
+  assert.match(text, /LOW COVERAGE/);
   assert.match(text, /## unclear/);
+});
+
+test('a re-keyed merge target is flagged, and a tie is unclear in any row order', () => {
+  const masters = [
+    { id: 'a', model_key: 'samsung:galaxy-s25-tang:unknown', status: 'draft' },
+    { id: 'b', model_key: 'samsung:galaxy-s25:unknown', status: 'draft' },
+  ];
+  const chain = planRekeys({
+    masters,
+    listings: [
+      { id: 'l1', master_id: 'a', key: 'samsung:galaxy-s25:unknown' },
+      { id: 'l2', master_id: 'b', key: 'samsung:galaxy-s26:unknown' },
+    ],
+    priceRows: [],
+  });
+  assert.match(
+    chain.changes.find((c) => c.masterId === 'a').action,
+    /merge into b \(that master is re-keyed too: resolve first\)/
+  );
+  const tie = [
+    { id: 't1', master_id: 'b', key: 'samsung:galaxy-s25:unknown' },
+    { id: 't2', master_id: 'b', key: 'samsung:galaxy-s25-plus:unknown' },
+  ];
+  for (const listings of [tie, [...tie].reverse()]) {
+    const plan = planRekeys({ masters: [masters[1]], listings, priceRows: [] });
+    assert.deepEqual(
+      plan.unclear.map((u) => u.masterId),
+      ['b']
+    );
+    assert.equal(plan.unchanged, 0);
+  }
 });
 
 const built = path.join(
