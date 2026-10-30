@@ -44,22 +44,25 @@ for (const path of PATHS) {
 // The report-only nonce reaches the render of a page rendered per request:
 // every nonced script carries the nonce of its own response, and the next
 // request gets another one (DOS/Rate#1345). Cached (ISR) pages have no nonce
-// yet, see DOS/Rate#1348.
-test('csp nonce on a dynamic page matches its header', async ({ request }) => {
-  const seen = new Set<string>();
-  for (let i = 0; i < 2; i++) {
-    const res = await request.get('/inspect');
-    expect(res.status()).toBe(200);
-    const policy = res.headers()['content-security-policy-report-only'] ?? '';
-    const nonce = policy.match(/script-src [^;]*'nonce-([^']+)'/)?.[1];
-    expect(nonce).toBeTruthy();
-    const html = await res.text();
-    const attrs = [...html.matchAll(/<script[^>]* nonce="([^"]+)"/g)].map(
-      (m) => m[1]
-    );
-    expect(attrs.length).toBeGreaterThan(0);
-    expect(new Set(attrs)).toEqual(new Set([nonce]));
-    seen.add(nonce!);
-  }
-  expect(seen.size).toBe(2);
-});
+// yet, see DOS/Rate#1348. The category page (force-dynamic, #491) is the one
+// the live check found without a nonce before the fix (DOS/Rate#1427).
+for (const path of ['/inspect', '/smartphones']) {
+  test(`csp nonce on ${path} matches its header`, async ({ request }) => {
+    const seen = new Set<string>();
+    for (let i = 0; i < 2; i++) {
+      const res = await request.get(path);
+      expect(res.status()).toBe(200);
+      const policy = res.headers()['content-security-policy-report-only'] ?? '';
+      const nonce = policy.match(/script-src [^;]*'nonce-([^']+)'/)?.[1];
+      expect(nonce).toBeTruthy();
+      const html = await res.text();
+      const attrs = [...html.matchAll(/<script[^>]* nonce="([^"]+)"/g)].map(
+        (m) => m[1]
+      );
+      expect(attrs.length).toBeGreaterThan(0);
+      expect(new Set(attrs)).toEqual(new Set([nonce]));
+      seen.add(nonce!);
+    }
+    expect(seen.size).toBe(2);
+  });
+}
