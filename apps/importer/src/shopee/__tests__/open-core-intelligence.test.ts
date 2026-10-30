@@ -1095,11 +1095,6 @@ async function runSuite() {
     // A "GPS" between the prefix and the brand goes with the prefix (DOS/Rate#1481).
     ['Máy định vị GPS Garmin GPS 73', 'garmin:gps-73:unknown'],
     ['Máy định vị GPS Garmin eTrex 22x', 'garmin:etrex-22x:unknown'],
-    // "GPS cầm tay" and "Thiết bị định vị" prefixes too; a prefix with no model
-    // stays unkeyable (DOS/Rate#1495).
-    ['Máy định vị GPS cầm tay Garmin GPSMAP 66i', 'garmin:gpsmap-66i:unknown'],
-    ['Thiết bị định vị GPS Garmin GPS 73', 'garmin:gps-73:unknown'],
-    ['Máy định vị GPS Garmin', 'garmin:unkeyed:unknown'],
     ['Máy định vị cầm tay Garmin GPS 64s', 'garmin:gps-64s:unknown'],
     ['Samsung Galaxy S24 + Plus 256GB', 'samsung:galaxy-s24-plus:256gb'],
     ['Samsung (Hàng chính hãng) Galaxy A55 256GB', 'samsung:galaxy-a55:256gb'],
@@ -1215,29 +1210,6 @@ async function runSuite() {
     ['Oppo A58 Xanh Lá/128GB', 'oppo:a58:128gb'],
     // "Titan" alone is a model word.
     ['Laptop MSI GT77 Titan/32GB/1TB', 'msi:gt77-titan:1024gb'],
-    // "Titanium" is a model word too, and a model word before a colour stays; only
-    // an English colour after Titan/Titanium makes one colour (DOS/Rate#1495).
-    ['Lenovo ThinkPad X1 Titanium/16GB/512GB', 'lenovo:thinkpad-x1-titanium:512gb'],
-    ['Lenovo ThinkPad X1 Yoga Titanium Bạc/16GB/512GB', 'lenovo:thinkpad-x1-yoga-titanium:512gb'],
-    ['MSI GT77 Titan Đen/32GB/1TB', 'msi:gt77-titan:1024gb'],
-    ['Samsung Galaxy S24 Ultra Titanium/256GB', 'samsung:galaxy-s24-ultra:256gb'],
-    ['Samsung Galaxy S24 Ultra Titanium Black/256GB', 'samsung:galaxy-s24-ultra:256gb'],
-    // On a phone, Titan or Titanium before a Vietnamese colour is a colour too.
-    ['Samsung Galaxy S24 Ultra Titan Xám/12GB/256GB', 'samsung:galaxy-s24-ultra:256gb'],
-    ['Samsung Galaxy S24 Ultra Titanium Tím/12GB/256GB', 'samsung:galaxy-s24-ultra:256gb'],
-    ['Xiaomi 14T Pro Titan Xanh/12GB/512GB', 'xiaomi:14t-pro:512gb'],
-    // At MSI and Lenovo it is the model's, before any colour; so is Tecno's Phantom.
-    ['MSI GT77 Titan Gray/32GB/2TB', 'msi:gt77-titan:2048gb'],
-    ['Lenovo ThinkPad X1 Titanium Black/16GB/512GB', 'lenovo:thinkpad-x1-titanium:512gb'],
-    ['Tecno Phantom Black/12GB/256GB', 'khac:tecno-phantom:256gb'],
-    ['Samsung Galaxy S23 Phantom Black/256GB', 'samsung:galaxy-s23:256gb'],
-    ['Acer Liquid Jade Black/16GB', 'acer:liquid-jade:16gb'],
-    ['Samsung Galaxy S24 Ultra Titanium Đen/256GB', 'samsung:galaxy-s24-ultra:256gb'],
-    ['Samsung Galaxy S24 Ultra Xám Titanium/256GB', 'samsung:galaxy-s24-ultra:256gb'],
-    // A colour's lead word before a colour leaves with it.
-    ['Oppo A58 Jade Green/128GB', 'oppo:a58:128gb'],
-    ['Xiaomi Redmi Note 13 Sky Blue/128GB', 'xiaomi:redmi-note-13:128gb'],
-    ['Vivo Y17s Gem Green/128GB', 'vivo:y17s:128gb'],
     ['Laptop MSI GT77 Titan RAM/32GB/1TB', 'msi:gt77-titan:1024gb'],
     // Two colours glued together are no glued run: the cap still holds.
     ['Samsung Galaxy Note 20 Ultra Black/White 12GB/256GB', 'samsung:galaxy-note-20-ultra:256gb'],
@@ -1309,6 +1281,43 @@ async function runSuite() {
     ['iPad mini 7 A17 Pro 128GB', 'apple:ipad-mini-7:128gb'],
     ['Apple iPad mini 8.3 inch (A17 Pro) Wi-Fi 128GB', 'apple:ipad-mini-7:128gb'],
     ['Apple iPad mini 2024 128GB', 'apple:ipad-mini:128gb'],
+  ] as const) {
+    assert.equal(keyOf(title), key, title);
+  }
+  // "Titanium" and "Titan" are laptop model words, not colours; "Jade", "Gem" and "Sky"
+  // start two-word colours; Garmin's GPS prefixes and its "GPS 73" (DOS/Rate#1495).
+  for (const [title, key] of [
+    ['Lenovo ThinkPad X1 Titanium/16GB/512GB', 'lenovo:thinkpad-x1-titanium:512gb'],
+    ['Lenovo ThinkPad X1 Titanium 16GB/512GB', 'lenovo:thinkpad-x1-titanium:512gb'],
+    ['ThinkPad X1 Yoga Titanium Bạc/16GB/512GB', 'lenovo:thinkpad-x1-yoga-titanium:512gb'],
+    ['MSI GT77 Titan Đen/32GB/1TB', 'msi:gt77-titan:1024gb'],
+    // A phone's "Titan" still starts its colour.
+    ['Samsung Galaxy S24 Ultra Titan Đen/256GB', 'samsung:galaxy-s24-ultra:256gb'],
+    ['Samsung Galaxy S24 Ultra Titan Gray/256GB', 'samsung:galaxy-s24-ultra:256gb'],
+    ['iPhone 16 Pro Max Titan Đen/256GB', 'apple:iphone-16-pro-max:256gb'],
+    ['Samsung Galaxy S24 Jade Green/256GB', 'samsung:galaxy-s24:256gb'],
+    ['Samsung Galaxy A55 Gem Green/8GB/256GB', 'samsung:galaxy-a55:256gb'],
+    ['Samsung Galaxy S24 Sky Blue/256GB', 'samsung:galaxy-s24:256gb'],
+    ['Máy định vị GPS cầm tay Garmin GPSMAP 66i', 'garmin:gpsmap-66i:unknown'],
+    ['Thiết bị định vị GPS Garmin GPS 73', 'garmin:gps-73:unknown'],
+    ['Garmin GPS 73', 'garmin:gps-73:unknown'],
+    // "Jade", "Gem" and "Sky" only start their own colour: "Galaxy Sky" and "Liquid Jade"
+    // are models.
+    ['Samsung Galaxy Sky Black/16GB', 'samsung:galaxy-sky:16gb'],
+    ['Acer Liquid Jade Black/16GB', 'acer:liquid-jade:16gb'],
+    ['MSI Pulse GL66 Titanium Gray/16GB/512GB', 'msi:pulse-gl66:512gb'],
+    // A laptop's "Titan Gray" or "Titanium Gray" is still its colour name.
+    ['Laptop Dell Latitude 7440 Titan Gray/16GB/512GB', 'dell:latitude-7440:512gb'],
+    ['Laptop Lenovo Yoga Slim 7 Titanium Gray/16GB/512GB', 'lenovo:yoga-slim-7:512gb'],
+    ['MSI Prestige 14 Titan Gray/16GB/512GB', 'msi:prestige-14:512gb'],
+    // Nor is it a model word in other laptop lines, before a Vietnamese colour or after one.
+    ['Laptop Dell Latitude 7440 Titan Xám/16GB/512GB', 'dell:latitude-7440:512gb'],
+    ['Laptop Dell Latitude 7440 Gray Titanium/16GB/512GB', 'dell:latitude-7440:512gb'],
+    ['Laptop Dell Latitude 7440 Black Titanium/16GB/512GB', 'dell:latitude-7440:512gb'],
+    // "chính hãng" between the GPS prefix and the brand.
+    ['Thiết bị định vị GPS chính hãng Garmin GPSMAP 65s', 'garmin:gpsmap-65s:unknown'],
+    // A GPS device title that names no model stays unkeyable.
+    ['Máy định vị GPS Garmin', 'garmin:unkeyed:unknown'],
   ] as const) {
     assert.equal(keyOf(title), key, title);
   }

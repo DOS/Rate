@@ -109,6 +109,9 @@
   "officialStore": {
     "message": "Official"
   },
+  "offerCombinedRiskNoData": {
+    "message": "Combined risk: no data yet"
+  },
   "offerCombinedRisk": {
     "message": "Combined risk: $SCORE$/100",
     "placeholders": {
@@ -354,6 +357,12 @@
         "content": "$1"
       }
     }
+  },
+  "noDataYet": {
+    "message": "No data yet"
+  },
+  "merchantTrustNoData": {
+    "message": "Trust: no data yet"
   },
   "merchantTrust": {
     "message": "Trust $SCORE$/100",

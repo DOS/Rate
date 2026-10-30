@@ -97,7 +97,8 @@ export function toHeroMerchantSuggestions(
         platform: sanitizeMerchantText(platform, 40),
         platform_shop_id: sanitizeMerchantIdentifier(platform_shop_id, 128),
         is_official: Boolean(is_official),
-        trust_score: clampScore100(trust_score),
+        // No data to score stays unknown, never 0 or 100 (DOS/Rate#1484).
+        trust_score: trust_score == null ? null : clampScore100(trust_score),
         // The flag is dropped here, so read it first (DOS/Rate#1479).
         dosafe_risk_score:
           dosafe_risk_known === false || dosafe_risk_score == null

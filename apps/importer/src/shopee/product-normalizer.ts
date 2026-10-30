@@ -1458,34 +1458,21 @@ const GARMIN_LINES =
 // the model's last word (DOS/Rate#1481). The first word of a two-word colour ("Titan
 // Gray/", "Xanh Dương/", "Silver Shadow/") goes with it.
 const GLUED_COLOURS =
-  /^(?:Đen|Trắng|Xanh|Bạc|Vàng|Hồng|Tím|Đỏ|Xám|Ghi|Cam|Nâu|Kem|Black|White|Blue|Navy|Silver|Gold|Pink|Purple|Lavender|Violet|Red|Gray|Grey|Green|Yellow|Graphite|Midnight|Starlight|Mint|Cream|Onyx|Cobalt|Icy|Amber)$/iu;
+  /^(?:Đen|Trắng|Xanh|Bạc|Vàng|Hồng|Tím|Đỏ|Xám|Ghi|Cam|Nâu|Kem|Black|White|Blue|Navy|Silver|Gold|Pink|Purple|Lavender|Violet|Red|Gray|Grey|Green|Yellow|Graphite|Midnight|Starlight|Mint|Cream|Onyx|Cobalt|Icy|Amber|Titanium)$/iu;
+// "Titan" alone is a model word (MSI GT77 Titan), but starts a colour before one.
+const GLUED_COLOUR_FIRST_WORDS = new RegExp(`${GLUED_COLOURS.source.slice(0, -2)}|Titan)$`, 'iu');
+// Samsung's "Jade Green", "Gem Green" and "Sky Blue": these first words go with their own
+// second word only, as "Galaxy Sky" and "Liquid Jade" are models too (DOS/Rate#1495).
+const GLUED_COLOUR_PAIRS = /^(?:jade green|gem green|sky blue)$/i;
+// In some laptop lines "Titan" and "Titanium" name the model, not its colour: "ThinkPad X1
+// Titanium/16GB/512GB", "X1 Yoga Titanium Bạc/…", "MSI GT77 Titan Đen/…" (DOS/Rate#1495).
+const LAPTOP_TITAN_WORD = /^titan(?:ium)?$/i;
+// English colour words: after "Titan" or "Titanium" they make a colour name ("Titan Gray").
+const ENGLISH_GLUED_COLOURS =
+  /^(?:Black|White|Blue|Navy|Silver|Gold|Pink|Purple|Lavender|Violet|Red|Gray|Grey|Green|Yellow|Graphite|Midnight|Starlight|Mint|Cream|Onyx|Cobalt|Icy|Amber|Shadow)$/i;
 const GLUED_COLOUR_SECOND_WORDS = /^(?:Dương|Lá|Ngọc|Đậm|Nhạt|Shadow)$/iu;
-// Words that start a colour only right before one ("Jade Green/", "Sky Blue/").
-const GLUED_COLOUR_LEAD_WORDS = /^(?:Jade|Gem|Sky|Phantom|Ice|Ocean|Forest|Rose)$/iu;
-// "Titan" and "Titanium" start a colour on a phone ("Titan Xám/", "Titanium Black/"),
-// but they are model words at MSI (GT77 Titan) and Lenovo (ThinkPad X1 Titanium),
-// which keep them before any colour (DOS/Rate#1495). "Phantom" leads a colour only at
-// Samsung and Asus ("Phantom Black"); elsewhere it is a line name (Tecno Phantom).
-const GLUED_METAL_WORDS = /^(?:Titan|Titanium)$/iu;
-const MODEL_WORD_LEADS: Readonly<Record<string, RegExp>> = {
-  MSI: GLUED_METAL_WORDS,
-  Lenovo: GLUED_METAL_WORDS,
-  Acer: /^Jade$/iu,
-};
-/** A colour glued to the run: a colour word, or "Titanium" as Samsung sells it. */
-const isGluedColourFor = (word: string | undefined, brand: string): boolean =>
-  isGluedColour(word) ||
-  (brand === 'Samsung' && word !== undefined && GLUED_METAL_WORDS.test(word));
 const isGluedColour = (word: string | undefined): boolean =>
   word !== undefined && (GLUED_COLOURS.test(word) || GLUED_COLOUR_SECOND_WORDS.test(word));
-/** Whether `first` and the glued `second` make one two-word colour, so both leave. */
-const isTwoWordColour = (first: string, second: string, brand: string): boolean =>
-  !MODEL_WORD_LEADS[brand]?.test(first) &&
-  !(/^Phantom$/iu.test(first) && brand !== 'Samsung' && brand !== 'Asus') &&
-  (GLUED_COLOURS.test(first) ||
-    GLUED_COLOUR_LEAD_WORDS.test(first) ||
-    GLUED_METAL_WORDS.test(first)) &&
-  isGluedColourFor(second, brand);
 // A word glued to a RAM/ROM run, a storage alone or a shop word: "Pro/12GB/512GB",
 // "Plus/256GB", "Plus/Mới" (DOS/Rate#1457, #1467). Matched on NFC text.
 const GLUED_HEAD =
@@ -2226,7 +2213,7 @@ export class ProductNormalizer {
       const cleaned = withoutLeadingPromo
         .replace(
           new RegExp(
-            `^(?:(?:Hàng\\s+)?Chính\\s+hãng\\s+)?(?:(?:Điện\\s+thoại(?:\\s+thông\\s+minh|\\s+di\\s+động)?|Smartphone|Máy\\s+tính\\s+bảng|Tablet|Laptop|Máy\\s+tính\\s+xách\\s+tay|Đồng\\s+hồ(?:\\s+đeo\\s+tay)?(?:\\s+thông\\s+minh)?|Vòng\\s+đeo\\s+tay(?:\\s+thông\\s+minh)?|Vòng\\s+tay\\s+thông\\s+minh|Smartwatch|Tai\\s+nghe(?:\\s+Bluetooth|\\s+chống\\s+ồn|\\s+không\\s+dây)?|Earbuds|(?:Máy|Thiết\\s+bị)\\s+định\\s+vị(?:\\s+GPS(?=\\s+(?:cầm\\s+tay\\s+)?${brand}\\b))?(?:\\s+cầm\\s+tay)?(?:\\s+GPS(?=\\s+${brand}\\b))?)\\s+(?:(?:Hàng\\s+)?Chính\\s+hãng\\s+)?)?(?:${brand}\\b\\s*)?`,
+            `^(?:(?:Hàng\\s+)?Chính\\s+hãng\\s+)?(?:(?:Điện\\s+thoại(?:\\s+thông\\s+minh|\\s+di\\s+động)?|Smartphone|Máy\\s+tính\\s+bảng|Tablet|Laptop|Máy\\s+tính\\s+xách\\s+tay|Đồng\\s+hồ(?:\\s+đeo\\s+tay)?(?:\\s+thông\\s+minh)?|Vòng\\s+đeo\\s+tay(?:\\s+thông\\s+minh)?|Vòng\\s+tay\\s+thông\\s+minh|Smartwatch|Tai\\s+nghe(?:\\s+Bluetooth|\\s+chống\\s+ồn|\\s+không\\s+dây)?|Earbuds|(?:Máy|Thiết\\s+bị)\\s+định\\s+vị(?:\\s+GPS(?=\\s+(?:cầm\\s+tay\\s+)?(?:(?:Hàng\\s+)?Chính\\s+hãng\\s+)?${brand}\\b))?(?:\\s+cầm\\s+tay)?(?:\\s+GPS(?=\\s+(?:(?:Hàng\\s+)?Chính\\s+hãng\\s+)?${brand}\\b))?)\\s+(?:(?:Hàng\\s+)?Chính\\s+hãng\\s+)?)?(?:${brand}\\b\\s*)?`,
             'i'
           ),
           ''
@@ -2249,6 +2236,11 @@ export class ProductNormalizer {
         .trim();
       const rawTokens = cleaned.split(/\s+/).filter(Boolean);
       const modelTokens: string[] = [];
+      // Only the lines Titan or Titanium names: Lenovo's ThinkPad X1 Titanium and MSI's
+      // GT and Titan laptops. Elsewhere ("Dell Latitude 7440 Titan Xám/") it is a colour.
+      const titanIsModelWord =
+        (brand === 'Lenovo' && /\bX1\b/i.test(modelTitle)) ||
+        (brand === 'MSI' && /\b(?:GT\d{2,3}|Titan\s+\d{2})\b/i.test(modelTitle));
       let hasProductCode = false;
       // A model whose first word only starts with a stop word ("GPSMAP") keeps two
       // words, as it keyed before (DOS/Rate#1429): "GPSMAP 67", not its description.
@@ -2319,7 +2311,7 @@ export class ProductNormalizer {
           !(modelTokens.length === 4 && /^plus(?:[,;]?$|\/)/i.test(tok)) &&
           // A glued colour past the cap still takes its first word back out
           // ("S24 Ultra Titan Gray/256GB", DOS/Rate#1481).
-          !isGluedColourFor(GLUED_HEAD.exec(tok.normalize('NFC'))?.[1], brand) &&
+          !isGluedColour(GLUED_HEAD.exec(tok.normalize('NFC'))?.[1]) &&
           !(/^pro$/i.test(modelTokens[modelTokens.length - 1] ?? '') && /^max[,;]?$/i.test(tok)) &&
           !generation
         ) {
@@ -2382,29 +2374,36 @@ export class ProductNormalizer {
               wordHead[1]!
             ) &&
             // Nor is a colour: "Galaxy A55 Đen/256GB" is the A55 (DOS/Rate#1481).
-            !GLUED_COLOURS.test(wordHead[1]!) &&
-            // Samsung sells "Titanium" as a colour ("Galaxy S24 Ultra Titanium/");
-            // elsewhere it is a model word ("ThinkPad X1 Titanium/", DOS/Rate#1495).
-            !(brand === 'Samsung' && GLUED_METAL_WORDS.test(wordHead[1]!)) &&
+            // Nor is "Titanium" after a colour word ("Black Titanium/", "Natural Titanium/").
+            (!GLUED_COLOURS.test(wordHead[1]!) ||
+              (titanIsModelWord &&
+                LAPTOP_TITAN_WORD.test(wordHead[1]!) &&
+                !/^(?:natural|desert)$/i.test(modelTokens[modelTokens.length - 1] ?? '') &&
+                !GLUED_COLOURS.test(
+                  (modelTokens[modelTokens.length - 1] ?? '').normalize('NFC')
+                ))) &&
             !(
               GLUED_COLOUR_SECOND_WORDS.test(wordHead[1]!) &&
-              isTwoWordColour(
-                (modelTokens[modelTokens.length - 1] ?? '').normalize('NFC'),
-                wordHead[1]!,
-                brand
+              GLUED_COLOUR_FIRST_WORDS.test(
+                (modelTokens[modelTokens.length - 1] ?? '').normalize('NFC')
               )
             )
           ) {
             modelTokens.push(wordHead[1]!);
           } else if (
+            isGluedColour(wordHead[1]) &&
             modelTokens.length > 1 &&
-            isTwoWordColour(
-              modelTokens[modelTokens.length - 1]!.normalize('NFC'),
-              wordHead[1]!,
-              brand
+            (GLUED_COLOUR_FIRST_WORDS.test(modelTokens[modelTokens.length - 1]!.normalize('NFC')) ||
+              GLUED_COLOUR_PAIRS.test(`${modelTokens[modelTokens.length - 1]} ${wordHead[1]}`)) &&
+            // A laptop's "Titanium Bạc/" or "Titan Đen/" keeps its model word, but "Titan
+            // Gray/" is Dell's and Lenovo's colour name: Titan leaves with it.
+            !(
+              titanIsModelWord &&
+              LAPTOP_TITAN_WORD.test(modelTokens[modelTokens.length - 1]!) &&
+              !ENGLISH_GLUED_COLOURS.test(wordHead[1]!)
             )
           ) {
-            // "Titan Gray/256GB", "Jade Green/": the colour's first word leaves too.
+            // "Titan Gray/256GB": the colour's first word leaves the model too.
             modelTokens.pop();
           }
           break;
