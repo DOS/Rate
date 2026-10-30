@@ -471,7 +471,7 @@ export class EntityMatcher {
     // As in Tier 2: an RPC failure aborts instead of seeding a duplicate Item.
     if (error) {
       throw new Error(
-        `[EntityMatcher] Item Tier 2 fuzzy match failed (${candidate.brand} ${candidate.model})${errorDetail(error)}`
+        `[EntityMatcher] Item Tier 2 fuzzy match failed (model_key ${candidate.model_key})${errorDetail(error)}`
       );
     }
     const rows = Array.isArray(data)

@@ -621,7 +621,9 @@ export class ShopeeIngestionPipeline {
         .eq('id', safeMasterIdHint)
         .maybeSingle();
       if (hintErr) {
-        throw new Error(`Failed to verify masterIdHint (${safeMasterIdHint}): ${hintErr.message}`);
+        throw new Error(
+          `Failed to verify masterIdHint (${safeMasterIdHint})${errorDetail(hintErr)}`
+        );
       }
       const hintRow = hintData as {
         id?: string;
