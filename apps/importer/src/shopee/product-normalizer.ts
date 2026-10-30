@@ -2136,10 +2136,32 @@ export class ProductNormalizer {
       const rawTokens = cleaned.split(/\s+/).filter(Boolean);
       const modelTokens: string[] = [];
       let hasProductCode = false;
+      // A model whose first word only starts with a stop word ("GPSMAP") keeps two
+      // words, as it keyed before (DOS/Rate#1429): "GPSMAP 67", not its description.
+      let maxModelTokens = Infinity;
       for (let i = 0; i < rawTokens.length; i++) {
-        const tok = rawTokens[i];
+        if (modelTokens.length >= maxModelTokens) break;
+        let tok = rawTokens[i];
         // "Samsung, Galaxy S25 Ultra": the brand's comma is not the end of the model.
         if (modelTokens.length === 0 && /^[,;]+$/.test(tok)) continue;
+        // "Samsung -Galaxy S24": a dash glued to the model's first word is no separator.
+        if (modelTokens.length === 0) tok = tok.replace(/^[-–|/]+(?=[\p{L}\d])/u, '');
+        // Nor does a size, RAM, a case size, a network, GPS, a dash or the shop's own
+        // "Chính hãng" / "Mới 100%" before the model has begun: "Samsung 256GB Galaxy
+        // S24 Ultra", "Samsung - Galaxy A55", "Xiaomi 16GB/512GB 15 Ultra" (DOS/Rate#1429).
+        if (modelTokens.length === 0) {
+          if (
+            /^(?:\d+(?:[.,]\d+)?(?:GB|TB)|\d+(?:GB)?[-/]\d+(?:GB|TB)?|\d{2}mm|[45]G|LTE|GPS|RAM|ROM|Chính|Hãng|Hàng|Mới|New|Fullbox|\d{1,3}%)?[-–|/]*$/iu.test(
+              tok
+            )
+          ) {
+            continue;
+          }
+          if (/^\d+(?:[.,]\d+)?$/.test(tok) && /^(?:GB|TB)$/i.test(rawTokens[i + 1] ?? '')) {
+            i++;
+            continue;
+          }
+        }
         const startsGeneration =
           /^gen$/i.test(tok) && /^\d{1,2}[,;]?$/.test(rawTokens[i + 1] ?? '');
         // A product code already names the generation: "IdeaPad Slim 3 15IAH8 Gen 8" and
@@ -2161,10 +2183,24 @@ export class ProductNormalizer {
         ) {
           break;
         }
-        if (
-          /^(?:\d+(?:[.,]\d+)?(?:GB|TB)|\d+\/\d+(?:GB|TB)?|\d{2}mm|5G|4G|LTE|GPS|RAM|ROM|OLED|WiFi|Chính|Quốc|Bản|Mới|Fullbox|Likenew|Like|Cũ|99%|98%|VN\/A|VNA|LL\/A|\(|\[|-)/i.test(
+        // A gift or bundle ends the model: "Xiaomi - 15T tặng ốp lưng" (DOS/Rate#1429).
+        // A "+" before "Plus" is the Plus written twice ("Galaxy S24 + Plus"), no bundle.
+        if (tok === '+' && /^plus[,;]?$/i.test(rawTokens[i + 1] ?? '')) continue;
+        if (/^(?:tặng|kèm|quà|\+)$/iu.test(tok.normalize('NFC'))) break;
+        const stop =
+          /^(?:\d+(?:[.,]\d+)?(?:GB|TB)|\d+\/\d+(?:GB|TB)?|\d{2}mm|5G|4G|LTE|GPS|RAM|ROM|OLED|WiFi|Chính|Quốc|Bản|Mới|Fullbox|Likenew|Like|Cũ|99%|98%|VN\/A|VNA|LL\/A|\(|\[|-)/i.exec(
             tok
-          ) ||
+          );
+        // As the model's first word, a stop word only counts whole: "Garmin GPSMAP 67"
+        // is the GPSMAP, not a "GPS" option (DOS/Rate#1429).
+        const startsWithStopWord =
+          modelTokens.length === 0 &&
+          stop !== null &&
+          /^[a-z]/i.test(stop[0]) &&
+          /^[\p{L}\d]/u.test(tok.slice(stop[0].length));
+        if (startsWithStopWord) maxModelTokens = 2;
+        if (
+          (stop && !startsWithStopWord) ||
           // A size written apart, "256 GB", ends the model like "256GB" (DOS/Rate#815).
           (/^\d+(?:[.,]\d+)?$/.test(tok) && /^(?:GB|TB)\b/i.test(rawTokens[i + 1] ?? ''))
         ) {
@@ -2179,7 +2215,10 @@ export class ProductNormalizer {
         modelTokens.push(tok);
         hasProductCode ||= isProductCodeToken(tok);
       }
-      model = modelTokens.length > 0 ? modelTokens.join(' ') : rawTokens.slice(0, 2).join(' ');
+      // No model token is no model: the title is unkeyable (DOS/Rate#1151) rather than
+      // keyed on whatever came first, which linked different phones to one master
+      // (DOS/Rate#1429).
+      model = modelTokens.join(' ');
     }
     model = model.replace(/\s+/g, ' ').trim().slice(0, 120).trim();
 

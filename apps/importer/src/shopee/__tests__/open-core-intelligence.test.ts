@@ -216,7 +216,8 @@ async function runSuite() {
     ['Samsung Galaxy S24 256GB', 'samsung:galaxy-s24:256gb'],
     ['iPhone 15 128GB', 'apple:iphone-15:128gb'],
     // A "+" before a gift or a word is not a Plus model (DOS/Rate#597).
-    ['Samsung Galaxy A55 + Tặng ốp', 'samsung:galaxy-a55-tang:unknown'],
+    // The gift no longer joins the model either (DOS/Rate#1429).
+    ['Samsung Galaxy A55 + Tặng ốp', 'samsung:galaxy-a55:unknown'],
     ['iPhone 15 128GB + Ốp lưng', 'apple:iphone-15:128gb'],
     ['iPhone 15 + Tặng sạc', 'apple:iphone-15:unknown'],
     ['Combo iPhone 15 + AirPods', 'apple:iphone-15:unknown'],
@@ -1040,6 +1041,39 @@ async function runSuite() {
     assert.equal(keyOf(title), 'samsung:galaxy-s26-ultra:256gb', title);
   }
   assert.equal(keyOf('Live Xiaomi Redmi Note 14 8GB/256GB'), 'xiaomi:redmi-note-14:256gb');
+  // A size, network or dash right after the brand does not end the model before it
+  // begins; with no model left the title is unkeyable, never two phones on one key
+  // (DOS/Rate#1429).
+  for (const [title, key] of [
+    ['Samsung 256GB Galaxy S24 Ultra', 'samsung:galaxy-s24-ultra:256gb'],
+    ['Samsung 256GB Galaxy A55 5G', 'samsung:galaxy-a55:256gb'],
+    ['Samsung - Galaxy A55 8GB 256GB', 'samsung:galaxy-a55:256gb'],
+    ['Samsung - Galaxy S24 Ultra 12GB 256GB', 'samsung:galaxy-s24-ultra:256gb'],
+    ['Samsung -Galaxy S24 Ultra 256GB', 'samsung:galaxy-s24-ultra:256gb'],
+    ['Samsung 256 GB Galaxy S24', 'samsung:galaxy-s24:256gb'],
+    ['Samsung 5G Galaxy A55 128GB', 'samsung:galaxy-a55:128gb'],
+    ['Samsung 8/256GB Galaxy A55', 'samsung:galaxy-a55:256gb'],
+    ['Xiaomi | Redmi Note 14 8GB/256GB', 'xiaomi:redmi-note-14:256gb'],
+    ['Xiaomi 16GB/512GB 15 Ultra', 'xiaomi:15-ultra:512gb'],
+    ['OPPO 8GB-256GB Reno12', 'oppo:reno12:256gb'],
+    ['vivo 5G| Y29 128GB', 'vivo:y29:128gb'],
+    ['Samsung 8GB RAM 256GB Galaxy A55', 'samsung:galaxy-a55:256gb'],
+    ['Samsung 44mm Galaxy Watch7', 'samsung:galaxy-watch7:unknown'],
+    ['Samsung Chính hãng Galaxy A55 256GB', 'samsung:galaxy-a55:256gb'],
+    ['OnePlus Chính hãng 13 256GB', 'oneplus:13:256gb'],
+    ['Samsung Mới 100% Galaxy S24', 'samsung:galaxy-s24:unknown'],
+    // A gift ends the model; a stop word only counts whole as the first word.
+    ['Xiaomi - 15T tặng ốp lưng 256GB', 'xiaomi:15t:256gb'],
+    ['Samsung 256GB Galaxy S24 Ultra tặng ốp lưng', 'samsung:galaxy-s24-ultra:256gb'],
+    ['JBL | Flip 6 tặng dây', 'jbl:flip-6:unknown'],
+    ['Garmin GPSMAP 67', 'garmin:gpsmap-67:unknown'],
+    ['Garmin GPSMAP 67 Máy định vị cầm tay', 'garmin:gpsmap-67:unknown'],
+    ['Samsung Galaxy S24 + Plus 256GB', 'samsung:galaxy-s24-plus:256gb'],
+    ['Samsung (Hàng chính hãng) Galaxy A55 256GB', 'samsung:galaxy-a55:256gb'],
+    ['Samsung 256GB', 'samsung:unkeyed:256gb'],
+  ] as const) {
+    assert.equal(keyOf(title), key, title);
+  }
   // The brand's line stands for it; promo phrases with "Off", "Sốc" or a percentage.
   assert.equal(keyOf('Sale Galaxy S26 Ultra 12GB/256GB'), 'samsung:galaxy-s26-ultra:256gb');
   assert.equal(keyOf('Live Điện thoại Redmi Note 14 8GB/256GB'), 'xiaomi:redmi-note-14:256gb');
