@@ -10,11 +10,12 @@
 // - one psql session reads everything inside BEGIN READ ONLY ... ROLLBACK, and
 //   PGOPTIONS asks for default_transaction_read_only as well (a pooler may drop
 //   startup options; the READ ONLY transaction does not depend on them);
-// - the first statement in that transaction is a guard: the run stops before any
-//   data is read unless the transaction is read-only and the role is no superuser
-//   and holds no INSERT, UPDATE, DELETE or TRUNCATE on the tables it reads (table
-//   or column grants). A role that could write is refused unless
-//   --allow-write-capable-role is given; the transaction stays read-only either way.
+// - the first statements in that transaction are a guard: psql runs the data reads
+//   (\if) only when the transaction is read-only and the role is no superuser and
+//   holds no INSERT, UPDATE, DELETE or TRUNCATE on the tables it reads (table or
+//   column grants), and this script checks the same row again and stops the session.
+//   A role that could write is refused unless --allow-write-capable-role is given;
+//   the transaction stays read-only either way.
 // The connection string comes from REKEY_DATABASE_URL. It is handed to psql as PG*
 // environment variables, never on the command line, and never printed.
 //
@@ -43,28 +44,41 @@ export const READ_TABLES = [
 
 const tableList = READ_TABLES.map((t) => `'${t}'`).join(', ');
 
+const writableTables = `(SELECT coalesce(json_agg(t), '[]'::json) FROM unnest(ARRAY[${tableList}]) AS t
+                 WHERE has_table_privilege(current_user, t, 'INSERT, UPDATE, DELETE, TRUNCATE')
+                    OR has_any_column_privilege(current_user, t, 'INSERT, UPDATE'))`;
+const superuser =
+  '(SELECT rolsuper FROM pg_roles WHERE rolname = current_user)';
+
 /**
- * The session's statements: the read-only transaction and the guard, sent alone; the
- * data reads are sent only after the guard passed. Each row is one tagged JSON line,
- * so a large table streams instead of building one value.
+ * The session's statements: the read-only transaction, then the guard, twice. psql
+ * itself decides first (\gset, \if): it runs the data reads only when the
+ * transaction is read-only and, unless the psql variable allow_write is on, the role
+ * cannot write. The guard row also goes to this script, which checks it again and
+ * stops the session. The whole script is sent at once, so nothing depends on when
+ * psql flushes its output. Each row is one tagged JSON line, so a large table streams
+ * instead of building one value.
  */
 export const GUARD_SQL = [
   'BEGIN READ ONLY;',
+  `SELECT current_setting('transaction_read_only') = 'on'
+    AND (:'allow_write' = 'on' OR (NOT coalesce(${superuser}, true)
+         AND json_array_length(${writableTables}) = 0)) AS guard_ok \\gset`,
   `SELECT 'guard' || chr(9) || json_build_object(
     'read_only', current_setting('transaction_read_only'),
-    'superuser', (SELECT rolsuper FROM pg_roles WHERE rolname = current_user),
-    'writable', (SELECT coalesce(json_agg(t), '[]'::json) FROM unnest(ARRAY[${tableList}]) AS t
-                 WHERE has_table_privilege(current_user, t, 'INSERT, UPDATE, DELETE, TRUNCATE')
-                    OR has_any_column_privilege(current_user, t, 'INSERT, UPDATE')))::text;`,
+    'superuser', ${superuser},
+    'writable', ${writableTables})::text;`,
 ].join('\n');
 
 export const DATA_SQL = [
+  '\\if :guard_ok',
   `SELECT 'master' || chr(9) || json_build_object('id', id, 'model_key', model_key, 'status', status)::text
     FROM rate.master_products;`,
   `SELECT 'listing' || chr(9) || json_build_object('id', id, 'master_id', cluster_id, 'title', title)::text
     FROM rate.products WHERE cluster_id IS NOT NULL;`,
   `SELECT 'price' || chr(9) || json_build_object('product_id', product_id, 'rows', count(*))::text
     FROM rate.price_history GROUP BY product_id;`,
+  '\\endif',
   'ROLLBACK;',
 ].join('\n');
 
@@ -145,7 +159,7 @@ export function pgEnvFromUrl(url) {
   // node-postgres "ssl=true") is refused rather than dropped, so a TLS requirement
   // is never lost silently. Only the parameter's name is reported.
   for (const [name, value] of parsed.searchParams) {
-    const variable = URL_PARAMS[name];
+    const variable = Object.hasOwn(URL_PARAMS, name) ? URL_PARAMS[name] : null;
     if (!variable) {
       throw new Error(
         `${ENV_URL} has a query parameter this script does not pass on: ${name}. ` +
@@ -386,12 +400,31 @@ export function createCollector({ keyOf, onGuard }) {
   };
 }
 
-/** Runs the session through psql, feeding each output line to `onLine`. */
-export function runSession(env, onLine, spawnFn = spawn) {
+/**
+ * Runs the session through psql, feeding each output line to `onLine`. psql's
+ * allow_write variable carries the --allow-write-capable-role override.
+ */
+export function runSession(
+  env,
+  onLine,
+  spawnFn = spawn,
+  { allowWriteCapableRole = false } = {}
+) {
   return new Promise((resolve, reject) => {
     const child = spawnFn(
       'psql',
-      ['-X', '-q', '-A', '-t', '-v', 'ON_ERROR_STOP=1', '-f', '-'],
+      [
+        '-X',
+        '-q',
+        '-A',
+        '-t',
+        '-v',
+        'ON_ERROR_STOP=1',
+        '-v',
+        `allow_write=${allowWriteCapableRole ? 'on' : 'off'}`,
+        '-f',
+        '-',
+      ],
       {
         env: {
           ...process.env,
@@ -406,24 +439,18 @@ export function runSession(env, onLine, spawnFn = spawn) {
     child.on('error', (err) =>
       reject(new Error(`psql could not start: ${err.message}`))
     );
-    let dataSent = false;
+    let guarded = false;
     createInterface({ input: child.stdout }).on('line', (line) => {
       if (failed) return;
       try {
         onLine(line);
+        if (line.startsWith('guard\t')) guarded = true;
       } catch (err) {
         failed = err;
-        child.stdin.destroy();
         child.kill();
-        return;
-      }
-      // The data reads go to psql only once the guard has passed.
-      if (!dataSent && line.startsWith('guard\t')) {
-        dataSent = true;
-        child.stdin.end(`${DATA_SQL}\n`);
       }
     });
-    // psql may exit (a failed guard, a lost connection) before stdin is written.
+    // psql may exit (a lost connection) before it has read all of stdin.
     child.stdin.on('error', () => {});
     // psql's own error text can quote parts of the connection; only count it.
     createInterface({ input: child.stderr }).on('line', () => {
@@ -431,7 +458,7 @@ export function runSession(env, onLine, spawnFn = spawn) {
     });
     child.on('close', (code) => {
       if (failed) reject(failed);
-      else if (code === 0 && !dataSent) {
+      else if (code === 0 && !guarded) {
         reject(new Error('refusing to run: psql gave no read-only check'));
       } else if (code !== 0) {
         reject(
@@ -442,7 +469,7 @@ export function runSession(env, onLine, spawnFn = spawn) {
         );
       } else resolve();
     });
-    child.stdin.write(`${GUARD_SQL}\n`);
+    child.stdin.end(`${SESSION_SQL}\n`);
   });
 }
 
@@ -514,7 +541,9 @@ async function main() {
       });
     },
   });
-  await runSession(env, collector.line);
+  await runSession(env, collector.line, spawn, {
+    allowWriteCapableRole: values['allow-write-capable-role'],
+  });
   const plan = planRekeys(collector.data);
   if (values.json) {
     console.log(JSON.stringify({ role, ...plan }, null, 2));

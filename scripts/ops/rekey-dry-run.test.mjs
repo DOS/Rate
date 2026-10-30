@@ -22,13 +22,28 @@ import {
 } from './rekey-dry-run.mjs';
 
 test('the session is one read-only transaction of SELECTs, guard first', () => {
-  const statements = SESSION_SQL.split(/;\s*\n/).map((s) =>
-    s.trim().replace(/;$/, '')
+  // Statements end in ";" or a psql "\gset"; "\if" and "\endif" are psql lines.
+  const parts = SESSION_SQL.split(
+    /(?:;|\\gset)\s*\n|\n(?=\\)|(?<=\\if :guard_ok|\\endif)\n/
+  )
+    .map((s) => s.trim().replace(/;$/, ''))
+    .filter(Boolean);
+  assert.deepEqual(parts.slice(0, 1), ['BEGIN READ ONLY']);
+  assert.equal(parts[parts.length - 1], 'ROLLBACK');
+  assert.match(parts[1], /AS guard_ok$/, 'psql decides first');
+  assert.match(
+    parts[2],
+    /^SELECT 'guard'/,
+    'then the guard row for this script'
   );
-  assert.equal(statements[0], 'BEGIN READ ONLY');
-  assert.equal(statements[statements.length - 1], 'ROLLBACK');
-  const reads = statements.slice(1, -1);
-  assert.match(reads[0], /^SELECT 'guard'/, 'the guard runs before any data');
+  assert.equal(
+    parts[3],
+    '\\if :guard_ok',
+    'the data reads only run past the guard'
+  );
+  assert.equal(parts[parts.length - 2], '\\endif');
+  const reads = parts.slice(1, -1).filter((s) => !s.startsWith('\\'));
+  assert.equal(reads.length, 5);
   for (const sql of reads) {
     assert.match(sql, /^SELECT\b/);
     assert.doesNotMatch(
@@ -36,10 +51,17 @@ test('the session is one read-only transaction of SELECTs, guard first', () => {
       /\b(?:INSERT\s+INTO|UPDATE\s+\w|DELETE\s+FROM|ALTER|DROP|TRUNCATE\s+\w|CREATE|GRANT|COPY)\b/i
     );
   }
+  for (const guard of [parts[1], parts[2]]) {
+    assert.match(
+      guard,
+      /has_any_column_privilege\(current_user, t, 'INSERT, UPDATE'\)/,
+      'column grants count'
+    );
+  }
+  assert.match(parts[1], /:'allow_write' = 'on'/);
   assert.match(
-    reads[0],
-    /has_any_column_privilege\(current_user, t, 'INSERT, UPDATE'\)/,
-    'column grants count'
+    parts[1],
+    /current_setting\('transaction_read_only'\) = 'on'\s+AND/
   );
 });
 
@@ -225,9 +247,19 @@ test('a failing guard stops the session before data is kept; psql errors are wit
   );
   assert.equal(collector.data.masters.length, 0);
   assert.ok(writer.calls[0].child.killed);
-  // The data reads never reached psql.
-  assert.equal(writer.calls[0].script, `${GUARD_SQL}\n`);
-  assert.ok(!writer.calls[0].script.includes('FROM rate.master_products'));
+  // Without the override, psql itself skips the data reads for such a role.
+  assert.ok(writer.calls[0].args.includes('allow_write=off'));
+  assert.ok(
+    writer.calls[0].script.indexOf('\\if :guard_ok') <
+      writer.calls[0].script.indexOf('FROM rate.master_products')
+  );
+  assert.ok(writer.calls[0].script.startsWith(GUARD_SQL));
+  const allowed = fakeSpawn({ lines: [] });
+  await assert.rejects(
+    runSession({}, () => {}, allowed.spawnFn, { allowWriteCapableRole: true }),
+    /no read-only check/
+  );
+  assert.ok(allowed.calls[0].args.includes('allow_write=on'));
   const noGuard = createCollector({ keyOf: () => null, onGuard: () => {} });
   assert.throws(
     () => noGuard.line('master\t{"id":"m1"}'),
