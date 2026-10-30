@@ -13,16 +13,23 @@ test.use(phone);
 type Budget = { js: number; css: number; prefetch: number };
 
 const KB = 1024;
+// Measured on CI on 2026-10-30 (E2E job, PR #1497): JS / CSS / prefetch KB.
+// home 320.3 / 43.5 / 0; category 338.8 / 45.4 / 6.3-7.9; product
+// 352.1 / 43.5 / 1.7-4.2; merchant 313.7 / 43.5 / 3.4. Prefetches depend on
+// timing, so their budget is the highest run plus 10%, at least 4 KB.
 const PAGES: Record<string, { path: string; budget: Budget }> = {
-  home: { path: '/', budget: { js: 1, css: 1, prefetch: 1 } },
-  category: { path: '/smartphones', budget: { js: 1, css: 1, prefetch: 1 } },
+  home: { path: '/', budget: { js: 353 * KB, css: 48 * KB, prefetch: 4 * KB } },
+  category: {
+    path: '/smartphones',
+    budget: { js: 373 * KB, css: 50 * KB, prefetch: 9 * KB },
+  },
   product: {
     path: '/smartphones/iphone-16-pro-max-256gb',
-    budget: { js: 1, css: 1, prefetch: 1 },
+    budget: { js: 388 * KB, css: 48 * KB, prefetch: 5 * KB },
   },
   merchant: {
     path: '/merchants/11111111-1111-4111-8111-111111111111',
-    budget: { js: 1, css: 1, prefetch: 1 },
+    budget: { js: 346 * KB, css: 48 * KB, prefetch: 4 * KB },
   },
 };
 
