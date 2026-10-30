@@ -1104,7 +1104,7 @@ async function runSuite() {
     'apple:watch-series-10-46mm:64gb'
   );
   assert.equal(
-    keyOf('[Tặng ốp lưng] Apple Watch Series 10 GPS 46mm'),
+    keyOf('[Tặng dây đeo] Apple Watch Series 10 GPS 46mm'),
     'apple:watch-series-10-46mm:64gb'
   );
   assert.equal(keyOf('Sale sốc tặng quà Apple Watch S10 46mm'), 'apple:watch-series-10-46mm:64gb');
@@ -1282,7 +1282,7 @@ async function runSuite() {
     'earbuds'
   );
   assert.equal(detectCategorySlug('HomePod mini (Tặng dây Apple Watch Series 10)'), 'smartphones');
-  assert.equal(detectCategorySlug('[Tặng ốp lưng] Apple Watch Series 10 GPS 46mm'), 'smartwatches');
+  assert.equal(detectCategorySlug('[Tặng dây đeo] Apple Watch Series 10 GPS 46mm'), 'smartwatches');
   // With no line matched, the family the title names first, else iPhone.
   assert.equal(keyOf('MacBook M4'), 'apple:macbook:unknown');
   assert.equal(keyOf('Apple "iPad" 256GB'), 'apple:ipad:256gb');
