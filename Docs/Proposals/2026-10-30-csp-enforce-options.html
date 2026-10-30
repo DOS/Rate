@@ -140,7 +140,7 @@
   <dl>
     <dt>Cách làm</dt><dd>
       <ol>
-        <li><b>Đo trước.</b> Gửi chính sách dưới đây thành một chính sách chỉ báo cáo thứ hai, chạy song song với chính sách chặt, trong vài khung 12 giờ. Sau đó kiểm tra <code>/smartphones</code> vẫn mang nonce, vì Next.js đọc nonce từ header chỉ báo cáo và hai chính sách không được làm nó lẫn. Kiểm tra cả bản preview, nơi thanh công cụ Vercel tải script từ <code>vercel.live</code>.</li>
+        <li><b>Đo trước.</b> Gửi chính sách dưới đây thành một chính sách chỉ báo cáo thứ hai, chạy song song với chính sách chặt, trong vài khung 12 giờ. Gửi cả hai trong cùng một header chỉ báo cáo, nối bằng dấu phẩy, chính sách chặt có nonce đứng trước, mỗi chính sách có <code>report-uri</code> riêng. Next.js 16.4 (<code>get-script-nonce-from-header</code>) tách header theo dấu <code>;</code> và lấy <code>script-src</code> đầu tiên, nên nếu (c) đứng trước, Next.js sẽ không tìm thấy nonce. Sau đó kiểm tra <code>/smartphones</code> vẫn mang nonce. Kiểm tra cả bản preview, nơi thanh công cụ Vercel tải script từ <code>vercel.live</code>.</li>
         <li>Sau đó mới chặn thật <code>script-src 'self' 'unsafe-inline'</code> và <code>worker-src 'self' blob:</code> trên mọi trang: không <code>'unsafe-eval'</code>, không host nào khác.
           <ul>
             <li>Thiếu <code>worker-src</code> thì worker sẽ dùng <code>script-src</code>, và worker dạng <code>blob:</code> sẽ bị chặn, ví dụ Sentry Replay (<code>instrumentation-client.ts</code>) khi bật DSN.</li>
