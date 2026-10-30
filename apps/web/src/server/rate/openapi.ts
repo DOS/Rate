@@ -458,6 +458,23 @@ function buildBaseRateOpenApiSpec(
                     type: 'object',
                     properties: {
                       ok: { type: 'boolean', example: true },
+                      requested_slugs: {
+                        type: 'array',
+                        items: { type: 'string' },
+                        description: 'The slugs read from `slugs`.',
+                      },
+                      excluded_cross_category_slugs: {
+                        type: 'array',
+                        items: { type: 'string' },
+                        description:
+                          'Published products left out by the Same-Category Comparison Lock (another category than the first product found).',
+                      },
+                      not_found_slugs: {
+                        type: 'array',
+                        items: { type: 'string' },
+                        description:
+                          'Requested slugs that match no published product.',
+                      },
                       data: {
                         type: 'array',
                         items: {
