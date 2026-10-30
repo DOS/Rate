@@ -80,6 +80,11 @@ import {
 } from '@/lib/compare-cell';
 import { productImageUrl } from '@/lib/rate-domain-core';
 import { itemSlugFromProductAnswer, versusHref } from '@/lib/item-compare';
+import {
+  formatDecimal,
+  formatNumber,
+  formatPriceVnd,
+} from '@/lib/locale-format';
 
 interface CompareWorkspaceProps {
   initialProducts: MasterProduct[];
@@ -195,9 +200,12 @@ export function sanitizeComparePriceVnd(value: unknown): number {
   return Math.round(num);
 }
 
-export function formatComparePriceVnd(value: unknown): string {
+export function formatComparePriceVnd(
+  value: unknown,
+  locale?: string | null
+): string {
   const safe = sanitizeComparePriceVnd(value);
-  return safe > 0 ? `${safe.toLocaleString('vi-VN')} ₫` : '-';
+  return safe > 0 ? formatPriceVnd(safe, locale) : '-';
 }
 
 export function sanitizeCompareMerchantCount(value: unknown): number {
@@ -267,7 +275,10 @@ function withPlainValues(groups: SpecGroupDef[]): SpecGroupDef[] {
   }));
 }
 
-export function buildSpecGroups(t: CompareTranslator): SpecGroupDef[] {
+export function buildSpecGroups(
+  t: CompareTranslator,
+  locale?: string | null
+): SpecGroupDef[] {
   return withPlainValues([
     {
       id: 'market_trust',
@@ -281,7 +292,10 @@ export function buildSpecGroups(t: CompareTranslator): SpecGroupDef[] {
             const r = getEffectiveRating(p);
             const count = p.authentic_review_count || p.total_reviews || 0;
             return r > 0
-              ? t('valAuthenticReviews', { rating: r.toFixed(1), count })
+              ? t('valAuthenticReviews', {
+                  rating: formatDecimal(r, locale, 1),
+                  count,
+                })
               : t('valNoReviews');
           },
           numericValue: (p) => {
@@ -295,7 +309,9 @@ export function buildSpecGroups(t: CompareTranslator): SpecGroupDef[] {
           label: t('rowExpertRating'),
           renderValue: (p) => {
             const exp5 = resolveCompareExpertRating5(p);
-            return exp5 != null ? `Lab ${exp5.toFixed(1)} / 5.0` : '-';
+            return exp5 != null
+              ? `Lab ${formatDecimal(exp5, locale, 1)} / ${formatDecimal(5, locale, 1)}`
+              : '-';
           },
           numericValue: (p) => resolveCompareExpertRating5(p),
           higherIsBetter: true,
@@ -303,7 +319,7 @@ export function buildSpecGroups(t: CompareTranslator): SpecGroupDef[] {
         {
           id: 'min_price',
           label: t('rowMinPrice'),
-          renderValue: (p) => formatComparePriceVnd(p.min_price),
+          renderValue: (p) => formatComparePriceVnd(p.min_price, locale),
           numericValue: (p) => {
             const safe = sanitizeComparePriceVnd(p.min_price);
             return safe > 0 ? safe : null;
@@ -318,9 +334,9 @@ export function buildSpecGroups(t: CompareTranslator): SpecGroupDef[] {
             const max = sanitizeComparePriceVnd(p.max_price);
             if (min <= 0) return '-';
             if (max > min) {
-              return `${min.toLocaleString('vi-VN')} ₫ - ${max.toLocaleString('vi-VN')} ₫`;
+              return `${formatPriceVnd(min, locale)} - ${formatPriceVnd(max, locale)}`;
             }
-            return `${min.toLocaleString('vi-VN')} ₫`;
+            return formatPriceVnd(min, locale);
           },
         },
         {
@@ -351,7 +367,7 @@ export function buildSpecGroups(t: CompareTranslator): SpecGroupDef[] {
             if (combined10 <= 0) return '-';
             const costPerPt = Math.round(min / combined10);
             return t('valPerPoint', {
-              cost: costPerPt.toLocaleString('vi-VN'),
+              cost: formatNumber(costPerPt, locale),
             });
           },
           numericValue: (p) => {
@@ -377,7 +393,7 @@ export function buildSpecGroups(t: CompareTranslator): SpecGroupDef[] {
             const min = sanitizeComparePriceVnd(p.min_price);
             if (min <= 0) return '-';
             const daily = Math.round(min / 730);
-            return t('valPerDay', { cost: daily.toLocaleString('vi-VN') });
+            return t('valPerDay', { cost: formatNumber(daily, locale) });
           },
           numericValue: (p) => {
             const min = sanitizeComparePriceVnd(p.min_price);
@@ -930,7 +946,7 @@ export default function CompareWorkspace({
   const router = useRouter();
   const specDict = useMemo(() => getSpecUiDictionary(locale), [locale]);
   const categoryTabs = useMemo(() => buildCategoryTabs(t), [t]);
-  const allSpecGroups = useMemo(() => buildSpecGroups(t), [t]);
+  const allSpecGroups = useMemo(() => buildSpecGroups(t, locale), [t, locale]);
   const [activeCategory, setActiveCategory] = useState<CanonicalCategorySlug>(
     () =>
       initialProducts.length > 0
@@ -1676,9 +1692,10 @@ export default function CompareWorkspace({
                             item.slug,
                             productImageUrl(item)
                           );
-                          const priceFormatted = Number(
-                            item.min_price || 0
-                          ).toLocaleString('vi-VN');
+                          const priceFormatted = formatNumber(
+                            Number(item.min_price || 0),
+                            locale
+                          );
                           const rating = getEffectiveRating(item);
 
                           return (
@@ -1727,7 +1744,7 @@ export default function CompareWorkspace({
                                     <span className="rate-score-badge-user">
                                       ★{' '}
                                       {rating > 0
-                                        ? rating.toFixed(1)
+                                        ? formatDecimal(rating, locale, 1)
                                         : t('unratedShort')}
                                     </span>
                                     <span
@@ -1932,7 +1949,11 @@ export default function CompareWorkspace({
                         {/* A 0.00 gap is a tie, as on the home page (DOS/Rate#1209). */}
                         {battle.scoreDelta5 > 0.005
                           ? t('scoreDeltaBadge', {
-                              delta: battle.scoreDelta5.toFixed(2),
+                              delta: formatDecimal(
+                                battle.scoreDelta5,
+                                locale,
+                                2
+                              ),
                             })
                           : t('mdRowTie')}
                       </span>
@@ -1957,7 +1978,12 @@ export default function CompareWorkspace({
                             {battle.productA.name}
                           </div>
                           <div className="small text-secondary rate-tabular">
-                            ★ {battle.productA.combinedScore5.toFixed(2)}
+                            ★{' '}
+                            {formatDecimal(
+                              battle.productA.combinedScore5,
+                              locale,
+                              2
+                            )}
                           </div>
                         </div>
                       </div>
@@ -1972,7 +1998,12 @@ export default function CompareWorkspace({
                             {battle.productB.name}
                           </div>
                           <div className="small text-secondary rate-tabular">
-                            ★ {battle.productB.combinedScore5.toFixed(2)}
+                            ★{' '}
+                            {formatDecimal(
+                              battle.productB.combinedScore5,
+                              locale,
+                              2
+                            )}
                           </div>
                         </div>
                         <img
@@ -2068,8 +2099,12 @@ export default function CompareWorkspace({
                   </div>
                   <div className="small text-white-50 rate-tabular">
                     ★{' '}
-                    {getEffectiveRating(headToHeadSummary.bestRated).toFixed(1)}{' '}
-                    / 5.0 {t('verdictAiFilteredNote')}
+                    {formatDecimal(
+                      getEffectiveRating(headToHeadSummary.bestRated),
+                      locale,
+                      1
+                    )}{' '}
+                    / {formatDecimal(5, locale, 1)} {t('verdictAiFilteredNote')}
                   </div>
                 </div>
               </div>
@@ -2162,10 +2197,10 @@ export default function CompareWorkspace({
                     {headToHeadSummary.lowestPrice.name}
                   </div>
                   <div className="small text-white-50 rate-tabular">
-                    {Number(
-                      headToHeadSummary.lowestPrice.min_price || 0
-                    ).toLocaleString('vi-VN')}{' '}
-                    ₫
+                    {formatPriceVnd(
+                      Number(headToHeadSummary.lowestPrice.min_price || 0),
+                      locale
+                    )}
                   </div>
                 </div>
               </div>
@@ -2238,7 +2273,7 @@ export default function CompareWorkspace({
                       productImageUrl(p)
                     );
                     const minPrice = Number(p.min_price || 0);
-                    const minPriceFormatted = minPrice.toLocaleString('vi-VN');
+                    const minPriceFormatted = formatNumber(minPrice, locale);
                     const userRating = getEffectiveRating(p);
                     const expertRating = resolveCompareExpertRating5(p);
                     const reviewCount =
@@ -2312,12 +2347,12 @@ export default function CompareWorkspace({
                             <span className="rate-score-badge-user">
                               ★{' '}
                               {userRating > 0
-                                ? `${userRating.toFixed(1)} (${reviewCount})`
+                                ? `${formatDecimal(userRating, locale, 1)} (${reviewCount})`
                                 : t('unratedShort')}
                             </span>
                             {expertRating != null && (
                               <span className="rate-score-badge-expert">
-                                Lab {expertRating.toFixed(1)}
+                                Lab {formatDecimal(expertRating, locale, 1)}
                               </span>
                             )}
                           </div>
@@ -2426,13 +2461,13 @@ export default function CompareWorkspace({
                       >
                         {sig.verdict === 'genuine_deal'
                           ? t('radarGenuineFloor', {
-                              pct: sig.savingsPct.toFixed(1),
+                              pct: formatDecimal(sig.savingsPct, locale, 1),
                               platform: (
                                 sig.genuineDeal?.platform ?? ''
                               ).toUpperCase(),
                             })
                           : t('radarFakeMarkup', {
-                              pct: sig.fakeMarkupPct.toFixed(1),
+                              pct: formatDecimal(sig.fakeMarkupPct, locale, 1),
                             })}
                       </td>
                     );

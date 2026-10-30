@@ -1,5 +1,8 @@
 import 'server-only';
-import { EXTENSION_CAPABILITY_MATRIX } from './extension';
+import {
+  EXTENSION_CAPABILITY_MATRIX,
+  EXTENSION_PRICE_VERDICTS,
+} from './extension';
 import { isItemModelOn } from './item-model';
 
 export interface OpenApiParameter {
@@ -66,21 +69,78 @@ function errorResponse(description: string): OpenApiResponse {
 }
 
 /**
- * The 429 of the inspection routes (`/lookup`, `/inspect`): 30 requests per
- * minute per client IP, counted on each server instance (DOS/Rate#1307).
+ * A rate limit's 429: `code: RATE_LIMIT_EXCEEDED` and `Retry-After`, the
+ * limit's window in seconds (DOS/Rate#1307, #1377, #1400).
  */
-function inspectRateLimitedResponse(): OpenApiResponse {
+function rateLimitedResponse(
+  description: string,
+  retryAfterSeconds = 60
+): OpenApiResponse {
   return {
     ...errorResponse(
-      'More than 30 requests per minute from this client IP (shared by `/lookup` and `/inspect`, counted on each server instance). The body has `code: "RATE_LIMIT_EXCEEDED"`.'
+      `${description} The body has \`code: "RATE_LIMIT_EXCEEDED"\`.`
     ),
     headers: {
       'Retry-After': {
         description: 'Seconds to wait before retrying.',
-        schema: { type: 'integer', example: 60 },
+        schema: { type: 'integer', example: retryAfterSeconds },
       },
     },
   };
+}
+
+/**
+ * The 429 of the inspection routes (`/lookup`, `/inspect`): 30 requests per
+ * minute per client IP, counted on each server instance (DOS/Rate#1307).
+ */
+function inspectRateLimitedResponse(): OpenApiResponse {
+  return rateLimitedResponse(
+    'More than 30 requests per minute from this client IP (shared by `/lookup` and `/inspect`, counted on each server instance).'
+  );
+}
+
+const LEADERBOARD_ENTRY = {
+  type: 'object',
+  additionalProperties: true,
+  properties: {
+    slug: { type: 'string' },
+    deal_radar: RADAR_REF,
+    radar_signal: RADAR_REF,
+  },
+} as const;
+
+/** The `/leaderboard` payload under `data` (DOS/Rate#1377). */
+const LEADERBOARD_PAYLOAD_PROPERTIES: Record<
+  string,
+  Record<string, unknown>
+> = {
+  directory: { type: 'string', example: 'tech_electronics' },
+  category: { type: 'string' },
+  criterion: { type: 'string' },
+  price_segment: { type: 'string' },
+  brand: { type: 'string' },
+  total_matched: { type: 'integer' },
+  returned_count: { type: 'integer' },
+  compare_top_3_url: { type: ['string', 'null'] },
+  podium_top_3: { type: 'array', items: LEADERBOARD_ENTRY },
+  items: { type: 'array', items: LEADERBOARD_ENTRY },
+};
+
+/**
+ * The same payload repeated at the top level for older clients, each field
+ * deprecated in favour of `data` (DOS/Rate#1377).
+ */
+function leaderboardTopLevelMirror(): Record<string, Record<string, unknown>> {
+  return Object.fromEntries(
+    Object.entries(LEADERBOARD_PAYLOAD_PROPERTIES).map(([key, schema]) => [
+      key,
+      {
+        ...schema,
+        deprecated: true,
+        description: `The same as \`data.${key}\`, kept for older clients.`,
+      },
+    ])
+  );
 }
 
 function jsonBody(schema: Record<string, unknown>) {
@@ -227,7 +287,7 @@ function buildBaseRateOpenApiSpec(
       {
         name: 'URL Inspector & Extension MV3',
         description:
-          'Real-time URL/SKU canonicalization, 10-platform hybrid lookup, 5-level price verdict, and zero-trust quarantine ingestion.',
+          'Real-time URL/SKU canonicalization, 10-platform hybrid lookup, evidence-based price verdict, and zero-trust quarantine ingestion.',
       },
       {
         name: 'Merchants & Dual Risk Score',
@@ -865,9 +925,9 @@ function buildBaseRateOpenApiSpec(
         get: {
           operationId: 'inspectProductUrlAndVerdict',
           summary:
-            'Full Web Product & URL Inspector with 5-level price verdict and price history chart',
+            'Full Web Product & URL Inspector with price verdict and price history chart',
           description:
-            'Runs the complete hybrid lookup pipeline for the `/inspect` web portal: canonicalizes 10 supported e-commerce/retailer platforms, blocks non-hardware accessories, resolves SKU variant capacity, computes the 5-level price verdict, and returns full product detail with the Deal Radar signal (`data.radarSignal`, null when no product matched). One of `q` or `url` is required. Limited to 30 requests per minute per client IP (shared with `/lookup`, counted on each server instance); past it the answer is 429 with `Retry-After`.',
+            'Runs the complete hybrid lookup pipeline for the `/inspect` web portal: canonicalizes 10 supported e-commerce/retailer platforms, blocks non-hardware accessories, resolves SKU variant capacity, computes the price verdict (`PriceVerdictLevel`), and returns full product detail with the Deal Radar signal (`data.radarSignal`, null when no product matched). One of `q` or `url` is required. Limited to 30 requests per minute per client IP (shared with `/lookup`, counted on each server instance); past it the answer is 429 with `Retry-After`.',
           tags: ['URL Inspector & Extension MV3'],
           parameters: [
             {
@@ -904,7 +964,7 @@ function buildBaseRateOpenApiSpec(
           responses: {
             '200': {
               description:
-                'Complete inspection payload: the lookup result plus `canonicalUrl`, the accessory `gatekeeper`, the 5-level `priceVerdict` and `radarSignal`, all under `data`.',
+                'Complete inspection payload: the lookup result plus `canonicalUrl`, the accessory `gatekeeper`, the `priceVerdict` (`PriceVerdictLevel`) and `radarSignal`, all under `data`.',
               content: jsonBody({
                 type: 'object',
                 properties: {
@@ -928,15 +988,7 @@ function buildBaseRateOpenApiSpec(
                             additionalProperties: true,
                             properties: {
                               verdict: {
-                                type: 'string',
-                                enum: [
-                                  'genuine_deal',
-                                  'fair_market_price',
-                                  'above_market',
-                                  'inflated_fake_sale',
-                                  'insufficient_data',
-                                  'accessory_skip',
-                                ],
+                                $ref: '#/components/schemas/PriceVerdictLevel',
                               },
                             },
                           },
@@ -961,7 +1013,7 @@ function buildBaseRateOpenApiSpec(
           summary:
             'Low-latency Hybrid Lookup for Rate Browser Extension Manifest V3',
           description:
-            'Dedicated read-only lookup endpoint for the Rate Browser Extension MV3 across 10 platforms (`shopee`, `lazada`, `tiki`, `tiktok`, `cellphones`, `tgdd`, `fptshop`, `hoangha`, `didongviet`, `phongvu`). Performs deterministic `platform_item_id` lookup, canonical model fallback, accessory gatekeeping, 5-level price verdict calculation, and returns the Deal Radar signal as `data.radarSignal`.',
+            'Dedicated read-only lookup endpoint for the Rate Browser Extension MV3 across 10 platforms (`shopee`, `lazada`, `tiki`, `tiktok`, `cellphones`, `tgdd`, `fptshop`, `hoangha`, `didongviet`, `phongvu`). Performs deterministic `platform_item_id` lookup, canonical model fallback, accessory gatekeeping, price verdict calculation (`PriceVerdictLevel`), and returns the Deal Radar signal as `data.radarSignal`.',
           tags: ['URL Inspector & Extension MV3'],
           parameters: [
             {
@@ -1070,15 +1122,7 @@ function buildBaseRateOpenApiSpec(
                               'Price verdict. `badgeLabel` and `explanation` are Vietnamese; `messageKey` and `messageParams` let a client show the same text in its own language (DOS/Rate#1326).',
                             properties: {
                               verdict: {
-                                type: 'string',
-                                enum: [
-                                  'genuine_deal',
-                                  'fair_market_price',
-                                  'above_market',
-                                  'inflated_fake_sale',
-                                  'insufficient_data',
-                                  'accessory_skip',
-                                ],
+                                $ref: '#/components/schemas/PriceVerdictLevel',
                               },
                               badgeLabel: { type: 'string' },
                               explanation: { type: 'string' },
@@ -1122,8 +1166,8 @@ function buildBaseRateOpenApiSpec(
             '400': errorResponse(
               'None of `url`, `title` or `externalId` was given. The body adds `capabilities` (the platform capability matrix).'
             ),
-            '429': errorResponse(
-              'Per-IP sliding-window rate limit exceeded (max 60 requests/min, counted on each server instance). No `Retry-After` header.'
+            '429': rateLimitedResponse(
+              'Per-IP sliding-window rate limit exceeded (max 60 requests/min, counted on each server instance).'
             ),
           },
         },
@@ -1153,8 +1197,8 @@ function buildBaseRateOpenApiSpec(
             '400': errorResponse(
               'Rejected by Zero-Trust Quarantine Validator. The body adds `details` (the validation issues).'
             ),
-            '429': errorResponse(
-              'Rate limit exceeded: a best-effort per-IP limit of 15 signals/min, counted separately on each server instance. No `Retry-After` header. The global cap of 120 crowd jobs/min is reported as a 200 with `jobState: "queue_error"`.'
+            '429': rateLimitedResponse(
+              'Rate limit exceeded: a best-effort per-IP limit of 15 signals/min, counted separately on each server instance. The global cap of 120 crowd jobs/min is reported as a 200 with `jobState: "queue_error"`.'
             ),
           },
         },
@@ -1507,8 +1551,9 @@ function buildBaseRateOpenApiSpec(
               'Guest (anonymous) sign-ins and cross-site cookie requests cannot submit reviews.'
             ),
             '409': errorResponse('This user already reviewed the product.'),
-            '429': errorResponse(
-              'More than 5 reviews by this user in 24 hours.'
+            '429': rateLimitedResponse(
+              'More than 5 reviews by this user in 24 hours.',
+              86_400
             ),
             '502': { description: 'The review could not be stored.' },
             '503': { description: 'Review submission is not deployed here.' },
@@ -1570,8 +1615,9 @@ function buildBaseRateOpenApiSpec(
             '403': errorResponse(
               'Voter account is ineligible (< 7 days old or unverified contact).'
             ),
-            '429': errorResponse(
-              'Rate limit exceeded (maximum 60 vote actions per hour).'
+            '429': rateLimitedResponse(
+              'Rate limit exceeded (maximum 60 vote actions per hour).',
+              3600
             ),
             '404': errorResponse('Review not found.'),
           },
@@ -1605,7 +1651,7 @@ function buildBaseRateOpenApiSpec(
               name: 'category',
               in: 'query',
               description:
-                'Canonical category slug (`smartphones`, `tablets`, `laptops`, `smartwatches`, `earbuds`, or `all`).',
+                'Canonical category slug (`smartphones`, `tablets`, `laptops`, `smartwatches`, `earbuds`, or `all`). `cat` is accepted as an alias.',
               schema: {
                 type: 'string',
                 enum: [...categorySlugs, 'all'],
@@ -1672,29 +1718,17 @@ function buildBaseRateOpenApiSpec(
           responses: {
             '200': {
               description:
-                '4-Tier JReviews Leaderboard ranking with Top 3 Podium, per-item `deal_radar` and `radar_signal` (both the four export fields) under `data.items`, and Same-Category compare URL.',
+                '4-Tier JReviews Leaderboard ranking with Top 3 Podium, per-item `deal_radar` and `radar_signal` (both the four export fields) under `data.items`, and Same-Category compare URL. The same payload is also repeated at the top level (`items`, `category`, ...) for older clients; read it from `data` (DOS/Rate#1377).',
               content: {
                 'application/json': {
                   schema: {
                     type: 'object',
                     properties: {
                       ok: { type: 'boolean', example: true },
+                      ...leaderboardTopLevelMirror(),
                       data: {
                         type: 'object',
-                        properties: {
-                          items: {
-                            type: 'array',
-                            items: {
-                              type: 'object',
-                              additionalProperties: true,
-                              properties: {
-                                slug: { type: 'string' },
-                                deal_radar: RADAR_REF,
-                                radar_signal: RADAR_REF,
-                              },
-                            },
-                          },
-                        },
+                        properties: LEADERBOARD_PAYLOAD_PROPERTIES,
                       },
                     },
                   },
@@ -1887,15 +1921,8 @@ function buildBaseRateOpenApiSpec(
         },
         PriceVerdictLevel: {
           type: 'string',
-          enum: [
-            'genuine_deal',
-            'fair_market',
-            'above_market',
-            'inflated_fake_sale',
-            'insufficient_data',
-            'ambiguous_variant',
-            'skipped_accessory',
-          ],
+          // The values the answers carry (DOS/Rate#1377).
+          enum: [...EXTENSION_PRICE_VERDICTS],
           description:
             'Evidence-based price verdict comparing observed listing price and claimed original price against the historical median and cross-retailer floor.',
         },
@@ -2054,7 +2081,7 @@ function buildBaseRateOpenApiSpec(
             code: {
               type: 'string',
               description:
-                'Machine-readable cause when there is one, e.g. `NOT_FOUND` on 404s and `RATE_LIMIT_EXCEEDED` on the `/lookup` and `/inspect` 429.',
+                'Machine-readable cause when there is one, e.g. `NOT_FOUND` on 404s and `RATE_LIMIT_EXCEEDED` on the `/lookup`, `/inspect`, `/extension/lookup` and `/extension/ingest` 429.',
               example: 'NOT_FOUND',
             },
           },

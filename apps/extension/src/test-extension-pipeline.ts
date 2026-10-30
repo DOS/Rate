@@ -979,14 +979,14 @@ async function runTests() {
   const verdictLevelSchema = specDoc.components.schemas.PriceVerdictLevel as {
     enum?: string[];
   };
+  // The values the lookup answers carry (DOS/Rate#1377).
   assert.deepEqual(verdictLevelSchema.enum, [
     'genuine_deal',
-    'fair_market',
+    'fair_market_price',
     'above_market',
     'inflated_fake_sale',
     'insufficient_data',
-    'ambiguous_variant',
-    'skipped_accessory',
+    'accessory_skip',
   ]);
   const lookupParamNames = (
     specDoc.paths['/api/v1/rate/extension/lookup']?.get?.parameters ?? []

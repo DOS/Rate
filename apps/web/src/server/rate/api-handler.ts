@@ -847,17 +847,38 @@ export const inspectRateLimiter = new BoundedSlidingWindowRateLimiter({
   maxBuckets: 5_000,
 });
 
+/**
+ * The 429 a rate-limited public route answers: `code: RATE_LIMIT_EXCEEDED`
+ * and `Retry-After` (seconds; the limit's window, one minute by default),
+ * exposed to cross-origin callers such as the extension (DOS/Rate#1322,
+ * #1377, #1400).
+ */
+export function rateLimitExceededResponse(
+  message: string,
+  headers: Record<string, string>,
+  /** The limit's window: the longest wait before a retry can pass. */
+  retryAfterSeconds = 60
+): NextResponse {
+  return NextResponse.json(
+    { ok: false, error: message, code: 'RATE_LIMIT_EXCEEDED' },
+    {
+      status: 429,
+      headers: {
+        ...headers,
+        'Retry-After': String(retryAfterSeconds),
+        'Access-Control-Expose-Headers': 'Retry-After',
+      },
+    }
+  );
+}
+
 /** The 429 the inspection routes answer past `inspectRateLimiter`. */
 export function inspectRateLimitResponse(
   headers: Record<string, string>
 ): NextResponse {
-  return NextResponse.json(
-    {
-      ok: false,
-      error: 'Rate limit exceeded. Maximum 30 inspections per minute.',
-      code: 'RATE_LIMIT_EXCEEDED',
-    },
-    { status: 429, headers: { ...headers, 'Retry-After': '60' } }
+  return rateLimitExceededResponse(
+    'Rate limit exceeded. Maximum 30 inspections per minute.',
+    headers
   );
 }
 

@@ -122,7 +122,7 @@ function main() {
     'radarExplanationFakeSale',
   ];
   const placeholders = (s: string) =>
-    [...s.matchAll(/\{(\w+)\}/g)].map((m) => m[1]).sort();
+    [...new Set([...s.matchAll(/\{(\w+)(?=[},])/g)].map((m) => m[1]))].sort();
   for (const locale of ['en', 'cs']) {
     const messages = readLocale(locale).productDetail!;
     for (const key of keys) {

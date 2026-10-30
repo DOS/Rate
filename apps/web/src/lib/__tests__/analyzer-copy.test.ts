@@ -15,10 +15,12 @@ const readLocale = (locale: string) =>
       'utf8'
     )
   ) as Messages;
-const fill = (template: string, values: Record<string, string>) =>
-  template.replace(/\{(\w+)\}/g, (_, name: string) => values[name] ?? '');
+const fill = (template: string, values: Record<string, string | number>) =>
+  template.replace(/\{(\w+)\}/g, (_, name: string) =>
+    String(values[name] ?? '')
+  );
 const placeholders = (s: string) =>
-  [...s.matchAll(/\{(\w+)\}/g)].map((m) => m[1]).sort();
+  [...new Set([...s.matchAll(/\{(\w+)(?=[},])/g)].map((m) => m[1]))].sort();
 
 function main() {
   console.warn('🧪 Analyzer copy suite');

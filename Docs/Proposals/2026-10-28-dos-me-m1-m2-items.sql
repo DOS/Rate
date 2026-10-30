@@ -149,10 +149,11 @@ GRANT ALL ON rate.items TO service_role;
 GRANT SELECT ON rate.items TO rate_worker;
 -- Rate Services updates Item specs before the flag goes on (RS#700): spec and description
 -- columns only. Identity, status, prices, counts and ratings stay with the triggers and
--- RPCs, so the worker cannot publish or re-key an Item.
+-- RPCs, so the worker cannot publish or re-key an Item. spec_provenance and metadata stay
+-- with the service role: no engine path writes them (RS#739). The table-level REVOKE also
+-- drops column grants, so a re-run narrows a database that has the wider list.
 REVOKE UPDATE ON rate.items FROM rate_worker;
-GRANT UPDATE (description, specifications, key_specs, spec_provenance, images, thumbnail,
-              metadata, updated_at)
+GRANT UPDATE (description, specifications, key_specs, images, thumbnail, updated_at)
   ON rate.items TO rate_worker;
 DROP POLICY IF EXISTS "Rate worker update items" ON rate.items;
 CREATE POLICY "Rate worker update items" ON rate.items
@@ -742,10 +743,15 @@ REVOKE EXECUTE ON FUNCTION rate.refresh_item_rating(uuid) FROM PUBLIC, anon, aut
 REVOKE EXECUTE ON FUNCTION rate.refresh_item_stats(uuid) FROM PUBLIC, anon, authenticated;
 REVOKE EXECUTE ON FUNCTION rate.match_item(text, text, text, real) FROM PUBLIC, anon, authenticated;
 REVOKE EXECUTE ON FUNCTION rate.retire_item_unknown_variant(uuid) FROM PUBLIC, anon, authenticated;
-GRANT EXECUTE ON FUNCTION rate.refresh_item_rating(uuid) TO service_role, rate_worker;
+-- The worker calls only refresh_item_stats and match_item (RS#739). refresh_item_stats is
+-- SECURITY DEFINER, so the rating it refreshes needs no worker grant; retiring an unknown
+-- variant is an admin step. The explicit REVOKE narrows a database that had the wider grant.
+REVOKE EXECUTE ON FUNCTION rate.refresh_item_rating(uuid) FROM rate_worker;
+REVOKE EXECUTE ON FUNCTION rate.retire_item_unknown_variant(uuid) FROM rate_worker;
+GRANT EXECUTE ON FUNCTION rate.refresh_item_rating(uuid) TO service_role;
 GRANT EXECUTE ON FUNCTION rate.refresh_item_stats(uuid) TO service_role, rate_worker;
 GRANT EXECUTE ON FUNCTION rate.match_item(text, text, text, real) TO service_role, rate_worker;
-GRANT EXECUTE ON FUNCTION rate.retire_item_unknown_variant(uuid) TO service_role, rate_worker;
+GRANT EXECUTE ON FUNCTION rate.retire_item_unknown_variant(uuid) TO service_role;
 
 -- M1.6 triggers (after the functions they call exist) -------------------------------------
 

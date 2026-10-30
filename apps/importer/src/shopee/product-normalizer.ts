@@ -1258,11 +1258,15 @@ function isProductCodeToken(token: string): boolean {
 // or "15 gói" is no size (DOS/Rate#1291).
 // "năm" is a duration at the end, before a separator or a shop's age ("13 năm", "Shop
 // 13 năm kinh nghiệm"); any other word or a year after it keeps the size (DOS/Rate#1333).
+// A shop's age reads "Shop 13 năm", "Shop: 13 năm", "Shop 13+ năm" or "Shop hơn 13 năm"
+// ("shop" a word of its own, so not "workshop"); a year after it ("Store 13 năm.2024",
+// "Shop 13 năm 2024") is a production year, so the size stays, but "99%" or "100" is no
+// year (DOS/Rate#1389).
 // "16 RAM 512" is the RAM; "13 RAM 8GB" (a RAM size follows) is the screen's 13
 // (DOS/Rate#1317).
 const UNIT_END = String.raw`(?![\p{L}\p{M}\d])`;
-const SIZE_NOT_PRECEDED_BY = String.raw`(?<![\d.,a-z])(?<!\d ?\/ ?)(?<!(?:ram|os|sonoma|sequoia|ventura|monterey|tahoe) )(?!(?<=(?:shop|cửa hàng|store) )\d{1,2} ?năm(?![\p{L}\d]))`;
-const SIZE_NOT_FOLLOWED_BY = String.raw`(?![.,]?\d|[a-z]| ?(?:gb?${UNIT_END}|tb?${UNIT_END}|th${UNIT_END}|gen|mm|w${UNIT_END}|h${UNIT_END}|\/|-? ?(?:core|nhân|lõi)|cpu|gpu|tiếng|giờ|%|(?:tháng|ngày|tuần|phút|gói|kỳ|nghìn|ngàn|triệu|vnd|months?|years?|days?|weeks?|hours?)${UNIT_END}|ram${UNIT_END}(?! ?\d{1,2}(?!\d))|năm(?= ?(?:$|[,|;)/+!\]]|[.:-](?! ?(?:19|20)?\d\d)| - |(?:kinh nghiệm|tuổi|hoạt động|uy tín|thành lập|bán hàng|chuyên|kinh doanh|phát triển)(?![\p{L}\d])))))`;
+const SIZE_NOT_PRECEDED_BY = String.raw`(?<![\d.,a-z])(?<!\d ?\/ ?)(?<!(?:ram|os|sonoma|sequoia|ventura|monterey|tahoe) )(?!(?<=(?<![\p{L}\d])(?:shop|cửa hàng|store)(?: ?: ?| )(?:(?:hơn|trên) )?)\d{1,2}(?: ?\+)? ?năm(?![\p{L}\d])(?! ?(?:[.:/-] ?(?:19|20)?|(?:19|20))\d\d(?![\p{L}\d%])))`;
+const SIZE_NOT_FOLLOWED_BY = String.raw`(?![.,]?\d|[a-z]| ?(?:gb?${UNIT_END}|tb?${UNIT_END}|th${UNIT_END}|gen|mm|w${UNIT_END}|h${UNIT_END}|\/|-? ?(?:core|nhân|lõi)|cpu|gpu|tiếng|giờ|%|(?:tháng|ngày|tuần|phút|gói|kỳ|nghìn|ngàn|triệu|vnd|months?|years?|days?|weeks?|hours?)${UNIT_END}|ram${UNIT_END}(?! ?\d{1,2}(?!\d))|năm(?= ?(?:$|[,|;)+!\]]|(?:[.:/-]| - )(?! ?(?:19|20)?\d\d(?![\d%]))|(?:kinh nghiệm|tuổi|hoạt động|uy tín|thành lập|bán hàng|chuyên|kinh doanh|phát triển)(?![\p{L}\d])))))`;
 const SIZE_MARKER = String.raw` ?(?:-? ?inch|in${UNIT_END}|"|''|”|″)`;
 const IPAD_SIZE = String.raw`(11|12[.,]9|13)(?:[.,]0)?`;
 const MACBOOK_AIR_SIZE = String.raw`(13|15)(?:[.,]\d)?`;
@@ -1325,6 +1329,9 @@ const GIFT_ACCESSORY_NOUN =
 // box ("hộp") is sold by no case size (DOS/Rate#1277).
 const WATCH_GIFT_ACCESSORY_NOUN =
   /(?<![\p{L}\d])(?:ốp|case|bao da|silicone|silicon|tpu|cường lực|kính|miếng dán|vỏ(?! (?:nhôm|titan|titanium|thép|nhựa|aluminum|aluminium|stainless|steel)(?![\p{L}\d]))|túi)(?![\p{L}\d])/iu;
+// The product's own part ends where "cho/for" or "+" starts another product; "GPS +
+// Cellular" is the watch and "13+ năm" a shop's age (DOS/Rate#1389).
+const OWN_PART_END = / (?:cho|for) | ?\+ (?!cellular|lte|năm(?![\p{L}\d]))/iu;
 const APPLE_SIZE_PATTERNS: Record<string, [RegExp, RegExp]> = {
   ipad: sizePatterns(IPAD_SIZE),
   'macbook air': sizePatterns(MACBOOK_AIR_SIZE),
@@ -1399,7 +1406,7 @@ function readAppleSize(model: string, rawTitle: string): string {
   const read = readFamilySize(family, withoutGift);
   if (read) return read;
   // The same part the size is read from: not what follows "cho/for" or "+".
-  const ownPart = withoutGift.split(/ (?:cho|for) | ?\+ (?!cellular|lte)/i)[0]!;
+  const ownPart = withoutGift.split(OWN_PART_END)[0]!;
   if (family === 'watch') {
     const worded = readWordedWatchSize(withoutGift);
     if (worded) return worded;
@@ -1430,7 +1437,7 @@ function readAppleSize(model: string, rawTitle: string): string {
  * 42 cho mặt 46mm" names the band's), when it names one size (DOS/Rate#1291).
  */
 function readWordedWatchSize(scope: string): string {
-  const own = scope.split(/ (?:cho|for) | ?\+ (?!cellular|lte)/i)[0]!;
+  const own = scope.split(OWN_PART_END)[0]!;
   const sizes = new Set<string>();
   for (const part of own.split(/[),|;\u2013]| - /)) {
     for (const m of part.matchAll(WATCH_SIZE_WORD)) {
@@ -1447,7 +1454,7 @@ function readWordedWatchSize(scope: string): string {
  * leaves out a watch size only a band names.
  */
 function readFamilySize(family: string, scope: string, withBand = true): string {
-  const own = scope.split(/ (?:cho|for) | ?\+ (?!cellular|lte)/i)[0]!;
+  const own = scope.split(OWN_PART_END)[0]!;
   if (family === 'watch') {
     // A size outside a band phrase ("dây", "band", "strap", "loop" or "bracelet" up to the
     // next ")", ",", "|", ";", en dash or " - ") is the case's. A band is sold by the case

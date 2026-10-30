@@ -37,7 +37,7 @@ export type AnalyzerCopyKey =
   | 'proPositiveFeedback';
 
 export type AnalyzerCopy =
-  | { key: AnalyzerCopyKey; values: Record<string, string> }
+  | { key: AnalyzerCopyKey; values: Record<string, string | number> }
   | { text: string; lang?: 'vi' };
 
 // Each pattern mirrors one string the analyzer writes; named groups become
@@ -158,7 +158,15 @@ export function analyzerCopy(text: string): AnalyzerCopy {
   const normalized = safeText.normalize('NFC');
   for (const [pattern, key] of TEMPLATES) {
     const match = pattern.exec(normalized);
-    if (match) return { key, values: { ...(match.groups ?? {}) } };
+    if (match) {
+      // Whole numbers go to the messages as numbers, so a plural message
+      // picks its form ("1 recenze", "5 recenzí"; DOS/Rate#1370).
+      const values: Record<string, string | number> = {};
+      for (const [name, value] of Object.entries(match.groups ?? {})) {
+        values[name] = /^\d+$/.test(value) ? Number(value) : value;
+      }
+      return { key, values };
+    }
   }
   // Only text that is actually Vietnamese is marked as such.
   return isVietnamese(normalized)
@@ -194,8 +202,7 @@ export function listingReviewSummary(
   const copy = analyzerCopy(text);
   const template = 'key' in copy ? VI_SUMMARY[copy.key] : undefined;
   if (!template || !('key' in copy)) return scopeLlmReviewSummary(text);
-  return template.replace(
-    /\{(\w+)\}/g,
-    (_, name: string) => copy.values[name] ?? ''
+  return template.replace(/\{(\w+)\}/g, (_, name: string) =>
+    String(copy.values[name] ?? '')
   );
 }
