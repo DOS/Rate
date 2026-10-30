@@ -518,6 +518,26 @@ async function runSuite() {
     ['iPad Pro M4 13 năm-2024', 'apple:ipad-pro-m4-13:unknown'],
     ['Máy tính bảng Apple iPad Pro 11 năm-2022 M2 128GB Wifi', 'apple:ipad-pro-m2-11:128gb'],
     ['iPad Pro M4 13 năm.2024', 'apple:ipad-pro-m4-13:unknown'],
+    // Shop ages with a colon, a "+" or "hơn" / "trên" (DOS/Rate#1389).
+    ['iPad Pro M4 256GB Shop: 13 năm tặng ốp 11 inch', 'apple:ipad-pro-m4-11:256gb'],
+    ['iPad Pro M4 256GB Shop 13+ năm tặng ốp 11 inch', 'apple:ipad-pro-m4-11:256gb'],
+    ['iPad Pro M4 256GB Shop hơn 13 năm chăm sóc tặng ốp 11 inch', 'apple:ipad-pro-m4-11:256gb'],
+    ['iPad Pro M4 256GB Shop trên 13 năm tặng ốp 11 inch', 'apple:ipad-pro-m4-11:256gb'],
+    // A production year after a shop's "năm" keeps the size.
+    ['iPad Pro M4 Apple Store 13 năm.2024 256GB', 'apple:ipad-pro-m4-13:256gb'],
+    ['iPad Pro M4 Shop 13 năm: 22', 'apple:ipad-pro-m4-13:unknown'],
+    ['iPad Pro M4 Shop 13 năm/2024', 'apple:ipad-pro-m4-13:unknown'],
+    ['iPad Pro M4 Shop 13 năm 2024 256GB', 'apple:ipad-pro-m4-13:256gb'],
+    // "/" and " - " before a year keep the size like "-" does.
+    ['iPad Pro M4 13 năm - 2024', 'apple:ipad-pro-m4-13:unknown'],
+    ['iPad Pro M4 13 năm/2024', 'apple:ipad-pro-m4-13:unknown'],
+    ['iPad Pro M4 256GB 13 năm/ tặng ốp 11 inch', 'apple:ipad-pro-m4-11:256gb'],
+    ['iPad Pro M4 256GB 13 năm - tặng ốp 11 inch', 'apple:ipad-pro-m4-11:256gb'],
+    // "13 năm." at the end is a duration, like "13 năm" (DOS/Rate#1333).
+    ['iPad Pro M4 13 năm.', 'apple:ipad-pro-m4:unknown'],
+    // "shop" inside a word is no shop: "năm" with no duration word keeps the size.
+    ['iPad Pro M4 workshop 13 năm tặng ốp 11 inch', 'apple:ipad-pro-m4-13:unknown'],
+    ['iPad Pro M4 appstore 13 năm tặng ốp 11 inch', 'apple:ipad-pro-m4-13:unknown'],
     // A screen size after "Shop" with no "năm" stays the product's.
     ['iPad Pro M4 Shop 11 inch', 'apple:ipad-pro-m4-11:unknown'],
     [
