@@ -982,6 +982,9 @@ async function runSuite() {
   assert.equal(keyOf('Apple Watch S 42mm'), 'apple:watch:unknown');
   assert.equal(keyOf('Dây đeo Apple Watch S 16cm 42mm'), 'apple:watch:unknown');
   assert.equal(keyOf('Dây đeo Apple Watch S 16 cm 42mm'), 'apple:watch:unknown');
+  assert.equal(keyOf('Dây đeo Apple Watch S 14-16cm 42mm'), 'apple:watch:unknown');
+  assert.equal(keyOf('Dây đeo Apple Watch S 14 - 16 cm 42mm'), 'apple:watch:unknown');
+  assert.equal(keyOf('Apple Watch S10 - 46mm GPS'), 'apple:watch-series-10-46mm:64gb');
   assert.equal(keyOf('Apple Watch S10x 46mm'), 'apple:watch:unknown');
   assert.equal(keyOf('Dây Apple Watch S/M 42mm'), 'apple:watch:unknown');
   assert.equal(keyOf('Apple Watch S10.46mm'), 'apple:watch:unknown');

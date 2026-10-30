@@ -1722,9 +1722,9 @@ export class ProductNormalizer {
       const watchMatch = appleTitle.match(
         // "Ultra 49mm" is the case size, not a generation (DOS/Rate#819). "Watch S10" is
         // the Series 10; only a generation (1 to 19) right after "Watch", with no unit or
-        // letter after it, counts, so an "S 42mm" size, a "S 16cm" band length or a "S/M"
-        // band is no series (DOS/Rate#1402).
-        /(?:apple\s*)?watch\s*(ultra(?:\s*\d+(?!\d|\s*mm\b))?|series\s*\d+|se(?:\s*\d+(?!\d|\s*(?:mm|gb|tb)\b)|(?![a-z]))|s ?(?:1\d|[1-9])(?![\d.,a-z]|\s*(?:mm|cm|gb|tb|inch)\b))/i
+        // letter after it, counts, so an "S 42mm" size, a "S 16cm" or "S 14-16cm" band
+        // length or a "S/M" band is no series (DOS/Rate#1402).
+        /(?:apple\s*)?watch\s*(ultra(?:\s*\d+(?!\d|\s*mm\b))?|series\s*\d+|se(?:\s*\d+(?!\d|\s*(?:mm|gb|tb)\b)|(?![a-z]))|s ?(?:1\d|[1-9])(?![\d.,a-z]|\s*(?:mm|cm|gb|tb|inch)\b| ?[-–] ?\d+(?:[.,]\d+)? ?cm\b))/i
       );
       const airpodsMatch = appleTitle.match(
         // Each run of spaces has exactly one `\s*` that can match it, so long
