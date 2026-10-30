@@ -1201,6 +1201,34 @@ async function runSuite() {
   ] as const)
     assert.equal(keyOf(title), key, title);
   assert.equal(detectCategorySlug('Galaxy S24 + tặng Galaxy Buds 3'), 'smartphones');
+  // Several gifts, a model range in a gift, "khi mua" and "+ 5 năm" (DOS/Rate#1422).
+  for (const [title, key] of [
+    ['AirPods 4 tặng kèm khi mua iPhone 16 Pro Max 256GB', 'apple:iphone-16-pro-max:256gb'],
+    ['iPhone 16 256GB tặng kèm khi mua online: tai nghe AirPods 4', 'apple:iphone-16:256gb'],
+    ['[Samsung tặng tai nghe] Galaxy Tab S9 8GB 128GB', 'samsung:galaxy-tab-s9:128gb'],
+    ['MacBook Air M3 tặng ốp iPhone 13 - 15 Pro Max', 'apple:macbook-air-m3:unknown'],
+    ['MacBook Air M3 tặng ốp iPhone 13 – 15 Pro Max', 'apple:macbook-air-m3:unknown'],
+    ['MacBook Air M3 tặng AirPods, ốp iPhone 15', 'apple:macbook-air-m3:unknown'],
+    [
+      'MacBook Air M3 tặng hộp AirPods, tặng bao da iPad, tặng dây Apple Watch, tặng hộp Apple Pencil, tặng ốp iPhone 15',
+      'apple:macbook-air-m3:unknown',
+    ],
+    ['MacBook Air M3 tặng AirPods, 15 inch 16GB 512GB', 'apple:macbook-air-m3-15:512gb'],
+    [
+      'Apple Watch Series 10 GPS + 5 năm bảo hành 46mm tặng AirPods',
+      'apple:watch-series-10-46mm:64gb',
+    ],
+  ] as const)
+    assert.equal(keyOf(title), key, title);
+  assert.equal(
+    detectCategorySlug('AirPods 4 tặng kèm khi mua iPhone 16 Pro Max 256GB'),
+    'smartphones'
+  );
+  assert.equal(
+    detectCategorySlug('iPhone 16 256GB tặng kèm khi mua online: tai nghe AirPods 4'),
+    'smartphones'
+  );
+  assert.equal(detectCategorySlug('[Samsung tặng tai nghe] Galaxy Tab S9 8GB 128GB'), 'tablets');
   assert.equal(
     detectCategorySlug('[Samsung tặng bao da] Máy tính bảng Galaxy Tab S9 8GB 128GB'),
     'tablets'

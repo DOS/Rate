@@ -271,19 +271,37 @@ const APPLE_FAMILIES: ReadonlyArray<readonly [RegExp, string]> = [
  */
 function ownProductPart(title: string): string {
   const composed = title.normalize('NFC');
-  // A bracketed promo that opens the title is skipped when the product follows it: "[Sạc
-  // Apple Watch tặng kèm] AirPods Pro 2" is the AirPods, but "(AirPods Pro 2 tặng dây
-  // Apple Watch) Chính hãng" names the product inside the brackets.
+  // A bracketed promo that opens the title is dropped when the product follows it: "[Sạc
+  // Apple Watch tặng kèm] AirPods Pro 2" is the AirPods and "[Samsung tặng tai nghe]
+  // Galaxy Tab S9" the tablet, but "(AirPods Pro 2 tặng dây Apple Watch) Chính hãng" names
+  // the product inside the brackets (DOS/Rate#1407, #1422).
   const block = /^\s*(?:\[[^\]]*\]|\([^)]*\)|【[^】]*】)/u.exec(composed)?.[0].length ?? 0;
-  const lead =
-    block > 0 && APPLE_FAMILIES.some(([family]) => family.test(composed.slice(block))) ? block : 0;
-  const found = composed.slice(lead).search(GIFT_CUT);
-  const at = found < 0 ? -1 : lead + found;
-  // "AirPods 4 tặng kèm khi mua iPhone 16 Pro Max" sells what follows: the gift comes
-  // first, so the whole title is the product's (DOS/Rate#1422).
-  if (at > 0 && /^(?:tặng|kèm|\s)*(?:khi|lúc)\s+mua(?![\p{L}\d])/iu.test(composed.slice(at)))
-    return composed;
-  return at > 0 ? composed.slice(0, at) : composed;
+  const body = block > 0 && namesProduct(composed.slice(block)) ? composed.slice(block) : composed;
+  const at = body.search(GIFT_CUT);
+  if (at > 0) {
+    // "AirPods 4 tặng kèm khi mua iPhone 16 Pro Max" sells what follows "khi mua"; "tặng
+    // kèm khi mua online: tai nghe" names no product right there and cuts as usual
+    // (DOS/Rate#1422).
+    const buying = /^(?:(?:tặng|kèm)\s*)*(?:khi|lúc)\s+mua\s+/iu.exec(body.slice(at));
+    const sold = buying ? body.slice(at + buying[0].length) : '';
+    const soldName = sold.replace(/^(?:apple|điện thoại|máy)\s+/iu, '');
+    if (
+      soldName &&
+      (APPLE_FAMILIES.some(([family]) => soldName.search(family) === 0) ||
+        soldName.search(PHONE_BRAND_RE) === 0)
+    )
+      return sold;
+  }
+  return at > 0 ? body.slice(0, at) : body;
+}
+
+/** True when the text names a product: an Apple family, a phone brand or a category. */
+function namesProduct(text: string): boolean {
+  return (
+    APPLE_FAMILIES.some(([family]) => family.test(text)) ||
+    PHONE_BRAND_RE.test(text) ||
+    categorySlugOf(text.toLowerCase()) !== null
+  );
 }
 
 /**
@@ -303,13 +321,17 @@ const PHONE_BRAND_RE =
  * product, as in OWN_PART_END (DOS/Rate#1407, #1422).
  */
 const GIFT_CUT =
-  /(?<![\p{L}\d])(?:tặng|kèm)(?![\p{L}\d])| ?\+ (?!cellular|lte|năm(?![\p{L}\d]))| \+(?!cellular|lte)(?=\p{L})/iu;
+  /(?<![\p{L}\d])(?:tặng|kèm)(?![\p{L}\d])| ?\+ (?!cellular|lte|(?:\d+ ?)?năm(?![\p{L}\d]))| \+(?!cellular|lte)(?=\p{L})/iu;
 
 /** The same markers, every one, to find the last before a gifted product (DOS/Rate#1422). */
 const GIFT_CUT_ALL = new RegExp(GIFT_CUT.source, 'giu');
 
-/** Where a gift phrase ends: a closing bracket, a " - " or "|" separator, or a comma. */
-const GIFT_PHRASE_END = /[)\]】,|]| [-–] /u;
+/**
+ * Where a gift phrase ends: a closing bracket, a "|" separator, a comma, or a " - " that
+ * does not run on into a model range ("ốp iPhone 13 - 15 Pro Max") (DOS/Rate#1422).
+ */
+const GIFT_PHRASE_END =
+  /[)\]】,|]| [-–] (?!\d{1,2}(?: ?(?:pro|plus|max|mini)(?![\p{L}\d])| ?(?:$|[,|)\]】])))/iu;
 
 /** True when the text names an Apple family other than `line` (DOS/Rate#1407). */
 function namesAppleFamilyOtherThan(text: string, line: string): boolean {
@@ -1442,7 +1464,7 @@ const withoutLeadingPromoWords = (title: string, brand: string): string => {
   }
   return rest !== title && brandHead(brand).test(rest) ? rest : title;
 };
-const OWN_PART_END = / (?:cho|for) | ?\+ (?!cellular|lte|năm(?![\p{L}\d]))/iu;
+const OWN_PART_END = / (?:cho|for) | ?\+ (?!cellular|lte|(?:\d+ ?)?năm(?![\p{L}\d]))/iu;
 const APPLE_SIZE_PATTERNS: Record<string, [RegExp, RegExp]> = {
   ipad: sizePatterns(IPAD_SIZE),
   'macbook air': sizePatterns(MACBOOK_AIR_SIZE),
@@ -1482,20 +1504,47 @@ function readAppleSize(model: string, rawTitle: string): string {
   // it stays: "Watch Series 10 GPS + Cellular 42mm | Tặng ốp iPhone", "MacBook Air M3
   // (Tặng AirPods) 15 inch" (DOS/Rate#1422).
   const familyName = family === 'ipad' ? 'iPad' : family === 'watch' ? 'Watch' : 'MacBook';
-  for (let guard = 0; guard < 4; guard++) {
+  // The gift phrase runs on past a comma or " - " that leads to another Apple product of
+  // the same gift ("tặng AirPods, ốp iPhone 15"). Each pass drops one gift; a title with
+  // more than eight loses everything from the last gift found on.
+  const giftStart = () => {
     let otherAt = -1;
     for (const [pattern, name] of APPLE_FAMILIES) {
       if (name === familyName) continue;
       const found = productPart.search(pattern);
       if (found > 0 && (otherAt < 0 || found < otherAt)) otherAt = found;
     }
-    if (otherAt < 0) break;
+    if (otherAt < 0) return null;
     const markers = Array.from(productPart.slice(0, otherAt).matchAll(GIFT_CUT_ALL));
     const start = markers.length > 0 ? markers[markers.length - 1]!.index! : -1;
-    if (start <= 0) break;
-    const end = productPart.slice(otherAt).search(GIFT_PHRASE_END);
-    productPart =
-      productPart.slice(0, start) + (end < 0 ? '' : ' ' + productPart.slice(otherAt + end));
+    return start > 0 ? { start, otherAt } : null;
+  };
+  for (let pass = 0; ; pass++) {
+    const gift = giftStart();
+    if (!gift) break;
+    if (pass === 8) {
+      productPart = productPart.slice(0, gift.start);
+      break;
+    }
+    let end = gift.otherAt;
+    for (;;) {
+      const next = productPart.slice(end).search(GIFT_PHRASE_END);
+      if (next < 0) {
+        end = -1;
+        break;
+      }
+      end += next;
+      const after = productPart.slice(end).replace(/^[,|)\]】]| [-–] /u, '');
+      const segmentEnd = after.search(GIFT_PHRASE_END);
+      const segment = segmentEnd < 0 ? after : after.slice(0, segmentEnd);
+      if (
+        !/^[,]| [-–] /u.test(productPart.slice(end)) ||
+        !namesAppleFamilyOtherThan(segment, familyName)
+      )
+        break;
+      end = productPart.length - after.length;
+    }
+    productPart = productPart.slice(0, gift.start) + (end < 0 ? '' : ' ' + productPart.slice(end));
   }
   const giftSizes = new Set<string>();
   const stripGift = (scope: string, noun: RegExp, sizes = new Set<string>()) =>
