@@ -2447,13 +2447,66 @@ interface RawProductRow {
   availability?: string | null;
 }
 
-// Category id to slug, read at most every 5 minutes per server instance. A
-// read error keeps the last map, or none: rows then keep their own hints.
+// Category id to slug, read at most every 5 minutes per server instance
+// (30 seconds after a failed read). Concurrent reads share one query. A
+// failed read keeps the last map, or none: rows then keep their own hints.
 const CATEGORY_SLUG_MAP_TTL_MS = 5 * 60_000;
+const CATEGORY_SLUG_MAP_RETRY_MS = 30_000;
 let categorySlugMapMemo: {
   at: number;
-  map: ReadonlyMap<string, string>;
+  ttl: number;
+  map: ReadonlyMap<string, string> | null;
 } | null = null;
+let categorySlugMapInFlight: Promise<ReadonlyMap<
+  string,
+  string
+> | null> | null = null;
+
+async function readCategorySlugMap(): Promise<ReadonlyMap<
+  string,
+  string
+> | null> {
+  const lastMap = categorySlugMapMemo?.map ?? null;
+  try {
+    const { data, error } = await getRateClient()
+      .from('categories')
+      .select('id, slug');
+    if (error || !Array.isArray(data)) {
+      categorySlugMapMemo = {
+        at: Date.now(),
+        ttl: CATEGORY_SLUG_MAP_RETRY_MS,
+        map: lastMap,
+      };
+      return lastMap;
+    }
+    const map = new Map<string, string>();
+    for (const c of data as Array<{ id?: unknown; slug?: unknown }>) {
+      if (typeof c?.id !== 'string' || typeof c?.slug !== 'string') continue;
+      // Read as getMasterProductCategorySlug reads a hint, so the stamp and
+      // the map-based links agree on a padded or capitalised slug.
+      map.set(
+        c.id,
+        c.slug
+          .replace(/\p{Cc}+/gu, '')
+          .trim()
+          .toLowerCase()
+      );
+    }
+    categorySlugMapMemo = {
+      at: Date.now(),
+      ttl: CATEGORY_SLUG_MAP_TTL_MS,
+      map,
+    };
+    return map;
+  } catch {
+    categorySlugMapMemo = {
+      at: Date.now(),
+      ttl: CATEGORY_SLUG_MAP_RETRY_MS,
+      map: lastMap,
+    };
+    return lastMap;
+  }
+}
 
 /**
  * The `categories` id-to-slug map product reads stamp onto their rows, so a
@@ -2467,26 +2520,14 @@ export async function getCategorySlugMap(): Promise<ReadonlyMap<
 > | null> {
   if (
     categorySlugMapMemo &&
-    Date.now() - categorySlugMapMemo.at < CATEGORY_SLUG_MAP_TTL_MS
+    Date.now() - categorySlugMapMemo.at < categorySlugMapMemo.ttl
   ) {
     return categorySlugMapMemo.map;
   }
-  try {
-    const { data, error } = await getRateClient()
-      .from('categories')
-      .select('id, slug');
-    if (error || !Array.isArray(data)) return categorySlugMapMemo?.map ?? null;
-    const map = new Map<string, string>();
-    for (const c of data as Array<{ id?: unknown; slug?: unknown }>) {
-      if (typeof c?.id === 'string' && typeof c?.slug === 'string') {
-        map.set(c.id, c.slug);
-      }
-    }
-    categorySlugMapMemo = { at: Date.now(), map };
-    return map;
-  } catch {
-    return categorySlugMapMemo?.map ?? null;
-  }
+  categorySlugMapInFlight ??= readCategorySlugMap().finally(() => {
+    categorySlugMapInFlight = null;
+  });
+  return categorySlugMapInFlight;
 }
 
 export function normalizeMasterProductRow(
@@ -2539,7 +2580,11 @@ export function normalizeMasterProductRow(
   // the category the sitemap and the category-path redirect use (#1380).
   const idCatSlug =
     typeof normalized.category_id === 'string'
-      ? categorySlugById?.get(normalized.category_id)
+      ? categorySlugById
+          ?.get(normalized.category_id)
+          ?.replace(/\p{Cc}+/gu, '')
+          .trim()
+          .toLowerCase()
       : undefined;
   if (isCanonicalCategorySlug(idCatSlug)) {
     if (existingMetaObj?.category_slug !== idCatSlug) {

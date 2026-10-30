@@ -4828,6 +4828,22 @@ async function runCoreArchitectureSuite() {
       'smartphones',
       'a non-catalogue category row leaves the hint as it was'
     );
+    // A padded or capitalised category slug is read as the map-based links
+    // read it.
+    assert.equal(
+      getMasterProductHref(
+        normalizeMasterProductRow(
+          galaxyBook1380,
+          null,
+          new Map([['cat-laptop', ' Laptops ']])
+        )
+      ),
+      getMasterProductHref(
+        galaxyBook1380,
+        new Map([['cat-laptop', ' Laptops ']])
+      ),
+      'stamp and map agree on a padded, capitalised slug'
+    );
     assert.equal(
       normalizeMasterProductRow(galaxyBook1380, null, null),
       galaxyBook1380,

@@ -2101,6 +2101,11 @@ function buildBaseRateOpenApiSpec(
           properties: {
             master_product_id: { type: 'string', format: 'uuid' },
             slug: { type: 'string' },
+            product_href: {
+              type: 'string',
+              description:
+                'The product page in its own category (e.g. `/laptops/<slug>`), for a link that never takes a 308 hop.',
+            },
             name: { type: 'string' },
             brand: { type: 'string' },
             current_min_price: { type: 'number' },
