@@ -379,6 +379,84 @@ async function testExtensionLookup() {
   console.warn('  ✅ Extension lookup returns the category spec view');
 }
 
+// The extension lookup and the public lookup pick the model a title names,
+// not the first model the search returns (DOS/Rate#1379, #594).
+async function testModelMatch() {
+  const { lookupExtensionProduct } = await import('@/server/rate/extension');
+  const { inspectProductOrShopUrl } = await import('@/lib/rate-api');
+  const named = (id: string, slug: string, name: string, storage = 128) => ({
+    ...phoneShaped(id, slug, 'smartphones'),
+    name,
+    model: name.replace(/^Apple /, '').replace(/ \d+GB$/, ''),
+    storage_gb: storage,
+  });
+  const IPHONE_16E = named(
+    '55555555-5555-4555-8555-555555555555',
+    'apple-iphone-16e-128gb',
+    'Apple iPhone 16e 128GB'
+  );
+  const IPHONE_16 = named(
+    '66666666-6666-4666-8666-666666666666',
+    'apple-iphone-16-128gb',
+    'Apple iPhone 16 128GB'
+  );
+  // The search returns the 16e first, as it did on rate.vn.
+  catalog = [IPHONE_16E, IPHONE_16];
+  masterRows = [];
+
+  const ext16 = await lookupExtensionProduct({
+    title: 'Apple iPhone 16 128GB',
+    price: 19_990_000,
+    mode: 'pill',
+  });
+  assert.equal(ext16.masterProduct?.slug, IPHONE_16.slug);
+  const ext16e = await lookupExtensionProduct({
+    title: 'Apple iPhone 16e 128GB',
+    mode: 'pill',
+  });
+  assert.equal(ext16e.masterProduct?.slug, IPHONE_16E.slug);
+
+  const public16 = await inspectProductOrShopUrl('iphone 16');
+  assert.equal(public16.masterProduct?.slug, IPHONE_16.slug);
+  assert.equal(public16.suggestions[0]?.slug, IPHONE_16.slug);
+  const public16e = await inspectProductOrShopUrl('iphone 16e');
+  assert.equal(public16e.masterProduct?.slug, IPHONE_16E.slug);
+
+  // The other order, so the 16e cases are not won by the search order.
+  catalog = [IPHONE_16, IPHONE_16E];
+  const ext16eSecond = await lookupExtensionProduct({
+    title: 'iPhone 16e 128GB | Chính hãng VN/A',
+    mode: 'pill',
+  });
+  assert.equal(ext16eSecond.masterProduct?.slug, IPHONE_16E.slug);
+  assert.equal(
+    (await inspectProductOrShopUrl('iphone 16e')).masterProduct?.slug,
+    IPHONE_16E.slug
+  );
+
+  // A size of another model does not beat the model the title names.
+  const IPHONE_16_PLUS_256 = named(
+    '77777777-7777-4777-8777-777777777777',
+    'apple-iphone-16-plus-256gb',
+    'Apple iPhone 16 Plus 256GB',
+    256
+  );
+  catalog = [IPHONE_16_PLUS_256, IPHONE_16];
+  const ext16Size = await lookupExtensionProduct({
+    title: 'Apple iPhone 16 256GB',
+    mode: 'pill',
+  });
+  assert.equal(ext16Size.masterProduct?.slug, IPHONE_16.slug);
+  // A bracketed promotion is not part of the model.
+  const extPromo = await lookupExtensionProduct({
+    title: 'Apple iPhone 16 128GB [Trả góp 0% - Bảo hành Plus 12 tháng]',
+    mode: 'pill',
+  });
+  assert.equal(extPromo.masterProduct?.slug, IPHONE_16.slug);
+  catalog = [];
+  console.warn('  ✅ Extension and public lookup pick the named model');
+}
+
 // Caller-controlled work is bounded (DOS/Rate#1308).
 async function testBoundedInputs() {
   const { NextRequest } = await import('next/server');
@@ -956,6 +1034,7 @@ async function main() {
   await testProductFilters();
   await testDetailAndCompare();
   await testExtensionLookup();
+  await testModelMatch();
   await testSpecMatchesBodies();
   await testBoundedInputs();
   await testInspectRateLimit();

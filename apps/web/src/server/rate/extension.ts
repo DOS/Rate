@@ -39,6 +39,7 @@ import {
 import { computeProductRadarSignal } from './deals';
 import type { RadarSignal } from '../../lib/deal-radar';
 import { createLogger } from '@/lib/logger';
+import { rankModelCandidates } from '@/lib/model-match';
 import {
   chooseItemVariant,
   itemProductPath,
@@ -1184,8 +1185,18 @@ export async function lookupExtensionProduct(
 
   // Step 3: Search candidate Master Products in DB (Read-Only)
   const searchKeyword = cleanModelSearchQuery || effectiveTitle || '';
+  // The search returns every model whose text contains the title, newest
+  // first: rank them so the 16e never answers for the 16 (DOS/Rate#1379),
+  // with the title's storage size breaking ties between sizes of the best
+  // model. The ranking reads the cleaned keyword the search used, without
+  // bracketed promotions, and sees enough rows that an older exact model is
+  // not cut off by the limit.
   const catalogCandidates = searchKeyword
-    ? await getMasterProducts({ search: searchKeyword, limit: 8 })
+    ? rankModelCandidates(
+        searchKeyword,
+        await getMasterProducts({ search: searchKeyword, limit: 48 }),
+        storageGb
+      )
     : [];
 
   let matchedMaster: MasterProduct | null = null;
@@ -1289,11 +1300,10 @@ export async function lookupExtensionProduct(
     !listingOfUnpublishedModel &&
     catalogCandidates.length > 0
   ) {
+    // The ranking already prefers the title's size within the best model; a
+    // size of another model never wins over the model (DOS/Rate#1379).
     if (storageGb) {
-      const exactStorageMatch = catalogCandidates.find(
-        (m) => m.storage_gb === storageGb
-      );
-      matchedMaster = exactStorageMatch || catalogCandidates[0]!;
+      matchedMaster = catalogCandidates[0]!;
       matchStatus = 'canonical_model';
     } else {
       matchedMaster = catalogCandidates[0]!;
