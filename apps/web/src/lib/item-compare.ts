@@ -297,3 +297,23 @@ export function itemSlugFromProductAnswer(json: unknown, slug: string): string {
     ? itemSlug
     : slug;
 }
+
+/**
+ * The product a `/api/v1/rate/products/{slug}` answer carries, with its full
+ * spec sheet, or null when the answer is not that product's (DOS/Rate#1515).
+ */
+export function productFromProductAnswer<T extends { slug: string }>(
+  json: unknown,
+  slug: string
+): T | null {
+  const product =
+    json && typeof json === 'object' && (json as { ok?: unknown }).ok === true
+      ? (json as { data?: { product?: unknown } }).data?.product
+      : undefined;
+  return product &&
+    typeof product === 'object' &&
+    !Array.isArray(product) &&
+    (product as { slug?: unknown }).slug === slug
+    ? (product as T)
+    : null;
+}
