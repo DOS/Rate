@@ -105,6 +105,32 @@ async function main() {
     'renditions are cached as immutable, and that rule comes after /img/:path*'
   );
 
+  // Every <img> that names device renditions sets srcSet (and sizes) before
+  // src, so an image React creates never starts the JPEG first; the product
+  // hero names them too, because React puts a preload for a non-lazy <img>
+  // into the page payload, and a prefetch of the page applies it: with
+  // srcSet the preload fetches a WebP rendition, never the full JPEG
+  // (DOS/Rate#1413).
+  const webSrc = join(here, '../..');
+  const imgTags = (rel: string) =>
+    [...readFileSync(join(webSrc, rel), 'utf8').matchAll(/<img\b[\s\S]*?\/>/g)]
+      .map((m) => m[0])
+      .filter((tag) => tag.includes('deviceImageSrcSet('));
+  const productPage = imgTags('app/[locale]/smartphones/[slug]/page.tsx');
+  const cards = imgTags('components/product/ProductCard.tsx');
+  assert.ok(
+    productPage.some((tag) => tag.includes('deviceImageSrcSet(mainImage)')),
+    'the product hero names the WebP renditions'
+  );
+  assert.equal(productPage.length, 2, 'hero and peer cards');
+  assert.equal(cards.length, 1);
+  for (const tag of [...productPage, ...cards]) {
+    const srcAt = tag.search(/\ssrc=\{/);
+    assert.ok(srcAt > 0, tag);
+    assert.ok(tag.indexOf('srcSet=') < srcAt, `srcSet before src: ${tag}`);
+    assert.ok(tag.indexOf('sizes=') < srcAt, `sizes before src: ${tag}`);
+  }
+
   console.warn('✅ Device image renditions suite passed');
 }
 

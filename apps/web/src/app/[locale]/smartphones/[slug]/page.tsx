@@ -820,7 +820,13 @@ export async function ProductDetailView({
                   {mainImage ? (
                     // The main product image is the page's largest paint: fetch it
                     // ahead of the below-the-fold peer and offer thumbnails.
+                    // React emits a preload for it into the page payload, which a
+                    // prefetch applies too, so it names the sized WebP renditions:
+                    // a prefetched page never pulls the full JPEG (#1413). It is
+                    // shown at most 350 px tall, 190 px on phones.
                     <img
+                      srcSet={deviceImageSrcSet(mainImage) ?? undefined}
+                      sizes="(max-width: 767.98px) 190px, 350px"
                       src={mainImage}
                       alt={product.name}
                       fetchPriority="high"
@@ -1602,12 +1608,12 @@ export async function ProductDetailView({
                               <img
                                 loading="lazy"
                                 decoding="async"
-                                src={peerThumb}
                                 srcSet={
                                   deviceImageSrcSet(peerThumb) ?? undefined
                                 }
                                 // 68 px box less padding and border.
                                 sizes="50px"
+                                src={peerThumb}
                                 alt={peer.name}
                                 style={{
                                   maxWidth: '100%',
