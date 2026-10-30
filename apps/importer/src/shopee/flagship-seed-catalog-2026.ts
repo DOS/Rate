@@ -4,8 +4,9 @@ import type { FlagshipDeviceSeed } from './flagship-seed-data.js';
  * Catalog expansion, groups A1-A3 (Docs/Proposals/2026-10-30-catalog-expansion.html): the
  * iPhone 17 family, iPhone 18 Pro and Pro Max, and the Galaxy S26 family, in every storage
  * sold in Vietnam. Spec-only, like every seed: no listing, price, merchant or review. Every
- * spec value is cited in `sources` (field path or group -> URL); the launch price is the
- * Vietnamese list price at launch, for reference only. Generated from sourced research
+ * spec group is cited in `sources` (a whole group, or a field path where the page is
+ * narrower, -> URL); the launch prices are the Vietnamese list prices at launch, for
+ * reference only. Generated from sourced research
  * notes on 2026-10-30; nothing here is applied to any database until JOY approves the
  * backfill (D1-D3).
  */
@@ -20,7 +21,7 @@ export const CATALOG_EXPANSION_2026_SEEDS: FlagshipDeviceSeed[] = [
     name: 'Apple iPhone 17 256GB',
     slug: 'apple-iphone-17-256gb',
     description:
-      'Apple iPhone 17 256GB chính hãng tại Việt Nam: màn hình 6.3 inch, chip Apple A19 (3 nm), 6-core CPU, 5-core GPU, RAM 8GB, bộ nhớ 256GB, pin 3692 mAh.',
+      'Apple iPhone 17 chính hãng tại Việt Nam: màn hình 6.3 inch, chip Apple A19 (3 nm), 6-core CPU, 5-core GPU, pin 3692 mAh.',
     ram_gb: 8,
     storage_gb: 256,
     screen_size_inch: 6.3,
@@ -112,7 +113,8 @@ export const CATALOG_EXPANSION_2026_SEEDS: FlagshipDeviceSeed[] = [
         announced: '2025, September 09',
         status:
           'Available. Released 2025, September 19 (Vietnam: pre-order 12/9/2025, on sale 19/9/2025)',
-        prices_msrp: '24.999.000 ₫ (256GB, giá niêm yết khi mở bán tại Việt Nam)',
+        prices_msrp:
+          'Giá niêm yết khi mở bán tại Việt Nam: 256GB: 24.999.000 ₫; 512GB: 31.499.000 ₫',
       },
       regulatory: { sar_head: '1.19 W/kg (EU: 1.49 W/kg)', sar_body: '1.19 W/kg (EU: 1.49 W/kg)' },
     },
@@ -160,7 +162,7 @@ export const CATALOG_EXPANSION_2026_SEEDS: FlagshipDeviceSeed[] = [
     name: 'Apple iPhone 17 512GB',
     slug: 'apple-iphone-17-512gb',
     description:
-      'Apple iPhone 17 512GB chính hãng tại Việt Nam: màn hình 6.3 inch, chip Apple A19 (3 nm), 6-core CPU, 5-core GPU, RAM 8GB, bộ nhớ 512GB, pin 3692 mAh.',
+      'Apple iPhone 17 chính hãng tại Việt Nam: màn hình 6.3 inch, chip Apple A19 (3 nm), 6-core CPU, 5-core GPU, pin 3692 mAh.',
     ram_gb: 8,
     storage_gb: 512,
     screen_size_inch: 6.3,
@@ -252,7 +254,8 @@ export const CATALOG_EXPANSION_2026_SEEDS: FlagshipDeviceSeed[] = [
         announced: '2025, September 09',
         status:
           'Available. Released 2025, September 19 (Vietnam: pre-order 12/9/2025, on sale 19/9/2025)',
-        prices_msrp: '31.499.000 ₫ (512GB, giá niêm yết khi mở bán tại Việt Nam)',
+        prices_msrp:
+          'Giá niêm yết khi mở bán tại Việt Nam: 256GB: 24.999.000 ₫; 512GB: 31.499.000 ₫',
       },
       regulatory: { sar_head: '1.19 W/kg (EU: 1.49 W/kg)', sar_body: '1.19 W/kg (EU: 1.49 W/kg)' },
     },
@@ -300,7 +303,7 @@ export const CATALOG_EXPANSION_2026_SEEDS: FlagshipDeviceSeed[] = [
     name: 'Apple iPhone 17 Pro 256GB',
     slug: 'apple-iphone-17-pro-256gb',
     description:
-      'Apple iPhone 17 Pro 256GB chính hãng tại Việt Nam: màn hình 6.3 inch, chip Apple A19 Pro (3 nm), 6-core CPU, 6-core GPU, RAM 12GB, bộ nhớ 256GB, pin 3998 mAh.',
+      'Apple iPhone 17 Pro chính hãng tại Việt Nam: màn hình 6.3 inch, chip Apple A19 Pro (3 nm), 6-core CPU, 6-core GPU, pin 3998 mAh.',
     ram_gb: 12,
     storage_gb: 256,
     screen_size_inch: 6.3,
@@ -396,7 +399,8 @@ export const CATALOG_EXPANSION_2026_SEEDS: FlagshipDeviceSeed[] = [
         announced: '2025, September 09',
         status:
           'Released 2025, September 19 (Vietnam: pre-order 12/9/2025, on sale 19/9/2025). No longer sold by Apple VN since iPhone 18 Pro launch (09/2026); still sold by VN retailers',
-        prices_msrp: '34.999.000 ₫ (256GB, giá niêm yết khi mở bán tại Việt Nam)',
+        prices_msrp:
+          'Giá niêm yết khi mở bán tại Việt Nam: 256GB: 34.999.000 ₫; 512GB: 41.499.000 ₫; 1TB: 47.999.000 ₫',
       },
       regulatory: { sar_head: '1.19 W/kg (EU: 1.49 W/kg)', sar_body: '1.19 W/kg (EU: 1.49 W/kg)' },
     },
@@ -442,7 +446,7 @@ export const CATALOG_EXPANSION_2026_SEEDS: FlagshipDeviceSeed[] = [
     name: 'Apple iPhone 17 Pro 512GB',
     slug: 'apple-iphone-17-pro-512gb',
     description:
-      'Apple iPhone 17 Pro 512GB chính hãng tại Việt Nam: màn hình 6.3 inch, chip Apple A19 Pro (3 nm), 6-core CPU, 6-core GPU, RAM 12GB, bộ nhớ 512GB, pin 3998 mAh.',
+      'Apple iPhone 17 Pro chính hãng tại Việt Nam: màn hình 6.3 inch, chip Apple A19 Pro (3 nm), 6-core CPU, 6-core GPU, pin 3998 mAh.',
     ram_gb: 12,
     storage_gb: 512,
     screen_size_inch: 6.3,
@@ -538,7 +542,8 @@ export const CATALOG_EXPANSION_2026_SEEDS: FlagshipDeviceSeed[] = [
         announced: '2025, September 09',
         status:
           'Released 2025, September 19 (Vietnam: pre-order 12/9/2025, on sale 19/9/2025). No longer sold by Apple VN since iPhone 18 Pro launch (09/2026); still sold by VN retailers',
-        prices_msrp: '41.499.000 ₫ (512GB, giá niêm yết khi mở bán tại Việt Nam)',
+        prices_msrp:
+          'Giá niêm yết khi mở bán tại Việt Nam: 256GB: 34.999.000 ₫; 512GB: 41.499.000 ₫; 1TB: 47.999.000 ₫',
       },
       regulatory: { sar_head: '1.19 W/kg (EU: 1.49 W/kg)', sar_body: '1.19 W/kg (EU: 1.49 W/kg)' },
     },
@@ -584,7 +589,7 @@ export const CATALOG_EXPANSION_2026_SEEDS: FlagshipDeviceSeed[] = [
     name: 'Apple iPhone 17 Pro 1TB',
     slug: 'apple-iphone-17-pro-1tb',
     description:
-      'Apple iPhone 17 Pro 1TB chính hãng tại Việt Nam: màn hình 6.3 inch, chip Apple A19 Pro (3 nm), 6-core CPU, 6-core GPU, RAM 12GB, bộ nhớ 1TB, pin 3998 mAh.',
+      'Apple iPhone 17 Pro chính hãng tại Việt Nam: màn hình 6.3 inch, chip Apple A19 Pro (3 nm), 6-core CPU, 6-core GPU, pin 3998 mAh.',
     ram_gb: 12,
     storage_gb: 1024,
     screen_size_inch: 6.3,
@@ -680,7 +685,8 @@ export const CATALOG_EXPANSION_2026_SEEDS: FlagshipDeviceSeed[] = [
         announced: '2025, September 09',
         status:
           'Released 2025, September 19 (Vietnam: pre-order 12/9/2025, on sale 19/9/2025). No longer sold by Apple VN since iPhone 18 Pro launch (09/2026); still sold by VN retailers',
-        prices_msrp: '47.999.000 ₫ (1TB, giá niêm yết khi mở bán tại Việt Nam)',
+        prices_msrp:
+          'Giá niêm yết khi mở bán tại Việt Nam: 256GB: 34.999.000 ₫; 512GB: 41.499.000 ₫; 1TB: 47.999.000 ₫',
       },
       regulatory: { sar_head: '1.19 W/kg (EU: 1.49 W/kg)', sar_body: '1.19 W/kg (EU: 1.49 W/kg)' },
     },
@@ -726,7 +732,7 @@ export const CATALOG_EXPANSION_2026_SEEDS: FlagshipDeviceSeed[] = [
     name: 'Apple iPhone 17 Pro Max 256GB',
     slug: 'apple-iphone-17-pro-max-256gb',
     description:
-      'Apple iPhone 17 Pro Max 256GB chính hãng tại Việt Nam: màn hình 6.9 inch, chip Apple A19 Pro (3 nm), 6-core CPU, 6-core GPU, RAM 12GB, bộ nhớ 256GB, pin 4823 mAh.',
+      'Apple iPhone 17 Pro Max chính hãng tại Việt Nam: màn hình 6.9 inch, chip Apple A19 Pro (3 nm), 6-core CPU, 6-core GPU, pin 4823 mAh.',
     ram_gb: 12,
     storage_gb: 256,
     screen_size_inch: 6.9,
@@ -819,7 +825,8 @@ export const CATALOG_EXPANSION_2026_SEEDS: FlagshipDeviceSeed[] = [
         announced: '2025, September 09',
         status:
           'Released 2025, September 19 (Vietnam: pre-order 12/9/2025, on sale 19/9/2025). No longer sold by Apple VN since iPhone 18 Pro Max launch (09/2026); still sold by VN retailers',
-        prices_msrp: '37.999.000 ₫ (256GB, giá niêm yết khi mở bán tại Việt Nam)',
+        prices_msrp:
+          'Giá niêm yết khi mở bán tại Việt Nam: 256GB: 37.999.000 ₫; 512GB: 44.499.000 ₫; 1TB: 50.999.000 ₫; 2TB: 63.999.000 ₫',
       },
       regulatory: { sar_head: '1.19 W/kg (EU: 1.49 W/kg)', sar_body: '1.19 W/kg (EU: 1.49 W/kg)' },
     },
@@ -869,7 +876,7 @@ export const CATALOG_EXPANSION_2026_SEEDS: FlagshipDeviceSeed[] = [
     name: 'Apple iPhone 17 Pro Max 512GB',
     slug: 'apple-iphone-17-pro-max-512gb',
     description:
-      'Apple iPhone 17 Pro Max 512GB chính hãng tại Việt Nam: màn hình 6.9 inch, chip Apple A19 Pro (3 nm), 6-core CPU, 6-core GPU, RAM 12GB, bộ nhớ 512GB, pin 4823 mAh.',
+      'Apple iPhone 17 Pro Max chính hãng tại Việt Nam: màn hình 6.9 inch, chip Apple A19 Pro (3 nm), 6-core CPU, 6-core GPU, pin 4823 mAh.',
     ram_gb: 12,
     storage_gb: 512,
     screen_size_inch: 6.9,
@@ -962,7 +969,8 @@ export const CATALOG_EXPANSION_2026_SEEDS: FlagshipDeviceSeed[] = [
         announced: '2025, September 09',
         status:
           'Released 2025, September 19 (Vietnam: pre-order 12/9/2025, on sale 19/9/2025). No longer sold by Apple VN since iPhone 18 Pro Max launch (09/2026); still sold by VN retailers',
-        prices_msrp: '44.499.000 ₫ (512GB, giá niêm yết khi mở bán tại Việt Nam)',
+        prices_msrp:
+          'Giá niêm yết khi mở bán tại Việt Nam: 256GB: 37.999.000 ₫; 512GB: 44.499.000 ₫; 1TB: 50.999.000 ₫; 2TB: 63.999.000 ₫',
       },
       regulatory: { sar_head: '1.19 W/kg (EU: 1.49 W/kg)', sar_body: '1.19 W/kg (EU: 1.49 W/kg)' },
     },
@@ -1012,7 +1020,7 @@ export const CATALOG_EXPANSION_2026_SEEDS: FlagshipDeviceSeed[] = [
     name: 'Apple iPhone 17 Pro Max 1TB',
     slug: 'apple-iphone-17-pro-max-1tb',
     description:
-      'Apple iPhone 17 Pro Max 1TB chính hãng tại Việt Nam: màn hình 6.9 inch, chip Apple A19 Pro (3 nm), 6-core CPU, 6-core GPU, RAM 12GB, bộ nhớ 1TB, pin 4823 mAh.',
+      'Apple iPhone 17 Pro Max chính hãng tại Việt Nam: màn hình 6.9 inch, chip Apple A19 Pro (3 nm), 6-core CPU, 6-core GPU, pin 4823 mAh.',
     ram_gb: 12,
     storage_gb: 1024,
     screen_size_inch: 6.9,
@@ -1105,7 +1113,8 @@ export const CATALOG_EXPANSION_2026_SEEDS: FlagshipDeviceSeed[] = [
         announced: '2025, September 09',
         status:
           'Released 2025, September 19 (Vietnam: pre-order 12/9/2025, on sale 19/9/2025). No longer sold by Apple VN since iPhone 18 Pro Max launch (09/2026); still sold by VN retailers',
-        prices_msrp: '50.999.000 ₫ (1TB, giá niêm yết khi mở bán tại Việt Nam)',
+        prices_msrp:
+          'Giá niêm yết khi mở bán tại Việt Nam: 256GB: 37.999.000 ₫; 512GB: 44.499.000 ₫; 1TB: 50.999.000 ₫; 2TB: 63.999.000 ₫',
       },
       regulatory: { sar_head: '1.19 W/kg (EU: 1.49 W/kg)', sar_body: '1.19 W/kg (EU: 1.49 W/kg)' },
     },
@@ -1152,7 +1161,7 @@ export const CATALOG_EXPANSION_2026_SEEDS: FlagshipDeviceSeed[] = [
     name: 'Apple iPhone 17 Pro Max 2TB',
     slug: 'apple-iphone-17-pro-max-2tb',
     description:
-      'Apple iPhone 17 Pro Max 2TB chính hãng tại Việt Nam: màn hình 6.9 inch, chip Apple A19 Pro (3 nm), 6-core CPU, 6-core GPU, RAM 12GB, bộ nhớ 2TB, pin 4823 mAh.',
+      'Apple iPhone 17 Pro Max chính hãng tại Việt Nam: màn hình 6.9 inch, chip Apple A19 Pro (3 nm), 6-core CPU, 6-core GPU, pin 4823 mAh.',
     ram_gb: 12,
     storage_gb: 2048,
     screen_size_inch: 6.9,
@@ -1245,7 +1254,8 @@ export const CATALOG_EXPANSION_2026_SEEDS: FlagshipDeviceSeed[] = [
         announced: '2025, September 09',
         status:
           'Released 2025, September 19 (Vietnam: pre-order 12/9/2025, on sale 19/9/2025). No longer sold by Apple VN since iPhone 18 Pro Max launch (09/2026); still sold by VN retailers',
-        prices_msrp: '63.999.000 ₫ (2TB, giá niêm yết khi mở bán tại Việt Nam)',
+        prices_msrp:
+          'Giá niêm yết khi mở bán tại Việt Nam: 256GB: 37.999.000 ₫; 512GB: 44.499.000 ₫; 1TB: 50.999.000 ₫; 2TB: 63.999.000 ₫',
       },
       regulatory: { sar_head: '1.19 W/kg (EU: 1.49 W/kg)', sar_body: '1.19 W/kg (EU: 1.49 W/kg)' },
     },
@@ -1293,7 +1303,7 @@ export const CATALOG_EXPANSION_2026_SEEDS: FlagshipDeviceSeed[] = [
     name: 'Apple iPhone 18 Pro Max 256GB',
     slug: 'apple-iphone-18-pro-max-256gb',
     description:
-      'Apple iPhone 18 Pro Max 256GB chính hãng tại Việt Nam: màn hình 6.9 inch, chip Apple A20 Pro (2 nm), CPU 6 nhân, GPU 7 nhân, RAM 12GB, bộ nhớ 256GB, pin 5391 mAh.',
+      'Apple iPhone 18 Pro Max chính hãng tại Việt Nam: màn hình 6.9 inch, chip Apple A20 Pro (2 nm), CPU 6 nhân, GPU 7 nhân, pin 5391 mAh.',
     ram_gb: 12,
     storage_gb: 256,
     screen_size_inch: 6.9,
@@ -1394,7 +1404,8 @@ export const CATALOG_EXPANSION_2026_SEEDS: FlagshipDeviceSeed[] = [
         announced: '2026, September 09',
         status:
           'Available. Released 2026, September 18 (Vietnam: pre-order 2026-09-12, on sale 2026-09-18)',
-        prices_msrp: '41.999.000 ₫ (256GB, giá niêm yết khi mở bán tại Việt Nam)',
+        prices_msrp:
+          'Giá niêm yết khi mở bán tại Việt Nam: 256GB: 41.999.000 ₫; 512GB: 48.499.000 ₫; 1TB: 61.499.000 ₫; 2TB: 80.999.000 ₫',
       },
       regulatory: {
         certifications: 'Vietnam model A3717 (apple.com/vn lists model versions A3714 and A3717)',
@@ -1445,7 +1456,7 @@ export const CATALOG_EXPANSION_2026_SEEDS: FlagshipDeviceSeed[] = [
     name: 'Apple iPhone 18 Pro Max 512GB',
     slug: 'apple-iphone-18-pro-max-512gb',
     description:
-      'Apple iPhone 18 Pro Max 512GB chính hãng tại Việt Nam: màn hình 6.9 inch, chip Apple A20 Pro (2 nm), CPU 6 nhân, GPU 7 nhân, RAM 12GB, bộ nhớ 512GB, pin 5391 mAh.',
+      'Apple iPhone 18 Pro Max chính hãng tại Việt Nam: màn hình 6.9 inch, chip Apple A20 Pro (2 nm), CPU 6 nhân, GPU 7 nhân, pin 5391 mAh.',
     ram_gb: 12,
     storage_gb: 512,
     screen_size_inch: 6.9,
@@ -1546,7 +1557,8 @@ export const CATALOG_EXPANSION_2026_SEEDS: FlagshipDeviceSeed[] = [
         announced: '2026, September 09',
         status:
           'Available. Released 2026, September 18 (Vietnam: pre-order 2026-09-12, on sale 2026-09-18)',
-        prices_msrp: '48.499.000 ₫ (512GB, giá niêm yết khi mở bán tại Việt Nam)',
+        prices_msrp:
+          'Giá niêm yết khi mở bán tại Việt Nam: 256GB: 41.999.000 ₫; 512GB: 48.499.000 ₫; 1TB: 61.499.000 ₫; 2TB: 80.999.000 ₫',
       },
       regulatory: {
         certifications: 'Vietnam model A3717 (apple.com/vn lists model versions A3714 and A3717)',
@@ -1597,7 +1609,7 @@ export const CATALOG_EXPANSION_2026_SEEDS: FlagshipDeviceSeed[] = [
     name: 'Apple iPhone 18 Pro Max 1TB',
     slug: 'apple-iphone-18-pro-max-1tb',
     description:
-      'Apple iPhone 18 Pro Max 1TB chính hãng tại Việt Nam: màn hình 6.9 inch, chip Apple A20 Pro (2 nm), CPU 6 nhân, GPU 7 nhân, RAM 12GB, bộ nhớ 1TB, pin 5391 mAh.',
+      'Apple iPhone 18 Pro Max chính hãng tại Việt Nam: màn hình 6.9 inch, chip Apple A20 Pro (2 nm), CPU 6 nhân, GPU 7 nhân, pin 5391 mAh.',
     ram_gb: 12,
     storage_gb: 1024,
     screen_size_inch: 6.9,
@@ -1698,7 +1710,8 @@ export const CATALOG_EXPANSION_2026_SEEDS: FlagshipDeviceSeed[] = [
         announced: '2026, September 09',
         status:
           'Available. Released 2026, September 18 (Vietnam: pre-order 2026-09-12, on sale 2026-09-18)',
-        prices_msrp: '61.499.000 ₫ (1TB, giá niêm yết khi mở bán tại Việt Nam)',
+        prices_msrp:
+          'Giá niêm yết khi mở bán tại Việt Nam: 256GB: 41.999.000 ₫; 512GB: 48.499.000 ₫; 1TB: 61.499.000 ₫; 2TB: 80.999.000 ₫',
       },
       regulatory: {
         certifications: 'Vietnam model A3717 (apple.com/vn lists model versions A3714 and A3717)',
@@ -1746,7 +1759,7 @@ export const CATALOG_EXPANSION_2026_SEEDS: FlagshipDeviceSeed[] = [
     name: 'Apple iPhone 18 Pro Max 2TB',
     slug: 'apple-iphone-18-pro-max-2tb',
     description:
-      'Apple iPhone 18 Pro Max 2TB chính hãng tại Việt Nam: màn hình 6.9 inch, chip Apple A20 Pro (2 nm), CPU 6 nhân, GPU 7 nhân, RAM 12GB, bộ nhớ 2TB, pin 5391 mAh.',
+      'Apple iPhone 18 Pro Max chính hãng tại Việt Nam: màn hình 6.9 inch, chip Apple A20 Pro (2 nm), CPU 6 nhân, GPU 7 nhân, pin 5391 mAh.',
     ram_gb: 12,
     storage_gb: 2048,
     screen_size_inch: 6.9,
@@ -1847,7 +1860,8 @@ export const CATALOG_EXPANSION_2026_SEEDS: FlagshipDeviceSeed[] = [
         announced: '2026, September 09',
         status:
           'Available. Released 2026, September 18 (Vietnam: pre-order 2026-09-12, on sale 2026-09-18)',
-        prices_msrp: '80.999.000 ₫ (2TB, giá niêm yết khi mở bán tại Việt Nam)',
+        prices_msrp:
+          'Giá niêm yết khi mở bán tại Việt Nam: 256GB: 41.999.000 ₫; 512GB: 48.499.000 ₫; 1TB: 61.499.000 ₫; 2TB: 80.999.000 ₫',
       },
       regulatory: {
         certifications: 'Vietnam model A3717 (apple.com/vn lists model versions A3714 and A3717)',
@@ -1895,7 +1909,7 @@ export const CATALOG_EXPANSION_2026_SEEDS: FlagshipDeviceSeed[] = [
     name: 'Apple iPhone 18 Pro 256GB',
     slug: 'apple-iphone-18-pro-256gb',
     description:
-      'Apple iPhone 18 Pro 256GB chính hãng tại Việt Nam: màn hình 6.3 inch, chip Apple A20 Pro (2 nm), CPU 6 nhân, GPU 7 nhân, RAM 12GB, bộ nhớ 256GB, pin 4056 mAh.',
+      'Apple iPhone 18 Pro chính hãng tại Việt Nam: màn hình 6.3 inch, chip Apple A20 Pro (2 nm), CPU 6 nhân, GPU 7 nhân, pin 4056 mAh.',
     ram_gb: 12,
     storage_gb: 256,
     screen_size_inch: 6.3,
@@ -1996,7 +2010,8 @@ export const CATALOG_EXPANSION_2026_SEEDS: FlagshipDeviceSeed[] = [
         announced: '2026, September 09',
         status:
           'Available. Released 2026, September 18 (Vietnam: pre-order 2026-09-12, on sale 2026-09-18)',
-        prices_msrp: '38.999.000 ₫ (256GB, giá niêm yết khi mở bán tại Việt Nam)',
+        prices_msrp:
+          'Giá niêm yết khi mở bán tại Việt Nam: 256GB: 38.999.000 ₫; 512GB: 45.499.000 ₫; 1TB: 58.499.000 ₫; 2TB: 77.999.000 ₫',
       },
       regulatory: {
         certifications: 'Vietnam model A3714 (apple.com/vn lists model versions A3714 and A3717)',
@@ -2041,7 +2056,7 @@ export const CATALOG_EXPANSION_2026_SEEDS: FlagshipDeviceSeed[] = [
     name: 'Apple iPhone 18 Pro 512GB',
     slug: 'apple-iphone-18-pro-512gb',
     description:
-      'Apple iPhone 18 Pro 512GB chính hãng tại Việt Nam: màn hình 6.3 inch, chip Apple A20 Pro (2 nm), CPU 6 nhân, GPU 7 nhân, RAM 12GB, bộ nhớ 512GB, pin 4056 mAh.',
+      'Apple iPhone 18 Pro chính hãng tại Việt Nam: màn hình 6.3 inch, chip Apple A20 Pro (2 nm), CPU 6 nhân, GPU 7 nhân, pin 4056 mAh.',
     ram_gb: 12,
     storage_gb: 512,
     screen_size_inch: 6.3,
@@ -2142,7 +2157,8 @@ export const CATALOG_EXPANSION_2026_SEEDS: FlagshipDeviceSeed[] = [
         announced: '2026, September 09',
         status:
           'Available. Released 2026, September 18 (Vietnam: pre-order 2026-09-12, on sale 2026-09-18)',
-        prices_msrp: '45.499.000 ₫ (512GB, giá niêm yết khi mở bán tại Việt Nam)',
+        prices_msrp:
+          'Giá niêm yết khi mở bán tại Việt Nam: 256GB: 38.999.000 ₫; 512GB: 45.499.000 ₫; 1TB: 58.499.000 ₫; 2TB: 77.999.000 ₫',
       },
       regulatory: {
         certifications: 'Vietnam model A3714 (apple.com/vn lists model versions A3714 and A3717)',
@@ -2187,7 +2203,7 @@ export const CATALOG_EXPANSION_2026_SEEDS: FlagshipDeviceSeed[] = [
     name: 'Apple iPhone 18 Pro 1TB',
     slug: 'apple-iphone-18-pro-1tb',
     description:
-      'Apple iPhone 18 Pro 1TB chính hãng tại Việt Nam: màn hình 6.3 inch, chip Apple A20 Pro (2 nm), CPU 6 nhân, GPU 7 nhân, RAM 12GB, bộ nhớ 1TB, pin 4056 mAh.',
+      'Apple iPhone 18 Pro chính hãng tại Việt Nam: màn hình 6.3 inch, chip Apple A20 Pro (2 nm), CPU 6 nhân, GPU 7 nhân, pin 4056 mAh.',
     ram_gb: 12,
     storage_gb: 1024,
     screen_size_inch: 6.3,
@@ -2288,7 +2304,8 @@ export const CATALOG_EXPANSION_2026_SEEDS: FlagshipDeviceSeed[] = [
         announced: '2026, September 09',
         status:
           'Available. Released 2026, September 18 (Vietnam: pre-order 2026-09-12, on sale 2026-09-18)',
-        prices_msrp: '58.499.000 ₫ (1TB, giá niêm yết khi mở bán tại Việt Nam)',
+        prices_msrp:
+          'Giá niêm yết khi mở bán tại Việt Nam: 256GB: 38.999.000 ₫; 512GB: 45.499.000 ₫; 1TB: 58.499.000 ₫; 2TB: 77.999.000 ₫',
       },
       regulatory: {
         certifications: 'Vietnam model A3714 (apple.com/vn lists model versions A3714 and A3717)',
@@ -2333,7 +2350,7 @@ export const CATALOG_EXPANSION_2026_SEEDS: FlagshipDeviceSeed[] = [
     name: 'Apple iPhone 18 Pro 2TB',
     slug: 'apple-iphone-18-pro-2tb',
     description:
-      'Apple iPhone 18 Pro 2TB chính hãng tại Việt Nam: màn hình 6.3 inch, chip Apple A20 Pro (2 nm), CPU 6 nhân, GPU 7 nhân, RAM 12GB, bộ nhớ 2TB, pin 4056 mAh.',
+      'Apple iPhone 18 Pro chính hãng tại Việt Nam: màn hình 6.3 inch, chip Apple A20 Pro (2 nm), CPU 6 nhân, GPU 7 nhân, pin 4056 mAh.',
     ram_gb: 12,
     storage_gb: 2048,
     screen_size_inch: 6.3,
@@ -2434,7 +2451,8 @@ export const CATALOG_EXPANSION_2026_SEEDS: FlagshipDeviceSeed[] = [
         announced: '2026, September 09',
         status:
           'Available. Released 2026, September 18 (Vietnam: pre-order 2026-09-12, on sale 2026-09-18)',
-        prices_msrp: '77.999.000 ₫ (2TB, giá niêm yết khi mở bán tại Việt Nam)',
+        prices_msrp:
+          'Giá niêm yết khi mở bán tại Việt Nam: 256GB: 38.999.000 ₫; 512GB: 45.499.000 ₫; 1TB: 58.499.000 ₫; 2TB: 77.999.000 ₫',
       },
       regulatory: {
         certifications: 'Vietnam model A3714 (apple.com/vn lists model versions A3714 and A3717)',
@@ -2480,7 +2498,7 @@ export const CATALOG_EXPANSION_2026_SEEDS: FlagshipDeviceSeed[] = [
     name: 'Samsung Galaxy S26 Ultra 256GB',
     slug: 'samsung-galaxy-s26-ultra-256gb',
     description:
-      'Samsung Galaxy S26 Ultra 256GB chính hãng tại Việt Nam: màn hình 6.9 inch, chip Snapdragon 8 Elite Gen 5 for Galaxy (3 nm), RAM 12GB, bộ nhớ 256GB, pin 5000 mAh.',
+      'Samsung Galaxy S26 Ultra chính hãng tại Việt Nam: màn hình 6.9 inch, chip Snapdragon 8 Elite Gen 5 for Galaxy (3 nm), pin 5000 mAh.',
     ram_gb: 12,
     storage_gb: 256,
     screen_size_inch: 6.9,
@@ -2590,7 +2608,8 @@ export const CATALOG_EXPANSION_2026_SEEDS: FlagshipDeviceSeed[] = [
       availability: {
         announced: '2026, February 25',
         status: 'Available. Released 2026, March 06',
-        prices_msrp: '36.990.000 ₫ (256GB, giá niêm yết khi mở bán tại Việt Nam)',
+        prices_msrp:
+          'Giá niêm yết khi mở bán tại Việt Nam: 256GB: 36.990.000 ₫; 512GB: 42.990.000 ₫; 1TB: 51.990.000 ₫',
       },
       regulatory: { sar_head: '1.09 W/kg', sar_body: '1.19 W/kg' },
     },
@@ -2632,7 +2651,7 @@ export const CATALOG_EXPANSION_2026_SEEDS: FlagshipDeviceSeed[] = [
     name: 'Samsung Galaxy S26 Ultra 512GB',
     slug: 'samsung-galaxy-s26-ultra-512gb',
     description:
-      'Samsung Galaxy S26 Ultra 512GB chính hãng tại Việt Nam: màn hình 6.9 inch, chip Snapdragon 8 Elite Gen 5 for Galaxy (3 nm), RAM 12GB, bộ nhớ 512GB, pin 5000 mAh.',
+      'Samsung Galaxy S26 Ultra chính hãng tại Việt Nam: màn hình 6.9 inch, chip Snapdragon 8 Elite Gen 5 for Galaxy (3 nm), pin 5000 mAh.',
     ram_gb: 12,
     storage_gb: 512,
     screen_size_inch: 6.9,
@@ -2742,7 +2761,8 @@ export const CATALOG_EXPANSION_2026_SEEDS: FlagshipDeviceSeed[] = [
       availability: {
         announced: '2026, February 25',
         status: 'Available. Released 2026, March 06',
-        prices_msrp: '42.990.000 ₫ (512GB, giá niêm yết khi mở bán tại Việt Nam)',
+        prices_msrp:
+          'Giá niêm yết khi mở bán tại Việt Nam: 256GB: 36.990.000 ₫; 512GB: 42.990.000 ₫; 1TB: 51.990.000 ₫',
       },
       regulatory: { sar_head: '1.09 W/kg', sar_body: '1.19 W/kg' },
     },
@@ -2784,7 +2804,7 @@ export const CATALOG_EXPANSION_2026_SEEDS: FlagshipDeviceSeed[] = [
     name: 'Samsung Galaxy S26 Ultra 1TB',
     slug: 'samsung-galaxy-s26-ultra-1tb',
     description:
-      'Samsung Galaxy S26 Ultra 1TB chính hãng tại Việt Nam: màn hình 6.9 inch, chip Snapdragon 8 Elite Gen 5 for Galaxy (3 nm), RAM 16GB, bộ nhớ 1TB, pin 5000 mAh.',
+      'Samsung Galaxy S26 Ultra chính hãng tại Việt Nam: màn hình 6.9 inch, chip Snapdragon 8 Elite Gen 5 for Galaxy (3 nm), pin 5000 mAh.',
     ram_gb: 16,
     storage_gb: 1024,
     screen_size_inch: 6.9,
@@ -2894,7 +2914,8 @@ export const CATALOG_EXPANSION_2026_SEEDS: FlagshipDeviceSeed[] = [
       availability: {
         announced: '2026, February 25',
         status: 'Available. Released 2026, March 06',
-        prices_msrp: '51.990.000 ₫ (1TB, giá niêm yết khi mở bán tại Việt Nam)',
+        prices_msrp:
+          'Giá niêm yết khi mở bán tại Việt Nam: 256GB: 36.990.000 ₫; 512GB: 42.990.000 ₫; 1TB: 51.990.000 ₫',
       },
       regulatory: { sar_head: '1.09 W/kg', sar_body: '1.19 W/kg' },
     },
@@ -2933,7 +2954,7 @@ export const CATALOG_EXPANSION_2026_SEEDS: FlagshipDeviceSeed[] = [
     name: 'Samsung Galaxy S26+ 256GB',
     slug: 'samsung-galaxy-s26-plus-256gb',
     description:
-      'Samsung Galaxy S26+ 256GB chính hãng tại Việt Nam: màn hình 6.7 inch, chip Exynos 2600 (2 nm) in Vietnam, RAM 12GB, bộ nhớ 256GB, pin 4900 mAh.',
+      'Samsung Galaxy S26+ chính hãng tại Việt Nam: màn hình 6.7 inch, chip Exynos 2600 (2 nm) in Vietnam, pin 4900 mAh.',
     ram_gb: 12,
     storage_gb: 256,
     screen_size_inch: 6.7,
@@ -3039,7 +3060,8 @@ export const CATALOG_EXPANSION_2026_SEEDS: FlagshipDeviceSeed[] = [
       availability: {
         announced: '2026, February 25',
         status: 'Available. Released 2026, March 06',
-        prices_msrp: '29.990.000 ₫ (256GB, giá niêm yết khi mở bán tại Việt Nam)',
+        prices_msrp:
+          'Giá niêm yết khi mở bán tại Việt Nam: 256GB: 29.990.000 ₫; 512GB: 35.990.000 ₫',
       },
       regulatory: { sar_head: '1.15 W/kg', sar_body: '1.17 W/kg' },
     },
@@ -3075,7 +3097,7 @@ export const CATALOG_EXPANSION_2026_SEEDS: FlagshipDeviceSeed[] = [
     name: 'Samsung Galaxy S26+ 512GB',
     slug: 'samsung-galaxy-s26-plus-512gb',
     description:
-      'Samsung Galaxy S26+ 512GB chính hãng tại Việt Nam: màn hình 6.7 inch, chip Exynos 2600 (2 nm) in Vietnam, RAM 12GB, bộ nhớ 512GB, pin 4900 mAh.',
+      'Samsung Galaxy S26+ chính hãng tại Việt Nam: màn hình 6.7 inch, chip Exynos 2600 (2 nm) in Vietnam, pin 4900 mAh.',
     ram_gb: 12,
     storage_gb: 512,
     screen_size_inch: 6.7,
@@ -3181,7 +3203,8 @@ export const CATALOG_EXPANSION_2026_SEEDS: FlagshipDeviceSeed[] = [
       availability: {
         announced: '2026, February 25',
         status: 'Available. Released 2026, March 06',
-        prices_msrp: '35.990.000 ₫ (512GB, giá niêm yết khi mở bán tại Việt Nam)',
+        prices_msrp:
+          'Giá niêm yết khi mở bán tại Việt Nam: 256GB: 29.990.000 ₫; 512GB: 35.990.000 ₫',
       },
       regulatory: { sar_head: '1.15 W/kg', sar_body: '1.17 W/kg' },
     },
@@ -3217,7 +3240,7 @@ export const CATALOG_EXPANSION_2026_SEEDS: FlagshipDeviceSeed[] = [
     name: 'Samsung Galaxy S26 256GB',
     slug: 'samsung-galaxy-s26-256gb',
     description:
-      'Samsung Galaxy S26 256GB chính hãng tại Việt Nam: màn hình 6.3 inch, chip Exynos 2600 (2 nm) in Vietnam, RAM 12GB, bộ nhớ 256GB, pin 4300 mAh.',
+      'Samsung Galaxy S26 chính hãng tại Việt Nam: màn hình 6.3 inch, chip Exynos 2600 (2 nm) in Vietnam, pin 4300 mAh.',
     ram_gb: 12,
     storage_gb: 256,
     screen_size_inch: 6.3,
@@ -3324,7 +3347,8 @@ export const CATALOG_EXPANSION_2026_SEEDS: FlagshipDeviceSeed[] = [
       availability: {
         announced: '2026, February 25',
         status: 'Available. Released 2026, March 06',
-        prices_msrp: '25.990.000 ₫ (256GB, giá niêm yết khi mở bán tại Việt Nam)',
+        prices_msrp:
+          'Giá niêm yết khi mở bán tại Việt Nam: 256GB: 25.990.000 ₫; 512GB: 31.990.000 ₫',
       },
       regulatory: { sar_head: '1.19 W/kg', sar_body: '1.20 W/kg' },
     },
@@ -3361,7 +3385,7 @@ export const CATALOG_EXPANSION_2026_SEEDS: FlagshipDeviceSeed[] = [
     name: 'Samsung Galaxy S26 512GB',
     slug: 'samsung-galaxy-s26-512gb',
     description:
-      'Samsung Galaxy S26 512GB chính hãng tại Việt Nam: màn hình 6.3 inch, chip Exynos 2600 (2 nm) in Vietnam, RAM 12GB, bộ nhớ 512GB, pin 4300 mAh.',
+      'Samsung Galaxy S26 chính hãng tại Việt Nam: màn hình 6.3 inch, chip Exynos 2600 (2 nm) in Vietnam, pin 4300 mAh.',
     ram_gb: 12,
     storage_gb: 512,
     screen_size_inch: 6.3,
@@ -3468,7 +3492,8 @@ export const CATALOG_EXPANSION_2026_SEEDS: FlagshipDeviceSeed[] = [
       availability: {
         announced: '2026, February 25',
         status: 'Available. Released 2026, March 06',
-        prices_msrp: '31.990.000 ₫ (512GB, giá niêm yết khi mở bán tại Việt Nam)',
+        prices_msrp:
+          'Giá niêm yết khi mở bán tại Việt Nam: 256GB: 25.990.000 ₫; 512GB: 31.990.000 ₫',
       },
       regulatory: { sar_head: '1.19 W/kg', sar_body: '1.20 W/kg' },
     },

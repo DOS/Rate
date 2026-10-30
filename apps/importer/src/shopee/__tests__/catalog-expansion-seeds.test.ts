@@ -103,4 +103,42 @@ for (const seed of CATALOG_EXPANSION_2026_SEEDS) {
   assert.ok((seed.aliases ?? []).length >= 2, `${where}: needs retail aliases`);
 }
 
+// More retail spellings key as their seed; near-miss models never land on these keys.
+for (const [title, key] of [
+  ['iPhone 17 Pro Max 1 TB', 'apple:iphone-17-pro-max:1024gb'],
+  ['Samsung Galaxy S26 Ultra 16GB 1TB', 'samsung:galaxy-s26-ultra:1024gb'],
+  ['Galaxy S26+ 12GB/512GB', 'samsung:galaxy-s26-plus:512gb'],
+  ['Samsung Galaxy S26 Plus 5G 512GB', 'samsung:galaxy-s26-plus:512gb'],
+] as const) {
+  assert.equal(normalize(title).model_key, key, title);
+}
+const seededKeys = new Set(CATALOG_EXPANSION_2026_SEEDS.map(seed => seed.model_key));
+for (const title of [
+  'Apple iPhone 17e 256GB',
+  'Apple iPhone Air 256GB',
+  'Samsung Galaxy S26 FE 256GB',
+  'Samsung Galaxy S26 Edge 256GB',
+]) {
+  assert.ok(!seededKeys.has(normalize(title).model_key), title);
+}
+
+// The benchmark registry (product-normalizer.ts) agrees with the sourced seeds on the
+// headline values for the models both describe, so an enriched listing carries them.
+for (const key of [
+  'apple:iphone-18-pro-max:256gb',
+  'apple:iphone-18-pro:256gb',
+  'samsung:galaxy-s26-ultra:256gb',
+]) {
+  const seed = CATALOG_EXPANSION_2026_SEEDS.find(s => s.model_key === key)!;
+  const enriched = normalize(seed.name);
+  assert.equal(enriched.is_benchmark_enriched, true, key);
+  assert.equal(enriched.battery_mah, seed.battery_mah, key);
+  assert.equal(enriched.screen_size_inch, seed.screen_size_inch, key);
+  assert.equal(
+    enriched.specifications.hardware?.chipset,
+    seed.specifications.hardware?.chipset?.replace(/ \(SM8850-1-AD, 3 nm\)$/, ' (3 nm)'),
+    key
+  );
+}
+
 console.warn(`✅ Catalog expansion seeds (${CATALOG_EXPANSION_2026_SEEDS.length} variants) passed`);

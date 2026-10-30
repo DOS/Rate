@@ -2390,20 +2390,21 @@ async function runSuite() {
     );
     assert.equal(keyOf('Đồng hồ Samsung Galaxy Watch7 44mm'), 'samsung:galaxy-watch7:unknown');
 
-    // #657 Case 1: Title-stated RAM beats benchmark RAM
-    const s26Ultra12Gb = normalizer.normalize(
-      createDummyShopeeProduct('Samsung Galaxy S26 Ultra - 12GB/256GB')
+    // #657 Case 1: Title-stated RAM beats benchmark RAM. The benchmark (sourced, catalog
+    // expansion A3) has the 256GB's 12GB; the 1TB title states its own 16GB.
+    const s26Ultra16Gb = normalizer.normalize(
+      createDummyShopeeProduct('Samsung Galaxy S26 Ultra - 16GB/1TB')
     );
-    assert.equal(s26Ultra12Gb.model_key, 'samsung:galaxy-s26-ultra:256gb');
-    assert.equal(s26Ultra12Gb.ram_gb, 12);
-    assert.equal(s26Ultra12Gb.specifications.hardware?.ram_gb, 12);
-    assert.equal(s26Ultra12Gb.key_specs.ram, '12GB');
+    assert.equal(s26Ultra16Gb.model_key, 'samsung:galaxy-s26-ultra:1024gb');
+    assert.equal(s26Ultra16Gb.ram_gb, 16);
+    assert.equal(s26Ultra16Gb.specifications.hardware?.ram_gb, 16);
+    assert.equal(s26Ultra16Gb.key_specs.ram, '16GB');
 
     const s26UltraBenchmarkRam = normalizer.normalize(
       createDummyShopeeProduct('Samsung Galaxy S26 Ultra 256GB')
     );
-    assert.equal(s26UltraBenchmarkRam.ram_gb, 16);
-    assert.equal(s26UltraBenchmarkRam.specifications.hardware?.ram_gb, 16);
+    assert.equal(s26UltraBenchmarkRam.ram_gb, 12);
+    assert.equal(s26UltraBenchmarkRam.specifications.hardware?.ram_gb, 12);
 
     // #657 Case 2 & 3: Earbuds, watches, tablets, laptops get no phone-shaped storage/RAM/screen/SAR/Face ID
     const wf1000xm6 = normalizer.normalize(createDummyShopeeProduct('Tai nghe Sony WF-1000XM6'));
