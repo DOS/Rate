@@ -692,6 +692,21 @@ async function runSuite() {
     'Củ sạc Apple 20W không kèm cáp sạc',
     'Tempered Glass Screen Protector for iPhone 16 Pro',
     'Clear Case for iPhone 16 Pro Max MagSafe',
+    // A case or film made for the Apple Pencil is still a case (review of #1505).
+    'Bao da iPad Pro M4 11 inch có khe đựng Apple Pencil',
+    'Kính cường lực iPad Pro M4 13 inch dùng được Apple Pencil',
+    'Ốp Apple Pencil 2 silicon',
+    'Cáp sạc Apple Pencil 1',
+    'Vỏ ốp iPhone 16 Pro Max',
+    'Bộ dán PPF iPhone 16 Pro',
+    'Skin dán Galaxy Tab S10 Ultra',
+    'Kính camera iPhone 16 Pro Max',
+    'Op lung iPhone 15 Pro Max',
+    'Combo ốp lưng và cường lực iPhone 16',
+    'Cases for Galaxy S25 Ultra',
+    'Magic Keyboard iPad Pro M4 11 inch',
+    'Bút S Pen Galaxy Tab S10 Ultra',
+    'Đế sạc Apple Watch Series 10',
   ];
   for (const title of accessoryTitles1505) {
     const accessory = normalizer.normalize(createDummyShopeeProduct(title));
@@ -704,6 +719,9 @@ async function runSuite() {
     ['Apple Watch Series 10 46mm Titanium Case', 'apple:watch-series-10-46mm:64gb'],
     ['Bút cảm ứng Apple Pencil Pro', 'apple:pencil-pro:unknown'],
     ['[Tặng ốp lưng] iPhone 16 Pro Max 256GB', 'apple:iphone-16-pro-max:256gb'],
+    // A bundle with the device after a short accessory and a "+" sells the device.
+    ['Sạc nhanh + iPhone 16 Pro Max 256GB', 'apple:iphone-16-pro-max:256gb'],
+    ['Stylus Apple Pencil Pro', 'apple:pencil-pro:unknown'],
   ] as const) {
     assert.equal(keyOf(title), expectedKey, title);
   }

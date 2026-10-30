@@ -402,22 +402,37 @@ const APPLE_PART_NUMBERS: Readonly<Record<string, readonly [string, string]>> = 
 // stylus, a keyboard, a charger or a strap for a device, not the device ("Ốp lưng iPad
 // mini A20 Pro", "Kính cường lực iPhone 16 Pro Max", DOS/Rate#1505). Only the opening
 // words count, so a gift after the device ("iPad mini A20 Pro tặng ốp lưng") and a
-// watch's own case ("Apple Watch Series 10 46mm Titanium Case") keep the device.
+// watch's own case ("Apple Watch Series 10 46mm Titanium Case") keep the device. A
+// "combo", "bộ" or "set" before the accessory, and titles typed without diacritics
+// ("Op lung"), count too.
 const ACCESSORY_OPENER =
-  /^(?:ốp(?:\s*lưng)?|bao\s*(?:da|đựng)|túi\s*(?:chống\s*sốc|đựng)|kính\s*cường\s*lực|cường\s*lực|miếng\s*dán|dán\s*(?:màn\s*hình|lưng|camera|ppf)|phim\s*dán|bút\s*cảm\s*ứng|bàn\s*phím|củ\s*sạc|sạc|cáp|dây\s*(?:đeo|sạc|cáp)|giá\s*đỡ|(?:silicone\s*|clear\s*|leather\s*|magsafe\s*)?case|cover|folio|(?:tempered\s*)?glass|screen\s*protector|stylus|keyboard|charger|cable)(?![\p{L}\d])/iu;
+  /^(?:(?:combo|bộ|set|hàng\s*chính\s*hãng)\s+)?(?:(?:vỏ\s*)?ốp(?:\s*lưng)?|op\s*lung|bao\s*(?:da|đựng)|túi\s*(?:chống\s*sốc|đựng)|kính\s*(?:cường\s*lực|camera|bảo\s*vệ)|cường\s*lực|(?:miếng|bộ)\s*dán|dán\s*(?:màn\s*hình|lưng|camera|ppf)|phim\s*dán|skin(?:\s*dán)?|bút|bàn\s*phím|magic\s*keyboard|(?:củ|đế)\s*sạc|sạc|cáp|dây\s*(?:đeo|sạc|cáp)|giá\s*đỡ|(?:silicone\s*|clear\s*|leather\s*|magsafe\s*)?cases?|covers?|folio|(?:tempered\s*)?glass|screen\s*protectors?|stylus|keyboard|charger|cable)(?![\p{L}\d])/iu;
+// A pen sold as itself: "Bút cảm ứng Apple Pencil Pro" is the Apple Pencil, its own
+// product, but a case "có khe đựng Apple Pencil" is still a case.
+const APPLE_PENCIL_OPENER =
+  /^(?:(?:bút(?:\s*cảm\s*ứng)?|stylus)\s+)?apple\s*pencil(?![\p{L}])/iu;
 
 /**
  * Whether a title sells an accessory for a device rather than the device: it opens with
  * the accessory (DOS/Rate#1505). Opening promo brackets ("[Hàng chính hãng]") are skipped.
- * An Apple Pencil is its own product, so "Bút cảm ứng Apple Pencil Pro" is not one.
+ * An Apple Pencil is its own product, and a bundle that puts the device after a short
+ * accessory and a "+" ("Sạc nhanh + iPhone 16 Pro Max 256GB") sells the device.
  */
 export function isAccessoryTitle(title: string): boolean {
   const t = typeof title === 'string' ? title.normalize('NFC') : '';
   const opening = t
     .replace(/^(?:\s*(?:\[[^\]]*\]|\([^)]*\)|【[^】]*】))+/u, '')
     .replace(/^[\s\p{P}\p{S}]+/u, '');
-  if (!ACCESSORY_OPENER.test(opening)) return false;
-  return !/apple\s*pencil/i.test(ownProductPart(t));
+  if (!ACCESSORY_OPENER.test(opening) || APPLE_PENCIL_OPENER.test(opening)) return false;
+  const plus = opening.indexOf('+');
+  if (plus > 0) {
+    const before = opening.slice(0, plus);
+    const after = opening.slice(plus + 1).trim();
+    if (!namesProduct(before) && namesProduct(after) && !ACCESSORY_OPENER.test(after)) {
+      return false;
+    }
+  }
+  return true;
 }
 
 /**
