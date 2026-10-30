@@ -18,6 +18,9 @@ for (const locale of ['vi', 'en', 'cs']) {
     const fit = async () =>
       input.evaluate((el: HTMLInputElement) => {
         const style = getComputedStyle(el);
+        // Measured in the input's own font; an empty font would fall back
+        // to the canvas's 10px default and pass by mistake.
+        if (!style.font) return false;
         const ctx = document.createElement('canvas').getContext('2d')!;
         ctx.font = style.font;
         const room =
