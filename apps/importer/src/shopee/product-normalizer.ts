@@ -406,11 +406,32 @@ const APPLE_PART_NUMBERS: Readonly<Record<string, readonly [string, string]>> = 
 // "combo", "bộ" or "set" before the accessory, and titles typed without diacritics
 // ("Op lung"), count too.
 const ACCESSORY_OPENER =
-  /^(?:(?:combo|bộ|set|hàng\s*chính\s*hãng)\s+)?(?:(?:vỏ\s*)?ốp(?:\s*lưng)?|op\s*lung|bao\s*(?:da|đựng)|túi\s*(?:chống\s*sốc|đựng)|kính\s*(?:cường\s*lực|camera|bảo\s*vệ)|cường\s*lực|(?:miếng|bộ)\s*dán|dán\s*(?:màn\s*hình|lưng|camera|ppf)|phim\s*dán|skin(?:\s*dán)?|bút|bàn\s*phím|magic\s*keyboard|(?:củ|đế)\s*sạc|sạc|cáp|dây\s*(?:đeo|sạc|cáp)|giá\s*đỡ|(?:silicone\s*|clear\s*|leather\s*|magsafe\s*)?cases?|covers?|folio|(?:tempered\s*)?glass|screen\s*protectors?|stylus|keyboard|charger|cable)(?![\p{L}\d])/iu;
-// A pen sold as itself: "Bút cảm ứng Apple Pencil Pro" is the Apple Pencil, its own
-// product, but a case "có khe đựng Apple Pencil" is still a case.
+  /^(?:(?:combo|bộ|set|hàng\s*chính\s*hãng)\s+)?(?:(?:vỏ\s*)?ốp(?:\s*lưng)?|op\s*lung|bao\s*(?:da|đựng)|túi\s*(?:chống\s*sốc|đựng)|kính\s*(?:cường\s*lực|camera|bảo\s*vệ)|cường\s*lực|(?:miếng|bộ)\s*dán|dán\s*(?:màn\s*hình|lưng|camera|ppf)|phim\s*dán|skin(?:\s*dán)?|bút|bàn\s*phím|magic\s*keyboard|(?:củ|đế)\s*sạc|sạc|cáp|dây|giá\s*đỡ|(?:silicone\s*|clear\s*|leather\s*|magsafe\s*)?cases?|covers?|folio|(?:tempered\s*)?glass|screen\s*protectors?|stylus|keyboard|charger|cable)(?![\p{L}\d])/iu;
+// A pen sold as itself: "Bút cảm ứng (chính hãng) Apple Pencil Pro" is the Apple Pencil,
+// its own product, but a case "có khe đựng Apple Pencil" or a pen "cho iPad như Apple
+// Pencil" is not.
 const APPLE_PENCIL_OPENER =
-  /^(?:(?:bút(?:\s*cảm\s*ứng)?|stylus)\s+)?apple\s*pencil(?![\p{L}])/iu;
+  /^(?:(?:bút(?:\s*cảm\s*ứng)?|stylus)(?:\s+(?!(?:cho|for|thay|như|giống|kiểu|dùng)(?![\p{L}\d]))[\p{L}\d-]+){0,2}\s+)?apple\s*pencil(?![\p{L}])/iu;
+
+/**
+ * The title from its first product word: emoji, punctuation and promo brackets before it
+ * dropped. A bracket is dropped only when a product follows it ("[Chính hãng] Ốp lưng
+ * iPhone 16"); one that holds the product ("[Ốp lưng iPhone 16 Pro Max] Trong suốt") is
+ * read without its brackets.
+ */
+function openingWords(text: string): string {
+  let rest = text;
+  for (;;) {
+    const before = rest;
+    rest = rest.replace(/^(?:(?![[(【])[\s\p{P}\p{S}])+/u, '');
+    const block = /^(?:\[([^\]]*)\]|\(([^)]*)\)|【([^】]*)】)/u.exec(rest);
+    if (block) {
+      const after = rest.slice(block[0].length);
+      rest = namesProduct(after) ? after : `${block[1] ?? block[2] ?? block[3] ?? ''} ${after}`;
+    }
+    if (rest === before) return rest.trim();
+  }
+}
 
 /**
  * Whether a title sells an accessory for a device rather than the device: it opens with
@@ -420,14 +441,16 @@ const APPLE_PENCIL_OPENER =
  */
 export function isAccessoryTitle(title: string): boolean {
   const t = typeof title === 'string' ? title.normalize('NFC') : '';
-  const opening = t
-    .replace(/^(?:\s*(?:\[[^\]]*\]|\([^)]*\)|【[^】]*】))+/u, '')
-    .replace(/^[\s\p{P}\p{S}]+/u, '');
+  // What the title sells, not a gift it opens with: "Ốp lưng tặng kèm khi mua iPhone 16 Pro
+  // Max" sells the iPhone (DOS/Rate#1407).
+  const opening = openingWords(ownProductPart(t));
   if (!ACCESSORY_OPENER.test(opening) || APPLE_PENCIL_OPENER.test(opening)) return false;
-  const plus = opening.indexOf('+');
+  // The part before a gift stops at the "+", so the bundle is read on the whole title.
+  const whole = openingWords(t);
+  const plus = whole.indexOf('+');
   if (plus > 0) {
-    const before = opening.slice(0, plus);
-    const after = opening.slice(plus + 1).trim();
+    const before = whole.slice(0, plus);
+    const after = whole.slice(plus + 1).trim();
     if (!namesProduct(before) && namesProduct(after) && !ACCESSORY_OPENER.test(after)) {
       return false;
     }

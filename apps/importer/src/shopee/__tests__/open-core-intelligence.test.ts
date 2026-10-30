@@ -707,6 +707,12 @@ async function runSuite() {
     'Magic Keyboard iPad Pro M4 11 inch',
     'Bút S Pen Galaxy Tab S10 Ultra',
     'Đế sạc Apple Watch Series 10',
+    // Codex review of #1507.
+    '[Ốp lưng iPhone 16 Pro Max] Trong suốt chống sốc',
+    'Dây cao su Apple Watch Ultra 2 49mm',
+    'Dây Apple Watch S/M 42mm',
+    'Dây Apple Watch Series 10 46mm tặng ốp',
+    '🔥 [Chính hãng] Ốp lưng iPhone 16 Pro Max',
   ];
   for (const title of accessoryTitles1505) {
     const accessory = normalizer.normalize(createDummyShopeeProduct(title));
@@ -722,6 +728,9 @@ async function runSuite() {
     // A bundle with the device after a short accessory and a "+" sells the device.
     ['Sạc nhanh + iPhone 16 Pro Max 256GB', 'apple:iphone-16-pro-max:256gb'],
     ['Stylus Apple Pencil Pro', 'apple:pencil-pro:unknown'],
+    ['Bút cảm ứng chính hãng Apple Pencil Pro', 'apple:pencil-pro:unknown'],
+    // A gift that opens the title is not what it sells.
+    ['Ốp lưng tặng kèm khi mua iPhone 16 Pro Max 256GB', 'apple:iphone-16-pro-max:256gb'],
   ] as const) {
     assert.equal(keyOf(title), expectedKey, title);
   }
@@ -1080,7 +1089,7 @@ async function runSuite() {
   assert.equal(keyOf('Apple Watch S 14 - 16 cm 42mm'), 'apple:watch:unknown');
   assert.equal(keyOf('Apple Watch S10 - 46mm GPS'), 'apple:watch-series-10-46mm:64gb');
   assert.equal(keyOf('Apple Watch S10x 46mm'), 'apple:watch:unknown');
-  assert.equal(keyOf('Dây Apple Watch S/M 42mm'), 'apple:watch:unknown');
+  assert.equal(keyOf('Apple Watch S/M 42mm'), 'apple:watch:unknown');
   assert.equal(keyOf('Apple Watch S10.46mm'), 'apple:watch:unknown');
   assert.equal(keyOf('Samsung Galaxy S10 128GB'), 'samsung:galaxy-s10:128gb');
   assert.equal(keyOf('Xiaomi Watch S1 Active'), 'xiaomi:watch-s1-active:unknown');
@@ -1399,7 +1408,7 @@ async function runSuite() {
     keyOf('Mua kèm iPhone giảm 500k Apple Watch Series 10 46mm'),
     'apple:watch-series-10-46mm:64gb'
   );
-  assert.equal(keyOf('Dây Apple Watch Series 10 46mm tặng ốp'), 'apple:watch-series-10-46mm:64gb');
+  assert.equal(keyOf('Apple Watch Series 10 46mm tặng ốp'), 'apple:watch-series-10-46mm:64gb');
   assert.equal(
     keyOf('Apple Watch Series 10 GPS + Cellular 46mm'),
     'apple:watch-series-10-46mm:64gb'
