@@ -1,12 +1,22 @@
 import assert from 'node:assert/strict';
-import {
-  collectServerTiming,
-  formatServerTiming,
-  timeStep,
-} from '../server-timing';
+import { AsyncLocalStorage } from 'node:async_hooks';
 
 // Server-Timing breakdown for the products API (DOS/Rate#1353).
 async function main() {
+  // Without the AsyncLocalStorage Next.js puts on globalThis (a browser
+  // bundle), timing is off: no header, and steps are plain awaits.
+  const timing = await import('../server-timing');
+  const off = timing;
+  assert.deepEqual(
+    await off.collectServerTiming(async () =>
+      off.timeStep('rpc', async () => 3)
+    ),
+    { result: 3, header: '' }
+  );
+
+  (globalThis as { AsyncLocalStorage?: unknown }).AsyncLocalStorage =
+    AsyncLocalStorage;
+  const { collectServerTiming, formatServerTiming, timeStep } = timing;
   // Outside a timed request, timeStep is a plain await.
   assert.equal(await timeStep('rpc', async () => 7), 7);
 
@@ -42,14 +52,17 @@ async function main() {
   assert.ok(steps.get('total')! >= steps.get('search-rpc')!, header);
 
   // A failing step is still timed and the error passes through.
-  await assert.rejects(
-    collectServerTiming(() =>
+  const failed = await collectServerTiming(async () => {
+    await assert.rejects(
       timeStep('category', async () => {
         throw new Error('boom');
-      })
-    ),
-    /boom/
-  );
+      }),
+      /boom/
+    );
+    return 'caught';
+  });
+  assert.equal(failed.result, 'caught');
+  assert.match(failed.header, /^category;dur=\d+\.\d, total;dur=/);
 
   // Only fixed lower-case tokens reach the header.
   assert.equal(

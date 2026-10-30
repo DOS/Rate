@@ -1,13 +1,30 @@
-import { AsyncLocalStorage } from 'node:async_hooks';
-
 /**
  * Per-request step timings for a `Server-Timing` header (DOS/Rate#1353), so a
  * slow API answer shows which database round trip took the time without
  * database access. Step names are fixed tokens chosen in code, never request
  * data, so the header carries no personal data. Outside
  * `collectServerTiming`, `timeStep` is a plain await.
+ *
+ * `rate-api` imports this and client modules reach `rate-api` through
+ * `rate-domain`, so there is no `node:async_hooks` import here: the server
+ * runtimes Next.js sets up expose `globalThis.AsyncLocalStorage`. Without it
+ * (a browser bundle) timing is off and every step is a plain await.
  */
-const requestSteps = new AsyncLocalStorage<Map<string, number>>();
+interface StepStore {
+  getStore(): Map<string, number> | undefined;
+  run<R>(store: Map<string, number>, callback: () => R): R;
+}
+
+let requestSteps: StepStore | null = null;
+
+function stepStore(): StepStore | null {
+  if (!requestSteps) {
+    const Storage = (globalThis as { AsyncLocalStorage?: new () => StepStore })
+      .AsyncLocalStorage;
+    if (typeof Storage === 'function') requestSteps = new Storage();
+  }
+  return requestSteps;
+}
 
 const STEP_NAME = /^[a-z][a-z0-9-]{0,31}$/;
 
@@ -20,7 +37,7 @@ export async function timeStep<T>(
   name: string,
   work: () => PromiseLike<T>
 ): Promise<T> {
-  const steps = requestSteps.getStore();
+  const steps = stepStore()?.getStore();
   if (!steps) return work();
   const started = performance.now();
   try {
@@ -30,13 +47,18 @@ export async function timeStep<T>(
   }
 }
 
-/** Runs `work` with step timing on; `header` adds a `total` step. */
+/**
+ * Runs `work` with step timing on; `header` adds a `total` step. It is empty
+ * when the runtime has no AsyncLocalStorage.
+ */
 export async function collectServerTiming<T>(
   work: () => Promise<T>
 ): Promise<{ result: T; header: string }> {
+  const store = stepStore();
+  if (!store) return { result: await work(), header: '' };
   const steps = new Map<string, number>();
   const started = performance.now();
-  const result = await requestSteps.run(steps, work);
+  const result = await store.run(steps, work);
   steps.set('total', performance.now() - started);
   return { result, header: formatServerTiming(steps) };
 }

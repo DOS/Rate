@@ -375,6 +375,9 @@ export async function getCategoryDirectoryFacets(
 /**
  * Fetch list of master products with 10-Field-Groups multi-criteria filtering & sorting
  */
+/** When the RPC fallback was last logged (DOS/Rate#1353). */
+let searchRpcFallbackLoggedAt = Number.NEGATIVE_INFINITY;
+
 export async function getMasterProducts(
   params?: MasterProductFilterParams
 ): Promise<MasterProduct[]> {
@@ -494,11 +497,15 @@ export async function getMasterProducts(
       );
     }
     // The fallback reads every matching row in this process: say why, so a
-    // slow catalogue is not blamed on the RPC when it never ran (#1353).
-    log.warn('search_master_products failed; using the fallback query', {
-      message: rpcErr?.message ?? 'no rows array',
-      code: rpcErr?.code,
-    });
+    // slow catalogue is not blamed on the RPC when it never ran (#1353). Once
+    // a minute per instance, so a missing RPC does not log every request.
+    if (Date.now() - searchRpcFallbackLoggedAt >= 60_000) {
+      searchRpcFallbackLoggedAt = Date.now();
+      log.warn('search_master_products failed; using the fallback query', {
+        message: rpcErr?.message ?? 'no rows array',
+        code: rpcErr?.code,
+      });
+    }
   }
 
   // Search, multi-brand case-insensitive matching, rating, and the JSONB spec
