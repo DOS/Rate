@@ -86,8 +86,14 @@ try {
     UPDATE rate.reviews SET helpfulness_weight = 1 WHERE id = '${ids.review}';
   `);
 
-  // The proposal applies twice on a live catalog.
+  // The proposal applies twice on a live catalog. Between the runs the worker holds the
+  // wider grants of the first version; the re-run narrows them (RS#739).
   sql(proposal);
+  sql(`
+    GRANT UPDATE (spec_provenance, metadata) ON rate.items TO rate_worker;
+    GRANT EXECUTE ON FUNCTION rate.refresh_item_rating(uuid) TO rate_worker;
+    GRANT EXECUTE ON FUNCTION rate.retire_item_unknown_variant(uuid) TO rate_worker;
+  `);
   sql(proposal);
 
   const checkVerify = (when) => {
@@ -202,6 +208,9 @@ try {
     `status = 'archived'`,
     `item_key = 'x:y'`,
     `min_price = 1`,
+    // Provenance and metadata stay with the service role (RS#739).
+    `spec_provenance = '{}'`,
+    `metadata = '{}'`,
   ]) {
     assert.throws(
       () =>
@@ -308,10 +317,26 @@ try {
     '29000000'
   );
 
+  // Retire and the bare rating refresh are admin steps: the worker cannot call them
+  // (RS#739); its refresh_item_stats still refreshes the rating as owner.
+  for (const call of [
+    `rate.retire_item_unknown_variant(item_id)`,
+    `rate.refresh_item_rating(item_id)`,
+  ]) {
+    assert.throws(
+      () =>
+        asRole(
+          'rate_worker',
+          `SELECT ${call} FROM rate.master_products WHERE id = '${unknownId}'`
+        ),
+      /permission denied for function/,
+      call
+    );
+  }
   // Retire: the multi-size Item's unknown variant goes; its listing keeps the Item.
   assert.equal(
     asRole(
-      'rate_worker',
+      'service_role',
       `SELECT rate.retire_item_unknown_variant(item_id) FROM rate.master_products WHERE id = '${unknownId}'`
     ),
     '1'
