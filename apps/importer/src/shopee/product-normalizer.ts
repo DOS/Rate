@@ -1338,17 +1338,35 @@ const WATCH_GIFT_ACCESSORY_NOUN =
 // A promo tag in front of the title is no part of the model: "[Mã giảm 50K]",
 // "(Hàng mới)", "【Hot】" or "{ Kích T10 }" (DOS/Rate#1421).
 const LEADING_PROMO_GROUPS = /^(?:\s*(?:\[[^\]]*\]|\([^)]*\)|【[^】]*】|\{[^}]*\}))+\s*/;
-// So is a promo word before the brand: "Live Samsung Galaxy S26 Ultra", "Hot Sale
-// Samsung …", "Flash Sale Điện thoại Samsung …". Only with the brand within the next
-// four words, so a brand or model that merely starts like one ("Hotwav") is kept
-// (DOS/Rate#1421).
-const LEADING_PROMO_WORDS = String.raw`(?:live(?:stream)?|(?:hot|flash|big|siêu|mega) sale|sale|hot|deal(?: hot)?|giảm giá|xả kho)`;
+// So is a promo word right before the brand or its line: "Live Samsung Galaxy S26
+// Ultra", "Hot Sale Samsung …", "Flash Sale Điện thoại Samsung …", "Sale Galaxy S26
+// Ultra" (DOS/Rate#1421). Only then: "JBL Live Pro 2" or "Live Beam 3 - JBL" keep
+// their "Live", and "Hotwav" is no "Hot". One promo word is matched at a time, so a
+// long run of them costs linear time (CodeQL js/polynomial-redos).
+const LEADING_PROMO_WORD =
+  /^(?:live(?:stream)?|(?:hot|flash|big|siêu|mega) sale|sale(?: (?:off|sốc|sock))?|hot|deal(?: hot)?|giảm giá|xả kho)(?![\p{L}\d])(?: ?\d{1,2} ?%)?[\s:!|-]*/iu;
+const MAX_LEADING_PROMO_WORDS = 4;
+// A line name that stands for the brand at the start of a title.
+const BRAND_LINES: Readonly<Record<string, readonly string[]>> = {
+  Samsung: ['galaxy'],
+  Xiaomi: ['redmi', 'poco'],
+};
+const BRAND_HEAD_PREFIX = String.raw`^(?:(?:điện thoại(?: thông minh| di động)?|smartphone|máy tính bảng|tablet|laptop|đồng hồ(?: thông minh)?|tai nghe) )?(?:(?:hàng )?chính hãng )?`;
 const escapeRegExp = (text: string): string => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-const leadingPromoWords = (brand: string): RegExp =>
+const brandHead = (brand: string): RegExp =>
   new RegExp(
-    String.raw`^(?:${LEADING_PROMO_WORDS}(?![\p{L}\d])[\s:!|-]*)+(?=(?:\S+\s+){0,4}${escapeRegExp(brand)}(?![\p{L}\d]))`,
+    `${BRAND_HEAD_PREFIX}(?:${[brand, ...(BRAND_LINES[brand] ?? [])].map(escapeRegExp).join('|')})(?![\\p{L}\\d])`,
     'iu'
   );
+const withoutLeadingPromoWords = (title: string, brand: string): string => {
+  let rest = title;
+  for (let i = 0; i < MAX_LEADING_PROMO_WORDS; i++) {
+    const promo = rest.match(LEADING_PROMO_WORD);
+    if (!promo) break;
+    rest = rest.slice(promo[0].length);
+  }
+  return rest !== title && brandHead(brand).test(rest) ? rest : title;
+};
 const OWN_PART_END = / (?:cho|for) | ?\+ (?!cellular|lte|năm(?![\p{L}\d]))/iu;
 const APPLE_SIZE_PATTERNS: Record<string, [RegExp, RegExp]> = {
   ipad: sizePatterns(IPAD_SIZE),
@@ -1937,10 +1955,10 @@ export class ProductNormalizer {
     } else if (brand === 'Xiaomi' && /pad\s*7\s*pro/i.test(modelTitle)) {
       model = 'Pad 7 Pro';
     } else {
-      const withoutLeadingPromo = modelTitle
-        .replace(LEADING_PROMO_GROUPS, '')
-        .replace(leadingPromoWords(brand), '')
-        .trim();
+      const withoutLeadingPromo = withoutLeadingPromoWords(
+        modelTitle.replace(LEADING_PROMO_GROUPS, '').trim(),
+        brand
+      );
       const cleaned = withoutLeadingPromo
         .replace(
           new RegExp(
@@ -2054,8 +2072,14 @@ export class ProductNormalizer {
     );
 
     const slashRamRom = title.match(/\b(\d{1,2})\s*(?:GB\s*)?\/\s*(\d+(?:[.,]\d+)?)\s*(TB|GB)\b/i);
+    // Storage first ("64GB/4GB") reads the same pair the other way round (DOS/Rate#1421).
+    const slashSecondGb = slashRamRom
+      ? parseFloat(slashRamRom[2].replace(',', '.')) *
+        (slashRamRom[3].toUpperCase() === 'TB' ? 1024 : 1)
+      : 0;
+    const slashReversed = slashRamRom !== null && parseInt(slashRamRom[1], 10) > slashSecondGb;
     if (slashRamRom && ramPhrases.length === 0) {
-      const slashRam = parseInt(slashRamRom[1], 10);
+      const slashRam = slashReversed ? slashSecondGb : parseInt(slashRamRom[1], 10);
       for (const c of claimable) {
         if (!c.claimed && c.value === slashRam) {
           c.claimed = true;
@@ -2127,8 +2151,7 @@ export class ProductNormalizer {
       }
     } else if (slashRamRom) {
       const candidateStorage = toValidStorageGb(
-        parseFloat(slashRamRom[2].replace(',', '.')) *
-          (slashRamRom[3].toUpperCase() === 'TB' ? 1024 : 1)
+        slashReversed ? parseInt(slashRamRom[1], 10) : slashSecondGb
       );
       if (candidateStorage !== null) {
         storageGb = candidateStorage;

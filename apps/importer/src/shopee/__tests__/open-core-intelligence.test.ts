@@ -1040,6 +1040,27 @@ async function runSuite() {
     assert.equal(keyOf(title), 'samsung:galaxy-s26-ultra:256gb', title);
   }
   assert.equal(keyOf('Live Xiaomi Redmi Note 14 8GB/256GB'), 'xiaomi:redmi-note-14:256gb');
+  // The brand's line stands for it; promo phrases with "Off", "Sốc" or a percentage.
+  assert.equal(keyOf('Sale Galaxy S26 Ultra 12GB/256GB'), 'samsung:galaxy-s26-ultra:256gb');
+  assert.equal(keyOf('Live Điện thoại Redmi Note 14 8GB/256GB'), 'xiaomi:redmi-note-14:256gb');
+  assert.equal(keyOf('Sale Off Xiaomi 15T 12GB/512GB'), 'xiaomi:15t:512gb');
+  assert.equal(keyOf('Sale Sốc Xiaomi 15T 12GB/512GB'), 'xiaomi:15t:512gb');
+  assert.equal(
+    keyOf('Sale off 50% Samsung Galaxy S26 Ultra 256GB'),
+    'samsung:galaxy-s26-ultra:256gb'
+  );
+  // A promo word not right before the brand is part of the model: JBL's Live line.
+  assert.equal(keyOf('Live Pro 2 - JBL chính hãng'), 'jbl:live-pro-2:unknown');
+  assert.equal(keyOf('Live Beam 3 - JBL chính hãng'), 'jbl:live-beam-3:unknown');
+  assert.equal(keyOf('Samsung Galaxy Buds Live'), 'samsung:galaxy-buds-live:unknown');
+  // A two-digit storage first: "64GB/4GB" is 64GB with 4GB RAM.
+  assert.equal(keyOf('Samsung Galaxy A05 64GB/4GB'), 'samsung:galaxy-a05:64gb');
+  // A long run of promo words costs linear time (CodeQL js/polynomial-redos).
+  {
+    const started = performance.now();
+    keyOf('Hot Sale '.repeat(40) + 'Galaxy S26 Ultra 256GB');
+    assert.ok(performance.now() - started < 200, 'leading promo words take linear time');
+  }
   // A brand or model that only starts like a promo word is kept.
   assert.equal(keyOf('Hotwav Cyber 15 8GB/256GB'), 'khac:hotwav-cyber-15:256gb');
   // Two sizes with no slash between stay unresolved, as before.
