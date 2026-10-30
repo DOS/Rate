@@ -1101,6 +1101,38 @@ async function runSuite() {
     detectCategorySlug('[Apple Watch Series 10 46mm tặng AirPods] Chính hãng VN/A'),
     'smartwatches'
   );
+  // An iPhone, iPad or MacBook in a gift is not the product either, nor is its size; a
+  // "+" with a space on one side is a bundle; a non-Apple phone with a gift stays a phone
+  // (DOS/Rate#1422).
+  assert.equal(keyOf('AirPods Pro 2 tặng ốp iPhone 16'), 'apple:airpods-pro-2:unknown');
+  assert.equal(
+    keyOf('Apple Watch Series 10 46mm tặng ốp iPhone 16'),
+    'apple:watch-series-10-46mm:64gb'
+  );
+  assert.equal(keyOf('MacBook Air M3 tặng ốp iPhone 15'), 'apple:macbook-air-m3:unknown');
+  assert.equal(keyOf('MacBook Air M3 15 inch kèm ốp iPhone 13'), 'apple:macbook-air-m3-15:unknown');
+  assert.equal(keyOf('MacBook Pro M4 14 inch tặng AirPods 4'), 'apple:macbook-pro-m4-14:unknown');
+  assert.equal(keyOf('iPad Pro M4 13 inch tặng Apple Pencil Pro'), 'apple:ipad-pro-m4-13:unknown');
+  assert.equal(keyOf('AirPods 4 tặng ốp iPhone'), 'apple:airpods-4:unknown');
+  assert.equal(keyOf('HomePod mini +Apple Watch Series 10 42mm'), 'apple:homepod-mini:unknown');
+  assert.equal(keyOf('iPhone 15+ 128GB'), 'apple:iphone-15-plus:128gb');
+  assert.equal(keyOf('Combo iPhone 15 + AirPods'), 'apple:iphone-15:unknown');
+  assert.equal(
+    keyOf('Apple Watch Series 10 GPS +Cellular 46mm'),
+    'apple:watch-series-10-46mm:64gb'
+  );
+  assert.equal(detectCategorySlug('HomePod mini +Apple Watch Series 10 42mm'), 'smartphones');
+  assert.equal(detectCategorySlug('AirPods Pro 2 tặng ốp iPhone 16'), 'earbuds');
+  assert.equal(detectCategorySlug('Samsung Galaxy S25 tặng tai nghe Galaxy Buds 3'), 'smartphones');
+  assert.equal(detectCategorySlug('Xiaomi Redmi Note 13 tặng đồng hồ thông minh'), 'smartphones');
+  assert.equal(
+    detectCategorySlug('Samsung Galaxy S24 Ultra 256GB | Tặng Galaxy Watch7'),
+    'smartphones'
+  );
+  assert.equal(detectCategorySlug('Samsung Galaxy Watch 7 tặng sạc'), 'smartwatches');
+  assert.equal(detectCategorySlug('Galaxy Buds 3 Pro tặng ốp'), 'earbuds');
+  assert.equal(detectCategorySlug('Laptop Asus Vivobook 14 tặng chuột'), 'laptops');
+  assert.equal(detectCategorySlug('Sale sốc tặng quà Galaxy Watch 7'), 'smartwatches');
   // The cut stays linear on a long run of separators.
   const cutStart = Date.now();
   detectCategorySlug(`Apple Watch Series 10 46mm${','.repeat(64_000)}x`);

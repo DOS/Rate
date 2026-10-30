@@ -263,7 +263,8 @@ const APPLE_FAMILIES: ReadonlyArray<readonly [RegExp, string]> = [
 /**
  * The product's own part of a title, before a gift or bundle after it: "HomePod mini" in
  * "HomePod mini tặng dây Apple Watch Series 10", "MacBook Air M3" in "MacBook Air M3 +
- * Apple Watch", "HomePod mini (Tặng dây Apple Watch)". A marker that opens the title
+ * Apple Watch" and "HomePod mini +Apple Watch", "HomePod mini (Tặng dây Apple Watch)". A
+ * marker that opens the title
  * ("Tặng ốp - Apple Watch", "[Tặng ốp] Apple Watch") leaves it whole; one after only a
  * word ("Quà tặng Apple Watch") leaves a part that names no product. Composed
  * form, so "tặng" is found in a decomposed (NFD) title too (DOS/Rate#1407).
@@ -276,10 +277,23 @@ function ownProductPart(title: string): string {
   const block = /^\s*(?:\[[^\]]*\]|\([^)]*\)|【[^】]*】)/u.exec(composed)?.[0].length ?? 0;
   const lead =
     block > 0 && APPLE_FAMILIES.some(([family]) => family.test(composed.slice(block))) ? block : 0;
-  const found = composed.slice(lead).search(/(?<![\p{L}\d])(?:tặng|kèm)(?![\p{L}\d])| ?\+ /iu);
+  // A "+" with a space before or after it is a bundle ("+ Apple Watch", " +Apple Watch");
+  // one glued on both sides is part of a name ("iPhone 15+128GB") (DOS/Rate#1422).
+  const found = composed
+    .slice(lead)
+    .search(/(?<![\p{L}\d])(?:tặng|kèm)(?![\p{L}\d])| ?\+ | \+(?=\p{L})/iu);
   const at = found < 0 ? -1 : lead + found;
   return at > 0 ? composed.slice(0, at) : composed;
 }
+
+/**
+ * Phone brands and lines with no category pattern of their own: an own part that names one
+ * and no other category is a phone, so "Samsung Galaxy S25 tặng tai nghe Galaxy Buds 3" is
+ * not earbuds (DOS/Rate#1422). Watches, earbuds, tablets and laptops of these brands match
+ * their category first.
+ */
+const PHONE_BRAND_RE =
+  /\b(?:samsung|galaxy|xiaomi|redmi|poco|oppo|vivo(?!\s*book)|realme|pixel|oneplus|honor|xperia|nokia|motorola|tecno|infinix)\b/i;
 
 /** True when the text names an Apple family other than `line` (DOS/Rate#1407). */
 function namesAppleFamilyOtherThan(text: string, line: string): boolean {
@@ -347,12 +361,12 @@ export function detectCategorySlug(title: string): CanonicalCategorySlug {
   // A gift or bundle after the product is not its category: "AirPods Pro 2 tặng dây Apple
   // Watch" is earbuds, "Apple iPhone 16 tặng smartwatch" a phone (DOS/Rate#1407). An own
   // part that names no category falls back to the whole title, unless it names another
-  // Apple product.
+  // Apple product or a phone brand, which keeps the phone default (DOS/Rate#1422).
   const own = ownProductPart(t);
   if (own !== t) {
     const ownSlug = categorySlugOf(own);
     if (ownSlug) return ownSlug;
-    if (namesAppleFamilyOtherThan(own, 'Watch')) return 'smartphones';
+    if (namesAppleFamilyOtherThan(own, 'Watch') || PHONE_BRAND_RE.test(own)) return 'smartphones';
   }
   return categorySlugOf(t) ?? 'smartphones';
 }
@@ -1409,7 +1423,13 @@ function readAppleSize(model: string, rawTitle: string): string {
   // The size of a gifted or bundled accessory is not the product's: "tặng Silicone Case
   // 46mm", "kèm ốp 46mm" lose that size; "kèm sạc 46mm GPS" and "kèm bút 13 inch" name
   // no accessory with a size of its own and keep it (DOS/Rate#1263).
-  const productPart = title.slice(Math.max(0, at));
+  let productPart = title.slice(Math.max(0, at));
+  // A gifted or bundled Apple product is not this one, and nor is its size: "MacBook Air
+  // M3 tặng ốp iPhone 15" has no 15 inch screen (DOS/Rate#1422).
+  const ownBeforeGift = ownProductPart(productPart);
+  const familyName = family === 'ipad' ? 'iPad' : family === 'watch' ? 'Watch' : 'MacBook';
+  if (namesAppleFamilyOtherThan(productPart.slice(ownBeforeGift.length), familyName))
+    productPart = ownBeforeGift;
   const giftSizes = new Set<string>();
   const stripGift = (scope: string, noun: RegExp, sizes = new Set<string>()) =>
     scope.replace(GIFTED_ACCESSORY_SIZE, (m, word: string, words: string) => {
@@ -1752,24 +1772,25 @@ export class ProductNormalizer {
         /airpods|\bwatch\b|macbook|apple\s*pencil/i.test(appleTitle.slice(0, fitsAt))
       )
         appleTitle = appleTitle.slice(0, fitsAt);
-      const iphoneMatch = appleTitle.match(
+      // An Apple line in a gift or bundle after another Apple product is not the product:
+      // "HomePod mini tặng dây Apple Watch Series 10" is the HomePod mini, "Apple TV 4K tặng
+      // AirPods Pro 2" the Apple TV (DOS/Rate#1407), "AirPods Pro 2 tặng ốp iPhone 16" the
+      // AirPods (DOS/Rate#1422).
+      const ownAppleTitle = ownProductPart(appleTitle);
+      const lineTitle = (line: string) =>
+        namesAppleFamilyOtherThan(ownAppleTitle, line) ? ownAppleTitle : appleTitle;
+      const iphoneMatch = lineTitle('iPhone').match(
         /iphone\s*(\d+e\b|\d+(?:\s*(?:pro\s*max|pro|plus|mini|air)|\+(?= ?(?:$|[-,]|\d+(?:[.,]\d+)? ?(?:gb|tb)\b|[45]g\b|lte\b|chính\b)))?|air\b|duo\b|se(?:\s*(?:\(\s*(?:2020|2022|2025)\s*\)|(?:2020|2022|2025)\b|(?:gen\s*)?[234]\b))?)/i
       );
       // The base iPad by its chip, "iPad A16" or "iPad (A16)", and "iPad Gen 10" like
       // "iPad 10" (DOS/Rate#817).
-      const ipadMatch = appleTitle.match(
+      const ipadMatch = lineTitle('iPad').match(
         // A screen size before the line ("iPad 11 Pro M4") is skipped (DOS/Rate#819).
         /ipad\s*(?:\(\s*)?(?:\d{2}(?:[.,]\d)?\s*(?:inch\s*)?(?=pro|air|mini))?(pro\s*m\d+|air\s*m\d+|air\s*[1-9](?!\d|[.,]\d|g\b|\s*(?:gb|tb|inch\b|in\b|"|''))|pro|air|mini(?:\s*[1-9](?!\d|[.,]\d|g\b|\s*(?:gb|tb|inch\b|in\b|"|'')))?|gen\s*\d+|a\d{2}\b|\d+(?!\d|\s*(?:pro|air|mini)\b))/i
       );
-      const macbookMatch = appleTitle.match(
+      const macbookMatch = lineTitle('MacBook').match(
         /macbook\s*(pro\s*m\d+(?:\s*(?:pro|max))?|air\s*m\d+|air|pro|neo\b)/i
       );
-      // A watch or AirPods in a gift or bundle after another Apple product is not the
-      // product: "HomePod mini tặng dây Apple Watch Series 10" is the HomePod mini, "Apple
-      // TV 4K tặng AirPods Pro 2" the Apple TV (DOS/Rate#1407).
-      const ownAppleTitle = ownProductPart(appleTitle);
-      const lineTitle = (line: string) =>
-        namesAppleFamilyOtherThan(ownAppleTitle, line) ? ownAppleTitle : appleTitle;
       const watchMatch = lineTitle('Watch').match(
         // "Ultra 49mm" is the case size, not a generation (DOS/Rate#819). "Watch S10" is
         // the Series 10; only a generation (1 to 19) right after "Watch", with no unit or
