@@ -68,7 +68,10 @@ for (const locale of ['vi', 'en', 'cs']) {
       }
       if (route.endsWith('e2e-medium-name-phone')) {
         expect(title.startsWith('E2E Galaxy Z Flip7'), title).toBe(true);
-        expect(title).toContain('29.990.000');
+        // Czech groups with a no-break space (#1369).
+        expect(title).toMatch(
+          locale === 'cs' ? /29\s990\s000/ : /29\.990\.000/
+        );
       }
       // Compare titles keep both product names (DOS/Rate#777).
       if (route.startsWith('/compare/') || route.includes('slugs=')) {

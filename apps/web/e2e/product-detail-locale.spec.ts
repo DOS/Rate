@@ -19,7 +19,8 @@ const COPY = {
   },
   cs: {
     radar:
-      /^O 1\.500\.000 ₫ levnější než medián cen 2 nabídek \(-4\.9 %\) u Apple Flagship Store \(SHOPEE\)\.$/,
+      // Czech numbers group with a no-break space and use a decimal comma (#1369).
+      /^O 1\s500\s000\s₫ levnější než medián cen 2 nabídek \(-4,9\s%\) u Apple Flagship Store \(SHOPEE\)\.$/,
     tier: /důvěryhodnost|^Málo ověřených vzorků|^Nedostatek ověřených vzorků/,
   },
 };

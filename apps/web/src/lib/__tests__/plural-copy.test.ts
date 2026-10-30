@@ -41,10 +41,11 @@ function main() {
       { count: 1 },
       'Odhalena 1 nabídka s uměle navýšenou původní cenou',
     ],
+    // Czech scores use a decimal comma (DOS/Rate#1369).
     [
       'productDetail.verifiedReviewsCount',
       { count: 4 },
-      '/ 5.0 (4 ověřené recenze)',
+      '/ 5,0 (4 ověřené recenze)',
     ],
     [
       'productDetail.verifiedReviewsCountNoScore',
@@ -84,8 +85,8 @@ function main() {
     ],
     [
       'compare.valAuthenticReviews',
-      { rating: '5.0', count: 1 },
-      '★ 5.0 / 5.0 (1 ověřená recenze)',
+      { rating: '5,0', count: 1 },
+      '★ 5,0 / 5,0 (1 ověřená recenze)',
     ],
     ['inspect.verifiedReviewsCount', { count: 3 }, '(3 ověřené recenze)'],
     [
@@ -279,13 +280,13 @@ function main() {
     [
       'homePage.authenticReviewsStatBadge',
       { count: 2, pct: 90 },
-      '2 autentické recenze (90%)',
+      '2 autentické recenze (90 %)',
     ],
     ['heroSearch.trackingProductsCount', { count: 3 }, 'Sledovány 3 produkty'],
     [
       'heroSearch.aiReviewAuthValue',
       { pct: 80, total: 1 },
-      '✓ 80% autentických (z 1 recenze)',
+      '✓ 80 % autentických (z 1 recenze)',
     ],
     [
       'developers.pgSelectPresetLabel',
@@ -354,7 +355,7 @@ function main() {
     [
       'merchants.mdAuthenticLine',
       { pct: 90, auth: 9, total: 10, flagged: 1 },
-      '- **Podíl skutečných recenzí:** 90% (9/10 skutečných, odfiltrována 1 falešná/spamová)',
+      '- **Podíl skutečných recenzí:** 90 % (9/10 skutečných, odfiltrována 1 falešná/spamová)',
     ],
     [
       'watchlist.bestOfferPrefix',

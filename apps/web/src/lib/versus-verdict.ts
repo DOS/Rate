@@ -1,3 +1,5 @@
+import { formatDecimal } from './locale-format';
+
 /**
  * Whether two 1v1 scores are level as the page shows them, at two decimals
  * (DOS/Rate#1209): 5.00 vs 5.00 is a tie, not a lead for either model.
@@ -35,9 +37,10 @@ export type VersusVerdictCopy =
  * weights it uses when they are not the default ones (DOS/Rate#1235).
  */
 export function versusVerdictCopy(
-  input: VersusVerdictInput
+  input: VersusVerdictInput,
+  locale?: string | null
 ): VersusVerdictCopy {
-  const score = input.score.toFixed(2);
+  const score = formatDecimal(input.score, locale, 2);
   if (input.tie) {
     return {
       key: 'versusAutoVerdictTie',
@@ -52,7 +55,7 @@ export function versusVerdictCopy(
       score,
       expertSuffix:
         input.winnerExpertScore10 != null
-          ? ` (${input.winnerExpertScore10.toFixed(1)}/10 Lab)`
+          ? ` (${formatDecimal(input.winnerExpertScore10, locale, 1)}/10 Lab)`
           : '',
     },
     weightsLabel: input.weightsLabel,
@@ -73,17 +76,21 @@ export function versusVerdictFor(
   },
   slugA: string,
   persona: string,
-  labels: Partial<Record<string, string>> & { custom: string }
+  labels: Partial<Record<string, string>> & { custom: string },
+  locale?: string | null
 ): VersusVerdictCopy {
-  return versusVerdictCopy({
-    tie: result.tie,
-    score:
-      result.tie || result.winner.slug === slugA
-        ? result.finalA
-        : result.finalB,
-    winnerName: result.winner.name,
-    winnerExpertScore10: result.winner.expertScore10,
-    weightsLabel:
-      persona === 'default' ? null : (labels[persona] ?? labels.custom),
-  });
+  return versusVerdictCopy(
+    {
+      tie: result.tie,
+      score:
+        result.tie || result.winner.slug === slugA
+          ? result.finalA
+          : result.finalB,
+      winnerName: result.winner.name,
+      winnerExpertScore10: result.winner.expertScore10,
+      weightsLabel:
+        persona === 'default' ? null : (labels[persona] ?? labels.custom),
+    },
+    locale
+  );
 }
