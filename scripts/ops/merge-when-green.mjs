@@ -374,6 +374,10 @@ export async function mergeWhenGreen({
   lint = lintHeader,
 } = {}) {
   const deadline = Date.now() + timeoutMs;
+  const timedOut = () => ({
+    ok: false,
+    message: `PR ${number} still not mergeable after ${timeoutMs / 60_000} min`,
+  });
   const headerLints = new Map();
   let blockedPolls = 0;
   let apiErrors = 0;
@@ -457,6 +461,7 @@ export async function mergeWhenGreen({
           message: `PR ${number} is still behind ${pr.base.ref} after ${MAX_BRANCH_UPDATES} updates (the base keeps moving)`,
         };
       }
+      if (Date.now() > deadline) return timedOut();
       const updated = gh(
         [
           'api',
@@ -480,13 +485,6 @@ export async function mergeWhenGreen({
       continue;
     }
     if (next.action === 'merge') {
-      // The lint above may have taken a while: never merge past the deadline.
-      if (Date.now() > deadline) {
-        return {
-          ok: false,
-          message: `PR ${number} still not mergeable after ${timeoutMs / 60_000} min`,
-        };
-      }
       // GitHub's default squash message keeps the commits' long lines and
       // mixes their trailers into the body: send one commitlint accepts.
       const squash = {};
@@ -518,6 +516,9 @@ export async function mergeWhenGreen({
         squash.commit_title = squashTitle(pr.title, number);
         squash.commit_message = squashBody(messages);
       }
+      // The lint and the commit listing may have taken a while: no write to
+      // GitHub, this merge or the branch update above, goes out past the deadline.
+      if (Date.now() > deadline) return timedOut();
       // The fields go as JSON on stdin: a long squash message is over the
       // Windows command line limit.
       const merged = gh(
