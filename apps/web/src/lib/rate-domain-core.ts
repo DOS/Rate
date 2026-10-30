@@ -1013,6 +1013,52 @@ export function sizedStoreImageUrl(
   return url;
 }
 
+/**
+ * The widths a store CDN image's `srcSet` names, as the device renditions.
+ * CellphoneS never enlarges: a 600 px original asked for at 800 comes back at
+ * 600, which an `800w` entry would draw at 3/4 of its size, so its list stops
+ * at 600, the size of its usual originals. FPT Shop's thumbor enlarges.
+ */
+const STORE_IMAGE_SRCSET_WIDTHS = [200, 400, 600, 800] as const;
+const CELLPHONES_SRCSET_WIDTHS = [200, 400, 600] as const;
+
+/**
+ * A `srcSet` of a store CDN image at the widths a product hero takes, resized
+ * by the CDN itself as `sizedStoreImageUrl` does. React's preload hint for the
+ * hero, which a prefetch of the page applies too, then fetches one of these
+ * rather than the 600-800 px original (DOS/Rate#1417). Null for a URL the CDN
+ * cannot resize.
+ */
+export function storeImageSrcSet(
+  url: string | null | undefined
+): string | null {
+  if (typeof url !== 'string' || !url) return null;
+  let host: string;
+  let path: string;
+  try {
+    ({ hostname: host, pathname: path } = new URL(url));
+  } catch {
+    return null;
+  }
+  // A thumbor filter other than format or quality (rotate, crop, fill...)
+  // changes the picture, and the resize drops it: keep such a URL whole.
+  const filters = /\/filters:([^/]*)\//.exec(path)?.[1];
+  if (
+    filters &&
+    filters.split(':').some((filter) => !/^(?:format|quality)\(/i.test(filter))
+  )
+    return null;
+  const widths =
+    host === 'cdn2.cellphones.com.vn'
+      ? CELLPHONES_SRCSET_WIDTHS
+      : STORE_IMAGE_SRCSET_WIDTHS;
+  const sized = widths.map((w) => sizedStoreImageUrl(url, w) ?? url);
+  // A URL the CDN cannot resize comes back unchanged at every width; one
+  // already at one of these widths ("/200x/") changes at the others.
+  if (sized.every((sizedUrl) => sizedUrl === url)) return null;
+  return sized.map((sizedUrl, i) => `${sizedUrl} ${widths[i]}w`).join(', ');
+}
+
 export function resolveProductImageUrl(
   slugOrProduct?:
     | string

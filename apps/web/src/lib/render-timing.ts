@@ -22,6 +22,12 @@ export interface RenderTiming {
  */
 export function startRenderTiming(route: string, key: string): RenderTiming {
   const start = performance.now();
+  // How long this server process had been up when the render began: a small
+  // value is a cold start, which the reads do not show (DOS/Rate#1344).
+  const processUptimeMs =
+    typeof process !== 'undefined' && typeof process.uptime === 'function'
+      ? Math.round(process.uptime() * 1000)
+      : null;
   const reads: Record<string, number> = {};
   const failed: string[] = [];
   const pending = new Set<string>();
@@ -33,6 +39,7 @@ export function startRenderTiming(route: string, key: string): RenderTiming {
       route,
       key,
       totalMs: Math.round(performance.now() - start),
+      processUptimeMs,
       reads,
       failed,
       pending: [...pending],

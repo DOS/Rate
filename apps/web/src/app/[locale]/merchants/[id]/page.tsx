@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { startRenderTiming } from '@/lib/render-timing';
 import { getTranslations, setRequestLocale } from 'next-intl/server';
 import { notFound } from 'next/navigation';
 import { discountVerdictCopy } from '@/lib/discount-verdict-copy';
@@ -137,10 +138,18 @@ export default async function MerchantProfilePage({
     locale,
     namespace: 'priceVerdict',
   });
+  // One log line of read timings per cache-miss render, as the product
+  // page writes (DOS/Rate#1344). The key is the merchant id from the URL,
+  // cut short: any string reaches this page.
+  const timing = startRenderTiming('merchant', id.slice(0, 64));
   const [merchant, dealRadar] = await Promise.all([
-    getCachedMerchantProfileById(id),
-    getCrossPlatformDealRadar({ categorySlug: 'all', limit: 50 }),
+    timing.time('merchant', getCachedMerchantProfileById(id)),
+    timing.time(
+      'dealRadar',
+      getCrossPlatformDealRadar({ categorySlug: 'all', limit: 50 })
+    ),
   ]);
+  timing.done();
 
   if (!merchant) {
     notFound();

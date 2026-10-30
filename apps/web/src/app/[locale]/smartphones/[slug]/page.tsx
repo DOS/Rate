@@ -95,7 +95,10 @@ import {
   computeProductStandingInCategory,
   scoreMasterProductForLeaderboard,
 } from '@/lib/leaderboard-engine';
-import { deviceImageSrcSet } from '@/lib/device-images';
+import {
+  deviceImageSizesForHeight,
+  deviceImageSrcSet,
+} from '@/lib/device-images';
 import ProductLeaderboardBadges from '@/components/leaderboard/ProductLeaderboardBadges';
 import ProductShareAuditButton from '@/components/leaderboard/ProductShareAuditButton';
 import ProductValueCalculator from '@/components/leaderboard/ProductValueCalculator';
@@ -115,6 +118,7 @@ import {
   foreignCategoryProductHref,
   usableImageUrls,
   productImageUrl,
+  storeImageSrcSet,
 } from '@/lib/rate-domain-core';
 import {
   localizeDecimalPoints,
@@ -129,6 +133,13 @@ import { versusHref } from '@/lib/item-compare';
 // Cached after the first request, refreshed every 5 minutes or when the
 // worker revalidates its cache tags (DOS/Rate#491).
 export const revalidate = 300;
+
+// The `sizes` of a store CDN hero image, whose aspect is not known: the hero
+// column's width (col-lg-5, the full row below lg), so a landscape photo keeps
+// the width it had without a srcSet. A square one is capped at 350 px tall
+// (190 px on phones) and gets a little more than it shows (DOS/Rate#1417).
+const STORE_HERO_SIZES =
+  '(max-width: 767.98px) calc(100vw - 56px), (max-width: 991.98px) 690px, (max-width: 1199.98px) 360px, (max-width: 1399.98px) 430px, 480px';
 
 // Nothing is prerendered at build; each slug renders on its first request.
 export function generateStaticParams(): { slug: string }[] {
@@ -337,10 +348,27 @@ export async function ProductDetailView({
     timing.done();
     notFound();
   }
+  // This product's offers and reviews depend only on its id: start them
+  // alongside the category check below rather than after it (DOS/Rate#1344).
+  // The rejection is handled where they are awaited; a redirect leaves them
+  // unused.
+  const offersRead = timing.time(
+    'offers',
+    getCachedMasterProductOffers(storedProduct.id)
+  );
+  const reviewsRead = timing.time(
+    'reviews',
+    getCachedMasterProductReviews(storedProduct.id)
+  );
+  offersRead.catch(() => undefined);
+  reviewsRead.catch(() => undefined);
   // Master-product route: a product asked for under another category's path
   // goes to its own (DOS/Rate#1366).
   if (!itemRoute) {
-    const ownHref = await foreignCategoryHref(storedProduct, categoryBasePath);
+    const ownHref = await timing.time(
+      'categorySlug',
+      foreignCategoryHref(storedProduct, categoryBasePath)
+    );
     if (ownHref) permanentRedirect(ownHref);
   }
   const itemVariants = itemPage?.variants ?? [];
@@ -358,49 +386,64 @@ export async function ProductDetailView({
     categorySlug === 'earbuds'
       ? tNav(categorySlug)
       : categoryLabel;
-  const [offers, reviews, storedCategoryPeers] = await Promise.all([
-    timing.time('offers', getCachedMasterProductOffers(product.id)),
-    timing.time('reviews', getCachedMasterProductReviews(product.id)),
-    peersRead,
-  ]);
-  const categoryPeers = storedCategoryPeers.map((peer) =>
-    applyCategorySpecTemplate(categorySlug, peer)
-  );
-  // "From" price, range and seller count: the stored stats every other page
-  // shows (in-stock listings, no bait prices), not the offer list below,
-  // which also holds sold-out listings at their last price (DOS/Rate#1141).
+  // Three independent chains, each started as soon as its input is known:
+  // offers -> price history, reviews -> review summary, and peers ->
+  // competitors -> their offers. Awaited in one stage after the product read
+  // rather than in two, so the competitors' offers no longer wait for this
+  // product's offers and reviews (DOS/Rate#1344).
   const marketStats = productMarketStats(product);
   const currentMinPrice = marketStats.minPrice;
-  // An Item's other sizes are the same device, not competitors (#1154).
-  const relatedCompetitors = rankRelatedCompetitors(
-    itemPage
-      ? withoutItemSiblings(
-          categoryPeers,
-          itemVariants.map((v) => v.variant.slug)
-        )
-      : categoryPeers,
-    product.slug,
-    currentMinPrice
-  );
-  const [reviewSummary, priceHistory, competitorOffers] = await Promise.all([
-    timing.time(
-      'reviewSummary',
-      getCachedMasterProductReviewSummary(product.id, reviews)
-    ),
+  const priceHistoryRead = offersRead.then((offers) =>
     timing.time(
       'priceHistory',
       getCachedMasterProductPriceHistory(product.id, offers)
-    ),
-    // Each competitor card's radar badge comes from that product's own
-    // offers, as this product's signal does, instead of from the category
-    // deal radar, which took 3.5-4 s cold before the first byte
-    // (DOS/Rate#1344).
+    )
+  );
+  const reviewSummaryRead = reviewsRead.then((reviews) =>
     timing.time(
+      'reviewSummary',
+      getCachedMasterProductReviewSummary(product.id, reviews)
+    )
+  );
+  const competitorsRead = peersRead.then(async (storedCategoryPeers) => {
+    const categoryPeers = storedCategoryPeers.map((peer) =>
+      applyCategorySpecTemplate(categorySlug, peer)
+    );
+    // An Item's other sizes are the same device, not competitors (#1154).
+    // "From" price: the stored stats every other page shows (in-stock
+    // listings, no bait prices), not the offer list (DOS/Rate#1141).
+    const relatedCompetitors = rankRelatedCompetitors(
+      itemPage
+        ? withoutItemSiblings(
+            categoryPeers,
+            itemVariants.map((v) => v.variant.slug)
+          )
+        : categoryPeers,
+      product.slug,
+      currentMinPrice
+    );
+    // Each competitor card's radar badge comes from that product's own
+    // offers, as this product's signal does (DOS/Rate#1344).
+    const competitorOffers = await timing.time(
       'competitorOffers',
       Promise.all(
         relatedCompetitors.map((peer) => getCachedMasterProductOffers(peer.id))
       )
-    ),
+    );
+    return { categoryPeers, relatedCompetitors, competitorOffers };
+  });
+  const [
+    offers,
+    reviews,
+    priceHistory,
+    reviewSummary,
+    { categoryPeers, relatedCompetitors, competitorOffers },
+  ] = await Promise.all([
+    offersRead,
+    reviewsRead,
+    priceHistoryRead,
+    reviewSummaryRead,
+    competitorsRead,
   ]);
   timing.done();
   const peerRadarIndex: RadarIndex = new Map(
@@ -458,6 +501,17 @@ export async function ProductDetailView({
 
   const keySpecLine = buildKeySpecLine(product, categorySlug);
   const mainImage = firstImageUrl(product.images);
+  // The hero's sized copies: the local WebP renditions of a device photo, or
+  // a store CDN's own resized copies (#1413, #1417). The box caps the photo
+  // at 350 px tall, 190 px on phones (_product.scss).
+  const heroDeviceSrcSet = deviceImageSrcSet(mainImage);
+  const heroStoreSrcSet = heroDeviceSrcSet ? null : storeImageSrcSet(mainImage);
+  const heroSrcSet = heroDeviceSrcSet ?? heroStoreSrcSet ?? undefined;
+  const heroSizes = heroDeviceSrcSet
+    ? deviceImageSizesForHeight(mainImage, { phone: 190, other: 350 })
+    : heroStoreSrcSet
+      ? STORE_HERO_SIZES
+      : undefined;
 
   const canonicalUrl = `https://rate.vn${categoryBasePath}/${
     itemRoute?.kind === 'render' ? itemRoute.itemSlug : product.slug
@@ -820,7 +874,12 @@ export async function ProductDetailView({
                   {mainImage ? (
                     // The main product image is the page's largest paint: fetch it
                     // ahead of the below-the-fold peer and offer thumbnails.
+                    // React emits a preload for it into the page payload, which a
+                    // prefetch applies too, so it names sized copies (heroSrcSet):
+                    // a prefetched page never pulls the full image (#1413, #1417).
                     <img
+                      srcSet={heroSrcSet}
+                      sizes={heroSizes}
                       src={mainImage}
                       alt={product.name}
                       fetchPriority="high"
@@ -1602,12 +1661,12 @@ export async function ProductDetailView({
                               <img
                                 loading="lazy"
                                 decoding="async"
-                                src={peerThumb}
                                 srcSet={
                                   deviceImageSrcSet(peerThumb) ?? undefined
                                 }
                                 // 68 px box less padding and border.
                                 sizes="50px"
+                                src={peerThumb}
                                 alt={peer.name}
                                 style={{
                                   maxWidth: '100%',

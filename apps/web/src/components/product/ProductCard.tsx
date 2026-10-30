@@ -135,14 +135,15 @@ export default function ProductCard({
           aria-hidden="true"
         >
           {thumbnail ? (
+            // Pre-sized WebP for local device photos; the card shows them at
+            // 132-176 px (DOS/Rate#1332). loading, srcSet and sizes come before
+            // src, so an image React creates never starts the JPEG (#1413).
             <img
-              src={thumbnail}
-              // Pre-sized WebP for local device photos; the card shows them
-              // at 132-176 px (DOS/Rate#1332).
+              loading="lazy"
               srcSet={deviceImageSrcSet(thumbnail) ?? undefined}
               sizes="176px"
+              src={thumbnail}
               alt=""
-              loading="lazy"
             />
           ) : (
             <span className="rate-product-card-noimage">{t('noImage')}</span>
