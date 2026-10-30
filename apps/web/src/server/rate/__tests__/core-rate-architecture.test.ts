@@ -9678,7 +9678,8 @@ async function runCoreArchitectureSuite() {
               id: 'm-1',
               name: 'Shopee Mall',
               is_official: true,
-              risk_score: true as unknown as number,
+              // A real score: junk is no score, so no low-risk deal (#1484).
+              risk_score: 5,
               dosafe_risk_score: '90' as unknown as number,
               review_risk_score: false as unknown as number,
             },
@@ -11075,9 +11076,9 @@ async function runCoreArchitectureSuite() {
       },
     ]);
     assert.equal(radarFromMalformed.totalClustersAnalyzed, 1);
-    assert.equal(radarFromMalformed.genuineDeals.length, 1);
-    assert.equal(radarFromMalformed.genuineDeals[0]?.platform, 'shopee');
-    assert.equal(radarFromMalformed.genuineDeals[0]?.merchantName, 'SHOPEE');
+    // An offer with no seller has no score, so it is no low-risk deal
+    // (DOS/Rate#1484); the scored Tiki offer sits above the median.
+    assert.equal(radarFromMalformed.genuineDeals.length, 0);
 
     const emptySignal = dealsMod.computeProductRadarSignal(
       null as unknown as never,
@@ -11895,7 +11896,13 @@ async function runCoreArchitectureSuite() {
             price_current: 20_000_000,
             price_original: 22_000_000,
             url: 'javascript:alert(1)',
-            merchant: { id: 'm1', name: 'Shop A', is_official: true },
+            // A scored seller: no score is no low-risk deal (DOS/Rate#1484).
+            merchant: {
+              id: 'm1',
+              name: 'Shop A',
+              is_official: true,
+              risk_score: 5,
+            },
           } as never,
           {
             id: 'o2',

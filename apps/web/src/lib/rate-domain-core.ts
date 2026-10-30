@@ -2153,9 +2153,10 @@ export function hasReviewRiskEvidence(
 }
 
 /**
- * A store's combined risk and trust (DOS/Rate#1484). A store with neither a
- * DOSafe score nor analysed reviews has no score at all (null), never risk 0
- * and "high trust 100/100".
+ * A store's combined risk and trust (DOS/Rate#1484). A store with no DOSafe
+ * score, no review evidence and no stored combined score has no score at all
+ * (null), never risk 0 and "high trust 100/100". A stored combined score
+ * alone (RS#708) is a signal too.
  *
  * With at least one signal the score is as before: the higher of the known
  * risks, where the review side keeps its platform baseline when no review was
@@ -2172,7 +2173,11 @@ export function merchantRiskFromSignals(signals: {
   reviewRisk: number;
   storedCombined: number | null;
 }): { risk_score: number | null; trust_score: number | null } {
-  if (!signals.dosafeKnown && !signals.reviewKnown) {
+  if (
+    !signals.dosafeKnown &&
+    !signals.reviewKnown &&
+    signals.storedCombined == null
+  ) {
     return { risk_score: null, trust_score: null };
   }
   const parts = [signals.reviewRisk, signals.storedCombined ?? 0];

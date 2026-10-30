@@ -546,6 +546,13 @@ async function main() {
       assert.equal(base.profile.dosafe_risk_known, false);
       assert.equal(base.profile.trust_score, null);
       assert.equal(base.profile.risk_score, null);
+      // A stored combined score alone keeps the store scored, as before.
+      Object.assign(merchantRow, { metadata: { combined_risk_score: 42 } });
+      installFetch({});
+      const combined = await getMerchantProfileBase(MERCHANT_ID);
+      assert.ok(combined);
+      assert.equal(combined.profile.risk_score, 42);
+      assert.equal(combined.profile.trust_score, 58);
       // A DOSafe score alone scores the store again.
       Object.assign(merchantRow, { metadata: { dosafe_risk_score: 4 } });
       installFetch({});

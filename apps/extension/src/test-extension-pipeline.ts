@@ -3156,7 +3156,13 @@ async function runTests() {
               platform: '000',
               price_current: 20_000_000,
               url: 'https://shopee.vn/1',
-              merchant: { id: '000', name: 'Official', is_official: true },
+              // A scored seller: no score is no low-risk deal (DOS/Rate#1484).
+              merchant: {
+                id: '000',
+                name: 'Official',
+                is_official: true,
+                risk_score: 5,
+              },
             },
             {
               id: '..bad..',

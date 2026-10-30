@@ -162,9 +162,15 @@ async function main() {
       reviewRisk: 12,
       storedCombined: 30,
     };
+    assert.deepEqual(
+      merchantRiskFromSignals({ ...none, storedCombined: null }),
+      { risk_score: null, trust_score: null }
+    );
+    // A stored combined score alone is a signal: scored as before (the
+    // review baseline stays a floor).
     assert.deepEqual(merchantRiskFromSignals(none), {
-      risk_score: null,
-      trust_score: null,
+      risk_score: 30,
+      trust_score: 70,
     });
     // DOSafe only: the review baseline and the stored split stay floors, so
     // no store's trust rises.
@@ -273,6 +279,83 @@ async function main() {
     assert.equal(stats.avgTrust, 65);
     assert.equal(summarizeMerchantDirectory([unscored]).avgTrust, null);
     assert.equal(summarizeMerchantDirectory([unscored]).safe, 0);
+  }
+
+  // The deal radar never calls a seller with no score "low risk": its
+  // cheapest offer is no genuine deal, and a scored seller still is
+  // (DOS/Rate#1484).
+  {
+    const { computeCrossPlatformDealRadarFromData } =
+      await import('../../server/rate/deals');
+    const master = {
+      id: 'mp-1484',
+      slug: 'phone-1484',
+      name: 'Phone 1484',
+      brand: 'X',
+      model: 'Phone',
+      model_key: 'x:phone:128gb',
+      category_id: null,
+      min_price: 9_000_000,
+      max_price: 10_000_000,
+      merchant_count: 3,
+      images: [],
+      metadata: { category_slug: 'smartphones' },
+    };
+    const offer = (
+      id: string,
+      price: number,
+      merchant: Record<string, unknown> | null
+    ) => ({
+      id,
+      platform: 'shopee',
+      title: 'Phone 1484',
+      price_current: price,
+      price_original: null,
+      stock: 5,
+      rating_star: 5,
+      rating_count: 1,
+      url: `https://shopee.vn/product/1484/${id}`,
+      merchant,
+    });
+    const scored = (id: string, risk: number | null) => ({
+      id,
+      name: id,
+      platform: 'shopee',
+      is_official: true,
+      rating_star: null,
+      follower_count: 0,
+      location: null,
+      risk_score: risk,
+      dosafe_risk_score: null,
+      review_risk_score: 0,
+      review_risk_breakdown: null,
+    });
+    const radarOf = (cheapest: Record<string, unknown> | null) =>
+      computeCrossPlatformDealRadarFromData(
+        [
+          {
+            master,
+            offers: [
+              offer('cheap', 8_000_000, cheapest),
+              offer('mid', 10_000_000, scored('m-mid', 60)),
+              offer('high', 10_500_000, scored('m-high', 60)),
+            ],
+          },
+        ] as never,
+        { categorySlug: 'all', platform: 'all', limit: 10 }
+      );
+    for (const cheapest of [null, scored('m-none', null)]) {
+      assert.ok(
+        !radarOf(cheapest).genuineDeals.some((d) =>
+          d.offerUrl.endsWith('cheap')
+        ),
+        'a seller with no score is no low-risk deal'
+      );
+    }
+    const deal = radarOf(scored('m-low', 5)).genuineDeals.find((d) =>
+      d.offerUrl.endsWith('cheap')
+    );
+    assert.equal(deal?.merchantRiskScore, 5);
   }
 
   console.warn('  ✅ merchant review risk suite passed');
