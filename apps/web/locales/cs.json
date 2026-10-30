@@ -1187,6 +1187,7 @@
     "offersTrustBadge": "Důvěryhodnost: {score} %",
     "offersScamRiskLabel": "Riziko podvodu",
     "variantLinksLabel": "Varianty",
+    "variantLinksUnknownSize": "Velikost neuvedena",
     "itemVariantLabel": "Úložiště",
     "itemVariantPrice": "Od {price} ₫",
     "itemVariantNoPrice": "Zatím bez ceny",

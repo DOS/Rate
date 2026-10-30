@@ -32,12 +32,15 @@ test('variant links resolve and mark the current variant', async ({ page }) => {
 test('a model with no other variant has no variant area and no quick specs', async ({
   page,
 }) => {
-  await page.goto('/smartphones/iphone-16-pro-max-256gb');
-  await expect(page.locator('h1')).toBeVisible();
-  await expect(page.getByTestId('pdv-variant-links')).toHaveCount(0);
-  // The quick-spec card labels are gone from the top area.
-  await expect(page.locator('main')).not.toContainText('Vi xử lý (Chipset)');
-  await expect(page.locator('main')).not.toContainText('Độ bền / Kháng nước');
+  // A brand:model:variant key whose model has no other published variant,
+  // and a key of another shape that reads no siblings at all.
+  for (const slug of ['e2e-solo-phone-128gb', 'iphone-16-pro-max-256gb']) {
+    await page.goto(`/smartphones/${slug}`);
+    await expect(page.locator('h1')).toBeVisible();
+    await expect(page.getByTestId('pdv-variant-links')).toHaveCount(0);
+    // A quick-spec card label that nothing else on the page uses.
+    await expect(page.locator('main')).not.toContainText('Độ bền / Kháng nước');
+  }
 });
 
 test('specs come before reviews', async ({ page }) => {

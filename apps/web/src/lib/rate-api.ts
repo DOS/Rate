@@ -875,6 +875,7 @@ export interface MasterProductSibling {
   id: string;
   slug: string;
   name: string;
+  category_id: string | null;
   variant_name: string | null;
   model_key: string;
   storage_gb: number | null;
@@ -902,7 +903,7 @@ export async function getMasterProductSiblings(
   const { data, error } = await supabase
     .from('master_products')
     .select(
-      'id, slug, name, variant_name, model_key, storage_gb, min_price, max_price, merchant_count'
+      'id, slug, name, category_id, variant_name, model_key, storage_gb, min_price, max_price, merchant_count'
     )
     // The prefix holds only [a-z0-9.:-], so it has no LIKE wildcard to escape.
     .like('model_key', `${keyPrefix}%`)

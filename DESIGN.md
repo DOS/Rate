@@ -118,12 +118,13 @@ To ensure Rate.vn is unmistakably a **Rating & Review Platform**, every Product 
    - **Primary Action Bar (Review-Centric CTAs):**
      - Primary button: **Đọc & Chấm điểm Review (`#jreviews-section`)** + **Viết đánh giá 5 tiêu chí**.
      - Secondary analytical actions: **So sánh đối đầu (`/compare`)**, **Kiểm định Link (`/inspect`)**, and **Theo dõi (`WatchlistQuickToggle`)**.
+   - **Variants under the price (DOS/Rate#1436):** the model's other variants (storage, colour) with their "from" prices, each linking to its page, the current one marked; with the Item flag on, the Item's size picker (#1154) in the same place. No quick-spec cards: the specifications section has them all. A model with no other variant shows nothing here.
    - **Compact Neutral Market Reference Strip:**
      - A single, understated horizontal bar at the bottom of the card showing the reference market price range (`Giá tham khảo trung lập từ N nguồn kiểm định`) with a subtle link to `#price-history-section`. No flashy red discount banners.
 
 ### 4.2 Section #1 (Immediately Below Header): 10-Group Canonical Technical Specifications (`#specs-section`)
 
-- Placed **first** in the page body, before the reviews, as JOY decided on 2026-10-30 (DOS/Rate#1436). The above-the-fold card carries no quick-spec cards; in their place it links the model's other variants (storage, colour) with their "from" prices, the current one marked.
+- Placed **first** in the page body, before the reviews, as JOY decided on 2026-10-30 (DOS/Rate#1436).
 - Renders all **10 canonical Field Groups** (`Display`, `Hardware`, `Camera`, `Battery`, `Design`, `Cellular`, `Connectivity`, `Multimedia`, `Availability`, `Regulatory`) in a unified **RTINGS/Linear two-column specification matrix**:
   - Clean slate card header with group index badge (`01` .. `10`).
   - Crisp `1px` row dividers, left column `38%` muted label, right column `62%` high-contrast tabular value.

@@ -362,17 +362,17 @@ export async function ProductDetailView({
   );
   offersRead.catch(() => undefined);
   reviewsRead.catch(() => undefined);
-  // The other variants of this model, linked where the quick-spec cards used
-  // to be; an Item page has its own size picker (#1154). Cached per model and
-  // bounded; a failed read only leaves the links out (DOS/Rate#1436).
+  // The other variants of this model, linked under the price where the
+  // quick-spec cards used to be; Item routes (flag on) keep the #1154 size
+  // picker instead. Cached per model and bounded. A failure fails the render
+  // like the reads beside it, so ISR keeps the last good page (DOS/Rate#1436).
   const siblingsRead = itemRoute
     ? Promise.resolve([])
-    : timing
-        .time(
-          'siblings',
-          getCachedMasterProductSiblings(storedProduct.model_key)
-        )
-        .catch(() => []);
+    : timing.time(
+        'siblings',
+        getCachedMasterProductSiblings(storedProduct.model_key)
+      );
+  siblingsRead.catch(() => undefined);
   // Master-product route: a product asked for under another category's path
   // goes to its own (DOS/Rate#1366).
   if (!itemRoute) {
@@ -459,7 +459,9 @@ export async function ProductDetailView({
     siblingsRead,
   ]);
   timing.done();
-  const variantLinks = buildProductVariantLinks(product.slug, siblings);
+  const variantLinks = itemRoute
+    ? null
+    : buildProductVariantLinks(product, siblings);
   const peerRadarIndex: RadarIndex = new Map(
     relatedCompetitors.map((peer, i) => [
       peer.slug,
@@ -954,6 +956,23 @@ export async function ProductDetailView({
                   })}
                 </p>
               )}
+              {/* The other variants of this model, not the quick-spec cards
+              the specs section already has (DOS/Rate#1436). */}
+              {variantLinks && (
+                <ProductVariantLinks
+                  links={variantLinks}
+                  basePath={categoryBasePath}
+                  label={t('variantLinksLabel')}
+                  unknownSizeLabel={t('variantLinksUnknownSize')}
+                  priceLabel={(minPrice) =>
+                    minPrice > 0
+                      ? t('itemVariantPrice', {
+                          price: formatNumber(minPrice, locale),
+                        })
+                      : t('itemVariantNoPrice')
+                  }
+                />
+              )}
               {isItemGroup && (
                 <ItemVariantPicker
                   label={t('itemVariantLabel')}
@@ -1278,23 +1297,6 @@ export async function ProductDetailView({
                   locale={locale}
                 />
               </div>
-
-              {/* The other variants of this model, not the quick-spec cards
-              the specs section already has (DOS/Rate#1436). */}
-              {variantLinks && (
-                <ProductVariantLinks
-                  links={variantLinks}
-                  basePath={categoryBasePath}
-                  label={t('variantLinksLabel')}
-                  priceLabel={(minPrice) =>
-                    minPrice > 0
-                      ? t('itemVariantPrice', {
-                          price: formatNumber(minPrice, locale),
-                        })
-                      : t('itemVariantNoPrice')
-                  }
-                />
-              )}
 
               {/* Neutral Market Price Reference Strip (De-commercialized per DESIGN.md v3.0) */}
               {isItemGroup

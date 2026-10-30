@@ -1187,6 +1187,7 @@
     "offersTrustBadge": "Độ tin cậy: {score}%",
     "offersScamRiskLabel": "Rủi ro lừa đảo",
     "variantLinksLabel": "Phiên bản",
+    "variantLinksUnknownSize": "Chưa rõ dung lượng",
     "itemVariantLabel": "Dung lượng",
     "itemVariantPrice": "Từ {price} ₫",
     "itemVariantNoPrice": "Chưa có giá",

@@ -1187,6 +1187,7 @@
     "offersTrustBadge": "Trust: {score}%",
     "offersScamRiskLabel": "Scam risk",
     "variantLinksLabel": "Versions",
+    "variantLinksUnknownSize": "Size not stated",
     "itemVariantLabel": "Storage",
     "itemVariantPrice": "From {price} ₫",
     "itemVariantNoPrice": "No price yet",

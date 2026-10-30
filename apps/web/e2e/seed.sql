@@ -349,8 +349,8 @@ VALUES
    'Đánh giá chi tiết, hợp lệ từ người dùng thực tế.');
 
 -- Two published storage variants of one model, keyed brand:model:variant like
--- the importer's keys, and a draft third: the product page links the
--- published ones and marks the current one (DOS/Rate#1436). Their rating is
+-- the importer's keys, a draft third and a lone model: the product page links
+-- the published variants and marks the current one (DOS/Rate#1436). Their rating is
 -- never refreshed, so they stay off the leaderboard.
 INSERT INTO rate.master_products
   (id, category_id, brand, model, model_key, name, slug, storage_gb, min_price, max_price, merchant_count, status, metadata)
@@ -363,4 +363,8 @@ VALUES
    '{"category_slug": "smartphones"}'),
   ('22222222-2222-4222-8222-222222221438', 'c0000000-0000-4000-8000-000000000001', 'E2E', 'Variant Phone',
    'e2e:variant-phone:512gb', 'E2E Variant Phone 512GB', 'e2e-variant-phone-512gb', 512, 13990000, 13990000, 1, 'draft',
+   '{"category_slug": "smartphones"}'),
+  -- A brand:model:variant key with no other published variant: no links.
+  ('22222222-2222-4222-8222-222222221439', 'c0000000-0000-4000-8000-000000000001', 'E2E', 'Solo Phone',
+   'e2e:solo-phone:128gb', 'E2E Solo Phone 128GB', 'e2e-solo-phone-128gb', 128, 7990000, 7990000, 1, 'published',
    '{"category_slug": "smartphones"}');

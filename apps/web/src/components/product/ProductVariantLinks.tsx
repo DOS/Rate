@@ -4,18 +4,22 @@ import type { ProductVariantLink } from '@/lib/product-variant-links';
 /**
  * The other published variants of this model, each with its "from" price and
  * a link to its own page; the page's own variant is marked, not linked. Shown
- * with the Item flag off, where the quick-spec cards used to be: the specs
- * section below has them all (DOS/Rate#1436).
+ * with the Item flag off, under the price where an Item page shows its size
+ * picker; it replaces the quick-spec cards, which the specs section repeated
+ * (DOS/Rate#1436).
  */
 export default function ProductVariantLinks({
   links,
   basePath,
   label,
+  unknownSizeLabel,
   priceLabel,
 }: {
   links: readonly ProductVariantLink[];
   basePath: string;
   label: string;
+  /** The label of a variant whose size is not stated. */
+  unknownSizeLabel: string;
   priceLabel: (minPrice: number) => string;
 }) {
   return (
@@ -27,7 +31,9 @@ export default function ProductVariantLinks({
       {links.map((link) => {
         const body = (
           <>
-            <span className="fw-semibold">{link.label}</span>
+            <span className="fw-semibold">
+              {link.label ?? unknownSizeLabel}
+            </span>
             <span className="small rate-tabular">
               {priceLabel(link.minPrice)}
             </span>
