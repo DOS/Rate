@@ -139,7 +139,7 @@ export const revalidate = 300;
 // the width it had without a srcSet. A square one is capped at 350 px tall
 // (190 px on phones) and gets a little more than it shows (DOS/Rate#1417).
 const STORE_HERO_SIZES =
-  '(max-width: 767.98px) calc(100vw - 56px), (max-width: 991.98px) 690px, (max-width: 1199.98px) 360px, 430px';
+  '(max-width: 767.98px) calc(100vw - 56px), (max-width: 991.98px) 690px, (max-width: 1199.98px) 360px, (max-width: 1399.98px) 430px, 480px';
 
 // Nothing is prerendered at build; each slug renders on its first request.
 export function generateStaticParams(): { slug: string }[] {
