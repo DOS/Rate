@@ -1055,6 +1055,23 @@ async function runSuite() {
   assert.equal(keyOf('Samsung Galaxy Buds Live'), 'samsung:galaxy-buds-live:unknown');
   // A two-digit storage first: "64GB/4GB" is 64GB with 4GB RAM.
   assert.equal(keyOf('Samsung Galaxy A05 64GB/4GB'), 'samsung:galaxy-a05:64gb');
+  assert.equal(keyOf('Samsung Galaxy A05 64/4GB'), 'samsung:galaxy-a05:64gb');
+  // A model number or screen size before a RAM/ROM pair is no storage: the pair is the
+  // chain's last link, and only a GB-stated or 32+ first number is reversed (DOS/Rate#1438).
+  for (const [title, storage] of [
+    ['Xiaomi Redmi 13/8GB/256GB', ':256gb'],
+    ['Asus Vivobook 14/8GB/512GB', ':512gb'],
+    ['Samsung Galaxy Tab S9 11/8GB/128GB', ':128gb'],
+    ['Xiaomi Pad 6 11/8GB/256GB', ':256gb'],
+    ['MacBook Air M2 13/8GB/256GB', ':256gb'],
+    ['Realme GT 6 16/12GB/512GB', ':512gb'],
+    ['Samsung Galaxy S24 8/256GB', ':256gb'],
+    ['Samsung Galaxy S24 12GB/1TB', ':1024gb'],
+    // No storage after the pair: the 8GB is RAM and the storage stays unknown.
+    ['Asus Vivobook 14/8GB', ':unknown'],
+  ] as const) {
+    assert.ok(keyOf(title).endsWith(storage), `${title} -> ${keyOf(title)}`);
+  }
   // A long run of promo words costs linear time (CodeQL js/polynomial-redos).
   {
     const started = performance.now();
