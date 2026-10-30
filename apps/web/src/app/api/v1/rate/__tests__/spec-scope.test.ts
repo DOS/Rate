@@ -547,6 +547,51 @@ async function testInspectRateLimit() {
   console.warn('  ✅ Inspect and lookup are rate-limited per client IP');
 }
 
+// The extension routes answer their 429 like /lookup and /inspect: a code,
+// Retry-After, and the header readable cross-origin (DOS/Rate#1377).
+async function testExtensionRateLimit() {
+  const { NextRequest } = await import('next/server');
+  const lookup = await import('../extension/lookup/route');
+  const ingest = await import('../extension/ingest/route');
+  const expectLimited = async (res: Response, route: string) => {
+    assert.equal(res.status, 429, route);
+    assert.equal(res.headers.get('retry-after'), '60', route);
+    assert.match(
+      res.headers.get('access-control-expose-headers') ?? '',
+      /Retry-After/,
+      route
+    );
+    const body = (await res.json()) as { ok?: boolean; code?: string };
+    assert.equal(body.ok, false, route);
+    assert.equal(body.code, 'RATE_LIMIT_EXCEEDED', route);
+  };
+  const lookupAt = (ip: string) =>
+    lookup.GET(
+      new NextRequest('http://localhost/api/v1/rate/extension/lookup', {
+        headers: { 'x-forwarded-for': ip },
+      })
+    );
+  for (let i = 0; i < 60; i++) {
+    assert.notEqual((await lookupAt('198.51.100.30')).status, 429);
+  }
+  await expectLimited(await lookupAt('198.51.100.30'), 'extension lookup');
+  const ingestAt = (ip: string) =>
+    ingest.POST(
+      new NextRequest('http://localhost/api/v1/rate/extension/ingest', {
+        method: 'POST',
+        headers: { 'x-forwarded-for': ip, 'content-type': 'application/json' },
+        body: '{}',
+      })
+    );
+  for (let i = 0; i < 15; i++) {
+    assert.notEqual((await ingestAt('198.51.100.31')).status, 429);
+  }
+  await expectLimited(await ingestAt('198.51.100.31'), 'extension ingest');
+  console.warn(
+    '  ✅ The extension routes answer 429 with a code and Retry-After'
+  );
+}
+
 type Json = Record<string, unknown>;
 
 /**
@@ -1038,6 +1083,7 @@ async function main() {
   await testSpecMatchesBodies();
   await testBoundedInputs();
   await testInspectRateLimit();
+  await testExtensionRateLimit();
 }
 
 main().catch((err) => {

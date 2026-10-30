@@ -1,5 +1,8 @@
 import 'server-only';
-import { EXTENSION_CAPABILITY_MATRIX } from './extension';
+import {
+  EXTENSION_CAPABILITY_MATRIX,
+  EXTENSION_PRICE_VERDICTS,
+} from './extension';
 import { isItemModelOn } from './item-model';
 
 export interface OpenApiParameter {
@@ -66,13 +69,13 @@ function errorResponse(description: string): OpenApiResponse {
 }
 
 /**
- * The 429 of the inspection routes (`/lookup`, `/inspect`): 30 requests per
- * minute per client IP, counted on each server instance (DOS/Rate#1307).
+ * A per-IP rate limit's 429: `code: RATE_LIMIT_EXCEEDED` and `Retry-After`
+ * (DOS/Rate#1307, #1377).
  */
-function inspectRateLimitedResponse(): OpenApiResponse {
+function rateLimitedResponse(description: string): OpenApiResponse {
   return {
     ...errorResponse(
-      'More than 30 requests per minute from this client IP (shared by `/lookup` and `/inspect`, counted on each server instance). The body has `code: "RATE_LIMIT_EXCEEDED"`.'
+      `${description} The body has \`code: "RATE_LIMIT_EXCEEDED"\`.`
     ),
     headers: {
       'Retry-After': {
@@ -81,6 +84,16 @@ function inspectRateLimitedResponse(): OpenApiResponse {
       },
     },
   };
+}
+
+/**
+ * The 429 of the inspection routes (`/lookup`, `/inspect`): 30 requests per
+ * minute per client IP, counted on each server instance (DOS/Rate#1307).
+ */
+function inspectRateLimitedResponse(): OpenApiResponse {
+  return rateLimitedResponse(
+    'More than 30 requests per minute from this client IP (shared by `/lookup` and `/inspect`, counted on each server instance).'
+  );
 }
 
 function jsonBody(schema: Record<string, unknown>) {
@@ -928,15 +941,7 @@ function buildBaseRateOpenApiSpec(
                             additionalProperties: true,
                             properties: {
                               verdict: {
-                                type: 'string',
-                                enum: [
-                                  'genuine_deal',
-                                  'fair_market_price',
-                                  'above_market',
-                                  'inflated_fake_sale',
-                                  'insufficient_data',
-                                  'accessory_skip',
-                                ],
+                                $ref: '#/components/schemas/PriceVerdictLevel',
                               },
                             },
                           },
@@ -1070,15 +1075,7 @@ function buildBaseRateOpenApiSpec(
                               'Price verdict. `badgeLabel` and `explanation` are Vietnamese; `messageKey` and `messageParams` let a client show the same text in its own language (DOS/Rate#1326).',
                             properties: {
                               verdict: {
-                                type: 'string',
-                                enum: [
-                                  'genuine_deal',
-                                  'fair_market_price',
-                                  'above_market',
-                                  'inflated_fake_sale',
-                                  'insufficient_data',
-                                  'accessory_skip',
-                                ],
+                                $ref: '#/components/schemas/PriceVerdictLevel',
                               },
                               badgeLabel: { type: 'string' },
                               explanation: { type: 'string' },
@@ -1122,8 +1119,8 @@ function buildBaseRateOpenApiSpec(
             '400': errorResponse(
               'None of `url`, `title` or `externalId` was given. The body adds `capabilities` (the platform capability matrix).'
             ),
-            '429': errorResponse(
-              'Per-IP sliding-window rate limit exceeded (max 60 requests/min, counted on each server instance). No `Retry-After` header.'
+            '429': rateLimitedResponse(
+              'Per-IP sliding-window rate limit exceeded (max 60 requests/min, counted on each server instance).'
             ),
           },
         },
@@ -1153,8 +1150,8 @@ function buildBaseRateOpenApiSpec(
             '400': errorResponse(
               'Rejected by Zero-Trust Quarantine Validator. The body adds `details` (the validation issues).'
             ),
-            '429': errorResponse(
-              'Rate limit exceeded: a best-effort per-IP limit of 15 signals/min, counted separately on each server instance. No `Retry-After` header. The global cap of 120 crowd jobs/min is reported as a 200 with `jobState: "queue_error"`.'
+            '429': rateLimitedResponse(
+              'Rate limit exceeded: a best-effort per-IP limit of 15 signals/min, counted separately on each server instance. The global cap of 120 crowd jobs/min is reported as a 200 with `jobState: "queue_error"`.'
             ),
           },
         },
@@ -1672,13 +1669,20 @@ function buildBaseRateOpenApiSpec(
           responses: {
             '200': {
               description:
-                '4-Tier JReviews Leaderboard ranking with Top 3 Podium, per-item `deal_radar` and `radar_signal` (both the four export fields) under `data.items`, and Same-Category compare URL.',
+                '4-Tier JReviews Leaderboard ranking with Top 3 Podium, per-item `deal_radar` and `radar_signal` (both the four export fields) under `data.items`, and Same-Category compare URL. The same payload is also repeated at the top level (`items`, `category`, ...) for older clients; read it from `data` (DOS/Rate#1377).',
               content: {
                 'application/json': {
                   schema: {
                     type: 'object',
                     properties: {
                       ok: { type: 'boolean', example: true },
+                      items: {
+                        type: 'array',
+                        deprecated: true,
+                        description:
+                          'The same as `data.items`, kept for older clients.',
+                        items: { type: 'object', additionalProperties: true },
+                      },
                       data: {
                         type: 'object',
                         properties: {
@@ -1887,15 +1891,8 @@ function buildBaseRateOpenApiSpec(
         },
         PriceVerdictLevel: {
           type: 'string',
-          enum: [
-            'genuine_deal',
-            'fair_market',
-            'above_market',
-            'inflated_fake_sale',
-            'insufficient_data',
-            'ambiguous_variant',
-            'skipped_accessory',
-          ],
+          // The values the answers carry (DOS/Rate#1377).
+          enum: [...EXTENSION_PRICE_VERDICTS],
           description:
             'Evidence-based price verdict comparing observed listing price and claimed original price against the historical median and cross-retailer floor.',
         },
@@ -2054,7 +2051,7 @@ function buildBaseRateOpenApiSpec(
             code: {
               type: 'string',
               description:
-                'Machine-readable cause when there is one, e.g. `NOT_FOUND` on 404s and `RATE_LIMIT_EXCEEDED` on the `/lookup` and `/inspect` 429.',
+                'Machine-readable cause when there is one, e.g. `NOT_FOUND` on 404s and `RATE_LIMIT_EXCEEDED` on the `/lookup`, `/inspect`, `/extension/lookup` and `/extension/ingest` 429.',
               example: 'NOT_FOUND',
             },
           },
