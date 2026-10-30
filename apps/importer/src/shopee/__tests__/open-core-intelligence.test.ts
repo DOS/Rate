@@ -1292,6 +1292,16 @@ async function runSuite() {
     ['iPad mini Wi-Fi + Cellular 128GB (A20 Pro)', 'apple:ipad-mini-8:128gb'],
     ['iPad mini 2019 A20', 'apple:ipad-mini:unknown'],
     ['iPad mini 128GB kèm bút A17 Pro', 'apple:ipad-mini:128gb'],
+    // The A17 Pro names the mini 7 whatever the year; a "|" separates specs; a lone
+    // "Kem" is a colour, not a gift.
+    ['iPad mini 2024 A17 Pro 128GB', 'apple:ipad-mini-7:128gb'],
+    ['iPad mini (2024) A17 Pro 128GB', 'apple:ipad-mini-7:128gb'],
+    ['iPad mini (2026) A17 Pro 128GB', 'apple:ipad-mini-7:128gb'],
+    ['iPad mini | A17 Pro | 128GB', 'apple:ipad-mini-7:128gb'],
+    ['iPad mini 128GB | A20 Pro', 'apple:ipad-mini-8:128gb'],
+    ['iPad mini Kem A20 Pro 128GB', 'apple:ipad-mini-8:128gb'],
+    ['iPad mini màu Vàng Kem chip A17 Pro 128GB', 'apple:ipad-mini-7:128gb'],
+    ['iPad mini | A20 Pro | 128GB', 'apple:ipad-mini-8:128gb'],
   ] as const) {
     assert.equal(keyOf(title), key, title);
   }

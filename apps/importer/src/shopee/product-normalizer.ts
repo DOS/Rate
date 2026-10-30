@@ -2063,16 +2063,18 @@ export class ProductNormalizer {
         // the first one: not a gift or bundle ("tặng ốp Galaxy A20", "+ Galaxy A20") nor
         // what a comparison names ("A20 Pro so sánh A17 Pro").
         // The own part ends at a "+" (but "+ Cellular" is the iPad's own), a gift or fit
-        // word with or without diacritics after any non-letter ("(Tặng", "tang op"), a
-        // "|", another iPad or a comparison. Its first A-chip counts, and a Galaxy model
-        // ("Galaxy A20") is none; "A15/A20" is the A15, no mini 8 (DOS/Rate#1510).
+        // word after any non-letter ("(Tặng"), a gift written without diacritics before
+        // what is given ("tang op", "kem but"; a lone "Kem" is a colour), another iPad or
+        // a comparison. A "|" is a spec separator and does not end it. Its first A-chip
+        // counts, and a Galaxy model ("Galaxy A20") is none; "A15/A20" is the A15, no
+        // mini 8 (DOS/Rate#1510).
         const mini = line.match(/^mini\s*([1-9])?$/i);
         const ownPart = mini
           ? appleTitle
               .slice((ipadMatch.index ?? 0) + ipadMatch[0].length)
               .normalize('NFC')
               .split(
-                /\s*\+(?!\s*(?:cellular|lte|5g|4g)\b)|(?<![\p{L}\d])(?:tương thích|dùng cho|kèm|tặng|tang|kem|qua tang)(?!\p{L})|\||\bipad\b|so sánh|\bvs\b/iu
+                /\s*\+(?!\s*(?:cellular|lte|5g|4g)\b)|(?<![\p{L}\d])(?:tương thích|dùng cho|kèm|tặng)(?!\p{L})|(?<![\p{L}\d])(?:tang|kem|qua tang)\s+(?:op|but|sac|cap|tai|day|bao|kinh|cuong luc|phu kien)\b|\bipad\b|so sánh|\bvs\b/iu
               )[0]!
           : '';
         const chipMatch_ = /(?<!galaxy\s{0,3})\ba(\d{2})(\s*pro)?\b/iu.exec(ownPart);
@@ -2082,19 +2084,21 @@ export class ProductNormalizer {
             : chipMatch_?.[1] === '17' && chipMatch_[2]
               ? '17'
               : undefined;
-        // A launch year names the generation before any chip: "iPad mini 2019 A20" is no
-        // mini 8 (DOS/Rate#1510).
+        // The A17 Pro names the mini 7 whatever year is written. A launch year other than
+        // 2026 overrules only an A20: "iPad mini 2019 A20" is no mini 8 (DOS/Rate#1510).
         const miniYear = /^\s*\(?\s*(20\d\d)\s*\)?(?![\d\p{L}])/iu.exec(ownPart)?.[1];
         if (mini)
           line = `mini${
             mini[1]
               ? ` ${mini[1]}`
-              : miniYear && miniYear !== '2026'
-                ? ''
-                : miniChip === '20' || miniYear === '2026'
-                  ? ' 8'
-                  : miniChip === '17'
-                    ? ' 7'
+              : miniChip === '17'
+                ? ' 7'
+                : miniChip === '20'
+                  ? miniYear && miniYear !== '2026'
+                    ? ''
+                    : ' 8'
+                  : miniYear === '2026'
+                    ? ' 8'
                     : ''
           }`;
         model = /^(pro|air)$/i.test(line) && chip ? `iPad ${line} ${chip}` : `iPad ${line}`;
