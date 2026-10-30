@@ -74,16 +74,6 @@ export function sanitizeMatcherEntityId(raw: unknown, maxLen = 128): string {
   return trimmed;
 }
 
-function isStrictBoolean(val: unknown): boolean {
-  if (typeof val === 'boolean') return val;
-  if (typeof val === 'number') return val === 1;
-  if (typeof val === 'string') {
-    const lower = val.trim().toLowerCase();
-    return lower === 'true' || lower === '1';
-  }
-  return false;
-}
-
 /** A known boolean, or null when the value says nothing (DOS/Rate#1196). */
 function toBooleanOrNull(val: unknown): boolean | null {
   if (typeof val === 'boolean') return val;
@@ -1075,10 +1065,9 @@ export class EntityMatcher {
               toBoundedPositiveNumber(aiResult.screen_size_inch, MAX_SCREEN_SIZE_INCH),
             battery_mah:
               existingBatteryMah ?? toBoundedPositiveInt(aiResult.battery_mah, MAX_BATTERY_MAH),
-            // Unknown stays null rather than false (DOS/Rate#1196).
-            has_5g: isStrictBoolean(row.has_5g)
-              ? true
-              : (toBooleanOrNull(aiResult.has_5g) ?? toBooleanOrNull(row.has_5g)),
+            // Unknown stays null rather than false (DOS/Rate#1196). A stored answer wins
+            // like the other columns: the AI only fills a null (DOS/Rate#1451).
+            has_5g: toBooleanOrNull(row.has_5g) ?? toBooleanOrNull(aiResult.has_5g),
             specifications: mergedSpecifications,
             key_specs: mergedKeySpecs,
             updated_at: new Date().toISOString(),

@@ -774,6 +774,8 @@ async function runEntityMatcherSuite() {
   assert.equal(updatedRow821?.storage_gb, 256);
   assert.equal(updatedRow821?.screen_size_inch, 6.8);
   assert.equal(updatedRow821?.battery_mah, 5000);
+  // A stored has_5g = false wins over the AI's true, like the other columns (DOS/Rate#1451).
+  assert.equal(updatedRow821?.has_5g, false);
   console.log('  ✅ [8/8] DOS/Rate#821 EntityMatcher bounds & HTTP URL sanitization passed');
 
   // 9. DOS/Rate#876: EntityMatcher URL C1 control/whitespace/port bounds, boolean numeric rejection & logger control-char sanitization
