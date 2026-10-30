@@ -1026,6 +1026,24 @@ async function runSuite() {
   assert.equal(keyOf('Apple Watch S10.46mm'), 'apple:watch:unknown');
   assert.equal(keyOf('Samsung Galaxy S10 128GB'), 'samsung:galaxy-s10:128gb');
   assert.equal(keyOf('Xiaomi Watch S1 Active'), 'xiaomi:watch-s1-active:unknown');
+  // A leading "{...}" promo group or a promo word before the brand is no model
+  // (DOS/Rate#1421); "256GB/12GB" names the storage first.
+  for (const title of [
+    '{ Kích T10 } Điện Thoại Samsung Galaxy S26 Ultra 5G 12GB/256GB Chính Hãng',
+    '{ Kích T10 - Full VAT } Điện Thoại Samsung Galaxy S26 Ultra 5G 12GB/256GB Chính Hãng',
+    'Live Samsung Galaxy S26 Ultra 5G 256GB/12GB',
+    'Hot Sale Samsung Galaxy S26 Ultra 12GB/256GB',
+    'Flash Sale Điện thoại Samsung Galaxy S26 Ultra 12GB/256GB',
+    'Sale Samsung Galaxy S26 Ultra 12GB 256GB',
+    'Samsung Galaxy S26 Ultra 256GB / 12GB',
+  ]) {
+    assert.equal(keyOf(title), 'samsung:galaxy-s26-ultra:256gb', title);
+  }
+  assert.equal(keyOf('Live Xiaomi Redmi Note 14 8GB/256GB'), 'xiaomi:redmi-note-14:256gb');
+  // A brand or model that only starts like a promo word is kept.
+  assert.equal(keyOf('Hotwav Cyber 15 8GB/256GB'), 'khac:hotwav-cyber-15:256gb');
+  // Two sizes with no slash between stay unresolved, as before.
+  assert.equal(keyOf('Samsung Galaxy S26 Ultra 256GB 12GB'), 'samsung:galaxy-s26-ultra:unknown');
   // With no line matched, the family the title names first, else iPhone.
   assert.equal(keyOf('MacBook M4'), 'apple:macbook:unknown');
   assert.equal(keyOf('Apple "iPad" 256GB'), 'apple:ipad:256gb');

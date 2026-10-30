@@ -1335,6 +1335,20 @@ const WATCH_GIFT_ACCESSORY_NOUN =
   /(?<![\p{L}\d])(?:ốp|case|bao da|silicone|silicon|tpu|cường lực|kính|miếng dán|vỏ(?! (?:nhôm|titan|titanium|thép|nhựa|aluminum|aluminium|stainless|steel)(?![\p{L}\d]))|túi)(?![\p{L}\d])/iu;
 // The product's own part ends where "cho/for" or "+" starts another product; "GPS +
 // Cellular" is the watch and "13+ năm" a shop's age (DOS/Rate#1389).
+// A promo tag in front of the title is no part of the model: "[Mã giảm 50K]",
+// "(Hàng mới)", "【Hot】" or "{ Kích T10 }" (DOS/Rate#1421).
+const LEADING_PROMO_GROUPS = /^(?:\s*(?:\[[^\]]*\]|\([^)]*\)|【[^】]*】|\{[^}]*\}))+\s*/;
+// So is a promo word before the brand: "Live Samsung Galaxy S26 Ultra", "Hot Sale
+// Samsung …", "Flash Sale Điện thoại Samsung …". Only with the brand within the next
+// four words, so a brand or model that merely starts like one ("Hotwav") is kept
+// (DOS/Rate#1421).
+const LEADING_PROMO_WORDS = String.raw`(?:live(?:stream)?|(?:hot|flash|big|siêu|mega) sale|sale|hot|deal(?: hot)?|giảm giá|xả kho)`;
+const escapeRegExp = (text: string): string => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const leadingPromoWords = (brand: string): RegExp =>
+  new RegExp(
+    String.raw`^(?:${LEADING_PROMO_WORDS}(?![\p{L}\d])[\s:!|-]*)+(?=(?:\S+\s+){0,4}${escapeRegExp(brand)}(?![\p{L}\d]))`,
+    'iu'
+  );
 const OWN_PART_END = / (?:cho|for) | ?\+ (?!cellular|lte|năm(?![\p{L}\d]))/iu;
 const APPLE_SIZE_PATTERNS: Record<string, [RegExp, RegExp]> = {
   ipad: sizePatterns(IPAD_SIZE),
@@ -1924,7 +1938,8 @@ export class ProductNormalizer {
       model = 'Pad 7 Pro';
     } else {
       const withoutLeadingPromo = modelTitle
-        .replace(/^(?:\s*(?:\[[^\]]*\]|\([^)]*\)|【[^】]*】))+\s*/, '')
+        .replace(LEADING_PROMO_GROUPS, '')
+        .replace(leadingPromoWords(brand), '')
         .trim();
       const cleaned = withoutLeadingPromo
         .replace(
@@ -1934,7 +1949,7 @@ export class ProductNormalizer {
           ),
           ''
         )
-        .replace(/^(?:\s*(?:\[[^\]]*\]|\([^)]*\)|【[^】]*】))+\s*/, '')
+        .replace(LEADING_PROMO_GROUPS, '')
         // "Vivo Book 15" is the Asus Vivobook line: key it like "Vivobook 15" (DOS/Rate#774).
         .replace(/\bvivo\s+book\b/gi, 'Vivobook')
         // "17 ProMax" keys like "17 Pro Max" (DOS/Rate#815).
@@ -2052,6 +2067,9 @@ export class ProductNormalizer {
       const between = title.slice(first.index + first.raw.length, second.index);
       if (first.value <= 32 && second.value >= 64 && /^[\s/,-]+$/.test(between)) {
         first.claimed = true;
+      } else if (first.value >= 64 && second.value <= 32 && /^\s*\/\s*$/.test(between)) {
+        // Storage first, RAM second: "256GB/12GB" is 256GB with 12GB RAM (DOS/Rate#1421).
+        second.claimed = true;
       }
     } else if (
       ramPhrases.length === 0 &&
