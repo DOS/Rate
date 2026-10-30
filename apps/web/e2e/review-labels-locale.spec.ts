@@ -55,7 +55,8 @@ for (const [locale, labels] of Object.entries(LABELS)) {
         .filter({ hasText: labels.weight })
     ).not.toHaveCount(0);
     // The rating weight badge carries only its number; the 6-axis model's own
-    // estimate sits in a separate labelled badge (DOS/Rate#596).
+    // estimate sits folded under the review, labelled as a reference
+    // (DOS/Rate#596, #1471).
     const ratingWeight = page.getByTestId('review-rating-weight');
     await expect(ratingWeight).toHaveCount(6);
     await expect(ratingWeight.first()).toHaveText(

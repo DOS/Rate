@@ -1670,25 +1670,21 @@ export default function JReviewsSection({
                       {rev.comment || t('emptyCommentPlaceholder')}
                     </p>
 
-                    {/* Why this weight: the AI note and the 6-factor model's
-                        estimate, folded so the card shows one weight, the one
-                        used. The estimate is labelled as reference, since it
-                        is not what the rating counts (DOS/Rate#1471, #596). */}
-                    <details
-                      className="rounded-3 bg-light small text-secondary mb-2 border p-2"
-                      open={isZeroWeight || isFilteredOutReview(rev)}
-                    >
-                      <summary className="fw-semibold">
-                        {t('weightWhySummary')}
-                      </summary>
-                      {rev.reason && (
-                        <p className="mb-1 mt-2">
-                          <strong>{t('aiReasonPrefix')}</strong>{' '}
-                          <AnalyzerText text={rev.reason} />
-                        </p>
-                      )}
+                    {/* AI Flag Reason Transparency Note */}
+                    {rev.reason && (
+                      <div className="rounded-3 bg-light small text-secondary mb-2 border p-2">
+                        <strong>{t('aiReasonPrefix')}</strong>{' '}
+                        <AnalyzerText text={rev.reason} />
+                      </div>
+                    )}
+
+                    {/* The 6-factor model's estimate is a reference, not the
+                        weight the rating uses, so it is folded and says so;
+                        the card shows one weight (DOS/Rate#1471, #596). */}
+                    <details className="small text-secondary mb-2">
+                      <summary>{t('weightWhySummary')}</summary>
                       <p
-                        className="mb-0 mt-2"
+                        className="mb-0 mt-1"
                         data-testid="review-6axis-breakdown"
                       >
                         {t('trustModelBadge', {

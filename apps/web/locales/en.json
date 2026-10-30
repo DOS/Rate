@@ -564,7 +564,7 @@
     "ratingWeightBadge": "Rating weight: {weight}x",
     "ratingWeightTitle": "Weight used in the product rating (after helpful votes and reports)",
     "trustModelBadge": "Reference estimate from the 6-factor model, not used in the rating: {explanation}",
-    "weightWhySummary": "Why this weight?",
+    "weightWhySummary": "Reference estimate (6 factors)",
     "variationPrefix": "Variant: <value>{variation}</value>",
     "emptyCommentPlaceholder": "(No comment text provided)",
     "aiReasonPrefix": "AI explanation:",

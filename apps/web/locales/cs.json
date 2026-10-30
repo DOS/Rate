@@ -564,7 +564,7 @@
     "ratingWeightBadge": "Váha v hodnocení: {weight}x",
     "ratingWeightTitle": "Váha použitá v hodnocení produktu (po započtení užitečných hlasů a nahlášení)",
     "trustModelBadge": "Orientační odhad modelu 6 faktorů, nepoužívá se v hodnocení: {explanation}",
-    "weightWhySummary": "Proč tato váha?",
+    "weightWhySummary": "Orientační odhad (6 faktorů)",
     "variationPrefix": "Varianta: <value>{variation}</value>",
     "emptyCommentPlaceholder": "(Bez textového komentáře)",
     "aiReasonPrefix": "AI vysvětlení:",
