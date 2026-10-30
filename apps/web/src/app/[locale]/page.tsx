@@ -981,10 +981,9 @@ export default async function Home({
                             <dd className="rate-merchant-note">
                               {merchant.follower_count > 0
                                 ? tHome('followersCountText', {
-                                    count:
-                                      merchant.follower_count.toLocaleString(
-                                        'vi-VN'
-                                      ),
+                                    // A number, so the plural picks its form;
+                                    // the message formats it (DOS/Rate#1398).
+                                    count: merchant.follower_count,
                                   })
                                 : tHome('periodicMonitoring')}
                             </dd>

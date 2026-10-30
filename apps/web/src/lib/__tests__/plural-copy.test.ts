@@ -340,6 +340,84 @@ function main() {
     );
   }
 
+  const more1398: Array<[string, Record<string, number | string>, string]> = [
+    [
+      'merchants.profileRadarAnalyzed',
+      { count: 1 },
+      'Automaticky porovnáno napříč 1 nabídkou',
+    ],
+    [
+      'merchants.mdRadarLine',
+      { genuine: 1, traps: 0 },
+      '- **Cenové signály:** 🟢 1 minimum napříč obchody | 🚨 0 falešných slev',
+    ],
+    [
+      'merchants.mdAuthenticLine',
+      { pct: 90, auth: 9, total: 10, flagged: 1 },
+      '- **Podíl skutečných recenzí:** 90% (9/10 skutečných, odfiltrována 1 falešná/spamová)',
+    ],
+    [
+      'watchlist.bestOfferPrefix',
+      { count: 1 },
+      'Nejnižší cena napříč 1 platformou/prodejcem:',
+    ],
+    ['homePage.followersCountText', { count: 2 }, '2 sledující'],
+    ['homePage.followersCountText', { count: 1500 }, '1 500 sledujících'],
+    [
+      'watchlist.cloudSavedAll',
+      { saved: 7 },
+      'Uloženo 7 cenových upozornění do Rate Cloud. Notifikace budou zaslány na váš e-mail.',
+    ],
+  ];
+  for (const [key, values, expected] of more1398) {
+    assert.equal(
+      cs(key as never, values as never),
+      expected,
+      `cs ${key} ${JSON.stringify(values)}`
+    );
+  }
+  assert.equal(
+    en('homePage.filteredSeedingStatBadge' as never, { count: 1 } as never),
+    '1 coin-farming or fake review filtered'
+  );
+  assert.equal(
+    en(
+      'merchants.profileMetaDesc' as never,
+      { name: 'X', dosafe: 1, seeding: 2, count: 1 } as never
+    ).includes('across 1 product on'),
+    true
+  );
+  assert.equal(
+    vi('homePage.followersCountText' as never, { count: 1500 } as never),
+    '1.500 người theo dõi'
+  );
+
+  // Every plural has its one and other forms.
+  const pluralArgs = (text: string) => [
+    ...text.matchAll(/\{(\w+), plural,([^]*?)\}\}/g),
+  ];
+  const walk = (node: unknown, out: string[] = []): string[] => {
+    if (typeof node === 'string') out.push(node);
+    else if (node && typeof node === 'object')
+      for (const v of Object.values(node)) walk(v, out);
+    return out;
+  };
+  // A count that is never 1 may name its exact value (=2) instead.
+  const hasOneAndOther = (forms: string) =>
+    (forms.includes('one {') || /=\d+ \{/.test(forms)) &&
+    forms.includes('other {');
+  for (const text of walk(read('cs'))) {
+    for (const m of pluralArgs(text)) {
+      // "few" may be left out where it reads as "other", as after "z".
+      assert.ok(hasOneAndOther(m[2]!), `cs plural: ${text}`);
+    }
+  }
+  for (const text of walk(read('en'))) {
+    for (const m of pluralArgs(text)) {
+      assert.ok(hasOneAndOther(m[2]!), `en plural: ${text}`);
+    }
+  }
+
   // Vietnamese has one form and keeps its plain placeholders.
   const viMessages = read('vi');
   for (const key of [
