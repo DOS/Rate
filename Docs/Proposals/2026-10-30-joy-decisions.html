@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="vi" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="color-scheme" content="dark" />
+  <title>Việc chờ JOY quyết</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0f1113;
+      --surface: #161a1e;
+      --surface-2: #1d2228;
+      --border: #2a313a;
+      --text: #e8edf2;
+      --muted: #9ba5b0;
+      --accent: #FF2E29;
+      --accent-soft: rgba(255, 46, 41, 0.14);
+      --green: #22c55e;
+      --amber: #f59e0b;
+      --amber-soft: rgba(245, 158, 11, 0.14);
+      --blue-soft: rgba(96, 165, 250, 0.14);
+      --code-bg: #0b0d0f;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 32px 16px 64px;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Inter, sans-serif;
+      line-height: 1.6;
+    }
+    .container { max-width: 960px; margin: 0 auto; }
+    h1 { font-size: 28px; margin: 12px 0 8px; letter-spacing: -0.02em; }
+    h2 { font-size: 20px; margin: 40px 0 12px; padding-bottom: 8px; border-bottom: 1px solid var(--border); color: #fff; }
+    h3 { font-size: 17px; margin: 0 0 8px; color: #fff; }
+    p, li { color: var(--text); }
+    ul { padding-left: 20px; margin: 6px 0; }
+    .muted { color: var(--muted); }
+    .badge { display: inline-block; padding: 3px 9px; border-radius: 6px; font-size: 12px; font-weight: 700; letter-spacing: 0.03em; }
+    .badge-accent { background: var(--accent-soft); color: var(--accent); border: 1px solid rgba(255,46,41,0.35); }
+    .badge-amber { background: var(--amber-soft); color: var(--amber); border: 1px solid rgba(245,158,11,0.35); }
+    .badge-blue { background: var(--blue-soft); color: #93c5fd; border: 1px solid rgba(96,165,250,0.35); }
+    .card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 16px 18px; margin: 14px 0; }
+    .card .head { display: flex; flex-wrap: wrap; gap: 6px; align-items: baseline; margin-bottom: 6px; }
+    .card .head h3 { flex: 1 1 260px; margin: 0; }
+    dl { margin: 8px 0 0; display: grid; grid-template-columns: 130px 1fr; gap: 6px 12px; }
+    dt { color: var(--muted); font-size: 14px; }
+    dd { margin: 0; }
+    .rec { color: var(--green); font-weight: 600; }
+    .table-wrap { overflow-x: auto; margin: 12px 0; }
+    table { width: 100%; border-collapse: collapse; font-size: 14px; min-width: 620px; }
+    th, td { border: 1px solid var(--border); padding: 7px 10px; text-align: left; vertical-align: top; }
+    th { background: var(--surface-2); color: #fff; }
+    code { background: var(--code-bg); border: 1px solid var(--border); border-radius: 4px; padding: 1px 5px; font-size: 13px; overflow-wrap: anywhere; }
+    a { color: #ff6b66; overflow-wrap: anywhere; }
+    @media (max-width: 600px) {
+      dl { grid-template-columns: 1fr; gap: 2px; }
+      dt { margin-top: 6px; }
+    }
+  </style>
+</head>
+<body>
+<div class="container">
+  <span class="badge badge-accent">Cần JOY quyết</span>
+  <h1>Các việc đang chờ JOY quyết (Rate)</h1>
+  <p class="muted">Ngày 30/10/2026. Người soạn: Web (Rate Core), theo yêu cầu của PO. Trang này chỉ gom lại để JOY trả lời một lượt; chi tiết nằm ở issue, PR và các trang đề xuất đã có. Xếp theo mức ảnh hưởng tới người mua và tới các việc khác, từ cao xuống thấp. Chưa có thao tác nào lên Production hay Supabase dùng chung.</p>
+
+  <h2>Tóm tắt</h2>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>#</th><th>Việc</th><th>Khuyến nghị</th><th>Chạm vào</th><th>Mức</th></tr></thead>
+      <tbody>
+        <tr><td>1</td><td>Sửa thông số iPhone 18 Pro, S26 Ultra (PR #1460, #1459, #1464)</td><td>Merge #1460, chạy backfill</td><td>Ghi dữ liệu Production</td><td>Cao</td></tr>
+        <tr><td>2</td><td>Mở rộng danh mục D1-D5 (PR #1455)</td><td>D1 A1-A3, D2 (a), D3 có, D4 hiện "chưa có giá", D5 chờ</td><td>Ghi dữ liệu Production</td><td>Cao</td></tr>
+        <tr><td>3</td><td>Re-key D1-D4 (#1407, #1441, #1430) và #1491 (c)(d)</td><td>D1 A, D2 có, D3 A rồi B, D4 phía DOS-Me</td><td>Dữ liệu và DDL qua DOS-Me</td><td>Cao</td></tr>
+        <tr><td>4</td><td>Đưa dev lên Production (promote)</td><td>Chỉ hỏi nếu <code>promote.mjs</code> bị từ chối</td><td>rate.vn</td><td>Cao</td></tr>
+        <tr><td>5</td><td>DOS-Me M1+M2 và runbook Item model (#1150, #1123)</td><td>Duyệt quyết định 1-9, xếp lịch M0 rồi M1+M2</td><td>DDL và dữ liệu qua DOS-Me</td><td>Cao</td></tr>
+        <tr><td>6</td><td>Một con số điểm cho mọi trang (#1470, PR #1478)</td><td>Phương án 2 (Bayesian ở mọi nơi)</td><td>Web; phương án 2 cần DOS-Me</td><td>Vừa</td></tr>
+        <tr><td>7</td><td>6 sản phẩm đã ngừng bán</td><td>Chưa có</td><td>Có thể đổi trạng thái dữ liệu</td><td>Vừa</td></tr>
+        <tr><td>8</td><td>Đăng bản tiện ích mới lên Chrome Web Store</td><td>Đăng sau promote, gồm #1476, #1477</td><td>Trang cửa hàng công khai</td><td>Vừa</td></tr>
+        <tr><td>9</td><td>CSP, quyết định 1-4 (#1323, #1348)</td><td>Có cho 1, 2, 3; 4 tuỳ JOY</td><td>Header web; 4 tốn phí</td><td>Vừa</td></tr>
+        <tr><td>10</td><td>Backfill 5G (#1196)</td><td>Đếm trước, rồi ghi</td><td>Ghi dữ liệu Production</td><td>Thấp-vừa</td></tr>
+        <tr><td>11</td><td>Việc DB nhỏ: #1306, #1353, #1247, #1143, #1173</td><td>Xem từng mục</td><td>DDL hoặc truy vấn đọc trên DB dùng chung</td><td>Thấp-vừa</td></tr>
+        <tr><td>12</td><td>Báo lỗi Next.js lên repo công khai (#1373, #1463)</td><td>Tuỳ JOY; không cần đổi app</td><td>Repo bên thứ ba công khai</td><td>Thấp</td></tr>
+        <tr><td>13</td><td>Plugin cc-po</td><td>Cần PO nói rõ câu hỏi</td><td>Công cụ nội bộ</td><td>Thấp</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h2>Chi tiết</h2>
+
+  <div class="card">
+    <div class="head"><h3>1. Sửa thông số iPhone 18 Pro và S26 Ultra</h3><span class="badge badge-accent">Cao</span></div>
+    <p class="muted"><a href="https://github.com/DOS/Rate/pull/1460">PR #1460</a>, <a href="https://github.com/DOS/Rate/issues/1459">#1459</a>, <a href="https://github.com/DOS/Rate/issues/1464">#1464</a></p>
+    <dl>
+      <dt>Câu hỏi</dt><dd>Cho merge #1460 và chạy <code>backfill:specs --apply</code> trên Production không; các bản dung lượng lớn (#1464) sửa theo cách nào?</dd>
+      <dt>Phương án</dt><dd>#1460: chạy thử chỉ đọc, rồi <code>--apply</code> sau khi JOY đồng ý. #1464: (1) để đợt seed danh mục (mục 2) phủ 512GB, 1TB, 2TB; (2) một bước dữ liệu riêng chép lại giá trị chuẩn.</dd>
+      <dt>Khuyến nghị</dt><dd class="rec">Core: merge và chạy #1460 (dos[bot] đã duyệt, lỗi P1 từ Codex đã sửa). #1464 chưa có khuyến nghị.</dd>
+      <dt>Nếu chờ</dt><dd>Hai trang iPhone đang hiện sai thông tin: pin, khung titan, giá 35,99 triệu thay vì 41,999 triệu, iOS 20.</dd>
+      <dt>Chạm vào</dt><dd>Ghi dữ liệu Production trên Supabase dùng chung, không DDL.</dd>
+    </dl>
+  </div>
+
+  <div class="card">
+    <div class="head"><h3>2. Mở rộng danh mục, D1-D5</h3><span class="badge badge-accent">Cao</span></div>
+    <p class="muted"><a href="https://github.com/DOS/Rate/pull/1455">PR #1455</a> (bản nháp, dựa trên #1460), trang <code>Docs/Proposals/2026-10-30-catalog-expansion.html</code></p>
+    <dl>
+      <dt>Câu hỏi</dt><dd>Duyệt đợt sản phẩm đầu tiên và quy tắc đưa bản nháp lên trang?</dd>
+      <dt>Phương án</dt><dd>D1 phạm vi (A1-A3, khoảng 25 phiên bản). D2 đăng (a) tự động khi có ít nhất một chỗ bán còn hàng đã kiểm, hoặc (b) duyệt tay từng đợt. D3 cho chạy <code>backfill-specs --apply</code>. D4 bản chưa có chỗ bán: hiện "chưa có giá" hay ẩn. D5 iPhone 18 và 18e bản thường: chờ hay seed ngay.</dd>
+      <dt>Khuyến nghị</dt><dd class="rec">Core: D1 A1-A3; D2 (a), hạng C cần 2 shop; D3 có; D4 hiện "chưa có giá"; D5 chờ.</dd>
+      <dt>Nếu chờ</dt><dd>Dòng iPhone 17, S26, S26+ và phần lớn các mức dung lượng vẫn chưa có trên rate.vn, tức thiếu chính các máy bán chạy.</dd>
+      <dt>Chạm vào</dt><dd>Ghi dữ liệu Production, không DDL; dùng thêm quota crawl của Rate Services.</dd>
+    </dl>
+  </div>
+
+  <div class="card">
+    <div class="head"><h3>3. Re-key D1-D4 và #1491 (c)(d)</h3><span class="badge badge-accent">Cao</span></div>
+    <p class="muted"><a href="https://github.com/DOS/Rate/issues/1407">#1407</a>, <a href="https://github.com/DOS/Rate/issues/1441">#1441</a>, <a href="https://github.com/DOS/Rate/issues/1430">#1430</a>, <a href="https://github.com/DOS/Rate/issues/1491">#1491</a>, chạy thử <a href="https://github.com/DOS/Rate/pull/1456">PR #1456</a>, trang <code>Docs/Proposals/2026-10-30-rekey-decisions.html</code></p>
+    <dl>
+      <dt>Câu hỏi</dt><dd>Duyệt cách đổi key cho từng trường hợp một máy bị tách thành hai trang?</dd>
+      <dt>Phương án</dt><dd>D1 cách viết tên đồng hồ: A đổi key và chuẩn hoá / B thêm bí danh ở bộ khớp / C để nguyên. D2 chữ quà tặng trong key: đếm chỉ đọc rồi sửa dữ liệu kiểu M0, có hay không. D3 máy cũ: A bỏ hàng không mới ngay lúc nhận / B lưu cột <code>condition</code> (DDL) / C gắn kèm và đánh dấu. D4 ai chạy lệnh đếm. #1491: (c) iPad Wi-Fi và 5G, (d) RAM MacBook: key mới cho sản phẩm mới, chỉ đổi key cũ khi JOY đồng ý.</dd>
+      <dt>Khuyến nghị</dt><dd class="rec">Core: D1 A; D2 có; D3 A ngay, B sau qua DOS-Me; D4 phía DOS-Me chạy. #1491 chờ kết quả chạy thử #1456.</dd>
+      <dt>Nếu chờ</dt><dd>Các sản phẩm có chữ quà tặng trong key đã ngừng nhận chỗ bán mới nên giá cũ dần; giá máy cũ có thể thành giá thấp nhất của máy mới; #1491 chặn việc tạo hàng loạt sản phẩm ở mục 2.</dd>
+      <dt>Chạm vào</dt><dd>Ghi dữ liệu Production qua DOS-Me; D3-B là DDL trên Supabase dùng chung.</dd>
+    </dl>
+  </div>
+
+  <div class="card">
+    <div class="head"><h3>4. Đưa dev lên Production (promote)</h3><span class="badge badge-accent">Cao</span></div>
+    <p class="muted">Lần promote gần nhất: <a href="https://github.com/DOS/Rate/pull/1443">PR #1443</a>. Hiện dev đi trước main 20 commit (giao diện sáng tối, sửa tiện ích #1476 và #1477, CSP bước 1 #1454, thứ tự trang sản phẩm #1475...).</p>
+    <dl>
+      <dt>Câu hỏi</dt><dd>Theo AGENTS.md mục 0.2, promote do agent chạy theo đợt; JOY chỉ được hỏi khi <code>promote.mjs</code> bị từ chối. Nếu đã bị từ chối: cho chạy đợt này không?</dd>
+      <dt>Phương án</dt><dd>(a) Duyệt promote; (b) giữ lại.</dd>
+      <dt>Khuyến nghị</dt><dd class="rec">(a), nếu bị hỏi. PO xác nhận giúp là có bị từ chối hay không.</dd>
+      <dt>Nếu chờ</dt><dd>Các bản sửa chưa tới người dùng rate.vn; bản tiện ích mới (mục 8) cũng chờ theo.</dd>
+      <dt>Chạm vào</dt><dd>Production rate.vn; không đụng DB.</dd>
+    </dl>
+  </div>
+
+  <div class="card">
+    <div class="head"><h3>5. DOS-Me M1+M2 và runbook Item model</h3><span class="badge badge-accent">Cao</span></div>
+    <p class="muted"><a href="https://github.com/DOS/Rate/issues/1150">#1150</a>, <a href="https://github.com/DOS/Rate/issues/1123">#1123</a> (M0), trang <code>Docs/Proposals/2026-10-29-item-model-go-live.html</code></p>
+    <dl>
+      <dt>Câu hỏi</dt><dd>Duyệt các quyết định 1-9 và xếp lịch M0, rồi M1+M2 qua DOS-Me?</dd>
+      <dt>Phương án</dt><dd>Core đề xuất: 1 <code>match_item</code> theo hãng; 2 Item chưa có đánh giá lưu 0; 3 giữ view tin cậy; 4 xét từng cảnh báo phiên bản lạ trước M3; 5 đặt tên <code>rate.variant_override</code>; 6 giữ trigger đồng bộ tới M4; 7 không thêm chốt chặn; 8 duyệt M0, gồm AirPods Pro 2 USB-C về <code>apple:airpods-pro-2</code>; 9 bắt buộc E2E Item model (129/132 đang xanh).</dd>
+      <dt>Khuyến nghị</dt><dd class="rec">Duyệt cả 9 như Core đề xuất. Code đã sẵn sàng.</dd>
+      <dt>Nếu chờ</dt><dd>Item model vẫn tắt: chưa có bộ chọn dung lượng, chưa có trang theo Item cho mục 2. Quy trình beta của DOS-Me cũng đang khoá (ROADMAP 6.4).</dd>
+      <dt>Chạm vào</dt><dd>DDL và dữ liệu trên Supabase dùng chung qua DOS-Me; quyết định 9 là thiết lập repo.</dd>
+    </dl>
+  </div>
+
+  <div class="card">
+    <div class="head"><h3>6. Một con số điểm cho mọi trang</h3><span class="badge badge-amber">Vừa</span></div>
+    <p class="muted"><a href="https://github.com/DOS/Rate/issues/1470">#1470</a>, <a href="https://github.com/DOS/Rate/pull/1478">PR #1478</a></p>
+    <dl>
+      <dt>Câu hỏi</dt><dd>Con số nào là điểm của sản phẩm ở mọi nơi; và PR #1478 (bảng so kè lấy điểm người mua, một chữ số thập phân) có được merge không?</dd>
+      <dt>Phương án</dt><dd>(1) Điểm người mua đã lưu ở mọi nơi: đơn giản, nhưng bỏ con số Bayesian mà #1144 đã chọn cho trang sản phẩm. (2) Điểm Bayesian ở mọi nơi: cần lưu điểm ước tính (hoặc tổng trọng số) vào <code>master_products</code> qua hàm làm mới, một bước DOS-Me.</dd>
+      <dt>Khuyến nghị</dt><dd class="rec">Web: phương án (2). PR #1478 độc lập, merge được ngay.</dd>
+      <dt>Nếu chờ</dt><dd>iPhone 16 128GB hiện 4.8 ở trang sản phẩm, 5.0 ở các chỗ khác. Gây khó hiểu, không sai dữ liệu.</dd>
+      <dt>Chạm vào</dt><dd>Web; phương án (2) cần migration DOS-Me.</dd>
+    </dl>
+  </div>
+
+  <div class="card">
+    <div class="head"><h3>7. Sáu sản phẩm đã ngừng bán</h3><span class="badge badge-amber">Vừa</span></div>
+    <p class="muted">Nguồn: Rate-Services#733 (repo riêng tư, đã đóng). Chưa có issue trong DOS/Rate.</p>
+    <dl>
+      <dt>Câu hỏi</dt><dd>Làm gì với sáu trang đang công khai mà các chuỗi đã ngừng bán: S24 Ultra, Watch Ultra 2, iPhone 16e, iPhone 16 Pro Max, MacBook Pro M4 Pro 14, Buds3 Pro?</dd>
+      <dt>Phương án</dt><dd>(a) Giữ nguyên; (b) đánh dấu "đời trước"; (c) thêm đời hiện tại (trùng mục 2).</dd>
+      <dt>Khuyến nghị</dt><dd class="rec">Chưa có. Web gợi ý (b) kèm (c): trang đã có trạng thái "Ngừng kinh doanh tại Việt Nam" (#1204).</dd>
+      <dt>Nếu chờ</dt><dd>Sáu trong 16 trang đang công khai chỉ có 1-3 shop, trông cũ.</dd>
+      <dt>Chạm vào</dt><dd>Có thể đổi trạng thái dữ liệu Production; không DDL.</dd>
+    </dl>
+  </div>
+
+  <div class="card">
+    <div class="head"><h3>8. Đăng bản tiện ích mới lên Chrome Web Store</h3><span class="badge badge-amber">Vừa</span></div>
+    <p class="muted">Checklist <a href="https://github.com/DOS/Rate/pull/1468">PR #1468</a> (<code>apps/extension/RELEASE.md</code>), sửa lỗi <a href="https://github.com/DOS/Rate/issues/1465">#1465</a>, <a href="https://github.com/DOS/Rate/issues/1466">#1466</a></p>
+    <dl>
+      <dt>Câu hỏi</dt><dd>Đăng bản mới ngay chứ? Việc đăng nhập cửa hàng chỉ JOY làm được.</dd>
+      <dt>Phương án</dt><dd>(a) Nâng phiên bản (manifest đang <code>2.0.0</code>, ví dụ lên <code>2.1.0</code>), build, thử, cập nhật mô tả, tải lên; (b) chờ.</dd>
+      <dt>Khuyến nghị</dt><dd class="rec">(a) sau đợt promote ở mục 4, vì #1476 và #1477 mới có trên dev.</dd>
+      <dt>Nếu chờ</dt><dd>Người dùng cửa hàng vẫn ở bản 2.0.0 (14/10): chưa đa ngôn ngữ, chưa xử lý lỗi 429, chưa sửa lỗi điểm rủi ro 0.</dd>
+      <dt>Chạm vào</dt><dd>Trang cửa hàng công khai.</dd>
+    </dl>
+  </div>
+
+  <div class="card">
+    <div class="head"><h3>9. CSP, quyết định 1-4</h3><span class="badge badge-amber">Vừa</span></div>
+    <p class="muted"><a href="https://github.com/DOS/Rate/issues/1323">#1323</a>, <a href="https://github.com/DOS/Rate/issues/1348">#1348</a>, trang <code>Docs/Proposals/2026-10-30-csp-enforce-options.html</code>. Bước 1 (#1454) đã ở dev.</p>
+    <dl>
+      <dt>Câu hỏi</dt><dd>Bật chế độ chặn cho <code>script-src</code> thế nào, khi trang ISR không mang được nonce?</dd>
+      <dt>Phương án</dt><dd>1 tạm chấp nhận <code>'unsafe-inline'</code> trong chính sách chặn; 2 hoãn render theo từng request cho tới khi #1344 render nguội dưới 2 giây; 3 chính sách chỉ báo cáo, chặt, cho trang động hay cho mọi trang; 4 giữ log Vercel 12 giờ hay thêm log drain (tốn phí).</dd>
+      <dt>Khuyến nghị</dt><dd class="rec">Core: có cho 1, 2 và 3; 4 tuỳ JOY.</dd>
+      <dt>Nếu chờ</dt><dd>CSP vẫn chỉ báo cáo; người dùng không bị ảnh hưởng, nhưng chưa chặn được script lạ chèn vào.</dd>
+      <dt>Chạm vào</dt><dd>Header của web Production; mục 4 là chi phí hạ tầng.</dd>
+    </dl>
+  </div>
+
+  <div class="card">
+    <div class="head"><h3>10. Backfill 5G</h3><span class="badge badge-blue">Thấp-vừa</span></div>
+    <p class="muted"><a href="https://github.com/DOS/Rate/issues/1196">#1196</a> (đã đóng), <a href="https://github.com/DOS/Rate/pull/1207">PR #1207</a></p>
+    <dl>
+      <dt>Câu hỏi</dt><dd>Cho đặt <code>has_5g = NULL</code> trên các sản phẩm do importer tạo mà chưa từng biết có 5G hay không?</dd>
+      <dt>Phương án</dt><dd>(a) Đếm chỉ đọc, rồi ghi cho các dòng <code>spec_source</code> là <code>crawled_title</code> hoặc <code>ai_unverified</code> và không có trong registry; kèm sửa 6 giá trị lẫn ngôn ngữ. (b) Để nguyên dòng cũ.</dd>
+      <dt>Khuyến nghị</dt><dd class="rec">Core: (a), sau khi có số đếm.</dd>
+      <dt>Nếu chờ</dt><dd>Một số trang cũ vẫn ghi "4G LTE" hoặc "Không" khi thực ra chưa biết.</dd>
+      <dt>Chạm vào</dt><dd>Ghi dữ liệu Production, không DDL.</dd>
+    </dl>
+  </div>
+
+  <div class="card">
+    <div class="head"><h3>11. Các việc DB nhỏ</h3><span class="badge badge-blue">Thấp-vừa</span></div>
+    <ul>
+      <li><a href="https://github.com/DOS/Rate/issues/1306">#1306</a> trigger phiếu bầu: duyệt migration DOS-Me thêm bảng chỉ ghi thêm <code>rate.review_vote_actions</code>, để chốt chặn đếm theo hành động. Core đề xuất có. DDL. Nếu chờ: một người có thể bấm phiếu liên tục làm DB tải nặng.</li>
+      <li><a href="https://github.com/DOS/Rate/issues/1353">#1353</a>: người có quyền DB chạy các lệnh <code>EXPLAIN (ANALYZE, BUFFERS)</code> chỉ đọc mà Core đã soạn (API trang sản phẩm 2,5-4,4 giây). Nếu chờ: chưa biết vì sao chậm, kéo theo #1344 và CSP phương án 2.</li>
+      <li><a href="https://github.com/DOS/Rate/issues/1247">#1247</a> giới hạn nhận dữ liệu theo mạng: hàm trong DB hay KV dùng chung (thêm nhà cung cấp và secret). Chưa có khuyến nghị. Nếu chờ: một máy có thể lấp đầy hàng đợi 120 lượt mỗi phút.</li>
+      <li><a href="https://github.com/DOS/Rate/issues/1143">#1143</a> điểm tiêu chí tự suy ra (dồn về 5.00): issue chưa ghi câu hỏi cho JOY; nhiều khả năng là có ẩn tiêu chí chưa đo được hay không. PO xác nhận giúp.</li>
+      <li><a href="https://github.com/DOS/Rate/issues/1173">#1173</a>: người có quyền Production chạy vài lệnh SELECT chỉ đọc về quyền trên <code>review_votes</code> và hai hàm làm mới, để kiểm tra có cấp quyền thừa không.</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <div class="head"><h3>12. Báo lỗi lên repo Next.js</h3><span class="badge badge-blue">Thấp</span></div>
+    <p class="muted"><a href="https://github.com/DOS/Rate/issues/1373">#1373</a> (bản nháp trong bình luận), <a href="https://github.com/DOS/Rate/issues/1463">#1463</a> (nguyên nhân gốc)</p>
+    <dl>
+      <dt>Câu hỏi</dt><dd>Cho agent đăng bản nháp lên repo công khai vercel/next.js không?</dd>
+      <dt>Phương án</dt><dd>Đăng hoặc không. Về phía sản phẩm: A trang 404 tiếng Việt tĩnh cho đường dẫn lạ (có HTML, nhưng khách en và cs cũng thấy tiếng Việt); B để nguyên (PO đã chọn B cho #1373).</dd>
+      <dt>Khuyến nghị</dt><dd class="rec">Web: không cần đổi app; đăng hay không là việc JOY quyết.</dd>
+      <dt>Nếu chờ</dt><dd>Không gấp: mã 404 và <code>noindex</code> đều đúng, chỉ HTML khi tắt JavaScript bị trống.</dd>
+      <dt>Chạm vào</dt><dd>Bài đăng công khai trên repo bên thứ ba, dưới tên tổ chức.</dd>
+    </dl>
+  </div>
+
+  <div class="card">
+    <div class="head"><h3>13. Plugin cc-po</h3><span class="badge badge-blue">Thấp</span></div>
+    <dl>
+      <dt>Câu hỏi</dt><dd>Chưa tìm thấy câu hỏi ghi lại trong DOS/Rate. Nhiều khả năng: Rate có chuyển skill PO và task-claim sang bản cc-po công khai (chạy <code>cc-po:setup</code> để tạo <code>docs/product-owner-config.md</code>) như Second-Spawn đang làm không?</dd>
+      <dt>Khuyến nghị</dt><dd class="rec">PO nêu rõ câu hỏi; Web chưa có khuyến nghị.</dd>
+      <dt>Nếu chờ</dt><dd>Các phiên Rate có hai bản skill PO (bản trong repo và bản <code>cc-po:*</code> cài cho tổ chức), dễ lệch nhau.</dd>
+      <dt>Chạm vào</dt><dd>Chỉ công cụ làm việc, không ảnh hưởng sản phẩm.</dd>
+    </dl>
+  </div>
+
+  <p class="muted">Ghi chú: các mục 4, 7, 11 (#1143) và 13 có chỗ chưa rõ trên GitHub; đã ghi rõ ở từng mục thay vì đoán.</p>
+</div>
+</body>
+</html>
