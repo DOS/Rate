@@ -16,9 +16,18 @@ export default function BackToTop() {
   };
 
   useEffect(() => {
-    // Only the visibility flips, so most scroll events change no state.
-    const handlerScroll = () => setScroll(window.scrollY > 50);
-    handlerScroll();
+    // Shown only while the buyer scrolls back up from more than a screen
+    // down, so it does not sit on the content they are reading on the way
+    // down (DOS/Rate#1487). Only the visibility flips, so most scroll
+    // events change no state.
+    let lastY = window.scrollY;
+    const handlerScroll = () => {
+      const y = window.scrollY;
+      if (y <= window.innerHeight) setScroll(false);
+      else if (y < lastY) setScroll(true);
+      else if (y > lastY) setScroll(false);
+      lastY = y;
+    };
     window.addEventListener('scroll', handlerScroll, { passive: true });
     return () => {
       window.removeEventListener('scroll', handlerScroll);
