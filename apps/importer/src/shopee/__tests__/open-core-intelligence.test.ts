@@ -1133,6 +1133,35 @@ async function runSuite() {
   assert.equal(detectCategorySlug('Galaxy Buds 3 Pro tặng ốp'), 'earbuds');
   assert.equal(detectCategorySlug('Laptop Asus Vivobook 14 tặng chuột'), 'laptops');
   assert.equal(detectCategorySlug('Sale sốc tặng quà Galaxy Watch 7'), 'smartwatches');
+  // Only the gifted product's phrase is dropped: a size before or after it, or after "+
+  // Cellular", is the product's own (DOS/Rate#1422).
+  for (const [title, key] of [
+    [
+      'Apple Watch Series 10 Nhôm GPS + Cellular 42mm | Tặng ốp iPhone',
+      'apple:watch-series-10-42mm:64gb',
+    ],
+    [
+      'Apple Watch Series 10 GPS + Cellular 46mm tặng ốp iPhone 16',
+      'apple:watch-series-10-46mm:64gb',
+    ],
+    [
+      'Apple Watch Series 10 GPS +Cellular 46mm tặng ốp iPhone 16',
+      'apple:watch-series-10-46mm:64gb',
+    ],
+    ['Apple Watch Series 10 [Tặng ốp iPhone] 46mm', 'apple:watch-series-10-46mm:64gb'],
+    ['Apple Watch SE 2 GPS + Cellular 44mm tặng AirPods 4', 'apple:watch-se-2-44mm:unknown'],
+    ['MacBook Air M3 (Tặng AirPods) 15 inch 8GB 256GB', 'apple:macbook-air-m3-15:256gb'],
+    ['MacBook Air M3 2024 - Tặng AirPods 4 - 15 inch 16GB 512GB', 'apple:macbook-air-m3-15:512gb'],
+    ['MacBook Air M3 kèm sạc 15 inch tặng AirPods', 'apple:macbook-air-m3-15:unknown'],
+    ['iPad Pro M4 (Tặng Apple Pencil Pro) 11 inch Wi-Fi 256GB', 'apple:ipad-pro-m4-11:256gb'],
+    ['iPad Air M2 Wi-Fi + Cellular 13 inch tặng Apple Pencil Pro', 'apple:ipad-air-m2-13:unknown'],
+    ['iPad Pro M4 Wi-Fi 256GB kèm bút 13 inch tặng AirPods', 'apple:ipad-pro-m4-13:256gb'],
+    // A "+" written for "Plus" keeps it.
+    ['Galaxy S24 + 256GB', 'samsung:galaxy-s24-plus:256gb'],
+    ['Redmi Note 13 Pro +5G', 'xiaomi:redmi-note-13-pro-plus:unknown'],
+  ] as const)
+    assert.equal(keyOf(title), key, title);
+  assert.equal(detectCategorySlug('Galaxy S24 + tặng Galaxy Buds 3'), 'smartphones');
   // The cut stays linear on a long run of separators.
   const cutStart = Date.now();
   detectCategorySlug(`Apple Watch Series 10 46mm${','.repeat(64_000)}x`);

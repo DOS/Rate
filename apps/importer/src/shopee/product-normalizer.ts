@@ -277,23 +277,35 @@ function ownProductPart(title: string): string {
   const block = /^\s*(?:\[[^\]]*\]|\([^)]*\)|【[^】]*】)/u.exec(composed)?.[0].length ?? 0;
   const lead =
     block > 0 && APPLE_FAMILIES.some(([family]) => family.test(composed.slice(block))) ? block : 0;
-  // A "+" with a space before or after it is a bundle ("+ Apple Watch", " +Apple Watch");
-  // one glued on both sides is part of a name ("iPhone 15+128GB") (DOS/Rate#1422).
-  const found = composed
-    .slice(lead)
-    .search(/(?<![\p{L}\d])(?:tặng|kèm)(?![\p{L}\d])| ?\+ | \+(?=\p{L})/iu);
+  const found = composed.slice(lead).search(GIFT_CUT);
   const at = found < 0 ? -1 : lead + found;
   return at > 0 ? composed.slice(0, at) : composed;
 }
 
 /**
- * Phone brands and lines with no category pattern of their own: an own part that names one
- * and no other category is a phone, so "Samsung Galaxy S25 tặng tai nghe Galaxy Buds 3" is
- * not earbuds (DOS/Rate#1422). Watches, earbuds, tablets and laptops of these brands match
- * their category first.
+ * Phone brands: an own part that names one and no category of its own keeps the phone
+ * default, so "Samsung Galaxy S25 tặng tai nghe Galaxy Buds 3" is not earbuds
+ * (DOS/Rate#1422). A line of these brands with a category pattern ("Galaxy Watch",
+ * "Galaxy Buds", "Galaxy Tab") matches it first; one with none ("Redmi Watch", "Galaxy
+ * Book") falls to the phone default, as it does with no gift.
  */
 const PHONE_BRAND_RE =
   /\b(?:samsung|galaxy|xiaomi|redmi|poco|oppo|vivo(?!\s*book)|realme|pixel|oneplus|honor|xperia|nokia|motorola|tecno|infinix)\b/i;
+
+/**
+ * Where a gift or bundle starts: "tặng" / "kèm" as words, a "+" with spaces round it, or a
+ * " +" right before a letter ("HomePod mini +Apple Watch"). A "+" glued on both sides is
+ * part of a name ("iPhone 15+128GB"), and "+ Cellular" / "+ LTE" / "+ 5 năm" belong to the
+ * product, as in OWN_PART_END (DOS/Rate#1407, #1422).
+ */
+const GIFT_CUT =
+  /(?<![\p{L}\d])(?:tặng|kèm)(?![\p{L}\d])| ?\+ (?!cellular|lte|năm(?![\p{L}\d]))| \+(?!cellular|lte)(?=\p{L})/iu;
+
+/** The same markers, every one, to find the last before a gifted product (DOS/Rate#1422). */
+const GIFT_CUT_ALL = new RegExp(GIFT_CUT.source, 'giu');
+
+/** Where a gift phrase ends: a closing bracket, a " - " or "|" separator, or a comma. */
+const GIFT_PHRASE_END = /[)\]】,|]| [-–] /u;
 
 /** True when the text names an Apple family other than `line` (DOS/Rate#1407). */
 function namesAppleFamilyOtherThan(text: string, line: string): boolean {
@@ -1425,11 +1437,26 @@ function readAppleSize(model: string, rawTitle: string): string {
   // no accessory with a size of its own and keep it (DOS/Rate#1263).
   let productPart = title.slice(Math.max(0, at));
   // A gifted or bundled Apple product is not this one, and nor is its size: "MacBook Air
-  // M3 tặng ốp iPhone 15" has no 15 inch screen (DOS/Rate#1422).
-  const ownBeforeGift = ownProductPart(productPart);
+  // M3 tặng ốp iPhone 15" has no 15 inch screen. Only that gift's phrase goes, from the
+  // last marker before the other product to the phrase's end, so a size before or after
+  // it stays: "Watch Series 10 GPS + Cellular 42mm | Tặng ốp iPhone", "MacBook Air M3
+  // (Tặng AirPods) 15 inch" (DOS/Rate#1422).
   const familyName = family === 'ipad' ? 'iPad' : family === 'watch' ? 'Watch' : 'MacBook';
-  if (namesAppleFamilyOtherThan(productPart.slice(ownBeforeGift.length), familyName))
-    productPart = ownBeforeGift;
+  for (let guard = 0; guard < 4; guard++) {
+    let otherAt = -1;
+    for (const [pattern, name] of APPLE_FAMILIES) {
+      if (name === familyName) continue;
+      const found = productPart.search(pattern);
+      if (found > 0 && (otherAt < 0 || found < otherAt)) otherAt = found;
+    }
+    if (otherAt < 0) break;
+    const markers = Array.from(productPart.slice(0, otherAt).matchAll(GIFT_CUT_ALL));
+    const start = markers.length > 0 ? markers[markers.length - 1]!.index! : -1;
+    if (start <= 0) break;
+    const end = productPart.slice(otherAt).search(GIFT_PHRASE_END);
+    productPart =
+      productPart.slice(0, start) + (end < 0 ? '' : ' ' + productPart.slice(otherAt + end));
+  }
   const giftSizes = new Set<string>();
   const stripGift = (scope: string, noun: RegExp, sizes = new Set<string>()) =>
     scope.replace(GIFTED_ACCESSORY_SIZE, (m, word: string, words: string) => {
