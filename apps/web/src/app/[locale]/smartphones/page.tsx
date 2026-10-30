@@ -48,6 +48,7 @@ import { applyCategorySpecTemplate } from '@repo/shared-data/rules';
 import ClientMessages from '@/components/providers/ClientMessages';
 import CatalogSortDropdown from '../components/catalog-sort-dropdown';
 import { productImageUrl } from '@/lib/rate-domain-core';
+import { versusHref } from '@/lib/item-compare';
 
 // Reads searchParams, so it renders per request. The [locale] layout's
 // generateStaticParams would otherwise make it static, and the searchParams
@@ -664,7 +665,7 @@ export async function CategoryCatalogContent({
                       )}
                       {products.length >= 2 && products[0] && products[1] && (
                         <Link
-                          href={`/compare/${products[0].slug}-vs-${products[1].slug}`}
+                          href={versusHref(products[0].slug, products[1].slug)}
                           className="rate-results-link"
                         >
                           <BsArrowLeftRight aria-hidden="true" />

@@ -112,6 +112,7 @@ import {
   usableImageUrls,
   productImageUrl,
 } from '@/lib/rate-domain-core';
+import { versusHref } from '@/lib/item-compare';
 
 // Cached after the first request, refreshed every 5 minutes or when the
 // worker revalidates its cache tags (DOS/Rate#491).
@@ -1593,7 +1594,7 @@ export async function ProductDetailView({
 
                         <div className="d-flex mt-auto gap-2">
                           <Link
-                            href={`/compare/${product.slug}-vs-${peer.slug}`}
+                            href={versusHref(product.slug, peer.slug)}
                             className="btn btn-sm btn-outline-primary rounded-pill fw-semibold flex-grow-1"
                           >
                             {t('compare1v1Btn')}
