@@ -15,25 +15,28 @@ type Kind = 'html' | 'js' | 'css' | 'prefetch';
 type Budget = Record<Kind, number>;
 
 const KB = 1024;
-// Measured on CI on 2026-10-30 (E2E job, PR #1497): JS / CSS KB.
-// home 320.3 / 43.5; category 338.8 / 45.4; product 352.1 / 43.5;
-// merchant 313.7 / 43.5.
+// Measured on CI on 2026-10-30 (E2E job, PR #1497), KB of HTML / JS / CSS /
+// prefetch: home 39.5 / 320.3 / 43.5 / 0; category 39.9 / 338.8 / 45.4 /
+// 6.3-7.9; product 50.8 / 352.1 / 43.5 / 1.7-5.7; merchant 29.9 / 313.7 /
+// 43.5 / 3.4. Budgets add about 10%. How many links a page prefetches on
+// its own depends on timing, so prefetch takes the highest run plus 25%, at
+// least 4 KB: a full page prefetched on sight is tens of KB.
 const PAGES: Record<string, { path: string; budget: Budget }> = {
   home: {
     path: '/',
-    budget: { html: 1, js: 353 * KB, css: 48 * KB, prefetch: 1 },
+    budget: { html: 44 * KB, js: 353 * KB, css: 48 * KB, prefetch: 4 * KB },
   },
   category: {
     path: '/smartphones',
-    budget: { html: 1, js: 373 * KB, css: 50 * KB, prefetch: 1 },
+    budget: { html: 44 * KB, js: 373 * KB, css: 50 * KB, prefetch: 10 * KB },
   },
   product: {
     path: '/smartphones/iphone-16-pro-max-256gb',
-    budget: { html: 1, js: 388 * KB, css: 48 * KB, prefetch: 1 },
+    budget: { html: 56 * KB, js: 388 * KB, css: 48 * KB, prefetch: 8 * KB },
   },
   merchant: {
     path: '/merchants/11111111-1111-4111-8111-111111111111',
-    budget: { html: 1, js: 346 * KB, css: 48 * KB, prefetch: 1 },
+    budget: { html: 33 * KB, js: 346 * KB, css: 48 * KB, prefetch: 5 * KB },
   },
 };
 
