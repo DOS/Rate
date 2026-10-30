@@ -316,6 +316,81 @@ function main() {
     { kind: 'redirect', to: '/compare/apple-iphone-16-vs-samsung-galaxy-s24' }
   );
 
+  // An Item slug with capitals: the URL is read lower-cased and looked up
+  // as typed, and a redirect for case alone never happens, so the chain
+  // always ends on a page (DOS/Rate#1383).
+  const capsItem = {
+    id: 'item-caps',
+    slug: 'A-phone',
+    default_variant_id: 'v-caps',
+  };
+  const capsVariant = {
+    id: 'v-caps',
+    slug: 'a-phone',
+    variant_key: 'standard',
+  };
+  const zItem: CompareResolution = {
+    kind: 'item',
+    item: { id: 'item-z', slug: 'z-phone', default_variant_id: null },
+    variants: [{ id: 'vz', slug: 'z-phone-std', variant_key: 'standard' }],
+  };
+  // The catalogue lookup is exact, as resolveCatalogSlug's `.eq('slug')`.
+  const lookup1383 = (slug: string): CompareResolution | null =>
+    slug === 'A-phone'
+      ? { kind: 'item', item: capsItem, variants: [capsVariant] }
+      : slug === 'a-phone'
+        ? {
+            kind: 'variant',
+            item: capsItem,
+            variant: capsVariant,
+            variants: [capsVariant],
+            retired: false,
+          }
+        : slug === 'z-phone'
+          ? zItem
+          : null;
+  // The page: lower-cased parse, then the slugs as typed, then lower-cased.
+  const follow1383 = (start: string, typedFirst = true) => {
+    let path = start;
+    for (let hop = 0; hop < 5; hop++) {
+      const raw = path.replace(/^\/compare\//, '');
+      const asTyped = raw.split('-vs-') as [string, string];
+      const lower = raw.toLowerCase().split('-vs-') as [string, string];
+      const planFor = ([a, b]: [string, string]) =>
+        planVersusRoute(
+          { slug: a, resolution: lookup1383(a) },
+          { slug: b, resolution: lookup1383(b) }
+        );
+      let plan = planFor(typedFirst ? asTyped : lower);
+      if (plan.kind === 'not_found') plan = planFor(lower);
+      if (plan.kind !== 'redirect') return { plan, hops: hop };
+      path = plan.to;
+    }
+    throw new Error(`redirect loop from ${start}`);
+  };
+  for (const start of [
+    '/compare/A-phone-vs-z-phone',
+    '/compare/a-phone-vs-z-phone',
+    '/compare/z-phone-vs-a-phone',
+    '/compare/z-phone-vs-A-phone',
+  ]) {
+    const { plan, hops } = follow1383(start);
+    assert.equal(plan.kind, 'render', start);
+    assert.ok(hops <= 1, `${start} needs at most one hop`);
+  }
+  // Even read lower-cased only (the page before #1383), case alone no longer
+  // redirects, so the old loop is gone.
+  assert.equal(
+    follow1383('/compare/A-phone-vs-z-phone', false).plan.kind,
+    'render'
+  );
+  assert.deepEqual(follow1383('/compare/A-phone-vs-z-phone').plan, {
+    kind: 'render',
+    slugA: 'a-phone',
+    slugB: 'z-phone-std',
+    canonical: '/compare/A-phone-vs-z-phone',
+  });
+
   // A restored tray product reads its Item from the product API (#1294).
   assert.equal(
     itemSlugFromProductAnswer(

@@ -37,16 +37,39 @@ interface VersusPageProps {
   params: Promise<{ locale: string; versus: string }>;
 }
 
-export function parseVersusSlugs(rawVersus: string): [string, string] | null {
-  const cleaned = decodeURIComponent(rawVersus || '')
-    .toLowerCase()
-    .trim();
+/**
+ * The two slugs of a versus URL, lower-cased, or with their case kept for the
+ * catalogue lookup (Item slugs are matched exactly, DOS/Rate#1383).
+ */
+export function parseVersusSlugs(
+  rawVersus: string,
+  keepCase = false
+): [string, string] | null {
+  const decoded = decodeURIComponent(rawVersus || '').trim();
+  const cleaned = keepCase ? decoded : decoded.toLowerCase();
   const parts = cleaned.split('-vs-');
   if (parts.length !== 2) return null;
   const slugA = parts[0]?.trim() || '';
   const slugB = parts[1]?.trim() || '';
   if (!slugA || !slugB || slugA === slugB) return null;
   return [slugA, slugB];
+}
+
+/**
+ * The Item route's plan for a versus URL. The Item lookup is exact, so the
+ * slugs are tried as typed first (an Item slug with capitals), then
+ * lower-cased (a capitalised alias of a lower-case slug) (DOS/Rate#1383).
+ */
+async function resolveVersusPlanAnyCase(
+  versus: string,
+  parsed: [string, string]
+): ReturnType<typeof resolveVersusPlan> {
+  const asTyped = parseVersusSlugs(versus, true);
+  if (asTyped && (asTyped[0] !== parsed[0] || asTyped[1] !== parsed[1])) {
+    const plan = await resolveVersusPlan(asTyped[0], asTyped[1]);
+    if (plan?.kind !== 'not_found') return plan;
+  }
+  return resolveVersusPlan(parsed[0], parsed[1]);
 }
 
 export async function generateMetadata({
@@ -70,7 +93,7 @@ export async function generateMetadata({
   }
 
   // RATE_ITEM_MODEL on: the Item pair is the page (DOS/Rate#1156).
-  const plan = await resolveVersusPlan(parsed[0], parsed[1]);
+  const plan = await resolveVersusPlanAnyCase(versus, parsed);
   if (plan && plan.kind !== 'render') {
     return notFoundMeta();
   }
@@ -131,7 +154,7 @@ export default async function VersusComparePage({ params }: VersusPageProps) {
   // RATE_ITEM_MODEL on: versus URLs name Items, an old variant pair 308s to
   // its Item pair and a same-Item pair is no versus (DOS/Rate#1156); off:
   // null, and the page is as before.
-  const plan = await resolveVersusPlan(parsed[0], parsed[1]);
+  const plan = await resolveVersusPlanAnyCase(versus, parsed);
   if (plan?.kind === 'redirect') permanentRedirect(plan.to);
   if (plan?.kind === 'not_found') notFound();
   // One URL per pair, its slugs sorted: the other order, letter case or

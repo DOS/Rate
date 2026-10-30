@@ -245,6 +245,32 @@ async function main() {
     }).kind,
     'render'
   );
+  // An Item slug with capitals on the product route: the old variant URL
+  // 308s to the Item URL, which renders, so there is no loop (#1383).
+  const capsItem = { ...item, slug: 'Apple-iPhone-16' } as never;
+  assert.deepEqual(
+    planItemRoute({
+      ...base,
+      resolution: {
+        kind: 'variant',
+        item: capsItem,
+        variant: variants[0]!,
+        retired: false,
+      },
+      requestedSlug: 'apple-iphone-16-128gb',
+      requestedVariant: null,
+    }),
+    { kind: 'redirect', to: '/smartphones/Apple-iPhone-16?v=128gb' }
+  );
+  assert.equal(
+    planItemRoute({
+      ...base,
+      resolution: { kind: 'item', item: capsItem, variant: null },
+      requestedSlug: 'Apple-iPhone-16',
+      requestedVariant: null,
+    }).kind,
+    'render'
+  );
   const render = (v: string | null, vs = variants) =>
     planItemRoute({
       ...base,
