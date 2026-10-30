@@ -1637,18 +1637,6 @@ export default function JReviewsSection({
                           ),
                         })}
                       </span>
-                      {/* The 6-axis trust model is a separate estimate with its
-                          own weight, so it gets its own labelled badge rather
-                          than explaining the rating weight (DOS/Rate#596). */}
-                      <span
-                        className="badge rounded-pill small bg-light text-muted border"
-                        title={weightExplanation}
-                        data-testid="review-6axis-breakdown"
-                      >
-                        {t('trustModelBadge', {
-                          explanation: weightExplanation,
-                        })}
-                      </span>
                     </div>
 
                     {rev.variation && (
@@ -1699,6 +1687,21 @@ export default function JReviewsSection({
                         <AnalyzerText text={rev.reason} />
                       </div>
                     )}
+
+                    {/* The 6-factor model's estimate is a reference, not the
+                        weight the rating uses, so it is folded and says so;
+                        the card shows one weight (DOS/Rate#1471, #596). */}
+                    <details className="small text-secondary mb-2">
+                      <summary>{t('weightWhySummary')}</summary>
+                      <p
+                        className="mb-0 mt-1"
+                        data-testid="review-6axis-breakdown"
+                      >
+                        {t('trustModelBadge', {
+                          explanation: weightExplanation,
+                        })}
+                      </p>
+                    </details>
                   </div>
 
                   {/* Bottom Row: JReviews Vote Bar (Helpful Up / Down / Report) */}

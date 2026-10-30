@@ -329,6 +329,7 @@ function main() {
     'ratingWeightBadge',
     'ratingWeightTitle',
     'trustModelBadge',
+    'weightWhySummary',
     'weightExplanationShippingOnly',
     'weightExplanationFiller',
     'weightExplanationSabotage',
