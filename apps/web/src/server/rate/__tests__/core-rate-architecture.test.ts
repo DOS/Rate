@@ -890,6 +890,23 @@ async function runCoreArchitectureSuite() {
       compareWorkspaceSrc.includes('popularBattles'),
     'CompareWorkspace must include 1-click Markdown Audit export and Popular 1v1 Battles Hub'
   );
+  // The versus page scores the pair in its hero, so its workspace shows the
+  // matrix first, then the picker and other pairs, and no second summary
+  // (DOS/Rate#1473).
+  assert.ok(versusPageSrc1367.includes('layout="versus"'));
+  const versusLayout = compareWorkspaceSrc.slice(
+    compareWorkspaceSrc.indexOf("if (layout === 'versus')")
+  );
+  const versusReturn = versusLayout.slice(0, versusLayout.indexOf('  }'));
+  assert.ok(
+    versusReturn.indexOf('{matrixBlock}') > 0 &&
+      versusReturn.indexOf('{matrixBlock}') <
+        versusReturn.indexOf('{controlsBlock}') &&
+      versusReturn.indexOf('{controlsBlock}') <
+        versusReturn.indexOf('{popularBlock}') &&
+      !versusReturn.includes('{summaryBlock}'),
+    'versus: matrix, then picker, then popular pairs, no second summary'
+  );
   const sitemapSrc = fs.readFileSync(
     path.join(repoRoot, 'apps/web/src/app/sitemap.ts'),
     'utf8'
