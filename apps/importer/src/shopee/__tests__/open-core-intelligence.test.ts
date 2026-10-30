@@ -1067,6 +1067,8 @@ async function runSuite() {
     ['Samsung 256GB Galaxy S24 Ultra tặng ốp lưng', 'samsung:galaxy-s24-ultra:256gb'],
     ['JBL | Flip 6 tặng dây', 'jbl:flip-6:unknown'],
     ['Garmin GPSMAP 67', 'garmin:gpsmap-67:unknown'],
+    ['Garmin GPSMAP 67 Máy định vị cầm tay', 'garmin:gpsmap-67:unknown'],
+    ['Samsung Galaxy S24 + Plus 256GB', 'samsung:galaxy-s24-plus:256gb'],
     ['Samsung (Hàng chính hãng) Galaxy A55 256GB', 'samsung:galaxy-a55:256gb'],
     ['Samsung 256GB', 'samsung:unkeyed:256gb'],
   ] as const) {
