@@ -97,20 +97,26 @@
     <li><b>Bản deploy hiện tại</b> (từ 05:43): chỉ trang ISR bị báo: trang chủ 219, <code>/merchants/[id]</code> 76, trang sản phẩm 66, <code>/contact-us</code> 27. Khung này ngắn (13 phút), nhưng không có trang động nào.</li>
   </ul>
   <div class="card key">
-    <p><b>Ý nghĩa:</b> mọi báo cáo đến nay đều là script Next.js của chính Rate trên trang cache. Đó là dữ liệu trang dạng script inline (<code>self.__next_f.push</code>) và các chunk do nó nạp. Chưa thấy script của extension, bên thứ ba hay analytics nào, và không có vi phạm nào ngoài <code>script-src</code>. Nếu bật chặt ngay hôm nay, mọi trang ISR sẽ hỏng, ngoài ra không hỏng gì khác.</p>
+    <p><b>Ý nghĩa:</b> mọi URL bị chặn đều là chunk Next.js của chính trang đó (69 dòng <code>rate-*.vercel.app</code> đến từ trang mở trên địa chỉ deployment). Phần còn lại là script inline, nhiều khả năng là dữ liệu trang (<code>self.__next_f.push</code>), vì HTML trang ISR có 9 script inline và không có nonce.</p>
+    <p><b>Giới hạn của số liệu:</b></p>
+    <ul>
+      <li>Endpoint không lưu mẫu nội dung script, nên không đối chiếu được từng dòng "inline".</li>
+      <li>Endpoint chỉ giữ tối đa 200 khóa vi phạm khác nhau mỗi 10 phút trên mỗi instance, và khung đọc chỉ có 12 giờ. Vì vậy "0 vi phạm khác" nghĩa là không ghi nhận được, không phải chắc chắn không có.</li>
+      <li>Quan trọng nhất: với <code>'strict-dynamic'</code>, script do một script tin cậy chèn vào có thể tải từ host bất kỳ mà không bị báo. Nếu app có nạp host bên ngoài theo cách đó, chính sách hôm nay cho qua, nhưng phương án (c) sẽ chặn. Nên số liệu này chưa đủ chứng minh (c) an toàn; phải đo riêng chính sách (c) trước khi bật (xem bên dưới).</li>
+    </ul>
   </div>
 
   <h2>3. Ba phương án</h2>
 
   <h3>(a) Nonce ở mọi trang, render trang ISR theo từng request</h3>
   <dl>
-    <dt>Cách làm</dt><dd>Bỏ cache ISR ở các route trên, để mỗi lần trả trang đều có nonce riêng, rồi bật chặn chính sách chặt.</dd>
+    <dt>Cách làm</dt><dd>Chuyển các route trên sang render theo từng request, để mỗi lần trả trang đều có nonce riêng, rồi bật chặn chính sách chặt. Chỉ bỏ <code>revalidate</code> của trang là chưa đủ, vì layout <code>[locale]</code> đặt <code>revalidate = 86400</code>. Mỗi route cần gọi một API động (<code>headers()</code>, <code>connection()</code>) hoặc đặt <code>dynamic = 'force-dynamic'</code>, như các trang danh mục đang làm (#491).</dd>
     <dt>Mức bảo vệ</dt><dd>Mạnh nhất: không script inline nào chạy được nếu thiếu nonce.</dd>
     <dt>Chi phí (số đo từ #1344)</dt><dd>
       <ul>
         <li>Khi chưa có cache: trang sản phẩm mất <b>12,3 giây</b> mới có byte đầu tiên (TTFB), trong đó 7,1 giây là đọc dữ liệu. Trang cửa hàng mất <b>14,9 giây</b>. PR #1416 đã cho các lượt đọc chạy song song, nhưng chưa có số đo sau khi promote, và chưa đạt mục tiêu 2 giây.</li>
         <li>Khi đã có cache: trang ISR trả trong <b>0,2 đến 0,5 giây</b>. Trang động <code>/smartphones</code> (dữ liệu đã có cache) trả trong <b>0,6 đến 0,7 giây</b>. Cùng mạng đo, 3 request mỗi trang.</li>
-        <li>Với (a), mọi lượt xem trang sản phẩm, cửa hàng, so sánh đều thành một lần chạy function. Lượt nào rơi vào instance nguội hoặc dữ liệu hết hạn cache sẽ phải chờ vài giây, thứ mà ISR đang che đi. Chi phí function và tải Supabase tăng theo lượng truy cập, thay vì theo số trang.</li>
+        <li>Với (a), mọi lượt xem trang sản phẩm, cửa hàng, so sánh đều thành một lần chạy function và một lần render. Các lượt đọc dữ liệu vẫn đi qua cache dữ liệu dùng chung giữa các request (<code>withRateDataCache</code>), nên Supabase chỉ bị gọi khi cache dữ liệu hết hạn, không phải mỗi lượt xem. Nhưng thời gian chạy function tăng theo lượng truy cập, thay vì theo số trang. Lượt nào rơi vào instance nguội hoặc cache dữ liệu hết hạn sẽ phải chờ vài giây, thứ mà ISR đang che đi.</li>
       </ul>
     </dd>
     <dt>Kết luận</dt><dd>Chưa làm lúc này. Đổi một lớp bảo vệ (chưa thấy kẻ tấn công nào trong báo cáo) lấy một trang web chậm hơn mà người dùng cảm nhận được. Xem lại khi #1344 đưa thời gian render nguội xuống dưới 2 giây.</dd>
@@ -121,12 +127,12 @@
     <dt>Cách làm</dt><dd>Bật <code>experimental.sri</code> của Next.js (Next 16.4 hỗ trợ cả khi build bằng Turbopack) để mỗi chunk có thuộc tính <code>integrity</code>, rồi liệt kê hash trong chính sách. Hoặc tự giữ một danh sách hash.</dd>
     <dt>Cái gì hỏng</dt><dd>
       <ul>
-        <li><b>Dữ liệu trang inline.</b> Mỗi trang có vài script <code>self.__next_f.push(...)</code> chứa dữ liệu của chính trang đó. Nội dung khác nhau theo từng trang và từng lần render lại, nên không thể đưa hash của chúng vào header (proxy chạy trước khi trang render). Cũng không đưa được vào thẻ <code>&lt;meta&gt;</code>, vì các script này được gửi sau <code>&lt;head&gt;</code>.</li>
+        <li><b>Dữ liệu trang inline.</b> Mỗi trang có vài script <code>self.__next_f.push(...)</code> chứa dữ liệu của chính trang đó. Nội dung khác nhau theo từng trang và từng lần render lại, nên không thể đưa hash của chúng vào header (proxy chạy trước khi trang render). Về lý thuyết có thể đưa vào thẻ <code>&lt;meta&gt;</code>, vì thẻ này áp cho các script phía sau nó. Nhưng <code>&lt;head&gt;</code> được gửi trước khi biết nội dung dữ liệu trang, nên cần một quy trình riêng: giữ lại HTML sau mỗi lần render và render lại, tính hash các script inline, rồi ghi thẻ meta vào HTML trong cache. Next.js không có điểm móc (hook) cho việc này.</li>
         <li><b>Giữ <code>'unsafe-inline'</code> làm dự phòng cũng không được.</b> Khi đã có hash hoặc nonce trong <code>script-src</code>, trình duyệt bỏ qua <code>'unsafe-inline'</code>, nên các script dữ liệu trang vẫn bị chặn.</li>
         <li><b>Khớp script ngoài bằng hash</b> là tính năng CSP3, trình duyệt hỗ trợ chưa đều. Danh sách hash còn đổi theo mỗi lần build, phải sinh lại và đi đúng nhịp với deploy và rollback.</li>
       </ul>
     </dd>
-    <dt>Chi phí bảo trì</dt><dd>Thêm một bước build sinh danh sách hash, thêm test giữ nó khớp với chunk, mà vẫn không phủ được dữ liệu trang inline.</dd>
+    <dt>Chi phí bảo trì</dt><dd>Thêm một bước build sinh danh sách hash, thêm test giữ nó khớp với chunk, và thêm bước xử lý lại HTML cho dữ liệu trang inline.</dd>
     <dt>Kết luận</dt><dd>Không dùng được cho trang App Router. SRI có thể xem xét sau, chỉ để kiểm tra tính toàn vẹn của chunk.</dd>
   </dl>
 
@@ -134,7 +140,16 @@
   <dl>
     <dt>Cách làm</dt><dd>
       <ol>
-        <li>Chặn thật <code>script-src 'self' 'unsafe-inline'</code> trên mọi trang: không <code>'unsafe-eval'</code>, không host nào khác. Đặt trong thẻ <code>&lt;meta&gt;</code> có sẵn (<code>PAGE_META_CSP</code>), không đặt trong header, nên không đụng tới việc truyền nonce của #1345. Chính sách này chặn script từ host lạ (kiểu tấn công chèn script để lấy dữ liệu hay gặp nhất), <code>eval</code> và plugin. Nó không chặn script inline bị chèn vào trang. Áp vào 2392 báo cáo ở trên, nó sẽ sinh ra <b>0</b> vi phạm.</li>
+        <li><b>Đo trước.</b> Gửi chính sách dưới đây thành một chính sách chỉ báo cáo thứ hai, chạy song song với chính sách chặt, trong vài khung 12 giờ. Sau đó kiểm tra <code>/smartphones</code> vẫn mang nonce, vì Next.js đọc nonce từ header chỉ báo cáo và hai chính sách không được làm nó lẫn. Kiểm tra cả bản preview, nơi thanh công cụ Vercel tải script từ <code>vercel.live</code>.</li>
+        <li>Sau đó mới chặn thật <code>script-src 'self' 'unsafe-inline'</code> và <code>worker-src 'self' blob:</code> trên mọi trang: không <code>'unsafe-eval'</code>, không host nào khác.
+          <ul>
+            <li>Thiếu <code>worker-src</code> thì worker sẽ dùng <code>script-src</code>, và worker dạng <code>blob:</code> sẽ bị chặn, ví dụ Sentry Replay (<code>instrumentation-client.ts</code>) khi bật DSN.</li>
+            <li>Khi chạy <code>next dev</code> vẫn giữ <code>'unsafe-eval'</code> cho React Refresh, như <code>buildContentSecurityPolicy</code> đang làm.</li>
+            <li>Đặt trong thẻ <code>&lt;meta&gt;</code> có sẵn (<code>PAGE_META_CSP</code>), không đặt trong header, nên không đụng tới việc truyền nonce của #1345. Next.js không đọc nonce từ thẻ meta.</li>
+            <li>Chính sách này chặn script từ host lạ (kiểu tấn công chèn script để lấy dữ liệu hay gặp nhất), <code>eval</code> và plugin. Nó không chặn script inline bị chèn vào trang.</li>
+            <li>Không dòng nào trong 2392 báo cáo ở trên là vi phạm của chính sách này. Bước đo trước vẫn cần, vì lý do ở mục 2.</li>
+          </ul>
+        </li>
         <li>Giữ chính sách chặt có nonce ở chế độ chỉ báo cáo, để vẫn thấy nguồn script mới nếu có. Có thể chỉ gửi nó trên trang động, để khoảng 2400 dòng log mỗi 12 giờ từ trang ISR (đã biết lý do) không che mất tín hiệu mới.</li>
         <li>Khi #1344 làm render theo request đủ rẻ, chuyển dần từng route sang (a).</li>
       </ol>
@@ -145,7 +160,7 @@
 
   <h2>4. Khuyến nghị</h2>
   <ol>
-    <li><b>Làm (c) ngay:</b> thêm <code>script-src 'self' 'unsafe-inline'</code> vào chính sách <code>&lt;meta&gt;</code> đang chặn thật, kèm bài e2e "không vi phạm" trên các route chính. Giữ chính sách chặt có nonce ở chế độ chỉ báo cáo.</li>
+    <li><b>Làm (c) ngay:</b> chạy chính sách của nó ở chế độ chỉ báo cáo trước, trong vài khung 12 giờ. Sau đó thêm <code>script-src 'self' 'unsafe-inline'; worker-src 'self' blob:</code> vào chính sách <code>&lt;meta&gt;</code> đang chặn thật, kèm bài e2e "không vi phạm" trên các route chính. Giữ chính sách chặt có nonce ở chế độ chỉ báo cáo.</li>
     <li><b>Giữ (a) làm đích, chờ #1344:</b> chỉ chuyển một route sang render theo request khi trang nguội render dưới 2 giây. Bắt đầu từ các trang nhẹ: about-us, contact-us, developers.</li>
     <li><b>Bỏ (b)</b> làm hướng chặn. <code>experimental.sri</code> chỉ xem xét sau, để kiểm tra tính toàn vẹn của chunk.</li>
     <li><b>Thu hẹp #1348</b> thành bước 1. Giữ #1323 mở cho bước 2.</li>
@@ -155,7 +170,7 @@
   <div class="q"><strong>1. Script inline trên trang cache:</strong> tạm chấp nhận <code>'unsafe-inline'</code> trong chính sách chặn thật? Nghĩa là CSP chặn script từ host lạ và <code>eval</code>, nhưng không chặn script inline bị chèn. Lớp bảo vệ trước script inline bị chèn vẫn là việc React tự escape nội dung khi xuất HTML, như hiện nay. <span class="rec-line">Khuyến nghị: đồng ý.</span></div>
   <div class="q"><strong>2. Render theo request (a):</strong> hoãn đến khi #1344 dưới 2 giây, và chấp nhận chính sách chặt chỉ ở chế độ báo cáo trên trang ISR đến lúc đó? <span class="rec-line">Khuyến nghị: đồng ý.</span></div>
   <div class="q"><strong>3. Bớt nhiễu báo cáo:</strong> chỉ gửi chính sách chặt (chỉ báo cáo) trên trang động, để báo cáo chỉ còn nguồn script mới, không lặp lại lỗi ISR đã biết? Hay giữ trên mọi trang? <span class="rec-line">Khuyến nghị: chỉ trên trang động.</span></div>
-  <div class="q"><strong>4. Thời gian giữ log:</strong> gói Pro chỉ giữ log runtime khoảng 12 giờ, quá ngắn để đọc một "khung báo cáo sạch" nhiều ngày. Giữ nguyên (đọc theo từng khung 12 giờ) hay thêm log drain (đẩy log ra kho lưu trữ ngoài)? Log drain là quyết định hạ tầng và chi phí. <span class="rec-line">Khuyến nghị: giữ nguyên lúc này, đọc vài khung 12 giờ trước khi bật (c).</span></div>
+  <div class="q"><strong>4. Thời gian giữ log:</strong> gói Pro chỉ giữ log runtime khoảng 12 giờ, quá ngắn để đọc một "khung báo cáo sạch" nhiều ngày. Giữ nguyên (đọc theo từng khung 12 giờ) hay thêm log drain (đẩy log ra kho lưu trữ ngoài)? Log drain là quyết định hạ tầng và chi phí. <span class="rec-line">Khuyến nghị: giữ nguyên lúc này, đọc vài khung 12 giờ của bước đo trước khi bật (c).</span></div>
 </div>
 </body>
 </html>
