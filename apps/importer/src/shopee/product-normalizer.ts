@@ -1462,18 +1462,30 @@ const GLUED_COLOURS =
 const GLUED_COLOUR_SECOND_WORDS = /^(?:Dương|Lá|Ngọc|Đậm|Nhạt|Shadow)$/iu;
 // Words that start a colour only right before one ("Jade Green/", "Sky Blue/").
 const GLUED_COLOUR_LEAD_WORDS = /^(?:Jade|Gem|Sky|Phantom|Ice|Ocean|Forest|Rose)$/iu;
-// "Titan" and "Titanium" are model words (MSI GT77 Titan, ThinkPad X1 Titanium) that
-// start a colour only before an English colour ("Titan Gray/", "Titanium Black/");
-// "Titan Đen" after GT77 is the GT77 Titan in black (DOS/Rate#1495).
+// "Titan" and "Titanium" start a colour on a phone ("Titan Xám/", "Titanium Black/"),
+// but they are model words at MSI (GT77 Titan) and Lenovo (ThinkPad X1 Titanium),
+// which keep them before any colour (DOS/Rate#1495). "Phantom" leads a colour only at
+// Samsung and Asus ("Phantom Black"); elsewhere it is a line name (Tecno Phantom).
 const GLUED_METAL_WORDS = /^(?:Titan|Titanium)$/iu;
-const GLUED_ENGLISH_COLOURS =
-  /^(?:Black|White|Blue|Navy|Silver|Gold|Pink|Purple|Violet|Red|Gray|Grey|Green|Yellow)$/iu;
+const MODEL_WORD_LEADS: Readonly<Record<string, RegExp>> = {
+  MSI: GLUED_METAL_WORDS,
+  Lenovo: GLUED_METAL_WORDS,
+  Acer: /^Jade$/iu,
+};
+/** A colour glued to the run: a colour word, or "Titanium" as Samsung sells it. */
+const isGluedColourFor = (word: string | undefined, brand: string): boolean =>
+  isGluedColour(word) ||
+  (brand === 'Samsung' && word !== undefined && GLUED_METAL_WORDS.test(word));
 const isGluedColour = (word: string | undefined): boolean =>
   word !== undefined && (GLUED_COLOURS.test(word) || GLUED_COLOUR_SECOND_WORDS.test(word));
 /** Whether `first` and the glued `second` make one two-word colour, so both leave. */
-const isTwoWordColour = (first: string, second: string): boolean =>
-  ((GLUED_COLOURS.test(first) || GLUED_COLOUR_LEAD_WORDS.test(first)) && isGluedColour(second)) ||
-  (GLUED_METAL_WORDS.test(first) && GLUED_ENGLISH_COLOURS.test(second));
+const isTwoWordColour = (first: string, second: string, brand: string): boolean =>
+  !MODEL_WORD_LEADS[brand]?.test(first) &&
+  !(/^Phantom$/iu.test(first) && brand !== 'Samsung' && brand !== 'Asus') &&
+  (GLUED_COLOURS.test(first) ||
+    GLUED_COLOUR_LEAD_WORDS.test(first) ||
+    GLUED_METAL_WORDS.test(first)) &&
+  isGluedColourFor(second, brand);
 // A word glued to a RAM/ROM run, a storage alone or a shop word: "Pro/12GB/512GB",
 // "Plus/256GB", "Plus/Mới" (DOS/Rate#1457, #1467). Matched on NFC text.
 const GLUED_HEAD =
@@ -2307,7 +2319,7 @@ export class ProductNormalizer {
           !(modelTokens.length === 4 && /^plus(?:[,;]?$|\/)/i.test(tok)) &&
           // A glued colour past the cap still takes its first word back out
           // ("S24 Ultra Titan Gray/256GB", DOS/Rate#1481).
-          !isGluedColour(GLUED_HEAD.exec(tok.normalize('NFC'))?.[1]) &&
+          !isGluedColourFor(GLUED_HEAD.exec(tok.normalize('NFC'))?.[1], brand) &&
           !(/^pro$/i.test(modelTokens[modelTokens.length - 1] ?? '') && /^max[,;]?$/i.test(tok)) &&
           !generation
         ) {
@@ -2378,14 +2390,19 @@ export class ProductNormalizer {
               GLUED_COLOUR_SECOND_WORDS.test(wordHead[1]!) &&
               isTwoWordColour(
                 (modelTokens[modelTokens.length - 1] ?? '').normalize('NFC'),
-                wordHead[1]!
+                wordHead[1]!,
+                brand
               )
             )
           ) {
             modelTokens.push(wordHead[1]!);
           } else if (
             modelTokens.length > 1 &&
-            isTwoWordColour(modelTokens[modelTokens.length - 1]!.normalize('NFC'), wordHead[1]!)
+            isTwoWordColour(
+              modelTokens[modelTokens.length - 1]!.normalize('NFC'),
+              wordHead[1]!,
+              brand
+            )
           ) {
             // "Titan Gray/256GB", "Jade Green/": the colour's first word leaves too.
             modelTokens.pop();

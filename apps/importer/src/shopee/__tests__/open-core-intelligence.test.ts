@@ -1222,6 +1222,18 @@ async function runSuite() {
     ['MSI GT77 Titan Đen/32GB/1TB', 'msi:gt77-titan:1024gb'],
     ['Samsung Galaxy S24 Ultra Titanium/256GB', 'samsung:galaxy-s24-ultra:256gb'],
     ['Samsung Galaxy S24 Ultra Titanium Black/256GB', 'samsung:galaxy-s24-ultra:256gb'],
+    // On a phone, Titan or Titanium before a Vietnamese colour is a colour too.
+    ['Samsung Galaxy S24 Ultra Titan Xám/12GB/256GB', 'samsung:galaxy-s24-ultra:256gb'],
+    ['Samsung Galaxy S24 Ultra Titanium Tím/12GB/256GB', 'samsung:galaxy-s24-ultra:256gb'],
+    ['Xiaomi 14T Pro Titan Xanh/12GB/512GB', 'xiaomi:14t-pro:512gb'],
+    // At MSI and Lenovo it is the model's, before any colour; so is Tecno's Phantom.
+    ['MSI GT77 Titan Gray/32GB/2TB', 'msi:gt77-titan:2048gb'],
+    ['Lenovo ThinkPad X1 Titanium Black/16GB/512GB', 'lenovo:thinkpad-x1-titanium:512gb'],
+    ['Tecno Phantom Black/12GB/256GB', 'khac:tecno-phantom:256gb'],
+    ['Samsung Galaxy S23 Phantom Black/256GB', 'samsung:galaxy-s23:256gb'],
+    ['Acer Liquid Jade Black/16GB', 'acer:liquid-jade:16gb'],
+    ['Samsung Galaxy S24 Ultra Titanium Đen/256GB', 'samsung:galaxy-s24-ultra:256gb'],
+    ['Samsung Galaxy S24 Ultra Xám Titanium/256GB', 'samsung:galaxy-s24-ultra:256gb'],
     // A colour's lead word before a colour leaves with it.
     ['Oppo A58 Jade Green/128GB', 'oppo:a58:128gb'],
     ['Xiaomi Redmi Note 13 Sky Blue/128GB', 'xiaomi:redmi-note-13:128gb'],
