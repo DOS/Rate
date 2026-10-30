@@ -508,6 +508,16 @@ async function runSuite() {
     ['iPad Pro M4 256GB 13 năm- tặng ốp 11 inch', 'apple:ipad-pro-m4-11:256gb'],
     ['iPad Pro M4 256GB [13 năm] tặng ốp 11 inch', 'apple:ipad-pro-m4-11:256gb'],
     ['iPad Pro M4 256GB 13 năm: tặng ốp 11 inch', 'apple:ipad-pro-m4-11:256gb'],
+    // The shop rule alone: no duration word after "năm".
+    [
+      'iPad Pro M4 256GB Shop 13 năm chăm sóc khách hàng tặng ốp 11 inch',
+      'apple:ipad-pro-m4-11:256gb',
+    ],
+    ['iPad Pro M4 256GB Apple Store 13 năm tặng ốp 11 inch', 'apple:ipad-pro-m4-11:256gb'],
+    // A year after "năm" with a mark between keeps the size.
+    ['iPad Pro M4 13 năm-2024', 'apple:ipad-pro-m4-13:unknown'],
+    ['Máy tính bảng Apple iPad Pro 11 năm-2022 M2 128GB Wifi', 'apple:ipad-pro-m2-11:128gb'],
+    ['iPad Pro M4 13 năm.2024', 'apple:ipad-pro-m4-13:unknown'],
     // A screen size after "Shop" with no "năm" stays the product's.
     ['iPad Pro M4 Shop 11 inch', 'apple:ipad-pro-m4-11:unknown'],
     [

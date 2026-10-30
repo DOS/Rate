@@ -1262,7 +1262,7 @@ function isProductCodeToken(token: string): boolean {
 // (DOS/Rate#1317).
 const UNIT_END = String.raw`(?![\p{L}\p{M}\d])`;
 const SIZE_NOT_PRECEDED_BY = String.raw`(?<![\d.,a-z])(?<!\d ?\/ ?)(?<!(?:ram|os|sonoma|sequoia|ventura|monterey|tahoe) )(?!(?<=(?:shop|cửa hàng|store) )\d{1,2} ?năm(?![\p{L}\d]))`;
-const SIZE_NOT_FOLLOWED_BY = String.raw`(?![.,]?\d|[a-z]| ?(?:gb?${UNIT_END}|tb?${UNIT_END}|th${UNIT_END}|gen|mm|w${UNIT_END}|h${UNIT_END}|\/|-? ?(?:core|nhân|lõi)|cpu|gpu|tiếng|giờ|%|(?:tháng|ngày|tuần|phút|gói|kỳ|nghìn|ngàn|triệu|vnd|months?|years?|days?|weeks?|hours?)${UNIT_END}|ram${UNIT_END}(?! ?\d{1,2}(?!\d))|năm(?= ?(?:$|[,|;)/+.!\]-]|:(?! ?(?:19|20)?\d\d)| - |(?:kinh nghiệm|tuổi|hoạt động|uy tín|thành lập|bán hàng|chuyên|kinh doanh|phát triển)(?![\p{L}\d])))))`;
+const SIZE_NOT_FOLLOWED_BY = String.raw`(?![.,]?\d|[a-z]| ?(?:gb?${UNIT_END}|tb?${UNIT_END}|th${UNIT_END}|gen|mm|w${UNIT_END}|h${UNIT_END}|\/|-? ?(?:core|nhân|lõi)|cpu|gpu|tiếng|giờ|%|(?:tháng|ngày|tuần|phút|gói|kỳ|nghìn|ngàn|triệu|vnd|months?|years?|days?|weeks?|hours?)${UNIT_END}|ram${UNIT_END}(?! ?\d{1,2}(?!\d))|năm(?= ?(?:$|[,|;)/+!\]]|[.:-](?! ?(?:19|20)?\d\d)| - |(?:kinh nghiệm|tuổi|hoạt động|uy tín|thành lập|bán hàng|chuyên|kinh doanh|phát triển)(?![\p{L}\d])))))`;
 const SIZE_MARKER = String.raw` ?(?:-? ?inch|in${UNIT_END}|"|''|”|″)`;
 const IPAD_SIZE = String.raw`(11|12[.,]9|13)(?:[.,]0)?`;
 const MACBOOK_AIR_SIZE = String.raw`(13|15)(?:[.,]\d)?`;
