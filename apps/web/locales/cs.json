@@ -23,7 +23,11 @@
       "menuCloseAria": "Zavřít menu",
       "categories": "Kategorie",
       "backToTop": "Zpět nahoru",
-      "skipToContent": "Přeskočit na hlavní obsah"
+      "skipToContent": "Přeskočit na hlavní obsah",
+      "themeGroupAria": "Světlý nebo tmavý vzhled",
+      "themeLight": "Světlý",
+      "themeDark": "Tmavý",
+      "themeSystem": "Podle systému"
     },
     "footer": {
       "copyRight": "© {YEAR} Rate.vn, součást ekosystému DOS. Porovnání parametrů, skutečná historie cen a recenze z mnoha obchodů.",

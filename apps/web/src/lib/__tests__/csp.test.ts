@@ -28,10 +28,19 @@ async function main() {
       .split('; ')
       .find((d) => d.startsWith(`${name} `))
       ?.slice(name.length + 1);
+  const { THEME_INIT_SCRIPT, THEME_INIT_SCRIPT_HASH } =
+    await import('../theme');
   assert.equal(
     directive('script-src'),
-    "'self' 'nonce-n0nce' 'strict-dynamic'",
-    'scripts: the nonce, never unsafe-inline or unsafe-eval in production'
+    `'self' 'nonce-n0nce' ${THEME_INIT_SCRIPT_HASH} 'strict-dynamic'`,
+    'scripts: the nonce and the theme script hash, never unsafe-inline or unsafe-eval in production'
+  );
+  // The hash must be the theme script's own, or the script is blocked once
+  // the policy is enforced (DOS/Rate#1435).
+  const { createHash } = await import('node:crypto');
+  assert.equal(
+    THEME_INIT_SCRIPT_HASH,
+    `'sha256-${createHash('sha256').update(THEME_INIT_SCRIPT).digest('base64')}'`
   );
   assert.equal(directive('default-src'), "'self'");
   assert.equal(
@@ -43,7 +52,7 @@ async function main() {
   assert.equal(directive('report-uri'), '/api/csp-report');
   assert.match(
     buildContentSecurityPolicy('x', { dev: true }),
-    /script-src 'self' 'nonce-x' 'strict-dynamic' 'unsafe-eval'/
+    /script-src 'self' 'nonce-x' 'sha256-[A-Za-z0-9+/=]+' 'strict-dynamic' 'unsafe-eval'/
   );
   assert.doesNotMatch(
     buildContentSecurityPolicy('x', { supabaseUrl: 'javascript:alert(1)' }),
@@ -63,7 +72,7 @@ async function main() {
   assert.ok(sent, 'pages carry the report-only policy');
   assert.match(
     sent,
-    /script-src 'self' 'nonce-[A-Za-z0-9+/=]+' 'strict-dynamic'/
+    /script-src 'self' 'nonce-[A-Za-z0-9+/=]+' 'sha256-[A-Za-z0-9+/=]+' 'strict-dynamic'/
   );
   assert.equal(
     res.headers.get(`x-middleware-request-${CSP_HEADER.toLowerCase()}`),
