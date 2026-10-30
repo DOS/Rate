@@ -23,7 +23,6 @@ import ItemLazySizePanel, {
 } from '@/components/product/item/ItemLazySizePanel';
 import { shouldLazyLoadSizes } from '@/lib/item-size-panel';
 import {
-  getCrossPlatformDealRadar,
   getCachedMasterProductBySlug,
   getCachedMasterProductOffers,
   getCachedMasterProductPriceHistory,
@@ -31,7 +30,6 @@ import {
   getCachedMasterProductReviewSummary,
   getCachedMasterProducts,
   computeProductRadarSignal,
-  type CanonicalCategorySlug,
 } from '@/server/rate';
 import { computeBayesianRatingSummary } from '@/lib/rate-api';
 import {
@@ -55,7 +53,8 @@ import {
   BsStarFill,
 } from 'react-icons/bs';
 import RadarBadge from '@/components/radar/RadarBadge';
-import { buildRadarIndex, getRadarSignal } from '@/lib/deal-radar';
+import { getRadarSignal, type RadarIndex } from '@/lib/deal-radar';
+import { startRenderTiming } from '@/lib/render-timing';
 import { bayesianTierKey, radarExplanation } from '@/lib/product-detail-copy';
 import {
   absoluteUrl,
@@ -232,20 +231,44 @@ export async function ProductDetailView({
 }) {
   const { locale, slug } = await params;
   setRequestLocale(locale);
+  const timing = startRenderTiming('product', slug);
+  const categorySlug = categoryBasePath.replace(/^\//, '') || 'smartphones';
   // RATE_ITEM_MODEL on: an old variant URL 308s to its Item URL with `?v=`,
   // and an Item URL renders its selected variant until the Item page ships
   // (Q1, DOS/Rate#1153, #1154). Off: null, and the page is as before.
-  const itemRoute = await resolveItemRoute({ slug, categoryBasePath });
-  if (itemRoute?.kind === 'redirect') permanentRedirect(itemRoute.to);
+  const itemRoute = await timing.time(
+    'itemRoute',
+    resolveItemRoute({ slug, categoryBasePath })
+  );
+  if (itemRoute?.kind === 'redirect') {
+    timing.done();
+    permanentRedirect(itemRoute.to);
+  }
   // Neither a published Item nor a variant of one: no fallback to the old
   // master lookup, which would show a variant of an unpublished Item.
-  if (itemRoute?.kind === 'not_found') notFound();
+  if (itemRoute?.kind === 'not_found') {
+    timing.done();
+    notFound();
+  }
+  // The category peers depend on nothing below: read them alongside the item
+  // and product reads instead of after them (DOS/Rate#1344). No fallback:
+  // this page is cached, so an empty fallback would be served for the whole
+  // revalidate window, and a failed regeneration keeps the last good page
+  // instead (DOS/Rate#491). The rejection is handled where it is awaited.
+  const peersRead = timing.time(
+    'peers',
+    getCachedMasterProducts({ categorySlug, limit: 50 })
+  );
+  peersRead.catch(() => undefined);
   // RATE_ITEM_MODEL on and an Item URL: every size's offers and history, and
   // the listings whose size is not stated (#1154). Null otherwise. A size
   // whose read failed is left out, and the page renders a size that loaded.
   const itemPage =
     itemRoute?.kind === 'render' && itemRoute.variants.length > 0
-      ? await loadItemPageContext(itemRoute.item, itemRoute.variants)
+      ? await timing.time(
+          'itemPage',
+          loadItemPageContext(itemRoute.item, itemRoute.variants)
+        )
       : null;
   const renderedSize =
     itemPage && itemRoute?.kind === 'render'
@@ -258,16 +281,16 @@ export async function ProductDetailView({
     getTranslations({ locale, namespace: 'productDetail' }),
     getTranslations({ locale, namespace: 'rate.nav' }),
     getTranslations({ locale, namespace: 'saleState' }),
-    getCachedMasterProductBySlug(productSlug),
+    timing.time('product', getCachedMasterProductBySlug(productSlug)),
   ]);
 
   if (!storedProduct) {
+    timing.done();
     notFound();
   }
   const itemVariants = itemPage?.variants ?? [];
   const isItemGroup = itemVariants.length > 1;
 
-  const categorySlug = categoryBasePath.replace(/^\//, '') || 'smartphones';
   // Each category shows only the spec groups and fields it has: earbuds have
   // no screen, RAM or camera, watches no 5G (DOS/Rate#1142).
   const specTemplate = getCategorySpecTemplate(categorySlug);
@@ -280,36 +303,13 @@ export async function ProductDetailView({
     categorySlug === 'earbuds'
       ? tNav(categorySlug)
       : categoryLabel;
-  const [offers, reviews, storedCategoryPeers, categoryDealRadar] =
-    await Promise.all([
-      getCachedMasterProductOffers(product.id),
-      getCachedMasterProductReviews(product.id),
-      // No fallbacks: this page is cached, so an empty fallback would be
-      // served for the whole revalidate window. A failed regeneration keeps
-      // the last good page instead (DOS/Rate#491).
-      getCachedMasterProducts({ categorySlug, limit: 50 }),
-      getCrossPlatformDealRadar({
-        categorySlug: categorySlug as CanonicalCategorySlug,
-        limit: 50,
-      }),
-    ]);
+  const [offers, reviews, storedCategoryPeers] = await Promise.all([
+    timing.time('offers', getCachedMasterProductOffers(product.id)),
+    timing.time('reviews', getCachedMasterProductReviews(product.id)),
+    peersRead,
+  ]);
   const categoryPeers = storedCategoryPeers.map((peer) =>
     applyCategorySpecTemplate(categorySlug, peer)
-  );
-  const [reviewSummary, priceHistory] = await Promise.all([
-    getCachedMasterProductReviewSummary(product.id, reviews),
-    getCachedMasterProductPriceHistory(product.id, offers),
-  ]);
-
-  // A sold-out listing's last price is no deal (DOS/Rate#1141).
-  const inStockOffers = offers.filter((o) => !isOfferUnavailable(o));
-  const radarSignal = computeProductRadarSignal(product, inStockOffers);
-  const radarNote = radarExplanation(radarSignal);
-  const peerRadarIndex = buildRadarIndex(categoryDealRadar);
-
-  const leaderboardBadges = computeProductStandingInCategory(
-    product,
-    categoryPeers
   );
   // "From" price, range and seller count: the stored stats every other page
   // shows (in-stock listings, no bait prices), not the offer list below,
@@ -326,6 +326,46 @@ export async function ProductDetailView({
       : categoryPeers,
     product.slug,
     currentMinPrice
+  );
+  const [reviewSummary, priceHistory, competitorOffers] = await Promise.all([
+    timing.time(
+      'reviewSummary',
+      getCachedMasterProductReviewSummary(product.id, reviews)
+    ),
+    timing.time(
+      'priceHistory',
+      getCachedMasterProductPriceHistory(product.id, offers)
+    ),
+    // Each competitor card's radar badge comes from that product's own
+    // offers, as this product's signal does, instead of from the category
+    // deal radar, which took 3.5-4 s cold before the first byte
+    // (DOS/Rate#1344).
+    timing.time(
+      'competitorOffers',
+      Promise.all(
+        relatedCompetitors.map((peer) => getCachedMasterProductOffers(peer.id))
+      )
+    ),
+  ]);
+  timing.done();
+  const peerRadarIndex: RadarIndex = new Map(
+    relatedCompetitors.map((peer, i) => [
+      peer.slug,
+      computeProductRadarSignal(
+        peer,
+        (competitorOffers[i] ?? []).filter((o) => !isOfferUnavailable(o))
+      ),
+    ])
+  );
+
+  // A sold-out listing's last price is no deal (DOS/Rate#1141).
+  const inStockOffers = offers.filter((o) => !isOfferUnavailable(o));
+  const radarSignal = computeProductRadarSignal(product, inStockOffers);
+  const radarNote = radarExplanation(radarSignal);
+
+  const leaderboardBadges = computeProductStandingInCategory(
+    product,
+    categoryPeers
   );
   // The Item page's name and "from" price span its sizes.
   const displayName = itemPage?.item.name || product.name;
