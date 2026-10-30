@@ -1807,6 +1807,7 @@
     "modeSearchBtn": "Tìm sản phẩm và thông số",
     "modeInspectBtn": "Dán link để kiểm tra giá ảo và độ tin cậy shop",
     "searchPlaceholder": "Tìm tên máy, chip (VD: iPhone 16, Apple A18) hoặc dán link Shopee...",
+    "searchPlaceholderShort": "Tên máy hoặc link sàn",
     "searchAriaLabel": "Tìm sản phẩm công nghệ hoặc dán link để kiểm tra",
     "clearKeywordAria": "Xóa từ khóa",
     "searchSubmitBtn": "Tìm kiếm",

@@ -1807,6 +1807,7 @@
     "modeSearchBtn": "Search products and specs",
     "modeInspectBtn": "Check a link for fake sales and seller trust",
     "searchPlaceholder": "Search model, chipset (e.g. iPhone 16, Apple A18) or paste Shopee link...",
+    "searchPlaceholderShort": "Model or store link",
     "searchAriaLabel": "Search tech products or paste a store link to check",
     "clearKeywordAria": "Clear keyword",
     "searchSubmitBtn": "Search",
