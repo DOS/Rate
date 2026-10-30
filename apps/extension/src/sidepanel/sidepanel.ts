@@ -33,6 +33,7 @@ import {
   renderReviewCardHtml,
   type PanelActionLink,
   riskScoreText,
+  trustText,
 } from './panel-view.js';
 import { verdictTexts } from '../verdict-display.js';
 
@@ -228,8 +229,9 @@ interface MerchantTrustFeedItem {
   dosafe_risk_score: number | null;
   /** Null when the store has no analysed review (DOS/Rate#1258). */
   review_risk_score: number | null;
-  risk_score: number;
-  trust_score: number;
+  /** Null for a store with neither a DOSafe score nor analysed reviews (DOS/Rate#1484). */
+  risk_score: number | null;
+  trust_score: number | null;
   product_count: number;
 }
 
@@ -261,7 +263,11 @@ async function fetchAndRenderMerchantTrustDirectory(
           b.platform.toLowerCase() === platform.toLowerCase() ? 1 : 0;
         if (aMatch !== bMatch) return bMatch - aMatch;
       }
-      return b.trust_score - a.trust_score || b.product_count - a.product_count;
+      // A store with no trust score sorts last (DOS/Rate#1484).
+      return (
+        (b.trust_score ?? -1) - (a.trust_score ?? -1) ||
+        b.product_count - a.product_count
+      );
     });
 
     slot.innerHTML = `
@@ -275,13 +281,15 @@ async function fetchAndRenderMerchantTrustDirectory(
               `/merchants/${encodeURIComponent(m.slug || m.id)}`,
               '/merchants'
             );
-            const trustScoreNum = Number(m.trust_score);
+            const trustScoreNum = m.trust_score;
             const trustColor =
-              trustScoreNum >= 85
-                ? '#34d399'
-                : trustScoreNum >= 65
-                  ? '#fbbf24'
-                  : '#f87171';
+              trustScoreNum == null
+                ? '#9ca3af'
+                : trustScoreNum >= 85
+                  ? '#34d399'
+                  : trustScoreNum >= 65
+                    ? '#fbbf24'
+                    : '#f87171';
             return `
               <div class="offer-item">
                 <div>
@@ -296,7 +304,7 @@ async function fetchAndRenderMerchantTrustDirectory(
                   </div>
                 </div>
                 <a href="${detailHref}" target="_blank" rel="noopener noreferrer" class="offer-price" style="text-decoration:none;color:${trustColor};">
-                  ${escapeHtml(t('merchantTrust', [formatSafeNumber(m.trust_score, { min: 0, max: 100 })]))}
+                  ${escapeHtml(trustText(m.trust_score))}
                 </a>
               </div>
             `;
@@ -434,7 +442,7 @@ function renderPanelContent(
         <div class="stats-grid">
           <div class="stat-box">
             <div class="stat-label">${escapeHtml(t('merchantTrustScore'))}</div>
-            <div class="stat-val" style="color: #34d399;">${formatSafeNumber(merchant.trust_score, { min: 0, max: 100 })}/100</div>
+            <div class="stat-val" style="color: ${merchant.trust_score == null ? '#9ca3af' : '#34d399'};">${escapeHtml(merchant.trust_score == null ? t('noDataYet') : `${formatSafeNumber(merchant.trust_score, { min: 0, max: 100 })}/100`)}</div>
           </div>
           <div class="stat-box">
             <div class="stat-label">${escapeHtml(t('merchantRiskPair'))}</div>
