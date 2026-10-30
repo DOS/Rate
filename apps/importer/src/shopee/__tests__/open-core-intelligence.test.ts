@@ -1350,6 +1350,30 @@ async function runSuite() {
     ['iPad mini 7 A17 Pro 128GB', 'apple:ipad-mini-7:128gb'],
     ['Apple iPad mini 8.3 inch (A17 Pro) Wi-Fi 128GB', 'apple:ipad-mini-7:128gb'],
     ['Apple iPad mini 2024 128GB', 'apple:ipad-mini:128gb'],
+    // A gift in brackets or without diacritics, a "|" bundle and a Galaxy model are no
+    // chip; the first chip counts; "+ Cellular" is the iPad's own; a launch year
+    // before the chip names an older mini; a chip only in a gift names none
+    // (DOS/Rate#1510).
+    ['iPad mini 64GB (Tặng ốp Galaxy A20)', 'apple:ipad-mini:64gb'],
+    ['iPad mini 64GB tang op lung Galaxy A20', 'apple:ipad-mini:64gb'],
+    ['iPad mini 128GB | Galaxy A20', 'apple:ipad-mini:128gb'],
+    ['iPad mini A15/A20 Pro 64GB', 'apple:ipad-mini:64gb'],
+    ['iPad mini Wi-Fi + Cellular 128GB (A20 Pro)', 'apple:ipad-mini-8:128gb'],
+    ['iPad mini 2019 A20', 'apple:ipad-mini:unknown'],
+    ['iPad mini 128GB kèm bút A17 Pro', 'apple:ipad-mini:128gb'],
+    // The A17 Pro names the mini 7 whatever the year; a "|" separates specs; a lone
+    // "Kem" is a colour, not a gift.
+    ['iPad mini 2024 A17 Pro 128GB', 'apple:ipad-mini-7:128gb'],
+    ['iPad mini (2024) A17 Pro 128GB', 'apple:ipad-mini-7:128gb'],
+    ['iPad mini (2026) A17 Pro 128GB', 'apple:ipad-mini-7:128gb'],
+    ['iPad mini | A17 Pro | 128GB', 'apple:ipad-mini-7:128gb'],
+    ['iPad mini 128GB | A20 Pro', 'apple:ipad-mini-8:128gb'],
+    ['iPad mini Kem A20 Pro 128GB', 'apple:ipad-mini-8:128gb'],
+    ['iPad mini màu Vàng Kem chip A17 Pro 128GB', 'apple:ipad-mini-7:128gb'],
+    ['iPad mini | A20 Pro | 128GB', 'apple:ipad-mini-8:128gb'],
+    // "Dùng cho" names a use unless another product follows it.
+    ['iPad mini dùng cho học tập, chip A17 Pro 128GB', 'apple:ipad-mini-7:128gb'],
+    ['iPad mini 64GB dùng cho Galaxy A20', 'apple:ipad-mini:64gb'],
   ] as const) {
     assert.equal(keyOf(title), key, title);
   }
