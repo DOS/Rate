@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
-import { Link } from '@/lib/navigation';
+import { IntentLink } from '@/components/elementary/IntentLink';
 import Image from 'next/image';
 import { useTranslations } from 'next-intl';
 import {
@@ -49,16 +49,14 @@ export function NavbarDarkDynamic({
   const tNav = useTranslations('rate.nav');
   const [scroll, setScroll] = useState(false);
   const [toggle, setToggle] = useState(false);
-  // On phones the menu is off-canvas: its links sit just off screen, within the
-  // margin Next treats as visible, so every route in it was prefetched on each
-  // page view. They prefetch once the menu is open (DOS/Rate#1064). Read at
-  // first client render; the prop does not change the markup.
+  // Phone layout: the menu is off-canvas and traps focus while open. Every
+  // header link is an IntentLink, so nothing in it prefetches until the
+  // visitor points at, focuses or touches it (DOS/Rate#1064, DOS/Rate#1330).
   const [phoneMenu, setPhoneMenu] = useState(
     () =>
       typeof window !== 'undefined' &&
       window.matchMedia(PHONE_MENU_QUERY).matches
   );
-  const menuPrefetch = phoneMenu && !toggle ? false : undefined;
   const toggleRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const [categoriesOpen, setCategoriesOpen] = useState(false);
@@ -203,7 +201,7 @@ export function NavbarDarkDynamic({
   }, []);
 
   const logo = (
-    <Link className="nav-brand" href="/" aria-label="Rate.vn">
+    <IntentLink className="nav-brand" href="/" aria-label="Rate.vn">
       {logoUrl ? (
         <Image
           src={logoUrl}
@@ -217,7 +215,7 @@ export function NavbarDarkDynamic({
       ) : (
         <RateWordmark tone="ink" size={30} />
       )}
-    </Link>
+    </IntentLink>
   );
 
   return (
@@ -251,40 +249,40 @@ export function NavbarDarkDynamic({
                     <LocaleSwitcher isDarkHeader={false} compact={true} />
                   </li>
                   <li>
-                    <Link
+                    <IntentLink
                       href="/inspect"
                       className="d-flex align-items-center text-danger"
                       aria-label={tNav('inspect')}
                     >
                       <BsShieldCheck className="me-1" />
-                    </Link>
+                    </IntentLink>
                   </li>
                   <li className="d-none d-sm-block">
-                    <Link
+                    <IntentLink
                       href="/compare"
                       className="d-flex align-items-center text-dark"
                       aria-label={tNav('compare')}
                     >
                       <BsArrowLeftRight className="me-1" />
-                    </Link>
+                    </IntentLink>
                   </li>
                   <li className="d-none d-sm-block">
-                    <Link
+                    <IntentLink
                       href="/watchlist"
                       className="d-flex align-items-center text-primary"
                       aria-label={tNav('watchlist')}
                     >
                       <BsBellFill className="me-1" />
-                    </Link>
+                    </IntentLink>
                   </li>
                   <li className="d-none d-sm-block">
-                    <Link
+                    <IntentLink
                       href="/developers"
                       className="d-flex align-items-center text-dark"
                       aria-label={tNav('developers')}
                     >
                       <BsCodeSlash className="me-1" />
-                    </Link>
+                    </IntentLink>
                   </li>
                 </ul>
               </div>
@@ -398,13 +396,12 @@ export function NavbarDarkDynamic({
                     <ul className="nav-menu">
                       {validLinks.map((link) => (
                         <li key={String(link.id) + link.href}>
-                          <Link
+                          <IntentLink
                             href={link.href!}
                             target={link.newTab ? '_blank' : undefined}
-                            prefetch={menuPrefetch}
                           >
                             {link.label}
-                          </Link>
+                          </IntentLink>
                         </li>
                       ))}
                     </ul>
@@ -428,9 +425,9 @@ export function NavbarDarkDynamic({
                         : undefined
                     }
                   >
-                    <Link href={link.href!} prefetch={menuPrefetch}>
+                    <IntentLink href={link.href!}>
                       {link.label}
-                    </Link>
+                    </IntentLink>
                   </li>
                 );
                 return (
@@ -453,13 +450,12 @@ export function NavbarDarkDynamic({
                       <ul id="rate-nav-categories" className="nav-dropdown">
                         {categoryLinks.map((link) => (
                           <li key={String(link.id)}>
-                            <Link
+                            <IntentLink
                               href={link.href!}
-                              prefetch={menuPrefetch}
                               onClick={() => setCategoriesOpen(false)}
                             >
                               {link.label}
-                            </Link>
+                            </IntentLink>
                           </li>
                         ))}
                       </ul>
@@ -477,14 +473,13 @@ export function NavbarDarkDynamic({
                   <LocaleSwitcher isDarkHeader={false} />
                 </li>
                 <li className="list-buttons d-flex align-items-center">
-                  <Link
+                  <IntentLink
                     href="/watchlist"
-                    prefetch={menuPrefetch}
                     className="d-inline-flex align-items-center"
                   >
                     <BsBellFill className="fs-6 me-1" />
                     {tNav('priceWatchCta')}
-                  </Link>
+                  </IntentLink>
                 </li>
               </ul>
             </div>

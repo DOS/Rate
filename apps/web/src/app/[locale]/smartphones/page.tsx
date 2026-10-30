@@ -2,6 +2,7 @@ import { Suspense } from 'react';
 import type { Metadata } from 'next';
 import { getTranslations, setRequestLocale } from 'next-intl/server';
 import { Link } from '@/lib/navigation';
+import { IntentLink } from '@/components/elementary/IntentLink';
 import {
   getCachedCategoryDirectoryFacets,
   getCachedMasterProducts,
@@ -664,7 +665,7 @@ export async function CategoryCatalogContent({
                         </Link>
                       )}
                       {products.length >= 2 && products[0] && products[1] && (
-                        <Link
+                        <IntentLink
                           href={versusHref(products[0].slug, products[1].slug)}
                           className="rate-results-link"
                         >
@@ -673,15 +674,15 @@ export async function CategoryCatalogContent({
                             brandA: products[0].brand,
                             brandB: products[1].brand,
                           })}
-                        </Link>
+                        </IntentLink>
                       )}
-                      <Link
+                      <IntentLink
                         href={`/leaderboard?cat=${categorySlug}`}
                         className="rate-results-link"
                       >
                         <BsTrophy aria-hidden="true" />
                         {t('page.leaderboardBadge')}
-                      </Link>
+                      </IntentLink>
                     </div>
                   </div>
 

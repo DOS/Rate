@@ -1,5 +1,5 @@
 import { getTranslations } from 'next-intl/server';
-import { Link } from '@/lib/navigation';
+import { IntentLink } from '@/components/elementary/IntentLink';
 import { normalizeRateLocale } from '@/lib/rate-i18n';
 import type { CanonicalCategorySlug } from '@/lib/rate-domain';
 import type {
@@ -140,7 +140,7 @@ export default async function ProductLeaderboardBadges({
           : `#${b.rank} ${critLabels[b.criterion]}`;
 
         return (
-          <Link
+          <IntentLink
             key={`${b.categorySlug}-${b.criterion}`}
             href={`/leaderboard?cat=${b.categorySlug}&criterion=${b.criterion}`}
             className="text-decoration-none d-inline-flex align-items-center rounded-pill gap-1 px-3 py-1"
@@ -175,7 +175,7 @@ export default async function ProductLeaderboardBadges({
             >
               ({b.score5.toFixed(2)}/5.0) ↗
             </span>
-          </Link>
+          </IntentLink>
         );
       })}
     </div>
