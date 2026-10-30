@@ -1118,7 +1118,9 @@ export default function CompareWorkspace({
       if (rows.some(Boolean)) {
         setProducts((prev) => prev.map((p) => known.get(p.slug) ?? p));
       }
-      setSpecsLoading(false);
+      // A failed read leaves the exports shut: the navigation's server render
+      // still brings the full row, and a short export would be wrong.
+      setSpecsLoading(rows.some((row) => !row));
     });
     return () => {
       cancelled = true;
