@@ -1,13 +1,16 @@
 import type { FlagshipDeviceSeed } from './flagship-seed-data.js';
 
 /**
- * Catalog expansion, groups A1-A3 (Docs/Proposals/2026-10-30-catalog-expansion.html): the
- * iPhone 17 family, iPhone 18 Pro and Pro Max, and the Galaxy S26 family, in every storage
- * sold in Vietnam. The 256GB iPhone 18 Pro, 18 Pro Max and S26 Ultra are the sourced seeds
- * of flagship-seed-sourced-2026.ts; this file adds the other 21 variants. Spec-only, like
+ * Catalog wave 1a (Docs/Proposals/2026-10-30-catalog-expansion.html; the 39 phone keys of
+ * the Rate Services wave list, RS#799): the iPhone 17, 17 Pro, 17 Pro Max, 17e and Air, the
+ * iPhone 18 Pro and Pro Max, the Galaxy S26, S26+, S26 Ultra and S26 FE, and the Galaxy Z
+ * Fold8, Z Fold8 Ultra and Z Flip8, in every storage sold in Vietnam. The 256GB iPhone 18
+ * Pro, 18 Pro Max and S26 Ultra exist already and are the sourced seeds of
+ * flagship-seed-sourced-2026.ts; this file adds the other 36 variants. Spec-only, like
  * every seed: no listing, price, merchant or review. Every spec group is cited in `sources`
  * (a whole group, or a field path where the page is narrower, -> URL); the launch prices
- * are the Vietnamese list prices at launch, for reference only. Researched on 2026-10-30;
+ * are the Vietnamese list prices at launch, for reference only. Researched on 2026-10-30
+ * (the wave 1a additions on 2026-10-31);
  * nothing here is applied to any database until JOY approves the backfill (D1-D3).
  */
 export const CATALOG_EXPANSION_2026_SEEDS: FlagshipDeviceSeed[] = [
@@ -3054,5 +3057,2028 @@ export const CATALOG_EXPANSION_2026_SEEDS: FlagshipDeviceSeed[] = [
       regulatory: 'https://www.gsmarena.com/samsung_galaxy_s26_5g-14456.php',
     },
     aliases: ['Điện thoại Samsung Galaxy S26 5G 12GB/512GB', 'Samsung Galaxy S26 512GB'],
+  },
+  // Wave 1a: the iPhone 17e, the iPhone Air and the Galaxy S26 FE, in the storages sold in
+  // Vietnam (the S26 FE has no 512GB there).
+  {
+    categorySlug: 'smartphones',
+    brand: 'Apple',
+    model: 'iPhone 17e',
+    variant_name: '256GB',
+    model_key: 'apple:iphone-17e:256gb',
+    name: 'Apple iPhone 17e 256GB',
+    slug: 'apple-iphone-17e-256gb',
+    description:
+      'Apple iPhone 17e chính hãng tại Việt Nam: màn hình 6.1 inch, chip Apple A19 (3 nm), camera 48MP Fusion.',
+    ram_gb: 8,
+    storage_gb: 256,
+    screen_size_inch: 6.1,
+    battery_mah: 4005,
+    has_5g: true,
+    colors: ['Đen', 'Trắng', 'Hồng Phai'],
+    images: [],
+    key_specs: {
+      screen: '6.1" Super Retina XDR OLED 60Hz (Ceramic Shield 2)',
+      chip: 'Apple A19 (3 nm), 6-core CPU, 4-core GPU',
+      camera: '48MP Fusion main; front 12MP TrueDepth',
+      battery: '4005 mAh, 50% in 30 min (20W+ adapter), MagSafe/Qi2 15W',
+      ram: '8GB',
+      storage: '256GB',
+    },
+    specifications: {
+      display: {
+        size_inch: 6.1,
+        type: 'Super Retina XDR OLED',
+        resolution: '1170 x 2532 pixels (~460 ppi)',
+        refresh_rate_hz: 60,
+        ppi: 460,
+        protection: 'Ceramic Shield 2',
+      },
+      hardware: {
+        chipset: 'Apple A19 (3 nm)',
+        cpu: 'Hexa-core (2x4.26 GHz + 4x2.60 GHz), 2 performance + 4 efficiency cores',
+        gpu: 'Apple GPU (4-core graphics)',
+        storage_expansion: 'No',
+        os: 'iOS 26.3, upgradable to iOS 27.2',
+        ram_gb: 8,
+        storage_gb: 256,
+      },
+      camera: {
+        rear_setup: 'Single camera (48MP Fusion; 2x optical-quality from the main sensor)',
+        main_camera: '48 MP Fusion, f/1.6, 26mm (wide), OIS',
+        second_camera: '12 MP 2x Telephoto from the 48MP Fusion sensor (no separate lens)',
+        flash: 'True Tone flash',
+        video_recording:
+          '4K Dolby Vision @24/25/30/60fps, 1080p@25/30/60fps, slo-mo 1080p@120/240fps',
+        front_camera: '12 MP TrueDepth, f/1.9; 4K Dolby Vision up to 60fps',
+      },
+      battery: {
+        capacity_mah: 4005,
+        type: 'Li-Ion 4005 mAh',
+        charging: 'Wired USB-C, 50% in 30 min with a 20W adapter or higher; MagSafe 15W; Qi2 15W',
+        fast_charging_w: 20,
+      },
+      design: {
+        dimensions: '146.7 x 71.5 x 7.8 mm',
+        weight_g: 169,
+        materials: 'Ceramic Shield 2 front, glass back, aluminum frame',
+        build: 'Ceramic Shield 2 front, glass back, aluminum frame',
+        resistance: 'IP68 (up to 6m for 30 min)',
+        biometrics: 'Face ID',
+        colors: ['Đen', 'Trắng', 'Hồng Phai'],
+      },
+      cellular: {
+        has_5g: true,
+        technology: 'GSM / HSPA / LTE / 5G (Apple C1X modem)',
+        bands_5g:
+          'n1, n2, n3, n5, n7, n8, n12, n20, n25, n26, n28, n30, n38, n40, n41, n48, n53, n66, n70, n75, n77, n78, n79',
+        bands_4g:
+          'FDD 1, 2, 3, 4, 5, 7, 8, 12, 13, 17, 18, 19, 20, 25, 26, 28, 30, 32, 66; TDD 34, 38, 39, 40, 41, 42, 48, 53',
+        bands_3g: 'UMTS/HSPA+ 850, 900, 1700/2100, 1900, 2100 MHz',
+        bands_2g: 'GSM/EDGE 850, 900, 1800, 1900 MHz',
+        sim_type: 'Nano-SIM + eSIM; dual eSIM (Vietnam model A3634)',
+      },
+      connectivity: {
+        bluetooth: '5.3',
+        wlan: 'Wi-Fi 6 (802.11ax) 2x2 MIMO',
+        usb: 'USB-C, USB 2 (up to 480 Mb/s)',
+        sensors:
+          'Face ID, barometer, high dynamic range gyro, high-g accelerometer, proximity sensor, dual ambient light sensors, magnetometer',
+        location: 'GPS, GLONASS, Galileo, QZSS, BeiDou, NavIC; digital compass',
+        nfc: true,
+      },
+      multimedia: {
+        loudspeaker: 'Yes, with stereo speakers',
+        headphone_jack_35mm: false,
+        audio_features:
+          'Spatial Audio, stereo recording; AAC, MP3, Apple Lossless, FLAC, Dolby Atmos',
+      },
+      availability: {
+        announced: '2026, March 02',
+        status: 'Available. Released 2026, March 11 (Vietnam: 2026, March 11)',
+        prices_msrp:
+          'Giá niêm yết khi mở bán tại Việt Nam: 256GB: 17.999.000 ₫; 512GB: 24.499.000 ₫',
+      },
+      regulatory: {
+        sar_head: '1.20 W/kg',
+        sar_body: '1.20 W/kg',
+      },
+    },
+    sources: {
+      storages: 'https://www.apple.com/vn/iphone-17e/specs/',
+      colors: 'https://www.apple.com/vn/iphone-17e/specs/',
+      ram_gb: 'https://www.gsmarena.com/apple_iphone_17e-14487.php',
+      vn_launch_prices: 'https://www.thegioididong.com/hoi-dap/iphone-17e-ra-mat-co-gi-moi-1590312',
+      vn_launch_prices_crosscheck:
+        'https://www.dienmayxanh.com/kinh-nghiem-hay/iphone-17e-ra-mat-1588391',
+      display: 'https://www.apple.com/iphone-17e/specs/',
+      'display.refresh_rate_hz': 'https://www.gsmarena.com/apple_iphone_17e-14487.php',
+      hardware: 'https://www.apple.com/iphone-17e/specs/',
+      'hardware.cpu_os': 'https://www.gsmarena.com/apple_iphone_17e-14487.php',
+      camera: 'https://www.apple.com/iphone-17e/specs/',
+      battery: 'https://www.gsmarena.com/apple_iphone_17e-14487.php',
+      'battery.charging': 'https://www.apple.com/vn/iphone-17e/specs/',
+      design: 'https://www.apple.com/iphone-17e/specs/',
+      cellular: 'https://www.apple.com/vn/iphone-17e/specs/',
+      connectivity: 'https://www.apple.com/vn/iphone-17e/specs/',
+      multimedia: 'https://www.apple.com/vn/iphone-17e/specs/',
+      'availability.announced_status': 'https://www.gsmarena.com/apple_iphone_17e-14487.php',
+      'availability.prices_msrp':
+        'https://www.thegioididong.com/hoi-dap/iphone-17e-ra-mat-co-gi-moi-1590312',
+      regulatory: 'https://www.gsmarena.com/apple_iphone_17e-14487.php',
+    },
+    aliases: ['Điện thoại iPhone 17e 256GB', 'iPhone 17e 256GB Chính hãng VN/A'],
+  },
+  {
+    categorySlug: 'smartphones',
+    brand: 'Apple',
+    model: 'iPhone 17e',
+    variant_name: '512GB',
+    model_key: 'apple:iphone-17e:512gb',
+    name: 'Apple iPhone 17e 512GB',
+    slug: 'apple-iphone-17e-512gb',
+    description:
+      'Apple iPhone 17e chính hãng tại Việt Nam: màn hình 6.1 inch, chip Apple A19 (3 nm), camera 48MP Fusion.',
+    ram_gb: 8,
+    storage_gb: 512,
+    screen_size_inch: 6.1,
+    battery_mah: 4005,
+    has_5g: true,
+    colors: ['Đen', 'Trắng', 'Hồng Phai'],
+    images: [],
+    key_specs: {
+      screen: '6.1" Super Retina XDR OLED 60Hz (Ceramic Shield 2)',
+      chip: 'Apple A19 (3 nm), 6-core CPU, 4-core GPU',
+      camera: '48MP Fusion main; front 12MP TrueDepth',
+      battery: '4005 mAh, 50% in 30 min (20W+ adapter), MagSafe/Qi2 15W',
+      ram: '8GB',
+      storage: '512GB',
+    },
+    specifications: {
+      display: {
+        size_inch: 6.1,
+        type: 'Super Retina XDR OLED',
+        resolution: '1170 x 2532 pixels (~460 ppi)',
+        refresh_rate_hz: 60,
+        ppi: 460,
+        protection: 'Ceramic Shield 2',
+      },
+      hardware: {
+        chipset: 'Apple A19 (3 nm)',
+        cpu: 'Hexa-core (2x4.26 GHz + 4x2.60 GHz), 2 performance + 4 efficiency cores',
+        gpu: 'Apple GPU (4-core graphics)',
+        storage_expansion: 'No',
+        os: 'iOS 26.3, upgradable to iOS 27.2',
+        ram_gb: 8,
+        storage_gb: 512,
+      },
+      camera: {
+        rear_setup: 'Single camera (48MP Fusion; 2x optical-quality from the main sensor)',
+        main_camera: '48 MP Fusion, f/1.6, 26mm (wide), OIS',
+        second_camera: '12 MP 2x Telephoto from the 48MP Fusion sensor (no separate lens)',
+        flash: 'True Tone flash',
+        video_recording:
+          '4K Dolby Vision @24/25/30/60fps, 1080p@25/30/60fps, slo-mo 1080p@120/240fps',
+        front_camera: '12 MP TrueDepth, f/1.9; 4K Dolby Vision up to 60fps',
+      },
+      battery: {
+        capacity_mah: 4005,
+        type: 'Li-Ion 4005 mAh',
+        charging: 'Wired USB-C, 50% in 30 min with a 20W adapter or higher; MagSafe 15W; Qi2 15W',
+        fast_charging_w: 20,
+      },
+      design: {
+        dimensions: '146.7 x 71.5 x 7.8 mm',
+        weight_g: 169,
+        materials: 'Ceramic Shield 2 front, glass back, aluminum frame',
+        build: 'Ceramic Shield 2 front, glass back, aluminum frame',
+        resistance: 'IP68 (up to 6m for 30 min)',
+        biometrics: 'Face ID',
+        colors: ['Đen', 'Trắng', 'Hồng Phai'],
+      },
+      cellular: {
+        has_5g: true,
+        technology: 'GSM / HSPA / LTE / 5G (Apple C1X modem)',
+        bands_5g:
+          'n1, n2, n3, n5, n7, n8, n12, n20, n25, n26, n28, n30, n38, n40, n41, n48, n53, n66, n70, n75, n77, n78, n79',
+        bands_4g:
+          'FDD 1, 2, 3, 4, 5, 7, 8, 12, 13, 17, 18, 19, 20, 25, 26, 28, 30, 32, 66; TDD 34, 38, 39, 40, 41, 42, 48, 53',
+        bands_3g: 'UMTS/HSPA+ 850, 900, 1700/2100, 1900, 2100 MHz',
+        bands_2g: 'GSM/EDGE 850, 900, 1800, 1900 MHz',
+        sim_type: 'Nano-SIM + eSIM; dual eSIM (Vietnam model A3634)',
+      },
+      connectivity: {
+        bluetooth: '5.3',
+        wlan: 'Wi-Fi 6 (802.11ax) 2x2 MIMO',
+        usb: 'USB-C, USB 2 (up to 480 Mb/s)',
+        sensors:
+          'Face ID, barometer, high dynamic range gyro, high-g accelerometer, proximity sensor, dual ambient light sensors, magnetometer',
+        location: 'GPS, GLONASS, Galileo, QZSS, BeiDou, NavIC; digital compass',
+        nfc: true,
+      },
+      multimedia: {
+        loudspeaker: 'Yes, with stereo speakers',
+        headphone_jack_35mm: false,
+        audio_features:
+          'Spatial Audio, stereo recording; AAC, MP3, Apple Lossless, FLAC, Dolby Atmos',
+      },
+      availability: {
+        announced: '2026, March 02',
+        status: 'Available. Released 2026, March 11 (Vietnam: 2026, March 11)',
+        prices_msrp:
+          'Giá niêm yết khi mở bán tại Việt Nam: 256GB: 17.999.000 ₫; 512GB: 24.499.000 ₫',
+      },
+      regulatory: {
+        sar_head: '1.20 W/kg',
+        sar_body: '1.20 W/kg',
+      },
+    },
+    sources: {
+      storages: 'https://www.apple.com/vn/iphone-17e/specs/',
+      colors: 'https://www.apple.com/vn/iphone-17e/specs/',
+      ram_gb: 'https://www.gsmarena.com/apple_iphone_17e-14487.php',
+      vn_launch_prices: 'https://www.thegioididong.com/hoi-dap/iphone-17e-ra-mat-co-gi-moi-1590312',
+      vn_launch_prices_crosscheck:
+        'https://www.dienmayxanh.com/kinh-nghiem-hay/iphone-17e-ra-mat-1588391',
+      display: 'https://www.apple.com/iphone-17e/specs/',
+      'display.refresh_rate_hz': 'https://www.gsmarena.com/apple_iphone_17e-14487.php',
+      hardware: 'https://www.apple.com/iphone-17e/specs/',
+      'hardware.cpu_os': 'https://www.gsmarena.com/apple_iphone_17e-14487.php',
+      camera: 'https://www.apple.com/iphone-17e/specs/',
+      battery: 'https://www.gsmarena.com/apple_iphone_17e-14487.php',
+      'battery.charging': 'https://www.apple.com/vn/iphone-17e/specs/',
+      design: 'https://www.apple.com/iphone-17e/specs/',
+      cellular: 'https://www.apple.com/vn/iphone-17e/specs/',
+      connectivity: 'https://www.apple.com/vn/iphone-17e/specs/',
+      multimedia: 'https://www.apple.com/vn/iphone-17e/specs/',
+      'availability.announced_status': 'https://www.gsmarena.com/apple_iphone_17e-14487.php',
+      'availability.prices_msrp':
+        'https://www.thegioididong.com/hoi-dap/iphone-17e-ra-mat-co-gi-moi-1590312',
+      regulatory: 'https://www.gsmarena.com/apple_iphone_17e-14487.php',
+    },
+    aliases: ['Điện thoại iPhone 17e 512GB', 'iPhone 17e 512GB Chính hãng VN/A'],
+  },
+  {
+    categorySlug: 'smartphones',
+    brand: 'Apple',
+    model: 'iPhone Air',
+    variant_name: '256GB',
+    model_key: 'apple:iphone-air:256gb',
+    name: 'Apple iPhone Air 256GB',
+    slug: 'apple-iphone-air-256gb',
+    description:
+      'Apple iPhone Air chính hãng tại Việt Nam: màn hình 6.5 inch ProMotion, chip Apple A19 Pro (3 nm), khung titan, dày 5.64 mm.',
+    ram_gb: 12,
+    storage_gb: 256,
+    screen_size_inch: 6.5,
+    battery_mah: 3149,
+    has_5g: true,
+    colors: ['Đen Không Gian', 'Trắng Mây', 'Vàng Nhạt', 'Xanh Da Trời'],
+    images: [],
+    key_specs: {
+      screen: '6.5" LTPO Super Retina XDR OLED 120Hz ProMotion, Always-On (Ceramic Shield 2)',
+      chip: 'Apple A19 Pro (3 nm), 6-core CPU, 5-core GPU',
+      camera: '48MP Fusion main; front 18MP Center Stage',
+      battery: '3149 mAh, 50% in 30 min (20W+ adapter), MagSafe/Qi2 20W',
+      ram: '12GB',
+      storage: '256GB',
+    },
+    specifications: {
+      display: {
+        size_inch: 6.5,
+        type: 'LTPO Super Retina XDR OLED, 120Hz ProMotion, Always-On',
+        resolution: '1260 x 2736 pixels (~460 ppi)',
+        refresh_rate_hz: 120,
+        ppi: 460,
+        protection: 'Ceramic Shield 2',
+      },
+      hardware: {
+        chipset: 'Apple A19 Pro (3 nm)',
+        cpu: 'Hexa-core, 2 performance + 4 efficiency cores',
+        gpu: 'Apple GPU (5-core graphics)',
+        storage_expansion: 'No',
+        os: 'iOS 26, upgradable to iOS 27.2',
+        ram_gb: 12,
+        storage_gb: 256,
+      },
+      camera: {
+        rear_setup: 'Single camera (48MP Fusion; 2x optical-quality from the main sensor)',
+        main_camera: '48 MP Fusion, f/1.6, 26mm (wide), sensor-shift OIS',
+        second_camera: '12 MP 2x Telephoto from the 48MP Fusion sensor (no separate lens)',
+        flash: 'Dual-LED dual-tone flash',
+        video_recording:
+          '4K Dolby Vision up to 60fps, 1080p slo-mo @120/240fps, Action mode up to 2.8K@60fps',
+        front_camera: '18 MP Center Stage, f/1.9; 4K Dolby Vision up to 60fps',
+      },
+      battery: {
+        capacity_mah: 3149,
+        type: 'Li-Ion 3149 mAh',
+        charging:
+          'Wired USB-C, 50% in 30 min with a 20W adapter or higher; MagSafe 20W; Qi2 20W; 4.5W reverse wired',
+        fast_charging_w: 20,
+        reverse_charging: '4.5W reverse wired',
+      },
+      design: {
+        dimensions: '156.2 x 74.7 x 5.64 mm',
+        weight_g: 165,
+        materials: 'Ceramic Shield 2 front, Ceramic Shield back, titanium frame (grade 5)',
+        build: 'Ceramic Shield 2 front, Ceramic Shield back, titanium frame (grade 5)',
+        resistance: 'IP68 (up to 6m for 30 min)',
+        biometrics: 'Face ID',
+        colors: ['Đen Không Gian', 'Trắng Mây', 'Vàng Nhạt', 'Xanh Da Trời'],
+      },
+      cellular: {
+        has_5g: true,
+        technology: 'GSM / HSPA / LTE / 5G (Apple C1X modem)',
+        bands_5g:
+          'n1, n2, n3, n5, n7, n8, n12, n20, n25, n26, n28, n30, n38, n40, n41, n48, n53, n66, n70, n75, n77, n78, n79',
+        bands_4g:
+          'FDD 1, 2, 3, 4, 5, 7, 8, 12, 13, 17, 18, 19, 20, 25, 26, 28, 30, 32, 66; TDD 34, 38, 39, 40, 41, 42, 48, 53',
+        bands_3g: 'UMTS/HSPA+ 850, 900, 1700/2100, 1900, 2100 MHz',
+        bands_2g: 'GSM/EDGE 850, 900, 1800, 1900 MHz',
+        sim_type: 'eSIM only, dual eSIM (no physical SIM, Vietnam model A3517)',
+      },
+      connectivity: {
+        bluetooth: '6.0',
+        wlan: 'Wi-Fi 7 (802.11be) 2x2 MIMO; Thread',
+        usb: 'USB-C, USB 2 (up to 480 Mb/s)',
+        sensors:
+          'Face ID, barometer, high dynamic range gyro, high-g accelerometer, proximity sensor, dual ambient light sensors, magnetometer',
+        location:
+          'Dual-frequency GPS (L1 + L5), GLONASS, Galileo, QZSS, BeiDou, NavIC; digital compass',
+        nfc: true,
+      },
+      multimedia: {
+        loudspeaker: 'Yes (single built-in speaker)',
+        headphone_jack_35mm: false,
+        audio_features:
+          'Spatial Audio, stereo recording; AAC, MP3, Apple Lossless, FLAC, Dolby Digital, Dolby Atmos',
+      },
+      availability: {
+        announced: '2025, September 09',
+        status: 'Available. Released 2025, September 19 (Vietnam: 2025, September 19)',
+        prices_msrp:
+          'Giá niêm yết khi mở bán tại Việt Nam: 256GB: 31.999.000 ₫; 512GB: 38.499.000 ₫; 1TB: 44.999.000 ₫',
+      },
+      regulatory: {
+        sar_head: '1.19 W/kg',
+        sar_body: '1.19 W/kg',
+      },
+    },
+    sources: {
+      storages: 'https://www.apple.com/vn/iphone-air/specs/',
+      colors: 'https://www.apple.com/vn/iphone-air/specs/',
+      ram_gb: 'https://www.gsmarena.com/apple_iphone_17_air-13502.php',
+      vn_launch_prices:
+        'https://vnreview.vn/threads/da-co-gia-ban-iphone-air-tai-viet-nam-chinh-thuc-tu-apple.68897/latest',
+      display: 'https://www.apple.com/iphone-air/specs/',
+      hardware: 'https://www.apple.com/iphone-air/specs/',
+      'hardware.os': 'https://www.gsmarena.com/apple_iphone_17_air-13502.php',
+      camera: 'https://www.apple.com/iphone-air/specs/',
+      'camera.flash': 'https://www.gsmarena.com/apple_iphone_17_air-13502.php',
+      battery: 'https://www.gsmarena.com/apple_iphone_17_air-13502.php',
+      'battery.charging': 'https://www.apple.com/vn/iphone-air/specs/',
+      design: 'https://www.apple.com/iphone-air/specs/',
+      cellular: 'https://www.apple.com/vn/iphone-air/specs/',
+      connectivity: 'https://www.apple.com/vn/iphone-air/specs/',
+      multimedia: 'https://www.apple.com/iphone-air/specs/',
+      'availability.announced_status': 'https://www.gsmarena.com/apple_iphone_17_air-13502.php',
+      'availability.prices_msrp':
+        'https://vnreview.vn/threads/da-co-gia-ban-iphone-air-tai-viet-nam-chinh-thuc-tu-apple.68897/latest',
+      regulatory: 'https://www.gsmarena.com/apple_iphone_17_air-13502.php',
+    },
+    aliases: ['Điện thoại iPhone Air 256GB', 'iPhone Air 256GB Chính hãng VN/A'],
+  },
+  {
+    categorySlug: 'smartphones',
+    brand: 'Apple',
+    model: 'iPhone Air',
+    variant_name: '512GB',
+    model_key: 'apple:iphone-air:512gb',
+    name: 'Apple iPhone Air 512GB',
+    slug: 'apple-iphone-air-512gb',
+    description:
+      'Apple iPhone Air chính hãng tại Việt Nam: màn hình 6.5 inch ProMotion, chip Apple A19 Pro (3 nm), khung titan, dày 5.64 mm.',
+    ram_gb: 12,
+    storage_gb: 512,
+    screen_size_inch: 6.5,
+    battery_mah: 3149,
+    has_5g: true,
+    colors: ['Đen Không Gian', 'Trắng Mây', 'Vàng Nhạt', 'Xanh Da Trời'],
+    images: [],
+    key_specs: {
+      screen: '6.5" LTPO Super Retina XDR OLED 120Hz ProMotion, Always-On (Ceramic Shield 2)',
+      chip: 'Apple A19 Pro (3 nm), 6-core CPU, 5-core GPU',
+      camera: '48MP Fusion main; front 18MP Center Stage',
+      battery: '3149 mAh, 50% in 30 min (20W+ adapter), MagSafe/Qi2 20W',
+      ram: '12GB',
+      storage: '512GB',
+    },
+    specifications: {
+      display: {
+        size_inch: 6.5,
+        type: 'LTPO Super Retina XDR OLED, 120Hz ProMotion, Always-On',
+        resolution: '1260 x 2736 pixels (~460 ppi)',
+        refresh_rate_hz: 120,
+        ppi: 460,
+        protection: 'Ceramic Shield 2',
+      },
+      hardware: {
+        chipset: 'Apple A19 Pro (3 nm)',
+        cpu: 'Hexa-core, 2 performance + 4 efficiency cores',
+        gpu: 'Apple GPU (5-core graphics)',
+        storage_expansion: 'No',
+        os: 'iOS 26, upgradable to iOS 27.2',
+        ram_gb: 12,
+        storage_gb: 512,
+      },
+      camera: {
+        rear_setup: 'Single camera (48MP Fusion; 2x optical-quality from the main sensor)',
+        main_camera: '48 MP Fusion, f/1.6, 26mm (wide), sensor-shift OIS',
+        second_camera: '12 MP 2x Telephoto from the 48MP Fusion sensor (no separate lens)',
+        flash: 'Dual-LED dual-tone flash',
+        video_recording:
+          '4K Dolby Vision up to 60fps, 1080p slo-mo @120/240fps, Action mode up to 2.8K@60fps',
+        front_camera: '18 MP Center Stage, f/1.9; 4K Dolby Vision up to 60fps',
+      },
+      battery: {
+        capacity_mah: 3149,
+        type: 'Li-Ion 3149 mAh',
+        charging:
+          'Wired USB-C, 50% in 30 min with a 20W adapter or higher; MagSafe 20W; Qi2 20W; 4.5W reverse wired',
+        fast_charging_w: 20,
+        reverse_charging: '4.5W reverse wired',
+      },
+      design: {
+        dimensions: '156.2 x 74.7 x 5.64 mm',
+        weight_g: 165,
+        materials: 'Ceramic Shield 2 front, Ceramic Shield back, titanium frame (grade 5)',
+        build: 'Ceramic Shield 2 front, Ceramic Shield back, titanium frame (grade 5)',
+        resistance: 'IP68 (up to 6m for 30 min)',
+        biometrics: 'Face ID',
+        colors: ['Đen Không Gian', 'Trắng Mây', 'Vàng Nhạt', 'Xanh Da Trời'],
+      },
+      cellular: {
+        has_5g: true,
+        technology: 'GSM / HSPA / LTE / 5G (Apple C1X modem)',
+        bands_5g:
+          'n1, n2, n3, n5, n7, n8, n12, n20, n25, n26, n28, n30, n38, n40, n41, n48, n53, n66, n70, n75, n77, n78, n79',
+        bands_4g:
+          'FDD 1, 2, 3, 4, 5, 7, 8, 12, 13, 17, 18, 19, 20, 25, 26, 28, 30, 32, 66; TDD 34, 38, 39, 40, 41, 42, 48, 53',
+        bands_3g: 'UMTS/HSPA+ 850, 900, 1700/2100, 1900, 2100 MHz',
+        bands_2g: 'GSM/EDGE 850, 900, 1800, 1900 MHz',
+        sim_type: 'eSIM only, dual eSIM (no physical SIM, Vietnam model A3517)',
+      },
+      connectivity: {
+        bluetooth: '6.0',
+        wlan: 'Wi-Fi 7 (802.11be) 2x2 MIMO; Thread',
+        usb: 'USB-C, USB 2 (up to 480 Mb/s)',
+        sensors:
+          'Face ID, barometer, high dynamic range gyro, high-g accelerometer, proximity sensor, dual ambient light sensors, magnetometer',
+        location:
+          'Dual-frequency GPS (L1 + L5), GLONASS, Galileo, QZSS, BeiDou, NavIC; digital compass',
+        nfc: true,
+      },
+      multimedia: {
+        loudspeaker: 'Yes (single built-in speaker)',
+        headphone_jack_35mm: false,
+        audio_features:
+          'Spatial Audio, stereo recording; AAC, MP3, Apple Lossless, FLAC, Dolby Digital, Dolby Atmos',
+      },
+      availability: {
+        announced: '2025, September 09',
+        status: 'Available. Released 2025, September 19 (Vietnam: 2025, September 19)',
+        prices_msrp:
+          'Giá niêm yết khi mở bán tại Việt Nam: 256GB: 31.999.000 ₫; 512GB: 38.499.000 ₫; 1TB: 44.999.000 ₫',
+      },
+      regulatory: {
+        sar_head: '1.19 W/kg',
+        sar_body: '1.19 W/kg',
+      },
+    },
+    sources: {
+      storages: 'https://www.apple.com/vn/iphone-air/specs/',
+      colors: 'https://www.apple.com/vn/iphone-air/specs/',
+      ram_gb: 'https://www.gsmarena.com/apple_iphone_17_air-13502.php',
+      vn_launch_prices:
+        'https://vnreview.vn/threads/da-co-gia-ban-iphone-air-tai-viet-nam-chinh-thuc-tu-apple.68897/latest',
+      display: 'https://www.apple.com/iphone-air/specs/',
+      hardware: 'https://www.apple.com/iphone-air/specs/',
+      'hardware.os': 'https://www.gsmarena.com/apple_iphone_17_air-13502.php',
+      camera: 'https://www.apple.com/iphone-air/specs/',
+      'camera.flash': 'https://www.gsmarena.com/apple_iphone_17_air-13502.php',
+      battery: 'https://www.gsmarena.com/apple_iphone_17_air-13502.php',
+      'battery.charging': 'https://www.apple.com/vn/iphone-air/specs/',
+      design: 'https://www.apple.com/iphone-air/specs/',
+      cellular: 'https://www.apple.com/vn/iphone-air/specs/',
+      connectivity: 'https://www.apple.com/vn/iphone-air/specs/',
+      multimedia: 'https://www.apple.com/iphone-air/specs/',
+      'availability.announced_status': 'https://www.gsmarena.com/apple_iphone_17_air-13502.php',
+      'availability.prices_msrp':
+        'https://vnreview.vn/threads/da-co-gia-ban-iphone-air-tai-viet-nam-chinh-thuc-tu-apple.68897/latest',
+      regulatory: 'https://www.gsmarena.com/apple_iphone_17_air-13502.php',
+    },
+    aliases: ['Điện thoại iPhone Air 512GB', 'iPhone Air 512GB Chính hãng VN/A'],
+  },
+  {
+    categorySlug: 'smartphones',
+    brand: 'Apple',
+    model: 'iPhone Air',
+    variant_name: '1TB',
+    model_key: 'apple:iphone-air:1024gb',
+    name: 'Apple iPhone Air 1TB',
+    slug: 'apple-iphone-air-1tb',
+    description:
+      'Apple iPhone Air chính hãng tại Việt Nam: màn hình 6.5 inch ProMotion, chip Apple A19 Pro (3 nm), khung titan, dày 5.64 mm.',
+    ram_gb: 12,
+    storage_gb: 1024,
+    screen_size_inch: 6.5,
+    battery_mah: 3149,
+    has_5g: true,
+    colors: ['Đen Không Gian', 'Trắng Mây', 'Vàng Nhạt', 'Xanh Da Trời'],
+    images: [],
+    key_specs: {
+      screen: '6.5" LTPO Super Retina XDR OLED 120Hz ProMotion, Always-On (Ceramic Shield 2)',
+      chip: 'Apple A19 Pro (3 nm), 6-core CPU, 5-core GPU',
+      camera: '48MP Fusion main; front 18MP Center Stage',
+      battery: '3149 mAh, 50% in 30 min (20W+ adapter), MagSafe/Qi2 20W',
+      ram: '12GB',
+      storage: '1TB',
+    },
+    specifications: {
+      display: {
+        size_inch: 6.5,
+        type: 'LTPO Super Retina XDR OLED, 120Hz ProMotion, Always-On',
+        resolution: '1260 x 2736 pixels (~460 ppi)',
+        refresh_rate_hz: 120,
+        ppi: 460,
+        protection: 'Ceramic Shield 2',
+      },
+      hardware: {
+        chipset: 'Apple A19 Pro (3 nm)',
+        cpu: 'Hexa-core, 2 performance + 4 efficiency cores',
+        gpu: 'Apple GPU (5-core graphics)',
+        storage_expansion: 'No',
+        os: 'iOS 26, upgradable to iOS 27.2',
+        ram_gb: 12,
+        storage_gb: 1024,
+      },
+      camera: {
+        rear_setup: 'Single camera (48MP Fusion; 2x optical-quality from the main sensor)',
+        main_camera: '48 MP Fusion, f/1.6, 26mm (wide), sensor-shift OIS',
+        second_camera: '12 MP 2x Telephoto from the 48MP Fusion sensor (no separate lens)',
+        flash: 'Dual-LED dual-tone flash',
+        video_recording:
+          '4K Dolby Vision up to 60fps, 1080p slo-mo @120/240fps, Action mode up to 2.8K@60fps',
+        front_camera: '18 MP Center Stage, f/1.9; 4K Dolby Vision up to 60fps',
+      },
+      battery: {
+        capacity_mah: 3149,
+        type: 'Li-Ion 3149 mAh',
+        charging:
+          'Wired USB-C, 50% in 30 min with a 20W adapter or higher; MagSafe 20W; Qi2 20W; 4.5W reverse wired',
+        fast_charging_w: 20,
+        reverse_charging: '4.5W reverse wired',
+      },
+      design: {
+        dimensions: '156.2 x 74.7 x 5.64 mm',
+        weight_g: 165,
+        materials: 'Ceramic Shield 2 front, Ceramic Shield back, titanium frame (grade 5)',
+        build: 'Ceramic Shield 2 front, Ceramic Shield back, titanium frame (grade 5)',
+        resistance: 'IP68 (up to 6m for 30 min)',
+        biometrics: 'Face ID',
+        colors: ['Đen Không Gian', 'Trắng Mây', 'Vàng Nhạt', 'Xanh Da Trời'],
+      },
+      cellular: {
+        has_5g: true,
+        technology: 'GSM / HSPA / LTE / 5G (Apple C1X modem)',
+        bands_5g:
+          'n1, n2, n3, n5, n7, n8, n12, n20, n25, n26, n28, n30, n38, n40, n41, n48, n53, n66, n70, n75, n77, n78, n79',
+        bands_4g:
+          'FDD 1, 2, 3, 4, 5, 7, 8, 12, 13, 17, 18, 19, 20, 25, 26, 28, 30, 32, 66; TDD 34, 38, 39, 40, 41, 42, 48, 53',
+        bands_3g: 'UMTS/HSPA+ 850, 900, 1700/2100, 1900, 2100 MHz',
+        bands_2g: 'GSM/EDGE 850, 900, 1800, 1900 MHz',
+        sim_type: 'eSIM only, dual eSIM (no physical SIM, Vietnam model A3517)',
+      },
+      connectivity: {
+        bluetooth: '6.0',
+        wlan: 'Wi-Fi 7 (802.11be) 2x2 MIMO; Thread',
+        usb: 'USB-C, USB 2 (up to 480 Mb/s)',
+        sensors:
+          'Face ID, barometer, high dynamic range gyro, high-g accelerometer, proximity sensor, dual ambient light sensors, magnetometer',
+        location:
+          'Dual-frequency GPS (L1 + L5), GLONASS, Galileo, QZSS, BeiDou, NavIC; digital compass',
+        nfc: true,
+      },
+      multimedia: {
+        loudspeaker: 'Yes (single built-in speaker)',
+        headphone_jack_35mm: false,
+        audio_features:
+          'Spatial Audio, stereo recording; AAC, MP3, Apple Lossless, FLAC, Dolby Digital, Dolby Atmos',
+      },
+      availability: {
+        announced: '2025, September 09',
+        status: 'Available. Released 2025, September 19 (Vietnam: 2025, September 19)',
+        prices_msrp:
+          'Giá niêm yết khi mở bán tại Việt Nam: 256GB: 31.999.000 ₫; 512GB: 38.499.000 ₫; 1TB: 44.999.000 ₫',
+      },
+      regulatory: {
+        sar_head: '1.19 W/kg',
+        sar_body: '1.19 W/kg',
+      },
+    },
+    sources: {
+      storages: 'https://www.apple.com/vn/iphone-air/specs/',
+      colors: 'https://www.apple.com/vn/iphone-air/specs/',
+      ram_gb: 'https://www.gsmarena.com/apple_iphone_17_air-13502.php',
+      vn_launch_prices:
+        'https://vnreview.vn/threads/da-co-gia-ban-iphone-air-tai-viet-nam-chinh-thuc-tu-apple.68897/latest',
+      display: 'https://www.apple.com/iphone-air/specs/',
+      hardware: 'https://www.apple.com/iphone-air/specs/',
+      'hardware.os': 'https://www.gsmarena.com/apple_iphone_17_air-13502.php',
+      camera: 'https://www.apple.com/iphone-air/specs/',
+      'camera.flash': 'https://www.gsmarena.com/apple_iphone_17_air-13502.php',
+      battery: 'https://www.gsmarena.com/apple_iphone_17_air-13502.php',
+      'battery.charging': 'https://www.apple.com/vn/iphone-air/specs/',
+      design: 'https://www.apple.com/iphone-air/specs/',
+      cellular: 'https://www.apple.com/vn/iphone-air/specs/',
+      connectivity: 'https://www.apple.com/vn/iphone-air/specs/',
+      multimedia: 'https://www.apple.com/iphone-air/specs/',
+      'availability.announced_status': 'https://www.gsmarena.com/apple_iphone_17_air-13502.php',
+      'availability.prices_msrp':
+        'https://vnreview.vn/threads/da-co-gia-ban-iphone-air-tai-viet-nam-chinh-thuc-tu-apple.68897/latest',
+      regulatory: 'https://www.gsmarena.com/apple_iphone_17_air-13502.php',
+    },
+    aliases: ['Điện thoại iPhone Air 1TB', 'iPhone Air 1TB Chính hãng VN/A'],
+  },
+  {
+    categorySlug: 'smartphones',
+    brand: 'Samsung',
+    model: 'Galaxy S26 FE',
+    variant_name: '8GB/128GB',
+    model_key: 'samsung:galaxy-s26-fe:128gb',
+    name: 'Samsung Galaxy S26 FE 128GB',
+    slug: 'samsung-galaxy-s26-fe-128gb',
+    description:
+      'Samsung Galaxy S26 FE chính hãng tại Việt Nam: màn hình 6.7 inch 120Hz, chip Exynos 2500 (3 nm), pin 4900 mAh.',
+    ram_gb: 8,
+    storage_gb: 128,
+    screen_size_inch: 6.7,
+    battery_mah: 4900,
+    has_5g: true,
+    colors: ['Xanh Blueberry', 'Xám Graphite', 'Xanh Pistachio'],
+    images: [],
+    key_specs: {
+      screen: '6.7" Dynamic AMOLED 2X, FHD+ 1080 x 2340, 120Hz, 1900 nits (peak)',
+      chip: 'Exynos 2500 (3 nm) in Vietnam',
+      camera: '50MP main + 12MP ultrawide + 8MP tele 3x; 12MP front',
+      battery: '4900 mAh, 45W wired, 15W wireless',
+      ram: '8GB',
+      storage: '128GB',
+    },
+    specifications: {
+      display: {
+        size_inch: 6.7,
+        type: 'Dynamic AMOLED 2X, 120Hz, HDR10+, 1900 nits (peak)',
+        resolution: '1080 x 2340 pixels (FHD+)',
+        refresh_rate_hz: 120,
+        ppi: 385,
+        protection: 'Corning Gorilla Glass Victus+',
+      },
+      hardware: {
+        chipset: 'Exynos 2500 (3 nm)',
+        cpu: '10-core (1x3.3 GHz Cortex-X925 + 2x2.74 GHz Cortex-A725 + 5x2.36 GHz Cortex-A725 + 2x1.8 GHz Cortex-A520)',
+        gpu: 'Xclipse 950',
+        storage_expansion: 'No',
+        os: 'Android 17, One UI 9, up to 7 major Android upgrades',
+        ram_gb: 8,
+        storage_gb: 128,
+      },
+      camera: {
+        rear_setup: 'Triple camera',
+        main_camera: '50 MP, f/1.8 (wide), dual pixel PDAF, OIS',
+        second_camera: '12 MP, f/2.2, 123˚ (ultrawide)',
+        third_camera: '8 MP, f/2.4 (telephoto), OIS, 3x optical zoom',
+        flash: 'LED flash',
+        video_recording: '8K@24/30fps, 4K@30/60/120fps, 1080p up to 240fps, HDR10+',
+        front_camera: '12 MP, f/2.2; 4K@30/60fps',
+      },
+      battery: {
+        capacity_mah: 4900,
+        type: 'Li-Ion 4900 mAh (typical), 4755 mAh (rated)',
+        charging: '45W wired; 15W wireless; Wireless PowerShare',
+        fast_charging_w: 45,
+        reverse_charging: 'Wireless PowerShare (reverse wireless)',
+      },
+      design: {
+        dimensions: '161.6 x 76.9 x 7.4 mm',
+        weight_g: 193,
+        materials:
+          'Glass front (Gorilla Glass Victus+), glass back (Gorilla Glass Victus+), aluminum frame',
+        build:
+          'Glass front (Gorilla Glass Victus+), glass back (Gorilla Glass Victus+), aluminum frame',
+        resistance: 'IP68 dust/water resistant (up to 1.5m for 30 min)',
+        biometrics: 'Fingerprint (under display, optical)',
+        colors: ['Xanh Blueberry', 'Xám Graphite', 'Xanh Pistachio'],
+      },
+      cellular: {
+        has_5g: true,
+        technology: 'GSM / WCDMA / LTE / 5G Sub-6 (FDD/TDD)',
+        bands_5g:
+          'FDD n1, n2, n3, n5, n7, n8, n12, n20, n25, n26, n28, n66; TDD n38, n40, n41, n77, n78',
+        bands_4g:
+          'FDD B1, B2, B3, B4, B5, B7, B8, B12, B13, B17, B18, B19, B20, B25, B26, B28, B66; TDD B38, B40, B41',
+        bands_3g: 'B1(2100), B2(1900), B4(AWS), B5(850), B8(900)',
+        bands_2g: 'GSM850, GSM900, DCS1800, PCS1900',
+        sim_type: 'Nano-SIM + Nano-SIM + eSIM (dual SIM)',
+      },
+      connectivity: {
+        bluetooth: '5.4',
+        wlan: 'Wi-Fi 802.11 a/b/g/n/ac/ax (Wi-Fi 6E), 2.4/5/6 GHz, Wi-Fi Direct',
+        usb: 'USB Type-C, USB 2.0',
+        sensors:
+          'Fingerprint (under display, optical), accelerometer, barometer, gyro, geomagnetic, Hall, light, proximity',
+        location: 'GPS, GLONASS, BDS, GALILEO, QZSS',
+        nfc: true,
+      },
+      multimedia: {
+        loudspeaker: 'Yes, with stereo speakers',
+        headphone_jack_35mm: false,
+        audio_features: 'Stereo sound',
+      },
+      availability: {
+        announced: '2026, August 27',
+        status: 'Available. On sale in Vietnam from 2026, August 28',
+        prices_msrp:
+          'Giá niêm yết khi mở bán tại Việt Nam: 128GB: 18.990.000 ₫; 256GB: 21.990.000 ₫',
+      },
+      regulatory: {
+        sar_head: '0.50 W/kg (EU)',
+        sar_body: '1.32 W/kg (EU)',
+      },
+    },
+    sources: {
+      storages:
+        'https://vnreview.vn/threads/samsung-ra-mat-galaxy-s26-fe-tai-viet-nam-vi-xu-ly-exynos-2500-moi-gia-tu-18-99-trieu-dong.90597/',
+      colors:
+        'https://www.samsung.com/vn/smartphones/galaxy-s/galaxy-s26-fe-blueberry-256gb-sm-s741bzvcxxv/',
+      vn_launch_prices:
+        'https://vnreview.vn/threads/samsung-ra-mat-galaxy-s26-fe-tai-viet-nam-vi-xu-ly-exynos-2500-moi-gia-tu-18-99-trieu-dong.90597/',
+      vn_launch_prices_crosscheck:
+        'https://cellphones.com.vn/dien-thoai-samsung-galaxy-s26-fe.html',
+      display:
+        'https://www.samsung.com/vn/smartphones/galaxy-s/galaxy-s26-fe-blueberry-256gb-sm-s741bzvcxxv/',
+      'display.ppi_protection': 'https://www.gsmarena.com/samsung_galaxy_s26_fe_5g-14870.php',
+      hardware:
+        'https://www.samsung.com/vn/smartphones/galaxy-s/galaxy-s26-fe-blueberry-256gb-sm-s741bzvcxxv/',
+      'hardware.cpu': 'https://www.gsmarena.com/samsung_galaxy_s26_fe_5g-14870.php',
+      camera:
+        'https://www.samsung.com/vn/smartphones/galaxy-s/galaxy-s26-fe-blueberry-256gb-sm-s741bzvcxxv/',
+      battery:
+        'https://www.samsung.com/vn/smartphones/galaxy-s/galaxy-s26-fe-blueberry-256gb-sm-s741bzvcxxv/',
+      design: 'https://www.gsmarena.com/samsung_galaxy_s26_fe_5g-14870.php',
+      cellular:
+        'https://www.samsung.com/vn/smartphones/galaxy-s/galaxy-s26-fe-blueberry-256gb-sm-s741bzvcxxv/',
+      connectivity:
+        'https://www.samsung.com/vn/smartphones/galaxy-s/galaxy-s26-fe-blueberry-256gb-sm-s741bzvcxxv/',
+      multimedia: 'https://www.gsmarena.com/samsung_galaxy_s26_fe_5g-14870.php',
+      'availability.announced_status':
+        'https://www.gsmarena.com/samsung_galaxy_s26_fe_5g-14870.php',
+      'availability.prices_msrp':
+        'https://vnreview.vn/threads/samsung-ra-mat-galaxy-s26-fe-tai-viet-nam-vi-xu-ly-exynos-2500-moi-gia-tu-18-99-trieu-dong.90597/',
+      regulatory: 'https://www.gsmarena.com/samsung_galaxy_s26_fe_5g-14870.php',
+    },
+    aliases: ['Samsung Galaxy S26 FE 5G 8GB/128GB', 'Điện thoại Samsung Galaxy S26 FE 8GB 128GB'],
+  },
+  {
+    categorySlug: 'smartphones',
+    brand: 'Samsung',
+    model: 'Galaxy S26 FE',
+    variant_name: '8GB/256GB',
+    model_key: 'samsung:galaxy-s26-fe:256gb',
+    name: 'Samsung Galaxy S26 FE 256GB',
+    slug: 'samsung-galaxy-s26-fe-256gb',
+    description:
+      'Samsung Galaxy S26 FE chính hãng tại Việt Nam: màn hình 6.7 inch 120Hz, chip Exynos 2500 (3 nm), pin 4900 mAh.',
+    ram_gb: 8,
+    storage_gb: 256,
+    screen_size_inch: 6.7,
+    battery_mah: 4900,
+    has_5g: true,
+    colors: ['Xanh Blueberry', 'Xám Graphite', 'Xanh Pistachio'],
+    images: [],
+    key_specs: {
+      screen: '6.7" Dynamic AMOLED 2X, FHD+ 1080 x 2340, 120Hz, 1900 nits (peak)',
+      chip: 'Exynos 2500 (3 nm) in Vietnam',
+      camera: '50MP main + 12MP ultrawide + 8MP tele 3x; 12MP front',
+      battery: '4900 mAh, 45W wired, 15W wireless',
+      ram: '8GB',
+      storage: '256GB',
+    },
+    specifications: {
+      display: {
+        size_inch: 6.7,
+        type: 'Dynamic AMOLED 2X, 120Hz, HDR10+, 1900 nits (peak)',
+        resolution: '1080 x 2340 pixels (FHD+)',
+        refresh_rate_hz: 120,
+        ppi: 385,
+        protection: 'Corning Gorilla Glass Victus+',
+      },
+      hardware: {
+        chipset: 'Exynos 2500 (3 nm)',
+        cpu: '10-core (1x3.3 GHz Cortex-X925 + 2x2.74 GHz Cortex-A725 + 5x2.36 GHz Cortex-A725 + 2x1.8 GHz Cortex-A520)',
+        gpu: 'Xclipse 950',
+        storage_expansion: 'No',
+        os: 'Android 17, One UI 9, up to 7 major Android upgrades',
+        ram_gb: 8,
+        storage_gb: 256,
+      },
+      camera: {
+        rear_setup: 'Triple camera',
+        main_camera: '50 MP, f/1.8 (wide), dual pixel PDAF, OIS',
+        second_camera: '12 MP, f/2.2, 123˚ (ultrawide)',
+        third_camera: '8 MP, f/2.4 (telephoto), OIS, 3x optical zoom',
+        flash: 'LED flash',
+        video_recording: '8K@24/30fps, 4K@30/60/120fps, 1080p up to 240fps, HDR10+',
+        front_camera: '12 MP, f/2.2; 4K@30/60fps',
+      },
+      battery: {
+        capacity_mah: 4900,
+        type: 'Li-Ion 4900 mAh (typical), 4755 mAh (rated)',
+        charging: '45W wired; 15W wireless; Wireless PowerShare',
+        fast_charging_w: 45,
+        reverse_charging: 'Wireless PowerShare (reverse wireless)',
+      },
+      design: {
+        dimensions: '161.6 x 76.9 x 7.4 mm',
+        weight_g: 193,
+        materials:
+          'Glass front (Gorilla Glass Victus+), glass back (Gorilla Glass Victus+), aluminum frame',
+        build:
+          'Glass front (Gorilla Glass Victus+), glass back (Gorilla Glass Victus+), aluminum frame',
+        resistance: 'IP68 dust/water resistant (up to 1.5m for 30 min)',
+        biometrics: 'Fingerprint (under display, optical)',
+        colors: ['Xanh Blueberry', 'Xám Graphite', 'Xanh Pistachio'],
+      },
+      cellular: {
+        has_5g: true,
+        technology: 'GSM / WCDMA / LTE / 5G Sub-6 (FDD/TDD)',
+        bands_5g:
+          'FDD n1, n2, n3, n5, n7, n8, n12, n20, n25, n26, n28, n66; TDD n38, n40, n41, n77, n78',
+        bands_4g:
+          'FDD B1, B2, B3, B4, B5, B7, B8, B12, B13, B17, B18, B19, B20, B25, B26, B28, B66; TDD B38, B40, B41',
+        bands_3g: 'B1(2100), B2(1900), B4(AWS), B5(850), B8(900)',
+        bands_2g: 'GSM850, GSM900, DCS1800, PCS1900',
+        sim_type: 'Nano-SIM + Nano-SIM + eSIM (dual SIM)',
+      },
+      connectivity: {
+        bluetooth: '5.4',
+        wlan: 'Wi-Fi 802.11 a/b/g/n/ac/ax (Wi-Fi 6E), 2.4/5/6 GHz, Wi-Fi Direct',
+        usb: 'USB Type-C, USB 2.0',
+        sensors:
+          'Fingerprint (under display, optical), accelerometer, barometer, gyro, geomagnetic, Hall, light, proximity',
+        location: 'GPS, GLONASS, BDS, GALILEO, QZSS',
+        nfc: true,
+      },
+      multimedia: {
+        loudspeaker: 'Yes, with stereo speakers',
+        headphone_jack_35mm: false,
+        audio_features: 'Stereo sound',
+      },
+      availability: {
+        announced: '2026, August 27',
+        status: 'Available. On sale in Vietnam from 2026, August 28',
+        prices_msrp:
+          'Giá niêm yết khi mở bán tại Việt Nam: 128GB: 18.990.000 ₫; 256GB: 21.990.000 ₫',
+      },
+      regulatory: {
+        sar_head: '0.50 W/kg (EU)',
+        sar_body: '1.32 W/kg (EU)',
+      },
+    },
+    sources: {
+      storages:
+        'https://vnreview.vn/threads/samsung-ra-mat-galaxy-s26-fe-tai-viet-nam-vi-xu-ly-exynos-2500-moi-gia-tu-18-99-trieu-dong.90597/',
+      colors:
+        'https://www.samsung.com/vn/smartphones/galaxy-s/galaxy-s26-fe-blueberry-256gb-sm-s741bzvcxxv/',
+      vn_launch_prices:
+        'https://vnreview.vn/threads/samsung-ra-mat-galaxy-s26-fe-tai-viet-nam-vi-xu-ly-exynos-2500-moi-gia-tu-18-99-trieu-dong.90597/',
+      vn_launch_prices_crosscheck:
+        'https://cellphones.com.vn/dien-thoai-samsung-galaxy-s26-fe.html',
+      display:
+        'https://www.samsung.com/vn/smartphones/galaxy-s/galaxy-s26-fe-blueberry-256gb-sm-s741bzvcxxv/',
+      'display.ppi_protection': 'https://www.gsmarena.com/samsung_galaxy_s26_fe_5g-14870.php',
+      hardware:
+        'https://www.samsung.com/vn/smartphones/galaxy-s/galaxy-s26-fe-blueberry-256gb-sm-s741bzvcxxv/',
+      'hardware.cpu': 'https://www.gsmarena.com/samsung_galaxy_s26_fe_5g-14870.php',
+      camera:
+        'https://www.samsung.com/vn/smartphones/galaxy-s/galaxy-s26-fe-blueberry-256gb-sm-s741bzvcxxv/',
+      battery:
+        'https://www.samsung.com/vn/smartphones/galaxy-s/galaxy-s26-fe-blueberry-256gb-sm-s741bzvcxxv/',
+      design: 'https://www.gsmarena.com/samsung_galaxy_s26_fe_5g-14870.php',
+      cellular:
+        'https://www.samsung.com/vn/smartphones/galaxy-s/galaxy-s26-fe-blueberry-256gb-sm-s741bzvcxxv/',
+      connectivity:
+        'https://www.samsung.com/vn/smartphones/galaxy-s/galaxy-s26-fe-blueberry-256gb-sm-s741bzvcxxv/',
+      multimedia: 'https://www.gsmarena.com/samsung_galaxy_s26_fe_5g-14870.php',
+      'availability.announced_status':
+        'https://www.gsmarena.com/samsung_galaxy_s26_fe_5g-14870.php',
+      'availability.prices_msrp':
+        'https://vnreview.vn/threads/samsung-ra-mat-galaxy-s26-fe-tai-viet-nam-vi-xu-ly-exynos-2500-moi-gia-tu-18-99-trieu-dong.90597/',
+      regulatory: 'https://www.gsmarena.com/samsung_galaxy_s26_fe_5g-14870.php',
+    },
+    aliases: ['Samsung Galaxy S26 FE 5G 8GB/256GB', 'Điện thoại Samsung Galaxy S26 FE 8GB 256GB'],
+  },
+  // Wave 1a: the Galaxy Z Fold8, Z Fold8 Ultra and Z Flip8 (announced 2026-07-22). There is
+  // no Z Flip8 FE this year.
+  {
+    categorySlug: 'smartphones',
+    brand: 'Samsung',
+    model: 'Galaxy Z Fold8',
+    variant_name: '12GB/256GB',
+    model_key: 'samsung:galaxy-z-fold8:256gb',
+    name: 'Samsung Galaxy Z Fold8 256GB',
+    slug: 'samsung-galaxy-z-fold8-256gb',
+    description:
+      'Samsung Galaxy Z Fold8 chính hãng tại Việt Nam: màn hình chính gập 7.6 inch, màn hình phụ 5.5 inch, chip Snapdragon 8 Elite Gen 5 for Galaxy (3 nm), pin 4800 mAh.',
+    ram_gb: 12,
+    storage_gb: 256,
+    screen_size_inch: 7.6,
+    battery_mah: 4800,
+    has_5g: true,
+    colors: ['Đen Graphite', 'Trắng Cream', 'Tím Lavender', 'Xanh Pistachio'],
+    images: [],
+    key_specs: {
+      screen: '7.6" foldable Dynamic LTPO AMOLED 2X 120Hz (2448 x 1848) + 5.5" cover screen 120Hz',
+      chip: 'Snapdragon 8 Elite Gen 5 for Galaxy (3 nm)',
+      camera: '50MP main + 50MP ultrawide; two 10MP front cameras',
+      battery: '4800 mAh, 45W wired, 20W wireless',
+      ram: '12GB',
+      storage: '256GB',
+    },
+    specifications: {
+      display: {
+        size_inch: 7.6,
+        type: 'Main: foldable Dynamic LTPO AMOLED 2X, 120Hz, HDR10+, 3000 nits (peak). Cover: 5.5" Dynamic LTPO AMOLED 2X, 120Hz, 1248 x 1972',
+        resolution: '2448 x 1848 pixels (main, 4:3)',
+        refresh_rate_hz: 120,
+        ppi: 404,
+        protection: 'Cover screen: Corning Gorilla Glass Ceramic 3; inner screen: plastic front',
+      },
+      hardware: {
+        chipset:
+          'Qualcomm Snapdragon 8 Elite Gen 5 for Galaxy (3 nm), all markets including Vietnam',
+        cpu: 'Octa-core (2x4.74 GHz Oryon V3 Phoenix L + 6x3.62 GHz Oryon V3 Phoenix M)',
+        gpu: 'Adreno 840',
+        storage_expansion: 'No',
+        os: 'Android 17, One UI 9, up to 7 major Android upgrades',
+        ram_gb: 12,
+        storage_gb: 256,
+      },
+      camera: {
+        rear_setup: 'Dual camera',
+        main_camera: '50 MP, f/1.8, 23mm (wide), 1/1.56", dual pixel PDAF, OIS',
+        second_camera: '50 MP, f/1.9, 13mm, 120˚ (ultrawide)',
+        flash: 'LED flash',
+        video_recording: '8K@30fps, 4K@30/60/120fps, 1080p@30/60/120/240fps, gyro-EIS, OIS',
+        front_camera:
+          '10 MP, f/2.2, 18mm (ultrawide) on the inner screen; 10 MP, f/2.2, 24mm (wide) on the cover screen; 4K@30/60fps',
+      },
+      battery: {
+        capacity_mah: 4800,
+        type: 'Si/C Li-Ion 4800 mAh',
+        charging: '45W wired, 63% in 30 min; 20W wireless; 4.5W reverse wireless',
+        fast_charging_w: 45,
+        reverse_charging: '4.5W reverse wireless',
+      },
+      design: {
+        dimensions: 'Unfolded: 161.4 x 123.9 x 4.5 mm; folded: 81.9 x 123.9 x 9.7 mm',
+        weight_g: 201,
+        materials:
+          'Glass front when folded (Gorilla Glass Ceramic 3), plastic front when unfolded, glass back (Gorilla Glass Victus 2), aluminum frame',
+        build:
+          'Glass front when folded (Gorilla Glass Ceramic 3), plastic front when unfolded, glass back (Gorilla Glass Victus 2), aluminum frame',
+        resistance: 'IP48',
+        biometrics: 'Fingerprint (side-mounted)',
+        colors: ['Đen Graphite', 'Trắng Cream', 'Tím Lavender', 'Xanh Pistachio'],
+      },
+      cellular: {
+        has_5g: true,
+        technology: 'GSM / HSPA / LTE / 5G',
+        bands_5g:
+          '1, 2, 3, 5, 7, 8, 12, 20, 25, 26, 28, 38, 40, 41, 66, 77, 78 SA/NSA/Sub6 (International)',
+        bands_4g:
+          '1, 2, 3, 4, 5, 7, 8, 12, 13, 17, 18, 19, 20, 25, 26, 28, 38, 39, 40, 41, 66 (International)',
+        bands_3g: 'HSDPA 850 / 900 / 1700(AWS) / 1900 / 2100',
+        bands_2g: 'GSM 850 / 900 / 1800 / 1900',
+        sim_type: 'Nano-SIM + eSIM / Dual eSIM (max 2 at a time)',
+      },
+      connectivity: {
+        bluetooth: '6.0, A2DP, LE',
+        wlan: 'Wi-Fi 802.11 a/b/g/n/ac/ax/be (Wi-Fi 7), tri-band, Wi-Fi Direct',
+        usb: 'USB Type-C 3.2 Gen 1',
+        sensors:
+          'Fingerprint (side-mounted), accelerometer, gyro, proximity, compass, barometer, Hall, light; UWB',
+        location: 'GPS, GLONASS, BDS, GALILEO, QZSS',
+        nfc: true,
+      },
+      multimedia: {
+        loudspeaker: 'Yes, with stereo speakers',
+        headphone_jack_35mm: false,
+        audio_features: 'High-bitrate audio',
+      },
+      availability: {
+        announced: '2026, July 22',
+        status: 'Available. Pre-orders in Vietnam from 2026, July 22',
+        prices_msrp:
+          'Giá niêm yết khi mở bán tại Việt Nam: 256GB: 46.990.000 ₫; 512GB: 52.990.000 ₫; 1TB: 61.990.000 ₫',
+      },
+      regulatory: {
+        sar_head: '1.23 W/kg',
+        sar_body: '1.17 W/kg',
+      },
+    },
+    sources: {
+      storages: 'https://www.samsung.com/vn/smartphones/galaxy-z-fold8/buy/',
+      colors: 'https://www.samsung.com/vn/smartphones/galaxy-z-fold8/buy/',
+      vn_launch_prices:
+        'https://cellphones.com.vn/sforum/gia-ban-va-khuyen-mai-galaxy-z-fold8-z-flip8',
+      vn_launch_prices_crosscheck:
+        'https://fptshop.com.vn/tin-tuc/danh-gia/samsung-galaxy-z-fold-8-gia-bao-nhieu-210412',
+      display: 'https://www.gsmarena.com/samsung_galaxy_z_fold_wide_5g-14673.php',
+      hardware: 'https://www.gsmarena.com/samsung_galaxy_z_fold_wide_5g-14673.php',
+      'hardware.chipset_vn':
+        'https://fptshop.com.vn/tin-tuc/danh-gia/samsung-galaxy-z-fold-8-gia-bao-nhieu-210412',
+      camera: 'https://www.gsmarena.com/samsung_galaxy_z_fold_wide_5g-14673.php',
+      battery: 'https://www.gsmarena.com/samsung_galaxy_z_fold_wide_5g-14673.php',
+      design: 'https://www.samsung.com/vn/smartphones/galaxy-z-fold8/specs/',
+      'design.materials': 'https://www.gsmarena.com/samsung_galaxy_z_fold_wide_5g-14673.php',
+      cellular: 'https://www.gsmarena.com/samsung_galaxy_z_fold_wide_5g-14673.php',
+      connectivity: 'https://www.samsung.com/vn/smartphones/galaxy-z-fold8/specs/',
+      multimedia: 'https://www.gsmarena.com/samsung_galaxy_z_fold_wide_5g-14673.php',
+      'availability.announced_status':
+        'https://www.gsmarena.com/samsung_galaxy_z_fold_wide_5g-14673.php',
+      'availability.prices_msrp':
+        'https://cellphones.com.vn/sforum/gia-ban-va-khuyen-mai-galaxy-z-fold8-z-flip8',
+      regulatory: 'https://www.gsmarena.com/samsung_galaxy_z_fold_wide_5g-14673.php',
+    },
+    aliases: [
+      'Điện thoại Samsung Galaxy Z Fold8 5G 12GB/256GB',
+      'Samsung Galaxy Z Fold8 5G 12GB 256GB Chính hãng',
+    ],
+  },
+  {
+    categorySlug: 'smartphones',
+    brand: 'Samsung',
+    model: 'Galaxy Z Fold8',
+    variant_name: '12GB/512GB',
+    model_key: 'samsung:galaxy-z-fold8:512gb',
+    name: 'Samsung Galaxy Z Fold8 512GB',
+    slug: 'samsung-galaxy-z-fold8-512gb',
+    description:
+      'Samsung Galaxy Z Fold8 chính hãng tại Việt Nam: màn hình chính gập 7.6 inch, màn hình phụ 5.5 inch, chip Snapdragon 8 Elite Gen 5 for Galaxy (3 nm), pin 4800 mAh.',
+    ram_gb: 12,
+    storage_gb: 512,
+    screen_size_inch: 7.6,
+    battery_mah: 4800,
+    has_5g: true,
+    colors: ['Đen Graphite', 'Trắng Cream', 'Tím Lavender', 'Xanh Pistachio'],
+    images: [],
+    key_specs: {
+      screen: '7.6" foldable Dynamic LTPO AMOLED 2X 120Hz (2448 x 1848) + 5.5" cover screen 120Hz',
+      chip: 'Snapdragon 8 Elite Gen 5 for Galaxy (3 nm)',
+      camera: '50MP main + 50MP ultrawide; two 10MP front cameras',
+      battery: '4800 mAh, 45W wired, 20W wireless',
+      ram: '12GB',
+      storage: '512GB',
+    },
+    specifications: {
+      display: {
+        size_inch: 7.6,
+        type: 'Main: foldable Dynamic LTPO AMOLED 2X, 120Hz, HDR10+, 3000 nits (peak). Cover: 5.5" Dynamic LTPO AMOLED 2X, 120Hz, 1248 x 1972',
+        resolution: '2448 x 1848 pixels (main, 4:3)',
+        refresh_rate_hz: 120,
+        ppi: 404,
+        protection: 'Cover screen: Corning Gorilla Glass Ceramic 3; inner screen: plastic front',
+      },
+      hardware: {
+        chipset:
+          'Qualcomm Snapdragon 8 Elite Gen 5 for Galaxy (3 nm), all markets including Vietnam',
+        cpu: 'Octa-core (2x4.74 GHz Oryon V3 Phoenix L + 6x3.62 GHz Oryon V3 Phoenix M)',
+        gpu: 'Adreno 840',
+        storage_expansion: 'No',
+        os: 'Android 17, One UI 9, up to 7 major Android upgrades',
+        ram_gb: 12,
+        storage_gb: 512,
+      },
+      camera: {
+        rear_setup: 'Dual camera',
+        main_camera: '50 MP, f/1.8, 23mm (wide), 1/1.56", dual pixel PDAF, OIS',
+        second_camera: '50 MP, f/1.9, 13mm, 120˚ (ultrawide)',
+        flash: 'LED flash',
+        video_recording: '8K@30fps, 4K@30/60/120fps, 1080p@30/60/120/240fps, gyro-EIS, OIS',
+        front_camera:
+          '10 MP, f/2.2, 18mm (ultrawide) on the inner screen; 10 MP, f/2.2, 24mm (wide) on the cover screen; 4K@30/60fps',
+      },
+      battery: {
+        capacity_mah: 4800,
+        type: 'Si/C Li-Ion 4800 mAh',
+        charging: '45W wired, 63% in 30 min; 20W wireless; 4.5W reverse wireless',
+        fast_charging_w: 45,
+        reverse_charging: '4.5W reverse wireless',
+      },
+      design: {
+        dimensions: 'Unfolded: 161.4 x 123.9 x 4.5 mm; folded: 81.9 x 123.9 x 9.7 mm',
+        weight_g: 201,
+        materials:
+          'Glass front when folded (Gorilla Glass Ceramic 3), plastic front when unfolded, glass back (Gorilla Glass Victus 2), aluminum frame',
+        build:
+          'Glass front when folded (Gorilla Glass Ceramic 3), plastic front when unfolded, glass back (Gorilla Glass Victus 2), aluminum frame',
+        resistance: 'IP48',
+        biometrics: 'Fingerprint (side-mounted)',
+        colors: ['Đen Graphite', 'Trắng Cream', 'Tím Lavender', 'Xanh Pistachio'],
+      },
+      cellular: {
+        has_5g: true,
+        technology: 'GSM / HSPA / LTE / 5G',
+        bands_5g:
+          '1, 2, 3, 5, 7, 8, 12, 20, 25, 26, 28, 38, 40, 41, 66, 77, 78 SA/NSA/Sub6 (International)',
+        bands_4g:
+          '1, 2, 3, 4, 5, 7, 8, 12, 13, 17, 18, 19, 20, 25, 26, 28, 38, 39, 40, 41, 66 (International)',
+        bands_3g: 'HSDPA 850 / 900 / 1700(AWS) / 1900 / 2100',
+        bands_2g: 'GSM 850 / 900 / 1800 / 1900',
+        sim_type: 'Nano-SIM + eSIM / Dual eSIM (max 2 at a time)',
+      },
+      connectivity: {
+        bluetooth: '6.0, A2DP, LE',
+        wlan: 'Wi-Fi 802.11 a/b/g/n/ac/ax/be (Wi-Fi 7), tri-band, Wi-Fi Direct',
+        usb: 'USB Type-C 3.2 Gen 1',
+        sensors:
+          'Fingerprint (side-mounted), accelerometer, gyro, proximity, compass, barometer, Hall, light; UWB',
+        location: 'GPS, GLONASS, BDS, GALILEO, QZSS',
+        nfc: true,
+      },
+      multimedia: {
+        loudspeaker: 'Yes, with stereo speakers',
+        headphone_jack_35mm: false,
+        audio_features: 'High-bitrate audio',
+      },
+      availability: {
+        announced: '2026, July 22',
+        status: 'Available. Pre-orders in Vietnam from 2026, July 22',
+        prices_msrp:
+          'Giá niêm yết khi mở bán tại Việt Nam: 256GB: 46.990.000 ₫; 512GB: 52.990.000 ₫; 1TB: 61.990.000 ₫',
+      },
+      regulatory: {
+        sar_head: '1.23 W/kg',
+        sar_body: '1.17 W/kg',
+      },
+    },
+    sources: {
+      storages: 'https://www.samsung.com/vn/smartphones/galaxy-z-fold8/buy/',
+      colors: 'https://www.samsung.com/vn/smartphones/galaxy-z-fold8/buy/',
+      vn_launch_prices:
+        'https://cellphones.com.vn/sforum/gia-ban-va-khuyen-mai-galaxy-z-fold8-z-flip8',
+      vn_launch_prices_crosscheck:
+        'https://fptshop.com.vn/tin-tuc/danh-gia/samsung-galaxy-z-fold-8-gia-bao-nhieu-210412',
+      display: 'https://www.gsmarena.com/samsung_galaxy_z_fold_wide_5g-14673.php',
+      hardware: 'https://www.gsmarena.com/samsung_galaxy_z_fold_wide_5g-14673.php',
+      'hardware.chipset_vn':
+        'https://fptshop.com.vn/tin-tuc/danh-gia/samsung-galaxy-z-fold-8-gia-bao-nhieu-210412',
+      camera: 'https://www.gsmarena.com/samsung_galaxy_z_fold_wide_5g-14673.php',
+      battery: 'https://www.gsmarena.com/samsung_galaxy_z_fold_wide_5g-14673.php',
+      design: 'https://www.samsung.com/vn/smartphones/galaxy-z-fold8/specs/',
+      'design.materials': 'https://www.gsmarena.com/samsung_galaxy_z_fold_wide_5g-14673.php',
+      cellular: 'https://www.gsmarena.com/samsung_galaxy_z_fold_wide_5g-14673.php',
+      connectivity: 'https://www.samsung.com/vn/smartphones/galaxy-z-fold8/specs/',
+      multimedia: 'https://www.gsmarena.com/samsung_galaxy_z_fold_wide_5g-14673.php',
+      'availability.announced_status':
+        'https://www.gsmarena.com/samsung_galaxy_z_fold_wide_5g-14673.php',
+      'availability.prices_msrp':
+        'https://cellphones.com.vn/sforum/gia-ban-va-khuyen-mai-galaxy-z-fold8-z-flip8',
+      regulatory: 'https://www.gsmarena.com/samsung_galaxy_z_fold_wide_5g-14673.php',
+    },
+    aliases: [
+      'Điện thoại Samsung Galaxy Z Fold8 5G 12GB/512GB',
+      'Samsung Galaxy Z Fold8 5G 12GB 512GB Chính hãng',
+    ],
+  },
+  {
+    categorySlug: 'smartphones',
+    brand: 'Samsung',
+    model: 'Galaxy Z Fold8',
+    variant_name: '16GB/1TB',
+    model_key: 'samsung:galaxy-z-fold8:1024gb',
+    name: 'Samsung Galaxy Z Fold8 1TB',
+    slug: 'samsung-galaxy-z-fold8-1tb',
+    description:
+      'Samsung Galaxy Z Fold8 chính hãng tại Việt Nam: màn hình chính gập 7.6 inch, màn hình phụ 5.5 inch, chip Snapdragon 8 Elite Gen 5 for Galaxy (3 nm), pin 4800 mAh.',
+    ram_gb: 16,
+    storage_gb: 1024,
+    screen_size_inch: 7.6,
+    battery_mah: 4800,
+    has_5g: true,
+    colors: ['Đen Graphite', 'Trắng Cream', 'Tím Lavender', 'Xanh Pistachio'],
+    images: [],
+    key_specs: {
+      screen: '7.6" foldable Dynamic LTPO AMOLED 2X 120Hz (2448 x 1848) + 5.5" cover screen 120Hz',
+      chip: 'Snapdragon 8 Elite Gen 5 for Galaxy (3 nm)',
+      camera: '50MP main + 50MP ultrawide; two 10MP front cameras',
+      battery: '4800 mAh, 45W wired, 20W wireless',
+      ram: '16GB',
+      storage: '1TB',
+    },
+    specifications: {
+      display: {
+        size_inch: 7.6,
+        type: 'Main: foldable Dynamic LTPO AMOLED 2X, 120Hz, HDR10+, 3000 nits (peak). Cover: 5.5" Dynamic LTPO AMOLED 2X, 120Hz, 1248 x 1972',
+        resolution: '2448 x 1848 pixels (main, 4:3)',
+        refresh_rate_hz: 120,
+        ppi: 404,
+        protection: 'Cover screen: Corning Gorilla Glass Ceramic 3; inner screen: plastic front',
+      },
+      hardware: {
+        chipset:
+          'Qualcomm Snapdragon 8 Elite Gen 5 for Galaxy (3 nm), all markets including Vietnam',
+        cpu: 'Octa-core (2x4.74 GHz Oryon V3 Phoenix L + 6x3.62 GHz Oryon V3 Phoenix M)',
+        gpu: 'Adreno 840',
+        storage_expansion: 'No',
+        os: 'Android 17, One UI 9, up to 7 major Android upgrades',
+        ram_gb: 16,
+        storage_gb: 1024,
+      },
+      camera: {
+        rear_setup: 'Dual camera',
+        main_camera: '50 MP, f/1.8, 23mm (wide), 1/1.56", dual pixel PDAF, OIS',
+        second_camera: '50 MP, f/1.9, 13mm, 120˚ (ultrawide)',
+        flash: 'LED flash',
+        video_recording: '8K@30fps, 4K@30/60/120fps, 1080p@30/60/120/240fps, gyro-EIS, OIS',
+        front_camera:
+          '10 MP, f/2.2, 18mm (ultrawide) on the inner screen; 10 MP, f/2.2, 24mm (wide) on the cover screen; 4K@30/60fps',
+      },
+      battery: {
+        capacity_mah: 4800,
+        type: 'Si/C Li-Ion 4800 mAh',
+        charging: '45W wired, 63% in 30 min; 20W wireless; 4.5W reverse wireless',
+        fast_charging_w: 45,
+        reverse_charging: '4.5W reverse wireless',
+      },
+      design: {
+        dimensions: 'Unfolded: 161.4 x 123.9 x 4.5 mm; folded: 81.9 x 123.9 x 9.7 mm',
+        weight_g: 201,
+        materials:
+          'Glass front when folded (Gorilla Glass Ceramic 3), plastic front when unfolded, glass back (Gorilla Glass Victus 2), aluminum frame',
+        build:
+          'Glass front when folded (Gorilla Glass Ceramic 3), plastic front when unfolded, glass back (Gorilla Glass Victus 2), aluminum frame',
+        resistance: 'IP48',
+        biometrics: 'Fingerprint (side-mounted)',
+        colors: ['Đen Graphite', 'Trắng Cream', 'Tím Lavender', 'Xanh Pistachio'],
+      },
+      cellular: {
+        has_5g: true,
+        technology: 'GSM / HSPA / LTE / 5G',
+        bands_5g:
+          '1, 2, 3, 5, 7, 8, 12, 20, 25, 26, 28, 38, 40, 41, 66, 77, 78 SA/NSA/Sub6 (International)',
+        bands_4g:
+          '1, 2, 3, 4, 5, 7, 8, 12, 13, 17, 18, 19, 20, 25, 26, 28, 38, 39, 40, 41, 66 (International)',
+        bands_3g: 'HSDPA 850 / 900 / 1700(AWS) / 1900 / 2100',
+        bands_2g: 'GSM 850 / 900 / 1800 / 1900',
+        sim_type: 'Nano-SIM + eSIM / Dual eSIM (max 2 at a time)',
+      },
+      connectivity: {
+        bluetooth: '6.0, A2DP, LE',
+        wlan: 'Wi-Fi 802.11 a/b/g/n/ac/ax/be (Wi-Fi 7), tri-band, Wi-Fi Direct',
+        usb: 'USB Type-C 3.2 Gen 1',
+        sensors:
+          'Fingerprint (side-mounted), accelerometer, gyro, proximity, compass, barometer, Hall, light; UWB',
+        location: 'GPS, GLONASS, BDS, GALILEO, QZSS',
+        nfc: true,
+      },
+      multimedia: {
+        loudspeaker: 'Yes, with stereo speakers',
+        headphone_jack_35mm: false,
+        audio_features: 'High-bitrate audio',
+      },
+      availability: {
+        announced: '2026, July 22',
+        status: 'Available. Pre-orders in Vietnam from 2026, July 22',
+        prices_msrp:
+          'Giá niêm yết khi mở bán tại Việt Nam: 256GB: 46.990.000 ₫; 512GB: 52.990.000 ₫; 1TB: 61.990.000 ₫',
+      },
+      regulatory: {
+        sar_head: '1.23 W/kg',
+        sar_body: '1.17 W/kg',
+      },
+    },
+    sources: {
+      storages: 'https://www.samsung.com/vn/smartphones/galaxy-z-fold8/buy/',
+      colors: 'https://www.samsung.com/vn/smartphones/galaxy-z-fold8/buy/',
+      vn_launch_prices:
+        'https://cellphones.com.vn/sforum/gia-ban-va-khuyen-mai-galaxy-z-fold8-z-flip8',
+      vn_launch_prices_crosscheck:
+        'https://fptshop.com.vn/tin-tuc/danh-gia/samsung-galaxy-z-fold-8-gia-bao-nhieu-210412',
+      display: 'https://www.gsmarena.com/samsung_galaxy_z_fold_wide_5g-14673.php',
+      hardware: 'https://www.gsmarena.com/samsung_galaxy_z_fold_wide_5g-14673.php',
+      'hardware.chipset_vn':
+        'https://fptshop.com.vn/tin-tuc/danh-gia/samsung-galaxy-z-fold-8-gia-bao-nhieu-210412',
+      camera: 'https://www.gsmarena.com/samsung_galaxy_z_fold_wide_5g-14673.php',
+      battery: 'https://www.gsmarena.com/samsung_galaxy_z_fold_wide_5g-14673.php',
+      design: 'https://www.samsung.com/vn/smartphones/galaxy-z-fold8/specs/',
+      'design.materials': 'https://www.gsmarena.com/samsung_galaxy_z_fold_wide_5g-14673.php',
+      cellular: 'https://www.gsmarena.com/samsung_galaxy_z_fold_wide_5g-14673.php',
+      connectivity: 'https://www.samsung.com/vn/smartphones/galaxy-z-fold8/specs/',
+      multimedia: 'https://www.gsmarena.com/samsung_galaxy_z_fold_wide_5g-14673.php',
+      'availability.announced_status':
+        'https://www.gsmarena.com/samsung_galaxy_z_fold_wide_5g-14673.php',
+      'availability.prices_msrp':
+        'https://cellphones.com.vn/sforum/gia-ban-va-khuyen-mai-galaxy-z-fold8-z-flip8',
+      regulatory: 'https://www.gsmarena.com/samsung_galaxy_z_fold_wide_5g-14673.php',
+    },
+    aliases: [
+      'Điện thoại Samsung Galaxy Z Fold8 5G 16GB/1TB',
+      'Samsung Galaxy Z Fold8 5G 16GB 1TB Chính hãng',
+    ],
+  },
+  {
+    categorySlug: 'smartphones',
+    brand: 'Samsung',
+    model: 'Galaxy Z Fold8 Ultra',
+    variant_name: '12GB/256GB',
+    model_key: 'samsung:galaxy-z-fold8-ultra:256gb',
+    name: 'Samsung Galaxy Z Fold8 Ultra 256GB',
+    slug: 'samsung-galaxy-z-fold8-ultra-256gb',
+    description:
+      'Samsung Galaxy Z Fold8 Ultra chính hãng tại Việt Nam: màn hình chính gập 8.0 inch, màn hình phụ 6.5 inch, chip Snapdragon 8 Elite Gen 5 for Galaxy (3 nm), camera chính 200 MP, pin 5000 mAh.',
+    ram_gb: 12,
+    storage_gb: 256,
+    screen_size_inch: 8.0,
+    battery_mah: 5000,
+    has_5g: true,
+    colors: ['Đen Graphite', 'Trắng Cream', 'Tím Shadow', 'Xanh Shadow'],
+    images: [],
+    key_specs: {
+      screen: '8.0" foldable Dynamic LTPO AMOLED 2X 120Hz (2256 x 2504) + 6.5" cover screen 120Hz',
+      chip: 'Snapdragon 8 Elite Gen 5 for Galaxy (3 nm)',
+      camera: '200MP main + 10MP tele 3x + 50MP ultrawide; two 10MP front cameras',
+      battery: '5000 mAh, 45W wired, 20W wireless',
+      ram: '12GB',
+      storage: '256GB',
+    },
+    specifications: {
+      display: {
+        size_inch: 8.0,
+        type: 'Main: foldable Dynamic LTPO AMOLED 2X, 120Hz, HDR10+, 3000 nits (peak). Cover: 6.5" Dynamic LTPO AMOLED 2X, 120Hz, 1080 x 2520',
+        resolution: '2256 x 2504 pixels (main)',
+        refresh_rate_hz: 120,
+        ppi: 422,
+        protection: 'Cover screen: Corning Gorilla Glass Ceramic 3; inner screen: plastic front',
+        features: 'Anti-reflective coating',
+      },
+      hardware: {
+        chipset:
+          'Qualcomm Snapdragon 8 Elite Gen 5 for Galaxy (3 nm), all markets including Vietnam',
+        cpu: 'Octa-core (2x4.74 GHz Oryon V3 Phoenix L + 6x3.62 GHz Oryon V3 Phoenix M)',
+        gpu: 'Adreno 840',
+        storage_expansion: 'No',
+        os: 'Android 17, One UI 9, up to 7 major Android upgrades',
+        ram_gb: 12,
+        storage_gb: 256,
+      },
+      camera: {
+        rear_setup: 'Triple camera',
+        main_camera: '200 MP, f/1.7, 23mm (wide), OIS',
+        second_camera: '10 MP, f/2.4, 69mm (telephoto), OIS, 3x optical zoom',
+        third_camera: '50 MP, f/1.9, 120˚ (ultrawide)',
+        flash: 'LED flash',
+        video_recording:
+          '8K@30fps, 4K@30/60/120fps, 1080p@30/60/120/240fps, 10-bit HDR, HDR10+, gyro-EIS, OIS',
+        front_camera:
+          '10 MP, f/2.2, 18mm (ultrawide) on the inner screen; 10 MP, f/2.2, 24mm (wide) on the cover screen; 4K@30/60fps',
+      },
+      battery: {
+        capacity_mah: 5000,
+        type: 'Si/C Li-Ion 5000 mAh',
+        charging: '45W wired, PD3.0, 67% in 30 min; 20W wireless (Qi2.2); 4.5W reverse wireless',
+        fast_charging_w: 45,
+        reverse_charging: '4.5W reverse wireless',
+      },
+      design: {
+        dimensions: 'Unfolded: 158.4 x 143.2 x 4.1 mm; folded: 158.4 x 72.8 x 8.9 mm',
+        weight_g: 215,
+        materials:
+          'Glass front when folded (Gorilla Glass Ceramic 3), plastic front when unfolded, glass back (Gorilla Glass Victus 2), aluminum frame',
+        build:
+          'Glass front when folded (Gorilla Glass Ceramic 3), plastic front when unfolded, glass back (Gorilla Glass Victus 2), aluminum frame',
+        resistance: 'IP48',
+        biometrics: 'Fingerprint (side-mounted)',
+        colors: ['Đen Graphite', 'Trắng Cream', 'Tím Shadow', 'Xanh Shadow'],
+      },
+      cellular: {
+        has_5g: true,
+        technology: 'GSM / HSPA / LTE / 5G',
+        bands_5g:
+          '1, 2, 3, 5, 7, 8, 12, 20, 25, 26, 28, 38, 40, 41, 66, 77, 78 SA/NSA/Sub6 (International)',
+        bands_4g:
+          '1, 2, 3, 4, 5, 7, 8, 12, 13, 17, 18, 19, 20, 25, 26, 28, 38, 39, 40, 41, 66 (International)',
+        bands_3g: 'HSDPA 850 / 900 / 1700(AWS) / 1900 / 2100',
+        bands_2g: 'GSM 850 / 900 / 1800 / 1900',
+        sim_type: 'Nano-SIM + eSIM / Dual eSIM (max 2 at a time)',
+      },
+      connectivity: {
+        bluetooth: '6.0, A2DP, LE',
+        wlan: 'Wi-Fi 802.11 a/b/g/n/ac/ax/be (Wi-Fi 7), tri-band',
+        usb: 'USB Type-C 3.2 Gen 1',
+        sensors:
+          'Fingerprint (side-mounted), accelerometer, gyro, proximity, compass, barometer, Hall, light; UWB',
+        location: 'GPS, GLONASS, BDS, GALILEO, QZSS',
+        nfc: true,
+      },
+      multimedia: {
+        loudspeaker: 'Yes, with stereo speakers',
+        headphone_jack_35mm: false,
+        audio_features: 'High-bitrate audio',
+      },
+      availability: {
+        announced: '2026, July 22',
+        status: 'Available. On sale in Vietnam from 2026, August',
+        prices_msrp:
+          'Giá niêm yết khi mở bán tại Việt Nam: 256GB: 52.990.000 ₫; 512GB: 58.990.000 ₫; 1TB: 67.990.000 ₫',
+      },
+      regulatory: {
+        sar_head: '1.10 W/kg',
+        sar_body: '1.25 W/kg',
+      },
+    },
+    sources: {
+      storages: 'https://www.samsung.com/vn/smartphones/galaxy-z-fold8-ultra/buy/',
+      colors: 'https://www.samsung.com/vn/smartphones/galaxy-z-fold8-ultra/buy/',
+      vn_launch_prices:
+        'https://cellphones.com.vn/sforum/gia-ban-va-khuyen-mai-galaxy-z-fold8-z-flip8',
+      vn_launch_prices_crosscheck:
+        'https://fptshop.com.vn/tin-tuc/danh-gia/samsung-galaxy-z-fold-8-ultra-gia-bao-nhieu-210413',
+      display: 'https://www.gsmarena.com/samsung_galaxy_z_fold8_ultra_5g-14802.php',
+      hardware: 'https://www.gsmarena.com/samsung_galaxy_z_fold8_ultra_5g-14802.php',
+      'hardware.chipset_vn': 'https://www.samsung.com/vn/smartphones/galaxy-z-fold8-ultra/',
+      camera: 'https://www.gsmarena.com/samsung_galaxy_z_fold8_ultra_5g-14802.php',
+      battery: 'https://www.gsmarena.com/samsung_galaxy_z_fold8_ultra_5g-14802.php',
+      design: 'https://www.samsung.com/vn/smartphones/galaxy-z-fold8-ultra/specs/',
+      'design.materials': 'https://www.gsmarena.com/samsung_galaxy_z_fold8_ultra_5g-14802.php',
+      cellular: 'https://www.gsmarena.com/samsung_galaxy_z_fold8_ultra_5g-14802.php',
+      connectivity: 'https://www.samsung.com/vn/smartphones/galaxy-z-fold8-ultra/specs/',
+      multimedia: 'https://www.gsmarena.com/samsung_galaxy_z_fold8_ultra_5g-14802.php',
+      'availability.announced_status':
+        'https://www.gsmarena.com/samsung_galaxy_z_fold8_ultra_5g-14802.php',
+      'availability.prices_msrp':
+        'https://cellphones.com.vn/sforum/gia-ban-va-khuyen-mai-galaxy-z-fold8-z-flip8',
+      regulatory: 'https://www.gsmarena.com/samsung_galaxy_z_fold8_ultra_5g-14802.php',
+    },
+    aliases: [
+      'Điện thoại Samsung Galaxy Z Fold8 Ultra 5G 12GB/256GB',
+      'Samsung Galaxy Z Fold8 Ultra 5G 12GB 256GB Chính hãng VN',
+    ],
+  },
+  {
+    categorySlug: 'smartphones',
+    brand: 'Samsung',
+    model: 'Galaxy Z Fold8 Ultra',
+    variant_name: '12GB/512GB',
+    model_key: 'samsung:galaxy-z-fold8-ultra:512gb',
+    name: 'Samsung Galaxy Z Fold8 Ultra 512GB',
+    slug: 'samsung-galaxy-z-fold8-ultra-512gb',
+    description:
+      'Samsung Galaxy Z Fold8 Ultra chính hãng tại Việt Nam: màn hình chính gập 8.0 inch, màn hình phụ 6.5 inch, chip Snapdragon 8 Elite Gen 5 for Galaxy (3 nm), camera chính 200 MP, pin 5000 mAh.',
+    ram_gb: 12,
+    storage_gb: 512,
+    screen_size_inch: 8.0,
+    battery_mah: 5000,
+    has_5g: true,
+    colors: ['Đen Graphite', 'Trắng Cream', 'Tím Shadow', 'Xanh Shadow'],
+    images: [],
+    key_specs: {
+      screen: '8.0" foldable Dynamic LTPO AMOLED 2X 120Hz (2256 x 2504) + 6.5" cover screen 120Hz',
+      chip: 'Snapdragon 8 Elite Gen 5 for Galaxy (3 nm)',
+      camera: '200MP main + 10MP tele 3x + 50MP ultrawide; two 10MP front cameras',
+      battery: '5000 mAh, 45W wired, 20W wireless',
+      ram: '12GB',
+      storage: '512GB',
+    },
+    specifications: {
+      display: {
+        size_inch: 8.0,
+        type: 'Main: foldable Dynamic LTPO AMOLED 2X, 120Hz, HDR10+, 3000 nits (peak). Cover: 6.5" Dynamic LTPO AMOLED 2X, 120Hz, 1080 x 2520',
+        resolution: '2256 x 2504 pixels (main)',
+        refresh_rate_hz: 120,
+        ppi: 422,
+        protection: 'Cover screen: Corning Gorilla Glass Ceramic 3; inner screen: plastic front',
+        features: 'Anti-reflective coating',
+      },
+      hardware: {
+        chipset:
+          'Qualcomm Snapdragon 8 Elite Gen 5 for Galaxy (3 nm), all markets including Vietnam',
+        cpu: 'Octa-core (2x4.74 GHz Oryon V3 Phoenix L + 6x3.62 GHz Oryon V3 Phoenix M)',
+        gpu: 'Adreno 840',
+        storage_expansion: 'No',
+        os: 'Android 17, One UI 9, up to 7 major Android upgrades',
+        ram_gb: 12,
+        storage_gb: 512,
+      },
+      camera: {
+        rear_setup: 'Triple camera',
+        main_camera: '200 MP, f/1.7, 23mm (wide), OIS',
+        second_camera: '10 MP, f/2.4, 69mm (telephoto), OIS, 3x optical zoom',
+        third_camera: '50 MP, f/1.9, 120˚ (ultrawide)',
+        flash: 'LED flash',
+        video_recording:
+          '8K@30fps, 4K@30/60/120fps, 1080p@30/60/120/240fps, 10-bit HDR, HDR10+, gyro-EIS, OIS',
+        front_camera:
+          '10 MP, f/2.2, 18mm (ultrawide) on the inner screen; 10 MP, f/2.2, 24mm (wide) on the cover screen; 4K@30/60fps',
+      },
+      battery: {
+        capacity_mah: 5000,
+        type: 'Si/C Li-Ion 5000 mAh',
+        charging: '45W wired, PD3.0, 67% in 30 min; 20W wireless (Qi2.2); 4.5W reverse wireless',
+        fast_charging_w: 45,
+        reverse_charging: '4.5W reverse wireless',
+      },
+      design: {
+        dimensions: 'Unfolded: 158.4 x 143.2 x 4.1 mm; folded: 158.4 x 72.8 x 8.9 mm',
+        weight_g: 215,
+        materials:
+          'Glass front when folded (Gorilla Glass Ceramic 3), plastic front when unfolded, glass back (Gorilla Glass Victus 2), aluminum frame',
+        build:
+          'Glass front when folded (Gorilla Glass Ceramic 3), plastic front when unfolded, glass back (Gorilla Glass Victus 2), aluminum frame',
+        resistance: 'IP48',
+        biometrics: 'Fingerprint (side-mounted)',
+        colors: ['Đen Graphite', 'Trắng Cream', 'Tím Shadow', 'Xanh Shadow'],
+      },
+      cellular: {
+        has_5g: true,
+        technology: 'GSM / HSPA / LTE / 5G',
+        bands_5g:
+          '1, 2, 3, 5, 7, 8, 12, 20, 25, 26, 28, 38, 40, 41, 66, 77, 78 SA/NSA/Sub6 (International)',
+        bands_4g:
+          '1, 2, 3, 4, 5, 7, 8, 12, 13, 17, 18, 19, 20, 25, 26, 28, 38, 39, 40, 41, 66 (International)',
+        bands_3g: 'HSDPA 850 / 900 / 1700(AWS) / 1900 / 2100',
+        bands_2g: 'GSM 850 / 900 / 1800 / 1900',
+        sim_type: 'Nano-SIM + eSIM / Dual eSIM (max 2 at a time)',
+      },
+      connectivity: {
+        bluetooth: '6.0, A2DP, LE',
+        wlan: 'Wi-Fi 802.11 a/b/g/n/ac/ax/be (Wi-Fi 7), tri-band',
+        usb: 'USB Type-C 3.2 Gen 1',
+        sensors:
+          'Fingerprint (side-mounted), accelerometer, gyro, proximity, compass, barometer, Hall, light; UWB',
+        location: 'GPS, GLONASS, BDS, GALILEO, QZSS',
+        nfc: true,
+      },
+      multimedia: {
+        loudspeaker: 'Yes, with stereo speakers',
+        headphone_jack_35mm: false,
+        audio_features: 'High-bitrate audio',
+      },
+      availability: {
+        announced: '2026, July 22',
+        status: 'Available. On sale in Vietnam from 2026, August',
+        prices_msrp:
+          'Giá niêm yết khi mở bán tại Việt Nam: 256GB: 52.990.000 ₫; 512GB: 58.990.000 ₫; 1TB: 67.990.000 ₫',
+      },
+      regulatory: {
+        sar_head: '1.10 W/kg',
+        sar_body: '1.25 W/kg',
+      },
+    },
+    sources: {
+      storages: 'https://www.samsung.com/vn/smartphones/galaxy-z-fold8-ultra/buy/',
+      colors: 'https://www.samsung.com/vn/smartphones/galaxy-z-fold8-ultra/buy/',
+      vn_launch_prices:
+        'https://cellphones.com.vn/sforum/gia-ban-va-khuyen-mai-galaxy-z-fold8-z-flip8',
+      vn_launch_prices_crosscheck:
+        'https://fptshop.com.vn/tin-tuc/danh-gia/samsung-galaxy-z-fold-8-ultra-gia-bao-nhieu-210413',
+      display: 'https://www.gsmarena.com/samsung_galaxy_z_fold8_ultra_5g-14802.php',
+      hardware: 'https://www.gsmarena.com/samsung_galaxy_z_fold8_ultra_5g-14802.php',
+      'hardware.chipset_vn': 'https://www.samsung.com/vn/smartphones/galaxy-z-fold8-ultra/',
+      camera: 'https://www.gsmarena.com/samsung_galaxy_z_fold8_ultra_5g-14802.php',
+      battery: 'https://www.gsmarena.com/samsung_galaxy_z_fold8_ultra_5g-14802.php',
+      design: 'https://www.samsung.com/vn/smartphones/galaxy-z-fold8-ultra/specs/',
+      'design.materials': 'https://www.gsmarena.com/samsung_galaxy_z_fold8_ultra_5g-14802.php',
+      cellular: 'https://www.gsmarena.com/samsung_galaxy_z_fold8_ultra_5g-14802.php',
+      connectivity: 'https://www.samsung.com/vn/smartphones/galaxy-z-fold8-ultra/specs/',
+      multimedia: 'https://www.gsmarena.com/samsung_galaxy_z_fold8_ultra_5g-14802.php',
+      'availability.announced_status':
+        'https://www.gsmarena.com/samsung_galaxy_z_fold8_ultra_5g-14802.php',
+      'availability.prices_msrp':
+        'https://cellphones.com.vn/sforum/gia-ban-va-khuyen-mai-galaxy-z-fold8-z-flip8',
+      regulatory: 'https://www.gsmarena.com/samsung_galaxy_z_fold8_ultra_5g-14802.php',
+    },
+    aliases: [
+      'Điện thoại Samsung Galaxy Z Fold8 Ultra 5G 12GB/512GB',
+      'Samsung Galaxy Z Fold8 Ultra 5G 12GB 512GB Chính hãng VN',
+    ],
+  },
+  {
+    categorySlug: 'smartphones',
+    brand: 'Samsung',
+    model: 'Galaxy Z Fold8 Ultra',
+    variant_name: '16GB/1TB',
+    model_key: 'samsung:galaxy-z-fold8-ultra:1024gb',
+    name: 'Samsung Galaxy Z Fold8 Ultra 1TB',
+    slug: 'samsung-galaxy-z-fold8-ultra-1tb',
+    description:
+      'Samsung Galaxy Z Fold8 Ultra chính hãng tại Việt Nam: màn hình chính gập 8.0 inch, màn hình phụ 6.5 inch, chip Snapdragon 8 Elite Gen 5 for Galaxy (3 nm), camera chính 200 MP, pin 5000 mAh.',
+    ram_gb: 16,
+    storage_gb: 1024,
+    screen_size_inch: 8.0,
+    battery_mah: 5000,
+    has_5g: true,
+    colors: ['Đen Graphite', 'Trắng Cream', 'Tím Shadow', 'Xanh Shadow'],
+    images: [],
+    key_specs: {
+      screen: '8.0" foldable Dynamic LTPO AMOLED 2X 120Hz (2256 x 2504) + 6.5" cover screen 120Hz',
+      chip: 'Snapdragon 8 Elite Gen 5 for Galaxy (3 nm)',
+      camera: '200MP main + 10MP tele 3x + 50MP ultrawide; two 10MP front cameras',
+      battery: '5000 mAh, 45W wired, 20W wireless',
+      ram: '16GB',
+      storage: '1TB',
+    },
+    specifications: {
+      display: {
+        size_inch: 8.0,
+        type: 'Main: foldable Dynamic LTPO AMOLED 2X, 120Hz, HDR10+, 3000 nits (peak). Cover: 6.5" Dynamic LTPO AMOLED 2X, 120Hz, 1080 x 2520',
+        resolution: '2256 x 2504 pixels (main)',
+        refresh_rate_hz: 120,
+        ppi: 422,
+        protection: 'Cover screen: Corning Gorilla Glass Ceramic 3; inner screen: plastic front',
+        features: 'Anti-reflective coating',
+      },
+      hardware: {
+        chipset:
+          'Qualcomm Snapdragon 8 Elite Gen 5 for Galaxy (3 nm), all markets including Vietnam',
+        cpu: 'Octa-core (2x4.74 GHz Oryon V3 Phoenix L + 6x3.62 GHz Oryon V3 Phoenix M)',
+        gpu: 'Adreno 840',
+        storage_expansion: 'No',
+        os: 'Android 17, One UI 9, up to 7 major Android upgrades',
+        ram_gb: 16,
+        storage_gb: 1024,
+      },
+      camera: {
+        rear_setup: 'Triple camera',
+        main_camera: '200 MP, f/1.7, 23mm (wide), OIS',
+        second_camera: '10 MP, f/2.4, 69mm (telephoto), OIS, 3x optical zoom',
+        third_camera: '50 MP, f/1.9, 120˚ (ultrawide)',
+        flash: 'LED flash',
+        video_recording:
+          '8K@30fps, 4K@30/60/120fps, 1080p@30/60/120/240fps, 10-bit HDR, HDR10+, gyro-EIS, OIS',
+        front_camera:
+          '10 MP, f/2.2, 18mm (ultrawide) on the inner screen; 10 MP, f/2.2, 24mm (wide) on the cover screen; 4K@30/60fps',
+      },
+      battery: {
+        capacity_mah: 5000,
+        type: 'Si/C Li-Ion 5000 mAh',
+        charging: '45W wired, PD3.0, 67% in 30 min; 20W wireless (Qi2.2); 4.5W reverse wireless',
+        fast_charging_w: 45,
+        reverse_charging: '4.5W reverse wireless',
+      },
+      design: {
+        dimensions: 'Unfolded: 158.4 x 143.2 x 4.1 mm; folded: 158.4 x 72.8 x 8.9 mm',
+        weight_g: 215,
+        materials:
+          'Glass front when folded (Gorilla Glass Ceramic 3), plastic front when unfolded, glass back (Gorilla Glass Victus 2), aluminum frame',
+        build:
+          'Glass front when folded (Gorilla Glass Ceramic 3), plastic front when unfolded, glass back (Gorilla Glass Victus 2), aluminum frame',
+        resistance: 'IP48',
+        biometrics: 'Fingerprint (side-mounted)',
+        colors: ['Đen Graphite', 'Trắng Cream', 'Tím Shadow', 'Xanh Shadow'],
+      },
+      cellular: {
+        has_5g: true,
+        technology: 'GSM / HSPA / LTE / 5G',
+        bands_5g:
+          '1, 2, 3, 5, 7, 8, 12, 20, 25, 26, 28, 38, 40, 41, 66, 77, 78 SA/NSA/Sub6 (International)',
+        bands_4g:
+          '1, 2, 3, 4, 5, 7, 8, 12, 13, 17, 18, 19, 20, 25, 26, 28, 38, 39, 40, 41, 66 (International)',
+        bands_3g: 'HSDPA 850 / 900 / 1700(AWS) / 1900 / 2100',
+        bands_2g: 'GSM 850 / 900 / 1800 / 1900',
+        sim_type: 'Nano-SIM + eSIM / Dual eSIM (max 2 at a time)',
+      },
+      connectivity: {
+        bluetooth: '6.0, A2DP, LE',
+        wlan: 'Wi-Fi 802.11 a/b/g/n/ac/ax/be (Wi-Fi 7), tri-band',
+        usb: 'USB Type-C 3.2 Gen 1',
+        sensors:
+          'Fingerprint (side-mounted), accelerometer, gyro, proximity, compass, barometer, Hall, light; UWB',
+        location: 'GPS, GLONASS, BDS, GALILEO, QZSS',
+        nfc: true,
+      },
+      multimedia: {
+        loudspeaker: 'Yes, with stereo speakers',
+        headphone_jack_35mm: false,
+        audio_features: 'High-bitrate audio',
+      },
+      availability: {
+        announced: '2026, July 22',
+        status: 'Available. On sale in Vietnam from 2026, August',
+        prices_msrp:
+          'Giá niêm yết khi mở bán tại Việt Nam: 256GB: 52.990.000 ₫; 512GB: 58.990.000 ₫; 1TB: 67.990.000 ₫',
+      },
+      regulatory: {
+        sar_head: '1.10 W/kg',
+        sar_body: '1.25 W/kg',
+      },
+    },
+    sources: {
+      storages: 'https://www.samsung.com/vn/smartphones/galaxy-z-fold8-ultra/buy/',
+      colors: 'https://www.samsung.com/vn/smartphones/galaxy-z-fold8-ultra/buy/',
+      vn_launch_prices:
+        'https://cellphones.com.vn/sforum/gia-ban-va-khuyen-mai-galaxy-z-fold8-z-flip8',
+      vn_launch_prices_crosscheck:
+        'https://fptshop.com.vn/tin-tuc/danh-gia/samsung-galaxy-z-fold-8-ultra-gia-bao-nhieu-210413',
+      display: 'https://www.gsmarena.com/samsung_galaxy_z_fold8_ultra_5g-14802.php',
+      hardware: 'https://www.gsmarena.com/samsung_galaxy_z_fold8_ultra_5g-14802.php',
+      'hardware.chipset_vn': 'https://www.samsung.com/vn/smartphones/galaxy-z-fold8-ultra/',
+      camera: 'https://www.gsmarena.com/samsung_galaxy_z_fold8_ultra_5g-14802.php',
+      battery: 'https://www.gsmarena.com/samsung_galaxy_z_fold8_ultra_5g-14802.php',
+      design: 'https://www.samsung.com/vn/smartphones/galaxy-z-fold8-ultra/specs/',
+      'design.materials': 'https://www.gsmarena.com/samsung_galaxy_z_fold8_ultra_5g-14802.php',
+      cellular: 'https://www.gsmarena.com/samsung_galaxy_z_fold8_ultra_5g-14802.php',
+      connectivity: 'https://www.samsung.com/vn/smartphones/galaxy-z-fold8-ultra/specs/',
+      multimedia: 'https://www.gsmarena.com/samsung_galaxy_z_fold8_ultra_5g-14802.php',
+      'availability.announced_status':
+        'https://www.gsmarena.com/samsung_galaxy_z_fold8_ultra_5g-14802.php',
+      'availability.prices_msrp':
+        'https://cellphones.com.vn/sforum/gia-ban-va-khuyen-mai-galaxy-z-fold8-z-flip8',
+      regulatory: 'https://www.gsmarena.com/samsung_galaxy_z_fold8_ultra_5g-14802.php',
+    },
+    aliases: [
+      'Điện thoại Samsung Galaxy Z Fold8 Ultra 5G 16GB/1TB',
+      'Samsung Galaxy Z Fold8 Ultra 5G 16GB 1TB Chính hãng VN',
+    ],
+  },
+  {
+    categorySlug: 'smartphones',
+    brand: 'Samsung',
+    model: 'Galaxy Z Flip8',
+    variant_name: '12GB/256GB',
+    model_key: 'samsung:galaxy-z-flip8:256gb',
+    name: 'Samsung Galaxy Z Flip8 256GB',
+    slug: 'samsung-galaxy-z-flip8-256gb',
+    description:
+      'Samsung Galaxy Z Flip8 chính hãng tại Việt Nam: màn hình chính gập 6.9 inch, màn hình phụ FlexWindow 4.1 inch, chip Exynos 2600 (2 nm) in Vietnam, pin 4300 mAh.',
+    ram_gb: 12,
+    storage_gb: 256,
+    screen_size_inch: 6.9,
+    battery_mah: 4300,
+    has_5g: true,
+    colors: ['Đen Graphite', 'Trắng Cream', 'Hồng Rosé', 'Xanh Mint'],
+    images: [],
+    key_specs: {
+      screen: '6.9" foldable Dynamic LTPO AMOLED 2X 120Hz (1080 x 2520) + 4.1" FlexWindow 120Hz',
+      chip: 'Exynos 2600 (2 nm) in Vietnam',
+      camera: '50MP main + 12MP ultrawide; 10MP front',
+      battery: '4300 mAh, 25W wired, 15W wireless',
+      ram: '12GB',
+      storage: '256GB',
+    },
+    specifications: {
+      display: {
+        size_inch: 6.9,
+        type: 'Main: foldable Dynamic LTPO AMOLED 2X, 120Hz, HDR10+, 3000 nits (peak). Cover (FlexWindow): 4.1" Super AMOLED, 120Hz, 948 x 1048',
+        resolution: '1080 x 2520 pixels (main, 21:9)',
+        refresh_rate_hz: 120,
+        ppi: 400,
+        protection: 'Cover screen: Corning Gorilla Glass Victus 2; inner screen: plastic front',
+      },
+      hardware: {
+        chipset:
+          'Exynos 2600 (2 nm) in Vietnam and most markets; Snapdragon 8 Elite Gen 5 for Galaxy (3 nm) in USA/Canada/China',
+        cpu: 'Exynos: 10-core (1x3.80 GHz C1-Ultra + 3x3.25 GHz C1-Pro + 6x2.75 GHz C1-Pro)',
+        gpu: 'Xclipse 960 (Exynos)',
+        storage_expansion: 'No',
+        os: 'Android 17, One UI 9, up to 7 major Android upgrades',
+        ram_gb: 12,
+        storage_gb: 256,
+      },
+      camera: {
+        rear_setup: 'Dual camera',
+        main_camera: '50 MP, f/1.8, 23mm (wide), 1/1.56", dual pixel PDAF, OIS',
+        second_camera: '12 MP, f/2.2, 13mm, 123˚ (ultrawide)',
+        flash: 'LED flash',
+        video_recording: '4K@30/60fps, 1080p@60/120/240fps, HDR10+',
+        front_camera: '10 MP, f/2.2, 23mm (wide); 4K@30/60fps',
+      },
+      battery: {
+        capacity_mah: 4300,
+        type: 'Si/C Li-Ion 4300 mAh',
+        charging: '25W wired, 55% in 30 min; 15W wireless; 4.5W reverse wireless',
+        fast_charging_w: 25,
+        reverse_charging: '4.5W reverse wireless',
+      },
+      design: {
+        dimensions: 'Unfolded: 166.9 x 75.4 x 6.1 mm; folded: 85.7 x 75.4 x 13.1 mm',
+        weight_g: 180,
+        materials:
+          'Plastic front when unfolded, glass back (Gorilla Glass Victus 2), Armor Aluminum frame',
+        build:
+          'Plastic front when unfolded, glass back (Gorilla Glass Victus 2), Armor Aluminum frame',
+        resistance: 'IP48',
+        biometrics: 'Fingerprint (side-mounted)',
+        colors: ['Đen Graphite', 'Trắng Cream', 'Hồng Rosé', 'Xanh Mint'],
+      },
+      cellular: {
+        has_5g: true,
+        technology: 'GSM / HSPA / LTE / 5G',
+        bands_5g:
+          '1, 2, 3, 5, 7, 8, 12, 20, 25, 26, 28, 38, 40, 41, 66, 71, 77, 78 SA/NSA/Sub6 (International)',
+        bands_4g:
+          '1, 2, 3, 4, 5, 7, 8, 12, 13, 17, 18, 19, 20, 25, 26, 28, 38, 39, 40, 41, 66 (International)',
+        bands_3g: 'HSDPA 850 / 900 / 1700(AWS) / 1900 / 2100',
+        bands_2g: 'GSM 850 / 900 / 1800 / 1900',
+        sim_type: 'Nano-SIM + eSIM / Dual eSIM (max 2 at a time)',
+      },
+      connectivity: {
+        bluetooth: '5.4, A2DP, LE',
+        wlan: 'Wi-Fi 802.11 a/b/g/n/ac/ax/be (Wi-Fi 7), tri-band, Wi-Fi Direct',
+        usb: 'USB Type-C 3.2 Gen 1',
+        sensors:
+          'Fingerprint (side-mounted), accelerometer, gyro, proximity, compass, barometer, Hall, light',
+        location: 'GPS, GLONASS, BDS, GALILEO',
+        nfc: true,
+      },
+      multimedia: {
+        loudspeaker: 'Yes, with stereo speakers',
+        headphone_jack_35mm: false,
+        audio_features: 'High-bitrate audio',
+      },
+      availability: {
+        announced: '2026, July 22',
+        status: 'Available. Pre-orders in Vietnam from 2026, July 22',
+        prices_msrp:
+          'Giá niêm yết khi mở bán tại Việt Nam: 256GB: 31.990.000 ₫; 512GB: 37.990.000 ₫',
+      },
+      regulatory: {
+        sar_head: '1.09 W/kg',
+        sar_body: '1.20 W/kg',
+      },
+    },
+    sources: {
+      storages: 'https://www.samsung.com/vn/smartphones/galaxy-z-flip8/buy/',
+      colors: 'https://www.samsung.com/vn/smartphones/galaxy-z-flip8/buy/',
+      vn_launch_prices: 'https://www.thegioididong.com/tin-tuc/galaxy-z-flip8-ra-mat-1595724',
+      vn_launch_prices_crosscheck:
+        'https://cellphones.com.vn/sforum/gia-ban-va-khuyen-mai-galaxy-z-fold8-z-flip8',
+      display: 'https://www.gsmarena.com/samsung_galaxy_z_flip8_5g-14803.php',
+      hardware: 'https://www.gsmarena.com/samsung_galaxy_z_flip8_5g-14803.php',
+      'hardware.chipset_vn':
+        'https://fptshop.com.vn/tin-tuc/danh-gia/samsung-galaxy-z-flip-8-gia-bao-nhieu-210443',
+      camera: 'https://www.gsmarena.com/samsung_galaxy_z_flip8_5g-14803.php',
+      battery: 'https://www.gsmarena.com/samsung_galaxy_z_flip8_5g-14803.php',
+      design: 'https://www.samsung.com/vn/smartphones/galaxy-z-flip8/specs/',
+      'design.materials': 'https://www.gsmarena.com/samsung_galaxy_z_flip8_5g-14803.php',
+      cellular: 'https://www.gsmarena.com/samsung_galaxy_z_flip8_5g-14803.php',
+      connectivity: 'https://www.samsung.com/vn/smartphones/galaxy-z-flip8/specs/',
+      multimedia: 'https://www.gsmarena.com/samsung_galaxy_z_flip8_5g-14803.php',
+      'availability.announced_status':
+        'https://www.gsmarena.com/samsung_galaxy_z_flip8_5g-14803.php',
+      'availability.prices_msrp':
+        'https://www.thegioididong.com/tin-tuc/galaxy-z-flip8-ra-mat-1595724',
+      regulatory: 'https://www.gsmarena.com/samsung_galaxy_z_flip8_5g-14803.php',
+    },
+    aliases: [
+      'Điện thoại Samsung Galaxy Z Flip8 5G 12GB/256GB',
+      'Samsung Galaxy Z Flip8 5G 12GB 256GB Chính hãng',
+    ],
+  },
+  {
+    categorySlug: 'smartphones',
+    brand: 'Samsung',
+    model: 'Galaxy Z Flip8',
+    variant_name: '12GB/512GB',
+    model_key: 'samsung:galaxy-z-flip8:512gb',
+    name: 'Samsung Galaxy Z Flip8 512GB',
+    slug: 'samsung-galaxy-z-flip8-512gb',
+    description:
+      'Samsung Galaxy Z Flip8 chính hãng tại Việt Nam: màn hình chính gập 6.9 inch, màn hình phụ FlexWindow 4.1 inch, chip Exynos 2600 (2 nm) in Vietnam, pin 4300 mAh.',
+    ram_gb: 12,
+    storage_gb: 512,
+    screen_size_inch: 6.9,
+    battery_mah: 4300,
+    has_5g: true,
+    colors: ['Đen Graphite', 'Trắng Cream', 'Hồng Rosé', 'Xanh Mint'],
+    images: [],
+    key_specs: {
+      screen: '6.9" foldable Dynamic LTPO AMOLED 2X 120Hz (1080 x 2520) + 4.1" FlexWindow 120Hz',
+      chip: 'Exynos 2600 (2 nm) in Vietnam',
+      camera: '50MP main + 12MP ultrawide; 10MP front',
+      battery: '4300 mAh, 25W wired, 15W wireless',
+      ram: '12GB',
+      storage: '512GB',
+    },
+    specifications: {
+      display: {
+        size_inch: 6.9,
+        type: 'Main: foldable Dynamic LTPO AMOLED 2X, 120Hz, HDR10+, 3000 nits (peak). Cover (FlexWindow): 4.1" Super AMOLED, 120Hz, 948 x 1048',
+        resolution: '1080 x 2520 pixels (main, 21:9)',
+        refresh_rate_hz: 120,
+        ppi: 400,
+        protection: 'Cover screen: Corning Gorilla Glass Victus 2; inner screen: plastic front',
+      },
+      hardware: {
+        chipset:
+          'Exynos 2600 (2 nm) in Vietnam and most markets; Snapdragon 8 Elite Gen 5 for Galaxy (3 nm) in USA/Canada/China',
+        cpu: 'Exynos: 10-core (1x3.80 GHz C1-Ultra + 3x3.25 GHz C1-Pro + 6x2.75 GHz C1-Pro)',
+        gpu: 'Xclipse 960 (Exynos)',
+        storage_expansion: 'No',
+        os: 'Android 17, One UI 9, up to 7 major Android upgrades',
+        ram_gb: 12,
+        storage_gb: 512,
+      },
+      camera: {
+        rear_setup: 'Dual camera',
+        main_camera: '50 MP, f/1.8, 23mm (wide), 1/1.56", dual pixel PDAF, OIS',
+        second_camera: '12 MP, f/2.2, 13mm, 123˚ (ultrawide)',
+        flash: 'LED flash',
+        video_recording: '4K@30/60fps, 1080p@60/120/240fps, HDR10+',
+        front_camera: '10 MP, f/2.2, 23mm (wide); 4K@30/60fps',
+      },
+      battery: {
+        capacity_mah: 4300,
+        type: 'Si/C Li-Ion 4300 mAh',
+        charging: '25W wired, 55% in 30 min; 15W wireless; 4.5W reverse wireless',
+        fast_charging_w: 25,
+        reverse_charging: '4.5W reverse wireless',
+      },
+      design: {
+        dimensions: 'Unfolded: 166.9 x 75.4 x 6.1 mm; folded: 85.7 x 75.4 x 13.1 mm',
+        weight_g: 180,
+        materials:
+          'Plastic front when unfolded, glass back (Gorilla Glass Victus 2), Armor Aluminum frame',
+        build:
+          'Plastic front when unfolded, glass back (Gorilla Glass Victus 2), Armor Aluminum frame',
+        resistance: 'IP48',
+        biometrics: 'Fingerprint (side-mounted)',
+        colors: ['Đen Graphite', 'Trắng Cream', 'Hồng Rosé', 'Xanh Mint'],
+      },
+      cellular: {
+        has_5g: true,
+        technology: 'GSM / HSPA / LTE / 5G',
+        bands_5g:
+          '1, 2, 3, 5, 7, 8, 12, 20, 25, 26, 28, 38, 40, 41, 66, 71, 77, 78 SA/NSA/Sub6 (International)',
+        bands_4g:
+          '1, 2, 3, 4, 5, 7, 8, 12, 13, 17, 18, 19, 20, 25, 26, 28, 38, 39, 40, 41, 66 (International)',
+        bands_3g: 'HSDPA 850 / 900 / 1700(AWS) / 1900 / 2100',
+        bands_2g: 'GSM 850 / 900 / 1800 / 1900',
+        sim_type: 'Nano-SIM + eSIM / Dual eSIM (max 2 at a time)',
+      },
+      connectivity: {
+        bluetooth: '5.4, A2DP, LE',
+        wlan: 'Wi-Fi 802.11 a/b/g/n/ac/ax/be (Wi-Fi 7), tri-band, Wi-Fi Direct',
+        usb: 'USB Type-C 3.2 Gen 1',
+        sensors:
+          'Fingerprint (side-mounted), accelerometer, gyro, proximity, compass, barometer, Hall, light',
+        location: 'GPS, GLONASS, BDS, GALILEO',
+        nfc: true,
+      },
+      multimedia: {
+        loudspeaker: 'Yes, with stereo speakers',
+        headphone_jack_35mm: false,
+        audio_features: 'High-bitrate audio',
+      },
+      availability: {
+        announced: '2026, July 22',
+        status: 'Available. Pre-orders in Vietnam from 2026, July 22',
+        prices_msrp:
+          'Giá niêm yết khi mở bán tại Việt Nam: 256GB: 31.990.000 ₫; 512GB: 37.990.000 ₫',
+      },
+      regulatory: {
+        sar_head: '1.09 W/kg',
+        sar_body: '1.20 W/kg',
+      },
+    },
+    sources: {
+      storages: 'https://www.samsung.com/vn/smartphones/galaxy-z-flip8/buy/',
+      colors: 'https://www.samsung.com/vn/smartphones/galaxy-z-flip8/buy/',
+      vn_launch_prices: 'https://www.thegioididong.com/tin-tuc/galaxy-z-flip8-ra-mat-1595724',
+      vn_launch_prices_crosscheck:
+        'https://cellphones.com.vn/sforum/gia-ban-va-khuyen-mai-galaxy-z-fold8-z-flip8',
+      display: 'https://www.gsmarena.com/samsung_galaxy_z_flip8_5g-14803.php',
+      hardware: 'https://www.gsmarena.com/samsung_galaxy_z_flip8_5g-14803.php',
+      'hardware.chipset_vn':
+        'https://fptshop.com.vn/tin-tuc/danh-gia/samsung-galaxy-z-flip-8-gia-bao-nhieu-210443',
+      camera: 'https://www.gsmarena.com/samsung_galaxy_z_flip8_5g-14803.php',
+      battery: 'https://www.gsmarena.com/samsung_galaxy_z_flip8_5g-14803.php',
+      design: 'https://www.samsung.com/vn/smartphones/galaxy-z-flip8/specs/',
+      'design.materials': 'https://www.gsmarena.com/samsung_galaxy_z_flip8_5g-14803.php',
+      cellular: 'https://www.gsmarena.com/samsung_galaxy_z_flip8_5g-14803.php',
+      connectivity: 'https://www.samsung.com/vn/smartphones/galaxy-z-flip8/specs/',
+      multimedia: 'https://www.gsmarena.com/samsung_galaxy_z_flip8_5g-14803.php',
+      'availability.announced_status':
+        'https://www.gsmarena.com/samsung_galaxy_z_flip8_5g-14803.php',
+      'availability.prices_msrp':
+        'https://www.thegioididong.com/tin-tuc/galaxy-z-flip8-ra-mat-1595724',
+      regulatory: 'https://www.gsmarena.com/samsung_galaxy_z_flip8_5g-14803.php',
+    },
+    aliases: [
+      'Điện thoại Samsung Galaxy Z Flip8 5G 12GB/512GB',
+      'Samsung Galaxy Z Flip8 5G 12GB 512GB Chính hãng',
+    ],
   },
 ];

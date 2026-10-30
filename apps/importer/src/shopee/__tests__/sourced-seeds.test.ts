@@ -44,17 +44,73 @@ const normalize = (title: string) =>
     shop: { shopId: '2' },
   } as unknown as ShopeeProduct);
 
-// The groups and storages the catalog proposal asks for, in every storage sold in Vietnam.
-const EXPECTED: Record<string, number[]> = {
-  'apple:iphone-18-pro-max': [256, 512, 1024, 2048],
-  'apple:iphone-18-pro': [256, 512, 1024, 2048],
-  'samsung:galaxy-s26-ultra': [256, 512, 1024],
-  'apple:iphone-17': [256, 512],
-  'apple:iphone-17-pro': [256, 512, 1024],
-  'apple:iphone-17-pro-max': [256, 512, 1024, 2048],
-  'samsung:galaxy-s26-plus': [256, 512],
-  'samsung:galaxy-s26': [256, 512],
-};
+// Catalog wave 1a: the 39 phone keys of the Rate Services wave list (RS#799; keys only).
+// Three exist already (the published 256GB iPhone 18 Pro and Pro Max, and the draft 256GB
+// Galaxy S26 Ultra): their sourced seeds are flagship-seed-sourced-2026.ts. The other 36
+// are flagship-seed-catalog-2026.ts. The seeds are exactly this set.
+const WAVE_1A_KEYS = [
+  'apple:iphone-17-pro-max:256gb',
+  'apple:iphone-17-pro-max:512gb',
+  'apple:iphone-17-pro-max:1024gb',
+  'apple:iphone-17-pro-max:2048gb',
+  'apple:iphone-17-pro:256gb',
+  'apple:iphone-17-pro:512gb',
+  'apple:iphone-17-pro:1024gb',
+  'apple:iphone-17:256gb',
+  'apple:iphone-17:512gb',
+  'apple:iphone-17e:256gb',
+  'apple:iphone-17e:512gb',
+  'apple:iphone-18-pro-max:256gb',
+  'apple:iphone-18-pro-max:512gb',
+  'apple:iphone-18-pro-max:1024gb',
+  'apple:iphone-18-pro-max:2048gb',
+  'apple:iphone-18-pro:256gb',
+  'apple:iphone-18-pro:512gb',
+  'apple:iphone-18-pro:1024gb',
+  'apple:iphone-18-pro:2048gb',
+  'apple:iphone-air:256gb',
+  'apple:iphone-air:512gb',
+  'apple:iphone-air:1024gb',
+  'samsung:galaxy-s26:256gb',
+  'samsung:galaxy-s26:512gb',
+  'samsung:galaxy-s26-plus:256gb',
+  'samsung:galaxy-s26-plus:512gb',
+  'samsung:galaxy-s26-ultra:256gb',
+  'samsung:galaxy-s26-ultra:512gb',
+  'samsung:galaxy-s26-ultra:1024gb',
+  'samsung:galaxy-s26-fe:128gb',
+  'samsung:galaxy-s26-fe:256gb',
+  'samsung:galaxy-z-flip8:256gb',
+  'samsung:galaxy-z-flip8:512gb',
+  'samsung:galaxy-z-fold8:256gb',
+  'samsung:galaxy-z-fold8:512gb',
+  'samsung:galaxy-z-fold8:1024gb',
+  'samsung:galaxy-z-fold8-ultra:256gb',
+  'samsung:galaxy-z-fold8-ultra:512gb',
+  'samsung:galaxy-z-fold8-ultra:1024gb',
+];
+assert.equal(WAVE_1A_KEYS.length, 39);
+assert.deepEqual(
+  SOURCED_SEEDS_2026.map(seed => seed.model_key).sort(),
+  [...WAVE_1A_KEYS].sort(),
+  'wave 1a seeds'
+);
+assert.deepEqual(
+  REPLACED.map(seed => seed.model_key).sort(),
+  ['apple:iphone-18-pro-max:256gb', 'apple:iphone-18-pro:256gb', 'samsung:galaxy-s26-ultra:256gb'],
+  'the three existing keys keep their sourced seeds'
+);
+// Each model's storages, in key order.
+const EXPECTED: Record<string, number[]> = {};
+for (const key of WAVE_1A_KEYS) {
+  const parts = splitModelKey(key);
+  assert.ok(parts, key);
+  EXPECTED[parts.itemKey] = [
+    ...(EXPECTED[parts.itemKey] ?? []),
+    Number(key.split(':')[2]!.slice(0, -2)),
+  ];
+}
+for (const itemKey of Object.keys(EXPECTED)) EXPECTED[itemKey]!.sort((a, b) => a - b);
 const byItem = new Map<string, number[]>();
 for (const seed of SOURCED_SEEDS_2026) {
   const parts = splitModelKey(seed.model_key);
@@ -122,15 +178,20 @@ for (const [title, key] of [
   ['Samsung Galaxy S26 Ultra 16GB 1TB', 'samsung:galaxy-s26-ultra:1024gb'],
   ['Galaxy S26+ 12GB/512GB', 'samsung:galaxy-s26-plus:512gb'],
   ['Samsung Galaxy S26 Plus 5G 512GB', 'samsung:galaxy-s26-plus:512gb'],
+  ['iPhone Air 1 TB', 'apple:iphone-air:1024gb'],
+  ['Samsung Galaxy Z Fold 8 Ultra 16GB/1TB', 'samsung:galaxy-z-fold8-ultra:1024gb'],
+  ['Samsung Galaxy Fold8 512GB', 'samsung:galaxy-z-fold8:512gb'],
+  ['Samsung Galaxy Z Flip 8 12GB/256GB', 'samsung:galaxy-z-flip8:256gb'],
 ] as const) {
   assert.equal(normalize(title).model_key, key, title);
 }
 const seededKeys = new Set(SOURCED_SEEDS_2026.map(seed => seed.model_key));
 for (const title of [
-  'Apple iPhone 17e 256GB',
-  'Apple iPhone Air 256GB',
-  'Samsung Galaxy S26 FE 256GB',
   'Samsung Galaxy S26 Edge 256GB',
+  'Samsung Galaxy S26 FE 512GB',
+  // No Z Flip8 FE this year: its key keeps clear of the Flip8 (DOS/Rate#1493).
+  'Samsung Galaxy Z Flip8 FE 256GB',
+  'Apple iPhone 16e 256GB',
 ]) {
   assert.ok(!seededKeys.has(normalize(title).model_key), title);
 }

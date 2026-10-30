@@ -2097,9 +2097,9 @@ async function runSuite() {
   assert.equal(paCatalogItems.length, 1);
   assert.equal(paCatalogItems[0]?.name, 'Samsung Galaxy S26 Ultra');
 
-  // Ensure all 14 canonical 2026 upstream devices across 5 categories are present in FLAGSHIP_DEVICES_TO_SEED (54 seed entries with the A1-A3 catalog expansion)
+  // Ensure all 14 canonical 2026 upstream devices across 5 categories are present in FLAGSHIP_DEVICES_TO_SEED (69 seed entries with the wave 1a catalog expansion)
   assert.equal(UPSTREAM_2026_ARENA_REFERENCE_URLS.length, 14);
-  assert.equal(FLAGSHIP_DEVICES_TO_SEED.length, 54);
+  assert.equal(FLAGSHIP_DEVICES_TO_SEED.length, 69);
   const seededModelKeys = new Set(FLAGSHIP_DEVICES_TO_SEED.map(d => d.model_key));
   for (const ref of UPSTREAM_2026_ARENA_REFERENCE_URLS) {
     assert.ok(
