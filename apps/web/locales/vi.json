@@ -1400,7 +1400,25 @@
     "pgPreset12Title": "Deal thật và giảm giá ảo trên 10 sàn (/deals)",
     "pgPreset12Desc": "Quét giá trên 10 sàn để tìm giá thấp thật (genuineDeals) và giá gốc bị nâng khống (fakeSaleTraps).",
     "pgPreset13Title": "Spec OpenAPI 3.1.0 (/openapi.json)",
-    "pgPreset13Desc": "Trả về spec OpenAPI 3.1.0 dạng JSON cho các endpoint REST API v1 của Rate.vn."
+    "pgPreset13Desc": "Trả về spec OpenAPI 3.1.0 dạng JSON cho các endpoint REST API v1 của Rate.vn.",
+    "authPublic": "Công khai (CORS)",
+    "authOptIn": "Cần người dùng đồng ý (opt-in)",
+    "authBearer": "Bearer token (Supabase Auth)",
+    "cacheNoStoreQueue": "no-store (đưa vào hàng đợi rate.crawl_jobs)",
+    "cacheNoStoreRpc": "no-store (RPC rate.submit_community_review)",
+    "cacheNoStoreTrigger": "no-store (trigger trong cơ sở dữ liệu)",
+    "groupTitles": {
+      "launch": "Ra mắt và tình trạng bán",
+      "body": "Thân máy và độ bền",
+      "display": "Màn hình và tấm nền",
+      "platform": "Nền tảng và chipset",
+      "memory": "Bộ nhớ và lưu trữ",
+      "cameras": "Camera (chia theo PhoneArena)",
+      "audio": "Âm thanh",
+      "connectivity": "Kết nối",
+      "battery": "Pin và sạc",
+      "misc": "Cảm biến, SAR và quy chuẩn"
+    }
   },
   "staticPages": {
     "aboutSeoTitle": "Giới thiệu Rate.vn - Giá thật và đánh giá đã lọc",
