@@ -35,72 +35,63 @@ export async function generateMetadata({
   };
 }
 
+// Titles: developers.groupTitles.<key> (DOS/Rate#1372).
 const TEN_FIELD_GROUPS = [
   {
     order: 1,
     key: 'launch',
-    title: 'Launch & availability',
     fields: 'announced, status, release_date, model_variants',
   },
   {
     order: 2,
     key: 'body',
-    title: 'Body & durability',
     fields:
       'dimensions, weight_g, build_materials, sim_type, ip_rating, colors',
   },
   {
     order: 3,
     key: 'display',
-    title: 'Display & panel',
     fields:
       'type, size_inches, resolution, refresh_rate_hz, peak_brightness_nits, protection_glass',
   },
   {
     order: 4,
     key: 'platform',
-    title: 'Platform & chipset',
     fields: 'os, chipset, cpu_cores, gpu, antutu_score, geekbench_score',
   },
   {
     order: 5,
     key: 'memory',
-    title: 'Memory & storage',
     fields: 'ram_options_gb, storage_options_gb, storage_type, card_slot',
   },
   {
     order: 6,
     key: 'cameras',
-    title: 'Cameras (PhoneArena split)',
     fields:
-      'main_camera, second_camera (Ultrawide), third_camera (Telephoto), fourth_camera, front_camera',
+      'main_camera, second_camera, third_camera, fourth_camera, front_camera',
   },
   {
     order: 7,
     key: 'audio',
-    title: 'Sound & acoustics',
     fields: 'loudspeaker_type, jack_3_5mm, hi_res_audio, spatial_audio',
   },
   {
     order: 8,
     key: 'connectivity',
-    title: 'Comms & connectivity',
     fields: 'wlan_wifi, bluetooth, gps_positioning, nfc, usb_type, uwb_support',
   },
   {
     order: 9,
     key: 'battery',
-    title: 'Battery & charging',
     fields:
       'capacity_mah, wired_charging_w, wireless_charging_w, reverse_charging, battery_life_endurance',
   },
   {
     order: 10,
     key: 'misc',
-    title: 'Sensors, SAR & regulatory',
     fields: 'sensors_list, sar_eu_w_kg, energy_label, price_launch_reference',
   },
-];
+] as const;
 
 export default async function DevelopersPage({
   params,
@@ -119,7 +110,7 @@ export default async function DevelopersPage({
     {
       method: 'GET',
       path: '/api/v1/rate/products',
-      auth: 'Public (CORS)',
+      auth: t('authPublic'),
       cache: 's-maxage=60, stale-while-revalidate=300',
       queryParams: t('ep1Params'),
       summary: t('ep1Summary'),
@@ -127,7 +118,7 @@ export default async function DevelopersPage({
     {
       method: 'GET',
       path: '/api/v1/rate/products/[slug]',
-      auth: 'Public (CORS)',
+      auth: t('authPublic'),
       cache: 's-maxage=60, stale-while-revalidate=300',
       queryParams: t('ep2Params'),
       summary: t('ep2Summary'),
@@ -135,7 +126,7 @@ export default async function DevelopersPage({
     {
       method: 'GET',
       path: '/api/v1/rate/compare',
-      auth: 'Public (CORS)',
+      auth: t('authPublic'),
       cache: 's-maxage=60, stale-while-revalidate=300',
       queryParams: t('ep3Params'),
       summary: t('ep3Summary'),
@@ -143,7 +134,7 @@ export default async function DevelopersPage({
     {
       method: 'GET',
       path: '/api/v1/rate/versus',
-      auth: 'Public (CORS)',
+      auth: t('authPublic'),
       cache: 's-maxage=60, stale-while-revalidate=300',
       queryParams: t('ep15Params'),
       summary: t('ep15Summary'),
@@ -151,7 +142,7 @@ export default async function DevelopersPage({
     {
       method: 'GET',
       path: '/api/v1/rate/watchlist',
-      auth: 'Public (CORS)',
+      auth: t('authPublic'),
       cache: 's-maxage=30, stale-while-revalidate=120',
       queryParams: t('ep4Params'),
       summary: t('ep4Summary'),
@@ -159,7 +150,7 @@ export default async function DevelopersPage({
     {
       method: 'GET',
       path: '/api/v1/rate/lookup',
-      auth: 'Public (CORS)',
+      auth: t('authPublic'),
       cache: 's-maxage=30, stale-while-revalidate=120',
       queryParams: t('ep5Params'),
       summary: t('ep5Summary'),
@@ -167,7 +158,7 @@ export default async function DevelopersPage({
     {
       method: 'GET',
       path: '/api/v1/rate/inspect',
-      auth: 'Public (CORS)',
+      auth: t('authPublic'),
       cache: 's-maxage=30, stale-while-revalidate=120',
       queryParams: t('ep6Params'),
       summary: t('ep6Summary'),
@@ -175,7 +166,7 @@ export default async function DevelopersPage({
     {
       method: 'GET',
       path: '/api/v1/rate/extension/lookup',
-      auth: 'Public (CORS)',
+      auth: t('authPublic'),
       cache: 's-maxage=30, stale-while-revalidate=120',
       queryParams: t('ep7Params'),
       summary: t('ep7Summary'),
@@ -183,15 +174,15 @@ export default async function DevelopersPage({
     {
       method: 'POST',
       path: '/api/v1/rate/extension/ingest',
-      auth: 'Opt-in consent required',
-      cache: 'no-store (queues rate.crawl_jobs)',
+      auth: t('authOptIn'),
+      cache: t('cacheNoStoreQueue'),
       queryParams: t('ep8Params'),
       summary: t('ep8Summary'),
     },
     {
       method: 'GET',
       path: '/api/v1/rate/merchants',
-      auth: 'Public (CORS)',
+      auth: t('authPublic'),
       cache: 's-maxage=60, stale-while-revalidate=300',
       queryParams: t('ep9Params'),
       summary: t('ep9Summary'),
@@ -199,7 +190,7 @@ export default async function DevelopersPage({
     {
       method: 'GET',
       path: '/api/v1/rate/merchants/[id]',
-      auth: 'Public (CORS)',
+      auth: t('authPublic'),
       cache: 's-maxage=60, stale-while-revalidate=300',
       queryParams: t('ep10Params'),
       summary: t('ep10Summary'),
@@ -207,7 +198,7 @@ export default async function DevelopersPage({
     {
       method: 'GET',
       path: '/api/v1/rate/merchants/directory',
-      auth: 'Public (CORS)',
+      auth: t('authPublic'),
       cache: 's-maxage=60, stale-while-revalidate=300',
       queryParams: t('ep19Params'),
       summary: t('ep19Summary'),
@@ -215,7 +206,7 @@ export default async function DevelopersPage({
     {
       method: 'GET',
       path: '/api/v1/rate/reviews',
-      auth: 'Public (CORS)',
+      auth: t('authPublic'),
       cache: 's-maxage=60, stale-while-revalidate=300',
       queryParams: t('ep16Params'),
       summary: t('ep16Summary'),
@@ -223,7 +214,7 @@ export default async function DevelopersPage({
     {
       method: 'GET',
       path: '/api/v1/rate/leaderboard',
-      auth: 'Public (CORS)',
+      auth: t('authPublic'),
       cache: 's-maxage=60, stale-while-revalidate=300',
       queryParams: t('ep17Params'),
       summary: t('ep17Summary'),
@@ -231,7 +222,7 @@ export default async function DevelopersPage({
     {
       method: 'GET',
       path: '/api/v1/rate/deals',
-      auth: 'Public (CORS)',
+      auth: t('authPublic'),
       cache: 's-maxage=120, stale-while-revalidate=300',
       queryParams: t('ep18Params'),
       summary: t('ep18Summary'),
@@ -239,7 +230,7 @@ export default async function DevelopersPage({
     {
       method: 'GET',
       path: '/api/v1/rate/stats',
-      auth: 'Public (CORS)',
+      auth: t('authPublic'),
       cache: 's-maxage=60, stale-while-revalidate=300',
       queryParams: t('ep11Params'),
       summary: t('ep11Summary'),
@@ -247,7 +238,7 @@ export default async function DevelopersPage({
     {
       method: 'GET',
       path: '/api/v1/rate/openapi.json',
-      auth: 'Public (CORS)',
+      auth: t('authPublic'),
       cache: 's-maxage=3600, stale-while-revalidate=86400',
       queryParams: t('ep12Params'),
       summary: t('ep12Summary'),
@@ -255,16 +246,16 @@ export default async function DevelopersPage({
     {
       method: 'POST',
       path: '/api/v1/rate/reviews',
-      auth: 'Bearer token (Supabase Auth)',
-      cache: 'no-store (RPC rate.submit_community_review)',
+      auth: t('authBearer'),
+      cache: t('cacheNoStoreRpc'),
       queryParams: t('ep13Params'),
       summary: t('ep13Summary'),
     },
     {
       method: 'POST',
       path: '/api/reviews/[id]/vote',
-      auth: 'Bearer token (Supabase Auth)',
-      cache: 'no-store (database trigger)',
+      auth: t('authBearer'),
+      cache: t('cacheNoStoreTrigger'),
       queryParams: t('ep14Params'),
       summary: t('ep14Summary'),
     },
@@ -481,7 +472,9 @@ export default async function DevelopersPage({
                         <span className="badge bg-dark rounded-pill">
                           {t('groupOrderBadge', { order: group.order })}
                         </span>
-                        <span className="fw-bold text-dark">{group.title}</span>
+                        <span className="fw-bold text-dark">
+                          {t(`groupTitles.${group.key}`)}
+                        </span>
                       </div>
                       <code className="small text-primary fw-semibold">
                         specifications.{group.key}

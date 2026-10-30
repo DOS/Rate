@@ -1400,7 +1400,25 @@
     "pgPreset12Title": "Skutečné slevy a falešné výprodeje na 10 tržištích (/deals)",
     "pgPreset12Desc": "Prochází ceny na 10 tržištích a hledá skutečně nízké ceny (genuineDeals) a nafouknuté původní ceny (fakeSaleTraps).",
     "pgPreset13Title": "Specifikace OpenAPI 3.1.0 (/openapi.json)",
-    "pgPreset13Desc": "Vrací specifikaci OpenAPI 3.1.0 ve formátu JSON pro endpointy Rate.vn REST API v1."
+    "pgPreset13Desc": "Vrací specifikaci OpenAPI 3.1.0 ve formátu JSON pro endpointy Rate.vn REST API v1.",
+    "authPublic": "Veřejný přístup (CORS)",
+    "authOptIn": "Vyžaduje souhlas uživatele (opt-in)",
+    "authBearer": "Bearer token (Supabase Auth)",
+    "cacheNoStoreQueue": "no-store (zařadí do fronty rate.crawl_jobs)",
+    "cacheNoStoreRpc": "no-store (RPC rate.submit_community_review)",
+    "cacheNoStoreTrigger": "no-store (databázový trigger)",
+    "groupTitles": {
+      "launch": "Uvedení a dostupnost",
+      "body": "Konstrukce a odolnost",
+      "display": "Displej a panel",
+      "platform": "Platforma a čipset",
+      "memory": "Paměť a úložiště",
+      "cameras": "Fotoaparáty (rozdělení podle PhoneArena)",
+      "audio": "Zvuk a akustika",
+      "connectivity": "Komunikace a konektivita",
+      "battery": "Baterie a nabíjení",
+      "misc": "Senzory, SAR a předpisy"
+    }
   },
   "staticPages": {
     "aboutSeoTitle": "O Rate.vn - porovnání parametrů, cen a recenzí | Rate.vn",
