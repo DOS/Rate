@@ -6,7 +6,7 @@ import {
   compareRowIsShown,
   isEmptySpecValue,
 } from '../product-spec-rows';
-import { getSpecUiDictionary } from '../spec-localizer';
+import { getSpecUiDictionary, localizedSpecValue } from '../spec-localizer';
 
 const groupsFor = (
   category: string,
@@ -252,10 +252,66 @@ async function testCompareUnknownSpecs() {
   console.warn('  ✅ Compare shows no invented value for unknown specs');
 }
 
+// English values the localizer leaves as they were are marked lang="en" on
+// a Czech or Vietnamese page, Vietnamese ones lang="vi" (DOS/Rate#1371).
+function testValueLanguage() {
+  const glass = 'Ceramic Shield glass (2024 generation)';
+  assert.deepEqual(localizedSpecValue(glass, 'cs'), {
+    text: glass,
+    lang: 'en',
+  });
+  assert.equal(localizedSpecValue(glass, 'en').lang, undefined);
+  assert.equal(localizedSpecValue(glass, 'vi').lang, 'en');
+  // Names and units alone are not English text.
+  assert.equal(localizedSpecValue('Apple A18 Pro', 'cs').lang, undefined);
+  assert.equal(localizedSpecValue('120 Hz, 2556x1179', 'cs').lang, undefined);
+  // Vietnamese source text on an English or Czech page.
+  assert.equal(localizedSpecValue('Sạc nhanh 35W', 'cs').lang, 'vi');
+  assert.equal(localizedSpecValue('Sạc nhanh 35W', 'vi').lang, undefined);
+  // A value the localizer changed is the page's language: no mark.
+  const yes = localizedSpecValue(true, 'cs');
+  assert.equal(yes.lang, undefined);
+  const translated = localizedSpecValue('September 2024', 'cs');
+  assert.notEqual(translated.text, 'September 2024');
+  assert.equal(translated.lang, undefined);
+
+  const rows = buildProductSpecGroups({
+    specs: {
+      display: { type: 'LTPO OLED', protection: glass },
+      design: { resistance: 'Sạc nhanh 35W' },
+      multimedia: { loudspeaker: 'Stereo speakers' },
+      battery: { reverse_charging: 'Reverse wireless charging 4.5W' },
+      connectivity: { other: 'Stereo reproduktory' },
+    } as unknown as ProductSpecifications,
+    keySpecs: { battery: 'Up to 20 hours of video playback' } as KeySpecs,
+    product: {},
+    template: getCategorySpecTemplate('smartphones'),
+    ui: getSpecUiDictionary('cs'),
+    locale: 'cs',
+  }).flatMap((g) => g.rows);
+  const rowOf = (value: string) => rows.find((r) => r.value === value);
+  assert.equal(rowOf(glass)?.lang, 'en');
+  assert.equal(rowOf('LTPO OLED')?.lang, undefined);
+  assert.equal(rowOf('Sạc nhanh 35W')?.lang, 'vi');
+  // Values from the key specs fallback and a reverse-charging sentence too.
+  assert.equal(rowOf('Reverse wireless charging 4.5W')?.lang, 'en');
+  assert.equal(rowOf('Up to 20 hours of video playback')?.lang, 'en');
+  // Each row keeps its own language: the translated loudspeaker row is not
+  // marked because another row's source text reads the same.
+  const speaker = localizedSpecValue('Stereo speakers', 'cs');
+  assert.notEqual(speaker.text, 'Stereo speakers');
+  const loudspeakerLabel = getSpecUiDictionary('cs').fields.loudspeaker;
+  const loudspeaker = rows.find((r) => r.label === loudspeakerLabel);
+  assert.equal(loudspeaker?.value, speaker.text);
+  assert.equal(loudspeaker?.lang, undefined);
+  console.warn('  ✅ Spec values carry their language when it differs');
+}
+
 async function main() {
   console.warn('🧪 Product spec rows suite (DOS/Rate#1186)');
   testProductPage();
   testCompare();
+  testValueLanguage();
   await testCompareUnknownSpecs();
 }
 
