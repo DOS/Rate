@@ -300,17 +300,18 @@ assert.deepEqual(
 );
 assert.deepEqual(versusVerdictCopy(versusInput, 'vi').values, {
   winner: 'A',
-  score: '4.92',
+  // One decimal, like every rating on the site (DOS/Rate#1470).
+  score: '4.9',
   expertSuffix: ' (9.1/10 Lab)',
 });
 assert.deepEqual(versusVerdictCopy(versusInput, 'cs').values, {
   winner: 'A',
-  score: '4,92',
+  score: '4,9',
   expertSuffix: ' (9,1/10 Lab)',
 });
 assert.deepEqual(
   versusVerdictCopy({ ...versusInput, tie: true }, 'cs').values,
-  { score: '4,92' }
+  { score: '4,9' }
 );
 
 // cs.json: a placeholder before % or ₫ is joined by one U+00A0, and no

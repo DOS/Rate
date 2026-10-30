@@ -11350,10 +11350,12 @@ async function runCoreArchitectureSuite() {
       'custom'
     );
     assert.equal(selfRes.tie, true);
-    assert.equal(selfRes.delta, '0.00');
+    assert.equal(selfRes.delta, '0.0');
     const { isVersusScoreTie } = await import('../../../lib/versus-verdict');
-    assert.equal(isVersusScoreTie(5, 4.996), true, 'equal at two decimals');
-    assert.equal(isVersusScoreTie(4.98, 4.97), false);
+    // One decimal, as the matrix and every rating show it (DOS/Rate#1470).
+    assert.equal(isVersusScoreTie(5, 4.96), true, 'equal at one decimal');
+    assert.equal(isVersusScoreTie(4.98, 5), true, '5.0 against 5.0');
+    assert.equal(isVersusScoreTie(4.9, 4.8), false);
     assert.equal(isVersusScoreTie(Number.NaN, 5), false);
     // The verdict follows the persona: A leads on the default weights, B on
     // the camera persona, and the verdict names each in turn with its
@@ -11365,6 +11367,7 @@ async function runCoreArchitectureSuite() {
       slug: 'cam-a',
       name: 'Model A',
       combinedScore5: 4.9,
+      userScore5: 4.9,
       expertScore10: null,
       criteria: { screen: 5, performance: 5, camera: 3, battery: 5, value: 5 },
     };
@@ -11373,6 +11376,7 @@ async function runCoreArchitectureSuite() {
       slug: 'cam-b',
       name: 'Model B',
       combinedScore5: 4.6,
+      userScore5: 4.6,
       expertScore10: null,
       criteria: { screen: 4, performance: 4, camera: 5, battery: 4, value: 4 },
     };
@@ -11403,9 +11407,9 @@ async function runCoreArchitectureSuite() {
       byCamera.key === 'versusAutoVerdict'
     ) {
       assert.equal(byDefault.values.winner, 'Model A');
-      assert.equal(byDefault.values.score, '4.90');
+      assert.equal(byDefault.values.score, '4.9');
       assert.equal(byCamera.values.winner, 'Model B');
-      assert.equal(byCamera.values.score, '4.50');
+      assert.equal(byCamera.values.score, '4.5');
     }
     assert.equal(byDefault.weightsLabel, null);
     assert.equal(byCamera.weightsLabel, 'Chụp ảnh / Âm thanh');
@@ -11420,7 +11424,7 @@ async function runCoreArchitectureSuite() {
       }),
       {
         key: 'versusAutoVerdictTie',
-        values: { score: '5.00' },
+        values: { score: '5.0' },
         weightsLabel: null,
       }
     );

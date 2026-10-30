@@ -1,12 +1,13 @@
 import { formatDecimal } from './locale-format';
 
 /**
- * Whether two 1v1 scores are level as the page shows them, at two decimals
- * (DOS/Rate#1209): 5.00 vs 5.00 is a tie, not a lead for either model.
+ * Whether two 1v1 scores are level as the page shows them (DOS/Rate#1209):
+ * at one decimal, like the comparison matrix and every rating on the site
+ * (DOS/Rate#1470). 5.0 vs 5.0 is a tie, not a lead for either model.
  */
 export function isVersusScoreTie(scoreA: number, scoreB: number): boolean {
   if (!Number.isFinite(scoreA) || !Number.isFinite(scoreB)) return false;
-  return scoreA.toFixed(2) === scoreB.toFixed(2);
+  return scoreA.toFixed(1) === scoreB.toFixed(1);
 }
 
 export interface VersusVerdictInput {
@@ -40,7 +41,7 @@ export function versusVerdictCopy(
   input: VersusVerdictInput,
   locale?: string | null
 ): VersusVerdictCopy {
-  const score = formatDecimal(input.score, locale, 2);
+  const score = formatDecimal(input.score, locale, 1);
   if (input.tie) {
     return {
       key: 'versusAutoVerdictTie',

@@ -123,7 +123,8 @@ export function computeVersusWeightedResult(
   const rawSumW = wScreen + wPerf + wCam + wBat + wVal;
 
   const calcWeighted = (item: ScoredVersusItem): number => {
-    const baseScore5 = sanitizeVersusScore5(item.combinedScore5);
+    // The product's rating as every page shows it (DOS/Rate#1470).
+    const baseScore5 = sanitizeVersusScore5(item.userScore5);
     if (persona === 'default') {
       return baseScore5;
     }
@@ -162,7 +163,7 @@ export function computeVersusWeightedResult(
   return {
     finalA,
     finalB,
-    delta: Math.abs(finalA - finalB).toFixed(2),
+    delta: Math.abs(finalA - finalB).toFixed(1),
     winner,
     // Level at the shown precision: no lead for either (DOS/Rate#1209).
     tie: isVersusScoreTie(finalA, finalB),
@@ -265,8 +266,8 @@ export default function VersusInteractiveScoreboard({
       const safePriceAdv = sanitizeVersusMarkdownCell(priceAdvantageLabel);
       const leadScore =
         weightedResult.finalA >= weightedResult.finalB
-          ? weightedResult.finalA.toFixed(2)
-          : weightedResult.finalB.toFixed(2);
+          ? weightedResult.finalA.toFixed(1)
+          : weightedResult.finalB.toFixed(1);
       const lines = [
         `### ${t('md1v1Heading', { nameA: safeNameA, nameB: safeNameB })}`,
         weightedResult.tie
@@ -276,7 +277,7 @@ export default function VersusInteractiveScoreboard({
         '',
         `| ${t('mdColCriterion')} | ${safeNameA} | ${safeNameB} | ${t('mdColAdvantage')} |`,
         `| --- | --- | --- | --- |`,
-        `| **${t('mdRowWeightedScore')}** | **${weightedResult.finalA.toFixed(2)}/5.0** | **${weightedResult.finalB.toFixed(2)}/5.0** | **${weightedResult.tie ? sanitizeVersusMarkdownCell(t('mdRowTie')) : safeWinnerName}** |`,
+        `| **${t('mdRowWeightedScore')}** | **${weightedResult.finalA.toFixed(1)}/5.0** | **${weightedResult.finalB.toFixed(1)}/5.0** | **${weightedResult.tie ? sanitizeVersusMarkdownCell(t('mdRowTie')) : safeWinnerName}** |`,
         ...criteriaRows.map((r) => {
           const winName =
             r.aVal > r.bVal
@@ -314,8 +315,8 @@ export default function VersusInteractiveScoreboard({
       [
         t('csvRowWeightedScore5'),
         100,
-        weightedResult.finalA.toFixed(2),
-        weightedResult.finalB.toFixed(2),
+        weightedResult.finalA.toFixed(1),
+        weightedResult.finalB.toFixed(1),
         weightedResult.tie ? t('mdRowTie') : weightedResult.winner.name,
       ],
       ...criteriaRows.map((r) => [
@@ -642,9 +643,9 @@ export default function VersusInteractiveScoreboard({
             )}
           </div>
           <div className="rate-tabular small text-warning fw-bold">
-            {scoreA.brand}: {formatDecimal(weightedResult.finalA, locale, 2)}/
+            {scoreA.brand}: {formatDecimal(weightedResult.finalA, locale, 1)}/
             {formatDecimal(5, locale, 1)} • {scoreB.brand}:{' '}
-            {formatDecimal(weightedResult.finalB, locale, 2)}/
+            {formatDecimal(weightedResult.finalB, locale, 1)}/
             {formatDecimal(5, locale, 1)}
           </div>
         </div>
@@ -660,7 +661,7 @@ export default function VersusInteractiveScoreboard({
             </Link>
             <div className="d-flex mt-1 flex-wrap gap-2">
               <span className="rate-score-badge-user">
-                ★ {formatDecimal(weightedResult.finalA, locale, 2)}/
+                ★ {formatDecimal(weightedResult.finalA, locale, 1)}/
                 {formatDecimal(5, locale, 1)}
               </span>
               <span className="rate-score-badge-expert">
@@ -684,7 +685,7 @@ export default function VersusInteractiveScoreboard({
             </Link>
             <div className="d-flex justify-content-end mt-1 flex-wrap gap-2">
               <span className="rate-score-badge-user">
-                ★ {formatDecimal(weightedResult.finalB, locale, 2)}/
+                ★ {formatDecimal(weightedResult.finalB, locale, 1)}/
                 {formatDecimal(5, locale, 1)}
               </span>
               <span className="rate-score-badge-expert">
