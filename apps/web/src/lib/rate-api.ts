@@ -6,6 +6,7 @@ import { rankModelCandidates } from '@/lib/model-match';
 import { isPendingReview } from '@/lib/review-display';
 import { listingReviewSummary } from '@/lib/analyzer-copy';
 import { countBrandsByItem } from '@/lib/item-directory';
+import { masterSiblingKeyPrefix } from '@/lib/product-variant-links';
 import {
   implausiblyLowOfferIds,
   plausibleOffers,
@@ -867,6 +868,81 @@ export async function getMasterProductBySlug(
     null,
     await getCategorySlugMap()
   );
+}
+
+/** A published master of the same model, for the product page's variant links. */
+export interface MasterProductSibling {
+  id: string;
+  slug: string;
+  name: string;
+  model: string | null;
+  category_id: string | null;
+  /** Only the category hint the route resolves a category from. */
+  metadata: { category_slug?: string | null } | null;
+  specifications: { category_slug?: string | null } | null;
+  variant_name: string | null;
+  model_key: string;
+  storage_gb: number | null;
+  min_price: number | null;
+  max_price: number | null;
+  merchant_count: number | null;
+}
+
+/** At most this many variants of one model are read (DOS/Rate#1436). */
+export const MAX_MASTER_PRODUCT_SIBLINGS = 24;
+
+export { masterSiblingKeyPrefix };
+
+/**
+ * The published masters whose key starts with `keyPrefix` (from
+ * masterSiblingKeyPrefix): the variants of one model, smallest storage first.
+ * Bounded to MAX_MASTER_PRODUCT_SIBLINGS rows; a database failure throws
+ * RateDataUnavailableError (DOS/Rate#1436).
+ */
+export async function getMasterProductSiblings(
+  keyPrefix: string
+): Promise<MasterProductSibling[]> {
+  if (masterSiblingKeyPrefix(`${keyPrefix}x`) !== keyPrefix) return [];
+  const supabase = getRateClient();
+  const { data, error } = await supabase
+    .from('master_products')
+    .select(
+      'id, slug, name, model, category_id, meta_category_slug:metadata->>category_slug, spec_category_slug:specifications->>category_slug, variant_name, model_key, storage_gb, min_price, max_price, merchant_count'
+    )
+    // The prefix holds only [a-z0-9.:-], so it has no LIKE wildcard to escape.
+    .like('model_key', `${keyPrefix}%`)
+    .eq('status', 'published')
+    .order('storage_gb', { ascending: true, nullsFirst: false })
+    .order('slug', { ascending: true })
+    .limit(MAX_MASTER_PRODUCT_SIBLINGS);
+  if (error) {
+    log.error('master product siblings lookup failed', {
+      keyPrefix,
+      message: error.message,
+    });
+    throw new RateDataUnavailableError('master product siblings', error);
+  }
+  type Row = Omit<MasterProductSibling, 'metadata' | 'specifications'> & {
+    meta_category_slug?: string | null;
+    spec_category_slug?: string | null;
+  };
+  return ((data ?? []) as unknown as Row[])
+    .filter(
+      (row) =>
+        typeof row?.slug === 'string' &&
+        PRODUCT_SLUG_REGEX.test(row.slug) &&
+        typeof row.model_key === 'string' &&
+        row.model_key.startsWith(keyPrefix)
+    )
+    .map(({ meta_category_slug, spec_category_slug, ...row }) => ({
+      ...row,
+      metadata: meta_category_slug
+        ? { category_slug: meta_category_slug }
+        : null,
+      specifications: spec_category_slug
+        ? { category_slug: spec_category_slug }
+        : null,
+    }));
 }
 
 interface RawTrustViewRow {

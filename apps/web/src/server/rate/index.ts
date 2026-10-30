@@ -12,6 +12,8 @@ import {
   getCategoryDirectoryFacets as _getCategoryDirectoryFacets,
   getCategoryRouteHref,
   getMasterProductBySlug as _getMasterProductBySlug,
+  getMasterProductSiblings as _getMasterProductSiblings,
+  masterSiblingKeyPrefix,
   getMasterProductCategorySlug,
   getMasterProductHref,
   getMasterProductOffers as _getMasterProductOffers,
@@ -270,6 +272,25 @@ export function getCachedMasterProductBySlug(slug: string) {
   const cleanSlug = sanitizeCachedProductSlug(slug);
   if (!cleanSlug) return Promise.resolve(null);
   return _getCachedMasterProductBySlugKey(cleanSlug);
+}
+
+const _getCachedMasterProductSiblingsByPrefix = cache((keyPrefix: string) =>
+  withRateDataCache(
+    _getMasterProductSiblings,
+    ['rate-master-product-siblings', keyPrefix],
+    { revalidate: 300, tags: [RATE_CACHE_TAGS.PRODUCTS] }
+  )(keyPrefix)
+);
+
+/**
+ * The published variants of a master's model, the master itself included,
+ * cached per model and bounded (DOS/Rate#1436). Empty for a key with no
+ * `brand:model:variant` shape.
+ */
+export function getCachedMasterProductSiblings(modelKey: string) {
+  const keyPrefix = masterSiblingKeyPrefix(modelKey);
+  if (!keyPrefix) return Promise.resolve([]);
+  return _getCachedMasterProductSiblingsByPrefix(keyPrefix);
 }
 
 const _getCachedCategoryDirectoryFacetsByKey = cache(

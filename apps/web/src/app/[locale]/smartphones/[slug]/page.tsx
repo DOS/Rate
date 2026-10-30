@@ -32,6 +32,7 @@ import {
   getCachedMasterProductPriceHistory,
   getCachedMasterProductReviews,
   getCachedMasterProductReviewSummary,
+  getCachedMasterProductSiblings,
   getCachedMasterProducts,
   computeProductRadarSignal,
 } from '@/server/rate';
@@ -69,6 +70,11 @@ import {
 } from '@/lib/seo';
 import JReviewsSection from '@/components/reviews/JReviewsSection';
 import PhoneCollapsible from '@/components/product/PhoneCollapsible';
+import ProductVariantLinks from '@/components/product/ProductVariantLinks';
+import {
+  buildProductVariantLinks,
+  siblingsInCategory,
+} from '@/lib/product-variant-links';
 import PriceHistorySection from '@/components/price-history/PriceHistorySection';
 import CompareQuickToggle from '@/components/compare/CompareQuickToggle';
 import CompareTrayBar from '@/components/compare/CompareTrayBar';
@@ -79,7 +85,6 @@ import type { KeySpecs, ProductSpecifications } from '@repo/shared-data';
 import { normalizeRateLocale } from '@/lib/rate-i18n';
 import {
   getSpecUiDictionary,
-  localizedSpecValue,
   specGroupHeading,
   specSectionBadge,
 } from '@/lib/spec-localizer';
@@ -121,11 +126,9 @@ import {
   storeImageSrcSet,
 } from '@/lib/rate-domain-core';
 import {
-  localizeDecimalPoints,
   formatDecimal,
   formatNumber,
   formatPercent,
-  formatPlainNumber,
   formatPriceVnd,
 } from '@/lib/locale-format';
 import { versusHref } from '@/lib/item-compare';
@@ -362,6 +365,26 @@ export async function ProductDetailView({
   );
   offersRead.catch(() => undefined);
   reviewsRead.catch(() => undefined);
+  // The other variants of this model, linked under the price where the
+  // quick-spec cards used to be; Item routes (flag on) keep the #1154 size
+  // picker instead. Cached per model and bounded. A failure fails the render
+  // like the reads beside it, so ISR keeps the last good page (DOS/Rate#1436).
+  const siblingsRead = itemRoute
+    ? Promise.resolve([])
+    : timing.time(
+        'siblings',
+        getCachedMasterProductSiblings(storedProduct.model_key).then(
+          async (rows) =>
+            rows.length === 0
+              ? rows
+              : siblingsInCategory(
+                  rows,
+                  categorySlug,
+                  await getCachedCategorySlugById()
+                )
+        )
+      );
+  siblingsRead.catch(() => undefined);
   // Master-product route: a product asked for under another category's path
   // goes to its own (DOS/Rate#1366).
   if (!itemRoute) {
@@ -438,14 +461,19 @@ export async function ProductDetailView({
     priceHistory,
     reviewSummary,
     { categoryPeers, relatedCompetitors, competitorOffers },
+    siblings,
   ] = await Promise.all([
     offersRead,
     reviewsRead,
     priceHistoryRead,
     reviewSummaryRead,
     competitorsRead,
+    siblingsRead,
   ]);
   timing.done();
+  const variantLinks = itemRoute
+    ? null
+    : buildProductVariantLinks(product, siblings);
   const peerRadarIndex: RadarIndex = new Map(
     relatedCompetitors.map((peer, i) => [
       peer.slug,
@@ -940,6 +968,23 @@ export async function ProductDetailView({
                   })}
                 </p>
               )}
+              {/* The other variants of this model, not the quick-spec cards
+              the specs section already has (DOS/Rate#1436). */}
+              {variantLinks && (
+                <ProductVariantLinks
+                  links={variantLinks}
+                  basePath={categoryBasePath}
+                  label={t('variantLinksLabel')}
+                  unknownSizeLabel={t('variantLinksUnknownSize')}
+                  priceLabel={(minPrice) =>
+                    minPrice > 0
+                      ? t('itemVariantPrice', {
+                          price: formatNumber(minPrice, locale),
+                        })
+                      : t('itemVariantNoPrice')
+                  }
+                />
+              )}
               {isItemGroup && (
                 <ItemVariantPicker
                   label={t('itemVariantLabel')}
@@ -1265,129 +1310,6 @@ export async function ProductDetailView({
                 />
               </div>
 
-              {/* Quick specs grid (Category-adaptive per DESIGN.md v3.0) */}
-              <div className="row g-2 mb-3">
-                <div className="col-sm-4 col-6">
-                  <div className="bg-light rounded-3 h-100 border p-3">
-                    <div className="text-muted small">
-                      {categorySlug === 'earbuds'
-                        ? t('quickSpecDriver')
-                        : t('quickSpecScreen')}
-                    </div>
-                    <div className="fw-semibold small">
-                      <ContentText
-                        text={String(
-                          localizeDecimalPoints(keySpecs?.screen, locale) ||
-                            (specs?.display?.size_inch
-                              ? `${formatPlainNumber(specs.display.size_inch, locale)}" ${specs?.display?.type || ''}`.trim()
-                              : specs?.display?.type ||
-                                specs?.multimedia?.loudspeaker ||
-                                '-')
-                        )}
-                        locale={locale}
-                      />
-                    </div>
-                  </div>
-                </div>
-                <div className="col-sm-4 col-6">
-                  <div className="bg-light rounded-3 h-100 border p-3">
-                    <div className="text-muted small">
-                      {t('quickSpecChipset')}
-                    </div>
-                    <div className="fw-semibold small">
-                      <ContentText
-                        text={String(
-                          keySpecs?.chip ||
-                            specs?.hardware?.chipset ||
-                            specs?.hardware?.cpu ||
-                            '-'
-                        )}
-                        locale={locale}
-                      />
-                    </div>
-                  </div>
-                </div>
-                {(specTemplate.groups.includes('camera') ||
-                  categorySlug === 'earbuds') && (
-                  <div className="col-sm-4 col-6">
-                    <div className="bg-light rounded-3 h-100 border p-3">
-                      <div className="text-muted small">
-                        {categorySlug === 'earbuds' &&
-                        !keySpecs?.camera &&
-                        !specs?.camera?.main_camera
-                          ? t('quickSpecAudioAnc')
-                          : t('quickSpecMainCamera')}
-                      </div>
-                      <div className="fw-semibold small">
-                        <ContentText
-                          text={String(
-                            keySpecs?.camera ||
-                              specs?.camera?.main_camera ||
-                              specs?.multimedia?.audio_features ||
-                              '-'
-                          )}
-                          locale={locale}
-                        />
-                      </div>
-                    </div>
-                  </div>
-                )}
-                {(specTemplate.ram || specTemplate.storage) && (
-                  <div className="col-sm-4 col-6">
-                    <div className="bg-light rounded-3 h-100 border p-3">
-                      <div className="text-muted small">
-                        {t('quickSpecMemory')}
-                      </div>
-                      <div className="fw-semibold small">
-                        {(() => {
-                          const ram = product.ram_gb ?? specs?.hardware?.ram_gb;
-                          const rom =
-                            product.storage_gb ?? specs?.hardware?.storage_gb;
-                          if (ram && rom) return `${ram}GB / ${rom}GB`;
-                          if (ram) return `${ram}GB RAM`;
-                          if (rom) return `${rom}GB`;
-                          return keySpecs?.ram || keySpecs?.storage || '-';
-                        })()}
-                      </div>
-                    </div>
-                  </div>
-                )}
-                <div className="col-sm-4 col-6">
-                  <div className="bg-light rounded-3 h-100 border p-3">
-                    <div className="text-muted small">
-                      {t('quickSpecBattery')}
-                    </div>
-                    <div className="fw-semibold small">
-                      <ContentText
-                        text={String(
-                          keySpecs?.battery ||
-                            (specs?.battery?.capacity_mah
-                              ? `${specs.battery.capacity_mah} mAh`
-                              : specs?.battery?.charging || '-')
-                        )}
-                        locale={locale}
-                      />
-                    </div>
-                  </div>
-                </div>
-                <div className="col-sm-4 col-6">
-                  <div className="bg-light rounded-3 h-100 border p-3">
-                    <div className="text-muted small">
-                      {t('quickSpecDurability')}
-                    </div>
-                    <div className="fw-semibold small">
-                      <ContentText
-                        {...localizedSpecValue(
-                          specs?.design?.resistance || specs?.design?.materials,
-                          locale
-                        )}
-                        locale={locale}
-                      />
-                    </div>
-                  </div>
-                </div>
-              </div>
-
               {/* Neutral Market Price Reference Strip (De-commercialized per DESIGN.md v3.0) */}
               {isItemGroup
                 ? renderSizePanels('strip', (v) =>
@@ -1412,30 +1334,8 @@ export async function ProductDetailView({
             </div>
           </div>
 
-          {/* SECTION #1: JReviews Dual-Rating, AI Review Synthesis & Interactive Voting (Core Product Value) */}
-          <div className="mb-5">
-            <JReviewsSection
-              masterProductId={product.id}
-              productSlug={product.slug}
-              productName={product.name}
-              averageRating={normalizeCompareFiveStarRating(
-                product.average_rating
-              )}
-              userRatingWeighted={
-                normalizeCompareFiveStarRating(product.user_rating_weighted) ||
-                null
-              }
-              expertRating={resolveCompareExpertRating5(product)}
-              expertReviewSummary={product.expert_review_summary || null}
-              authenticReviewCount={authenticCount}
-              ignoredReviewCount={ignoredCount}
-              reviews={reviews}
-              summary={reviewSummary}
-              radarSignal={radarSignal}
-            />
-          </div>
-
-          {/* SECTION #2: Spec groups, per category template (DOS/Rate#1142) */}
+          {/* SECTION #1: Spec groups, per category template (DOS/Rate#1142), before
+          the reviews (DOS/Rate#1436) */}
           {(() => {
             const specUi = getSpecUiDictionary(locale);
             // Rows with no value and groups with no row are left out
@@ -1518,6 +1418,29 @@ export async function ProductDetailView({
               </div>
             );
           })()}
+
+          {/* SECTION #2: JReviews Dual-Rating, AI Review Synthesis & Interactive Voting (Core Product Value) */}
+          <div className="mb-5">
+            <JReviewsSection
+              masterProductId={product.id}
+              productSlug={product.slug}
+              productName={product.name}
+              averageRating={normalizeCompareFiveStarRating(
+                product.average_rating
+              )}
+              userRatingWeighted={
+                normalizeCompareFiveStarRating(product.user_rating_weighted) ||
+                null
+              }
+              expertRating={resolveCompareExpertRating5(product)}
+              expertReviewSummary={product.expert_review_summary || null}
+              authenticReviewCount={authenticCount}
+              ignoredReviewCount={ignoredCount}
+              reviews={reviews}
+              summary={reviewSummary}
+              radarSignal={radarSignal}
+            />
+          </div>
 
           {/* SECTION #3: Time-Series Price History Chart, Fake Discount Detector & Neutral Merchant Audit */}
           {isItemGroup
