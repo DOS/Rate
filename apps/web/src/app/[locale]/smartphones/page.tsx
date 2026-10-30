@@ -49,6 +49,7 @@ import ClientMessages from '@/components/providers/ClientMessages';
 import BootstrapClient from '@/app/BootstrapClient';
 import { productImageUrl } from '@/lib/rate-domain-core';
 import {
+  localizeDecimalPoints,
   formatDecimal,
   formatNumber,
   formatPlainNumber,
@@ -841,7 +842,7 @@ export async function CategoryCatalogContent({
                         });
                       }
                       const screen =
-                        keySpecs.screen ||
+                        localizeDecimalPoints(keySpecs.screen, locale) ||
                         (item.screen_size_inch
                           ? `${formatPlainNumber(item.screen_size_inch, locale)}"`
                           : '');

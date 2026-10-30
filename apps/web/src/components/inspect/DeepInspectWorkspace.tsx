@@ -565,15 +565,14 @@ export default function DeepInspectWorkspace({
                           {t('currentPriceLabel')}
                         </div>
                         <div className="h5 fw-bold text-danger rate-tabular mb-0">
-                          {formatNumber(
+                          {formatPriceVnd(
                             Number(
                               matchedOffer?.price_current ||
                                 master?.min_price ||
                                 0
                             ),
                             locale
-                          )}{' '}
-                          ₫
+                          )}
                         </div>
                       </div>
                     </div>
@@ -879,11 +878,10 @@ export default function DeepInspectWorkspace({
                               {offer.title}
                             </td>
                             <td className="fw-bold text-danger">
-                              {formatNumber(
+                              {formatPriceVnd(
                                 Number(offer.price_current),
                                 locale
-                              )}{' '}
-                              ₫
+                              )}
                               {implausibleOfferIds.has(offer.id) && (
                                 <span
                                   className="badge bg-warning text-dark d-block mt-1"

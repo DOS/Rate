@@ -781,11 +781,10 @@ export default function DealFinderWorkspace({
                             />{' '}
                             · {t('claimedOrigLabel')}{' '}
                             <s>
-                              {formatNumber(
+                              {formatPriceVnd(
                                 trap.priceOriginal || trap.priceCurrent,
                                 locale
-                              )}{' '}
-                              ₫
+                              )}
                             </s>
                           </span>
                         </div>

@@ -1,3 +1,4 @@
+import { collapseRun } from './locale-format';
 /** The default share card for rate.vn links (1200x630, see scripts/og-image/rate-og.html). */
 export const SHARE_IMAGE = {
   url: '/img/rate-og.png',
@@ -21,7 +22,8 @@ export const MAX_DESCRIPTION_LENGTH = 160;
  */
 export function fitTitle(
   candidates: readonly string[],
-  max: number = MAX_TITLE_LENGTH
+  max: number = MAX_TITLE_LENGTH,
+  locale?: string | null
 ): string {
   if (!Array.isArray(candidates)) return '';
   const rawMax = typeof max === 'number' ? max : NaN;
@@ -35,7 +37,7 @@ export function fitTitle(
         ? c
             .slice(0, 2000)
             .replace(/\p{Cc}+/gu, ' ')
-            .replace(/\s+/g, ' ')
+            .replace(/\s+/g, (run) => collapseRun(run, locale))
             .trim()
         : ''
     )
@@ -65,8 +67,8 @@ export function fitTitle(
  * word boundary with an ellipsis when long names push it past the limit
  * (DOS/Rate#793).
  */
-export function fitDescription(text: string): string {
-  return fitTitle([text], MAX_DESCRIPTION_LENGTH);
+export function fitDescription(text: string, locale?: string | null): string {
+  return fitTitle([text], MAX_DESCRIPTION_LENGTH, locale);
 }
 
 /**

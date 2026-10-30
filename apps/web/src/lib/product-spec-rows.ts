@@ -9,6 +9,7 @@ import {
   normalizeStorageExpansion,
   type SpecUiDictionary,
 } from './spec-localizer';
+import { localizeDecimalPoints } from './locale-format';
 
 export interface ProductSpecRow {
   label: string;
@@ -107,9 +108,11 @@ export function buildProductSpecGroups({
     display: [
       {
         label: f.screenSize,
-        value:
+        value: localizeDecimalPoints(
           withUnit(s.display?.size_inch, 'inch') ||
-          withUnit(product.screen_size_inch, 'inch'),
+            withUnit(product.screen_size_inch, 'inch'),
+          locale
+        ),
       },
       { label: f.panelType, value: loc(s.display?.type || k.screen) },
       { label: f.resolution, value: loc(s.display?.resolution) },

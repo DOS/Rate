@@ -783,11 +783,10 @@ export default async function Home({
                                     />{' '}
                                     · {tHome('inflatedOrigInline')}{' '}
                                     <s>
-                                      {formatNumber(
+                                      {formatPriceVnd(
                                         t.priceOriginal || t.priceCurrent,
                                         locale
-                                      )}{' '}
-                                      ₫
+                                      )}
                                     </s>
                                   </span>
                                 </div>

@@ -14,7 +14,7 @@
 export type FormatLocale = 'vi' | 'en' | 'cs';
 
 /** U+00A0, the space Intl cs-CZ puts between groups and before units. */
-export const NBSP = ' ';
+export const NBSP = String.fromCharCode(0xa0);
 
 /** Maps any page locale to a formatter locale; anything unknown is `vi`. */
 export function toFormatLocale(locale?: string | null): FormatLocale {
@@ -177,4 +177,36 @@ export function formatDate(
 ): string {
   const date = value instanceof Date ? value : new Date(value);
   return date.toLocaleDateString(isCs(locale) ? 'cs-CZ' : 'vi-VN', options);
+}
+
+/**
+ * A display string with numbers already in it, such as a crawler's
+ * `6.1" OLED` or `6.1 inch`: on cs a decimal point between two digits
+ * becomes a comma (`6,1" OLED`); vi/en get the input unchanged. A null or
+ * undefined input gives an empty string.
+ */
+export function localizeDecimalPoints(
+  text: string | null | undefined,
+  locale?: string | null
+): string {
+  if (typeof text !== 'string') return '';
+  if (!isCs(locale)) return text;
+  return text.replace(/(?<=\d)\.(?=\d)/g, ',');
+}
+
+/**
+ * Collapses runs of whitespace to one space, as `.replace(/\s+/g, ' ')` does
+ * on vi/en. On cs a run that is only non-breaking spaces stays one U+00A0,
+ * so `1 550 000 ₫` and `13,1 %` keep their non-breaking spaces.
+ */
+export function collapseWhitespace(
+  text: string,
+  locale?: string | null
+): string {
+  return text.replace(/\s+/g, (run) => collapseRun(run, locale));
+}
+
+/** The replacement for one whitespace run, see `collapseWhitespace`. */
+export function collapseRun(run: string, locale?: string | null): string {
+  return isCs(locale) && /^[\xa0]+$/.test(run) ? NBSP : ' ';
 }

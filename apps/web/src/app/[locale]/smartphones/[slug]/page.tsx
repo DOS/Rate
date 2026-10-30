@@ -112,6 +112,7 @@ import {
   productImageUrl,
 } from '@/lib/rate-domain-core';
 import {
+  localizeDecimalPoints,
   formatDecimal,
   formatNumber,
   formatPercent,
@@ -186,16 +187,20 @@ export async function generateCategoryProductMetadata(
   return {
     // The product name first; the site name, then the price give way to fit
     // a search result (DOS/Rate#782). No "from 0 ₫" without a price.
-    title: fitTitle([
-      ...(hasPrice
-        ? [
-            t('metaTitle', { name, minPrice }),
-            t('metaTitleShort', { name, minPrice }),
-          ]
-        : []),
-      `${name} | Rate.vn`,
-      name,
-    ]),
+    title: fitTitle(
+      [
+        ...(hasPrice
+          ? [
+              t('metaTitle', { name, minPrice }),
+              t('metaTitleShort', { name, minPrice }),
+            ]
+          : []),
+        `${name} | Rate.vn`,
+        name,
+      ],
+      undefined,
+      locale
+    ),
     description: fitDescription(
       hasPrice
         ? t('metaDesc', {
@@ -203,7 +208,8 @@ export async function generateCategoryProductMetadata(
             brand: product.brand,
             merchantCount: marketStats.sellerCount,
           })
-        : t('metaDescNoStock', { name, brand: product.brand })
+        : t('metaDescNoStock', { name, brand: product.brand }),
+      locale
     ),
     alternates: {
       canonical: canonicalUrl,
@@ -1128,7 +1134,7 @@ export async function ProductDetailView({
                     <div className="fw-semibold small">
                       <ContentText
                         text={String(
-                          keySpecs?.screen ||
+                          localizeDecimalPoints(keySpecs?.screen, locale) ||
                             (specs?.display?.size_inch
                               ? `${formatPlainNumber(specs.display.size_inch, locale)}" ${specs?.display?.type || ''}`.trim()
                               : specs?.display?.type ||

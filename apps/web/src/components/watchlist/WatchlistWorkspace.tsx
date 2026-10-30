@@ -734,8 +734,8 @@ export default function WatchlistWorkspace({
                   {t('kpiSpreadSavingsLabel')}
                 </div>
                 <div className="h5 fw-bold rate-tabular text-success mb-0">
-                  +{formatNumber(portfolioStats.totalSpreadSavingsVnd, locale)}{' '}
-                  ₫
+                  +
+                  {formatPriceVnd(portfolioStats.totalSpreadSavingsVnd, locale)}
                 </div>
               </div>
             </div>

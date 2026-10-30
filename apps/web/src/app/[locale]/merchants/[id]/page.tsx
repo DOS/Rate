@@ -976,11 +976,10 @@ export default async function MerchantProfilePage({
                                 >
                                   {t('lowestMarketPriceLabel')}{' '}
                                   <strong className="font-monospace">
-                                    {formatNumber(
+                                    {formatPriceVnd(
                                       item.master_product.market_min_price,
                                       locale
-                                    )}{' '}
-                                    ₫
+                                    )}
                                   </strong>
                                 </div>
                               </div>

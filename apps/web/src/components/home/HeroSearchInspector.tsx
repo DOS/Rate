@@ -41,6 +41,7 @@ import {
   formatDecimal,
   formatNumber,
   formatPlainNumber,
+  formatPriceVnd,
 } from '@/lib/locale-format';
 
 interface HeroSearchInspectorProps {
@@ -770,11 +771,10 @@ export default function HeroSearchInspector({
 
                           <div className="text-danger fw-bold fs-5 mb-1">
                             {t('bestPriceLabel')}{' '}
-                            {formatNumber(
+                            {formatPriceVnd(
                               Number(inspectResult.masterProduct.min_price),
                               locale
-                            )}{' '}
-                            ₫
+                            )}
                             {inspectResult.priceHistory?.lowestEverPrice && (
                               <span className="text-success small fw-semibold ms-2">
                                 {t('lowestEverPriceLabel', {

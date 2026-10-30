@@ -455,7 +455,8 @@ export default function VersusInteractiveScoreboard({
     weightedResult,
     scoreA.slug,
     persona,
-    personaLabels
+    personaLabels,
+    locale
   );
 
   return (

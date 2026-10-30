@@ -374,12 +374,15 @@ export default function ProductValueCalculator({
               {t('valueCalcCardDailyCostTitle', { months })}
             </div>
             <div className="h5 fw-bold rate-tabular text-danger mb-1">
-              {formatNumber(metrics.dailyCostVnd, locale)}{' '}
-              {t('valueCalcPerDayUnit')}
+              {formatPriceVnd(metrics.dailyCostVnd, locale, {
+                symbol: t('valueCalcPerDayUnit'),
+              })}
             </div>
             <div className="small text-secondary rate-tabular">
-              ~{formatNumber(metrics.monthlyCostVnd, locale)}{' '}
-              {t('valueCalcPerMonthUnit')}
+              ~
+              {formatPriceVnd(metrics.monthlyCostVnd, locale, {
+                symbol: t('valueCalcPerMonthUnit'),
+              })}
             </div>
           </div>
         </div>

@@ -2098,11 +2098,10 @@ export default function CompareWorkspace({
                     {headToHeadSummary.lowestPrice.name}
                   </div>
                   <div className="small text-white-50 rate-tabular">
-                    {formatNumber(
+                    {formatPriceVnd(
                       Number(headToHeadSummary.lowestPrice.min_price || 0),
                       locale
-                    )}{' '}
-                    ₫
+                    )}
                   </div>
                 </div>
               </div>

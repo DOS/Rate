@@ -1,4 +1,5 @@
 import type { SpecGroupKey } from '@repo/shared-data/rules';
+import { collapseWhitespace } from './locale-format';
 import { type RateLocale, normalizeRateLocale } from './rate-i18n';
 
 export interface SpecUiDictionary {
@@ -581,9 +582,7 @@ export function localizeSpecValue(
     return '-';
   }
 
-  let text = raw
-    .replace(/\p{Cc}+/gu, ' ')
-    .replace(/\s+/g, ' ')
+  let text = collapseWhitespace(raw.replace(/\p{Cc}+/gu, ' '), lang)
     .trim()
     .slice(0, 2_000);
   if (!text || text === '-' || DISALLOWED_SPEC_TEXT_REGEX.test(text)) {

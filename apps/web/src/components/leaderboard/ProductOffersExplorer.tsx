@@ -488,11 +488,11 @@ export default function ProductOffersExplorer({
           <div className="small rate-tabular text-secondary">
             {t('offersSpreadLowLabel')}{' '}
             <strong className="text-success">
-              {formatNumber(priceSpreadAudit.cheapest.price_current, locale)} ₫
+              {formatPriceVnd(priceSpreadAudit.cheapest.price_current, locale)}
             </strong>{' '}
             • {t('offersSpreadHighLabel')}{' '}
             <strong className="text-danger">
-              {formatNumber(priceSpreadAudit.priciest.price_current, locale)} ₫
+              {formatPriceVnd(priceSpreadAudit.priciest.price_current, locale)}
             </strong>
           </div>
         </div>
