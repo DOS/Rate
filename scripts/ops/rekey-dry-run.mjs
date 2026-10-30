@@ -275,12 +275,18 @@ export function planRekeys({ masters, listings, priceRows }) {
       // The master keeps its key, but a minority of its listings may key elsewhere,
       // such as 5G iPads under a key that stays Wi-Fi (#1491 c, d). They would leave
       // it once the normalizer ships; list them per target key.
+      // A leaving listing keeps its own storage when its title states one, so 128GB
+      // and 256GB 5G listings under an "unknown" master go to two keys.
       const leaving = new Map();
       for (const l of own) {
         if (!l.key) continue;
-        const { item } = splitKey(watchRespelling(l.key) ?? l.key);
-        if (item === stored.item) continue;
-        const newKey = stored.variant ? `${item}:${stored.variant}` : item;
+        const own_ = splitKey(watchRespelling(l.key) ?? l.key);
+        if (own_.item === stored.item) continue;
+        const variant =
+          own_.variant && own_.variant !== 'unknown'
+            ? own_.variant
+            : stored.variant;
+        const newKey = variant ? `${own_.item}:${variant}` : own_.item;
         const g = leaving.get(newKey) ?? { newKey, listings: 0, priceRows: 0 };
         g.listings += 1;
         g.priceRows += rowsByProduct.get(l.id) ?? 0;
@@ -290,14 +296,12 @@ export function planRekeys({ masters, listings, priceRows }) {
         splits.push({
           masterId: m.id,
           status: m.status,
-          key: m.model_key,
+          oldKey: m.model_key,
           listings: own.length,
-          groups: [...leaving.values()]
-            .sort((a, b) => a.newKey.localeCompare(b.newKey))
-            .map((g) => ({
-              ...g,
-              target: masterByKey.get(g.newKey)?.id ?? null,
-            })),
+          keyed,
+          groups: [...leaving.values()].sort((a, b) =>
+            a.newKey.localeCompare(b.newKey)
+          ),
         });
       }
       continue;
@@ -353,7 +357,24 @@ export function planRekeys({ masters, listings, priceRows }) {
     (a, b) =>
       a.category.localeCompare(b.category) || a.oldKey.localeCompare(b.oldKey)
   );
-  splits.sort((a, b) => a.key.localeCompare(b.key));
+  // Where a split's listings would go, knowing the re-keys above: into a master
+  // that stays, into one that is re-keyed too, or onto a key a re-key also takes.
+  for (const s of splits) {
+    for (const g of s.groups) {
+      const target = masterByKey.get(g.newKey);
+      const alsoMovingHere = movingTo.get(g.newKey);
+      if (target && moving.has(target.id)) {
+        g.action = `into ${target.id} (that master is re-keyed too: resolve first)`;
+      } else if (target) {
+        g.action = `into existing master ${target.id}`;
+      } else if (alsoMovingHere) {
+        g.action = `onto the key ${alsoMovingHere.join(', ')} moves to: resolve first`;
+      } else {
+        g.action = 'a new master';
+      }
+    }
+  }
+  splits.sort((a, b) => a.oldKey.localeCompare(b.oldKey));
   return { changes, unclear, splits, unchanged, noListings };
 }
 
@@ -367,9 +388,22 @@ export function formatPlan(plan) {
     }),
     { listings: 0, priceRows: 0 }
   );
+  const splits = plan.splits ?? [];
+  const split = splits.reduce(
+    (t, s) =>
+      s.groups.reduce(
+        (u, g) => ({
+          listings: u.listings + g.listings,
+          priceRows: u.priceRows + g.priceRows,
+        }),
+        t
+      ),
+    { listings: 0, priceRows: 0 }
+  );
   lines.push(
     `Proposed re-keys: ${plan.changes.length} masters, ${totals.listings} listings, ${totals.priceRows} price rows ` +
-      `(unchanged ${plan.unchanged}, no listings ${plan.noListings}, unclear ${plan.unclear.length}). Nothing was written.`
+      `(unchanged ${plan.unchanged}, no listings ${plan.noListings}, unclear ${plan.unclear.length}). ` +
+      `Minority leaving a kept-key master: ${splits.length} masters, ${split.listings} listings, ${split.priceRows} price rows. Nothing was written.`
   );
   let category = '';
   for (const c of plan.changes) {
@@ -396,23 +430,19 @@ export function formatPlan(plan) {
       );
     }
   }
-  const splits = plan.splits ?? [];
   if (splits.length > 0) {
-    const leaving = splits.reduce(
-      (n, s) => n + s.groups.reduce((m, g) => m + g.listings, 0),
-      0
-    );
     lines.push(
       '',
-      `## minority listings leaving a kept-key master (${splits.length} masters, ${leaving} listings; #1491 c, d)`
+      `## minority listings leaving a kept-key master (${splits.length} masters, ${split.listings} listings, ${split.priceRows} price rows; #1491 c, d)`
     );
+    const n = (count, word) => `${count} ${word}${count === 1 ? '' : 's'}`;
     for (const s of splits) {
       lines.push(
-        `${s.key}  [keeps its key; ${s.status}; listings ${s.listings}; master ${s.masterId}]`
+        `${s.oldKey}  [keeps its key; ${s.status}; listings ${s.listings}, keyed ${s.keyed}; master ${s.masterId}]`
       );
       for (const g of s.groups) {
         lines.push(
-          `  -> ${g.newKey}: ${g.listings} listings, ${g.priceRows} price rows (${g.target ? `into existing master ${g.target}` : 'a new master'})`
+          `  -> ${g.newKey}: ${n(g.listings, 'listing')}, ${n(g.priceRows, 'price row')} (${g.action})`
         );
       }
     }

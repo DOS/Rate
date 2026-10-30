@@ -419,12 +419,14 @@ test('lists the minority listings that would leave a kept-key master (#1491 c, d
         status: 'published',
       },
       { id: 'i2', model_key: 'apple:ipad-pro-m4-11-5g:256gb', status: 'draft' },
+      { id: 'u1', model_key: 'apple:ipad-mini-7:unknown', status: 'draft' },
       {
         id: 'b1',
         model_key: 'apple:macbook-air-m3-13:256gb',
         status: 'published',
       },
       { id: 'q1', model_key: 'samsung:galaxy-a55:256gb', status: 'published' },
+      { id: 'n1', model_key: 'garmin:fenix-7', status: 'draft' },
     ],
     listings: [
       // A suffix-enabled build keys the 5G titles apart; the Wi-Fi majority stays.
@@ -432,7 +434,16 @@ test('lists the minority listings that would leave a kept-key master (#1491 c, d
       { id: 'w2', master_id: 'i1', key: 'apple:ipad-pro-m4-11:256gb' },
       { id: 'w3', master_id: 'i1', key: 'apple:ipad-pro-m4-11:unknown' },
       { id: 'c1', master_id: 'i1', key: 'apple:ipad-pro-m4-11-5g:256gb' },
+      // A leaving listing keeps the storage its title states.
+      { id: 'c2', master_id: 'i1', key: 'apple:ipad-pro-m4-11-5g:512gb' },
       { id: 'w4', master_id: 'i1', key: null },
+      // Under an "unknown" master, 128GB and 256GB 5G listings go to two keys, and
+      // one with no storage takes the master's.
+      { id: 'm1', master_id: 'u1', key: 'apple:ipad-mini-7:128gb' },
+      { id: 'm2', master_id: 'u1', key: 'apple:ipad-mini-7:unknown' },
+      { id: 'm3', master_id: 'u1', key: 'apple:ipad-mini-7:256gb' },
+      { id: 'm4', master_id: 'u1', key: 'apple:ipad-mini-7-5g:128gb' },
+      { id: 'm5', master_id: 'u1', key: 'apple:ipad-mini-7-5g:unknown' },
       { id: 'g1', master_id: 'b1', key: 'apple:macbook-air-m3-13:256gb' },
       { id: 'g2', master_id: 'b1', key: 'apple:macbook-air-m3-13:256gb' },
       {
@@ -442,60 +453,101 @@ test('lists the minority listings that would leave a kept-key master (#1491 c, d
       },
       // A master whose listings all keep its key lists nothing.
       { id: 'a1', master_id: 'q1', key: 'samsung:galaxy-a55:256gb' },
+      // A master with no variant passes on a stated storage only; "unknown" is none.
+      { id: 'f1', master_id: 'n1', key: 'garmin:fenix-7:unknown' },
+      { id: 'f2', master_id: 'n1', key: 'garmin:fenix-7:unknown' },
+      { id: 'f3', master_id: 'n1', key: 'garmin:fenix-7-pro:unknown' },
     ],
     priceRows: [
       { product_id: 'c1', rows: 7 },
+      { product_id: 'c2', rows: 2 },
       { product_id: 'g3', rows: '2' },
       { product_id: 'w1', rows: 9 },
     ],
   });
   assert.equal(plan.changes.length, 0, 'every master keeps its key');
-  assert.equal(plan.unchanged, 3, 'i1, b1, q1');
   assert.equal(plan.noListings, 1, 'i2');
-  assert.deepEqual(plan.splits, [
-    {
-      masterId: 'i1',
-      status: 'published',
-      key: 'apple:ipad-pro-m4-11:256gb',
-      listings: 5,
-      groups: [
-        {
-          newKey: 'apple:ipad-pro-m4-11-5g:256gb',
-          listings: 1,
-          priceRows: 7,
-          target: 'i2',
-        },
-      ],
-    },
-    {
-      masterId: 'b1',
-      status: 'published',
-      key: 'apple:macbook-air-m3-13:256gb',
-      listings: 3,
-      groups: [
-        {
-          newKey: 'apple:macbook-air-m3-13-8gb-ram:256gb',
-          listings: 1,
-          priceRows: 2,
-          target: null,
-        },
-      ],
-    },
+  const groups = (s) => [
+    s.oldKey,
+    s.keyed,
+    ...s.groups.map((g) => [g.newKey, g.listings, g.priceRows, g.action]),
+  ];
+  assert.deepEqual(plan.splits.map(groups), [
+    [
+      'apple:ipad-mini-7:unknown',
+      5,
+      ['apple:ipad-mini-7-5g:128gb', 1, 0, 'a new master'],
+      ['apple:ipad-mini-7-5g:unknown', 1, 0, 'a new master'],
+    ],
+    [
+      'apple:ipad-pro-m4-11:256gb',
+      5,
+      ['apple:ipad-pro-m4-11-5g:256gb', 1, 7, 'into existing master i2'],
+      ['apple:ipad-pro-m4-11-5g:512gb', 1, 2, 'a new master'],
+    ],
+    [
+      'apple:macbook-air-m3-13:256gb',
+      3,
+      ['apple:macbook-air-m3-13-8gb-ram:256gb', 1, 2, 'a new master'],
+    ],
+    ['garmin:fenix-7', 3, ['garmin:fenix-7-pro', 1, 0, 'a new master']],
   ]);
   const text = formatPlan(plan).join('\n');
   assert.match(
     text,
-    /## minority listings leaving a kept-key master \(2 masters, 2 listings; #1491 c, d\)/
+    /Minority leaving a kept-key master: 4 masters, 6 listings, 11 price rows\./
   );
   assert.match(
     text,
-    /-> apple:ipad-pro-m4-11-5g:256gb: 1 listings, 7 price rows \(into existing master i2\)/
+    /## minority listings leaving a kept-key master \(4 masters, 6 listings, 11 price rows; #1491 c, d\)/
   );
   assert.match(
     text,
-    /-> apple:macbook-air-m3-13-8gb-ram:256gb: 1 listings, 2 price rows \(a new master\)/
+    /-> apple:ipad-pro-m4-11-5g:256gb: 1 listing, 7 price rows \(into existing master i2\)/
   );
+  assert.match(text, /listings 6, keyed 5; master i1/);
   assert.match(text, /Proposed re-keys: 0 masters/);
+});
+
+test('a split onto a master or key that a re-key also touches is flagged', () => {
+  const plan = planRekeys({
+    masters: [
+      { id: 'A', model_key: 'samsung:galaxy-a55:256gb', status: 'published' },
+      { id: 'B', model_key: 'samsung:galaxy-a56:256gb', status: 'draft' },
+      { id: 'C', model_key: 'xiaomi:15-tang-op:256gb', status: 'draft' },
+      { id: 'D', model_key: 'xiaomi:15t:256gb', status: 'draft' },
+    ],
+    listings: [
+      { id: 'a1', master_id: 'A', key: 'samsung:galaxy-a55:256gb' },
+      { id: 'a2', master_id: 'A', key: 'samsung:galaxy-a55:256gb' },
+      { id: 'a3', master_id: 'A', key: 'samsung:galaxy-a56:256gb' },
+      // B is re-keyed, so it is no safe target for A's A56 listing.
+      { id: 'b1', master_id: 'B', key: 'samsung:galaxy-a57:256gb' },
+      // C moves to xiaomi:15:256gb, the key D's minority would go to as well.
+      { id: 'c1', master_id: 'C', key: 'xiaomi:15:256gb' },
+      { id: 'd1', master_id: 'D', key: 'xiaomi:15t:256gb' },
+      { id: 'd2', master_id: 'D', key: 'xiaomi:15t:256gb' },
+      { id: 'd3', master_id: 'D', key: 'xiaomi:15:256gb' },
+    ],
+    priceRows: [],
+  });
+  assert.deepEqual(
+    plan.changes.map((c) => [c.oldKey, c.newKey]),
+    [
+      ['xiaomi:15-tang-op:256gb', 'xiaomi:15:256gb'],
+      ['samsung:galaxy-a56:256gb', 'samsung:galaxy-a57:256gb'],
+    ]
+  );
+  assert.deepEqual(
+    plan.splits.map((s) => [s.oldKey, s.groups.map((g) => g.action)]),
+    [
+      [
+        'samsung:galaxy-a55:256gb',
+        ['into B (that master is re-keyed too: resolve first)'],
+      ],
+      ['xiaomi:15t:256gb', ['onto the key C moves to: resolve first']],
+    ]
+  );
 });
 
 test('a watch respelling keeps what the titles say, else falls back to the stored key', () => {
