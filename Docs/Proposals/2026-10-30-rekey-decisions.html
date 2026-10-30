@@ -130,28 +130,28 @@
   </ul>
 
   <h3>5.2 Cách thêm hậu tố đề xuất</h3>
-  <p>Bản cơ bản giữ nguyên key hiện tại, chỉ bản còn lại được thêm hậu tố. Không sản phẩm nào đang lưu bị đổi tên. Chỉ listing của bản còn lại chuyển sang một sản phẩm mới.</p>
+  <p>Bản cơ bản giữ nguyên key hiện tại, chỉ bản còn lại được thêm hậu tố. Sản phẩm có cả hai bản thì giữ key, chỉ mất listing của bản còn lại sang một sản phẩm mới. Sản phẩm <strong>chỉ có</strong> bản còn lại thì chuyển cả sang key có hậu tố, và bước chạy thử hiện nó thành một lần đổi tên (5.4).</p>
   <div class="table-wrap">
   <table>
     <tr><th>Phần</th><th>Bản cơ bản (giữ key)</th><th>Bản còn lại (key mới)</th></tr>
     <tr><td>(c)</td><td>Wi-Fi: <code>apple:ipad-air-m4-11:128gb</code></td><td>5G/Cellular: <code>apple:ipad-air-m4-11-5g:128gb</code></td></tr>
-    <tr><td>(d)</td><td>RAM cơ bản: <code>apple:macbook-air-m3-13:256gb</code></td><td>RAM cao hơn: <code>apple:macbook-air-m3-13-16gb-ram:256gb</code></td></tr>
+    <tr><td>(d)</td><td>RAM cơ bản (16GB): <code>apple:macbook-air-m3-13:256gb</code></td><td>RAM khác (8GB): <code>apple:macbook-air-m3-13-8gb-ram:256gb</code></td></tr>
   </table>
   </div>
   <ul>
     <li><strong>(c)</strong> không cần bảng phụ. Tiêu đề ghi 5G, Cellular hoặc LTE thì thêm hậu tố, còn lại là Wi-Fi như hiện nay.</li>
-    <li><strong>(d)</strong> cần bảng RAM cơ bản cho từng model MacBook, tức là phải viết thêm code và dữ liệu. Tiêu đề không ghi RAM thì giữ key cơ bản như hiện nay.</li>
+    <li><strong>(d)</strong> cần bảng RAM cơ bản cho từng model MacBook, tức là phải viết thêm code và dữ liệu. RAM cơ bản lấy theo thông số của sản phẩm tạo sẵn, để không sản phẩm nào mất chính các listing mà thông số của nó mô tả. Ví dụ sản phẩm tạo sẵn <code>apple:macbook-air-m3-13:256gb</code> là bản 16GB, nên 16GB giữ key, còn 8GB thêm hậu tố. Tiêu đề không ghi RAM thì giữ key cơ bản như hiện nay.</li>
   </ul>
 
   <h3>5.3 Key và listing bị ảnh hưởng (ước tính từ code và kho tiêu đề RS, chỉ số đếm)</h3>
   <ul>
-    <li><strong>(c) iPad, 6 key đang trộn Wi-Fi với 5G:</strong> <code>ipad-mini-7:128gb</code>, <code>ipad-pro-m4-11:256gb</code>, <code>ipad-pro-m4-11:unknown</code>, <code>ipad-pro-m5-11:1024gb</code>, <code>ipad-pro-m5-11:unknown</code> và <code>ipad-air-m3-11:128gb</code>. Trong kho tiêu đề, 16 trên 54 tiêu đề của các key này là bản 5G và sẽ chuyển sang key <code>-5g</code>.</li>
-    <li><strong>(c) iPad, 8 key toàn tiêu đề 5G:</strong> listing của các key này sẽ chuyển sang key <code>-5g</code> và rời sản phẩm Wi-Fi mang key đó, nếu có.</li>
-    <li><strong>(d) MacBook, 1 key đang trộn RAM:</strong> <code>macbook-air-m3-13:256gb</code> (8GB và 16GB). Bốn key khác chỉ có một mức RAM trong tiêu đề. Chúng chỉ đổi nếu RAM cơ bản trong bảng khác với mức đó.</li>
+    <li><strong>(c) iPad, 6 key đang trộn Wi-Fi với 5G:</strong> <code>apple:ipad-mini-7:128gb</code>, <code>apple:ipad-pro-m4-11:256gb</code>, <code>apple:ipad-pro-m4-11:unknown</code>, <code>apple:ipad-pro-m5-11:1024gb</code>, <code>apple:ipad-pro-m5-11:unknown</code> và <code>apple:ipad-air-m3-11:128gb</code>. Mỗi key giữ nguyên, chỉ mất các listing bản 5G sang sản phẩm <code>-5g</code>.</li>
+    <li><strong>(c) iPad, 8 key toàn tiêu đề 5G:</strong> sản phẩm mang một trong các key này chuyển cả sang key <code>-5g</code>, tức là một lần đổi tên theo cách hiểu của bước chạy thử.</li>
+    <li><strong>(d) MacBook, 1 key đang trộn RAM:</strong> <code>apple:macbook-air-m3-13:256gb</code> (8GB và 16GB). Bốn key khác chỉ có một mức RAM trong tiêu đề. Sản phẩm mang các key đó chỉ bị đổi tên nếu mức RAM ấy khác RAM cơ bản trong bảng.</li>
     <li><strong>Sản phẩm tạo sẵn bị ảnh hưởng:</strong>
       <ul>
         <li><code>apple:ipad-pro-m5-11:256gb</code> (đã xuất bản) và <code>apple:ipad-pro-m4-11:256gb</code>, chỉ qua các listing bản 5G;</li>
-        <li><code>apple:macbook-air-m3-13:256gb</code>, qua các listing bản 16GB.</li>
+        <li><code>apple:macbook-air-m3-13:256gb</code>, qua các listing bản 8GB.</li>
       </ul>
     </li>
     <li>Core không có quyền đọc database. Số liệu thật lấy từ bước chạy thử (5.4).</li>
@@ -162,13 +162,13 @@
   <ol>
     <li>Build bộ chuẩn hoá từ nhánh có thêm hậu tố (chưa merge), rồi chỉ bước chạy thử vào bản build đó bằng <code>--normalizer &lt;đường dẫn&gt;</code>.</li>
     <li>Sản phẩm mà <strong>phần lớn</strong> listing là bản còn lại (các key toàn 5G) sẽ hiện thành đề xuất chuyển sang key <code>-5g</code>, kèm số listing và số dòng lịch sử giá.</li>
-    <li>Sản phẩm mà <strong>phần lớn</strong> listing là bản cơ bản thì giữ key, nên bước chạy thử hiện tại chưa liệt kê phần thiểu số sẽ rời đi. Cần một phần mở rộng nhỏ, vẫn chỉ đọc, in ra cho từng sản phẩm các listing có key mới khác key cũ, trước khi JOY quyết.</li>
+    <li>Sản phẩm mà <strong>phần lớn</strong> listing là bản cơ bản thì giữ key, nên bước chạy thử hiện tại chưa liệt kê phần thiểu số sẽ rời đi. Cần một phần mở rộng nhỏ, vẫn chỉ đọc, in ra cho từng sản phẩm các listing có key mới khác key cũ. Phần này chạy trước khi JOY quyết D5 và D6.</li>
   </ol>
   <p>Sau khi JOY đồng ý, bước sửa dữ liệu theo kiểu M0:</p>
   <ul>
     <li>tạo các sản phẩm mới;</li>
     <li>chuyển listing của bản còn lại sang;</li>
-    <li>cập nhật giá của cả hai sản phẩm;</li>
+    <li>tính lại số liệu thị trường (giá, số chỗ bán) của cả hai sản phẩm;</li>
     <li>kèm file kiểm tra, file hoàn tác và test chạy lại trên CI.</li>
   </ul>
   <p>Phần sửa bộ chuẩn hoá phát hành cùng đợt.</p>
@@ -178,13 +178,25 @@
   <div class="q"><strong>D2. Chữ quà tặng trong key (#1441):</strong> duyệt bước đếm ngay, rồi bước sửa dữ liệu kiểu M0. <span class="rec-line">Đề xuất: đồng ý, vì key đã bắt đầu tách từ khi PR #1433 merge.</span></div>
   <div class="q"><strong>D3. Máy cũ (#1430):</strong> A ngay rồi B sau, B ngay, hay để nguyên. <span class="rec-line">Đề xuất: A ngay, B sau.</span></div>
   <div class="q"><strong>D4. Ai chạy các bước đếm:</strong> cần quyền đọc production, mà Core không có. <span class="rec-line">Đề xuất: phía DOS-Me chạy. Core soạn sẵn câu SQL trong PR đề xuất của từng bước sửa dữ liệu.</span> Áp dụng cả cho D5 và D6.</div>
-  <div class="q"><strong>D5. iPad Wi-Fi và 5G (#1491 c):</strong> thêm hậu tố như mục 5.2 (Wi-Fi giữ key, 5G thêm <code>-5g</code>), hay để chung một key. <span class="rec-line">Đề xuất: thêm hậu tố, sau bước chạy thử ở 5.4.</span> Việc này quyết định đợt 1b của kế hoạch mở rộng danh mục.</div>
-  <div class="q"><strong>D6. MacBook nhiều mức RAM (#1491 d):</strong> thêm hậu tố kèm bảng RAM cơ bản, hay để nguyên. <span class="rec-line">Đề xuất: thêm hậu tố.</span> Core viết bảng RAM và test trước, để JOY xem từng mức RAM cơ bản trước khi bất kỳ listing nào bị chuyển.</div>
+  <div class="q"><strong>D5. iPad Wi-Fi và 5G (#1491 c), làm hai bước.</strong>
+    <ul>
+      <li>Bây giờ: duyệt bước chạy thử chỉ đọc ở mục 5.4, dùng nhánh có hậu tố.</li>
+      <li>Sau đó, dựa trên số liệu: chọn thêm hậu tố như mục 5.2 (Wi-Fi giữ key, 5G thêm <code>-5g</code>), hay để chung một key.</li>
+    </ul>
+    <span class="rec-line">Đề xuất: thêm hậu tố.</span> Việc này quyết định đợt 1b của kế hoạch mở rộng danh mục.
+  </div>
+  <div class="q"><strong>D6. MacBook nhiều mức RAM (#1491 d), làm hai bước.</strong>
+    <ul>
+      <li>Bây giờ: Core viết bảng RAM cơ bản và test, để JOY xem từng mức RAM cơ bản, rồi bước chạy thử liệt kê các listing sẽ chuyển.</li>
+      <li>Sau đó: chọn thêm hậu tố hay để nguyên.</li>
+    </ul>
+    <span class="rec-line">Đề xuất: thêm hậu tố.</span>
+  </div>
 
   <h2>7. Thứ tự</h2>
   <ol>
-    <li>JOY quyết D1 đến D6.</li>
-    <li>Phía DOS-Me / JOY chạy các bước đếm, chỉ đọc.</li>
+    <li>JOY quyết D1 đến D4, và duyệt bước đầu của D5 và D6.</li>
+    <li>Phía DOS-Me / JOY chạy các bước đếm chỉ đọc, gồm cả bước chạy thử ở 5.4. Sau đó JOY quyết bước thứ hai của D5 và D6.</li>
     <li>Core soạn từng bước sửa dữ liệu, kèm file kiểm tra, hoàn tác và test CI, trong một PR đề xuất. PO duyệt PR; JOY áp dụng qua DOS-Me theo thứ tự preview, beta, rồi prod.</li>
     <li>Cùng đợt đó, Core phát hành phần sửa code tương ứng, kèm so sánh key (chỉ số đếm).</li>
     <li>RS cập nhật engine, chạy kiểm danh mục (audit-catalog), và kiểm không sản phẩm nào bị mất listing.</li>
