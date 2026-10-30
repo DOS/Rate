@@ -2029,10 +2029,15 @@ export class ProductNormalizer {
         if (modelTokens.length === 0 && /^[,;]+$/.test(tok)) continue;
         // "Samsung -Galaxy S24": a dash glued to the model's first word is no separator.
         if (modelTokens.length === 0) tok = tok.replace(/^[-–|/]+(?=[\p{L}\d])/u, '');
-        // Nor does a size, a network or a dash before the model has begun: "Samsung
-        // 256GB Galaxy S24 Ultra", "Samsung - Galaxy A55" (DOS/Rate#1429).
+        // Nor does a size, RAM, a case size, a network, GPS, a dash or the shop's own
+        // "Chính hãng" / "Mới 100%" before the model has begun: "Samsung 256GB Galaxy
+        // S24 Ultra", "Samsung - Galaxy A55", "Xiaomi 16GB/512GB 15 Ultra" (DOS/Rate#1429).
         if (modelTokens.length === 0) {
-          if (/^(?:\d+(?:[.,]\d+)?(?:GB|TB)|\d+\/\d+(?:GB|TB)?|[45]G|LTE|[-–|/])$/i.test(tok)) {
+          if (
+            /^(?:\d+(?:[.,]\d+)?(?:GB|TB)|\d+(?:GB)?[-/]\d+(?:GB|TB)?|\d{2}mm|[45]G|LTE|GPS|RAM|ROM|Chính|Hãng|Hàng|Mới|New|Fullbox|\d{1,3}%)?[-–|/]*$/iu.test(
+              tok
+            )
+          ) {
             continue;
           }
           if (/^\d+(?:[.,]\d+)?$/.test(tok) && /^(?:GB|TB)$/i.test(rawTokens[i + 1] ?? '')) {
@@ -2061,10 +2066,21 @@ export class ProductNormalizer {
         ) {
           break;
         }
-        if (
-          /^(?:\d+(?:[.,]\d+)?(?:GB|TB)|\d+\/\d+(?:GB|TB)?|\d{2}mm|5G|4G|LTE|GPS|RAM|ROM|OLED|WiFi|Chính|Quốc|Bản|Mới|Fullbox|Likenew|Like|Cũ|99%|98%|VN\/A|VNA|LL\/A|\(|\[|-)/i.test(
+        // A gift or bundle ends the model: "Xiaomi - 15T tặng ốp lưng" (DOS/Rate#1429).
+        if (/^(?:tặng|kèm|quà|\+)$/iu.test(tok.normalize('NFC'))) break;
+        const stop =
+          /^(?:\d+(?:[.,]\d+)?(?:GB|TB)|\d+\/\d+(?:GB|TB)?|\d{2}mm|5G|4G|LTE|GPS|RAM|ROM|OLED|WiFi|Chính|Quốc|Bản|Mới|Fullbox|Likenew|Like|Cũ|99%|98%|VN\/A|VNA|LL\/A|\(|\[|-)/i.exec(
             tok
-          ) ||
+          );
+        // As the model's first word, a stop word only counts whole: "Garmin GPSMAP 67"
+        // is the GPSMAP, not a "GPS" option (DOS/Rate#1429).
+        const startsWithStopWord =
+          modelTokens.length === 0 &&
+          stop !== null &&
+          /^[a-z]/i.test(stop[0]) &&
+          /^[\p{L}\d]/u.test(tok.slice(stop[0].length));
+        if (
+          (stop && !startsWithStopWord) ||
           // A size written apart, "256 GB", ends the model like "256GB" (DOS/Rate#815).
           (/^\d+(?:[.,]\d+)?$/.test(tok) && /^(?:GB|TB)\b/i.test(rawTokens[i + 1] ?? ''))
         ) {
