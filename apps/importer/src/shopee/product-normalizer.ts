@@ -2286,7 +2286,8 @@ export class ProductNormalizer {
         if (
           /^(?:fold|flip)\d{1,2}$/i.test(modelTokens[modelTokens.length - 1] ?? '') &&
           /^z$/i.test(modelTokens[modelTokens.length - 2] ?? '') &&
-          !/^(?:ultra|fe)[,;]?$/i.test(tok)
+          // "Ultra/12GB/256GB" glued to its run goes on to the glued-word rule below.
+          !/^(?:ultra|fe)(?:[,;]?$|\/)/i.test(tok)
         ) {
           break;
         }

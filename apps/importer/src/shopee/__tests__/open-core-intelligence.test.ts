@@ -1251,6 +1251,8 @@ async function runSuite() {
     ['Samsung Galaxy Z Fold 8 Ultra Đen 512GB', 'samsung:galaxy-z-fold8-ultra:512gb'],
     ['Samsung Galaxy Z Fold6 Silver Shadow 12GB 256GB', 'samsung:galaxy-z-fold6:256gb'],
     ['Samsung Galaxy Z Fold 8, 256GB', 'samsung:galaxy-z-fold8:256gb'],
+    ['Samsung Galaxy Z Fold8 Ultra/12GB/256GB', 'samsung:galaxy-z-fold8-ultra:256gb'],
+    ['Samsung Galaxy Z Flip8 FE/8GB/256GB', 'samsung:galaxy-z-flip8-fe:256gb'],
     ['Apple iPad mini 2026k 64GB', 'apple:ipad-mini:64gb'],
     ['iPad mini (A17 Pro) Wi-Fi 128GB', 'apple:ipad-mini-7:128gb'],
   ] as const) {
