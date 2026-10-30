@@ -287,7 +287,7 @@ export default function ProductValueCalculator({
               price: formatNumber(metrics.safeMinPrice, locale),
               score:
                 metrics.combined10 > 0
-                  ? `${metrics.combined10}/10`
+                  ? `${formatPlainNumber(metrics.combined10, locale)}/10`
                   : t('valueCalcNoScoreYet'),
             })}
           </p>
@@ -361,7 +361,7 @@ export default function ProductValueCalculator({
             <div className="small text-secondary">
               {metrics.combined10 > 0
                 ? t('valueCalcCardCostPerPointSub', {
-                    score: metrics.combined10,
+                    score: formatPlainNumber(metrics.combined10, locale),
                   })
                 : t('valueCalcCardCostPerPointEmpty')}
             </div>

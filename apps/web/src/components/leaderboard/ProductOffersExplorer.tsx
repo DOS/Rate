@@ -29,11 +29,7 @@ import { implausiblyLowOfferIds } from '@repo/shared-data/rules';
 import { isOfferUnavailable } from '@/lib/product-market-stats';
 import { contentLang } from '@/lib/content-lang';
 import ContentText from '@/components/elementary/ContentText';
-import {
-  formatNumber,
-  formatPercent,
-  formatPriceVnd,
-} from '@/lib/locale-format';
+import { formatPercent, formatPriceVnd } from '@/lib/locale-format';
 
 interface ProductOffersExplorerProps {
   readonly productName: string;
@@ -647,13 +643,13 @@ export default function ProductOffersExplorer({
             </thead>
             <tbody>
               {filteredOffers.map((offer) => {
-                const price = formatNumber(offer.price_current, locale);
+                const price = formatPriceVnd(offer.price_current, locale);
                 const origPrice =
                   offer.price_original != null &&
                   Number.isFinite(Number(offer.price_original)) &&
                   Number(offer.price_original) > offer.price_current &&
                   Number(offer.price_original) <= MAX_VALID_VND_PRICE
-                    ? formatNumber(offer.price_original, locale)
+                    ? formatPriceVnd(offer.price_original, locale)
                     : null;
                 const trustScore = computeMerchantTrustScore(
                   offer.merchant.risk_score
@@ -789,11 +785,11 @@ export default function ProductOffersExplorer({
                     </td>
                     <td>
                       <div className="fw-bold text-dark rate-tabular">
-                        {price} ₫
+                        {price}
                       </div>
                       {origPrice && (
                         <div className="text-muted small text-decoration-line-through rate-tabular">
-                          {origPrice} ₫
+                          {origPrice}
                         </div>
                       )}
                       {discountAnalysis && (
