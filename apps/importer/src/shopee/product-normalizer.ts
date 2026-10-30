@@ -2248,12 +2248,19 @@ export class ProductNormalizer {
           break;
         }
         // A word glued to the chain ("Redmi Note 13 Pro/12GB/512GB") is the model's last
-        // word, and the chain ends the model (DOS/Rate#1457).
+        // word, and the chain ends the model; a stop word there ("RAM/8GB/256GB",
+        // "Mới/…") is not (DOS/Rate#1457).
         const wordHead = /^(\p{L}+)\/\d{1,2}(?:GB)?\/\d+(?:[.,]\d+)?(?:GB|TB)(?![a-z\d])/iu.exec(
           tok
         );
         if (wordHead && modelTokens.length > 0) {
-          modelTokens.push(wordHead[1]!);
+          if (
+            !/^(?:LTE|GPS|RAM|ROM|OLED|WiFi|Chính|Quốc|Bản|Mới|Fullbox|Likenew|Like|Cũ|VNA)$/iu.test(
+              wordHead[1]!.normalize('NFC')
+            )
+          ) {
+            modelTokens.push(wordHead[1]!);
+          }
           break;
         }
         const stop =
@@ -2353,7 +2360,9 @@ export class ProductNormalizer {
         m =>
           /^TB$/i.test(m[5]!) ||
           parseFloat(m[4]!.replace(',', '.')) >= 32 ||
+          // A storage first, unless a RAM word names it ("RAM 32GB/16GB/512GB").
           (Boolean(m[3]) &&
+            !/\bRAM\s*:?\s*$/i.test(title.slice(0, m.index)) &&
             parseInt(m[2]!, 10) >= 32 &&
             parseInt(m[2]!, 10) > parseFloat(m[4]!.replace(',', '.')))
       ) ??

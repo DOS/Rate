@@ -1151,6 +1151,11 @@ async function runSuite() {
     // A word glued to the chain is the model's last word (DOS/Rate#1457).
     ['Xiaomi Redmi Note 13 Pro/12GB/512GB', 'xiaomi:redmi-note-13-pro:512gb'],
     ['Xiaomi Redmi Note 13 Pro Plus/12GB/512GB', 'xiaomi:redmi-note-13-pro-plus:512gb'],
+    // A stop word glued to the chain is no model word.
+    ['Samsung Galaxy A55 RAM/8GB/256GB', 'samsung:galaxy-a55:256gb'],
+    ['Samsung Galaxy A55 Mới/8GB/256GB', 'samsung:galaxy-a55:256gb'],
+    // A RAM word before a storage-first pair names a RAM.
+    ['Lenovo ThinkPad T14 RAM 32GB/16GB/512GB SSD', 'lenovo:thinkpad-t14:512gb'],
     ['Samsung Galaxy Tab A9 64GB/4GB/128GB/8GB', 'samsung:galaxy-tab-a9:64gb'],
   ] as const) {
     assert.equal(keyOf(title), key, title);
