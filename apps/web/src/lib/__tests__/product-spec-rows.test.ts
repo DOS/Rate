@@ -344,7 +344,7 @@ async function testCompareCellLanguage() {
 
   const osExp = rows.get('hw_os_exp')!;
   const plain = osExp.renderValue(product);
-  assert.doesNotMatch(plain, /[]/, 'renderValue is plain text');
+  assert.doesNotMatch(plain, /[\uE000\uE001]/, 'renderValue is plain text');
   assert.equal(plain, plainCompareCell(osExp.renderCell!(product)));
   const segments = compareCellSegments(osExp.renderCell!(product));
   const prefix = segments.find((s) => !s.spec && /karta/i.test(s.text));
@@ -360,6 +360,117 @@ async function testCompareCellLanguage() {
     colorsCell.some((s) => s.spec && s.text === 'Desert titanium, Black')
   );
   assert.ok(colorsCell.some((s) => !s.spec && /Barvy/.test(s.text)));
+
+  // Every row, with every field set: no Czech catalogue prefix ends up inside
+  // a spec part, and a boolean is catalogue text.
+  const full = {
+    slug: 'z',
+    specifications: {
+      display: {
+        type: 'LTPO OLED',
+        resolution: '1179x2556',
+        protection: 'Ceramic Shield glass',
+        features: 'Dynamic Island',
+      },
+      hardware: {
+        chipset: 'Apple A18',
+        cpu: 'Hexa-core',
+        gpu: 'Apple GPU',
+        os: 'iOS 18',
+        storage_expansion: 'No card slot',
+      },
+      camera: {
+        main_camera: '48 MP',
+        second_camera: '12 MP',
+        third_camera: '12 MP tele',
+        fourth_camera: 'LiDAR',
+        video_recording: '4K@60fps',
+        flash: 'Dual LED',
+        front_camera: '12 MP',
+      },
+      battery: {
+        type: 'Li-Ion, non-removable',
+        charging: 'Wireless fast charging',
+        reverse_charging: 'Reverse wireless charging 4.5W',
+      },
+      design: {
+        dimensions: '147.6 x 71.6 x 7.8 mm',
+        materials: 'Glass front',
+        resistance: 'IP68 dust/water resistant',
+        biometrics: 'Face ID',
+        colors: ['Black'],
+      },
+      cellular: {
+        sim_type: 'Nano-SIM and eSIM',
+        technology: 'GSM / LTE / 5G',
+        bands_5g: 'n1, n78',
+        data_speed: '5G',
+      },
+      connectivity: {
+        wlan: 'Wi-Fi 7',
+        bluetooth: '5.3',
+        nfc: true,
+        usb: 'USB-C',
+        location: 'GPS',
+        sensors: 'Face ID, accelerometer',
+      },
+      multimedia: {
+        loudspeaker: 'Stereo speakers',
+        headphone_jack_35mm: false,
+        audio_features: 'Spatial audio',
+      },
+      availability: {
+        announced: '2024, September',
+        status: 'Available',
+        prices_msrp: '$799',
+      },
+      regulatory: {
+        certifications: 'CE',
+        fcc_approval: 'BCG-E8726A',
+        sar_head: '1.2 W/kg',
+        sar_body: '1.1 W/kg',
+      },
+    },
+  } as never;
+  const prefixes = [
+    'valCardSlotPrefix',
+    'valColorsPrefix',
+    'valReverseChargePrefix',
+    'valSarHeadPrefix',
+    'valSarBodyPrefix',
+  ].map((key) =>
+    (csMessages.compare[key] as string).split('{value}')[0]!.trim()
+  );
+  const yes = csMessages.compare.boolYes as string;
+  const no = csMessages.compare.boolNo as string;
+  for (const [id, row] of rows) {
+    if (!row.renderCell) continue;
+    for (const segment of compareCellSegments(row.renderCell(full))) {
+      if (!segment.spec) continue;
+      for (const prefix of prefixes) {
+        assert.ok(
+          !segment.text.includes(prefix),
+          `${id}: "${prefix}" inside a spec part`
+        );
+      }
+      assert.notEqual(segment.text, yes, `${id}: Yes is catalogue text`);
+      assert.notEqual(segment.text, no, `${id}: No is catalogue text`);
+    }
+  }
+  const battery = compareCellSegments(
+    rows.get('bat_details')!.renderCell!(full)
+  );
+  assert.ok(
+    battery.some((s) => s.spec && s.text === 'Reverse wireless charging 4.5W')
+  );
+  // A raw string is a spec value; a boolean is not.
+  const nfc = compareCellSegments(
+    rows.get('conn_nfc')!.renderCell!({
+      slug: 'n',
+      specifications: { connectivity: { nfc: 'Yes, market dependent' } },
+    } as never)
+  );
+  assert.deepEqual(nfc, [{ text: 'Yes, market dependent', spec: true }]);
 
   // A catalogue-only cell has no spec part at all.
   const reviews = compareCellSegments(

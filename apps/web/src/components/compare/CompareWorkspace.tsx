@@ -119,6 +119,16 @@ interface SpecGroupDef {
  * the page's, and the catalogue text around it is shown as is
  * (DOS/Rate#1392).
  */
+function compareCellShownText(cell: string, locale: string): string {
+  const segments = compareCellSegments(cell);
+  if (!segments.some((s) => s.spec)) {
+    return localizeSpecValue(plainCompareCell(cell), locale);
+  }
+  return segments
+    .map((s) => (s.spec ? localizedSpecValue(s.text, locale).text : s.text))
+    .join('');
+}
+
 function CompareCellText({
   segments,
   locale,
@@ -160,6 +170,15 @@ function formatBool(
   if (val === true) return t('boolYes');
   if (val === false) return t('boolNo');
   return '-';
+}
+
+/** formatBool, with a raw string from the data marked as a spec value. */
+function formatBoolPart(
+  val: boolean | string | undefined | null,
+  t: CompareTranslator
+): string {
+  const text = formatBool(val, t);
+  return typeof val === 'string' && val.trim() ? specPart(text) : text;
 }
 
 function getEffectiveRating(p: MasterProduct): number {
@@ -613,16 +632,18 @@ export function buildSpecGroups(t: CompareTranslator): SpecGroupDef[] {
           label: t('rowBatDetails'),
           renderValue: (p) => {
             const specs = (p.specifications || {}) as ProductSpecifications;
+            // Each part marked on its own, the catalogue prefix left out
+            // (DOS/Rate#1392).
             const parts = [
-              specs.battery?.type,
-              specs.battery?.charging,
+              specPart(specs.battery?.type),
+              specPart(specs.battery?.charging),
               specs.battery?.reverse_charging
                 ? t('valReverseChargePrefix', {
-                    value: formatBool(specs.battery.reverse_charging, t),
+                    value: formatBoolPart(specs.battery.reverse_charging, t),
                   })
                 : null,
             ].filter(Boolean);
-            return parts.length > 0 ? parts.map(specPart).join(' | ') : '-';
+            return parts.length > 0 ? parts.join(' | ') : '-';
           },
         },
       ],
@@ -763,7 +784,7 @@ export function buildSpecGroups(t: CompareTranslator): SpecGroupDef[] {
           label: t('rowConnNfc'),
           renderValue: (p) => {
             const specs = (p.specifications || {}) as ProductSpecifications;
-            return formatBool(specs.connectivity?.nfc, t);
+            return formatBoolPart(specs.connectivity?.nfc, t);
           },
         },
         {
@@ -801,12 +822,13 @@ export function buildSpecGroups(t: CompareTranslator): SpecGroupDef[] {
             const specs = (p.specifications || {}) as ProductSpecifications;
             const jack =
               specs.multimedia?.headphone_jack_35mm !== undefined
-                ? `3.5mm: ${formatBool(specs.multimedia.headphone_jack_35mm, t)}`
+                ? `3.5mm: ${formatBoolPart(specs.multimedia.headphone_jack_35mm, t)}`
                 : null;
-            const parts = [jack, specs.multimedia?.audio_features].filter(
-              Boolean
-            );
-            return parts.length > 0 ? parts.map(specPart).join(' | ') : '-';
+            const parts = [
+              jack,
+              specPart(specs.multimedia?.audio_features),
+            ].filter(Boolean);
+            return parts.length > 0 ? parts.join(' | ') : '-';
           },
         },
       ],
@@ -993,8 +1015,11 @@ export default function CompareWorkspace({
       ...group,
       rows: group.rows.filter((row) =>
         compareRowIsShown(
-          // The cells show the localized text, where "N/A" becomes "-".
-          products.map((p) => localizeSpecValue(row.renderValue(p), locale)),
+          // The text the cells show, where "N/A" becomes "-", localized
+          // part by part as the cells do (DOS/Rate#1392).
+          products.map((p) =>
+            compareCellShownText((row.renderCell ?? row.renderValue)(p), locale)
+          ),
           showDiffOnly
         )
       ),
