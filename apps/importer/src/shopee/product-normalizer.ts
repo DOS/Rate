@@ -1464,6 +1464,11 @@ const GLUED_COLOUR_FIRST_WORDS = new RegExp(`${GLUED_COLOURS.source.slice(0, -2)
 // Samsung's "Jade Green", "Gem Green" and "Sky Blue": these first words go with their own
 // second word only, as "Galaxy Sky" and "Liquid Jade" are models too (DOS/Rate#1495).
 const GLUED_COLOUR_PAIRS = /^(?:jade green|gem green|sky blue)$/i;
+// Samsung's and Asus's "Phantom Black", "Phantom Silver", "Phantom Đen": a colour name
+// there, while Tecno's Phantom is a line (DOS/Rate#1495).
+const PHANTOM_COLOUR_BRANDS = new Set(['Samsung', 'Asus']);
+const isPhantomColour = (first: string, second: string, brand: string): boolean =>
+  PHANTOM_COLOUR_BRANDS.has(brand) && /^phantom$/i.test(first) && isGluedColour(second);
 // In some laptop lines "Titan" and "Titanium" name the model, not its colour: "ThinkPad X1
 // Titanium/16GB/512GB", "X1 Yoga Titanium Bạc/…", "MSI GT77 Titan Đen/…" (DOS/Rate#1495).
 const LAPTOP_TITAN_WORD = /^titan(?:ium)?$/i;
@@ -2394,7 +2399,8 @@ export class ProductNormalizer {
             isGluedColour(wordHead[1]) &&
             modelTokens.length > 1 &&
             (GLUED_COLOUR_FIRST_WORDS.test(modelTokens[modelTokens.length - 1]!.normalize('NFC')) ||
-              GLUED_COLOUR_PAIRS.test(`${modelTokens[modelTokens.length - 1]} ${wordHead[1]}`)) &&
+              GLUED_COLOUR_PAIRS.test(`${modelTokens[modelTokens.length - 1]} ${wordHead[1]}`) ||
+              isPhantomColour(modelTokens[modelTokens.length - 1]!, wordHead[1]!, brand)) &&
             // A laptop's "Titanium Bạc/" or "Titan Đen/" keeps its model word, but "Titan
             // Gray/" is Dell's and Lenovo's colour name: Titan leaves with it.
             !(
