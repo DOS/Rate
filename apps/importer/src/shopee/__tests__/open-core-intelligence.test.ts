@@ -1043,6 +1043,16 @@ async function runSuite() {
     keyOf('Apple Watch Series 10 GPS + Cellular 46mm'),
     'apple:watch-series-10-46mm:64gb'
   );
+  // A bundle inside a gift that opens the title is not the product's own part.
+  assert.equal(
+    keyOf('[Tặng ốp iPhone + dây đeo] Apple Watch Series 10 46mm'),
+    'apple:watch-series-10-46mm:64gb'
+  );
+  // The cut stays linear on a long run of separators.
+  const cutStart = Date.now();
+  detectCategorySlug(`Apple Watch Series 10 46mm${','.repeat(64_000)}x`);
+  detectCategorySlug(`HomePod mini${' +'.repeat(32_000)}x`);
+  assert.ok(Date.now() - cutStart < 500, 'gift cut is linear');
   // The gifted AirPods no longer make the watch earbuds, so it keys like the bare title.
   assert.equal(keyOf('Apple Watch Ultra 2 49mm tặng AirPods'), keyOf('Apple Watch Ultra 2 49mm'));
   assert.equal(
