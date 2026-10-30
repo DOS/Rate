@@ -7,6 +7,7 @@ import {
 } from '../security-guards.js';
 import { escapeHtml, t } from '../i18n.js';
 import type { ExtensionLookupData } from '../types.js';
+import { RateLimitRetry } from '../rate-limit.js';
 import {
   buildPillAriaLabel,
   resolvePillTheme,
@@ -222,12 +223,16 @@ function renderShadowTrustPill(lookup: ExtensionLookupData): void {
 // ignored (DOS/Rate#1300).
 let detectGeneration = 0;
 let lastProcessedSignature = '';
+// After a rate limit the same product is looked up again once the wait is over
+// (DOS/Rate#1466).
+const rateLimitRetry = new RateLimitRetry();
 
 async function inspectCurrentPage(): Promise<void> {
   requestAnimationFrame(async () => {
     const signal = extractProductSignalFromDom(document, window.location.href);
     if (!signal) {
       lastProcessedSignature = '';
+      rateLimitRetry.track('');
       removeTrustPillHost();
       return;
     }
@@ -235,6 +240,7 @@ async function inspectCurrentPage(): Promise<void> {
     const signature = `${signal.canonicalUrl}|${signal.selectedVariant || ''}|${signal.price || ''}`;
     if (signature === lastProcessedSignature) return;
     lastProcessedSignature = signature;
+    rateLimitRetry.track(signature);
     // Only the latest page's answer may draw or clear the pill: on a
     // single-page shop an earlier lookup can answer after a later one.
     const generation = ++detectGeneration;
@@ -251,7 +257,10 @@ async function inspectCurrentPage(): Promise<void> {
       };
 
       if (generation !== detectGeneration) return;
-      scheduleRetryAfterRateLimit(response);
+      rateLimitRetry.after(signature, response, () => {
+        lastProcessedSignature = '';
+        void inspectCurrentPage();
+      });
       if (response?.ok && response.data) {
         renderShadowTrustPill(response.data);
       } else {
@@ -265,36 +274,6 @@ async function inspectCurrentPage(): Promise<void> {
       if (generation === detectGeneration) removeTrustPillHost();
     }
   });
-}
-
-// After a rate limit the same product is looked up again once the wait is over, so its pill
-// comes back without a navigation (DOS/Rate#1466).
-let rateLimitRetryTimer: ReturnType<typeof setTimeout> | null = null;
-function scheduleRetryAfterRateLimit(response: {
-  ok?: boolean;
-  status?: number | null;
-  retryAfterSeconds?: number;
-}): void {
-  if (rateLimitRetryTimer) clearTimeout(rateLimitRetryTimer);
-  rateLimitRetryTimer = null;
-  const wait = response?.retryAfterSeconds;
-  if (
-    response?.ok !== false ||
-    response.status !== 429 ||
-    typeof wait !== 'number' ||
-    !Number.isFinite(wait) ||
-    wait <= 0
-  ) {
-    return;
-  }
-  rateLimitRetryTimer = setTimeout(
-    () => {
-      rateLimitRetryTimer = null;
-      lastProcessedSignature = '';
-      void inspectCurrentPage();
-    },
-    (Math.min(wait, 600) + 1) * 1000
-  );
 }
 
 // Initial inspection + lightweight observation for SPA route/variant selection changes

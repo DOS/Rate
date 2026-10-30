@@ -51,6 +51,80 @@ export function cooldownSecondsLeft(untilMs: unknown, nowMs: number): number {
   return left > 0 ? Math.min(left, MAX_RATE_LIMIT_COOLDOWN_SECONDS) : 0;
 }
 
+/** A product's pill retries on its own this many times in a row after a 429. */
+export const MAX_RATE_LIMIT_AUTO_RETRIES = 3;
+
+export interface RetryTimers {
+  set(run: () => void, ms: number): unknown;
+  clear(handle: unknown): void;
+}
+
+/**
+ * Looks the page's product up again once a 429's wait is over, so its pill comes back
+ * without a navigation. The retry belongs to one product: a new product drops it, and
+ * after MAX_RATE_LIMIT_AUTO_RETRIES 429s in a row the shopper retries by hand.
+ */
+export class RateLimitRetry {
+  private handle: unknown = null;
+  private signature = '';
+  private attempts = 0;
+
+  constructor(
+    private readonly timers: RetryTimers = {
+      set: (run, ms) => setTimeout(run, ms),
+      clear: (handle) => clearTimeout(handle as ReturnType<typeof setTimeout>),
+    }
+  ) {}
+
+  /** The page now shows this product; a retry planned for another one is dropped. */
+  track(signature: string): void {
+    if (signature === this.signature) return;
+    this.cancel();
+    this.signature = signature;
+    this.attempts = 0;
+  }
+
+  cancel(): void {
+    if (this.handle != null) this.timers.clear(this.handle);
+    this.handle = null;
+  }
+
+  /**
+   * After this product's lookup answered: plans a retry for a 429 and returns its delay
+   * in ms, or null when none is planned.
+   */
+  after(
+    signature: string,
+    response: {
+      ok?: boolean;
+      status?: number | null;
+      retryAfterSeconds?: number;
+    },
+    retry: () => void
+  ): number | null {
+    this.cancel();
+    if (signature !== this.signature) return null;
+    if (response?.ok !== false || response.status !== 429) {
+      this.attempts = 0;
+      return null;
+    }
+    if (this.attempts >= MAX_RATE_LIMIT_AUTO_RETRIES) return null;
+    this.attempts += 1;
+    const wait = response.retryAfterSeconds;
+    const seconds =
+      typeof wait === 'number' && Number.isFinite(wait) && wait >= 0
+        ? Math.min(wait, MAX_RATE_LIMIT_COOLDOWN_SECONDS)
+        : DEFAULT_RATE_LIMIT_COOLDOWN_SECONDS;
+    // One second past the wait, so a wait of 0 still retries.
+    const delayMs = (seconds + 1) * 1000;
+    this.handle = this.timers.set(() => {
+      this.handle = null;
+      if (this.signature === signature) retry();
+    }, delayMs);
+    return delayMs;
+  }
+}
+
 /** Where the cooldown deadline survives a restarted service worker. */
 export interface CooldownStore {
   get(): Promise<unknown>;
@@ -65,6 +139,8 @@ export interface CooldownStore {
  */
 export class LookupCooldown {
   private untilMs = 0;
+  // Bumped by clear(), so a store read that began before it is ignored.
+  private generation = 0;
 
   constructor(
     private readonly store: CooldownStore,
@@ -80,12 +156,14 @@ export class LookupCooldown {
 
   /** Seconds before lookups may resume; 0 when they may go now. */
   async secondsLeft(): Promise<number> {
+    const generation = this.generation;
     let stored: unknown;
     try {
       stored = await this.store.get();
     } catch {
       stored = undefined;
     }
+    if (generation !== this.generation) stored = undefined;
     const nowMs = this.now();
     this.untilMs = Math.max(
       this.sane(this.untilMs, nowMs),
@@ -111,6 +189,7 @@ export class LookupCooldown {
 
   /** Lets lookups go at once (another server was chosen). */
   async clear(): Promise<void> {
+    this.generation += 1;
     this.untilMs = 0;
     try {
       await this.store.set(0);

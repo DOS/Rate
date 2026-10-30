@@ -169,6 +169,8 @@ async function maybeSendOptInCrowdSignal(
   if (!settings.crowdContributeOptIn) return;
   if (!SUPPORTED_CROWD_PLATFORMS.has(signal.platform)) return;
   if (!signal.externalItemId || !signal.price || signal.price <= 0) return;
+  // A 429 may have come back while the settings were read.
+  if ((await lookupCooldown.secondsLeft()) > 0) return;
 
   try {
     await fetch(
@@ -581,8 +583,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           nextSettings.apiBaseUrl = normalizeAllowedApiBaseUrl(
             message.apiBaseUrl
           );
-          // The cooldown was another server's (DOS/Rate#1466).
-          await lookupCooldown.clear();
+          // The cooldown was another server's (DOS/Rate#1466); saving the same one keeps it.
+          if (nextSettings.apiBaseUrl !== (await getSettings()).apiBaseUrl) {
+            await lookupCooldown.clear();
+          }
         }
         if (typeof message.crowdContributeOptIn === 'boolean') {
           nextSettings.crowdContributeOptIn = message.crowdContributeOptIn;

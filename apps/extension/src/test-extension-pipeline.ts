@@ -4009,6 +4009,8 @@ async function runTests() {
       DEFAULT_RATE_LIMIT_COOLDOWN_SECONDS,
       MAX_RATE_LIMIT_COOLDOWN_SECONDS,
       LookupCooldown,
+      RateLimitRetry,
+      MAX_RATE_LIMIT_AUTO_RETRIES,
     } = await import('./rate-limit.js');
     const now = Date.parse('2026-10-30T10:00:00Z');
     assert.equal(parseRetryAfterSeconds('60', now), 60);
@@ -4093,6 +4095,87 @@ async function runTests() {
       );
       assert.equal(await broken.hold('60'), 60);
       assert.equal(await broken.secondsLeft(), 60);
+
+      // A store read that began before clear() never brings the cleared wait back.
+      let release: (v: unknown) => void = () => {};
+      const slow = new LookupCooldown(
+        {
+          get: () => new Promise((resolve) => (release = resolve)),
+          set: async () => {},
+        },
+        () => clock
+      );
+      const pending = slow.secondsLeft();
+      await slow.clear();
+      release(clock + 60_000);
+      assert.equal(await pending, 0);
+    }
+
+    // The pill's retry after a 429, with fake timers.
+    {
+      const planned = new Map<number, () => void>();
+      let nextHandle = 1;
+      const timers = {
+        set: (run: () => void) => {
+          planned.set(nextHandle, run);
+          return nextHandle++;
+        },
+        clear: (handle: unknown) => {
+          planned.delete(handle as number);
+        },
+      };
+      const fire = () => {
+        const runs = [...planned.values()];
+        planned.clear();
+        runs.forEach((run) => run());
+      };
+      const retried: string[] = [];
+      const limited = { ok: false, status: 429, retryAfterSeconds: 60 };
+      const retry = new RateLimitRetry(timers);
+
+      // Product A is limited; the page moves to B before the wait ends: no retry of B.
+      retry.track('A');
+      assert.equal(
+        retry.after('A', limited, () => retried.push('A')),
+        61_000
+      );
+      retry.track('B');
+      assert.equal(planned.size, 0);
+      fire();
+      assert.deepEqual(retried, []);
+
+      // Retry-After: 0 (or a past date) still retries, one second later.
+      assert.equal(
+        retry.after('B', { ...limited, retryAfterSeconds: 0 }, () =>
+          retried.push('B')
+        ),
+        1_000
+      );
+      fire();
+      assert.deepEqual(retried, ['B']);
+
+      // A server that keeps answering 429 gets a bounded number of retries.
+      for (let i = 1; i < MAX_RATE_LIMIT_AUTO_RETRIES; i += 1) {
+        assert.ok(retry.after('B', limited, () => retried.push('B')));
+        fire();
+      }
+      assert.equal(retried.length, MAX_RATE_LIMIT_AUTO_RETRIES);
+      assert.equal(
+        retry.after('B', limited, () => retried.push('B')),
+        null
+      );
+      assert.equal(planned.size, 0);
+      // An answer that is not a 429 resets the count.
+      assert.equal(
+        retry.after('B', { ok: true }, () => {}),
+        null
+      );
+      assert.ok(retry.after('B', limited, () => retried.push('B')));
+      // A late answer for an earlier product plans nothing.
+      assert.equal(
+        retry.after('A', limited, () => retried.push('A')),
+        null
+      );
     }
 
     const { renderLookupErrorHtml } = await import('./sidepanel/panel-view.js');
@@ -4125,10 +4208,11 @@ async function runTests() {
       workerSource.indexOf('async function requestLookup('),
       workerSource.indexOf('async function fetchExtensionLookup(')
     );
-    assert.ok(
-      requestLookupBody.indexOf('lookupCooldown.secondsLeft()') <
-        requestLookupBody.indexOf('await fetch(')
+    const cooldownCheck = requestLookupBody.indexOf(
+      'await lookupCooldown.secondsLeft()'
     );
+    assert.ok(cooldownCheck >= 0);
+    assert.ok(cooldownCheck < requestLookupBody.indexOf('await fetch('));
     // No crowd signal while lookups wait; another server clears the wait; the pill
     // looks the product up again once the wait is over.
     const crowdBody = workerSource.slice(
@@ -4138,13 +4222,25 @@ async function runTests() {
         workerSource.indexOf('async function maybeSendOptInCrowdSignal(')
       )
     );
-    assert.ok(crowdBody.includes('lookupCooldown.secondsLeft()'));
-    assert.ok(workerSource.includes('await lookupCooldown.clear()'));
+    // Checked again right before the POST: a 429 may come back while settings load.
+    const lastCrowdCheck = crowdBody.lastIndexOf(
+      'await lookupCooldown.secondsLeft()'
+    );
+    assert.ok(lastCrowdCheck > crowdBody.indexOf('await getSettings()'));
+    // Only another server clears the wait.
+    assert.ok(
+      /if \(nextSettings\.apiBaseUrl !== \(await getSettings\(\)\)\.apiBaseUrl\) \{\s*await lookupCooldown\.clear\(\);/.test(
+        workerSource
+      )
+    );
     const contentScript = fs.readFileSync(
       path.resolve(__dirname, 'content/content-script.ts'),
       'utf8'
     );
-    assert.ok(contentScript.includes('scheduleRetryAfterRateLimit(response)'));
+    assert.ok(contentScript.includes('rateLimitRetry.track(signature)'));
+    assert.ok(
+      contentScript.includes('rateLimitRetry.after(signature, response')
+    );
     assert.ok(
       requestLookupBody.includes("response.headers.get('Retry-After')")
     );
