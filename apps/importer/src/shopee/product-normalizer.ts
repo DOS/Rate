@@ -403,7 +403,7 @@ const APPLE_PART_NUMBERS: Readonly<Record<string, readonly [string, string]>> = 
 export function detectCategorySlug(title: string): CanonicalCategorySlug {
   const t = typeof title === 'string' ? title.normalize('NFC').toLowerCase() : '';
   // A gift or bundle after the product is not its category: "AirPods Pro 2 tặng dây Apple
-  // Watch" is earbuds, "Apple iPhone 16 tặng smartwatch" a phone (DOS/Rate#1407). An own
+  // Watch" is earbuds, "iPhone 15 Plus tặng đồng hồ thông minh" a phone (DOS/Rate#1407). An own
   // part that names no category falls back to the whole title, unless it names another
   // Apple product or a phone brand, which keeps the phone default (DOS/Rate#1422).
   const own = ownProductPart(t);

@@ -1104,7 +1104,7 @@ async function runSuite() {
     'apple:watch-series-10-46mm:64gb'
   );
   assert.equal(
-    keyOf('[Tặng ốp lưng] Apple Watch Series 10 GPS 46mm'),
+    keyOf('[Tặng dây đeo] Apple Watch Series 10 GPS 46mm'),
     'apple:watch-series-10-46mm:64gb'
   );
   assert.equal(keyOf('Sale sốc tặng quà Apple Watch S10 46mm'), 'apple:watch-series-10-46mm:64gb');
@@ -1165,7 +1165,7 @@ async function runSuite() {
   assert.equal(detectCategorySlug('Samsung Galaxy S25 tặng tai nghe Galaxy Buds 3'), 'smartphones');
   assert.equal(detectCategorySlug('Xiaomi Redmi Note 13 tặng đồng hồ thông minh'), 'smartphones');
   assert.equal(
-    detectCategorySlug('Samsung Galaxy S24 Ultra 256GB | Tặng Galaxy Watch7'),
+    detectCategorySlug('Samsung Galaxy S23 FE 128GB | Tặng Galaxy Buds FE'),
     'smartphones'
   );
   assert.equal(detectCategorySlug('Samsung Galaxy Watch 7 tặng sạc'), 'smartwatches');
@@ -1274,7 +1274,7 @@ async function runSuite() {
   assert.equal(detectCategorySlug('AirPods Pro 2 tặng dây Apple Watch Series 10'), 'earbuds');
   assert.equal(detectCategorySlug('iPad Pro M4 tặng Apple Watch Series 10'), 'tablets');
   assert.equal(detectCategorySlug('MacBook Air M3 + Apple Watch Series 10'), 'laptops');
-  assert.equal(detectCategorySlug('Apple iPhone 16 tặng smartwatch'), 'smartphones');
+  assert.equal(detectCategorySlug('Apple iPhone 15 Plus 128GB tặng đồng hồ thông minh'), 'smartphones');
   assert.equal(detectCategorySlug('Apple Watch Series 10 46mm tặng AirPods Pro 2'), 'smartwatches');
   assert.equal(detectCategorySlug('Sale sốc tặng quà Apple Watch S10 46mm'), 'smartwatches');
   assert.equal(
@@ -1282,7 +1282,7 @@ async function runSuite() {
     'earbuds'
   );
   assert.equal(detectCategorySlug('HomePod mini (Tặng dây Apple Watch Series 10)'), 'smartphones');
-  assert.equal(detectCategorySlug('[Tặng ốp lưng] Apple Watch Series 10 GPS 46mm'), 'smartwatches');
+  assert.equal(detectCategorySlug('[Tặng dây đeo] Apple Watch Series 10 GPS 46mm'), 'smartwatches');
   // With no line matched, the family the title names first, else iPhone.
   assert.equal(keyOf('MacBook M4'), 'apple:macbook:unknown');
   assert.equal(keyOf('Apple "iPad" 256GB'), 'apple:ipad:256gb');
