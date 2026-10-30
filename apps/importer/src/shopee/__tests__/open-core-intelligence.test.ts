@@ -1284,6 +1284,10 @@ async function runSuite() {
     ['Laptop Dell Latitude 7440 Titan Gray/16GB/512GB', 'dell:latitude-7440:512gb'],
     ['Laptop Lenovo Yoga Slim 7 Titanium Gray/16GB/512GB', 'lenovo:yoga-slim-7:512gb'],
     ['MSI Prestige 14 Titan Gray/16GB/512GB', 'msi:prestige-14:512gb'],
+    // Nor is it a model word in other laptop lines, before a Vietnamese colour or after one.
+    ['Laptop Dell Latitude 7440 Titan Xám/16GB/512GB', 'dell:latitude-7440:512gb'],
+    ['Laptop Dell Latitude 7440 Gray Titanium/16GB/512GB', 'dell:latitude-7440:512gb'],
+    ['Laptop Dell Latitude 7440 Black Titanium/16GB/512GB', 'dell:latitude-7440:512gb'],
     // "chính hãng" between the GPS prefix and the brand.
     ['Thiết bị định vị GPS chính hãng Garmin GPSMAP 65s', 'garmin:gpsmap-65s:unknown'],
     // A GPS device title that names no model stays unkeyable.
