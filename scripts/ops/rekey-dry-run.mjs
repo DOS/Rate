@@ -44,10 +44,11 @@ export const READ_TABLES = [
 const tableList = READ_TABLES.map((t) => `'${t}'`).join(', ');
 
 /**
- * The session's statements: the read-only transaction, the guard first, then one
- * tagged JSON line per row, so a large table streams instead of building one value.
+ * The session's statements: the read-only transaction and the guard, sent alone; the
+ * data reads are sent only after the guard passed. Each row is one tagged JSON line,
+ * so a large table streams instead of building one value.
  */
-export const SESSION_SQL = [
+export const GUARD_SQL = [
   'BEGIN READ ONLY;',
   `SELECT 'guard' || chr(9) || json_build_object(
     'read_only', current_setting('transaction_read_only'),
@@ -55,6 +56,9 @@ export const SESSION_SQL = [
     'writable', (SELECT coalesce(json_agg(t), '[]'::json) FROM unnest(ARRAY[${tableList}]) AS t
                  WHERE has_table_privilege(current_user, t, 'INSERT, UPDATE, DELETE, TRUNCATE')
                     OR has_any_column_privilege(current_user, t, 'INSERT, UPDATE')))::text;`,
+].join('\n');
+
+export const DATA_SQL = [
   `SELECT 'master' || chr(9) || json_build_object('id', id, 'model_key', model_key, 'status', status)::text
     FROM rate.master_products;`,
   `SELECT 'listing' || chr(9) || json_build_object('id', id, 'master_id', cluster_id, 'title', title)::text
@@ -63,6 +67,8 @@ export const SESSION_SQL = [
     FROM rate.price_history GROUP BY product_id;`,
   'ROLLBACK;',
 ].join('\n');
+
+export const SESSION_SQL = `${GUARD_SQL}\n${DATA_SQL}`;
 
 /**
  * Throws unless the transaction is read-only and, without the override, the role
@@ -87,6 +93,25 @@ export function checkReadOnly(guard, { allowWriteCapableRole = false } = {}) {
     : 'SELECT-only role';
 }
 
+/** libpq URL query parameters and the environment variables that carry them. */
+export const URL_PARAMS = {
+  host: 'PGHOST',
+  hostaddr: 'PGHOSTADDR',
+  port: 'PGPORT',
+  user: 'PGUSER',
+  dbname: 'PGDATABASE',
+  sslmode: 'PGSSLMODE',
+  sslrootcert: 'PGSSLROOTCERT',
+  sslcert: 'PGSSLCERT',
+  sslkey: 'PGSSLKEY',
+  sslcrl: 'PGSSLCRL',
+  sslnegotiation: 'PGSSLNEGOTIATION',
+  channel_binding: 'PGCHANNELBINDING',
+  connect_timeout: 'PGCONNECT_TIMEOUT',
+  application_name: 'PGAPPNAME',
+  target_session_attrs: 'PGTARGETSESSIONATTRS',
+};
+
 /**
  * The connection string as libpq environment variables, so it never sits on a
  * command line. Throws a message that names no part of it.
@@ -109,14 +134,26 @@ export function pgEnvFromUrl(url) {
     }
   };
   const env = {
-    PGHOST: decode(parsed.hostname),
+    // An IPv6 host comes bracketed in a URL; libpq wants it bare.
+    PGHOST: decode(parsed.hostname.replace(/^\[(.*)\]$/, '$1')),
     PGPORT: parsed.port || '5432',
     PGUSER: decode(parsed.username),
     PGPASSWORD: decode(parsed.password),
     PGDATABASE: decode(parsed.pathname.replace(/^\//, '')) || 'postgres',
   };
-  const sslmode = parsed.searchParams.get('sslmode');
-  if (sslmode) env.PGSSLMODE = sslmode;
+  // libpq's own query parameters keep their meaning; any other one (such as the
+  // node-postgres "ssl=true") is refused rather than dropped, so a TLS requirement
+  // is never lost silently. Only the parameter's name is reported.
+  for (const [name, value] of parsed.searchParams) {
+    const variable = URL_PARAMS[name];
+    if (!variable) {
+      throw new Error(
+        `${ENV_URL} has a query parameter this script does not pass on: ${name}. ` +
+          `Supported: ${Object.keys(URL_PARAMS).join(', ')} (for TLS use sslmode=require or verify-full).`
+      );
+    }
+    env[variable] = value;
+  }
   return env;
 }
 
@@ -149,7 +186,9 @@ export function watchRespelling(key) {
  * listings agree on a brand:model that differs from the stored one, the master is
  * proposed to move there with its stored variant; with no majority it is unclear.
  * Only brand:model is compared: a title that leaves out the storage moves no
- * variant. Watch keys #1407 would respell are proposed from the stored key.
+ * variant. Watch spellings #1407 would change ("series10") are respelled in the
+ * listings' keys before the vote, so the target keeps what the titles say (such as
+ * the case size); with no listings or no majority, the stored key is respelled.
  */
 export function planRekeys({ masters, listings, priceRows }) {
   const byMaster = new Map();
@@ -174,22 +213,25 @@ export function planRekeys({ masters, listings, priceRows }) {
       0
     );
     const respelled = watchRespelling(m.model_key);
-    if (respelled) {
+    const fromStoredKey = () =>
       changes.push({
         masterId: m.id,
         status: m.status,
         oldKey: m.model_key,
         newKey: respelled,
         category: 'watch-spelling (#1407)',
-        source: 'spelling rule (normalizer change not shipped)',
+        source:
+          'spelling rule on the stored key, no title majority: check the case size by hand',
         listings: own.length,
         agreeing: null,
         keyed: null,
         priceRows: priceRowCount,
       });
-      continue;
-    }
     if (own.length === 0) {
+      if (respelled) {
+        fromStoredKey();
+        continue;
+      }
       noListings += 1;
       continue;
     }
@@ -198,7 +240,8 @@ export function planRekeys({ masters, listings, priceRows }) {
     for (const l of own) {
       if (!l.key) continue;
       keyed += 1;
-      const { item } = splitKey(l.key);
+      // The normalizer change for #1407 is not shipped; this rule stands in for it.
+      const { item } = splitKey(watchRespelling(l.key) ?? l.key);
       votes.set(item, (votes.get(item) ?? 0) + 1);
     }
     const stored = splitKey(m.model_key);
@@ -209,6 +252,10 @@ export function planRekeys({ masters, listings, priceRows }) {
     const majority = top !== null && count * 2 > keyed;
     if (majority && top === stored.item) {
       unchanged += 1;
+      continue;
+    }
+    if (!majority && respelled) {
+      fromStoredKey();
       continue;
     }
     if (!majority) {
@@ -229,7 +276,7 @@ export function planRekeys({ masters, listings, priceRows }) {
       oldKey: m.model_key,
       newKey: stored.variant ? `${top}:${stored.variant}` : top,
       category: categoryOf(m.model_key),
-      source: 'normalizer',
+      source: respelled ? 'normalizer + spelling rule' : 'normalizer',
       listings: own.length,
       agreeing: count,
       keyed,
@@ -359,22 +406,34 @@ export function runSession(env, onLine, spawnFn = spawn) {
     child.on('error', (err) =>
       reject(new Error(`psql could not start: ${err.message}`))
     );
+    let dataSent = false;
     createInterface({ input: child.stdout }).on('line', (line) => {
       if (failed) return;
       try {
         onLine(line);
       } catch (err) {
         failed = err;
+        child.stdin.destroy();
         child.kill();
+        return;
+      }
+      // The data reads go to psql only once the guard has passed.
+      if (!dataSent && line.startsWith('guard\t')) {
+        dataSent = true;
+        child.stdin.end(`${DATA_SQL}\n`);
       }
     });
+    // psql may exit (a failed guard, a lost connection) before stdin is written.
+    child.stdin.on('error', () => {});
     // psql's own error text can quote parts of the connection; only count it.
     createInterface({ input: child.stderr }).on('line', () => {
       stderrLines += 1;
     });
     child.on('close', (code) => {
       if (failed) reject(failed);
-      else if (code !== 0) {
+      else if (code === 0 && !dataSent) {
+        reject(new Error('refusing to run: psql gave no read-only check'));
+      } else if (code !== 0) {
         reject(
           new Error(
             `psql failed (exit ${code}, ${stderrLines} error line(s) withheld because they can quote the connection). ` +
@@ -383,7 +442,7 @@ export function runSession(env, onLine, spawnFn = spawn) {
         );
       } else resolve();
     });
-    child.stdin.end(SESSION_SQL);
+    child.stdin.write(`${GUARD_SQL}\n`);
   });
 }
 

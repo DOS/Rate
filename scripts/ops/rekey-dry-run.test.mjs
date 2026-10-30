@@ -7,6 +7,7 @@ import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 
 import {
+  GUARD_SQL,
   SESSION_SQL,
   categoryOf,
   checkReadOnly,
@@ -97,6 +98,28 @@ test('the connection string becomes PG* variables and no error repeats it', () =
       PGSSLMODE: 'require',
     }
   );
+  // libpq's TLS parameters are passed on, and an IPv6 host loses its brackets.
+  assert.deepEqual(
+    pgEnvFromUrl(
+      'postgresql://ro:pw@[2001:db8::1]:5432/postgres?sslmode=verify-full&sslrootcert=system'
+    ),
+    {
+      PGHOST: '2001:db8::1',
+      PGPORT: '5432',
+      PGUSER: 'ro',
+      PGPASSWORD: 'pw',
+      PGDATABASE: 'postgres',
+      PGSSLMODE: 'verify-full',
+      PGSSLROOTCERT: 'system',
+    }
+  );
+  // A parameter libpq would not read ("ssl=true") is refused, never dropped.
+  assert.throws(
+    () => pgEnvFromUrl('postgresql://ro:secret@db.example/postgres?ssl=true'),
+    (err) =>
+      /query parameter .* ssl\./.test(err.message) &&
+      !err.message.includes('secret')
+  );
   for (const bad of [
     'postgresql://ro:secret%zz@db.example/postgres',
     'not a url secret',
@@ -109,7 +132,11 @@ test('the connection string becomes PG* variables and no error repeats it', () =
   }
 });
 
-/** A fake psql: prints `lines`, then exits with `code` (stderr gets `stderr`). */
+/**
+ * A fake psql: answers the first statements it gets with the guard line (when
+ * `lines` starts with one), the rest of `lines` once stdin ends, then exits with
+ * `code` (stderr gets `stderr`). Killed, it prints nothing more.
+ */
 function fakeSpawn({ lines = [], code = 0, stderr = '' }) {
   const calls = [];
   const spawnFn = (cmd, args, opts) => {
@@ -117,18 +144,29 @@ function fakeSpawn({ lines = [], code = 0, stderr = '' }) {
     child.stdout = new PassThrough();
     child.stderr = new PassThrough();
     child.stdin = new PassThrough();
-    child.kill = () => {
-      child.killed = true;
-    };
-    calls.push({ cmd, args, opts, child });
-    let script = '';
-    child.stdin.on('data', (d) => (script += d));
-    child.stdin.on('end', () => {
-      calls[calls.length - 1].script = script;
-      child.stdout.end(lines.join('\n') + '\n');
+    const call = { cmd, args, opts, child, script: '' };
+    calls.push(call);
+    let done = false;
+    const finish = (rest) => {
+      if (done) return;
+      done = true;
+      child.stdout.end(rest.length > 0 ? rest.join('\n') + '\n' : '');
       child.stderr.end(stderr);
       setTimeout(() => child.emit('close', code), 10);
+    };
+    child.kill = () => {
+      child.killed = true;
+      finish([]);
+    };
+    let answered = false;
+    child.stdin.on('data', (d) => {
+      call.script += d;
+      if (answered) return;
+      answered = true;
+      if (lines[0]?.startsWith('guard\t')) child.stdout.write(lines[0] + '\n');
+      else finish(lines);
     });
+    child.stdin.on('end', () => finish(lines.slice(1)));
     return child;
   };
   return { spawnFn, calls };
@@ -163,7 +201,7 @@ test('one psql session, read-only options, no URL on the command line', async ()
     '-c default_transaction_read_only=on'
   );
   assert.equal(calls[0].opts.env.PGPASSWORD, 'secret');
-  assert.equal(calls[0].script, SESSION_SQL);
+  assert.equal(calls[0].script, `${SESSION_SQL}\n`);
   assert.deepEqual(collector.data.listings, [
     { id: 'p1', master_id: 'm1', key: 'samsung:galaxy-s25:unknown' },
   ]);
@@ -187,6 +225,9 @@ test('a failing guard stops the session before data is kept; psql errors are wit
   );
   assert.equal(collector.data.masters.length, 0);
   assert.ok(writer.calls[0].child.killed);
+  // The data reads never reached psql.
+  assert.equal(writer.calls[0].script, `${GUARD_SQL}\n`);
+  assert.ok(!writer.calls[0].script.includes('FROM rate.master_products'));
   const noGuard = createCollector({ keyOf: () => null, onGuard: () => {} });
   assert.throws(
     () => noGuard.line('master\t{"id":"m1"}'),
@@ -312,7 +353,7 @@ test('plans renames and merges, counting what would move', () => {
       3,
       5,
     ],
-    // The #1407 respelling comes from the stored key, as the normalizer change is not shipped.
+    // The #1407 respelling is applied to the listings' keys, as the normalizer change is not shipped.
     [
       'apple:watch-se2-40mm:unknown',
       'apple:watch-se-2-40mm:unknown',
@@ -323,10 +364,7 @@ test('plans renames and merges, counting what would move', () => {
   ]);
   assert.equal(plan.changes[0].lowCoverage, true);
   assert.equal(plan.changes[2].lowCoverage, false);
-  assert.equal(
-    plan.changes[3].source,
-    'spelling rule (normalizer change not shipped)'
-  );
+  assert.equal(plan.changes[3].source, 'normalizer + spelling rule');
   assert.deepEqual(
     plan.unclear.map((u) => u.oldKey),
     ['oppo:reno-12-x:256gb']
@@ -338,6 +376,42 @@ test('plans renames and merges, counting what would move', () => {
   assert.match(text, /Nothing was written\./);
   assert.match(text, /LOW COVERAGE/);
   assert.match(text, /## unclear/);
+});
+
+test('a watch respelling keeps what the titles say, else falls back to the stored key', () => {
+  const plan = planRekeys({
+    masters: [
+      { id: 'w1', model_key: 'apple:watch-series10:unknown', status: 'draft' },
+      {
+        id: 'w2',
+        model_key: 'apple:watch-series-10-46mm:64gb',
+        status: 'published',
+      },
+      { id: 'w3', model_key: 'apple:watch-se3:unknown', status: 'draft' },
+    ],
+    listings: [
+      // The unshipped normalizer still keys the glued spelling, with the case size.
+      { id: 'r1', master_id: 'w1', key: 'apple:watch-series10-46mm:64gb' },
+      { id: 'r2', master_id: 'w2', key: 'apple:watch-series-10-46mm:64gb' },
+    ],
+    priceRows: [],
+  });
+  const row = (c) => [c.oldKey, c.newKey, c.action, c.source];
+  assert.deepEqual(plan.changes.map(row), [
+    [
+      'apple:watch-se3:unknown',
+      'apple:watch-se-3:unknown',
+      'rename in place',
+      'spelling rule on the stored key, no title majority: check the case size by hand',
+    ],
+    [
+      'apple:watch-series10:unknown',
+      'apple:watch-series-10-46mm:unknown',
+      'rename in place',
+      'normalizer + spelling rule',
+    ],
+  ]);
+  assert.equal(plan.unchanged, 1, 'w2');
 });
 
 test('a re-keyed merge target is flagged, and a tie is unclear in any row order', () => {
