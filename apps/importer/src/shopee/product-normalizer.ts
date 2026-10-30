@@ -1440,6 +1440,11 @@ const WATCH_GIFT_ACCESSORY_NOUN =
 // Cellular" is the watch and "13+ năm" a shop's age (DOS/Rate#1389).
 // A promo tag in front of the title is no part of the model: "[Mã giảm 50K]",
 // "(Hàng mới)", "【Hot】" or "{ Kích T10 }" (DOS/Rate#1421).
+// Garmin's watch and bike lines: a bare number before one of them is a case size, not
+// a GPS model number (DOS/Rate#1467).
+const GARMIN_LINES =
+  /^(?:Venu|Fenix|Fēnix|Forerunner|Vivoactive|Vivomove|Vivosmart|Instinct|Epix|Enduro|Approach|Lily|Edge|Descent|Quatix|Tactix|Marq|Bounce)\b/i;
+
 const LEADING_PROMO_GROUPS = /^(?:\s*(?:\[[^\]]*\]|\([^)]*\)|【[^】]*】|\{[^}]*\}))+\s*/;
 // So is a promo word right before the brand or its line: "Live Samsung Galaxy S26
 // Ultra", "Hot Sale Samsung …", "Flash Sale Điện thoại Samsung …", "Sale Galaxy S26
@@ -2146,7 +2151,7 @@ export class ProductNormalizer {
       const cleaned = withoutLeadingPromo
         .replace(
           new RegExp(
-            `^(?:(?:Hàng\\s+)?Chính\\s+hãng\\s+)?(?:(?:Điện\\s+thoại(?:\\s+thông\\s+minh|\\s+di\\s+động)?|Smartphone|Máy\\s+tính\\s+bảng|Tablet|Laptop|Máy\\s+tính\\s+xách\\s+tay|Đồng\\s+hồ(?:\\s+đeo\\s+tay)?(?:\\s+thông\\s+minh)?|Vòng\\s+đeo\\s+tay(?:\\s+thông\\s+minh)?|Vòng\\s+tay\\s+thông\\s+minh|Smartwatch|Tai\\s+nghe(?:\\s+Bluetooth|\\s+chống\\s+ồn|\\s+không\\s+dây)?|Earbuds)\\s+(?:(?:Hàng\\s+)?Chính\\s+hãng\\s+)?)?(?:${brand}\\b\\s*)?`,
+            `^(?:(?:Hàng\\s+)?Chính\\s+hãng\\s+)?(?:(?:Điện\\s+thoại(?:\\s+thông\\s+minh|\\s+di\\s+động)?|Smartphone|Máy\\s+tính\\s+bảng|Tablet|Laptop|Máy\\s+tính\\s+xách\\s+tay|Đồng\\s+hồ(?:\\s+đeo\\s+tay)?(?:\\s+thông\\s+minh)?|Vòng\\s+đeo\\s+tay(?:\\s+thông\\s+minh)?|Vòng\\s+tay\\s+thông\\s+minh|Smartwatch|Tai\\s+nghe(?:\\s+Bluetooth|\\s+chống\\s+ồn|\\s+không\\s+dây)?|Earbuds|Máy\\s+định\\s+vị(?:\\s+cầm\\s+tay)?)\\s+(?:(?:Hàng\\s+)?Chính\\s+hãng\\s+)?)?(?:${brand}\\b\\s*)?`,
             'i'
           ),
           ''
@@ -2176,15 +2181,25 @@ export class ProductNormalizer {
         if (modelTokens.length === 0) {
           // A Garmin "GPS" before a model number is the model's own word: "Garmin GPS 73",
           // "Garmin GPS 64s" key as "gps-73" and "gps-64s", as before DOS/Rate#1429. Other
-          // brands' "GPS 5G" or "GPS 44 mm" stay options (DOS/Rate#1457).
-          if (
+          // brands' "GPS 5G" or "GPS 44 mm" stay options (DOS/Rate#1457). A storage ("GPS
+          // 32 GB", "GPS 64 GB Edge") is no model number, and a number before another
+          // Garmin line is that watch's case size: "GPS 42 Venu 3S" is the Venu 3S
+          // (DOS/Rate#1467).
+          const gpsNumber =
             brand === 'Garmin' &&
             /^GPS$/i.test(tok) &&
-            /^\d{2,3}[a-z]{0,2}$/i.test(rawTokens[i + 1] ?? '') &&
-            // A size or storage ("47mm", "32GB") is no model number.
-            !/\d(?:mm|gb|tb|g)$/i.test(rawTokens[i + 1] ?? '') &&
-            !/^mm\b/i.test(rawTokens[i + 2] ?? '')
+            /^\d{2,3}[a-z]{0,3}[,;]?$/i.test(rawTokens[i + 1] ?? '') &&
+            !/\d(?:mm|gb|tb|g)[,;]?$/i.test(rawTokens[i + 1] ?? '') &&
+            !/^(?:mm|GB|TB)\b/i.test(rawTokens[i + 2] ?? '');
+          if (
+            gpsNumber &&
+            /^\d{2}$/.test(rawTokens[i + 1] ?? '') &&
+            GARMIN_LINES.test(rawTokens[i + 2] ?? '')
           ) {
+            i++;
+            continue;
+          }
+          if (gpsNumber) {
             modelTokens.push(tok);
             maxModelTokens = 2;
             continue;
@@ -2252,13 +2267,17 @@ export class ProductNormalizer {
         // A word glued to the chain ("Redmi Note 13 Pro/12GB/512GB") is the model's last
         // word, and the chain ends the model; a stop word there ("RAM/8GB/256GB",
         // "Mới/…") is not (DOS/Rate#1457).
-        const wordHead = /^(\p{L}+)\/\d{1,2}(?:GB)?\/\d+(?:[.,]\d+)?(?:GB|TB)(?![a-z\d])/iu.exec(
-          tok
-        );
+        // So is one glued to a storage alone ("Pro Plus/256GB") or to a shop word
+        // ("Plus/Mới 100%"), and "S24+" keeps its plus; a shop word itself
+        // ("ChínhHãng/8GB/256GB") is no model word (DOS/Rate#1467).
+        const wordHead =
+          /^(\p{L}[\p{L}\d]*\+?)\/(?:(?:\d{1,2}(?:GB)?\/)?\d+(?:[.,]\d+)?(?:GB|TB)(?![a-z\d])|(?:Mới|Chính|Hàng|Fullbox|Likenew|Like|Cũ|New)(?![\p{L}\d]))/iu.exec(
+            tok.normalize('NFC')
+          );
         if (wordHead && modelTokens.length > 0) {
           if (
-            !/^(?:LTE|GPS|RAM|ROM|OLED|WiFi|Chính|Quốc|Bản|Mới|Fullbox|Likenew|Like|Cũ|VNA)$/iu.test(
-              wordHead[1]!.normalize('NFC')
+            !/^(?:(?:LTE|GPS|RAM|ROM|OLED|WiFi)(?:\d\w*|DDR\w*)?|Chính\p{L}*|Hàng\p{L}*|Quốc\p{L}*|Bản|Mới|Fullbox|Likenew|Like|Cũ|VNA)$/iu.test(
+              wordHead[1]!
             )
           ) {
             modelTokens.push(wordHead[1]!);
@@ -2353,18 +2372,32 @@ export class ProductNormalizer {
     // a list of variants ("6GB/128GB/8GB/256GB") keys as its first, as before. With no such
     // pair, the chain's last link (DOS/Rate#1438). A pair that starts on a stated storage
     // ("64GB/4GB/128GB/8GB") is that storage first, so the list keys as its first variant,
-    // 64GB, not the 128GB of the next pair (DOS/Rate#1457).
+    // 64GB, not the 128GB of the next pair (DOS/Rate#1457). A three- or four-digit storage
+    // only starts a pair before a RAM under 30GB ("128GB/4GB/256GB/8GB" is 128GB), never
+    // before another storage ("128GB/256GB" lists two) or a workstation RAM ("RAM
+    // 128GB/32GB") (DOS/Rate#1467).
     const slashPairs = [
-      ...title.matchAll(/(?=(\b(\d{1,2})\s*(GB\s*)?\/\s*(\d+(?:[.,]\d+)?)\s*(TB|GB)\b))/gi),
-    ];
+      ...title.matchAll(
+        /(?=(\b(\d{1,2}|\d{3,4}(?=\s*GB\s*\/\s*(?:[1-9]|[12]\d)\s*GB\b))\s*(GB\s*)?\/\s*(\d+(?:[.,]\d+)?)\s*(TB|GB)\b))/gi
+      ),
+    ].filter(
+      m =>
+        m[2]!.length < 3 ||
+        !/\bRAM(?:\s*[:\-–]?\s*(?:LP)?DDR\w*(?:\s+\d+\s*MHz)?)?\s*[:\-–]?\s*$/i.test(
+          title.slice(0, m.index)
+        )
+    );
     const lastSlashPair =
       slashPairs.find(
         m =>
           /^TB$/i.test(m[5]!) ||
           parseFloat(m[4]!.replace(',', '.')) >= 32 ||
-          // A storage first, unless a RAM word names it ("RAM 32GB/16GB/512GB").
+          // A storage first, unless a RAM word names it ("RAM 32GB/16GB/512GB", "RAM DDR4
+          // 32GB/…").
           (Boolean(m[3]) &&
-            !/\bRAM\s*[:\-–]?\s*$/i.test(title.slice(0, m.index)) &&
+            !/\bRAM(?:\s*[:\-–]?\s*(?:LP)?DDR\w*(?:\s+\d+\s*MHz)?)?\s*[:\-–]?\s*$/i.test(
+              title.slice(0, m.index)
+            ) &&
             parseInt(m[2]!, 10) >= 32 &&
             parseInt(m[2]!, 10) > parseFloat(m[4]!.replace(',', '.')))
       ) ??
