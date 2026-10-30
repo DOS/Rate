@@ -2470,6 +2470,36 @@ async function runSuite() {
     /missing camera\.second_camera/,
     'auditMasterSpecs must reject whitespace-only camera.second_camera (#503)'
   );
+  // A phone with one rear camera (iPhone 17e, iPhone Air) passes without a second one;
+  // any other setup still needs it (DOS/Rate#1455).
+  const auditOne = (camera: Record<string, string>) =>
+    auditMasterSpecs({
+      from: () => ({
+        select: () => ({
+          order: () => ({
+            range: async (from: number) => ({
+              data:
+                from === 0
+                  ? [
+                      {
+                        id: 'm-cam',
+                        name: 'Camera Device',
+                        model_key: 'test:cam:256gb',
+                        specifications: { ...phoneArenaFallbackSpec.specifications, camera },
+                      },
+                    ]
+                  : [],
+              error: null,
+            }),
+          }),
+        }),
+      }),
+    } as never);
+  assert.equal(await auditOne({ rear_setup: 'Single camera', main_camera: '48 MP Fusion' }), 1);
+  await assert.rejects(
+    () => auditOne({ rear_setup: 'Dual camera', main_camera: '48 MP Fusion' }),
+    /missing camera\.second_camera/
+  );
 
   console.log(
     '  ✅ [11/12] Backfill KeySpecs Merge, Whitespace Field Group Audit & Arena PhoneArena Fallbacks (#503) passed'
