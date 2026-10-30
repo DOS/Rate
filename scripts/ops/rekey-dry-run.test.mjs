@@ -817,3 +817,30 @@ test('a refused or failed PostgREST read sends nothing and echoes no secret', as
       !err.message.includes('db.example')
   );
 });
+
+test('a PostgREST transport or JSON error is replaced by a fixed message', async () => {
+  const rest = {
+    url: 'https://db.example',
+    anonKey: 'anon-key-value',
+    accessToken: jwt('rate_worker'),
+  };
+  await assert.rejects(
+    readViaPostgrest(rest, () => null, {
+      fetchImpl: async (url) => {
+        throw new TypeError('fetch failed for ' + url + ' secret-token');
+      },
+    }),
+    (err) =>
+      /rate.master_products could not be sent/.test(err.message) &&
+      !err.message.includes('db.example') &&
+      !err.message.includes('secret-token')
+  );
+  await assert.rejects(
+    readViaPostgrest(rest, () => null, {
+      fetchImpl: async () => new Response('not json, quoting anon-key-value'),
+    }),
+    (err) =>
+      /returned no JSON/.test(err.message) &&
+      !err.message.includes('anon-key-value')
+  );
+});

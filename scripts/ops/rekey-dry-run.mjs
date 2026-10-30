@@ -700,22 +700,36 @@ export async function readTable(
     target.searchParams.set('order', 'id.asc');
     target.searchParams.set('limit', String(pageSize));
     if (after !== null) target.searchParams.set('id', `gt.${after}`);
-    const res = await getFetch(target.toString(), {
-      method: 'GET',
-      headers: {
-        apikey: anonKey,
-        Authorization: `Bearer ${accessToken}`,
-        'Accept-Profile': 'rate',
-        Accept: 'application/json',
-      },
-    });
+    let res;
+    try {
+      res = await getFetch(target.toString(), {
+        method: 'GET',
+        headers: {
+          apikey: anonKey,
+          Authorization: `Bearer ${accessToken}`,
+          'Accept-Profile': 'rate',
+          Accept: 'application/json',
+        },
+      });
+    } catch (err) {
+      // The wrapper's own refusals carry no secret; a transport error can quote
+      // the URL, so it is replaced by a fixed message.
+      if (/this dry run only reads|non-https/.test(err?.message ?? ''))
+        throw err;
+      throw new Error(`PostgREST read of rate.${table} could not be sent`);
+    }
     if (!res.ok) {
       // The response body is not echoed: it can quote the request.
       throw new Error(
         `PostgREST read of rate.${table} failed (HTTP ${res.status})`
       );
     }
-    const page = await res.json();
+    let page;
+    try {
+      page = await res.json();
+    } catch {
+      throw new Error(`PostgREST read of rate.${table} returned no JSON`);
+    }
     if (!Array.isArray(page)) {
       throw new Error(`PostgREST read of rate.${table} returned no rows array`);
     }
@@ -828,9 +842,15 @@ async function main() {
     for (const [k, name] of Object.entries(ENV_REST))
       if (!rest[k]) usage(`${name} is required with --via-postgrest`);
     try {
-      new URL(rest.url);
+      const u = new URL(rest.url);
+      // The project URL carries no credentials; a user or password there would
+      // risk being quoted, so it is refused, as is plain http.
+      if (u.username || u.password || u.protocol !== 'https:')
+        throw new Error();
     } catch {
-      usage(`${ENV_REST.url} is not a valid URL`);
+      usage(
+        `${ENV_REST.url} must be the project's https URL, with no user or password`
+      );
     }
     const keyOf = await loadKeyOf(values.normalizer);
     const { role, data } = await readViaPostgrest(rest, keyOf);
