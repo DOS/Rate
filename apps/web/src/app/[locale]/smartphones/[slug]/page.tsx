@@ -118,6 +118,7 @@ import {
   foreignCategoryProductHref,
   usableImageUrls,
   productImageUrl,
+  storeImageSrcSet,
 } from '@/lib/rate-domain-core';
 import {
   localizeDecimalPoints,
@@ -827,12 +828,23 @@ export async function ProductDetailView({
                     // prefetch applies too, so it names the sized WebP renditions:
                     // a prefetched page never pulls the full JPEG (#1413). The box
                     // caps it at 350 px tall, 190 px on phones (_product.scss).
+                    // A store CDN image names the CDN's own resized copies, sized
+                    // as a square photo: its aspect is not known (#1417).
                     <img
-                      srcSet={deviceImageSrcSet(mainImage) ?? undefined}
-                      sizes={deviceImageSizesForHeight(mainImage, {
-                        phone: 190,
-                        other: 350,
-                      })}
+                      srcSet={
+                        deviceImageSrcSet(mainImage) ??
+                        storeImageSrcSet(mainImage) ??
+                        undefined
+                      }
+                      sizes={
+                        deviceImageSizesForHeight(mainImage, {
+                          phone: 190,
+                          other: 350,
+                        }) ??
+                        (storeImageSrcSet(mainImage)
+                          ? '(max-width: 767.98px) 190px, 350px'
+                          : undefined)
+                      }
                       src={mainImage}
                       alt={product.name}
                       fetchPriority="high"

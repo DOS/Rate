@@ -1013,6 +1013,34 @@ export function sizedStoreImageUrl(
   return url;
 }
 
+/** The widths a store CDN image's `srcSet` names, as the device renditions. */
+const STORE_IMAGE_SRCSET_WIDTHS = [200, 400, 600, 800] as const;
+
+/**
+ * A `srcSet` of a store CDN image at the widths a product hero takes, resized
+ * by the CDN itself as `sizedStoreImageUrl` does. React's preload hint for the
+ * hero, which a prefetch of the page applies too, then fetches one of these
+ * rather than the 600-800 px original (DOS/Rate#1417). Null for a URL the CDN
+ * cannot resize.
+ */
+export function storeImageSrcSet(
+  url: string | null | undefined
+): string | null {
+  if (typeof url !== 'string' || !url) return null;
+  const sized = STORE_IMAGE_SRCSET_WIDTHS.map(
+    (w) => `${sizedStoreImageUrl(url, w) ?? url} ${w}w`
+  );
+  // A URL the CDN cannot resize comes back unchanged at every width; one
+  // already at one of these widths ("/200x/") changes at the others.
+  if (
+    sized.every(
+      (entry, i) => entry === `${url} ${STORE_IMAGE_SRCSET_WIDTHS[i]}w`
+    )
+  )
+    return null;
+  return sized.join(', ');
+}
+
 export function resolveProductImageUrl(
   slugOrProduct?:
     | string

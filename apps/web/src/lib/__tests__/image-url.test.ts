@@ -5,6 +5,7 @@ import {
   productImageUrl,
   resolveProductImageUrl,
   sizedStoreImageUrl,
+  storeImageSrcSet,
   usableImageUrls,
 } from '../rate-domain-core';
 
@@ -25,7 +26,10 @@ function main() {
     'an existing size and filter are replaced, not stacked'
   );
   assert.equal(
-    sizedStoreImageUrl('https://cdn2.fptshop.com.vn/unsafe/800x/uploads/a.png', 128),
+    sizedStoreImageUrl(
+      'https://cdn2.fptshop.com.vn/unsafe/800x/uploads/a.png',
+      128
+    ),
     'https://cdn2.fptshop.com.vn/unsafe/128x0/filters:format(webp)/uploads/a.png',
     'a width-only size is replaced and a folder path is kept'
   );
@@ -65,6 +69,39 @@ function main() {
     'https://cdn2.fptshop.com.vn/unsafe/32x0/filters:format(webp)/a.png',
     'the width is kept within 32-1024'
   );
+
+  // The product hero's srcSet of a store CDN image (DOS/Rate#1417).
+  assert.equal(
+    storeImageSrcSet('https://cdn2.fptshop.com.vn/unsafe/a.png'),
+    [200, 400, 600, 800]
+      .map(
+        (w) =>
+          `https://cdn2.fptshop.com.vn/unsafe/${w}x0/filters:format(webp)/a.png ${w}w`
+      )
+      .join(', ')
+  );
+  assert.equal(
+    storeImageSrcSet(
+      'https://cdn2.cellphones.com.vn/200x/media/catalog/product/x.png'
+    ),
+    [200, 400, 600, 800]
+      .map(
+        (w) =>
+          `https://cdn2.cellphones.com.vn/${w}x/media/catalog/product/x.png ${w}w`
+      )
+      .join(', '),
+    'a URL already at one of the widths still gets every width'
+  );
+  for (const other of [
+    'https://cdn.tgdd.vn/a.jpg',
+    '/img/devices/apple-iphone-16-128gb.jpg',
+    'https://cdn2.fptshop.com.vn/unsafe/fit-in/800x800/a.png',
+    '',
+    null,
+    undefined,
+  ]) {
+    assert.equal(storeImageSrcSet(other), null, String(other));
+  }
 
   assert.equal(isImageUrl('https://cdn.tgdd.vn/a.jpg'), true);
   assert.equal(isImageUrl('http://example.com/a.png'), true);

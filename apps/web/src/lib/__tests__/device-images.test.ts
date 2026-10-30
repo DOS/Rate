@@ -124,6 +124,15 @@ async function main() {
     productPage.some((tag) => tag.includes('deviceImageSrcSet(mainImage)')),
     'the product hero names the WebP renditions'
   );
+  // A store CDN hero names the CDN's resized copies instead (DOS/Rate#1417).
+  assert.ok(
+    productPage.some(
+      (tag) =>
+        tag.includes('deviceImageSrcSet(mainImage)') &&
+        tag.includes('storeImageSrcSet(mainImage)')
+    ),
+    'the product hero names the store CDN renditions'
+  );
   assert.equal(productPage.length, 2, 'hero and peer cards');
   assert.equal(cards.length, 1);
   for (const tag of [...productPage, ...cards]) {
