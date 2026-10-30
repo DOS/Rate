@@ -441,6 +441,8 @@
     "expertScoreShort": "Expert {score}/10"
   },
   "reviews": {
+    "reviewsShowMore": "Zobrazit {count, plural, one {# další recenzi} few {# další recenze} other {# dalších recenzí}}",
+    "reviewsShowLess": "Zobrazit méně recenzí",
     "criteriaScreen": "Displej a zobrazení",
     "criteriaPerformance": "Výkon a teploty",
     "criteriaCamera": "Fotoaparát a video",
@@ -986,6 +988,11 @@
     "listingDiscontinuedBadge": "Ukončený prodej"
   },
   "productDetail": {
+    "jumpNavAria": "Přejít na sekci",
+    "jumpNavOffers": "Kde koupit ({count})",
+    "jumpNavPriceHistory": "Historie cen",
+    "jumpNavSpecs": "Parametry",
+    "jumpNavReviews": "Recenze ({count})",
     "notFoundTitle": "Produkt nenalezen | Rate.vn",
     "metaTitle": "{name} - Od {minPrice} ₫ | Rate.vn",
     "metaTitleShort": "{name} - Od {minPrice} ₫",

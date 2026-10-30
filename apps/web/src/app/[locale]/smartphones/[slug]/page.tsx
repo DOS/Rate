@@ -1334,7 +1334,77 @@ export async function ProductDetailView({
             </div>
           </div>
 
-          {/* SECTION #1: Spec groups, per category template (DOS/Rate#1142), before
+          {/* Where to buy comes first, then the price history, specs and
+          reviews; this row jumps to each (DOS/Rate#1469). */}
+          <nav
+            className="rate-pdv-jumpnav"
+            aria-label={t('jumpNavAria')}
+            data-testid="pdv-jump-nav"
+          >
+            <a href="#offers-table">
+              {t('jumpNavOffers', { count: offers.length })}
+            </a>
+            <a href="#price-history-section">{t('jumpNavPriceHistory')}</a>
+            <a href="#specs-section">{t('jumpNavSpecs')}</a>
+            <a href="#jreviews-section">
+              {t('jumpNavReviews', { count: authenticCount })}
+            </a>
+          </nav>
+
+          {/* Neutral Merchant Reference & Trust Audit Table */}
+          <div
+            id="offers-table"
+            className="card rounded-4 p-md-5 mt-4 mb-5 border-0 p-4 shadow-sm"
+          >
+            {isItemGroup
+              ? renderSizePanels('offers', (v) =>
+                  renderOffersBody(variantPanelInput(v))
+                )
+              : renderOffersBody({
+                  product,
+                  offers,
+                  priceHistory,
+                  radarSignal,
+                  emptyText: pageEmptyOffersText,
+                })}
+          </div>
+
+          {/* Listings whose size is not stated: their own group, never part
+              of the "from" price (Q2, DOS/Rate#1154). */}
+          {itemPage && itemPage.unknownOffers.length > 0 && (
+            <div
+              id="offers-unknown-size"
+              className="card rounded-4 p-md-5 mb-5 border-0 p-4 shadow-sm"
+              data-testid="pdv-unknown-size-offers"
+            >
+              <h2 className="h5 fw-bold mb-1">
+                {t('unknownSizeTitle', {
+                  count: itemPage.unknownOffers.length,
+                })}
+              </h2>
+              <p className="text-muted small mb-3">{t('unknownSizeNote')}</p>
+              <ProductOffersExplorer
+                productName={displayName}
+                productSlug={itemPage.item.slug}
+                offers={itemPage.unknownOffers}
+                byOffer={itemPage.unknownByOffer}
+              />
+            </div>
+          )}
+
+          {/* Time-Series Price History Chart, Fake Discount Detector & Neutral Merchant Audit */}
+          {isItemGroup
+            ? renderSizePanels('history', (v) =>
+                renderPriceHistory(variantPanelInput(v))
+              )
+            : renderPriceHistory({
+                product,
+                priceHistory,
+                minPrice: currentMinPrice,
+                radarSignal,
+              })}
+
+          {/* Spec groups, per category template (DOS/Rate#1142), before
           the reviews (DOS/Rate#1436) */}
           {(() => {
             const specUi = getSpecUiDictionary(locale);
@@ -1419,7 +1489,7 @@ export async function ProductDetailView({
             );
           })()}
 
-          {/* SECTION #2: JReviews Dual-Rating, AI Review Synthesis & Interactive Voting (Core Product Value) */}
+          {/* JReviews Dual-Rating, AI Review Synthesis & Interactive Voting (Core Product Value) */}
           <div className="mb-5">
             <JReviewsSection
               masterProductId={product.id}
@@ -1441,59 +1511,6 @@ export async function ProductDetailView({
               radarSignal={radarSignal}
             />
           </div>
-
-          {/* SECTION #3: Time-Series Price History Chart, Fake Discount Detector & Neutral Merchant Audit */}
-          {isItemGroup
-            ? renderSizePanels('history', (v) =>
-                renderPriceHistory(variantPanelInput(v))
-              )
-            : renderPriceHistory({
-                product,
-                priceHistory,
-                minPrice: currentMinPrice,
-                radarSignal,
-              })}
-
-          {/* Neutral Merchant Reference & Trust Audit Table */}
-          <div
-            id="offers-table"
-            className="card rounded-4 p-md-5 mt-4 mb-5 border-0 p-4 shadow-sm"
-          >
-            {isItemGroup
-              ? renderSizePanels('offers', (v) =>
-                  renderOffersBody(variantPanelInput(v))
-                )
-              : renderOffersBody({
-                  product,
-                  offers,
-                  priceHistory,
-                  radarSignal,
-                  emptyText: pageEmptyOffersText,
-                })}
-          </div>
-
-          {/* Listings whose size is not stated: their own group, never part
-              of the "from" price (Q2, DOS/Rate#1154). */}
-          {itemPage && itemPage.unknownOffers.length > 0 && (
-            <div
-              id="offers-unknown-size"
-              className="card rounded-4 p-md-5 mb-5 border-0 p-4 shadow-sm"
-              data-testid="pdv-unknown-size-offers"
-            >
-              <h2 className="h5 fw-bold mb-1">
-                {t('unknownSizeTitle', {
-                  count: itemPage.unknownOffers.length,
-                })}
-              </h2>
-              <p className="text-muted small mb-3">{t('unknownSizeNote')}</p>
-              <ProductOffersExplorer
-                productName={displayName}
-                productSlug={itemPage.item.slug}
-                offers={itemPage.unknownOffers}
-                byOffer={itemPage.unknownByOffer}
-              />
-            </div>
-          )}
 
           {/* Interactive Value Efficiency & 2-Year Ownership Calculator (#62) */}
           {(() => {
