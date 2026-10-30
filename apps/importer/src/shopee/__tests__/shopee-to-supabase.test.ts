@@ -72,6 +72,8 @@ interface StubPipelineOptions {
 function createPipelineStubSupabase(opts: StubPipelineOptions = {}) {
   const events: {
     merchantUpserts: number;
+    merchantPayloads: Array<Record<string, unknown>>;
+    merchantUpdates: Array<Record<string, unknown>>;
     productUpserts: Array<Record<string, unknown>>;
     priceRpcCalls: Array<Record<string, unknown>>;
     priceInserts: Array<Record<string, unknown>>;
@@ -80,6 +82,8 @@ function createPipelineStubSupabase(opts: StubPipelineOptions = {}) {
     marketStatsRefreshed: string[];
   } = {
     merchantUpserts: 0,
+    merchantPayloads: [],
+    merchantUpdates: [],
     productUpserts: [],
     priceRpcCalls: [],
     priceInserts: [],
@@ -111,8 +115,9 @@ function createPipelineStubSupabase(opts: StubPipelineOptions = {}) {
 
       if (table === 'merchants') {
         return {
-          upsert(_payload: Record<string, unknown>, _options?: unknown) {
+          upsert(payload: Record<string, unknown>, _options?: unknown) {
             events.merchantUpserts += 1;
+            events.merchantPayloads.push(payload);
             return {
               select(_cols: string) {
                 return {
@@ -126,7 +131,8 @@ function createPipelineStubSupabase(opts: StubPipelineOptions = {}) {
               },
             };
           },
-          update(_payload: Record<string, unknown>) {
+          update(payload: Record<string, unknown>) {
+            events.merchantUpdates.push(payload);
             return {
               eq(_col: string, _val: string) {
                 return Promise.resolve({ data: null, error: null });
@@ -743,6 +749,28 @@ async function runTests() {
     'Must refresh both verified=true and verified=false cohorts'
   );
   assert.deepEqual(reportedSections, ['merchant', 'master', 'listing', 'price', 'reviews']);
+  // The shop upsert carries only the shop's own fields, never metadata or
+  // review_risk_*: Rate Services' auditor owns the merchant review risk
+  // (DOS/Rate#1341). This stub does not reach the review analysis; that path
+  // (persistAnalysisToSupabase, scoreSellerReviewRisk) is checked in
+  // test-review-analyzer.ts and backfill-review-risk.test.ts.
+  assert.deepEqual(revRaceEvents.merchantUpdates, [], 'no merchants update');
+  const MERCHANT_UPSERT_KEYS = [
+    'entity_hash',
+    'follower_count',
+    'is_official',
+    'location',
+    'name',
+    'platform',
+    'platform_shop_id',
+    'rating_star',
+    'updated_at',
+    'url',
+  ];
+  assert.ok(revRaceEvents.merchantPayloads.length > 0);
+  for (const payload of revRaceEvents.merchantPayloads) {
+    assert.deepEqual(Object.keys(payload).sort(), MERCHANT_UPSERT_KEYS);
+  }
   console.log(
     '  ✅ [5/6] Review deduplication, 23505 retry pass & verifiedPurchase refresh passed'
   );

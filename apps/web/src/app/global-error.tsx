@@ -3,6 +3,7 @@
 import csMessages from '../../locales/cs.json';
 import enMessages from '../../locales/en.json';
 import viMessages from '../../locales/vi.json';
+import { PAGE_META_CSP } from '@/lib/csp';
 import { normalizeRateLocale, type SupportedRateLocale } from '@/lib/rate-i18n';
 
 const GLOBAL_ERROR_CATALOG: Record<
@@ -43,6 +44,7 @@ export default function GlobalError({
     <html lang={locale}>
       <head>
         <meta charSet="utf-8" />
+        <meta httpEquiv="Content-Security-Policy" content={PAGE_META_CSP} />
         <meta name="color-scheme" content="dark" />
         <title>{`${copy.title} - Rate.vn`}</title>
       </head>

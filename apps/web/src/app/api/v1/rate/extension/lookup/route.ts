@@ -10,6 +10,8 @@ import {
   parseBoundedStringParam,
   parseOptionalVndPriceParam,
   withPublicReviewRisk,
+  withPublicOfferReviewRisk,
+  rateLimitExceededResponse,
 } from '@/server/rate/api-handler';
 
 const CORS_HEADERS = {
@@ -49,12 +51,10 @@ export async function GET(request: NextRequest) {
   try {
     const clientIp = extractClientRateLimitKey(request.headers);
     if (!lookupRateLimiter.allow(clientIp)) {
-      return NextResponse.json(
-        {
-          ok: false,
-          error: 'Rate limit exceeded. Maximum 60 lookup requests per minute.',
-        },
-        { status: 429, headers: CORS_HEADERS }
+      // The same 429 as /lookup and /inspect (DOS/Rate#1377).
+      return rateLimitExceededResponse(
+        'Rate limit exceeded. Maximum 60 lookup requests per minute.',
+        CORS_HEADERS
       );
     }
 
@@ -100,12 +100,21 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(
       {
         ok: true,
-        data: result.merchantProfile
-          ? {
-              ...result,
-              merchantProfile: withPublicReviewRisk(result.merchantProfile),
-            }
-          : result,
+        data: {
+          ...result,
+          // A seller with no analysed review has no review risk (#1258,
+          // #1376), on the store card and on every offer alike.
+          matchedOffer: result.matchedOffer
+            ? withPublicOfferReviewRisk(result.matchedOffer)
+            : null,
+          allOffers: result.allOffers.map(withPublicOfferReviewRisk),
+          topCheaperOffers: result.topCheaperOffers.map(
+            withPublicOfferReviewRisk
+          ),
+          merchantProfile: result.merchantProfile
+            ? withPublicReviewRisk(result.merchantProfile)
+            : null,
+        },
       },
       {
         status: 200,

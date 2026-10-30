@@ -66,6 +66,8 @@ const WATCH = phoneShaped(
 let catalog: unknown[] = [];
 // What a `master_products` read answers (detail and compare routes).
 let masterRows: unknown[] = [];
+// What a `merchants` read answers (merchant list and directory routes).
+let merchantRows: unknown[] = [];
 let calls: string[] = [];
 // The last `search_master_products` arguments, to see the filters reach SQL.
 let searchArgs: Record<string, unknown> = {};
@@ -97,7 +99,31 @@ globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
     );
   }
   if (pathname === '/rest/v1/master_products') {
-    return jsonResponse(200, masterRows);
+    // Honour a slug filter (`eq.` or `in.(...)`) so unknown slugs miss.
+    const slugFilter = new URL(url).searchParams.get('slug');
+    const wanted = slugFilter?.startsWith('eq.')
+      ? [slugFilter.slice(3)]
+      : slugFilter?.startsWith('in.(')
+        ? slugFilter
+            .slice(4, -1)
+            .split(',')
+            .map((s) => s.replace(/^"|"$/g, ''))
+        : null;
+    return jsonResponse(
+      200,
+      wanted
+        ? masterRows.filter((row) =>
+            wanted.includes((row as { slug: string }).slug)
+          )
+        : masterRows
+    );
+  }
+  if (pathname === '/rest/v1/merchants') {
+    // Paged reads (`.range()`) end on a short page.
+    const params = new URL(url).searchParams;
+    const from = Number(params.get('offset') ?? 0);
+    const size = Number(params.get('limit') ?? merchantRows.length);
+    return jsonResponse(200, merchantRows.slice(from, from + size));
   }
   return jsonResponse(200, []);
 }) as typeof fetch;
@@ -265,6 +291,38 @@ async function testDetailAndCompare() {
   assert.equal(cmpBody.data.length, 1);
   assert.equal(cmpBody.data[0].has_5g, false);
   assert.equal(cmpBody.data[0].specifications.cellular.technology, 'LTE');
+  assert.deepEqual(cmpBody.not_found_slugs, []);
+
+  // Another category's product is excluded by the lock; a slug with no
+  // published product is not found, not cross-category (DOS/Rate#1364).
+  masterRows = [WATCH, EARBUD];
+  const mixed = await compare.GET(
+    new NextRequest(
+      `http://localhost/api/v1/rate/compare?slugs=${WATCH.slug},${EARBUD.slug},does-not-exist-xyz`
+    )
+  );
+  assert.equal(mixed.status, 200);
+  const mixedBody = await mixed.json();
+  assert.deepEqual(
+    mixedBody.data.map((p: { slug: string }) => p.slug),
+    [WATCH.slug]
+  );
+  assert.deepEqual(mixedBody.excluded_cross_category_slugs, [EARBUD.slug]);
+  assert.deepEqual(mixedBody.not_found_slugs, ['does-not-exist-xyz']);
+  // A slug in another case is the same product, compared once and not listed.
+  const upper = await compare.GET(
+    new NextRequest(
+      `http://localhost/api/v1/rate/compare?slugs=${WATCH.slug.toUpperCase()},${WATCH.slug}`
+    )
+  );
+  const upperBody = await upper.json();
+  assert.deepEqual(
+    upperBody.data.map((p: { slug: string }) => p.slug),
+    [WATCH.slug]
+  );
+  assert.deepEqual(upperBody.excluded_cross_category_slugs, []);
+  assert.deepEqual(upperBody.not_found_slugs, []);
+  assert.equal(upperBody.requested_slugs.length, 1);
   masterRows = [];
   console.warn('  ✅ API v1 detail and compare return the scoped view');
 }
@@ -321,6 +379,147 @@ async function testExtensionLookup() {
   console.warn('  ✅ Extension lookup returns the category spec view');
 }
 
+// The extension lookup and the public lookup pick the model a title names,
+// not the first model the search returns (DOS/Rate#1379, #594).
+async function testModelMatch() {
+  const { lookupExtensionProduct } = await import('@/server/rate/extension');
+  const { inspectProductOrShopUrl } = await import('@/lib/rate-api');
+  const named = (id: string, slug: string, name: string, storage = 128) => ({
+    ...phoneShaped(id, slug, 'smartphones'),
+    name,
+    model: name.replace(/^Apple /, '').replace(/ \d+GB$/, ''),
+    storage_gb: storage,
+  });
+  const IPHONE_16E = named(
+    '55555555-5555-4555-8555-555555555555',
+    'apple-iphone-16e-128gb',
+    'Apple iPhone 16e 128GB'
+  );
+  const IPHONE_16 = named(
+    '66666666-6666-4666-8666-666666666666',
+    'apple-iphone-16-128gb',
+    'Apple iPhone 16 128GB'
+  );
+  // The search returns the 16e first, as it did on rate.vn.
+  catalog = [IPHONE_16E, IPHONE_16];
+  masterRows = [];
+
+  const ext16 = await lookupExtensionProduct({
+    title: 'Apple iPhone 16 128GB',
+    price: 19_990_000,
+    mode: 'pill',
+  });
+  assert.equal(ext16.masterProduct?.slug, IPHONE_16.slug);
+  const ext16e = await lookupExtensionProduct({
+    title: 'Apple iPhone 16e 128GB',
+    mode: 'pill',
+  });
+  assert.equal(ext16e.masterProduct?.slug, IPHONE_16E.slug);
+
+  const public16 = await inspectProductOrShopUrl('iphone 16');
+  assert.equal(public16.masterProduct?.slug, IPHONE_16.slug);
+  assert.equal(public16.suggestions[0]?.slug, IPHONE_16.slug);
+  const public16e = await inspectProductOrShopUrl('iphone 16e');
+  assert.equal(public16e.masterProduct?.slug, IPHONE_16E.slug);
+
+  // The other order, so the 16e cases are not won by the search order.
+  catalog = [IPHONE_16, IPHONE_16E];
+  const ext16eSecond = await lookupExtensionProduct({
+    title: 'iPhone 16e 128GB | Chính hãng VN/A',
+    mode: 'pill',
+  });
+  assert.equal(ext16eSecond.masterProduct?.slug, IPHONE_16E.slug);
+  assert.equal(
+    (await inspectProductOrShopUrl('iphone 16e')).masterProduct?.slug,
+    IPHONE_16E.slug
+  );
+
+  // A size of another model does not beat the model the title names.
+  const IPHONE_16_PLUS_256 = named(
+    '77777777-7777-4777-8777-777777777777',
+    'apple-iphone-16-plus-256gb',
+    'Apple iPhone 16 Plus 256GB',
+    256
+  );
+  catalog = [IPHONE_16_PLUS_256, IPHONE_16];
+  const ext16Size = await lookupExtensionProduct({
+    title: 'Apple iPhone 16 256GB',
+    mode: 'pill',
+  });
+  assert.equal(ext16Size.masterProduct?.slug, IPHONE_16.slug);
+  // A bracketed promotion is not part of the model.
+  const extPromo = await lookupExtensionProduct({
+    title: 'Apple iPhone 16 128GB [Trả góp 0% - Bảo hành Plus 12 tháng]',
+    mode: 'pill',
+  });
+  assert.equal(extPromo.masterProduct?.slug, IPHONE_16.slug);
+  catalog = [];
+  console.warn('  ✅ Extension and public lookup pick the named model');
+}
+
+// Caller-controlled work is bounded (DOS/Rate#1308).
+async function testBoundedInputs() {
+  const { NextRequest } = await import('next/server');
+  // category=all with a spec filter pages in process: its offset is capped.
+  let res = await listProducts('category=all&has5g=1&offset=2001');
+  assert.equal(res.status, 400);
+  res = await listProducts('category=all&has5g=1&offset=2000');
+  assert.equal(res.status, 200);
+  // A merchants platform must be a tracked one.
+  const merchants = await import('../merchants/route');
+  const ask = (q: string) =>
+    merchants.GET(
+      new NextRequest(`http://localhost/api/v1/rate/merchants?${q}`)
+    );
+  assert.equal((await ask('platform=not-a-platform')).status, 400);
+  assert.notEqual((await ask('platform=Shopee')).status, 400);
+  // JSON write bodies are read up to 32 KB.
+  const { readBoundedJsonBody, MAX_JSON_BODY_BYTES } =
+    await import('@/server/rate/api-handler');
+  const post = (body: string, headers: Record<string, string> = {}) =>
+    new Request('http://localhost/x', { method: 'POST', body, headers });
+  assert.deepEqual(await readBoundedJsonBody(post('{"a":1}')), {
+    tooLarge: false,
+    value: { a: 1 },
+  });
+  assert.deepEqual(await readBoundedJsonBody(post('not json')), {
+    tooLarge: false,
+    value: null,
+  });
+  // A longest review with every non-ASCII character escaped still fits.
+  const escapedReview = JSON.stringify({
+    masterProductId: '11111111-1111-4111-8111-111111111111',
+    comment: 'ệ'.repeat(3000),
+    authorName: 'ệ'.repeat(120),
+    variation: 'ệ'.repeat(200),
+  }).replace(
+    /[^\x20-\x7e]/g,
+    (c) => `\\u${c.charCodeAt(0).toString(16).padStart(4, '0')}`
+  );
+  assert.ok(escapedReview.length > 16_384, 'the escaped body is over 16 KB');
+  const escapedRead = await readBoundedJsonBody(post(escapedReview));
+  assert.equal(escapedRead.tooLarge, false, 'an escaped longest review fits');
+  const big = JSON.stringify({ a: 'x'.repeat(MAX_JSON_BODY_BYTES) });
+  assert.deepEqual(await readBoundedJsonBody(post(big)), { tooLarge: true });
+  assert.deepEqual(
+    await readBoundedJsonBody(
+      post('{}', { 'content-length': String(MAX_JSON_BODY_BYTES + 1) })
+    ),
+    { tooLarge: true },
+    'a declared length over the cap is not read'
+  );
+  const ingest = await import('../extension/ingest/route');
+  const tooBig = await ingest.POST(
+    new NextRequest('http://localhost/api/v1/rate/extension/ingest', {
+      method: 'POST',
+      body: big,
+      headers: { 'content-type': 'application/json' },
+    })
+  );
+  assert.equal(tooBig.status, 413);
+  console.warn('  ✅ Offsets, platforms and body sizes are bounded');
+}
+
 // Inspect and lookup share a per-IP limit (DOS/Rate#1307).
 async function testInspectRateLimit() {
   const { NextRequest } = await import('next/server');
@@ -348,12 +547,543 @@ async function testInspectRateLimit() {
   console.warn('  ✅ Inspect and lookup are rate-limited per client IP');
 }
 
+// The extension routes answer their 429 like /lookup and /inspect: a code,
+// Retry-After, and the header readable cross-origin (DOS/Rate#1377).
+async function testExtensionRateLimit() {
+  const { NextRequest } = await import('next/server');
+  const lookup = await import('../extension/lookup/route');
+  const ingest = await import('../extension/ingest/route');
+  const expectLimited = async (res: Response, route: string) => {
+    assert.equal(res.status, 429, route);
+    assert.equal(res.headers.get('retry-after'), '60', route);
+    assert.match(
+      res.headers.get('access-control-expose-headers') ?? '',
+      /Retry-After/,
+      route
+    );
+    const body = (await res.json()) as { ok?: boolean; code?: string };
+    assert.equal(body.ok, false, route);
+    assert.equal(body.code, 'RATE_LIMIT_EXCEEDED', route);
+  };
+  const lookupAt = (ip: string) =>
+    lookup.GET(
+      new NextRequest('http://localhost/api/v1/rate/extension/lookup', {
+        headers: { 'x-forwarded-for': ip },
+      })
+    );
+  for (let i = 0; i < 60; i++) {
+    assert.notEqual((await lookupAt('198.51.100.30')).status, 429);
+  }
+  await expectLimited(await lookupAt('198.51.100.30'), 'extension lookup');
+  const ingestAt = (ip: string) =>
+    ingest.POST(
+      new NextRequest('http://localhost/api/v1/rate/extension/ingest', {
+        method: 'POST',
+        headers: { 'x-forwarded-for': ip, 'content-type': 'application/json' },
+        body: '{}',
+      })
+    );
+  for (let i = 0; i < 15; i++) {
+    assert.notEqual((await ingestAt('198.51.100.31')).status, 429);
+  }
+  await expectLimited(await ingestAt('198.51.100.31'), 'extension ingest');
+  console.warn(
+    '  ✅ The extension routes answer 429 with a code and Retry-After'
+  );
+}
+
+type Json = Record<string, unknown>;
+
+/**
+ * The schema at `path` in the OpenAPI document: a segment is a property
+ * name, `[]` an array's items and `*` an object's additionalProperties.
+ * `$ref`, `allOf` and `anyOf` are followed. Null when the path is not
+ * documented.
+ */
+function specSchemaAt(spec: Json, schema: unknown, path: string[]): unknown {
+  const resolve = (node: unknown): Json | null => {
+    if (!node || typeof node !== 'object') return null;
+    const ref = (node as Json).$ref;
+    if (typeof ref === 'string') {
+      const name = ref.replace('#/components/schemas/', '');
+      const schemas = (spec.components as Json).schemas as Json;
+      return resolve(schemas[name]);
+    }
+    return node as Json;
+  };
+  const step = (node: unknown, seg: string): unknown[] => {
+    const s = resolve(node);
+    if (!s) return [];
+    const found: unknown[] = [];
+    for (const key of ['allOf', 'anyOf'] as const) {
+      if (Array.isArray(s[key])) {
+        for (const branch of s[key] as unknown[]) {
+          found.push(...step(branch, seg));
+        }
+      }
+    }
+    if (seg === '[]' && s.items) found.push(s.items);
+    else if (seg === '*' && typeof s.additionalProperties === 'object') {
+      found.push(s.additionalProperties);
+    } else if (s.properties && seg in (s.properties as Json)) {
+      found.push((s.properties as Json)[seg]);
+    }
+    return found;
+  };
+  let nodes: unknown[] = [schema];
+  for (const seg of path) {
+    nodes = nodes.flatMap((n) => step(n, seg));
+    if (nodes.length === 0) return null;
+  }
+  return nodes[0] ?? null;
+}
+
+/**
+ * Every value at `path` in a response body: `[]` takes every array element
+ * and `*` every object value. Empty when the path is missing.
+ */
+function bodyValuesAt(body: unknown, path: string[]): unknown[] {
+  let nodes: unknown[] = [body];
+  for (const seg of path) {
+    const next: unknown[] = [];
+    for (const node of nodes) {
+      if (!node || typeof node !== 'object') continue;
+      if (seg === '[]') {
+        if (Array.isArray(node)) next.push(...node);
+      } else if (seg === '*') {
+        next.push(...Object.values(node as Json));
+      } else if (seg in (node as Json)) {
+        next.push((node as Json)[seg]);
+      }
+    }
+    nodes = next;
+  }
+  return nodes;
+}
+
+/**
+ * Whether `value` fits the documented schema's `type` (`integer` must be a
+ * whole number, `null` must be listed) and `enum`, following `$ref`, `allOf`
+ * and `anyOf`/`oneOf`. A schema without a type accepts anything.
+ */
+function valueFits(spec: Json, schema: unknown, value: unknown): boolean {
+  if (!schema || typeof schema !== 'object') return true;
+  const s = schema as Json;
+  if (typeof s.$ref === 'string') {
+    const name = s.$ref.replace('#/components/schemas/', '');
+    return valueFits(
+      spec,
+      ((spec.components as Json).schemas as Json)[name],
+      value
+    );
+  }
+  for (const key of ['anyOf', 'oneOf'] as const) {
+    if (Array.isArray(s[key])) {
+      return (s[key] as unknown[]).some((b) => valueFits(spec, b, value));
+    }
+  }
+  if (Array.isArray(s.allOf)) {
+    if (!(s.allOf as unknown[]).every((b) => valueFits(spec, b, value))) {
+      return false;
+    }
+  }
+  if (Array.isArray(s.enum) && !(s.enum as unknown[]).includes(value)) {
+    return false;
+  }
+  if (s.type === undefined) return true;
+  const types = Array.isArray(s.type)
+    ? (s.type as string[])
+    : [s.type as string];
+  const kind =
+    value === null ? 'null' : Array.isArray(value) ? 'array' : typeof value;
+  return types.some((t) =>
+    t === 'integer'
+      ? typeof value === 'number' && Number.isInteger(value)
+      : t === 'number'
+        ? typeof value === 'number'
+        : t === kind
+  );
+}
+
+// The OpenAPI document describes what the routes answer (DOS/Rate#1357,
+// #1358, #1359, #1363): each documented path below is checked in the
+// document and in a real response body.
+async function testSpecMatchesBodies() {
+  const { NextRequest } = await import('next/server');
+  const { buildRateOpenApiSpec } = await import('@/server/rate/openapi');
+  const spec = buildRateOpenApiSpec('https://rate.vn') as unknown as Json;
+  const paths = spec.paths as Record<string, Record<string, Json>>;
+
+  const okSchema = (route: string, method = 'get', status = '200') =>
+    (
+      (paths[route]![method]!.responses as Json)[status] as {
+        content: { 'application/json': { schema: unknown } };
+      }
+    ).content['application/json'].schema;
+
+  const expectPaths = (
+    route: string,
+    body: unknown,
+    documented: string[],
+    status = '200'
+  ) => {
+    for (const dotted of documented) {
+      const path = dotted.split('.');
+      assert.ok(
+        specSchemaAt(spec, okSchema(route, 'get', status), path),
+        `${route} ${status}: the document has ${dotted}`
+      );
+      const values = bodyValuesAt(body, path);
+      assert.ok(
+        values.length > 0,
+        `${route} ${status}: the body has ${dotted}`
+      );
+      // The values fit the documented type, nullability and enum, so an
+      // integer documented for a decimal (or a missing null) fails here.
+      const documentedSchema = specSchemaAt(
+        spec,
+        okSchema(route, 'get', status),
+        path
+      );
+      for (const value of values) {
+        assert.ok(
+          valueFits(spec, documentedSchema, value),
+          `${route} ${status}: ${dotted} = ${JSON.stringify(value)} does not fit the document`
+        );
+      }
+    }
+  };
+  const radar = ['verdict', 'savingsPct', 'fakeMarkupPct', 'spreadPct'];
+  const radarDetail = [...radar, 'genuineDeal', 'fakeSaleTrap', 'priceSpread'];
+  const under = (prefix: string, keys: string[]) =>
+    keys.map((k) => `${prefix}.${k}`);
+
+  const PHONE = phoneShaped(
+    '55555555-5555-4555-8555-555555555555',
+    'apple-iphone-16-128gb',
+    'smartphones'
+  );
+  const PHONE_2 = phoneShaped(
+    '66666666-6666-4666-8666-666666666666',
+    'apple-iphone-16-256gb',
+    'smartphones'
+  );
+  const get = (url: string, ip = '203.0.113.7') =>
+    new NextRequest(`http://localhost${url}`, {
+      headers: { 'x-forwarded-for': ip },
+    });
+
+  // GET /products: `data[].deal_radar`, not `radar_signal` (#1357).
+  catalog = [PHONE];
+  const list = await listProducts('category=smartphones');
+  assert.equal(list.status, 200);
+  expectPaths('/api/v1/rate/products', list.body, [
+    'ok',
+    'category',
+    'count',
+    'offset',
+    'data.[].slug',
+    'data.[].sale_state',
+    ...under('data.[].deal_radar', radar),
+  ]);
+  assert.equal(
+    specSchemaAt(spec, okSchema('/api/v1/rate/products'), [
+      'data',
+      '[]',
+      'radar_signal',
+    ]),
+    null
+  );
+
+  // GET /products/{slug}: `data.radarSignal`, camelCase, with the entries.
+  masterRows = [PHONE];
+  const detail = await import('../products/[slug]/route');
+  const detailRes = await detail.GET(
+    get(`/api/v1/rate/products/${PHONE.slug}`),
+    { params: Promise.resolve({ slug: PHONE.slug }) } as never
+  );
+  assert.equal(detailRes.status, 200);
+  const detailBody = await detailRes.json();
+  expectPaths('/api/v1/rate/products/{slug}', detailBody, [
+    'data.product.sale_state',
+    'data.offers',
+    'data.reviews',
+    'data.priceHistory',
+    'data.reviewSummary',
+    ...under('data.radarSignal', radarDetail),
+  ]);
+  assert.ok(!('radar_signal' in detailBody));
+
+  // GET /compare: `data[].deal_radar` per product, no top-level map.
+  const compare = await import('../compare/route');
+  const cmp = await compare.GET(
+    get(`/api/v1/rate/compare?slugs=${PHONE.slug}`)
+  );
+  assert.equal(cmp.status, 200);
+  const cmpBody = await cmp.json();
+  expectPaths('/api/v1/rate/compare', cmpBody, [
+    'count',
+    'locked_category',
+    'requested_slugs',
+    'excluded_cross_category_slugs',
+    'data.[].canonical_href',
+    'data.[].sale_state',
+    ...under('data.[].deal_radar', radar),
+  ]);
+  assert.ok(!('deal_radar' in cmpBody));
+
+  // GET /watchlist: `items` keyed by slug, not a `data` array (#1358).
+  const watchlist = await import('../watchlist/route');
+  const watch = await watchlist.GET(
+    get(`/api/v1/rate/watchlist?slugs=${PHONE.slug}`)
+  );
+  assert.equal(watch.status, 200);
+  const watchBody = await watch.json();
+  expectPaths('/api/v1/rate/watchlist', watchBody, [
+    'count',
+    'items.*.slug',
+    'items.*.master_product_id',
+    'items.*.offer_platforms',
+    ...under('items.*.deal_radar', radar),
+    ...under('items.*.radar_signal', radarDetail),
+  ]);
+  assert.ok(PHONE.slug in watchBody.items);
+  assert.ok(!('data' in watchBody));
+
+  // GET /lookup and /inspect: `data.radarSignal`.
+  const lookup = await import('../lookup/route');
+  const lookupRes = await lookup.GET(
+    get(`/api/v1/rate/lookup?q=${PHONE.slug}`)
+  );
+  assert.equal(lookupRes.status, 200);
+  expectPaths('/api/v1/rate/lookup', await lookupRes.json(), [
+    'data.query',
+    'data.matchedType',
+    'data.allOffers',
+    'data.merchantProfile',
+    'data.radarSignal',
+  ]);
+  const inspect = await import('../inspect/route');
+  const inspectRes = await inspect.GET(
+    get(`/api/v1/rate/inspect?url=${PHONE.slug}`)
+  );
+  assert.equal(inspectRes.status, 200, 'url is an alternative to q');
+  expectPaths('/api/v1/rate/inspect', await inspectRes.json(), [
+    'data.matchedType',
+    'data.canonicalUrl',
+    'data.gatekeeper.isAccessory',
+    'data.priceVerdict.verdict',
+    'data.radarSignal',
+  ]);
+
+  // GET /versus: `deal_radar.productA` and the per-product signals.
+  masterRows = [PHONE, PHONE_2];
+  const versus = await import('../versus/route');
+  const vs = await versus.GET(
+    get(`/api/v1/rate/versus?pair=${PHONE.slug}-vs-${PHONE_2.slug}`)
+  );
+  assert.equal(vs.status, 200);
+  expectPaths('/api/v1/rate/versus', await vs.json(), [
+    'is_tie',
+    'versus_pair',
+    ...under('deal_radar.productA', radar),
+    ...under('deal_radar.productB', radar),
+    ...under('product_a.deal_radar', radar),
+    ...under('product_b.radar_signal', radar),
+  ]);
+
+  // GET /reviews: the list envelope (#1363).
+  masterRows = [PHONE];
+  const reviews = await import('../reviews/route');
+  const rv = await reviews.GET(get(`/api/v1/rate/reviews?slug=${PHONE.slug}`));
+  assert.equal(rv.status, 200);
+  expectPaths('/api/v1/rate/reviews', await rv.json(), [
+    'masterProductId',
+    'count',
+    'totalCount',
+    'summary',
+    'data',
+  ]);
+
+  // Merchants: `data[]` + `count`, the directory's `data.items`, and a
+  // `review_risk_score` that is an integer or null (#1363).
+  const ANALYSED = {
+    id: '77777777-7777-4777-8777-777777777777',
+    platform: 'shopee',
+    platform_shop_id: '1001',
+    name: 'Analysed store',
+    is_official: true,
+    follower_count: 10,
+    // A decimal combined score and an integer review score, as stored.
+    risk_score: 6.5,
+    review_risk_score: 6,
+    review_risk_breakdown: { total_reviews: 12 },
+  };
+  const UNANALYSED = {
+    ...ANALYSED,
+    id: '88888888-8888-4888-8888-888888888888',
+    platform_shop_id: '1002',
+    name: 'Store without reviews',
+    review_risk_breakdown: null,
+  };
+  merchantRows = [ANALYSED, UNANALYSED];
+  const merchants = await import('../merchants/route');
+  const mRes = await merchants.GET(get('/api/v1/rate/merchants'));
+  assert.equal(mRes.status, 200);
+  const mBody = await mRes.json();
+  expectPaths('/api/v1/rate/merchants', mBody, [
+    'count',
+    'data.[].review_risk_score',
+    'data.[].risk_score',
+    'data.[].trust_score',
+  ]);
+  const scoreType = (
+    specSchemaAt(spec, okSchema('/api/v1/rate/merchants'), [
+      'data',
+      '[]',
+      'review_risk_score',
+    ]) as Json
+  ).type;
+  assert.deepEqual(scoreType, ['integer', 'null']);
+  assert.deepEqual(
+    mBody.data
+      .map((m: { review_risk_score: unknown }) => m.review_risk_score)
+      .sort(),
+    [6, null]
+  );
+  const directory = await import('../merchants/directory/route');
+  const dRes = await directory.GET(get('/api/v1/rate/merchants/directory'));
+  assert.equal(dRes.status, 200);
+  expectPaths('/api/v1/rate/merchants/directory', await dRes.json(), [
+    'data.items.[].review_risk_score',
+    'data.matched',
+    'data.offset',
+  ]);
+  assert.ok(
+    specSchemaAt(spec, okSchema('/api/v1/rate/merchants/{id}'), [
+      'data',
+      'review_risk_score',
+    ])
+  );
+  merchantRows = [];
+
+  // Error bodies are ApiError: `{ ok: false, error, code? }` (#1359).
+  const apiError = (spec.components as Json).schemas as Json;
+  assert.deepEqual((apiError.ApiError as Json).required, ['ok', 'error']);
+  const errorBodies: Array<[string, string, Response]> = [
+    [
+      '/api/v1/rate/compare',
+      '400',
+      await compare.GET(get('/api/v1/rate/compare')),
+    ],
+    [
+      '/api/v1/rate/lookup',
+      '400',
+      await lookup.GET(get('/api/v1/rate/lookup')),
+    ],
+    [
+      '/api/v1/rate/inspect',
+      '400',
+      await inspect.GET(get('/api/v1/rate/inspect')),
+    ],
+    [
+      '/api/v1/rate/reviews',
+      '400',
+      await reviews.GET(get('/api/v1/rate/reviews')),
+    ],
+  ];
+  masterRows = [];
+  errorBodies.push([
+    '/api/v1/rate/reviews',
+    '404',
+    await reviews.GET(get('/api/v1/rate/reviews?slug=does-not-exist-xyz')),
+  ]);
+  const merchantById = await import('../merchants/[id]/route');
+  errorBodies.push([
+    '/api/v1/rate/merchants/{id}',
+    '404',
+    await merchantById.GET(get('/api/v1/rate/merchants/nope'), {
+      params: Promise.resolve({ id: 'nope' }),
+    } as never),
+  ]);
+  for (const [route, status, res] of errorBodies) {
+    assert.equal(String(res.status), status, `${route} ${status}`);
+    const body = await res.json();
+    assert.equal(body.ok, false, `${route} ${status}`);
+    assert.equal(typeof body.error, 'string', `${route} ${status}`);
+    assert.ok(
+      body.code === undefined || typeof body.code === 'string',
+      `${route} ${status}`
+    );
+    assert.equal(
+      (
+        okSchema(route, 'get', status) as {
+          $ref?: string;
+        }
+      ).$ref,
+      '#/components/schemas/ApiError',
+      `${route} documents its ${status} as ApiError`
+    );
+  }
+
+  // Every documented 4xx references ApiError.
+  for (const [route, ops] of Object.entries(paths)) {
+    for (const [method, op] of Object.entries(ops)) {
+      for (const [status, res] of Object.entries(op.responses as Json)) {
+        if (!status.startsWith('4')) continue;
+        const ref = (
+          res as {
+            content?: { 'application/json'?: { schema?: { $ref?: string } } };
+          }
+        ).content?.['application/json']?.schema?.$ref;
+        assert.equal(
+          ref,
+          '#/components/schemas/ApiError',
+          `${method.toUpperCase()} ${route} ${status} references ApiError`
+        );
+      }
+    }
+  }
+
+  // The extension lookup answers its result under `data` (route not run
+  // here: the lookup itself is covered above).
+  const extLookup = okSchema('/api/v1/rate/extension/lookup');
+  for (const key of radarDetail) {
+    assert.ok(specSchemaAt(spec, extLookup, ['data', 'radarSignal', key]));
+  }
+  assert.equal(specSchemaAt(spec, extLookup, ['radar_signal']), null);
+
+  // /lookup and /inspect: 429 with Retry-After, and `q` or `url`.
+  for (const route of ['/api/v1/rate/lookup', '/api/v1/rate/inspect']) {
+    const op = paths[route]!.get!;
+    const limited = (op.responses as Json)['429'] as Json;
+    assert.ok(limited, `${route} documents 429`);
+    assert.ok(
+      (limited.headers as Json)['Retry-After'],
+      `${route} 429 documents Retry-After`
+    );
+    assert.match(String(limited.description), /RATE_LIMIT_EXCEEDED/);
+    const params = op.parameters as Array<{ name: string; required?: boolean }>;
+    for (const name of ['q', 'url']) {
+      const param = params.find((p) => p.name === name);
+      assert.ok(param, `${route} documents ${name}`);
+      assert.notEqual(param.required, true, `${route} ${name} is optional`);
+    }
+  }
+  catalog = [];
+  console.warn('  ✅ The OpenAPI document matches the API v1 response bodies');
+}
+
 async function main() {
   console.warn('🧪 API v1 category spec view suite (DOS/Rate#1184)');
   await testProductFilters();
   await testDetailAndCompare();
   await testExtensionLookup();
+  await testModelMatch();
+  await testSpecMatchesBodies();
+  await testBoundedInputs();
   await testInspectRateLimit();
+  await testExtensionRateLimit();
 }
 
 main().catch((err) => {

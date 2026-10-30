@@ -188,6 +188,19 @@ SET ram_gb = 1, storage_gb = 64, screen_size_inch = 1, has_5g = true,
   key_specs = '{"screen": "1 inch", "camera": "E2E Mic Array", "ram": "1GB", "storage": "64GB", "battery": "515 mAh"}'
 WHERE slug = 'e2e-bud-002';
 
+-- A watch stored with a 5G flag, read through the smartwatch template: its
+-- page must not show 5G (DOS/Rate#1142). There is no smartwatch category
+-- row, so its category comes from metadata; a phone under /smartwatches now
+-- 308s to /smartphones (DOS/Rate#1366), so the test needs a real watch.
+INSERT INTO rate.master_products
+  (id, category_id, brand, model, model_key, name, slug, screen_size_inch, battery_mah, has_5g,
+   min_price, max_price, merchant_count, status, metadata, specifications)
+VALUES ('22222222-2222-4222-8222-222222221366', NULL, 'Apple', 'Watch E2E Cellular', 'apple_watch_e2e_cellular',
+  'Apple Watch E2E Cellular', 'apple-watch-e2e-cellular', 1.9, 300, true, 0, 0, 0, 'published',
+  '{"category_slug": "smartwatches"}',
+  '{"category_slug": "smartwatches", "display": {"size_inch": 1.9}, "cellular": {"has_5g": true},
+    "battery": {"capacity_mah": 300}}');
+
 -- A phone whose six 5-star reviews are mostly star-only, one of them a
 -- sponsored post: the product page shows the star-distribution warning and a
 -- disclosure badge, which must follow the active locale (DOS/Rate#566). Its

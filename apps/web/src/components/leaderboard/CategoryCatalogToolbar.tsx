@@ -21,6 +21,7 @@ import {
   type CrossPlatformDealRadarResponse,
 } from '@/lib/deal-radar';
 import { useDealRadarIndex } from '@/components/radar/use-deal-radar';
+import { versusHref } from '@/lib/item-compare';
 
 const CATALOG_CONTROL_CHARS_RE = /\p{Cc}+/gu;
 
@@ -307,7 +308,7 @@ export default function CategoryCatalogToolbar({
             </select>
             {effectiveSlugA && effectiveSlugB && (
               <Link
-                href={`/compare/${effectiveSlugA}-vs-${effectiveSlugB}`}
+                href={versusHref(effectiveSlugA, effectiveSlugB)}
                 className="btn btn-sm btn-primary fw-semibold px-3"
                 data-testid="catalog-1v1-go-btn"
               >

@@ -965,6 +965,54 @@ export function productImageUrl(product: {
   ]);
 }
 
+/**
+ * A store CDN image at about the width it is shown (DOS/Rate#1328). The two
+ * CDNs Rate hotlinks resize by URL: FPT Shop's thumbor (`/unsafe/{w}x0/`,
+ * WebP via a filter) and CellphoneS (`/{w}x/`). Their originals are
+ * 600-800 px PNGs of up to 700 KB, shown in 52 px thumbnails. Any other URL is
+ * returned unchanged. `width` is in image pixels (allow for the device pixel
+ * ratio), rounded and kept within 32-1024.
+ */
+export function sizedStoreImageUrl(
+  url: string | null | undefined,
+  width: number
+): string | null {
+  if (typeof url !== 'string' || !url) return url ?? null;
+  const w = Math.min(1024, Math.max(32, Math.round(Number(width) || 0)));
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return url;
+  }
+  if (parsed.protocol !== 'https:') return url;
+  if (parsed.hostname === 'cdn2.fptshop.com.vn') {
+    // Only the plain form `/unsafe/[WxH/][filters:.../]image` is rewritten.
+    // Other Thumbor options (fit-in, smart, trim, crop, align, meta) would be
+    // read as part of the image path, so those URLs are left as they are.
+    const m = /^\/unsafe\/(?:-?\d*x-?\d*\/)?(?:filters:[^/]*\/)?(.+)$/.exec(
+      parsed.pathname
+    );
+    if (!m?.[1]) return url;
+    if (
+      /^(?:(?:adaptive-|full-)?fit-in|smart|trim(?::[^/]*)?|meta|left|right|center|top|middle|bottom|-?\d*x-?\d*|\d+x\d+:\d+x\d+|filters:[^/]*)(?:\/|$)/.test(
+        m[1]
+      )
+    ) {
+      return url;
+    }
+    parsed.pathname = `/unsafe/${w}x0/filters:format(webp)/${m[1]}`;
+    return parsed.toString();
+  }
+  if (parsed.hostname === 'cdn2.cellphones.com.vn') {
+    const m = /^\/(?:\d+x\d*\/)?(media\/.+)$/.exec(parsed.pathname);
+    if (!m) return url;
+    parsed.pathname = `/${w}x/${m[1]}`;
+    return parsed.toString();
+  }
+  return url;
+}
+
 export function resolveProductImageUrl(
   slugOrProduct?:
     | string
@@ -1064,7 +1112,19 @@ export function getMasterProductCategorySlug(
       .category_slug === 'string'
       ? (product.specifications as { category_slug: string }).category_slug
       : undefined;
-  const resolvedCat = catSlugFromMap || catSlugFromMeta || catSlugFromSpecs;
+  // Each hint trimmed and lower-cased, and the first canonical one wins, so
+  // links, the sitemap and the category-path redirect agree (DOS/Rate#1366).
+  const resolvedCat = [catSlugFromMap, catSlugFromMeta, catSlugFromSpecs]
+    .map((hint) =>
+      typeof hint === 'string'
+        ? hint
+            .replace(/\p{Cc}+/gu, '')
+            .trim()
+            .toLowerCase()
+            .slice(0, 64)
+        : undefined
+    )
+    .find((hint) => isCanonicalCategorySlug(hint));
 
   if (isCanonicalCategorySlug(resolvedCat)) {
     return resolvedCat;
@@ -1141,6 +1201,41 @@ export function getMasterProductHref(
   return safeSlug
     ? `/${catSlug}/${encodeURIComponent(safeSlug)}`
     : `/${catSlug}`;
+}
+
+/**
+ * A product's `metadata` or `specifications` reduced to its category hint,
+ * trimmed, lower-case and canonical only (null otherwise), the way
+ * `getMasterProductCategorySlug` reads hints (DOS/Rate#1366).
+ */
+export const categorySlugOnly = (
+  value: Record<string, unknown> | null | undefined
+): { category_slug: string } | null => {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  if (typeof value.category_slug !== 'string') return null;
+  const slug = value.category_slug
+    .replace(/\p{Cc}+/gu, '')
+    .trim()
+    .toLowerCase()
+    .slice(0, 64);
+  return isCanonicalCategorySlug(slug) ? { category_slug: slug } : null;
+};
+
+/**
+ * The product's own URL when it is asked for under another category's path
+ * (`/laptops/<phone>`), else null. Built with `getMasterProductHref`, the way
+ * the site links products and lists them in the sitemap, so a redirect lands
+ * on the listed URL (DOS/Rate#1366). Null too when no product URL can be
+ * built: the page then renders as asked.
+ */
+export function foreignCategoryProductHref(
+  product: Parameters<typeof getMasterProductHref>[0],
+  categoryBasePath: string,
+  categorySlugById: ReadonlyMap<string, string>
+): string | null {
+  const href = getMasterProductHref(product, categorySlugById);
+  if (!/^\/[a-z]+\/[^/]+$/.test(href)) return null;
+  return href.startsWith(`${categoryBasePath}/`) ? null : href;
 }
 
 export interface MerchantListFilterParams {

@@ -20,6 +20,8 @@ const SAME_VOTE_TOKEN = 'same-vote-token';
 // What the stubbed PostgREST answers a VOTER_TOKEN vote with (code 42501).
 let voteRejectionMessage =
   'review_votes: account is not eligible to vote on reviews';
+// Its SQLSTATE: 42501 (eligibility), or 54000 (the hourly vote limit).
+let voteRejectionCode = '42501';
 // A JWT-shaped access token for the cookie session (supabase-js reads its exp).
 const b64url = (o: unknown) =>
   Buffer.from(JSON.stringify(o)).toString('base64url');
@@ -119,7 +121,7 @@ globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
     headers.authorization === `Bearer ${VOTER_TOKEN}`
   ) {
     return jsonResponse(403, {
-      code: '42501',
+      code: voteRejectionCode,
       message: voteRejectionMessage,
     });
   }
@@ -297,7 +299,7 @@ async function testReviews() {
   for (const [sqlstate, status, code] of [
     ['42501', 403, 'FORBIDDEN'],
     ['23505', 409, 'DUPLICATE_REVIEW'],
-    ['54000', 429, 'RATE_LIMITED'],
+    ['54000', 429, 'RATE_LIMIT_EXCEEDED'],
     ['22023', 400, 'REJECTED'],
   ] as const) {
     rpcResponder = () => ({
@@ -308,6 +310,12 @@ async function testReviews() {
       post('/api/v1/rate/reviews', validReview, GOOD_TOKEN) as Req
     );
     assert.equal(res.status, status, `SQLSTATE ${sqlstate}`);
+    // The 24-hour review limit carries its window as Retry-After (#1400).
+    assert.equal(
+      res.headers.get('retry-after'),
+      status === 429 ? '86400' : null,
+      `SQLSTATE ${sqlstate}`
+    );
     const rejected = await res.json();
     assert.equal(rejected.ok, false);
     assert.equal(rejected.code, code);
@@ -735,6 +743,27 @@ async function testCookieSessions() {
     'a 42501 that is not the eligibility guard must not answer VOTER_NOT_ELIGIBLE (#771)'
   );
   assert.equal((await grantErrorVoteRes.json()).code, 'VOTE_REJECTED');
+
+  // The hourly vote limit answers like the other rate limits: a code and
+  // Retry-After, the limit's one-hour window (DOS/Rate#1400).
+  voteRejectionCode = '54000';
+  voteRejectionMessage =
+    'review_votes: rate limit exceeded (60 vote actions per hour)';
+  const limitedVoteRes = await postVote(
+    new Request(`https://rate.vn/api/reviews/${reviewId}/vote`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${VOTER_TOKEN}`,
+      },
+      body: JSON.stringify({ voteType: 'up' }),
+    }) as VoteReq,
+    { params: Promise.resolve({ id: reviewId }) }
+  );
+  assert.equal(limitedVoteRes.status, 429);
+  assert.equal(limitedVoteRes.headers.get('retry-after'), '3600');
+  assert.equal((await limitedVoteRes.json()).code, 'RATE_LIMIT_EXCEEDED');
+  voteRejectionCode = '42501';
 
   // The same vote again writes nothing, so it cannot flush caches (#1306).
   calls.length = 0;

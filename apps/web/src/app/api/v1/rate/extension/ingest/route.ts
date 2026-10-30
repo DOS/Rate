@@ -9,6 +9,9 @@ import {
   extractClientRateLimitKey,
   isSafeCrowdIngestHttpUrl,
   jsonApiError,
+  payloadTooLargeResponse,
+  readBoundedJsonBody,
+  rateLimitExceededResponse,
 } from '@/server/rate/api-handler';
 import { parseEcommerceUrlOrQuery } from '@/lib/rate-api';
 
@@ -89,17 +92,16 @@ export async function POST(request: NextRequest) {
     const clientIp = extractClientRateLimitKey(request.headers);
 
     if (!ingestRateLimiter.allow(clientIp)) {
-      return NextResponse.json(
-        {
-          ok: false,
-          error:
-            'Rate limit exceeded. Too many crowd signals from this address; try again in a minute.',
-        },
-        { status: 429, headers: CORS_HEADERS }
+      // The same 429 as /lookup and /inspect (DOS/Rate#1377).
+      return rateLimitExceededResponse(
+        'Rate limit exceeded. Too many crowd signals from this address; try again in a minute.',
+        CORS_HEADERS
       );
     }
 
-    const body: unknown = await request.json().catch(() => null);
+    const bodyRead = await readBoundedJsonBody(request);
+    if (bodyRead.tooLarge) return payloadTooLargeResponse(CORS_HEADERS);
+    const body: unknown = bodyRead.value;
     const parsed = CrowdIngestSchema.safeParse(body);
 
     if (!parsed.success) {

@@ -29,17 +29,25 @@ export type CompareResolution =
   | null;
 
 // `slug@256gb` pins a size (design doc 5.1); the key is the literal segment.
-const PIN_REGEX = /^([a-z0-9][a-z0-9._-]{0,159})@([a-z0-9][a-z0-9-]{0,40})$/;
+const PIN_REGEX = /^([a-z0-9][a-z0-9._-]{0,159})@([a-z0-9][a-z0-9-]{0,40})$/i;
 
 /** A compare token: an Item or variant slug, optionally pinned to a size. */
-export function parseCompareToken(raw: string): {
+export function parseCompareToken(
+  raw: string,
+  /**
+   * Keep the slug's letter case, for the exact catalogue lookup (an Item
+   * slug with capitals, DOS/Rate#1383). The size key is always lower case.
+   */
+  keepCase = false
+): {
   slug: string;
   variantKey: string | null;
 } {
-  const clean = typeof raw === 'string' ? raw.trim().toLowerCase() : '';
+  const trimmed = typeof raw === 'string' ? raw.trim() : '';
+  const clean = keepCase ? trimmed : trimmed.toLowerCase();
   const pinned = PIN_REGEX.exec(clean);
   return pinned
-    ? { slug: pinned[1]!, variantKey: pinned[2]! }
+    ? { slug: pinned[1]!, variantKey: pinned[2]!.toLowerCase() }
     : { slug: clean, variantKey: null };
 }
 
@@ -105,6 +113,98 @@ export function dedupeCompareTargets<
   return out;
 }
 
+/** True when `{a}-vs-{b}` parses back to exactly `a` and `b`. */
+function versusRoundTrips(slugA: string, slugB: string): boolean {
+  const parts = `${slugA}-vs-${slugB}`.split('-vs-');
+  return parts.length === 2 && parts[0] === slugA && parts[1] === slugB;
+}
+
+/**
+ * A versus pair in its one canonical order: the two slugs sorted (without
+ * regard to case). Each pair has a single URL; the other order 308s to it
+ * (DOS/Rate#1367). When the sorted URL would not parse back to the same two
+ * slugs (a slug ending in "-vs"), the other order is used if it does.
+ */
+export function canonicalVersusOrder(
+  slugA: string,
+  slugB: string
+): [string, string] {
+  const sorted: [string, string] =
+    slugA.toLowerCase() <= slugB.toLowerCase()
+      ? [slugA, slugB]
+      : [slugB, slugA];
+  if (versusRoundTrips(sorted[0], sorted[1])) return sorted;
+  const reversed: [string, string] = [sorted[1], sorted[0]];
+  return versusRoundTrips(reversed[0], reversed[1]) ? reversed : sorted;
+}
+
+/** True when the pair, in this order, makes a versus URL that parses back. */
+export function isParseableVersusPair(slugA: string, slugB: string): boolean {
+  return versusRoundTrips(slugA, slugB);
+}
+
+/**
+ * The two compared products in the URL's order. The compare read does not
+ * keep the order it was asked in, and the page, its title and its canonical
+ * must not flip with it (DOS/Rate#1367). A side the read did not return
+ * stays undefined, so the page 404s instead of comparing a product with
+ * itself.
+ */
+export function inPairOrder<T extends { slug: string }>(
+  compared: readonly T[],
+  pair: readonly string[]
+): [T | undefined, T | undefined] {
+  const bySlug = (slug: string | undefined) =>
+    slug === undefined
+      ? undefined
+      : compared.find((p) => p.slug.toLowerCase() === slug.toLowerCase());
+  return [bySlug(pair[0]), bySlug(pair[1])];
+}
+
+// A catalogue slug as it may appear in a versus URL.
+// Capitals allowed: an Item slug may carry them, and the requested URL is
+// compared exactly with the canonical, so the canonical never redirects to
+// itself (DOS/Rate#1383).
+const VERSUS_URL_SLUG = /^[a-zA-Z0-9][a-zA-Z0-9._-]*$/;
+
+/**
+ * The canonical versus URL when the request named the pair any other way
+ * (the other order, other letter case), else null (DOS/Rate#1367).
+ * `requested` is the `[versus]` param, which Next has already decoded, so a
+ * percent-encoded alias renders with the canonical tag instead of a 308. A pair whose
+ * canonical slugs are not plain catalogue slugs is not redirected: the page
+ * 404s as before.
+ */
+export function versusAliasRedirect(
+  requested: string,
+  canonicalPath: string
+): string | null {
+  const slugs = canonicalPath.replace(/^\/compare\//, '').split('-vs-');
+  if (
+    slugs.length !== 2 ||
+    !slugs.every((slug) => VERSUS_URL_SLUG.test(slug) && !slug.includes('..'))
+  ) {
+    return null;
+  }
+  return `/compare/${requested}` === canonicalPath ? null : canonicalPath;
+}
+
+/**
+ * A catalogue lookup without regard to letter case, given an exact one: the
+ * slug as typed first (an Item slug with capitals), then lower-cased (a
+ * capitalised alias of a lower-case slug). Returns the slug it was found
+ * under (DOS/Rate#1383).
+ */
+export async function lookupSlugAnyCase<T>(
+  slug: string,
+  lookupExact: (slug: string) => Promise<T | null>
+): Promise<{ slug: string; found: T | null }> {
+  const asTyped = await lookupExact(slug);
+  const lower = slug.toLowerCase();
+  if (asTyped || lower === slug) return { slug, found: asTyped };
+  return { slug: lower, found: await lookupExact(lower) };
+}
+
 export type VersusPlan =
   /** Neither side has an Item: today's versus page. */
   | { kind: 'legacy' }
@@ -133,23 +233,42 @@ export function planVersusRoute(
   if (urlSlugA.includes('-vs-') || urlSlugB.includes('-vs-')) {
     return { kind: 'not_found' };
   }
-  const canonical = `/compare/${urlSlugA}-vs-${urlSlugB}`;
-  if (urlSlugA !== sideA.slug || urlSlugB !== sideB.slug) {
+  // One URL per pair, the slugs sorted; the other order 308s there (#1367).
+  const swapped = canonicalVersusOrder(urlSlugA, urlSlugB)[0] !== urlSlugA;
+  // Neither order makes a URL that parses back (a slug ending in "-vs"):
+  // no versus page for it, as for a slug holding "-vs-" (#1275).
+  if (
+    !isParseableVersusPair(
+      swapped ? urlSlugB : urlSlugA,
+      swapped ? urlSlugA : urlSlugB
+    )
+  ) {
+    return { kind: 'not_found' };
+  }
+  const [first, second] = swapped ? [b, a] : [a, b];
+  const [firstSlug, secondSlug] = swapped
+    ? [urlSlugB, urlSlugA]
+    : [urlSlugA, urlSlugB];
+  const canonical = `/compare/${firstSlug}-vs-${secondSlug}`;
+  // Each side comes looked up as typed (then lower-cased) under the slug it
+  // was found under, so the Item URL this redirects to resolves to itself
+  // and renders: no loop for an Item slug with capitals (DOS/Rate#1383).
+  if (firstSlug !== sideA.slug || secondSlug !== sideB.slug) {
     return { kind: 'redirect', to: canonical };
   }
   return {
     kind: 'render',
-    slugA: a.variantSlug,
-    slugB: b.variantSlug,
+    slugA: first.variantSlug,
+    slugB: second.variantSlug,
     canonical,
   };
 }
 
 /**
- * A versus URL for two catalogue slugs, naming their Items when
- * `itemSlugBySlug` maps them (RATE_ITEM_MODEL on), so in-app links need no
- * 308 hop (DOS/Rate#1290). A side whose Item slug holds "-vs-" keeps its
- * own slug; with no map the URL is as before.
+ * The canonical versus URL for two catalogue slugs: the sides in sorted
+ * order (#1367), each named by its Item when `itemSlugBySlug` maps it
+ * (RATE_ITEM_MODEL on), so in-app links need no 308 hop (DOS/Rate#1290). A
+ * side whose Item slug holds "-vs-" keeps its own slug.
  */
 export function versusHref(
   slugA: string,
@@ -160,7 +279,8 @@ export function versusHref(
     const itemSlug = itemSlugBySlug?.[slug];
     return itemSlug && !itemSlug.includes('-vs-') ? itemSlug : slug;
   };
-  return `/compare/${side(slugA)}-vs-${side(slugB)}`;
+  const [first, second] = canonicalVersusOrder(side(slugA), side(slugB));
+  return `/compare/${first}-vs-${second}`;
 }
 
 /**

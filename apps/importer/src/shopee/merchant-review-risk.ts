@@ -1,17 +1,16 @@
 /**
  * Seller-wide review risk (DOS/Rate#691, DOS/Rate#698)
  *
- * Scores a seller with `evaluateMerchantRisk` over all of its analyzed reviews,
- * so every page reads the same persisted number. Reviews are mapped exactly as
+ * Scores a seller with `evaluateMerchantRisk` over all of its analyzed reviews. Reviews are mapped exactly as
  * the web does (`getMerchantsList` in apps/web/src/lib/rate-api.ts); the
  * price-anomaly term uses the same cluster peer floor as ingestion.
  *
- * Used by the backfill job (every seller) and by ingestion (the ingested
- * product's seller), so both write the same score.
+ * Used by the backfill report (every seller) and by ingestion's log (the
+ * ingested product's seller). Neither writes it: Rate Services'
+ * MerchantRiskAuditor owns the stored review risk (DOS/Rate#1341).
  */
 import { MAX_VALID_VND_PRICE } from '@repo/shared-data';
 import {
-  merchantRiskBreakdown,
   type AiReviewAnalyzer,
   type AnalyzedReviewResult,
   type MerchantRiskEvaluation,
@@ -368,39 +367,6 @@ export function normalizeSafeId(raw: unknown): string | null {
   return trimmed;
 }
 
-/** Writes only the review risk columns (and updated_at) on rate.merchants. */
-export async function writeMerchantReviewRisk(
-  supabase: RateSupabaseClient,
-  merchantId: string,
-  risk: MerchantRiskEvaluation,
-  nowIso = new Date().toISOString()
-): Promise<void> {
-  const safeMerchantId = normalizeSafeId(merchantId);
-  if (!safeMerchantId) {
-    throw new Error('Invalid merchantId for writeMerchantReviewRisk');
-  }
-  const rawScore = parseFiniteRiskNumber((risk as { risk_score?: unknown })?.risk_score);
-  const safeScore = Number.isFinite(rawScore)
-    ? Math.min(100, Math.max(0, Math.round(rawScore)))
-    : 0;
-  const safeNowIso =
-    typeof nowIso === 'string' && nowIso.trim() && Number.isFinite(Date.parse(nowIso.trim()))
-      ? new Date(nowIso.trim()).toISOString()
-      : new Date().toISOString();
-  const { error } = await supabase
-    .from('merchants')
-    .update({
-      review_risk_score: safeScore,
-      review_risk_breakdown: merchantRiskBreakdown(risk),
-      review_risk_updated_at: safeNowIso,
-      updated_at: safeNowIso,
-    })
-    .eq('id', safeMerchantId);
-  if (error) {
-    throw new Error(`Failed to write review risk for ${safeMerchantId}: ${error.message}`);
-  }
-}
-
 const ID_CHUNK = 100;
 
 /** Pages through `table` rows whose `column` is one of `ids`, in id chunks. */
@@ -546,17 +512,18 @@ export async function loadAndScoreMerchant(
 }
 
 /**
- * Rescores one seller over all of its reviews and stores the result. Returns
- * null (and writes nothing) when the seller has no analyzed reviews.
+ * Scores one seller over all of its reviews, for the ingest log. Returns null
+ * when the seller has no analyzed reviews. Writes nothing: Rate Services'
+ * MerchantRiskAuditor is the single writer of review_risk_score,
+ * review_risk_breakdown and the risk keys in merchants.metadata, and runs at
+ * the end of the Shopee job (DOS/Rate#1341, DOS/Rate-Services#724).
  */
-export async function rescoreMerchantReviewRisk(
+export async function scoreSellerReviewRisk(
   supabase: RateSupabaseClient,
   analyzer: AiReviewAnalyzer,
   merchantId: string
 ): Promise<MerchantScore | null> {
   const safeMerchantId = normalizeSafeId(merchantId);
   if (!safeMerchantId) return null;
-  const score = await loadAndScoreMerchant(supabase, analyzer, safeMerchantId);
-  if (score) await writeMerchantReviewRisk(supabase, safeMerchantId, score.risk);
-  return score;
+  return loadAndScoreMerchant(supabase, analyzer, safeMerchantId);
 }

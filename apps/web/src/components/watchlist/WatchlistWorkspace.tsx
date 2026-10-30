@@ -44,6 +44,13 @@ import {
   watchlistSizeChoices,
   type WatchlistSizeChoice,
 } from '@/lib/watchlist-sizes';
+import {
+  formatDate,
+  formatDecimal,
+  formatNumber,
+  formatPlainNumber,
+  formatPriceVnd,
+} from '@/lib/locale-format';
 
 interface WatchlistWorkspaceProps {
   catalogProducts: MasterProduct[];
@@ -51,6 +58,8 @@ interface WatchlistWorkspaceProps {
 }
 
 interface LiveWatchlistDeal {
+  /** The product page in its own category (#1380). */
+  product_href?: string;
   slug: string;
   current_min_price: number;
   current_max_price: number;
@@ -695,7 +704,7 @@ export default function WatchlistWorkspace({
                   {t('kpiTotalMinLabel')}
                 </div>
                 <div className="h5 fw-bold rate-tabular mb-0 text-white">
-                  {portfolioStats.totalMinVnd.toLocaleString('vi-VN')} ₫
+                  {formatPriceVnd(portfolioStats.totalMinVnd, locale)}
                 </div>
               </div>
             </div>
@@ -711,7 +720,7 @@ export default function WatchlistWorkspace({
                   {t('kpiTotalTargetLabel')}
                 </div>
                 <div className="h5 fw-bold rate-tabular text-info mb-0">
-                  {portfolioStats.totalTargetVnd.toLocaleString('vi-VN')} ₫
+                  {formatPriceVnd(portfolioStats.totalTargetVnd, locale)}
                 </div>
               </div>
             </div>
@@ -728,8 +737,7 @@ export default function WatchlistWorkspace({
                 </div>
                 <div className="h5 fw-bold rate-tabular text-success mb-0">
                   +
-                  {portfolioStats.totalSpreadSavingsVnd.toLocaleString('vi-VN')}{' '}
-                  ₫
+                  {formatPriceVnd(portfolioStats.totalSpreadSavingsVnd, locale)}
                 </div>
               </div>
             </div>
@@ -747,7 +755,7 @@ export default function WatchlistWorkspace({
                 <div className="h5 fw-bold rate-tabular text-warning mb-0">
                   ★{' '}
                   {avgPortfolioRating > 0
-                    ? `${avgPortfolioRating.toFixed(2)} / 5.0`
+                    ? `${formatDecimal(avgPortfolioRating, locale, 2)} / ${formatDecimal(5, locale, 1)}`
                     : t('kpiNoRating')}
                 </div>
               </div>
@@ -865,7 +873,7 @@ export default function WatchlistWorkspace({
                           </span>
                           <h3 className="h6 fw-bold mb-1">{p.name}</h3>
                           <div className="text-danger fw-bold small">
-                            {minP.toLocaleString('vi-VN')} ₫
+                            {formatPriceVnd(minP, locale)}
                           </div>
                         </div>
                       </div>
@@ -875,10 +883,10 @@ export default function WatchlistWorkspace({
                         className="btn btn-sm btn-primary rounded-pill fw-medium w-100"
                       >
                         {t('quickWatch5PctBtn', {
-                          price: computeWatchlistTargetPrice(
-                            minP,
-                            5
-                          ).toLocaleString('vi-VN'),
+                          price: formatNumber(
+                            computeWatchlistTargetPrice(minP, 5),
+                            locale
+                          ),
                         })}
                       </button>
                     </div>
@@ -902,9 +910,14 @@ export default function WatchlistWorkspace({
             const diffFromTarget = currentMin - item.targetPrice;
             const targetReached =
               currentMin > 0 && currentMin <= item.targetPrice;
+            // The live read names the product's own category; the stored
+            // path is the last resort (#1380).
             const detailHref = live
               ? getMasterProductHref(live)
-              : `${item.categoryPath || '/smartphones'}/${item.slug}`;
+              : typeof dealInfo?.product_href === 'string' &&
+                  /^\/[a-z]+\/[^/?#\s]+$/.test(dealInfo.product_href)
+                ? dealInfo.product_href
+                : `${item.categoryPath || '/smartphones'}/${item.slug}`;
             const bestOffer = dealInfo?.best_offer || null;
             const bestOfferSafeUrl = bestOffer
               ? sanitizeWatchlistBestOfferUrl(bestOffer.url)
@@ -916,7 +929,7 @@ export default function WatchlistWorkspace({
               dealInfo?.radar_signal ?? getRadarSignal(radarIndex, item.slug);
             const parsedAddedTime = Date.parse(item.addedAt);
             const safeAddedDate = Number.isFinite(parsedAddedTime)
-              ? new Date(parsedAddedTime).toLocaleDateString('vi-VN')
+              ? formatDate(parsedAddedTime, locale)
               : '-';
 
             return (
@@ -961,10 +974,10 @@ export default function WatchlistWorkspace({
                           ) : (
                             <span className="badge bg-warning-subtle text-warning-emphasis border-warning-subtle rounded-pill border">
                               {t('badgeWaitingDrop', {
-                                diff: Math.max(
-                                  0,
-                                  diffFromTarget
-                                ).toLocaleString('vi-VN'),
+                                diff: formatNumber(
+                                  Math.max(0, diffFromTarget),
+                                  locale
+                                ),
                               })}
                             </span>
                           )}
@@ -979,8 +992,10 @@ export default function WatchlistWorkspace({
                             {radarSignal.genuineDeal && (
                               <span className="badge bg-success-subtle text-success rounded-pill small">
                                 {t('radarGenuineBadge', {
-                                  pct: radarSignal.genuineDeal
-                                    .savingsVsMedianPct,
+                                  pct: formatPlainNumber(
+                                    radarSignal.genuineDeal.savingsVsMedianPct,
+                                    locale
+                                  ),
                                   platform:
                                     radarSignal.genuineDeal.platform.toUpperCase(),
                                 })}
@@ -991,7 +1006,10 @@ export default function WatchlistWorkspace({
                                 {t('radarFakeBadge', {
                                   platform:
                                     radarSignal.fakeSaleTrap.platform.toUpperCase(),
-                                  pct: radarSignal.fakeSaleTrap.fakeMarkupPct,
+                                  pct: formatPlainNumber(
+                                    radarSignal.fakeSaleTrap.fakeMarkupPct,
+                                    locale
+                                  ),
                                 })}
                               </span>
                             )}
@@ -1002,9 +1020,13 @@ export default function WatchlistWorkspace({
                                   data-testid="watchlist-price-spread-badge"
                                 >
                                   {t('radarSpreadBadge', {
-                                    pct: radarSignal.priceSpread.spreadPct,
-                                    vnd: radarSignal.priceSpread.spreadVnd.toLocaleString(
-                                      'vi-VN'
+                                    pct: formatPlainNumber(
+                                      radarSignal.priceSpread.spreadPct,
+                                      locale
+                                    ),
+                                    vnd: formatNumber(
+                                      radarSignal.priceSpread.spreadVnd,
+                                      locale
                                     ),
                                     cheapest:
                                       radarSignal.priceSpread.cheapestPlatform.toUpperCase(),
@@ -1051,7 +1073,7 @@ export default function WatchlistWorkspace({
                           {t('colCurrentLowest')}
                         </div>
                         <div className="fw-bold text-danger">
-                          {currentMin.toLocaleString('vi-VN')} ₫
+                          {formatPriceVnd(currentMin, locale)}
                         </div>
                         <div
                           className="text-muted"
@@ -1059,7 +1081,7 @@ export default function WatchlistWorkspace({
                         >
                           {currentMin !== currentMax
                             ? t('highestPriceSub', {
-                                price: currentMax.toLocaleString('vi-VN'),
+                                price: formatNumber(currentMax, locale),
                               })
                             : t('sellersCountSub', {
                                 count:
@@ -1077,7 +1099,7 @@ export default function WatchlistWorkspace({
                           {t('colPriceWhenAdded')}
                         </div>
                         <div className="fw-semibold text-dark">
-                          {item.priceWhenAdded.toLocaleString('vi-VN')} ₫
+                          {formatPriceVnd(item.priceWhenAdded, locale)}
                         </div>
                         <div
                           className={
@@ -1093,12 +1115,13 @@ export default function WatchlistWorkspace({
                             ? t('diffUnchanged')
                             : diffFromAdded < 0
                               ? t('diffDropped', {
-                                  diff: Math.abs(diffFromAdded).toLocaleString(
-                                    'vi-VN'
+                                  diff: formatNumber(
+                                    Math.abs(diffFromAdded),
+                                    locale
                                   ),
                                 })
                               : t('diffIncreased', {
-                                  diff: diffFromAdded.toLocaleString('vi-VN'),
+                                  diff: formatNumber(diffFromAdded, locale),
                                 })}
                         </div>
                       </div>
@@ -1109,7 +1132,7 @@ export default function WatchlistWorkspace({
                           {t('colTargetPrice')}
                         </div>
                         <div className="fw-bold text-primary">
-                          ≤ {item.targetPrice.toLocaleString('vi-VN')} ₫
+                          ≤ {formatPriceVnd(item.targetPrice, locale)}
                         </div>
                         <button
                           type="button"
@@ -1168,7 +1191,7 @@ export default function WatchlistWorkspace({
                             >
                               {choice.label}
                               {choice.minPrice > 0 &&
-                                ` · ${choice.minPrice.toLocaleString('vi-VN')} ₫`}
+                                ` · ${formatPriceVnd(choice.minPrice, locale)}`}
                             </button>
                           ))}
                         </div>
@@ -1220,10 +1243,11 @@ export default function WatchlistWorkspace({
                           className="small fw-semibold text-primary text-decoration-none"
                         >
                           {t('openDealLink', {
-                            price: (
+                            price: formatNumber(
                               sanitizeWatchlistPrice(bestOffer.price) ||
-                              currentMin
-                            ).toLocaleString('vi-VN'),
+                                currentMin,
+                              locale
+                            ),
                           })}
                         </a>
                       )}

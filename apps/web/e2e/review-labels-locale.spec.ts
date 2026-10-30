@@ -59,7 +59,7 @@ for (const [locale, labels] of Object.entries(LABELS)) {
     const ratingWeight = page.getByTestId('review-rating-weight');
     await expect(ratingWeight).toHaveCount(6);
     await expect(ratingWeight.first()).toHaveText(
-      /^(Trọng số tính điểm|Rating weight|Váha v hodnocení): \d\.\d\dx$/
+      /^(?:(?:Trọng số tính điểm|Rating weight): \d\.\d\d|Váha v hodnocení: \d,\d\d)x$/
     );
     // The model's estimate is labelled as trust, never as a second weight
     // (DOS/Rate#1215).

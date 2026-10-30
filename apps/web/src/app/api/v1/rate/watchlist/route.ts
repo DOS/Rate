@@ -15,6 +15,8 @@ import {
   parseWatchlistSlugsParam,
   resolveWatchlistMasterPriceBounds,
   selectBestOfferFromListings,
+  payloadTooLargeResponse,
+  readBoundedJsonBody,
 } from '@/server/rate/api-handler';
 import {
   authenticateRateRequest,
@@ -23,6 +25,7 @@ import {
   type RpcRejection,
 } from '@/server/rate/request-auth';
 import { createLogger, serializeError } from '@/lib/logger';
+import { getMasterProductHref } from '@/lib/rate-domain-core';
 
 const log = createLogger('api.watchlist');
 
@@ -153,6 +156,9 @@ export async function GET(request: NextRequest) {
         {
           master_product_id: master.id,
           slug: master.slug,
+          // The product page in its own category, so a saved item whose
+          // stored path names another category links straight there (#1380).
+          product_href: getMasterProductHref(master),
           name: master.name,
           brand: master.brand,
           current_min_price: currentMinPrice,
@@ -228,7 +234,10 @@ const PriceAlertBodySchema = z.object({
  */
 export async function POST(request: NextRequest) {
   try {
-    const rawBody: unknown = await request.json().catch(() => null);
+    const bodyRead = await readBoundedJsonBody(request);
+    if (bodyRead.tooLarge)
+      return payloadTooLargeResponse(WATCHLIST_CORS_HEADERS);
+    const rawBody: unknown = bodyRead.value;
 
     const auth = await authenticateRateRequest(
       request,

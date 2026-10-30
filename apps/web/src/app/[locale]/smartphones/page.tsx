@@ -2,6 +2,7 @@ import { Suspense } from 'react';
 import type { Metadata } from 'next';
 import { getTranslations, setRequestLocale } from 'next-intl/server';
 import { Link } from '@/lib/navigation';
+import { IntentLink } from '@/components/elementary/IntentLink';
 import {
   getCachedCategoryDirectoryFacets,
   getCachedMasterProducts,
@@ -46,8 +47,16 @@ import {
 import type { KeySpecs, ProductSpecifications } from '@repo/shared-data';
 import { applyCategorySpecTemplate } from '@repo/shared-data/rules';
 import ClientMessages from '@/components/providers/ClientMessages';
-import BootstrapClient from '@/app/BootstrapClient';
+import CatalogSortDropdown from '../components/catalog-sort-dropdown';
 import { productImageUrl } from '@/lib/rate-domain-core';
+import {
+  localizeDecimalPoints,
+  formatDecimal,
+  formatNumber,
+  formatPlainNumber,
+  formatPriceVnd,
+} from '@/lib/locale-format';
+import { versusHref } from '@/lib/item-compare';
 
 // Reads searchParams, so it renders per request. The [locale] layout's
 // generateStaticParams would otherwise make it static, and the searchParams
@@ -288,7 +297,7 @@ export async function CategoryCatalogContent({
   if (minRating > 0) {
     activeChips.push({
       id: 'rating',
-      label: `★ ${minRating.toFixed(1)}+`,
+      label: `★ ${formatDecimal(minRating, locale, 1)}+`,
       removeHref: buildFilterHref(basePath, rawSearch, { rating: null }),
     });
   }
@@ -401,9 +410,6 @@ export async function CategoryCatalogContent({
             __html: JSON.stringify(structuredData).replace(/</g, '\\u003c'),
           }}
         />
-        {/* Bootstrap JS (bundled, not a CDN) drives only the catalog's sort
-        dropdown and filter drawer, so other pages skip it (DOS/Rate#754). */}
-        <BootstrapClient />
 
         {/* Hero Banner (DESIGN.md v2.0 Dark Obsidian + DOS Crimson Glow) */}
         <div
@@ -666,8 +672,8 @@ export async function CategoryCatalogContent({
                         </Link>
                       )}
                       {products.length >= 2 && products[0] && products[1] && (
-                        <Link
-                          href={`/compare/${products[0].slug}-vs-${products[1].slug}`}
+                        <IntentLink
+                          href={versusHref(products[0].slug, products[1].slug)}
                           className="rate-results-link"
                         >
                           <BsArrowLeftRight aria-hidden="true" />
@@ -675,56 +681,32 @@ export async function CategoryCatalogContent({
                             brandA: products[0].brand,
                             brandB: products[1].brand,
                           })}
-                        </Link>
+                        </IntentLink>
                       )}
-                      <Link
+                      <IntentLink
                         href={`/leaderboard?cat=${categorySlug}`}
                         className="rate-results-link"
                       >
                         <BsTrophy aria-hidden="true" />
                         {t('page.leaderboardBadge')}
-                      </Link>
+                      </IntentLink>
                     </div>
                   </div>
 
                   <div className="col-xl-5 col-lg-5 col-md-5 col-sm-12">
                     <div className="text-md-end">
-                      <div className="dropdown d-inline-flex mw-100 p-0">
-                        <a
-                          href="#shortfilter"
-                          className="dropdown-toggle toogleDrops px-3 py-2"
-                          id="shortfilter"
-                          data-bs-toggle="dropdown"
-                          aria-expanded="false"
-                        >
-                          {t('page.sortByPrefix', {
-                            label: currentSortOption.label,
-                          })}
-                        </a>
-                        <div className="dropdown-menu dropdown-menu-end border shadow-sm">
-                          <ul className="card rounded-0 list-unstyled mb-0 p-0">
-                            {SORT_OPTIONS.map((opt) => (
-                              <li key={opt.value}>
-                                <Link
-                                  href={buildFilterHref(basePath, rawSearch, {
-                                    sort:
-                                      opt.value === 'default'
-                                        ? null
-                                        : opt.value,
-                                  })}
-                                  className={`dropdown-item ${
-                                    currentSortOption.value === opt.value
-                                      ? 'active'
-                                      : ''
-                                  }`}
-                                >
-                                  {t(`sortOptions.${opt.value}`)}
-                                </Link>
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
-                      </div>
+                      <CatalogSortDropdown
+                        label={t('page.sortByPrefix', {
+                          label: currentSortOption.label,
+                        })}
+                        items={SORT_OPTIONS.map((opt) => ({
+                          href: buildFilterHref(basePath, rawSearch, {
+                            sort: opt.value === 'default' ? null : opt.value,
+                          }),
+                          label: t(`sortOptions.${opt.value}`),
+                          active: currentSortOption.value === opt.value,
+                        }))}
+                      />
                     </div>
                   </div>
                 </div>
@@ -835,9 +817,9 @@ export async function CategoryCatalogContent({
                         });
                       }
                       const screen =
-                        keySpecs.screen ||
+                        localizeDecimalPoints(keySpecs.screen, locale) ||
                         (item.screen_size_inch
-                          ? `${item.screen_size_inch}"`
+                          ? `${formatPlainNumber(item.screen_size_inch, locale)}"`
                           : '');
                       if (screen) {
                         cardSpecs.push({
@@ -985,11 +967,14 @@ export async function CategoryCatalogContent({
                             </div>
                             <div className="rate-radar-item-side">
                               <span className="rate-radar-price">
-                                {g.priceCurrent.toLocaleString('vi-VN')} ₫
+                                {formatPriceVnd(g.priceCurrent, locale)}
                               </span>
                               <span className="rate-radar-tag is-good">
                                 {t('page.vsMedianBadge', {
-                                  pct: g.savingsVsMedianPct,
+                                  pct: formatPlainNumber(
+                                    g.savingsVsMedianPct,
+                                    locale
+                                  ),
                                 })}
                               </span>
                             </div>
@@ -1026,11 +1011,14 @@ export async function CategoryCatalogContent({
                               </div>
                               <div className="rate-radar-item-side">
                                 <span className="rate-radar-price">
-                                  {trap.priceCurrent.toLocaleString('vi-VN')} ₫
+                                  {formatPriceVnd(trap.priceCurrent, locale)}
                                 </span>
                                 <span className="rate-radar-tag is-bad">
                                   {t('page.fakeMarkupBadge', {
-                                    pct: trap.fakeMarkupPct,
+                                    pct: formatPlainNumber(
+                                      trap.fakeMarkupPct,
+                                      locale
+                                    ),
                                   })}
                                 </span>
                               </div>
@@ -1081,11 +1069,14 @@ export async function CategoryCatalogContent({
                                       <div className="rate-radar-item-side">
                                         <span className="rate-radar-tag is-warn">
                                           {t('page.spreadDiffBadge', {
-                                            pct: sp.spreadPct,
-                                            amount:
-                                              sp.spreadVnd.toLocaleString(
-                                                'vi-VN'
-                                              ),
+                                            pct: formatPlainNumber(
+                                              sp.spreadPct,
+                                              locale
+                                            ),
+                                            amount: formatNumber(
+                                              sp.spreadVnd,
+                                              locale
+                                            ),
                                           })}
                                         </span>
                                       </div>

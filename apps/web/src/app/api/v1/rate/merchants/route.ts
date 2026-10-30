@@ -7,6 +7,7 @@ import {
   parseBoundedIntParam,
   parseBoundedNumberParam,
   parseBoundedStringParam,
+  SUPPORTED_PLATFORM_SLUGS,
 } from '@/server/rate/api-handler';
 
 export async function OPTIONS() {
@@ -24,8 +25,20 @@ export async function GET(request: NextRequest) {
   try {
     const sp = request.nextUrl.searchParams;
     const q = parseBoundedStringParam(sp.get('q'), 160) || undefined;
-    const platform =
-      parseBoundedStringParam(sp.get('platform'), 32) || undefined;
+    const rawPlatform = (
+      parseBoundedStringParam(sp.get('platform'), 32) || ''
+    ).toLowerCase();
+    // Only a tracked platform: a free string would make a cache entry per
+    // value (DOS/Rate#1308).
+    if (rawPlatform && !SUPPORTED_PLATFORM_SLUGS.has(rawPlatform)) {
+      return jsonApiError(
+        400,
+        'Unknown platform',
+        undefined,
+        PUBLIC_API_CORS_HEADERS
+      );
+    }
+    const platform = rawPlatform || undefined;
     const rawOfficial = (sp.get('officialOnly') ?? sp.get('official') ?? '')
       .replace(/\p{Cc}+/gu, '')
       .trim()

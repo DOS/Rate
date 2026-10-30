@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import { BsChevronDown, BsChevronUp, BsPhone } from 'react-icons/bs';
 import { Link } from '@/lib/navigation';
 import {
@@ -13,17 +13,22 @@ import {
   setCompareTray,
   subscribeCompareTray,
 } from './compare-tray';
+import { formatPriceVnd } from '@/lib/locale-format';
 
 // Per-tab memory of the user's last choice; phones start collapsed (#607).
 const COLLAPSED_KEY = 'rate_compare_tray_collapsed';
 const PHONE_QUERY = '(max-width: 767.98px)';
 
-export function formatCompareTrayPriceVnd(value: unknown): string {
-  return `${sanitizeTrayPriceVnd(value).toLocaleString('vi-VN')} ₫`;
+export function formatCompareTrayPriceVnd(
+  value: unknown,
+  locale?: string | null
+): string {
+  return formatPriceVnd(sanitizeTrayPriceVnd(value), locale);
 }
 
 export default function CompareTrayBar() {
   const t = useTranslations('compare');
+  const locale = useLocale();
   const [items, setItems] = useState<CompareTrayItem[]>([]);
   const [collapsed, setCollapsed] = useState(false);
 
@@ -177,7 +182,7 @@ export default function CompareTrayBar() {
                         className="text-warning fw-bold rate-tabular text-nowrap"
                         style={{ fontSize: '0.8125rem' }}
                       >
-                        {formatCompareTrayPriceVnd(item.min_price)}
+                        {formatCompareTrayPriceVnd(item.min_price, locale)}
                       </div>
                     </div>
                     <button

@@ -5,7 +5,9 @@ import { discountVerdictCopy } from '@/lib/discount-verdict-copy';
 import { formatSoldCount, hasSoldCount } from '@/lib/sold-count';
 import AnalyzerText from '@/components/reviews/AnalyzerText';
 import { Link } from '@/lib/navigation';
+import { IntentLink } from '@/components/elementary/IntentLink';
 import { getCategoryRouteHref, resolveProductImageUrl } from '@/lib/rate-api';
+import { sizedStoreImageUrl } from '@/lib/rate-domain-core';
 import {
   getCachedMerchantProfileById,
   getCrossPlatformDealRadar,
@@ -41,6 +43,13 @@ import { contentLang } from '@/lib/content-lang';
 import ClientMessages from '@/components/providers/ClientMessages';
 import { normalizeRateLocale } from '@/lib/rate-i18n';
 import { defaultOpenGraph, fitTitle, fitDescription } from '@/lib/seo';
+import {
+  formatDecimal,
+  formatNumber,
+  formatPercent,
+  formatPlainNumber,
+  formatPriceVnd,
+} from '@/lib/locale-format';
 
 // Cached after the first request, refreshed every 5 minutes or when the
 // worker revalidates its cache tags (DOS/Rate#491).
@@ -304,7 +313,7 @@ export default async function MerchantProfilePage({
                         {t('platformRatingLabel')}{' '}
                         <strong className="font-monospace text-white">
                           {merchant.rating_star
-                            ? `${merchant.rating_star.toFixed(2)} / 5.0`
+                            ? `${formatDecimal(merchant.rating_star, locale, 2)} / ${formatDecimal(5, locale, 1)}`
                             : t('notUpdatedYet')}
                         </strong>
                       </span>
@@ -313,7 +322,7 @@ export default async function MerchantProfilePage({
                         {t('followersLabel')}{' '}
                         <strong className="font-monospace text-white">
                           {merchant.follower_count > 0
-                            ? merchant.follower_count.toLocaleString('vi-VN')
+                            ? formatNumber(merchant.follower_count, locale)
                             : '-'}
                         </strong>
                       </span>
@@ -514,7 +523,7 @@ export default async function MerchantProfilePage({
                     <>
                       {t('layer2DescPrefix')}{' '}
                       <strong>{brk.total_reviews}</strong> {t('layer2DescMid')}{' '}
-                      <strong>{authenticPct}%</strong>).
+                      <strong>{formatPercent(authenticPct, locale)}</strong>).
                     </>
                   )}
                 </p>
@@ -602,12 +611,12 @@ export default async function MerchantProfilePage({
                       })
                     : t('profileRadarZeroFake')}
                 </span>
-                <Link
+                <IntentLink
                   href="/deals"
                   className="btn btn-sm btn-outline-danger rounded-pill fw-semibold px-3"
                 >
                   {t('openRadar10PlatformsBtn')}
-                </Link>
+                </IntentLink>
               </div>
             </div>
             {merchantGenuineDeals.length > 0 || merchantFakeTraps.length > 0 ? (
@@ -628,17 +637,22 @@ export default async function MerchantProfilePage({
                         </Link>
                         <div className="text-secondary small">
                           {t('low60dAndMedian', {
-                            min: g.marketMinPrice.toLocaleString('vi-VN'),
-                            median: g.marketMedianPrice.toLocaleString('vi-VN'),
+                            min: formatNumber(g.marketMinPrice, locale),
+                            median: formatNumber(g.marketMedianPrice, locale),
                           })}
                         </div>
                       </div>
                       <div className="flex-shrink-0 text-end">
                         <div className="fw-bold text-success font-monospace small">
-                          {g.priceCurrent.toLocaleString('vi-VN')} ₫
+                          {formatPriceVnd(g.priceCurrent, locale)}
                         </div>
                         <span className="badge bg-success rounded-pill">
-                          {t('vsMedianBadge', { pct: g.savingsVsMedianPct })}
+                          {t('vsMedianBadge', {
+                            pct: formatPlainNumber(
+                              g.savingsVsMedianPct,
+                              locale
+                            ),
+                          })}
                         </span>
                       </div>
                     </div>
@@ -660,18 +674,21 @@ export default async function MerchantProfilePage({
                         </Link>
                         <div className="text-secondary small">
                           {t('inflatedOriginalPrice', {
-                            price: (tItem.priceOriginal || 0).toLocaleString(
-                              'vi-VN'
+                            price: formatNumber(
+                              tItem.priceOriginal || 0,
+                              locale
                             ),
                           })}
                         </div>
                       </div>
                       <div className="flex-shrink-0 text-end">
                         <div className="fw-bold text-danger font-monospace small">
-                          {tItem.priceCurrent.toLocaleString('vi-VN')} ₫
+                          {formatPriceVnd(tItem.priceCurrent, locale)}
                         </div>
                         <span className="badge bg-danger rounded-pill">
-                          {t('fakeMarkupBadge', { pct: tItem.fakeMarkupPct })}
+                          {t('fakeMarkupBadge', {
+                            pct: formatPlainNumber(tItem.fakeMarkupPct, locale),
+                          })}
                         </span>
                       </div>
                     </div>
@@ -726,7 +743,11 @@ export default async function MerchantProfilePage({
                           }
                         : {
                             label: t('flagAuthenticWeight', {
-                              weight: rev.helpfulness_weight.toFixed(2),
+                              weight: formatDecimal(
+                                rev.helpfulness_weight,
+                                locale,
+                                2
+                              ),
                             }),
                             cls: 'bg-success-subtle text-success',
                           };
@@ -852,10 +873,12 @@ export default async function MerchantProfilePage({
                   </thead>
                   <tbody>
                     {merchant.listings.map((item) => {
-                      const priceText =
-                        item.price_current.toLocaleString('vi-VN');
+                      const priceText = formatNumber(
+                        item.price_current,
+                        locale
+                      );
                       const origText = item.price_original
-                        ? item.price_original.toLocaleString('vi-VN')
+                        ? formatNumber(item.price_original, locale)
                         : null;
                       // A sold-out listing's last price is shown as such,
                       // never as a deal (DOS/Rate#1248).
@@ -869,9 +892,14 @@ export default async function MerchantProfilePage({
                             : da?.verdict === 'genuine_deal'
                               ? 'bg-success text-white'
                               : 'bg-light text-secondary border';
-                      const resolvedImg = resolveProductImageUrl(
-                        item.master_product?.slug,
-                        item.image
+                      // A 52 px thumbnail: the store CDN's small rendition,
+                      // not its 600-800 px original (DOS/Rate#1328).
+                      const resolvedImg = sizedStoreImageUrl(
+                        resolveProductImageUrl(
+                          item.master_product?.slug,
+                          item.image
+                        ),
+                        128
                       );
                       // The category read with the master, not one guessed
                       // from its name, which linked earbuds and others under
@@ -926,8 +954,8 @@ export default async function MerchantProfilePage({
                                       •{' '}
                                     </>
                                   )}
-                                  ★ {item.rating_star.toFixed(1)} (
-                                  {item.rating_count})
+                                  ★ {formatDecimal(item.rating_star, locale, 1)}{' '}
+                                  ({item.rating_count})
                                 </div>
                               </div>
                             </div>
@@ -955,10 +983,10 @@ export default async function MerchantProfilePage({
                                 >
                                   {t('lowestMarketPriceLabel')}{' '}
                                   <strong className="font-monospace">
-                                    {item.master_product.market_min_price.toLocaleString(
-                                      'vi-VN'
-                                    )}{' '}
-                                    ₫
+                                    {formatPriceVnd(
+                                      item.master_product.market_min_price,
+                                      locale
+                                    )}
                                   </strong>
                                 </div>
                               </div>
@@ -1002,11 +1030,14 @@ export default async function MerchantProfilePage({
                                 <span
                                   className={`badge ${badgeClass} rounded-pill small px-3 py-1`}
                                   title={
-                                    discountVerdictCopy(tVerdict, da)
+                                    discountVerdictCopy(tVerdict, da, locale)
                                       .explanation
                                   }
                                 >
-                                  {discountVerdictCopy(tVerdict, da).label}
+                                  {
+                                    discountVerdictCopy(tVerdict, da, locale)
+                                      .label
+                                  }
                                 </span>
                                 <div
                                   className="text-muted mt-1"
@@ -1016,10 +1047,10 @@ export default async function MerchantProfilePage({
                                   }}
                                 >
                                   {t('historicalLowObs', {
-                                    price:
-                                      da.historical_min_price.toLocaleString(
-                                        'vi-VN'
-                                      ),
+                                    price: formatNumber(
+                                      da.historical_min_price,
+                                      locale
+                                    ),
                                     count: da.observation_count,
                                   })}
                                 </div>

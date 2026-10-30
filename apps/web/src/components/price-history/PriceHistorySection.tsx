@@ -31,6 +31,12 @@ import {
 } from '@/lib/deal-radar';
 import { discountVerdictCopy } from '@/lib/discount-verdict-copy';
 import { escapeCsvCell } from '@/lib/csv-safe';
+import {
+  formatDate,
+  formatDecimal,
+  formatPlainNumber,
+  formatPriceVnd,
+} from '@/lib/locale-format';
 
 interface PriceHistorySectionProps {
   productName: string;
@@ -79,15 +85,21 @@ function getVerdictBadgeStyle(verdict: DiscountVerdictType): {
 
 const PRICE_HISTORY_CONTROL_CHARS_RE = /\p{Cc}+/gu;
 
-export function formatPriceHistoryVnd(price: unknown): string {
+export function formatPriceHistoryVnd(
+  price: unknown,
+  locale?: string | null
+): string {
   const num = Number(price);
   if (!Number.isFinite(num) || num <= 0 || num > MAX_VALID_VND_PRICE) {
     return '-';
   }
-  return `${Math.round(num).toLocaleString('vi-VN')} ₫`;
+  return formatPriceVnd(Math.round(num), locale);
 }
 
-export function formatCompactPriceHistoryVnd(price: unknown): string {
+export function formatCompactPriceHistoryVnd(
+  price: unknown,
+  locale?: string | null
+): string {
   const num = Number(price);
   if (!Number.isFinite(num) || num <= 0 || num > MAX_VALID_VND_PRICE) {
     return '0';
@@ -95,7 +107,7 @@ export function formatCompactPriceHistoryVnd(price: unknown): string {
   const rounded = Math.round(num);
   if (rounded >= 1_000_000) {
     const tr = rounded / 1_000_000;
-    return `${tr % 1 === 0 ? tr.toFixed(0) : tr.toFixed(1)}tr`;
+    return `${formatDecimal(tr, locale, tr % 1 === 0 ? 0 : 1)}tr`;
   }
   if (rounded >= 1_000) {
     return `${Math.round(rounded / 1_000)}k`;
@@ -126,10 +138,10 @@ export function sanitizePriceHistoryMarkdownCell(
 const formatVnd = formatPriceHistoryVnd;
 const formatCompactVnd = formatCompactPriceHistoryVnd;
 
-function formatDateShort(iso: string): string {
+function formatDateShort(locale: string, iso: string): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return iso;
-  return d.toLocaleDateString('vi-VN', {
+  return formatDate(d, locale, {
     day: '2-digit',
     month: '2-digit',
     year: 'numeric',
@@ -571,7 +583,7 @@ export default function PriceHistorySection({
               {t('priceHistoryKpiCurrentMinTitle')}
             </div>
             <div className="h5 fw-bold text-danger mb-1">
-              {formatVnd(history.currentMinPrice)}
+              {formatVnd(history.currentMinPrice, locale)}
             </div>
             <div className="text-muted" style={{ fontSize: '0.8125rem' }}>
               {t('priceHistoryKpiCurrentMinSub', {
@@ -587,7 +599,7 @@ export default function PriceHistorySection({
               {t('priceHistoryKpiLowestEverTitle')}
             </div>
             <div className="h5 fw-bold text-success mb-1">
-              {formatVnd(history.lowestEverPrice)}
+              {formatVnd(history.lowestEverPrice, locale)}
             </div>
             <div
               className="text-success-emphasis"
@@ -599,7 +611,7 @@ export default function PriceHistorySection({
                     text={history.lowestEverMerchant}
                     locale={locale}
                   />
-                  {` (${history.lowestEverDate ? formatDateShort(history.lowestEverDate) : ''})`}
+                  {` (${history.lowestEverDate ? formatDateShort(locale, history.lowestEverDate) : ''})`}
                 </>
               ) : (
                 t('priceHistoryKpiLowestEverDefaultSub')
@@ -614,7 +626,7 @@ export default function PriceHistorySection({
               {t('priceHistoryKpiHighestEverTitle')}
             </div>
             <div className="h5 fw-bold text-dark mb-1">
-              {formatVnd(history.highestEverPrice)}
+              {formatVnd(history.highestEverPrice, locale)}
             </div>
             <div className="text-muted" style={{ fontSize: '0.8125rem' }}>
               {t('priceHistoryKpiHighestEverSub', {
@@ -784,7 +796,7 @@ export default function PriceHistorySection({
                   }}
                 />
                 {t('priceHistoryLegendLowest', {
-                  price: formatVnd(history.lowestEverPrice),
+                  price: formatVnd(history.lowestEverPrice, locale),
                 })}
               </span>
             </div>
@@ -792,7 +804,7 @@ export default function PriceHistorySection({
             {activeNode && (
               <div className="badge bg-light text-dark rounded-pill small border px-3 py-2">
                 <BsCalendar3 aria-hidden="true" className="me-1" />
-                {formatDateShort(activeNode.pt.recorded_at)} -{' '}
+                {formatDateShort(locale, activeNode.pt.recorded_at)} -{' '}
                 <strong>
                   <ContentText
                     text={activeNode.pt.merchant_name}
@@ -801,12 +813,12 @@ export default function PriceHistorySection({
                 </strong>
                 :{' '}
                 <span className="text-danger fw-bold">
-                  {formatVnd(activeNode.pt.price)}
+                  {formatVnd(activeNode.pt.price, locale)}
                 </span>
                 {activeNode.pt.price_original &&
                   activeNode.pt.price_original > activeNode.pt.price && (
                     <span className="text-muted text-decoration-line-through ms-2">
-                      {formatVnd(activeNode.pt.price_original)}
+                      {formatVnd(activeNode.pt.price_original, locale)}
                     </span>
                   )}
               </div>
@@ -848,7 +860,7 @@ export default function PriceHistorySection({
                     fontSize={labelUnits}
                     fill="#64748b"
                   >
-                    {formatCompactVnd(tk.value)}
+                    {formatCompactVnd(tk.value, locale)}
                   </text>
                 </g>
               ))}
@@ -958,6 +970,7 @@ export default function PriceHistorySection({
                     fill="#64748b"
                   >
                     {formatDateShort(
+                      locale,
                       chartGeometry.mapped[0]?.pt.recorded_at || ''
                     )}
                   </text>
@@ -971,6 +984,7 @@ export default function PriceHistorySection({
                       fill="#64748b"
                     >
                       {formatDateShort(
+                        locale,
                         chartGeometry.mapped[0]?.pt.recorded_at || ''
                       )}
                     </text>
@@ -987,6 +1001,7 @@ export default function PriceHistorySection({
                         fill="#64748b"
                       >
                         {formatDateShort(
+                          locale,
                           chartGeometry.mapped[
                             Math.floor(chartGeometry.mapped.length / 2)
                           ]?.pt.recorded_at || ''
@@ -1005,6 +1020,7 @@ export default function PriceHistorySection({
                         fill="#64748b"
                       >
                         {formatDateShort(
+                          locale,
                           chartGeometry.mapped[chartGeometry.mapped.length - 1]
                             ?.pt.recorded_at || ''
                         )}
@@ -1046,7 +1062,7 @@ export default function PriceHistorySection({
                       className={`badge ${style.badgeClass} rounded-pill small px-3 py-1`}
                     >
                       <style.icon aria-hidden="true" className="me-1" />
-                      {discountVerdictCopy(tVerdict, oa).label}
+                      {discountVerdictCopy(tVerdict, oa, locale).label}
                     </span>
                   </div>
 
@@ -1056,7 +1072,7 @@ export default function PriceHistorySection({
                         {t('priceHistoryCurrentPriceLabel')}{' '}
                       </span>
                       <span className="fw-bold text-danger">
-                        {formatVnd(oa.price_current)}
+                        {formatVnd(oa.price_current, locale)}
                       </span>
                     </div>
                     {oa.price_original && (
@@ -1065,11 +1081,14 @@ export default function PriceHistorySection({
                           {t('priceHistoryStrikethroughLabel')}{' '}
                         </span>
                         <span className="text-muted text-decoration-line-through small">
-                          {formatVnd(oa.price_original)}
+                          {formatVnd(oa.price_original, locale)}
                         </span>
                         <span className="badge bg-light text-dark small ms-1 border">
                           {t('priceHistoryClaimedPctBadge', {
-                            pct: oa.claimed_discount_pct,
+                            pct: formatPlainNumber(
+                              oa.claimed_discount_pct,
+                              locale
+                            ),
                           })}
                         </span>
                       </div>
@@ -1082,20 +1101,26 @@ export default function PriceHistorySection({
                   >
                     <span>
                       {t('priceHistoryMedianLabel')}{' '}
-                      <strong>{formatVnd(oa.historical_median_price)}</strong>
+                      <strong>
+                        {formatVnd(oa.historical_median_price, locale)}
+                      </strong>
                     </span>
                     <span>
                       {t('priceHistoryMinLabel')}{' '}
-                      <strong>{formatVnd(oa.historical_min_price)}</strong>
+                      <strong>
+                        {formatVnd(oa.historical_min_price, locale)}
+                      </strong>
                     </span>
                     <span>
                       {t('priceHistoryMaxLabel')}{' '}
-                      <strong>{formatVnd(oa.historical_max_price)}</strong>
+                      <strong>
+                        {formatVnd(oa.historical_max_price, locale)}
+                      </strong>
                     </span>
                   </div>
 
                   <p className="small text-secondary lh-sm mb-0">
-                    {discountVerdictCopy(tVerdict, oa).explanation}
+                    {discountVerdictCopy(tVerdict, oa, locale).explanation}
                   </p>
                 </div>
               </div>

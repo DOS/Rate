@@ -9,6 +9,9 @@ import {
   resolveReviewVoteInput,
   sanitizePublicApiError,
   type ReviewReportReason,
+  payloadTooLargeResponse,
+  readBoundedJsonBody,
+  rateLimitExceededResponse,
 } from '@/server/rate/api-handler';
 import { authenticateRateRequest } from '@/server/rate/request-auth';
 import { createLogger, serializeError } from '@/lib/logger';
@@ -148,7 +151,10 @@ export async function POST(
   }
 
   try {
-    const rawBody = await request.json().catch(() => null);
+    const bodyRead = await readBoundedJsonBody(request);
+    if (bodyRead.tooLarge)
+      return payloadTooLargeResponse(REVIEW_VOTE_CORS_HEADERS);
+    const rawBody = bodyRead.value;
 
     const auth = await authenticateRateRequest(
       request,
@@ -287,21 +293,24 @@ export async function POST(
             message: upsertErr.message,
           });
         }
+        // The database counts 60 vote actions per rolling hour (#1400).
+        if (isRateLimit) {
+          return rateLimitExceededResponse(
+            'Rate limit exceeded (maximum 60 vote actions per hour)',
+            REVIEW_VOTE_CORS_HEADERS,
+            3600
+          );
+        }
         return NextResponse.json(
           {
             ok: false,
-            error: isRateLimit
-              ? 'Rate limit exceeded (maximum 60 vote actions per hour)'
-              : sanitizePublicApiError(
-                  upsertErr,
-                  'Failed to record review vote'
-                ),
-            code: isRateLimit ? 'RATE_LIMIT_EXCEEDED' : 'VOTE_REJECTED',
+            error: sanitizePublicApiError(
+              upsertErr,
+              'Failed to record review vote'
+            ),
+            code: 'VOTE_REJECTED',
           },
-          {
-            status: isRateLimit ? 429 : 400,
-            headers: REVIEW_VOTE_CORS_HEADERS,
-          }
+          { status: 400, headers: REVIEW_VOTE_CORS_HEADERS }
         );
       }
     }

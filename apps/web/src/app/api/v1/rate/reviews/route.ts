@@ -13,6 +13,9 @@ import {
   PUBLIC_API_CORS_HEADERS,
   jsonApiError,
   parseReviewsQueryParams,
+  payloadTooLargeResponse,
+  readBoundedJsonBody,
+  rateLimitExceededResponse,
 } from '@/server/rate/api-handler';
 import {
   authenticateRateRequest,
@@ -134,7 +137,7 @@ const SubmitReviewSchema = z.object({
     .string()
     .trim()
     .uuid('Mã sản phẩm chuẩn hóa (masterProductId) không hợp lệ.'),
-  authorName: z.string().optional(),
+  authorName: z.string().max(120).optional(),
   ratingStar: z.preprocess(
     (val) =>
       val === null || (typeof val === 'string' && !val.trim())
@@ -156,8 +159,12 @@ const SubmitReviewSchema = z.object({
         .min(15, 'Nội dung đánh giá phải có độ dài từ 15 đến 3.000 ký tự.')
         .max(3000, 'Nội dung đánh giá phải có độ dài từ 15 đến 3.000 ký tự.')
     ),
-  variation: z.string().optional(),
-  criteriaRatings: z.record(z.string(), z.unknown()).optional(),
+  variation: z.string().max(200).optional(),
+  // Only the known criteria are read; a record of many keys is no review.
+  criteriaRatings: z
+    .record(z.string().max(40), z.unknown())
+    .refine((r) => Object.keys(r).length <= 20)
+    .optional(),
 });
 
 const FLAG_CATEGORIES = new Set<ReviewFlagCategory>([
@@ -198,7 +205,7 @@ const RPC_REJECTIONS: Record<string, RpcRejection> = {
   // more than 5 reviews in 24h
   '54000': {
     status: 429,
-    code: 'RATE_LIMITED',
+    code: 'RATE_LIMIT_EXCEEDED',
     error: 'Bạn đã gửi quá 5 đánh giá trong 24 giờ, vui lòng thử lại sau.',
   },
 };
@@ -357,7 +364,10 @@ export function toReviewItem(
  */
 export async function POST(request: NextRequest) {
   try {
-    const rawBody: unknown = await request.json().catch(() => null);
+    const bodyRead = await readBoundedJsonBody(request);
+    if (bodyRead.tooLarge)
+      return payloadTooLargeResponse(PUBLIC_API_CORS_HEADERS);
+    const rawBody: unknown = bodyRead.value;
 
     const auth = await authenticateRateRequest(
       request,
@@ -430,6 +440,14 @@ export async function POST(request: NextRequest) {
       }
       // Errors the RPC raises on purpose carry a user-facing Vietnamese message.
       const rejection = mapRpcRejection(rpcError, RPC_REJECTIONS);
+      // The database counts 5 reviews per rolling 24 hours (#1400).
+      if (rejection?.status === 429) {
+        return rateLimitExceededResponse(
+          rejection.error,
+          REVIEWS_CORS_HEADERS,
+          86_400
+        );
+      }
       if (rejection) {
         return NextResponse.json(
           { ok: false, error: rejection.error, code: rejection.code },

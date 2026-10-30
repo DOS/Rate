@@ -1,4 +1,6 @@
 import type { SpecGroupKey } from '@repo/shared-data/rules';
+import { collapseWhitespace } from './locale-format';
+import { isVietnamese } from './content-lang';
 import { type RateLocale, normalizeRateLocale } from './rate-i18n';
 
 export interface SpecUiDictionary {
@@ -581,9 +583,7 @@ export function localizeSpecValue(
     return '-';
   }
 
-  let text = raw
-    .replace(/\p{Cc}+/gu, ' ')
-    .replace(/\s+/g, ' ')
+  let text = collapseWhitespace(raw.replace(/\p{Cc}+/gu, ' '), lang)
     .trim()
     .slice(0, 2_000);
   if (!text || text === '-' || DISALLOWED_SPEC_TEXT_REGEX.test(text)) {
@@ -634,4 +634,32 @@ export function localizeSpecValue(
     text = text.replace(pattern, replacement);
   }
   return text;
+}
+
+/**
+ * A spec value as the page shows it, with the language to mark it in when
+ * that is not the page's: Vietnamese source text, or English source text the
+ * localizer left as it was on a Czech or Vietnamese page, so screen readers
+ * read it in its own language (DOS/Rate#699, #1371). A value the localizer
+ * changed is the page's language, or mixed, and gets no mark.
+ */
+export function localizedSpecValue(
+  raw: string | number | boolean | null | undefined,
+  locale?: string
+): { text: string; lang?: 'en' | 'vi' } {
+  const text = localizeSpecValue(raw, locale);
+  if (typeof raw !== 'string') return { text };
+  const page = normalizeRateLocale(locale);
+  if (isVietnamese(text))
+    return page === 'vi' ? { text } : { text, lang: 'vi' };
+  if (page === 'en') return { text };
+  const source = raw
+    .replace(/\p{Cc}+/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  // Lowercase words, not names or units: "glass", "battery life".
+  const hasEnglishWords = (text.match(/\p{L}+/gu) ?? []).some(
+    (word) => /^[a-z]{2,}$/.test(word) && !UNTRANSLATED_TOKENS.has(word)
+  );
+  return text === source && hasEnglishWords ? { text, lang: 'en' } : { text };
 }

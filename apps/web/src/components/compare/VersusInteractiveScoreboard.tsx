@@ -20,7 +20,7 @@ import { escapeCsvCell } from '@/lib/csv-safe';
 import { isVersusScoreTie, versusVerdictFor } from '@/lib/versus-verdict';
 import RadarBadge from '@/components/radar/RadarBadge';
 import { useDealRadarIndex } from '@/components/radar/use-deal-radar';
-import { versusHref } from '@/lib/item-compare';
+import { formatDecimal, formatPercent } from '@/lib/locale-format';
 
 export type ScoredVersusItem = Omit<ScoredLeaderboardItem, 'rank'>;
 
@@ -28,8 +28,6 @@ interface VersusInteractiveScoreboardProps {
   readonly scoreA: ScoredVersusItem;
   readonly scoreB: ScoredVersusItem;
   readonly locale?: string;
-  /** RATE_ITEM_MODEL on: variant slug to Item slug, for the swap link. */
-  readonly itemSlugBySlug?: Readonly<Record<string, string>>;
 }
 
 export type PersonaPresetKey =
@@ -172,10 +170,14 @@ export function computeVersusWeightedResult(
 }
 
 export default function VersusInteractiveScoreboard({
-  scoreA,
-  scoreB,
-  itemSlugBySlug,
+  scoreA: firstScore,
+  scoreB: secondScore,
 }: VersusInteractiveScoreboardProps) {
+  // A pair has one URL, its sides sorted (DOS/Rate#1367), so the swap button
+  // swaps the two sides here instead of linking to the other order.
+  const [swapped, setSwapped] = useState<boolean>(false);
+  const scoreA = swapped ? secondScore : firstScore;
+  const scoreB = swapped ? firstScore : secondScore;
   const t = useTranslations('compare');
   const locale = useLocale();
   const useCaseLabelId = useId();
@@ -454,7 +456,8 @@ export default function VersusInteractiveScoreboard({
     weightedResult,
     scoreA.slug,
     persona,
-    personaLabels
+    personaLabels,
+    locale
   );
 
   return (
@@ -559,13 +562,16 @@ export default function VersusInteractiveScoreboard({
             >
               JSON
             </button>
-            <Link
-              href={versusHref(scoreB.slug, scoreA.slug, itemSlugBySlug)}
+            <button
+              type="button"
+              onClick={() => setSwapped((prev) => !prev)}
+              aria-pressed={swapped}
+              data-testid="versus-swap-btn"
               className="btn btn-sm btn-outline-light rounded-pill px-3"
               title={t('swapDevicesTitle')}
             >
               ⇄ {t('swapAbBtn')}
-            </Link>
+            </button>
           </div>
         </div>
 
@@ -582,7 +588,7 @@ export default function VersusInteractiveScoreboard({
                   <div className="d-flex justify-content-between small mb-1 text-white">
                     <span>{c.label}</span>
                     <strong className="text-warning rate-tabular">
-                      {weights[c.key]}%
+                      {formatPercent(weights[c.key], locale)}
                     </strong>
                   </div>
                   <input
@@ -624,14 +630,22 @@ export default function VersusInteractiveScoreboard({
                   {weightedResult.winner.name}
                 </strong>
                 <span className="text-white-50 small ms-2">
-                  {t('leadingDeltaNote', { delta: weightedResult.delta })}
+                  {t('leadingDeltaNote', {
+                    delta: formatDecimal(
+                      Number(weightedResult.delta),
+                      locale,
+                      2
+                    ),
+                  })}
                 </span>
               </>
             )}
           </div>
           <div className="rate-tabular small text-warning fw-bold">
-            {scoreA.brand}: {weightedResult.finalA.toFixed(2)}/5.0 •{' '}
-            {scoreB.brand}: {weightedResult.finalB.toFixed(2)}/5.0
+            {scoreA.brand}: {formatDecimal(weightedResult.finalA, locale, 2)}/
+            {formatDecimal(5, locale, 1)} • {scoreB.brand}:{' '}
+            {formatDecimal(weightedResult.finalB, locale, 2)}/
+            {formatDecimal(5, locale, 1)}
           </div>
         </div>
 
@@ -646,11 +660,12 @@ export default function VersusInteractiveScoreboard({
             </Link>
             <div className="d-flex mt-1 flex-wrap gap-2">
               <span className="rate-score-badge-user">
-                ★ {weightedResult.finalA.toFixed(2)}/5.0
+                ★ {formatDecimal(weightedResult.finalA, locale, 2)}/
+                {formatDecimal(5, locale, 1)}
               </span>
               <span className="rate-score-badge-expert">
                 {scoreA.expertScore10 != null
-                  ? `Lab ${scoreA.expertScore10.toFixed(1)}/10`
+                  ? `Lab ${formatDecimal(scoreA.expertScore10, locale, 1)}/10`
                   : t('labScorePending')}
               </span>
             </div>
@@ -669,11 +684,12 @@ export default function VersusInteractiveScoreboard({
             </Link>
             <div className="d-flex justify-content-end mt-1 flex-wrap gap-2">
               <span className="rate-score-badge-user">
-                ★ {weightedResult.finalB.toFixed(2)}/5.0
+                ★ {formatDecimal(weightedResult.finalB, locale, 2)}/
+                {formatDecimal(5, locale, 1)}
               </span>
               <span className="rate-score-badge-expert">
                 {scoreB.expertScore10 != null
-                  ? `Lab ${scoreB.expertScore10.toFixed(1)}/10`
+                  ? `Lab ${formatDecimal(scoreB.expertScore10, locale, 1)}/10`
                   : t('labScorePending')}
               </span>
             </div>
@@ -698,7 +714,8 @@ export default function VersusInteractiveScoreboard({
                       aWins ? 'text-success' : 'text-white-50'
                     }`}
                   >
-                    {row.aVal.toFixed(2)}/5.0 {aWins ? '✓' : ''}
+                    {formatDecimal(row.aVal, locale, 2)}/
+                    {formatDecimal(5, locale, 1)} {aWins ? '✓' : ''}
                   </span>
                   <div
                     className="progress bg-dark d-none d-md-flex flex-grow-1"
@@ -716,7 +733,7 @@ export default function VersusInteractiveScoreboard({
               <div className="small text-light fw-semibold col-4 text-center">
                 {row.label}{' '}
                 <span className="text-white-50 rate-tabular">
-                  ({weights[row.key]}%)
+                  ({formatPercent(weights[row.key], locale)})
                 </span>
               </div>
               <div className="col-4 text-end">
@@ -738,7 +755,8 @@ export default function VersusInteractiveScoreboard({
                     }`}
                   >
                     {bWins ? '✓ ' : ''}
-                    {row.bVal.toFixed(2)}/5.0
+                    {formatDecimal(row.bVal, locale, 2)}/
+                    {formatDecimal(5, locale, 1)}
                   </span>
                 </div>
               </div>

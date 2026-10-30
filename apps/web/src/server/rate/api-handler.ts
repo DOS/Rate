@@ -35,6 +35,25 @@ export function withPublicReviewRisk<
   return { ...merchant, review_risk_score: reviewRiskScoreOrNull(merchant) };
 }
 
+/**
+ * An offer as public payloads carry it: its seller's review risk follows
+ * `withPublicReviewRisk` (null without an analysed review), as every merchant
+ * surface answers for the same seller (DOS/Rate#1376). An offer with no
+ * seller is returned as it is.
+ */
+export function withPublicOfferReviewRisk<
+  T extends {
+    merchant?: {
+      review_risk_score?: number | string | null;
+      review_risk_breakdown?: { total_reviews?: unknown } | null;
+    } | null;
+  },
+>(offer: T): T {
+  return offer?.merchant
+    ? ({ ...offer, merchant: withPublicReviewRisk(offer.merchant) } as T)
+    : offer;
+}
+
 export const PUBLIC_API_CORS_HEADERS: Record<string, string> = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, OPTIONS',
@@ -744,6 +763,80 @@ export function extractClientRateLimitKey(
   return 'anon';
 }
 
+/** The 10 marketplaces and retailers Rate tracks (DOS/Rate#1308). */
+export const SUPPORTED_PLATFORM_SLUGS: ReadonlySet<string> = new Set([
+  'shopee',
+  'lazada',
+  'tiki',
+  'tiktok',
+  'cellphones',
+  'tgdd',
+  'fptshop',
+  'hoangha',
+  'didongviet',
+  'phongvu',
+]);
+
+/**
+ * JSON write bodies are small: a review is the largest. Its 3,000-character
+ * comment is about 18 KB when a client escapes every non-ASCII character as
+ * a \u escape (Python's json.dumps does), so the cap leaves room for that.
+ */
+export const MAX_JSON_BODY_BYTES = 32_768;
+
+/**
+ * A request's JSON body, read up to `maxBytes` (DOS/Rate#1308): a larger body
+ * (by Content-Length, or by what is actually sent) is `tooLarge` and is not
+ * read further; a body that is no JSON is `value: null`.
+ */
+export async function readBoundedJsonBody(
+  request: Request,
+  maxBytes = MAX_JSON_BODY_BYTES
+): Promise<{ tooLarge: true } | { tooLarge: false; value: unknown }> {
+  const declared = Number(request.headers.get('content-length'));
+  if (Number.isFinite(declared) && declared > maxBytes) {
+    return { tooLarge: true };
+  }
+  if (!request.body) return { tooLarge: false, value: null };
+  const reader = request.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    size += value.byteLength;
+    if (size > maxBytes) {
+      await reader.cancel().catch(() => undefined);
+      return { tooLarge: true };
+    }
+    chunks.push(value);
+  }
+  const bytes = new Uint8Array(size);
+  let at = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, at);
+    at += chunk.byteLength;
+  }
+  try {
+    return {
+      tooLarge: false,
+      value: JSON.parse(new TextDecoder().decode(bytes)) as unknown,
+    };
+  } catch {
+    return { tooLarge: false, value: null };
+  }
+}
+
+/** The 413 a write route answers for a body over `MAX_JSON_BODY_BYTES`. */
+export function payloadTooLargeResponse(
+  headers: Record<string, string>
+): NextResponse {
+  return NextResponse.json(
+    { ok: false, error: 'Request body too large', code: 'PAYLOAD_TOO_LARGE' },
+    { status: 413, headers }
+  );
+}
+
 /**
  * Per-IP limit of the uncached inspection routes (`/inspect`, `/lookup`),
  * per server instance (DOS/Rate#1307). A durable shared limit is #1247.
@@ -754,17 +847,38 @@ export const inspectRateLimiter = new BoundedSlidingWindowRateLimiter({
   maxBuckets: 5_000,
 });
 
+/**
+ * The 429 a rate-limited public route answers: `code: RATE_LIMIT_EXCEEDED`
+ * and `Retry-After` (seconds; the limit's window, one minute by default),
+ * exposed to cross-origin callers such as the extension (DOS/Rate#1322,
+ * #1377, #1400).
+ */
+export function rateLimitExceededResponse(
+  message: string,
+  headers: Record<string, string>,
+  /** The limit's window: the longest wait before a retry can pass. */
+  retryAfterSeconds = 60
+): NextResponse {
+  return NextResponse.json(
+    { ok: false, error: message, code: 'RATE_LIMIT_EXCEEDED' },
+    {
+      status: 429,
+      headers: {
+        ...headers,
+        'Retry-After': String(retryAfterSeconds),
+        'Access-Control-Expose-Headers': 'Retry-After',
+      },
+    }
+  );
+}
+
 /** The 429 the inspection routes answer past `inspectRateLimiter`. */
 export function inspectRateLimitResponse(
   headers: Record<string, string>
 ): NextResponse {
-  return NextResponse.json(
-    {
-      ok: false,
-      error: 'Rate limit exceeded. Maximum 30 inspections per minute.',
-      code: 'RATE_LIMIT_EXCEEDED',
-    },
-    { status: 429, headers: { ...headers, 'Retry-After': '60' } }
+  return rateLimitExceededResponse(
+    'Rate limit exceeded. Maximum 30 inspections per minute.',
+    headers
   );
 }
 
