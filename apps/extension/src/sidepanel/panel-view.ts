@@ -15,7 +15,7 @@ import {
   normalizeFiveStarRating,
   resolveSafeApiRelativeUrl,
 } from '../security-guards.js';
-import { escapeHtml, t, type MessageKey } from '../i18n.js';
+import { contentTextHtml, escapeHtml, t, type MessageKey } from '../i18n.js';
 
 export { escapeHtml };
 
@@ -146,7 +146,7 @@ function renderOfferRowHtml(
             <div class="offer-item${muted ? ' offer-item-muted' : ''}">
               <div>
                 <div class="offer-shop">
-                  ${escapeHtml(off.merchant.name)}
+                  ${contentTextHtml(off.merchant.name)}
                   ${off.merchant.is_official ? officialBadgeHtml() : ''}
                   ${marksHtml}
                 </div>
@@ -194,6 +194,14 @@ export function renderReviewCardHtml(
   );
   const analysed = Number(reviews.total_analyzed);
   const hasReviews = Number.isFinite(analysed) && analysed > 0;
+  // The server writes the summary in Vietnamese only. An English or Czech
+  // panel leaves it out rather than machine-translating it or guessing its
+  // language: the genuine share and the count above say the same
+  // (DOS/Rate#1374).
+  const summary =
+    hasReviews && reviews.ai_summary && t('langCode') === 'vi'
+      ? reviews.ai_summary
+      : null;
   return `
       <div class="card">
         <div class="card-title">${escapeHtml(t('reviewCardTitle'))}</div>
@@ -212,8 +220,8 @@ export function renderReviewCardHtml(
           </div>
         </div>
         ${
-          hasReviews && reviews.ai_summary
-            ? `<p style="margin-top: 8px; color: #d1d5db; font-size: 13px;">${escapeHtml(reviews.ai_summary)}</p>`
+          summary
+            ? `<p style="margin-top: 8px; color: #d1d5db; font-size: 13px;">${escapeHtml(summary)}</p>`
             : ''
         }
       </div>
@@ -253,7 +261,7 @@ export function renderNotFoundHtml(
   return `
       <div class="card">
         <div class="card-title">${escapeHtml(t('notFoundTitle'))}</div>
-        ${query ? `<div class="product-name">${escapeHtml(query)}</div>` : ''}
+        ${query ? `<div class="product-name">${contentTextHtml(query)}</div>` : ''}
         <p style="color: #9ca3af;">
           ${escapeHtml(t(accessory ? 'notFoundAccessory' : 'notFoundNoData'))}
         </p>
@@ -294,7 +302,7 @@ export function renderLookupErrorHtml(
   return `
       <div class="card" role="alert">
         <div class="card-title">${escapeHtml(t('lookupErrorTitle'))}</div>
-        ${title ? `<div class="product-name">${escapeHtml(title)}</div>` : ''}
+        ${title ? `<div class="product-name">${contentTextHtml(title)}</div>` : ''}
         <p style="color: #9ca3af;">${escapeHtml(t(LOOKUP_FAILURE_MESSAGE[kind]))}</p>
         <div class="btn-row">
           <button type="button" class="btn-secondary" data-action="retry">${escapeHtml(t('retry'))}</button>

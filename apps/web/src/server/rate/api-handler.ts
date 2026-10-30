@@ -35,6 +35,25 @@ export function withPublicReviewRisk<
   return { ...merchant, review_risk_score: reviewRiskScoreOrNull(merchant) };
 }
 
+/**
+ * An offer as public payloads carry it: its seller's review risk follows
+ * `withPublicReviewRisk` (null without an analysed review), as every merchant
+ * surface answers for the same seller (DOS/Rate#1376). An offer with no
+ * seller is returned as it is.
+ */
+export function withPublicOfferReviewRisk<
+  T extends {
+    merchant?: {
+      review_risk_score?: number | string | null;
+      review_risk_breakdown?: { total_reviews?: unknown } | null;
+    } | null;
+  },
+>(offer: T): T {
+  return offer?.merchant
+    ? ({ ...offer, merchant: withPublicReviewRisk(offer.merchant) } as T)
+    : offer;
+}
+
 export const PUBLIC_API_CORS_HEADERS: Record<string, string> = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, OPTIONS',

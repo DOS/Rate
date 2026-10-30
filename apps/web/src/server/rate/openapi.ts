@@ -462,7 +462,10 @@ function buildBaseRateOpenApiSpec(
                           },
                         },
                       },
-                      offers: { type: 'array', items: { type: 'object' } },
+                      offers: {
+                        type: 'array',
+                        items: { $ref: '#/components/schemas/MerchantOffer' },
+                      },
                       priceHistory: { type: ['object', 'null'] },
                       reviewSummary: {
                         anyOf: [
@@ -2056,6 +2059,42 @@ function buildBaseRateOpenApiSpec(
             },
           },
         },
+        MerchantOffer: {
+          type: 'object',
+          additionalProperties: true,
+          description:
+            'A marketplace listing of the product (`rate.products`) with its seller.',
+          properties: {
+            id: { type: 'string' },
+            platform: { type: 'string' },
+            title: { type: 'string' },
+            price_current: { type: 'number' },
+            price_original: { type: ['number', 'null'] },
+            url: { type: 'string' },
+            merchant: {
+              type: ['object', 'null'],
+              additionalProperties: true,
+              properties: {
+                id: { type: 'string' },
+                name: { type: 'string' },
+                is_official: { type: 'boolean' },
+                risk_score: { type: 'number', minimum: 0, maximum: 100 },
+                dosafe_risk_score: {
+                  type: ['number', 'null'],
+                  minimum: 0,
+                  maximum: 100,
+                },
+                review_risk_score: {
+                  type: ['integer', 'null'],
+                  minimum: 0,
+                  maximum: 100,
+                  description:
+                    'Risk measured on the seller reviews only; null for a seller with no analysed review, as the merchant endpoints answer (DOS/Rate#1376).',
+                },
+              },
+            },
+          },
+        },
         MerchantSummary: {
           type: 'object',
           additionalProperties: true,
@@ -2297,7 +2336,7 @@ export function withItemModelDocs(
         type: 'array',
         description:
           'Offers of the Item whose listing states no size, in the same shape as `offers`. They never feed a variant price.',
-        items: { type: 'object' },
+        items: { $ref: '#/components/schemas/MerchantOffer' },
       };
     }
   }

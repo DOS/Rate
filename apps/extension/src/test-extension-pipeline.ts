@@ -4037,6 +4037,125 @@ async function runTests() {
     console.log('  ✅ [Empty reviews and unknown ratings (#1301)] Verified');
   }
 
+  // Vietnamese server text in an English or Czech panel (DOS/Rate#1374)
+  {
+    const { renderOffersCardHtml, renderReviewCardHtml } =
+      await import('./sidepanel/panel-view.js');
+    const {
+      contentLangAttr,
+      contentTextHtml,
+      formatCatalogueEntry,
+      isVietnameseText,
+    } = await import('./i18n.js');
+    const offerFor = (
+      merchantName: string,
+      price: number
+    ): ExtensionOfferItem => ({
+      id: merchantName,
+      platform: 'shopee',
+      title: merchantName,
+      price_current: price,
+      price_original: null,
+      rating_star: 4.8,
+      rating_count: 10,
+      historical_sold: 0,
+      url: 'https://shopee.vn/x-i.1.2',
+      merchant: {
+        id: `m-${merchantName}`,
+        name: merchantName,
+        is_official: false,
+        risk_score: 12,
+        dosafe_risk_score: 5,
+        review_risk_score: null,
+      },
+    });
+    const catalogues = readLocaleCatalogues();
+    const viSummary =
+      'Lần phân tích gần nhất (một nơi bán) đã xét 6 đánh giá: giữ lại 6 đánh giá thực chất và loại bỏ 0 đánh giá rác';
+    const card = (summary: string) =>
+      renderReviewCardHtml(
+        {
+          total_analyzed: 6,
+          authentic_pct: 100,
+          suspicious_pct: 0,
+          fake_pct: 0,
+          pros: [],
+          cons: [],
+          ai_summary: summary,
+        },
+        { user_rating_weighted: 4.8, average_rating: 4.8 }
+      );
+    assert.ok(isVietnameseText(viSummary));
+    assert.ok(
+      isVietnameseText('6.5h (Tai nghe) / 32h (Hộp sạc MagSafe USB-C)')
+    );
+    assert.ok(!isVietnameseText('6.1" Super Retina XDR OLED'));
+    assert.ok(!isVietnameseText('Ověřené recenze, dvě nabídky, žádné'));
+    // Acute-only Vietnamese is recognised by its words.
+    assert.ok(isVietnameseText('Camera kép 12 MP'));
+    assert.ok(isVietnameseText('Giá khá cao, máy nóng.'));
+    assert.ok(!isVietnameseText('Pokémon Nestlé edition'));
+    assert.ok(!isVietnameseText('MUA reviewers praise the camera'));
+
+    // Vietnamese panel (no chrome.i18n): the summary is shown, unmarked.
+    assert.ok(card(viSummary).includes(viSummary));
+    assert.equal(contentLangAttr('Sạc nhanh 35W'), '');
+
+    const globalWithChrome = globalThis as { chrome?: unknown };
+    const previousChrome = globalWithChrome.chrome;
+    try {
+      for (const locale of ['en', 'cs'] as const) {
+        globalWithChrome.chrome = {
+          i18n: {
+            getMessage: (name: string, subs?: string[]) => {
+              const entry = catalogues[locale][name];
+              return entry ? formatCatalogueEntry(entry, subs ?? []) : '';
+            },
+          },
+        };
+        const html = card(viSummary);
+        assert.ok(!html.includes('Lần phân tích'), `${locale}: no vi summary`);
+        assert.match(html, /100\s?%/, `${locale}: the genuine share stays`);
+        // Whatever it looks like: the server only writes Vietnamese ones.
+        for (const other of ['Pin tốt.', 'Most buyers praise the battery.']) {
+          assert.ok(!card(other).includes(other), `${locale}: ${other}`);
+        }
+        assert.equal(contentLangAttr('Sạc nhanh 35W'), ' lang="vi"');
+        assert.equal(contentLangAttr('A18 chip, 6-core GPU'), '');
+        // Store names in the offers card are marked, English ones are not.
+        const offersHtml = renderOffersCardHtml([
+          offerFor('Hoàng Hà Mobile', 20_000_000),
+          offerFor('Apple Flagship Store', 21_000_000),
+        ]);
+        assert.ok(
+          offersHtml.includes('<span lang="vi">Hoàng Hà Mobile</span>')
+        );
+        assert.ok(!offersHtml.includes('<span lang="vi">Apple Flagship'));
+        assert.equal(
+          contentTextHtml('Đáy <giá>'),
+          '<span lang="vi">Đáy &lt;giá&gt;</span>',
+          'still escaped'
+        );
+      }
+      // A Vietnamese panel through chrome.i18n marks nothing and hides nothing.
+      globalWithChrome.chrome = {
+        i18n: {
+          getMessage: (name: string, subs?: string[]) => {
+            const entry = catalogues.vi[name];
+            return entry ? formatCatalogueEntry(entry, subs ?? []) : '';
+          },
+        },
+      };
+      assert.ok(card(viSummary).includes(viSummary));
+      assert.equal(contentTextHtml('Hoàng Hà Mobile'), 'Hoàng Hà Mobile');
+    } finally {
+      globalWithChrome.chrome = previousChrome;
+    }
+    console.log(
+      '  ✅ [Vietnamese server text in an en or cs panel (#1374)] Verified'
+    );
+  }
+
   // Vietnamese labels and accessible names (DOS/Rate#1302)
   {
     const { buildPillAriaLabel } = await import('./verdict-display.js');
@@ -4481,8 +4600,13 @@ async function runTests() {
         '<span class="verdict-badge">${escapeHtml(verdict.label)}</span>'
       )
     );
-    assert.ok(panelSource.includes('}">${escapeHtml(verdict.label)}</span>'));
-    assert.ok(panelSource.includes('${escapeHtml(verdict.explanation)}</p>'));
+    // The panel marks a Vietnamese fallback label as such (DOS/Rate#1374).
+    assert.ok(
+      panelSource.includes('}">${contentTextHtml(verdict.label)}</span>')
+    );
+    assert.ok(
+      panelSource.includes('${contentTextHtml(verdict.explanation)}</p>')
+    );
     for (const text of [contentSource, panelSource]) {
       assert.ok(!/assessment\.(badgeLabel|explanation)\b/.test(text));
     }
