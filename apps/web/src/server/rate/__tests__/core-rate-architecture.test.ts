@@ -3611,6 +3611,26 @@ async function runCoreArchitectureSuite() {
     const emptyPayloadRes = await revalidateRoute.POST(emptyPayloadReq);
     assert.equal(emptyPayloadRes.status, 400);
 
+    // The body is capped like every other JSON write, behind the secret
+    // too: over 32 KB is a 413, a body that is no JSON a 400 (#1404).
+    const revalidateWith1404 = (body: string) =>
+      revalidateRoute.POST(
+        new NextRequest('https://rate.vn/api/v1/rate/revalidate', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: 'Bearer test-revalidate-secret-2026',
+          },
+          body,
+        })
+      );
+    const oversizeRes = await revalidateWith1404(
+      JSON.stringify({ tags: ['rate:products'], pad: 'x'.repeat(40_000) })
+    );
+    assert.equal(oversizeRes.status, 413);
+    assert.equal((await oversizeRes.json()).code, 'PAYLOAD_TOO_LARGE');
+    assert.equal((await revalidateWith1404('not json')).status, 400);
+
     const validRevalReq = new NextRequest(
       'https://rate.vn/api/v1/rate/revalidate',
       {

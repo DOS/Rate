@@ -8,7 +8,11 @@ import {
 } from '@/server/rate';
 import { createLogger } from '@/lib/logger';
 import { routing } from '@/lib/navigation';
-import { jsonApiError } from '@/server/rate/api-handler';
+import {
+  jsonApiError,
+  payloadTooLargeResponse,
+  readBoundedJsonBody,
+} from '@/server/rate/api-handler';
 
 const log = createLogger('api.revalidate');
 
@@ -130,10 +134,14 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  let rawBody: unknown;
-  try {
-    rawBody = await request.json();
-  } catch {
+  // Capped like every other JSON write, even behind the secret
+  // (DOS/Rate#1404).
+  const bodyRead = await readBoundedJsonBody(request);
+  if (bodyRead.tooLarge) {
+    return payloadTooLargeResponse(REVALIDATE_CORS_HEADERS);
+  }
+  const rawBody: unknown = bodyRead.value;
+  if (rawBody === null) {
     return jsonApiError(
       400,
       'Invalid JSON request body',
