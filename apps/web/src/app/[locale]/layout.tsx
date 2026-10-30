@@ -8,6 +8,7 @@ import {
 } from 'next-intl/server';
 import { AppProviders } from '@/app/providers';
 import { pickClientMessages } from '@/lib/client-messages';
+import { PAGE_META_CSP } from '@/lib/csp';
 import { fontFaces } from '@/lib/fonts';
 import { routing } from '@/lib/navigation';
 import { defaultOpenGraph } from '@/lib/seo';
@@ -65,6 +66,10 @@ export default async function LocaleLayout({
       lang={locale}
       className={fontFaces.map((font) => font.variable).join(' ')}
     >
+      <head>
+        {/* Not a header: see PAGE_META_CSP (DOS/Rate#1345). */}
+        <meta httpEquiv="Content-Security-Policy" content={PAGE_META_CSP} />
+      </head>
       <body>
         <NextIntlClientProvider locale={locale} messages={clientMessages}>
           <AppProviders>{children}</AppProviders>
