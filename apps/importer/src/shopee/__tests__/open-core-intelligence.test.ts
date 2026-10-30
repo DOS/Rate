@@ -1356,10 +1356,30 @@ async function runSuite() {
     ['CMF by Nothing Phone 2 Pro 8GB 256GB', 'nothing:cmf-phone-2-pro:256gb'],
     ['Nothing Ear (a)', 'nothing:ear-a:unknown'],
     ['Nothing Headphone (1)', 'nothing:headphone-1:unknown'],
-    // "nothing" as a word is no brand.
-    ['I have nothing to say Samsung Galaxy S24', 'samsung:i-have-nothing-to:unknown'],
+    ['Hot Sale CMF Phone 2 Pro 256GB', 'nothing:cmf-phone-2-pro:256gb'],
+    ['Nothing Ear (open)', 'nothing:ear-open:unknown'],
+    ['Nothing Ear (stick)', 'nothing:ear-stick:unknown'],
+    // A Nothing product in a gift or bundle is not the brand.
+    ['Honor X9c kèm tai nghe Nothing Ear (a)', 'honor:x9c:unknown'],
+    ['Honor Magic 7 Pro tặng CMF Buds Pro 2', 'honor:magic-7-pro:unknown'],
+    ['Mac mini M4 + Nothing Ear (a)', 'apple:mac-mini-m4:unknown'],
+    ['Honor 200 256GB tặng Nothing Ear (2)', 'honor:200:256gb'],
+    ['Nothing Phone (3) 256GB tặng CMF Buds Pro 2', 'nothing:phone-3:256gb'],
+    ['Nothing Phone (3a) (Pro) 256GB', 'nothing:phone-3a-pro:256gb'],
+    ['Nothing Phone (2a) + 256GB', 'nothing:phone-2a-plus:256gb'],
   ] as const)
     assert.equal(keyOf(title), key, title);
+  // "nothing" as a word is no brand.
+  for (const title of ['Tai nghe Bluetooth nothing compares 2 u', 'Áo thun nothing phone-related'])
+    assert.ok(keyOf(title).startsWith('khac:'), title);
+  for (const title of [
+    'Nothing Phone 3 tặng CMF Watch Pro 2',
+    'Nothing Phone 3 tặng Nothing Ear (a)',
+    'CMF Phone 2 Pro tặng CMF Buds 2a',
+  ])
+    assert.equal(detectCategorySlug(title), 'smartphones', title);
+  assert.equal(detectCategorySlug('CMF by Nothing Watch Pro 2'), 'smartwatches');
+  assert.equal(detectCategorySlug('CMF by Nothing Buds Pro 2'), 'earbuds');
   assert.equal(detectCategorySlug('Nothing Ear (2)'), 'earbuds');
   assert.equal(detectCategorySlug('CMF Watch Pro 2'), 'smartwatches');
   assert.equal(detectCategorySlug('Nothing Phone (3) 256GB'), 'smartphones');
