@@ -376,6 +376,40 @@ function main() {
     );
   }
 
+  // Czech pages write the formula's decimals with a comma; vi and en keep
+  // the dot, and Vietnamese free text is left alone (DOS/Rate#1411).
+  const formula = 'A=1 · B=1 · C=1.2 · D=1 · E=1 · F=1 -> 1.20x';
+  assert.deepEqual(
+    weightExplanationCopy(
+      { weight: 1.2, explanationVi: formula, explanationKind: 'formula' },
+      'cs'
+    ),
+    { text: 'A=1 · B=1 · C=1,2 · D=1 · E=1 · F=1 -> 1,20x' }
+  );
+  assert.deepEqual(
+    weightExplanationCopy({ weight: 1.2, explanationVi: formula }, 'cs'),
+    { text: 'A=1 · B=1 · C=1,2 · D=1 · E=1 · F=1 -> 1,20x' },
+    'a cached row without a kind'
+  );
+  assert.deepEqual(
+    weightExplanationCopy(
+      { weight: 1.2, explanationVi: formula, explanationKind: 'formula' },
+      'en'
+    ),
+    { text: formula }
+  );
+  assert.deepEqual(weightExplanationCopy(cached, 'cs'), {
+    text: cached.explanationVi,
+  });
+  const cs = JSON.parse(
+    readFileSync(new URL('../../../locales/cs.json', import.meta.url), 'utf8')
+  );
+  // No dot decimal anywhere in the review section's Czech messages.
+  for (const [key, text] of Object.entries(cs.reviews)) {
+    if (typeof text !== 'string') continue;
+    assert.doesNotMatch(text, /\d\.\d/, `cs reviews.${key}`);
+  }
+
   console.warn('✅ Review display suite passed');
 }
 

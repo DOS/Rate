@@ -1,4 +1,4 @@
-import { formatDecimal } from './locale-format';
+import { formatDecimal, toFormatLocale } from './locale-format';
 import type {
   CombinedDualScoreBlendMode,
   ReviewFlagCategory,
@@ -13,6 +13,9 @@ import type {
  * excluded from the rating (DOS-Me 20261018100000) until an analyzer scores
  * them, so they get their own neutral state instead of the category fallback.
  */
+
+// The formula as the analyzer writes it, kind or not (cached rows).
+const FORMULA_RE = /^A=[\d.]+ · B=[\d.]+ /;
 export type ReviewBadgeKind = ReviewFlagCategory | 'pending';
 
 const VALID_REVIEW_FLAG_CATEGORIES = new Set<ReviewFlagCategory>([
@@ -152,7 +155,15 @@ export function weightExplanationCopy(
             .trim()
             .slice(0, 300)
         : '';
-    return { text: cleanText };
+    // The 6-factor formula ("A=1 · C=1.2 -> 1.20x") is notation, not
+    // words: on cs its decimals take the comma (DOS/Rate#1411).
+    return {
+      text:
+        toFormatLocale(locale) === 'cs' &&
+        (kind === 'formula' || FORMULA_RE.test(cleanText))
+          ? cleanText.replace(/(\d)\.(\d)/g, '$1,$2')
+          : cleanText,
+    };
   }
   const rawWeight = parseDecimalReviewNumber(breakdown.weight);
   const safeWeight = Number.isFinite(rawWeight)
