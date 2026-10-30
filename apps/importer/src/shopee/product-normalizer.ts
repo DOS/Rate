@@ -2174,6 +2174,21 @@ export class ProductNormalizer {
         // "Chính hãng" / "Mới 100%" before the model has begun: "Samsung 256GB Galaxy
         // S24 Ultra", "Samsung - Galaxy A55", "Xiaomi 16GB/512GB 15 Ultra" (DOS/Rate#1429).
         if (modelTokens.length === 0) {
+          // A Garmin "GPS" before a model number is the model's own word: "Garmin GPS 73",
+          // "Garmin GPS 64s" key as "gps-73" and "gps-64s", as before DOS/Rate#1429. Other
+          // brands' "GPS 5G" or "GPS 44 mm" stay options (DOS/Rate#1457).
+          if (
+            brand === 'Garmin' &&
+            /^GPS$/i.test(tok) &&
+            /^\d{2,3}[a-z]{0,2}$/i.test(rawTokens[i + 1] ?? '') &&
+            // A size or storage ("47mm", "32GB") is no model number.
+            !/\d(?:mm|gb|tb|g)$/i.test(rawTokens[i + 1] ?? '') &&
+            !/^mm\b/i.test(rawTokens[i + 2] ?? '')
+          ) {
+            modelTokens.push(tok);
+            maxModelTokens = 2;
+            continue;
+          }
           if (
             /^(?:\d+(?:[.,]\d+)?(?:GB|TB)|\d+(?:GB)?[-/]\d+(?:GB|TB)?|\d{2}mm|[45]G|LTE|GPS|RAM|ROM|Chính|Hãng|Hàng|Mới|New|Fullbox|\d{1,3}%)?[-–|/]*$/iu.test(
               tok
@@ -2201,7 +2216,7 @@ export class ProductNormalizer {
         // "Max" after "Pro": "Redmi Note 17 Pro Max" is not the Pro (DOS/Rate#815).
         if (
           modelTokens.length >= 4 &&
-          !(modelTokens.length === 4 && /^plus[,;]?$/i.test(tok)) &&
+          !(modelTokens.length === 4 && /^plus(?:[,;]?$|\/)/i.test(tok)) &&
           !(/^pro$/i.test(modelTokens[modelTokens.length - 1] ?? '') && /^max[,;]?$/i.test(tok)) &&
           !generation
         ) {
@@ -2231,6 +2246,22 @@ export class ProductNormalizer {
             (modelTokens.length > 0 ? !modelTokens.some(t => /\d/.test(t)) : /[a-z]/i.test(head))
           ) {
             modelTokens.push(head);
+          }
+          break;
+        }
+        // A word glued to the chain ("Redmi Note 13 Pro/12GB/512GB") is the model's last
+        // word, and the chain ends the model; a stop word there ("RAM/8GB/256GB",
+        // "Mới/…") is not (DOS/Rate#1457).
+        const wordHead = /^(\p{L}+)\/\d{1,2}(?:GB)?\/\d+(?:[.,]\d+)?(?:GB|TB)(?![a-z\d])/iu.exec(
+          tok
+        );
+        if (wordHead && modelTokens.length > 0) {
+          if (
+            !/^(?:LTE|GPS|RAM|ROM|OLED|WiFi|Chính|Quốc|Bản|Mới|Fullbox|Likenew|Like|Cũ|VNA)$/iu.test(
+              wordHead[1]!.normalize('NFC')
+            )
+          ) {
+            modelTokens.push(wordHead[1]!);
           }
           break;
         }
@@ -2320,12 +2351,23 @@ export class ProductNormalizer {
     // The pair is the first one that ends on a storage (32GB or more): "Redmi 13/8GB/256GB"
     // and "Realme GT 6 16/12GB/512GB" are 8GB and 12GB RAM, not a 13 or 16 before them, and
     // a list of variants ("6GB/128GB/8GB/256GB") keys as its first, as before. With no such
-    // pair, the chain's last link (DOS/Rate#1438).
+    // pair, the chain's last link (DOS/Rate#1438). A pair that starts on a stated storage
+    // ("64GB/4GB/128GB/8GB") is that storage first, so the list keys as its first variant,
+    // 64GB, not the 128GB of the next pair (DOS/Rate#1457).
     const slashPairs = [
       ...title.matchAll(/(?=(\b(\d{1,2})\s*(GB\s*)?\/\s*(\d+(?:[.,]\d+)?)\s*(TB|GB)\b))/gi),
     ];
     const lastSlashPair =
-      slashPairs.find(m => /^TB$/i.test(m[5]!) || parseFloat(m[4]!.replace(',', '.')) >= 32) ??
+      slashPairs.find(
+        m =>
+          /^TB$/i.test(m[5]!) ||
+          parseFloat(m[4]!.replace(',', '.')) >= 32 ||
+          // A storage first, unless a RAM word names it ("RAM 32GB/16GB/512GB").
+          (Boolean(m[3]) &&
+            !/\bRAM\s*[:\-–]?\s*$/i.test(title.slice(0, m.index)) &&
+            parseInt(m[2]!, 10) >= 32 &&
+            parseInt(m[2]!, 10) > parseFloat(m[4]!.replace(',', '.')))
+      ) ??
       slashPairs.find(m => !/^\s*\/\s*\d/.test(title.slice(m.index + m[1]!.length))) ??
       slashPairs[0];
     // "16/2GB RAM": the RAM word names the second number, so the first is the storage.

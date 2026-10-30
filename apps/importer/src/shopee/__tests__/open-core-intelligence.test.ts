@@ -1068,6 +1068,15 @@ async function runSuite() {
     ['JBL | Flip 6 tặng dây', 'jbl:flip-6:unknown'],
     ['Garmin GPSMAP 67', 'garmin:gpsmap-67:unknown'],
     ['Garmin GPSMAP 67 Máy định vị cầm tay', 'garmin:gpsmap-67:unknown'],
+    // "GPS" before a model number is the model's own word (DOS/Rate#1457).
+    ['Garmin GPS 73 Máy định vị cầm tay', 'garmin:gps-73:unknown'],
+    ['Garmin GPS 64s', 'garmin:gps-64s:unknown'],
+    ['Samsung GPS 44mm Galaxy Watch7', 'samsung:galaxy-watch7:unknown'],
+    // Only Garmin's: a network after another brand's GPS is no model number.
+    ['Xiaomi GPS 4G Redmi Watch 5', 'xiaomi:redmi-watch-5:unknown'],
+    ['Samsung GPS 5G Galaxy Watch7 44mm', 'samsung:galaxy-watch7:unknown'],
+    // Nor is a size or storage after Garmin's GPS.
+    ['Garmin GPS 47mm Fenix 7', 'garmin:fenix-7:unknown'],
     ['Samsung Galaxy S24 + Plus 256GB', 'samsung:galaxy-s24-plus:256gb'],
     ['Samsung (Hàng chính hãng) Galaxy A55 256GB', 'samsung:galaxy-a55:256gb'],
     ['Samsung 256GB', 'samsung:unkeyed:256gb'],
@@ -1109,6 +1118,8 @@ async function runSuite() {
     // A list of variants keys as its first, as before.
     ['Oppo A3 6GB/128GB/8GB/256GB', ':128gb'],
     ['Samsung A06 4/64GB/6/128GB', ':64gb'],
+    // Storage first, the list still keys as its first variant (DOS/Rate#1457).
+    ['Samsung Galaxy Tab A9 64GB/4GB/128GB/8GB', ':64gb'],
   ] as const) {
     assert.ok(keyOf(title).endsWith(storage), `${title} -> ${keyOf(title)}`);
   }
@@ -1139,6 +1150,17 @@ async function runSuite() {
     // Nor is a network.
     ['Xiaomi 5G/8GB/256GB', 'xiaomi:unkeyed:256gb'],
     ['Samsung Galaxy A55 5G/8GB/256GB', 'samsung:galaxy-a55:256gb'],
+    // A word glued to the chain is the model's last word (DOS/Rate#1457).
+    ['Xiaomi Redmi Note 13 Pro/12GB/512GB', 'xiaomi:redmi-note-13-pro:512gb'],
+    ['Xiaomi Redmi Note 13 Pro Plus/12GB/512GB', 'xiaomi:redmi-note-13-pro-plus:512gb'],
+    // A stop word glued to the chain is no model word.
+    ['Samsung Galaxy A55 RAM/8GB/256GB', 'samsung:galaxy-a55:256gb'],
+    ['Samsung Galaxy A55 Mới/8GB/256GB', 'samsung:galaxy-a55:256gb'],
+    // A RAM word before a storage-first pair names a RAM.
+    ['Lenovo ThinkPad T14 RAM 32GB/16GB/512GB SSD', 'lenovo:thinkpad-t14:512gb'],
+    ['Lenovo ThinkPad T14 RAM - 32GB/16GB/512GB SSD', 'lenovo:thinkpad-t14:512gb'],
+    ['Lenovo ThinkPad T14 RAM-32GB/16GB/512GB SSD', 'lenovo:thinkpad-t14:512gb'],
+    ['Samsung Galaxy Tab A9 64GB/4GB/128GB/8GB', 'samsung:galaxy-tab-a9:64gb'],
   ] as const) {
     assert.equal(keyOf(title), key, title);
   }
