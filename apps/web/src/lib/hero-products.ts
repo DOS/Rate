@@ -111,7 +111,14 @@ export function toHeroProductSuggestions(
  * links. They were 27% of the watchlist page's HTML and 8% of a category
  * page's (DOS/Rate#1353).
  */
-export function withoutSpecSheet<T extends MasterProduct>(p: T): T {
+export type WithoutSpecSheet<T extends MasterProduct> = Omit<
+  T,
+  'description' | 'expert_review_summary'
+> & { description: null; expert_review_summary: null };
+
+export function withoutSpecSheet<T extends MasterProduct>(
+  p: T
+): WithoutSpecSheet<T> {
   return {
     ...p,
     specifications: categorySlugOnly(p.specifications),

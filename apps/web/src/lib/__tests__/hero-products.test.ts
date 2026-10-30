@@ -23,6 +23,15 @@ const fullRow = {
 } as unknown as MasterProduct;
 const slimRow = withoutSpecSheet(fullRow) as MasterProduct &
   Record<string, unknown>;
+// The type says what the value is: the dropped texts are null, and a slim row
+// is still a catalog row the client components take.
+const typedSlim = withoutSpecSheet(fullRow);
+const nullDescription: null = typedSlim.description;
+const nullSummary: null = typedSlim.expert_review_summary;
+const asRow: MasterProduct = typedSlim;
+assert.equal(nullDescription, null);
+assert.equal(nullSummary, null);
+assert.equal(asRow.slug, fullRow.slug);
 assert.deepEqual(slimRow.specifications, { category_slug: 'smartphones' });
 assert.deepEqual(slimRow.spec_provenance, {});
 assert.equal(slimRow.expert_review_summary, null);
