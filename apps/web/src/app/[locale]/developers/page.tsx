@@ -68,7 +68,7 @@ const TEN_FIELD_GROUPS = [
     order: 6,
     key: 'cameras',
     fields:
-      'main_camera, second_camera (Ultrawide), third_camera (Telephoto), fourth_camera, front_camera',
+      'main_camera, second_camera, third_camera, fourth_camera, front_camera',
   },
   {
     order: 7,

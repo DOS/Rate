@@ -61,10 +61,25 @@ for (const locale of ['vi', 'en', 'cs']) {
     assert.equal(typeof dev[key], 'string', `${locale}.${key}`);
   }
   assert.deepEqual(Object.keys(titles).sort(), [...groups].sort(), locale);
-  for (const group of groups) {
-    assert.ok(page.includes(`key: '${group}'`), `${group} card exists`);
+  for (const value of [
+    ...keys.map((key) => dev[key]),
+    ...groups.map((group) => titles[group]),
+  ]) {
+    assert.ok(
+      typeof value === 'string' && value.trim().length > 0,
+      `${locale}: an empty label`
+    );
   }
 }
+for (const group of groups) {
+  assert.ok(page.includes(`key: '${group}'`), `${group} card exists`);
+}
+// The page renders them through t(), not a literal.
+for (const key of keys) {
+  assert.ok(page.includes(`t('${key}')`), `the page renders ${key}`);
+}
+assert.ok(page.includes('t(`groupTitles.${group.key}`)'), 'group titles');
+assert.doesNotMatch(page, /\((?:Ultrawide|Telephoto)\)/, 'no English notes');
 // The Czech and Vietnamese text differs from the English wherever words,
 // not identifiers, carry the meaning.
 for (const locale of ['vi', 'cs']) {
