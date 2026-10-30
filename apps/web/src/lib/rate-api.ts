@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 import type { Database, MasterProduct } from '@repo/shared-data';
 import { createLogger } from '@/lib/logger';
+import { timeStep } from '@/lib/server-timing';
 import { rankModelCandidates } from '@/lib/model-match';
 import { isPendingReview } from '@/lib/review-display';
 import { listingReviewSummary } from '@/lib/analyzer-copy';
@@ -389,11 +390,13 @@ export async function getMasterProducts(
       : '';
 
   if (cleanCategorySlug && cleanCategorySlug !== 'all') {
-    const { data: catRow, error: catErr } = await supabase
-      .from('categories')
-      .select('id')
-      .eq('slug', cleanCategorySlug)
-      .maybeSingle();
+    const { data: catRow, error: catErr } = await timeStep('category', () =>
+      supabase
+        .from('categories')
+        .select('id')
+        .eq('slug', cleanCategorySlug)
+        .maybeSingle()
+    );
 
     if (catErr) {
       log.error('category slug lookup failed', {
@@ -456,9 +459,11 @@ export async function getMasterProducts(
   // Every filter defaults to NULL in SQL, so an omitted (undefined) filter is
   // the same as passing null.
   {
-    const { data: rpcRows, error: rpcErr } = await supabase.rpc(
-      'search_master_products',
-      {
+    // The slug map is read alongside the RPC, not after it: one round trip
+    // less on a cold instance (DOS/Rate#1353). It never rejects.
+    const categorySlugMapRead = timeStep('slug-map', getCategorySlugMap);
+    const { data: rpcRows, error: rpcErr } = await timeStep('search-rpc', () =>
+      supabase.rpc('search_master_products', {
         p_category_id: resolvedCategoryId ?? undefined,
         p_brands: brandList && brandList.length > 0 ? brandList : undefined,
         p_search: cleanSearch || undefined,
@@ -480,14 +485,20 @@ export async function getMasterProducts(
         p_sort: params?.sort || 'default',
         p_limit: boundedLimit,
         p_offset: boundedOffset,
-      }
+      })
     );
     if (!rpcErr && Array.isArray(rpcRows)) {
-      const categorySlugById = await getCategorySlugMap();
+      const categorySlugById = await categorySlugMapRead;
       return (rpcRows as MasterProduct[]).map((r) =>
         normalizeMasterProductRow(r, categoryHint, categorySlugById)
       );
     }
+    // The fallback reads every matching row in this process: say why, so a
+    // slow catalogue is not blamed on the RPC when it never ran (#1353).
+    log.warn('search_master_products failed; using the fallback query', {
+      message: rpcErr?.message ?? 'no rows array',
+      code: rpcErr?.code,
+    });
   }
 
   // Search, multi-brand case-insensitive matching, rating, and the JSONB spec
@@ -1483,21 +1494,25 @@ export async function getMasterProductOffersBatch(
 
     // Paged per chunk: 150 masters can easily hold more than 1000 offers.
     const [viewData, availability] = await Promise.all([
-      fetchAllRows('v_products_with_merchant_trust', (from, to) =>
-        supabase
-          .from('v_products_with_merchant_trust')
-          .select(TRUST_VIEW_SELECT)
-          .in('cluster_id', batchIds)
-          .order('price_current', { ascending: true })
-          .order('id')
-          .range(from, to)
-      ).catch(() => null),
-      getListingAvailability(batchIds),
+      timeStep('offers-view', () =>
+        fetchAllRows('v_products_with_merchant_trust', (from, to) =>
+          supabase
+            .from('v_products_with_merchant_trust')
+            .select(TRUST_VIEW_SELECT)
+            .in('cluster_id', batchIds)
+            .order('price_current', { ascending: true })
+            .order('id')
+            .range(from, to)
+        ).catch(() => null)
+      ),
+      timeStep('availability', () => getListingAvailability(batchIds)),
     ]);
 
     if (viewData) {
       const rows = viewData as unknown as RawTrustViewRow[];
-      const extras = await sellerExtrasForTrustViewRows(rows);
+      const extras = await timeStep('seller-extras', () =>
+        sellerExtrasForTrustViewRows(rows)
+      );
       for (const row of rows) {
         const cid = row.cluster_id ? String(row.cluster_id) : '';
         if (!cid) continue;
