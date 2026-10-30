@@ -40,7 +40,7 @@ test('a store with no DOSafe score shows no score and no tone', async ({
 }) => {
   expect((await page.goto(UNKNOWN))?.status()).toBe(200);
   const badge = page.getByTestId('merchant-scam-badge');
-  await expect(badge).toHaveText('Rủi ro lừa đảo: chưa đủ dữ liệu');
+  await expect(badge).toHaveText('Rủi ro lừa đảo: chưa có dữ liệu');
   await expect(badge).toHaveAttribute('data-tone', 'unknown');
   await expect(badge).not.toContainText('/100');
   const status = page.getByTestId('merchant-scam-status');

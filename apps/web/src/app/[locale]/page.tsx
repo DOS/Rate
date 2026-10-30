@@ -992,7 +992,7 @@ export default async function Home({
                             {/* No DOSafe score: no number, and no "no scam
                                 detected" (DOS/Rate#1479). */}
                             {dosafeScore == null ? (
-                              <dd>{tHome('reviewRiskNoData')}</dd>
+                              <dd>{tHome('dosafeRiskNoData')}</dd>
                             ) : (
                               <>
                                 <dd className={tone(dosafeScore)}>
