@@ -33,6 +33,12 @@ export const PAGE_META_CSP =
   "base-uri 'self'; form-action 'self'; object-src 'none'";
 export const CSP_REPORT_PATH = '/api/csp-report';
 
+/**
+ * The tag on reports of the measured policy below, as `?policy=` on its report-uri.
+ * Reports with no tag are the strict nonce policy's (DOS/Rate#1323).
+ */
+export const CSP_INLINE_POLICY_TAG = 'inline';
+
 /** A base64 nonce from 128 random bits. */
 export function createCspNonce(): string {
   const bytes = new Uint8Array(16);
@@ -82,4 +88,36 @@ export function buildContentSecurityPolicy(
     "object-src 'none'",
     `report-uri ${CSP_REPORT_PATH}`,
   ].join('; ');
+}
+
+/**
+ * Option (c) of Docs/Proposals/2026-10-30-csp-enforce-options.md, measured before
+ * anyone enforces it (DOS/Rate#1323): scripts from this origin or inline, never
+ * another host or `eval`, and workers from this origin or `blob:`. Report-only;
+ * whether to enforce it is JOY's decision.
+ */
+export function buildInlineScriptPolicy(
+  options: { dev?: boolean } = {}
+): string {
+  const script = ["'self'", "'unsafe-inline'"];
+  // React Refresh evaluates code in development.
+  if (options.dev) script.push("'unsafe-eval'");
+  return [
+    `script-src ${script.join(' ')}`,
+    "worker-src 'self' blob:",
+    `report-uri ${CSP_REPORT_PATH}?policy=${CSP_INLINE_POLICY_TAG}`,
+  ].join('; ');
+}
+
+/**
+ * The report-only header value: both policies in one header, comma-joined, the
+ * strict nonce policy first. Next.js (`getScriptNonceFromHeader`) splits the
+ * header on ';' and reads the first script-src, so that must be the one with the
+ * nonce, or the pages lose it (DOS/Rate#1323).
+ */
+export function buildReportOnlyCsp(
+  nonce: string,
+  options: { dev?: boolean; supabaseUrl?: string } = {}
+): string {
+  return `${buildContentSecurityPolicy(nonce, options)}, ${buildInlineScriptPolicy(options)}`;
 }
