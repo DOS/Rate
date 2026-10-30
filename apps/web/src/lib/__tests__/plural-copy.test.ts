@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { createTranslator } from 'next-intl';
+import { analyzerCopy } from '../analyzer-copy';
 
 // Count phrases on product, category and comparison pages agree with the
 // number in Czech (1, 2-4, 5+) and English (1, other) (DOS/Rate#1370).
@@ -147,13 +148,109 @@ function main() {
     );
   }
 
-  // Vietnamese has one form; its messages are unchanged.
+  // The remaining count phrases on the same pages, every Czech form.
+  const more: Array<[string, Record<string, number | string>, string]> = [
+    [
+      'analyzerCopy.summaryDefault',
+      { total: 1, kept: 1, removed: 1 },
+      'Poslední analýza (jeden obchod) prověřila 1 recenzi: ponechána 1 skutečná recenze a vyřazena 1 spamová, odměnová, falešná nebo bombardující recenze.',
+    ],
+    [
+      'analyzerCopy.summaryDefault',
+      { total: 12, kept: 3, removed: 9 },
+      'Poslední analýza (jeden obchod) prověřila 12 recenzí: ponechány 3 skutečné recenze a vyřazeno 9 spamových, odměnových, falešných nebo bombardujících recenzí.',
+    ],
+    [
+      'analyzerCopy.summaryNoAuthentic',
+      { removed: 1 },
+      'Poslední analýza (jeden obchod) po odfiltrování 1 spamového nebo odměnového komentáře nenašla žádné skutečné recenze.',
+    ],
+    [
+      'productDetail.priceHistoryFakeAlertBadge',
+      { count: 3 },
+      'Odhaleny 3 nabídky s uměle navýšenou původní cenou',
+    ],
+    [
+      'productDetail.priceHistoryFakeAlertBadge',
+      { count: 9 },
+      'Odhaleno 9 nabídek s uměle navýšenou původní cenou',
+    ],
+    [
+      'productDetail.priceHistoryKpiCurrentMinSub',
+      { count: 1 },
+      'Agregováno z 1 obchodu',
+    ],
+    [
+      'productDetail.priceReferenceLabel',
+      { count: 2 },
+      'Referenční tržní rozpětí (2 sledované zdroje):',
+    ],
+    [
+      'productDetail.unknownSizeTitle',
+      { count: 5 },
+      'Neuvedené úložiště (5 zdrojů)',
+    ],
+    ['reviews.validCountBadge', { count: 1 }, '✓ 1 platná'],
+    ['reviews.expertReviewsCountNote', { count: 2 }, '2 expertní hodnocení'],
+    ['reviews.expertReviewsCountNote', { count: 6 }, '6 expertních hodnocení'],
+    ['catalog.page.foundSuffix', { total: 3 }, '/ 3 normalizované produkty'],
+    [
+      'compare.switcherPeerCount',
+      { count: 1 },
+      '1 standardizovaný model v kategorii',
+    ],
+    ['compare.valSourcesCount', { count: 4 }, '4 zdroje'],
+  ];
+  for (const [key, values, expected] of more) {
+    assert.equal(
+      cs(key as never, values as never),
+      expected,
+      `cs ${key} ${JSON.stringify(values)}`
+    );
+  }
   assert.equal(
+    en('reviews.expertReviewsCountNote' as never, { count: 1 } as never),
+    '1 expert evaluation'
+  );
+  assert.equal(
+    en('compare.valSourcesCount' as never, { count: 1 } as never),
+    '1 source'
+  );
+
+  // A stored Vietnamese summary, parsed and shown on the Czech page, picks
+  // the forms of its own numbers.
+  const parsed = analyzerCopy(
+    'Lần phân tích gần nhất (một nơi bán) đã xét 2 đánh giá: giữ lại 1 đánh giá thực chất và loại bỏ 1 đánh giá rác, nhận xu, ảo hoặc bom hàng.'
+  );
+  assert.ok('key' in parsed && parsed.key === 'summaryDefault');
+  assert.equal(
+    cs(`analyzerCopy.${parsed.key}` as never, parsed.values as never),
+    'Poslední analýza (jeden obchod) prověřila 2 recenze: ponechána 1 skutečná recenze a vyřazena 1 spamová, odměnová, falešná nebo bombardující recenze.'
+  );
+
+  // A count of a thousand or more is grouped the locale's way.
+  assert.equal(
+    cs('catalog.page.radarAnalyzedSub' as never, { count: 1234 } as never),
+    'Zkontrolováno 1 234 nabídek'
+  );
+  assert.equal(
+    en('catalog.page.radarAnalyzedSub' as never, { count: 1234 } as never),
+    'Checked 1,234 store listings'
+  );
+
+  // Vietnamese has one form and keeps its plain placeholders.
+  const viMessages = read('vi');
+  for (const key of [
+    'verifiedReviewsCountNoScore',
+    'priceHistoryGenuineDealBadge',
+  ]) {
+    assert.doesNotMatch(viMessages.productDetail[key], /plural/, `vi ${key}`);
+  }
+  assert.ok(
     vi(
       'productDetail.verifiedReviewsCountNoScore' as never,
       { count: 1 } as never
-    ),
-    `(1 ${read('vi').productDetail.verifiedReviewsCountNoScore.split('{count} ')[1]}`
+    ).startsWith('(1 ')
   );
 
   console.warn('  ✅ Count phrases agree with the number in cs and en (#1370)');
