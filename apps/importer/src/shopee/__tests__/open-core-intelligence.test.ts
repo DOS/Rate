@@ -477,83 +477,119 @@ async function runSuite() {
     ['MacBook Air M2 8GB 256GB bảo hành 15 tháng', 'apple:macbook-air-m2:256gb'],
     ['MacBook Pro M3 18GB 512GB bảo hành 14 tháng', 'apple:macbook-pro-m3:512gb'],
     ['MacBook Air M2 8GB 256GB 15 gói quà', 'apple:macbook-air-m2:256gb'],
-    // "<size> năm <year>" names the size and the year (DOS/Rate#1317); a "năm"
-    // with no year after it is a duration.
+    // A number right before "năm" is a duration or a shop's age, never a size
+    // (DOS/Rate#1410): the gift's size stands in, or the title stays size-less.
+    // The one exception is the release-year form: the size right after the line and a
+    // four-digit year after "năm" (DOS/Rate#1317, #1333).
     ['Máy tính bảng Apple iPad Pro 11 năm 2022 M2 128GB Wifi', 'apple:ipad-pro-m2-11:128gb'],
     ['Laptop Apple MacBook Pro 14 năm 2023 M3 8GB 512GB', 'apple:macbook-pro-m3-14:512gb'],
     ['MacBook Air 13 năm 2022 M2 8GB 256GB', 'apple:macbook-air-m2-13:256gb'],
     ['MacBook Air 15 năm 2023 M2 8GB 256GB', 'apple:macbook-air-m2-15:256gb'],
     ['iPad Air 11 năm 2024 M2 128GB', 'apple:ipad-air-m2-11:128gb'],
     ['iPad Pro 12.9 năm 2022 M2 128GB', 'apple:ipad-pro-m2-129:128gb'],
-    ['MacBook Air M2 13 năm', 'apple:macbook-air-m2:unknown'],
-    // Any word or year form after "năm" keeps the size (DOS/Rate#1333).
     ['iPad Pro 11 năm sx 2022', 'apple:ipad-pro-11:unknown'],
     ['iPad Pro 12.9 năm sản xuất 2022', 'apple:ipad-pro-129:unknown'],
     ['MacBook Air 13 năm ra mắt 2022', 'apple:macbook-air-13:unknown'],
     ['iPad Pro 11 năm: 2022', 'apple:ipad-pro-11:unknown'],
-    ['iPad Pro 11 năm 22', 'apple:ipad-pro-11:unknown'],
-    // A shop's age is no size: the gift's size stands in.
+    ['iPad Pro M4 13 năm-2024', 'apple:ipad-pro-m4-13:unknown'],
+    ['Máy tính bảng Apple iPad Pro 11 năm-2022 M2 128GB Wifi', 'apple:ipad-pro-m2-11:128gb'],
+    ['iPad Pro M4 13 năm.2024', 'apple:ipad-pro-m4-13:unknown'],
+    ['iPad Pro M4 13 năm - 2024', 'apple:ipad-pro-m4-13:unknown'],
+    ['iPad Pro M4 13 năm – 2024', 'apple:ipad-pro-m4-13:unknown'],
+    ['iPad Pro M4 13 năm/2024', 'apple:ipad-pro-m4-13:unknown'],
+    ['MacBook Pro M3 Max 16 năm 2023 1TB', 'apple:macbook-pro-m3-max-16:1024gb'],
+    // Chip, storage, network or generation words may sit between the line and the size.
+    ['iPad Pro M2 128GB 11 năm 2022 tặng ốp 13 inch', 'apple:ipad-pro-m2-11:128gb'],
+    ['MacBook Air chip M2 13 năm 2022 256GB tặng túi 15 inch', 'apple:macbook-air-m2-13:256gb'],
+    ['iPad Pro (M4) 11 năm 2024', 'apple:ipad-pro-m4-11:unknown'],
+    ['iPad Pro Wifi 11 năm 2022', 'apple:ipad-pro-11:unknown'],
+    ['iPad Pro 5G 11 năm 2022 M2', 'apple:ipad-pro-m2-11:unknown'],
+    ['iPad Pro Gen 4 11 năm 2022', 'apple:ipad-pro-11:unknown'],
+    ['iPad Air 5 11 năm 2022', 'apple:ipad-air-5-11:unknown'],
+    ['MacBook Air 13 năm phát hành 2022', 'apple:macbook-air-13:unknown'],
+    ['iPad Pro 11 năm 2022/2023', 'apple:ipad-pro-11:unknown'],
+    // A count or a shop-age word after the year is no release year.
+    ['iPad Pro M4 256GB 13 năm 2024 uy tín', 'apple:ipad-pro-m4:256gb'],
+    ['iPad Pro M4 Wifi 13 năm 2024 kinh nghiệm tặng ốp 11 inch', 'apple:ipad-pro-m4-11:unknown'],
+    ['iPad Pro M4 13 năm 2000 đơn 256GB tặng ốp 11 inch', 'apple:ipad-pro-m4-11:256gb'],
+    ['MacBook Air M2 15 năm 2000 khách 256GB tặng túi 13 inch', 'apple:macbook-air-m2-13:256gb'],
+    ['MacBook Pro M3 14 năm 2000 đơn tặng túi 16 inch', 'apple:macbook-pro-m3-16:unknown'],
+    // A two-digit year is too close to a count to count.
+    ['iPad Pro 11 năm 22', 'apple:ipad-pro:unknown'],
+    ['MacBook Air M2 13 năm', 'apple:macbook-air-m2:unknown'],
+    ['iPad Pro M4 13 năm.', 'apple:ipad-pro-m4:unknown'],
+    // A shop's age, whatever its form or what follows it.
     ['iPad Pro M4 256GB - Shop 13 năm kinh nghiệm - tặng ốp 11 inch', 'apple:ipad-pro-m4-11:256gb'],
-    // "Shop N năm" is the shop's age whatever follows; "năm" before a mark or
-    // another shop-age word is a duration (DOS/Rate#1386).
     ['iPad Pro M4 256GB - Shop 13 năm bán hàng - tặng ốp 11 inch', 'apple:ipad-pro-m4-11:256gb'],
     [
       'MacBook Pro M3 512GB Shop 16 năm chuyên hàng Apple tặng túi 14 inch',
       'apple:macbook-pro-m3-14:512gb',
     ],
     ['MacBook Air M2 cửa hàng 15 năm uy tín 13 inch', 'apple:macbook-air-m2-13:unknown'],
+    [
+      'iPad Pro M4 256GB Shop 13 năm chăm sóc khách hàng tặng ốp 11 inch',
+      'apple:ipad-pro-m4-11:256gb',
+    ],
+    ['iPad Pro M4 256GB Apple Store 13 năm tặng ốp 11 inch', 'apple:ipad-pro-m4-11:256gb'],
+    ['iPad Pro M4 256GB Shop: 13 năm tặng ốp 11 inch', 'apple:ipad-pro-m4-11:256gb'],
+    ['iPad Pro M4 256GB Shop:13 năm tặng ốp 11 inch', 'apple:ipad-pro-m4-11:256gb'],
+    ['iPad Pro M4 256GB Shop : 13 năm tặng ốp 11 inch', 'apple:ipad-pro-m4-11:256gb'],
+    ['iPad Pro M4 256GB Shop 13+ năm tặng ốp 11 inch', 'apple:ipad-pro-m4-11:256gb'],
+    ['iPad Pro M4 256GB Shop 13 + năm tặng ốp 11 inch', 'apple:ipad-pro-m4-11:256gb'],
+    ['iPad Pro M4 256GB 13+ năm tặng ốp 11 inch', 'apple:ipad-pro-m4-11:256gb'],
+    ['iPad Pro M4 256GB Shop hơn 13 năm chăm sóc tặng ốp 11 inch', 'apple:ipad-pro-m4-11:256gb'],
+    ['iPad Pro M4 256GB Shop trên 13 năm tặng ốp 11 inch', 'apple:ipad-pro-m4-11:256gb'],
+    ['iPad Pro M4 256GB Shop gần 13 năm tặng ốp 11 inch', 'apple:ipad-pro-m4-11:256gb'],
+    ['iPad Pro M4 256GB Shop đã 13 năm tặng ốp 11 inch', 'apple:ipad-pro-m4-11:256gb'],
+    ['iPad Pro M4 256GB Shop tròn 13 năm tặng ốp 11 inch', 'apple:ipad-pro-m4-11:256gb'],
+    ['iPad Pro M4 256GB Shop uy tín 13 năm tặng ốp 11 inch', 'apple:ipad-pro-m4-11:256gb'],
+    ['iPad Pro M4 256GB iStore 13 năm tặng ốp 11 inch', 'apple:ipad-pro-m4-11:256gb'],
+    ['iPad Pro M4 256GB Macstore 13 năm tặng ốp 11 inch', 'apple:ipad-pro-m4-11:256gb'],
+    ['iPad Pro M4 256GB TechStore 13 năm tặng ốp 11 inch', 'apple:ipad-pro-m4-11:256gb'],
+    ['iPad Pro M4 256GB OneShop 13 năm tặng ốp 11 inch', 'apple:ipad-pro-m4-11:256gb'],
+    ['iPad Pro M4 256GB Phoneshop 13 năm tặng ốp 11 inch', 'apple:ipad-pro-m4-11:256gb'],
+    ['iPad Pro M4 workshop 13 năm tặng ốp 11 inch', 'apple:ipad-pro-m4-11:unknown'],
+    ['iPad Pro M4 appstore 13 năm tặng ốp 11 inch', 'apple:ipad-pro-m4-11:unknown'],
+    // A year after a shop's age does not make it a size.
+    ['iPad Pro M4 256GB Shop 13 năm 2024 tặng ốp 11 inch', 'apple:ipad-pro-m4-11:256gb'],
+    ['MacBook Air M2 Shop 13 năm 2022 tặng túi 15 inch', 'apple:macbook-air-m2-15:unknown'],
+    ['iPad Pro M4 256GB Shop 13 năm 2023', 'apple:ipad-pro-m4:256gb'],
+    ['iPad Pro M4 Apple Store 13 năm.2024 256GB', 'apple:ipad-pro-m4:256gb'],
+    ['iPad Pro M4 Shop 13 năm/2024', 'apple:ipad-pro-m4:unknown'],
+    ['iPad Pro M4 Shop 13 năm 2024 256GB', 'apple:ipad-pro-m4:256gb'],
+    ['iPad Pro M4 Shop 13 năm: 22', 'apple:ipad-pro-m4:unknown'],
+    ['iPad Pro M4 Shop 13 năm 20', 'apple:ipad-pro-m4:unknown'],
+    // Counts, dates and durations after "năm" are no year.
+    ['iPad Pro M4 256GB Shop 13 năm - 12 tháng', 'apple:ipad-pro-m4:256gb'],
+    ['iPad Pro M4 256GB Shop 13 năm – 12 tháng', 'apple:ipad-pro-m4:256gb'],
+    ['iPad Pro M4 256GB 13 năm/24/7', 'apple:ipad-pro-m4:256gb'],
+    ['iPad Pro M4 256GB 13 năm 2000 đơn', 'apple:ipad-pro-m4:256gb'],
+    ['iPad Pro M4 256GB 13 năm - 24h', 'apple:ipad-pro-m4:256gb'],
+    ['iPad Pro M4 256GB 13 năm - 20 máy', 'apple:ipad-pro-m4:256gb'],
+    ['iPad Pro M4 256GB Shop 13 năm/11/11', 'apple:ipad-pro-m4:256gb'],
+    ['iPad Pro M4 256GB Shop 13 năm 99% tặng ốp 11 inch', 'apple:ipad-pro-m4-11:256gb'],
+    ['iPad Pro M4 256GB Shop 13 năm 100 đánh giá tặng ốp 11 inch', 'apple:ipad-pro-m4-11:256gb'],
+    ['iPad Pro M4 256GB - 13 năm - 100 đánh giá tặng ốp 11 inch', 'apple:ipad-pro-m4-11:256gb'],
+    ['iPad Pro M4 256GB 13 năm/100 đánh giá tặng ốp 11 inch', 'apple:ipad-pro-m4-11:256gb'],
+    ['iPad Pro M4 256GB 13 năm 2000 đơn tặng ốp 11 inch', 'apple:ipad-pro-m4-11:256gb'],
+    // A duration with any mark or word after it.
     ['iPad Pro M4 256GB 13 năm phát triển tặng ốp 11 inch', 'apple:ipad-pro-m4-11:256gb'],
     ['iPad Pro M4 256GB 13 năm. tặng ốp 11 inch', 'apple:ipad-pro-m4-11:256gb'],
     ['iPad Pro M4 256GB 13 năm! tặng ốp 11 inch', 'apple:ipad-pro-m4-11:256gb'],
     ['iPad Pro M4 256GB 13 năm- tặng ốp 11 inch', 'apple:ipad-pro-m4-11:256gb'],
     ['iPad Pro M4 256GB [13 năm] tặng ốp 11 inch', 'apple:ipad-pro-m4-11:256gb'],
     ['iPad Pro M4 256GB 13 năm: tặng ốp 11 inch', 'apple:ipad-pro-m4-11:256gb'],
-    // The shop rule alone: no duration word after "năm".
-    [
-      'iPad Pro M4 256GB Shop 13 năm chăm sóc khách hàng tặng ốp 11 inch',
-      'apple:ipad-pro-m4-11:256gb',
-    ],
-    ['iPad Pro M4 256GB Apple Store 13 năm tặng ốp 11 inch', 'apple:ipad-pro-m4-11:256gb'],
-    // A year after "năm" with a mark between keeps the size.
-    ['iPad Pro M4 13 năm-2024', 'apple:ipad-pro-m4-13:unknown'],
-    ['Máy tính bảng Apple iPad Pro 11 năm-2022 M2 128GB Wifi', 'apple:ipad-pro-m2-11:128gb'],
-    ['iPad Pro M4 13 năm.2024', 'apple:ipad-pro-m4-13:unknown'],
-    // Shop ages with a colon, a "+" or "hơn" / "trên" (DOS/Rate#1389).
-    ['iPad Pro M4 256GB Shop: 13 năm tặng ốp 11 inch', 'apple:ipad-pro-m4-11:256gb'],
-    ['iPad Pro M4 256GB Shop 13+ năm tặng ốp 11 inch', 'apple:ipad-pro-m4-11:256gb'],
-    ['iPad Pro M4 256GB Shop hơn 13 năm chăm sóc tặng ốp 11 inch', 'apple:ipad-pro-m4-11:256gb'],
-    ['iPad Pro M4 256GB Shop trên 13 năm tặng ốp 11 inch', 'apple:ipad-pro-m4-11:256gb'],
-    ['iPad Pro M4 256GB Shop:13 năm tặng ốp 11 inch', 'apple:ipad-pro-m4-11:256gb'],
-    ['iPad Pro M4 256GB Shop : 13 năm tặng ốp 11 inch', 'apple:ipad-pro-m4-11:256gb'],
-    ['iPad Pro M4 256GB Shop 13 + năm tặng ốp 11 inch', 'apple:ipad-pro-m4-11:256gb'],
-    // A percentage, a count or a bare two-digit number after it is no year.
-    ['iPad Pro M4 256GB Shop 13 năm 99% tặng ốp 11 inch', 'apple:ipad-pro-m4-11:256gb'],
-    ['iPad Pro M4 256GB Shop 13 năm 100 đánh giá tặng ốp 11 inch', 'apple:ipad-pro-m4-11:256gb'],
-    ['iPad Pro M4 Shop 13 năm 20', 'apple:ipad-pro-m4:unknown'],
-    ['iPad Pro M4 256GB - 13 năm - 100 đánh giá tặng ốp 11 inch', 'apple:ipad-pro-m4-11:256gb'],
-    ['iPad Pro M4 256GB 13 năm/100 đánh giá tặng ốp 11 inch', 'apple:ipad-pro-m4-11:256gb'],
-    // A production year after a shop's "năm" keeps the size.
-    ['iPad Pro M4 Apple Store 13 năm.2024 256GB', 'apple:ipad-pro-m4-13:256gb'],
-    ['iPad Pro M4 Shop 13 năm: 22', 'apple:ipad-pro-m4-13:unknown'],
-    ['iPad Pro M4 Shop 13 năm/2024', 'apple:ipad-pro-m4-13:unknown'],
-    ['iPad Pro M4 Shop 13 năm 2024 256GB', 'apple:ipad-pro-m4-13:256gb'],
-    // "/" and " - " before a year keep the size like "-" does.
-    ['iPad Pro M4 13 năm - 2024', 'apple:ipad-pro-m4-13:unknown'],
-    ['iPad Pro M4 13 năm/2024', 'apple:ipad-pro-m4-13:unknown'],
     ['iPad Pro M4 256GB 13 năm/ tặng ốp 11 inch', 'apple:ipad-pro-m4-11:256gb'],
     ['iPad Pro M4 256GB 13 năm - tặng ốp 11 inch', 'apple:ipad-pro-m4-11:256gb'],
-    // "13 năm." at the end is a duration, like "13 năm" (DOS/Rate#1333).
-    ['iPad Pro M4 13 năm.', 'apple:ipad-pro-m4:unknown'],
-    // "shop" inside a word is no shop: "năm" with no duration word keeps the size.
-    ['iPad Pro M4 workshop 13 năm tặng ốp 11 inch', 'apple:ipad-pro-m4-13:unknown'],
-    ['iPad Pro M4 appstore 13 năm tặng ốp 11 inch', 'apple:ipad-pro-m4-13:unknown'],
+    // A real size before the shop's age stays the product's.
+    ['iPad Pro M4 13 inch 256GB Shop 13 năm', 'apple:ipad-pro-m4-13:256gb'],
     // A screen size after "Shop" with no "năm" stays the product's.
     ['iPad Pro M4 Shop 11 inch', 'apple:ipad-pro-m4-11:unknown'],
     [
       'MacBook Air M2 256GB - Shop 14 năm kinh nghiệm - tặng túi 13 inch',
       'apple:macbook-air-m2-13:256gb',
     ],
-    ['iPad Pro M4 256GB 11 năm bảo hành tặng ốp 13 inch', 'apple:ipad-pro-m4-11:256gb'],
+    ['iPad Pro M4 256GB 11 năm bảo hành tặng ốp 13 inch', 'apple:ipad-pro-m4-13:256gb'],
     // A date ("11/11"), RAM or SSD, a macOS name, a duration or an amount is no
     // size, so the gift's size still stands in.
     ['iPad Pro M4 Sale 11/11 tặng ốp 13 inch', 'apple:ipad-pro-m4-13:unknown'],
