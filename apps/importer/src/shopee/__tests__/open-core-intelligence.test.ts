@@ -1069,6 +1069,12 @@ async function runSuite() {
     ['Samsung Galaxy S24 12GB/1TB', ':1024gb'],
     // No storage after the pair: the 8GB is RAM and the storage stays unknown.
     ['Asus Vivobook 14/8GB', ':unknown'],
+    // A RAM word after the pair names the RAM, so a small storage first still reads.
+    ['Samsung Galaxy S5 16/2GB RAM', ':16gb'],
+    ['Samsung Galaxy S3 mini 8/1GB RAM', ':8gb'],
+    // A list of variants keys as its first, as before.
+    ['Oppo A3 6GB/128GB/8GB/256GB', ':128gb'],
+    ['Samsung A06 4/64GB/6/128GB', ':64gb'],
   ] as const) {
     assert.ok(keyOf(title).endsWith(storage), `${title} -> ${keyOf(title)}`);
   }

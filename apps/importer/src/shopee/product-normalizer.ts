@@ -2231,14 +2231,21 @@ export class ProductNormalizer {
       /dung lượng\s*(?:[:-]\s*)?(\d+(?:[.,]\d+)?)\s*(TB|GB)(?!\s*(?:RAM|bộ\s*nhớ\s*RAM|dung\s*lượng\s*RAM))/i
     );
 
-    // In a chain the pair is the last link: "Redmi 13/8GB/256GB" and "Realme GT 6
-    // 16/12GB/512GB" are 8GB and 12GB RAM, not a 13 or 16 before them (DOS/Rate#1438).
+    // The pair is the first one that ends on a storage (32GB or more): "Redmi 13/8GB/256GB"
+    // and "Realme GT 6 16/12GB/512GB" are 8GB and 12GB RAM, not a 13 or 16 before them, and
+    // a list of variants ("6GB/128GB/8GB/256GB") keys as its first, as before. With no such
+    // pair, the chain's last link (DOS/Rate#1438).
     const slashPairs = [
       ...title.matchAll(/(?=(\b(\d{1,2})\s*(GB\s*)?\/\s*(\d+(?:[.,]\d+)?)\s*(TB|GB)\b))/gi),
     ];
     const lastSlashPair =
+      slashPairs.find(m => /^TB$/i.test(m[5]!) || parseFloat(m[4]!.replace(',', '.')) >= 32) ??
       slashPairs.find(m => !/^\s*\/\s*\d/.test(title.slice(m.index + m[1]!.length))) ??
       slashPairs[0];
+    // "16/2GB RAM": the RAM word names the second number, so the first is the storage.
+    const ramAfterSlashPair =
+      lastSlashPair !== undefined &&
+      /^\s*RAM\b/i.test(title.slice(lastSlashPair.index + lastSlashPair[1]!.length));
     const slashRamRom = lastSlashPair
       ? ([lastSlashPair[1]!, lastSlashPair[2]!, lastSlashPair[4]!, lastSlashPair[5]!] as const)
       : null;
@@ -2253,7 +2260,7 @@ export class ProductNormalizer {
     const slashReversed =
       slashRamRom !== null &&
       slashFirst > slashSecondGb &&
-      (Boolean(lastSlashPair?.[3]) || slashFirst >= 32);
+      (Boolean(lastSlashPair?.[3]) || slashFirst >= 32 || ramAfterSlashPair);
     // A bare number before a smaller RAM ("Vivobook 14/8GB") names no storage at all.
     const slashNoStorage = slashRamRom !== null && slashFirst > slashSecondGb && !slashReversed;
     if (slashRamRom && ramPhrases.length === 0) {
