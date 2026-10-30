@@ -483,6 +483,29 @@ async function runTests() {
     'masterIdHint DB error must abort instead of falling through and splitting cluster'
   );
 
+  // A hint to a master that no longer exists is logged, then matched from the title
+  // (DOS/Rate#1432).
+  const { stub: hintMissingStub } = createPipelineStubSupabase({ hintRow: null });
+  const warned: string[] = [];
+  const originalWarn = console.warn;
+  console.warn = (line: unknown) => {
+    warned.push(String(line));
+  };
+  try {
+    await new ShopeeIngestionPipeline({
+      supabaseClient: hintMissingStub,
+      apiKey: '',
+    }).ingestProduct(createBaseProduct(), undefined, { masterIdHint: 'master-gone-1' });
+  } finally {
+    console.warn = originalWarn;
+  }
+  assert.ok(
+    warned.some(
+      line => line.includes('ingest.master_hint_missing') && line.includes('master-gone-1')
+    ),
+    'a hint that matches no master is logged'
+  );
+
   const { stub: hintOkStub, events: hintOkEvents } = createPipelineStubSupabase({
     hintRow: { id: 'master-hint-verified' },
   });
