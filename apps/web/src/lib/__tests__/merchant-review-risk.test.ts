@@ -1,5 +1,9 @@
 import assert from 'node:assert/strict';
-import { filterMerchantDirectory } from '../merchant-directory';
+import {
+  filterMerchantDirectory,
+  summarizeMerchantDirectory,
+} from '../merchant-directory';
+import { merchantRiskFromSignals } from '../rate-domain-core';
 import {
   hasReviewRiskEvidence,
   knownDosafeRiskScore,
@@ -145,6 +149,103 @@ async function main() {
   await offerSellersWithoutReviewsReadAsNoData();
   await combinedColumnIsNotReviewRisk();
   await publicOffersSayNoneWithoutReviews();
+
+  // A store with neither a DOSafe score nor analysed reviews has no trust
+  // score, not "high trust 100/100"; with one signal, that one alone counts
+  // (DOS/Rate#1484).
+  {
+    const none = {
+      dosafeKnown: false,
+      dosafeRisk: 0,
+      baseRisk: 0,
+      reviewKnown: false,
+      reviewRisk: 12,
+      storedCombined: 30,
+    };
+    assert.deepEqual(merchantRiskFromSignals(none), {
+      risk_score: null,
+      trust_score: null,
+    });
+    // DOSafe only: the review baseline and the stored split do not count.
+    assert.deepEqual(
+      merchantRiskFromSignals({ ...none, dosafeKnown: true, dosafeRisk: 5 }),
+      { risk_score: 5, trust_score: 95 }
+    );
+    // Reviews only.
+    assert.deepEqual(
+      merchantRiskFromSignals({ ...none, reviewKnown: true, reviewRisk: 20 }),
+      { risk_score: 20, trust_score: 80 }
+    );
+    // Both: the higher risk, raised by a stored combined score.
+    assert.deepEqual(
+      merchantRiskFromSignals({
+        ...none,
+        dosafeKnown: true,
+        dosafeRisk: 5,
+        reviewKnown: true,
+        reviewRisk: 20,
+      }),
+      { risk_score: 30, trust_score: 70 }
+    );
+    // A known DOSafe 0 and a known clean review set are a real 100.
+    assert.deepEqual(
+      merchantRiskFromSignals({
+        ...none,
+        dosafeKnown: true,
+        reviewKnown: true,
+        reviewRisk: 0,
+        storedCombined: null,
+      }),
+      { risk_score: 0, trust_score: 100 }
+    );
+
+    const unscored = {
+      ...merchant('n', 0, 0),
+      trust_score: null,
+      risk_score: null,
+    } as unknown as MerchantSummary;
+    const high = merchant('h', 5, 10, 90);
+    const low = merchant('l', 5, 10, 40);
+    // Last in every trust order, in both sort paths.
+    assert.deepEqual(
+      filterMerchantDirectory([unscored, low, high], {
+        query: '',
+        platform: 'all',
+        officialOnly: false,
+        riskTier: 'all',
+        seedingTier: 'all',
+        sortBy: 'trust_desc',
+      }).map((m) => m.id),
+      ['h', 'l', 'n']
+    );
+    assert.deepEqual(
+      filterAndSortMerchants([unscored, low, high], { sort: 'trust_desc' }).map(
+        (m) => m.id
+      ),
+      ['h', 'l', 'n']
+    );
+    // In no risk tier, "warning" included.
+    for (const riskTier of ['safe', 'moderate', 'warning'] as const) {
+      assert.ok(
+        !filterMerchantDirectory([unscored], {
+          query: '',
+          platform: 'all',
+          officialOnly: false,
+          riskTier,
+          seedingTier: 'all',
+          sortBy: 'trust_desc',
+        }).some((m) => m.id === 'n'),
+        riskTier
+      );
+    }
+    // Neither "safe" nor part of the average; no average with no score at all.
+    const stats = summarizeMerchantDirectory([unscored, high, low]);
+    assert.equal(stats.total, 3);
+    assert.equal(stats.safe, 1);
+    assert.equal(stats.avgTrust, 65);
+    assert.equal(summarizeMerchantDirectory([unscored]).avgTrust, null);
+    assert.equal(summarizeMerchantDirectory([unscored]).safe, 0);
+  }
 
   console.warn('  ✅ merchant review risk suite passed');
 }

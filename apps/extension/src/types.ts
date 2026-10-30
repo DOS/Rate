@@ -142,8 +142,9 @@ export interface ExtensionLookupData {
     id: string;
     name: string;
     is_official: boolean;
-    trust_score: number;
-    risk_score: number;
+    /** Null for a store with neither a DOSafe score nor analysed reviews (DOS/Rate#1484). */
+    trust_score: number | null;
+    risk_score: number | null;
     /** Null when no DOSafe score is known (DOS/Rate#1465). */
     dosafe_risk_score: number | null;
     /** Null when the store has no analysed review (DOS/Rate#1258). */

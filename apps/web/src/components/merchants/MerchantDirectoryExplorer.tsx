@@ -544,10 +544,15 @@ export default function MerchantDirectoryExplorer({
         <div className="col-md-3 col-6">
           <div className="card rounded-4 h-100 border bg-white p-3 shadow-sm">
             <div className="text-muted small">{labels.avgTrustScore}</div>
-            <div className="fs-4 fw-bold text-dark">
-              {summaryStats.avgTrust}
-              <span className="fs-6 text-muted fw-normal">/100</span>
-            </div>
+            {/* No store with a trust score: no average (DOS/Rate#1484). */}
+            {summaryStats.avgTrust == null ? (
+              <div className="fs-6 text-muted">{labels.reviewRiskNoData}</div>
+            ) : (
+              <div className="fs-4 fw-bold text-dark">
+                {summaryStats.avgTrust}
+                <span className="fs-6 text-muted fw-normal">/100</span>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -786,12 +791,15 @@ export default function MerchantDirectoryExplorer({
           <div className="row g-4">
             {visibleMerchants.map((merchant) => {
               const dosafeScore = knownDosafeRiskScore(merchant);
+              const trustScore = merchant.trust_score;
               const trustBadgeClass =
-                merchant.trust_score >= 80
-                  ? 'bg-success text-white'
-                  : merchant.trust_score >= 50
-                    ? 'bg-warning text-dark'
-                    : 'bg-danger text-white';
+                trustScore == null
+                  ? 'bg-light text-muted border'
+                  : trustScore >= 80
+                    ? 'bg-success text-white'
+                    : trustScore >= 50
+                      ? 'bg-warning text-dark'
+                      : 'bg-danger text-white';
 
               const minPriceText = merchant.min_price
                 ? formatPriceVnd(merchant.min_price, locale)
@@ -847,7 +855,9 @@ export default function MerchantDirectoryExplorer({
                         <span
                           className={`badge ${trustBadgeClass} rounded-pill fs-6 rate-tabular px-3 py-2`}
                         >
-                          {t('trustBadge', { score: merchant.trust_score })}
+                          {trustScore == null
+                            ? t('trustBadgeNoData')
+                            : t('trustBadge', { score: trustScore })}
                         </span>
                       </div>
                     </div>

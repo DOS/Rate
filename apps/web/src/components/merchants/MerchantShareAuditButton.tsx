@@ -63,7 +63,8 @@ interface MerchantShareAuditButtonProps {
   readonly platform: string;
   readonly platformShopId: string;
   readonly isOfficial: boolean;
-  readonly trustScore: number;
+  /** Null for a store with no data to score (DOS/Rate#1484). */
+  readonly trustScore: number | null;
   readonly trustLevelLabel: string;
   /** Null when the seller has no DOSafe score (DOS/Rate#1479). */
   readonly dosafeRiskScore: number | null;
@@ -104,7 +105,8 @@ export default function MerchantShareAuditButton({
     '-',
     80
   );
-  const safeTrustScore = sanitizeMerchantScore100(trustScore);
+  const safeTrustScore =
+    trustScore == null ? null : sanitizeMerchantScore100(trustScore);
   const safeDosafeRisk =
     dosafeRiskScore == null ? null : sanitizeMerchantScore100(dosafeRiskScore);
   const safeSeedingRisk = sanitizeMerchantScore100(reviewSeedingRiskScore);
@@ -137,10 +139,12 @@ export default function MerchantShareAuditButton({
           type: isOfficial ? t('officialMallLabel') : t('standardShopLabel'),
           shopId: safeShopId,
         }),
-        t('mdTrustLine', {
-          score: safeTrustScore,
-          label: safeTrustLevelLabel,
-        }),
+        safeTrustScore == null
+          ? t('mdTrustLineNoData')
+          : t('mdTrustLine', {
+              score: safeTrustScore,
+              label: safeTrustLevelLabel,
+            }),
         safeDosafeRisk == null
           ? t('mdDosafeLineNoData')
           : t('mdDosafeLine', { score: safeDosafeRisk }),
@@ -206,7 +210,8 @@ export default function MerchantShareAuditButton({
       safePlatform.toUpperCase(),
       safeShopId,
       isOfficial ? 'Official Mall' : 'Standard',
-      safeTrustScore,
+      // Empty for a store with no data (DOS/Rate#1484).
+      safeTrustScore ?? '',
       safeTrustLevelLabel,
       // Empty without a DOSafe score (DOS/Rate#1479).
       safeDosafeRisk ?? '',

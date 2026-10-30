@@ -356,6 +356,13 @@ export function renderActionRowsHtml(links: PanelActionLink[]): string {
 
 // A risk score that is not known reads as no data, never as 0, the lowest risk: a store
 // with no analysed review (DOS/Rate#1258) or no DOSafe score (DOS/Rate#1465).
+/** "Trust N/100", or "no data yet" for a store with nothing to score (DOS/Rate#1484). */
+export function trustText(score: number | null | undefined): string {
+  return score == null
+    ? t('merchantTrustNoData')
+    : t('merchantTrust', [formatSafeNumber(score, { min: 0, max: 100 })]);
+}
+
 export function riskScoreText(score: number | null | undefined): string {
   return score == null
     ? t('reviewRiskNoData')

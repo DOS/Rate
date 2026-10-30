@@ -355,6 +355,9 @@
       }
     }
   },
+  "merchantTrustNoData": {
+    "message": "Tin cậy: chưa có dữ liệu"
+  },
   "merchantTrust": {
     "message": "Tin cậy $SCORE$/100",
     "placeholders": {

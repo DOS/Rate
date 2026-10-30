@@ -355,6 +355,9 @@
       }
     }
   },
+  "merchantTrustNoData": {
+    "message": "Trust: no data yet"
+  },
   "merchantTrust": {
     "message": "Trust $SCORE$/100",
     "placeholders": {

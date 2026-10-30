@@ -29,6 +29,8 @@ import {
   type MerchantListFilterParams,
   extractPersistedBreakdown,
   storedRiskSplit,
+  hasReviewRiskEvidence,
+  merchantRiskFromSignals,
   filterAndSortMerchants,
   sanitizePostgrestFilterToken,
   type ParsedEcommerceUrl,
@@ -3325,12 +3327,17 @@ export async function getMerchantsList(
       (typeof meta.combined_risk_score === 'number' &&
       Number.isFinite(meta.combined_risk_score)
         ? toSafeRiskScore100(meta.combined_risk_score, 0)
-        : 0);
-    const combinedRisk = Math.min(
-      100,
-      Math.max(baseRisk, dosafeRisk, effectiveReviewRisk, metaCombined)
-    );
-    const trustScore = Math.max(0, 100 - combinedRisk);
+        : null);
+    // Only known signals count; none known is no score (DOS/Rate#1484).
+    const { risk_score: combinedRisk, trust_score: trustScore } =
+      merchantRiskFromSignals({
+        dosafeKnown,
+        dosafeRisk,
+        baseRisk,
+        reviewKnown: hasReviewRiskEvidence(breakdown),
+        reviewRisk: effectiveReviewRisk,
+        storedCombined: metaCombined,
+      });
 
     return {
       id: m.id,
@@ -3869,12 +3876,17 @@ export async function getMerchantProfileBase(
     (typeof meta.combined_risk_score === 'number' &&
     Number.isFinite(meta.combined_risk_score)
       ? toSafeRiskScore100(meta.combined_risk_score, 0)
-      : 0);
-  const combinedRisk = Math.min(
-    100,
-    Math.max(baseRisk, dosafeRisk, effectiveReviewRisk, metaCombined)
-  );
-  const trustScore = Math.max(0, 100 - combinedRisk);
+      : null);
+  // Only known signals count; none known is no score (DOS/Rate#1484).
+  const { risk_score: combinedRisk, trust_score: trustScore } =
+    merchantRiskFromSignals({
+      dosafeKnown,
+      dosafeRisk,
+      baseRisk,
+      reviewKnown: hasReviewRiskEvidence(breakdown),
+      reviewRisk: effectiveReviewRisk,
+      storedCombined: metaCombined,
+    });
   // The store's price range is what it sells now: sold-out listings are out.
   const prices = listings
     .filter((l) => !isOfferUnavailable(l))

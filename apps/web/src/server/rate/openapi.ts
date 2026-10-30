@@ -2153,13 +2153,19 @@ function buildBaseRateOpenApiSpec(
                 'Risk measured on the store reviews only; null for a store with no analysed review.',
             },
             risk_score: {
-              type: 'number',
+              type: ['number', 'null'],
               minimum: 0,
               maximum: 100,
               description:
-                'Combined risk (DOSafe and review risk); may carry decimals.',
+                'Combined risk from the known signals (DOSafe score, analysed reviews); may carry decimals. Null when neither is known (DOS/Rate#1484).',
             },
-            trust_score: { type: 'number', minimum: 0, maximum: 100 },
+            trust_score: {
+              type: ['number', 'null'],
+              minimum: 0,
+              maximum: 100,
+              description:
+                '100 minus `risk_score`. Null for a store with neither a DOSafe score nor analysed reviews; such stores sort last by trust and count in no risk tier (DOS/Rate#1484).',
+            },
             product_count: { type: 'integer' },
             min_price: { type: ['number', 'null'] },
             max_price: { type: ['number', 'null'] },

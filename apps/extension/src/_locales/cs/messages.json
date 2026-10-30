@@ -355,6 +355,9 @@
       }
     }
   },
+  "merchantTrustNoData": {
+    "message": "Důvěra: zatím bez dat"
+  },
   "merchantTrust": {
     "message": "Důvěra $SCORE$/100",
     "placeholders": {
