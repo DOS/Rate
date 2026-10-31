@@ -41,11 +41,11 @@ import {
 import ContentText from '@/components/elementary/ContentText';
 import { firstImageUrl, productImageUrl } from '@/lib/rate-domain-core';
 import {
-  formatDecimal,
   formatNumber,
   formatPlainNumber,
   formatPriceVnd,
 } from '@/lib/locale-format';
+import StarRating from '@/components/elementary/StarRating';
 
 interface HeroSearchInspectorProps {
   initialProducts: HeroProductSuggestion[];
@@ -521,9 +521,7 @@ export default function HeroSearchInspector({
                                   </span>
                                 )}
                                 {rating > 0 && (
-                                  <span className="text-warning-emphasis fw-semibold">
-                                    ★ {formatDecimal(rating, locale, 1)}
-                                  </span>
+                                  <StarRating value={rating} size="sm" />
                                 )}
                                 <RadarBadge
                                   signal={getRadarSignal(radarIndex, item.slug)}

@@ -676,7 +676,7 @@ async function runCoreArchitectureSuite() {
   );
   assert.ok(
     leaderboardExplorerSource.includes('rate-scoreboard-dark') &&
-      leaderboardExplorerSource.includes('rate-score-badge-user') &&
+      leaderboardExplorerSource.includes('<StarRating') &&
       leaderboardExplorerSource.includes('rate-score-badge-expert') &&
       leaderboardExplorerSource.includes(
         '/compare?cat=${activeCategory}&slugs='

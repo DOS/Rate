@@ -55,7 +55,6 @@ import {
   BsPhone,
   BsShieldCheck,
   BsShieldExclamation,
-  BsStarFill,
 } from 'react-icons/bs';
 import RadarBadge from '@/components/radar/RadarBadge';
 import { getRadarSignal, type RadarIndex } from '@/lib/deal-radar';
@@ -132,6 +131,7 @@ import {
   formatPriceVnd,
 } from '@/lib/locale-format';
 import { versusHref } from '@/lib/item-compare';
+import StarRating from '@/components/elementary/StarRating';
 
 // Cached after the first request, refreshed every 5 minutes or when the
 // worker revalidates its cache tags (DOS/Rate#491).
@@ -1013,16 +1013,14 @@ export async function ProductDetailView({
                   className="rate-pdv-hero-score d-flex d-lg-none align-items-center mb-3 gap-1"
                   data-testid="pdv-hero-score"
                 >
-                  <BsStarFill aria-hidden="true" className="text-warning" />
                   <span className="visually-hidden">
                     {t('userWeightedScoreLabel')}:
                   </span>
-                  <strong className="rate-tabular">
-                    {formatDecimal(displayUserRating, locale, 1)}
-                  </strong>
-                  <span>
-                    {t('verifiedReviewsCount', { count: authenticCount })}
-                  </span>
+                  <StarRating
+                    value={displayUserRating}
+                    count={authenticCount}
+                    title={t('userScoreHint')}
+                  />
                 </p>
               )}
 
@@ -1093,25 +1091,15 @@ export async function ProductDetailView({
                       <div className="rate-pdv-score-label is-user">
                         {t('userWeightedScoreLabel')}
                       </div>
-                      {displayUserRating > 0 ? (
-                        <div className="rate-pdv-score-row">
-                          <span className="rate-pdv-score-value">
-                            {formatDecimal(displayUserRating, locale, 1)}
-                          </span>
-                          <span className="rate-pdv-score-sub">
-                            {t('verifiedReviewsCount', {
-                              count: authenticCount,
-                            })}
-                          </span>
-                        </div>
-                      ) : (
-                        <div className="rate-pdv-score-empty">
-                          {t('notAvailableYet')} ·{' '}
-                          {t('verifiedReviewsCountNoScore', {
-                            count: authenticCount,
-                          })}
-                        </div>
-                      )}
+                      <div className="rate-pdv-score-row">
+                        <StarRating
+                          value={displayUserRating}
+                          count={displayUserRating > 0 ? authenticCount : null}
+                          size="lg"
+                          title={t('userScoreHint')}
+                          testId="pdv-user-score"
+                        />
+                      </div>
                       <div
                         className="rate-pdv-confidence"
                         data-testid="pdv-bayesian-confidence"
@@ -1150,17 +1138,21 @@ export async function ProductDetailView({
                         {t('expertScoreLabel')}
                       </div>
                       {expertRating10 != null ? (
-                        <div className="rate-pdv-score-row">
+                        <div
+                          className="rate-pdv-score-row"
+                          title={t('expertScoreHint')}
+                        >
                           <span className="rate-pdv-score-value is-small">
                             {formatDecimal(expertRating10, locale, 1)}
                           </span>
-                          <span className="rate-pdv-score-sub">
-                            {t('tenGroupStandardWithSlash')}
+                          <span className="rate-pdv-score-sub">/10</span>
+                          <span className="visually-hidden">
+                            {t('expertScoreHint')}
                           </span>
                         </div>
                       ) : (
                         <div className="rate-pdv-score-empty">
-                          {t('notAvailableYet')} · {t('tenGroupStandard')}
+                          {t('notAvailableYet')}
                         </div>
                       )}
                     </div>
@@ -1632,12 +1624,11 @@ export async function ProductDetailView({
                               <span className="badge bg-secondary-subtle text-secondary small">
                                 {peer.brand}
                               </span>
-                              <span className="badge bg-warning-subtle text-dark small">
-                                ★{' '}
-                                {peerRating > 0
-                                  ? formatDecimal(peerRating, locale, 1)
-                                  : t('peerNoRating')}
-                              </span>
+                              <StarRating
+                                value={peerRating}
+                                size="sm"
+                                emptyLabel={t('peerNoRating')}
+                              />
                               <RadarBadge
                                 signal={getRadarSignal(
                                   peerRadarIndex,

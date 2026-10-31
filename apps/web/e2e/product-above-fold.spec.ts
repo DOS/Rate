@@ -36,6 +36,6 @@ for (const viewport of [
 test('the repeated hero score is hidden on desktop', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 900 });
   await page.goto(PRODUCT);
-  await expect(page.locator('.rate-pdv-score-value').first()).toBeVisible();
+  await expect(page.getByTestId('pdv-user-score')).toBeVisible();
   await expect(page.getByTestId('pdv-hero-score')).toBeHidden();
 });

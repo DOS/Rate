@@ -43,6 +43,7 @@ function main() {
     'deals',
     'errors',
     'rate',
+    'starRating',
     'watchlist',
   ]);
   assert.deepEqual(Object.keys(shared.rate as object), ['nav']);
@@ -96,6 +97,7 @@ function main() {
     'deals',
     'errors',
     'rate',
+    'starRating',
     'watchlist',
   ]);
 

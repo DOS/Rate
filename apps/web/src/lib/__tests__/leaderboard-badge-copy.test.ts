@@ -49,7 +49,6 @@ for (const locale of ['vi', 'en', 'cs'] as const) {
     'shortValue',
     'userUnrated',
     'expertUnrated',
-    'userScoreShort',
     'expertScoreShort',
   ]) {
     assert.ok(lb[key], `vi: missing leaderboard.${key}`);
