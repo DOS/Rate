@@ -563,8 +563,8 @@ async function runCoreArchitectureSuite() {
     'earbuds'
   );
 
-  // ProductDetailView reads: sellers (#offers-table), then specs, then reviews
-  // (DOS/Rate#1436, #1469).
+  // ProductDetailView reads: specs, then reviews, then the price history and
+  // the sellers (#offers-table) last (DOS/Rate#1436, #1469, #1530).
   const detailPagePath = path.resolve(
     __dirname,
     '../../../app/[locale]/smartphones/[slug]/page.tsx'
@@ -572,10 +572,14 @@ async function runCoreArchitectureSuite() {
   const detailPageSrc = fs.readFileSync(detailPagePath, 'utf8');
   const idxJReviews = detailPageSrc.indexOf('<JReviewsSection');
   const idxSpecs = detailPageSrc.indexOf('id="specs-section"');
+  const idxHistory = detailPageSrc.indexOf('id="pdv-price-history"');
   const idxOffers = detailPageSrc.indexOf('id="offers-table"');
   assert.ok(
-    idxOffers > 0 && idxSpecs > idxOffers && idxJReviews > idxSpecs,
-    'ProductDetailView must render #offers-table before #specs-section, and #specs-section before <JReviewsSection />'
+    idxSpecs > 0 &&
+      idxJReviews > idxSpecs &&
+      idxHistory > idxJReviews &&
+      idxOffers > idxHistory,
+    'ProductDetailView must render #specs-section, <JReviewsSection />, #pdv-price-history, then #offers-table'
   );
 
   console.log(

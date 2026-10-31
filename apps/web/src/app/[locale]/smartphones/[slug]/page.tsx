@@ -1024,22 +1024,22 @@ export async function ProductDetailView({
                 </p>
               )}
 
-              {/* Where to buy comes first, then the price history, specs and
-              reviews; this row jumps to each (DOS/Rate#1469). It sits under the
-              price, before the scoreboard, so a phone shows it in the first
-              screen (DOS/Rate#1517). */}
+              {/* The specs come first, then the reviews, the price history and
+              the sellers; this row jumps to each (DOS/Rate#1469, #1530). It
+              sits under the price, before the scoreboard, so a phone shows it
+              in the first screen (DOS/Rate#1517). */}
               <nav
                 className="rate-pdv-jumpnav"
                 aria-label={t('jumpNavAria')}
                 data-testid="pdv-jump-nav"
               >
-                <a href="#offers-table">
-                  {t('jumpNavOffers', { count: offers.length })}
-                </a>
-                <a href="#pdv-price-history">{t('jumpNavPriceHistory')}</a>
                 <a href="#specs-section">{t('jumpNavSpecs')}</a>
                 <a href="#jreviews-section">
                   {t('jumpNavReviews', { count: authenticCount })}
+                </a>
+                <a href="#pdv-price-history">{t('jumpNavPriceHistory')}</a>
+                <a href="#offers-table">
+                  {t('jumpNavOffers', { count: offers.length })}
                 </a>
               </nav>
               {/* #1 Core Focus Above the Fold: JReviews Dual-Rating & 5-Criteria Scoreboard (DESIGN.md v3.0) */}
@@ -1348,65 +1348,10 @@ export async function ProductDetailView({
             </div>
           </div>
 
-          {/* Neutral Merchant Reference & Trust Audit Table */}
-          <div
-            id="offers-table"
-            className="card rounded-4 p-md-5 mb-5 border-0 p-4 shadow-sm"
-          >
-            {isItemGroup
-              ? renderSizePanels('offers', (v) =>
-                  renderOffersBody(variantPanelInput(v))
-                )
-              : renderOffersBody({
-                  product,
-                  offers,
-                  priceHistory,
-                  radarSignal,
-                  emptyText: pageEmptyOffersText,
-                })}
-          </div>
-
-          {/* Listings whose size is not stated: their own group, never part
-              of the "from" price (Q2, DOS/Rate#1154). */}
-          {itemPage && itemPage.unknownOffers.length > 0 && (
-            <div
-              id="offers-unknown-size"
-              className="card rounded-4 p-md-5 mb-5 border-0 p-4 shadow-sm"
-              data-testid="pdv-unknown-size-offers"
-            >
-              <h2 className="h5 fw-bold mb-1">
-                {t('unknownSizeTitle', {
-                  count: itemPage.unknownOffers.length,
-                })}
-              </h2>
-              <p className="text-muted small mb-3">{t('unknownSizeNote')}</p>
-              <ProductOffersExplorer
-                productName={displayName}
-                productSlug={itemPage.item.slug}
-                offers={itemPage.unknownOffers}
-                byOffer={itemPage.unknownByOffer}
-              />
-            </div>
-          )}
-
-          {/* Time-Series Price History Chart, Fake Discount Detector & Neutral
-          Merchant Audit. The wrapper is the jump row's target: a lazy size
-          panel has no #price-history-section until it loads (#1469). */}
-          <div id="pdv-price-history">
-            {isItemGroup
-              ? renderSizePanels('history', (v) =>
-                  renderPriceHistory(variantPanelInput(v))
-                )
-              : renderPriceHistory({
-                  product,
-                  priceHistory,
-                  minPrice: currentMinPrice,
-                  radarSignal,
-                })}
-          </div>
-
-          {/* Spec groups, per category template (DOS/Rate#1142), before
-          the reviews (DOS/Rate#1436) */}
+          {/* The product first: spec groups, per category template
+          (DOS/Rate#1142), then the reviews, the price history and the sellers
+          last (DOS/Rate#1530). The price strip above keeps the best price in
+          the first screen. */}
           {(() => {
             const specUi = getSpecUiDictionary(locale);
             // Rows with no value and groups with no row are left out
@@ -1457,16 +1402,11 @@ export async function ProductDetailView({
                   openOnHash="#specs-section"
                   collapsible={specGroups.length > 3}
                 >
-                  {specGroups.map(({ group, rows }, i) => (
+                  {specGroups.map(({ group, rows }) => (
                     <div key={group} className="col-md-6 col-12">
                       <div className="rounded-4 h-100 border bg-white p-4">
                         <h3 className="h6 fw-bold text-primary mb-3">
-                          {specGroupHeading(
-                            specUi,
-                            group,
-                            i + 1,
-                            specTemplate.has5g
-                          )}
+                          {specGroupHeading(specUi, group, specTemplate.has5g)}
                         </h3>
                         <dl className="row small mb-0">
                           {rows.map(({ label, value, lang }) => (
@@ -1512,6 +1452,63 @@ export async function ProductDetailView({
               radarSignal={radarSignal}
             />
           </div>
+
+          {/* Time-Series Price History Chart, Fake Discount Detector & Neutral
+          Merchant Audit. The wrapper is the jump row's target: a lazy size
+          panel has no #price-history-section until it loads (#1469). */}
+          <div id="pdv-price-history">
+            {isItemGroup
+              ? renderSizePanels('history', (v) =>
+                  renderPriceHistory(variantPanelInput(v))
+                )
+              : renderPriceHistory({
+                  product,
+                  priceHistory,
+                  minPrice: currentMinPrice,
+                  radarSignal,
+                })}
+          </div>
+
+          {/* Neutral Merchant Reference & Trust Audit Table */}
+          <div
+            id="offers-table"
+            className="card rounded-4 p-md-5 mb-5 border-0 p-4 shadow-sm"
+          >
+            {isItemGroup
+              ? renderSizePanels('offers', (v) =>
+                  renderOffersBody(variantPanelInput(v))
+                )
+              : renderOffersBody({
+                  product,
+                  offers,
+                  priceHistory,
+                  radarSignal,
+                  emptyText: pageEmptyOffersText,
+                })}
+          </div>
+
+          {/* Listings whose size is not stated: their own group, never part
+              of the "from" price (Q2, DOS/Rate#1154). */}
+          {itemPage && itemPage.unknownOffers.length > 0 && (
+            <div
+              id="offers-unknown-size"
+              className="card rounded-4 p-md-5 mb-5 border-0 p-4 shadow-sm"
+              data-testid="pdv-unknown-size-offers"
+            >
+              <h2 className="h5 fw-bold mb-1">
+                {t('unknownSizeTitle', {
+                  count: itemPage.unknownOffers.length,
+                })}
+              </h2>
+              <p className="text-muted small mb-3">{t('unknownSizeNote')}</p>
+              <ProductOffersExplorer
+                productName={displayName}
+                productSlug={itemPage.item.slug}
+                offers={itemPage.unknownOffers}
+                byOffer={itemPage.unknownByOffer}
+              />
+            </div>
+          )}
 
           {/* Interactive Value Efficiency & 2-Year Ownership Calculator (#62) */}
           {(() => {

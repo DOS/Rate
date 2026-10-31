@@ -190,7 +190,7 @@ function main() {
       'Hexa-core (2x4.05 GHz performance + 4x2.42 GHz efficiency)',
       'vi'
     ),
-    '6 nhân (Hexa-core) (2x4.05 GHz hiệu năng + 4x2.42 GHz tiết kiệm điện)'
+    '6 nhân (2x4.05 GHz hiệu năng + 4x2.42 GHz tiết kiệm điện)'
   );
   assert.equal(
     localizeSpecValue(
