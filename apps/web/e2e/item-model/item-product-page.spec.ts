@@ -9,10 +9,10 @@ const ITEM = '/smartphones/e2e-item-phone';
 const BIG = '/smartphones/e2e-item-big';
 const NO_DATA_MERCHANT = '17e00000-0000-4000-8000-0000000d1484';
 const ORDER = [
-  'offers-table',
-  'pdv-price-history',
   'specs-section',
   'jreviews-section',
+  'pdv-price-history',
+  'offers-table',
 ];
 
 /** Clicks once the page is hydrated: a click before it does nothing. */

@@ -1,19 +1,19 @@
 import { expect, test } from '@playwright/test';
 
-// A shopper reaches the sellers first: the page reads price box, sellers,
-// price history, specs, then reviews, with a jump row to each, and phones
-// show the first three reviews until expanded (DOS/Rate#1469).
+// The product comes first: the page reads price box, specs, reviews, price
+// history, then the sellers last, with a jump row to each (DOS/Rate#1469,
+// #1530), and phones show the first three reviews until expanded.
 const PRODUCT = '/smartphones/iphone-16-pro-max-256gb';
 // Six seeded reviews (seed.sql, DOS/Rate#566).
 const MANY_REVIEWS = '/smartphones/e2e-review-labels-phone';
 const ORDER = [
-  'offers-table',
-  'pdv-price-history',
   'specs-section',
   'jreviews-section',
+  'pdv-price-history',
+  'offers-table',
 ];
 
-test('sellers come first, then price history, specs and reviews', async ({
+test('specs come first, then reviews, price history and sellers', async ({
   page,
 }) => {
   await page.goto(PRODUCT);
