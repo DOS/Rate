@@ -22,13 +22,32 @@ export type LeaderboardCriterionKey =
 export type LeaderboardPriceSegment =
   'all' | 'under15m' | '15to25m' | 'over25m';
 
-export interface LeaderboardCriteriaBreakdown {
-  screen: number;
-  performance: number;
-  camera: number;
-  battery: number;
-  value: number;
-}
+/** The criteria a product can be scored on, besides its overall scores. */
+export const LEADERBOARD_SCORE_CRITERIA = [
+  'screen',
+  'performance',
+  'camera',
+  'battery',
+  'value',
+] as const;
+
+export type LeaderboardScoreCriterion =
+  (typeof LEADERBOARD_SCORE_CRITERIA)[number];
+
+/**
+ * A product's score on each criterion, or null when there is no real score
+ * for it (DOS/Rate#1143): pages show "Chưa đủ dữ liệu" and no rank.
+ */
+export type LeaderboardCriteriaBreakdown = Record<
+  LeaderboardScoreCriterion,
+  number | null
+>;
+
+/** A weight per criterion, as the persona and custom weights set them. */
+export type LeaderboardCriteriaWeights = Record<
+  LeaderboardScoreCriterion,
+  number
+>;
 
 export interface ScoredLeaderboardItem {
   rank: number;
@@ -186,10 +205,10 @@ function toSafeNonNegativeNumber(raw: unknown): number {
 }
 
 /**
- * The spec fields the criteria scores read (computeJReviewsCriteriaScores). A
- * client that ranks or pairs products, such as the leaderboard and the compare
- * picker's popular pairs, needs only these, not the whole spec sheet
- * (DOS/Rate#1515). A test checks every spec this file reads is listed.
+ * The spec fields a client that ranks or pairs products, such as the
+ * leaderboard and the compare picker's popular pairs, keeps instead of the
+ * whole spec sheet (DOS/Rate#1515). The scores no longer read specs
+ * (DOS/Rate#1143); a test checks this file reads none.
  */
 export const LEADERBOARD_SPEC_FIELDS = {
   battery: ['capacity_mah', 'charging', 'fast_charging_w'],
@@ -224,10 +243,37 @@ export function leaderboardSpecsOnly(specs: unknown): ProductSpecifications {
   return out as ProductSpecifications;
 }
 
+/**
+ * The criteria that apply to a category: earbuds have no screen
+ * (DOS/Rate#1143), and score noise cancelling as their "camera" criterion
+ * (DOS/Rate#1250).
+ */
+export function leaderboardCriteriaForCategory(
+  categorySlug: CanonicalCategorySlug
+): readonly LeaderboardScoreCriterion[] {
+  return categorySlug === 'earbuds'
+    ? LEADERBOARD_SCORE_CRITERIA.filter((c) => c !== 'screen')
+    : LEADERBOARD_SCORE_CRITERIA;
+}
+
+// The stored keys each criterion reads from expert_criteria_scores.
+const CRITERION_SCORE_KEYS: Record<LeaderboardScoreCriterion, string[]> = {
+  screen: ['screen', 'display', 'man_hinh', 'design', 'comfort'],
+  performance: ['performance', 'hardware', 'hieu_nang', 'connectivity'],
+  camera: ['camera', 'audio', 'multimedia', 'sound', 'sensors'],
+  battery: ['battery', 'pin', 'endurance'],
+  value: ['value', 'price_value', 'dang_tien'],
+};
+
+/**
+ * A product's per-criterion scores, out of 5, from the scores stored for each
+ * criterion only. A criterion with no stored score, or one that does not
+ * apply to the category, is null: it is never derived from the star rating,
+ * the specs or the price, which made every well-rated product score 5.00
+ * and tie (DOS/Rate#1143).
+ */
 export function computeJReviewsCriteriaScores(
-  item: MasterProduct,
-  userScore5: number,
-  expertScore5: number | null
+  item: MasterProduct
 ): LeaderboardCriteriaBreakdown {
   const safeItem = (
     item && typeof item === 'object' && !Array.isArray(item) ? item : {}
@@ -239,191 +285,67 @@ export function computeJReviewsCriteriaScores(
       ? safeItem.expert_criteria_scores
       : {}
   ) as Record<string, unknown>;
-  const specs = (
-    safeItem.specifications &&
-    typeof safeItem.specifications === 'object' &&
-    !Array.isArray(safeItem.specifications)
-      ? safeItem.specifications
-      : {}
-  ) as ProductSpecifications;
-  const categorySlug = getMasterProductCategorySlug(safeItem);
-  const safeUserScore5 =
-    typeof userScore5 === 'number' &&
-    Number.isFinite(userScore5) &&
-    userScore5 > 0
-      ? clampScore5(userScore5)
-      : 0;
-  const safeExpertScore5 =
-    typeof expertScore5 === 'number' &&
-    Number.isFinite(expertScore5) &&
-    expertScore5 > 0
-      ? clampScore5(expertScore5)
-      : null;
-  const base5 =
-    safeUserScore5 > 0 && safeExpertScore5 != null
-      ? Number((safeUserScore5 * 0.55 + safeExpertScore5 * 0.45).toFixed(2))
-      : safeUserScore5 > 0
-        ? safeUserScore5
-        : (safeExpertScore5 ?? 0);
+  const applies = leaderboardCriteriaForCategory(
+    getMasterProductCategorySlug(safeItem)
+  );
 
-  const parseRaw = (keys: string[], fallbackDelta: number): number => {
-    for (const k of keys) {
+  const read = (criterion: LeaderboardScoreCriterion): number | null => {
+    if (!applies.includes(criterion)) return null;
+    for (const k of CRITERION_SCORE_KEYS[criterion]) {
       const v = toSafePositiveNumber(rawCriteria[k]);
-      if (v > 0 && v <= 10) {
-        return clampScore5(v > 5 ? v / 2 : v);
-      }
+      if (v > 0 && v <= 10) return clampScore5(v > 5 ? v / 2 : v);
     }
-    if (base5 <= 0) return 0;
-    return clampScore5(base5 + fallbackDelta);
+    return null;
   };
-
-  const refreshHz = toSafePositiveNumber(specs.display?.refresh_rate_hz);
-  const ramGb =
-    toSafePositiveNumber(safeItem.ram_gb) ||
-    toSafePositiveNumber(specs.hardware?.ram_gb);
-  const batteryMah =
-    toSafePositiveNumber(safeItem.battery_mah) ||
-    toSafePositiveNumber(specs.battery?.capacity_mah);
-  const fastChargingW = toSafePositiveNumber(specs.battery?.fast_charging_w);
-  const rawMinPrice = toSafePositiveNumber(safeItem.min_price);
-  const minPrice =
-    Number.isFinite(rawMinPrice) &&
-    rawMinPrice > 0 &&
-    rawMinPrice <= 1_000_000_000
-      ? rawMinPrice
-      : 0;
-  const displayType = String(specs.display?.type || '').toLowerCase();
-  const displayProtection = String(
-    specs.display?.protection || ''
-  ).toLowerCase();
-  const resistance = String(specs.design?.resistance || '').toLowerCase();
-  const audioFeatures = String(
-    specs.multimedia?.audio_features || ''
-  ).toLowerCase();
-  const sensors = String(specs.connectivity?.sensors || '').toLowerCase();
-  const location = String(specs.connectivity?.location || '').toLowerCase();
-
-  let screenDelta: number;
-  let perfDelta: number;
-  let camDelta: number;
-  let batDelta: number;
-  let valDelta: number;
-
-  if (categorySlug === 'earbuds') {
-    screenDelta =
-      resistance.includes('ip') || Number(specs.design?.weight_g || 0) > 0
-        ? 0.12
-        : 0.04;
-    perfDelta =
-      String(specs.connectivity?.bluetooth || '').includes('5.') ||
-      Boolean(specs.hardware?.chipset)
-        ? 0.14
-        : 0.04;
-    camDelta =
-      audioFeatures.includes('anc') ||
-      audioFeatures.includes('ldac') ||
-      audioFeatures.includes('spatial') ||
-      audioFeatures.includes('dolby') ||
-      Boolean(specs.multimedia?.audio_features)
-        ? 0.16
-        : 0.06;
-    batDelta =
-      batteryMah >= 500
-        ? 0.16
-        : batteryMah >= 300 || Boolean(specs.battery?.charging)
-          ? 0.09
-          : 0.03;
-    valDelta =
-      minPrice > 0 && minPrice <= 3_500_000
-        ? 0.22
-        : minPrice > 0 && minPrice <= 6_500_000
-          ? 0.1
-          : minPrice > 0
-            ? -0.03
-            : 0;
-  } else if (categorySlug === 'smartwatches') {
-    screenDelta =
-      refreshHz >= 60 ||
-      displayType.includes('oled') ||
-      displayType.includes('amoled') ||
-      displayProtection.includes('sapphire')
-        ? 0.12
-        : 0.03;
-    perfDelta = Boolean(specs.hardware?.chipset) || ramGb >= 2 ? 0.12 : 0.03;
-    camDelta =
-      sensors.includes('ecg') ||
-      sensors.includes('spo2') ||
-      location.includes('dual') ||
-      location.includes('l1') ||
-      Boolean(specs.connectivity?.sensors)
-        ? 0.14
-        : 0.04;
-    batDelta = batteryMah >= 500 ? 0.18 : batteryMah >= 300 ? 0.09 : 0.02;
-    valDelta =
-      minPrice > 0 && minPrice <= 7_000_000
-        ? 0.2
-        : minPrice > 0 && minPrice <= 15_000_000
-          ? 0.08
-          : minPrice > 0
-            ? -0.04
-            : 0;
-  } else if (categorySlug === 'laptops') {
-    screenDelta =
-      refreshHz >= 120
-        ? 0.15
-        : refreshHz >= 90 ||
-            displayType.includes('oled') ||
-            displayType.includes('mini-led')
-          ? 0.09
-          : 0.02;
-    perfDelta = ramGb >= 32 ? 0.18 : ramGb >= 16 ? 0.12 : 0.02;
-    camDelta =
-      specs.camera?.front_camera || specs.multimedia?.loudspeaker ? 0.08 : 0.02;
-    batDelta =
-      batteryMah >= 7000 || fastChargingW >= 90
-        ? 0.16
-        : batteryMah >= 4500 || fastChargingW >= 65
-          ? 0.09
-          : 0.02;
-    valDelta =
-      minPrice > 0 && minPrice <= 25_000_000
-        ? 0.2
-        : minPrice > 0 && minPrice <= 42_000_000
-          ? 0.08
-          : minPrice > 0
-            ? -0.04
-            : 0;
-  } else {
-    screenDelta = refreshHz >= 120 ? 0.14 : refreshHz >= 90 ? 0.05 : -0.04;
-    perfDelta = ramGb >= 16 ? 0.16 : ramGb >= 12 ? 0.08 : 0.02;
-    camDelta = specs.camera?.second_camera ? 0.12 : 0.03;
-    batDelta = batteryMah >= 5500 ? 0.18 : batteryMah >= 4800 ? 0.09 : 0.02;
-    valDelta =
-      minPrice > 0 && minPrice <= 18_000_000
-        ? 0.22
-        : minPrice > 0 && minPrice <= 27_000_000
-          ? 0.08
-          : minPrice > 0
-            ? -0.05
-            : 0;
-  }
 
   return {
-    screen: parseRaw(
-      ['screen', 'display', 'man_hinh', 'design', 'comfort'],
-      screenDelta
-    ),
-    performance: parseRaw(
-      ['performance', 'hardware', 'hieu_nang', 'connectivity'],
-      perfDelta
-    ),
-    camera: parseRaw(
-      ['camera', 'audio', 'multimedia', 'sound', 'sensors'],
-      camDelta
-    ),
-    battery: parseRaw(['battery', 'pin', 'endurance'], batDelta),
-    value: parseRaw(['value', 'price_value', 'dang_tien'], valDelta),
+    screen: read('screen'),
+    performance: read('performance'),
+    camera: read('camera'),
+    battery: read('battery'),
+    value: read('value'),
   };
+}
+
+/**
+ * The weighted average of the criteria that have a score, out of 5, or null
+ * when none of the weighted ones has one. `only` limits it to the criteria
+ * both sides of a 1v1 have, so neither wins on a criterion the other lacks.
+ */
+export function weightedCriteriaScore5(
+  criteria: LeaderboardCriteriaBreakdown,
+  weights: LeaderboardCriteriaWeights,
+  only: readonly LeaderboardScoreCriterion[] = LEADERBOARD_SCORE_CRITERIA
+): number | null {
+  let sum = 0;
+  let weightSum = 0;
+  for (const c of only) {
+    const score = criteria?.[c];
+    const weight = weights?.[c];
+    if (
+      typeof score !== 'number' ||
+      !Number.isFinite(score) ||
+      score <= 0 ||
+      typeof weight !== 'number' ||
+      !Number.isFinite(weight) ||
+      weight <= 0
+    ) {
+      continue;
+    }
+    sum += score * weight;
+    weightSum += weight;
+  }
+  return weightSum > 0 ? Number((sum / weightSum).toFixed(2)) : null;
+}
+
+/** The criteria both products have a score for. */
+export function sharedScoredCriteria(
+  a: LeaderboardCriteriaBreakdown,
+  b: LeaderboardCriteriaBreakdown
+): LeaderboardScoreCriterion[] {
+  return LEADERBOARD_SCORE_CRITERIA.filter(
+    (c) => (a?.[c] ?? 0) > 0 && (b?.[c] ?? 0) > 0
+  );
 }
 
 /** Filtered-review counts per master id, as read from stored reviews. */
@@ -474,18 +396,12 @@ export function scoreMasterProductForLeaderboard(
   const expertScore5: number | null =
     expertScore10 != null ? Number((expertScore10 / 2).toFixed(2)) : null;
 
-  const criteria = computeJReviewsCriteriaScores(
-    safeItem,
-    userScore5,
-    expertScore5
-  );
-  const criteriaValues = [
-    criteria.screen,
-    criteria.performance,
-    criteria.camera,
-    criteria.battery,
-    criteria.value,
-  ].filter((v) => v > 0);
+  // Only real criterion scores join the composite; a product without them
+  // ranks on its user and expert scores alone (DOS/Rate#1143).
+  const criteria = computeJReviewsCriteriaScores(safeItem);
+  const criteriaValues = LEADERBOARD_SCORE_CRITERIA.map(
+    (c) => criteria[c]
+  ).filter((v): v is number => v != null && v > 0);
   const criteriaAvg =
     criteriaValues.length > 0
       ? criteriaValues.reduce((a, b) => a + b, 0) / criteriaValues.length
@@ -516,7 +432,9 @@ export function scoreMasterProductForLeaderboard(
   let activeScore5 = combinedScore5;
   if (safeCriterion === 'user') activeScore5 = userScore5;
   else if (safeCriterion === 'expert') activeScore5 = expertScore5 ?? 0;
-  else if (safeCriterion !== 'combined') activeScore5 = criteria[safeCriterion];
+  else if (safeCriterion !== 'combined') {
+    activeScore5 = criteria[safeCriterion] ?? 0;
+  }
 
   const rawAuthentic = toSafeNonNegativeNumber(safeItem.authentic_review_count);
   const rawTotal = toSafePositiveNumber(safeItem.total_reviews);
@@ -781,13 +699,16 @@ export function computeProductStandingInCategory(
     });
     const found = ranked.find((r) => r.slug === targetSlug);
     if (!found) continue;
+    // A criterion ranks only the products with a real score on it, and needs
+    // at least two of them: "#1 of 1" is not a ranking (DOS/Rate#1143).
+    if (crit !== 'combined' && ranked.length < 2) continue;
 
     // Always include overall combined rank; also include top-3 sub-criteria ranks
     if (crit === 'combined' || found.rank <= 3) {
       badges.push({
         criterion: crit,
         rank: found.rank,
-        totalInCategory,
+        totalInCategory: crit === 'combined' ? totalInCategory : ranked.length,
         score5: found.activeScore5,
         score10: found.activeScore10,
         categorySlug,

@@ -124,6 +124,8 @@
     }
   },
   "compare": {
+    "criteriaSourceExpert": "Hodnocení kritérií od expertů",
+    "criterionNoData": "Nedostatek dat",
     "versusMetaTitle": "{nameA} vs {nameB}: 10 skupin parametrů a hodnocení | Rate.vn",
     "versusMetaTitleShort": "{nameA} vs {nameB} | Rate.vn",
     "versusMetaDescription": "Přímé porovnání {nameA} a {nameB}: hodnocení v 5 kritériích, 10 skupin parametrů a skutečné ceny v obchodech.",
@@ -344,6 +346,8 @@
     "quickToggleShortLimit": "Max. 4"
   },
   "leaderboard": {
+    "criteriaSourceExpert": "Hodnocení kritérií od expertů",
+    "criterionNoData": "Nedostatek dat",
     "metaTitle": "Žebříček technologií | Rate.vn",
     "metaDescription": "Nezávislý žebříček podle kategorií: hodnocení expertů a ověřených kupujících v 5 kritériích, bez reklam a affiliate odkazů.",
     "kicker": "Nezávislý žebříček zařízení",

@@ -124,6 +124,8 @@
     }
   },
   "compare": {
+    "criteriaSourceExpert": "Criterion scores from experts",
+    "criterionNoData": "Not enough data",
     "versusMetaTitle": "{nameA} vs {nameB}: 10 spec groups and review scores | Rate.vn",
     "versusMetaTitleShort": "{nameA} vs {nameB} | Rate.vn",
     "versusMetaDescription": "Compare {nameA} and {nameB} head to head: review scores across 5 criteria, 10 spec groups and real store prices.",
@@ -344,6 +346,8 @@
     "quickToggleShortLimit": "Max 4"
   },
   "leaderboard": {
+    "criteriaSourceExpert": "Criterion scores from experts",
+    "criterionNoData": "Not enough data",
     "metaTitle": "Tech device leaderboard | Rate.vn",
     "metaDescription": "Independent rankings by category: expert and verified buyer scores across 5 criteria, with no ads or affiliate bias.",
     "kicker": "Independent device rankings",
