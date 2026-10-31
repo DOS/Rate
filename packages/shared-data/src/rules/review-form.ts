@@ -73,30 +73,52 @@ function hasContent(text: string): boolean {
   return letters.length >= 3 && new Set(letters).size >= 2;
 }
 
-// A con that dodges the question, compared without diacritics: "không có",
-// "chưa thấy ạ", "không có gì để chê", "Không có nhược điểm nào cả", "chả có
-// gì", "khum có", "không chê được gì", "chưa gặp vấn đề gì", "mọi thứ đều ổn",
-// "none", "10/10". A real con, however small ("giá hơi cao", "không có jack
-// 3.5mm", "chưa có gì nổi bật"), never matches: the whole line must be the
-// dodge.
+// Each word of a dodge as typed with its diacritics or without any ("không" or
+// "khong"), but never with other ones: "hỏng" (broken), "gập", "lời" and "ồn"
+// are real words, not "hông", "gặp", "lỗi" and "ổn" typed loosely.
+const anyOf = (words: readonly string[]): string =>
+  `(?:${[...new Set(words.flatMap((word) => [word, plainPoint(word)]))].join('|')})`;
+
+// A con that dodges the question: "không có", "chưa thấy ạ", "mình không thấy
+// gì để chê", "Không có nhược điểm nào cả", "chả có gì", "khum có", "không chê
+// được gì", "chưa gặp vấn đề gì", "không có ý kiến", "mọi thứ đều ổn", "none",
+// "10/10". A real con, however small ("giá hơi cao", "không có jack 3.5mm",
+// "chưa có gì nổi bật", "hỏng luôn"), never matches: the whole line must be
+// the dodge.
 const EVASIVE_CON = new RegExp(
   [
-    '^(?:(?:hien tai|tam thoi|den gio|van|thi|thuc su|that su) )*',
-    '(?:khong|ko|k|kh|khum|chua|chang|cha|hok|hong|hem)',
-    '(?: (?:co|thay|gap|phat hien(?: ra)?|che duoc|che))*',
-    '(?: (?:gi|j|nhuoc diem|diem tru|khuyet diem|diem yeu|van de|loi))*',
-    '(?: (?:de|ma|dang|phai|can) (?:che|phan nan))?',
-    '(?: (?:ca|het|nao|luon|a|nhe|nha|nhen|dau|gi|j))*$',
-    '|^(?:(?:moi thu|tat ca|all) (?:deu )?(?:on|tot|ok|good|fine)',
-    '|kcj|no|none|nothing(?: to complain(?: about)?)?|no cons?|no complaints?',
-    '|n a|0|ok|on|tot|hoan hao|perfect|10 10|5 sao)$',
+    `^(?:${anyOf(['hiện tại', 'tạm thời', 'đến giờ', 'vẫn', 'thì', 'thực sự', 'thật sự', 'mình', 'em', 'tôi', 'tui', 'anh', 'chị', 'e', 'm'])} )*`,
+    anyOf([
+      'không',
+      'ko',
+      'k',
+      'kh',
+      'khum',
+      'chưa',
+      'chẳng',
+      'chả',
+      'hok',
+      'hông',
+      'hem',
+    ]),
+    `(?: ${anyOf(['có', 'thấy', 'gặp', 'phát hiện', 'phát hiện ra', 'chê được', 'chê'])})*`,
+    `(?: ${anyOf(['gì', 'j', 'nhược điểm', 'điểm trừ', 'khuyết điểm', 'điểm yếu', 'vấn đề', 'lỗi', 'điểm', 'ý kiến'])})*`,
+    `(?:(?: ${anyOf(['để', 'mà', 'đáng', 'phải', 'cần'])})? ${anyOf(['chê', 'phàn nàn', 'nói', 'kể'])})?`,
+    `(?: ${anyOf(['cả', 'hết', 'nào', 'luôn', 'ạ', 'nhé', 'nha', 'nhen', 'đâu'])})*$`,
+    `|^(?:${anyOf(['mọi thứ', 'tất cả', 'all'])} (?:${anyOf(['đều'])} )?${anyOf(['ổn', 'tốt', 'ok', 'good', 'fine'])}`,
+    `|${anyOf(['kcj', 'no', 'none', 'nothing', 'nothing to complain', 'nothing to complain about', 'no con', 'no cons', 'no complaint', 'no complaints', 'everything is fine', 'n a', '0', 'ok', 'ổn', 'tốt', 'rất tốt', 'tuyệt vời', 'hoàn hảo', 'perfect', '10 10', '5 sao'])})$`,
   ].join('')
 );
 
-/** Whether a con line says only that there is no con. */
+/**
+ * Whether a con line says only that there is no con. A dodge is short: a
+ * line longer than a con may be is never one, which also keeps the check
+ * linear on an oversized request.
+ */
 export function isEvasiveCon(text: string): boolean {
-  const plain = plainPoint(text);
-  return !hasContent(text) || EVASIVE_CON.test(plain);
+  const compared = comparablePoint(text);
+  if (compared.length > REVIEW_POINT_MAX) return false;
+  return !hasContent(text) || EVASIVE_CON.test(compared);
 }
 
 function checkList(

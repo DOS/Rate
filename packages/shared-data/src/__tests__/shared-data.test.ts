@@ -1564,6 +1564,16 @@ function testRatingCriteriaAndReviewForm(): void {
     'aaaaa',
     'Khô​ng có',
     'ＫＨÔＮＧ CÓ',
+    // Round 2 of #1548.
+    'Mình không thấy gì để chê',
+    'Em chưa thấy gì',
+    'Không có gì chê',
+    'Không có điểm gì để chê',
+    'Không có gì để nói',
+    'Không có ý kiến',
+    'Rất tốt',
+    'Everything is fine',
+    'hong co',
   ]) {
     assert.ok(rules.isEvasiveCon(dodge), dodge);
   }
@@ -1578,6 +1588,15 @@ function testRatingCriteriaAndReviewForm(): void {
     'Không có NFC',
     'Chưa có gì nổi bật',
     'K có sạc',
+    // Round 2 of #1548: other diacritics are other words.
+    'Hỏng hết',
+    'Hỏng luôn',
+    'Vẫn hỏng',
+    'Không gập',
+    'Chưa có lời',
+    'Không có lõi',
+    'Mọi thứ đều ồn',
+    'Chả cá',
   ]) {
     assert.ok(!rules.isEvasiveCon(real), real);
   }
@@ -1684,6 +1703,10 @@ function testRatingCriteriaAndReviewForm(): void {
   });
   // (1.3*15 + 5*20 + 5*20 + 5*20 + 5*15) / 90 = 394.5 / 90 = 4.38.
   assert.equal(rules.weightedReviewStar('smartphones', legacyStars), 4.4);
+  // An oversized con is never a dodge and is checked in linear time.
+  const started = Date.now();
+  assert.ok(!rules.isEvasiveCon('khong ' + 'gi '.repeat(50_000) + 'x'));
+  assert.ok(Date.now() - started < 1000, 'linear on an oversized con');
 }
 
 function main(): void {
