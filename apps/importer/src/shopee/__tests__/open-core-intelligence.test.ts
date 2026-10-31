@@ -721,6 +721,14 @@ async function runSuite() {
     'Folio 13 cho HP Pavilion',
     'Folio 13 HP sleeve chống sốc',
     'Folio 13 Samsung Galaxy Tab S9',
+    // Review of #1541: an accessory or fit word right after the brand, and a brand that is
+    // not right after the model.
+    'Folio 13 HP op lung',
+    'Folio 13 HP tui chong soc',
+    'Folio 13 HP cường lực',
+    'Folio 13 HP adapter 65W',
+    'Folio 13 HP tuong thich',
+    'Folio 12 iPad Pro HP',
   ];
   for (const title of accessoryTitles1505) {
     const accessory = normalizer.normalize(createDummyShopeeProduct(title));
@@ -748,6 +756,20 @@ async function runSuite() {
     ['HP EliteBook Folio 1040 G3 i7 16GB', 'hp:elitebook-folio-1040-g3:16gb'],
   ] as const) {
     assert.equal(keyOf(title), expectedKey, title);
+  }
+  // Review of #1541: promo words before the line, older "G1" models, and the laptop's own
+  // text later in the title ("bàn phím có đèn", "dùng cho văn phòng") keep the device.
+  for (const title of [
+    '[Hàng chính hãng] Folio 13 HP i5 8GB',
+    'Combo Folio 13 HP i5 8GB',
+    'Folio G1 HP Core m5 8GB',
+    'Folio 1040 G3 HP i5 8GB',
+    'Folio 13 (HP) i5 8GB',
+    'Folio 13 HP Core i5 bàn phím có đèn',
+    'Folio 13 HP i5 dùng cho văn phòng',
+    'Folio 13 HP pin 8 tiếng',
+  ]) {
+    assert.equal(normalizer.normalize(createDummyShopeeProduct(title)).keyable, true, title);
   }
   // DOS/Rate#1124: a size outside a band phrase is the case's; a band's size counts only
   // when the title names no other.

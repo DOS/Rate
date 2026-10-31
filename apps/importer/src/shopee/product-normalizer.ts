@@ -411,28 +411,33 @@ const ACCESSORY_OPENER =
 const PENCIL_FIT_WORD =
   /(?<![\p{L}\d])(?:cho|for|thay|như|giống|kiểu|dùng|tương\s*thích|compatible|khe|đựng|ngăn)(?![\p{L}\d])/iu;
 
-// Device lines named like an accessory, with the brand that owns the line: HP's Folio
-// laptops ("Folio 13 HP Core i5 8GB", DOS/Rate#1539). The line word opens the title with
-// a model number right after it.
-const DEVICE_LINE_OPENERS: ReadonlyArray<readonly [RegExp, RegExp]> = [
-  [/^folio\s+\d{1,4}[a-z]?(?![\p{L}\d])/iu, /(?<![\p{L}\d])hp(?![\p{L}\d])/iu],
+// Device lines named like an accessory: the line word, its model ("13", "1040 G3", "G1")
+// and the brand that owns the line right after it. HP's Folio laptops ("Folio 13 HP Core
+// i5 8GB", DOS/Rate#1539).
+const DEVICE_LINE_OPENERS: readonly RegExp[] = [
+  /^folio\s+(?:\d{1,4}[a-z]?|g\d)(?:\s+g\d)?\s+[([]?hp[)\]]?(?![\p{L}\d])/iu,
 ];
-// An accessory word after the line word: "Folio 13 HP sleeve" still sells a sleeve.
-const ACCESSORY_WORD =
-  /(?<![\p{L}\d])(?:cases?|covers?|sleeves?|ốp|bao\s*(?:da|đựng)|túi|kính|dán|skin|keyboard|bàn\s*phím|stylus|bút)(?![\p{L}\d])/iu;
+// The promo words ACCESSORY_OPENER lets come before the accessory.
+const OPENER_PROMO = /^(?:(?:combo|bộ|set|hàng\s*chính\s*hãng)\s+)?/iu;
+// Accessories that ACCESSORY_OPENER does not name, and fit words, right after a laptop name:
+// "Folio 13 HP sleeve", "Folio 13 HP tui chong soc", "Folio 13 HP adapter 65W".
+const LAPTOP_ACCESSORY_OPENER =
+  /^(?:sleeves?|pouch|bags?|balo|ba\s*lô|túi|tui|bao|adapter|battery|decal|stand|casing|miếng|mieng|kinh|dan|tempered|tương\s*thích|tuong\s*thich|compatible|for|cho|thay)(?![\p{L}\d])/iu;
 
 /**
  * A device whose line name is also an accessory word: "Folio 13 HP ..." is an HP Folio
- * laptop, not a folio case (DOS/Rate#1539). It needs the line's own brand, no word that
- * makes the device what the title fits ("cho", "for") and no other accessory word, so
- * "Folio case for iPad" and "Folio 13 cho HP" stay accessories.
+ * laptop, not a folio case (DOS/Rate#1539). The line's own brand must come right after its
+ * model, so "Folio case for iPad", "Folio 13 cho HP" and "Folio 12 iPad Pro HP" stay
+ * accessories, and an accessory right after the brand ("Folio 13 HP op lung") is still one.
+ * What comes later is the laptop's own text ("bàn phím có đèn", "dùng cho văn phòng").
  */
 function opensWithDeviceLine(opening: string): boolean {
-  return DEVICE_LINE_OPENERS.some(([line, brand]) => {
-    const head = line.exec(opening);
-    if (!head || !brand.test(opening)) return false;
-    const rest = opening.slice(head[0].length);
-    return !PENCIL_FIT_WORD.test(rest) && !ACCESSORY_WORD.test(rest);
+  const title = opening.replace(OPENER_PROMO, '');
+  return DEVICE_LINE_OPENERS.some(line => {
+    const head = line.exec(title);
+    if (!head) return false;
+    const rest = title.slice(head[0].length).trim();
+    return !ACCESSORY_OPENER.test(rest) && !LAPTOP_ACCESSORY_OPENER.test(rest);
   });
 }
 
