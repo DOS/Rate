@@ -71,7 +71,8 @@ for (const path of PAGES) {
         }
         const bg = Math.max(...stops);
         const texts = surface.querySelectorAll<HTMLElement>(
-          '[class*="text-muted"], [class*="text-secondary"], [class*="text-success"], [class*="text-danger"], [class*="text-info"], [class*="text-warning"], [class*="text-primary"]'
+          // The star ratings' value and count too (DOS/Rate#1528).
+          '[class*="text-muted"], [class*="text-secondary"], [class*="text-success"], [class*="text-danger"], [class*="text-info"], [class*="text-warning"], [class*="text-primary"], .rate-stars-value, .rate-stars-count, .rate-stars.is-empty'
         );
         for (const el of texts) {
           // Measured against its own nearest dark surface, once.

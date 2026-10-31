@@ -1059,13 +1059,9 @@ export default function JReviewsSection({
               <div className="text-uppercase small fw-bold text-primary mb-1">
                 {t('authenticUserScoreTitle')}
               </div>
-              <div
-                className={`my-2 ${
-                  liveScores.confidenceTier === 'insufficient_data'
-                    ? 'opacity-50'
-                    : ''
-                }`}
-              >
+              {/* No fading for thin data: the confidence badge below says
+              so, and faded text fails contrast (DOS/Rate#1528). */}
+              <div className="my-2">
                 <StarRating
                   value={liveScores.bayesianUser}
                   count={

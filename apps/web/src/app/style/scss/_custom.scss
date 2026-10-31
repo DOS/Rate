@@ -1600,7 +1600,8 @@ body .input-group > .input-group-text {
     --rate-star-on: var(--rate-star-poor);
   }
   &.is-empty {
-    color: var(--rate-fg-muted);
+    // Secondary, not muted: muted is under 4.5:1 on #f1f5f9 cards.
+    color: var(--rate-fg-secondary);
     font-weight: 400;
   }
 }
