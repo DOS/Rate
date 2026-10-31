@@ -442,6 +442,27 @@ export default function LeaderboardExplorer({
       .map((p) => applyCategorySpecTemplate(activeCategory, p));
   }, [products, activeCategory]);
 
+  // The category's criteria that at least one product has a real score
+  // for. A criterion with none gets no tab, no weight and no row cell, not
+  // an empty list (DOS/Rate#1553).
+  const scoredCriteria = useMemo(() => {
+    const scored = new Set<LeaderboardCriterionKey>();
+    const own = leaderboardCriteriaForCategory(activeCategory);
+    for (const item of categoryProducts) {
+      const { criteria } = computeProductScores(
+        item,
+        'combined',
+        filteredReviewCounts
+      );
+      for (const c of own) {
+        if ((criteria[c] ?? 0) > 0) scored.add(c);
+      }
+      if (scored.size === own.length) break;
+    }
+    return own.filter((c) => scored.has(c));
+  }, [activeCategory, categoryProducts, filteredReviewCounts]);
+  const hasScoredCriteria = scoredCriteria.length > 0;
+
   const availableBrands = useMemo(() => {
     const brands = new Set<string>();
     for (const p of categoryProducts) {
@@ -766,15 +787,32 @@ export default function LeaderboardExplorer({
     setActiveCriterion(crit);
   }, []);
   // A URL such as ?cat=earbuds&criterion=screen opens on the combined tab.
+  // So does a criterion no product has a score for yet (DOS/Rate#1553).
   useEffect(() => {
-    const crit = criterionForCategory(activeCategory, activeCriterion);
+    let crit = criterionForCategory(activeCategory, activeCriterion);
+    if (
+      crit !== 'combined' &&
+      crit !== 'user' &&
+      crit !== 'expert' &&
+      !scoredCriteria.includes(crit)
+    ) {
+      crit = 'combined';
+    }
     if (crit !== activeCriterion) setActiveCriterion(crit);
-  }, [activeCategory, activeCriterion]);
+  }, [activeCategory, activeCriterion, scoredCriteria]);
+  useEffect(() => {
+    if (hasScoredCriteria || activePersona === 'none') return;
+    setActivePersona('none');
+    setShowWeightSliders(false);
+    setCustomWeights({
+      screen: 20,
+      performance: 20,
+      camera: 20,
+      battery: 20,
+      value: 20,
+    });
+  }, [hasScoredCriteria, activePersona]);
 
-  // The criteria the active category has: no screen tab for earbuds
-  // (DOS/Rate#1143).
-  const categoryCriteria: readonly LeaderboardCriterionKey[] =
-    leaderboardCriteriaForCategory(activeCategory);
   const allCriterionOptions: Array<{
     key: LeaderboardCriterionKey;
     label: string;
@@ -826,7 +864,7 @@ export default function LeaderboardExplorer({
       opt.key === 'combined' ||
       opt.key === 'user' ||
       opt.key === 'expert' ||
-      categoryCriteria.includes(opt.key)
+      scoredCriteria.includes(opt.key)
   );
 
   return (
@@ -967,115 +1005,123 @@ export default function LeaderboardExplorer({
         </div>
 
         {/* 3. Smart Use-Case Persona Recommender & Custom 5-Criteria Weight Sliders (Issue #52) */}
-        <div className="border-top mb-3 pt-3">
-          <div className="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
-            <div
-              id="leaderboard-persona-label"
-              className="small text-muted fw-semibold"
-            >
-              {copy.personaTitle}
-            </div>
-            <button
-              type="button"
-              aria-expanded={showWeightSliders}
-              aria-controls="leaderboard-weight-sliders"
-              onClick={() => setShowWeightSliders((v) => !v)}
-              className={`btn btn-sm rounded-pill px-3 py-1 ${
-                showWeightSliders || activePersona === 'custom'
-                  ? 'btn-primary fw-semibold text-white'
-                  : 'btn-outline-primary'
-              }`}
-              style={{ fontSize: '0.8125rem' }}
-            >
-              <BsSliders aria-hidden="true" className="me-1" />
-              {copy.customizeWeightsBtn}
-              {/* Custom weights select no persona pill and are shown only by
-                  this button's colour, so its name says so too (#1067). */}
-              {activePersona === 'custom' && (
-                <span className="visually-hidden">
-                  {`: ${copy.personaLabels.custom}`}
-                </span>
-              )}
-            </button>
-          </div>
-
-          <div
-            className="d-flex flex-wrap gap-2"
-            role="group"
-            aria-labelledby="leaderboard-persona-label"
-          >
-            {(
-              [
-                'none',
-                'photography',
-                'gaming',
-                'endurance',
-                'business',
-                'value_hunter',
-              ] as const
-            ).map((presetKey) => {
-              const isSelected = activePersona === presetKey;
-              return (
-                <button
-                  key={presetKey}
-                  type="button"
-                  aria-pressed={isSelected}
-                  onClick={() => applyPersonaPreset(presetKey)}
-                  className={`btn btn-sm rounded-pill px-3 py-1 ${
-                    isSelected
-                      ? 'btn-danger fw-semibold text-white shadow-sm'
-                      : 'btn-outline-dark bg-light'
-                  }`}
-                  style={{ fontSize: '0.8125rem' }}
-                >
-                  {copy.personaLabels[presetKey]}
-                </button>
-              );
-            })}
-          </div>
-
-          {showWeightSliders && (
-            <div
-              id="leaderboard-weight-sliders"
-              className="rounded-3 bg-light mt-2 border p-3"
-            >
-              <div className="row g-3">
-                {(
-                  [
-                    { key: 'screen', label: copy.critLabels.screen },
-                    { key: 'performance', label: copy.critLabels.performance },
-                    { key: 'camera', label: copy.critLabels.camera },
-                    { key: 'battery', label: copy.critLabels.battery },
-                    { key: 'value', label: copy.critLabels.value },
-                  ] as const
-                )
-                  .filter((slider) => categoryCriteria.includes(slider.key))
-                  .map((slider) => (
-                    <div key={slider.key} className="col-md-4 col-sm-6">
-                      <div className="d-flex justify-content-between small fw-semibold mb-1">
-                        <span>{slider.label}</span>
-                        <span className="rate-tabular text-danger">
-                          {formatPercent(customWeights[slider.key], locale)}
-                        </span>
-                      </div>
-                      <input
-                        type="range"
-                        min={0}
-                        max={100}
-                        step={5}
-                        value={customWeights[slider.key]}
-                        onChange={(e) =>
-                          updateSingleWeight(slider.key, Number(e.target.value))
-                        }
-                        className="form-range"
-                        aria-label={slider.label}
-                      />
-                    </div>
-                  ))}
+        {hasScoredCriteria && (
+          <div className="border-top mb-3 pt-3">
+            <div className="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
+              <div
+                id="leaderboard-persona-label"
+                className="small text-muted fw-semibold"
+              >
+                {copy.personaTitle}
               </div>
+              <button
+                type="button"
+                aria-expanded={showWeightSliders}
+                aria-controls="leaderboard-weight-sliders"
+                onClick={() => setShowWeightSliders((v) => !v)}
+                className={`btn btn-sm rounded-pill px-3 py-1 ${
+                  showWeightSliders || activePersona === 'custom'
+                    ? 'btn-primary fw-semibold text-white'
+                    : 'btn-outline-primary'
+                }`}
+                style={{ fontSize: '0.8125rem' }}
+              >
+                <BsSliders aria-hidden="true" className="me-1" />
+                {copy.customizeWeightsBtn}
+                {/* Custom weights select no persona pill and are shown only by
+                  this button's colour, so its name says so too (#1067). */}
+                {activePersona === 'custom' && (
+                  <span className="visually-hidden">
+                    {`: ${copy.personaLabels.custom}`}
+                  </span>
+                )}
+              </button>
             </div>
-          )}
-        </div>
+
+            <div
+              className="d-flex flex-wrap gap-2"
+              role="group"
+              aria-labelledby="leaderboard-persona-label"
+            >
+              {(
+                [
+                  'none',
+                  'photography',
+                  'gaming',
+                  'endurance',
+                  'business',
+                  'value_hunter',
+                ] as const
+              ).map((presetKey) => {
+                const isSelected = activePersona === presetKey;
+                return (
+                  <button
+                    key={presetKey}
+                    type="button"
+                    aria-pressed={isSelected}
+                    onClick={() => applyPersonaPreset(presetKey)}
+                    className={`btn btn-sm rounded-pill px-3 py-1 ${
+                      isSelected
+                        ? 'btn-danger fw-semibold text-white shadow-sm'
+                        : 'btn-outline-dark bg-light'
+                    }`}
+                    style={{ fontSize: '0.8125rem' }}
+                  >
+                    {copy.personaLabels[presetKey]}
+                  </button>
+                );
+              })}
+            </div>
+
+            {showWeightSliders && (
+              <div
+                id="leaderboard-weight-sliders"
+                className="rounded-3 bg-light mt-2 border p-3"
+              >
+                <div className="row g-3">
+                  {(
+                    [
+                      { key: 'screen', label: copy.critLabels.screen },
+                      {
+                        key: 'performance',
+                        label: copy.critLabels.performance,
+                      },
+                      { key: 'camera', label: copy.critLabels.camera },
+                      { key: 'battery', label: copy.critLabels.battery },
+                      { key: 'value', label: copy.critLabels.value },
+                    ] as const
+                  )
+                    .filter((slider) => scoredCriteria.includes(slider.key))
+                    .map((slider) => (
+                      <div key={slider.key} className="col-md-4 col-sm-6">
+                        <div className="d-flex justify-content-between small fw-semibold mb-1">
+                          <span>{slider.label}</span>
+                          <span className="rate-tabular text-danger">
+                            {formatPercent(customWeights[slider.key], locale)}
+                          </span>
+                        </div>
+                        <input
+                          type="range"
+                          min={0}
+                          max={100}
+                          step={5}
+                          value={customWeights[slider.key]}
+                          onChange={(e) =>
+                            updateSingleWeight(
+                              slider.key,
+                              Number(e.target.value)
+                            )
+                          }
+                          className="form-range"
+                          aria-label={slider.label}
+                        />
+                      </div>
+                    ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Search + Price Segment + Brand Filter Bar */}
         <div className="row g-2 border-top align-items-center pt-3">
@@ -1356,63 +1402,69 @@ export default function LeaderboardExplorer({
                       </div>
 
                       {/* Mini 5-Criteria Bars */}
-                      <div
-                        className="rounded-3 mb-3 p-2 px-3"
-                        style={{ background: 'var(--rate-glass-bg)' }}
-                      >
+                      {hasScoredCriteria && (
                         <div
-                          className="text-white-50 mb-1"
-                          style={{ fontSize: '0.75rem' }}
+                          className="rounded-3 mb-3 p-2 px-3"
+                          style={{ background: 'var(--rate-glass-bg)' }}
                         >
-                          {t('criteriaSourceExpert')}
-                        </div>
-                        {(
-                          [
-                            { key: 'screen', label: copy.critLabels.screen },
-                            {
-                              key: 'performance',
-                              label: copy.critLabels.performance,
-                            },
-                            { key: 'camera', label: copy.critLabels.camera },
-                            { key: 'battery', label: copy.critLabels.battery },
-                            { key: 'value', label: copy.critLabels.value },
-                          ] as const
-                        )
-                          .filter((c) => categoryCriteria.includes(c.key))
-                          .map((c) => {
-                            const val = entry.criteria[c.key];
-                            const pct = sanitizeLeaderboardBarPercentage(val);
-                            return (
-                              <div key={c.key} className="mb-1 last:mb-0">
-                                <div
-                                  className="d-flex justify-content-between text-white-50"
-                                  style={{ fontSize: '0.8125rem' }}
-                                >
-                                  <span>{c.label}</span>
-                                  <strong className="rate-tabular text-white">
-                                    {val != null
-                                      ? formatDecimal(val, locale, 2)
-                                      : t('criterionNoData')}
-                                  </strong>
-                                </div>
-                                {val != null && (
+                          <div
+                            className="text-white-50 mb-1"
+                            style={{ fontSize: '0.75rem' }}
+                          >
+                            {t('criteriaSourceExpert')}
+                          </div>
+                          {(
+                            [
+                              { key: 'screen', label: copy.critLabels.screen },
+                              {
+                                key: 'performance',
+                                label: copy.critLabels.performance,
+                              },
+                              { key: 'camera', label: copy.critLabels.camera },
+                              {
+                                key: 'battery',
+                                label: copy.critLabels.battery,
+                              },
+                              { key: 'value', label: copy.critLabels.value },
+                            ] as const
+                          )
+                            .filter((c) => scoredCriteria.includes(c.key))
+                            .map((c) => {
+                              const val = entry.criteria[c.key];
+                              const pct = sanitizeLeaderboardBarPercentage(val);
+                              return (
+                                <div key={c.key} className="mb-1 last:mb-0">
                                   <div
-                                    className="progress rounded-pill"
-                                    style={{
-                                      height: 4,
-                                      backgroundColor: 'rgba(255,255,255,0.12)',
-                                    }}
+                                    className="d-flex justify-content-between text-white-50"
+                                    style={{ fontSize: '0.8125rem' }}
                                   >
-                                    <div
-                                      className="progress-bar bg-warning"
-                                      style={{ width: `${pct}%` }}
-                                    />
+                                    <span>{c.label}</span>
+                                    <strong className="rate-tabular text-white">
+                                      {val != null
+                                        ? formatDecimal(val, locale, 2)
+                                        : t('criterionNoData')}
+                                    </strong>
                                   </div>
-                                )}
-                              </div>
-                            );
-                          })}
-                      </div>
+                                  {val != null && (
+                                    <div
+                                      className="progress rounded-pill"
+                                      style={{
+                                        height: 4,
+                                        backgroundColor:
+                                          'rgba(255,255,255,0.12)',
+                                      }}
+                                    >
+                                      <div
+                                        className="progress-bar bg-warning"
+                                        style={{ width: `${pct}%` }}
+                                      />
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })}
+                        </div>
+                      )}
 
                       <div className="d-flex mb-3 flex-wrap gap-1">
                         {keySpecs.chip && (
@@ -1710,7 +1762,7 @@ export default function LeaderboardExplorer({
                           { key: 'value', short: t('shortValue') },
                         ] as const
                       )
-                        .filter((c) => categoryCriteria.includes(c.key))
+                        .filter((c) => scoredCriteria.includes(c.key))
                         .map((c) => (
                           <div
                             key={c.key}
