@@ -9,7 +9,7 @@ import {
 import { radarExportFields } from '@/lib/deal-radar';
 import {
   comparePositiveMinPrices,
-  LEADERBOARD_SCORE_CRITERIA,
+  leaderboardCriteriaForCategory,
   scoreMasterProductForLeaderboard,
   sharedScoredCriteria,
   weightedCriteriaScore5,
@@ -314,7 +314,9 @@ export async function GET(req: NextRequest) {
 
     // A criterion without a real score on both sides has no winner: its
     // scores, delta and winner are null (DOS/Rate#1143).
-    const criteriaHeadToHead = LEADERBOARD_SCORE_CRITERIA.map((key) => {
+    const criteriaHeadToHead = leaderboardCriteriaForCategory(
+      scoreA.categorySlug
+    ).map((key) => {
       const a5 = scoreA.criteria[key];
       const b5 = scoreB.criteria[key];
       const a10 = a5 != null ? Number((a5 * 2).toFixed(1)) : null;

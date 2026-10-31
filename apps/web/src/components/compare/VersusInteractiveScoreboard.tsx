@@ -712,6 +712,9 @@ export default function VersusInteractiveScoreboard({
         </div>
 
         {/* 5-Criteria Dual Progress Bar Comparison Rows */}
+        <div className="small text-white-50 mt-2">
+          {t('criteriaSourceExpert')}
+        </div>
         {criteriaRows.map((row) => {
           const { aWins, bWins } = row;
           const aPct = Math.min(100, Math.round(((row.aVal ?? 0) / 5) * 100));
@@ -741,7 +744,10 @@ export default function VersusInteractiveScoreboard({
                       className={`progress-bar ${
                         aWins ? 'bg-success' : 'bg-secondary'
                       }`}
-                      style={{ width: `${aPct}%` }}
+                      style={{
+                        width: `${aPct}%`,
+                        visibility: row.aVal != null ? undefined : 'hidden',
+                      }}
                     />
                   </div>
                 </div>
@@ -762,7 +768,10 @@ export default function VersusInteractiveScoreboard({
                       className={`progress-bar ${
                         bWins ? 'bg-success' : 'bg-secondary'
                       }`}
-                      style={{ width: `${bPct}%` }}
+                      style={{
+                        width: `${bPct}%`,
+                        visibility: row.bVal != null ? undefined : 'hidden',
+                      }}
                     />
                   </div>
                   <span

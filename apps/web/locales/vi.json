@@ -124,6 +124,7 @@
     }
   },
   "compare": {
+    "criteriaSourceExpert": "Điểm tiêu chí do chuyên gia chấm",
     "criterionNoData": "Chưa đủ dữ liệu",
     "versusMetaTitle": "So sánh {nameA} và {nameB}: 10 nhóm thông số và điểm đánh giá | Rate.vn",
     "versusMetaTitleShort": "{nameA} vs {nameB} | Rate.vn",
@@ -344,6 +345,7 @@
     "quickToggleShortLimit": "Tối đa 4"
   },
   "leaderboard": {
+    "criteriaSourceExpert": "Điểm tiêu chí do chuyên gia chấm",
     "criterionNoData": "Chưa đủ dữ liệu",
     "metaTitle": "Bảng xếp hạng thiết bị công nghệ | Rate.vn",
     "metaDescription": "Bảng xếp hạng độc lập theo danh mục: điểm chuyên gia và điểm người mua thật theo 5 tiêu chí, không bị chi phối bởi quảng cáo hay link affiliate.",

@@ -150,6 +150,19 @@ interface RankedProductEntry {
   activeScore5: number;
 }
 
+/** The criterion a category can rank by: combined when it lacks it. */
+function criterionForCategory(
+  cat: CanonicalCategorySlug,
+  crit: LeaderboardCriterionKey
+): LeaderboardCriterionKey {
+  return crit === 'combined' ||
+    crit === 'user' ||
+    crit === 'expert' ||
+    leaderboardCriteriaForCategory(cat).includes(crit)
+    ? crit
+    : 'combined';
+}
+
 type TranslateFn = ReturnType<typeof useTranslations<'leaderboard'>>;
 
 function buildCategoryTabs(t: TranslateFn): ReadonlyArray<{
@@ -478,12 +491,13 @@ export default function LeaderboardExplorer({
       return true;
     });
 
-    const totalWeight =
-      customWeights.screen +
-      customWeights.performance +
-      customWeights.camera +
-      customWeights.battery +
-      customWeights.value;
+    // Only the weights of the category's own criteria count: a screen
+    // weight left over from phones does not empty the earbuds list.
+    const weightedCriteria = leaderboardCriteriaForCategory(activeCategory);
+    const totalWeight = weightedCriteria.reduce(
+      (sum, c) => sum + customWeights[c],
+      0
+    );
 
     const scored = filtered
       .map((item) => {
@@ -492,16 +506,22 @@ export default function LeaderboardExplorer({
           activeCriterion,
           filteredReviewCounts
         );
-        if (activePersona !== 'none' && totalWeight > 0) {
-          // The weights apply to the criteria with a real score; a product
-          // with none keeps its combined score (DOS/Rate#1143).
+        // A product the active tab has no score for stays out, weights or
+        // not; one with no real score on the weighted criteria drops out of
+        // the weighted ranking, like a criterion tab (DOS/Rate#1143).
+        if (
+          activePersona !== 'none' &&
+          totalWeight > 0 &&
+          base.activeScore5 > 0
+        ) {
           const weighted5 = weightedCriteriaScore5(
             base.criteria,
-            customWeights
+            customWeights,
+            weightedCriteria
           );
           return {
             ...base,
-            activeScore5: weighted5 ?? base.combinedScore5,
+            activeScore5: weighted5 ?? 0,
           };
         }
         return base;
@@ -540,6 +560,7 @@ export default function LeaderboardExplorer({
       return a.product.slug.localeCompare(b.product.slug);
     });
   }, [
+    activeCategory,
     categoryProducts,
     selectedBrand,
     priceSegment,
@@ -722,9 +743,11 @@ export default function LeaderboardExplorer({
   };
 
   const handleSelectCategory = (cat: CanonicalCategorySlug) => {
+    const crit = criterionForCategory(cat, activeCriterion);
     setActiveCategory(cat);
+    setActiveCriterion(crit);
     setSelectedBrand('all');
-    replaceTabUrl(cat, activeCriterion);
+    replaceTabUrl(cat, crit);
   };
 
   const handleSelectCriterion = (crit: LeaderboardCriterionKey) => {
@@ -742,6 +765,11 @@ export default function LeaderboardExplorer({
   const applyUrlCriterion = useCallback((crit: LeaderboardCriterionKey) => {
     setActiveCriterion(crit);
   }, []);
+  // A URL such as ?cat=earbuds&criterion=screen opens on the combined tab.
+  useEffect(() => {
+    const crit = criterionForCategory(activeCategory, activeCriterion);
+    if (crit !== activeCriterion) setActiveCriterion(crit);
+  }, [activeCategory, activeCriterion]);
 
   // The criteria the active category has: no screen tab for earbuds
   // (DOS/Rate#1143).
@@ -1020,28 +1048,30 @@ export default function LeaderboardExplorer({
                     { key: 'battery', label: copy.critLabels.battery },
                     { key: 'value', label: copy.critLabels.value },
                   ] as const
-                ).map((slider) => (
-                  <div key={slider.key} className="col-md-4 col-sm-6">
-                    <div className="d-flex justify-content-between small fw-semibold mb-1">
-                      <span>{slider.label}</span>
-                      <span className="rate-tabular text-danger">
-                        {formatPercent(customWeights[slider.key], locale)}
-                      </span>
+                )
+                  .filter((slider) => categoryCriteria.includes(slider.key))
+                  .map((slider) => (
+                    <div key={slider.key} className="col-md-4 col-sm-6">
+                      <div className="d-flex justify-content-between small fw-semibold mb-1">
+                        <span>{slider.label}</span>
+                        <span className="rate-tabular text-danger">
+                          {formatPercent(customWeights[slider.key], locale)}
+                        </span>
+                      </div>
+                      <input
+                        type="range"
+                        min={0}
+                        max={100}
+                        step={5}
+                        value={customWeights[slider.key]}
+                        onChange={(e) =>
+                          updateSingleWeight(slider.key, Number(e.target.value))
+                        }
+                        className="form-range"
+                        aria-label={slider.label}
+                      />
                     </div>
-                    <input
-                      type="range"
-                      min={0}
-                      max={100}
-                      step={5}
-                      value={customWeights[slider.key]}
-                      onChange={(e) =>
-                        updateSingleWeight(slider.key, Number(e.target.value))
-                      }
-                      className="form-range"
-                      aria-label={slider.label}
-                    />
-                  </div>
-                ))}
+                  ))}
               </div>
             </div>
           )}
@@ -1330,6 +1360,12 @@ export default function LeaderboardExplorer({
                         className="rounded-3 mb-3 p-2 px-3"
                         style={{ background: 'var(--rate-glass-bg)' }}
                       >
+                        <div
+                          className="text-white-50 mb-1"
+                          style={{ fontSize: '0.75rem' }}
+                        >
+                          {t('criteriaSourceExpert')}
+                        </div>
                         {(
                           [
                             { key: 'screen', label: copy.critLabels.screen },
@@ -1359,18 +1395,20 @@ export default function LeaderboardExplorer({
                                       : t('criterionNoData')}
                                   </strong>
                                 </div>
-                                <div
-                                  className="progress rounded-pill"
-                                  style={{
-                                    height: 4,
-                                    backgroundColor: 'rgba(255,255,255,0.12)',
-                                  }}
-                                >
+                                {val != null && (
                                   <div
-                                    className="progress-bar bg-warning"
-                                    style={{ width: `${pct}%` }}
-                                  />
-                                </div>
+                                    className="progress rounded-pill"
+                                    style={{
+                                      height: 4,
+                                      backgroundColor: 'rgba(255,255,255,0.12)',
+                                    }}
+                                  >
+                                    <div
+                                      className="progress-bar bg-warning"
+                                      style={{ width: `${pct}%` }}
+                                    />
+                                  </div>
+                                )}
                               </div>
                             );
                           })}
