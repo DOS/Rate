@@ -22,13 +22,15 @@ const trayItems = [
 
 type Measure = { text: string; ratio: number; color: string; ground: string };
 
-// The text colour of each visible control against the ground it sits on.
-// Translucent grounds are composited down to the first opaque one (white if
-// none); a gradient counts as its lightest stop, the worst case for light
-// ink. The text's own alpha and its opacity chain are composited over that
-// ground too, so a faded label is measured as it is seen.
+// The text colour of each visible control against the ground it sits on,
+// composited the way the browser paints it: every element from <html> down
+// to the control lays its background colour, then its gradient (counted as
+// its lightest stop, the worst case for light ink), over what is below; an
+// element's opacity fades its whole group (ground and text) into the
+// backdrop. The text's own alpha is composited last.
 async function contrastOf(controls: Locator): Promise<Measure[]> {
   return controls.evaluateAll((els) => {
+    type Rgb = [number, number, number];
     type Rgba = [number, number, number, number];
     const parse = (css: string): Rgba[] =>
       (css.match(/rgba?\([^)]+\)/g) ?? []).map((m) => {
@@ -39,44 +41,55 @@ async function contrastOf(controls: Locator): Promise<Measure[]> {
           .map(Number);
         return [r, g, b, a];
       });
-    const lum = ([r, g, b]: Rgba) => {
+    const lum = ([r, g, b]: Rgb | Rgba) => {
       const ch = (v: number) => {
         const s = v / 255;
         return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
       };
       return 0.2126 * ch(r) + 0.7152 * ch(g) + 0.0722 * ch(b);
     };
-    const over = (top: Rgba, base: Rgba, alpha = top[3]): Rgba => [
+    const mix = (base: Rgb, top: Rgb | Rgba, alpha: number): Rgb => [
       top[0] * alpha + base[0] * (1 - alpha),
       top[1] * alpha + base[1] * (1 - alpha),
       top[2] * alpha + base[2] * (1 - alpha),
-      1,
     ];
+    type Node = { fill?: Rgba; stop?: Rgba; opacity: number };
+    const paint = (path: Node[], text: Rgba | null): Rgb => {
+      const render = (i: number, backdrop: Rgb): Rgb => {
+        const node = path[i]!;
+        let c = backdrop;
+        if (node.fill) c = mix(c, node.fill, node.fill[3]);
+        if (node.stop) c = mix(c, node.stop, node.stop[3]);
+        const inner =
+          i + 1 < path.length
+            ? render(i + 1, c)
+            : text
+              ? mix(c, text, text[3])
+              : c;
+        return mix(backdrop, inner, node.opacity);
+      };
+      return render(0, [255, 255, 255]);
+    };
     return els
       .filter((el) => {
         const r = el.getBoundingClientRect();
         return r.width > 0 && r.height > 0;
       })
       .map((el) => {
-        // Background layers from the control outwards, up to an opaque one.
-        const layers: Rgba[] = [];
-        let opacity = 1;
+        const path: Node[] = [];
         for (let n: Element | null = el; n; n = n.parentElement) {
           const s = getComputedStyle(n);
-          opacity *= Number(s.opacity);
           const stops = parse(s.backgroundImage).filter((c) => c[3] > 0);
-          const fill = parse(s.backgroundColor).filter((c) => c[3] > 0);
-          const layer =
-            stops.sort((a, b) => lum(b) - lum(a))[0] ?? fill[0] ?? null;
-          if (!layer) continue;
-          layers.push(layer);
-          if (layer[3] >= 1) break;
+          path.unshift({
+            fill: parse(s.backgroundColor).find((c) => c[3] > 0),
+            stop: stops.sort((a, b) => lum(b) - lum(a))[0],
+            opacity: Number(s.opacity),
+          });
         }
-        let ground: Rgba = [255, 255, 255, 1];
-        for (const layer of layers.reverse()) ground = over(layer, ground);
         const color = getComputedStyle(el).color;
-        const fg: Rgba = parse(color)[0] ?? [0, 0, 0, 1];
-        const seen = over(fg, ground, fg[3] * opacity);
+        const fg = parse(color)[0] ?? [0, 0, 0, 1];
+        const ground = paint(path, null);
+        const seen = paint(path, fg);
         const a = lum(seen);
         const b = lum(ground);
         return {
@@ -85,10 +98,7 @@ async function contrastOf(controls: Locator): Promise<Measure[]> {
             .slice(0, 40),
           ratio: (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05),
           color,
-          ground: `rgb(${ground
-            .slice(0, 3)
-            .map((v) => Math.round(v))
-            .join(', ')})`,
+          ground: `rgb(${ground.map((v) => Math.round(v)).join(', ')})`,
         };
       });
   });
