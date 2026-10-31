@@ -1567,6 +1567,9 @@ const GARMIN_LINES =
 // Colour words a shop glues to the RAM/ROM run ("Đen/256GB", "Xanh/8GB/128GB"): never
 // the model's last word (DOS/Rate#1481). The first word of a two-word colour ("Titan
 // Gray/", "Xanh Dương/", "Silver Shadow/") goes with it.
+// The RAM sizes Apple sells MacBooks with (DOS/Rate#1491 d).
+const MACBOOK_RAM_SIZES = new Set([8, 16, 18, 24, 32, 36, 48, 64, 96, 128]);
+
 const GLUED_COLOURS =
   /^(?:Đen|Trắng|Xanh|Bạc|Vàng|Hồng|Tím|Đỏ|Xám|Ghi|Cam|Nâu|Kem|Black|White|Blue|Navy|Silver|Gold|Pink|Purple|Lavender|Violet|Red|Gray|Grey|Green|Yellow|Graphite|Midnight|Starlight|Mint|Cream|Onyx|Cobalt|Icy|Amber|Titanium)$/iu;
 // "Titan" alone is a model word (MSI GT77 Titan), but starts a colour before one.
@@ -2803,7 +2806,29 @@ export class ProductNormalizer {
     // An accessory for a device is not the device: it gets no key, so it never joins the
     // device's master or Item (DOS/Rate#1505).
     const keyable = Boolean(slugify(brand) && slugify(model)) && !isAccessoryTitle(title);
-    const itemKey = keyable ? baseKey : `${slugify(brand) || 'khac'}:${UNKEYED_MODEL_SEGMENT}`;
+    // DRAFT for DOS/Rate#1491 (c) and (d), not for merge until JOY's re-key decisions D5
+    // and D6: the base configuration keeps today's key, the other one gets a suffix.
+    // A 5G (Cellular, LTE) iPad keys "-5g"; a MacBook whose title states a RAM other
+    // than its registry line's base RAM keys "-<n>gb-ram". A line with no registry
+    // entry has no known base RAM and keeps its key.
+    const ownTitle = ownProductPart(title);
+    let configSuffix = '';
+    if (
+      brand === 'Apple' &&
+      /^iPad\b/.test(model) &&
+      /\b(?:5g|4g|lte|cellular)\b/i.test(ownTitle)
+    ) {
+      configSuffix = '-5g';
+    } else if (brand === 'Apple' && /^MacBook\b/.test(model) && benchmark?.ram_gb) {
+      const stated = claimable.find(t => t.claimed)?.value;
+      // Only a MacBook RAM size: "RAM SSD 512GB" claims the SSD, which is no RAM.
+      if (stated !== undefined && MACBOOK_RAM_SIZES.has(stated) && stated !== benchmark.ram_gb) {
+        configSuffix = `-${stated}gb-ram`;
+      }
+    }
+    const itemKey = keyable
+      ? `${baseKey}${configSuffix}`
+      : `${slugify(brand) || 'khac'}:${UNKEYED_MODEL_SEGMENT}`;
     const variantKey = storageKnown ? `${storageGb}gb` : UNKNOWN_VARIANT_KEY;
     const modelKey = `${itemKey}:${variantKey}`;
     const itemName = `${brand} ${model}`.trim();
