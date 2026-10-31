@@ -50,7 +50,7 @@ Design: [`2026-10-31-criteria-stars-pros-cons.html`](./2026-10-31-criteria-stars
   - `rate.refresh_master_rating_extras(master)` writes them, only where they changed.
   - Only the service role can run them.
 - **Triggers keep the values current.**
-  - On `rate.reviews` and `rate.review_flags`: every insert, update and delete. They run once per statement, so a bulk import refreshes each touched master once.
+  - On `rate.reviews` (a change of a rating input: star, exact star, criteria, weight, type, origin or listing) and `rate.review_flags` (`include_in_rating`), for every insert, update and delete. They run once per statement; see Known limits for bulk flag imports.
   - On `rate.master_products`: a change of `user_rating_weighted` or `authentic_review_count`, for example after a listing moves.
   - **No existing function is replaced or renamed.** A later `CREATE OR REPLACE` of a refresh function (M1+M2, its rollback, a hotfix) cannot stop these updates.
 
@@ -58,8 +58,8 @@ Design: [`2026-10-31-criteria-stars-pros-cons.html`](./2026-10-31-criteria-stars
 
 1. **Apply order:** before or after M0 and M1+M2. The replay covers both orders and the M1+M2 rollback.
 2. **Apply on preview:**
-   - The schema transaction briefly takes ACCESS EXCLUSIVE locks on `rate.reviews` and `rate.master_products` (the `ALTER TABLE` statements).
-   - The backfill runs afterwards in its own transaction and locks only reviewed master rows.
+   - The schema transaction takes ACCESS EXCLUSIVE locks on `rate.reviews` and `rate.master_products` only for the `ALTER TABLE` statements. The new CHECKs are added NOT VALID, so nothing is scanned under that lock.
+   - The backfill transaction validates the CHECKs (a scan that lets reads and writes go on) and refreshes the reviewed masters, locking only those rows.
    - Run the verify file: V1 to V6 must return 0.
    - Compare V7: `rating_score` sits a little below `user_rating_weighted` for masters with few reviews, because of the prior. That is intended (D3).
 3. **Then beta, then prod**, running the verify file after each.
@@ -76,6 +76,10 @@ Design: [`2026-10-31-criteria-stars-pros-cons.html`](./2026-10-31-criteria-stars
 Roll back only while no phase reads or writes the new columns: before P3, P4 and P5, or after reverting them.
 
 ## Known limits
+
+- **Bulk flag imports.** The existing `trg_review_flags_sync_weight` updates `rate.reviews` one row at a time. A bulk flag import therefore refreshes a master once per flag row, not once per import. Re-crawls that rewrite reviews unchanged refresh nothing: only changes to rating inputs count.
+- **Concurrent writers.** A variant locked by another transaction is skipped, as `refresh_item_rating` does. This avoids deadlocks between sibling variants. The other transaction writes its own values when it reaches that variant. Like the live refresh, two writers on the same master can leave the older values until the next write; V6 shows any master out of date.
+- **Deleting a listing with its reviews** leaves the master's values in place until its next review write or refresh, the same as `user_rating_weighted` today. V6 shows it. Re-run the backfill to fix it.
 
 - **`rate_worker` can write the new columns directly.** It keeps its table-level UPDATE on `master_products` and on crawled reviews (20261018183000). The next trigger run overwrites such a write, and V6 shows it. Column-level grants are a separate hardening step.
 - **Per-category prior means:** version 1 uses 4.2 for every criterion.

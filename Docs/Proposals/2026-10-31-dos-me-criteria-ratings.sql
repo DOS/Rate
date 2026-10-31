@@ -42,19 +42,19 @@ DO $$
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'reviews_rating_exact_range') THEN
     ALTER TABLE rate.reviews ADD CONSTRAINT reviews_rating_exact_range
-      CHECK (rating_exact IS NULL OR (rating_exact >= 1 AND rating_exact <= 5));
+      CHECK (rating_exact IS NULL OR (rating_exact >= 1 AND rating_exact <= 5)) NOT VALID;
   END IF;
   IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'reviews_verdict_length') THEN
     ALTER TABLE rate.reviews ADD CONSTRAINT reviews_verdict_length
-      CHECK (verdict IS NULL OR char_length(verdict) <= 300);
+      CHECK (verdict IS NULL OR char_length(verdict) <= 300) NOT VALID;
   END IF;
   IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'reviews_criteria_version_positive') THEN
     ALTER TABLE rate.reviews ADD CONSTRAINT reviews_criteria_version_positive
-      CHECK (criteria_version IS NULL OR criteria_version >= 1);
+      CHECK (criteria_version IS NULL OR criteria_version >= 1) NOT VALID;
   END IF;
   IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'reviews_value_score_range') THEN
     ALTER TABLE rate.reviews ADD CONSTRAINT reviews_value_score_range
-      CHECK (value_score IS NULL OR (value_score >= 0 AND value_score <= 100));
+      CHECK (value_score IS NULL OR (value_score >= 0 AND value_score <= 100)) NOT VALID;
   END IF;
 END $$;
 
@@ -136,11 +136,11 @@ DO $$
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'master_products_rating_score_range') THEN
     ALTER TABLE rate.master_products ADD CONSTRAINT master_products_rating_score_range
-      CHECK (rating_score IS NULL OR (rating_score >= 0 AND rating_score <= 5));
+      CHECK (rating_score IS NULL OR (rating_score >= 0 AND rating_score <= 5)) NOT VALID;
   END IF;
   IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'master_products_rating_weight_sum_nonneg') THEN
     ALTER TABLE rate.master_products ADD CONSTRAINT master_products_rating_weight_sum_nonneg
-      CHECK (rating_weight_sum >= 0);
+      CHECK (rating_weight_sum >= 0) NOT VALID;
   END IF;
 END $$;
 
@@ -260,12 +260,20 @@ BEGIN
   SELECT x.rating_score, x.rating_weight_sum, x.criteria_scores
   INTO v_score, v_weight, v_criteria
   FROM rate.master_rating_extras(p_master_id) x;
+  -- Variants in id order, skipping one another transaction holds, as refresh_item_rating
+  -- does: that transaction is refreshing the same Item and writes when it gets there, so two
+  -- refreshes of sibling variants never wait on each other (no deadlock).
   EXECUTE format($q$
     UPDATE rate.master_products m
     SET rating_score = $2, rating_weight_sum = $3, criteria_scores = $4
-    WHERE %s = $1
-      AND (m.rating_score, m.rating_weight_sum, m.criteria_scores) IS DISTINCT FROM ($2, $3, $4)
-  $q$, CASE WHEN v_item IS NULL THEN 'm.id' ELSE 'm.item_id' END)
+    WHERE m.id IN (
+      SELECT mp.id FROM rate.master_products mp
+      WHERE %s = $1
+        AND (mp.rating_score, mp.rating_weight_sum, mp.criteria_scores)
+            IS DISTINCT FROM ($2, $3, $4)
+      ORDER BY mp.id
+      FOR UPDATE SKIP LOCKED)
+  $q$, CASE WHEN v_item IS NULL THEN 'mp.id' ELSE 'mp.item_id' END)
   USING COALESCE(v_item, p_master_id), v_score, v_weight, v_criteria;
 END $$;
 
@@ -285,25 +293,57 @@ GRANT EXECUTE ON FUNCTION rate.refresh_master_rating_extras(uuid) TO service_rol
 --   rate.review_flags  every insert, update and delete (include_in_rating)
 --   rate.master_products a change of user_rating_weighted or authentic_review_count, which the
 --                      live refresh writes after a listing moves between masters or Items
--- Statement-level with transition tables for the two review tables, so a bulk import refreshes
--- each touched master once per statement.
+-- Statement-level with transition tables for the two review tables, and only rows whose rating
+-- inputs changed count, so a re-crawl that rewrites reviews unchanged refreshes nothing. A bulk
+-- flag import still refreshes a master once per flag row: the existing trg_review_flags_sync_weight
+-- updates rate.reviews one row at a time (20261014033000).
 
-CREATE OR REPLACE FUNCTION rate.refresh_rating_extras_of_masters(p_masters uuid[])
+-- The masters whose ratings a set of listings feeds: each listing's master, and once M1+M2 is
+-- in, one variant of the Item of a listing with no variant (cluster_id NULL, item_id set).
+-- Each Item is refreshed once, whichever of its variants comes first.
+CREATE OR REPLACE FUNCTION rate.refresh_rating_extras_of_products(p_products uuid[])
 RETURNS void
 LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = ''
 AS $$
 DECLARE
+  v_masters uuid[];
+  v_extra uuid[];
   v_master uuid;
+  v_item uuid;
+  v_done uuid[] := '{}';
 BEGIN
-  FOR v_master IN SELECT DISTINCT unnest(p_masters) ORDER BY 1 LOOP
-    IF v_master IS NOT NULL THEN
-      PERFORM rate.refresh_master_rating_extras(v_master);
+  IF p_products IS NULL OR cardinality(p_products) = 0 THEN
+    RETURN;
+  END IF;
+  v_masters := ARRAY(SELECT DISTINCT p.cluster_id FROM rate.products p
+                     WHERE p.id = ANY (p_products) AND p.cluster_id IS NOT NULL);
+  IF EXISTS (SELECT 1 FROM pg_catalog.pg_attribute
+             WHERE attrelid = 'rate.products'::pg_catalog.regclass
+               AND attname = 'item_id' AND NOT attisdropped) THEN
+    EXECUTE $q$
+      SELECT ARRAY(
+        SELECT DISTINCT ON (p.item_id) m.id
+        FROM rate.products p
+        JOIN rate.master_products m ON m.item_id = p.item_id
+        WHERE p.id = ANY ($1) AND p.cluster_id IS NULL AND p.item_id IS NOT NULL
+        ORDER BY p.item_id, m.id)
+    $q$ INTO v_extra USING p_products;
+    v_masters := v_masters || v_extra;
+  END IF;
+  FOR v_master IN SELECT DISTINCT unnest(v_masters) ORDER BY 1 LOOP
+    v_item := rate.master_rating_item(v_master);
+    IF v_item IS NOT NULL THEN
+      CONTINUE WHEN v_item = ANY (v_done);
+      v_done := v_done || v_item;
     END IF;
+    PERFORM rate.refresh_master_rating_extras(v_master);
   END LOOP;
 END $$;
 
+-- Only rows whose rating inputs changed count, so a re-crawl that rewrites a review unchanged
+-- (ON CONFLICT DO UPDATE) refreshes nothing.
 CREATE OR REPLACE FUNCTION rate.reviews_refresh_rating_extras()
 RETURNS trigger
 LANGUAGE plpgsql
@@ -312,16 +352,19 @@ SET search_path = ''
 AS $$
 BEGIN
   IF TG_OP = 'INSERT' THEN
-    PERFORM rate.refresh_rating_extras_of_masters(ARRAY(
-      SELECT p.cluster_id FROM changed_new r JOIN rate.products p ON p.id = r.product_id));
+    PERFORM rate.refresh_rating_extras_of_products(ARRAY(SELECT product_id FROM changed_new));
   ELSIF TG_OP = 'UPDATE' THEN
-    PERFORM rate.refresh_rating_extras_of_masters(ARRAY(
-      SELECT p.cluster_id FROM (SELECT product_id FROM changed_new
-                                UNION SELECT product_id FROM changed_old) r
-      JOIN rate.products p ON p.id = r.product_id));
+    PERFORM rate.refresh_rating_extras_of_products(ARRAY(
+      SELECT x.product_id
+      FROM changed_new n JOIN changed_old o ON o.id = n.id,
+           LATERAL (VALUES (n.product_id), (o.product_id)) x(product_id)
+      WHERE (n.product_id, n.rating_star, n.rating_exact, n.criteria_ratings,
+             n.helpfulness_weight, n.reviewer_type, n.origin)
+            IS DISTINCT FROM
+            (o.product_id, o.rating_star, o.rating_exact, o.criteria_ratings,
+             o.helpfulness_weight, o.reviewer_type, o.origin)));
   ELSE
-    PERFORM rate.refresh_rating_extras_of_masters(ARRAY(
-      SELECT p.cluster_id FROM changed_old r JOIN rate.products p ON p.id = r.product_id));
+    PERFORM rate.refresh_rating_extras_of_products(ARRAY(SELECT product_id FROM changed_old));
   END IF;
   RETURN NULL;
 END $$;
@@ -334,20 +377,19 @@ SET search_path = ''
 AS $$
 BEGIN
   IF TG_OP = 'INSERT' THEN
-    PERFORM rate.refresh_rating_extras_of_masters(ARRAY(
-      SELECT p.cluster_id FROM changed_new f
-      JOIN rate.reviews r ON r.id = f.review_id JOIN rate.products p ON p.id = r.product_id));
+    PERFORM rate.refresh_rating_extras_of_products(ARRAY(
+      SELECT r.product_id FROM changed_new f JOIN rate.reviews r ON r.id = f.review_id));
   ELSIF TG_OP = 'UPDATE' THEN
-    PERFORM rate.refresh_rating_extras_of_masters(ARRAY(
-      SELECT p.cluster_id FROM (SELECT review_id FROM changed_new
-                                UNION SELECT review_id FROM changed_old) f
-      JOIN rate.reviews r ON r.id = f.review_id JOIN rate.products p ON p.id = r.product_id));
+    PERFORM rate.refresh_rating_extras_of_products(ARRAY(
+      SELECT r.product_id
+      FROM changed_new n JOIN changed_old o ON o.review_id = n.review_id
+      JOIN rate.reviews r ON r.id = n.review_id
+      WHERE n.include_in_rating IS DISTINCT FROM o.include_in_rating));
   ELSE
     -- A flag deleted with its review (ON DELETE CASCADE) finds no review here; the reviews
     -- trigger refreshes that master.
-    PERFORM rate.refresh_rating_extras_of_masters(ARRAY(
-      SELECT p.cluster_id FROM changed_old f
-      JOIN rate.reviews r ON r.id = f.review_id JOIN rate.products p ON p.id = r.product_id));
+    PERFORM rate.refresh_rating_extras_of_products(ARRAY(
+      SELECT r.product_id FROM changed_old f JOIN rate.reviews r ON r.id = f.review_id));
   END IF;
   RETURN NULL;
 END $$;
@@ -363,7 +405,7 @@ BEGIN
   RETURN NULL;
 END $$;
 
-REVOKE EXECUTE ON FUNCTION rate.refresh_rating_extras_of_masters(uuid[]) FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION rate.refresh_rating_extras_of_products(uuid[]) FROM PUBLIC, anon, authenticated;
 REVOKE EXECUTE ON FUNCTION rate.reviews_refresh_rating_extras() FROM PUBLIC, anon, authenticated;
 REVOKE EXECUTE ON FUNCTION rate.review_flags_refresh_rating_extras() FROM PUBLIC, anon, authenticated;
 REVOKE EXECUTE ON FUNCTION rate.master_products_refresh_rating_extras() FROM PUBLIC, anon, authenticated;
@@ -410,7 +452,15 @@ COMMIT;
 -- Re-runnable; it writes only rows whose values differ. A catalog of many thousand reviewed
 -- masters can run it in id ranges instead.
 
+-- The CHECKs above were added NOT VALID (no scan under the ACCESS EXCLUSIVE lock); validating
+-- them here scans each table under a lock that lets reads and writes go on.
 BEGIN;
+ALTER TABLE rate.reviews VALIDATE CONSTRAINT reviews_rating_exact_range;
+ALTER TABLE rate.reviews VALIDATE CONSTRAINT reviews_verdict_length;
+ALTER TABLE rate.reviews VALIDATE CONSTRAINT reviews_criteria_version_positive;
+ALTER TABLE rate.reviews VALIDATE CONSTRAINT reviews_value_score_range;
+ALTER TABLE rate.master_products VALIDATE CONSTRAINT master_products_rating_score_range;
+ALTER TABLE rate.master_products VALIDATE CONSTRAINT master_products_rating_weight_sum_nonneg;
 SELECT rate.refresh_master_rating_extras(m.id)
 FROM rate.master_products m
 WHERE m.authentic_review_count > 0 OR m.user_rating_weighted > 0

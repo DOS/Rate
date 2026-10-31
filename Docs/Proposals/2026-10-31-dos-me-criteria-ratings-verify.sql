@@ -3,14 +3,15 @@
 -- stack.
 
 -- V1 Every new column exists.                                                  expect 0
-SELECT 9 - count(*) AS missing_columns
+SELECT 10 - count(*) AS missing_columns
 FROM information_schema.columns
 WHERE table_schema = 'rate'
   AND ((table_name = 'reviews' AND column_name IN ('rating_exact', 'verdict', 'criteria_version',
                                                    'value_score', 'value_breakdown'))
     OR (table_name = 'master_products' AND column_name IN ('rating_score', 'rating_weight_sum',
                                                            'criteria_scores'))
-    OR (table_name = 'review_points' AND column_name = 'body'));
+    OR (table_name = 'review_points' AND column_name = 'body')
+    OR (table_name = 'product_points' AND column_name = 'label'));
 
 -- V2 Both new tables have row level security on.                              expect 0
 SELECT 2 - count(*) AS tables_without_rls
@@ -29,7 +30,7 @@ SELECT count(*) FILTER (WHERE to_regprocedure(w.signature) IS NULL)
   AS missing_or_open_functions
 FROM (VALUES ('rate.master_rating_item(uuid)'), ('rate.master_rating_extras(uuid)'),
              ('rate.refresh_master_rating_extras(uuid)'),
-             ('rate.refresh_rating_extras_of_masters(uuid[])'),
+             ('rate.refresh_rating_extras_of_products(uuid[])'),
              ('rate.reviews_refresh_rating_extras()'),
              ('rate.review_flags_refresh_rating_extras()'),
              ('rate.master_products_refresh_rating_extras()')) w(signature);

@@ -21,7 +21,7 @@ DROP TRIGGER IF EXISTS trg_master_products_rating_extras ON rate.master_products
 DROP FUNCTION IF EXISTS rate.master_products_refresh_rating_extras();
 DROP FUNCTION IF EXISTS rate.review_flags_refresh_rating_extras();
 DROP FUNCTION IF EXISTS rate.reviews_refresh_rating_extras();
-DROP FUNCTION IF EXISTS rate.refresh_rating_extras_of_masters(uuid[]);
+DROP FUNCTION IF EXISTS rate.refresh_rating_extras_of_products(uuid[]);
 DROP FUNCTION IF EXISTS rate.refresh_master_rating_extras(uuid);
 DROP FUNCTION IF EXISTS rate.master_rating_extras(uuid);
 DROP FUNCTION IF EXISTS rate.master_rating_item(uuid);

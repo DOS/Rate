@@ -284,6 +284,41 @@ try {
   assert.equal(row(x128), pooledAfterVote, '128GB after the vote');
   assert.equal(row(x256), pooledAfterVote, '256GB after the vote');
   checkAll('after a vote on the Item path');
+  // A review on an Item listing with no variant (cluster_id NULL) refreshes the Item too:
+  // weights 5 + 1 = 6, stars 19.3 + 4: (12.6 + 23.3) / 9 = 3.99.
+  const noVariant = 'b0000000-0000-4000-8000-0000000000a0';
+  const noVariantReview = 'd0000000-0000-4000-8000-0000000000a0';
+  sql(`
+    INSERT INTO rate.products (id, merchant_id, platform, platform_item_id, title, price_current, url,
+                               cluster_id, item_id)
+    SELECT '${noVariant}', '${MERCHANT}', 'shopee', 'xnv', 'Acme Phone X', 11000000,
+           'https://shopee.vn/xnv', NULL, item_id
+    FROM rate.master_products WHERE id = '${x128}';
+    INSERT INTO rate.reviews (id, product_id, rating_star, comment, reviewer_type)
+    VALUES ('${noVariantReview}', '${noVariant}', 4, 'Máy ổn.', 'user');
+    INSERT INTO rate.review_flags (review_id, verdict, include_in_rating, detector, detector_version, input_hash)
+    VALUES ('${noVariantReview}', 'authentic', true, 'replay', 'v1', 'hnv');
+    UPDATE rate.reviews SET helpfulness_weight = 1 WHERE id = '${noVariantReview}';
+  `);
+  assert.equal(
+    sql(
+      `SELECT cluster_id IS NULL FROM rate.products WHERE id = '${noVariant}'`
+    ),
+    't',
+    'the listing has no variant'
+  );
+  const withNoVariant =
+    '3.99|6.00|{"display": {"score": 3.80, "writers": 4, "weight_sum": 4.00}}';
+  assert.equal(row(x128), withNoVariant, '128GB counts the no-variant review');
+  assert.equal(row(x256), withNoVariant, '256GB counts the no-variant review');
+  // A re-crawl that rewrites the review unchanged refreshes nothing; V6 stays 0 either way.
+  sql(
+    `UPDATE rate.reviews SET comment = comment WHERE id = '${noVariantReview}'`
+  );
+  checkAll('with a no-variant review');
+  sql(`DELETE FROM rate.reviews WHERE id = '${noVariantReview}';
+       DELETE FROM rate.products WHERE id = '${noVariant}';`);
+  assert.equal(row(x128), pooledAfterVote, '128GB after the review is deleted');
 
   // 3. The M1+M2 rollback under the proposal: the triggers stay and the 128GB, whose review
   // changes, goes back to its own rating. The 256GB keeps the pooled values until something
