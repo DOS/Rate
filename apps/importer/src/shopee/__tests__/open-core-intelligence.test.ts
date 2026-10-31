@@ -729,6 +729,10 @@ async function runSuite() {
     'Folio 13 HP adapter 65W',
     'Folio 13 HP tuong thich',
     'Folio 12 iPad Pro HP',
+    // Codex round 2 on #1541.
+    'Folio 13 HP sac 45W dau kim',
+    'Folio 13 HP ban phim US thay the',
+    'Folio 13 HP - sleeve da màu nâu',
   ];
   for (const title of accessoryTitles1505) {
     const accessory = normalizer.normalize(createDummyShopeeProduct(title));
@@ -768,6 +772,7 @@ async function runSuite() {
     'Folio 13 HP Core i5 bàn phím có đèn',
     'Folio 13 HP i5 dùng cho văn phòng',
     'Folio 13 HP pin 8 tiếng',
+    'Folio 13 HP cho sinh viên Core i5 4GB RAM SSD 128GB',
   ]) {
     assert.equal(normalizer.normalize(createDummyShopeeProduct(title)).keyable, true, title);
   }

@@ -419,10 +419,11 @@ const DEVICE_LINE_OPENERS: readonly RegExp[] = [
 ];
 // The promo words ACCESSORY_OPENER lets come before the accessory.
 const OPENER_PROMO = /^(?:(?:combo|bộ|set|hàng\s*chính\s*hãng)\s+)?/iu;
-// Accessories that ACCESSORY_OPENER does not name, and fit words, right after a laptop name:
-// "Folio 13 HP sleeve", "Folio 13 HP tui chong soc", "Folio 13 HP adapter 65W".
+// Accessories that ACCESSORY_OPENER does not name, typed with or without diacritics, and
+// fit words, right after a laptop name: "Folio 13 HP sleeve", "Folio 13 HP tui chong soc",
+// "Folio 13 HP sac 45W". "cho" is not one: "Folio 13 HP cho sinh viên" is the laptop.
 const LAPTOP_ACCESSORY_OPENER =
-  /^(?:sleeves?|pouch|bags?|balo|ba\s*lô|túi|tui|bao|adapter|battery|decal|stand|casing|miếng|mieng|kinh|dan|tempered|tương\s*thích|tuong\s*thich|compatible|for|cho|thay)(?![\p{L}\d])/iu;
+  /^(?:sleeves?|pouch|bags?|balo|ba\s*lô|túi|tui|bao|adapter|battery|decal|stand|casing|miếng|mieng|kinh|dan|sac|cap|ban\s*phim|tempered|tương\s*thích|tuong\s*thich|compatible|thay)(?![\p{L}\d])/iu;
 
 /**
  * A device whose line name is also an accessory word: "Folio 13 HP ..." is an HP Folio
@@ -436,7 +437,8 @@ function opensWithDeviceLine(opening: string): boolean {
   return DEVICE_LINE_OPENERS.some(line => {
     const head = line.exec(title);
     if (!head) return false;
-    const rest = title.slice(head[0].length).trim();
+    // "Folio 13 HP - sleeve da" and "Folio 13 HP (sleeve)" read the word after the dash.
+    const rest = title.slice(head[0].length).replace(/^[\s\p{P}\p{S}]+/u, '');
     return !ACCESSORY_OPENER.test(rest) && !LAPTOP_ACCESSORY_OPENER.test(rest);
   });
 }
