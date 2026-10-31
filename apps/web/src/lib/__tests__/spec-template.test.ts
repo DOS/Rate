@@ -18,8 +18,8 @@ const readSource = (path: string) =>
 const headings = (category: string, locale: string) => {
   const ui = getSpecUiDictionary(locale);
   const template = getCategorySpecTemplate(category);
-  return template.groups.map((group: SpecGroupKey, i: number) =>
-    specGroupHeading(ui, group, i + 1, template.has5g)
+  return template.groups.map((group: SpecGroupKey) =>
+    specGroupHeading(ui, group, template.has5g)
   );
 };
 
@@ -216,8 +216,11 @@ async function testSurfaces() {
   // Compare headings come from the template too: no "5G" heading for a watch.
   assert.match(
     compare,
-    /specGroupHeading\(\s*specDict,\s*group\.id as SpecGroupKey,\s*numberedSpecGroups\.indexOf\(group\) \+ 1,\s*getCategorySpecTemplate\(activeCategory\)\.has5g\s*\)/
+    /specGroupHeading\(\s*specDict,\s*group\.id as SpecGroupKey,\s*getCategorySpecTemplate\(activeCategory\)\.has5g\s*\)/
   );
+  // The CSV and JSON exports use the same heading as the table.
+  assert.match(compare, /\[groupHeading\(group\), row\.label/);
+  assert.match(compare, /groupTitle: groupHeading\(group\)/);
   const detail = readSource('../../app/[locale]/smartphones/[slug]/page.tsx');
   assert.match(detail, /categorySlug=\{categorySlug\}/);
   assert.match(detail, /buildKeySpecLine\(product, categorySlug\)/);
@@ -229,12 +232,25 @@ async function testSurfaces() {
 async function main() {
   console.warn('🧪 Category spec template suite (DOS/Rate#1142)');
 
-  // Phones keep the ten numbered groups, worded as before.
+  // Phones keep the ten groups, each in the page's language only: no
+  // number and no English name in brackets (DOS/Rate#1529).
   const phone = headings('smartphones', 'vi');
   assert.equal(phone.length, 10);
-  assert.equal(phone[0], '1. Màn hình (Display)');
-  assert.equal(phone[5], '6. Mạng Di động & 5G (Cellular)');
-  assert.equal(phone[9], '10. Pháp lý, Chứng nhận & SAR (Regulatory)');
+  assert.equal(phone[0], 'Màn hình');
+  assert.equal(phone[1], 'Phần cứng & Hiệu năng');
+  assert.equal(phone[5], 'Mạng di động & 5G');
+  assert.equal(phone[9], 'Pháp lý, Chứng nhận & SAR');
+  assert.equal(headings('smartphones', 'en')[0], 'Display & panel');
+  for (const locale of ['vi', 'en', 'cs']) {
+    for (const h of [
+      ...headings('smartphones', locale),
+      getSpecUiDictionary(locale).cellularNo5gGroup,
+    ]) {
+      assert.doesNotMatch(h, /^\d/, `${locale}: ${h}`);
+      // Acronyms such as (MSRP) may stay; a Vietnamese label has none left.
+      if (locale === 'vi') assert.doesNotMatch(h, /\(/, h);
+    }
+  }
   assert.deepEqual(headings('tablets', 'en'), headings('smartphones', 'en'));
   assert.equal(
     specSectionBadge(getSpecUiDictionary('vi'), 10),
@@ -247,25 +263,23 @@ async function main() {
     const ui = getSpecUiDictionary(locale);
     const buds = headings('earbuds', locale);
     assert.equal(buds.length, 7);
-    assert.ok(buds[0]!.startsWith('1. '));
-    assert.ok(buds[0]!.endsWith(ui.groups.multimedia.replace(/^\d+\.\s*/, '')));
+    assert.equal(buds[0], ui.groups.multimedia);
     for (const group of ['display', 'camera', 'cellular'] as const) {
-      const label = ui.groups[group].replace(/^\d+\.\s*/, '');
       assert.ok(
-        !buds.some((h: string) => h.endsWith(label)),
+        !buds.includes(ui.groups[group]),
         `earbuds (${locale}) must not show ${group}`
       );
     }
     assert.equal(specSectionBadge(ui, buds.length).startsWith('7 '), true);
   }
   assert.deepEqual(headings('earbuds', 'en'), [
-    '1. Audio & multimedia',
-    '2. Battery & charging',
-    '3. Connectivity & sensors',
-    '4. Hardware & performance',
-    '5. Design & durability',
-    '6. Availability & MSRP',
-    '7. Regulatory, certifications & SAR',
+    'Audio & multimedia',
+    'Battery & charging',
+    'Connectivity & sensors',
+    'Hardware & performance',
+    'Design & durability',
+    'Availability & MSRP',
+    'Regulatory, certifications & SAR',
   ]);
 
   // Smartwatches: no camera group and no "5G" anywhere in the headings.
@@ -277,7 +291,7 @@ async function main() {
       watch.join(' | ')
     );
   }
-  assert.equal(headings('smartwatches', 'vi')[4], '5. Mạng Di động (Cellular)');
+  assert.equal(headings('smartwatches', 'vi')[4], 'Mạng di động');
 
   // The card chips read only what the template leaves: an earbud has no
   // "1GB RAM · 64GB" and a cellular watch no "5G".
