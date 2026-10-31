@@ -462,8 +462,13 @@ ALTER TABLE rate.reviews VALIDATE CONSTRAINT reviews_criteria_version_positive;
 ALTER TABLE rate.reviews VALIDATE CONSTRAINT reviews_value_score_range;
 ALTER TABLE rate.master_products VALIDATE CONSTRAINT master_products_rating_score_range;
 ALTER TABLE rate.master_products VALIDATE CONSTRAINT master_products_rating_weight_sum_nonneg;
+-- A master with a reviewed listing, or one the live refresh rated (an Item variant whose
+-- reviews sit on listings with no variant). The first test does not trust the cached
+-- authentic_review_count: a weight written straight to rate.reviews leaves it stale.
 SELECT rate.refresh_master_rating_extras(m.id)
 FROM rate.master_products m
-WHERE m.authentic_review_count > 0 OR m.user_rating_weighted > 0
+WHERE EXISTS (SELECT 1 FROM rate.products p JOIN rate.reviews r ON r.product_id = p.id
+              WHERE p.cluster_id = m.id)
+   OR m.authentic_review_count > 0 OR m.user_rating_weighted > 0
 ORDER BY m.id;
 COMMIT;
