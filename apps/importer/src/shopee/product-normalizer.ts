@@ -411,6 +411,31 @@ const ACCESSORY_OPENER =
 const PENCIL_FIT_WORD =
   /(?<![\p{L}\d])(?:cho|for|thay|như|giống|kiểu|dùng|tương\s*thích|compatible|khe|đựng|ngăn)(?![\p{L}\d])/iu;
 
+// Device lines named like an accessory, with the brand that owns the line: HP's Folio
+// laptops ("Folio 13 HP Core i5 8GB", DOS/Rate#1539). The line word opens the title with
+// a model number right after it.
+const DEVICE_LINE_OPENERS: ReadonlyArray<readonly [RegExp, RegExp]> = [
+  [/^folio\s+\d{1,4}[a-z]?(?![\p{L}\d])/iu, /(?<![\p{L}\d])hp(?![\p{L}\d])/iu],
+];
+// An accessory word after the line word: "Folio 13 HP sleeve" still sells a sleeve.
+const ACCESSORY_WORD =
+  /(?<![\p{L}\d])(?:cases?|covers?|sleeves?|ốp|bao\s*(?:da|đựng)|túi|kính|dán|skin|keyboard|bàn\s*phím|stylus|bút)(?![\p{L}\d])/iu;
+
+/**
+ * A device whose line name is also an accessory word: "Folio 13 HP ..." is an HP Folio
+ * laptop, not a folio case (DOS/Rate#1539). It needs the line's own brand, no word that
+ * makes the device what the title fits ("cho", "for") and no other accessory word, so
+ * "Folio case for iPad" and "Folio 13 cho HP" stay accessories.
+ */
+function opensWithDeviceLine(opening: string): boolean {
+  return DEVICE_LINE_OPENERS.some(([line, brand]) => {
+    const head = line.exec(opening);
+    if (!head || !brand.test(opening)) return false;
+    const rest = opening.slice(head[0].length);
+    return !PENCIL_FIT_WORD.test(rest) && !ACCESSORY_WORD.test(rest);
+  });
+}
+
 /**
  * A pen sold as itself: "Bút cảm ứng (chính hãng) Apple Pencil Pro" is the Apple Pencil,
  * its own product. Only the pen word and promo words may come before "Apple Pencil"; a
@@ -455,7 +480,13 @@ export function isAccessoryTitle(title: string): boolean {
   // What the title sells, not a gift it opens with: "Ốp lưng tặng kèm khi mua iPhone 16 Pro
   // Max" sells the iPhone (DOS/Rate#1407).
   const opening = openingWords(ownProductPart(t));
-  if (!ACCESSORY_OPENER.test(opening) || opensWithApplePencil(opening)) return false;
+  if (
+    !ACCESSORY_OPENER.test(opening) ||
+    opensWithApplePencil(opening) ||
+    opensWithDeviceLine(opening)
+  ) {
+    return false;
+  }
   // The part before a gift stops at the "+", so the bundle is read on the whole title.
   const whole = openingWords(t);
   const plus = whole.indexOf('+');
