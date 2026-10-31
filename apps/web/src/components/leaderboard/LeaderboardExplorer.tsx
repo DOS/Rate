@@ -4,6 +4,7 @@ import React, {
   Suspense,
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useState,
 } from 'react';
@@ -788,7 +789,8 @@ export default function LeaderboardExplorer({
   }, []);
   // A URL such as ?cat=earbuds&criterion=screen opens on the combined tab.
   // So does a criterion no product has a score for yet (DOS/Rate#1553).
-  useEffect(() => {
+  // Before paint, so an empty list never flashes, and the URL follows.
+  useLayoutEffect(() => {
     let crit = criterionForCategory(activeCategory, activeCriterion);
     if (
       crit !== 'combined' &&
@@ -798,7 +800,13 @@ export default function LeaderboardExplorer({
     ) {
       crit = 'combined';
     }
-    if (crit !== activeCriterion) setActiveCriterion(crit);
+    if (crit === activeCriterion) return;
+    setActiveCriterion(crit);
+    window.history.replaceState(
+      null,
+      '',
+      `${window.location.pathname}?cat=${activeCategory}&criterion=${crit}`
+    );
   }, [activeCategory, activeCriterion, scoredCriteria]);
   useEffect(() => {
     if (hasScoredCriteria || activePersona === 'none') return;

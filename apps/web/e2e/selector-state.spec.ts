@@ -43,6 +43,7 @@ test('criteria with no scored product get no tab or persona', async ({
   await expect(criteria.getByRole('button', { pressed: true })).toContainText(
     'Điểm tổng hợp'
   );
+  await expect(page).toHaveURL(/[?&]criterion=combined$/);
   await expect(
     page.getByRole('group', { name: /Gợi ý theo nhu cầu/ })
   ).toHaveCount(0);
