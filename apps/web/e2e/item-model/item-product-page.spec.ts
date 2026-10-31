@@ -9,10 +9,10 @@ const ITEM = '/smartphones/e2e-item-phone';
 const BIG = '/smartphones/e2e-item-big';
 const NO_DATA_MERCHANT = '17e00000-0000-4000-8000-0000000d1484';
 const ORDER = [
-  'offers-table',
-  'pdv-price-history',
   'specs-section',
   'jreviews-section',
+  'pdv-price-history',
+  'offers-table',
 ];
 
 /** Clicks once the page is hydrated: a click before it does nothing. */
@@ -72,7 +72,7 @@ test('the size picker replaces the quick specs and links each size', async ({
 
 // The lazy Item also with another size loaded on demand.
 for (const path of [ITEM, BIG, `${BIG}?v=256gb`]) {
-  test(`${path}: price, jump row, sellers, history, specs, reviews`, async ({
+  test(`${path}: price, jump row, specs, reviews, history, sellers`, async ({
     page,
   }) => {
     await page.goto(path);
