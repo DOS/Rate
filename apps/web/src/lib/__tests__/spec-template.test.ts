@@ -218,6 +218,9 @@ async function testSurfaces() {
     compare,
     /specGroupHeading\(\s*specDict,\s*group\.id as SpecGroupKey,\s*getCategorySpecTemplate\(activeCategory\)\.has5g\s*\)/
   );
+  // The CSV and JSON exports use the same heading as the table.
+  assert.match(compare, /\[groupHeading\(group\), row\.label/);
+  assert.match(compare, /groupTitle: groupHeading\(group\)/);
   const detail = readSource('../../app/[locale]/smartphones/[slug]/page.tsx');
   assert.match(detail, /categorySlug=\{categorySlug\}/);
   assert.match(detail, /buildKeySpecLine\(product, categorySlug\)/);
@@ -235,7 +238,7 @@ async function main() {
   assert.equal(phone.length, 10);
   assert.equal(phone[0], 'Màn hình');
   assert.equal(phone[1], 'Phần cứng & Hiệu năng');
-  assert.equal(phone[5], 'Mạng Di động & 5G');
+  assert.equal(phone[5], 'Mạng di động & 5G');
   assert.equal(phone[9], 'Pháp lý, Chứng nhận & SAR');
   assert.equal(headings('smartphones', 'en')[0], 'Display & panel');
   for (const locale of ['vi', 'en', 'cs']) {
@@ -288,7 +291,7 @@ async function main() {
       watch.join(' | ')
     );
   }
-  assert.equal(headings('smartwatches', 'vi')[4], 'Mạng Di động');
+  assert.equal(headings('smartwatches', 'vi')[4], 'Mạng di động');
 
   // The card chips read only what the template leaves: an earbud has no
   // "1GB RAM · 64GB" and a cellular watch no "5G".

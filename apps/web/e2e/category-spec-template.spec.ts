@@ -68,7 +68,7 @@ test('a watch page never shows 5G', async ({ page }) => {
   // The seeded watch has no network value left once 5G is dropped, so the
   // cellular group is hidden (DOS/Rate#1186); the 4G-only bands label is
   // covered by product-spec-rows.test.ts.
-  await expect(specs).not.toContainText('Mạng Di động');
+  await expect(specs).not.toContainText('Mạng di động');
   await expect(specs).not.toContainText('5G');
   await expect(specs).not.toContainText('Camera');
 });

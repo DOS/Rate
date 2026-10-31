@@ -1053,6 +1053,18 @@ export default function CompareWorkspace({
     }))
     .filter((group) => group.rows.length > 0);
 
+  // A spec group's heading in the page's language, for the table and the
+  // exports alike (DOS/Rate#1529); a watch's cellular heading has no "5G"
+  // (DOS/Rate#1166).
+  const groupHeading = (group: { id: string; title: string }) =>
+    group.id in specDict.groups
+      ? specGroupHeading(
+          specDict,
+          group.id as SpecGroupKey,
+          getCategorySpecTemplate(activeCategory).has5g
+        )
+      : group.title;
+
   const searchInputRef = useRef<HTMLInputElement | null>(null);
   const searchBoxRef = useRef<HTMLDivElement | null>(null);
   const restoredTrayRef = useRef(false);
@@ -1475,7 +1487,7 @@ export default function CompareWorkspace({
         const vals = products.map((p) => row.renderValue(p));
         if (vals.every((v) => !v || v === '-')) continue;
         rows.push(
-          [group.title, row.label, ...vals]
+          [groupHeading(group), row.label, ...vals]
             .map((c) => escapeCsvCell(c))
             .join(',')
         );
@@ -1514,7 +1526,7 @@ export default function CompareWorkspace({
       }),
       matrix: specGroups.map((group) => ({
         groupId: group.id,
-        groupTitle: group.title,
+        groupTitle: groupHeading(group),
         // Like the CSV, no row that every product leaves empty.
         rows: group.rows
           .filter((row) =>
@@ -2555,15 +2567,7 @@ export default function CompareWorkspace({
                     1 +
                     (products.length < MAX_COMPARE_ITEMS ? 1 : 0);
 
-                  // A watch's cellular heading has no "5G" (DOS/Rate#1166).
-                  const groupTitle =
-                    group.id in specDict.groups
-                      ? specGroupHeading(
-                          specDict,
-                          group.id as SpecGroupKey,
-                          getCategorySpecTemplate(activeCategory).has5g
-                        )
-                      : group.title;
+                  const groupTitle = groupHeading(group);
 
                   return (
                     <React.Fragment key={group.id}>
