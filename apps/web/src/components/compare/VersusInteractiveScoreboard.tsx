@@ -120,6 +120,27 @@ export function sanitizeVersusMarkdownCell(value: unknown): string {
   return cleaned || '-';
 }
 
+/**
+ * The use-case presets worth offering for a pair (DOS/Rate#1556): one whose
+ * heaviest criterion both models have a real score for. With no criterion
+ * scored on both sides every preset would read as the default one.
+ */
+export function versusAvailablePersonas(
+  shared: readonly string[]
+): Exclude<PersonaPresetKey, 'custom'>[] {
+  if (shared.length === 0) return [];
+  return (
+    Object.keys(PERSONA_WEIGHTS) as Exclude<PersonaPresetKey, 'custom'>[]
+  ).filter((key) => {
+    if (key === 'default') return true;
+    const weights = PERSONA_WEIGHTS[key];
+    const lead = (Object.keys(weights) as (keyof CriteriaWeights)[]).reduce(
+      (best, c) => (weights[c] > weights[best] ? c : best)
+    );
+    return shared.includes(lead);
+  });
+}
+
 export function computeVersusWeightedResult(
   scoreA: ScoredVersusItem,
   scoreB: ScoredVersusItem,
@@ -241,9 +262,30 @@ export default function VersusInteractiveScoreboard({
           ? t('mdRowTie')
           : '-';
 
+  // Presets and weights only where both models have a real criterion score;
+  // otherwise they would change nothing, so they are not offered
+  // (DOS/Rate#1556).
+  const sharedCriteria = useMemo(
+    () => sharedScoredCriteria(scoreA.criteria, scoreB.criteria),
+    [scoreA.criteria, scoreB.criteria]
+  );
+  const availablePersonas = versusAvailablePersonas(sharedCriteria);
+  const canWeigh = availablePersonas.length > 0;
+  const activePersona: PersonaPresetKey =
+    persona === 'custom'
+      ? canWeigh
+        ? 'custom'
+        : 'default'
+      : availablePersonas.includes(persona)
+        ? persona
+        : 'default';
+  const activeWeights =
+    activePersona === persona ? weights : PERSONA_WEIGHTS.default;
+
   const weightedResult = useMemo(
-    () => computeVersusWeightedResult(scoreA, scoreB, weights, persona),
-    [scoreA, scoreB, weights, persona]
+    () =>
+      computeVersusWeightedResult(scoreA, scoreB, activeWeights, activePersona),
+    [scoreA, scoreB, activeWeights, activePersona]
   );
 
   // The criteria of the pair's category (no screen for earbuds); a side
@@ -345,7 +387,7 @@ export default function VersusInteractiveScoreboard({
       ],
       ...criteriaRows.map((r) => [
         r.label,
-        weights[r.key],
+        activeWeights[r.key],
         r.aVal != null ? r.aVal.toFixed(2) : '',
         r.bVal != null ? r.bVal.toFixed(2) : '',
         !r.compared
@@ -421,8 +463,8 @@ export default function VersusInteractiveScoreboard({
     const payload = {
       source: 'Rate.vn 1v1 Versus Scoreboard',
       versusSlug: `${safeSlugA}-vs-${safeSlugB}`,
-      persona,
-      weights,
+      persona: activePersona,
+      weights: activeWeights,
       exportedAt: new Date().toISOString(),
       tie: weightedResult.tie,
       winner: weightedResult.tie
@@ -453,7 +495,7 @@ export default function VersusInteractiveScoreboard({
       criteriaBreakdown: criteriaRows.map((r) => ({
         key: r.key,
         label: r.label,
-        weightPercent: weights[r.key],
+        weightPercent: activeWeights[r.key],
         scoreA: r.aVal,
         scoreB: r.bVal,
       })),
@@ -482,7 +524,7 @@ export default function VersusInteractiveScoreboard({
   const verdict = versusVerdictFor(
     weightedResult,
     scoreA.slug,
-    persona,
+    activePersona,
     personaLabels,
     locale
   );
@@ -510,62 +552,68 @@ export default function VersusInteractiveScoreboard({
         {/* Top Action & Persona Filter Strip */}
         <div className="d-flex justify-content-between align-items-center border-bottom border-secondary border-opacity-25 mb-3 flex-wrap gap-2 pb-3">
           {/* Presets expose the pressed one, not only its colour (DOS/Rate#1069). */}
-          <div
-            className="d-flex align-items-center flex-wrap gap-1"
-            role="group"
-            aria-labelledby={useCaseLabelId}
-          >
-            <span
-              id={useCaseLabelId}
-              className="small text-white-50 fw-semibold me-1"
+          {canWeigh ? (
+            <div
+              className="d-flex align-items-center flex-wrap gap-1"
+              role="group"
+              aria-labelledby={useCaseLabelId}
             >
-              {t('useCaseLabel')}
-            </span>
-            {(
-              [
-                { key: 'default', label: t('personaDefault') },
-                { key: 'photography', label: t('personaPhotography') },
-                { key: 'gaming', label: t('personaGaming') },
-                { key: 'endurance', label: t('personaEndurance') },
-                { key: 'value_hunter', label: t('personaValueHunter') },
-              ] as const
-            ).map((item) => (
+              <span
+                id={useCaseLabelId}
+                className="small text-white-50 fw-semibold me-1"
+              >
+                {t('useCaseLabel')}
+              </span>
+              {(
+                [
+                  { key: 'default', label: t('personaDefault') },
+                  { key: 'photography', label: t('personaPhotography') },
+                  { key: 'gaming', label: t('personaGaming') },
+                  { key: 'endurance', label: t('personaEndurance') },
+                  { key: 'value_hunter', label: t('personaValueHunter') },
+                ] as const
+              )
+                .filter((item) => availablePersonas.includes(item.key))
+                .map((item) => (
+                  <button
+                    key={item.key}
+                    type="button"
+                    aria-pressed={activePersona === item.key}
+                    onClick={() => selectPersona(item.key)}
+                    className={`btn btn-sm rounded-pill px-3 py-1 ${
+                      activePersona === item.key
+                        ? 'btn-danger fw-bold text-white'
+                        : 'btn-outline-light text-white-50'
+                    }`}
+                    style={{ fontSize: '0.8125rem' }}
+                  >
+                    {item.label}
+                  </button>
+                ))}
               <button
-                key={item.key}
                 type="button"
-                aria-pressed={persona === item.key}
-                onClick={() => selectPersona(item.key)}
+                aria-expanded={showSliders}
+                aria-controls={slidersPanelId}
+                onClick={() => setShowSliders((prev) => !prev)}
                 className={`btn btn-sm rounded-pill px-3 py-1 ${
-                  persona === item.key
-                    ? 'btn-danger fw-bold text-white'
-                    : 'btn-outline-light text-white-50'
+                  showSliders || activePersona === 'custom'
+                    ? 'btn-warning text-dark fw-bold'
+                    : 'btn-outline-secondary text-light'
                 }`}
                 style={{ fontSize: '0.8125rem' }}
               >
-                {item.label}
-              </button>
-            ))}
-            <button
-              type="button"
-              aria-expanded={showSliders}
-              aria-controls={slidersPanelId}
-              onClick={() => setShowSliders((prev) => !prev)}
-              className={`btn btn-sm rounded-pill px-3 py-1 ${
-                showSliders || persona === 'custom'
-                  ? 'btn-warning text-dark fw-bold'
-                  : 'btn-outline-secondary text-light'
-              }`}
-              style={{ fontSize: '0.8125rem' }}
-            >
-              <BsSliders aria-hidden="true" className="me-1" />
-              {t('customWeightsBtn')}
-              {/* Custom weights select no preset and are shown only by this
+                <BsSliders aria-hidden="true" className="me-1" />
+                {t('customWeightsBtn')}
+                {/* Custom weights select no preset and are shown only by this
                 button's colour, so its name says so too (DOS/Rate#1069). */}
-              {persona === 'custom' && (
-                <span className="visually-hidden">{`: ${t('customWeightsActive')}`}</span>
-              )}
-            </button>
-          </div>
+                {activePersona === 'custom' && (
+                  <span className="visually-hidden">{`: ${t('customWeightsActive')}`}</span>
+                )}
+              </button>
+            </div>
+          ) : (
+            <span />
+          )}
 
           <div className="d-flex align-items-center flex-wrap gap-2">
             <button
@@ -605,35 +653,37 @@ export default function VersusInteractiveScoreboard({
         </div>
 
         {/* Interactive 5-Criteria Weight Sliders */}
-        {showSliders && (
+        {showSliders && canWeigh && (
           <div
             id={slidersPanelId}
             className="rounded-3 border-secondary border-opacity-25 mb-3 border p-3"
             style={{ background: 'rgba(255,255,255,0.04)' }}
           >
             <div className="row g-3">
-              {criteriaRows.map((c) => (
-                <div key={c.key} className="col-md col-6">
-                  <div className="d-flex justify-content-between small mb-1 text-white">
-                    <span>{c.label}</span>
-                    <strong className="text-warning rate-tabular">
-                      {formatPercent(weights[c.key], locale)}
-                    </strong>
+              {criteriaRows
+                .filter((c) => sharedCriteria.includes(c.key))
+                .map((c) => (
+                  <div key={c.key} className="col-md col-6">
+                    <div className="d-flex justify-content-between small mb-1 text-white">
+                      <span>{c.label}</span>
+                      <strong className="text-warning rate-tabular">
+                        {formatPercent(activeWeights[c.key], locale)}
+                      </strong>
+                    </div>
+                    <input
+                      type="range"
+                      min={0}
+                      max={100}
+                      step={5}
+                      value={activeWeights[c.key]}
+                      onChange={(e) =>
+                        updateWeight(c.key, Number(e.target.value))
+                      }
+                      className="form-range"
+                      aria-label={c.label}
+                    />
                   </div>
-                  <input
-                    type="range"
-                    min={0}
-                    max={100}
-                    step={5}
-                    value={weights[c.key]}
-                    onChange={(e) =>
-                      updateWeight(c.key, Number(e.target.value))
-                    }
-                    className="form-range"
-                    aria-label={c.label}
-                  />
-                </div>
-              ))}
+                ))}
             </div>
           </div>
         )}
@@ -761,7 +811,7 @@ export default function VersusInteractiveScoreboard({
               <div className="small text-light fw-semibold col-4 text-center">
                 {row.label}{' '}
                 <span className="text-white-50 rate-tabular">
-                  ({formatPercent(weights[row.key], locale)})
+                  ({formatPercent(activeWeights[row.key], locale)})
                 </span>
               </div>
               <div className="col-4 text-end">

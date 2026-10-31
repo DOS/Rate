@@ -14880,6 +14880,45 @@ async function runCoreArchitectureSuite() {
     );
   }
 
+  // Versus and deals offer a persona only where its criterion has a real
+  // score; with none, every persona would rank like the default
+  // (DOS/Rate#1556).
+  {
+    const { availableDealPersonas } =
+      await import('../../../components/deals/DealFinderWorkspace');
+    const { versusAvailablePersonas } =
+      await import('../../../components/compare/VersusInteractiveScoreboard');
+    const phone = (slug: string, criteria?: Record<string, number>) =>
+      ({
+        id: slug,
+        slug,
+        name: slug,
+        brand: 'E2E',
+        min_price: 10_000_000,
+        user_rating_weighted: 4.5,
+        metadata: { category_slug: 'smartphones' },
+        expert_criteria_scores: criteria ?? null,
+      }) as unknown as import('../../../lib/rate-api').MasterProduct;
+    assert.deepEqual(availableDealPersonas([phone('a'), phone('b')], 'all'), [
+      'default',
+    ]);
+    assert.deepEqual(
+      availableDealPersonas([phone('a'), phone('b', { camera: 9 })], 'all'),
+      ['default', 'photography']
+    );
+    assert.deepEqual(
+      availableDealPersonas([phone('b', { camera: 9 })], 'earbuds'),
+      ['default']
+    );
+    assert.deepEqual(versusAvailablePersonas([]), []);
+    const cameraOnly = versusAvailablePersonas(['camera']);
+    assert.ok(cameraOnly.includes('default'));
+    assert.ok(cameraOnly.includes('photography'));
+    assert.ok(!cameraOnly.includes('gaming'));
+    assert.ok(!cameraOnly.includes('endurance'));
+    console.log('  ✅ Personas need a scored criterion (#1556) passed');
+  }
+
   console.log('🎉 All Rate.vn Core Architecture tests passed!');
 }
 

@@ -7,11 +7,7 @@ const PAGES: { path: string; groups: (string | RegExp)[] }[] = [
     path: '/smartphones/iphone-16-pro-max-256gb',
     groups: ['Gian hàng:', 'Khoảng thời gian', 'Chu kỳ sử dụng'],
   },
-  {
-    path: '/compare/iphone-16-pro-max-256gb-vs-samsung-galaxy-s25-ultra-256gb',
-    groups: [/Chấm theo nhu cầu/],
-  },
-  { path: '/deals', groups: [/Ngành hàng/, /Ưu tiên chấm điểm/] },
+  { path: '/deals', groups: [/Ngành hàng/] },
   {
     path: '/merchants',
     groups: ['Lọc theo sàn', 'Lọc theo rủi ro đánh giá'],
@@ -51,7 +47,10 @@ test('choosing another pill moves the pressed state', async ({ page }) => {
   await expect(group.getByRole('button', { pressed: true })).toHaveCount(1);
 });
 
-test('compare custom weights are named on the sliders toggle', async ({
+// No seeded product has a criterion score, as on rate.vn today: a persona
+// or custom weights would rank exactly like the default, so versus and deals
+// do not offer them (DOS/Rate#1556).
+test('versus and deals offer no persona without criterion scores', async ({
   page,
 }) => {
   expect(
@@ -61,23 +60,15 @@ test('compare custom weights are named on the sliders toggle', async ({
       )
     )?.status()
   ).toBe(200);
-  const toggle = page.getByRole('button', { name: /Tùy chỉnh trọng số/ });
-  await expect(async () => {
-    if ((await toggle.getAttribute('aria-expanded')) !== 'true') {
-      await toggle.click();
-    }
-    await expect(toggle).toHaveAttribute('aria-expanded', 'true', {
-      timeout: 500,
-    });
-  }).toPass();
-  // useId ids hold characters that need escaping in a #id selector.
-  const panelId = (await toggle.getAttribute('aria-controls')) ?? '';
-  const panel = page.locator(`[id="${panelId}"]`);
-  await expect(panel).toBeVisible();
-  await expect(toggle).not.toHaveAccessibleName(/Trọng số tùy chỉnh/);
-  await panel.locator('input[type="range"]').first().focus();
-  await page.keyboard.press('ArrowRight');
-  await expect(toggle).toHaveAccessibleName(/Trọng số tùy chỉnh/);
-  const presets = page.getByRole('group', { name: /Chấm theo nhu cầu/ });
-  await expect(presets.getByRole('button', { pressed: true })).toHaveCount(0);
+  await expect(page.locator('.rate-scoreboard-dark')).toBeVisible();
+  await expect(
+    page.getByRole('group', { name: /Chấm theo nhu cầu/ })
+  ).toHaveCount(0);
+  await expect(
+    page.getByRole('button', { name: /Tùy chỉnh trọng số/ })
+  ).toHaveCount(0);
+
+  expect((await page.goto('/deals'))?.status()).toBe(200);
+  await expect(page.locator('#rate-ranked-deals > div').first()).toBeVisible();
+  await expect(page.locator('#rate-deal-personas')).toHaveCount(0);
 });

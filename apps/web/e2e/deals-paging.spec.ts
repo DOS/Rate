@@ -19,11 +19,10 @@ test('deals load 12 at a time and filters restart paging', async ({ page }) => {
   // Keyboard focus moves to the first newly shown card.
   await expect(cards.nth(12).locator('a[href]').first()).toBeFocused();
 
-  // Any filter change starts again from the first page: a persona...
-  await page
-    .locator('#rate-deal-personas button[aria-pressed="false"]')
-    .first()
-    .click();
+  // Any filter change starts again from the first page: the budget...
+  const budget = page.locator('input[type="range"]').first();
+  await budget.focus();
+  await page.keyboard.press('ArrowLeft');
   await expect(cards).toHaveCount(12);
 
   // ...or a search.
