@@ -1052,10 +1052,6 @@ export default function CompareWorkspace({
       ),
     }))
     .filter((group) => group.rows.length > 0);
-  // Spec groups are numbered from 1 after the market group.
-  const numberedSpecGroups = visibleSpecGroups.filter(
-    (group) => group.id !== 'market_trust'
-  );
 
   const searchInputRef = useRef<HTMLInputElement | null>(null);
   const searchBoxRef = useRef<HTMLDivElement | null>(null);
@@ -2559,15 +2555,12 @@ export default function CompareWorkspace({
                     1 +
                     (products.length < MAX_COMPARE_ITEMS ? 1 : 0);
 
-                  // Numbered in the category's order, and a watch's
-                  // cellular heading without "5G" (DOS/Rate#1166). The
-                  // market group comes first, so spec groups start at 1.
+                  // A watch's cellular heading has no "5G" (DOS/Rate#1166).
                   const groupTitle =
                     group.id in specDict.groups
                       ? specGroupHeading(
                           specDict,
                           group.id as SpecGroupKey,
-                          numberedSpecGroups.indexOf(group) + 1,
                           getCategorySpecTemplate(activeCategory).has5g
                         )
                       : group.title;

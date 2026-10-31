@@ -1465,16 +1465,11 @@ export async function ProductDetailView({
                   openOnHash="#specs-section"
                   collapsible={specGroups.length > 3}
                 >
-                  {specGroups.map(({ group, rows }, i) => (
+                  {specGroups.map(({ group, rows }) => (
                     <div key={group} className="col-md-6 col-12">
                       <div className="rounded-4 h-100 border bg-white p-4">
                         <h3 className="h6 fw-bold text-primary mb-3">
-                          {specGroupHeading(
-                            specUi,
-                            group,
-                            i + 1,
-                            specTemplate.has5g
-                          )}
+                          {specGroupHeading(specUi, group, specTemplate.has5g)}
                         </h3>
                         <dl className="row small mb-0">
                           {rows.map(({ label, value, lang }) => (
