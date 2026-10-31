@@ -32,7 +32,6 @@ import {
   BsPeopleFill,
   BsShieldCheck,
   BsShop,
-  BsStarFill,
 } from 'react-icons/bs';
 import { isPendingReview } from '@/lib/review-display';
 import {
@@ -53,6 +52,7 @@ import {
   formatPlainNumber,
   formatPriceVnd,
 } from '@/lib/locale-format';
+import StarRating from '@/components/elementary/StarRating';
 
 // Cached after the first request, refreshed every 5 minutes or when the
 // worker revalidates its cache tags (DOS/Rate#491).
@@ -360,13 +360,12 @@ export default async function MerchantProfilePage({
                       {/* Items wrap: "Hodnocení tržiště: Neaktualizováno" is wider
                           than a 320px header column (DOS/Rate#1084). */}
                       <span className="d-inline-flex align-items-center flex-wrap gap-1">
-                        <BsStarFill className="text-warning" />
                         {t('platformRatingLabel')}{' '}
-                        <strong className="font-monospace text-white">
-                          {merchant.rating_star
-                            ? `${formatDecimal(merchant.rating_star, locale, 2)} / ${formatDecimal(5, locale, 1)}`
-                            : t('notUpdatedYet')}
-                        </strong>
+                        <StarRating
+                          value={merchant.rating_star}
+                          size="sm"
+                          emptyLabel={t('notUpdatedYet')}
+                        />
                       </span>
                       <span className="d-inline-flex align-items-center flex-wrap gap-1">
                         <BsPeopleFill className="text-info" />
@@ -866,9 +865,7 @@ export default async function MerchantProfilePage({
                               </div>
                             )}
                           </div>
-                          <span className="rate-score-badge-user">
-                            ★ {rev.rating_star}/5
-                          </span>
+                          <StarRating value={rev.rating_star} size="sm" />
                         </div>
 
                         <p
@@ -1036,8 +1033,11 @@ export default async function MerchantProfilePage({
                                       •{' '}
                                     </>
                                   )}
-                                  ★ {formatDecimal(item.rating_star, locale, 1)}{' '}
-                                  ({item.rating_count})
+                                  <StarRating
+                                    value={item.rating_star}
+                                    count={item.rating_count}
+                                    size="sm"
+                                  />
                                 </div>
                               </div>
                             </div>

@@ -39,6 +39,7 @@ import {
   formatPlainNumber,
   formatPriceVnd,
 } from '@/lib/locale-format';
+import StarRating from '@/components/elementary/StarRating';
 
 interface DealFinderWorkspaceProps {
   readonly products: MasterProduct[];
@@ -891,12 +892,12 @@ export default function DealFinderWorkspace({
                           {t('rankDealBadge', { rank: deal.rank })}
                         </span>
                         <span className="rate-spec-pill">{deal.brand}</span>
-                        <span className="rate-score-badge-user">
-                          ★{' '}
-                          {deal.personaScore5 > 0
-                            ? `${formatDecimal(deal.personaScore5, locale, 2)}/${formatDecimal(5, locale, 1)}`
-                            : t('noScore')}
-                        </span>
+                        <StarRating
+                          value={deal.personaScore5}
+                          digits={2}
+                          size="sm"
+                          emptyLabel={t('noScore')}
+                        />
                         <span className="rate-score-badge-expert">
                           {deal.expertScore10 != null
                             ? `Lab ${formatDecimal(deal.expertScore10, locale, 1)}/10`

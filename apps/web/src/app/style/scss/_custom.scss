@@ -85,6 +85,11 @@
   --rate-status-bad-bg: #fee2e2;
   --rate-brand-bg: #fff1f2;
   --rate-score-star-bg: #fffbeb;
+  // Rating stars by band (DOS/Rate#1528): at least 3:1 on white and #f1f5f9.
+  --rate-star-good: #15803d;
+  --rate-star-fair: #c2410c;
+  --rate-star-poor: #dc2626;
+  --rate-star-empty: #cbd5e1;
   // Crimson text for links and labels on white surfaces (#d83030 is 4.8:1 on white)
   --rate-crimson-text: #d83030;
   // Keyboard focus ring: 4.8:1 on white, 4.0:1 on #0f1113 (WCAG 2.4.7 / 1.4.11)
@@ -144,6 +149,10 @@
   --rate-score-user-bg: rgba(45, 186, 105, 0.14);
   --rate-score-expert-bg: rgba(99, 102, 241, 0.14);
   --rate-score-star-bg: rgba(245, 158, 11, 0.14);
+  --rate-star-good: #4ade80;
+  --rate-star-fair: #fb923c;
+  --rate-star-poor: #f87171;
+  --rate-star-empty: rgba(255, 255, 255, 0.2);
   --rate-risk-danger-bg: rgba(244, 63, 94, 0.14);
   // #d83030 is only ~3.8:1 on #12161f; the hero highlight color reads ~6.5:1
   --rate-crimson-text: #ff6b6b;
@@ -1564,5 +1573,81 @@ body .input-group > .input-group-text {
       border-color: HighlightText !important;
       color: HighlightText !important;
     }
+  }
+}
+
+// One rating display (DOS/Rate#1528, components/elementary/StarRating.tsx):
+// five stars filled to the value, the value and the count. The stars take the
+// band colour; the value and count keep the text colour.
+.rate-stars {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35em;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+  vertical-align: middle;
+
+  &.is-good {
+    --rate-star-on: var(--rate-star-good);
+  }
+  &.is-fair {
+    --rate-star-on: var(--rate-star-fair);
+  }
+  &.is-poor {
+    --rate-star-on: var(--rate-star-poor);
+  }
+  &.is-empty {
+    color: var(--rate-fg-muted);
+    font-weight: 400;
+  }
+}
+
+.rate-stars-icons {
+  position: relative;
+  display: inline-flex;
+  flex: none;
+
+  svg {
+    flex: none;
+    width: 1em;
+    height: 1em;
+  }
+}
+
+.rate-stars-track {
+  display: inline-flex;
+  color: var(--rate-star-empty);
+}
+
+.rate-stars-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  display: inline-flex;
+  overflow: hidden;
+  color: var(--rate-star-on);
+}
+
+.rate-stars-value {
+  font-weight: 700;
+  color: var(--rate-fg-primary);
+}
+
+.rate-stars-count {
+  color: var(--rate-fg-secondary);
+  font-weight: 400;
+}
+
+.rate-stars-sm {
+  font-size: var(--rate-text-min);
+}
+.rate-stars-md {
+  font-size: 1rem;
+}
+.rate-stars-lg {
+  font-size: 1.5rem;
+
+  .rate-stars-count {
+    font-size: 1rem;
   }
 }

@@ -4,6 +4,7 @@ import React, { useEffect, useId, useMemo, useState } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
 import ExportMenu from '@/components/elementary/ExportMenu';
 import PhoneCollapsible from '@/components/product/PhoneCollapsible';
+import StarRating from '@/components/elementary/StarRating';
 import {
   BsBarChart,
   BsCheckCircle,
@@ -999,7 +1000,7 @@ export default function JReviewsSection({
                   locale,
                   1
                 )}{' '}
-                / {formatDecimal(5, locale, 1)} ★
+                ★
               </strong>
             </span>
             <button
@@ -1037,23 +1038,12 @@ export default function JReviewsSection({
               <div className="text-uppercase small fw-bold text-white-50 mb-1">
                 {t('overallScoreTitle')}
               </div>
-              <div className="d-flex align-items-baseline my-2 gap-2">
-                <span className="display-5 fw-bold font-monospace text-white">
-                  {liveScores.overall > 0
-                    ? formatDecimal(liveScores.overall, locale, 1)
-                    : 'N/A'}
-                </span>
-                <span className="text-white-50 fw-medium">
-                  / {formatDecimal(5, locale, 1)}
-                </span>
-              </div>
-              <div className="text-warning fs-5 mb-2">
-                {'★'.repeat(Math.round(liveScores.overall || 5))}
-                <span className="text-white opacity-25">
-                  {'★'.repeat(
-                    Math.max(0, 5 - Math.round(liveScores.overall || 5))
-                  )}
-                </span>
+              <div className="my-2">
+                <StarRating
+                  value={liveScores.overall}
+                  size="lg"
+                  testId="jreviews-overall-score"
+                />
               </div>
             </div>
             <div className="small text-white-50 border-top border-secondary border-opacity-25 mt-2 pt-2">
@@ -1066,46 +1056,37 @@ export default function JReviewsSection({
         <div className="col-md-4 col-12">
           <div className="rounded-4 d-flex flex-column justify-content-between h-100 border bg-white p-4">
             <div>
-              <div className="d-flex justify-content-between align-items-center mb-1">
-                <span className="text-uppercase small fw-bold text-primary">
-                  {t('authenticUserScoreTitle')}
-                </span>
-                <span className="rate-score-badge-user">
-                  ★{' '}
-                  {liveScores.user != null
-                    ? formatDecimal(liveScores.user, locale, 2)
-                    : 'N/A'}
-                </span>
+              <div className="text-uppercase small fw-bold text-primary mb-1">
+                {t('authenticUserScoreTitle')}
               </div>
-              <div className="d-flex align-items-baseline my-2 gap-2">
-                <span
-                  className={`display-6 fw-bold text-dark font-monospace ${
-                    liveScores.confidenceTier === 'insufficient_data'
-                      ? 'opacity-50'
-                      : ''
-                  }`}
-                >
-                  {liveScores.bayesianUser != null
-                    ? formatDecimal(liveScores.bayesianUser, locale, 2)
-                    : 'N/A'}
-                </span>
-                <span className="text-muted small">
-                  / {formatDecimal(5, locale, 1)} (Bayes)
-                </span>
-              </div>
-              <div className="small text-secondary mb-2">
-                {t('basedOnAuthenticReviews', {
-                  count: counts.authentic,
-                  // The cs decimal comma, as avgScore (DOS/Rate#1411).
-                  weightSum: formatPlainNumber(
-                    liveScores.userWeightSum,
-                    locale
-                  ),
-                  avgScore:
-                    liveScores.user != null
-                      ? formatDecimal(liveScores.user, locale, 2)
-                      : 'N/A',
-                })}
+              <div
+                className={`my-2 ${
+                  liveScores.confidenceTier === 'insufficient_data'
+                    ? 'opacity-50'
+                    : ''
+                }`}
+              >
+                <StarRating
+                  value={liveScores.bayesianUser}
+                  count={
+                    liveScores.bayesianUser != null ? counts.authentic : null
+                  }
+                  size="lg"
+                  testId="jreviews-user-score"
+                  // How the score is computed, kept as a tooltip (DOS/Rate#1528).
+                  title={t('basedOnAuthenticReviews', {
+                    count: counts.authentic,
+                    // The cs decimal comma, as avgScore (DOS/Rate#1411).
+                    weightSum: formatPlainNumber(
+                      liveScores.userWeightSum,
+                      locale
+                    ),
+                    avgScore:
+                      liveScores.user != null
+                        ? formatDecimal(liveScores.user, locale, 2)
+                        : 'N/A',
+                  })}
+                />
               </div>
             </div>
             <div className="d-flex border-top mt-2 flex-wrap gap-2 pt-2">
@@ -1133,9 +1114,6 @@ export default function JReviewsSection({
                 )}
                 )
               </span>
-              <span className="badge bg-success-subtle text-success small">
-                {t('validCountBadge', { count: counts.authentic })}
-              </span>
               {counts.ignored > 0 && (
                 <span className="badge bg-danger-subtle text-danger small">
                   {t('blockedSeedingBadge', { count: counts.ignored })}
@@ -1153,22 +1131,24 @@ export default function JReviewsSection({
                 <span className="text-uppercase small fw-bold text-dark">
                   {t('expertLabScoreTitle')}
                 </span>
-                <span className="rate-score-badge-expert">
-                  Expert{' '}
-                  {liveScores.expert != null
-                    ? `${formatDecimal(liveScores.expert, locale, 1)}/${formatDecimal(5, locale, 1)}`
-                    : t('expertPendingShort')}
-                </span>
+                {liveScores.expert == null && (
+                  <span className="rate-score-badge-expert">
+                    {t('expertPendingShort')}
+                  </span>
+                )}
               </div>
               {liveScores.expert != null ? (
                 <>
                   <div className="d-flex align-items-baseline my-2 gap-2">
+                    {/* On 10, as the scoreboard above shows it. */}
                     <span className="display-6 fw-bold text-dark font-monospace">
-                      {formatDecimal(liveScores.expert, locale, 1)}
+                      {formatDecimal(
+                        Number((liveScores.expert * 2).toFixed(1)),
+                        locale,
+                        1
+                      )}
                     </span>
-                    <span className="text-muted small">
-                      / {formatDecimal(5, locale, 1)}
-                    </span>
+                    <span className="text-muted small">/10</span>
                   </div>
                   <div className="small text-secondary">
                     {expertReviewSummary ? (
@@ -1226,7 +1206,7 @@ export default function JReviewsSection({
                     <span className="text-muted fw-medium">{crit.label}</span>
                     <strong className="text-dark font-monospace">
                       {crit.score != null
-                        ? `${formatDecimal(crit.score, locale, 1)}/${formatDecimal(5, locale, 1)}`
+                        ? formatDecimal(crit.score, locale, 1)
                         : t('notAvailableShort')}
                     </strong>
                   </div>

@@ -41,6 +41,7 @@ import {
   resolveCompareDisplaySizeInch,
   resolveCompareEffectiveUserRating,
   resolveCompareExpertRating5,
+  resolveCompareExpertRating10,
   resolveCompareMemoryScore,
   resolveCompareRamGb,
   resolveCompareStorageGb,
@@ -84,6 +85,7 @@ import {
   productFromProductAnswer,
   versusHref,
 } from '@/lib/item-compare';
+import StarRating from '@/components/elementary/StarRating';
 import {
   formatDecimal,
   formatNumber,
@@ -317,9 +319,10 @@ export function buildSpecGroups(
           id: 'expert_rating',
           label: t('rowExpertRating'),
           renderValue: (p) => {
-            const exp5 = resolveCompareExpertRating5(p);
-            return exp5 != null
-              ? `Lab ${formatDecimal(exp5, locale, 1)} / ${formatDecimal(5, locale, 1)}`
+            // On 10, as the product page shows it (DOS/Rate#1528).
+            const exp10 = resolveCompareExpertRating10(p);
+            return exp10 != null
+              ? `Lab ${formatDecimal(exp10, locale, 1)}/10`
               : '-';
           },
           numericValue: (p) => resolveCompareExpertRating5(p),
@@ -1801,12 +1804,11 @@ export default function CompareWorkspace({
                                     <span className="rate-spec-pill">
                                       {item.brand}
                                     </span>
-                                    <span className="rate-score-badge-user">
-                                      ★{' '}
-                                      {rating > 0
-                                        ? formatDecimal(rating, locale, 1)
-                                        : t('unratedShort')}
-                                    </span>
+                                    <StarRating
+                                      value={rating}
+                                      size="sm"
+                                      emptyLabel={t('unratedShort')}
+                                    />
                                     <span
                                       className="text-secondary fw-semibold rate-tabular"
                                       style={{ fontSize: '0.8125rem' }}
@@ -2044,14 +2046,11 @@ export default function CompareWorkspace({
                           <div className="small fw-bold text-dark text-truncate">
                             {battle.productA.name}
                           </div>
-                          <div className="small text-secondary rate-tabular">
-                            ★{' '}
-                            {formatDecimal(
-                              battle.productA.combinedScore5,
-                              locale,
-                              2
-                            )}
-                          </div>
+                          <StarRating
+                            value={battle.productA.combinedScore5}
+                            digits={2}
+                            size="sm"
+                          />
                         </div>
                       </div>
 
@@ -2064,14 +2063,11 @@ export default function CompareWorkspace({
                           <div className="small fw-bold text-dark text-truncate">
                             {battle.productB.name}
                           </div>
-                          <div className="small text-secondary rate-tabular">
-                            ★{' '}
-                            {formatDecimal(
-                              battle.productB.combinedScore5,
-                              locale,
-                              2
-                            )}
-                          </div>
+                          <StarRating
+                            value={battle.productB.combinedScore5}
+                            digits={2}
+                            size="sm"
+                          />
                         </div>
                         <img
                           loading="lazy"
@@ -2168,15 +2164,11 @@ export default function CompareWorkspace({
                   <div className="fw-bold text-truncate text-white">
                     {headToHeadSummary.bestRated.name}
                   </div>
-                  <div className="small text-white-50 rate-tabular">
-                    ★{' '}
-                    {formatDecimal(
-                      getEffectiveRating(headToHeadSummary.bestRated),
-                      locale,
-                      1
-                    )}{' '}
-                    / {formatDecimal(5, locale, 1)} {t('verdictAiFilteredNote')}
-                  </div>
+                  <StarRating
+                    value={getEffectiveRating(headToHeadSummary.bestRated)}
+                    size="sm"
+                    title={t('verdictAiFilteredNote')}
+                  />
                 </div>
               </div>
             )}
@@ -2350,7 +2342,7 @@ export default function CompareWorkspace({
                     const minPrice = Number(p.min_price || 0);
                     const minPriceFormatted = formatNumber(minPrice, locale);
                     const userRating = getEffectiveRating(p);
-                    const expertRating = resolveCompareExpertRating5(p);
+                    const expertRating = resolveCompareExpertRating10(p);
                     const reviewCount =
                       p.authentic_review_count || p.total_reviews || 0;
 
@@ -2419,15 +2411,15 @@ export default function CompareWorkspace({
 
                           {/* Core Rating Badges First (Per DESIGN.md v3.0) */}
                           <div className="d-flex justify-content-center mb-2 flex-wrap gap-1">
-                            <span className="rate-score-badge-user">
-                              ★{' '}
-                              {userRating > 0
-                                ? `${formatDecimal(userRating, locale, 1)} (${reviewCount})`
-                                : t('unratedShort')}
-                            </span>
+                            <StarRating
+                              value={userRating}
+                              count={reviewCount}
+                              size="sm"
+                              emptyLabel={t('unratedShort')}
+                            />
                             {expertRating != null && (
                               <span className="rate-score-badge-expert">
-                                Lab {formatDecimal(expertRating, locale, 1)}
+                                Lab {formatDecimal(expertRating, locale, 1)}/10
                               </span>
                             )}
                           </div>
@@ -2630,10 +2622,23 @@ export default function CompareWorkspace({
                                       : 'text-dark'
                                   }`}
                                 >
-                                  <CompareCellText
-                                    segments={segments}
-                                    locale={locale}
-                                  />
+                                  {row.id === 'rating_weighted' ? (
+                                    <StarRating
+                                      value={getEffectiveRating(p)}
+                                      count={
+                                        p.authentic_review_count ||
+                                        p.total_reviews ||
+                                        0
+                                      }
+                                      size="sm"
+                                      emptyLabel={t('valNoReviews')}
+                                    />
+                                  ) : (
+                                    <CompareCellText
+                                      segments={segments}
+                                      locale={locale}
+                                    />
+                                  )}
                                   {isWinner && (
                                     <span
                                       className="badge bg-success rounded-pill ms-1 text-white"

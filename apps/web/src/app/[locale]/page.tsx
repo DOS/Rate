@@ -74,6 +74,7 @@ import {
   formatPlainNumber,
   formatPriceVnd,
 } from '@/lib/locale-format';
+import StarRating from '@/components/elementary/StarRating';
 
 // Cached after the first request, refreshed every 5 minutes or when the
 // worker revalidates its cache tags (DOS/Rate#491).
@@ -655,12 +656,11 @@ export default async function Home({
                                 {battle.productA.name}
                               </div>
                               <div className="rate-battle-score">
-                                ★{' '}
-                                {formatDecimal(
-                                  battle.productA.combinedScore5,
-                                  locale,
-                                  2
-                                )}
+                                <StarRating
+                                  value={battle.productA.combinedScore5}
+                                  digits={2}
+                                  size="sm"
+                                />
                               </div>
                             </div>
                             <span className="rate-battle-vs" aria-hidden="true">
@@ -671,12 +671,11 @@ export default async function Home({
                                 {battle.productB.name}
                               </div>
                               <div className="rate-battle-score">
-                                ★{' '}
-                                {formatDecimal(
-                                  battle.productB.combinedScore5,
-                                  locale,
-                                  2
-                                )}
+                                <StarRating
+                                  value={battle.productB.combinedScore5}
+                                  digits={2}
+                                  size="sm"
+                                />
                               </div>
                             </div>
                           </div>
@@ -1043,9 +1042,15 @@ export default async function Home({
                           <div>
                             <dt>{tHome('ratingsAndProductsLabel')}</dt>
                             <dd>
-                              {merchant.rating_star != null
-                                ? `★ ${formatDecimal(merchant.rating_star, locale, 1)} · `
-                                : ''}
+                              {merchant.rating_star != null && (
+                                <>
+                                  <StarRating
+                                    value={merchant.rating_star}
+                                    size="sm"
+                                  />
+                                  {' · '}
+                                </>
+                              )}
                               {merchant.product_count}{' '}
                               {tHome('productsShortUnit')}
                             </dd>

@@ -51,7 +51,6 @@ import {
   BsShieldCheck,
   BsShieldExclamation,
   BsShop,
-  BsStarFill,
 } from 'react-icons/bs';
 import ContentText from '@/components/elementary/ContentText';
 import { contentLang } from '@/lib/content-lang';
@@ -69,6 +68,7 @@ import {
   formatPlainNumber,
   formatPriceVnd,
 } from '@/lib/locale-format';
+import StarRating from '@/components/elementary/StarRating';
 
 const INSPECT_CONTROL_CHARS_RE = /\p{Cc}+/gu;
 
@@ -801,14 +801,18 @@ export default function DeepInspectWorkspace({
 
                   <div className="d-flex justify-content-between align-items-center border-top flex-wrap gap-2 pt-3">
                     <div className="d-flex align-items-center flex-wrap gap-2">
-                      <span className="rate-score-badge-user">
-                        <BsStarFill className="text-warning" />
-                        <span>
-                          {masterUserRating > 0
-                            ? `${formatDecimal(masterUserRating, locale, 1)}/${formatDecimal(5, locale, 1)}`
-                            : t('userNoScore')}
-                        </span>
-                      </span>
+                      <StarRating
+                        value={masterUserRating}
+                        count={
+                          masterUserRating > 0
+                            ? master.authentic_review_count ||
+                              master.total_reviews ||
+                              0
+                            : null
+                        }
+                        size="sm"
+                        emptyLabel={t('userNoScore')}
+                      />
                       <span className="rate-score-badge-expert">
                         <span>
                           {t('expertLabel')}{' '}
@@ -819,14 +823,6 @@ export default function DeepInspectWorkspace({
                         </span>
                       </span>
                       <RadarBadge signal={radarSignal} />
-                      <span className="small text-muted">
-                        {t('verifiedReviewsCount', {
-                          count:
-                            master.authentic_review_count ||
-                            master.total_reviews ||
-                            0,
-                        })}
-                      </span>
                     </div>
                     <Link
                       href={productHref}

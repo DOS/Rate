@@ -41,22 +41,6 @@ function main() {
       { count: 1 },
       'Odhalena 1 nabídka s uměle navýšenou původní cenou',
     ],
-    // Czech scores use a decimal comma (DOS/Rate#1369).
-    [
-      'productDetail.verifiedReviewsCount',
-      { count: 4 },
-      '/ 5,0 (4 ověřené recenze)',
-    ],
-    [
-      'productDetail.verifiedReviewsCountNoScore',
-      { count: 1 },
-      '(1 ověřená recenze)',
-    ],
-    [
-      'productDetail.verifiedReviewsCountNoScore',
-      { count: 15 },
-      '(15 ověřených recenzí)',
-    ],
     [
       'productDetail.authenticReviewsBadge',
       { count: 2 },
@@ -85,8 +69,8 @@ function main() {
     ],
     [
       'compare.valAuthenticReviews',
-      { rating: '5,0', count: 1 },
-      '★ 5,0 / 5,0 (1 ověřená recenze)',
+      { rating: '5,0', count: 11204 },
+      '★ 5,0 (11\u00a0204)',
     ],
     ['inspect.verifiedReviewsCount', { count: 3 }, '(3 ověřené recenze)'],
     [
@@ -125,11 +109,6 @@ function main() {
       '2 listings currently in genuine deal zone',
     ],
     ['catalog.page.radarAnalyzedSub', { count: 1 }, 'Checked 1 store listing'],
-    [
-      'productDetail.verifiedReviewsCountNoScore',
-      { count: 1 },
-      '(1 verified review)',
-    ],
     [
       'catalog.meta.laptops.titleCount',
       { count: 1 },
@@ -191,7 +170,6 @@ function main() {
       { count: 5 },
       'Neuvedené úložiště (5 zdrojů)',
     ],
-    ['reviews.validCountBadge', { count: 1 }, '✓ 1 platná'],
     ['reviews.expertReviewsCountNote', { count: 2 }, '2 expertní hodnocení'],
     ['reviews.expertReviewsCountNote', { count: 6 }, '6 expertních hodnocení'],
     ['catalog.page.foundSuffix', { total: 3 }, '/ 3 normalizované produkty'],
@@ -421,15 +399,12 @@ function main() {
 
   // Vietnamese has one form and keeps its plain placeholders.
   const viMessages = read('vi');
-  for (const key of [
-    'verifiedReviewsCountNoScore',
-    'priceHistoryGenuineDealBadge',
-  ]) {
+  for (const key of ['priceHistoryGenuineDealBadge']) {
     assert.doesNotMatch(viMessages.productDetail[key], /plural/, `vi ${key}`);
   }
   assert.ok(
     vi(
-      'productDetail.verifiedReviewsCountNoScore' as never,
+      'inspect.verifiedReviewsCount' as never,
       { count: 1 } as never
     ).startsWith('(1 ')
   );

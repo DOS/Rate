@@ -43,7 +43,6 @@ import {
   BsAwardFill,
   BsBatteryCharging,
   BsCameraFill,
-  BsCheckCircleFill,
   BsCpu,
   BsDisplay,
   BsEarbuds,
@@ -63,6 +62,7 @@ import {
   BsTrophyFill,
 } from 'react-icons/bs';
 import ContentText from '@/components/elementary/ContentText';
+import StarRating from '@/components/elementary/StarRating';
 import {
   formatDecimal,
   formatNumber,
@@ -394,7 +394,6 @@ export default function LeaderboardExplorer({
       rank2Label: t('rank2Label'),
       rank3Label: t('rank3Label'),
       fullTableTitle: t('fullTableTitle'),
-      verifiedReviewsSuffix: t('verifiedReviewsSuffix'),
       storesTrackedSuffix: t('storesTrackedSuffix'),
       viewAuditDetailBtn: t('viewAuditDetailBtn'),
       inspectBtn: t('inspectBtn'),
@@ -1256,12 +1255,11 @@ export default function LeaderboardExplorer({
                           {rankLabel}
                         </span>
                         <div className="text-end">
-                          <div className="fs-4 fw-bold text-warning rate-tabular lh-1">
-                            {formatDecimal(entry.activeScore5, locale, 2)}
-                            <span className="fs-6 text-white-50">
-                              /{formatDecimal(5, locale, 1)}
-                            </span>
-                          </div>
+                          <StarRating
+                            value={entry.activeScore5}
+                            digits={2}
+                            size="lg"
+                          />
                         </div>
                       </div>
 
@@ -1296,12 +1294,12 @@ export default function LeaderboardExplorer({
                             </Link>
                           </h3>
                           <div className="d-flex flex-wrap gap-1">
-                            <span className="rate-score-badge-user">
-                              ★{' '}
-                              {entry.userScore5 > 0
-                                ? `${formatDecimal(entry.userScore5, locale, 2)}/${formatDecimal(5, locale, 1)}`
-                                : t('unratedShort')}
-                            </span>
+                            <StarRating
+                              value={entry.userScore5}
+                              count={entry.authenticCount}
+                              size="sm"
+                              emptyLabel={t('unratedShort')}
+                            />
                             <span className="rate-score-badge-expert">
                               {entry.expertScore10 != null
                                 ? t('expertScoreShort', {
@@ -1458,7 +1456,7 @@ export default function LeaderboardExplorer({
                           #{iA + 1} vs #{iB + 1}
                         </span>
                         <span className="badge bg-danger-subtle text-danger rounded-pill small rate-tabular">
-                          Δ {delta} / {formatDecimal(5, locale, 1)}
+                          Δ {delta}
                         </span>
                       </div>
 
@@ -1566,10 +1564,6 @@ export default function LeaderboardExplorer({
                         <span className="badge bg-dark rounded-pill small text-white">
                           {entry.product.brand}
                         </span>
-                        <span className="badge bg-success-subtle text-success rounded-pill small">
-                          <BsCheckCircleFill className="me-1" />
-                          {entry.authenticCount} {copy.verifiedReviewsSuffix}
-                        </span>
                         {entry.ignoredCount > 0 && (
                           <span className="badge bg-danger-subtle text-danger rounded-pill small">
                             <BsShieldCheck
@@ -1625,20 +1619,12 @@ export default function LeaderboardExplorer({
                 <div className="col-lg-4 col-md-7">
                   <div className="rounded-3 bg-light border p-2 px-3">
                     <div className="d-flex mb-2 flex-wrap gap-2">
-                      <span className="rate-score-badge-user">
-                        <BsStarFill className="text-warning" />
-                        <span>
-                          {entry.userScore5 > 0
-                            ? t('userScoreShort', {
-                                score: formatDecimal(
-                                  entry.userScore5,
-                                  locale,
-                                  2
-                                ),
-                              })
-                            : t('userUnrated')}
-                        </span>
-                      </span>
+                      <StarRating
+                        value={entry.userScore5}
+                        count={entry.authenticCount}
+                        size="sm"
+                        emptyLabel={t('userUnrated')}
+                      />
                       <span className="rate-score-badge-expert">
                         <span>
                           {entry.expertScore10 != null
@@ -1706,12 +1692,7 @@ export default function LeaderboardExplorer({
                       <div className="small text-muted">
                         {copy.critLabels[activeCriterion]}
                       </div>
-                      <div className="h4 fw-bold text-danger rate-tabular mb-0">
-                        {formatDecimal(entry.activeScore5, locale, 2)}
-                        <span className="fs-6 text-muted fw-normal">
-                          /{formatDecimal(5, locale, 1)}
-                        </span>
-                      </div>
+                      <StarRating value={entry.activeScore5} digits={2} />
                       <div className="small text-secondary rate-tabular">
                         {minPriceText} ₫ ({entry.product.merchant_count || 0}{' '}
                         {copy.storesTrackedSuffix})

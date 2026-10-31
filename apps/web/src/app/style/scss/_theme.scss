@@ -27,6 +27,10 @@
   --rate-score-user-bg: rgba(45, 186, 105, 0.14);
   --rate-score-expert-bg: rgba(99, 102, 241, 0.14);
   --rate-score-star-bg: rgba(245, 158, 11, 0.14);
+  --rate-star-good: #4ade80;
+  --rate-star-fair: #fb923c;
+  --rate-star-poor: #f87171;
+  --rate-star-empty: rgba(255, 255, 255, 0.2);
   --rate-risk-danger-bg: rgba(244, 63, 94, 0.14);
   --rate-status-good-fg: #4ade80;
   --rate-status-good-bg: rgba(34, 197, 94, 0.14);
@@ -371,6 +375,11 @@
   --rate-score-user-bg: #ecfdf5;
   --rate-score-expert-bg: #eef2ff;
   --rate-score-star-bg: #fffbeb;
+  // Rating stars by band (DOS/Rate#1528): at least 3:1 on white and #f1f5f9.
+  --rate-star-good: #15803d;
+  --rate-star-fair: #c2410c;
+  --rate-star-poor: #dc2626;
+  --rate-star-empty: #cbd5e1;
   --rate-risk-danger-bg: #fff1f2;
   --rate-crimson-text: #d83030;
   --rate-focus-ring: #d83030;
