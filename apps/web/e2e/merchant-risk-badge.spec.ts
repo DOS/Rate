@@ -47,3 +47,28 @@ test('a store with no DOSafe score shows no score and no tone', async ({
   await expect(status).toHaveText('Chưa có dữ liệu DOSafe');
   await expect(status).not.toHaveClass(/text-success/);
 });
+
+// The risk pills sit beside the card title in half-width cards; the long
+// "no data" text ran out of the card's right edge at 1280 and 992 px
+// (DOS/Rate#1524). Each pill stays inside its card at every width.
+for (const width of [1280, 992, 390]) {
+  test(`the risk pills stay inside their cards at ${width} px`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width, height: 900 });
+    expect((await page.goto(LOW))?.status()).toBe(200);
+    const pills = [
+      page.getByTestId('merchant-scam-badge'),
+      page.getByTestId('merchant-review-risk-badge'),
+    ];
+    for (const pill of pills) {
+      await expect(pill).toBeVisible();
+      const overflow = await pill.evaluate((el) => {
+        const card = el.closest('.card')!.getBoundingClientRect();
+        const box = el.getBoundingClientRect();
+        return Math.max(box.right - card.right, card.left - box.left);
+      });
+      expect(overflow, await pill.innerText()).toBeLessThanOrEqual(0);
+    }
+  });
+}
