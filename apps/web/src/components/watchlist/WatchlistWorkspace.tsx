@@ -46,11 +46,11 @@ import {
 } from '@/lib/watchlist-sizes';
 import {
   formatDate,
-  formatDecimal,
   formatNumber,
   formatPlainNumber,
   formatPriceVnd,
 } from '@/lib/locale-format';
+import StarRating from '@/components/elementary/StarRating';
 
 interface WatchlistWorkspaceProps {
   catalogProducts: MasterProduct[];
@@ -752,12 +752,10 @@ export default function WatchlistWorkspace({
                 <div className="small text-white-50 mb-1">
                   {t('kpiAvgRatingLabel')}
                 </div>
-                <div className="h5 fw-bold rate-tabular text-warning mb-0">
-                  ★{' '}
-                  {avgPortfolioRating > 0
-                    ? `${formatDecimal(avgPortfolioRating, locale, 2)} / ${formatDecimal(5, locale, 1)}`
-                    : t('kpiNoRating')}
-                </div>
+                <StarRating
+                  value={avgPortfolioRating}
+                  emptyLabel={t('kpiNoRating')}
+                />
               </div>
             </div>
           </div>

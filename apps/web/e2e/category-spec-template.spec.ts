@@ -10,12 +10,13 @@ test('earbud page shows audio specs and no phone fields', async ({ page }) => {
   await page.goto(BUD);
   const specs = page.locator('#specs-section');
   const headings = specs.locator('h3');
-  await expect(headings.first()).toHaveText(/^1\. Âm thanh/);
+  // One language and no number (DOS/Rate#1529).
+  await expect(headings.first()).toHaveText(/^Âm thanh/);
   // Groups with no value are hidden (DOS/Rate#1186) and no sale status is
   // invented (DOS/Rate#1193): the seeded bud has audio, battery and
   // Bluetooth, nothing else.
   await expect(headings).toHaveCount(3);
-  await expect(headings.nth(1)).toHaveText(/^2\. Pin/);
+  await expect(headings.nth(1)).toHaveText(/^Pin/);
   await expect(specs).toContainText('E2E 10.5mm driver');
   await expect(specs).toContainText('E2E ANC');
   for (const text of [
@@ -62,11 +63,13 @@ test('a watch page never shows 5G', async ({ page }) => {
   await expect(meta).toContainText('Apple');
   await expect(meta).not.toContainText('5G');
   const specs = page.locator('#specs-section');
-  await expect(specs).toContainText('Màn hình (Display)');
+  await expect(specs).toContainText('Màn hình');
+  // One language per page (DOS/Rate#1529).
+  await expect(specs).not.toContainText('(Display)');
   // The seeded watch has no network value left once 5G is dropped, so the
   // cellular group is hidden (DOS/Rate#1186); the 4G-only bands label is
   // covered by product-spec-rows.test.ts.
-  await expect(specs).not.toContainText('Mạng Di động');
+  await expect(specs).not.toContainText('Mạng di động');
   await expect(specs).not.toContainText('5G');
   await expect(specs).not.toContainText('Camera');
 });

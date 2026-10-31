@@ -11,11 +11,11 @@ import {
 import { escapeCsvCell } from '@/lib/csv-safe';
 import { MAX_VALID_VND_PRICE } from '@/lib/rate-domain';
 import {
-  formatDecimal,
   formatNumber,
   formatPlainNumber,
   formatPriceVnd,
 } from '@/lib/locale-format';
+import StarRating from '@/components/elementary/StarRating';
 
 interface ProductValueCalculatorProps {
   readonly productName: string;
@@ -413,10 +413,11 @@ export default function ProductValueCalculator({
             <div className="text-muted small mb-1">
               {t('valueCalcCardValueScoreTitle')}
             </div>
-            <div className="h5 fw-bold rate-tabular text-primary mb-1">
-              {safeValueCriterionScore5 > 0
-                ? `★ ${formatDecimal(safeValueCriterionScore5, locale, 1)}/${formatDecimal(5, locale, 1)}`
-                : t('valueCalcNotAvailable')}
+            <div className="h5 mb-1">
+              <StarRating
+                value={safeValueCriterionScore5}
+                emptyLabel={t('valueCalcNotAvailable')}
+              />
             </div>
             <div className="small text-secondary rate-tabular">
               {metrics.maxSpreadSavingsVnd > 0

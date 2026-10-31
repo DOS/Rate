@@ -46,7 +46,6 @@ import {
   BsShieldExclamation,
   BsShop,
   BsSortDown,
-  BsStarFill,
 } from 'react-icons/bs';
 
 import {
@@ -55,11 +54,11 @@ import {
   sanitizeMerchantScore100,
 } from '@/components/merchants/MerchantShareAuditButton';
 import {
-  formatDecimal,
   formatNumber,
   formatPlainNumber,
   formatPriceVnd,
 } from '@/lib/locale-format';
+import StarRating from '@/components/elementary/StarRating';
 
 // Rows per request when an export collects every matching store.
 const EXPORT_PAGE_SIZE = 500;
@@ -875,18 +874,14 @@ export default function MerchantDirectoryExplorer({
                         so the card stays short on phones (DOS/Rate#635). */}
                     <ul className="list-unstyled d-flex small rate-tabular column-gap-3 row-gap-1 mb-3 flex-wrap">
                       <li className="d-flex align-items-center gap-1">
-                        <BsStarFill
-                          aria-hidden="true"
-                          className="text-warning"
-                        />
                         <span className="text-muted">
                           {labels.platformRating}:
                         </span>
-                        <strong>
-                          {merchant.rating_star
-                            ? `${formatDecimal(merchant.rating_star, locale, 2)} / ${formatDecimal(5, locale, 1)}`
-                            : labels.noRating}
-                        </strong>
+                        <StarRating
+                          value={merchant.rating_star}
+                          size="sm"
+                          emptyLabel={labels.noRating}
+                        />
                       </li>
                       {merchant.follower_count > 0 && (
                         <li className="d-flex align-items-center gap-1">

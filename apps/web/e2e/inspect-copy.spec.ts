@@ -69,7 +69,7 @@ for (const [prefix, lang] of [
       `${prefix}/inspect?q=${encodeURIComponent('iPhone 16 Pro Max')}`
     );
     await expect(page.locator('html')).toHaveAttribute('lang', lang);
-    await expect(page.locator('.rate-score-badge-user').first()).toBeVisible();
+    await expect(page.locator('.rate-stars').first()).toBeVisible();
     await page.locator('.rate-export-menu summary').click();
     await page.getByTestId('inspect-copy-md-btn').click();
     const labels = inspectLabels(lang);
