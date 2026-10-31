@@ -1146,6 +1146,9 @@ export async function ProductDetailView({
                             {formatDecimal(expertRating10, locale, 1)}
                           </span>
                           <span className="rate-pdv-score-sub">/10</span>
+                          <span className="visually-hidden">
+                            {t('expertScoreHint')}
+                          </span>
                         </div>
                       ) : (
                         <div className="rate-pdv-score-empty">

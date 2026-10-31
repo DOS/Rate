@@ -319,10 +319,9 @@ export function buildSpecGroups(
           id: 'expert_rating',
           label: t('rowExpertRating'),
           renderValue: (p) => {
-            // On 10, as the product page shows it (DOS/Rate#1528).
-            const exp10 = resolveCompareExpertRating10(p);
-            return exp10 != null
-              ? `Lab ${formatDecimal(exp10, locale, 1)}/10`
+            const exp5 = resolveCompareExpertRating5(p);
+            return exp5 != null
+              ? `Lab ${formatDecimal(exp5, locale, 1)} / ${formatDecimal(5, locale, 1)}`
               : '-';
           },
           numericValue: (p) => resolveCompareExpertRating5(p),
@@ -2622,7 +2621,20 @@ export default function CompareWorkspace({
                                       : 'text-dark'
                                   }`}
                                 >
-                                  {row.id === 'rating_weighted' ? (
+                                  {/* Screen-only cells: the stars, and the
+                                  lab score on 10 as the product page shows
+                                  it; exports keep renderValue (#1528). */}
+                                  {row.id === 'expert_rating' ? (
+                                    resolveCompareExpertRating10(p) != null ? (
+                                      `Lab ${formatDecimal(
+                                        resolveCompareExpertRating10(p)!,
+                                        locale,
+                                        1
+                                      )}/10`
+                                    ) : (
+                                      '-'
+                                    )
+                                  ) : row.id === 'rating_weighted' ? (
                                     <StarRating
                                       value={getEffectiveRating(p)}
                                       count={

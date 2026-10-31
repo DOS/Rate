@@ -69,8 +69,8 @@ function main() {
     ],
     [
       'compare.valAuthenticReviews',
-      { rating: '5,0', count: 11204 },
-      '★ 5,0 (11\u00a0204)',
+      { rating: '5,0', count: 1 },
+      '★ 5,0 / 5,0 (1 ověřená recenze)',
     ],
     ['inspect.verifiedReviewsCount', { count: 3 }, '(3 ověřené recenze)'],
     [

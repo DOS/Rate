@@ -1259,6 +1259,7 @@ export default function LeaderboardExplorer({
                             value={entry.activeScore5}
                             digits={2}
                             size="lg"
+                            emptyLabel={t('unratedShort')}
                           />
                         </div>
                       </div>
@@ -1465,9 +1466,12 @@ export default function LeaderboardExplorer({
                           <div className="small fw-bold text-dark text-truncate">
                             {a.product.name}
                           </div>
-                          <div className="small text-secondary rate-tabular">
-                            ★ {formatDecimal(a.activeScore5, locale, 2)}
-                          </div>
+                          <StarRating
+                            value={a.activeScore5}
+                            digits={2}
+                            size="sm"
+                            emptyLabel={t('unratedShort')}
+                          />
                         </div>
                         <span className="badge bg-secondary rounded-pill flex-shrink-0">
                           VS
@@ -1476,9 +1480,12 @@ export default function LeaderboardExplorer({
                           <div className="small fw-bold text-dark text-truncate">
                             {b.product.name}
                           </div>
-                          <div className="small text-secondary rate-tabular">
-                            ★ {formatDecimal(b.activeScore5, locale, 2)}
-                          </div>
+                          <StarRating
+                            value={b.activeScore5}
+                            digits={2}
+                            size="sm"
+                            emptyLabel={t('unratedShort')}
+                          />
                         </div>
                       </div>
 
@@ -1692,7 +1699,11 @@ export default function LeaderboardExplorer({
                       <div className="small text-muted">
                         {copy.critLabels[activeCriterion]}
                       </div>
-                      <StarRating value={entry.activeScore5} digits={2} />
+                      <StarRating
+                        value={entry.activeScore5}
+                        digits={2}
+                        emptyLabel={t('unratedShort')}
+                      />
                       <div className="small text-secondary rate-tabular">
                         {minPriceText} ₫ ({entry.product.merchant_count || 0}{' '}
                         {copy.storesTrackedSuffix})

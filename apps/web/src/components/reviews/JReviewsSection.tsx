@@ -1206,7 +1206,7 @@ export default function JReviewsSection({
                     <span className="text-muted fw-medium">{crit.label}</span>
                     <strong className="text-dark font-monospace">
                       {crit.score != null
-                        ? formatDecimal(crit.score, locale, 1)
+                        ? `${formatDecimal(crit.score, locale, 1)}/5`
                         : t('notAvailableShort')}
                     </strong>
                   </div>
@@ -1585,9 +1585,10 @@ export default function JReviewsSection({
                           </span>
                         )}
                       </div>
-                      <span className="badge bg-warning text-dark small font-monospace">
-                        {'★'.repeat(Math.max(1, Math.min(5, rev.rating_star)))}
-                      </span>
+                      <StarRating
+                        value={Math.max(1, Math.min(5, rev.rating_star))}
+                        size="sm"
+                      />
                     </div>
 
                     {/* Second Row: Flag Category Badge + JReviews Weight Badge */}

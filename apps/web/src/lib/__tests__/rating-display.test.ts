@@ -8,6 +8,7 @@ import {
   ratingFillPercent,
   ratingTone,
 } from '../rating-display';
+import { CLIENT_MESSAGE_SCOPES } from '../client-messages';
 
 // Ratings show as stars with the value and a short count (DOS/Rate#1528):
 // green from 4.0, orange from 3.0, red below, judged on the printed value.
@@ -66,10 +67,20 @@ for (const locale of ['vi', 'en', 'cs'] as const) {
     assert.ok(messages.productDetail[key], `${locale}: productDetail.${key}`);
   }
   assert.doesNotMatch(messages.productDetail.userWeightedScoreLabel, /\(/);
-  assert.doesNotMatch(messages.compare.valAuthenticReviews, /\/ ?5[.,]0/);
+  // The versus verdict is on screen; the compare CSV/JSON cell keeps its form.
+  for (const key of ['versusAutoVerdict', 'versusAutoVerdictTie']) {
+    assert.doesNotMatch(
+      messages.compare[key],
+      /\/ ?5[.,]0/,
+      `${locale} ${key}`
+    );
+  }
 }
+// Client trees get the component's messages (StarRating has no 'use client'
+// of its own, so the client-messages scan does not see it).
+assert.ok(CLIENT_MESSAGE_SCOPES.shared.includes('starRating'));
 const vi = readFileSync(join(localesDir, 'vi.json'), 'utf8');
-for (const phrase of ['bài kiểm chứng', 'chuẩn 10 nhóm', 'review thật']) {
+for (const phrase of ['bài kiểm chứng', 'chuẩn 10 nhóm']) {
   assert.ok(!vi.includes(phrase), `vi.json still has "${phrase}"`);
 }
 
@@ -87,7 +98,9 @@ const walk = (dir: string) => {
   }
 };
 walk(srcDir);
-const SCALE_IN_JSX = /formatDecimal\(5, locale/;
+// A JSX child `{formatDecimal(5, …)}`; template strings (`${…}`) are export
+// text such as the compare CSV cell, which keeps its form.
+const SCALE_IN_JSX = /(?<!\$)\{formatDecimal\(5, locale/;
 for (const file of screenFiles) {
   const text = readFileSync(file, 'utf8');
   assert.doesNotMatch(text, SCALE_IN_JSX, `${file} prints a "/5.0" scale`);

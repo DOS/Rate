@@ -707,7 +707,7 @@ export default function VersusInteractiveScoreboard({
                       aWins ? 'text-success' : 'text-white-50'
                     }`}
                   >
-                    {formatDecimal(row.aVal, locale, 2)} {aWins ? '✓' : ''}
+                    {formatDecimal(row.aVal, locale, 2)}/5 {aWins ? '✓' : ''}
                   </span>
                   <div
                     className="progress bg-dark d-none d-md-flex flex-grow-1"
@@ -747,7 +747,7 @@ export default function VersusInteractiveScoreboard({
                     }`}
                   >
                     {bWins ? '✓ ' : ''}
-                    {formatDecimal(row.bVal, locale, 2)}
+                    {formatDecimal(row.bVal, locale, 2)}/5
                   </span>
                 </div>
               </div>

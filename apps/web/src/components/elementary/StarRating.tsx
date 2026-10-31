@@ -58,6 +58,7 @@ export default function StarRating({
         data-testid={testId}
       >
         {emptyLabel ?? t('empty')}
+        {title && <span className="visually-hidden">. {title}</span>}
       </span>
     );
   }
@@ -69,7 +70,7 @@ export default function StarRating({
     ? t('ariaWithCount', { value: valueText, count, countText })
     : t('aria', { value: valueText });
 
-  return (
+  const stars = (
     <span
       className={`${classes} is-${ratingTone(rating, digits)}`}
       role="img"
@@ -102,5 +103,14 @@ export default function StarRating({
         </span>
       )}
     </span>
+  );
+  if (!title) return stars;
+  // aria-label wins over title on role="img", so screen readers get the
+  // tooltip's meaning from a hidden sibling.
+  return (
+    <>
+      {stars}
+      <span className="visually-hidden">{title}</span>
+    </>
   );
 }
