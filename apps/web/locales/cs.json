@@ -134,6 +134,7 @@
     "tieDeltaNote": "(stejné skóre při aktuálních vahách)",
     "tie1v1Badge": "Remíza 1v1",
     "versusAutoVerdictTie": "Automatický verdikt: oba modely mají stejné celkové skóre ({score}); rozhodněte podle ceny a parametrů, které potřebujete.",
+    "versusAutoVerdictNoScore": "Automatický verdikt: ani jeden model zatím nemá hodnocení; rozhodněte podle ceny a parametrů, které potřebujete.",
     "versusVerdictWeights": "(Váhy: {weights}.)",
     "compareMetaTitleWithNames": "Porovnání {names} - Hodnocení a 10 skupin parametrů | Rate.vn",
     "compareMetaTitleWithNamesShort": "{names} | Rate.vn",
