@@ -13,19 +13,19 @@
 --   rate.product_points  the aggregated pro and con lines of a master (written by P5)
 --   rate.master_products rating_score (the one rating of D3), rating_weight_sum,
 --                        criteria_scores (per criterion, only when D9's thresholds are met)
---   rate.refresh_master_rating_extras(p_master_id) fills the three master columns.
---   rate.refresh_master_product_rating(p_master_id) becomes a wrapper: it runs the body that
---   is live today (renamed refresh_master_product_rating_base, whichever version that is,
---   M1+M2's Item-aware one included) and then the extras, so every existing caller fills the
---   new columns with no change on its side.
+--   rate.master_rating_extras(p_master_id) computes the three master columns (read-only);
+--   rate.refresh_master_rating_extras(p_master_id) writes them, to the master or, once M1+M2
+--   is applied, to every variant of its Item (the pooled rating, like refresh_item_rating).
+--   Triggers on rate.reviews, rate.review_flags and rate.master_products keep them current.
+--   No existing function is replaced or renamed.
 --
--- Order: after M0 and M1+M2 if those are still pending. A later migration that replaces
--- rate.refresh_master_product_rating must keep calling rate.refresh_master_rating_extras.
+-- Order: before or after M0 and M1+M2; the replay test applies it both ways, and through the
+-- M1+M2 rollback.
 --
--- Idempotent: IF NOT EXISTS everywhere, constraints guarded by pg_constraint, the rename runs
--- only once (guarded by the base function's existence), CREATE OR REPLACE for functions, DROP
--- POLICY IF EXISTS before each policy. One transaction. The backfill at the end writes only
--- the three new master columns.
+-- Idempotent: IF NOT EXISTS everywhere, constraints guarded by pg_constraint, CREATE OR
+-- REPLACE for functions, DROP ... IF EXISTS before each policy and trigger. Two transactions:
+-- the schema change, then the backfill (section 8), which writes only the three new master
+-- columns of reviewed masters.
 
 BEGIN;
 
@@ -144,108 +144,275 @@ BEGIN
   END IF;
 END $$;
 
--- 6. The extras: one rating (D2, D3) and per-criterion scores (D9) ------------------------------
+-- 6. The rating and criteria scores of a master (D2, D3, D9) -----------------------------------
 --
--- The same reviews as rate.refresh_master_product_rating counts: user reviews of the master's
--- crawled listings, crawl or community, included in the rating, with a weight above 0. The
--- star is rating_exact when a criteria review set it, else rating_star. Each weight is capped
--- at 3, as apps/web/src/lib/rate-domain-core.ts computeBayesianRatingSummary does.
+-- The reviews rate.refresh_master_product_rating counts: user reviews of crawled listings,
+-- crawl or community, included in the rating, with a weight above 0. Their scope follows the
+-- live refresh: the master's own listings (cluster_id) before M1+M2, the whole Item's listings
+-- (item_id) once the master belongs to an Item, so every variant shows the Item's pooled
+-- rating, as refresh_item_rating does for user_rating_weighted. The item_id columns are read
+-- dynamically, so the same functions work with and without M1+M2.
 --
---   rating_score  = (k * mu + sum(w * star)) / (k + sum(w)),  k = 3, mu = 4.2; NULL with no
---                   weight, so a page shows "no rating yet" instead of the prior.
---   criteria      = the same estimate per criterion key of criteria_ratings, over the reviews
---                   that rated it; kept only with 3 or more reviews and a weight sum of 1.5 or
---                   more (D9). "writers" lets a reader apply the ranking threshold (5).
---                   A Rate user writes one review per product (submit_community_review), so a
---                   review is a writer. The prior mean is 4.2 until per-category means exist.
+--   rating_score  = (k * mu + sum(w * star)) / (k + sum(w)), k = 3, mu = 4.2, each weight capped
+--                   at 3 and the star = rating_exact when a criteria review set it, else
+--                   rating_star (apps/web/src/lib/rate-domain-core.ts computeBayesianRatingSummary).
+--                   NULL with no weight, so a page shows "no rating yet" instead of the prior.
+--   criteria      = the same estimate per criterion of criteria_ratings, over the reviews that
+--                   rated it with a number from 1 to 5 under a key shaped like the shared-data
+--                   keys (^[a-z_]{2,32}$); kept only with 3 or more reviews and a weight sum of
+--                   1.5 or more (D9). "writers" lets a reader apply the ranking threshold (5). A
+--                   Rate user writes one review per product, so a review is a writer. The prior
+--                   mean is 4.2 for every criterion until per-category means exist.
 
-CREATE OR REPLACE FUNCTION rate.refresh_master_rating_extras(p_master_id uuid)
-RETURNS void
-LANGUAGE sql
+-- The Item a master belongs to, or NULL (always NULL before M1+M2).
+CREATE OR REPLACE FUNCTION rate.master_rating_item(p_master_id uuid)
+RETURNS uuid
+LANGUAGE plpgsql
+STABLE
 SECURITY DEFINER
 SET search_path = ''
 AS $$
-  WITH eligible AS (
-    SELECT LEAST(3.0, r.helpfulness_weight)::numeric AS w,
-           COALESCE(r.rating_exact, r.rating_star)::numeric AS star,
-           r.criteria_ratings
-    FROM rate.products p
-    JOIN rate.reviews r ON r.product_id = p.id
-    JOIN rate.review_flags f ON f.review_id = r.id
-    WHERE p.cluster_id = p_master_id
-      AND p.origin = 'crawl'
-      AND r.origin IN ('crawl', 'community')
-      AND r.reviewer_type = 'user'
-      AND COALESCE(f.include_in_rating, true)
-      AND r.helpfulness_weight > 0
-  ),
-  overall AS (
-    SELECT round(COALESCE(sum(w), 0), 2) AS weight_sum,
-           CASE WHEN sum(w) > 0 THEN round((3 * 4.2 + sum(w * star)) / (3 + sum(w)), 2) END AS score
-    FROM eligible
-    WHERE star BETWEEN 1 AND 5
-  ),
-  per_criterion AS (
-    SELECT c.key,
-           count(*) AS writers,
-           round(sum(e.w), 2) AS weight_sum,
-           round((3 * 4.2 + sum(e.w * (c.value #>> '{}')::numeric)) / (3 + sum(e.w)), 2) AS score
-    FROM eligible e
-    CROSS JOIN LATERAL jsonb_each(
-      CASE WHEN jsonb_typeof(e.criteria_ratings) = 'object' THEN e.criteria_ratings
-           ELSE '{}'::jsonb END
-    ) AS c(key, value)
-    WHERE jsonb_typeof(c.value) = 'number'
-      AND (c.value #>> '{}')::numeric BETWEEN 1 AND 5
-    GROUP BY c.key
-  )
-  UPDATE rate.master_products m
-  SET rating_score = o.score,
-      rating_weight_sum = o.weight_sum,
-      criteria_scores = COALESCE(
-        (SELECT jsonb_object_agg(pc.key, jsonb_build_object(
-                  'score', pc.score, 'weight_sum', pc.weight_sum, 'writers', pc.writers))
-         FROM per_criterion pc
-         WHERE pc.writers >= 3 AND pc.weight_sum >= 1.5),
-        '{}'::jsonb)
-  FROM overall o
-  WHERE m.id = p_master_id;
-$$;
-
-REVOKE EXECUTE ON FUNCTION rate.refresh_master_rating_extras(uuid) FROM PUBLIC, anon, authenticated;
-GRANT EXECUTE ON FUNCTION rate.refresh_master_rating_extras(uuid) TO service_role, rate_worker;
-
--- 7. Wrap the live refresh ---------------------------------------------------------------------
---
--- Renaming keeps the live body, its owner, SECURITY DEFINER and grants, whatever version it
--- is. Only on the first run: a re-run finds the base and leaves it.
-
-DO $$
+DECLARE
+  v_item uuid;
 BEGIN
-  IF to_regprocedure('rate.refresh_master_product_rating_base(uuid)') IS NULL THEN
-    ALTER FUNCTION rate.refresh_master_product_rating(uuid)
-      RENAME TO refresh_master_product_rating_base;
+  IF EXISTS (SELECT 1 FROM pg_catalog.pg_attribute
+             WHERE attrelid = 'rate.master_products'::pg_catalog.regclass
+               AND attname = 'item_id' AND NOT attisdropped) THEN
+    EXECUTE 'SELECT item_id FROM rate.master_products WHERE id = $1' INTO v_item USING p_master_id;
   END IF;
+  RETURN v_item;
 END $$;
 
-CREATE OR REPLACE FUNCTION rate.refresh_master_product_rating(p_master_id uuid)
+-- What the master's rating columns should hold. Read-only: the verify file compares it with
+-- the stored columns.
+CREATE OR REPLACE FUNCTION rate.master_rating_extras(p_master_id uuid)
+RETURNS TABLE (rating_score numeric, rating_weight_sum numeric, criteria_scores jsonb)
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+DECLARE
+  v_item uuid := rate.master_rating_item(p_master_id);
+BEGIN
+  RETURN QUERY EXECUTE format($q$
+    WITH eligible AS (
+      SELECT LEAST(3.0, r.helpfulness_weight)::numeric AS w,
+             COALESCE(r.rating_exact, r.rating_star)::numeric AS star,
+             r.criteria_ratings
+      FROM rate.products p
+      JOIN rate.reviews r ON r.product_id = p.id
+      JOIN rate.review_flags f ON f.review_id = r.id
+      WHERE %s = $1
+        AND p.origin = 'crawl'
+        AND r.origin IN ('crawl', 'community')
+        AND r.reviewer_type = 'user'
+        AND COALESCE(f.include_in_rating, true)
+        AND r.helpfulness_weight > 0
+    ),
+    overall AS (
+      SELECT round(COALESCE(sum(w), 0), 2) AS weight_sum,
+             CASE WHEN sum(w) > 0 THEN round((3 * 4.2 + sum(w * star)) / (3 + sum(w)), 2) END AS score
+      FROM eligible
+      WHERE star BETWEEN 1 AND 5
+    ),
+    per_criterion AS (
+      SELECT c.key,
+             count(*) AS writers,
+             round(sum(e.w), 2) AS weight_sum,
+             round((3 * 4.2 + sum(e.w * (c.value #>> '{}')::numeric)) / (3 + sum(e.w)), 2) AS score
+      FROM eligible e
+      CROSS JOIN LATERAL jsonb_each(
+        CASE WHEN jsonb_typeof(e.criteria_ratings) = 'object' THEN e.criteria_ratings
+             ELSE '{}'::jsonb END
+      ) AS c(key, value)
+      WHERE c.key ~ '^[a-z_]{2,32}$'
+        AND jsonb_typeof(c.value) = 'number'
+        AND (c.value #>> '{}')::numeric BETWEEN 1 AND 5
+      GROUP BY c.key
+    )
+    SELECT o.score,
+           o.weight_sum,
+           COALESCE(
+             (SELECT jsonb_object_agg(pc.key, jsonb_build_object(
+                       'score', pc.score, 'weight_sum', pc.weight_sum, 'writers', pc.writers))
+              FROM per_criterion pc
+              WHERE pc.writers >= 3 AND pc.weight_sum >= 1.5),
+             '{}'::jsonb)
+    FROM overall o
+  $q$, CASE WHEN v_item IS NULL THEN 'p.cluster_id' ELSE 'p.item_id' END)
+  USING COALESCE(v_item, p_master_id);
+END $$;
+
+-- Writes them, to the master or to every variant of its Item, only where they changed.
+CREATE OR REPLACE FUNCTION rate.refresh_master_rating_extras(p_master_id uuid)
 RETURNS void
 LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = ''
 AS $$
+DECLARE
+  v_item uuid := rate.master_rating_item(p_master_id);
+  v_score numeric;
+  v_weight numeric;
+  v_criteria jsonb;
 BEGIN
-  PERFORM rate.refresh_master_product_rating_base(p_master_id);
-  PERFORM rate.refresh_master_rating_extras(p_master_id);
-END;
-$$;
+  SELECT x.rating_score, x.rating_weight_sum, x.criteria_scores
+  INTO v_score, v_weight, v_criteria
+  FROM rate.master_rating_extras(p_master_id) x;
+  EXECUTE format($q$
+    UPDATE rate.master_products m
+    SET rating_score = $2, rating_weight_sum = $3, criteria_scores = $4
+    WHERE %s = $1
+      AND (m.rating_score, m.rating_weight_sum, m.criteria_scores) IS DISTINCT FROM ($2, $3, $4)
+  $q$, CASE WHEN v_item IS NULL THEN 'm.id' ELSE 'm.item_id' END)
+  USING COALESCE(v_item, p_master_id), v_score, v_weight, v_criteria;
+END $$;
 
-REVOKE EXECUTE ON FUNCTION rate.refresh_master_product_rating(uuid) FROM PUBLIC, anon, authenticated;
-GRANT EXECUTE ON FUNCTION rate.refresh_master_product_rating(uuid) TO service_role, rate_worker;
-REVOKE EXECUTE ON FUNCTION rate.refresh_master_product_rating_base(uuid) FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION rate.master_rating_item(uuid) FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION rate.master_rating_extras(uuid) FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION rate.refresh_master_rating_extras(uuid) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION rate.master_rating_item(uuid) TO service_role;
+GRANT EXECUTE ON FUNCTION rate.master_rating_extras(uuid) TO service_role;
+GRANT EXECUTE ON FUNCTION rate.refresh_master_rating_extras(uuid) TO service_role;
 
--- 8. Backfill: every master gets its rating_score and criteria_scores once. Re-runnable.
+-- 7. Keep them current: triggers on what they read --------------------------------------------
+--
+-- No refresh function is replaced or renamed, so a later CREATE OR REPLACE of
+-- refresh_master_product_rating or refresh_item_rating (M1+M2, its rollback, a hotfix) cannot
+-- drop these columns' updates. The triggers fire on:
+--   rate.reviews       every insert, update and delete (star, exact star, criteria, weight)
+--   rate.review_flags  every insert, update and delete (include_in_rating)
+--   rate.master_products a change of user_rating_weighted or authentic_review_count, which the
+--                      live refresh writes after a listing moves between masters or Items
+-- Statement-level with transition tables for the two review tables, so a bulk import refreshes
+-- each touched master once per statement.
 
-SELECT rate.refresh_master_rating_extras(id) FROM rate.master_products;
+CREATE OR REPLACE FUNCTION rate.refresh_rating_extras_of_masters(p_masters uuid[])
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+DECLARE
+  v_master uuid;
+BEGIN
+  FOR v_master IN SELECT DISTINCT unnest(p_masters) ORDER BY 1 LOOP
+    IF v_master IS NOT NULL THEN
+      PERFORM rate.refresh_master_rating_extras(v_master);
+    END IF;
+  END LOOP;
+END $$;
 
+CREATE OR REPLACE FUNCTION rate.reviews_refresh_rating_extras()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+BEGIN
+  IF TG_OP = 'INSERT' THEN
+    PERFORM rate.refresh_rating_extras_of_masters(ARRAY(
+      SELECT p.cluster_id FROM changed_new r JOIN rate.products p ON p.id = r.product_id));
+  ELSIF TG_OP = 'UPDATE' THEN
+    PERFORM rate.refresh_rating_extras_of_masters(ARRAY(
+      SELECT p.cluster_id FROM (SELECT product_id FROM changed_new
+                                UNION SELECT product_id FROM changed_old) r
+      JOIN rate.products p ON p.id = r.product_id));
+  ELSE
+    PERFORM rate.refresh_rating_extras_of_masters(ARRAY(
+      SELECT p.cluster_id FROM changed_old r JOIN rate.products p ON p.id = r.product_id));
+  END IF;
+  RETURN NULL;
+END $$;
+
+CREATE OR REPLACE FUNCTION rate.review_flags_refresh_rating_extras()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+BEGIN
+  IF TG_OP = 'INSERT' THEN
+    PERFORM rate.refresh_rating_extras_of_masters(ARRAY(
+      SELECT p.cluster_id FROM changed_new f
+      JOIN rate.reviews r ON r.id = f.review_id JOIN rate.products p ON p.id = r.product_id));
+  ELSIF TG_OP = 'UPDATE' THEN
+    PERFORM rate.refresh_rating_extras_of_masters(ARRAY(
+      SELECT p.cluster_id FROM (SELECT review_id FROM changed_new
+                                UNION SELECT review_id FROM changed_old) f
+      JOIN rate.reviews r ON r.id = f.review_id JOIN rate.products p ON p.id = r.product_id));
+  ELSE
+    -- A flag deleted with its review (ON DELETE CASCADE) finds no review here; the reviews
+    -- trigger refreshes that master.
+    PERFORM rate.refresh_rating_extras_of_masters(ARRAY(
+      SELECT p.cluster_id FROM changed_old f
+      JOIN rate.reviews r ON r.id = f.review_id JOIN rate.products p ON p.id = r.product_id));
+  END IF;
+  RETURN NULL;
+END $$;
+
+CREATE OR REPLACE FUNCTION rate.master_products_refresh_rating_extras()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+BEGIN
+  PERFORM rate.refresh_master_rating_extras(NEW.id);
+  RETURN NULL;
+END $$;
+
+REVOKE EXECUTE ON FUNCTION rate.refresh_rating_extras_of_masters(uuid[]) FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION rate.reviews_refresh_rating_extras() FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION rate.review_flags_refresh_rating_extras() FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION rate.master_products_refresh_rating_extras() FROM PUBLIC, anon, authenticated;
+
+DROP TRIGGER IF EXISTS trg_reviews_rating_extras_ins ON rate.reviews;
+CREATE TRIGGER trg_reviews_rating_extras_ins AFTER INSERT ON rate.reviews
+  REFERENCING NEW TABLE AS changed_new
+  FOR EACH STATEMENT EXECUTE FUNCTION rate.reviews_refresh_rating_extras();
+DROP TRIGGER IF EXISTS trg_reviews_rating_extras_upd ON rate.reviews;
+CREATE TRIGGER trg_reviews_rating_extras_upd AFTER UPDATE ON rate.reviews
+  REFERENCING OLD TABLE AS changed_old NEW TABLE AS changed_new
+  FOR EACH STATEMENT EXECUTE FUNCTION rate.reviews_refresh_rating_extras();
+DROP TRIGGER IF EXISTS trg_reviews_rating_extras_del ON rate.reviews;
+CREATE TRIGGER trg_reviews_rating_extras_del AFTER DELETE ON rate.reviews
+  REFERENCING OLD TABLE AS changed_old
+  FOR EACH STATEMENT EXECUTE FUNCTION rate.reviews_refresh_rating_extras();
+
+DROP TRIGGER IF EXISTS trg_review_flags_rating_extras_ins ON rate.review_flags;
+CREATE TRIGGER trg_review_flags_rating_extras_ins AFTER INSERT ON rate.review_flags
+  REFERENCING NEW TABLE AS changed_new
+  FOR EACH STATEMENT EXECUTE FUNCTION rate.review_flags_refresh_rating_extras();
+DROP TRIGGER IF EXISTS trg_review_flags_rating_extras_upd ON rate.review_flags;
+CREATE TRIGGER trg_review_flags_rating_extras_upd AFTER UPDATE ON rate.review_flags
+  REFERENCING OLD TABLE AS changed_old NEW TABLE AS changed_new
+  FOR EACH STATEMENT EXECUTE FUNCTION rate.review_flags_refresh_rating_extras();
+DROP TRIGGER IF EXISTS trg_review_flags_rating_extras_del ON rate.review_flags;
+CREATE TRIGGER trg_review_flags_rating_extras_del AFTER DELETE ON rate.review_flags
+  REFERENCING OLD TABLE AS changed_old
+  FOR EACH STATEMENT EXECUTE FUNCTION rate.review_flags_refresh_rating_extras();
+
+DROP TRIGGER IF EXISTS trg_master_products_rating_extras ON rate.master_products;
+CREATE TRIGGER trg_master_products_rating_extras
+  AFTER UPDATE OF user_rating_weighted, authentic_review_count ON rate.master_products
+  FOR EACH ROW
+  WHEN ((OLD.user_rating_weighted, OLD.authentic_review_count)
+        IS DISTINCT FROM (NEW.user_rating_weighted, NEW.authentic_review_count))
+  EXECUTE FUNCTION rate.master_products_refresh_rating_extras();
+
+COMMIT;
+
+-- 8. Backfill, in its own transaction after the schema change commits, so the ALTER TABLE
+-- locks are already released and only the touched master rows are locked. Masters with no
+-- counted review already hold the right values (NULL, 0, {}) from the column defaults.
+-- Re-runnable; it writes only rows whose values differ. A catalog of many thousand reviewed
+-- masters can run it in id ranges instead.
+
+BEGIN;
+SELECT rate.refresh_master_rating_extras(m.id)
+FROM rate.master_products m
+WHERE m.authentic_review_count > 0 OR m.user_rating_weighted > 0
+ORDER BY m.id;
 COMMIT;
