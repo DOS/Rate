@@ -177,7 +177,7 @@ export default async function ProductLeaderboardBadges({
                 fontSize: '0.8125rem',
               }}
             >
-              ({formatDecimal(b.score5, lang, 2)}/{formatDecimal(5, lang, 1)}) ↗
+              ({formatDecimal(b.score5, lang, 2)}) ↗
             </span>
           </IntentLink>
         );

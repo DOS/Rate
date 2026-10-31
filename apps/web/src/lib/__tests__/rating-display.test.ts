@@ -100,7 +100,7 @@ const walk = (dir: string) => {
 walk(srcDir);
 // A JSX child `{formatDecimal(5, …)}`; template strings (`${…}`) are export
 // text such as the compare CSV cell, which keeps its form.
-const SCALE_IN_JSX = /(?<!\$)\{formatDecimal\(5, locale/;
+const SCALE_IN_JSX = /(?<!\$)\{formatDecimal\(5, \w+/;
 for (const file of screenFiles) {
   const text = readFileSync(file, 'utf8');
   assert.doesNotMatch(text, SCALE_IN_JSX, `${file} prints a "/5.0" scale`);

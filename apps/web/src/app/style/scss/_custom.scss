@@ -1581,8 +1581,10 @@ body .input-group > .input-group-text {
 // band colour; the value and count keep the text colour.
 .rate-stars {
   display: inline-flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 0.35em;
+  max-width: 100%;
+  gap: 0.15em 0.35em;
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
   line-height: 1.2;
