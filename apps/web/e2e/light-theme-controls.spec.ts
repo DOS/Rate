@@ -135,16 +135,9 @@ for (const colorScheme of ['light', 'dark'] as const) {
       );
       await settled(page);
 
-      const scoreboard = page.locator('.rate-scoreboard-dark').first();
-      // The custom-weights toggle in its inactive state, the one axe missed.
-      const weights = scoreboard.getByRole('button', {
-        name: 'Tùy chỉnh trọng số',
-      });
-      await expect(weights.first()).toBeVisible();
-      await expect(weights.first()).toHaveAttribute('aria-expanded', 'false');
-      const weightMeasures = await contrastOf(weights);
-      expect(weightMeasures.length).toBeGreaterThan(0);
-      expectReadable(weightMeasures, 'custom-weights button');
+      // The custom-weights toggle is not offered while no seeded product
+      // has a criterion score (DOS/Rate#1556); the other controls are.
+      await expect(page.locator('.rate-scoreboard-dark').first()).toBeVisible();
 
       const controls = await contrastOf(
         page.locator(

@@ -80,6 +80,50 @@ export function sanitizeDealFinderMarkdownCell(value: unknown): string {
   return cleaned || '-';
 }
 
+/** The criterion each persona leans on (see rankProductsForDealFinder). */
+const PERSONA_LEAN: Record<
+  Exclude<PersonaKey, 'default'>,
+  'value' | 'camera' | 'performance' | 'battery'
+> = {
+  value_hunter: 'value',
+  photography: 'camera',
+  gaming: 'performance',
+  endurance: 'battery',
+};
+
+/**
+ * The personas worth offering (DOS/Rate#1556): the default one, and one whose
+ * criterion some product in the category has a real score for. Without one,
+ * the persona ranks exactly like the default.
+ */
+export function availableDealPersonas(
+  products: readonly MasterProduct[],
+  categoryFilter: CanonicalCategorySlug | 'all'
+): PersonaKey[] {
+  const scored = new Set<string>();
+  if (Array.isArray(products)) {
+    for (const p of products) {
+      if (!p || typeof p !== 'object') continue;
+      if (
+        categoryFilter !== 'all' &&
+        getMasterProductCategorySlug(p) !== categoryFilter
+      ) {
+        continue;
+      }
+      const { criteria } = scoreMasterProductForLeaderboard(p);
+      for (const c of Object.values(PERSONA_LEAN)) {
+        if ((criteria[c] ?? 0) > 0) scored.add(c);
+      }
+    }
+  }
+  return [
+    'default',
+    ...(Object.keys(PERSONA_LEAN) as Exclude<PersonaKey, 'default'>[]).filter(
+      (k) => scored.has(PERSONA_LEAN[k])
+    ),
+  ];
+}
+
 export function rankProductsForDealFinder(
   products: readonly MasterProduct[],
   options: {
@@ -187,12 +231,21 @@ export default function DealFinderWorkspace({
   const [categoryFilter, setCategoryFilter] = useState<
     CanonicalCategorySlug | 'all'
   >(initialCategory);
-  const [persona, setPersona] = useState<PersonaKey>('value_hunter');
+  const [chosenPersona, setPersona] = useState<PersonaKey>('value_hunter');
   const [maxBudgetVnd, setMaxBudgetVnd] = useState<number>(65_000_000);
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [copiedMarkdown, setCopiedMarkdown] = useState<boolean>(false);
   const [copiedRadarMd, setCopiedRadarMd] = useState<boolean>(false);
   const radarIndex = useDealRadarIndex(dealRadar);
+  // A persona whose criterion no product here has a score for is not
+  // offered, and the ranking falls back to the default (DOS/Rate#1556).
+  const availablePersonas = useMemo(
+    () => availableDealPersonas(products, categoryFilter),
+    [products, categoryFilter]
+  );
+  const persona: PersonaKey = availablePersonas.includes(chosenPersona)
+    ? chosenPersona
+    : 'default';
   // Paging restarts whenever a filter changes the ranking.
   const filterKey = `${categoryFilter}|${persona}|${maxBudgetVnd}|${searchQuery}`;
   const [paging, setPaging] = useState({
@@ -588,35 +641,39 @@ export default function DealFinderWorkspace({
           ))}
         </div>
 
-        {/* Persona Pills */}
-        <div
-          id="rate-deal-personas"
-          className="d-flex align-items-center mb-3 flex-wrap gap-2"
-          role="group"
-          aria-labelledby={personaLabelId}
-        >
-          <span
-            id={personaLabelId}
-            className="small text-secondary fw-semibold me-1"
+        {/* Persona Pills: only with a choice to make */}
+        {availablePersonas.length > 1 && (
+          <div
+            id="rate-deal-personas"
+            className="d-flex align-items-center mb-3 flex-wrap gap-2"
+            role="group"
+            aria-labelledby={personaLabelId}
           >
-            {t('personaLabel')}
-          </span>
-          {personaOptions.map((p) => (
-            <button
-              key={p.key}
-              type="button"
-              aria-pressed={persona === p.key}
-              onClick={() => setPersona(p.key)}
-              className={`btn btn-sm rounded-pill px-3 py-1 ${
-                persona === p.key
-                  ? 'btn-danger fw-bold text-white'
-                  : 'btn-light text-secondary border'
-              }`}
+            <span
+              id={personaLabelId}
+              className="small text-secondary fw-semibold me-1"
             >
-              {p.label}
-            </button>
-          ))}
-        </div>
+              {t('personaLabel')}
+            </span>
+            {personaOptions
+              .filter((p) => availablePersonas.includes(p.key))
+              .map((p) => (
+                <button
+                  key={p.key}
+                  type="button"
+                  aria-pressed={persona === p.key}
+                  onClick={() => setPersona(p.key)}
+                  className={`btn btn-sm rounded-pill px-3 py-1 ${
+                    persona === p.key
+                      ? 'btn-danger fw-bold text-white'
+                      : 'btn-light text-secondary border'
+                  }`}
+                >
+                  {p.label}
+                </button>
+              ))}
+          </div>
+        )}
 
         {/* Budget Slider & Search */}
         <div className="row g-3 align-items-center">
