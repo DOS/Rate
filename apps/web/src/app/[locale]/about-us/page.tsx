@@ -85,10 +85,10 @@ export default async function AboutUsPage({
 
             <div className="col-lg-4">
               <div
-                className="card rounded-4 border p-4 text-white"
+                className="card rounded-4 p-4 text-white"
                 style={{
                   background: 'var(--rate-glass-bg)',
-                  borderColor: 'var(--rate-glass-border)',
+                  border: '1px solid var(--rate-glass-border)',
                 }}
               >
                 <div className="small text-uppercase text-white-50 fw-bold mb-3">

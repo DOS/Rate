@@ -176,10 +176,9 @@ for (const colorScheme of ['light', 'dark'] as const) {
         colorScheme
       );
       const [bg, ink] = await page
-        .locator('main h1, h1')
-        .first()
+        .locator('h1')
         .evaluate((h1) => [
-          getComputedStyle(h1.closest('section')!).backgroundColor,
+          getComputedStyle(h1.closest('section') ?? h1).backgroundColor,
           getComputedStyle(h1).color,
         ]);
       if (colorScheme === 'light') {

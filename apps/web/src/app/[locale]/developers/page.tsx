@@ -296,6 +296,8 @@ export default async function DevelopersPage({
                     target="_blank"
                     rel="noopener noreferrer"
                     className="btn btn-outline-info rounded-pill fw-semibold px-4 py-2"
+                    // The text ink, so the border reads on the light hero too (#1522).
+                    style={{ borderColor: 'var(--rate-ink-info)' }}
                   >
                     {t('btnOpenApiSpec')}
                   </a>
@@ -312,10 +314,10 @@ export default async function DevelopersPage({
 
               <div className="col-lg-4">
                 <div
-                  className="card rounded-4 border p-4 text-white"
+                  className="card rounded-4 p-4 text-white"
                   style={{
                     background: 'var(--rate-glass-bg)',
-                    borderColor: 'var(--rate-glass-border)',
+                    border: '1px solid var(--rate-glass-border)',
                   }}
                 >
                   <div className="small text-uppercase text-white-50 fw-bold mb-3">
