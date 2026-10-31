@@ -97,10 +97,8 @@ export default function VersusMatchupSwitcher({
       onSubmit={handleLaunchMatchup}
       className="rounded-4 mt-3 p-3"
       style={{
-        // Theme tokens: obsidian glass on dark, a light panel on light
-        // (DOS/Rate#1521).
-        background: 'var(--rate-glass-bg)',
-        border: '1px solid var(--rate-glass-border)',
+        background: 'rgba(255, 255, 255, 0.04)',
+        border: '1px solid rgba(255, 255, 255, 0.1)',
       }}
     >
       <div className="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">

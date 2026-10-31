@@ -22,50 +22,62 @@ const trayItems = [
 
 type Measure = { text: string; ratio: number; color: string; ground: string };
 
-// The text colour of each visible control against the nearest opaque ground
-// behind it: a background colour, or the lightest opaque stop of a gradient
-// (the worst case for light ink).
+// The text colour of each visible control against the ground it sits on.
+// Translucent grounds are composited down to the first opaque one (white if
+// none); a gradient counts as its lightest stop, the worst case for light
+// ink. The text's own alpha and its opacity chain are composited over that
+// ground too, so a faded label is measured as it is seen.
 async function contrastOf(controls: Locator): Promise<Measure[]> {
   return controls.evaluateAll((els) => {
-    const parse = (css: string) =>
-      (css.match(/rgba?\([^)]+\)/g) ?? []).map((m) =>
-        m
+    type Rgba = [number, number, number, number];
+    const parse = (css: string): Rgba[] =>
+      (css.match(/rgba?\([^)]+\)/g) ?? []).map((m) => {
+        const [r = 0, g = 0, b = 0, a = 1] = m
           .replace(/rgba?\(|\)/g, '')
           .split(/[,\s/]+/)
           .filter(Boolean)
-          .map(Number)
-      );
-    const opaque = (c: number[]) => c.length === 3 || (c[3] ?? 1) >= 0.5;
-    const lum = ([r = 0, g = 0, b = 0]: number[]) => {
+          .map(Number);
+        return [r, g, b, a];
+      });
+    const lum = ([r, g, b]: Rgba) => {
       const ch = (v: number) => {
         const s = v / 255;
         return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
       };
       return 0.2126 * ch(r) + 0.7152 * ch(g) + 0.0722 * ch(b);
     };
+    const over = (top: Rgba, base: Rgba, alpha = top[3]): Rgba => [
+      top[0] * alpha + base[0] * (1 - alpha),
+      top[1] * alpha + base[1] * (1 - alpha),
+      top[2] * alpha + base[2] * (1 - alpha),
+      1,
+    ];
     return els
       .filter((el) => {
         const r = el.getBoundingClientRect();
         return r.width > 0 && r.height > 0;
       })
       .map((el) => {
-        let ground = [255, 255, 255];
+        // Background layers from the control outwards, up to an opaque one.
+        const layers: Rgba[] = [];
+        let opacity = 1;
         for (let n: Element | null = el; n; n = n.parentElement) {
           const s = getComputedStyle(n);
-          const fill = parse(s.backgroundColor).filter(opaque);
-          if (fill.length > 0) {
-            ground = fill[0]!;
-            break;
-          }
-          const stops = parse(s.backgroundImage).filter(opaque);
-          if (stops.length > 0) {
-            ground = stops.sort((a, b) => lum(b) - lum(a))[0]!;
-            break;
-          }
+          opacity *= Number(s.opacity);
+          const stops = parse(s.backgroundImage).filter((c) => c[3] > 0);
+          const fill = parse(s.backgroundColor).filter((c) => c[3] > 0);
+          const layer =
+            stops.sort((a, b) => lum(b) - lum(a))[0] ?? fill[0] ?? null;
+          if (!layer) continue;
+          layers.push(layer);
+          if (layer[3] >= 1) break;
         }
+        let ground: Rgba = [255, 255, 255, 1];
+        for (const layer of layers.reverse()) ground = over(layer, ground);
         const color = getComputedStyle(el).color;
-        const [fg = [0, 0, 0]] = parse(color);
-        const a = lum(fg);
+        const fg: Rgba = parse(color)[0] ?? [0, 0, 0, 1];
+        const seen = over(fg, ground, fg[3] * opacity);
+        const a = lum(seen);
         const b = lum(ground);
         return {
           text: (el.textContent ?? el.getAttribute('aria-label') ?? '')
@@ -73,7 +85,10 @@ async function contrastOf(controls: Locator): Promise<Measure[]> {
             .slice(0, 40),
           ratio: (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05),
           color,
-          ground: `rgb(${ground.slice(0, 3).join(', ')})`,
+          ground: `rgb(${ground
+            .slice(0, 3)
+            .map((v) => Math.round(v))
+            .join(', ')})`,
         };
       });
   });
@@ -130,9 +145,9 @@ for (const colorScheme of ['light', 'dark'] as const) {
       expectReadable(controls, 'versus controls');
 
       // The matchup selects follow the theme: no obsidian field on light.
-      for (const select of await page
-        .locator('form:has(select) select')
-        .all()) {
+      const selects = page.locator('form:has(select) select');
+      await expect(selects).toHaveCount(2);
+      for (const select of await selects.all()) {
         const ground = await select.evaluate(
           (el) => getComputedStyle(el).backgroundColor
         );

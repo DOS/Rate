@@ -435,11 +435,8 @@
       .btn-dark,
       .bg-dark .btn
     ) {
+    // Hover grounds here are light (--bs-light), so the ink stays dark.
     color: var(--rate-fg-primary) !important;
-
-    &.btn-outline-secondary:is(:hover, :active) {
-      color: #ffffff !important;
-    }
   }
 }
 
