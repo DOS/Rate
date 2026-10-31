@@ -10,12 +10,13 @@ test('earbud page shows audio specs and no phone fields', async ({ page }) => {
   await page.goto(BUD);
   const specs = page.locator('#specs-section');
   const headings = specs.locator('h3');
-  await expect(headings.first()).toHaveText(/^1\. Âm thanh/);
+  // One language and no number (DOS/Rate#1529).
+  await expect(headings.first()).toHaveText(/^Âm thanh/);
   // Groups with no value are hidden (DOS/Rate#1186) and no sale status is
   // invented (DOS/Rate#1193): the seeded bud has audio, battery and
   // Bluetooth, nothing else.
   await expect(headings).toHaveCount(3);
-  await expect(headings.nth(1)).toHaveText(/^2\. Pin/);
+  await expect(headings.nth(1)).toHaveText(/^Pin/);
   await expect(specs).toContainText('E2E 10.5mm driver');
   await expect(specs).toContainText('E2E ANC');
   for (const text of [
