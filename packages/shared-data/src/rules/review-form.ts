@@ -24,39 +24,79 @@ export type ReviewTextIssue =
   | { kind: 'verdict_length'; length: number }
   | { kind: 'points_count'; list: 'pros' | 'cons'; count: number }
   | { kind: 'point_length'; list: 'pros' | 'cons'; index: number }
+  | { kind: 'no_content'; list: 'verdict' | 'pros' | 'cons'; index: number }
   | { kind: 'evasive_con'; index: number }
   | { kind: 'duplicate_point'; list: 'pros' | 'cons'; index: number }
   | { kind: 'pro_and_con'; index: number };
 
-// Canonical decomposition, so diacritics split off as marks.
-const DECOMPOSED = 'NFD';
+const EMPTY = '';
+// Compatibility composition: fullwidth letters ("ＫＨÔＮＧ") fold to plain
+// ones and Vietnamese letters stay whole.
+const COMPOSED = 'NFKC';
+// Compatibility decomposition, so diacritics split off as marks.
+const DECOMPOSED = 'NFKD';
 
 /**
- * The form a line is compared in: lower case, no diacritics, "đ" as "d",
- * punctuation as spaces and spaces collapsed. Only for comparing lines;
- * what is stored and shown keeps the writer's text.
+ * The form two lines are compared in: lower case, no zero-width characters,
+ * punctuation and symbols as spaces, spaces collapsed. Diacritics stay
+ * ("sạc" and "sắc" differ, design 5.1). Only for comparing lines; what is
+ * stored and shown keeps the writer's text.
  */
 export function comparablePoint(text: string): string {
-  const decomposed = text.normalize(DECOMPOSED);
-  return decomposed
-    .replace(/\p{M}+/gu, '')
-    .replace(/[đĐ]/g, 'd')
+  const composed = String(text ?? EMPTY).normalize(COMPOSED);
+  return composed
+    .replace(/\p{Cf}+/gu, '')
     .toLowerCase()
     .replace(/[\p{P}\p{S}]+/gu, ' ')
     .replace(/\s+/g, ' ')
     .trim();
 }
 
-// A con that dodges the question ("không có", "chưa thấy", "không có gì để
-// chê", "ko co", "none"), compared without diacritics. A real con, however
-// small ("giá hơi cao"), never matches: the whole line must be the dodge.
-const EVASIVE_CON =
-  /^(?:(?:hien\s+tai|tam\s+thoi|den\s+gio|van)\s+)?(?:khong|ko|k|chua|chang|hok|hong)(?:\s+(?:co|thay|gap|phat\s+hien))?(?:\s+(?:gi|j|nhuoc\s+diem|diem\s+tru))?(?:\s+(?:de|ma)\s+che)?(?:\s+(?:ca|het|nao|luon))?$|^(?:none|nothing|no\s+cons?|n\s*a|0|ok|tot|hoan\s+hao|perfect)$/;
+/** A compared line without diacritics, "đ" as "d": for spotting dodges. */
+function plainPoint(text: string): string {
+  const decomposed = comparablePoint(text).normalize(DECOMPOSED);
+  return decomposed.replace(/\p{M}+/gu, '').replace(/đ/g, 'd');
+}
+
+/** Length in characters as the writer sees them (code points, composed). */
+function visibleLength(text: string): number {
+  const composed = String(text ?? EMPTY).normalize(COMPOSED);
+  return [...composed.replace(/\p{Cf}+/gu, '').trim()].length;
+}
+
+/**
+ * Whether a line has words in it: at least three letters or digits, and
+ * not one character repeated ("aaaaa", "....", "🔥🔥🔥🔥🔥").
+ */
+function hasContent(text: string): boolean {
+  const letters = comparablePoint(text).match(/[\p{L}\p{N}]/gu) ?? [];
+  return letters.length >= 3 && new Set(letters).size >= 2;
+}
+
+// A con that dodges the question, compared without diacritics: "không có",
+// "chưa thấy ạ", "không có gì để chê", "Không có nhược điểm nào cả", "chả có
+// gì", "khum có", "không chê được gì", "chưa gặp vấn đề gì", "mọi thứ đều ổn",
+// "none", "10/10". A real con, however small ("giá hơi cao", "không có jack
+// 3.5mm", "chưa có gì nổi bật"), never matches: the whole line must be the
+// dodge.
+const EVASIVE_CON = new RegExp(
+  [
+    '^(?:(?:hien tai|tam thoi|den gio|van|thi|thuc su|that su) )*',
+    '(?:khong|ko|k|kh|khum|chua|chang|cha|hok|hong|hem)',
+    '(?: (?:co|thay|gap|phat hien(?: ra)?|che duoc|che))*',
+    '(?: (?:gi|j|nhuoc diem|diem tru|khuyet diem|diem yeu|van de|loi))*',
+    '(?: (?:de|ma|dang|phai|can) (?:che|phan nan))?',
+    '(?: (?:ca|het|nao|luon|a|nhe|nha|nhen|dau|gi|j))*$',
+    '|^(?:(?:moi thu|tat ca|all) (?:deu )?(?:on|tot|ok|good|fine)',
+    '|kcj|no|none|nothing(?: to complain(?: about)?)?|no cons?|no complaints?',
+    '|n a|0|ok|on|tot|hoan hao|perfect|10 10|5 sao)$',
+  ].join('')
+);
 
 /** Whether a con line says only that there is no con. */
 export function isEvasiveCon(text: string): boolean {
-  const plain = comparablePoint(text);
-  return plain.length === 0 || EVASIVE_CON.test(plain);
+  const plain = plainPoint(text);
+  return !hasContent(text) || EVASIVE_CON.test(plain);
 }
 
 function checkList(
@@ -68,33 +108,46 @@ function checkList(
     issues.push({ kind: 'points_count', list, count: points.length });
   const seen = new Set<string>();
   points.forEach((point, index) => {
-    const length = point.trim().length;
+    const length = visibleLength(point);
     if (length < REVIEW_POINT_MIN || length > REVIEW_POINT_MAX)
       issues.push({ kind: 'point_length', list, index });
-    const plain = comparablePoint(point);
-    if (plain && seen.has(plain))
+    else if (list === 'pros' && !hasContent(point))
+      issues.push({ kind: 'no_content', list, index });
+    const compared = comparablePoint(point);
+    if (compared && seen.has(compared))
       issues.push({ kind: 'duplicate_point', list, index });
-    seen.add(plain);
+    seen.add(compared);
   });
+}
+
+function asLines(value: unknown): string[] {
+  return Array.isArray(value) ? value.map((line) => String(line ?? '')) : [];
 }
 
 /**
  * What is wrong with a Rate review's text under D5 (design 4.2): verdict
- * length, the number and length of pros and cons, a con that dodges, the
- * same line twice in a list, and a line that is both a pro and a con. An
- * empty result is a valid review.
+ * length, the number and length of pros and cons, a line with no words, a
+ * con that dodges, the same line twice in a list, and a line that is both a
+ * pro and a con. Lengths count characters as the writer sees them, like
+ * Postgres char_length. An empty result is a valid review; a malformed body
+ * gives issues and never throws.
  */
 export function validateReviewText(review: ReviewText): ReviewTextIssue[] {
   const issues: ReviewTextIssue[] = [];
-  const verdictLength = review.verdict.trim().length;
+  const verdict = String(review?.verdict ?? '');
+  const pros = asLines(review?.pros);
+  const cons = asLines(review?.cons);
+  const verdictLength = visibleLength(verdict);
   if (verdictLength < REVIEW_VERDICT_MIN || verdictLength > REVIEW_VERDICT_MAX)
     issues.push({ kind: 'verdict_length', length: verdictLength });
-  checkList('pros', review.pros, issues);
-  checkList('cons', review.cons, issues);
-  const pros = new Set(review.pros.map(comparablePoint));
-  review.cons.forEach((con, index) => {
+  else if (!hasContent(verdict))
+    issues.push({ kind: 'no_content', list: 'verdict', index: 0 });
+  checkList('pros', pros, issues);
+  checkList('cons', cons, issues);
+  const proLines = new Set(pros.map(comparablePoint));
+  cons.forEach((con, index) => {
     if (isEvasiveCon(con)) issues.push({ kind: 'evasive_con', index });
-    else if (pros.has(comparablePoint(con)))
+    else if (proLines.has(comparablePoint(con)))
       issues.push({ kind: 'pro_and_con', index });
   });
   return issues;

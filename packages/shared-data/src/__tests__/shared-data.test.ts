@@ -1545,6 +1545,25 @@ function testRatingCriteriaAndReviewForm(): void {
     'Không có điểm trừ',
     'None.',
     '...',
+    // Reviews of #1548.
+    'Không có nhược điểm nào cả',
+    'chua co nhuoc diem nao het',
+    'Không có gì đáng chê',
+    'không chê được gì',
+    'Ko có gì để chê nha',
+    'không có ạ',
+    'Chả có gì',
+    'Khum có',
+    'kcj',
+    'Chưa phát hiện ra',
+    'Chưa gặp vấn đề gì',
+    'Không có gì để phàn nàn',
+    'Mọi thứ đều ổn',
+    'no complaints',
+    '10/10',
+    'aaaaa',
+    'Khô​ng có',
+    'ＫＨÔＮＧ CÓ',
   ]) {
     assert.ok(rules.isEvasiveCon(dodge), dodge);
   }
@@ -1553,6 +1572,12 @@ function testRatingCriteriaAndReviewForm(): void {
     'Không có củ sạc trong hộp',
     'Chưa có bản màu xanh',
     'Không chống nước',
+    'Không có jack 3.5mm',
+    'Chưa hỗ trợ eSIM',
+    'Pin không trâu',
+    'Không có NFC',
+    'Chưa có gì nổi bật',
+    'K có sạc',
   ]) {
     assert.ok(!rules.isEvasiveCon(real), real);
   }
@@ -1580,6 +1605,85 @@ function testRatingCriteriaAndReviewForm(): void {
       { kind: 'point_length', list: 'pros', index: 2 },
     ]
   );
+  // Reviews of #1548: lines with no words, lengths as the writer sees them
+  // (three emoji are 3, a decomposed "Pin ổn" is 6),
+  // diacritics kept when comparing, and malformed bodies that never throw.
+  assert.deepEqual(
+    rules.validateReviewText({
+      verdict: '.'.repeat(25),
+      pros: ['!!!!!!', '🔥🔥🔥🔥🔥', 'Màn hình sắc nét'],
+      cons: ['Màn hình sạc nét'],
+    }),
+    [
+      { kind: 'no_content', list: 'verdict', index: 0 },
+      { kind: 'no_content', list: 'pros', index: 0 },
+      { kind: 'no_content', list: 'pros', index: 1 },
+    ]
+  );
+  assert.deepEqual(
+    rules.validateReviewText({
+      ...review,
+      pros: ['😀😀😀', 'Pin ổn'.normalize('NFD')],
+    }),
+    [{ kind: 'point_length', list: 'pros', index: 0 }]
+  );
+  assert.deepEqual(
+    rules.validateReviewText(
+      null as unknown as Parameters<typeof rules.validateReviewText>[0]
+    ),
+    [
+      { kind: 'verdict_length', length: 0 },
+      { kind: 'points_count', list: 'pros', count: 0 },
+      { kind: 'points_count', list: 'cons', count: 0 },
+    ]
+  );
+
+  // Reviews of #1548: prototype keys are not categories or ratings, null is a
+  // skipped criterion, and legacy 0.1-step stars count in the review star.
+  for (const slug of ['toString', '__proto__', 'constructor']) {
+    assert.deepEqual(
+      rules.getRatingCriteria(slug),
+      rules.getRatingCriteria('smartphones'),
+      slug
+    );
+    assert.equal(rules.hasRatingCriteria(slug), false, slug);
+    assert.deepEqual(
+      rules.validateCriteriaRatings(slug, phone),
+      [],
+      `validate ${slug}`
+    );
+    assert.deepEqual(
+      rules.mapLegacyCriteriaRatings(slug, { value: 5 }),
+      { value: 5 },
+      `legacy ${slug}`
+    );
+  }
+  assert.equal(rules.hasRatingCriteria('earbuds'), true);
+  assert.equal(rules.hasRatingCriteria('service'), false);
+  assert.equal(
+    rules.weightedReviewStar(
+      'smartphones',
+      Object.create({ value: 5 }) as Record<string, number>
+    ),
+    null
+  );
+  assert.deepEqual(
+    rules.validateCriteriaRatings('smartphones', {
+      ...phone,
+      design: null,
+      camera: null,
+    }),
+    []
+  );
+  const legacyStars = rules.mapLegacyCriteriaRatings('smartphones', {
+    screen: 1.3,
+    performance: 5,
+    camera: 5,
+    battery: 5,
+    value: 5,
+  });
+  // (1.3*15 + 5*20 + 5*20 + 5*20 + 5*15) / 90 = 394.5 / 90 = 4.38.
+  assert.equal(rules.weightedReviewStar('smartphones', legacyStars), 4.4);
 }
 
 function main(): void {

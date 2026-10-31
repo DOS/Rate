@@ -128,13 +128,38 @@ export function getRatingCriteria(
   categorySlug: string | null | undefined
 ): readonly RatingCriterion[] {
   return (
-    (categorySlug ? RATING_CRITERIA[categorySlug] : undefined) ??
-    RATING_CRITERIA.smartphones!
+    ownValue(RATING_CRITERIA, categorySlug) ?? RATING_CRITERIA.smartphones!
   );
 }
 
-/** Criterion stars as stored in `rate.reviews.criteria_ratings`. */
-export type CriteriaRatings = Partial<Record<string, number>>;
+/**
+ * Whether a category has its own criteria list. An API that must not rate a
+ * new category ("tvs") or a typo ("service") as a phone checks this first.
+ */
+export function hasRatingCriteria(
+  categorySlug: string | null | undefined
+): boolean {
+  return ownValue(RATING_CRITERIA, categorySlug) !== undefined;
+}
+
+/**
+ * A record's own entry: "toString" or "__proto__" as a category slug or a
+ * rating key never reaches Object.prototype.
+ */
+function ownValue<T>(
+  record: Readonly<Record<string, T>> | null | undefined,
+  key: string | null | undefined
+): T | undefined {
+  return record && key && Object.prototype.hasOwnProperty.call(record, key)
+    ? record[key]
+    : undefined;
+}
+
+/**
+ * Criterion stars as stored in `rate.reviews.criteria_ratings`. A criterion
+ * the writer left out ("Chưa dùng tới") is missing, undefined or null.
+ */
+export type CriteriaRatings = Partial<Record<string, number | null>>;
 
 export type CriteriaRatingsIssue =
   | { kind: 'unknown_key'; key: string }
@@ -142,15 +167,19 @@ export type CriteriaRatingsIssue =
   | { kind: 'missing_required'; key: RatingCriterionKey }
   | { kind: 'too_many_skipped'; skipped: number };
 
-/** A star from 1 to 5 in half steps. */
-function isStar(value: unknown): value is number {
+/** A stored star: any number from 1 to 5 (legacy reviews kept 0.1 steps). */
+function isStoredStar(value: unknown): value is number {
   return (
     typeof value === 'number' &&
     Number.isFinite(value) &&
     value >= 1 &&
-    value <= 5 &&
-    Number.isInteger(value * 2)
+    value <= 5
   );
+}
+
+/** A star the form gives: 1 to 5 in half steps. */
+function isStar(value: unknown): value is number {
+  return isStoredStar(value) && Number.isInteger(value * 2);
 }
 
 /**
@@ -166,14 +195,15 @@ export function validateCriteriaRatings(
   const criteria = getRatingCriteria(categorySlug);
   const known = new Set<string>(criteria.map((criterion) => criterion.key));
   const issues: CriteriaRatingsIssue[] = [];
-  for (const [key, star] of Object.entries(ratings)) {
+  const given = ratings && typeof ratings === 'object' ? ratings : {};
+  for (const [key, star] of Object.entries(given)) {
     if (!known.has(key)) issues.push({ kind: 'unknown_key', key });
-    else if (star !== undefined && !isStar(star))
+    else if (star != null && !isStar(star))
       issues.push({ kind: 'bad_star', key });
   }
   let skipped = 0;
   for (const criterion of criteria) {
-    if (ratings[criterion.key] !== undefined) continue;
+    if (ownValue(given, criterion.key) != null) continue;
     if (criterion.required)
       issues.push({ kind: 'missing_required', key: criterion.key });
     else skipped += 1;
@@ -186,7 +216,9 @@ export function validateCriteriaRatings(
 /**
  * A review's own star: the weighted average of the criteria it rated, at one
  * decimal (design 2.2). Keys the category does not have and stars outside
- * 1-5 are ignored; null when nothing valid is rated.
+ * 1-5 are ignored; null when nothing valid is rated. Any star from 1 to 5
+ * counts, so a legacy review's 0.1-step stars do too: half steps are a rule
+ * of the form (validateCriteriaRatings), not of stored data.
  */
 export function weightedReviewStar(
   categorySlug: string | null | undefined,
@@ -195,8 +227,8 @@ export function weightedReviewStar(
   let sum = 0;
   let weights = 0;
   for (const criterion of getRatingCriteria(categorySlug)) {
-    const star = ratings[criterion.key];
-    if (!isStar(star)) continue;
+    const star = ownValue(ratings, criterion.key);
+    if (!isStoredStar(star)) continue;
     sum += star * criterion.weight;
     weights += criterion.weight;
   }
@@ -208,9 +240,12 @@ export function weightedReviewStar(
 export type LegacyCriterionKey =
   'screen' | 'performance' | 'camera' | 'battery' | 'value';
 
-// What each legacy key rated per category. Earbuds labelled "screen" as
-// soundstage and "camera" as ANC / mic; a key with no counterpart (a watch's
-// camera, earbuds' performance) maps to nothing and its star is dropped.
+// What each legacy key rated per category. The product page labels an
+// earbud's "screen" score soundstage and its "camera" score ANC / mic, so
+// they map to sound and anc. A key with no counterpart (a tablet's, laptop's
+// or watch's camera, a watch's or earbud's performance) maps to nothing and
+// its star is dropped. A mapped legacy review can rate fewer criteria than
+// validateCriteriaRatings asks of a new one: that check is for new reviews.
 const LEGACY_MAP: Readonly<
   Record<string, Partial<Record<LegacyCriterionKey, RatingCriterionKey>>>
 > = {
@@ -253,20 +288,11 @@ export function mapLegacyCriteriaRatings(
   categorySlug: string | null | undefined,
   legacy: Partial<Record<string, unknown>>
 ): CriteriaRatings {
-  const map =
-    (categorySlug ? LEGACY_MAP[categorySlug] : undefined) ??
-    LEGACY_MAP.smartphones!;
+  const map = ownValue(LEGACY_MAP, categorySlug) ?? LEGACY_MAP.smartphones!;
   const out: CriteriaRatings = {};
   for (const [legacyKey, key] of Object.entries(map)) {
-    const star = legacy[legacyKey];
-    if (
-      key &&
-      typeof star === 'number' &&
-      Number.isFinite(star) &&
-      star >= 1 &&
-      star <= 5
-    )
-      out[key] = star;
+    const star = ownValue(legacy, legacyKey);
+    if (key && isStoredStar(star)) out[key] = star;
   }
   return out;
 }
