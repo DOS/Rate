@@ -57,6 +57,8 @@ for (const width of [1280, 992, 390]) {
   }) => {
     await page.setViewportSize({ width, height: 900 });
     expect((await page.goto(LOW))?.status()).toBe(200);
+    // Measure with the web font, not a narrower fallback.
+    await page.evaluate(() => document.fonts.ready);
     const pills = [
       page.getByTestId('merchant-scam-badge'),
       page.getByTestId('merchant-review-risk-badge'),
@@ -66,7 +68,12 @@ for (const width of [1280, 992, 390]) {
       const overflow = await pill.evaluate((el) => {
         const card = el.closest('.card')!.getBoundingClientRect();
         const box = el.getBoundingClientRect();
-        return Math.max(box.right - card.right, card.left - box.left);
+        // Past the card, or text running out of the pill itself.
+        return Math.max(
+          box.right - card.right,
+          card.left - box.left,
+          el.scrollWidth - el.clientWidth
+        );
       });
       expect(overflow, await pill.innerText()).toBeLessThanOrEqual(0);
     }
