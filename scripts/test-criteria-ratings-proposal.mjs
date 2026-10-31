@@ -121,7 +121,15 @@ try {
   const per256 = '3.650|1.00|{}';
 
   const applyAndCheckPerMaster = (when) => {
+    // A stale cache: the 256GB has a counted review but authentic_review_count 0 (a weight
+    // written straight to rate.reviews). The backfill still picks it by its reviewed listing.
+    sql(
+      `UPDATE rate.master_products SET authentic_review_count = 0, user_rating_weighted = 0
+       WHERE id = '${x256}'`
+    );
     sql(proposal);
+    assert.equal(row(x256), per256, `the backfill rates a master with a stale count ${when}`);
+    sql(`SELECT rate.refresh_master_product_rating('${x256}')`);
     sql(proposal);
     // A criteria review gets its exact star: the reviews trigger refreshes the master.
     asRole(
