@@ -518,7 +518,7 @@
     "updatingLabTestsDesc": "Khi chưa có điểm chuyên gia, điểm tổng hợp chỉ dựa trên đánh giá của người mua thực chất (đã lọc đánh giá ảo).",
     "expertReviewsCountNote": "{count} bài đánh giá từ chuyên gia",
     "zeroAdDilutionNote": "Chưa bị pha loãng bởi đánh giá quảng cáo",
-    "criteriaMatrixHeading": "Điểm chi tiết theo 5 tiêu chí trải nghiệm",
+    "criteriaMatrixHeading": "Điểm chi tiết theo tiêu chí trải nghiệm",
     "normalizedByHelpfulnessBadge": "Đã chuẩn hóa theo trọng số hữu ích",
     "notAvailableShort": "Chưa có",
     "aiAuthenticityHeading": "AI kiểm tra đánh giá thật hay ảo và tóm tắt trải nghiệm",

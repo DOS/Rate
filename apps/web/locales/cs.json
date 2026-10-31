@@ -518,7 +518,7 @@
     "updatingLabTestsDesc": "Dokud není k dispozici expertní skóre, celkové skóre vychází jen ze skutečných hodnocení kupujících (bez falešných recenzí).",
     "expertReviewsCountNote": "{count, plural, one {# expertní hodnocení} few {# expertní hodnocení} other {# expertních hodnocení}}",
     "zeroAdDilutionNote": "Nezkresleno reklamními recenzemi",
-    "criteriaMatrixHeading": "Podrobné skóre v 5 oblastech zkušeností",
+    "criteriaMatrixHeading": "Podrobné skóre podle oblastí zkušeností",
     "normalizedByHelpfulnessBadge": "Normalizováno podle váhy užitečnosti",
     "notAvailableShort": "N/A",
     "aiAuthenticityHeading": "AI analýza důvěryhodnosti a souhrn zkušeností",
