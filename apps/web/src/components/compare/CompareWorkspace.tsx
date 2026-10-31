@@ -116,6 +116,8 @@ interface SpecRowDef {
   renderValue: (p: MasterProduct) => string;
   /** The cell with its spec values marked (specPart), for the matrix. */
   renderCell?: (p: MasterProduct) => string;
+  /** A screen-only cell text that differs from the export (DOS/Rate#1528). */
+  screenValue?: (p: MasterProduct) => string;
   numericValue?: (p: MasterProduct) => number | null;
   higherIsBetter?: boolean;
   /** Whether the category's spec template has this row (DOS/Rate#1166). */
@@ -322,6 +324,13 @@ export function buildSpecGroups(
             const exp5 = resolveCompareExpertRating5(p);
             return exp5 != null
               ? `Lab ${formatDecimal(exp5, locale, 1)} / ${formatDecimal(5, locale, 1)}`
+              : '-';
+          },
+          // On screen the lab score reads on 10, as the product page shows it.
+          screenValue: (p) => {
+            const exp10 = resolveCompareExpertRating10(p);
+            return exp10 != null
+              ? `Lab ${formatDecimal(exp10, locale, 1)}/10`
               : '-';
           },
           numericValue: (p) => resolveCompareExpertRating5(p),
@@ -1047,7 +1056,10 @@ export default function CompareWorkspace({
           // The text the cells show, where "N/A" becomes "-", localized
           // part by part as the cells do (DOS/Rate#1392).
           products.map((p) =>
-            compareCellShownText((row.renderCell ?? row.renderValue)(p), locale)
+            compareCellShownText(
+              (row.screenValue ?? row.renderCell ?? row.renderValue)(p),
+              locale
+            )
           ),
           showDiffOnly
         )
@@ -2624,16 +2636,8 @@ export default function CompareWorkspace({
                                   {/* Screen-only cells: the stars, and the
                                   lab score on 10 as the product page shows
                                   it; exports keep renderValue (#1528). */}
-                                  {row.id === 'expert_rating' ? (
-                                    resolveCompareExpertRating10(p) != null ? (
-                                      `Lab ${formatDecimal(
-                                        resolveCompareExpertRating10(p)!,
-                                        locale,
-                                        1
-                                      )}/10`
-                                    ) : (
-                                      '-'
-                                    )
+                                  {row.screenValue ? (
+                                    row.screenValue(p)
                                   ) : row.id === 'rating_weighted' ? (
                                     <StarRating
                                       value={getEffectiveRating(p)}

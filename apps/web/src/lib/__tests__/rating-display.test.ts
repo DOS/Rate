@@ -113,4 +113,27 @@ assert.ok(
   )
 );
 
-console.warn('  ✅ Ratings show as stars with a short count (#1528)');
+// The compare table: the screen shows the lab score on 10 and the "only
+// differences" filter reads that same text, while the CSV/JSON export keeps
+// "Lab x / 5.0" (Codex, PR #1534).
+void (async () => {
+  const { buildSpecGroups } =
+    await import('../../components/compare/CompareWorkspace');
+  const t = ((key: string) => key) as unknown as Parameters<
+    typeof buildSpecGroups
+  >[0];
+  const row = buildSpecGroups(t, 'vi')
+    .flatMap((g) => g.rows)
+    .find((r) => r.id === 'expert_rating')!;
+  const product = (expert: number) =>
+    ({ expert_rating: expert }) as unknown as Parameters<
+      typeof row.renderValue
+    >[0];
+  assert.equal(row.renderValue(product(4.51)), 'Lab 4.5 / 5.0');
+  assert.equal(row.screenValue?.(product(4.51)), 'Lab 9.0/10');
+  assert.equal(row.screenValue?.(product(4.54)), 'Lab 9.1/10');
+  console.warn('  ✅ Ratings show as stars with a short count (#1528)');
+})().catch((error: unknown) => {
+  console.error(error);
+  process.exit(1);
+});
