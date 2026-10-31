@@ -43,7 +43,10 @@ export default async function FaqPage({
 
   return (
     <PageShell locale={locale}>
-      <section className="bg-dark border-bottom border-secondary border-opacity-25 py-5 text-white">
+      <section
+        className="hero-banner rate-surface-dark rate-ink-on-dark border-bottom border-secondary border-opacity-25 py-5 text-white"
+        style={{ background: 'var(--bs-dark)' }}
+      >
         <div className="container py-3 text-center">
           <span className="badge bg-primary rounded-pill fw-semibold mb-3 px-3 py-2">
             <BsQuestionCircleFill className="me-1" /> {t('faqHeroBadge')}

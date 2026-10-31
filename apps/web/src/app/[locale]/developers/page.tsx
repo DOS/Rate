@@ -265,7 +265,10 @@ export default async function DevelopersPage({
     <ClientMessages scope="developers">
       <PageShell locale={locale}>
         {/* Hero Header */}
-        <section className="bg-dark border-bottom border-secondary border-opacity-25 py-5 text-white">
+        <section
+          className="hero-banner rate-surface-dark rate-ink-on-dark border-bottom border-secondary border-opacity-25 py-5 text-white"
+          style={{ background: 'var(--bs-dark)' }}
+        >
           <div className="container py-3">
             <div className="row align-items-center g-4">
               <div className="col-lg-8">
@@ -308,7 +311,13 @@ export default async function DevelopersPage({
               </div>
 
               <div className="col-lg-4">
-                <div className="card rounded-4 bg-opacity-50 border-secondary border-opacity-25 border bg-black p-4 text-white">
+                <div
+                  className="card rounded-4 border p-4 text-white"
+                  style={{
+                    background: 'var(--rate-glass-bg)',
+                    borderColor: 'var(--rate-glass-border)',
+                  }}
+                >
                   <div className="small text-uppercase text-white-50 fw-bold mb-3">
                     {t('liveStatsHeader')}
                   </div>
@@ -389,7 +398,7 @@ export default async function DevelopersPage({
 
             <div className="table-responsive rounded-4 border shadow-sm">
               <table className="table-hover mb-0 table align-middle">
-                <thead className="table-dark">
+                <thead className="table-light">
                   <tr>
                     <th style={{ width: '90px' }}>{t('thMethod')}</th>
                     <th style={{ minWidth: '250px' }}>{t('thPath')}</th>

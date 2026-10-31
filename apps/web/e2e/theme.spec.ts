@@ -155,6 +155,52 @@ for (const colorScheme of ['light', 'dark'] as const) {
   });
 }
 
+// The content pages' heroes and the API table head follow the theme too
+// (DOS/Rate#1522): light ground and dark heading on light, obsidian on dark.
+const CONTENT_PAGES = [
+  '/developers',
+  '/faq',
+  '/about-us',
+  '/contact-us',
+  '/privacy-policy',
+];
+for (const colorScheme of ['light', 'dark'] as const) {
+  test(`the content page heroes are ${colorScheme} on the ${colorScheme} theme`, async ({
+    page,
+  }) => {
+    await page.emulateMedia({ colorScheme });
+    for (const path of CONTENT_PAGES) {
+      await page.goto(path);
+      await expect(page.locator('html')).toHaveAttribute(
+        'data-bs-theme',
+        colorScheme
+      );
+      const [bg, ink] = await page
+        .locator('main h1, h1')
+        .first()
+        .evaluate((h1) => [
+          getComputedStyle(h1.closest('section')!).backgroundColor,
+          getComputedStyle(h1).color,
+        ]);
+      if (colorScheme === 'light') {
+        expect(brightness(bg), path).toBeGreaterThan(200);
+        expect(brightness(ink), path).toBeLessThan(60);
+      } else {
+        expect(brightness(bg), path).toBeLessThan(60);
+        expect(brightness(ink), path).toBeGreaterThan(200);
+      }
+    }
+    if (colorScheme === 'light') {
+      await page.goto('/developers');
+      const head = await page
+        .locator('thead th')
+        .first()
+        .evaluate((th) => getComputedStyle(th).backgroundColor);
+      expect(brightness(head)).toBeGreaterThan(200);
+    }
+  });
+}
+
 test.describe('without JavaScript', () => {
   test.use({ javaScriptEnabled: false });
 
