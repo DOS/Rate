@@ -9,6 +9,11 @@ import {
   type ScoredLeaderboardItem,
 } from '@/lib/rate-domain';
 import {
+  leaderboardCriteriaForCategory,
+  sharedScoredCriteria,
+  weightedCriteriaScore5,
+} from '@/lib/leaderboard-engine';
+import {
   getRadarSignal,
   RADAR_CSV_HEADERS,
   radarCsvCells,
@@ -84,6 +89,13 @@ export function sanitizeVersusScore5(value: unknown): number {
   return Number(Math.min(5, num).toFixed(2));
 }
 
+/** A criterion score out of 5, or null when there is no real one. */
+export function versusCriterionScore5(value: unknown): number | null {
+  if (value == null) return null;
+  const score = sanitizeVersusScore5(value);
+  return score > 0 ? score : null;
+}
+
 export function sanitizeVersusExportSlug(value: unknown): string {
   if (typeof value !== 'string') return 'device';
   const cleaned = value
@@ -123,6 +135,7 @@ export function computeVersusWeightedResult(
   const wVal = sanitizeWeight(weights.value);
   const rawSumW = wScreen + wPerf + wCam + wBat + wVal;
 
+  const shared = sharedScoredCriteria(scoreA.criteria, scoreB.criteria);
   const calcWeighted = (item: ScoredVersusItem): number => {
     // The product's rating as every page shows it (DOS/Rate#1470); a model
     // with no buyer rating yet keeps its composite (expert or criteria).
@@ -132,20 +145,22 @@ export function computeVersusWeightedResult(
     if (persona === 'default') {
       return baseScore5;
     }
-    const cScreen = sanitizeVersusScore5(item.criteria?.screen);
-    const cPerf = sanitizeVersusScore5(item.criteria?.performance);
-    const cCam = sanitizeVersusScore5(item.criteria?.camera);
-    const cBat = sanitizeVersusScore5(item.criteria?.battery);
-    const cVal = sanitizeVersusScore5(item.criteria?.value);
-    const wAvg =
+    // Only the criteria both models have a real score for are weighed; with
+    // none in common the weights change nothing (DOS/Rate#1143).
+    const wAvg = weightedCriteriaScore5(
+      item.criteria,
       rawSumW > 0
-        ? (cScreen * wScreen +
-            cPerf * wPerf +
-            cCam * wCam +
-            cBat * wBat +
-            cVal * wVal) /
-          rawSumW
-        : (cScreen + cPerf + cCam + cBat + cVal) / 5;
+        ? {
+            screen: wScreen,
+            performance: wPerf,
+            camera: wCam,
+            battery: wBat,
+            value: wVal,
+          }
+        : { screen: 1, performance: 1, camera: 1, battery: 1, value: 1 },
+      shared
+    );
+    if (wAvg == null) return baseScore5;
     return sanitizeVersusScore5(baseScore5 * 0.35 + wAvg * 0.65);
   };
 
@@ -227,38 +242,35 @@ export default function VersusInteractiveScoreboard({
     [scoreA, scoreB, weights, persona]
   );
 
-  const criteriaRows = [
-    {
-      key: 'screen' as const,
-      label: t('criteriaScreen'),
-      aVal: sanitizeVersusScore5(scoreA.criteria?.screen),
-      bVal: sanitizeVersusScore5(scoreB.criteria?.screen),
-    },
-    {
-      key: 'performance' as const,
-      label: t('criteriaPerformance'),
-      aVal: sanitizeVersusScore5(scoreA.criteria?.performance),
-      bVal: sanitizeVersusScore5(scoreB.criteria?.performance),
-    },
-    {
-      key: 'camera' as const,
-      label: t('criteriaCamera'),
-      aVal: sanitizeVersusScore5(scoreA.criteria?.camera),
-      bVal: sanitizeVersusScore5(scoreB.criteria?.camera),
-    },
-    {
-      key: 'battery' as const,
-      label: t('criteriaBattery'),
-      aVal: sanitizeVersusScore5(scoreA.criteria?.battery),
-      bVal: sanitizeVersusScore5(scoreB.criteria?.battery),
-    },
-    {
-      key: 'value' as const,
-      label: t('criteriaValue'),
-      aVal: sanitizeVersusScore5(scoreA.criteria?.value),
-      bVal: sanitizeVersusScore5(scoreB.criteria?.value),
-    },
-  ];
+  // The criteria of the pair's category (no screen for earbuds); a side
+  // without a real score reads "Chưa đủ dữ liệu", and a row wins only when
+  // both sides have one (DOS/Rate#1143).
+  const criterionLabels = {
+    screen: t('criteriaScreen'),
+    performance: t('criteriaPerformance'),
+    camera: t('criteriaCamera'),
+    battery: t('criteriaBattery'),
+    value: t('criteriaValue'),
+  };
+  const noData = t('criterionNoData');
+  const criteriaRows = leaderboardCriteriaForCategory(scoreA.categorySlug).map(
+    (key) => {
+      const aVal = versusCriterionScore5(scoreA.criteria?.[key]);
+      const bVal = versusCriterionScore5(scoreB.criteria?.[key]);
+      const compared = aVal != null && bVal != null;
+      return {
+        key,
+        label: criterionLabels[key],
+        aVal,
+        bVal,
+        aWins: compared && aVal > bVal,
+        bWins: compared && bVal > aVal,
+        compared,
+      };
+    }
+  );
+  const criterionCell = (v: number | null) =>
+    v != null ? `${v.toFixed(2)}/5.0` : noData;
 
   const handleCopy1v1Markdown = async () => {
     if (typeof window === 'undefined') return;
@@ -286,13 +298,14 @@ export default function VersusInteractiveScoreboard({
         `| --- | --- | --- | --- |`,
         `| **${t('mdRowWeightedScore')}** | **${weightedResult.finalA.toFixed(1)}/5.0** | **${weightedResult.finalB.toFixed(1)}/5.0** | **${weightedResult.tie ? sanitizeVersusMarkdownCell(t('mdRowTie')) : safeWinnerName}** |`,
         ...criteriaRows.map((r) => {
-          const winName =
-            r.aVal > r.bVal
+          const winName = !r.compared
+            ? '-'
+            : r.aWins
               ? safeNameA
-              : r.bVal > r.aVal
+              : r.bWins
                 ? safeNameB
                 : sanitizeVersusMarkdownCell(t('mdRowTie'));
-          return `| ${sanitizeVersusMarkdownCell(r.label)} | ${r.aVal.toFixed(2)}/5.0 | ${r.bVal.toFixed(2)}/5.0 | ${winName} |`;
+          return `| ${sanitizeVersusMarkdownCell(r.label)} | ${sanitizeVersusMarkdownCell(criterionCell(r.aVal))} | ${sanitizeVersusMarkdownCell(criterionCell(r.bVal))} | ${winName} |`;
         }),
         `| **${t('mdRowMinPrice')}** | ${scoreA.minPrice > 0 ? `${scoreA.minPrice.toLocaleString('vi-VN')} ₫` : '-'} | ${scoreB.minPrice > 0 ? `${scoreB.minPrice.toLocaleString('vi-VN')} ₫` : '-'} | ${safePriceAdv} |`,
         `| **${t('mdRowDealRadar')}** | ${radarMarkdownCell(sigA, locale)} | ${radarMarkdownCell(sigB, locale)} | ${sigA.verdict === 'genuine_deal' ? safeNameA : sigB.verdict === 'genuine_deal' ? safeNameB : '-'} |`,
@@ -329,13 +342,15 @@ export default function VersusInteractiveScoreboard({
       ...criteriaRows.map((r) => [
         r.label,
         weights[r.key],
-        r.aVal.toFixed(2),
-        r.bVal.toFixed(2),
-        r.aVal > r.bVal
-          ? scoreA.name
-          : r.bVal > r.aVal
-            ? scoreB.name
-            : t('mdRowTie'),
+        r.aVal != null ? r.aVal.toFixed(2) : '',
+        r.bVal != null ? r.bVal.toFixed(2) : '',
+        !r.compared
+          ? ''
+          : r.aWins
+            ? scoreA.name
+            : r.bWins
+              ? scoreB.name
+              : t('mdRowTie'),
       ]),
       [
         t('csvRowExpertScore10'),
@@ -698,10 +713,9 @@ export default function VersusInteractiveScoreboard({
 
         {/* 5-Criteria Dual Progress Bar Comparison Rows */}
         {criteriaRows.map((row) => {
-          const aWins = row.aVal > row.bVal;
-          const bWins = row.bVal > row.aVal;
-          const aPct = Math.min(100, Math.round((row.aVal / 5) * 100));
-          const bPct = Math.min(100, Math.round((row.bVal / 5) * 100));
+          const { aWins, bWins } = row;
+          const aPct = Math.min(100, Math.round(((row.aVal ?? 0) / 5) * 100));
+          const bPct = Math.min(100, Math.round(((row.bVal ?? 0) / 5) * 100));
           return (
             <div
               key={row.key}
@@ -714,7 +728,10 @@ export default function VersusInteractiveScoreboard({
                       aWins ? 'text-success' : 'text-white-50'
                     }`}
                   >
-                    {formatDecimal(row.aVal, locale, 2)}/5 {aWins ? '✓' : ''}
+                    {row.aVal != null
+                      ? `${formatDecimal(row.aVal, locale, 2)}/5`
+                      : noData}{' '}
+                    {aWins ? '✓' : ''}
                   </span>
                   <div
                     className="progress bg-dark d-none d-md-flex flex-grow-1"
@@ -754,7 +771,9 @@ export default function VersusInteractiveScoreboard({
                     }`}
                   >
                     {bWins ? '✓ ' : ''}
-                    {formatDecimal(row.bVal, locale, 2)}/5
+                    {row.bVal != null
+                      ? `${formatDecimal(row.bVal, locale, 2)}/5`
+                      : noData}
                   </span>
                 </div>
               </div>

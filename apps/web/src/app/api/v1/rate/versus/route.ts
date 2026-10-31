@@ -9,8 +9,11 @@ import {
 import { radarExportFields } from '@/lib/deal-radar';
 import {
   comparePositiveMinPrices,
+  LEADERBOARD_SCORE_CRITERIA,
   scoreMasterProductForLeaderboard,
-  type LeaderboardCriteriaBreakdown,
+  sharedScoredCriteria,
+  weightedCriteriaScore5,
+  type LeaderboardCriteriaWeights,
 } from '@/lib/leaderboard-engine';
 import {
   PUBLIC_API_CORS_HEADERS,
@@ -33,7 +36,7 @@ export async function OPTIONS() {
 
 interface VersusPersonaConfig {
   id: string;
-  weights: LeaderboardCriteriaBreakdown;
+  weights: LeaderboardCriteriaWeights;
 }
 
 const VERSUS_PERSONAS: VersusPersonaConfig[] = [
@@ -149,14 +152,6 @@ const VERSUS_PERSONAS: VersusPersonaConfig[] = [
   },
 ];
 
-const CRITERIA_KEYS: Array<keyof LeaderboardCriteriaBreakdown> = [
-  'screen',
-  'performance',
-  'camera',
-  'battery',
-  'value',
-];
-
 export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
@@ -226,7 +221,7 @@ export async function GET(req: NextRequest) {
       return Number.isFinite(num) ? Math.max(0, Math.min(100, num)) : fallback;
     };
 
-    const sanitizedWeights: LeaderboardCriteriaBreakdown = {
+    const sanitizedWeights: LeaderboardCriteriaWeights = {
       screen: parseWeight('w_screen', matchedPersona.weights.screen),
       performance: parseWeight(
         'w_performance',
@@ -244,7 +239,7 @@ export async function GET(req: NextRequest) {
       sanitizedWeights.battery +
       sanitizedWeights.value;
 
-    const normalizedWeights: LeaderboardCriteriaBreakdown =
+    const normalizedWeights: LeaderboardCriteriaWeights =
       weightTotal > 0
         ? {
             screen: Number(
@@ -271,33 +266,26 @@ export async function GET(req: NextRequest) {
             value: 20,
           };
 
-    const computeWeighted5 = (c: LeaderboardCriteriaBreakdown): number => {
-      const wSum =
-        normalizedWeights.screen +
-        normalizedWeights.performance +
-        normalizedWeights.camera +
-        normalizedWeights.battery +
-        normalizedWeights.value;
-      if (wSum <= 0) {
-        return Number(
-          (
-            (c.screen + c.performance + c.camera + c.battery + c.value) /
-            5
-          ).toFixed(2)
-        );
-      }
-      const weighted =
-        (c.screen * normalizedWeights.screen +
-          c.performance * normalizedWeights.performance +
-          c.camera * normalizedWeights.camera +
-          c.battery * normalizedWeights.battery +
-          c.value * normalizedWeights.value) /
-        wSum;
-      return Number(weighted.toFixed(2));
-    };
-
-    const customScoreA5 = computeWeighted5(scoreA.criteria);
-    const customScoreB5 = computeWeighted5(scoreB.criteria);
+    // The weights apply to the criteria both products have a real score
+    // for; with none in common, both sides use their main score, and no
+    // criterion counts as won or lost (DOS/Rate#1143).
+    const comparedCriteria = sharedScoredCriteria(
+      scoreA.criteria,
+      scoreB.criteria
+    );
+    const weightedA5 = weightedCriteriaScore5(
+      scoreA.criteria,
+      normalizedWeights,
+      comparedCriteria
+    );
+    const weightedB5 = weightedCriteriaScore5(
+      scoreB.criteria,
+      normalizedWeights,
+      comparedCriteria
+    );
+    const byCriteria = weightedA5 != null && weightedB5 != null;
+    const customScoreA5 = byCriteria ? weightedA5 : scoreA.combinedScore5;
+    const customScoreB5 = byCriteria ? weightedB5 : scoreB.combinedScore5;
     const customScoreA10 = Number((customScoreA5 * 2).toFixed(1));
     const customScoreB10 = Number((customScoreB5 * 2).toFixed(1));
     const priceSide = comparePositiveMinPrices(
@@ -324,11 +312,14 @@ export async function GET(req: NextRequest) {
       Math.abs(customScoreA10 - customScoreB10).toFixed(1)
     );
 
-    const criteriaHeadToHead = CRITERIA_KEYS.map((key) => {
+    // A criterion without a real score on both sides has no winner: its
+    // scores, delta and winner are null (DOS/Rate#1143).
+    const criteriaHeadToHead = LEADERBOARD_SCORE_CRITERIA.map((key) => {
       const a5 = scoreA.criteria[key];
       const b5 = scoreB.criteria[key];
-      const a10 = Number((a5 * 2).toFixed(1));
-      const b10 = Number((b5 * 2).toFixed(1));
+      const a10 = a5 != null ? Number((a5 * 2).toFixed(1)) : null;
+      const b10 = b5 != null ? Number((b5 * 2).toFixed(1)) : null;
+      const compared = a10 != null && b10 != null;
       return {
         criterion: key,
         weight_pct: normalizedWeights[key],
@@ -336,8 +327,14 @@ export async function GET(req: NextRequest) {
         score_a_10: a10,
         score_b_5: b5,
         score_b_10: b10,
-        delta_10: Number((a10 - b10).toFixed(1)),
-        winner_slug: a5 > b5 ? scoreA.slug : b5 > a5 ? scoreB.slug : 'tie',
+        delta_10: compared ? Number((a10 - b10).toFixed(1)) : null,
+        winner_slug: !compared
+          ? null
+          : a10 > b10
+            ? scoreA.slug
+            : b10 > a10
+              ? scoreB.slug
+              : 'tie',
       };
     });
 
@@ -395,6 +392,10 @@ export async function GET(req: NextRequest) {
         compare_matrix_url: `/compare?cat=${category}&slugs=${scoreA.slug},${scoreB.slug}`,
         persona: matchedPersona.id,
         weights: normalizedWeights,
+        // What the custom weighted scores weigh: the criteria both products
+        // have a real score for, or their main scores when they share none.
+        custom_weighted_basis: byCriteria ? 'criteria' : 'combined',
+        compared_criteria: comparedCriteria,
         deal_radar: {
           productA: radarSignalA,
           productB: radarSignalB,

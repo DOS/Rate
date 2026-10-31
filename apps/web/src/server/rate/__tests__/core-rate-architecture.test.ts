@@ -5462,19 +5462,19 @@ async function runCoreArchitectureSuite() {
     );
     assert.equal(scoredEarbud.categorySlug, 'earbuds');
 
-    // 68.2 Category-aware criteria fallback deltas for earbuds (no -0.04 penalty for missing refresh_rate_hz)
-    // base5 = 4.6 * 0.55 + 4.5 * 0.45 = 2.53 + 2.025 = 4.56
-    assert.ok(
-      scoredEarbud.criteria.screen > 4.56,
-      `Earbuds with IPX4 design must receive positive screen/design delta (${scoredEarbud.criteria.screen} > 4.56) instead of -0.04 smartphone refresh rate penalty (#399)`
-    );
-    assert.ok(
-      scoredEarbud.criteria.camera >= 4.7,
-      `Earbuds with ANC + LDAC must receive positive audio criterion delta (${scoredEarbud.criteria.camera}) (#399)`
-    );
-    assert.ok(
-      scoredEarbud.criteria.battery >= 4.7,
-      `Earbuds with 500mAh case must receive positive battery delta (${scoredEarbud.criteria.battery}) (#399)`
+    // 68.2 No criterion score is derived from the star rating, specs or
+    // price: an earbud without stored criterion scores has none, and its
+    // combined score is its user and expert scores alone (DOS/Rate#1143).
+    assert.deepEqual(scoredEarbud.criteria, {
+      screen: null,
+      performance: null,
+      camera: null,
+      battery: null,
+      value: null,
+    });
+    assert.equal(
+      scoredEarbud.combinedScore5,
+      Number((4.6 * 0.6 + 4.5 * 0.4).toFixed(2))
     );
 
     // 68.3 Unpriced (min_price = 0) products excluded from non-'all' priceSegments & sorted after priced ties
@@ -5486,7 +5486,7 @@ async function runCoreArchitectureSuite() {
       min_price: 0,
       max_price: 0,
       // Give unpriced clone identical criteria via explicit expert_criteria_scores so scores tie
-      expert_criteria_scores: { ...scoredEarbud.criteria },
+      expert_criteria_scores: { camera: 4.8, battery: 4.7, value: 4.6 },
     };
     const pricedClone = {
       ...tenPointUserProduct,
@@ -5495,7 +5495,7 @@ async function runCoreArchitectureSuite() {
       name: 'ZZZ Priced Earbud',
       min_price: 5_490_000,
       max_price: 5_990_000,
-      expert_criteria_scores: { ...scoredEarbud.criteria },
+      expert_criteria_scores: { camera: 4.8, battery: 4.7, value: 4.6 },
     };
 
     const under15mRanked = rankFromDomain([unpricedClone, pricedClone], {
@@ -12086,10 +12086,7 @@ async function runCoreArchitectureSuite() {
     assert.equal(competitors983[0]?.slug, 'galaxy-s24-ultra');
     assert.equal(buildKeySpecLine983([] as never), '');
 
-    assert.equal(
-      computeJReviewsCriteriaScores983([] as never, 0, null).screen,
-      0
-    );
+    assert.equal(computeJReviewsCriteriaScores983([] as never).screen, null);
     assert.equal(scoreMasterProductForLeaderboard983([] as never).slug, '');
 
     const sampleProducts983 = [

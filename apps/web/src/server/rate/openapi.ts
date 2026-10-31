@@ -99,11 +99,29 @@ function inspectRateLimitedResponse(): OpenApiResponse {
   );
 }
 
+/**
+ * A product's score out of 5 on each criterion, null when there is no real
+ * score for it (never derived from the star rating; DOS/Rate#1143). Earbuds
+ * have no `screen` criterion, so theirs is always null.
+ */
+const CRITERIA_SCORES = {
+  type: 'object',
+  description:
+    'Score out of 5 per criterion, from the scores stored for that criterion only. `null` means not enough data ("Chưa đủ dữ liệu"): it is never derived from the star rating, and a null criterion is left out of the combined score and of criterion rankings. Earbuds have no `screen` criterion.',
+  properties: Object.fromEntries(
+    ['screen', 'performance', 'camera', 'battery', 'value'].map((c) => [
+      c,
+      { type: ['number', 'null'], minimum: 0, maximum: 5 },
+    ])
+  ),
+} as const;
+
 const LEADERBOARD_ENTRY = {
   type: 'object',
   additionalProperties: true,
   properties: {
     slug: { type: 'string' },
+    criteria_scores: CRITERIA_SCORES,
     deal_radar: RADAR_REF,
     radar_signal: RADAR_REF,
   },
@@ -727,7 +745,39 @@ function buildBaseRateOpenApiSpec(
                   is_tie: { type: 'boolean' },
                   overall_winner: { type: 'object' },
                   price_comparison: { type: 'object' },
-                  criteria_head_to_head: { type: 'array' },
+                  custom_weighted_basis: {
+                    type: 'string',
+                    enum: ['criteria', 'combined'],
+                    description:
+                      'What `custom_weighted_score_*` weighs: the criteria both products have a real score for (`compared_criteria`), or their combined scores when they share none.',
+                  },
+                  compared_criteria: {
+                    type: 'array',
+                    items: { type: 'string' },
+                  },
+                  criteria_head_to_head: {
+                    type: 'array',
+                    description:
+                      'One row per criterion. When either side has no real score for it, its scores, `delta_10` and `winner_slug` are null: the criterion is not won or lost.',
+                    items: {
+                      type: 'object',
+                      additionalProperties: true,
+                      properties: {
+                        criterion: { type: 'string' },
+                        weight_pct: { type: 'number' },
+                        score_a_5: { type: ['number', 'null'] },
+                        score_a_10: { type: ['number', 'null'] },
+                        score_b_5: { type: ['number', 'null'] },
+                        score_b_10: { type: ['number', 'null'] },
+                        delta_10: { type: ['number', 'null'] },
+                        winner_slug: {
+                          type: ['string', 'null'],
+                          description:
+                            "The winner's slug, `tie`, or null when the criterion was not compared.",
+                        },
+                      },
+                    },
+                  },
                   deal_radar: {
                     type: 'object',
                     properties: {
@@ -740,6 +790,7 @@ function buildBaseRateOpenApiSpec(
                     additionalProperties: true,
                     properties: {
                       slug: { type: 'string' },
+                      criteria_scores: CRITERIA_SCORES,
                       deal_radar: RADAR_REF,
                       radar_signal: RADAR_REF,
                     },
@@ -749,6 +800,7 @@ function buildBaseRateOpenApiSpec(
                     additionalProperties: true,
                     properties: {
                       slug: { type: 'string' },
+                      criteria_scores: CRITERIA_SCORES,
                       deal_radar: RADAR_REF,
                       radar_signal: RADAR_REF,
                     },

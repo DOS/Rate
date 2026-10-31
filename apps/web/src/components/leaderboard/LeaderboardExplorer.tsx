@@ -25,6 +25,12 @@ import {
   type MasterProduct,
 } from '@/lib/rate-domain';
 import {
+  LEADERBOARD_SCORE_CRITERIA,
+  leaderboardCriteriaForCategory,
+  weightedCriteriaScore5,
+  type LeaderboardCriteriaBreakdown,
+} from '@/lib/leaderboard-engine';
+import {
   getRadarSignal,
   radarCsvCells,
   radarExportFields,
@@ -140,13 +146,7 @@ interface RankedProductEntry {
   combinedScore5: number;
   authenticCount: number;
   ignoredCount: number;
-  criteria: {
-    screen: number;
-    performance: number;
-    camera: number;
-    battery: number;
-    value: number;
-  };
+  criteria: LeaderboardCriteriaBreakdown;
   activeScore5: number;
 }
 
@@ -493,19 +493,15 @@ export default function LeaderboardExplorer({
           filteredReviewCounts
         );
         if (activePersona !== 'none' && totalWeight > 0) {
-          const weighted5 = Number(
-            (
-              (base.criteria.screen * customWeights.screen +
-                base.criteria.performance * customWeights.performance +
-                base.criteria.camera * customWeights.camera +
-                base.criteria.battery * customWeights.battery +
-                base.criteria.value * customWeights.value) /
-              totalWeight
-            ).toFixed(2)
+          // The weights apply to the criteria with a real score; a product
+          // with none keeps its combined score (DOS/Rate#1143).
+          const weighted5 = weightedCriteriaScore5(
+            base.criteria,
+            customWeights
           );
           return {
             ...base,
-            activeScore5: weighted5,
+            activeScore5: weighted5 ?? base.combinedScore5,
           };
         }
         return base;
@@ -664,13 +660,10 @@ export default function LeaderboardExplorer({
         entry.activeScore5.toFixed(2),
         entry.userScore5 > 0 ? entry.userScore5.toFixed(1) : '',
         entry.expertScore10 != null ? entry.expertScore10.toFixed(1) : '',
-        entry.criteria.screen > 0 ? entry.criteria.screen.toFixed(1) : '',
-        entry.criteria.performance > 0
-          ? entry.criteria.performance.toFixed(1)
-          : '',
-        entry.criteria.camera > 0 ? entry.criteria.camera.toFixed(1) : '',
-        entry.criteria.battery > 0 ? entry.criteria.battery.toFixed(1) : '',
-        entry.criteria.value > 0 ? entry.criteria.value.toFixed(1) : '',
+        ...LEADERBOARD_SCORE_CRITERIA.map((c) => {
+          const score = entry.criteria[c];
+          return score != null && score > 0 ? score.toFixed(1) : '';
+        }),
         String(sanitizeLeaderboardPriceVnd(entry.product.min_price)),
         ...radarCsvCells(radar),
       ];
@@ -750,7 +743,11 @@ export default function LeaderboardExplorer({
     setActiveCriterion(crit);
   }, []);
 
-  const criterionOptions: Array<{
+  // The criteria the active category has: no screen tab for earbuds
+  // (DOS/Rate#1143).
+  const categoryCriteria: readonly LeaderboardCriterionKey[] =
+    leaderboardCriteriaForCategory(activeCategory);
+  const allCriterionOptions: Array<{
     key: LeaderboardCriterionKey;
     label: string;
     icon: React.ReactNode;
@@ -796,6 +793,13 @@ export default function LeaderboardExplorer({
       icon: <BsGem className="text-info" />,
     },
   ];
+  const criterionOptions = allCriterionOptions.filter(
+    (opt) =>
+      opt.key === 'combined' ||
+      opt.key === 'user' ||
+      opt.key === 'expert' ||
+      categoryCriteria.includes(opt.key)
+  );
 
   return (
     <div>
@@ -1337,35 +1341,39 @@ export default function LeaderboardExplorer({
                             { key: 'battery', label: copy.critLabels.battery },
                             { key: 'value', label: copy.critLabels.value },
                           ] as const
-                        ).map((c) => {
-                          const val = entry.criteria[c.key];
-                          const pct = sanitizeLeaderboardBarPercentage(val);
-                          return (
-                            <div key={c.key} className="mb-1 last:mb-0">
-                              <div
-                                className="d-flex justify-content-between text-white-50"
-                                style={{ fontSize: '0.8125rem' }}
-                              >
-                                <span>{c.label}</span>
-                                <strong className="rate-tabular text-white">
-                                  {formatDecimal(val, locale, 2)}
-                                </strong>
-                              </div>
-                              <div
-                                className="progress rounded-pill"
-                                style={{
-                                  height: 4,
-                                  backgroundColor: 'rgba(255,255,255,0.12)',
-                                }}
-                              >
+                        )
+                          .filter((c) => categoryCriteria.includes(c.key))
+                          .map((c) => {
+                            const val = entry.criteria[c.key];
+                            const pct = sanitizeLeaderboardBarPercentage(val);
+                            return (
+                              <div key={c.key} className="mb-1 last:mb-0">
                                 <div
-                                  className="progress-bar bg-warning"
-                                  style={{ width: `${pct}%` }}
-                                />
+                                  className="d-flex justify-content-between text-white-50"
+                                  style={{ fontSize: '0.8125rem' }}
+                                >
+                                  <span>{c.label}</span>
+                                  <strong className="rate-tabular text-white">
+                                    {val != null
+                                      ? formatDecimal(val, locale, 2)
+                                      : t('criterionNoData')}
+                                  </strong>
+                                </div>
+                                <div
+                                  className="progress rounded-pill"
+                                  style={{
+                                    height: 4,
+                                    backgroundColor: 'rgba(255,255,255,0.12)',
+                                  }}
+                                >
+                                  <div
+                                    className="progress-bar bg-warning"
+                                    style={{ width: `${pct}%` }}
+                                  />
+                                </div>
                               </div>
-                            </div>
-                          );
-                        })}
+                            );
+                          })}
                       </div>
 
                       <div className="d-flex mb-3 flex-wrap gap-1">
@@ -1663,31 +1671,37 @@ export default function LeaderboardExplorer({
                           { key: 'battery', short: t('shortBattery') },
                           { key: 'value', short: t('shortValue') },
                         ] as const
-                      ).map((c) => (
-                        <div
-                          key={c.key}
-                          className="d-flex justify-content-between col-6 pe-2"
-                        >
-                          <span
-                            className="text-muted"
-                            style={{ fontSize: '0.8125rem' }}
+                      )
+                        .filter((c) => categoryCriteria.includes(c.key))
+                        .map((c) => (
+                          <div
+                            key={c.key}
+                            className="d-flex justify-content-between col-6 pe-2"
                           >
-                            {c.short}:
-                          </span>
-                          <strong
-                            className={`rate-tabular ${
-                              activeCriterion === c.key
-                                ? 'text-danger'
-                                : 'text-dark'
-                            }`}
-                            style={{ fontSize: '0.8125rem' }}
-                          >
-                            {entry.criteria[c.key] > 0
-                              ? formatDecimal(entry.criteria[c.key], locale, 2)
-                              : t('unratedShort')}
-                          </strong>
-                        </div>
-                      ))}
+                            <span
+                              className="text-muted"
+                              style={{ fontSize: '0.8125rem' }}
+                            >
+                              {c.short}:
+                            </span>
+                            <strong
+                              className={`rate-tabular ${
+                                activeCriterion === c.key
+                                  ? 'text-danger'
+                                  : 'text-dark'
+                              }`}
+                              style={{ fontSize: '0.8125rem' }}
+                            >
+                              {(entry.criteria[c.key] ?? 0) > 0
+                                ? formatDecimal(
+                                    entry.criteria[c.key] ?? 0,
+                                    locale,
+                                    2
+                                  )
+                                : t('criterionNoData')}
+                            </strong>
+                          </div>
+                        ))}
                     </div>
                   </div>
                 </div>

@@ -124,23 +124,21 @@ export function rankProductsForDealFinder(
 
     const item = scoreMasterProductForLeaderboard(p);
     const c = item.criteria;
+    // A persona leans on one criterion only where the product has a real
+    // score for it; otherwise the combined score stands (DOS/Rate#1143).
+    const lean = (score: number | null, share: number) =>
+      score != null && score > 0
+        ? Number((item.combinedScore5 * (1 - share) + score * share).toFixed(2))
+        : item.combinedScore5;
     let personaScore5 = item.combinedScore5;
     if (persona === 'value_hunter') {
-      personaScore5 = Number(
-        (item.combinedScore5 * 0.45 + c.value * 0.55).toFixed(2)
-      );
+      personaScore5 = lean(c.value, 0.55);
     } else if (persona === 'photography') {
-      personaScore5 = Number(
-        (item.combinedScore5 * 0.4 + c.camera * 0.6).toFixed(2)
-      );
+      personaScore5 = lean(c.camera, 0.6);
     } else if (persona === 'gaming') {
-      personaScore5 = Number(
-        (item.combinedScore5 * 0.4 + c.performance * 0.6).toFixed(2)
-      );
+      personaScore5 = lean(c.performance, 0.6);
     } else if (persona === 'endurance') {
-      personaScore5 = Number(
-        (item.combinedScore5 * 0.4 + c.battery * 0.6).toFixed(2)
-      );
+      personaScore5 = lean(c.battery, 0.6);
     }
 
     const rawMaxP = Number(p.max_price);
