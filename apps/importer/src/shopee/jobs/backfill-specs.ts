@@ -260,7 +260,11 @@ export async function auditMasterSpecs(supabase: RateSupabaseClient): Promise<nu
     if (!row.specifications?.camera?.main_camera?.trim()) {
       failures.push(`${label} is missing camera.main_camera`);
     }
-    if (!row.specifications?.camera?.second_camera?.trim()) {
+    // A phone with one rear camera (iPhone 17e, iPhone Air) has no second one to name.
+    if (
+      !/^single\b/i.test(row.specifications?.camera?.rear_setup?.trim() ?? '') &&
+      !row.specifications?.camera?.second_camera?.trim()
+    ) {
       failures.push(`${label} is missing camera.second_camera`);
     }
   }

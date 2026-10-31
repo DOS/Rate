@@ -1,4 +1,5 @@
 import { splitModelKey, type ProductSpecifications, type KeySpecs } from '@repo/shared-data';
+import { CATALOG_EXPANSION_2026_SEEDS } from './flagship-seed-catalog-2026.js';
 import { SOURCED_SEEDS_2026 } from './flagship-seed-sourced-2026.js';
 
 /**
@@ -3563,6 +3564,9 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
   // Sourced iPhone 18 Pro, 18 Pro Max and Galaxy S26 Ultra 256GB seeds (flagship-seed-sourced-
   // 2026.ts), in place of the earlier unsourced entries.
   ...SOURCED_SEEDS_2026,
+  // Catalog expansion A1-A3 (draft): every other storage of these lines, plus the iPhone 17
+  // and Galaxy S26 / S26+ families (flagship-seed-catalog-2026.ts).
+  ...CATALOG_EXPANSION_2026_SEEDS,
 ];
 
 /**

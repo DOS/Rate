@@ -2164,9 +2164,9 @@ async function runSuite() {
   assert.equal(paCatalogItems.length, 1);
   assert.equal(paCatalogItems[0]?.name, 'Samsung Galaxy S26 Ultra');
 
-  // Ensure all 14 canonical 2026 upstream devices across 5 categories are present in FLAGSHIP_DEVICES_TO_SEED (33 seed entries)
+  // Ensure all 14 canonical 2026 upstream devices across 5 categories are present in FLAGSHIP_DEVICES_TO_SEED (69 seed entries with the wave 1a catalog expansion)
   assert.equal(UPSTREAM_2026_ARENA_REFERENCE_URLS.length, 14);
-  assert.equal(FLAGSHIP_DEVICES_TO_SEED.length, 33);
+  assert.equal(FLAGSHIP_DEVICES_TO_SEED.length, 69);
   const seededModelKeys = new Set(FLAGSHIP_DEVICES_TO_SEED.map(d => d.model_key));
   for (const ref of UPSTREAM_2026_ARENA_REFERENCE_URLS) {
     assert.ok(
@@ -2536,6 +2536,36 @@ async function runSuite() {
       } as never),
     /missing camera\.second_camera/,
     'auditMasterSpecs must reject whitespace-only camera.second_camera (#503)'
+  );
+  // A phone with one rear camera (iPhone 17e, iPhone Air) passes without a second one;
+  // any other setup still needs it (DOS/Rate#1455).
+  const auditOne = (camera: Record<string, string>) =>
+    auditMasterSpecs({
+      from: () => ({
+        select: () => ({
+          order: () => ({
+            range: async (from: number) => ({
+              data:
+                from === 0
+                  ? [
+                      {
+                        id: 'm-cam',
+                        name: 'Camera Device',
+                        model_key: 'test:cam:256gb',
+                        specifications: { ...phoneArenaFallbackSpec.specifications, camera },
+                      },
+                    ]
+                  : [],
+              error: null,
+            }),
+          }),
+        }),
+      }),
+    } as never);
+  assert.equal(await auditOne({ rear_setup: 'Single camera', main_camera: '48 MP Fusion' }), 1);
+  await assert.rejects(
+    () => auditOne({ rear_setup: 'Dual camera', main_camera: '48 MP Fusion' }),
+    /missing camera\.second_camera/
   );
 
   console.log(
