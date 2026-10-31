@@ -518,7 +518,7 @@
     "updatingLabTestsDesc": "Until the expert score is ready, the combined score uses only genuine buyer ratings (fake reviews filtered out).",
     "expertReviewsCountNote": "{count, plural, one {# expert evaluation} other {# expert evaluations}}",
     "zeroAdDilutionNote": "Undiluted by sponsored or affiliate reviews",
-    "criteriaMatrixHeading": "Scores across 5 experience criteria",
+    "criteriaMatrixHeading": "Scores by experience criterion",
     "normalizedByHelpfulnessBadge": "Normalized by helpfulness weight",
     "notAvailableShort": "N/A",
     "aiAuthenticityHeading": "AI review authenticity check and experience summary",

@@ -29,6 +29,8 @@ import {
   type ReviewAnalysisSummary,
   type ReviewItem,
 } from '@/lib/rate-domain';
+import { leaderboardCriteriaForCategory } from '@/lib/leaderboard-engine';
+import type { CanonicalCategorySlug } from '@/lib/rate-domain-core';
 import {
   RADAR_CSV_HEADERS,
   radarCsvCells,
@@ -62,6 +64,8 @@ type SortMode = 'weight_desc' | 'newest' | 'rating_desc' | 'rating_asc';
 
 export interface JReviewsSectionProps {
   masterProductId?: string;
+  /** Shows only this category's criteria: no screen for earbuds. */
+  categorySlug?: CanonicalCategorySlug;
   productSlug?: string;
   productName: string;
   averageRating: number;
@@ -143,6 +147,7 @@ export default function JReviewsSection({
   reviews: initialReviews,
   summary,
   radarSignal,
+  categorySlug,
 }: JReviewsSectionProps) {
   const t = useTranslations('reviews');
   const tAnalyzer = useTranslations('analyzerCopy');
@@ -156,6 +161,13 @@ export default function JReviewsSection({
       })),
     [t]
   );
+  // The scores shown: the category's own criteria, like the leaderboard and
+  // versus (DOS/Rate#1553). The review form keeps all five for now.
+  const shownCriteriaMeta = useMemo(() => {
+    if (!categorySlug) return criteriaMeta;
+    const own: readonly string[] = leaderboardCriteriaForCategory(categorySlug);
+    return criteriaMeta.filter((c) => own.includes(c.key));
+  }, [criteriaMeta, categorySlug]);
 
   const flagMetaMap = useMemo<
     Record<
@@ -326,7 +338,7 @@ export default function JReviewsSection({
     });
     const starAnomaly = detectStarDistributionAnomaly(reviews);
 
-    const criteriaAverages = criteriaMeta.map((crit) => {
+    const criteriaAverages = shownCriteriaMeta.map((crit) => {
       let wSum = 0;
       let valSum = 0;
       for (const r of validUserReviews) {
@@ -367,7 +379,7 @@ export default function JReviewsSection({
     averageRating,
     userRatingWeighted,
     expertRating,
-    criteriaMeta,
+    shownCriteriaMeta,
     t,
   ]);
 
@@ -1632,7 +1644,7 @@ export default function JReviewsSection({
                     {rev.criteria_ratings &&
                       Object.keys(rev.criteria_ratings).length > 0 && (
                         <div className="d-flex mb-2 flex-wrap gap-1">
-                          {criteriaMeta.map((crit) => {
+                          {shownCriteriaMeta.map((crit) => {
                             const val = rev.criteria_ratings?.[crit.key];
                             if (val == null) return null;
                             return (

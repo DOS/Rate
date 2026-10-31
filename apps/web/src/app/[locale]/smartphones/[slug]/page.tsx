@@ -120,6 +120,7 @@ import {
 import {
   firstImageUrl,
   foreignCategoryProductHref,
+  isCanonicalCategorySlug,
   usableImageUrls,
   productImageUrl,
   storeImageSrcSet,
@@ -1434,6 +1435,9 @@ export async function ProductDetailView({
           <div className="mb-5">
             <JReviewsSection
               masterProductId={product.id}
+              categorySlug={
+                isCanonicalCategorySlug(categorySlug) ? categorySlug : undefined
+              }
               productSlug={product.slug}
               productName={product.name}
               averageRating={normalizeCompareFiveStarRating(

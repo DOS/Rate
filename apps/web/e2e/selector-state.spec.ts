@@ -10,7 +10,6 @@ test('leaderboard selectors expose their state', async ({ page }) => {
   const groups = [
     page.getByRole('group', { name: 'Chọn ngành hàng' }),
     page.getByRole('group', { name: /Xếp hạng theo tiêu chí/ }),
-    page.getByRole('group', { name: /Gợi ý theo nhu cầu/ }),
     page.getByRole('group', { name: 'Lọc theo tầm giá' }),
   ];
   for (const group of groups) {
@@ -22,33 +21,35 @@ test('leaderboard selectors expose their state', async ({ page }) => {
   );
 
   // Choosing a price segment moves the pressed state.
-  const price = groups[3]!;
+  const price = groups[2]!;
   const unpressed = price.getByRole('button', { pressed: false }).first();
   const label = (await unpressed.innerText()).trim();
   await unpressed.click();
   await expect(price.getByRole('button', { pressed: true })).toHaveText(label);
+});
 
-  // The customize button reports the weight panel it opens.
-  const customize = page.locator(
-    'button[aria-controls="leaderboard-weight-sliders"]'
+// No seeded product has a criterion score, as on rate.vn today: the criterion
+// tabs, the persona presets and the weight sliders would only empty the list,
+// so they are not shown, and a criterion URL opens on the combined score
+// (DOS/Rate#1553).
+test('criteria with no scored product get no tab or persona', async ({
+  page,
+}) => {
+  expect(
+    (await page.goto('/leaderboard?cat=smartphones&criterion=camera'))?.status()
+  ).toBe(200);
+  const criteria = page.getByRole('group', { name: /Xếp hạng theo tiêu chí/ });
+  await expect(criteria.getByRole('button')).toHaveCount(3);
+  await expect(criteria.getByRole('button', { pressed: true })).toContainText(
+    'Điểm tổng hợp'
   );
-  await expect(customize).toHaveAttribute('aria-expanded', 'false');
-  await customize.click();
-  await expect(customize).toHaveAttribute('aria-expanded', 'true');
-  await expect(page.locator('#leaderboard-weight-sliders')).toBeVisible();
-
-  // Moving a slider makes the weights custom: no preset is pressed, and the
-  // customize button, coloured for it, says so in its name.
-  await expect(customize).not.toHaveAccessibleName(/Trọng số cá nhân hóa/);
-  const slider = page
-    .locator('#leaderboard-weight-sliders input[type="range"]')
-    .first();
-  await slider.focus();
-  await page.keyboard.press('ArrowRight');
-  await expect(customize).toHaveAccessibleName(/Trọng số cá nhân hóa/);
-  await expect(groups[2]!.getByRole('button', { pressed: true })).toHaveCount(
-    0
-  );
+  await expect(page).toHaveURL(/[?&]criterion=combined$/);
+  await expect(
+    page.getByRole('group', { name: /Gợi ý theo nhu cầu/ })
+  ).toHaveCount(0);
+  await expect(
+    page.locator('button[aria-controls="leaderboard-weight-sliders"]')
+  ).toHaveCount(0);
 });
 
 test('the compare category switcher exposes its state', async ({ page }) => {
