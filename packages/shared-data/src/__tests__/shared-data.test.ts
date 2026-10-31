@@ -1381,6 +1381,334 @@ function testLlmReviewSummaryScope(): void {
   );
 }
 
+function testRatingCriteriaAndReviewForm(): void {
+  // D1: every list is weighted to 100, with unique keys, both labels and
+  // exactly one required criterion.
+  for (const slug of rules.RATING_CRITERIA_CATEGORIES) {
+    const criteria = rules.getRatingCriteria(slug);
+    assert.equal(
+      criteria.reduce((sum, criterion) => sum + criterion.weight, 0),
+      100,
+      slug
+    );
+    assert.equal(new Set(criteria.map((cr) => cr.key)).size, criteria.length);
+    for (const criterion of criteria) {
+      assert.ok(criterion.label.vi && criterion.label.en, criterion.key);
+      assert.ok(criterion.weight > 0, criterion.key);
+    }
+    assert.equal(criteria.filter((cr) => cr.required).length, 1, slug);
+  }
+  assert.equal(rules.RATING_CRITERIA_VERSION, 1);
+  // Earbuds rate sound, not a display; an unknown category rates as a phone.
+  const earbudKeys = rules.getRatingCriteria('earbuds').map((cr) => cr.key);
+  assert.ok(earbudKeys.includes('sound') && !earbudKeys.includes('display'));
+  assert.deepEqual(
+    rules.getRatingCriteria('cameras'),
+    rules.getRatingCriteria('smartphones')
+  );
+  assert.deepEqual(
+    rules.getRatingCriteria(null),
+    rules.getRatingCriteria('smartphones')
+  );
+
+  // The review star is the weighted average, at one decimal: a phone with
+  // performance 5 (20), camera 4 (20), battery 3 (20), display 5 (15),
+  // design 4 (10) and value 4 (15) is 415 / 100 = 4.15, shown as 4.2.
+  const phone = {
+    performance: 5,
+    camera: 4,
+    battery: 3,
+    display: 5,
+    design: 4,
+    value: 4,
+  };
+  assert.equal(rules.weightedReviewStar('smartphones', phone), 4.2);
+  // Skipped criteria leave the weights of the rated ones: (5*20 + 4*15) / 35.
+  assert.equal(
+    rules.weightedReviewStar('smartphones', { performance: 5, value: 4 }),
+    4.6
+  );
+  // Unknown keys and bad stars are ignored; nothing valid gives null.
+  assert.equal(
+    rules.weightedReviewStar('smartphones', { screen: 5, value: 7 }),
+    null
+  );
+  assert.equal(rules.weightedReviewStar('earbuds', {}), null);
+
+  // D5: up to two criteria skipped, value never; stars 1-5 in half steps.
+  assert.deepEqual(rules.validateCriteriaRatings('smartphones', phone), []);
+  assert.deepEqual(
+    rules.validateCriteriaRatings('smartphones', {
+      performance: 4.5,
+      camera: 4,
+      battery: 3,
+      display: 5,
+      value: 4,
+    }),
+    []
+  );
+  assert.deepEqual(
+    rules.validateCriteriaRatings('smartphones', {
+      performance: 5,
+      camera: 4,
+      battery: 3,
+      display: 5,
+      design: 4,
+    }),
+    [{ kind: 'missing_required', key: 'value' }]
+  );
+  assert.deepEqual(
+    rules.validateCriteriaRatings('smartphones', {
+      performance: 5,
+      camera: 4,
+      value: 4,
+    }),
+    [{ kind: 'too_many_skipped', skipped: 3 }]
+  );
+  assert.deepEqual(
+    rules.validateCriteriaRatings('earbuds', {
+      sound: 5,
+      anc: 4.3,
+      battery: 0,
+      comfort: 5,
+      screen: 4,
+      value: 4,
+    }),
+    [
+      { kind: 'bad_star', key: 'anc' },
+      { kind: 'bad_star', key: 'battery' },
+      { kind: 'unknown_key', key: 'screen' },
+    ]
+  );
+  assert.deepEqual(
+    rules.validateCriteriaRatings('services', {
+      service_quality: 5,
+      attitude: 4,
+      speed: 4,
+    }),
+    [{ kind: 'missing_required', key: 'price' }]
+  );
+
+  // Legacy five keys map per category; a key with no counterpart is dropped
+  // and nothing is inferred for the new criteria.
+  const legacy = {
+    screen: 4.3,
+    performance: 5,
+    camera: 4,
+    battery: 3,
+    value: 4,
+  };
+  assert.deepEqual(rules.mapLegacyCriteriaRatings('smartphones', legacy), {
+    display: 4.3,
+    performance: 5,
+    camera: 4,
+    battery: 3,
+    value: 4,
+  });
+  assert.deepEqual(rules.mapLegacyCriteriaRatings('earbuds', legacy), {
+    sound: 4.3,
+    anc: 4,
+    battery: 3,
+    value: 4,
+  });
+  assert.deepEqual(rules.mapLegacyCriteriaRatings('smartwatches', legacy), {
+    display: 4.3,
+    battery: 3,
+    value: 4,
+  });
+  assert.deepEqual(
+    rules.mapLegacyCriteriaRatings('laptops', { screen: 9, value: 'x' }),
+    {}
+  );
+
+  // D5 text: verdict, pros and cons.
+  const review = {
+    verdict: 'Hợp người chơi game, ai cần sạc nhanh nên cân nhắc.',
+    pros: ['Chơi game mượt, ít nóng', 'Ảnh đêm rõ'],
+    cons: ['Sạc chậm so với máy cùng giá'],
+  };
+  assert.deepEqual(rules.validateReviewText(review), []);
+  assert.deepEqual(
+    rules.validateReviewText({ verdict: 'Tốt', pros: [], cons: [] }),
+    [
+      { kind: 'verdict_length', length: 3 },
+      { kind: 'points_count', list: 'pros', count: 0 },
+      { kind: 'points_count', list: 'cons', count: 0 },
+    ]
+  );
+  for (const dodge of [
+    'Không có',
+    'không có gì để chê',
+    'Chưa thấy',
+    'Hiện tại chưa thấy nhược điểm nào',
+    'ko co',
+    'Không có điểm trừ',
+    'None.',
+    '...',
+    // Reviews of #1548.
+    'Không có nhược điểm nào cả',
+    'chua co nhuoc diem nao het',
+    'Không có gì đáng chê',
+    'không chê được gì',
+    'Ko có gì để chê nha',
+    'không có ạ',
+    'Chả có gì',
+    'Khum có',
+    'kcj',
+    'Chưa phát hiện ra',
+    'Chưa gặp vấn đề gì',
+    'Không có gì để phàn nàn',
+    'Mọi thứ đều ổn',
+    'no complaints',
+    '10/10',
+    'aaaaa',
+    'Khô​ng có',
+    'ＫＨÔＮＧ CÓ',
+    // Round 2 of #1548.
+    'Mình không thấy gì để chê',
+    'Em chưa thấy gì',
+    'Không có gì chê',
+    'Không có điểm gì để chê',
+    'Không có gì để nói',
+    'Không có ý kiến',
+    'Rất tốt',
+    'Everything is fine',
+    'hong co',
+  ]) {
+    assert.ok(rules.isEvasiveCon(dodge), dodge);
+  }
+  for (const real of [
+    'Giá hơi cao',
+    'Không có củ sạc trong hộp',
+    'Chưa có bản màu xanh',
+    'Không chống nước',
+    'Không có jack 3.5mm',
+    'Chưa hỗ trợ eSIM',
+    'Pin không trâu',
+    'Không có NFC',
+    'Chưa có gì nổi bật',
+    'K có sạc',
+    // Round 2 of #1548: other diacritics are other words.
+    'Hỏng hết',
+    'Hỏng luôn',
+    'Vẫn hỏng',
+    'Không gập',
+    'Chưa có lời',
+    'Không có lõi',
+    'Mọi thứ đều ồn',
+    'Chả cá',
+  ]) {
+    assert.ok(!rules.isEvasiveCon(real), real);
+  }
+  assert.deepEqual(
+    rules.validateReviewText({
+      ...review,
+      pros: ['Màn đẹp, sáng', 'màn đẹp sáng'],
+      cons: ['Không có gì', 'Màn đẹp, sáng!'],
+    }),
+    [
+      { kind: 'duplicate_point', list: 'pros', index: 1 },
+      { kind: 'evasive_con', index: 0 },
+      { kind: 'pro_and_con', index: 1 },
+    ]
+  );
+  assert.deepEqual(
+    rules.validateReviewText({
+      ...review,
+      pros: ['Tốt', 'x'.repeat(151), 'a', 'b1234', 'c1234', 'd1234'],
+    }),
+    [
+      { kind: 'points_count', list: 'pros', count: 6 },
+      { kind: 'point_length', list: 'pros', index: 0 },
+      { kind: 'point_length', list: 'pros', index: 1 },
+      { kind: 'point_length', list: 'pros', index: 2 },
+    ]
+  );
+  // Reviews of #1548: lines with no words, lengths as the writer sees them
+  // (three emoji are 3, a decomposed "Pin ổn" is 6),
+  // diacritics kept when comparing, and malformed bodies that never throw.
+  assert.deepEqual(
+    rules.validateReviewText({
+      verdict: '.'.repeat(25),
+      pros: ['!!!!!!', '🔥🔥🔥🔥🔥', 'Màn hình sắc nét'],
+      cons: ['Màn hình sạc nét'],
+    }),
+    [
+      { kind: 'no_content', list: 'verdict', index: 0 },
+      { kind: 'no_content', list: 'pros', index: 0 },
+      { kind: 'no_content', list: 'pros', index: 1 },
+    ]
+  );
+  assert.deepEqual(
+    rules.validateReviewText({
+      ...review,
+      pros: ['😀😀😀', 'Pin ổn'.normalize('NFD')],
+    }),
+    [{ kind: 'point_length', list: 'pros', index: 0 }]
+  );
+  assert.deepEqual(
+    rules.validateReviewText(
+      null as unknown as Parameters<typeof rules.validateReviewText>[0]
+    ),
+    [
+      { kind: 'verdict_length', length: 0 },
+      { kind: 'points_count', list: 'pros', count: 0 },
+      { kind: 'points_count', list: 'cons', count: 0 },
+    ]
+  );
+
+  // Reviews of #1548: prototype keys are not categories or ratings, null is a
+  // skipped criterion, and legacy 0.1-step stars count in the review star.
+  for (const slug of ['toString', '__proto__', 'constructor']) {
+    assert.deepEqual(
+      rules.getRatingCriteria(slug),
+      rules.getRatingCriteria('smartphones'),
+      slug
+    );
+    assert.equal(rules.hasRatingCriteria(slug), false, slug);
+    assert.deepEqual(
+      rules.validateCriteriaRatings(slug, phone),
+      [],
+      `validate ${slug}`
+    );
+    assert.deepEqual(
+      rules.mapLegacyCriteriaRatings(slug, { value: 5 }),
+      { value: 5 },
+      `legacy ${slug}`
+    );
+  }
+  assert.equal(rules.hasRatingCriteria('earbuds'), true);
+  assert.equal(rules.hasRatingCriteria('service'), false);
+  assert.equal(
+    rules.weightedReviewStar(
+      'smartphones',
+      Object.create({ value: 5 }) as Record<string, number>
+    ),
+    null
+  );
+  assert.deepEqual(
+    rules.validateCriteriaRatings('smartphones', {
+      ...phone,
+      design: null,
+      camera: null,
+    }),
+    []
+  );
+  const legacyStars = rules.mapLegacyCriteriaRatings('smartphones', {
+    screen: 1.3,
+    performance: 5,
+    camera: 5,
+    battery: 5,
+    value: 5,
+  });
+  // (1.3*15 + 5*20 + 5*20 + 5*20 + 5*15) / 90 = 394.5 / 90 = 4.38.
+  assert.equal(rules.weightedReviewStar('smartphones', legacyStars), 4.4);
+  // An oversized con is never a dodge and is checked in linear time.
+  const started = Date.now();
+  assert.ok(!rules.isEvasiveCon('khong ' + 'gi '.repeat(50_000) + 'x'));
+  assert.ok(Date.now() - started < 1000, 'linear on an oversized con');
+}
+
 function main(): void {
   console.log('🧪 Running @repo/shared-data unit tests...');
   testVersionAndZeroStrapiExports();
@@ -1413,6 +1741,10 @@ function main(): void {
   console.log('  ✅ [9/9] Category spec templates (DOS/Rate#1142) verified');
   testLlmReviewSummaryScope();
   console.log('  ✅ [10/10] LLM review summary scope (DOS/Rate#1244) verified');
+  testRatingCriteriaAndReviewForm();
+  console.log(
+    '  ✅ [11/11] Rating criteria and review form rules (DOS/Rate#1542) verified'
+  );
   console.log('🎉 All @repo/shared-data tests passed!');
 }
 

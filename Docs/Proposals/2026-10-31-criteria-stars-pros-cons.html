@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="vi" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="color-scheme" content="dark" />
+  <title>Sao theo tiêu chí và ưu nhược</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0f1113;
+      --surface: #161a1e;
+      --surface-2: #1d2228;
+      --border: #2a313a;
+      --text: #e8edf2;
+      --muted: #9ba5b0;
+      --accent: #FF2E29;
+      --accent-soft: rgba(255, 46, 41, 0.14);
+      --green: #22c55e;
+      --green-soft: rgba(34, 197, 94, 0.12);
+      --red: #f87171;
+      --red-soft: rgba(248, 113, 113, 0.12);
+      --amber: #f59e0b;
+      --amber-soft: rgba(245, 158, 11, 0.14);
+      --star: #fbbf24;
+      --code-bg: #0b0d0f;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 32px 16px 64px;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Inter, sans-serif;
+      line-height: 1.65;
+    }
+    .container { max-width: 960px; margin: 0 auto; }
+    h1 { font-size: 28px; margin: 12px 0 8px; letter-spacing: -0.02em; }
+    h2 { font-size: 20px; margin: 40px 0 12px; padding-bottom: 8px; border-bottom: 1px solid var(--border); color: #fff; }
+    h3 { font-size: 16px; margin: 24px 0 8px; color: #fff; }
+    p, li { color: var(--text); }
+    .muted { color: var(--muted); }
+    .badge { display: inline-block; padding: 4px 10px; border-radius: 6px; font-size: 12px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; }
+    .badge-accent { background: var(--accent-soft); color: var(--accent); border: 1px solid rgba(255,46,41,0.35); }
+    .badge-amber { background: var(--amber-soft); color: var(--amber); border: 1px solid rgba(245,158,11,0.35); }
+    .card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 16px 18px; margin: 14px 0; }
+    .card.warn { border-color: rgba(245,158,11,0.45); }
+    .table-wrap { overflow-x: auto; margin: 12px 0; }
+    table { width: 100%; border-collapse: collapse; font-size: 14px; min-width: 620px; }
+    th, td { border: 1px solid var(--border); padding: 8px 10px; text-align: left; vertical-align: top; }
+    th { background: var(--surface-2); color: #fff; }
+    code { background: var(--code-bg); border: 1px solid var(--border); border-radius: 4px; padding: 1px 5px; font-size: 13px; overflow-wrap: anywhere; }
+    pre { background: var(--code-bg); border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; overflow-x: auto; font-size: 13px; line-height: 1.5; }
+    .q { border-left: 3px solid var(--accent); padding-left: 12px; margin: 16px 0; }
+    .q strong { color: #fff; }
+    .rec-line { color: var(--green); font-weight: 600; }
+    a { color: #ff6b66; }
+
+    /* UI mock-ups */
+    .mock { background: #fff; color: #1a1d21; border-radius: 12px; padding: 18px; margin: 16px 0; font-size: 14px; }
+    .mock h4 { margin: 0 0 6px; font-size: 18px; color: #111; }
+    .mock .sub { color: #5b6470; font-size: 13px; }
+    .mock .headline { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+    .mock .big { font-size: 36px; font-weight: 800; color: #111; }
+    .mock .stars { color: #f59e0b; letter-spacing: 1px; }
+    .mock .verdict { margin: 10px 0 14px; color: #222; }
+    .mock .crit { display: grid; grid-template-columns: minmax(110px, 1.2fr) 3fr 54px; gap: 8px; align-items: center; padding: 6px 0; border-top: 1px solid #eceef1; }
+    .mock .bar { height: 8px; background: #eceef1; border-radius: 4px; overflow: hidden; }
+    .mock .bar span { display: block; height: 100%; background: #FF2E29; }
+    .mock .w { color: #8a929c; font-size: 12px; }
+    .mock .na { color: #8a929c; font-style: italic; }
+    .mock .pc { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 8px 0 4px; }
+    .mock .pc ul { margin: 0; padding-left: 0; list-style: none; }
+    .mock .pc li { color: #1a1d21; padding: 2px 0 2px 22px; position: relative; }
+    .mock .pro li::before { content: "+"; position: absolute; left: 4px; color: #16a34a; font-weight: 800; }
+    .mock .con li::before { content: "\2212"; position: absolute; left: 4px; color: #dc2626; font-weight: 800; }
+    .mock .pc .t { font-weight: 700; font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 4px; }
+    .mock .pro .t { color: #16a34a; }
+    .mock .con .t { color: #dc2626; }
+    .mock .cnt { color: #8a929c; font-size: 12px; }
+    .mock .chip { display: inline-block; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 999px; margin-right: 4px; }
+    .mock .chip.g { background: #dcfce7; color: #166534; }
+    .mock .chip.b { background: #e0e7ff; color: #3730a3; }
+    .mock .chip.a { background: #fef3c7; color: #92400e; }
+    .mock .rc { border: 1px solid #e3e6ea; border-radius: 10px; padding: 14px; margin-top: 8px; }
+    .mock .mini { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 4px 12px; font-size: 13px; margin: 8px 0; }
+    .mock .foot { display: flex; gap: 14px; color: #5b6470; font-size: 13px; margin-top: 10px; flex-wrap: wrap; }
+    @media (max-width: 560px) {
+      .mock .pc { grid-template-columns: 1fr; }
+      .mock .crit { grid-template-columns: 1fr 1.4fr 44px; }
+    }
+  </style>
+</head>
+<body>
+<div class="container">
+  <span class="badge badge-accent">Đề xuất thiết kế</span>
+  <span class="badge badge-amber">Cần JOY quyết</span>
+  <h1>Sao theo từng tiêu chí, ưu nhược điểm cho mỗi review, và điểm giá trị review</h1>
+  <p class="muted">Ngày 31/10/2026. Người soạn: Core (Rate). Issue #1531 (thiết kế sao theo tiêu chí, ưu nhược điểm, điểm giá trị review). Đồng thời giải quyết #1143 (điểm tiêu chí suy ra từ số sao nên dồn về 5.00) và câu hỏi "một con số điểm" của #1470 (PR #1478 đang giữ). Đây chỉ là thiết kế: chưa sửa code, chưa đụng database.</p>
+
+  <h2>0. Tóm tắt trong một phút</h2>
+  <ul>
+    <li><strong>Tiêu chí theo ngành hàng.</strong> Mỗi ngành hàng có một danh sách tiêu chí riêng (điện thoại: Màn hình, Hiệu năng, Camera, Pin, Thiết kế, Đáng tiền; tai nghe: Chất âm, Chống ồn, Mic...), mỗi tiêu chí có một trọng số. Danh sách nằm trong code ở <code>packages/shared-data</code>, có số phiên bản.</li>
+    <li><strong>Review trên Rate.</strong> Người viết chấm sao từng tiêu chí. Số sao tổng của review được <em>tính</em> từ các tiêu chí theo trọng số, giống JReviews. Người viết bắt buộc ghi một câu kết luận, ít nhất 1 ưu điểm và 1 nhược điểm; ưu nhược riêng cho từng tiêu chí thì không bắt buộc.</li>
+    <li><strong>Review lấy từ nguồn khác</strong> (Shopee, chuyên gia bên ngoài sau này): chỉ có một số sao tổng, ưu nhược không bắt buộc.</li>
+    <li><strong>Một con số điểm cho mọi trang</strong> (#1470): điểm Bayes (ước lượng có "kéo về trung bình" khi ít review) tính trên số sao tổng của mọi review hợp lệ, lưu sẵn trên <code>master_products</code>, làm tròn 1 chữ số. Điểm chuyên gia hiện riêng, có nhãn.</li>
+    <li><strong>Điểm tiêu chí thật</strong> (#1143): chỉ tính từ review có chấm tiêu chí đó. Không đủ dữ liệu thì hiện "Chưa đủ dữ liệu", không bịa số. Tiêu chí không thuộc ngành hàng thì ẩn.</li>
+    <li><strong>Ưu nhược của sản phẩm</strong>: code gom các dòng ưu nhược của mọi review theo tiêu chí, bỏ trùng, đếm số người nhắc. AI chỉ viết lại mỗi cụm thành một câu gọn. Một nhược điểm cần ít nhất 2 người khác nhau nhắc mới hiện.</li>
+    <li><strong>Điểm giá trị review</strong> (0 đến 100): đo mức đầy đủ và hữu ích của một review. Dùng để xếp review, gắn nhãn chất lượng và tính điểm thưởng sau này. Nó chỉ làm trọng số của review trong điểm sản phẩm tăng nhẹ: review không có gì giữ nguyên, review đầy đủ nhất nặng hơn 25%.</li>
+    <li><strong>Cần migration DOS-Me</strong> cho phần lưu trữ (bảng dòng ưu nhược, cột điểm trên review và sản phẩm). Repo này không chạy DDL. Có một bước làm ngay không cần database: sửa #1143 trên web.</li>
+  </ul>
+
+  <p class="muted"><strong>Quy ước và từ ngữ.</strong> Công thức và bảng dùng dấu phẩy thập phân (4,2); con số hiện cho người mua dùng dấu chấm như trên rate.vn hiện nay (4.6). "Seeding": review được trả tiền hoặc dàn dựng để khen. "Cổng chặn": điều kiện đưa trọng số review về 0 (giả, chép, viết cho có). "Cận dưới Wilson": cách tính tỷ lệ vote hữu ích có tính đến việc ít vote thì kém chắc chắn, nên 2 vote trên 2 không thắng 90 vote trên 100. "Pipeline": chuỗi bước xử lý chạy tự động theo đợt.</p>
+
+  <h2>1. Hiện trạng (đọc code, chỉ đọc)</h2>
+  <div class="table-wrap"><table>
+    <tr><th>Phần</th><th>Đang có</th><th>Thiếu hoặc sai</th></tr>
+    <tr><td>Chấm tiêu chí khi viết review</td><td>Form trong <code>JReviewsSection.tsx</code> có 5 hàng nút chọn 1 đến 5 sao (screen, performance, camera, battery, value), mặc định 5 sao. Số sao của review là trung bình cộng, làm tròn thành số nguyên. API <code>POST /api/v1/rate/reviews</code> lọc khoá tiêu chí rồi gọi RPC <code>rate.submit_community_review</code>, lưu vào cột <code>rate.reviews.criteria_ratings</code> (jsonb). RPC không kiểm khoá.</td><td>Cùng 5 tiêu chí cho mọi ngành hàng (tai nghe chỉ đổi nhãn). Không có trọng số. Tiêu chí người viết không bấm vẫn tính 5 sao. API tin số sao tổng trình duyệt gửi lên, chỉ tự tính khi thiếu. Cột <code>rating_star</code> là số nguyên 1 đến 5. Không có ưu nhược trên review.</td></tr>
+    <tr><td>Điểm tiêu chí của sản phẩm</td><td><code>computeJReviewsCriteriaScores</code> trong <code>leaderboard-engine.ts</code>: đọc <code>expert_criteria_scores</code>, nếu không có thì lấy số sao cộng một độ lệch tự đặt theo thông số và giá.</td><td>Chính là lỗi #1143: điểm bịa, dồn về 5.00, hoà và thứ hạng giả. Điểm tiêu chí bịa này còn chiếm 20% điểm ghép của bảng xếp hạng. Trong repo này không có code nào ghi <code>expert_criteria_scores</code>; 36 sản phẩm có điểm chuyên gia từ file seed (đề xuất kiểm tra nguồn gốc catalog ngày 16/10).</td></tr>
+    <tr><td>Điểm tổng</td><td>Trang sản phẩm dùng điểm Bayes (#1144: k = 3, trung bình mặc định 4,2), web tính từ danh sách review. Database chỉ lưu <code>user_rating_weighted</code>: trung bình có trọng số, không Bayes. Bảng xếp hạng dùng một điểm ghép (người dùng, chuyên gia, tiêu chí).</td><td>Lỗi #1470: cùng một máy hiện 4.8, 4.98, 5.0 ở các chỗ khác nhau.</td></tr>
+    <tr><td>Trọng số review</td><td>Trọng số đang lưu (<code>helpfulness_weight</code>, 0 đến 3) do <code>rate.compute_review_weight</code> tính: gốc 1 (0,25 nếu đáng ngờ, 0 nếu giả), cộng trừ theo vote và báo cáo. Mô hình tin cậy review (<code>Docs/Platform/review-trust-model.html</code>) đã thiết kế công thức sáu trục w = G × A × B × C × D × E × F, nhưng <em>chưa được dùng</em> cho trọng số đang lưu.</td><td>Chưa có gì đo "review có đủ ưu nhược, đủ tiêu chí không".</td></tr>
+    <tr><td>Ưu nhược</td><td>AI trong importer (<code>ai-review-analyzer.ts</code>) sinh tối đa 6 ưu và 6 nhược cho cả một listing, lưu ở <code>rate.review_analysis.pros/cons</code>; web gộp theo sản phẩm và hiện.</td><td>Không theo tiêu chí, không đếm số người nhắc, không gắn với review nào. Schema zod <code>review.schema.ts</code> có trường <code>pros/cons</code> nhưng không dùng.</td></tr>
+    <tr><td>Vote hữu ích</td><td>Có, kèm điều kiện tài khoản 7 ngày, đã xác minh email hoặc số điện thoại, giới hạn 60 lượt mỗi giờ.</td><td>Ổn, dùng lại được.</td></tr>
+    <tr><td>Điểm thưởng cho người dùng</td><td>Chưa có hệ thống nào.</td><td>Cần quyết riêng (mục 9, D8).</td></tr>
+    <tr><td>"Tiêu chuẩn 10 nhóm"</td><td>10 nhóm <em>thông số</em> (màn hình, phần cứng, pin, camera...) trong <code>specs.schema.ts</code> và <code>spec-template.ts</code>.</td><td>Là nhóm thông số kỹ thuật, không phải tiêu chí chấm sao. Tiêu chí chấm sao sẽ tham chiếu tới nhóm thông số liên quan, nhưng là danh sách riêng.</td></tr>
+  </table></div>
+
+  <h2>2. Mô hình tiêu chí</h2>
+  <h3>2.1 Danh sách tiêu chí và trọng số theo ngành hàng (bản nháp)</h3>
+  <p>Trọng số mỗi ngành cộng lại bằng 100. Đây là bản nháp để JOY sửa; con số chỉ là điểm xuất phát.</p>
+  <div class="table-wrap"><table>
+    <tr><th>Ngành hàng</th><th>Tiêu chí (trọng số %)</th></tr>
+    <tr><td>Điện thoại</td><td>Hiệu năng 20, Camera 20, Pin và sạc 20, Màn hình 15, Thiết kế và độ bền 10, Đáng tiền 15</td></tr>
+    <tr><td>Máy tính bảng</td><td>Màn hình 20, Hiệu năng 20, Pin 15, Loa và giải trí 10, Phần mềm và phụ kiện 10, Thiết kế 10, Đáng tiền 15</td></tr>
+    <tr><td>Laptop</td><td>Hiệu năng 25, Màn hình 15, Pin 15, Bàn phím và touchpad 10, Tản nhiệt và độ ồn 10, Thiết kế và độ bền 10, Đáng tiền 15</td></tr>
+    <tr><td>Đồng hồ thông minh</td><td>Theo dõi sức khoẻ 25, Pin 20, Thiết kế và đeo 15, Ứng dụng và kết nối 15, Màn hình 10, Đáng tiền 15</td></tr>
+    <tr><td>Tai nghe</td><td>Chất âm 30, Chống ồn 15, Pin 15, Đeo thoải mái 15, Mic và gọi 10, Đáng tiền 15</td></tr>
+    <tr><td>Dịch vụ (khi mở, <code>entity_type = 'service'</code>)</td><td>Chất lượng dịch vụ 35, Giá cả 25, Thái độ phục vụ 20, Tốc độ 20</td></tr>
+  </table></div>
+  <ul>
+    <li><strong>Chỗ lưu:</strong> một file trong <code>packages/shared-data/src/rules/</code> (ví dụ <code>rating-criteria.ts</code>), cạnh <code>spec-template.ts</code>. Mỗi tiêu chí có khoá cố định (<code>performance</code>, <code>camera</code>, <code>sound</code>...), nhãn tiếng Việt và tiếng Anh, trọng số, và nhóm thông số liên quan (để trang sản phẩm hiện thông số cạnh điểm).</li>
+    <li><strong>Phiên bản:</strong> mỗi lần đổi danh sách hay trọng số tăng số phiên bản. Review lưu phiên bản lúc viết.</li>
+    <li><strong>Vì sao để trong code, không trong database:</strong> đổi trọng số làm đổi điểm người dùng thấy, nên nên đi qua PR và review như mọi thay đổi khác. Không cần migration mỗi lần chỉnh. Web và importer đọc cùng một file. API (chạy trên server, đọc file này) kiểm khoá và tự tính số sao tổng, không tin con số trình duyệt gửi; RPC chỉ kiểm số sao nằm trong 1 đến 5.</li>
+    <li><strong>Đổi trọng số không tính lại review cũ.</strong> Số sao tổng của một review được giữ theo phiên bản lúc viết (cột <code>criteria_version</code>), nên không có lệnh cập nhật hàng loạt trên database dùng chung. Điểm từng tiêu chí của sản phẩm không phụ thuộc trọng số nên không đổi.</li>
+    <li><strong>5 khoá cũ</strong> trong <code>criteria_ratings</code> của review đã viết: <code>screen</code> thành Màn hình, <code>performance</code> thành Hiệu năng, <code>camera</code> thành Camera (tai nghe: Chất âm), <code>battery</code> thành Pin, <code>value</code> thành Đáng tiền. Tiêu chí mới mà review cũ không có thì để trống, không suy ra.</li>
+    <li><strong>Điểm theo nhu cầu</strong> (giống điểm "theo cách dùng" của RTINGS: chơi game, chụp ảnh, văn phòng): mỗi nhu cầu là một bộ trọng số khác trên cùng các điểm tiêu chí, ví dụ "Chơi game" = Hiệu năng 40, Pin 25, Màn hình 20, Đáng tiền 15. Hiện thành một hàng nhỏ dưới điểm chính, có nhãn rõ, chỉ khi các tiêu chí liên quan đủ dữ liệu. Bộ chọn nhu cầu ở trang Deals hiện có dùng lại các bộ này. Con số điểm chính không đổi.</li>
+  </ul>
+
+  <h3>2.2 Cách tính</h3>
+  <p><strong>Điểm tổng của một review trên Rate</strong>, tính như JReviews, người viết không tự chọn số sao tổng:</p>
+<pre>sao_review = Σ (trọng_số_i × sao_i) / Σ trọng_số_i      chỉ trên các tiêu chí người viết đã chấm
+làm tròn 0,1; người viết thấy con số này ngay khi kéo sao</pre>
+  <p>Người viết được bỏ qua tối đa 2 tiêu chí ("Chưa dùng tới", ví dụ chưa thử chống ồn), không được bỏ "Đáng tiền". Không còn mặc định 5 sao: tiêu chí chưa bấm thì form báo thiếu, chứ không tự tính là 5.</p>
+  <p><strong>Điểm từng tiêu chí của sản phẩm</strong> (Bayes theo từng tiêu chí, cùng cách #1144 đang dùng cho điểm tổng):</p>
+<pre>điểm_tiêu_chí_i = (k × μ_i + Σ w_r × sao_r,i) / (k + Σ w_r)
+k = 3; μ_i = trung bình tiêu chí i của cả ngành hàng (chưa có thì 4,2)
+w_r = trọng số tin cậy của review r (mô hình tin cậy review, 0 đến 3)
+chỉ tính review có chấm tiêu chí i và có trọng số lớn hơn 0
+hiện khi có ít nhất 3 người viết khác nhau và Σ w_r ≥ 1,5; còn lại "Chưa đủ dữ liệu"
+dùng để xếp hạng theo tiêu chí (chip "#1 Màn hình") khi có ít nhất 5 người viết khác nhau</pre>
+  <p>Ngưỡng theo số người viết là để một review được vote cao không tự tạo ra một thứ hạng.</p>
+  <p><strong>Điểm tổng của sản phẩm</strong> (con số duy nhất hiện mọi nơi):</p>
+<pre>điểm_sản_phẩm = (k × μ + Σ w_r × sao_review_r) / (k + Σ w_r)      k = 3, μ = 4,2 (như #1144)
+mọi review hợp lệ: review Shopee dùng số sao gốc, review Rate dùng sao_review tính ở trên</pre>
+  <p>Vì sao không tính điểm sản phẩm thẳng từ các điểm tiêu chí: review lấy từ sàn (phần lớn dữ liệu hiện nay) chỉ có một số sao tổng. Tính từ tiêu chí sẽ bỏ hết số review đó, và sản phẩm chưa có review Rate nào sẽ không có điểm. Trọng số tiêu chí vẫn quyết định điểm tổng, nhưng ở bên trong từng review Rate. Khi review Rate đủ nhiều, hai cách cho kết quả gần nhau; Core sẽ theo dõi chênh lệch này.</p>
+  <p>Hệ quả cần nói rõ trên trang: điểm chính (tính từ mọi review) có thể khác trung bình có trọng số của các điểm tiêu chí (chỉ từ review Rate). Vì vậy khối điểm tiêu chí ghi "Từ N review trên Rate" và có link "cách tính điểm". Đây là hai con số đo hai thứ khác nhau, có nhãn, không phải lỗi #1470.</p>
+
+  <h3>2.3 Giải quyết #1143 (điểm tiêu chí dồn về 5.00)</h3>
+  <ul>
+    <li>Bỏ hẳn nhánh "số sao cộng độ lệch". Không có dữ liệu thì trả <code>null</code>, hiện "Chưa đủ dữ liệu" ở bảng xếp hạng, trang so kè, chip thứ hạng và API (ghi rõ trong OpenAPI).</li>
+    <li>Bỏ phần trung bình tiêu chí ra khỏi điểm ghép của bảng xếp hạng khi không có dữ liệu thật, để số bịa không còn lọt vào thứ hạng.</li>
+    <li>Thẻ so kè 1v1 ở trang chủ: tiêu chí không có dữ liệu thì không tính thắng thua, nên hết cảnh cả ba trận "Ngang điểm"; trận nào không có tiêu chí nào để so thì so theo điểm chính.</li>
+    <li>Sắp theo một tiêu chí chỉ liệt kê sản phẩm có điểm tiêu chí đó. Chip "#1 Màn hình" chỉ hiện khi có điểm thật.</li>
+    <li>Tiêu chí không thuộc ngành hàng thì ẩn (tai nghe không có "Màn hình").</li>
+    <li>Điểm chuyên gia theo tiêu chí (<code>expert_criteria_scores</code>) vẫn hiện được, nhưng có nhãn "Chuyên gia", không trộn vào điểm người dùng. 36 sản phẩm có điểm này từ seed; quyết định giữ hay bỏ đang mở ở đề xuất nguồn gốc dữ liệu catalog (16/10).</li>
+    <li>Phần này làm được ngay trên web, không cần database (giai đoạn P0).</li>
+  </ul>
+
+  <h3>2.4 Giải quyết #1470 (một con số điểm)</h3>
+  <ul>
+    <li>Con số duy nhất là <strong>điểm Bayes</strong> ở 2.2, tức phương án (2) của PR #1478. Trang sản phẩm, thẻ sản phẩm, so sánh, so kè, danh sách theo dõi, bảng xếp hạng và API đều đọc cùng cột, cùng làm tròn 1 chữ số.</li>
+    <li>Hàm làm mới <code>rate.refresh_master_product_rating</code> ghi thêm điểm Bayes và tổng trọng số vào <code>master_products</code> (migration DOS-Me). Nói thẳng: #1470 chỉ được giải quyết trọn khi có cột này (P2, P4). Điểm Bayes cần tổng trọng số chứ không phải số review, nên các danh sách hiện không tự tính được. Trong lúc chờ, giữ cách của PR #1478 (mọi chỗ ngoài trang sản phẩm dùng điểm đã lưu, 1 chữ số) và chấp nhận trang sản phẩm còn lệch ở một số máy.</li>
+    <li>Điểm chuyên gia là con số thứ hai, luôn có nhãn "Chuyên gia", không ghép vào điểm chính. Điểm ghép trên bảng xếp hạng (người dùng, chuyên gia, tiêu chí) chỉ còn dùng để phá hoà khi xếp hạng, không hiện ra như một "điểm".</li>
+    <li>PR #1478 merge được độc lập: nó đã đưa bảng so kè về điểm của sản phẩm và 1 chữ số. Khi có cột Bayes, chỉ cần đổi nguồn đọc.</li>
+  </ul>
+
+  <h2>3. Mô hình dữ liệu</h2>
+  <p>Mọi thay đổi bảng dưới đây là DDL trên Supabase dùng chung, nên đi qua migration DOS-Me do JOY duyệt và chạy. Repo này chỉ soạn đề xuất SQL, không áp dụng.</p>
+  <div class="table-wrap"><table>
+    <tr><th>Chỗ</th><th>Thay đổi</th><th>Có sẵn hay mới</th><th>Migration</th></tr>
+    <tr><td><code>rate.reviews.criteria_ratings</code></td><td>Giữ dạng <code>{khoá: sao}</code>, thêm khoá mới theo danh sách ngành hàng.</td><td>Có sẵn</td><td>Không (API kiểm khoá theo danh sách mới)</td></tr>
+    <tr><td><code>rate.reviews.rating_star</code></td><td>Đang là số nguyên 1 đến 5 (<code>SMALLINT</code>), RPC cũng nhận số nguyên. Số sao tính từ tiêu chí là số lẻ (4,3), nên thêm cột <code>rating_exact numeric(2,1)</code>; <code>rating_star</code> giữ số làm tròn cho code cũ đọc. Các hàm tính điểm đọc <code>rating_exact</code> khi có.</td><td>Có sẵn, thêm cột cạnh nó</td><td>Có, DOS-Me</td></tr>
+    <tr><td><code>rate.reviews</code> cột mới</td><td><code>verdict text</code> (câu kết luận, tối đa 300 ký tự); <code>criteria_version int</code>; <code>value_score numeric(5,2)</code> và <code>value_breakdown jsonb</code> (mục 6).</td><td>Mới</td><td>Có, DOS-Me</td></tr>
+    <tr><td><code>rate.review_points</code> (bảng mới)</td><td>Mỗi dòng là một ưu hoặc nhược: <code>review_id</code>, <code>criterion_key</code> (rỗng nghĩa là ưu nhược chung của review), <code>kind</code> ('pro' hoặc 'con'), <code>body</code> (5 đến 150 ký tự), <code>position</code>, <code>cluster_id</code> (do bước gom gán).</td><td>Mới</td><td>Có, DOS-Me</td></tr>
+    <tr><td><code>rate.product_points</code> (bảng mới)</td><td>Kết quả gom cho mỗi sản phẩm: <code>master_id</code>, <code>criterion_key</code>, <code>kind</code>, <code>label</code> (câu hiển thị), <code>support</code> (tổng trọng số người nhắc), <code>reviewer_count</code>, <code>has_expert</code>, <code>first_seen</code>, <code>last_seen</code>, <code>method</code> ('code' hoặc 'ai').</td><td>Mới; thay dần <code>review_analysis.pros/cons</code></td><td>Có, DOS-Me</td></tr>
+    <tr><td><code>rate.master_products</code> cột mới</td><td><code>rating_score numeric(3,2)</code> (điểm Bayes), <code>rating_weight_sum numeric</code>, <code>criteria_scores jsonb</code> (<code>{khoá: {score, weight_sum}}</code>, chỉ tiêu chí đủ dữ liệu).</td><td>Mới</td><td>Có, DOS-Me; hàm làm mới ghi các cột này</td></tr>
+    <tr><td><code>rate.submit_community_review</code></td><td>Bản 2: nhận <code>verdict</code>, danh sách ưu nhược và số sao do API đã tính; kiểm lại các điều kiện bắt buộc (mục 4) để không ai gọi thẳng RPC mà lách được.</td><td>Có sẵn, sửa</td><td>Có, DOS-Me</td></tr>
+  </table></div>
+  <p><strong>Vì sao tách ưu nhược ra bảng riêng thay vì cột mảng:</strong> bước gom cần gán từng dòng vào một cụm, đếm theo tiêu chí và truy ngược "ai đã nhắc ý này". Bảng riêng làm việc đó bằng SQL thường và đánh chỉ mục được; mảng trong jsonb thì phải bung ra mỗi lần.</p>
+
+  <h2>4. Luồng viết review</h2>
+  <h3>4.1 Form cho người dùng Rate</h3>
+  <ol>
+    <li><strong>Chấm sao từng tiêu chí</strong> của ngành hàng, theo nửa sao. Điểm tổng tính sẵn hiện ngay bên cạnh. Được bỏ qua tối đa 2 tiêu chí, trừ "Đáng tiền".</li>
+    <li><strong>Câu kết luận</strong> (bắt buộc, 20 đến 300 ký tự): "Ai nên mua, ai không nên". Đây là đoạn mở đầu kiểu RTINGS.</li>
+    <li><strong>Ưu điểm và nhược điểm chung</strong> (bắt buộc): mỗi bên ít nhất 1, nhiều nhất 5 dòng, mỗi dòng 5 đến 150 ký tự. Áp dụng cả cho review chuyên gia do Rate đăng (<code>reviewer_type = 'expert'</code>).</li>
+    <li><strong>Ưu nhược theo tiêu chí</strong> (không bắt buộc): bấm vào một tiêu chí đã chấm để thêm 1 đến 3 dòng. Dòng ưu nhược chung mà người viết kéo vào một tiêu chí cũng tính.</li>
+    <li><strong>Nội dung dài và ảnh</strong> (không bắt buộc, như hiện nay).</li>
+  </ol>
+  <h3>4.2 Kiểm tra (ở cả API và RPC, không chỉ ở trình duyệt)</h3>
+  <ul>
+    <li>Nhược điểm không được là câu né: "không có", "chưa thấy", "không có gì để chê", ".", lặp ký tự. Danh sách cụm từ nằm trong code, có test. Người dùng thật sự chưa thấy nhược điểm thì có thể ghi điều nhỏ nhất (giá, phụ kiện, cân nặng); form gợi ý sẵn vài ý theo ngành hàng.</li>
+    <li>Không có hai dòng trùng nhau, không có dòng xuất hiện ở cả ưu lẫn nhược.</li>
+    <li>Không chép nguyên văn từ review khác của chính người đó ở sản phẩm khác (so sánh gần giống, mục chống lạm dụng ở 6.4).</li>
+    <li>Sao và ưu nhược trái nhau (5 sao Pin nhưng nhược "pin rất tệ") không chặn, nhưng gắn cờ cho bước phân tích như mô hình tin cậy (loại 15).</li>
+    <li>Thông báo lỗi bằng tiếng Việt, chỉ đúng ô sai; bản nháp giữ ở trình duyệt để không mất chữ khi lỗi.</li>
+  </ul>
+  <h3>4.3 Review lấy từ nguồn khác</h3>
+  <ul>
+    <li><strong>Shopee và các sàn</strong>: chỉ có số sao tổng và chữ. Ưu nhược không bắt buộc. Không sinh sao tiêu chí giả từ chữ. Bước AI có thể (không bắt buộc, giai đoạn sau) trích từ chữ ra vài dòng ưu nhược gắn tiêu chí, ghi <code>method = 'ai'</code> và chỉ dùng cho bước gom, không hiện như lời người viết.</li>
+    <li><strong>Chuyên gia bên ngoài</strong> (khi có nguồn được phép): lưu điểm tổng, điểm tiêu chí quy về thang 5 theo một bảng chuyển khoá cho từng nguồn, kèm link bài gốc. Ưu nhược của họ chỉ lưu dạng tóm tắt ngắn do Rate viết lại, không chép nguyên văn bài viết của người khác.</li>
+  </ul>
+
+  <h2>5. Gom ưu nhược thành ưu nhược của sản phẩm</h2>
+  <h3>5.1 Code làm trước</h3>
+  <ol>
+    <li><strong>Chuẩn hoá chữ</strong>: chữ thường, bỏ từ đệm ("khá", "rất", "hơi"), giữ dấu khi so hai dòng (bỏ dấu thì "sạc" và "sắc" thành một) và giữ từ phủ định ("không", "chưa", "chẳng"). Bản bỏ dấu chỉ dùng để dò từ khoá ở bước 2.</li>
+    <li><strong>Gán tiêu chí</strong>: dòng đã gắn tiêu chí thì giữ; dòng chung thì dò từ khoá theo ngành hàng (pin, sạc, mAh cho Pin; màn, sáng, chói cho Màn hình...). Bộ từ khoá dùng lại phần trích khía cạnh đã có trong analyzer. Không khớp thì vào nhóm "Chung".</li>
+    <li><strong>Gom cụm</strong>: hai dòng cùng tiêu chí, cùng loại, giống nhau từ 60% số từ trở lên thì vào một cụm. Đơn giản, chạy được trong SQL hoặc Node, không tốn tiền AI.</li>
+    <li><strong>Đếm</strong>: mỗi cụm cộng trọng số tin cậy của người nhắc (mỗi người tính một lần). Review bị cổng chặn (trọng số 0) không được đếm. Dòng từ chuyên gia đánh dấu riêng.</li>
+    <li><strong>Lọc để hiện</strong>: ưu điểm cần ít nhất 2 người khác nhau và tổng trọng số từ 1,5 trở lên, hoặc 1 chuyên gia; nhược điểm cũng vậy. Ngưỡng trọng số chặn kiểu dùng vài tài khoản mới (trọng số thấp) để dựng một ý; ngưỡng người chặn một người ghét sản phẩm tự tạo ra nhược điểm của cả sản phẩm. Mỗi tiêu chí hiện tối đa 3 ưu, 3 nhược; phần tổng của sản phẩm hiện tối đa 5 mỗi bên.</li>
+    <li><strong>Luôn giữ nhược điểm</strong>: nếu có nhược điểm đạt ngưỡng thì phần tổng phải hiện ít nhất 1, kể cả khi ưu điểm áp đảo. Trang toàn ưu điểm là dấu hiệu seeding, và người mua cần thấy mặt yếu.</li>
+  </ol>
+  <h3>5.2 AI làm phần còn lại</h3>
+  <ul>
+    <li>Viết lại mỗi cụm thành một câu gọn, đúng chính tả ("Pin dùng hết ngày với nhu cầu vừa phải"). Câu AI viết phải dựa trên các dòng trong cụm; nếu không khớp thì dùng nguyên dòng được nhắc nhiều nhất.</li>
+    <li>Gộp hai cụm cùng ý mà code không nhận ra vì cách nói khác nhau.</li>
+    <li>Viết đoạn kết luận chung của sản phẩm từ các cụm hàng đầu, có ghi "Tóm tắt từ N review".</li>
+    <li>Chạy theo đợt (khi có review mới, hoặc hằng đêm), dùng lại pipeline AI của importer, không gọi AI khi người dùng mở trang.</li>
+  </ul>
+  <h3>5.3 Độ mới</h3>
+  <ul>
+    <li>Trọng số của một dòng giảm một nửa sau mỗi 12 tháng, nên cụm cũ dần nhường chỗ cho cụm mới (sản phẩm được cập nhật phần mềm, giá đổi).</li>
+    <li>Cụm không có ai nhắc trong 18 tháng thì ẩn.</li>
+    <li>Khối ưu nhược ghi "Cập nhật ngày ..." và số review đã dùng.</li>
+  </ul>
+
+  <h2>6. Điểm giá trị review</h2>
+  <h3>6.1 Thành phần (thang 100)</h3>
+  <div class="table-wrap"><table>
+    <tr><th>Thành phần</th><th>Tối đa</th><th>Cách tính</th></tr>
+    <tr><td>Đầy đủ</td><td>35</td><td>Chấm đủ tiêu chí 10; có câu kết luận 5; có ưu và nhược chung 10; có ưu nhược theo ít nhất 2 tiêu chí 5; có ảnh thật 5.</td></tr>
+    <tr><td>Nội dung cụ thể</td><td>20</td><td>Theo trục C của mô hình tin cậy (hời hợt, ngắn nhưng cụ thể, chi tiết, chuyên sâu). Độ dài có trần: viết dài thêm sau mức đủ không được thêm điểm.</td></tr>
+    <tr><td>Đã mua</td><td>15</td><td>Có xác nhận đã mua (sàn, hoặc sau này hoá đơn). Chưa xác nhận: 0.</td></tr>
+    <tr><td>Vote hữu ích</td><td>20</td><td>Từ cận dưới Wilson của vote hữu ích (đang dùng để sắp review), nên vài vote đầu không làm điểm nhảy vọt.</td></tr>
+    <tr><td>Uy tín người viết</td><td>10</td><td>Trục D của mô hình tin cậy: tuổi tài khoản, lịch sử review, uy tín theo ngành hàng.</td></tr>
+  </table></div>
+  <p>Review bị cổng chặn (giả, chép, viết cho có để lấy xu...) có điểm giá trị bằng 0, dù đầy đủ đến đâu. Review lấy từ sàn cũng có điểm này (thường thấp vì thiếu ưu nhược), nên một thang dùng chung cho mọi review.</p>
+
+  <h3>6.2 Ảnh hưởng tới điểm sản phẩm</h3>
+  <p>JOY muốn review đầy đủ "cao hơn một tí". Chỉ phần "Đầy đủ" ở 6.1 chạm vào trọng số, qua một hệ số nhân:</p>
+<pre>hệ_số_đầy_đủ = 1 + 0,25 × đầy_đủ / 35          từ ×1,00 (không có gì) đến ×1,25 (đủ hết)
+hôm nay:  w = helpfulness_weight × hệ_số_đầy_đủ,  trần 3 như cũ</pre>
+  <ul>
+    <li><strong>Hiệu quả thật:</strong> review từ sàn không có ưu nhược giữ nguyên trọng số (không bị phạt vì nguồn không cho phép ghi ưu nhược). Review Rate luôn có kết luận và ưu nhược nên ít nhất khoảng ×1,18; đủ hết là ×1,25. Tức review Rate nặng hơn review sàn tương đương từ 18% đến 25%.</li>
+    <li><strong>Phụ thuộc cần biết:</strong> trọng số đang lưu hôm nay là <code>helpfulness_weight</code> (gốc cộng vote), chưa phải công thức sáu trục của mô hình tin cậy. Hệ số trên nhân vào trọng số đang lưu, nên làm được ngay ở P6. Khi nào mô hình sáu trục được áp dụng (một việc riêng, làm đổi điểm mọi sản phẩm), phần ưu nhược và ảnh trong "Đầy đủ" được bỏ khỏi hệ số này, vì trục C đã tính chúng (mức "chi tiết" đòi có cả ưu lẫn nhược, ảnh thật được cộng 0,1). Khi đó chỉ còn phần chấm đủ tiêu chí và kết luận nâng trọng số, để không tính hai lần.</li>
+    <li>Vote và uy tín người viết không nằm trong hệ số này, nên không bị tính hai lần với vote đã có trong <code>helpfulness_weight</code>.</li>
+  </ul>
+
+  <h3>6.3 Dùng điểm giá trị ở đâu</h3>
+  <ul>
+    <li><strong>Có:</strong> sắp review ở trang sản phẩm (cách sắp mặc định "Hữu ích nhất" dùng điểm giá trị, vote vẫn là thành phần lớn); nhãn công khai theo bậc ("Cơ bản", "Đầy đủ", "Xuất sắc"); chọn review hiện đầu tiên trên thẻ sản phẩm; tính điểm thưởng khi có hệ thống điểm.</li>
+    <li><strong>Không:</strong> không dùng điểm giá trị để xếp hạng sản phẩm trực tiếp. Nó chỉ chạm điểm sản phẩm qua mức nâng nhẹ ở 6.2.</li>
+    <li><strong>Hiện con số hay không:</strong> người xem thấy bậc, người viết thấy con số của chính mình và cách tăng nó ("Thêm ưu nhược cho Pin để lên bậc Đầy đủ"). Hiện con số công khai dễ khiến người ta tối ưu con số thay vì viết thật.</li>
+  </ul>
+
+  <h3>6.4 Rủi ro lạm dụng và cách chặn</h3>
+  <div class="table-wrap"><table>
+    <tr><th>Rủi ro</th><th>Chặn bằng</th></tr>
+    <tr><td>Điền cho đủ ô để lấy điểm ("Ưu: tốt. Nhược: không")</td><td>Kiểm ở 4.2; phần "Nội dung cụ thể" chấm theo chi tiết, không theo số ô; phần "Đầy đủ" chỉ cộng khi trục C không phải hời hợt.</td></tr>
+    <tr><td>Viết dài, đệm chữ</td><td>Độ dài có trần; chữ đệm và lặp vào nhóm "viết cho có", cổng chặn.</td></tr>
+    <tr><td>Chép một bộ ưu nhược cho nhiều sản phẩm</td><td>So gần giống giữa các review của cùng người và giữa các tài khoản (trục A, loại "chép từ nơi khác").</td></tr>
+    <tr><td>Nhóm vote cho nhau</td><td>Điều kiện vote đã có (tuổi tài khoản, xác minh, giới hạn mỗi giờ); trọng số người vote ở mục 9 của mô hình tin cậy; Wilson thay vì đếm thô.</td></tr>
+    <tr><td>Săn điểm thưởng hàng loạt</td><td>Điểm thưởng chỉ trao sau khi review qua bước phân tích và một thời gian giữ (ví dụ 7 ngày); điểm giảm dần theo số review trong ngày; mỗi người một review mỗi sản phẩm (đã có).</td></tr>
+    <tr><td>Bỏ qua 2 tiêu chí yếu nhất để số sao tổng của review cao hơn</td><td>Không chặn được hoàn toàn. Giới hạn 2 tiêu chí, không được bỏ "Đáng tiền"; điểm tiêu chí của sản phẩm không bị ảnh hưởng vì chỉ đọc tiêu chí đã chấm; phần "Đầy đủ" mất 10 điểm khi bỏ qua tiêu chí.</td></tr>
+    <tr><td>Người bán tự viết hoặc thuê viết</td><td>Trục B (xung đột lợi ích, tài trợ không công bố) đã có trong mô hình tin cậy.</td></tr>
+  </table></div>
+
+  <h2>7. Phác thảo giao diện (bố cục kiểu RTINGS)</h2>
+  <h3>7.1 Khối đánh giá trên trang sản phẩm</h3>
+  <div class="mock">
+    <div class="headline"><span class="big">4.6</span><span class="stars">★★★★★</span><span class="sub">trên 5 · 128 review đã kiểm · Độ tin cậy cao</span></div>
+    <div class="sub">Chuyên gia: <strong>4.4</strong> (2 bài) · cách tính điểm</div>
+    <p class="verdict"><strong>Kết luận:</strong> Máy mạnh, camera tốt cả ngày lẫn đêm, pin đủ một ngày dùng nhiều. Hợp người chụp ảnh và chơi game. Không hợp người cần sạc rất nhanh. <span class="cnt">Tóm tắt từ 128 review, cập nhật 31/10/2026</span></p>
+    <div class="sub" style="margin-bottom:4px">Điểm theo tiêu chí, từ 23 review trên Rate · cách tính điểm</div>
+    <div class="crit"><span>Hiệu năng <span class="w">20%</span></span><div class="bar"><span style="width:94%"></span></div><strong>4.7</strong></div>
+    <div class="crit"><span>Camera <span class="w">20%</span></span><div class="bar"><span style="width:90%"></span></div><strong>4.5</strong></div>
+    <div class="crit"><span>Pin và sạc <span class="w">20%</span></span><div class="bar"><span style="width:80%"></span></div><strong>4.0</strong></div>
+    <div class="crit"><span>Màn hình <span class="w">15%</span></span><div class="bar"><span style="width:92%"></span></div><strong>4.6</strong></div>
+    <div class="crit"><span>Thiết kế và độ bền <span class="w">10%</span></span><div class="bar"><span style="width:0"></span></div><span class="na">Chưa đủ</span></div>
+    <div class="crit"><span>Đáng tiền <span class="w">15%</span></span><div class="bar"><span style="width:76%"></span></div><strong>3.8</strong></div>
+    <div class="pc">
+      <div class="pro"><div class="t">Ưu điểm</div><ul>
+        <li>Chơi game nặng mượt, ít nóng <span class="cnt">· 41 người</span></li>
+        <li>Ảnh đêm rõ, ít nhiễu <span class="cnt">· 33 người</span></li>
+        <li>Màn hình sáng, dễ nhìn ngoài nắng <span class="cnt">· 27 người</span></li>
+      </ul></div>
+      <div class="con"><div class="t">Nhược điểm</div><ul>
+        <li>Sạc chậm so với máy cùng giá <span class="cnt">· 22 người</span></li>
+        <li>Giá cao, ít khuyến mãi <span class="cnt">· 15 người</span></li>
+      </ul></div>
+    </div>
+    <div class="sub">Bấm vào một tiêu chí để xem ưu nhược riêng của tiêu chí đó.</div>
+  </div>
+
+  <h3>7.2 Một thẻ review</h3>
+  <div class="mock">
+    <div class="rc">
+      <div><strong>Minh T.</strong> <span class="chip g">Đã mua</span><span class="chip b">Xuất sắc</span><span class="sub">· dùng 4 tháng · 12/10/2026</span></div>
+      <div style="margin-top:4px"><span class="stars">★★★★☆</span> <strong>4.3</strong> <span class="sub">(tính từ 6 tiêu chí)</span></div>
+      <p class="verdict"><strong>"Hợp người chơi game và chụp đêm; ai cần sạc nhanh nên cân nhắc."</strong></p>
+      <div class="pc">
+        <div class="pro"><div class="t">Ưu điểm</div><ul><li>Genshin max setting giữ 55 đến 60 fps</li><li>Chụp đêm không cần chân máy</li></ul></div>
+        <div class="con"><div class="t">Nhược điểm</div><ul><li>Sạc đầy mất gần 90 phút</li><li>Hộp không kèm củ sạc</li></ul></div>
+      </div>
+      <div class="mini">
+        <span>Hiệu năng ★ 5.0</span><span>Camera ★ 4.5</span><span>Pin và sạc ★ 3.5</span><span>Màn hình ★ 4.5</span><span>Thiết kế ★ 4.0</span><span>Đáng tiền ★ 4.0</span>
+      </div>
+      <div class="sub">▸ Pin và sạc: <span style="color:#16a34a">+ dùng 1 ngày rưỡi</span> · <span style="color:#dc2626">− sạc chậm</span></div>
+      <div class="foot"><span>👍 Hữu ích (24)</span><span>👎 (1)</span><span>Báo cáo</span></div>
+    </div>
+    <div class="rc">
+      <div><strong>Người mua trên Shopee</strong> <span class="chip g">Đã mua</span><span class="chip a">Cơ bản</span><span class="sub">· nguồn: Shopee</span></div>
+      <div style="margin-top:4px"><span class="stars">★★★★★</span> <strong>5.0</strong></div>
+      <p class="verdict">Máy đẹp, giao nhanh, dùng mượt.</p>
+      <div class="sub">Review từ sàn: không có ưu nhược theo tiêu chí.</div>
+    </div>
+  </div>
+
+  <h2>8. Kế hoạch theo giai đoạn</h2>
+  <div class="table-wrap"><table>
+    <tr><th>Giai đoạn</th><th>Việc</th><th>Cỡ</th><th>Cần database?</th></tr>
+    <tr><td>P0</td><td>Sửa #1143 trên web: bỏ điểm tiêu chí suy ra, trả null, "Chưa đủ dữ liệu", bỏ chúng khỏi điểm ghép bảng xếp hạng, so kè 1v1 không tính tiêu chí trống, ẩn tiêu chí không thuộc ngành hàng, test và OpenAPI. Merge PR #1478.</td><td>S</td><td>Không</td></tr>
+    <tr><td>P1</td><td>Danh sách tiêu chí theo ngành hàng trong <code>shared-data</code> (khoá, nhãn, trọng số, phiên bản) và bảng chuyển 5 khoá cũ. Web đọc danh sách này thay cho 5 khoá cố định.</td><td>M</td><td>Không</td></tr>
+    <tr><td>P2</td><td>Migration DOS-Me: cột mới trên <code>reviews</code> và <code>master_products</code>, bảng <code>review_points</code>, <code>product_points</code>; hàm làm mới ghi điểm Bayes và điểm tiêu chí. Core soạn SQL đề xuất kèm file kiểm tra và hoàn tác; JOY chạy.</td><td>L</td><td>Có, JOY áp dụng</td></tr>
+    <tr><td>P3</td><td>Form review bản 2 và RPC <code>submit_community_review</code> bản 2: sao theo tiêu chí, kết luận, ưu nhược bắt buộc, kiểm tra ở 4.2.</td><td>M</td><td>Sau P2</td></tr>
+    <tr><td>P4</td><td>Một con số điểm mọi nơi (#1470): mọi trang và API đọc <code>rating_score</code>.</td><td>S</td><td>Sau P2</td></tr>
+    <tr><td>P5</td><td>Gom ưu nhược: code (5.1) rồi AI (5.2), chạy trong importer theo đợt, ghi <code>product_points</code>; khối 7.1 trên trang sản phẩm.</td><td>M đến L</td><td>Sau P2</td></tr>
+    <tr><td>P6</td><td>Điểm giá trị review: tính, lưu, sắp review, nhãn bậc, hệ số đầy đủ trên trọng số đang lưu (6.2). Áp dụng mô hình sáu trục là việc riêng, không nằm trong P6.</td><td>M</td><td>Sau P2</td></tr>
+    <tr><td>Sau</td><td>Điểm thưởng cho người viết (cần hệ thống điểm, thuộc DOS-Me); nhập review chuyên gia bên ngoài; AI trích ưu nhược từ review sàn.</td><td>L</td><td>Có</td></tr>
+  </table></div>
+  <p>P0 và P1 bắt đầu được ngay sau khi JOY duyệt. P3 đến P6 chờ P2.</p>
+
+  <h2>9. Các quyết định cần JOY</h2>
+
+  <div class="q"><strong>D1. Danh sách tiêu chí và trọng số ở 2.1.</strong> Duyệt bản nháp, hay sửa trọng số trước?
+    <br><span class="rec-line">Đề xuất: duyệt bản nháp làm phiên bản 1; Core chỉnh sau khi có khoảng 200 review Rate có chấm tiêu chí.</span></div>
+
+  <div class="q"><strong>D2. Điểm tổng của sản phẩm tính thế nào.</strong> (a) Bayes trên số sao tổng của mọi review, trong đó review Rate có số sao tính từ tiêu chí theo trọng số; (b) tính thẳng từ điểm các tiêu chí của sản phẩm.
+    <br><span class="rec-line">Đề xuất: (a).</span> (b) bỏ mất review từ sàn, và sản phẩm chưa có review Rate sẽ không có điểm.</div>
+
+  <div class="q"><strong>D3. Một con số điểm cho mọi trang (#1470).</strong> Điểm Bayes lưu trên <code>master_products</code> (phương án 2 của PR #1478), điểm chuyên gia hiện riêng có nhãn, điểm ghép chỉ dùng để phá hoà.
+    <br><span class="rec-line">Đề xuất: duyệt, và merge PR #1478 ngay.</span></div>
+
+  <div class="q"><strong>D4. Sửa #1143 bây giờ (P0).</strong> Bỏ điểm tiêu chí suy ra; trang và API hiện "Chưa đủ dữ liệu". Một số chip "#1" và bảng xếp hạng theo tiêu chí sẽ vắng đi vì đa số sản phẩm chưa có dữ liệu tiêu chí.
+    <br><span class="rec-line">Đề xuất: làm ngay. Số ít mà thật tốt hơn số nhiều mà bịa.</span></div>
+
+  <div class="q"><strong>D5. Mức bắt buộc của form.</strong> Bắt buộc câu kết luận, ít nhất 1 ưu và 1 nhược chung, chấm đủ tiêu chí (bỏ qua tối đa 2, trừ "Đáng tiền"); ưu nhược theo tiêu chí không bắt buộc.
+    <br><span class="rec-line">Đề xuất: duyệt như trên.</span> Điểm này khác ý ban đầu của JOY (ưu nhược cho cả từng tiêu chí): bắt buộc ưu nhược cho từng tiêu chí làm form quá dài, người dùng bỏ giữa chừng. Ưu nhược theo tiêu chí vẫn có, được cộng điểm giá trị, và dòng chung được tự gán tiêu chí ở bước gom.</div>
+
+  <div class="q"><strong>D6. Điểm giá trị review ảnh hưởng điểm sản phẩm bao nhiêu.</strong> (a) Chỉ dùng để sắp review và gắn nhãn; (b) nâng nhẹ trọng số bằng hệ số đầy đủ, từ ×1,00 đến ×1,25 (6.2); (c) nhân cả điểm giá trị 0 đến 100 vào trọng số.
+    <br><span class="rec-line">Đề xuất: (b).</span> Đúng ý "cao hơn một tí", không tính vote hai lần, không mở đường cho người tối ưu con số để kéo điểm sản phẩm.</div>
+
+  <div class="q"><strong>D7. Hiện điểm giá trị ra sao.</strong> Con số công khai, hay chỉ bậc công khai và con số cho riêng người viết.
+    <br><span class="rec-line">Đề xuất: bậc công khai, con số chỉ người viết thấy.</span></div>
+
+  <div class="q"><strong>D8. Điểm thưởng cho người viết.</strong> Rate chưa có hệ thống điểm. Điểm thưởng nằm ở Rate hay ở DOS-Me (tài khoản chung của hệ sinh thái), và quy đổi ra gì.
+    <br><span class="rec-line">Đề xuất: tách thành một quyết định riêng sau P6; khi làm thì đặt ở DOS-Me, trao sau 7 ngày giữ và sau bước phân tích.</span> Điểm giá trị review là đầu vào sẵn sàng cho việc đó.</div>
+
+  <div class="q"><strong>D9. Ngưỡng hiển thị.</strong> Một ưu hoặc nhược của sản phẩm: ít nhất 2 người khác nhau và tổng trọng số từ 1,5, hoặc 1 chuyên gia; luôn giữ ít nhất 1 nhược điểm nếu có. Một điểm tiêu chí: ít nhất 3 người viết; xếp hạng theo tiêu chí: ít nhất 5.
+    <br><span class="rec-line">Đề xuất: duyệt.</span></div>
+
+  <div class="q"><strong>D10. Migration DOS-Me cho P2.</strong> Core soạn SQL đề xuất (cột, bảng, hàm làm mới, file kiểm tra, file hoàn tác) để JOY xem và áp dụng qua DOS-Me.
+    <br><span class="rec-line">Đề xuất: duyệt để Core soạn; không có gì được áp dụng khi chưa có lệnh của JOY.</span></div>
+
+  <h2>10. Không nằm trong đề xuất này</h2>
+  <ul>
+    <li>Không sửa code, không chạy SQL, không đổi dữ liệu nào. Các issue thực hiện sẽ được mở sau khi JOY duyệt.</li>
+    <li>Không bàn cách lấy review chuyên gia từ các trang bên ngoài (quyền sử dụng nội dung là một quyết định riêng).</li>
+    <li>Điểm người bán (review chỉ nói về giao hàng, đóng gói) đi theo mô hình tin cậy review, không thuộc tiêu chí sản phẩm.</li>
+  </ul>
+</div>
+</body>
+</html>

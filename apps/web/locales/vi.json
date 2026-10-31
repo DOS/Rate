@@ -124,6 +124,8 @@
     }
   },
   "compare": {
+    "criteriaSourceExpert": "Điểm tiêu chí do chuyên gia chấm",
+    "criterionNoData": "Chưa đủ dữ liệu",
     "versusMetaTitle": "So sánh {nameA} và {nameB}: 10 nhóm thông số và điểm đánh giá | Rate.vn",
     "versusMetaTitleShort": "{nameA} vs {nameB} | Rate.vn",
     "versusMetaDescription": "So sánh trực tiếp {nameA} và {nameB}: điểm đánh giá theo 5 tiêu chí, 10 nhóm thông số kỹ thuật và giá thật trên các sàn.",
@@ -134,6 +136,7 @@
     "tieDeltaNote": "(cùng điểm theo trọng số hiện tại)",
     "tie1v1Badge": "Ngang điểm 1v1",
     "versusAutoVerdictTie": "Kết luận tự động: hai mẫu ngang điểm tổng hợp ({score}), chọn theo giá và thông số bạn cần.",
+    "versusAutoVerdictNoScore": "Kết luận tự động: cả hai mẫu chưa có đánh giá, chọn theo giá và thông số bạn cần.",
     "versusVerdictWeights": "(Theo trọng số: {weights}.)",
     "compareMetaTitleWithNames": "So sánh {names} - Điểm đánh giá và 10 nhóm thông số | Rate.vn",
     "compareMetaTitleWithNamesShort": "{names} | Rate.vn",
@@ -343,6 +346,8 @@
     "quickToggleShortLimit": "Tối đa 4"
   },
   "leaderboard": {
+    "criteriaSourceExpert": "Điểm tiêu chí do chuyên gia chấm",
+    "criterionNoData": "Chưa đủ dữ liệu",
     "metaTitle": "Bảng xếp hạng thiết bị công nghệ | Rate.vn",
     "metaDescription": "Bảng xếp hạng độc lập theo danh mục: điểm chuyên gia và điểm người mua thật theo 5 tiêu chí, không bị chi phối bởi quảng cáo hay link affiliate.",
     "kicker": "Bảng xếp hạng thiết bị độc lập",

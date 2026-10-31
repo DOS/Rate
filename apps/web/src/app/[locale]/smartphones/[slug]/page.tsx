@@ -1525,7 +1525,7 @@ export async function ProductDetailView({
                 maxPriceVnd={marketStats.maxPrice}
                 userScore5={lbScored.userScore5}
                 expertScore10={lbScored.expertScore10}
-                valueCriterionScore5={lbScored.criteria.value}
+                valueCriterionScore5={lbScored.criteria.value ?? 0}
                 radarSignal={radarSignal}
               />
             );

@@ -175,8 +175,8 @@ for (const category of ['smartphones', 'tablets'] as const) {
     `popular pairs in ${category}`
   );
 }
-// Every spec field the scoring file reads is in the kept list, so a new one
-// cannot silently score as missing on the leaderboard.
+// The scores read no spec field: a criterion score is never derived from
+// the specs (DOS/Rate#1143). Any spec a later change reads must be kept.
 const engineSrc = readFileSync(
   new URL('../leaderboard-engine.ts', import.meta.url),
   'utf8'
@@ -184,7 +184,7 @@ const engineSrc = readFileSync(
 const readSpecs = [
   ...engineSrc.matchAll(/\bspecs\??\.([a-z_]+)\??\.([a-z_]+)/g),
 ];
-assert.ok(readSpecs.length >= 15, 'the scoring file reads spec fields');
+assert.equal(readSpecs.length, 0, 'the scoring file reads no spec field');
 for (const [, group, field] of readSpecs) {
   const kept = (LEADERBOARD_SPEC_FIELDS as Record<string, readonly string[]>)[
     group!

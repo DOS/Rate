@@ -11,3 +11,5 @@ export * from './listing-price-floor.js';
 export * from './spec-template.js';
 export * from './model-key.js';
 export * from './review-summary.js';
+export * from './rating-criteria.js';
+export * from './review-form.js';

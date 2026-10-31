@@ -149,6 +149,9 @@ playwright-report-item-model/
 !Docs/Proposals/2026-10-29-dos-me-m3-m4.sql
 !Docs/Proposals/2026-10-29-dos-me-m3-m4-rollback.sql
 !Docs/Proposals/2026-10-29-dos-me-m3-m4-verify.sql
+!Docs/Proposals/2026-10-31-dos-me-criteria-ratings.sql
+!Docs/Proposals/2026-10-31-dos-me-criteria-ratings-rollback.sql
+!Docs/Proposals/2026-10-31-dos-me-criteria-ratings-verify.sql
 * - Copy*
 * - Bản sao*
 *.dump

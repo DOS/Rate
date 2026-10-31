@@ -7,7 +7,7 @@ import { radarExplanation } from '../product-detail-copy';
 import { weightExplanationCopy } from '../review-display';
 import { fitTitle } from '../seo';
 import { localizeSpecValue } from '../spec-localizer';
-import { versusVerdictCopy } from '../versus-verdict';
+import { versusApiWinner, versusVerdictCopy } from '../versus-verdict';
 import {
   NBSP,
   collapseWhitespace,
@@ -300,18 +300,43 @@ assert.deepEqual(
 );
 assert.deepEqual(versusVerdictCopy(versusInput, 'vi').values, {
   winner: 'A',
-  score: '4.92',
+  // One decimal, like every rating on the site (DOS/Rate#1470).
+  score: '4.9',
   expertSuffix: ' (9.1/10 Lab)',
 });
 assert.deepEqual(versusVerdictCopy(versusInput, 'cs').values, {
   winner: 'A',
-  score: '4,92',
+  score: '4,9',
   expertSuffix: ' (9,1/10 Lab)',
 });
 assert.deepEqual(
   versusVerdictCopy({ ...versusInput, tie: true }, 'cs').values,
-  { score: '4,92' }
+  { score: '4,9' }
 );
+// Neither model has a score: no "0.0" tie (DOS/Rate#1545).
+assert.equal(
+  versusVerdictCopy({ ...versusInput, tie: true, score: 0 }).key,
+  'versusAutoVerdictNoScore'
+);
+
+// The 1v1 API decides on the /10 scores at one decimal; the composite and
+// then the lower price only break a tie (DOS/Rate#1545).
+assert.deepEqual(versusApiWinner(8.9, 8.7, 4.0, 4.9, 'B'), {
+  tie: false,
+  side: 'A',
+});
+assert.deepEqual(versusApiWinner(9.04, 8.96, 4.0, 4.9, 'A'), {
+  tie: true,
+  side: 'B',
+});
+assert.deepEqual(versusApiWinner(9.0, 9.0, 4.5, 4.5, 'B'), {
+  tie: true,
+  side: 'B',
+});
+assert.deepEqual(versusApiWinner(9.0, 9.0, 4.5, 4.5, 'equal'), {
+  tie: true,
+  side: 'A',
+});
 
 // cs.json: a placeholder before % or ₫ is joined by one U+00A0, and no
 // rating scale is written `/ 5.0`.
