@@ -33,7 +33,7 @@ Design: [`2026-10-31-criteria-stars-pros-cons.html`](./2026-10-31-criteria-stars
   - Public read; only the service role writes.
 - **`rate.product_points`:** the aggregated lines of a master, with support, writer count, an expert flag, and first and last seen dates. Public read; the service role and the worker (P5) write.
 - **`rate.master_products`:**
-  - `rating_score`: the one rating of D3. It is a Bayesian average with k = 3 and mu = 4.2 (the same formula as the web's `computeBayesianRatingSummary`). Each review weight is capped at 3, and `rating_exact` is used when present.
+  - `rating_score`: the one rating of D3. It is a Bayesian average with k = 3 and mu = 4.2 (the same formula as the web's `computeBayesianRatingSummary`). Each review weight is capped at 3, and `rating_exact` is used when present. It is stored as `numeric(4,3)`, and criterion scores at 3 decimals too, so a page rounds once, to 1 decimal (4.249 shows 4.2).
   - `rating_weight_sum`.
   - `criteria_scores`: `{key: {score, weight_sum, writers}}`. A criterion appears only when all of these hold (D9):
     - 3 or more reviews rated it;

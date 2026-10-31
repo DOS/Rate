@@ -128,7 +128,7 @@ GRANT SELECT ON rate.review_points TO rate_worker;
 -- 5. rate.master_products ----------------------------------------------------------------------
 
 ALTER TABLE rate.master_products
-  ADD COLUMN IF NOT EXISTS rating_score numeric(3, 2),
+  ADD COLUMN IF NOT EXISTS rating_score numeric(4, 3),
   ADD COLUMN IF NOT EXISTS rating_weight_sum numeric(10, 2) NOT NULL DEFAULT 0,
   ADD COLUMN IF NOT EXISTS criteria_scores jsonb NOT NULL DEFAULT '{}'::jsonb;
 
@@ -157,6 +157,7 @@ END $$;
 --                   at 3 and the star = rating_exact when a criteria review set it, else
 --                   rating_star (apps/web/src/lib/rate-domain-core.ts computeBayesianRatingSummary).
 --                   NULL with no weight, so a page shows "no rating yet" instead of the prior.
+--                   Stored at 3 decimals (scores too), so a page rounds once, to 1 decimal.
 --   criteria      = the same estimate per criterion of criteria_ratings, over the reviews that
 --                   rated it with a number from 1 to 5 under a key shaped like the shared-data
 --                   keys (^[a-z_]{2,32}$); kept only with 3 or more reviews and a weight sum of
@@ -212,7 +213,7 @@ BEGIN
     ),
     overall AS (
       SELECT round(COALESCE(sum(w), 0), 2) AS weight_sum,
-             CASE WHEN sum(w) > 0 THEN round((3 * 4.2 + sum(w * star)) / (3 + sum(w)), 2) END AS score
+             CASE WHEN sum(w) > 0 THEN round((3 * 4.2 + sum(w * star)) / (3 + sum(w)), 3) END AS score
       FROM eligible
       WHERE star BETWEEN 1 AND 5
     ),
@@ -220,7 +221,7 @@ BEGIN
       SELECT c.key,
              count(*) AS writers,
              round(sum(e.w), 2) AS weight_sum,
-             round((3 * 4.2 + sum(e.w * (c.value #>> '{}')::numeric)) / (3 + sum(e.w)), 2) AS score
+             round((3 * 4.2 + sum(e.w * (c.value #>> '{}')::numeric)) / (3 + sum(e.w)), 3) AS score
       FROM eligible e
       CROSS JOIN LATERAL jsonb_each(
         CASE WHEN jsonb_typeof(e.criteria_ratings) = 'object' THEN e.criteria_ratings

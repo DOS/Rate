@@ -113,12 +113,12 @@ try {
   `);
 
   // Per master (no Items yet). 128GB: weights 1 + 1 + 1 + 2 = 5 (review 4 is excluded), stars
-  // 5, 4.3 (exact), 3, 5: (3 * 4.2 + 22.3) / 8 = 4.36. display: 3 writers, weight 3:
-  // (12.6 + 12) / 6 = 4.10. value has 2 writers (hidden); a bad key and a string star are not
-  // criteria. 256GB: (12.6 + 2) / 4 = 3.65, one writer, no criteria.
+  // 5, 4.3 (exact), 3, 5: (3 * 4.2 + 22.3) / 8 = 4.3625, stored 4.363. display: 3 writers, weight 3:
+  // (12.6 + 12) / 6 = 4.100. value has 2 writers (hidden); a bad key and a string star are not
+  // criteria. 256GB: (12.6 + 2) / 4 = 3.650, one writer, no criteria.
   const per128 =
-    '4.36|5.00|{"display": {"score": 4.10, "writers": 3, "weight_sum": 3.00}}';
-  const per256 = '3.65|1.00|{}';
+    '4.363|5.00|{"display": {"score": 4.100, "writers": 3, "weight_sum": 3.00}}';
+  const per256 = '3.650|1.00|{}';
 
   const applyAndCheckPerMaster = (when) => {
     sql(proposal);
@@ -144,7 +144,7 @@ try {
     );
     assert.equal(
       row(x128),
-      '4.56|4.00|{}',
+      '4.557|4.00|{}',
       `review 3 out of the rating ${when}`
     );
     sql(
@@ -257,12 +257,12 @@ try {
 
   // 2. The proposal first, then M0 and M1+M2: the two sizes become one Item, and both
   // variants show the Item's pooled rating. Weights 5 + 1 = 6, stars 22.3 + 2:
-  // (12.6 + 24.3) / 9 = 4.10. display: 4 writers, weight 4: (12.6 + 14) / 7 = 3.80.
+  // (12.6 + 24.3) / 9 = 4.100. display: 4 writers, weight 4: (12.6 + 14) / 7 = 3.800.
   applyAndCheckPerMaster('before M1+M2');
   sql(m0);
   sql(m1m2);
   const pooled =
-    '4.10|6.00|{"display": {"score": 3.80, "writers": 4, "weight_sum": 4.00}}';
+    '4.100|6.00|{"display": {"score": 3.800, "writers": 4, "weight_sum": 4.00}}';
   assert.equal(
     sql(
       `SELECT count(DISTINCT item_id) FROM rate.master_products WHERE id IN ('${x128}', '${x256}')`
@@ -274,18 +274,18 @@ try {
   assert.equal(row(x256), pooled, '256GB shows the Item rating');
   checkAll('after M1+M2 on top');
   // A vote's weight change on the Item path (refresh_item_rating, not the master refresh):
-  // review 5 at weight 1: weights 5, stars 5 + 4.3 + 3 + 5 + 2 = 19.3, (12.6 + 19.3) / 8 = 3.99.
+  // review 5 at weight 1: weights 5, stars 5 + 4.3 + 3 + 5 + 2 = 19.3, (12.6 + 19.3) / 8 = 3.9875, stored 3.988.
   sql(
     `UPDATE rate.reviews SET helpfulness_weight = 1 WHERE id = '${review(5)}'`
   );
   asRole('rate_worker', `SELECT rate.refresh_master_product_rating('${x256}')`);
   const pooledAfterVote =
-    '3.99|5.00|{"display": {"score": 3.80, "writers": 4, "weight_sum": 4.00}}';
+    '3.988|5.00|{"display": {"score": 3.800, "writers": 4, "weight_sum": 4.00}}';
   assert.equal(row(x128), pooledAfterVote, '128GB after the vote');
   assert.equal(row(x256), pooledAfterVote, '256GB after the vote');
   checkAll('after a vote on the Item path');
   // A review on an Item listing with no variant (cluster_id NULL) refreshes the Item too:
-  // weights 5 + 1 = 6, stars 19.3 + 4: (12.6 + 23.3) / 9 = 3.99.
+  // weights 5 + 1 = 6, stars 19.3 + 4: (12.6 + 23.3) / 9 = 3.989.
   const noVariant = 'b0000000-0000-4000-8000-0000000000a0';
   const noVariantReview = 'd0000000-0000-4000-8000-0000000000a0';
   sql(`
@@ -308,7 +308,7 @@ try {
     'the listing has no variant'
   );
   const withNoVariant =
-    '3.99|6.00|{"display": {"score": 3.80, "writers": 4, "weight_sum": 4.00}}';
+    '3.989|6.00|{"display": {"score": 3.800, "writers": 4, "weight_sum": 4.00}}';
   assert.equal(row(x128), withNoVariant, '128GB counts the no-variant review');
   assert.equal(row(x256), withNoVariant, '256GB counts the no-variant review');
   // A re-crawl that rewrites the review unchanged refreshes nothing; V6 stays 0 either way.
