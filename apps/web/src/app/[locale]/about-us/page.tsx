@@ -52,7 +52,10 @@ export default async function AboutUsPage({
 
   return (
     <PageShell locale={locale}>
-      <section className="bg-dark border-bottom border-secondary border-opacity-25 py-5 text-white">
+      <section
+        className="hero-banner rate-surface-dark rate-ink-on-dark border-bottom border-secondary border-opacity-25 py-5 text-white"
+        style={{ background: 'var(--bs-dark)' }}
+      >
         <div className="container py-3">
           <div className="row align-items-center g-4">
             <div className="col-lg-8">
@@ -81,7 +84,13 @@ export default async function AboutUsPage({
             </div>
 
             <div className="col-lg-4">
-              <div className="card rounded-4 bg-opacity-50 border-secondary border-opacity-25 border bg-black p-4 text-white">
+              <div
+                className="card rounded-4 p-4 text-white"
+                style={{
+                  background: 'var(--rate-glass-bg)',
+                  border: '1px solid var(--rate-glass-border)',
+                }}
+              >
                 <div className="small text-uppercase text-white-50 fw-bold mb-3">
                   {t('aboutStatsTitle')}
                 </div>

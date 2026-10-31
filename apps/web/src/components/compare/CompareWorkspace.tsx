@@ -41,6 +41,7 @@ import {
   resolveCompareDisplaySizeInch,
   resolveCompareEffectiveUserRating,
   resolveCompareExpertRating5,
+  resolveCompareExpertRating10,
   resolveCompareMemoryScore,
   resolveCompareRamGb,
   resolveCompareStorageGb,
@@ -79,7 +80,12 @@ import {
   type CompareCellSegment,
 } from '@/lib/compare-cell';
 import { productImageUrl } from '@/lib/rate-domain-core';
-import { itemSlugFromProductAnswer, versusHref } from '@/lib/item-compare';
+import {
+  itemSlugFromProductAnswer,
+  productFromProductAnswer,
+  versusHref,
+} from '@/lib/item-compare';
+import StarRating from '@/components/elementary/StarRating';
 import {
   formatDecimal,
   formatNumber,
@@ -94,6 +100,11 @@ interface CompareWorkspaceProps {
   locale?: string;
   /** RATE_ITEM_MODEL on: variant slug to Item slug, for versus links. */
   itemSlugBySlug?: Readonly<Record<string, string>>;
+  /**
+   * `versus`: the hero above already scores the pair, so the matrix comes
+   * first and the second summary is left out (DOS/Rate#1473).
+   */
+  layout?: 'compare' | 'versus';
 }
 
 type CompareTranslator = ReturnType<typeof useTranslations<'compare'>>;
@@ -105,6 +116,8 @@ interface SpecRowDef {
   renderValue: (p: MasterProduct) => string;
   /** The cell with its spec values marked (specPart), for the matrix. */
   renderCell?: (p: MasterProduct) => string;
+  /** A screen-only cell text that differs from the export (DOS/Rate#1528). */
+  screenValue?: (p: MasterProduct) => string;
   numericValue?: (p: MasterProduct) => number | null;
   higherIsBetter?: boolean;
   /** Whether the category's spec template has this row (DOS/Rate#1166). */
@@ -311,6 +324,13 @@ export function buildSpecGroups(
             const exp5 = resolveCompareExpertRating5(p);
             return exp5 != null
               ? `Lab ${formatDecimal(exp5, locale, 1)} / ${formatDecimal(5, locale, 1)}`
+              : '-';
+          },
+          // On screen the lab score reads on 10, as the product page shows it.
+          screenValue: (p) => {
+            const exp10 = resolveCompareExpertRating10(p);
+            return exp10 != null
+              ? `Lab ${formatDecimal(exp10, locale, 1)}/10`
               : '-';
           },
           numericValue: (p) => resolveCompareExpertRating5(p),
@@ -941,6 +961,7 @@ export default function CompareWorkspace({
   hasExplicitSlugs = false,
   locale = 'vi',
   itemSlugBySlug,
+  layout = 'compare',
 }: CompareWorkspaceProps) {
   const t = useTranslations('compare');
   const router = useRouter();
@@ -1035,17 +1056,28 @@ export default function CompareWorkspace({
           // The text the cells show, where "N/A" becomes "-", localized
           // part by part as the cells do (DOS/Rate#1392).
           products.map((p) =>
-            compareCellShownText((row.renderCell ?? row.renderValue)(p), locale)
+            compareCellShownText(
+              (row.screenValue ?? row.renderCell ?? row.renderValue)(p),
+              locale
+            )
           ),
           showDiffOnly
         )
       ),
     }))
     .filter((group) => group.rows.length > 0);
-  // Spec groups are numbered from 1 after the market group.
-  const numberedSpecGroups = visibleSpecGroups.filter(
-    (group) => group.id !== 'market_trust'
-  );
+
+  // A spec group's heading in the page's language, for the table and the
+  // exports alike (DOS/Rate#1529); a watch's cellular heading has no "5G"
+  // (DOS/Rate#1166).
+  const groupHeading = (group: { id: string; title: string }) =>
+    group.id in specDict.groups
+      ? specGroupHeading(
+          specDict,
+          group.id as SpecGroupKey,
+          getCategorySpecTemplate(activeCategory).has5g
+        )
+      : group.title;
 
   const searchInputRef = useRef<HTMLInputElement | null>(null);
   const searchBoxRef = useRef<HTMLDivElement | null>(null);
@@ -1066,6 +1098,56 @@ export default function CompareWorkspace({
       ),
     [catalogCandidates, activeCategory]
   );
+
+  // Rows known to carry their full spec sheet: the page's own and the search
+  // API's. A picker candidate carries only the ranking fields (DOS/Rate#1515),
+  // so a candidate that joins the comparison has its sheet read from the
+  // products API; the exports wait for it.
+  const fullRowsRef = useRef(new Map<string, MasterProduct>());
+  const [specsLoading, setSpecsLoading] = useState(false);
+  useEffect(() => {
+    for (const p of initialProducts) fullRowsRef.current.set(p.slug, p);
+  }, [initialProducts]);
+  useEffect(() => {
+    for (const p of remoteResults ?? []) fullRowsRef.current.set(p.slug, p);
+  }, [remoteResults]);
+  useEffect(() => {
+    const known = fullRowsRef.current;
+    if (
+      storedProducts.some((p) => known.has(p.slug) && known.get(p.slug) !== p)
+    ) {
+      setProducts((prev) => prev.map((p) => known.get(p.slug) ?? p));
+      return;
+    }
+    const missing = storedProducts
+      .map((p) => p.slug)
+      .filter((slug) => !known.has(slug));
+    setSpecsLoading(missing.length > 0);
+    if (missing.length === 0) return;
+    let cancelled = false;
+    void Promise.all(
+      missing.map((slug) =>
+        fetch(`/api/v1/rate/products/${encodeURIComponent(slug)}`)
+          .then((res) => (res.ok ? res.json() : null))
+          .then((json: unknown) =>
+            productFromProductAnswer<MasterProduct>(json, slug)
+          )
+          .catch(() => null)
+      )
+    ).then((rows) => {
+      if (cancelled) return;
+      for (const row of rows) if (row) known.set(row.slug, row);
+      if (rows.some(Boolean)) {
+        setProducts((prev) => prev.map((p) => known.get(p.slug) ?? p));
+      }
+      // A failed read leaves the exports shut: the navigation's server render
+      // still brings the full row, and a short export would be wrong.
+      setSpecsLoading(rows.some((row) => !row));
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [storedProducts]);
 
   // Sync local products state when server initialProducts prop updates (e.g. Back/Forward navigation)
   useEffect(() => {
@@ -1419,7 +1501,7 @@ export default function CompareWorkspace({
         const vals = products.map((p) => row.renderValue(p));
         if (vals.every((v) => !v || v === '-')) continue;
         rows.push(
-          [group.title, row.label, ...vals]
+          [groupHeading(group), row.label, ...vals]
             .map((c) => escapeCsvCell(c))
             .join(',')
         );
@@ -1458,7 +1540,7 @@ export default function CompareWorkspace({
       }),
       matrix: specGroups.map((group) => ({
         groupId: group.id,
-        groupTitle: group.title,
+        groupTitle: groupHeading(group),
         // Like the CSV, no row that every product leaves empty.
         rows: group.rows
           .filter((row) =>
@@ -1545,8 +1627,8 @@ export default function CompareWorkspace({
     };
   }, [products]);
 
-  return (
-    <div>
+  const controlsBlock = (
+    <>
       {/* 5-Category Lock Switcher Bar */}
       <div className="rate-card mb-3 p-3">
         <div className="d-flex flex-column flex-lg-row align-items-lg-center justify-content-between gap-2">
@@ -1741,12 +1823,11 @@ export default function CompareWorkspace({
                                     <span className="rate-spec-pill">
                                       {item.brand}
                                     </span>
-                                    <span className="rate-score-badge-user">
-                                      ★{' '}
-                                      {rating > 0
-                                        ? formatDecimal(rating, locale, 1)
-                                        : t('unratedShort')}
-                                    </span>
+                                    <StarRating
+                                      value={rating}
+                                      size="sm"
+                                      emptyLabel={t('unratedShort')}
+                                    />
                                     <span
                                       className="text-secondary fw-semibold rate-tabular"
                                       style={{ fontSize: '0.8125rem' }}
@@ -1830,6 +1911,7 @@ export default function CompareWorkspace({
                   <button
                     type="button"
                     onClick={handleCopyMarkdownReport}
+                    disabled={specsLoading}
                     className="btn btn-sm btn-outline-danger rounded-pill fw-medium px-3 py-2"
                   >
                     {copiedMarkdown
@@ -1839,6 +1921,7 @@ export default function CompareWorkspace({
                   <button
                     type="button"
                     onClick={handleDownloadCompareCsv}
+                    disabled={specsLoading}
                     data-testid="compare-export-csv-btn"
                     className="btn btn-sm btn-outline-dark rounded-pill fw-medium px-3 py-2"
                   >
@@ -1847,6 +1930,7 @@ export default function CompareWorkspace({
                   <button
                     type="button"
                     onClick={handleDownloadCompareJson}
+                    disabled={specsLoading}
                     data-testid="compare-export-json-btn"
                     className="btn btn-sm btn-outline-dark rounded-pill fw-medium px-3 py-2"
                   >
@@ -1908,7 +1992,11 @@ export default function CompareWorkspace({
           </div>
         )}
       </div>
+    </>
+  );
 
+  const popularBlock = (
+    <>
       {/* Popular 1v1 Head-to-Head Battles Hub for Active Category */}
       {popularBattles.length > 0 && (
         <div className="rate-card p-md-4 mb-4 p-3">
@@ -1977,14 +2065,11 @@ export default function CompareWorkspace({
                           <div className="small fw-bold text-dark text-truncate">
                             {battle.productA.name}
                           </div>
-                          <div className="small text-secondary rate-tabular">
-                            ★{' '}
-                            {formatDecimal(
-                              battle.productA.combinedScore5,
-                              locale,
-                              2
-                            )}
-                          </div>
+                          <StarRating
+                            value={battle.productA.combinedScore5}
+                            digits={2}
+                            size="sm"
+                          />
                         </div>
                       </div>
 
@@ -1997,14 +2082,11 @@ export default function CompareWorkspace({
                           <div className="small fw-bold text-dark text-truncate">
                             {battle.productB.name}
                           </div>
-                          <div className="small text-secondary rate-tabular">
-                            ★{' '}
-                            {formatDecimal(
-                              battle.productB.combinedScore5,
-                              locale,
-                              2
-                            )}
-                          </div>
+                          <StarRating
+                            value={battle.productB.combinedScore5}
+                            digits={2}
+                            size="sm"
+                          />
                         </div>
                         <img
                           loading="lazy"
@@ -2048,7 +2130,11 @@ export default function CompareWorkspace({
           </div>
         </div>
       )}
+    </>
+  );
 
+  const summaryBlock = (
+    <>
       {/* Automated Head-to-Head 10-Group Verdict Summary Card */}
       {headToHeadSummary && (
         <div className="rate-scoreboard-dark p-md-4 mb-4 p-3 shadow-sm">
@@ -2097,15 +2183,11 @@ export default function CompareWorkspace({
                   <div className="fw-bold text-truncate text-white">
                     {headToHeadSummary.bestRated.name}
                   </div>
-                  <div className="small text-white-50 rate-tabular">
-                    ★{' '}
-                    {formatDecimal(
-                      getEffectiveRating(headToHeadSummary.bestRated),
-                      locale,
-                      1
-                    )}{' '}
-                    / {formatDecimal(5, locale, 1)} {t('verdictAiFilteredNote')}
-                  </div>
+                  <StarRating
+                    value={getEffectiveRating(headToHeadSummary.bestRated)}
+                    size="sm"
+                    title={t('verdictAiFilteredNote')}
+                  />
                 </div>
               </div>
             )}
@@ -2208,7 +2290,11 @@ export default function CompareWorkspace({
           </div>
         </div>
       )}
+    </>
+  );
 
+  const matrixBlock = (
+    <>
       {/* Empty State if 0 products */}
       {products.length === 0 ? (
         <div className="rate-card p-5 text-center">
@@ -2275,7 +2361,7 @@ export default function CompareWorkspace({
                     const minPrice = Number(p.min_price || 0);
                     const minPriceFormatted = formatNumber(minPrice, locale);
                     const userRating = getEffectiveRating(p);
-                    const expertRating = resolveCompareExpertRating5(p);
+                    const expertRating = resolveCompareExpertRating10(p);
                     const reviewCount =
                       p.authentic_review_count || p.total_reviews || 0;
 
@@ -2344,15 +2430,15 @@ export default function CompareWorkspace({
 
                           {/* Core Rating Badges First (Per DESIGN.md v3.0) */}
                           <div className="d-flex justify-content-center mb-2 flex-wrap gap-1">
-                            <span className="rate-score-badge-user">
-                              ★{' '}
-                              {userRating > 0
-                                ? `${formatDecimal(userRating, locale, 1)} (${reviewCount})`
-                                : t('unratedShort')}
-                            </span>
+                            <StarRating
+                              value={userRating}
+                              count={reviewCount}
+                              size="sm"
+                              emptyLabel={t('unratedShort')}
+                            />
                             {expertRating != null && (
                               <span className="rate-score-badge-expert">
-                                Lab {formatDecimal(expertRating, locale, 1)}
+                                Lab {formatDecimal(expertRating, locale, 1)}/10
                               </span>
                             )}
                           </div>
@@ -2484,18 +2570,7 @@ export default function CompareWorkspace({
                     1 +
                     (products.length < MAX_COMPARE_ITEMS ? 1 : 0);
 
-                  // Numbered in the category's order, and a watch's
-                  // cellular heading without "5G" (DOS/Rate#1166). The
-                  // market group comes first, so spec groups start at 1.
-                  const groupTitle =
-                    group.id in specDict.groups
-                      ? specGroupHeading(
-                          specDict,
-                          group.id as SpecGroupKey,
-                          numberedSpecGroups.indexOf(group) + 1,
-                          getCategorySpecTemplate(activeCategory).has5g
-                        )
-                      : group.title;
+                  const groupTitle = groupHeading(group);
 
                   return (
                     <React.Fragment key={group.id}>
@@ -2555,10 +2630,28 @@ export default function CompareWorkspace({
                                       : 'text-dark'
                                   }`}
                                 >
-                                  <CompareCellText
-                                    segments={segments}
-                                    locale={locale}
-                                  />
+                                  {/* Screen-only cells: the stars, and the
+                                  lab score on 10 as the product page shows
+                                  it; exports keep renderValue (#1528). */}
+                                  {row.screenValue ? (
+                                    row.screenValue(p)
+                                  ) : row.id === 'rating_weighted' ? (
+                                    <StarRating
+                                      value={getEffectiveRating(p)}
+                                      count={
+                                        p.authentic_review_count ||
+                                        p.total_reviews ||
+                                        0
+                                      }
+                                      size="sm"
+                                      emptyLabel={t('valNoReviews')}
+                                    />
+                                  ) : (
+                                    <CompareCellText
+                                      segments={segments}
+                                      locale={locale}
+                                    />
+                                  )}
                                   {isWinner && (
                                     <span
                                       className="badge bg-success rounded-pill ms-1 text-white"
@@ -2584,6 +2677,28 @@ export default function CompareWorkspace({
           </div>
         </div>
       )}
+    </>
+  );
+
+  // The versus page already scores the pair in its hero, so it shows the
+  // comparison right after it, then the picker and other pairs; the
+  // second summary stays on /compare only (DOS/Rate#1473).
+  if (layout === 'versus') {
+    return (
+      <div>
+        {matrixBlock}
+        <div className="mt-4">{controlsBlock}</div>
+        {popularBlock}
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      {controlsBlock}
+      {popularBlock}
+      {summaryBlock}
+      {matrixBlock}
     </div>
   );
 }

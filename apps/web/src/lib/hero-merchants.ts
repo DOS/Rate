@@ -14,8 +14,16 @@ export type HeroMerchantSuggestion = Pick<
   | 'platform_shop_id'
   | 'is_official'
   | 'trust_score'
-  | 'dosafe_risk_score'
->;
+> & {
+  /** Null when the store has no DOSafe score, never 0 (DOS/Rate#1479). */
+  dosafe_risk_score: number | null;
+};
+
+/** A summary as pages pass it, with the server-side flag for an unknown DOSafe score. */
+type HeroMerchantInput = Omit<HeroMerchantSuggestion, 'dosafe_risk_score'> & {
+  dosafe_risk_score?: number | null;
+  dosafe_risk_known?: boolean;
+};
 
 /** Pages pass only the first few: the dropdown fetches matches as the user types. */
 export const HERO_MERCHANT_PRELOAD = 2;
@@ -64,12 +72,12 @@ export function clampScore100(value: unknown): number {
 }
 
 export function toHeroMerchantSuggestions(
-  merchants: readonly HeroMerchantSuggestion[]
+  merchants: readonly HeroMerchantInput[]
 ): HeroMerchantSuggestion[] {
   if (!Array.isArray(merchants)) return [];
   return merchants
     .filter(
-      (m): m is HeroMerchantSuggestion =>
+      (m): m is HeroMerchantInput =>
         Boolean(m) && typeof m === 'object' && !Array.isArray(m)
     )
     .slice(0, MAX_HERO_MERCHANTS)
@@ -82,14 +90,20 @@ export function toHeroMerchantSuggestions(
         is_official,
         trust_score,
         dosafe_risk_score,
+        dosafe_risk_known,
       }) => ({
         id: sanitizeMerchantIdentifier(id, 128),
         name: sanitizeMerchantText(name, 200),
         platform: sanitizeMerchantText(platform, 40),
         platform_shop_id: sanitizeMerchantIdentifier(platform_shop_id, 128),
         is_official: Boolean(is_official),
-        trust_score: clampScore100(trust_score),
-        dosafe_risk_score: clampScore100(dosafe_risk_score),
+        // No data to score stays unknown, never 0 or 100 (DOS/Rate#1484).
+        trust_score: trust_score == null ? null : clampScore100(trust_score),
+        // The flag is dropped here, so read it first (DOS/Rate#1479).
+        dosafe_risk_score:
+          dosafe_risk_known === false || dosafe_risk_score == null
+            ? null
+            : clampScore100(dosafe_risk_score),
       })
     );
 }

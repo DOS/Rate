@@ -17,6 +17,8 @@ export const CLIENT_MESSAGE_SCOPES = {
     'compare.quickToggle*',
     'watchlist.quickToggle*',
     'deals.radarBadge*',
+    // StarRating, used by server and client components (DOS/Rate#1528).
+    'starRating',
   ],
   home: ['heroSearch', 'priceVerdict'],
   contact: ['staticPages.quarantine*', 'heroSearch', 'priceVerdict'],

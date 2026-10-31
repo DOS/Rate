@@ -2,7 +2,8 @@ import { expect, test } from '@playwright/test';
 
 // On a phone the product name, the price line and the user score are in the
 // first screen, not behind a full-screen photo (DOS/Rate#605). The score value
-// itself, not only its label, must fit (DOS/Rate#630).
+// itself, not only its label, must fit (DOS/Rate#630). So does the whole jump row to
+// the specs, reviews, history and sellers (DOS/Rate#1517, #1530).
 const PRODUCT = '/smartphones/iphone-16-pro-max-256gb';
 
 for (const viewport of [
@@ -19,6 +20,7 @@ for (const viewport of [
       'h1',
       '.rate-pdv-price-line',
       '[data-testid="pdv-hero-score"]',
+      '[data-testid="pdv-jump-nav"]',
     ]) {
       const el = page.locator(selector).first();
       await expect(el).toBeVisible();
@@ -34,6 +36,6 @@ for (const viewport of [
 test('the repeated hero score is hidden on desktop', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 900 });
   await page.goto(PRODUCT);
-  await expect(page.locator('.rate-pdv-score-value').first()).toBeVisible();
+  await expect(page.getByTestId('pdv-user-score')).toBeVisible();
   await expect(page.getByTestId('pdv-hero-score')).toBeHidden();
 });

@@ -26,6 +26,7 @@ import {
 } from '@/lib/merchant-directory';
 import {
   hasReviewRiskEvidence,
+  knownDosafeRiskScore,
   reviewRiskScoreOrNull,
 } from '@/lib/merchant-risk-tone';
 import { selectMerchantRadar } from '@/lib/deal-radar';
@@ -45,7 +46,6 @@ import {
   BsShieldExclamation,
   BsShop,
   BsSortDown,
-  BsStarFill,
 } from 'react-icons/bs';
 
 import {
@@ -54,11 +54,11 @@ import {
   sanitizeMerchantScore100,
 } from '@/components/merchants/MerchantShareAuditButton';
 import {
-  formatDecimal,
   formatNumber,
   formatPlainNumber,
   formatPriceVnd,
 } from '@/lib/locale-format';
+import StarRating from '@/components/elementary/StarRating';
 
 // Rows per request when an export collects every matching store.
 const EXPORT_PAGE_SIZE = 500;
@@ -277,6 +277,7 @@ export default function MerchantDirectoryExplorer({
       authenticLabel: t('authenticLabel'),
       noReviewsToAnalyse: t('layer2NoReviews'),
       reviewRiskNoData: t('reviewRiskNoDataShort'),
+      trustNoData: t('trustNoData'),
       riskScamLabel: t('riskScamLabel'),
       riskReviewLabel: t('riskReviewLabel'),
       priceRangeLabel: t('priceRangeLabel'),
@@ -360,7 +361,10 @@ export default function MerchantDirectoryExplorer({
         sanitizeMerchantAuditText(m.name, 'Unknown'),
         sanitizeMerchantAuditText(m.platform, 'shopee', 32).toUpperCase(),
         m.is_official ? 'Yes' : 'No',
-        `${sanitizeMerchantScore100(m.trust_score)}/100`,
+        // No trust score: no number (DOS/Rate#1484).
+        m.trust_score == null
+          ? labels.trustNoData
+          : `${sanitizeMerchantScore100(m.trust_score)}/100`,
         hasReviewRiskEvidence(m.review_risk_breakdown)
           ? `${sanitizeMerchantScore100(m.review_risk_score)}/100`
           : labels.reviewRiskNoData,
@@ -443,7 +447,9 @@ export default function MerchantDirectoryExplorer({
         sanitizeMerchantAuditText(m.platform, 'shopee', 32),
         sanitizeMerchantAuditText(m.platform_shop_id, '', 80),
         m.is_official ? 'true' : 'false',
-        String(sanitizeMerchantScore100(m.trust_score)),
+        m.trust_score == null
+          ? ''
+          : String(sanitizeMerchantScore100(m.trust_score)),
         // Empty without analysed reviews (DOS/Rate#1258).
         hasReviewRiskEvidence(m.review_risk_breakdown)
           ? String(sanitizeMerchantScore100(m.review_risk_score))
@@ -534,7 +540,10 @@ export default function MerchantDirectoryExplorer({
         <div className="col-md-3 col-6">
           <div className="card rounded-4 h-100 border bg-white p-3 shadow-sm">
             <div className="text-muted small">{labels.highTrustShops}</div>
-            <div className="fs-4 fw-bold text-primary d-flex align-items-center gap-2">
+            <div
+              className="fs-4 fw-bold text-primary d-flex align-items-center gap-2"
+              data-testid="merchant-safe-count"
+            >
               <BsShieldCheck />
               {summaryStats.safe}
             </div>
@@ -543,10 +552,15 @@ export default function MerchantDirectoryExplorer({
         <div className="col-md-3 col-6">
           <div className="card rounded-4 h-100 border bg-white p-3 shadow-sm">
             <div className="text-muted small">{labels.avgTrustScore}</div>
-            <div className="fs-4 fw-bold text-dark">
-              {summaryStats.avgTrust}
-              <span className="fs-6 text-muted fw-normal">/100</span>
-            </div>
+            {/* No store with a trust score: no average (DOS/Rate#1484). */}
+            {summaryStats.avgTrust == null ? (
+              <div className="fs-6 text-muted">{labels.trustNoData}</div>
+            ) : (
+              <div className="fs-4 fw-bold text-dark">
+                {summaryStats.avgTrust}
+                <span className="fs-6 text-muted fw-normal">/100</span>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -784,12 +798,16 @@ export default function MerchantDirectoryExplorer({
         <>
           <div className="row g-4">
             {visibleMerchants.map((merchant) => {
+              const dosafeScore = knownDosafeRiskScore(merchant);
+              const trustScore = merchant.trust_score;
               const trustBadgeClass =
-                merchant.trust_score >= 80
-                  ? 'bg-success text-white'
-                  : merchant.trust_score >= 50
-                    ? 'bg-warning text-dark'
-                    : 'bg-danger text-white';
+                trustScore == null
+                  ? 'bg-light text-muted border'
+                  : trustScore >= 80
+                    ? 'bg-success text-white'
+                    : trustScore >= 50
+                      ? 'bg-warning text-dark'
+                      : 'bg-danger text-white';
 
               const minPriceText = merchant.min_price
                 ? formatPriceVnd(merchant.min_price, locale)
@@ -845,7 +863,9 @@ export default function MerchantDirectoryExplorer({
                         <span
                           className={`badge ${trustBadgeClass} rounded-pill fs-6 rate-tabular px-3 py-2`}
                         >
-                          {t('trustBadge', { score: merchant.trust_score })}
+                          {trustScore == null
+                            ? t('trustBadgeNoData')
+                            : t('trustBadge', { score: trustScore })}
                         </span>
                       </div>
                     </div>
@@ -854,18 +874,14 @@ export default function MerchantDirectoryExplorer({
                         so the card stays short on phones (DOS/Rate#635). */}
                     <ul className="list-unstyled d-flex small rate-tabular column-gap-3 row-gap-1 mb-3 flex-wrap">
                       <li className="d-flex align-items-center gap-1">
-                        <BsStarFill
-                          aria-hidden="true"
-                          className="text-warning"
-                        />
                         <span className="text-muted">
                           {labels.platformRating}:
                         </span>
-                        <strong>
-                          {merchant.rating_star
-                            ? `${formatDecimal(merchant.rating_star, locale, 2)} / ${formatDecimal(5, locale, 1)}`
-                            : labels.noRating}
-                        </strong>
+                        <StarRating
+                          value={merchant.rating_star}
+                          size="sm"
+                          emptyLabel={labels.noRating}
+                        />
                       </li>
                       {merchant.follower_count > 0 && (
                         <li className="d-flex align-items-center gap-1">
@@ -901,24 +917,33 @@ export default function MerchantDirectoryExplorer({
                               <BsShield aria-hidden="true" className="me-1" />
                               {labels.riskScamLabel}
                             </span>
-                            <span
-                              className={`badge rounded-pill rate-tabular ${
-                                merchant.dosafe_risk_score === 0
-                                  ? 'bg-success-subtle text-success'
-                                  : 'bg-danger-subtle text-danger'
-                              }`}
+                            {dosafeScore == null ? (
+                              // No DOSafe score: no number, and no alert (#1465).
+                              <span className="badge rounded-pill bg-light text-muted border">
+                                {labels.reviewRiskNoData}
+                              </span>
+                            ) : (
+                              <span
+                                className={`badge rounded-pill rate-tabular ${
+                                  dosafeScore === 0
+                                    ? 'bg-success-subtle text-success'
+                                    : 'bg-danger-subtle text-danger'
+                                }`}
+                              >
+                                {dosafeScore}/100
+                              </span>
+                            )}
+                          </div>
+                          {dosafeScore != null && (
+                            <div
+                              className="small text-muted d-none d-sm-block"
+                              style={{ fontSize: '0.8125rem' }}
                             >
-                              {merchant.dosafe_risk_score}/100
-                            </span>
-                          </div>
-                          <div
-                            className="small text-muted d-none d-sm-block"
-                            style={{ fontSize: '0.8125rem' }}
-                          >
-                            {merchant.dosafe_risk_score === 0
-                              ? labels.dosafeZero
-                              : labels.dosafeAlert}
-                          </div>
+                              {dosafeScore === 0
+                                ? labels.dosafeZero
+                                : labels.dosafeAlert}
+                            </div>
+                          )}
                         </div>
 
                         <div className="col-sm-6 col-12">

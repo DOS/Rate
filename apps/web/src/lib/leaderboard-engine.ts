@@ -185,6 +185,45 @@ function toSafeNonNegativeNumber(raw: unknown): number {
   return Number.isFinite(raw) && raw >= 0 ? raw : NaN;
 }
 
+/**
+ * The spec fields the criteria scores read (computeJReviewsCriteriaScores). A
+ * client that ranks or pairs products, such as the leaderboard and the compare
+ * picker's popular pairs, needs only these, not the whole spec sheet
+ * (DOS/Rate#1515). A test checks every spec this file reads is listed.
+ */
+export const LEADERBOARD_SPEC_FIELDS = {
+  battery: ['capacity_mah', 'charging', 'fast_charging_w'],
+  camera: ['front_camera', 'second_camera'],
+  connectivity: ['bluetooth', 'location', 'sensors'],
+  design: ['resistance', 'weight_g'],
+  display: ['protection', 'refresh_rate_hz', 'type'],
+  hardware: ['chipset', 'ram_gb'],
+  multimedia: ['audio_features', 'loudspeaker'],
+} as const satisfies Partial<Record<keyof ProductSpecifications, string[]>>;
+
+/** A spec sheet cut to what the scores read, plus the category slug. */
+export function leaderboardSpecsOnly(specs: unknown): ProductSpecifications {
+  if (!specs || typeof specs !== 'object' || Array.isArray(specs)) {
+    return {} as ProductSpecifications;
+  }
+  const source = specs as Record<string, unknown>;
+  const out: Record<string, unknown> = {};
+  if (typeof source.category_slug === 'string') {
+    out.category_slug = source.category_slug;
+  }
+  for (const [group, fields] of Object.entries(LEADERBOARD_SPEC_FIELDS)) {
+    const block = source[group];
+    if (!block || typeof block !== 'object' || Array.isArray(block)) continue;
+    const kept: Record<string, unknown> = {};
+    for (const field of fields) {
+      const value = (block as Record<string, unknown>)[field];
+      if (value !== undefined) kept[field] = value;
+    }
+    if (Object.keys(kept).length > 0) out[group] = kept;
+  }
+  return out as ProductSpecifications;
+}
+
 export function computeJReviewsCriteriaScores(
   item: MasterProduct,
   userScore5: number,

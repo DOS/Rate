@@ -10,6 +10,7 @@ import { contentLang } from '@/lib/content-lang';
 import { MAX_VALID_VND_PRICE } from '@/lib/rate-domain';
 import { formatDecimal, formatPriceVnd } from '@/lib/locale-format';
 import { deviceImageSrcSet } from '@/lib/device-images';
+import StarRating from '@/components/elementary/StarRating';
 
 export interface ProductCardSpec {
   readonly key: string;
@@ -181,18 +182,12 @@ export default function ProductCard({
         </h3>
 
         <div className="rate-product-card-scores">
-          {safeUserScore != null ? (
-            <>
-              <span className="rate-score-badge-user">
-                ★ {formatDecimal(safeUserScore, locale, 1)}
-              </span>
-              <span className="rate-product-card-muted">
-                {t('reviewCount', { count: safeReviewCount })}
-              </span>
-            </>
-          ) : (
-            <span className="rate-product-card-muted">{t('noReviews')}</span>
-          )}
+          <StarRating
+            value={safeUserScore}
+            count={safeReviewCount}
+            size="sm"
+            emptyLabel={t('noReviews')}
+          />
           {safeExpertScore != null && (
             <span className="rate-score-badge-expert">
               {t('expertScore', {

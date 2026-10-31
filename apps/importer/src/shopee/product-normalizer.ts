@@ -85,7 +85,8 @@ export interface NormalizedProductCandidate {
   /** How the variant was found; null when it is not known. */
   variant_source?: Extract<VariantSource, 'title' | 'single_size' | 'single_variant'> | null;
   /**
-   * False when the title gives no model segment. The key then carries the
+   * False when the title gives no model segment, or sells an accessory for a device
+   * (`isAccessoryTitle`, DOS/Rate#1505). The key then carries the
    * `unkeyed` placeholder model instead of an empty segment (`samsung::unknown`),
    * and the pipeline and matcher reject the candidate (UnkeyableProductTitleError).
    */
@@ -397,6 +398,115 @@ const APPLE_PART_NUMBERS: Readonly<Record<string, readonly [string, string]>> = 
   MX2D3: ['Pencil', 'Pencil Pro'],
 };
 
+// An accessory named first: the title sells a case, a cover, a screen protector, a
+// stylus, a keyboard, a charger or a strap for a device, not the device ("Ốp lưng iPad
+// mini A20 Pro", "Kính cường lực iPhone 16 Pro Max", DOS/Rate#1505). Only the opening
+// words count, so a gift after the device ("iPad mini A20 Pro tặng ốp lưng") and a
+// watch's own case ("Apple Watch Series 10 46mm Titanium Case") keep the device. A
+// "combo", "bộ" or "set" before the accessory, and titles typed without diacritics
+// ("Op lung"), count too.
+const ACCESSORY_OPENER =
+  /^(?:(?:combo|bộ|set|hàng\s*chính\s*hãng)\s+)?(?:(?:vỏ\s*)?ốp(?:\s*lưng)?|op\s*lung|bao\s*(?:da|đựng)|túi\s*(?:chống\s*sốc|đựng)|kính\s*(?:cường\s*lực|camera|bảo\s*vệ)|cường\s*lực|(?:miếng|bộ)\s*dán|dán\s*(?:màn\s*hình|lưng|camera|ppf)|phim\s*dán|skin(?:\s*dán)?|bút|bàn\s*phím|magic\s*keyboard|(?:củ|đế)\s*sạc|sạc|cáp|dây|giá\s*đỡ|(?:silicone\s*|clear\s*|leather\s*|magsafe\s*)?cases?|covers?|folio|(?:tempered\s*)?glass|screen\s*protectors?|stylus|keyboard|charger|cable)(?![\p{L}\d])/iu;
+// Words that make "Apple Pencil" what something fits or copies, not what it is.
+const PENCIL_FIT_WORD =
+  /(?<![\p{L}\d])(?:cho|for|thay|như|giống|kiểu|dùng|tương\s*thích|compatible|khe|đựng|ngăn)(?![\p{L}\d])/iu;
+
+// Device lines named like an accessory: the line word, its model ("13", "1040 G3", "G1")
+// and the brand that owns the line right after it. HP's Folio laptops ("Folio 13 HP Core
+// i5 8GB", DOS/Rate#1539).
+const DEVICE_LINE_OPENERS: readonly RegExp[] = [
+  /^folio\s+(?:\d{1,4}[a-z]?|g\d)(?:\s+g\d)?\s+[([]?hp[)\]]?(?![\p{L}\d])/iu,
+];
+// The promo words ACCESSORY_OPENER lets come before the accessory.
+const OPENER_PROMO = /^(?:(?:combo|bộ|set|hàng\s*chính\s*hãng)\s+)?/iu;
+// Accessories that ACCESSORY_OPENER does not name, typed with or without diacritics, and
+// fit words, right after a laptop name: "Folio 13 HP sleeve", "Folio 13 HP tui chong soc",
+// "Folio 13 HP sac 45W". "cho" is not one: "Folio 13 HP cho sinh viên" is the laptop.
+const LAPTOP_ACCESSORY_OPENER =
+  /^(?:sleeves?|pouch|bags?|balo|ba\s*lô|túi|tui|bao|adapter|battery|decal|stand|casing|miếng|mieng|kinh|dan|sac|cap|ban\s*phim|tempered|tương\s*thích|tuong\s*thich|compatible|thay)(?![\p{L}\d])/iu;
+
+/**
+ * A device whose line name is also an accessory word: "Folio 13 HP ..." is an HP Folio
+ * laptop, not a folio case (DOS/Rate#1539). The line's own brand must come right after its
+ * model, so "Folio case for iPad", "Folio 13 cho HP" and "Folio 12 iPad Pro HP" stay
+ * accessories, and an accessory right after the brand ("Folio 13 HP op lung") is still one.
+ * What comes later is the laptop's own text ("bàn phím có đèn", "dùng cho văn phòng").
+ */
+function opensWithDeviceLine(opening: string): boolean {
+  const title = opening.replace(OPENER_PROMO, '');
+  return DEVICE_LINE_OPENERS.some(line => {
+    const head = line.exec(title);
+    if (!head) return false;
+    // "Folio 13 HP - sleeve da" and "Folio 13 HP (sleeve)" read the word after the dash.
+    const rest = title.slice(head[0].length).replace(/^[\s\p{P}\p{S}]+/u, '');
+    return !ACCESSORY_OPENER.test(rest) && !LAPTOP_ACCESSORY_OPENER.test(rest);
+  });
+}
+
+/**
+ * A pen sold as itself: "Bút cảm ứng (chính hãng) Apple Pencil Pro" is the Apple Pencil,
+ * its own product. Only the pen word and promo words may come before "Apple Pencil"; a
+ * case "có khe đựng Apple Pencil" or a pen "cho iPad như Apple Pencil" is not one.
+ */
+function opensWithApplePencil(opening: string): boolean {
+  const at = /apple\s*pencil(?![\p{L}])/iu.exec(opening)?.index;
+  if (at === undefined) return false;
+  const before = opening.slice(0, at);
+  if (!/^(?:(?:bút|stylus)(?![\p{L}\d])|$)/iu.test(before.trim())) return false;
+  return !PENCIL_FIT_WORD.test(before) && !namesProduct(before);
+}
+
+/**
+ * The title from its first product word: emoji, punctuation and promo brackets before it
+ * dropped. A bracket is dropped only when a product follows it ("[Chính hãng] Ốp lưng
+ * iPhone 16"); one that holds the product ("[Ốp lưng iPhone 16 Pro Max] Trong suốt") is
+ * read without its brackets.
+ */
+function openingWords(text: string): string {
+  let rest = text;
+  for (;;) {
+    const before = rest;
+    rest = rest.replace(/^(?:(?![[(【])[\s\p{P}\p{S}])+/u, '');
+    const block = /^(?:\[([^\]]*)\]|\(([^)]*)\)|【([^】]*)】)/u.exec(rest);
+    if (block) {
+      const after = rest.slice(block[0].length);
+      rest = namesProduct(after) ? after : `${block[1] ?? block[2] ?? block[3] ?? ''} ${after}`;
+    }
+    if (rest === before) return rest.trim();
+  }
+}
+
+/**
+ * Whether a title sells an accessory for a device rather than the device: it opens with
+ * the accessory (DOS/Rate#1505). Opening promo brackets ("[Hàng chính hãng]") are skipped.
+ * An Apple Pencil is its own product, and a bundle that puts the device after a short
+ * accessory and a "+" ("Sạc nhanh + iPhone 16 Pro Max 256GB") sells the device.
+ */
+export function isAccessoryTitle(title: string): boolean {
+  const t = typeof title === 'string' ? title.normalize('NFC') : '';
+  // What the title sells, not a gift it opens with: "Ốp lưng tặng kèm khi mua iPhone 16 Pro
+  // Max" sells the iPhone (DOS/Rate#1407).
+  const opening = openingWords(ownProductPart(t));
+  if (
+    !ACCESSORY_OPENER.test(opening) ||
+    opensWithApplePencil(opening) ||
+    opensWithDeviceLine(opening)
+  ) {
+    return false;
+  }
+  // The part before a gift stops at the "+", so the bundle is read on the whole title.
+  const whole = openingWords(t);
+  const plus = whole.indexOf('+');
+  if (plus > 0) {
+    const before = whole.slice(0, plus);
+    const after = whole.slice(plus + 1).trim();
+    if (!namesProduct(before) && namesProduct(after) && !ACCESSORY_OPENER.test(after)) {
+      return false;
+    }
+  }
+  return true;
+}
+
 /**
  * Detect canonical category slug from product title across all 5 tech categories.
  */
@@ -476,7 +586,10 @@ const CANONICAL_PHONE_REGISTRY: Record<
     third_camera?: string;
     fourth_camera?: string;
     front_camera: string;
-    charging_w: number;
+    /** Wired charging wattage, when a source states it. */
+    charging_w?: number;
+    /** RAM of the storages that differ from `ram_gb` (the S26 Ultra 1TB has 16GB). */
+    ram_by_storage_gb?: Readonly<Record<number, number>>;
     has_5g: boolean;
     release_date: string;
     ip_rating: string;
@@ -1045,75 +1158,81 @@ const CANONICAL_PHONE_REGISTRY: Record<
     ip_rating: 'IP68 dust/water resistant (up to 1.5m for 30 min)',
   },
   'apple:iphone-18-pro-max': {
+    // Sourced with the seeds (flagship-seed-sourced-2026.ts); Apple and
+    // GSMArena publish no charging wattage for this model.
     screen_size_inch: 6.9,
-    battery_mah: 4950,
+    battery_mah: 5391,
     ram_gb: 12,
-    chipset: 'Apple A20 Pro (2 nm TSMC N2)',
-    cpu: 'Hexa-core (2x4.40 GHz + 4x2.85 GHz)',
-    gpu: 'Apple GPU (6-core graphics with hardware ray tracing)',
-    os: 'iOS 20',
-    weight_g: 225,
-    dimensions: '163.0 x 77.6 x 8.2 mm',
+    chipset: 'Apple A20 Pro (2 nm)',
+    cpu: 'Hexa-core (2x4.93 GHz + 4x2.64 GHz)',
+    gpu: 'Apple 7-core GPU with Neural Accelerators, hardware-accelerated ray tracing',
+    os: 'iOS 27',
+    weight_g: 249,
+    dimensions: '163.4 x 78.0 x 8.75 mm',
     resolution: '1320 x 2868 pixels (~460 ppi)',
     screen_type:
-      'LTPO Super Retina XDR OLED, 120Hz ProMotion, Under-Display Face ID, 3000 nits (peak)',
+      'LTPO Super Retina XDR OLED, ProMotion up to 120Hz, HDR, Dolby Vision, 3000 nits (outdoor peak)',
     refresh_rate_hz: 120,
-    rear_camera: '48 MP, f/1.4-2.8, 24mm (wide), variable aperture, sensor-shift OIS',
-    second_camera:
-      '48 MP, f/2.6, 120mm (periscope telephoto), 5x optical zoom, 3D sensor-shift OIS',
-    third_camera: '48 MP, f/2.0, 13mm (ultrawide), PDAF + TOF 3D LiDAR scanner',
-    front_camera: '24 MP, f/1.9, 23mm (wide), PDAF, OIS + Under-Display SL 3D',
-    charging_w: 45,
+    rear_camera:
+      '48 MP Fusion Main, variable aperture f/1.48-f/4.0, 24mm, 1/1.28", dual pixel PDAF, sensor-shift OIS',
+    second_camera: '48 MP Fusion Ultra Wide, f/2.2, 13mm, 120°, PDAF',
+    third_camera:
+      '48 MP Fusion Telephoto, f/2.8, 100mm (4x), tetraprism periscope, 3D sensor-shift OIS',
+    front_camera: '18 MP Center Stage, f/1.9, 20mm, PDAF',
     has_5g: true,
     release_date: 'September 2026',
-    ip_rating: 'IP68 dust/water resistant (up to 6m for 30 min)',
+    ip_rating: 'IP68 (up to 6 m for 30 min)',
   },
   'apple:iphone-18-pro': {
+    // Sourced with the seeds (flagship-seed-sourced-2026.ts); Apple and
+    // GSMArena publish no charging wattage for this model.
     screen_size_inch: 6.3,
-    battery_mah: 3850,
+    battery_mah: 4056,
     ram_gb: 12,
-    chipset: 'Apple A20 Pro (2 nm TSMC N2)',
-    cpu: 'Hexa-core (2x4.40 GHz + 4x2.85 GHz)',
-    gpu: 'Apple GPU (6-core graphics with hardware ray tracing)',
-    os: 'iOS 20',
-    weight_g: 198,
-    dimensions: '149.6 x 71.5 x 8.2 mm',
+    chipset: 'Apple A20 Pro (2 nm)',
+    cpu: 'Hexa-core (2x4.93 GHz + 4x2.64 GHz)',
+    gpu: 'Apple 7-core GPU with Neural Accelerators, hardware-accelerated ray tracing',
+    os: 'iOS 27',
+    weight_g: 211,
+    dimensions: '150.0 x 71.9 x 8.75 mm',
     resolution: '1206 x 2622 pixels (~460 ppi)',
     screen_type:
-      'LTPO Super Retina XDR OLED, 120Hz ProMotion, Under-Display Face ID, 3000 nits (peak)',
+      'LTPO Super Retina XDR OLED, ProMotion up to 120Hz, HDR, Dolby Vision, 3000 nits (outdoor peak)',
     refresh_rate_hz: 120,
-    rear_camera: '48 MP, f/1.4-2.8, 24mm (wide), variable aperture, sensor-shift OIS',
-    second_camera:
-      '48 MP, f/2.6, 120mm (periscope telephoto), 5x optical zoom, 3D sensor-shift OIS',
-    third_camera: '48 MP, f/2.0, 13mm (ultrawide), PDAF + TOF 3D LiDAR scanner',
-    front_camera: '24 MP, f/1.9, 23mm (wide), PDAF, OIS + Under-Display SL 3D',
-    charging_w: 40,
+    rear_camera:
+      '48 MP Fusion Main, variable aperture f/1.48-f/4.0, 24mm, 1/1.28", dual pixel PDAF, sensor-shift OIS',
+    second_camera: '48 MP Fusion Ultra Wide, f/2.2, 13mm, 120°, PDAF',
+    third_camera:
+      '48 MP Fusion Telephoto, f/2.8, 100mm (4x), tetraprism periscope, 3D sensor-shift OIS',
+    front_camera: '18 MP Center Stage, f/1.9, 20mm, PDAF',
     has_5g: true,
     release_date: 'September 2026',
-    ip_rating: 'IP68 dust/water resistant (up to 6m for 30 min)',
+    ip_rating: 'IP68 (up to 6 m for 30 min)',
   },
   'samsung:galaxy-s26-ultra': {
+    // Sourced with the seeds (flagship-seed-sourced-2026.ts).
     screen_size_inch: 6.9,
-    battery_mah: 5500,
-    ram_gb: 16,
-    chipset: 'Qualcomm Snapdragon 8 Elite Gen 2 for Galaxy (2 nm)',
-    cpu: 'Octa-core (2x4.74 GHz Oryon V2 + 6x3.85 GHz Oryon V2)',
-    gpu: 'Adreno 840 (for Galaxy)',
-    os: 'Android 16, One UI 8.1',
-    weight_g: 218,
-    dimensions: '162.6 x 77.6 x 8.1 mm',
-    resolution: '1440 x 3120 pixels (~505 ppi)',
-    screen_type: 'Dynamic LTPO AMOLED 2X, 120Hz, HDR10+, Gorilla Armor 2, 3200 nits (peak)',
+    battery_mah: 5000,
+    ram_gb: 12,
+    chipset: 'Qualcomm Snapdragon 8 Elite Gen 5 for Galaxy (3 nm)',
+    cpu: 'Octa-core (2x4.74 GHz Oryon V3 Phoenix L + 6x3.62 GHz Oryon V3 Phoenix M)',
+    gpu: 'Adreno 840 (1.3 GHz)',
+    os: 'Android 16, One UI 8.5',
+    weight_g: 214,
+    dimensions: '163.6 x 78.1 x 7.9 mm',
+    resolution: '1440 x 3120 pixels (~500 ppi)',
+    screen_type: 'Dynamic LTPO AMOLED 2X, 120Hz, HDR10+, 2600 nits (peak)',
     refresh_rate_hz: 120,
-    rear_camera: '200 MP, f/1.6, 23mm (wide), ISOCELL HP9, multi-directional PDAF, OIS',
-    second_camera: '50 MP, f/3.2, 115mm (periscope telephoto), PDAF, OIS, 5x optical zoom',
-    third_camera: '50 MP, f/2.4, 67mm (telephoto), PDAF, OIS, 3x optical zoom',
-    fourth_camera: '50 MP, f/1.9, 13mm, 120˚ (ultrawide), Dual Pixel PDAF, Super Steady video',
-    front_camera: '12 MP, f/2.2, 26mm (wide), Dual Pixel PDAF',
-    charging_w: 65,
+    rear_camera: '200 MP, f/1.4, 23mm (wide), 1/1.3", multi-directional PDAF, OIS',
+    second_camera: '50 MP, f/1.9, 120˚ (ultrawide), 1/2.5", dual pixel PDAF',
+    third_camera: '50 MP, f/2.9, 111mm (periscope telephoto), PDAF, OIS, 5x optical zoom',
+    fourth_camera: '10 MP, f/2.4, 67mm (telephoto), PDAF, OIS, 3x optical zoom',
+    front_camera: '12 MP, f/2.2, 23mm (wide), dual pixel PDAF',
+    charging_w: 60,
+    ram_by_storage_gb: { 1024: 16 },
     has_5g: true,
     release_date: 'February 2026',
-    ip_rating: 'IP68 dust/water resistant (up to 1.5m for 30 min, Titanium Grade 5 + S Pen)',
+    ip_rating: 'IP68 dust/water resistant (up to 1.5m for 30 min)',
   },
   'oppo:find-x9-pro': {
     screen_size_inch: 6.82,
@@ -1440,6 +1559,40 @@ const WATCH_GIFT_ACCESSORY_NOUN =
 // Cellular" is the watch and "13+ năm" a shop's age (DOS/Rate#1389).
 // A promo tag in front of the title is no part of the model: "[Mã giảm 50K]",
 // "(Hàng mới)", "【Hot】" or "{ Kích T10 }" (DOS/Rate#1421).
+// Garmin's watch and bike lines: a bare number before one of them is a case size, not
+// a GPS model number (DOS/Rate#1467).
+const GARMIN_LINES =
+  /^(?:Venu|Fenix|Fēnix|Forerunner|Vivoactive|Vivomove|Vivosmart|Instinct|Epix|Enduro|Approach|Lily|Edge|Descent|Quatix|Tactix|Marq|Bounce)\b/i;
+
+// Colour words a shop glues to the RAM/ROM run ("Đen/256GB", "Xanh/8GB/128GB"): never
+// the model's last word (DOS/Rate#1481). The first word of a two-word colour ("Titan
+// Gray/", "Xanh Dương/", "Silver Shadow/") goes with it.
+const GLUED_COLOURS =
+  /^(?:Đen|Trắng|Xanh|Bạc|Vàng|Hồng|Tím|Đỏ|Xám|Ghi|Cam|Nâu|Kem|Black|White|Blue|Navy|Silver|Gold|Pink|Purple|Lavender|Violet|Red|Gray|Grey|Green|Yellow|Graphite|Midnight|Starlight|Mint|Cream|Onyx|Cobalt|Icy|Amber|Titanium)$/iu;
+// "Titan" alone is a model word (MSI GT77 Titan), but starts a colour before one.
+const GLUED_COLOUR_FIRST_WORDS = new RegExp(`${GLUED_COLOURS.source.slice(0, -2)}|Titan)$`, 'iu');
+// Samsung's "Jade Green", "Gem Green" and "Sky Blue": these first words go with their own
+// second word only, as "Galaxy Sky" and "Liquid Jade" are models too (DOS/Rate#1495).
+const GLUED_COLOUR_PAIRS = /^(?:jade green|gem green|sky blue)$/i;
+// Samsung's and Asus's "Phantom Black", "Phantom Silver", "Phantom Đen": a colour name
+// there, while Tecno's Phantom is a line (DOS/Rate#1495).
+const PHANTOM_COLOUR_BRANDS = new Set(['Samsung', 'Asus']);
+const isPhantomColour = (first: string, second: string, brand: string): boolean =>
+  PHANTOM_COLOUR_BRANDS.has(brand) && /^phantom$/i.test(first) && isGluedColour(second);
+// In some laptop lines "Titan" and "Titanium" name the model, not its colour: "ThinkPad X1
+// Titanium/16GB/512GB", "X1 Yoga Titanium Bạc/…", "MSI GT77 Titan Đen/…" (DOS/Rate#1495).
+const LAPTOP_TITAN_WORD = /^titan(?:ium)?$/i;
+// English colour words: after "Titan" or "Titanium" they make a colour name ("Titan Gray").
+const ENGLISH_GLUED_COLOURS =
+  /^(?:Black|White|Blue|Navy|Silver|Gold|Pink|Purple|Lavender|Violet|Red|Gray|Grey|Green|Yellow|Graphite|Midnight|Starlight|Mint|Cream|Onyx|Cobalt|Icy|Amber|Shadow)$/i;
+const GLUED_COLOUR_SECOND_WORDS = /^(?:Dương|Lá|Ngọc|Đậm|Nhạt|Shadow)$/iu;
+const isGluedColour = (word: string | undefined): boolean =>
+  word !== undefined && (GLUED_COLOURS.test(word) || GLUED_COLOUR_SECOND_WORDS.test(word));
+// A word glued to a RAM/ROM run, a storage alone or a shop word: "Pro/12GB/512GB",
+// "Plus/256GB", "Plus/Mới" (DOS/Rate#1457, #1467). Matched on NFC text.
+const GLUED_HEAD =
+  /^(\p{L}[\p{L}\d]*\+?)\/(?:(?:\d{1,2}(?:GB)?\/)?\d+(?:[.,]\d+)?(?:GB|TB)(?![a-z\d])|(?:Mới|Chính|Hàng|Fullbox|Likenew|Like|Cũ|New)(?![\p{L}\d]))/iu;
+
 const LEADING_PROMO_GROUPS = /^(?:\s*(?:\[[^\]]*\]|\([^)]*\)|【[^】]*】|\{[^}]*\}))+\s*/;
 // So is a promo word right before the brand or its line: "Live Samsung Galaxy S26
 // Ultra", "Hot Sale Samsung …", "Flash Sale Điện thoại Samsung …", "Sale Galaxy S26
@@ -2026,9 +2179,52 @@ export class ProductNormalizer {
         // "iPad mini 6" and "iPad mini 7" are two models, not one "iPad mini"; Apple calls the
         // 7th "iPad mini (A17 Pro)", and "8.3 inch" or "8,3 inch" is the screen (DOS/Rate#819).
         // One digit, not a "5G" or "4G" network or a storage ("mini 64 Wifi").
+        // "iPad mini (2026)" is the mini 8, so the chains that write the year key like the
+        // ones that write the number (DOS/Rate#1491). The older years keep their stored
+        // "ipad-mini" key ("iPad mini 2024", DOS/Rate#819) until a re-key decides otherwise.
+        // Its chip names it too: FPT Shop and TGDD write "iPad mini A20 Pro", as A17 Pro
+        // names the mini 7 (DOS/Rate#1502). Only the chip in the product's own part counts,
+        // the first one: not a gift or bundle ("tặng ốp Galaxy A20", "+ Galaxy A20") nor
+        // what a comparison names ("A20 Pro so sánh A17 Pro").
+        // The own part ends at a "+" (but "+ Cellular" is the iPad's own), a gift or fit
+        // word after any non-letter ("(Tặng"), a gift written without diacritics before
+        // what is given ("tang op", "kem but"; a lone "Kem" is a colour), another iPad or
+        // a comparison. A "|" is a spec separator and does not end it. Its first A-chip
+        // counts, and a Galaxy model ("Galaxy A20") is none; "A15/A20" is the A15, no
+        // mini 8 (DOS/Rate#1510).
         const mini = line.match(/^mini\s*([1-9])?$/i);
+        const ownPart = mini
+          ? appleTitle
+              .slice((ipadMatch.index ?? 0) + ipadMatch[0].length)
+              .normalize('NFC')
+              .split(
+                /\s*\+(?!\s*(?:cellular|lte|5g|4g)\b)|(?<![\p{L}\d])(?:kèm|tặng)(?!\p{L})|(?<![\p{L}\d])(?:tương thích|dùng cho)(?:\s+(?:với|cho))?\s+(?:ipad|iphone|galaxy|samsung|apple|macbook|xiaomi|oppo|vivo|huawei|máy)(?!\p{L})|(?<![\p{L}\d])(?:tang|kem|qua tang)\s+(?:op|but|sac|cap|tai|day|bao|kinh|cuong luc|phu kien)\b|\bipad\b|so sánh|\bvs\b/iu
+              )[0]!
+          : '';
+        const chipMatch_ = /(?<!galaxy\s{0,3})\ba(\d{2})(\s*pro)?\b/iu.exec(ownPart);
+        const miniChip =
+          chipMatch_?.[1] === '20'
+            ? '20'
+            : chipMatch_?.[1] === '17' && chipMatch_[2]
+              ? '17'
+              : undefined;
+        // The A17 Pro names the mini 7 whatever year is written. A launch year other than
+        // 2026 overrules only an A20: "iPad mini 2019 A20" is no mini 8 (DOS/Rate#1510).
+        const miniYear = /^\s*\(?\s*(20\d\d)\s*\)?(?![\d\p{L}])/iu.exec(ownPart)?.[1];
         if (mini)
-          line = `mini${mini[1] ? ` ${mini[1]}` : /\ba17\s*pro\b/i.test(appleTitle) ? ' 7' : ''}`;
+          line = `mini${
+            mini[1]
+              ? ` ${mini[1]}`
+              : miniChip === '17'
+                ? ' 7'
+                : miniChip === '20'
+                  ? miniYear && miniYear !== '2026'
+                    ? ''
+                    : ' 8'
+                  : miniYear === '2026'
+                    ? ' 8'
+                    : ''
+          }`;
         model = /^(pro|air)$/i.test(line) && chip ? `iPad ${line} ${chip}` : `iPad ${line}`;
       } else if (macbookMatch && macbookMatch[1]) {
         const line = macbookMatch[1].trim().replace(/^neo$/i, 'Neo');
@@ -2146,7 +2342,7 @@ export class ProductNormalizer {
       const cleaned = withoutLeadingPromo
         .replace(
           new RegExp(
-            `^(?:(?:Hàng\\s+)?Chính\\s+hãng\\s+)?(?:(?:Điện\\s+thoại(?:\\s+thông\\s+minh|\\s+di\\s+động)?|Smartphone|Máy\\s+tính\\s+bảng|Tablet|Laptop|Máy\\s+tính\\s+xách\\s+tay|Đồng\\s+hồ(?:\\s+đeo\\s+tay)?(?:\\s+thông\\s+minh)?|Vòng\\s+đeo\\s+tay(?:\\s+thông\\s+minh)?|Vòng\\s+tay\\s+thông\\s+minh|Smartwatch|Tai\\s+nghe(?:\\s+Bluetooth|\\s+chống\\s+ồn|\\s+không\\s+dây)?|Earbuds)\\s+(?:(?:Hàng\\s+)?Chính\\s+hãng\\s+)?)?(?:${brand}\\b\\s*)?`,
+            `^(?:(?:Hàng\\s+)?Chính\\s+hãng\\s+)?(?:(?:Điện\\s+thoại(?:\\s+thông\\s+minh|\\s+di\\s+động)?|Smartphone|Máy\\s+tính\\s+bảng|Tablet|Laptop|Máy\\s+tính\\s+xách\\s+tay|Đồng\\s+hồ(?:\\s+đeo\\s+tay)?(?:\\s+thông\\s+minh)?|Vòng\\s+đeo\\s+tay(?:\\s+thông\\s+minh)?|Vòng\\s+tay\\s+thông\\s+minh|Smartwatch|Tai\\s+nghe(?:\\s+Bluetooth|\\s+chống\\s+ồn|\\s+không\\s+dây)?|Earbuds|(?:Máy|Thiết\\s+bị)\\s+định\\s+vị(?:\\s+GPS(?=\\s+(?:cầm\\s+tay\\s+)?(?:(?:Hàng\\s+)?Chính\\s+hãng\\s+)?${brand}\\b))?(?:\\s+cầm\\s+tay)?(?:\\s+GPS(?=\\s+(?:(?:Hàng\\s+)?Chính\\s+hãng\\s+)?${brand}\\b))?)\\s+(?:(?:Hàng\\s+)?Chính\\s+hãng\\s+)?)?(?:${brand}\\b\\s*)?`,
             'i'
           ),
           ''
@@ -2156,9 +2352,24 @@ export class ProductNormalizer {
         .replace(/\bvivo\s+book\b/gi, 'Vivobook')
         // "17 ProMax" keys like "17 Pro Max" (DOS/Rate#815).
         .replace(/\b(pro)(max)\b/gi, '$1 $2')
+        // "Z Fold 8 Ultra" and "Z Flip 8" key like "Z Fold8 Ultra" and "Z Flip8", the way
+        // Samsung and most chains write them (DOS/Rate#1491). Only after "Z": the older
+        // "Galaxy Fold 2" and "Galaxy Flip 3" keep their keys, and "Fold 5G" is a network.
+        .replace(
+          /\b(Z\s+(?:Fold|Flip))\s+(\d{1,2})(?![\d./\p{L}]|,\d|\s*(?:\/|GB|TB|inch|in\b|"))/giu,
+          '$1$2'
+        )
+        // So does a current Fold or Flip written glued but without its "Z" ("Galaxy
+        // Fold8 Ultra").
+        .replace(/\bGalaxy\s+(?=(?:Fold|Flip)(?:[5-9]|1\d)(?!\d))/gi, 'Galaxy Z ')
         .trim();
       const rawTokens = cleaned.split(/\s+/).filter(Boolean);
       const modelTokens: string[] = [];
+      // Only the lines Titan or Titanium names: Lenovo's ThinkPad X1 Titanium and MSI's
+      // GT and Titan laptops. Elsewhere ("Dell Latitude 7440 Titan Xám/") it is a colour.
+      const titanIsModelWord =
+        (brand === 'Lenovo' && /\bX1\b/i.test(modelTitle)) ||
+        (brand === 'MSI' && /\b(?:GT\d{2,3}|Titan\s+\d{2})\b/i.test(modelTitle));
       let hasProductCode = false;
       // A model whose first word only starts with a stop word ("GPSMAP") keeps two
       // words, as it keyed before (DOS/Rate#1429): "GPSMAP 67", not its description.
@@ -2176,15 +2387,25 @@ export class ProductNormalizer {
         if (modelTokens.length === 0) {
           // A Garmin "GPS" before a model number is the model's own word: "Garmin GPS 73",
           // "Garmin GPS 64s" key as "gps-73" and "gps-64s", as before DOS/Rate#1429. Other
-          // brands' "GPS 5G" or "GPS 44 mm" stay options (DOS/Rate#1457).
-          if (
+          // brands' "GPS 5G" or "GPS 44 mm" stay options (DOS/Rate#1457). A storage ("GPS
+          // 32 GB", "GPS 64 GB Edge") is no model number, and a number before another
+          // Garmin line is that watch's case size: "GPS 42 Venu 3S" is the Venu 3S
+          // (DOS/Rate#1467).
+          const gpsNumber =
             brand === 'Garmin' &&
             /^GPS$/i.test(tok) &&
-            /^\d{2,3}[a-z]{0,2}$/i.test(rawTokens[i + 1] ?? '') &&
-            // A size or storage ("47mm", "32GB") is no model number.
-            !/\d(?:mm|gb|tb|g)$/i.test(rawTokens[i + 1] ?? '') &&
-            !/^mm\b/i.test(rawTokens[i + 2] ?? '')
+            /^\d{2,3}[a-z]{0,3}[,;]?$/i.test(rawTokens[i + 1] ?? '') &&
+            !/\d(?:mm|gb|tb|g)[,;]?$/i.test(rawTokens[i + 1] ?? '') &&
+            !/^(?:mm|GB|TB)\b/i.test(rawTokens[i + 2] ?? '');
+          if (
+            gpsNumber &&
+            /^\d{2}$/.test(rawTokens[i + 1] ?? '') &&
+            GARMIN_LINES.test(rawTokens[i + 2] ?? '')
           ) {
+            i++;
+            continue;
+          }
+          if (gpsNumber) {
             modelTokens.push(tok);
             maxModelTokens = 2;
             continue;
@@ -2217,6 +2438,9 @@ export class ProductNormalizer {
         if (
           modelTokens.length >= 4 &&
           !(modelTokens.length === 4 && /^plus(?:[,;]?$|\/)/i.test(tok)) &&
+          // A glued colour past the cap still takes its first word back out
+          // ("S24 Ultra Titan Gray/256GB", DOS/Rate#1481).
+          !isGluedColour(GLUED_HEAD.exec(tok.normalize('NFC'))?.[1]) &&
           !(/^pro$/i.test(modelTokens[modelTokens.length - 1] ?? '') && /^max[,;]?$/i.test(tok)) &&
           !generation
         ) {
@@ -2226,6 +2450,23 @@ export class ProductNormalizer {
         // A "+" before "Plus" is the Plus written twice ("Galaxy S24 + Plus"), no bundle.
         if (tok === '+' && /^plus[,;]?$/i.test(rawTokens[i + 1] ?? '')) continue;
         if (/^(?:tặng|kèm|quà|\+)$/iu.test(tok.normalize('NFC'))) break;
+        // A numbered Galaxy Fold or Flip ends after its number and an "Ultra" or "FE": a
+        // colour, RAM, year, size or shop word after it ("Z Fold8 Xanh", "Z Flip8 8 256GB")
+        // is none of the model (DOS/Rate#1491).
+        if (
+          /^(?:fold|flip)\d{1,2}$/i.test(modelTokens[modelTokens.length - 1] ?? '') &&
+          /^z$/i.test(modelTokens[modelTokens.length - 2] ?? '') &&
+          // "Ultra/12GB/256GB" glued to its run goes on to the glued-word rule below.
+          !/^(?:ultra|fe)(?:[,;]?$|\/)/i.test(tok)
+        ) {
+          break;
+        }
+        if (
+          /^(?:ultra|fe)$/i.test(modelTokens[modelTokens.length - 1] ?? '') &&
+          /^(?:fold|flip)\d{1,2}$/i.test(modelTokens[modelTokens.length - 2] ?? '')
+        ) {
+          break;
+        }
         // A model number glued to a RAM/ROM pair ("Redmi 13/8GB/256GB", "Redmi 13C/…",
         // "Honor X9/…") is the model's when the model has none yet; after a numbered model
         // ("Galaxy Tab S9 11/8GB/128GB") or as a decimal ("15.6/8GB/512GB") it is a screen
@@ -2252,16 +2493,48 @@ export class ProductNormalizer {
         // A word glued to the chain ("Redmi Note 13 Pro/12GB/512GB") is the model's last
         // word, and the chain ends the model; a stop word there ("RAM/8GB/256GB",
         // "Mới/…") is not (DOS/Rate#1457).
-        const wordHead = /^(\p{L}+)\/\d{1,2}(?:GB)?\/\d+(?:[.,]\d+)?(?:GB|TB)(?![a-z\d])/iu.exec(
-          tok
-        );
+        // So is one glued to a storage alone ("Pro Plus/256GB") or to a shop word
+        // ("Plus/Mới 100%"), and "S24+" keeps its plus; a shop word itself
+        // ("ChínhHãng/8GB/256GB") is no model word (DOS/Rate#1467).
+        const wordHead = GLUED_HEAD.exec(tok.normalize('NFC'));
         if (wordHead && modelTokens.length > 0) {
           if (
-            !/^(?:LTE|GPS|RAM|ROM|OLED|WiFi|Chính|Quốc|Bản|Mới|Fullbox|Likenew|Like|Cũ|VNA)$/iu.test(
-              wordHead[1]!.normalize('NFC')
+            !/^(?:(?:LTE|GPS|RAM|ROM|OLED|WiFi)(?:\d\w*|DDR\w*)?|Chính\p{L}*|Hàng\p{L}*|Quốc\p{L}*|Bản|Mới|Fullbox|Likenew|Like|Cũ|VNA)$/iu.test(
+              wordHead[1]!
+            ) &&
+            // Nor is a colour: "Galaxy A55 Đen/256GB" is the A55 (DOS/Rate#1481).
+            // Nor is "Titanium" after a colour word ("Black Titanium/", "Natural Titanium/").
+            (!GLUED_COLOURS.test(wordHead[1]!) ||
+              (titanIsModelWord &&
+                LAPTOP_TITAN_WORD.test(wordHead[1]!) &&
+                !/^(?:natural|desert)$/i.test(modelTokens[modelTokens.length - 1] ?? '') &&
+                !GLUED_COLOURS.test(
+                  (modelTokens[modelTokens.length - 1] ?? '').normalize('NFC')
+                ))) &&
+            !(
+              GLUED_COLOUR_SECOND_WORDS.test(wordHead[1]!) &&
+              GLUED_COLOUR_FIRST_WORDS.test(
+                (modelTokens[modelTokens.length - 1] ?? '').normalize('NFC')
+              )
             )
           ) {
             modelTokens.push(wordHead[1]!);
+          } else if (
+            isGluedColour(wordHead[1]) &&
+            modelTokens.length > 1 &&
+            (GLUED_COLOUR_FIRST_WORDS.test(modelTokens[modelTokens.length - 1]!.normalize('NFC')) ||
+              GLUED_COLOUR_PAIRS.test(`${modelTokens[modelTokens.length - 1]} ${wordHead[1]}`) ||
+              isPhantomColour(modelTokens[modelTokens.length - 1]!, wordHead[1]!, brand)) &&
+            // A laptop's "Titanium Bạc/" or "Titan Đen/" keeps its model word, but "Titan
+            // Gray/" is Dell's and Lenovo's colour name: Titan leaves with it.
+            !(
+              titanIsModelWord &&
+              LAPTOP_TITAN_WORD.test(modelTokens[modelTokens.length - 1]!) &&
+              !ENGLISH_GLUED_COLOURS.test(wordHead[1]!)
+            )
+          ) {
+            // "Titan Gray/256GB": the colour's first word leaves the model too.
+            modelTokens.pop();
           }
           break;
         }
@@ -2353,18 +2626,32 @@ export class ProductNormalizer {
     // a list of variants ("6GB/128GB/8GB/256GB") keys as its first, as before. With no such
     // pair, the chain's last link (DOS/Rate#1438). A pair that starts on a stated storage
     // ("64GB/4GB/128GB/8GB") is that storage first, so the list keys as its first variant,
-    // 64GB, not the 128GB of the next pair (DOS/Rate#1457).
+    // 64GB, not the 128GB of the next pair (DOS/Rate#1457). A three- or four-digit storage
+    // only starts a pair before a RAM under 30GB ("128GB/4GB/256GB/8GB" is 128GB), never
+    // before another storage ("128GB/256GB" lists two) or a workstation RAM ("RAM
+    // 128GB/32GB") (DOS/Rate#1467).
     const slashPairs = [
-      ...title.matchAll(/(?=(\b(\d{1,2})\s*(GB\s*)?\/\s*(\d+(?:[.,]\d+)?)\s*(TB|GB)\b))/gi),
-    ];
+      ...title.matchAll(
+        /(?=(\b(\d{1,2}|\d{3,4}(?=\s*GB\s*\/\s*(?:[1-9]|[12]\d)\s*GB\b))\s*(GB\s*)?\/\s*(\d+(?:[.,]\d+)?)\s*(TB|GB)\b))/gi
+      ),
+    ].filter(
+      m =>
+        m[2]!.length < 3 ||
+        !/\bRAM(?:\s*[:\-–]?\s*(?:LP)?DDR\w*(?:\s+\d+\s*MHz)?)?\s*[:\-–]?\s*$/i.test(
+          title.slice(0, m.index)
+        )
+    );
     const lastSlashPair =
       slashPairs.find(
         m =>
           /^TB$/i.test(m[5]!) ||
           parseFloat(m[4]!.replace(',', '.')) >= 32 ||
-          // A storage first, unless a RAM word names it ("RAM 32GB/16GB/512GB").
+          // A storage first, unless a RAM word names it ("RAM 32GB/16GB/512GB", "RAM DDR4
+          // 32GB/…").
           (Boolean(m[3]) &&
-            !/\bRAM\s*[:\-–]?\s*$/i.test(title.slice(0, m.index)) &&
+            !/\bRAM(?:\s*[:\-–]?\s*(?:LP)?DDR\w*(?:\s+\d+\s*MHz)?)?\s*[:\-–]?\s*$/i.test(
+              title.slice(0, m.index)
+            ) &&
             parseInt(m[2]!, 10) >= 32 &&
             parseInt(m[2]!, 10) > parseFloat(m[4]!.replace(',', '.')))
       ) ??
@@ -2513,7 +2800,9 @@ export class ProductNormalizer {
     // (':unknown') instead of guessing a default (plan v7 §5.2).
     // An empty key segment ("samsung::unknown") is never emitted: a title with no
     // model keys on a placeholder and is marked unkeyable (DOS/Rate#1151).
-    const keyable = Boolean(slugify(brand) && slugify(model));
+    // An accessory for a device is not the device: it gets no key, so it never joins the
+    // device's master or Item (DOS/Rate#1505).
+    const keyable = Boolean(slugify(brand) && slugify(model)) && !isAccessoryTitle(title);
     const itemKey = keyable ? baseKey : `${slugify(brand) || 'khac'}:${UNKEYED_MODEL_SEGMENT}`;
     const variantKey = storageKnown ? `${storageGb}gb` : UNKNOWN_VARIANT_KEY;
     const modelKey = `${itemKey}:${variantKey}`;
@@ -2565,7 +2854,10 @@ export class ProductNormalizer {
     const ramGb =
       categorySlug === 'earbuds' || categorySlug === 'smartwatches'
         ? null
-        : (validClaimedRam ?? benchmark?.ram_gb ?? null);
+        : (validClaimedRam ??
+          (storageGb !== null ? benchmark?.ram_by_storage_gb?.[storageGb] : undefined) ??
+          benchmark?.ram_gb ??
+          null);
     // The registry describes one size of a line: its screen and battery do not describe
     // the other size ("iPad Pro M4 13" is not the 11 inch entry) (DOS/Rate#1113).
     const appleInches = appleSize && !appleSize.endsWith('mm') ? parseFloat(appleSize) : null;
@@ -2724,9 +3016,10 @@ export class ProductNormalizer {
                 ? 3561
                 : 5000);
 
-    const fallbackChargingW =
-      benchmark?.charging_w ||
-      (categorySlug === 'laptops'
+    // A registry model whose sources state no wattage gets none, not a category default.
+    const fallbackChargingW = benchmark
+      ? benchmark.charging_w
+      : categorySlug === 'laptops'
         ? 65
         : categorySlug === 'tablets'
           ? 30
@@ -2736,7 +3029,7 @@ export class ProductNormalizer {
               ? 5
               : isApple
                 ? 25
-                : 45);
+                : 45;
 
     const cameraCount = benchmark
       ? [
@@ -2895,7 +3188,7 @@ export class ProductNormalizer {
           : `${fallbackScreenSize}" ${benchmark?.screen_type?.split(',')[0] || fallbackScreenType.split(',')[0]}`,
       chip: benchmark?.chipset?.split('(')[0]?.trim() || fallbackChip,
       camera: benchmark?.rear_camera ? benchmark.rear_camera.split(',')[0] : fallbackKeyCamera,
-      battery: `${fallbackBatteryMah} mAh (${fallbackChargingW}W)`,
+      battery: `${fallbackBatteryMah} mAh${fallbackChargingW ? ` (${fallbackChargingW}W)` : ''}`,
       storage: storageDisplay,
       ram: ramGb ? `${ramGb}GB` : undefined,
     };

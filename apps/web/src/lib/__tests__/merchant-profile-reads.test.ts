@@ -530,6 +530,117 @@ async function main() {
     );
   }
 
+  // A store with neither a DOSafe score (column default 0, no metadata score)
+  // nor an analysed review has no trust score, not 100/100 (DOS/Rate#1484).
+  {
+    const saved = { ...merchantRow };
+    Object.assign(merchantRow, {
+      risk_score: 0,
+      review_risk_score: 0,
+      metadata: {},
+    });
+    try {
+      installFetch({});
+      const base = await getMerchantProfileBase(MERCHANT_ID);
+      assert.ok(base);
+      assert.equal(base.profile.dosafe_risk_known, false);
+      assert.equal(base.profile.trust_score, null);
+      assert.equal(base.profile.risk_score, null);
+      // A stored combined score alone keeps the store scored, as before.
+      Object.assign(merchantRow, { metadata: { combined_risk_score: 42 } });
+      installFetch({});
+      const combined = await getMerchantProfileBase(MERCHANT_ID);
+      assert.ok(combined);
+      assert.equal(combined.profile.risk_score, 42);
+      assert.equal(combined.profile.trust_score, 58);
+      // A DOSafe score alone scores the store again.
+      Object.assign(merchantRow, { metadata: { dosafe_risk_score: 4 } });
+      installFetch({});
+      const scored = await getMerchantProfileBase(MERCHANT_ID);
+      assert.ok(scored);
+      assert.equal(typeof scored.profile.trust_score, 'number');
+      assert.ok((scored.profile.trust_score ?? 100) < 100);
+    } finally {
+      Object.assign(merchantRow, saved);
+    }
+  }
+
+  // Offer cards: a seller with no DOSafe score and no stored review score
+  // has no combined risk and no trust, never "trust 100%" from an Official
+  // Mall's 0 baseline (DOS/Rate#1484).
+  {
+    const { mapTrustViewRowToMerchantOffer, mapOfferRowToMerchantOffer } =
+      await import('../rate-api');
+    const { offerTrustScore } =
+      await import('../../components/leaderboard/ProductOffersExplorer');
+    const viewRisk = (extra: Record<string, unknown>, dosafe?: number) =>
+      mapTrustViewRowToMerchantOffer(
+        {
+          id: 'o',
+          merchant_id: 'm',
+          platform: 'shopee',
+          title: 't',
+          price_current: 1_000_000,
+          url: 'https://shopee.vn/p',
+          review_risk_score: 0,
+          ...extra,
+        } as never,
+        undefined,
+        dosafe
+      ).merchant.risk_score;
+    assert.equal(viewRisk({ merchant_is_official: true }), null);
+    assert.equal(viewRisk({}), null);
+    assert.equal(viewRisk({ merchant_is_official: true }, 5), 5);
+    assert.equal(viewRisk({ review_risk_score: 42 }), 42);
+    assert.equal(viewRisk({ threat_risk_score: 30 }), 30);
+    const rawRisk = (merchants: Record<string, unknown>) =>
+      mapOfferRowToMerchantOffer({
+        id: 'o',
+        platform: 'lazada',
+        title: 't',
+        price_current: 1_000_000,
+        url: 'https://www.lazada.vn/p',
+        merchants: { id: 'm', name: 'Shop', platform: 'lazada', ...merchants },
+      } as never).merchant.risk_score;
+    assert.equal(rawRisk({ is_official: true }), null);
+    assert.equal(
+      rawRisk({ review_risk_score: 0, review_risk_breakdown: {} }),
+      null
+    );
+    assert.equal(rawRisk({ metadata: { dosafe_risk_score: 4 } }), 15);
+    assert.equal(rawRisk({ metadata: { review_risk_score: 33 } }), 33);
+    // No score is no trust, never 100.
+    assert.equal(offerTrustScore(null), null);
+    assert.equal(offerTrustScore(undefined), null);
+    assert.equal(offerTrustScore(0), 100);
+    assert.equal(offerTrustScore(18), 82);
+  }
+
+  // A stored importer score whose breakdown has no count is still review
+  // evidence: the store keeps its score (DOS/Rate#1484 review).
+  {
+    const saved = { ...merchantRow };
+    Object.assign(merchantRow, {
+      risk_score: 0,
+      review_risk_score: 68,
+      review_risk_breakdown: { review_risk_score: 68 },
+      metadata: {},
+    });
+    try {
+      installFetch({});
+      const base = await getMerchantProfileBase(MERCHANT_ID);
+      assert.ok(base);
+      assert.equal(base.profile.risk_score, 68);
+      assert.equal(base.profile.trust_score, 32);
+    } finally {
+      for (const key of Object.keys(merchantRow)) {
+        if (!(key in saved))
+          delete (merchantRow as Record<string, unknown>)[key];
+      }
+      Object.assign(merchantRow, saved);
+    }
+  }
+
   console.warn('  ✅ merchant profile reads suite passed');
 }
 

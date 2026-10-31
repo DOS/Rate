@@ -11,6 +11,7 @@ import {
   versusAliasRedirect,
   versusHref,
   itemSlugFromProductAnswer,
+  productFromProductAnswer,
   type CompareResolution,
 } from '../item-compare';
 
@@ -447,6 +448,35 @@ async function main() {
     'x'
   );
 
+  // A compare candidate's full sheet comes from the product answer, and only
+  // the asked product's (DOS/Rate#1515).
+  const answered = { slug: 'pixel-10', specifications: { display: {} } };
+  assert.equal(
+    productFromProductAnswer(
+      { ok: true, data: { product: answered } },
+      'pixel-10'
+    ),
+    answered
+  );
+  assert.equal(
+    productFromProductAnswer(
+      { ok: true, data: { product: answered } },
+      'other'
+    ),
+    null
+  );
+  assert.equal(
+    productFromProductAnswer(
+      { ok: false, data: { product: answered } },
+      'pixel-10'
+    ),
+    null
+  );
+  assert.equal(productFromProductAnswer(null, 'pixel-10'), null);
+  assert.equal(
+    productFromProductAnswer({ ok: true, data: { product: [] } }, 'pixel-10'),
+    null
+  );
   console.warn('  ✅ item compare suite passed');
 }
 

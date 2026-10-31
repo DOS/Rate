@@ -43,7 +43,8 @@ export interface CrossPlatformDealRadarItem {
   merchantId: string;
   merchantName: string;
   isOfficialMall: boolean;
-  merchantRiskScore: number;
+  /** Null for a seller with no score at all (DOS/Rate#1484). */
+  merchantRiskScore: number | null;
   offerUrl: string;
   priceCurrent: number;
   priceOriginal: number | null;
@@ -109,20 +110,22 @@ function computeMedian(values: number[]): number {
   return Math.round((valid[mid - 1]! + valid[mid]!) / 2);
 }
 
+/**
+ * A seller's effective risk, or null when it has no score at all (no seller,
+ * or a null combined risk: no DOSafe score and no stored review score). A
+ * radar deal is never "low risk" from no data (DOS/Rate#1484).
+ */
 function resolveEffectiveMerchantRisk(
-  merchant: MerchantOffer['merchant'] | undefined,
-  fallback: number
-): number {
-  const safeFallback =
-    typeof fallback === 'number' && Number.isFinite(fallback) && fallback >= 0
-      ? Math.min(100, fallback)
-      : 0;
-  if (!merchant) return safeFallback;
-  const risk =
-    typeof merchant.risk_score === 'number' &&
-    Number.isFinite(merchant.risk_score)
-      ? merchant.risk_score
-      : safeFallback;
+  merchant: MerchantOffer['merchant'] | undefined
+): number | null {
+  if (!merchant) return null;
+  if (
+    typeof merchant.risk_score !== 'number' ||
+    !Number.isFinite(merchant.risk_score)
+  ) {
+    return null;
+  }
+  const risk = merchant.risk_score;
   const dosafe =
     typeof merchant.dosafe_risk_score === 'number' &&
     Number.isFinite(merchant.dosafe_risk_score)
@@ -481,7 +484,7 @@ export function computeCrossPlatformDealRadarFromData(
 
     const bestOffer = sortedByPrice.find(
       (o) =>
-        resolveEffectiveMerchantRisk(o.merchant, 10) <= 30 &&
+        (resolveEffectiveMerchantRisk(o.merchant) ?? 100) <= 30 &&
         (platformFilter === 'all' ||
           o.platform.toLowerCase() === platformFilter)
     );
@@ -524,7 +527,7 @@ export function computeCrossPlatformDealRadarFromData(
         merchantId: bestOffer.merchant.id,
         merchantName: bestOffer.merchant.name,
         isOfficialMall: Boolean(bestOffer.merchant.is_official),
-        merchantRiskScore: resolveEffectiveMerchantRisk(bestOffer.merchant, 5),
+        merchantRiskScore: resolveEffectiveMerchantRisk(bestOffer.merchant),
         offerUrl: bestOffer.url,
         priceCurrent: bestOffer.price_current,
         priceOriginal: validBestOrig,
@@ -580,7 +583,7 @@ export function computeCrossPlatformDealRadarFromData(
           merchantId: off.merchant.id,
           merchantName: off.merchant.name,
           isOfficialMall: Boolean(off.merchant.is_official),
-          merchantRiskScore: resolveEffectiveMerchantRisk(off.merchant, 15),
+          merchantRiskScore: resolveEffectiveMerchantRisk(off.merchant),
           offerUrl: off.url,
           priceCurrent: off.price_current,
           priceOriginal: validOrig,

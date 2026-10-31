@@ -9,6 +9,7 @@ import { Link } from '@/lib/navigation';
 import { IntentLink } from '@/components/elementary/IntentLink';
 import { getCategoryRouteHref, resolveProductImageUrl } from '@/lib/rate-api';
 import { sizedStoreImageUrl } from '@/lib/rate-domain-core';
+import { deviceImageSrcSet } from '@/lib/device-images';
 import {
   getCachedMerchantProfileById,
   getCrossPlatformDealRadar,
@@ -31,11 +32,11 @@ import {
   BsPeopleFill,
   BsShieldCheck,
   BsShop,
-  BsStarFill,
 } from 'react-icons/bs';
 import { isPendingReview } from '@/lib/review-display';
 import {
   hasReviewRiskEvidence,
+  knownDosafeRiskScore,
   merchantRiskTone,
 } from '@/lib/merchant-risk-tone';
 import { isOfferUnavailable } from '@/lib/product-market-stats';
@@ -51,6 +52,7 @@ import {
   formatPlainNumber,
   formatPriceVnd,
 } from '@/lib/locale-format';
+import StarRating from '@/components/elementary/StarRating';
 
 // Cached after the first request, refreshed every 5 minutes or when the
 // worker revalidates its cache tags (DOS/Rate#491).
@@ -77,29 +79,53 @@ export async function generateMetadata({
     };
   }
   const canonicalUrl = `https://rate.vn/merchants/${merchant.id}`;
-  const fullTitle = t('profileMetaTitle', {
-    name: merchant.name,
-    platform: merchant.platform.toUpperCase(),
-    score: merchant.trust_score,
-  });
-  const shortTitle = t('profileMetaTitleShort', {
-    name: merchant.name,
-    score: merchant.trust_score,
-  });
-  // No review risk number without analysed reviews (DOS/Rate#1249).
+  // No trust number for a store with no data (DOS/Rate#1484).
+  const fullTitle =
+    merchant.trust_score == null
+      ? t('profileMetaTitleNoScore', {
+          name: merchant.name,
+          platform: merchant.platform.toUpperCase(),
+        })
+      : t('profileMetaTitle', {
+          name: merchant.name,
+          platform: merchant.platform.toUpperCase(),
+          score: merchant.trust_score,
+        });
+  const shortTitle =
+    merchant.trust_score == null
+      ? t('profileMetaTitleShortNoScore', { name: merchant.name })
+      : t('profileMetaTitleShort', {
+          name: merchant.name,
+          score: merchant.trust_score,
+        });
+  // No review risk number without analysed reviews (DOS/Rate#1249), and no
+  // DOSafe number without a DOSafe score (DOS/Rate#1479).
+  const dosafeScore = knownDosafeRiskScore(merchant);
+  const hasReviews = hasReviewRiskEvidence(merchant.review_risk_breakdown);
   const description = fitDescription(
-    hasReviewRiskEvidence(merchant.review_risk_breakdown)
-      ? t('profileMetaDesc', {
-          name: merchant.name,
-          dosafe: merchant.dosafe_risk_score,
-          seeding: merchant.review_risk_score,
-          count: merchant.product_count,
-        })
-      : t('profileMetaDescNoReviews', {
-          name: merchant.name,
-          dosafe: merchant.dosafe_risk_score,
-          count: merchant.product_count,
-        })
+    dosafeScore == null
+      ? hasReviews
+        ? t('profileMetaDescNoDosafe', {
+            name: merchant.name,
+            seeding: merchant.review_risk_score,
+            count: merchant.product_count,
+          })
+        : t('profileMetaDescNoData', {
+            name: merchant.name,
+            count: merchant.product_count,
+          })
+      : hasReviews
+        ? t('profileMetaDesc', {
+            name: merchant.name,
+            dosafe: dosafeScore,
+            seeding: merchant.review_risk_score,
+            count: merchant.product_count,
+          })
+        : t('profileMetaDescNoReviews', {
+            name: merchant.name,
+            dosafe: dosafeScore,
+            count: merchant.product_count,
+          })
   );
 
   return {
@@ -160,19 +186,26 @@ export default async function MerchantProfilePage({
   const merchantGenuineDeals = merchantRadar.genuineDeals;
   const merchantFakeTraps = merchantRadar.fakeSaleTraps;
 
+  // A store with neither a DOSafe score nor analysed reviews has no trust
+  // score: a neutral "no data" tag, never "high trust" (DOS/Rate#1484).
+  const trustScore = merchant.trust_score;
   const trustLevelLabel =
-    merchant.trust_score >= 80
-      ? t('trustHigh')
-      : merchant.trust_score >= 50
-        ? t('trustModerate')
-        : t('trustRisk');
+    trustScore == null
+      ? t('trustNoData')
+      : trustScore >= 80
+        ? t('trustHigh')
+        : trustScore >= 50
+          ? t('trustModerate')
+          : t('trustRisk');
 
   const trustBadgeClass =
-    merchant.trust_score >= 80
-      ? 'bg-success text-white'
-      : merchant.trust_score >= 50
-        ? 'bg-warning text-dark'
-        : 'bg-danger text-white';
+    trustScore == null
+      ? 'bg-secondary text-white'
+      : trustScore >= 80
+        ? 'bg-success text-white'
+        : trustScore >= 50
+          ? 'bg-warning text-dark'
+          : 'bg-danger text-white';
 
   const brk = merchant.review_risk_breakdown;
   // No ratio without analysed reviews: 0 of 0 is not "100% authentic".
@@ -180,8 +213,11 @@ export default async function MerchantProfilePage({
     brk.total_reviews > 0
       ? Math.round((brk.authentic_count / brk.total_reviews) * 1000) / 10
       : null;
-  // Same cut-offs as the home merchant cards (DOS/Rate#1140).
-  const scamTone = merchantRiskTone(merchant.dosafe_risk_score);
+  // Same cut-offs as the home merchant cards (DOS/Rate#1140). A seller with
+  // no DOSafe score has no tone: neither clean nor an alert (DOS/Rate#1479).
+  const dosafeScore = knownDosafeRiskScore(merchant);
+  const scamTone =
+    dosafeScore == null ? 'unknown' : merchantRiskTone(dosafeScore);
 
   const canonicalUrl = `https://rate.vn/merchants/${merchant.id}`;
 
@@ -267,7 +303,10 @@ export default async function MerchantProfilePage({
           <div className="rate-scoreboard-dark p-md-5 mb-4 p-4">
             <div className="row g-4 align-items-center">
               <div className="col-lg-8">
-                <div className="d-flex align-items-start gap-3">
+                {/* Phones stack the icon above the text, and the text column
+                    may shrink, so a long name wraps instead of pushing the
+                    card past a 360px screen (DOS/Rate#1472). */}
+                <div className="d-flex flex-column flex-sm-row align-items-start gap-3">
                   <div
                     className="rounded-4 d-flex align-items-center justify-content-center fs-2 flex-shrink-0 text-white shadow-sm"
                     style={{
@@ -280,7 +319,7 @@ export default async function MerchantProfilePage({
                   >
                     <BsShop />
                   </div>
-                  <div>
+                  <div style={{ minWidth: 0 }}>
                     <div className="d-flex align-items-center mb-2 flex-wrap gap-2">
                       <span className="badge bg-danger text-uppercase rounded-pill px-3 py-1">
                         {merchant.platform}
@@ -298,7 +337,7 @@ export default async function MerchantProfilePage({
                         </span>
                       )}
                       <span
-                        className="badge rounded-pill px-3 py-1"
+                        className="badge rounded-pill text-wrap text-break px-3 py-1"
                         style={{
                           backgroundColor: 'var(--rate-glass-bg)',
                           color: 'var(--rate-fg-paragraph)',
@@ -308,7 +347,10 @@ export default async function MerchantProfilePage({
                         Shop ID: <code>{merchant.platform_shop_id}</code>
                       </span>
                     </div>
-                    <h1 className="h2 fw-bold mb-2 text-white">
+                    <h1
+                      className="h2 fw-bold mb-2 text-white"
+                      style={{ overflowWrap: 'anywhere' }}
+                    >
                       <ContentText text={merchant.name} locale={locale} />
                     </h1>
                     <div
@@ -318,13 +360,12 @@ export default async function MerchantProfilePage({
                       {/* Items wrap: "Hodnocení tržiště: Neaktualizováno" is wider
                           than a 320px header column (DOS/Rate#1084). */}
                       <span className="d-inline-flex align-items-center flex-wrap gap-1">
-                        <BsStarFill className="text-warning" />
                         {t('platformRatingLabel')}{' '}
-                        <strong className="font-monospace text-white">
-                          {merchant.rating_star
-                            ? `${formatDecimal(merchant.rating_star, locale, 2)} / ${formatDecimal(5, locale, 1)}`
-                            : t('notUpdatedYet')}
-                        </strong>
+                        <StarRating
+                          value={merchant.rating_star}
+                          size="sm"
+                          emptyLabel={t('notUpdatedYet')}
+                        />
                       </span>
                       <span className="d-inline-flex align-items-center flex-wrap gap-1">
                         <BsPeopleFill className="text-info" />
@@ -363,18 +404,24 @@ export default async function MerchantProfilePage({
                   >
                     {t('compositeTrustScoreLabel')}
                   </div>
-                  <div className="display-6 fw-bold font-monospace mb-1 text-white">
-                    {merchant.trust_score}
-                    <span
-                      className="fs-5 fw-normal"
-                      style={{ color: 'var(--rate-fg-secondary)' }}
+                  {trustScore != null && (
+                    <div
+                      className="display-6 fw-bold font-monospace mb-1 text-white"
+                      data-testid="merchant-trust-score"
                     >
-                      /100
-                    </span>
-                  </div>
+                      {trustScore}
+                      <span
+                        className="fs-5 fw-normal"
+                        style={{ color: 'var(--rate-fg-secondary)' }}
+                      >
+                        /100
+                      </span>
+                    </div>
+                  )}
                   <div className="mb-3">
                     <span
                       className={`badge ${trustBadgeClass} rounded-pill px-3 py-2`}
+                      data-testid="merchant-trust-label"
                     >
                       {trustLevelLabel}
                     </span>
@@ -396,9 +443,9 @@ export default async function MerchantProfilePage({
                     platform={merchant.platform}
                     platformShopId={merchant.platform_shop_id}
                     isOfficial={merchant.is_official}
-                    trustScore={merchant.trust_score}
+                    trustScore={trustScore}
                     trustLevelLabel={trustLevelLabel}
-                    dosafeRiskScore={merchant.dosafe_risk_score}
+                    dosafeRiskScore={dosafeScore}
                     reviewSeedingRiskScore={merchant.review_risk_score}
                     authenticReviews={brk.authentic_count}
                     totalReviews={brk.total_reviews}
@@ -420,7 +467,10 @@ export default async function MerchantProfilePage({
             {/* 1. DOSafe Threat Intelligence Card */}
             <div className="col-lg-6 col-12">
               <div className="card rounded-4 h-100 border p-4 shadow-sm">
-                <div className="d-flex justify-content-between align-items-start mb-3">
+                {/* The risk pill drops below the title when the half-width card
+                    has no room for both, and wraps its own text rather than
+                    run out of the card (DOS/Rate#1524). */}
+                <div className="d-flex justify-content-between align-items-start flex-wrap mb-3 gap-2">
                   <div>
                     <span className="badge bg-primary-subtle text-primary rounded-pill small mb-2 px-3 py-1">
                       {t('layer1Badge')}
@@ -431,17 +481,21 @@ export default async function MerchantProfilePage({
                     </h2>
                   </div>
                   <span
-                    className={`badge rounded-pill fs-6 px-3 py-2 ${
-                      scamTone === 'good'
-                        ? 'bg-success-subtle text-success'
-                        : scamTone === 'warn'
-                          ? 'bg-warning-subtle text-warning-emphasis'
-                          : 'bg-danger text-white'
+                    className={`badge rounded-pill fs-6 text-wrap mw-100 px-3 py-2 ${
+                      scamTone === 'unknown'
+                        ? 'bg-light text-muted border'
+                        : scamTone === 'good'
+                          ? 'bg-success-subtle text-success'
+                          : scamTone === 'warn'
+                            ? 'bg-warning-subtle text-warning-emphasis'
+                            : 'bg-danger text-white'
                     }`}
                     data-testid="merchant-scam-badge"
                     data-tone={scamTone}
                   >
-                    {t('scamRiskBadge', { score: merchant.dosafe_risk_score })}
+                    {dosafeScore == null
+                      ? t('scamRiskBadgeNoData')
+                      : t('scamRiskBadge', { score: dosafeScore })}
                   </span>
                 </div>
 
@@ -452,19 +506,23 @@ export default async function MerchantProfilePage({
                     <span className="text-muted">{t('scamStatusLabel')}</span>
                     <span
                       className={`fw-semibold ${
-                        scamTone === 'good'
-                          ? 'text-success'
-                          : scamTone === 'warn'
-                            ? 'text-warning-emphasis'
-                            : 'text-danger'
+                        scamTone === 'unknown'
+                          ? 'text-muted'
+                          : scamTone === 'good'
+                            ? 'text-success'
+                            : scamTone === 'warn'
+                              ? 'text-warning-emphasis'
+                              : 'text-danger'
                       }`}
                       data-testid="merchant-scam-status"
                     >
-                      {scamTone === 'good'
-                        ? t('scamStatusClean')
-                        : scamTone === 'warn'
-                          ? t('scamStatusCaution')
-                          : t('scamStatusAlert')}
+                      {scamTone === 'unknown'
+                        ? t('scamStatusNoData')
+                        : scamTone === 'good'
+                          ? t('scamStatusClean')
+                          : scamTone === 'warn'
+                            ? t('scamStatusCaution')
+                            : t('scamStatusAlert')}
                     </span>
                   </div>
                   <div className="d-flex align-items-center justify-content-between small mb-2">
@@ -492,7 +550,7 @@ export default async function MerchantProfilePage({
             {/* 2. AI Review & Seeding Risk Card */}
             <div className="col-lg-6 col-12">
               <div className="card rounded-4 h-100 border p-4 shadow-sm">
-                <div className="d-flex justify-content-between align-items-start mb-3">
+                <div className="d-flex justify-content-between align-items-start flex-wrap mb-3 gap-2">
                   <div>
                     <span className="badge bg-warning-subtle text-warning-emphasis rounded-pill small mb-2 px-3 py-1">
                       {t('layer2Badge')}
@@ -504,7 +562,7 @@ export default async function MerchantProfilePage({
                   </div>
                   {hasReviewRiskEvidence(brk) ? (
                     <span
-                      className={`badge rounded-pill fs-6 px-3 py-2 ${
+                      className={`badge rounded-pill fs-6 text-wrap mw-100 px-3 py-2 ${
                         merchant.review_risk_score <= 15
                           ? 'bg-success-subtle text-success'
                           : merchant.review_risk_score <= 40
@@ -519,7 +577,10 @@ export default async function MerchantProfilePage({
                   ) : (
                     // No analysed reviews: a number would be a guess
                     // (DOS/Rate#1249).
-                    <span className="badge rounded-pill fs-6 bg-light text-muted border px-3 py-2">
+                    <span
+                      className="badge rounded-pill fs-6 bg-light text-muted text-wrap mw-100 border px-3 py-2"
+                      data-testid="merchant-review-risk-badge"
+                    >
                       {t('reviewRiskNoData')}
                     </span>
                   )}
@@ -804,9 +865,7 @@ export default async function MerchantProfilePage({
                               </div>
                             )}
                           </div>
-                          <span className="rate-score-badge-user">
-                            ★ {rev.rating_star}/5
-                          </span>
+                          <StarRating value={rev.rating_star} size="sm" />
                         </div>
 
                         <p
@@ -926,9 +985,17 @@ export default async function MerchantProfilePage({
                           <td>
                             <div className="d-flex align-items-center gap-3">
                               {resolvedImg && (
+                                // A local device photo loads its pre-sized
+                                // WebP, not the full JPEG (DOS/Rate#1500,
+                                // #1332). srcSet and sizes come before src,
+                                // so the JPEG never starts (#1413).
                                 <img
                                   loading="lazy"
                                   decoding="async"
+                                  srcSet={
+                                    deviceImageSrcSet(resolvedImg) ?? undefined
+                                  }
+                                  sizes="52px"
                                   src={resolvedImg}
                                   alt={item.title}
                                   lang={contentLang(item.title, locale)}
@@ -966,8 +1033,11 @@ export default async function MerchantProfilePage({
                                       •{' '}
                                     </>
                                   )}
-                                  ★ {formatDecimal(item.rating_star, locale, 1)}{' '}
-                                  ({item.rating_count})
+                                  <StarRating
+                                    value={item.rating_star}
+                                    count={item.rating_count}
+                                    size="sm"
+                                  />
                                 </div>
                               </div>
                             </div>

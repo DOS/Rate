@@ -2,7 +2,10 @@
 
 import React, { useEffect, useState } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
-import { hasReviewRiskEvidence } from '@/lib/merchant-risk-tone';
+import {
+  hasReviewRiskEvidence,
+  knownDosafeRiskScore,
+} from '@/lib/merchant-risk-tone';
 import { discountVerdictCopy } from '@/lib/discount-verdict-copy';
 import AnalyzerText from '@/components/reviews/AnalyzerText';
 import { useDetailsDismiss } from '@/components/elementary/use-details-dismiss';
@@ -48,7 +51,6 @@ import {
   BsShieldCheck,
   BsShieldExclamation,
   BsShop,
-  BsStarFill,
 } from 'react-icons/bs';
 import ContentText from '@/components/elementary/ContentText';
 import { contentLang } from '@/lib/content-lang';
@@ -66,6 +68,7 @@ import {
   formatPlainNumber,
   formatPriceVnd,
 } from '@/lib/locale-format';
+import StarRating from '@/components/elementary/StarRating';
 
 const INSPECT_CONTROL_CHARS_RE = /\p{Cc}+/gu;
 
@@ -286,7 +289,7 @@ export default function DeepInspectWorkspace({
           : []),
         ...(merchant
           ? [
-              `- **${t('mdSeller')}:** ${merchant.name} (${merchant.platform.toUpperCase()}) | ${t('mdTrustScore')}: **${merchant.trust_score}/100** (${t('dosafeRiskLabel')}: ${merchant.dosafe_risk_score}/100, ${t('reviewRiskLabel')}: ${hasReviewRiskEvidence(merchant.review_risk_breakdown) ? `${merchant.review_risk_score}/100` : t('reviewRiskNoData')})`,
+              `- **${t('mdSeller')}:** ${merchant.name} (${merchant.platform.toUpperCase()}) | ${t('mdTrustScore')}: ${merchant.trust_score == null ? t('trustNoData') : `**${merchant.trust_score}/100**`} (${t('dosafeRiskLabel')}: ${knownDosafeRiskScore(merchant) == null ? t('reviewRiskNoData') : `${knownDosafeRiskScore(merchant)}/100`}, ${t('reviewRiskLabel')}: ${hasReviewRiskEvidence(merchant.review_risk_breakdown) ? `${merchant.review_risk_score}/100` : t('reviewRiskNoData')})`,
             ]
           : []),
         `- **${t('mdLink')}:** ${shareUrl}`,
@@ -798,14 +801,18 @@ export default function DeepInspectWorkspace({
 
                   <div className="d-flex justify-content-between align-items-center border-top flex-wrap gap-2 pt-3">
                     <div className="d-flex align-items-center flex-wrap gap-2">
-                      <span className="rate-score-badge-user">
-                        <BsStarFill className="text-warning" />
-                        <span>
-                          {masterUserRating > 0
-                            ? `${formatDecimal(masterUserRating, locale, 1)}/${formatDecimal(5, locale, 1)}`
-                            : t('userNoScore')}
-                        </span>
-                      </span>
+                      <StarRating
+                        value={masterUserRating}
+                        count={
+                          masterUserRating > 0
+                            ? master.authentic_review_count ||
+                              master.total_reviews ||
+                              0
+                            : null
+                        }
+                        size="sm"
+                        emptyLabel={t('userNoScore')}
+                      />
                       <span className="rate-score-badge-expert">
                         <span>
                           {t('expertLabel')}{' '}
@@ -816,14 +823,6 @@ export default function DeepInspectWorkspace({
                         </span>
                       </span>
                       <RadarBadge signal={radarSignal} />
-                      <span className="small text-muted">
-                        {t('verifiedReviewsCount', {
-                          count:
-                            master.authentic_review_count ||
-                            master.total_reviews ||
-                            0,
-                        })}
-                      </span>
                     </div>
                     <Link
                       href={productHref}
@@ -950,9 +949,17 @@ export default function DeepInspectWorkspace({
                   <div className="mb-3">
                     <div className="d-flex justify-content-between small mb-1">
                       <span className="text-muted">{t('dosafeRiskLabel')}</span>
-                      <strong className="text-success">
-                        {Number(merchant.dosafe_risk_score || 0).toFixed(0)}/100
-                      </strong>
+                      {/* No DOSafe score: no number, not 0 (DOS/Rate#1465). */}
+                      {knownDosafeRiskScore(merchant) == null ? (
+                        <span className="text-muted">
+                          {t('reviewRiskNoData')}
+                        </span>
+                      ) : (
+                        <strong className="text-success">
+                          {Number(knownDosafeRiskScore(merchant)).toFixed(0)}
+                          /100
+                        </strong>
+                      )}
                     </div>
                     <div className="progress" style={{ height: 8 }}>
                       <div
@@ -960,7 +967,7 @@ export default function DeepInspectWorkspace({
                         style={{
                           width: `${Math.min(
                             100,
-                            Math.max(4, Number(merchant.dosafe_risk_score || 0))
+                            Math.max(4, knownDosafeRiskScore(merchant) ?? 0)
                           )}%`,
                         }}
                       />

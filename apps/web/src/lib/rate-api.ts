@@ -29,6 +29,8 @@ import {
   type MerchantListFilterParams,
   extractPersistedBreakdown,
   storedRiskSplit,
+  hasReviewRiskEvidence,
+  merchantRiskFromSignals,
   filterAndSortMerchants,
   sanitizePostgrestFilterToken,
   type ParsedEcommerceUrl,
@@ -208,7 +210,8 @@ export interface MerchantOffer {
     rating_star: number | null;
     follower_count: number;
     location: string | null;
-    risk_score: number;
+    /** Null for a seller with no DOSafe score and no stored review score (DOS/Rate#1484). */
+    risk_score: number | null;
     /** `null` when no DOSafe or combined score is stored (#1099). */
     dosafe_risk_score: number | null;
     /** `null` only for an offer with no seller; else stored or baseline (#685). */
@@ -1274,13 +1277,21 @@ export function mapTrustViewRowToMerchantOffer(
       rating_star: null,
       follower_count: toSafeNonNegativeVoteCount(followerCount, 100_000_000),
       location: cleanLocation || null,
-      risk_score: riskSplit
-        ? Math.max(combinedRisk, dosafeRisk ?? 0, riskSplit.combined)
-        : Math.max(
-            combinedRisk,
-            dosafeRisk ?? 0,
-            reviewRisk ?? baselineReviewRisk({ platform: safeRow.platform })
-          ),
+      // No DOSafe score, no stored review score and no view score: no risk
+      // number, so no "trust 100%" either (DOS/Rate#1484).
+      risk_score:
+        dosafeRisk == null &&
+        !riskSplit &&
+        isUnscoredTrustViewRow(safeRow) &&
+        combinedRisk === 0
+          ? null
+          : riskSplit
+            ? Math.max(combinedRisk, dosafeRisk ?? 0, riskSplit.combined)
+            : Math.max(
+                combinedRisk,
+                dosafeRisk ?? 0,
+                reviewRisk ?? baselineReviewRisk({ platform: safeRow.platform })
+              ),
       dosafe_risk_score: dosafeRisk,
       review_risk_score: reviewRisk,
       review_risk_breakdown: safeBreakdown,
@@ -1364,12 +1375,20 @@ export function mapOfferRowToMerchantOffer(item: RawOfferRow): MerchantOffer {
       ? toSafeRiskScore100(meta.combined_risk_score, 0)
       : 0;
   // An unknown seller is never safer than the baseline in trust and sorting.
-  const combinedRisk = Math.max(
+  const scoredRisk = Math.max(
     baseRisk,
     dosafeRisk ?? 0,
     reviewRisk ?? baselineReviewRisk({ platform: safeItem.platform }),
     metaCombined
   );
+  // No DOSafe score and no stored review or combined score: no risk number,
+  // so no "trust 100%" either (DOS/Rate#1484).
+  const combinedRisk =
+    dosafeRisk == null &&
+    !hasStoredScore &&
+    typeof meta?.combined_risk_score !== 'number'
+      ? null
+      : scoredRisk;
   const topLevelBreakdown =
     merchantObj?.review_risk_breakdown &&
     typeof merchantObj.review_risk_breakdown === 'object' &&
@@ -3293,11 +3312,15 @@ export async function getMerchantsList(
         : {}
     ) as Record<string, unknown>;
     const baseRisk = toSafeRiskScore100(m.risk_score, 0);
-    const dosafeRisk =
+    const hasMetaDosafe =
       typeof meta.dosafe_risk_score === 'number' &&
-      Number.isFinite(meta.dosafe_risk_score)
-        ? toSafeRiskScore100(meta.dosafe_risk_score, 0)
-        : baseRisk;
+      Number.isFinite(meta.dosafe_risk_score);
+    const dosafeRisk = hasMetaDosafe
+      ? toSafeRiskScore100(meta.dosafe_risk_score, 0)
+      : baseRisk;
+    // The column's default 0 with no metadata score is a missing DOSafe score, as the
+    // view path reads it (#1099); public payloads answer null (DOS/Rate#1465).
+    const dosafeKnown = hasMetaDosafe || baseRisk > 0;
     const persistedReviewRisk = persistedReviewRiskOf(m);
     // A stored score covers all of the seller's reviews: it wins over the
     // one computed here, as on the profile (#684).
@@ -3321,12 +3344,21 @@ export async function getMerchantsList(
       (typeof meta.combined_risk_score === 'number' &&
       Number.isFinite(meta.combined_risk_score)
         ? toSafeRiskScore100(meta.combined_risk_score, 0)
-        : 0);
-    const combinedRisk = Math.min(
-      100,
-      Math.max(baseRisk, dosafeRisk, effectiveReviewRisk, metaCombined)
-    );
-    const trustScore = Math.max(0, 100 - combinedRisk);
+        : null);
+    // Only known signals count; none known is no score (DOS/Rate#1484).
+    const { risk_score: combinedRisk, trust_score: trustScore } =
+      merchantRiskFromSignals({
+        dosafeKnown,
+        dosafeRisk,
+        baseRisk,
+        // A stored importer score whose breakdown has no count still counts.
+        reviewKnown:
+          hasReviewRiskEvidence(breakdown) ||
+          (hasStoredReviewRisk(m) &&
+            hasReviewRiskEvidence(m.review_risk_breakdown)),
+        reviewRisk: effectiveReviewRisk,
+        storedCombined: metaCombined,
+      });
 
     return {
       id: m.id,
@@ -3345,6 +3377,7 @@ export async function getMerchantsList(
       follower_count: toSafeNonNegativeVoteCount(m.follower_count, 100_000_000),
       location: m.location || null,
       dosafe_risk_score: dosafeRisk,
+      dosafe_risk_known: dosafeKnown,
       review_risk_score: effectiveReviewRisk,
       risk_score: combinedRisk,
       trust_score: trustScore,
@@ -3840,6 +3873,11 @@ export async function getMerchantProfileBase(
     Number.isFinite(meta.dosafe_risk_score)
       ? toSafeRiskScore100(meta.dosafe_risk_score, 0)
       : baseRisk;
+  // As in getMerchantsList: the column's default 0 alone is no DOSafe score (#1465).
+  const dosafeKnown =
+    (typeof meta.dosafe_risk_score === 'number' &&
+      Number.isFinite(meta.dosafe_risk_score)) ||
+    baseRisk > 0;
   const persistedReviewRisk = persistedReviewRiskOf(merchantRow);
   // A persisted importer score covers all of the seller's reviews; the dynamic
   // one only the newest page. Use the persisted score when there is one, as
@@ -3859,12 +3897,21 @@ export async function getMerchantProfileBase(
     (typeof meta.combined_risk_score === 'number' &&
     Number.isFinite(meta.combined_risk_score)
       ? toSafeRiskScore100(meta.combined_risk_score, 0)
-      : 0);
-  const combinedRisk = Math.min(
-    100,
-    Math.max(baseRisk, dosafeRisk, effectiveReviewRisk, metaCombined)
-  );
-  const trustScore = Math.max(0, 100 - combinedRisk);
+      : null);
+  // Only known signals count; none known is no score (DOS/Rate#1484).
+  const { risk_score: combinedRisk, trust_score: trustScore } =
+    merchantRiskFromSignals({
+      dosafeKnown,
+      dosafeRisk,
+      baseRisk,
+      // A stored importer score whose breakdown has no count still counts.
+      reviewKnown:
+        hasReviewRiskEvidence(breakdown) ||
+        (hasStoredReviewRisk(merchantRow) &&
+          hasReviewRiskEvidence(merchantRow.review_risk_breakdown)),
+      reviewRisk: effectiveReviewRisk,
+      storedCombined: metaCombined,
+    });
   // The store's price range is what it sells now: sold-out listings are out.
   const prices = listings
     .filter((l) => !isOfferUnavailable(l))
@@ -3893,6 +3940,7 @@ export async function getMerchantProfileBase(
     ),
     location: merchantRow.location || null,
     dosafe_risk_score: dosafeRisk,
+    dosafe_risk_known: dosafeKnown,
     review_risk_score: effectiveReviewRisk,
     risk_score: combinedRisk,
     trust_score: trustScore,

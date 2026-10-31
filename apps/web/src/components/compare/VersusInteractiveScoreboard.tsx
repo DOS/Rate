@@ -19,6 +19,7 @@ import {
 import { escapeCsvCell } from '@/lib/csv-safe';
 import { isVersusScoreTie, versusVerdictFor } from '@/lib/versus-verdict';
 import RadarBadge from '@/components/radar/RadarBadge';
+import StarRating from '@/components/elementary/StarRating';
 import { useDealRadarIndex } from '@/components/radar/use-deal-radar';
 import { formatDecimal, formatPercent } from '@/lib/locale-format';
 
@@ -649,10 +650,8 @@ export default function VersusInteractiveScoreboard({
             )}
           </div>
           <div className="rate-tabular small text-warning fw-bold">
-            {scoreA.brand}: {formatDecimal(weightedResult.finalA, locale, 1)}/
-            {formatDecimal(5, locale, 1)} • {scoreB.brand}:{' '}
-            {formatDecimal(weightedResult.finalB, locale, 1)}/
-            {formatDecimal(5, locale, 1)}
+            {scoreA.brand}: {formatDecimal(weightedResult.finalA, locale, 1)} •{' '}
+            {scoreB.brand}: {formatDecimal(weightedResult.finalB, locale, 1)}
           </div>
         </div>
 
@@ -666,10 +665,7 @@ export default function VersusInteractiveScoreboard({
               {scoreA.name}
             </Link>
             <div className="d-flex mt-1 flex-wrap gap-2">
-              <span className="rate-score-badge-user">
-                ★ {formatDecimal(weightedResult.finalA, locale, 1)}/
-                {formatDecimal(5, locale, 1)}
-              </span>
+              <StarRating value={weightedResult.finalA} />
               <span className="rate-score-badge-expert">
                 {scoreA.expertScore10 != null
                   ? `Lab ${formatDecimal(scoreA.expertScore10, locale, 1)}/10`
@@ -690,10 +686,7 @@ export default function VersusInteractiveScoreboard({
               {scoreB.name}
             </Link>
             <div className="d-flex justify-content-end mt-1 flex-wrap gap-2">
-              <span className="rate-score-badge-user">
-                ★ {formatDecimal(weightedResult.finalB, locale, 1)}/
-                {formatDecimal(5, locale, 1)}
-              </span>
+              <StarRating value={weightedResult.finalB} />
               <span className="rate-score-badge-expert">
                 {scoreB.expertScore10 != null
                   ? `Lab ${formatDecimal(scoreB.expertScore10, locale, 1)}/10`
@@ -721,8 +714,7 @@ export default function VersusInteractiveScoreboard({
                       aWins ? 'text-success' : 'text-white-50'
                     }`}
                   >
-                    {formatDecimal(row.aVal, locale, 2)}/
-                    {formatDecimal(5, locale, 1)} {aWins ? '✓' : ''}
+                    {formatDecimal(row.aVal, locale, 2)}/5 {aWins ? '✓' : ''}
                   </span>
                   <div
                     className="progress bg-dark d-none d-md-flex flex-grow-1"
@@ -762,8 +754,7 @@ export default function VersusInteractiveScoreboard({
                     }`}
                   >
                     {bWins ? '✓ ' : ''}
-                    {formatDecimal(row.bVal, locale, 2)}/
-                    {formatDecimal(5, locale, 1)}
+                    {formatDecimal(row.bVal, locale, 2)}/5
                   </span>
                 </div>
               </div>

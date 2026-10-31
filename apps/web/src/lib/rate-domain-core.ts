@@ -803,9 +803,20 @@ export interface MerchantSummary {
   follower_count: number;
   location: string | null;
   dosafe_risk_score: number;
+  /**
+   * False when no DOSafe score is known: no metadata score and the column's default 0
+   * (#1099). Internal: public payloads turn it into a null `dosafe_risk_score`
+   * (`withPublicReviewRisk`, DOS/Rate#1465).
+   */
+  dosafe_risk_known?: boolean;
   review_risk_score: number;
-  risk_score: number;
-  trust_score: number;
+  /**
+   * Combined risk and trust from the signals that are known: the DOSafe score
+   * and the analysed reviews. Null when neither is known: a store with no data
+   * is not "high trust 100/100" (DOS/Rate#1484).
+   */
+  risk_score: number | null;
+  trust_score: number | null;
   product_count: number;
   min_price: number | null;
   max_price: number | null;
@@ -1460,29 +1471,31 @@ export function filterAndSortMerchants(
     Number.isFinite(safeParams.minTrust)
   ) {
     const safeMinTrust = Math.max(0, Math.min(100, safeParams.minTrust));
-    results = results.filter((m) => {
-      const trust =
-        typeof m.trust_score === 'number' && Number.isFinite(m.trust_score)
-          ? m.trust_score
-          : 0;
-      return trust >= safeMinTrust;
-    });
+    // Any threshold, 0 included, needs a real score (DOS/Rate#1484).
+    results = results.filter(
+      (m) =>
+        typeof m.trust_score === 'number' &&
+        Number.isFinite(m.trust_score) &&
+        m.trust_score >= safeMinTrust
+    );
   }
 
   if (safeParams?.sort) {
     const safeNum = (v: unknown, fallback = 0): number =>
       typeof v === 'number' && Number.isFinite(v) ? v : fallback;
+    // A store with no trust score sorts after every scored one (DOS/Rate#1484).
+    const trustOf = (m: MerchantSummary): number => safeNum(m.trust_score, -1);
     results.sort((a, b) => {
       switch (safeParams.sort) {
         case 'trust_desc':
           return (
-            safeNum(b.trust_score) - safeNum(a.trust_score) ||
+            trustOf(b) - trustOf(a) ||
             safeNum(b.product_count) - safeNum(a.product_count)
           );
         case 'products_desc':
           return (
             safeNum(b.product_count) - safeNum(a.product_count) ||
-            safeNum(b.trust_score) - safeNum(a.trust_score)
+            trustOf(b) - trustOf(a)
           );
         case 'seeding_asc':
           // Measured scores first: no reviews is not the lowest risk
@@ -1492,12 +1505,12 @@ export function filterAndSortMerchants(
               Number(!hasReviewRiskEvidence(b.review_risk_breakdown)) ||
             safeNum(a.review_risk_score, 100) -
               safeNum(b.review_risk_score, 100) ||
-            safeNum(b.trust_score) - safeNum(a.trust_score)
+            trustOf(b) - trustOf(a)
           );
         case 'followers_desc':
           return (
             safeNum(b.follower_count) - safeNum(a.follower_count) ||
-            safeNum(b.trust_score) - safeNum(a.trust_score)
+            trustOf(b) - trustOf(a)
           );
         default:
           return 0;
@@ -2137,6 +2150,58 @@ export function hasReviewRiskEvidence(
   if (rawTotal == null) return true;
   const total = Number(rawTotal);
   return Number.isFinite(total) && total > 0;
+}
+
+/**
+ * A store's combined risk and trust (DOS/Rate#1484). A store with no DOSafe
+ * score, no review evidence and no stored combined score has no score at all
+ * (null), never risk 0 and "high trust 100/100". A stored combined score
+ * alone (RS#708) is a signal too.
+ *
+ * With at least one signal the score is as before: the higher of the known
+ * risks, where the review side keeps its platform baseline when no review was
+ * analysed (#1249) and a stored combined score (the importer's split, RS#708)
+ * stays a floor. An unknown DOSafe score adds nothing (its column default is
+ * 0), so it never lowers the risk either. `baseRisk` is the merchants.risk_score
+ * column, the DOSafe score's legacy home.
+ */
+export function merchantRiskFromSignals(signals: {
+  dosafeKnown: boolean;
+  dosafeRisk: number;
+  baseRisk: number;
+  reviewKnown: boolean;
+  reviewRisk: number;
+  storedCombined: number | null;
+}): { risk_score: number | null; trust_score: number | null } {
+  if (
+    !signals.dosafeKnown &&
+    !signals.reviewKnown &&
+    signals.storedCombined == null
+  ) {
+    return { risk_score: null, trust_score: null };
+  }
+  const parts = [signals.reviewRisk, signals.storedCombined ?? 0];
+  if (signals.dosafeKnown) parts.push(signals.dosafeRisk, signals.baseRisk);
+  const finite = parts.filter((n) => Number.isFinite(n));
+  const risk = Math.min(100, Math.max(0, ...finite));
+  return { risk_score: risk, trust_score: Math.max(0, 100 - risk) };
+}
+
+/**
+ * The DOSafe risk score a merchant card may show, or null when none is known:
+ * a public payload's null, or a server-side summary flagged unknown (the
+ * column's default 0). The same seller then reads alike before and after a
+ * client fetch, and never as 0, the lowest risk (DOS/Rate#1465).
+ */
+export function knownDosafeRiskScore(merchant: {
+  dosafe_risk_score?: number | string | null;
+  dosafe_risk_known?: boolean;
+}): number | null {
+  if (merchant.dosafe_risk_known === false) return null;
+  const raw = merchant.dosafe_risk_score;
+  if (raw == null || raw === '') return null;
+  const score = Number(raw);
+  return Number.isFinite(score) ? Math.min(100, Math.max(0, score)) : null;
 }
 
 /**

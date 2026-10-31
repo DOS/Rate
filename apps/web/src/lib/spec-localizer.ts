@@ -94,18 +94,18 @@ const SPEC_UI_DICTS: Record<RateLocale, SpecUiDictionary> = {
     no: 'Không',
     supported: 'Có hỗ trợ',
     has5gYes: 'Có (5G Sub-6 / mmWave)',
-    cellularNo5gGroup: '6. Mạng Di động (Cellular)',
+    cellularNo5gGroup: 'Mạng di động',
     groups: {
-      display: '1. Màn hình (Display)',
-      hardware: '2. Phần cứng & Hiệu năng (Hardware)',
-      camera: '3. Máy ảnh & Quang học (Camera - PhoneArena Split)',
-      battery: '4. Pin & Công nghệ Sạc (Battery)',
-      design: '5. Thiết kế & Độ bền (Design)',
-      cellular: '6. Mạng Di động & 5G (Cellular)',
-      connectivity: '7. Kết nối & Cảm biến (Connectivity)',
-      multimedia: '8. Âm thanh & Đa phương tiện (Multimedia)',
-      availability: '9. Phát hành & Giá niêm yết (Availability)',
-      regulatory: '10. Pháp lý, Chứng nhận & SAR (Regulatory)',
+      display: 'Màn hình',
+      hardware: 'Phần cứng & Hiệu năng',
+      camera: 'Máy ảnh & Quang học',
+      battery: 'Pin & Công nghệ sạc',
+      design: 'Thiết kế & Độ bền',
+      cellular: 'Mạng di động & 5G',
+      connectivity: 'Kết nối & Cảm biến',
+      multimedia: 'Âm thanh & Đa phương tiện',
+      availability: 'Phát hành & Giá niêm yết',
+      regulatory: 'Pháp lý, Chứng nhận & SAR',
     },
     fields: {
       screenSize: 'Kích thước màn hình',
@@ -115,7 +115,7 @@ const SPEC_UI_DICTS: Record<RateLocale, SpecUiDictionary> = {
       ppi: 'Mật độ điểm ảnh',
       protection: 'Kính bảo vệ',
       displayFeatures: 'Tính năng hiển thị',
-      chipset: 'Vi xử lý (Chipset)',
+      chipset: 'Vi xử lý',
       cpu: 'Nhân CPU',
       gpu: 'Đồ họa (GPU)',
       ram: 'Bộ nhớ RAM',
@@ -127,7 +127,7 @@ const SPEC_UI_DICTS: Record<RateLocale, SpecUiDictionary> = {
       secondCamera: 'Camera phụ 2 (Góc siêu rộng)',
       thirdCamera: 'Camera phụ 3 (Tele / Zoom)',
       fourthCamera: 'Camera phụ 4 (Tiềm vọng / Cảm biến)',
-      frontCamera: 'Camera trước (Selfie)',
+      frontCamera: 'Camera trước',
       videoAndFlash: 'Quay video & Đèn Flash',
       batteryCapacity: 'Dung lượng pin',
       batteryType: 'Loại pin',
@@ -174,18 +174,18 @@ const SPEC_UI_DICTS: Record<RateLocale, SpecUiDictionary> = {
     no: 'No',
     supported: 'Supported',
     has5gYes: 'Yes (5G Sub-6 / mmWave)',
-    cellularNo5gGroup: '6. Cellular network',
+    cellularNo5gGroup: 'Cellular network',
     groups: {
-      display: '1. Display & panel',
-      hardware: '2. Hardware & performance',
-      camera: '3. Camera system (PhoneArena Split)',
-      battery: '4. Battery & charging',
-      design: '5. Design & durability',
-      cellular: '6. Cellular & 5G network',
-      connectivity: '7. Connectivity & sensors',
-      multimedia: '8. Audio & multimedia',
-      availability: '9. Availability & MSRP',
-      regulatory: '10. Regulatory, certifications & SAR',
+      display: 'Display & panel',
+      hardware: 'Hardware & performance',
+      camera: 'Camera system',
+      battery: 'Battery & charging',
+      design: 'Design & durability',
+      cellular: 'Cellular & 5G network',
+      connectivity: 'Connectivity & sensors',
+      multimedia: 'Audio & multimedia',
+      availability: 'Availability & MSRP',
+      regulatory: 'Regulatory, certifications & SAR',
     },
     fields: {
       screenSize: 'Screen size',
@@ -254,18 +254,18 @@ const SPEC_UI_DICTS: Record<RateLocale, SpecUiDictionary> = {
     no: 'Ne',
     supported: 'Podporováno',
     has5gYes: 'Ano (5G Sub-6 / mmWave)',
-    cellularNo5gGroup: '6. Mobilní sítě',
+    cellularNo5gGroup: 'Mobilní sítě',
     groups: {
-      display: '1. Displej a obrazovka',
-      hardware: '2. Hardware a výkon',
-      camera: '3. Fotoaparát a optika (PhoneArena Split)',
-      battery: '4. Baterie a nabíjení',
-      design: '5. Konstrukce a odolnost',
-      cellular: '6. Mobilní sítě a 5G',
-      connectivity: '7. Konektivita a senzory',
-      multimedia: '8. Zvuk a multimédia',
-      availability: '9. Dostupnost a cena (MSRP)',
-      regulatory: '10. Certifikace a hodnota SAR',
+      display: 'Displej a obrazovka',
+      hardware: 'Hardware a výkon',
+      camera: 'Fotoaparát a optika',
+      battery: 'Baterie a nabíjení',
+      design: 'Konstrukce a odolnost',
+      cellular: 'Mobilní sítě a 5G',
+      connectivity: 'Konektivita a senzory',
+      multimedia: 'Zvuk a multimédia',
+      availability: 'Dostupnost a cena (MSRP)',
+      regulatory: 'Certifikace a hodnota SAR',
     },
     fields: {
       screenSize: 'Úhlopříčka displeje',
@@ -283,11 +283,11 @@ const SPEC_UI_DICTS: Record<RateLocale, SpecUiDictionary> = {
       storageExpansion: 'Rozšíření paměti',
       os: 'Operační systém',
       rearSetup: 'Sestava zadního fotoaparátu',
-      mainCamera: 'Hlavní snímač (Wide)',
-      secondCamera: 'Druhý snímač (Ultrawide)',
+      mainCamera: 'Hlavní snímač (širokoúhlý)',
+      secondCamera: 'Druhý snímač (ultraširokoúhlý)',
       thirdCamera: 'Třetí snímač (Teleobjektiv)',
       fourthCamera: 'Čtvrtý snímač (Periskop / ToF)',
-      frontCamera: 'Přední kamera (Selfie)',
+      frontCamera: 'Přední kamera',
       videoAndFlash: 'Záznam videa a blesk',
       batteryCapacity: 'Kapacita baterie',
       batteryType: 'Typ baterie',
@@ -333,18 +333,17 @@ export function getSpecUiDictionary(locale?: string): SpecUiDictionary {
 }
 
 /**
- * A group heading numbered by its place in the category's template, so an
- * earbud page that starts with audio reads "1. Audio" (DOS/Rate#1142).
+ * A group heading in the page's language, without a number or a second
+ * language (DOS/Rate#1529); a watch's cellular group has no "5G".
  */
 export function specGroupHeading(
   ui: SpecUiDictionary,
   group: SpecGroupKey,
-  position: number,
   has5g = true
 ): string {
-  const label =
-    group === 'cellular' && !has5g ? ui.cellularNo5gGroup : ui.groups[group];
-  return `${position}. ${label.replace(/^\d+\.\s*/, '')}`;
+  return group === 'cellular' && !has5g
+    ? ui.cellularNo5gGroup
+    : ui.groups[group];
 }
 
 /** The "10 spec groups" badge with the category's own group count. */
@@ -445,9 +444,9 @@ const VI_SPEC_REPLACEMENTS: Array<[RegExp, string]> = [
   [/\bperformance\b/gi, 'hiệu năng'],
   [/\befficiency\b/gi, 'tiết kiệm điện'],
   [/\(photo\/panorama\)/gi, '(ảnh/toàn cảnh)'],
-  [/\bOcta-core\b/gi, '8 nhân (Octa-core)'],
-  [/\bHexa-core\b/gi, '6 nhân (Hexa-core)'],
-  [/\bDeca-core\b/gi, '10 nhân (Deca-core)'],
+  [/\bOcta-core\b/gi, '8 nhân'],
+  [/\bHexa-core\b/gi, '6 nhân'],
+  [/\bDeca-core\b/gi, '10 nhân'],
 ];
 
 // A letter only Vietnamese uses among the spec languages.

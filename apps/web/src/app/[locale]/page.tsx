@@ -64,6 +64,7 @@ import {
 import { applyCategorySpecTemplate } from '@repo/shared-data/rules';
 import {
   hasReviewRiskEvidence,
+  knownDosafeRiskScore,
   merchantRiskTone,
 } from '@/lib/merchant-risk-tone';
 import {
@@ -73,6 +74,7 @@ import {
   formatPlainNumber,
   formatPriceVnd,
 } from '@/lib/locale-format';
+import StarRating from '@/components/elementary/StarRating';
 
 // Cached after the first request, refreshed every 5 minutes or when the
 // worker revalidates its cache tags (DOS/Rate#491).
@@ -654,12 +656,11 @@ export default async function Home({
                                 {battle.productA.name}
                               </div>
                               <div className="rate-battle-score">
-                                ★{' '}
-                                {formatDecimal(
-                                  battle.productA.combinedScore5,
-                                  locale,
-                                  2
-                                )}
+                                <StarRating
+                                  value={battle.productA.combinedScore5}
+                                  digits={2}
+                                  size="sm"
+                                />
                               </div>
                             </div>
                             <span className="rate-battle-vs" aria-hidden="true">
@@ -670,12 +671,11 @@ export default async function Home({
                                 {battle.productB.name}
                               </div>
                               <div className="rate-battle-score">
-                                ★{' '}
-                                {formatDecimal(
-                                  battle.productB.combinedScore5,
-                                  locale,
-                                  2
-                                )}
+                                <StarRating
+                                  value={battle.productB.combinedScore5}
+                                  digits={2}
+                                  size="sm"
+                                />
                               </div>
                             </div>
                           </div>
@@ -933,13 +933,20 @@ export default async function Home({
                 .slice(0, HOME_MERCHANT_PREVIEW_COUNT)
                 .map((merchant) => {
                   const tone = (risk: number) => `is-${merchantRiskTone(risk)}`;
-                  const overallTone = tone(merchant.risk_score);
+                  // No data at all: no tone and no number (DOS/Rate#1484).
+                  const overallTone =
+                    merchant.risk_score == null
+                      ? ''
+                      : tone(merchant.risk_score);
+                  const dosafeScore = knownDosafeRiskScore(merchant);
                   const trustLabel =
-                    overallTone === 'is-good'
-                      ? tHome('merchantTrustedLabel')
-                      : overallTone === 'is-warn'
-                        ? tHome('merchantCautionLabel')
-                        : tHome('merchantHighRiskLabel');
+                    merchant.trust_score == null
+                      ? tHome('merchantNoDataLabel')
+                      : overallTone === 'is-good'
+                        ? tHome('merchantTrustedLabel')
+                        : overallTone === 'is-warn'
+                          ? tHome('merchantCautionLabel')
+                          : tHome('merchantHighRiskLabel');
                   const breakdown = merchant.review_risk_breakdown;
                   const totalRevAnalyzed = breakdown?.total_reviews ?? 0;
                   const flaggedRevCount =
@@ -980,21 +987,30 @@ export default async function Home({
                             </div>
                           </div>
                           <span className={`rate-radar-tag ${overallTone}`}>
-                            {trustLabel} · {merchant.trust_score}/100
+                            {merchant.trust_score == null
+                              ? trustLabel
+                              : `${trustLabel} · ${merchant.trust_score}/100`}
                           </span>
                         </div>
 
                         <dl className="rate-merchant-metrics">
                           <div>
                             <dt>{tHome('dosafeRiskLabel')}</dt>
-                            <dd className={tone(merchant.dosafe_risk_score)}>
-                              {merchant.dosafe_risk_score}/100
-                            </dd>
-                            {merchantRiskTone(merchant.dosafe_risk_score) ===
-                              'good' && (
-                              <dd className="rate-merchant-note">
-                                {tHome('noScamDetected')}
-                              </dd>
+                            {/* No DOSafe score: no number, and no "no scam
+                                detected" (DOS/Rate#1479). */}
+                            {dosafeScore == null ? (
+                              <dd>{tHome('dosafeRiskNoData')}</dd>
+                            ) : (
+                              <>
+                                <dd className={tone(dosafeScore)}>
+                                  {dosafeScore}/100
+                                </dd>
+                                {merchantRiskTone(dosafeScore) === 'good' && (
+                                  <dd className="rate-merchant-note">
+                                    {tHome('noScamDetected')}
+                                  </dd>
+                                )}
+                              </>
                             )}
                           </div>
                           <div>
@@ -1026,9 +1042,15 @@ export default async function Home({
                           <div>
                             <dt>{tHome('ratingsAndProductsLabel')}</dt>
                             <dd>
-                              {merchant.rating_star != null
-                                ? `★ ${formatDecimal(merchant.rating_star, locale, 1)} · `
-                                : ''}
+                              {merchant.rating_star != null && (
+                                <>
+                                  <StarRating
+                                    value={merchant.rating_star}
+                                    size="sm"
+                                  />
+                                  {' · '}
+                                </>
+                              )}
                               {merchant.product_count}{' '}
                               {tHome('productsShortUnit')}
                             </dd>

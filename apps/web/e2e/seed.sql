@@ -45,6 +45,14 @@ VALUES
    'Samsung Galaxy S25 Ultra 256GB', 'c0000000-0000-4000-8000-000000000001', 'Samsung', 26490000, 33990000,
    'https://tiki.vn/item-3', '22222222-2222-4222-8222-222222222222');
 
+-- The Apple Flagship Store has a stored review risk and no DOSafe score: a seller with a
+-- real score, so the deal radar may call its cheaper offer a genuine deal; with no score
+-- at all it could not (DOS/Rate#1484). Its DOSafe score stays unknown (DOS/Rate#1479).
+UPDATE rate.merchants
+SET review_risk_score = 8,
+    review_risk_breakdown = '{"total_reviews": 12, "authentic_count": 11, "coin_spam_count": 1, "seeding_fake_count": 0, "sabotage_or_bombing_count": 0, "suspicious_ratio_pct": 8}'
+WHERE id = '11111111-1111-4111-8111-111111111111';
+
 INSERT INTO rate.price_history (product_id, price, price_original, recorded_at)
 SELECT p.id, p.price_current + d.days * 100000, p.price_original, now() - make_interval(days => d.days)
 FROM rate.products p
@@ -82,6 +90,13 @@ INSERT INTO rate.products (id, merchant_id, platform, platform_item_id, title, c
 VALUES ('cccccccc-cccc-4ccc-8ccc-ccccccccfa17', 'dddddddd-dddd-4ddd-8ddd-ddddddddfa17', 'shopee', 'item_fault',
   'E2E Price Fault Phone', 'c0000000-0000-4000-8000-000000000001', 1000000, 'https://shopee.vn/item-fault',
   '22222222-2222-4222-8222-22222222fa17');
+
+-- A store with no data at all: no DOSafe score (risk_score left at its
+-- default 0, no metadata), no reviews and no stored combined score. It has no
+-- trust score, not "high trust 100/100", even as an Official Mall, whose
+-- review baseline is 0 (DOS/Rate#1484).
+INSERT INTO rate.merchants (id, platform, platform_shop_id, name, slug, is_official, follower_count)
+VALUES ('11111111-1111-4111-8111-111111111484', 'shopee', 'shop_no_data', 'No Data Store', 'no-data-store', true, 900000);
 
 -- 1100 small merchants push the directory past PostgREST's 1000-row cap, and
 -- "Last Ranked Shop" sorts after all of them (fewest followers), so an unpaged
@@ -269,12 +284,14 @@ VALUES ('cccccccc-cccc-4ccc-8ccc-ccccccc07692', 'Draft Links', 4, 'Máy dùng �
 -- name, the medium ones the short forms that keep the score or the price. The
 -- phones have no offers and no reviews, so they stay off the deals and the
 -- leaderboard, and their old created_at keeps them last in default orderings.
-INSERT INTO rate.merchants (id, platform, platform_shop_id, name, slug, is_official)
+-- The medium-name store has a DOSafe score, so its title keeps a trust score; a store
+-- with no data has none (DOS/Rate#1484).
+INSERT INTO rate.merchants (id, platform, platform_shop_id, name, slug, is_official, risk_score)
 VALUES
   ('ffffffff-ffff-4fff-8fff-ffffffff0782', 'shopee', 'shop_long_name',
-   'Cửa Hàng Ủy Quyền Chính Hãng Điện Thoại Di Động Toàn Quốc', 'long-name-store', false),
+   'Cửa Hàng Ủy Quyền Chính Hãng Điện Thoại Di Động Toàn Quốc', 'long-name-store', false, 0),
   ('ffffffff-ffff-4fff-8fff-ffffffff0783', 'shopee', 'shop_medium_name',
-   'Cửa Hàng Điện Thoại Chính Hãng Hà Nội 24h', 'medium-name-store', false);
+   'Cửa Hàng Điện Thoại Chính Hãng Hà Nội 24h', 'medium-name-store', false, 12);
 INSERT INTO rate.master_products
   (id, category_id, brand, model, model_key, name, slug, min_price, max_price, merchant_count, status, metadata, created_at)
 VALUES
@@ -326,6 +343,11 @@ VALUES
 -- leaderboard, and its reviews are older than every other review.
 INSERT INTO rate.merchants (id, platform, platform_shop_id, name, slug, is_official)
 VALUES ('ffffffff-ffff-4fff-8fff-ffffffff0811', 'shopee', 'shop_excluded_review', 'Excluded Review Store', 'excluded-review-store', false);
+
+-- One long unbroken store name: the merchant header wraps it instead of
+-- pushing the page sideways on a phone (DOS/Rate#1472).
+INSERT INTO rate.merchants (id, platform, platform_shop_id, name, slug, is_official)
+VALUES ('ffffffff-ffff-4fff-8fff-ffffffff1472', 'lazada', '1000118502', 'Didongthongminhchinhhang.vn', 'unbroken-name-store', false);
 INSERT INTO rate.master_products
   (id, category_id, brand, model, model_key, name, slug, min_price, max_price, merchant_count, status, metadata)
 VALUES ('22222222-2222-4222-8222-222222220811', 'c0000000-0000-4000-8000-000000000001', 'E2E', 'Excluded Review Phone',
@@ -368,3 +390,9 @@ VALUES
   ('22222222-2222-4222-8222-222222221439', 'c0000000-0000-4000-8000-000000000001', 'E2E', 'Solo Phone',
    'e2e:solo-phone:128gb', 'E2E Solo Phone 128GB', 'e2e-solo-phone-128gb', 128, 7990000, 7990000, 1, 'published',
    '{"category_slug": "smartphones"}');
+
+-- A listing on the budget merchant page shows a device photo with sized
+-- renditions, so perf-budget.spec's full-size JPEG check covers that page
+-- (DOS/Rate#1500). The product page shows no listing images.
+UPDATE rate.products SET images = ARRAY['/img/devices/apple-iphone-16-pro-max-256gb.jpg']
+WHERE id = '33333333-3333-4333-8333-333333333331';

@@ -58,7 +58,10 @@ export default async function ContactUsPage({
   return (
     <ClientMessages scope="contact">
       <PageShell locale={locale}>
-        <section className="bg-dark border-bottom border-secondary border-opacity-25 py-5 text-white">
+        <section
+          className="hero-banner rate-surface-dark rate-ink-on-dark border-bottom border-secondary border-opacity-25 py-5 text-white"
+          style={{ background: 'var(--bs-dark)' }}
+        >
           <div className="container py-3">
             <div className="row justify-content-center mb-4 text-center">
               <div className="col-lg-9">
