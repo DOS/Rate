@@ -72,7 +72,7 @@ test('the size picker replaces the quick specs and links each size', async ({
 
 // The lazy Item also with another size loaded on demand.
 for (const path of [ITEM, BIG, `${BIG}?v=256gb`]) {
-  test(`${path}: price, jump row, sellers, history, specs, reviews`, async ({
+  test(`${path}: price, jump row, specs, reviews, history, sellers`, async ({
     page,
   }) => {
     await page.goto(path);
