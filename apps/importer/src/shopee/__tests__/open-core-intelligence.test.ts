@@ -714,6 +714,25 @@ async function runSuite() {
     'Dây Apple Watch S/M 42mm',
     'Dây Apple Watch Series 10 46mm tặng ốp',
     '🔥 [Chính hãng] Ốp lưng iPhone 16 Pro Max',
+    // DOS/Rate#1539: a folio case stays a case; only HP's Folio line is a device.
+    'Folio case for iPad Pro 11',
+    'Folio 11 inch cho iPad Pro',
+    'Folio iPad 10',
+    'Folio 13 cho HP Pavilion',
+    'Folio 13 HP sleeve chống sốc',
+    'Folio 13 Samsung Galaxy Tab S9',
+    // Review of #1541: an accessory or fit word right after the brand, and a brand that is
+    // not right after the model.
+    'Folio 13 HP op lung',
+    'Folio 13 HP tui chong soc',
+    'Folio 13 HP cường lực',
+    'Folio 13 HP adapter 65W',
+    'Folio 13 HP tuong thich',
+    'Folio 12 iPad Pro HP',
+    // Codex round 2 on #1541.
+    'Folio 13 HP sac 45W dau kim',
+    'Folio 13 HP ban phim US thay the',
+    'Folio 13 HP - sleeve da màu nâu',
   ];
   for (const title of accessoryTitles1505) {
     const accessory = normalizer.normalize(createDummyShopeeProduct(title));
@@ -734,8 +753,28 @@ async function runSuite() {
     ['Bút cảm ứng cao cấp chính hãng Apple Pencil Pro', 'apple:pencil-pro:unknown'],
     // A gift that opens the title is not what it sells.
     ['Ốp lưng tặng kèm khi mua iPhone 16 Pro Max 256GB', 'apple:iphone-16-pro-max:256gb'],
+    // DOS/Rate#1539: HP's Folio laptops open with the line word and keep a key. The
+    // brand after the model stays in it, as for any laptop line typed that way.
+    ['Folio 13 HP Core i5 8GB 256GB', 'hp:folio-13-hp-core:256gb'],
+    ['[Chính hãng] Folio 13 HP i5 8GB', 'hp:folio-13-hp-i5:8gb'],
+    ['HP EliteBook Folio 1040 G3 i7 16GB', 'hp:elitebook-folio-1040-g3:16gb'],
   ] as const) {
     assert.equal(keyOf(title), expectedKey, title);
+  }
+  // Review of #1541: promo words before the line, older "G1" models, and the laptop's own
+  // text later in the title ("bàn phím có đèn", "dùng cho văn phòng") keep the device.
+  for (const title of [
+    '[Hàng chính hãng] Folio 13 HP i5 8GB',
+    'Combo Folio 13 HP i5 8GB',
+    'Folio G1 HP Core m5 8GB',
+    'Folio 1040 G3 HP i5 8GB',
+    'Folio 13 (HP) i5 8GB',
+    'Folio 13 HP Core i5 bàn phím có đèn',
+    'Folio 13 HP i5 dùng cho văn phòng',
+    'Folio 13 HP pin 8 tiếng',
+    'Folio 13 HP cho sinh viên Core i5 4GB RAM SSD 128GB',
+  ]) {
+    assert.equal(normalizer.normalize(createDummyShopeeProduct(title)).keyable, true, title);
   }
   // DOS/Rate#1124: a size outside a band phrase is the case's; a band's size counts only
   // when the title names no other.
