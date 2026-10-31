@@ -187,6 +187,10 @@ export default function VersusInteractiveScoreboard({
   const scoreA = swapped ? secondScore : firstScore;
   const scoreB = swapped ? firstScore : secondScore;
   const t = useTranslations('compare');
+  const tStars = useTranslations('starRating');
+  // A side with no score reads like its stars, not "0.0" (DOS/Rate#1545).
+  const summaryScore = (score: number): string =>
+    score > 0 ? formatDecimal(score, locale, 1) : tStars('empty');
   const locale = useLocale();
   const useCaseLabelId = useId();
   const slidersPanelId = useId();
@@ -479,9 +483,11 @@ export default function VersusInteractiveScoreboard({
         aria-live="polite"
       >
         {/* Narrows the values to each key's own placeholders. */}
-        {verdict.key === 'versusAutoVerdictTie'
-          ? t(verdict.key, verdict.values)
-          : t(verdict.key, verdict.values)}
+        {verdict.key === 'versusAutoVerdictNoScore'
+          ? t(verdict.key)
+          : verdict.key === 'versusAutoVerdictTie'
+            ? t(verdict.key, verdict.values)
+            : t(verdict.key, verdict.values)}
         {verdict.weightsLabel &&
           ` ${t('versusVerdictWeights', { weights: verdict.weightsLabel })}`}
       </p>
@@ -650,8 +656,8 @@ export default function VersusInteractiveScoreboard({
             )}
           </div>
           <div className="rate-tabular small text-warning fw-bold">
-            {scoreA.brand}: {formatDecimal(weightedResult.finalA, locale, 1)} •{' '}
-            {scoreB.brand}: {formatDecimal(weightedResult.finalB, locale, 1)}
+            {scoreA.brand}: {summaryScore(weightedResult.finalA)} •{' '}
+            {scoreB.brand}: {summaryScore(weightedResult.finalB)}
           </div>
         </div>
 

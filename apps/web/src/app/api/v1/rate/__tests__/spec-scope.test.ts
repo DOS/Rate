@@ -883,7 +883,20 @@ async function testSpecMatchesBodies() {
     get(`/api/v1/rate/versus?pair=${PHONE.slug}-vs-${PHONE_2.slug}`)
   );
   assert.equal(vs.status, 200);
-  expectPaths('/api/v1/rate/versus', await vs.json(), [
+  const vsBody = await vs.json();
+  // The tie and the winner read the /10 scores as shown, at one decimal
+  // (#1545): a tie only when they are equal, else the higher one wins.
+  const vsA10 = vsBody.product_a.custom_weighted_score_10;
+  const vsB10 = vsBody.product_b.custom_weighted_score_10;
+  assert.equal(vsBody.is_tie, vsA10 === vsB10);
+  if (!vsBody.is_tie) {
+    assert.equal(vsBody.overall_winner.side, vsA10 > vsB10 ? 'A' : 'B');
+    assert.equal(
+      vsBody.overall_winner.margin_10,
+      Number(Math.abs(vsA10 - vsB10).toFixed(1))
+    );
+  }
+  expectPaths('/api/v1/rate/versus', vsBody, [
     'is_tie',
     'versus_pair',
     ...under('deal_radar.productA', radar),

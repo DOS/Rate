@@ -7,6 +7,7 @@ import {
   getMasterProductOffersBatch,
 } from '@/server/rate';
 import { radarExportFields } from '@/lib/deal-radar';
+import { versusApiWinner } from '@/lib/versus-verdict';
 import {
   comparePositiveMinPrices,
   scoreMasterProductForLeaderboard,
@@ -305,18 +306,16 @@ export async function GET(req: NextRequest) {
       scoreB.minPrice
     );
 
-    const winnerSide: 'A' | 'B' =
-      customScoreA5 > customScoreB5
-        ? 'A'
-        : customScoreB5 > customScoreA5
-          ? 'B'
-          : scoreA.combinedScore5 > scoreB.combinedScore5
-            ? 'A'
-            : scoreB.combinedScore5 > scoreA.combinedScore5
-              ? 'B'
-              : priceSide === 'B'
-                ? 'B'
-                : 'A';
+    // The winner and the tie read the scores as the response shows them, at
+    // one decimal; the composite and then the price only break a tie
+    // (DOS/Rate#1545, D3).
+    const { tie: isTie, side: winnerSide } = versusApiWinner(
+      customScoreA10,
+      customScoreB10,
+      scoreA.combinedScore5,
+      scoreB.combinedScore5,
+      priceSide
+    );
 
     const winnerScore = winnerSide === 'A' ? scoreA : scoreB;
     const winnerCustom10 = winnerSide === 'A' ? customScoreA10 : customScoreB10;
@@ -399,11 +398,9 @@ export async function GET(req: NextRequest) {
           productA: radarSignalA,
           productB: radarSignalB,
         },
-        // Level at two decimals: overall_winner is then only the tie-break
-        // (DOS/Rate#1209).
-        is_tie:
-          customScoreA5.toFixed(2) === customScoreB5.toFixed(2) &&
-          scoreA.combinedScore5.toFixed(2) === scoreB.combinedScore5.toFixed(2),
+        // Level at the shown precision: overall_winner is then only the
+        // tie-break (DOS/Rate#1209, DOS/Rate#1545).
+        is_tie: isTie,
         overall_winner: {
           side: winnerSide,
           slug: winnerScore.slug,
