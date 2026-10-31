@@ -861,6 +861,24 @@ export async function ProductDetailView({
       />
     );
 
+  const colorsBlock = (visibility: string) =>
+    product.colors && product.colors.length > 0 ? (
+      <div className={`border-top mt-3 pt-3 text-start ${visibility}`}>
+        <div className="small text-muted mb-2">{t('availableColors')}</div>
+        <div className="rate-pdv-colors d-flex flex-wrap gap-2">
+          {product.colors.map((c, i) => (
+            <span
+              key={i}
+              className="badge text-dark rounded-pill small border bg-white px-3 py-2"
+              lang={contentLang(c, locale)}
+            >
+              {c}
+            </span>
+          ))}
+        </div>
+      </div>
+    ) : null;
+
   return (
     <ClientMessages scope="productDetail">
       <PageShell locale={locale}>
@@ -918,25 +936,9 @@ export async function ProductDetailView({
                   )}
                 </div>
 
-                {/* Colors */}
-                {product.colors && product.colors.length > 0 && (
-                  <div className="border-top mt-3 pt-3 text-start">
-                    <div className="small text-muted mb-2">
-                      {t('availableColors')}
-                    </div>
-                    <div className="rate-pdv-colors d-flex flex-wrap gap-2">
-                      {product.colors.map((c, i) => (
-                        <span
-                          key={i}
-                          className="badge text-dark rounded-pill small border bg-white px-3 py-2"
-                          lang={contentLang(c, locale)}
-                        >
-                          {c}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                )}
+                {/* Colors: under the photo on desktop; on a phone they move below the
+                scoreboard, so the jump row fits the first screen (DOS/Rate#1517). */}
+                {colorsBlock('d-none d-lg-block')}
               </div>
             </div>
 
@@ -1024,6 +1026,24 @@ export async function ProductDetailView({
                 </p>
               )}
 
+              {/* Where to buy comes first, then the price history, specs and
+              reviews; this row jumps to each (DOS/Rate#1469). It sits under the
+              price, before the scoreboard, so a phone shows it in the first
+              screen (DOS/Rate#1517). */}
+              <nav
+                className="rate-pdv-jumpnav"
+                aria-label={t('jumpNavAria')}
+                data-testid="pdv-jump-nav"
+              >
+                <a href="#offers-table">
+                  {t('jumpNavOffers', { count: offers.length })}
+                </a>
+                <a href="#pdv-price-history">{t('jumpNavPriceHistory')}</a>
+                <a href="#specs-section">{t('jumpNavSpecs')}</a>
+                <a href="#jreviews-section">
+                  {t('jumpNavReviews', { count: authenticCount })}
+                </a>
+              </nav>
               {/* #1 Core Focus Above the Fold: JReviews Dual-Rating & 5-Criteria Scoreboard (DESIGN.md v3.0) */}
               <div className="rate-scoreboard-dark rate-surface-dark rate-pdv-board mb-4">
                 <div className="rate-pdv-board-head">
@@ -1310,6 +1330,8 @@ export async function ProductDetailView({
                 />
               </div>
 
+              {colorsBlock('d-lg-none mb-4')}
+
               {/* Neutral Market Price Reference Strip (De-commercialized per DESIGN.md v3.0) */}
               {isItemGroup
                 ? renderSizePanels('strip', (v) =>
@@ -1333,23 +1355,6 @@ export async function ProductDetailView({
               </details>
             </div>
           </div>
-
-          {/* Where to buy comes first, then the price history, specs and
-          reviews; this row jumps to each (DOS/Rate#1469). */}
-          <nav
-            className="rate-pdv-jumpnav"
-            aria-label={t('jumpNavAria')}
-            data-testid="pdv-jump-nav"
-          >
-            <a href="#offers-table">
-              {t('jumpNavOffers', { count: offers.length })}
-            </a>
-            <a href="#pdv-price-history">{t('jumpNavPriceHistory')}</a>
-            <a href="#specs-section">{t('jumpNavSpecs')}</a>
-            <a href="#jreviews-section">
-              {t('jumpNavReviews', { count: authenticCount })}
-            </a>
-          </nav>
 
           {/* Neutral Merchant Reference & Trust Audit Table */}
           <div

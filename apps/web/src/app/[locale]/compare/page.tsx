@@ -15,6 +15,7 @@ import { defaultOpenGraph, fitTitle, fitDescription } from '@/lib/seo';
 import CompareWorkspace from '@/components/compare/CompareWorkspace';
 import PageShell from '../components/page-shell';
 import ClientMessages from '@/components/providers/ClientMessages';
+import { withScoringSpecs } from '@/lib/hero-products';
 
 // Reads searchParams, so it renders per request. The [locale] layout's
 // generateStaticParams would otherwise make it static, and the searchParams
@@ -197,7 +198,9 @@ export default async function ComparePhonesPage({
 
             <CompareWorkspace
               initialProducts={initialProducts}
-              catalogCandidates={catalogCandidates}
+              // Ranking fields only: an added product gets its full
+              // sheet from the page the selection navigates to (#1515).
+              catalogCandidates={catalogCandidates.map(withScoringSpecs)}
               initialCategory={activeCategory}
               hasExplicitSlugs={requestedSlugs.length > 0}
               locale={locale}

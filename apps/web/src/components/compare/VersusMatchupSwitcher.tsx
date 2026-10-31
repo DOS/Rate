@@ -118,7 +118,7 @@ export default function VersusMatchupSwitcher({
             aria-label={t('selectDeviceAAria')}
             value={effectiveSlugA}
             onChange={(e) => setSlugA(e.target.value)}
-            className="form-select form-select-sm bg-dark border-secondary text-white"
+            className="form-select form-select-sm"
           >
             {sameCategoryPeers.map((peer) => (
               <option
@@ -137,7 +137,7 @@ export default function VersusMatchupSwitcher({
             aria-label={t('selectDeviceBAria')}
             value={effectiveSlugB}
             onChange={(e) => setSlugB(e.target.value)}
-            className="form-select form-select-sm bg-dark border-secondary text-white"
+            className="form-select form-select-sm"
           >
             {sameCategoryPeers.map((peer) => (
               <option

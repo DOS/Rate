@@ -415,6 +415,29 @@
   .border-white {
     border-color: var(--rate-border-subtle) !important;
   }
+
+  // Light ink on the surface itself (the compare tray card) turns dark too.
+  &:is(.text-white, .text-light):not(.bg-dark) {
+    color: var(--rate-fg-primary) !important;
+  }
+
+  // Outline, link and plain buttons drawn with light ink for the obsidian
+  // ground (the versus custom-weights button, the compare tray's collapse and
+  // remove buttons) take dark ink once it turns light (DOS/Rate#1521).
+  // Filled buttons keep their white ink; a .bg-dark block stays dark.
+  .btn:is(.text-white, .text-light):not(
+      .btn-primary,
+      .btn-secondary,
+      .btn-success,
+      .btn-danger,
+      .btn-warning,
+      .btn-info,
+      .btn-dark,
+      .bg-dark .btn
+    ) {
+    // Hover grounds here are light (--bs-light), so the ink stays dark.
+    color: var(--rate-fg-primary) !important;
+  }
 }
 
 // Outline-light buttons are made for dark grounds: on the ones that turn

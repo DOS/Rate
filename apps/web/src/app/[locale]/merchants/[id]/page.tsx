@@ -9,6 +9,7 @@ import { Link } from '@/lib/navigation';
 import { IntentLink } from '@/components/elementary/IntentLink';
 import { getCategoryRouteHref, resolveProductImageUrl } from '@/lib/rate-api';
 import { sizedStoreImageUrl } from '@/lib/rate-domain-core';
+import { deviceImageSrcSet } from '@/lib/device-images';
 import {
   getCachedMerchantProfileById,
   getCrossPlatformDealRadar,
@@ -467,7 +468,10 @@ export default async function MerchantProfilePage({
             {/* 1. DOSafe Threat Intelligence Card */}
             <div className="col-lg-6 col-12">
               <div className="card rounded-4 h-100 border p-4 shadow-sm">
-                <div className="d-flex justify-content-between align-items-start mb-3">
+                {/* The risk pill drops below the title when the half-width card
+                    has no room for both, and wraps its own text rather than
+                    run out of the card (DOS/Rate#1524). */}
+                <div className="d-flex justify-content-between align-items-start flex-wrap mb-3 gap-2">
                   <div>
                     <span className="badge bg-primary-subtle text-primary rounded-pill small mb-2 px-3 py-1">
                       {t('layer1Badge')}
@@ -478,7 +482,7 @@ export default async function MerchantProfilePage({
                     </h2>
                   </div>
                   <span
-                    className={`badge rounded-pill fs-6 px-3 py-2 ${
+                    className={`badge rounded-pill fs-6 text-wrap mw-100 px-3 py-2 ${
                       scamTone === 'unknown'
                         ? 'bg-light text-muted border'
                         : scamTone === 'good'
@@ -547,7 +551,7 @@ export default async function MerchantProfilePage({
             {/* 2. AI Review & Seeding Risk Card */}
             <div className="col-lg-6 col-12">
               <div className="card rounded-4 h-100 border p-4 shadow-sm">
-                <div className="d-flex justify-content-between align-items-start mb-3">
+                <div className="d-flex justify-content-between align-items-start flex-wrap mb-3 gap-2">
                   <div>
                     <span className="badge bg-warning-subtle text-warning-emphasis rounded-pill small mb-2 px-3 py-1">
                       {t('layer2Badge')}
@@ -559,7 +563,7 @@ export default async function MerchantProfilePage({
                   </div>
                   {hasReviewRiskEvidence(brk) ? (
                     <span
-                      className={`badge rounded-pill fs-6 px-3 py-2 ${
+                      className={`badge rounded-pill fs-6 text-wrap mw-100 px-3 py-2 ${
                         merchant.review_risk_score <= 15
                           ? 'bg-success-subtle text-success'
                           : merchant.review_risk_score <= 40
@@ -574,7 +578,10 @@ export default async function MerchantProfilePage({
                   ) : (
                     // No analysed reviews: a number would be a guess
                     // (DOS/Rate#1249).
-                    <span className="badge rounded-pill fs-6 bg-light text-muted border px-3 py-2">
+                    <span
+                      className="badge rounded-pill fs-6 bg-light text-muted text-wrap mw-100 border px-3 py-2"
+                      data-testid="merchant-review-risk-badge"
+                    >
                       {t('reviewRiskNoData')}
                     </span>
                   )}
@@ -981,9 +988,17 @@ export default async function MerchantProfilePage({
                           <td>
                             <div className="d-flex align-items-center gap-3">
                               {resolvedImg && (
+                                // A local device photo loads its pre-sized
+                                // WebP, not the full JPEG (DOS/Rate#1500,
+                                // #1332). srcSet and sizes come before src,
+                                // so the JPEG never starts (#1413).
                                 <img
                                   loading="lazy"
                                   decoding="async"
+                                  srcSet={
+                                    deviceImageSrcSet(resolvedImg) ?? undefined
+                                  }
+                                  sizes="52px"
                                   src={resolvedImg}
                                   alt={item.title}
                                   lang={contentLang(item.title, locale)}
