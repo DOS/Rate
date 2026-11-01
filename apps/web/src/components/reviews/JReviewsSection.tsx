@@ -52,6 +52,8 @@ import {
   type ReviewBadgeKind,
 } from '@/lib/review-display';
 import AnalyzerText, { analyzerText } from './AnalyzerText';
+import ReviewFormV2 from './ReviewFormV2';
+import { isReviewFormV2Enabled } from '@/lib/review-form-v2';
 import {
   formatDecimal,
   formatPercent,
@@ -628,43 +630,47 @@ export default function JReviewsSection({
         return;
       }
 
-      const newRev = payload.review as ReviewItem;
-      setReviews((prev) => [newRev, ...prev]);
-
-      try {
-        const cacheKey = `${LOCAL_REVIEWS_PREFIX}${masterProductId || productSlug || productName}`;
-        const existingLocal = JSON.parse(
-          window.localStorage.getItem(cacheKey) || '[]'
-        );
-        const nextLocal = [
-          newRev,
-          ...(Array.isArray(existingLocal) ? existingLocal : []),
-        ].slice(0, 20);
-        window.localStorage.setItem(cacheKey, JSON.stringify(nextLocal));
-      } catch {
-        // Ignore storage quota errors
-      }
-
       setComment('');
-      setShowWriteForm(false);
-      setSubmitSuccess(
-        newRev.verdict === 'unanalyzed'
-          ? t('successPendingModeration')
-          : newRev.include_in_rating
-            ? t('successPublishedAuthentic', {
-                weight: formatDecimal(newRev.helpfulness_weight, locale, 2),
-              })
-            : t('successFlaggedFiltered', {
-                flag:
-                  flagMetaMap[newRev.flag_category]?.label ??
-                  newRev.flag_category,
-              })
-      );
+      handleReviewStored(payload.review as ReviewItem);
     } catch {
       setSubmitError(t('errNetworkFailed'));
     } finally {
       setSubmittingReview(false);
     }
+  }
+
+  /** Shows a stored review at the top and says how it was classified. */
+  function handleReviewStored(newRev: ReviewItem) {
+    setReviews((prev) => [newRev, ...prev]);
+
+    try {
+      const cacheKey = `${LOCAL_REVIEWS_PREFIX}${masterProductId || productSlug || productName}`;
+      const existingLocal = JSON.parse(
+        window.localStorage.getItem(cacheKey) || '[]'
+      );
+      const nextLocal = [
+        newRev,
+        ...(Array.isArray(existingLocal) ? existingLocal : []),
+      ].slice(0, 20);
+      window.localStorage.setItem(cacheKey, JSON.stringify(nextLocal));
+    } catch {
+      // Ignore storage quota errors
+    }
+
+    setShowWriteForm(false);
+    setSubmitSuccess(
+      newRev.verdict === 'unanalyzed'
+        ? t('successPendingModeration')
+        : newRev.include_in_rating
+          ? t('successPublishedAuthentic', {
+              weight: formatDecimal(newRev.helpfulness_weight, locale, 2),
+            })
+          : t('successFlaggedFiltered', {
+              flag:
+                flagMetaMap[newRev.flag_category]?.label ??
+                newRev.flag_category,
+            })
+    );
   }
 
   const [copiedReviewsMd, setCopiedReviewsMd] = useState(false);
@@ -879,8 +885,19 @@ export default function JReviewsSection({
         </div>
       )}
 
+      {/* Review form v2 behind its flag (DOS/Rate#1544) */}
+      {showWriteForm && isReviewFormV2Enabled() && (
+        <ReviewFormV2
+          masterProductId={masterProductId}
+          productName={productName}
+          categorySlug={categorySlug}
+          defaultAuthorName={t('defaultAuthorName')}
+          onStored={handleReviewStored}
+        />
+      )}
+
       {/* Interactive 5-Criteria Write Review Form */}
-      {showWriteForm && (
+      {showWriteForm && !isReviewFormV2Enabled() && (
         <form
           onSubmit={handleSubmitCommunityReview}
           className="border-primary border-opacity-25 rounded-4 bg-light mb-4 border p-4"

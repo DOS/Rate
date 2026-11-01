@@ -1766,6 +1766,36 @@ export async function isPublishedMasterProduct(
   return Boolean(data);
 }
 
+/**
+ * The category of a published master product, or null when the id names no
+ * published product. The review API checks criteria against it rather than a
+ * category the browser sends (DOS/Rate#1544).
+ */
+export async function getPublishedMasterProductCategorySlug(
+  masterId: string
+): Promise<CanonicalCategorySlug | null> {
+  const supabase = getRateClient();
+  const { data, error } = await supabase
+    .from('master_products')
+    .select('id, slug, name, model, category_id, metadata, specifications')
+    .eq('id', masterId)
+    .eq('status', 'published')
+    .maybeSingle();
+  if (error) {
+    log.error('master product category lookup failed', {
+      masterId,
+      message: error.message,
+    });
+    throw new RateDataUnavailableError('master product', error);
+  }
+  if (!data) return null;
+  const categorySlugById = await getCategorySlugMap();
+  return getMasterProductCategorySlug(
+    data as Parameters<typeof getMasterProductCategorySlug>[0],
+    categorySlugById ?? undefined
+  );
+}
+
 export async function getMasterProductReviews(
   masterId: string
 ): Promise<ReviewItem[]> {
