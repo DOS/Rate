@@ -1709,6 +1709,200 @@ function testRatingCriteriaAndReviewForm(): void {
   assert.ok(Date.now() - started < 1000, 'linear on an oversized con');
 }
 
+function testProductPoints(): void {
+  const now = new Date('2026-11-01T00:00:00Z');
+  const monthsAgo = (months: number): string =>
+    new Date(now.getTime() - months * (365.25 / 12) * 86_400_000).toISOString();
+  let next = 0;
+  const line = (
+    writerId: string,
+    kind: rules.PointKind,
+    body: string,
+    extra: Partial<rules.PointLine> = {}
+  ): rules.PointLine => {
+    next += 1;
+    return {
+      id: `l${String(next).padStart(3, '0')}`,
+      reviewId: `r-${writerId}`,
+      writerId,
+      kind,
+      criterionKey: null,
+      body,
+      weight: 1,
+      isExpert: false,
+      writtenAt: now.toISOString(),
+      ...extra,
+    };
+  };
+  const run = (lines: rules.PointLine[], slug = 'smartphones') =>
+    rules.aggregateProductPoints(slug, lines, now);
+
+  // Normalising: filler words go, diacritics stay, a negation joins the next
+  // word, so "pin không trâu" never matches "pin trâu".
+  assert.deepEqual(rules.pointTokens('Pin KHÁ trâu!!'), ['pin', 'trâu']);
+  assert.deepEqual(rules.pointTokens('pin không trâu'), ['pin', 'không_trâu']);
+  assert.deepEqual(rules.pointTokens('ko trâu'), ['không_trâu']);
+  assert.notDeepEqual(
+    rules.pointTokens('sạc nhanh'),
+    rules.pointTokens('sắc nhanh')
+  );
+  assert.equal(rules.wordOverlap(['a', 'b'], ['a', 'b']), 1);
+  assert.equal(rules.wordOverlap(['a', 'b'], ['c']), 0);
+  assert.equal(rules.wordOverlap([], []), 0);
+  assert.ok(
+    rules.wordOverlap(
+      rules.pointTokens('pin trâu'),
+      rules.pointTokens('pin không trâu')
+    ) < rules.POINT_CLUSTER_OVERLAP
+  );
+
+  // Criteria: the line's own key when the category has it, else keywords,
+  // matched with or without diacritics but never with other ones.
+  const assign = rules.assignPointCriterion;
+  assert.equal(assign('smartphones', 'camera', 'pin trâu'), 'camera');
+  assert.equal(assign('smartphones', 'anc', 'pin trâu'), 'battery');
+  assert.equal(assign('smartphones', null, 'Pin trâu dùng cả ngày'), 'battery');
+  assert.equal(assign('smartphones', null, 'pin trau, sac nhanh'), 'battery');
+  assert.equal(assign('smartphones', null, 'cảm ứng mượt'), 'performance');
+  assert.equal(assign('smartphones', null, 'Màn hình sáng rõ'), 'display');
+  assert.equal(assign('earbuds', null, 'chống ồn tốt'), 'anc');
+  assert.equal(assign('earbuds', null, 'Màn hình sáng rõ'), null);
+  assert.equal(
+    assign('smartphones', null, 'hộp đựng đẹp, giao đúng hẹn'),
+    null
+  );
+  assert.equal(assign('smartphones', 'toString', 'abc def'), null);
+
+  // Clustering: alike lines of one criterion and kind join; a pro and a con,
+  // or a negated line, do not.
+  const alike = run([
+    line('a', 'pro', 'Pin trâu, dùng cả ngày'),
+    line('b', 'pro', 'pin rất trâu dùng cả ngày'),
+    line('c', 'pro', 'Pin trâu dùng cả ngày luôn'),
+    line('d', 'con', 'pin không trâu dùng cả ngày'),
+  ]);
+  const batteryPro = alike.clusters.find((cl) => cl.kind === 'pro')!;
+  assert.equal(batteryPro.criterionKey, 'battery');
+  assert.equal(batteryPro.reviewerCount, 3);
+  assert.deepEqual(batteryPro.lineIds.length, 3);
+  assert.equal(alike.clusters.length, 2);
+  assert.equal(alike.byCriterion.battery!.pros.length, 1);
+  assert.equal(alike.byCriterion.battery!.cons.length, 0, 'one writer: no con');
+  assert.equal(alike.reviewCount, 4);
+  // The label is the form most writers used, in the first one's words.
+  const label = run([
+    line('a', 'pro', 'Màn hình sáng, rõ nét', { writtenAt: monthsAgo(3) }),
+    line('b', 'pro', 'màn hình rất sáng rõ nét'),
+    line('c', 'pro', 'Màn hình  sáng rõ nét!'),
+  ]);
+  assert.equal(label.clusters.length, 1);
+  assert.equal(label.clusters[0]!.label, 'Màn hình sáng, rõ nét');
+
+  // D9: two writers and a weight sum of 1.5, or one expert.
+  const two = (weight: number) =>
+    run(
+      [
+        line('a', 'pro', 'camera chụp đêm đẹp', { weight }),
+        line('b', 'pro', 'camera chụp đêm rất đẹp', { weight }),
+      ],
+      'smartphones'
+    ).clusters[0]!;
+  assert.equal(two(0.7).visible, false, '1.4 is below 1.5');
+  assert.equal(two(0.75).support, 1.5);
+  assert.equal(two(0.75).visible, true);
+  const expert = run([
+    line('x', 'con', 'Camera tele hơi mờ', { isExpert: true }),
+  ]);
+  assert.equal(expert.clusters[0]!.visible, true);
+  assert.equal(expert.summary.cons.length, 1);
+
+  // A hostile writer, even at full weight over several reviews, shows no con.
+  const hostile = run([
+    line('h', 'con', 'Pin tụt nhanh kinh khủng', { weight: 3, reviewId: 'r1' }),
+    line('h', 'con', 'pin tụt rất nhanh kinh khủng', {
+      weight: 3,
+      reviewId: 'r2',
+    }),
+    line('h', 'con', 'Màn hình ám vàng', { weight: 3, reviewId: 'r1' }),
+    line('ok1', 'pro', 'Camera đẹp'),
+    line('ok2', 'pro', 'camera rất đẹp'),
+  ]);
+  assert.equal(hostile.summary.cons.length, 0);
+  assert.equal(hostile.summary.pros.length, 1);
+  const hostileBattery = hostile.clusters.find(
+    (cl) => cl.criterionKey === 'battery'
+  )!;
+  assert.equal(hostileBattery.reviewerCount, 1);
+  assert.equal(
+    hostileBattery.support,
+    3,
+    'one writer counts once, capped at 3'
+  );
+  // Gated reviews (weight 0) and dodging cons are not counted at all.
+  const gated = run([
+    line('a', 'con', 'loa nhỏ, rè', { weight: 0 }),
+    line('b', 'con', 'loa nhỏ rè', { weight: 0 }),
+    line('c', 'con', 'Không có nhược điểm nào cả'),
+    line('d', 'con', 'không có gì để chê'),
+  ]);
+  assert.equal(gated.clusters.length, 0);
+  assert.equal(gated.reviewCount, 0);
+
+  // Freshness: a weight halves every 12 months; 18 silent months hide a point.
+  assert.ok(
+    Math.abs(rules.decayedWeight(1, new Date(monthsAgo(12)), now) - 0.5) < 1e-9
+  );
+  assert.equal(rules.decayedWeight(5, now, now), rules.POINT_WEIGHT_CAP);
+  assert.equal(rules.decayedWeight(-1, now, now), 0);
+  const aged = (months: number) =>
+    run([
+      line('a', 'pro', 'loa to rõ', {
+        isExpert: true,
+        writtenAt: monthsAgo(months),
+      }),
+    ]).clusters[0]!.visible;
+  assert.equal(aged(17), true);
+  assert.equal(aged(19), false);
+  // Two writers at weight 1, a year old: 0.5 + 0.5 is below 1.5.
+  const old = run([
+    line('a', 'pro', 'sạc nhanh', { writtenAt: monthsAgo(12) }),
+    line('b', 'pro', 'sạc rất nhanh', { writtenAt: monthsAgo(12) }),
+  ]).clusters[0]!;
+  assert.equal(old.support, 1);
+  assert.equal(old.visible, false);
+
+  // Limits: three per criterion and five per side in the summary; a passing
+  // con is kept however many pros pass.
+  const pros = [
+    'pin trâu',
+    'sạc nhanh',
+    'pin bền lâu chai',
+    'mah lớn',
+    'camera đẹp',
+    'màn hình sáng',
+    'hiệu năng mạnh',
+    'thiết kế sang',
+  ];
+  const many: rules.PointLine[] = [];
+  for (const body of pros)
+    for (const writer of ['a', 'b', 'c'])
+      many.push(line(writer, 'pro', body, { weight: 3 }));
+  many.push(line('d', 'con', 'giá hơi cao', { weight: 0.8 }));
+  many.push(line('e', 'con', 'giá cao', { weight: 0.8 }));
+  const crowded = run(many);
+  assert.equal(crowded.byCriterion.battery!.pros.length, 3);
+  assert.equal(crowded.summary.pros.length, rules.PRODUCT_POINTS_MAX);
+  assert.equal(crowded.summary.cons.length, 1);
+  assert.equal(crowded.summary.cons[0]!.criterionKey, 'value');
+  assert.equal(crowded.updatedAt, now);
+  // The same lines in another order give the same clusters.
+  const reversed = run([...many].reverse());
+  assert.deepEqual(
+    reversed.clusters.map((cl) => [cl.key, cl.support, cl.lineIds]),
+    crowded.clusters.map((cl) => [cl.key, cl.support, cl.lineIds])
+  );
+}
+
 function main(): void {
   console.log('🧪 Running @repo/shared-data unit tests...');
   testVersionAndZeroStrapiExports();
@@ -1745,6 +1939,8 @@ function main(): void {
   console.log(
     '  ✅ [11/11] Rating criteria and review form rules (DOS/Rate#1542) verified'
   );
+  testProductPoints();
+  console.log('  ✅ [12/12] Product pros and cons (DOS/Rate#1546) verified');
   console.log('🎉 All @repo/shared-data tests passed!');
 }
 

@@ -1,0 +1,504 @@
+/**
+ * A product's pros and cons, built from its reviews' pro and con lines
+ * (DOS/Rate#1546, design #1531 section 5.1, D9). Code only, no AI: lines are
+ * normalised, given a criterion, clustered by shared words, counted once per
+ * writer by trust weight, decayed by age and filtered for display. AI later
+ * rewords a cluster's label; it never decides what is shown.
+ *
+ * Plain data and functions only, like the rest of `rules`, and no database:
+ * the importer job reads `rate.review_points` into PointLine values and
+ * writes the clusters to `rate.product_points`.
+ */
+import { getRatingCriteria } from './rating-criteria.js';
+import { comparablePoint, isEvasiveCon } from './review-form.js';
+
+/** Two lines join a cluster when this share of their words is shared. */
+export const POINT_CLUSTER_OVERLAP = 0.6;
+/** D9: a point shows with this many distinct writers... */
+export const POINT_MIN_WRITERS = 2;
+/** ...whose decayed weights sum to at least this, or with one expert. */
+export const POINT_MIN_SUPPORT = 1.5;
+/** A writer's weight counts at most this, as in the product rating. */
+export const POINT_WEIGHT_CAP = 3;
+/** Pros and cons shown per criterion, each side. */
+export const PRODUCT_CRITERION_POINTS_MAX = 3;
+/** Pros and cons shown in the product summary, each side. */
+export const PRODUCT_POINTS_MAX = 5;
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+const YEAR_MS = 365.25 * DAY_MS;
+/** A line's weight halves every 12 months (design 5.3). */
+export const POINT_HALF_LIFE_MS = YEAR_MS;
+/** A cluster nobody mentioned for 18 months is hidden (design 5.3). */
+export const POINT_SILENT_MS = 1.5 * YEAR_MS;
+
+export type PointKind = 'pro' | 'con';
+
+/** One pro or con line of a review, as the importer reads it. */
+export interface PointLine {
+  /** `rate.review_points.id`. */
+  id: string;
+  reviewId: string;
+  /** Who wrote it: a user id, or a marketplace reviewer key. */
+  writerId: string;
+  kind: PointKind;
+  /** The line's own criterion, or null for a pro or con of the whole review. */
+  criterionKey: string | null;
+  body: string;
+  /** The review's trust weight; 0 means the gate excluded it. */
+  weight: number;
+  /** A review Rate published as an expert's (reviewer_type = 'expert'). */
+  isExpert: boolean;
+  /** When the review was written (ISO string or Date). */
+  writtenAt: string | Date;
+}
+
+/** A cluster of lines, as `rate.product_points` stores it. */
+export interface PointCluster {
+  /** Stable within one run: criterion, kind and the first line's id. */
+  key: string;
+  criterionKey: string | null;
+  kind: PointKind;
+  /** The line most writers wrote alike, in its writer's words. */
+  label: string;
+  /** Distinct writers' decayed, capped weights, at two decimals. */
+  support: number;
+  reviewerCount: number;
+  hasExpert: boolean;
+  firstSeen: Date;
+  lastSeen: Date;
+  /** Every counted line in the cluster, for `review_points.cluster_id`. */
+  lineIds: string[];
+  /** Whether it passes D9 and is not silent (design 5.3). */
+  visible: boolean;
+}
+
+export interface PointSides {
+  pros: PointCluster[];
+  cons: PointCluster[];
+}
+
+export interface ProductPoints {
+  /** Every cluster, shown or not, in display order. */
+  clusters: PointCluster[];
+  /** Shown points per criterion key; '' holds the whole-review ("Chung") ones. */
+  byCriterion: Record<string, PointSides>;
+  /** The product summary: up to five each side, a passing con always kept. */
+  summary: PointSides;
+  /** Distinct reviews whose lines were counted ("Tóm tắt từ N review"). */
+  reviewCount: number;
+  /** The run's clock, shown as "Cập nhật ngày ...". */
+  updatedAt: Date;
+}
+
+// The rules' import check reads quotes on an export line as a module path.
+const EMPTY = '';
+const SPACE = ' ';
+/** The bucket of a whole-review point ("Chung"). */
+export const GENERAL_POINTS = EMPTY;
+
+// Intensifiers and particles that do not change what a line says
+// ("pin khá trâu" is "pin trâu").
+const FILLER = new Set([
+  'khá',
+  'rất',
+  'hơi',
+  'quá',
+  'lắm',
+  'cực',
+  'siêu',
+  'cũng',
+  'thì',
+  'là',
+  'ạ',
+  'nhé',
+  'nha',
+]);
+// A negation joins the next word, so "pin không trâu" never matches
+// "pin trâu" by sharing "pin" and "trâu".
+const NEGATION = new Set([
+  'không',
+  'ko',
+  'k',
+  'kh',
+  'khum',
+  'hok',
+  'chưa',
+  'chẳng',
+  'chả',
+]);
+
+/** A word without diacritics, "đ" as "d". */
+function plainWord(word: string): string {
+  return word
+    .normalize('NFKD')
+    .replace(/\p{M}+/gu, '')
+    .replace(/đ/g, 'd');
+}
+
+/**
+ * The words two lines are compared by: the comparable line (diacritics
+ * kept, design 5.1) without filler words, each negation joined to the word
+ * after it ("không_trâu").
+ */
+export function pointTokens(text: string): string[] {
+  const words = comparablePoint(text)
+    .split(SPACE)
+    .filter((word) => word && !FILLER.has(word));
+  const tokens: string[] = [];
+  for (let i = 0; i < words.length; i += 1) {
+    const word = words[i]!;
+    if (NEGATION.has(word) && i + 1 < words.length) {
+      tokens.push(`không_${words[i + 1]}`);
+      i += 1;
+    } else tokens.push(NEGATION.has(word) ? 'không' : word);
+  }
+  return tokens;
+}
+
+/**
+ * The share of words two lines have in common: twice the shared distinct
+ * words over both lines' distinct words (the Dice coefficient), from 0 to 1.
+ */
+export function wordOverlap(
+  a: readonly string[],
+  b: readonly string[]
+): number {
+  const left = new Set(a);
+  const right = new Set(b);
+  if (left.size + right.size === 0) return 0;
+  let shared = 0;
+  for (const word of left) if (right.has(word)) shared += 1;
+  return (2 * shared) / (left.size + right.size);
+}
+
+// Keywords per criterion, written with diacritics. The analyzer's aspect
+// words (battery, display, camera, audio, performance) are the start.
+const CRITERION_KEYWORDS: Readonly<Record<string, readonly string[]>> = {
+  battery: ['pin', 'sạc', 'mah', 'sạc nhanh', 'thời lượng', 'củ sạc'],
+  display: [
+    'màn hình',
+    'màn',
+    'hiển thị',
+    'độ sáng',
+    'tần số quét',
+    'nit',
+    'ám màu',
+    'chói',
+  ],
+  camera: [
+    'camera',
+    'cam',
+    'chụp',
+    'chụp ảnh',
+    'quay',
+    'quay phim',
+    'selfie',
+    'zoom',
+    'góc rộng',
+  ],
+  performance: [
+    'hiệu năng',
+    'mượt',
+    'lag',
+    'giật',
+    'chip',
+    'game',
+    'chơi game',
+    'cấu hình',
+    'ram',
+    'xử lý',
+    'đơ',
+  ],
+  design: [
+    'thiết kế',
+    'bền',
+    'cầm',
+    'nhẹ',
+    'nặng',
+    'vỏ',
+    'khung',
+    'mỏng',
+    'chắc chắn',
+    'chống nước',
+    'ngoại hình',
+  ],
+  value: ['giá', 'tiền', 'đáng tiền', 'rẻ', 'đắt', 'mắc', 'hời'],
+  sound: ['âm thanh', 'chất âm', 'loa', 'bass', 'treble', 'âm lượng'],
+  software: ['phần mềm', 'ứng dụng', 'cập nhật', 'ios', 'android', 'giao diện'],
+  keyboard: ['bàn phím', 'phím', 'touchpad', 'trackpad'],
+  thermals: ['nóng', 'nhiệt', 'quạt', 'ồn', 'tản nhiệt'],
+  health: [
+    'sức khoẻ',
+    'sức khỏe',
+    'nhịp tim',
+    'spo2',
+    'giấc ngủ',
+    'ngủ',
+    'bước chân',
+    'đo',
+  ],
+  apps: [
+    'ứng dụng',
+    'app',
+    'kết nối',
+    'thông báo',
+    'bluetooth',
+    'wifi',
+    'gps',
+    'nfc',
+  ],
+  anc: ['chống ồn', 'anc', 'xuyên âm', 'cách âm'],
+  comfort: ['đeo', 'êm', 'thoải mái', 'đau tai', 'vừa tai', 'cấn'],
+  calls: ['mic', 'micro', 'gọi', 'cuộc gọi', 'đàm thoại', 'nghe gọi'],
+  service_quality: ['chất lượng', 'dịch vụ', 'sạch', 'ngon'],
+  price: ['giá', 'tiền', 'rẻ', 'đắt', 'mắc'],
+  attitude: ['thái độ', 'nhân viên', 'phục vụ', 'nhiệt tình', 'lịch sự'],
+  speed: ['nhanh', 'chậm', 'chờ', 'đợi', 'lâu'],
+};
+
+/**
+ * Whether a keyword's words appear in a line's words, in order. Each word
+ * matches as written or with no diacritics at all ("pin", "sac"), never with
+ * other ones: "cảm" (cảm ứng) is not "cam" (camera).
+ */
+function containsKeyword(words: readonly string[], keyword: string): boolean {
+  const wanted = keyword.split(SPACE);
+  for (let start = 0; start + wanted.length <= words.length; start += 1) {
+    if (
+      wanted.every((want, offset) => {
+        const word = words[start + offset]!;
+        return word === want || word === plainWord(want);
+      })
+    )
+      return true;
+  }
+  return false;
+}
+
+/**
+ * The criterion a line belongs to in a category: its own key when the
+ * category has it, otherwise the criterion whose keywords it mentions most
+ * (ties go to the category's order), otherwise null ("Chung").
+ */
+export function assignPointCriterion(
+  categorySlug: string | null | undefined,
+  criterionKey: string | null,
+  body: string
+): string | null {
+  const criteria = getRatingCriteria(categorySlug);
+  if (criterionKey && criteria.some((cr) => cr.key === criterionKey))
+    return criterionKey;
+  const words = comparablePoint(body).split(SPACE);
+  let best: string | null = null;
+  let bestHits = 0;
+  for (const criterion of criteria) {
+    const keywords = Object.prototype.hasOwnProperty.call(
+      CRITERION_KEYWORDS,
+      criterion.key
+    )
+      ? CRITERION_KEYWORDS[criterion.key]!
+      : [];
+    const hits = keywords.filter((kw) => containsKeyword(words, kw)).length;
+    if (hits > bestHits) {
+      best = criterion.key;
+      bestHits = hits;
+    }
+  }
+  return best;
+}
+
+/** A weight after decay: half per POINT_HALF_LIFE_MS of age, capped. */
+export function decayedWeight(
+  weight: number,
+  writtenAt: Date,
+  now: Date
+): number {
+  if (!Number.isFinite(weight) || weight <= 0) return 0;
+  const age = Math.max(0, now.getTime() - writtenAt.getTime());
+  return Math.min(weight, POINT_WEIGHT_CAP) * 0.5 ** (age / POINT_HALF_LIFE_MS);
+}
+
+interface Line {
+  source: PointLine;
+  criterionKey: string | null;
+  tokens: string[];
+  form: string;
+  writtenAt: Date;
+}
+
+function asDate(value: string | Date): Date {
+  return value instanceof Date ? value : new Date(value);
+}
+
+/** The lines that may count: weighted, dated, with words, not a dodge. */
+function countedLines(
+  categorySlug: string | null | undefined,
+  lines: readonly PointLine[]
+): Line[] {
+  const counted: Line[] = [];
+  for (const source of lines) {
+    if (source.kind !== 'pro' && source.kind !== 'con') continue;
+    if (!(source.weight > 0)) continue;
+    const writtenAt = asDate(source.writtenAt);
+    if (Number.isNaN(writtenAt.getTime())) continue;
+    if (source.kind === 'con' && isEvasiveCon(source.body)) continue;
+    const tokens = pointTokens(source.body);
+    if (tokens.length === 0) continue;
+    counted.push({
+      source,
+      criterionKey: assignPointCriterion(
+        categorySlug,
+        source.criterionKey,
+        source.body
+      ),
+      tokens,
+      form: tokens.join(SPACE),
+      writtenAt,
+    });
+  }
+  // Oldest first, so a cluster's key and leader do not depend on read order.
+  return counted.sort(
+    (a, b) =>
+      a.writtenAt.getTime() - b.writtenAt.getTime() ||
+      (a.source.id < b.source.id ? -1 : a.source.id > b.source.id ? 1 : 0)
+  );
+}
+
+/**
+ * Greedy clustering within one criterion and kind: a line joins the cluster
+ * whose first line it overlaps most, at POINT_CLUSTER_OVERLAP or more, or
+ * starts a new one. Comparing with the first line, not any member, keeps a
+ * chain of small steps from joining two different points.
+ */
+function clusterLines(lines: readonly Line[]): Line[][] {
+  const clusters: Line[][] = [];
+  for (const line of lines) {
+    let best: Line[] | undefined;
+    let bestOverlap = POINT_CLUSTER_OVERLAP;
+    for (const cluster of clusters) {
+      const leader = cluster[0]!;
+      if (
+        leader.criterionKey !== line.criterionKey ||
+        leader.source.kind !== line.source.kind
+      )
+        continue;
+      const overlap = wordOverlap(leader.tokens, line.tokens);
+      if (overlap >= bestOverlap && (!best || overlap > bestOverlap)) {
+        best = cluster;
+        bestOverlap = overlap;
+      }
+    }
+    if (best) best.push(line);
+    else clusters.push([line]);
+  }
+  return clusters;
+}
+
+/** The label: the form most writers used, in its first writer's words. */
+function clusterLabel(lines: readonly Line[]): string {
+  const forms = new Map<string, { writers: Set<string>; first: Line }>();
+  for (const line of lines) {
+    const entry = forms.get(line.form);
+    if (entry) entry.writers.add(line.source.writerId);
+    else
+      forms.set(line.form, {
+        writers: new Set([line.source.writerId]),
+        first: line,
+      });
+  }
+  let best: { writers: Set<string>; first: Line } | undefined;
+  for (const entry of forms.values())
+    if (!best || entry.writers.size > best.writers.size) best = entry;
+  return best!.first.source.body.trim().replace(/\s+/g, ' ');
+}
+
+function summarise(lines: readonly Line[], now: Date): PointCluster {
+  const leader = lines[0]!;
+  // Each writer counts once, with their strongest line in the cluster.
+  const writers = new Map<string, number>();
+  let hasExpert = false;
+  for (const line of lines) {
+    const weight = decayedWeight(line.source.weight, line.writtenAt, now);
+    const writer = line.source.writerId;
+    writers.set(writer, Math.max(writers.get(writer) ?? 0, weight));
+    if (line.source.isExpert) hasExpert = true;
+  }
+  let support = 0;
+  for (const weight of writers.values()) support += weight;
+  support = Math.round(support * 100) / 100;
+  const firstSeen = leader.writtenAt;
+  const lastSeen = lines[lines.length - 1]!.writtenAt;
+  const fresh = now.getTime() - lastSeen.getTime() <= POINT_SILENT_MS;
+  const passes =
+    (writers.size >= POINT_MIN_WRITERS && support >= POINT_MIN_SUPPORT) ||
+    hasExpert;
+  return {
+    key: `${leader.criterionKey ?? GENERAL_POINTS}:${leader.source.kind}:${leader.source.id}`,
+    criterionKey: leader.criterionKey,
+    kind: leader.source.kind,
+    label: clusterLabel(lines),
+    support,
+    reviewerCount: writers.size,
+    hasExpert,
+    firstSeen,
+    lastSeen,
+    lineIds: lines.map((line) => line.source.id),
+    visible: passes && fresh,
+  };
+}
+
+/** Display order: more support, more writers, an expert, then newer. */
+function byRank(a: PointCluster, b: PointCluster): number {
+  return (
+    b.support - a.support ||
+    b.reviewerCount - a.reviewerCount ||
+    Number(b.hasExpert) - Number(a.hasExpert) ||
+    b.lastSeen.getTime() - a.lastSeen.getTime() ||
+    (a.key < b.key ? -1 : a.key > b.key ? 1 : 0)
+  );
+}
+
+function sides(clusters: readonly PointCluster[], max: number): PointSides {
+  return {
+    pros: clusters.filter((cl) => cl.kind === 'pro').slice(0, max),
+    cons: clusters.filter((cl) => cl.kind === 'con').slice(0, max),
+  };
+}
+
+/**
+ * A product's pros and cons from its review lines (design 5.1 and 5.3):
+ * lines of gated reviews (weight 0), dodging cons and lines with no words
+ * are left out; the rest are clustered per criterion and kind, counted once
+ * per writer and shown under D9. `now` is the run's clock, so a run is
+ * repeatable.
+ */
+export function aggregateProductPoints(
+  categorySlug: string | null | undefined,
+  lines: readonly PointLine[],
+  now: Date
+): ProductPoints {
+  const counted = countedLines(categorySlug, lines);
+  const clusters = clusterLines(counted)
+    .map((cluster) => summarise(cluster, now))
+    .sort(byRank);
+  const shown = clusters.filter((cl) => cl.visible);
+  const byCriterion: Record<string, PointSides> = {};
+  for (const key of new Set(
+    shown.map((cl) => cl.criterionKey ?? GENERAL_POINTS)
+  ))
+    byCriterion[key] = sides(
+      shown.filter((cl) => (cl.criterionKey ?? GENERAL_POINTS) === key),
+      PRODUCT_CRITERION_POINTS_MAX
+    );
+  // Each side has its own five places, so a passing con is always kept in
+  // the summary however many pros pass (design 5.1, "luôn giữ nhược điểm").
+  const summary = sides(shown, PRODUCT_POINTS_MAX);
+  return {
+    clusters,
+    byCriterion,
+    summary,
+    reviewCount: new Set(counted.map((line) => line.source.reviewId)).size,
+    updatedAt: now,
+  };
+}
