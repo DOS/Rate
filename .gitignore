@@ -155,6 +155,9 @@ playwright-report-item-model/
 !Docs/Proposals/2026-11-01-dos-me-review-submission-v2.sql
 !Docs/Proposals/2026-11-01-dos-me-review-submission-v2-rollback.sql
 !Docs/Proposals/2026-11-01-dos-me-review-submission-v2-verify.sql
+!Docs/Proposals/2026-11-02-dos-me-search-rating-score.sql
+!Docs/Proposals/2026-11-02-dos-me-search-rating-score-rollback.sql
+!Docs/Proposals/2026-11-02-dos-me-search-rating-score-verify.sql
 * - Copy*
 * - Bản sao*
 *.dump
