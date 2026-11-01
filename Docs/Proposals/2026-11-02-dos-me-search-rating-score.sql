@@ -11,7 +11,8 @@
 -- This is resolveCompareEffectiveUserRating in apps/web/src/lib/rate-domain.ts. Before, the order
 -- read user_rating_weighted then average_rating, and the filter also fell back to expert_rating,
 -- which no page shows as the product's rating; so the catalog, `?rating=` and the leaderboard's
--- top-100 load could disagree with the rating on screen. A product with none of the three sorts
+-- top-100 load could disagree with the rating on screen. The filter compares the rating at one
+-- decimal, as the pages show it (productRatingScore5); the order uses it unrounded. A product with none of the three sorts
 -- last and never passes a minimum rating, as before.
 --
 -- Needs, in this order:
@@ -110,7 +111,8 @@ BEGIN
     AND (
       p_min_rating IS NULL
       OR p_min_rating <= 0
-      OR COALESCE(shown.rating_5, 0) >= p_min_rating
+      -- At one decimal, as the pages show it: 4.46 shows 4.5 and passes 4.5.
+      OR pg_catalog.round(COALESCE(shown.rating_5, 0), 1) >= p_min_rating
     )
     AND (p_ram_gb IS NULL OR cardinality(p_ram_gb) = 0 OR m.ram_gb = ANY (p_ram_gb))
     AND (p_storage_gb IS NULL OR cardinality(p_storage_gb) = 0 OR m.storage_gb = ANY (p_storage_gb))

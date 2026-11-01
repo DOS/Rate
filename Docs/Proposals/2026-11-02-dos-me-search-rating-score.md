@@ -25,6 +25,8 @@ The migration is one `CREATE OR REPLACE FUNCTION`. The order and the filter read
 - otherwise `user_rating_weighted`, then `average_rating`. Each one counts only when it is above 0 and at most 100. A value above 10 is divided by 20, and a value above 5 is divided by 2. The result is rounded to 2 decimals (`normalizeCompareFiveStarRating`);
 - otherwise nothing. Such a product sorts last and never passes a minimum rating, as before.
 
+The order uses this rating unrounded. The filter compares it at one decimal, as every page shows it (`productRatingScore5`): a stored 4.46 shows 4.5, so it passes a 4.5 minimum.
+
 **Nothing else changes.** The rest is DOS/DOS.Me#1497's function (head `8ccfbf2e`), byte for byte: the signature, the return type, `SECURITY INVOKER`, `search_path = ''`, `plan_cache_mode = force_custom_plan`, the other filters, the trigram search expression, the `created_at` and `id` tiebreak, the paging and the grants. There is no table, index or data change.
 
 **Diff against #1497's function:**
@@ -44,7 +46,7 @@ The migration is one `CREATE OR REPLACE FUNCTION`. The order and the filter read
 -        m.average_rating,
 -        0
 -      ) >= p_min_rating
-+      OR COALESCE(shown.rating_5, 0) >= p_min_rating
++      OR pg_catalog.round(COALESCE(shown.rating_5, 0), 1) >= p_min_rating
  ...
 -    CASE WHEN p_sort = 'rating_desc' THEN COALESCE(NULLIF(m.user_rating_weighted, 0), m.average_rating, 0) END DESC NULLS LAST,
 +    CASE WHEN p_sort = 'rating_desc' THEN COALESCE(shown.rating_5, 0) END DESC NULLS LAST,
@@ -53,7 +55,7 @@ The migration is one `CREATE OR REPLACE FUNCTION`. The order and the filter read
 ### What changes for shoppers
 
 - **The rating order follows the shown rating.** A product with a stored score of 4.6 no longer ranks above one shown at 4.8 because of a higher weighted rating.
-- **`?rating=4.5` returns exactly the products shown at 4.5 or more.** A product with only an expert score, and no rating on screen, no longer passes.
+- **`?rating=4.5` returns exactly the products shown at 4.5 or more**, counting the rating at one decimal as the pages do. A product with only an expert score, and no rating on screen, no longer passes.
 - **A 0-10 average no longer ranks first.** Before, an average stored as 9.0 sorted above every 0-5 rating.
 
 ## Order (needs, in this order)
@@ -72,7 +74,7 @@ This proposal must land **after #1497**. If it is applied first, #1497 would lat
   - **V2:** the function reads `m.rating_score` and no longer reads `expert_rating`.
   - **V3:** `anon`, `authenticated` and `service_role` can still call it.
   - **V4:** in the `rating_desc` order, no product sits above one with a higher shown rating.
-  - **V5:** at minimum ratings of 3.5, 4.0, 4.5 and 4.8, the RPC returns exactly the published products whose shown rating reaches the threshold.
+  - **V5:** at minimum ratings of 3.5, 4.0, 4.5 and 4.8, the RPC returns exactly the published products whose shown rating, at one decimal, reaches the threshold.
 - `-rollback.sql`: #1497's function, byte for byte. There is no data to restore.
 - **Replay test:** `scripts/test-search-rating-score-proposal.mjs`, on Docker, in DOS/Rate CI. It runs these steps:
   1. Apply P2, then #1497's function (from the rollback file).
@@ -83,9 +85,12 @@ This proposal must land **after #1497**. If it is applied first, #1497 would lat
 
 ## Known limits
 
-- **Rounding:** the fallback rounds with PostgreSQL `round(numeric, 2)` (half away from zero), and the web uses `toFixed(2)`. They can differ by 0.01 only on a binary halfway value of a fallback rating. `rating_score` itself is not rounded on either side.
+- **Rounding:** the fallback rounds with PostgreSQL `round(numeric, 2)` (half away from zero), and the web uses `toFixed(2)`. They can differ by 0.01 only on a binary halfway value of a fallback rating. `rating_score` itself is not rounded before that; both sides round the result once more to one decimal for the filter, half up.
 - **No index on the rating:** the shown rating is computed per row, so the rating order and filter have no index. `rate.master_products` has under 40 rows on production. If the catalog grows past a few thousand published rows, a generated column or an expression index is a later step.
-- **The web's JS fallback path:** in `apps/web/src/lib/rate-api.ts`, `getEffectiveRating` runs only when the RPC is unavailable, and it still tries `expert_rating` before `average_rating`. Aligning it with `resolveCompareEffectiveUserRating` is a small web change, separate from this proposal.
+- **Web follow-ups (separate web PR, not this proposal):**
+  - **The JS fallback path:** `getEffectiveRating` in `apps/web/src/lib/rate-api.ts` runs only when the RPC is unavailable. It still tries `expert_rating` before `average_rating`, does not bring a 0-10 value to 0-5, and accepts a `rating_score` above 5. It should use `resolveCompareEffectiveUserRating`, with the one-decimal filter. A test (`core-rate-architecture.test.ts`, "rating_desc sort must use expert_rating") pins the old behaviour.
+  - **The OpenAPI text** for `min_rating` and `sort` (`server/rate/openapi.ts`) could say they use `rating_score_5`, the shown rating.
+  - **The leaderboard engine's `userScore5`** fallback reads a value above 10 as 0, where `rate-domain.ts` divides it by 20. It only matters for edge rows, which the leaderboard re-ranks itself.
 
 ## Rollout
 

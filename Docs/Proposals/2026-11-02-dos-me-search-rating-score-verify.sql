@@ -47,8 +47,9 @@ SELECT count(*) FROM (
 ) o
 WHERE o.here > o.above;
 
--- V5 a minimum rating returns exactly the published products whose shown rating reaches it; expect 0
--- (per threshold: products returned below it, plus products at or above it that are missing).
+-- V5 a minimum rating returns exactly the products whose shown rating reaches it; expect 0
+-- (the shown rating at one decimal, as the pages show it;
+-- per threshold: products returned below it, plus products at or above it that are missing).
 WITH shown AS (
   SELECT m.id, COALESCE(CASE
     WHEN m.rating_score > 0 AND m.rating_score <= 5 THEN m.rating_score
@@ -72,7 +73,7 @@ returned AS (
   CROSS JOIN LATERAL rate.search_master_products(p_min_rating => t.t, p_limit => 500) s
 )
 SELECT
-  (SELECT count(*) FROM returned r JOIN shown s ON s.id = r.id WHERE s.rating_5 < r.t)
+  (SELECT count(*) FROM returned r JOIN shown s ON s.id = r.id WHERE round(s.rating_5, 1) < r.t)
   + (SELECT count(*) FROM thresholds t
      WHERE (SELECT count(*) FROM returned r WHERE r.t = t.t)
-         < LEAST(500, (SELECT count(*) FROM shown s WHERE s.rating_5 >= t.t)));
+         < LEAST(500, (SELECT count(*) FROM shown s WHERE round(s.rating_5, 1) >= t.t)));

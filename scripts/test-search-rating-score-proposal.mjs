@@ -52,6 +52,8 @@ const PRODUCTS = {
   e: ['4.6', '4.95', null, null, 'published'], // shown 4.6; the old order put it first
   f: ['0', '4.0', null, null, 'published'], // a zero score falls back: shown 4.0
   g: ['5', '5', '5', '5', 'draft'], // never listed
+  h: ['4.46', null, null, null, 'published'], // shows 4.5: passes a 4.5 minimum
+  // user_rating_weighted has a 0-5 CHECK, so only average_rating can need scaling.
 };
 const id = (name) =>
   `a0000000-0000-4000-8000-0000000000${name.charCodeAt(0).toString(16)}`;
@@ -102,7 +104,7 @@ try {
     `p_sort => 'rating_desc', p_limit => 50${sqlArgs}`;
   assert.equal(
     listed(rowsOf('')),
-    'cebafd',
+    'cebafdh',
     "#1497 orders by user_rating_weighted, then average_rating, unscaled (c's 9/10 first)"
   );
   assert.equal(
@@ -118,13 +120,13 @@ try {
 
   const checkProposal = (when) => {
     // 4.9, 4.814, 4.6, 4.5, 4.0, then the product with no shown rating.
-    assert.equal(listed(rowsOf('')), 'baecfd', `rating order ${when}`);
+    assert.equal(listed(rowsOf('')), 'baechfd', `rating order ${when}`);
     assert.equal(
       listed(rowsOf(''), 'authenticated'),
-      'baecfd',
+      'baechfd',
       `authenticated ${when}`
     );
-    assert.equal(listed(rowsOf(''), 'service_role'), 'baecfd');
+    assert.equal(listed(rowsOf(''), 'service_role'), 'baechfd');
     assert.equal(
       listed(rowsOf(', p_min_rating => 4.6')),
       'bae',
@@ -132,8 +134,8 @@ try {
     );
     assert.equal(
       listed(rowsOf(', p_min_rating => 4.5')),
-      'baec',
-      `minimum 4.5 keeps 4.5 ${when}`
+      'baech',
+      `minimum 4.5 keeps 4.5 and 4.46 (shown 4.5) ${when}`
     );
     assert.equal(
       listed(rowsOf(', p_min_rating => 4.95')),
@@ -143,7 +145,7 @@ try {
     // Other sorts and filters are #1497's.
     assert.equal(
       listed(`p_sort => 'default', p_limit => 50`).length,
-      6,
+      7,
       `the draft stays out ${when}`
     );
     assert.equal(listed(`p_search => 'Acme Pc'`), 'c', `search ${when}`);
@@ -156,7 +158,7 @@ try {
 
   sql(rollback);
   sql(rollback);
-  assert.equal(listed(rowsOf('')), 'cebafd', 'rollback restores #1497');
+  assert.equal(listed(rowsOf('')), 'cebafdh', 'rollback restores #1497');
   assert.notEqual(verifyResults().V2, '0', 'V2 after the rollback');
 
   sql(proposal);
