@@ -606,7 +606,8 @@
     "v2ErrNoContent": "Napište to konkrétněji.",
     "v2ErrEvasive": "Uveďte jednu věc, která vám vadí, i drobnou.",
     "v2ErrDuplicate": "Tento řádek se opakuje.",
-    "v2ErrBoth": "Tento řádek už je mezi klady."
+    "v2ErrBoth": "Tento řádek už je mezi klady.",
+    "v2ErrRejected": "Toto pole není platné."
   },
   "watchlist": {
     "metaTitle": "Seznam hlídaných cen a upozornění na slevy | Rate.vn",

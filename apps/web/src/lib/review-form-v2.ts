@@ -58,7 +58,8 @@ export type ReviewV2MessageKey =
   | 'v2ErrNoContent'
   | 'v2ErrEvasive'
   | 'v2ErrDuplicate'
-  | 'v2ErrBoth';
+  | 'v2ErrBoth'
+  | 'v2ErrRejected';
 
 /**
  * One error on one field. Fields: `criteria`, `criterion.<key>`, `verdict`,

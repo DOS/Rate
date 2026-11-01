@@ -47,6 +47,7 @@ const MESSAGE_KEYS = new Set<ReviewV2MessageKey>([
   'v2ErrEvasive',
   'v2ErrDuplicate',
   'v2ErrBoth',
+  'v2ErrRejected',
 ]);
 
 /** Field errors from the API, kept only when they have the known shape. */
@@ -429,6 +430,7 @@ export default function ReviewFormV2({
 
   const skippedError = errorFor('criteria');
   const verdictError = errorFor('verdict');
+  const commentError = errorFor('comment');
   const verdictLength = [...draft.verdict.trim()].length;
 
   return (
@@ -659,11 +661,18 @@ export default function ReviewFormV2({
           rows={3}
           value={draft.comment}
           maxLength={3000}
+          aria-invalid={commentError ? true : undefined}
+          aria-describedby={commentError ? `${fieldId}-comment-err` : undefined}
           onChange={(e) =>
             update((prev) => ({ ...prev, comment: e.target.value }))
           }
-          className="form-control form-control-sm rounded-3"
+          className={`form-control form-control-sm rounded-3 ${commentError ? 'is-invalid' : ''}`}
         />
+        {commentError && (
+          <div id={`${fieldId}-comment-err`} className="text-danger small">
+            {commentError}
+          </div>
+        )}
       </div>
 
       <div className="d-flex justify-content-end">

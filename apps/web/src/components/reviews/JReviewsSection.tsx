@@ -54,6 +54,7 @@ import {
 import AnalyzerText, { analyzerText } from './AnalyzerText';
 import ReviewFormV2 from './ReviewFormV2';
 import { isReviewFormV2Enabled } from '@/lib/review-form-v2';
+import { hasRatingCriteria } from '@repo/shared-data/rules';
 import {
   formatDecimal,
   formatPercent,
@@ -860,18 +861,21 @@ export default function JReviewsSection({
               </>
             )}
           </ExportMenu>
-          {masterProductId && (
-            <button
-              type="button"
-              onClick={() => {
-                setShowWriteForm((v) => !v);
-                setSubmitError(null);
-              }}
-              className="btn btn-primary btn-sm rounded-pill fw-medium px-3 py-2"
-            >
-              {showWriteForm ? t('closeFormBtn') : t('openWriteFormBtn')}
-            </button>
-          )}
+          {/* v2 rates a category's own criteria: a category without a
+              list has no form, as the RPC refuses it (DOS/Rate#1544). */}
+          {masterProductId &&
+            (!isReviewFormV2Enabled() || hasRatingCriteria(categorySlug)) && (
+              <button
+                type="button"
+                onClick={() => {
+                  setShowWriteForm((v) => !v);
+                  setSubmitError(null);
+                }}
+                className="btn btn-primary btn-sm rounded-pill fw-medium px-3 py-2"
+              >
+                {showWriteForm ? t('closeFormBtn') : t('openWriteFormBtn')}
+              </button>
+            )}
           <span className="badge bg-dark rounded-pill small px-3 py-2 text-white">
             {t('dualRatingStandardBadge')}
           </span>
