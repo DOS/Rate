@@ -427,6 +427,7 @@ export function computeCrossPlatformDealRadarFromData(
       typeof val === 'number' && Number.isFinite(val) && val > 0 ? val : 0;
     const rawExpert =
       pickPositiveRating(master.expert_rating) ||
+      pickPositiveRating(master.rating_score) ||
       pickPositiveRating(master.user_rating_weighted) ||
       pickPositiveRating(master.average_rating);
     // No expert or user rating yet: leave the score empty instead of inventing one.

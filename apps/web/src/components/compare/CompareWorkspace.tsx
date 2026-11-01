@@ -2035,12 +2035,12 @@ export default function CompareWorkspace({
                       </span>
                       <span className="badge bg-danger-subtle text-danger rounded-pill small rate-tabular">
                         {/* A 0.00 gap is a tie, as on the home page (DOS/Rate#1209). */}
-                        {battle.scoreDelta5 > 0.005
+                        {battle.scoreDelta5 > 0.05
                           ? t('scoreDeltaBadge', {
                               delta: formatDecimal(
                                 battle.scoreDelta5,
                                 locale,
-                                2
+                                1
                               ),
                             })
                           : t('mdRowTie')}
@@ -2066,8 +2066,8 @@ export default function CompareWorkspace({
                             {battle.productA.name}
                           </div>
                           <StarRating
-                            value={battle.productA.combinedScore5}
-                            digits={2}
+                            value={battle.productA.userScore5}
+                            digits={1}
                             size="sm"
                           />
                         </div>
@@ -2083,8 +2083,8 @@ export default function CompareWorkspace({
                             {battle.productB.name}
                           </div>
                           <StarRating
-                            value={battle.productB.combinedScore5}
-                            digits={2}
+                            value={battle.productB.userScore5}
+                            digits={1}
                             size="sm"
                           />
                         </div>

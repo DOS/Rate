@@ -27,6 +27,7 @@ import {
 } from '@/lib/rate-domain';
 import {
   LEADERBOARD_SCORE_CRITERIA,
+  displayedScore5,
   leaderboardCriteriaForCategory,
   weightedCriteriaScore5,
   type LeaderboardCriteriaBreakdown,
@@ -148,6 +149,7 @@ interface RankedProductEntry {
   authenticCount: number;
   ignoredCount: number;
   criteria: LeaderboardCriteriaBreakdown;
+  rankCriteria: LeaderboardCriteriaBreakdown;
   activeScore5: number;
 }
 
@@ -222,6 +224,7 @@ function computeProductScores(
     authenticCount: scored.authenticReviewCount,
     ignoredCount: scored.filteredNoiseReviewCount,
     criteria: scored.criteria,
+    rankCriteria: scored.rankCriteria,
     activeScore5: scored.activeScore5,
   };
 }
@@ -445,24 +448,34 @@ export default function LeaderboardExplorer({
 
   // The category's criteria that at least one product has a real score
   // for. A criterion with none gets no tab, no weight and no row cell, not
-  // an empty list (DOS/Rate#1553).
-  const scoredCriteria = useMemo(() => {
-    const scored = new Set<LeaderboardCriterionKey>();
+  // an empty list (DOS/Rate#1553). A tab and a weight need a score past the
+  // ranking threshold; a cell needs one past the display threshold (D9).
+  const { scoredCriteria, shownCriteria } = useMemo(() => {
+    const ranked = new Set<LeaderboardCriterionKey>();
+    const shown = new Set<LeaderboardCriterionKey>();
     const own = leaderboardCriteriaForCategory(activeCategory);
     for (const item of categoryProducts) {
-      const { criteria } = computeProductScores(
+      const { criteria, rankCriteria } = computeProductScores(
         item,
         'combined',
         filteredReviewCounts
       );
       for (const c of own) {
-        if ((criteria[c] ?? 0) > 0) scored.add(c);
+        if ((criteria[c] ?? 0) > 0) shown.add(c);
+        if ((rankCriteria[c] ?? 0) > 0) ranked.add(c);
       }
-      if (scored.size === own.length) break;
+      if (ranked.size === own.length) break;
     }
-    return own.filter((c) => scored.has(c));
+    return {
+      scoredCriteria: own.filter((c) => ranked.has(c)),
+      shownCriteria: own.filter((c) => shown.has(c)),
+    };
   }, [activeCategory, categoryProducts, filteredReviewCounts]);
   const hasScoredCriteria = scoredCriteria.length > 0;
+  const hasShownCriteria = shownCriteria.length > 0;
+  // The one rating shows at 1 decimal (D3); a persona's own weighted score
+  // keeps 2, under the persona's name.
+  const scoreDigits: 1 | 2 = activePersona === 'none' ? 1 : 2;
 
   const availableBrands = useMemo(() => {
     const brands = new Set<string>();
@@ -537,7 +550,7 @@ export default function LeaderboardExplorer({
           base.activeScore5 > 0
         ) {
           const weighted5 = weightedCriteriaScore5(
-            base.criteria,
+            base.rankCriteria,
             customWeights,
             weightedCriteria
           );
@@ -555,12 +568,21 @@ export default function LeaderboardExplorer({
         if (activeCriterion === 'user' && entry.userScore5 <= 0) {
           return false;
         }
+        // The overall view keeps a product with an expert score but no
+        // rating yet, after every rated one (D3).
+        if (activeCriterion === 'combined' && activePersona === 'none') {
+          return entry.combinedScore5 > 0;
+        }
         return entry.activeScore5 > 0;
       });
 
+    // Ranked by the score as shown, so equal-looking scores never rank by
+    // a hidden decimal; the composite breaks the tie (D3).
+    const shown = (score: number) =>
+      activePersona === 'none' ? displayedScore5(score) : score;
     return scored.sort((a, b) => {
-      if (b.activeScore5 !== a.activeScore5) {
-        return b.activeScore5 - a.activeScore5;
+      if (shown(b.activeScore5) !== shown(a.activeScore5)) {
+        return shown(b.activeScore5) - shown(a.activeScore5);
       }
       if (b.combinedScore5 !== a.combinedScore5) {
         return b.combinedScore5 - a.combinedScore5;
@@ -1223,7 +1245,7 @@ export default function LeaderboardExplorer({
                   {rankedEntries.map((entry, idx) => (
                     <option key={entry.product.slug} value={entry.product.slug}>
                       #{idx + 1} {entry.product.name} (
-                      {formatDecimal(entry.activeScore5, locale, 2)}★)
+                      {formatDecimal(entry.activeScore5, locale, scoreDigits)}★)
                     </option>
                   ))}
                 </select>
@@ -1247,7 +1269,12 @@ export default function LeaderboardExplorer({
                           value={entry.product.slug}
                         >
                           #{rankIdx + 1} {entry.product.name} (
-                          {formatDecimal(entry.activeScore5, locale, 2)}★)
+                          {formatDecimal(
+                            entry.activeScore5,
+                            locale,
+                            scoreDigits
+                          )}
+                          ★)
                         </option>
                       );
                     })}
@@ -1345,7 +1372,7 @@ export default function LeaderboardExplorer({
                         <div className="text-end">
                           <StarRating
                             value={entry.activeScore5}
-                            digits={2}
+                            digits={scoreDigits}
                             size="lg"
                             emptyLabel={t('unratedShort')}
                           />
@@ -1410,7 +1437,7 @@ export default function LeaderboardExplorer({
                       </div>
 
                       {/* Mini 5-Criteria Bars */}
-                      {hasScoredCriteria && (
+                      {hasShownCriteria && (
                         <div
                           className="rounded-3 mb-3 p-2 px-3"
                           style={{ background: 'var(--rate-glass-bg)' }}
@@ -1436,7 +1463,7 @@ export default function LeaderboardExplorer({
                               { key: 'value', label: copy.critLabels.value },
                             ] as const
                           )
-                            .filter((c) => scoredCriteria.includes(c.key))
+                            .filter((c) => shownCriteria.includes(c.key))
                             .map((c) => {
                               const val = entry.criteria[c.key];
                               const pct = sanitizeLeaderboardBarPercentage(val);
@@ -1551,9 +1578,14 @@ export default function LeaderboardExplorer({
                 const b = rankedEntries[iB]!;
                 const vHref = versusHref(a.product.slug, b.product.slug);
                 const delta = formatDecimal(
-                  Math.abs(a.activeScore5 - b.activeScore5),
+                  Math.abs(
+                    scoreDigits === 1
+                      ? displayedScore5(a.activeScore5) -
+                          displayedScore5(b.activeScore5)
+                      : a.activeScore5 - b.activeScore5
+                  ),
                   locale,
-                  2
+                  scoreDigits
                 );
                 return (
                   <div key={vHref} className="col-lg-4 col-md-6">
@@ -1574,7 +1606,7 @@ export default function LeaderboardExplorer({
                           </div>
                           <StarRating
                             value={a.activeScore5}
-                            digits={2}
+                            digits={scoreDigits}
                             size="sm"
                             emptyLabel={t('unratedShort')}
                           />
@@ -1588,7 +1620,7 @@ export default function LeaderboardExplorer({
                           </div>
                           <StarRating
                             value={b.activeScore5}
-                            digits={2}
+                            digits={scoreDigits}
                             size="sm"
                             emptyLabel={t('unratedShort')}
                           />
@@ -1770,7 +1802,7 @@ export default function LeaderboardExplorer({
                           { key: 'value', short: t('shortValue') },
                         ] as const
                       )
-                        .filter((c) => scoredCriteria.includes(c.key))
+                        .filter((c) => shownCriteria.includes(c.key))
                         .map((c) => (
                           <div
                             key={c.key}
@@ -1813,7 +1845,7 @@ export default function LeaderboardExplorer({
                       </div>
                       <StarRating
                         value={entry.activeScore5}
-                        digits={2}
+                        digits={scoreDigits}
                         emptyLabel={t('unratedShort')}
                       />
                       <div className="small text-secondary rate-tabular">

@@ -10,6 +10,7 @@ import { radarExportFields } from '@/lib/deal-radar';
 import { versusApiWinner } from '@/lib/versus-verdict';
 import {
   comparePositiveMinPrices,
+  displayedScore5,
   leaderboardCriteriaForCategory,
   scoreMasterProductForLeaderboard,
   sharedScoredCriteria,
@@ -440,6 +441,7 @@ export async function GET(req: NextRequest) {
           custom_weighted_score_5: customScoreA5,
           custom_weighted_score_10: customScoreA10,
           user_score_5: scoreA.userScore5,
+          rating_score_5: displayedScore5(scoreA.userScore5) || null,
           expert_score_10: scoreA.expertScore10,
           authentic_review_count: scoreA.authenticReviewCount,
           filtered_noise_review_count: scoreA.filteredNoiseReviewCount,
@@ -465,6 +467,7 @@ export async function GET(req: NextRequest) {
           custom_weighted_score_5: customScoreB5,
           custom_weighted_score_10: customScoreB10,
           user_score_5: scoreB.userScore5,
+          rating_score_5: displayedScore5(scoreB.userScore5) || null,
           expert_score_10: scoreB.expertScore10,
           authentic_review_count: scoreB.authenticReviewCount,
           filtered_noise_review_count: scoreB.filteredNoiseReviewCount,

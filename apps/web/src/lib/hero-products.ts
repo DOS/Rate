@@ -22,6 +22,7 @@ export type HeroProductSuggestion = Pick<
   | 'thumbnail'
   | 'min_price'
   | 'merchant_count'
+  | 'rating_score'
   | 'user_rating_weighted'
   | 'average_rating'
   | 'category_id'
@@ -98,6 +99,7 @@ export function toHeroProductSuggestions(
       thumbnail: p.thumbnail,
       min_price: p.min_price,
       merchant_count: p.merchant_count,
+      rating_score: p.rating_score,
       user_rating_weighted: p.user_rating_weighted,
       average_rating: p.average_rating,
       category_id: p.category_id,

@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { resolveCompareEffectiveUserRating } from '@/lib/rate-domain';
 import { getTranslations, setRequestLocale } from 'next-intl/server';
 import { Link } from '@/lib/navigation';
 import PageShell from './components/page-shell';
@@ -531,9 +532,7 @@ export default async function Home({
                     { ...item, slug: catalogRowSlug(item) },
                     catSlugById
                   );
-                  const rawUser = Number(
-                    item.user_rating_weighted || item.average_rating || 0
-                  );
+                  const rawUser = resolveCompareEffectiveUserRating(item);
                   const expertScore =
                     item.expert_rating != null && Number(item.expert_rating) > 0
                       ? Number(item.expert_rating)
@@ -638,12 +637,12 @@ export default async function Home({
                               #{battle.productA.rank} vs #{battle.productB.rank}
                             </span>
                             <span>
-                              {battle.scoreDelta5 > 0.005
+                              {battle.scoreDelta5 > 0.05
                                 ? tHome('scoreDeltaLabel', {
                                     delta: formatDecimal(
                                       battle.scoreDelta5,
                                       locale,
-                                      2
+                                      1
                                     ),
                                   })
                                 : tHome('scoreTieLabel')}
@@ -657,8 +656,8 @@ export default async function Home({
                               </div>
                               <div className="rate-battle-score">
                                 <StarRating
-                                  value={battle.productA.combinedScore5}
-                                  digits={2}
+                                  value={battle.productA.userScore5}
+                                  digits={1}
                                   size="sm"
                                 />
                               </div>
@@ -672,8 +671,8 @@ export default async function Home({
                               </div>
                               <div className="rate-battle-score">
                                 <StarRating
-                                  value={battle.productB.combinedScore5}
-                                  digits={2}
+                                  value={battle.productB.userScore5}
+                                  digits={1}
                                   size="sm"
                                 />
                               </div>

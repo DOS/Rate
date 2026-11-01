@@ -594,11 +594,13 @@ export async function getMasterProducts(
         query = query.order('merchant_count', { ascending: false });
         break;
       case 'rating_desc':
-        // Unrated (NULL) models last, like search_master_products.
-        query = query.order('user_rating_weighted', {
-          ascending: false,
-          nullsFirst: false,
-        });
+        // By the one rating (D3); unrated (NULL) models last.
+        query = query
+          .order('rating_score', { ascending: false, nullsFirst: false })
+          .order('user_rating_weighted', {
+            ascending: false,
+            nullsFirst: false,
+          });
         break;
       case 'newest':
       case 'default':
@@ -668,13 +670,15 @@ export async function getMasterProducts(
   }
 
   const getEffectiveRating = (item: MasterProduct): number =>
-    item.user_rating_weighted && Number(item.user_rating_weighted) > 0
-      ? Number(item.user_rating_weighted)
-      : item.expert_rating && Number(item.expert_rating) > 0
-        ? Number(item.expert_rating)
-        : Number(item.average_rating || 0);
+    Number(item.rating_score) > 0
+      ? Number(item.rating_score)
+      : item.user_rating_weighted && Number(item.user_rating_weighted) > 0
+        ? Number(item.user_rating_weighted)
+        : item.expert_rating && Number(item.expert_rating) > 0
+          ? Number(item.expert_rating)
+          : Number(item.average_rating || 0);
 
-  // Minimum effective rating filter (prefers JReviews weighted user rating -> expert rating -> average_rating)
+  // Minimum effective rating filter (the stored rating -> weighted user rating -> expert rating -> average_rating)
   if (typeof params?.minRating === 'number' && params.minRating > 0) {
     const minRating = params.minRating;
     items = items.filter((item) => getEffectiveRating(item) >= minRating);

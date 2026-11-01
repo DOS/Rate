@@ -8,7 +8,10 @@ import {
 } from '@/server/rate';
 import { computeProductRadarSignal } from '@/server/rate/deals';
 import { isOfferUnavailable } from '@/lib/product-market-stats';
-import { getMasterProductCategorySlug } from '@/lib/rate-domain';
+import {
+  getMasterProductCategorySlug,
+  productRatingScore5,
+} from '@/lib/rate-domain';
 import { applyCategorySpecTemplate } from '@repo/shared-data/rules';
 import { listingCountForSaleState, saleStateOfMaster } from '@/lib/sale-state';
 import {
@@ -110,6 +113,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
           // Why there is no price, when there is none (DOS/Rate#1188).
           product: {
             ...product,
+            rating_score_5: productRatingScore5(product),
             sale_state: saleStateOfMaster(
               product,
               listingCountForSaleState(

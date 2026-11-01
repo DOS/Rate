@@ -16,6 +16,7 @@ import {
   MAX_VALID_VND_PRICE,
 } from '@/lib/rate-domain';
 import {
+  displayedScore5,
   scoreMasterProductForLeaderboard,
   type ScoredLeaderboardItem,
 } from '@/lib/leaderboard-engine';
@@ -110,9 +111,10 @@ export function availableDealPersonas(
       ) {
         continue;
       }
-      const { criteria } = scoreMasterProductForLeaderboard(p);
+      // A persona ranks, so it needs a score past the ranking threshold.
+      const { rankCriteria } = scoreMasterProductForLeaderboard(p);
       for (const c of Object.values(PERSONA_LEAN)) {
-        if ((criteria[c] ?? 0) > 0) scored.add(c);
+        if ((rankCriteria[c] ?? 0) > 0) scored.add(c);
       }
     }
   }
@@ -167,14 +169,15 @@ export function rankProductsForDealFinder(
     }
 
     const item = scoreMasterProductForLeaderboard(p);
-    const c = item.criteria;
-    // A persona leans on one criterion only where the product has a real
-    // score for it; otherwise the combined score stands (DOS/Rate#1143).
+    const c = item.rankCriteria;
+    // The default view shows the one rating (D3). A persona leans on one
+    // criterion only where the product has a score past the ranking
+    // threshold; otherwise the rating stands (DOS/Rate#1143, D9).
     const lean = (score: number | null, share: number) =>
-      score != null && score > 0
-        ? Number((item.combinedScore5 * (1 - share) + score * share).toFixed(2))
-        : item.combinedScore5;
-    let personaScore5 = item.combinedScore5;
+      score != null && score > 0 && item.userScore5 > 0
+        ? Number((item.userScore5 * (1 - share) + score * share).toFixed(2))
+        : item.userScore5;
+    let personaScore5 = item.userScore5;
     if (persona === 'value_hunter') {
       personaScore5 = lean(c.value, 0.55);
     } else if (persona === 'photography') {
@@ -206,9 +209,16 @@ export function rankProductsForDealFinder(
     });
   }
 
+  // The default view ranks by the rating as shown, the composite breaking
+  // a tie (D3); a persona ranks by its own score.
+  const shown = (score: number) =>
+    persona === 'default' ? displayedScore5(score) : score;
   scored.sort((a, b) => {
-    if (b.personaScore5 !== a.personaScore5) {
-      return b.personaScore5 - a.personaScore5;
+    if (shown(b.personaScore5) !== shown(a.personaScore5)) {
+      return shown(b.personaScore5) - shown(a.personaScore5);
+    }
+    if (b.combinedScore5 !== a.combinedScore5) {
+      return b.combinedScore5 - a.combinedScore5;
     }
     return a.minPrice - b.minPrice;
   });
@@ -949,7 +959,7 @@ export default function DealFinderWorkspace({
                         <span className="rate-spec-pill">{deal.brand}</span>
                         <StarRating
                           value={deal.personaScore5}
-                          digits={2}
+                          digits={persona === 'default' ? 1 : 2}
                           size="sm"
                           emptyLabel={t('noScore')}
                         />
