@@ -11,6 +11,7 @@ DROP FUNCTION IF EXISTS rate.review_point_list(jsonb, text, integer, integer, te
 DROP FUNCTION IF EXISTS rate.review_point_is_evasive_con(text);
 DROP FUNCTION IF EXISTS rate.review_point_has_content(text);
 DROP FUNCTION IF EXISTS rate.review_text_length(text);
+DROP FUNCTION IF EXISTS rate.review_text_stored(text);
 DROP FUNCTION IF EXISTS rate.review_point_compare(text);
 DROP INDEX IF EXISTS rate.review_points_position_key;
 DROP TABLE IF EXISTS rate.rating_criteria;
