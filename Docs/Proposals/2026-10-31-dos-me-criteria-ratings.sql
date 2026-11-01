@@ -161,7 +161,9 @@ END $$;
 --   criteria      = the same estimate per criterion of criteria_ratings, over the reviews that
 --                   rated it with a number from 1 to 5 under a key shaped like the shared-data
 --                   keys (^[a-z_]{2,32}$); kept only with 3 or more reviews and a weight sum of
---                   1.5 or more (D9). "writers" lets a reader apply the ranking threshold (5). A
+--                   1.5 or more (D9), each review counting at most 1 toward that sum, so one heavy
+--                   review plus near-zero ones never passes. The stored weight_sum is the plain
+--                   sum. "writers" lets a reader apply the ranking threshold (5). A
 --                   Rate user writes one review per product, so a review is a writer. The prior
 --                   mean is 4.2 for every criterion until per-category means exist.
 
@@ -221,6 +223,7 @@ BEGIN
       SELECT c.key,
              count(*) AS writers,
              round(sum(e.w), 2) AS weight_sum,
+             sum(LEAST(1.0, e.w)) AS shown_sum,
              round((3 * 4.2 + sum(e.w * (c.value #>> '{}')::numeric)) / (3 + sum(e.w)), 3) AS score
       FROM eligible e
       CROSS JOIN LATERAL jsonb_each(
@@ -238,7 +241,7 @@ BEGIN
              (SELECT jsonb_object_agg(pc.key, jsonb_build_object(
                        'score', pc.score, 'weight_sum', pc.weight_sum, 'writers', pc.writers))
               FROM per_criterion pc
-              WHERE pc.writers >= 3 AND pc.weight_sum >= 1.5),
+              WHERE pc.writers >= 3 AND pc.shown_sum >= 1.5),
              '{}'::jsonb)
     FROM overall o
   $q$, CASE WHEN v_item IS NULL THEN 'p.cluster_id' ELSE 'p.item_id' END)

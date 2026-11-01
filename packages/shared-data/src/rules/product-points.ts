@@ -22,8 +22,17 @@ import {
 export const POINT_CLUSTER_OVERLAP = 0.6;
 /** D9: a point shows with this many distinct writers... */
 export const POINT_MIN_WRITERS = 2;
-/** ...whose decayed weights sum to at least this, or with one expert. */
+/**
+ * ...whose decayed weights, each writer counting at most
+ * POINT_WRITER_SHARE_CAP, sum to at least this; or with one expert.
+ */
 export const POINT_MIN_SUPPORT = 1.5;
+/**
+ * The most one writer adds toward POINT_MIN_SUPPORT, so one heavy writer and
+ * a near-zero one (3 + 0.01) are not two real voices. Ranking still uses the
+ * full support.
+ */
+export const POINT_WRITER_SHARE_CAP = 1;
 /** A writer's weight counts at most this, as in the product rating. */
 export const POINT_WEIGHT_CAP = 3;
 /** Pros and cons shown per criterion, each side. */
@@ -532,13 +541,17 @@ function summarise(lines: readonly Line[], now: Date): PointCluster {
       hasExpert = true;
   }
   let rawSupport = 0;
-  for (const weight of writers.values()) rawSupport += weight;
+  let shownSupport = 0;
+  for (const weight of writers.values()) {
+    rawSupport += weight;
+    shownSupport += Math.min(weight, POINT_WRITER_SHARE_CAP);
+  }
   const support = Math.round(rawSupport * 100) / 100;
   const firstSeen = leader.writtenAt;
   const lastSeen = lines[lines.length - 1]!.writtenAt;
   const fresh = now.getTime() - lastSeen.getTime() <= POINT_SILENT_MS;
   const passes =
-    (writers.size >= POINT_MIN_WRITERS && rawSupport >= POINT_MIN_SUPPORT) ||
+    (writers.size >= POINT_MIN_WRITERS && shownSupport >= POINT_MIN_SUPPORT) ||
     hasExpert;
   return {
     key: `${leader.criterionKey ?? GENERAL_POINTS}:${leader.source.kind}:${leader.source.id}`,
