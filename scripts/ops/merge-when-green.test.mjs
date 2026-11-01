@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
+import { mkdtempSync, rmSync, symlinkSync } from 'node:fs';
 import os from 'node:os';
+import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 
@@ -447,6 +449,20 @@ test('a squash header is refused, not merged, when commitlint cannot run', async
   });
   assert.equal(missing.ok, false);
   assert.match(missing.problems[0], /commitlint is not installed/);
+  // commitlint installed but no commitlint.config.ts: refused, as the CLI does.
+  const bare = mkdtempSync(path.join(os.tmpdir(), 'mwg-no-config-'));
+  try {
+    symlinkSync(
+      path.join(repoRoot, 'node_modules'),
+      path.join(bare, 'node_modules'),
+      'junction'
+    );
+    const noRules = await lintHeader('fix(web): a thing (#7)', { cwd: bare });
+    assert.equal(noRules.ok, false);
+    assert.match(noRules.problems[0], /commitlint found no rules/);
+  } finally {
+    rmSync(bare, { recursive: true, force: true });
+  }
   const broken = await lintHeader('fix(web): a thing (#7)', {
     loader: async () => {
       throw new Error('cannot load config');

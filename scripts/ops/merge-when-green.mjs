@@ -247,6 +247,11 @@ export async function loadCommitlint(cwd = REPO_ROOT) {
     importDefault('@commitlint/lint'),
   ]);
   const config = await load({}, { cwd });
+  // The CLI refuses a config with no rules (a missing commitlint.config.ts);
+  // lint() alone would pass any header.
+  if (Object.keys(config.rules ?? {}).length === 0) {
+    throw new Error(`commitlint found no rules in ${cwd}`);
+  }
   const options = {
     parserOpts: config.parserPreset?.parserOpts ?? {},
     plugins: config.plugins ?? {},
@@ -719,4 +724,7 @@ if (isMain(import.meta.url)) {
   });
   if (!result.ok) fail(result.message);
   console.log(result.message);
+  // A commitlint load still in flight (the PR merged elsewhere, say) must not
+  // hold the process open (DOS/Rate#1564).
+  process.exit(0);
 }
