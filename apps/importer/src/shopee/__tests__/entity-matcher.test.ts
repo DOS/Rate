@@ -280,6 +280,30 @@ async function runEntityMatcherSuite() {
     detectProductCondition('Điện thoại Samsung Galaxy S24 Ultra 256GB', 'Máy cũ, pin 90%'),
     'used'
   );
+  // A new device's title offering a trade-in in any order stays new (DOS/Rate#1430).
+  for (const title of [
+    'Samsung Galaxy S24 Ultra 256GB - Trợ giá lên đời máy cũ',
+    'Samsung Galaxy S24 Ultra 256GB Lên đời máy cũ trợ giá 2 triệu',
+    'Samsung Galaxy S24 Ultra 256GB Hỗ trợ đổi máy cũ',
+    'iPhone 16 Pro Max 256GB Chính hãng VN/A - Đổi máy cũ',
+    'iPhone 16 Pro Max 256GB Trợ giá máy cũ 1 triệu',
+    'iPhone 16 Pro Max 256GB Thu cũ lên đời',
+    'iPhone 16 Pro Max 256GB Máy cũ lên đời trợ giá',
+    'iPhone 16 Pro Max 256GB Lên đời từ điện thoại cũ',
+    'iPhone 16 Pro Max 256GB Thu đt cũ đổi mới',
+  ]) {
+    assert.equal(detectProductCondition(title), 'new', `${title} is a new device`);
+  }
+  // A real used listing stays used.
+  for (const title of [
+    'Điện thoại iPhone 12 Pro 128GB máy cũ đẹp',
+    'iPhone 11 64GB Máy cũ giá rẻ bảo hành 3 tháng',
+    'Samsung Galaxy S21 điện thoại cũ đã qua sử dụng',
+    'Thanh lý máy cũ iPhone XS Max',
+    'iPhone 13 cũ - máy cũ zin, trợ giá ship',
+  ]) {
+    assert.equal(detectProductCondition(title), 'used', `${title} is a used device`);
+  }
   for (const title of [
     'Tai nghe Apple AirPods Pro 2nd Gen USB-C Chính hãng VN/A',
     'Apple iPhone SE 2nd generation 64GB',

@@ -155,9 +155,22 @@ export class NonNewListingError extends Error {
   }
 }
 
-/** A trade-in offer for the buyer's old device, which says nothing about the listing's own. */
-const TRADE_IN_PHRASE =
-  /(?:thu|đổi)\s*(?:mua\s*)?(?:(?:máy|điện\s*thoại)\s*)?cũ\s*(?:lên\s*đời|(?:lấy|đổi)\s*(?:(?:máy|điện\s*thoại)\s*)?mới)|thu\s*(?:mua\s*)?(?:máy|điện\s*thoại)\s*cũ/gi;
+/**
+ * A trade-in offer for the buyer's old device, which says nothing about the listing's own:
+ * a trade-in verb right before "(máy|điện thoại) cũ" ("thu mua máy cũ", "lên đời máy cũ",
+ * "trợ giá máy cũ", "hỗ trợ đổi máy cũ"), or "cũ" right before "lên đời" or "đổi/lấy mới"
+ * ("thu cũ đổi mới", "máy cũ lên đời"). A few filler words may sit between verb and device.
+ */
+const OLD_DEVICE = String.raw`(?:(?:máy|điện\s*thoại|đt)\s*)?cũ`;
+const TRADE_IN_PHRASE = new RegExp(
+  String.raw`(?:thu(?:\s*mua)?|đổi|lên\s*đời|trợ\s*giá|hỗ\s*trợ)\s*(?:(?:từ|cho|mọi|các|bằng|khi)\s*)*` +
+    OLD_DEVICE +
+    String.raw`(?:\s*(?:lên\s*đời|(?:lấy|đổi|sang)\s*(?:(?:máy|điện\s*thoại)\s*)?mới))?` +
+    '|' +
+    OLD_DEVICE +
+    String.raw`\s*(?:lên\s*đời|(?:lấy|đổi|sang)\s*(?:(?:máy|điện\s*thoại)\s*)?mới)`,
+  'gi'
+);
 
 /**
  * Detect listing physical condition from product title and optional description (Audit C6).
