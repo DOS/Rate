@@ -37,6 +37,7 @@ import {
   parseEcommerceUrlOrQuery,
   extractProductKeywordFromUrl,
   firstImageUrl,
+  resolveCompareEffectiveUserRating,
 } from './rate-domain-core';
 import {
   isOfferUnavailable,
@@ -669,22 +670,19 @@ export async function getMasterProducts(
     });
   }
 
-  // The stored rating first (D3), then the weighted user rating; an
-  // unrated product sorts by its expert score, then the marketplace
-  // average (DOS/Rate#510).
+  // The rating every page shows (D3), as search_master_products reads it
+  // (DOS/Rate#1545): the stored score, else the weighted user rating, else
+  // the marketplace average. The expert score is shown apart, never as it.
   const getEffectiveRating = (item: MasterProduct): number =>
-    Number(item.rating_score) > 0
-      ? Number(item.rating_score)
-      : Number(item.user_rating_weighted) > 0
-        ? Number(item.user_rating_weighted)
-        : Number(item.expert_rating) > 0
-          ? Number(item.expert_rating)
-          : Number(item.average_rating || 0);
+    resolveCompareEffectiveUserRating(item);
 
-  // Minimum effective rating filter
+  // Minimum rating, compared at one decimal as the pages show it: a stored
+  // 4.46 shows 4.5 and passes 4.5.
   if (typeof params?.minRating === 'number' && params.minRating > 0) {
     const minRating = params.minRating;
-    items = items.filter((item) => getEffectiveRating(item) >= minRating);
+    items = items.filter(
+      (item) => Math.round(getEffectiveRating(item) * 10) / 10 >= minRating
+    );
   }
 
   // Battery: capacity_mah >= minBatteryMah (top-level -> specifications.battery.capacity_mah -> key_specs.battery "<N> mAh")
