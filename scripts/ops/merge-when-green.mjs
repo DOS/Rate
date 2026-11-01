@@ -13,7 +13,7 @@
 // --ignore lets a known-broken, non-required check through; name it in the PR.
 // Prints one line and exits 0 when merged, 1 when it cannot merge.
 
-import { spawnSync } from 'node:child_process';
+import { spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -209,18 +209,69 @@ export function squashTitle(title, number) {
 
 const REPO_ROOT = fileURLToPath(new URL('../../', import.meta.url));
 const COMMITLINT_CLI = 'node_modules/@commitlint/cli/cli.js';
-export const LINT_TIMEOUT_MS = 60_000;
+/**
+ * How long commitlint may take before the header fails closed. The CLI spends
+ * its time opening about 750 small module files at almost no CPU; on a cold
+ * Windows checkout with antivirus scanning that took up to two minutes of wall
+ * time (DOS/Rate#1564). MERGE_WHEN_GREEN_LINT_TIMEOUT_MS overrides it.
+ */
+export const LINT_TIMEOUT_MS = 180_000;
+
+export function lintTimeoutMs(env = process.env) {
+  const raw = env.MERGE_WHEN_GREEN_LINT_TIMEOUT_MS;
+  const ms = Number(raw);
+  return raw && Number.isInteger(ms) && ms > 0 ? ms : LINT_TIMEOUT_MS;
+}
+
+/** Runs the commitlint CLI on stdin without blocking; resolves when it ends. */
+function runCommitlint(header, { cwd, spawnFn, timeoutMs }) {
+  return new Promise((resolve) => {
+    let child;
+    try {
+      child = spawnFn(process.execPath, [COMMITLINT_CLI], {
+        cwd,
+        stdio: ['pipe', 'pipe', 'pipe'],
+        windowsHide: true,
+      });
+    } catch (error) {
+      resolve({ error, status: null, stdout: '', stderr: '' });
+      return;
+    }
+    let stdout = '';
+    let stderr = '';
+    let settled = false;
+    const finish = (r) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      resolve({ stdout, stderr, ...r });
+    };
+    // A hung commitlint is killed and fails closed.
+    const timer = setTimeout(() => {
+      child.kill();
+      finish({ timedOut: true, status: null });
+    }, timeoutMs);
+    child.stdout?.setEncoding('utf8').on('data', (d) => (stdout += d));
+    child.stderr?.setEncoding('utf8').on('data', (d) => (stderr += d));
+    child.on('error', (error) => finish({ error, status: null }));
+    child.on('close', (status) => finish({ status }));
+    child.stdin?.on('error', () => {});
+    child.stdin?.end(header);
+  });
+}
 
 /**
  * Lints a squash header with the repository's own commitlint config
  * (commitlint.config.ts), as the commitlint check will: type-enum, case,
  * length and the rest. The shape check in squashTitle let "ux(web): ..." through
- * (DOS/Rate#1513). Fails closed when commitlint cannot run, so no header is
- * merged unchecked. `problems` holds commitlint's own lines.
+ * (DOS/Rate#1513). commitlint runs as a child process, so the run keeps polling
+ * while it loads and the timeout can stop it (DOS/Rate#1564). Fails closed when
+ * commitlint cannot run or times out, so no header is merged unchecked.
+ * `problems` holds commitlint's own lines.
  */
-export function lintHeader(
+export async function lintHeader(
   header,
-  { cwd = REPO_ROOT, spawnFn = spawnSync } = {}
+  { cwd = REPO_ROOT, spawnFn = spawn, timeoutMs = lintTimeoutMs() } = {}
 ) {
   if (!existsSync(path.join(cwd, COMMITLINT_CLI))) {
     return {
@@ -230,15 +281,15 @@ export function lintHeader(
       ],
     };
   }
-  // A hung commitlint fails closed after a minute instead of holding the merge.
-  const r = spawnFn(process.execPath, [COMMITLINT_CLI], {
-    cwd,
-    input: header,
-    encoding: 'utf8',
-    timeout: LINT_TIMEOUT_MS,
-  });
+  const r = await runCommitlint(header, { cwd, spawnFn, timeoutMs });
+  if (r.timedOut) {
+    return {
+      ok: false,
+      problems: [`commitlint timed out after ${timeoutMs / 1000} s`],
+    };
+  }
   if (r.error || r.status === null) {
-    return { ok: false, problems: ['commitlint could not run or timed out'] };
+    return { ok: false, problems: ['commitlint could not run'] };
   }
   if (r.status === 0) return { ok: true, problems: [] };
   // commitlint prints "✖   <problem> [rule]" lines, coloured on a terminal.
@@ -452,9 +503,24 @@ export async function mergeWhenGreen({
           };
         }
         // Linted once per header: the title is re-read each poll and may change.
-        if (!headerLints.has(header)) headerLints.set(header, lint(header));
-        const linted = headerLints.get(header);
-        if (!linted.ok) {
+        // The lint runs while the checks are awaited; a rejection it has
+        // reported stops the run at once, and a merge waits for its verdict.
+        if (!headerLints.has(header)) {
+          const entry = { result: null };
+          entry.promise = Promise.resolve()
+            .then(() => lint(header))
+            .catch((err) => ({
+              ok: false,
+              problems: [`commitlint could not run: ${err?.message ?? err}`],
+            }))
+            .then((r) => {
+              entry.result = r;
+              return r;
+            });
+          headerLints.set(header, entry);
+        }
+        const linted = headerLints.get(header).result;
+        if (linted && !linted.ok) {
           return {
             ok: false,
             message: `PR ${number}: commitlint rejects the squash header "${header}": ${linted.problems.join('; ')}`,
@@ -510,6 +576,14 @@ export async function mergeWhenGreen({
       // mixes their trailers into the body: send one commitlint accepts.
       const squash = {};
       if (method === 'squash') {
+        const header = squashTitle(pr.title, number);
+        const linted = await headerLints.get(header).promise;
+        if (!linted.ok) {
+          return {
+            ok: false,
+            message: `PR ${number}: commitlint rejects the squash header "${header}": ${linted.problems.join('; ')}`,
+          };
+        }
         let messages;
         try {
           messages = io
@@ -638,4 +712,7 @@ if (isMain(import.meta.url)) {
   });
   if (!result.ok) fail(result.message);
   console.log(result.message);
+  // A commitlint child still running (the PR was found merged, say) must not
+  // hold the process open (DOS/Rate#1564).
+  process.exit(0);
 }

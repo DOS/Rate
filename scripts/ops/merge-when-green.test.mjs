@@ -1,7 +1,11 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
+import { EventEmitter } from 'node:events';
+import { mkdtempSync, rmSync, symlinkSync } from 'node:fs';
 import os from 'node:os';
+import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { PassThrough, Writable } from 'node:stream';
 import test from 'node:test';
 
 import {
@@ -17,6 +21,7 @@ import {
   squashBody,
   LINT_TIMEOUT_MS,
   lintHeader,
+  lintTimeoutMs,
   mergeWhenGreen,
   squashTitle,
   wrapLine,
@@ -403,14 +408,16 @@ test('the squash message of PR bodies with lines over 100 characters passes comm
   assert.doesNotMatch(result.output, /warning/);
 });
 
-test('lints the squash header with the repository commitlint, type-enum included', () => {
+test('lints the squash header with the repository commitlint, type-enum included', async () => {
   // A valid header passes.
-  assert.deepEqual(lintHeader('fix(web): a thing (#7)'), {
+  assert.deepEqual(await lintHeader('fix(web): a thing (#7)'), {
     ok: true,
     problems: [],
   });
   // "ux" fits the shape check but not commitlint's type-enum (DOS/Rate#1513).
-  const ux = lintHeader('ux(web): the same product shows one rating (#1475)');
+  const ux = await lintHeader(
+    'ux(web): the same product shows one rating (#1475)'
+  );
   assert.equal(
     squashTitle('ux(web): the same product shows one rating', 1475),
     'ux(web): the same product shows one rating (#1475)'
@@ -418,49 +425,139 @@ test('lints the squash header with the repository commitlint, type-enum included
   assert.equal(ux.ok, false);
   assert.ok(
     ux.problems.some(
-      (p) => /type must be one of/.test(p) && /type-enum/.test(p)
+      (p) => /type must be one of/.test(p) && /\[type-enum\]/.test(p)
     ),
     ux.problems.join('\n')
   );
   // A start-case subject is refused with commitlint's reason.
-  const startCase = lintHeader('fix(web): Add a sentence-case subject (#8)');
+  const startCase = await lintHeader(
+    'fix(web): Add a sentence-case subject (#8)'
+  );
   assert.equal(startCase.ok, false);
   assert.ok(
-    startCase.problems.some((p) => /subject-case/.test(p)),
+    startCase.problems.some((p) => /\[subject-case\]/.test(p)),
     startCase.problems.join('\n')
+  );
+  // The config's own ignores apply: a Dependabot subject is skipped (DOS/Rate#725).
+  assert.equal(
+    (await lintHeader('chore(deps): Bump foo from 1.0.0 to 1.0.1 (#9)')).ok,
+    true
   );
 });
 
-test('a squash header is refused, not merged, when commitlint cannot run', () => {
-  const missing = lintHeader('fix(web): a thing (#7)', { cwd: os.tmpdir() });
+test('a squash header is refused, not merged, when commitlint cannot run', async () => {
+  const missing = await lintHeader('fix(web): a thing (#7)', {
+    cwd: os.tmpdir(),
+  });
   assert.equal(missing.ok, false);
   assert.match(missing.problems[0], /commitlint is not installed/);
-  const failed = lintHeader('fix(web): a thing (#7)', {
-    spawnFn: () => ({ error: new Error('spawn failed'), status: null }),
+  // commitlint installed but no commitlint.config.ts: refused, as the CLI does.
+  const bare = mkdtempSync(path.join(os.tmpdir(), 'mwg-no-config-'));
+  try {
+    symlinkSync(
+      path.join(repoRoot, 'node_modules'),
+      path.join(bare, 'node_modules'),
+      'junction'
+    );
+    const noRules = await lintHeader('fix(web): a thing (#7)', { cwd: bare });
+    assert.equal(noRules.ok, false, noRules.problems.join('\n'));
+  } finally {
+    rmSync(bare, { recursive: true, force: true });
+  }
+  const failed = await lintHeader('fix(web): a thing (#7)', {
+    spawnFn: () => {
+      throw new Error('spawn failed');
+    },
   });
   assert.deepEqual(failed, {
     ok: false,
-    problems: ['commitlint could not run or timed out'],
+    problems: ['commitlint could not run'],
   });
-  const silent = lintHeader('fix(web): a thing (#7)', {
-    spawnFn: () => ({ status: 2, stdout: '', stderr: '' }),
+  const errored = await lintHeader('fix(web): a thing (#7)', {
+    spawnFn: () => fakeChild({ error: new Error('ENOENT') }),
+  });
+  assert.deepEqual(errored.problems, ['commitlint could not run']);
+  const silent = await lintHeader('fix(web): a thing (#7)', {
+    spawnFn: () => fakeChild({ status: 2 }),
   });
   assert.deepEqual(silent, { ok: false, problems: ['commitlint exited 2'] });
-  // A broken config says why in its first lines, and the lint is bounded in time.
-  const broken = lintHeader('fix(web): a thing (#7)', {
-    spawnFn: (_cmd, _args, opts) => {
-      assert.equal(opts.timeout, LINT_TIMEOUT_MS);
-      return {
+  // A broken config says why in its first lines; the header goes in on stdin.
+  let stdin = '';
+  const broken = await lintHeader('fix(web): a thing (#7)', {
+    spawnFn: () =>
+      fakeChild({
         status: 9,
-        stdout: '',
         stderr: 'Error: cannot load config\n  at x',
-      };
-    },
+        onInput: (text) => (stdin = text),
+      }),
   });
+  assert.equal(stdin, 'fix(web): a thing (#7)');
   assert.deepEqual(broken, {
     ok: false,
     problems: ['commitlint exited 9: Error: cannot load config | at x'],
   });
+  // A commitlint that never ends is killed and fails closed (DOS/Rate#1564).
+  let killed = false;
+  const hung = await lintHeader('fix(web): a thing (#7)', {
+    spawnFn: () => fakeChild({ hang: true, onKill: () => (killed = true) }),
+    timeoutMs: 20,
+  });
+  assert.deepEqual(hung, {
+    ok: false,
+    problems: ['commitlint timed out after 0.02 s'],
+  });
+  assert.equal(killed, true);
+});
+
+/** A child process double: exits with `status`, or errors, or hangs until killed. */
+function fakeChild({
+  status = 0,
+  stdout = '',
+  stderr = '',
+  error,
+  hang,
+  onInput,
+  onKill,
+} = {}) {
+  const child = new EventEmitter();
+  child.stdout = new PassThrough();
+  child.stderr = new PassThrough();
+  let input = '';
+  child.stdin = new Writable({
+    write(chunk, _enc, done) {
+      input += chunk;
+      done();
+    },
+    final(done) {
+      onInput?.(input);
+      done();
+      if (hang) return;
+      setImmediate(() => {
+        if (error) return child.emit('error', error);
+        child.stdout.end(stdout);
+        child.stderr.end(stderr);
+        setImmediate(() => child.emit('close', status));
+      });
+    },
+  });
+  child.kill = () => onKill?.();
+  return child;
+}
+
+test('the lint timeout defaults to three minutes and takes a positive override', () => {
+  assert.equal(LINT_TIMEOUT_MS, 180_000);
+  assert.equal(lintTimeoutMs({}), LINT_TIMEOUT_MS);
+  assert.equal(
+    lintTimeoutMs({ MERGE_WHEN_GREEN_LINT_TIMEOUT_MS: '300000' }),
+    300_000
+  );
+  for (const bad of ['0', '-5', 'abc', '1.5', '']) {
+    assert.equal(
+      lintTimeoutMs({ MERGE_WHEN_GREEN_LINT_TIMEOUT_MS: bad }),
+      LINT_TIMEOUT_MS,
+      bad
+    );
+  }
 });
 
 /**
@@ -560,4 +657,44 @@ test('no branch update goes out once the deadline has passed', async () => {
   assert.equal(result.ok, false);
   assert.match(result.message, /still not mergeable after/);
   assert.deepEqual(writes, [], 'the branch was not updated');
+});
+
+test('a merge waits for a slow lint, and a rejection it reports writes nothing', async () => {
+  // The lint resolves only after the checks are green: the merge waits for it.
+  let release;
+  const slow = new Promise((resolve) => (release = resolve));
+  const { io, writes } = fakeGitHub();
+  const pending = mergeWhenGreen({
+    number: 41,
+    timeoutMs: 500,
+    intervalMs: 10,
+    lint: () => slow,
+    io,
+  });
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(writes, [], 'no merge before the lint has a verdict');
+  release({ ok: true, problems: [] });
+  assert.equal((await pending).ok, true);
+  // A rejected header is never merged, and a throwing lint fails closed.
+  for (const lint of [
+    async () => ({
+      ok: false,
+      problems: ['type must be one of [fix] [type-enum]'],
+    }),
+    () => {
+      throw new Error('boom');
+    },
+  ]) {
+    const rejected = fakeGitHub();
+    const result = await mergeWhenGreen({
+      number: 41,
+      timeoutMs: 500,
+      intervalMs: 10,
+      lint,
+      io: rejected.io,
+    });
+    assert.equal(result.ok, false);
+    assert.match(result.message, /commitlint rejects the squash header/);
+    assert.deepEqual(rejected.writes, []);
+  }
 });
