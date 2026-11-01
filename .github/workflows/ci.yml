@@ -76,6 +76,9 @@ jobs:
       - name: Replay the DOS-Me criteria ratings proposal (Docker)
         run: node scripts/test-criteria-ratings-proposal.mjs
 
+      - name: Replay the DOS-Me review submission v2 proposal (Docker)
+        run: pnpm --filter @repo/shared-data build && node scripts/test-review-submission-v2-proposal.mjs
+
       - name: Check generated rate schema types match the migrations
         run: pnpm check:db-types
 

@@ -111,6 +111,13 @@ const EVASIVE_CON = new RegExp(
 );
 
 /**
+ * The dodge pattern's source, matched against comparablePoint(line). The
+ * DOS-Me review RPC (rate.submit_community_review_v2) carries the same
+ * pattern; DOS/Rate's proposal test keeps the two equal.
+ */
+export const EVASIVE_CON_PATTERN: string = EVASIVE_CON.source;
+
+/**
  * Whether a con line says only that there is no con. A dodge is short: a
  * line longer than a con may be is never one, which also keeps the check
  * linear on an oversized request.
