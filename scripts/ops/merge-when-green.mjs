@@ -13,10 +13,10 @@
 // --ignore lets a known-broken, non-required check through; name it in the PR.
 // Prints one line and exits 0 when merged, 1 when it cannot merge.
 
-import { existsSync, realpathSync } from 'node:fs';
-import { createRequire } from 'node:module';
+import { spawn } from 'node:child_process';
+import { existsSync } from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 import {
   DEFAULT_REPO,
@@ -208,12 +208,12 @@ export function squashTitle(title, number) {
 }
 
 const REPO_ROOT = fileURLToPath(new URL('../../', import.meta.url));
-const COMMITLINT_CLI_PACKAGE = 'node_modules/@commitlint/cli/package.json';
+const COMMITLINT_CLI = 'node_modules/@commitlint/cli/cli.js';
 /**
- * How long the lint may take before it fails closed. Loading commitlint opens
- * about a thousand small files; on a cold Windows checkout with antivirus
- * scanning that took up to two minutes of wall time at almost no CPU
- * (DOS/Rate#1564). MERGE_WHEN_GREEN_LINT_TIMEOUT_MS overrides it.
+ * How long commitlint may take before the header fails closed. The CLI spends
+ * its time opening about 750 small module files at almost no CPU; on a cold
+ * Windows checkout with antivirus scanning that took up to two minutes of wall
+ * time (DOS/Rate#1564). MERGE_WHEN_GREEN_LINT_TIMEOUT_MS overrides it.
  */
 export const LINT_TIMEOUT_MS = 180_000;
 
@@ -223,109 +223,97 @@ export function lintTimeoutMs(env = process.env) {
   return raw && Number.isInteger(ms) && ms > 0 ? ms : LINT_TIMEOUT_MS;
 }
 
-/**
- * Loads the repository's commitlint in-process: @commitlint/load reads
- * commitlint.config.ts (extends, parser preset, ignores) and @commitlint/lint
- * applies it, as the CLI does, without a child process. Both are resolved from
- * @commitlint/cli, whose dependencies they are.
- */
-export async function loadCommitlint(cwd = REPO_ROOT) {
-  const cliPackage = path.join(cwd, COMMITLINT_CLI_PACKAGE);
-  if (!existsSync(cliPackage)) {
-    throw new Error(
-      `commitlint is not installed (${COMMITLINT_CLI_PACKAGE}): run pnpm install`
-    );
-  }
-  // pnpm links the package: resolve its dependencies from where it really is.
-  const require = createRequire(realpathSync(cliPackage));
-  const importDefault = async (name) => {
-    const mod = await import(pathToFileURL(require.resolve(name)).href);
-    return mod.default?.default ?? mod.default;
-  };
-  const [load, lint] = await Promise.all([
-    importDefault('@commitlint/load'),
-    importDefault('@commitlint/lint'),
-  ]);
-  const config = await load({}, { cwd });
-  // The CLI refuses a config with no rules (a missing commitlint.config.ts);
-  // lint() alone would pass any header.
-  if (Object.keys(config.rules ?? {}).length === 0) {
-    throw new Error(`commitlint found no rules in ${cwd}`);
-  }
-  const options = {
-    parserOpts: config.parserPreset?.parserOpts ?? {},
-    plugins: config.plugins ?? {},
-    ignores: config.ignores ?? [],
-    defaultIgnores: config.defaultIgnores,
-    helpUrl: config.helpUrl,
-  };
-  return (message) => lint(message, config.rules, options);
+/** Runs the commitlint CLI on stdin without blocking; resolves when it ends. */
+function runCommitlint(header, { cwd, spawnFn, timeoutMs }) {
+  return new Promise((resolve) => {
+    let child;
+    try {
+      child = spawnFn(process.execPath, [COMMITLINT_CLI], {
+        cwd,
+        stdio: ['pipe', 'pipe', 'pipe'],
+        windowsHide: true,
+      });
+    } catch (error) {
+      resolve({ error, status: null, stdout: '', stderr: '' });
+      return;
+    }
+    let stdout = '';
+    let stderr = '';
+    let settled = false;
+    const finish = (r) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      resolve({ stdout, stderr, ...r });
+    };
+    // A hung commitlint is killed and fails closed.
+    const timer = setTimeout(() => {
+      child.kill();
+      finish({ timedOut: true, status: null });
+    }, timeoutMs);
+    child.stdout?.setEncoding('utf8').on('data', (d) => (stdout += d));
+    child.stderr?.setEncoding('utf8').on('data', (d) => (stderr += d));
+    child.on('error', (error) => finish({ error, status: null }));
+    child.on('close', (status) => finish({ status }));
+    child.stdin?.on('error', () => {});
+    child.stdin?.end(header);
+  });
 }
-
-/** One commitlint load per checkout, shared by every lint of a run. */
-const commitlintLoads = new Map();
 
 /**
  * Lints a squash header with the repository's own commitlint config
  * (commitlint.config.ts), as the commitlint check will: type-enum, case,
  * length and the rest. The shape check in squashTitle let "ux(web): ..." through
- * (DOS/Rate#1513). Fails closed when commitlint cannot load or run, or takes
- * longer than the timeout, so no header is merged unchecked. `problems` holds
- * commitlint's own messages, as "<message> [rule]".
+ * (DOS/Rate#1513). commitlint runs as a child process, so the run keeps polling
+ * while it loads and the timeout can stop it (DOS/Rate#1564). Fails closed when
+ * commitlint cannot run or times out, so no header is merged unchecked.
+ * `problems` holds commitlint's own lines.
  */
 export async function lintHeader(
   header,
-  { cwd = REPO_ROOT, loader = loadCommitlint, timeoutMs = lintTimeoutMs() } = {}
+  { cwd = REPO_ROOT, spawnFn = spawn, timeoutMs = lintTimeoutMs() } = {}
 ) {
-  const key = loader === loadCommitlint ? cwd : null;
-  let loading = key === null ? undefined : commitlintLoads.get(key);
-  if (!loading) {
-    loading = Promise.resolve().then(() => loader(cwd));
-    if (key !== null) {
-      commitlintLoads.set(key, loading);
-      // A failed load is not kept: the next lint tries again.
-      loading.catch(() => commitlintLoads.delete(key));
-    }
-  }
-  return lintWith(loading, header, timeoutMs);
-}
-
-async function lintWith(loading, header, timeoutMs) {
-  let timer;
-  const timeout = new Promise((resolve) => {
-    timer = setTimeout(() => resolve(null), timeoutMs);
-    timer.unref?.();
-  });
-  try {
-    const report = await Promise.race([
-      loading.then((lint) => lint(header)),
-      timeout,
-    ]);
-    if (report === null) {
-      return {
-        ok: false,
-        problems: [`commitlint timed out after ${timeoutMs / 1000} s`],
-      };
-    }
-    if (report.valid) return { ok: true, problems: [] };
-    const problems = [...(report.errors ?? [])].map(
-      (e) => `${e.message} [${e.name}]`
-    );
+  if (!existsSync(path.join(cwd, COMMITLINT_CLI))) {
     return {
       ok: false,
-      problems:
-        problems.length > 0
-          ? problems
-          : ['commitlint found the header invalid'],
+      problems: [
+        `commitlint is not installed (${COMMITLINT_CLI}): run pnpm install`,
+      ],
     };
-  } catch (err) {
+  }
+  const r = await runCommitlint(header, { cwd, spawnFn, timeoutMs });
+  if (r.timedOut) {
     return {
       ok: false,
-      problems: [`commitlint could not run: ${err?.message ?? err}`],
+      problems: [`commitlint timed out after ${timeoutMs / 1000} s`],
     };
-  } finally {
-    clearTimeout(timer);
   }
+  if (r.error || r.status === null) {
+    return { ok: false, problems: ['commitlint could not run'] };
+  }
+  if (r.status === 0) return { ok: true, problems: [] };
+  // commitlint prints "✖   <problem> [rule]" lines, coloured on a terminal.
+  // eslint-disable-next-line no-control-regex
+  const plain = `${r.stdout}\n${r.stderr}`.replace(/\u001b\[[0-9;]*m/g, '');
+  const problems = plain
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter((l) => /^✖\s+/.test(l) && !/found \d+ problems?/.test(l))
+    .map((l) => l.replace(/^✖\s+/, ''));
+  // With no "✖" line (a broken config, say), the first lines of its output say why.
+  const head = plain
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter(Boolean)
+    .slice(0, 3)
+    .join(' | ');
+  return {
+    ok: false,
+    problems:
+      problems.length > 0
+        ? problems
+        : [`commitlint exited ${r.status}${head ? `: ${head}` : ''}`],
+  };
 }
 
 /**
@@ -724,7 +712,7 @@ if (isMain(import.meta.url)) {
   });
   if (!result.ok) fail(result.message);
   console.log(result.message);
-  // A commitlint load still in flight (the PR merged elsewhere, say) must not
+  // A commitlint child still running (the PR was found merged, say) must not
   // hold the process open (DOS/Rate#1564).
   process.exit(0);
 }

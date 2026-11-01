@@ -1,9 +1,11 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
+import { EventEmitter } from 'node:events';
 import { mkdtempSync, rmSync, symlinkSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { PassThrough, Writable } from 'node:stream';
 import test from 'node:test';
 
 import {
@@ -458,45 +460,89 @@ test('a squash header is refused, not merged, when commitlint cannot run', async
       'junction'
     );
     const noRules = await lintHeader('fix(web): a thing (#7)', { cwd: bare });
-    assert.equal(noRules.ok, false);
-    assert.match(noRules.problems[0], /commitlint found no rules/);
+    assert.equal(noRules.ok, false, noRules.problems.join('\n'));
   } finally {
     rmSync(bare, { recursive: true, force: true });
   }
-  const broken = await lintHeader('fix(web): a thing (#7)', {
-    loader: async () => {
-      throw new Error('cannot load config');
+  const failed = await lintHeader('fix(web): a thing (#7)', {
+    spawnFn: () => {
+      throw new Error('spawn failed');
     },
   });
+  assert.deepEqual(failed, {
+    ok: false,
+    problems: ['commitlint could not run'],
+  });
+  const errored = await lintHeader('fix(web): a thing (#7)', {
+    spawnFn: () => fakeChild({ error: new Error('ENOENT') }),
+  });
+  assert.deepEqual(errored.problems, ['commitlint could not run']);
+  const silent = await lintHeader('fix(web): a thing (#7)', {
+    spawnFn: () => fakeChild({ status: 2 }),
+  });
+  assert.deepEqual(silent, { ok: false, problems: ['commitlint exited 2'] });
+  // A broken config says why in its first lines; the header goes in on stdin.
+  let stdin = '';
+  const broken = await lintHeader('fix(web): a thing (#7)', {
+    spawnFn: () =>
+      fakeChild({
+        status: 9,
+        stderr: 'Error: cannot load config\n  at x',
+        onInput: (text) => (stdin = text),
+      }),
+  });
+  assert.equal(stdin, 'fix(web): a thing (#7)');
   assert.deepEqual(broken, {
     ok: false,
-    problems: ['commitlint could not run: cannot load config'],
+    problems: ['commitlint exited 9: Error: cannot load config | at x'],
   });
-  const throwing = await lintHeader('fix(web): a thing (#7)', {
-    loader: async () => () => {
-      throw new Error('parser blew up');
-    },
-  });
-  assert.deepEqual(throwing.problems, [
-    'commitlint could not run: parser blew up',
-  ]);
-  const silent = await lintHeader('fix(web): a thing (#7)', {
-    loader: async () => () => ({ valid: false, errors: [] }),
-  });
-  assert.deepEqual(silent, {
-    ok: false,
-    problems: ['commitlint found the header invalid'],
-  });
-  // A load that never ends fails closed at the timeout (DOS/Rate#1564).
+  // A commitlint that never ends is killed and fails closed (DOS/Rate#1564).
+  let killed = false;
   const hung = await lintHeader('fix(web): a thing (#7)', {
-    loader: () => new Promise(() => {}),
+    spawnFn: () => fakeChild({ hang: true, onKill: () => (killed = true) }),
     timeoutMs: 20,
   });
   assert.deepEqual(hung, {
     ok: false,
     problems: ['commitlint timed out after 0.02 s'],
   });
+  assert.equal(killed, true);
 });
+
+/** A child process double: exits with `status`, or errors, or hangs until killed. */
+function fakeChild({
+  status = 0,
+  stdout = '',
+  stderr = '',
+  error,
+  hang,
+  onInput,
+  onKill,
+} = {}) {
+  const child = new EventEmitter();
+  child.stdout = new PassThrough();
+  child.stderr = new PassThrough();
+  let input = '';
+  child.stdin = new Writable({
+    write(chunk, _enc, done) {
+      input += chunk;
+      done();
+    },
+    final(done) {
+      onInput?.(input);
+      done();
+      if (hang) return;
+      setImmediate(() => {
+        if (error) return child.emit('error', error);
+        child.stdout.end(stdout);
+        child.stderr.end(stderr);
+        setImmediate(() => child.emit('close', status));
+      });
+    },
+  });
+  child.kill = () => onKill?.();
+  return child;
+}
 
 test('the lint timeout defaults to three minutes and takes a positive override', () => {
   assert.equal(LINT_TIMEOUT_MS, 180_000);
