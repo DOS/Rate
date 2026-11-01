@@ -888,6 +888,7 @@ export default function JReviewsSection({
       {/* Review form v2 behind its flag (DOS/Rate#1544) */}
       {showWriteForm && isReviewFormV2Enabled() && (
         <ReviewFormV2
+          key={masterProductId ?? productSlug ?? productName}
           masterProductId={masterProductId}
           productName={productName}
           categorySlug={categorySlug}

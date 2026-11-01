@@ -360,7 +360,6 @@ async function testReviews() {
   );
 }
 
-// GET reviews by id serves published products only, like the slug path (DOS/Rate#1309).
 // Review form v2 (DOS/Rate#1544): behind NEXT_PUBLIC_RATE_REVIEW_FORM_V2,
 // checked against the product's category, and never stored until the DOS-Me
 // v2 RPC exists.
@@ -397,6 +396,24 @@ async function testReviewsV2() {
 
   process.env.NEXT_PUBLIC_RATE_REVIEW_FORM_V2 = '1';
   try {
+    // With v2 on, a v1 body is refused: no verdict, pros or cons.
+    calls = [];
+    res = await POST(
+      post('/api/v1/rate/reviews', validReview, GOOD_TOKEN) as Req
+    );
+    assert.equal(res.status, 400);
+    assert.equal((await res.json()).code, 'INVALID_BODY');
+    calls = [];
+    res = await POST(
+      post(
+        '/api/v1/rate/reviews',
+        { ...v2Review, formVersion: '2' },
+        GOOD_TOKEN
+      ) as Req
+    );
+    assert.equal(res.status, 400);
+    assert.equal(rpcCalls('submit_community_review').length, 0);
+
     // Still signed-in only.
     calls = [];
     res = await POST(post('/api/v1/rate/reviews', v2Review) as Req);
@@ -473,11 +490,25 @@ async function testReviewsV2() {
   } finally {
     delete process.env.NEXT_PUBLIC_RATE_REVIEW_FORM_V2;
   }
+
+  // The stored star is computed from the criteria (the test product is a
+  // phone): the body's ratingStar 5 is never read. Lines are single lines.
+  const { buildReviewV2Submission } = await import('@/server/rate/review-v2');
+  const built = buildReviewV2Submission('smartphones', v2Review);
+  assert.ok(built.ok);
+  // (4.5*20 + 4*20 + 5*20 + 4*15 + 3.5*15) / 90 = 4.25
+  assert.equal(built.submission.ratingStar, 4.3);
+  assert.equal(built.submission.criteriaVersion, 1);
+  assert.equal(
+    buildReviewV2Submission('smartphones', { ...v2Review, verdict: '' }).ok,
+    false
+  );
   console.warn(
     '  ✅ POST review form v2 is flagged, checked per field and never stored yet (#1544)'
   );
 }
 
+// GET reviews by id serves published products only, like the slug path (DOS/Rate#1309).
 async function testReviewsByIdPublishedOnly() {
   const { GET } = await import('../reviews/route');
   type Req = Parameters<typeof GET>[0];

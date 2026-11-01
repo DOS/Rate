@@ -126,6 +126,18 @@ function main() {
     ]
   );
 
+  // A line both a pro and a con of one criterion, and an empty entry.
+  assert.deepEqual(
+    fields({
+      ...VALID,
+      criterionPoints: {
+        battery: { pros: ['Pin dùng hơi nóng'], cons: ['pin dùng hơi nóng'] },
+        camera: { pros: [], cons: [] },
+      },
+    }),
+    ['points.battery.cons.0:v2ErrBoth', 'points.camera:v2ErrCount']
+  );
+
   // A malformed body gives errors and never throws.
   assert.ok(
     reviewV2Errors('smartphones', null as unknown as ReviewV2Input).length > 0
@@ -180,6 +192,12 @@ function main() {
   assert.equal(parseReviewV2Draft('null'), null);
   assert.equal(parseReviewV2Draft(null), null);
   assert.deepEqual(parseReviewV2Draft('{"pros":[1,"a"]}')?.pros, ['a']);
+  // A stored star off the half steps is dropped, so the picker keeps a stop.
+  assert.deepEqual(
+    parseReviewV2Draft('{"ratings":{"camera":3.3,"battery":7,"value":4.5}}')
+      ?.ratings,
+    { value: 4.5 }
+  );
 
   console.warn('✅ Review form v2 suite passed');
 }

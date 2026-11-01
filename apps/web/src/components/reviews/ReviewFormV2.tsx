@@ -83,12 +83,14 @@ function HalfStarPicker({
   value,
   label,
   invalid,
+  required,
   describedBy,
   onChange,
 }: {
   value: number | null;
   label: string;
   invalid: boolean;
+  required: boolean;
   describedBy?: string;
   onChange: (star: number) => void;
 }) {
@@ -124,6 +126,7 @@ function HalfStarPicker({
       role="radiogroup"
       aria-label={label}
       aria-invalid={invalid || undefined}
+      aria-required={required || undefined}
       aria-describedby={describedBy}
       className="d-inline-flex align-items-center"
     >
@@ -211,12 +214,23 @@ function LineList({
   const t = useTranslations('reviews');
   const baseId = useId();
   const listError = errorFor(field);
+  const listErrorId = `${baseId}-err`;
   const rows = lines.length > 0 ? lines : [''];
+  // Blank lines are dropped before the check, so error N is the Nth line
+  // with text in it, not the Nth row.
+  let checked = -1;
+  const checkedIndex = rows.map((line) =>
+    line.trim() ? (checked += 1) : null
+  );
   return (
-    <fieldset className="mb-2">
+    <fieldset
+      className="mb-2"
+      aria-describedby={listError ? listErrorId : undefined}
+    >
       <legend className="small fw-semibold mb-1">{label}</legend>
       {rows.map((line, index) => {
-        const error = errorFor(`${field}.${index}`);
+        const at = checkedIndex[index];
+        const error = at == null ? null : errorFor(`${field}.${at}`);
         const errorId = `${baseId}-${index}-err`;
         return (
           <div key={index} className="mb-1">
@@ -255,7 +269,11 @@ function LineList({
           </div>
         );
       })}
-      {listError && <div className="text-danger small">{listError}</div>}
+      {listError && (
+        <div id={listErrorId} className="text-danger small">
+          {listError}
+        </div>
+      )}
       {rows.length < max && (
         <button
           type="button"
@@ -292,7 +310,9 @@ export default function ReviewFormV2({
   );
   const labelOf = (c: RatingCriterion) =>
     locale === 'vi' ? c.label.vi : c.label.en;
-  const draftKey = `${REVIEW_V2_DRAFT_PREFIX}${masterProductId ?? ''}`;
+  const draftKey = masterProductId
+    ? `${REVIEW_V2_DRAFT_PREFIX}${masterProductId}`
+    : null;
 
   const [draft, setDraft] = useState<ReviewV2Draft>(emptyReviewV2Draft);
   const [draftLoaded, setDraftLoaded] = useState(false);
@@ -305,6 +325,7 @@ export default function ReviewFormV2({
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
+    if (!draftKey) return;
     try {
       const saved = parseReviewV2Draft(window.localStorage.getItem(draftKey));
       if (saved) setDraft(saved);
@@ -315,7 +336,7 @@ export default function ReviewFormV2({
   }, [draftKey]);
 
   useEffect(() => {
-    if (!draftLoaded) return;
+    if (!draftLoaded || !draftKey) return;
     try {
       window.localStorage.setItem(draftKey, JSON.stringify(draft));
     } catch {
@@ -392,7 +413,7 @@ export default function ReviewFormV2({
         return;
       }
       try {
-        window.localStorage.removeItem(draftKey);
+        if (draftKey) window.localStorage.removeItem(draftKey);
       } catch {
         // Nothing to clear when storage is blocked.
       }
@@ -505,6 +526,7 @@ export default function ReviewFormV2({
                   value={value}
                   label={label}
                   invalid={Boolean(error)}
+                  required={c.required}
                   describedBy={error ? errorId : undefined}
                   onChange={(star) => setRating(c.key, star)}
                 />
@@ -565,7 +587,9 @@ export default function ReviewFormV2({
           );
         })}
         {skippedError && (
-          <div className="text-danger small mt-1">{skippedError}</div>
+          <div id={`${fieldId}-skipped-err`} className="text-danger small mt-1">
+            {skippedError}
+          </div>
         )}
       </div>
 

@@ -216,8 +216,25 @@ export function reviewV2Errors(
         errors.push({ field, key: 'v2ErrCriterion' });
         continue;
       }
+      const pros = Array.isArray(entry.pros) ? entry.pros : [];
+      const cons = Array.isArray(entry.cons) ? entry.cons : [];
+      // A criterion entry carries 1 to 3 lines; an empty one is not sent.
+      if (pros.length + cons.length === 0) {
+        errors.push({
+          field,
+          key: 'v2ErrCount',
+          values: { max: REVIEW_CRITERION_POINTS_MAX },
+        });
+        continue;
+      }
       criterionPointErrors(field, 'pros', entry.pros, errors);
       criterionPointErrors(field, 'cons', entry.cons, errors);
+      const proLines = new Set(pros.map((p) => comparablePoint(String(p))));
+      cons.forEach((con, index) => {
+        const compared = comparablePoint(String(con));
+        if (compared && proLines.has(compared))
+          errors.push({ field: `${field}.cons.${index}`, key: 'v2ErrBoth' });
+      });
     }
   }
   return errors;
@@ -297,7 +314,10 @@ export function parseReviewV2Draft(raw: string | null): ReviewV2Draft | null {
     const ratings: Record<string, number | null> = {};
     if (value.ratings && typeof value.ratings === 'object')
       for (const [k, v] of Object.entries(value.ratings))
-        if (v === null || (typeof v === 'number' && Number.isFinite(v)))
+        if (
+          v === null ||
+          (typeof v === 'number' && v >= 1 && v <= 5 && Number.isInteger(v * 2))
+        )
           ratings[k] = v;
     const points: ReviewV2Draft['points'] = {};
     if (value.points && typeof value.points === 'object')

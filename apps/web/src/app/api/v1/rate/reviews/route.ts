@@ -28,11 +28,11 @@ import { createLogger, serializeError } from '@/lib/logger';
 import {
   REVIEW_FORM_VERSION,
   isReviewFormV2Enabled,
-  reviewV2Errors,
-  reviewV2Star,
 } from '@/lib/review-form-v2';
-import { RATING_CRITERIA_VERSION } from '@repo/shared-data/rules';
-import { submitCommunityReviewV2 } from '@/server/rate/review-v2';
+import {
+  buildReviewV2Submission,
+  submitCommunityReviewV2,
+} from '@/server/rate/review-v2';
 
 const log = createLogger('api.reviews');
 
@@ -181,9 +181,15 @@ const stripControls = (s: string) =>
     .replace(/\r\n?/g, '\n')
     .replace(/[^\P{Cc}\n]+/gu, '')
     .trim();
+// One line: control characters and line breaks become spaces.
+const oneLine = (s: string) =>
+  s
+    .replace(/\p{Cc}+/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
 // Generous caps against an oversized body; the real limits are the D5 rules
 // in reviewV2Errors, which name the field that breaks them.
-const V2Line = z.string().max(600).transform(stripControls);
+const V2Line = z.string().max(600).transform(oneLine);
 const V2Lines = z.array(V2Line).max(20);
 
 /** The v2 body (DOS/Rate#1544): no star, the server computes it. */
@@ -203,7 +209,7 @@ const SubmitReviewV2Schema = z.object({
   criteriaRatings: z
     .record(z.string().max(40), z.number().finite().nullable())
     .refine((r) => Object.keys(r).length <= 20),
-  verdict: z.string().max(1200).transform(stripControls),
+  verdict: z.string().max(1200).transform(oneLine),
   pros: V2Lines,
   cons: V2Lines,
   criterionPoints: z
@@ -424,13 +430,10 @@ export async function POST(request: NextRequest) {
     );
     if (!auth.ok) return auth.response;
 
-    if (
-      isReviewFormV2Enabled() &&
-      rawBody &&
-      typeof rawBody === 'object' &&
-      (rawBody as { formVersion?: unknown }).formVersion === REVIEW_FORM_VERSION
-    ) {
-      return await submitReviewV2(rawBody);
+    // With v2 on, every review is a v2 review: a v1 body (no verdict, pros
+    // or cons, a star from the browser) is refused as INVALID_BODY.
+    if (isReviewFormV2Enabled()) {
+      return await submitReviewV2(auth.rateClient, rawBody);
     }
 
     const parsed = SubmitReviewSchema.safeParse(rawBody ?? {});
@@ -564,22 +567,16 @@ export async function POST(request: NextRequest) {
   }
 }
 
-function cleanName(value: string | undefined, max: number): string | null {
-  return (
-    (value || '')
-      .replace(/\p{Cc}+/gu, '')
-      .trim()
-      .slice(0, max) || null
-  );
-}
-
 /**
  * The v2 path, behind NEXT_PUBLIC_RATE_REVIEW_FORM_V2 (DOS/Rate#1544): the
  * review is checked against its product's category with the form's own
  * rules, and its star is the weighted average of its criteria. Storing it
  * waits for the DOS-Me v2 RPC, so a valid review gets a 503 for now.
  */
-async function submitReviewV2(rawBody: unknown): Promise<NextResponse> {
+async function submitReviewV2(
+  rateClient: unknown,
+  rawBody: unknown
+): Promise<NextResponse> {
   const parsed = SubmitReviewV2Schema.safeParse(rawBody);
   if (!parsed.success) {
     return NextResponse.json(
@@ -604,33 +601,20 @@ async function submitReviewV2(rawBody: unknown): Promise<NextResponse> {
     );
   }
 
-  const fieldErrors = reviewV2Errors(categorySlug, body);
-  const ratingStar = reviewV2Star(categorySlug, body.criteriaRatings);
-  if (fieldErrors.length > 0 || ratingStar == null) {
+  const checked = buildReviewV2Submission(categorySlug, body);
+  if (!checked.ok) {
     return NextResponse.json(
       {
         ok: false,
         error: 'Đánh giá chưa hợp lệ, xem lại các ô được đánh dấu.',
         code: 'INVALID_REVIEW',
-        fieldErrors,
+        fieldErrors: checked.fieldErrors,
       },
       { status: 400, headers: REVIEWS_CORS_HEADERS }
     );
   }
 
-  const result = await submitCommunityReviewV2({
-    masterProductId: body.masterProductId,
-    authorName: cleanName(body.authorName, 80) ?? 'Người dùng Rate.vn',
-    variation: cleanName(body.variation, 120),
-    comment: body.comment || null,
-    ratingStar,
-    criteriaVersion: RATING_CRITERIA_VERSION,
-    criteriaRatings: body.criteriaRatings,
-    verdict: body.verdict,
-    pros: body.pros,
-    cons: body.cons,
-    criterionPoints: body.criterionPoints ?? {},
-  });
+  const result = await submitCommunityReviewV2(rateClient, checked.submission);
   if (!result.ok) {
     return NextResponse.json(
       {
