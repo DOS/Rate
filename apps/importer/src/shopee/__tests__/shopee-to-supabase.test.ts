@@ -538,6 +538,8 @@ async function runTests() {
     ['Like new 99% iPhone 15 128GB', undefined, 'like_new_99'],
     ['Điện thoại iPhone 14 Pro Max 128GB Máy cũ đã qua sử dụng', 'master-hint-verified', 'used'],
     ['Apple iPhone 15 Pro 256GB Hàng Tân Trang Apple CPO', 'master-hint-verified', 'refurbished'],
+    // A control character inside the phrase is stripped before the check.
+    ['Apple iPhone 14 Pro Max 128GB Máy\u0000 cũ', 'master-hint-verified', 'used'],
   ] as const) {
     const { stub: nonNewStub, events: nonNewEvents } = createPipelineStubSupabase({
       hintRow: { id: 'master-hint-verified' },

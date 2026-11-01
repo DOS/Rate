@@ -286,6 +286,14 @@ async function runEntityMatcherSuite() {
     assert.equal(detectProductCondition(title), 'new', `${title} is a new device`);
   }
   assert.equal(detectProductCondition('iPhone 13 128GB 2nd hand'), 'used');
+  // A bare percentage is a spec or an ad, not a condition; one about the device is.
+  assert.equal(
+    detectProductCondition(
+      'Tai nghe Anker Soundcore Liberty 4 NC Mới 100% Chống ồn 98% Chính hãng'
+    ),
+    'new'
+  );
+  assert.equal(detectProductCondition('iPhone 13 Pro 128GB máy 98% pin 99%'), 'like_new_99');
   assert.equal(
     detectProductCondition('Điện thoại Apple iPhone 15 Pro Max 256GB Likenew 99% Zin Nguyên Bản'),
     'like_new_99'

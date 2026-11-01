@@ -96,6 +96,8 @@ export interface NormalizedProductCandidate {
   storage_gb: number | null; // null = unparseable from the title; identity carries ':unknown'
   needs_review: boolean; // true when identity could not be confidently derived or listing is non-new (plan v7 §5.2, Audit C6)
   condition?: ProductCondition;
+  /** The condition the sanitized title alone states; the ingest check reads it (DOS/Rate#1430). */
+  title_condition?: ProductCondition;
   origin?: ProductOrigin;
   ram_gb: number | null;
   screen_size_inch: number | null;
@@ -178,7 +180,7 @@ export function detectProductCondition(title: string, description?: string): Pro
       return 'refurbished';
     }
     if (
-      /(?:\blike\s*new\b|\blikenew\b|mới\s*9[5-9]%|đẹp\s*9[5-9]%|zin\s*9[5-9]%|\b9[89]%|siêu\s*lướt|hàng\s*lướt|máy\s*lướt|hàng\s*trưng\s*bày|máy\s*trưng\s*bày|\bopen\s*box\b|đã\s*kích\s*hoạt\s*bảo\s*hành)/i.test(
+      /(?:\blike\s*new\b|\blikenew\b|mới\s*9[5-9]%|đẹp\s*9[5-9]%|zin\s*9[5-9]%|(?:máy|ngoại\s*hình|hình\s*thức|keng|pin)\s*9[5-9]%|siêu\s*lướt|hàng\s*lướt|máy\s*lướt|hàng\s*trưng\s*bày|máy\s*trưng\s*bày|\bopen\s*box\b|đã\s*kích\s*hoạt\s*bảo\s*hành)/i.test(
         text
       )
     ) {
@@ -3242,6 +3244,7 @@ export class ProductNormalizer {
       storage_gb: storageKnown ? storageGb : null,
       needs_review: !keyable || !storageConfident || condition !== 'new',
       condition,
+      title_condition: detectProductCondition(title),
       origin,
       ram_gb: ramGb,
       screen_size_inch: screenSize,

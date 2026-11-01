@@ -17,7 +17,6 @@ import {
   type ValidatedScrapedProduct,
 } from './types.js';
 import {
-  detectProductCondition,
   isAccessoryTitle,
   NonNewListingError,
   ProductNormalizer,
@@ -544,7 +543,7 @@ export class ShopeeIngestionPipeline {
     // stored condition, its price would become the new device's min_price (DOS/Rate#1430).
     // Only the title decides: description boilerplate ("không bán hàng cũ", "99% khách
     // hàng hài lòng") would drop new listings, so a description hit still only sets needs_review.
-    const condition = detectProductCondition(product.title);
+    const condition = candidate.title_condition ?? 'new';
     if (condition !== 'new') {
       throw new NonNewListingError(product.title, condition);
     }
