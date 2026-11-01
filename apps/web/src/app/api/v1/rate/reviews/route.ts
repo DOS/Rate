@@ -594,18 +594,18 @@ async function submitReviewV2(
   }
   const body = parsed.data;
 
-  const categorySlug = await getCachedPublishedMasterProductCategory(
-    body.masterProductId
-  );
-  if (!categorySlug) {
+  const { published, category: categorySlug } =
+    await getCachedPublishedMasterProductCategory(body.masterProductId);
+  if (!published) {
     return NextResponse.json(
       { ok: false, error: 'Product not found', code: 'NOT_FOUND' },
       { status: 404, headers: REVIEWS_CORS_HEADERS }
     );
   }
 
-  // The RPC refuses a category with no criteria list; say so here first.
-  if (!hasRatingCriteria(categorySlug)) {
+  // The RPC refuses a category with no criteria list, or a product with
+  // no category; say so here first.
+  if (!categorySlug || !hasRatingCriteria(categorySlug)) {
     return NextResponse.json(
       {
         ok: false,
@@ -659,6 +659,15 @@ async function submitReviewV2(
         { status: 400, headers: REVIEWS_CORS_HEADERS }
       );
     }
+    if (
+      result.error?.code === 'P0002' &&
+      result.error.details === 'master_product_id'
+    ) {
+      return NextResponse.json(
+        { ok: false, error: 'Product not found', code: 'NOT_FOUND' },
+        { status: 404, headers: REVIEWS_CORS_HEADERS }
+      );
+    }
     const rejection = result.error
       ? mapRpcRejection(result.error, RPC_REJECTIONS)
       : null;
@@ -698,17 +707,39 @@ async function submitReviewV2(
   }
 
   // The RPC's `verdict` is the writer's verdict text; the analysis verdict
-  // the review list reads is `flag_verdict`.
+  // the review list reads is `flag_verdict`. Its criteria use the
+  // category's own keys, which v1's sanitizer would drop.
   const record = result.record;
+  const review = toReviewItem(
+    { ...record, verdict: record.flag_verdict ?? 'unanalyzed' },
+    {}
+  );
+  const criteria = v2StoredCriteria(record.criteria_ratings);
   return NextResponse.json(
     {
       ok: true,
       mode: 'supabase_rpc',
-      review: toReviewItem(
-        { ...record, verdict: record.flag_verdict ?? 'unanalyzed' },
-        {}
-      ),
+      review: {
+        ...review,
+        criteria_ratings: criteria,
+        signals: {
+          ...review.signals,
+          criteria_count: Object.keys(criteria).length,
+        },
+      },
     },
     { headers: REVIEWS_CORS_HEADERS }
   );
+}
+
+/** Stored v2 criterion stars: the category's keys, 1 to 5. */
+function v2StoredCriteria(raw: unknown): Record<string, number> {
+  const out: Record<string, number> = {};
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return out;
+  for (const [key, value] of Object.entries(raw).slice(0, 20)) {
+    if (!/^[a-z][a-z_]{1,31}$/.test(key)) continue;
+    const star = asNumber(value, NaN);
+    if (Number.isFinite(star) && star >= 1 && star <= 5) out[key] = star;
+  }
+  return out;
 }

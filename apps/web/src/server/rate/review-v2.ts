@@ -153,7 +153,9 @@ export function reviewV2FieldFromRpcDetail(detail: unknown): string | null {
       d
     );
   if (points) {
-    if (!points[1]) return 'criteria';
+    // The form shows pros and cons lists only, so a whole entry (an unknown
+    // key, a value that is no object) is marked on the criteria box.
+    if (!points[1] || !points[2]) return 'criteria';
     return ['points', points[1], points[2], points[3]]
       .filter((part): part is string => Boolean(part))
       .join('.');

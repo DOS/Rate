@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { isReviewFormV2Enabled } from '@/lib/review-form-v2';
 import { Fragment } from 'react';
 import { getTranslations, setRequestLocale } from 'next-intl/server';
 import { Link } from '@/lib/navigation';
@@ -28,6 +29,7 @@ import ItemLazySizePanel, {
 import { shouldLazyLoadSizes } from '@/lib/item-size-panel';
 import {
   getCachedMasterProductBySlug,
+  getCachedPublishedMasterProductCategory,
   getCachedMasterProductOffers,
   getCachedMasterProductPriceHistory,
   getCachedMasterProductReviews,
@@ -473,6 +475,12 @@ export async function ProductDetailView({
     siblingsRead,
   ]);
   timing.done();
+  // With review form v2 on, the category the RPC rates (DOS/Rate#1544).
+  const reviewCategory = isReviewFormV2Enabled()
+    ? await getCachedPublishedMasterProductCategory(product.id)
+        .then((r) => r.category)
+        .catch(() => null)
+    : null;
   const variantLinks = itemRoute
     ? null
     : buildProductVariantLinks(product, siblings);
@@ -1449,6 +1457,7 @@ export async function ProductDetailView({
               averageRating={normalizeCompareFiveStarRating(
                 product.average_rating
               )}
+              reviewCategorySlug={reviewCategory}
               userRatingWeighted={displayUserRating || null}
               ratingScore={storedRating || null}
               expertRating={resolveCompareExpertRating5(product)}

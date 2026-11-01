@@ -41,6 +41,9 @@ const USER = {
 };
 const MASTER_ID = '99999999-8888-4777-8666-555555555555';
 const DRAFT_MASTER_ID = '99999999-8888-4777-8666-444444444444';
+// A published product with no category row (DOS/Rate#1544).
+const NO_CATEGORY_MASTER_ID = '99999999-8888-4777-8666-333333333333';
+const PHONES_CATEGORY_ID = '77777777-8888-4777-8666-555555555555';
 
 process.env.NEXT_PUBLIC_SUPABASE_URL = SUPABASE_URL;
 process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = ANON_KEY;
@@ -151,10 +154,22 @@ globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
         : { id: DRAFT_MASTER_ID, status: 'draft' }
     );
   }
+  if (pathname === '/rest/v1/categories') {
+    return jsonResponse(200, [{ id: PHONES_CATEGORY_ID, slug: 'smartphones' }]);
+  }
+  if (
+    pathname === '/rest/v1/master_products' &&
+    new URL(url).searchParams.get('id') === `eq.${NO_CATEGORY_MASTER_ID}`
+  ) {
+    return jsonResponse(200, [
+      { id: NO_CATEGORY_MASTER_ID, category_id: null, status: 'published' },
+    ]);
+  }
   if (pathname === '/rest/v1/master_products') {
     return jsonResponse(200, [
       {
         id: MASTER_ID,
+        category_id: PHONES_CATEGORY_ID,
         slug: 'apple-iphone-16-128gb',
         name: 'Apple iPhone 16 128GB',
         brand: 'Apple',
@@ -477,6 +492,25 @@ async function testReviewsV2() {
     );
     assert.equal(res.status, 404);
 
+    // A product with no category row has no criteria list: refused here,
+    // as the RPC would refuse it.
+    calls = [];
+    res = await POST(
+      post(
+        '/api/v1/rate/reviews',
+        { ...v2Review, masterProductId: NO_CATEGORY_MASTER_ID },
+        GOOD_TOKEN
+      ) as Req
+    );
+    assert.equal(res.status, 400);
+    assert.deepEqual((await res.json()).fieldErrors, [
+      { field: 'criteria', key: 'v2ErrCriterion' },
+    ]);
+    assert.equal(
+      calls.filter((c) => c.url.includes('/rest/v1/rpc/')).length,
+      0
+    );
+
     // A valid review goes to rate.submit_community_review_v2 as the user,
     // with blank criteria left out; the stored analysis verdict, not the
     // writer's verdict text, reaches the review list.
@@ -518,6 +552,15 @@ async function testReviewsV2() {
     assert.equal(stored.ok, true);
     assert.equal(stored.review.verdict, 'unanalyzed');
     assert.equal(stored.review.include_in_rating, false);
+    assert.deepEqual(
+      stored.review.criteria_ratings,
+      v2Review.criteriaRatings,
+      'the new criteria keys survive on the stored item'
+    );
+    assert.equal(
+      stored.review.signals.criteria_count,
+      Object.keys(v2Review.criteriaRatings).length
+    );
     const [v2Rpc] = rpcCalls('submit_community_review_v2');
     assert.ok(v2Rpc, 'the v2 RPC must be called');
     // v1 is never called on the v2 path.
@@ -580,6 +623,19 @@ async function testReviewsV2() {
       assert.equal((await res.json()).code, code, sqlstate);
     }
 
+    // No product behind the id: a 404, not "no listing".
+    calls = [];
+    rpcResponder = () => ({
+      status: 400,
+      json: {
+        code: 'P0002',
+        message: 'Không tìm thấy sản phẩm',
+        details: 'master_product_id',
+      },
+    });
+    res = await POST(post('/api/v1/rate/reviews', v2Review, GOOD_TOKEN) as Req);
+    assert.equal(res.status, 404);
+
     // An environment without the v2 RPC says so.
     calls = [];
     rpcResponder = () => ({
@@ -613,10 +669,8 @@ async function testReviewsV2() {
   assert.equal(reviewV2FieldFromRpcDetail('criteria'), 'criteria');
   assert.equal(reviewV2FieldFromRpcDetail('criteria.value'), 'criterion.value');
   assert.equal(reviewV2FieldFromRpcDetail('criterion_points'), 'criteria');
-  assert.equal(
-    reviewV2FieldFromRpcDetail('criterion_points.anc'),
-    'points.anc'
-  );
+  // A whole entry has no field of its own in the form.
+  assert.equal(reviewV2FieldFromRpcDetail('criterion_points.anc'), 'criteria');
   assert.equal(
     reviewV2FieldFromRpcDetail('criterion_points.anc.pros'),
     'points.anc.pros'

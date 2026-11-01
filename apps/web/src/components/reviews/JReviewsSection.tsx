@@ -69,6 +69,11 @@ export interface JReviewsSectionProps {
   masterProductId?: string;
   /** Shows only this category's criteria: no screen for earbuds. */
   categorySlug?: CanonicalCategorySlug;
+  /**
+   * The category review form v2 rates (the product's category row, as the
+   * v2 RPC reads it); null when it has none. Only read with v2 on.
+   */
+  reviewCategorySlug?: string | null;
   productSlug?: string;
   productName: string;
   averageRating: number;
@@ -154,6 +159,7 @@ export default function JReviewsSection({
   summary,
   radarSignal,
   categorySlug,
+  reviewCategorySlug,
 }: JReviewsSectionProps) {
   const t = useTranslations('reviews');
   const tAnalyzer = useTranslations('analyzerCopy');
@@ -864,7 +870,8 @@ export default function JReviewsSection({
           {/* v2 rates a category's own criteria: a category without a
               list has no form, as the RPC refuses it (DOS/Rate#1544). */}
           {masterProductId &&
-            (!isReviewFormV2Enabled() || hasRatingCriteria(categorySlug)) && (
+            (!isReviewFormV2Enabled() ||
+              hasRatingCriteria(reviewCategorySlug)) && (
               <button
                 type="button"
                 onClick={() => {
@@ -903,7 +910,7 @@ export default function JReviewsSection({
           key={masterProductId ?? productSlug ?? productName}
           masterProductId={masterProductId}
           productName={productName}
-          categorySlug={categorySlug}
+          categorySlug={reviewCategorySlug ?? undefined}
           defaultAuthorName={t('defaultAuthorName')}
           onStored={handleReviewStored}
         />

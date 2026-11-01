@@ -1772,17 +1772,19 @@ export async function isPublishedMasterProduct(
 }
 
 /**
- * The category of a published master product, or null when the id names no
- * published product. The review API checks criteria against it rather than a
- * category the browser sends (DOS/Rate#1544).
+ * The review category of a published master product: the slug of its
+ * `category_id`, as rate.submit_community_review_v2 reads it, with no guess
+ * from metadata or the name (DOS/Rate#1544). `published` is false when the
+ * id names no published product; `category` is null when it has no
+ * category row.
  */
 export async function getPublishedMasterProductCategorySlug(
   masterId: string
-): Promise<CanonicalCategorySlug | null> {
+): Promise<{ published: boolean; category: string | null }> {
   const supabase = getRateClient();
   const { data, error } = await supabase
     .from('master_products')
-    .select('id, slug, name, model, category_id, metadata, specifications')
+    .select('id, category_id')
     .eq('id', masterId)
     .eq('status', 'published')
     .maybeSingle();
@@ -1793,12 +1795,13 @@ export async function getPublishedMasterProductCategorySlug(
     });
     throw new RateDataUnavailableError('master product', error);
   }
-  if (!data) return null;
-  const categorySlugById = await getCategorySlugMap();
-  return getMasterProductCategorySlug(
-    data as Parameters<typeof getMasterProductCategorySlug>[0],
-    categorySlugById ?? undefined
-  );
+  if (!data) return { published: false, category: null };
+  const categoryId = (data as { category_id?: string | null }).category_id;
+  const categorySlugById = categoryId ? await getCategorySlugMap() : null;
+  return {
+    published: true,
+    category: (categoryId && categorySlugById?.get(categoryId)) || null,
+  };
 }
 
 export async function getMasterProductReviews(

@@ -11,7 +11,6 @@ import {
   type RatingCriterion,
 } from '@repo/shared-data/rules';
 import type { ReviewItem } from '@/lib/rate-domain';
-import type { CanonicalCategorySlug } from '@/lib/rate-domain-core';
 import { jsonWriteHeaders } from '@/lib/auth/access-token';
 import { submitErrorKey } from '@/lib/review-display';
 import { formatDecimal } from '@/lib/locale-format';
@@ -31,7 +30,8 @@ import {
 export interface ReviewFormV2Props {
   masterProductId?: string;
   productName: string;
-  categorySlug?: CanonicalCategorySlug;
+  /** The category row the v2 RPC rates against (never guessed). */
+  categorySlug?: string;
   defaultAuthorName: string;
   onStored: (review: ReviewItem) => void;
 }
