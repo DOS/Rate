@@ -138,6 +138,16 @@ function main() {
     ['points.battery.cons.0:v2ErrBoth', 'points.camera:v2ErrCount']
   );
 
+  // Criterion lines count like the RPC: NFC, invisible characters out.
+  // "Đẹp❤️" is 4 there (the variation selector is not counted), too short.
+  assert.deepEqual(
+    fields({
+      ...VALID,
+      criterionPoints: { design: { pros: ['Đẹp❤️'] } },
+    }),
+    ['points.design.pros.0:v2ErrLength']
+  );
+
   // A malformed body gives errors and never throws.
   assert.ok(
     reviewV2Errors('smartphones', null as unknown as ReviewV2Input).length > 0

@@ -31,8 +31,11 @@ import {
 } from '@/lib/review-form-v2';
 import {
   buildReviewV2Submission,
+  reviewV2FieldFromRpcDetail,
   submitCommunityReviewV2,
 } from '@/server/rate/review-v2';
+import { hasRatingCriteria } from '@repo/shared-data/rules';
+import type { AuthenticatedRateRequest } from '@/server/rate/request-auth';
 
 const log = createLogger('api.reviews');
 
@@ -574,7 +577,7 @@ export async function POST(request: NextRequest) {
  * waits for the DOS-Me v2 RPC, so a valid review gets a 503 for now.
  */
 async function submitReviewV2(
-  rateClient: unknown,
+  rateClient: AuthenticatedRateRequest['rateClient'],
   rawBody: unknown
 ): Promise<NextResponse> {
   const parsed = SubmitReviewV2Schema.safeParse(rawBody);
@@ -591,13 +594,26 @@ async function submitReviewV2(
   }
   const body = parsed.data;
 
-  const categorySlug = await getCachedPublishedMasterProductCategory(
-    body.masterProductId
-  );
-  if (!categorySlug) {
+  const { published, category: categorySlug } =
+    await getCachedPublishedMasterProductCategory(body.masterProductId);
+  if (!published) {
     return NextResponse.json(
       { ok: false, error: 'Product not found', code: 'NOT_FOUND' },
       { status: 404, headers: REVIEWS_CORS_HEADERS }
+    );
+  }
+
+  // The RPC refuses a category with no criteria list, or a product with
+  // no category; say so here first.
+  if (!categorySlug || !hasRatingCriteria(categorySlug)) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error: 'Danh mục này chưa có tiêu chí chấm điểm.',
+        code: 'INVALID_REVIEW',
+        fieldErrors: [{ field: 'criteria', key: 'v2ErrCriterion' }],
+      },
+      { status: 400, headers: REVIEWS_CORS_HEADERS }
     );
   }
 
@@ -616,21 +632,114 @@ async function submitReviewV2(
 
   const result = await submitCommunityReviewV2(rateClient, checked.submission);
   if (!result.ok) {
+    if (result.missing) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: 'Chức năng gửi đánh giá chưa sẵn sàng trên môi trường này.',
+          code: 'REVIEWS_UNAVAILABLE',
+        },
+        { status: 503, headers: REVIEWS_CORS_HEADERS }
+      );
+    }
+    // A field the database refused: shown on that field of the form.
+    const field =
+      result.error?.code === '22023'
+        ? reviewV2FieldFromRpcDetail(result.error.details)
+        : null;
+    if (field) {
+      log.warn('submit_community_review_v2 rejected a field', { field });
+      return NextResponse.json(
+        {
+          ok: false,
+          error: 'Đánh giá chưa hợp lệ, xem lại các ô được đánh dấu.',
+          code: 'INVALID_REVIEW',
+          fieldErrors: [{ field, key: 'v2ErrRejected' }],
+        },
+        { status: 400, headers: REVIEWS_CORS_HEADERS }
+      );
+    }
+    if (
+      result.error?.code === 'P0002' &&
+      result.error.details === 'master_product_id'
+    ) {
+      return NextResponse.json(
+        { ok: false, error: 'Product not found', code: 'NOT_FOUND' },
+        { status: 404, headers: REVIEWS_CORS_HEADERS }
+      );
+    }
+    const rejection = result.error
+      ? mapRpcRejection(result.error, RPC_REJECTIONS)
+      : null;
+    if (rejection?.status === 429) {
+      return rateLimitExceededResponse(
+        rejection.error,
+        REVIEWS_CORS_HEADERS,
+        86_400
+      );
+    }
+    if (rejection) {
+      return NextResponse.json(
+        { ok: false, error: rejection.error, code: rejection.code },
+        { status: rejection.status, headers: REVIEWS_CORS_HEADERS }
+      );
+    }
+    log.error('submit_community_review_v2 failed', {
+      code: result.error?.code,
+      message: result.error?.message,
+    });
     return NextResponse.json(
       {
         ok: false,
-        error: 'Chức năng gửi đánh giá chưa sẵn sàng trên môi trường này.',
-        code: result.code,
+        error: 'Không thể lưu đánh giá lúc này.',
+        code: 'PERSIST_FAILED',
       },
-      { status: 503, headers: REVIEWS_CORS_HEADERS }
+      { status: 502, headers: REVIEWS_CORS_HEADERS }
     );
   }
+
+  try {
+    revalidateTag(RATE_CACHE_TAGS.REVIEWS, 'max');
+    revalidateTag(RATE_CACHE_TAGS.PRODUCTS, 'max');
+    revalidateTag(RATE_CACHE_TAGS.STATS, 'max');
+  } catch {
+    // Ignore revalidateTag errors outside Next.js request context
+  }
+
+  // The RPC's `verdict` is the writer's verdict text; the analysis verdict
+  // the review list reads is `flag_verdict`. Its criteria use the
+  // category's own keys, which v1's sanitizer would drop.
+  const record = result.record;
+  const review = toReviewItem(
+    { ...record, verdict: record.flag_verdict ?? 'unanalyzed' },
+    {}
+  );
+  const criteria = v2StoredCriteria(record.criteria_ratings);
   return NextResponse.json(
     {
       ok: true,
       mode: 'supabase_rpc',
-      review: toReviewItem(result.record, {}),
+      review: {
+        ...review,
+        criteria_ratings: criteria,
+        signals: {
+          ...review.signals,
+          criteria_count: Object.keys(criteria).length,
+        },
+      },
     },
     { headers: REVIEWS_CORS_HEADERS }
   );
+}
+
+/** Stored v2 criterion stars: the category's keys, 1 to 5. */
+function v2StoredCriteria(raw: unknown): Record<string, number> {
+  const out: Record<string, number> = {};
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return out;
+  for (const [key, value] of Object.entries(raw).slice(0, 20)) {
+    if (!/^[a-z][a-z_]{1,31}$/.test(key)) continue;
+    const star = asNumber(value, NaN);
+    if (Number.isFinite(star) && star >= 1 && star <= 5) out[key] = star;
+  }
+  return out;
 }

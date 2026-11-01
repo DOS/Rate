@@ -20,6 +20,7 @@ import {
   getRatingCriteria,
   hasContent,
   isEvasiveCon,
+  storedPoint,
   validateCriteriaRatings,
   validateReviewText,
   weightedReviewStar,
@@ -58,7 +59,8 @@ export type ReviewV2MessageKey =
   | 'v2ErrNoContent'
   | 'v2ErrEvasive'
   | 'v2ErrDuplicate'
-  | 'v2ErrBoth';
+  | 'v2ErrBoth'
+  | 'v2ErrRejected';
 
 /**
  * One error on one field. Fields: `criteria`, `criterion.<key>`, `verdict`,
@@ -77,8 +79,9 @@ const DUPLICATE_LINE = 'v2ErrDuplicate' as const;
 
 /** Length as the writer sees it, like review-form.ts and char_length. */
 function lineLength(text: string): number {
-  const composed = String(text ?? '').normalize('NFKC');
-  return [...composed.replace(/\p{Cf}+/gu, '').trim()].length;
+  // Counted on the stored form (NFC, no invisible characters), as the v2
+  // RPC and the main lists count it.
+  return [...storedPoint(text)].length;
 }
 
 function hasOwn(record: object, key: string): boolean {

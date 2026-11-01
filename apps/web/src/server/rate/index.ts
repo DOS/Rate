@@ -394,14 +394,19 @@ const _getCachedPublishedCategoryByKey = cache((cleanId: string) =>
 );
 
 /**
- * The category of a published master product, null for any other id: what
- * the review API checks criteria against (DOS/Rate#1544).
+ * The review category of a published master product (its category_id's
+ * slug, as the v2 review RPC reads it): what the review API and the write
+ * button check criteria against (DOS/Rate#1544).
  */
 export function getCachedPublishedMasterProductCategory(
   masterProductId: string
 ) {
   const cleanId = sanitizeCachedEntityId(masterProductId);
-  if (!cleanId) return Promise.resolve(null);
+  if (!cleanId)
+    return Promise.resolve({
+      published: false,
+      category: null as string | null,
+    });
   return _getCachedPublishedCategoryByKey(cleanId);
 }
 

@@ -41,6 +41,9 @@ const USER = {
 };
 const MASTER_ID = '99999999-8888-4777-8666-555555555555';
 const DRAFT_MASTER_ID = '99999999-8888-4777-8666-444444444444';
+// A published product with no category row (DOS/Rate#1544).
+const NO_CATEGORY_MASTER_ID = '99999999-8888-4777-8666-333333333333';
+const PHONES_CATEGORY_ID = '77777777-8888-4777-8666-555555555555';
 
 process.env.NEXT_PUBLIC_SUPABASE_URL = SUPABASE_URL;
 process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = ANON_KEY;
@@ -151,10 +154,22 @@ globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
         : { id: DRAFT_MASTER_ID, status: 'draft' }
     );
   }
+  if (pathname === '/rest/v1/categories') {
+    return jsonResponse(200, [{ id: PHONES_CATEGORY_ID, slug: 'smartphones' }]);
+  }
+  if (
+    pathname === '/rest/v1/master_products' &&
+    new URL(url).searchParams.get('id') === `eq.${NO_CATEGORY_MASTER_ID}`
+  ) {
+    return jsonResponse(200, [
+      { id: NO_CATEGORY_MASTER_ID, category_id: null, status: 'published' },
+    ]);
+  }
   if (pathname === '/rest/v1/master_products') {
     return jsonResponse(200, [
       {
         id: MASTER_ID,
+        category_id: PHONES_CATEGORY_ID,
         slug: 'apple-iphone-16-128gb',
         name: 'Apple iPhone 16 128GB',
         brand: 'Apple',
@@ -477,23 +492,192 @@ async function testReviewsV2() {
     );
     assert.equal(res.status, 404);
 
-    // A valid review waits for the v2 RPC: 503, and nothing is written.
+    // A product with no category row has no criteria list: refused here,
+    // as the RPC would refuse it.
     calls = [];
-    res = await POST(post('/api/v1/rate/reviews', v2Review, GOOD_TOKEN) as Req);
-    assert.equal(res.status, 503);
-    assert.equal((await res.json()).code, 'REVIEWS_UNAVAILABLE');
+    res = await POST(
+      post(
+        '/api/v1/rate/reviews',
+        { ...v2Review, masterProductId: NO_CATEGORY_MASTER_ID },
+        GOOD_TOKEN
+      ) as Req
+    );
+    assert.equal(res.status, 400);
+    assert.deepEqual((await res.json()).fieldErrors, [
+      { field: 'criteria', key: 'v2ErrCriterion' },
+    ]);
     assert.equal(
       calls.filter((c) => c.url.includes('/rest/v1/rpc/')).length,
       0
     );
-    assert.ok(calls.every((c) => c.method === 'GET'));
+
+    // A valid review goes to rate.submit_community_review_v2 as the user,
+    // with blank criteria left out; the stored analysis verdict, not the
+    // writer's verdict text, reaches the review list.
+    calls = [];
+    rpcResponder = (name, rpcBody) =>
+      name === 'submit_community_review_v2'
+        ? {
+            status: 200,
+            json: {
+              id: 'bbbbbbbb-bbbb-4ccc-8ddd-eeeeeeeeeeee',
+              author_name: 'Tester',
+              rating_star: 4,
+              rating_exact: 4.3,
+              criteria_ratings: (rpcBody as { p_criteria_ratings: unknown })
+                .p_criteria_ratings,
+              verdict: v2Review.verdict,
+              comment: null,
+              reviewer_type: 'user',
+              points: 2,
+              flag_verdict: 'unanalyzed',
+              flag_category: null,
+              include_in_rating: false,
+              created_at: '2026-11-02T00:00:00Z',
+            },
+          }
+        : { status: 500, json: { message: 'unexpected rpc' } };
+    res = await POST(
+      post(
+        '/api/v1/rate/reviews',
+        {
+          ...v2Review,
+          criteriaRatings: { ...v2Review.criteriaRatings, design: null },
+        },
+        GOOD_TOKEN
+      ) as Req
+    );
+    assert.equal(res.status, 200);
+    const stored = await res.json();
+    assert.equal(stored.ok, true);
+    assert.equal(stored.review.verdict, 'unanalyzed');
+    assert.equal(stored.review.include_in_rating, false);
+    assert.deepEqual(
+      stored.review.criteria_ratings,
+      v2Review.criteriaRatings,
+      'the new criteria keys survive on the stored item'
+    );
+    assert.equal(
+      stored.review.signals.criteria_count,
+      Object.keys(v2Review.criteriaRatings).length
+    );
+    const [v2Rpc] = rpcCalls('submit_community_review_v2');
+    assert.ok(v2Rpc, 'the v2 RPC must be called');
+    // v1 is never called on the v2 path.
+    assert.equal(
+      calls.filter((c) => c.url.endsWith('/rpc/submit_community_review'))
+        .length,
+      0
+    );
+    assert.equal(v2Rpc.headers.authorization, `Bearer ${GOOD_TOKEN}`);
+    const v2Args = v2Rpc.body as Record<string, unknown>;
+    assert.equal(v2Args.p_master_product_id, MASTER_ID);
+    assert.deepEqual(v2Args.p_criteria_ratings, v2Review.criteriaRatings);
+    assert.equal(v2Args.p_verdict, v2Review.verdict);
+    assert.deepEqual(v2Args.p_pros, v2Review.pros);
+    assert.deepEqual(v2Args.p_cons, v2Review.cons);
+    assert.equal(v2Args.p_reviewer_type, undefined);
+    assert.equal(v2Args.p_rating_star, undefined);
+    assert.ok(
+      calls.every((c) => !JSON.stringify(c.headers).includes(SERVICE_KEY)),
+      'no request may carry the service-role key'
+    );
+
+    // A field the database refuses is marked on that field of the form.
+    for (const [details, field] of [
+      ['pros.0', 'pros.0'],
+      ['criteria.battery', 'criterion.battery'],
+      ['criterion_points.battery.cons.0', 'points.battery.cons.0'],
+    ]) {
+      calls = [];
+      rpcResponder = () => ({
+        status: 400,
+        json: { code: '22023', message: 'Dòng này bị trùng', details },
+      });
+      res = await POST(
+        post('/api/v1/rate/reviews', v2Review, GOOD_TOKEN) as Req
+      );
+      assert.equal(res.status, 400);
+      const refused = await res.json();
+      assert.equal(refused.code, 'INVALID_REVIEW');
+      assert.deepEqual(refused.fieldErrors, [{ field, key: 'v2ErrRejected' }]);
+    }
+
+    // The other rejections keep v1's meaning.
+    for (const [sqlstate, status, code] of [
+      ['42501', 403, 'FORBIDDEN'],
+      ['23505', 409, 'DUPLICATE_REVIEW'],
+      ['54000', 429, 'RATE_LIMIT_EXCEEDED'],
+      ['P0002', 400, 'REJECTED'],
+      ['22023', 400, 'REJECTED'],
+    ] as const) {
+      calls = [];
+      rpcResponder = () => ({
+        status: 400,
+        json: { code: sqlstate, message: 'rejected by rpc' },
+      });
+      res = await POST(
+        post('/api/v1/rate/reviews', v2Review, GOOD_TOKEN) as Req
+      );
+      assert.equal(res.status, status, sqlstate);
+      assert.equal((await res.json()).code, code, sqlstate);
+    }
+
+    // No product behind the id: a 404, not "no listing".
+    calls = [];
+    rpcResponder = () => ({
+      status: 400,
+      json: {
+        code: 'P0002',
+        message: 'Không tìm thấy sản phẩm',
+        details: 'master_product_id',
+      },
+    });
+    res = await POST(post('/api/v1/rate/reviews', v2Review, GOOD_TOKEN) as Req);
+    assert.equal(res.status, 404);
+
+    // An environment without the v2 RPC says so.
+    calls = [];
+    rpcResponder = () => ({
+      status: 404,
+      json: { code: 'PGRST202', message: 'Could not find the function' },
+    });
+    res = await POST(post('/api/v1/rate/reviews', v2Review, GOOD_TOKEN) as Req);
+    assert.equal(res.status, 503);
+    assert.equal((await res.json()).code, 'REVIEWS_UNAVAILABLE');
+
+    // Any other failure is reported, never faked.
+    calls = [];
+    rpcResponder = () => ({
+      status: 500,
+      json: { code: 'XX000', message: 'boom' },
+    });
+    res = await POST(post('/api/v1/rate/reviews', v2Review, GOOD_TOKEN) as Req);
+    assert.equal(res.status, 502);
+    assert.equal((await res.json()).code, 'PERSIST_FAILED');
   } finally {
     delete process.env.NEXT_PUBLIC_RATE_REVIEW_FORM_V2;
   }
 
   // The stored star is computed from the criteria (the test product is a
   // phone): the body's ratingStar 5 is never read. Lines are single lines.
-  const { buildReviewV2Submission } = await import('@/server/rate/review-v2');
+  const { buildReviewV2Submission, reviewV2FieldFromRpcDetail } =
+    await import('@/server/rate/review-v2');
+  // DETAIL names the database field; the form's names differ for criteria.
+  assert.equal(reviewV2FieldFromRpcDetail('verdict'), 'verdict');
+  assert.equal(reviewV2FieldFromRpcDetail('cons.4'), 'cons.4');
+  assert.equal(reviewV2FieldFromRpcDetail('criteria'), 'criteria');
+  assert.equal(reviewV2FieldFromRpcDetail('criteria.value'), 'criterion.value');
+  assert.equal(reviewV2FieldFromRpcDetail('criterion_points'), 'criteria');
+  // A whole entry has no field of its own in the form.
+  assert.equal(reviewV2FieldFromRpcDetail('criterion_points.anc'), 'criteria');
+  assert.equal(
+    reviewV2FieldFromRpcDetail('criterion_points.anc.pros'),
+    'points.anc.pros'
+  );
+  assert.equal(reviewV2FieldFromRpcDetail('master_product_id'), null);
+  assert.equal(reviewV2FieldFromRpcDetail('criteria.__proto__x'), null);
+  assert.equal(reviewV2FieldFromRpcDetail(null), null);
   const built = buildReviewV2Submission('smartphones', v2Review);
   assert.ok(built.ok);
   // (4.5*20 + 4*20 + 5*20 + 4*15 + 3.5*15) / 90 = 4.25
@@ -504,7 +688,7 @@ async function testReviewsV2() {
     false
   );
   console.warn(
-    '  ✅ POST review form v2 is flagged, checked per field and never stored yet (#1544)'
+    '  ✅ POST review form v2 is flagged, checked per field and stored through the v2 RPC (#1544)'
   );
 }
 
