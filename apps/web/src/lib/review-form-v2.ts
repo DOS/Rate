@@ -72,8 +72,8 @@ export interface ReviewV2Error {
 }
 
 const LINE = { min: REVIEW_POINT_MIN, max: REVIEW_POINT_MAX };
-// Named once: gitleaks reads `key: 'v2ErrDuplicate'` as a generic API key.
-const DUPLICATE_LINE: ReviewV2MessageKey = 'v2ErrDuplicate';
+// Named once: the secret scan flags this literal beside a key field.
+const DUPLICATE_LINE = 'v2ErrDuplicate' as const;
 
 /** Length as the writer sees it, like review-form.ts and char_length. */
 function lineLength(text: string): number {
