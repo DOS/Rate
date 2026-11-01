@@ -7,6 +7,7 @@ import {
   getCachedMasterProductBySlug,
   getCachedMasterProductReviews,
   getCachedMasterProductReviewSummary,
+  getCachedPublishedMasterProductCategory,
   isCachedPublishedMasterProduct,
 } from '@/server/rate';
 import {
@@ -24,6 +25,14 @@ import {
   type RpcRejection,
 } from '@/server/rate/request-auth';
 import { createLogger, serializeError } from '@/lib/logger';
+import {
+  REVIEW_FORM_VERSION,
+  isReviewFormV2Enabled,
+} from '@/lib/review-form-v2';
+import {
+  buildReviewV2Submission,
+  submitCommunityReviewV2,
+} from '@/server/rate/review-v2';
 
 const log = createLogger('api.reviews');
 
@@ -163,6 +172,51 @@ const SubmitReviewSchema = z.object({
   // Only the known criteria are read; a record of many keys is no review.
   criteriaRatings: z
     .record(z.string().max(40), z.unknown())
+    .refine((r) => Object.keys(r).length <= 20)
+    .optional(),
+});
+
+const stripControls = (s: string) =>
+  s
+    .replace(/\r\n?/g, '\n')
+    .replace(/[^\P{Cc}\n]+/gu, '')
+    .trim();
+// One line: control characters and line breaks become spaces.
+const oneLine = (s: string) =>
+  s
+    .replace(/\p{Cc}+/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+// Generous caps against an oversized body; the real limits are the D5 rules
+// in reviewV2Errors, which name the field that breaks them.
+const V2Line = z.string().max(600).transform(oneLine);
+const V2Lines = z.array(V2Line).max(20);
+
+/** The v2 body (DOS/Rate#1544): no star, the server computes it. */
+const SubmitReviewV2Schema = z.object({
+  masterProductId: z
+    .string()
+    .trim()
+    .uuid('Mã sản phẩm chuẩn hóa (masterProductId) không hợp lệ.'),
+  formVersion: z.literal(REVIEW_FORM_VERSION),
+  authorName: z.string().max(120).optional(),
+  variation: z.string().max(200).optional(),
+  comment: z
+    .string()
+    .transform(stripControls)
+    .pipe(z.string().max(3000, 'Nội dung đánh giá dài tối đa 3.000 ký tự.'))
+    .optional(),
+  criteriaRatings: z
+    .record(z.string().max(40), z.number().finite().nullable())
+    .refine((r) => Object.keys(r).length <= 20),
+  verdict: z.string().max(1200).transform(oneLine),
+  pros: V2Lines,
+  cons: V2Lines,
+  criterionPoints: z
+    .record(
+      z.string().max(40),
+      z.object({ pros: V2Lines.optional(), cons: V2Lines.optional() })
+    )
     .refine((r) => Object.keys(r).length <= 20)
     .optional(),
 });
@@ -376,6 +430,12 @@ export async function POST(request: NextRequest) {
     );
     if (!auth.ok) return auth.response;
 
+    // With v2 on, every review is a v2 review: a v1 body (no verdict, pros
+    // or cons, a star from the browser) is refused as INVALID_BODY.
+    if (isReviewFormV2Enabled()) {
+      return await submitReviewV2(auth.rateClient, rawBody);
+    }
+
     const parsed = SubmitReviewSchema.safeParse(rawBody ?? {});
     if (!parsed.success) {
       return NextResponse.json(
@@ -505,4 +565,72 @@ export async function POST(request: NextRequest) {
       REVIEWS_CORS_HEADERS
     );
   }
+}
+
+/**
+ * The v2 path, behind NEXT_PUBLIC_RATE_REVIEW_FORM_V2 (DOS/Rate#1544): the
+ * review is checked against its product's category with the form's own
+ * rules, and its star is the weighted average of its criteria. Storing it
+ * waits for the DOS-Me v2 RPC, so a valid review gets a 503 for now.
+ */
+async function submitReviewV2(
+  rateClient: unknown,
+  rawBody: unknown
+): Promise<NextResponse> {
+  const parsed = SubmitReviewV2Schema.safeParse(rawBody);
+  if (!parsed.success) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error:
+          parsed.error.issues[0]?.message || 'Dữ liệu đánh giá không hợp lệ.',
+        code: 'INVALID_BODY',
+      },
+      { status: 400, headers: REVIEWS_CORS_HEADERS }
+    );
+  }
+  const body = parsed.data;
+
+  const categorySlug = await getCachedPublishedMasterProductCategory(
+    body.masterProductId
+  );
+  if (!categorySlug) {
+    return NextResponse.json(
+      { ok: false, error: 'Product not found', code: 'NOT_FOUND' },
+      { status: 404, headers: REVIEWS_CORS_HEADERS }
+    );
+  }
+
+  const checked = buildReviewV2Submission(categorySlug, body);
+  if (!checked.ok) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error: 'Đánh giá chưa hợp lệ, xem lại các ô được đánh dấu.',
+        code: 'INVALID_REVIEW',
+        fieldErrors: checked.fieldErrors,
+      },
+      { status: 400, headers: REVIEWS_CORS_HEADERS }
+    );
+  }
+
+  const result = await submitCommunityReviewV2(rateClient, checked.submission);
+  if (!result.ok) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error: 'Chức năng gửi đánh giá chưa sẵn sàng trên môi trường này.',
+        code: result.code,
+      },
+      { status: 503, headers: REVIEWS_CORS_HEADERS }
+    );
+  }
+  return NextResponse.json(
+    {
+      ok: true,
+      mode: 'supabase_rpc',
+      review: toReviewItem(result.record, {}),
+    },
+    { headers: REVIEWS_CORS_HEADERS }
+  );
 }

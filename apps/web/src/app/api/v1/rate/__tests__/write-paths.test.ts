@@ -360,6 +360,154 @@ async function testReviews() {
   );
 }
 
+// Review form v2 (DOS/Rate#1544): behind NEXT_PUBLIC_RATE_REVIEW_FORM_V2,
+// checked against the product's category, and never stored until the DOS-Me
+// v2 RPC exists.
+async function testReviewsV2() {
+  const { POST } = await import('../reviews/route');
+  type Req = Parameters<typeof POST>[0];
+  const v2Review = {
+    masterProductId: MASTER_ID,
+    formVersion: 2,
+    authorName: 'Tester',
+    ratingStar: 5,
+    criteriaRatings: {
+      performance: 4.5,
+      camera: 4,
+      battery: 5,
+      display: 4,
+      value: 3.5,
+    },
+    verdict: 'Hợp người chụp ảnh nhiều, không hợp người chơi game nặng.',
+    pros: ['Pin dùng trọn ngày'],
+    cons: ['Giá hơi cao so với cấu hình'],
+  };
+  rpcResponder = () => ({ status: 200, json: { id: 'stored' } });
+
+  // Flag off: the body takes the current path, which needs a comment.
+  delete process.env.NEXT_PUBLIC_RATE_REVIEW_FORM_V2;
+  calls = [];
+  let res = await POST(
+    post('/api/v1/rate/reviews', v2Review, GOOD_TOKEN) as Req
+  );
+  assert.equal(res.status, 400);
+  assert.equal((await res.json()).code, 'INVALID_BODY');
+  assert.equal(rpcCalls('submit_community_review').length, 0);
+
+  process.env.NEXT_PUBLIC_RATE_REVIEW_FORM_V2 = '1';
+  try {
+    // With v2 on, a v1 body is refused: no verdict, pros or cons.
+    calls = [];
+    res = await POST(
+      post('/api/v1/rate/reviews', validReview, GOOD_TOKEN) as Req
+    );
+    assert.equal(res.status, 400);
+    assert.equal((await res.json()).code, 'INVALID_BODY');
+    calls = [];
+    res = await POST(
+      post(
+        '/api/v1/rate/reviews',
+        { ...v2Review, formVersion: '2' },
+        GOOD_TOKEN
+      ) as Req
+    );
+    assert.equal(res.status, 400);
+    assert.equal(rpcCalls('submit_community_review').length, 0);
+
+    // Still signed-in only.
+    calls = [];
+    res = await POST(post('/api/v1/rate/reviews', v2Review) as Req);
+    assert.equal(res.status, 401);
+
+    // No verdict, no pro, no con: rejected per field.
+    calls = [];
+    res = await POST(
+      post(
+        '/api/v1/rate/reviews',
+        { ...v2Review, verdict: '', pros: [], cons: ['không có'] },
+        GOOD_TOKEN
+      ) as Req
+    );
+    assert.equal(res.status, 400);
+    const invalid = await res.json();
+    assert.equal(invalid.code, 'INVALID_REVIEW');
+    assert.deepEqual(
+      invalid.fieldErrors.map((e: { field: string }) => e.field),
+      ['verdict', 'pros', 'cons.0']
+    );
+    assert.equal(rpcCalls('submit_community_review').length, 0);
+
+    // A criterion of another category is rejected, not dropped.
+    calls = [];
+    res = await POST(
+      post(
+        '/api/v1/rate/reviews',
+        {
+          ...v2Review,
+          criteriaRatings: { ...v2Review.criteriaRatings, anc: 5 },
+        },
+        GOOD_TOKEN
+      ) as Req
+    );
+    assert.equal(res.status, 400);
+    assert.deepEqual((await res.json()).fieldErrors, [
+      { field: 'criterion.anc', key: 'v2ErrCriterion' },
+    ]);
+
+    // An oversized body is refused before any check.
+    calls = [];
+    res = await POST(
+      post(
+        '/api/v1/rate/reviews',
+        { ...v2Review, pros: Array.from({ length: 21 }, () => 'Pin trâu') },
+        GOOD_TOKEN
+      ) as Req
+    );
+    assert.equal(res.status, 400);
+    assert.equal((await res.json()).code, 'INVALID_BODY');
+
+    // A draft product is not found.
+    calls = [];
+    res = await POST(
+      post(
+        '/api/v1/rate/reviews',
+        { ...v2Review, masterProductId: DRAFT_MASTER_ID },
+        GOOD_TOKEN
+      ) as Req
+    );
+    assert.equal(res.status, 404);
+
+    // A valid review waits for the v2 RPC: 503, and nothing is written.
+    calls = [];
+    res = await POST(post('/api/v1/rate/reviews', v2Review, GOOD_TOKEN) as Req);
+    assert.equal(res.status, 503);
+    assert.equal((await res.json()).code, 'REVIEWS_UNAVAILABLE');
+    assert.equal(
+      calls.filter((c) => c.url.includes('/rest/v1/rpc/')).length,
+      0
+    );
+    assert.ok(calls.every((c) => c.method === 'GET'));
+  } finally {
+    delete process.env.NEXT_PUBLIC_RATE_REVIEW_FORM_V2;
+  }
+
+  // The stored star is computed from the criteria (the test product is a
+  // phone): the body's ratingStar 5 is never read. Lines are single lines.
+  const { buildReviewV2Submission } = await import('@/server/rate/review-v2');
+  const built = buildReviewV2Submission('smartphones', v2Review);
+  assert.ok(built.ok);
+  // (4.5*20 + 4*20 + 5*20 + 4*15 + 3.5*15) / 90 = 4.25
+  assert.equal(built.submission.ratingStar, 4.3);
+  assert.equal(built.submission.criteriaVersion, 1);
+  assert.equal(
+    buildReviewV2Submission('smartphones', { ...v2Review, verdict: '' }).ok,
+    false
+  );
+  console.warn(
+    '  ✅ POST review form v2 is flagged, checked per field and never stored yet (#1544)'
+  );
+}
+
 // GET reviews by id serves published products only, like the slug path (DOS/Rate#1309).
 async function testReviewsByIdPublishedOnly() {
   const { GET } = await import('../reviews/route');
@@ -1688,6 +1836,7 @@ async function testMerchantCacheRevalidateAndDomainBounds() {
 async function main() {
   console.log('🧪 Public write-path security suite (#155)');
   await testReviews();
+  await testReviewsV2();
   await testReviewsByIdPublishedOnly();
   await testWatchlist();
   await testCookieSessions();

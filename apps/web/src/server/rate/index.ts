@@ -21,6 +21,7 @@ import {
   getMasterProductPriceHistory as _getMasterProductPriceHistory,
   getMasterProductReviews as _getMasterProductReviews,
   isPublishedMasterProduct as _isPublishedMasterProduct,
+  getPublishedMasterProductCategorySlug as _getPublishedMasterProductCategorySlug,
   getMasterProductReviewSummary as _getMasterProductReviewSummary,
   getMasterProducts as _getMasterProducts,
   attachMerchantDiscountAnalysis as _attachMerchantDiscountAnalysis,
@@ -379,6 +380,29 @@ export function isCachedPublishedMasterProduct(masterProductId: string) {
   const cleanId = sanitizeCachedEntityId(masterProductId);
   if (!cleanId) return Promise.resolve(false);
   return _getCachedIsPublishedMasterProductByKey(cleanId);
+}
+
+const _getCachedPublishedCategoryByKey = cache((cleanId: string) =>
+  withRateDataCache(
+    _getPublishedMasterProductCategorySlug,
+    ['rate-master-product-category', cleanId],
+    {
+      revalidate: 300,
+      tags: [RATE_CACHE_TAGS.PRODUCTS],
+    }
+  )(cleanId)
+);
+
+/**
+ * The category of a published master product, null for any other id: what
+ * the review API checks criteria against (DOS/Rate#1544).
+ */
+export function getCachedPublishedMasterProductCategory(
+  masterProductId: string
+) {
+  const cleanId = sanitizeCachedEntityId(masterProductId);
+  if (!cleanId) return Promise.resolve(null);
+  return _getCachedPublishedCategoryByKey(cleanId);
 }
 
 export function getCachedMasterProductReviews(masterProductId: string) {
