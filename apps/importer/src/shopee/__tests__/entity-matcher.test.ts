@@ -268,6 +268,7 @@ async function runEntityMatcherSuite() {
     'Đổi máy cũ lấy máy mới tại cửa hàng',
     'Thu máy cũ đổi máy mới, trợ giá',
     'Thu mua máy cũ giá cao',
+    'Mới 100% - Thu mua điện thoại cũ giá cao',
   ]) {
     assert.equal(
       detectProductCondition('Điện thoại Samsung Galaxy S24 Ultra 256GB', description),

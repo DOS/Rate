@@ -157,7 +157,7 @@ export class NonNewListingError extends Error {
 
 /** A trade-in offer for the buyer's old device, which says nothing about the listing's own. */
 const TRADE_IN_PHRASE =
-  /(?:thu|đổi)\s*(?:mua\s*)?(?:máy\s*)?cũ\s*(?:lên\s*đời|(?:lấy|đổi)\s*(?:máy\s*)?mới)|thu\s*(?:mua\s*)?máy\s*cũ/gi;
+  /(?:thu|đổi)\s*(?:mua\s*)?(?:(?:máy|điện\s*thoại)\s*)?cũ\s*(?:lên\s*đời|(?:lấy|đổi)\s*(?:(?:máy|điện\s*thoại)\s*)?mới)|thu\s*(?:mua\s*)?(?:máy|điện\s*thoại)\s*cũ/gi;
 
 /**
  * Detect listing physical condition from product title and optional description (Audit C6).
