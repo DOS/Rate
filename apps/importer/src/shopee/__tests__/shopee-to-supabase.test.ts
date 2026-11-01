@@ -17,7 +17,7 @@ import {
   normalizeScrapedProductPrices,
   platformReviewIdFor,
 } from '../shopee-to-supabase.js';
-import { UnkeyableProductTitleError } from '../product-normalizer.js';
+import { NonNewListingError, UnkeyableProductTitleError } from '../product-normalizer.js';
 import type { RateSupabaseClient, ShopeeProduct, ShopeeReview } from '../types.js';
 
 function createBaseProduct(overrides: Partial<ShopeeProduct> = {}): ShopeeProduct {
@@ -532,6 +532,48 @@ async function runTests() {
     UnkeyableProductTitleError
   );
   assert.equal(accessoryEvents.productUpserts.length, 0);
+  // A used, like-new or refurbished listing is rejected before anything is written, with
+  // or without a hint: its price would become the new device's min_price (DOS/Rate#1430).
+  for (const [title, hint, condition] of [
+    ['Like new 99% iPhone 15 128GB', undefined, 'like_new_99'],
+    ['Điện thoại iPhone 14 Pro Max 128GB Máy cũ đã qua sử dụng', 'master-hint-verified', 'used'],
+    ['Apple iPhone 15 Pro 256GB Hàng Tân Trang Apple CPO', 'master-hint-verified', 'refurbished'],
+    // A control character inside the phrase is stripped before the check.
+    ['Apple iPhone 14 Pro Max 128GB Máy\u0000 cũ', 'master-hint-verified', 'used'],
+  ] as const) {
+    const { stub: nonNewStub, events: nonNewEvents } = createPipelineStubSupabase({
+      hintRow: { id: 'master-hint-verified' },
+    });
+    await assert.rejects(
+      new ShopeeIngestionPipeline({ supabaseClient: nonNewStub, apiKey: '' }).ingestProduct(
+        createBaseProduct({ title }),
+        undefined,
+        hint ? { masterIdHint: hint } : {}
+      ),
+      (err: unknown) =>
+        err instanceof NonNewListingError &&
+        err.code === 'NON_NEW_LISTING' &&
+        err.condition === condition
+    );
+    assert.equal(nonNewEvents.productUpserts.length, 0, `${title} writes no listing`);
+  }
+  // Only the title rejects: description boilerplate that reads as non-new (a negation,
+  // "99% khách hàng") keeps a new listing (DOS/Rate#1430).
+  for (const description of [
+    'Nhận thu máy cũ, hỗ trợ trả góp 0%',
+    'Cam kết hàng chính hãng, không bán hàng cũ, hàng tân trang',
+    '99% khách hàng hài lòng',
+  ]) {
+    const { stub: descStub, events: descEvents } = createPipelineStubSupabase({
+      hintRow: { id: 'master-hint-verified' },
+    });
+    await new ShopeeIngestionPipeline({ supabaseClient: descStub, apiKey: '' }).ingestProduct(
+      createBaseProduct({ description }),
+      undefined,
+      { masterIdHint: 'master-hint-verified' }
+    );
+    assert.equal(descEvents.productUpserts.length, 1, `${description} keeps the listing`);
+  }
   assert.equal(hintOkEvents.productUpserts[0]?.cluster_id, 'master-hint-verified');
   assert.equal(hintOkEvents.productUpserts[0]?.category_id, 'cat-smartphones');
   assert.equal(

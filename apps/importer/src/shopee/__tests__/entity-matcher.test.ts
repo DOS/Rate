@@ -261,6 +261,40 @@ async function runEntityMatcherSuite() {
     'new',
     'Trade-in promotion ("thu cũ đổi mới") must not misclassify a new phone as used'
   );
+  for (const description of [
+    'Nhận thu máy cũ giá cao',
+    'Hỗ trợ thu mua máy cũ, trả góp 0%',
+    'Thu cũ lên đời, bảo hành 12 tháng',
+    'Đổi máy cũ lấy máy mới tại cửa hàng',
+    'Thu máy cũ đổi máy mới, trợ giá',
+    'Thu mua máy cũ giá cao',
+    'Mới 100% - Thu mua điện thoại cũ giá cao',
+  ]) {
+    assert.equal(
+      detectProductCondition('Điện thoại Samsung Galaxy S24 Ultra 256GB', description),
+      'new',
+      `A trade-in offer (${description}) does not make a new listing used (DOS/Rate#1430)`
+    );
+  }
+  assert.equal(
+    detectProductCondition('Điện thoại Samsung Galaxy S24 Ultra 256GB', 'Máy cũ, pin 90%'),
+    'used'
+  );
+  for (const title of [
+    'Tai nghe Apple AirPods Pro 2nd Gen USB-C Chính hãng VN/A',
+    'Apple iPhone SE 2nd generation 64GB',
+  ]) {
+    assert.equal(detectProductCondition(title), 'new', `${title} is a new device`);
+  }
+  assert.equal(detectProductCondition('iPhone 13 128GB 2nd hand'), 'used');
+  // A bare percentage is a spec or an ad, not a condition; one about the device is.
+  assert.equal(
+    detectProductCondition(
+      'Tai nghe Anker Soundcore Liberty 4 NC Mới 100% Chống ồn 98% Chính hãng'
+    ),
+    'new'
+  );
+  assert.equal(detectProductCondition('iPhone 13 Pro 128GB máy 98% pin 99%'), 'like_new_99');
   assert.equal(
     detectProductCondition('Điện thoại Apple iPhone 15 Pro Max 256GB Likenew 99% Zin Nguyên Bản'),
     'like_new_99'

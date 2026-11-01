@@ -18,6 +18,7 @@ import {
 } from './types.js';
 import {
   isAccessoryTitle,
+  NonNewListingError,
   ProductNormalizer,
   UnkeyableProductTitleError,
 } from './product-normalizer.js';
@@ -537,6 +538,14 @@ export class ShopeeIngestionPipeline {
     // hint: a crawl for a device's master also finds its cases (DOS/Rate#1505).
     if (candidate.keyable === false && (!options.masterIdHint || isAccessoryTitle(product.title))) {
       throw new UnkeyableProductTitleError(product.title);
+    }
+    // A used, like-new or refurbished listing is rejected even with a hint: with no
+    // stored condition, its price would become the new device's min_price (DOS/Rate#1430).
+    // Only the title decides: description boilerplate ("không bán hàng cũ", "99% khách
+    // hàng hài lòng") would drop new listings, so a description hit still only sets needs_review.
+    const condition = candidate.title_condition ?? 'new';
+    if (condition !== 'new') {
+      throw new NonNewListingError(product.title, condition);
     }
 
     // 1. Upsert merchant
