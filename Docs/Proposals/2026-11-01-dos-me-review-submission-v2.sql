@@ -15,7 +15,8 @@
 --   rate.review_point_has_content(text) at least three letters or digits, two of them different
 --   rate.review_point_is_evasive_con(text)  a con that only says there is none (shared-data
 --                                       isEvasiveCon, the same pattern text)
---   rate.review_text_length(text)       length in characters as the writer sees them
+--   rate.review_text_stored(text)       a line as stored (shared-data storedPoint)
+--   rate.review_text_length(text)       its length in characters as the writer sees them
 --   rate.submit_community_review_v2(...) a Rate review under D5: criterion stars (half steps,
 --                                       the required criterion, at most 2 left out), the review
 --                                       star as their weighted average at 0.1, a verdict of 20 to
@@ -107,9 +108,41 @@ CREATE UNIQUE INDEX IF NOT EXISTS review_points_position_key
 
 -- 3. Line helpers (packages/shared-data/src/rules/review-form.ts) ------------------------------
 
--- comparablePoint: compatibility composition, no format characters (zero-width, soft hyphen,
--- bidi marks), lower case, anything but letters, digits and spaces as a space, spaces collapsed.
--- Diacritics stay: "sạc" and "sắc" differ.
+-- Every helper reads text under the built-in pg_c_utf8 collation (PostgreSQL 17), so lower case
+-- and letter classes follow Unicode whatever the database's own locale is. The invisible set is
+-- review-form.ts INVISIBLE: format characters (zero-width, bidi marks, flag tags), emoji
+-- variation selectors and the keycap mark; the replay test checks every such code point.
+
+-- storedPoint: canonical composition, no invisible characters, trimmed. A line is stored in this
+-- form and its length counted on it, so it always fits the review_points length check.
+CREATE OR REPLACE FUNCTION rate.review_text_stored(p_text text)
+RETURNS text
+LANGUAGE sql
+IMMUTABLE
+PARALLEL SAFE
+SET search_path = ''
+AS $$
+  SELECT pg_catalog.regexp_replace(
+    pg_catalog.regexp_replace(normalize(COALESCE(p_text, ''), NFC),
+      '[­؀-؅؜۝܏࢐-࢑࣢᠎​-‏‪-‮⁠-⁤⁦-⁯⃣︀-️﻿￹-￻\U000110BD\U000110CD\U00013430-\U0001343F\U0001BCA0-\U0001BCA3\U0001D173-\U0001D17A\U000E0001\U000E0020-\U000E007F\U000E0100-\U000E01EF]',
+      '', 'g') COLLATE pg_catalog.pg_c_utf8,
+    '^[[:space:]]+|[[:space:]]+$', '', 'g')
+$$;
+
+-- Length in characters as the writer sees them: code points of the stored form.
+CREATE OR REPLACE FUNCTION rate.review_text_length(p_text text)
+RETURNS integer
+LANGUAGE sql
+IMMUTABLE
+PARALLEL SAFE
+SET search_path = ''
+AS $$
+  SELECT char_length(rate.review_text_stored(p_text))
+$$;
+
+-- comparablePoint: compatibility composition, no invisible characters, lower case, anything but
+-- letters, digits and spaces as a space, spaces collapsed. Diacritics stay: "sạc" and "sắc"
+-- differ.
 CREATE OR REPLACE FUNCTION rate.review_point_compare(p_text text)
 RETURNS text
 LANGUAGE sql
@@ -117,11 +150,11 @@ IMMUTABLE
 PARALLEL SAFE
 SET search_path = ''
 AS $$
-  SELECT btrim(pg_catalog.regexp_replace(
+  SELECT pg_catalog.btrim(pg_catalog.regexp_replace(
            pg_catalog.regexp_replace(
-             pg_catalog.lower(pg_catalog.regexp_replace(
-               normalize(COALESCE(p_text, ''), NFKC),
-               '[­؜᠎​-‏‪-‮⁠-⁤⁦-⁯﻿]', '', 'g')),
+             pg_catalog.lower(pg_catalog.regexp_replace(normalize(COALESCE(p_text, ''), NFKC),
+               '[­؀-؅؜۝܏࢐-࢑࣢᠎​-‏‪-‮⁠-⁤⁦-⁯⃣︀-️﻿￹-￻\U000110BD\U000110CD\U00013430-\U0001343F\U0001BCA0-\U0001BCA3\U0001D173-\U0001D17A\U000E0001\U000E0020-\U000E007F\U000E0100-\U000E01EF]',
+               '', 'g') COLLATE pg_catalog.pg_c_utf8),
              '[^[:alnum:][:space:]]+', ' ', 'g'),
            '[[:space:]]+', ' ', 'g'))
 $$;
@@ -134,9 +167,10 @@ IMMUTABLE
 PARALLEL SAFE
 SET search_path = ''
 AS $$
-  SELECT char_length(c) >= 3
+  SELECT pg_catalog.char_length(c) >= 3
      AND (SELECT count(DISTINCT ch) FROM pg_catalog.regexp_split_to_table(c, '') AS ch) >= 2
-  FROM (SELECT pg_catalog.regexp_replace(rate.review_point_compare(p_text), '[^[:alnum:]]', '', 'g') AS c) s
+  FROM (SELECT pg_catalog.regexp_replace(rate.review_point_compare(p_text) COLLATE pg_catalog.pg_c_utf8,
+          '[^[:alnum:]]', '', 'g') AS c) s
 $$;
 
 -- isEvasiveCon: no words, or the whole compared line is a dodge ("không có", "chưa thấy gì để
@@ -152,33 +186,22 @@ AS $$
       OR rate.review_point_compare(p_text) ~ '^(?:(?:hiện tại|hien tai|tạm thời|tam thoi|đến giờ|den gio|vẫn|van|thì|thi|thực sự|thuc su|thật sự|that su|mình|minh|em|tôi|toi|tui|anh|chị|chi|e|m) )*(?:không|khong|ko|k|kh|khum|chưa|chua|chẳng|chang|chả|cha|hok|hông|hong|hem)(?: (?:có|co|thấy|thay|gặp|gap|phát hiện|phat hien|phát hiện ra|phat hien ra|chê được|che duoc|chê|che))*(?: (?:gì|gi|j|nhược điểm|nhuoc diem|điểm trừ|diem tru|khuyết điểm|khuyet diem|điểm yếu|diem yeu|vấn đề|van de|lỗi|loi|điểm|diem|ý kiến|y kien))*(?:(?: (?:để|de|mà|ma|đáng|dang|phải|phai|cần|can))? (?:chê|che|phàn nàn|phan nan|nói|noi|kể|ke))?(?: (?:cả|ca|hết|het|nào|nao|luôn|luon|ạ|a|nhé|nhe|nha|nhen|đâu|dau))*$|^(?:(?:mọi thứ|moi thu|tất cả|tat ca|all) (?:(?:đều|deu) )?(?:ổn|on|tốt|tot|ok|good|fine)|(?:kcj|no|none|nothing|nothing to complain|nothing to complain about|no con|no cons|no complaint|no complaints|everything is fine|n a|0|ok|ổn|on|tốt|tot|rất tốt|rat tot|tuyệt vời|tuyet voi|hoàn hảo|hoan hao|perfect|10 10|5 sao))$'
 $$;
 
--- Length in characters as the writer sees them (Postgres char_length after composition).
-CREATE OR REPLACE FUNCTION rate.review_text_length(p_text text)
-RETURNS integer
-LANGUAGE sql
-IMMUTABLE
-PARALLEL SAFE
-SET search_path = ''
-AS $$
-  SELECT char_length(pg_catalog.regexp_replace(
-    pg_catalog.regexp_replace(normalize(COALESCE(p_text, ''), NFKC),
-      '[­؜᠎​-‏‪-‮⁠-⁤⁦-⁯﻿]', '', 'g'),
-    '^[[:space:]]+|[[:space:]]+$', '', 'g'))
-$$;
-
+REVOKE ALL ON FUNCTION rate.review_text_stored(text) FROM PUBLIC, anon;
+REVOKE ALL ON FUNCTION rate.review_text_length(text) FROM PUBLIC, anon;
 REVOKE ALL ON FUNCTION rate.review_point_compare(text) FROM PUBLIC, anon;
 REVOKE ALL ON FUNCTION rate.review_point_has_content(text) FROM PUBLIC, anon;
 REVOKE ALL ON FUNCTION rate.review_point_is_evasive_con(text) FROM PUBLIC, anon;
-REVOKE ALL ON FUNCTION rate.review_text_length(text) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION rate.review_text_stored(text) TO authenticated, service_role;
+GRANT EXECUTE ON FUNCTION rate.review_text_length(text) TO authenticated, service_role;
 GRANT EXECUTE ON FUNCTION rate.review_point_compare(text) TO authenticated, service_role;
 GRANT EXECUTE ON FUNCTION rate.review_point_has_content(text) TO authenticated, service_role;
 GRANT EXECUTE ON FUNCTION rate.review_point_is_evasive_con(text) TO authenticated, service_role;
-GRANT EXECUTE ON FUNCTION rate.review_text_length(text) TO authenticated, service_role;
 
 -- 4. The lines of one list, checked and normalised ----------------------------------------------
 
 -- A list of pros or cons: a JSON array of strings, each 5 to 150 characters with words in it,
--- no line twice; a con must not dodge. Returns the trimmed lines in order. p_field names the
+-- no line twice; a con must not dodge. Returns the lines as stored (review_text_stored), in
+-- order. p_field names the
 -- list in errors ('pros', 'criterion_points.battery.cons').
 CREATE OR REPLACE FUNCTION rate.review_point_list(
   p_lines jsonb, p_kind text, p_min integer, p_max integer, p_field text
@@ -212,7 +235,7 @@ BEGIN
     IF jsonb_typeof(p_lines -> v_i) <> 'string' THEN
       RAISE EXCEPTION 'Mỗi dòng phải là chữ' USING ERRCODE = '22023', DETAIL = p_field || '.' || v_i;
     END IF;
-    v_line := btrim(p_lines ->> v_i);
+    v_line := rate.review_text_stored(p_lines ->> v_i);
     v_len := rate.review_text_length(v_line);
     IF v_len < 5 OR v_len > 150 THEN
       RAISE EXCEPTION 'Mỗi dòng từ 5 đến 150 ký tự' USING ERRCODE = '22023', DETAIL = p_field || '.' || v_i;
@@ -357,6 +380,7 @@ BEGIN
     IF v_star < 1 OR v_star > 5 OR v_star * 2 <> trunc(v_star * 2) THEN
       RAISE EXCEPTION 'Số sao phải từ 1 đến 5, bước 0,5' USING ERRCODE = '22023', DETAIL = 'criteria.' || v_criterion.key;
     END IF;
+    v_star := round(v_star, 1);
     v_clean_criteria := v_clean_criteria || jsonb_build_object(v_criterion.key, v_star);
     v_weighted := v_weighted + v_star * v_criterion.weight;
     v_weights := v_weights + v_criterion.weight;
@@ -368,7 +392,7 @@ BEGIN
   v_rating_star := round(v_rating_exact)::smallint;
 
   -- Verdict, 20 to 300 characters with words in it.
-  v_verdict := btrim(COALESCE(p_verdict, ''));
+  v_verdict := rate.review_text_stored(p_verdict);
   v_verdict_len := rate.review_text_length(v_verdict);
   IF v_verdict_len < 20 OR v_verdict_len > 300 THEN
     RAISE EXCEPTION 'Phần kết luận cần từ 20 đến 300 ký tự' USING ERRCODE = '22023', DETAIL = 'verdict';
@@ -416,7 +440,7 @@ BEGIN
 
   -- The free text is optional; without it the verdict is the review's comment, so readers of v1
   -- reviews and the analyzer always have text.
-  v_comment := btrim(COALESCE(p_comment, ''));
+  v_comment := rate.review_text_stored(p_comment);
   v_comment_len := char_length(v_comment);
   IF v_comment_len > 3000 THEN
     RAISE EXCEPTION 'Nội dung đánh giá tối đa 3000 ký tự' USING ERRCODE = '22023', DETAIL = 'comment';
@@ -461,7 +485,9 @@ BEGIN
   END IF;
 
   -- v1's keyword rules, over every line the writer wrote. They only exclude.
-  v_all_text := concat_ws(E'\n', v_comment, v_verdict, array_to_string(v_pros, E'\n'), array_to_string(v_cons, E'\n'));
+  v_all_text := concat_ws(E'\n', v_comment, v_verdict, array_to_string(v_pros, E'\n'), array_to_string(v_cons, E'\n'),
+    (SELECT string_agg(line, E'\n') FROM jsonb_array_elements(v_criterion_lines) e,
+       LATERAL (SELECT jsonb_array_elements_text(e -> 'pros') UNION ALL SELECT jsonb_array_elements_text(e -> 'cons')) AS t(line)));
   IF v_all_text ~* '(nhận xu|kiếm xu|lấy xu|comment lấy xu|hình ảnh chỉ mang tính chất|video chỉ mang tính chất)' THEN
     v_flag_verdict := 'suspicious';
     v_flag_category := 'low_value_coin_spam';

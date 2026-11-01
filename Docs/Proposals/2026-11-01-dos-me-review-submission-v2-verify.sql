@@ -1,5 +1,5 @@
 -- PROPOSAL, NOT APPLIED. Read-only checks for 2026-11-01-dos-me-review-submission-v2.sql
--- (DOS/Rate#1544). Run after the migration on preview, beta and prod. V1 to V6 must return 0.
+-- (DOS/Rate#1544). Run after the migration on preview, beta and prod. V1 to V7 must return 0.
 
 -- V1 The criteria lists are complete.                                           expect 0
 --    Version 1 has 36 rows; each category weighs 100 with one required criterion.
@@ -10,20 +10,24 @@ WHERE (SELECT count(*) FROM rate.rating_criteria WHERE criteria_version = 1) <> 
               HAVING sum(weight) <> 100 OR count(*) FILTER (WHERE required) <> 1);
 
 -- V2 The functions exist, the RPC is SECURITY DEFINER with an empty search_path.  expect 0
-SELECT 6 - count(*) AS functions_missing
+SELECT 7 - count(DISTINCT p.proname) AS functions_missing
 FROM pg_proc p
 WHERE p.pronamespace = 'rate'::regnamespace
-  AND (p.proname IN ('review_point_compare', 'review_point_has_content', 'review_point_is_evasive_con',
-                     'review_text_length', 'review_point_list')
+  AND (p.proname IN ('review_text_stored', 'review_text_length', 'review_point_compare',
+                     'review_point_has_content', 'review_point_is_evasive_con', 'review_point_list')
        OR (p.proname = 'submit_community_review_v2' AND p.prosecdef
            AND p.proconfig @> ARRAY['search_path=""']));
 
--- V3 anon and PUBLIC cannot run the RPC; authenticated and service_role can.     expect 0
-SELECT count(*) AS rpc_grants_wrong
+-- V3 anon cannot run the RPC or the helpers; authenticated and service_role can. expect 0
+SELECT count(*) AS grants_wrong
 FROM (VALUES ('anon', false), ('authenticated', true), ('service_role', true)) AS g(role, allowed)
-WHERE has_function_privilege(g.role,
-  'rate.submit_community_review_v2(uuid, jsonb, text, jsonb, jsonb, jsonb, text, text, text, text)',
-  'EXECUTE') <> g.allowed;
+CROSS JOIN (VALUES
+  ('rate.submit_community_review_v2(uuid, jsonb, text, jsonb, jsonb, jsonb, text, text, text, text)'),
+  ('rate.review_point_list(jsonb, text, integer, integer, text)'),
+  ('rate.review_text_stored(text)'), ('rate.review_text_length(text)'),
+  ('rate.review_point_compare(text)'), ('rate.review_point_has_content(text)'),
+  ('rate.review_point_is_evasive_con(text)')) AS f(fn)
+WHERE has_function_privilege(g.role, f.fn, 'EXECUTE') <> g.allowed;
 
 -- V4 Every v2 review (criteria_version set) has a verdict, a pro and a con.     expect 0
 SELECT count(*) AS v2_reviews_incomplete
@@ -45,7 +49,20 @@ SELECT 1 - count(*) AS position_key_missing
 FROM pg_indexes
 WHERE schemaname = 'rate' AND indexname = 'review_points_position_key';
 
--- V7 For information: v2 reviews and their lines so far.
+-- V7 The line helpers read Vietnamese the same as shared-data on this database.  expect 0
+--    Upper case folds, diacritics stay, a dodge is caught, emoji marks are invisible.
+SELECT count(*) AS line_helpers_wrong
+FROM (VALUES
+  (rate.review_point_compare('KHÔNG CÓ'), 'không có'),
+  (rate.review_point_compare('Sạc NHANH!!'), 'sạc nhanh'),
+  (rate.review_point_compare('Pin tốt ❤️'), 'pin tốt'),
+  (rate.review_point_is_evasive_con('Không có gì ☺️')::text, 'true'),
+  (rate.review_point_is_evasive_con('Giá hơi cao')::text, 'false'),
+  (rate.review_point_has_content('ưu điểm')::text, 'true'),
+  (rate.review_text_length('Ổn ' || chr(8203) || '😀')::text, '4')) AS t(got, want)
+WHERE got IS DISTINCT FROM want;
+
+-- V8 For information: v2 reviews and their lines so far.
 SELECT count(*) AS v2_reviews,
        (SELECT count(*) FROM rate.review_points p JOIN rate.reviews r ON r.id = p.review_id
         WHERE r.criteria_version IS NOT NULL) AS v2_lines

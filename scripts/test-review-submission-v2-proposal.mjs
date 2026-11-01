@@ -44,7 +44,7 @@ const checks = [
     /^-- (V\d+) [^\n]*expect 0\n(?:--[^\n]*\n)*(SELECT[\s\S]*?;)/gm
   ),
 ].map(([, id, query]) => ({ id, query }));
-assert.equal(checks.length, 6, 'the verification lists its expect-0 queries');
+assert.equal(checks.length, 7, 'the verification lists its expect-0 queries');
 
 // The proposal carries the dodge pattern of shared-data, character for character.
 const patternInSql = proposal.match(
@@ -137,17 +137,45 @@ try {
     'Tất cả đều tốt',
     'nothing to complain about',
     'Camera chụp đêm hơi nhiễu',
+    'KHÔNG CÓ',
+    'Không có gì ☺️',
+    'không có gì ❤️',
+    '10/10 ❤️',
+    'Pin tốt ❤️',
+    '1️⃣ màn hình hơi ám vàng',
+    'Loa to 🏴󠁧󠁢󠁳󠁣󠁴󠁿 rõ',
+    'khô\u{E0020}ng có',
+    'a̲b̲c̲ d',
+    'Ổn định lắm',
+    '\u{F0000}'.repeat(76),
+    'ước mơ'.normalize('NFD'),
   ];
   for (const line of corpus) {
     const row = sql(
-      `SELECT rate.review_point_compare(${q(line)}) || '|' || rate.review_point_is_evasive_con(${q(line)})`
+      `SELECT rate.review_point_compare(${q(line)}) || '|' || rate.review_point_is_evasive_con(${q(line)})
+         || '|' || rate.review_text_stored(${q(line)}) || '|' || rate.review_text_length(${q(line)})`
     );
     assert.equal(
       row,
-      `${rules.comparablePoint(line)}|${rules.isEvasiveCon(line)}`,
-      `compare and dodge for ${JSON.stringify(line)}`
+      `${rules.comparablePoint(line)}|${rules.isEvasiveCon(line)}|${rules.storedPoint(line)}|${[...rules.storedPoint(line)].length}`,
+      `compare, dodge and stored form for ${JSON.stringify(line)}`
     );
   }
+  // Every invisible code point of review-form.ts is invisible to the SQL helpers too.
+  const invisible = [];
+  for (let c = 0; c < 0x110000; c += 1)
+    if (
+      (c < 0xd800 || c > 0xdfff) &&
+      /[\p{Cf}︀-️⃣\u{E0100}-\u{E01EF}]/u.test(String.fromCodePoint(c))
+    )
+      invisible.push(String.fromCodePoint(c));
+  assert.ok(invisible.length > 300, 'the invisible set is the full one');
+  assert.equal(
+    sql(
+      `SELECT rate.review_text_stored(${q(`a${invisible.join('')}b`)}) || '|' || rate.review_point_compare(${q(`A${invisible.join('')}B`)})`
+    ),
+    'ab|ab'
+  );
   assert.notEqual(
     sql(`SELECT rate.review_point_compare('sạc')`),
     sql(`SELECT rate.review_point_compare('sắc')`),
@@ -358,10 +386,13 @@ try {
   );
   // One review per user and master; v1 and v2 share that rule.
   fails(asA, good, /đã gửi đánh giá/, null);
-  // Earbuds rate their own list; the weighted star matches shared-data on random sets.
+  // The RPC's star equals weightedReviewStar on random earbud sets. The service role has no
+  // per-user limit, so it submits them all to one master.
+  const asService = { role: 'service_role' };
   let seed = 7;
   const next = () => (seed = (seed * 48271) % 2147483647) / 2147483647;
-  for (let n = 0; n < 40; n += 1) {
+  let checked = 0;
+  for (let n = 0; n < 30; n += 1) {
     const criteria = {};
     for (const c of rules.getRatingCriteria('earbuds'))
       if (c.required || next() > 0.3)
@@ -369,18 +400,47 @@ try {
     const skipped =
       rules.getRatingCriteria('earbuds').length - Object.keys(criteria).length;
     if (skipped > rules.MAX_SKIPPED_CRITERIA) continue;
-    const star = sql(
-      `SELECT round(sum(s.star * c.weight) / sum(c.weight), 1)
-       FROM jsonb_each_text(${j(criteria)}) AS s0(key, v)
-       CROSS JOIN LATERAL (SELECT s0.v::numeric AS star) s
-       JOIN rate.rating_criteria c ON c.key = s0.key AND c.category_slug = 'earbuds' AND c.criteria_version = 1`
+    const r = JSON.parse(
+      call(asService, args({ ...good, criteria, points: {} }, buds))
     );
-    assert.equal(
-      Number(star),
-      rules.weightedReviewStar('earbuds', criteria),
-      JSON.stringify(criteria)
-    );
+    const exact = rules.weightedReviewStar('earbuds', criteria);
+    assert.equal(Number(r.rating_exact), exact, JSON.stringify(criteria));
+    assert.equal(r.rating_star, Math.round(exact), JSON.stringify(criteria));
+    checked += 1;
   }
+  assert.ok(checked >= 10, `${checked} random sets went through the RPC`);
+  // A stored line is counted as stored: 150 decomposed letters are 150 composed ones and fit
+  // the review_points length check.
+  const decomposed = 'ướ'.repeat(75).normalize('NFD');
+  assert.ok(decomposed.length > 150);
+  const long = JSON.parse(
+    call(
+      asService,
+      args(
+        {
+          ...good,
+          criteria: { sound: 4, anc: 4, battery: 4, comfort: 4, value: 4 },
+          pros: [decomposed],
+          points: {},
+        },
+        buds
+      )
+    )
+  );
+  assert.equal(
+    sql(
+      `SELECT char_length(body) FROM rate.review_points WHERE review_id = '${long.id}' AND kind = 'pro'`
+    ),
+    '150'
+  );
+  // A criterion star is stored at 0.1, whatever scale the caller sent.
+  const scaled = JSON.parse(
+    call(
+      asService,
+      `${q(buds)}, '{"sound": 4.50000, "anc": 3.0, "battery": 4, "comfort": 5, "value": 4}'::jsonb, ${q(good.verdict)}, ${j(good.pros)}, ${j(good.cons)}, '{}'::jsonb`
+    )
+  );
+  assert.equal(JSON.stringify(scaled.criteria_ratings.sound), '4.5');
   const budsReview = JSON.parse(
     call(
       asB,
@@ -412,7 +472,25 @@ try {
     )
   );
   assert.equal(spam.flag_category, 'seeding_fake');
+  const criterionSpam = JSON.parse(
+    call(
+      asService,
+      args(
+        {
+          ...good,
+          points: { battery: { pros: ['Nhắn zalo để mua pin giá rẻ'] } },
+        },
+        phone2
+      )
+    )
+  );
+  assert.equal(
+    criterionSpam.flag_category,
+    'seeding_fake',
+    'a criterion line is checked too'
+  );
   checkAll('after v2 reviews');
+  const linesBefore = sql(`SELECT count(*) FROM rate.review_points`);
 
   // 4. The rollback twice; reviews and their lines stay; the proposal applies again.
   sql(rollback);
@@ -425,8 +503,8 @@ try {
   assert.equal(sql(`SELECT to_regclass('rate.rating_criteria') IS NULL`), 't');
   assert.equal(
     sql(`SELECT count(*) FROM rate.review_points`),
-    '12',
-    'lines stay: 5 + 3 + 4'
+    linesBefore,
+    'lines stay'
   );
   assert.equal(
     sql(

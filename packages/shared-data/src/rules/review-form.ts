@@ -33,22 +33,40 @@ const EMPTY = '';
 // Compatibility composition: fullwidth letters ("ＫＨÔＮＧ") fold to plain
 // ones and Vietnamese letters stay whole.
 const COMPOSED = 'NFKC';
+// Canonical composition: the text as stored and measured.
+const CANONICAL = 'NFC';
 // Compatibility decomposition, so diacritics split off as marks.
 const DECOMPOSED = 'NFKD';
+// Invisible characters: format characters (zero-width, bidi marks, the tags
+// of flag emoji), emoji variation selectors and the keycap mark. The DOS-Me
+// review RPC strips the same set (DOS/Rate#1544).
+const INVISIBLE = /[\p{Cf}︀-️⃣\u{E0100}-\u{E01EF}]+/gu;
 
 /**
- * The form two lines are compared in: lower case, no zero-width characters,
- * punctuation and symbols as spaces, spaces collapsed. Diacritics stay
- * ("sạc" and "sắc" differ, design 5.1). Only for comparing lines; what is
- * stored and shown keeps the writer's text.
+ * The form two lines are compared in: lower case, no invisible characters,
+ * anything but letters, digits and spaces as a space, spaces collapsed.
+ * Diacritics stay ("sạc" and "sắc" differ, design 5.1). Only for comparing
+ * lines; what is stored and shown is storedPoint.
  */
 export function comparablePoint(text: string): string {
   const composed = String(text ?? EMPTY).normalize(COMPOSED);
   return composed
-    .replace(/\p{Cf}+/gu, '')
+    .replace(INVISIBLE, '')
     .toLowerCase()
-    .replace(/[\p{P}\p{S}]+/gu, ' ')
+    .replace(/[^\p{L}\p{N}\s]+/gu, ' ')
     .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/**
+ * A line as stored: the writer's words, composed, without invisible
+ * characters, trimmed. Lengths are counted on this form, so a stored line
+ * always fits the table's length check.
+ */
+export function storedPoint(text: string): string {
+  return String(text ?? EMPTY)
+    .normalize(CANONICAL)
+    .replace(INVISIBLE, EMPTY)
     .trim();
 }
 
@@ -58,10 +76,9 @@ function plainPoint(text: string): string {
   return decomposed.replace(/\p{M}+/gu, '').replace(/đ/g, 'd');
 }
 
-/** Length in characters as the writer sees them (code points, composed). */
+/** Length in characters as the writer sees them (code points of storedPoint). */
 function visibleLength(text: string): number {
-  const composed = String(text ?? EMPTY).normalize(COMPOSED);
-  return [...composed.replace(/\p{Cf}+/gu, '').trim()].length;
+  return [...storedPoint(text)].length;
 }
 
 /**
@@ -124,7 +141,7 @@ export const EVASIVE_CON_PATTERN: string = EVASIVE_CON.source;
  */
 export function isEvasiveCon(text: string): boolean {
   const compared = comparablePoint(text);
-  if (compared.length > REVIEW_POINT_MAX) return false;
+  if ([...compared].length > REVIEW_POINT_MAX) return false;
   return !hasContent(text) || EVASIVE_CON.test(compared);
 }
 
