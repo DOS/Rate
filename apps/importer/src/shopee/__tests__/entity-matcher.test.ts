@@ -266,6 +266,8 @@ async function runEntityMatcherSuite() {
     'Hỗ trợ thu mua máy cũ, trả góp 0%',
     'Thu cũ lên đời, bảo hành 12 tháng',
     'Đổi máy cũ lấy máy mới tại cửa hàng',
+    'Thu máy cũ đổi máy mới, trợ giá',
+    'Thu mua máy cũ giá cao',
   ]) {
     assert.equal(
       detectProductCondition('Điện thoại Samsung Galaxy S24 Ultra 256GB', description),
@@ -277,6 +279,13 @@ async function runEntityMatcherSuite() {
     detectProductCondition('Điện thoại Samsung Galaxy S24 Ultra 256GB', 'Máy cũ, pin 90%'),
     'used'
   );
+  for (const title of [
+    'Tai nghe Apple AirPods Pro 2nd Gen USB-C Chính hãng VN/A',
+    'Apple iPhone SE 2nd generation 64GB',
+  ]) {
+    assert.equal(detectProductCondition(title), 'new', `${title} is a new device`);
+  }
+  assert.equal(detectProductCondition('iPhone 13 128GB 2nd hand'), 'used');
   assert.equal(
     detectProductCondition('Điện thoại Apple iPhone 15 Pro Max 256GB Likenew 99% Zin Nguyên Bản'),
     'like_new_99'

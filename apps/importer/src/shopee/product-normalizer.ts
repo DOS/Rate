@@ -155,7 +155,7 @@ export class NonNewListingError extends Error {
 
 /** A trade-in offer for the buyer's old device, which says nothing about the listing's own. */
 const TRADE_IN_PHRASE =
-  /thu\s*cũ\s*đổi\s*mới|(?:thu|đổi)\s*(?:mua\s*)?(?:máy\s*)?cũ\s*(?:lên\s*đời|lấy\s*(?:máy\s*)?mới)|(?:nhận|hỗ\s*trợ)\s*thu\s*(?:mua\s*)?máy\s*cũ/gi;
+  /(?:thu|đổi)\s*(?:mua\s*)?(?:máy\s*)?cũ\s*(?:lên\s*đời|(?:lấy|đổi)\s*(?:máy\s*)?mới)|thu\s*(?:mua\s*)?máy\s*cũ/gi;
 
 /**
  * Detect listing physical condition from product title and optional description (Audit C6).
@@ -185,7 +185,7 @@ export function detectProductCondition(title: string, description?: string): Pro
       return 'like_new_99';
     }
     if (
-      /(?:máy\s*cũ|hàng\s*cũ|điện\s*thoại\s*cũ|đã\s*qua\s*sử\s*dụng|\bsecond\s*hand\b|\b2nd\b|thanh\s*lý\s*máy\s*cũ|máy\s*trần\s*cũ)/i.test(
+      /(?:máy\s*cũ|hàng\s*cũ|điện\s*thoại\s*cũ|đã\s*qua\s*sử\s*dụng|\bsecond\s*hand\b|\b2nd\s*hand\b|thanh\s*lý\s*máy\s*cũ|máy\s*trần\s*cũ)/i.test(
         text
       )
     ) {

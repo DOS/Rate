@@ -555,16 +555,23 @@ async function runTests() {
     );
     assert.equal(nonNewEvents.productUpserts.length, 0, `${title} writes no listing`);
   }
-  // A new phone whose description offers a trade-in for the buyer's old one is ingested.
-  const { stub: tradeInStub, events: tradeInEvents } = createPipelineStubSupabase({
-    hintRow: { id: 'master-hint-verified' },
-  });
-  await new ShopeeIngestionPipeline({ supabaseClient: tradeInStub, apiKey: '' }).ingestProduct(
-    createBaseProduct({ description: 'Nhận thu máy cũ, hỗ trợ trả góp 0%' }),
-    undefined,
-    { masterIdHint: 'master-hint-verified' }
-  );
-  assert.equal(tradeInEvents.productUpserts.length, 1);
+  // Only the title rejects: description boilerplate that reads as non-new (a negation,
+  // "99% khách hàng") keeps a new listing (DOS/Rate#1430).
+  for (const description of [
+    'Nhận thu máy cũ, hỗ trợ trả góp 0%',
+    'Cam kết hàng chính hãng, không bán hàng cũ, hàng tân trang',
+    '99% khách hàng hài lòng',
+  ]) {
+    const { stub: descStub, events: descEvents } = createPipelineStubSupabase({
+      hintRow: { id: 'master-hint-verified' },
+    });
+    await new ShopeeIngestionPipeline({ supabaseClient: descStub, apiKey: '' }).ingestProduct(
+      createBaseProduct({ description }),
+      undefined,
+      { masterIdHint: 'master-hint-verified' }
+    );
+    assert.equal(descEvents.productUpserts.length, 1, `${description} keeps the listing`);
+  }
   assert.equal(hintOkEvents.productUpserts[0]?.cluster_id, 'master-hint-verified');
   assert.equal(hintOkEvents.productUpserts[0]?.category_id, 'cat-smartphones');
   assert.equal(
