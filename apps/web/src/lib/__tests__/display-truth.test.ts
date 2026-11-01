@@ -220,10 +220,17 @@ const reviewsSection = readFileSync(
   join(__dirname, '..', '..', 'components', 'reviews', 'JReviewsSection.tsx'),
   'utf8'
 );
+// The buyer score is the stored rating the headline shows when there is
+// one, else the Bayesian buyer score (DOS/Rate#1545, D3).
 assert.match(
   reviewsSection,
-  /computeCombinedDualScore\(\{\s*userScore: bayesianUserScore,/,
-  'the reviews section composite must read the Bayesian buyer score'
+  /computeCombinedDualScore\(\{\s*userScore: shownUserScore,/,
+  'the reviews section composite must read the buyer score the page shows'
+);
+assert.match(
+  reviewsSection,
+  /shownUserScore =\s*ratingScore != null && ratingScore > 0 \? ratingScore : bayesianUserScore;/,
+  'the buyer score is the stored rating, else the Bayesian one'
 );
 
 console.log('display-truth: ok');

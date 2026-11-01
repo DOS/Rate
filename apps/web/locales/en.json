@@ -124,7 +124,7 @@
     }
   },
   "compare": {
-    "criteriaSourceExpert": "Criterion scores from experts",
+    "criteriaSourceExpert": "Criterion scores from reviewers or experts",
     "criterionNoData": "Not enough data",
     "versusMetaTitle": "{nameA} vs {nameB}: 10 spec groups and review scores | Rate.vn",
     "versusMetaTitleShort": "{nameA} vs {nameB} | Rate.vn",
@@ -346,7 +346,7 @@
     "quickToggleShortLimit": "Max 4"
   },
   "leaderboard": {
-    "criteriaSourceExpert": "Criterion scores from experts",
+    "criteriaSourceExpert": "Criterion scores from reviewers or experts",
     "criterionNoData": "Not enough data",
     "metaTitle": "Tech device leaderboard | Rate.vn",
     "metaDescription": "Independent rankings by category: expert and verified buyer scores across 5 criteria, with no ads or affiliate bias.",
@@ -579,7 +579,34 @@
     "reportTitle": "Report a fake, spam or sabotage review (each report lowers its weight by 0.35)",
     "reportBtnLabel": "Report ({count})",
     "filterGroupAria": "Filter reviews",
-    "exportMenu": "Export data"
+    "exportMenu": "Export data",
+    "v2FormHeading": "Review {productName}",
+    "v2CriteriaLabel": "Rate each criterion",
+    "v2Skip": "Not used yet",
+    "v2StarAria": "{criterion}: {star} stars",
+    "v2Overall": "Overall",
+    "v2Verdict": "Verdict",
+    "v2VerdictHint": "Who should buy it, who should not",
+    "v2Pros": "Pros",
+    "v2Cons": "Cons",
+    "v2ConsHint": "Even a small one: price, accessories, weight",
+    "v2AddLine": "Add line",
+    "v2RemoveLine": "Remove line",
+    "v2CriterionPoints": "Own pros and cons",
+    "v2Comment": "Details (optional)",
+    "v2Submit": "Submit review",
+    "v2Submitting": "Submitting...",
+    "v2ErrInvalid": "The review is not valid yet: check the marked fields.",
+    "v2ErrCriterion": "Not a valid criterion.",
+    "v2ErrRequired": "This criterion must be rated.",
+    "v2ErrSkipped": "Skip at most {max} criteria.",
+    "v2ErrVerdict": "The verdict needs {min} to {max} characters.",
+    "v2ErrCount": "Needs 1 to {max} lines.",
+    "v2ErrLength": "Each line needs {min} to {max} characters.",
+    "v2ErrNoContent": "Say a bit more.",
+    "v2ErrEvasive": "Name one thing you dislike, however small.",
+    "v2ErrDuplicate": "This line is a duplicate.",
+    "v2ErrBoth": "This line is already a pro."
   },
   "watchlist": {
     "metaTitle": "True price watchlist and drop alerts | Rate.vn",

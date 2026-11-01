@@ -124,13 +124,45 @@ export function normalizeCompareFiveStarRating(
   return Number(scaled.toFixed(2));
 }
 
-export function resolveCompareEffectiveUserRating(
-  p: Pick<SharedMasterProduct, 'user_rating_weighted' | 'average_rating'>
+/**
+ * The stored Bayesian rating (`rating_score`, DOS/Rate#1545), out of 5 and
+ * unrounded: it is stored at 3 decimals so a page rounds once, to 1. Zero
+ * when there is none.
+ */
+export function resolveStoredRatingScore(
+  p: Partial<Pick<SharedMasterProduct, 'rating_score'>> | null | undefined
 ): number {
   if (!p || typeof p !== 'object' || Array.isArray(p)) return 0;
+  const num = parseFiniteNumericSpec(p.rating_score);
+  return Number.isFinite(num) && num > 0 && num <= 5 ? num : 0;
+}
+
+/**
+ * The one rating every page shows (design #1531 D3): the stored Bayesian
+ * `rating_score`. A product without one falls back to the weighted user
+ * rating, then the marketplace average, as before the column existed.
+ */
+export function resolveCompareEffectiveUserRating(
+  p: Pick<SharedMasterProduct, 'user_rating_weighted' | 'average_rating'> &
+    Partial<Pick<SharedMasterProduct, 'rating_score'>>
+): number {
+  if (!p || typeof p !== 'object' || Array.isArray(p)) return 0;
+  const stored = resolveStoredRatingScore(p);
+  if (stored > 0) return stored;
   const weighted = normalizeCompareFiveStarRating(p.user_rating_weighted);
   if (weighted > 0) return weighted;
   return normalizeCompareFiveStarRating(p.average_rating);
+}
+
+/**
+ * The one rating as every page shows it, for the API's `rating_score_5`:
+ * one decimal, rounded once, or null when the product has none (D3).
+ */
+export function productRatingScore5(
+  p: Parameters<typeof resolveCompareEffectiveUserRating>[0]
+): number | null {
+  const rating = resolveCompareEffectiveUserRating(p);
+  return rating > 0 ? Math.round(rating * 10) / 10 : null;
 }
 
 export function resolveCompareExpertRating5(

@@ -13,3 +13,4 @@ export * from './model-key.js';
 export * from './review-summary.js';
 export * from './rating-criteria.js';
 export * from './review-form.js';
+export * from './product-points.js';

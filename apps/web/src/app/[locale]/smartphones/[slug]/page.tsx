@@ -40,6 +40,7 @@ import { computeBayesianRatingSummary } from '@/lib/rate-api';
 import {
   normalizeCompareFiveStarRating,
   resolveCompareEffectiveUserRating,
+  resolveStoredRatingScore,
   resolveCompareExpertRating5,
   resolveCompareExpertRating10,
 } from '@/lib/rate-domain';
@@ -523,10 +524,15 @@ export async function ProductDetailView({
   const rawUserRating = resolveCompareEffectiveUserRating(product);
   const expertRating10 = resolveCompareExpertRating10(product);
   const bayesianSummary = computeBayesianRatingSummary(reviews, rawUserRating);
+  // The headline is the stored rating every other page shows (D3); the
+  // review list only gives the confidence tag and the counts.
+  const storedRating = resolveStoredRatingScore(product);
   const displayUserRating =
-    bayesianSummary.effectiveWeightSum > 0
-      ? bayesianSummary.bayesianRating
-      : rawUserRating;
+    storedRating > 0
+      ? storedRating
+      : bayesianSummary.effectiveWeightSum > 0
+        ? bayesianSummary.bayesianRating
+        : rawUserRating;
 
   const keySpecLine = buildKeySpecLine(product, categorySlug);
   const mainImage = firstImageUrl(product.images);
@@ -561,7 +567,7 @@ export async function ProductDetailView({
     displayUserRating > 0 && authenticCount > 0
       ? {
           '@type': 'AggregateRating',
-          ratingValue: Number(displayUserRating.toFixed(2)),
+          ratingValue: Math.round(displayUserRating * 10) / 10,
           reviewCount: authenticCount,
           bestRating: 5,
           worstRating: 1,
@@ -781,7 +787,7 @@ export async function ProductDetailView({
             name={v.product.name}
             brand={v.product.brand}
             modelKey={v.product.model_key}
-            userScore5={Number(displayUserRating.toFixed(2))}
+            userScore5={displayUserRating}
             expertScore10={expertRating10}
             authenticReviews={authenticCount}
             minPriceVnd={v.stats.minPrice}
@@ -835,7 +841,7 @@ export async function ProductDetailView({
   );
   const sizeStripContext = {
     categoryPath: categoryBasePath,
-    userScore5: Number(displayUserRating.toFixed(2)),
+    userScore5: displayUserRating,
     expertScore10: expertRating10,
     authenticReviews: authenticCount,
     keySpecLine,
@@ -1443,10 +1449,8 @@ export async function ProductDetailView({
               averageRating={normalizeCompareFiveStarRating(
                 product.average_rating
               )}
-              userRatingWeighted={
-                normalizeCompareFiveStarRating(product.user_rating_weighted) ||
-                null
-              }
+              userRatingWeighted={displayUserRating || null}
+              ratingScore={storedRating || null}
               expertRating={resolveCompareExpertRating5(product)}
               expertReviewSummary={product.expert_review_summary || null}
               authenticReviewCount={authenticCount}

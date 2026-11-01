@@ -55,7 +55,7 @@ export function sanitizeLeaderboardBadgeEntry(
       : safeRank;
   const rawScore5 = Number(candidate.score5);
   if (!Number.isFinite(rawScore5) || rawScore5 <= 0) return null;
-  const safeScore5 = Math.min(5, Math.max(0, Number(rawScore5.toFixed(2))));
+  const safeScore5 = Math.min(5, Math.max(0, rawScore5));
   const rawScore10 = Number(candidate.score10);
   const safeScore10 =
     Number.isFinite(rawScore10) && rawScore10 > 0
@@ -177,7 +177,13 @@ export default async function ProductLeaderboardBadges({
                 fontSize: '0.8125rem',
               }}
             >
-              ({formatDecimal(b.score5, lang, 2)}) ↗
+              (
+              {formatDecimal(
+                b.score5,
+                lang,
+                b.criterion === 'combined' ? 1 : 2
+              )}
+              ) ↗
             </span>
           </IntentLink>
         );

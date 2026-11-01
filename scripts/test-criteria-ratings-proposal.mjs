@@ -121,7 +121,19 @@ try {
   const per256 = '3.650|1.00|{}';
 
   const applyAndCheckPerMaster = (when) => {
+    // A stale cache: the 256GB has a counted review but authentic_review_count 0 (a weight
+    // written straight to rate.reviews). The backfill still picks it by its reviewed listing.
+    sql(
+      `UPDATE rate.master_products SET authentic_review_count = 0, user_rating_weighted = 0
+       WHERE id = '${x256}'`
+    );
     sql(proposal);
+    assert.equal(
+      row(x256),
+      per256,
+      `the backfill rates a master with a stale count ${when}`
+    );
+    sql(`SELECT rate.refresh_master_product_rating('${x256}')`);
     sql(proposal);
     // A criteria review gets its exact star: the reviews trigger refreshes the master.
     asRole(
@@ -151,6 +163,19 @@ try {
       `UPDATE rate.review_flags SET include_in_rating = true WHERE review_id = '${review(3)}'`
     );
     assert.equal(row(x128), per128, `review 3 back ${when}`);
+    // D9: each review counts at most 1 toward the 1.5 sum, so one heavy review and two
+    // near-zero ones (3 + 0.01 + 0.01) show no display score.
+    sql(`UPDATE rate.reviews SET helpfulness_weight = 3 WHERE id = '${review(1)}';
+         UPDATE rate.reviews SET helpfulness_weight = 0.01
+           WHERE id IN ('${review(2)}', '${review(3)}')`);
+    assert.match(
+      row(x128),
+      /\|\{\}$/,
+      `one heavy writer shows no criterion ${when}`
+    );
+    sql(`UPDATE rate.reviews SET helpfulness_weight = 1
+           WHERE id IN ('${review(1)}', '${review(2)}', '${review(3)}')`);
+    assert.equal(row(x128), per128, `weights back ${when}`);
 
     for (const fn of [
       `rate.refresh_master_rating_extras('${x128}')`,

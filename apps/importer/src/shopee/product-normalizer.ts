@@ -96,6 +96,8 @@ export interface NormalizedProductCandidate {
   storage_gb: number | null; // null = unparseable from the title; identity carries ':unknown'
   needs_review: boolean; // true when identity could not be confidently derived or listing is non-new (plan v7 §5.2, Audit C6)
   condition?: ProductCondition;
+  /** The condition the sanitized title alone states; the ingest check reads it (DOS/Rate#1430). */
+  title_condition?: ProductCondition;
   origin?: ProductOrigin;
   ram_gb: number | null;
   screen_size_inch: number | null;
@@ -135,15 +137,60 @@ export class UnkeyableProductTitleError extends Error {
 }
 
 /**
+ * A used, like-new or refurbished listing. `rate.products` stores no condition, so
+ * linked to a master its lower price would become the new device's `min_price` and
+ * feed the deal radar. The listing is rejected before anything is written until
+ * condition is stored (DOS/Rate#1430).
+ */
+export class NonNewListingError extends Error {
+  readonly code = 'NON_NEW_LISTING';
+  readonly condition: Exclude<ProductCondition, 'new'>;
+
+  constructor(title: unknown, condition: Exclude<ProductCondition, 'new'>) {
+    super(
+      `Cannot ingest a non-new listing (condition=${condition}): ${JSON.stringify(String(title ?? '').slice(0, 200))}`
+    );
+    this.name = 'NonNewListingError';
+    this.condition = condition;
+  }
+}
+
+/**
+ * A trade-in offer for the buyer's old device, which says nothing about the listing's own:
+ * a trade-in verb right before "(máy|điện thoại) cũ" ("thu mua máy cũ", "lên đời máy cũ",
+ * "trợ giá máy cũ", "hỗ trợ đổi máy cũ"), or "cũ" right before "lên đời" or "đổi/lấy mới"
+ * ("thu cũ đổi mới", "máy cũ lên đời"). A few filler words or an amount ("2 triệu") may sit
+ * between verb and device, and a hyphen, colon or comma may separate the words. "Mới" is not
+ * a trade-in when a number or a warranty term follows it ("đổi mới 99%", "đổi mới trong 30
+ * ngày"), and a bare "hỗ trợ" is not a trade-in verb ("hỗ trợ máy cũ").
+ */
+const SEP = String.raw`[\s\-:,]*`;
+const OLD_DEVICE = String.raw`(?:(?:máy|điện\s*thoại|đt)${SEP})?cũ`;
+const TRADE_IN_FILLER = String.raw`(?:(?:từ|cho|mọi|các|bằng|khi|lại|giá\s*cao|\d+(?:[.,]\d+)?\s*(?:triệu|tr|k|đ))${SEP})*`;
+const TRADE_IN_TO_NEW = String.raw`(?:lên${SEP}đời|(?:lấy|đổi|sang)${SEP}(?:(?:máy|điện\s*thoại)${SEP})?mới(?!\s*(?:\d|trong|sau|nếu|khi)))`;
+const TRADE_IN_PHRASE = new RegExp(
+  String.raw`(?:(?:hỗ\s*trợ${SEP})?(?:thu(?:\s*mua)?|đổi|lên${SEP}đời)|trợ\s*giá)${SEP}` +
+    TRADE_IN_FILLER +
+    OLD_DEVICE +
+    String.raw`(?:${SEP}${TRADE_IN_TO_NEW})?` +
+    '|' +
+    OLD_DEVICE +
+    SEP +
+    TRADE_IN_TO_NEW,
+  'gi'
+);
+
+/**
  * Detect listing physical condition from product title and optional description (Audit C6).
- * Strips promotional trade-in phrases ("thu cũ đổi mới") before matching so new retail listings
- * offering trade-in programs are not misclassified as used devices.
+ * Strips promotional trade-in phrases ("thu cũ đổi mới", "thu máy cũ lên đời") before matching
+ * so new retail listings offering trade-in programs are not misclassified as used devices; a
+ * non-new listing is rejected at ingest (DOS/Rate#1430).
  */
 export function detectProductCondition(title: string, description?: string): ProductCondition {
   const safeTitle = typeof title === 'string' ? title : '';
   const safeDesc = typeof description === 'string' ? description : '';
-  const cleanTitle = safeTitle.replace(/thu\s*cũ\s*đổi\s*mới/gi, ' ');
-  const cleanDesc = safeDesc.replace(/thu\s*cũ\s*đổi\s*mới/gi, ' ');
+  const cleanTitle = safeTitle.replace(TRADE_IN_PHRASE, ' ');
+  const cleanDesc = safeDesc.replace(TRADE_IN_PHRASE, ' ');
 
   const checkSource = (text: string): ProductCondition | null => {
     if (
@@ -154,14 +201,14 @@ export function detectProductCondition(title: string, description?: string): Pro
       return 'refurbished';
     }
     if (
-      /(?:\blike\s*new\b|\blikenew\b|mới\s*9[5-9]%|đẹp\s*9[5-9]%|zin\s*9[5-9]%|\b9[89]%|siêu\s*lướt|hàng\s*lướt|máy\s*lướt|hàng\s*trưng\s*bày|máy\s*trưng\s*bày|\bopen\s*box\b|đã\s*kích\s*hoạt\s*bảo\s*hành)/i.test(
+      /(?:\blike\s*new\b|\blikenew\b|mới\s*9[5-9]%|đẹp\s*9[5-9]%|zin\s*9[5-9]%|(?:máy|ngoại\s*hình|hình\s*thức|keng|pin)\s*9[5-9]%|siêu\s*lướt|hàng\s*lướt|máy\s*lướt|hàng\s*trưng\s*bày|máy\s*trưng\s*bày|\bopen\s*box\b|đã\s*kích\s*hoạt\s*bảo\s*hành)/i.test(
         text
       )
     ) {
       return 'like_new_99';
     }
     if (
-      /(?:máy\s*cũ|hàng\s*cũ|điện\s*thoại\s*cũ|đã\s*qua\s*sử\s*dụng|\bsecond\s*hand\b|\b2nd\b|thanh\s*lý\s*máy\s*cũ|máy\s*trần\s*cũ)/i.test(
+      /(?:máy\s*cũ|hàng\s*cũ|điện\s*thoại\s*cũ|đã\s*qua\s*sử\s*dụng|\bsecond\s*hand\b|\b2nd\s*hand\b|thanh\s*lý\s*máy\s*cũ|máy\s*trần\s*cũ)/i.test(
         text
       )
     ) {
@@ -3218,6 +3265,7 @@ export class ProductNormalizer {
       storage_gb: storageKnown ? storageGb : null,
       needs_review: !keyable || !storageConfident || condition !== 'new',
       condition,
+      title_condition: detectProductCondition(title),
       origin,
       ram_gb: ramGb,
       screen_size_inch: screenSize,

@@ -1,4 +1,5 @@
 import { Suspense } from 'react';
+import { resolveCompareEffectiveUserRating } from '@/lib/rate-domain';
 import type { Metadata } from 'next';
 import { getTranslations, setRequestLocale } from 'next-intl/server';
 import { Link } from '@/lib/navigation';
@@ -781,13 +782,7 @@ export async function CategoryCatalogContent({
                       const thumb = productImageUrl(item);
 
                       const effectiveRating =
-                        item.user_rating_weighted &&
-                        Number(item.user_rating_weighted) > 0
-                          ? Number(item.user_rating_weighted)
-                          : item.average_rating &&
-                              Number(item.average_rating) > 0
-                            ? Number(item.average_rating)
-                            : null;
+                        resolveCompareEffectiveUserRating(item) || null;
                       const expertScore =
                         item.expert_rating != null &&
                         Number(item.expert_rating) > 0

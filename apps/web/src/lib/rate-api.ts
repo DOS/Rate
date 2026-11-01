@@ -594,11 +594,13 @@ export async function getMasterProducts(
         query = query.order('merchant_count', { ascending: false });
         break;
       case 'rating_desc':
-        // Unrated (NULL) models last, like search_master_products.
-        query = query.order('user_rating_weighted', {
-          ascending: false,
-          nullsFirst: false,
-        });
+        // By the one rating (D3); unrated (NULL) models last.
+        query = query
+          .order('rating_score', { ascending: false, nullsFirst: false })
+          .order('user_rating_weighted', {
+            ascending: false,
+            nullsFirst: false,
+          });
         break;
       case 'newest':
       case 'default':
@@ -667,14 +669,19 @@ export async function getMasterProducts(
     });
   }
 
+  // The stored rating first (D3), then the weighted user rating; an
+  // unrated product sorts by its expert score, then the marketplace
+  // average (DOS/Rate#510).
   const getEffectiveRating = (item: MasterProduct): number =>
-    item.user_rating_weighted && Number(item.user_rating_weighted) > 0
-      ? Number(item.user_rating_weighted)
-      : item.expert_rating && Number(item.expert_rating) > 0
-        ? Number(item.expert_rating)
-        : Number(item.average_rating || 0);
+    Number(item.rating_score) > 0
+      ? Number(item.rating_score)
+      : Number(item.user_rating_weighted) > 0
+        ? Number(item.user_rating_weighted)
+        : Number(item.expert_rating) > 0
+          ? Number(item.expert_rating)
+          : Number(item.average_rating || 0);
 
-  // Minimum effective rating filter (prefers JReviews weighted user rating -> expert rating -> average_rating)
+  // Minimum effective rating filter
   if (typeof params?.minRating === 'number' && params.minRating > 0) {
     const minRating = params.minRating;
     items = items.filter((item) => getEffectiveRating(item) >= minRating);
@@ -1764,6 +1771,36 @@ export async function isPublishedMasterProduct(
     throw new RateDataUnavailableError('master product', error);
   }
   return Boolean(data);
+}
+
+/**
+ * The category of a published master product, or null when the id names no
+ * published product. The review API checks criteria against it rather than a
+ * category the browser sends (DOS/Rate#1544).
+ */
+export async function getPublishedMasterProductCategorySlug(
+  masterId: string
+): Promise<CanonicalCategorySlug | null> {
+  const supabase = getRateClient();
+  const { data, error } = await supabase
+    .from('master_products')
+    .select('id, slug, name, model, category_id, metadata, specifications')
+    .eq('id', masterId)
+    .eq('status', 'published')
+    .maybeSingle();
+  if (error) {
+    log.error('master product category lookup failed', {
+      masterId,
+      message: error.message,
+    });
+    throw new RateDataUnavailableError('master product', error);
+  }
+  if (!data) return null;
+  const categorySlugById = await getCategorySlugMap();
+  return getMasterProductCategorySlug(
+    data as Parameters<typeof getMasterProductCategorySlug>[0],
+    categorySlugById ?? undefined
+  );
 }
 
 export async function getMasterProductReviews(

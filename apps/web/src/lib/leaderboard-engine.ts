@@ -59,8 +59,10 @@ export interface ScoredLeaderboardItem {
   categoryPath: string;
   productHref: string;
   thumbnail: string;
+  /** The one rating (D3): the stored `rating_score`, unrounded. */
   userScore5: number;
   expertScore10: number | null;
+  /** The composite: it only breaks ties between equal ratings (D3). */
   combinedScore5: number;
   activeScore5: number;
   activeScore10: number;
@@ -69,7 +71,10 @@ export interface ScoredLeaderboardItem {
   minPrice: number;
   maxPrice: number;
   merchantCount: number;
+  /** Criterion scores to show: 3 or more writers (D9). */
   criteria: LeaderboardCriteriaBreakdown;
+  /** Criterion scores to rank and weigh by: 5 or more writers (D9). */
+  rankCriteria: LeaderboardCriteriaBreakdown;
   product: MasterProduct;
 }
 
@@ -256,7 +261,8 @@ export function leaderboardCriteriaForCategory(
     : LEADERBOARD_SCORE_CRITERIA;
 }
 
-// The stored keys each criterion reads from expert_criteria_scores.
+// The stored keys each criterion reads from criteria_scores and
+// expert_criteria_scores.
 const CRITERION_SCORE_KEYS: Record<LeaderboardScoreCriterion, string[]> = {
   screen: ['screen', 'display', 'man_hinh', 'design', 'comfort'],
   performance: ['performance', 'hardware', 'hieu_nang', 'connectivity'],
@@ -265,34 +271,60 @@ const CRITERION_SCORE_KEYS: Record<LeaderboardScoreCriterion, string[]> = {
   value: ['value', 'price_value', 'dang_tien'],
 };
 
+/** Writers a criterion score needs to be shown, and to rank (D9). */
+export const CRITERION_SHOW_WRITERS = 3;
+export const CRITERION_RANK_WRITERS = 5;
+
+function plainRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+}
+
+function ownEntry(record: Record<string, unknown>, key: string): unknown {
+  return Object.prototype.hasOwnProperty.call(record, key)
+    ? record[key]
+    : undefined;
+}
+
 /**
  * A product's per-criterion scores, out of 5, from the scores stored for each
  * criterion only. A criterion with no stored score, or one that does not
  * apply to the category, is null: it is never derived from the star rating,
  * the specs or the price, which made every well-rated product score 5.00
  * and tie (DOS/Rate#1143).
+ *
+ * The reviewers' score (`criteria_scores`, DOS/Rate#1545) counts when at
+ * least `minWriters` wrote it; otherwise the expert score stands.
  */
 export function computeJReviewsCriteriaScores(
-  item: MasterProduct
+  item: MasterProduct,
+  minWriters: number = CRITERION_SHOW_WRITERS
 ): LeaderboardCriteriaBreakdown {
   const safeItem = (
     item && typeof item === 'object' && !Array.isArray(item) ? item : {}
   ) as MasterProduct;
-  const rawCriteria = (
-    safeItem.expert_criteria_scores &&
-    typeof safeItem.expert_criteria_scores === 'object' &&
-    !Array.isArray(safeItem.expert_criteria_scores)
-      ? safeItem.expert_criteria_scores
-      : {}
-  ) as Record<string, unknown>;
+  const community = plainRecord(safeItem.criteria_scores);
+  const expert = plainRecord(safeItem.expert_criteria_scores);
   const applies = leaderboardCriteriaForCategory(
     getMasterProductCategorySlug(safeItem)
   );
 
+  const readCommunity = (k: string): number | null => {
+    const entry = plainRecord(ownEntry(community, k));
+    const writers = toSafePositiveNumber(entry.writers);
+    const score = toSafePositiveNumber(entry.score);
+    return writers >= minWriters && score > 0 && score <= 5 ? score : null;
+  };
+
   const read = (criterion: LeaderboardScoreCriterion): number | null => {
     if (!applies.includes(criterion)) return null;
     for (const k of CRITERION_SCORE_KEYS[criterion]) {
-      const v = toSafePositiveNumber(rawCriteria[k]);
+      const v = readCommunity(k);
+      if (v != null) return v;
+    }
+    for (const k of CRITERION_SCORE_KEYS[criterion]) {
+      const v = toSafePositiveNumber(ownEntry(expert, k));
       if (v > 0 && v <= 10) return clampScore5(v > 5 ? v / 2 : v);
     }
     return null;
@@ -378,13 +410,18 @@ export function scoreMasterProductForLeaderboard(
       images: safeItem.images,
     }) || '/img/devices/apple-iphone-16-pro-max-256gb.jpg';
 
+  // The stored Bayesian rating, kept unrounded so a page rounds once (D3).
+  // A product without one falls back to the older ratings.
+  const storedRating = toSafePositiveNumber(safeItem.rating_score);
   const rawUser =
     toSafePositiveNumber(safeItem.user_rating_weighted) ||
     toSafePositiveNumber(safeItem.average_rating);
   const userScore5 =
-    rawUser > 0 && rawUser <= 10
-      ? clampScore5(rawUser > 5 ? rawUser / 2 : rawUser)
-      : 0;
+    storedRating > 0 && storedRating <= 5
+      ? storedRating
+      : rawUser > 0 && rawUser <= 10
+        ? clampScore5(rawUser > 5 ? rawUser / 2 : rawUser)
+        : 0;
 
   const rawExpert = toSafePositiveNumber(safeItem.expert_rating);
   const expertScore10: number | null =
@@ -397,10 +434,15 @@ export function scoreMasterProductForLeaderboard(
     expertScore10 != null ? Number((expertScore10 / 2).toFixed(2)) : null;
 
   // Only real criterion scores join the composite; a product without them
-  // ranks on its user and expert scores alone (DOS/Rate#1143).
+  // ranks on its user and expert scores alone (DOS/Rate#1143). Ranking reads
+  // the scores past the ranking threshold only (D9).
   const criteria = computeJReviewsCriteriaScores(safeItem);
+  const rankCriteria = computeJReviewsCriteriaScores(
+    safeItem,
+    CRITERION_RANK_WRITERS
+  );
   const criteriaValues = LEADERBOARD_SCORE_CRITERIA.map(
-    (c) => criteria[c]
+    (c) => rankCriteria[c]
   ).filter((v): v is number => v != null && v > 0);
   const criteriaAvg =
     criteriaValues.length > 0
@@ -429,11 +471,12 @@ export function scoreMasterProductForLeaderboard(
     combinedScore5 = clampScore5(criteriaAvg);
   }
 
-  let activeScore5 = combinedScore5;
-  if (safeCriterion === 'user') activeScore5 = userScore5;
-  else if (safeCriterion === 'expert') activeScore5 = expertScore5 ?? 0;
-  else if (safeCriterion !== 'combined') {
-    activeScore5 = criteria[safeCriterion] ?? 0;
+  // The overall view shows the one rating (D3); the composite only breaks
+  // ties. A criterion view ranks on scores past the ranking threshold (D9).
+  let activeScore5 = userScore5;
+  if (safeCriterion === 'expert') activeScore5 = expertScore5 ?? 0;
+  else if (safeCriterion !== 'combined' && safeCriterion !== 'user') {
+    activeScore5 = rankCriteria[safeCriterion] ?? 0;
   }
 
   const rawAuthentic = toSafeNonNegativeNumber(safeItem.authentic_review_count);
@@ -483,15 +526,24 @@ export function scoreMasterProductForLeaderboard(
     expertScore10,
     combinedScore5,
     activeScore5,
-    activeScore10: Number((activeScore5 * 2).toFixed(1)),
+    activeScore10:
+      safeCriterion === 'expert'
+        ? (expertScore10 ?? 0)
+        : Number((Math.round(activeScore5 * 10) / 5).toFixed(1)),
     authenticReviewCount,
     filteredNoiseReviewCount,
     minPrice,
     maxPrice,
     merchantCount,
     criteria,
+    rankCriteria,
     product: safeItem,
   };
+}
+
+/** A score as the page shows it: one decimal, rounded once (D3). */
+export function displayedScore5(score: number): number {
+  return Number.isFinite(score) && score > 0 ? Math.round(score * 10) / 10 : 0;
 }
 
 function readFilteredReviewCount(
@@ -570,7 +622,13 @@ export function rankMasterProductsForLeaderboard(
       if (criterion === 'user' && entry.userScore5 <= 0) {
         return false;
       }
-      if (entry.activeScore5 <= 0) {
+      // The overall view keeps a product with no rating yet but an expert
+      // score: it ranks after every rated one, by the composite.
+      if (
+        criterion === 'combined'
+          ? entry.combinedScore5 <= 0
+          : entry.activeScore5 <= 0
+      ) {
         return false;
       }
       if (
@@ -614,8 +672,17 @@ export function rankMasterProductsForLeaderboard(
       return true;
     })
     .sort((a, b) => {
-      if (b.activeScore5 !== a.activeScore5) {
-        return b.activeScore5 - a.activeScore5;
+      // The rating views rank by the score as shown, so two products showing
+      // 4.6 never rank by a hidden decimal; the composite breaks the tie (D3).
+      const ratingView = criterion === 'combined' || criterion === 'user';
+      const shownA = ratingView
+        ? displayedScore5(a.activeScore5)
+        : a.activeScore5;
+      const shownB = ratingView
+        ? displayedScore5(b.activeScore5)
+        : b.activeScore5;
+      if (shownB !== shownA) {
+        return shownB - shownA;
       }
       if (b.combinedScore5 !== a.combinedScore5) {
         return b.combinedScore5 - a.combinedScore5;
@@ -784,19 +851,24 @@ export function buildPopular1v1BattlesForCategory(
       sideSlug(itemB)
     );
     const versusSlug = `${firstSide}-vs-${secondSide}`;
-    const scoreDelta5 = Number(
-      Math.abs(itemA.combinedScore5 - itemB.combinedScore5).toFixed(2)
-    );
+    // The rating as shown decides the pair; the composite breaks a tie (D3).
+    const shownA = displayedScore5(itemA.userScore5);
+    const shownB = displayedScore5(itemB.userScore5);
+    const scoreDelta5 = Number(Math.abs(shownA - shownB).toFixed(1));
     const priceDeltaVnd =
       itemA.minPrice > 0 && itemB.minPrice > 0
         ? Math.abs(itemA.minPrice - itemB.minPrice)
         : 0;
     const winnerSlug =
-      itemA.combinedScore5 > itemB.combinedScore5
+      shownA > shownB
         ? itemA.slug
-        : itemB.combinedScore5 > itemA.combinedScore5
+        : shownB > shownA
           ? itemB.slug
-          : null;
+          : itemA.combinedScore5 > itemB.combinedScore5
+            ? itemA.slug
+            : itemB.combinedScore5 > itemA.combinedScore5
+              ? itemB.slug
+              : null;
 
     pairs.push({
       versusSlug,

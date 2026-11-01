@@ -52,6 +52,8 @@ import {
   type ReviewBadgeKind,
 } from '@/lib/review-display';
 import AnalyzerText, { analyzerText } from './AnalyzerText';
+import ReviewFormV2 from './ReviewFormV2';
+import { isReviewFormV2Enabled } from '@/lib/review-form-v2';
 import {
   formatDecimal,
   formatPercent,
@@ -70,6 +72,8 @@ export interface JReviewsSectionProps {
   productName: string;
   averageRating: number;
   userRatingWeighted: number | null;
+  /** The stored rating the page headline shows (D3), when there is one. */
+  ratingScore?: number | null;
   expertRating: number | null;
   expertReviewSummary?: string | null;
   authenticReviewCount: number;
@@ -140,6 +144,7 @@ export default function JReviewsSection({
   productName,
   averageRating,
   userRatingWeighted,
+  ratingScore,
   expertRating,
   expertReviewSummary,
   authenticReviewCount,
@@ -296,6 +301,10 @@ export default function JReviewsSection({
       bayesianConfidence,
       userWeightSum,
     } = computeJReviewsUserScores(reviews, userRatingWeighted, averageRating);
+    // The buyer score is the stored rating every page shows (D3); the list
+    // only gives the weight and the confidence.
+    const shownUserScore =
+      ratingScore != null && ratingScore > 0 ? ratingScore : bayesianUserScore;
     const confidenceTier: 'insufficient_data' | 'low' | 'medium' | 'high' =
       bayesianConfidence < 0.3
         ? 'insufficient_data'
@@ -331,7 +340,7 @@ export default function JReviewsSection({
     // The buyer score the header shows, so a 100% buyer composite equals it
     // (DOS/Rate#1144).
     const dualScore = computeCombinedDualScore({
-      userScore: bayesianUserScore,
+      userScore: shownUserScore,
       expertScore: computedExpert,
       userConfidence: bayesianConfidence,
       fallbackAverage: averageRating,
@@ -366,7 +375,7 @@ export default function JReviewsSection({
       blendMode: dualScore.blendMode,
       starAnomaly,
       user: computedUser,
-      bayesianUser: bayesianUserScore,
+      bayesianUser: shownUserScore,
       bayesianConfidence,
       confidenceTier,
       confidenceLabel,
@@ -378,6 +387,7 @@ export default function JReviewsSection({
     reviews,
     averageRating,
     userRatingWeighted,
+    ratingScore,
     expertRating,
     shownCriteriaMeta,
     t,
@@ -628,43 +638,47 @@ export default function JReviewsSection({
         return;
       }
 
-      const newRev = payload.review as ReviewItem;
-      setReviews((prev) => [newRev, ...prev]);
-
-      try {
-        const cacheKey = `${LOCAL_REVIEWS_PREFIX}${masterProductId || productSlug || productName}`;
-        const existingLocal = JSON.parse(
-          window.localStorage.getItem(cacheKey) || '[]'
-        );
-        const nextLocal = [
-          newRev,
-          ...(Array.isArray(existingLocal) ? existingLocal : []),
-        ].slice(0, 20);
-        window.localStorage.setItem(cacheKey, JSON.stringify(nextLocal));
-      } catch {
-        // Ignore storage quota errors
-      }
-
       setComment('');
-      setShowWriteForm(false);
-      setSubmitSuccess(
-        newRev.verdict === 'unanalyzed'
-          ? t('successPendingModeration')
-          : newRev.include_in_rating
-            ? t('successPublishedAuthentic', {
-                weight: formatDecimal(newRev.helpfulness_weight, locale, 2),
-              })
-            : t('successFlaggedFiltered', {
-                flag:
-                  flagMetaMap[newRev.flag_category]?.label ??
-                  newRev.flag_category,
-              })
-      );
+      handleReviewStored(payload.review as ReviewItem);
     } catch {
       setSubmitError(t('errNetworkFailed'));
     } finally {
       setSubmittingReview(false);
     }
+  }
+
+  /** Shows a stored review at the top and says how it was classified. */
+  function handleReviewStored(newRev: ReviewItem) {
+    setReviews((prev) => [newRev, ...prev]);
+
+    try {
+      const cacheKey = `${LOCAL_REVIEWS_PREFIX}${masterProductId || productSlug || productName}`;
+      const existingLocal = JSON.parse(
+        window.localStorage.getItem(cacheKey) || '[]'
+      );
+      const nextLocal = [
+        newRev,
+        ...(Array.isArray(existingLocal) ? existingLocal : []),
+      ].slice(0, 20);
+      window.localStorage.setItem(cacheKey, JSON.stringify(nextLocal));
+    } catch {
+      // Ignore storage quota errors
+    }
+
+    setShowWriteForm(false);
+    setSubmitSuccess(
+      newRev.verdict === 'unanalyzed'
+        ? t('successPendingModeration')
+        : newRev.include_in_rating
+          ? t('successPublishedAuthentic', {
+              weight: formatDecimal(newRev.helpfulness_weight, locale, 2),
+            })
+          : t('successFlaggedFiltered', {
+              flag:
+                flagMetaMap[newRev.flag_category]?.label ??
+                newRev.flag_category,
+            })
+    );
   }
 
   const [copiedReviewsMd, setCopiedReviewsMd] = useState(false);
@@ -879,8 +893,20 @@ export default function JReviewsSection({
         </div>
       )}
 
+      {/* Review form v2 behind its flag (DOS/Rate#1544) */}
+      {showWriteForm && isReviewFormV2Enabled() && (
+        <ReviewFormV2
+          key={masterProductId ?? productSlug ?? productName}
+          masterProductId={masterProductId}
+          productName={productName}
+          categorySlug={categorySlug}
+          defaultAuthorName={t('defaultAuthorName')}
+          onStored={handleReviewStored}
+        />
+      )}
+
       {/* Interactive 5-Criteria Write Review Form */}
-      {showWriteForm && (
+      {showWriteForm && !isReviewFormV2Enabled() && (
         <form
           onSubmit={handleSubmitCommunityReview}
           className="border-primary border-opacity-25 rounded-4 bg-light mb-4 border p-4"

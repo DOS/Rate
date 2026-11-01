@@ -27,6 +27,7 @@ for (const name of [
   'computeRetryDelayMs',
   'resolveItemModelMode',
   'UnkeyableProductTitleError',
+  'NonNewListingError',
 ]) {
   assert.equal(
     typeof crawlers[name],

@@ -261,6 +261,73 @@ async function runEntityMatcherSuite() {
     'new',
     'Trade-in promotion ("thu cũ đổi mới") must not misclassify a new phone as used'
   );
+  for (const description of [
+    'Nhận thu máy cũ giá cao',
+    'Hỗ trợ thu mua máy cũ, trả góp 0%',
+    'Thu cũ lên đời, bảo hành 12 tháng',
+    'Đổi máy cũ lấy máy mới tại cửa hàng',
+    'Thu máy cũ đổi máy mới, trợ giá',
+    'Thu mua máy cũ giá cao',
+    'Mới 100% - Thu mua điện thoại cũ giá cao',
+  ]) {
+    assert.equal(
+      detectProductCondition('Điện thoại Samsung Galaxy S24 Ultra 256GB', description),
+      'new',
+      `A trade-in offer (${description}) does not make a new listing used (DOS/Rate#1430)`
+    );
+  }
+  assert.equal(
+    detectProductCondition('Điện thoại Samsung Galaxy S24 Ultra 256GB', 'Máy cũ, pin 90%'),
+    'used'
+  );
+  // A new device's title offering a trade-in in any order stays new (DOS/Rate#1430).
+  for (const title of [
+    'Samsung Galaxy S24 Ultra 256GB - Trợ giá lên đời máy cũ',
+    'Samsung Galaxy S24 Ultra 256GB Lên đời máy cũ trợ giá 2 triệu',
+    'Samsung Galaxy S24 Ultra 256GB Hỗ trợ đổi máy cũ',
+    'iPhone 16 Pro Max 256GB Chính hãng VN/A - Đổi máy cũ',
+    'iPhone 16 Pro Max 256GB Trợ giá máy cũ 1 triệu',
+    'iPhone 16 Pro Max 256GB Thu cũ lên đời',
+    'iPhone 16 Pro Max 256GB Máy cũ lên đời trợ giá',
+    'iPhone 16 Pro Max 256GB Lên đời từ điện thoại cũ',
+    'iPhone 16 Pro Max 256GB Thu đt cũ đổi mới',
+    'iPhone 16 Pro Max 256GB Thu mua giá cao máy cũ',
+    'iPhone 16 Pro Max 256GB Thu mua lại máy cũ',
+    'iPhone 16 Pro Max 256GB Trợ giá 2 triệu cho máy cũ',
+    'iPhone 16 Pro Max 256GB Lên đời - máy cũ trợ giá',
+    'iPhone 16 Pro Max 256GB Lên-đời máy cũ',
+  ]) {
+    assert.equal(detectProductCondition(title), 'new', `${title} is a new device`);
+  }
+  // A real used listing stays used.
+  for (const title of [
+    'Điện thoại iPhone 12 Pro 128GB máy cũ đẹp',
+    'iPhone 11 64GB Máy cũ giá rẻ bảo hành 3 tháng',
+    'Samsung Galaxy S21 điện thoại cũ đã qua sử dụng',
+    'Thanh lý máy cũ iPhone XS Max',
+    'iPhone 13 cũ - máy cũ zin, trợ giá ship',
+    // A warranty swap is not a trade-in, and a bare "hỗ trợ" is not a trade-in verb.
+    'iPhone 11 64GB máy cũ đổi mới trong 30 ngày',
+    'iPhone 12 Pro hỗ trợ máy cũ',
+  ]) {
+    assert.equal(detectProductCondition(title), 'used', `${title} is a used device`);
+  }
+  assert.equal(detectProductCondition('Điện thoại cũ đổi mới 99%'), 'like_new_99');
+  for (const title of [
+    'Tai nghe Apple AirPods Pro 2nd Gen USB-C Chính hãng VN/A',
+    'Apple iPhone SE 2nd generation 64GB',
+  ]) {
+    assert.equal(detectProductCondition(title), 'new', `${title} is a new device`);
+  }
+  assert.equal(detectProductCondition('iPhone 13 128GB 2nd hand'), 'used');
+  // A bare percentage is a spec or an ad, not a condition; one about the device is.
+  assert.equal(
+    detectProductCondition(
+      'Tai nghe Anker Soundcore Liberty 4 NC Mới 100% Chống ồn 98% Chính hãng'
+    ),
+    'new'
+  );
+  assert.equal(detectProductCondition('iPhone 13 Pro 128GB máy 98% pin 99%'), 'like_new_99');
   assert.equal(
     detectProductCondition('Điện thoại Apple iPhone 15 Pro Max 256GB Likenew 99% Zin Nguyên Bản'),
     'like_new_99'
