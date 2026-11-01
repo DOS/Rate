@@ -119,6 +119,7 @@ const FILLER = new Set([
   'ạ',
   'nhé',
   'nha',
+  'hề',
 ]);
 const NEGATED = 'không_';
 // A negation joins the next word, so "pin không trâu" never matches
@@ -343,6 +344,8 @@ export function decayedWeight(
 
 interface Line {
   source: PointLine;
+  /** The writer id, trimmed. */
+  writer: string;
   criterionKey: string | null;
   tokens: string[];
   form: string;
@@ -368,22 +371,74 @@ function contradicts(a: readonly string[], b: readonly string[]): boolean {
   return negates(a, new Set(b)) || negates(b, new Set(a));
 }
 
+/** Single-word keywords: a word that names an aspect ("nóng", "lag"). */
+const ASPECT_WORDS: ReadonlySet<string> = new Set(
+  Object.values(CRITERION_KEYWORDS)
+    .flat()
+    .filter((keyword) => !keyword.includes(SPACE))
+);
+
+/**
+ * Two lines that state different facts while sharing most words: each names
+ * an aspect the other does not ("máy nóng khi chơi game" against "máy lag
+ * khi chơi game"), or their numbers differ ("1 ngày" against "2 ngày").
+ */
+function differentClaims(a: readonly string[], b: readonly string[]): boolean {
+  const left = new Set(a);
+  const right = new Set(b);
+  const only = (
+    from: Set<string>,
+    to: Set<string>,
+    test: (word: string) => boolean
+  ): boolean => [...from].some((word) => test(word) && !to.has(word));
+  const isAspect = (word: string): boolean => ASPECT_WORDS.has(word);
+  const isNumber = (word: string): boolean => /^\p{N}+$/u.test(word);
+  return (
+    (only(left, right, isAspect) && only(right, left, isAspect)) ||
+    only(left, right, isNumber) ||
+    only(right, left, isNumber)
+  );
+}
+
+/**
+ * How well a line matches a cluster's first line: 0 when they contradict or
+ * state different facts; at least POINT_CLUSTER_OVERLAP when every word of
+ * the shorter one (two words or more) is in the longer one ("pin trâu" in
+ * "pin trâu dùng cả ngày"); otherwise their word overlap.
+ */
+function matchScore(a: readonly string[], b: readonly string[]): number {
+  if (contradicts(a, b) || differentClaims(a, b)) return 0;
+  const overlap = wordOverlap(a, b);
+  const [shorter, longer] = a.length <= b.length ? [a, b] : [b, a];
+  const inside = new Set(longer);
+  const contained =
+    new Set(shorter).size >= 2 && shorter.every((word) => inside.has(word));
+  return contained ? Math.max(overlap, POINT_CLUSTER_OVERLAP) : overlap;
+}
+
 /**
  * The lines that may count: a writer, a finite positive weight, a date, a
  * length rate.review_points allows, words in it, and not a dodge.
  */
 function countedLines(
   categorySlug: string | null | undefined,
-  lines: readonly PointLine[]
+  lines: readonly PointLine[],
+  now: Date
 ): Line[] {
   const counted: Line[] = [];
+  const seen = new Set<string>();
   for (const source of lines) {
+    // A line read twice counts once.
+    if (seen.has(source.id)) continue;
+    seen.add(source.id);
     if (source.kind !== 'pro' && source.kind !== 'con') continue;
     if (!Number.isFinite(source.weight) || source.weight <= 0) continue;
     if (typeof source.writerId !== 'string' || !source.writerId.trim())
       continue;
-    const writtenAt = asDate(source.writtenAt);
-    if (Number.isNaN(writtenAt.getTime())) continue;
+    const dated = asDate(source.writtenAt);
+    if (Number.isNaN(dated.getTime())) continue;
+    // A future date is now: it neither escapes decay nor keeps a point fresh.
+    const writtenAt = dated.getTime() > now.getTime() ? now : dated;
     const body = String(source.body ?? EMPTY).trim();
     const length = [...body.normalize('NFKC')].length;
     if (length < REVIEW_POINT_MIN || length > REVIEW_POINT_MAX) continue;
@@ -393,6 +448,7 @@ function countedLines(
     if (tokens.length === 0) continue;
     counted.push({
       source,
+      writer: source.writerId.trim(),
       criterionKey: assignPointCriterion(
         categorySlug,
         source.criterionKey,
@@ -429,9 +485,7 @@ function clusterLines(lines: readonly Line[]): Line[][] {
         leader.source.kind !== line.source.kind
       )
         continue;
-      const overlap = contradicts(leader.tokens, line.tokens)
-        ? 0
-        : wordOverlap(leader.tokens, line.tokens);
+      const overlap = matchScore(leader.tokens, line.tokens);
       if (overlap >= bestOverlap && (!best || overlap > bestOverlap)) {
         best = cluster;
         bestOverlap = overlap;
@@ -448,10 +502,10 @@ function clusterLabel(lines: readonly Line[]): string {
   const forms = new Map<string, { writers: Set<string>; first: Line }>();
   for (const line of lines) {
     const entry = forms.get(line.form);
-    if (entry) entry.writers.add(line.source.writerId);
+    if (entry) entry.writers.add(line.writer);
     else
       forms.set(line.form, {
-        writers: new Set([line.source.writerId]),
+        writers: new Set([line.writer]),
         first: line,
       });
   }
@@ -468,9 +522,14 @@ function summarise(lines: readonly Line[], now: Date): PointCluster {
   let hasExpert = false;
   for (const line of lines) {
     const weight = decayedWeight(line.source.weight, line.writtenAt, now);
-    const writer = line.source.writerId;
-    writers.set(writer, Math.max(writers.get(writer) ?? 0, weight));
-    if (line.source.isExpert) hasExpert = true;
+    writers.set(line.writer, Math.max(writers.get(line.writer) ?? 0, weight));
+    // An expert counts while their line is fresh: an old expert line does not
+    // lift a new single writer's point (design 5.3).
+    if (
+      line.source.isExpert &&
+      now.getTime() - line.writtenAt.getTime() <= POINT_SILENT_MS
+    )
+      hasExpert = true;
   }
   let rawSupport = 0;
   for (const weight of writers.values()) rawSupport += weight;
@@ -526,7 +585,7 @@ export function aggregateProductPoints(
   lines: readonly PointLine[],
   now: Date
 ): ProductPoints {
-  const counted = countedLines(categorySlug, lines);
+  const counted = countedLines(categorySlug, lines, now);
   const clusters = clusterLines(counted)
     .map((cluster) => summarise(cluster, now))
     .sort(byRank);

@@ -1801,6 +1801,28 @@ function testProductPoints(): void {
     line('b', 'con', 'Màn hình không bị ám vàng'),
   ]);
   assert.equal(negated.clusters.length, 2, 'a negation splits one kind');
+  assert.deepEqual(rules.pointTokens('máy không hề nóng'), [
+    'máy',
+    'không_nóng',
+  ]);
+  // Lines that share a frame but state different facts stay apart: another
+  // aspect ("nóng" against "lag") or another number.
+  const claims = (a: string, b: string) =>
+    run([line('a', 'con', a), line('b', 'con', b)]).clusters.length;
+  assert.equal(claims('máy nóng khi chơi game', 'máy lag khi chơi game'), 2);
+  assert.equal(claims('pin dùng được 1 ngày', 'pin dùng được 2 ngày'), 2);
+  // A short line inside a longer one joins it, whichever is older.
+  for (const ids of [
+    ['x1', 'x2'],
+    ['x2', 'x1'],
+  ])
+    assert.equal(
+      run([
+        line('a', 'pro', 'pin trâu', { id: ids[0] }),
+        line('b', 'pro', 'pin trâu dùng cả ngày', { id: ids[1] }),
+      ]).clusters.length,
+      1
+    );
   const alike = run([
     line('a', 'pro', 'Pin trâu, dùng cả ngày'),
     line('b', 'pro', 'pin rất trâu dùng cả ngày'),
@@ -1890,6 +1912,34 @@ function testProductPoints(): void {
     line('h', 'pro', 'pin trâu cả ngày', { weight: Number.NaN }),
   ]);
   assert.equal(malformed.clusters.length, 0);
+  // A line read twice counts once; writer ids are compared trimmed.
+  const twice = line('a', 'con', 'loa rè khi mở to');
+  const dup = run([
+    twice,
+    twice,
+    { ...twice, writerId: 'b' },
+    line(' c', 'con', 'loa rè khi mở to'),
+    line('c ', 'con', 'loa rè khi mở to'),
+  ]).clusters[0]!;
+  assert.deepEqual(dup.lineIds.length, 3);
+  assert.equal(dup.reviewerCount, 2);
+  // An old expert line does not lift one fresh writer's point, and a future
+  // date counts as now.
+  const stale = run([
+    line('x', 'con', 'pin tụt nhanh', {
+      isExpert: true,
+      writtenAt: monthsAgo(60),
+    }),
+    line('h', 'con', 'pin tụt rất nhanh'),
+  ]).clusters[0]!;
+  assert.equal(stale.hasExpert, false);
+  assert.equal(stale.visible, false);
+  const future = run([
+    line('a', 'pro', 'loa to rõ', {
+      writtenAt: new Date(now.getTime() + 86_400_000 * 400).toISOString(),
+    }),
+  ]).clusters[0]!;
+  assert.equal(future.lastSeen.getTime(), now.getTime());
 
   // Freshness: a weight halves every 12 months; 18 silent months hide a point.
   assert.ok(
