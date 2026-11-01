@@ -72,6 +72,8 @@ export interface ReviewV2Error {
 }
 
 const LINE = { min: REVIEW_POINT_MIN, max: REVIEW_POINT_MAX };
+// Named once: gitleaks reads `key: 'v2ErrDuplicate'` as a generic API key.
+const DUPLICATE_LINE: ReviewV2MessageKey = 'v2ErrDuplicate';
 
 /** Length as the writer sees it, like review-form.ts and char_length. */
 function lineLength(text: string): number {
@@ -111,7 +113,7 @@ function criterionPointErrors(
       errors.push({ field: at, key: 'v2ErrNoContent' });
     const compared = comparablePoint(line);
     if (compared && seen.has(compared))
-      errors.push({ field: at, key: 'v2ErrDuplicate' });
+      errors.push({ field: at, key: DUPLICATE_LINE });
     seen.add(compared);
   });
 }
@@ -190,7 +192,7 @@ export function reviewV2Errors(
       case 'duplicate_point':
         errors.push({
           field: `${issue.list}.${issue.index}`,
-          key: 'v2ErrDuplicate',
+          key: DUPLICATE_LINE,
         });
         break;
       case 'pro_and_con':

@@ -4,3 +4,8 @@
 # Fake 'sk-123...' key in the logger redaction test. The line carries gitleaks:allow
 # today; this commit (#260) added it before the inline allow comment existed.
 02a0187ca6b96e11476e6bf90921aabf53b1f7a5:apps/importer/src/shopee/__tests__/entity-matcher.test.ts:generic-api-key:453
+
+# The message key 'v2ErrDuplicate' in `key: '...'` literals of the review form v2
+# rules (#1544), read as a generic API key. Later commits use a named constant.
+2f624a1c620f68ecb658eed02aba62b05f05b04b:apps/web/src/lib/review-form-v2.ts:generic-api-key:114
+2f624a1c620f68ecb658eed02aba62b05f05b04b:apps/web/src/lib/review-form-v2.ts:generic-api-key:193
