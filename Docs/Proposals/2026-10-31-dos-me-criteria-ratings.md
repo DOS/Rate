@@ -38,7 +38,7 @@ Design: [`2026-10-31-criteria-stars-pros-cons.html`](./2026-10-31-criteria-stars
   - `criteria_scores`: `{key: {score, weight_sum, writers}}`. A criterion appears only when all of these hold (D9):
     - 3 or more reviews rated it;
     - each rating is a number from 1 to 5, under a key shaped like the shared-data keys;
-    - the reviews' weight sum is 1.5 or more.
+    - the reviews' weight sum is 1.5 or more, each review counting at most 1 toward it, so one heavy review plus near-zero ones never passes. The stored `weight_sum` is the plain sum.
 
     Readers apply the ranking threshold of 5 from `writers`.
 - **Which reviews count:** the same reviews `refresh_master_product_rating` counts.

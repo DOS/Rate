@@ -44,7 +44,8 @@ WHERE n.nspname = 'rate' AND NOT t.tgisinternal AND t.tgenabled <> 'D'
                    'trg_review_flags_rating_extras_upd', 'trg_review_flags_rating_extras_del',
                    'trg_master_products_rating_extras');
 
--- V5 Every criterion score meets the display thresholds of D9.                expect 0
+-- V5 Every criterion score has 3 writers and a stored weight sum of 1.5.  expect 0
+--    (D9 also caps each review at 1 toward that sum; V6 checks it.)
 SELECT count(*) AS criteria_below_threshold
 FROM rate.master_products m, jsonb_each(m.criteria_scores) c(key, v)
 WHERE (c.v ->> 'writers')::int < 3

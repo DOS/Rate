@@ -1861,6 +1861,29 @@ function testProductPoints(): void {
   // The threshold reads the exact sum: 1.4952 is stored as 1.50 but hidden.
   assert.equal(two(0.7476).support, 1.5);
   assert.equal(two(0.7476).visible, false);
+  // Each writer adds at most 1 toward 1.5: 3 + 0.01 is one voice, not two;
+  // 1 + 0.5 passes. Support (for ranking) keeps the full sum.
+  const heavy = run([
+    line('a', 'pro', 'camera chụp đêm đẹp', { weight: 3 }),
+    line('b', 'pro', 'camera chụp đêm rất đẹp', { weight: 0.01 }),
+  ]).clusters[0]!;
+  assert.equal(heavy.support, 3.01);
+  assert.equal(heavy.visible, false, '3 + 0.01 does not pass');
+  const even = run([
+    line('a', 'pro', 'camera chụp đêm đẹp', { weight: 3 }),
+    line('b', 'pro', 'camera chụp đêm rất đẹp', { weight: 0.5 }),
+  ]).clusters[0]!;
+  assert.equal(even.visible, true, '1 + 0.5 passes');
+  // The cap applies after decay: weight 3 two years old is 0.75, which counts
+  // in full, so with another 0.75 it passes.
+  const decayedHeavy = run([
+    line('a', 'pro', 'camera chụp đêm đẹp', {
+      weight: 3,
+      writtenAt: monthsAgo(24),
+    }),
+    line('b', 'pro', 'camera chụp đêm rất đẹp', { weight: 0.75 }),
+  ]).clusters[0]!;
+  assert.equal(decayedHeavy.visible, true);
   const expert = run([
     line('x', 'con', 'Camera tele hơi mờ', { isExpert: true }),
   ]);
