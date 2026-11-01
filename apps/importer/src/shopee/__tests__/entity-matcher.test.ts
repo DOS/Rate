@@ -261,6 +261,22 @@ async function runEntityMatcherSuite() {
     'new',
     'Trade-in promotion ("thu cũ đổi mới") must not misclassify a new phone as used'
   );
+  for (const description of [
+    'Nhận thu máy cũ giá cao',
+    'Hỗ trợ thu mua máy cũ, trả góp 0%',
+    'Thu cũ lên đời, bảo hành 12 tháng',
+    'Đổi máy cũ lấy máy mới tại cửa hàng',
+  ]) {
+    assert.equal(
+      detectProductCondition('Điện thoại Samsung Galaxy S24 Ultra 256GB', description),
+      'new',
+      `A trade-in offer (${description}) does not make a new listing used (DOS/Rate#1430)`
+    );
+  }
+  assert.equal(
+    detectProductCondition('Điện thoại Samsung Galaxy S24 Ultra 256GB', 'Máy cũ, pin 90%'),
+    'used'
+  );
   assert.equal(
     detectProductCondition('Điện thoại Apple iPhone 15 Pro Max 256GB Likenew 99% Zin Nguyên Bản'),
     'like_new_99'

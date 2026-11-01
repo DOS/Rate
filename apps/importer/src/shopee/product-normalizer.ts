@@ -135,15 +135,39 @@ export class UnkeyableProductTitleError extends Error {
 }
 
 /**
+ * A used, like-new or refurbished listing. `rate.products` stores no condition, so
+ * linked to a master its lower price would become the new device's `min_price` and
+ * feed the deal radar. The listing is rejected before anything is written until
+ * condition is stored (DOS/Rate#1430).
+ */
+export class NonNewListingError extends Error {
+  readonly code = 'NON_NEW_LISTING';
+  readonly condition: Exclude<ProductCondition, 'new'>;
+
+  constructor(title: unknown, condition: Exclude<ProductCondition, 'new'>) {
+    super(
+      `Cannot ingest a non-new listing (condition=${condition}): ${JSON.stringify(String(title ?? '').slice(0, 200))}`
+    );
+    this.name = 'NonNewListingError';
+    this.condition = condition;
+  }
+}
+
+/** A trade-in offer for the buyer's old device, which says nothing about the listing's own. */
+const TRADE_IN_PHRASE =
+  /thu\s*cũ\s*đổi\s*mới|(?:thu|đổi)\s*(?:mua\s*)?(?:máy\s*)?cũ\s*(?:lên\s*đời|lấy\s*(?:máy\s*)?mới)|(?:nhận|hỗ\s*trợ)\s*thu\s*(?:mua\s*)?máy\s*cũ/gi;
+
+/**
  * Detect listing physical condition from product title and optional description (Audit C6).
- * Strips promotional trade-in phrases ("thu cũ đổi mới") before matching so new retail listings
- * offering trade-in programs are not misclassified as used devices.
+ * Strips promotional trade-in phrases ("thu cũ đổi mới", "thu máy cũ lên đời") before matching
+ * so new retail listings offering trade-in programs are not misclassified as used devices; a
+ * non-new listing is rejected at ingest (DOS/Rate#1430).
  */
 export function detectProductCondition(title: string, description?: string): ProductCondition {
   const safeTitle = typeof title === 'string' ? title : '';
   const safeDesc = typeof description === 'string' ? description : '';
-  const cleanTitle = safeTitle.replace(/thu\s*cũ\s*đổi\s*mới/gi, ' ');
-  const cleanDesc = safeDesc.replace(/thu\s*cũ\s*đổi\s*mới/gi, ' ');
+  const cleanTitle = safeTitle.replace(TRADE_IN_PHRASE, ' ');
+  const cleanDesc = safeDesc.replace(TRADE_IN_PHRASE, ' ');
 
   const checkSource = (text: string): ProductCondition | null => {
     if (
