@@ -475,7 +475,10 @@ export default function LeaderboardExplorer({
   const hasShownCriteria = shownCriteria.length > 0;
   // The one rating shows at 1 decimal (D3); a persona's own weighted score
   // keeps 2, under the persona's name.
-  const scoreDigits: 1 | 2 = activePersona === 'none' ? 1 : 2;
+  const ratingView =
+    activePersona === 'none' &&
+    (activeCriterion === 'combined' || activeCriterion === 'user');
+  const scoreDigits: 1 | 2 = ratingView ? 1 : 2;
 
   const availableBrands = useMemo(() => {
     const brands = new Set<string>();
@@ -547,7 +550,9 @@ export default function LeaderboardExplorer({
         if (
           activePersona !== 'none' &&
           totalWeight > 0 &&
-          base.activeScore5 > 0
+          (activeCriterion === 'combined'
+            ? base.combinedScore5 > 0
+            : base.activeScore5 > 0)
         ) {
           const weighted5 = weightedCriteriaScore5(
             base.rankCriteria,
@@ -579,7 +584,10 @@ export default function LeaderboardExplorer({
     // Ranked by the score as shown, so equal-looking scores never rank by
     // a hidden decimal; the composite breaks the tie (D3).
     const shown = (score: number) =>
-      activePersona === 'none' ? displayedScore5(score) : score;
+      activePersona === 'none' &&
+      (activeCriterion === 'combined' || activeCriterion === 'user')
+        ? displayedScore5(score)
+        : score;
     return scored.sort((a, b) => {
       if (shown(b.activeScore5) !== shown(a.activeScore5)) {
         return shown(b.activeScore5) - shown(a.activeScore5);
@@ -669,7 +677,9 @@ export default function LeaderboardExplorer({
         sanitizeLeaderboardMarkdownCell(entry.product.name),
         sanitizeLeaderboardMarkdownCell(entry.product.brand),
         entry.activeScore5.toFixed(2),
-        entry.userScore5 > 0 ? entry.userScore5.toFixed(1) : t('unratedShort'),
+        entry.userScore5 > 0
+          ? displayedScore5(entry.userScore5).toFixed(1)
+          : t('unratedShort'),
         entry.expertScore10 != null
           ? entry.expertScore10.toFixed(1)
           : t('unratedShort'),
@@ -723,7 +733,9 @@ export default function LeaderboardExplorer({
         entry.product.brand || '',
         entry.categorySlug,
         entry.activeScore5.toFixed(2),
-        entry.userScore5 > 0 ? entry.userScore5.toFixed(1) : '',
+        entry.userScore5 > 0
+          ? displayedScore5(entry.userScore5).toFixed(1)
+          : '',
         entry.expertScore10 != null ? entry.expertScore10.toFixed(1) : '',
         ...LEADERBOARD_SCORE_CRITERIA.map((c) => {
           const score = entry.criteria[c];

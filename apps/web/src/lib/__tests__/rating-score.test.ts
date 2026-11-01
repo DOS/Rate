@@ -114,7 +114,6 @@ assert.deepEqual(
       criteria_scores: {
         battery: { score: 9, writers: 10 },
         camera: 'x',
-        toString: crit(4, 9),
       },
     })
   ),
@@ -125,6 +124,23 @@ assert.deepEqual(
     battery: null,
     value: null,
   }
+);
+
+// An inherited criterion is no score either.
+assert.equal(
+  computeJReviewsCriteriaScores(
+    phone('a', {
+      criteria_scores: Object.create({ camera: crit(4, 9) }),
+      expert_criteria_scores: Object.create({ camera: 8 }),
+    })
+  ).camera,
+  null
+);
+// The expert tab keeps the expert's own score: 8.5/10 stays 8.5.
+assert.equal(
+  scoreMasterProductForLeaderboard(phone('a', { expert_rating: 8.5 }), 'expert')
+    .activeScore10,
+  8.5
 );
 
 // A criterion view ranks only scores from 5 writers.

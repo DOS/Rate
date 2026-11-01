@@ -1450,6 +1450,7 @@ export async function ProductDetailView({
                 product.average_rating
               )}
               userRatingWeighted={displayUserRating || null}
+              ratingScore={storedRating || null}
               expertRating={resolveCompareExpertRating5(product)}
               expertReviewSummary={product.expert_review_summary || null}
               authenticReviewCount={authenticCount}

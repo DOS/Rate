@@ -669,16 +669,19 @@ export async function getMasterProducts(
     });
   }
 
+  // The stored rating first (D3), then the weighted user rating; an
+  // unrated product sorts by its expert score, then the marketplace
+  // average (DOS/Rate#510).
   const getEffectiveRating = (item: MasterProduct): number =>
     Number(item.rating_score) > 0
       ? Number(item.rating_score)
-      : item.user_rating_weighted && Number(item.user_rating_weighted) > 0
+      : Number(item.user_rating_weighted) > 0
         ? Number(item.user_rating_weighted)
-        : item.expert_rating && Number(item.expert_rating) > 0
+        : Number(item.expert_rating) > 0
           ? Number(item.expert_rating)
           : Number(item.average_rating || 0);
 
-  // Minimum effective rating filter (the stored rating -> weighted user rating -> expert rating -> average_rating)
+  // Minimum effective rating filter
   if (typeof params?.minRating === 'number' && params.minRating > 0) {
     const minRating = params.minRating;
     items = items.filter((item) => getEffectiveRating(item) >= minRating);

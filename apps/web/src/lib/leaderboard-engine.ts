@@ -526,7 +526,10 @@ export function scoreMasterProductForLeaderboard(
     expertScore10,
     combinedScore5,
     activeScore5,
-    activeScore10: Number((Math.round(activeScore5 * 10) / 5).toFixed(1)),
+    activeScore10:
+      safeCriterion === 'expert'
+        ? (expertScore10 ?? 0)
+        : Number((Math.round(activeScore5 * 10) / 5).toFixed(1)),
     authenticReviewCount,
     filteredNoiseReviewCount,
     minPrice,
@@ -669,10 +672,15 @@ export function rankMasterProductsForLeaderboard(
       return true;
     })
     .sort((a, b) => {
-      // Ranked by the score as shown, so two products showing 4.6 never rank
-      // by a hidden second decimal; the composite breaks the tie (D3).
-      const shownA = displayedScore5(a.activeScore5);
-      const shownB = displayedScore5(b.activeScore5);
+      // The rating views rank by the score as shown, so two products showing
+      // 4.6 never rank by a hidden decimal; the composite breaks the tie (D3).
+      const ratingView = criterion === 'combined' || criterion === 'user';
+      const shownA = ratingView
+        ? displayedScore5(a.activeScore5)
+        : a.activeScore5;
+      const shownB = ratingView
+        ? displayedScore5(b.activeScore5)
+        : b.activeScore5;
       if (shownB !== shownA) {
         return shownB - shownA;
       }

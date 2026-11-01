@@ -175,7 +175,7 @@ export function rankProductsForDealFinder(
     // threshold; otherwise the rating stands (DOS/Rate#1143, D9).
     const lean = (score: number | null, share: number) =>
       score != null && score > 0 && item.userScore5 > 0
-        ? Number((item.userScore5 * (1 - share) + score * share).toFixed(2))
+        ? item.userScore5 * (1 - share) + score * share
         : item.userScore5;
     let personaScore5 = item.userScore5;
     if (persona === 'value_hunter') {
@@ -196,9 +196,10 @@ export function rankProductsForDealFinder(
         ? Math.round(rawMaxP)
         : minP;
     const spreadSavingsVnd = Math.max(0, maxP - minP);
-    const combinedScore10 = item.combinedScore5 * 2;
+    // Per point of the rating the card shows (D3).
+    const ratingScore10 = displayedScore5(item.userScore5) * 2;
     const costPerPointVnd =
-      combinedScore10 > 0 ? Math.round(minP / combinedScore10) : 0;
+      ratingScore10 > 0 ? Math.round(minP / ratingScore10) : 0;
 
     scored.push({
       ...item,
@@ -487,7 +488,7 @@ export default function DealFinderWorkspace({
           .slice(0, 20)
           .map(
             (d) =>
-              `| #${d.rank} | ${sanitizeDealFinderMarkdownCell(d.name)} | ${sanitizeDealFinderMarkdownCell(d.brand)} | **${d.personaScore5 > 0 ? `${d.personaScore5.toFixed(2)}/5.0` : t('noScore')}** | ★ ${d.userScore5 > 0 ? d.userScore5.toFixed(1) : t('noScore')} (${d.expertScore10 != null ? `Lab ${d.expertScore10.toFixed(1)}/10` : t('labNoScore')}) | **${d.minPrice.toLocaleString('vi-VN')} ₫** | ${d.spreadSavingsVnd > 0 ? `-${d.spreadSavingsVnd.toLocaleString('vi-VN')} ₫` : t('samePrice')} | ${radarMarkdownCell(getRadarSignal(radarIndex, d.slug))} |`
+              `| #${d.rank} | ${sanitizeDealFinderMarkdownCell(d.name)} | ${sanitizeDealFinderMarkdownCell(d.brand)} | **${d.personaScore5 > 0 ? `${d.personaScore5.toFixed(2)}/5.0` : t('noScore')}** | ★ ${d.userScore5 > 0 ? displayedScore5(d.userScore5).toFixed(1) : t('noScore')} (${d.expertScore10 != null ? `Lab ${d.expertScore10.toFixed(1)}/10` : t('labNoScore')}) | **${d.minPrice.toLocaleString('vi-VN')} ₫** | ${d.spreadSavingsVnd > 0 ? `-${d.spreadSavingsVnd.toLocaleString('vi-VN')} ₫` : t('samePrice')} | ${radarMarkdownCell(getRadarSignal(radarIndex, d.slug))} |`
           ),
       ];
       await navigator.clipboard.writeText(lines.join('\n'));
@@ -521,7 +522,7 @@ export default function DealFinderWorkspace({
       d.brand,
       d.categorySlug,
       d.personaScore5 > 0 ? d.personaScore5.toFixed(2) : '',
-      d.userScore5 > 0 ? d.userScore5.toFixed(2) : '',
+      d.userScore5 > 0 ? displayedScore5(d.userScore5).toFixed(1) : '',
       d.expertScore10 != null ? d.expertScore10.toFixed(1) : '',
       d.minPrice,
       d.spreadSavingsVnd,
