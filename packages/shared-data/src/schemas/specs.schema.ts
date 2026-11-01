@@ -160,6 +160,13 @@ export const MasterProductSchema = z.object({
     .default({})
     .optional(),
   user_rating_weighted: z.number().min(0).max(5).nullable().optional(),
+  // The one rating (DOS/Rate#1545, design #1531 D3): Bayesian, k = 3,
+  // mu = 4.2, stored at 3 decimals; null while no review counts.
+  rating_score: z.number().min(0).max(5).nullable().optional(),
+  rating_weight_sum: z.number().nonnegative().optional(),
+  // Per criterion, only past D9's display threshold:
+  // { key: { score, weight_sum, writers } }.
+  criteria_scores: z.record(z.string(), z.unknown()).default({}).optional(),
   authentic_review_count: z.number().int().nonnegative().default(0).optional(),
   status: StatusSchema.default('draft'),
   metadata: z.record(z.string(), z.unknown()).default({}),

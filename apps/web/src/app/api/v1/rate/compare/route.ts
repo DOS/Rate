@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { productRatingScore5 } from '@/lib/rate-domain';
 import {
   getCachedCompareMasterProducts,
   getCachedMasterProductBySlug,
@@ -85,6 +86,7 @@ export async function GET(request: NextRequest) {
             // The category's spec view, as /compare shows it (DOS/Rate#1166).
             ...applyCategorySpecTemplate(lockedCategory, p),
             canonical_href: getMasterProductHref(p),
+            rating_score_5: productRatingScore5(p),
             deal_radar: radarExportFields(computeProductRadarSignal(p, offers)),
             sale_state: saleStateOfMaster(p),
           };

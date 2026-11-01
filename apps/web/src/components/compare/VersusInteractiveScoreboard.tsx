@@ -86,7 +86,8 @@ export const PERSONA_WEIGHTS: Record<
 export function sanitizeVersusScore5(value: unknown): number {
   const num = typeof value === 'number' ? value : Number(value);
   if (!Number.isFinite(num) || num <= 0) return 0;
-  return Number(Math.min(5, num).toFixed(2));
+  // Unrounded: the page rounds once, to 1 decimal (D3).
+  return Math.min(5, num);
 }
 
 /** A criterion score out of 5, or null when there is no real one. */
@@ -156,7 +157,8 @@ export function computeVersusWeightedResult(
   const wVal = sanitizeWeight(weights.value);
   const rawSumW = wScreen + wPerf + wCam + wBat + wVal;
 
-  const shared = sharedScoredCriteria(scoreA.criteria, scoreB.criteria);
+  // Weights read the scores past the ranking threshold (D9).
+  const shared = sharedScoredCriteria(scoreA.rankCriteria, scoreB.rankCriteria);
   const calcWeighted = (item: ScoredVersusItem): number => {
     // The product's rating as every page shows it (DOS/Rate#1470); a model
     // with no buyer rating yet keeps its composite (expert or criteria).
@@ -169,7 +171,7 @@ export function computeVersusWeightedResult(
     // Only the criteria both models have a real score for are weighed; with
     // none in common the weights change nothing (DOS/Rate#1143).
     const wAvg = weightedCriteriaScore5(
-      item.criteria,
+      item.rankCriteria,
       rawSumW > 0
         ? {
             screen: wScreen,
@@ -266,8 +268,8 @@ export default function VersusInteractiveScoreboard({
   // otherwise they would change nothing, so they are not offered
   // (DOS/Rate#1556).
   const sharedCriteria = useMemo(
-    () => sharedScoredCriteria(scoreA.criteria, scoreB.criteria),
-    [scoreA.criteria, scoreB.criteria]
+    () => sharedScoredCriteria(scoreA.rankCriteria, scoreB.rankCriteria),
+    [scoreA.rankCriteria, scoreB.rankCriteria]
   );
   const availablePersonas = versusAvailablePersonas(sharedCriteria);
   const canWeigh = availablePersonas.length > 0;

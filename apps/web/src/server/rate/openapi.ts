@@ -107,7 +107,7 @@ function inspectRateLimitedResponse(): OpenApiResponse {
 const CRITERIA_SCORES = {
   type: 'object',
   description:
-    'Score out of 5 per criterion, from the scores stored for that criterion only. `null` means not enough data ("Chưa đủ dữ liệu"): it is never derived from the star rating, and a null criterion is left out of the combined score and of criterion rankings. Earbuds have no `screen` criterion.',
+    'Score out of 5 per criterion, from the scores stored for that criterion only: the reviewers\' score once 3 or more reviewers rated it, else an expert score. `null` means not enough data ("Chưa đủ dữ liệu"): it is never derived from the star rating, and a null criterion is left out of the combined score. Criterion rankings and persona weights use a reviewers\' score only from 5 reviewers on. Earbuds have no `screen` criterion.',
   properties: Object.fromEntries(
     ['screen', 'performance', 'camera', 'battery', 'value'].map((c) => [
       c,
@@ -116,11 +116,24 @@ const CRITERIA_SCORES = {
   ),
 } as const;
 
+/** The one rating every page shows (DOS/Rate#1545, design #1531 D3). */
+const RATING_SCORE_5 = {
+  type: ['number', 'null'],
+  minimum: 0,
+  maximum: 5,
+  description:
+    'The product rating every Rate page shows: the stored Bayesian `rating_score` (k = 3, prior 4.2, weighted reviews) at one decimal; for a product without one, the weighted user rating, then the marketplace average. `null` when there is none ("Chưa có đánh giá"). `user_score_5` and `combined_score_5` stay for older clients; the combined score only breaks ties between equal ratings.',
+} as const;
+
+const RATING_NOTE =
+  ' Each product carries `rating_score_5`, the one rating every Rate page shows (the stored Bayesian score at one decimal, null when there is none).';
+
 const LEADERBOARD_ENTRY = {
   type: 'object',
   additionalProperties: true,
   properties: {
     slug: { type: 'string' },
+    rating_score_5: RATING_SCORE_5,
     criteria_scores: CRITERIA_SCORES,
     deal_radar: RADAR_REF,
     radar_signal: RADAR_REF,
@@ -330,7 +343,8 @@ function buildBaseRateOpenApiSpec(
           summary:
             'List standardized master products with 10-group spec filters',
           description:
-            'Queries `rate.master_products` with multi-dimensional filtering across category, brand, price range, RAM/storage options, refresh rate, 5G, IP rating, charging wattage, and JReviews weighted score. Each product carries its category spec view (earbuds have no screen, RAM or storage; watches show no 5G). A spec filter the category does not have, such as `has5g` on `smartwatches` or `ramGb` and `compactScreen` on `earbuds`, returns 400. On `all` such a filter keeps only products whose own category has it (`has5g=1` returns 5G phones, tablets and laptops, never watches or earbuds).',
+            'Queries `rate.master_products` with multi-dimensional filtering across category, brand, price range, RAM/storage options, refresh rate, 5G, IP rating, charging wattage, and JReviews weighted score. Each product carries its category spec view (earbuds have no screen, RAM or storage; watches show no 5G). A spec filter the category does not have, such as `has5g` on `smartwatches` or `ramGb` and `compactScreen` on `earbuds`, returns 400. On `all` such a filter keeps only products whose own category has it (`has5g=1` returns 5G phones, tablets and laptops, never watches or earbuds).' +
+            RATING_NOTE,
           tags: ['Products & Specs'],
           parameters: [
             {
@@ -507,7 +521,8 @@ function buildBaseRateOpenApiSpec(
           summary:
             'Get full master product detail, 10-group specs, offers, price history & AI reviews',
           description:
-            'Returns the canonical master product record, full 10-group specification JSONB, cross-marketplace merchant offers (`rate.products`), price history series (`rate.price_history`), fake-sale discount analysis, the Deal Radar signal (`data.radarSignal`), and AI-audited user reviews.',
+            'Returns the canonical master product record, full 10-group specification JSONB, cross-marketplace merchant offers (`rate.products`), price history series (`rate.price_history`), fake-sale discount analysis, the Deal Radar signal (`data.radarSignal`), and AI-audited user reviews.' +
+            RATING_NOTE,
           tags: ['Products & Specs'],
           parameters: [
             {
@@ -576,7 +591,8 @@ function buildBaseRateOpenApiSpec(
           summary:
             'Compare up to 4 master products side-by-side across all 10 spec groups',
           description:
-            'Fetches up to 4 standardized master products and aligns their 10-group specifications (GSMArena + PhoneArena split camera schema), JReviews scores, and lowest verified prices.',
+            'Fetches up to 4 standardized master products and aligns their 10-group specifications (GSMArena + PhoneArena split camera schema), JReviews scores, and lowest verified prices.' +
+            RATING_NOTE,
           tags: ['Comparison & Watchlist'],
           parameters: [
             {
@@ -790,6 +806,7 @@ function buildBaseRateOpenApiSpec(
                     additionalProperties: true,
                     properties: {
                       slug: { type: 'string' },
+                      rating_score_5: RATING_SCORE_5,
                       criteria_scores: CRITERIA_SCORES,
                       deal_radar: RADAR_REF,
                       radar_signal: RADAR_REF,
@@ -800,6 +817,7 @@ function buildBaseRateOpenApiSpec(
                     additionalProperties: true,
                     properties: {
                       slug: { type: 'string' },
+                      rating_score_5: RATING_SCORE_5,
                       criteria_scores: CRITERIA_SCORES,
                       deal_radar: RADAR_REF,
                       radar_signal: RADAR_REF,
@@ -1696,7 +1714,7 @@ function buildBaseRateOpenApiSpec(
           summary:
             'Get 4-Tier JReviews Dual-Rating & 5-Criteria Leaderboard rankings',
           description:
-            'Ranks standardized master products within a category (or across all 5 categories) by Combined 10.0 score, Verified User score, Lab Expert score, or any of the 5 JReviews sub-criteria (screen, performance, camera, battery, value) with zero affiliate weight.',
+            'Ranks standardized master products within a category (or across all 5 categories). The default `combined` view ranks by the one rating, `rating_score_5` (equal ratings broken by the combined score); other views rank by Verified User score, Lab Expert score, or any of the 5 JReviews sub-criteria (screen, performance, camera, battery, value) with zero affiliate weight.',
           tags: ['Products & Specs'],
           parameters: [
             {

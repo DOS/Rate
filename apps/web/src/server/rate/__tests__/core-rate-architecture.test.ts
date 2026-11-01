@@ -11452,6 +11452,14 @@ async function runCoreArchitectureSuite() {
       userScore5: 4.9,
       expertScore10: null,
       criteria: { screen: 5, performance: 5, camera: 3, battery: 5, value: 5 },
+      // Weights read the scores past the ranking threshold (D9).
+      rankCriteria: {
+        screen: 5,
+        performance: 5,
+        camera: 3,
+        battery: 5,
+        value: 5,
+      },
     };
     const camB = {
       ...scoreItemB,
@@ -11461,6 +11469,14 @@ async function runCoreArchitectureSuite() {
       userScore5: 4.6,
       expertScore10: null,
       criteria: { screen: 4, performance: 4, camera: 5, battery: 4, value: 4 },
+      // Weights read the scores past the ranking threshold (D9).
+      rankCriteria: {
+        screen: 4,
+        performance: 4,
+        camera: 5,
+        battery: 4,
+        value: 4,
+      },
     };
     const { PERSONA_WEIGHTS } =
       await import('../../../components/compare/VersusInteractiveScoreboard');
@@ -13358,7 +13374,8 @@ async function runCoreArchitectureSuite() {
       sanitizeWatchlistCount,
     } = await import('../../../components/watchlist/WatchlistWorkspace');
 
-    assert.equal(sanitizeVersusScore5(4.856), 4.86);
+    // Unrounded: the page rounds once, to 1 decimal (DOS/Rate#1545).
+    assert.equal(sanitizeVersusScore5(4.856), 4.856);
     assert.equal(sanitizeVersusScore5(8.2), 5);
     assert.equal(sanitizeVersusScore5(-1), 0);
     assert.equal(sanitizeVersusScore5(Number.NaN), 0);

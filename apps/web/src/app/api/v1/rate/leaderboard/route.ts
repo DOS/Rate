@@ -7,6 +7,7 @@ import {
 } from '@/server/rate';
 import { radarExportFields } from '@/lib/deal-radar';
 import {
+  displayedScore5,
   normalizeLeaderboardCategory,
   normalizeLeaderboardCriterion,
   normalizeLeaderboardPriceSegment,
@@ -99,6 +100,7 @@ export async function GET(req: NextRequest) {
         active_score_10: r.activeScore10,
         combined_score_5: r.combinedScore5,
         user_score_5: r.userScore5,
+        rating_score_5: displayedScore5(r.userScore5) || null,
         expert_score_10: r.expertScore10,
         authentic_review_count: r.authenticReviewCount,
         filtered_noise_review_count: r.filteredNoiseReviewCount,

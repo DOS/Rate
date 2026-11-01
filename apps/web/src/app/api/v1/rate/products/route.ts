@@ -7,7 +7,10 @@ import {
 } from '@/server/rate';
 import { computeProductRadarSignal } from '@/server/rate/deals';
 import { radarExportFields } from '@/lib/deal-radar';
-import { getMasterProductCategorySlug } from '@/lib/rate-domain';
+import {
+  getMasterProductCategorySlug,
+  productRatingScore5,
+} from '@/lib/rate-domain';
 import { applyCategorySpecTemplate } from '@repo/shared-data/rules';
 import { saleStateOfMaster } from '@/lib/sale-state';
 import {
@@ -323,6 +326,7 @@ export async function GET(request: NextRequest) {
           const offers = offersByMasterId.get(p.id) ?? [];
           return {
             ...applyCategorySpecTemplate(getMasterProductCategorySlug(p), p),
+            rating_score_5: productRatingScore5(p),
             deal_radar: radarExportFields(computeProductRadarSignal(p, offers)),
             sale_state: saleStateOfMaster(p),
           };

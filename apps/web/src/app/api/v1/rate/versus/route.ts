@@ -10,6 +10,7 @@ import { radarExportFields } from '@/lib/deal-radar';
 import { versusApiWinner } from '@/lib/versus-verdict';
 import {
   comparePositiveMinPrices,
+  displayedScore5,
   leaderboardCriteriaForCategory,
   scoreMasterProductForLeaderboard,
   sharedScoredCriteria,
@@ -267,28 +268,36 @@ export async function GET(req: NextRequest) {
             value: 20,
           };
 
-    // The weights apply to the criteria both products have a real score
-    // for; with none in common, both sides use their main score, and no
-    // criterion counts as won or lost (DOS/Rate#1143).
+    // The weights apply to the criteria both products have a score for
+    // past the ranking threshold (D9); with none in common, both sides use
+    // their rating as every page shows it, and no criterion counts as won
+    // or lost (DOS/Rate#1143, D3).
     const comparedCriteria = sharedScoredCriteria(
-      scoreA.criteria,
-      scoreB.criteria
+      scoreA.rankCriteria,
+      scoreB.rankCriteria
     );
     const weightedA5 = weightedCriteriaScore5(
-      scoreA.criteria,
+      scoreA.rankCriteria,
       normalizedWeights,
       comparedCriteria
     );
     const weightedB5 = weightedCriteriaScore5(
-      scoreB.criteria,
+      scoreB.rankCriteria,
       normalizedWeights,
       comparedCriteria
     );
     const byCriteria = weightedA5 != null && weightedB5 != null;
-    const customScoreA5 = byCriteria ? weightedA5 : scoreA.combinedScore5;
-    const customScoreB5 = byCriteria ? weightedB5 : scoreB.combinedScore5;
-    const customScoreA10 = Number((customScoreA5 * 2).toFixed(1));
-    const customScoreB10 = Number((customScoreB5 * 2).toFixed(1));
+    const baseScore5 = (s: typeof scoreA) =>
+      s.userScore5 > 0 ? s.userScore5 : s.combinedScore5;
+    const customScoreA5 = byCriteria ? weightedA5 : baseScore5(scoreA);
+    const customScoreB5 = byCriteria ? weightedB5 : baseScore5(scoreB);
+    // Rounded once, as the pages round (D3).
+    const customScoreA10 = Number(
+      (Math.round(customScoreA5 * 10) / 5).toFixed(1)
+    );
+    const customScoreB10 = Number(
+      (Math.round(customScoreB5 * 10) / 5).toFixed(1)
+    );
     const priceSide = comparePositiveMinPrices(
       scoreA.minPrice,
       scoreB.minPrice
@@ -440,6 +449,7 @@ export async function GET(req: NextRequest) {
           custom_weighted_score_5: customScoreA5,
           custom_weighted_score_10: customScoreA10,
           user_score_5: scoreA.userScore5,
+          rating_score_5: displayedScore5(scoreA.userScore5) || null,
           expert_score_10: scoreA.expertScore10,
           authentic_review_count: scoreA.authenticReviewCount,
           filtered_noise_review_count: scoreA.filteredNoiseReviewCount,
@@ -465,6 +475,7 @@ export async function GET(req: NextRequest) {
           custom_weighted_score_5: customScoreB5,
           custom_weighted_score_10: customScoreB10,
           user_score_5: scoreB.userScore5,
+          rating_score_5: displayedScore5(scoreB.userScore5) || null,
           expert_score_10: scoreB.expertScore10,
           authentic_review_count: scoreB.authenticReviewCount,
           filtered_noise_review_count: scoreB.filteredNoiseReviewCount,

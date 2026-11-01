@@ -449,7 +449,7 @@ export default function HeroSearchInspector({
                       );
                       const minPrice = formatNumber(safeMinPrice, locale);
                       const rating = sanitizeHeroInspectorRating(
-                        item.user_rating_weighted,
+                        item.rating_score || item.user_rating_weighted,
                         item.average_rating
                       );
 

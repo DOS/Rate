@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { resolveCompareEffectiveUserRating } from '@/lib/rate-domain';
 import { getTranslations, setRequestLocale } from 'next-intl/server';
 import {
   BsArrowLeftRight,
@@ -128,10 +129,10 @@ export default async function LeaderboardPage({ params }: PageProps) {
         () => ({}) as Record<string, number>
       ),
     ]);
-  // Back in one best-rated-first list (same key as search_master_products'
-  // rating_desc), so the top 15 in the ItemList below stay platform-wide.
+  // Back in one best-rated-first list, by the one rating (D3), so the top
+  // 15 in the ItemList below stay platform-wide.
   const ratingOf = (p: (typeof productsByCategory)[number][number]) =>
-    Number(p.user_rating_weighted || 0) || Number(p.average_rating || 0);
+    resolveCompareEffectiveUserRating(p);
   const products = productsByCategory
     .flat()
     .sort((a, b) => ratingOf(b) - ratingOf(a));

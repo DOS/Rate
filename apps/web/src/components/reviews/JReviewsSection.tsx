@@ -72,6 +72,8 @@ export interface JReviewsSectionProps {
   productName: string;
   averageRating: number;
   userRatingWeighted: number | null;
+  /** The stored rating the page headline shows (D3), when there is one. */
+  ratingScore?: number | null;
   expertRating: number | null;
   expertReviewSummary?: string | null;
   authenticReviewCount: number;
@@ -142,6 +144,7 @@ export default function JReviewsSection({
   productName,
   averageRating,
   userRatingWeighted,
+  ratingScore,
   expertRating,
   expertReviewSummary,
   authenticReviewCount,
@@ -298,6 +301,10 @@ export default function JReviewsSection({
       bayesianConfidence,
       userWeightSum,
     } = computeJReviewsUserScores(reviews, userRatingWeighted, averageRating);
+    // The buyer score is the stored rating every page shows (D3); the list
+    // only gives the weight and the confidence.
+    const shownUserScore =
+      ratingScore != null && ratingScore > 0 ? ratingScore : bayesianUserScore;
     const confidenceTier: 'insufficient_data' | 'low' | 'medium' | 'high' =
       bayesianConfidence < 0.3
         ? 'insufficient_data'
@@ -333,7 +340,7 @@ export default function JReviewsSection({
     // The buyer score the header shows, so a 100% buyer composite equals it
     // (DOS/Rate#1144).
     const dualScore = computeCombinedDualScore({
-      userScore: bayesianUserScore,
+      userScore: shownUserScore,
       expertScore: computedExpert,
       userConfidence: bayesianConfidence,
       fallbackAverage: averageRating,
@@ -368,7 +375,7 @@ export default function JReviewsSection({
       blendMode: dualScore.blendMode,
       starAnomaly,
       user: computedUser,
-      bayesianUser: bayesianUserScore,
+      bayesianUser: shownUserScore,
       bayesianConfidence,
       confidenceTier,
       confidenceLabel,
@@ -380,6 +387,7 @@ export default function JReviewsSection({
     reviews,
     averageRating,
     userRatingWeighted,
+    ratingScore,
     expertRating,
     shownCriteriaMeta,
     t,
