@@ -68,7 +68,7 @@ function visibleLength(text: string): number {
  * Whether a line has words in it: at least three letters or digits, and
  * not one character repeated ("aaaaa", "....", "🔥🔥🔥🔥🔥").
  */
-function hasContent(text: string): boolean {
+export function hasContent(text: string): boolean {
   const letters = comparablePoint(text).match(/[\p{L}\p{N}]/gu) ?? [];
   return letters.length >= 3 && new Set(letters).size >= 2;
 }

@@ -10,7 +10,13 @@
  * writes the clusters to `rate.product_points`.
  */
 import { getRatingCriteria } from './rating-criteria.js';
-import { comparablePoint, isEvasiveCon } from './review-form.js';
+import {
+  REVIEW_POINT_MAX,
+  REVIEW_POINT_MIN,
+  comparablePoint,
+  hasContent,
+  isEvasiveCon,
+} from './review-form.js';
 
 /** Two lines join a cluster when this share of their words is shared. */
 export const POINT_CLUSTER_OVERLAP = 0.6;
@@ -114,6 +120,7 @@ const FILLER = new Set([
   'nhé',
   'nha',
 ]);
+const NEGATED = 'không_';
 // A negation joins the next word, so "pin không trâu" never matches
 // "pin trâu" by sharing "pin" and "trâu".
 const NEGATION = new Set([
@@ -149,7 +156,7 @@ export function pointTokens(text: string): string[] {
   for (let i = 0; i < words.length; i += 1) {
     const word = words[i]!;
     if (NEGATION.has(word) && i + 1 < words.length) {
-      tokens.push(`không_${words[i + 1]}`);
+      tokens.push(`${NEGATED}${words[i + 1]}`);
       i += 1;
     } else tokens.push(NEGATION.has(word) ? 'không' : word);
   }
@@ -173,7 +180,10 @@ export function wordOverlap(
 }
 
 // Keywords per criterion, written with diacritics. The analyzer's aspect
-// words (battery, display, camera, audio, performance) are the start.
+// words (battery, display, camera, audio, performance) are the start. A word
+// whose plain form is a common word is left out: "đơ" and "đo" read "do"
+// (because), "chờ" reads "cho", "êm" reads "em", "cầm" and "cam" read
+// the colour, "mắc" reads "Mac".
 const CRITERION_KEYWORDS: Readonly<Record<string, readonly string[]>> = {
   battery: ['pin', 'sạc', 'mah', 'sạc nhanh', 'thời lượng', 'củ sạc'],
   display: [
@@ -188,7 +198,6 @@ const CRITERION_KEYWORDS: Readonly<Record<string, readonly string[]>> = {
   ],
   camera: [
     'camera',
-    'cam',
     'chụp',
     'chụp ảnh',
     'quay',
@@ -208,12 +217,10 @@ const CRITERION_KEYWORDS: Readonly<Record<string, readonly string[]>> = {
     'cấu hình',
     'ram',
     'xử lý',
-    'đơ',
   ],
   design: [
     'thiết kế',
     'bền',
-    'cầm',
     'nhẹ',
     'nặng',
     'vỏ',
@@ -223,7 +230,7 @@ const CRITERION_KEYWORDS: Readonly<Record<string, readonly string[]>> = {
     'chống nước',
     'ngoại hình',
   ],
-  value: ['giá', 'tiền', 'đáng tiền', 'rẻ', 'đắt', 'mắc', 'hời'],
+  value: ['giá', 'tiền', 'đáng tiền', 'rẻ', 'đắt', 'hời'],
   sound: ['âm thanh', 'chất âm', 'loa', 'bass', 'treble', 'âm lượng'],
   software: ['phần mềm', 'ứng dụng', 'cập nhật', 'ios', 'android', 'giao diện'],
   keyboard: ['bàn phím', 'phím', 'touchpad', 'trackpad'],
@@ -236,7 +243,6 @@ const CRITERION_KEYWORDS: Readonly<Record<string, readonly string[]>> = {
     'giấc ngủ',
     'ngủ',
     'bước chân',
-    'đo',
   ],
   apps: [
     'ứng dụng',
@@ -249,31 +255,46 @@ const CRITERION_KEYWORDS: Readonly<Record<string, readonly string[]>> = {
     'nfc',
   ],
   anc: ['chống ồn', 'anc', 'xuyên âm', 'cách âm'],
-  comfort: ['đeo', 'êm', 'thoải mái', 'đau tai', 'vừa tai', 'cấn'],
+  comfort: ['đeo', 'thoải mái', 'đau tai', 'vừa tai', 'cấn'],
   calls: ['mic', 'micro', 'gọi', 'cuộc gọi', 'đàm thoại', 'nghe gọi'],
   service_quality: ['chất lượng', 'dịch vụ', 'sạch', 'ngon'],
-  price: ['giá', 'tiền', 'rẻ', 'đắt', 'mắc'],
+  price: ['giá', 'tiền', 'rẻ', 'đắt'],
   attitude: ['thái độ', 'nhân viên', 'phục vụ', 'nhiệt tình', 'lịch sự'],
-  speed: ['nhanh', 'chậm', 'chờ', 'đợi', 'lâu'],
+  speed: ['nhanh', 'chậm', 'đợi', 'lâu'],
 };
 
 /**
- * Whether a keyword's words appear in a line's words, in order. Each word
- * matches as written or with no diacritics at all ("pin", "sac"), never with
- * other ones: "cảm" (cảm ứng) is not "cam" (camera).
+ * Whether a keyword's words appear in a line's words, in order. A line typed
+ * without any diacritics ("pin trau, sac nhanh") matches the plain keyword;
+ * a line with diacritics matches only as written, so "cảm" (cảm ứng) is not
+ * "cam" and "do" (because) is not "đo".
  */
-function containsKeyword(words: readonly string[], keyword: string): boolean {
-  const wanted = keyword.split(SPACE);
+function containsKeyword(
+  words: readonly string[],
+  keyword: string,
+  plainLine: boolean
+): boolean {
+  const wanted = (plainLine ? plainWord(keyword) : keyword).split(SPACE);
   for (let start = 0; start + wanted.length <= words.length; start += 1) {
-    if (
-      wanted.every((want, offset) => {
-        const word = words[start + offset]!;
-        return word === want || word === plainWord(want);
-      })
-    )
+    if (wanted.every((want, offset) => words[start + offset] === want))
       return true;
   }
   return false;
+}
+
+/** Matched keywords, not counting one inside a longer match ("màn" in "màn hình"). */
+function keywordHits(
+  words: readonly string[],
+  keywords: readonly string[],
+  plainLine: boolean
+): number {
+  const matched = keywords.filter((kw) =>
+    containsKeyword(words, kw, plainLine)
+  );
+  return matched.filter(
+    (kw) =>
+      !matched.some((other) => other !== kw && ` ${other} `.includes(` ${kw} `))
+  ).length;
 }
 
 /**
@@ -290,6 +311,7 @@ export function assignPointCriterion(
   if (criterionKey && criteria.some((cr) => cr.key === criterionKey))
     return criterionKey;
   const words = comparablePoint(body).split(SPACE);
+  const plainLine = words.every((word) => word === plainWord(word));
   let best: string | null = null;
   let bestHits = 0;
   for (const criterion of criteria) {
@@ -299,7 +321,7 @@ export function assignPointCriterion(
     )
       ? CRITERION_KEYWORDS[criterion.key]!
       : [];
-    const hits = keywords.filter((kw) => containsKeyword(words, kw)).length;
+    const hits = keywordHits(words, keywords, plainLine);
     if (hits > bestHits) {
       best = criterion.key;
       bestHits = hits;
@@ -327,11 +349,29 @@ interface Line {
   writtenAt: Date;
 }
 
-function asDate(value: string | Date): Date {
-  return value instanceof Date ? value : new Date(value);
+function asDate(value: string | Date | null | undefined): Date {
+  if (value instanceof Date) return value;
+  // new Date(null) is 1970, not an unknown date.
+  return typeof value === 'string' ? new Date(value) : new Date(Number.NaN);
 }
 
-/** The lines that may count: weighted, dated, with words, not a dodge. */
+/**
+ * Two lines that say opposite things: one negates a word the other states
+ * ("không_bị" against "bị"), however many other words they share.
+ */
+function contradicts(a: readonly string[], b: readonly string[]): boolean {
+  const negates = (from: readonly string[], to: Set<string>): boolean =>
+    from.some(
+      (token) =>
+        token.startsWith(NEGATED) && to.has(token.slice(NEGATED.length))
+    );
+  return negates(a, new Set(b)) || negates(b, new Set(a));
+}
+
+/**
+ * The lines that may count: a writer, a finite positive weight, a date, a
+ * length rate.review_points allows, words in it, and not a dodge.
+ */
 function countedLines(
   categorySlug: string | null | undefined,
   lines: readonly PointLine[]
@@ -339,11 +379,17 @@ function countedLines(
   const counted: Line[] = [];
   for (const source of lines) {
     if (source.kind !== 'pro' && source.kind !== 'con') continue;
-    if (!(source.weight > 0)) continue;
+    if (!Number.isFinite(source.weight) || source.weight <= 0) continue;
+    if (typeof source.writerId !== 'string' || !source.writerId.trim())
+      continue;
     const writtenAt = asDate(source.writtenAt);
     if (Number.isNaN(writtenAt.getTime())) continue;
-    if (source.kind === 'con' && isEvasiveCon(source.body)) continue;
-    const tokens = pointTokens(source.body);
+    const body = String(source.body ?? EMPTY).trim();
+    const length = [...body.normalize('NFKC')].length;
+    if (length < REVIEW_POINT_MIN || length > REVIEW_POINT_MAX) continue;
+    if (!hasContent(body)) continue;
+    if (source.kind === 'con' && isEvasiveCon(body)) continue;
+    const tokens = pointTokens(body);
     if (tokens.length === 0) continue;
     counted.push({
       source,
@@ -383,7 +429,9 @@ function clusterLines(lines: readonly Line[]): Line[][] {
         leader.source.kind !== line.source.kind
       )
         continue;
-      const overlap = wordOverlap(leader.tokens, line.tokens);
+      const overlap = contradicts(leader.tokens, line.tokens)
+        ? 0
+        : wordOverlap(leader.tokens, line.tokens);
       if (overlap >= bestOverlap && (!best || overlap > bestOverlap)) {
         best = cluster;
         bestOverlap = overlap;
@@ -424,14 +472,14 @@ function summarise(lines: readonly Line[], now: Date): PointCluster {
     writers.set(writer, Math.max(writers.get(writer) ?? 0, weight));
     if (line.source.isExpert) hasExpert = true;
   }
-  let support = 0;
-  for (const weight of writers.values()) support += weight;
-  support = Math.round(support * 100) / 100;
+  let rawSupport = 0;
+  for (const weight of writers.values()) rawSupport += weight;
+  const support = Math.round(rawSupport * 100) / 100;
   const firstSeen = leader.writtenAt;
   const lastSeen = lines[lines.length - 1]!.writtenAt;
   const fresh = now.getTime() - lastSeen.getTime() <= POINT_SILENT_MS;
   const passes =
-    (writers.size >= POINT_MIN_WRITERS && support >= POINT_MIN_SUPPORT) ||
+    (writers.size >= POINT_MIN_WRITERS && rawSupport >= POINT_MIN_SUPPORT) ||
     hasExpert;
   return {
     key: `${leader.criterionKey ?? GENERAL_POINTS}:${leader.source.kind}:${leader.source.id}`,

@@ -1773,8 +1773,34 @@ function testProductPoints(): void {
   );
   assert.equal(assign('smartphones', 'toString', 'abc def'), null);
 
+  // A plain word that is a keyword without its diacritics ("do", "cho",
+  // "em", "cam") does not route a line, and "màn" inside "màn hình" is one hit.
+  assert.equal(
+    assign('smartphones', null, 'Pin tụt nhanh do cập nhật'),
+    'battery'
+  );
+  assert.equal(
+    assign('smartphones', null, 'Camera mờ do chống rung kém'),
+    'camera'
+  );
+  assert.equal(
+    assign('smartwatches', null, 'Pin tụt nhanh do bật GPS'),
+    'battery'
+  );
+  assert.equal(assign('smartphones', null, 'Màu cam đẹp lắm'), null);
+  assert.equal(assign('earbuds', null, 'Mua cho em gái, mic rõ'), 'calls');
+  assert.equal(
+    assign('smartphones', null, 'màn hình đẹp, pin trâu'),
+    'battery'
+  );
+
   // Clustering: alike lines of one criterion and kind join; a pro and a con,
   // or a negated line, do not.
+  const negated = run([
+    line('a', 'con', 'Màn hình bị ám vàng nhẹ'),
+    line('b', 'con', 'Màn hình không bị ám vàng'),
+  ]);
+  assert.equal(negated.clusters.length, 2, 'a negation splits one kind');
   const alike = run([
     line('a', 'pro', 'Pin trâu, dùng cả ngày'),
     line('b', 'pro', 'pin rất trâu dùng cả ngày'),
@@ -1810,6 +1836,9 @@ function testProductPoints(): void {
   assert.equal(two(0.7).visible, false, '1.4 is below 1.5');
   assert.equal(two(0.75).support, 1.5);
   assert.equal(two(0.75).visible, true);
+  // The threshold reads the exact sum: 1.4952 is stored as 1.50 but hidden.
+  assert.equal(two(0.7476).support, 1.5);
+  assert.equal(two(0.7476).visible, false);
   const expert = run([
     line('x', 'con', 'Camera tele hơi mờ', { isExpert: true }),
   ]);
@@ -1847,6 +1876,20 @@ function testProductPoints(): void {
   ]);
   assert.equal(gated.clusters.length, 0);
   assert.equal(gated.reviewCount, 0);
+  // Lines the review_points table would refuse, or with no writer, no date or
+  // a weight that is not a number, are not counted either.
+  const malformed = run([
+    line('a', 'pro', 'ok'),
+    line('b', 'pro', 'ok'),
+    line('c', 'pro', 'aaaaaaa'),
+    line('d', 'pro', `pin trâu ${'x'.repeat(150)}`),
+    line('', 'pro', 'pin trâu cả ngày'),
+    { ...line('e', 'pro', 'pin trâu cả ngày'), writerId: undefined as never },
+    { ...line('f', 'pro', 'pin trâu cả ngày'), writtenAt: null as never },
+    line('g', 'pro', 'pin trâu cả ngày', { weight: Infinity }),
+    line('h', 'pro', 'pin trâu cả ngày', { weight: Number.NaN }),
+  ]);
+  assert.equal(malformed.clusters.length, 0);
 
   // Freshness: a weight halves every 12 months; 18 silent months hide a point.
   assert.ok(
