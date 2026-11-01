@@ -291,6 +291,11 @@ async function runEntityMatcherSuite() {
     'iPhone 16 Pro Max 256GB Máy cũ lên đời trợ giá',
     'iPhone 16 Pro Max 256GB Lên đời từ điện thoại cũ',
     'iPhone 16 Pro Max 256GB Thu đt cũ đổi mới',
+    'iPhone 16 Pro Max 256GB Thu mua giá cao máy cũ',
+    'iPhone 16 Pro Max 256GB Thu mua lại máy cũ',
+    'iPhone 16 Pro Max 256GB Trợ giá 2 triệu cho máy cũ',
+    'iPhone 16 Pro Max 256GB Lên đời - máy cũ trợ giá',
+    'iPhone 16 Pro Max 256GB Lên-đời máy cũ',
   ]) {
     assert.equal(detectProductCondition(title), 'new', `${title} is a new device`);
   }
@@ -301,9 +306,13 @@ async function runEntityMatcherSuite() {
     'Samsung Galaxy S21 điện thoại cũ đã qua sử dụng',
     'Thanh lý máy cũ iPhone XS Max',
     'iPhone 13 cũ - máy cũ zin, trợ giá ship',
+    // A warranty swap is not a trade-in, and a bare "hỗ trợ" is not a trade-in verb.
+    'iPhone 11 64GB máy cũ đổi mới trong 30 ngày',
+    'iPhone 12 Pro hỗ trợ máy cũ',
   ]) {
     assert.equal(detectProductCondition(title), 'used', `${title} is a used device`);
   }
+  assert.equal(detectProductCondition('Điện thoại cũ đổi mới 99%'), 'like_new_99');
   for (const title of [
     'Tai nghe Apple AirPods Pro 2nd Gen USB-C Chính hãng VN/A',
     'Apple iPhone SE 2nd generation 64GB',

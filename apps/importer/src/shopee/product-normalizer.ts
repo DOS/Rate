@@ -159,16 +159,24 @@ export class NonNewListingError extends Error {
  * A trade-in offer for the buyer's old device, which says nothing about the listing's own:
  * a trade-in verb right before "(máy|điện thoại) cũ" ("thu mua máy cũ", "lên đời máy cũ",
  * "trợ giá máy cũ", "hỗ trợ đổi máy cũ"), or "cũ" right before "lên đời" or "đổi/lấy mới"
- * ("thu cũ đổi mới", "máy cũ lên đời"). A few filler words may sit between verb and device.
+ * ("thu cũ đổi mới", "máy cũ lên đời"). A few filler words or an amount ("2 triệu") may sit
+ * between verb and device, and a hyphen, colon or comma may separate the words. "Mới" is not
+ * a trade-in when a number or a warranty term follows it ("đổi mới 99%", "đổi mới trong 30
+ * ngày"), and a bare "hỗ trợ" is not a trade-in verb ("hỗ trợ máy cũ").
  */
-const OLD_DEVICE = String.raw`(?:(?:máy|điện\s*thoại|đt)\s*)?cũ`;
+const SEP = String.raw`[\s\-:,]*`;
+const OLD_DEVICE = String.raw`(?:(?:máy|điện\s*thoại|đt)${SEP})?cũ`;
+const TRADE_IN_FILLER = String.raw`(?:(?:từ|cho|mọi|các|bằng|khi|lại|giá\s*cao|\d+(?:[.,]\d+)?\s*(?:triệu|tr|k|đ))${SEP})*`;
+const TRADE_IN_TO_NEW = String.raw`(?:lên${SEP}đời|(?:lấy|đổi|sang)${SEP}(?:(?:máy|điện\s*thoại)${SEP})?mới(?!\s*(?:\d|trong|sau|nếu|khi)))`;
 const TRADE_IN_PHRASE = new RegExp(
-  String.raw`(?:thu(?:\s*mua)?|đổi|lên\s*đời|trợ\s*giá|hỗ\s*trợ)\s*(?:(?:từ|cho|mọi|các|bằng|khi)\s*)*` +
+  String.raw`(?:(?:hỗ\s*trợ${SEP})?(?:thu(?:\s*mua)?|đổi|lên${SEP}đời)|trợ\s*giá)${SEP}` +
+    TRADE_IN_FILLER +
     OLD_DEVICE +
-    String.raw`(?:\s*(?:lên\s*đời|(?:lấy|đổi|sang)\s*(?:(?:máy|điện\s*thoại)\s*)?mới))?` +
+    String.raw`(?:${SEP}${TRADE_IN_TO_NEW})?` +
     '|' +
     OLD_DEVICE +
-    String.raw`\s*(?:lên\s*đời|(?:lấy|đổi|sang)\s*(?:(?:máy|điện\s*thoại)\s*)?mới)`,
+    SEP +
+    TRADE_IN_TO_NEW,
   'gi'
 );
 
