@@ -1707,6 +1707,24 @@ function testRatingCriteriaAndReviewForm(): void {
   const started = Date.now();
   assert.ok(!rules.isEvasiveCon('khong ' + 'gi '.repeat(50_000) + 'x'));
   assert.ok(Date.now() - started < 1000, 'linear on an oversized con');
+  // Emoji marks and flag tags are invisible: "☺️" leaves no mark behind, so
+  // the dodge is caught, and "Pin tốt ❤️" is "Pin tốt" twice.
+  assert.ok(rules.isEvasiveCon('Không có gì ☺️'));
+  assert.ok(rules.isEvasiveCon('10/10 ❤️'));
+  assert.equal(rules.comparablePoint('Pin tốt ❤️'), 'pin tốt');
+  assert.equal(rules.storedPoint('  Loa​ to 🏴󠁧󠁢󠁳󠁣󠁴󠁿 '), 'Loa to 🏴');
+  // A line is measured as stored: 150 decomposed letters are 150 letters.
+  const decomposed = 'ướ'.repeat(75).normalize('NFD');
+  assert.deepEqual(
+    rules
+      .validateReviewText({
+        verdict: 'Máy tốt, pin trâu, camera chụp đêm ổn định.',
+        pros: [decomposed],
+        cons: ['Giá hơi cao so với đối thủ'],
+      })
+      .filter((issue) => issue.kind === 'point_length'),
+    []
+  );
 }
 
 function testProductPoints(): void {

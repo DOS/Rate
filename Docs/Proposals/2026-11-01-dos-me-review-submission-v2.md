@@ -1,0 +1,90 @@
+# DOS-Me migration proposal: review submission v2 (P3)
+
+**Not applied.** DOS/Rate#1544, phase P3 of the criteria ratings design (`2026-10-31-criteria-stars-pros-cons.html`, sections 2 and 4.2; D1 and D5, approved by JOY on 2026-10-31). JOY reviews it and applies it through DOS-Me: preview, then beta, then production. DOS/Rate runs no DDL against production.
+
+- **Needs:** P2 (`2026-10-31-dos-me-criteria-ratings.sql`, DOS/DOS.Me#1489) applied first. P3 writes P2's columns (`rating_exact`, `verdict`, `criteria_version`) and P2's `rate.review_points` table.
+- **Files:**
+  - `2026-11-01-dos-me-review-submission-v2.sql`: the migration, one transaction, re-runnable.
+  - `-verify.sql`: read-only checks; V1 to V7 must return 0.
+  - `-rollback.sql`: drops what the migration adds, one transaction, re-runnable.
+- **Replay test:** `scripts/test-review-submission-v2-proposal.mjs`, on Docker, in DOS/Rate CI.
+
+## What it adds
+
+- **`rate.rating_criteria`:** the criteria of each category, with weight, the required flag and order, versioned. Version 1 is `packages/shared-data/src/rules/rating-criteria.ts`, 36 rows. A version never changes; a new list is a new version. RLS is on, with public read.
+- **Line helpers**, the SQL side of `review-form.ts`. They read text under the built-in `pg_c_utf8` collation (PostgreSQL 17), so they behave the same whatever the database's locale is:
+  - `rate.review_text_stored` (`storedPoint`): a line as stored, composed (NFC), without invisible characters, trimmed;
+  - `rate.review_point_compare` (`comparablePoint`): lower case, diacritics kept, anything but letters, digits and spaces as a space;
+  - `rate.review_point_has_content` (`hasContent`);
+  - `rate.review_point_is_evasive_con` (`isEvasiveCon`); its pattern is `EVASIVE_CON_PATTERN`, character for character;
+  - `rate.review_text_length`: code points of the stored form, so a stored line always fits the `review_points` length check;
+  - `rate.review_point_list`, which checks one list of pros or cons.
+- **`rate.submit_community_review_v2(master, criteria, verdict, pros, cons, criterion_points, comment, author_name, variation, reviewer_type)`**, SECURITY DEFINER, callable by `authenticated` and `service_role`. It:
+  - checks the criterion stars: keys of the master's category only, 1 to 5 in half steps, the required criterion given, at most 2 left out. It stores each star at 0.1, whatever scale the caller sent;
+  - stores `rating_exact` as their weighted average at 0.1 (the same as `weightedReviewStar`), and `rating_star` as that value rounded;
+  - checks the verdict: 20 to 300 characters, with words in it;
+  - checks pros and cons: 1 to 5 each, 5 to 150 characters each, no line twice, no line in both lists, and no con that dodges;
+  - checks the lines of one criterion: up to 3 pros and 3 cons, under the same rules. As in `review-form.ts`, nothing compares a criterion's lines with the overall lists or with another criterion's, and a criterion the writer left unrated may still have lines;
+  - writes the review, one `rate.review_points` row per line, the author row and the excluded flag, all in one transaction. A refused call writes nothing.
+  - Without free text, the verdict becomes the review's `comment`, so the analyzer and v1 readers still have text.
+- **`review_points_position_key`:** one row per review, criterion, kind and position.
+
+## Same as v1
+
+- Only a signed-in, non-anonymous user or the service role can submit.
+- The review goes on a crawled listing of the master.
+- One review per user and master, and at most 5 reviews per user in 24 hours. v1 and v2 share the per-user lock.
+- The keyword rules apply, now over the verdict and the lines too. They only exclude.
+- A new review starts excluded until the analyzer decides.
+
+v1 stays unchanged and granted, so the current form works until the web calls v2. A later migration revokes v1.
+
+## Errors
+
+- Messages are in Vietnamese, with SQLSTATE 22023.
+- The field is in `DETAIL`, so the API can mark it:
+  - `criteria`, or `criteria.<key>`;
+  - `verdict`;
+  - `pros`, or `pros.<i>`;
+  - `cons`, or `cons.<i>`;
+  - `criterion_points.<key>.<pros|cons>.<i>`;
+  - `comment`.
+- The gates keep v1's codes:
+  - 42501: not signed in, or an anonymous account;
+  - 23505: the user already reviewed this master;
+  - 54000: more than 5 reviews in 24 hours;
+  - P0002: no product, or no listing.
+
+## Differences from the TypeScript rules
+
+- **Invisible characters:** both sides strip the same set: every format character (`\p{Cf}`, including the tags of flag emoji), the emoji variation selectors and the keycap mark.
+  - The replay test checks every such code point.
+  - With this PR, `review-form.ts` also strips them. Before, "Không có gì ☺️" passed as a con, because the variation selector survived.
+- **Same rules on both sides:** comparison turns anything but letters, digits and spaces into a space, and lengths count code points of the stored form.
+- **Known differences:** both are rare in Vietnamese reviews, and V7 checks the cases that matter.
+  - Case folding follows Unicode simple mapping in SQL; JavaScript gives a final sigma ("ς").
+  - Some scripts' combining marks are kept by JavaScript composition but turned into spaces by the SQL class.
+- **Corpus:** the replay test compares the compared form, the dodge check, the stored form and the length on a corpus of real and tricky lines:
+  - diacritics, dodges, upper case and fullwidth letters;
+  - zero-width and tag characters, variation-selector, keycap and flag emoji;
+  - decomposed input, and astral private-use characters.
+- **Unknown category:** the RPC refuses a master whose category has no list (or no category). `getRatingCriteria` falls back to the smartphone list, so the API must check `hasRatingCriteria` before it shows the form.
+
+## Rollout
+
+1. Preview: Supabase Preview applies it on the DOS-Me PR. Then run the verify file there, read-only.
+2. Beta: the native GitHub Integration applies it on merge to `dev`. Then run the verify file.
+3. Production: a selective promote PR into `main`, after JOY's approval, as for P2.
+4. Web (P3, #1544): the form and `POST /api/v1/rate/reviews` call v2, and map `DETAIL` to the field.
+5. Rollback: `-rollback.sql`, only while no web build calls v2. Reviews written through v2 keep their columns and lines.
+
+## Verification
+
+- **V1:** 36 version 1 rows; each category weighs 100, with one required criterion.
+- **V2:** the seven functions exist; the RPC is SECURITY DEFINER with an empty `search_path`.
+- **V3:** `anon` cannot run the RPC or the helpers; `authenticated` and `service_role` can.
+- **V4:** every v2 review has a verdict, a 0.1 star, a pro and a con.
+- **V5:** every v2 review's star equals its 0.1 star rounded.
+- **V6:** the position key exists.
+- **V7:** the helpers read Vietnamese as shared-data does on this database: upper case, diacritics, a dodge, emoji marks, length.
+- **V8** (for information): the number of v2 reviews and lines.
