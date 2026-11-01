@@ -750,6 +750,33 @@ export type Database = {
           },
         ];
       };
+      rating_criteria: {
+        Row: {
+          category_slug: string;
+          criteria_version: number;
+          key: string;
+          position: number;
+          required: boolean;
+          weight: number;
+        };
+        Insert: {
+          category_slug: string;
+          criteria_version: number;
+          key: string;
+          position: number;
+          required?: boolean;
+          weight: number;
+        };
+        Update: {
+          category_slug?: string;
+          criteria_version?: number;
+          key?: string;
+          position?: number;
+          required?: boolean;
+          weight?: number;
+        };
+        Relationships: [];
+      };
       review_analysis: {
         Row: {
           ai_summary: string | null;
@@ -1348,6 +1375,24 @@ export type Database = {
         Args: { p_author: string; p_comment: string; p_rating: number };
         Returns: string;
       };
+      review_point_compare: { Args: { p_text: string }; Returns: string };
+      review_point_has_content: { Args: { p_text: string }; Returns: boolean };
+      review_point_is_evasive_con: {
+        Args: { p_text: string };
+        Returns: boolean;
+      };
+      review_point_list: {
+        Args: {
+          p_field: string;
+          p_kind: string;
+          p_lines: Json;
+          p_max: number;
+          p_min: number;
+        };
+        Returns: string[];
+      };
+      review_text_length: { Args: { p_text: string }; Returns: number };
+      review_text_stored: { Args: { p_text: string }; Returns: string };
       search_catalog_autocomplete: {
         Args: { p_limit?: number; p_query: string };
         Returns: {
@@ -1451,6 +1496,21 @@ export type Database = {
           p_rating_star: number;
           p_reviewer_type?: string;
           p_variation?: string;
+        };
+        Returns: Json;
+      };
+      submit_community_review_v2: {
+        Args: {
+          p_author_name?: string;
+          p_comment?: string;
+          p_cons: Json;
+          p_criteria_ratings: Json;
+          p_criterion_points?: Json;
+          p_master_product_id: string;
+          p_pros: Json;
+          p_reviewer_type?: string;
+          p_variation?: string;
+          p_verdict: string;
         };
         Returns: Json;
       };
