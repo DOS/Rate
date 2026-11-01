@@ -17,6 +17,7 @@ import {
   squashBody,
   LINT_TIMEOUT_MS,
   lintHeader,
+  lintTimeoutMs,
   mergeWhenGreen,
   squashTitle,
   wrapLine,
@@ -403,14 +404,16 @@ test('the squash message of PR bodies with lines over 100 characters passes comm
   assert.doesNotMatch(result.output, /warning/);
 });
 
-test('lints the squash header with the repository commitlint, type-enum included', () => {
+test('lints the squash header with the repository commitlint, type-enum included', async () => {
   // A valid header passes.
-  assert.deepEqual(lintHeader('fix(web): a thing (#7)'), {
+  assert.deepEqual(await lintHeader('fix(web): a thing (#7)'), {
     ok: true,
     problems: [],
   });
   // "ux" fits the shape check but not commitlint's type-enum (DOS/Rate#1513).
-  const ux = lintHeader('ux(web): the same product shows one rating (#1475)');
+  const ux = await lintHeader(
+    'ux(web): the same product shows one rating (#1475)'
+  );
   assert.equal(
     squashTitle('ux(web): the same product shows one rating', 1475),
     'ux(web): the same product shows one rating (#1475)'
@@ -418,49 +421,81 @@ test('lints the squash header with the repository commitlint, type-enum included
   assert.equal(ux.ok, false);
   assert.ok(
     ux.problems.some(
-      (p) => /type must be one of/.test(p) && /type-enum/.test(p)
+      (p) => /type must be one of/.test(p) && /\[type-enum\]/.test(p)
     ),
     ux.problems.join('\n')
   );
   // A start-case subject is refused with commitlint's reason.
-  const startCase = lintHeader('fix(web): Add a sentence-case subject (#8)');
+  const startCase = await lintHeader(
+    'fix(web): Add a sentence-case subject (#8)'
+  );
   assert.equal(startCase.ok, false);
   assert.ok(
-    startCase.problems.some((p) => /subject-case/.test(p)),
+    startCase.problems.some((p) => /\[subject-case\]/.test(p)),
     startCase.problems.join('\n')
+  );
+  // The config's own ignores apply: a Dependabot subject is skipped (DOS/Rate#725).
+  assert.equal(
+    (await lintHeader('chore(deps): Bump foo from 1.0.0 to 1.0.1 (#9)')).ok,
+    true
   );
 });
 
-test('a squash header is refused, not merged, when commitlint cannot run', () => {
-  const missing = lintHeader('fix(web): a thing (#7)', { cwd: os.tmpdir() });
+test('a squash header is refused, not merged, when commitlint cannot run', async () => {
+  const missing = await lintHeader('fix(web): a thing (#7)', {
+    cwd: os.tmpdir(),
+  });
   assert.equal(missing.ok, false);
   assert.match(missing.problems[0], /commitlint is not installed/);
-  const failed = lintHeader('fix(web): a thing (#7)', {
-    spawnFn: () => ({ error: new Error('spawn failed'), status: null }),
-  });
-  assert.deepEqual(failed, {
-    ok: false,
-    problems: ['commitlint could not run or timed out'],
-  });
-  const silent = lintHeader('fix(web): a thing (#7)', {
-    spawnFn: () => ({ status: 2, stdout: '', stderr: '' }),
-  });
-  assert.deepEqual(silent, { ok: false, problems: ['commitlint exited 2'] });
-  // A broken config says why in its first lines, and the lint is bounded in time.
-  const broken = lintHeader('fix(web): a thing (#7)', {
-    spawnFn: (_cmd, _args, opts) => {
-      assert.equal(opts.timeout, LINT_TIMEOUT_MS);
-      return {
-        status: 9,
-        stdout: '',
-        stderr: 'Error: cannot load config\n  at x',
-      };
+  const broken = await lintHeader('fix(web): a thing (#7)', {
+    loader: async () => {
+      throw new Error('cannot load config');
     },
   });
   assert.deepEqual(broken, {
     ok: false,
-    problems: ['commitlint exited 9: Error: cannot load config | at x'],
+    problems: ['commitlint could not run: cannot load config'],
   });
+  const throwing = await lintHeader('fix(web): a thing (#7)', {
+    loader: async () => () => {
+      throw new Error('parser blew up');
+    },
+  });
+  assert.deepEqual(throwing.problems, [
+    'commitlint could not run: parser blew up',
+  ]);
+  const silent = await lintHeader('fix(web): a thing (#7)', {
+    loader: async () => () => ({ valid: false, errors: [] }),
+  });
+  assert.deepEqual(silent, {
+    ok: false,
+    problems: ['commitlint found the header invalid'],
+  });
+  // A load that never ends fails closed at the timeout (DOS/Rate#1564).
+  const hung = await lintHeader('fix(web): a thing (#7)', {
+    loader: () => new Promise(() => {}),
+    timeoutMs: 20,
+  });
+  assert.deepEqual(hung, {
+    ok: false,
+    problems: ['commitlint timed out after 0.02 s'],
+  });
+});
+
+test('the lint timeout defaults to three minutes and takes a positive override', () => {
+  assert.equal(LINT_TIMEOUT_MS, 180_000);
+  assert.equal(lintTimeoutMs({}), LINT_TIMEOUT_MS);
+  assert.equal(
+    lintTimeoutMs({ MERGE_WHEN_GREEN_LINT_TIMEOUT_MS: '300000' }),
+    300_000
+  );
+  for (const bad of ['0', '-5', 'abc', '1.5', '']) {
+    assert.equal(
+      lintTimeoutMs({ MERGE_WHEN_GREEN_LINT_TIMEOUT_MS: bad }),
+      LINT_TIMEOUT_MS,
+      bad
+    );
+  }
 });
 
 /**
@@ -560,4 +595,44 @@ test('no branch update goes out once the deadline has passed', async () => {
   assert.equal(result.ok, false);
   assert.match(result.message, /still not mergeable after/);
   assert.deepEqual(writes, [], 'the branch was not updated');
+});
+
+test('a merge waits for a slow lint, and a rejection it reports writes nothing', async () => {
+  // The lint resolves only after the checks are green: the merge waits for it.
+  let release;
+  const slow = new Promise((resolve) => (release = resolve));
+  const { io, writes } = fakeGitHub();
+  const pending = mergeWhenGreen({
+    number: 41,
+    timeoutMs: 500,
+    intervalMs: 10,
+    lint: () => slow,
+    io,
+  });
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(writes, [], 'no merge before the lint has a verdict');
+  release({ ok: true, problems: [] });
+  assert.equal((await pending).ok, true);
+  // A rejected header is never merged, and a throwing lint fails closed.
+  for (const lint of [
+    async () => ({
+      ok: false,
+      problems: ['type must be one of [fix] [type-enum]'],
+    }),
+    () => {
+      throw new Error('boom');
+    },
+  ]) {
+    const rejected = fakeGitHub();
+    const result = await mergeWhenGreen({
+      number: 41,
+      timeoutMs: 500,
+      intervalMs: 10,
+      lint,
+      io: rejected.io,
+    });
+    assert.equal(result.ok, false);
+    assert.match(result.message, /commitlint rejects the squash header/);
+    assert.deepEqual(rejected.writes, []);
+  }
 });

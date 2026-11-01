@@ -13,10 +13,10 @@
 // --ignore lets a known-broken, non-required check through; name it in the PR.
 // Prints one line and exits 0 when merged, 1 when it cannot merge.
 
-import { spawnSync } from 'node:child_process';
-import { existsSync } from 'node:fs';
+import { existsSync, realpathSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { parseArgs } from 'node:util';
 import {
   DEFAULT_REPO,
@@ -208,61 +208,119 @@ export function squashTitle(title, number) {
 }
 
 const REPO_ROOT = fileURLToPath(new URL('../../', import.meta.url));
-const COMMITLINT_CLI = 'node_modules/@commitlint/cli/cli.js';
-export const LINT_TIMEOUT_MS = 60_000;
+const COMMITLINT_CLI_PACKAGE = 'node_modules/@commitlint/cli/package.json';
+/**
+ * How long the lint may take before it fails closed. Loading commitlint opens
+ * about a thousand small files; on a cold Windows checkout with antivirus
+ * scanning that took up to two minutes of wall time at almost no CPU
+ * (DOS/Rate#1564). MERGE_WHEN_GREEN_LINT_TIMEOUT_MS overrides it.
+ */
+export const LINT_TIMEOUT_MS = 180_000;
+
+export function lintTimeoutMs(env = process.env) {
+  const raw = env.MERGE_WHEN_GREEN_LINT_TIMEOUT_MS;
+  const ms = Number(raw);
+  return raw && Number.isInteger(ms) && ms > 0 ? ms : LINT_TIMEOUT_MS;
+}
+
+/**
+ * Loads the repository's commitlint in-process: @commitlint/load reads
+ * commitlint.config.ts (extends, parser preset, ignores) and @commitlint/lint
+ * applies it, as the CLI does, without a child process. Both are resolved from
+ * @commitlint/cli, whose dependencies they are.
+ */
+export async function loadCommitlint(cwd = REPO_ROOT) {
+  const cliPackage = path.join(cwd, COMMITLINT_CLI_PACKAGE);
+  if (!existsSync(cliPackage)) {
+    throw new Error(
+      `commitlint is not installed (${COMMITLINT_CLI_PACKAGE}): run pnpm install`
+    );
+  }
+  // pnpm links the package: resolve its dependencies from where it really is.
+  const require = createRequire(realpathSync(cliPackage));
+  const importDefault = async (name) => {
+    const mod = await import(pathToFileURL(require.resolve(name)).href);
+    return mod.default?.default ?? mod.default;
+  };
+  const [load, lint] = await Promise.all([
+    importDefault('@commitlint/load'),
+    importDefault('@commitlint/lint'),
+  ]);
+  const config = await load({}, { cwd });
+  const options = {
+    parserOpts: config.parserPreset?.parserOpts ?? {},
+    plugins: config.plugins ?? {},
+    ignores: config.ignores ?? [],
+    defaultIgnores: config.defaultIgnores,
+    helpUrl: config.helpUrl,
+  };
+  return (message) => lint(message, config.rules, options);
+}
+
+/** One commitlint load per checkout, shared by every lint of a run. */
+const commitlintLoads = new Map();
 
 /**
  * Lints a squash header with the repository's own commitlint config
  * (commitlint.config.ts), as the commitlint check will: type-enum, case,
  * length and the rest. The shape check in squashTitle let "ux(web): ..." through
- * (DOS/Rate#1513). Fails closed when commitlint cannot run, so no header is
- * merged unchecked. `problems` holds commitlint's own lines.
+ * (DOS/Rate#1513). Fails closed when commitlint cannot load or run, or takes
+ * longer than the timeout, so no header is merged unchecked. `problems` holds
+ * commitlint's own messages, as "<message> [rule]".
  */
-export function lintHeader(
+export async function lintHeader(
   header,
-  { cwd = REPO_ROOT, spawnFn = spawnSync } = {}
+  { cwd = REPO_ROOT, loader = loadCommitlint, timeoutMs = lintTimeoutMs() } = {}
 ) {
-  if (!existsSync(path.join(cwd, COMMITLINT_CLI))) {
+  const key = loader === loadCommitlint ? cwd : null;
+  let loading = key === null ? undefined : commitlintLoads.get(key);
+  if (!loading) {
+    loading = Promise.resolve().then(() => loader(cwd));
+    if (key !== null) {
+      commitlintLoads.set(key, loading);
+      // A failed load is not kept: the next lint tries again.
+      loading.catch(() => commitlintLoads.delete(key));
+    }
+  }
+  return lintWith(loading, header, timeoutMs);
+}
+
+async function lintWith(loading, header, timeoutMs) {
+  let timer;
+  const timeout = new Promise((resolve) => {
+    timer = setTimeout(() => resolve(null), timeoutMs);
+    timer.unref?.();
+  });
+  try {
+    const report = await Promise.race([
+      loading.then((lint) => lint(header)),
+      timeout,
+    ]);
+    if (report === null) {
+      return {
+        ok: false,
+        problems: [`commitlint timed out after ${timeoutMs / 1000} s`],
+      };
+    }
+    if (report.valid) return { ok: true, problems: [] };
+    const problems = [...(report.errors ?? [])].map(
+      (e) => `${e.message} [${e.name}]`
+    );
     return {
       ok: false,
-      problems: [
-        `commitlint is not installed (${COMMITLINT_CLI}): run pnpm install`,
-      ],
+      problems:
+        problems.length > 0
+          ? problems
+          : ['commitlint found the header invalid'],
     };
+  } catch (err) {
+    return {
+      ok: false,
+      problems: [`commitlint could not run: ${err?.message ?? err}`],
+    };
+  } finally {
+    clearTimeout(timer);
   }
-  // A hung commitlint fails closed after a minute instead of holding the merge.
-  const r = spawnFn(process.execPath, [COMMITLINT_CLI], {
-    cwd,
-    input: header,
-    encoding: 'utf8',
-    timeout: LINT_TIMEOUT_MS,
-  });
-  if (r.error || r.status === null) {
-    return { ok: false, problems: ['commitlint could not run or timed out'] };
-  }
-  if (r.status === 0) return { ok: true, problems: [] };
-  // commitlint prints "✖   <problem> [rule]" lines, coloured on a terminal.
-  // eslint-disable-next-line no-control-regex
-  const plain = `${r.stdout}\n${r.stderr}`.replace(/\u001b\[[0-9;]*m/g, '');
-  const problems = plain
-    .split(/\r?\n/)
-    .map((l) => l.trim())
-    .filter((l) => /^✖\s+/.test(l) && !/found \d+ problems?/.test(l))
-    .map((l) => l.replace(/^✖\s+/, ''));
-  // With no "✖" line (a broken config, say), the first lines of its output say why.
-  const head = plain
-    .split(/\r?\n/)
-    .map((l) => l.trim())
-    .filter(Boolean)
-    .slice(0, 3)
-    .join(' | ');
-  return {
-    ok: false,
-    problems:
-      problems.length > 0
-        ? problems
-        : [`commitlint exited ${r.status}${head ? `: ${head}` : ''}`],
-  };
 }
 
 /**
@@ -452,9 +510,24 @@ export async function mergeWhenGreen({
           };
         }
         // Linted once per header: the title is re-read each poll and may change.
-        if (!headerLints.has(header)) headerLints.set(header, lint(header));
-        const linted = headerLints.get(header);
-        if (!linted.ok) {
+        // The lint runs while the checks are awaited; a rejection it has
+        // reported stops the run at once, and a merge waits for its verdict.
+        if (!headerLints.has(header)) {
+          const entry = { result: null };
+          entry.promise = Promise.resolve()
+            .then(() => lint(header))
+            .catch((err) => ({
+              ok: false,
+              problems: [`commitlint could not run: ${err?.message ?? err}`],
+            }))
+            .then((r) => {
+              entry.result = r;
+              return r;
+            });
+          headerLints.set(header, entry);
+        }
+        const linted = headerLints.get(header).result;
+        if (linted && !linted.ok) {
           return {
             ok: false,
             message: `PR ${number}: commitlint rejects the squash header "${header}": ${linted.problems.join('; ')}`,
@@ -510,6 +583,14 @@ export async function mergeWhenGreen({
       // mixes their trailers into the body: send one commitlint accepts.
       const squash = {};
       if (method === 'squash') {
+        const header = squashTitle(pr.title, number);
+        const linted = await headerLints.get(header).promise;
+        if (!linted.ok) {
+          return {
+            ok: false,
+            message: `PR ${number}: commitlint rejects the squash header "${header}": ${linted.problems.join('; ')}`,
+          };
+        }
         let messages;
         try {
           messages = io
