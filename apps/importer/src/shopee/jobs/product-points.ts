@@ -8,9 +8,22 @@
  * and category, clusters the lines of each master with
  * aggregateProductPoints (@repo/shared-data/rules), and writes the points it
  * shows to rate.product_points (method 'code'). Dry-run by default: it prints
- * what it would write. `--apply` writes, as the rate_worker role
- * (SUPABASE_RATE_WORKER_KEY), which may read the review tables and write only
+ * what it would write. `--apply` writes, as the rate_worker role: the job
+ * signs in as the worker's Supabase Auth user (RATE_WORKER_EMAIL and
+ * RATE_WORKER_PASSWORD, with the project's publishable key), whose access
+ * token carries that role. It may read the review tables and write only
  * product_points.
+ *
+ * Which lines count, as the P2 rating counts reviews: lines the writer wrote
+ * (method 'writer'), on crawled listings (origin 'crawl'), of crawled or
+ * community reviews; seed, synthetic, fixture and backfill rows never show.
+ * A review is one writer: a Rate user writes one review per master. Two
+ * reviews of one person on one master (after the matcher moves a listing) or
+ * several marketplace reviews of one buyer count as several writers; the
+ * analyzer's weights and D9's weight sum limit what that can show.
+ *
+ * Run it from one place at a time (the importer's schedule). Two runs at once
+ * can leave both runs' rows until the next run, which replaces them.
  *
  * Per master, new rows are inserted before the old 'code' rows are deleted, so
  * a reader never sees a master with no points while the job runs. A master
@@ -43,6 +56,7 @@ export interface ReviewPointRow {
 export interface PointReviewRow {
   id: string;
   product_id: string;
+  origin: string | null;
   reviewer_type: string | null;
   helpfulness_weight: number | string | null;
   created_at: string | null;
@@ -56,6 +70,7 @@ export interface PointReviewRow {
 export interface PointListingRow {
   id: string;
   cluster_id: string | null;
+  origin: string | null;
 }
 
 export interface PointMasterRow {
@@ -88,11 +103,15 @@ const flagOf = (
 ): { include_in_rating: boolean | null; verdict: string | null } | null =>
   Array.isArray(review.review_flags) ? (review.review_flags[0] ?? null) : review.review_flags;
 
+/** Reviews whose lines may count: crawled or community, never seed or test data. */
+const COUNTED_REVIEW_ORIGINS = new Set(['crawl', 'community']);
+
 /**
- * The weight a review's lines carry. A user review counts only once the
- * analyzer included it in the rating, with its stored weight (the gate of
- * design 5.1: weight 0 is not counted). An expert review Rate published counts
- * with weight 1 at least, unless the analyzer excluded it after looking at it.
+ * The weight a review's lines carry. A user review counts as the P2 rating
+ * counts it: it has a flag that does not exclude it (a NULL include counts),
+ * with its stored weight; weight 0 is the gate of design 5.1. An expert review
+ * Rate published counts with weight 1 at least, unless the analyzer excluded
+ * it after looking at it (D9: one expert shows a point).
  */
 export function reviewPointWeight(review: PointReviewRow): number {
   const flag = flagOf(review);
@@ -105,7 +124,7 @@ export function reviewPointWeight(review: PointReviewRow): number {
       (flag.verdict ?? 'unanalyzed') !== 'unanalyzed';
     return excluded ? 0 : Math.max(1, weight);
   }
-  return flag?.include_in_rating === true ? weight : 0;
+  return flag !== null && flag.include_in_rating !== false ? weight : 0;
 }
 
 /**
@@ -126,7 +145,7 @@ export function buildProductPoints(
   const reviewById = new Map(input.reviews.map(r => [r.id, r]));
   const masterByListing = new Map(
     input.listings
-      .filter(l => typeof l.cluster_id === 'string' && l.cluster_id)
+      .filter(l => typeof l.cluster_id === 'string' && l.cluster_id && l.origin === 'crawl')
       .map(l => [l.id, l.cluster_id as string])
   );
   const slugByCategory = new Map(input.categories.map(c => [c.id, c.slug]));
@@ -140,7 +159,7 @@ export function buildProductPoints(
   const linesByMaster = new Map<string, PointLine[]>();
   for (const point of input.points) {
     const review = reviewById.get(point.review_id);
-    if (!review) continue;
+    if (!review || !COUNTED_REVIEW_ORIGINS.has(review.origin ?? '')) continue;
     const masterId = masterByListing.get(review.product_id);
     if (!masterId || !categoryByMaster.has(masterId)) continue;
     if (point.kind !== 'pro' && point.kind !== 'con') continue;
@@ -230,20 +249,21 @@ export async function runProductPointsJob(
     supabase
       .from('review_points')
       .select('id, review_id, criterion_key, kind, body')
+      .eq('method', 'writer')
       .order('id')
       .range(from, to)
   );
   const reviews = await selectIn<PointReviewRow>(
     supabase,
     'reviews',
-    'id, product_id, reviewer_type, helpfulness_weight, created_at, platform_created_at, review_flags(include_in_rating, verdict)',
+    'id, product_id, origin, reviewer_type, helpfulness_weight, created_at, platform_created_at, review_flags(include_in_rating, verdict)',
     'id',
     points.map(p => p.review_id)
   );
   const listings = await selectIn<PointListingRow>(
     supabase,
     'products',
-    'id, cluster_id',
+    'id, cluster_id, origin',
     'id',
     reviews.map(r => r.product_id)
   );
@@ -328,16 +348,37 @@ if (isDirectExecution) {
   (async () => {
     const { createClient } = await import('@supabase/supabase-js');
     const rawUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-    // The rate_worker key: it can read the review tables and write only
-    // product_points, so a mistake here cannot touch anything else.
-    const key = (process.env.SUPABASE_RATE_WORKER_KEY || '').trim();
-    if (!rawUrl.trim() || !key) {
-      throw new Error('Missing SUPABASE_URL or SUPABASE_RATE_WORKER_KEY in environment.');
+    // The publishable key plus the worker user's sign-in: its access token
+    // carries the rate_worker role, which can read the review tables and write
+    // only product_points, so a mistake here cannot touch anything else.
+    const key = (
+      process.env.SUPABASE_PUBLISHABLE_KEY ||
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+      ''
+    ).trim();
+    const email = (process.env.RATE_WORKER_EMAIL || '').trim();
+    const password = process.env.RATE_WORKER_PASSWORD || '';
+    if (!rawUrl.trim() || !key || !email || !password) {
+      throw new Error(
+        'Missing SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, RATE_WORKER_EMAIL or RATE_WORKER_PASSWORD in environment.'
+      );
     }
     const { url, host } = resolveBackfillSupabaseTarget(rawUrl);
-    const supabase = scopeSupabaseToRate(
-      createClient(url, key, { auth: { persistSession: false } })
-    );
+    const client = createClient(url, key, { auth: { persistSession: false } });
+    const { data: auth, error: authError } = await client.auth.signInWithPassword({
+      email,
+      password,
+    });
+    if (authError || !auth.session) {
+      throw new Error(
+        `Sign-in as the rate_worker user failed: ${authError?.message ?? 'no session'}`
+      );
+    }
+    const role = (auth.user?.role ?? '').trim();
+    if (role !== 'rate_worker') {
+      throw new Error(`The signed-in user has role '${role}', not rate_worker; refusing to run.`);
+    }
+    const supabase = scopeSupabaseToRate(client);
     const apply = process.argv.includes('--apply');
     const at = process.argv.indexOf('--master');
     const masterId = at >= 0 ? (process.argv[at + 1] ?? '') : null;

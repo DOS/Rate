@@ -22,6 +22,7 @@ const review = (
 ): PointReviewRow => ({
   id,
   product_id,
+  origin: 'crawl',
   reviewer_type: 'user',
   helpfulness_weight: 1,
   created_at: '2026-11-01T00:00:00Z',
@@ -50,9 +51,11 @@ const masters = [
   { id: QUIET, category_id: PHONES },
 ];
 const listings = [
-  { id: 'l-phone', cluster_id: PHONE },
-  { id: 'l-buds', cluster_id: EARBUD },
-  { id: 'l-quiet', cluster_id: QUIET },
+  { id: 'l-phone', cluster_id: PHONE, origin: 'crawl' },
+  { id: 'l-buds', cluster_id: EARBUD, origin: 'crawl' },
+  { id: 'l-quiet', cluster_id: QUIET, origin: 'crawl' },
+  // A fabricated listing of the phone: its reviews never count.
+  { id: 'l-seed', cluster_id: PHONE, origin: 'seed' },
 ];
 const reviews = [
   review('r1', 'l-phone'),
@@ -70,6 +73,9 @@ const reviews = [
   }),
   // A hostile writer on the quiet master: one review, many cons.
   review('r8', 'l-quiet', { helpfulness_weight: 3 }),
+  // Seed data: a seed review on a crawled listing, a crawled review on a seed listing.
+  review('r9', 'l-phone', { origin: 'seed' }),
+  review('r10', 'l-seed'),
 ];
 const points = [
   point('r1', 'pro', 'Pin trâu, dùng cả ngày'),
@@ -83,6 +89,9 @@ const points = [
   point('r7', 'con', 'Mic thu tiếng gió khá nhiều', 'calls'),
   point('r8', 'con', 'Pin tụt nhanh kinh khủng'),
   point('r8', 'con', 'Màn hình ám vàng rõ'),
+  // Without the origin filter these two would make the price con show.
+  point('r9', 'con', 'Giá hơi cao so với đối thủ'),
+  point('r10', 'con', 'giá hơi cao so với đối thủ'),
 ];
 
 async function run() {
@@ -99,6 +108,13 @@ async function run() {
     0
   );
   assert.equal(reviewPointWeight(review('a', 'l', { review_flags: null })), 0);
+  // A NULL include counts, as in the P2 rating (COALESCE(include_in_rating, true)).
+  assert.equal(
+    reviewPointWeight(
+      review('a', 'l', { review_flags: { include_in_rating: null, verdict: null } })
+    ),
+    1
+  );
   assert.equal(reviewPointWeight(review('a', 'l', { helpfulness_weight: 'NaN' })), 0);
   assert.equal(reviewPointWeight(reviews[6]!), 1);
   assert.equal(
@@ -148,6 +164,7 @@ async function run() {
   });
   const dry = await runProductPointsJob(fake.client, { now: NOW });
   assert.deepEqual(dry, { apply: false, masters: 3, points: 3, inserted: 0, deleted: 0 });
+  assert.ok(fake.filters.includes('review_points:method=writer'), "only the writers' lines");
   assert.equal(fake.writes.length, 0, 'a dry run writes nothing');
 
   const applied = await runProductPointsJob(fake.client, { apply: true, now: NOW });
@@ -186,13 +203,16 @@ type Row = Record<string, unknown>;
  */
 function fakeSupabase(tables: Record<string, readonly object[]>) {
   const writes: { op: string; detail: string }[] = [];
+  const filters: string[] = [];
   const query = (table: string) => {
     let rows = [...(tables[table] ?? [])] as Row[];
     const builder = {
       select: () => builder,
       order: () => builder,
       eq: (column: string, value: unknown) => {
-        rows = rows.filter(r => r[column] === value);
+        filters.push(`${table}:${column}=${String(value)}`);
+        // Fixture rows without the column (review lines have no method) pass.
+        rows = rows.filter(r => r[column] === undefined || r[column] === value);
         return builder;
       },
       in: (column: string, values: unknown[]) => {
@@ -221,7 +241,7 @@ function fakeSupabase(tables: Record<string, readonly object[]>) {
       }),
     }),
   };
-  return { client: client as unknown as RateSupabaseClient, writes };
+  return { client: client as unknown as RateSupabaseClient, writes, filters };
 }
 
 run().catch(err => {
