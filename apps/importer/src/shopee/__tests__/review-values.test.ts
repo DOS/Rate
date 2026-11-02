@@ -51,7 +51,15 @@ const line = (
   body: string,
   criterion_key: string | null = null,
   method = 'writer'
-): ValuePointRow => ({ review_id: id(n), kind, body, criterion_key, method });
+): ValuePointRow => ({
+  id: `${id(n)}-${(lineNo += 1)}`,
+  review_id: id(n),
+  kind,
+  body,
+  criterion_key,
+  method,
+});
+let lineNo = 0;
 
 const categories = [{ id: PHONES, slug: 'smartphones' }];
 const masters = [
@@ -136,6 +144,12 @@ async function run() {
   assert.equal(input(5).depth, 'filler');
   assert.equal(input(1).hasRealPhoto, true);
   assert.equal(input(1).verifiedPurchase, true);
+  assert.equal(
+    reviewValueInput({ ...reviews[1]!, is_verified_buyer: true }, [], 'smartphones')
+      .verifiedPurchase,
+    false,
+    "a community review's default purchase mark does not count"
+  );
   assert.deepEqual([input(1).helpfulVotes, input(1).unhelpfulVotes], [9, 1]);
   assert.equal(input(1).authorTrust, null);
   assert.equal(input(1).points[0]!.method, 'ai');
@@ -231,6 +245,30 @@ async function run() {
     },
   });
   assert.deepEqual(rated.get(M2), { rating_score: 3.9, rating_weight_sum: 1, criteria_scores: {} });
+  // D9's threshold on weights that sum to exactly 1.5 (0.7 + 0.35 + 0.45): floating point
+  // gives 1.4999999999999998 in this order and would drop the criterion.
+  const edge = expectedMasterRatings({
+    reviews: [0.7, 0.35, 0.45].map((w, i) =>
+      review(30 + i, 'l2', { helpfulness_weight: w, criteria_ratings: { battery: 4 } })
+    ),
+    listings,
+    values: new Map(),
+  });
+  assert.deepEqual(edge.get(M2)!.criteria_scores, {
+    battery: { score: 4.133, weight_sum: 1.5, writers: 3 },
+  });
+  assert.ok(
+    !masterRatingMatches(
+      {
+        id: M2,
+        rating_score: 4.134,
+        rating_weight_sum: 1.5,
+        criteria_scores: edge.get(M2)!.criteria_scores,
+      },
+      edge.get(M2)
+    ),
+    'one unit in the last place is stale, as V5 compares exactly'
+  );
   assert.ok(
     masterRatingMatches(
       {
@@ -339,7 +377,7 @@ async function run() {
   assert.deepEqual(
     fake.stores[0]!.map(r => r.id),
     [1, 2, 3, 4, 5, 7, 8].map(id),
-    'one batch in review id order'
+    'one batch, by master then review id'
   );
   assert.deepEqual(applied.staleMasters, [M2], 'M2 is reported after a fresh read');
   assert.equal(
@@ -374,6 +412,60 @@ async function run() {
   );
   await assert.rejects(runReviewValuesJob(one.client, { masterId: 'not-a-uuid' }), /UUID/);
 
+  // A big master: 2500 reviews with 2 lines each, read past PostgREST's 1000-row pages,
+  // both for the whole table and for one master.
+  const crowd = Array.from({ length: 2500 }, (_, i) =>
+    review(1000 + i, 'l2', { comment: 'Pin trâu, màn hình đẹp, chụp ảnh nét.' })
+  );
+  const crowdLines = crowd.flatMap(r => [
+    {
+      id: `${r.id}-a`,
+      review_id: r.id,
+      kind: 'pro',
+      body: 'Pin dùng cả ngày',
+      criterion_key: null,
+      method: 'writer',
+    },
+    {
+      id: `${r.id}-b`,
+      review_id: r.id,
+      kind: 'con',
+      body: 'Sạc hơi chậm',
+      criterion_key: null,
+      method: 'writer',
+    },
+  ]);
+  for (const masterId of [null, M2]) {
+    const bigFake = fakeSupabase({
+      reviews: crowd,
+      review_points: crowdLines,
+      review_values: [],
+      products: listings,
+      master_products: masters.map(m => ({
+        ...m,
+        rating_score: null,
+        rating_weight_sum: 0,
+        criteria_scores: {},
+      })),
+      categories,
+    });
+    const big = await runReviewValuesJob(bigFake.client, { apply: true, masterId });
+    assert.equal(big.reviews, 2500, `every review read (${masterId ?? 'all'})`);
+    assert.equal(bigFake.tables.review_values!.length, 2500);
+    assert.deepEqual(
+      bigFake.stores.map(b => b.length),
+      [500, 500, 500, 500, 500]
+    );
+    assert.ok(
+      bigFake.stores.every(b => b.every(r => r.breakdown.gaps.includes('criteria'))),
+      'the lines were read: no review misses its pros and cons'
+    );
+    assert.ok(
+      bigFake.stores.flat().every(r => !r.breakdown.gaps.includes('pros_cons')),
+      'every review has its lines'
+    );
+  }
+
   console.log(
     '  ✅ inputs, changed values, batches, deadlock retry, V5 check, dry run and apply verified'
   );
@@ -382,8 +474,8 @@ async function run() {
 type Row = Record<string, unknown>;
 
 /**
- * A tiny stand-in for the Supabase query builder (select with order/range,
- * in, then) and the writer RPC, which upserts rate.review_values and sets the
+ * A tiny stand-in for the Supabase query builder (select, in, gt, order and
+ * limit, at most 1000 rows a read as PostgREST) and the writer RPC, which upserts rate.review_values and sets the
  * public tier as rate.store_review_values does.
  */
 function fakeSupabase(seed: Record<string, readonly object[]>) {
@@ -391,21 +483,30 @@ function fakeSupabase(seed: Record<string, readonly object[]>) {
     Object.entries(seed).map(([name, rows]) => [name, rows.map(r => ({ ...(r as Row) }))])
   );
   const stores: ReviewValueWrite[][] = [];
+  const reads: string[] = [];
   const state: { onStore: (() => void) | null } = { onStore: null };
   const copy = (row: Row): Row => ({ ...row });
   const query = (table: string) => {
     let rows = [...(tables[table] ?? [])];
     const builder = {
       select: () => builder,
-      order: () => builder,
+      order: (key: string) => {
+        rows.sort((a, b) => (String(a[key]) < String(b[key]) ? -1 : 1));
+        return builder;
+      },
       in: (column: string, values: unknown[]) => {
         rows = rows.filter(r => values.includes(r[column]));
         return builder;
       },
-      range: (from: number, to: number) =>
-        Promise.resolve({ data: rows.slice(from, to + 1).map(copy), error: null }),
-      then: (resolve: (value: { data: Row[]; error: null }) => unknown) =>
-        Promise.resolve({ data: rows.map(copy), error: null }).then(resolve),
+      gt: (column: string, value: string) => {
+        rows = rows.filter(r => String(r[column]) > value);
+        return builder;
+      },
+      // PostgREST returns at most 1000 rows, whatever the limit.
+      limit: (n: number) => {
+        reads.push(table);
+        return Promise.resolve({ data: rows.slice(0, Math.min(n, 1000)).map(copy), error: null });
+      },
     };
     return builder;
   };
@@ -440,6 +541,7 @@ function fakeSupabase(seed: Record<string, readonly object[]>) {
     client: client as unknown as RateSupabaseClient,
     tables,
     stores,
+    reads,
     set onStore(fn: () => void) {
       state.onStore = fn;
     },

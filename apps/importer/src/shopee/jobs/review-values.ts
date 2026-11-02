@@ -8,8 +8,8 @@
  * (rate.review_points), its listing and category, computes reviewValue
  * (@repo/shared-data/rules) with the review's depth on its whole text
  * (reviewDepth), and stores the values that changed through
- * rate.store_review_values. Dry-run by default: it prints what it would
- * store. `--apply` writes, as the rate_worker role: the job signs in as the
+ * rate.store_review_values. Dry-run by default: it logs how many values it
+ * would store (counts only: the numbers are private, D7). `--apply` writes, as the rate_worker role: the job signs in as the
  * worker's Supabase Auth user (RATE_WORKER_EMAIL and RATE_WORKER_PASSWORD,
  * with the project's publishable key), whose access token carries that role.
  * It may read the review tables and write values only through the writer,
@@ -26,7 +26,14 @@
  * Batches hold at most BATCH_ROWS rows and BATCH_BYTES bytes (the writer takes
  * 1000 rows and 2 MB). The writer locks a batch's reviews in id order; another
  * writer of rate.reviews may not, so a batch a deadlock aborts (40P01) is
- * retried. Run it from one place at a time (the importer's schedule).
+ * retried. The other side of such a deadlock is usually a crawl writing
+ * reviews: schedule the job away from the crawl windows. Run it from one
+ * place at a time (the importer's schedule). Rows are read by keyset pages,
+ * and every read is held in memory: a few hundred MB per hundred thousand
+ * reviews with their text and lines.
+ *
+ * `stored` counts the review_values rows the writer changed; a row whose
+ * only change is the public tier counts in `changed`, not in `stored`.
  *
  * After a run it checks every rated master as V5 of the verify file does
  * (scripts/ops/rate-review-value-score-verify.sql in DOS-Me): the stored
@@ -44,12 +51,12 @@ import { pathToFileURL } from 'node:url';
 import dotenv from 'dotenv';
 import {
   reviewDepth,
-  reviewRatingWeight,
+  completenessWeightFactor,
   reviewValue,
   type ReviewValue,
   type ReviewValuePoint,
 } from '@repo/shared-data/rules';
-import { fetchAllPages, resolveBackfillSupabaseTarget } from '../paging.js';
+import { resolveBackfillSupabaseTarget } from '../paging.js';
 import { createImporterLogger } from '../logger.js';
 import { scopeSupabaseToRate, type RateSupabaseClient } from '../types.js';
 import { reviewPointWeight, type CategoryRow, type PointMasterRow } from './product-points.js';
@@ -58,6 +65,8 @@ const logger = createImporterLogger('ReviewValuesJob');
 
 /** IDs per `in` filter, so a request URL stays short. */
 const IN_CHUNK = 150;
+/** Rows per read; PostgREST returns at most 1000. */
+export const PAGE_ROWS = 1000;
 /** Rows per writer call; the writer takes 1000. */
 export const BATCH_ROWS = 500;
 /** Bytes per writer call; the writer takes 2 MB. */
@@ -93,6 +102,7 @@ export interface ValueReviewRow {
 }
 
 export interface ValuePointRow {
+  id?: string;
   review_id: string;
   kind: string;
   criterion_key: string | null;
@@ -182,7 +192,9 @@ export function reviewValueInput(
     verdict: review.verdict,
     points,
     hasRealPhoto: Array.isArray(review.images) && review.images.length > 0,
-    verifiedPurchase: review.is_verified_buyer === true,
+    // A marketplace's mark only: is_verified_buyer defaults to true, and community
+    // reviews written before 20261018100000 took that default without a purchase.
+    verifiedPurchase: review.origin === 'crawl' && review.is_verified_buyer === true,
     helpfulVotes: count(review.upvotes),
     unhelpfulVotes: count(review.downvotes),
     authorTrust: null,
@@ -253,12 +265,16 @@ function canonical(value: unknown): string {
 
 /**
  * The rows to store: reviews whose stored number, breakdown or public tier
- * differs from the computed value, in review id order.
+ * differs from the computed value. They are ordered by master, then review
+ * id: each writer call refreshes the masters of its batch, so a master's
+ * reviews in one or two batches refresh it once or twice, not once per
+ * batch. The writer still locks each batch in review id order.
  */
 export function changedValues(
   values: ReadonlyMap<string, ReviewValue>,
   stored: readonly StoredValueRow[],
-  tierById: ReadonlyMap<string, string | null>
+  tierById: ReadonlyMap<string, string | null>,
+  masterById: ReadonlyMap<string, string | null> = new Map()
 ): ReviewValueWrite[] {
   const storedById = new Map(stored.map(row => [row.review_id, row]));
   const out: ReviewValueWrite[] = [];
@@ -271,7 +287,8 @@ export function changedValues(
       (tierById.get(id) ?? null) === value.tier;
     if (!same) out.push({ id, score: value.score, breakdown: value });
   }
-  return out.sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+  const order = (row: ReviewValueWrite) => `${masterById.get(row.id) ?? '~'}|${row.id}`;
+  return out.sort((a, b) => (order(a) < order(b) ? -1 : order(a) > order(b) ? 1 : 0));
 }
 
 /** Writer calls of at most BATCH_ROWS rows and BATCH_BYTES bytes each. */
@@ -293,10 +310,28 @@ export function batchValues(rows: readonly ReviewValueWrite[]): ReviewValueWrite
   return out;
 }
 
-const round = (value: number, digits: number): number => {
-  const scale = 10 ** digits;
-  return Math.round(value * scale) / scale;
+// The rating is computed in exact integers, as PostgreSQL's numeric does: a
+// weight in millionths (helpfulness_weight has 2 decimals, the factor 4), a
+// star or criterion value in ten-thousandths. Floating point would flip D9's
+// `>= 1.5` threshold on sums like 0.7 + 0.35 + 0.45.
+const W_UNIT = 1_000_000n;
+const V_UNIT = 10_000n;
+const PRIOR_SUM = 126n * W_UNIT * V_UNIT; // k x mu = 3 x 4.2 = 12.6, x 10
+const PRIOR_WEIGHT = 3n * W_UNIT;
+
+const toUnits = (value: number, unit: bigint): bigint => BigInt(Math.round(value * Number(unit)));
+
+/** round(num / den, digits) half away from zero, for num, den >= 0. */
+const divRound = (num: bigint, den: bigint, digits: number): number => {
+  const scale = 10n ** BigInt(digits);
+  return Number((2n * num * scale + den) / (2n * den)) / Number(scale);
 };
+
+/** (k x mu + sum(w x v)) / (k + sum(w)) at 3 decimals; sumWV carries PRIOR_SUM's /10. */
+const bayes = (sumW: bigint, sumWV: bigint): number =>
+  divRound(PRIOR_SUM + 10n * sumWV, 10n * V_UNIT * (PRIOR_WEIGHT + sumW), 3);
+
+const weightSum = (sumW: bigint): number => divRound(sumW, W_UNIT, 2);
 
 /** What rate.master_rating_extras gives for a master, from the rows read. */
 export interface MasterRatingExpected {
@@ -322,7 +357,7 @@ export function expectedMasterRatings(input: {
       .filter(l => l.origin === 'crawl' && typeof l.cluster_id === 'string' && l.cluster_id)
       .map(l => [l.id, l.cluster_id as string])
   );
-  type Eligible = { w: number; star: number; criteria: unknown };
+  type Eligible = { w: bigint; star: number; criteria: unknown };
   const byMaster = new Map<string, Eligible[]>();
   for (const review of input.reviews) {
     const masterId = masterByListing.get(review.product_id);
@@ -340,8 +375,11 @@ export function expectedMasterRatings(input: {
     }
     const exact = review.rating_exact == null ? null : Number(review.rating_exact);
     const list = byMaster.get(masterId) ?? [];
+    const factor = completenessWeightFactor(input.values.get(review.id)?.weightCompleteness);
+    const w = toUnits(weight, 100n) * toUnits(factor, V_UNIT);
     list.push({
-      w: reviewRatingWeight(weight, input.values.get(review.id)?.weightCompleteness),
+      // LEAST(3, helpfulness_weight x factor), as reviewRatingWeight, in millionths.
+      w: w < 3n * W_UNIT ? w : 3n * W_UNIT,
       star: exact ?? Number(review.rating_star),
       criteria: review.criteria_ratings,
     });
@@ -350,45 +388,46 @@ export function expectedMasterRatings(input: {
   const out = new Map<string, MasterRatingExpected>();
   for (const [masterId, eligible] of byMaster) {
     const rated = eligible.filter(e => e.star >= 1 && e.star <= 5);
-    const sumW = rated.reduce((s, e) => s + e.w, 0);
-    const sumWS = rated.reduce((s, e) => s + e.w * e.star, 0);
-    const perKey = new Map<string, { writers: number; w: number; shown: number; ws: number }>();
+    const sumW = rated.reduce((s, e) => s + e.w, 0n);
+    const sumWS = rated.reduce((s, e) => s + e.w * toUnits(e.star, V_UNIT), 0n);
+    const perKey = new Map<string, { writers: number; w: bigint; shown: bigint; ws: bigint }>();
     for (const e of eligible) {
       if (!e.criteria || typeof e.criteria !== 'object' || Array.isArray(e.criteria)) continue;
       for (const [key, value] of Object.entries(e.criteria as Record<string, unknown>)) {
         if (!CRITERION_KEY.test(key) || typeof value !== 'number' || value < 1 || value > 5) {
           continue;
         }
-        const acc = perKey.get(key) ?? { writers: 0, w: 0, shown: 0, ws: 0 };
+        const acc = perKey.get(key) ?? { writers: 0, w: 0n, shown: 0n, ws: 0n };
         acc.writers += 1;
         acc.w += e.w;
-        acc.shown += Math.min(1, e.w);
-        acc.ws += e.w * value;
+        acc.shown += e.w < W_UNIT ? e.w : W_UNIT;
+        acc.ws += e.w * toUnits(value, V_UNIT);
         perKey.set(key, acc);
       }
     }
     const criteria: MasterRatingExpected['criteria_scores'] = {};
     for (const [key, acc] of perKey) {
-      if (acc.writers < 3 || acc.shown < 1.5) continue;
+      if (acc.writers < 3 || 2n * acc.shown < 3n * W_UNIT) continue;
       criteria[key] = {
-        score: round((3 * 4.2 + acc.ws) / (3 + acc.w), 3),
-        weight_sum: round(acc.w, 2),
+        score: bayes(acc.w, acc.ws),
+        weight_sum: weightSum(acc.w),
         writers: acc.writers,
       };
     }
     out.set(masterId, {
-      rating_score: sumW > 0 ? round((3 * 4.2 + sumWS) / (3 + sumW), 3) : null,
-      rating_weight_sum: round(sumW, 2),
+      rating_score: sumW > 0n ? bayes(sumW, sumWS) : null,
+      rating_weight_sum: weightSum(sumW),
       criteria_scores: criteria,
     });
   }
   return out;
 }
 
-/** Floating point and numeric rounding may differ by one unit of the last place. */
-const close = (a: unknown, b: number | null, unit: number): boolean => {
+/** Equal at `digits` decimals, as V5 compares the stored numeric exactly. */
+const close = (a: unknown, b: number | null, digits: number): boolean => {
   if (a === null || a === undefined || b === null) return (a ?? null) === b;
-  return Math.abs(Number(a) - b) <= unit * 1.1;
+  const scale = 10 ** digits;
+  return Math.round(Number(a) * scale) === Math.round(b * scale);
 };
 
 /** Whether a stored master equals what the rating gives (V5 of the verify file). */
@@ -401,8 +440,8 @@ export function masterRatingMatches(
     rating_weight_sum: 0,
     criteria_scores: {},
   };
-  if (!close(row.rating_score, want.rating_score, 0.001)) return false;
-  if (!close(row.rating_weight_sum ?? 0, want.rating_weight_sum, 0.01)) return false;
+  if (!close(row.rating_score, want.rating_score, 3)) return false;
+  if (!close(row.rating_weight_sum ?? 0, want.rating_weight_sum, 2)) return false;
   const stored =
     row.criteria_scores && typeof row.criteria_scores === 'object'
       ? (row.criteria_scores as Record<
@@ -416,8 +455,8 @@ export function masterRatingMatches(
     const s = stored[key] ?? {};
     const w = want.criteria_scores[key]!;
     return (
-      close(s.score, w.score, 0.001) &&
-      close(s.weight_sum, w.weight_sum, 0.01) &&
+      close(s.score, w.score, 3) &&
+      close(s.weight_sum, w.weight_sum, 2) &&
       Number(s.writers) === w.writers
     );
   });
@@ -429,18 +468,51 @@ function chunks<T>(items: readonly T[], size = IN_CHUNK): T[][] {
   return out;
 }
 
+type Filter = (query: ReturnType<ReturnType<RateSupabaseClient['from']>['select']>) => unknown;
+
+/**
+ * Every row of a table, or of a filter on it, in pages of PAGE_ROWS keyed on
+ * `key` (keyset, not OFFSET): each page costs the same however deep it is,
+ * a row written during the read never shifts the next page, and there is no
+ * page cap. `columns` must include `key`.
+ */
+export async function fetchByKey<T>(
+  supabase: RateSupabaseClient,
+  table: string,
+  columns: string,
+  key: string,
+  filter: Filter = query => query
+): Promise<T[]> {
+  const rows: T[] = [];
+  let last: string | null = null;
+  for (;;) {
+    let query = filter(supabase.from(table).select(columns)) as ReturnType<
+      ReturnType<RateSupabaseClient['from']>['select']
+    >;
+    if (last !== null) query = query.gt(key, last);
+    const { data, error } = await query.order(key).limit(PAGE_ROWS);
+    if (error) throw new Error(`${table}: ${error.message}`);
+    const page = (data ?? []) as unknown as T[];
+    rows.push(...page);
+    if (page.length < PAGE_ROWS) return rows;
+    last = String((page[page.length - 1] as Record<string, unknown>)[key]);
+  }
+}
+
+/** The rows whose `column` is one of `ids`, every page of each chunk. */
 async function selectIn<T>(
   supabase: RateSupabaseClient,
   table: string,
   columns: string,
   column: string,
-  ids: readonly string[]
+  ids: readonly string[],
+  key = 'id'
 ): Promise<T[]> {
   const rows: T[] = [];
   for (const part of chunks([...new Set(ids)])) {
-    const { data, error } = await supabase.from(table).select(columns).in(column, part);
-    if (error) throw new Error(`${table}: ${error.message}`);
-    rows.push(...((data ?? []) as T[]));
+    rows.push(
+      ...(await fetchByKey<T>(supabase, table, columns, key, query => query.in(column, part)))
+    );
   }
   return rows;
 }
@@ -500,7 +572,8 @@ async function loadMasterRating(
     'review_values',
     'review_id, value_score, value_breakdown',
     'review_id',
-    reviews.map(r => r.id)
+    reviews.map(r => r.id),
+    'review_id'
   );
   const values = new Map(
     stored.map(row => [
@@ -556,19 +629,8 @@ export async function runReviewValuesJob(
         );
   const reviews =
     scopedListings === null
-      ? await fetchAllPages<ValueReviewRow>(
-          'reviews',
-          (from, to) =>
-            // The column list is not a literal, so the client cannot type the rows.
-            supabase
-              .from('reviews')
-              .select(REVIEW_COLUMNS)
-              .in('origin', SCORED_REVIEW_ORIGINS)
-              .order('id')
-              .range(from, to) as unknown as PromiseLike<{
-              data: ValueReviewRow[] | null;
-              error: { message: string } | null;
-            }>
+      ? await fetchByKey<ValueReviewRow>(supabase, 'reviews', REVIEW_COLUMNS, 'id', query =>
+          query.in('origin', SCORED_REVIEW_ORIGINS)
         )
       : (
           await selectIn<ValueReviewRow>(
@@ -580,37 +642,28 @@ export async function runReviewValuesJob(
           )
         ).filter(r => SCORED_REVIEW_ORIGINS.includes(r.origin ?? ''));
   const reviewIds = reviews.map(r => r.id);
+  const pointColumns = 'id, review_id, kind, criterion_key, body, method';
   const points =
     only === null
-      ? await fetchAllPages<ValuePointRow>('review_points', (from, to) =>
-          supabase
-            .from('review_points')
-            .select('review_id, kind, criterion_key, body, method')
-            .order('id')
-            .range(from, to)
-        )
+      ? await fetchByKey<ValuePointRow>(supabase, 'review_points', pointColumns, 'id')
       : await selectIn<ValuePointRow>(
           supabase,
           'review_points',
-          'review_id, kind, criterion_key, body, method',
+          pointColumns,
           'review_id',
           reviewIds
         );
+  const valueColumns = 'review_id, value_score, value_breakdown';
   const stored =
     only === null
-      ? await fetchAllPages<StoredValueRow>('review_values', (from, to) =>
-          supabase
-            .from('review_values')
-            .select('review_id, value_score, value_breakdown')
-            .order('review_id')
-            .range(from, to)
-        )
+      ? await fetchByKey<StoredValueRow>(supabase, 'review_values', valueColumns, 'review_id')
       : await selectIn<StoredValueRow>(
           supabase,
           'review_values',
-          'review_id, value_score, value_breakdown',
+          valueColumns,
           'review_id',
-          reviewIds
+          reviewIds,
+          'review_id'
         );
   const listings =
     scopedListings ??
@@ -631,12 +684,16 @@ export async function runReviewValuesJob(
     'id',
     masterIds
   );
-  const categories = await fetchAllPages<CategoryRow>('categories', (from, to) =>
-    supabase.from('categories').select('id, slug').order('id').range(from, to)
-  );
+  const categories = await fetchByKey<CategoryRow>(supabase, 'categories', 'id, slug', 'id');
 
   const values = buildReviewValues({ reviews, points, listings, masters, categories });
-  const changed = changedValues(values, stored, new Map(reviews.map(r => [r.id, r.value_tier])));
+  const masterOfListing = new Map(listings.map(l => [l.id, l.cluster_id]));
+  const changed = changedValues(
+    values,
+    stored,
+    new Map(reviews.map(r => [r.id, r.value_tier])),
+    new Map(reviews.map(r => [r.id, masterOfListing.get(r.product_id) ?? null]))
+  );
   const batches = batchValues(changed);
   logger.info(
     'review_values.plan',
@@ -770,8 +827,13 @@ if (isDirectExecution) {
     logger.info('review_values.target', `Target: ${host} (${apply ? 'apply' : 'dry run'})`, {
       host,
     });
-    const result = await runReviewValuesJob(supabase, { apply, masterId });
-    if (result.staleMasters.length > 0) process.exitCode = 2;
+    try {
+      const result = await runReviewValuesJob(supabase, { apply, masterId });
+      if (result.staleMasters.length > 0) process.exitCode = 2;
+    } finally {
+      // One run, one session: do not leave its refresh token behind.
+      await client.auth.signOut().catch(() => undefined);
+    }
   })().catch((err: unknown) => {
     logger.error(
       'review_values.fatal',
