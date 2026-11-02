@@ -139,6 +139,12 @@ const expectedScore = (lifted) => {
 
 try {
   const { sql, asRole } = startRateDb({ name: container });
+  // The reference stack has P6 (20261102233000): roll it back, with the CHECK the rollback
+  // keeps, so the proposal replays on the stack before it.
+  sql(rollback);
+  sql(
+    `ALTER TABLE rate.reviews DROP CONSTRAINT IF EXISTS reviews_value_private`
+  );
   const checkAll = (when) => {
     for (const { id, query } of checks)
       assert.equal(sql(query), '0', `${id} ${when}`);
