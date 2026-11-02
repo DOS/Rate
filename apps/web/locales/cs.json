@@ -491,7 +491,7 @@
     "exportReviewsCsvBtn": "Exportovat CSV recenzí",
     "exportJsonBtn": "Exportovat JSON",
     "closeFormBtn": "✕ Zavřít formulář",
-    "openWriteFormBtn": "Napsat recenzi (5 kritérií)",
+    "openWriteFormBtn": "Napsat recenzi",
     "dualRatingStandardBadge": "Falešné recenze odfiltrovány",
     "closeAlertAria": "Zavřít",
     "writeFormHeading": "Napsat hodnocení v 5 kritériích pro {productName}",
