@@ -2212,6 +2212,73 @@ function testReviewValue(): void {
   );
   assert.equal(completeness({ points: 'junk' as never }), 15);
   assert.equal(completeness({ points: [null as never] }), 15);
+  // A copy typed without diacritics or spaces is the same line.
+  assert.equal(
+    completeness({
+      points: [
+        generalLines[0]!,
+        { kind: 'con', criterionKey: null, body: 'Pin dung ca ngay' },
+      ],
+    }),
+    15
+  );
+  assert.equal(
+    completeness({
+      points: [
+        ...generalLines,
+        { kind: 'pro', criterionKey: 'battery', body: 'Pindung ca ngay' },
+        { kind: 'con', criterionKey: 'display', body: 'SAC HOI CHAM' },
+      ],
+    }),
+    25
+  );
+  // Praise alone and dodges earn nothing, as a pro or under a criterion.
+  assert.equal(
+    completeness({
+      points: [
+        { kind: 'pro', criterionKey: null, body: 'Rất tốt' },
+        generalLines[1]!,
+      ],
+    }),
+    15
+  );
+  assert.equal(
+    completeness({
+      points: [
+        ...generalLines,
+        { kind: 'pro', criterionKey: 'battery', body: 'rất tốt' },
+        { kind: 'pro', criterionKey: 'camera', body: 'sản phẩm ok lắm' },
+        { kind: 'con', criterionKey: 'display', body: 'không có gì để chê' },
+      ],
+    }),
+    25
+  );
+  // Lines AI extracted from a marketplace review earn nothing.
+  assert.equal(
+    completeness({
+      points: [...generalLines, ...criterionLines].map((point) => ({
+        ...point,
+        method: 'ai' as const,
+      })),
+    }),
+    15
+  );
+  // A category without its own criteria list has no criteria to complete.
+  assert.equal(completeness({ categorySlug: null }), 15);
+  assert.equal(completeness({ categorySlug: 'tvs' }), 15);
+  // A verdict that repeats a line, or longer than the form allows, earns nothing.
+  const longLine = 'Pin dùng cả ngày với nhu cầu vừa phải';
+  assert.equal(
+    completeness({
+      verdict: longLine,
+      points: [
+        { kind: 'pro', criterionKey: null, body: longLine },
+        generalLines[1]!,
+      ],
+    }),
+    20
+  );
+  assert.equal(completeness({ verdict: 'Máy dùng tốt. '.repeat(30) }), 20);
 
   // Filling the boxes on a superficial text earns no completeness, and
   // padding cannot raise specificity past its depth.
@@ -2240,6 +2307,23 @@ function testReviewValue(): void {
   assert.equal(imported.completeness, 0);
   assert.equal(imported.verified, 15);
   assert.equal(imported.tier, 'basic');
+  // With a photo it earns completeness, but not weight: no pros and cons (6.2).
+  const importedPhoto = value({
+    criteriaRatings: null,
+    verdict: null,
+    points: [],
+    depth: 'specific_short',
+    hasRealPhoto: true,
+  });
+  assert.equal(importedPhoto.completeness, 5);
+  assert.equal(importedPhoto.weightCompleteness, 0);
+  assert.equal(full.weightCompleteness, 35);
+  assert.equal(standard.weightCompleteness, 25);
+  assert.equal(value({ hasRealPhoto: true }).weightCompleteness, 30);
+  assert.equal(gated.weightCompleteness, 0);
+  // Malformed input never throws.
+  assert.equal(rules.reviewValue(null as never).score, 5);
+  assert.equal(rules.reviewValue(null as never).tier, 'basic');
 
   // Helpful votes through the Wilson bound: a few votes do not jump.
   assert.equal(rules.wilsonLowerBound(0, 0), 0);
@@ -2248,7 +2332,8 @@ function testReviewValue(): void {
   assert.equal(value({ helpfulVotes: 2 }).helpful, 6.85);
   assert.ok(value({ helpfulVotes: 1e12 }).helpful <= max.helpful);
   assert.equal(value({ authorTrust: 7 }).trust, 10);
-  assert.equal(value({ authorTrust: Number.NaN }).trust, 0);
+  assert.equal(value({ authorTrust: Number.NaN }).trust, 5);
+  assert.equal(value({ authorTrust: -1 }).trust, 0);
 
   // D6: x1.00 to x1.25 on the stored weight, capped at 3.
   assert.equal(rules.completenessWeightFactor(0), 1);
@@ -2262,6 +2347,8 @@ function testReviewValue(): void {
   assert.equal(rules.reviewRatingWeight(2.8, 35), 3);
   assert.equal(rules.reviewRatingWeight(0, 35), 0);
   assert.equal(rules.reviewRatingWeight(-1, 35), 0);
+  assert.equal(rules.reviewRatingWeight(Number.NaN, 35), 0);
+  assert.equal(rules.reviewRatingWeight(Infinity, 0), 3);
   // Acceptance: a complete review weighs at most 25% more than the same
   // review with nothing; an imported one without pros and cons keeps its weight.
   assert.ok(

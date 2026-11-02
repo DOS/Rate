@@ -8,14 +8,15 @@
  * Plain data and functions only, like the rest of `rules`, and no database:
  * the importer job and the community path read a review into a
  * ReviewValueInput and store the result in `rate.reviews.value_score` and
- * `value_breakdown`. The DOS-Me rating refresh reads `completeness` from
+ * `value_breakdown`. The DOS-Me rating refresh reads `weightCompleteness` from
  * `value_breakdown` and applies completenessWeightFactor, so the two stay
  * equal.
  */
-import { getRatingCriteria } from './rating-criteria.js';
+import { getRatingCriteria, hasRatingCriteria } from './rating-criteria.js';
 import {
   REVIEW_POINT_MAX,
   REVIEW_POINT_MIN,
+  REVIEW_VERDICT_MAX,
   REVIEW_VERDICT_MIN,
   comparablePoint,
   hasContent,
@@ -76,8 +77,10 @@ export type ReviewDepth =
   | 'expert_depth';
 
 /**
- * Specificity points per depth. Depth already caps length: past "detailed",
- * more words add nothing, so padding cannot raise this part.
+ * Specificity points per depth. Length counts only through the depth, so
+ * padding past a depth's threshold adds nothing. Padding up to a threshold
+ * is axis C's to catch: as the web classifies it today, 30, 90 and 240
+ * characters with a product word move a text up a depth.
  */
 export const REVIEW_SPECIFICITY_POINTS: Readonly<Record<ReviewDepth, number>> =
   {
@@ -107,6 +110,11 @@ export interface ReviewValuePoint {
   /** The line's own criterion, or null for a pro or con of the whole review. */
   criterionKey: string | null;
   body: string;
+  /**
+   * `rate.review_points.method`: 'ai' lines are extracted from a marketplace
+   * review for clustering (design 4.3) and earn nothing here.
+   */
+  method?: 'writer' | 'ai';
 }
 
 export interface ReviewValueInput {
@@ -154,6 +162,12 @@ export interface ReviewValue {
   gated: boolean;
   score: number;
   completeness: number;
+  /**
+   * The completeness the rating weight reads (D6): completeness, less the
+   * photo of a review without pros and cons, so a marketplace review keeps
+   * its weight (6.2). The DOS-Me refresh reads this key.
+   */
+  weightCompleteness: number;
   specificity: number;
   verified: number;
   helpful: number;
@@ -209,13 +223,84 @@ function ownValue(record: unknown, key: string): unknown {
     : undefined;
 }
 
-/** A line that counts: the form's length, words in it, not a dodging con. */
+/**
+ * The words a line is scored on: comparablePoint without diacritics, so a
+ * copy typed without them ("Pin dung ca ngay") is the same line. Stricter
+ * than the form, which keeps "sạc" and "sắc" apart: a false merge here only
+ * drops one line's credit.
+ */
+function scoringWords(text: string): string[] {
+  return comparablePoint(text)
+    .normalize('NFD')
+    .replace(/\p{M}+/gu, '')
+    .replace(/đ/g, 'd')
+    .split(' ')
+    .filter(Boolean);
+}
+
+// Words of praise that say nothing about the product ("rất tốt", "sản phẩm
+// ok", "dùng ổn"), without diacritics. A line made only of them earns
+// nothing (6.4).
+const GENERIC_WORDS: ReadonlySet<string> = new Set([
+  'a',
+  'bt',
+  'binh',
+  'chat',
+  'cuc',
+  'cung',
+  'dep',
+  'duoc',
+  'dung',
+  'em',
+  'good',
+  'great',
+  'hai',
+  'hang',
+  'kha',
+  'ky',
+  'lam',
+  'long',
+  'luong',
+  'may',
+  'minh',
+  'ngon',
+  'nha',
+  'nhe',
+  'nice',
+  'ok',
+  'oke',
+  'on',
+  'pham',
+  'qua',
+  'rat',
+  'san',
+  'sp',
+  'thich',
+  'thuong',
+  'tot',
+  'tuyet',
+  'ung',
+  'very',
+  'voi',
+  'xai',
+  'xin',
+  'y',
+]);
+
+/**
+ * A writer's line that counts: the form's length, words in it, not a dodge,
+ * not praise alone. Lines extracted by AI and malformed lines count for
+ * nothing.
+ */
 function countedLine(point: ReviewValuePoint): boolean {
-  const body = String(point?.body ?? '');
+  if (!point || typeof point !== 'object') return false;
+  if (point.kind !== 'pro' && point.kind !== 'con') return false;
+  if (point.method === 'ai') return false;
+  const body = String(point.body ?? '');
   const length = [...storedPoint(body)].length;
   if (length < REVIEW_POINT_MIN || length > REVIEW_POINT_MAX) return false;
-  if (!hasContent(body)) return false;
-  return point.kind === 'con' ? !isEvasiveCon(body) : point.kind === 'pro';
+  if (!hasContent(body) || isEvasiveCon(body)) return false;
+  return !scoringWords(body).every((word) => GENERIC_WORDS.has(word));
 }
 
 interface CompletenessParts {
@@ -227,11 +312,16 @@ interface CompletenessParts {
 }
 
 function completenessParts(input: ReviewValueInput): CompletenessParts {
-  const criteria = getRatingCriteria(input.categorySlug);
+  // A category without its own list has no criteria to complete: never the
+  // smartphone fallback of getRatingCriteria.
+  const criteria = hasRatingCriteria(input.categorySlug)
+    ? getRatingCriteria(input.categorySlug)
+    : [];
   const keys = new Set<string>(criteria.map((criterion) => criterion.key));
   const verdict = String(input.verdict ?? '');
   // Each line counts once, wherever it is repeated: the same words as a pro
-  // and a con, twice in a list, or again under a criterion.
+  // and a con, twice in a list, again under a criterion, or with other
+  // diacritics, case, punctuation or spacing.
   const seen = new Set<string>();
   let pro = false;
   let con = false;
@@ -245,7 +335,7 @@ function completenessParts(input: ReviewValueInput): CompletenessParts {
   ];
   for (const point of ordered) {
     if (!countedLine(point)) continue;
-    const compared = comparablePoint(point.body);
+    const compared = scoringWords(point.body).join('');
     if (seen.has(compared)) continue;
     seen.add(compared);
     if (point.criterionKey == null) {
@@ -261,9 +351,12 @@ function completenessParts(input: ReviewValueInput): CompletenessParts {
       criteria.every((criterion) =>
         isStar(ownValue(input.criteriaRatings, criterion.key))
       ),
+    // The form's verdict, and not one of the lines again.
     verdict:
       [...storedPoint(verdict)].length >= REVIEW_VERDICT_MIN &&
-      hasContent(verdict),
+      [...storedPoint(verdict)].length <= REVIEW_VERDICT_MAX &&
+      hasContent(verdict) &&
+      !seen.has(scoringWords(verdict).join('')),
     prosCons: pro && con,
     criterionPoints:
       criteriaWithLines.size >= REVIEW_CRITERION_POINTS_MIN_CRITERIA,
@@ -271,13 +364,20 @@ function completenessParts(input: ReviewValueInput): CompletenessParts {
   };
 }
 
+// A malformed input reads as an empty review. A function of its own, because
+// the rules import check reads a quote on an export line as a module path.
+function asInput(raw: unknown): ReviewValueInput {
+  return (raw && typeof raw === 'object' ? raw : {}) as ReviewValueInput;
+}
+
 /**
  * The value score of one review and its parts (design 6.1). A gated review
  * scores 0. Completeness counts only when the text is more than superficial,
- * each pro or con line counts once however often it is repeated, and length
- * counts only through the depth, so padding and copied lines add nothing.
+ * each pro or con line counts once however often or however it is retyped,
+ * and length counts only through the depth.
  */
-export function reviewValue(input: ReviewValueInput): ReviewValue {
+export function reviewValue(raw: ReviewValueInput): ReviewValue {
+  const input = asInput(raw);
   const depth: ReviewDepth = Object.prototype.hasOwnProperty.call(
     REVIEW_SPECIFICITY_POINTS,
     input?.depth
@@ -294,6 +394,9 @@ export function reviewValue(input: ReviewValueInput): ReviewValue {
       (parts.prosCons ? P.prosCons : 0) +
       (parts.criterionPoints ? P.criterionPoints : 0) +
       (parts.photo ? P.photo : 0);
+  const weightCompleteness =
+    completeness -
+    (parts.photo && !parts.prosCons && completeness ? P.photo : 0);
   const specificity = REVIEW_SPECIFICITY_POINTS[depth];
   const verified =
     input.verifiedPurchase === true ? REVIEW_VALUE_MAX.verified : 0;
@@ -302,12 +405,7 @@ export function reviewValue(input: ReviewValueInput): ReviewValue {
       wilsonLowerBound(input.helpfulVotes, input.unhelpfulVotes)
   );
   const trust = round2(
-    REVIEW_VALUE_MAX.trust *
-      clamp(
-        input.authorTrust == null ? 0.5 : finiteOr(input.authorTrust, 0),
-        0,
-        1
-      )
+    REVIEW_VALUE_MAX.trust * clamp(finiteOr(input.authorTrust, 0.5), 0, 1)
   );
 
   const gaps: ReviewValueGap[] = [];
@@ -325,6 +423,7 @@ export function reviewValue(input: ReviewValueInput): ReviewValue {
       gated: true,
       score: 0,
       completeness: 0,
+      weightCompleteness: 0,
       specificity: 0,
       verified: 0,
       helpful: 0,
@@ -347,6 +446,7 @@ export function reviewValue(input: ReviewValueInput): ReviewValue {
     gated: false,
     score,
     completeness,
+    weightCompleteness,
     specificity,
     verified,
     helpful,
@@ -357,10 +457,11 @@ export function reviewValue(input: ReviewValueInput): ReviewValue {
 }
 
 /**
- * D6: the rating weight factor of a completeness, from 1 (nothing) to 1.25
- * (everything), at four decimals. Anything that is not a number from 0 to
- * 35 counts as its nearest bound, and a missing one as 0, so a review the
- * job has not scored yet keeps its weight.
+ * D6: the rating weight factor of a review's `weightCompleteness`, from 1
+ * (nothing) to 1.25 (everything), at four decimals. A number outside 0 to
+ * 35 counts as its nearest bound; anything else, a numeric string included,
+ * as 0, so a review the job has not scored yet keeps its weight. Read the
+ * stored value as a number (jsonb `->`, not `->>`).
  */
 export function completenessWeightFactor(completeness: unknown): number {
   const c = clamp(finiteOr(completeness, 0), 0, REVIEW_VALUE_MAX.completeness);
@@ -374,15 +475,16 @@ export function completenessWeightFactor(completeness: unknown): number {
 
 /**
  * A review's weight in the product rating: the stored helpfulness weight
- * times the completeness factor, capped at REVIEW_RATING_WEIGHT_CAP (6.2).
+ * times the factor of its weightCompleteness, capped at
+ * REVIEW_RATING_WEIGHT_CAP (6.2).
  */
 export function reviewRatingWeight(
   helpfulnessWeight: number,
-  completeness: unknown
+  weightCompleteness: unknown
 ): number {
-  const weight = Math.max(0, finiteOr(helpfulnessWeight, 0));
+  if (Number.isNaN(helpfulnessWeight) || !(helpfulnessWeight > 0)) return 0;
   return Math.min(
     REVIEW_RATING_WEIGHT_CAP,
-    weight * completenessWeightFactor(completeness)
+    helpfulnessWeight * completenessWeightFactor(weightCompleteness)
   );
 }
