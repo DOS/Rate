@@ -54,6 +54,9 @@ const review = (n) => `d0000000-0000-4000-8000-00000000000${n}`;
 
 try {
   const { sql, asRole } = startRateDb({ name: container });
+  // The reference stack has P6 (20261102233000), which sits on P2: roll it back first, as
+  // production would before a P2 rollback.
+  sql(read('2026-11-02-dos-me-review-value-score-rollback.sql'));
   const checkAll = (when) => {
     for (const { id, query } of checks)
       assert.equal(sql(query), '0', `${id} ${when}`);
