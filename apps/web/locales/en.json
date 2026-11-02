@@ -491,7 +491,7 @@
     "exportReviewsCsvBtn": "Export reviews CSV",
     "exportJsonBtn": "Export JSON",
     "closeFormBtn": "✕ Close form",
-    "openWriteFormBtn": "Write 5-criteria review",
+    "openWriteFormBtn": "Write a review",
     "dualRatingStandardBadge": "Fake reviews filtered",
     "closeAlertAria": "Close",
     "writeFormHeading": "Write a 5-criteria review for {productName}",

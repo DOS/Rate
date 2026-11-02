@@ -491,7 +491,7 @@
     "exportReviewsCsvBtn": "Xuất CSV đánh giá",
     "exportJsonBtn": "Xuất JSON",
     "closeFormBtn": "✕ Đóng biểu mẫu",
-    "openWriteFormBtn": "Viết đánh giá 5 tiêu chí",
+    "openWriteFormBtn": "Viết đánh giá",
     "dualRatingStandardBadge": "Đã lọc đánh giá ảo",
     "closeAlertAria": "Đóng",
     "writeFormHeading": "Viết đánh giá 5 tiêu chí cho {productName}",
