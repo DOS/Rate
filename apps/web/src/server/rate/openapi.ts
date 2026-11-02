@@ -430,7 +430,7 @@ function buildBaseRateOpenApiSpec(
               name: 'minRating',
               in: 'query',
               description:
-                'Minimum effective product rating (0-5 star scale); alias `rating` is also accepted',
+                'Minimum product rating (0-5 star scale), compared with `rating_score_5`, the rating every Rate page shows, at one decimal: a product shown as 4.5 passes 4.5. A product without a rating never passes. Alias `rating` is also accepted',
               schema: { type: 'number' },
             },
             {
@@ -450,7 +450,8 @@ function buildBaseRateOpenApiSpec(
             {
               name: 'sort',
               in: 'query',
-              description: 'Sort order for returned master products',
+              description:
+                'Sort order for returned master products. `rating_desc` orders by the rating every Rate page shows (`rating_score_5` before its rounding to one decimal), products without a rating last',
               schema: {
                 type: 'string',
                 enum: [
