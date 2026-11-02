@@ -62,9 +62,11 @@ import {
   isReviewId,
   MY_REVIEW_VALUES_MAX_IDS,
   parseMyReviewValue,
+  compareByQuality,
   reviewTierBadgeKey,
-  reviewTierRank,
   reviewValueGapKey,
+  shownReviewTier,
+  shownReviewValueGaps,
   type MyReviewValue,
 } from '@/lib/review-value-display';
 import {
@@ -449,25 +451,7 @@ export default function JReviewsSection({
     return [...filtered].sort((a, b) => {
       if (sortMode === 'weight_desc') {
         // The public quality tier leads (DOS/Rate#1547, D7).
-        const tierGap =
-          reviewTierRank(b.value_tier) - reviewTierRank(a.value_tier);
-        if (tierGap !== 0) return tierGap;
-        const wilsonA = computeWilsonLowerBound(a.upvotes, a.downvotes);
-        const wilsonB = computeWilsonLowerBound(b.upvotes, b.downvotes);
-        if (
-          a.include_in_rating &&
-          b.include_in_rating &&
-          Math.abs(wilsonB - wilsonA) >= 0.005
-        ) {
-          return wilsonB - wilsonA;
-        }
-        if (b.helpfulness_weight !== a.helpfulness_weight) {
-          return b.helpfulness_weight - a.helpfulness_weight;
-        }
-        return (
-          new Date(b.created_at || 0).getTime() -
-          new Date(a.created_at || 0).getTime()
-        );
+        return compareByQuality(a, b, computeWilsonLowerBound);
       }
       if (sortMode === 'rating_desc') {
         return b.rating_star - a.rating_star;
@@ -496,33 +480,39 @@ export default function JReviewsSection({
   // (DOS/Rate#1547, D7). Visitors without a session cookie make no call and
   // never load the Supabase client.
   useEffect(() => {
-    if (!reviewIdsKey || !hasSessionCookie(document.cookie)) return;
     let cancelled = false;
     void (async () => {
-      const token = await getBrowserAccessToken();
-      if (!token || cancelled) return;
+      // Without a session, or on any failure, no number stays on screen.
+      let next: Record<string, MyReviewValue> = {};
       try {
-        const res = await fetch('/api/v1/rate/reviews/my-values', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({ ids: reviewIdsKey.split(',') }),
-        });
-        if (!res.ok) return;
-        const payload = await res.json();
-        const next: Record<string, MyReviewValue> = {};
-        for (const row of Array.isArray(payload?.values)
-          ? payload.values
-          : []) {
-          const value = parseMyReviewValue(row?.score, { gaps: row?.gaps });
-          if (isReviewId(row?.id) && value) next[row.id.toLowerCase()] = value;
+        const token =
+          reviewIdsKey && hasSessionCookie(document.cookie)
+            ? await getBrowserAccessToken()
+            : null;
+        if (token && !cancelled) {
+          const res = await fetch('/api/v1/rate/reviews/my-values', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({ ids: reviewIdsKey.split(',') }),
+          });
+          const payload = res.ok ? await res.json() : null;
+          for (const row of Array.isArray(payload?.values)
+            ? payload.values
+            : []) {
+            const value = parseMyReviewValue(row?.score, { gaps: row?.gaps });
+            if (isReviewId(row?.id) && value) {
+              next[row.id.toLowerCase()] = value;
+            }
+          }
         }
-        if (!cancelled) setMyValues(next);
       } catch {
         // The hint is optional; the page works without it.
+        next = {};
       }
+      if (!cancelled) setMyValues(next);
     })();
     return () => {
       cancelled = true;
@@ -1651,8 +1641,15 @@ export default function JReviewsSection({
             const isPending = Boolean(pendingIds[rev.id]);
             const isZeroWeight =
               !rev.include_in_rating || rev.helpfulness_weight <= 0;
-            const tierKey = reviewTierBadgeKey(rev.value_tier);
+            const tier = shownReviewTier(rev);
+            const tierKey = reviewTierBadgeKey(tier);
             const myValue = myValues[rev.id.toLowerCase()];
+            const myGaps = myValue
+              ? shownReviewValueGaps(
+                  myValue.gaps,
+                  hasRatingCriteria(reviewCategorySlug ?? categorySlug)
+                )
+              : [];
 
             return (
               <div key={rev.id} className="col-md-6 col-12">
@@ -1733,17 +1730,20 @@ export default function JReviewsSection({
                       {tierKey && (
                         <span
                           className={`badge rounded-pill small border ${
-                            rev.value_tier === 'excellent'
-                              ? 'bg-warning-subtle text-warning-emphasis border-warning-subtle'
-                              : 'bg-success-subtle text-success-emphasis border-success-subtle'
+                            tier === 'excellent'
+                              ? 'bg-primary-subtle text-primary-emphasis border-primary-subtle'
+                              : 'bg-light text-dark'
                           }`}
                           title={t('valueTierTitle')}
                           data-testid="review-value-tier"
                         >
-                          {rev.value_tier === 'excellent' ? (
+                          {tier === 'excellent' ? (
                             <BsAward aria-hidden="true" className="me-1" />
                           ) : (
-                            <BsPatchCheck aria-hidden="true" className="me-1" />
+                            <BsPatchCheck
+                              aria-hidden="true"
+                              className="text-success me-1"
+                            />
                           )}
                           {t(tierKey)}
                         </span>
@@ -1752,15 +1752,16 @@ export default function JReviewsSection({
 
                     {/* The writer's own number and what would raise it; the
                         public sees only the tier (DOS/Rate#1547, D7). */}
-                    {myValue && (
+                    {/* A gated review scores 0 with no gaps: its flag says why. */}
+                    {myValue && (myValue.score > 0 || myGaps.length > 0) && (
                       <div
                         className="small text-secondary mb-2"
                         data-testid="my-review-value"
                       >
                         {t('myReviewValue', { score: myValue.score })}
-                        {myValue.gaps.length > 0 &&
+                        {myGaps.length > 0 &&
                           ` · ${t('myReviewValueGaps', {
-                            gaps: myValue.gaps
+                            gaps: myGaps
                               .map((gap) => reviewValueGapKey(gap))
                               .filter((key) => key !== null)
                               .map((key) => t(key))

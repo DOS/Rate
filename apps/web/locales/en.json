@@ -549,7 +549,7 @@
     "valueTierTitle": "Review quality tier",
     "valueTierComplete": "Complete",
     "valueTierExcellent": "Excellent",
-    "myReviewValue": "Your score: {score}/100",
+    "myReviewValue": "Your review value (only you see it): {score}/100",
     "myReviewValueGaps": "Add: {gaps}",
     "valueGapDetail": "detail",
     "valueGapCriteria": "all criteria",

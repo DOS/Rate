@@ -2396,6 +2396,12 @@ function buildBaseRateOpenApiSpec(
               ],
             },
             reason: { type: ['string', 'null'] },
+            value_tier: {
+              type: ['string', 'null'],
+              enum: ['basic', 'complete', 'excellent', null],
+              description:
+                'Public quality tier of the review; null when it is not scored yet or is gated. The 0-100 value score is private to the writer.',
+            },
           },
         },
       },

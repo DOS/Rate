@@ -20,6 +20,86 @@ export function reviewTierRank(tier: ReviewValueTier | null | undefined) {
   return tier === 'excellent' ? 2 : tier === 'complete' ? 1 : 0;
 }
 
+/**
+ * The tier a review shows and sorts by. A review the rating leaves out (a
+ * flag or zero weight since it was scored) shows none, so a stale tier never
+ * lifts it.
+ */
+export function shownReviewTier(review: {
+  value_tier?: ReviewValueTier | null;
+  include_in_rating: boolean;
+  helpfulness_weight: number;
+}): ReviewValueTier | null {
+  return review.include_in_rating && review.helpfulness_weight > 0
+    ? (review.value_tier ?? null)
+    : null;
+}
+
+interface QualitySortedReview {
+  value_tier?: ReviewValueTier | null;
+  include_in_rating: boolean;
+  helpfulness_weight: number;
+  upvotes: number;
+  downvotes: number;
+  created_at: string | null;
+}
+
+/** Buyers voted it down: more down than up votes, at least 3 in all. */
+function votedDown(r: { upvotes: number; downvotes: number }): boolean {
+  return r.downvotes > r.upvotes && r.upvotes + r.downvotes >= 3;
+}
+
+/**
+ * The "most helpful" order: the shown tier first (design 6.3), unless buyers
+ * voted the review down, so votes still outrank a complete form; then the
+ * helpful-vote order and the newest. `wilson` is the Wilson lower bound of a
+ * review's votes.
+ */
+export function compareByQuality<T extends QualitySortedReview>(
+  a: T,
+  b: T,
+  wilson: (upvotes: number, downvotes: number) => number
+): number {
+  const rank = (r: T) =>
+    votedDown(r) ? 0 : reviewTierRank(shownReviewTier(r));
+  const tierGap = rank(b) - rank(a);
+  if (tierGap !== 0) return tierGap;
+  const wilsonA = wilson(a.upvotes, a.downvotes);
+  const wilsonB = wilson(b.upvotes, b.downvotes);
+  if (
+    a.include_in_rating &&
+    b.include_in_rating &&
+    Math.abs(wilsonB - wilsonA) >= 0.005
+  ) {
+    return wilsonB - wilsonA;
+  }
+  if (b.helpfulness_weight !== a.helpfulness_weight) {
+    return b.helpfulness_weight - a.helpfulness_weight;
+  }
+  return (
+    new Date(b.created_at || 0).getTime() -
+    new Date(a.created_at || 0).getTime()
+  );
+}
+
+/**
+ * The gaps the writer is shown: at most three they can act on. A verified
+ * purchase has no path from the form yet, and criteria gaps need a category
+ * with a criteria list.
+ */
+export function shownReviewValueGaps(
+  gaps: readonly ReviewValueGap[],
+  hasCriteria: boolean
+): ReviewValueGap[] {
+  return gaps
+    .filter(
+      (gap) =>
+        gap !== 'verified' &&
+        (hasCriteria || (gap !== 'criteria' && gap !== 'criterion_points'))
+    )
+    .slice(0, 3);
+}
+
 /** The badge a tier shows: basic and unscored show none (less text). */
 export function reviewTierBadgeKey(
   tier: ReviewValueTier | null | undefined

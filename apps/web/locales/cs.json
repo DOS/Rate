@@ -549,7 +549,7 @@
     "valueTierTitle": "Úroveň kvality recenze",
     "valueTierComplete": "Úplná",
     "valueTierExcellent": "Výborná",
-    "myReviewValue": "Vaše skóre: {score}/100",
+    "myReviewValue": "Hodnota vaší recenze (vidíte jen vy): {score}/100",
     "myReviewValueGaps": "Doplňte: {gaps}",
     "valueGapDetail": "podrobnosti",
     "valueGapCriteria": "všechna kritéria",
