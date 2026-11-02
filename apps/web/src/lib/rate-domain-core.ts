@@ -204,7 +204,7 @@ export function computeWilsonLowerBound(
 const WEB_SHIPPING_ASPECT_RE =
   /(?:giao\s*hàng|ship(?:per)?|vận\s*chuyển|đóng\s*gói|bọc\s*hàng|hộp\s*móp|giao\s*nhanh|giao\s*chậm|tư\s*vấn|chăm\s*sóc\s*khách)/i;
 
-// Any mention of the product or of using it, based on PRODUCT_ASPECT_RE in
+// Any mention of the product or of using it, based on the product words in
 // apps/importer/src/shopee/ai-review-analyzer.ts (isShippingOnlyComment) plus
 // Shopee's structured product fields. Matched as whole words so "hư" in "như"
 // or "pin" in "shopping" do not count. Words that also describe delivery

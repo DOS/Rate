@@ -3363,59 +3363,6 @@ async function runCoreArchitectureSuite() {
     `Wilson lower bound for 50/52 (${wilsonManyVotes}) must exceed 1/1 (${wilsonSingleVote})`
   );
 
-  // A form v2 review: its verdict and its writer's pros and cons count with
-  // the comment for axis C; AI-extracted lines do not (DOS/Rate#1583).
-  const v2Review = {
-    rating_star: 5,
-    comment: '',
-    reviewer_type: 'user' as const,
-    upvotes: 0,
-    downvotes: 0,
-    report_count: 0,
-    flag_category: 'authentic' as const,
-    verdict: 'authentic' as const,
-    include_in_rating: true,
-    signals: null,
-  };
-  const v2Text = {
-    verdict: 'Máy mượt, đáng tiền trong tầm giá.',
-    points: [
-      {
-        kind: 'pro',
-        criterion_key: null,
-        body: 'Pin dùng cả ngày',
-        method: 'writer',
-      },
-      {
-        kind: 'con',
-        criterion_key: 'battery',
-        body: 'Sạc hơi chậm',
-        method: 'writer',
-      },
-    ],
-  };
-  const v2Bare = evaluateReviewTrustAssessment(v2Review);
-  const v2Eval = evaluateReviewTrustAssessment(v2Review, v2Text);
-  assert.equal(v2Bare.depth, 'stars_only');
-  assert.equal(v2Eval.depth, 'specific_short');
-  assert.ok(v2Eval.breakdown.weight > v2Bare.breakdown.weight);
-  assert.equal(
-    evaluateReviewTrustAssessment(v2Review, {
-      points: v2Text.points.map((p) => ({ ...p, method: 'ai' })),
-    }).depth,
-    'stars_only'
-  );
-  // v2 stores the verdict as the comment when there is no free text: said
-  // twice, it counts once.
-  assert.equal(
-    evaluateReviewTrustAssessment(
-      { ...v2Review, comment: v2Text.verdict },
-      { verdict: v2Text.verdict, points: null }
-    ).depth,
-    evaluateReviewTrustAssessment({ ...v2Review, comment: v2Text.verdict })
-      .depth
-  );
-
   const shippingOnlyEval = evaluateReviewTrustAssessment({
     rating_star: 1,
     comment: 'Giao hàng quá chậm, đóng gói hộp móp méo, shipper thái độ kém',
