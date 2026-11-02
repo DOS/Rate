@@ -42,7 +42,44 @@ BEGIN;
 -- queue every reader behind a long query. Re-run the file if it times out.
 SET LOCAL lock_timeout = '5s';
 
--- 1. The private values ------------------------------------------------------------------------
+-- 1. The public tier, and P2's columns kept empty -----------------------------------------------
+-- First, so rate.reviews goes straight to ACCESS EXCLUSIVE (the CREATE TABLE below would
+-- otherwise take SHARE ROW EXCLUSIVE first and upgrade). NOT VALID: no scan under the lock.
+
+-- A review that already holds a number in P2's public columns could never be updated again
+-- under reviews_value_private: refuse the apply instead (move such values out first). One scan
+-- of rate.reviews, before any strong lock.
+DO $$
+BEGIN
+  IF to_regclass('rate.review_values') IS NULL
+     AND EXISTS (SELECT 1 FROM rate.reviews
+                 WHERE value_score IS NOT NULL OR value_breakdown IS NOT NULL) THEN
+    RAISE EXCEPTION 'rate.reviews has value_score or value_breakdown set; P6 keeps them empty (D7)'
+      USING ERRCODE = '55000';
+  END IF;
+END $$;
+
+ALTER TABLE rate.reviews ADD COLUMN IF NOT EXISTS value_tier text;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conrelid = 'rate.reviews'::regclass
+                   AND conname = 'reviews_value_tier_known') THEN
+    ALTER TABLE rate.reviews ADD CONSTRAINT reviews_value_tier_known
+      CHECK (value_tier IS NULL OR value_tier IN ('basic', 'complete', 'excellent')) NOT VALID;
+  END IF;
+  -- P2 put the number on the public table; it lives in rate.review_values instead.
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conrelid = 'rate.reviews'::regclass
+                   AND conname = 'reviews_value_private') THEN
+    ALTER TABLE rate.reviews ADD CONSTRAINT reviews_value_private
+      CHECK (value_score IS NULL AND value_breakdown IS NULL) NOT VALID;
+  END IF;
+END $$;
+
+-- 2. The private values ------------------------------------------------------------------------
+-- Writers: only rate.store_review_values (and service_role by hand). The refresh triggers
+-- cover INSERT, UPDATE of the breakdown and DELETE; a TRUNCATE or a change of review_id (only
+-- service_role can) needs a manual refresh of the masters involved.
 
 CREATE TABLE IF NOT EXISTS rate.review_values (
   review_id       uuid PRIMARY KEY REFERENCES rate.reviews(id) ON DELETE CASCADE,
@@ -77,25 +114,6 @@ DROP POLICY IF EXISTS "Rate worker read review_values" ON rate.review_values;
 CREATE POLICY "Rate worker read review_values" ON rate.review_values
   FOR SELECT TO rate_worker USING (true);
 
--- 2. The public tier, and P2's columns kept empty -----------------------------------------------
--- NOT VALID: no scan under the lock. Every row holds NULL in all three today; V6 checks them.
-
-ALTER TABLE rate.reviews ADD COLUMN IF NOT EXISTS value_tier text;
-
-DO $$
-BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conrelid = 'rate.reviews'::regclass
-                   AND conname = 'reviews_value_tier_known') THEN
-    ALTER TABLE rate.reviews ADD CONSTRAINT reviews_value_tier_known
-      CHECK (value_tier IS NULL OR value_tier IN ('basic', 'complete', 'excellent')) NOT VALID;
-  END IF;
-  -- P2 put the number on the public table; it lives in rate.review_values instead.
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conrelid = 'rate.reviews'::regclass
-                   AND conname = 'reviews_value_private') THEN
-    ALTER TABLE rate.reviews ADD CONSTRAINT reviews_value_private
-      CHECK (value_score IS NULL AND value_breakdown IS NULL) NOT VALID;
-  END IF;
-END $$;
 
 -- 3. The D6 factor -----------------------------------------------------------------------------
 -- 1 + 0.25 x weightCompleteness / 35 at four decimals. A missing breakdown, a missing or
@@ -244,9 +262,12 @@ CREATE TRIGGER trg_review_values_rating_extras_del AFTER DELETE ON rate.review_v
 --   a gated row: every part 0, tier null, no gaps.
 -- A malformed row fails the whole call (22023) and names its index; nothing is written. Rows
 -- of reviews that do not exist are skipped. It writes rate.review_values (the number, private)
--- and rate.reviews.value_tier (the tier, public), the reviews locked in id order first so two
--- batches never deadlock. Returns the number of reviews whose stored value changed. Run one
--- job worker at a time; a batch refreshes its masters inside the call.
+-- and rate.reviews.value_tier (the tier, public). The reviews are locked FOR NO KEY UPDATE in id
+-- order first: two batches never deadlock, and inserts that reference those reviews (flags,
+-- lines, votes) are not blocked. Another writer that updates several reviews out of id order
+-- can still deadlock with a batch; PostgreSQL aborts one side (40P01), so the job retries.
+-- Returns the number of reviews whose stored value changed. Run one job worker at a time; a
+-- batch refreshes its masters inside the call.
 CREATE OR REPLACE FUNCTION rate.store_review_values(p_values jsonb)
 RETURNS integer
 LANGUAGE plpgsql
@@ -330,26 +351,22 @@ BEGIN
     v_index := v_index + 1;
   END LOOP;
 
-  CREATE TEMP TABLE IF NOT EXISTS pg_temp.review_values_batch (
-    review_id uuid PRIMARY KEY, value_score numeric(5, 2), value_breakdown jsonb
-  ) ON COMMIT DROP;
-  TRUNCATE pg_temp.review_values_batch;
-  -- A review listed twice: the last row wins. Reviews that do not exist are skipped.
-  INSERT INTO pg_temp.review_values_batch
-  SELECT DISTINCT ON ((e ->> 'id')::uuid)
-         (e ->> 'id')::uuid, round((e ->> 'score')::numeric, 2), e -> 'breakdown'
-  FROM jsonb_array_elements(p_values) WITH ORDINALITY AS a(e, n)
-  WHERE EXISTS (SELECT 1 FROM rate.reviews r WHERE r.id = (e ->> 'id')::uuid)
-  ORDER BY (e ->> 'id')::uuid, n DESC;
-
+  -- The batch is read straight from p_values in each statement, with no temp table a caller's
+  -- session could have prepared: a review listed twice, the last row wins; reviews that do not
+  -- exist are skipped by the joins.
   PERFORM 1 FROM rate.reviews r
-  WHERE r.id IN (SELECT b.review_id FROM pg_temp.review_values_batch b)
+  WHERE r.id IN (SELECT (e ->> 'id')::uuid FROM jsonb_array_elements(p_values) e)
   ORDER BY r.id
-  FOR UPDATE;
+  FOR NO KEY UPDATE;
 
   INSERT INTO rate.review_values AS rv (review_id, value_score, value_breakdown, updated_at)
   SELECT b.review_id, b.value_score, b.value_breakdown, now()
-  FROM pg_temp.review_values_batch b
+  FROM (SELECT DISTINCT ON ((e ->> 'id')::uuid)
+               (e ->> 'id')::uuid AS review_id, round((e ->> 'score')::numeric, 2) AS value_score,
+               e -> 'breakdown' AS value_breakdown
+        FROM jsonb_array_elements(p_values) WITH ORDINALITY AS a(e, n)
+        ORDER BY (e ->> 'id')::uuid, n DESC) b
+  JOIN rate.reviews r ON r.id = b.review_id
   ORDER BY b.review_id
   ON CONFLICT (review_id) DO UPDATE
     SET value_score = EXCLUDED.value_score,
@@ -361,7 +378,10 @@ BEGIN
 
   UPDATE rate.reviews r
   SET value_tier = b.value_breakdown ->> 'tier'
-  FROM pg_temp.review_values_batch b
+  FROM (SELECT DISTINCT ON ((e ->> 'id')::uuid)
+               (e ->> 'id')::uuid AS review_id, e -> 'breakdown' AS value_breakdown
+        FROM jsonb_array_elements(p_values) WITH ORDINALITY AS a(e, n)
+        ORDER BY (e ->> 'id')::uuid, n DESC) b
   WHERE r.id = b.review_id
     AND r.value_tier IS DISTINCT FROM (b.value_breakdown ->> 'tier');
 

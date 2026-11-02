@@ -4,8 +4,9 @@
 --      drops the triggers on rate.review_values, and refreshes every master a stored value could
 --      have lifted; no table lock beyond the rows it updates;
 --   2. drops the writer, the reader, the factor, rate.review_values (its values are lost: the
---      scoring job recomputes them), the tier column and the two CHECKs on rate.reviews, under a
---      short ACCESS EXCLUSIVE lock with a 5 s timeout (re-run the file if it times out).
+--      scoring job recomputes them), the tier column and its CHECK, under a short ACCESS
+--      EXCLUSIVE lock with a 5 s timeout (re-run the file if it times out). The CHECK keeping
+--      P2's public number columns empty stays (D7).
 -- The refresh skips a master another transaction holds at that moment (FOR UPDATE SKIP LOCKED in
 -- P2), so stop the scoring job first and afterwards run V5 of the verify file: any master it
 -- counts needs SELECT rate.refresh_master_rating_extras(id).
@@ -81,9 +82,11 @@ DROP FUNCTION IF EXISTS rate.review_values_refresh_rating_extras();
 DO $$
 BEGIN
   IF to_regclass('rate.review_values') IS NOT NULL THEN
+    -- Only reviews whose value lifted them (the factor still exists until transaction 2).
     PERFORM rate.refresh_rating_extras_of_products(ARRAY(
       SELECT DISTINCT r.product_id
-      FROM rate.review_values v JOIN rate.reviews r ON r.id = v.review_id));
+      FROM rate.review_values v JOIN rate.reviews r ON r.id = v.review_id
+      WHERE rate.review_completeness_factor(v.value_breakdown) > 1));
   END IF;
 END $$;
 
@@ -98,7 +101,8 @@ DROP FUNCTION IF EXISTS rate.my_review_values(uuid[]);
 DROP FUNCTION IF EXISTS rate.review_completeness_factor(jsonb);
 DROP TABLE IF EXISTS rate.review_values;
 
-ALTER TABLE rate.reviews DROP CONSTRAINT IF EXISTS reviews_value_private;
+-- reviews_value_private stays: P2's public number columns must remain empty after a rollback
+-- too (D7), and rate_worker can still write rate.reviews.
 ALTER TABLE rate.reviews DROP CONSTRAINT IF EXISTS reviews_value_tier_known;
 ALTER TABLE rate.reviews DROP COLUMN IF EXISTS value_tier;
 

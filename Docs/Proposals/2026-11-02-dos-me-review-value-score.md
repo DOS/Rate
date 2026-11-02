@@ -94,6 +94,11 @@ values, each review by at most +25% weight.
   - The scoring job in the importer (a follow-up) computes `reviewValue` for
     each review and calls `store_review_values` as `rate_worker`, one worker
     at a time.
+    - It retries a batch that a deadlock (40P01) aborts. Batches lock their
+      reviews in id order, but another writer may not.
+    - After each run, it runs V5 and refreshes any master V5 counts. P2's
+      refresh skips a master another transaction holds, so a master can be
+      left stale until its next change.
   - The web sorts on the server and shows the tier publicly. It shows the
     writer their own number through `my_review_values`.
 - **The SQL repeats the module's constants**: 35, 0.25, the steps, the parts'
@@ -107,7 +112,23 @@ values, each review by at most +25% weight.
 ## Decisions
 
 1. **D7 is applied as approved:** the tier is public and the number is only
-   for the writer.
+   for the writer. No role but `service_role`, `rate_worker` and the review's
+   writer can read a stored number. Its limits, for information:
+   - **Most of the number can be rebuilt from public data.** The formula is
+     open, and its inputs are public: the text, the lines, the criteria, the
+     purchase mark, the votes and the tier. That gives the number to within
+     the trust part, about 5 points. D7 keeps the number off pages; it does
+     not make it secret against a determined observer.
+   - **The public `rating_weight_sum` can reveal a review's factor.** On a
+     master with a single counted review, or by comparing the sum before and
+     after a scoring batch, it gives `weightCompleteness`. Only that part is
+     exposed, and it is mostly computable from the public content anyway.
+   - **Sorting on the server** shows how reviews rank by value, but not the
+     numbers.
+   - **`rate_worker` can set `value_tier` directly on crawled reviews**,
+     through its table grant on `rate.reviews`. The CHECK limits it to the
+     three labels, so the tier can drift from the number but cannot carry the
+     number. V7 catches that drift.
 2. **Who can lift a review**, accepted by the PO as recommended.
    - The database cannot check a claimed completeness against the review's
      text, lines and criteria.
@@ -125,6 +146,11 @@ values, each review by at most +25% weight.
 
 1. **Before the apply**, run V5 of the verify file alone as a baseline, so
    drift that P2 already has is not mistaken for P6.
+   - The migration refuses to run if any review already holds a number in
+     P2's public `value_score` or `value_breakdown`. Under the new CHECK such
+     a row could never be updated again.
+   - Nothing writes them today. If a writer appeared, move its values out
+     first.
 2. Copy the `.sql` into DOS-Me `supabase/migrations/` with a new timestamp,
    and the verify and rollback files into `scripts/ops/`, as for P3.
 3. After the beta and production applies, run the verify file read-only as
@@ -134,8 +160,9 @@ values, each review by at most +25% weight.
    first. It runs in two transactions:
    - first, P2's rating function goes back byte for byte, the triggers are
      dropped, and the masters the values touched are refreshed;
-   - then the functions, `rate.review_values`, the tier column and the CHECKs
-     are dropped, under a 5 s lock timeout.
+   - then the functions, `rate.review_values`, the tier column and its CHECK
+     are dropped, under a 5 s lock timeout. The CHECK that keeps P2's public
+     number columns empty stays.
 
    The stored values are lost; the scoring job recomputes them after a
    re-apply. Afterwards, run V5. A master it counts was held by another

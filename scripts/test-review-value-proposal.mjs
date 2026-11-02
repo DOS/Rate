@@ -193,6 +193,22 @@ try {
   const before = score();
   assert.equal(before, expectedScore(false), 'P2 rates the master');
 
+  // A number already in P2's public columns refuses the apply, which then leaves nothing.
+  sql(`UPDATE rate.reviews SET value_score = 50 WHERE id = '${review(1)}'`);
+  assert.throws(
+    () => sql(proposal),
+    /rate.reviews has value_score or value_breakdown set/
+  );
+  assert.equal(
+    sql(
+      `SELECT (to_regclass('rate.review_values') IS NULL)::text || ',' || count(*)
+       FROM information_schema.columns
+       WHERE table_schema = 'rate' AND table_name = 'reviews' AND column_name = 'value_tier'`
+    ),
+    'true,0'
+  );
+  sql(`UPDATE rate.reviews SET value_score = NULL WHERE id = '${review(1)}'`);
+
   // Applied twice: no stored rating changes, every check passes.
   sql(proposal);
   sql(proposal);
@@ -537,9 +553,11 @@ try {
   );
   assert.equal(
     sql(
-      `SELECT count(*) FROM pg_constraint WHERE conname IN ('reviews_value_private', 'reviews_value_tier_known')`
+      `SELECT string_agg(conname, ',') FROM pg_constraint
+       WHERE conname IN ('reviews_value_private', 'reviews_value_tier_known')`
     ),
-    '0'
+    'reviews_value_private',
+    'only the CHECK keeping the number off the public table stays'
   );
   // P2's rating still works: a weight change refreshes the master.
   sql(

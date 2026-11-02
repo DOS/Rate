@@ -38,6 +38,8 @@ SELECT count(*) FROM (
   WHERE has_table_privilege(r.role, 'rate.review_values', 'SELECT')
      OR has_table_privilege(r.role, 'rate.review_values', 'INSERT')
      OR has_table_privilege(r.role, 'rate.review_values', 'UPDATE')
+     OR has_table_privilege(r.role, 'rate.review_values', 'DELETE')
+     OR has_table_privilege(r.role, 'rate.review_values', 'TRUNCATE')
      OR has_function_privilege(r.role, 'rate.store_review_values(jsonb)', 'EXECUTE')
      OR has_function_privilege(r.role, 'rate.review_completeness_factor(jsonb)', 'EXECUTE')
   UNION ALL
@@ -50,6 +52,7 @@ SELECT count(*) FROM (
      OR has_table_privilege('rate_worker', 'rate.review_values', 'INSERT')
      OR has_table_privilege('rate_worker', 'rate.review_values', 'UPDATE')
      OR has_table_privilege('rate_worker', 'rate.review_values', 'DELETE')
+     OR has_table_privilege('rate_worker', 'rate.review_values', 'TRUNCATE')
      OR NOT has_function_privilege('rate_worker', 'rate.store_review_values(jsonb)', 'EXECUTE')
   UNION ALL
   SELECT 'rls' FROM pg_class WHERE oid = 'rate.review_values'::regclass AND NOT relrowsecurity
