@@ -497,7 +497,8 @@ try {
   sql(rollback);
   assert.equal(
     sql(`SELECT count(*) FROM pg_proc WHERE pronamespace = 'rate'::regnamespace
-         AND proname IN ('submit_community_review_v2', 'review_point_list', 'review_point_compare')`),
+         AND proname IN ('submit_community_review_v2', 'review_point_list', 'review_point_compare',
+           'review_point_has_content', 'review_point_is_evasive_con', 'review_text_length', 'review_text_stored')`),
     '0'
   );
   assert.equal(sql(`SELECT to_regclass('rate.rating_criteria') IS NULL`), 't');

@@ -128,4 +128,29 @@ assert.deepEqual(
   ['battery']
 );
 
+// The user score is the rating the pages show (resolveCompareEffectiveUserRating,
+// DOS/Rate#1545): the stored score first, else the weighted rating, else the
+// average, each brought to 0-5 the same way.
+const withRatings = (ratings: Record<string, number | null>) =>
+  scoreMasterProductForLeaderboard({
+    ...phone('ratings', 0),
+    ...ratings,
+  } as unknown as MasterProduct).userScore5;
+assert.equal(
+  withRatings({ rating_score: 4.814, user_rating_weighted: 4.2 }),
+  4.814
+);
+assert.equal(withRatings({ rating_score: 0, user_rating_weighted: 4.3 }), 4.3);
+// A zero weighted rating falls back to the average, then scaled: 9/10 is 4.5.
+assert.equal(withRatings({ user_rating_weighted: 0, average_rating: 9 }), 4.5);
+// A 0-100 average is 4.5 too; the engine used to read anything above 10 as 0.
+assert.equal(
+  withRatings({ user_rating_weighted: null, average_rating: 90 }),
+  4.5
+);
+assert.equal(
+  withRatings({ user_rating_weighted: null, average_rating: null }),
+  0
+);
+
 console.log('leaderboard-criteria: criterion scores are real or null');

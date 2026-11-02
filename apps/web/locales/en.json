@@ -606,7 +606,8 @@
     "v2ErrNoContent": "Say a bit more.",
     "v2ErrEvasive": "Name one thing you dislike, however small.",
     "v2ErrDuplicate": "This line is a duplicate.",
-    "v2ErrBoth": "This line is already a pro."
+    "v2ErrBoth": "This line is already a pro.",
+    "v2ErrRejected": "This field is not valid."
   },
   "watchlist": {
     "metaTitle": "True price watchlist and drop alerts | Rate.vn",

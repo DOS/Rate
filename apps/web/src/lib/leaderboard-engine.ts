@@ -2,6 +2,7 @@ import {
   getCategoryRouteHref,
   getMasterProductCategorySlug,
   getMasterProductHref,
+  resolveCompareEffectiveUserRating,
   resolveProductImageUrl,
 } from './rate-domain-core';
 import { catalogRowSlug, type ItemCatalogRow } from './item-directory';
@@ -410,18 +411,10 @@ export function scoreMasterProductForLeaderboard(
       images: safeItem.images,
     }) || '/img/devices/apple-iphone-16-pro-max-256gb.jpg';
 
-  // The stored Bayesian rating, kept unrounded so a page rounds once (D3).
-  // A product without one falls back to the older ratings.
-  const storedRating = toSafePositiveNumber(safeItem.rating_score);
-  const rawUser =
-    toSafePositiveNumber(safeItem.user_rating_weighted) ||
-    toSafePositiveNumber(safeItem.average_rating);
-  const userScore5 =
-    storedRating > 0 && storedRating <= 5
-      ? storedRating
-      : rawUser > 0 && rawUser <= 10
-        ? clampScore5(rawUser > 5 ? rawUser / 2 : rawUser)
-        : 0;
+  // The rating every page shows (D3): the stored Bayesian score, kept
+  // unrounded so a page rounds once, else the weighted user rating, then the
+  // marketplace average, each read as the pages read them (DOS/Rate#1545).
+  const userScore5 = resolveCompareEffectiveUserRating(safeItem);
 
   const rawExpert = toSafePositiveNumber(safeItem.expert_rating);
   const expertScore10: number | null =

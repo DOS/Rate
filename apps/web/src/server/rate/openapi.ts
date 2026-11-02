@@ -1583,7 +1583,7 @@ function buildBaseRateOpenApiSpec(
           summary:
             'Submit a 5-criteria JReviews community review with automated anti-seeding check',
           description:
-            'Submits a community review for the signed-in user via `rate.submit_community_review`. The review is stored unanalyzed and does not change product scores until it is analyzed; keyword spam is flagged at once. Requires a Supabase access token. The reviewer type is decided by the database; the request cannot claim `expert`. Any failure to store the review is returned as an error.',
+            "Submits a community review for the signed-in user via `rate.submit_community_review`. The review is stored unanalyzed and does not change product scores until it is analyzed; keyword spam is flagged at once. Requires a Supabase access token. The reviewer type is decided by the database; the request cannot claim `expert`. Any failure to store the review is returned as an error. Where review form v2 is enabled, the body must carry `formVersion: 2`, `criteriaRatings` (the category's criteria in half stars), `verdict`, `pros` and `cons` (and optionally `criterionPoints`); it is stored through `rate.submit_community_review_v2`, the star is computed from the criteria, and a field the review breaks comes back as `code: INVALID_REVIEW` with `fieldErrors`.",
           tags: ['Community Reviews & Voting'],
           security: [{ bearerAuth: [] }],
           requestBody: {

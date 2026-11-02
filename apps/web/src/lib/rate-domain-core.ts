@@ -6,6 +6,63 @@
  */
 import type { MasterProduct } from '@repo/shared-data';
 
+/** A finite number from a number or a numeric string, else NaN. */
+export function parseFiniteNumericSpec(raw: unknown): number {
+  if (typeof raw === 'number') {
+    return Number.isFinite(raw) ? raw : NaN;
+  }
+  if (typeof raw === 'string') {
+    const cleaned = raw.replace(/\p{Cc}+/gu, '').trim();
+    if (!cleaned || cleaned.length > 32 || /^[+-]?0[xbo]/i.test(cleaned)) {
+      return NaN;
+    }
+    return Number(cleaned.replace(',', '.'));
+  }
+  return NaN;
+}
+
+export function normalizeCompareFiveStarRating(
+  raw: number | string | null | undefined
+): number {
+  const num = parseFiniteNumericSpec(raw);
+  if (!Number.isFinite(num) || num <= 0 || num > 100) {
+    return 0;
+  }
+  const scaled = num > 10 ? num / 20 : num > 5 ? num / 2 : num;
+  if (scaled <= 0 || scaled > 5) return 0;
+  return Number(scaled.toFixed(2));
+}
+
+/**
+ * The stored Bayesian rating (`rating_score`, DOS/Rate#1545), out of 5 and
+ * unrounded: it is stored at 3 decimals so a page rounds once, to 1. Zero
+ * when there is none.
+ */
+export function resolveStoredRatingScore(
+  p: Partial<Pick<MasterProduct, 'rating_score'>> | null | undefined
+): number {
+  if (!p || typeof p !== 'object' || Array.isArray(p)) return 0;
+  const num = parseFiniteNumericSpec(p.rating_score);
+  return Number.isFinite(num) && num > 0 && num <= 5 ? num : 0;
+}
+
+/**
+ * The one rating every page shows (design #1531 D3): the stored Bayesian
+ * `rating_score`. A product without one falls back to the weighted user
+ * rating, then the marketplace average, as before the column existed.
+ */
+export function resolveCompareEffectiveUserRating(
+  p: Pick<MasterProduct, 'user_rating_weighted' | 'average_rating'> &
+    Partial<Pick<MasterProduct, 'rating_score'>>
+): number {
+  if (!p || typeof p !== 'object' || Array.isArray(p)) return 0;
+  const stored = resolveStoredRatingScore(p);
+  if (stored > 0) return stored;
+  const weighted = normalizeCompareFiveStarRating(p.user_rating_weighted);
+  if (weighted > 0) return weighted;
+  return normalizeCompareFiveStarRating(p.average_rating);
+}
+
 export type ReviewFlagCategory =
   | 'authentic'
   | 'low_value_coin_spam'

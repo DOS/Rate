@@ -6106,10 +6106,23 @@ async function runCoreArchitectureSuite() {
         sort: 'rating_desc',
       });
       assert.equal(sorted510.length, 2);
-      assert.equal(
-        sorted510[0]?.id,
-        'mp-510-1',
-        'rating_desc sort must use expert_rating (4.9) when user_rating_weighted is null (#510)'
+      // The shown rating orders the list: 4.6 (weighted) above 4.2 (the
+      // average); the expert score (4.9) is shown apart (DOS/Rate#1545).
+      assert.deepEqual(
+        sorted510.map((p) => p.id),
+        ['mp-510-2', 'mp-510-1'],
+        'rating_desc sorts by the shown rating, not by expert_rating (#1545)'
+      );
+      masterPageFetched = false;
+      const rated510 = await rateApi510.getMasterProducts({
+        categorySlug: 'laptops',
+        brands: ['asus'],
+        minRating: 4.5,
+      });
+      assert.deepEqual(
+        rated510.map((p) => p.id),
+        ['mp-510-2'],
+        'minRating compares the shown rating; an expert 4.9 does not pass (#1545)'
       );
     } finally {
       globalThis.fetch = origFetch510;

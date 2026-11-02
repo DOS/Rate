@@ -606,7 +606,8 @@
     "v2ErrNoContent": "Viết rõ ý hơn.",
     "v2ErrEvasive": "Ghi một điểm chưa ưng, dù nhỏ.",
     "v2ErrDuplicate": "Dòng này bị trùng.",
-    "v2ErrBoth": "Dòng này đã có ở ưu điểm."
+    "v2ErrBoth": "Dòng này đã có ở ưu điểm.",
+    "v2ErrRejected": "Ô này chưa hợp lệ."
   },
   "watchlist": {
     "metaTitle": "Theo dõi giá thật và cảnh báo giảm giá | Rate.vn",
