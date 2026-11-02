@@ -943,6 +943,34 @@ export type Database = {
           },
         ];
       };
+      review_values: {
+        Row: {
+          review_id: string;
+          updated_at: string;
+          value_breakdown: Json;
+          value_score: number;
+        };
+        Insert: {
+          review_id: string;
+          updated_at?: string;
+          value_breakdown: Json;
+          value_score: number;
+        };
+        Update: {
+          review_id?: string;
+          updated_at?: string;
+          value_breakdown?: Json;
+          value_score?: number;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'review_values_review_id_fkey';
+            columns: ['review_id'];
+            referencedRelation: 'reviews';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
       review_votes: {
         Row: {
           created_at: string;
@@ -1006,6 +1034,7 @@ export type Database = {
           upvotes: number | null;
           value_breakdown: Json | null;
           value_score: number | null;
+          value_tier: string | null;
           variation: string | null;
           verdict: string | null;
         };
@@ -1034,6 +1063,7 @@ export type Database = {
           upvotes?: number | null;
           value_breakdown?: Json | null;
           value_score?: number | null;
+          value_tier?: string | null;
           variation?: string | null;
           verdict?: string | null;
         };
@@ -1062,6 +1092,7 @@ export type Database = {
           upvotes?: number | null;
           value_breakdown?: Json | null;
           value_score?: number | null;
+          value_tier?: string | null;
           variation?: string | null;
           verdict?: string | null;
         };
@@ -1176,6 +1207,42 @@ export type Database = {
           p_verdict: string;
         };
         Returns: number;
+      };
+      crawl_job_failures: {
+        Args: { p_limit?: number; p_since?: string };
+        Returns: {
+          error_kind: string;
+          jobs: number;
+          latest_updated_at: string;
+          platform: string;
+          status: string;
+          type: string;
+        }[];
+      };
+      crawl_job_repeat_failures: {
+        Args: { p_limit?: number; p_min_failures?: number; p_since?: string };
+        Returns: {
+          failures: number;
+          first_failed_at: string;
+          last_failed_at: string;
+          latest_error_kind: string;
+          platform: string;
+          platform_item_id: string;
+        }[];
+      };
+      crawl_queue_summary: {
+        Args: { p_platforms?: string[] };
+        Returns: {
+          jobs: number;
+          newest_updated_at: string;
+          oldest_created_at: string;
+          pending_in_backoff: number;
+          platform: string;
+          priority: number;
+          running_lease_expired: number;
+          status: string;
+          type: string;
+        }[];
       };
       current_user_can_vote_reviews: { Args: never; Returns: boolean };
       dequeue_crawl_job: {
@@ -1325,6 +1392,14 @@ export type Database = {
           total_reviews: number;
         }[];
       };
+      my_review_values: {
+        Args: { p_review_ids: string[] };
+        Returns: {
+          review_id: string;
+          value_breakdown: Json;
+          value_score: number;
+        }[];
+      };
       purge_completed_crawl_jobs: {
         Args: { p_retention_days?: number };
         Returns: number;
@@ -1370,6 +1445,10 @@ export type Database = {
           generation: number;
           input_hash: string;
         }[];
+      };
+      review_completeness_factor: {
+        Args: { p_breakdown: Json };
+        Returns: number;
       };
       review_input_hash: {
         Args: { p_author: string; p_comment: string; p_rating: number };
@@ -1487,6 +1566,7 @@ export type Database = {
         Args: { p_params?: Json; p_source: string };
         Returns: string;
       };
+      store_review_values: { Args: { p_values: Json }; Returns: number };
       submit_community_review: {
         Args: {
           p_author_name: string;
