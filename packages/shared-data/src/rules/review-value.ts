@@ -14,6 +14,7 @@
  * equal.
  */
 import { getRatingCriteria, hasRatingCriteria } from './rating-criteria.js';
+import type { ReviewDepth } from './review-depth.js';
 import {
   REVIEW_POINT_MAX,
   REVIEW_POINT_MIN,
@@ -65,23 +66,10 @@ export const REVIEW_TIER_COMPLETE_MIN = 30;
 export const REVIEW_TIER_EXCELLENT_MIN = 70;
 
 /**
- * Axis C of the review trust model (`Docs/Platform/review-trust-model.html`),
- * as `evaluateReviewTrustAssessment` in apps/web classifies it.
- */
-export type ReviewDepth =
-  | 'stars_only'
-  | 'platform_label'
-  | 'filler'
-  | 'low_effort'
-  | 'specific_short'
-  | 'detailed'
-  | 'expert_depth';
-
-/**
  * Specificity points per depth. Length counts only through the depth, so
- * padding past a depth's threshold adds nothing. Padding up to a threshold
- * is axis C's to catch: as the web classifies it today, 30, 90 and 240
- * characters with a product word move a text up a depth.
+ * padding past a depth's threshold adds nothing, and `reviewDepth` leaves
+ * repeats out of the length, so padding up to a threshold adds nothing
+ * either.
  */
 export const REVIEW_SPECIFICITY_POINTS: Readonly<Record<ReviewDepth, number>> =
   {
@@ -125,7 +113,10 @@ export interface ReviewValueInput {
    * value score is 0 however complete the review is (6.1).
    */
   gated: boolean;
-  /** Axis C, measured on all the review's text: comment, verdict and lines. */
+  /**
+   * Axis C, measured on all the review's text: comment, verdict and lines;
+   * `reviewDepth` (`review-depth.ts`) classifies it.
+   */
   depth: ReviewDepth;
   /** `rate.reviews.criteria_ratings`. */
   criteriaRatings: unknown;
