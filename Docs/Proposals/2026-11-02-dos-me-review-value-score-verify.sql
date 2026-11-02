@@ -1,5 +1,7 @@
 -- VERIFY the PROPOSAL 2026-11-02-dos-me-review-value-score.sql (DOS/Rate#1547). Read-only.
 -- Run after the migration on preview, beta and production. V1 to V7 return 0.
+-- Run as postgres or service_role: V1, V5 and V8 call functions only service_role may execute
+-- (a role without them fails loudly, never passes). V5 recomputes every master: run it off-peak.
 
 -- V1 the factor is the D6 formula on weightCompleteness
 -- (packages/shared-data completenessWeightFactor); expect 0
@@ -11,11 +13,14 @@ SELECT count(*) FROM (VALUES
 ) AS t(breakdown, expected)
 WHERE rate.review_completeness_factor(t.breakdown) IS DISTINCT FROM t.expected;
 
--- V2 the rating and its trigger read the factor; expect 0
-SELECT count(*) FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+-- V2 the rating reads the factor, and its trigger compares it on both sides; expect 0
+SELECT 2 - count(*) FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
 WHERE n.nspname = 'rate'
-  AND p.proname IN ('master_rating_extras', 'reviews_refresh_rating_extras')
-  AND p.prosrc NOT LIKE '%rate.review_completeness_factor(%value_breakdown)%';
+  AND ((p.proname = 'master_rating_extras'
+        AND p.prosrc LIKE '%r.helpfulness_weight * rate.review_completeness_factor(r.value_breakdown)%')
+    OR (p.proname = 'reviews_refresh_rating_extras'
+        AND p.prosrc LIKE '%rate.review_completeness_factor(n.value_breakdown)%'
+        AND p.prosrc LIKE '%rate.review_completeness_factor(o.value_breakdown)%'));
 
 -- V3 the writer is security definer with an empty search_path, callable by service_role and
 -- rate_worker and by nobody else; expect 0
@@ -43,11 +48,12 @@ CROSS JOIN LATERAL rate.master_rating_extras(m.id) x
 WHERE (m.rating_score, m.rating_weight_sum, m.criteria_scores)
       IS DISTINCT FROM (x.rating_score, x.rating_weight_sum, x.criteria_scores);
 
--- V6 every stored value is well formed: the CHECKs hold on every row (they are NOT VALID),
--- the breakdown's score is value_score, and a gated review scores 0; expect 0
+-- V6 every stored value is well formed: a score only with a breakdown, the CHECKs hold on
+-- every row (they are NOT VALID), the breakdown's score is value_score, and a gated review
+-- scores 0; expect 0
 SELECT count(*) FROM rate.reviews r
-WHERE r.value_breakdown IS NOT NULL
-  AND CASE
+WHERE (r.value_breakdown IS NULL) <> (r.value_score IS NULL)
+   OR r.value_breakdown IS NOT NULL AND CASE
     WHEN jsonb_typeof(r.value_breakdown) <> 'object'
       OR jsonb_typeof(r.value_breakdown -> 'completeness') IS DISTINCT FROM 'number'
       OR jsonb_typeof(r.value_breakdown -> 'weightCompleteness') IS DISTINCT FROM 'number'
@@ -59,10 +65,17 @@ WHERE r.value_breakdown IS NOT NULL
       OR (r.value_breakdown -> 'gated' = 'true'::jsonb AND r.value_score <> 0)
   END;
 
--- V7 every review's factor is between 1 and 1.25, so none weighs more than 1.25 times its
--- stored weight (D6); expect 0
+-- V7 the public tier (D7) follows the module's rule: none on a gated review, else basic under
+-- completeness 30, excellent from score 70, complete between; expect 0
 SELECT count(*) FROM rate.reviews r
-WHERE rate.review_completeness_factor(r.value_breakdown) NOT BETWEEN 1 AND 1.25;
+WHERE jsonb_typeof(r.value_breakdown) = 'object'
+  AND jsonb_typeof(r.value_breakdown -> 'completeness') = 'number'
+  AND jsonb_typeof(r.value_breakdown -> 'score') = 'number'
+  AND (r.value_breakdown ->> 'tier') IS DISTINCT FROM CASE
+    WHEN r.value_breakdown -> 'gated' = 'true'::jsonb THEN NULL
+    WHEN (r.value_breakdown ->> 'completeness')::numeric < 30 THEN 'basic'
+    WHEN (r.value_breakdown ->> 'score')::numeric >= 70 THEN 'excellent'
+    ELSE 'complete' END;
 
 -- V8 (information) reviews scored, their mean score and the share lifted
 SELECT count(*) FILTER (WHERE value_breakdown IS NOT NULL) AS scored,

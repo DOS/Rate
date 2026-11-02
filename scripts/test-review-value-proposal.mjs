@@ -213,6 +213,51 @@ try {
     );
   assert.equal(Number(sql(`SELECT rate.review_completeness_factor(NULL)`)), 1);
 
+  // The writer accepts every output of the module over a grid of its inputs (each completeness
+  // item on or off, every depth, gated, verified, votes, trust), so a module change the SQL
+  // does not follow fails here, not in production. Reviews that do not exist are only checked.
+  const grid = [];
+  const extraLines = [
+    { kind: 'pro', criterionKey: 'camera', body: 'Chụp đêm rõ nét' },
+    { kind: 'con', criterionKey: 'display', body: 'Màn hơi tối ngoài nắng' },
+  ];
+  for (const depth of Object.keys(rules.REVIEW_SPECIFICITY_POINTS))
+    for (let bits = 0; bits < 64; bits += 1)
+      grid.push(
+        rules.reviewValue({
+          ...base,
+          depth,
+          criteriaRatings: bits & 1 ? allRated : {},
+          verdict: bits & 2 ? base.verdict : null,
+          points: [
+            ...(bits & 4 ? general : []),
+            ...(bits & 8 ? extraLines : []),
+          ],
+          hasRealPhoto: Boolean(bits & 16),
+          verifiedPurchase: Boolean(bits & 32),
+          gated: depth === 'detailed' && bits % 7 === 0,
+          helpfulVotes: bits % 9,
+          unhelpfulVotes: bits % 4,
+          authorTrust: bits % 5 === 0 ? null : (bits % 11) / 10,
+        })
+      );
+  assert.ok(grid.some((v) => v.weightCompleteness < v.completeness));
+  assert.ok(new Set(grid.map((v) => v.tier)).size === 4, 'every tier and null');
+  for (let i = 0; i < grid.length; i += 400)
+    assert.equal(
+      store(
+        JSON.stringify(
+          grid.slice(i, i + 400).map((v, j) => ({
+            id: `f0000000-0000-4000-8000-${String(i + j).padStart(12, '0')}`,
+            score: v.score,
+            breakdown: v,
+          }))
+        )
+      ),
+      '0',
+      'grid rows are accepted (and no such review exists)'
+    );
+
   // Stored as rate_worker, community review included: the rating lifts as the module says.
   assert.equal(store(payload([1, 2, 3, 4, 5])), '5');
   assert.equal(stored(), '5');
@@ -290,6 +335,63 @@ try {
     }),
     /row 1 has values out of range/
   );
+  // Only a shape the module could produce: its keys, its tier, its gaps, its parts.
+  const shape = /row 1 is not a review value/;
+  const range = /row 1 has values out of range/;
+  refuse(bad({ breakdown: { note: 'x' } }), shape);
+  refuse(bad({ breakdown: { gated: 'true' } }), shape);
+  refuse(bad({ breakdown: { gaps: 'photo' } }), shape);
+  refuse(bad({ breakdown: { gaps: [1] } }), shape);
+  refuse(bad({ score: '20' }), shape);
+  refuse('[1]', /row 0 is not a review value/);
+  const noTier = { ...good.breakdown };
+  delete noTier.tier;
+  refuse(JSON.stringify([good, { ...good, breakdown: noTier }]), shape);
+  refuse(bad({ breakdown: { tier: 'excellent' } }), range);
+  refuse(bad({ breakdown: { gaps: ['photo', 'photo'] } }), range);
+  refuse(bad({ breakdown: { gaps: ['bribe'] } }), range);
+  refuse(bad({ breakdown: { verified: 7 } }), range);
+  refuse(bad({ breakdown: { helpful: -1 } }), range);
+  // Specificity 13 is no depth's points (keep the sum right so only the part fails).
+  refuse(
+    bad({
+      score: values[2].score + 1,
+      breakdown: { score: values[2].score + 1, specificity: 13 },
+    }),
+    range
+  );
+  // A photo's 5 off the weight needs a photo and no pros and cons, and never 10.
+  refuse(bad({ breakdown: { weightCompleteness: -5 } }), range);
+  // ...and a photo without pros and cons must take its 5 off.
+  refuse(bad({ breakdown: { weightCompleteness: 5 } }), range);
+  refuse(
+    JSON.stringify([
+      {
+        ...good,
+        breakdown: { ...values[1], weightCompleteness: 30 },
+        id: review(1),
+        score: values[1].score,
+      },
+    ]),
+    /row 0 has values out of range/
+  );
+  refuse(
+    JSON.stringify(
+      Array.from({ length: 900 }, () => ({ ...good, pad: 'x'.repeat(3000) }))
+    ),
+    /at most 1000 rows and 2 MB/
+  );
+  // rate_worker writing a crawled review's columns directly meets the CHECKs: no full factor
+  // without the completeness behind it.
+  assert.throws(
+    () =>
+      asRole(
+        'rate_worker',
+        `UPDATE rate.reviews SET value_breakdown = '{"completeness": 0, "weightCompleteness": 35}'
+         WHERE id = '${review(2)}'`
+      ),
+    /reviews_value_breakdown_completeness/
+  );
   assert.equal(
     sql(
       `SELECT count(*) FROM rate.reviews WHERE id = '${review(2)}' AND value_breakdown IS NULL`
@@ -364,10 +466,8 @@ try {
   REVIEWS[4][1] = 1;
   assert.equal(score(), expectedScore(false));
 
-  // Applied again over kept values: the triggers do not re-run, so V5 shows the stale masters
-  // until a refresh; the job's next write or a refresh brings them back.
+  // Applied again over kept values: its last section lifts their masters again.
   sql(proposal);
-  sql(`SELECT rate.refresh_master_rating_extras('${MASTER}')`);
   assert.equal(score(), expectedScore(true));
   checkAll('after the re-apply');
 

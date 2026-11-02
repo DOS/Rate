@@ -1,8 +1,14 @@
 -- ROLLBACK of the PROPOSAL 2026-11-02-dos-me-review-value-score.sql (DOS/Rate#1547).
--- Puts back P2's rating functions (byte for byte from 20261101120000_rate_criteria_ratings.sql),
--- drops the factor, the writer and the two CHECKs, then refreshes every master whose rating a
--- stored breakdown could have lifted. The value_score and value_breakdown columns are P2's and
--- keep their data; without the factor they no longer touch any rating.
+-- Two transactions:
+--   1. puts back P2's rating functions (byte for byte from 20261101120000_rate_criteria_ratings.sql)
+--      and refreshes every master whose rating a stored breakdown could have lifted; no table
+--      lock beyond the rows it updates;
+--   2. drops the writer, the factor and the two CHECKs, a short ACCESS EXCLUSIVE lock with a
+--      5 s timeout (re-run the file if it times out).
+-- The value_score and value_breakdown columns are P2's and keep their data; without the factor
+-- they no longer touch any rating. The refresh skips a master another transaction holds at that
+-- moment (FOR UPDATE SKIP LOCKED in P2), so afterwards run V5 of the verify file: any master it
+-- counts needs SELECT rate.refresh_master_rating_extras(id).
 -- Safe to run twice.
 
 BEGIN;
@@ -92,13 +98,19 @@ BEGIN
   RETURN NULL;
 END $$;
 
+SELECT rate.refresh_rating_extras_of_products(ARRAY(
+  SELECT DISTINCT r.product_id FROM rate.reviews r WHERE r.value_breakdown IS NOT NULL));
+
+COMMIT;
+
+BEGIN;
+
+SET LOCAL lock_timeout = '5s';
+
 DROP FUNCTION IF EXISTS rate.store_review_values(jsonb);
 DROP FUNCTION IF EXISTS rate.review_completeness_factor(jsonb);
 
 ALTER TABLE rate.reviews DROP CONSTRAINT IF EXISTS reviews_value_breakdown_completeness;
 ALTER TABLE rate.reviews DROP CONSTRAINT IF EXISTS reviews_value_breakdown_object;
-
-SELECT rate.refresh_rating_extras_of_products(ARRAY(
-  SELECT DISTINCT r.product_id FROM rate.reviews r WHERE r.value_breakdown IS NOT NULL));
 
 COMMIT;

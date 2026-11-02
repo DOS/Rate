@@ -14,12 +14,14 @@
 --   rate.master_rating_extras   each review's weight becomes
 --                        LEAST(3, helpfulness_weight x factor); nothing else changes.
 --   rate.reviews_refresh_rating_extras   a change of the factor refreshes the master.
---   rate.store_review_values(p_values)   the one writer of value_score and value_breakdown,
---                        for the scoring job (rate_worker) and service_role; it checks each
---                        row's shape, so a stored breakdown is always one the shared module
---                        could have produced.
---   Two NOT VALID CHECKs on value_breakdown (an object; completeness and weightCompleteness
---   steps of 5 from 0 to 35).
+--   rate.store_review_values(p_values)   the writer of value_score and value_breakdown for
+--                        the scoring job (rate_worker) and service_role, community reviews
+--                        included; it accepts only a breakdown the shared module could produce.
+--                        rate_worker can still write crawled reviews' columns directly (its
+--                        table grant), as it can write helpfulness_weight; the CHECKs below
+--                        bound that to the same +25%.
+--   Two NOT VALID CHECKs on value_breakdown (an object; completeness a step of 5 from 0 to 35,
+--   weightCompleteness equal to it or 5 less).
 --
 -- Depends on P2 (20261101120000, value_score, value_breakdown and the rating functions) and
 -- P3 (20261102090000); both are in production. Uses only PostgreSQL 15 features.
@@ -28,28 +30,42 @@
 -- job writes it, and a NULL breakdown has factor 1, so no stored rating changes. Ratings move
 -- only as the job stores scores, each by at most +25% weight on a review.
 --
--- Idempotent: CREATE OR REPLACE for functions, constraints guarded by pg_constraint.
+-- Idempotent: CREATE OR REPLACE for functions, constraints guarded by pg_constraint. Section 5,
+-- after the transaction, re-lifts masters whose reviews already hold values (a re-apply after
+-- a rollback); on the first apply it changes nothing.
 -- =============================================================================
 
 BEGIN;
 
+-- The ALTER TABLEs below take a short ACCESS EXCLUSIVE lock on rate.reviews: give up rather
+-- than queue every reader behind a long query. Re-run the file if it times out.
+SET LOCAL lock_timeout = '5s';
+
 -- 1. value_breakdown shape ---------------------------------------------------------------------
--- NOT VALID: no scan under the ALTER TABLE lock. Every row is NULL today; V6 checks them all.
+-- NOT VALID: no scan under the ALTER TABLE lock. Every row is NULL today; V6 checks them all,
+-- and a later file may VALIDATE them (SHARE UPDATE EXCLUSIVE, no write block) as P2's did.
 
 DO $$
 BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'reviews_value_breakdown_object') THEN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conrelid = 'rate.reviews'::regclass
+                   AND conname = 'reviews_value_breakdown_object') THEN
     ALTER TABLE rate.reviews ADD CONSTRAINT reviews_value_breakdown_object
       CHECK (value_breakdown IS NULL OR jsonb_typeof(value_breakdown) = 'object') NOT VALID;
   END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'reviews_value_breakdown_completeness') THEN
+  -- Both completeness keys steps of 5, and the weight one equal to completeness or the 5 of a
+  -- photo less: a direct write (service_role, or rate_worker on a crawled review) cannot give
+  -- a review the full factor without its completeness.
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conrelid = 'rate.reviews'::regclass
+                   AND conname = 'reviews_value_breakdown_completeness') THEN
     ALTER TABLE rate.reviews ADD CONSTRAINT reviews_value_breakdown_completeness
       CHECK (value_breakdown IS NULL
              OR jsonb_typeof(value_breakdown) <> 'object'
              OR CASE WHEN jsonb_typeof(value_breakdown -> 'completeness') = 'number'
                       AND jsonb_typeof(value_breakdown -> 'weightCompleteness') = 'number'
                      THEN (value_breakdown ->> 'completeness')::numeric IN (0, 5, 10, 15, 20, 25, 30, 35)
-                      AND (value_breakdown ->> 'weightCompleteness')::numeric IN (0, 5, 10, 15, 20, 25, 30, 35)
+                      AND (value_breakdown ->> 'completeness')::numeric
+                          - (value_breakdown ->> 'weightCompleteness')::numeric IN (0, 5)
+                      AND (value_breakdown ->> 'weightCompleteness')::numeric >= 0
                      ELSE false END)
       NOT VALID;
   END IF;
@@ -174,13 +190,20 @@ END $$;
 
 -- 4. The writer --------------------------------------------------------------------------------
 -- p_values: a JSON array of {"id": review uuid, "score": 0-100, "breakdown": {...}}, at most
--- 1000 rows. Each breakdown must look like the shared module's output: an object with
--- "version" 1, "gated" boolean, the five parts as numbers within their maximums,
--- "completeness" a step of 5, "weightCompleteness" equal to it or 5 less, "score" equal to "score" of the row and to the parts' sum, and a
--- gated row scored 0. "tier" and "gaps" are kept as given. A malformed row fails the whole call
--- (22023) and names its index; nothing is written. Rows of reviews that no longer exist are
--- skipped. Returns the number of reviews whose stored value changed. One UPDATE statement, so
--- the reviews trigger refreshes each affected master once.
+-- 1000 rows and 2 MB. Each breakdown must be one the shared module could produce:
+--   exactly its eleven keys; "version" 1; "gated" a boolean;
+--   "completeness" a step of 5 up to 35; "weightCompleteness" 5 less exactly for a photo
+--   without pros and cons ("gaps" has "pros_cons" and not "photo"), else equal to it;
+--   "specificity" one of the depth points; "verified" 0 or 15; "helpful" 0 to 20; "trust" 0 to
+--   10; "score" the row's score and the parts' sum;
+--   "gaps" distinct known gaps; "tier" the module's rule (basic under completeness 30,
+--   excellent from score 70, else complete);
+--   a gated row: every part 0, tier null, no gaps.
+-- A malformed row fails the whole call (22023) and names its index; nothing is written. Rows
+-- of reviews that no longer exist are skipped. Returns the number of reviews whose stored
+-- value changed. The rows are locked in id order first (no deadlock between two batches), then
+-- written in one UPDATE, so the reviews trigger refreshes each affected master once. Run one
+-- job worker at a time; a batch refreshes its masters inside the call.
 CREATE OR REPLACE FUNCTION rate.store_review_values(p_values jsonb)
 RETURNS integer
 LANGUAGE plpgsql
@@ -193,13 +216,16 @@ DECLARE
   v_b jsonb;
   v_score numeric;
   v_sum numeric;
+  v_c numeric;
+  v_gaps text[];
+  v_tier text;
   v_changed integer;
 BEGIN
   IF jsonb_typeof(p_values) IS DISTINCT FROM 'array' THEN
     RAISE EXCEPTION 'p_values must be a JSON array' USING ERRCODE = '22023';
   END IF;
-  IF jsonb_array_length(p_values) > 1000 THEN
-    RAISE EXCEPTION 'at most 1000 rows per call' USING ERRCODE = '22023';
+  IF jsonb_array_length(p_values) > 1000 OR octet_length(p_values::text) > 2097152 THEN
+    RAISE EXCEPTION 'at most 1000 rows and 2 MB per call' USING ERRCODE = '22023';
   END IF;
   FOR v_row IN SELECT value FROM jsonb_array_elements(p_values) LOOP
     v_b := v_row -> 'breakdown';
@@ -208,6 +234,10 @@ BEGIN
        OR (v_row ->> 'id') !~ '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'
        OR jsonb_typeof(v_row -> 'score') IS DISTINCT FROM 'number'
        OR jsonb_typeof(v_b) IS DISTINCT FROM 'object'
+       OR v_b - ARRAY['version', 'gated', 'score', 'completeness', 'weightCompleteness',
+                      'specificity', 'verified', 'helpful', 'trust', 'tier', 'gaps'] <> '{}'::jsonb
+       OR NOT v_b ?& ARRAY['version', 'gated', 'score', 'completeness', 'weightCompleteness',
+                          'specificity', 'verified', 'helpful', 'trust', 'tier', 'gaps']
        OR v_b -> 'version' IS DISTINCT FROM '1'::jsonb
        OR jsonb_typeof(v_b -> 'gated') IS DISTINCT FROM 'boolean'
        OR jsonb_typeof(v_b -> 'score') IS DISTINCT FROM 'number'
@@ -216,29 +246,51 @@ BEGIN
        OR jsonb_typeof(v_b -> 'specificity') IS DISTINCT FROM 'number'
        OR jsonb_typeof(v_b -> 'verified') IS DISTINCT FROM 'number'
        OR jsonb_typeof(v_b -> 'helpful') IS DISTINCT FROM 'number'
-       OR jsonb_typeof(v_b -> 'trust') IS DISTINCT FROM 'number' THEN
+       OR jsonb_typeof(v_b -> 'trust') IS DISTINCT FROM 'number'
+       OR jsonb_typeof(v_b -> 'tier') NOT IN ('string', 'null')
+       OR jsonb_typeof(v_b -> 'gaps') IS DISTINCT FROM 'array'
+       OR EXISTS (SELECT 1 FROM jsonb_array_elements(v_b -> 'gaps') g
+                  WHERE jsonb_typeof(g) IS DISTINCT FROM 'string') THEN
       RAISE EXCEPTION 'row % is not a review value', v_index USING ERRCODE = '22023';
     END IF;
     v_score := (v_row ->> 'score')::numeric;
-    v_sum := (v_b ->> 'completeness')::numeric + (v_b ->> 'specificity')::numeric
+    v_c := (v_b ->> 'completeness')::numeric;
+    v_sum := v_c + (v_b ->> 'specificity')::numeric
            + (v_b ->> 'verified')::numeric + (v_b ->> 'helpful')::numeric
            + (v_b ->> 'trust')::numeric;
-    IF (v_b ->> 'completeness')::numeric NOT IN (0, 5, 10, 15, 20, 25, 30, 35)
-       -- weightCompleteness: completeness, or completeness less the 5 of a photo
-       OR (v_b ->> 'completeness')::numeric - (v_b ->> 'weightCompleteness')::numeric NOT IN (0, 5)
-       OR (v_b ->> 'weightCompleteness')::numeric < 0
-       OR (v_b ->> 'specificity')::numeric NOT BETWEEN 0 AND 20
+    v_gaps := ARRAY(SELECT jsonb_array_elements_text(v_b -> 'gaps'));
+    v_tier := v_b ->> 'tier';
+    IF v_c NOT IN (0, 5, 10, 15, 20, 25, 30, 35)
+       OR v_c - (v_b ->> 'weightCompleteness')::numeric NOT IN (0, 5)
+       -- 5 off exactly when a review has a photo, no pros and cons, and some completeness
+       OR (v_c - (v_b ->> 'weightCompleteness')::numeric = 5)
+          IS DISTINCT FROM ('pros_cons' = ANY (v_gaps) AND NOT 'photo' = ANY (v_gaps) AND v_c > 0)
+       OR (v_b ->> 'specificity')::numeric NOT IN (0, 5, 12, 17, 20)
        OR (v_b ->> 'verified')::numeric NOT IN (0, 15)
        OR (v_b ->> 'helpful')::numeric NOT BETWEEN 0 AND 20
        OR (v_b ->> 'trust')::numeric NOT BETWEEN 0 AND 10
        OR v_score NOT BETWEEN 0 AND 100
        OR (v_b ->> 'score')::numeric <> v_score
        OR abs(v_sum - v_score) > 0.01
-       OR ((v_b ->> 'gated')::boolean AND v_sum <> 0) THEN
+       OR cardinality(v_gaps) <> (SELECT count(DISTINCT g) FROM unnest(v_gaps) g)
+       OR NOT v_gaps <@ ARRAY['detail', 'criteria', 'verdict', 'pros_cons', 'criterion_points',
+                               'photo', 'verified']
+       -- in parentheses: plpgsql ends an IF condition at the first bare THEN
+       OR (CASE WHEN (v_b ->> 'gated')::boolean
+               THEN v_sum <> 0 OR v_score <> 0 OR v_tier IS NOT NULL OR cardinality(v_gaps) <> 0
+               ELSE v_tier IS DISTINCT FROM CASE WHEN v_c < 30 THEN 'basic'
+                                                 WHEN v_score >= 70 THEN 'excellent'
+                                                 ELSE 'complete' END
+           END) THEN
       RAISE EXCEPTION 'row % has values out of range', v_index USING ERRCODE = '22023';
     END IF;
     v_index := v_index + 1;
   END LOOP;
+
+  PERFORM 1 FROM rate.reviews r
+  WHERE r.id IN (SELECT (e ->> 'id')::uuid FROM jsonb_array_elements(p_values) e)
+  ORDER BY r.id
+  FOR UPDATE;
 
   UPDATE rate.reviews r
   SET value_score = round(v.score, 2), value_breakdown = v.breakdown
@@ -258,3 +310,12 @@ REVOKE EXECUTE ON FUNCTION rate.store_review_values(jsonb) FROM PUBLIC, anon, au
 GRANT EXECUTE ON FUNCTION rate.store_review_values(jsonb) TO service_role, rate_worker;
 
 COMMIT;
+
+-- 5. Masters with values stored before this apply ----------------------------------------------
+-- A no-op on the first apply (no review has a breakdown). After a rollback that kept the
+-- values, it lifts their masters again. Outside the transaction, so the scan of rate.reviews
+-- holds no ALTER TABLE lock.
+SELECT rate.refresh_rating_extras_of_products(ARRAY(
+  SELECT DISTINCT r.product_id FROM rate.reviews r
+  WHERE r.value_breakdown IS NOT NULL
+    AND rate.review_completeness_factor(r.value_breakdown) > 1));
