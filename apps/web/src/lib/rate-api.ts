@@ -1688,6 +1688,20 @@ interface RawReviewFlagRow {
   signals?: Record<string, unknown> | null;
 }
 
+/**
+ * A review row with its analyzer flag and the writer's pros and cons
+ * (form v2), which axis C reads with the comment (DOS/Rate#1583).
+ */
+const REVIEW_SELECT =
+  '*, review_flags(*), review_points(kind, criterion_key, body, method)';
+
+interface RawReviewPointRow {
+  kind?: string | null;
+  criterion_key?: string | null;
+  body?: string | null;
+  method?: string | null;
+}
+
 interface RawReviewRow {
   id: string;
   author_name?: string | null;
@@ -1702,6 +1716,9 @@ interface RawReviewRow {
   helpfulness_weight?: number | string | null;
   criteria_ratings?: Record<string, number> | null;
   review_flags?: RawReviewFlagRow | RawReviewFlagRow[] | null;
+  /** The form v2 verdict line; the analyzer's verdict is in review_flags. */
+  verdict?: string | null;
+  review_points?: RawReviewPointRow[] | null;
 }
 
 /**
@@ -1820,7 +1837,7 @@ export async function getMasterProductReviews(
     (chunk) =>
       supabase
         .from('reviews')
-        .select('*, review_flags(*)')
+        .select(REVIEW_SELECT)
         .in('product_id', chunk)
         .order('created_at', { ascending: false })
         .limit(50)
@@ -1891,7 +1908,10 @@ export async function getMasterProductReviews(
       reason: vf?.reason || null,
       signals: vf?.signals || null,
     };
-    item.trust_assessment = evaluateReviewTrustAssessment(item);
+    item.trust_assessment = evaluateReviewTrustAssessment(item, {
+      verdict: r.verdict,
+      points: r.review_points,
+    });
     return item;
   });
 }
@@ -3717,7 +3737,7 @@ export async function getMerchantProfileBase(
     (chunk) =>
       supabase
         .from('reviews')
-        .select('*, review_flags(*)')
+        .select(REVIEW_SELECT)
         .in('product_id', chunk)
         .order('created_at', { ascending: false })
         .limit(60)
@@ -3888,7 +3908,10 @@ export async function getMerchantProfileBase(
       reason: vf?.reason || null,
       signals: vf?.signals || null,
     };
-    item.trust_assessment = evaluateReviewTrustAssessment(item);
+    item.trust_assessment = evaluateReviewTrustAssessment(item, {
+      verdict: r.verdict,
+      points: r.review_points,
+    });
     return item;
   });
 
@@ -4134,7 +4157,7 @@ export async function getRatePlatformStats(): Promise<RatePlatformStats> {
     supabase.from('reviews').select('id', { count: 'exact', head: true }),
     supabase
       .from('reviews')
-      .select('*, review_flags(*)')
+      .select(REVIEW_SELECT)
       .order('created_at', { ascending: false })
       .limit(60),
     // Platform-wide review verdict counts (DOS/Rate#455), with the same rules
@@ -4327,7 +4350,10 @@ export async function getRatePlatformStats(): Promise<RatePlatformStats> {
         masterSlug: pInfo?.masterSlug || null,
         masterRouteHref: pInfo?.masterRouteHref || null,
       };
-      item.trust_assessment = evaluateReviewTrustAssessment(item);
+      item.trust_assessment = evaluateReviewTrustAssessment(item, {
+        verdict: r.verdict,
+        points: r.review_points,
+      });
       return item;
     });
 

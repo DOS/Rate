@@ -204,7 +204,7 @@ export function computeWilsonLowerBound(
 const WEB_SHIPPING_ASPECT_RE =
   /(?:giao\s*hàng|ship(?:per)?|vận\s*chuyển|đóng\s*gói|bọc\s*hàng|hộp\s*móp|giao\s*nhanh|giao\s*chậm|tư\s*vấn|chăm\s*sóc\s*khách)/i;
 
-// Any mention of the product or of using it, based on PRODUCT_ASPECT_RE in
+// Any mention of the product or of using it, based on the product words in
 // apps/importer/src/shopee/ai-review-analyzer.ts (isShippingOnlyComment) plus
 // Shopee's structured product fields. Matched as whole words so "hư" in "như"
 // or "pin" in "shopping" do not count. Words that also describe delivery
@@ -245,7 +245,13 @@ export function evaluateReviewTrustAssessment(
     | 'verdict'
     | 'include_in_rating'
     | 'signals'
-  >
+  >,
+  /**
+   * The rest of a form v2 review's text, which axis C reads with the
+   * comment: its verdict line and its writer's pros and cons
+   * (`rate.review_points`, DOS/Rate#1583).
+   */
+  reviewText?: { verdict?: unknown; points?: readonly unknown[] | null }
 ): ReviewTrustAssessment {
   const review = (
     rawReview && typeof rawReview === 'object' && !Array.isArray(rawReview)
@@ -310,6 +316,8 @@ export function evaluateReviewTrustAssessment(
   // 3. Axis C: Depth, shared with the review value score (DOS/Rate#1581).
   const depth: ReviewDepthAxis = reviewDepth({
     comment,
+    verdict: reviewText?.verdict,
+    points: reviewText?.points ?? undefined,
     reviewerType: review.reviewer_type,
     flagCategory: review.flag_category,
   });

@@ -1,6 +1,6 @@
 import crypto from 'node:crypto';
 import { z, MAX_VALID_VND_PRICE, seedingRiskPenalty } from '@repo/shared-data';
-import { scopeLlmReviewSummary } from '@repo/shared-data/rules';
+import { reviewDepth, scopeLlmReviewSummary, type ReviewDepth } from '@repo/shared-data/rules';
 import {
   resolveValidHttpBaseUrl,
   extractJsonObjectString,
@@ -80,14 +80,8 @@ export type Independence =
   | 'undisclosed_paid'
   | 'conflict_of_interest';
 
-export type Depth =
-  | 'stars_only'
-  | 'platform_label'
-  | 'filler'
-  | 'low_effort'
-  | 'specific_short'
-  | 'detailed'
-  | 'expert_depth';
+/** Axis C, as `reviewDepth` in @repo/shared-data/rules classifies it. */
+export type Depth = ReviewDepth;
 
 export type SubjectKind =
   'master_product' | 'listing' | 'brand' | 'merchant' | 'reviewer' | 'expert' | 'review';
@@ -680,16 +674,12 @@ export function isRatingOnlyComment(comment: string | null | undefined): boolean
 const SHIPPING_ASPECT_RE =
   /(?:giao\s*hàng|ship(?:per)?|vận\s*chuyển|đóng\s*gói|bọc\s*chống\s*sốc|hộp\s*(?:bị\s*)?(?:móp|rách|nát)|giao\s*(?:nhanh|chậm|trễ|lâu)|nhân\s*viên\s*giao|đơn\s*vị\s*vận\s*chuyển)/i;
 
-// Whole words only (Unicode-aware), so "hư" in "như" or "pin" in "shopping"
-// do not count as a product aspect (DOS/Rate#601).
-const PRODUCT_ASPECT_RE =
-  /(?<![\p{L}\p{N}])(?:máy|điện\s*thoại|tai\s*nghe|sản\s*phẩm|pin|màn(?:\s*hình)?|cam(?:era)?|loa|mic|chất\s*âm|chống\s*ồn|cảm\s*ứng|hiệu\s*năng|cấu\s*hình|chip|ram|rom|sạc|dùng|xài|sử\s*dụng|trải\s*nghiệm|chạy|mượt|lag|giật|nóng|ấm|lỗi|hỏng|hư|bền|đẹp|xịn|chính\s*hãng|nguyên\s*seal|bảo\s*hành|chất\s*lượng|vân\s*tay|wifi|5g|bluetooth|nhiệt\s*độ|tần\s*số)(?![\p{L}\p{N}])/iu;
-
 // What counts as talking about the product when deciding that a review is
 // about shipping alone. Same list as WEB_PRODUCT_MENTION_RE in
 // apps/web/src/lib/rate-domain-core.ts so the stored weight and the web estimate
 // agree (test-review-analyzer.ts checks the two literals are identical):
-// PRODUCT_ASPECT_RE, except that words which also describe delivery count
+// a list of product words (whole words, Unicode-aware, so "hư" in "như"
+// does not count, DOS/Rate#601), except that words which also describe delivery count
 // only outside a delivery phrase: "sản phẩm" but not "sản phẩm được đóng
 // gói/giao", "chất lượng" but not "chất lượng đóng gói", "hàng tốt" but not
 // "giao/nhận hàng tốt", "đẹp" but not "(đóng) gói (rất) đẹp" or "hộp đựng
@@ -749,9 +739,6 @@ export function hasStarSentimentContradiction(
 
   return false;
 }
-
-const TECHNICAL_MEASUREMENT_RE =
-  /(?:\b\d+(?:[.,]\d+)?\s*(?:mah|wh|w|watt|hz|nit|nits|db|fps|gb|tb|mah|mm|gram|g|°c|độ\s*c|tiếng|giờ\s*on\s*screen|sot)\b|geekbench|antutu|3dmark|pcmark|đo\s*thực\s*tế|test\s*thực\s*tế)/i;
 
 const LONG_TERM_USAGE_RE =
   /(?:sau\s*(?:[3-9]|\d{2,})\s*tháng|dùng\s*(?:được\s*)?(?:[3-9]|\d{2,})\s*tháng|xài\s*(?:được\s*)?(?:[3-9]|\d{2,})\s*tháng|nửa\s*năm|[1-9]\s*năm\s*sử\s*dụng|dùng\s*hơn\s*[1-9]\s*năm)/i;
@@ -885,7 +872,6 @@ export function assessReview6Axes(
     .normalize('NFC')
     .replace(/\p{Cc}+/gu, '')
     .trim();
-  const cleanText = comment.replace(/[\s.!,]+$/u, '').trim();
 
   // 1. Extract aspects & routing
   const aspects: Record<string, ReviewAspectSignal> = {};
@@ -968,30 +954,13 @@ export function assessReview6Axes(
     independence = 'affiliate';
   }
 
-  // 4. Axis C: Depth
-  let depth: Depth;
-  if (cleanText.length === 0) {
-    depth = 'stars_only';
-  } else if (RATING_LABEL_RE.test(cleanText)) {
-    depth = 'platform_label';
-  } else if (options.isCoinSpam) {
-    depth = 'filler';
-  } else if (
-    safeReview.reviewer_type === 'expert' ||
-    TECHNICAL_MEASUREMENT_RE.test(comment) ||
-    (comment.length >= 240 && productAspectCount >= 2)
-  ) {
-    depth = 'expert_depth';
-  } else if (
-    (comment.length >= 90 && (productAspectCount >= 1 || PRODUCT_ASPECT_RE.test(comment))) ||
-    productAspectCount >= 2
-  ) {
-    depth = 'detailed';
-  } else if (productAspectCount >= 1 || PRODUCT_ASPECT_RE.test(comment)) {
-    depth = comment.length >= 30 ? 'specific_short' : 'low_effort';
-  } else {
-    depth = 'low_effort';
-  }
+  // 4. Axis C: Depth, the classifier the web and the review value job use
+  // (@repo/shared-data/rules, DOS/Rate#1583). Coin spam is filler.
+  const depth: Depth = reviewDepth({
+    comment,
+    reviewerType: safeReview.reviewer_type,
+    flagCategory: options.isCoinSpam ? 'low_value_coin_spam' : null,
+  });
 
   const hasRealMedia =
     Array.isArray(safeReview.images) &&

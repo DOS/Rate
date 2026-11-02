@@ -4,7 +4,7 @@
  */
 import http from 'node:http';
 import assert from 'node:assert/strict';
-import { LLM_REVIEW_SUMMARY_PREFIX } from '@repo/shared-data/rules';
+import { LLM_REVIEW_SUMMARY_PREFIX, reviewDepth } from '@repo/shared-data/rules';
 import { readFileSync } from 'node:fs';
 import {
   AiReviewAnalyzer,
@@ -2931,6 +2931,40 @@ async function run() {
     assert.equal(insertedMasterPayload?.['has_5g'], false);
     console.log(
       '\u2705 [EntityMatcher, MerchantRiskBreakdown & platformReviewIdFor Bounds (#998)] Verified!'
+    );
+  }
+
+  // The analyzer's axis C is the shared reviewDepth, as on the web and in the
+  // review value job (DOS/Rate#1583).
+  {
+    for (const comment of [
+      '',
+      'Hài lòng',
+      'Tốt',
+      'Pin trâu',
+      'Pin trâu, camera đẹp',
+      'Pin dùng được cả ngày, màn hình đẹp.',
+      'Pin 5000mAh dùng cả ngày',
+      'Pin dùng được cả ngày với nhu cầu lướt web, màn hình sáng rõ ngoài trời. '.repeat(2),
+      Array(40).fill('pin ok').join(' '),
+    ]) {
+      assert.equal(
+        assessReview6Axes({ id: 'd', rating_star: 5, comment }).depth,
+        reviewDepth({ comment }),
+        'depth of ' + JSON.stringify(comment.slice(0, 40))
+      );
+    }
+    assert.equal(
+      assessReview6Axes({ id: 'd', rating_star: 5, comment: 'Pin trâu' }, { isCoinSpam: true })
+        .depth,
+      'filler'
+    );
+    assert.equal(
+      assessReview6Axes({ id: 'd', rating_star: 5, comment: 'ok', reviewer_type: 'expert' }).depth,
+      'expert_depth'
+    );
+    console.log(
+      '\u2705 [Axis C] the analyzer classifies depth with the shared reviewDepth (#1583)'
     );
   }
 
