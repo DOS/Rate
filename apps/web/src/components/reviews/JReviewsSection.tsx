@@ -6,6 +6,7 @@ import ExportMenu from '@/components/elementary/ExportMenu';
 import PhoneCollapsible from '@/components/product/PhoneCollapsible';
 import StarRating from '@/components/elementary/StarRating';
 import {
+  BsAward,
   BsBarChart,
   BsCheckCircle,
   BsExclamationTriangle,
@@ -14,6 +15,7 @@ import {
   BsHandThumbsUp,
   BsInfoCircle,
   BsMegaphone,
+  BsPatchCheck,
   BsRobot,
   BsStarFill,
 } from 'react-icons/bs';
@@ -55,6 +57,16 @@ import AnalyzerText, { analyzerText } from './AnalyzerText';
 import ReviewFormV2 from './ReviewFormV2';
 import { isReviewFormV2Enabled } from '@/lib/review-form-v2';
 import { hasRatingCriteria } from '@repo/shared-data/rules';
+import {
+  hasSessionCookie,
+  isReviewId,
+  MY_REVIEW_VALUES_MAX_IDS,
+  parseMyReviewValue,
+  reviewTierBadgeKey,
+  reviewTierRank,
+  reviewValueGapKey,
+  type MyReviewValue,
+} from '@/lib/review-value-display';
 import {
   formatDecimal,
   formatPercent,
@@ -228,6 +240,8 @@ export default function JReviewsSection({
   const [authNotice, setAuthNotice] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<FilterTab>('all');
   const [sortMode, setSortMode] = useState<SortMode>('weight_desc');
+  // The signed-in writer's own value scores, by review id (DOS/Rate#1547).
+  const [myValues, setMyValues] = useState<Record<string, MyReviewValue>>({});
   const [searchKeyword, setSearchKeyword] = useState('');
   const [starFilter, setStarFilter] = useState<'all' | 5 | 4 | 3>('all');
 
@@ -434,6 +448,10 @@ export default function JReviewsSection({
 
     return [...filtered].sort((a, b) => {
       if (sortMode === 'weight_desc') {
+        // The public quality tier leads (DOS/Rate#1547, D7).
+        const tierGap =
+          reviewTierRank(b.value_tier) - reviewTierRank(a.value_tier);
+        if (tierGap !== 0) return tierGap;
         const wilsonA = computeWilsonLowerBound(a.upvotes, a.downvotes);
         const wilsonB = computeWilsonLowerBound(b.upvotes, b.downvotes);
         if (
@@ -463,6 +481,53 @@ export default function JReviewsSection({
       );
     });
   }, [reviews, activeTab, sortMode, searchKeyword, starFilter, tAnalyzer]);
+
+  // Ids of the reviews on the page, stable across votes, for the lookup below.
+  const reviewIdsKey = useMemo(
+    () =>
+      [...new Set(reviews.map((r) => r.id).filter(isReviewId))]
+        .slice(0, MY_REVIEW_VALUES_MAX_IDS)
+        .sort()
+        .join(','),
+    [reviews]
+  );
+
+  // A signed-in writer sees the value score and gaps of their own reviews
+  // (DOS/Rate#1547, D7). Visitors without a session cookie make no call and
+  // never load the Supabase client.
+  useEffect(() => {
+    if (!reviewIdsKey || !hasSessionCookie(document.cookie)) return;
+    let cancelled = false;
+    void (async () => {
+      const token = await getBrowserAccessToken();
+      if (!token || cancelled) return;
+      try {
+        const res = await fetch('/api/v1/rate/reviews/my-values', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ ids: reviewIdsKey.split(',') }),
+        });
+        if (!res.ok) return;
+        const payload = await res.json();
+        const next: Record<string, MyReviewValue> = {};
+        for (const row of Array.isArray(payload?.values)
+          ? payload.values
+          : []) {
+          const value = parseMyReviewValue(row?.score, { gaps: row?.gaps });
+          if (isReviewId(row?.id) && value) next[row.id.toLowerCase()] = value;
+        }
+        if (!cancelled) setMyValues(next);
+      } catch {
+        // The hint is optional; the page works without it.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [reviewIdsKey]);
 
   async function handleVote(reviewId: string, clickedVote: VoteChoice) {
     if (pendingIds[reviewId]) return;
@@ -1586,6 +1651,8 @@ export default function JReviewsSection({
             const isPending = Boolean(pendingIds[rev.id]);
             const isZeroWeight =
               !rev.include_in_rating || rev.helpfulness_weight <= 0;
+            const tierKey = reviewTierBadgeKey(rev.value_tier);
+            const myValue = myValues[rev.id.toLowerCase()];
 
             return (
               <div key={rev.id} className="col-md-6 col-12">
@@ -1663,7 +1730,44 @@ export default function JReviewsSection({
                           ),
                         })}
                       </span>
+                      {tierKey && (
+                        <span
+                          className={`badge rounded-pill small border ${
+                            rev.value_tier === 'excellent'
+                              ? 'bg-warning-subtle text-warning-emphasis border-warning-subtle'
+                              : 'bg-success-subtle text-success-emphasis border-success-subtle'
+                          }`}
+                          title={t('valueTierTitle')}
+                          data-testid="review-value-tier"
+                        >
+                          {rev.value_tier === 'excellent' ? (
+                            <BsAward aria-hidden="true" className="me-1" />
+                          ) : (
+                            <BsPatchCheck aria-hidden="true" className="me-1" />
+                          )}
+                          {t(tierKey)}
+                        </span>
+                      )}
                     </div>
+
+                    {/* The writer's own number and what would raise it; the
+                        public sees only the tier (DOS/Rate#1547, D7). */}
+                    {myValue && (
+                      <div
+                        className="small text-secondary mb-2"
+                        data-testid="my-review-value"
+                      >
+                        {t('myReviewValue', { score: myValue.score })}
+                        {myValue.gaps.length > 0 &&
+                          ` · ${t('myReviewValueGaps', {
+                            gaps: myValue.gaps
+                              .map((gap) => reviewValueGapKey(gap))
+                              .filter((key) => key !== null)
+                              .map((key) => t(key))
+                              .join(', '),
+                          })}`}
+                      </div>
+                    )}
 
                     {rev.variation && (
                       <div className="text-muted small mb-2">

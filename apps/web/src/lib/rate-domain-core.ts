@@ -5,6 +5,7 @@
  * them (DOS/Rate#756).
  */
 import type { MasterProduct } from '@repo/shared-data';
+import type { ReviewValueTier } from '@repo/shared-data/rules';
 import {
   REVIEW_PLATFORM_LABEL_RE,
   REVIEW_PRODUCT_ASPECT_RE,
@@ -148,6 +149,8 @@ export interface ReviewItem {
   reason: string | null;
   signals: Record<string, unknown> | null;
   trust_assessment?: ReviewTrustAssessment;
+  /** The public quality tier (DOS/Rate#1547, D7); null when unscored. */
+  value_tier?: ReviewValueTier | null;
 }
 
 export function toSafeNonNegativeVoteCount(

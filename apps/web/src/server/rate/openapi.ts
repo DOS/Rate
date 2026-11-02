@@ -1693,6 +1693,43 @@ function buildBaseRateOpenApiSpec(
           },
         },
       },
+      '/api/v1/rate/reviews/my-values': {
+        post: {
+          operationId: 'getMyReviewValues',
+          summary: "Read the value score of the caller's own reviews",
+          description:
+            "Returns the 0-100 value score and the missing parts (`gaps`) of the reviews among `ids` that the signed-in caller wrote, through `rate.my_review_values` with the caller's JWT. Other ids are left out. The public sees only each review's `value_tier`. Never cached.",
+          tags: ['Community Reviews & Voting'],
+          security: [{ bearerAuth: [] }],
+          requestBody: {
+            required: true,
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  required: ['ids'],
+                  properties: {
+                    ids: {
+                      type: 'array',
+                      maxItems: 100,
+                      items: { type: 'string', format: 'uuid' },
+                    },
+                  },
+                },
+              },
+            },
+          },
+          responses: {
+            '200': {
+              description:
+                "`values`: `{ id, score, gaps }` for each of the caller's own reviews that has a score.",
+            },
+            '400': errorResponse('`ids` is not a list of up to 100 uuids.'),
+            '401': errorResponse('Missing or invalid bearer token.'),
+            '503': errorResponse('Review values are not available here.'),
+          },
+        },
+      },
       '/api/v1/rate/stats': {
         get: {
           operationId: 'getPlatformStats',
