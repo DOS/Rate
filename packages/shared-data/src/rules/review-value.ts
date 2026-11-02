@@ -6,10 +6,11 @@
  * the product rating, through a weight factor from x1.00 to x1.25 (D6).
  *
  * Plain data and functions only, like the rest of `rules`, and no database:
- * the importer job and the community path read a review into a
- * ReviewValueInput and store the result in `rate.reviews.value_score` and
- * `value_breakdown`. The DOS-Me rating refresh reads `weightCompleteness` from
- * `value_breakdown` and applies completenessWeightFactor, so the two stay
+ * the scoring job reads a review into a ReviewValueInput and stores the
+ * result through `rate.store_review_values`, which keeps the number in the
+ * private `rate.review_values` and the tier in `rate.reviews.value_tier`
+ * (DOS/Rate#1580). The DOS-Me rating refresh reads `weightCompleteness` from
+ * the stored breakdown and applies completenessWeightFactor, so the two stay
  * equal.
  */
 import { getRatingCriteria, hasRatingCriteria } from './rating-criteria.js';
