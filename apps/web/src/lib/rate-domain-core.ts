@@ -5,6 +5,12 @@
  * them (DOS/Rate#756).
  */
 import type { MasterProduct } from '@repo/shared-data';
+import {
+  REVIEW_PLATFORM_LABEL_RE,
+  REVIEW_PRODUCT_ASPECT_RE,
+  reviewDepth,
+  type ReviewDepth,
+} from '@repo/shared-data/rules';
 
 /** A finite number from a number or a numeric string, else NaN. */
 export function parseFiniteNumericSpec(raw: unknown): number {
@@ -82,14 +88,8 @@ export type ReviewIndependenceAxis =
   | 'undisclosed_paid'
   | 'conflict_of_interest';
 
-export type ReviewDepthAxis =
-  | 'stars_only'
-  | 'platform_label'
-  | 'filler'
-  | 'low_effort'
-  | 'specific_short'
-  | 'detailed'
-  | 'expert_depth';
+/** Axis C, classified by `reviewDepth` in `@repo/shared-data/rules`. */
+export type ReviewDepthAxis = ReviewDepth;
 
 export interface ReviewWeightBreakdown {
   gate: 0 | 1;
@@ -204,9 +204,6 @@ export function computeWilsonLowerBound(
 const WEB_SHIPPING_ASPECT_RE =
   /(?:giao\s*hàng|ship(?:per)?|vận\s*chuyển|đóng\s*gói|bọc\s*hàng|hộp\s*móp|giao\s*nhanh|giao\s*chậm|tư\s*vấn|chăm\s*sóc\s*khách)/i;
 
-const WEB_PRODUCT_ASPECT_RE =
-  /(?:\bpin\b|sạc|mah|màn(?:\s*hình)?|tần\s*số\s*quét|nit|hiển\s*thị|cam(?:era)?(?!\s*kết)|chụp|quay\s*video|zoom|loa|mic|chất\s*âm|chống\s*ồn|bass|treble|hiệu\s*năng|chip|mượt|lag|giật|nóng|nhiệt\s*độ|fps|game|thiết\s*kế|cầm\s*nắm|vân\s*tay|face\s*id|wifi|5g|bluetooth|phím|bàn\s*phím|touchpad)/i;
-
 // Any mention of the product or of using it, based on PRODUCT_ASPECT_RE in
 // apps/importer/src/shopee/ai-review-analyzer.ts (isShippingOnlyComment) plus
 // Shopee's structured product fields. Matched as whole words so "hư" in "như"
@@ -215,12 +212,9 @@ const WEB_PRODUCT_ASPECT_RE =
 // đóng gói", "đẹp" but not "đóng gói rất đẹp"); see PRODUCT_MENTION_RE in
 // the importer, which must stay identical (its tests compare the two). Only used
 // to decide that a review is about shipping alone; depth still uses the
-// stricter WEB_PRODUCT_ASPECT_RE.
+// stricter REVIEW_PRODUCT_ASPECT_RE.
 const WEB_PRODUCT_MENTION_RE =
   /(?<![\p{L}\p{N}])(?:máy|điện\s*thoại|tai\s*nghe|pin|màn(?:\s*hình)?|camera|loa|mic|chất\s*âm|chống\s*ồn|cảm\s*ứng|hiệu\s*năng|cấu\s*hình|chip|ram|rom|sạc|dùng|xài|sử\s*dụng|trải\s*nghiệm|mượt|lag|giật|nóng|ấm|lỗi|hỏng|hư|bền|xịn|chính\s*hãng|nguyên\s*seal|bảo\s*hành|vân\s*tay|wifi|5g|bluetooth|nhiệt\s*độ|tần\s*số|sản\s*phẩm(?!\s+(?:(?:đã\s+)?được\s+|đã\s+)?(?:đóng\s*gói|giao\s*(?:hàng|nhanh|chậm|trễ|lâu|đến|tới)|vận\s*chuyển|bọc|ship))|chất\s*lượng(?!\s+(?:đóng\s*gói|giao|vận\s*chuyển|phục\s*vụ|dịch\s*vụ))|(?<!(?:giao|gói|đóng|nhận|gửi|ship)\s+)hàng(?:\s+\p{L}+){0,2}?\s+(?:đẹp|tốt|xịn|chuẩn|ok|ổn|kém|tệ|lỗi|tuyệt|ngon|hài\s*lòng|ưng)|(?<!(?:gói|hộp|bọc|bì)(?:\s+\p{L}+)?\s*)đẹp|mô\s*tả|(?:y|giống|đúng)\s*hình|tính\s*năng\s*nổi\s*bật)(?![\p{L}\p{N}])/iu;
-
-const WEB_PLATFORM_LABEL_RE =
-  /^(?:cực\s*k[ìỳ]\s*hài\s*lòng|rất\s*hài\s*lòng|hài\s*lòng|bình\s*thường|không\s*hài\s*lòng|rất\s*không\s*hài\s*lòng|tuyệt\s*vời|tốt|khá|tệ|rất\s*tệ)$/iu;
 
 const WEB_SPONSORED_RE =
   /(?:được\s*tài\s*trợ|nhận\s*sản\s*phẩm\s*từ\s*hãng|bài\s*viết\s*tài\s*trợ|quảng\s*cáo|sponsored|gifted\s*by|partner(?:ed)?\s*with)/i;
@@ -230,9 +224,6 @@ const WEB_AFFILIATE_RE =
 
 const WEB_INCENTIVIZED_RE =
   /(?:đánh\s*giá\s*5\s*sao\s*nhận\s*quà|nhận\s*voucher|hoàn\s*tiền\s*khi\s*đánh\s*giá|thẻ\s*cào\s*trong\s*hộp)/i;
-
-const WEB_TECH_MEASURE_RE =
-  /(?:\b\d+\s*(?:mah|wh|w|hz|nit|nits|fps|gb|tb|mp|mm|gram|g|db|ms|°c|độ\s*c)\b|geekbench|antutu|3dmark|cinebench|pcmag|gsmarena|phonearena)/i;
 
 const WEB_LONG_TERM_RE =
   /(?:sau\s*\d+\s*(?:tháng|năm|tuần)|dùng\s*(?:được\s*)?\d+\s*(?:tháng|năm)|cập\s*nhật\s*sau)/i;
@@ -266,7 +257,7 @@ export function evaluateReviewTrustAssessment(
     .trim();
   const cleanText = comment.replace(/[\s.!,]+$/u, '').trim();
   const hasShipping = WEB_SHIPPING_ASPECT_RE.test(comment);
-  const hasProduct = WEB_PRODUCT_ASPECT_RE.test(comment);
+  const hasProduct = REVIEW_PRODUCT_ASPECT_RE.test(comment);
   const shippingOnly =
     hasShipping &&
     !hasProduct &&
@@ -316,27 +307,12 @@ export function evaluateReviewTrustAssessment(
     sponsorshipBadgeVi = 'Tiếp thị liên kết';
   }
 
-  // 3. Axis C: Depth
-  let depth: ReviewDepthAxis;
-  if (cleanText.length === 0) {
-    depth = 'stars_only';
-  } else if (WEB_PLATFORM_LABEL_RE.test(cleanText)) {
-    depth = 'platform_label';
-  } else if (review.flag_category === 'low_value_coin_spam') {
-    depth = 'filler';
-  } else if (
-    review.reviewer_type === 'expert' ||
-    WEB_TECH_MEASURE_RE.test(comment) ||
-    (cleanText.length >= 240 && hasProduct)
-  ) {
-    depth = 'expert_depth';
-  } else if (cleanText.length >= 90 && hasProduct) {
-    depth = 'detailed';
-  } else if (hasProduct && cleanText.length >= 30) {
-    depth = 'specific_short';
-  } else {
-    depth = 'low_effort';
-  }
+  // 3. Axis C: Depth, shared with the review value score (DOS/Rate#1581).
+  const depth: ReviewDepthAxis = reviewDepth({
+    comment,
+    reviewerType: review.reviewer_type,
+    flagCategory: review.flag_category,
+  });
 
   const A =
     authenticity === 'genuine' ? 1.0 : authenticity === 'doubtful' ? 0.5 : 0;
@@ -625,7 +601,7 @@ export function detectStarDistributionAnomaly(
       fiveStarCount += 1;
       if (
         text.length < 25 ||
-        WEB_PLATFORM_LABEL_RE.test(text) ||
+        REVIEW_PLATFORM_LABEL_RE.test(text) ||
         r.flag_category !== 'authentic'
       ) {
         shallowOrFlaggedFiveStar += 1;

@@ -2037,6 +2037,124 @@ function testProductPoints(): void {
   );
 }
 
+function testReviewDepth(): void {
+  const depth = (input: rules.ReviewDepthInput) => rules.reviewDepth(input);
+  // A comment alone classifies as the web did before DOS/Rate#1581.
+  assert.equal(depth({}), 'stars_only');
+  assert.equal(depth({ comment: '   ' }), 'stars_only');
+  assert.equal(depth({ comment: 'Rất hài lòng!' }), 'platform_label');
+  assert.equal(
+    depth({ comment: 'Máy ổn', flagCategory: 'low_value_coin_spam' }),
+    'filler'
+  );
+  assert.equal(
+    depth({ comment: 'ok', reviewerType: 'expert' }),
+    'expert_depth'
+  );
+  assert.equal(depth({ comment: 'Pin 5000mAh' }), 'expert_depth');
+  assert.equal(depth({ comment: 'Giao nhanh, đóng gói kỹ' }), 'low_effort');
+  assert.equal(depth({ comment: 'Pin trâu' }), 'low_effort');
+  // 30, 90 and 240 characters with a product word.
+  const short = 'Pin dùng được cả ngày, màn đẹp.';
+  assert.ok(short.length >= 30);
+  assert.equal(depth({ comment: short }), 'specific_short');
+  const detailed =
+    'Pin dùng được cả ngày với nhu cầu lướt web, màn hình sáng rõ ngoài trời, ' +
+    'chơi game nhẹ không nóng.';
+  assert.ok(detailed.length >= 90);
+  assert.equal(depth({ comment: detailed }), 'detailed');
+  const long =
+    detailed +
+    ' Camera chụp ban ngày đẹp, ban đêm hơi nhiễu nhưng chấp nhận được, loa ngoài to và rõ,' +
+    ' vân tay nhạy, thiết kế cầm chắc tay, sạc nhanh đầy trong khoảng một giờ.';
+  assert.ok(long.length >= 240);
+  assert.equal(depth({ comment: long }), 'expert_depth');
+
+  // A form v2 review with no comment: its verdict and lines are its text.
+  const v2 = {
+    verdict: 'Máy mượt, đáng tiền trong tầm giá.',
+    points: [
+      { kind: 'pro' as const, criterionKey: null, body: 'Pin dùng cả ngày' },
+      { kind: 'con' as const, criterionKey: null, body: 'Sạc hơi chậm' },
+    ],
+  };
+  assert.equal(depth({ comment: '', verdict: v2.verdict }), 'specific_short');
+  assert.equal(depth(v2), 'specific_short');
+  assert.equal(
+    rules.reviewDepthText(v2),
+    'Máy mượt, đáng tiền trong tầm giá.\nPin dùng cả ngày\nSạc hơi chậm'
+  );
+  // A number ending one part and a unit starting the next are no measurement.
+  assert.equal(depth({ comment: 'Đặt 2', verdict: 'gọn nhẹ' }), 'low_effort');
+  // Lines extracted by AI from a marketplace comment add nothing.
+  assert.equal(
+    depth({
+      points: [{ body: 'Pin trâu, màn đẹp, chơi game mượt', method: 'ai' }],
+    }),
+    'stars_only'
+  );
+  // Bare strings count as lines too; non-text parts are ignored.
+  assert.equal(depth({ points: ['Pin dùng cả ngày', 42, null] }), 'low_effort');
+
+  // Padding does not reach a threshold (design 6.4).
+  for (const times of [6, 20, 40]) {
+    const padded = Array(times).fill('pin ok').join(' ');
+    assert.equal(depth({ comment: padded }), 'low_effort', `${times} x pin ok`);
+    const sentences = Array(times).fill('Pin ok.').join(' ');
+    assert.equal(
+      depth({ comment: sentences }),
+      'low_effort',
+      `${times} sentences`
+    );
+  }
+  assert.ok(Array(40).fill('pin ok').join(' ').length >= 240);
+  assert.equal(
+    depth({ comment: Array(30).fill('tốt').join(' ') }),
+    'low_effort'
+  );
+  assert.equal(
+    depth({ comment: Array(30).fill('tốt').join(', ') }),
+    'low_effort'
+  );
+  // A verdict repeated as a pro is not counted twice.
+  assert.equal(
+    depth({
+      verdict: 'Pin dùng được cả ngày',
+      points: ['Pin dùng được cả ngày', 'pin dùng được cả ngày'],
+    }),
+    'low_effort'
+  );
+  assert.equal(rules.reviewPaddingLength(short), 0);
+  assert.equal(rules.reviewPaddingLength(detailed), 0);
+  assert.equal(rules.reviewPaddingLength(''), 0);
+  assert.equal(rules.reviewPaddingLength(null as never), 0);
+  // Two copies in a row are not a padding run.
+  assert.equal(rules.reviewPaddingLength('rất rất tốt'), 0);
+  assert.equal(depth(null as never), 'stars_only');
+
+  // reviewValue on the classified depth: a v2 review without a comment
+  // reaches completeness 25 (criteria, verdict, pros and cons).
+  const phone = rules.getRatingCriteria('smartphones');
+  const value = rules.reviewValue({
+    categorySlug: 'smartphones',
+    gated: false,
+    depth: depth(v2),
+    criteriaRatings: Object.fromEntries(phone.map((c) => [c.key, 4])),
+    verdict: v2.verdict,
+    points: v2.points,
+    hasRealPhoto: false,
+    verifiedPurchase: false,
+    helpfulVotes: 0,
+    unhelpfulVotes: 0,
+    authorTrust: null,
+  });
+  assert.equal(value.completeness, 25);
+  assert.ok(
+    value.specificity >= rules.REVIEW_SPECIFICITY_POINTS.specific_short
+  );
+  console.log('  ✅ review depth (axis C) over the whole review text (#1581)');
+}
+
 function testReviewValue(): void {
   const phone = rules.getRatingCriteria('smartphones');
   const allRated: Record<string, number> = Object.fromEntries(
@@ -2396,6 +2514,7 @@ function main(): void {
   );
   testProductPoints();
   console.log('  ✅ [12/12] Product pros and cons (DOS/Rate#1546) verified');
+  testReviewDepth();
   testReviewValue();
   console.log(
     '  ✅ [13/13] Review value score and weight factor (DOS/Rate#1547) verified'

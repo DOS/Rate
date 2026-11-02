@@ -8417,13 +8417,17 @@ async function runCoreArchitectureSuite() {
       path.join(libDir, 'rate-domain-core.ts'),
       'utf8'
     );
+    // Values only from `@repo/shared-data/rules`, plain functions that pull
+    // in neither zod nor Supabase (its header; DOS/Rate#1581).
     const valueImports = [
       ...coreSrc.matchAll(/^import\s+(?!type\b)[^;]*?from\s+'([^']+)'/gm),
-    ].map((m) => m[1]);
+    ]
+      .map((m) => m[1])
+      .filter((specifier) => specifier !== '@repo/shared-data/rules');
     assert.deepEqual(
       valueImports,
       [],
-      'rate-domain-core.ts must only use type imports (#756)'
+      'rate-domain-core.ts must only use type imports, or values from @repo/shared-data/rules (#756)'
     );
     for (const file of [
       'rate-domain.ts',
