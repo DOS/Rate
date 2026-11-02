@@ -561,6 +561,11 @@ async function testReviewsV2() {
       stored.review.signals.criteria_count,
       Object.keys(v2Review.criteriaRatings).length
     );
+    // The new card's trust reads the verdict and the pros and cons, not the
+    // empty comment alone (DOS/Rate#1583).
+    assert.ok(stored.review.trust_assessment, 'the card carries its trust');
+    assert.notEqual(stored.review.trust_assessment.depth, 'stars_only');
+    assert.notEqual(stored.review.trust_assessment.depth, 'platform_label');
     const [v2Rpc] = rpcCalls('submit_community_review_v2');
     assert.ok(v2Rpc, 'the v2 RPC must be called');
     // v1 is never called on the v2 path.
