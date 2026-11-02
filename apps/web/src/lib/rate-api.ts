@@ -4,6 +4,7 @@ import { createLogger } from '@/lib/logger';
 import { timeStep } from '@/lib/server-timing';
 import { rankModelCandidates } from '@/lib/model-match';
 import { isPendingReview } from '@/lib/review-display';
+import { parseReviewValueTier } from '@/lib/review-value-display';
 import { listingReviewSummary } from '@/lib/analyzer-copy';
 import { countBrandsByItem } from '@/lib/item-directory';
 import { masterSiblingKeyPrefix } from '@/lib/product-variant-links';
@@ -1719,6 +1720,8 @@ interface RawReviewRow {
   /** The form v2 verdict line; the analyzer's verdict is in review_flags. */
   verdict?: string | null;
   review_points?: RawReviewPointRow[] | null;
+  /** The public quality tier (DOS/Rate#1547). */
+  value_tier?: string | null;
 }
 
 /**
@@ -1907,6 +1910,7 @@ export async function getMasterProductReviews(
       flag_category: flagCategory,
       reason: vf?.reason || null,
       signals: vf?.signals || null,
+      value_tier: parseReviewValueTier(r.value_tier),
     };
     item.trust_assessment = evaluateReviewTrustAssessment(item, {
       verdict: r.verdict,
@@ -3344,6 +3348,7 @@ export async function getMerchantsList(
         flag_category: flagCategory,
         reason: vf?.reason || null,
         signals: vf?.signals || null,
+        value_tier: parseReviewValueTier(r.value_tier),
       };
 
       const existing = mappedReviewsByMerchant.get(mId) ?? [];
@@ -3907,6 +3912,7 @@ export async function getMerchantProfileBase(
       flag_category: flagCategory,
       reason: vf?.reason || null,
       signals: vf?.signals || null,
+      value_tier: parseReviewValueTier(r.value_tier),
     };
     item.trust_assessment = evaluateReviewTrustAssessment(item, {
       verdict: r.verdict,

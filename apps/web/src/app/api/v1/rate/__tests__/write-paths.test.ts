@@ -738,6 +738,97 @@ async function testReviewsByIdPublishedOnly() {
   );
 }
 
+async function testMyReviewValues() {
+  const { POST } = await import('../reviews/my-values/route');
+  const MINE = 'aaaaaaaa-1111-4222-8333-444444444444';
+  const OTHER = 'aaaaaaaa-1111-4222-8333-555555555555';
+  const breakdown = {
+    version: 1,
+    gated: false,
+    score: 62,
+    tier: 'complete',
+    gaps: ['photo', 'not_a_gap', 'verified', 'photo'],
+  };
+
+  // Nobody signed in: no call to the database.
+  calls = [];
+  let res = await POST(post('/api/v1/rate/reviews/my-values', { ids: [MINE] }));
+  assert.equal(res.status, 401);
+  assert.equal(rpcCalls('my_review_values').length, 0);
+
+  // Bad ids are refused before the database.
+  for (const ids of [
+    'x',
+    [MINE, 'not-a-uuid'],
+    Array.from(
+      { length: 101 },
+      (_, i) => `aaaaaaaa-1111-4222-8333-${String(i).padStart(12, '0')}`
+    ),
+  ]) {
+    calls = [];
+    res = await POST(
+      post('/api/v1/rate/reviews/my-values', { ids }, GOOD_TOKEN)
+    );
+    assert.equal(res.status, 400);
+    assert.equal(rpcCalls('my_review_values').length, 0);
+  }
+
+  // The writer's call goes out with their own token; the answer keeps only
+  // asked ids with a valid score, the known gaps, and is never cached.
+  calls = [];
+  rpcResponder = (name) =>
+    name === 'my_review_values'
+      ? {
+          status: 200,
+          json: [
+            { review_id: MINE, value_score: 61.6, value_breakdown: breakdown },
+            {
+              review_id: 'aaaaaaaa-1111-4222-8333-666666666666',
+              value_score: 90,
+              value_breakdown: breakdown,
+            },
+            { review_id: OTHER, value_score: 'NaN', value_breakdown: null },
+          ],
+        }
+      : { status: 500, json: { message: 'unexpected rpc' } };
+  res = await POST(
+    post(
+      '/api/v1/rate/reviews/my-values',
+      { ids: [MINE, MINE.toUpperCase(), OTHER] },
+      GOOD_TOKEN
+    )
+  );
+  assert.equal(res.status, 200);
+  assert.match(res.headers.get('cache-control') ?? '', /no-store/);
+  assert.deepEqual(await res.json(), {
+    ok: true,
+    values: [{ id: MINE, score: 62, gaps: ['photo', 'verified'] }],
+  });
+  const [call] = rpcCalls('my_review_values');
+  assert.ok(call, 'my_review_values must be called');
+  assert.equal(call.headers.authorization, `Bearer ${GOOD_TOKEN}`);
+  assert.deepEqual(call.body, { p_review_ids: [MINE, OTHER] });
+  assert.ok(
+    calls.every((c) => !JSON.stringify(c.headers).includes(SERVICE_KEY)),
+    'no request may carry the service-role key'
+  );
+
+  // A missing function and other failures are reported, not faked.
+  rpcResponder = () => ({
+    status: 404,
+    json: { code: 'PGRST202', message: 'Could not find the function' },
+  });
+  res = await POST(
+    post('/api/v1/rate/reviews/my-values', { ids: [MINE] }, GOOD_TOKEN)
+  );
+  assert.equal(res.status, 503);
+  rpcResponder = () => ({ status: 500, json: { code: 'XX000' } });
+  res = await POST(
+    post('/api/v1/rate/reviews/my-values', { ids: [MINE] }, GOOD_TOKEN)
+  );
+  assert.equal(res.status, 502);
+}
+
 async function testWatchlist() {
   const { POST } = await import('../watchlist/route');
   type Req = Parameters<typeof POST>[0];
@@ -2028,6 +2119,7 @@ async function main() {
   await testReviews();
   await testReviewsV2();
   await testReviewsByIdPublishedOnly();
+  await testMyReviewValues();
   await testWatchlist();
   await testCookieSessions();
   await testFilterBoundsAndWatchlistPrices();
