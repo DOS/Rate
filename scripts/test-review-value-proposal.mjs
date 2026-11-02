@@ -2,7 +2,8 @@
 // Replays the DOS-Me review value PROPOSAL (DOS/Rate#1547, phase P6 of #1531) on the migration
 // replay stack (P2 and P3 included): a master with crawled and community reviews, the proposal
 // twice with no rating change, the factor equal to the shared module's for every completeness,
-// values from the shared module stored as rate_worker and the rating they lift, the writer's
+// values from the shared module stored as rate_worker and the rating they lift, D7 (the number
+// private, the tier public, the writer reading their own), the writer's
 // refusals and grants, every verification query, the rollback twice (the lift is gone) and the
 // proposal again. Nothing touches a real database.
 //
@@ -144,8 +145,15 @@ try {
   };
   const score = () =>
     sql(`SELECT rating_score FROM rate.master_products WHERE id = '${MASTER}'`);
-  const stored = () =>
-    sql(`SELECT count(*) FROM rate.reviews WHERE value_breakdown IS NOT NULL`);
+  const stored = () => sql(`SELECT count(*) FROM rate.review_values`);
+  const tier = (n) =>
+    sql(
+      `SELECT coalesce(value_tier, '-') FROM rate.reviews WHERE id = '${review(n)}'`
+    );
+  const asUser = (sub, query) =>
+    sql(
+      `SET ROLE authenticated; SET request.jwt.claims = '${JSON.stringify({ sub, role: 'authenticated' })}'; ${query}; RESET ROLE;`
+    );
   const store = (json, role = 'rate_worker') =>
     asRole(role, `SELECT rate.store_review_values($v$${json}$v$::jsonb)`);
 
@@ -272,8 +280,20 @@ try {
     '7.43'
   );
   assert.equal(
-    sql(`SELECT value_score FROM rate.reviews WHERE id = '${review(1)}'`),
+    sql(
+      `SELECT value_score FROM rate.review_values WHERE review_id = '${review(1)}'`
+    ),
     values[1].score.toFixed(2)
+  );
+  // The public table gets the tier only (D7); P2's number columns stay empty.
+  assert.equal(tier(1), values[1].tier);
+  assert.equal(tier(2), 'basic');
+  assert.equal(tier(3), '-', 'a gated review shows no tier');
+  assert.equal(
+    sql(
+      `SELECT count(*) FROM rate.reviews WHERE value_score IS NOT NULL OR value_breakdown IS NOT NULL`
+    ),
+    '0'
   );
   // The same values again change nothing; a new score with the same completeness refreshes
   // nothing either (the rating stays).
@@ -291,6 +311,54 @@ try {
   assert.equal(store(payload([5])), '1');
   checkAll('after storing values');
 
+  // D7: the public reads the tier and never the number; the writer reads their own number.
+  assert.equal(
+    asRole(
+      'anon',
+      `SELECT value_tier FROM rate.reviews WHERE id = '${review(1)}'`
+    ),
+    values[1].tier
+  );
+  for (const role of ['anon', 'authenticated'])
+    assert.throws(
+      () => asRole(role, `SELECT count(*) FROM rate.review_values`),
+      /permission denied for table review_values/
+    );
+  const WRITER = '11111111-1111-4111-8111-111111111111';
+  const OTHER = '22222222-2222-4222-8222-222222222222';
+  sql(`
+    INSERT INTO auth.users (id, email) VALUES ('${WRITER}', 'w@example.test'), ('${OTHER}', 'o@example.test');
+    INSERT INTO rate.review_authors (review_id, author_user_id) VALUES ('${review(5)}', '${WRITER}');
+  `);
+  const mine = (sub) =>
+    asUser(
+      sub,
+      `SELECT string_agg(review_id || ':' || value_score || ':' || (value_breakdown ->> 'tier'), ',')
+       FROM rate.my_review_values(ARRAY['${review(5)}', '${review(1)}']::uuid[])`
+    );
+  assert.equal(
+    mine(WRITER),
+    `${review(5)}:${values[5].score.toFixed(2)}:${values[5].tier}`,
+    'the writer sees their own number, and only their own'
+  );
+  assert.equal(mine(OTHER), '', 'another user sees nothing');
+  assert.throws(
+    () =>
+      asRole(
+        'anon',
+        `SELECT * FROM rate.my_review_values(ARRAY['${review(5)}']::uuid[])`
+      ),
+    /permission denied for function my_review_values/
+  );
+  assert.throws(
+    () =>
+      asUser(
+        WRITER,
+        `SELECT * FROM rate.my_review_values(ARRAY(SELECT gen_random_uuid() FROM generate_series(1, 101)))`
+      ),
+    /at most 100 review ids/
+  );
+
   // Refusals: nothing is written by a call with one bad row.
   const refuse = (json, pattern, role = 'rate_worker') =>
     assert.throws(() => store(json, role), pattern);
@@ -304,9 +372,7 @@ try {
         breakdown: { ...good.breakdown, ...change.breakdown },
       },
     ]);
-  sql(
-    `UPDATE rate.reviews SET value_score = NULL, value_breakdown = NULL WHERE id = '${review(2)}'`
-  );
+  sql(`DELETE FROM rate.review_values WHERE review_id = '${review(2)}'`);
   refuse('{"id": 1}', /p_values must be a JSON array/);
   refuse(
     JSON.stringify(Array.from({ length: 1001 }, () => good)),
@@ -381,22 +447,29 @@ try {
     ),
     /at most 1000 rows and 2 MB/
   );
-  // rate_worker writing a crawled review's columns directly meets the CHECKs: no full factor
-  // without the completeness behind it.
+  // rate_worker cannot write the values directly, nor put the number on the public table.
   assert.throws(
     () =>
       asRole(
         'rate_worker',
-        `UPDATE rate.reviews SET value_breakdown = '{"completeness": 0, "weightCompleteness": 35}'
-         WHERE id = '${review(2)}'`
+        `INSERT INTO rate.review_values (review_id, value_score, value_breakdown)
+         VALUES ('${review(2)}', 0, '{"completeness": 0, "weightCompleteness": 0, "score": 0}')`
       ),
-    /reviews_value_breakdown_completeness/
+    /permission denied for table review_values/
+  );
+  assert.throws(
+    () =>
+      asRole(
+        'rate_worker',
+        `UPDATE rate.reviews SET value_score = 90 WHERE id = '${review(2)}'`
+      ),
+    /reviews_value_private/
   );
   assert.equal(
     sql(
-      `SELECT count(*) FROM rate.reviews WHERE id = '${review(2)}' AND value_breakdown IS NULL`
+      `SELECT count(*) FROM rate.review_values WHERE review_id = '${review(2)}'`
     ),
-    '1',
+    '0',
     'a refused call writes nothing'
   );
   for (const role of ['anon', 'authenticated'])
@@ -409,16 +482,17 @@ try {
   assert.throws(
     () =>
       sql(
-        `UPDATE rate.reviews SET value_breakdown = '{"weightCompleteness": 12}' WHERE id = '${review(2)}'`
+        `INSERT INTO rate.review_values (review_id, value_score, value_breakdown)
+         VALUES ('${review(2)}', 0, '{"completeness": 0, "weightCompleteness": 35, "score": 0}')`
       ),
-    /reviews_value_breakdown_completeness/
+    /review_values_completeness/
   );
   assert.throws(
     () =>
       sql(
-        `UPDATE rate.reviews SET value_breakdown = '[]' WHERE id = '${review(2)}'`
+        `UPDATE rate.reviews SET value_tier = 'gold' WHERE id = '${review(2)}'`
       ),
-    /reviews_value_breakdown_object/
+    /reviews_value_tier_known/
   );
   // A review listed twice: the last row wins; an unknown review is skipped.
   assert.equal(
@@ -433,7 +507,7 @@ try {
   );
   assert.equal(
     sql(
-      `SELECT value_breakdown ->> 'completeness' FROM rate.reviews WHERE id = '${review(2)}'`
+      `SELECT value_breakdown ->> 'completeness' FROM rate.review_values WHERE review_id = '${review(2)}'`
     ),
     '5',
     'the last row, not the first'
@@ -441,21 +515,29 @@ try {
   assert.equal(score(), lifted);
   checkAll('after the refusals');
 
-  // Rollback twice: the lift is gone, the values stay, the functions and CHECKs go.
+  // Rollback twice: the lift is gone, and so are the values, the tier, the functions and CHECKs.
   sql(rollback);
   sql(rollback);
   assert.equal(score(), before, 'the rollback removes the lift');
-  assert.equal(stored(), '5', 'the rollback keeps the stored values');
   assert.equal(
     sql(
       `SELECT count(*) FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
-       WHERE n.nspname = 'rate' AND p.proname IN ('store_review_values', 'review_completeness_factor')`
+       WHERE n.nspname = 'rate' AND p.proname IN ('store_review_values', 'my_review_values',
+         'review_completeness_factor', 'review_values_refresh_rating_extras')`
     ),
     '0'
   );
   assert.equal(
     sql(
-      `SELECT count(*) FROM pg_constraint WHERE conname LIKE 'reviews_value_breakdown_%'`
+      `SELECT (to_regclass('rate.review_values') IS NULL)::text || ',' || count(*)
+       FROM information_schema.columns
+       WHERE table_schema = 'rate' AND table_name = 'reviews' AND column_name = 'value_tier'`
+    ),
+    'true,0'
+  );
+  assert.equal(
+    sql(
+      `SELECT count(*) FROM pg_constraint WHERE conname IN ('reviews_value_private', 'reviews_value_tier_known')`
     ),
     '0'
   );
@@ -466,10 +548,16 @@ try {
   REVIEWS[4][1] = 1;
   assert.equal(score(), expectedScore(false));
 
-  // Applied again over kept values: its last section lifts their masters again.
+  // Applied again: nothing moves until the job stores values again; then they lift.
+  sql(proposal);
+  assert.equal(score(), expectedScore(false));
+  checkAll('after the re-apply');
+  assert.equal(store(payload([1, 2, 3, 4, 5])), '5');
+  assert.equal(score(), expectedScore(true));
+  // A re-apply over kept values changes nothing either.
   sql(proposal);
   assert.equal(score(), expectedScore(true));
-  checkAll('after the re-apply');
+  checkAll('after the re-store');
 
   console.log(
     'review value proposal: shared-module parity, values stored and refused, rating lift, verify and rollback replayed'

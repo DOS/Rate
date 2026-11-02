@@ -9,53 +9,79 @@ through DOS-Me like P2 and P3, after JOY approves it.
 | --------------------------------------------------- | ------------------------------------------------------- |
 | `2026-11-02-dos-me-review-value-score.sql`          | the migration: one transaction, then a refresh          |
 | `2026-11-02-dos-me-review-value-score-verify.sql`   | read-only checks, V1 to V7 return 0 (V8 is information) |
-| `2026-11-02-dos-me-review-value-score-rollback.sql` | puts P2's functions back and removes the lift           |
+| `2026-11-02-dos-me-review-value-score-rollback.sql` | puts P2's function back and removes the lift            |
 | `scripts/test-review-value-proposal.mjs`            | replays it all on PostgreSQL in Docker                  |
 
 ## What it does
 
-P2 already added `rate.reviews.value_score` and `value_breakdown` (both NULL
-everywhere today). This migration makes them count for the rating and adds a
-checked writer:
+### D7: the number is private, the tier is public
 
-- **`rate.review_completeness_factor(value_breakdown)`**: D6's
+- **`rate.review_values`** (new) holds each review's value score and breakdown.
+  - Row level security is on. `anon` and `authenticated` have no access at
+    all.
+  - `service_role` has full access; `rate_worker` can read it.
+  - Only `rate.store_review_values` writes it.
+- **`rate.reviews.value_tier`** (new, nullable) is the public tier: `basic`,
+  `complete` or `excellent`. It is NULL when a review is not scored, or is
+  gated.
+- **P2's `rate.reviews.value_score` and `value_breakdown` stay empty.** These
+  columns are on the publicly readable table, so a CHECK
+  (`reviews_value_private`) keeps any number from landing there. They can be
+  dropped in a later clean-up.
+- **`rate.my_review_values(review_ids)`**, for `authenticated` users: the
+  writer reads the number and breakdown of their own reviews. It matches the
+  caller through `rate.review_authors` and takes at most 100 ids per call.
+  - Another user gets nothing; `anon` cannot call it.
+  - The web uses it for the writer's hint ("Thêm ưu nhược cho Pin để lên bậc
+    Đầy đủ").
+- **Sorting reviews by value** runs on the server with `service_role`. Pages
+  receive the order and the tier, never the number.
+
+### D6: the weight
+
+- **`rate.review_completeness_factor(breakdown)`** computes
   `1 + 0.25 x weightCompleteness / 35`, from x1.00 to x1.25, at four decimals.
-  - It is equal to `completenessWeightFactor` in
+  - It equals `completenessWeightFactor` in
     `packages/shared-data/src/rules/review-value.ts` (DOS/Rate#1579); the replay
     compares the two for every value.
-  - `weightCompleteness` is the review's completeness, less the photo of a
-    review without pros and cons. A marketplace review keeps its weight even
-    with photos (design 6.2 and the issue's acceptance).
-- **`rate.master_rating_extras`**: each review's weight becomes
-  `LEAST(3, helpfulness_weight x factor)`. Nothing else in P2's body changes.
-- **`rate.reviews_refresh_rating_extras`**: a change of the factor refreshes
-  the master, as a change of the weight does. Storing a new score with the
-  same completeness refreshes nothing.
-- **`rate.store_review_values(p_values)`**: the writer for the scoring job
-  (`rate_worker`) and `service_role`.
-  - It takes up to 1000 `{id, score, breakdown}` rows and 2 MB.
-  - It accepts only a breakdown the shared module could produce:
-    - its eleven keys; the parts within their values;
-    - completeness a step of 5, and `weightCompleteness` 5 less exactly for a
-      photo without pros and cons;
-    - the score equal to the sum;
-    - `tier` by the module's rule; `gaps` from the known list;
-    - a gated review all 0, with no tier.
-  - It locks the rows in id order, then writes them in one statement, so each
-    master refreshes once.
-  - One bad row refuses the whole call (22023, with the row's index).
-- **Two NOT VALID CHECKs** on the breakdown: an object; completeness a step of
-  5; `weightCompleteness` equal to it or 5 less. These also bind a direct
-  write (below). V6 checks every row; a later file may VALIDATE them, as P2's
-  backfill file did.
-- **After the transaction**, a refresh of masters whose reviews already hold a
-  lifting breakdown. It changes nothing on the first apply, and re-lifts them
-  after a rollback and a re-apply.
-- The ALTER TABLEs wait at most 5 s for their lock (`lock_timeout`); re-run the
-  file if it times out.
+  - `weightCompleteness` drops the photo of a review without pros and cons, so
+    a marketplace review keeps its weight (design 6.2).
+- **`rate.master_rating_extras`** joins the private values. Each review's
+  weight becomes `LEAST(3, helpfulness_weight x factor)`; nothing else in P2's
+  body changes.
+- **Statement-level triggers on `rate.review_values`** refresh a master when a
+  review's factor changes. A rescore with the same completeness refreshes
+  nothing. P2's triggers on `rate.reviews` are not touched.
 
-**Rating impact at apply time: none**, as long as no review has a breakdown
-yet (check 1 under Apply). Ratings then move only as the scoring job stores
+### The writer: `rate.store_review_values(p_values)`
+
+- Callable by `rate_worker` (the scoring job) and `service_role`.
+- Takes up to 1000 `{id, score, breakdown}` rows and 2 MB per call.
+- It accepts only a breakdown the shared module could produce:
+  - exactly its eleven keys;
+  - each part one of its possible values;
+  - completeness a step of 5;
+  - `weightCompleteness` 5 less exactly for a photo without pros and cons;
+  - the score equal to the parts' sum;
+  - `tier` by the module's rule, and `gaps` from the known list;
+  - a gated review all 0, with no tier.
+- It writes the number to `rate.review_values` and the tier to
+  `rate.reviews.value_tier`. It locks the reviews in id order first.
+- One bad row refuses the whole call (22023, with the row's index).
+- `rate_worker` has no direct write to `rate.review_values`. The old direct
+  path, its table grant on `rate.reviews`, cannot carry a number either,
+  because of the CHECK.
+
+### Locks and refresh
+
+- The ALTER TABLEs on `rate.reviews` (one nullable column, two NOT VALID
+  CHECKs) wait at most 5 s for their lock. Re-run the file if it times out.
+- After the transaction, a refresh brings the masters of already stored values
+  back in line. It changes nothing on the first apply, because the table is
+  new.
+
+**Rating impact at apply time: none.** The values table starts empty, and a
+review without a row has factor 1. Ratings move only as the scoring job stores
 values, each review by at most +25% weight.
 
 ## Order and dependencies
@@ -64,89 +90,74 @@ values, each review by at most +25% weight.
   production.
 - **Shared module:** DOS/Rate#1579 must be merged first, because the replay
   test builds the shared module.
-- **After the apply:** the scoring job in the importer (a follow-up) computes
-  `reviewValue` for each review and calls `store_review_values` as
-  `rate_worker`, one worker at a time. The web then sorts by `value_score` and
-  shows the tier.
+- **After the apply:**
+  - The scoring job in the importer (a follow-up) computes `reviewValue` for
+    each review and calls `store_review_values` as `rate_worker`, one worker
+    at a time.
+  - The web sorts on the server and shows the tier publicly. It shows the
+    writer their own number through `my_review_values`.
 - **The SQL repeats the module's constants**: 35, 0.25, the steps, the parts'
   values, the tier thresholds, the gap names and the keys.
   - A change to the module that changes its output needs a DOS-Me migration
-    first, with a `REVIEW_VALUE_VERSION` bump. Until then the writer refuses
-    the new rows: it fails closed.
+    first, with a `REVIEW_VALUE_VERSION` bump.
+  - Until then the writer refuses the new rows: it fails closed.
   - The replay stores the module's output over a grid of 448 inputs, so CI
     catches a drift.
 
-## Decisions for JOY
+## Decisions
 
-1. **D7 and the public API.** `rate.reviews` is publicly readable, so
-   `value_score` and `value_breakdown` can be read through the API even
-   though the web shows only the tier.
-   - The breakdown includes `trust`, the writer's axis D trust x10, which is a
-     per-author signal that is new to the public, and `gaps`.
-   - Hiding them needs one of these:
-     - column grants, which break the `select=*` reads of reviews;
-     - moving the number to a private table.
-   - **Recommendation:** accept it for now. D7 is about what pages show, and
-     axis D is still a placeholder (unknown counts as 0.5). Move the number
-     and the breakdown to a private table when author trust becomes real.
-2. **Who can lift a review.**
+1. **D7 is applied as approved:** the tier is public and the number is only
+   for the writer.
+2. **Who can lift a review**, accepted by the PO as recommended.
    - The database cannot check a claimed completeness against the review's
-     text, lines and criteria. So a caller with `rate_worker` can give any
-     review it chooses up to +25% weight.
-   - Two paths:
-     - through the writer, for every review, community ones included (the job
-       must score every review the same way);
-     - directly, for crawled reviews, which its table grant already allows,
-       as it allows `helpfulness_weight`. The CHECKs bound that to the same
-       +25%.
-   - The real worst case is selective lifting: for example, only the 1-star
-     reviews of one product.
-   - **Recommendation:** accept. `rate_worker` can already set
-     `helpfulness_weight` up to 3 on crawled reviews, which moves a rating
-     much further.
+     text, lines and criteria.
+   - So a caller with `rate_worker` can, through the writer, give any review
+     up to +25% weight.
+   - `rate_worker` can already set `helpfulness_weight` up to 3 on crawled
+     reviews, which moves a rating much further.
 3. **Side effects of the lift**, for information:
    - A lifted review also counts toward D9's criterion threshold
      (`LEAST(1, w)`), so a lift can make a criterion score appear sooner.
    - `rating_weight_sum`, which is public, grows by the same amount.
-   - Only `rating_score` is lifted. `user_rating_weighted`, the fallback
-     rating, stays on the plain weight. The two drift a little further apart
-     until the fallback is retired.
+   - `user_rating_weighted`, the fallback rating, stays on the plain weight.
 
 ## Apply
 
-1. **Before the apply**, read-only:
-   - `SELECT count(*) FROM rate.reviews WHERE value_breakdown IS NOT NULL`
-     must be 0. If it is not, the last section re-lifts those masters, which
-     changes ratings.
-   - Run V5 alone as a baseline, so drift that P2 already has is not
-     mistaken for P6.
+1. **Before the apply**, run V5 of the verify file alone as a baseline, so
+   drift that P2 already has is not mistaken for P6.
 2. Copy the `.sql` into DOS-Me `supabase/migrations/` with a new timestamp,
    and the verify and rollback files into `scripts/ops/`, as for P3.
 3. After the beta and production applies, run the verify file read-only as
-   `postgres` or `service_role`: V1 to V7 must return 0. V5 recomputes every
+   `postgres` or `service_role`. V1 to V7 must return 0. V5 recomputes every
    master, so run it off-peak.
-4. **Rollback:** the rollback file, safe to run twice. It runs in two
-   transactions:
-   - P2's functions back byte for byte, and a refresh of the masters a stored
-     breakdown touched;
-   - then the writer, the factor and the CHECKs dropped, under a 5 s lock
-     timeout.
+4. **Rollback:** the rollback file, safe to run twice. Stop the scoring job
+   first. It runs in two transactions:
+   - first, P2's rating function goes back byte for byte, the triggers are
+     dropped, and the masters the values touched are refreshed;
+   - then the functions, `rate.review_values`, the tier column and the CHECKs
+     are dropped, under a 5 s lock timeout.
 
-   The stored values stay (they are P2's columns) and no longer count. The
-   refresh skips a master another transaction holds at that moment, so run V5
-   afterwards. A master it counts needs
-   `SELECT rate.refresh_master_rating_extras(id)`. Stop the scoring job first.
+   The stored values are lost; the scoring job recomputes them after a
+   re-apply. Afterwards, run V5. A master it counts was held by another
+   transaction during the refresh and needs
+   `SELECT rate.refresh_master_rating_extras(id)`.
 
 ## Tests (local, Docker)
 
 `node scripts/test-review-value-proposal.mjs` (after building
 `@repo/shared-data`):
 
-- the proposal twice with no rating change;
-- the factor's parity with the shared module for 0 to 35 and for junk;
+- the proposal applied twice with no rating change;
+- the factor's parity with the shared module for 0 to 35, and for junk;
 - the writer accepting the module's output over a grid of 448 inputs;
 - the module's values stored as `rate_worker` (a community review included),
   and the lifted rating equal to the module's formula, cap included;
+- D7:
+  - `anon` reads the tier;
+  - `anon` and `authenticated` are refused on `rate.review_values`;
+  - P2's number columns stay empty;
+  - the writer reads their own number and nobody else's;
+  - `anon` cannot call the reader, and the id cap holds;
 - a re-store that changes nothing, and a rescore with the same completeness
   that refreshes nothing;
 - the refusals, where nothing is written:
@@ -154,9 +165,12 @@ values, each review by at most +25% weight.
   - a bad id, version, key, type, tier, gap or part;
   - a score that is not the sum;
   - a gated review not scored 0;
-  - the photo rule broken either way;
-- a direct `rate_worker` write stopped by the CHECK;
-- the grants (`anon` and `authenticated` refused);
+  - the photo rule broken in either direction;
+- direct writes stopped:
+  - `rate_worker` on `rate.review_values`;
+  - a number on `rate.reviews`;
+  - the CHECKs;
 - V1 to V7;
-- the rollback twice (the lift is gone, the values stay, P2 still
-  refreshes), then the proposal again, which lifts the kept values back.
+- the rollback twice: the lift and every object are gone, and P2 still
+  refreshes;
+- the proposal again: no change until values are stored, then the lift.

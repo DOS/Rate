@@ -6,72 +6,98 @@
 -- Rollback: 2026-11-02-dos-me-review-value-score-rollback.sql.
 --
 -- What it does:
---   rate.review_completeness_factor(value_breakdown) the D6 factor, 1 to 1.25, from the
---                        weightCompleteness a review's value score stored (0 to 35: completeness
---                        less the photo of a review without pros and cons, so a marketplace review
---                        keeps its weight). Equal to completenessWeightFactor in
---                        packages/shared-data/src/rules/review-value.ts (DOS/Rate#1579).
---   rate.master_rating_extras   each review's weight becomes
---                        LEAST(3, helpfulness_weight x factor); nothing else changes.
---   rate.reviews_refresh_rating_extras   a change of the factor refreshes the master.
---   rate.store_review_values(p_values)   the writer of value_score and value_breakdown for
---                        the scoring job (rate_worker) and service_role, community reviews
---                        included; it accepts only a breakdown the shared module could produce.
---                        rate_worker can still write crawled reviews' columns directly (its
---                        table grant), as it can write helpfulness_weight; the CHECKs below
---                        bound that to the same +25%.
---   Two NOT VALID CHECKs on value_breakdown (an object; completeness a step of 5 from 0 to 35,
---   weightCompleteness equal to it or 5 less).
+--   rate.review_values   a review's value score and breakdown, PRIVATE (D7: the number only for
+--                        the writer). No anon or authenticated access; service_role and
+--                        rate_worker read it; only rate.store_review_values writes it.
+--   rate.reviews.value_tier   the public tier (D7): basic, complete or excellent; NULL when not
+--                        scored or gated. P2's rate.reviews.value_score and value_breakdown stay
+--                        empty, held there by a CHECK, so the number never reaches the public
+--                        table.
+--   rate.review_completeness_factor(breakdown)   the D6 factor, 1 to 1.25, from the breakdown's
+--                        weightCompleteness (completeness less the photo of a review without
+--                        pros and cons, so a marketplace review keeps its weight). Equal to
+--                        completenessWeightFactor in packages/shared-data/src/rules/review-value.ts.
+--   rate.master_rating_extras   each review's weight becomes LEAST(3, helpfulness_weight x
+--                        factor); nothing else in P2's body changes.
+--   triggers on rate.review_values   a change of a review's factor refreshes its master.
+--   rate.store_review_values(p_values)   the writer for the scoring job (rate_worker) and
+--                        service_role: only a breakdown the shared module could produce.
+--   rate.my_review_values(p_review_ids)   the writer of a review reads its own number and
+--                        breakdown (authenticated, through rate.review_authors).
 --
--- Depends on P2 (20261101120000, value_score, value_breakdown and the rating functions) and
--- P3 (20261102090000); both are in production. Uses only PostgreSQL 15 features.
+-- Depends on P2 (20261101120000) and P3 (20261102090000); both are in production.
 --
--- Rating impact at apply time: none. value_breakdown is NULL on every review until the scoring
--- job writes it, and a NULL breakdown has factor 1, so no stored rating changes. Ratings move
--- only as the job stores scores, each by at most +25% weight on a review.
+-- Rating impact at apply time: none. rate.review_values is new and empty, and a review without
+-- a row has factor 1. Ratings move only as the job stores values, each review by at most +25%.
 --
--- Idempotent: CREATE OR REPLACE for functions, constraints guarded by pg_constraint. Section 5,
--- after the transaction, re-lifts masters whose reviews already hold values (a re-apply after
--- a rollback); on the first apply it changes nothing.
+-- Idempotent: IF NOT EXISTS for the table and column, constraints guarded by pg_constraint,
+-- CREATE OR REPLACE for functions, DROP ... IF EXISTS before each trigger and policy. Section
+-- 7, after the transaction, refreshes masters whose reviews already hold values (a re-apply);
+-- on the first apply it changes nothing.
 -- =============================================================================
 
 BEGIN;
 
--- The ALTER TABLEs below take a short ACCESS EXCLUSIVE lock on rate.reviews: give up rather
--- than queue every reader behind a long query. Re-run the file if it times out.
+-- The ALTER TABLEs on rate.reviews take a short ACCESS EXCLUSIVE lock: give up rather than
+-- queue every reader behind a long query. Re-run the file if it times out.
 SET LOCAL lock_timeout = '5s';
 
--- 1. value_breakdown shape ---------------------------------------------------------------------
--- NOT VALID: no scan under the ALTER TABLE lock. Every row is NULL today; V6 checks them all,
--- and a later file may VALIDATE them (SHARE UPDATE EXCLUSIVE, no write block) as P2's did.
+-- 1. The private values ------------------------------------------------------------------------
+
+CREATE TABLE IF NOT EXISTS rate.review_values (
+  review_id       uuid PRIMARY KEY REFERENCES rate.reviews(id) ON DELETE CASCADE,
+  value_score     numeric(5, 2) NOT NULL CHECK (value_score BETWEEN 0 AND 100),
+  value_breakdown jsonb NOT NULL CHECK (jsonb_typeof(value_breakdown) = 'object'),
+  updated_at      timestamptz NOT NULL DEFAULT now(),
+  -- Both completeness keys numbers, completeness a step of 5, the weight one equal to it or
+  -- the 5 of a photo less; the breakdown's score is value_score.
+  CONSTRAINT review_values_completeness CHECK (
+    CASE WHEN jsonb_typeof(value_breakdown -> 'completeness') = 'number'
+          AND jsonb_typeof(value_breakdown -> 'weightCompleteness') = 'number'
+          AND jsonb_typeof(value_breakdown -> 'score') = 'number'
+         THEN (value_breakdown ->> 'completeness')::numeric IN (0, 5, 10, 15, 20, 25, 30, 35)
+          AND (value_breakdown ->> 'completeness')::numeric
+              - (value_breakdown ->> 'weightCompleteness')::numeric IN (0, 5)
+          AND (value_breakdown ->> 'weightCompleteness')::numeric >= 0
+          AND round((value_breakdown ->> 'score')::numeric, 2) = value_score
+         ELSE false END)
+);
+
+COMMENT ON TABLE rate.review_values IS
+  'Value score of a review (DOS/Rate#1547). Private (D7): the public sees only rate.reviews.value_tier; the writer reads its own through rate.my_review_values.';
+
+ALTER TABLE rate.review_values ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON rate.review_values FROM PUBLIC, anon, authenticated, rate_worker;
+GRANT ALL ON rate.review_values TO service_role;
+GRANT SELECT ON rate.review_values TO rate_worker;
+DROP POLICY IF EXISTS "Service role access review_values" ON rate.review_values;
+CREATE POLICY "Service role access review_values" ON rate.review_values
+  FOR ALL TO service_role USING (true) WITH CHECK (true);
+DROP POLICY IF EXISTS "Rate worker read review_values" ON rate.review_values;
+CREATE POLICY "Rate worker read review_values" ON rate.review_values
+  FOR SELECT TO rate_worker USING (true);
+
+-- 2. The public tier, and P2's columns kept empty -----------------------------------------------
+-- NOT VALID: no scan under the lock. Every row holds NULL in all three today; V6 checks them.
+
+ALTER TABLE rate.reviews ADD COLUMN IF NOT EXISTS value_tier text;
 
 DO $$
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conrelid = 'rate.reviews'::regclass
-                   AND conname = 'reviews_value_breakdown_object') THEN
-    ALTER TABLE rate.reviews ADD CONSTRAINT reviews_value_breakdown_object
-      CHECK (value_breakdown IS NULL OR jsonb_typeof(value_breakdown) = 'object') NOT VALID;
+                   AND conname = 'reviews_value_tier_known') THEN
+    ALTER TABLE rate.reviews ADD CONSTRAINT reviews_value_tier_known
+      CHECK (value_tier IS NULL OR value_tier IN ('basic', 'complete', 'excellent')) NOT VALID;
   END IF;
-  -- Both completeness keys steps of 5, and the weight one equal to completeness or the 5 of a
-  -- photo less: a direct write (service_role, or rate_worker on a crawled review) cannot give
-  -- a review the full factor without its completeness.
+  -- P2 put the number on the public table; it lives in rate.review_values instead.
   IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conrelid = 'rate.reviews'::regclass
-                   AND conname = 'reviews_value_breakdown_completeness') THEN
-    ALTER TABLE rate.reviews ADD CONSTRAINT reviews_value_breakdown_completeness
-      CHECK (value_breakdown IS NULL
-             OR jsonb_typeof(value_breakdown) <> 'object'
-             OR CASE WHEN jsonb_typeof(value_breakdown -> 'completeness') = 'number'
-                      AND jsonb_typeof(value_breakdown -> 'weightCompleteness') = 'number'
-                     THEN (value_breakdown ->> 'completeness')::numeric IN (0, 5, 10, 15, 20, 25, 30, 35)
-                      AND (value_breakdown ->> 'completeness')::numeric
-                          - (value_breakdown ->> 'weightCompleteness')::numeric IN (0, 5)
-                      AND (value_breakdown ->> 'weightCompleteness')::numeric >= 0
-                     ELSE false END)
-      NOT VALID;
+                   AND conname = 'reviews_value_private') THEN
+    ALTER TABLE rate.reviews ADD CONSTRAINT reviews_value_private
+      CHECK (value_score IS NULL AND value_breakdown IS NULL) NOT VALID;
   END IF;
 END $$;
 
--- 2. The D6 factor -----------------------------------------------------------------------------
+-- 3. The D6 factor -----------------------------------------------------------------------------
 -- 1 + 0.25 x weightCompleteness / 35 at four decimals. A missing breakdown, a missing or
 -- non-number weightCompleteness count as 0 (factor 1); a number outside 0 to 35 as its nearest
 -- bound.
@@ -93,8 +119,8 @@ $$;
 REVOKE EXECUTE ON FUNCTION rate.review_completeness_factor(jsonb) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION rate.review_completeness_factor(jsonb) TO service_role;
 
--- 3. The rating reads it -----------------------------------------------------------------------
--- P2's body with one change: the weight of each review (marked P6).
+-- 4. The rating reads it -----------------------------------------------------------------------
+-- P2's body with two changes, marked P6: the private values joined, and the weight.
 
 CREATE OR REPLACE FUNCTION rate.master_rating_extras(p_master_id uuid)
 RETURNS TABLE (rating_score numeric, rating_weight_sum numeric, criteria_scores jsonb)
@@ -109,12 +135,13 @@ BEGIN
   RETURN QUERY EXECUTE format($q$
     WITH eligible AS (
       -- P6: the stored weight times the completeness factor (D6), capped at 3.
-      SELECT LEAST(3.0, r.helpfulness_weight * rate.review_completeness_factor(r.value_breakdown))::numeric AS w,
+      SELECT LEAST(3.0, r.helpfulness_weight * rate.review_completeness_factor(v.value_breakdown))::numeric AS w,
              COALESCE(r.rating_exact, r.rating_star)::numeric AS star,
              r.criteria_ratings
       FROM rate.products p
       JOIN rate.reviews r ON r.product_id = p.id
       JOIN rate.review_flags f ON f.review_id = r.id
+      LEFT JOIN rate.review_values v ON v.review_id = r.id  -- P6
       WHERE %s = $1
         AND p.origin = 'crawl'
         AND r.origin IN ('crawl', 'community')
@@ -157,9 +184,11 @@ BEGIN
   USING COALESCE(v_item, p_master_id);
 END $$;
 
--- P2's body with one change: the factor is a rating input (marked P6). Only a change of the
--- factor counts, so storing a new score with the same completeness refreshes nothing.
-CREATE OR REPLACE FUNCTION rate.reviews_refresh_rating_extras()
+-- CREATE OR REPLACE keeps P2's grants (service_role only).
+
+-- A change of a review's factor refreshes its master. Statement-level, as P2's triggers; only
+-- rows whose factor changed count, so a rescore with the same completeness refreshes nothing.
+CREATE OR REPLACE FUNCTION rate.review_values_refresh_rating_extras()
 RETURNS trigger
 LANGUAGE plpgsql
 SECURITY DEFINER
@@ -167,28 +196,42 @@ SET search_path = ''
 AS $$
 BEGIN
   IF TG_OP = 'INSERT' THEN
-    PERFORM rate.refresh_rating_extras_of_products(ARRAY(SELECT product_id FROM changed_new));
+    PERFORM rate.refresh_rating_extras_of_products(ARRAY(
+      SELECT r.product_id FROM changed_new n JOIN rate.reviews r ON r.id = n.review_id
+      WHERE rate.review_completeness_factor(n.value_breakdown) <> 1));
   ELSIF TG_OP = 'UPDATE' THEN
     PERFORM rate.refresh_rating_extras_of_products(ARRAY(
-      SELECT x.product_id
-      FROM changed_new n JOIN changed_old o ON o.id = n.id,
-           LATERAL (VALUES (n.product_id), (o.product_id)) x(product_id)
-      WHERE (n.product_id, n.rating_star, n.rating_exact, n.criteria_ratings,
-             n.helpfulness_weight, n.reviewer_type, n.origin,
-             rate.review_completeness_factor(n.value_breakdown))  -- P6
-            IS DISTINCT FROM
-            (o.product_id, o.rating_star, o.rating_exact, o.criteria_ratings,
-             o.helpfulness_weight, o.reviewer_type, o.origin,
-             rate.review_completeness_factor(o.value_breakdown))));  -- P6
+      SELECT r.product_id
+      FROM changed_new n JOIN changed_old o ON o.review_id = n.review_id
+      JOIN rate.reviews r ON r.id = n.review_id
+      WHERE rate.review_completeness_factor(n.value_breakdown)
+            IS DISTINCT FROM rate.review_completeness_factor(o.value_breakdown)));
   ELSE
-    PERFORM rate.refresh_rating_extras_of_products(ARRAY(SELECT product_id FROM changed_old));
+    -- A row deleted with its review (ON DELETE CASCADE) finds no review here; the reviews
+    -- trigger refreshes that master.
+    PERFORM rate.refresh_rating_extras_of_products(ARRAY(
+      SELECT r.product_id FROM changed_old o JOIN rate.reviews r ON r.id = o.review_id
+      WHERE rate.review_completeness_factor(o.value_breakdown) <> 1));
   END IF;
   RETURN NULL;
 END $$;
 
--- CREATE OR REPLACE keeps P2's grants on both (service_role only).
+REVOKE EXECUTE ON FUNCTION rate.review_values_refresh_rating_extras() FROM PUBLIC, anon, authenticated;
 
--- 4. The writer --------------------------------------------------------------------------------
+DROP TRIGGER IF EXISTS trg_review_values_rating_extras_ins ON rate.review_values;
+CREATE TRIGGER trg_review_values_rating_extras_ins AFTER INSERT ON rate.review_values
+  REFERENCING NEW TABLE AS changed_new
+  FOR EACH STATEMENT EXECUTE FUNCTION rate.review_values_refresh_rating_extras();
+DROP TRIGGER IF EXISTS trg_review_values_rating_extras_upd ON rate.review_values;
+CREATE TRIGGER trg_review_values_rating_extras_upd AFTER UPDATE ON rate.review_values
+  REFERENCING OLD TABLE AS changed_old NEW TABLE AS changed_new
+  FOR EACH STATEMENT EXECUTE FUNCTION rate.review_values_refresh_rating_extras();
+DROP TRIGGER IF EXISTS trg_review_values_rating_extras_del ON rate.review_values;
+CREATE TRIGGER trg_review_values_rating_extras_del AFTER DELETE ON rate.review_values
+  REFERENCING OLD TABLE AS changed_old
+  FOR EACH STATEMENT EXECUTE FUNCTION rate.review_values_refresh_rating_extras();
+
+-- 5. The writer --------------------------------------------------------------------------------
 -- p_values: a JSON array of {"id": review uuid, "score": 0-100, "breakdown": {...}}, at most
 -- 1000 rows and 2 MB. Each breakdown must be one the shared module could produce:
 --   exactly its eleven keys; "version" 1; "gated" a boolean;
@@ -200,9 +243,9 @@ END $$;
 --   excellent from score 70, else complete);
 --   a gated row: every part 0, tier null, no gaps.
 -- A malformed row fails the whole call (22023) and names its index; nothing is written. Rows
--- of reviews that no longer exist are skipped. Returns the number of reviews whose stored
--- value changed. The rows are locked in id order first (no deadlock between two batches), then
--- written in one UPDATE, so the reviews trigger refreshes each affected master once. Run one
+-- of reviews that do not exist are skipped. It writes rate.review_values (the number, private)
+-- and rate.reviews.value_tier (the tier, public), the reviews locked in id order first so two
+-- batches never deadlock. Returns the number of reviews whose stored value changed. Run one
 -- job worker at a time; a batch refreshes its masters inside the call.
 CREATE OR REPLACE FUNCTION rate.store_review_values(p_values jsonb)
 RETURNS integer
@@ -287,35 +330,83 @@ BEGIN
     v_index := v_index + 1;
   END LOOP;
 
+  CREATE TEMP TABLE IF NOT EXISTS pg_temp.review_values_batch (
+    review_id uuid PRIMARY KEY, value_score numeric(5, 2), value_breakdown jsonb
+  ) ON COMMIT DROP;
+  TRUNCATE pg_temp.review_values_batch;
+  -- A review listed twice: the last row wins. Reviews that do not exist are skipped.
+  INSERT INTO pg_temp.review_values_batch
+  SELECT DISTINCT ON ((e ->> 'id')::uuid)
+         (e ->> 'id')::uuid, round((e ->> 'score')::numeric, 2), e -> 'breakdown'
+  FROM jsonb_array_elements(p_values) WITH ORDINALITY AS a(e, n)
+  WHERE EXISTS (SELECT 1 FROM rate.reviews r WHERE r.id = (e ->> 'id')::uuid)
+  ORDER BY (e ->> 'id')::uuid, n DESC;
+
   PERFORM 1 FROM rate.reviews r
-  WHERE r.id IN (SELECT (e ->> 'id')::uuid FROM jsonb_array_elements(p_values) e)
+  WHERE r.id IN (SELECT b.review_id FROM pg_temp.review_values_batch b)
   ORDER BY r.id
   FOR UPDATE;
 
-  UPDATE rate.reviews r
-  SET value_score = round(v.score, 2), value_breakdown = v.breakdown
-  FROM (
-    SELECT DISTINCT ON ((e ->> 'id')::uuid)
-           (e ->> 'id')::uuid AS id, (e ->> 'score')::numeric AS score, e -> 'breakdown' AS breakdown
-    FROM jsonb_array_elements(p_values) WITH ORDINALITY AS a(e, n)
-    ORDER BY (e ->> 'id')::uuid, n DESC  -- a review listed twice: the last row wins
-  ) v
-  WHERE r.id = v.id
-    AND (r.value_score, r.value_breakdown) IS DISTINCT FROM (round(v.score, 2), v.breakdown);
+  INSERT INTO rate.review_values AS rv (review_id, value_score, value_breakdown, updated_at)
+  SELECT b.review_id, b.value_score, b.value_breakdown, now()
+  FROM pg_temp.review_values_batch b
+  ORDER BY b.review_id
+  ON CONFLICT (review_id) DO UPDATE
+    SET value_score = EXCLUDED.value_score,
+        value_breakdown = EXCLUDED.value_breakdown,
+        updated_at = EXCLUDED.updated_at
+    WHERE (rv.value_score, rv.value_breakdown)
+          IS DISTINCT FROM (EXCLUDED.value_score, EXCLUDED.value_breakdown);
   GET DIAGNOSTICS v_changed = ROW_COUNT;
+
+  UPDATE rate.reviews r
+  SET value_tier = b.value_breakdown ->> 'tier'
+  FROM pg_temp.review_values_batch b
+  WHERE r.id = b.review_id
+    AND r.value_tier IS DISTINCT FROM (b.value_breakdown ->> 'tier');
+
   RETURN v_changed;
 END $$;
 
 REVOKE EXECUTE ON FUNCTION rate.store_review_values(jsonb) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION rate.store_review_values(jsonb) TO service_role, rate_worker;
 
+-- 6. The writer of a review reads its number ---------------------------------------------------
+-- Up to 100 review ids; returns the ones the caller wrote (rate.review_authors) that have a
+-- value. Anyone else's reviews, and anon, get nothing.
+CREATE OR REPLACE FUNCTION rate.my_review_values(p_review_ids uuid[])
+RETURNS TABLE (review_id uuid, value_score numeric, value_breakdown jsonb)
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+DECLARE
+  v_uid uuid := auth.uid();
+BEGIN
+  IF v_uid IS NULL THEN
+    RETURN;
+  END IF;
+  IF cardinality(p_review_ids) > 100 THEN
+    RAISE EXCEPTION 'at most 100 review ids per call' USING ERRCODE = '22023';
+  END IF;
+  RETURN QUERY
+  SELECT v.review_id, v.value_score, v.value_breakdown
+  FROM rate.review_values v
+  JOIN rate.review_authors a ON a.review_id = v.review_id
+  WHERE v.review_id = ANY (p_review_ids)
+    AND a.author_user_id = v_uid;
+END $$;
+
+REVOKE EXECUTE ON FUNCTION rate.my_review_values(uuid[]) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION rate.my_review_values(uuid[]) TO authenticated, service_role;
+
 COMMIT;
 
--- 5. Masters with values stored before this apply ----------------------------------------------
--- A no-op on the first apply (no review has a breakdown). After a rollback that kept the
--- values, it lifts their masters again. Outside the transaction, so the scan of rate.reviews
--- holds no ALTER TABLE lock.
+-- 7. Masters with values stored before this apply ----------------------------------------------
+-- A no-op on the first apply (the table is new). On a re-apply over kept values it brings their
+-- masters back in line. Outside the transaction, so it holds no ALTER TABLE lock.
 SELECT rate.refresh_rating_extras_of_products(ARRAY(
-  SELECT DISTINCT r.product_id FROM rate.reviews r
-  WHERE r.value_breakdown IS NOT NULL
-    AND rate.review_completeness_factor(r.value_breakdown) > 1));
+  SELECT DISTINCT r.product_id
+  FROM rate.review_values v JOIN rate.reviews r ON r.id = v.review_id
+  WHERE rate.review_completeness_factor(v.value_breakdown) > 1));

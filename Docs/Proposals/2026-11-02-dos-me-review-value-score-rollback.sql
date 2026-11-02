@@ -1,13 +1,13 @@
 -- ROLLBACK of the PROPOSAL 2026-11-02-dos-me-review-value-score.sql (DOS/Rate#1547).
 -- Two transactions:
---   1. puts back P2's rating functions (byte for byte from 20261101120000_rate_criteria_ratings.sql)
---      and refreshes every master whose rating a stored breakdown could have lifted; no table
---      lock beyond the rows it updates;
---   2. drops the writer, the factor and the two CHECKs, a short ACCESS EXCLUSIVE lock with a
---      5 s timeout (re-run the file if it times out).
--- The value_score and value_breakdown columns are P2's and keep their data; without the factor
--- they no longer touch any rating. The refresh skips a master another transaction holds at that
--- moment (FOR UPDATE SKIP LOCKED in P2), so afterwards run V5 of the verify file: any master it
+--   1. puts back P2's rating function (byte for byte from 20261101120000_rate_criteria_ratings.sql),
+--      drops the triggers on rate.review_values, and refreshes every master a stored value could
+--      have lifted; no table lock beyond the rows it updates;
+--   2. drops the writer, the reader, the factor, rate.review_values (its values are lost: the
+--      scoring job recomputes them), the tier column and the two CHECKs on rate.reviews, under a
+--      short ACCESS EXCLUSIVE lock with a 5 s timeout (re-run the file if it times out).
+-- The refresh skips a master another transaction holds at that moment (FOR UPDATE SKIP LOCKED in
+-- P2), so stop the scoring job first and afterwards run V5 of the verify file: any master it
 -- counts needs SELECT rate.refresh_master_rating_extras(id).
 -- Safe to run twice.
 
@@ -73,33 +73,19 @@ BEGIN
   USING COALESCE(v_item, p_master_id);
 END $$;
 
-CREATE OR REPLACE FUNCTION rate.reviews_refresh_rating_extras()
-RETURNS trigger
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path = ''
-AS $$
-BEGIN
-  IF TG_OP = 'INSERT' THEN
-    PERFORM rate.refresh_rating_extras_of_products(ARRAY(SELECT product_id FROM changed_new));
-  ELSIF TG_OP = 'UPDATE' THEN
-    PERFORM rate.refresh_rating_extras_of_products(ARRAY(
-      SELECT x.product_id
-      FROM changed_new n JOIN changed_old o ON o.id = n.id,
-           LATERAL (VALUES (n.product_id), (o.product_id)) x(product_id)
-      WHERE (n.product_id, n.rating_star, n.rating_exact, n.criteria_ratings,
-             n.helpfulness_weight, n.reviewer_type, n.origin)
-            IS DISTINCT FROM
-            (o.product_id, o.rating_star, o.rating_exact, o.criteria_ratings,
-             o.helpfulness_weight, o.reviewer_type, o.origin)));
-  ELSE
-    PERFORM rate.refresh_rating_extras_of_products(ARRAY(SELECT product_id FROM changed_old));
-  END IF;
-  RETURN NULL;
-END $$;
+DROP TRIGGER IF EXISTS trg_review_values_rating_extras_ins ON rate.review_values;
+DROP TRIGGER IF EXISTS trg_review_values_rating_extras_upd ON rate.review_values;
+DROP TRIGGER IF EXISTS trg_review_values_rating_extras_del ON rate.review_values;
+DROP FUNCTION IF EXISTS rate.review_values_refresh_rating_extras();
 
-SELECT rate.refresh_rating_extras_of_products(ARRAY(
-  SELECT DISTINCT r.product_id FROM rate.reviews r WHERE r.value_breakdown IS NOT NULL));
+DO $$
+BEGIN
+  IF to_regclass('rate.review_values') IS NOT NULL THEN
+    PERFORM rate.refresh_rating_extras_of_products(ARRAY(
+      SELECT DISTINCT r.product_id
+      FROM rate.review_values v JOIN rate.reviews r ON r.id = v.review_id));
+  END IF;
+END $$;
 
 COMMIT;
 
@@ -108,9 +94,12 @@ BEGIN;
 SET LOCAL lock_timeout = '5s';
 
 DROP FUNCTION IF EXISTS rate.store_review_values(jsonb);
+DROP FUNCTION IF EXISTS rate.my_review_values(uuid[]);
 DROP FUNCTION IF EXISTS rate.review_completeness_factor(jsonb);
+DROP TABLE IF EXISTS rate.review_values;
 
-ALTER TABLE rate.reviews DROP CONSTRAINT IF EXISTS reviews_value_breakdown_completeness;
-ALTER TABLE rate.reviews DROP CONSTRAINT IF EXISTS reviews_value_breakdown_object;
+ALTER TABLE rate.reviews DROP CONSTRAINT IF EXISTS reviews_value_private;
+ALTER TABLE rate.reviews DROP CONSTRAINT IF EXISTS reviews_value_tier_known;
+ALTER TABLE rate.reviews DROP COLUMN IF EXISTS value_tier;
 
 COMMIT;

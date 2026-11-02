@@ -13,34 +13,53 @@ SELECT count(*) FROM (VALUES
 ) AS t(breakdown, expected)
 WHERE rate.review_completeness_factor(t.breakdown) IS DISTINCT FROM t.expected;
 
--- V2 the rating reads the factor, and its trigger compares it on both sides; expect 0
-SELECT 2 - count(*) FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
-WHERE n.nspname = 'rate'
-  AND ((p.proname = 'master_rating_extras'
-        AND p.prosrc LIKE '%r.helpfulness_weight * rate.review_completeness_factor(r.value_breakdown)%')
-    OR (p.proname = 'reviews_refresh_rating_extras'
-        AND p.prosrc LIKE '%rate.review_completeness_factor(n.value_breakdown)%'
-        AND p.prosrc LIKE '%rate.review_completeness_factor(o.value_breakdown)%'));
+-- V2 the rating reads the private values' factor, and the three triggers on them exist; expect 0
+SELECT 4 - (
+  SELECT count(*) FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+  WHERE n.nspname = 'rate' AND p.proname = 'master_rating_extras'
+    AND p.prosrc LIKE '%r.helpfulness_weight * rate.review_completeness_factor(v.value_breakdown)%'
+    AND p.prosrc LIKE '%LEFT JOIN rate.review_values v ON v.review_id = r.id%'
+) - (
+  SELECT count(*) FROM pg_trigger
+  WHERE tgrelid = 'rate.review_values'::regclass AND NOT tgisinternal
+    AND tgname IN ('trg_review_values_rating_extras_ins', 'trg_review_values_rating_extras_upd',
+                   'trg_review_values_rating_extras_del')
+);
 
--- V3 the writer is security definer with an empty search_path, callable by service_role and
--- rate_worker and by nobody else; expect 0
+-- V3 D7: anon and authenticated cannot read rate.review_values or call the writer, and anon
+-- cannot call the reader; rate_worker reads the table but writes only through the writer; the
+-- functions are security definer with an empty search_path; expect 0
 SELECT count(*) FROM (
-  SELECT 'definer' AS problem FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
-  WHERE n.nspname = 'rate' AND p.proname = 'store_review_values'
+  SELECT p.proname::text AS problem FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+  WHERE n.nspname = 'rate' AND p.proname IN ('store_review_values', 'my_review_values')
     AND NOT (p.prosecdef AND p.proconfig @> ARRAY['search_path=""'])
   UNION ALL
-  SELECT r.role FROM unnest(ARRAY['service_role', 'rate_worker']) AS r(role)
-  WHERE NOT has_function_privilege(r.role, 'rate.store_review_values(jsonb)', 'EXECUTE')
-  UNION ALL
   SELECT r.role FROM unnest(ARRAY['anon', 'authenticated']) AS r(role)
-  WHERE has_function_privilege(r.role, 'rate.store_review_values(jsonb)', 'EXECUTE')
+  WHERE has_table_privilege(r.role, 'rate.review_values', 'SELECT')
+     OR has_table_privilege(r.role, 'rate.review_values', 'INSERT')
+     OR has_table_privilege(r.role, 'rate.review_values', 'UPDATE')
+     OR has_function_privilege(r.role, 'rate.store_review_values(jsonb)', 'EXECUTE')
      OR has_function_privilege(r.role, 'rate.review_completeness_factor(jsonb)', 'EXECUTE')
+  UNION ALL
+  SELECT 'anon reader' WHERE has_function_privilege('anon', 'rate.my_review_values(uuid[])', 'EXECUTE')
+  UNION ALL
+  SELECT 'authenticated reader'
+  WHERE NOT has_function_privilege('authenticated', 'rate.my_review_values(uuid[])', 'EXECUTE')
+  UNION ALL
+  SELECT 'rate_worker' WHERE NOT has_table_privilege('rate_worker', 'rate.review_values', 'SELECT')
+     OR has_table_privilege('rate_worker', 'rate.review_values', 'INSERT')
+     OR has_table_privilege('rate_worker', 'rate.review_values', 'UPDATE')
+     OR has_table_privilege('rate_worker', 'rate.review_values', 'DELETE')
+     OR NOT has_function_privilege('rate_worker', 'rate.store_review_values(jsonb)', 'EXECUTE')
+  UNION ALL
+  SELECT 'rls' FROM pg_class WHERE oid = 'rate.review_values'::regclass AND NOT relrowsecurity
 ) x;
 
--- V4 the two CHECKs exist; expect 0
-SELECT 2 - count(*) FROM pg_constraint
-WHERE conrelid = 'rate.reviews'::regclass
-  AND conname IN ('reviews_value_breakdown_object', 'reviews_value_breakdown_completeness');
+-- V4 the CHECKs exist; expect 0
+SELECT 3 - count(*) FROM pg_constraint
+WHERE (conrelid = 'rate.reviews'::regclass
+       AND conname IN ('reviews_value_tier_known', 'reviews_value_private'))
+   OR (conrelid = 'rate.review_values'::regclass AND conname = 'review_values_completeness');
 
 -- V5 every master's stored rating equals what the functions compute; expect 0
 SELECT count(*) FROM rate.master_products m
@@ -48,37 +67,28 @@ CROSS JOIN LATERAL rate.master_rating_extras(m.id) x
 WHERE (m.rating_score, m.rating_weight_sum, m.criteria_scores)
       IS DISTINCT FROM (x.rating_score, x.rating_weight_sum, x.criteria_scores);
 
--- V6 every stored value is well formed: a score only with a breakdown, the CHECKs hold on
--- every row (they are NOT VALID), the breakdown's score is value_score, and a gated review
--- scores 0; expect 0
+-- V6 the number never reaches the public table: P2's columns are empty on every row (the CHECK
+-- is NOT VALID), and every tier is known; expect 0
 SELECT count(*) FROM rate.reviews r
-WHERE (r.value_breakdown IS NULL) <> (r.value_score IS NULL)
-   OR r.value_breakdown IS NOT NULL AND CASE
-    WHEN jsonb_typeof(r.value_breakdown) <> 'object'
-      OR jsonb_typeof(r.value_breakdown -> 'completeness') IS DISTINCT FROM 'number'
-      OR jsonb_typeof(r.value_breakdown -> 'weightCompleteness') IS DISTINCT FROM 'number'
-      OR jsonb_typeof(r.value_breakdown -> 'score') IS DISTINCT FROM 'number' THEN true
-    ELSE (r.value_breakdown ->> 'completeness')::numeric NOT IN (0, 5, 10, 15, 20, 25, 30, 35)
-      OR (r.value_breakdown ->> 'completeness')::numeric
-         - (r.value_breakdown ->> 'weightCompleteness')::numeric NOT IN (0, 5)
-      OR round((r.value_breakdown ->> 'score')::numeric, 2) IS DISTINCT FROM r.value_score
-      OR (r.value_breakdown -> 'gated' = 'true'::jsonb AND r.value_score <> 0)
-  END;
+WHERE r.value_score IS NOT NULL OR r.value_breakdown IS NOT NULL
+   OR (r.value_tier IS NOT NULL AND r.value_tier NOT IN ('basic', 'complete', 'excellent'));
 
--- V7 the public tier (D7) follows the module's rule: none on a gated review, else basic under
--- completeness 30, excellent from score 70, complete between; expect 0
+-- V7 the public tier is the stored breakdown's, and follows the module's rule: none on a gated
+-- review, else basic under completeness 30, excellent from score 70, complete between; a tier
+-- only with a value; expect 0
 SELECT count(*) FROM rate.reviews r
-WHERE jsonb_typeof(r.value_breakdown) = 'object'
-  AND jsonb_typeof(r.value_breakdown -> 'completeness') = 'number'
-  AND jsonb_typeof(r.value_breakdown -> 'score') = 'number'
-  AND (r.value_breakdown ->> 'tier') IS DISTINCT FROM CASE
-    WHEN r.value_breakdown -> 'gated' = 'true'::jsonb THEN NULL
-    WHEN (r.value_breakdown ->> 'completeness')::numeric < 30 THEN 'basic'
-    WHEN (r.value_breakdown ->> 'score')::numeric >= 70 THEN 'excellent'
-    ELSE 'complete' END;
+LEFT JOIN rate.review_values v ON v.review_id = r.id
+WHERE (v.review_id IS NULL AND r.value_tier IS NOT NULL)
+   OR (v.review_id IS NOT NULL AND (
+         r.value_tier IS DISTINCT FROM (v.value_breakdown ->> 'tier')
+      OR (v.value_breakdown ->> 'tier') IS DISTINCT FROM CASE
+           WHEN v.value_breakdown -> 'gated' = 'true'::jsonb THEN NULL
+           WHEN (v.value_breakdown ->> 'completeness')::numeric < 30 THEN 'basic'
+           WHEN v.value_score >= 70 THEN 'excellent'
+           ELSE 'complete' END));
 
--- V8 (information) reviews scored, their mean score and the share lifted
-SELECT count(*) FILTER (WHERE value_breakdown IS NOT NULL) AS scored,
+-- V8 (information) reviews scored, their mean score and how many are lifted
+SELECT count(*) AS scored,
        round(avg(value_score), 2) AS mean_score,
        count(*) FILTER (WHERE rate.review_completeness_factor(value_breakdown) > 1) AS lifted
-FROM rate.reviews;
+FROM rate.review_values;
