@@ -33,6 +33,16 @@ export const REVIEW_PRODUCT_ASPECT_RE =
 export const REVIEW_TECH_MEASURE_RE =
   /(?:\b\d+\s*(?:mah|wh|w|hz|nit|nits|fps|gb|tb|mp|mm|gram|g|db|ms|°c|độ\s*c)\b|geekbench|antutu|3dmark|cinebench|pcmag|gsmarena|phonearena)/i;
 
+/**
+ * A measured battery report, also expert depth on its own (DOS/Rate#1583):
+ * screen-on time or use in hours tied to the battery or the screen ("pin
+ * dùng được 7 tiếng", "SOT 8 giờ", "6h on screen"), a charge timed between
+ * two percentages, or a measurement said to be one ("đo thực tế"). Hours
+ * alone are not one: "giao hàng 2 tiếng" is about delivery.
+ */
+export const REVIEW_BATTERY_MEASURE_RE =
+  /(?:(?<![\p{L}\p{N}])(?:pin|sot|screen\s*on|on\s*screen|onscreen)(?![\p{L}\p{N}])[^.!?\n]{0,30}?\d+(?:[.,]\d+)?\s*(?:tiếng|giờ|h|hrs?|hours?)(?![\p{L}\p{N}])|\d+(?:[.,]\d+)?\s*(?:tiếng|giờ|h)\s*(?:sot|on\s*screen|onscreen|bật\s*màn|sáng\s*màn)(?![\p{L}\p{N}])|(?<![\p{L}\p{N}])sot\s*:?\s*\d|(?<![\p{L}\p{N}])(?:đo|test)\s*thực\s*tế(?![\p{L}\p{N}])|sạc\s*(?:đầy\s*)?(?:từ\s*)?\d+\s*%\s*(?:lên|đến|tới|-)\s*\d+\s*%[^.!?\n]{0,12}?\d+\s*(?:phút|p|tiếng|giờ)(?![\p{L}\p{N}]))/iu;
+
 /** A marketplace's canned satisfaction label, the whole text. */
 export const REVIEW_PLATFORM_LABEL_RE =
   /^(?:cực\s*k[ìỳ]\s*hài\s*lòng|rất\s*hài\s*lòng|hài\s*lòng|bình\s*thường|không\s*hài\s*lòng|rất\s*không\s*hài\s*lòng|tuyệt\s*vời|tốt|khá|tệ|rất\s*tệ)$/iu;
@@ -176,7 +186,11 @@ export function reviewDepth(input: ReviewDepthInput): ReviewDepth {
   const length = cleanText.length - reviewPaddingLength(cleanText);
   if (
     safe.reviewerType === 'expert' ||
-    parts.some((part) => REVIEW_TECH_MEASURE_RE.test(part)) ||
+    parts.some(
+      (part) =>
+        REVIEW_TECH_MEASURE_RE.test(part) ||
+        REVIEW_BATTERY_MEASURE_RE.test(part)
+    ) ||
     (length >= REVIEW_DEPTH_LENGTH.expert && hasProduct)
   ) {
     return 'expert_depth';

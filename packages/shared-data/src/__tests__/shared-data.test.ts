@@ -2084,6 +2084,38 @@ function testReviewDepth(): void {
     rules.reviewDepthText(v2),
     'Máy mượt, đáng tiền trong tầm giá.\nPin dùng cả ngày\nSạc hơi chậm'
   );
+  // A measured battery report is technical depth on its own (DOS/Rate#1583).
+  for (const line of [
+    'Pin dùng được 7 tiếng liên tục, lướt web và xem video',
+    'SOT 8 giờ, pin ổn',
+    'Pin trâu sot 9h',
+    'Dùng 6h on screen vẫn còn 20%',
+    'Sạc từ 20% lên 100% mất 45 phút',
+    'Đo thực tế màn hình rất sáng',
+    'Test thực tế pin trụ được cả ngày',
+  ]) {
+    assert.equal(depth({ comment: line }), 'expert_depth', line);
+  }
+  // Hours that are not a battery report are not one.
+  for (const line of [
+    'Giao hàng 2 tiếng là tới',
+    'Đợi 3 tiếng mới được tư vấn',
+    'Shop trả lời sau 2h',
+    'Pin tốt',
+    'Pin dùng ổn cả ngày',
+  ]) {
+    assert.notEqual(depth({ comment: line }), 'expert_depth', line);
+  }
+  // A measured line counts in a v2 review's pros too.
+  assert.equal(
+    depth({ verdict: 'Máy ổn trong tầm giá', points: ['SOT khoảng 7 tiếng'] }),
+    'expert_depth'
+  );
+  // Padding still adds nothing: "pin ok" repeated is no measurement.
+  assert.equal(
+    depth({ comment: Array(40).fill('pin ok').join(' ') }),
+    'low_effort'
+  );
   // A number ending one part and a unit starting the next are no measurement.
   assert.equal(depth({ comment: 'Đặt 2', verdict: 'gọn nhẹ' }), 'low_effort');
   // Lines extracted by AI from a marketplace comment add nothing.

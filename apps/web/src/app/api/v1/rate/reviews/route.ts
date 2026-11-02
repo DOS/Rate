@@ -35,6 +35,7 @@ import {
   submitCommunityReviewV2,
 } from '@/server/rate/review-v2';
 import { hasRatingCriteria } from '@repo/shared-data/rules';
+import { evaluateReviewTrustAssessment } from '@/lib/rate-domain';
 import type { AuthenticatedRateRequest } from '@/server/rate/request-auth';
 
 const log = createLogger('api.reviews');
@@ -715,18 +716,36 @@ async function submitReviewV2(
     {}
   );
   const criteria = v2StoredCriteria(record.criteria_ratings);
+  const reviewWithCriteria: ReviewItem = {
+    ...review,
+    criteria_ratings: criteria,
+    signals: {
+      ...review.signals,
+      criteria_count: Object.keys(criteria).length,
+    },
+  };
+  // The new card's trust reads the whole v2 text, as the review list will
+  // (DOS/Rate#1583); the client would otherwise judge the comment alone.
+  const submission = checked.submission;
+  reviewWithCriteria.trust_assessment = evaluateReviewTrustAssessment(
+    reviewWithCriteria,
+    {
+      verdict: record.verdict ?? submission.verdict,
+      points: [
+        ...submission.pros,
+        ...submission.cons,
+        ...Object.values(submission.criterionPoints).flatMap((lines) => [
+          ...(lines?.pros ?? []),
+          ...(lines?.cons ?? []),
+        ]),
+      ],
+    }
+  );
   return NextResponse.json(
     {
       ok: true,
       mode: 'supabase_rpc',
-      review: {
-        ...review,
-        criteria_ratings: criteria,
-        signals: {
-          ...review.signals,
-          criteria_count: Object.keys(criteria).length,
-        },
-      },
+      review: reviewWithCriteria,
     },
     { headers: REVIEWS_CORS_HEADERS }
   );
