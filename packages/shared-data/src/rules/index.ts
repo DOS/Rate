@@ -14,3 +14,4 @@ export * from './review-summary.js';
 export * from './rating-criteria.js';
 export * from './review-form.js';
 export * from './product-points.js';
+export * from './review-value.js';
