@@ -394,7 +394,7 @@ async function testReviewsV2() {
       value: 3.5,
     },
     verdict: 'Hợp người chụp ảnh nhiều, không hợp người chơi game nặng.',
-    pros: ['Pin dùng trọn ngày'],
+    pros: ['Pin dùng được 8 tiếng mỗi ngày'],
     cons: ['Giá hơi cao so với cấu hình'],
   };
   rpcResponder = () => ({ status: 200, json: { id: 'stored' } });
@@ -564,8 +564,9 @@ async function testReviewsV2() {
     // The new card's trust reads the verdict and the pros and cons, not the
     // empty comment alone (DOS/Rate#1583).
     assert.ok(stored.review.trust_assessment, 'the card carries its trust');
-    assert.notEqual(stored.review.trust_assessment.depth, 'stars_only');
-    assert.notEqual(stored.review.trust_assessment.depth, 'platform_label');
+    // Only the pro measures the battery, so expert depth proves the lines
+    // reached the classifier.
+    assert.equal(stored.review.trust_assessment.depth, 'expert_depth');
     const [v2Rpc] = rpcCalls('submit_community_review_v2');
     assert.ok(v2Rpc, 'the v2 RPC must be called');
     // v1 is never called on the v2 path.

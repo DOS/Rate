@@ -33,15 +33,47 @@ export const REVIEW_PRODUCT_ASPECT_RE =
 export const REVIEW_TECH_MEASURE_RE =
   /(?:\b\d+\s*(?:mah|wh|w|hz|nit|nits|fps|gb|tb|mp|mm|gram|g|db|ms|°c|độ\s*c)\b|geekbench|antutu|3dmark|cinebench|pcmag|gsmarena|phonearena)/i;
 
+// Pieces of REVIEW_BATTERY_MEASURE_RE. A number never starts inside another
+// number, so a long run of digits is scanned once. Every gap stays inside one
+// clause: it stops at punctuation and at a delivery or waiting word.
+const NOT_WORD_BEFORE = String.raw`(?<![\p{L}\p{N}])`;
+const NOT_WORD_AFTER = String.raw`(?![\p{L}\p{N}])`;
+const NUMBER = String.raw`(?<![\p{N}.,])\d+(?:[.,]\d+)?(?:\s*[-–~]\s*\d+(?:[.,]\d+)?)?`;
+const HOURS = String.raw`\s*(?:tiếng|giờ|h|hrs?|hours?)(?!\p{L})`;
+const CLAUSE_GAP = String.raw`(?:(?!giao|ship|chờ|đợi|nhận|đặt|mua|mở)[^,;.!?\n]){0,25}?`;
+const SCREEN_ON = String.raw`(?:sot|on[\s-]*screen|onscreen|screen[\s-]*on(?:\s*time)?)`;
+const BATTERY_PATTERNS = [
+  // "pin dùng được 7 tiếng", "pin trâu sot 9h"; not a spare battery, a
+  // torch, a watch cell or a coin cell.
+  String.raw`(?<!(?:đèn|kim)\s)${NOT_WORD_BEFORE}pin${NOT_WORD_AFTER}(?!\s*(?:dự\s*phòng|con\s*thỏ|cài|tiểu|cúc|aaa?${NOT_WORD_AFTER}))${CLAUSE_GAP}${NUMBER}${HOURS}`,
+  // "SOT 8 giờ", "screen-on time: 9 hours", "onscreen ~7h".
+  String.raw`${NOT_WORD_BEFORE}${SCREEN_ON}\s*:?\s*(?:~|khoảng|tầm|được|là)?\s*${NUMBER}${HOURS}`,
+  // "6h on screen", "7 tiếng bật màn".
+  String.raw`${NUMBER}${HOURS}[\s-]*(?:${SCREEN_ON}|bật\s*màn|sáng\s*màn)${NOT_WORD_AFTER}`,
+  // "dùng liên tục 6-7 tiếng", "xem phim được 10 tiếng".
+  String.raw`${NOT_WORD_BEFORE}(?:dùng|xài|chơi\s*game|xem\s*phim|xem\s*video|lướt\s*web)\s*(?:liên\s*tục|được)\s*(?:khoảng|tầm|~)?\s*${NUMBER}${HOURS}`,
+  // "bật màn 7 tiếng còn 30%", "chơi game 5 tiếng tụt 40%".
+  String.raw`${NUMBER}${HOURS}[^,;.!?\n]{0,15}?(?:còn|tụt|hết|xuống|mất)\s*\d+\s*%`,
+  // "sạc từ 20% lên 100% mất 45 phút", "sạc 0-100% 50p".
+  String.raw`${NOT_WORD_BEFORE}sạc\s*(?:đầy\s*)?(?:từ\s*)?\d+\s*%?\s*(?:lên|đến|tới|-|–)\s*\d+\s*%[^,;.!?\n]{0,12}?${NUMBER}\s*(?:phút|p|tiếng|giờ|h)(?!\p{L})`,
+  // "đo thực tế 1200 nit", "test thực tế pin trụ 9 tiếng": with a number.
+  String.raw`${NOT_WORD_BEFORE}(?:đo|test)\s*thực\s*tế[^,;.!?\n]{0,40}?\d`,
+];
+const BATTERY_SOURCE = BATTERY_PATTERNS.join(String.raw`|`);
+const BATTERY_FLAGS = String.raw`iu`;
+
 /**
- * A measured battery report, also expert depth on its own (DOS/Rate#1583):
- * screen-on time or use in hours tied to the battery or the screen ("pin
- * dùng được 7 tiếng", "SOT 8 giờ", "6h on screen"), a charge timed between
- * two percentages, or a measurement said to be one ("đo thực tế"). Hours
- * alone are not one: "giao hàng 2 tiếng" is about delivery.
+ * A measured battery report (DOS/Rate#1583): screen-on time or use in hours
+ * tied to the battery, the screen or continuous use, the charge left after
+ * some hours, a charge timed between two percentages, or a figure said to be
+ * measured ("đo thực tế"). Hours alone are not one: "giao hàng 2 tiếng" is
+ * about delivery, and "pin dự phòng" is an accessory. It counts as expert
+ * depth once the text, padding left out, is at least `specificShort` long.
  */
-export const REVIEW_BATTERY_MEASURE_RE =
-  /(?:(?<![\p{L}\p{N}])(?:pin|sot|screen\s*on|on\s*screen|onscreen)(?![\p{L}\p{N}])[^.!?\n]{0,30}?\d+(?:[.,]\d+)?\s*(?:tiếng|giờ|h|hrs?|hours?)(?![\p{L}\p{N}])|\d+(?:[.,]\d+)?\s*(?:tiếng|giờ|h)\s*(?:sot|on\s*screen|onscreen|bật\s*màn|sáng\s*màn)(?![\p{L}\p{N}])|(?<![\p{L}\p{N}])sot\s*:?\s*\d|(?<![\p{L}\p{N}])(?:đo|test)\s*thực\s*tế(?![\p{L}\p{N}])|sạc\s*(?:đầy\s*)?(?:từ\s*)?\d+\s*%\s*(?:lên|đến|tới|-)\s*\d+\s*%[^.!?\n]{0,12}?\d+\s*(?:phút|p|tiếng|giờ)(?![\p{L}\p{N}]))/iu;
+export const REVIEW_BATTERY_MEASURE_RE = new RegExp(
+  BATTERY_SOURCE,
+  BATTERY_FLAGS
+);
 
 /** A marketplace's canned satisfaction label, the whole text. */
 export const REVIEW_PLATFORM_LABEL_RE =
@@ -186,11 +218,9 @@ export function reviewDepth(input: ReviewDepthInput): ReviewDepth {
   const length = cleanText.length - reviewPaddingLength(cleanText);
   if (
     safe.reviewerType === 'expert' ||
-    parts.some(
-      (part) =>
-        REVIEW_TECH_MEASURE_RE.test(part) ||
-        REVIEW_BATTERY_MEASURE_RE.test(part)
-    ) ||
+    parts.some((part) => REVIEW_TECH_MEASURE_RE.test(part)) ||
+    (length >= REVIEW_DEPTH_LENGTH.specificShort &&
+      parts.some((part) => REVIEW_BATTERY_MEASURE_RE.test(part))) ||
     (length >= REVIEW_DEPTH_LENGTH.expert && hasProduct)
   ) {
     return 'expert_depth';

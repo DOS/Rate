@@ -2084,33 +2084,54 @@ function testReviewDepth(): void {
     rules.reviewDepthText(v2),
     'Máy mượt, đáng tiền trong tầm giá.\nPin dùng cả ngày\nSạc hơi chậm'
   );
-  // A measured battery report is technical depth on its own (DOS/Rate#1583).
+  // A measured battery report is technical depth (DOS/Rate#1583).
   for (const line of [
     'Pin dùng được 7 tiếng liên tục, lướt web và xem video',
-    'SOT 8 giờ, pin ổn',
-    'Pin trâu sot 9h',
-    'Dùng 6h on screen vẫn còn 20%',
-    'Sạc từ 20% lên 100% mất 45 phút',
-    'Đo thực tế màn hình rất sáng',
-    'Test thực tế pin trụ được cả ngày',
+    'SOT 8 giờ với 5G bật cả ngày, pin ổn hơn máy cũ',
+    'Pin trâu sot 9h, chơi game nhẹ buổi tối vẫn còn',
+    'Dùng 6h on screen vẫn còn 20%, rất hài lòng',
+    'Sạc từ 20% lên 100% mất 45 phút, sạc khá nhanh',
+    'Sạc 0-100% 50p, máy hơi ấm khi sạc nhanh',
+    'Test thực tế pin trụ 9 tiếng với độ sáng tự động',
+    'Màn hình bật 7 tiếng còn 30%, quá ổn cho nhu cầu',
+    'Chơi game 5 tiếng tụt 40% pin, máy không nóng lắm',
+    'Dùng liên tục 6-7 tiếng mới phải sạc lại, pin ổn',
+    'Screen-on time 9 hours on Wi-Fi, very good battery',
+    'Onscreen ~7h với 4G, pin tốt trong tầm giá',
   ]) {
     assert.equal(depth({ comment: line }), 'expert_depth', line);
   }
-  // Hours that are not a battery report are not one.
+  // Hours that are not a battery report, and accessories, are not one.
   for (const line of [
-    'Giao hàng 2 tiếng là tới',
-    'Đợi 3 tiếng mới được tư vấn',
-    'Shop trả lời sau 2h',
-    'Pin tốt',
-    'Pin dùng ổn cả ngày',
+    'Giao hàng 2 tiếng là tới, đóng gói cẩn thận',
+    'Đợi 3 tiếng mới được tư vấn, nhân viên chậm',
+    'Pin tốt, giao hàng sau 3 tiếng',
+    'pin ổn, chờ 2 tiếng mới có hàng',
+    'Mua kèm pin dự phòng 10000, giao 2h chiều',
+    'Pin con thỏ mua 2 hộp giao 3h',
+    'Pin chưa dùng thử, mới mở hộp 1h',
+    'Đèn pin sáng 5h liền, cầm chắc tay',
+    'Shop test thực tế trước khi giao, rất nhiệt tình',
+    'Đo thực tế vừa vặn, áo mặc vừa người',
+    'sot 1 sao vì giao chậm quá',
   ]) {
     assert.notEqual(depth({ comment: line }), 'expert_depth', line);
   }
   // A measured line counts in a v2 review's pros too.
   assert.equal(
-    depth({ verdict: 'Máy ổn trong tầm giá', points: ['SOT khoảng 7 tiếng'] }),
+    depth({
+      verdict: 'Máy ổn trong tầm giá, hợp nhu cầu',
+      points: ['SOT khoảng 7 tiếng mỗi ngày'],
+    }),
     'expert_depth'
   );
+  // A bare measurement shorter than specific_short is not expert depth.
+  assert.notEqual(depth({ comment: 'Pin 7 tiếng' }), 'expert_depth');
+  // Long digit runs are scanned once (no quadratic backtracking).
+  const started = Date.now();
+  depth({ comment: `sạc 1% - 1% ${'1'.repeat(100_000)}` });
+  depth({ comment: '1'.repeat(100_000) });
+  assert.ok(Date.now() - started < 2_000, 'digit runs stay linear');
   // Padding still adds nothing: "pin ok" repeated is no measurement.
   assert.equal(
     depth({ comment: Array(40).fill('pin ok').join(' ') }),

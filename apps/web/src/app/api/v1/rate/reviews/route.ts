@@ -34,7 +34,7 @@ import {
   reviewV2FieldFromRpcDetail,
   submitCommunityReviewV2,
 } from '@/server/rate/review-v2';
-import { hasRatingCriteria } from '@repo/shared-data/rules';
+import { hasRatingCriteria, storedPoint } from '@repo/shared-data/rules';
 import { evaluateReviewTrustAssessment } from '@/lib/rate-domain';
 import type { AuthenticatedRateRequest } from '@/server/rate/request-auth';
 
@@ -731,6 +731,7 @@ async function submitReviewV2(
     reviewWithCriteria,
     {
       verdict: record.verdict ?? submission.verdict,
+      // As rate.review_text_stored keeps them, so the list reads the same.
       points: [
         ...submission.pros,
         ...submission.cons,
@@ -738,7 +739,7 @@ async function submitReviewV2(
           ...(lines?.pros ?? []),
           ...(lines?.cons ?? []),
         ]),
-      ],
+      ].map(storedPoint),
     }
   );
   return NextResponse.json(
