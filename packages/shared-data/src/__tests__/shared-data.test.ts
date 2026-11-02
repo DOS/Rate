@@ -2037,6 +2037,327 @@ function testProductPoints(): void {
   );
 }
 
+function testReviewValue(): void {
+  const phone = rules.getRatingCriteria('smartphones');
+  const allRated: Record<string, number> = Object.fromEntries(
+    phone.map((criterion) => [criterion.key, 4])
+  );
+  const generalLines: rules.ReviewValuePoint[] = [
+    { kind: 'pro', criterionKey: null, body: 'Pin dùng cả ngày' },
+    { kind: 'con', criterionKey: null, body: 'Sạc hơi chậm' },
+  ];
+  const criterionLines: rules.ReviewValuePoint[] = [
+    { kind: 'pro', criterionKey: 'camera', body: 'Chụp đêm rõ nét' },
+    { kind: 'con', criterionKey: 'display', body: 'Màn hơi tối ngoài nắng' },
+  ];
+  const base: rules.ReviewValueInput = {
+    categorySlug: 'smartphones',
+    gated: false,
+    depth: 'detailed',
+    criteriaRatings: allRated,
+    verdict: 'Máy mượt, pin dùng hết ngày, đáng tiền trong tầm giá.',
+    points: generalLines,
+    hasRealPhoto: false,
+    verifiedPurchase: false,
+    helpfulVotes: 0,
+    unhelpfulVotes: 0,
+    authorTrust: null,
+  };
+  const value = (extra: Partial<rules.ReviewValueInput>) =>
+    rules.reviewValue({ ...base, ...extra });
+  const completeness = (extra: Partial<rules.ReviewValueInput>) =>
+    value(extra).completeness;
+
+  // The parts sum to 100, the completeness items to 35.
+  const max = rules.REVIEW_VALUE_MAX;
+  assert.equal(
+    max.completeness + max.specificity + max.verified + max.helpful + max.trust,
+    100
+  );
+  assert.equal(
+    Object.values(rules.REVIEW_COMPLETENESS_POINTS).reduce((a, b) => a + b, 0),
+    max.completeness
+  );
+
+  // A standard Rate review: criteria, verdict, a pro and a con make 25.
+  const standard = value({});
+  assert.equal(standard.completeness, 25);
+  assert.equal(standard.specificity, 17);
+  assert.equal(standard.trust, 5, 'unknown trust counts as 0.5');
+  assert.equal(standard.score, 47);
+  assert.equal(standard.tier, 'basic');
+  assert.deepEqual(standard.gaps, ['criterion_points', 'photo', 'verified']);
+
+  // Lines for two criteria and a photo: everything, and the "Đầy đủ" tier.
+  const full = value({
+    hasRealPhoto: true,
+    points: [...generalLines, ...criterionLines],
+  });
+  assert.equal(full.completeness, 35);
+  assert.equal(full.tier, 'complete');
+  assert.deepEqual(full.gaps, ['verified']);
+  // Verified, expert depth and a trusted writer: "Xuất sắc".
+  const excellent = value({
+    hasRealPhoto: true,
+    points: [...generalLines, ...criterionLines],
+    depth: 'expert_depth',
+    verifiedPurchase: true,
+    authorTrust: 1,
+  });
+  assert.equal(excellent.score, 80);
+  assert.equal(excellent.tier, 'excellent');
+  assert.deepEqual(excellent.gaps, []);
+  // A high score without completeness stays "Cơ bản".
+  assert.equal(
+    value({
+      depth: 'expert_depth',
+      verifiedPurchase: true,
+      authorTrust: 1,
+      helpfulVotes: 500,
+      verdict: null,
+    }).tier,
+    'basic'
+  );
+
+  // One skipped criterion loses the 10 points (6.4).
+  const skipped = { ...allRated };
+  delete skipped[phone.find((criterion) => !criterion.required)!.key];
+  assert.equal(completeness({ criteriaRatings: skipped }), 15);
+  assert.equal(completeness({ criteriaRatings: 'junk' }), 15);
+  assert.equal(completeness({ criteriaRatings: [4, 4, 4] }), 15);
+  assert.equal(
+    completeness({ criteriaRatings: { ...allRated, value: 0 } }),
+    15,
+    'a star outside 1-5 is not a rating'
+  );
+
+  // A verdict shorter than the form's minimum, or with no words, does not count.
+  assert.equal(completeness({ verdict: 'Tốt' }), 20);
+  assert.equal(completeness({ verdict: '!'.repeat(30) }), 20);
+  assert.equal(completeness({ verdict: null }), 20);
+
+  // "Ưu: tốt. Nhược: không": a dodging con earns nothing (6.4).
+  assert.equal(
+    completeness({
+      points: [
+        generalLines[0]!,
+        { kind: 'con', criterionKey: null, body: 'không có gì để chê' },
+      ],
+    }),
+    15
+  );
+  // Copy-pasted lines count once: the same words as a pro and a con, a line
+  // repeated under two criteria, a general line repeated under a criterion.
+  assert.equal(
+    completeness({
+      points: [
+        generalLines[0]!,
+        { kind: 'con', criterionKey: null, body: 'Pin dùng cả ngày!' },
+      ],
+    }),
+    15
+  );
+  assert.equal(
+    completeness({
+      points: [
+        ...generalLines,
+        { kind: 'pro', criterionKey: 'battery', body: 'Pin dùng cả ngày' },
+        { kind: 'pro', criterionKey: 'camera', body: 'PIN dùng cả ngày.' },
+      ],
+    }),
+    25
+  );
+  assert.equal(
+    completeness({
+      points: [
+        { kind: 'pro', criterionKey: 'camera', body: 'Chụp đêm rõ nét' },
+        { kind: 'pro', criterionKey: 'battery', body: 'Chụp đêm rõ nét' },
+        ...generalLines,
+      ],
+    }),
+    25,
+    'the same line under two criteria is one criterion'
+  );
+  assert.equal(
+    completeness({
+      points: [
+        ...generalLines,
+        { kind: 'pro', criterionKey: 'camera', body: 'Chụp đêm rõ nét' },
+        { kind: 'pro', criterionKey: 'camera', body: 'Quay video ổn định' },
+      ],
+    }),
+    25,
+    'two lines of one criterion are not two criteria'
+  );
+  assert.equal(
+    completeness({
+      points: [
+        ...generalLines,
+        { kind: 'pro', criterionKey: 'anc', body: 'Chống ồn rất tốt' },
+        { kind: 'pro', criterionKey: 'toString', body: 'Chụp đêm rõ nét' },
+      ],
+    }),
+    25,
+    'keys the category does not have count for nothing'
+  );
+  // Junk lines and lines outside the form's lengths count for nothing.
+  assert.equal(
+    completeness({
+      points: [
+        { kind: 'pro', criterionKey: null, body: 'aaaaaaaa' },
+        { kind: 'con', criterionKey: null, body: 'Sạc chậm '.repeat(30) },
+      ],
+    }),
+    15
+  );
+  assert.equal(completeness({ points: 'junk' as never }), 15);
+  assert.equal(completeness({ points: [null as never] }), 15);
+  // A copy typed without diacritics or spaces is the same line.
+  assert.equal(
+    completeness({
+      points: [
+        generalLines[0]!,
+        { kind: 'con', criterionKey: null, body: 'Pin dung ca ngay' },
+      ],
+    }),
+    15
+  );
+  assert.equal(
+    completeness({
+      points: [
+        ...generalLines,
+        { kind: 'pro', criterionKey: 'battery', body: 'Pindung ca ngay' },
+        { kind: 'con', criterionKey: 'display', body: 'SAC HOI CHAM' },
+      ],
+    }),
+    25
+  );
+  // Praise alone and dodges earn nothing, as a pro or under a criterion.
+  assert.equal(
+    completeness({
+      points: [
+        { kind: 'pro', criterionKey: null, body: 'Rất tốt' },
+        generalLines[1]!,
+      ],
+    }),
+    15
+  );
+  assert.equal(
+    completeness({
+      points: [
+        ...generalLines,
+        { kind: 'pro', criterionKey: 'battery', body: 'rất tốt' },
+        { kind: 'pro', criterionKey: 'camera', body: 'sản phẩm ok lắm' },
+        { kind: 'con', criterionKey: 'display', body: 'không có gì để chê' },
+      ],
+    }),
+    25
+  );
+  // Lines AI extracted from a marketplace review earn nothing.
+  assert.equal(
+    completeness({
+      points: [...generalLines, ...criterionLines].map((point) => ({
+        ...point,
+        method: 'ai' as const,
+      })),
+    }),
+    15
+  );
+  // A category without its own criteria list has no criteria to complete.
+  assert.equal(completeness({ categorySlug: null }), 15);
+  assert.equal(completeness({ categorySlug: 'tvs' }), 15);
+  // A verdict that repeats a line, or longer than the form allows, earns nothing.
+  const longLine = 'Pin dùng cả ngày với nhu cầu vừa phải';
+  assert.equal(
+    completeness({
+      verdict: longLine,
+      points: [
+        { kind: 'pro', criterionKey: null, body: longLine },
+        generalLines[1]!,
+      ],
+    }),
+    20
+  );
+  assert.equal(completeness({ verdict: 'Máy dùng tốt. '.repeat(30) }), 20);
+
+  // Filling the boxes on a superficial text earns no completeness, and
+  // padding cannot raise specificity past its depth.
+  const lowEffort = value({ depth: 'low_effort' });
+  assert.equal(lowEffort.completeness, 0);
+  assert.equal(lowEffort.gaps[0], 'detail');
+  assert.equal(value({ depth: 'filler' }).specificity, 0);
+  assert.equal(value({ depth: 'expert_depth' }).specificity, max.specificity);
+  assert.equal(value({ depth: 'bogus' as never }).specificity, 0);
+
+  // Gated: 0 however complete, and no tier.
+  const gated = value({ gated: true, verifiedPurchase: true });
+  assert.equal(gated.score, 0);
+  assert.equal(gated.completeness, 0);
+  assert.equal(gated.tier, null);
+
+  // An imported review: no lines, no criteria, verified, a few votes.
+  const imported = value({
+    criteriaRatings: null,
+    verdict: null,
+    points: [],
+    depth: 'specific_short',
+    verifiedPurchase: true,
+    helpfulVotes: 3,
+  });
+  assert.equal(imported.completeness, 0);
+  assert.equal(imported.verified, 15);
+  assert.equal(imported.tier, 'basic');
+  // With a photo it earns completeness, but not weight: no pros and cons (6.2).
+  const importedPhoto = value({
+    criteriaRatings: null,
+    verdict: null,
+    points: [],
+    depth: 'specific_short',
+    hasRealPhoto: true,
+  });
+  assert.equal(importedPhoto.completeness, 5);
+  assert.equal(importedPhoto.weightCompleteness, 0);
+  assert.equal(full.weightCompleteness, 35);
+  assert.equal(standard.weightCompleteness, 25);
+  assert.equal(value({ hasRealPhoto: true }).weightCompleteness, 30);
+  assert.equal(gated.weightCompleteness, 0);
+  // Malformed input never throws.
+  assert.equal(rules.reviewValue(null as never).score, 5);
+  assert.equal(rules.reviewValue(null as never).tier, 'basic');
+
+  // Helpful votes through the Wilson bound: a few votes do not jump.
+  assert.equal(rules.wilsonLowerBound(0, 0), 0);
+  assert.equal(rules.wilsonLowerBound(Number.NaN, -1), 0);
+  assert.ok(rules.wilsonLowerBound(90, 10) > rules.wilsonLowerBound(2, 0));
+  assert.equal(value({ helpfulVotes: 2 }).helpful, 6.85);
+  assert.ok(value({ helpfulVotes: 1e12 }).helpful <= max.helpful);
+  assert.equal(value({ authorTrust: 7 }).trust, 10);
+  assert.equal(value({ authorTrust: Number.NaN }).trust, 5);
+  assert.equal(value({ authorTrust: -1 }).trust, 0);
+
+  // D6: x1.00 to x1.25 on the stored weight, capped at 3.
+  assert.equal(rules.completenessWeightFactor(0), 1);
+  assert.equal(rules.completenessWeightFactor(35), 1.25);
+  assert.equal(rules.completenessWeightFactor(25), 1.1786);
+  assert.equal(rules.completenessWeightFactor(99), 1.25);
+  assert.equal(rules.completenessWeightFactor(-4), 1);
+  assert.equal(rules.completenessWeightFactor('35'), 1);
+  assert.equal(rules.completenessWeightFactor(undefined), 1);
+  assert.equal(rules.reviewRatingWeight(1, 35), 1.25);
+  assert.equal(rules.reviewRatingWeight(2.8, 35), 3);
+  assert.equal(rules.reviewRatingWeight(0, 35), 0);
+  assert.equal(rules.reviewRatingWeight(-1, 35), 0);
+  assert.equal(rules.reviewRatingWeight(Number.NaN, 35), 0);
+  assert.equal(rules.reviewRatingWeight(Infinity, 0), 3);
+  // Acceptance: a complete review weighs at most 25% more than the same
+  // review with nothing; an imported one without pros and cons keeps its weight.
+  assert.ok(
+    rules.reviewRatingWeight(1, full.completeness) <=
+      1.25 * rules.reviewRatingWeight(1, 0)
+  );
+  assert.equal(rules.reviewRatingWeight(1.4, imported.completeness), 1.4);
+}
+
 function main(): void {
   console.log('🧪 Running @repo/shared-data unit tests...');
   testVersionAndZeroStrapiExports();
@@ -2075,6 +2396,10 @@ function main(): void {
   );
   testProductPoints();
   console.log('  ✅ [12/12] Product pros and cons (DOS/Rate#1546) verified');
+  testReviewValue();
+  console.log(
+    '  ✅ [13/13] Review value score and weight factor (DOS/Rate#1547) verified'
+  );
   console.log('🎉 All @repo/shared-data tests passed!');
 }
 
