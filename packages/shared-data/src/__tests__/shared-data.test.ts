@@ -2117,6 +2117,32 @@ function testProductPoints(): void {
   ]);
   assert.equal(labelled.clusters.length, 1);
   assert.equal(labelled.clusters[0]!.label, 'Pin dùng được cả ngày');
+  // Points with a writer's own line rank before AI-only ones, whatever the
+  // support; AI-only points stay visible below them (PO decision, #1598).
+  const ranked = run([
+    ...['a', 'b', 'c', 'd', 'e', 'f'].map((w) =>
+      ai(`shop-${w}`, 'Màn hình sáng rõ ngoài trời')
+    ),
+    line('user-1', 'pro', 'Pin dùng được cả ngày'),
+    line('user-2', 'pro', 'Pin dùng được cả ngày'),
+  ]);
+  assert.deepEqual(
+    ranked.summary.pros.map((p) => [
+      p.label,
+      p.support,
+      p.reviewerCount,
+      p.aiReviewerCount,
+    ]),
+    [
+      ['Pin dùng được cả ngày', 2, 2, 0],
+      ['Màn hình sáng rõ ngoài trời', 3, 6, 6],
+    ]
+  );
+  assert.equal(ranked.reviewCount, 8);
+  assert.equal(ranked.aiReviewCount, 6);
+  // A mixed point counts its marketplace reviews and ranks as writer-backed.
+  assert.equal(mixed.clusters[0]!.aiReviewerCount, 1);
+  assert.equal(mixed.aiReviewCount, 1);
   // A line without a method is the writer's own, at full weight.
   assert.equal(
     run([line('user-1', 'pro', 'Pin dùng được cả ngày', { weight: 2 })])

@@ -105,6 +105,12 @@ export interface PointCluster {
   /** Distinct writers' decayed, capped weights, at two decimals. */
   support: number;
   reviewerCount: number;
+  /**
+   * Of reviewerCount, the marketplace reviews counted only through lines AI
+   * extracted ("trong đó N review trên sàn"). A point with a writer's own line
+   * has reviewerCount > aiReviewerCount and ranks before AI-only points.
+   */
+  aiReviewerCount: number;
   hasExpert: boolean;
   firstSeen: Date;
   lastSeen: Date;
@@ -128,6 +134,8 @@ export interface ProductPoints {
   summary: PointSides;
   /** Distinct reviews whose lines were counted ("Tóm tắt từ N review"). */
   reviewCount: number;
+  /** Of reviewCount, those counted only through AI lines ("trong đó N review trên sàn"). */
+  aiReviewCount: number;
   /** The run's clock, shown as "Cập nhật ngày ...". */
   updatedAt: Date;
 }
@@ -579,8 +587,11 @@ function summarise(lines: readonly Line[], now: Date): PointCluster {
   const leader = lines[0]!;
   // Each writer counts once, with their strongest line in the cluster.
   const writers = new Map<string, number>();
+  // Writers with a line of their own; the rest are AI-only.
+  const ownWords = new Set<string>();
   let hasExpert = false;
   for (const line of lines) {
+    if (!isAiLine(line.source)) ownWords.add(line.writer);
     const weight = lineSupport(line, now);
     writers.set(line.writer, Math.max(writers.get(line.writer) ?? 0, weight));
     // An expert counts while their line is fresh: an old expert line does not
@@ -613,6 +624,7 @@ function summarise(lines: readonly Line[], now: Date): PointCluster {
     label: clusterLabel(lines),
     support,
     reviewerCount: writers.size,
+    aiReviewerCount: writers.size - ownWords.size,
     hasExpert,
     firstSeen,
     lastSeen,
@@ -621,9 +633,14 @@ function summarise(lines: readonly Line[], now: Date): PointCluster {
   };
 }
 
-/** Display order: more support, more writers, an expert, then newer. */
+/**
+ * Display order: a point with at least one writer's own line before an
+ * AI-only one (DOS/Rate#1531), then more support, more writers, an expert,
+ * then newer. AI-only points stay eligible below them.
+ */
 function byRank(a: PointCluster, b: PointCluster): number {
   return (
+    Number(hasOwnWords(b)) - Number(hasOwnWords(a)) ||
     b.support - a.support ||
     b.reviewerCount - a.reviewerCount ||
     Number(b.hasExpert) - Number(a.hasExpert) ||
@@ -632,11 +649,26 @@ function byRank(a: PointCluster, b: PointCluster): number {
   );
 }
 
+function hasOwnWords(cluster: PointCluster): boolean {
+  return cluster.reviewerCount > cluster.aiReviewerCount;
+}
+
 function sides(clusters: readonly PointCluster[], max: number): PointSides {
   return {
     pros: clusters.filter((cl) => cl.kind === 'pro').slice(0, max),
     cons: clusters.filter((cl) => cl.kind === 'con').slice(0, max),
   };
+}
+
+/** Reviews counted only through AI lines. */
+function aiOnlyReviews(lines: readonly Line[]): number {
+  const own = new Set<string>();
+  const ai = new Set<string>();
+  for (const line of lines)
+    (isAiLine(line.source) ? ai : own).add(line.source.reviewId);
+  let count = 0;
+  for (const reviewId of ai) if (!own.has(reviewId)) count += 1;
+  return count;
 }
 
 /**
@@ -679,6 +711,7 @@ export function aggregateProductPoints(
     byCriterion,
     summary,
     reviewCount: new Set(counted.map((line) => line.source.reviewId)).size,
+    aiReviewCount: aiOnlyReviews(counted),
     updatedAt: now,
   };
 }
