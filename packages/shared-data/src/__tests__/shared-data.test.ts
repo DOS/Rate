@@ -2035,6 +2035,86 @@ function testProductPoints(): void {
     reversed.clusters.map((cl) => [cl.key, cl.support, cl.lineIds]),
     crowded.clusters.map((cl) => [cl.key, cl.support, cl.lineIds])
   );
+
+  // Lines AI extracted from marketplace reviews (DOS/Rate#1531, design
+  // 2026-11-03 section 9, D4 option b): each review is one writer, adding
+  // 0.5 x min(decayed weight, 1).
+  const ai = (
+    writerId: string,
+    body: string,
+    extra: Partial<rules.PointLine> = {}
+  ) => line(writerId, 'pro', body, { method: 'ai', ...extra });
+  assert.equal(rules.POINT_AI_WEIGHT_SHARE, 0.5);
+  // Two AI lines, weight 3 each: 0.5 + 0.5 = 1, under 1.5; capped before the
+  // half, so heavy reviews do not reach it with two.
+  const twoAi = run([
+    ai('shop-a', 'Pin dùng được cả ngày', { weight: 3 }),
+    ai('shop-b', 'Pin dùng được cả ngày', { weight: 3 }),
+  ]);
+  assert.equal(twoAi.clusters.length, 1);
+  assert.equal(twoAi.clusters[0]!.support, 1);
+  assert.equal(twoAi.clusters[0]!.reviewerCount, 2);
+  assert.equal(twoAi.clusters[0]!.visible, false);
+  // Three AI lines reach 1.5 and show.
+  const threeAi = run([
+    ai('shop-a', 'Pin dùng được cả ngày'),
+    ai('shop-b', 'Pin dùng được cả ngày'),
+    ai('shop-c', 'Pin dùng được cả ngày'),
+  ]);
+  assert.equal(threeAi.clusters[0]!.support, 1.5);
+  assert.equal(threeAi.clusters[0]!.visible, true);
+  // One wrong extraction never shows alone, however heavy its review.
+  assert.equal(
+    run([ai('shop-a', 'Camera chụp đêm rất đẹp', { weight: 3 })]).clusters[0]!
+      .visible,
+    false
+  );
+  // An AI line adds to a writer's point: one writer (1) plus one AI line
+  // (0.5) reaches 1.5 with two writers.
+  const mixed = run([
+    line('user-1', 'pro', 'Pin dùng được cả ngày'),
+    ai('shop-a', 'Pin dùng được cả ngày'),
+  ]);
+  assert.equal(mixed.clusters[0]!.support, 1.5);
+  assert.equal(mixed.clusters[0]!.visible, true);
+  // Decay applies before the cap and the half: a two-year-old AI line adds 0.13.
+  assert.equal(
+    run([
+      ai('shop-a', 'Pin dùng được cả ngày', {
+        writtenAt: monthsAgo(24),
+        weight: 1,
+      }),
+    ]).clusters[0]!.support,
+    0.13
+  );
+  // An AI line is never an expert's, so it cannot show a point alone.
+  const aiExpert = run([
+    ai('shop-a', 'Pin dùng được cả ngày', { isExpert: true }),
+  ]);
+  assert.equal(aiExpert.clusters[0]!.hasExpert, false);
+  assert.equal(aiExpert.clusters[0]!.visible, false);
+  // The hide switch drops every AI line, as if none were stored.
+  const hidden = rules.aggregateProductPoints(
+    'smartphones',
+    [
+      line('user-1', 'pro', 'Pin dùng được cả ngày'),
+      ai('shop-a', 'Pin dùng được cả ngày'),
+      ai('shop-b', 'Pin dùng được cả ngày'),
+      ai('shop-c', 'Camera chụp đêm rất đẹp'),
+    ],
+    now,
+    { hideAiLines: true }
+  );
+  assert.equal(hidden.clusters.length, 1);
+  assert.equal(hidden.clusters[0]!.support, 1);
+  assert.equal(hidden.clusters[0]!.reviewerCount, 1);
+  assert.equal(hidden.reviewCount, 1);
+  // A line without a method is the writer's own, at full weight.
+  assert.equal(
+    run([line('user-1', 'pro', 'Pin dùng được cả ngày', { weight: 2 })])
+      .clusters[0]!.support,
+    2
+  );
 }
 
 function testReviewDepth(): void {

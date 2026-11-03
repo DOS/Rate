@@ -2,7 +2,7 @@
  * Product pros and cons writer (DOS/Rate#1546, design #1531 section 5, D9)
  *
  * Usage:
- *   pnpm --filter @repo/crawlers exec tsx src/shopee/jobs/product-points.ts [--apply] [--master <uuid>]
+ *   pnpm --filter @repo/crawlers exec tsx src/shopee/jobs/product-points.ts [--apply] [--master <uuid>] [--hide-ai]
  *
  * Reads every review line (rate.review_points) with its review, flag, listing
  * and category, clusters the lines of each master with
@@ -15,8 +15,12 @@
  * product_points.
  *
  * Which lines count, as the P2 rating counts reviews: lines the writer wrote
- * (method 'writer'), on crawled listings (origin 'crawl'), of crawled or
- * community reviews; seed, synthetic, fixture and backfill rows never show.
+ * (method 'writer') and lines AI extracted from marketplace reviews (method
+ * 'ai', at half weight: POINT_AI_WEIGHT_SHARE, DOS/Rate#1531), on crawled
+ * listings (origin 'crawl'), of crawled or community reviews; seed,
+ * synthetic, fixture and backfill rows never show. `--hide-ai`, or
+ * PRODUCT_POINTS_HIDE_AI=true, leaves every 'ai' line out: the next run
+ * writes the points without them, and nothing is deleted from review_points.
  * A review is one writer: a Rate user writes one review per master. Two
  * reviews of one person on one master (after the matcher moves a listing) or
  * several marketplace reviews of one buyer count as several writers; the
@@ -31,7 +35,7 @@
  * another method ('ai', the rewording step of design 5.2) are left alone.
  *
  * Not here yet: review_points.cluster_id (rate_worker has no UPDATE on
- * review_points) and lines extracted by AI from marketplace reviews.
+ * review_points).
  */
 import { pathToFileURL } from 'node:url';
 import dotenv from 'dotenv';
@@ -51,6 +55,17 @@ export interface ReviewPointRow {
   criterion_key: string | null;
   kind: string;
   body: string;
+  /** 'writer', or 'ai' for a line extracted from a marketplace review. */
+  method?: string | null;
+}
+
+/** Whether `--hide-ai` or PRODUCT_POINTS_HIDE_AI asks to leave AI lines out. */
+export function hideAiLinesFrom(
+  argv: readonly string[],
+  env: Record<string, string | undefined>
+): boolean {
+  const flag = (env.PRODUCT_POINTS_HIDE_AI ?? '').trim().toLowerCase();
+  return argv.includes('--hide-ai') || flag === 'true' || flag === '1';
 }
 
 export interface PointReviewRow {
@@ -140,8 +155,10 @@ export function buildProductPoints(
     masters: readonly PointMasterRow[];
     categories: readonly CategoryRow[];
   },
-  now: Date
+  now: Date,
+  options: { hideAiLines?: boolean } = {}
 ): Map<string, ProductPointInsert[]> {
+  const hideAiLines = options.hideAiLines === true;
   const reviewById = new Map(input.reviews.map(r => [r.id, r]));
   const masterByListing = new Map(
     input.listings
@@ -163,6 +180,10 @@ export function buildProductPoints(
     const masterId = masterByListing.get(review.product_id);
     if (!masterId || !categoryByMaster.has(masterId)) continue;
     if (point.kind !== 'pro' && point.kind !== 'con') continue;
+    // Only the writer's lines and AI's; any other method is not a review line.
+    const method = point.method ?? 'writer';
+    if (method !== 'writer' && method !== 'ai') continue;
+    if (hideAiLines && method === 'ai') continue;
     const lines = linesByMaster.get(masterId) ?? [];
     lines.push({
       id: point.id,
@@ -174,6 +195,7 @@ export function buildProductPoints(
       weight: reviewPointWeight(review),
       isExpert: review.reviewer_type === 'expert',
       writtenAt: review.platform_created_at ?? review.created_at ?? '',
+      method,
     });
     linesByMaster.set(masterId, lines);
   }
@@ -181,7 +203,9 @@ export function buildProductPoints(
   const out = new Map<string, ProductPointInsert[]>();
   const stamp = now.toISOString();
   for (const [masterId, lines] of linesByMaster) {
-    const result = aggregateProductPoints(categoryByMaster.get(masterId), lines, now);
+    const result = aggregateProductPoints(categoryByMaster.get(masterId), lines, now, {
+      hideAiLines,
+    });
     // What a page shows: the top points of each criterion and the summary.
     const shown = new Map<string, PointCluster>();
     for (const sides of [...Object.values(result.byCriterion), result.summary])
@@ -232,7 +256,7 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export async function runProductPointsJob(
   supabase: RateSupabaseClient,
-  options: { apply?: boolean; masterId?: string | null; now?: Date } = {}
+  options: { apply?: boolean; masterId?: string | null; now?: Date; hideAiLines?: boolean } = {}
 ): Promise<{
   apply: boolean;
   masters: number;
@@ -248,8 +272,8 @@ export async function runProductPointsJob(
   const points = await fetchAllPages<ReviewPointRow>('review_points', (from, to) =>
     supabase
       .from('review_points')
-      .select('id, review_id, criterion_key, kind, body')
-      .eq('method', 'writer')
+      .select('id, review_id, criterion_key, kind, body, method')
+      .in('method', options.hideAiLines === true ? ['writer'] : ['writer', 'ai'])
       .order('id')
       .range(from, to)
   );
@@ -295,7 +319,9 @@ export async function runProductPointsJob(
     supabase.from('categories').select('id, slug').order('id').range(from, to)
   );
 
-  const built = buildProductPoints({ points, reviews, listings, masters, categories }, now);
+  const built = buildProductPoints({ points, reviews, listings, masters, categories }, now, {
+    hideAiLines: options.hideAiLines === true,
+  });
   for (const id of masterIds) if (!built.has(id)) built.set(id, []);
   const oldIdsByMaster = new Map<string, string[]>();
   for (const row of existing) {
@@ -382,11 +408,14 @@ if (isDirectExecution) {
     const apply = process.argv.includes('--apply');
     const at = process.argv.indexOf('--master');
     const masterId = at >= 0 ? (process.argv[at + 1] ?? '') : null;
+    const hideAiLines = hideAiLinesFrom(process.argv, process.env);
     // The host is not secret; it shows which project the job reads.
-    logger.info('product_points.target', `Target: ${host} (${apply ? 'apply' : 'dry run'})`, {
-      host,
-    });
-    await runProductPointsJob(supabase, { apply, masterId });
+    logger.info(
+      'product_points.target',
+      `Target: ${host} (${apply ? 'apply' : 'dry run'}${hideAiLines ? ', AI lines hidden' : ''})`,
+      { host, hideAiLines }
+    );
+    await runProductPointsJob(supabase, { apply, masterId, hideAiLines });
   })().catch((err: unknown) => {
     logger.error(
       'product_points.fatal',

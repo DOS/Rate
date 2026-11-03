@@ -2,8 +2,10 @@
  * A product's pros and cons, built from its reviews' pro and con lines
  * (DOS/Rate#1546, design #1531 section 5.1, D9). Code only, no AI: lines are
  * normalised, given a criterion, clustered by shared words, counted once per
- * writer by trust weight, decayed by age and filtered for display. AI later
- * rewords a cluster's label; it never decides what is shown.
+ * writer by trust weight, decayed by age and filtered for display. Lines AI
+ * extracted from marketplace reviews count at half weight
+ * (POINT_AI_WEIGHT_SHARE), so they can add to a point but one wrong
+ * extraction never shows alone.
  *
  * Plain data and functions only, like the rest of `rules`, and no database:
  * the importer job reads `rate.review_points` into PointLine values and
@@ -35,6 +37,15 @@ export const POINT_MIN_SUPPORT = 1.5;
 export const POINT_WRITER_SHARE_CAP = 1;
 /** A writer's weight counts at most this, as in the product rating. */
 export const POINT_WEIGHT_CAP = 3;
+/**
+ * A line AI extracted from a marketplace review (`method: 'ai'`) counts this
+ * share of its writer's decayed weight, after the per-writer cap
+ * (POINT_WRITER_SHARE_CAP): 0.5 x min(weight, 1). Its review still counts as
+ * one writer, so a point from marketplace reviews alone needs three of them
+ * to reach POINT_MIN_SUPPORT, and one wrong extraction never shows on its own
+ * (DOS/Rate#1531, `2026-11-03-ai-review-points.html` section 9, D4 option b).
+ */
+export const POINT_AI_WEIGHT_SHARE = 0.5;
 /** Pros and cons shown per criterion, each side. */
 export const PRODUCT_CRITERION_POINTS_MAX = 3;
 /** Pros and cons shown in the product summary, each side. */
@@ -66,6 +77,21 @@ export interface PointLine {
   isExpert: boolean;
   /** When the review was written (ISO string or Date). */
   writtenAt: string | Date;
+  /**
+   * `rate.review_points.method`: 'ai' for a line extracted by AI from a
+   * marketplace review, which counts at POINT_AI_WEIGHT_SHARE and never as
+   * an expert's; the writer's own lines otherwise.
+   */
+  method?: 'writer' | 'ai';
+}
+
+/** Options of aggregateProductPoints. */
+export interface ProductPointsOptions {
+  /**
+   * Leave out every line AI extracted (`method: 'ai'`), as if none were
+   * stored: the switch that hides them without deleting anything.
+   */
+  hideAiLines?: boolean;
 }
 
 /** A cluster of lines, as `rate.product_points` stores it. */
@@ -432,7 +458,8 @@ function matchScore(a: readonly string[], b: readonly string[]): number {
 function countedLines(
   categorySlug: string | null | undefined,
   lines: readonly PointLine[],
-  now: Date
+  now: Date,
+  hideAiLines: boolean
 ): Line[] {
   const counted: Line[] = [];
   const seen = new Set<string>();
@@ -440,6 +467,7 @@ function countedLines(
     // A line read twice counts once.
     if (seen.has(source.id)) continue;
     seen.add(source.id);
+    if (hideAiLines && isAiLine(source)) continue;
     if (source.kind !== 'pro' && source.kind !== 'con') continue;
     if (!Number.isFinite(source.weight) || source.weight <= 0) continue;
     if (typeof source.writerId !== 'string' || !source.writerId.trim())
@@ -524,18 +552,39 @@ function clusterLabel(lines: readonly Line[]): string {
   return best!.first.source.body.trim().replace(/\s+/g, ' ');
 }
 
+function isAiLine(line: PointLine): boolean {
+  return line.method === AI_METHOD;
+}
+
+// A constant, because the rules import check reads a quote on an export
+// line as a module path.
+const AI_METHOD = 'ai';
+
+/**
+ * What a line adds for its writer: its decayed weight, or for an AI line
+ * POINT_AI_WEIGHT_SHARE of that weight capped at POINT_WRITER_SHARE_CAP.
+ */
+function lineSupport(line: Line, now: Date): number {
+  const weight = decayedWeight(line.source.weight, line.writtenAt, now);
+  return isAiLine(line.source)
+    ? POINT_AI_WEIGHT_SHARE * Math.min(weight, POINT_WRITER_SHARE_CAP)
+    : weight;
+}
+
 function summarise(lines: readonly Line[], now: Date): PointCluster {
   const leader = lines[0]!;
   // Each writer counts once, with their strongest line in the cluster.
   const writers = new Map<string, number>();
   let hasExpert = false;
   for (const line of lines) {
-    const weight = decayedWeight(line.source.weight, line.writtenAt, now);
+    const weight = lineSupport(line, now);
     writers.set(line.writer, Math.max(writers.get(line.writer) ?? 0, weight));
     // An expert counts while their line is fresh: an old expert line does not
-    // lift a new single writer's point (design 5.3).
+    // lift a new single writer's point (design 5.3). An AI line is never an
+    // expert's own words.
     if (
       line.source.isExpert &&
+      !isAiLine(line.source) &&
       now.getTime() - line.writtenAt.getTime() <= POINT_SILENT_MS
     )
       hasExpert = true;
@@ -590,15 +639,22 @@ function sides(clusters: readonly PointCluster[], max: number): PointSides {
  * A product's pros and cons from its review lines (design 5.1 and 5.3):
  * lines of gated reviews (weight 0), dodging cons and lines with no words
  * are left out; the rest are clustered per criterion and kind, counted once
- * per writer and shown under D9. `now` is the run's clock, so a run is
- * repeatable.
+ * per writer and shown under D9. Lines AI extracted count at
+ * POINT_AI_WEIGHT_SHARE, or not at all with `hideAiLines`. `now` is the run's
+ * clock, so a run is repeatable.
  */
 export function aggregateProductPoints(
   categorySlug: string | null | undefined,
   lines: readonly PointLine[],
-  now: Date
+  now: Date,
+  options: ProductPointsOptions = {}
 ): ProductPoints {
-  const counted = countedLines(categorySlug, lines, now);
+  const counted = countedLines(
+    categorySlug,
+    lines,
+    now,
+    options?.hideAiLines === true
+  );
   const clusters = clusterLines(counted)
     .map((cluster) => summarise(cluster, now))
     .sort(byRank);
