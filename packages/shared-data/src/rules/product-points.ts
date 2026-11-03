@@ -536,8 +536,12 @@ function clusterLines(lines: readonly Line[]): Line[][] {
 
 /** The label: the form most writers used, in its first writer's words. */
 function clusterLabel(lines: readonly Line[]): string {
+  // The writers' own words when the cluster has any; AI lines label a
+  // cluster only of AI lines (DOS/Rate#1531).
+  const written = lines.filter((line) => !isAiLine(line.source));
+  const source = written.length > 0 ? written : lines;
   const forms = new Map<string, { writers: Set<string>; first: Line }>();
-  for (const line of lines) {
+  for (const line of source) {
     const entry = forms.get(line.form);
     if (entry) entry.writers.add(line.writer);
     else

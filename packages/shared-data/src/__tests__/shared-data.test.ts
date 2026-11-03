@@ -2109,6 +2109,14 @@ function testProductPoints(): void {
   assert.equal(hidden.clusters[0]!.support, 1);
   assert.equal(hidden.clusters[0]!.reviewerCount, 1);
   assert.equal(hidden.reviewCount, 1);
+  // A writer's words label the point, even when AI lines outnumber them.
+  const labelled = run([
+    ai('shop-a', 'Pin dùng được cả ngày luôn'),
+    ai('shop-b', 'Pin dùng được cả ngày luôn'),
+    line('user-1', 'pro', 'Pin dùng được cả ngày'),
+  ]);
+  assert.equal(labelled.clusters.length, 1);
+  assert.equal(labelled.clusters[0]!.label, 'Pin dùng được cả ngày');
   // A line without a method is the writer's own, at full weight.
   assert.equal(
     run([line('user-1', 'pro', 'Pin dùng được cả ngày', { weight: 2 })])

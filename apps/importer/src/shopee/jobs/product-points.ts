@@ -31,8 +31,10 @@
  *
  * Per master, new rows are inserted before the old 'code' rows are deleted, so
  * a reader never sees a master with no points while the job runs. A master
- * whose lines no longer show anything has its 'code' rows removed. Rows of
- * another method ('ai', the rewording step of design 5.2) are left alone.
+ * whose lines no longer show anything has its 'code' rows removed.
+ * product_points rows of another method (product_points.method 'ai', the
+ * rewording step of design 5.2, not the review_points 'ai' lines above) are
+ * left alone.
  *
  * Not here yet: review_points.cluster_id (rate_worker has no UPDATE on
  * review_points).
@@ -59,13 +61,30 @@ export interface ReviewPointRow {
   method?: string | null;
 }
 
-/** Whether `--hide-ai` or PRODUCT_POINTS_HIDE_AI asks to leave AI lines out. */
+const SWITCH_ON = new Set(['true', '1', 'yes', 'on']);
+const SWITCH_OFF = new Set(['', 'false', '0', 'no', 'off']);
+
+/**
+ * Whether `--hide-ai` (or `--hide-ai=<value>`) or PRODUCT_POINTS_HIDE_AI asks
+ * to leave AI lines out. A value it does not know throws, so a typo never
+ * shows lines someone meant to hide.
+ */
 export function hideAiLinesFrom(
   argv: readonly string[],
   env: Record<string, string | undefined>
 ): boolean {
-  const flag = (env.PRODUCT_POINTS_HIDE_AI ?? '').trim().toLowerCase();
-  return argv.includes('--hide-ai') || flag === 'true' || flag === '1';
+  const read = (raw: string, from: string): boolean => {
+    const value = raw.trim().toLowerCase();
+    if (SWITCH_ON.has(value)) return true;
+    if (SWITCH_OFF.has(value)) return false;
+    throw new Error(`${from} must be true or false, not ${JSON.stringify(raw)}.`);
+  };
+  let hide = read(env.PRODUCT_POINTS_HIDE_AI ?? '', 'PRODUCT_POINTS_HIDE_AI');
+  for (const arg of argv) {
+    if (arg === '--hide-ai') hide = true;
+    else if (arg.startsWith('--hide-ai=')) hide = read(arg.slice('--hide-ai='.length), '--hide-ai');
+  }
+  return hide;
 }
 
 export interface PointReviewRow {

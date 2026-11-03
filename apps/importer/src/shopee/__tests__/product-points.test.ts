@@ -253,6 +253,15 @@ async function run() {
   assert.equal(hideAiLinesFrom(['node', 'job'], { PRODUCT_POINTS_HIDE_AI: ' 1 ' }), true);
   assert.equal(hideAiLinesFrom(['node', 'job'], { PRODUCT_POINTS_HIDE_AI: 'false' }), false);
   assert.equal(hideAiLinesFrom(['node', 'job'], {}), false);
+  assert.equal(hideAiLinesFrom(['node', 'job', '--hide-ai=yes'], {}), true);
+  assert.equal(hideAiLinesFrom(['node', 'job', '--hide-ai=false'], {}), false);
+  assert.equal(hideAiLinesFrom(['node', 'job'], { PRODUCT_POINTS_HIDE_AI: 'on' }), true);
+  // A value it does not know fails, never shows lines meant to be hidden.
+  assert.throws(
+    () => hideAiLinesFrom(['node', 'job'], { PRODUCT_POINTS_HIDE_AI: 'ye' }),
+    /true or false/
+  );
+  assert.throws(() => hideAiLinesFrom(['node', 'job', '--hide-ai=maybe'], {}), /true or false/);
   // The job reads only the writers' lines when AI lines are hidden.
   const hiddenRun = fakeSupabase({
     review_points: points,
