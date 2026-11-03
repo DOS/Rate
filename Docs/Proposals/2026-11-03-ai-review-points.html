@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="vi" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="color-scheme" content="dark" />
+  <title>AI trích ưu nhược từ review sàn</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0f1113;
+      --surface: #161a1e;
+      --surface-2: #1d2228;
+      --border: #2a313a;
+      --text: #e8edf2;
+      --muted: #9ba5b0;
+      --accent: #FF2E29;
+      --accent-soft: rgba(255, 46, 41, 0.14);
+      --green: #22c55e;
+      --amber: #f59e0b;
+      --amber-soft: rgba(245, 158, 11, 0.14);
+      --code-bg: #0b0d0f;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 32px 16px 64px;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Inter, sans-serif;
+      line-height: 1.65;
+    }
+    .container { max-width: 960px; margin: 0 auto; }
+    h1 { font-size: 28px; margin: 12px 0 8px; letter-spacing: -0.02em; }
+    h2 { font-size: 20px; margin: 40px 0 12px; padding-bottom: 8px; border-bottom: 1px solid var(--border); color: #fff; }
+    h3 { font-size: 16px; margin: 24px 0 8px; color: #fff; }
+    p, li { color: var(--text); }
+    .muted { color: var(--muted); }
+    .badge { display: inline-block; padding: 4px 10px; border-radius: 6px; font-size: 12px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; }
+    .badge-accent { background: var(--accent-soft); color: var(--accent); border: 1px solid rgba(255,46,41,0.35); }
+    .badge-amber { background: var(--amber-soft); color: var(--amber); border: 1px solid rgba(245,158,11,0.35); }
+    .card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 16px 18px; margin: 14px 0; }
+    .card.warn { border-color: rgba(245,158,11,0.45); }
+    .table-wrap { overflow-x: auto; margin: 12px 0; }
+    table { width: 100%; border-collapse: collapse; font-size: 14px; min-width: 620px; }
+    th, td { border: 1px solid var(--border); padding: 8px 10px; text-align: left; vertical-align: top; }
+    th { background: var(--surface-2); color: #fff; }
+    td.num { text-align: right; white-space: nowrap; }
+    code { background: var(--code-bg); border: 1px solid var(--border); border-radius: 4px; padding: 1px 5px; font-size: 13px; overflow-wrap: anywhere; }
+    pre { background: var(--code-bg); border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; overflow-x: auto; font-size: 13px; line-height: 1.5; }
+    .q { border-left: 3px solid var(--accent); padding-left: 12px; margin: 16px 0; }
+    .q strong { color: #fff; }
+    .rec-line { color: var(--green); font-weight: 600; }
+    a { color: #ff6b66; }
+  </style>
+</head>
+<body>
+<div class="container">
+  <span class="badge badge-accent">Đề xuất thiết kế</span>
+  <span class="badge badge-amber">Cần JOY quyết</span>
+  <h1>AI trích ưu nhược từ review trên sàn</h1>
+  <p class="muted">Ngày 03/11/2026. Người soạn: Core (Rate). Thuộc #1531 (sao theo tiêu chí, ưu nhược, điểm giá trị review), mục 4.3 của <a href="./2026-10-31-criteria-stars-pros-cons.html">đề xuất ngày 31/10</a>. Đây chỉ là thiết kế: chưa có code gọi AI, chưa tốn tiền, chưa đụng database.</p>
+
+  <h2>0. Tóm tắt trong một phút</h2>
+  <ul>
+    <li><strong>Việc cần làm.</strong> Review lấy từ sàn (Shopee) chỉ có số sao và một đoạn chữ. Bước AI đọc đoạn chữ đó, rút ra vài dòng ưu nhược, gắn mỗi dòng với một tiêu chí của ngành hàng. Kết quả lưu vào <code>rate.review_points</code> với <code>method = 'ai'</code>.</li>
+    <li><strong>Mục đích.</strong> Các dòng này chỉ dùng cho bước gom ưu nhược của sản phẩm (P5). Chúng không bao giờ hiện như lời người viết. Chúng cũng không sinh sao tiêu chí và không tính vào điểm giá trị review.</li>
+    <li><strong>Model.</strong> Đề xuất Claude Haiku 5.5, rẻ nhất trong các model Claude mới. Trước khi bật, chạy thử trên một bộ 100 review đã chấm tay: nếu Haiku không đạt ngưỡng chất lượng thì chuyển lên Claude Sonnet 5.5.</li>
+    <li><strong>Chi phí.</strong> Khoảng 0,05 đến 0,15 USD cho mỗi 1.000 review với Haiku (dùng Batch API giảm 50%). Kho hiện tại khoảng 250 review: dưới 0,05 USD, một lần. Sonnet 5.5 đắt gấp 20 lần mỗi token: khoảng 1 đến 2,5 USD cho 1.000 review với Batch API, 2 đến 5 USD nếu không dùng Batch.</li>
+    <li><strong>Mỗi review chỉ xử lý một lần.</strong> Mỗi review có một dấu đã xử lý, kèm mã băm nội dung và phiên bản prompt. Chỉ khi chữ của review đổi, hoặc khi đổi prompt, review mới được xử lý lại.</li>
+    <li><strong>Nơi chạy.</strong> Code (prompt, schema, kiểm tra) nằm trong <code>apps/importer</code> của DOS/Rate, công khai giống job product-points. Rate-Services chỉ lên lịch chạy và giữ khoá API. Job chạy bằng tài khoản <code>rate_worker</code>.</li>
+    <li><strong>Cần migration DOS-Me nhỏ.</strong> Hiện <code>rate_worker</code> chỉ được đọc <code>review_points</code>. Cần một bảng đánh dấu đã xử lý và một hàm ghi riêng cho dòng <code>'ai'</code>.</li>
+    <li><strong>An toàn.</strong> Mỗi dòng AI phải kèm câu trích nguyên văn có thật trong review, nếu không thì bị loại. Có bộ kiểm tra tự động, giới hạn tiền mỗi tháng, công tắc tắt ngay, và một lệnh xoá sạch mọi dòng <code>'ai'</code>.</li>
+  </ul>
+  <p>Từ ngữ: "token" là đơn vị AI dùng để đếm chữ; tiền tính theo số token đọc vào và viết ra. "Batch API" là cách gửi nhiều yêu cầu một lúc, trả kết quả trong vòng 24 giờ, rẻ hơn 50%. "Prompt caching" là cách để AI nhớ phần hướng dẫn giống nhau giữa các lần gọi; phần nhớ được tính 10% giá.</p>
+
+  <h2>1. Review nào được xử lý</h2>
+  <p>Chỉ xử lý review có đủ chữ để rút ra một ý thật. Review nào không qua các điều kiện dưới đây thì bỏ qua, không gọi AI và không tốn tiền.</p>
+  <div class="table-wrap"><table>
+    <tr><th>Điều kiện</th><th>Giá trị đề xuất</th><th>Lý do</th></tr>
+    <tr><td>Nguồn</td><td><code>origin = 'crawl'</code>, <code>reviewer_type = 'user'</code></td><td>Review viết trên Rate đã có ưu nhược do người viết ghi. Review chuyên gia đi theo đường riêng (mục 4.3 của đề xuất gốc).</td></tr>
+    <tr><td>Chưa có dòng ưu nhược</td><td>Không có dòng <code>method = 'writer'</code> nào</td><td>Không ghi đè lời người viết.</td></tr>
+    <tr><td>Qua cổng chặn</td><td>Có <code>review_flags</code>, <code>include_in_rating</code> không phải false, trọng số lớn hơn 0 (cổng của job product-points, <code>jobs/product-points.ts</code>), và độ sâu không phải "viết cho có" (kiểm tra của job review-values, <code>jobs/review-values.ts</code>)</td><td>Review giả, seeding hoặc viết cho có không được tạo ưu nhược.</td></tr>
+    <tr><td>Độ dài</td><td>Từ 40 ký tự và 8 từ trở lên, sau khi bỏ emoji và ký tự lặp</td><td>"Hàng đẹp, giao nhanh" không có ý gì về sản phẩm. Ngưỡng này loại phần lớn review một câu.</td></tr>
+    <tr><td>Ngôn ngữ</td><td>Tiếng Việt hoặc tiếng Anh (đoán bằng dấu tiếng Việt và từ thông dụng, không gọi AI)</td><td>Các dòng ưu nhược hiện bằng tiếng Việt. Review ngôn ngữ khác rất hiếm, bỏ qua để giữ prompt đơn giản.</td></tr>
+    <tr><td>Ngành hàng</td><td>Listing đã gắn với một sản phẩm gốc, và ngành hàng có danh sách tiêu chí</td><td>Phải biết danh sách tiêu chí để gắn dòng. Ngành "dịch vụ" chưa mở.</td></tr>
+  </table></div>
+  <p>Các ý chỉ nói về giao hàng, đóng gói, thái độ shop thì không lấy: đó là chuyện của người bán, đã có mô hình tin cậy người bán lo.</p>
+
+  <h2>2. Prompt và dạng kết quả</h2>
+  <h3>2.1 Gửi gì cho AI</h3>
+  <ul>
+    <li><strong>Phần hướng dẫn cố định</strong> (được cache): vai trò, luật trích, danh sách tiêu chí của ngành hàng (khoá, nhãn tiếng Việt, một dòng giải thích mỗi tiêu chí, lấy từ <code>packages/shared-data/src/rules/rating-criteria.ts</code>), và 4 đến 6 ví dụ mẫu. Mỗi ngành hàng một bản, có số phiên bản.</li>
+    <li><strong>Phần thay đổi:</strong> tối đa 20 review của cùng một ngành hàng. Mỗi review gồm một số thứ tự tạm và đoạn chữ. Không gửi tên, ảnh đại diện, mã người dùng, mã đơn hàng hay đường link.</li>
+  </ul>
+  <h3>2.2 Luật trích (tóm tắt prompt)</h3>
+  <ol>
+    <li>Chỉ lấy điều review nói ra. Không suy ra từ số sao, không đoán.</li>
+    <li>Mỗi review tối đa 3 ưu và 3 nhược. Không có gì rõ ràng thì trả danh sách rỗng; danh sách rỗng là kết quả bình thường.</li>
+    <li>Mỗi dòng dài 5 đến 150 ký tự, viết lại gọn bằng tiếng Việt, giữ đúng ý và đúng mức độ ("pin hơi yếu" không thành "pin rất tệ").</li>
+    <li>Mỗi dòng có <code>criterion_key</code> thuộc danh sách của ngành hàng, hoặc <code>null</code> nếu là ý chung.</li>
+    <li>Mỗi dòng có <code>evidence</code>: một đoạn trích nguyên văn ngắn từ review chứa ý đó.</li>
+    <li>Bỏ qua chuyện giao hàng, đóng gói, người bán, khuyến mãi.</li>
+  </ol>
+  <h3>2.3 Dạng kết quả (structured output, JSON có schema)</h3>
+  <p>Dùng tính năng structured outputs của Claude API: kết quả luôn đúng schema, không cần đoán cách đọc chữ.</p>
+<pre>{
+  "reviews": [
+    {
+      "ref": 3,
+      "points": [
+        { "kind": "pro", "criterion_key": "battery",
+          "body": "Pin dùng hết ngày với nhu cầu vừa phải",
+          "evidence": "pin xài cả ngày vẫn còn" },
+        { "kind": "con", "criterion_key": "screen",
+          "body": "Màn hình khó nhìn ngoài nắng",
+          "evidence": "ra nắng hơi khó nhìn" }
+      ]
+    }
+  ]
+}</pre>
+  <p><code>criterion_key</code> trong schema là một danh sách liệt kê đúng các khoá của ngành hàng, nên AI không thể trả một khoá lạ.</p>
+
+  <h2>3. Chọn model</h2>
+  <div class="table-wrap"><table>
+    <tr><th>Model</th><th>Giá đọc vào / viết ra (USD mỗi 1 triệu token)</th><th>Nhận xét</th></tr>
+    <tr><td>Claude Haiku 5.5 (<code>claude-haiku-5-5</code>)</td><td>0,10 / 0,50</td><td>Rẻ nhất. Việc này đơn giản: đọc một đoạn ngắn, rút ý có trích dẫn. Đề xuất dùng mặc định.</td></tr>
+    <tr><td>Claude Sonnet 5.5 (<code>claude-sonnet-5-5</code>)</td><td>2 / 10</td><td>Dự phòng nếu Haiku không đạt ngưỡng ở mục 7 (ví dụ hiểu sai tiếng lóng, viết tắt).</td></tr>
+    <tr><td>Claude Opus 5.5 (<code>claude-opus-5-5</code>)</td><td>4 / 20</td><td>Không cần cho việc này.</td></tr>
+  </table></div>
+  <p class="muted">Giá theo bảng giá API của Anthropic. Batch API giảm 50% cả hai chiều. Phần hướng dẫn cache được tính khoảng 10% giá đọc vào; lần ghi cache đầu tính 125%. Haiku 5.5 mặc định có suy nghĩ ở mức <code>medium</code>. Đề xuất đặt mức <code>low</code>: việc này không cần suy luận sâu, và token suy nghĩ cũng tính tiền như token viết ra.</p>
+  <p><strong>Gọi qua đâu.</strong> Importer hiện gọi AI qua chuẩn OpenAI (biến <code>AI_PROVIDER</code>, cổng <code>dos-ai</code>). Đề xuất bước này gọi thẳng Claude API bằng SDK chính thức của Anthropic, vì cần structured outputs, Batch API và prompt caching. Khoá API chỉ nằm trong secret của Rate-Services. Câu hỏi này để JOY quyết ở D2.</p>
+
+  <h2>4. Gửi theo lô và chỉ xử lý một lần</h2>
+  <ul>
+    <li><strong>Gom lô:</strong> mỗi yêu cầu chứa tối đa 20 review cùng ngành hàng. Phần hướng dẫn của ngành hàng (khoảng 1.500 token) dùng chung, nên được cache: các yêu cầu sau chỉ trả 10% cho phần này. Tối thiểu để cache trên Haiku 5.5 là 512 token, phần hướng dẫn vượt mức này.</li>
+    <li><strong>Batch API:</strong> mỗi lần chạy gửi một batch, chờ kết quả, rồi mới ghi. Việc này không cần trả lời ngay.</li>
+    <li><strong>Dấu đã xử lý:</strong> một bảng mới <code>rate.review_ai_extractions</code> lưu cho mỗi review:
+      <ul>
+        <li>mã băm của đoạn chữ đã gửi;</li>
+        <li>phiên bản prompt và tên model;</li>
+        <li>kết quả: đã ghi N dòng, không có ý nào, hoặc bị loại ở bước kiểm tra;</li>
+        <li>thời điểm xử lý.</li>
+      </ul>
+      Review có dấu trùng mã băm, trùng phiên bản prompt và trùng phiên bản danh sách tiêu chí thì bỏ qua. Nhờ dấu này, review "không có ý nào" cũng không bị gửi lại.</li>
+    <li><strong>Không trả tiền hai lần:</strong>
+      <ul>
+        <li>Chữ được chuẩn hoá Unicode (NFC) trước khi băm.</li>
+        <li>Hàm ghi lưu các dòng và dấu đã xử lý trong cùng một giao dịch.</li>
+        <li>Mã batch được lưu lại ngay khi gửi. Job chết giữa chừng thì lần sau lấy kết quả của batch cũ, không gửi lại.</li>
+        <li>Kết quả bị cắt (<code>max_tokens</code>) hoặc bị từ chối (<code>refusal</code>) không bao giờ được ghi là "không có ý nào". Review đó được thử lại lần sau, tối đa 2 lần.</li>
+      </ul>
+    </li>
+    <li>Với Batch API, cache chỉ trúng khi có thể, không chắc chắn. Phần hướng dẫn nhỏ nên chi phí gần như không đổi dù trúng hay trượt.</li>
+    <li><strong>Khi nào xử lý lại:</strong> chữ của review đổi (mã băm khác), hoặc nâng phiên bản prompt. Nâng phiên bản là việc có chủ đích: chạy thử trên bộ mẫu trước, rồi mới xử lý lại cả kho.</li>
+  </ul>
+
+  <h2>5. Ước tính chi phí</h2>
+  <p>Giả định:</p>
+  <ul>
+    <li>Một review sàn qua điều kiện ở mục 1 dài trung bình khoảng 200 token. Tiếng Việt có dấu tốn token hơn tiếng Anh nên ước rộng tay.</li>
+    <li>Mỗi review ra khoảng 120 token kết quả, gồm cả câu trích dẫn.</li>
+    <li>Cộng thêm token suy nghĩ ở mức <code>low</code>.</li>
+    <li>Mỗi yêu cầu 20 review, phần hướng dẫn 1.500 token được cache.</li>
+  </ul>
+  <div class="table-wrap"><table>
+    <tr><th>Model</th><th>1.000 review, giá thường</th><th>1.000 review, Batch API</th><th>Kho hôm nay (~250 review)</th><th>5.000 review mới mỗi tháng</th></tr>
+    <tr><td>Haiku 5.5</td><td class="num">~0,10 đến 0,30 USD</td><td class="num">~0,05 đến 0,15 USD</td><td class="num">dưới 0,05 USD</td><td class="num">~0,25 đến 0,75 USD/tháng</td></tr>
+    <tr><td>Sonnet 5.5</td><td class="num">~2 đến 5 USD</td><td class="num">~1 đến 2,5 USD</td><td class="num">~0,25 đến 0,6 USD</td><td class="num">~5 đến 12,5 USD/tháng</td></tr>
+  </table></div>
+  <p>Cách tính, với Haiku 5.5, cho 1.000 review (50 yêu cầu):</p>
+  <ul>
+    <li>Đọc vào: khoảng 200.000 token, tức 0,02 USD.</li>
+    <li>Phần cache: khoảng 75.000 token đọc lại cache, gần như không đáng kể.</li>
+    <li>Viết ra: khoảng 120.000 token, tức 0,06 USD, cộng phần suy nghĩ.</li>
+  </ul>
+  <p>Mức tăng hằng tháng phụ thuộc tốc độ crawl. 5.000 review mỗi tháng là giả định rộng tay; phần lớn review sàn bị loại ở mục 1 nên số thật gửi đi sẽ ít hơn.</p>
+  <p>Chi phí thật nhỏ hơn rủi ro chất lượng, nên giới hạn tiền ở mục 8 chủ yếu để chặn lỗi vòng lặp, không phải để tiết kiệm.</p>
+
+  <h2>6. Nơi chạy và ranh giới open-core</h2>
+  <ul>
+    <li><strong>DOS/Rate (công khai), trong <code>apps/importer</code>:</strong>
+      <ul>
+        <li>job <code>review-ai-points</code>, cùng kiểu với product-points và review-values: chạy thử mặc định, cờ <code>--apply</code> mới ghi;</li>
+        <li>prompt và schema theo ngành hàng;</li>
+        <li>bộ lọc review ở mục 1 và bộ kiểm tra ở mục 7;</li>
+        <li>test chạy bằng dữ liệu giả và một client AI giả. Không commit chữ review thật từ sàn vào repo.</li>
+      </ul>
+    </li>
+    <li><strong>DOS/Rate-Services (riêng tư):</strong> chỉ thêm một lịch chạy, giữ khoá <code>ANTHROPIC_API_KEY</code> và tài khoản <code>rate_worker</code>. Thứ tự mỗi đêm: crawl xong, rồi review-ai-points, rồi product-points (để gom luôn các dòng mới), rồi review-values. Không chạy trùng giờ crawl. Không có gì của Rate-Services (proxy, scraper, API nội bộ của sàn) đi vào DOS/Rate.</li>
+    <li><strong>Database:</strong>
+      <ul>
+        <li>Job đọc bằng <code>rate_worker</code>.</li>
+        <li>Job ghi qua một hàm mới <code>rate.store_review_ai_points</code>. Hàm này chỉ nhận dòng <code>method = 'ai'</code>, chỉ cho review từ sàn chưa có dòng của người viết, và kiểm lại độ dài, khoá tiêu chí, số dòng.</li>
+        <li>Không mở quyền ghi thẳng bảng <code>review_points</code> cho <code>rate_worker</code>.</li>
+        <li>Cần migration DOS-Me cho hàm này và bảng <code>review_ai_extractions</code>. Core soạn đề xuất SQL; JOY duyệt và chạy.</li>
+      </ul>
+    </li>
+    <li><strong>Gửi gì ra ngoài:</strong> chỉ đoạn chữ review công khai trên sàn và danh sách tiêu chí. Không gửi dữ liệu người dùng Rate, không gửi định danh người viết.</li>
+  </ul>
+
+  <h2>7. Kiểm tra chất lượng</h2>
+  <h3>7.1 Trước khi bật (một lần, trên Beta)</h3>
+  <ul>
+    <li><strong>Bộ mẫu:</strong> 100 review sàn thật, lấy trên Beta, trải đều các ngành hàng. Core chấm tay đáp án: mỗi review có những ưu nhược nào, thuộc tiêu chí nào. Bộ mẫu lưu trong repo riêng tư DOS/Rate-Services, không vào repo công khai, vì là chữ của người khác.</li>
+    <li><strong>Ngưỡng để bật:</strong>
+      <ul>
+        <li>ít nhất 95% số dòng AI đúng với review (không bịa);</li>
+        <li>ít nhất 85% gắn đúng tiêu chí;</li>
+        <li>ít nhất 70% ý trong đáp án được AI tìm ra;</li>
+        <li>0 dòng sinh ra từ review không có ý gì.</li>
+      </ul>
+    </li>
+    <li>Chạy Haiku trước. Không đạt thì chạy Sonnet. Hai lượt thử tốn dưới 1 USD.</li>
+  </ul>
+  <h3>7.2 Mỗi lần chạy (tự động, trong code)</h3>
+  <ul>
+    <li><code>evidence</code> phải là một đoạn có thật trong chính review mang số <code>ref</code> đó, không phải trong review khác cùng lô. Cả hai bên được chuẩn hoá Unicode (NFC), đưa về chữ thường, gộp khoảng trắng. Đoạn trích dài ít nhất 2 từ. Không khớp thì loại dòng đó.</li>
+    <li>Review sàn hay viết không dấu, và AI có thể thêm dấu vào câu trích. Nếu chỉ khớp sau khi bỏ dấu thì vẫn nhận dòng đó, nhưng đếm riêng, không tính vào ngưỡng dừng 10% bên dưới.</li>
+    <li>Câu trích được lưu cùng dấu đã xử lý (bảng <code>review_ai_extractions</code>), để lần đọc lại hằng tuần kiểm được từng dòng.</li>
+    <li>Độ dài 5 đến 150 ký tự. Khoá tiêu chí thuộc ngành hàng. Không trùng dòng. Không có dòng ở cả ưu lẫn nhược.</li>
+    <li>Dùng lại danh sách câu né của form review ("không có", "chưa thấy") để loại nhược điểm rỗng.</li>
+    <li><strong>Dừng cả lần chạy</strong> nếu hơn 10% số dòng bị loại vì trích dẫn không khớp, hoặc nếu tỷ lệ review có kết quả nhảy quá xa so với lần trước. Hai dấu hiệu này thường do prompt hoặc model đổi.</li>
+  </ul>
+  <h3>7.3 Sau khi chạy</h3>
+  <ul>
+    <li>Mỗi tuần lấy ngẫu nhiên 20 dòng mới để Core đọc lại. Ghi số dòng sai vào issue theo dõi.</li>
+    <li>Log của job chỉ có số đếm: đã gửi, đã ghi, đã loại và lý do, token đã dùng. Không ghi chữ review vào log.</li>
+  </ul>
+
+  <h2>8. Công tắc tắt và giới hạn</h2>
+  <ul>
+    <li><strong>Công tắc dừng gọi AI:</strong> biến <code>REVIEW_AI_POINTS_ENABLED</code> trong lịch chạy của Rate-Services. Đặt <code>false</code> thì job thoát ngay, không gọi AI, và huỷ batch đang chạy dở.</li>
+    <li><strong>Công tắc ẩn dòng đã ghi:</strong> job product-points có tuỳ chọn bỏ qua dòng <code>'ai'</code>. Bật nó thì lần gom kế tiếp không còn ưu nhược từ AI, mà chưa cần xoá gì.</li>
+    <li><strong>Giới hạn mỗi lần chạy:</strong> tối đa 2.000 review mỗi đêm. Trước khi gửi, job ước tính chi phí tối đa (số yêu cầu nhân giới hạn token viết ra); vượt phần tiền còn lại của tháng thì không gửi.</li>
+    <li><strong>Giới hạn tiền:</strong> theo model: 5 USD mỗi tháng với Haiku 5.5, 15 USD với Sonnet 5.5. Tiền đã tiêu đếm từ số token thật API trả về và lưu trong database (cùng bảng dấu đã xử lý), để mọi lần chạy cùng thấy. Chạm giới hạn thì job dừng và báo.</li>
+    <li><strong>Xoá sạch:</strong> một lệnh của job (<code>--purge</code>) gọi hàm ghi để xoá mọi dòng <code>'ai'</code>, hoặc chỉ các dòng của một phiên bản prompt, cùng dấu đã xử lý tương ứng. Lần chạy product-points kế tiếp gom lại mà không còn chúng. Không mất lời của người viết nào.</li>
+  </ul>
+
+  <h2>9. Dòng AI trong ngưỡng D9</h2>
+  <p>D9 hiện tại (trong <code>packages/shared-data/src/rules/product-points.ts</code>): một ưu hoặc nhược của sản phẩm hiện khi có ít nhất 2 người khác nhau nhắc và tổng trọng số từ 1,5 trở lên, hoặc 1 chuyên gia; luôn giữ ít nhất 1 nhược điểm nếu có. Câu hỏi là dòng AI được tính bao nhiêu.</p>
+  <div class="table-wrap"><table>
+    <tr><th>Phương án</th><th>Cách tính</th><th>Hệ quả</th></tr>
+    <tr><td>(a) Như lời người viết</td><td>Dòng AI tính đủ trọng số của review</td><td>Hiện nhiều ý nhất. Nhưng một lỗi trích của AI có sức nặng bằng lời người thật viết.</td></tr>
+    <tr><td>(b) Nửa trọng số</td><td>Mỗi review vẫn tính là 1 người viết, nhưng dòng AI chỉ góp <code>0,5 × min(trọng số sau khi giảm theo tuổi, 1)</code> vào tổng. Nhân 0,5 sau mức trần 1 mỗi người.</td><td>Một ý chỉ từ review sàn cần ít nhất 3 review mới đạt 1,5. Nếu nhân trước mức trần, 2 review trọng số cao đã đủ. Lỗi lẻ của AI khó tự tạo thành một ưu nhược của sản phẩm.</td></tr>
+    <tr><td>(c) Chỉ để phụ hoạ</td><td>Dòng AI chỉ cộng vào ý đã có ít nhất 1 dòng của người viết</td><td>An toàn nhất. Nhưng hôm nay gần như không có review Rate nào, nên trang sản phẩm sẽ vẫn trống.</td></tr>
+  </table></div>
+  <p>Phương án (a) hoặc (b) cần sửa job product-points: bỏ bộ lọc chỉ đọc dòng <code>'writer'</code>, và thêm <code>method</code> vào mỗi dòng đem gom. Câu hiển thị của một cụm hiện lấy từ dòng được nhắc nhiều nhất, nên có thể là câu AI viết. Khi đó khối ưu nhược phải ghi nguồn như dưới đây.</p>
+  <p>Các điều giữ nguyên dù chọn phương án nào:</p>
+  <ul>
+    <li>Dòng AI không sinh sao tiêu chí. Ngưỡng 3 người viết cho điểm tiêu chí chỉ đếm sao do người viết chấm.</li>
+    <li>Dòng AI không tính vào điểm giá trị review: code của P6 đã chỉ đọc dòng <code>'writer'</code>.</li>
+    <li>Thẻ review không hiện dòng AI như lời người viết.</li>
+    <li>Khối ưu nhược của sản phẩm ghi rõ nguồn, ví dụ "Tóm tắt từ 40 review, trong đó 35 review trên sàn".</li>
+  </ul>
+
+  <h2>10. Các quyết định cần JOY</h2>
+  <div class="q"><strong>D1. Model.</strong> Haiku 5.5 làm mặc định, chuyển lên Sonnet 5.5 nếu không đạt ngưỡng ở 7.1.
+    <p class="rec-line">Đề xuất: duyệt. Chi phí cả hai đều nhỏ; chất lượng quyết định bằng bộ mẫu, không bằng đoán.</p></div>
+  <div class="q"><strong>D2. Gọi AI qua đâu.</strong> (a) Thẳng Claude API bằng SDK Anthropic, khoá trong Rate-Services; (b) qua cổng <code>dos-ai</code> kiểu OpenAI như importer đang làm.
+    <p class="rec-line">Đề xuất: (a). Cần structured outputs, Batch API và prompt caching. Qua cổng kiểu OpenAI thì mất hoặc phải tự làm lại các tính năng này.</p></div>
+  <div class="q"><strong>D3. Điều kiện chọn review.</strong> Các ngưỡng ở mục 1: từ 40 ký tự và 8 từ, tiếng Việt hoặc tiếng Anh, qua cổng chặn, chưa có dòng của người viết.
+    <p class="rec-line">Đề xuất: duyệt. Chỉnh lại sau lần chạy thử đầu nếu bỏ sót quá nhiều.</p></div>
+  <div class="q"><strong>D4. Trọng số dòng AI trong D9</strong> (mục 9).
+    <p class="rec-line">Đề xuất: (b) nửa trọng số, chốt sau một lần gom thử trên Beta với kho ~250 review: xem (b) và (c) mỗi cách hiện bao nhiêu ưu nhược. Trang sản phẩm có ưu nhược thật từ dữ liệu sàn, nhưng một lỗi lẻ của AI không tự thành ưu nhược của sản phẩm.</p></div>
+  <div class="q"><strong>D5. Giới hạn.</strong> 5 USD mỗi tháng với Haiku 5.5 (15 USD nếu phải dùng Sonnet 5.5), 2.000 review mỗi đêm, hai công tắc (dừng gọi AI, ẩn dòng đã ghi) và lệnh xoá sạch.
+    <p class="rec-line">Đề xuất: duyệt.</p></div>
+  <div class="q"><strong>D6. Migration DOS-Me.</strong> Bảng <code>rate.review_ai_extractions</code> và hàm <code>rate.store_review_ai_points</code> cho <code>rate_worker</code>. Core soạn SQL đề xuất kèm file kiểm tra, file hoàn tác và replay.
+    <p class="rec-line">Đề xuất: duyệt để Core soạn. Không áp dụng gì khi chưa có lệnh của JOY.</p></div>
+
+  <h2>11. Thứ tự làm</h2>
+  <ol>
+    <li>Sau khi JOY duyệt: Core soạn đề xuất migration ở D6 (chưa áp dụng).</li>
+    <li>Viết job trong <code>apps/importer</code>, test bằng client AI giả. Chưa tốn tiền.</li>
+    <li>Chạy thử bộ mẫu 100 review trên Beta (dưới 1 USD), báo kết quả theo ngưỡng ở 7.1. Bước này cần JOY cho phép tiêu tiền và cấp khoá API.</li>
+    <li>Áp dụng migration lên Beta, chạy job một lần ở chế độ chạy thử, rồi <code>--apply</code> trên kho ~250 review.</li>
+    <li>Production và lịch chạy hằng đêm trong Rate-Services.</li>
+  </ol>
+
+  <h2>12. Không nằm trong đề xuất này</h2>
+  <ul>
+    <li>Không có code gọi AI, không tốn tiền, không đổi dữ liệu nào.</li>
+    <li>Bước AI viết lại cụm ưu nhược của sản phẩm (mục 5.2 của đề xuất gốc) là một việc riêng.</li>
+    <li>Bỏ phần ưu nhược cũ ở cấp listing (<code>review_analysis.pros/cons</code>, do <code>ai-review-analyzer.ts</code> sinh) là việc dọn dẹp sau, khi khối mới đã hiện đủ.</li>
+    <li>Review chuyên gia bên ngoài: chưa có nguồn được phép.</li>
+  </ul>
+</div>
+</body>
+</html>
