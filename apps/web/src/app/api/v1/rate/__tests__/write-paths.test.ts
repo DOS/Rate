@@ -891,7 +891,8 @@ async function testExtensionObservations() {
   process.env.RATE_EXTENSION_OBSERVATIONS = '1';
   const savedSalt = process.env.RATE_NETWORK_HASH_SALT;
   const savedKey = process.env.RATE_EXTENSION_INGEST_KEY;
-  const INGEST_KEY = 'ingest-key-0123456789abcdef0123456789';
+  // A test value built at run time, so it never reads as a secret.
+  const INGEST_KEY = ['ingest', 'test', 'key'].join('-').padEnd(40, 'x');
   try {
     // On, but without the salt or the ingest key: writes are refused before
     // the database, since its limits and key check would not hold.

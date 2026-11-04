@@ -147,14 +147,17 @@ export function isExtensionMarketplaceHost(
   host: string
 ): boolean {
   const h = host.toLowerCase();
-  return EXTENSION_MARKETPLACE_HOSTS[marketplace].some((allowed) =>
-    allowed.startsWith('.')
-      ? h === allowed.slice(1) ||
-        new RegExp(
-          `^(?:[a-z0-9-]+\\.)+${allowed.slice(1).replace(/\./g, '\\.')}$`
-        ).test(h)
-      : h === allowed
-  );
+  return EXTENSION_MARKETPLACE_HOSTS[marketplace].some((allowed) => {
+    if (!allowed.startsWith('.')) return h === allowed;
+    // A subdomain: non-empty labels of [a-z0-9-] before the base domain,
+    // as the RPC's ^([a-z0-9-]+\.)*base$ requires. No pattern is built
+    // from data.
+    if (h === allowed.slice(1)) return true;
+    if (!h.endsWith(allowed)) return false;
+    return /^(?:[a-z0-9-]+\.)+$/.test(
+      h.slice(0, h.length - allowed.length + 1)
+    );
+  });
 }
 
 /** Code points, as the database's char_length counts them. */
