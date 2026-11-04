@@ -47,7 +47,9 @@
         "https://shopee.vn/*",
         "https://*.lazada.vn/*",
         "https://tiki.vn/*",
-        "https://www.tiktok.com/*",
+        "https://www.tiktok.com/view/product/*",
+        "https://www.tiktok.com/@*/product/*",
+        "https://www.tiktok.com/shop/*pdp/*",
         "https://shop.tiktok.com/*",
         "https://cellphones.com.vn/*",
         "https://*.thegioididong.com/*",
@@ -56,6 +58,7 @@
         "https://didongviet.vn/*",
         "https://phongvu.vn/*"
       ],
+      "exclude_matches": ["https://www.tiktok.com/@*/video/*"],
       "js": ["content/content-script.js"],
       "run_at": "document_idle"
     }

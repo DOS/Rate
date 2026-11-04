@@ -53,7 +53,7 @@
     "message": "Pomoc s hledáním nových produktů (jen když ji zapnete):"
   },
   "optInBody": {
-    "message": "Když je zapnuto, každá nabídka, kterou otevřete, se také odešle do nezávislé fronty ke kontrole Rate.vn s těmito údaji: obchod, ID produktu, ID obchodu, URL bez sledovacích parametrů, název produktu, zvolená varianta, cena, původní cena, počet hvězdiček a počet recenzí. Bez účtu a osobních údajů."
+    "message": "Když je zapnuto, každá nabídka, kterou otevřete, se také odešle do nezávislé fronty ke kontrole Rate.vn s těmito údaji: obchod, ID produktu, ID obchodu, URL bez sledovacích parametrů, název produktu, zvolená varianta, cena, původní cena, počet hvězdiček a počet recenzí. Bez účtu, jména, e-mailu a cookies."
   },
   "crowdFieldPlatform": {
     "message": "obchod"
