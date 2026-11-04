@@ -829,6 +829,235 @@ async function testMyReviewValues() {
   assert.equal(res.status, 502);
 }
 
+async function testExtensionObservations() {
+  const submitterRoute = await import('../extension/submitter/route');
+  const observationRoute = await import('../extension/observation/route');
+  const obsMod = await import('@/server/rate/extension-observations');
+  const SUBMITTER = 'cccccccc-1111-4222-8333-444444444444';
+  const observation = {
+    schema_version: 1,
+    marketplace: 'shopee',
+    listing_url: 'https://shopee.vn/iphone-16-i.123.456',
+    external_item_id: '456',
+    external_shop_id: '123',
+    sku_id: '789',
+    variant_label: 'Đen',
+    price_vnd: 19_990_000,
+    list_price_vnd: 22_990_000,
+    stock_state: 'in_stock',
+    stock_qty: 5,
+    observed_at: new Date(Date.now() - 60_000).toISOString(),
+    extractor: { source: 'json_ld', extension_version: '2.1.0' },
+  };
+  const withIp = (req: Request, ip: string) => {
+    req.headers.set('x-forwarded-for', ip);
+    return req;
+  };
+  const del = (body: unknown) =>
+    new Request('http://localhost/api/v1/rate/extension/submitter', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+
+  // Off by default: 404 and no database call on any route.
+  delete process.env.RATE_EXTENSION_OBSERVATIONS;
+  calls = [];
+  for (const res of [
+    await submitterRoute.POST(post('/api/v1/rate/extension/submitter', {})),
+    await submitterRoute.DELETE(del({ submitterId: SUBMITTER })),
+    await observationRoute.POST(
+      post('/api/v1/rate/extension/observation', {
+        submitterId: SUBMITTER,
+        observation,
+      })
+    ),
+  ]) {
+    assert.equal(res.status, 404);
+    assert.equal((await res.json()).code, 'NOT_ENABLED');
+  }
+  assert.equal(calls.length, 0, 'a disabled route touches nothing');
+
+  process.env.RATE_EXTENSION_OBSERVATIONS = '1';
+  const savedSalt = process.env.RATE_NETWORK_HASH_SALT;
+  try {
+    // On, but without the network hash salt: observations are refused,
+    // since the per-network limit would not hold.
+    delete process.env.RATE_NETWORK_HASH_SALT;
+    calls = [];
+    const noSalt = await observationRoute.POST(
+      post('/api/v1/rate/extension/observation', {
+        submitterId: SUBMITTER,
+        observation,
+      })
+    );
+    assert.equal(noSalt.status, 503);
+    assert.equal(calls.length, 0);
+    process.env.RATE_NETWORK_HASH_SALT = 'test-salt-0123456789';
+
+    // A submitter id comes from the RPC, as anon, never the service key.
+    calls = [];
+    rpcResponder = (name) =>
+      name === 'register_extension_submitter'
+        ? { status: 200, json: SUBMITTER }
+        : { status: 500, json: { message: 'unexpected rpc' } };
+    let res = await submitterRoute.POST(
+      post('/api/v1/rate/extension/submitter', {})
+    );
+    assert.equal(res.status, 200);
+    assert.deepEqual(await res.json(), { ok: true, submitterId: SUBMITTER });
+    assert.match(res.headers.get('cache-control') ?? '', /no-store/);
+    assert.ok(
+      calls.every((c) => !JSON.stringify(c.headers).includes(SERVICE_KEY))
+    );
+
+    // A valid observation goes to the RPC with a hash of the /24, not the IP.
+    calls = [];
+    rpcResponder = (name) =>
+      name === 'submit_extension_observation'
+        ? {
+            status: 200,
+            json: { id: 1, status: 'quarantined', received_at: 'now' },
+          }
+        : { status: 500, json: { message: 'unexpected rpc' } };
+    res = await observationRoute.POST(
+      withIp(
+        post('/api/v1/rate/extension/observation', {
+          submitterId: SUBMITTER.toUpperCase(),
+          observation,
+        }),
+        '203.0.113.77'
+      )
+    );
+    assert.equal(res.status, 200);
+    assert.deepEqual(await res.json(), { ok: true, status: 'quarantined' });
+    const [call] = rpcCalls('submit_extension_observation');
+    assert.ok(call, 'submit_extension_observation must be called');
+    const args = call.body as Record<string, unknown>;
+    assert.equal(args.p_submitter_id, SUBMITTER);
+    assert.deepEqual(args.p_observation, observation);
+    assert.equal(
+      args.p_network_hash,
+      obsMod.networkHashFor('203.0.113.1', 'test-salt-0123456789')
+    );
+    assert.match(String(args.p_network_hash), /^[0-9a-f]{64}$/);
+    assert.ok(
+      !JSON.stringify(calls).includes('203.0.113.77'),
+      'the raw IP is never sent on'
+    );
+
+    // Bad input is refused before the database.
+    for (const [body, code, field] of [
+      [{ submitterId: 'x', observation }, 'INVALID_SUBMITTER', undefined],
+      [
+        {
+          submitterId: SUBMITTER,
+          observation: { ...observation, rating_star: 5 },
+        },
+        'INVALID_OBSERVATION',
+        'observation',
+      ],
+      [
+        {
+          submitterId: SUBMITTER,
+          observation: { ...observation, listing_url: 'https://evil.com/x' },
+        },
+        'INVALID_OBSERVATION',
+        'listing_url',
+      ],
+    ] as const) {
+      calls = [];
+      res = await observationRoute.POST(
+        post('/api/v1/rate/extension/observation', body)
+      );
+      assert.equal(res.status, 400);
+      const json = await res.json();
+      assert.equal(json.code, code);
+      if (field) assert.equal(json.field, field);
+      assert.equal(calls.length, 0);
+    }
+
+    // Database answers map to fixed codes, never a faked success.
+    for (const [error, status, code] of [
+      [{ code: '22023', details: 'price_vnd' }, 400, 'INVALID_OBSERVATION'],
+      [{ code: 'P0002', details: 'submitter_id' }, 404, 'UNKNOWN_SUBMITTER'],
+      [{ code: '54000' }, 429, 'RATE_LIMIT_EXCEEDED'],
+      [
+        { code: 'PGRST202', message: 'Could not find' },
+        503,
+        'OBSERVATIONS_UNAVAILABLE',
+      ],
+      [{ code: 'XX000', message: 'boom' }, 502, 'PERSIST_FAILED'],
+    ] as const) {
+      rpcResponder = () => ({
+        status: error.code === 'PGRST202' ? 404 : 400,
+        json: error,
+      });
+      res = await observationRoute.POST(
+        post('/api/v1/rate/extension/observation', {
+          submitterId: SUBMITTER,
+          observation,
+        })
+      );
+      assert.equal(res.status, status, error.code);
+      const json = await res.json();
+      assert.equal(json.code, code, error.code);
+      if (error.code === '22023') assert.equal(json.field, 'price_vnd');
+    }
+
+    // Deleting answers the same for any id and calls the delete RPC.
+    calls = [];
+    rpcResponder = (name) =>
+      name === 'delete_extension_submitter'
+        ? { status: 200, json: 0 }
+        : { status: 500, json: { message: 'unexpected rpc' } };
+    res = await submitterRoute.DELETE(del({ submitterId: SUBMITTER }));
+    assert.equal(res.status, 200);
+    assert.deepEqual(await res.json(), { ok: true });
+    assert.deepEqual(rpcCalls('delete_extension_submitter')[0]?.body, {
+      p_submitter_id: SUBMITTER,
+    });
+    res = await submitterRoute.DELETE(del({ submitterId: 'nope' }));
+    assert.equal(res.status, 400);
+
+    // Network ranges: /24 for IPv4, /48 for IPv6, nothing otherwise.
+    assert.equal(obsMod.networkPrefixOf('203.0.113.77'), '203.0.113.0/24');
+    assert.equal(
+      obsMod.networkPrefixOf('2001:db8:abcd:12::1'),
+      '2001:db8:abcd::/48'
+    );
+    assert.equal(
+      obsMod.networkPrefixOf('2001:0db8:0000::1'),
+      '2001:db8:0::/48'
+    );
+    assert.equal(obsMod.networkPrefixOf('::1'), '0:0:0::/48');
+    for (const bad of [
+      'anon',
+      '999.1.1.1',
+      '1.2.3',
+      'a::b::c',
+      'fe80::1%eth0',
+      '',
+    ]) {
+      assert.equal(obsMod.networkPrefixOf(bad), null, bad);
+    }
+    assert.equal(obsMod.networkHashFor('203.0.113.77', 'short'), null);
+    assert.equal(obsMod.networkHashFor('anon', 'test-salt-0123456789'), null);
+    assert.equal(
+      obsMod.networkHashFor('203.0.113.5', 'test-salt-0123456789'),
+      obsMod.networkHashFor('203.0.113.200', 'test-salt-0123456789')
+    );
+    assert.notEqual(
+      obsMod.networkHashFor('203.0.113.5', 'test-salt-0123456789'),
+      obsMod.networkHashFor('203.0.114.5', 'test-salt-0123456789')
+    );
+  } finally {
+    delete process.env.RATE_EXTENSION_OBSERVATIONS;
+    if (savedSalt === undefined) delete process.env.RATE_NETWORK_HASH_SALT;
+    else process.env.RATE_NETWORK_HASH_SALT = savedSalt;
+  }
+}
+
 async function testWatchlist() {
   const { POST } = await import('../watchlist/route');
   type Req = Parameters<typeof POST>[0];
@@ -2120,6 +2349,7 @@ async function main() {
   await testReviewsV2();
   await testReviewsByIdPublishedOnly();
   await testMyReviewValues();
+  await testExtensionObservations();
   await testWatchlist();
   await testCookieSessions();
   await testFilterBoundsAndWatchlistPrices();

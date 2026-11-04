@@ -5026,6 +5026,156 @@ async function runTests() {
     );
   }
 
+  // --- DOS/Rate#1606: stock, SKU and the v1 observation (read, not sent) ---
+  {
+    const det = await import('./extractors/ecommerce-detector.js');
+    const guards = await import('./security-guards.js');
+    assert.equal(
+      det.stockStateFromAvailability('https://schema.org/InStock'),
+      'in_stock'
+    );
+    assert.equal(
+      det.stockStateFromAvailability('http://schema.org/OutOfStock'),
+      'out_of_stock'
+    );
+    assert.equal(
+      det.stockStateFromAvailability('LimitedAvailability'),
+      'low_stock'
+    );
+    assert.equal(det.stockStateFromAvailability('PreOrder'), 'unknown');
+    assert.equal(det.stockStateFromAvailability('in stock'), 'in_stock');
+    assert.equal(det.stockStateFromAvailability('blue'), null);
+    assert.equal(det.stockStateFromAvailability(42), null);
+    assert.deepEqual(
+      det.extractStockFromJsonLdOffers([
+        { price: 1 },
+        {
+          availability: 'https://schema.org/InStock',
+          inventoryLevel: { value: 7 },
+        },
+      ]),
+      { stockState: 'in_stock', stockQty: 7 }
+    );
+    assert.deepEqual(
+      det.extractStockFromJsonLdOffers({
+        availability: 'OutOfStock',
+        inventoryLevel: 9,
+      }),
+      { stockState: 'out_of_stock', stockQty: 0 }
+    );
+    assert.deepEqual(
+      det.extractStockFromJsonLdOffers({
+        availability: 'InStock',
+        inventoryLevel: -3,
+      }),
+      { stockState: 'in_stock', stockQty: null }
+    );
+    assert.equal(
+      det.extractSkuId(
+        'lazada',
+        'https://www.lazada.vn/products/iphone-i123-s456.html',
+        null
+      ),
+      '456'
+    );
+    assert.equal(
+      det.extractSkuId(
+        'tiki',
+        'https://tiki.vn/iphone-p123.html?spid=789',
+        'X1'
+      ),
+      '789'
+    );
+    assert.equal(
+      det.extractSkuId('shopee', 'https://shopee.vn/x-i.1.2', 'MDL-9'),
+      'MDL-9'
+    );
+    assert.equal(
+      det.extractSkuId('shopee', 'https://shopee.vn/x-i.1.2', 'a b'),
+      null
+    );
+    assert.equal(
+      det.extractSkuId('tiki', 'https://tiki.vn/x-p1.html?spid=abc', null),
+      null
+    );
+
+    const signal = {
+      platform: 'shopee' as const,
+      canonicalUrl: 'https://shopee.vn/iphone-16-i.123.456',
+      externalItemId: '456',
+      externalShopId: '123',
+      title: 'iPhone 16 128GB',
+      selectedVariant: 'Đen',
+      price: 19_990_000,
+      originalPrice: 22_990_000,
+      ratingStar: 4.9,
+      ratingCount: 1000,
+      skuId: '789',
+      stockState: 'in_stock' as const,
+      stockQty: 5,
+      extractorSource: 'json_ld' as const,
+    };
+    const at = new Date('2026-11-04T10:00:00Z');
+    const obs = guards.buildExtensionObservationV1(signal, at, '2.1.0');
+    assert.deepEqual(obs, {
+      schema_version: 1,
+      marketplace: 'shopee',
+      listing_url: 'https://shopee.vn/iphone-16-i.123.456',
+      external_item_id: '456',
+      external_shop_id: '123',
+      sku_id: '789',
+      variant_label: 'Đen',
+      price_vnd: 19_990_000,
+      list_price_vnd: 22_990_000,
+      stock_state: 'in_stock',
+      stock_qty: 5,
+      observed_at: '2026-11-04T10:00:00.000Z',
+      extractor: { source: 'json_ld', extension_version: '2.1.0' },
+    });
+    // No ratings in v1 (JOY approved dropping them).
+    assert.ok(obs && !('rating_star' in obs) && !('ratingStar' in obs));
+    assert.equal(
+      guards.buildExtensionObservationV1(
+        { ...signal, price: null },
+        at,
+        '2.1.0'
+      ),
+      null
+    );
+    assert.equal(
+      guards.buildExtensionObservationV1(
+        { ...signal, externalItemId: null },
+        at,
+        '2.1.0'
+      ),
+      null
+    );
+    // The sanitizer keeps only valid v1 fields.
+    const dirty = guards.sanitizeExtensionProductSignal({
+      ...signal,
+      skuId: 'a b',
+      stockState: 'lots' as never,
+      stockQty: -1,
+      extractorSource: 'api' as never,
+    });
+    assert.equal(dirty.skuId, null);
+    assert.equal(dirty.stockState, 'unknown');
+    assert.equal(dirty.stockQty, null);
+    assert.equal(dirty.extractorSource, 'dom');
+    // Neither the opt-in signal nor the lookup carries the new fields yet.
+    const crowd = guards.buildCrowdIngestPayload(signal as never);
+    for (const key of ['skuId', 'stockState', 'stockQty', 'extractorSource']) {
+      assert.ok(!(key in crowd), key);
+    }
+    const workerSource = fs.readFileSync(
+      path.resolve(__dirname, 'background/service-worker.ts'),
+      'utf8'
+    );
+    assert.ok(!/stockState|skuId|stockQty/.test(workerSource));
+    console.log(
+      '  ✅ [Stock, SKU and the v1 observation, not sent (#1606)] Verified'
+    );
+  }
   console.log('🎉 All Rate Browser Extension MV3 v2 tests passed!');
 }
 

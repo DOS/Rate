@@ -1,3 +1,7 @@
+import {
+  parseExtensionObservationV1,
+  type ExtensionObservationV1,
+} from '@repo/shared-data/rules';
 import type {
   ExtractedPageProductSignal,
   SupportedEcommercePlatform,
@@ -286,7 +290,66 @@ export function sanitizeExtensionProductSignal(
     originalPrice: validOriginalPrice,
     ratingStar: validRatingStar,
     ratingCount: validRatingCount,
+    // The v1 observation fields (DOS/Rate#1606), checked like the rest.
+    skuId:
+      typeof safeSignal.skuId === 'string' &&
+      /^[A-Za-z0-9_.-]{1,64}$/.test(safeSignal.skuId)
+        ? safeSignal.skuId
+        : null,
+    stockState: (
+      ['in_stock', 'low_stock', 'out_of_stock', 'unknown'] as const
+    ).includes(safeSignal.stockState as never)
+      ? safeSignal.stockState
+      : 'unknown',
+    stockQty:
+      typeof safeSignal.stockQty === 'number' &&
+      Number.isInteger(safeSignal.stockQty) &&
+      safeSignal.stockQty >= 0 &&
+      safeSignal.stockQty <= 1_000_000
+        ? safeSignal.stockQty
+        : null,
+    extractorSource: (['json_ld', 'dom', 'mixed'] as const).includes(
+      safeSignal.extractorSource as never
+    )
+      ? safeSignal.extractorSource
+      : 'dom',
   };
+}
+
+/**
+ * The ExtensionObservation v1 an opted-in install would send for `signal`
+ * (DOS/Rate#1606), or null when the page lacks what v1 needs (an item id, a
+ * price). Not sent yet: the opt-in signal still uses buildCrowdIngestPayload
+ * until the quarantine table exists and the disclosures name v1.
+ */
+export function buildExtensionObservationV1(
+  rawSignal: ExtractedPageProductSignal,
+  observedAt: Date,
+  extensionVersion: string
+): ExtensionObservationV1 | null {
+  const signal = sanitizeExtensionProductSignal(rawSignal);
+  const parsed = parseExtensionObservationV1(
+    {
+      schema_version: 1,
+      marketplace: signal.platform,
+      listing_url: signal.canonicalUrl,
+      external_item_id: signal.externalItemId,
+      external_shop_id: signal.externalShopId,
+      sku_id: signal.skuId ?? null,
+      variant_label: signal.selectedVariant,
+      price_vnd: signal.price,
+      list_price_vnd: signal.originalPrice,
+      stock_state: signal.stockState ?? 'unknown',
+      stock_qty: signal.stockQty ?? null,
+      observed_at: observedAt.toISOString(),
+      extractor: {
+        source: signal.extractorSource ?? 'dom',
+        extension_version: extensionVersion,
+      },
+    },
+    observedAt.getTime()
+  );
+  return parsed.ok ? parsed.value : null;
 }
 
 export function escapeSafeExternalHref(

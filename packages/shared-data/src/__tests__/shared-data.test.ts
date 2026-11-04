@@ -2322,6 +2322,109 @@ function testReviewDepth(): void {
   console.log('  ✅ review depth (axis C) over the whole review text (#1581)');
 }
 
+function testExtensionObservation(): void {
+  const now = Date.parse('2026-11-04T10:00:00Z');
+  const valid = {
+    schema_version: 1,
+    marketplace: 'shopee',
+    listing_url: 'https://shopee.vn/iphone-16-i.123.456',
+    external_item_id: '456',
+    external_shop_id: '123',
+    sku_id: '789',
+    variant_label: 'Đen, 128GB',
+    price_vnd: 19_990_000,
+    list_price_vnd: 22_990_000,
+    stock_state: 'in_stock',
+    stock_qty: 12,
+    observed_at: '2026-11-04T09:59:00Z',
+    extractor: { source: 'json_ld', extension_version: '2.1.0' },
+  };
+  const parse = (o: unknown) => rules.parseExtensionObservationV1(o, now);
+  const ok = parse(valid);
+  assert.ok(ok.ok);
+  assert.deepEqual(ok.ok && ok.value, valid);
+  // Nullable fields may be null, but must be present.
+  assert.ok(
+    parse({
+      ...valid,
+      external_shop_id: null,
+      sku_id: null,
+      variant_label: null,
+      list_price_vnd: null,
+      stock_qty: null,
+      stock_state: 'unknown',
+    }).ok
+  );
+  const { sku_id: _dropped, ...missing } = valid;
+  void _dropped;
+  const cases: Array<[Record<string, unknown> | unknown, string]> = [
+    [null, 'observation'],
+    [[], 'observation'],
+    [{ ...valid, rating_star: 5 }, 'observation'],
+    [missing, 'sku_id'],
+    [{ ...valid, schema_version: 2 }, 'schema_version'],
+    [{ ...valid, marketplace: 'amazon' }, 'marketplace'],
+    [
+      { ...valid, listing_url: 'https://shopee.vn/x?utm_source=a' },
+      'listing_url',
+    ],
+    [{ ...valid, listing_url: 'https://shopee.vn/x#a' }, 'listing_url'],
+    [{ ...valid, listing_url: 'http://shopee.vn/x' }, 'listing_url'],
+    [{ ...valid, listing_url: 'https://evil.com/shopee.vn' }, 'listing_url'],
+    [{ ...valid, listing_url: 'https://shopee.vn.evil.com/x' }, 'listing_url'],
+    [{ ...valid, listing_url: 'https://u:p@shopee.vn/x' }, 'listing_url'],
+    [
+      { ...valid, listing_url: `https://shopee.vn/${'a'.repeat(2048)}` },
+      'listing_url',
+    ],
+    [{ ...valid, external_item_id: '' }, 'external_item_id'],
+    [{ ...valid, external_item_id: 'a b' }, 'external_item_id'],
+    [{ ...valid, external_shop_id: 'x'.repeat(65) }, 'external_shop_id'],
+    [{ ...valid, sku_id: 7 }, 'sku_id'],
+    [{ ...valid, variant_label: '' }, 'variant_label'],
+    [{ ...valid, variant_label: 'a\u0000b' }, 'variant_label'],
+    [{ ...valid, price_vnd: 999 }, 'price_vnd'],
+    [{ ...valid, price_vnd: 1.5e3 + 0.5 }, 'price_vnd'],
+    [{ ...valid, price_vnd: '19990000' }, 'price_vnd'],
+    [{ ...valid, list_price_vnd: 19_000_000 }, 'list_price_vnd'],
+    [{ ...valid, stock_state: 'many' }, 'stock_state'],
+    [{ ...valid, stock_qty: -1 }, 'stock_qty'],
+    [{ ...valid, stock_qty: 1_000_001 }, 'stock_qty'],
+    [{ ...valid, observed_at: '2026-11-04T10:11:00Z' }, 'observed_at'],
+    [{ ...valid, observed_at: '2026-11-03T09:59:00Z' }, 'observed_at'],
+    [{ ...valid, observed_at: 'yesterday' }, 'observed_at'],
+    [{ ...valid, extractor: 'json_ld' }, 'extractor'],
+    [{ ...valid, extractor: { ...valid.extractor, user: 'x' } }, 'extractor'],
+    [
+      { ...valid, extractor: { ...valid.extractor, source: 'api' } },
+      'extractor.source',
+    ],
+    [
+      { ...valid, extractor: { ...valid.extractor, extension_version: '2 1' } },
+      'extractor.extension_version',
+    ],
+  ];
+  for (const [input, field] of cases) {
+    const result = parse(input);
+    assert.equal(result.ok, false, JSON.stringify(input).slice(0, 80));
+    assert.equal(
+      !result.ok && result.field,
+      field,
+      JSON.stringify(input).slice(0, 80)
+    );
+  }
+  // Every marketplace accepts its own hosts and refuses another's.
+  assert.ok(rules.isExtensionMarketplaceHost('lazada', 'www.lazada.vn'));
+  assert.ok(rules.isExtensionMarketplaceHost('tgdd', 'www.thegioididong.com'));
+  assert.ok(rules.isExtensionMarketplaceHost('tiktok', 'shop.tiktok.com'));
+  assert.ok(!rules.isExtensionMarketplaceHost('tiktok', 'm.tiktok.com'));
+  assert.ok(!rules.isExtensionMarketplaceHost('lazada', 'notlazada.vn'));
+  assert.ok(!rules.isExtensionMarketplaceHost('shopee', 'tiki.vn'));
+  for (const m of rules.EXTENSION_MARKETPLACES) {
+    assert.ok(rules.EXTENSION_MARKETPLACE_HOSTS[m].length > 0, m);
+  }
+}
+
 function testReviewValue(): void {
   const phone = rules.getRatingCriteria('smartphones');
   const allRated: Record<string, number> = Object.fromEntries(
@@ -2686,6 +2789,8 @@ function main(): void {
   console.log(
     '  ✅ [13/13] Review value score and weight factor (DOS/Rate#1547) verified'
   );
+  testExtensionObservation();
+  console.log('  ✅ [14/14] ExtensionObservation v1 (DOS/Rate#1606) verified');
   console.log('🎉 All @repo/shared-data tests passed!');
 }
 
