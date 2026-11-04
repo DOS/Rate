@@ -16,6 +16,7 @@ import {
 import {
   aiCandidates,
   buildRequests,
+  BatchGoneError,
   collectBatch,
   dosAiReviewAiClient,
   fromDosAiOutputLine,
@@ -361,7 +362,7 @@ function testCollect() {
   ];
   const texts = new Map([1, 2, 3, 4, 5, 6, 7].map(n => [id(n), LONG]));
   const collected = collectBatch(
-    { id: 'msgbatch_test0001', model: 'dos', prompt_version: 'v1', manifest },
+    { id: 'batch_test0001', model: 'dos', prompt_version: 'v1', manifest },
     results,
     texts
   );
@@ -376,7 +377,7 @@ function testCollect() {
   for (const n of [3, 4, 5, 6, 7])
     assert.equal(rows.get(id(n))!.failed, true, `review ${n} failed`);
   assert.equal(collected.failedReviews, 5);
-  assert.equal(rows.get(id(1))!.batch_id, 'msgbatch_test0001');
+  assert.equal(rows.get(id(1))!.batch_id, 'batch_test0001');
   assert.equal(collected.usage.input_tokens, 16000, 'cut-off and refused requests are paid for');
   assert.equal(
     collected.costUsd,
@@ -384,7 +385,7 @@ function testCollect() {
   );
   const errored = collectBatch(
     {
-      id: 'msgbatch_test0002',
+      id: 'batch_test0002',
       model: 'dos',
       prompt_version: 'v1',
       manifest: manifest.slice(1, 2),
@@ -509,7 +510,7 @@ async function testJob() {
   // A crash after the batch was created: the next run collects it without sending again.
   const crashed = fakeSupabase(seed());
   crashed.tables.review_ai_batches!.push({
-    id: 'msgbatch_crashed01',
+    id: 'batch_crashed01',
     model: 'dos',
     prompt_version: REVIEW_AI_PROMPT_VERSION,
     status: 'submitted',
@@ -527,7 +528,7 @@ async function testJob() {
     stored_at: null,
   });
   ai.calls.length = 0;
-  ai.batches.set('msgbatch_crashed01', [
+  ai.batches.set('batch_crashed01', [
     { custom_id: 'smartphones-0', ...answer([1, 2, 3].map(ref => ({ ref, points: GOOD_POINTS }))) },
   ]);
   // A dry run while it is open does not count its reviews as due.
@@ -542,7 +543,7 @@ async function testJob() {
     category_slug: 'smartphones',
     outcome: 'stored',
     attempts: 1,
-    batch_id: 'msgbatch_crashed01',
+    batch_id: 'batch_crashed01',
   });
   const resumed = await runReviewAiPointsJob(crashed.client, {
     apply: true,
@@ -550,7 +551,7 @@ async function testJob() {
     ai: ai.client,
     now,
   });
-  assert.deepEqual(resumed.collected, ['msgbatch_crashed01']);
+  assert.deepEqual(resumed.collected, ['batch_crashed01']);
   assert.equal(resumed.sent, 0, 'nothing sent twice');
   assert.ok(!ai.calls.includes('create'));
   assert.deepEqual(
@@ -563,7 +564,7 @@ async function testJob() {
   const running = fakeSupabase(seed());
   running.tables.review_ai_batches!.push({
     ...crashed.tables.review_ai_batches![0]!,
-    id: 'msgbatch_running01',
+    id: 'batch_running01',
     status: 'submitted',
     cost_usd: null,
   });
@@ -577,7 +578,7 @@ async function testJob() {
     waitMs: 0,
     wait: async () => {},
   });
-  assert.deepEqual(waited.waiting, ['msgbatch_running01']);
+  assert.deepEqual(waited.waiting, ['batch_running01']);
   assert.equal(waited.candidates, 0);
   assert.ok(!ai.calls.includes('create'));
   // ...and the kill switch cancels it.
@@ -587,7 +588,7 @@ async function testJob() {
     ai: ai.client,
     now,
   });
-  assert.deepEqual(stopped.canceled, ['msgbatch_running01']);
+  assert.deepEqual(stopped.canceled, ['batch_running01']);
   assert.ok(ai.calls.includes('cancel'));
   assert.equal(
     running.tables.review_ai_batches![0]!.status,
@@ -597,9 +598,7 @@ async function testJob() {
   // Switched on again: the canceled batch ends; its finished request is stored, the
   // canceled one comes back as failed rows, and nothing is sent twice.
   ai.status = 'ended';
-  ai.batches.set('msgbatch_running01', [
-    { custom_id: 'smartphones-0', result: { type: 'canceled' } },
-  ]);
+  ai.batches.set('batch_running01', [{ custom_id: 'smartphones-0', result: { type: 'canceled' } }]);
   ai.calls.length = 0;
   const back = await runReviewAiPointsJob(running.client, {
     apply: true,
@@ -607,7 +606,7 @@ async function testJob() {
     ai: ai.client,
     now,
   });
-  assert.equal(back.collected[0], 'msgbatch_running01', 'the old batch first, then the new one');
+  assert.equal(back.collected[0], 'batch_running01', 'the old batch first, then the new one');
   assert.equal(back.stored.failed, 3);
   // The fake writer has no attempts; the failed reviews are due again, in a new batch.
   assert.equal(back.sent, 3);
@@ -615,7 +614,7 @@ async function testJob() {
   // The monthly cap: this month's spend plus the ceiling over $5 sends nothing.
   const capped = fakeSupabase(seed());
   capped.tables.review_ai_batches!.push({
-    id: 'msgbatch_spent0001',
+    id: 'batch_spent0001',
     model: 'dos',
     prompt_version: 'v0',
     status: 'stored',
@@ -626,7 +625,7 @@ async function testJob() {
     stored_at: '2026-11-02T01:00:00Z',
   });
   capped.tables.review_ai_batches!.push({
-    id: 'msgbatch_lastmonth',
+    id: 'batch_lastmonth',
     model: 'dos',
     prompt_version: 'v0',
     status: 'stored',
@@ -646,12 +645,12 @@ async function testJob() {
   assert.equal(over.capped, true);
   assert.equal(over.monthSpendUsd, 4.999, 'last month does not count');
   assert.equal(ai.calls.length, 0);
-  const sonnet = await runReviewAiPointsJob(capped.client, {
+  const qwenMax = await runReviewAiPointsJob(capped.client, {
     enabled: true,
     model: 'qwen3.8-max',
     now,
   });
-  assert.equal(sonnet.capped, false, 'each model has its own cap');
+  assert.equal(qwenMax.capped, false, 'each model has its own cap');
 
   // A quality stop: most quotes made up; nothing stored, the batch left ended.
   const bad = fakeSupabase(seed());
@@ -688,6 +687,37 @@ async function testJob() {
     runReviewAiPointsJob(dry.client, { enabled: true, now, waitMs: Number.NaN }),
     /--wait-minutes/
   );
+
+  // A batch the gateway failed as a whole: the row is closed, nothing is stored, and the
+  // reviews are due again with no attempt spent.
+  const goneDb = fakeSupabase(seed());
+  goneDb.tables.review_ai_batches!.push({
+    ...crashed.tables.review_ai_batches![0]!,
+    id: 'batch_failed01',
+    status: 'submitted',
+    cost_usd: null,
+    stored_at: null,
+  });
+  const goneAi: ReviewAiClient = {
+    ...ai.client,
+    async createBatch() {
+      throw new Error('not in this test');
+    },
+    // eslint-disable-next-line require-yield
+    async *results() {
+      throw new BatchGoneError('dos.ai batch ended failed with no output', 'canceled');
+    },
+  };
+  const afterGone = await runReviewAiPointsJob(goneDb.client, {
+    enabled: true,
+    ai: goneAi,
+    now,
+    apply: true,
+    maxReviews: 1,
+  }).catch((err: unknown) => err);
+  assert.match(String(afterGone), /not in this test/, 'its reviews were due again and sent');
+  assert.equal(goneDb.tables.review_ai_batches![0]!.status, 'canceled');
+  assert.equal(goneDb.stores.length, 0);
 
   // The purge: a dry run says so; --apply calls the writer; a bad version is refused.
   const purge = fakeSupabase(seed());
@@ -791,9 +821,16 @@ async function testDosAiClient() {
     }
     if (path === '/batches/batch_abc123/cancel') return reply(200, { status: 'cancelling' });
     if (path === '/batches/batch_broke') return reply(402, { error: 'insufficient credits' });
+    if (path === '/batches/batch_failed') {
+      return reply(200, { status: 'failed', output_file_id: null, errmsg: 'zdr org' });
+    }
+    if (path === '/batches/batch_purged') {
+      return reply(200, { status: 'completed', output_file_id: 'file_gone' });
+    }
     return reply(404, 'no route');
   }) as typeof fetch;
-  const client = dosAiReviewAiClient('dos_sk_test', 'https://beta-api.dos.ai/v1/', gateway);
+  const noWait = async () => {};
+  const client = dosAiReviewAiClient('dos_sk_test', 'https://beta-api.dos.ai/v1/', gateway, noWait);
   const built = buildRequests(
     [{ id: id(1), text: LONG, textHash: reviewTextHash(LONG), category: 'smartphones' }],
     'dos'
@@ -814,7 +851,69 @@ async function testDosAiClient() {
     'POST /batches',
     'GET /batches/batch_abc123',
   ]);
-  console.log('  ✅ dos.ai batch client: upload, create, status, results, cancel, retry and 402');
+  // A batch failed as a whole, or one whose output file is gone: no results, ever.
+  const drain = async (batchId: string) => {
+    for await (const r of client.results(batchId)) void r;
+  };
+  await assert.rejects(drain('batch_failed'), (err: unknown) => {
+    assert.ok(err instanceof BatchGoneError);
+    assert.equal(err.status, 'canceled');
+    assert.match(err.message, /ended failed with no output: zdr org/);
+    return true;
+  });
+  await assert.rejects(drain('batch_purged'), (err: unknown) => {
+    assert.ok(err instanceof BatchGoneError);
+    assert.equal(err.status, 'expired');
+    return true;
+  });
+  // A line the gateway did not run for want of credits is unbilled, not failed.
+  assert.equal(reason({ custom_id: 'f', response: { status_code: 402, body: {} } }), 'unbilled');
+  assert.equal(
+    reason({ custom_id: 'g', error: { code: 'insufficient_credits', message: 'x' } }),
+    'unbilled'
+  );
+
+  // POST /batches is never retried on an answer that may hide a created batch.
+  for (const lost of ['network', '502'] as const) {
+    let creates = 0;
+    const flaky = (async (url: string | URL | Request, init?: RequestInit) => {
+      const path = String(url).replace('https://api.dos.me/v1', '');
+      if (path === '/files') return new Response(JSON.stringify({ id: 'file_in' }));
+      creates += 1;
+      if (init?.method === 'POST' && lost === 'network') throw new Error('socket hang up');
+      return new Response('bad gateway', { status: 502 });
+    }) as typeof fetch;
+    const once = dosAiReviewAiClient('dos_sk_test', undefined, flaky, noWait);
+    await assert.rejects(
+      once.createBatch(built.requests),
+      lost === 'network' ? /A batch may have been created/ : /502/
+    );
+    assert.equal(creates, 1, `POST /batches sent once (${lost})`);
+  }
+  // ...but a 429, refused before anything exists, is retried.
+  let throttled = 0;
+  const busyGateway = (async (url: string | URL | Request) => {
+    const path = String(url).replace('https://api.dos.me/v1', '');
+    if (path === '/files') return new Response(JSON.stringify({ id: 'file_in' }));
+    throttled += 1;
+    return throttled === 1
+      ? new Response('slow down', { status: 429 })
+      : new Response(JSON.stringify({ id: 'batch_after_429' }));
+  }) as typeof fetch;
+  assert.deepEqual(
+    await dosAiReviewAiClient('dos_sk_test', undefined, busyGateway, noWait).createBatch(
+      built.requests
+    ),
+    { id: 'batch_after_429' }
+  );
+  // The request body: deterministic and bounded.
+  assert.deepEqual(
+    [built.requests[0]!.body.temperature, built.requests[0]!.body.max_tokens],
+    [0, 6000]
+  );
+  console.log(
+    '  ✅ dos.ai batch client: upload, create once, status, results, gone batches, cancel, retry and 402'
+  );
 }
 
 function refsOf(request: BatchRequest): number[] {
@@ -837,7 +936,7 @@ function fakeAi(answerFor: (requests: BatchRequest[]) => BatchResult[]) {
     async createBatch(requests) {
       state.calls.push('create');
       state.onCreate?.();
-      const batchId = `msgbatch_fake${String((n += 1)).padStart(4, '0')}`;
+      const batchId = `batch_fake${String((n += 1)).padStart(4, '0')}`;
       state.batches.set(batchId, answerFor(requests));
       return { id: batchId };
     },

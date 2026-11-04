@@ -143,7 +143,7 @@ export type BatchResult =
         };
       };
     }
-  | { custom_id: string; result: { type: 'errored' | 'expired' | 'canceled' } };
+  | { custom_id: string; result: { type: 'errored' | 'expired' | 'canceled' | 'unbilled' } };
 
 export interface ReviewAiClient {
   createBatch(requests: BatchRequest[]): Promise<{ id: string }>;
@@ -177,12 +177,20 @@ interface DosAiOutputLine {
 /**
  * A dos.ai output line as the job reads results: a 200 response is a
  * message whose stop reason is the finish reason ('stop' ends normally,
- * 'length' is cut off, 'content_filter' is refused); anything else errored.
+ * 'length' is cut off, 'content_filter' is refused); a line the gateway did
+ * not run for want of credits (402, insufficient_credits) is 'unbilled', so
+ * the review stays due without spending an attempt; anything else errored.
  * Cached prompt tokens are split out of prompt_tokens.
  */
 export function fromDosAiOutputLine(line: DosAiOutputLine): BatchResult | null {
   if (typeof line.custom_id !== 'string') return null;
   const body = line.response?.body;
+  if (
+    line.response?.status_code === 402 ||
+    /insufficient|credit|balance/i.test(line.error?.code ?? '')
+  ) {
+    return { custom_id: line.custom_id, result: { type: 'unbilled' } };
+  }
   if (line.error || line.response?.status_code !== 200 || !body) {
     return { custom_id: line.custom_id, result: { type: 'errored' } };
   }
@@ -217,49 +225,83 @@ export function fromDosAiOutputLine(line: DosAiOutputLine): BatchResult | null {
 }
 
 /**
+ * A batch whose results will never come: the gateway failed it as a whole
+ * (a refused file, a Zero Data Retention organization, no credits at start),
+ * it ended with no output, or its output file is gone. The job closes its row
+ * and stores nothing, so its reviews are due again without spending an attempt.
+ */
+export class BatchGoneError extends Error {
+  constructor(
+    message: string,
+    readonly status: 'canceled' | 'expired'
+  ) {
+    super(message);
+    this.name = 'BatchGoneError';
+  }
+}
+
+/**
  * The real client: the dos.ai gateway's OpenAI-compatible Files and Batch API
  * (POST /files, POST /batches, GET /batches/:id, POST /batches/:id/cancel,
  * GET /files/:id/content), with the key in DOS_AI_API_KEY as a Bearer token.
- * A 429 or 5xx is retried; a 402 (no credits left) stops the run.
+ * Each call, body included, has a timeout. A 429 or 5xx, or a network error,
+ * is retried, except on POST /batches: a batch may have been created behind a
+ * lost answer, and a retry would run and bill a second one, so that call is
+ * retried only on 429 (refused before anything was created). A 402 (no
+ * credits left) stops the run.
  */
 export function dosAiReviewAiClient(
   apiKey: string,
   baseUrl: string = DOS_AI_DEFAULT_BASE_URL,
-  fetchImpl: typeof fetch = fetch
+  fetchImpl: typeof fetch = fetch,
+  wait: (ms: number) => Promise<unknown> = ms => new Promise(r => setTimeout(r, ms))
 ): ReviewAiClient {
   const base = baseUrl.replace(/\/+$/, '');
-  const call = async (path: string, init: RequestInit = {}): Promise<Response> => {
+  const call = async (
+    path: string,
+    init: RequestInit = {},
+    retry: 'all' | 'throttled' = 'all'
+  ): Promise<{ status: number; text: string }> => {
     for (let attempt = 1; ; attempt++) {
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), DOS_AI_TIMEOUT_MS);
-      let response: Response | null = null;
+      let status = 0;
+      let text = '';
+      let failure: unknown = null;
       try {
-        response = await fetchImpl(`${base}${path}`, {
+        const response = await fetchImpl(`${base}${path}`, {
           ...init,
           headers: { Authorization: `Bearer ${apiKey}`, ...(init.headers ?? {}) },
           signal: controller.signal,
         });
+        status = response.status;
+        text = await response.text();
       } catch (err) {
-        if (attempt >= DOS_AI_ATTEMPTS) throw err;
+        failure = err;
       } finally {
         clearTimeout(timer);
       }
-      if (response) {
-        if (response.ok) return response;
-        if (response.status === 402) {
-          throw new Error('dos.ai refused the request: no credits left on the key (402).');
-        }
-        if ((response.status !== 429 && response.status < 500) || attempt >= DOS_AI_ATTEMPTS) {
-          // The body names the reason; it holds no review text of ours.
-          const detail = (await response.text().catch(() => '')).slice(0, 300);
-          throw new Error(`dos.ai ${init.method ?? 'GET'} ${path}: ${response.status} ${detail}`);
-        }
+      if (failure === null && status >= 200 && status < 300) return { status, text };
+      if (status === 402) {
+        throw new Error('dos.ai refused the request: no credits left on the key (402).');
       }
-      await new Promise(resolve => setTimeout(resolve, 1000 * 2 ** (attempt - 1)));
+      const retryable =
+        retry === 'all' ? failure !== null || status === 429 || status >= 500 : status === 429;
+      if (!retryable || attempt >= DOS_AI_ATTEMPTS) {
+        if (failure !== null && retry === 'throttled') {
+          throw new Error(
+            `dos.ai ${init.method ?? 'GET'} ${path}: no answer (${String(failure)}). A batch may have been created; check the key's batches on dos.ai before the next run.`
+          );
+        }
+        if (failure !== null) throw failure;
+        // The body names the reason; it holds no review text of ours.
+        throw new Error(`dos.ai ${init.method ?? 'GET'} ${path}: ${status} ${text.slice(0, 300)}`);
+      }
+      await wait(1000 * 2 ** (attempt - 1));
     }
   };
-  const json = async <T>(path: string, init?: RequestInit) =>
-    (await (await call(path, init)).json()) as T;
+  const json = async <T>(path: string, init?: RequestInit, retry?: 'all' | 'throttled') =>
+    JSON.parse((await call(path, init, retry)).text) as T;
   return {
     async createBatch(requests) {
       const form = new FormData();
@@ -272,15 +314,19 @@ export function dosAiReviewAiClient(
         'review-ai-points.jsonl'
       );
       const file = await json<{ id: string }>('/files', { method: 'POST', body: form });
-      const batch = await json<{ id: string }>('/batches', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          input_file_id: file.id,
-          endpoint: '/v1/chat/completions',
-          completion_window: '24h',
-        }),
-      });
+      const batch = await json<{ id: string }>(
+        '/batches',
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            input_file_id: file.id,
+            endpoint: '/v1/chat/completions',
+            completion_window: '24h',
+          }),
+        },
+        'throttled'
+      );
       return { id: batch.id };
     },
     async batchStatus(id) {
@@ -291,14 +337,27 @@ export function dosAiReviewAiClient(
         : 'in_progress';
     },
     async *results(id) {
-      const batch = await json<{ output_file_id?: string | null }>(
-        `/batches/${encodeURIComponent(id)}`
-      );
-      // A failed or canceled batch may have no output: its lines come back as failed rows.
-      if (!batch.output_file_id) return;
-      const text = await (
-        await call(`/files/${encodeURIComponent(batch.output_file_id)}/content`)
-      ).text();
+      const batch = await json<{
+        status?: string;
+        output_file_id?: string | null;
+        errmsg?: string | null;
+      }>(`/batches/${encodeURIComponent(id)}`);
+      if (!batch.output_file_id) {
+        // Failed as a whole, or ended with no line run: nothing to store.
+        throw new BatchGoneError(
+          `dos.ai batch ${id} ended ${batch.status ?? 'without a status'} with no output${batch.errmsg ? `: ${batch.errmsg.slice(0, 200)}` : ''}`,
+          batch.status === 'expired' ? 'expired' : 'canceled'
+        );
+      }
+      let text: string;
+      try {
+        text = (await call(`/files/${encodeURIComponent(batch.output_file_id)}/content`)).text;
+      } catch (err) {
+        if (/ 404 /.test(String(err))) {
+          throw new BatchGoneError(`dos.ai batch ${id}: its output file is gone (404)`, 'expired');
+        }
+        throw err;
+      }
       for (const raw of text.split('\n')) {
         if (!raw.trim()) continue;
         let line: DosAiOutputLine;
@@ -577,6 +636,8 @@ export interface CollectedBatch {
   rejects: Record<AiRejectReason, number>;
   unaccented: number;
   failedReviews: number;
+  /** Reviews in requests the gateway did not run for want of credits: still due. */
+  unbilledReviews: number;
   reviewsWithLines: number;
   reviewsAnswered: number;
 }
@@ -629,6 +690,7 @@ export function collectBatch(
     },
     unaccented: 0,
     failedReviews: 0,
+    unbilledReviews: 0,
     reviewsWithLines: 0,
     reviewsAnswered: 0,
   };
@@ -652,6 +714,11 @@ export function collectBatch(
           }
         }
       }
+    }
+    // A request the gateway never ran for want of credits: its reviews stay due, no attempt spent.
+    if (result?.result.type === 'unbilled') {
+      out.unbilledReviews += request.reviews.length;
+      continue;
     }
     for (const review of request.reviews) {
       const base = {
@@ -892,16 +959,26 @@ export async function runReviewAiPointsJob(
     try {
       for await (const entry of ai.results(batch.id)) results.push(entry);
     } catch (err) {
-      // The API keeps results 29 days: an older batch is gone, so mark it and move on.
-      if (now.getTime() - new Date(batch.submitted_at).getTime() < RESULTS_KEPT_MS) throw err;
+      // Results that will never come (the client says so, or the batch is past 28 days):
+      // close the row and store nothing, so the reviews are due again with no attempt spent.
+      const gone = err instanceof BatchGoneError;
+      if (!gone && now.getTime() - new Date(batch.submitted_at).getTime() < RESULTS_KEPT_MS) {
+        throw err;
+      }
+      const status = gone ? err.status : 'expired';
       const { error } = await supabase
         .from('review_ai_batches')
-        .update({ status: 'expired', ended_at: now.toISOString() })
+        .update({ status, ended_at: now.toISOString() })
         .eq('id', batch.id);
-      if (error) throw new Error(`review_ai_batches expire: ${error.message}`);
-      logger.warn('review_ai.expired', `Batch ${batch.id} results are gone; marked expired.`, {
-        batch: batch.id,
-      });
+      if (error) throw new Error(`review_ai_batches close: ${error.message}`);
+      logger.warn(
+        'review_ai.gone',
+        `Batch ${batch.id} has no results to store; marked ${status}.`,
+        {
+          batch: batch.id,
+          reason: err instanceof Error ? err.message : String(err),
+        }
+      );
       return false;
     }
     const ids = batch.manifest.flatMap(r => r.reviews.map(v => v.id));
@@ -962,6 +1039,7 @@ export async function runReviewAiPointsJob(
       rejects: collected.rejects,
       unaccented: collected.unaccented,
       failed_reviews: collected.failedReviews,
+      unbilled_reviews: collected.unbilledReviews,
       cost_usd: Number(collected.costUsd.toFixed(4)),
       ...counts,
     });

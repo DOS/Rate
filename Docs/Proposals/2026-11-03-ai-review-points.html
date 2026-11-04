@@ -141,6 +141,7 @@
   <p><strong>Gọi qua đâu.</strong> Importer hiện gọi AI qua chuẩn OpenAI (biến <code>AI_PROVIDER</code>, cổng <code>dos-ai</code>). Đề xuất bước này gọi thẳng Claude API bằng SDK chính thức của Anthropic, vì cần structured outputs, Batch API và prompt caching. Khoá API chỉ nằm trong secret của Rate-Services. Câu hỏi này để JOY quyết ở D2.</p>
 
   <h2>4. Gửi theo lô và chỉ xử lý một lần</h2>
+  <p class="muted">Từ 04/11/2026 lô được gửi qua Batch API của dos.ai, theo chuẩn OpenAI (file JSONL rồi tạo batch). Dấu đã xử lý, mã lô lưu ngay khi tạo và các luật thử lại bên dưới giữ nguyên. Phần nói về cache và giá Claude chỉ còn để tham khảo.</p>
   <ul>
     <li><strong>Gom lô:</strong> mỗi yêu cầu chứa tối đa 20 review cùng ngành hàng. Phần hướng dẫn của ngành hàng (khoảng 1.500 token) dùng chung, nên được cache: các yêu cầu sau chỉ trả 10% cho phần này. Tối thiểu để cache trên Haiku 5.5 là 512 token, phần hướng dẫn vượt mức này.</li>
     <li><strong>Batch API:</strong> mỗi lần chạy gửi một batch, chờ kết quả, rồi mới ghi. Việc này không cần trả lời ngay.</li>
@@ -165,6 +166,7 @@
   </ul>
 
   <h2>5. Ước tính chi phí</h2>
+  <p class="muted">Từ 04/11/2026: với <code>dos</code> qua Batch API của dos.ai (0,125 / 0,75 USD mỗi 1 triệu token sau khi giảm 50%), 1.000 review tốn khoảng 0,12 USD (200.000 token đọc vào, 120.000 token viết ra); kho ~250 review dưới 0,05 USD. Bảng dưới là ước tính cũ cho Claude.</p>
   <p>Giả định:</p>
   <ul>
     <li>Một review sàn qua điều kiện ở mục 1 dài trung bình khoảng 200 token. Tiếng Việt có dấu tốn token hơn tiếng Anh nên ước rộng tay.</li>
