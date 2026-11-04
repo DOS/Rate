@@ -148,37 +148,62 @@ export function isExtensionMarketplaceHost(
 ): boolean {
   const h = host.toLowerCase();
   return EXTENSION_MARKETPLACE_HOSTS[marketplace].some((allowed) =>
-    allowed.startsWith('.') ? h.endsWith(allowed) : h === allowed
+    allowed.startsWith('.')
+      ? h === allowed.slice(1) ||
+        new RegExp(
+          `^(?:[a-z0-9-]+\\.)+${allowed.slice(1).replace(/\./g, '\\.')}$`
+        ).test(h)
+      : h === allowed
   );
 }
+
+/** Code points, as the database's char_length counts them. */
+const codePoints = (v: string) => Array.from(v).length;
+
+/** An unpaired UTF-16 surrogate, which Postgres jsonb cannot store. */
+const LONE_SURROGATE_RE =
+  /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/;
+
+// The same checks as the RPC: no query, fragment, path parameters, space or
+// control character anywhere; https; a lowercase host with no user or port.
+// eslint-disable-next-line no-control-regex
+const URL_FORBIDDEN_RE = /[?#;\s\u0000-\u001f\u007f-\u009f]/;
 
 function listingUrlOk(v: unknown, marketplace: ExtensionMarketplace): boolean {
   if (
     typeof v !== 'string' ||
-    v.length > EXTENSION_OBSERVATION_LIMITS.urlMax ||
-    v.includes('?') ||
-    v.includes('#') ||
-    CONTROL_RE.test(v)
+    codePoints(v) > EXTENSION_OBSERVATION_LIMITS.urlMax ||
+    URL_FORBIDDEN_RE.test(v) ||
+    LONE_SURROGATE_RE.test(v)
   ) {
     return false;
   }
-  try {
-    const url = new URL(v);
-    return (
-      url.protocol === 'https:' &&
-      !url.username &&
-      !url.password &&
-      !url.port &&
-      isExtensionMarketplaceHost(marketplace, url.hostname)
-    );
-  } catch {
-    return false;
-  }
+  const host = /^https:\/\/([^/]*)/.exec(v)?.[1];
+  return (
+    typeof host === 'string' &&
+    /^[a-z0-9.-]+$/.test(host) &&
+    isExtensionMarketplaceHost(marketplace, host)
+  );
+}
+
+/** ISO 8601 with a zone, as the RPC requires it. */
+const OBSERVED_AT_RE =
+  /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d{1,9})?)?(?:Z|[+-]\d{2}(?::?\d{2})?)$/;
+
+function observedAtMs(v: unknown): number {
+  if (typeof v !== 'string' || !OBSERVED_AT_RE.test(v)) return Number.NaN;
+  // Date.parse wants the offset as ±hh:mm.
+  const normalized = v
+    .replace(/([+-]\d{2})$/, '$1:00')
+    .replace(/([+-]\d{2})(\d{2})$/, '$1:$2');
+  return Date.parse(normalized);
 }
 
 /**
- * Checks an observation against v1 at server time `nowMs`. The first field
- * that breaks a rule is named, the way the RPC names it in DETAIL.
+ * Checks an observation against v1 at server time `nowMs`. It refuses what
+ * the RPC refuses; the field it names is the first rule broken in this order,
+ * which can differ from the RPC's when several rules break (an unknown key is
+ * `observation` here and its own name there).
  */
 export function parseExtensionObservationV1(
   raw: unknown,
@@ -203,8 +228,9 @@ export function parseExtensionObservationV1(
   if (
     variant !== null &&
     (typeof variant !== 'string' ||
-      variant.length < 1 ||
-      variant.length > EXTENSION_OBSERVATION_LIMITS.variantMax ||
+      codePoints(variant) < 1 ||
+      LONE_SURROGATE_RE.test(variant) ||
+      codePoints(variant) > EXTENSION_OBSERVATION_LIMITS.variantMax ||
       CONTROL_RE.test(variant))
   ) {
     return fail('variant_label');
@@ -228,10 +254,7 @@ export function parseExtensionObservationV1(
   ) {
     return fail('stock_qty');
   }
-  const observedMs =
-    typeof raw.observed_at === 'string' && raw.observed_at.length <= 40
-      ? Date.parse(raw.observed_at)
-      : Number.NaN;
+  const observedMs = observedAtMs(raw.observed_at);
   if (
     !Number.isFinite(observedMs) ||
     observedMs > nowMs + EXTENSION_OBSERVATION_LIMITS.futureSkewMs ||

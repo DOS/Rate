@@ -3,6 +3,9 @@ import { NextResponse } from 'next/server';
 import { getRateClient } from '@/lib/rate-api';
 import { isMissingRpcError } from '@/server/rate/request-auth';
 import { rateLimitExceededResponse } from '@/server/rate/api-handler';
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('server.extension-observations');
 
 /**
  * ExtensionObservation v1 ingest (DOS/Rate#1606, M2 of
@@ -14,23 +17,57 @@ import { rateLimitExceededResponse } from '@/server/rate/api-handler';
  *
  * Off until the table exists: every route answers 404 unless
  * RATE_EXTENSION_OBSERVATIONS is "1", and then makes no database call.
+ * Writes also need two server secrets: RATE_EXTENSION_INGEST_KEY, which the
+ * RPCs check so nobody can call them around this route, and
+ * RATE_NETWORK_HASH_SALT for the per-network limits.
  */
 
-export const EXTENSION_OBSERVATION_HEADERS: Record<string, string> = {
-  'Access-Control-Allow-Origin': '*',
+const BASE_HEADERS: Record<string, string> = {
   'Access-Control-Allow-Methods': 'POST, DELETE, OPTIONS',
   'Access-Control-Allow-Headers': 'Content-Type, X-Rate-Extension-Version',
   'Cache-Control': 'no-store',
+  Vary: 'Origin',
 };
+
+/** Browser-extension origins: the only browser callers these routes serve. */
+const EXTENSION_ORIGIN_RE =
+  /^(?:chrome-extension|moz-extension|extension):\/\/[a-z0-9-]{1,64}$/i;
+
+/**
+ * The response headers for a request: CORS only for an extension origin.
+ * Callers without an Origin (the extension's service worker sends one;
+ * server tools send none) get no CORS header at all.
+ */
+export function observationHeaders(
+  request?: Request | null
+): Record<string, string> {
+  const origin = request?.headers.get('origin') ?? '';
+  return EXTENSION_ORIGIN_RE.test(origin)
+    ? { ...BASE_HEADERS, 'Access-Control-Allow-Origin': origin }
+    : { ...BASE_HEADERS };
+}
+
+/**
+ * A web page's request: any http(s) Origin. Refused, so a site the user
+ * visits cannot register ids or send observations from the user's network.
+ */
+export function isWebPageOrigin(request: Request): boolean {
+  return /^https?:\/\//i.test(request.headers.get('origin') ?? '');
+}
+
+export function isJsonRequest(request: Request): boolean {
+  return /^application\/json\b/i.test(
+    request.headers.get('content-type') ?? ''
+  );
+}
 
 export function isExtensionObservationsEnabled(): boolean {
   return process.env.RATE_EXTENSION_OBSERVATIONS === '1';
 }
 
 /**
- * The per-network limit needs the salt: without it every request's
- * network_hash is null and fresh submitter ids walk around the
- * per-submitter limit. Observations are refused until it is set.
+ * The per-network limits need the salt, and the RPCs need the ingest key;
+ * writes are refused until both are set.
  */
 export function hasNetworkHashSalt(
   salt = process.env.RATE_NETWORK_HASH_SALT
@@ -38,21 +75,49 @@ export function hasNetworkHashSalt(
   return typeof salt === 'string' && salt.length >= 16;
 }
 
+export function ingestKey(
+  key = process.env.RATE_EXTENSION_INGEST_KEY
+): string | null {
+  return typeof key === 'string' && key.length >= 32 ? key : null;
+}
+
 export function observationResponse(
+  request: Request | null,
   status: number,
   body: Record<string, unknown>
 ): NextResponse {
   return NextResponse.json(body, {
     status,
-    headers: EXTENSION_OBSERVATION_HEADERS,
+    headers: observationHeaders(request),
   });
 }
 
-export const notEnabledResponse = () =>
-  observationResponse(404, {
+export const notEnabledResponse = (request: Request | null) =>
+  observationResponse(request, 404, {
     ok: false,
     code: 'NOT_ENABLED',
     error: 'Extension observations are not enabled.',
+  });
+
+export const unavailableResponse = (request: Request | null) =>
+  observationResponse(request, 503, {
+    ok: false,
+    code: 'OBSERVATIONS_UNAVAILABLE',
+    error: 'Extension observations are not available yet.',
+  });
+
+export const webPageRefusedResponse = (request: Request | null) =>
+  observationResponse(request, 403, {
+    ok: false,
+    code: 'CROSS_SITE',
+    error: 'Web pages cannot call this endpoint.',
+  });
+
+export const notJsonResponse = (request: Request | null) =>
+  observationResponse(request, 415, {
+    ok: false,
+    code: 'UNSUPPORTED_MEDIA_TYPE',
+    error: 'Send Content-Type: application/json.',
   });
 
 const UUID_RE =
@@ -65,11 +130,15 @@ export function parseSubmitterId(raw: unknown): string | null {
 }
 
 /**
- * The network range of an IP: the /24 of IPv4, the /48 of IPv6; null for
- * anything else (no address, a placeholder, a malformed value).
+ * The network range of an IP: the /24 of IPv4 (also IPv4-mapped IPv6), the
+ * /48 of IPv6; null for anything else (no address, a placeholder, a
+ * malformed value).
  */
 export function networkPrefixOf(ip: string): string | null {
-  const v4 = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(ip);
+  const mapped = /^::ffff:(\d{1,3}(?:\.\d{1,3}){3})$/i.exec(ip);
+  const v4 = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(
+    mapped?.[1] ?? ip
+  );
   if (v4) {
     const parts = v4.slice(1, 5).map(Number);
     if (parts.some((p) => p > 255)) return null;
@@ -93,18 +162,19 @@ export function networkPrefixOf(ip: string): string | null {
 /**
  * HMAC-SHA256 of the network range with RATE_NETWORK_HASH_SALT, as lowercase
  * hex: lets Rate-Services tell independent submitters apart without the raw
- * IP ever being stored. Null without a salt of at least 16 characters or
- * without a usable address.
+ * IP ever being stored. An address that gives no range shares one "unknown"
+ * bucket, so the per-network limits still hold. Null only without a salt of
+ * at least 16 characters.
  */
 export function networkHashFor(
   ip: string,
   salt = process.env.RATE_NETWORK_HASH_SALT
 ): string | null {
-  if (typeof salt !== 'string' || salt.length < 16) return null;
-  const prefix = networkPrefixOf(ip);
-  return prefix
-    ? createHmac('sha256', salt).update(prefix).digest('hex')
-    : null;
+  if (!hasNetworkHashSalt(salt)) return null;
+  const prefix = networkPrefixOf(ip) ?? 'unknown';
+  return createHmac('sha256', salt as string)
+    .update(prefix)
+    .digest('hex');
 }
 
 interface LooseRpcClient {
@@ -128,30 +198,36 @@ export function callObservationRpc(
   return (getRateClient() as unknown as LooseRpcClient).rpc(fn, args);
 }
 
-/** An RPC failure as an answer: never a success, never the raw message. */
-export function rpcFailureResponse(error: {
-  code?: string;
-  details?: string;
-}): NextResponse {
-  if (isMissingRpcError(error)) {
-    return observationResponse(503, {
-      ok: false,
-      code: 'OBSERVATIONS_UNAVAILABLE',
-      error: 'Extension observations are not available yet.',
-    });
-  }
+/**
+ * An RPC failure as an answer: never a success, never the raw message. The
+ * code is logged (not the message, which can carry input).
+ */
+export function rpcFailureResponse(
+  request: Request | null,
+  error: { code?: string; details?: string }
+): NextResponse {
+  log.warn('extension observation rpc refused', {
+    code: typeof error.code === 'string' ? error.code.slice(0, 16) : null,
+  });
+  if (isMissingRpcError(error)) return unavailableResponse(request);
   if (error.code === '54000') {
+    // The database limits are hourly.
     return rateLimitExceededResponse(
-      'Too many observations; try again later.',
-      EXTENSION_OBSERVATION_HEADERS
+      'Too many requests; try again later.',
+      observationHeaders(request),
+      3600
     );
   }
   if (error.code === 'P0002') {
-    return observationResponse(404, {
+    return observationResponse(request, 404, {
       ok: false,
       code: 'UNKNOWN_SUBMITTER',
       error: 'Unknown submitter.',
     });
+  }
+  if (error.code === '42501') {
+    // The ingest key was refused: a server configuration problem.
+    return unavailableResponse(request);
   }
   if (error.code === '22023') {
     const field =
@@ -159,16 +235,25 @@ export function rpcFailureResponse(error: {
       /^[a-z_]{1,32}(?:\.[a-z_]{1,32})?$/.test(error.details)
         ? error.details
         : null;
-    return observationResponse(400, {
+    return observationResponse(request, 400, {
       ok: false,
       code: 'INVALID_OBSERVATION',
       error: 'The observation was refused.',
       field,
     });
   }
-  return observationResponse(502, {
+  return observationResponse(request, 502, {
     ok: false,
     code: 'PERSIST_FAILED',
     error: 'Could not store the observation.',
+  });
+}
+
+/** The answer to a preflight: 404 while the routes are off. */
+export function observationOptions(request: Request): Response {
+  if (!isExtensionObservationsEnabled()) return notEnabledResponse(request);
+  return new Response(null, {
+    status: 204,
+    headers: observationHeaders(request),
   });
 }

@@ -2377,6 +2377,29 @@ function testExtensionObservation(): void {
       { ...valid, listing_url: `https://shopee.vn/${'a'.repeat(2048)}` },
       'listing_url',
     ],
+    // The RPC's URL rules: lowercase host, no port, user, path parameter
+    // or space; no empty subdomain label.
+    [{ ...valid, listing_url: 'https://Shopee.vn/x' }, 'listing_url'],
+    [{ ...valid, listing_url: 'https://shopee.vn:443/x' }, 'listing_url'],
+    [{ ...valid, listing_url: 'https://@shopee.vn/x' }, 'listing_url'],
+    [
+      { ...valid, listing_url: 'https://shopee.vn/x;jsessionid=1' },
+      'listing_url',
+    ],
+    [{ ...valid, listing_url: 'https://shopee.vn/a b' }, 'listing_url'],
+    [{ ...valid, listing_url: 'https:shopee.vn/x' }, 'listing_url'],
+    [
+      {
+        ...valid,
+        marketplace: 'lazada',
+        listing_url: 'https://a..lazada.vn/x',
+      },
+      'listing_url',
+    ],
+    [{ ...valid, variant_label: 'a\ud800b' }, 'variant_label'],
+    [{ ...valid, observed_at: '2026-11-04' }, 'observed_at'],
+    [{ ...valid, observed_at: '2026-11-04T09:59' }, 'observed_at'],
+    [{ ...valid, observed_at: '2026-11-04 09:59Z' }, 'observed_at'],
     [{ ...valid, external_item_id: '' }, 'external_item_id'],
     [{ ...valid, external_item_id: 'a b' }, 'external_item_id'],
     [{ ...valid, external_shop_id: 'x'.repeat(65) }, 'external_shop_id'],
@@ -2413,6 +2436,21 @@ function testExtensionObservation(): void {
       JSON.stringify(input).slice(0, 80)
     );
   }
+  // Offsets the RPC accepts are accepted here too.
+  for (const at of [
+    '2026-11-04T16:59+07',
+    '2026-11-04T16:59+0700',
+    '2026-11-04T16:59:00.123456+07:00',
+  ]) {
+    assert.ok(parse({ ...valid, observed_at: at }).ok, at);
+  }
+  assert.ok(
+    parse({
+      ...valid,
+      marketplace: 'lazada',
+      listing_url: 'https://www.lazada.vn/products/x-i1-s2.html',
+    }).ok
+  );
   // Every marketplace accepts its own hosts and refuses another's.
   assert.ok(rules.isExtensionMarketplaceHost('lazada', 'www.lazada.vn'));
   assert.ok(rules.isExtensionMarketplaceHost('tgdd', 'www.thegioididong.com'));

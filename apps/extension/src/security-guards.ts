@@ -291,17 +291,20 @@ export function sanitizeExtensionProductSignal(
     ratingStar: validRatingStar,
     ratingCount: validRatingCount,
     // The v1 observation fields (DOS/Rate#1606), checked like the rest.
-    skuId:
-      typeof safeSignal.skuId === 'string' &&
-      /^[A-Za-z0-9_.-]{1,64}$/.test(safeSignal.skuId)
-        ? safeSignal.skuId
-        : null,
+    skuId: (() => {
+      const sku = sanitizeExternalIdentifier(safeSignal.skuId);
+      return sku && sku.length <= 64 ? sku : null;
+    })(),
     stockState: (
       ['in_stock', 'low_stock', 'out_of_stock', 'unknown'] as const
     ).includes(safeSignal.stockState as never)
       ? safeSignal.stockState
       : 'unknown',
+    // A quantity only with a known state (DOS/Rate#1606).
     stockQty:
+      ['in_stock', 'low_stock', 'out_of_stock'].includes(
+        safeSignal.stockState as string
+      ) &&
       typeof safeSignal.stockQty === 'number' &&
       Number.isInteger(safeSignal.stockQty) &&
       safeSignal.stockQty >= 0 &&
@@ -314,6 +317,35 @@ export function sanitizeExtensionProductSignal(
       ? safeSignal.extractorSource
       : 'dom',
   };
+}
+
+/**
+ * The query of the product lookup: exactly the fields the disclosures name
+ * (store, cleaned URL, title, item and shop ids, variant, price, original
+ * price) and the mode. A test pins its output (DOS/Rate#1606).
+ */
+export function buildLookupParams(
+  rawSignal: ExtractedPageProductSignal,
+  mode: 'pill' | 'full'
+): URLSearchParams {
+  const signal = sanitizeExtensionProductSignal(rawSignal);
+  const params = new URLSearchParams();
+  params.set('platform', signal.platform);
+  params.set('url', signal.canonicalUrl);
+  params.set('title', signal.title);
+  params.set('mode', mode);
+  if (signal.externalItemId) params.set('externalId', signal.externalItemId);
+  if (signal.externalShopId) params.set('shopId', signal.externalShopId);
+  if (signal.selectedVariant) {
+    params.set('selectedVariant', signal.selectedVariant);
+  }
+  if (signal.price && signal.price > 0) {
+    params.set('price', String(signal.price));
+  }
+  if (signal.originalPrice && signal.originalPrice > 0) {
+    params.set('originalPrice', String(signal.originalPrice));
+  }
+  return params;
 }
 
 /**
@@ -336,7 +368,12 @@ export function buildExtensionObservationV1(
       external_item_id: signal.externalItemId,
       external_shop_id: signal.externalShopId,
       sku_id: signal.skuId ?? null,
-      variant_label: signal.selectedVariant,
+      // v1 allows 120 characters; a longer label is cut, not a reason to
+      // drop the observation.
+      variant_label: signal.selectedVariant
+        ? Array.from(signal.selectedVariant).slice(0, 120).join('').trim() ||
+          null
+        : null,
       price_vnd: signal.price,
       list_price_vnd: signal.originalPrice,
       stock_state: signal.stockState ?? 'unknown',

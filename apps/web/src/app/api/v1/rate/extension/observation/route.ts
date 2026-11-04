@@ -7,15 +7,22 @@ import {
   readBoundedJsonBody,
 } from '@/server/rate/api-handler';
 import {
-  EXTENSION_OBSERVATION_HEADERS,
   callObservationRpc,
   hasNetworkHashSalt,
+  ingestKey,
   isExtensionObservationsEnabled,
+  isJsonRequest,
+  isWebPageOrigin,
   networkHashFor,
   notEnabledResponse,
+  notJsonResponse,
+  observationHeaders,
+  observationOptions,
   observationResponse,
   parseSubmitterId,
   rpcFailureResponse,
+  unavailableResponse,
+  webPageRefusedResponse,
 } from '@/server/rate/extension-observations';
 import { createLogger, serializeError } from '@/lib/logger';
 
@@ -29,11 +36,8 @@ const observationLimiter = new BoundedSlidingWindowRateLimiter({
   maxBuckets: 2_000,
 });
 
-export async function OPTIONS() {
-  return new Response(null, {
-    status: 204,
-    headers: EXTENSION_OBSERVATION_HEADERS,
-  });
+export function OPTIONS(request: Request) {
+  return observationOptions(request);
 }
 
 /**
@@ -43,31 +47,28 @@ export async function OPTIONS() {
  * on: only a salted hash of its network range goes to the RPC.
  */
 export async function POST(request: Request) {
-  if (!isExtensionObservationsEnabled()) return notEnabledResponse();
-  if (!hasNetworkHashSalt()) {
-    return observationResponse(503, {
-      ok: false,
-      code: 'OBSERVATIONS_UNAVAILABLE',
-      error: 'Extension observations are not available yet.',
-    });
-  }
+  if (!isExtensionObservationsEnabled()) return notEnabledResponse(request);
+  if (isWebPageOrigin(request)) return webPageRefusedResponse(request);
+  if (!isJsonRequest(request)) return notJsonResponse(request);
+  const key = ingestKey();
+  if (!key || !hasNetworkHashSalt()) return unavailableResponse(request);
   const clientIp = extractClientRateLimitKey(request.headers);
   if (!observationLimiter.allow(clientIp)) {
     return rateLimitExceededResponse(
       'Too many observations; try again in a minute.',
-      EXTENSION_OBSERVATION_HEADERS
+      observationHeaders(request)
     );
   }
   const body = await readBoundedJsonBody(request, 8 * 1024);
   if (body.tooLarge)
-    return payloadTooLargeResponse(EXTENSION_OBSERVATION_HEADERS);
+    return payloadTooLargeResponse(observationHeaders(request));
   const raw =
     body.value && typeof body.value === 'object' && !Array.isArray(body.value)
       ? (body.value as { submitterId?: unknown; observation?: unknown })
       : {};
   const submitterId = parseSubmitterId(raw.submitterId);
   if (!submitterId) {
-    return observationResponse(400, {
+    return observationResponse(request, 400, {
       ok: false,
       code: 'INVALID_SUBMITTER',
       error: 'Provide submitterId as a uuid.',
@@ -75,7 +76,7 @@ export async function POST(request: Request) {
   }
   const parsed = parseExtensionObservationV1(raw.observation);
   if (!parsed.ok) {
-    return observationResponse(400, {
+    return observationResponse(request, 400, {
       ok: false,
       code: 'INVALID_OBSERVATION',
       error: 'The observation was refused.',
@@ -86,17 +87,18 @@ export async function POST(request: Request) {
     const { data, error } = await callObservationRpc(
       'submit_extension_observation',
       {
+        p_ingest_key: key,
         p_submitter_id: submitterId,
         p_observation: parsed.value,
         p_network_hash: networkHashFor(clientIp),
       }
     );
-    if (error) return rpcFailureResponse(error);
+    if (error) return rpcFailureResponse(request, error);
     const stored =
       data && typeof data === 'object' && !Array.isArray(data)
         ? (data as { status?: unknown })
         : null;
-    return observationResponse(200, {
+    return observationResponse(request, 200, {
       ok: true,
       status: stored?.status === 'quarantined' ? 'quarantined' : 'received',
     });
@@ -104,6 +106,6 @@ export async function POST(request: Request) {
     log.error('submit_extension_observation failed', {
       error: serializeError(err),
     });
-    return rpcFailureResponse({});
+    return rpcFailureResponse(request, {});
   }
 }

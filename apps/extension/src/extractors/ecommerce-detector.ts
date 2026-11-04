@@ -475,27 +475,33 @@ export function extractPriceFromJsonLdOffers(offersRaw: unknown): {
 }
 
 /**
- * A schema.org availability (`https://schema.org/InStock`, `InStock`, or a
- * page's own "in stock" text) as a stock state; null when it says nothing
- * (DOS/Rate#1606). Pre-orders and back-orders are unknown, not in stock.
+ * A schema.org availability (`https://schema.org/InStock`, `schema:InStock`,
+ * `InStock`, or a page's own "in stock" text) as a stock state; null when it
+ * says nothing (DOS/Rate#1606). Pre-orders and back-orders are unknown, not
+ * in stock. An array gives its first string.
  */
 export function stockStateFromAvailability(
   raw: unknown
 ): ExtractedStockState | null {
-  if (typeof raw !== 'string' || raw.length > 200) return null;
-  const v = raw
+  const first = Array.isArray(raw)
+    ? raw.find((v): v is string => typeof v === 'string')
+    : raw;
+  if (typeof first !== 'string' || first.length > 200) return null;
+  const v = first
     .toLowerCase()
-    .replace(/^https?:\/\/schema\.org\//, '')
+    .replace(/^(?:https?:\/\/(?:www\.)?schema\.org\/|schema:)/, '')
     .replace(/[\s_-]+/g, '');
   if (!v) return null;
   if (/^(?:instock|instoreonly|onlineonly|available)$/.test(v)) {
     return 'in_stock';
   }
   if (/^(?:limitedavailability|lowstock)$/.test(v)) return 'low_stock';
-  if (/^(?:outofstock|soldout|discontinued|oos)$/.test(v)) {
+  if (/^(?:outofstock|soldout|discontinued|reserved|oos)$/.test(v)) {
     return 'out_of_stock';
   }
-  if (/^(?:preorder|presale|backorder|madetoorder)$/.test(v)) {
+  if (
+    /^(?:preorder|presale|backorder|madetoorder|availablefororder)$/.test(v)
+  ) {
     return 'unknown';
   }
   return null;
@@ -515,11 +521,8 @@ function stockQtyOf(raw: unknown): number | null {
   return Number.isInteger(n) && n >= 0 && n <= 1_000_000 ? n : null;
 }
 
-/** Stock state and quantity from JSON-LD offers: the first offer that says. */
-export function extractStockFromJsonLdOffers(offersRaw: unknown): {
-  stockState: ExtractedStockState | null;
-  stockQty: number | null;
-} {
+/** The offers of a JSON-LD `offers` value, nested AggregateOffer ones too. */
+export function jsonLdOfferList(offersRaw: unknown): Record<string, unknown>[] {
   const offers: Record<string, unknown>[] = [];
   const push = (entry: unknown) => {
     if (
@@ -532,29 +535,78 @@ export function extractStockFromJsonLdOffers(offersRaw: unknown): {
     }
   };
   for (const entry of Array.isArray(offersRaw) ? offersRaw : [offersRaw]) {
-    push(entry);
     const nested = (entry as { offers?: unknown } | null)?.offers;
-    if (Array.isArray(nested)) nested.forEach(push);
-  }
-  for (const offer of offers) {
-    const stockState = stockStateFromAvailability(offer.availability);
-    if (stockState) {
-      return {
-        stockState,
-        stockQty:
-          stockState === 'out_of_stock' ? 0 : stockQtyOf(offer.inventoryLevel),
-      };
+    if (nested && typeof nested === 'object') {
+      (Array.isArray(nested) ? nested : [nested]).forEach(push);
+      if (!(entry as { availability?: unknown }).availability) continue;
     }
+    push(entry);
+  }
+  return offers;
+}
+
+/**
+ * The stock of one offer. A quantity is kept only when it agrees with the
+ * state: none for an unknown state, 0 for out of stock, and none for an
+ * "in stock" offer that says 0.
+ */
+export function stockOfOffer(offer: Record<string, unknown> | null): {
+  stockState: ExtractedStockState | null;
+  stockQty: number | null;
+} {
+  const stockState = offer
+    ? stockStateFromAvailability(offer.availability)
+    : null;
+  if (!stockState || stockState === 'unknown') {
+    return { stockState, stockQty: null };
+  }
+  if (stockState === 'out_of_stock') return { stockState, stockQty: 0 };
+  const qty = stockQtyOf(offer?.inventoryLevel);
+  return { stockState, stockQty: qty === 0 ? null : qty };
+}
+
+/** Stock state and quantity from JSON-LD offers: the first offer that says. */
+export function extractStockFromJsonLdOffers(offersRaw: unknown): {
+  stockState: ExtractedStockState | null;
+  stockQty: number | null;
+} {
+  for (const offer of jsonLdOfferList(offersRaw)) {
+    const stock = stockOfOffer(offer);
+    if (stock.stockState) return stock;
   }
   return { stockState: null, stockQty: null };
 }
 
-const SKU_ID_RE = /^[A-Za-z0-9_.-]{1,64}$/;
+/**
+ * The offer of the selected variant: the only offer, or the one whose sku or
+ * name matches the selected variant; null when several offers and none can be
+ * told apart, so stock and SKU are not read off another variant.
+ */
+export function pickVariantOffer(
+  offers: readonly Record<string, unknown>[],
+  selectedVariant: string | null
+): Record<string, unknown> | null {
+  if (offers.length === 1) return offers[0] ?? null;
+  if (!selectedVariant) return null;
+  const wanted = selectedVariant.toLowerCase();
+  const matches = offers.filter((offer) =>
+    [offer.sku, offer.name].some(
+      (v) =>
+        typeof v === 'string' &&
+        v.trim().length > 0 &&
+        wanted.includes(v.trim().toLowerCase())
+    )
+  );
+  return matches.length === 1 ? (matches[0] ?? null) : null;
+}
+
+const SKU_ID_RE = /^[A-Za-z0-9_-][A-Za-z0-9_.-]{0,63}$/;
 
 /**
  * The id of the selected variant: from the URL where the store puts it there
- * (Lazada `-s<id>.html`, Tiki `?spid=`), else the JSON-LD `sku` (DOS/Rate#1606).
- * `rawUrl` is the page URL before cleaning, since Tiki keeps it in the query.
+ * (Lazada `-s<id>.html`, Tiki `?spid=`), else the given structured-data sku
+ * (DOS/Rate#1606). `rawUrl` is the page URL before cleaning, since Tiki keeps
+ * it in the query.
  */
 export function extractSkuId(
   platform: SupportedEcommercePlatform,
@@ -750,11 +802,11 @@ export function extractProductSignalFromDom(
   let originalPrice: number | null = null;
   let ratingStar: number | null = null;
   let ratingCount: number | null = null;
-  let stockState: ExtractedStockState | null = null;
-  let stockQty: number | null = null;
-  let jsonLdSku: unknown = null;
-  let titleFromJsonLd = false;
+  // The first JSON-LD product's offers and sku (DOS/Rate#1606).
+  let productOffers: Record<string, unknown>[] | null = null;
+  let productSku: unknown = null;
   let priceFromJsonLd = false;
+  let originalFromDom = false;
 
   // 1. Try JSON-LD Product structured data first (cleanest & resilient across SPA updates)
   const ldScripts = doc.querySelectorAll('script[type="application/ld+json"]');
@@ -766,18 +818,10 @@ export function extractProductSignalFromDom(
         if (isJsonLdProductEntity(item)) {
           if (!title && typeof item.name === 'string') {
             title = cleanExtractedProductTitle(item.name);
-            titleFromJsonLd = Boolean(title);
           }
-          if (!stockState) {
-            const stock = extractStockFromJsonLdOffers(item.offers);
-            stockState = stock.stockState;
-            stockQty = stock.stockQty;
-          }
-          if (jsonLdSku === null) {
-            const offerSku = Array.isArray(item.offers)
-              ? (item.offers[0] as { sku?: unknown } | undefined)?.sku
-              : (item.offers as { sku?: unknown } | undefined)?.sku;
-            jsonLdSku = item.sku ?? offerSku ?? null;
+          if (productOffers === null) {
+            productOffers = jsonLdOfferList(item.offers);
+            productSku = item.sku ?? null;
           }
           if (!price || !originalPrice) {
             const offerPrices = extractPriceFromJsonLdOffers(item.offers);
@@ -854,24 +898,36 @@ export function extractProductSignalFromDom(
     const parsed = parseVndPriceText(el?.textContent);
     if (parsed && (!price || parsed > price)) {
       originalPrice = parsed;
+      originalFromDom = true;
       break;
     }
   }
 
   const selectedVariant = extractSelectedVariantFromDom(doc);
 
-  // 4. Stock from the page's product meta when JSON-LD said nothing.
-  if (!stockState) {
+  // 4. Stock and SKU from the selected variant's offer only, so they never
+  // describe another variant; then the page's product meta for the stock.
+  const offers = productOffers ?? [];
+  const offer = pickVariantOffer(offers, selectedVariant);
+  let { stockState, stockQty } = stockOfOffer(offer);
+  const stockFromJsonLd = stockState !== null;
+  if (!stockState && offers.length <= 1) {
     const meta = doc.querySelector(
-      'meta[property="product:availability"], meta[property="og:availability"], [itemprop="availability"]'
+      'meta[property="product:availability"], meta[property="og:availability"]'
     );
-    stockState = stockStateFromAvailability(
-      meta?.getAttribute('content') ?? meta?.getAttribute('href')
-    );
-    if (stockState === 'out_of_stock') stockQty = 0;
+    ({ stockState, stockQty } = stockOfOffer({
+      availability: meta?.getAttribute('content'),
+    }));
   }
+  const jsonLdSku =
+    offer?.sku ?? (offers.length <= 1 ? productSku : null) ?? null;
 
-  const fromJsonLd = [titleFromJsonLd, priceFromJsonLd || price === null];
+  // Where the fields v1 carries came from: price, list price and stock.
+  const sources = [
+    price !== null ? priceFromJsonLd : null,
+    originalPrice !== null ? !originalFromDom : null,
+    stockState !== null ? stockFromJsonLd : null,
+  ].filter((v): v is boolean => v !== null);
   return {
     platform,
     canonicalUrl,
@@ -886,10 +942,11 @@ export function extractProductSignalFromDom(
     skuId: extractSkuId(platform, currentUrl, jsonLdSku),
     stockState: stockState ?? 'unknown',
     stockQty: stockState ? stockQty : null,
-    extractorSource: fromJsonLd.every(Boolean)
-      ? 'json_ld'
-      : fromJsonLd.some(Boolean)
-        ? 'mixed'
-        : 'dom',
+    extractorSource:
+      sources.length > 0 && sources.every(Boolean)
+        ? 'json_ld'
+        : sources.some(Boolean)
+          ? 'mixed'
+          : 'dom',
   };
 }

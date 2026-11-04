@@ -878,22 +878,76 @@ async function testExtensionObservations() {
   }
   assert.equal(calls.length, 0, 'a disabled route touches nothing');
 
+  // A preflight is a 404 too while off.
+  assert.equal(
+    observationRoute.OPTIONS(
+      new Request('http://localhost/api/v1/rate/extension/observation', {
+        method: 'OPTIONS',
+      })
+    ).status,
+    404
+  );
+
   process.env.RATE_EXTENSION_OBSERVATIONS = '1';
   const savedSalt = process.env.RATE_NETWORK_HASH_SALT;
+  const savedKey = process.env.RATE_EXTENSION_INGEST_KEY;
+  const INGEST_KEY = 'ingest-key-0123456789abcdef0123456789';
   try {
-    // On, but without the network hash salt: observations are refused,
-    // since the per-network limit would not hold.
-    delete process.env.RATE_NETWORK_HASH_SALT;
+    // On, but without the salt or the ingest key: writes are refused before
+    // the database, since its limits and key check would not hold.
+    for (const [salt, key] of [
+      [undefined, INGEST_KEY],
+      ['test-salt-0123456789', undefined],
+      ['test-salt-0123456789', 'too-short'],
+    ] as const) {
+      if (salt) process.env.RATE_NETWORK_HASH_SALT = salt;
+      else delete process.env.RATE_NETWORK_HASH_SALT;
+      if (key) process.env.RATE_EXTENSION_INGEST_KEY = key;
+      else delete process.env.RATE_EXTENSION_INGEST_KEY;
+      calls = [];
+      for (const res of [
+        await submitterRoute.POST(post('/api/v1/rate/extension/submitter', {})),
+        await observationRoute.POST(
+          post('/api/v1/rate/extension/observation', {
+            submitterId: SUBMITTER,
+            observation,
+          })
+        ),
+      ]) {
+        assert.equal(res.status, 503);
+      }
+      assert.equal(calls.length, 0);
+    }
+    process.env.RATE_NETWORK_HASH_SALT = 'test-salt-0123456789';
+    process.env.RATE_EXTENSION_INGEST_KEY = INGEST_KEY;
+
+    // A web page cannot call the routes; an extension origin gets CORS; a
+    // body that is not JSON is refused.
     calls = [];
-    const noSalt = await observationRoute.POST(
-      post('/api/v1/rate/extension/observation', {
-        submitterId: SUBMITTER,
-        observation,
+    const fromSite = post('/api/v1/rate/extension/submitter', {});
+    fromSite.headers.set('origin', 'https://evil.example');
+    assert.equal((await submitterRoute.POST(fromSite)).status, 403);
+    const asText = new Request(
+      'http://localhost/api/v1/rate/extension/observation',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain' },
+        body: JSON.stringify({ submitterId: SUBMITTER, observation }),
+      }
+    );
+    assert.equal((await observationRoute.POST(asText)).status, 415);
+    assert.equal(calls.length, 0);
+    const preflight = observationRoute.OPTIONS(
+      new Request('http://localhost/api/v1/rate/extension/observation', {
+        method: 'OPTIONS',
+        headers: { origin: 'chrome-extension://abcdefghijklmnop' },
       })
     );
-    assert.equal(noSalt.status, 503);
-    assert.equal(calls.length, 0);
-    process.env.RATE_NETWORK_HASH_SALT = 'test-salt-0123456789';
+    assert.equal(preflight.status, 204);
+    assert.equal(
+      preflight.headers.get('access-control-allow-origin'),
+      'chrome-extension://abcdefghijklmnop'
+    );
 
     // A submitter id comes from the RPC, as anon, never the service key.
     calls = [];
@@ -906,6 +960,11 @@ async function testExtensionObservations() {
     );
     assert.equal(res.status, 200);
     assert.deepEqual(await res.json(), { ok: true, submitterId: SUBMITTER });
+    assert.deepEqual(rpcCalls('register_extension_submitter')[0]?.body, {
+      p_ingest_key: INGEST_KEY,
+      p_network_hash: obsMod.networkHashFor('anon', 'test-salt-0123456789'),
+    });
+    assert.equal(res.headers.get('access-control-allow-origin'), null);
     assert.match(res.headers.get('cache-control') ?? '', /no-store/);
     assert.ok(
       calls.every((c) => !JSON.stringify(c.headers).includes(SERVICE_KEY))
@@ -934,6 +993,7 @@ async function testExtensionObservations() {
     const [call] = rpcCalls('submit_extension_observation');
     assert.ok(call, 'submit_extension_observation must be called');
     const args = call.body as Record<string, unknown>;
+    assert.equal(args.p_ingest_key, INGEST_KEY);
     assert.equal(args.p_submitter_id, SUBMITTER);
     assert.deepEqual(args.p_observation, observation);
     assert.equal(
@@ -983,6 +1043,11 @@ async function testExtensionObservations() {
       [{ code: 'P0002', details: 'submitter_id' }, 404, 'UNKNOWN_SUBMITTER'],
       [{ code: '54000' }, 429, 'RATE_LIMIT_EXCEEDED'],
       [
+        { code: '42501', details: 'ingest_key' },
+        503,
+        'OBSERVATIONS_UNAVAILABLE',
+      ],
+      [
         { code: 'PGRST202', message: 'Could not find' },
         503,
         'OBSERVATIONS_UNAVAILABLE',
@@ -1003,6 +1068,9 @@ async function testExtensionObservations() {
       const json = await res.json();
       assert.equal(json.code, code, error.code);
       if (error.code === '22023') assert.equal(json.field, 'price_vnd');
+      if (error.code === '54000') {
+        assert.equal(res.headers.get('retry-after'), '3600');
+      }
     }
 
     // Deleting answers the same for any id and calls the delete RPC.
@@ -1031,6 +1099,10 @@ async function testExtensionObservations() {
       '2001:db8:0::/48'
     );
     assert.equal(obsMod.networkPrefixOf('::1'), '0:0:0::/48');
+    assert.equal(
+      obsMod.networkPrefixOf('::ffff:203.0.113.9'),
+      '203.0.113.0/24'
+    );
     for (const bad of [
       'anon',
       '999.1.1.1',
@@ -1042,7 +1114,15 @@ async function testExtensionObservations() {
       assert.equal(obsMod.networkPrefixOf(bad), null, bad);
     }
     assert.equal(obsMod.networkHashFor('203.0.113.77', 'short'), null);
-    assert.equal(obsMod.networkHashFor('anon', 'test-salt-0123456789'), null);
+    // An unusable address still lands in one shared bucket.
+    assert.match(
+      String(obsMod.networkHashFor('anon', 'test-salt-0123456789')),
+      /^[0-9a-f]{64}$/
+    );
+    assert.equal(
+      obsMod.networkHashFor('anon', 'test-salt-0123456789'),
+      obsMod.networkHashFor('1.2.3', 'test-salt-0123456789')
+    );
     assert.equal(
       obsMod.networkHashFor('203.0.113.5', 'test-salt-0123456789'),
       obsMod.networkHashFor('203.0.113.200', 'test-salt-0123456789')
@@ -1055,6 +1135,8 @@ async function testExtensionObservations() {
     delete process.env.RATE_EXTENSION_OBSERVATIONS;
     if (savedSalt === undefined) delete process.env.RATE_NETWORK_HASH_SALT;
     else process.env.RATE_NETWORK_HASH_SALT = savedSalt;
+    if (savedKey === undefined) delete process.env.RATE_EXTENSION_INGEST_KEY;
+    else process.env.RATE_EXTENSION_INGEST_KEY = savedKey;
   }
 }
 

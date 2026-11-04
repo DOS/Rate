@@ -4995,11 +4995,18 @@ async function runTests() {
       path.resolve(__dirname, 'background/service-worker.ts'),
       'utf8'
     );
+    // The lookup query is built in security-guards (DOS/Rate#1606).
+    const guardsSource = fs.readFileSync(
+      path.resolve(__dirname, 'security-guards.ts'),
+      'utf8'
+    );
     const sentParams = [
       ...new Set(
-        [...workerSource.matchAll(/params\.set\(\s*'([^']+)'/g)].map(
-          (m) => m[1]!
-        )
+        [
+          ...(workerSource + guardsSource).matchAll(
+            /params\.set\(\s*'([^']+)'/g
+          ),
+        ].map((m) => m[1]!)
       ),
     ].sort();
     assert.deepEqual(sentParams, [
@@ -5167,11 +5174,139 @@ async function runTests() {
     for (const key of ['skuId', 'stockState', 'stockQty', 'extractorSource']) {
       assert.ok(!(key in crowd), key);
     }
+    // The exact lookup query and opt-in payload, pinned: they are what the
+    // disclosures describe.
+    assert.equal(
+      guards.buildLookupParams(signal, 'pill').toString(),
+      'platform=shopee&url=https%3A%2F%2Fshopee.vn%2Fiphone-16-i.123.456&title=iPhone+16+128GB&mode=pill&externalId=456&shopId=123&selectedVariant=%C4%90en&price=19990000&originalPrice=22990000'
+    );
+    assert.equal(
+      JSON.stringify(crowd),
+      JSON.stringify({
+        platform: 'shopee',
+        externalItemId: '456',
+        externalShopId: '123',
+        url: 'https://shopee.vn/iphone-16-i.123.456',
+        title: 'iPhone 16 128GB',
+        selectedVariant: 'Đen',
+        price: 19_990_000,
+        originalPrice: 22_990_000,
+        ratingStar: 4.9,
+        ratingCount: 1000,
+        userConsentOptIn: true,
+      })
+    );
     const workerSource = fs.readFileSync(
       path.resolve(__dirname, 'background/service-worker.ts'),
       'utf8'
     );
-    assert.ok(!/stockState|skuId|stockQty/.test(workerSource));
+    assert.ok(!/stockState|skuId|stockQty|extractorSource/.test(workerSource));
+    assert.ok(workerSource.includes('buildLookupParams(rawSignal, mode)'));
+
+    // A long variant label is cut to 120 characters, not a lost observation.
+    const longObs = guards.buildExtensionObservationV1(
+      { ...signal, selectedVariant: 'Màu '.repeat(50) },
+      at,
+      '2.1.0'
+    );
+    assert.ok(longObs && longObs.variant_label!.length <= 120);
+
+    // More availability forms; quantities only agree with the state.
+    assert.equal(det.stockStateFromAvailability('schema:InStock'), 'in_stock');
+    assert.equal(
+      det.stockStateFromAvailability('https://www.schema.org/SoldOut'),
+      'out_of_stock'
+    );
+    assert.equal(det.stockStateFromAvailability('Reserved'), 'out_of_stock');
+    assert.equal(det.stockStateFromAvailability(['InStock']), 'in_stock');
+    assert.equal(
+      det.stockStateFromAvailability('available for order'),
+      'unknown'
+    );
+    assert.deepEqual(
+      det.stockOfOffer({ availability: 'InStock', inventoryLevel: 0 }),
+      {
+        stockState: 'in_stock',
+        stockQty: null,
+      }
+    );
+    assert.deepEqual(
+      det.stockOfOffer({ availability: 'PreOrder', inventoryLevel: 50 }),
+      {
+        stockState: 'unknown',
+        stockQty: null,
+      }
+    );
+    assert.deepEqual(
+      det.extractStockFromJsonLdOffers({
+        '@type': 'AggregateOffer',
+        offers: { availability: 'LimitedAvailability', inventoryLevel: '3' },
+      }),
+      { stockState: 'low_stock', stockQty: 3 }
+    );
+    assert.equal(
+      det.extractSkuId('shopee', 'https://shopee.vn/x-i.1.2', '.'),
+      null
+    );
+
+    // End to end on a page: the selected variant's own offer gives stock and
+    // SKU, never another variant's or the parent's.
+    const variantPage = (selected: string | null, offers: unknown) =>
+      ({
+        title: 'iPhone 16',
+        querySelectorAll(sel: string) {
+          if (sel === 'script[type="application/ld+json"]') {
+            return [
+              {
+                textContent: JSON.stringify({
+                  '@type': 'Product',
+                  name: 'iPhone 16 128GB',
+                  sku: 'BASE-1',
+                  offers,
+                }),
+              },
+            ];
+          }
+          if (selected && sel.includes('aria-checked')) {
+            return [{ textContent: selected }];
+          }
+          return [];
+        },
+        querySelector() {
+          return null;
+        },
+      }) as unknown as Document;
+    const twoOffers = [
+      { sku: 'V-RED', name: 'Đỏ', price: 19990000, availability: 'OutOfStock' },
+      {
+        sku: 'V-BLUE',
+        name: 'Xanh',
+        price: 19990000,
+        availability: 'InStock',
+        inventoryLevel: 4,
+      },
+    ];
+    const url = 'https://shopee.vn/iphone-16-i.123.456';
+    const none = det.extractProductSignalFromDom(
+      variantPage(null, twoOffers),
+      url
+    );
+    assert.ok(none);
+    assert.equal(none.stockState, 'unknown');
+    assert.equal(none.skuId, null);
+    assert.equal(none.extractorSource, 'json_ld');
+    const single = det.extractProductSignalFromDom(
+      variantPage(null, {
+        price: 19990000,
+        availability: 'InStock',
+        inventoryLevel: 9,
+      }),
+      url
+    );
+    assert.ok(single);
+    assert.equal(single.stockState, 'in_stock');
+    assert.equal(single.stockQty, 9);
+    assert.equal(single.skuId, 'BASE-1');
     console.log(
       '  ✅ [Stock, SKU and the v1 observation, not sent (#1606)] Verified'
     );

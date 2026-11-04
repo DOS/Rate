@@ -11,6 +11,7 @@ import {
 } from '../extractors/ecommerce-detector.js';
 import {
   buildCrowdIngestPayload,
+  buildLookupParams,
   DEFAULT_API_BASE_URL,
   isPrivilegedExtensionSender,
   normalizeAllowedApiBaseUrl,
@@ -116,24 +117,8 @@ async function fetchExtensionLookup(
   rawSignal: ExtractedPageProductSignal,
   mode: 'pill' | 'full'
 ): Promise<LookupOutcome> {
-  const signal = sanitizeExtensionProductSignal(rawSignal);
   const settings = await getSettings();
-  const params = new URLSearchParams();
-  params.set('platform', signal.platform);
-  params.set('url', signal.canonicalUrl);
-  params.set('title', signal.title);
-  params.set('mode', mode);
-  if (signal.externalItemId) params.set('externalId', signal.externalItemId);
-  if (signal.externalShopId) params.set('shopId', signal.externalShopId);
-  if (signal.selectedVariant) {
-    params.set('selectedVariant', signal.selectedVariant);
-  }
-  if (signal.price && signal.price > 0) {
-    params.set('price', String(signal.price));
-  }
-  if (signal.originalPrice && signal.originalPrice > 0) {
-    params.set('originalPrice', String(signal.originalPrice));
-  }
+  const params = buildLookupParams(rawSignal, mode);
 
   return requestLookup(
     `${settings.apiBaseUrl}${RATE_API_V1_ENDPOINTS.EXTENSION_LOOKUP}?${params.toString()}`
