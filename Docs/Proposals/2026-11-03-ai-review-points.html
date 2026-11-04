@@ -122,6 +122,15 @@
   <p><code>criterion_key</code> trong schema là một danh sách liệt kê đúng các khoá của ngành hàng, nên AI không thể trả một khoá lạ.</p>
 
   <h2>3. Chọn model</h2>
+  <div class="q"><strong>Cập nhật 04/11/2026: JOY đổi D2, gọi qua dos.ai.</strong> Job gọi model qua cổng dos.ai (Batch API kiểu OpenAI: <code>POST /v1/files</code>, <code>POST /v1/batches</code>), không gọi thẳng Anthropic. Batch API của dos.ai chỉ nhận model của chính DOS và Alibaba (<code>dos</code>, <code>qwen3.8-*</code>, <code>deepseek-*</code>), không nhận Claude, và tính nửa giá. Vì vậy:
+    <ul>
+      <li>Model mặc định là <code>dos</code> (Qwen3.8 27B chạy trên GPU của DOS), giá niêm yết 0,25 / 1,50 USD mỗi 1 triệu token, còn một nửa khi đi qua Batch API.</li>
+      <li>Model dự phòng là <code>qwen3.8-max</code> (2 / 6 USD), chỉ dùng nếu <code>dos</code> không đạt ngưỡng ở mục 7.1. Cách chọn giống D1: rẻ trước, mạnh hơn khi bộ mẫu bảo cần.</li>
+      <li>Giới hạn tiền giữ nguyên mức: 5 USD mỗi tháng cho <code>dos</code>, 15 USD cho <code>qwen3.8-max</code>. Token đọc lại từ cache được tính đủ giá đọc vào, nên con số job ghi là mức trần; hoá đơn thật nằm trong sổ của dos.ai.</li>
+      <li>Kết quả vẫn ép theo schema (<code>response_format</code> json_schema), và mọi kiểm tra ở mục 7.2 giữ nguyên.</li>
+      <li>Khoá: <code>DOS_AI_API_KEY</code> (khoá <code>dos_sk_</code> tạo ở dev.dos.me), thay cho <code>ANTHROPIC_API_KEY</code>.</li>
+    </ul>
+    Bảng dưới đây là phương án Claude ban đầu, giữ lại để tham khảo.</div>
   <div class="table-wrap"><table>
     <tr><th>Model</th><th>Giá đọc vào / viết ra (USD mỗi 1 triệu token)</th><th>Nhận xét</th></tr>
     <tr><td>Claude Haiku 5.5 (<code>claude-haiku-5-5</code>)</td><td>0,10 / 0,50</td><td>Rẻ nhất. Việc này đơn giản: đọc một đoạn ngắn, rút ý có trích dẫn. Đề xuất dùng mặc định.</td></tr>
@@ -132,6 +141,7 @@
   <p><strong>Gọi qua đâu.</strong> Importer hiện gọi AI qua chuẩn OpenAI (biến <code>AI_PROVIDER</code>, cổng <code>dos-ai</code>). Đề xuất bước này gọi thẳng Claude API bằng SDK chính thức của Anthropic, vì cần structured outputs, Batch API và prompt caching. Khoá API chỉ nằm trong secret của Rate-Services. Câu hỏi này để JOY quyết ở D2.</p>
 
   <h2>4. Gửi theo lô và chỉ xử lý một lần</h2>
+  <p class="muted">Từ 04/11/2026 lô được gửi qua Batch API của dos.ai, theo chuẩn OpenAI (file JSONL rồi tạo batch). Dấu đã xử lý, mã lô lưu ngay khi tạo và các luật thử lại bên dưới giữ nguyên. Phần nói về cache và giá Claude chỉ còn để tham khảo.</p>
   <ul>
     <li><strong>Gom lô:</strong> mỗi yêu cầu chứa tối đa 20 review cùng ngành hàng. Phần hướng dẫn của ngành hàng (khoảng 1.500 token) dùng chung, nên được cache: các yêu cầu sau chỉ trả 10% cho phần này. Tối thiểu để cache trên Haiku 5.5 là 512 token, phần hướng dẫn vượt mức này.</li>
     <li><strong>Batch API:</strong> mỗi lần chạy gửi một batch, chờ kết quả, rồi mới ghi. Việc này không cần trả lời ngay.</li>
@@ -156,6 +166,7 @@
   </ul>
 
   <h2>5. Ước tính chi phí</h2>
+  <p class="muted">Từ 04/11/2026: với <code>dos</code> qua Batch API của dos.ai (0,125 / 0,75 USD mỗi 1 triệu token sau khi giảm 50%), 1.000 review tốn khoảng 0,12 USD (200.000 token đọc vào, 120.000 token viết ra); kho ~250 review dưới 0,05 USD. Bảng dưới là ước tính cũ cho Claude.</p>
   <p>Giả định:</p>
   <ul>
     <li>Một review sàn qua điều kiện ở mục 1 dài trung bình khoảng 200 token. Tiếng Việt có dấu tốn token hơn tiếng Anh nên ước rộng tay.</li>
@@ -187,7 +198,7 @@
         <li>test chạy bằng dữ liệu giả và một client AI giả. Không commit chữ review thật từ sàn vào repo.</li>
       </ul>
     </li>
-    <li><strong>DOS/Rate-Services (riêng tư):</strong> chỉ thêm một lịch chạy, giữ khoá <code>ANTHROPIC_API_KEY</code> và tài khoản <code>rate_worker</code>. Thứ tự mỗi đêm: crawl xong, rồi review-ai-points, rồi product-points (để gom luôn các dòng mới), rồi review-values. Không chạy trùng giờ crawl. Không có gì của Rate-Services (proxy, scraper, API nội bộ của sàn) đi vào DOS/Rate.</li>
+    <li><strong>DOS/Rate-Services (riêng tư):</strong> chỉ thêm một lịch chạy, giữ khoá <code>DOS_AI_API_KEY</code> của cổng dos.ai (trước là <code>ANTHROPIC_API_KEY</code>, đổi theo D2 ngày 04/11) và tài khoản <code>rate_worker</code>. Thứ tự mỗi đêm: crawl xong, rồi review-ai-points, rồi product-points (để gom luôn các dòng mới), rồi review-values. Không chạy trùng giờ crawl. Không có gì của Rate-Services (proxy, scraper, API nội bộ của sàn) đi vào DOS/Rate.</li>
     <li><strong>Database:</strong>
       <ul>
         <li>Job đọc bằng <code>rate_worker</code>.</li>
@@ -258,7 +269,8 @@
   <div class="q"><strong>D1. Model.</strong> Haiku 5.5 làm mặc định, chuyển lên Sonnet 5.5 nếu không đạt ngưỡng ở 7.1.
     <p class="rec-line">Đề xuất: duyệt. Chi phí cả hai đều nhỏ; chất lượng quyết định bằng bộ mẫu, không bằng đoán.</p></div>
   <div class="q"><strong>D2. Gọi AI qua đâu.</strong> (a) Thẳng Claude API bằng SDK Anthropic, khoá trong Rate-Services; (b) qua cổng <code>dos-ai</code> kiểu OpenAI như importer đang làm.
-    <p class="rec-line">Đề xuất: (a). Cần structured outputs, Batch API và prompt caching. Qua cổng kiểu OpenAI thì mất hoặc phải tự làm lại các tính năng này.</p></div>
+    <p class="rec-line">Đề xuất: (a). Cần structured outputs, Batch API và prompt caching. Qua cổng kiểu OpenAI thì mất hoặc phải tự làm lại các tính năng này.</p>
+    <p class="rec-line">Quyết định 04/11/2026: JOY chọn (b), gọi qua dos.ai ("Tao có nguyên 1 cái dos.ai cơ mà?"). Cổng có Batch API và nhận json_schema, nên job giữ được gửi theo lô, chỉ xử lý một lần và ép schema. Model đổi thành <code>dos</code> / <code>qwen3.8-max</code> vì Batch API của cổng không nhận Claude (xem mục 3).</p></div>
   <div class="q"><strong>D3. Điều kiện chọn review.</strong> Các ngưỡng ở mục 1: từ 40 ký tự và 8 từ, tiếng Việt hoặc tiếng Anh, qua cổng chặn, chưa có dòng của người viết.
     <p class="rec-line">Đề xuất: duyệt. Chỉnh lại sau lần chạy thử đầu nếu bỏ sót quá nhiều.</p></div>
   <div class="q"><strong>D4. Trọng số dòng AI trong D9</strong> (mục 9).
