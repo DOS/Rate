@@ -1,6 +1,6 @@
 # Chrome Web Store release: checklist and changelog
 
-Release-readiness check of the extension built from `dev` at `fc9b820d` on 2026-10-30. The check was read-only: nothing was published, and the live API was used with a few GET requests.
+Release-readiness check of the extension built from `dev` at `fc9b820d` on 2026-10-30, with the TikTok content-script row updated on 2026-11-04 (#1601). The check was read-only: nothing was published, and the live API was used with a few GET requests.
 
 ## 1. Readiness check (2026-10-30)
 
@@ -55,4 +55,4 @@ Release-readiness check of the extension built from `dev` at `fc9b820d` on 2026-
 - The toolbar badge shows at a glance whether the price you see is a good one. Sold-out listings no longer count towards the price comparison.
 - More accurate product matching: "iPhone 16" no longer matches the iPhone 16e. Category and brand pages are no longer mistaken for product pages.
 - Sellers with no analysed reviews show "No data yet" instead of a risk number.
-- The "Help detect new products" option names exactly what it sends and is still off by default. On TikTok, the extension runs only on product pages.
+- The "Help find new products" option names exactly what it sends and is still off by default. On TikTok, the extension runs only on product pages.

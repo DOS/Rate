@@ -485,7 +485,10 @@ async function runTests() {
   ) as {
     permissions?: string[];
     host_permissions?: string[];
-    content_scripts?: Array<{ matches?: string[] }>;
+    content_scripts?: Array<{
+      matches?: string[];
+      exclude_matches?: string[];
+    }>;
   };
   assert.deepEqual(
     manifestJson.permissions,
@@ -499,13 +502,21 @@ async function runTests() {
     for (const pattern of [...hosts, ...matches]) {
       assert.ok(!pattern.includes('*.tiktok.com'), pattern);
     }
-    const matchesPattern = (pattern: string, url: string) =>
-      new RegExp(
+    // Chrome matches a pattern's path against the URL's path and query,
+    // never its fragment.
+    const matchesPattern = (pattern: string, url: string) => {
+      const u = new URL(url);
+      return new RegExp(
         `^${pattern
           .replace(/[.+?^${}()|[\]\\]/g, '\\$&')
           .replace('://*\\.', '://(?:[^/]+\\.)?')
           .replace(/\*/g, '.*')}$`
-      ).test(url);
+      ).test(`${u.origin}${u.pathname}${u.search}`);
+    };
+    const excludes = manifestJson.content_scripts?.[0]?.exclude_matches ?? [];
+    const injectedOn = (url: string) =>
+      matches.some((p) => matchesPattern(p, url)) &&
+      !excludes.some((p) => matchesPattern(p, url));
     for (const url of [
       'https://www.tiktok.com/@appleflagship/product/1729384756',
       'https://www.tiktok.com/view/product/1729384756',
@@ -513,10 +524,9 @@ async function runTests() {
       'https://www.tiktok.com/shop/vn/pdp/iphone-16/1729384756?src=x',
       'https://shop.tiktok.com/view/product/1729401928401',
     ]) {
-      assert.ok(
-        matches.some((p) => matchesPattern(p, url)),
-        `content script must run on ${url}`
-      );
+      assert.ok(injectedOn(url), `content script must run on ${url}`);
+      // ...and the extractor reads these as products, so the two agree.
+      assert.ok(extractIdsFromUrl('tiktok', url).externalItemId, url);
       assert.ok(
         hosts.some((p) => matchesPattern(p, url)),
         url
@@ -548,11 +558,11 @@ async function runTests() {
       'https://www.tiktok.com/foryou',
       'https://www.tiktok.com/@appleflagship/video/7291234567890',
       'https://www.tiktok.com/search?q=iphone',
+      'https://www.tiktok.com/@appleflagship',
+      'https://www.tiktok.com/@appleflagship/video/7291234567890?ref=/product/1',
+      'https://www.tiktok.com/foryou#/view/product/1',
     ]) {
-      assert.ok(
-        !matches.some((p) => matchesPattern(p, url)),
-        `content script must not run on ${url}`
-      );
+      assert.ok(!injectedOn(url), `content script must not run on ${url}`);
     }
     const originOf = (pattern: string) =>
       pattern.replace(/^(https:\/\/[^/]+)\/.*$/, '$1/*');

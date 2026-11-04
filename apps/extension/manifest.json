@@ -58,6 +58,7 @@
         "https://didongviet.vn/*",
         "https://phongvu.vn/*"
       ],
+      "exclude_matches": ["https://www.tiktok.com/@*/video/*"],
       "js": ["content/content-script.js"],
       "run_at": "document_idle"
     }
