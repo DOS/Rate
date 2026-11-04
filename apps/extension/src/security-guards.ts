@@ -375,10 +375,9 @@ export function buildLookupParams(
 }
 
 /**
- * The ExtensionObservation v1 an opted-in install would send for `signal`
+ * The ExtensionObservation v1 an opted-in install sends for `signal`
  * (DOS/Rate#1606), or null when the page lacks what v1 needs (an item id, a
- * price). Not sent yet: the opt-in signal still uses buildCrowdIngestPayload
- * until the quarantine table exists and the disclosures name v1.
+ * price).
  */
 export function buildExtensionObservationV1(
   rawSignal: ExtractedPageProductSignal,
@@ -627,7 +626,38 @@ export function shouldRenderTrustPill(
 }
 
 /**
- * What the opt-in crowd signal sends, with the message key of the words the
+ * What an opted-in install sends (ExtensionObservation v1, DOS/Rate#1606),
+ * with the message key of the words the opt-in texts use for each field;
+ * every locale's opt-in and consent texts name each one, plus the submitter
+ * id and the network hash the server adds.
+ */
+export const OBSERVATION_FIELD_LABELS = {
+  marketplace: 'crowdFieldPlatform',
+  listing_url: 'crowdFieldUrl',
+  external_item_id: 'crowdFieldExternalItemId',
+  external_shop_id: 'crowdFieldExternalShopId',
+  sku_id: 'observationFieldSku',
+  variant_label: 'crowdFieldSelectedVariant',
+  price_vnd: 'crowdFieldPrice',
+  list_price_vnd: 'crowdFieldOriginalPrice',
+  stock_state: 'observationFieldStock',
+  stock_qty: 'observationFieldStock',
+  observed_at: 'observationFieldObservedAt',
+  extractor: 'observationFieldExtractor',
+} as const satisfies Record<
+  Exclude<keyof ExtensionObservationV1, 'schema_version'>,
+  MessageKey
+>;
+
+/** What else an observation carries: the submitter id and the network hash. */
+export const OBSERVATION_EXTRA_LABELS = [
+  'observationFieldSubmitter',
+  'observationFieldNetwork',
+] as const satisfies readonly MessageKey[];
+
+/**
+ * The legacy opt-in crowd signal (still accepted by the ingest route for the
+ * contact form); the extension now sends v1. What it sends, with the message key of the words the
  * side panel uses for each field. The opt-in text in every locale names
  * each one, so a field added here is disclosed too (DOS/Rate#1230, #1304).
  */

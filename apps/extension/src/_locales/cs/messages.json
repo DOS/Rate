@@ -53,7 +53,7 @@
     "message": "Pomoc s hledáním nových produktů (jen když ji zapnete):"
   },
   "optInBody": {
-    "message": "Když je zapnuto, každá nabídka, kterou otevřete, se také odešle do nezávislé fronty ke kontrole Rate.vn s těmito údaji: obchod, ID produktu, ID obchodu, URL bez sledovacích parametrů, název produktu, zvolená varianta, cena, původní cena, počet hvězdiček a počet recenzí. Bez účtu, jména, e-mailu a cookies."
+    "message": "Když je zapnuto, každá nabídka, kterou otevřete, se také odešle do nezávislé fronty ke kontrole Rate.vn s těmito údaji: obchod, ID produktu, ID obchodu, URL bez sledovacích parametrů, ID varianty (SKU), zvolená varianta, cena, původní cena, stav skladu, čas, kdy jste cenu viděli, verze rozšíření, a navíc náhodné ID této instalace a otisk rozsahu vaší sítě (ne IP adresa). Servery Rate.vn mohou nabídku v obchodě znovu ověřit. Vypnutím se toto ID i vše odeslané smaže. Bez účtu, jména, e-mailu a cookies."
   },
   "crowdFieldPlatform": {
     "message": "obchod"
@@ -684,6 +684,24 @@
     "message": "Zásady ochrany soukromí"
   },
   "onboardingOptInBody": {
-    "message": "Když zvolíte „Ano“, každá nabídka, kterou otevřete, se také odešle do fronty ke kontrole Rate.vn s těmito údaji: obchod, ID produktu, ID obchodu, URL bez sledovacích parametrů, název produktu, zvolená varianta, cena, původní cena, počet hvězdiček a počet recenzí. Servery Rate.vn mohou nabídku v obchodě znovu ověřit. Bez účtu, jména, e-mailu a cookies."
+    "message": "Když zvolíte „Ano“, každá nabídka, kterou otevřete, se také odešle do fronty ke kontrole Rate.vn s těmito údaji: obchod, ID produktu, ID obchodu, URL bez sledovacích parametrů, ID varianty (SKU), zvolená varianta, cena, původní cena, stav skladu, čas, kdy jste cenu viděli, verze rozšíření, a navíc náhodné ID této instalace a otisk rozsahu vaší sítě (ne IP adresa). Servery Rate.vn mohou nabídku v obchodě znovu ověřit. Vypnutím se toto ID i vše odeslané smaže. Bez účtu, jména, e-mailu a cookies."
+  },
+  "observationFieldSku": {
+    "message": "ID varianty (SKU)"
+  },
+  "observationFieldStock": {
+    "message": "stav skladu"
+  },
+  "observationFieldObservedAt": {
+    "message": "čas, kdy jste cenu viděli"
+  },
+  "observationFieldExtractor": {
+    "message": "verze rozšíření"
+  },
+  "observationFieldSubmitter": {
+    "message": "náhodné ID této instalace"
+  },
+  "observationFieldNetwork": {
+    "message": "otisk rozsahu vaší sítě (ne IP adresa)"
   }
 }

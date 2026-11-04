@@ -618,18 +618,34 @@ async function runTests() {
       hosts.filter((h) => !/rate\.vn/.test(h)).sort()
     );
 
-    // The opt-in label names every field the crowd signal sends
-    // (DOS/Rate#1230).
-    const { buildCrowdIngestPayload, CROWD_INGEST_FIELD_LABELS } =
-      await import('./security-guards.js');
-    const payload = buildCrowdIngestPayload({
-      platform: 'shopee',
-      canonicalUrl: 'https://shopee.vn/x-i.1.2',
-      title: 'iPhone 16',
-    } as never);
+    // The opt-in label names every field an opted-in install sends: the v1
+    // observation's keys, plus the submitter id and the network hash
+    // (DOS/Rate#1230, #1606).
+    const {
+      buildExtensionObservationV1,
+      OBSERVATION_FIELD_LABELS,
+      OBSERVATION_EXTRA_LABELS,
+    } = await import('./security-guards.js');
+    const sample = buildExtensionObservationV1(
+      {
+        platform: 'shopee',
+        canonicalUrl: 'https://shopee.vn/x-i.1.2',
+        externalItemId: '2',
+        externalShopId: '1',
+        title: 'iPhone 16',
+        selectedVariant: null,
+        price: 19_990_000,
+        originalPrice: null,
+        ratingStar: 5,
+        ratingCount: 3,
+      },
+      new Date(),
+      '2.1.0'
+    );
+    assert.ok(sample);
     assert.deepEqual(
-      Object.keys(payload).sort(),
-      [...Object.keys(CROWD_INGEST_FIELD_LABELS), 'userConsentOptIn'].sort()
+      Object.keys(sample).sort(),
+      [...Object.keys(OBSERVATION_FIELD_LABELS), 'schema_version'].sort()
     );
     const panelHtml = fs.readFileSync(
       path.resolve(__dirname, 'sidepanel/sidepanel.html'),
@@ -640,10 +656,16 @@ async function runTests() {
       panelHtml.indexOf('</label>', panelHtml.indexOf('id="chk-crowd-optin"'))
     );
     assert.ok(optInLabel.includes('data-i18n="optInBody"'));
+    const disclosedKeys = [
+      ...new Set([
+        ...Object.values(OBSERVATION_FIELD_LABELS),
+        ...OBSERVATION_EXTRA_LABELS,
+      ]),
+    ];
     // Every locale's opt-in text names every field (DOS/Rate#1304).
     for (const [locale, catalogue] of Object.entries(readLocaleCatalogues())) {
       const optInText = catalogue.optInBody?.message ?? '';
-      for (const key of Object.values(CROWD_INGEST_FIELD_LABELS)) {
+      for (const key of disclosedKeys) {
         const label = catalogue[key]?.message ?? '';
         assert.ok(label, `${locale} lacks ${key}`);
         assert.ok(
@@ -651,10 +673,21 @@ async function runTests() {
           `${locale} opt-in text lacks "${label}"`
         );
       }
+      // Ratings are no longer sent (JOY approved dropping them).
+      for (const gone of [
+        'crowdFieldRatingStar',
+        'crowdFieldRatingCount',
+        'crowdFieldTitle',
+      ]) {
+        assert.ok(
+          !optInText.includes(catalogue[gone]?.message ?? '\u0000'),
+          `${locale} opt-in text still names ${gone}`
+        );
+      }
       assert.ok(!/Chỉ gửi URL/.test(optInText));
       // The install consent page names the same fields (DOS/Rate#1603).
       const consentText = catalogue.onboardingOptInBody?.message ?? '';
-      for (const key of Object.values(CROWD_INGEST_FIELD_LABELS)) {
+      for (const key of disclosedKeys) {
         assert.ok(
           consentText.includes(catalogue[key]?.message ?? '\u0000'),
           `${locale} consent text lacks ${key}`
@@ -4296,7 +4329,9 @@ async function runTests() {
         workerSource.match(/'X-Rate-Extension-Version': EXTENSION_VERSION/g) ??
         []
       ).length,
-      2
+      // Every request the worker makes carries it (DOS/Rate#1606 added the
+      // submitter and observation calls).
+      (workerSource.match(/\bfetch\(/g) ?? []).length
     );
     assert.ok(workerSource.includes('chrome.runtime.getManifest().version'));
     // The cooldown is checked before any fetch, and a 429 sets it from Retry-After.
@@ -5265,6 +5300,19 @@ async function runTests() {
     );
     assert.ok(!/stockState|skuId|stockQty|extractorSource/.test(workerSource));
     assert.ok(workerSource.includes('buildLookupParams(rawSignal, mode)'));
+    // The opt-in sends v1 to the observation route, never the legacy crowd
+    // ingest, and turning it off erases the install's id (DOS/Rate#1606).
+    assert.ok(
+      workerSource.includes('RATE_API_V1_ENDPOINTS.EXTENSION_OBSERVATION')
+    );
+    assert.ok(!workerSource.includes('EXTENSION_INGEST'));
+    assert.ok(!workerSource.includes('buildCrowdIngestPayload'));
+    assert.ok(
+      /crowdContributeOptIn === false\)\s*\{\s*void forgetObservationSubmitter\(/.test(
+        workerSource
+      )
+    );
+    assert.ok(workerSource.includes("method: 'DELETE'"));
 
     // A long variant label is cut to 120 characters, not a lost observation.
     const longObs = guards.buildExtensionObservationV1(

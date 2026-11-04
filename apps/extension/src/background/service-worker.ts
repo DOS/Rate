@@ -10,7 +10,7 @@ import {
   sanitizeProductUrl,
 } from '../extractors/ecommerce-detector.js';
 import {
-  buildCrowdIngestPayload,
+  buildExtensionObservationV1,
   buildLookupParams,
   DEFAULT_API_BASE_URL,
   isOnboardingSender,
@@ -159,9 +159,19 @@ async function maybeSendOptInCrowdSignal(
   // A 429 may have come back while the settings were read.
   if ((await lookupCooldown.secondsLeft()) > 0) return;
 
+  // ExtensionObservation v1 into the quarantine (DOS/Rate#1606): only the
+  // fields v1 names, with this install's random submitter id.
+  const observation = buildExtensionObservationV1(
+    signal,
+    new Date(),
+    EXTENSION_VERSION
+  );
+  if (!observation) return;
   try {
-    await fetch(
-      `${settings.apiBaseUrl}${RATE_API_V1_ENDPOINTS.EXTENSION_INGEST}`,
+    const submitterId = await observationSubmitterId(settings.apiBaseUrl);
+    if (!submitterId) return;
+    const res = await fetch(
+      `${settings.apiBaseUrl}${RATE_API_V1_ENDPOINTS.EXTENSION_OBSERVATION}`,
       {
         method: 'POST',
         headers: {
@@ -169,11 +179,79 @@ async function maybeSendOptInCrowdSignal(
           'X-Rate-Extension-Version': EXTENSION_VERSION,
         },
         signal: AbortSignal.timeout(8_000),
-        body: JSON.stringify(buildCrowdIngestPayload(signal)),
+        body: JSON.stringify({ submitterId, observation }),
       }
     );
+    // The server no longer knows this id (deleted, purged): get a new one
+    // next time.
+    if (res.status === 404) {
+      const body = (await res.json().catch(() => null)) as {
+        code?: string;
+      } | null;
+      if (body?.code === 'UNKNOWN_SUBMITTER') {
+        await chrome.storage.local.remove?.(SUBMITTER_ID_KEY);
+      }
+    }
   } catch {
     // Non-blocking background quarantine submission
+  }
+}
+
+const SUBMITTER_ID_KEY = 'observationSubmitterId';
+const SUBMITTER_ID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+
+/**
+ * This install's pseudonymous submitter id, asked from the server once and
+ * kept in chrome.storage.local; null while the server does not take
+ * observations (the routes answer 404 until they are turned on).
+ */
+async function observationSubmitterId(
+  apiBaseUrl: string
+): Promise<string | null> {
+  const stored = await chrome.storage.local.get(SUBMITTER_ID_KEY);
+  const known = stored[SUBMITTER_ID_KEY];
+  if (typeof known === 'string' && SUBMITTER_ID_RE.test(known)) return known;
+  const res = await fetch(
+    `${apiBaseUrl}${RATE_API_V1_ENDPOINTS.EXTENSION_SUBMITTER}`,
+    {
+      method: 'POST',
+      headers: { 'X-Rate-Extension-Version': EXTENSION_VERSION },
+      signal: AbortSignal.timeout(8_000),
+    }
+  );
+  if (!res.ok) return null;
+  const body = (await res.json().catch(() => null)) as {
+    submitterId?: unknown;
+  } | null;
+  const id = body?.submitterId;
+  if (typeof id !== 'string' || !SUBMITTER_ID_RE.test(id)) return null;
+  await chrome.storage.local.set({ [SUBMITTER_ID_KEY]: id });
+  return id;
+}
+
+/**
+ * Turning the opt-in off erases this install's contributions: the server
+ * deletes the submitter id and every observation sent with it, and the id
+ * is forgotten here (DOS/Rate#1606).
+ */
+async function forgetObservationSubmitter(apiBaseUrl: string): Promise<void> {
+  const stored = await chrome.storage.local.get(SUBMITTER_ID_KEY);
+  const id = stored[SUBMITTER_ID_KEY];
+  await chrome.storage.local.remove?.(SUBMITTER_ID_KEY);
+  if (typeof id !== 'string' || !SUBMITTER_ID_RE.test(id)) return;
+  try {
+    await fetch(`${apiBaseUrl}${RATE_API_V1_ENDPOINTS.EXTENSION_SUBMITTER}`, {
+      method: 'DELETE',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Rate-Extension-Version': EXTENSION_VERSION,
+      },
+      signal: AbortSignal.timeout(8_000),
+      body: JSON.stringify({ submitterId: id }),
+    });
+  } catch {
+    // Best effort; the server's purge removes ids that stop sending.
   }
 }
 
@@ -598,7 +676,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         if (typeof message.crowdContributeOptIn === 'boolean') {
           nextSettings.crowdContributeOptIn = message.crowdContributeOptIn;
         }
+        const before = await getSettings();
         await chrome.storage.local.set(nextSettings);
+        if (nextSettings.crowdContributeOptIn === false) {
+          void forgetObservationSubmitter(before.apiBaseUrl);
+        }
         const updated = await getSettings();
         sendResponse({ ok: true, settings: updated });
       } catch (err) {

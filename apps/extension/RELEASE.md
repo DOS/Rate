@@ -45,7 +45,7 @@ Release-readiness check of the extension built from `dev` at `fc9b820d` on 2026-
 - Biểu tượng trên thanh công cụ cho biết nhanh giá đang xem có tốt không. Tin bán đã hết hàng không còn được tính vào giá so sánh.
 - Nhận diện sản phẩm chính xác hơn: tra "iPhone 16" không còn ra iPhone 16e. Trang danh mục và trang thương hiệu không bị nhầm là trang sản phẩm.
 - Gian hàng chưa có đánh giá được phân tích sẽ ghi "Chưa có dữ liệu", không hiện con số rủi ro.
-- Lựa chọn "Đóng góp phát hiện sản phẩm mới" ghi rõ những gì được gửi đi và vẫn tắt mặc định. Lần cài đầu tiên, tiện ích hỏi bạn một lần. TikTok chỉ còn chạy trên trang sản phẩm.
+- Lựa chọn "Đóng góp phát hiện sản phẩm mới" ghi rõ những gì được gửi đi và vẫn tắt mặc định. Lần cài đầu tiên, tiện ích hỏi bạn một lần. Khi bật, tiện ích gửi một quan sát gọn (giá, tồn kho, SKU) thay cho số sao và lượt đánh giá; tắt là xóa mọi thứ đã gửi. TikTok chỉ còn chạy trên trang sản phẩm.
 
 ### English
 
@@ -56,4 +56,4 @@ Release-readiness check of the extension built from `dev` at `fc9b820d` on 2026-
 - The toolbar badge shows at a glance whether the price you see is a good one. Sold-out listings no longer count towards the price comparison.
 - More accurate product matching: "iPhone 16" no longer matches the iPhone 16e. Category and brand pages are no longer mistaken for product pages.
 - Sellers with no analysed reviews show "No data yet" instead of a risk number.
-- The "Help find new products" option names exactly what it sends and is still off by default. On first install, the extension asks you once. On TikTok, the extension runs only on product pages.
+- The "Help find new products" option names exactly what it sends and is still off by default. On first install, the extension asks you once. When on, it sends a minimal observation (price, stock, SKU) instead of ratings; turning it off deletes everything it sent. On TikTok, the extension runs only on product pages.
