@@ -19,6 +19,7 @@ import {
   DEFAULT_API_BASE_URL,
   MAX_SPARKLINE_POINTS,
   escapeSafeExternalHref,
+  isOnboardingSender,
   isPrivilegedExtensionSender,
   normalizeAllowedApiBaseUrl,
   normalizeFiveStarRating,
@@ -467,38 +468,51 @@ async function runTests() {
     }),
     true
   );
-  // In a tab, only this extension's install consent page may change
-  // settings (DOS/Rate#1603).
+  // The install consent page is an extension page in a tab: it is never a
+  // privileged sender, and only isOnboardingSender, which lets it set the
+  // opt-in alone, accepts it by its exact URL (DOS/Rate#1603).
+  const onboardingUrl =
+    'chrome-extension://abcdefghijklmnop/onboarding/onboarding.html';
   assert.equal(
     isPrivilegedExtensionSender(
-      {
-        tab: { id: 7 },
-        url: 'chrome-extension://abcdefghijklmnop/onboarding/onboarding.html',
-      },
+      { tab: { id: 7 }, url: onboardingUrl },
+      'abcdefghijklmnop'
+    ),
+    false
+  );
+  assert.equal(
+    isOnboardingSender(
+      { tab: { id: 7 }, url: onboardingUrl },
       'abcdefghijklmnop'
     ),
     true
   );
-  for (const url of [
-    'https://shopee.vn/onboarding/onboarding.html',
-    'chrome-extension://otherextensionid/onboarding/onboarding.html',
-    'chrome-extension://abcdefghijklmnop/sidepanel/sidepanel.html',
-    'chrome-extension://abcdefghijklmnop/onboarding/onboarding.html?x=1',
-    undefined,
+  for (const sender of [
+    { tab: { id: 7 }, url: 'https://shopee.vn/onboarding/onboarding.html' },
+    {
+      tab: { id: 7 },
+      url: 'chrome-extension://otherextensionid/onboarding/onboarding.html',
+    },
+    {
+      tab: undefined,
+      url: 'chrome-extension://abcdefghijklmnop/sidepanel/sidepanel.html',
+    },
+    { tab: { id: 7 }, url: `${onboardingUrl}?x=1` },
+    { tab: { id: 7 }, url: `${onboardingUrl}#x` },
+    { tab: { id: 7 }, url: undefined },
+    { id: 'otherextensionid', tab: { id: 7 }, url: onboardingUrl },
+    null,
   ]) {
     assert.equal(
-      isPrivilegedExtensionSender({ tab: { id: 7 }, url }, 'abcdefghijklmnop'),
+      isOnboardingSender(sender as never, 'abcdefghijklmnop'),
       false,
-      String(url)
+      JSON.stringify(sender)
     );
   }
   assert.equal(
-    isPrivilegedExtensionSender({
-      tab: { id: 7 },
-      url: 'chrome-extension://abcdefghijklmnop/onboarding/onboarding.html',
-    }),
+    isOnboardingSender({ tab: { id: 7 }, url: onboardingUrl }),
     false,
-    'without a known runtime id a tab sender is never privileged'
+    'without a known runtime id nothing is the consent page'
   );
   assert.equal(
     escapeSafeExternalHref('javascript:alert(1)'),

@@ -32,6 +32,17 @@ async function choose(optIn: boolean): Promise<void> {
 
 document.addEventListener('DOMContentLoaded', () => {
   applyDocumentMessages(document);
+  // The status always shows the stored choice, also one changed in the side
+  // panel after this page saved it.
+  chrome.storage.onChanged?.addListener((changes, areaName) => {
+    const change = changes.crowdContributeOptIn;
+    const status = document.getElementById('status');
+    if (areaName === 'local' && change && status) {
+      status.textContent = t(
+        change.newValue === true ? 'onboardingSavedYes' : 'onboardingSavedNo'
+      );
+    }
+  });
   document.title = t('onboardingTitle');
   document
     .getElementById('btn-no')

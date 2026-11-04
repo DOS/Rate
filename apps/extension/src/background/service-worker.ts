@@ -12,6 +12,7 @@ import {
 import {
   buildCrowdIngestPayload,
   DEFAULT_API_BASE_URL,
+  isOnboardingSender,
   isPrivilegedExtensionSender,
   normalizeAllowedApiBaseUrl,
   ONBOARDING_PAGE_PATH,
@@ -211,8 +212,29 @@ async function updateActionBadge(
 }
 
 chrome.runtime.onInstalled.addListener(async (details) => {
-  // On a first install only, ask about the opt-in (DOS/Rate#1603). The
-  // default stays off, so closing the page sends nothing extra.
+  try {
+    await chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true });
+    // Each missing setting gets its default; a stored choice is kept.
+    const existing = await chrome.storage.local.get([
+      'apiBaseUrl',
+      'crowdContributeOptIn',
+    ]);
+    const defaults: Partial<ExtensionSettings> = {};
+    if (typeof existing.apiBaseUrl !== 'string') {
+      defaults.apiBaseUrl = DEFAULT_SETTINGS.apiBaseUrl;
+    }
+    if (typeof existing.crowdContributeOptIn !== 'boolean') {
+      defaults.crowdContributeOptIn = DEFAULT_SETTINGS.crowdContributeOptIn;
+    }
+    if (Object.keys(defaults).length > 0) {
+      await chrome.storage.local.set(defaults);
+    }
+  } catch {
+    // Ignore sidePanel or storage init errors during extension reload
+  }
+  // On a first install only, after the defaults, ask about the opt-in
+  // (DOS/Rate#1603). The default stays off, so closing the page sends
+  // nothing extra.
   if (details?.reason === 'install') {
     try {
       await chrome.tabs.create({
@@ -221,21 +243,6 @@ chrome.runtime.onInstalled.addListener(async (details) => {
     } catch {
       // The side panel toggle still offers the choice.
     }
-  }
-  try {
-    await chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true });
-    const existing = await chrome.storage.local.get([
-      'apiBaseUrl',
-      'crowdContributeOptIn',
-    ]);
-    if (typeof existing.apiBaseUrl !== 'string') {
-      await chrome.storage.local.set({
-        apiBaseUrl: DEFAULT_SETTINGS.apiBaseUrl,
-        crowdContributeOptIn: DEFAULT_SETTINGS.crowdContributeOptIn,
-      });
-    }
-  } catch {
-    // Ignore sidePanel or storage init errors during extension reload
   }
 });
 
@@ -578,7 +585,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
 
   if (msgType === 'RATE_UPDATE_SETTINGS') {
-    if (!isPrivilegedExtensionSender(sender)) {
+    // The install consent page may set the opt-in and nothing else.
+    const fromOnboarding = isOnboardingSender(sender);
+    if (!fromOnboarding && !isPrivilegedExtensionSender(sender)) {
       sendResponse({
         ok: false,
         error: 'Settings can only be updated from the Rate extension sidepanel',
@@ -589,6 +598,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       try {
         const nextSettings: Partial<ExtensionSettings> = {};
         if (
+          !fromOnboarding &&
           typeof message.apiBaseUrl === 'string' &&
           message.apiBaseUrl.trim()
         ) {

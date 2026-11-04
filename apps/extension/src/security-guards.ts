@@ -68,6 +68,28 @@ export function normalizeAllowedApiBaseUrl(
 /** The consent page opened once at install (DOS/Rate#1603). */
 export const ONBOARDING_PAGE_PATH = 'onboarding/onboarding.html';
 
+/**
+ * The install consent page, an extension page in a tab: exactly its URL in
+ * this extension, never a content script (whose url is the web page). It may
+ * only set the opt-in (DOS/Rate#1603).
+ */
+export function isOnboardingSender(
+  sender: { id?: string; tab?: unknown; url?: string } | null | undefined,
+  expectedRuntimeId?: string
+): boolean {
+  if (!sender || typeof sender !== 'object' || Array.isArray(sender)) {
+    return false;
+  }
+  const runtimeId =
+    expectedRuntimeId ??
+    (typeof chrome !== 'undefined' ? chrome.runtime?.id : undefined);
+  if (!runtimeId) return false;
+  if (typeof sender.id === 'string' && sender.id !== runtimeId) return false;
+  return (
+    sender.url === `chrome-extension://${runtimeId}/${ONBOARDING_PAGE_PATH}`
+  );
+}
+
 export function isPrivilegedExtensionSender(
   sender: {
     id?: string;
@@ -90,13 +112,8 @@ export function isPrivilegedExtensionSender(
           .runtime!.id
       : undefined);
 
-  // A sender in a tab is a content script, except the install consent page,
-  // an extension page opened in a tab (DOS/Rate#1603).
   if (sender.tab != null) {
-    return (
-      Boolean(runtimeId) &&
-      sender.url === `chrome-extension://${runtimeId}/${ONBOARDING_PAGE_PATH}`
-    );
+    return false;
   }
 
   if (
