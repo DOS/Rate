@@ -17,6 +17,8 @@ import {
   aiCandidates,
   buildRequests,
   collectBatch,
+  dosAiReviewAiClient,
+  fromDosAiOutputLine,
   qualityStop,
   runReviewAiPointsJob,
   type AiMarkerRow,
@@ -169,24 +171,25 @@ function testPrompt() {
     too_many: 1,
   });
 
-  // Prices: Haiku 5.5 at batch prices, cache reads and writes included.
+  // Prices: dos.ai list prices at the Batch API's half, cached tokens at the full input
+  // price (an upper bound).
   assert.equal(
-    batchCostUsd('claude-haiku-5-5', {
+    batchCostUsd('dos', {
       input_tokens: 1_000_000,
       output_tokens: 1_000_000,
       cache_read_input_tokens: 1_000_000,
       cache_creation_input_tokens: 1_000_000,
     }).toFixed(4),
-    ((0.1 + 0.5 + 0.01 + 0.125) * 0.5).toFixed(4)
+    ((0.25 + 1.5 + 0.25 + 0.25) * 0.5).toFixed(4)
   );
   assert.equal(
-    batchCostUsd('claude-sonnet-5-5', { output_tokens: 1_000_000 }),
-    20 * batchCostUsd('claude-haiku-5-5', { output_tokens: 1_000_000 })
+    batchCostUsd('qwen3.8-max', { output_tokens: 1_000_000 }),
+    4 * batchCostUsd('dos', { output_tokens: 1_000_000 })
   );
-  const ceiling = reserveUsd('claude-haiku-5-5', [
+  const ceiling = reserveUsd('dos', [
     { instructions: 'x'.repeat(3000), message: 'y'.repeat(8000) },
   ]);
-  assert.ok(ceiling > 0.0015 && ceiling < 0.003, `one request's ceiling ${ceiling}`);
+  assert.ok(ceiling > 0.004 && ceiling < 0.007, `one request's ceiling ${ceiling}`);
   console.log('  ✅ hash, qualifying text, schema, evidence, line checks and prices verified');
 }
 
@@ -252,16 +255,23 @@ function testCandidates() {
     textHash: hash,
     category: i < 41 ? 'smartphones' : 'laptops',
   }));
-  const built = buildRequests(many, 'claude-haiku-5-5');
+  const built = buildRequests(many, 'dos');
   assert.deepEqual(
     built.manifest.map(r => `${r.custom_id}:${r.reviews.length}`),
     ['laptops-0:4', 'smartphones-1:20', 'smartphones-2:20', 'smartphones-3:1']
   );
+  // One line of an OpenAI-format batch file, as dos.ai's Batch API takes it.
   const request = built.requests[1]!;
-  assert.equal(request.params.model, 'claude-haiku-5-5');
-  assert.equal(request.params.output_config.effort, 'low');
-  assert.equal(request.params.system[0]!.cache_control.type, 'ephemeral');
-  const sent = JSON.parse(request.params.messages[0]!.content.split('\n').slice(1).join('\n')) as {
+  assert.deepEqual([request.method, request.url], ['POST', '/v1/chat/completions']);
+  assert.equal(request.body.model, 'dos');
+  assert.equal(request.body.stream, false);
+  assert.equal(request.body.messages[0].role, 'system');
+  assert.equal(request.body.messages[0].content, reviewAiInstructions('smartphones'));
+  assert.deepEqual(
+    [request.body.response_format.type, request.body.response_format.json_schema.strict],
+    ['json_schema', true]
+  );
+  const sent = JSON.parse(request.body.messages[1].content.split('\n').slice(1).join('\n')) as {
     ref: number;
     text: string;
   }[];
@@ -269,7 +279,7 @@ function testCandidates() {
     sent.map(r => r.ref),
     Array.from({ length: 20 }, (_, i) => i + 1)
   );
-  assert.ok(!request.params.messages[0]!.content.includes(id(100)), 'no review id is sent');
+  assert.ok(!JSON.stringify(request).includes(id(100)), 'no review id is sent');
   console.log('  ✅ the gate, the process-once rule and the requests verified');
 }
 
@@ -351,7 +361,7 @@ function testCollect() {
   ];
   const texts = new Map([1, 2, 3, 4, 5, 6, 7].map(n => [id(n), LONG]));
   const collected = collectBatch(
-    { id: 'msgbatch_test0001', model: 'claude-haiku-5-5', prompt_version: 'v1', manifest },
+    { id: 'msgbatch_test0001', model: 'dos', prompt_version: 'v1', manifest },
     results,
     texts
   );
@@ -370,12 +380,12 @@ function testCollect() {
   assert.equal(collected.usage.input_tokens, 16000, 'cut-off and refused requests are paid for');
   assert.equal(
     collected.costUsd,
-    batchCostUsd('claude-haiku-5-5', { input_tokens: 16000, output_tokens: 3600 })
+    batchCostUsd('dos', { input_tokens: 16000, output_tokens: 3600 })
   );
   const errored = collectBatch(
     {
       id: 'msgbatch_test0002',
-      model: 'claude-haiku-5-5',
+      model: 'dos',
       prompt_version: 'v1',
       manifest: manifest.slice(1, 2),
     },
@@ -476,7 +486,7 @@ async function testJob() {
   assert.equal(batch.status, 'stored');
   assert.equal(
     Number(batch.cost_usd),
-    Number(batchCostUsd('claude-haiku-5-5', { input_tokens: 4000, output_tokens: 900 }).toFixed(4))
+    Number(batchCostUsd('dos', { input_tokens: 4000, output_tokens: 900 }).toFixed(4))
   );
   assert.equal(db.stores.flat().length, 3);
   assert.ok(
@@ -500,7 +510,7 @@ async function testJob() {
   const crashed = fakeSupabase(seed());
   crashed.tables.review_ai_batches!.push({
     id: 'msgbatch_crashed01',
-    model: 'claude-haiku-5-5',
+    model: 'dos',
     prompt_version: REVIEW_AI_PROMPT_VERSION,
     status: 'submitted',
     manifest: [
@@ -606,7 +616,7 @@ async function testJob() {
   const capped = fakeSupabase(seed());
   capped.tables.review_ai_batches!.push({
     id: 'msgbatch_spent0001',
-    model: 'claude-haiku-5-5',
+    model: 'dos',
     prompt_version: 'v0',
     status: 'stored',
     manifest: [],
@@ -617,7 +627,7 @@ async function testJob() {
   });
   capped.tables.review_ai_batches!.push({
     id: 'msgbatch_lastmonth',
-    model: 'claude-haiku-5-5',
+    model: 'dos',
     prompt_version: 'v0',
     status: 'stored',
     manifest: [],
@@ -638,7 +648,7 @@ async function testJob() {
   assert.equal(ai.calls.length, 0);
   const sonnet = await runReviewAiPointsJob(capped.client, {
     enabled: true,
-    model: 'claude-sonnet-5-5',
+    model: 'qwen3.8-max',
     now,
   });
   assert.equal(sonnet.capped, false, 'each model has its own cap');
@@ -697,8 +707,118 @@ async function testJob() {
   );
 }
 
+async function testDosAiClient() {
+  // Output lines: a normal answer, a cut-off one, a filtered one, an error, a 400.
+  const ok = (finish: string) => ({
+    status_code: 200,
+    body: {
+      choices: [{ message: { content: '{"reviews":[]}' }, finish_reason: finish }],
+      usage: {
+        prompt_tokens: 1000,
+        completion_tokens: 50,
+        prompt_tokens_details: { cached_tokens: 600 },
+      },
+    },
+  });
+  const read = (line: object) => fromDosAiOutputLine(line);
+  const stopped = read({ custom_id: 'a', response: ok('stop') });
+  assert.equal(stopped?.result.type, 'succeeded');
+  if (stopped?.result.type === 'succeeded') {
+    assert.equal(stopped.result.message.stop_reason, 'end_turn');
+    assert.deepEqual(stopped.result.message.usage, {
+      input_tokens: 400,
+      output_tokens: 50,
+      cache_read_input_tokens: 600,
+      cache_creation_input_tokens: 0,
+    });
+  }
+  const reason = (line: object) => {
+    const r = read(line);
+    return r?.result.type === 'succeeded' ? r.result.message.stop_reason : r?.result.type;
+  };
+  assert.equal(reason({ custom_id: 'b', response: ok('length') }), 'max_tokens');
+  assert.equal(reason({ custom_id: 'c', response: ok('content_filter') }), 'refusal');
+  assert.equal(
+    reason({ custom_id: 'd', error: { code: 'model_sunset', message: 'x' } }),
+    'errored'
+  );
+  assert.equal(reason({ custom_id: 'e', response: { status_code: 400, body: {} } }), 'errored');
+  assert.equal(read({ response: ok('stop') }), null, 'a line with no custom_id is skipped');
+
+  // The client against a fake gateway: upload, create, status, results, cancel, auth, retry, 402.
+  const calls: string[] = [];
+  let busy = 1;
+  const gateway = (async (url: string | URL | Request, init?: RequestInit) => {
+    const path = String(url).replace('https://beta-api.dos.ai/v1', '');
+    const method = init?.method ?? 'GET';
+    calls.push(`${method} ${path}`);
+    assert.equal(
+      (init?.headers as Record<string, string>).Authorization,
+      'Bearer dos_sk_test',
+      'the key as a Bearer token'
+    );
+    const reply = (status: number, body: unknown) =>
+      new Response(typeof body === 'string' ? body : JSON.stringify(body), { status });
+    if (path === '/files' && method === 'POST') {
+      const form = init!.body as FormData;
+      assert.equal(form.get('purpose'), 'batch');
+      const lines = (await (form.get('file') as Blob).text()).trim().split('\n');
+      assert.equal(JSON.parse(lines[0]!).url, '/v1/chat/completions');
+      return reply(200, { id: 'file_in' });
+    }
+    if (path === '/batches' && method === 'POST') {
+      const body = JSON.parse(String(init!.body)) as Record<string, string>;
+      assert.deepEqual(body, {
+        input_file_id: 'file_in',
+        endpoint: '/v1/chat/completions',
+        completion_window: '24h',
+      });
+      return reply(200, { id: 'batch_abc123' });
+    }
+    if (path === '/batches/batch_abc123') {
+      if (busy-- > 0) return reply(503, 'busy');
+      return reply(200, { status: 'completed', output_file_id: 'file_out' });
+    }
+    if (path === '/files/file_out/content') {
+      return reply(
+        200,
+        [
+          JSON.stringify({ custom_id: 'smartphones-0', response: ok('stop') }),
+          'not json',
+          JSON.stringify({ custom_id: 'smartphones-1', error: { message: 'x' } }),
+        ].join('\n')
+      );
+    }
+    if (path === '/batches/batch_abc123/cancel') return reply(200, { status: 'cancelling' });
+    if (path === '/batches/batch_broke') return reply(402, { error: 'insufficient credits' });
+    return reply(404, 'no route');
+  }) as typeof fetch;
+  const client = dosAiReviewAiClient('dos_sk_test', 'https://beta-api.dos.ai/v1/', gateway);
+  const built = buildRequests(
+    [{ id: id(1), text: LONG, textHash: reviewTextHash(LONG), category: 'smartphones' }],
+    'dos'
+  );
+  assert.deepEqual(await client.createBatch(built.requests), { id: 'batch_abc123' });
+  assert.equal(await client.batchStatus('batch_abc123'), 'ended', 'a 503 is retried');
+  const out: BatchResult[] = [];
+  for await (const r of client.results('batch_abc123')) out.push(r);
+  assert.deepEqual(
+    out.map(r => `${r.custom_id}:${r.result.type}`),
+    ['smartphones-0:succeeded', 'smartphones-1:errored']
+  );
+  await client.cancelBatch('batch_abc123');
+  await assert.rejects(client.batchStatus('batch_broke'), /no credits left/);
+  await assert.rejects(client.batchStatus('batch_missing'), /404/);
+  assert.deepEqual(calls.slice(0, 3), [
+    'POST /files',
+    'POST /batches',
+    'GET /batches/batch_abc123',
+  ]);
+  console.log('  ✅ dos.ai batch client: upload, create, status, results, cancel, retry and 402');
+}
+
 function refsOf(request: BatchRequest): number[] {
-  const content = request.params.messages[0]!.content;
+  const content = request.body.messages[1].content;
   return (JSON.parse(content.slice(content.indexOf('\n') + 1)) as { ref: number }[]).map(
     r => r.ref
   );
@@ -855,6 +975,7 @@ async function run() {
   testCandidates();
   testCollect();
   await testJob();
+  await testDosAiClient();
 }
 
 run().catch(err => {

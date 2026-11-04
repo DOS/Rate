@@ -29,11 +29,11 @@ import {
 export const REVIEW_AI_PROMPT_VERSION = 'v1';
 export { RATING_CRITERIA_VERSION };
 
-/** Reviews per request: one category, one cached instruction block. */
+/** Reviews per request: one category, one instruction block (a shared prefix). */
 export const REVIEWS_PER_REQUEST = 20;
 /** Lines per side per review (design 2.2). */
 export const AI_POINTS_PER_KIND = 3;
-/** Output tokens per request: 20 reviews x ~120 tokens, with room for low-effort thinking. */
+/** Output tokens per request: 20 reviews x ~120 tokens, with room for any reasoning. */
 export const REQUEST_MAX_TOKENS = 6000;
 /** Evidence length, in characters as stored (the writer takes 2 to 300). */
 export const EVIDENCE_MAX = 300;
@@ -42,18 +42,31 @@ export const EVIDENCE_MAX = 300;
 export const REVIEW_AI_MIN_CHARS = 40;
 export const REVIEW_AI_MIN_WORDS = 8;
 
-/** Models the job may use (D1) and their list prices in USD per million tokens. */
+/**
+ * Models the job may use through the dos.ai gateway's Batch API (D2 as JOY
+ * decided on 2026-11-04: the job calls dos.ai, not a model vendor), and their
+ * dos.ai list prices in USD per million tokens (dosai.model_pricing, cents
+ * per million: dos 25/150, qwen3.8-max 200/600). The gateway's Batch API
+ * serves only its own and Alibaba models (dos, qwen3.8-*, deepseek-*); dos is
+ * Qwen3.8 27B on DOS's own GPUs. D1's shape stays: the cheap model by
+ * default, the stronger one only if the default misses the gold set (7.1).
+ */
 export const REVIEW_AI_MODELS = {
-  'claude-haiku-5-5': { input: 0.1, output: 0.5, monthlyCapUsd: 5 },
-  'claude-sonnet-5-5': { input: 2, output: 10, monthlyCapUsd: 15 },
+  dos: { input: 0.25, output: 1.5, monthlyCapUsd: 5 },
+  'qwen3.8-max': { input: 2, output: 6, monthlyCapUsd: 15 },
 } as const;
 export type ReviewAiModel = keyof typeof REVIEW_AI_MODELS;
-export const DEFAULT_REVIEW_AI_MODEL: ReviewAiModel = 'claude-haiku-5-5';
-/** The Batch API halves every token price. */
+export const DEFAULT_REVIEW_AI_MODEL: ReviewAiModel = 'dos';
+/** The gateway bills Batch API lines at half the synchronous price. */
 export const BATCH_DISCOUNT = 0.5;
-/** Cache reads cost 0.1x the input price; cache writes 1.25x. */
-export const CACHE_READ_FACTOR = 0.1;
-export const CACHE_WRITE_FACTOR = 1.25;
+/**
+ * Cached prompt tokens, read or written, are counted at the full input price:
+ * the gateway reports them (prompt_tokens_details) but its cached rates per
+ * model are not published, so the job's figure is an upper bound. The
+ * gateway's own ledger is the bill.
+ */
+export const CACHE_READ_FACTOR = 1;
+export const CACHE_WRITE_FACTOR = 1;
 
 export function isReviewAiModel(value: unknown): value is ReviewAiModel {
   return typeof value === 'string' && Object.prototype.hasOwnProperty.call(REVIEW_AI_MODELS, value);
