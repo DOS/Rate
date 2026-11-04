@@ -777,6 +777,127 @@ export type Database = {
         };
         Relationships: [];
       };
+      review_ai_batches: {
+        Row: {
+          cache_read_tokens: number;
+          cache_write_tokens: number;
+          cost_usd: number | null;
+          ended_at: string | null;
+          id: string;
+          input_tokens: number;
+          manifest: Json;
+          model: string;
+          output_tokens: number;
+          prompt_version: string;
+          request_count: number;
+          reserved_usd: number;
+          review_count: number;
+          status: string;
+          stored_at: string | null;
+          submitted_at: string;
+        };
+        Insert: {
+          cache_read_tokens?: number;
+          cache_write_tokens?: number;
+          cost_usd?: number | null;
+          ended_at?: string | null;
+          id: string;
+          input_tokens?: number;
+          manifest: Json;
+          model: string;
+          output_tokens?: number;
+          prompt_version: string;
+          request_count: number;
+          reserved_usd: number;
+          review_count: number;
+          status?: string;
+          stored_at?: string | null;
+          submitted_at?: string;
+        };
+        Update: {
+          cache_read_tokens?: number;
+          cache_write_tokens?: number;
+          cost_usd?: number | null;
+          ended_at?: string | null;
+          id?: string;
+          input_tokens?: number;
+          manifest?: Json;
+          model?: string;
+          output_tokens?: number;
+          prompt_version?: string;
+          request_count?: number;
+          reserved_usd?: number;
+          review_count?: number;
+          status?: string;
+          stored_at?: string | null;
+          submitted_at?: string;
+        };
+        Relationships: [];
+      };
+      review_ai_extractions: {
+        Row: {
+          attempts: number;
+          batch_id: string | null;
+          category_slug: string;
+          criteria_version: number;
+          evidence: Json;
+          lines_prompt_version: string | null;
+          model: string;
+          outcome: string;
+          point_count: number;
+          processed_at: string;
+          prompt_version: string;
+          rejected_count: number;
+          review_id: string;
+          text_hash: string;
+        };
+        Insert: {
+          attempts?: number;
+          batch_id?: string | null;
+          category_slug: string;
+          criteria_version: number;
+          evidence?: Json;
+          lines_prompt_version?: string | null;
+          model: string;
+          outcome: string;
+          point_count?: number;
+          processed_at?: string;
+          prompt_version: string;
+          rejected_count?: number;
+          review_id: string;
+          text_hash: string;
+        };
+        Update: {
+          attempts?: number;
+          batch_id?: string | null;
+          category_slug?: string;
+          criteria_version?: number;
+          evidence?: Json;
+          lines_prompt_version?: string | null;
+          model?: string;
+          outcome?: string;
+          point_count?: number;
+          processed_at?: string;
+          prompt_version?: string;
+          rejected_count?: number;
+          review_id?: string;
+          text_hash?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'review_ai_extractions_batch_id_fkey';
+            columns: ['batch_id'];
+            referencedRelation: 'review_ai_batches';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'review_ai_extractions_review_id_fkey';
+            columns: ['review_id'];
+            referencedRelation: 'reviews';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
       review_analysis: {
         Row: {
           ai_summary: string | null;
@@ -1404,6 +1525,10 @@ export type Database = {
         Args: { p_retention_days?: number };
         Returns: number;
       };
+      purge_review_ai_points: {
+        Args: { p_prompt_version: string };
+        Returns: Json;
+      };
       record_price_observation: {
         Args: {
           p_observation_id?: string;
@@ -1446,6 +1571,7 @@ export type Database = {
           input_hash: string;
         }[];
       };
+      review_ai_text_hash: { Args: { p_text: string }; Returns: string };
       review_completeness_factor: {
         Args: { p_breakdown: Json };
         Returns: number;
@@ -1566,6 +1692,7 @@ export type Database = {
         Args: { p_params?: Json; p_source: string };
         Returns: string;
       };
+      store_review_ai_points: { Args: { p_rows: Json }; Returns: Json };
       store_review_values: { Args: { p_values: Json }; Returns: number };
       submit_community_review: {
         Args: {

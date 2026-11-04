@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import {
   buildProductPoints,
+  hideAiLinesFrom,
   reviewPointWeight,
   runProductPointsJob,
   type PointReviewRow,
@@ -164,7 +165,10 @@ async function run() {
   });
   const dry = await runProductPointsJob(fake.client, { now: NOW });
   assert.deepEqual(dry, { apply: false, masters: 3, points: 3, inserted: 0, deleted: 0 });
-  assert.ok(fake.filters.includes('review_points:method=writer'), "only the writers' lines");
+  assert.ok(
+    fake.filters.includes('review_points:method in writer,ai'),
+    "the writers' lines and AI's"
+  );
   assert.equal(fake.writes.length, 0, 'a dry run writes nothing');
 
   const applied = await runProductPointsJob(fake.client, { apply: true, now: NOW });
@@ -192,7 +196,86 @@ async function run() {
   );
   await assert.rejects(runProductPointsJob(one.client, { masterId: 'not-a-uuid' }), /UUID/);
 
+  // Lines AI extracted from marketplace reviews (DOS/Rate#1531): each review is
+  // one writer at 0.5 x min(weight, 1), so three agreeing reviews show a point
+  // and two do not; --hide-ai leaves them all out.
+  const aiReviews = [
+    review('m1', 'l-quiet', { helpfulness_weight: 3 }),
+    review('m2', 'l-quiet', { helpfulness_weight: 3 }),
+    review('m3', 'l-quiet'),
+  ];
+  const aiPoint = (review_id: string, body: string, method = 'ai'): ReviewPointRow => ({
+    ...point(review_id, 'pro', body),
+    method,
+  });
+  const aiInput = (lines: ReviewPointRow[]) => ({
+    points: lines,
+    reviews: aiReviews,
+    listings,
+    masters,
+    categories,
+  });
+  const screen = 'Màn hình sáng rõ ngoài trời';
+  const twoAi = buildProductPoints(aiInput([aiPoint('m1', screen), aiPoint('m2', screen)]), NOW);
+  assert.deepEqual(twoAi.get(QUIET), [], 'two AI lines (0.5 + 0.5) do not show');
+  const threeAi = buildProductPoints(
+    aiInput([aiPoint('m1', screen), aiPoint('m2', screen), aiPoint('m3', screen)]),
+    NOW
+  );
+  assert.deepEqual(
+    threeAi.get(QUIET)!.map(p => [p.label, p.support, p.reviewer_count, p.has_expert]),
+    [[screen, 1.5, 3, false]]
+  );
+  assert.deepEqual(
+    buildProductPoints(
+      aiInput([aiPoint('m1', screen), aiPoint('m2', screen), aiPoint('m3', screen)]),
+      NOW,
+      { hideAiLines: true }
+    ).get(QUIET),
+    undefined,
+    'hidden AI lines are not read at all'
+  );
+  // A line of another method (a reworded label, say) is not a review line.
+  assert.deepEqual(
+    buildProductPoints(
+      aiInput([
+        aiPoint('m1', screen, 'code'),
+        aiPoint('m2', screen, 'code'),
+        aiPoint('m3', screen, 'code'),
+      ]),
+      NOW
+    ).get(QUIET),
+    undefined
+  );
+  // The switch: --hide-ai or PRODUCT_POINTS_HIDE_AI.
+  assert.equal(hideAiLinesFrom(['node', 'job', '--hide-ai'], {}), true);
+  assert.equal(hideAiLinesFrom(['node', 'job'], { PRODUCT_POINTS_HIDE_AI: 'true' }), true);
+  assert.equal(hideAiLinesFrom(['node', 'job'], { PRODUCT_POINTS_HIDE_AI: ' 1 ' }), true);
+  assert.equal(hideAiLinesFrom(['node', 'job'], { PRODUCT_POINTS_HIDE_AI: 'false' }), false);
+  assert.equal(hideAiLinesFrom(['node', 'job'], {}), false);
+  assert.equal(hideAiLinesFrom(['node', 'job', '--hide-ai=yes'], {}), true);
+  assert.equal(hideAiLinesFrom(['node', 'job', '--hide-ai=false'], {}), false);
+  assert.equal(hideAiLinesFrom(['node', 'job'], { PRODUCT_POINTS_HIDE_AI: 'on' }), true);
+  // A value it does not know fails, never shows lines meant to be hidden.
+  assert.throws(
+    () => hideAiLinesFrom(['node', 'job'], { PRODUCT_POINTS_HIDE_AI: 'ye' }),
+    /true or false/
+  );
+  assert.throws(() => hideAiLinesFrom(['node', 'job', '--hide-ai=maybe'], {}), /true or false/);
+  // The job reads only the writers' lines when AI lines are hidden.
+  const hiddenRun = fakeSupabase({
+    review_points: points,
+    reviews,
+    products: listings,
+    master_products: masters,
+    categories,
+    product_points: [],
+  });
+  await runProductPointsJob(hiddenRun.client, { now: NOW, hideAiLines: true });
+  assert.ok(hiddenRun.filters.includes('review_points:method in writer'));
+
   console.log('  ✅ weights, aggregation per master and category, dry run and apply verified');
+  console.log('  ✅ AI lines at half weight, and the switch that hides them (#1531)');
 }
 
 type Row = Record<string, unknown>;
@@ -216,7 +299,9 @@ function fakeSupabase(tables: Record<string, readonly object[]>) {
         return builder;
       },
       in: (column: string, values: unknown[]) => {
-        rows = rows.filter(r => values.includes(r[column]));
+        filters.push(`${table}:${column} in ${values.join(',')}`);
+        // As eq: fixture rows without the column pass.
+        rows = rows.filter(r => r[column] === undefined || values.includes(r[column]));
         return builder;
       },
       range: (from: number, to: number) =>

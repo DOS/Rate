@@ -53,7 +53,7 @@
     "message": "Help find new products (only when you turn it on):"
   },
   "optInBody": {
-    "message": "When on, every listing you open is also sent to the independent Rate.vn review queue with: store, product ID, shop ID, URL with tracking parameters removed, product name, selected variant, price, original price, star rating and number of reviews. No account or personal data is included."
+    "message": "When on, every listing you open is also sent to the independent Rate.vn review queue with: store, product ID, shop ID, URL with tracking parameters removed, product name, selected variant, price, original price, star rating and number of reviews. No account, name, email or cookies are included."
   },
   "crowdFieldPlatform": {
     "message": "store"
