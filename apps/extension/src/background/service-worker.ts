@@ -14,6 +14,7 @@ import {
   DEFAULT_API_BASE_URL,
   isPrivilegedExtensionSender,
   normalizeAllowedApiBaseUrl,
+  ONBOARDING_PAGE_PATH,
   sanitizeExtensionProductSignal,
   selectFreshestSessionSignal,
 } from '../security-guards.js';
@@ -209,7 +210,18 @@ async function updateActionBadge(
   }
 }
 
-chrome.runtime.onInstalled.addListener(async () => {
+chrome.runtime.onInstalled.addListener(async (details) => {
+  // On a first install only, ask about the opt-in (DOS/Rate#1603). The
+  // default stays off, so closing the page sends nothing extra.
+  if (details?.reason === 'install') {
+    try {
+      await chrome.tabs.create({
+        url: chrome.runtime.getURL(ONBOARDING_PAGE_PATH),
+      });
+    } catch {
+      // The side panel toggle still offers the choice.
+    }
+  }
   try {
     await chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true });
     const existing = await chrome.storage.local.get([

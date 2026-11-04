@@ -652,5 +652,35 @@
         "content": "$2"
       }
     }
+  },
+  "onboardingTitle": {
+    "message": "Rate.vn is ready"
+  },
+  "onboardingLookup": {
+    "message": "On product pages of the 10 supported stores, the extension sends the product name, price and ids to Rate.vn to look up price history. No account needed."
+  },
+  "onboardingQuestion": {
+    "message": "Would you like to contribute the listings you view?"
+  },
+  "onboardingNothingYet": {
+    "message": "The extension sends nothing more until you choose \"Yes\". You can change this any time in the side panel."
+  },
+  "onboardingNo": {
+    "message": "No, thanks"
+  },
+  "onboardingYes": {
+    "message": "Yes, I want to contribute"
+  },
+  "onboardingSavedNo": {
+    "message": "Saved: not contributing. You can close this page."
+  },
+  "onboardingSavedYes": {
+    "message": "Saved: contributing. You can turn it off in the side panel."
+  },
+  "onboardingSaveFailed": {
+    "message": "Not saved. Try again or choose in the side panel."
+  },
+  "onboardingPrivacyLink": {
+    "message": "Privacy policy"
   }
 }

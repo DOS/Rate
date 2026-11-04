@@ -652,5 +652,35 @@
         "content": "$2"
       }
     }
+  },
+  "onboardingTitle": {
+    "message": "Rate.vn đã sẵn sàng"
+  },
+  "onboardingLookup": {
+    "message": "Trên trang sản phẩm của 10 sàn được hỗ trợ, tiện ích gửi tên, giá và mã sản phẩm cho Rate.vn để tra lịch sử giá. Không cần tài khoản."
+  },
+  "onboardingQuestion": {
+    "message": "Bạn có muốn đóng góp các tin bán bạn xem không?"
+  },
+  "onboardingNothingYet": {
+    "message": "Tiện ích không gửi thêm gì cho đến khi bạn chọn \"Có\". Bạn có thể đổi lựa chọn bất cứ lúc nào trong bảng bên cạnh."
+  },
+  "onboardingNo": {
+    "message": "Không, cảm ơn"
+  },
+  "onboardingYes": {
+    "message": "Có, tôi muốn đóng góp"
+  },
+  "onboardingSavedNo": {
+    "message": "Đã lưu: không đóng góp. Bạn có thể đóng trang này."
+  },
+  "onboardingSavedYes": {
+    "message": "Đã lưu: có đóng góp. Bạn có thể tắt trong bảng bên cạnh."
+  },
+  "onboardingSaveFailed": {
+    "message": "Chưa lưu được. Hãy thử lại hoặc chọn trong bảng bên cạnh."
+  },
+  "onboardingPrivacyLink": {
+    "message": "Chính sách bảo mật"
   }
 }

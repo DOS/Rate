@@ -467,6 +467,39 @@ async function runTests() {
     }),
     true
   );
+  // In a tab, only this extension's install consent page may change
+  // settings (DOS/Rate#1603).
+  assert.equal(
+    isPrivilegedExtensionSender(
+      {
+        tab: { id: 7 },
+        url: 'chrome-extension://abcdefghijklmnop/onboarding/onboarding.html',
+      },
+      'abcdefghijklmnop'
+    ),
+    true
+  );
+  for (const url of [
+    'https://shopee.vn/onboarding/onboarding.html',
+    'chrome-extension://otherextensionid/onboarding/onboarding.html',
+    'chrome-extension://abcdefghijklmnop/sidepanel/sidepanel.html',
+    'chrome-extension://abcdefghijklmnop/onboarding/onboarding.html?x=1',
+    undefined,
+  ]) {
+    assert.equal(
+      isPrivilegedExtensionSender({ tab: { id: 7 }, url }, 'abcdefghijklmnop'),
+      false,
+      String(url)
+    );
+  }
+  assert.equal(
+    isPrivilegedExtensionSender({
+      tab: { id: 7 },
+      url: 'chrome-extension://abcdefghijklmnop/onboarding/onboarding.html',
+    }),
+    false,
+    'without a known runtime id a tab sender is never privileged'
+  );
   assert.equal(
     escapeSafeExternalHref('javascript:alert(1)'),
     'https://rate.vn',
