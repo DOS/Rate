@@ -657,13 +657,13 @@
     "message": "Rate.vn je připraveno"
   },
   "onboardingLookup": {
-    "message": "Na stránkách produktů 10 podporovaných obchodů rozšíření posílá Rate.vn název, cenu a ID produktu, aby vyhledalo historii cen. Účet není potřeba."
+    "message": "Na stránkách produktů 10 podporovaných obchodů rozšíření posílá Rate.vn obchod, URL bez parametrů, název, ID produktu a obchodu, variantu, cenu a původní cenu, aby vyhledalo historii cen. Účet není potřeba."
   },
   "onboardingQuestion": {
     "message": "Chcete přispívat nabídkami, které si prohlížíte?"
   },
   "onboardingNothingYet": {
-    "message": "Rozšíření nic dalšího neposílá, dokud nezvolíte \"Ano\". Volbu můžete kdykoli změnit v bočním panelu."
+    "message": "Ve výchozím stavu vypnuto. Změnit to můžete kdykoli: klikněte na ikonu Rate.vn, otevře se boční panel, volba „Pomoc s hledáním nových produktů“."
   },
   "onboardingNo": {
     "message": "Ne, děkuji"
@@ -682,5 +682,8 @@
   },
   "onboardingPrivacyLink": {
     "message": "Zásady ochrany soukromí"
+  },
+  "onboardingOptInBody": {
+    "message": "Když zvolíte „Ano“, každá nabídka, kterou otevřete, se také odešle do fronty ke kontrole Rate.vn s těmito údaji: obchod, ID produktu, ID obchodu, URL bez sledovacích parametrů, název produktu, zvolená varianta, cena, původní cena, počet hvězdiček a počet recenzí. Servery Rate.vn mohou nabídku v obchodě znovu ověřit. Bez účtu, jména, e-mailu a cookies."
   }
 }

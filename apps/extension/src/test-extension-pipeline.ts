@@ -652,7 +652,23 @@ async function runTests() {
         );
       }
       assert.ok(!/Chỉ gửi URL/.test(optInText));
+      // The install consent page names the same fields (DOS/Rate#1603).
+      const consentText = catalogue.onboardingOptInBody?.message ?? '';
+      for (const key of Object.values(CROWD_INGEST_FIELD_LABELS)) {
+        assert.ok(
+          consentText.includes(catalogue[key]?.message ?? '\u0000'),
+          `${locale} consent text lacks ${key}`
+        );
+      }
     }
+    assert.ok(
+      fs
+        .readFileSync(
+          path.resolve(__dirname, 'onboarding/onboarding.html'),
+          'utf8'
+        )
+        .includes('data-i18n="onboardingOptInBody"')
+    );
     // The store listing names the extension as the vi catalogue does.
     const viName = readLocaleCatalogues().vi.extName?.message;
     assert.equal(
