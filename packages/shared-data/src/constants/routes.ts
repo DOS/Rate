@@ -56,6 +56,8 @@ export const RATE_API_V1_ENDPOINTS = {
   REVALIDATE: '/api/v1/rate/revalidate',
   EXTENSION_LOOKUP: '/api/v1/rate/extension/lookup',
   EXTENSION_INGEST: '/api/v1/rate/extension/ingest',
+  EXTENSION_SUBMITTER: '/api/v1/rate/extension/submitter',
+  EXTENSION_OBSERVATION: '/api/v1/rate/extension/observation',
   REVIEW_VOTE: (reviewId: string) =>
     `/api/reviews/${encodeURIComponent(sanitizePathSegment(reviewId, 128))}/vote`,
   HEALTH: '/api/health',

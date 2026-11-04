@@ -10,7 +10,7 @@ import {
   sanitizeProductUrl,
 } from '../extractors/ecommerce-detector.js';
 import {
-  buildCrowdIngestPayload,
+  buildExtensionObservationV1,
   buildLookupParams,
   DEFAULT_API_BASE_URL,
   isOnboardingSender,
@@ -21,6 +21,7 @@ import {
   selectFreshestSessionSignal,
 } from '../security-guards.js';
 import { LookupCooldown } from '../rate-limit.js';
+import { ObservationClient } from './observation-client.js';
 import { t } from '../i18n.js';
 import { resolveActionBadge } from '../verdict-display.js';
 
@@ -29,17 +30,27 @@ const DEFAULT_SETTINGS: ExtensionSettings = {
   crowdContributeOptIn: false,
 };
 
+/**
+ * The consent the opt-in was given under. Version 2 is ExtensionObservation
+ * v1 with its submitter id (DOS/Rate#1606); an opt-in given to the older
+ * crowd signal counts as off until the user says yes again.
+ */
+const OPT_IN_CONSENT_VERSION = 2;
+
 async function getSettings(): Promise<ExtensionSettings> {
   try {
     const stored = await chrome.storage.local.get([
       'apiBaseUrl',
       'crowdContributeOptIn',
+      'crowdConsentVersion',
     ]);
     return {
       apiBaseUrl: normalizeAllowedApiBaseUrl(
         typeof stored.apiBaseUrl === 'string' ? stored.apiBaseUrl : null
       ),
-      crowdContributeOptIn: Boolean(stored.crowdContributeOptIn ?? false),
+      crowdContributeOptIn:
+        stored.crowdContributeOptIn === true &&
+        stored.crowdConsentVersion === OPT_IN_CONSENT_VERSION,
     };
   } catch {
     return DEFAULT_SETTINGS;
@@ -159,23 +170,30 @@ async function maybeSendOptInCrowdSignal(
   // A 429 may have come back while the settings were read.
   if ((await lookupCooldown.secondsLeft()) > 0) return;
 
-  try {
-    await fetch(
-      `${settings.apiBaseUrl}${RATE_API_V1_ENDPOINTS.EXTENSION_INGEST}`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Rate-Extension-Version': EXTENSION_VERSION,
-        },
-        signal: AbortSignal.timeout(8_000),
-        body: JSON.stringify(buildCrowdIngestPayload(signal)),
-      }
-    );
-  } catch {
-    // Non-blocking background quarantine submission
-  }
+  // ExtensionObservation v1 into the quarantine (DOS/Rate#1606): only the
+  // fields v1 names, under this install's random submitter id.
+  const observation = buildExtensionObservationV1(
+    signal,
+    new Date(),
+    EXTENSION_VERSION
+  );
+  if (!observation) return;
+  await observationClient.send(settings.apiBaseUrl, observation);
 }
+
+const observationClient = new ObservationClient({
+  storage: {
+    get: (key) => chrome.storage.local.get(key),
+    set: (items) => chrome.storage.local.set(items),
+    remove: (key) => chrome.storage.local.remove(key),
+  },
+  fetch: (url, init) => fetch(url, init),
+  now: () => Date.now(),
+  extensionVersion: EXTENSION_VERSION,
+  optedIn: async () => (await getSettings()).crowdContributeOptIn,
+  submitterPath: RATE_API_V1_ENDPOINTS.EXTENSION_SUBMITTER,
+  observationPath: RATE_API_V1_ENDPOINTS.EXTENSION_OBSERVATION,
+});
 
 async function updateActionBadge(
   tabId: number | undefined,
@@ -196,7 +214,33 @@ async function updateActionBadge(
   }
 }
 
+chrome.runtime.onStartup?.addListener(() => {
+  void observationClient.retryErasures();
+});
+
 chrome.runtime.onInstalled.addListener(async (details) => {
+  void observationClient.retryErasures();
+  // An opt-in given to the older crowd signal is not consent to v1: it is
+  // off, and the consent page asks again (DOS/Rate#1606).
+  if (details?.reason === 'update') {
+    try {
+      const stored = await chrome.storage.local.get([
+        'crowdContributeOptIn',
+        'crowdConsentVersion',
+      ]);
+      if (
+        stored.crowdContributeOptIn === true &&
+        stored.crowdConsentVersion !== OPT_IN_CONSENT_VERSION
+      ) {
+        await chrome.storage.local.set({ crowdContributeOptIn: false });
+        await chrome.tabs.create({
+          url: chrome.runtime.getURL(ONBOARDING_PAGE_PATH),
+        });
+      }
+    } catch {
+      // The side panel toggle still offers the choice.
+    }
+  }
   try {
     await chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true });
     // Each missing setting gets its default; a stored choice is kept.
@@ -595,10 +639,20 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             await lookupCooldown.clear();
           }
         }
+        const consent: Record<string, unknown> = {};
         if (typeof message.crowdContributeOptIn === 'boolean') {
           nextSettings.crowdContributeOptIn = message.crowdContributeOptIn;
+          consent.crowdConsentVersion = message.crowdContributeOptIn
+            ? OPT_IN_CONSENT_VERSION
+            : null;
         }
-        await chrome.storage.local.set(nextSettings);
+        await chrome.storage.local.set({ ...nextSettings, ...consent });
+        // Turning it off erases this install's contributions (DOS/Rate#1606);
+        // a new server address leaves the old id to be erased where it came
+        // from on the next send.
+        if (nextSettings.crowdContributeOptIn === false) {
+          void observationClient.forget();
+        }
         const updated = await getSettings();
         sendResponse({ ok: true, settings: updated });
       } catch (err) {
