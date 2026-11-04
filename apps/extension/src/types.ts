@@ -262,6 +262,9 @@ declare global {
           ) => boolean | void
         ) => void;
       };
+      onStartup?: {
+        addListener: (callback: () => void) => void;
+      };
       onInstalled: {
         addListener: (
           callback: (details: { reason: string }) => void | Promise<void>
@@ -274,7 +277,7 @@ declare global {
           keys?: string | string[] | Record<string, unknown>
         ) => Promise<Record<string, unknown>>;
         set: (items: Record<string, unknown>) => Promise<void>;
-        remove?: (keys: string | string[]) => Promise<void>;
+        remove: (keys: string | string[]) => Promise<void>;
       };
       session: {
         get: (

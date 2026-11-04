@@ -4329,10 +4329,25 @@ async function runTests() {
         workerSource.match(/'X-Rate-Extension-Version': EXTENSION_VERSION/g) ??
         []
       ).length,
-      // Every request the worker makes carries it (DOS/Rate#1606 added the
-      // submitter and observation calls).
-      (workerSource.match(/\bfetch\(/g) ?? []).length
+      1
     );
+    // The observation client's requests carry it too (DOS/Rate#1606): each
+    // of its fetches takes this.headers(...), which sets the version.
+    {
+      const clientSource = fs.readFileSync(
+        path.resolve(__dirname, 'background/observation-client.ts'),
+        'utf8'
+      );
+      assert.equal(
+        (clientSource.match(/this\.deps\.fetch\(/g) ?? []).length,
+        (clientSource.match(/headers: this\.headers\(/g) ?? []).length
+      );
+      assert.ok(
+        clientSource.includes(
+          "'X-Rate-Extension-Version': this.deps.extensionVersion"
+        )
+      );
+    }
     assert.ok(workerSource.includes('chrome.runtime.getManifest().version'));
     // The cooldown is checked before any fetch, and a 429 sets it from Retry-After.
     const requestLookupBody = workerSource.slice(
@@ -5308,11 +5323,16 @@ async function runTests() {
     assert.ok(!workerSource.includes('EXTENSION_INGEST'));
     assert.ok(!workerSource.includes('buildCrowdIngestPayload'));
     assert.ok(
-      /crowdContributeOptIn === false\)\s*\{\s*void forgetObservationSubmitter\(/.test(
+      /crowdContributeOptIn === false\)\s*\{\s*void observationClient\.forget\(\)/.test(
         workerSource
       )
     );
-    assert.ok(workerSource.includes("method: 'DELETE'"));
+    // An opt-in given before v1 is not consent to it.
+    assert.ok(
+      workerSource.includes(
+        'stored.crowdConsentVersion === OPT_IN_CONSENT_VERSION'
+      )
+    );
 
     // A long variant label is cut to 120 characters, not a lost observation.
     const longObs = guards.buildExtensionObservationV1(
@@ -5418,8 +5438,245 @@ async function runTests() {
     assert.equal(single.stockState, 'in_stock');
     assert.equal(single.stockQty, 9);
     assert.equal(single.skuId, 'BASE-1');
+    console.log('  ✅ [Stock, SKU and the v1 observation (#1606)] Verified');
+  }
+  // --- DOS/Rate#1606: the observation client (register, send, erase) ---
+  {
+    const {
+      ObservationClient,
+      SUBMITTER_KEY,
+      PENDING_ERASURE_KEY,
+      HOLD_UNTIL_KEY,
+    } = await import('./background/observation-client.js');
+    const ID1 = '11111111-2222-4333-8444-555555555555';
+    const ID2 = '66666666-7777-4888-8999-aaaaaaaaaaaa';
+    const BASE = 'https://rate.vn';
+    const obs = {
+      schema_version: 1 as const,
+      marketplace: 'shopee' as const,
+      listing_url: 'https://shopee.vn/x-i.1.2',
+      external_item_id: '2',
+      external_shop_id: '1',
+      sku_id: null,
+      variant_label: null,
+      price_vnd: 19_990_000,
+      list_price_vnd: null,
+      stock_state: 'in_stock' as const,
+      stock_qty: null,
+      observed_at: '2026-11-04T10:00:00.000Z',
+      extractor: { source: 'json_ld' as const, extension_version: '2.1.0' },
+    };
+    type Call = {
+      method: string;
+      url: string;
+      headers: Record<string, string>;
+      body: unknown;
+    };
+    const json = (
+      status: number,
+      body: unknown,
+      headers: Record<string, string> = {}
+    ) =>
+      new Response(JSON.stringify(body), {
+        status,
+        headers: { 'Content-Type': 'application/json', ...headers },
+      });
+    const make = (opts: {
+      optedIn?: () => boolean;
+      respond: (call: Call) => Response | Promise<Response>;
+      now?: number;
+    }) => {
+      const store = new Map<string, unknown>();
+      const calls: Call[] = [];
+      const client = new ObservationClient({
+        storage: {
+          get: async (key) => (store.has(key) ? { [key]: store.get(key) } : {}),
+          set: async (items) => {
+            for (const [k, v] of Object.entries(items)) store.set(k, v);
+          },
+          remove: async (key) => {
+            store.delete(key);
+          },
+        },
+        fetch: async (url, init) => {
+          const call: Call = {
+            method: String(init.method),
+            url,
+            headers: (init.headers ?? {}) as Record<string, string>,
+            body: init.body ? JSON.parse(String(init.body)) : undefined,
+          };
+          calls.push(call);
+          return opts.respond(call);
+        },
+        now: () => opts.now ?? 1_000_000,
+        extensionVersion: '2.1.0',
+        optedIn: async () => (opts.optedIn ? opts.optedIn() : true),
+        submitterPath: '/api/v1/rate/extension/submitter',
+        observationPath: '/api/v1/rate/extension/observation',
+      });
+      return { client, store, calls };
+    };
+    const ok = (call: Call) =>
+      call.method === 'POST' && call.url.endsWith('/submitter')
+        ? json(200, { ok: true, submitterId: ID1 })
+        : json(200, { ok: true, status: 'quarantined' });
+
+    // (a) Register once (no body, no Content-Type), then send with the id.
+    {
+      const { client, store, calls } = make({ respond: ok });
+      await client.send(BASE, obs);
+      assert.deepEqual(
+        calls.map((c) => `${c.method} ${c.url}`),
+        [
+          `POST ${BASE}/api/v1/rate/extension/submitter`,
+          `POST ${BASE}/api/v1/rate/extension/observation`,
+        ]
+      );
+      assert.equal(calls[0]!.body, undefined);
+      assert.equal(calls[0]!.headers['Content-Type'], undefined);
+      assert.equal(calls[1]!.headers['Content-Type'], 'application/json');
+      assert.deepEqual(calls[1]!.body, { submitterId: ID1, observation: obs });
+      assert.deepEqual(store.get(SUBMITTER_KEY), { id: ID1, apiBaseUrl: BASE });
+      // (b) The next product reuses the id.
+      await client.send(BASE, obs);
+      assert.equal(calls.filter((c) => c.url.endsWith('/submitter')).length, 1);
+    }
+    // (c) Two products at once register one id.
+    {
+      const { client, calls } = make({ respond: ok });
+      await Promise.all([client.send(BASE, obs), client.send(BASE, obs)]);
+      assert.equal(calls.filter((c) => c.url.endsWith('/submitter')).length, 1);
+    }
+    // (d) Routes off: no observation, no id, and a hold, so the next product
+    // asks nothing.
+    {
+      const { client, store, calls } = make({
+        respond: () => json(404, { ok: false, code: 'NOT_ENABLED' }),
+      });
+      await client.send(BASE, obs);
+      await client.send(BASE, obs);
+      assert.equal(calls.length, 1);
+      assert.equal(store.has(SUBMITTER_KEY), false);
+      assert.ok(Number(store.get(HOLD_UNTIL_KEY)) > 1_000_000);
+    }
+    // (e) UNKNOWN_SUBMITTER drops the id; (f) a 429 holds for its Retry-After.
+    {
+      let observationAnswer: Response = json(404, {
+        ok: false,
+        code: 'UNKNOWN_SUBMITTER',
+      });
+      const { client, store, calls } = make({
+        respond: (c) =>
+          c.url.endsWith('/submitter') ? ok(c) : observationAnswer,
+      });
+      await client.send(BASE, obs);
+      assert.equal(store.has(SUBMITTER_KEY), false);
+      observationAnswer = json(429, { ok: false }, { 'Retry-After': '3600' });
+      await client.send(BASE, obs);
+      assert.equal(store.get(HOLD_UNTIL_KEY), 1_000_000 + 3_600_000);
+      const before = calls.length;
+      await client.send(BASE, obs);
+      assert.equal(calls.length, before, 'held: nothing is sent');
+    }
+    // (g) Opt-out erases on the issuing server; (h) a failed erasure is kept
+    // and retried until the server confirms.
+    {
+      let deleteOk = false;
+      const { client, store, calls } = make({
+        respond: (c) =>
+          c.method === 'DELETE'
+            ? deleteOk
+              ? json(200, { ok: true })
+              : json(503, { ok: false })
+            : ok(c),
+      });
+      await client.send(BASE, obs);
+      await client.forget();
+      const del = calls.filter((c) => c.method === 'DELETE');
+      assert.equal(del.length, 1);
+      assert.equal(del[0]!.headers['Content-Type'], 'application/json');
+      assert.deepEqual(del[0]!.body, { submitterId: ID1 });
+      assert.equal(store.has(SUBMITTER_KEY), false);
+      assert.deepEqual(store.get(PENDING_ERASURE_KEY), [
+        { id: ID1, apiBaseUrl: BASE },
+      ]);
+      deleteOk = true;
+      await client.retryErasures();
+      assert.equal(store.has(PENDING_ERASURE_KEY), false);
+    }
+    // (i) Opt-out while the id is being issued: it is erased, nothing sent.
+    {
+      let opted = true;
+      let release!: () => void;
+      const gate = new Promise<void>((r) => (release = r));
+      let registering!: () => void;
+      const registerStarted = new Promise<void>((r) => (registering = r));
+      const { client, store, calls } = make({
+        optedIn: () => opted,
+        respond: async (c) => {
+          if (c.method === 'POST' && c.url.endsWith('/submitter')) {
+            registering();
+            await gate;
+            return json(200, { ok: true, submitterId: ID2 });
+          }
+          return json(200, { ok: true });
+        },
+      });
+      const sending = client.send(BASE, obs);
+      await registerStarted;
+      // The user turns it off while the id is being issued.
+      opted = false;
+      const forgetting = client.forget();
+      release();
+      await Promise.all([sending, forgetting]);
+      assert.equal(
+        calls.filter((c) => c.url.endsWith('/observation')).length,
+        0
+      );
+      assert.equal(store.has(SUBMITTER_KEY), false);
+      assert.deepEqual(
+        calls.filter((c) => c.method === 'DELETE').map((c) => c.body),
+        [{ submitterId: ID2 }]
+      );
+    }
+    // (j) Opted out: nothing at all.
+    {
+      const { client, calls } = make({ optedIn: () => false, respond: ok });
+      await client.send(BASE, obs);
+      assert.equal(calls.length, 0);
+    }
+    // An id from another server is erased there, not sent here.
+    {
+      const { client, store, calls } = make({ respond: ok });
+      store.set(SUBMITTER_KEY, {
+        id: ID2,
+        apiBaseUrl: 'http://localhost:3000',
+      });
+      await client.send(BASE, obs);
+      const del = calls.find((c) => c.method === 'DELETE');
+      assert.ok(del && del.url.startsWith('http://localhost:3000'));
+      assert.deepEqual(del.body, { submitterId: ID2 });
+      assert.deepEqual(
+        calls.find((c) => c.url.endsWith('/observation'))?.body,
+        {
+          submitterId: ID1,
+          observation: obs,
+        }
+      );
+    }
+    // (k) A body that is not JSON keeps the id and throws nothing.
+    {
+      const { client, store } = make({
+        respond: (c) =>
+          c.url.endsWith('/submitter')
+            ? ok(c)
+            : new Response('nope', { status: 404 }),
+      });
+      await client.send(BASE, obs);
+      assert.deepEqual(store.get(SUBMITTER_KEY), { id: ID1, apiBaseUrl: BASE });
+    }
     console.log(
-      '  ✅ [Stock, SKU and the v1 observation, not sent (#1606)] Verified'
+      '  ✅ [Observation client: one id, erasure kept until confirmed, holds (#1606)] Verified'
     );
   }
   console.log('🎉 All Rate Browser Extension MV3 v2 tests passed!');

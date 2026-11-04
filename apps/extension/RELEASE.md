@@ -26,6 +26,7 @@ Release-readiness check of the extension built from `dev` at `fc9b820d` on 2026-
    - **Product pages:** on one product page each of Shopee, Tiki and CellphoneS, the pill appears and the side panel opens.
    - **Language:** set Chrome to English, then Czech. The panel and the verdict follow the browser language, and en/cs never show the Vietnamese review summary (#1385).
    - **Opt-in:** the crowd opt-in is off by default, and its label names the fields it sends (#1230, #1241).
+   - **Contribution erasure:** with the observation routes on, opt in, open a product page, then turn the opt-in off: the server holds no observation for the install's id afterwards, and with the network off the erasure is retried at the next start (#1606).
    - **Consent page:** a fresh install opens the consent page once, with "No" focused. Closing it leaves the opt-in off; "Yes" turns on the side panel toggle; reloading or updating the extension does not open it again (#1603).
 5. Update the store listing:
    - Description and screenshots match the panel as it is now (the price list and the states from #1319).

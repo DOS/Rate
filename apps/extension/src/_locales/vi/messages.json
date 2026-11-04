@@ -53,7 +53,7 @@
     "message": "Đóng góp phát hiện sản phẩm mới (chỉ khi bạn bật):"
   },
   "optInBody": {
-    "message": "Khi bật, mỗi tin bán bạn mở còn được gửi vào hàng đợi kiểm duyệt độc lập của Rate.vn với: sàn, mã sản phẩm, mã gian hàng, URL đã cắt tham số theo dõi, mã phiên bản (SKU), phiên bản đang chọn, giá bán, giá gốc, tình trạng còn hàng, thời điểm bạn thấy giá, phiên bản tiện ích, kèm một mã ngẫu nhiên của lượt cài này và mã băm dải mạng của bạn (không phải IP). Máy chủ Rate.vn có thể kiểm tra lại tin bán đó trên sàn. Tắt đóng góp là xóa mã đó và mọi tin đã gửi. Không kèm tài khoản, tên, email hay cookie."
+    "message": "Khi bật, mỗi tin bán bạn mở còn được gửi vào hàng đợi kiểm duyệt độc lập của Rate.vn với: sàn, mã sản phẩm, mã gian hàng, URL đã cắt tham số theo dõi, mã SKU của phân loại, phiên bản đang chọn, giá bán, giá gốc, tình trạng và số lượng còn hàng, thời điểm bạn thấy giá, phiên bản tiện ích, kèm một mã người đóng góp ngẫu nhiên của lượt cài này. Máy chủ tính và giữ mã băm dải mạng của bạn (không phải IP) trong 28 ngày, giữ tin đã gửi 180 ngày, và có thể kiểm tra lại tin bán đó trên sàn. Tắt đóng góp là xóa mã đó và mọi tin đã gửi. Không kèm tài khoản, tên, email hay cookie."
   },
   "crowdFieldPlatform": {
     "message": "sàn"
@@ -684,13 +684,13 @@
     "message": "Chính sách bảo mật"
   },
   "onboardingOptInBody": {
-    "message": "Nếu bạn chọn \"Có\", mỗi tin bán bạn mở còn được gửi vào hàng đợi kiểm duyệt của Rate.vn với: sàn, mã sản phẩm, mã gian hàng, URL đã cắt tham số theo dõi, mã phiên bản (SKU), phiên bản đang chọn, giá bán, giá gốc, tình trạng còn hàng, thời điểm bạn thấy giá, phiên bản tiện ích, kèm một mã ngẫu nhiên của lượt cài này và mã băm dải mạng của bạn (không phải IP). Máy chủ Rate.vn có thể kiểm tra lại tin bán đó trên sàn. Tắt đóng góp là xóa mã đó và mọi tin đã gửi. Không kèm tài khoản, tên, email hay cookie."
+    "message": "Nếu bạn chọn \"Có\", mỗi tin bán bạn mở còn được gửi vào hàng đợi kiểm duyệt của Rate.vn với: sàn, mã sản phẩm, mã gian hàng, URL đã cắt tham số theo dõi, mã SKU của phân loại, phiên bản đang chọn, giá bán, giá gốc, tình trạng và số lượng còn hàng, thời điểm bạn thấy giá, phiên bản tiện ích, kèm một mã người đóng góp ngẫu nhiên của lượt cài này. Máy chủ tính và giữ mã băm dải mạng của bạn (không phải IP) trong 28 ngày, giữ tin đã gửi 180 ngày, và có thể kiểm tra lại tin bán đó trên sàn. Tắt đóng góp là xóa mã đó và mọi tin đã gửi. Không kèm tài khoản, tên, email hay cookie."
   },
   "observationFieldSku": {
-    "message": "mã phiên bản (SKU)"
+    "message": "mã SKU của phân loại"
   },
   "observationFieldStock": {
-    "message": "tình trạng còn hàng"
+    "message": "tình trạng và số lượng còn hàng"
   },
   "observationFieldObservedAt": {
     "message": "thời điểm bạn thấy giá"
@@ -699,7 +699,7 @@
     "message": "phiên bản tiện ích"
   },
   "observationFieldSubmitter": {
-    "message": "một mã ngẫu nhiên của lượt cài này"
+    "message": "một mã người đóng góp ngẫu nhiên của lượt cài này"
   },
   "observationFieldNetwork": {
     "message": "mã băm dải mạng của bạn (không phải IP)"

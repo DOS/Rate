@@ -21,6 +21,7 @@ import {
   selectFreshestSessionSignal,
 } from '../security-guards.js';
 import { LookupCooldown } from '../rate-limit.js';
+import { ObservationClient } from './observation-client.js';
 import { t } from '../i18n.js';
 import { resolveActionBadge } from '../verdict-display.js';
 
@@ -29,17 +30,27 @@ const DEFAULT_SETTINGS: ExtensionSettings = {
   crowdContributeOptIn: false,
 };
 
+/**
+ * The consent the opt-in was given under. Version 2 is ExtensionObservation
+ * v1 with its submitter id (DOS/Rate#1606); an opt-in given to the older
+ * crowd signal counts as off until the user says yes again.
+ */
+const OPT_IN_CONSENT_VERSION = 2;
+
 async function getSettings(): Promise<ExtensionSettings> {
   try {
     const stored = await chrome.storage.local.get([
       'apiBaseUrl',
       'crowdContributeOptIn',
+      'crowdConsentVersion',
     ]);
     return {
       apiBaseUrl: normalizeAllowedApiBaseUrl(
         typeof stored.apiBaseUrl === 'string' ? stored.apiBaseUrl : null
       ),
-      crowdContributeOptIn: Boolean(stored.crowdContributeOptIn ?? false),
+      crowdContributeOptIn:
+        stored.crowdContributeOptIn === true &&
+        stored.crowdConsentVersion === OPT_IN_CONSENT_VERSION,
     };
   } catch {
     return DEFAULT_SETTINGS;
@@ -160,100 +171,29 @@ async function maybeSendOptInCrowdSignal(
   if ((await lookupCooldown.secondsLeft()) > 0) return;
 
   // ExtensionObservation v1 into the quarantine (DOS/Rate#1606): only the
-  // fields v1 names, with this install's random submitter id.
+  // fields v1 names, under this install's random submitter id.
   const observation = buildExtensionObservationV1(
     signal,
     new Date(),
     EXTENSION_VERSION
   );
   if (!observation) return;
-  try {
-    const submitterId = await observationSubmitterId(settings.apiBaseUrl);
-    if (!submitterId) return;
-    const res = await fetch(
-      `${settings.apiBaseUrl}${RATE_API_V1_ENDPOINTS.EXTENSION_OBSERVATION}`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Rate-Extension-Version': EXTENSION_VERSION,
-        },
-        signal: AbortSignal.timeout(8_000),
-        body: JSON.stringify({ submitterId, observation }),
-      }
-    );
-    // The server no longer knows this id (deleted, purged): get a new one
-    // next time.
-    if (res.status === 404) {
-      const body = (await res.json().catch(() => null)) as {
-        code?: string;
-      } | null;
-      if (body?.code === 'UNKNOWN_SUBMITTER') {
-        await chrome.storage.local.remove?.(SUBMITTER_ID_KEY);
-      }
-    }
-  } catch {
-    // Non-blocking background quarantine submission
-  }
+  await observationClient.send(settings.apiBaseUrl, observation);
 }
 
-const SUBMITTER_ID_KEY = 'observationSubmitterId';
-const SUBMITTER_ID_RE =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
-
-/**
- * This install's pseudonymous submitter id, asked from the server once and
- * kept in chrome.storage.local; null while the server does not take
- * observations (the routes answer 404 until they are turned on).
- */
-async function observationSubmitterId(
-  apiBaseUrl: string
-): Promise<string | null> {
-  const stored = await chrome.storage.local.get(SUBMITTER_ID_KEY);
-  const known = stored[SUBMITTER_ID_KEY];
-  if (typeof known === 'string' && SUBMITTER_ID_RE.test(known)) return known;
-  const res = await fetch(
-    `${apiBaseUrl}${RATE_API_V1_ENDPOINTS.EXTENSION_SUBMITTER}`,
-    {
-      method: 'POST',
-      headers: { 'X-Rate-Extension-Version': EXTENSION_VERSION },
-      signal: AbortSignal.timeout(8_000),
-    }
-  );
-  if (!res.ok) return null;
-  const body = (await res.json().catch(() => null)) as {
-    submitterId?: unknown;
-  } | null;
-  const id = body?.submitterId;
-  if (typeof id !== 'string' || !SUBMITTER_ID_RE.test(id)) return null;
-  await chrome.storage.local.set({ [SUBMITTER_ID_KEY]: id });
-  return id;
-}
-
-/**
- * Turning the opt-in off erases this install's contributions: the server
- * deletes the submitter id and every observation sent with it, and the id
- * is forgotten here (DOS/Rate#1606).
- */
-async function forgetObservationSubmitter(apiBaseUrl: string): Promise<void> {
-  const stored = await chrome.storage.local.get(SUBMITTER_ID_KEY);
-  const id = stored[SUBMITTER_ID_KEY];
-  await chrome.storage.local.remove?.(SUBMITTER_ID_KEY);
-  if (typeof id !== 'string' || !SUBMITTER_ID_RE.test(id)) return;
-  try {
-    await fetch(`${apiBaseUrl}${RATE_API_V1_ENDPOINTS.EXTENSION_SUBMITTER}`, {
-      method: 'DELETE',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Rate-Extension-Version': EXTENSION_VERSION,
-      },
-      signal: AbortSignal.timeout(8_000),
-      body: JSON.stringify({ submitterId: id }),
-    });
-  } catch {
-    // Best effort; the server's purge removes ids that stop sending.
-  }
-}
+const observationClient = new ObservationClient({
+  storage: {
+    get: (key) => chrome.storage.local.get(key),
+    set: (items) => chrome.storage.local.set(items),
+    remove: (key) => chrome.storage.local.remove(key),
+  },
+  fetch: (url, init) => fetch(url, init),
+  now: () => Date.now(),
+  extensionVersion: EXTENSION_VERSION,
+  optedIn: async () => (await getSettings()).crowdContributeOptIn,
+  submitterPath: RATE_API_V1_ENDPOINTS.EXTENSION_SUBMITTER,
+  observationPath: RATE_API_V1_ENDPOINTS.EXTENSION_OBSERVATION,
+});
 
 async function updateActionBadge(
   tabId: number | undefined,
@@ -274,7 +214,33 @@ async function updateActionBadge(
   }
 }
 
+chrome.runtime.onStartup?.addListener(() => {
+  void observationClient.retryErasures();
+});
+
 chrome.runtime.onInstalled.addListener(async (details) => {
+  void observationClient.retryErasures();
+  // An opt-in given to the older crowd signal is not consent to v1: it is
+  // off, and the consent page asks again (DOS/Rate#1606).
+  if (details?.reason === 'update') {
+    try {
+      const stored = await chrome.storage.local.get([
+        'crowdContributeOptIn',
+        'crowdConsentVersion',
+      ]);
+      if (
+        stored.crowdContributeOptIn === true &&
+        stored.crowdConsentVersion !== OPT_IN_CONSENT_VERSION
+      ) {
+        await chrome.storage.local.set({ crowdContributeOptIn: false });
+        await chrome.tabs.create({
+          url: chrome.runtime.getURL(ONBOARDING_PAGE_PATH),
+        });
+      }
+    } catch {
+      // The side panel toggle still offers the choice.
+    }
+  }
   try {
     await chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true });
     // Each missing setting gets its default; a stored choice is kept.
@@ -673,13 +639,19 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             await lookupCooldown.clear();
           }
         }
+        const consent: Record<string, unknown> = {};
         if (typeof message.crowdContributeOptIn === 'boolean') {
           nextSettings.crowdContributeOptIn = message.crowdContributeOptIn;
+          consent.crowdConsentVersion = message.crowdContributeOptIn
+            ? OPT_IN_CONSENT_VERSION
+            : null;
         }
-        const before = await getSettings();
-        await chrome.storage.local.set(nextSettings);
+        await chrome.storage.local.set({ ...nextSettings, ...consent });
+        // Turning it off erases this install's contributions (DOS/Rate#1606);
+        // a new server address leaves the old id to be erased where it came
+        // from on the next send.
         if (nextSettings.crowdContributeOptIn === false) {
-          void forgetObservationSubmitter(before.apiBaseUrl);
+          void observationClient.forget();
         }
         const updated = await getSettings();
         sendResponse({ ok: true, settings: updated });

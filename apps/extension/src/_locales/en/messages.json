@@ -53,7 +53,7 @@
     "message": "Help find new products (only when you turn it on):"
   },
   "optInBody": {
-    "message": "When on, every listing you open is also sent to the independent Rate.vn review queue with: store, product ID, shop ID, URL with tracking parameters removed, variant ID (SKU), selected variant, price, original price, stock status, the time you saw the price, the extension version, plus a random ID for this install and a hash of your network range (not your IP). Rate.vn's servers may re-check that listing on the store. Turning it off deletes that ID and everything sent with it. No account, name, email or cookies are included."
+    "message": "When on, every listing you open is also sent to the independent Rate.vn review queue with: store, product ID, shop ID, URL with tracking parameters removed, variant ID (SKU), selected variant, price, original price, stock status and quantity, the time you saw the price, the extension version, plus a random contributor ID for this install. The server derives and keeps a hash of your network range (not your IP) for 28 days, keeps what you sent for 180 days, and may re-check that listing on the store. Turning it off deletes that ID and everything sent with it. No account, name, email or cookies are included."
   },
   "crowdFieldPlatform": {
     "message": "store"
@@ -684,13 +684,13 @@
     "message": "Privacy policy"
   },
   "onboardingOptInBody": {
-    "message": "If you choose \"Yes\", every listing you open is also sent to the Rate.vn review queue with: store, product ID, shop ID, URL with tracking parameters removed, variant ID (SKU), selected variant, price, original price, stock status, the time you saw the price, the extension version, plus a random ID for this install and a hash of your network range (not your IP). Rate.vn's servers may re-check that listing on the store. Turning it off deletes that ID and everything sent with it. No account, name, email or cookies are included."
+    "message": "If you choose \"Yes\", every listing you open is also sent to the Rate.vn review queue with: store, product ID, shop ID, URL with tracking parameters removed, variant ID (SKU), selected variant, price, original price, stock status and quantity, the time you saw the price, the extension version, plus a random contributor ID for this install. The server derives and keeps a hash of your network range (not your IP) for 28 days, keeps what you sent for 180 days, and may re-check that listing on the store. Turning it off deletes that ID and everything sent with it. No account, name, email or cookies are included."
   },
   "observationFieldSku": {
     "message": "variant ID (SKU)"
   },
   "observationFieldStock": {
-    "message": "stock status"
+    "message": "stock status and quantity"
   },
   "observationFieldObservedAt": {
     "message": "the time you saw the price"
@@ -699,7 +699,7 @@
     "message": "the extension version"
   },
   "observationFieldSubmitter": {
-    "message": "a random ID for this install"
+    "message": "a random contributor ID for this install"
   },
   "observationFieldNetwork": {
     "message": "a hash of your network range (not your IP)"
