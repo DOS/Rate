@@ -509,6 +509,8 @@ async function runTests() {
     for (const url of [
       'https://www.tiktok.com/@appleflagship/product/1729384756',
       'https://www.tiktok.com/view/product/1729384756',
+      'https://www.tiktok.com/shop/pdp/iphone-16/1729384756',
+      'https://www.tiktok.com/shop/vn/pdp/iphone-16/1729384756?src=x',
       'https://shop.tiktok.com/view/product/1729401928401',
     ]) {
       assert.ok(
@@ -539,8 +541,23 @@ async function runTests() {
       [...(manifestJson.permissions ?? []), ...hosts].sort(),
       'CHROMEWEBSTORE.md permission table must match manifest.json'
     );
+    // On www.tiktok.com the content script runs only on product pages, not
+    // on the video feed (DOS/Rate#1601); host permissions are per origin.
+    for (const url of [
+      'https://www.tiktok.com/',
+      'https://www.tiktok.com/foryou',
+      'https://www.tiktok.com/@appleflagship/video/7291234567890',
+      'https://www.tiktok.com/search?q=iphone',
+    ]) {
+      assert.ok(
+        !matches.some((p) => matchesPattern(p, url)),
+        `content script must not run on ${url}`
+      );
+    }
+    const originOf = (pattern: string) =>
+      pattern.replace(/^(https:\/\/[^/]+)\/.*$/, '$1/*');
     assert.deepEqual(
-      [...matches].sort(),
+      [...new Set(matches.map(originOf))].sort(),
       hosts.filter((h) => !/rate\.vn/.test(h)).sort()
     );
 
