@@ -211,11 +211,12 @@ export function rpcFailureResponse(
   });
   if (isMissingRpcError(error)) return unavailableResponse(request);
   if (error.code === '54000') {
-    // The database limits are hourly.
+    // The per-submitter and per-network limits are hourly; the global
+    // register brake (DETAIL "submitter") is per minute.
     return rateLimitExceededResponse(
       'Too many requests; try again later.',
       observationHeaders(request),
-      3600
+      error.details === 'submitter' ? 60 : 3600
     );
   }
   if (error.code === 'P0002') {

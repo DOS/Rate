@@ -187,8 +187,9 @@ function listingUrlOk(v: unknown, marketplace: ExtensionMarketplace): boolean {
 }
 
 /** ISO 8601 with a zone, as the RPC requires it. */
+// Seconds stop at 59 and offsets at ±15:59, the range Postgres accepts.
 const OBSERVED_AT_RE =
-  /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d{1,9})?)?(?:Z|[+-]\d{2}(?::?\d{2})?)$/;
+  /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::[0-5]\d(?:\.\d{1,9})?)?(?:Z|[+-](?:0\d|1[0-5])(?::?[0-5]\d)?)$/;
 
 function observedAtMs(v: unknown): number {
   if (typeof v !== 'string' || !OBSERVED_AT_RE.test(v)) return Number.NaN;

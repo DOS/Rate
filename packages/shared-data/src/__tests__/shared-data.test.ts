@@ -2397,6 +2397,8 @@ function testExtensionObservation(): void {
       'listing_url',
     ],
     [{ ...valid, variant_label: 'a\ud800b' }, 'variant_label'],
+    [{ ...valid, observed_at: '2026-11-04T10:00:00+16:00' }, 'observed_at'],
+    [{ ...valid, observed_at: '2026-11-04T09:59:60Z' }, 'observed_at'],
     [{ ...valid, observed_at: '2026-11-04' }, 'observed_at'],
     [{ ...valid, observed_at: '2026-11-04T09:59' }, 'observed_at'],
     [{ ...valid, observed_at: '2026-11-04 09:59Z' }, 'observed_at'],

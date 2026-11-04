@@ -1072,6 +1072,16 @@ async function testExtensionObservations() {
         assert.equal(res.headers.get('retry-after'), '3600');
       }
     }
+    // The global register brake is per minute.
+    rpcResponder = () => ({
+      status: 400,
+      json: { code: '54000', details: 'submitter' },
+    });
+    const brake = await submitterRoute.POST(
+      post('/api/v1/rate/extension/submitter', {})
+    );
+    assert.equal(brake.status, 429);
+    assert.equal(brake.headers.get('retry-after'), '60');
 
     // Deleting answers the same for any id and calls the delete RPC.
     calls = [];
