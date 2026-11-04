@@ -56,7 +56,11 @@ SET LOCAL lock_timeout = '5s';
 CREATE TABLE IF NOT EXISTS rate.extension_ingest_secret (
   id         boolean PRIMARY KEY DEFAULT true CHECK (id),
   key_sha256 text NOT NULL CHECK (key_sha256 ~ '^[0-9a-f]{64}$'),
-  updated_at timestamptz NOT NULL DEFAULT now()
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  -- Not the sha256 of the empty string: a runbook that hashed an unset variable would
+  -- otherwise store a key that an empty caller matches.
+  CONSTRAINT extension_ingest_secret_key_not_empty_check
+    CHECK (key_sha256 <> 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855')
 );
 
 COMMENT ON TABLE rate.extension_ingest_secret IS
@@ -235,6 +239,11 @@ AS $$
 DECLARE
   v_id uuid;
 BEGIN
+  -- The web's key has at least 32 characters; a shorter or missing one never reaches the hash.
+  IF p_ingest_key IS NULL OR char_length(p_ingest_key) < 32 THEN
+    RAISE EXCEPTION 'Extension ingest key refused' USING ERRCODE = '42501',
+      DETAIL = 'ingest_key';
+  END IF;
   IF (SELECT key_sha256 FROM rate.extension_ingest_secret WHERE id) IS DISTINCT FROM
        encode(sha256(convert_to(coalesce(p_ingest_key, ''), 'UTF8')), 'hex') THEN
     RAISE EXCEPTION 'Extension ingest key refused' USING ERRCODE = '42501',
@@ -315,6 +324,11 @@ DECLARE
   v_now timestamptz := now();
   v_id bigint;
 BEGIN
+  -- The web's key has at least 32 characters; a shorter or missing one never reaches the hash.
+  IF p_ingest_key IS NULL OR char_length(p_ingest_key) < 32 THEN
+    RAISE EXCEPTION 'Extension ingest key refused' USING ERRCODE = '42501',
+      DETAIL = 'ingest_key';
+  END IF;
   IF (SELECT key_sha256 FROM rate.extension_ingest_secret WHERE id) IS DISTINCT FROM
        encode(sha256(convert_to(coalesce(p_ingest_key, ''), 'UTF8')), 'hex') THEN
     RAISE EXCEPTION 'Extension ingest key refused' USING ERRCODE = '42501',
@@ -440,11 +454,13 @@ BEGIN
   END IF;
   v_stock_qty := v_num;
 
-  -- observed_at: ISO 8601 with a zone, at most 10 minutes ahead and 24 hours behind now().
+  -- observed_at: ISO 8601 with a zone (seconds 00 to 59, so no leap second; an offset up to
+  -- 15:59, as Postgres parses it), at most 10 minutes ahead and 24 hours behind now().
   v_observed_text := CASE WHEN jsonb_typeof(o -> 'observed_at') = 'string'
                           THEN o ->> 'observed_at' END;
   IF v_observed_text IS NULL OR v_observed_text !~
-       '^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d{1,9})?)?(Z|[+-]\d{2}(:?\d{2})?)$' THEN
+       '^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:[0-5]\d(\.\d{1,9})?)?(Z|[+-](0\d|1[0-5])(:?[0-5]\d)?)$'
+  THEN
     RAISE EXCEPTION 'Invalid observed_at' USING ERRCODE = '22023', DETAIL = 'observed_at';
   END IF;
   BEGIN
@@ -582,15 +598,18 @@ BEGIN
       DETAIL = 'p_empty_submitter_days';
   END IF;
 
-  UPDATE rate.extension_observations SET network_hash = NULL
-  WHERE network_hash IS NOT NULL
-    AND received_at < now() - make_interval(days => p_network_hash_days);
-  GET DIAGNOSTICS v_hashes = ROW_COUNT;
-
+  -- Lock order: submitters before observations, as delete_extension_submitter does (the
+  -- submitter row, then its observations through the cascade). The other order deadlocks with a
+  -- delete that runs in the middle of a purge.
   UPDATE rate.extension_submitters SET network_hash = NULL
   WHERE network_hash IS NOT NULL
     AND created_at < now() - make_interval(days => p_network_hash_days);
   GET DIAGNOSTICS v_submitter_hashes = ROW_COUNT;
+
+  UPDATE rate.extension_observations SET network_hash = NULL
+  WHERE network_hash IS NOT NULL
+    AND received_at < now() - make_interval(days => p_network_hash_days);
+  GET DIAGNOSTICS v_hashes = ROW_COUNT;
 
   DELETE FROM rate.extension_observations
   WHERE received_at < now() - make_interval(days => p_keep_days);

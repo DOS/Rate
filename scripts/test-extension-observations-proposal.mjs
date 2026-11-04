@@ -65,7 +65,7 @@ const j = (value) => `${q(JSON.stringify(value))}::jsonb`;
 const sha = (text) => createHash('sha256').update(text, 'utf8').digest('hex');
 const ch = (code) => String.fromCodePoint(code);
 // A test value made up here, not a secret: the replay sets its hash as the ingest key row.
-const KEY = `local-replay-ingest-key-${process.pid}`;
+const KEY = `local-replay-ingest-key-not-a-secret-${process.pid}`;
 const NET_A = sha('net-a');
 const UNKNOWN = '00000000-0000-4000-8000-000000000000';
 let nets = 0;
@@ -222,6 +222,35 @@ try {
       `submit with ${key}`
     );
   }
+  // The empty key's hash cannot be stored; a key under 32 characters is refused even when its
+  // hash is the stored one.
+  refused(
+    'postgres',
+    `UPDATE rate.extension_ingest_secret SET key_sha256 = ${q(sha(''))}`,
+    '23514',
+    undefined,
+    'the empty key hash is refused'
+  );
+  const shortKey = 'k'.repeat(31);
+  sql(
+    `UPDATE rate.extension_ingest_secret SET key_sha256 = ${q(sha(shortKey))}`
+  );
+  refused(
+    'anon',
+    registerSql(NET_A, shortKey),
+    '42501',
+    'ingest_key',
+    'a 31-character key'
+  );
+  refused(
+    'anon',
+    submitSql(UNKNOWN, good(), NET_A, shortKey),
+    '42501',
+    'ingest_key',
+    'a 31-character key on submit'
+  );
+  sql(`UPDATE rate.extension_ingest_secret SET key_sha256 = ${q(sha(KEY))}`);
+  assert.ok(KEY.length >= 32, 'the replay key is long enough');
 
   // 3. Every check, and a check fails when its rule breaks.
   checkAll('after the apply');
@@ -369,6 +398,8 @@ try {
     { observed_at: iso(now - HOUR, { off: 420, sep: null }) },
     { observed_at: iso(now - HOUR, { off: -300 }) },
     { observed_at: iso(now - HOUR, { off: 345 }) },
+    { observed_at: iso(now - HOUR, { off: 959 }) },
+    { observed_at: iso(now - HOUR, { off: -900 }) },
     { observed_at: iso(now - HOUR, { sec: false }) },
     { observed_at: iso(now - HOUR, { frac: '.123456789' }) },
     { observed_at: iso(now - HOUR, { frac: '.5' }) },
@@ -484,6 +515,11 @@ try {
     ['observed_at', good({ observed_at: hourAgo.replace(/:\d\dZ$/, ':61Z') })],
     ['observed_at', good({ observed_at: hourAgo.replace(/T\d\d/, 'T25') })],
     ['observed_at', good({ observed_at: hourAgo.replace('Z', '+24:00') })],
+    ['observed_at', good({ observed_at: hourAgo.replace(/:\d\dZ$/, ':60Z') })],
+    ['observed_at', good({ observed_at: hourAgo.replace('Z', '+16:00') })],
+    ['observed_at', good({ observed_at: hourAgo.replace('Z', '-16:00') })],
+    ['observed_at', good({ observed_at: hourAgo.replace('Z', '+1560') })],
+    ['observed_at', good({ observed_at: hourAgo.replace('Z', '+05:60') })],
     [
       'observed_at',
       good({ observed_at: `${hourAgo.slice(0, 19)}.1234567890Z` }),
@@ -827,7 +863,7 @@ try {
            AND l.pid <> pg_backend_pid()`) === '0'
   ) {
     assert.ok(Date.now() < deadline, 'the racing submit started');
-    spawnSync('docker', ['exec', container, 'true']);
+    await new Promise((resolve) => setTimeout(resolve, 200));
   }
   const raced = JSON.parse(
     as('service_role', 'SELECT rate.purge_extension_observations()::text')
@@ -845,6 +881,78 @@ try {
     'p7 stays'
   );
   assert.equal(count(`submitter_id = ${q(p7)}`), 1, 'its observation stays');
+
+  // The lock order: a delete in the middle of a purge must not deadlock. A third session holds
+  // an old observation X and an old submitter Y, so the purge stops partway; then the user
+  // deletes S, whose old observation O the purge also clears. Purge and delete both take the
+  // submitter before its observations, so the delete waits for the purge and both finish.
+  const background = (input) => {
+    const child = spawn(
+      'docker',
+      [
+        'exec',
+        '-i',
+        container,
+        'psql',
+        '-XqAt',
+        '-v',
+        'ON_ERROR_STOP=1',
+        '-U',
+        'postgres',
+      ],
+      { stdio: ['pipe', 'pipe', 'pipe'] }
+    );
+    let out = '';
+    child.stdout.on('data', (d) => (out += d));
+    child.stderr.on('data', (d) => (out += d));
+    child.stdin.end(input);
+    return new Promise((resolve) =>
+      child.on('close', (code) => resolve({ code, out }))
+    );
+  };
+  // Async between polls, so the background sessions' pipes keep flowing.
+  const waitFor = async (query, what) => {
+    const until = Date.now() + 15_000;
+    while (sql(query) === '0') {
+      assert.ok(Date.now() < until, what);
+      await new Promise((resolve) => setTimeout(resolve, 200));
+    }
+  };
+  const [dS, dY, dZ] = [register(), register(), register()];
+  age([dS, dY, dZ], 30);
+  backfill(dS, 1, '30 days', NET_A); // O
+  backfill(dZ, 1, '30 days', NET_A); // X
+  const holder = background(`BEGIN;
+    SELECT 1 FROM rate.extension_observations WHERE submitter_id = ${q(dZ)} FOR UPDATE;
+    SELECT 1 FROM rate.extension_submitters WHERE id = ${q(dY)} FOR UPDATE;
+    SELECT pg_sleep(4); COMMIT;`);
+  await waitFor(
+    `SELECT count(*) FROM pg_stat_activity WHERE query LIKE '%pg_sleep(4)%'
+       AND pid <> pg_backend_pid() AND wait_event = 'PgSleep'`,
+    'the holder took its locks'
+  );
+  const purging = background(
+    `SET ROLE service_role; SELECT rate.purge_extension_observations()::text;`
+  );
+  await waitFor(
+    `SELECT count(*) FROM pg_stat_activity WHERE query LIKE '%purge_extension_observations%'
+       AND pid <> pg_backend_pid() AND wait_event_type = 'Lock'`,
+    'the purge waits on the holder'
+  );
+  const deleting = background(
+    `SET ROLE anon; SELECT rate.delete_extension_submitter(${q(dS)});`
+  );
+  const [held, purged, deleted] = await Promise.all([
+    holder,
+    purging,
+    deleting,
+  ]);
+  assert.equal(held.code, 0, held.out);
+  assert.equal(purged.code, 0, `the purge finished: ${purged.out}`);
+  assert.equal(deleted.code, 0, `the delete finished: ${deleted.out}`);
+  assert.doesNotMatch(`${purged.out}${deleted.out}`, /deadlock/);
+  assert.equal(deleted.out.trim(), '1', 'the delete took O with S');
+  assert.equal(count(`id = ${q(dS)}`, 'rate.extension_submitters'), 0);
 
   // 10. The tables: anon and authenticated reach nothing; rate_worker reads and sets status only
   // and has nothing on the key; service_role writes directly within the CHECKs.

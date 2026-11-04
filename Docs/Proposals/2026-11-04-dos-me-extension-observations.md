@@ -40,16 +40,17 @@ prices, products or ratings. Corroboration and promotion are M3/M4, in DOS/Rate-
   EXECUTE is revoked from PUBLIC.
   1. `rate.register_extension_submitter(p_ingest_key, p_network_hash)`, for anon,
      authenticated and service_role.
-     - A key whose sha256 is not the stored row raises 42501, DETAIL `ingest_key`. Without a row,
-       every call is refused.
+     - A key that is missing, shorter than 32 characters, or whose sha256 is not the stored row
+       raises 42501, DETAIL `ingest_key`. Without a row, every call is refused. The row can
+       never hold the sha256 of the empty string (a CHECK).
      - A network hash that is not 64 lowercase hex characters raises 22023, DETAIL
        `network_hash`.
      - Over 20 new submitters per network hash in the last hour raises 54000, DETAIL
        `network_hash`.
      - Over 600 new submitters in the last minute, in all, raises 54000, DETAIL `submitter`.
      - Each count runs under an advisory lock, so it is exact.
-  2. `rate.submit_extension_observation(p_ingest_key, p_submitter_id, p_observation,
-p_network_hash)`, for anon, authenticated and service_role.
+  2. `rate.submit_extension_observation(...)`, for anon, authenticated and service_role. Its
+     arguments: `p_ingest_key`, `p_submitter_id`, `p_observation`, `p_network_hash`.
      - The ingest key and the network hash are checked as in register.
      - Then every payload rule, in the order of the shared validator. A refusal raises 22023,
        and DETAIL names the field:
@@ -67,9 +68,11 @@ p_network_hash)`, for anon, authenticated and service_role.
      - It takes no ingest key, so erasure always works.
      - It deletes the submitter, and its observations by cascade.
      - It returns how many observations went. An unknown id returns 0.
-  4. `rate.purge_extension_observations(p_network_hash_days, p_keep_days,
-p_empty_submitter_days)`, for service_role only. Defaults: 28, 180 and 7 days.
-     - It clears `network_hash` on older observations and submitters.
+  4. `rate.purge_extension_observations(...)`, for service_role only. Its arguments:
+     `p_network_hash_days` (28), `p_keep_days` (180), `p_empty_submitter_days` (7).
+     - It clears `network_hash` on older submitters, then on older observations. That order
+       matches delete (the submitter, then its observations), so a delete during a purge waits
+       instead of deadlocking.
      - It deletes older observations.
      - It deletes submitters without observations that are older than
        `p_empty_submitter_days`.
@@ -104,8 +107,10 @@ control character. Its host is lowercase, with no user and no port.
   limit.
 - The network hash is therefore always the web's. It is evidence of independence only for rows
   written through the web, and with the key in place that means all rows.
-- The key is a server secret of the web. If it leaks, rotate it: set a new row and redeploy the
-  web with the new key.
+- The key is a server secret of the web. It must never be committed. Its sha256 may be.
+- **Rotation is a hard cut.** Once the new row is set, register and submit answer 42501 to the
+  old key, so the web's writes fail (503) until it redeploys with the new key. Deletes keep
+  working.
 
 ## Privacy
 
@@ -152,7 +157,9 @@ control character. Its host is lowercase, with no user and no port.
    (10 minutes ahead, 24 hours behind), not to `now()`.
 4. **A change to the payload needs a migration.** The SQL repeats the rules of the shared
    validator, which is plain functions. A drift fails closed, and the replay compares both
-   over 160 payloads.
+   over 167 payloads.
+   - `observed_at` takes seconds 00 to 59 (no leap second) and an offset up to 15:59, which is
+     what Postgres parses.
 5. **Where the RPC and the validator differ on purpose:**
    - the 16 KB cap is the RPC's alone (the web caps the request body);
    - a lone UTF-16 surrogate: the validator names the field, and jsonb refuses the text
@@ -162,17 +169,33 @@ control character. Its host is lowercase, with no user and no port.
 
 ## Apply
 
-1. Copy the `.sql` into DOS-Me `supabase/migrations/` with a new timestamp, and the verify and
-   rollback files into `scripts/ops/`.
-2. **Set the ingest key row**, as `postgres` or `service_role`, from the web's secret (never
-   commit it):
-   `INSERT INTO rate.extension_ingest_secret (key_sha256) VALUES ('<sha256 hex of the key>')
-ON CONFLICT (id) DO UPDATE SET key_sha256 = EXCLUDED.key_sha256, updated_at = now();`
-3. After the beta and production applies, run the verify file read-only. V1 to V12 must
-   return 0.
-4. Schedule the daily purge as `service_role`.
-5. **Rollback:** the rollback file, safe to run twice. Turn the web flag off first. Every
-   observation and submitter id is lost, and the key row with them.
+These steps are for the session or agent that applies DOS-Me. JOY runs no command.
+
+1. **Generate the key** with a CSPRNG, for example `openssl rand -hex 32`. Keep it out of git,
+   logs and chat.
+2. **Hash the exact bytes** with `printf %s "$KEY" | sha256sum`.
+   - Never `echo`, which adds a newline.
+   - Never in SQL, where the key would reach the database logs.
+   - Check that `$KEY` is set: the sha256 of an empty key is refused by a CHECK.
+3. **Set the web's secrets** on every Vercel environment that points at that database:
+   - `RATE_EXTENSION_INGEST_KEY`: the key;
+   - `RATE_NETWORK_HASH_SALT`: random, at least 16 characters.
+   - Preview, beta and production share the prod database, so they share one key.
+4. **Apply the migration.** Copy the `.sql` into DOS-Me `supabase/migrations/` with a new
+   timestamp, and the verify and rollback files into `scripts/ops/`.
+5. **Insert the row**, as `postgres` or `service_role`, with only the hash:
+
+   ```sql
+   INSERT INTO rate.extension_ingest_secret (key_sha256) VALUES ('<sha256 hex>')
+   ON CONFLICT (id) DO UPDATE SET key_sha256 = EXCLUDED.key_sha256, updated_at = now();
+   ```
+
+6. **Run the verify file** read-only. V1 to V12 must return 0; V12 proves the row is set.
+7. **Only then turn the web flag on** (`RATE_EXTENSION_OBSERVATIONS=1`).
+8. Schedule the daily purge as `service_role`.
+
+**Rollback:** the rollback file, safe to run twice. Turn the web flag off first. Every
+observation and submitter id is lost, and the key row with them.
 
 ## Tests (local, Docker)
 
@@ -181,9 +204,10 @@ ON CONFLICT (id) DO UPDATE SET key_sha256 = EXCLUDED.key_sha256, updated_at = no
 - the proposal applied twice, and V1 to V12; V1, V2 and V11 fail on a forced RLS or a stray
   grant;
 - the ingest key: no row, a wrong, empty or null key, and the hash itself are refused (42501);
-  the right key passes; the table holds one row;
+  a 31-character key is refused even when its hash is stored; the empty key's hash cannot be
+  stored; the right key passes; the table holds one row;
 - a required network hash in register and submit;
-- 37 valid and 123 refused payloads, each with the same verdict and field from the RPC and from
+- 39 valid and 128 refused payloads, each with the same verdict and field from the RPC and from
   `parseExtensionObservationV1`, URL and time edges included;
 - an unknown or null submitter (P0002), and nothing written by a refused call;
 - the limits at their exact thresholds: the 120th per submitter, the 600th per network (with
@@ -191,7 +215,9 @@ ON CONFLICT (id) DO UPDATE SET key_sha256 = EXCLUDED.key_sha256, updated_at = no
   next one is refused;
 - delete: the count, the cascade, 0 for an unknown or null id, no key needed;
 - purge: hashes cleared on both tables, rows and empty submitters deleted, service_role only;
-  and a submit held open during the purge keeps its submitter and its row;
+  a submit held open during the purge keeps its submitter and its row; and a delete in the
+  middle of a stalled purge waits for it instead of deadlocking (the old lock order fails this
+  test with "deadlock detected");
 - grants: anon and authenticated reach none of the three tables; rate_worker reads and updates
   `status` only and has nothing on the key; the CHECKs hold `service_role`;
 - the rollback twice, then the proposal again (refusing until the key row is set), and again

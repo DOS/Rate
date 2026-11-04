@@ -149,7 +149,7 @@ SELECT count(*) FROM (
 ) x;
 
 -- V7 the CHECKs exist and are validated, and the foreign key cascades on delete; expect 0
-SELECT (19 - (
+SELECT (20 - (
   SELECT count(*) FROM pg_constraint
   WHERE contype = 'c' AND convalidated AND (
     (conrelid = to_regclass('rate.extension_observations') AND conname IN (
@@ -164,7 +164,7 @@ SELECT (19 - (
     OR (conrelid = to_regclass('rate.extension_submitters')
         AND conname = 'extension_submitters_network_hash_check')
     OR (conrelid = to_regclass('rate.extension_ingest_secret')
-        AND conname IN ('extension_ingest_secret_id_check',
+        AND conname IN ('extension_ingest_secret_id_check', 'extension_ingest_secret_key_not_empty_check',
                         'extension_ingest_secret_key_sha256_check')))
 )) - (
   SELECT count(*) FROM pg_constraint
