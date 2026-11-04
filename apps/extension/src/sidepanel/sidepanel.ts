@@ -820,6 +820,13 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
+  chrome.storage.onChanged?.addListener((changes, areaName) => {
+    const change = changes.crowdContributeOptIn;
+    if (areaName === 'local' && change && chkOptIn) {
+      chkOptIn.checked = change.newValue === true;
+    }
+  });
+
   chkOptIn?.addEventListener('change', async () => {
     await chrome.runtime.sendMessage({
       type: 'RATE_UPDATE_SETTINGS',

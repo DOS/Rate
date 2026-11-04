@@ -16,6 +16,7 @@ async function main() {
   fs.rmSync(distDir, { recursive: true, force: true });
   ensureDir(path.join(distDir, 'icons'));
   ensureDir(path.join(distDir, 'sidepanel'));
+  ensureDir(path.join(distDir, 'onboarding'));
 
   // 1. Copy manifest.json
   fs.copyFileSync(
@@ -53,8 +54,13 @@ async function main() {
     ...common,
     format: 'esm',
     entryPoints: {
-      'background/service-worker': path.join(srcDir, 'background', 'service-worker.ts'),
+      'background/service-worker': path.join(
+        srcDir,
+        'background',
+        'service-worker.ts'
+      ),
       'sidepanel/sidepanel': path.join(srcDir, 'sidepanel', 'sidepanel.ts'),
+      'onboarding/onboarding': path.join(srcDir, 'onboarding', 'onboarding.ts'),
     },
     outdir: distDir,
   });
@@ -62,13 +68,22 @@ async function main() {
     ...common,
     format: 'iife',
     entryPoints: {
-      'content/content-script': path.join(srcDir, 'content', 'content-script.ts'),
+      'content/content-script': path.join(
+        srcDir,
+        'content',
+        'content-script.ts'
+      ),
     },
     outdir: distDir,
   });
   fs.copyFileSync(
     path.join(srcDir, 'sidepanel', 'sidepanel.html'),
     path.join(distDir, 'sidepanel', 'sidepanel.html')
+  );
+  // The install consent page (DOS/Rate#1603).
+  fs.copyFileSync(
+    path.join(srcDir, 'onboarding', 'onboarding.html'),
+    path.join(distDir, 'onboarding', 'onboarding.html')
   );
 
   console.log(

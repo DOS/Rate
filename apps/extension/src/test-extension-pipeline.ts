@@ -19,6 +19,7 @@ import {
   DEFAULT_API_BASE_URL,
   MAX_SPARKLINE_POINTS,
   escapeSafeExternalHref,
+  isOnboardingSender,
   isPrivilegedExtensionSender,
   normalizeAllowedApiBaseUrl,
   normalizeFiveStarRating,
@@ -467,6 +468,52 @@ async function runTests() {
     }),
     true
   );
+  // The install consent page is an extension page in a tab: it is never a
+  // privileged sender, and only isOnboardingSender, which lets it set the
+  // opt-in alone, accepts it by its exact URL (DOS/Rate#1603).
+  const onboardingUrl =
+    'chrome-extension://abcdefghijklmnop/onboarding/onboarding.html';
+  assert.equal(
+    isPrivilegedExtensionSender(
+      { tab: { id: 7 }, url: onboardingUrl },
+      'abcdefghijklmnop'
+    ),
+    false
+  );
+  assert.equal(
+    isOnboardingSender(
+      { tab: { id: 7 }, url: onboardingUrl },
+      'abcdefghijklmnop'
+    ),
+    true
+  );
+  for (const sender of [
+    { tab: { id: 7 }, url: 'https://shopee.vn/onboarding/onboarding.html' },
+    {
+      tab: { id: 7 },
+      url: 'chrome-extension://otherextensionid/onboarding/onboarding.html',
+    },
+    {
+      tab: undefined,
+      url: 'chrome-extension://abcdefghijklmnop/sidepanel/sidepanel.html',
+    },
+    { tab: { id: 7 }, url: `${onboardingUrl}?x=1` },
+    { tab: { id: 7 }, url: `${onboardingUrl}#x` },
+    { tab: { id: 7 }, url: undefined },
+    { id: 'otherextensionid', tab: { id: 7 }, url: onboardingUrl },
+    null,
+  ]) {
+    assert.equal(
+      isOnboardingSender(sender as never, 'abcdefghijklmnop'),
+      false,
+      JSON.stringify(sender)
+    );
+  }
+  assert.equal(
+    isOnboardingSender({ tab: { id: 7 }, url: onboardingUrl }),
+    false,
+    'without a known runtime id nothing is the consent page'
+  );
   assert.equal(
     escapeSafeExternalHref('javascript:alert(1)'),
     'https://rate.vn',
@@ -605,7 +652,23 @@ async function runTests() {
         );
       }
       assert.ok(!/Chỉ gửi URL/.test(optInText));
+      // The install consent page names the same fields (DOS/Rate#1603).
+      const consentText = catalogue.onboardingOptInBody?.message ?? '';
+      for (const key of Object.values(CROWD_INGEST_FIELD_LABELS)) {
+        assert.ok(
+          consentText.includes(catalogue[key]?.message ?? '\u0000'),
+          `${locale} consent text lacks ${key}`
+        );
+      }
     }
+    assert.ok(
+      fs
+        .readFileSync(
+          path.resolve(__dirname, 'onboarding/onboarding.html'),
+          'utf8'
+        )
+        .includes('data-i18n="onboardingOptInBody"')
+    );
     // The store listing names the extension as the vi catalogue does.
     const viName = readLocaleCatalogues().vi.extName?.message;
     assert.equal(
