@@ -6,15 +6,17 @@
  *     [--apply] [--purge <all|prompt version>] [--max <n>] [--wait-minutes <n>]
  *
  * Reads crawled user reviews, picks those that qualify (design section 1, D3),
- * sends them through the Message Batches API with a structured output schema
- * per category (section 2), checks every line it gets back (section 7.2) and
+ * sends them through the dos.ai gateway's Batch API (OpenAI format, D2 as JOY
+ * decided on 2026-11-04) with a structured output schema per category
+ * (section 2), checks every line it gets back (section 7.2) and
  * stores what passes as rate.review_points method 'ai' through
  * rate.store_review_ai_points, which writes the lines and the process-once
  * marker (rate.review_ai_extractions) in one transaction.
  *
  * Dry run by default: it reads, plans and logs counts and the cost ceiling,
- * and never calls a model (no API key needed). `--apply` sends one batch,
- * waits for it (at most --wait-minutes, default 60) and stores the results.
+ * and never calls a model (no key needed). `--apply` sends one batch with the
+ * key in DOS_AI_API_KEY (DOS_AI_BASE_URL overrides the gateway URL), waits for
+ * it (at most --wait-minutes, default 60) and stores the results.
  * It signs in as the rate_worker user (RATE_WORKER_EMAIL and
  * RATE_WORKER_PASSWORD with the publishable key), which reads the review
  * tables, writes the batch record and writes lines only through the writer.
@@ -22,9 +24,10 @@
  * Switches and limits (section 8, D5):
  *   - REVIEW_AI_POINTS_ENABLED must be 'true', or the job exits before any
  *     model call; with --apply it also cancels a batch still running.
- *   - REVIEW_AI_MODEL: claude-haiku-5-5 (default) or claude-sonnet-5-5 (D1).
+ *   - REVIEW_AI_MODEL: dos (default, Qwen3.8 27B on DOS's GPUs) or
+ *     qwen3.8-max, the models the gateway's Batch API serves (D1's shape).
  *   - At most 2000 reviews a run (--max lowers it).
- *   - A monthly cap per model ($5 Haiku, $15 Sonnet). The month's spend is the
+ *   - A monthly cap per model ($5 dos, $15 qwen3.8-max). The month's spend is the
  *     reported cost of its batches, or their reserved ceiling while running,
  *     read from rate.review_ai_batches. A batch whose ceiling would pass the
  *     cap is not sent, and the CLI exits with code 3.
@@ -97,22 +100,26 @@ export const SHARE_JUMP_STOP = 0.3;
 /** ...when both batches have at least this many reviews. */
 export const SHARE_JUMP_MIN_REVIEWS = 50;
 const DEADLOCK_ATTEMPTS = 4;
-/** The Batch API keeps results 29 days; past 28 a batch is treated as gone. */
+/** A batch whose results cannot be read after 28 days is treated as gone. */
 const RESULTS_KEPT_MS = 28 * 24 * 60 * 60 * 1000;
 const PROMPT_VERSION_RE = /^[a-z0-9][a-z0-9._-]{0,31}$/;
 
 // --- The model client: the Batch API as the job uses it, so tests pass a fake. ------------
 
+/** One line of a dos.ai (OpenAI-format) batch input file. */
 export interface BatchRequest {
   custom_id: string;
-  params: {
+  method: 'POST';
+  url: '/v1/chat/completions';
+  body: {
     model: ReviewAiModel;
     max_tokens: number;
-    system: { type: 'text'; text: string; cache_control: { type: 'ephemeral' } }[];
-    messages: { role: 'user'; content: string }[];
-    output_config: {
-      effort: 'low';
-      format: { type: 'json_schema'; schema: Record<string, unknown> };
+    temperature: number;
+    stream: false;
+    messages: [{ role: 'system'; content: string }, { role: 'user'; content: string }];
+    response_format: {
+      type: 'json_schema';
+      json_schema: { name: string; strict: true; schema: Record<string, unknown> };
     };
   };
 }
@@ -136,7 +143,7 @@ export type BatchResult =
         };
       };
     }
-  | { custom_id: string; result: { type: 'errored' | 'expired' | 'canceled' } };
+  | { custom_id: string; result: { type: 'errored' | 'expired' | 'canceled' | 'unbilled' } };
 
 export interface ReviewAiClient {
   createBatch(requests: BatchRequest[]): Promise<{ id: string }>;
@@ -145,29 +152,226 @@ export interface ReviewAiClient {
   cancelBatch(id: string): Promise<void>;
 }
 
-/** The real client: the official Anthropic SDK, the key from ANTHROPIC_API_KEY. */
-export async function anthropicReviewAiClient(apiKey: string): Promise<ReviewAiClient> {
-  const { default: Anthropic } = await import('@anthropic-ai/sdk');
-  const client = new Anthropic({ apiKey });
+/** The dos.ai gateway's default base URL, as the importer's other AI clients use it. */
+export const DOS_AI_DEFAULT_BASE_URL = 'https://api.dos.me/v1';
+const DOS_AI_TIMEOUT_MS = 60_000;
+const DOS_AI_ATTEMPTS = 3;
+
+/** One line of a dos.ai batch output file (OpenAI batch format). */
+interface DosAiOutputLine {
+  custom_id?: string;
+  response?: {
+    status_code?: number;
+    body?: {
+      choices?: { message?: { content?: string | null }; finish_reason?: string | null }[];
+      usage?: {
+        prompt_tokens?: number;
+        completion_tokens?: number;
+        prompt_tokens_details?: { cached_tokens?: number; cache_write_tokens?: number } | null;
+      };
+    };
+  } | null;
+  error?: { code?: string; message?: string } | null;
+}
+
+/**
+ * A dos.ai output line as the job reads results: a 200 response is a
+ * message whose stop reason is the finish reason ('stop' ends normally,
+ * 'length' is cut off, 'content_filter' is refused); a line the gateway did
+ * not run for want of credits (402, insufficient_credits) is 'unbilled', so
+ * the review stays due without spending an attempt; anything else errored.
+ * Cached prompt tokens are split out of prompt_tokens.
+ */
+export function fromDosAiOutputLine(line: DosAiOutputLine): BatchResult | null {
+  if (typeof line.custom_id !== 'string') return null;
+  const body = line.response?.body;
+  if (
+    line.response?.status_code === 402 ||
+    /insufficient|credit|balance/i.test(line.error?.code ?? '')
+  ) {
+    return { custom_id: line.custom_id, result: { type: 'unbilled' } };
+  }
+  if (line.error || line.response?.status_code !== 200 || !body) {
+    return { custom_id: line.custom_id, result: { type: 'errored' } };
+  }
+  const choice = body.choices?.[0];
+  const finish = choice?.finish_reason ?? null;
+  const n = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) && v > 0 ? v : 0);
+  const cachedRead = n(body.usage?.prompt_tokens_details?.cached_tokens);
+  const cachedWrite = n(body.usage?.prompt_tokens_details?.cache_write_tokens);
+  return {
+    custom_id: line.custom_id,
+    result: {
+      type: 'succeeded',
+      message: {
+        stop_reason:
+          finish === 'stop'
+            ? 'end_turn'
+            : finish === 'length'
+              ? 'max_tokens'
+              : finish === 'content_filter'
+                ? 'refusal'
+                : finish,
+        content: [{ type: 'text', text: choice?.message?.content ?? '' }],
+        usage: {
+          input_tokens: Math.max(0, n(body.usage?.prompt_tokens) - cachedRead - cachedWrite),
+          output_tokens: n(body.usage?.completion_tokens),
+          cache_read_input_tokens: cachedRead,
+          cache_creation_input_tokens: cachedWrite,
+        },
+      },
+    },
+  };
+}
+
+/**
+ * A batch whose results will never come: the gateway failed it as a whole
+ * (a refused file, a Zero Data Retention organization, no credits at start),
+ * it ended with no output, or its output file is gone. The job closes its row
+ * and stores nothing, so its reviews are due again without spending an attempt.
+ */
+export class BatchGoneError extends Error {
+  constructor(
+    message: string,
+    readonly status: 'canceled' | 'expired'
+  ) {
+    super(message);
+    this.name = 'BatchGoneError';
+  }
+}
+
+/**
+ * The real client: the dos.ai gateway's OpenAI-compatible Files and Batch API
+ * (POST /files, POST /batches, GET /batches/:id, POST /batches/:id/cancel,
+ * GET /files/:id/content), with the key in DOS_AI_API_KEY as a Bearer token.
+ * Each call, body included, has a timeout. A 429 or 5xx, or a network error,
+ * is retried, except on POST /batches: a batch may have been created behind a
+ * lost answer, and a retry would run and bill a second one, so that call is
+ * retried only on 429 (refused before anything was created). A 402 (no
+ * credits left) stops the run.
+ */
+export function dosAiReviewAiClient(
+  apiKey: string,
+  baseUrl: string = DOS_AI_DEFAULT_BASE_URL,
+  fetchImpl: typeof fetch = fetch,
+  wait: (ms: number) => Promise<unknown> = ms => new Promise(r => setTimeout(r, ms))
+): ReviewAiClient {
+  const base = baseUrl.replace(/\/+$/, '');
+  const call = async (
+    path: string,
+    init: RequestInit = {},
+    retry: 'all' | 'throttled' = 'all'
+  ): Promise<{ status: number; text: string }> => {
+    for (let attempt = 1; ; attempt++) {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), DOS_AI_TIMEOUT_MS);
+      let status = 0;
+      let text = '';
+      let failure: unknown = null;
+      try {
+        const response = await fetchImpl(`${base}${path}`, {
+          ...init,
+          headers: { Authorization: `Bearer ${apiKey}`, ...(init.headers ?? {}) },
+          signal: controller.signal,
+        });
+        status = response.status;
+        text = await response.text();
+      } catch (err) {
+        failure = err;
+      } finally {
+        clearTimeout(timer);
+      }
+      if (failure === null && status >= 200 && status < 300) return { status, text };
+      if (status === 402) {
+        throw new Error('dos.ai refused the request: no credits left on the key (402).');
+      }
+      const retryable =
+        retry === 'all' ? failure !== null || status === 429 || status >= 500 : status === 429;
+      if (!retryable || attempt >= DOS_AI_ATTEMPTS) {
+        if (failure !== null && retry === 'throttled') {
+          throw new Error(
+            `dos.ai ${init.method ?? 'GET'} ${path}: no answer (${String(failure)}). A batch may have been created; check the key's batches on dos.ai before the next run.`
+          );
+        }
+        if (failure !== null) throw failure;
+        // The body names the reason; it holds no review text of ours.
+        throw new Error(`dos.ai ${init.method ?? 'GET'} ${path}: ${status} ${text.slice(0, 300)}`);
+      }
+      await wait(1000 * 2 ** (attempt - 1));
+    }
+  };
+  const json = async <T>(path: string, init?: RequestInit, retry?: 'all' | 'throttled') =>
+    JSON.parse((await call(path, init, retry)).text) as T;
   return {
     async createBatch(requests) {
-      const batch = await client.messages.batches.create({
-        requests: requests as unknown as Parameters<
-          typeof client.messages.batches.create
-        >[0]['requests'],
-      });
+      const form = new FormData();
+      form.append('purpose', 'batch');
+      form.append(
+        'file',
+        new Blob([requests.map(r => JSON.stringify(r)).join('\n') + '\n'], {
+          type: 'application/jsonl',
+        }),
+        'review-ai-points.jsonl'
+      );
+      const file = await json<{ id: string }>('/files', { method: 'POST', body: form });
+      const batch = await json<{ id: string }>(
+        '/batches',
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            input_file_id: file.id,
+            endpoint: '/v1/chat/completions',
+            completion_window: '24h',
+          }),
+        },
+        'throttled'
+      );
       return { id: batch.id };
     },
     async batchStatus(id) {
-      return (await client.messages.batches.retrieve(id)).processing_status;
+      const batch = await json<{ status: string }>(`/batches/${encodeURIComponent(id)}`);
+      if (batch.status === 'cancelling') return 'canceling';
+      return ['completed', 'failed', 'cancelled', 'expired'].includes(batch.status)
+        ? 'ended'
+        : 'in_progress';
     },
     async *results(id) {
-      for await (const entry of await client.messages.batches.results(id)) {
-        yield entry as unknown as BatchResult;
+      const batch = await json<{
+        status?: string;
+        output_file_id?: string | null;
+        errmsg?: string | null;
+      }>(`/batches/${encodeURIComponent(id)}`);
+      if (!batch.output_file_id) {
+        // Failed as a whole, or ended with no line run: nothing to store.
+        throw new BatchGoneError(
+          `dos.ai batch ${id} ended ${batch.status ?? 'without a status'} with no output${batch.errmsg ? `: ${batch.errmsg.slice(0, 200)}` : ''}`,
+          batch.status === 'expired' ? 'expired' : 'canceled'
+        );
+      }
+      let text: string;
+      try {
+        text = (await call(`/files/${encodeURIComponent(batch.output_file_id)}/content`)).text;
+      } catch (err) {
+        if (/ 404 /.test(String(err))) {
+          throw new BatchGoneError(`dos.ai batch ${id}: its output file is gone (404)`, 'expired');
+        }
+        throw err;
+      }
+      for (const raw of text.split('\n')) {
+        if (!raw.trim()) continue;
+        let line: DosAiOutputLine;
+        try {
+          line = JSON.parse(raw) as DosAiOutputLine;
+        } catch {
+          continue;
+        }
+        const result = fromDosAiOutputLine(line);
+        if (result) yield result;
       }
     },
     async cancelBatch(id) {
-      await client.messages.batches.cancel(id);
+      await call(`/batches/${encodeURIComponent(id)}/cancel`, { method: 'POST' });
     },
   };
 }
@@ -384,17 +588,26 @@ export function buildRequests(
       const refs = part.map((c, j) => ({ ref: j + 1, candidate: c }));
       requests.push({
         custom_id,
-        params: {
+        method: 'POST',
+        url: '/v1/chat/completions',
+        body: {
           model,
           max_tokens: REQUEST_MAX_TOKENS,
-          system: [{ type: 'text', text: system, cache_control: { type: 'ephemeral' } }],
+          temperature: 0,
+          stream: false,
+          // The instructions first and the same for a category: a shared prefix the
+          // gateway's backends can cache on their own.
           messages: [
+            { role: 'system', content: system },
             {
               role: 'user',
               content: reviewAiUserMessage(refs.map(r => ({ ref: r.ref, text: r.candidate.text }))),
             },
           ],
-          output_config: { effort: 'low', format: { type: 'json_schema', schema } },
+          response_format: {
+            type: 'json_schema',
+            json_schema: { name: 'review_points', strict: true, schema },
+          },
         },
       });
       instructions.push(system);
@@ -423,6 +636,8 @@ export interface CollectedBatch {
   rejects: Record<AiRejectReason, number>;
   unaccented: number;
   failedReviews: number;
+  /** Reviews in requests the gateway did not run for want of credits: still due. */
+  unbilledReviews: number;
   reviewsWithLines: number;
   reviewsAnswered: number;
 }
@@ -475,6 +690,7 @@ export function collectBatch(
     },
     unaccented: 0,
     failedReviews: 0,
+    unbilledReviews: 0,
     reviewsWithLines: 0,
     reviewsAnswered: 0,
   };
@@ -498,6 +714,11 @@ export function collectBatch(
           }
         }
       }
+    }
+    // A request the gateway never ran for want of credits: its reviews stay due, no attempt spent.
+    if (result?.result.type === 'unbilled') {
+      out.unbilledReviews += request.reviews.length;
+      continue;
     }
     for (const review of request.reviews) {
       const base = {
@@ -673,7 +894,7 @@ export async function runReviewAiPointsJob(
     purged: null,
   };
   const needAi = (): ReviewAiClient => {
-    if (!options.ai) throw new Error('ANTHROPIC_API_KEY is needed to send or collect a batch.');
+    if (!options.ai) throw new Error('DOS_AI_API_KEY is needed to send or collect a batch.');
     return options.ai;
   };
 
@@ -738,16 +959,26 @@ export async function runReviewAiPointsJob(
     try {
       for await (const entry of ai.results(batch.id)) results.push(entry);
     } catch (err) {
-      // The API keeps results 29 days: an older batch is gone, so mark it and move on.
-      if (now.getTime() - new Date(batch.submitted_at).getTime() < RESULTS_KEPT_MS) throw err;
+      // Results that will never come (the client says so, or the batch is past 28 days):
+      // close the row and store nothing, so the reviews are due again with no attempt spent.
+      const gone = err instanceof BatchGoneError;
+      if (!gone && now.getTime() - new Date(batch.submitted_at).getTime() < RESULTS_KEPT_MS) {
+        throw err;
+      }
+      const status = gone ? err.status : 'expired';
       const { error } = await supabase
         .from('review_ai_batches')
-        .update({ status: 'expired', ended_at: now.toISOString() })
+        .update({ status, ended_at: now.toISOString() })
         .eq('id', batch.id);
-      if (error) throw new Error(`review_ai_batches expire: ${error.message}`);
-      logger.warn('review_ai.expired', `Batch ${batch.id} results are gone; marked expired.`, {
-        batch: batch.id,
-      });
+      if (error) throw new Error(`review_ai_batches close: ${error.message}`);
+      logger.warn(
+        'review_ai.gone',
+        `Batch ${batch.id} has no results to store; marked ${status}.`,
+        {
+          batch: batch.id,
+          reason: err instanceof Error ? err.message : String(err),
+        }
+      );
       return false;
     }
     const ids = batch.manifest.flatMap(r => r.reviews.map(v => v.id));
@@ -808,6 +1039,7 @@ export async function runReviewAiPointsJob(
       rejects: collected.rejects,
       unaccented: collected.unaccented,
       failed_reviews: collected.failedReviews,
+      unbilled_reviews: collected.unbilledReviews,
       cost_usd: Number(collected.costUsd.toFixed(4)),
       ...counts,
     });
@@ -879,7 +1111,7 @@ export async function runReviewAiPointsJob(
     model,
     requests.map((r, i) => ({
       instructions: instructions[i]!,
-      message: r.params.messages[0]!.content,
+      message: r.body.messages[1].content,
     }))
   );
   const refreshed = await fetchByKey<AiBatchRow>(
@@ -1055,9 +1287,15 @@ if (isDirectExecution) {
       throw new Error(`The signed-in user has role '${role}', not rate_worker; refusing to run.`);
     }
     const supabase = scopeSupabaseToRate(client);
-    // The model key is read only for a run that may call the API.
-    const apiKey = (process.env.ANTHROPIC_API_KEY || '').trim();
-    const ai = apply && apiKey ? await anthropicReviewAiClient(apiKey) : null;
+    // The gateway key is read only for a run that may call it. DOS_AI_BASE_URL alone
+    // overrides the gateway (beta-api.dos.ai, say); AI_BASE_URL is the other
+    // importer jobs' and may name another provider.
+    const apiKey = (process.env.DOS_AI_API_KEY || '').trim();
+    const baseUrl = (process.env.DOS_AI_BASE_URL || DOS_AI_DEFAULT_BASE_URL).trim();
+    if (!/^https:\/\/[^/\s]+(\/[^\s]*)?$/.test(baseUrl)) {
+      throw new Error('DOS_AI_BASE_URL must be an https URL.');
+    }
+    const ai = apply && apiKey ? dosAiReviewAiClient(apiKey, baseUrl) : null;
     logger.info(
       'review_ai.target',
       `Target: ${host} (${apply ? 'apply' : 'dry run'}, ${enabled ? 'enabled' : 'disabled'}, ${modelName})`,

@@ -19,6 +19,7 @@ import {
   DEFAULT_API_BASE_URL,
   MAX_SPARKLINE_POINTS,
   escapeSafeExternalHref,
+  isOnboardingSender,
   isPrivilegedExtensionSender,
   normalizeAllowedApiBaseUrl,
   normalizeFiveStarRating,
@@ -467,6 +468,52 @@ async function runTests() {
     }),
     true
   );
+  // The install consent page is an extension page in a tab: it is never a
+  // privileged sender, and only isOnboardingSender, which lets it set the
+  // opt-in alone, accepts it by its exact URL (DOS/Rate#1603).
+  const onboardingUrl =
+    'chrome-extension://abcdefghijklmnop/onboarding/onboarding.html';
+  assert.equal(
+    isPrivilegedExtensionSender(
+      { tab: { id: 7 }, url: onboardingUrl },
+      'abcdefghijklmnop'
+    ),
+    false
+  );
+  assert.equal(
+    isOnboardingSender(
+      { tab: { id: 7 }, url: onboardingUrl },
+      'abcdefghijklmnop'
+    ),
+    true
+  );
+  for (const sender of [
+    { tab: { id: 7 }, url: 'https://shopee.vn/onboarding/onboarding.html' },
+    {
+      tab: { id: 7 },
+      url: 'chrome-extension://otherextensionid/onboarding/onboarding.html',
+    },
+    {
+      tab: undefined,
+      url: 'chrome-extension://abcdefghijklmnop/sidepanel/sidepanel.html',
+    },
+    { tab: { id: 7 }, url: `${onboardingUrl}?x=1` },
+    { tab: { id: 7 }, url: `${onboardingUrl}#x` },
+    { tab: { id: 7 }, url: undefined },
+    { id: 'otherextensionid', tab: { id: 7 }, url: onboardingUrl },
+    null,
+  ]) {
+    assert.equal(
+      isOnboardingSender(sender as never, 'abcdefghijklmnop'),
+      false,
+      JSON.stringify(sender)
+    );
+  }
+  assert.equal(
+    isOnboardingSender({ tab: { id: 7 }, url: onboardingUrl }),
+    false,
+    'without a known runtime id nothing is the consent page'
+  );
   assert.equal(
     escapeSafeExternalHref('javascript:alert(1)'),
     'https://rate.vn',
@@ -605,7 +652,23 @@ async function runTests() {
         );
       }
       assert.ok(!/Chỉ gửi URL/.test(optInText));
+      // The install consent page names the same fields (DOS/Rate#1603).
+      const consentText = catalogue.onboardingOptInBody?.message ?? '';
+      for (const key of Object.values(CROWD_INGEST_FIELD_LABELS)) {
+        assert.ok(
+          consentText.includes(catalogue[key]?.message ?? '\u0000'),
+          `${locale} consent text lacks ${key}`
+        );
+      }
     }
+    assert.ok(
+      fs
+        .readFileSync(
+          path.resolve(__dirname, 'onboarding/onboarding.html'),
+          'utf8'
+        )
+        .includes('data-i18n="onboardingOptInBody"')
+    );
     // The store listing names the extension as the vi catalogue does.
     const viName = readLocaleCatalogues().vi.extName?.message;
     assert.equal(
@@ -4995,11 +5058,18 @@ async function runTests() {
       path.resolve(__dirname, 'background/service-worker.ts'),
       'utf8'
     );
+    // The lookup query is built in security-guards (DOS/Rate#1606).
+    const guardsSource = fs.readFileSync(
+      path.resolve(__dirname, 'security-guards.ts'),
+      'utf8'
+    );
     const sentParams = [
       ...new Set(
-        [...workerSource.matchAll(/params\.set\(\s*'([^']+)'/g)].map(
-          (m) => m[1]!
-        )
+        [
+          ...(workerSource + guardsSource).matchAll(
+            /params\.set\(\s*'([^']+)'/g
+          ),
+        ].map((m) => m[1]!)
       ),
     ].sort();
     assert.deepEqual(sentParams, [
@@ -5026,6 +5096,284 @@ async function runTests() {
     );
   }
 
+  // --- DOS/Rate#1606: stock, SKU and the v1 observation (read, not sent) ---
+  {
+    const det = await import('./extractors/ecommerce-detector.js');
+    const guards = await import('./security-guards.js');
+    assert.equal(
+      det.stockStateFromAvailability('https://schema.org/InStock'),
+      'in_stock'
+    );
+    assert.equal(
+      det.stockStateFromAvailability('http://schema.org/OutOfStock'),
+      'out_of_stock'
+    );
+    assert.equal(
+      det.stockStateFromAvailability('LimitedAvailability'),
+      'low_stock'
+    );
+    assert.equal(det.stockStateFromAvailability('PreOrder'), 'unknown');
+    assert.equal(det.stockStateFromAvailability('in stock'), 'in_stock');
+    assert.equal(det.stockStateFromAvailability('blue'), null);
+    assert.equal(det.stockStateFromAvailability(42), null);
+    assert.deepEqual(
+      det.extractStockFromJsonLdOffers([
+        { price: 1 },
+        {
+          availability: 'https://schema.org/InStock',
+          inventoryLevel: { value: 7 },
+        },
+      ]),
+      { stockState: 'in_stock', stockQty: 7 }
+    );
+    assert.deepEqual(
+      det.extractStockFromJsonLdOffers({
+        availability: 'OutOfStock',
+        inventoryLevel: 9,
+      }),
+      { stockState: 'out_of_stock', stockQty: 0 }
+    );
+    assert.deepEqual(
+      det.extractStockFromJsonLdOffers({
+        availability: 'InStock',
+        inventoryLevel: -3,
+      }),
+      { stockState: 'in_stock', stockQty: null }
+    );
+    assert.equal(
+      det.extractSkuId(
+        'lazada',
+        'https://www.lazada.vn/products/iphone-i123-s456.html',
+        null
+      ),
+      '456'
+    );
+    assert.equal(
+      det.extractSkuId(
+        'tiki',
+        'https://tiki.vn/iphone-p123.html?spid=789',
+        'X1'
+      ),
+      '789'
+    );
+    assert.equal(
+      det.extractSkuId('shopee', 'https://shopee.vn/x-i.1.2', 'MDL-9'),
+      'MDL-9'
+    );
+    assert.equal(
+      det.extractSkuId('shopee', 'https://shopee.vn/x-i.1.2', 'a b'),
+      null
+    );
+    assert.equal(
+      det.extractSkuId('tiki', 'https://tiki.vn/x-p1.html?spid=abc', null),
+      null
+    );
+
+    const signal = {
+      platform: 'shopee' as const,
+      canonicalUrl: 'https://shopee.vn/iphone-16-i.123.456',
+      externalItemId: '456',
+      externalShopId: '123',
+      title: 'iPhone 16 128GB',
+      selectedVariant: 'Đen',
+      price: 19_990_000,
+      originalPrice: 22_990_000,
+      ratingStar: 4.9,
+      ratingCount: 1000,
+      skuId: '789',
+      stockState: 'in_stock' as const,
+      stockQty: 5,
+      extractorSource: 'json_ld' as const,
+    };
+    const at = new Date('2026-11-04T10:00:00Z');
+    const obs = guards.buildExtensionObservationV1(signal, at, '2.1.0');
+    assert.deepEqual(obs, {
+      schema_version: 1,
+      marketplace: 'shopee',
+      listing_url: 'https://shopee.vn/iphone-16-i.123.456',
+      external_item_id: '456',
+      external_shop_id: '123',
+      sku_id: '789',
+      variant_label: 'Đen',
+      price_vnd: 19_990_000,
+      list_price_vnd: 22_990_000,
+      stock_state: 'in_stock',
+      stock_qty: 5,
+      observed_at: '2026-11-04T10:00:00.000Z',
+      extractor: { source: 'json_ld', extension_version: '2.1.0' },
+    });
+    // No ratings in v1 (JOY approved dropping them).
+    assert.ok(obs && !('rating_star' in obs) && !('ratingStar' in obs));
+    assert.equal(
+      guards.buildExtensionObservationV1(
+        { ...signal, price: null },
+        at,
+        '2.1.0'
+      ),
+      null
+    );
+    assert.equal(
+      guards.buildExtensionObservationV1(
+        { ...signal, externalItemId: null },
+        at,
+        '2.1.0'
+      ),
+      null
+    );
+    // The sanitizer keeps only valid v1 fields.
+    const dirty = guards.sanitizeExtensionProductSignal({
+      ...signal,
+      skuId: 'a b',
+      stockState: 'lots' as never,
+      stockQty: -1,
+      extractorSource: 'api' as never,
+    });
+    assert.equal(dirty.skuId, null);
+    assert.equal(dirty.stockState, 'unknown');
+    assert.equal(dirty.stockQty, null);
+    assert.equal(dirty.extractorSource, 'dom');
+    // Neither the opt-in signal nor the lookup carries the new fields yet.
+    const crowd = guards.buildCrowdIngestPayload(signal as never);
+    for (const key of ['skuId', 'stockState', 'stockQty', 'extractorSource']) {
+      assert.ok(!(key in crowd), key);
+    }
+    // The exact lookup query and opt-in payload, pinned: they are what the
+    // disclosures describe.
+    assert.equal(
+      guards.buildLookupParams(signal, 'pill').toString(),
+      'platform=shopee&url=https%3A%2F%2Fshopee.vn%2Fiphone-16-i.123.456&title=iPhone+16+128GB&mode=pill&externalId=456&shopId=123&selectedVariant=%C4%90en&price=19990000&originalPrice=22990000'
+    );
+    assert.equal(
+      JSON.stringify(crowd),
+      JSON.stringify({
+        platform: 'shopee',
+        externalItemId: '456',
+        externalShopId: '123',
+        url: 'https://shopee.vn/iphone-16-i.123.456',
+        title: 'iPhone 16 128GB',
+        selectedVariant: 'Đen',
+        price: 19_990_000,
+        originalPrice: 22_990_000,
+        ratingStar: 4.9,
+        ratingCount: 1000,
+        userConsentOptIn: true,
+      })
+    );
+    const workerSource = fs.readFileSync(
+      path.resolve(__dirname, 'background/service-worker.ts'),
+      'utf8'
+    );
+    assert.ok(!/stockState|skuId|stockQty|extractorSource/.test(workerSource));
+    assert.ok(workerSource.includes('buildLookupParams(rawSignal, mode)'));
+
+    // A long variant label is cut to 120 characters, not a lost observation.
+    const longObs = guards.buildExtensionObservationV1(
+      { ...signal, selectedVariant: 'Màu '.repeat(50) },
+      at,
+      '2.1.0'
+    );
+    assert.ok(longObs && longObs.variant_label!.length <= 120);
+
+    // More availability forms; quantities only agree with the state.
+    assert.equal(det.stockStateFromAvailability('schema:InStock'), 'in_stock');
+    assert.equal(
+      det.stockStateFromAvailability('https://www.schema.org/SoldOut'),
+      'out_of_stock'
+    );
+    assert.equal(det.stockStateFromAvailability('Reserved'), 'out_of_stock');
+    assert.equal(det.stockStateFromAvailability(['InStock']), 'in_stock');
+    assert.equal(
+      det.stockStateFromAvailability('available for order'),
+      'unknown'
+    );
+    assert.deepEqual(
+      det.stockOfOffer({ availability: 'InStock', inventoryLevel: 0 }),
+      {
+        stockState: 'in_stock',
+        stockQty: null,
+      }
+    );
+    assert.deepEqual(
+      det.stockOfOffer({ availability: 'PreOrder', inventoryLevel: 50 }),
+      {
+        stockState: 'unknown',
+        stockQty: null,
+      }
+    );
+    assert.deepEqual(
+      det.extractStockFromJsonLdOffers({
+        '@type': 'AggregateOffer',
+        offers: { availability: 'LimitedAvailability', inventoryLevel: '3' },
+      }),
+      { stockState: 'low_stock', stockQty: 3 }
+    );
+    assert.equal(
+      det.extractSkuId('shopee', 'https://shopee.vn/x-i.1.2', '.'),
+      null
+    );
+
+    // End to end on a page: the selected variant's own offer gives stock and
+    // SKU, never another variant's or the parent's.
+    const variantPage = (selected: string | null, offers: unknown) =>
+      ({
+        title: 'iPhone 16',
+        querySelectorAll(sel: string) {
+          if (sel === 'script[type="application/ld+json"]') {
+            return [
+              {
+                textContent: JSON.stringify({
+                  '@type': 'Product',
+                  name: 'iPhone 16 128GB',
+                  sku: 'BASE-1',
+                  offers,
+                }),
+              },
+            ];
+          }
+          if (selected && sel.includes('aria-checked')) {
+            return [{ textContent: selected }];
+          }
+          return [];
+        },
+        querySelector() {
+          return null;
+        },
+      }) as unknown as Document;
+    const twoOffers = [
+      { sku: 'V-RED', name: 'Đỏ', price: 19990000, availability: 'OutOfStock' },
+      {
+        sku: 'V-BLUE',
+        name: 'Xanh',
+        price: 19990000,
+        availability: 'InStock',
+        inventoryLevel: 4,
+      },
+    ];
+    const url = 'https://shopee.vn/iphone-16-i.123.456';
+    const none = det.extractProductSignalFromDom(
+      variantPage(null, twoOffers),
+      url
+    );
+    assert.ok(none);
+    assert.equal(none.stockState, 'unknown');
+    assert.equal(none.skuId, null);
+    assert.equal(none.extractorSource, 'json_ld');
+    const single = det.extractProductSignalFromDom(
+      variantPage(null, {
+        price: 19990000,
+        availability: 'InStock',
+        inventoryLevel: 9,
+      }),
+      url
+    );
+    assert.ok(single);
+    assert.equal(single.stockState, 'in_stock');
+    assert.equal(single.stockQty, 9);
+    assert.equal(single.skuId, 'BASE-1');
+    console.log(
+      '  ✅ [Stock, SKU and the v1 observation, not sent (#1606)] Verified'
+    );
+  }
   console.log('🎉 All Rate Browser Extension MV3 v2 tests passed!');
 }
 

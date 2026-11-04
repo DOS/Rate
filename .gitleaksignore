@@ -11,3 +11,6 @@
 2f624a1c620f68ecb658eed02aba62b05f05b04b:apps/web/src/lib/review-form-v2.ts:generic-api-key:193
 4c0506053bbbc6668df016cdebfd3ee37fc9cea8:apps/web/src/lib/review-form-v2.ts:generic-api-key:75
 4c0506053bbbc6668df016cdebfd3ee37fc9cea8:apps/web/src/lib/review-form-v2.ts:generic-api-key:76
+# Test fixture of the extension ingest key in write-paths.test.ts (#1606), a fake value read
+# as a generic API key in an already-pushed commit. Later commits build it at run time.
+d19083ac00645e6296031283025b5dd751eaab78:apps/web/src/app/api/v1/rate/__tests__/write-paths.test.ts:generic-api-key:894

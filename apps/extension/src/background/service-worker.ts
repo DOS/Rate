@@ -11,9 +11,12 @@ import {
 } from '../extractors/ecommerce-detector.js';
 import {
   buildCrowdIngestPayload,
+  buildLookupParams,
   DEFAULT_API_BASE_URL,
+  isOnboardingSender,
   isPrivilegedExtensionSender,
   normalizeAllowedApiBaseUrl,
+  ONBOARDING_PAGE_PATH,
   sanitizeExtensionProductSignal,
   selectFreshestSessionSignal,
 } from '../security-guards.js';
@@ -116,24 +119,8 @@ async function fetchExtensionLookup(
   rawSignal: ExtractedPageProductSignal,
   mode: 'pill' | 'full'
 ): Promise<LookupOutcome> {
-  const signal = sanitizeExtensionProductSignal(rawSignal);
   const settings = await getSettings();
-  const params = new URLSearchParams();
-  params.set('platform', signal.platform);
-  params.set('url', signal.canonicalUrl);
-  params.set('title', signal.title);
-  params.set('mode', mode);
-  if (signal.externalItemId) params.set('externalId', signal.externalItemId);
-  if (signal.externalShopId) params.set('shopId', signal.externalShopId);
-  if (signal.selectedVariant) {
-    params.set('selectedVariant', signal.selectedVariant);
-  }
-  if (signal.price && signal.price > 0) {
-    params.set('price', String(signal.price));
-  }
-  if (signal.originalPrice && signal.originalPrice > 0) {
-    params.set('originalPrice', String(signal.originalPrice));
-  }
+  const params = buildLookupParams(rawSignal, mode);
 
   return requestLookup(
     `${settings.apiBaseUrl}${RATE_API_V1_ENDPOINTS.EXTENSION_LOOKUP}?${params.toString()}`
@@ -209,21 +196,38 @@ async function updateActionBadge(
   }
 }
 
-chrome.runtime.onInstalled.addListener(async () => {
+chrome.runtime.onInstalled.addListener(async (details) => {
   try {
     await chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true });
+    // Each missing setting gets its default; a stored choice is kept.
     const existing = await chrome.storage.local.get([
       'apiBaseUrl',
       'crowdContributeOptIn',
     ]);
+    const defaults: Partial<ExtensionSettings> = {};
     if (typeof existing.apiBaseUrl !== 'string') {
-      await chrome.storage.local.set({
-        apiBaseUrl: DEFAULT_SETTINGS.apiBaseUrl,
-        crowdContributeOptIn: DEFAULT_SETTINGS.crowdContributeOptIn,
-      });
+      defaults.apiBaseUrl = DEFAULT_SETTINGS.apiBaseUrl;
+    }
+    if (typeof existing.crowdContributeOptIn !== 'boolean') {
+      defaults.crowdContributeOptIn = DEFAULT_SETTINGS.crowdContributeOptIn;
+    }
+    if (Object.keys(defaults).length > 0) {
+      await chrome.storage.local.set(defaults);
     }
   } catch {
     // Ignore sidePanel or storage init errors during extension reload
+  }
+  // On a first install only, after the defaults, ask about the opt-in
+  // (DOS/Rate#1603). The default stays off, so closing the page sends
+  // nothing extra.
+  if (details?.reason === 'install') {
+    try {
+      await chrome.tabs.create({
+        url: chrome.runtime.getURL(ONBOARDING_PAGE_PATH),
+      });
+    } catch {
+      // The side panel toggle still offers the choice.
+    }
   }
 });
 
@@ -566,7 +570,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
 
   if (msgType === 'RATE_UPDATE_SETTINGS') {
-    if (!isPrivilegedExtensionSender(sender)) {
+    // The install consent page may set the opt-in and nothing else.
+    const fromOnboarding = isOnboardingSender(sender);
+    if (!fromOnboarding && !isPrivilegedExtensionSender(sender)) {
       sendResponse({
         ok: false,
         error: 'Settings can only be updated from the Rate extension sidepanel',
@@ -577,6 +583,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       try {
         const nextSettings: Partial<ExtensionSettings> = {};
         if (
+          !fromOnboarding &&
           typeof message.apiBaseUrl === 'string' &&
           message.apiBaseUrl.trim()
         ) {

@@ -652,5 +652,38 @@
         "content": "$2"
       }
     }
+  },
+  "onboardingTitle": {
+    "message": "Rate.vn is ready"
+  },
+  "onboardingLookup": {
+    "message": "On product pages of the 10 supported stores, the extension sends Rate.vn the store, the URL without parameters, the title, the item and shop ids, the variant, the price and the original price to look up price history. No account needed."
+  },
+  "onboardingQuestion": {
+    "message": "Would you like to contribute the listings you view?"
+  },
+  "onboardingNothingYet": {
+    "message": "Off by default. Change it any time: click the Rate.vn icon to open the side panel, \"Help find new products\"."
+  },
+  "onboardingNo": {
+    "message": "No, thanks"
+  },
+  "onboardingYes": {
+    "message": "Yes, I want to contribute"
+  },
+  "onboardingSavedNo": {
+    "message": "Saved: not contributing. You can close this page."
+  },
+  "onboardingSavedYes": {
+    "message": "Saved: contributing. You can turn it off in the side panel."
+  },
+  "onboardingSaveFailed": {
+    "message": "Not saved. Try again or choose in the side panel."
+  },
+  "onboardingPrivacyLink": {
+    "message": "Privacy policy"
+  },
+  "onboardingOptInBody": {
+    "message": "If you choose \"Yes\", every listing you open is also sent to the Rate.vn review queue with: store, product ID, shop ID, URL with tracking parameters removed, product name, selected variant, price, original price, star rating and number of reviews. Rate.vn's servers may re-check that listing on the store. No account, name, email or cookies are included."
   }
 }
