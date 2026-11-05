@@ -13,10 +13,19 @@ export const repoRoot = path.resolve(
   '..'
 );
 
+// Migrations the throwaway database cannot apply, and the test that covers each
+// instead (the same list DOS/DOS.Me keeps in scripts/migration/test-rate-schema-replay.mjs).
+export const NOT_REPLAYED = new Map([
+  [
+    '20261025090000_rate_product_images_bucket.sql',
+    'needs the Supabase storage schema; covered by DOS/DOS.Me scripts/ci/rate-product-images-bucket.integration.test.mjs',
+  ],
+]);
+
 export function readMigrations() {
   const migDir = path.join(repoRoot, 'supabase', 'migrations');
   return readdirSync(migDir)
-    .filter((f) => f.endsWith('.sql'))
+    .filter((f) => f.endsWith('.sql') && !NOT_REPLAYED.has(f))
     .sort()
     .map((f) => ({ name: f, sql: readFileSync(path.join(migDir, f), 'utf8') }));
 }

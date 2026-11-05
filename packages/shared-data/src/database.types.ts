@@ -1459,11 +1459,13 @@ export type Database = {
           cluster_official_min: number;
           history_avg: number;
           history_count: number;
+          history_first_at: string;
           history_max: number;
           history_median: number;
           history_min: number;
           merchant_id: string;
           merchant_is_official: boolean;
+          peer_reference_max: number;
           peer_reference_min: number;
           platform: string;
           price_current: number;

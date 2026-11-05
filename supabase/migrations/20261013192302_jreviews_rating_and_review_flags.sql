@@ -1,8 +1,3 @@
--- ==============================================================================
--- Migration: JReviews-Style Dual Rating (Expert vs Weighted User),
--- Review Upvote/Downvote Weighting, 5-Category Anti-Scam Flags & Multi-Entity Support
--- ==============================================================================
-
 -- 1. Extend rate.review_flags with 5 distinct Vietnamese e-commerce & service flag categories
 ALTER TABLE rate.review_flags
   ADD COLUMN IF NOT EXISTS flag_category TEXT DEFAULT 'authentic'
@@ -54,7 +49,6 @@ DECLARE
   v_net INTEGER := COALESCE(p_upvotes, 0) - COALESCE(p_downvotes, 0);
   v_weight NUMERIC;
 BEGIN
-  -- Skip/Ignore coin spam, seeding fake, competitor sabotage, and review bombing completely
   IF p_flag_category IN ('low_value_coin_spam', 'seeding_fake', 'competitor_sabotage', 'review_bombing')
      OR p_verdict = 'fake' THEN
     RETURN 0.00;
@@ -72,18 +66,27 @@ BEGIN
     v_weight := v_base;
   END IF;
 
-  -- Penalty for user abuse reports
   v_weight := v_weight - (COALESCE(p_reports, 0) * 0.35);
 
   RETURN ROUND(GREATEST(0.00, LEAST(3.00, v_weight)), 2);
 END;
 $$;
 
--- Public read access for review_flags so UI can display transparency badges
 ALTER TABLE rate.review_flags ENABLE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS "Public can view review_flags" ON rate.review_flags;
-CREATE POLICY "Public can view review_flags" ON rate.review_flags FOR SELECT USING (true);
-DROP POLICY IF EXISTS "Service role write review_flags" ON rate.review_flags;
-CREATE POLICY "Service role write review_flags" ON rate.review_flags FOR ALL TO service_role USING (true) WITH CHECK (true);
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies WHERE schemaname = 'rate' AND tablename = 'review_flags' AND policyname = 'Public can view review_flags'
+  ) THEN
+    CREATE POLICY "Public can view review_flags" ON rate.review_flags FOR SELECT USING (true);
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies WHERE schemaname = 'rate' AND tablename = 'review_flags' AND policyname = 'Service role write review_flags'
+  ) THEN
+    CREATE POLICY "Service role write review_flags" ON rate.review_flags FOR ALL TO service_role USING (true) WITH CHECK (true);
+  END IF;
+END $$;
+
 GRANT SELECT ON rate.review_flags TO anon, authenticated;
 GRANT ALL ON rate.review_flags TO service_role;
