@@ -1,5 +1,7 @@
 -- =============================================================================
--- Migration: 20261107100000_rate_extension_ingest_key_rotation.sql
+-- Migration: 20261109090000_rate_extension_ingest_key_rotation.sql
+-- Version moved from 20261107100000, which two other DOS.Me migrations also used
+-- (nano_banana_2_1_zdr_data_retention, dosafe_close_anon_reads); the body is unchanged.
 -- Purpose (DOS/Rate#1606): rotates the ingest key row set by
 -- 20261106160100_rate_extension_ingest_key.sql, as the apply runbook says ("a new migration
 -- with the new hash, then the web redeploys with the new key"). The first key was lost before
