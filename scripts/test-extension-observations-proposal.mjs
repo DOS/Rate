@@ -110,6 +110,9 @@ const without = (key) => {
 
 try {
   const { sql } = startRateDb({ name: container });
+  // The reference stack has the quarantine (20261106160000, with its key row): roll it back, so
+  // the proposal replays on the stack before it, with no key row, as this script expects.
+  sql(rollback);
   // One psql session per call; the role and its errors stay in it. VERBOSITY verbose prints the
   // SQLSTATE in front of the message.
   const as = (role, query) =>
