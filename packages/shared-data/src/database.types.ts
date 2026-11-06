@@ -1050,31 +1050,6 @@ export type Database = {
           },
         ];
       };
-      review_author_keys: {
-        Row: {
-          author_key: string;
-          created_at: string;
-          review_id: string;
-        };
-        Insert: {
-          author_key: string;
-          created_at?: string;
-          review_id: string;
-        };
-        Update: {
-          author_key?: string;
-          created_at?: string;
-          review_id?: string;
-        };
-        Relationships: [
-          {
-            foreignKeyName: 'review_author_keys_review_id_fkey';
-            columns: ['review_id'];
-            referencedRelation: 'reviews';
-            referencedColumns: ['id'];
-          },
-        ];
-      };
       review_authors: {
         Row: {
           author_user_id: string | null;
