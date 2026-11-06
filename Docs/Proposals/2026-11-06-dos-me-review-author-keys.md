@@ -11,9 +11,9 @@ sends a key per review and the analyzer groups by it.
 
 On each review of a `ScrapedProduct` (`reviews[]`):
 
-| Field       | Type   | Rule                                                        |
-| ----------- | ------ | ----------------------------------------------------------- |
-| `authorKey` | string | optional; 16 to 128 chars of `[A-Za-z0-9_-]`, else rejected |
+| Field       | Type   | Rule                                                                            |
+| ----------- | ------ | ------------------------------------------------------------------------------- |
+| `authorKey` | string | optional; 16 to 128 chars of `[A-Za-z0-9_-]`, else dropped (the review is kept) |
 
 - Recommended value: hex of `HMAC-SHA256(secret, normalised original author name)` (64 chars).
   The secret stays in RS; Rate never sees it. Use one secret for all products and platforms so
@@ -37,6 +37,11 @@ read failure logs a warning and the analysis falls back to `author_name`.
 `reviewAuthorIdentity` (apps/importer `ai-review-analyzer.ts`): `key:<author_key>` when present,
 else `name:<lower-cased author_name>`, else `id:<review id>`. Duplicate-text counts and the
 near-duplicate shingle pass use it. Scoring weights are unchanged.
+
+Limits: reviews stored before masking carry a raw name and get a key only when crawled again;
+until then they are one identity by name and a keyed copy of the same author counts as another.
+Unkeyed masked names ("N***n") can merge different authors. RS should send a key on every review.
+Also: `rate.review_input_hash` includes `author_name`, so masking changes that hash (RS/DB side).
 
 ## Files
 

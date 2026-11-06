@@ -455,7 +455,7 @@ export class ShopeeIngestionPipeline {
     productId: string,
     reviewIds: readonly string[]
   ): Promise<Map<string, string>> {
-    const out = new Map<string, string>();
+    let out = new Map<string, string>();
     const ids = reviewIds.filter(Boolean);
     try {
       for (let i = 0; i < ids.length; i += 100) {
@@ -470,6 +470,8 @@ export class ShopeeIngestionPipeline {
         }
       }
     } catch (err) {
+      // All or nothing: a partial map would mix key and name identities in one analysis.
+      out = new Map<string, string>();
       logger.warn(
         'ingest.author_keys_load_warn',
         `Review analysis falls back to author_name: ${err instanceof Error ? err.message : String(err)}`,
