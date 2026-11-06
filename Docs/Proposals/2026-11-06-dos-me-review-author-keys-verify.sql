@@ -8,10 +8,15 @@ WHERE NOT EXISTS (
   WHERE n.nspname = 'rate' AND c.relname = 'review_author_keys' AND c.relrowsecurity
 );
 
--- V2 anon and authenticated hold no privilege on it; expect 0
-SELECT count(*) FROM information_schema.role_table_grants
-WHERE table_schema = 'rate' AND table_name = 'review_author_keys'
-  AND grantee IN ('anon', 'authenticated', 'PUBLIC');
+-- V2 privilege matrix: anon and authenticated have nothing, rate_worker has no DELETE or
+-- TRUNCATE; expect 0
+SELECT count(*) FROM (VALUES
+  ('anon', 'SELECT'), ('anon', 'INSERT'), ('anon', 'UPDATE'), ('anon', 'DELETE'),
+  ('authenticated', 'SELECT'), ('authenticated', 'INSERT'), ('authenticated', 'UPDATE'),
+  ('authenticated', 'DELETE'), ('rate_worker', 'DELETE'), ('rate_worker', 'TRUNCATE')
+) AS t(role_name, priv)
+WHERE has_table_privilege(t.role_name, 'rate.review_author_keys', t.priv)
+   OR has_any_column_privilege(t.role_name, 'rate.review_author_keys', t.priv);
 
 -- V3 no stored key has a bad shape; expect 0
 SELECT count(*) FROM rate.review_author_keys WHERE author_key !~ '^[A-Za-z0-9_-]{16,128}$';

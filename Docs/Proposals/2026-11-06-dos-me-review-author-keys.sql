@@ -20,6 +20,7 @@
 -- =============================================================================
 
 BEGIN;
+SET LOCAL lock_timeout = '5s';
 
 CREATE TABLE IF NOT EXISTS rate.review_author_keys (
   review_id  uuid PRIMARY KEY REFERENCES rate.reviews (id) ON DELETE CASCADE,
@@ -27,8 +28,6 @@ CREATE TABLE IF NOT EXISTS rate.review_author_keys (
   author_key text NOT NULL CHECK (author_key ~ '^[A-Za-z0-9_-]{16,128}$'),
   created_at timestamptz NOT NULL DEFAULT now()
 );
-
-CREATE INDEX IF NOT EXISTS review_author_keys_key_idx ON rate.review_author_keys (author_key);
 
 ALTER TABLE rate.review_author_keys ENABLE ROW LEVEL SECURITY;
 REVOKE ALL ON rate.review_author_keys FROM PUBLIC, anon, authenticated, rate_worker;
@@ -38,8 +37,19 @@ GRANT SELECT, INSERT, UPDATE ON rate.review_author_keys TO rate_worker;
 DROP POLICY IF EXISTS review_author_keys_service ON rate.review_author_keys;
 CREATE POLICY review_author_keys_service ON rate.review_author_keys
   FOR ALL TO service_role USING (true) WITH CHECK (true);
+-- Like reviews and review_flags: the worker reads all, writes only keys of crawled reviews.
 DROP POLICY IF EXISTS review_author_keys_worker ON rate.review_author_keys;
-CREATE POLICY review_author_keys_worker ON rate.review_author_keys
-  FOR ALL TO rate_worker USING (true) WITH CHECK (true);
+DROP POLICY IF EXISTS review_author_keys_worker_read ON rate.review_author_keys;
+DROP POLICY IF EXISTS review_author_keys_worker_insert ON rate.review_author_keys;
+DROP POLICY IF EXISTS review_author_keys_worker_update ON rate.review_author_keys;
+CREATE POLICY review_author_keys_worker_read ON rate.review_author_keys
+  FOR SELECT TO rate_worker USING (true);
+CREATE POLICY review_author_keys_worker_insert ON rate.review_author_keys
+  FOR INSERT TO rate_worker
+  WITH CHECK (EXISTS (SELECT 1 FROM rate.reviews r WHERE r.id = review_author_keys.review_id AND r.origin <> 'community'));
+CREATE POLICY review_author_keys_worker_update ON rate.review_author_keys
+  FOR UPDATE TO rate_worker
+  USING (EXISTS (SELECT 1 FROM rate.reviews r WHERE r.id = review_author_keys.review_id AND r.origin <> 'community'))
+  WITH CHECK (EXISTS (SELECT 1 FROM rate.reviews r WHERE r.id = review_author_keys.review_id AND r.origin <> 'community'));
 
 COMMIT;

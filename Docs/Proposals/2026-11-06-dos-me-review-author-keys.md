@@ -41,7 +41,11 @@ near-duplicate shingle pass use it. Scoring weights are unchanged.
 Limits: reviews stored before masking carry a raw name and get a key only when crawled again;
 until then they are one identity by name and a keyed copy of the same author counts as another.
 Unkeyed masked names ("N***n") can merge different authors. RS should send a key on every review.
-Also: `rate.review_input_hash` includes `author_name`, so masking changes that hash (RS/DB side).
+Do not rotate the HMAC secret or change the name normalisation: a crawl returns only a window of
+recent reviews, so old and new keys of one author would meet in one analysis and count as two
+authors. A change needs a full re-send of every review first.
+The worker role can write keys only for crawled reviews (not `origin = 'community'`).
+Also: `rate.review_input_hash` includes `author_name`, so masking changes that hash (RS/DB side; the crawl path does not use it).
 
 ## Files
 
