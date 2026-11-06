@@ -1220,6 +1220,44 @@ async function run() {
   assert.equal(copiedBatch[1].flag_category, 'seeding_fake');
   assert.equal(copiedBatch[1].assessment?.authenticity, 'copied');
 
+  // 9.3b Per-review author key (DOS/Rate#1614): RS masks author_name, the key tells authors apart.
+  const keyedText =
+    'Máy nguyên seal chính hãng dùng cực kỳ mượt mà, pin trâu dùng cả ngày không nóng';
+  const keyA = 'a'.repeat(64);
+  const keyB = 'b'.repeat(64);
+  const sameMaskDiffKey = analyzer.analyzeWithHeuristics([
+    { id: 'mk-1', author_name: 'N***n', author_key: keyA, rating_star: 5, comment: keyedText },
+    { id: 'mk-2', author_name: 'N***n', author_key: keyB, rating_star: 5, comment: keyedText },
+  ]);
+  assert.equal(
+    sameMaskDiffKey[0].flag_category,
+    'seeding_fake',
+    'same masked name but different author_key must count as two authors'
+  );
+  const sameKey = analyzer.analyzeWithHeuristics([
+    { id: 'mk-3', author_name: 'N***n', author_key: keyA, rating_star: 5, comment: keyedText },
+    { id: 'mk-4', author_name: 'Q***x', author_key: keyA, rating_star: 5, comment: keyedText },
+  ]);
+  assert.notEqual(
+    sameKey[0].flag_category,
+    'seeding_fake',
+    'same author_key is one author even when the masked names differ'
+  );
+  const noKey = analyzer.analyzeWithHeuristics([
+    { id: 'mk-5', author_name: 'N***n', rating_star: 5, comment: keyedText },
+    { id: 'mk-6', author_name: 'N***n', rating_star: 5, comment: keyedText },
+  ]);
+  assert.notEqual(
+    noKey[0].flag_category,
+    'seeding_fake',
+    'without author_key the author_name fallback applies (same name, one author)'
+  );
+  const nameDiff = analyzer.analyzeWithHeuristics([
+    { id: 'mk-7', author_name: 'seeder_a', rating_star: 5, comment: keyedText },
+    { id: 'mk-8', author_name: 'seeder_b', rating_star: 5, comment: keyedText },
+  ]);
+  assert.equal(nameDiff[0].flag_category, 'seeding_fake', 'name fallback still separates authors');
+
   // 9.4 Affiliate Shortlink Detection (Section 3 Axis B / P2)
   const affAssess = assessReview6Axes({
     id: 'aff-shortlink',
