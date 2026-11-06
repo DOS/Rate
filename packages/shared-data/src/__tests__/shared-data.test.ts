@@ -371,6 +371,37 @@ function testMasterProductAndScrapedProductSchemas(): void {
     false,
     'ScrapedProductSchema must reject non-http reviews[].authorAvatar'
   );
+  for (const [key, ok] of [
+    ['a'.repeat(64), true],
+    ['Ab_-0123456789xyz', true],
+    ['short', false],
+    ['a'.repeat(129), false],
+    ['has space in the key!', false],
+  ] as const) {
+    assert.equal(
+      ScrapedProductSchema.safeParse({
+        platform: 'shopee',
+        itemId: '123456',
+        shopId: '654321',
+        url: 'https://shopee.vn/product/654321/123456',
+        title: 'iPhone 16 Pro Max 256GB',
+        priceMin: 31990000,
+        priceMax: 33990000,
+        reviews: [
+          {
+            reviewId: 'r1',
+            author: 'B***r',
+            authorKey: key,
+            ratingStar: 5,
+            comment: 'Good',
+          },
+        ],
+        shop: { shopId: '654321', name: 'Apple Flagship Store', isMall: true },
+      }).success,
+      ok,
+      `reviews[].authorKey ${key.slice(0, 12)} must ${ok ? 'pass' : 'fail'}`
+    );
+  }
   assert.equal(
     ScrapedProductSchema.safeParse({
       platform: 'shopee',

@@ -402,6 +402,83 @@ export class ShopeeIngestionPipeline {
    * request, a short URL) instead of reading every stored review, which
    * PostgREST caps at max-rows.
    */
+  /**
+   * Keep the per-review author key RS computed (DOS/Rate#1614) in rate.review_author_keys,
+   * a table anon cannot read. Never fails the ingest: without a key the analyzer falls back
+   * to author_name.
+   */
+  private async storeAuthorKeys(
+    productId: string,
+    reviews: readonly ShopeeReview[]
+  ): Promise<void> {
+    const keyByPlatformId = new Map<string, string>();
+    for (const r of reviews) {
+      const platformId = platformReviewIdFor(r);
+      if (platformId && typeof r.authorKey === 'string' && r.authorKey) {
+        keyByPlatformId.set(platformId, r.authorKey);
+      }
+    }
+    if (keyByPlatformId.size === 0) return;
+    try {
+      const platformIds = [...keyByPlatformId.keys()];
+      for (let i = 0; i < platformIds.length; i += 50) {
+        const chunk = platformIds.slice(i, i + 50);
+        const { data: rows, error: lookupErr } = await this.supabase
+          .from('reviews')
+          .select('id, platform_review_id')
+          .eq('product_id', productId)
+          .in('platform_review_id', chunk);
+        if (lookupErr) throw new Error(lookupErr.message);
+        const payload = (rows || [])
+          .map(row => ({
+            review_id: row.id as string,
+            author_key: keyByPlatformId.get(row.platform_review_id as string),
+          }))
+          .filter(p => Boolean(p.review_id && p.author_key));
+        if (payload.length === 0) continue;
+        const { error: upsertErr } = await this.supabase
+          .from('review_author_keys')
+          .upsert(payload, { onConflict: 'review_id' });
+        if (upsertErr) throw new Error(upsertErr.message);
+      }
+    } catch (err) {
+      logger.warn(
+        'ingest.author_keys_store_warn',
+        `Could not store review author keys: ${err instanceof Error ? err.message : String(err)}`,
+        { productId }
+      );
+    }
+  }
+
+  /** Author keys of stored reviews by review id; empty when none or the read fails. */
+  private async loadAuthorKeys(
+    productId: string,
+    reviewIds: readonly string[]
+  ): Promise<Map<string, string>> {
+    const out = new Map<string, string>();
+    const ids = reviewIds.filter(Boolean);
+    try {
+      for (let i = 0; i < ids.length; i += 100) {
+        const { data, error } = await this.supabase
+          .from('review_author_keys')
+          .select('review_id, author_key')
+          .in('review_id', ids.slice(i, i + 100));
+        if (error) throw new Error(error.message);
+        for (const row of data || []) {
+          if (row.review_id && row.author_key)
+            out.set(String(row.review_id), String(row.author_key));
+        }
+      }
+    } catch (err) {
+      logger.warn(
+        'ingest.author_keys_load_warn',
+        `Review analysis falls back to author_name: ${err instanceof Error ? err.message : String(err)}`,
+        { productId }
+      );
+    }
+    return out;
+  }
+
   private async findExistingReviewIds(
     productId: string,
     ids: readonly string[],
@@ -1112,6 +1189,7 @@ export class ShopeeIngestionPipeline {
           );
         }
       }
+      await this.storeAuthorKeys(productId, product.reviews);
       // Rows stored before the platform's purchase flag was captured still carry the
       // column default; refresh it for reviews already in the DB.
       for (const verified of [true, false]) {
@@ -1169,10 +1247,17 @@ export class ShopeeIngestionPipeline {
             .filter(r => r.reviewer)
             .map(r => [platformReviewIdFor(r), r.reviewer] as const)
         );
+        const authorKeyByReviewId = storedErr
+          ? new Map<string, string>()
+          : await this.loadAuthorKeys(
+              productId,
+              (storedReviews || []).map(r => String(r?.id ?? ''))
+            );
         const analysisInput: ReviewInputItem[] = (storedReviews || [])
           .filter(row => Boolean(row && typeof row === 'object' && !Array.isArray(row)))
           .map((row: ReviewInputItem & { platform_review_id?: string | null }) => ({
             ...row,
+            author_key: authorKeyByReviewId.get(String(row.id)) ?? null,
             reviewer: row.platform_review_id
               ? reviewerByPlatformId.get(row.platform_review_id)
               : undefined,

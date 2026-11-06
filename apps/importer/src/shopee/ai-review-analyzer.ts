@@ -134,6 +134,11 @@ export interface BayesianRatingResult {
 export interface ReviewInputItem {
   id: string;
   author_name?: string | null;
+  /**
+   * Keyed HMAC of the original author name, computed by Rate-Services before it masks
+   * `author_name`. Preferred over the name to tell authors apart; absent on old rows.
+   */
+  author_key?: string | null;
   rating_star: number;
   comment?: string | null;
   variation?: string | null;
@@ -146,6 +151,24 @@ export interface ReviewInputItem {
   platform_created_at?: string | null;
   /** Reviewer metadata from the scrape, when the platform exposes it. */
   reviewer?: ScrapedReviewer | null;
+}
+
+/**
+ * Identity used to tell authors apart for duplicate-text and seeding analysis: the
+ * `author_key` when present (exact, case-sensitive), else the lower-cased `author_name`,
+ * else the review id. Prefixes keep a key from ever equal to a name.
+ */
+export function reviewAuthorIdentity(
+  r: Pick<ReviewInputItem, 'author_key' | 'author_name'>,
+  reviewId: string
+): string {
+  if (typeof r.author_key === 'string' && r.author_key.trim()) {
+    return `key:${r.author_key.trim()}`;
+  }
+  if (typeof r.author_name === 'string' && r.author_name.trim()) {
+    return `name:${r.author_name.toLowerCase()}`;
+  }
+  return `id:${reviewId}`;
 }
 
 export interface AnalyzedReviewResult {
@@ -1182,9 +1205,7 @@ export class AiReviewAnalyzer {
       const norm = normalizeTextForDedupe(r.comment || '');
       // Rating labels repeat across buyers because the platform writes them, not because of seeding.
       if (norm.length >= 15 && !isRatingOnlyComment(r.comment)) {
-        const rawAuthor =
-          typeof r.author_name === 'string' && r.author_name.trim() ? r.author_name : reviewId;
-        const authorKey = rawAuthor.toLowerCase();
+        const authorKey = reviewAuthorIdentity(r, reviewId);
         const authors = commentCounts.get(norm) || new Set<string>();
         authors.add(authorKey);
         commentCounts.set(norm, authors);

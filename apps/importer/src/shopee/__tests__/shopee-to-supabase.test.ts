@@ -53,6 +53,7 @@ function createBaseProduct(overrides: Partial<ShopeeProduct> = {}): ShopeeProduc
 }
 
 interface StubPipelineOptions {
+  storedAuthorKeys?: Array<{ review_id: string; author_key: string }>;
   categoriesErr?: { message: string } | null;
   hintRow?: { id: string; storage_gb?: number | null } | null;
   hintErr?: { message: string } | null;
@@ -83,6 +84,7 @@ function createPipelineStubSupabase(opts: StubPipelineOptions = {}) {
     reviewInserts: Array<Array<Record<string, unknown>>>;
     verifiedUpdates: Array<{ verified: boolean; ids: string[] }>;
     marketStatsRefreshed: string[];
+    authorKeyUpserts: Array<Array<Record<string, unknown>>>;
   } = {
     merchantUpserts: 0,
     merchantPayloads: [],
@@ -93,6 +95,7 @@ function createPipelineStubSupabase(opts: StubPipelineOptions = {}) {
     reviewInserts: [],
     verifiedUpdates: [],
     marketStatsRefreshed: [],
+    authorKeyUpserts: [],
   };
 
   let reviewSelectPass = 0;
@@ -253,6 +256,20 @@ function createPipelineStubSupabase(opts: StubPipelineOptions = {}) {
       if (table === 'reviews') {
         return {
           select(cols: string) {
+            if (cols === 'id, platform_review_id') {
+              return {
+                eq(_col: string, _val: string) {
+                  return {
+                    in(_inCol: string, requested: string[]) {
+                      return Promise.resolve({
+                        data: requested.map(id => ({ id: `db-${id}`, platform_review_id: id })),
+                        error: null,
+                      });
+                    },
+                  };
+                },
+              };
+            }
             if (cols === 'platform_review_id') {
               return {
                 eq(_col: string, _val: string) {
@@ -353,6 +370,22 @@ function createPipelineStubSupabase(opts: StubPipelineOptions = {}) {
                 return Promise.resolve({ data: null, error: null });
               },
             };
+          },
+        };
+      }
+
+      if (table === 'review_author_keys') {
+        return {
+          select(_columns: string) {
+            return {
+              in(_column: string, _ids: unknown[]) {
+                return Promise.resolve({ data: opts.storedAuthorKeys ?? [], error: null });
+              },
+            };
+          },
+          upsert(payload: Array<Record<string, unknown>>, _options?: unknown) {
+            events.authorKeyUpserts.push(payload);
+            return Promise.resolve({ data: null, error: null });
           },
         };
       }
@@ -818,7 +851,8 @@ async function runTests() {
         },
         {
           reviewId: 'rev-explicit-1',
-          author: 'Minh Anh',
+          author: 'M***h',
+          authorKey: 'c'.repeat(64),
           ratingStar: 5,
           comment: 'Review mới còn lại sau khi lọc race',
           images: [],
@@ -846,6 +880,11 @@ async function runTests() {
     'Pass 2 should insert only the remaining non-raced review'
   );
   assert.equal(revRaceEvents.reviewInserts[1]?.[0]?.platform_review_id, 'rev-explicit-1');
+  assert.deepEqual(
+    revRaceEvents.authorKeyUpserts,
+    [[{ review_id: 'db-rev-explicit-1', author_key: 'c'.repeat(64) }]],
+    'author_key from RS is stored in review_author_keys for the review (DOS/Rate#1614)'
+  );
   assert.equal(
     revRaceEvents.verifiedUpdates.length,
     2,
