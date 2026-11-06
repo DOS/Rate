@@ -71,6 +71,8 @@ export interface ScrapedReviewer {
 export interface ShopeeReview {
   reviewId: string;
   author: string;
+  /** Keyed HMAC of the original author name (RS), 16 to 128 chars of [A-Za-z0-9_-]. */
+  authorKey?: string;
   authorAvatar?: string;
   ratingStar: number;
   comment: string;

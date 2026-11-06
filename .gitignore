@@ -187,3 +187,7 @@ storageState*.json
 !*.env.js
 !*.env.mjs
 !*.env.d.ts
+# Reviewed DOS-Me migration proposal (DOS/Rate#1614): DDL only, no data, no credentials.
+!Docs/Proposals/2026-11-06-dos-me-review-author-keys.sql
+!Docs/Proposals/2026-11-06-dos-me-review-author-keys-rollback.sql
+!Docs/Proposals/2026-11-06-dos-me-review-author-keys-verify.sql

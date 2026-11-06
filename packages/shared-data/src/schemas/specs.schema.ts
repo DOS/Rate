@@ -205,6 +205,13 @@ export const ScrapedReviewerSchema = z.object({
 export const ScrapedReviewSchema = z.object({
   reviewId: z.string().max(128),
   author: z.string().max(200),
+  /** Keyed HMAC of the original author name, computed by Rate-Services; not reversible. */
+  authorKey: z
+    .string()
+    .regex(/^[A-Za-z0-9_-]{16,128}$/)
+    .optional()
+    // A malformed key is dropped, never a reason to reject the listing: analysis uses author_name.
+    .catch(undefined),
   authorAvatar: HttpUrlSchema.optional(),
   ratingStar: z.number().min(1).max(5),
   comment: z.string().max(10_000),
