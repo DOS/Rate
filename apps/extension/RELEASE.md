@@ -26,6 +26,8 @@ Release-readiness check of the extension built from `dev` at `fc9b820d` on 2026-
    - **Product pages:** on one product page each of Shopee, Tiki and CellphoneS, the pill appears and the side panel opens.
    - **Language:** set Chrome to English, then Czech. The panel and the verdict follow the browser language, and en/cs never show the Vietnamese review summary (#1385).
    - **Opt-in:** the crowd opt-in is off by default, and its label names the fields it sends (#1230, #1241).
+   - **Contribution erasure:** with the observation routes on, opt in, open a product page, then turn the opt-in off: the server holds no observation for the install's id afterwards, and with the network off the erasure is retried at the next start (#1606).
+   - **Consent page:** a fresh install opens the consent page once, with "No" focused. Closing it leaves the opt-in off; "Yes" turns on the side panel toggle; reloading or updating the extension does not open it again (#1603).
 5. Update the store listing:
    - Description and screenshots match the panel as it is now (the price list and the states from #1319).
    - The changelog below.
@@ -44,7 +46,7 @@ Release-readiness check of the extension built from `dev` at `fc9b820d` on 2026-
 - Biểu tượng trên thanh công cụ cho biết nhanh giá đang xem có tốt không. Tin bán đã hết hàng không còn được tính vào giá so sánh.
 - Nhận diện sản phẩm chính xác hơn: tra "iPhone 16" không còn ra iPhone 16e. Trang danh mục và trang thương hiệu không bị nhầm là trang sản phẩm.
 - Gian hàng chưa có đánh giá được phân tích sẽ ghi "Chưa có dữ liệu", không hiện con số rủi ro.
-- Lựa chọn "Đóng góp phát hiện sản phẩm mới" ghi rõ những gì được gửi đi và vẫn tắt mặc định. TikTok chỉ còn chạy trên trang sản phẩm.
+- Lựa chọn "Đóng góp phát hiện sản phẩm mới" ghi rõ những gì được gửi đi và vẫn tắt mặc định. Lần cài đầu tiên, tiện ích hỏi bạn một lần. Khi bật, tiện ích gửi một quan sát gọn (giá, tồn kho, SKU) thay cho số sao và lượt đánh giá; tắt là xóa mọi thứ đã gửi. TikTok chỉ còn chạy trên trang sản phẩm.
 
 ### English
 
@@ -55,4 +57,4 @@ Release-readiness check of the extension built from `dev` at `fc9b820d` on 2026-
 - The toolbar badge shows at a glance whether the price you see is a good one. Sold-out listings no longer count towards the price comparison.
 - More accurate product matching: "iPhone 16" no longer matches the iPhone 16e. Category and brand pages are no longer mistaken for product pages.
 - Sellers with no analysed reviews show "No data yet" instead of a risk number.
-- The "Help find new products" option names exactly what it sends and is still off by default. On TikTok, the extension runs only on product pages.
+- The "Help find new products" option names exactly what it sends and is still off by default. On first install, the extension asks you once. When on, it sends a minimal observation (price, stock, SKU) instead of ratings; turning it off deletes everything it sent. On TikTok, the extension runs only on product pages.

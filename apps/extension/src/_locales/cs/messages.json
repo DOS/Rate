@@ -53,7 +53,7 @@
     "message": "Pomoc s hledáním nových produktů (jen když ji zapnete):"
   },
   "optInBody": {
-    "message": "Když je zapnuto, každá nabídka, kterou otevřete, se také odešle do nezávislé fronty ke kontrole Rate.vn s těmito údaji: obchod, ID produktu, ID obchodu, URL bez sledovacích parametrů, název produktu, zvolená varianta, cena, původní cena, počet hvězdiček a počet recenzí. Bez účtu, jména, e-mailu a cookies."
+    "message": "Když je zapnuto, každá nabídka, kterou otevřete, se také odešle do nezávislé fronty ke kontrole Rate.vn s těmito údaji: obchod, ID produktu, ID obchodu, URL bez sledovacích parametrů, ID varianty (SKU), zvolená varianta, cena, původní cena, stav a počet kusů skladem, čas, kdy jste cenu viděli, verze rozšíření, a navíc náhodné ID přispěvatele této instalace. Server odvodí a 28 dní uchovává otisk rozsahu vaší sítě (ne IP adresa), odeslané záznamy uchovává 180 dní a může nabídku v obchodě znovu ověřit. Vypnutím se toto ID i vše odeslané smaže. Bez účtu, jména, e-mailu a cookies."
   },
   "crowdFieldPlatform": {
     "message": "obchod"
@@ -652,5 +652,56 @@
         "content": "$2"
       }
     }
+  },
+  "onboardingTitle": {
+    "message": "Rate.vn je připraveno"
+  },
+  "onboardingLookup": {
+    "message": "Na stránkách produktů 10 podporovaných obchodů rozšíření posílá Rate.vn obchod, URL bez parametrů, název, ID produktu a obchodu, variantu, cenu a původní cenu, aby vyhledalo historii cen. Účet není potřeba."
+  },
+  "onboardingQuestion": {
+    "message": "Chcete přispívat nabídkami, které si prohlížíte?"
+  },
+  "onboardingNothingYet": {
+    "message": "Ve výchozím stavu vypnuto. Změnit to můžete kdykoli: klikněte na ikonu Rate.vn, otevře se boční panel, volba „Pomoc s hledáním nových produktů“."
+  },
+  "onboardingNo": {
+    "message": "Ne, děkuji"
+  },
+  "onboardingYes": {
+    "message": "Ano, chci přispívat"
+  },
+  "onboardingSavedNo": {
+    "message": "Uloženo: nepřispívat. Tuto stránku můžete zavřít."
+  },
+  "onboardingSavedYes": {
+    "message": "Uloženo: přispívat. Vypnout to můžete v bočním panelu."
+  },
+  "onboardingSaveFailed": {
+    "message": "Neuloženo. Zkuste to znovu nebo zvolte v bočním panelu."
+  },
+  "onboardingPrivacyLink": {
+    "message": "Zásady ochrany soukromí"
+  },
+  "onboardingOptInBody": {
+    "message": "Když zvolíte „Ano“, každá nabídka, kterou otevřete, se také odešle do fronty ke kontrole Rate.vn s těmito údaji: obchod, ID produktu, ID obchodu, URL bez sledovacích parametrů, ID varianty (SKU), zvolená varianta, cena, původní cena, stav a počet kusů skladem, čas, kdy jste cenu viděli, verze rozšíření, a navíc náhodné ID přispěvatele této instalace. Server odvodí a 28 dní uchovává otisk rozsahu vaší sítě (ne IP adresa), odeslané záznamy uchovává 180 dní a může nabídku v obchodě znovu ověřit. Vypnutím se toto ID i vše odeslané smaže. Bez účtu, jména, e-mailu a cookies."
+  },
+  "observationFieldSku": {
+    "message": "ID varianty (SKU)"
+  },
+  "observationFieldStock": {
+    "message": "stav a počet kusů skladem"
+  },
+  "observationFieldObservedAt": {
+    "message": "čas, kdy jste cenu viděli"
+  },
+  "observationFieldExtractor": {
+    "message": "verze rozšíření"
+  },
+  "observationFieldSubmitter": {
+    "message": "náhodné ID přispěvatele této instalace"
+  },
+  "observationFieldNetwork": {
+    "message": "otisk rozsahu vaší sítě (ne IP adresa)"
   }
 }

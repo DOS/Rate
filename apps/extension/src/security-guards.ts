@@ -1,3 +1,7 @@
+import {
+  parseExtensionObservationV1,
+  type ExtensionObservationV1,
+} from '@repo/shared-data/rules';
 import type {
   ExtractedPageProductSignal,
   SupportedEcommercePlatform,
@@ -65,6 +69,31 @@ export function normalizeAllowedApiBaseUrl(
   }
 }
 
+/** The consent page opened once at install (DOS/Rate#1603). */
+export const ONBOARDING_PAGE_PATH = 'onboarding/onboarding.html';
+
+/**
+ * The install consent page, an extension page in a tab: exactly its URL in
+ * this extension, never a content script (whose url is the web page). It may
+ * only set the opt-in (DOS/Rate#1603).
+ */
+export function isOnboardingSender(
+  sender: { id?: string; tab?: unknown; url?: string } | null | undefined,
+  expectedRuntimeId?: string
+): boolean {
+  if (!sender || typeof sender !== 'object' || Array.isArray(sender)) {
+    return false;
+  }
+  const runtimeId =
+    expectedRuntimeId ??
+    (typeof chrome !== 'undefined' ? chrome.runtime?.id : undefined);
+  if (!runtimeId) return false;
+  if (typeof sender.id === 'string' && sender.id !== runtimeId) return false;
+  return (
+    sender.url === `chrome-extension://${runtimeId}/${ONBOARDING_PAGE_PATH}`
+  );
+}
+
 export function isPrivilegedExtensionSender(
   sender: {
     id?: string;
@@ -74,9 +103,6 @@ export function isPrivilegedExtensionSender(
   expectedRuntimeId?: string
 ): boolean {
   if (!sender || typeof sender !== 'object' || Array.isArray(sender)) {
-    return false;
-  }
-  if (sender.tab != null) {
     return false;
   }
   const runtimeId =
@@ -89,6 +115,10 @@ export function isPrivilegedExtensionSender(
       ? (globalThis as { chrome?: { runtime?: { id?: string } } }).chrome!
           .runtime!.id
       : undefined);
+
+  if (sender.tab != null) {
+    return false;
+  }
 
   if (
     runtimeId &&
@@ -286,7 +316,102 @@ export function sanitizeExtensionProductSignal(
     originalPrice: validOriginalPrice,
     ratingStar: validRatingStar,
     ratingCount: validRatingCount,
+    // The v1 observation fields (DOS/Rate#1606), checked like the rest.
+    skuId: (() => {
+      const sku = sanitizeExternalIdentifier(safeSignal.skuId);
+      return sku && sku.length <= 64 ? sku : null;
+    })(),
+    stockState: (
+      ['in_stock', 'low_stock', 'out_of_stock', 'unknown'] as const
+    ).includes(safeSignal.stockState as never)
+      ? safeSignal.stockState
+      : 'unknown',
+    // A quantity only with a known state (DOS/Rate#1606).
+    stockQty:
+      ['in_stock', 'low_stock', 'out_of_stock'].includes(
+        safeSignal.stockState as string
+      ) &&
+      typeof safeSignal.stockQty === 'number' &&
+      Number.isInteger(safeSignal.stockQty) &&
+      safeSignal.stockQty >= 0 &&
+      safeSignal.stockQty <= 1_000_000
+        ? safeSignal.stockQty
+        : null,
+    extractorSource: (['json_ld', 'dom', 'mixed'] as const).includes(
+      safeSignal.extractorSource as never
+    )
+      ? safeSignal.extractorSource
+      : 'dom',
   };
+}
+
+/**
+ * The query of the product lookup: exactly the fields the disclosures name
+ * (store, cleaned URL, title, item and shop ids, variant, price, original
+ * price) and the mode. A test pins its output (DOS/Rate#1606).
+ */
+export function buildLookupParams(
+  rawSignal: ExtractedPageProductSignal,
+  mode: 'pill' | 'full'
+): URLSearchParams {
+  const signal = sanitizeExtensionProductSignal(rawSignal);
+  const params = new URLSearchParams();
+  params.set('platform', signal.platform);
+  params.set('url', signal.canonicalUrl);
+  params.set('title', signal.title);
+  params.set('mode', mode);
+  if (signal.externalItemId) params.set('externalId', signal.externalItemId);
+  if (signal.externalShopId) params.set('shopId', signal.externalShopId);
+  if (signal.selectedVariant) {
+    params.set('selectedVariant', signal.selectedVariant);
+  }
+  if (signal.price && signal.price > 0) {
+    params.set('price', String(signal.price));
+  }
+  if (signal.originalPrice && signal.originalPrice > 0) {
+    params.set('originalPrice', String(signal.originalPrice));
+  }
+  return params;
+}
+
+/**
+ * The ExtensionObservation v1 an opted-in install sends for `signal`
+ * (DOS/Rate#1606), or null when the page lacks what v1 needs (an item id, a
+ * price).
+ */
+export function buildExtensionObservationV1(
+  rawSignal: ExtractedPageProductSignal,
+  observedAt: Date,
+  extensionVersion: string
+): ExtensionObservationV1 | null {
+  const signal = sanitizeExtensionProductSignal(rawSignal);
+  const parsed = parseExtensionObservationV1(
+    {
+      schema_version: 1,
+      marketplace: signal.platform,
+      listing_url: signal.canonicalUrl,
+      external_item_id: signal.externalItemId,
+      external_shop_id: signal.externalShopId,
+      sku_id: signal.skuId ?? null,
+      // v1 allows 120 characters; a longer label is cut, not a reason to
+      // drop the observation.
+      variant_label: signal.selectedVariant
+        ? Array.from(signal.selectedVariant).slice(0, 120).join('').trim() ||
+          null
+        : null,
+      price_vnd: signal.price,
+      list_price_vnd: signal.originalPrice,
+      stock_state: signal.stockState ?? 'unknown',
+      stock_qty: signal.stockQty ?? null,
+      observed_at: observedAt.toISOString(),
+      extractor: {
+        source: signal.extractorSource ?? 'dom',
+        extension_version: extensionVersion,
+      },
+    },
+    observedAt.getTime()
+  );
+  return parsed.ok ? parsed.value : null;
 }
 
 export function escapeSafeExternalHref(
@@ -501,7 +626,38 @@ export function shouldRenderTrustPill(
 }
 
 /**
- * What the opt-in crowd signal sends, with the message key of the words the
+ * What an opted-in install sends (ExtensionObservation v1, DOS/Rate#1606),
+ * with the message key of the words the opt-in texts use for each field;
+ * every locale's opt-in and consent texts name each one, plus the submitter
+ * id and the network hash the server adds.
+ */
+export const OBSERVATION_FIELD_LABELS = {
+  marketplace: 'crowdFieldPlatform',
+  listing_url: 'crowdFieldUrl',
+  external_item_id: 'crowdFieldExternalItemId',
+  external_shop_id: 'crowdFieldExternalShopId',
+  sku_id: 'observationFieldSku',
+  variant_label: 'crowdFieldSelectedVariant',
+  price_vnd: 'crowdFieldPrice',
+  list_price_vnd: 'crowdFieldOriginalPrice',
+  stock_state: 'observationFieldStock',
+  stock_qty: 'observationFieldStock',
+  observed_at: 'observationFieldObservedAt',
+  extractor: 'observationFieldExtractor',
+} as const satisfies Record<
+  Exclude<keyof ExtensionObservationV1, 'schema_version'>,
+  MessageKey
+>;
+
+/** What else an observation carries: the submitter id and the network hash. */
+export const OBSERVATION_EXTRA_LABELS = [
+  'observationFieldSubmitter',
+  'observationFieldNetwork',
+] as const satisfies readonly MessageKey[];
+
+/**
+ * The legacy opt-in crowd signal (still accepted by the ingest route for the
+ * contact form); the extension now sends v1. What it sends, with the message key of the words the
  * side panel uses for each field. The opt-in text in every locale names
  * each one, so a field added here is disclosed too (DOS/Rate#1230, #1304).
  */

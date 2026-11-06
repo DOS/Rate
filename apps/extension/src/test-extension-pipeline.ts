@@ -19,6 +19,7 @@ import {
   DEFAULT_API_BASE_URL,
   MAX_SPARKLINE_POINTS,
   escapeSafeExternalHref,
+  isOnboardingSender,
   isPrivilegedExtensionSender,
   normalizeAllowedApiBaseUrl,
   normalizeFiveStarRating,
@@ -467,6 +468,52 @@ async function runTests() {
     }),
     true
   );
+  // The install consent page is an extension page in a tab: it is never a
+  // privileged sender, and only isOnboardingSender, which lets it set the
+  // opt-in alone, accepts it by its exact URL (DOS/Rate#1603).
+  const onboardingUrl =
+    'chrome-extension://abcdefghijklmnop/onboarding/onboarding.html';
+  assert.equal(
+    isPrivilegedExtensionSender(
+      { tab: { id: 7 }, url: onboardingUrl },
+      'abcdefghijklmnop'
+    ),
+    false
+  );
+  assert.equal(
+    isOnboardingSender(
+      { tab: { id: 7 }, url: onboardingUrl },
+      'abcdefghijklmnop'
+    ),
+    true
+  );
+  for (const sender of [
+    { tab: { id: 7 }, url: 'https://shopee.vn/onboarding/onboarding.html' },
+    {
+      tab: { id: 7 },
+      url: 'chrome-extension://otherextensionid/onboarding/onboarding.html',
+    },
+    {
+      tab: undefined,
+      url: 'chrome-extension://abcdefghijklmnop/sidepanel/sidepanel.html',
+    },
+    { tab: { id: 7 }, url: `${onboardingUrl}?x=1` },
+    { tab: { id: 7 }, url: `${onboardingUrl}#x` },
+    { tab: { id: 7 }, url: undefined },
+    { id: 'otherextensionid', tab: { id: 7 }, url: onboardingUrl },
+    null,
+  ]) {
+    assert.equal(
+      isOnboardingSender(sender as never, 'abcdefghijklmnop'),
+      false,
+      JSON.stringify(sender)
+    );
+  }
+  assert.equal(
+    isOnboardingSender({ tab: { id: 7 }, url: onboardingUrl }),
+    false,
+    'without a known runtime id nothing is the consent page'
+  );
   assert.equal(
     escapeSafeExternalHref('javascript:alert(1)'),
     'https://rate.vn',
@@ -571,18 +618,34 @@ async function runTests() {
       hosts.filter((h) => !/rate\.vn/.test(h)).sort()
     );
 
-    // The opt-in label names every field the crowd signal sends
-    // (DOS/Rate#1230).
-    const { buildCrowdIngestPayload, CROWD_INGEST_FIELD_LABELS } =
-      await import('./security-guards.js');
-    const payload = buildCrowdIngestPayload({
-      platform: 'shopee',
-      canonicalUrl: 'https://shopee.vn/x-i.1.2',
-      title: 'iPhone 16',
-    } as never);
+    // The opt-in label names every field an opted-in install sends: the v1
+    // observation's keys, plus the submitter id and the network hash
+    // (DOS/Rate#1230, #1606).
+    const {
+      buildExtensionObservationV1,
+      OBSERVATION_FIELD_LABELS,
+      OBSERVATION_EXTRA_LABELS,
+    } = await import('./security-guards.js');
+    const sample = buildExtensionObservationV1(
+      {
+        platform: 'shopee',
+        canonicalUrl: 'https://shopee.vn/x-i.1.2',
+        externalItemId: '2',
+        externalShopId: '1',
+        title: 'iPhone 16',
+        selectedVariant: null,
+        price: 19_990_000,
+        originalPrice: null,
+        ratingStar: 5,
+        ratingCount: 3,
+      },
+      new Date(),
+      '2.1.0'
+    );
+    assert.ok(sample);
     assert.deepEqual(
-      Object.keys(payload).sort(),
-      [...Object.keys(CROWD_INGEST_FIELD_LABELS), 'userConsentOptIn'].sort()
+      Object.keys(sample).sort(),
+      [...Object.keys(OBSERVATION_FIELD_LABELS), 'schema_version'].sort()
     );
     const panelHtml = fs.readFileSync(
       path.resolve(__dirname, 'sidepanel/sidepanel.html'),
@@ -593,10 +656,16 @@ async function runTests() {
       panelHtml.indexOf('</label>', panelHtml.indexOf('id="chk-crowd-optin"'))
     );
     assert.ok(optInLabel.includes('data-i18n="optInBody"'));
+    const disclosedKeys = [
+      ...new Set([
+        ...Object.values(OBSERVATION_FIELD_LABELS),
+        ...OBSERVATION_EXTRA_LABELS,
+      ]),
+    ];
     // Every locale's opt-in text names every field (DOS/Rate#1304).
     for (const [locale, catalogue] of Object.entries(readLocaleCatalogues())) {
       const optInText = catalogue.optInBody?.message ?? '';
-      for (const key of Object.values(CROWD_INGEST_FIELD_LABELS)) {
+      for (const key of disclosedKeys) {
         const label = catalogue[key]?.message ?? '';
         assert.ok(label, `${locale} lacks ${key}`);
         assert.ok(
@@ -604,8 +673,35 @@ async function runTests() {
           `${locale} opt-in text lacks "${label}"`
         );
       }
+      // Ratings are no longer sent (JOY approved dropping them).
+      for (const gone of [
+        'crowdFieldRatingStar',
+        'crowdFieldRatingCount',
+        'crowdFieldTitle',
+      ]) {
+        assert.ok(
+          !optInText.includes(catalogue[gone]?.message ?? '\u0000'),
+          `${locale} opt-in text still names ${gone}`
+        );
+      }
       assert.ok(!/Chỉ gửi URL/.test(optInText));
+      // The install consent page names the same fields (DOS/Rate#1603).
+      const consentText = catalogue.onboardingOptInBody?.message ?? '';
+      for (const key of disclosedKeys) {
+        assert.ok(
+          consentText.includes(catalogue[key]?.message ?? '\u0000'),
+          `${locale} consent text lacks ${key}`
+        );
+      }
     }
+    assert.ok(
+      fs
+        .readFileSync(
+          path.resolve(__dirname, 'onboarding/onboarding.html'),
+          'utf8'
+        )
+        .includes('data-i18n="onboardingOptInBody"')
+    );
     // The store listing names the extension as the vi catalogue does.
     const viName = readLocaleCatalogues().vi.extName?.message;
     assert.equal(
@@ -4233,8 +4329,25 @@ async function runTests() {
         workerSource.match(/'X-Rate-Extension-Version': EXTENSION_VERSION/g) ??
         []
       ).length,
-      2
+      1
     );
+    // The observation client's requests carry it too (DOS/Rate#1606): each
+    // of its fetches takes this.headers(...), which sets the version.
+    {
+      const clientSource = fs.readFileSync(
+        path.resolve(__dirname, 'background/observation-client.ts'),
+        'utf8'
+      );
+      assert.equal(
+        (clientSource.match(/this\.deps\.fetch\(/g) ?? []).length,
+        (clientSource.match(/headers: this\.headers\(/g) ?? []).length
+      );
+      assert.ok(
+        clientSource.includes(
+          "'X-Rate-Extension-Version': this.deps.extensionVersion"
+        )
+      );
+    }
     assert.ok(workerSource.includes('chrome.runtime.getManifest().version'));
     // The cooldown is checked before any fetch, and a 429 sets it from Retry-After.
     const requestLookupBody = workerSource.slice(
@@ -4995,11 +5108,18 @@ async function runTests() {
       path.resolve(__dirname, 'background/service-worker.ts'),
       'utf8'
     );
+    // The lookup query is built in security-guards (DOS/Rate#1606).
+    const guardsSource = fs.readFileSync(
+      path.resolve(__dirname, 'security-guards.ts'),
+      'utf8'
+    );
     const sentParams = [
       ...new Set(
-        [...workerSource.matchAll(/params\.set\(\s*'([^']+)'/g)].map(
-          (m) => m[1]!
-        )
+        [
+          ...(workerSource + guardsSource).matchAll(
+            /params\.set\(\s*'([^']+)'/g
+          ),
+        ].map((m) => m[1]!)
       ),
     ].sort();
     assert.deepEqual(sentParams, [
@@ -5026,6 +5146,539 @@ async function runTests() {
     );
   }
 
+  // --- DOS/Rate#1606: stock, SKU and the v1 observation (read, not sent) ---
+  {
+    const det = await import('./extractors/ecommerce-detector.js');
+    const guards = await import('./security-guards.js');
+    assert.equal(
+      det.stockStateFromAvailability('https://schema.org/InStock'),
+      'in_stock'
+    );
+    assert.equal(
+      det.stockStateFromAvailability('http://schema.org/OutOfStock'),
+      'out_of_stock'
+    );
+    assert.equal(
+      det.stockStateFromAvailability('LimitedAvailability'),
+      'low_stock'
+    );
+    assert.equal(det.stockStateFromAvailability('PreOrder'), 'unknown');
+    assert.equal(det.stockStateFromAvailability('in stock'), 'in_stock');
+    assert.equal(det.stockStateFromAvailability('blue'), null);
+    assert.equal(det.stockStateFromAvailability(42), null);
+    assert.deepEqual(
+      det.extractStockFromJsonLdOffers([
+        { price: 1 },
+        {
+          availability: 'https://schema.org/InStock',
+          inventoryLevel: { value: 7 },
+        },
+      ]),
+      { stockState: 'in_stock', stockQty: 7 }
+    );
+    assert.deepEqual(
+      det.extractStockFromJsonLdOffers({
+        availability: 'OutOfStock',
+        inventoryLevel: 9,
+      }),
+      { stockState: 'out_of_stock', stockQty: 0 }
+    );
+    assert.deepEqual(
+      det.extractStockFromJsonLdOffers({
+        availability: 'InStock',
+        inventoryLevel: -3,
+      }),
+      { stockState: 'in_stock', stockQty: null }
+    );
+    assert.equal(
+      det.extractSkuId(
+        'lazada',
+        'https://www.lazada.vn/products/iphone-i123-s456.html',
+        null
+      ),
+      '456'
+    );
+    assert.equal(
+      det.extractSkuId(
+        'tiki',
+        'https://tiki.vn/iphone-p123.html?spid=789',
+        'X1'
+      ),
+      '789'
+    );
+    assert.equal(
+      det.extractSkuId('shopee', 'https://shopee.vn/x-i.1.2', 'MDL-9'),
+      'MDL-9'
+    );
+    assert.equal(
+      det.extractSkuId('shopee', 'https://shopee.vn/x-i.1.2', 'a b'),
+      null
+    );
+    assert.equal(
+      det.extractSkuId('tiki', 'https://tiki.vn/x-p1.html?spid=abc', null),
+      null
+    );
+
+    const signal = {
+      platform: 'shopee' as const,
+      canonicalUrl: 'https://shopee.vn/iphone-16-i.123.456',
+      externalItemId: '456',
+      externalShopId: '123',
+      title: 'iPhone 16 128GB',
+      selectedVariant: 'Đen',
+      price: 19_990_000,
+      originalPrice: 22_990_000,
+      ratingStar: 4.9,
+      ratingCount: 1000,
+      skuId: '789',
+      stockState: 'in_stock' as const,
+      stockQty: 5,
+      extractorSource: 'json_ld' as const,
+    };
+    const at = new Date('2026-11-04T10:00:00Z');
+    const obs = guards.buildExtensionObservationV1(signal, at, '2.1.0');
+    assert.deepEqual(obs, {
+      schema_version: 1,
+      marketplace: 'shopee',
+      listing_url: 'https://shopee.vn/iphone-16-i.123.456',
+      external_item_id: '456',
+      external_shop_id: '123',
+      sku_id: '789',
+      variant_label: 'Đen',
+      price_vnd: 19_990_000,
+      list_price_vnd: 22_990_000,
+      stock_state: 'in_stock',
+      stock_qty: 5,
+      observed_at: '2026-11-04T10:00:00.000Z',
+      extractor: { source: 'json_ld', extension_version: '2.1.0' },
+    });
+    // No ratings in v1 (JOY approved dropping them).
+    assert.ok(obs && !('rating_star' in obs) && !('ratingStar' in obs));
+    assert.equal(
+      guards.buildExtensionObservationV1(
+        { ...signal, price: null },
+        at,
+        '2.1.0'
+      ),
+      null
+    );
+    assert.equal(
+      guards.buildExtensionObservationV1(
+        { ...signal, externalItemId: null },
+        at,
+        '2.1.0'
+      ),
+      null
+    );
+    // The sanitizer keeps only valid v1 fields.
+    const dirty = guards.sanitizeExtensionProductSignal({
+      ...signal,
+      skuId: 'a b',
+      stockState: 'lots' as never,
+      stockQty: -1,
+      extractorSource: 'api' as never,
+    });
+    assert.equal(dirty.skuId, null);
+    assert.equal(dirty.stockState, 'unknown');
+    assert.equal(dirty.stockQty, null);
+    assert.equal(dirty.extractorSource, 'dom');
+    // Neither the opt-in signal nor the lookup carries the new fields yet.
+    const crowd = guards.buildCrowdIngestPayload(signal as never);
+    for (const key of ['skuId', 'stockState', 'stockQty', 'extractorSource']) {
+      assert.ok(!(key in crowd), key);
+    }
+    // The exact lookup query and opt-in payload, pinned: they are what the
+    // disclosures describe.
+    assert.equal(
+      guards.buildLookupParams(signal, 'pill').toString(),
+      'platform=shopee&url=https%3A%2F%2Fshopee.vn%2Fiphone-16-i.123.456&title=iPhone+16+128GB&mode=pill&externalId=456&shopId=123&selectedVariant=%C4%90en&price=19990000&originalPrice=22990000'
+    );
+    assert.equal(
+      JSON.stringify(crowd),
+      JSON.stringify({
+        platform: 'shopee',
+        externalItemId: '456',
+        externalShopId: '123',
+        url: 'https://shopee.vn/iphone-16-i.123.456',
+        title: 'iPhone 16 128GB',
+        selectedVariant: 'Đen',
+        price: 19_990_000,
+        originalPrice: 22_990_000,
+        ratingStar: 4.9,
+        ratingCount: 1000,
+        userConsentOptIn: true,
+      })
+    );
+    const workerSource = fs.readFileSync(
+      path.resolve(__dirname, 'background/service-worker.ts'),
+      'utf8'
+    );
+    assert.ok(!/stockState|skuId|stockQty|extractorSource/.test(workerSource));
+    assert.ok(workerSource.includes('buildLookupParams(rawSignal, mode)'));
+    // The opt-in sends v1 to the observation route, never the legacy crowd
+    // ingest, and turning it off erases the install's id (DOS/Rate#1606).
+    assert.ok(
+      workerSource.includes('RATE_API_V1_ENDPOINTS.EXTENSION_OBSERVATION')
+    );
+    assert.ok(!workerSource.includes('EXTENSION_INGEST'));
+    assert.ok(!workerSource.includes('buildCrowdIngestPayload'));
+    assert.ok(
+      /crowdContributeOptIn === false\)\s*\{\s*void observationClient\.forget\(\)/.test(
+        workerSource
+      )
+    );
+    // An opt-in given before v1 is not consent to it.
+    assert.ok(
+      workerSource.includes(
+        'stored.crowdConsentVersion === OPT_IN_CONSENT_VERSION'
+      )
+    );
+
+    // A long variant label is cut to 120 characters, not a lost observation.
+    const longObs = guards.buildExtensionObservationV1(
+      { ...signal, selectedVariant: 'Màu '.repeat(50) },
+      at,
+      '2.1.0'
+    );
+    assert.ok(longObs && longObs.variant_label!.length <= 120);
+
+    // More availability forms; quantities only agree with the state.
+    assert.equal(det.stockStateFromAvailability('schema:InStock'), 'in_stock');
+    assert.equal(
+      det.stockStateFromAvailability('https://www.schema.org/SoldOut'),
+      'out_of_stock'
+    );
+    assert.equal(det.stockStateFromAvailability('Reserved'), 'out_of_stock');
+    assert.equal(det.stockStateFromAvailability(['InStock']), 'in_stock');
+    assert.equal(
+      det.stockStateFromAvailability('available for order'),
+      'unknown'
+    );
+    assert.deepEqual(
+      det.stockOfOffer({ availability: 'InStock', inventoryLevel: 0 }),
+      {
+        stockState: 'in_stock',
+        stockQty: null,
+      }
+    );
+    assert.deepEqual(
+      det.stockOfOffer({ availability: 'PreOrder', inventoryLevel: 50 }),
+      {
+        stockState: 'unknown',
+        stockQty: null,
+      }
+    );
+    assert.deepEqual(
+      det.extractStockFromJsonLdOffers({
+        '@type': 'AggregateOffer',
+        offers: { availability: 'LimitedAvailability', inventoryLevel: '3' },
+      }),
+      { stockState: 'low_stock', stockQty: 3 }
+    );
+    assert.equal(
+      det.extractSkuId('shopee', 'https://shopee.vn/x-i.1.2', '.'),
+      null
+    );
+
+    // End to end on a page: the selected variant's own offer gives stock and
+    // SKU, never another variant's or the parent's.
+    const variantPage = (selected: string | null, offers: unknown) =>
+      ({
+        title: 'iPhone 16',
+        querySelectorAll(sel: string) {
+          if (sel === 'script[type="application/ld+json"]') {
+            return [
+              {
+                textContent: JSON.stringify({
+                  '@type': 'Product',
+                  name: 'iPhone 16 128GB',
+                  sku: 'BASE-1',
+                  offers,
+                }),
+              },
+            ];
+          }
+          if (selected && sel.includes('aria-checked')) {
+            return [{ textContent: selected }];
+          }
+          return [];
+        },
+        querySelector() {
+          return null;
+        },
+      }) as unknown as Document;
+    const twoOffers = [
+      { sku: 'V-RED', name: 'Đỏ', price: 19990000, availability: 'OutOfStock' },
+      {
+        sku: 'V-BLUE',
+        name: 'Xanh',
+        price: 19990000,
+        availability: 'InStock',
+        inventoryLevel: 4,
+      },
+    ];
+    const url = 'https://shopee.vn/iphone-16-i.123.456';
+    const none = det.extractProductSignalFromDom(
+      variantPage(null, twoOffers),
+      url
+    );
+    assert.ok(none);
+    assert.equal(none.stockState, 'unknown');
+    assert.equal(none.skuId, null);
+    assert.equal(none.extractorSource, 'json_ld');
+    const single = det.extractProductSignalFromDom(
+      variantPage(null, {
+        price: 19990000,
+        availability: 'InStock',
+        inventoryLevel: 9,
+      }),
+      url
+    );
+    assert.ok(single);
+    assert.equal(single.stockState, 'in_stock');
+    assert.equal(single.stockQty, 9);
+    assert.equal(single.skuId, 'BASE-1');
+    console.log('  ✅ [Stock, SKU and the v1 observation (#1606)] Verified');
+  }
+  // --- DOS/Rate#1606: the observation client (register, send, erase) ---
+  {
+    const {
+      ObservationClient,
+      SUBMITTER_KEY,
+      PENDING_ERASURE_KEY,
+      HOLD_UNTIL_KEY,
+    } = await import('./background/observation-client.js');
+    const ID1 = '11111111-2222-4333-8444-555555555555';
+    const ID2 = '66666666-7777-4888-8999-aaaaaaaaaaaa';
+    const BASE = 'https://rate.vn';
+    const obs = {
+      schema_version: 1 as const,
+      marketplace: 'shopee' as const,
+      listing_url: 'https://shopee.vn/x-i.1.2',
+      external_item_id: '2',
+      external_shop_id: '1',
+      sku_id: null,
+      variant_label: null,
+      price_vnd: 19_990_000,
+      list_price_vnd: null,
+      stock_state: 'in_stock' as const,
+      stock_qty: null,
+      observed_at: '2026-11-04T10:00:00.000Z',
+      extractor: { source: 'json_ld' as const, extension_version: '2.1.0' },
+    };
+    type Call = {
+      method: string;
+      url: string;
+      headers: Record<string, string>;
+      body: unknown;
+    };
+    const json = (
+      status: number,
+      body: unknown,
+      headers: Record<string, string> = {}
+    ) =>
+      new Response(JSON.stringify(body), {
+        status,
+        headers: { 'Content-Type': 'application/json', ...headers },
+      });
+    const make = (opts: {
+      optedIn?: () => boolean;
+      respond: (call: Call) => Response | Promise<Response>;
+      now?: number;
+    }) => {
+      const store = new Map<string, unknown>();
+      const calls: Call[] = [];
+      const client = new ObservationClient({
+        storage: {
+          get: async (key) => (store.has(key) ? { [key]: store.get(key) } : {}),
+          set: async (items) => {
+            for (const [k, v] of Object.entries(items)) store.set(k, v);
+          },
+          remove: async (key) => {
+            store.delete(key);
+          },
+        },
+        fetch: async (url, init) => {
+          const call: Call = {
+            method: String(init.method),
+            url,
+            headers: (init.headers ?? {}) as Record<string, string>,
+            body: init.body ? JSON.parse(String(init.body)) : undefined,
+          };
+          calls.push(call);
+          return opts.respond(call);
+        },
+        now: () => opts.now ?? 1_000_000,
+        extensionVersion: '2.1.0',
+        optedIn: async () => (opts.optedIn ? opts.optedIn() : true),
+        submitterPath: '/api/v1/rate/extension/submitter',
+        observationPath: '/api/v1/rate/extension/observation',
+      });
+      return { client, store, calls };
+    };
+    const ok = (call: Call) =>
+      call.method === 'POST' && call.url.endsWith('/submitter')
+        ? json(200, { ok: true, submitterId: ID1 })
+        : json(200, { ok: true, status: 'quarantined' });
+
+    // (a) Register once (no body, no Content-Type), then send with the id.
+    {
+      const { client, store, calls } = make({ respond: ok });
+      await client.send(BASE, obs);
+      assert.deepEqual(
+        calls.map((c) => `${c.method} ${c.url}`),
+        [
+          `POST ${BASE}/api/v1/rate/extension/submitter`,
+          `POST ${BASE}/api/v1/rate/extension/observation`,
+        ]
+      );
+      assert.equal(calls[0]!.body, undefined);
+      assert.equal(calls[0]!.headers['Content-Type'], undefined);
+      assert.equal(calls[1]!.headers['Content-Type'], 'application/json');
+      assert.deepEqual(calls[1]!.body, { submitterId: ID1, observation: obs });
+      assert.deepEqual(store.get(SUBMITTER_KEY), { id: ID1, apiBaseUrl: BASE });
+      // (b) The next product reuses the id.
+      await client.send(BASE, obs);
+      assert.equal(calls.filter((c) => c.url.endsWith('/submitter')).length, 1);
+    }
+    // (c) Two products at once register one id.
+    {
+      const { client, calls } = make({ respond: ok });
+      await Promise.all([client.send(BASE, obs), client.send(BASE, obs)]);
+      assert.equal(calls.filter((c) => c.url.endsWith('/submitter')).length, 1);
+    }
+    // (d) Routes off: no observation, no id, and a hold, so the next product
+    // asks nothing.
+    {
+      const { client, store, calls } = make({
+        respond: () => json(404, { ok: false, code: 'NOT_ENABLED' }),
+      });
+      await client.send(BASE, obs);
+      await client.send(BASE, obs);
+      assert.equal(calls.length, 1);
+      assert.equal(store.has(SUBMITTER_KEY), false);
+      assert.ok(Number(store.get(HOLD_UNTIL_KEY)) > 1_000_000);
+    }
+    // (e) UNKNOWN_SUBMITTER drops the id; (f) a 429 holds for its Retry-After.
+    {
+      let observationAnswer: Response = json(404, {
+        ok: false,
+        code: 'UNKNOWN_SUBMITTER',
+      });
+      const { client, store, calls } = make({
+        respond: (c) =>
+          c.url.endsWith('/submitter') ? ok(c) : observationAnswer,
+      });
+      await client.send(BASE, obs);
+      assert.equal(store.has(SUBMITTER_KEY), false);
+      observationAnswer = json(429, { ok: false }, { 'Retry-After': '3600' });
+      await client.send(BASE, obs);
+      assert.equal(store.get(HOLD_UNTIL_KEY), 1_000_000 + 3_600_000);
+      const before = calls.length;
+      await client.send(BASE, obs);
+      assert.equal(calls.length, before, 'held: nothing is sent');
+    }
+    // (g) Opt-out erases on the issuing server; (h) a failed erasure is kept
+    // and retried until the server confirms.
+    {
+      let deleteOk = false;
+      const { client, store, calls } = make({
+        respond: (c) =>
+          c.method === 'DELETE'
+            ? deleteOk
+              ? json(200, { ok: true })
+              : json(503, { ok: false })
+            : ok(c),
+      });
+      await client.send(BASE, obs);
+      await client.forget();
+      const del = calls.filter((c) => c.method === 'DELETE');
+      assert.equal(del.length, 1);
+      assert.equal(del[0]!.headers['Content-Type'], 'application/json');
+      assert.deepEqual(del[0]!.body, { submitterId: ID1 });
+      assert.equal(store.has(SUBMITTER_KEY), false);
+      assert.deepEqual(store.get(PENDING_ERASURE_KEY), [
+        { id: ID1, apiBaseUrl: BASE },
+      ]);
+      deleteOk = true;
+      await client.retryErasures();
+      assert.equal(store.has(PENDING_ERASURE_KEY), false);
+    }
+    // (i) Opt-out while the id is being issued: it is erased, nothing sent.
+    {
+      let opted = true;
+      let release!: () => void;
+      const gate = new Promise<void>((r) => (release = r));
+      let registering!: () => void;
+      const registerStarted = new Promise<void>((r) => (registering = r));
+      const { client, store, calls } = make({
+        optedIn: () => opted,
+        respond: async (c) => {
+          if (c.method === 'POST' && c.url.endsWith('/submitter')) {
+            registering();
+            await gate;
+            return json(200, { ok: true, submitterId: ID2 });
+          }
+          return json(200, { ok: true });
+        },
+      });
+      const sending = client.send(BASE, obs);
+      await registerStarted;
+      // The user turns it off while the id is being issued.
+      opted = false;
+      const forgetting = client.forget();
+      release();
+      await Promise.all([sending, forgetting]);
+      assert.equal(
+        calls.filter((c) => c.url.endsWith('/observation')).length,
+        0
+      );
+      assert.equal(store.has(SUBMITTER_KEY), false);
+      assert.deepEqual(
+        calls.filter((c) => c.method === 'DELETE').map((c) => c.body),
+        [{ submitterId: ID2 }]
+      );
+    }
+    // (j) Opted out: nothing at all.
+    {
+      const { client, calls } = make({ optedIn: () => false, respond: ok });
+      await client.send(BASE, obs);
+      assert.equal(calls.length, 0);
+    }
+    // An id from another server is erased there, not sent here.
+    {
+      const { client, store, calls } = make({ respond: ok });
+      store.set(SUBMITTER_KEY, {
+        id: ID2,
+        apiBaseUrl: 'http://localhost:3000',
+      });
+      await client.send(BASE, obs);
+      const del = calls.find((c) => c.method === 'DELETE');
+      assert.ok(del && del.url.startsWith('http://localhost:3000'));
+      assert.deepEqual(del.body, { submitterId: ID2 });
+      assert.deepEqual(
+        calls.find((c) => c.url.endsWith('/observation'))?.body,
+        {
+          submitterId: ID1,
+          observation: obs,
+        }
+      );
+    }
+    // (k) A body that is not JSON keeps the id and throws nothing.
+    {
+      const { client, store } = make({
+        respond: (c) =>
+          c.url.endsWith('/submitter')
+            ? ok(c)
+            : new Response('nope', { status: 404 }),
+      });
+      await client.send(BASE, obs);
+      assert.deepEqual(store.get(SUBMITTER_KEY), { id: ID1, apiBaseUrl: BASE });
+    }
+    console.log(
+      '  ✅ [Observation client: one id, erasure kept until confirmed, holds (#1606)] Verified'
+    );
+  }
   console.log('🎉 All Rate Browser Extension MV3 v2 tests passed!');
 }
 

@@ -161,6 +161,112 @@ export type Database = {
         };
         Relationships: [];
       };
+      extension_ingest_secret: {
+        Row: {
+          id: boolean;
+          key_sha256: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: boolean;
+          key_sha256: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: boolean;
+          key_sha256?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      extension_observations: {
+        Row: {
+          external_item_id: string;
+          external_shop_id: string | null;
+          extractor: Json;
+          id: number;
+          list_price_vnd: number | null;
+          listing_url: string;
+          marketplace: string;
+          network_hash: string | null;
+          observed_at: string;
+          price_vnd: number;
+          received_at: string;
+          schema_version: number;
+          sku_id: string | null;
+          status: string;
+          stock_qty: number | null;
+          stock_state: string;
+          submitter_id: string;
+          variant_label: string | null;
+        };
+        Insert: {
+          external_item_id: string;
+          external_shop_id?: string | null;
+          extractor: Json;
+          id?: never;
+          list_price_vnd?: number | null;
+          listing_url: string;
+          marketplace: string;
+          network_hash?: string | null;
+          observed_at: string;
+          price_vnd: number;
+          received_at?: string;
+          schema_version: number;
+          sku_id?: string | null;
+          status?: string;
+          stock_qty?: number | null;
+          stock_state: string;
+          submitter_id: string;
+          variant_label?: string | null;
+        };
+        Update: {
+          external_item_id?: string;
+          external_shop_id?: string | null;
+          extractor?: Json;
+          id?: never;
+          list_price_vnd?: number | null;
+          listing_url?: string;
+          marketplace?: string;
+          network_hash?: string | null;
+          observed_at?: string;
+          price_vnd?: number;
+          received_at?: string;
+          schema_version?: number;
+          sku_id?: string | null;
+          status?: string;
+          stock_qty?: number | null;
+          stock_state?: string;
+          submitter_id?: string;
+          variant_label?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'extension_observations_submitter_id_fkey';
+            columns: ['submitter_id'];
+            referencedRelation: 'extension_submitters';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
+      extension_submitters: {
+        Row: {
+          created_at: string;
+          id: string;
+          network_hash: string | null;
+        };
+        Insert: {
+          created_at?: string;
+          id?: string;
+          network_hash?: string | null;
+        };
+        Update: {
+          created_at?: string;
+          id?: string;
+          network_hash?: string | null;
+        };
+        Relationships: [];
+      };
       master_products: {
         Row: {
           authentic_review_count: number | null;
@@ -1366,6 +1472,10 @@ export type Database = {
         }[];
       };
       current_user_can_vote_reviews: { Args: never; Returns: boolean };
+      delete_extension_submitter: {
+        Args: { p_submitter_id: string };
+        Returns: number;
+      };
       dequeue_crawl_job: {
         Args: { p_lease?: string; p_platform: string; p_worker_id: string };
         Returns: {
@@ -1459,11 +1569,13 @@ export type Database = {
           cluster_official_min: number;
           history_avg: number;
           history_count: number;
+          history_first_at: string;
           history_max: number;
           history_median: number;
           history_min: number;
           merchant_id: string;
           merchant_is_official: boolean;
+          peer_reference_max: number;
           peer_reference_min: number;
           platform: string;
           price_current: number;
@@ -1525,6 +1637,14 @@ export type Database = {
         Args: { p_retention_days?: number };
         Returns: number;
       };
+      purge_extension_observations: {
+        Args: {
+          p_empty_submitter_days?: number;
+          p_keep_days?: number;
+          p_network_hash_days?: number;
+        };
+        Returns: Json;
+      };
       purge_review_ai_points: {
         Args: { p_prompt_version: string };
         Returns: Json;
@@ -1559,6 +1679,10 @@ export type Database = {
       refresh_review_vote_counts: {
         Args: { p_review_id: string };
         Returns: undefined;
+      };
+      register_extension_submitter: {
+        Args: { p_ingest_key: string; p_network_hash: string };
+        Returns: string;
       };
       release_crawl_job: {
         Args: { p_claim_token: string; p_id: string; p_reason?: string };
@@ -1718,6 +1842,15 @@ export type Database = {
           p_reviewer_type?: string;
           p_variation?: string;
           p_verdict: string;
+        };
+        Returns: Json;
+      };
+      submit_extension_observation: {
+        Args: {
+          p_ingest_key: string;
+          p_network_hash: string;
+          p_observation: Json;
+          p_submitter_id: string;
         };
         Returns: Json;
       };

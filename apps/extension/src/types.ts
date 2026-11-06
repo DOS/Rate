@@ -202,6 +202,9 @@ export interface ExtensionLookupData {
   } | null;
 }
 
+export type ExtractedStockState =
+  'in_stock' | 'low_stock' | 'out_of_stock' | 'unknown';
+
 export interface ExtractedPageProductSignal {
   platform: SupportedEcommercePlatform;
   canonicalUrl: string;
@@ -213,6 +216,15 @@ export interface ExtractedPageProductSignal {
   originalPrice: number | null;
   ratingStar: number | null;
   ratingCount: number | null;
+  /**
+   * Read for ExtensionObservation v1 (DOS/Rate#1606) and not sent yet:
+   * neither the lookup nor the opt-in signal carries them.
+   */
+  skuId?: string | null;
+  stockState?: ExtractedStockState;
+  stockQty?: number | null;
+  /** Where the title and price came from. */
+  extractorSource?: 'json_ld' | 'dom' | 'mixed';
 }
 
 export interface ExtensionSettings {
@@ -250,6 +262,9 @@ declare global {
           ) => boolean | void
         ) => void;
       };
+      onStartup?: {
+        addListener: (callback: () => void) => void;
+      };
       onInstalled: {
         addListener: (
           callback: (details: { reason: string }) => void | Promise<void>
@@ -262,6 +277,7 @@ declare global {
           keys?: string | string[] | Record<string, unknown>
         ) => Promise<Record<string, unknown>>;
         set: (items: Record<string, unknown>) => Promise<void>;
+        remove: (keys: string | string[]) => Promise<void>;
       };
       session: {
         get: (

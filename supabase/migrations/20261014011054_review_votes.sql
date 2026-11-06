@@ -1,20 +1,3 @@
--- ==============================================================================
--- Migration: per-user review votes / reports (rate.review_votes)
---
--- Design notes
---  * One row per (review, voter): a user has ONE up/down vote per review and may
---    additionally REPORT it. Changing a vote is an UPDATE, not a second row.
---  * Authenticated users only (auth.users, shared Supabase Auth). Anonymous voting is
---    the easiest brigading vector (review_bombing / competitor_sabotage), so it is
---    deliberately not supported in v1.
---  * Counters on rate.reviews (upvotes/downvotes/report_count/helpfulness_weight) are
---    ALWAYS recomputed from rate.review_votes (set-based, idempotent -> no drift), and
---    helpfulness_weight reuses rate.compute_review_weight so SQL and TS agree.
---  * rate.master_products.user_rating_weighted is recomputed across ALL listings of a
---    master product.
---  * Flood guard: max 60 new votes / hour / user.
--- ==============================================================================
-
 CREATE TABLE IF NOT EXISTS rate.review_votes (
   review_id UUID NOT NULL REFERENCES rate.reviews(id) ON DELETE CASCADE,
   voter_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
@@ -34,10 +17,6 @@ CREATE TABLE IF NOT EXISTS rate.review_votes (
 CREATE INDEX IF NOT EXISTS idx_rate_review_votes_voter_time
   ON rate.review_votes (voter_id, created_at DESC);
 
--- ------------------------------------------------------------------------------
--- Aggregate: weighted user rating of a master product across ALL its listings.
--- Only analyzed reviews (a review_flags row exists) with weight > 0 count.
--- ------------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION rate.refresh_master_product_rating(p_master_id UUID)
 RETURNS void
 LANGUAGE sql
@@ -64,9 +43,6 @@ AS $$
   WHERE m.id = p_master_id;
 $$;
 
--- ------------------------------------------------------------------------------
--- Recompute counters + weight of one review from review_votes, then its master rating.
--- ------------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION rate.refresh_review_vote_counts(p_review_id UUID)
 RETURNS void
 LANGUAGE plpgsql
@@ -115,9 +91,6 @@ BEGIN
 END;
 $$;
 
--- ------------------------------------------------------------------------------
--- Triggers
--- ------------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION rate.review_votes_guard()
 RETURNS trigger
 LANGUAGE plpgsql
@@ -161,52 +134,68 @@ BEGIN
 END;
 $$;
 
-DROP TRIGGER IF EXISTS trg_review_votes_guard ON rate.review_votes;
-CREATE TRIGGER trg_review_votes_guard
-  BEFORE INSERT OR UPDATE ON rate.review_votes
-  FOR EACH ROW EXECUTE FUNCTION rate.review_votes_guard();
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_trigger WHERE tgname = 'trg_review_votes_guard'
+  ) THEN
+    CREATE TRIGGER trg_review_votes_guard
+      BEFORE INSERT OR UPDATE ON rate.review_votes
+      FOR EACH ROW EXECUTE FUNCTION rate.review_votes_guard();
+  END IF;
 
-DROP TRIGGER IF EXISTS trg_review_votes_after_change ON rate.review_votes;
-CREATE TRIGGER trg_review_votes_after_change
-  AFTER INSERT OR UPDATE OR DELETE ON rate.review_votes
-  FOR EACH ROW EXECUTE FUNCTION rate.review_votes_after_change();
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_trigger WHERE tgname = 'trg_review_votes_after_change'
+  ) THEN
+    CREATE TRIGGER trg_review_votes_after_change
+      AFTER INSERT OR UPDATE OR DELETE ON rate.review_votes
+      FOR EACH ROW EXECUTE FUNCTION rate.review_votes_after_change();
+  END IF;
+END $$;
 
--- ------------------------------------------------------------------------------
--- RLS: users read/write ONLY their own votes. Public sees only the counters that
--- live on rate.reviews (never who voted).
--- ------------------------------------------------------------------------------
 ALTER TABLE rate.review_votes ENABLE ROW LEVEL SECURITY;
 
-DROP POLICY IF EXISTS "Users read own review votes" ON rate.review_votes;
-CREATE POLICY "Users read own review votes" ON rate.review_votes
-  FOR SELECT TO authenticated USING (voter_id = (SELECT auth.uid()));
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies WHERE schemaname = 'rate' AND tablename = 'review_votes' AND policyname = 'Users read own review votes'
+  ) THEN
+    CREATE POLICY "Users read own review votes" ON rate.review_votes
+      FOR SELECT TO authenticated USING (voter_id = (SELECT auth.uid()));
+  END IF;
 
-DROP POLICY IF EXISTS "Users insert own review votes" ON rate.review_votes;
-CREATE POLICY "Users insert own review votes" ON rate.review_votes
-  FOR INSERT TO authenticated WITH CHECK (voter_id = (SELECT auth.uid()));
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies WHERE schemaname = 'rate' AND tablename = 'review_votes' AND policyname = 'Users insert own review votes'
+  ) THEN
+    CREATE POLICY "Users insert own review votes" ON rate.review_votes
+      FOR INSERT TO authenticated WITH CHECK (voter_id = (SELECT auth.uid()));
+  END IF;
 
-DROP POLICY IF EXISTS "Users update own review votes" ON rate.review_votes;
-CREATE POLICY "Users update own review votes" ON rate.review_votes
-  FOR UPDATE TO authenticated
-  USING (voter_id = (SELECT auth.uid()))
-  WITH CHECK (voter_id = (SELECT auth.uid()));
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies WHERE schemaname = 'rate' AND tablename = 'review_votes' AND policyname = 'Users update own review votes'
+  ) THEN
+    CREATE POLICY "Users update own review votes" ON rate.review_votes
+      FOR UPDATE TO authenticated
+      USING (voter_id = (SELECT auth.uid()))
+      WITH CHECK (voter_id = (SELECT auth.uid()));
+  END IF;
 
-DROP POLICY IF EXISTS "Users delete own review votes" ON rate.review_votes;
-CREATE POLICY "Users delete own review votes" ON rate.review_votes
-  FOR DELETE TO authenticated USING (voter_id = (SELECT auth.uid()));
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies WHERE schemaname = 'rate' AND tablename = 'review_votes' AND policyname = 'Users delete own review votes'
+  ) THEN
+    CREATE POLICY "Users delete own review votes" ON rate.review_votes
+      FOR DELETE TO authenticated USING (voter_id = (SELECT auth.uid()));
+  END IF;
 
-DROP POLICY IF EXISTS "Service role full access review_votes" ON rate.review_votes;
-CREATE POLICY "Service role full access review_votes" ON rate.review_votes
-  FOR ALL TO service_role USING (true) WITH CHECK (true);
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies WHERE schemaname = 'rate' AND tablename = 'review_votes' AND policyname = 'Service role full access review_votes'
+  ) THEN
+    CREATE POLICY "Service role full access review_votes" ON rate.review_votes
+      FOR ALL TO service_role USING (true) WITH CHECK (true);
+  END IF;
+END $$;
 
--- ------------------------------------------------------------------------------
--- Grants. Internal functions are NOT callable through the public API.
--- ------------------------------------------------------------------------------
-REVOKE ALL ON rate.review_votes FROM anon;
 GRANT SELECT, INSERT, UPDATE, DELETE ON rate.review_votes TO authenticated;
 GRANT ALL ON rate.review_votes TO service_role;
-
-REVOKE EXECUTE ON FUNCTION rate.refresh_master_product_rating(UUID) FROM PUBLIC, anon, authenticated;
-REVOKE EXECUTE ON FUNCTION rate.refresh_review_vote_counts(UUID) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION rate.refresh_master_product_rating(UUID) TO service_role;
 GRANT EXECUTE ON FUNCTION rate.refresh_review_vote_counts(UUID) TO service_role;

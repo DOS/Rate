@@ -164,6 +164,9 @@ playwright-report-item-model/
 !Docs/Proposals/2026-11-03-dos-me-review-ai-points.sql
 !Docs/Proposals/2026-11-03-dos-me-review-ai-points-rollback.sql
 !Docs/Proposals/2026-11-03-dos-me-review-ai-points-verify.sql
+!Docs/Proposals/2026-11-04-dos-me-extension-observations.sql
+!Docs/Proposals/2026-11-04-dos-me-extension-observations-rollback.sql
+!Docs/Proposals/2026-11-04-dos-me-extension-observations-verify.sql
 * - Copy*
 * - Bản sao*
 *.dump

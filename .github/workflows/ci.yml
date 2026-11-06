@@ -88,6 +88,9 @@ jobs:
       - name: Replay the DOS-Me review AI points proposal (Docker)
         run: node scripts/test-review-ai-points-proposal.mjs
 
+      - name: Replay the DOS-Me extension observations proposal (Docker)
+        run: pnpm --filter @repo/shared-data build && node scripts/test-extension-observations-proposal.mjs
+
       - name: Check generated rate schema types match the migrations
         run: pnpm check:db-types
 
