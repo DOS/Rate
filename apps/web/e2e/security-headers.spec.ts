@@ -95,11 +95,12 @@ for (const path of PAGES) {
   test(`no csp violation on ${path}`, async ({ page }) => {
     const consoleErrors: string[] = [];
     page.on('console', (m) => {
-      // The strict nonce policy is report-only and logs "[Report Only]"
-      // lines for cached pages; only the enforced policy counts here.
+      // The strict nonce policy is report-only and logs lines for cached
+      // pages ("The policy is report-only, so the violation has been
+      // logged"); only the enforced policy counts here.
       if (
         /content security policy/i.test(m.text()) &&
-        !m.text().startsWith('[Report Only]')
+        !/report-only|\[Report Only\]/i.test(m.text())
       ) {
         consoleErrors.push(m.text());
       }
