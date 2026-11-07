@@ -27,7 +27,7 @@ Do not render the ISR pages per request to get a nonce, and do not try hashes fo
 
 - **Blocks:** a script from any other host (the usual injection and exfiltration payload), `eval`, plugins (`object-src 'none'`), and workers from other origins.
 - **Does not block:** an injected inline script. React's output escaping stays the defense there, as it is today. This is the trade-off JOY accepts.
-- **Caching and speed:** unchanged. The policy is a build-time constant in the layout, so no page becomes dynamic. The proxy, nonce and `X-Vercel-Cache` behaviour are untouched.
+- **Caching and speed:** unchanged. The policy is a constant set when the module loads (it reads no request), so no page becomes dynamic. The proxy, nonce and `X-Vercel-Cache` behaviour are untouched.
 - **Vercel:** the policy is in a `<meta>` tag, not a header, so the nonce hand-off fixed in #1345 is untouched (Next.js and Vercel copy an enforcing header onto the request, and Next.js would then read the nonce from it). A `<meta>` policy cannot carry `frame-ancestors`, which `X-Frame-Options: SAMEORIGIN` keeps covering.
 - **Preview deployments:** the Vercel toolbar loads from `vercel.live`, so only builds with `VERCEL_ENV=preview` add that host. The value is fixed at build time, so a preview build promoted to production would keep it; production builds never have it.
 - **Development:** `next dev` adds `'unsafe-eval'` for React Refresh.
@@ -47,7 +47,7 @@ Do not render the ISR pages per request to get a nonce, and do not try hashes fo
 
 143 lines, none from the policy being enforced here, none from another host. The strict policy keeps reporting the known ISR noise (inline and chunk scripts on cached pages). Limits: the endpoint logs each distinct violation once per 10 minutes per instance and the plan's runtime log retention was about 12 hours when read, so "0" means none were logged.
 
-**Preview proof:** see the PR for the Vercel preview and the e2e run (no `securitypolicyviolation` event and no CSP console error on `/`, a product page and a merchant page; meta carries the enforced directives; the report-only header and nonce unchanged).
+**Proof:** the Vercel preview is behind SSO, so the proof is a local production build (`next build` and `next start` on the seeded e2e stack) and the e2e run in CI. On `/`, a product page and a merchant page: the `<meta>` carries the enforced directives, the pages stay ISR (`s-maxage`), the report-only header and its per-request nonce are unchanged, the built-in browser console shows only report-only lines (no `Refused to…`), and the e2e finds no enforced violation. A control test injects a script from another host and requires the enforced violation, so a meta the browser ignored would fail. Not covered: the Vercel toolbar and Sentry Replay on a preview.
 
 **Monitoring note:** a `<meta>` policy cannot carry `report-uri`, so the enforced policy does not report itself. Its report-only twin (`policy=inline`, same directives) is the signal; on preview builds the twin lacks the toolbar host and may show noise.
 

@@ -126,3 +126,35 @@ for (const path of PAGES) {
     expect(consoleErrors).toEqual([]);
   });
 }
+
+// Positive control: the meta policy is really enforced. A script from another
+// host injected into the page raises an enforced violation and never runs;
+// without this, a meta the browser ignored would pass the checks above.
+test('the page meta csp blocks a script from another host', async ({
+  page,
+}) => {
+  await page.goto('/');
+  const result = await page.evaluate(
+    () =>
+      new Promise<{ blocked: string; directive: string; ran: boolean }>(
+        (resolve) => {
+          const w = window as unknown as { __ran?: boolean };
+          document.addEventListener('securitypolicyviolation', (e) => {
+            if (e.disposition === 'enforce') {
+              resolve({
+                blocked: e.blockedURI,
+                directive: e.effectiveDirective,
+                ran: !!w.__ran,
+              });
+            }
+          });
+          const s = document.createElement('script');
+          s.src = 'https://csp-control.invalid/x.js';
+          document.body.appendChild(s);
+        }
+      )
+  );
+  expect(result.directive).toBe('script-src-elem');
+  expect(result.blocked).toContain('csp-control.invalid');
+  expect(result.ran).toBe(false);
+});
