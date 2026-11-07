@@ -19,6 +19,12 @@ for (const path of PATHS) {
       "form-action 'self'",
       "object-src 'none'",
     ];
+    // The enforced script policy rides in the page's <meta> tag (#1323).
+    const pageDirectives = [
+      ...directives,
+      "script-src 'self' 'unsafe-inline'",
+      "worker-src 'self' blob:",
+    ];
     if (path.startsWith('/api/')) {
       const csp = headers['content-security-policy'] ?? '';
       for (const directive of ["frame-ancestors 'self'", ...directives]) {
@@ -33,7 +39,7 @@ for (const path of PATHS) {
       const meta = html.match(
         /<meta http-equiv="Content-Security-Policy" content="([^"]*)"/
       );
-      for (const directive of directives) {
+      for (const directive of pageDirectives) {
         expect(meta?.[1]?.replace(/&#x27;/g, "'")).toContain(directive);
       }
     }
@@ -75,3 +81,80 @@ for (const path of ['/inspect', '/smartphones']) {
     expect(seen.size).toBe(2);
   });
 }
+
+// The enforced <meta> policy (script-src 'self' 'unsafe-inline') must not block
+// anything the pages need: the home page (ISR), a product page (ISR) and a
+// merchant page (ISR) run their scripts and hydrate with no violation, in the
+// DOM event and in the console (DOS/Rate#1323).
+const PAGES = [
+  '/',
+  '/smartphones/iphone-16-pro-max-256gb',
+  '/merchants/11111111-1111-4111-8111-111111111112',
+];
+for (const path of PAGES) {
+  test(`no csp violation on ${path}`, async ({ page }) => {
+    const consoleErrors: string[] = [];
+    page.on('console', (m) => {
+      // The strict nonce policy is report-only and logs lines for cached
+      // pages ("The policy is report-only, so the violation has been
+      // logged"); only the enforced policy counts here.
+      if (
+        /content security policy/i.test(m.text()) &&
+        !/report-only|\[Report Only\]/i.test(m.text())
+      ) {
+        consoleErrors.push(m.text());
+      }
+    });
+    await page.addInitScript(() => {
+      (window as unknown as { __csp: string[] }).__csp = [];
+      document.addEventListener('securitypolicyviolation', (e) => {
+        if (e.disposition !== 'enforce') return;
+        (window as unknown as { __csp: string[] }).__csp.push(
+          `${e.violatedDirective} ${e.blockedURI}`
+        );
+      });
+    });
+    const res = await page.goto(path);
+    expect(res?.status()).toBe(200);
+    await page.waitForLoadState('networkidle');
+    // The inline theme script ran (hydration itself is covered by other specs).
+    await expect(page.locator('html')).toHaveAttribute('data-bs-theme', /.+/);
+    const events = await page.evaluate(
+      () => (window as unknown as { __csp: string[] }).__csp
+    );
+    expect(events).toEqual([]);
+    expect(consoleErrors).toEqual([]);
+  });
+}
+
+// Positive control: the meta policy is really enforced. A script from another
+// host injected into the page raises an enforced violation and never runs;
+// without this, a meta the browser ignored would pass the checks above.
+test('the page meta csp blocks a script from another host', async ({
+  page,
+}) => {
+  await page.goto('/');
+  const result = await page.evaluate(
+    () =>
+      new Promise<{ blocked: string; directive: string; ran: boolean }>(
+        (resolve) => {
+          const w = window as unknown as { __ran?: boolean };
+          document.addEventListener('securitypolicyviolation', (e) => {
+            if (e.disposition === 'enforce') {
+              resolve({
+                blocked: e.blockedURI,
+                directive: e.effectiveDirective,
+                ran: !!w.__ran,
+              });
+            }
+          });
+          const s = document.createElement('script');
+          s.src = 'https://csp-control.invalid/x.js';
+          document.body.appendChild(s);
+        }
+      )
+  );
+  expect(result.directive).toBe('script-src-elem');
+  expect(result.blocked).toContain('csp-control.invalid');
+  expect(result.ran).toBe(false);
+});

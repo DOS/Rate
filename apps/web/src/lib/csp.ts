@@ -30,9 +30,38 @@ export const CSP_HEADER = 'Content-Security-Policy-Report-Only';
 export const STATIC_CSP =
   "frame-ancestors 'self'; base-uri 'self'; form-action 'self'; object-src 'none';";
 
-/** STATIC_CSP without frame-ancestors, which a <meta> policy ignores. */
-export const PAGE_META_CSP =
-  "base-uri 'self'; form-action 'self'; object-src 'none'";
+/**
+ * The enforced policy of every page, in a <meta> tag (a header would hide the
+ * nonce from Next.js, see STATIC_CSP). Besides STATIC_CSP without
+ * frame-ancestors, which a <meta> policy ignores, it limits scripts to this
+ * origin plus inline ones, never another host or `eval`, and workers to this
+ * origin or `blob:` (Sentry Replay). `'unsafe-inline'` stays because ISR pages
+ * are cached without a per-request nonce (DOS/Rate#1323); the strict nonce
+ * policy stays report-only. Next.js does not read a nonce from a <meta> tag.
+ *
+ * - `dev`: React Refresh evaluates code.
+ * - `preview`: the Vercel toolbar on preview deployments loads from vercel.live.
+ */
+export function buildPageMetaCsp(
+  options: { dev?: boolean; preview?: boolean } = {}
+): string {
+  const script = ["'self'", "'unsafe-inline'"];
+  if (options.preview) script.push('https://vercel.live');
+  if (options.dev) script.push("'unsafe-eval'");
+  return [
+    "base-uri 'self'",
+    "form-action 'self'",
+    "object-src 'none'",
+    `script-src ${script.join(' ')}`,
+    "worker-src 'self' blob:",
+  ].join('; ');
+}
+
+/** The page policy for this build: development and preview get their extras. */
+export const PAGE_META_CSP = buildPageMetaCsp({
+  dev: process.env.NODE_ENV === 'development',
+  preview: process.env.VERCEL_ENV === 'preview',
+});
 export const CSP_REPORT_PATH = '/api/csp-report';
 
 /**
