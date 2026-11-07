@@ -9,6 +9,8 @@ process.env.NEXT_PUBLIC_SUPABASE_URL = 'https://abc.supabase.co';
 async function main() {
   const {
     buildContentSecurityPolicy,
+    buildInlineScriptPolicy,
+    buildPageMetaCsp,
     buildReportOnlyCsp,
     createCspNonce,
     CSP_HEADER,
@@ -137,10 +139,36 @@ async function main() {
     /(^|,)content-security-policy(,|$)/
   );
   assert.doesNotMatch(STATIC_CSP, /script-src|default-src/);
+  const metaDirective = (policy: string, name: string) =>
+    policy
+      .split('; ')
+      .find((d) => d.startsWith(`${name} `))
+      ?.slice(name.length + 1);
   assert.equal(
     PAGE_META_CSP,
-    STATIC_CSP.replace("frame-ancestors 'self'; ", '').replace(/;$/, ''),
-    'pages get the static policy in a <meta> tag, less frame-ancestors'
+    "base-uri 'self'; form-action 'self'; object-src 'none'; script-src 'self' 'unsafe-inline'; worker-src 'self' blob:",
+    'pages enforce the static policy less frame-ancestors, plus the inline-script policy, in a <meta> tag'
+  );
+  // The enforced script-src never lists another host or eval in production,
+  // and no nonce or hash (either would make CSP2+ browsers ignore
+  // unsafe-inline and block the cached pages' inline scripts).
+  assert.equal(
+    metaDirective(buildPageMetaCsp(), 'script-src'),
+    "'self' 'unsafe-inline'"
+  );
+  assert.equal(metaDirective(buildPageMetaCsp(), 'worker-src'), "'self' blob:");
+  assert.equal(
+    metaDirective(buildPageMetaCsp({ dev: true }), 'script-src'),
+    "'self' 'unsafe-inline' 'unsafe-eval'"
+  );
+  assert.equal(
+    metaDirective(buildPageMetaCsp({ preview: true }), 'script-src'),
+    "'self' 'unsafe-inline' https://vercel.live"
+  );
+  // The enforced and the measured policies must stay the same policy.
+  assert.equal(
+    `${metaDirective(PAGE_META_CSP, 'script-src')}; ${metaDirective(PAGE_META_CSP, 'worker-src')}`,
+    `${metaDirective(buildInlineScriptPolicy(), 'script-src')}; ${metaDirective(buildInlineScriptPolicy(), 'worker-src')}`
   );
   for (const file of [
     '../../app/[locale]/layout.tsx',
