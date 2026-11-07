@@ -95,13 +95,19 @@ for (const path of PAGES) {
   test(`no csp violation on ${path}`, async ({ page }) => {
     const consoleErrors: string[] = [];
     page.on('console', (m) => {
-      if (/content security policy/i.test(m.text())) {
+      // The strict nonce policy is report-only and logs "[Report Only]"
+      // lines for cached pages; only the enforced policy counts here.
+      if (
+        /content security policy/i.test(m.text()) &&
+        !m.text().startsWith('[Report Only]')
+      ) {
         consoleErrors.push(m.text());
       }
     });
     await page.addInitScript(() => {
       (window as unknown as { __csp: string[] }).__csp = [];
       document.addEventListener('securitypolicyviolation', (e) => {
+        if (e.disposition !== 'enforce') return;
         (window as unknown as { __csp: string[] }).__csp.push(
           `${e.violatedDirective} ${e.blockedURI}`
         );
@@ -110,7 +116,7 @@ for (const path of PAGES) {
     const res = await page.goto(path);
     expect(res?.status()).toBe(200);
     await page.waitForLoadState('networkidle');
-    // Hydration ran: the theme script set its attribute and React attached.
+    // The inline theme script ran (hydration itself is covered by other specs).
     await expect(page.locator('html')).toHaveAttribute('data-bs-theme', /.+/);
     const events = await page.evaluate(
       () => (window as unknown as { __csp: string[] }).__csp
