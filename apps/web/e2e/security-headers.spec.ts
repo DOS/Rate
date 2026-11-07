@@ -19,6 +19,12 @@ for (const path of PATHS) {
       "form-action 'self'",
       "object-src 'none'",
     ];
+    // The enforced script policy rides in the page's <meta> tag (#1323).
+    const pageDirectives = [
+      ...directives,
+      "script-src 'self' 'unsafe-inline'",
+      "worker-src 'self' blob:",
+    ];
     if (path.startsWith('/api/')) {
       const csp = headers['content-security-policy'] ?? '';
       for (const directive of ["frame-ancestors 'self'", ...directives]) {
@@ -33,7 +39,7 @@ for (const path of PATHS) {
       const meta = html.match(
         /<meta http-equiv="Content-Security-Policy" content="([^"]*)"/
       );
-      for (const directive of directives) {
+      for (const directive of pageDirectives) {
         expect(meta?.[1]?.replace(/&#x27;/g, "'")).toContain(directive);
       }
     }
@@ -73,5 +79,43 @@ for (const path of ['/inspect', '/smartphones']) {
       seen.add(nonce!);
     }
     expect(seen.size).toBe(2);
+  });
+}
+
+// The enforced <meta> policy (script-src 'self' 'unsafe-inline') must not block
+// anything the pages need: the home page (ISR), a product page (ISR) and a
+// merchant page (ISR) run their scripts and hydrate with no violation, in the
+// DOM event and in the console (DOS/Rate#1323).
+const PAGES = [
+  '/',
+  '/smartphones/iphone-16-pro-max-256gb',
+  '/merchants/11111111-1111-4111-8111-111111111112',
+];
+for (const path of PAGES) {
+  test(`no csp violation on ${path}`, async ({ page }) => {
+    const consoleErrors: string[] = [];
+    page.on('console', (m) => {
+      if (/content security policy/i.test(m.text())) {
+        consoleErrors.push(m.text());
+      }
+    });
+    await page.addInitScript(() => {
+      (window as unknown as { __csp: string[] }).__csp = [];
+      document.addEventListener('securitypolicyviolation', (e) => {
+        (window as unknown as { __csp: string[] }).__csp.push(
+          `${e.violatedDirective} ${e.blockedURI}`
+        );
+      });
+    });
+    const res = await page.goto(path);
+    expect(res?.status()).toBe(200);
+    await page.waitForLoadState('networkidle');
+    // Hydration ran: the theme script set its attribute and React attached.
+    await expect(page.locator('html')).toHaveAttribute('data-bs-theme', /.+/);
+    const events = await page.evaluate(
+      () => (window as unknown as { __csp: string[] }).__csp
+    );
+    expect(events).toEqual([]);
+    expect(consoleErrors).toEqual([]);
   });
 }
