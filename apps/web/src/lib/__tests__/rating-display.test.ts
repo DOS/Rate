@@ -160,6 +160,25 @@ void (async () => {
   );
   assert.equal(ratingRow.numericValue?.(rated(4.84)), 4.8);
   assert.equal(ratingRow.numericValue?.(rated(0)), null);
+
+  // The "highest rated" verdict card follows the same rule: no winner when
+  // the top two both show 4.9, the higher shown rating otherwise.
+  const { pickHighestRated } =
+    await import('../../components/compare/CompareWorkspace');
+  const named = (name: string, rating: number) =>
+    ({ ...(rated(rating) as object), name }) as unknown as Parameters<
+      typeof pickHighestRated
+    >[0][number];
+  assert.equal(
+    pickHighestRated([named('iPhone 15', 4.892), named('iPhone 16', 4.87)]),
+    null
+  );
+  assert.equal(
+    pickHighestRated([named('A', 4.84), named('B', 4.86)])?.name,
+    'B'
+  );
+  assert.equal(pickHighestRated([named('A', 4.6), named('B', 0)])?.name, 'A');
+  assert.equal(pickHighestRated([named('A', 0), named('B', 0)]), null);
   console.warn('  ✅ Ratings show as stars with a short count (#1528)');
 })().catch((error: unknown) => {
   console.error(error);
