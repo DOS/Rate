@@ -132,6 +132,34 @@ void (async () => {
   assert.equal(row.renderValue(product(4.51)), 'Lab 4.5 / 5.0');
   assert.equal(row.screenValue?.(product(4.51)), 'Lab 9.0/10');
   assert.equal(row.screenValue?.(product(4.54)), 'Lab 9.1/10');
+  // The best mark compares what the screen shows (#1470): 4.51 and 4.52 both
+  // read "Lab 9.0/10", so neither is best.
+  assert.equal(row.numericValue?.(product(4.51)), 9);
+  assert.equal(
+    row.numericValue?.(product(4.51)),
+    row.numericValue?.(product(4.52))
+  );
+  assert.equal(row.numericValue?.(product(4.54)), 9.1);
+
+  // The buyer rating row: iPhone 15 at 4.892 and iPhone 16 at 4.87 both show
+  // 4.9 on /compare, so neither gets the best mark (#1470).
+  const ratingRow = buildSpecGroups(t, 'vi')
+    .flatMap((g) => g.rows)
+    .find((r) => r.id === 'rating_weighted')!;
+  const rated = (rating: number) =>
+    ({
+      rating_score: rating,
+      rating_score_5: rating,
+      user_rating_weighted: rating,
+      average_rating: rating,
+    }) as unknown as Parameters<typeof ratingRow.renderValue>[0];
+  assert.equal(ratingRow.numericValue?.(rated(4.892)), 4.9);
+  assert.equal(
+    ratingRow.numericValue?.(rated(4.892)),
+    ratingRow.numericValue?.(rated(4.87))
+  );
+  assert.equal(ratingRow.numericValue?.(rated(4.84)), 4.8);
+  assert.equal(ratingRow.numericValue?.(rated(0)), null);
   console.warn('  ✅ Ratings show as stars with a short count (#1528)');
 })().catch((error: unknown) => {
   console.error(error);

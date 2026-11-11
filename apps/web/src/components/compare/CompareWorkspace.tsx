@@ -311,9 +311,11 @@ export function buildSpecGroups(
                 })
               : t('valNoReviews');
           },
+          // The best mark compares the rating as shown, at one decimal, so
+          // 4.89 against 4.87 (both 4.9) is a tie, not a win (#1470).
           numericValue: (p) => {
             const r = getEffectiveRating(p);
-            return r > 0 ? r : null;
+            return r > 0 ? Number(r.toFixed(1)) : null;
           },
           higherIsBetter: true,
         },
@@ -333,7 +335,8 @@ export function buildSpecGroups(
               ? `Lab ${formatDecimal(exp10, locale, 1)}/10`
               : '-';
           },
-          numericValue: (p) => resolveCompareExpertRating5(p),
+          // Compared on the lab score on 10 the screen shows (one decimal).
+          numericValue: (p) => resolveCompareExpertRating10(p),
           higherIsBetter: true,
         },
         {
