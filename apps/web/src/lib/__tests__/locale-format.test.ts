@@ -230,6 +230,7 @@ const genuineSignal = {
   fakeMarkupPct: 0,
   spreadPct: 0,
   genuineDeal: {
+    verdict: 'genuine_all_time_low',
     savingsVsMedianVnd: 1_550_000,
     savingsVsMedianPct: 13.1,
     merchantName: 'Shop',
@@ -267,6 +268,22 @@ assert.equal(
 assert.equal(
   radarLabel(genuineSignal, 0, 'cs'),
   `🔥 Minimum napříč obchody (-13,1${NBSP}%)`
+);
+// A below-median deal that is no multi-platform floor (#1145) keeps the
+// Czech percent format too.
+assert.equal(
+  radarLabel(
+    {
+      ...(genuineSignal as object),
+      genuineDeal: {
+        ...(genuineSignal as { genuineDeal: object }).genuineDeal,
+        verdict: 'best_market_deal',
+      },
+    } as never,
+    0,
+    'cs'
+  ),
+  `✅ Pod mediánem (-13,1${NBSP}%)`
 );
 
 const breakdown = {

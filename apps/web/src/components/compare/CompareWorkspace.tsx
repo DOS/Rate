@@ -49,6 +49,7 @@ import {
 } from '@/lib/rate-domain';
 import {
   getRadarSignal,
+  isMultiPlatformFloor,
   RADAR_CSV_HEADERS,
   radarCsvCells,
   radarExportFields,
@@ -2546,12 +2547,17 @@ export default function CompareWorkspace({
                         }`}
                       >
                         {sig.verdict === 'genuine_deal'
-                          ? t('radarGenuineFloor', {
-                              pct: formatDecimal(sig.savingsPct, locale, 1),
-                              platform: (
-                                sig.genuineDeal?.platform ?? ''
-                              ).toUpperCase(),
-                            })
+                          ? t(
+                              isMultiPlatformFloor(sig.genuineDeal)
+                                ? 'radarGenuineFloor'
+                                : 'radarBelowMedian',
+                              {
+                                pct: formatDecimal(sig.savingsPct, locale, 1),
+                                platform: (
+                                  sig.genuineDeal?.platform ?? ''
+                                ).toUpperCase(),
+                              }
+                            )
                           : t('radarFakeMarkup', {
                               pct: formatDecimal(sig.fakeMarkupPct, locale, 1),
                             })}
