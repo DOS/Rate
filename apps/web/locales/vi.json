@@ -120,7 +120,8 @@
       "solution": "Vui lòng kiểm tra lại đường dẫn URL hoặc quay về trang chủ Rate.vn.",
       "redirect": "Quay về trang chủ",
       "compareCta": "So sánh 10 nhóm thông số",
-      "merchantsCta": "Độ tin cậy gian hàng"
+      "merchantsCta": "Độ tin cậy gian hàng",
+      "searchLabel": "Tìm sản phẩm theo danh mục"
     }
   },
   "compare": {

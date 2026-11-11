@@ -9,7 +9,12 @@ const BADGE = {
   en: 'Open rating, fake reviews filtered',
 };
 
-for (const path of ['/deals', '/leaderboard', '/merchants', '/no-such-page']) {
+// The 404 of a missing versus page renders inside the locale layout; an
+// unknown path gets the static Vietnamese root 404, which has no site footer
+// (DOS/Rate#1463).
+const NOT_FOUND = '/compare/a-vs-b';
+
+for (const path of ['/deals', '/leaderboard', '/merchants', NOT_FOUND]) {
   test(`the footer of ${path} reads in English`, async ({ page, baseURL }) => {
     await page
       .context()
@@ -17,7 +22,7 @@ for (const path of ['/deals', '/leaderboard', '/merchants', '/no-such-page']) {
     await page.goto(path);
     await expect(page.locator('html')).toHaveAttribute('lang', 'en');
     const footer = page.locator('.rate-footer-cta');
-    if (path !== '/no-such-page') {
+    if (path !== NOT_FOUND) {
       await expect(footer).toContainText(BADGE.en);
       await expect(footer).not.toContainText(BADGE.vi);
     }

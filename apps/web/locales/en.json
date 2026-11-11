@@ -120,7 +120,8 @@
       "solution": "Please check if you have entered the correct URL or return to the home page.",
       "redirect": "Go to home page",
       "compareCta": "Compare 10 spec groups",
-      "merchantsCta": "Merchant trust"
+      "merchantsCta": "Merchant trust",
+      "searchLabel": "Find products by category"
     }
   },
   "compare": {
