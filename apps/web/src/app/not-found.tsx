@@ -6,9 +6,9 @@ import { fontFaces } from '@/lib/fonts';
 import { THEME_INIT_SCRIPT } from '@/lib/theme';
 import vi from '../../locales/vi.json';
 
-// The 404 of every path no route matches: unknown paths (the proxy sends them
-// to /vi/<path>, under which nothing matches) and dotted paths (the
-// afterFiles rewrite in next.config.mjs). Next server-renders this page for
+// The 404 of every path no route matches: unknown paths (the proxy rewrites
+// them to /<locale>/<path>, under which nothing matches) and missing dotted
+// paths (the afterFiles rewrite in next.config.mjs). Next server-renders this page for
 // them with status 404. A page-level notFound() instead gets Next's empty
 // `__next_error__` shell, whatever boundary is nearest (DOS/Rate#1463), which
 // is why there is no [locale]/[...rest] catch-all.
@@ -46,7 +46,12 @@ export default function RootNotFound() {
         <meta httpEquiv="Content-Security-Policy" content={PAGE_META_CSP} />
       </head>
       <body>
-        <main className="bg-light min-vh-100 py-5">
+        {/* The id PageShell gives the one <main> (landmarks.spec.ts). */}
+        <main
+          id="main-content"
+          tabIndex={-1}
+          className="bg-light min-vh-100 py-5"
+        >
           <div className="container py-5">
             <div className="row justify-content-center">
               <div className="col-lg-8">
@@ -89,8 +94,16 @@ export default function RootNotFound() {
                     </Link>
                   </div>
 
-                  <nav aria-label={t.searchLabel} className="border-top pt-4">
-                    <p className="small text-secondary mb-2">{t.searchLabel}</p>
+                  <nav
+                    aria-labelledby="not-found-categories"
+                    className="border-top pt-4"
+                  >
+                    <p
+                      id="not-found-categories"
+                      className="small text-secondary mb-2"
+                    >
+                      {t.searchLabel}
+                    </p>
                     <div className="d-flex justify-content-center flex-wrap gap-2">
                       {CATEGORIES.map(({ href, label }) => (
                         <Link

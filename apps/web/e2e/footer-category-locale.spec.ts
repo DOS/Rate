@@ -9,9 +9,10 @@ const BADGE = {
   en: 'Open rating, fake reviews filtered',
 };
 
-// The 404 of a missing versus page renders inside the locale layout; an
-// unknown path gets the static Vietnamese root 404, which has no site footer
-// (DOS/Rate#1463).
+// The 404 of a missing versus page is the locale not-found, painted by the
+// client inside the locale layout (Next serves the server HTML as an empty
+// shell, DOS/Rate#1625). An unknown path gets the static Vietnamese root 404,
+// which has no site footer (DOS/Rate#1463).
 const NOT_FOUND = '/compare/a-vs-b';
 
 for (const path of ['/deals', '/leaderboard', '/merchants', NOT_FOUND]) {

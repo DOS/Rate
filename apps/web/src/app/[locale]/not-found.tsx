@@ -54,7 +54,10 @@ export default async function NotFound() {
                   </Link>
                 </div>
 
-                <div className="border-top d-flex justify-content-center flex-wrap gap-2 pt-4">
+                <nav
+                  aria-label={t('searchLabel')}
+                  className="border-top d-flex justify-content-center flex-wrap gap-2 pt-4"
+                >
                   <Link
                     href="/smartphones"
                     className="btn btn-sm btn-light rounded-pill px-3"
@@ -90,7 +93,7 @@ export default async function NotFound() {
                     <BsEarbuds aria-hidden="true" className="me-1" />
                     {tCat('tabEarbuds')}
                   </Link>
-                </div>
+                </nav>
               </div>
             </div>
           </div>

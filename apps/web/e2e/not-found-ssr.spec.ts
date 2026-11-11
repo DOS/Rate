@@ -8,6 +8,7 @@ const PATHS = [
   '/smartphones/a/b',
   '/foo.png',
   '/ads.txt',
+  '/sitemap_index.xml',
 ];
 
 for (const path of PATHS) {
