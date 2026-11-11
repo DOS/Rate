@@ -582,7 +582,11 @@ function renderPanelContent(
   const radarSpreadPct = Number(radarSig?.spreadPct ?? 0);
   const radarPillHtml = radarSig
     ? radarSig.verdict === 'genuine_deal'
-      ? `<span class="verdict-pill verdict-genuine_deal" style="margin-left:6px;">🔥 ${escapeHtml(t('radarPillDeal', [formatSafeNumber(radarSig.savingsPct, { min: 0, max: 100 })]))}</span>`
+      ? // Only a 3+ offer floor is the multi-platform floor; fewer offers are
+        // just below the median (DOS/Rate#1145).
+        radarSig.genuineDeal?.verdict === 'genuine_all_time_low'
+        ? `<span class="verdict-pill verdict-genuine_deal" style="margin-left:6px;">🔥 ${escapeHtml(t('radarPillDeal', [formatSafeNumber(radarSig.savingsPct, { min: 0, max: 100 })]))}</span>`
+        : `<span class="verdict-pill verdict-genuine_deal" style="margin-left:6px;">✅ ${escapeHtml(t('radarPillBelowMedian', [formatSafeNumber(radarSig.savingsPct, { min: 0, max: 100 })]))}</span>`
       : radarSig.verdict === 'fake_sale_trap'
         ? `<span class="verdict-pill verdict-inflated_fake_sale" style="margin-left:6px;">🚨 ${escapeHtml(t('radarPillTrap', [formatSafeNumber(radarSig.fakeMarkupPct, { min: 0, max: 10000 })]))}</span>`
         : Number.isFinite(radarSpreadPct) && radarSpreadPct >= 5

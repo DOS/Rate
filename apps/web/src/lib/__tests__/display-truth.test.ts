@@ -149,8 +149,15 @@ for (const locale of LOCALES) {
   assert.ok(messages.watchlist!.radarBelowMedianBadge);
   // The /deals section lists every genuine deal, 2-offer ones included, so
   // its header and export title must not claim a floor (#1145).
-  for (const key of ['genuineDealsHeader', 'radarMdGenuineTitle']) {
-    const text = String(messages.deals![key]);
+  for (const [ns, key] of [
+    ['deals', 'genuineDealsHeader'],
+    ['deals', 'radarMdGenuineTitle'],
+    ['deals', 'radarMdHeader'],
+    ['deals', 'radarBannerBadge'],
+    ['homePage', 'radarGenuineTitle'],
+    ['merchants', 'mdRadarLine'],
+  ] as const) {
+    const text = String(messages[ns]![key]);
     assert.ok(
       !/đáy|\blows?\b|minim/i.test(text),
       `${locale}: deals.${key} must not claim a floor: ${text}`
@@ -238,6 +245,33 @@ assert.match(
   radarLabel(buildRadarIndex(sameMerchant).get(master.slug)!, 0, 'vi'),
   /Đáy giá đa sàn/
 );
+// 3 offers, the cheapest less than 2% below the median: below the median,
+// not the floor.
+const shallow = computeCrossPlatformDealRadarFromData(
+  [
+    {
+      master: master as never,
+      offers: [
+        offer(0, 'm-a', 19_800_000),
+        offer(1, 'm-b', 20_000_000),
+        offer(2, 'm-c', 20_100_000),
+      ] as never,
+    },
+  ],
+  { categorySlug: 'all', limit: 10 }
+);
+assert.equal(shallow.genuineDeals[0]?.verdict, 'best_market_deal');
+for (const locale of LOCALES) {
+  // The catalog radar box sits over every genuine deal (DOS/Rate#1145).
+  const title = String(
+    (readLocale(locale).catalog as unknown as Record<string, Messages[string]>)
+      .page!.radarDealsTitle
+  );
+  assert.ok(
+    !/đáy|\blows?\b|minim/i.test(title),
+    `${locale}: catalog.page.radarDealsTitle must not claim a floor: ${title}`
+  );
+}
 
 // DOS/Rate#1144: with no expert score, the composite equals the buyer score
 // the header shows. 9 rating-only 5-star reviews (weight 0.25 each) are 4.54

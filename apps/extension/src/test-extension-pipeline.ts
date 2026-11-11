@@ -5679,6 +5679,55 @@ async function runTests() {
       '  ✅ [Observation client: one id, erasure kept until confirmed, holds (#1606)] Verified'
     );
   }
+  {
+    // Only a genuine_all_time_low deal (3+ offers) is the multi-platform floor; a
+    // cheaper offer among 2 is just below the median (DOS/Rate#1145).
+    const panelSource = fs.readFileSync(
+      path.resolve(__dirname, 'sidepanel/sidepanel.ts'),
+      'utf8'
+    );
+    assert.ok(
+      panelSource.includes(
+        "radarSig.genuineDeal?.verdict === 'genuine_all_time_low'"
+      ),
+      'the panel names only a real floor the multi-platform floor'
+    );
+    assert.ok(panelSource.includes("t('radarPillBelowMedian'"));
+    const chipSource = fs.readFileSync(
+      path.resolve(__dirname, 'content/content-script.ts'),
+      'utf8'
+    );
+    assert.ok(
+      chipSource.includes(
+        "radarSig.genuineDeal?.verdict === 'genuine_all_time_low'"
+      ),
+      'the page chip names only a real floor the multi-platform floor'
+    );
+    assert.ok(chipSource.includes("t('pillRadarBelowMedian'"));
+    const catalogues = readLocaleCatalogues();
+    for (const [locale, messages] of Object.entries(catalogues)) {
+      for (const [belowKey, floorKey] of [
+        ['radarPillBelowMedian', 'radarPillDeal'],
+        ['pillRadarBelowMedian', 'pillRadarDeal'],
+      ] as const) {
+        const below = messages[belowKey];
+        assert.ok(below, `${locale}: ${belowKey} exists`);
+        // "đáy" is the Vietnamese word for floor.
+        assert.ok(
+          !/đáy|\blow\b|dno|minim/i.test(below.message),
+          `${locale}: ${belowKey} claims no floor`
+        );
+        assert.deepEqual(
+          below.placeholders,
+          messages[floorKey]!.placeholders,
+          `${locale}: ${belowKey} has the placeholders of ${floorKey}`
+        );
+      }
+    }
+    console.log(
+      '  ✅ [Radar pill: floor only from 3 offers, else below median (#1145)] Verified'
+    );
+  }
   console.log('🎉 All Rate Browser Extension MV3 v2 tests passed!');
 }
 

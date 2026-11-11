@@ -710,7 +710,7 @@ const _getCrossPlatformDealRadarByKey = cache(
       },
       [
         // v2: the response gained totalMerchantsAnalyzed and marketOfferCount.
-        'rate-cross-platform-deal-radar-v2',
+        'rate-cross-platform-deal-radar-v3',
         categorySlug,
         platformFilter,
         String(limit),
