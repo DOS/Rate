@@ -41,7 +41,7 @@
     "@repo/eslint-config": "workspace:*",
     "@repo/prettier-config": "workspace:*",
     "@repo/typescript-config": "workspace:*",
-    "@swc/core": "1.13.3",
+    "@swc/core": "1.16.20",
     "@swc/core-win32-x64-msvc": "1.13.3",
     "@types/node": "^26.6.5",
     "@types/react": "^19.3.0",
