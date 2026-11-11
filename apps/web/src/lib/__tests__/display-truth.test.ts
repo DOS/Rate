@@ -1,7 +1,10 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { computeCrossPlatformDealRadarFromData } from '../../server/rate/deals';
+import {
+  computeCrossPlatformDealRadarFromData,
+  computeProductRadarSignal,
+} from '../../server/rate/deals';
 import { merchantRiskTone } from '../merchant-risk-tone';
 import { radarExplanation } from '../product-detail-copy';
 import {
@@ -160,7 +163,7 @@ for (const locale of LOCALES) {
     const text = String(messages[ns]![key]);
     assert.ok(
       !/đáy|\blows?\b|minim/i.test(text),
-      `${locale}: deals.${key} must not claim a floor: ${text}`
+      `${locale}: ${ns}.${key} must not claim a floor: ${text}`
     );
   }
 }
@@ -261,6 +264,26 @@ const shallow = computeCrossPlatformDealRadarFromData(
   { categorySlug: 'all', limit: 10 }
 );
 assert.equal(shallow.genuineDeals[0]?.verdict, 'best_market_deal');
+// The product and extension radar signal keeps the verdict the extension
+// branches on (DOS/Rate#1145).
+assert.equal(
+  computeProductRadarSignal(
+    master as never,
+    [
+      offer(0, 'm-a', 16_490_000),
+      offer(1, 'm-a', 23_490_000),
+      offer(2, 'm-b', 20_000_000),
+    ] as never
+  ).genuineDeal?.verdict,
+  'genuine_all_time_low'
+);
+assert.equal(
+  computeProductRadarSignal(
+    master as never,
+    [offer(0, 'm-a', 16_490_000), offer(1, 'm-b', 23_490_000)] as never
+  ).genuineDeal?.verdict,
+  'best_market_deal'
+);
 for (const locale of LOCALES) {
   // The catalog radar box sits over every genuine deal (DOS/Rate#1145).
   const title = String(

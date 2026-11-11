@@ -710,6 +710,7 @@ const _getCrossPlatformDealRadarByKey = cache(
       },
       [
         // v2: the response gained totalMerchantsAnalyzed and marketOfferCount.
+        // v3: genuine_all_time_low needs 3+ offers (DOS/Rate#1145).
         'rate-cross-platform-deal-radar-v3',
         categorySlug,
         platformFilter,
