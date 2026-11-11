@@ -1,5 +1,4 @@
 import type { Metadata } from 'next';
-import Link from 'next/link';
 
 import { PAGE_META_CSP } from '@/lib/csp';
 import { fontFaces } from '@/lib/fonts';
@@ -17,6 +16,10 @@ import vi from '../../locales/vi.json';
 // here, and reading the NEXT_LOCALE cookie would make the page dynamic, which
 // is a 500 inside static routes (DOS/Rate#1373, #732). The root layout has no
 // <html>, so this page brings its own.
+//
+// Next puts this page into the flight data of every page (the root layout's
+// not-found boundary), so it is kept small: plain links, few classes. A
+// bigger one put the home page over its HTML budget (perf-budget.spec.ts).
 const t = vi.errors.notFound;
 const tCat = vi.leaderboard;
 
@@ -26,12 +29,12 @@ export const metadata: Metadata = {
 };
 
 const CATEGORIES = [
-  { href: '/smartphones', label: tCat.tabSmartphones },
-  { href: '/laptops', label: tCat.tabLaptops },
-  { href: '/tablets', label: tCat.tabTablets },
-  { href: '/smartwatches', label: tCat.tabSmartwatches },
-  { href: '/earbuds', label: tCat.tabEarbuds },
-];
+  ['/smartphones', tCat.tabSmartphones],
+  ['/laptops', tCat.tabLaptops],
+  ['/tablets', tCat.tabTablets],
+  ['/smartwatches', tCat.tabSmartwatches],
+  ['/earbuds', tCat.tabEarbuds],
+] as const;
 
 export default function RootNotFound() {
   return (
@@ -47,79 +50,28 @@ export default function RootNotFound() {
       </head>
       <body>
         {/* The id PageShell gives the one <main> (landmarks.spec.ts). */}
-        <main
-          id="main-content"
-          tabIndex={-1}
-          className="bg-light min-vh-100 py-5"
-        >
-          <div className="container py-5">
-            <div className="row justify-content-center">
-              <div className="col-lg-8">
-                <div className="card rounded-4 p-md-5 border-0 bg-white p-4 text-center shadow-sm">
-                  <p className="mb-3">
-                    <Link
-                      href="/"
-                      className="fw-bold text-dark text-decoration-none fs-4"
-                    >
-                      Rate.vn
-                    </Link>
-                  </p>
-                  <p className="mb-3">
-                    <span className="badge bg-danger bg-opacity-10 text-danger rounded-pill fw-semibold px-3 py-2">
-                      404
-                    </span>
-                  </p>
-                  <h1 className="h2 fw-bold text-dark mb-3">{t.title}</h1>
-                  <p className="text-muted mb-2">{t.description}</p>
-                  <p className="small text-secondary mb-4">{t.solution}</p>
-
-                  <div className="d-flex justify-content-center mb-4 flex-wrap gap-2">
-                    <Link
-                      href="/"
-                      className="btn btn-danger rounded-pill fw-semibold px-4"
-                    >
-                      {t.redirect}
-                    </Link>
-                    <Link
-                      href="/compare"
-                      className="btn btn-outline-dark rounded-pill fw-medium px-4"
-                    >
-                      {t.compareCta}
-                    </Link>
-                    <Link
-                      href="/merchants"
-                      className="btn btn-outline-secondary rounded-pill fw-medium px-4"
-                    >
-                      {t.merchantsCta}
-                    </Link>
-                  </div>
-
-                  <nav
-                    aria-labelledby="not-found-categories"
-                    className="border-top pt-4"
-                  >
-                    <p
-                      id="not-found-categories"
-                      className="small text-secondary mb-2"
-                    >
-                      {t.searchLabel}
-                    </p>
-                    <div className="d-flex justify-content-center flex-wrap gap-2">
-                      {CATEGORIES.map(({ href, label }) => (
-                        <Link
-                          key={href}
-                          href={href}
-                          className="btn btn-sm btn-light rounded-pill px-3"
-                        >
-                          {label}
-                        </Link>
-                      ))}
-                    </div>
-                  </nav>
-                </div>
-              </div>
-            </div>
-          </div>
+        <main id="main-content" tabIndex={-1} className="container py-5">
+          <h1 className="h2 fw-bold mb-3">{t.title}</h1>
+          <p className="text-muted">{t.description}</p>
+          <p>
+            <a href="/" className="btn btn-danger rounded-pill px-4">
+              {t.redirect}
+            </a>
+          </p>
+          <nav aria-labelledby="nf-cat" className="border-top pt-3">
+            <p id="nf-cat" className="small text-secondary mb-2">
+              {t.searchLabel}
+            </p>
+            {CATEGORIES.map(([href, label]) => (
+              <a
+                key={href}
+                href={href}
+                className="btn btn-sm btn-light me-2 mb-2"
+              >
+                {label}
+              </a>
+            ))}
+          </nav>
         </main>
       </body>
     </html>
