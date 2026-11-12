@@ -89,9 +89,9 @@ flowchart TB
 - **Package Manager**: `pnpm@10.34.5`
 - **TypeScript**: `7.0.2`
 
-### Các lệnh thường dùng (`D:\Projects\Rate`)
+### Các lệnh thường dùng (`~/Projects/Rate`)
 
-```powershell
+```bash
 # 1. Cài đặt dependencies toàn monorepo
 pnpm install
 

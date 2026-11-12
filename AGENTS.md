@@ -1,6 +1,6 @@
 # 🤖 AGENTS.md - Quy Chuẩn Bắt Buộc Cho Mọi AI Coding Agents (Rate Platform & Hệ Sinh Thái DOS)
 
-Tài liệu này tổng hợp đầy đủ **User-Level Hard Rules (`C:\Users\JOY\AGENTS.md`, `C:\Users\JOY\.claude\CLAUDE.md`)** và **Workspace Rules** dành cho mọi AI Coding Agents (Antigravity, Claude Code, OpenAI Codex, Cursor, Windsurf, ZCode, v.v.) khi làm việc trên **Rate Platform (`rate.vn`)**.
+Tài liệu này tổng hợp đầy đủ **User-Level Hard Rules (`~/AGENTS.md`, `~/.claude/CLAUDE.md`)** và **Workspace Rules** dành cho mọi AI Coding Agents (Antigravity, Claude Code, OpenAI Codex, Cursor, Windsurf, ZCode, v.v.) khi làm việc trên **Rate Platform (`rate.vn`)**.
 
 > 📌 **Session Product Owner (PO):** nếu session là PO (tiêu đề có "Product Owner", hoặc JOY giao làm PO của Rate Core hay Rate Services), việc ĐẦU TIÊN là đọc và làm theo toàn bộ skill [`.claude/skills/product-owner/SKILL.md`](./.claude/skills/product-owner/SKILL.md), trước mọi thao tác khác. Chi tiết ở [Mục 6](#6-product-owner-po-và-session-con).
 
@@ -10,12 +10,12 @@ Tài liệu này tổng hợp đầy đủ **User-Level Hard Rules (`C:\Users\JO
 
 1. **CẤM TUYỆT ĐỐI chạy Migration / DDL trực tiếp lên Shared Prod Supabase (`gulptwduchsjcsbndmua`) từ BẤT KỲ repo nào:**
    - Project Supabase `dos` (prod ref: `gulptwduchsjcsbndmua`) được dùng chung bởi `DOS-Me`, `DOS-AI`, `DOSafe`, `Bexly`, `An-Nhan`, và `Rate`.
-   - **CHỈ CÓ `DOS-Me/supabase/migrations/` (`D:\Projects\DOS-Me`)** là sổ cái migration (migration ledger) và đường deploy CI duy nhất (qua `preview -> beta -> prod`) cho mọi schema (`public`, `dosai`, `dosafe`, `bexly`, `nhan`, `rate`).
+   - **CHỈ CÓ `DOS-Me/supabase/migrations/` (`~/Projects/DOS.Me`)** là sổ cái migration (migration ledger) và đường deploy CI duy nhất (qua `preview -> beta -> prod`) cho mọi schema (`public`, `dosai`, `dosafe`, `bexly`, `nhan`, `rate`).
    - **TUYỆT ĐỐI KHÔNG** chạy DDL (`CREATE`, `ALTER`, `DROP`, `GRANT`, `REVOKE`) lên `gulptwduchsjcsbndmua` qua Supabase MCP (`apply_migration`, `execute_sql`), Dashboard SQL Editor, hoặc `supabase db push` từ repo `Rate`. Chỉ được phép chạy `SELECT` (read-only) qua MCP.
    - Khi cần thay đổi schema `rate`: Viết file migration idempotent (`CREATE ... IF NOT EXISTS`, `ADD COLUMN IF NOT EXISTS`, `DROP POLICY IF EXISTS` trước `CREATE POLICY`, `DO $$ ... $$`), xin phép JOY để tạo PR bên `DOS-Me/supabase/migrations/`, test/deploy trên **beta** trước rồi mới qua **prod**. (Bản copy trong `DOS/Rate/supabase/migrations/` chỉ mang tính tham chiếu mã nguồn mở Open-Core, không dùng để push thẳng lên `gulptwduchsjcsbndmua`).
 
 2. **JOY KHÔNG CODE, KHÔNG CHẠY LỆNH, VÀ KHÔNG MERGE PR:**
-   - Không bao giờ đưa lệnh terminal, bash/PowerShell snippet hay code bảo JOY tự chạy hoặc tự dán. Agent phải tự chạy tất cả.
+   - Không bao giờ đưa lệnh terminal, shell snippet hay code bảo JOY tự chạy hoặc tự dán. Agent phải tự chạy tất cả.
    - Không bao giờ bảo JOY tự review code diff hay bấm nút Merge PR ("chờ mày merge"). Agent phải chạy code review (`superpowers:code-reviewer` / subagent fresh-context review), sửa hết lỗi, đợi CI xanh và **tự động merge PR** (`gh pr merge`).
    - Chỉ hỏi ý kiến JOY cho: quyết định sản phẩm/kiến trúc, thao tác rủi ro cao (xóa dữ liệu, thay đổi prod, tiêu tiền, sửa khác repo `cross-repo writes`), hoặc bước bắt buộc cần người thật (2FA, CAPTCHA, OAuth device code).
    - **PR promote `dev` -> `main` (deploy production) cũng do agent tự merge.** JOY không phải coder, không biết merge và không bấm nút Merge cho bất kỳ PR nào, kể cả PR promote. **Promote theo đợt, không hỏi JOY mỗi lần:** agent cứ làm task liên tục, không kết thúc task bằng câu hỏi "deploy lên production nhé?". Agent tự mở và merge PR promote khi gặp một trong các mốc: hết backlog; `dev` dồn từ 10 PR chưa promote trở lên; thay đổi cũ nhất chưa promote đã quá 24 giờ; hoặc agent kết thúc một phiên làm việc dài. Chỉ promote khi CI của `dev` head xanh và không có PR nào đang sửa dở một lỗi đã lên production. Merge bằng merge commit (`gh pr merge <N> --merge`, không squash/rebase), rồi tự kiểm tra bản live theo `Docs/Resources/RELEASE.md`. Không bao giờ viết "chờ JOY merge", "JOY duyệt merge" hay "JOY merge bằng merge commit". Vẫn phải hỏi JOY trước những việc ngoài một lần promote thông thường (migration DOS-Me, sửa dữ liệu production, đổi credential).
@@ -33,8 +33,8 @@ Tài liệu này tổng hợp đầy đủ **User-Level Hard Rules (`C:\Users\JO
 
 5. **Cách ly Worktree & Bảo vệ Cross-Repo:**
    - **Không tự ý sửa repo khác** ngoài workspace hiện tại khi chưa được JOY đồng ý.
-   - Khi làm việc đa nhánh/đa repo, tạo worktree riêng theo runtime (`<repo>\.claude\worktrees\<task>`, `<repo>\.codex\worktrees\<task>`, `<repo>\.gemini\worktrees\<task>`). Không bao giờ chạy `git checkout` / `git reset --hard` trên nhánh chính đang dùng chung.
-   - Mọi deliverable (báo cáo HTML, proposal, script) phải lưu trong repo và commit, không vứt ở thư mục tạm (`C:\Temp`, scratchpad).
+   - Khi làm việc đa nhánh/đa repo, tạo worktree riêng theo runtime (`<repo>/.claude/worktrees/<task>`, `<repo>/.codex/worktrees/<task>`, `<repo>/.gemini/worktrees/<task>`). Không bao giờ chạy `git checkout` / `git reset --hard` trên nhánh chính đang dùng chung.
+   - Mọi deliverable (báo cáo HTML, proposal, script) phải lưu trong repo và commit, không vứt ở thư mục tạm (`/tmp`, scratchpad).
 
 6. **CẤM deploy thẳng lên Production (`rate.vn`). Production chỉ build từ nhánh `main` qua Vercel Git integration:**
    - Luồng chuẩn (giống `DOS.AI` và `DOS.Me`): PR tính năng -> `dev` (**squash**); PR promote `dev` -> `main` mở từ chính nhánh `dev` và merge bằng **merge commit** (`gh pr merge --merge`), không bao giờ squash hay rebase. Hotfix: nhánh `hotfix/*` -> `main` có label `emergency-hotfix`, rồi back-merge ngay `main` -> `dev` bằng merge commit. Chi tiết: [`Docs/Resources/RELEASE.md`](./Docs/Resources/RELEASE.md).
@@ -63,7 +63,7 @@ Lộ trình chuẩn: **[`Docs/Resources/ROADMAP.md`](./Docs/Resources/ROADMAP.md
 
 Trước khi viết bất kỳ dòng code nào, Agent phải kiểm tra danh sách Issue trên cả 2 repo:
 
-```powershell
+```bash
 # Xem danh sách Issue đang mở
 gh issue list -R DOS/Rate --state open
 gh issue list -R DOS/Rate-Services --state open
@@ -75,10 +75,10 @@ gh issue list -R DOS/Rate-Services --state open
   - **Issue có nhãn `incident` là ưu tiên số 1**, trên mọi việc khác: chúng do `.github/workflows/incident-report.yml` tự mở khi CI đỏ trên `dev`/`main` (DOS/Rate-Services có workflow tương tự cho crawler theo lịch), hoặc do Upptime mở trong `DOS/status` khi rate.vn sập. Nhận issue, tìm thay đổi gây lỗi, sửa tiếp (fix forward). Issue tự đóng khi mọi job đã lỗi chạy xanh lại (job bị bỏ qua, `skipped`, không tính là đã hồi phục).
   - Sau đó ưu tiên chọn các Issue đang có nhãn `status:ready`.
   - Nếu yêu cầu của người dùng chưa có Issue tương ứng, **TẠO NGAY ISSUE MỚI BẰNG TIẾNG ANH** và gắn vào GitHub Project #9:
-    ```powershell
-    $agentNick = "Crawl" # Đặt nickname riêng của Agent (vd: Crawl, Web, Core...)
-    $agentLabel = "agent:$($agentNick.ToLower())"
-    gh label create $agentLabel -R DOS/Rate --color "D93F0B" --description "Claimed by Agent: $agentNick" --force
+    ```bash
+    agentNick="Crawl" # Đặt nickname riêng của Agent (vd: Crawl, Web, Core...)
+    agentLabel="agent:$(printf '%s' "$agentNick" | tr '[:upper:]' '[:lower:]')"
+    gh label create "$agentLabel" -R DOS/Rate --color "D93F0B" --description "Claimed by Agent: $agentNick" --force
     gh issue create -R DOS/Rate --title "<English task title>" --body "<Detailed English description>" --label "status:in-progress,$agentLabel" --assignee "@me"
     gh project item-add 9 --owner DOS --url <ISSUE_URL>
     ```
@@ -86,10 +86,10 @@ gh issue list -R DOS/Rate-Services --state open
 
   Cách nhanh, một lệnh làm cả nhãn lẫn board (tự thêm issue vào Project #9 nếu chưa có, chỉ giữ một nhãn `status:*`): `node scripts/ops/board.mjs <ISSUE_NUMBER> --status in-progress --agent $agentNick`. Các trạng thái khác: `ready`, `in-review`, `done`, `backlog`. Các lệnh `gh` dưới đây là cách làm tương đương bằng tay.
 
-  ```powershell
-  $agentNick = "Crawl" # Nickname của Agent hiện tại
-  $agentLabel = "agent:$($agentNick.ToLower())"
-  gh label create $agentLabel -R DOS/Rate --color "D93F0B" --description "Claimed by Agent: $agentNick" --force
+  ```bash
+  agentNick="Crawl" # Nickname của Agent hiện tại
+  agentLabel="agent:$(printf '%s' "$agentNick" | tr '[:upper:]' '[:lower:]')"
+  gh label create "$agentLabel" -R DOS/Rate --color "D93F0B" --description "Claimed by Agent: $agentNick" --force
 
   # 1. Cập nhật nhãn Issue (status:in-progress + agent:<nick>) & comment ghi danh bằng Tiếng Anh
   gh issue edit <ISSUE_NUMBER> -R DOS/Rate --remove-label "status:ready" --add-label "status:in-progress,$agentLabel" --add-assignee "@me"
@@ -99,9 +99,9 @@ gh issue list -R DOS/Rate-Services --state open
   # Project ID: PVT_kwDOA388Vc4Bm5Ml | Field Status: PVTSSF_lADOA388Vc4Bm5MlzhlgSt8 | Field Agent: PVTF_lADOA388Vc4Bm5MlzhlqBH8
   # Status Option IDs: Backlog=f75ad846 | Ready=e18bf179 | In progress=47fc9ee4 | In review=aba860b9 | Done=98236657
   # Tra item từ phía issue: `gh project item-list` mặc định chỉ trả 30 trong hơn 300 item của Project #9 nên không thấy issue mới (`$itemId` rỗng, cập nhật board thất bại âm thầm).
-  $itemId = gh api graphql -F n=<ISSUE_NUMBER> -f query='query($n: Int!) { repository(owner: "DOS", name: "Rate") { issue(number: $n) { projectItems(first: 10) { nodes { id project { number } } } } } }' --jq '.data.repository.issue.projectItems.nodes[] | select(.project.number == 9) | .id'
-  gh project item-edit --project-id PVT_kwDOA388Vc4Bm5Ml --id $itemId --field-id PVTSSF_lADOA388Vc4Bm5MlzhlgSt8 --single-select-option-id 47fc9ee4
-  gh project item-edit --project-id PVT_kwDOA388Vc4Bm5Ml --id $itemId --field-id PVTF_lADOA388Vc4Bm5MlzhlqBH8 --text $agentNick
+  itemId=$(gh api graphql -F n=<ISSUE_NUMBER> -f query='query($n: Int!) { repository(owner: "DOS", name: "Rate") { issue(number: $n) { projectItems(first: 10) { nodes { id project { number } } } } } }' --jq '.data.repository.issue.projectItems.nodes[] | select(.project.number == 9) | .id')
+  gh project item-edit --project-id PVT_kwDOA388Vc4Bm5Ml --id "$itemId" --field-id PVTSSF_lADOA388Vc4Bm5MlzhlgSt8 --single-select-option-id 47fc9ee4
+  gh project item-edit --project-id PVT_kwDOA388Vc4Bm5Ml --id "$itemId" --field-id PVTF_lADOA388Vc4Bm5MlzhlqBH8 --text "$agentNick"
   ```
 
 - **Check bắt buộc `task-claim`:** ruleset `dev-task-claim` chặn merge PR vào `dev` cho tới khi **mỗi** issue mà PR sẽ đóng (từ khóa `Closes`/`Fixes`/`Resolves #N` hoặc liên kết thủ công) có nhãn `agent:<nick>` và `status:in-progress` hoặc `status:in-review`. PR của Dependabot được miễn; PR không đóng issue nào thì pass. Khi issue được thêm hoặc gỡ nhãn `agent:*`/`status:*`, check của các PR liên quan tự chạy lại; nếu không thấy chạy lại thì push/sửa mô tả PR hoặc chạy `gh run rerun <run-id> -R DOS/Rate`. Nguồn: `.github/workflows/task-claim.yml`, `.github/workflows/task-claim-revalidate.yml`, `scripts/task-claim-check.mjs`.
@@ -111,18 +111,18 @@ gh issue list -R DOS/Rate-Services --state open
 Sau khi code xong, chạy pass toàn bộ bài test/build và qua bước review:
 
 - **Trường hợp đang mở PR chờ CI / Reviewer tự động (`In Review`):**
-  ```powershell
+  ```bash
   gh issue edit <ISSUE_NUMBER> -R DOS/Rate --remove-label "status:in-progress" --add-label "status:in-review"
   gh issue comment <ISSUE_NUMBER> -R DOS/Rate --body "🔍 **[Agent: $agentNick]** Implementation complete and tests passing. Moving status to In Review (Commit/PR: <SHA/URL>)."
-  $itemId = gh api graphql -F n=<ISSUE_NUMBER> -f query='query($n: Int!) { repository(owner: "DOS", name: "Rate") { issue(number: $n) { projectItems(first: 10) { nodes { id project { number } } } } } }' --jq '.data.repository.issue.projectItems.nodes[] | select(.project.number == 9) | .id'
-  gh project item-edit --project-id PVT_kwDOA388Vc4Bm5Ml --id $itemId --field-id PVTSSF_lADOA388Vc4Bm5MlzhlgSt8 --single-select-option-id aba860b9
+  itemId=$(gh api graphql -F n=<ISSUE_NUMBER> -f query='query($n: Int!) { repository(owner: "DOS", name: "Rate") { issue(number: $n) { projectItems(first: 10) { nodes { id project { number } } } } } }' --jq '.data.repository.issue.projectItems.nodes[] | select(.project.number == 9) | .id')
+  gh project item-edit --project-id PVT_kwDOA388Vc4Bm5Ml --id "$itemId" --field-id PVTSSF_lADOA388Vc4Bm5MlzhlgSt8 --single-select-option-id aba860b9
   ```
 - **Trường hợp đã hoàn tất & merge xong (`Done`):**
-  ```powershell
+  ```bash
   gh issue edit <ISSUE_NUMBER> -R DOS/Rate --remove-label "status:in-progress,status:in-review" --add-label "status:done"
   gh issue close <ISSUE_NUMBER> -R DOS/Rate --comment "✅ **[Agent: $agentNick]** Completed in commit <SHA> (Status -> Done)."
-  $itemId = gh api graphql -F n=<ISSUE_NUMBER> -f query='query($n: Int!) { repository(owner: "DOS", name: "Rate") { issue(number: $n) { projectItems(first: 10) { nodes { id project { number } } } } } }' --jq '.data.repository.issue.projectItems.nodes[] | select(.project.number == 9) | .id'
-  gh project item-edit --project-id PVT_kwDOA388Vc4Bm5Ml --id $itemId --field-id PVTSSF_lADOA388Vc4Bm5MlzhlgSt8 --single-select-option-id 98236657
+  itemId=$(gh api graphql -F n=<ISSUE_NUMBER> -f query='query($n: Int!) { repository(owner: "DOS", name: "Rate") { issue(number: $n) { projectItems(first: 10) { nodes { id project { number } } } } } }' --jq '.data.repository.issue.projectItems.nodes[] | select(.project.number == 9) | .id')
+  gh project item-edit --project-id PVT_kwDOA388Vc4Bm5Ml --id "$itemId" --field-id PVTSSF_lADOA388Vc4Bm5MlzhlgSt8 --single-select-option-id 98236657
   ```
 
 ---
@@ -131,11 +131,11 @@ Sau khi code xong, chạy pass toàn bộ bài test/build và qua bước review
 
 Hệ thống Rate được tách thành **2 repositories riêng biệt** (và dùng chung DB với **`DOS/DOS.Me`**):
 
-| Repository                                                      |         Độ riêng tư         | Đường dẫn Local             | Những gì ĐƯỢC PHÉP đặt tại đây                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
-| :-------------------------------------------------------------- | :-------------------------: | :-------------------------- | :----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **[`DOS/Rate`](https://github.com/DOS/Rate)**                   |  🌍 **Public (Open-Core)**  | `D:\Projects\Rate`          | • **`apps/web`**: Giao diện Next.js 16.3.8 (`rate.vn`), i18n (`vi`, `en`, `cs`), Server Data Layer (`src/server/rate/`) & REST API v1 (`src/app/api/v1/rate/`)<br/>• **`apps/extension`**: Giao diện Browser Extension MV3 minh bạch<br/>• **`packages/shared-data`**: Zod Schema 10 nhóm thông số (`specs.schema.ts`)<br/>• **`apps/importer`**: Bộ não chuẩn hóa & chấm điểm công khai (`types.ts`, `product-normalizer.ts`, `entity-matcher.ts`, `ai-spec-enricher.ts`, `ai-review-analyzer.ts`, `shopee-to-supabase.ts`)<br/>• **`supabase/migrations`**: Bản sao tham chiếu schema `rate` cho Open-Core (**KHÔNG chạy `db push` hay MCP `apply_migration` từ đây**) |
-| **[`DOS/Rate-Services`](https://github.com/DOS/Rate-Services)** | 🔒 **Private (Enterprise)** | `D:\Projects\Rate-Services` | • **Anti-Detect Scrapers**: `shopee-scraper.ts`, `shopee-search-scraper.ts`, `sniff-search-api.ts`<br/>• **Bypass & Proxy**: `shopee-captcha-solver.ts` (giải Captcha), `proxy-manager.ts` (`mproxy.vn`)<br/>• **Queue Workers**: `queue-worker.ts`, `crawl-smartphones-with-proxy.ts`<br/>• **GitHub Actions Cron**: `.github/workflows/scheduled-crawler.yml`                                                                                                                                                                                                                                                                                                          |
-| **[`DOS/DOS.Me`](https://github.com/DOS/DOS.Me)**               |  🔒 **Sole DB Authority**   | `D:\Projects\DOS-Me`        | • **`supabase/migrations/`**: Nơi **DUY NHẤT** được phép chứa migration chính thức và chạy CI deploy (`preview -> beta -> prod`) lên Supabase `gulptwduchsjcsbndmua`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| Repository                                                      |         Độ riêng tư         | Đường dẫn Local            | Những gì ĐƯỢC PHÉP đặt tại đây                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| :-------------------------------------------------------------- | :-------------------------: | :------------------------- | :----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **[`DOS/Rate`](https://github.com/DOS/Rate)**                   |  🌍 **Public (Open-Core)**  | `~/Projects/Rate`          | • **`apps/web`**: Giao diện Next.js 16.3.8 (`rate.vn`), i18n (`vi`, `en`, `cs`), Server Data Layer (`src/server/rate/`) & REST API v1 (`src/app/api/v1/rate/`)<br/>• **`apps/extension`**: Giao diện Browser Extension MV3 minh bạch<br/>• **`packages/shared-data`**: Zod Schema 10 nhóm thông số (`specs.schema.ts`)<br/>• **`apps/importer`**: Bộ não chuẩn hóa & chấm điểm công khai (`types.ts`, `product-normalizer.ts`, `entity-matcher.ts`, `ai-spec-enricher.ts`, `ai-review-analyzer.ts`, `shopee-to-supabase.ts`)<br/>• **`supabase/migrations`**: Bản sao tham chiếu schema `rate` cho Open-Core (**KHÔNG chạy `db push` hay MCP `apply_migration` từ đây**) |
+| **[`DOS/Rate-Services`](https://github.com/DOS/Rate-Services)** | 🔒 **Private (Enterprise)** | `~/Projects/Rate-Services` | • **Anti-Detect Scrapers**: `shopee-scraper.ts`, `shopee-search-scraper.ts`, `sniff-search-api.ts`<br/>• **Bypass & Proxy**: `shopee-captcha-solver.ts` (giải Captcha), `proxy-manager.ts` (`mproxy.vn`)<br/>• **Queue Workers**: `queue-worker.ts`, `crawl-smartphones-with-proxy.ts`<br/>• **GitHub Actions Cron**: `.github/workflows/scheduled-crawler.yml`                                                                                                                                                                                                                                                                                                          |
+| **[`DOS/DOS.Me`](https://github.com/DOS/DOS.Me)**               |  🔒 **Sole DB Authority**   | `~/Projects/DOS.Me`        | • **`supabase/migrations/`**: Nơi **DUY NHẤT** được phép chứa migration chính thức và chạy CI deploy (`preview -> beta -> prod`) lên Supabase `gulptwduchsjcsbndmua`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
 
 > ⚠️ **CẤM TUYỆT ĐỐI:** Không bao giờ commit code giải Captcha, xoay Proxy, sniff API nội bộ của sàn, hoặc khoá bí mật (`SUPABASE_SECRET_KEY`, `AI_API_KEY`, `MPROXY_*`) vào `DOS/Rate`.
 
@@ -168,8 +168,8 @@ Hệ thống Rate được tách thành **2 repositories riêng biệt** (và d�
 
 ## 4. Lệnh Kiểm Thử & Build Thường Dùng
 
-```powershell
-# Tại D:\Projects\Rate (Monorepo dùng pnpm + TypeScript 7.0.2)
+```bash
+# Tại ~/Projects/Rate (Monorepo dùng pnpm + TypeScript 7.0.2)
 pnpm --filter @repo/shared-data build
 pnpm --filter @repo/crawlers build
 pnpm --filter @repo/crawlers exec tsx src/shopee/test-ai-enricher.ts
@@ -179,7 +179,7 @@ pnpm --filter @repo/web build
 
 pnpm --filter @repo/crawlers test:dist
 
-# Tại D:\Projects\Rate-Services (pnpm workspace + submodule vendor/rate)
+# Tại ~/Projects/Rate-Services (pnpm workspace + submodule vendor/rate)
 git submodule update --init
 pnpm install
 pnpm build

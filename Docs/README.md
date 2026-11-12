@@ -4,9 +4,9 @@
 
 Kho tài liệu kiến trúc, đặc tả kỹ thuật và vận hành của **Rate Platform (`rate.vn`)** thuộc hệ sinh thái **DOS**.
 
-- **Repo Public (Open-Core UI, REST API v1, Schema & Intelligence):** [`https://github.com/DOS/Rate`](https://github.com/DOS/Rate) (`D:\Projects\Rate`)
-- **Repo Private (Anti-Detect Scrapers, Proxy & Queue Workers):** [`https://github.com/DOS/Rate-Services`](https://github.com/DOS/Rate-Services) (`D:\Projects\Rate-Services`)
-- **Sole DB Migration Authority (`rate` schema):** [`https://github.com/DOS/DOS.Me`](https://github.com/DOS/DOS.Me) (`D:\Projects\DOS-Me\supabase\migrations`)
+- **Repo Public (Open-Core UI, REST API v1, Schema & Intelligence):** [`https://github.com/DOS/Rate`](https://github.com/DOS/Rate) (`~/Projects/Rate`)
+- **Repo Private (Anti-Detect Scrapers, Proxy & Queue Workers):** [`https://github.com/DOS/Rate-Services`](https://github.com/DOS/Rate-Services) (`~/Projects/Rate-Services`)
+- **Sole DB Migration Authority (`rate` schema):** [`https://github.com/DOS/DOS.Me`](https://github.com/DOS/DOS.Me) (`~/Projects/DOS.Me/supabase/migrations`)
 - **Bảng Quản lý Task Đa Agent (GitHub Project #9):** [`https://github.com/orgs/DOS/projects/9`](https://github.com/orgs/DOS/projects/9)
 
 ---
