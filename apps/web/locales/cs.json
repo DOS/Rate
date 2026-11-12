@@ -120,7 +120,8 @@
       "solution": "Zkontrolujte prosím, zda jste zadali správnou adresu anebo se vraťte na úvodní stránku.",
       "redirect": "Přejít na úvodní stránku",
       "compareCta": "Porovnat 10 skupin parametrů",
-      "merchantsCta": "Důvěryhodnost prodejců"
+      "merchantsCta": "Důvěryhodnost prodejců",
+      "searchLabel": "Najít produkty podle kategorie"
     }
   },
   "compare": {

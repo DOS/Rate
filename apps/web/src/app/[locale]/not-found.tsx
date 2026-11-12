@@ -1,13 +1,4 @@
 import { getTranslations } from 'next-intl/server';
-import {
-  BsArrowLeftRight,
-  BsEarbuds,
-  BsLaptop,
-  BsPhone,
-  BsShieldCheck,
-  BsSmartwatch,
-  BsTablet,
-} from 'react-icons/bs';
 import { Link } from '@/lib/navigation';
 import PageShell from './components/page-shell';
 
@@ -42,55 +33,51 @@ export default async function NotFound() {
                     href="/compare"
                     className="btn btn-outline-dark rounded-pill fw-medium px-4"
                   >
-                    <BsArrowLeftRight aria-hidden="true" className="me-1" />
                     {t('compareCta')}
                   </Link>
                   <Link
                     href="/merchants"
                     className="btn btn-outline-secondary rounded-pill fw-medium px-4"
                   >
-                    <BsShieldCheck aria-hidden="true" className="me-1" />
                     {t('merchantsCta')}
                   </Link>
                 </div>
 
-                <div className="border-top d-flex justify-content-center flex-wrap gap-2 pt-4">
+                <nav
+                  aria-label={t('searchLabel')}
+                  className="border-top d-flex justify-content-center flex-wrap gap-2 pt-4"
+                >
                   <Link
                     href="/smartphones"
                     className="btn btn-sm btn-light rounded-pill px-3"
                   >
-                    <BsPhone aria-hidden="true" className="me-1" />
                     {tCat('tabSmartphones')}
                   </Link>
                   <Link
                     href="/laptops"
                     className="btn btn-sm btn-light rounded-pill px-3"
                   >
-                    <BsLaptop aria-hidden="true" className="me-1" />
                     {tCat('tabLaptops')}
                   </Link>
                   <Link
                     href="/tablets"
                     className="btn btn-sm btn-light rounded-pill px-3"
                   >
-                    <BsTablet aria-hidden="true" className="me-1" />
                     {tCat('tabTablets')}
                   </Link>
                   <Link
                     href="/smartwatches"
                     className="btn btn-sm btn-light rounded-pill px-3"
                   >
-                    <BsSmartwatch aria-hidden="true" className="me-1" />
                     {tCat('tabSmartwatches')}
                   </Link>
                   <Link
                     href="/earbuds"
                     className="btn btn-sm btn-light rounded-pill px-3"
                   >
-                    <BsEarbuds aria-hidden="true" className="me-1" />
                     {tCat('tabEarbuds')}
                   </Link>
-                </div>
+                </nav>
               </div>
             </div>
           </div>

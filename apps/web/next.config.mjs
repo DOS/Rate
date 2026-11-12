@@ -193,6 +193,19 @@ const nextConfig = {
         source: "/apple-touch-icon-precomposed.png",
         destination: "/apple-icon.png",
       },
+      // A missing dotted path ("/foo.png", "/ads.txt") skips the proxy, so it
+      // would land on [locale] with the file name as the locale, and the
+      // layout's notFound() gets Next's empty error shell (DOS/Rate#1463).
+      // Sent to a path no route matches, it gets app/not-found.tsx rendered
+      // on the server with status 404 instead. These rewrites run after
+      // public files and static routes (robots.txt, icon.png, sitemap.xml),
+      // so those still load; Next and Vercel assets and the API are left
+      // alone. Only a dot in the last segment counts: "/a.b/smartphones"
+      // still lands on [locale] and gets the shell (status 404).
+      {
+        source: "/:path((?!_next/|_vercel/|api/)(?:.*/)?[^/]*[.][^/]*)",
+        destination: "/vi/__not-found",
+      },
     ]
   },
 }
