@@ -1,6 +1,10 @@
 import React from 'react';
 import { useLocale, useTranslations } from 'next-intl';
-import { EMPTY_RADAR_SIGNAL, type RadarSignal } from '@/lib/deal-radar';
+import {
+  EMPTY_RADAR_SIGNAL,
+  isMultiPlatformFloor,
+  type RadarSignal,
+} from '@/lib/deal-radar';
 import { formatDecimal } from '@/lib/locale-format';
 
 export function sanitizeRadarPercentage(value: unknown, maxPct = 1000): number {
@@ -51,9 +55,12 @@ export default function RadarBadge({
   const safeMinSpreadPct = sanitizeRadarMinSpreadPct(minSpreadPct, 10);
   let label = '';
   if (sig.verdict === 'genuine_deal' && safeSavingsPct > 0) {
-    label = tDeals('radarBadgeGenuine', {
-      pct: formatDecimal(safeSavingsPct, locale, 1),
-    });
+    label = tDeals(
+      isMultiPlatformFloor(sig.genuineDeal)
+        ? 'radarBadgeGenuine'
+        : 'radarBadgeBelowMedian',
+      { pct: formatDecimal(safeSavingsPct, locale, 1) }
+    );
   } else if (sig.verdict === 'fake_sale_trap' && safeFakeMarkupPct > 0) {
     label = tDeals('radarBadgeFakeTrap', {
       pct: formatDecimal(safeFakeMarkupPct, locale, 1),

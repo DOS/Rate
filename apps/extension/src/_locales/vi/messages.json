@@ -222,6 +222,14 @@
       }
     }
   },
+  "pillRadarBelowMedian": {
+    "message": "Dưới trung vị (-$PCT$%)",
+    "placeholders": {
+      "pct": {
+        "content": "$1"
+      }
+    }
+  },
   "pillRadarTrap": {
     "message": "Bẫy Sale (+$PCT$%)",
     "placeholders": {
@@ -483,6 +491,14 @@
   },
   "radarPillDeal": {
     "message": "Đáy giá đa sàn (-$PCT$%)",
+    "placeholders": {
+      "pct": {
+        "content": "$1"
+      }
+    }
+  },
+  "radarPillBelowMedian": {
+    "message": "Dưới giá trung vị (-$PCT$%)",
     "placeholders": {
       "pct": {
         "content": "$1"

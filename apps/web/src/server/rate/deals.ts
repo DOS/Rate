@@ -98,6 +98,9 @@ export interface CrossPlatformDealRadarResponse {
   priceSpreadLeaders: CrossPlatformPriceSpreadItem[];
 }
 
+/** Offers needed before a deal can be called the multi-platform floor. */
+export const MIN_OFFERS_FOR_ALL_TIME_LOW = 3;
+
 function computeMedian(values: number[]): number {
   const valid = values
     .filter((v) => Number.isFinite(v) && v > 0 && v <= MAX_VALID_VND_PRICE)
@@ -506,8 +509,13 @@ export function computeCrossPlatformDealRadarFromData(
             )
           : 0;
 
+      // A "multi-platform floor" needs at least 3 offers: with 2, the median
+      // is just their midpoint and the cheaper one is always "the floor"
+      // (DOS/Rate#1145). Fewer offers stay a plain best_market_deal.
       const isAllTimeLow =
-        bestOffer.price_current <= marketMinPrice && savingsVsMedianPct >= 2.0;
+        validOffers.length >= MIN_OFFERS_FOR_ALL_TIME_LOW &&
+        bestOffer.price_current <= marketMinPrice &&
+        savingsVsMedianPct >= 2.0;
       const verdict: DealRadarVerdict = isAllTimeLow
         ? 'genuine_all_time_low'
         : 'best_market_deal';
@@ -702,7 +710,8 @@ const _getCrossPlatformDealRadarByKey = cache(
       },
       [
         // v2: the response gained totalMerchantsAnalyzed and marketOfferCount.
-        'rate-cross-platform-deal-radar-v2',
+        // v3: genuine_all_time_low needs 3+ offers (DOS/Rate#1145).
+        'rate-cross-platform-deal-radar-v3',
         categorySlug,
         platformFilter,
         String(limit),

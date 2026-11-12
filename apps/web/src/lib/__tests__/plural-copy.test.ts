@@ -328,7 +328,7 @@ function main() {
     [
       'merchants.mdRadarLine',
       { genuine: 1, traps: 0 },
-      '- **Cenové signály:** 🟢 1 minimum napříč obchody | 🚨 0 falešných slev',
+      '- **Cenové signály:** 🟢 1 nabídka pod mediánem | 🚨 0 falešných slev',
     ],
     [
       'merchants.mdAuthenticLine',

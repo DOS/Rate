@@ -222,6 +222,14 @@
       }
     }
   },
+  "pillRadarBelowMedian": {
+    "message": "Below median (-$PCT$%)",
+    "placeholders": {
+      "pct": {
+        "content": "$1"
+      }
+    }
+  },
   "pillRadarTrap": {
     "message": "Fake sale (+$PCT$%)",
     "placeholders": {
@@ -483,6 +491,14 @@
   },
   "radarPillDeal": {
     "message": "Cross-store price low (-$PCT$%)",
+    "placeholders": {
+      "pct": {
+        "content": "$1"
+      }
+    }
+  },
+  "radarPillBelowMedian": {
+    "message": "Below median (-$PCT$%)",
     "placeholders": {
       "pct": {
         "content": "$1"

@@ -199,6 +199,8 @@ export interface ExtensionLookupData {
     savingsPct: number;
     fakeMarkupPct: number;
     spreadPct: number;
+    /** Only `genuine_all_time_low` (3+ offers) is the multi-platform floor (DOS/Rate#1145). */
+    genuineDeal?: { verdict?: string } | null;
   } | null;
 }
 

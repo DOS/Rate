@@ -77,7 +77,11 @@ function renderShadowTrustPill(lookup: ExtensionLookupData): void {
     const radarSpreadPct = Number(radarSig?.spreadPct ?? 0);
     const radarChipHtml = radarSig
       ? radarSig.verdict === 'genuine_deal'
-        ? `<span class="radar-chip radar-deal">🔥 ${escapeHtml(t('pillRadarDeal', [formatSafeNumber(radarSig.savingsPct, { min: 0, max: 100 })]))}</span>`
+        ? // Only a 3+ offer floor is the multi-platform floor; fewer offers
+          // are just below the median (DOS/Rate#1145).
+          radarSig.genuineDeal?.verdict === 'genuine_all_time_low'
+          ? `<span class="radar-chip radar-deal">🔥 ${escapeHtml(t('pillRadarDeal', [formatSafeNumber(radarSig.savingsPct, { min: 0, max: 100 })]))}</span>`
+          : `<span class="radar-chip radar-deal">✅ ${escapeHtml(t('pillRadarBelowMedian', [formatSafeNumber(radarSig.savingsPct, { min: 0, max: 100 })]))}</span>`
         : radarSig.verdict === 'fake_sale_trap'
           ? `<span class="radar-chip radar-trap">🚨 ${escapeHtml(t('pillRadarTrap', [formatSafeNumber(radarSig.fakeMarkupPct, { min: 0, max: 10000 })]))}</span>`
           : Number.isFinite(radarSpreadPct) && radarSpreadPct >= 5
