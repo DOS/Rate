@@ -76,7 +76,8 @@ gh issue list -R DOS/Rate-Services --state open
   - Sau đó ưu tiên chọn các Issue đang có nhãn `status:ready`.
   - Nếu yêu cầu của người dùng chưa có Issue tương ứng, **TẠO NGAY ISSUE MỚI BẰNG TIẾNG ANH** và gắn vào GitHub Project #9:
     ```bash
-    agentNick="Crawl" # Đặt nickname riêng của Agent (vd: Crawl, Web, Core...)
+    # Đặt nickname riêng của Agent (vd: Crawl, Web, Core...)
+    agentNick="Crawl"
     agentLabel="agent:$(printf '%s' "$agentNick" | tr '[:upper:]' '[:lower:]')"
     gh label create "$agentLabel" -R DOS/Rate --color "D93F0B" --description "Claimed by Agent: $agentNick" --force
     gh issue create -R DOS/Rate --title "<English task title>" --body "<Detailed English description>" --label "status:in-progress,$agentLabel" --assignee "@me"
@@ -87,7 +88,8 @@ gh issue list -R DOS/Rate-Services --state open
   Cách nhanh, một lệnh làm cả nhãn lẫn board (tự thêm issue vào Project #9 nếu chưa có, chỉ giữ một nhãn `status:*`): `node scripts/ops/board.mjs <ISSUE_NUMBER> --status in-progress --agent $agentNick`. Các trạng thái khác: `ready`, `in-review`, `done`, `backlog`. Các lệnh `gh` dưới đây là cách làm tương đương bằng tay.
 
   ```bash
-  agentNick="Crawl" # Nickname của Agent hiện tại
+  # Nickname của Agent hiện tại
+  agentNick="Crawl"
   agentLabel="agent:$(printf '%s' "$agentNick" | tr '[:upper:]' '[:lower:]')"
   gh label create "$agentLabel" -R DOS/Rate --color "D93F0B" --description "Claimed by Agent: $agentNick" --force
 
