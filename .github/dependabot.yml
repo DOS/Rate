@@ -7,6 +7,30 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
+    groups:
+      # @swc/core and its Windows binding @swc/core-win32-x64-msvc are pinned
+      # to the same exact version in three places: root devDependencies, root
+      # pnpm.overrides and apps/web devDependencies. Bumped alone, @swc/core
+      # loads a binding of another version (#1337, realigned by hand in #1629),
+      # so both move in one PR. The pattern does not match @swc/helpers.
+      #
+      # pnpm.overrides: Dependabot rewrites an override in the root
+      # package.json together with the direct dependency of the same name
+      # (seen in #1337 for @swc/core and #1335 for
+      # @typescript-eslint/eslint-plugin). It does not do so for overrides
+      # kept in pnpm-workspace.yaml (dependabot/dependabot-core#16529), so
+      # keep these overrides in package.json.
+      #
+      # Before merging a PR of this group, check that both packages show the
+      # same version in all three places and in the `overrides:` block of
+      # pnpm-lock.yaml. A group PR can carry only one of the two (for example
+      # when the other has no newer release yet), and security updates are
+      # not grouped here. If the pair is out of step, fix it by hand as in
+      # #1629: set the versions in both package.json files, then run
+      # `pnpm install --lockfile-only`.
+      swc-core:
+        patterns:
+          - "@swc/core*"
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
