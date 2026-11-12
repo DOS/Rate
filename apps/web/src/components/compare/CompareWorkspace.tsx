@@ -203,6 +203,28 @@ function getEffectiveRating(p: MasterProduct): number {
   return resolveCompareEffectiveUserRating(p);
 }
 
+/** The rating as every page shows it: one decimal (#1470). */
+function shownRating(p: MasterProduct): number {
+  return Number(getEffectiveRating(p).toFixed(1));
+}
+
+/**
+ * The "highest rated" verdict card's product: the one whose shown rating is
+ * above every other. Two products that both show 4.9 have no winner, so the
+ * card is left out, like the matrix's best mark (#1470).
+ */
+export function pickHighestRated(
+  products: readonly MasterProduct[]
+): MasterProduct | null {
+  const byRating = products
+    .filter((p) => shownRating(p) > 0)
+    .sort((a, b) => shownRating(b) - shownRating(a));
+  const [first, second] = byRating;
+  if (!first) return null;
+  if (second && shownRating(second) === shownRating(first)) return null;
+  return first;
+}
+
 const COMPARE_CONTROL_CHARS_RE = /\p{Cc}+/gu;
 
 export function sanitizeComparePriceVnd(value: unknown): number {
@@ -311,9 +333,11 @@ export function buildSpecGroups(
                 })
               : t('valNoReviews');
           },
+          // The best mark compares the rating as shown, at one decimal, so
+          // 4.89 against 4.87 (both 4.9) is a tie, not a win (#1470).
           numericValue: (p) => {
             const r = getEffectiveRating(p);
-            return r > 0 ? r : null;
+            return r > 0 ? shownRating(p) : null;
           },
           higherIsBetter: true,
         },
@@ -333,7 +357,8 @@ export function buildSpecGroups(
               ? `Lab ${formatDecimal(exp10, locale, 1)}/10`
               : '-';
           },
-          numericValue: (p) => resolveCompareExpertRating5(p),
+          // Compared on the lab score on 10 the screen shows (one decimal).
+          numericValue: (p) => resolveCompareExpertRating10(p),
           higherIsBetter: true,
         },
         {
@@ -1597,9 +1622,6 @@ export default function CompareWorkspace({
 
   const headToHeadSummary = useMemo(() => {
     if (products.length < 2) return null;
-    const byRating = [...products]
-      .filter((p) => getEffectiveRating(p) > 0)
-      .sort((a, b) => getEffectiveRating(b) - getEffectiveRating(a));
     const byPrice = [...products]
       .filter((p) => sanitizeComparePriceVnd(p.min_price) > 0)
       .sort(
@@ -1620,7 +1642,7 @@ export default function CompareWorkspace({
           (resolveCompareBatteryMah(a) ?? 0)
       );
     return {
-      bestRated: byRating[0] ?? null,
+      bestRated: pickHighestRated(products),
       lowestPrice: byPrice[0] ?? null,
       highestMemory: byMemory[0] ?? null,
       bestBattery: byBattery[0] ?? null,
