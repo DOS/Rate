@@ -29,6 +29,7 @@ export {
   resolveCompareEffectiveUserRating,
   resolveStoredRatingScore,
 } from './rate-domain-core';
+import { displayedScore5 } from './rating-display';
 import {
   normalizeCompareFiveStarRating,
   parseFiniteNumericSpec,
@@ -114,7 +115,7 @@ export function productRatingScore5(
   p: Parameters<typeof resolveCompareEffectiveUserRating>[0]
 ): number | null {
   const rating = resolveCompareEffectiveUserRating(p);
-  return rating > 0 ? Math.round(rating * 10) / 10 : null;
+  return displayedScore5(rating) || null;
 }
 
 export function resolveCompareExpertRating5(

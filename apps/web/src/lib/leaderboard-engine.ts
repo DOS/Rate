@@ -7,6 +7,7 @@ import {
 } from './rate-domain-core';
 import { catalogRowSlug, type ItemCatalogRow } from './item-directory';
 import { canonicalVersusOrder } from './item-compare';
+import { displayedScore5 } from './rating-display';
 import type { CanonicalCategorySlug, MasterProduct } from './rate-api';
 import type { KeySpecs, ProductSpecifications } from '@repo/shared-data';
 
@@ -534,10 +535,9 @@ export function scoreMasterProductForLeaderboard(
   };
 }
 
-/** A score as the page shows it: one decimal, rounded once (D3). */
-export function displayedScore5(score: number): number {
-  return Number.isFinite(score) && score > 0 ? Math.round(score * 10) / 10 : 0;
-}
+// A score as the page shows it: one decimal, rounded once (D3). Defined with
+// the star display, re-exported here for the callers that already import it.
+export { displayedScore5 };
 
 function readFilteredReviewCount(
   counts: FilteredReviewCountsByMaster | null | undefined,

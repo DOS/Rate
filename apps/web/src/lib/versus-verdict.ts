@@ -1,4 +1,5 @@
 import { formatDecimal } from './locale-format';
+import { displayedScore5, formatRatingValue } from './rating-display';
 
 /**
  * Whether two 1v1 scores are level as the page shows them (DOS/Rate#1209):
@@ -7,7 +8,7 @@ import { formatDecimal } from './locale-format';
  */
 export function isVersusScoreTie(scoreA: number, scoreB: number): boolean {
   if (!Number.isFinite(scoreA) || !Number.isFinite(scoreB)) return false;
-  return scoreA.toFixed(1) === scoreB.toFixed(1);
+  return displayedScore5(scoreA) === displayedScore5(scoreB);
 }
 
 /**
@@ -81,7 +82,7 @@ export function versusVerdictCopy(
       weightsLabel: input.weightsLabel,
     };
   }
-  const score = formatDecimal(input.score, locale, 1);
+  const score = formatRatingValue(input.score, locale);
   if (input.tie) {
     return {
       key: 'versusAutoVerdictTie',

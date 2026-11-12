@@ -6033,7 +6033,7 @@ async function runCoreArchitectureSuite() {
                 max_price: 48_990_000,
                 merchant_count: 4,
                 total_reviews: 12,
-                average_rating: 4.2,
+                average_rating: 4.35,
                 user_rating_weighted: null,
                 expert_rating: 4.9,
                 status: 'published',
@@ -6053,7 +6053,7 @@ async function runCoreArchitectureSuite() {
                 merchant_count: 5,
                 total_reviews: 20,
                 average_rating: 4.5,
-                user_rating_weighted: 4.6,
+                user_rating_weighted: 4.55,
                 expert_rating: 4.5,
                 status: 'published',
                 specifications: { display: { refresh_rate_hz: 120 } },
@@ -6106,7 +6106,7 @@ async function runCoreArchitectureSuite() {
         sort: 'rating_desc',
       });
       assert.equal(sorted510.length, 2);
-      // The shown rating orders the list: 4.6 (weighted) above 4.2 (the
+      // The shown rating orders the list: 4.55 (weighted) above 4.35 (the
       // average); the expert score (4.9) is shown apart (DOS/Rate#1545).
       assert.deepEqual(
         sorted510.map((p) => p.id),
@@ -6124,6 +6124,29 @@ async function runCoreArchitectureSuite() {
         ['mp-510-2'],
         'minRating compares the shown rating; an expert 4.9 does not pass (#1545)'
       );
+      // At x.x5 the filter rounds like the pages and the RPC do, half up on
+      // the decimal value: 4.35 shows 4.4 and passes 4.4, 4.55 shows 4.6 and
+      // passes 4.6. `toFixed(1)` would read them as 4.3 and 4.5 (#1631).
+      const ratedIds510 = async (minRating: number) => {
+        masterPageFetched = false;
+        const rows = await rateApi510.getMasterProducts({
+          categorySlug: 'laptops',
+          brands: ['asus'],
+          minRating,
+        });
+        return rows.map((p) => p.id).sort();
+      };
+      assert.deepEqual(
+        await ratedIds510(4.4),
+        ['mp-510-1', 'mp-510-2'],
+        'a stored 4.35 shows 4.4 and passes minRating 4.4 (#1631)'
+      );
+      assert.deepEqual(
+        await ratedIds510(4.6),
+        ['mp-510-2'],
+        'a stored 4.55 shows 4.6 and passes minRating 4.6 (#1631)'
+      );
+      assert.deepEqual(await ratedIds510(4.7), []);
     } finally {
       globalThis.fetch = origFetch510;
     }
@@ -11438,6 +11461,11 @@ async function runCoreArchitectureSuite() {
     assert.equal(isVersusScoreTie(5, 4.96), true, 'equal at one decimal');
     assert.equal(isVersusScoreTie(4.98, 5), true, '5.0 against 5.0');
     assert.equal(isVersusScoreTie(4.9, 4.8), false);
+    // x.x5 rounds half up like the stars: 4.35 shows 4.4, 4.55 shows 4.6
+    // (#1631).
+    assert.equal(isVersusScoreTie(4.35, 4.4), true, '4.35 shows 4.4');
+    assert.equal(isVersusScoreTie(4.55, 4.6), true, '4.55 shows 4.6');
+    assert.equal(isVersusScoreTie(4.35, 4.3), false);
     // A model with no buyer rating keeps its composite as the base, and the
     // gap is the one between the scores as shown (DOS/Rate#1470).
     const expertOnly = computeVersusWeightedResult(

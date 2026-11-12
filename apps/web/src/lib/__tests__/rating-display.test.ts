@@ -42,6 +42,19 @@ assert.equal(formatRatingValue(4.62, 'vi'), '4.6');
 assert.equal(formatRatingValue(4.62, 'en'), '4.6');
 assert.equal(formatRatingValue(4.62, 'cs'), '4,6');
 assert.equal(formatRatingValue(4.625, 'vi', 2), '4.63');
+// x.x5 rounds half up on the decimal value, like the database and the
+// minRating filter: a stored 4.350 prints 4.4, never 4.3 (#1631).
+assert.equal(formatRatingValue(4.35, 'vi'), '4.4');
+assert.equal(formatRatingValue(4.35, 'en'), '4.4');
+assert.equal(formatRatingValue(4.35, 'cs'), '4,4');
+assert.equal(formatRatingValue(4.05, 'vi'), '4.1');
+assert.equal(formatRatingValue(4.55, 'vi'), '4.6');
+assert.equal(formatRatingValue(4.349, 'vi'), '4.3');
+// The stars fill and take their colour from that same printed value.
+assert.equal(ratingFillPercent(4.35), ratingFillPercent(4.4));
+assert.ok(ratingFillPercent(4.35) > ratingFillPercent(4.3));
+assert.equal(ratingTone(2.95), 'fair');
+assert.equal(ratingTone(4.05), 'good');
 
 // The count takes the locale's thousands separator.
 assert.equal(formatRatingCount(11204, 'vi'), '11.204');
@@ -160,6 +173,10 @@ void (async () => {
   );
   assert.equal(ratingRow.numericValue?.(rated(4.84)), 4.8);
   assert.equal(ratingRow.numericValue?.(rated(0)), null);
+  // x.x5: 4.35 shows 4.4 and 4.55 shows 4.6, so each ties the product that
+  // shows the same number (#1631).
+  assert.equal(ratingRow.numericValue?.(rated(4.35)), 4.4);
+  assert.equal(ratingRow.numericValue?.(rated(4.55)), 4.6);
 
   // The "highest rated" verdict card follows the same rule: no winner when
   // the top two both show 4.9, the higher shown rating otherwise.
@@ -178,6 +195,11 @@ void (async () => {
     'B'
   );
   assert.equal(pickHighestRated([named('A', 4.6), named('B', 0)])?.name, 'A');
+  assert.equal(pickHighestRated([named('A', 4.35), named('B', 4.4)]), null);
+  assert.equal(
+    pickHighestRated([named('A', 4.35), named('B', 4.3)])?.name,
+    'A'
+  );
   assert.equal(pickHighestRated([named('A', 0), named('B', 0)]), null);
   console.warn('  ✅ Ratings show as stars with a short count (#1528)');
 })().catch((error: unknown) => {
