@@ -1852,7 +1852,7 @@ function buildBaseRateOpenApiSpec(
           summary:
             'Cross-Platform Deal Radar & Fake-Sale Trap Feed across 10 platforms',
           description:
-            'Returns real-time genuine cross-platform deals (`genuineDeals`, current offers below the cross-retailer median) and inflated fake-sale traps (`fakeSaleTraps`) audited against cross-retailer median prices.',
+            'Returns real-time genuine cross-platform deals (`genuineDeals`, current offers below the cross-retailer median) and inflated fake-sale traps (`fakeSaleTraps`) audited against cross-retailer median prices. A genuine deal has `verdict` `genuine_all_time_low` (the multi-platform price floor) only when the product has 3 or more offers and the deal is the cheapest offer at least 2% below the median; otherwise it is `best_market_deal`, since the median of 2 offers is just their midpoint.',
           tags: ['Products & Specs'],
           parameters: [
             {
@@ -2159,7 +2159,7 @@ function buildBaseRateOpenApiSpec(
                 genuineDeal: {
                   type: ['object', 'null'],
                   description:
-                    'The genuine-deal entry (cheapest store below the cross-retailer median).',
+                    'The genuine-deal entry (cheapest store below the cross-retailer median). Its `verdict` is `genuine_all_time_low` (the multi-platform price floor) only from 3 offers up, else `best_market_deal`.',
                 },
                 fakeSaleTrap: {
                   type: ['object', 'null'],

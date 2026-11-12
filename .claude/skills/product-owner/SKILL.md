@@ -220,7 +220,7 @@ Size is set on the board item. Look the item id up from the issue first, with
 the query in `AGENTS.md` 1 (`name: "Rate"`, or `name: "Rate-Services"`
 for the Services line):
 
-```powershell
+```bash
 gh project item-edit --project-id PVT_kwDOA388Vc4Bm5Ml --id <item id> --field-id PVTSSF_lADOA388Vc4Bm5MlzhlgTCc --single-select-option-id 86db8eb3
 ```
 
@@ -238,7 +238,7 @@ claim.
 Use `start_session` with a fresh context and its own worktree. Use
 `initiation: "user_asked"` only when JOY told the PO to dispatch work in the
 PO chat; otherwise the session is a proposal card JOY has to start. Worktree:
-(`<repo>\.claude\worktrees\<task>`, `AGENTS.md` 0.5). The brief is the only
+(`<repo>/.claude/worktrees/<task>`, `AGENTS.md` 0.5). The brief is the only
 context the session gets, so it carries:
 
 - **Task**: the issue link, the problem in a few lines, and the acceptance

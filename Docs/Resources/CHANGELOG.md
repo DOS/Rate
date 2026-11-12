@@ -1,9 +1,9 @@
-# 📜 Rate Platform Changelog - Nhật Ký Hoàn Thành Chi Tiết (Phases 1 -> 5)
+# 📜 Rate Platform Changelog - Nhật Ký Hoàn Thành Chi Tiết (Phases 1 -> 7)
 
-> **Cập nhật lần cuối:** 20/10/2026  
+> **Cập nhật lần cuối:** 12/11/2026  
 > **Lộ trình kiến trúc & các hạng mục tiếp theo (Phase 6 & 7):** Xem [`Docs/Resources/ROADMAP.md`](./ROADMAP.md)  
 > **GitHub Project Board (Multi-Agent Queue):** [https://github.com/orgs/DOS/projects/9](https://github.com/orgs/DOS/projects/9)  
-> **Trạng thái:** Lưu trữ toàn bộ lịch sử triển khai chi tiết các hạng mục đã hoàn thành từ Phase 1 đến Phase 5 (`4.1 -> 4.78` & `5.1 -> 5.20`).
+> **Trạng thái:** Lưu trữ toàn bộ lịch sử triển khai chi tiết các hạng mục đã hoàn thành từ Phase 1 đến Phase 5 (`4.1 -> 4.78` & `5.1 -> 5.20`), plus Phase 6 & 7 entries `6.1 -> 6.20` up to 2026-11-12. CHANGELOG numbers are their own and do not match ROADMAP item numbers.
 
 ---
 
@@ -304,3 +304,73 @@ Hệ thống **Rate Platform (`rate.vn`)** vận hành trên kiến trúc **4 T�
   - **Rate-Services (`DOS/Rate-Services#141`-`#171`):** JSON-LD và logger che secret, `proxyAwareFetch` chống SSRF qua redirect, lease/heartbeat worker, auditor phân trang theo `batch.length`, JWT hết hạn và giới hạn origin cho `service_role`, listing hết hàng / ngừng kinh doanh không có giá được ghi `listing_unavailable` thay vì lỗi (Tiki, TGDD, Lazada, CellphoneS, TikTok Shop, Shopee), Affiliate `pricesOnly`, và `resolveShopeeAssetUrl` + suy giá từ biến thể cho Shopee PDP (PR #172).
   - Mỗi PR đều có test hồi quy và review fresh-context bằng subagent; riêng `DOS/Rate-Services#172` dùng CI + build/lint/test cục bộ thay thế vì subagent hết quota.
 
+### ✅ Phase 6 & 7 (continued): Work Merged Into `dev` From 2026-10-20 To 2026-11-12
+
+> Written in English per `AGENTS.md` 0 (repo docs are English); the sections above keep their original Vietnamese. About 510 PRs merged into `dev` in this window, and `dev` was promoted to `main` 53 times (the last on 2026-11-07, PR #1619). Entries are grouped by theme and cite representative PRs, not every commit. Features marked "behind a flag" are merged but off in Production. Items marked **merged to dev, awaiting promotion** are not on `main` yet.
+
+- [x] **6.6. Plain-language copy, localization and phone layout (PRs #573-#680, #697-#741, #1384-#1414):**
+  - Rewrote jargon across the product page, catalog, compare, deals, `/inspect`, merchants, footer, exports and `/developers` into plain sentence-case Vietnamese, English and Czech (#626, #636-#680, #697, #706).
+  - Phone layout: product name, price and buyer score in the first screen, compare tray collapsed, three spec groups until expanded, one export menu per section, 44px targets, the header fits 320px (#605-#625, #644, #717, #722, #812).
+  - Marketplace text, store, reviewer and variant names carry `lang="vi"`, English spec values `lang="en"` (#701, #729, #1390, #1401).
+  - One locale-aware formatter; Czech pages format prices, numbers, dates and decimal commas; count phrases use plural rules (#1384, #1396, #1409, #1414).
+- [x] **6.7. Review risk and honest trust numbers (PRs #653-#703, #1109-#1165, #1266-#1387, #1476-#1499):**
+  - Competitor-sabotage and coin-farming comments no longer add review risk; the web computes dynamic review risk with the importer formula, and a merchant-wide review risk is backfilled and rescored on ingest (#653, #670, #682, #683, #696, #703).
+  - Only true numbers are shown: a missing offer risk or DOSafe score stays missing, a seller or store with no analysed review or no data shows "no data" instead of 0 risk or a trust score (#1109, #1119, #1165, #1266, #1387, #1476, #1483, #1492, #1499).
+  - AI review summaries state their scope (one listing's batch) and drop quoted scores (#1220, #1229, #1260); the merchant risk split is labelled as combined risk (#1280); the importer stops writing the merchant review risk that the Rate-Services auditor owns (#1346).
+- [x] **6.8. Second input-bounds hardening sweep (2026-10-24 -> 2026-10-26, PRs #823-#1056, #1096):**
+  - Continued the 6.5 sweep file by file across `@repo/shared-data`, the importer engine, the web BFF and API handlers, client components and the extension: integer and finite-number ceilings, HTTP(S)-only URLs, slug, ID and token length caps, control-character stripping and logger redaction. Each PR carries regression tests.
+- [x] **6.9. SEO, structured data and 404s (PRs #733-#796, #881, #1061, #1378, #1382, #1627):**
+  - `www.rate.vn` redirects to `rate.vn`; API JSON, auth pages and inspect results stay out of search; absolute URLs in product JSON-LD, site JSON-LD on home, BreadcrumbList and ItemList on category pages, summary ItemLists on leaderboard and comparisons (#739, #745, #747, #751, #1061).
+  - Titles within 65 characters, meta descriptions that fit a result, no same-URL hreflang, real sitemap `lastmod` read through the tagged Data Cache (#743, #765, #767, #777, #782, #786, #793).
+  - Dotted root paths answer 404 instead of 500; unknown paths and missing comparisons are titled as 404s; a product under another category's path and an unsorted versus pair 308 to one canonical URL (#733, #881, #1378, #1382).
+  - **Merged to dev, awaiting promotion:** unknown paths get a server-rendered static Vietnamese 404 (status 404, `lang="vi"`, real title) (#1627, closes #1463 and #1373).
+- [x] **6.10. Performance (PRs #737-#791, #1063-#1065, #1237-#1426, #1497-#1516):**
+  - Each page receives only the client messages it reads; Sentry, Bootstrap JS and supabase-js stay out of client bundles where unused; Bootstrap is built from the parts the site uses and the catalog menus run on React state (#737, #753, #755, #757, #1347, #1349).
+  - Lazy, pre-sized WebP thumbnails and hero preloads, store-CDN small renditions, prefetch on intent, client-only bodies no longer shift the footer (#763, #766, #791, #1343, #1351, #1355, #1415, #1419, #1504).
+  - Product page read chains run in parallel; merchant profiles are cached without per-master reads; category, watchlist, leaderboard and compare lists drop full spec sheets; Vercel functions run in `sin1` next to Supabase; a phone performance budget runs in E2E (#1237, #1416, #1418, #1426, #1497, #1512, #1516).
+- [x] **6.11. Accessibility follow-ups (PRs #775, #1068-#1118):**
+  - One main landmark, a skip link and ordered headings on every page; selected and pressed states exposed on selectors and pill groups; forced-colors highlight; labelled search and link inputs; the open phone menu traps focus and makes the page behind it inert (#775, #1068, #1070, #1072, #1076, #1078, #1087, #1095, #1100, #1107, #1118).
+  - en and cs catalog, leaderboard and merchant headers fit 320px (#1083, #1085).
+- [x] **6.12. Normalizer and matcher keying (about 60 PRs, #770-#1541):**
+  - Apple lines (iPad, iPad mini generations and chips, MacBook, Watch sizes and Series shorthand, AirPods years), Galaxy Fold/Flip, Garmin, Vivo/Vivobook, earbuds model numbers, storage-first variant lists, colour words, shop-age and release-year "năm" forms, gifts and bundles, and accessory-led titles now key correctly (for example #816-#827, #1101-#1127, #1203-#1292, #1321-#1450, #1493-#1541).
+  - Tier 2 never links a storage-less title to a sized master; `masterIdHint` is ignored when the page states another storage; an unknown 5G is stored as null (#1202, #1206, #1207).
+  - Used, like-new and refurbished listings are rejected at ingest so they no longer set a new device's price (#1561, #1562, option A of #1430).
+  - Sourced specs for iPhone 18 Pro, 18 Pro Max and Galaxy S26 Ultra (#1460).
+  - A read-only re-key dry run lists stored model keys the normalizer no longer produces (#1456); the re-key data steps wait on JOY (see ROADMAP).
+- [x] **6.13. Prices, offers, availability and deals (PRs #634, #690-#869, #1091, #1141-#1204, #1630):**
+  - A bait-price listing no longer sets the lowest price and is labelled in `/inspect`; one shared bait-price rule and price floor (#800, #807, #1091).
+  - Every surface reads the stored market stats for price and seller count (#1164); batch offers read availability, and the radar, best offer, extension verdict and cheaper-elsewhere skip sold-out listings (#1176, #1180); a published model with no in-stock listing shows a sale state (#1204).
+  - Sold-count labels (20k+) and locale-aware exact counts (#690, #693); deals show 12 at a time and the radar counts every offer of a cluster (#634, #869).
+  - **Merged to dev, awaiting promotion:** the multi-platform floor deal label needs 3 or more offers (#1630, closes #1145).
+- [x] **6.14. Category spec templates and honest spec display (PRs #1163-#1201, #1447-#1535):**
+  - Per-category spec templates for earbuds and watches, applied to the product page, compare, leaderboard, export, API v1 filters and the extension lookup (#1163, #1182, #1191).
+  - Empty spec rows and groups are hidden, unknown specs show empty instead of invented values, no half-translated values, one language per spec label (#1192, #1199, #1201, #1532).
+  - Product page order: specs and reviews first, then prices and sellers, with a jump row in the first phone screen (#1447, #1475, #1518, #1535).
+- [x] **6.15. Item / variant / listing model, behind `RATE_ITEM_MODEL` (off in Production) (PRs #1136-#1296, #1501):**
+  - Design (#1136) and shared schemas with `model_key` helpers (#1167); a read-only migration inventory (#1168); an item-first matcher with `match_item` (#1179, #1190, #1208, #1243).
+  - Web: item data layer, catalog slug resolution and 308s, item product page with a size picker and ProductGroup JSON-LD, directory, facets, leaderboard, stats, sitemap, compare, versus and watchlist per item, on-demand size panels (#1264-#1296); an item-model E2E job (#1273, #1501).
+  - DOS-Me proposals with replay tests: M0 seed re-key, M1+M2 items, item RPCs, M3/M4, and the go-live runbook for JOY (#1242, #1267, #1279, #1288, #1394, #1425). Applying them waits on DOS-Me (#1150, #1160).
+- [x] **6.16. One rating, per-criterion stars, pros and cons, review quality tiers (PRs #1228-#1238, #1478-#1480, #1533-#1616, #1628):**
+  - Design for weighted criteria stars, pros and cons and a review value score (#1533); per-category criteria, weights and review form rules (#1548); per-criterion scores are real or null, never derived from stars (#1550, #1554, #1557).
+  - One rating everywhere from the stored `rating_score`, rounded once; search and the API `minRating` / rating sort read the shown rating (#1571, #1574, #1575, #1591); ratings show as stars with a short count (#1534); versus ties and verdicts follow the shown rating (#1228, #1238, #1478, #1551).
+  - Review form v2 with criteria, verdict and pros and cons behind `NEXT_PUBLIC_RATE_REVIEW_FORM_V2` (off), stored through `submit_community_review_v2` (#1567, #1577).
+  - Product points: review pros and cons clustered per product, AI extraction from marketplace reviews at half weight through the dos.ai gateway, review depth, review value score, quality tier badge and per-review author keys for seeding analysis (#1560-#1570, #1579-#1600, #1607, #1615).
+  - DOS-Me migrations mirrored into `supabase/migrations/` with regenerated types (#1569, #1576, #1587, #1594, #1600, #1616).
+  - **Merged to dev, awaiting promotion:** the compare best mark reads the rating as shown (#1628, closes #1470).
+- [x] **6.17. Browser extension (PRs #1178, #1239-#1255, #1319-#1477, #1602-#1611):**
+  - Proposal for the extension as a primary data source (#1178); truthful opt-in label, privacy policy coverage and narrower TikTok hosts (#1239, #1241, #1255, #1602).
+  - vi, en and cs through `chrome.i18n`, verdict label and explanation in the extension's language (#1325, #1342, #1385); price list, badge, empty and error states (#1319).
+  - API 429s carry a code and `Retry-After`, which the extension honours (#1399, #1403, #1477); release-readiness check and store changelog (#1468).
+  - Extension observation v1 (M2): onboarding consent screen, stock and SKU, flagged quarantine ingest; opted-in installs send v1 while the web flag `RATE_EXTENSION_OBSERVATIONS` stays off (#1605, #1608-#1611).
+- [x] **6.18. Security and content security policy (PRs #773, #792, #957, #1312-#1324, #1350, #1408, #1454, #1618):**
+  - `SUPABASE_SERVICE_ROLE_KEY` renamed to `SUPABASE_SECRET_KEY` (#957); the vote route follows the database's voter rules and rolls back a refused vote (#773, #792, #803).
+  - Post-login targets that normalize to `//host` go home; reviews by product id serve published products only; public API errors answer a fixed message; inspect and lookup are rate-limited and cached; JSON write bodies are capped (#1312, #1314, #1315, #1322, #1324, #1408).
+  - CSP: report-only policy with a per-request nonce, then `script-src` enforced on ISR pages through the page meta CSP (#1318, #1350, #1454, #1618).
+- [x] **6.19. Themes and layout (PRs #1135, #1440, #1462, #1523, #1525):**
+  - Full-width category layout with a sticky filter sidebar (#1135); light and dark themes with a light/dark/system toggle and follow-up fixes (#1440, #1462, #1523, #1525).
+- [x] **6.20. Ops, CI, release tooling and dependencies:**
+  - Agent release helpers and live-commit report, `merge-when-green` updates a branch behind a strict base and writes a commitlint-clean squash message, merge commits only into `main`, sitemap warm-up after a promote (#870, #959, #1018, #1133, #1354, #1514, #1519, #1566).
+  - An incident issue opens when CI fails on `dev` or `main` and closes only after every failed job succeeds again (#1058, #1157); Vercel installs with the frozen lockfile (#735).
+  - Product Owner workflow skill for Rate and the rule that a PO session loads it first (#1104, #1115); one page of decisions waiting on JOY (#1494).
+  - DOS-Me drift migrations mirrored (#1169, #1612).
+  - Next.js 16.3.8 -> 16.4.1 (#728); **merged to dev, awaiting promotion:** Next.js 16.4.5 (#1338), `@swc/core` 1.16.20 with the matching win32 pin (#1337, #1629), the `pnpm-lock.yaml` repair after Dependabot merges (#1622), and two minor tooling bumps (#1335, #1336).
