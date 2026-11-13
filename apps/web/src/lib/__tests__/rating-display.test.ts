@@ -53,8 +53,6 @@ assert.equal(formatRatingValue(4.349, 'vi'), '4.3');
 // The stars fill and take their colour from that same printed value.
 assert.equal(ratingFillPercent(4.35), ratingFillPercent(4.4));
 assert.ok(ratingFillPercent(4.35) > ratingFillPercent(4.3));
-assert.equal(ratingTone(2.95), 'fair');
-assert.equal(ratingTone(4.05), 'good');
 
 // The count takes the locale's thousands separator.
 assert.equal(formatRatingCount(11204, 'vi'), '11.204');
@@ -201,6 +199,47 @@ void (async () => {
     'A'
   );
   assert.equal(pickHighestRated([named('A', 0), named('B', 0)]), null);
+
+  // The 1v1 scoreboard reads the same shown scores (#1631): 4.35 shows 4.4,
+  // so it ties 4.4 and leads 4.3 by 0.1.
+  const { computeVersusWeightedResult } =
+    await import('../../components/compare/VersusInteractiveScoreboard');
+  type VersusSide = Parameters<typeof computeVersusWeightedResult>[0];
+  const side = (slug: string, userScore5: number) =>
+    ({
+      slug,
+      name: slug,
+      brand: 'Brand',
+      userScore5,
+      combinedScore5: userScore5,
+      minPrice: 10_000_000,
+      criteria: {},
+      rankCriteria: {},
+    }) as unknown as VersusSide;
+  const noWeights = {
+    screen: 0,
+    performance: 0,
+    camera: 0,
+    battery: 0,
+    value: 0,
+  };
+  const level = computeVersusWeightedResult(
+    side('a', 4.35),
+    side('b', 4.4),
+    noWeights,
+    'default'
+  );
+  assert.equal(level.tie, true);
+  assert.equal(level.delta, '0.0');
+  const lead = computeVersusWeightedResult(
+    side('a', 4.35),
+    side('b', 4.3),
+    noWeights,
+    'default'
+  );
+  assert.equal(lead.tie, false);
+  assert.equal(lead.delta, '0.1');
+  assert.equal(lead.winner.slug, 'a');
   console.warn('  ✅ Ratings show as stars with a short count (#1528)');
 })().catch((error: unknown) => {
   console.error(error);

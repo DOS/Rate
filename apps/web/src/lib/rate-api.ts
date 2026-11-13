@@ -678,9 +678,9 @@ export async function getMasterProducts(
   const getEffectiveRating = (item: MasterProduct): number =>
     resolveCompareEffectiveUserRating(item);
 
-  // Minimum rating, compared at one decimal as the pages show it and as
-  // search_master_products rounds it: a stored 4.46 shows 4.5 and passes 4.5,
-  // a stored 4.350 shows 4.4 and passes 4.4 (DOS/Rate#1631).
+  // Minimum rating, compared at one decimal with the rounding the pages show
+  // and search_master_products uses: a stored 4.46 shows 4.5 and passes 4.5,
+  // a stored 4.350 shows 4.4 and passes 4.4.
   if (typeof params?.minRating === 'number' && params.minRating > 0) {
     const minRating = params.minRating;
     items = items.filter(

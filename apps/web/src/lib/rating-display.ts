@@ -54,7 +54,11 @@ export function ratingFillPercent(value: number, digits = 1): number {
   return Math.max(0, Math.min(100, (shown / 5) * 100));
 }
 
-/** The value as printed: `4.6` (vi, en), `4,6` (cs). */
+/**
+ * The value as printed: `4.6` (vi, en), `4,6` (cs). At one decimal a value
+ * that is not a score above 0 prints as `0.0`; callers show their own empty
+ * state for it.
+ */
 export function formatRatingValue(
   value: number,
   locale: string | null | undefined,

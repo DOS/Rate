@@ -6124,9 +6124,9 @@ async function runCoreArchitectureSuite() {
         ['mp-510-2'],
         'minRating compares the shown rating; an expert 4.9 does not pass (#1545)'
       );
-      // At x.x5 the filter rounds like the pages and the RPC do, half up on
-      // the decimal value: 4.35 shows 4.4 and passes 4.4, 4.55 shows 4.6 and
-      // passes 4.6. `toFixed(1)` would read them as 4.3 and 4.5 (#1631).
+      // Pinned, not changed (#1631): at x.x5 the filter rounds half up on the
+      // decimal value, as the RPC does and as the pages now show it. 4.35
+      // shows 4.4 and passes 4.4, 4.55 shows 4.6 and passes 4.6.
       const ratedIds510 = async (minRating: number) => {
         masterPageFetched = false;
         const rows = await rateApi510.getMasterProducts({
