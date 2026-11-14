@@ -8,17 +8,34 @@ const WITHOUT_POINTS = '/smartphones/samsung-galaxy-s25-ultra-256gb';
 
 test('renders overall pros/cons with ai-over-code, 5/3 caps, criterion filter and zero writes', async ({
   page,
+  baseURL,
 }) => {
+  const appOrigin = baseURL ? new URL(baseURL).origin : null;
   const writeOrAiRequests: string[] = [];
   page.on('request', (req) => {
     const method = req.method().toUpperCase();
-    const url = req.url().toLowerCase();
+    const rawUrl = req.url();
+    const url = rawUrl.toLowerCase();
+    // Cached ISR pages carry no per-request nonce yet (DOS/Rate#1348), so
+    // Chromium posts report-only CSP telemetry to /api/csp-report (204 sink).
+    try {
+      const parsed = new URL(rawUrl);
+      if (
+        method === 'POST' &&
+        parsed.pathname === '/api/csp-report' &&
+        (!appOrigin || parsed.origin === appOrigin)
+      ) {
+        return;
+      }
+    } catch {
+      // Non-HTTP URLs fall through to the method and host check below.
+    }
     if (
       (method !== 'GET' && method !== 'HEAD') ||
       url.includes('openai') ||
       url.includes('dos.ai')
     ) {
-      writeOrAiRequests.push(`${method} ${req.url()}`);
+      writeOrAiRequests.push(`${method} ${rawUrl}`);
     }
   });
 
