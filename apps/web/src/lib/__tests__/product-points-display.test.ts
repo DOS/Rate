@@ -651,23 +651,38 @@ export async function runProductPointsDisplaySuite(): Promise<void> {
         last_seen: '2026-11-01T12:00:00Z',
         updated_at: conflictStamp,
       }),
+      makeRow('writer-omitted-num', {
+        method: 'ai',
+        kind: 'pro',
+        criterion_key: 'display',
+        label: 'Màn hình hiển thị ổn định',
+        support: 2.0,
+        reviewer_count: 4,
+        has_expert: false,
+        first_seen: '2026-11-01T00:00:00Z',
+        last_seen: '2026-11-01T12:00:00Z',
+        updated_at: conflictStamp,
+      }),
     ];
     const largeReviewRows = Array.from({ length: 5_000 }, (_, i) => ({
       id: `bulk-rev-${i}`,
       reviewer_type: 'user',
-      helpfulness_weight: i < 2 ? 0.5 : 1,
+      helpfulness_weight: i < 3 ? 0.5 : 1,
       created_at: '2026-11-01T06:00:00Z',
       review_points: [
         {
           id: `bulk-rp-${i}`,
           kind: i === 1 ? 'con' : 'pro',
-          criterion_key: i === 1 ? 'performance' : 'battery',
+          criterion_key:
+            i === 1 ? 'performance' : i === 2 ? 'display' : 'battery',
           body:
             i === 0
               ? 'Pin dùng 10 giờ'
               : i === 1
                 ? 'Máy nóng khi chơi game'
-                : `Nhận xét thực tế điểm riêng thứ ${i} ổn định`,
+                : i === 2
+                  ? 'Mình thấy màn hình hiển thị 2 tuần ổn định'
+                  : `Nhận xét thực tế điểm riêng thứ ${i} ổn định`,
           method: i % 2 === 0 ? 'writer' : 'ai',
           created_at: '2026-11-01T06:00:00Z',
         },
@@ -703,13 +718,16 @@ export async function runProductPointsDisplaySuite(): Promise<void> {
     assert.equal(perfData.reviewCount, 5_000);
     const rowById = new Map(perfData.rows.map((r) => [r.id, r]));
     assert.equal(rowById.get('writer-10h')?.has_own_words, true);
+    assert.equal(rowById.get('writer-omitted-num')?.has_own_words, true);
     assert.equal(rowById.get('ai-only-20h')?.has_own_words, false);
     assert.equal(rowById.get('ai-only-lag')?.has_own_words, false);
     const rankedPerf = selectProductPoints(perfData.rows, {
       categorySlug: 'smartphones',
     });
-    assert.equal(rankedPerf?.pros[0]?.id, 'writer-10h');
-    assert.equal(rankedPerf?.pros[1]?.id, 'ai-only-20h');
+    assert.deepEqual(
+      rankedPerf?.pros.map((p) => p.id),
+      ['writer-omitted-num', 'writer-10h', 'ai-only-20h']
+    );
   } finally {
     globalThis.fetch = prevFetch;
     if (prevUrl === undefined) delete process.env.NEXT_PUBLIC_SUPABASE_URL;

@@ -219,7 +219,33 @@ function sameStringSet(
   return true;
 }
 
+const SAFE_AI_POLISH_TOKENS = new Set([
+  'nhưng',
+  'tuy',
+  'nhiên',
+  'và',
+  'với',
+  'khi',
+  'lúc',
+  'vẫn',
+  'còn',
+  'hơn',
+  'nên',
+  'vì',
+  'do',
+  'ở',
+  'trên',
+  'cho',
+  'điểm',
+  'cộng',
+  'trừ',
+  'ổn',
+  'định',
+  'bền',
+]);
+
 function hasClaimConflict(
+  method: 'ai' | 'code',
   rowTokens: readonly string[],
   rowTokenSet: ReadonlySet<string>,
   rowDigits: ReadonlySet<string>,
@@ -227,7 +253,20 @@ function hasClaimConflict(
   lineTokenSet: ReadonlySet<string>,
   lineDigits: ReadonlySet<string>
 ): boolean {
-  if (!sameStringSet(rowDigits, lineDigits)) return true;
+  if (method === 'code') {
+    if (!sameStringSet(rowDigits, lineDigits)) return true;
+  } else {
+    for (const d of rowDigits) {
+      if (!lineDigits.has(d)) return true;
+    }
+    if (rowDigits.size === 0 && lineDigits.size > 0) {
+      for (const tok of rowTokenSet) {
+        if (!lineTokenSet.has(tok) && !SAFE_AI_POLISH_TOKENS.has(tok)) {
+          return true;
+        }
+      }
+    }
+  }
   for (const tok of rowTokens) {
     if (
       tok.startsWith(NEGATED_PREFIX) &&
@@ -272,6 +311,7 @@ function scoreWriterLineAgainstRow(
     w.tokenSet.size === 0 ||
     cand.tokenSet.size === 0 ||
     hasClaimConflict(
+      cand.method,
       cand.tokens,
       cand.tokenSet,
       cand.digits,
@@ -289,24 +329,27 @@ function scoreWriterLineAgainstRow(
   if (shared < Math.min(2, w.tokenSet.size)) return 0;
   const dice = wordOverlap(cand.tokens, w.tokens);
   if (w.tokenSet.size < 2 && dice < POINT_CLUSTER_OVERLAP) return 0;
-  if (cand.method === 'code') {
-    const [shorter, longer] =
-      w.tokenSet.size <= cand.tokenSet.size
-        ? [w.tokenSet, cand.tokenSet]
-        : [cand.tokenSet, w.tokenSet];
-    let contained = shorter.size >= 2;
-    if (contained) {
-      for (const tok of shorter) {
-        if (!longer.has(tok)) {
-          contained = false;
-          break;
-        }
+  const [shorter, longer] =
+    w.tokenSet.size <= cand.tokenSet.size
+      ? [w.tokenSet, cand.tokenSet]
+      : [cand.tokenSet, w.tokenSet];
+  let contained = shorter.size >= 2;
+  if (contained) {
+    for (const tok of shorter) {
+      if (!longer.has(tok)) {
+        contained = false;
+        break;
       }
     }
+  }
+  if (cand.method === 'code') {
     const eff = contained ? Math.max(dice, POINT_CLUSTER_OVERLAP) : dice;
     return eff >= POINT_CLUSTER_OVERLAP ? eff : 0;
   }
-  const coverage = shared / w.tokenSet.size;
+  const coverage = Math.max(
+    shared / w.tokenSet.size,
+    contained ? POINT_CLUSTER_OVERLAP : 0
+  );
   return coverage >= POINT_CLUSTER_OVERLAP ? dice * 0.5 + coverage * 0.5 : 0;
 }
 
