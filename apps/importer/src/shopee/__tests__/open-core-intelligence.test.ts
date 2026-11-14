@@ -294,7 +294,7 @@ async function runSuite() {
     ['iPad 10 64GB - Tặng bao da dùng chung iPad A16', 'apple:ipad-10:64gb'],
     ['Tai nghe Sony WH-1000XM5 cho Mac mini M4', 'sony:wh-1000xm5:unknown'],
     ['Mac mini 2018 256GB', 'apple:mac-mini-2018:256gb'],
-    ['iPad Air 4G 64GB', 'apple:ipad-air:64gb'],
+    ['iPad Air 4G 64GB', 'apple:ipad-air-5g:64gb'],
     // An A16 or later chip anywhere after the size or generation names the base iPad, and
     // the 11th generation is the iPad (A16).
     ['iPad 11 2025 A16 128GB', 'apple:ipad-a16:128gb'],
@@ -506,7 +506,7 @@ async function runSuite() {
     ['MacBook Air chip M2 13 năm 2022 256GB tặng túi 15 inch', 'apple:macbook-air-m2-13:256gb'],
     ['iPad Pro (M4) 11 năm 2024', 'apple:ipad-pro-m4-11:unknown'],
     ['iPad Pro Wifi 11 năm 2022', 'apple:ipad-pro-11:unknown'],
-    ['iPad Pro 5G 11 năm 2022 M2', 'apple:ipad-pro-m2-11:unknown'],
+    ['iPad Pro 5G 11 năm 2022 M2', 'apple:ipad-pro-m2-11-5g:unknown'],
     ['iPad Pro Gen 4 11 năm 2022', 'apple:ipad-pro-11:unknown'],
     ['iPad Air 5 11 năm 2022', 'apple:ipad-air-5-11:unknown'],
     ['MacBook Air 13 năm phát hành 2022', 'apple:macbook-air-13:unknown'],
@@ -1057,11 +1057,11 @@ async function runSuite() {
   assert.equal(keyOf('iPad mini 2024 128GB'), 'apple:ipad-mini:128gb');
   // A "5G" or "4G" network or a storage after "mini" is no generation: "mini 5G" is not the
   // 2019 iPad mini 5, and "mini 64 Wifi" is no "mini 64".
-  assert.equal(keyOf('Apple iPad mini 5G 64GB'), 'apple:ipad-mini:64gb');
-  assert.equal(keyOf('Apple iPad mini 4G 64GB'), 'apple:ipad-mini:64gb');
+  assert.equal(keyOf('Apple iPad mini 5G 64GB'), 'apple:ipad-mini-5g:64gb');
+  assert.equal(keyOf('Apple iPad mini 4G 64GB'), 'apple:ipad-mini-5g:64gb');
   assert.equal(keyOf('Apple iPad mini 64 Wifi'), 'apple:ipad-mini:unknown');
   assert.equal(keyOf('Apple iPad mini 64/256GB'), 'apple:ipad-mini:256gb');
-  assert.equal(keyOf('Apple iPad mini 6 5G 64GB'), 'apple:ipad-mini-6:64gb');
+  assert.equal(keyOf('Apple iPad mini 6 5G 64GB'), 'apple:ipad-mini-6-5g:64gb');
   assert.equal(
     normalizer.normalize(createDummyShopeeProduct('iPad Mini 7 Wifi 128GB')).model,
     'iPad mini 7'
@@ -1365,9 +1365,9 @@ async function runSuite() {
     ['iPad mini (A17 Pro) Wi-Fi 128GB', 'apple:ipad-mini-7:128gb'],
     // The mini 8 by its chip, as FPT Shop and TGDD title it (DOS/Rate#1502).
     ['iPad mini A20 Pro WiFi 128GB', 'apple:ipad-mini-8:128gb'],
-    ['iPad mini A20 Pro 5G 256GB', 'apple:ipad-mini-8:256gb'],
+    ['iPad mini A20 Pro 5G 256GB', 'apple:ipad-mini-8-5g:256gb'],
     ['Apple iPad mini (A20 Pro) Wi-Fi 512GB', 'apple:ipad-mini-8:512gb'],
-    ['Máy tính bảng iPad mini A20 Pro Wi-Fi + Cellular 128GB', 'apple:ipad-mini-8:128gb'],
+    ['Máy tính bảng iPad mini A20 Pro Wi-Fi + Cellular 128GB', 'apple:ipad-mini-8-5g:128gb'],
     ['iPad mini 8.3 inch A20 Pro Wi-Fi 128GB', 'apple:ipad-mini-8:128gb'],
     ['iPad mini A20Pro 128GB', 'apple:ipad-mini-8:128gb'],
     ['iPad mini A20 128GB', 'apple:ipad-mini-8:128gb'],
@@ -1397,7 +1397,7 @@ async function runSuite() {
     ['iPad mini 64GB tang op lung Galaxy A20', 'apple:ipad-mini:64gb'],
     ['iPad mini 128GB | Galaxy A20', 'apple:ipad-mini:128gb'],
     ['iPad mini A15/A20 Pro 64GB', 'apple:ipad-mini:64gb'],
-    ['iPad mini Wi-Fi + Cellular 128GB (A20 Pro)', 'apple:ipad-mini-8:128gb'],
+    ['iPad mini Wi-Fi + Cellular 128GB (A20 Pro)', 'apple:ipad-mini-8-5g:128gb'],
     ['iPad mini 2019 A20', 'apple:ipad-mini:unknown'],
     ['iPad mini 128GB kèm bút A17 Pro', 'apple:ipad-mini:128gb'],
     // The A17 Pro names the mini 7 whatever the year; a "|" separates specs; a lone
@@ -1454,6 +1454,27 @@ async function runSuite() {
     ['Thiết bị định vị GPS chính hãng Garmin GPSMAP 65s', 'garmin:gpsmap-65s:unknown'],
     // A GPS device title that names no model stays unkeyable.
     ['Máy định vị GPS Garmin', 'garmin:unkeyed:unknown'],
+  ] as const) {
+    assert.equal(keyOf(title), key, title);
+  }
+  // DRAFT DOS/Rate#1491 (c) and (d): a 5G iPad and a MacBook with a RAM other than its
+  // line's base RAM key apart; the base configuration keeps its key.
+  for (const [title, key] of [
+    ['iPad Air M4 11 inch Wi-Fi 128GB', 'apple:ipad-air-m4-11:128gb'],
+    ['iPad Air M4 11 inch 5G 128GB', 'apple:ipad-air-m4-11-5g:128gb'],
+    ['iPad Pro M4 11 inch Wi-Fi + Cellular 256GB', 'apple:ipad-pro-m4-11-5g:256gb'],
+    ['iPad mini 7 5G 128GB', 'apple:ipad-mini-7-5g:128gb'],
+    // A 5G in a gift is not the iPad's.
+    ['Apple iPad Air 11 M2 WiFi 128GB tặng ốp 5G', 'apple:ipad-air-m2-11:128gb'],
+    ['MacBook Air M3 13 inch 16GB/256GB', 'apple:macbook-air-m3-13:256gb'],
+    ['MacBook Air M3 13 inch 8GB/256GB', 'apple:macbook-air-m3-13-8gb-ram:256gb'],
+    ['MacBook Air M3 13 inch 256GB', 'apple:macbook-air-m3-13:256gb'],
+    ['MacBook Pro 14 M4 Pro 48GB/1TB', 'apple:macbook-pro-m4-pro-14-48gb-ram:1024gb'],
+    // An SSD read as RAM is no RAM size; a line with no registry entry keeps its key.
+    ['MacBook Air M3 RAM SSD 512GB', 'apple:macbook-air-m3:unknown'],
+    ['MacBook Pro M5 Pro 14 48GB/1TB', 'apple:macbook-pro-m5-pro-14:1024gb'],
+    // An iPhone is untouched.
+    ['Apple iPhone 16 Pro 5G 256GB', 'apple:iphone-16-pro:256gb'],
   ] as const) {
     assert.equal(keyOf(title), key, title);
   }
@@ -1591,11 +1612,14 @@ async function runSuite() {
     ],
     ['Apple Watch Series 10 [Tặng ốp iPhone] 46mm', 'apple:watch-series-10-46mm:64gb'],
     ['Apple Watch SE 2 GPS + Cellular 44mm tặng AirPods 4', 'apple:watch-se-2-44mm:unknown'],
-    ['MacBook Air M3 (Tặng AirPods) 15 inch 8GB 256GB', 'apple:macbook-air-m3-15:256gb'],
+    ['MacBook Air M3 (Tặng AirPods) 15 inch 8GB 256GB', 'apple:macbook-air-m3-15-8gb-ram:256gb'],
     ['MacBook Air M3 2024 - Tặng AirPods 4 - 15 inch 16GB 512GB', 'apple:macbook-air-m3-15:512gb'],
     ['MacBook Air M3 kèm sạc 15 inch tặng AirPods', 'apple:macbook-air-m3-15:unknown'],
     ['iPad Pro M4 (Tặng Apple Pencil Pro) 11 inch Wi-Fi 256GB', 'apple:ipad-pro-m4-11:256gb'],
-    ['iPad Air M2 Wi-Fi + Cellular 13 inch tặng Apple Pencil Pro', 'apple:ipad-air-m2-13:unknown'],
+    [
+      'iPad Air M2 Wi-Fi + Cellular 13 inch tặng Apple Pencil Pro',
+      'apple:ipad-air-m2-13-5g:unknown',
+    ],
     ['iPad Pro M4 Wi-Fi 256GB kèm bút 13 inch tặng AirPods', 'apple:ipad-pro-m4-13:256gb'],
     // A "+" written for "Plus" keeps it.
     ['Galaxy S24 + 256GB', 'samsung:galaxy-s24-plus:256gb'],
@@ -1894,7 +1918,8 @@ async function runSuite() {
   }
   assert.equal(
     normalizer.normalize(createDummyShopeeProduct('MacBook Air 13 inch M3 8GB 256GB')).model_key,
-    'apple:macbook-air-m3-13:256gb'
+    // DRAFT DOS/Rate#1491 (d): 8GB is not the line's 16GB base RAM.
+    'apple:macbook-air-m3-13-8gb-ram:256gb'
   );
   assert.equal(
     normalizer.normalize(createDummyShopeeProduct('Tai nghe Apple AirPods Pro 2 USB-C MTJV3'))
