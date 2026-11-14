@@ -431,15 +431,11 @@ export default async function Home({
             <div className="row g-3">
               {platformStats.categoriesWithCounts.map((cat) => {
                 const known = isKnownCategory(cat.slug);
-                const titleId = `home-cat-${cat.slug}-title`;
-                const descId = `home-cat-${cat.slug}-desc`;
                 return (
                   <div key={cat.id} className="col-xl col-lg-4 col-sm-6 col-12">
                     <Link
                       href={cat.routeHref}
                       className="rate-card rate-card-interactive rate-category-card"
-                      aria-labelledby={titleId}
-                      aria-describedby={known ? descId : undefined}
                     >
                       <div className="rate-category-card-top">
                         <span
@@ -460,11 +456,11 @@ export default async function Home({
                             : tRate('home.catExpanding')}
                         </span>
                       </div>
-                      <h3 id={titleId} className="rate-category-card-title">
+                      <h3 className="rate-category-card-title">
                         {known ? tRate(`nav.${cat.slug}`) : cat.name}
                       </h3>
                       {isKnownCategory(cat.slug) && (
-                        <p id={descId} className="rate-category-card-desc">
+                        <p className="rate-category-card-desc">
                           {tHome(CATEGORY_DESC_KEYS[cat.slug])}
                         </p>
                       )}
