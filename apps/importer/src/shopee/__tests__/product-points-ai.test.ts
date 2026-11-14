@@ -452,3 +452,34 @@ test('runProductPointsAiJob dry-run writes nothing, --apply writes ai rows, skip
   const msgs = buildProductPointsAiMessages('smartphones', [], new Map());
   assert.ok(!msgs[1].content.includes('[object Object]'));
 });
+
+test('formatGroundedProductVerdict runs in linear O(n) time (<10ms) on 20,000 repeated dots', () => {
+  const manyDots = '.'.repeat(20_000);
+  const pathologicalCluster = {
+    key: 'battery:pro:1',
+    criterionKey: 'battery',
+    kind: 'pro' as const,
+    label: `Pin bền${manyDots} ổn`,
+    support: 2,
+    reviewerCount: 2,
+    aiReviewerCount: 0,
+    hasExpert: false,
+    firstSeen: NOW,
+    lastSeen: NOW,
+    lineIds: ['1', '2'],
+    visible: true,
+  };
+  const start = performance.now();
+  const verdict = formatGroundedProductVerdict({
+    aiVerdict: `Pin bền${manyDots} Tóm tắt từ 2 review...`,
+    summary: { pros: [pathologicalCluster], cons: [] },
+    reviewCount: 2,
+    updatedAt: NOW,
+  });
+  const elapsedMs = performance.now() - start;
+  assert.ok(verdict);
+  assert.ok(
+    elapsedMs < 10,
+    `Expected linear execution under 10ms on 20k dots, took ${elapsedMs.toFixed(2)}ms`
+  );
+});

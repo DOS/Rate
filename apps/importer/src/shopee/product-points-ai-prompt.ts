@@ -346,6 +346,30 @@ function formatUtcDdMmYyyy(date: Date): string {
   return `${dd}/${mm}/${yyyy}`;
 }
 
+function trimTrailingDots(text: string): string {
+  let end = text.length;
+  while (end > 0 && text.charCodeAt(end - 1) === 46) end -= 1;
+  return text.slice(0, end);
+}
+
+function stripTrailingVerdictFooter(text: string): string {
+  const trimmed = trimTrailingDots(text.trim()).trimEnd();
+  const lower = trimmed.toLowerCase();
+  const marker = 'tóm tắt từ ';
+  const idx = lower.lastIndexOf(marker);
+  if (idx < 0 || !lower.endsWith(' review')) return text.trim();
+  const digitsPart = lower.slice(idx + marker.length, lower.length - ' review'.length).trim();
+  if (!digitsPart || ![...digitsPart].every(ch => ch >= '0' && ch <= '9')) return text.trim();
+
+  let cut = idx;
+  const beforeSummary = lower.slice(0, idx).trimEnd();
+  const updateIdx = beforeSummary.lastIndexOf('cập nhật');
+  if (updateIdx >= 0 && idx - updateIdx <= 40 && !beforeSummary.slice(updateIdx).includes('.')) {
+    cut = updateIdx;
+  }
+  return trimmed.slice(0, cut).trim();
+}
+
 /**
  * Formats a grounded 1-2 sentence product verdict from kept pros/cons, always
  * carrying the `DD/MM/YYYY` update date and ending `"Tóm tắt từ <N> review"`.
@@ -367,13 +391,11 @@ export function formatGroundedProductVerdict(input: {
   const defaultLeadParts: string[] = [];
   if (summary.pros[0]) defaultLeadParts.push(`Điểm cộng: ${summary.pros[0].label}`);
   if (summary.cons[0]) defaultLeadParts.push(`Điểm trừ: ${summary.cons[0].label}`);
-  const fallbackBody = `${defaultLeadParts.join('. ').replace(/\.+$/u, '')}.`;
+  const fallbackBody = `${trimTrailingDots(defaultLeadParts.join('. '))}.`;
 
   let body = fallbackBody;
   if (typeof input.aiVerdict === 'string' && !REDACTED_MARKER_RE.test(input.aiVerdict)) {
-    const cleaned = sanitizeAiGeneratedText(input.aiVerdict, 320)
-      .replace(/\s*(?:Cập nhật[^.]*?)?Tóm tắt từ\s+\d+\s+review\.?\s*$/iu, '')
-      .trim();
+    const cleaned = stripTrailingVerdictFooter(sanitizeAiGeneratedText(input.aiVerdict, 320));
     const len = [...cleaned].length;
     if (
       len >= 12 &&
@@ -399,7 +421,9 @@ export function formatGroundedProductVerdict(input: {
       );
       const badDigits = extractNumbers(cleaned).some(n => !allowedDigits.has(n));
       if (hasOverlap && !badNegation && !badDigits) {
-        body = /[.!?]$/u.test(cleaned) ? cleaned : `${cleaned}.`;
+        const endsWithPunct =
+          cleaned.endsWith('.') || cleaned.endsWith('!') || cleaned.endsWith('?');
+        body = endsWithPunct ? cleaned : `${cleaned}.`;
       }
     }
   }
