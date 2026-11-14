@@ -7,7 +7,7 @@ import type {
   ProductLeaderboardBadgeInfo,
 } from '@/lib/leaderboard-engine';
 import { BsAwardFill, BsTrophyFill } from 'react-icons/bs';
-import { formatDecimal } from '@/lib/locale-format';
+import { formatRatingValue } from '@/lib/rating-display';
 
 const VALID_BADGE_CATEGORIES = new Set<CanonicalCategorySlug>([
   'smartphones',
@@ -178,7 +178,7 @@ export default async function ProductLeaderboardBadges({
               }}
             >
               (
-              {formatDecimal(
+              {formatRatingValue(
                 b.score5,
                 lang,
                 b.criterion === 'combined' ? 1 : 2

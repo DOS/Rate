@@ -77,6 +77,7 @@ import {
   formatPercent,
   formatPriceVnd,
 } from '@/lib/locale-format';
+import { formatRatingValue } from '@/lib/rating-display';
 import { versusHref } from '@/lib/item-compare';
 
 export type { LeaderboardCriterionKey, LeaderboardPriceSegment };
@@ -1257,7 +1258,12 @@ export default function LeaderboardExplorer({
                   {rankedEntries.map((entry, idx) => (
                     <option key={entry.product.slug} value={entry.product.slug}>
                       #{idx + 1} {entry.product.name} (
-                      {formatDecimal(entry.activeScore5, locale, scoreDigits)}★)
+                      {formatRatingValue(
+                        entry.activeScore5,
+                        locale,
+                        scoreDigits
+                      )}
+                      ★)
                     </option>
                   ))}
                 </select>
@@ -1281,7 +1287,7 @@ export default function LeaderboardExplorer({
                           value={entry.product.slug}
                         >
                           #{rankIdx + 1} {entry.product.name} (
-                          {formatDecimal(
+                          {formatRatingValue(
                             entry.activeScore5,
                             locale,
                             scoreDigits

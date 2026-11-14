@@ -92,6 +92,7 @@ import {
   formatNumber,
   formatPriceVnd,
 } from '@/lib/locale-format';
+import { displayedScore5, formatRatingValue } from '@/lib/rating-display';
 
 interface CompareWorkspaceProps {
   initialProducts: MasterProduct[];
@@ -204,9 +205,9 @@ function getEffectiveRating(p: MasterProduct): number {
   return resolveCompareEffectiveUserRating(p);
 }
 
-/** The rating as every page shows it: one decimal (#1470). */
+/** The rating as every page shows it: one decimal, rounded once (#1470, #1631). */
 function shownRating(p: MasterProduct): number {
-  return Number(getEffectiveRating(p).toFixed(1));
+  return displayedScore5(getEffectiveRating(p));
 }
 
 /**
@@ -329,7 +330,7 @@ export function buildSpecGroups(
             const count = p.authentic_review_count || p.total_reviews || 0;
             return r > 0
               ? t('valAuthenticReviews', {
-                  rating: formatDecimal(r, locale, 1),
+                  rating: formatRatingValue(r, locale),
                   count,
                 })
               : t('valNoReviews');
@@ -1440,7 +1441,7 @@ export default function CompareWorkspace({
             const r = getEffectiveRating(p);
             const cnt = p.authentic_review_count || p.total_reviews || 0;
             return r > 0
-              ? `★ ${r.toFixed(1)}/5.0 (${cnt} review)`
+              ? `★ ${shownRating(p).toFixed(1)}/5.0 (${cnt} review)`
               : t('unratedShort');
           })
           .join(' | ')} |`,

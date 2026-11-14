@@ -27,6 +27,7 @@ import RadarBadge from '@/components/radar/RadarBadge';
 import StarRating from '@/components/elementary/StarRating';
 import { useDealRadarIndex } from '@/components/radar/use-deal-radar';
 import { formatDecimal, formatPercent } from '@/lib/locale-format';
+import { displayedScore5, formatRatingValue } from '@/lib/rating-display';
 
 export type ScoredVersusItem = Omit<ScoredLeaderboardItem, 'rank'>;
 
@@ -206,9 +207,9 @@ export function computeVersusWeightedResult(
     finalA,
     finalB,
     // The gap between the scores as shown, at one decimal.
-    delta: Math.abs(
-      Number(finalA.toFixed(1)) - Number(finalB.toFixed(1))
-    ).toFixed(1),
+    delta: Math.abs(displayedScore5(finalA) - displayedScore5(finalB)).toFixed(
+      1
+    ),
     winner,
     // Level at the shown precision: no lead for either (DOS/Rate#1209).
     tie: isVersusScoreTie(finalA, finalB),
@@ -228,7 +229,7 @@ export default function VersusInteractiveScoreboard({
   const tStars = useTranslations('starRating');
   // A side with no score reads like its stars, not "0.0" (DOS/Rate#1545).
   const summaryScore = (score: number): string =>
-    score > 0 ? formatDecimal(score, locale, 1) : tStars('empty');
+    score > 0 ? formatRatingValue(score, locale) : tStars('empty');
   const locale = useLocale();
   const useCaseLabelId = useId();
   const slidersPanelId = useId();
@@ -333,8 +334,8 @@ export default function VersusInteractiveScoreboard({
       const safePriceAdv = sanitizeVersusMarkdownCell(priceAdvantageLabel);
       const leadScore =
         weightedResult.finalA >= weightedResult.finalB
-          ? weightedResult.finalA.toFixed(1)
-          : weightedResult.finalB.toFixed(1);
+          ? displayedScore5(weightedResult.finalA).toFixed(1)
+          : displayedScore5(weightedResult.finalB).toFixed(1);
       const lines = [
         `### ${t('md1v1Heading', { nameA: safeNameA, nameB: safeNameB })}`,
         weightedResult.tie
@@ -344,7 +345,7 @@ export default function VersusInteractiveScoreboard({
         '',
         `| ${t('mdColCriterion')} | ${safeNameA} | ${safeNameB} | ${t('mdColAdvantage')} |`,
         `| --- | --- | --- | --- |`,
-        `| **${t('mdRowWeightedScore')}** | **${weightedResult.finalA.toFixed(1)}/5.0** | **${weightedResult.finalB.toFixed(1)}/5.0** | **${weightedResult.tie ? sanitizeVersusMarkdownCell(t('mdRowTie')) : safeWinnerName}** |`,
+        `| **${t('mdRowWeightedScore')}** | **${displayedScore5(weightedResult.finalA).toFixed(1)}/5.0** | **${displayedScore5(weightedResult.finalB).toFixed(1)}/5.0** | **${weightedResult.tie ? sanitizeVersusMarkdownCell(t('mdRowTie')) : safeWinnerName}** |`,
         ...criteriaRows.map((r) => {
           const winName = !r.compared
             ? '-'
@@ -383,8 +384,8 @@ export default function VersusInteractiveScoreboard({
       [
         t('csvRowWeightedScore5'),
         100,
-        weightedResult.finalA.toFixed(1),
-        weightedResult.finalB.toFixed(1),
+        displayedScore5(weightedResult.finalA).toFixed(1),
+        displayedScore5(weightedResult.finalB).toFixed(1),
         weightedResult.tie ? t('mdRowTie') : weightedResult.winner.name,
       ],
       ...criteriaRows.map((r) => [
@@ -480,7 +481,7 @@ export default function VersusInteractiveScoreboard({
         slug: safeSlugA,
         name: scoreA.name,
         brand: scoreA.brand,
-        weightedScore5: Number(weightedResult.finalA.toFixed(1)),
+        weightedScore5: displayedScore5(weightedResult.finalA),
         expertScore10: scoreA.expertScore10,
         minPriceVnd: scoreA.minPrice,
         dealRadar: radarExportFields(sigA),
@@ -489,7 +490,7 @@ export default function VersusInteractiveScoreboard({
         slug: safeSlugB,
         name: scoreB.name,
         brand: scoreB.brand,
-        weightedScore5: Number(weightedResult.finalB.toFixed(1)),
+        weightedScore5: displayedScore5(weightedResult.finalB),
         expertScore10: scoreB.expertScore10,
         minPriceVnd: scoreB.minPrice,
         dealRadar: radarExportFields(sigB),

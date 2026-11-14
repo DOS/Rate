@@ -70,6 +70,24 @@ assert.equal(productRatingScore5(phone('a', { rating_score: 4.25 })), 4.3);
 assert.equal(productRatingScore5(phone('a')), null);
 assert.equal(displayedScore5(4.249), 4.2);
 assert.equal(displayedScore5(0), 0);
+// At x.x5 the one rounding goes half up on the decimal value, as the
+// database rounds the stored numeric(4,3): 4.350 is 4.4, where `toFixed(1)`
+// reads the binary float and gives 4.3 (#1631).
+assert.equal(displayedScore5(4.35), 4.4);
+assert.equal(displayedScore5(4.05), 4.1);
+assert.equal(displayedScore5(4.55), 4.6);
+assert.equal(displayedScore5(4.85), 4.9);
+assert.equal(productRatingScore5(phone('a', { rating_score: 4.35 })), 4.4);
+assert.equal(productRatingScore5(phone('a', { rating_score: 4.349 })), 4.3);
+// Every score the database can store (three decimals, 0.001 to 5.000) rounds
+// to its decimal half-up value.
+for (let thousandths = 1; thousandths <= 5000; thousandths++) {
+  assert.equal(
+    displayedScore5(thousandths / 1000),
+    Math.floor((thousandths + 50) / 100) / 10,
+    `displayedScore5(${thousandths / 1000})`
+  );
+}
 
 // The leaderboard reads the same number.
 const scored = scoreMasterProductForLeaderboard(

@@ -6,6 +6,7 @@ import { BsDownload } from 'react-icons/bs';
 import { Link } from '@/lib/navigation';
 import { useDetailsDismiss } from '@/components/elementary/use-details-dismiss';
 import { escapeCsvCell } from '@/lib/csv-safe';
+import { displayedScore5 } from '@/lib/rating-display';
 import {
   MAX_VALID_VND_PRICE,
   resolveCompareEffectiveUserRating,
@@ -144,7 +145,7 @@ export default function CategoryCatalogToolbar({
         sanitizeCatalogToolbarText(p.name, 'Unknown'),
         sanitizeCatalogToolbarText(p.brand, '-', 80),
         userRating != null
-          ? `${userRating.toFixed(1)}/5.0`
+          ? `${displayedScore5(userRating).toFixed(1)}/5.0`
           : t('toolbar.unratedText'),
         expertScore10 != null
           ? `${expertScore10.toFixed(1)}/10`
@@ -199,7 +200,7 @@ export default function CategoryCatalogToolbar({
         sanitizeCatalogToolbarText(p.name, 'Unknown'),
         sanitizeCatalogToolbarText(p.brand, '', 80),
         safeCategorySlug,
-        userRating != null ? userRating.toFixed(1) : '',
+        userRating != null ? displayedScore5(userRating).toFixed(1) : '',
         expertScore10 != null ? expertScore10.toFixed(1) : '',
         String(
           sanitizeCatalogCount(p.authentic_review_count || p.total_reviews || 0)

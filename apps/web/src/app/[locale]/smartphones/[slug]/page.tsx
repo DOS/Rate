@@ -134,6 +134,7 @@ import {
   formatPercent,
   formatPriceVnd,
 } from '@/lib/locale-format';
+import { displayedScore5 } from '@/lib/rating-display';
 import { versusHref } from '@/lib/item-compare';
 import StarRating from '@/components/elementary/StarRating';
 
@@ -575,7 +576,7 @@ export async function ProductDetailView({
     displayUserRating > 0 && authenticCount > 0
       ? {
           '@type': 'AggregateRating',
-          ratingValue: Math.round(displayUserRating * 10) / 10,
+          ratingValue: displayedScore5(displayUserRating),
           reviewCount: authenticCount,
           bestRating: 5,
           worstRating: 1,
