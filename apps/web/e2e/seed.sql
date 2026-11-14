@@ -396,3 +396,29 @@ VALUES
 -- (DOS/Rate#1500). The product page shows no listing images.
 UPDATE rate.products SET images = ARRAY['/img/devices/apple-iphone-16-pro-max-256gb.jpg']
 WHERE id = '33333333-3333-4333-8333-333333333331';
+
+-- Aggregated pros and cons on iPhone 16 Pro Max (DOS/Rate#1624, design 7.1):
+-- 6 'ai' pros (4 on battery, 2 on camera), 2 'ai' cons, and 1 'code' row that
+-- 'ai' supersedes; Galaxy S25 Ultra keeps none, so both states are tested.
+INSERT INTO rate.product_points
+  (id, master_id, criterion_key, kind, label, support, reviewer_count, has_expert, method, updated_at)
+VALUES
+  ('77777777-7777-4777-8777-777777771601', '22222222-2222-4222-8222-222222222221', 'camera', 'pro',
+   'Ảnh chụp đêm rõ nét, ít nhiễu', 14.50, 18, false, 'ai', timestamptz '2026-10-31 12:00:00+07'),
+  ('77777777-7777-4777-8777-777777771602', '22222222-2222-4222-8222-222222222221', 'battery', 'pro',
+   'Pin dùng trọn một ngày dài', 12.20, 15, false, 'ai', timestamptz '2026-10-31 12:00:00+07'),
+  ('77777777-7777-4777-8777-777777771603', '22222222-2222-4222-8222-222222222221', 'camera', 'pro',
+   'Quay video chống rung rất mượt', 9.80, 12, false, 'ai', timestamptz '2026-10-31 12:00:00+07'),
+  ('77777777-7777-4777-8777-777777771604', '22222222-2222-4222-8222-222222222221', 'battery', 'pro',
+   'Sạc qua cổng USB-C ổn định', 8.10, 10, false, 'ai', timestamptz '2026-10-31 12:00:00+07'),
+  ('77777777-7777-4777-8777-777777771605', '22222222-2222-4222-8222-222222222221', 'battery', 'pro',
+   'Ít tụt phần trăm khi để chờ', 6.40, 8, false, 'ai', timestamptz '2026-10-31 12:00:00+07'),
+  ('77777777-7777-4777-8777-777777771606', '22222222-2222-4222-8222-222222222221', 'battery', 'pro',
+   'Tối ưu điện năng khi xem phim', 4.20, 5, false, 'ai', timestamptz '2026-10-31 12:00:00+07'),
+  ('77777777-7777-4777-8777-777777771607', '22222222-2222-4222-8222-222222222221', 'battery', 'con',
+   'Sạc đầy mất gần 90 phút', 5.60, 7, false, 'ai', timestamptz '2026-10-31 12:00:00+07'),
+  ('77777777-7777-4777-8777-777777771608', '22222222-2222-4222-8222-222222222221', 'value', 'con',
+   'Giá niêm yết cao, ít đợt giảm sâu', 3.90, 4, false, 'ai', timestamptz '2026-10-31 12:00:00+07'),
+  ('77777777-7777-4777-8777-777777771609', '22222222-2222-4222-8222-222222222221', 'battery', 'pro',
+   'Dòng code dự phòng khi chưa có ai', 25.00, 30, false, 'code', timestamptz '2026-10-30 12:00:00+07');
+

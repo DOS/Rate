@@ -54,8 +54,14 @@ import {
   type ReviewBadgeKind,
 } from '@/lib/review-display';
 import AnalyzerText, { analyzerText } from './AnalyzerText';
+import ProductPointsBlock from './ProductPointsBlock';
 import ReviewFormV2 from './ReviewFormV2';
 import { isReviewFormV2Enabled } from '@/lib/review-form-v2';
+import {
+  mapLegacyPointCriterionKey,
+  selectProductPoints,
+  type StoredProductPointRow,
+} from '@/lib/product-points-display';
 import { hasRatingCriteria } from '@repo/shared-data/rules';
 import {
   hasSessionCookie,
@@ -100,6 +106,8 @@ export interface JReviewsSectionProps {
   ignoredReviewCount: number;
   reviews: ReviewItem[];
   summary: ReviewAnalysisSummary;
+  productPoints?: readonly StoredProductPointRow[];
+  productPointsReviewCount?: number;
   radarSignal?: RadarSignal | null;
 }
 
@@ -171,6 +179,8 @@ export default function JReviewsSection({
   ignoredReviewCount,
   reviews: initialReviews,
   summary,
+  productPoints,
+  productPointsReviewCount,
   radarSignal,
   categorySlug,
   reviewCategorySlug,
@@ -246,6 +256,24 @@ export default function JReviewsSection({
   const [myValues, setMyValues] = useState<Record<string, MyReviewValue>>({});
   const [searchKeyword, setSearchKeyword] = useState('');
   const [starFilter, setStarFilter] = useState<'all' | 5 | 4 | 3>('all');
+  const [selectedPointCriterion, setSelectedPointCriterion] = useState<
+    string | null
+  >(null);
+
+  const pointsOverview = useMemo(
+    () =>
+      selectProductPoints(productPoints, {
+        categorySlug,
+        pointsReviewCount: productPointsReviewCount,
+      }),
+    [productPoints, categorySlug, productPointsReviewCount]
+  );
+  const availablePointCriteria = useMemo(
+    () => new Set(pointsOverview?.availableCriteria ?? []),
+    [pointsOverview]
+  );
+  const showLegacyProsCons =
+    !pointsOverview && (summary.pros.length > 0 || summary.cons.length > 0);
 
   // 5-Criteria Write Review Form State
   const [showWriteForm, setShowWriteForm] = useState(false);
@@ -1290,6 +1318,14 @@ export default function JReviewsSection({
             {t('normalizedByHelpfulnessBadge')}
           </span>
         </div>
+        {availablePointCriteria.size > 0 && (
+          <span
+            id={`${fieldId}-points-filter-desc`}
+            className="visually-hidden"
+          >
+            {t('pointsCriterionHint')}
+          </span>
+        )}
         <div className="row g-3">
           {liveScores.criteriaAverages.map((crit) => {
             const pct =
@@ -1299,32 +1335,73 @@ export default function JReviewsSection({
                     Math.max(10, Math.round((crit.score / 5) * 100))
                   )
                 : 0;
+            const mappedPointKey = mapLegacyPointCriterionKey(
+              categorySlug,
+              crit.key
+            );
+            const canFilterPoints =
+              mappedPointKey !== null &&
+              availablePointCriteria.has(mappedPointKey);
+            const isCriterionSelected =
+              canFilterPoints && selectedPointCriterion === mappedPointKey;
+            const cardInner = (
+              <>
+                <span className="d-flex justify-content-between align-items-center small mb-1">
+                  <span className="text-muted fw-medium">{crit.label}</span>
+                  <strong className="text-dark font-monospace">
+                    {crit.score != null
+                      ? `${formatDecimal(crit.score, locale, 1)}/5`
+                      : t('notAvailableShort')}
+                  </strong>
+                </span>
+                <span
+                  className="progress d-flex rounded-pill"
+                  style={{ height: '6px' }}
+                  aria-hidden="true"
+                >
+                  <span
+                    className="progress-bar bg-warning"
+                    style={{ width: `${pct}%` }}
+                  />
+                </span>
+              </>
+            );
             return (
               <div key={crit.key} className="col-lg col-md-4 col-sm-6 col-12">
-                <div className="rounded-3 bg-light h-100 border p-2 px-3">
-                  <div className="d-flex justify-content-between align-items-center small mb-1">
-                    <span className="text-muted fw-medium">{crit.label}</span>
-                    <strong className="text-dark font-monospace">
-                      {crit.score != null
-                        ? `${formatDecimal(crit.score, locale, 1)}/5`
-                        : t('notAvailableShort')}
-                    </strong>
-                  </div>
-                  <div
-                    className="progress rounded-pill"
-                    style={{ height: '6px' }}
+                {canFilterPoints ? (
+                  <button
+                    type="button"
+                    aria-pressed={isCriterionSelected}
+                    aria-describedby={`${fieldId}-points-filter-desc`}
+                    data-testid={`jreviews-criterion-${mappedPointKey}`}
+                    onClick={() =>
+                      setSelectedPointCriterion((prev) =>
+                        prev === mappedPointKey ? null : mappedPointKey
+                      )
+                    }
+                    className="rate-crit-card-btn rounded-3 h-100 p-2 px-3"
                   >
-                    <div
-                      className="progress-bar bg-warning"
-                      style={{ width: `${pct}%` }}
-                    />
+                    {cardInner}
+                  </button>
+                ) : (
+                  <div className="rounded-3 bg-light h-100 border p-2 px-3">
+                    {cardInner}
                   </div>
-                </div>
+                )}
               </div>
             );
           })}
         </div>
       </div>
+
+      {/* 1c. Product Pros & Cons from rate.product_points (DOS/Rate#1624, design 7.1) */}
+      <ProductPointsBlock
+        points={productPoints}
+        categorySlug={categorySlug}
+        pointsReviewCount={productPointsReviewCount}
+        selectedCriterion={selectedPointCriterion}
+        onSelectCriterion={setSelectedPointCriterion}
+      />
 
       {liveScores.starAnomaly.isAnomalous && (
         <div
@@ -1384,7 +1461,9 @@ export default function JReviewsSection({
         {/* Progress Bar: draws the badge percentages above, so it is hidden
             from assistive tech rather than labelled (DOS/Rate#1071). */}
         <div
-          className="progress rounded-pill mb-3"
+          className={`progress rounded-pill ${
+            summary.ai_summary || showLegacyProsCons ? 'mb-3' : 'mb-0'
+          }`}
           style={{ height: '10px' }}
           aria-hidden="true"
         >
@@ -1427,13 +1506,17 @@ export default function JReviewsSection({
         </div>
 
         {summary.ai_summary && (
-          <div className="rounded-3 small text-dark mb-3 border bg-white p-3">
+          <div
+            className={`rounded-3 small text-dark border bg-white p-3 ${
+              showLegacyProsCons ? 'mb-3' : 'mb-0'
+            }`}
+          >
             <strong>{t('aiSummaryPrefix')}</strong>{' '}
             <AnalyzerText text={summary.ai_summary} />
           </div>
         )}
 
-        {(summary.pros.length > 0 || summary.cons.length > 0) && (
+        {showLegacyProsCons && (
           <div className="row g-3">
             <div className="col-md-6 col-12">
               <div className="rounded-3 h-100 border bg-white p-3">
