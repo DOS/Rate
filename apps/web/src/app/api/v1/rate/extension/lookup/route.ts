@@ -1,5 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import {
+  productRatingScore5,
+  resolveStoredRatingScore,
+} from '@/lib/rate-domain';
+import {
   EXTENSION_CAPABILITY_MATRIX,
   lookupExtensionProduct,
 } from '@/server/rate';
@@ -102,6 +106,14 @@ export async function GET(request: NextRequest) {
         ok: true,
         data: {
           ...result,
+          masterProduct: result.masterProduct
+            ? {
+                ...result.masterProduct,
+                rating_score:
+                  resolveStoredRatingScore(result.masterProduct) || null,
+                rating_score_5: productRatingScore5(result.masterProduct),
+              }
+            : null,
           // A seller with no analysed review has no review risk (#1258,
           // #1376), on the store card and on every offer alike.
           matchedOffer: result.matchedOffer
