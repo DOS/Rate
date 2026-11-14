@@ -370,6 +370,32 @@ function stripTrailingVerdictFooter(text: string): string {
   return trimmed.slice(0, cut).trim();
 }
 
+function isAsciiDigit(ch: string | undefined): boolean {
+  return ch !== undefined && ch >= '0' && ch <= '9';
+}
+
+function countVerdictSentences(text: string): number {
+  let count = 0;
+  let inSentence = false;
+  for (let i = 0; i < text.length; i += 1) {
+    const ch = text[i]!;
+    if (ch === '.' || ch === '!' || ch === '?' || ch === '…') {
+      if (ch === '.' && isAsciiDigit(text[i - 1]) && isAsciiDigit(text[i + 1])) {
+        inSentence = true;
+        continue;
+      }
+      if (inSentence) {
+        count += 1;
+        inSentence = false;
+      }
+    } else if (ch !== ' ' && ch !== '\t' && ch !== '\n' && ch !== '\r') {
+      inSentence = true;
+    }
+  }
+  if (inSentence) count += 1;
+  return count;
+}
+
 /**
  * Formats a grounded 1-2 sentence product verdict from kept pros/cons, always
  * carrying the `DD/MM/YYYY` update date and ending `"Tóm tắt từ <N> review"`.
@@ -397,9 +423,12 @@ export function formatGroundedProductVerdict(input: {
   if (typeof input.aiVerdict === 'string' && !REDACTED_MARKER_RE.test(input.aiVerdict)) {
     const cleaned = stripTrailingVerdictFooter(sanitizeAiGeneratedText(input.aiVerdict, 320));
     const len = [...cleaned].length;
+    const sentenceCount = countVerdictSentences(cleaned);
     if (
       len >= 12 &&
       len <= 280 &&
+      sentenceCount >= 1 &&
+      sentenceCount <= 2 &&
       !REDACTED_MARKER_RE.test(cleaned) &&
       hasContent(cleaned) &&
       !hasReviewScoreClaim(cleaned)

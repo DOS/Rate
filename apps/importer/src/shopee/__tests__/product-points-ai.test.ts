@@ -340,6 +340,10 @@ test('runProductPointsAiJob dry-run writes nothing, --apply writes ai rows, skip
           rows = rows.filter(r => vals.includes(r[col]));
           return builder;
         },
+        eq: (col: string, val: unknown) => {
+          rows = rows.filter(r => r[col] === val);
+          return builder;
+        },
         gt: (col: string, val: string) => {
           rows = rows.filter(r => String(r[col] ?? '') > val);
           return builder;
@@ -351,13 +355,29 @@ test('runProductPointsAiJob dry-run writes nothing, --apply writes ai rows, skip
         limit: (n: number) => Promise.resolve({ data: rows.slice(0, n), error: null }),
         range: (from: number, to: number) =>
           Promise.resolve({ data: rows.slice(from, to + 1), error: null }),
-        insert: (payload: unknown[]) => {
+        insert: (payload: Record<string, unknown>[]) => {
           inserts.push(payload);
-          return Promise.resolve({ error: null });
+          const created = payload.map((item, idx) => ({
+            ...item,
+            id: `99999999-9999-4999-8999-${String(idx + 1).padStart(12, '0')}`,
+          }));
+          if (table === 'product_points') {
+            productPoints.push(...(created as unknown as StoredProductPointRow[]));
+          }
+          return {
+            select: () => Promise.resolve({ data: created.map(c => ({ id: c.id })), error: null }),
+            then: (onFulfilled: (v: { error: null }) => unknown) =>
+              Promise.resolve({ error: null }).then(onFulfilled),
+          };
         },
         delete: () => ({
           in: (_col: string, vals: string[]) => {
             deletes.push(vals);
+            if (table === 'product_points') {
+              for (let idx = productPoints.length - 1; idx >= 0; idx -= 1) {
+                if (vals.includes(productPoints[idx]!.id)) productPoints.splice(idx, 1);
+              }
+            }
             return Promise.resolve({ error: null });
           },
         }),
@@ -379,9 +399,24 @@ test('runProductPointsAiJob dry-run writes nothing, --apply writes ai rows, skip
   assert.equal(inserts.length, 0);
   assert.equal(deletes.length, 0);
 
-  // 2) Apply writes `method = 'ai'`, deletes old AI + stale AI rows, leaves `code` untouched
+  // 2) Apply writes `method = 'ai'`, sweeps concurrent + old AI + stale AI rows, leaves `code` untouched
   const fakeAi: ReviewAiClient = {
     async createBatch() {
+      // Simulate an overlapping run inserting another `ai` row while the batch was in flight
+      productPoints.push({
+        id: 'ai-concurrent-mid-batch',
+        master_id: M_DUE,
+        criterion_key: 'battery',
+        kind: 'pro',
+        label: 'Pin song song',
+        support: 2,
+        reviewer_count: 2,
+        has_expert: false,
+        first_seen: '2026-11-10T00:00:00Z',
+        last_seen: '2026-11-12T00:00:00Z',
+        method: 'ai',
+        updated_at: '2026-11-14T09:30:00Z',
+      });
       return { id: 'batch-1' };
     },
     async batchStatus() {
@@ -419,8 +454,8 @@ test('runProductPointsAiJob dry-run writes nothing, --apply writes ai rows, skip
     aiClient: fakeAi,
   });
   assert.equal(applied.inserted, 1);
-  assert.equal(applied.deleted, 2); // ai-stale + ai-old-due
-  assert.deepEqual(deletes.flat().sort(), ['ai-old-due', 'ai-stale']);
+  assert.equal(applied.deleted, 3); // ai-stale + ai-old-due + ai-concurrent-mid-batch
+  assert.deepEqual(deletes.flat().sort(), ['ai-concurrent-mid-batch', 'ai-old-due', 'ai-stale']);
   const written = inserts[0]![0] as { method: string; label: string };
   assert.equal(written.method, 'ai');
   assert.equal(written.label, 'Pin trâu dùng bền lâu');
@@ -429,6 +464,21 @@ test('runProductPointsAiJob dry-run writes nothing, --apply writes ai rows, skip
   // 3) Errored/truncated AI batch item leaves existing AI rows intact so master stays due
   inserts.length = 0;
   deletes.length = 0;
+  productPoints[0]!.updated_at = '2026-11-14T11:00:00Z';
+  productPoints.push({
+    id: 'ai-stale-2',
+    master_id: M_STALE,
+    criterion_key: 'battery',
+    kind: 'pro',
+    label: 'Pin cũ 2',
+    support: 2,
+    reviewer_count: 2,
+    has_expert: false,
+    first_seen: '2026-11-01T00:00:00Z',
+    last_seen: '2026-11-02T00:00:00Z',
+    method: 'ai',
+    updated_at: '2026-11-03T09:00:00Z',
+  });
   const erroredAi: ReviewAiClient = {
     async createBatch() {
       return { id: 'batch-err' };
@@ -447,7 +497,7 @@ test('runProductPointsAiJob dry-run writes nothing, --apply writes ai rows, skip
     aiClient: erroredAi,
   });
   assert.equal(deferred.inserted, 0);
-  assert.deepEqual(deletes.flat(), ['ai-stale']);
+  assert.deepEqual(deletes.flat(), ['ai-stale-2']);
 
   const msgs = buildProductPointsAiMessages('smartphones', [], new Map());
   assert.ok(!msgs[1].content.includes('[object Object]'));
@@ -481,5 +531,25 @@ test('formatGroundedProductVerdict runs in linear O(n) time (<10ms) on 20,000 re
   assert.ok(
     elapsedMs < 10,
     `Expected linear execution under 10ms on 20k dots, took ${elapsedMs.toFixed(2)}ms`
+  );
+
+  // Falls back when AI returns more than 2 sentences
+  const proCluster = { ...pathologicalCluster, label: 'Pin dùng lâu sạc nhanh' };
+  const conCluster = {
+    ...pathologicalCluster,
+    key: 'thermals:con:2',
+    criterionKey: 'thermals',
+    kind: 'con' as const,
+    label: 'Máy nóng',
+  };
+  const tooManySentences = formatGroundedProductVerdict({
+    aiVerdict: 'Pin dùng lâu. Sạc nhanh. Máy nóng.',
+    summary: { pros: [proCluster], cons: [conCluster] },
+    reviewCount: 4,
+    updatedAt: NOW,
+  });
+  assert.equal(
+    tooManySentences,
+    'Điểm cộng: Pin dùng lâu sạc nhanh. Điểm trừ: Máy nóng. Cập nhật 14/11/2026 - Tóm tắt từ 4 review'
   );
 });

@@ -26,6 +26,10 @@ A dedicated `1:1` table keyed by `master_id` keeps `rate_worker` isolated from `
 - `rate_worker`: `SELECT, INSERT, UPDATE, DELETE` (`USING (true) WITH CHECK (true)`), matching `rate.product_points`.
 - `service_role`: `ALL`.
 
+## Optional Atomic Replacement RPC (`rate.replace_product_points_ai`)
+
+Until this `DOS-Me` migration lands, `product-points-ai.ts` inserts the new `method = 'ai'` rows returning their UUIDs and sweeps every `method = 'ai'` row for that `master_id` not in the newly inserted set (preventing overlapping runs from leaving duplicate AI sets). When deploying `rate.product_verdicts` in `DOS-Me`, we can optionally bundle a `rate.replace_product_points_ai(p_master_id uuid, p_points jsonb, p_verdict text, p_review_count int)` `SECURITY INVOKER` RPC to replace both `rate.product_points` (`method = 'ai'`) and `rate.product_verdicts` under a single per-master transaction lock.
+
 ## Companion Files
 
 - Migration: `Docs/Proposals/2026-11-14-dos-me-product-verdict.sql`

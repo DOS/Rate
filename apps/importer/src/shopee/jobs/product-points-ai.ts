@@ -419,12 +419,34 @@ export async function runProductPointsAiJob(
     );
     if (!apply) continue;
 
+    const insertedSet = new Set<string>();
     if (rows.length > 0) {
-      const { error } = await supabase.from('product_points').insert(rows);
+      const { data: insertedRows, error } = await supabase
+        .from('product_points')
+        .insert(rows)
+        .select('id');
       if (error) throw new Error(`product_points AI insert for ${id}: ${error.message}`);
-      inserted += rows.length;
+      for (const r of (insertedRows ?? []) as { id?: unknown }[]) {
+        if (typeof r.id === 'string' && UUID_RE.test(r.id)) insertedSet.add(r.id);
+      }
+      if (insertedSet.size !== rows.length) {
+        throw new Error(
+          `product_points AI insert for ${id}: expected ${rows.length} UUIDs, got ${insertedSet.size}.`
+        );
+      }
+      inserted += insertedSet.size;
     }
-    for (const part of chunks(oldAiIds)) {
+    const currentAiRows = await fetchByKey<{ id: string }>(
+      supabase,
+      'product_points',
+      'id',
+      'id',
+      query => query.eq('master_id', id).eq('method', 'ai')
+    );
+    const idsToDelete = [...new Set([...oldAiIds, ...currentAiRows.map(r => r.id)])].filter(
+      rowId => !insertedSet.has(rowId)
+    );
+    for (const part of chunks(idsToDelete)) {
       const { error } = await supabase.from('product_points').delete().in('id', part);
       if (error) throw new Error(`product_points AI delete for ${id}: ${error.message}`);
       deleted += part.length;
