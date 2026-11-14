@@ -76,6 +76,23 @@ test('resolveGroundedClusterLabel falls back on ungrounded words, negation flip,
     ),
     rawLabel
   );
+
+  // Invented secondary claim beyond shared words
+  assert.equal(
+    resolveGroundedClusterLabel(
+      'Pin dùng cả ngày, camera chống nước tuyệt vời',
+      'pin dùng cả ngày',
+      ['pin dùng cả ngày'],
+      'pro'
+    ),
+    'pin dùng cả ngày'
+  );
+
+  // Antonym swap without explicit negation ("mát" instead of "nóng")
+  assert.equal(
+    resolveGroundedClusterLabel('Máy mát khi chơi game', rawLabel, rawLines, 'con'),
+    rawLabel
+  );
 });
 
 test('mergeAndSelectAiProductPoints deduplicates same writer across merged clusters and preserves always-one-con', () => {
@@ -160,6 +177,31 @@ test('mergeAndSelectAiProductPoints deduplicates same writer across merged clust
   assert.ok(verdict);
   assert.match(verdict, /14\/11\/2026/);
   assert.ok(verdict.endsWith(`Tóm tắt từ ${base.reviewCount} review`));
+
+  // Conflicting numeric claims ("1 ngày" vs "2 ngày") must NOT merge into 4 writers
+  const numLines: PointLine[] = [
+    mkLine('n1', 'u1', 'pro', 'battery', 'pin dùng được 1 ngày', 1),
+    mkLine('n2', 'u2', 'pro', 'battery', 'pin dùng được 1 ngày', 1),
+    mkLine('n3', 'u3', 'pro', 'battery', 'pin dùng được 2 ngày', 1),
+    mkLine('n4', 'u4', 'pro', 'battery', 'pin dùng được 2 ngày', 1),
+  ];
+  const numBase = aggregateProductPoints('smartphones', numLines, NOW);
+  const numClusters = numBase.clusters.filter(c => c.visible);
+  assert.equal(numClusters.length, 2);
+  const numMerged = mergeAndSelectAiProductPoints(
+    numBase.clusters,
+    numLines,
+    [
+      {
+        clusterKeys: [numClusters[0]!.key, numClusters[1]!.key],
+        sentence: 'Pin dùng được 2 ngày',
+      },
+    ],
+    NOW
+  );
+  assert.equal(numMerged.byCriterion.battery!.pros.length, 2);
+  assert.equal(numMerged.byCriterion.battery!.pros[0]!.reviewerCount, 2);
+  assert.equal(numMerged.byCriterion.battery!.pros[1]!.reviewerCount, 2);
 });
 
 test('runProductPointsAiJob dry-run writes nothing, --apply writes ai rows, skips unchanged, and clears stale ai rows', async () => {
@@ -296,9 +338,17 @@ test('runProductPointsAiJob dry-run writes nothing, --apply writes ai rows, skip
         select: () => builder,
         in: (col: string, vals: readonly unknown[]) => {
           rows = rows.filter(r => vals.includes(r[col]));
-          return Promise.resolve({ data: rows, error: null });
+          return builder;
         },
-        order: () => builder,
+        gt: (col: string, val: string) => {
+          rows = rows.filter(r => String(r[col] ?? '') > val);
+          return builder;
+        },
+        order: (col: string) => {
+          rows = [...rows].sort((a, b) => String(a[col] ?? '').localeCompare(String(b[col] ?? '')));
+          return builder;
+        },
+        limit: (n: number) => Promise.resolve({ data: rows.slice(0, n), error: null }),
         range: (from: number, to: number) =>
           Promise.resolve({ data: rows.slice(from, to + 1), error: null }),
         insert: (payload: unknown[]) => {

@@ -33,6 +33,28 @@ import { sanitizeAiGeneratedText } from './logger.js';
 const NEGATED_PREFIX = 'không_';
 const DIGITS_RE = /\p{N}+/gu;
 const REDACTED_MARKER_RE = /\[(?:link|phone)-removed\]/iu;
+const SAFE_CONNECTIVE_TOKENS = new Set([
+  'nhưng',
+  'tuy',
+  'nhiên',
+  'và',
+  'với',
+  'khi',
+  'lúc',
+  'vẫn',
+  'còn',
+  'hơn',
+  'nên',
+  'vì',
+  'do',
+  'ở',
+  'trên',
+  'cho',
+  'điểm',
+  'cộng',
+  'trừ',
+]);
+const SAFE_PRO_POLISH_TOKENS = new Set(['ổn', 'định', 'bền']);
 
 function extractNumbers(text: string): string[] {
   return text.normalize('NFKC').match(DIGITS_RE) ?? [];
@@ -63,11 +85,19 @@ function validateGroundedSentence(
   }
   if (rawTokenSet.size === 0) return null;
 
-  // Require at least 2 shared tokens (or 1 when raw lines only contain 1 distinct token).
+  // Every AI token must come from raw lines (or neutral connectives / safe pro polish),
+  // preventing invented secondary claims or antonym swaps ("mát" for "nóng").
   const aiDistinct = [...new Set(aiTokens)];
   const shared = aiDistinct.filter(tok => rawTokenSet.has(tok)).length;
   const minShared = Math.min(2, rawTokenSet.size);
-  if (shared < minShared) return null;
+  if (shared < minShared || shared / aiDistinct.length < 0.6) return null;
+  for (const tok of aiDistinct) {
+    const allowed =
+      rawTokenSet.has(tok) ||
+      SAFE_CONNECTIVE_TOKENS.has(tok) ||
+      (kind === 'pro' && SAFE_PRO_POLISH_TOKENS.has(tok));
+    if (!allowed) return null;
+  }
 
   // Reject polarity flip between `không_<w>` and `<w>`.
   for (const tok of aiDistinct) {
@@ -167,26 +197,53 @@ export function mergeAndSelectAiProductPoints(
     buckets.forEach((members, idx) => {
       const candidateSentence = idx === 0 && hasClearMajority ? item.sentence : null;
       if (members.length > 1) {
-        const memberTokenSets = members.map(m => {
+        const memberInfos = members.map(m => {
           const toks = new Set<string>();
+          const digits = new Set<string>();
           for (const id of m.lineIds) {
             const b = lineById.get(id)?.body;
-            if (b) for (const t of pointTokens(b)) toks.add(t);
+            if (b) {
+              for (const t of pointTokens(b)) toks.add(t);
+              for (const n of extractNumbers(b)) digits.add(n);
+            }
           }
-          return toks;
+          return { toks, digits };
         });
+        let compatible = true;
+        for (let i = 0; i < memberInfos.length && compatible; i += 1) {
+          for (let j = i + 1; j < memberInfos.length; j += 1) {
+            const a = memberInfos[i]!;
+            const b = memberInfos[j]!;
+            const negConflict =
+              [...a.toks].some(
+                t => t.startsWith(NEGATED_PREFIX) && b.toks.has(t.slice(NEGATED_PREFIX.length))
+              ) ||
+              [...b.toks].some(
+                t => t.startsWith(NEGATED_PREFIX) && a.toks.has(t.slice(NEGATED_PREFIX.length))
+              );
+            const numConflict =
+              (a.digits.size > 0 || b.digits.size > 0) &&
+              (a.digits.size !== b.digits.size || ![...a.digits].every(d => b.digits.has(d)));
+            if (negConflict || numConflict) {
+              compatible = false;
+              break;
+            }
+          }
+        }
         const pooledBodies = members.flatMap(m =>
           m.lineIds.map(id => lineById.get(id)?.body ?? '').filter(Boolean)
         );
-        const validated = validateGroundedSentence(
-          candidateSentence,
-          pooledBodies,
-          members[0]!.kind
-        );
+        const validated = compatible
+          ? validateGroundedSentence(candidateSentence, pooledBodies, members[0]!.kind)
+          : null;
         const vTokens = validated ? new Set(pointTokens(validated)) : null;
         const overlapsEveryMember =
           vTokens !== null &&
-          memberTokenSets.every(set => set.size > 0 && [...set].some(t => vTokens.has(t)));
+          memberInfos.every(
+            info =>
+              info.toks.size > 0 &&
+              [...info.toks].filter(t => vTokens.has(t)).length >= Math.min(2, info.toks.size)
+          );
         if (overlapsEveryMember) {
           groups.push({ members, sentence: validated });
         } else {
@@ -329,7 +386,12 @@ export function formatGroundedProductVerdict(input: {
       const allowedDigits = new Set(shownLabels.flatMap(l => extractNumbers(l)));
       const vDistinct = [...new Set(pointTokens(cleaned))];
       const shared = vDistinct.filter(t => allowedTokens.has(t)).length;
-      const hasOverlap = shared >= Math.min(2, allowedTokens.size) && allowedTokens.size > 0;
+      const hasOverlap =
+        allowedTokens.size > 0 &&
+        shared >= Math.min(2, allowedTokens.size) &&
+        vDistinct.length > 0 &&
+        shared / vDistinct.length >= 0.6 &&
+        vDistinct.every(t => allowedTokens.has(t) || SAFE_CONNECTIVE_TOKENS.has(t));
       const badNegation = vDistinct.some(t =>
         t.startsWith(NEGATED_PREFIX)
           ? !allowedTokens.has(t)

@@ -47,6 +47,7 @@ import {
   type BatchRequest,
   type ReviewAiClient,
 } from './review-ai-points.js';
+import { fetchByKey } from './review-values.js';
 
 const logger = createImporterLogger('ProductPointsAiJob');
 const IN_CHUNK = 150;
@@ -109,13 +110,14 @@ async function selectIn<T>(
   table: string,
   columns: string,
   column: string,
-  ids: readonly string[]
+  ids: readonly string[],
+  key = 'id'
 ): Promise<T[]> {
   const rows: T[] = [];
   for (const part of chunks([...new Set(ids)])) {
-    const { data, error } = await supabase.from(table).select(columns).in(column, part);
-    if (error) throw new Error(`${table}: ${error.message}`);
-    rows.push(...((data ?? []) as T[]));
+    rows.push(
+      ...(await fetchByKey<T>(supabase, table, columns, key, query => query.in(column, part)))
+    );
   }
   return rows;
 }

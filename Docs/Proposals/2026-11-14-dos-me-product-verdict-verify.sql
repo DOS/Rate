@@ -15,7 +15,10 @@ SELECT count(*) FROM (VALUES
   ('rate_worker', 'TRUNCATE')
 ) AS t(role_name, priv)
 WHERE has_table_privilege(t.role_name, 'rate.product_verdicts', t.priv)
-   OR has_any_column_privilege(t.role_name, 'rate.product_verdicts', t.priv);
+   OR (
+     t.priv IN ('SELECT', 'INSERT', 'UPDATE', 'REFERENCES')
+     AND has_any_column_privilege(t.role_name, 'rate.product_verdicts', t.priv)
+   );
 
 -- V3 anon, authenticated, rate_worker and service_role can SELECT; expect 0
 SELECT count(*) FROM (VALUES
