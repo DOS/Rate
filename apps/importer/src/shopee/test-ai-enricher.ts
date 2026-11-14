@@ -308,10 +308,13 @@ async function runTests() {
       device.specifications.camera?.main_camera,
       `Flagship seed ${device.model_key} missing main_camera`
     );
-    assert.ok(
-      device.specifications.camera?.second_camera,
-      `Flagship seed ${device.model_key} missing second_camera`
-    );
+    // A phone with one rear camera (iPhone 17e, iPhone Air) has no second one to name.
+    if (!/^single\b/i.test(device.specifications.camera?.rear_setup ?? '')) {
+      assert.ok(
+        device.specifications.camera?.second_camera,
+        `Flagship seed ${device.model_key} missing second_camera`
+      );
+    }
     console.log(
       `✅ [Seed Validation] ${device.name} (${device.categorySlug}) -> 10/10 groups, camera=${device.specifications.camera?.rear_setup}`
     );
