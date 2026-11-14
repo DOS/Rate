@@ -3,37 +3,16 @@ updates:
   # One npm entry at the workspace root: Dependabot updates every pnpm
   # workspace package and the single root pnpm-lock.yaml together. Per-app
   # entries changed apps/*/package.json without the lockfile (frozen install failed).
+  #
+  # Keep pnpm.overrides in the root package.json (not pnpm-workspace.yaml,
+  # dependabot/dependabot-core#16529) so Dependabot rewrites an override
+  # together with the direct dependency of the same name (#1335, #1337).
+  # Platform @swc/core-* bindings come from @swc/core optionalDependencies
+  # and are not pinned directly (#1645).
   - package-ecosystem: "npm"
     directory: "/"
     schedule:
       interval: "weekly"
-    groups:
-      # @swc/core and its Windows binding @swc/core-win32-x64-msvc are pinned
-      # to the same exact version in three places: root devDependencies, root
-      # pnpm.overrides and apps/web devDependencies. Bumped alone, @swc/core
-      # loads a binding of another version on Windows x64 (#1337, realigned by
-      # hand in #1629), so both move in one PR, which also takes a single slot
-      # of the open pull request limit. The pattern does not match
-      # @swc/helpers.
-      #
-      # pnpm.overrides: Dependabot rewrites an override in the root
-      # package.json together with the direct dependency of the same name
-      # (seen in #1337 for @swc/core and #1335 for
-      # @typescript-eslint/eslint-plugin, both ungrouped PRs; not yet seen
-      # for a group PR). It does not do so for overrides
-      # kept in pnpm-workspace.yaml (dependabot/dependabot-core#16529), so
-      # keep these overrides in package.json.
-      #
-      # Before merging a PR of this group, check that both packages show the
-      # same version in all three places and in the `overrides:` block of
-      # pnpm-lock.yaml. A group PR can carry only one of the two (for example
-      # when one of them is under an ignore condition), and security updates
-      # are not grouped here. If the pair is out of step, fix it by hand as in
-      # #1629: set the versions in both package.json files, then run
-      # `pnpm install --lockfile-only`.
-      swc-core:
-        patterns:
-          - "@swc/core*"
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
