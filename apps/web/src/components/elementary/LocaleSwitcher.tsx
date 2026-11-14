@@ -18,6 +18,8 @@ const FlagVN = () => (
     width="18"
     height="12"
     viewBox="0 0 3 2"
+    aria-hidden="true"
+    focusable="false"
     style={{
       borderRadius: '2px',
       display: 'inline-block',
@@ -43,6 +45,8 @@ const FlagEN = () => {
       width="18"
       height="12"
       viewBox="0 0 60 30"
+      aria-hidden="true"
+      focusable="false"
       style={{
         borderRadius: '2px',
         display: 'inline-block',
@@ -77,6 +81,8 @@ const FlagCS = () => (
     width="18"
     height="12"
     viewBox="0 0 3 2"
+    aria-hidden="true"
+    focusable="false"
     style={{
       borderRadius: '2px',
       display: 'inline-block',
@@ -139,6 +145,25 @@ export function sanitizeSwitcherQueryString(rawSearch: unknown): string {
   } catch {
     return '';
   }
+}
+
+export function getSwitcherShortCode(locale: string): string {
+  const safe = sanitizeSwitcherLocale(locale, 'vi');
+  return localeConfig[safe]?.short ?? safe.toUpperCase();
+}
+
+// Keep visible button text (e.g. "VI", "EN", "CS") inside aria-label without
+// parentheses: axe-core 4.14 strips (...) in label-content-name-mismatch
+// (WCAG 2.5.3 Label in Name, DOS/Rate#1651).
+export function formatSwitcherAriaLabel(
+  selectLanguageLabel: string,
+  shortCode: string
+): string {
+  const base = selectLanguageLabel.replace(/\p{Cc}+/gu, '').trim();
+  const code = shortCode.replace(/\p{Cc}+/gu, '').trim();
+  if (!code) return base;
+  if (!base) return code;
+  return `${base}: ${code}`;
 }
 
 export function LocaleSwitcher({
@@ -234,11 +259,17 @@ export function LocaleSwitcher({
           cursor: 'pointer',
         }}
         aria-expanded={isOpen}
-        aria-label={tNav('selectLanguageAria')}
+        aria-label={formatSwitcherAriaLabel(
+          tNav('selectLanguageAria'),
+          active.short
+        )}
       >
-        <span className="d-flex align-items-center">{active.flag}</span>
+        <span className="d-flex align-items-center" aria-hidden="true">
+          {active.flag}
+        </span>
         <span style={{ letterSpacing: '0.5px' }}>{active.short}</span>
         <FaChevronDown
+          aria-hidden="true"
           style={{ fontSize: '10px', opacity: 0.8, marginLeft: '1px' }}
         />
       </button>
@@ -267,6 +298,7 @@ export function LocaleSwitcher({
               <li key={loc}>
                 <button
                   type="button"
+                  aria-pressed={isSelected}
                   onClick={() => handleSelect(loc)}
                   className={`dropdown-item d-flex align-items-center justify-content-between rounded-2 w-100 border-0 px-2.5 py-2 text-start ${
                     isSelected ? 'bg-light text-primary fw-bold' : 'text-dark'
@@ -274,13 +306,18 @@ export function LocaleSwitcher({
                   style={{ fontSize: '13px', cursor: 'pointer' }}
                 >
                   <span className="d-flex align-items-center gap-2">
-                    <span className="d-flex align-items-center">
+                    <span
+                      className="d-flex align-items-center"
+                      aria-hidden="true"
+                    >
                       {item.flag}
                     </span>
                     <span>{item.label}</span>
                   </span>
                   {isSelected && (
-                    <span className="text-primary fw-bold">✓</span>
+                    <span className="text-primary fw-bold" aria-hidden="true">
+                      ✓
+                    </span>
                   )}
                 </button>
               </li>

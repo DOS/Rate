@@ -20,31 +20,39 @@
   ],
   "scripts": {
     "build": "turbo build --cache-dir=.turbo",
-    "check:migrations": "node scripts/check-migration-drift.mjs",
-    "check:db-types": "node scripts/gen-db-types.mjs --check",
-    "test:e2e": "node scripts/e2e/run.mjs",
-    "test:migrations": "node scripts/test-migration-replay.mjs",
-    "build:web": "turbo run build --filter=@repo/web",
     "build:crawler": "turbo run build --filter=@repo/crawlers",
+    "build:web": "turbo run build --filter=@repo/web",
+    "check:db-types": "node scripts/gen-db-types.mjs --check",
+    "check:migrations": "node scripts/check-migration-drift.mjs",
     "commit": "git-cz",
     "dev": "turbo run dev",
-    "dev:web": "turbo run dev --filter=@repo/web",
     "dev:crawler": "turbo run dev --filter=@repo/crawlers",
+    "dev:web": "turbo run dev --filter=@repo/web",
     "format": "prettier --write --cache --ignore-unknown \"**/*.{js,jsx,ts,tsx,md,css,scss}\"",
-    "gen:db-types": "node scripts/gen-db-types.mjs",
     "format:check": "prettier --check --cache --ignore-unknown \"**/*.{js,jsx,ts,tsx,md,css,scss}\"",
+    "gen:db-types": "node scripts/gen-db-types.mjs",
     "preinstall": "npx only-allow pnpm",
     "lint": "turbo lint",
     "prepare": "husky || true",
     "start:web": "turbo run start --filter=@repo/web",
+    "test:e2e": "node scripts/e2e/run.mjs",
+    "test:migrations": "node scripts/test-migration-replay.mjs",
     "typecheck": "turbo typecheck"
   },
   "lint-staged": {
     "*.{js,jsx,ts,tsx,md,css,scss}": "prettier --write --ignore-unknown"
   },
   "prettier": "@repo/prettier-config",
+  "dependencies": {
+    "@typescript-eslint/eslint-plugin": "^8.72.0",
+    "@typescript-eslint/parser": "^8.71.2",
+    "eslint-config-prettier": "10.1.8",
+    "lucide-react": "0.513.0",
+    "playwright": "^1.64.1",
+    "zod": "^4.6.5"
+  },
   "devDependencies": {
-    "@axe-core/playwright": "4.13.0",
+    "@axe-core/playwright": "4.14.0",
     "@commitlint/cli": "21.2.3",
     "@commitlint/config-conventional": "21.2.4",
     "@playwright/test": "^1.64.1",
@@ -74,30 +82,22 @@
       "sharp"
     ],
     "overrides": {
-      "eslint": "^9.39.5",
+      "@swc/core": "1.16.20",
       "@typescript-eslint/eslint-plugin": "^8.72.0",
       "@typescript-eslint/parser": "^8.71.2",
       "@typescript-eslint/typescript-estree": "^8.71.2",
-      "@swc/core": "1.16.20",
-      "brace-expansion@>=1.0.0 <1.1.21": "^1.1.21",
-      "brace-expansion@>=5.0.0 <5.0.12": "^5.0.12",
-      "lodash@>=4.0.0 <4.18.0": "^4.18.1",
-      "tmp@<0.2.6": "^0.2.7",
-      "source-map-js@>=1.0.0 <1.2.2": "^1.2.2",
-      "fast-uri@>=3.0.0 <3.1.9": "^3.1.9",
       "ajv@>=6.0.0 <6.14.0": "^6.14.0",
-      "postcss-selector-parser@<7.1.6": "^7.1.6",
+      "brace-expansion@>=5.0.0 <5.0.12": "^5.0.12",
+      "brace-expansion@>=1.0.0 <1.1.21": "^1.1.21",
+      "eslint": "^9.39.5",
+      "fast-uri@>=3.0.0 <3.1.9": "^3.1.9",
+      "glob@^13": "^14.0.3",
       "js-yaml@<4.1.0": "^4.1.1",
+      "lodash@>=4.0.0 <4.18.0": "^4.18.1",
       "minimatch@^10": "^11.0.1",
-      "glob@^13": "^14.0.3"
+      "postcss-selector-parser@<7.1.6": "^7.1.6",
+      "source-map-js@>=1.0.0 <1.2.2": "^1.2.2",
+      "tmp@<0.2.6": "^0.2.7"
     }
-  },
-  "dependencies": {
-    "@typescript-eslint/eslint-plugin": "^8.72.0",
-    "@typescript-eslint/parser": "^8.71.2",
-    "eslint-config-prettier": "10.1.8",
-    "lucide-react": "0.513.0",
-    "playwright": "^1.64.1",
-    "zod": "^4.6.5"
   }
 }
