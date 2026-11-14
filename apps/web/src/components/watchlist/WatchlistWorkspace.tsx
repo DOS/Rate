@@ -11,6 +11,7 @@ import {
   getMasterProductHref,
   resolveCompareEffectiveUserRating,
 } from '@/lib/rate-domain';
+import { formatScoreFixed } from '@/lib/rating-display';
 import {
   MIN_WATCHLIST_TARGET_PRICE,
   computeWatchlistTargetPrice,
@@ -131,6 +132,29 @@ export function sanitizeWatchlistCount(value: unknown): number {
   const num = typeof value === 'number' ? value : Number(value);
   if (!Number.isFinite(num) || num <= 0) return 0;
   return Math.min(100_000, Math.round(num));
+}
+
+export function formatWatchlistPortfolioAverageRating(
+  ratingSum: number,
+  ratedCount: number,
+  digits: 1 | 2 = 2
+): string | null {
+  if (
+    !Number.isFinite(ratingSum) ||
+    !Number.isFinite(ratedCount) ||
+    ratingSum <= 0 ||
+    ratedCount < 1
+  ) {
+    return null;
+  }
+  const count = BigInt(Math.round(ratedCount));
+  const sumThousandths = BigInt(
+    formatScoreFixed(ratingSum, 3).replace('.', '')
+  );
+  const denom = (digits === 1 ? 100n : 10n) * count;
+  const scaled = (sumThousandths + denom / 2n) / denom;
+  const s = scaled.toString().padStart(digits + 1, '0');
+  return `${s.slice(0, -digits)}.${s.slice(-digits)}`;
 }
 
 export default function WatchlistWorkspace({
@@ -438,7 +462,8 @@ export default function WatchlistWorkspace({
       acc.totalTargetVnd += item.targetPrice;
       acc.totalSpreadSavingsVnd += Math.max(0, curMax - curMin);
       if (userR > 0) {
-        acc.ratingSum += userR;
+        acc.ratingSum =
+          (Math.round(acc.ratingSum * 1000) + Math.round(userR * 1000)) / 1000;
         acc.ratedCount += 1;
       }
       return acc;
@@ -451,12 +476,18 @@ export default function WatchlistWorkspace({
       ratedCount: 0,
     }
   );
-  const avgPortfolioRating =
-    portfolioStats.ratedCount > 0
-      ? Number(
-          (portfolioStats.ratingSum / portfolioStats.ratedCount).toFixed(2)
-        )
-      : 0;
+  const avgPortfolioRating = Number(
+    formatWatchlistPortfolioAverageRating(
+      portfolioStats.ratingSum,
+      portfolioStats.ratedCount,
+      1
+    ) ?? 0
+  );
+  const avgPortfolioRating2d = formatWatchlistPortfolioAverageRating(
+    portfolioStats.ratingSum,
+    portfolioStats.ratedCount,
+    2
+  );
 
   const handleCopyPortfolioMarkdown = async () => {
     if (typeof window === 'undefined' || items.length === 0) return;
@@ -473,10 +504,9 @@ export default function WatchlistWorkspace({
           price: portfolioStats.totalSpreadSavingsVnd.toLocaleString('vi-VN'),
         }),
         t('mdAvgRating', {
-          rating:
-            avgPortfolioRating > 0
-              ? `${avgPortfolioRating.toFixed(2)}/5.0`
-              : t('mdNoRating'),
+          rating: avgPortfolioRating2d
+            ? `${avgPortfolioRating2d}/5.0`
+            : t('mdNoRating'),
         }),
         ``,
         t('mdTableHead'),

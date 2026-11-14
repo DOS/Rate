@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { resolveCompareEffectiveUserRating } from '@/lib/rate-domain';
+import { buildLeaderboardItemListElements } from '@/lib/leaderboard-engine';
 import { getTranslations, setRequestLocale } from 'next-intl/server';
 import {
   BsArrowLeftRight,
@@ -14,13 +14,10 @@ import {
   getItemCatalogPage,
   getCrossPlatformDealRadar,
 } from '@/server/rate';
-import {
-  getMasterProductHref,
-  type CanonicalCategorySlug,
-} from '@/lib/rate-api';
+import type { CanonicalCategorySlug } from '@/lib/rate-api';
 import { normalizeRateLocale, type SupportedRateLocale } from '@/lib/rate-i18n';
 import { defaultOpenGraph } from '@/lib/seo';
-import { catalogRowSlug, sumCountsByItemRow } from '@/lib/item-directory';
+import { sumCountsByItemRow } from '@/lib/item-directory';
 import PageShell from '../components/page-shell';
 import CompareTrayBar from '@/components/compare/CompareTrayBar';
 import LeaderboardExplorer from '@/components/leaderboard/LeaderboardExplorer';
@@ -129,13 +126,15 @@ export default async function LeaderboardPage({ params }: PageProps) {
         () => ({}) as Record<string, number>
       ),
     ]);
-  // Back in one best-rated-first list, by the one rating (D3), so the top
-  // 15 in the ItemList below stay platform-wide.
-  const ratingOf = (p: (typeof productsByCategory)[number][number]) =>
-    resolveCompareEffectiveUserRating(p);
-  const products = productsByCategory
-    .flat()
-    .sort((a, b) => ratingOf(b) - ratingOf(a));
+  // Back in one best-rated-first list, ordered by the shown rating
+  // (displayedScore5) then composite, matching the visible ranking (#1647).
+  const allProducts = productsByCategory.flat();
+  const itemFilteredCounts = sumCountsByItemRow(
+    allProducts,
+    filteredReviewCounts
+  );
+  const { orderedProducts: products, itemListElements } =
+    buildLeaderboardItemListElements(allProducts, siteUrl, itemFilteredCounts);
 
   const copy = {
     kicker: t('kicker'),
@@ -160,13 +159,8 @@ export default async function LeaderboardPage({ params }: PageProps) {
     '@type': 'ItemList',
     name: copy.title,
     description: copy.subtitle,
-    numberOfItems: Math.min(products.length, 15),
-    itemListElement: products.slice(0, 15).map((p, index) => ({
-      '@type': 'ListItem',
-      position: index + 1,
-      name: p.name,
-      url: `${siteUrl}${getMasterProductHref({ ...p, slug: catalogRowSlug(p) })}`,
-    })),
+    numberOfItems: itemListElements.length,
+    itemListElement: itemListElements,
   };
 
   return (
@@ -383,10 +377,7 @@ export default async function LeaderboardPage({ params }: PageProps) {
             <LeaderboardExplorer
               products={products.map(withScoringSpecs)}
               dealRadar={dealRadar}
-              filteredReviewCounts={sumCountsByItemRow(
-                products,
-                filteredReviewCounts
-              )}
+              filteredReviewCounts={itemFilteredCounts}
               locale={resolvedLocale}
             />
           </section>

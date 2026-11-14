@@ -5,8 +5,10 @@ import {
   displayRating,
   formatRatingCount,
   formatRatingValue,
+  formatScoreFixed,
   ratingFillPercent,
   ratingTone,
+  roundScore,
 } from '../rating-display';
 import { CLIENT_MESSAGE_SCOPES } from '../client-messages';
 
@@ -42,6 +44,29 @@ assert.equal(formatRatingValue(4.62, 'vi'), '4.6');
 assert.equal(formatRatingValue(4.62, 'en'), '4.6');
 assert.equal(formatRatingValue(4.62, 'cs'), '4,6');
 assert.equal(formatRatingValue(4.625, 'vi', 2), '4.63');
+// Decimal-safe two-decimal half-up rounding (#1647): neither toFixed(2) nor
+// Math.round(x * 100) / 100 rounds both 1.005 and 4.345 half up.
+assert.equal(formatScoreFixed(1.005, 2), '1.01');
+assert.equal(formatScoreFixed(4.345, 2), '4.35');
+assert.equal(formatScoreFixed(2.675, 2), '2.68');
+assert.equal(formatScoreFixed(0, 2), '0.00');
+assert.equal(formatScoreFixed(-2, 1), '0.0');
+assert.equal(formatScoreFixed(Number.NaN, 2), '0.00');
+assert.equal(formatScoreFixed(5e-3, 2), '0.01');
+assert.equal(formatScoreFixed(1e-9, 2), '0.00');
+assert.equal(roundScore(1.005, 2), 1.01);
+assert.equal(roundScore(4.345, 2), 4.35);
+assert.equal(formatRatingValue(1.005, 'vi', 2), '1.01');
+assert.equal(formatRatingValue(1.005, 'cs', 2), '1,01');
+assert.equal(formatRatingValue(4.345, 'vi', 2), '4.35');
+assert.equal(formatRatingValue(4.345, 'cs', 2), '4,35');
+for (let thousandths = 1; thousandths <= 5000; thousandths++) {
+  assert.equal(
+    roundScore(thousandths / 1000, 2),
+    Math.floor((thousandths + 5) / 10) / 100,
+    `roundScore(${thousandths / 1000}, 2)`
+  );
+}
 // x.x5 rounds half up on the decimal value, like the database and the
 // minRating filter: a stored 4.350 prints 4.4, never 4.3 (#1631).
 assert.equal(formatRatingValue(4.35, 'vi'), '4.4');
@@ -141,6 +166,8 @@ void (async () => {
       typeof row.renderValue
     >[0];
   assert.equal(row.renderValue(product(4.51)), 'Lab 4.5 / 5.0');
+  assert.equal(row.renderValue(product(4.35)), 'Lab 4.4 / 5.0');
+  assert.equal(row.renderValue(product(4.345)), 'Lab 4.3 / 5.0');
   assert.equal(row.screenValue?.(product(4.51)), 'Lab 9.0/10');
   assert.equal(row.screenValue?.(product(4.54)), 'Lab 9.1/10');
   // The best mark compares what the screen shows (#1470): 4.51 and 4.52 both
@@ -202,7 +229,7 @@ void (async () => {
 
   // The 1v1 scoreboard reads the same shown scores (#1631): 4.35 shows 4.4,
   // so it ties 4.4 and leads 4.3 by 0.1.
-  const { computeVersusWeightedResult } =
+  const { computeVersusWeightedResult, formatVersusWeightedMarkdown } =
     await import('../../components/compare/VersusInteractiveScoreboard');
   type VersusSide = Parameters<typeof computeVersusWeightedResult>[0];
   const side = (slug: string, userScore5: number) =>
@@ -240,6 +267,269 @@ void (async () => {
   assert.equal(lead.tie, false);
   assert.equal(lead.delta, '0.1');
   assert.equal(lead.winner.slug, 'a');
+
+  // Versus with one unrated side (#1647 item 8): no fake "leads by 4.4" gap
+  // against 0, and Markdown prints "N/A" instead of "0.0/5.0".
+  const oneUnrated = computeVersusWeightedResult(
+    side('a', 4.35),
+    side('b', 0),
+    noWeights,
+    'default'
+  );
+  assert.equal(oneUnrated.tie, false);
+  assert.equal(oneUnrated.bothScored, false);
+  assert.equal(oneUnrated.delta, null);
+  assert.equal(oneUnrated.winner.slug, 'a');
+  const mdCopy = {
+    tie1v1Badge: '1v1 Tie',
+    mdTieLine: (score: string) => `Tie (${score}/5.0)`,
+    valNoReviews: 'No reviews yet',
+    mdLeadingDevice: 'Leading device',
+    mdScoreDelta: (delta: string) => `Delta ${delta} pts`,
+    mdRowWeightedScore: 'Weighted combined score',
+    mdRowTie: 'Tie',
+  };
+  const mdOneUnrated = formatVersusWeightedMarkdown(oneUnrated, 'a', mdCopy);
+  assert.equal(
+    mdOneUnrated.summaryBullet,
+    '- **Leading device:** **a** (4.4/5.0)'
+  );
+  assert.equal(
+    mdOneUnrated.weightedScoreRow,
+    '| **Weighted combined score** | **4.4/5.0** | N/A | **a** |'
+  );
+  const bothUnrated = computeVersusWeightedResult(
+    side('a', 0),
+    side('b', 0),
+    noWeights,
+    'default'
+  );
+  assert.equal(bothUnrated.tie, true);
+  assert.equal(bothUnrated.bothScored, false);
+  const mdBothUnrated = formatVersusWeightedMarkdown(bothUnrated, 'a', mdCopy);
+  assert.equal(mdBothUnrated.summaryBullet, '- **1v1 Tie:** No reviews yet');
+  assert.equal(
+    mdBothUnrated.weightedScoreRow,
+    '| **Weighted combined score** | N/A | N/A | - |'
+  );
+
+  // Items 3, 4, 6, 7, 9 (#1647): lab scores on 10, 2-decimal exports, JSON
+  // ratingScore5, 1-decimal export columns in rating views, and JSON-LD order.
+  const {
+    resolveCompareExpertRating5,
+    resolveCompareExpertRating5Shown,
+    resolveCompareExpertRating10,
+  } = await import('../rate-domain');
+  assert.equal(resolveCompareExpertRating5({ expert_rating: 4.345 }), 4.35);
+  assert.equal(resolveCompareExpertRating5({ expert_rating: 8.35 }), 4.18);
+  assert.equal(resolveCompareExpertRating5Shown({ expert_rating: 4.345 }), 4.3);
+  assert.equal(resolveCompareExpertRating5Shown({ expert_rating: 4.35 }), 4.4);
+  assert.equal(resolveCompareExpertRating10({ expert_rating: 4.175 }), 8.4);
+  assert.equal(resolveCompareExpertRating10({ expert_rating: 8.35 }), 8.4);
+  assert.equal(resolveCompareExpertRating10({ expert_rating: 4.225 }), 8.5);
+  assert.equal(resolveCompareExpertRating10({ expert_rating: 8.45 }), 8.5);
+  for (let thousandths = 1; thousandths <= 5000; thousandths++) {
+    assert.equal(
+      resolveCompareExpertRating10({ expert_rating: thousandths / 1000 }),
+      Math.floor((thousandths * 2 + 50) / 100) / 10,
+      `resolveCompareExpertRating10(${thousandths / 1000})`
+    );
+  }
+
+  const { computeCrossPlatformDealRadarFromData } =
+    await import('../../server/rate/deals');
+  const dealRadarCluster = {
+    master: {
+      id: 'm1',
+      slug: 'phone-lab',
+      name: 'Phone Lab',
+      brand: 'Brand',
+      expert_rating: 4.175,
+      metadata: { category_slug: 'smartphones' },
+    },
+    offers: [
+      {
+        id: 'o1',
+        platform: 'shopee',
+        price_current: 18_000_000,
+        price_original: 20_000_000,
+        url: 'https://shopee.vn/p1',
+        stock_status: 'in_stock',
+        merchant: {
+          id: 's1',
+          name: 'Shop 1',
+          is_official: true,
+          risk_score: 5,
+        },
+      },
+      {
+        id: 'o2',
+        platform: 'lazada',
+        price_current: 20_000_000,
+        price_original: 20_000_000,
+        url: 'https://lazada.vn/p1',
+        stock_status: 'in_stock',
+        merchant: {
+          id: 's2',
+          name: 'Shop 2',
+          is_official: true,
+          risk_score: 5,
+        },
+      },
+    ],
+  };
+  const radarOut = computeCrossPlatformDealRadarFromData(
+    [dealRadarCluster as never],
+    { categorySlug: 'smartphones', limit: 5 }
+  );
+  assert.equal(radarOut.genuineDeals[0]?.jreviewsScore10, 8.4);
+
+  const { formatWatchlistPortfolioAverageRating } =
+    await import('../../components/watchlist/WatchlistWorkspace');
+  assert.equal(formatWatchlistPortfolioAverageRating(4.345, 1), '4.35');
+  assert.equal(formatWatchlistPortfolioAverageRating(4.345, 1, 1), '4.3');
+  assert.equal(formatWatchlistPortfolioAverageRating(8.9, 2, 1), '4.5');
+  assert.equal(formatWatchlistPortfolioAverageRating(8.9, 2, 2), '4.45');
+  assert.equal(formatWatchlistPortfolioAverageRating(8.13, 2), '4.07');
+  assert.equal(formatWatchlistPortfolioAverageRating(13.065, 3), '4.36');
+  assert.equal(formatWatchlistPortfolioAverageRating(22.025, 5), '4.41');
+  assert.equal(formatWatchlistPortfolioAverageRating(2.01, 2), '1.01');
+  assert.equal(formatWatchlistPortfolioAverageRating(0, 0), null);
+
+  const { normalizeShareAuditFields } =
+    await import('../../components/leaderboard/ProductShareAuditButton');
+  const shareFields = normalizeShareAuditFields({
+    modelKey: 'brand:model',
+    userScore5: 4.345,
+    expertScore10: 4.175,
+    authenticReviews: 5,
+    minPriceVnd: 10_000_000,
+    offerCount: 2,
+  });
+  assert.equal(formatScoreFixed(shareFields.safeUserScore5, 2), '4.35');
+  assert.equal(shareFields.safeExpertScore10, 8.4);
+
+  const { EMPTY_RADAR_SIGNAL } = await import('../deal-radar');
+  const emptyRadar = EMPTY_RADAR_SIGNAL;
+  const { buildCompareJsonProductEntry } =
+    await import('../../components/compare/CompareWorkspace');
+  const { buildCatalogJsonProductEntry } =
+    await import('../../components/leaderboard/CategoryCatalogToolbar');
+  const { buildLeaderboardJsonItem, formatLeaderboardActiveScore } =
+    await import('../../components/leaderboard/LeaderboardExplorer');
+  const {
+    buildDealJsonItem,
+    formatDealPersonaScore,
+    rankProductsForDealFinder,
+  } = await import('../../components/deals/DealFinderWorkspace');
+  const { buildLeaderboardItemListElements } =
+    await import('../leaderboard-engine');
+
+  const prod435 = {
+    id: 'p-435',
+    slug: 'phone-435',
+    name: 'Phone 435',
+    brand: 'Brand',
+    min_price: 15_000_000,
+    rating_score: 4.35,
+    metadata: { category_slug: 'smartphones' },
+  } as unknown as Parameters<typeof buildCompareJsonProductEntry>[0];
+  const prodUnrated = {
+    ...prod435,
+    id: 'p-0',
+    slug: 'phone-0',
+    rating_score: null,
+  } as unknown as Parameters<typeof buildCompareJsonProductEntry>[0];
+
+  assert.equal(
+    buildCompareJsonProductEntry(prod435, emptyRadar).userRating,
+    4.35
+  );
+  assert.equal(
+    buildCompareJsonProductEntry(prod435, emptyRadar).ratingScore5,
+    4.4
+  );
+  assert.equal(
+    buildCompareJsonProductEntry(prodUnrated, emptyRadar).ratingScore5,
+    null
+  );
+
+  assert.equal(
+    buildCatalogJsonProductEntry(prod435, 1, emptyRadar).userRating,
+    4.35
+  );
+  assert.equal(
+    buildCatalogJsonProductEntry(prod435, 1, emptyRadar).ratingScore5,
+    4.4
+  );
+  assert.equal(
+    buildCatalogJsonProductEntry(prodUnrated, 2, emptyRadar).ratingScore5,
+    null
+  );
+
+  const lbJson = buildLeaderboardJsonItem(
+    {
+      product: prod435,
+      activeScore5: 4.35,
+      userScore5: 4.35,
+      expertScore10: 8.4,
+      criteria: {
+        screen: null,
+        performance: null,
+        camera: null,
+        battery: null,
+        value: null,
+      },
+    },
+    1,
+    emptyRadar
+  );
+  assert.equal(lbJson.userScore5, 4.35);
+  assert.equal(lbJson.ratingScore5, 4.4);
+  assert.equal(formatLeaderboardActiveScore(4.35, 1, 'unrated'), '4.4');
+  assert.equal(formatLeaderboardActiveScore(4.345, 2, 'unrated'), '4.35');
+  assert.equal(formatLeaderboardActiveScore(1.005, 2, 'unrated'), '1.01');
+  assert.equal(formatLeaderboardActiveScore(0, 1, 'unrated'), 'unrated');
+
+  const rankedDeal = rankProductsForDealFinder([prod435], {
+    categoryFilter: 'smartphones',
+    persona: 'default',
+    maxBudgetVnd: 30_000_000,
+    searchQuery: '',
+  })[0]!;
+  const dealJson = buildDealJsonItem(rankedDeal, emptyRadar);
+  assert.equal(dealJson.userScore5, 4.35);
+  assert.equal(dealJson.ratingScore5, 4.4);
+  assert.equal(formatDealPersonaScore(4.35, 'default'), '4.4');
+  assert.equal(formatDealPersonaScore(4.345, 'photography'), '4.35');
+  assert.equal(formatDealPersonaScore(1.005, 'gaming'), '1.01');
+  assert.equal(formatDealPersonaScore(0, 'default'), null);
+
+  const jsonLdPool = [
+    {
+      ...prod435,
+      id: 'raw-higher',
+      slug: 'raw-higher',
+      name: 'Raw Higher',
+      rating_score: 4.39,
+    },
+    {
+      ...prod435,
+      id: 'composite-higher',
+      slug: 'composite-higher',
+      name: 'Composite Higher',
+      rating_score: 4.35,
+      expert_rating: 5,
+    },
+  ] as unknown as Parameters<typeof buildLeaderboardItemListElements>[0];
+  const { itemListElements } = buildLeaderboardItemListElements(
+    jsonLdPool,
+    'https://rate.vn'
+  );
+  assert.deepEqual(
+    itemListElements.map((item) => item.name),
+    ['Composite Higher', 'Raw Higher']
+  );
   console.warn('  ✅ Ratings show as stars with a short count (#1528)');
 })().catch((error: unknown) => {
   console.error(error);
