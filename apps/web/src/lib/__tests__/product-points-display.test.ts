@@ -607,6 +607,109 @@ export async function runProductPointsDisplaySuite(): Promise<void> {
       () => getMasterProductPoints('22222222-2222-4222-8222-222222229999'),
       (err: unknown) => err instanceof RateDataUnavailableError
     );
+    failNext = false;
+
+    // Linear scan + claim-conflict disambiguation:
+    // - 5,000 distinct valid lines complete in < 500ms (no quadratic clustering).
+    // - Writer line "Pin dùng 10 giờ" never marks AI-only "Dùng pin 20 giờ" (or
+    //   negated / conflicting-aspect rows) as has_own_words.
+    const conflictStamp = '2026-11-02T08:00:00Z';
+    const conflictStoredRows: StoredProductPointRow[] = [
+      makeRow('ai-only-20h', {
+        method: 'ai',
+        kind: 'pro',
+        criterion_key: 'battery',
+        label: 'Dùng pin 20 giờ',
+        support: 2.0,
+        reviewer_count: 4,
+        has_expert: false,
+        first_seen: '2026-11-01T00:00:00Z',
+        last_seen: '2026-11-01T12:00:00Z',
+        updated_at: conflictStamp,
+      }),
+      makeRow('writer-10h', {
+        method: 'ai',
+        kind: 'pro',
+        criterion_key: 'battery',
+        label: 'Thời lượng pin dùng 10 giờ',
+        support: 1.5,
+        reviewer_count: 3,
+        has_expert: false,
+        first_seen: '2026-11-01T00:00:00Z',
+        last_seen: '2026-11-01T12:00:00Z',
+        updated_at: conflictStamp,
+      }),
+      makeRow('ai-only-lag', {
+        method: 'ai',
+        kind: 'con',
+        criterion_key: 'performance',
+        label: 'Máy lag khi chơi game',
+        support: 1.5,
+        reviewer_count: 3,
+        has_expert: false,
+        first_seen: '2026-11-01T00:00:00Z',
+        last_seen: '2026-11-01T12:00:00Z',
+        updated_at: conflictStamp,
+      }),
+    ];
+    const largeReviewRows = Array.from({ length: 5_000 }, (_, i) => ({
+      id: `bulk-rev-${i}`,
+      reviewer_type: 'user',
+      helpfulness_weight: i < 2 ? 0.5 : 1,
+      created_at: '2026-11-01T06:00:00Z',
+      review_points: [
+        {
+          id: `bulk-rp-${i}`,
+          kind: i === 1 ? 'con' : 'pro',
+          criterion_key: i === 1 ? 'performance' : 'battery',
+          body:
+            i === 0
+              ? 'Pin dùng 10 giờ'
+              : i === 1
+                ? 'Máy nóng khi chơi game'
+                : `Nhận xét thực tế điểm riêng thứ ${i} ổn định`,
+          method: i % 2 === 0 ? 'writer' : 'ai',
+          created_at: '2026-11-01T06:00:00Z',
+        },
+      ],
+      review_flags: { include_in_rating: true, verdict: 'authentic' },
+    }));
+    globalThis.fetch = (async (input: RequestInfo | URL) => {
+      const reqUrl =
+        typeof input === 'string'
+          ? input
+          : input instanceof URL
+            ? input.href
+            : input.url;
+      const rowsOut = reqUrl.includes('/rest/v1/reviews?')
+        ? largeReviewRows
+        : conflictStoredRows;
+      return new Response(JSON.stringify(rowsOut), {
+        status: 200,
+        headers: {
+          'Content-Type': 'application/json',
+          'Content-Range': `0-${rowsOut.length - 1}/${rowsOut.length}`,
+        },
+      });
+    }) as typeof fetch;
+
+    const t0 = performance.now();
+    const perfData = await getMasterProductPoints(
+      '33333333-3333-4333-8333-333333333333',
+      'smartphones'
+    );
+    const elapsedMs = performance.now() - t0;
+    assert.ok(elapsedMs < 1_000, `Expected <1000ms, got ${elapsedMs}ms`);
+    assert.equal(perfData.reviewCount, 5_000);
+    const rowById = new Map(perfData.rows.map((r) => [r.id, r]));
+    assert.equal(rowById.get('writer-10h')?.has_own_words, true);
+    assert.equal(rowById.get('ai-only-20h')?.has_own_words, false);
+    assert.equal(rowById.get('ai-only-lag')?.has_own_words, false);
+    const rankedPerf = selectProductPoints(perfData.rows, {
+      categorySlug: 'smartphones',
+    });
+    assert.equal(rankedPerf?.pros[0]?.id, 'writer-10h');
+    assert.equal(rankedPerf?.pros[1]?.id, 'ai-only-20h');
   } finally {
     globalThis.fetch = prevFetch;
     if (prevUrl === undefined) delete process.env.NEXT_PUBLIC_SUPABASE_URL;
