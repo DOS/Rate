@@ -31,6 +31,7 @@ import {
   getCachedMasterProductBySlug,
   getCachedPublishedMasterProductCategory,
   getCachedMasterProductOffers,
+  getCachedMasterProductPoints,
   getCachedMasterProductPriceHistory,
   getCachedMasterProductReviews,
   getCachedMasterProductReviewSummary,
@@ -368,8 +369,17 @@ export async function ProductDetailView({
     'reviews',
     getCachedMasterProductReviews(storedProduct.id)
   );
+  const productPointsRead = timing.time(
+    'productPoints',
+    getCachedMasterProductPoints(
+      storedProduct.id,
+      storedProduct.slug,
+      categorySlug
+    )
+  );
   offersRead.catch(() => undefined);
   reviewsRead.catch(() => undefined);
+  productPointsRead.catch(() => undefined);
   // The other variants of this model, linked under the price where the
   // quick-spec cards used to be; Item routes (flag on) keep the #1154 size
   // picker instead. Cached per model and bounded. A failure fails the render
@@ -463,6 +473,7 @@ export async function ProductDetailView({
   const [
     offers,
     reviews,
+    productPointsData,
     priceHistory,
     reviewSummary,
     { categoryPeers, relatedCompetitors, competitorOffers },
@@ -470,6 +481,7 @@ export async function ProductDetailView({
   ] = await Promise.all([
     offersRead,
     reviewsRead,
+    productPointsRead,
     priceHistoryRead,
     reviewSummaryRead,
     competitorsRead,
@@ -1467,6 +1479,8 @@ export async function ProductDetailView({
               ignoredReviewCount={ignoredCount}
               reviews={reviews}
               summary={reviewSummary}
+              productPoints={productPointsData.rows}
+              productPointsReviewCount={productPointsData.reviewCount}
               radarSignal={radarSignal}
             />
           </div>

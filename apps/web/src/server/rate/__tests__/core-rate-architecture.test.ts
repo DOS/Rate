@@ -3486,6 +3486,7 @@ async function runCoreArchitectureSuite() {
     'openapi.ts',
     'api-handler.ts',
     'cache-tags.ts',
+    'product-points.ts',
   ];
   for (const modName of serverRateModules58) {
     const modSource = fs58.readFileSync(
@@ -14979,6 +14980,13 @@ async function runCoreArchitectureSuite() {
     assert.ok(!cameraOnly.includes('gaming'));
     assert.ok(!cameraOnly.includes('endurance'));
     console.log('  ✅ Personas need a scored criterion (#1556) passed');
+  }
+
+  // Product page pros and cons block from rate.product_points (DOS/Rate#1624).
+  {
+    const { runProductPointsDisplaySuite } =
+      await import('../../../lib/__tests__/product-points-display.test');
+    await runProductPointsDisplaySuite();
   }
 
   console.log('🎉 All Rate.vn Core Architecture tests passed!');
