@@ -11,7 +11,12 @@
 //   overwritten. (REST PATCH with force=false does not refuse a stale update
 //   on refs/claims, verified 2026-11-15, so it is not used.)
 // - Release: delete the ref, only by the holder, or by anyone once the issue
-//   is closed. `forceRelease` (PO only) deletes it whoever holds it.
+//   is closed. `forceRelease` (PO only) deletes it whoever holds it. GitHub
+//   has no conditional ref delete (updateRefs with a zero afterOid did not
+//   delete, verified 2026-11-15), so a take-over landing between a release's
+//   read and its delete would be deleted with it. The hand-over order avoids
+//   that: the next session takes over only after board.mjs posted the
+//   "released" comment, by which time the ref is gone.
 //
 // Every function takes an `api` with the five operations below, so the tests
 // run the same logic against an in-memory ref store.
@@ -40,8 +45,19 @@ export async function acquireLock({
   claimant,
   agent,
   takeOver = false,
+  adopt = false,
+  claimedWithoutLock = false,
 }) {
   const current = await api.read(number);
+  if (!current && claimedWithoutLock && !takeOver && !adopt) {
+    // Labelled in-progress or in-review but never locked: a claim made
+    // before the lock existed, maybe by another session with this nickname.
+    throw new ClaimError(
+      `already claimed by labels but has no ${lockRef(number)} (a claim made before the lock): ` +
+        're-run with --adopt only if this session made that claim; otherwise it is ' +
+        "another session's claim (--take-over after a hand-over or JOY's assignment)"
+    );
+  }
   if (!current) {
     const sha = await api.commit({ number, claimant, agent });
     if (await api.create(number, sha)) return { action: 'taken' };
@@ -106,7 +122,7 @@ export async function forceRelease({ api, number }) {
 }
 
 /** `gh` with the HTTP status of a failed `gh api` call. */
-function ghCall(args, input) {
+export function ghCall(args, input) {
   const r = gh(args, { allowFailure: true, input });
   const status =
     r.status === 0 ? 200 : Number(r.stderr.match(/\(HTTP (\d{3})\)/)?.[1] ?? 0);
@@ -118,20 +134,23 @@ function must(r, what) {
   return r.stdout.trim() ? JSON.parse(r.stdout) : null;
 }
 
-/** The lock operations against GitHub for `repo` (owner/name). */
-export function githubLockApi(repo) {
+/**
+ * The lock operations against GitHub for `repo` (owner/name). `call` runs one
+ * `gh` command (tests pass a fake).
+ */
+export function githubLockApi(repo, { call = ghCall } = {}) {
   const base = `repos/${repo}`;
   let repositoryId = null;
   const api = {
     async read(number) {
-      const ref = ghCall(['api', `${base}/git/ref/claims/${number}`]);
+      const ref = call(['api', `${base}/git/ref/claims/${number}`]);
       if (!ref.ok && ref.status === 404) return null;
       const found = must(ref, `reading ${lockRef(number)}`);
       // Only the exact ref is this issue's lock.
       if (found?.ref !== lockRef(number)) return null;
       const sha = found.object.sha;
       const commit = must(
-        ghCall(['api', `${base}/git/commits/${sha}`]),
+        call(['api', `${base}/git/commits/${sha}`]),
         `reading the lock commit ${sha}`
       );
       return {
@@ -143,7 +162,7 @@ export function githubLockApi(repo) {
     async commit({ number, claimant, agent, parent }) {
       const record = JSON.stringify({ repo, number, claimant, agent });
       const blob = must(
-        ghCall([
+        call([
           'api',
           `${base}/git/blobs`,
           '-f',
@@ -154,7 +173,7 @@ export function githubLockApi(repo) {
         'writing the lock record'
       ).sha;
       const tree = must(
-        ghCall(
+        call(
           ['api', `${base}/git/trees`, '--input', '-'],
           JSON.stringify({
             tree: [
@@ -165,7 +184,7 @@ export function githubLockApi(repo) {
         'writing the lock tree'
       ).sha;
       return must(
-        ghCall([
+        call([
           'api',
           `${base}/git/commits`,
           '-f',
@@ -178,7 +197,7 @@ export function githubLockApi(repo) {
       ).sha;
     },
     async create(number, sha) {
-      const r = ghCall([
+      const r = call([
         'api',
         `${base}/git/refs`,
         '-f',
@@ -192,10 +211,10 @@ export function githubLockApi(repo) {
     },
     async replace(number, before, after) {
       repositoryId ??= must(
-        ghCall(['api', base, '--jq', '{id: .node_id}']),
+        call(['api', base, '--jq', '{id: .node_id}']),
         `reading ${repo}`
       ).id;
-      const r = ghCall([
+      const r = call([
         'api',
         'graphql',
         '-f',
@@ -221,7 +240,7 @@ export function githubLockApi(repo) {
       );
     },
     async remove(number) {
-      const r = ghCall([
+      const r = call([
         'api',
         '-X',
         'DELETE',

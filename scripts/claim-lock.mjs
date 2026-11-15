@@ -43,19 +43,22 @@ export function poTool(claimant) {
 }
 
 /**
- * The claimant of the calling session: `--claimant`, else `RATE_CLAIMANT`,
- * else the Claude Code desktop session id (`claude:<host session id>`, the
- * id other sessions use to message this one), else the Claude Code session
- * id. Qwen Code and other tools pass `--claimant` or set `RATE_CLAIMANT`.
+ * The claimant of the calling session: `--claimant`, else the Claude Code
+ * desktop session id (`claude:<host session id>`, the id other sessions use
+ * to message this one), else the Claude Code session id, else
+ * `RATE_CLAIMANT`. The Claude ids win over `RATE_CLAIMANT` so that a value
+ * left in a shell profile can never make every Claude session share one
+ * claimant. Qwen Code and other tools pass `--claimant`; `RATE_CLAIMANT`
+ * must be set per session, never in a shared profile.
  */
 export function resolveClaimant({ flag, env = {} } = {}) {
   const value =
     flag?.trim() ||
-    env.RATE_CLAIMANT?.trim() ||
     (env.CLAUDE_CODE_HOST_SESSION_ID?.trim() &&
       `claude:${env.CLAUDE_CODE_HOST_SESSION_ID.trim()}`) ||
     (env.CLAUDE_CODE_SESSION_ID?.trim() &&
       `claude:${env.CLAUDE_CODE_SESSION_ID.trim()}`) ||
+    env.RATE_CLAIMANT?.trim() ||
     '';
   if (!value) {
     throw new Error(

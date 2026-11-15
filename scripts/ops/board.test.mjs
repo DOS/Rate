@@ -14,8 +14,15 @@ import {
   isPoNick,
   labelChanges,
   lockComment,
+  setBoard,
 } from './board.mjs';
-import { ClaimError, acquireLock, forceRelease, releaseLock } from './lock.mjs';
+import {
+  ClaimError,
+  acquireLock,
+  forceRelease,
+  githubLockApi,
+  releaseLock,
+} from './lock.mjs';
 
 test('agent labels are lowercase agent:<nick>', () => {
   assert.equal(agentLabel(' Guard '), 'agent:guard');
@@ -417,7 +424,7 @@ test('the lock comment names the claimant', () => {
   );
 });
 
-test('claimant: flag, then RATE_CLAIMANT, then the Claude session id', () => {
+test('claimant: flag, then the Claude session ids, then RATE_CLAIMANT', () => {
   const env = {
     RATE_CLAIMANT: 'qwen:env12345',
     CLAUDE_CODE_HOST_SESSION_ID: 'local_host1234',
@@ -427,14 +434,15 @@ test('claimant: flag, then RATE_CLAIMANT, then the Claude session id', () => {
     resolveClaimant({ flag: 'codex:flag1234', env }),
     'codex:flag1234'
   );
-  assert.equal(resolveClaimant({ env }), 'qwen:env12345');
+  // A RATE_CLAIMANT left in a shell profile never overrides a Claude session.
+  assert.equal(resolveClaimant({ env }), 'claude:local_host1234');
   assert.equal(
-    resolveClaimant({ env: { ...env, RATE_CLAIMANT: '' } }),
-    'claude:local_host1234'
+    resolveClaimant({ env: { ...env, CLAUDE_CODE_HOST_SESSION_ID: '' } }),
+    'claude:sess5678'
   );
   assert.equal(
-    resolveClaimant({ env: { CLAUDE_CODE_SESSION_ID: 'sess5678' } }),
-    'claude:sess5678'
+    resolveClaimant({ env: { RATE_CLAIMANT: 'qwen:env12345' } }),
+    'qwen:env12345'
   );
   assert.throws(() => resolveClaimant({ env: {} }), /no claimant/);
   assert.throws(
@@ -466,4 +474,298 @@ test('lock message round-trips and PR bodies declare claimants', () => {
     [A, B]
   );
   assert.deepEqual(declaredClaimants('mentions Claimant: inline only'), []);
+});
+
+test('lock: a lockless issue already claimed by labels needs --adopt', async () => {
+  const api = fakeLocks();
+  await assert.rejects(
+    acquireLock({
+      api,
+      number: 7,
+      claimant: A,
+      agent: 'Core',
+      claimedWithoutLock: true,
+    }),
+    /claim made before the lock.*--adopt/
+  );
+  assert.equal(await holder(api, 7), null);
+  const r = await acquireLock({
+    api,
+    number: 7,
+    claimant: A,
+    agent: 'Core',
+    claimedWithoutLock: true,
+    adopt: true,
+  });
+  assert.equal(r.action, 'taken');
+});
+
+// ---- githubLockApi against a fake `gh` ----
+
+const ok = (json) => ({
+  ok: true,
+  status: 200,
+  stdout: JSON.stringify(json),
+  stderr: '',
+});
+const err = (status, message) => ({
+  ok: false,
+  status,
+  stdout: '',
+  stderr: `gh: ${message} (HTTP ${status})`,
+});
+
+/** A fake `gh` that answers by the first matching [pattern, reply]. */
+function fakeGh(routes) {
+  const calls = [];
+  const call = (args) => {
+    calls.push(args.join(' '));
+    const line = args.join(' ');
+    for (const [pattern, reply] of routes) {
+      if (pattern.test(line))
+        return typeof reply === 'function' ? reply(line) : reply;
+    }
+    throw new Error(`unexpected gh call: ${line}`);
+  };
+  return { call, calls };
+}
+
+const lockMsg = formatLockMessage({
+  repo: 'DOS/Rate',
+  number: 7,
+  claimant: A,
+  agent: 'Ops',
+});
+
+test('github lock api: reads a lock, a missing one and only the exact ref', async () => {
+  const held = githubLockApi('DOS/Rate', {
+    call: fakeGh([
+      [
+        /git\/ref\/claims\/7$/,
+        ok({ ref: 'refs/claims/7', object: { sha: 's1' } }),
+      ],
+      [/git\/commits\/s1$/, ok({ message: lockMsg, committer: { date: 'd' } })],
+    ]).call,
+  });
+  assert.deepEqual(await held.read(7), {
+    sha: 's1',
+    claimant: A,
+    agent: 'Ops',
+    claimedAt: 'd',
+  });
+  const missing = githubLockApi('DOS/Rate', {
+    call: fakeGh([[/git\/ref\/claims\/7$/, err(404, 'Not Found')]]).call,
+  });
+  assert.equal(await missing.read(7), null);
+  const other = githubLockApi('DOS/Rate', {
+    call: fakeGh([
+      [
+        /git\/ref\/claims\/7$/,
+        ok({ ref: 'refs/claims/70', object: { sha: 's9' } }),
+      ],
+    ]).call,
+  });
+  assert.equal(await other.read(7), null);
+  const broken = githubLockApi('DOS/Rate', {
+    call: fakeGh([[/git\/ref\/claims\/7$/, err(502, 'Bad Gateway')]]).call,
+  });
+  await assert.rejects(broken.read(7), /reading refs\/claims\/7 failed/);
+});
+
+test('github lock api: create tells a lost race from a real failure', async () => {
+  const api = (reply) =>
+    githubLockApi('DOS/Rate', {
+      call: fakeGh([[/git\/refs -f ref=/, reply]]).call,
+    });
+  assert.equal(await api(ok({})).create(7, 's1'), true);
+  assert.equal(
+    await api(err(422, 'Reference already exists')).create(7, 's1'),
+    false
+  );
+  await assert.rejects(
+    api(err(422, 'Invalid request')).create(7, 's1'),
+    /creating/
+  );
+  await assert.rejects(api(err(403, 'Forbidden')).create(7, 's1'), /creating/);
+});
+
+test('github lock api: remove treats a missing ref as done', async () => {
+  const api = (reply) =>
+    githubLockApi('DOS/Rate', { call: fakeGh([[/-X DELETE/, reply]]).call });
+  await api(ok(null)).remove(7);
+  await api(err(404, 'Not Found')).remove(7);
+  await api(err(422, 'Reference does not exist')).remove(7);
+  await assert.rejects(api(err(500, 'Server Error')).remove(7), /deleting/);
+});
+
+test('github lock api: a failed compare-and-swap is judged by re-reading the ref', async () => {
+  const api = (sha) =>
+    githubLockApi('DOS/Rate', {
+      call: fakeGh([
+        [/--jq \{id: \.node_id\}/, ok({ id: 'R_1' })],
+        [/updateRefs/, err(500, 'Something went wrong')],
+        [/git\/ref\/claims\/7$/, ok({ ref: 'refs/claims/7', object: { sha } })],
+        [/git\/commits\//, ok({ message: lockMsg, committer: { date: 'd' } })],
+      ]).call,
+    });
+  assert.equal(await api('moved').replace(7, 'before', 'after'), false);
+  assert.equal(await api('after').replace(7, 'before', 'after'), true);
+  await assert.rejects(
+    api('before').replace(7, 'before', 'after'),
+    /replacing/
+  );
+});
+
+// ---- setBoard with fake I/O ----
+
+function fakeIo(labels, { state = 'OPEN' } = {}) {
+  const log = [];
+  return {
+    log,
+    io: {
+      ghJson(args) {
+        if (args[1] === 'graphql') {
+          return {
+            data: {
+              repository: {
+                issue: {
+                  url: 'https://github.com/DOS/Rate/issues/7',
+                  state,
+                  labels: { nodes: labels.map((name) => ({ name })) },
+                  projectItems: {
+                    nodes: [{ id: 'ITEM', project: { number: 9 } }],
+                  },
+                },
+              },
+            },
+          };
+        }
+        throw new Error(`unexpected ghJson ${args.join(' ')}`);
+      },
+      gh(args) {
+        log.push(args.slice(0, 2).join(' '));
+        return { status: 0, stdout: '', stderr: '' };
+      },
+    },
+  };
+}
+
+function loggingLocks(log) {
+  const api = fakeLocks();
+  return {
+    ...api,
+    async create(n, sha) {
+      log.push('lock create');
+      return api.create(n, sha);
+    },
+    async remove(n) {
+      log.push('lock remove');
+      return api.remove(n);
+    },
+  };
+}
+
+test('setBoard: takes the lock, comments, then labels and board', async () => {
+  const { io, log } = fakeIo(['status:ready']);
+  const api = loggingLocks(log);
+  const out = await setBoard({
+    number: 7,
+    status: 'in-progress',
+    nick: 'Ops',
+    claimant: A,
+    api,
+    io,
+  });
+  assert.match(out, /lock taken/);
+  assert.deepEqual(log.slice(0, 3), [
+    'lock create',
+    'issue comment',
+    'label create',
+  ]);
+  assert.ok(log.indexOf('issue edit') > log.indexOf('issue comment'));
+  assert.ok(log.includes('project item-edit'));
+  assert.equal(log.at(-1), 'workflow run');
+});
+
+test('setBoard: a lost claim changes no label, board or comment', async () => {
+  const { io, log } = fakeIo(['status:ready']);
+  const api = loggingLocks(log);
+  await acquireLock({ api, number: 7, claimant: B, agent: 'Ops' });
+  log.length = 0;
+  await assert.rejects(
+    setBoard({
+      number: 7,
+      status: 'in-progress',
+      nick: 'Ops',
+      claimant: A,
+      api,
+      io,
+    }),
+    /claimed by qwen:bbbb2222/
+  );
+  assert.deepEqual(log, []);
+});
+
+test('setBoard: a refused release changes nothing', async () => {
+  const { io, log } = fakeIo(['status:in-review', 'agent:ops']);
+  const api = loggingLocks(log);
+  await acquireLock({ api, number: 7, claimant: B, agent: 'Ops' });
+  log.length = 0;
+  await assert.rejects(
+    setBoard({ number: 7, status: 'ready', nick: 'Ops', claimant: A, api, io }),
+    /only the holder releases it/
+  );
+  assert.deepEqual(log, []);
+});
+
+test('setBoard: a legacy claim needs --adopt, then the holder releases on done', async () => {
+  const { io, log } = fakeIo(['status:in-progress', 'agent:ops']);
+  const api = loggingLocks(log);
+  await assert.rejects(
+    setBoard({
+      number: 7,
+      status: 'in-review',
+      nick: 'Ops',
+      claimant: A,
+      api,
+      io,
+    }),
+    /--adopt/
+  );
+  assert.deepEqual(log, []);
+  await setBoard({
+    number: 7,
+    status: 'in-review',
+    nick: 'Ops',
+    claimant: A,
+    adopt: true,
+    api,
+    io,
+  });
+  assert.equal(await holder(api, 7), A);
+  const out = await setBoard({
+    number: 7,
+    status: 'done',
+    nick: 'Ops',
+    claimant: A,
+    api,
+    io,
+  });
+  assert.match(out, /lock released/);
+  assert.equal(await holder(api, 7), null);
+});
+
+test('setBoard: the PO marks a closed issue done whoever holds the lock', async () => {
+  const { io } = fakeIo(['status:in-review', 'agent:ops'], { state: 'CLOSED' });
+  const api = fakeLocks();
+  await acquireLock({ api, number: 7, claimant: B, agent: 'Ops' });
+  const out = await setBoard({
+    number: 7,
+    status: 'done',
+    nick: 'Ops',
+    claimant: A,
+    api,
+    io,
+  });
+  assert.match(out, /lock released/);
 });

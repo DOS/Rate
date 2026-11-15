@@ -42,10 +42,13 @@ in Qwen Code Desktop (DOS/Rate#1673). They keep apart like this:
   label when it dispatches
   (`gh issue edit <n> -R DOS/Rate --add-label po:claude`). `board.mjs` adds
   the claimant's line label on a claim and refuses an issue of the other line
-  without `--take-over` (JOY's assignment only).
+  without `--take-over` (JOY's assignment only). A claimant of a tool that
+  runs no PO (for example `codex:...`) gets no `po:*` label and is not
+  refused by line; such an agent still respects the labels by this rule.
 - **Separate state.** Each PO keeps its own state and check-in file, named
-  per tool (`po-state.claude.md`, `po-state.qwen.md`), and never writes the
-  other's.
+  per tool (`po-state.claude.md`, `po-state.qwen.md`), outside the
+  repository (in that PO's own notes folder), never committed, and never
+  writes the other's.
 - **One promoter.** Only the Claude Code PO runs `promote.mjs` and the
   `verify-live.mjs` check after it. The Qwen PO asks the Claude Code PO (or
   JOY, if it cannot reach it) when its merged work needs a promotion.
@@ -166,8 +169,10 @@ names a role and two sessions can share it:
   workflow runs on it.
 - The lock records the **claimant**, `<tool>:<session id>`. Claude Code
   sessions get `claude:<session id>` automatically (the desktop session id,
-  the one `SendMessage` uses). Qwen Code sessions pass
-  `--claimant qwen:<session id>` or set `RATE_CLAIMANT`. `board.mjs` prints
+  the one `SendMessage` uses). Qwen Code sessions pass `--claimant qwen:<session id>` on every call.
+  `RATE_CLAIMANT` may only be set for one session, never in a shell profile
+  or an environment other sessions (sub-sessions included) inherit; a Claude
+  Code session id always wins over it. `board.mjs` prints
   the claimant and posts it in a lock comment on the issue.
 - Re-claiming by the holder changes nothing. `ready`, `backlog` and `done`
   release the lock; only the holder may, except on a closed (merged) issue,
@@ -175,9 +180,16 @@ names a role and two sessions can share it:
 - `--take-over` moves the lock to the new session (after a hand-over or on
   JOY's assignment), and fails if the lock changed since it was read.
 - `node scripts/ops/board.mjs <n> --force-release --agent PO --reason "<evidence>"`
-  clears an orphaned lock, whoever holds it, and posts the reason. PO only.
-- A claim made before the lock existed takes it on the holder's next
-  `board.mjs ... --status in-progress|in-review`.
+  clears an orphaned lock, whoever holds it, and posts the reason. PO only by
+  convention: the script checks only `--agent PO`, and the comment is the
+  record.
+- An issue already `in-progress` or `in-review` without a lock (claimed with
+  labels before the lock existed) is refused, since another session may hold
+  it under the same nickname. The session that made that claim re-runs with
+  `--adopt`; anyone else needs a hand-over or JOY's assignment and
+  `--take-over`.
+- A worktree cut from `dev` before DOS/Rate#1673 merged has the old
+  `board.mjs`, which takes no lock: merge `origin/dev` into the branch first.
 
 In DOS/Rate the required `task-claim` check (`scripts/task-claim-check.mjs`,
 ruleset `dev-task-claim`) passes a PR into `dev` only when every
@@ -215,9 +227,13 @@ PR, latest comment, notes folder, and the lock holder from the lock comment
 or `board.mjs`'s refusal) and asks JOY in one line. On JOY's yes,
 quoted in the brief with the date, the new session posts a takeover comment
 linking the evidence and runs
-`board.mjs <n> --status in-progress --agent <Nick> --take-over`. When the
-holder's session is gone for good, the PO may instead clear the lock first
-with `board.mjs <n> --force-release --agent PO --reason "<JOY's yes, date>"`.
+`board.mjs <n> --status in-progress --agent <Nick> --take-over`, which
+replaces the old lock. When nobody takes the issue yet, the PO clears the lock
+with `board.mjs <n> --force-release --agent PO --reason "<JOY's yes, date>"`
+and returns the issue with
+`board.mjs <n> --status ready --agent PO --take-over`. A hand-over (release)
+is complete once `board.mjs` posted its "Claim lock ... released" comment;
+the next session claims only after that comment.
 
 ## Triage
 

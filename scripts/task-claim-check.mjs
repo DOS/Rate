@@ -161,10 +161,13 @@ export function renderSummary(number, result) {
   if (!result.ok) {
     lines.push(
       '',
-      'Claim the issue from the session that does the work: ' +
+      'Claim the issue from the session that does the work, with `board.mjs` from an ' +
+        'up-to-date `dev` (merge `origin/dev` into the branch first: a copy older than ' +
+        'DOS/Rate#1673 takes no lock): ' +
         '`node scripts/ops/board.mjs <n> --status in-review --agent <Nick>` ' +
-        '(it sets the labels, Project #9 and the claim lock `refs/claims/<n>`, and ' +
-        'prints the claimant), then put `Claimant: <tool>:<session id>` on a line ' +
+        '(add `--adopt` for an issue this session claimed before the lock existed). ' +
+        'It sets the labels, Project #9 and the claim lock `refs/claims/<n>`, and ' +
+        'prints the claimant; put `Claimant: <tool>:<session id>` on a line ' +
         'of its own in the PR description. Editing the description re-runs this check.'
     );
   }

@@ -13,7 +13,10 @@
 // `ready`, `backlog` and `done` release it. The claimant is `--claimant`, else
 // RATE_CLAIMANT, else the Claude Code session id (scripts/claim-lock.mjs).
 // `--force-release` (PO only) clears an orphaned lock and says why on the
-// issue.
+// issue. `--adopt` takes the lock of an issue this session claimed with
+// labels only, before the lock existed: a lockless issue that is already
+// in-progress or in-review is otherwise refused, since it may be another
+// session's claim under the same nickname.
 //
 // The status label replaces any other status:* label, the agent label
 // (agent:<nick>) is created when missing, a claim adds the PO line label
@@ -133,9 +136,9 @@ const ISSUE_QUERY = `query($owner: String!, $name: String!, $n: Int!) {
   }
 }`;
 
-function readIssue(repo, number) {
+function readIssue(repo, number, { ghJson: json = ghJson } = {}) {
   const [owner, name] = repo.split('/');
-  const data = ghJson([
+  const data = json([
     'api',
     'graphql',
     '-f',
@@ -159,8 +162,10 @@ function readIssue(repo, number) {
   };
 }
 
-function comment(repo, number, body) {
-  gh(['issue', 'comment', String(number), '-R', repo, '--body', body]);
+const defaultIo = { gh, ghJson };
+
+function comment(io, repo, number, body) {
+  io.gh(['issue', 'comment', String(number), '-R', repo, '--body', body]);
 }
 
 /**
@@ -169,9 +174,9 @@ function comment(repo, number, body) {
  * Only DOS/Rate has the check. Best effort: the check also re-runs when a
  * PR is edited.
  */
-function revalidate(repo, number) {
+function revalidate(io, repo, number) {
   if (repo !== DEFAULT_REPO) return;
-  const r = gh(
+  const r = io.gh(
     [
       'workflow',
       'run',
@@ -199,12 +204,15 @@ export async function setBoard({
   nick,
   claimant,
   takeOver = false,
+  adopt = false,
   api = githubLockApi(repo),
+  io = defaultIo,
 }) {
   const spec = STATUSES[status];
   if (!spec) throw new Error(`unknown status ${status}`);
-  const issue = readIssue(repo, number);
+  const issue = readIssue(repo, number, io);
   const claiming = CLAIM_STATUSES.includes(status);
+  const { gh, ghJson } = io;
 
   // Refuse before changing anything when the labels say someone else holds
   // the issue.
@@ -213,12 +221,25 @@ export async function setBoard({
     po: claiming ? poTool(claimant) : null,
   });
 
-  // The lock first: it is the one step only one session can win. Labels and
-  // board follow, and a re-run after a failure finds the lock already held
-  // (or already released) and carries on.
+  // The lock first: it is the one step only one session can win. Its comment
+  // goes out at once, so the issue names the claimant even if a later step
+  // fails. Labels and board follow, and a re-run after a failure finds the
+  // lock already held (or already released) and carries on.
   const lock = claiming
-    ? await acquireLock({ api, number, claimant, agent: nick, takeOver })
+    ? await acquireLock({
+        api,
+        number,
+        claimant,
+        agent: nick,
+        takeOver,
+        adopt,
+        claimedWithoutLock: issue.labels.some((l) =>
+          CLAIM_STATUSES.some((c) => STATUSES[c].label === l)
+        ),
+      })
     : await releaseLock({ api, number, claimant, issueClosed: issue.closed });
+  const note = lockComment({ repo, number, nick, claimant, status, lock });
+  if (note) comment(io, repo, number, note);
 
   const taken = remove.filter((l) => l.startsWith('agent:'));
   if (taken.length > 0) {
@@ -286,11 +307,7 @@ export async function setBoard({
   edit(PROJECT.statusField, ['--single-select-option-id', spec.option]);
   edit(PROJECT.agentField, ['--text', nick]);
 
-  const note = lockComment({ repo, number, nick, claimant, status, lock });
-  if (note) {
-    comment(repo, number, note);
-    revalidate(repo, number);
-  }
+  if (note) revalidate(io, repo, number);
   return `${repo}#${number} -> ${status} (${nick}, ${claimant}, lock ${lock.action})`;
 }
 
@@ -302,7 +319,10 @@ export async function forceReleaseBoard({
   reason,
   claimant = null,
   api = githubLockApi(repo),
+  io = defaultIo,
 }) {
+  // A convention, not access control: any session can pass --agent PO. It
+  // makes the force-release a deliberate, PO-attributed act on the record.
   if (!isPoNick(nick)) {
     throw new Error(
       '--force-release is for the Product Owner: run it with --agent PO'
@@ -317,19 +337,20 @@ export async function forceReleaseBoard({
   if (lock.action === 'none')
     return `${repo}#${number}: no claim lock to release`;
   comment(
+    io,
     repo,
     number,
     `⚠️ **[Agent: ${nick}]** Force-released claim lock \`${lockRef(number)}\` ` +
       `held by ${describeLock(lock.previous)}` +
       `${claimant ? ` (by claimant \`${claimant}\`)` : ''}. Reason: ${reason.trim()}`
   );
-  revalidate(repo, number);
+  revalidate(io, repo, number);
   return `${repo}#${number}: force-released the lock of ${describeLock(lock.previous)}`;
 }
 
 const USAGE =
   `usage: board.mjs <issue>... --status ${Object.keys(STATUSES).join('|')} --agent <nick> ` +
-  '[--claimant <tool>:<session id>] [--take-over] [--repo owner/name]\n' +
+  '[--claimant <tool>:<session id>] [--take-over | --adopt] [--repo owner/name]\n' +
   '       board.mjs <issue>... --force-release --agent PO --reason "<why>" [--repo owner/name]';
 
 if (isMain(import.meta.url)) {
@@ -341,6 +362,7 @@ if (isMain(import.meta.url)) {
       agent: { type: 'string' },
       claimant: { type: 'string' },
       'take-over': { type: 'boolean', default: false },
+      adopt: { type: 'boolean', default: false },
       'force-release': { type: 'boolean', default: false },
       reason: { type: 'string' },
     },
@@ -379,6 +401,7 @@ if (isMain(import.meta.url)) {
               nick: values.agent.trim(),
               claimant,
               takeOver: values['take-over'],
+              adopt: values.adopt,
             })
       );
     } catch (err) {
