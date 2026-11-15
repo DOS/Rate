@@ -215,6 +215,17 @@ export default function VersusInteractiveScoreboard({
   const criterionCell = (v: number | null) =>
     v != null ? `${formatScoreFixed(v, 1)}/5.0` : noData;
 
+  const personaLabels: Partial<Record<PersonaPresetKey, string>> & {
+    custom: string;
+  } = {
+    default: t('personaDefault'),
+    photography: t('personaPhotography'),
+    gaming: t('personaGaming'),
+    endurance: t('personaEndurance'),
+    value_hunter: t('personaValueHunter'),
+    custom: t('customWeightsActive'),
+  };
+
   const handleCopy1v1Markdown = async () => {
     if (typeof window === 'undefined') return;
     try {
@@ -244,8 +255,16 @@ export default function VersusInteractiveScoreboard({
         summaryBullet,
         ...(personaLead
           ? [
-              `- ${sanitizeVersusMarkdownCell(
-                t(personaLead.key, personaLead.values)
+              `- ${t(
+                personaLead.key,
+                personaLead.key === 'versusPersonaLead'
+                  ? {
+                      ...personaLead.values,
+                      winner: sanitizeVersusMarkdownCell(
+                        personaResult?.winner.name
+                      ),
+                    }
+                  : personaLead.values
               )}`,
             ]
           : []),
@@ -293,7 +312,7 @@ export default function VersusInteractiveScoreboard({
     const rows: Array<Array<string | number>> = [
       [
         t('csvRowWeightedScore5'),
-        100,
+        '-',
         shownA > 0 ? formatScoreFixed(shownA, 1) : '',
         shownB > 0 ? formatScoreFixed(shownB, 1) : '',
         shownA <= 0 && shownB <= 0
@@ -302,6 +321,18 @@ export default function VersusInteractiveScoreboard({
             ? t('mdRowTie')
             : overallResult.winner.name,
       ],
+      // The lead under the picked weights, apart from the overall row.
+      ...(personaResult
+        ? [
+            [
+              personaLabels[activePersona] ?? personaLabels.custom,
+              100,
+              formatScoreFixed(displayedScore5(personaResult.finalA), 1),
+              formatScoreFixed(displayedScore5(personaResult.finalB), 1),
+              personaResult.tie ? t('mdRowTie') : personaResult.winner.name,
+            ],
+          ]
+        : []),
       ...criteriaRows.map((r) => [
         r.label,
         activeWeights[r.key],
@@ -446,16 +477,6 @@ export default function VersusInteractiveScoreboard({
     URL.revokeObjectURL(url);
   };
 
-  const personaLabels: Partial<Record<PersonaPresetKey, string>> & {
-    custom: string;
-  } = {
-    default: t('personaDefault'),
-    photography: t('personaPhotography'),
-    gaming: t('personaGaming'),
-    endurance: t('personaEndurance'),
-    value_hunter: t('personaValueHunter'),
-    custom: t('customWeightsActive'),
-  };
   // The final verdict reads the overall stars, so it names no weights.
   const verdict = versusVerdictFor(
     overallResult,

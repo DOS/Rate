@@ -293,7 +293,8 @@ export type VersusWeightedResult = ReturnType<
  * preset or weights are picked ("the overall stars are the final
  * comparison"). A preset or custom weights only add `persona`, the
  * 0.35 * rating + 0.65 * criteria lead under those weights, shown apart;
- * null when the default weights apply (also after a fallback).
+ * null when the default weights apply (also after a fallback) or when the
+ * weights fall on no criterion both models have a score for.
  */
 export function computeVersusResult(
   scoreA: ScoredVersusItem,
@@ -302,6 +303,15 @@ export function computeVersusResult(
   weights: CriteriaWeights
 ) {
   const applied = resolveVersusPersona(scoreA, scoreB, persona, weights);
+  const byPersona =
+    applied.persona === 'default'
+      ? null
+      : computeVersusWeightedResult(
+          scoreA,
+          scoreB,
+          applied.weights,
+          applied.persona
+        );
   return {
     overall: computeVersusWeightedResult(
       scoreA,
@@ -309,15 +319,9 @@ export function computeVersusResult(
       PERSONA_WEIGHTS.default,
       'default'
     ),
-    persona:
-      applied.persona === 'default'
-        ? null
-        : computeVersusWeightedResult(
-            scoreA,
-            scoreB,
-            applied.weights,
-            applied.persona
-          ),
+    // No lead when the weights reach no shared criterion: it would only
+    // repeat the overall result.
+    persona: byPersona?.basis === 'rating_and_criteria' ? byPersona : null,
     appliedPersona: applied.persona,
     appliedWeights: applied.weights,
   };

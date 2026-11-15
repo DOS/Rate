@@ -270,19 +270,16 @@ export async function GET(req: NextRequest) {
       ])
     ) as unknown as LeaderboardCriteriaWeights;
 
-    const weightTotal =
-      sanitizedWeights.screen +
-      sanitizedWeights.performance +
-      sanitizedWeights.camera +
-      sanitizedWeights.battery +
-      sanitizedWeights.value;
-
-    const normalizedWeights: LeaderboardCriteriaWeights =
-      weightTotal > 0
+    // Weights as percentages of their total; equal when all are 0.
+    const toPercentWeights = (
+      w: LeaderboardCriteriaWeights
+    ): LeaderboardCriteriaWeights => {
+      const total = weightKeys.reduce((sum, key) => sum + w[key], 0);
+      return total > 0
         ? (Object.fromEntries(
             weightKeys.map((key) => [
               key,
-              roundScore((sanitizedWeights[key] / weightTotal) * 100, 1),
+              roundScore((w[key] / total) * 100, 1),
             ])
           ) as unknown as LeaderboardCriteriaWeights)
         : {
@@ -292,6 +289,8 @@ export async function GET(req: NextRequest) {
             battery: 20,
             value: 20,
           };
+    };
+    const normalizedWeights = toPercentWeights(sanitizedWeights);
 
     // The criteria both products have a score for past the ranking
     // threshold (D9); a criterion outside them is not won or lost
@@ -316,6 +315,8 @@ export async function GET(req: NextRequest) {
       sanitizedWeights
     );
     const overall = versus.overall;
+    // The weights the pair is scored with, after the preset fallback.
+    const appliedWeights = toPercentWeights(versus.appliedWeights);
     const byWeights = versus.persona ?? overall;
     // Rounded once, as the page rounds (D3), then put on 10.
     const shown10 = (score5: number) => displayedScore5(score5) * 2;
@@ -370,7 +371,7 @@ export async function GET(req: NextRequest) {
             : null;
         return {
           criterion: key,
-          weight_pct: normalizedWeights[key],
+          weight_pct: appliedWeights[key],
           score_a_5: a5,
           score_a_10: a10,
           score_b_5: b5,
@@ -445,6 +446,7 @@ export async function GET(req: NextRequest) {
         // requested one cannot weigh this pair (DOS/Rate#1556, #1647).
         applied_persona: versus.appliedPersona,
         weights: normalizedWeights,
+        applied_weights: appliedWeights,
         // What the custom weighted scores weigh: the shown rating alone, or
         // 0.35 * rating + 0.65 * the weighted criteria both products have a
         // real score for (`compared_criteria`).
@@ -467,11 +469,12 @@ export async function GET(req: NextRequest) {
           brand: winnerScore.brand,
           combined_score_5: winnerScore.combinedScore5,
           combined_score_10: roundScore(winnerScore.combinedScore5 * 2, 1),
+          // The deciding score; the weighted ones are in `persona_result`.
           overall_score_5: winnerSide === 'A' ? overallA5 : overallB5,
-          custom_weighted_score_5:
-            winnerSide === 'A' ? customScoreA5 : customScoreB5,
-          custom_weighted_score_10:
-            winnerSide === 'A' ? customScoreA10 : customScoreB10,
+          overall_score_10:
+            (winnerSide === 'A' ? overallA5 : overallB5) != null
+              ? shown10(winnerSide === 'A' ? overall.finalA : overall.finalB)
+              : null,
           margin_10: margin10,
           min_price: winnerScore.minPrice,
         },

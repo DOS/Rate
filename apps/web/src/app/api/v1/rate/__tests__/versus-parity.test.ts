@@ -109,7 +109,10 @@ interface VersusBody {
     side: 'A' | 'B';
     slug: string;
     margin_10: number | null;
+    overall_score_10: number | null;
+    custom_weighted_score_10?: number;
   };
+  applied_weights: Record<string, number>;
   persona_result: {
     persona: string;
     basis: string;
@@ -386,6 +389,10 @@ async function main() {
       '&persona=photography'
     );
     assert.equal(photo.overall_winner.slug, 'vp-cam-a');
+    // The final winner carries its deciding score, never the weighted one.
+    assert.equal(photo.overall_winner.overall_score_10, 9.2);
+    assert.equal(photo.overall_winner.custom_weighted_score_10, undefined);
+    assert.equal(photo.applied_weights.camera, 45);
     assert.equal(photo.is_tie, false);
     assert.equal(photo.applied_persona, 'photography');
     assert.equal(photo.custom_weighted_basis, 'rating_and_criteria');
@@ -440,6 +447,7 @@ async function main() {
     );
     assert.equal(api.persona, 'photography');
     assert.equal(api.applied_persona, 'default');
+    assert.equal(api.applied_weights.camera, 20);
     assert.equal(api.custom_weighted_basis, 'rating');
     assert.equal(api.persona_result, null);
     assert.equal(api.overall_winner.slug, 'vp-fallback-a');
@@ -469,6 +477,25 @@ async function main() {
     assert.equal(api.applied_persona, 'default');
     assert.equal(api.persona_result, null);
     assert.equal(api.overall_winner.slug, 'vp-noshare-b');
+  }
+
+  // 8b. Custom weights that fall only on criteria not scored on both sides
+  //     add no lead: it would repeat the overall result.
+  {
+    const api = await agree(
+      'custom, weights off the shared criteria',
+      phone('vp-offshare-a', 4.1, { camera: 9, battery: 8 }),
+      phone('vp-offshare-b', 4.4, { camera: 8, value: 9 }),
+      {
+        persona: 'custom',
+        weights: { ...PERSONA_WEIGHTS.default, camera: 0 },
+      },
+      '&w_camera=0'
+    );
+    assert.equal(api.applied_persona, 'custom');
+    assert.equal(api.persona_result, null);
+    assert.equal(api.custom_weighted_basis, 'rating');
+    assert.equal(api.overall_winner.slug, 'vp-offshare-b');
   }
 
   // 9. Each criterion has its own winner, on the criterion stars as shown at
@@ -555,6 +582,14 @@ async function main() {
     'the verdict names the final winner by the overall stars, no weights'
   );
   assert.ok(!pageSrc.includes('weightedResult.'));
+  // The preset lead never stands in for the overall result: it is read only
+  // for its own line, its CSV row and its JSON field.
+  assert.ok(!/personaResult\s*\?\?|\?\?\s*personaResult/.test(pageSrc));
+  assert.equal(
+    pageSrc.match(/personaResult\.winner\b/g)?.length,
+    2,
+    'personaResult.winner only in the CSV lead row and the JSON export'
+  );
 
   console.log('versus-parity: page and API agree on every case');
 }
