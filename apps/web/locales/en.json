@@ -848,6 +848,7 @@
     "radarSectionBadge": "Price signals and price gaps across 10 stores",
     "openDealRadarLink": "See deals across 10 stores →",
     "radarGenuinePill": "Lowest across stores: -{pct}% on {platform} ({price} ₫)",
+    "radarBelowMedianPill": "Below median: -{pct}% on {platform} ({price} ₫)",
     "radarFakePill": "Fake discount: +{pct}% on {platform}",
     "radarSpreadPill": "Price gap across 10 stores: +{pct}% ({vnd} ₫ between {cheapest} and {priciest})",
     "masterProductSection": "Matched product (10 spec groups)",
