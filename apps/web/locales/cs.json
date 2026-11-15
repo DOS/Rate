@@ -171,7 +171,7 @@
     "leadingDeltaNote": "(Náskok +{delta} b. dle aktuálních vah)",
     "labScorePending": "Lab: nedostupné",
     "price60dStable": "Cena stabilní",
-    "radarRowTitle": "Cenový signál z 10 obchodů (nabídky pod mediánem a falešné slevy)",
+    "radarRowTitle": "Cenový signál z 10 obchodů (pod mediánem, falešné slevy)",
     "md1v1Heading": "Verdikt souboje 1v1: {nameA} vs {nameB}",
     "mdLeadingDevice": "Vedoucí zařízení",
     "mdScoreDelta": "Rozdíl {delta} b.",

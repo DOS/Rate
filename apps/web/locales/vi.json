@@ -171,7 +171,7 @@
     "leadingDeltaNote": "(Chênh lệch +{delta} điểm theo trọng số hiện tại)",
     "labScorePending": "Lab: chưa có",
     "price60dStable": "Giá ổn định",
-    "radarRowTitle": "Tín hiệu giá trên 10 sàn (deal dưới giá trung vị và giảm giá ảo)",
+    "radarRowTitle": "Tín hiệu giá 10 sàn (deal dưới trung vị, giảm giá ảo)",
     "md1v1Heading": "Kết luận so sánh 1v1: {nameA} vs {nameB}",
     "mdLeadingDevice": "Thiết bị dẫn trước",
     "mdScoreDelta": "Chênh lệch {delta} điểm",

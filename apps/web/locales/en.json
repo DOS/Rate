@@ -171,7 +171,7 @@
     "leadingDeltaNote": "(+{delta} pts lead under current weights)",
     "labScorePending": "Lab: pending",
     "price60dStable": "Price stable",
-    "radarRowTitle": "Price signal across 10 stores (below-median deals and fake sales)",
+    "radarRowTitle": "10-store price signal (below-median deals, fake sales)",
     "md1v1Heading": "1v1 verdict: {nameA} vs {nameB}",
     "mdLeadingDevice": "Leading device",
     "mdScoreDelta": "Delta {delta} pts",
