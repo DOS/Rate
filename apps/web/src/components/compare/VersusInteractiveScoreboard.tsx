@@ -15,9 +15,10 @@ import {
   radarMarkdownCell,
 } from '@/lib/deal-radar';
 import { escapeCsvCell } from '@/lib/csv-safe';
-import { versusVerdictFor } from '@/lib/versus-verdict';
+import { versusPersonaLeadCopy, versusVerdictFor } from '@/lib/versus-verdict';
 import {
   PERSONA_WEIGHTS,
+  computeVersusResult,
   computeVersusWeightedResult,
   resolveVersusPersona,
   sanitizeVersusScore5,
@@ -41,6 +42,7 @@ import {
 
 export {
   PERSONA_WEIGHTS,
+  computeVersusResult,
   computeVersusWeightedResult,
   resolveVersusPersona,
   sanitizeVersusScore5,
@@ -82,7 +84,7 @@ export function sanitizeVersusMarkdownCell(value: unknown): string {
 }
 
 export function formatVersusWeightedMarkdown(
-  weightedResult: ReturnType<typeof computeVersusWeightedResult>,
+  overallResult: ReturnType<typeof computeVersusWeightedResult>,
   safeWinnerName: string,
   copy: {
     tie1v1Badge: string;
@@ -94,22 +96,22 @@ export function formatVersusWeightedMarkdown(
     mdRowTie: string;
   }
 ): { summaryBullet: string; weightedScoreRow: string } {
-  const shownA = displayedScore5(weightedResult.finalA);
-  const shownB = displayedScore5(weightedResult.finalB);
+  const shownA = displayedScore5(overallResult.finalA);
+  const shownB = displayedScore5(overallResult.finalB);
   const anyScored = shownA > 0 || shownB > 0;
   const leadScore = formatScoreFixed(Math.max(shownA, shownB), 1);
-  const summaryBullet = weightedResult.tie
+  const summaryBullet = overallResult.tie
     ? anyScored
       ? `- **${copy.tie1v1Badge}:** ${copy.mdTieLine(leadScore)}`
       : `- **${copy.tie1v1Badge}:** ${copy.valNoReviews}`
-    : weightedResult.delta != null
-      ? `- **${copy.mdLeadingDevice}:** **${safeWinnerName}** (${leadScore}/5.0 - ${copy.mdScoreDelta(weightedResult.delta)})`
+    : overallResult.delta != null
+      ? `- **${copy.mdLeadingDevice}:** **${safeWinnerName}** (${leadScore}/5.0 - ${copy.mdScoreDelta(overallResult.delta)})`
       : `- **${copy.mdLeadingDevice}:** **${safeWinnerName}** (${leadScore}/5.0)`;
   const cellA = shownA > 0 ? `**${formatScoreFixed(shownA, 1)}/5.0**` : 'N/A';
   const cellB = shownB > 0 ? `**${formatScoreFixed(shownB, 1)}/5.0**` : 'N/A';
   const advantage = !anyScored
     ? '-'
-    : weightedResult.tie
+    : overallResult.tie
       ? `**${sanitizeVersusMarkdownCell(copy.mdRowTie)}**`
       : `**${safeWinnerName}**`;
   return {
@@ -176,15 +178,17 @@ export default function VersusInteractiveScoreboard({
   );
   const availablePersonas = versusAvailablePersonas(sharedCriteria);
   const canWeigh = availablePersonas.length > 0;
-  // The same fallback as GET /api/v1/rate/versus (DOS/Rate#1647).
-  const { persona: activePersona, weights: activeWeights } =
-    resolveVersusPersona(scoreA, scoreB, persona, weights);
-
-  const weightedResult = useMemo(
-    () =>
-      computeVersusWeightedResult(scoreA, scoreB, activeWeights, activePersona),
-    [scoreA, scoreB, activeWeights, activePersona]
+  // The same result as GET /api/v1/rate/versus (DOS/Rate#1647): the final
+  // winner by the overall stars as shown, whatever weights are picked; a
+  // preset or custom weights only add their own lead, shown apart.
+  const versus = useMemo(
+    () => computeVersusResult(scoreA, scoreB, persona, weights),
+    [scoreA, scoreB, persona, weights]
   );
+  const overallResult = versus.overall;
+  const personaResult = versus.persona;
+  const activePersona = versus.appliedPersona;
+  const activeWeights = versus.appliedWeights;
 
   // The criteria of the pair's category (no screen for earbuds); a side
   // without a real score reads "Chưa đủ dữ liệu", and a row wins only when
@@ -209,7 +213,7 @@ export default function VersusInteractiveScoreboard({
     compared: row.winner != null,
   }));
   const criterionCell = (v: number | null) =>
-    v != null ? `${formatScoreFixed(v, 2)}/5.0` : noData;
+    v != null ? `${formatScoreFixed(v, 1)}/5.0` : noData;
 
   const handleCopy1v1Markdown = async () => {
     if (typeof window === 'undefined') return;
@@ -219,11 +223,11 @@ export default function VersusInteractiveScoreboard({
       const safeNameA = sanitizeVersusMarkdownCell(scoreA.name);
       const safeNameB = sanitizeVersusMarkdownCell(scoreB.name);
       const safeWinnerName = sanitizeVersusMarkdownCell(
-        weightedResult.winner.name
+        overallResult.winner.name
       );
       const safePriceAdv = sanitizeVersusMarkdownCell(priceAdvantageLabel);
       const { summaryBullet, weightedScoreRow } = formatVersusWeightedMarkdown(
-        weightedResult,
+        overallResult,
         safeWinnerName,
         {
           tie1v1Badge: t('tie1v1Badge'),
@@ -238,6 +242,13 @@ export default function VersusInteractiveScoreboard({
       const lines = [
         `### ${t('md1v1Heading', { nameA: safeNameA, nameB: safeNameB })}`,
         summaryBullet,
+        ...(personaLead
+          ? [
+              `- ${sanitizeVersusMarkdownCell(
+                t(personaLead.key, personaLead.values)
+              )}`,
+            ]
+          : []),
         `- **${t('mdAuditUrl')}:** ${window.location.href}`,
         '',
         `| ${t('mdColCriterion')} | ${safeNameA} | ${safeNameB} | ${t('mdColAdvantage')} |`,
@@ -277,8 +288,8 @@ export default function VersusInteractiveScoreboard({
       scoreB.name,
       t('csvColAdvantage'),
     ];
-    const shownA = displayedScore5(weightedResult.finalA);
-    const shownB = displayedScore5(weightedResult.finalB);
+    const shownA = displayedScore5(overallResult.finalA);
+    const shownB = displayedScore5(overallResult.finalB);
     const rows: Array<Array<string | number>> = [
       [
         t('csvRowWeightedScore5'),
@@ -287,15 +298,15 @@ export default function VersusInteractiveScoreboard({
         shownB > 0 ? formatScoreFixed(shownB, 1) : '',
         shownA <= 0 && shownB <= 0
           ? '-'
-          : weightedResult.tie
+          : overallResult.tie
             ? t('mdRowTie')
-            : weightedResult.winner.name,
+            : overallResult.winner.name,
       ],
       ...criteriaRows.map((r) => [
         r.label,
         activeWeights[r.key],
-        r.aVal != null ? formatScoreFixed(r.aVal, 2) : '',
-        r.bVal != null ? formatScoreFixed(r.bVal, 2) : '',
+        r.aVal != null ? formatScoreFixed(r.aVal, 1) : '',
+        r.bVal != null ? formatScoreFixed(r.bVal, 1) : '',
         !r.compared
           ? ''
           : r.aWins
@@ -370,24 +381,22 @@ export default function VersusInteractiveScoreboard({
     const sigB = getRadarSignal(radarIndex, scoreB.slug);
     const safeSlugA = sanitizeVersusExportSlug(scoreA.slug);
     const safeSlugB = sanitizeVersusExportSlug(scoreB.slug);
-    const shownA = displayedScore5(weightedResult.finalA);
-    const shownB = displayedScore5(weightedResult.finalB);
+    const shownA = displayedScore5(overallResult.finalA);
+    const shownB = displayedScore5(overallResult.finalB);
     const payload = {
       source: 'Rate.vn 1v1 Versus Scoreboard',
       versusSlug: `${safeSlugA}-vs-${safeSlugB}`,
       persona: activePersona,
       weights: activeWeights,
       exportedAt: new Date().toISOString(),
-      tie: weightedResult.tie,
-      winner: weightedResult.tie
+      tie: overallResult.tie,
+      winner: overallResult.tie
         ? null
         : {
-            slug: sanitizeVersusExportSlug(weightedResult.winner.slug),
-            name: weightedResult.winner.name,
+            slug: sanitizeVersusExportSlug(overallResult.winner.slug),
+            name: overallResult.winner.name,
             scoreDelta5:
-              weightedResult.delta != null
-                ? Number(weightedResult.delta)
-                : null,
+              overallResult.delta != null ? Number(overallResult.delta) : null,
           },
       productA: {
         slug: safeSlugA,
@@ -407,6 +416,17 @@ export default function VersusInteractiveScoreboard({
         minPriceVnd: scoreB.minPrice,
         dealRadar: radarExportFields(sigB),
       },
+      // The lead under the picked preset or weights; never the winner.
+      personaResult: personaResult
+        ? {
+            tie: personaResult.tie,
+            winnerSlug: personaResult.tie
+              ? null
+              : sanitizeVersusExportSlug(personaResult.winner.slug),
+            scoreA5: displayedScore5(personaResult.finalA) || null,
+            scoreB5: displayedScore5(personaResult.finalB) || null,
+          }
+        : null,
       criteriaBreakdown: criteriaRows.map((r) => ({
         key: r.key,
         label: r.label,
@@ -436,8 +456,17 @@ export default function VersusInteractiveScoreboard({
     value_hunter: t('personaValueHunter'),
     custom: t('customWeightsActive'),
   };
+  // The final verdict reads the overall stars, so it names no weights.
   const verdict = versusVerdictFor(
-    weightedResult,
+    overallResult,
+    scoreA.slug,
+    'default',
+    personaLabels,
+    locale
+  );
+  // The lead under the picked preset or weights, apart from the verdict.
+  const personaLead = versusPersonaLeadCopy(
+    personaResult,
     scoreA.slug,
     activePersona,
     personaLabels,
@@ -446,9 +475,8 @@ export default function VersusInteractiveScoreboard({
 
   return (
     <>
-      {/* The verdict reads the scoreboard's own result, so it follows the
-          weights the reader picks; other weights than the default are named
-          (DOS/Rate#1235). */}
+      {/* The verdict names the final winner by the overall stars; the
+          picked weights only add their own lead below (DOS/Rate#1647). */}
       <p
         className="text-white-50 small mb-4"
         data-testid="versus-verdict"
@@ -462,6 +490,11 @@ export default function VersusInteractiveScoreboard({
             : t(verdict.key, verdict.values)}
         {verdict.weightsLabel &&
           ` ${t('versusVerdictWeights', { weights: verdict.weightsLabel })}`}
+        {personaLead && (
+          <span className="d-block mt-1" data-testid="versus-persona-lead">
+            {t(personaLead.key, personaLead.values)}
+          </span>
+        )}
       </p>
       <div className="rate-scoreboard-dark rounded-4 p-4">
         {/* Top Action & Persona Filter Strip */}
@@ -614,24 +647,24 @@ export default function VersusInteractiveScoreboard({
         >
           <div>
             <span className="badge bg-success rounded-pill me-2 text-white">
-              {weightedResult.tie ? t('tie1v1Badge') : t('leading1v1Badge')}
+              {overallResult.tie ? t('tie1v1Badge') : t('leading1v1Badge')}
             </span>
-            {weightedResult.tie ? (
+            {overallResult.tie ? (
               <span className="text-white-50 small">
-                {weightedResult.bothScored
+                {overallResult.bothScored
                   ? t('tieDeltaNote')
                   : t('valNoReviews')}
               </span>
             ) : (
               <>
                 <strong className="text-white">
-                  {weightedResult.winner.name}
+                  {overallResult.winner.name}
                 </strong>
-                {weightedResult.delta != null && (
+                {overallResult.delta != null && (
                   <span className="text-white-50 small ms-2">
                     {t('leadingDeltaNote', {
                       delta: formatDecimal(
-                        Number(weightedResult.delta),
+                        Number(overallResult.delta),
                         locale,
                         1
                       ),
@@ -642,8 +675,8 @@ export default function VersusInteractiveScoreboard({
             )}
           </div>
           <div className="rate-tabular small text-warning fw-bold">
-            {scoreA.brand}: {summaryScore(weightedResult.finalA)} •{' '}
-            {scoreB.brand}: {summaryScore(weightedResult.finalB)}
+            {scoreA.brand}: {summaryScore(overallResult.finalA)} •{' '}
+            {scoreB.brand}: {summaryScore(overallResult.finalB)}
           </div>
         </div>
 
@@ -657,7 +690,7 @@ export default function VersusInteractiveScoreboard({
               {scoreA.name}
             </Link>
             <div className="d-flex mt-1 flex-wrap gap-2">
-              <StarRating value={weightedResult.finalA} />
+              <StarRating value={overallResult.finalA} />
               <span className="rate-score-badge-expert">
                 {scoreA.expertScore10 != null
                   ? `Lab ${formatDecimal(scoreA.expertScore10, locale, 1)}/10`
@@ -678,7 +711,7 @@ export default function VersusInteractiveScoreboard({
               {scoreB.name}
             </Link>
             <div className="d-flex justify-content-end mt-1 flex-wrap gap-2">
-              <StarRating value={weightedResult.finalB} />
+              <StarRating value={overallResult.finalB} />
               <span className="rate-score-badge-expert">
                 {scoreB.expertScore10 != null
                   ? `Lab ${formatDecimal(scoreB.expertScore10, locale, 1)}/10`
@@ -709,7 +742,7 @@ export default function VersusInteractiveScoreboard({
                     }`}
                   >
                     {row.aVal != null
-                      ? `${formatRatingValue(row.aVal, locale, 2)}/5`
+                      ? `${formatRatingValue(row.aVal, locale, 1)}/5`
                       : noData}{' '}
                     {aWins ? '✓' : ''}
                   </span>
@@ -758,7 +791,7 @@ export default function VersusInteractiveScoreboard({
                   >
                     {bWins ? '✓ ' : ''}
                     {row.bVal != null
-                      ? `${formatRatingValue(row.bVal, locale, 2)}/5`
+                      ? `${formatRatingValue(row.bVal, locale, 1)}/5`
                       : noData}
                   </span>
                 </div>

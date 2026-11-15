@@ -7,7 +7,7 @@ import { radarExplanation } from '../product-detail-copy';
 import { weightExplanationCopy } from '../review-display';
 import { fitTitle } from '../seo';
 import { localizeSpecValue } from '../spec-localizer';
-import { versusVerdictCopy } from '../versus-verdict';
+import { versusPersonaLeadCopy, versusVerdictCopy } from '../versus-verdict';
 import {
   NBSP,
   collapseWhitespace,
@@ -334,6 +334,50 @@ assert.deepEqual(
 assert.equal(
   versusVerdictCopy({ ...versusInput, tie: true, score: 0 }).key,
   'versusAutoVerdictNoScore'
+);
+
+// The lead under a preset is shown apart from the verdict (DOS/Rate#1647):
+// named by the preset, with the leader's score; none with the default
+// weights or without a score.
+const leadLabels = { photography: 'Camera / Audio', custom: 'Custom weights' };
+const leadResult = {
+  tie: false,
+  finalA: 4.067,
+  finalB: 4.3975,
+  winner: { slug: 'b', name: 'Model B' },
+};
+assert.deepEqual(
+  versusPersonaLeadCopy(leadResult, 'a', 'photography', leadLabels, 'cs'),
+  {
+    key: 'versusPersonaLead',
+    values: { weights: 'Camera / Audio', winner: 'Model B', score: '4,4' },
+  }
+);
+assert.deepEqual(
+  versusPersonaLeadCopy(
+    { ...leadResult, tie: true },
+    'a',
+    'business',
+    leadLabels
+  ),
+  {
+    key: 'versusPersonaTie',
+    values: { weights: 'Custom weights', score: '4.1' },
+  }
+);
+assert.equal(
+  versusPersonaLeadCopy(leadResult, 'a', 'default', leadLabels),
+  null
+);
+assert.equal(versusPersonaLeadCopy(null, 'a', 'photography', leadLabels), null);
+assert.equal(
+  versusPersonaLeadCopy(
+    { ...leadResult, tie: true, finalA: 0, finalB: 0 },
+    'a',
+    'photography',
+    leadLabels
+  ),
+  null
 );
 
 // cs.json: a placeholder before % or ₫ is joined by one U+00A0, and no

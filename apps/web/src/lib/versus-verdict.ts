@@ -110,3 +110,41 @@ export function versusVerdictFor(
     locale
   );
 }
+
+export type VersusPersonaLeadCopy =
+  | {
+      key: 'versusPersonaLead';
+      values: { weights: string; winner: string; score: string };
+    }
+  | { key: 'versusPersonaTie'; values: { weights: string; score: string } };
+
+/**
+ * The lead under a picked preset or custom weights (DOS/Rate#1647), shown
+ * apart from the verdict: the final winner stays the one by the overall
+ * stars. Null with the default weights or when neither side has a score.
+ */
+export function versusPersonaLeadCopy(
+  result: {
+    tie: boolean;
+    finalA: number;
+    finalB: number;
+    winner: { slug: string; name: string };
+  } | null,
+  slugA: string,
+  persona: string,
+  labels: Partial<Record<string, string>> & { custom: string },
+  locale?: string | null
+): VersusPersonaLeadCopy | null {
+  if (!result || persona === 'default') return null;
+  const lead =
+    result.tie || result.winner.slug === slugA ? result.finalA : result.finalB;
+  if (!(lead > 0)) return null;
+  const weights = labels[persona] ?? labels.custom;
+  const score = formatRatingValue(lead, locale);
+  return result.tie
+    ? { key: 'versusPersonaTie', values: { weights, score } }
+    : {
+        key: 'versusPersonaLead',
+        values: { weights, winner: result.winner.name, score },
+      };
+}

@@ -16,8 +16,7 @@ import {
 } from '@/lib/leaderboard-engine';
 import { roundScore } from '@/lib/rating-display';
 import {
-  computeVersusWeightedResult,
-  resolveVersusPersona,
+  computeVersusResult,
   versusCriteriaHeadToHead,
   type PersonaPresetKey,
 } from '@/lib/versus-score';
@@ -43,9 +42,9 @@ export async function OPTIONS() {
 interface VersusPersonaConfig {
   id: string;
   /**
-   * The page's preset this one scores as (DOS/Rate#1647): `default` reads
-   * the shown rating alone; a preset the page does not offer scores as
-   * custom weights, 0.35 * rating + 0.65 * weighted criteria.
+   * The shared preset this one scores as (DOS/Rate#1647, `PERSONA_WEIGHTS`
+   * in `lib/versus-score.ts`): `default` adds no lead; a preset outside
+   * that list (`creator`, `gamer`, `traveler`) scores as custom weights.
    */
   preset: PersonaPresetKey;
   weights: LeaderboardCriteriaWeights;
@@ -302,41 +301,58 @@ export async function GET(req: NextRequest) {
       scoreB.rankCriteria
     );
 
-    // The winner, the tie and the scores come from the function the versus
-    // page uses, with the same preset fallback, so the API and the page
-    // always name the same winner (DOS/Rate#1647): the default weights read
-    // the rating as shown (`rating_score_5`, or the composite for a model
-    // with no buyer rating yet); a preset or custom weights score
-    // 0.35 * rating + 0.65 * the weighted shared criteria. The tie reads the
-    // scores at one decimal; on a tie the higher unrounded score, then the
-    // lower price, then side A pick `overall_winner`.
-    const scoring = resolveVersusPersona(
+    // The same result as the versus page, from the same function and with
+    // the same preset fallback (DOS/Rate#1647). The final winner and the tie
+    // read the overall rating as shown (`rating_score_5`, or the composite
+    // for a model with no buyer rating yet), whatever weights are asked for:
+    // the overall stars are the final comparison. On a tie the higher
+    // unrounded score, the lower price, then the pair's canonical first slug
+    // pick `overall_winner`. A preset or custom weights only add
+    // `persona_result`: 0.35 * rating + 0.65 * the weighted shared criteria.
+    const versus = computeVersusResult(
       scoreA,
       scoreB,
       hasCustomWeights ? 'custom' : matchedPersona.preset,
       sanitizedWeights
     );
-    const versusResult = computeVersusWeightedResult(
-      scoreA,
-      scoreB,
-      scoring.weights,
-      scoring.persona
-    );
-    const customScoreA5 = versusResult.finalA;
-    const customScoreB5 = versusResult.finalB;
+    const overall = versus.overall;
+    const byWeights = versus.persona ?? overall;
     // Rounded once, as the page rounds (D3), then put on 10.
-    const customScoreA10 = displayedScore5(customScoreA5) * 2;
-    const customScoreB10 = displayedScore5(customScoreB5) * 2;
+    const shown10 = (score5: number) => displayedScore5(score5) * 2;
+    const overallA5 = displayedScore5(overall.finalA) || null;
+    const overallB5 = displayedScore5(overall.finalB) || null;
+    const customScoreA5 = byWeights.finalA;
+    const customScoreB5 = byWeights.finalB;
+    const customScoreA10 = shown10(customScoreA5);
+    const customScoreB10 = shown10(customScoreB5);
     const priceSide = comparePositiveMinPrices(
       scoreA.minPrice,
       scoreB.minPrice
     );
 
-    const isTie = versusResult.tie;
-    const winnerSide = versusResult.winnerSide;
+    const isTie = overall.tie;
+    const winnerSide = overall.winnerSide;
     const winnerScore = winnerSide === 'A' ? scoreA : scoreB;
-    const winnerCustom10 = winnerSide === 'A' ? customScoreA10 : customScoreB10;
-    const margin10 = roundScore(Math.abs(customScoreA10 - customScoreB10), 1);
+    // The gap between the overall stars as shown, on 10; null when one side
+    // has no score, as the page shows no gap then.
+    const margin10 =
+      overallA5 != null && overallB5 != null
+        ? roundScore(Math.abs(overallA5 - overallB5) * 2, 1)
+        : overallA5 == null && overallB5 == null
+          ? 0
+          : null;
+    const personaResult = versus.persona
+      ? {
+          persona: versus.appliedPersona,
+          basis: versus.persona.basis,
+          is_tie: versus.persona.tie,
+          winner_slug: versus.persona.winner.slug,
+          score_a_5: versus.persona.finalA,
+          score_a_10: shown10(versus.persona.finalA),
+          score_b_5: versus.persona.finalB,
+          score_b_10: shown10(versus.persona.finalB),
+        }
+      : null;
 
     // A criterion without a real score on both sides has no winner: its
     // scores, delta and winner are null (DOS/Rate#1143).
@@ -427,12 +443,15 @@ export async function GET(req: NextRequest) {
         persona: matchedPersona.id,
         // The page preset the pair is scored with: `default` when the
         // requested one cannot weigh this pair (DOS/Rate#1556, #1647).
-        applied_persona: scoring.persona,
+        applied_persona: versus.appliedPersona,
         weights: normalizedWeights,
         // What the custom weighted scores weigh: the shown rating alone, or
         // 0.35 * rating + 0.65 * the weighted criteria both products have a
         // real score for (`compared_criteria`).
-        custom_weighted_basis: versusResult.basis,
+        custom_weighted_basis: byWeights.basis,
+        // The lead under the asked preset or weights; null with the default
+        // weights. It never replaces `overall_winner` (DOS/Rate#1647).
+        persona_result: personaResult,
         compared_criteria: comparedCriteria,
         deal_radar: {
           productA: radarSignalA,
@@ -448,9 +467,11 @@ export async function GET(req: NextRequest) {
           brand: winnerScore.brand,
           combined_score_5: winnerScore.combinedScore5,
           combined_score_10: roundScore(winnerScore.combinedScore5 * 2, 1),
+          overall_score_5: winnerSide === 'A' ? overallA5 : overallB5,
           custom_weighted_score_5:
             winnerSide === 'A' ? customScoreA5 : customScoreB5,
-          custom_weighted_score_10: winnerCustom10,
+          custom_weighted_score_10:
+            winnerSide === 'A' ? customScoreA10 : customScoreB10,
           margin_10: margin10,
           min_price: winnerScore.minPrice,
         },
@@ -476,6 +497,7 @@ export async function GET(req: NextRequest) {
           custom_weighted_score_10: customScoreA10,
           user_score_5: scoreA.userScore5,
           rating_score_5: displayedScore5(scoreA.userScore5) || null,
+          overall_score_5: overallA5,
           expert_score_10: scoreA.expertScore10,
           authentic_review_count: scoreA.authenticReviewCount,
           filtered_noise_review_count: scoreA.filteredNoiseReviewCount,
@@ -502,6 +524,7 @@ export async function GET(req: NextRequest) {
           custom_weighted_score_10: customScoreB10,
           user_score_5: scoreB.userScore5,
           rating_score_5: displayedScore5(scoreB.userScore5) || null,
+          overall_score_5: overallB5,
           expert_score_10: scoreB.expertScore10,
           authentic_review_count: scoreB.authenticReviewCount,
           filtered_noise_review_count: scoreB.filteredNoiseReviewCount,

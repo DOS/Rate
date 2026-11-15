@@ -1,10 +1,13 @@
 // The 1v1 score and winner, shared by the versus page
 // (`VersusInteractiveScoreboard`) and `GET /api/v1/rate/versus` so both
-// always name the same winner and the same tie (DOS/Rate#1647, item 5).
+// always name the same winner, the same tie and the same criterion winners
+// (DOS/Rate#1647, item 5).
 //
-// The default weights read the product's rating as every page shows it; a
-// use-case preset or custom weights blend that rating with the weighted
-// criteria both models have a real score for: 0.35 * rating + 0.65 * criteria.
+// The final winner reads the product's rating as every page shows it. Each
+// criterion has its own winner on its shown stars. A use-case preset or
+// custom weights add a separate lead that blends the rating with the
+// weighted criteria both models have a real score for:
+// 0.35 * rating + 0.65 * criteria; it never replaces the final winner.
 
 import { comparePositiveMinPrices } from './rate-domain';
 import type { ScoredLeaderboardItem } from './rate-domain';
@@ -13,8 +16,13 @@ import {
   sharedScoredCriteria,
   weightedCriteriaScore5,
 } from './leaderboard-engine';
-import { displayedScore5, formatScoreFixed } from './rating-display';
+import {
+  displayedScore5,
+  formatScoreFixed,
+  roundScore,
+} from './rating-display';
 import { isVersusScoreTie } from './versus-verdict';
+import { canonicalVersusOrder } from './item-compare';
 
 export type ScoredVersusItem = Omit<ScoredLeaderboardItem, 'rank'>;
 
@@ -212,8 +220,13 @@ export function computeVersusWeightedResult(
     );
     if (wAvg == null) return { score: baseScore5, byCriteria: false };
     return {
+      // Float noise trimmed at 6 decimals, so a blend worth 3.85 is not
+      // 3.8499999999999996 and shows 3.9, rounded once on the decimal (D3).
       score: sanitizeVersusScore5(
-        baseScore5 * VERSUS_RATING_SHARE + wAvg * VERSUS_CRITERIA_SHARE
+        roundScore(
+          baseScore5 * VERSUS_RATING_SHARE + wAvg * VERSUS_CRITERIA_SHARE,
+          6
+        )
       ),
       byCriteria: true,
     };
@@ -227,14 +240,18 @@ export function computeVersusWeightedResult(
     scoreA.minPrice,
     scoreB.minPrice
   );
+  // On level scores the lower price, then the pair's canonical first slug,
+  // so the pick never depends on the order the pair was asked in.
   const winnerSide: 'A' | 'B' =
     finalA > finalB
       ? 'A'
       : finalB > finalA
         ? 'B'
-        : tiePriceSide === 'B'
-          ? 'B'
-          : 'A';
+        : tiePriceSide === 'A' || tiePriceSide === 'B'
+          ? tiePriceSide
+          : canonicalVersusOrder(scoreA.slug, scoreB.slug)[0] === scoreA.slug
+            ? 'A'
+            : 'B';
   const winner = winnerSide === 'A' ? scoreA : scoreB;
 
   const shownA = displayedScore5(finalA);
@@ -269,3 +286,39 @@ export function computeVersusWeightedResult(
 export type VersusWeightedResult = ReturnType<
   typeof computeVersusWeightedResult
 >;
+
+/**
+ * The 1v1 result the page and the API show (DOS/Rate#1647): the final
+ * winner and tie always come from the overall rating as shown, whatever
+ * preset or weights are picked ("the overall stars are the final
+ * comparison"). A preset or custom weights only add `persona`, the
+ * 0.35 * rating + 0.65 * criteria lead under those weights, shown apart;
+ * null when the default weights apply (also after a fallback).
+ */
+export function computeVersusResult(
+  scoreA: ScoredVersusItem,
+  scoreB: ScoredVersusItem,
+  persona: PersonaPresetKey,
+  weights: CriteriaWeights
+) {
+  const applied = resolveVersusPersona(scoreA, scoreB, persona, weights);
+  return {
+    overall: computeVersusWeightedResult(
+      scoreA,
+      scoreB,
+      PERSONA_WEIGHTS.default,
+      'default'
+    ),
+    persona:
+      applied.persona === 'default'
+        ? null
+        : computeVersusWeightedResult(
+            scoreA,
+            scoreB,
+            applied.weights,
+            applied.persona
+          ),
+    appliedPersona: applied.persona,
+    appliedWeights: applied.weights,
+  };
+}
