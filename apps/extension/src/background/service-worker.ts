@@ -344,12 +344,17 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           return;
         }
         await updateActionBadge(tabId, lookup);
+        // Always persist or clear `lookup_tab_<id>` (and `lookup_tab_latest`
+        // for the active tab) so stale product state never lingers after a
+        // lookup error or null/unmatched response (DOS/Rate#1664).
+        const lookupPayload: Record<string, unknown> = {
+          [`lookup_${cacheKey}`]: lookup,
+        };
+        if (!isBackgroundTab) {
+          lookupPayload.lookup_tab_latest = lookup;
+        }
+        await chrome.storage.session.set(lookupPayload);
         if (!outcome.ok) {
-          // An open side panel reloads for this page instead of keeping the
-          // previous product (it listens to this key).
-          if (!isBackgroundTab) {
-            await chrome.storage.session.set({ lookup_tab_latest: null });
-          }
           sendResponse({
             ok: false,
             status: outcome.status,
@@ -359,19 +364,25 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           return;
         }
 
-        if (lookup) {
-          const lookupPayload: Record<string, unknown> = {
-            [`lookup_${cacheKey}`]: lookup,
-          };
-          if (!isBackgroundTab) {
-            lookupPayload.lookup_tab_latest = lookup;
-          }
-          await chrome.storage.session.set(lookupPayload);
-        }
-
         sendResponse({ ok: true, data: lookup });
       } catch (err) {
-        if (isLatest()) await updateActionBadge(sender.tab?.id, null);
+        if (isLatest()) {
+          await updateActionBadge(sender.tab?.id, null);
+          const errCacheKey = sender.tab?.id
+            ? `tab_${sender.tab.id}`
+            : 'tab_latest';
+          const errPayload: Record<string, unknown> = {
+            [`lookup_${errCacheKey}`]: null,
+          };
+          if (!(sender.tab && sender.tab.active === false)) {
+            errPayload.lookup_tab_latest = null;
+          }
+          try {
+            await chrome.storage.session.set(errPayload);
+          } catch {
+            // Ignore session storage errors during worker shutdown
+          }
+        }
         sendResponse({
           ok: false,
           status: null,
@@ -438,16 +449,17 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           return;
         }
 
+        const isQuickQuerySelected =
+          Boolean(latestEntry?.signal) &&
+          baseSignal === latestEntry?.signal &&
+          latestEntry?.source === 'quick_query';
+
         const effectiveSignal: ExtractedPageProductSignal = overrideVariant
           ? { ...baseSignal, selectedVariant: overrideVariant }
           : baseSignal;
 
         if (overrideVariant) {
           const now = Date.now();
-          const isQuickQuerySelected =
-            Boolean(latestEntry?.signal) &&
-            baseSignal === latestEntry?.signal &&
-            latestEntry?.source === 'quick_query';
           if (isQuickQuerySelected) {
             await chrome.storage.session.set({
               tab_latest: {
@@ -472,7 +484,21 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           }
         }
 
+        const detectSeqBefore = activeTab?.id
+          ? latestDetectByTab.get(activeTab.id)
+          : undefined;
         const outcome = await fetchExtensionLookup(effectiveSignal, 'full');
+        if (
+          !isQuickQuerySelected &&
+          activeTab?.id &&
+          latestDetectByTab.get(activeTab.id) === detectSeqBefore
+        ) {
+          const resolvedLookup = outcome.ok ? outcome.data : null;
+          await updateActionBadge(activeTab.id, resolvedLookup);
+          await chrome.storage.session.set({
+            [`lookup_${tabKey}`]: resolvedLookup,
+          });
+        }
         sendResponse(
           outcome.ok
             ? {

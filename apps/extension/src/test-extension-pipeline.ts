@@ -4718,9 +4718,9 @@ async function runTests() {
     );
     assert.ok(
       contentSource.includes(
-        'aria-label="${escapeHtml(buildPillAriaLabel(verdict.label, cheaperSummary))}"'
+        'aria-label="${escapeHtml(buildPillAriaLabel(verdict.label, cheaperSummary, [radarBadge?.text, ratingText]))}"'
       ),
-      'the pill names its verdict'
+      'the pill names its verdict and visible details'
     );
     console.log(
       '  ✅ [Vietnamese labels and accessible names (#1302)] Verified'
@@ -5851,6 +5851,656 @@ async function runTests() {
     await runExtensionLookupRouteTests();
     console.log(
       '  ✅ [Extension rating source priority & x.x5 half-up rounding (#1656)] Verified'
+    );
+  }
+
+  // --- DOS/Rate#1664: hydration signature, negative VND, variant matching, picker/badge & WCAG 2.5.3 ---
+  {
+    const { pickVariantOffer } =
+      await import('./extractors/ecommerce-detector.js');
+    const { buildProductSignalSignature } =
+      await import('./security-guards.js');
+    const { buildPillAriaLabel } = await import('./verdict-display.js');
+    const { buildSvgSparkline, renderVariantPickerHtml } =
+      await import('./sidepanel/panel-view.js');
+
+    // 1. Negative VND voucher strings rejected before stripping non-digits.
+    for (const neg of [
+      '-50.000đ',
+      '-50.000₫',
+      '-50.000d',
+      '\u22122.000.000đ',
+      '- 2.000.000 ₫',
+      '\u201350.000đ',
+      '\u201450.000đ',
+      '\ufe6350.000đ',
+      '\uff0d50.000đ',
+      '₫-50.000',
+      '-₫50.000',
+      'đ -50.000',
+      'VND -2.000.000',
+      'Voucher -50.000đ',
+      '~ -50.000đ',
+      -50_000,
+    ] as const) {
+      assert.equal(parseVndPriceText(neg), null, `must reject ${String(neg)}`);
+    }
+    assert.equal(parseVndPriceText('~ 28.990.000₫'), 28_990_000);
+    assert.equal(parseVndPriceText('28.990.000₫ - 34.990.000₫'), 28_990_000);
+
+    // 2. Token-safe bidirectional pickVariantOffer.
+    const fullTitleOffers = [
+      { sku: '8', name: 'iPhone 16 Pro Max 128GB Titan Đen' },
+      { sku: '16', name: 'iPhone 16 Pro Max 256GB Titan Tự Nhiên' },
+      { sku: '32', name: 'iPhone 16 Pro Max 512GB Titan Tự Nhiên' },
+    ];
+    assert.equal(
+      pickVariantOffer(fullTitleOffers, '256GB'),
+      fullTitleOffers[1]
+    );
+    assert.equal(
+      pickVariantOffer(fullTitleOffers, '256 GB'),
+      fullTitleOffers[1]
+    );
+    assert.equal(
+      pickVariantOffer(fullTitleOffers, 'Titan Tự Nhiên - 256GB'),
+      fullTitleOffers[1]
+    );
+    assert.equal(pickVariantOffer(fullTitleOffers, '8'), fullTitleOffers[0]);
+    assert.equal(
+      pickVariantOffer(
+        [
+          { sku: '8', name: '8GB' },
+          { sku: '128', name: '128GB' },
+        ],
+        '128GB'
+      )?.name,
+      '128GB',
+      'bare "8" or "8GB" must never match "128GB"'
+    );
+    assert.equal(
+      pickVariantOffer(
+        [
+          { sku: '16', name: 'iPhone 16 128GB' },
+          { sku: '17', name: 'iPhone 16 512GB' },
+        ],
+        'iPhone 16 - 256GB'
+      ),
+      null,
+      'bare numeric SKU "16" must not match model number in selectedVariant'
+    );
+    const colorOffers = [{ name: 'Đen' }, { name: 'Đen Nhám' }];
+    assert.equal(pickVariantOffer(colorOffers, 'Đen'), colorOffers[0]);
+    assert.equal(pickVariantOffer(colorOffers, 'Đen Nhám'), colorOffers[1]);
+    assert.equal(
+      pickVariantOffer(colorOffers, 'Đen Nhám - 256GB'),
+      colorOffers[1]
+    );
+
+    // 3. Variant picker null-storage check, aria-pressed & sparkline aria-hidden.
+    const nullStorageHtml = renderVariantPickerHtml({
+      detectedStorageGb: null,
+      selectedVariant: null,
+      variantCandidates: [
+        {
+          storageGb: null,
+          label: 'Tiêu chuẩn',
+          slug: 'earbuds-std',
+          minPrice: 1_990_000,
+          maxPrice: 2_190_000,
+        },
+        {
+          storageGb: null,
+          label: 'Bản ANC',
+          slug: 'earbuds-anc',
+          minPrice: 2_990_000,
+          maxPrice: 3_190_000,
+        },
+      ],
+    });
+    assert.ok(
+      !/class="variant-btn[^"]*\bactive\b/.test(nullStorageHtml),
+      'null storageGb must not mark all variant buttons .active'
+    );
+    assert.equal(
+      (nullStorageHtml.match(/aria-pressed="false"/g) || []).length,
+      2
+    );
+    const chosenNullStorageHtml = renderVariantPickerHtml({
+      detectedStorageGb: null,
+      selectedVariant: 'Bản ANC',
+      matchStatus: 'canonical_model',
+      variantCandidates: [
+        {
+          storageGb: null,
+          label: 'Tiêu chuẩn',
+          slug: 'earbuds-std',
+          minPrice: 1_990_000,
+          maxPrice: 2_190_000,
+        },
+        {
+          storageGb: null,
+          label: 'Bản ANC',
+          slug: 'earbuds-anc',
+          minPrice: 2_990_000,
+          maxPrice: 3_190_000,
+        },
+      ],
+    });
+    assert.equal(
+      (chosenNullStorageHtml.match(/class="variant-btn active"/g) || []).length,
+      1
+    );
+    assert.equal(
+      (chosenNullStorageHtml.match(/aria-pressed="true"/g) || []).length,
+      1
+    );
+    assert.equal(
+      (chosenNullStorageHtml.match(/aria-pressed="false"/g) || []).length,
+      1
+    );
+    const sizedHtml = renderVariantPickerHtml({
+      detectedStorageGb: 256,
+      selectedVariant: null,
+      matchStatus: 'canonical_model',
+      variantCandidates: [
+        {
+          storageGb: 256,
+          label: '256GB',
+          slug: 'p-256',
+          minPrice: 28_990_000,
+          maxPrice: 29_990_000,
+        },
+        {
+          storageGb: 512,
+          label: '512GB',
+          slug: 'p-512',
+          minPrice: 33_990_000,
+          maxPrice: 34_990_000,
+        },
+      ],
+    });
+    assert.ok(
+      /class="variant-btn active"\s+aria-pressed="true"\s+data-variant="256GB"/.test(
+        sizedHtml
+      )
+    );
+    const sparkSvg = buildSvgSparkline([
+      {
+        id: '1',
+        product_id: 'p',
+        merchant_name: 'Shop A',
+        platform: 'shopee',
+        price: 28_990_000,
+        price_original: null,
+        recorded_at: '2026-11-01T00:00:00Z',
+      },
+      {
+        id: '2',
+        product_id: 'p',
+        merchant_name: 'Shop A',
+        platform: 'shopee',
+        price: 27_990_000,
+        price_original: null,
+        recorded_at: '2026-11-02T00:00:00Z',
+      },
+    ]);
+    assert.match(sparkSvg, /<svg\b[^>]*\baria-hidden="true"/);
+
+    // 4. Hydration signature includes normalized originalPrice and title.
+    const baseSigInput = {
+      platform: 'shopee' as const,
+      canonicalUrl: 'https://shopee.vn/iphone-16-pro-max-i.88.99',
+      externalItemId: '99',
+      externalShopId: '88',
+      title: 'Shopee',
+      selectedVariant: '256GB',
+      price: 29_500_000,
+      originalPrice: null as number | null,
+      ratingStar: null,
+      ratingCount: null,
+    };
+    const sigInitial = buildProductSignalSignature(baseSigInput);
+    const sigHydratedTitle = buildProductSignalSignature({
+      ...baseSigInput,
+      title: 'iPhone 16 Pro Max 256GB VN/A',
+    });
+    const sigHydratedOriginal = buildProductSignalSignature({
+      ...baseSigInput,
+      title: 'iPhone 16 Pro Max 256GB VN/A',
+      originalPrice: 39_990_000,
+    });
+    assert.notEqual(sigInitial, sigHydratedTitle, 'hydrated title changes sig');
+    assert.notEqual(
+      sigHydratedTitle,
+      sigHydratedOriginal,
+      'hydrated originalPrice changes sig'
+    );
+    assert.equal(
+      buildProductSignalSignature({
+        ...baseSigInput,
+        title: '  iPhone 16\n  Pro Max 256GB VN/A  ',
+        originalPrice: 29_500_000,
+      }),
+      sigHydratedTitle,
+      'whitespace churn or non-discount originalPrice <= price keeps sig stable'
+    );
+
+    // 5. WCAG 2.5.3 Label in Name + live content-script SPA hydration re-lookup.
+    const removeParens = (v: string): string => {
+      let prev = '';
+      let cur = v;
+      while (cur !== prev) {
+        prev = cur;
+        cur = cur.replace(/\([^()]*\)/g, '');
+      }
+      return cur;
+    };
+    const axeTokens = (v: string): string[] =>
+      removeParens(v.toLowerCase().normalize('NFKD'))
+        .replace(/[^\p{L}\p{N}]+/gu, ' ')
+        .trim()
+        .split(/\s+/)
+        .filter(Boolean);
+    const isLabelInName = (visible: string, ariaName: string): boolean => {
+      const needle = axeTokens(visible);
+      if (needle.length === 0) return true;
+      const hay = axeTokens(ariaName);
+      for (let i = 0; i + needle.length <= hay.length; i++) {
+        if (needle.every((w, j) => w === hay[i + j])) return true;
+      }
+      return false;
+    };
+    const directAria = buildPillAriaLabel(
+      'Giảm giá ảo',
+      'Rẻ hơn tại 3 nơi (-1.500.000 ₫)',
+      ['Bẫy Sale (+35%)', '4.4 (89% thật)']
+    );
+    assert.equal(
+      isLabelInName(
+        'Rate.vn Giảm giá ảo Bẫy Sale (+35%) 4.4 (89% thật) Rẻ hơn tại 3 nơi (-1.500.000 ₫)',
+        directAria
+      ),
+      true,
+      'buildPillAriaLabel must contain all visible non-aria-hidden pill tokens in order'
+    );
+
+    // Live content-script hydration & rendered Shadow DOM pill WCAG 2.5.3 check.
+    {
+      const g = globalThis as Record<string, unknown>;
+      const saved = {
+        window: g.window,
+        document: g.document,
+        MutationObserver: g.MutationObserver,
+        requestAnimationFrame: g.requestAnimationFrame,
+        setTimeout: g.setTimeout,
+        clearTimeout: g.clearTimeout,
+        chrome: g.chrome,
+      };
+      let h1Text = 'iPhone 16';
+      let delText = '';
+      let shadowHtml = '';
+      let mutationCb: (() => void) | null = null;
+      const rafQ: Array<() => unknown> = [];
+      const timerQ: Array<() => unknown> = [];
+      const sentSignals: Array<Record<string, unknown>> = [];
+      const flush = async () => {
+        while (timerQ.length > 0 || rafQ.length > 0) {
+          while (timerQ.length > 0) await timerQ.shift()!();
+          while (rafQ.length > 0) await rafQ.shift()!();
+        }
+      };
+      const shadowRoot = {
+        get innerHTML() {
+          return shadowHtml;
+        },
+        set innerHTML(v: string) {
+          shadowHtml = v;
+        },
+        getElementById: () => ({ addEventListener() {} }),
+      };
+      let hostMounted = false;
+      const hostEl = {
+        id: '',
+        shadowRoot: null as typeof shadowRoot | null,
+        attachShadow() {
+          this.shadowRoot = shadowRoot;
+          return shadowRoot;
+        },
+        remove() {
+          hostMounted = false;
+        },
+      };
+      try {
+        g.window = {
+          location: { href: 'https://shopee.vn/iphone-16-pro-max-i.88.99' },
+        };
+        g.document = {
+          title: 'Shopee',
+          body: {
+            appendChild() {
+              hostMounted = true;
+            },
+          },
+          getElementById: (id: string) =>
+            id === 'rate-vn-trust-pill-host' && hostMounted ? hostEl : null,
+          createElement: () => hostEl,
+          querySelectorAll: () => [],
+          querySelector: (sel: string) => {
+            if (sel === 'h1') return { textContent: h1Text };
+            if (sel === '.pqTWkA') return { textContent: '29.500.000₫' };
+            if (sel === 'del' && delText) return { textContent: delText };
+            return null;
+          },
+        };
+        g.MutationObserver = class {
+          constructor(cb: () => void) {
+            mutationCb = cb;
+          }
+          observe() {}
+        };
+        g.requestAnimationFrame = (cb: () => unknown) => {
+          rafQ.push(cb);
+          return rafQ.length;
+        };
+        g.setTimeout = ((cb: () => unknown) => {
+          timerQ.push(cb);
+          return timerQ.length;
+        }) as unknown;
+        g.clearTimeout = () => {};
+        g.chrome = {
+          runtime: {
+            sendMessage: async (msg: { signal?: Record<string, unknown> }) => {
+              if (msg.signal) sentSignals.push(msg.signal);
+              const orig = Number(msg.signal?.originalPrice ?? 0);
+              return {
+                ok: true,
+                data: {
+                  matchStatus: 'exact_listing',
+                  isAccessoryOrPart: false,
+                  priceAssessment: {
+                    verdict:
+                      orig > 29_500_000 ? 'inflated_fake_sale' : 'above_market',
+                    badgeLabel:
+                      orig > 29_500_000 ? 'Giảm giá ảo' : 'Cao hơn thị trường',
+                    explanation: 'Test',
+                    cheaperOfferCount: 2,
+                    maxSavingsAmount: 1_000_000,
+                    marketMinPrice: 28_500_000,
+                  },
+                  masterProduct: { rating_score_5: 4.5 },
+                  reviewSummary: { total_analyzed: 20, authentic_pct: 90 },
+                  radarSignal:
+                    orig > 29_500_000
+                      ? {
+                          verdict: 'fake_sale_trap',
+                          savingsPct: 0,
+                          fakeMarkupPct: 35,
+                          spreadPct: 12,
+                        }
+                      : null,
+                },
+              };
+            },
+          },
+        };
+        await import('./content/content-script.js');
+        await flush();
+        assert.equal(sentSignals.length, 1);
+        assert.equal(sentSignals[0]!.originalPrice, null);
+        mutationCb!();
+        await flush();
+        assert.equal(
+          sentSignals.length,
+          1,
+          'unchanged DOM must not re-trigger'
+        );
+        delText = '39.990.000₫';
+        mutationCb!();
+        await flush();
+        assert.equal(
+          sentSignals.length,
+          2,
+          'hydrated originalPrice must re-lookup'
+        );
+        assert.equal(sentSignals[1]!.originalPrice, 39_990_000);
+        const ariaMatch = shadowHtml.match(/aria-label="([^"]+)"/);
+        assert.ok(ariaMatch?.[1], 'pill trigger must carry aria-label');
+        const pillMarkup = shadowHtml.slice(
+          shadowHtml.indexOf('id="rate-pill-trigger"')
+        );
+        const visibleDomText = pillMarkup
+          .replace(/^[^>]*>/, '')
+          .replace(/<span[^>]*aria-hidden="true"[^>]*>[\s\S]*?<\/span>/g, ' ')
+          .replace(/<[^>]+>/g, ' ')
+          .replace(/\s+/g, ' ')
+          .trim();
+        assert.equal(isLabelInName(visibleDomText, ariaMatch![1]!), true);
+        h1Text = 'Điện thoại Apple iPhone 16 Pro Max 256GB VN/A';
+        mutationCb!();
+        await flush();
+        assert.equal(sentSignals.length, 3, 'hydrated title must re-lookup');
+      } finally {
+        Object.assign(g, saved);
+      }
+    }
+
+    // 6. Service worker: clear stale lookup_tab_<id> & update badge after variant fetch.
+    {
+      const g = globalThis as Record<string, unknown>;
+      const prevChrome = g.chrome;
+      const prevFetch = g.fetch;
+      const sessionMap = new Map<string, unknown>();
+      const localMap = new Map<string, unknown>([
+        ['apiBaseUrl', 'https://rate.vn'],
+        ['crowdContributeOptIn', false],
+      ]);
+      const badges = new Map<number, { text: string; color?: string }>();
+      let onMsg:
+        | ((
+            m: Record<string, unknown>,
+            s: Record<string, unknown>,
+            cb: (r: unknown) => void
+          ) => boolean | void)
+        | null = null;
+      let fetchResponder: (url: string) => Response = () =>
+        new Response(JSON.stringify({ ok: true, data: null }), { status: 200 });
+      try {
+        g.chrome = {
+          runtime: {
+            id: 'rate-test-ext',
+            getURL: (p: string) => `chrome-extension://rate-test-ext/${p}`,
+            getManifest: () => ({ version: '2.0.0' }),
+            onStartup: { addListener() {} },
+            onInstalled: { addListener() {} },
+            onMessage: {
+              addListener(fn: typeof onMsg) {
+                onMsg = fn;
+              },
+            },
+          },
+          storage: {
+            local: {
+              get: async (k?: string | string[]) => {
+                const keys = Array.isArray(k) ? k : k ? [k] : [];
+                return Object.fromEntries(
+                  keys
+                    .filter((x) => localMap.has(x))
+                    .map((x) => [x, localMap.get(x)])
+                );
+              },
+              set: async (items: Record<string, unknown>) => {
+                for (const [k, v] of Object.entries(items)) localMap.set(k, v);
+              },
+              remove: async (k: string | string[]) => {
+                for (const x of Array.isArray(k) ? k : [k]) localMap.delete(x);
+              },
+            },
+            session: {
+              get: async (k?: string | string[]) => {
+                const keys = Array.isArray(k) ? k : k ? [k] : [];
+                return Object.fromEntries(
+                  keys
+                    .filter((x) => sessionMap.has(x))
+                    .map((x) => [x, sessionMap.get(x)])
+                );
+              },
+              set: async (items: Record<string, unknown>) => {
+                for (const [k, v] of Object.entries(items)) {
+                  sessionMap.set(k, v);
+                }
+              },
+            },
+          },
+          sidePanel: { setPanelBehavior: async () => {}, open: async () => {} },
+          action: {
+            setBadgeText: async ({
+              text,
+              tabId,
+            }: {
+              text: string;
+              tabId?: number;
+            }) => {
+              if (tabId) badges.set(tabId, { ...badges.get(tabId), text });
+            },
+            setBadgeBackgroundColor: async ({
+              color,
+              tabId,
+            }: {
+              color: string;
+              tabId?: number;
+            }) => {
+              if (tabId) {
+                badges.set(tabId, {
+                  text: badges.get(tabId)?.text ?? '',
+                  color,
+                });
+              }
+            },
+            onClicked: { addListener() {} },
+          },
+          tabs: {
+            query: async () => [{ id: 42, active: true }],
+            create: async () => ({ id: 1 }),
+          },
+        };
+        g.fetch = (async (input: string | URL) =>
+          fetchResponder(String(input))) as unknown;
+        await import('./background/service-worker.js');
+        assert.ok(onMsg, 'service worker registered onMessage listener');
+        const callSw = (
+          msg: Record<string, unknown>,
+          sender: Record<string, unknown>
+        ) =>
+          new Promise<Record<string, unknown>>((resolve) => {
+            onMsg!(msg, sender, (res) =>
+              resolve(res as Record<string, unknown>)
+            );
+          });
+        const mkLookup = (
+          matchStatus: string,
+          verdict: string
+        ): Record<string, unknown> => ({
+          matchStatus,
+          isAccessoryOrPart: false,
+          priceAssessment: { verdict },
+        });
+
+        // (a) Active tab 42 populates lookup_tab_42, then clears it on null and on 503.
+        fetchResponder = () =>
+          new Response(
+            JSON.stringify({
+              ok: true,
+              data: mkLookup('exact_listing', 'fair_market_price'),
+            }),
+            { status: 200 }
+          );
+        await callSw(
+          { type: 'RATE_PRODUCT_DETECTED', signal: baseSigInput },
+          { tab: { id: 42, active: true } }
+        );
+        assert.ok(sessionMap.get('lookup_tab_42'));
+        assert.equal(badges.get(42)?.text, 'OK');
+
+        fetchResponder = () =>
+          new Response(JSON.stringify({ ok: true, data: null }), {
+            status: 200,
+          });
+        await callSw(
+          { type: 'RATE_PRODUCT_DETECTED', signal: baseSigInput },
+          { tab: { id: 42, active: true } }
+        );
+        assert.equal(
+          sessionMap.get('lookup_tab_42'),
+          null,
+          'lookup_tab_<id> must clear when lookup data is null'
+        );
+        assert.equal(sessionMap.get('lookup_tab_latest'), null);
+        assert.equal(badges.get(42)?.text, '');
+
+        fetchResponder = () =>
+          new Response(
+            JSON.stringify({
+              ok: true,
+              data: mkLookup('ambiguous_variant', 'insufficient_data'),
+            }),
+            { status: 200 }
+          );
+        await callSw(
+          {
+            type: 'RATE_PRODUCT_DETECTED',
+            signal: { ...baseSigInput, selectedVariant: null },
+          },
+          { tab: { id: 42, active: true } }
+        );
+        assert.equal(badges.get(42)?.text, '?');
+
+        // Background tab 99 failure clears lookup_tab_99 without touching lookup_tab_latest.
+        sessionMap.set(
+          'lookup_tab_99',
+          mkLookup('exact_listing', 'genuine_deal')
+        );
+        fetchResponder = () => new Response('err', { status: 503 });
+        await callSw(
+          { type: 'RATE_PRODUCT_DETECTED', signal: baseSigInput },
+          { tab: { id: 99, active: false } }
+        );
+        assert.equal(sessionMap.get('lookup_tab_99'), null);
+        assert.ok(
+          sessionMap.get('lookup_tab_latest'),
+          'background tab failure must not clobber active lookup_tab_latest'
+        );
+
+        // (b) Variant selection in RATE_SIDEPANEL_FETCH_FULL updates tab 42 badge from '?' -> 'TỐT'.
+        fetchResponder = () =>
+          new Response(
+            JSON.stringify({
+              ok: true,
+              data: mkLookup('canonical_model', 'genuine_deal'),
+            }),
+            { status: 200 }
+          );
+        const panelSender = {
+          id: 'rate-test-ext',
+          url: 'chrome-extension://rate-test-ext/sidepanel/sidepanel.html',
+        };
+        const fullRes = await callSw(
+          { type: 'RATE_SIDEPANEL_FETCH_FULL', selectedVariant: '256GB' },
+          panelSender
+        );
+        assert.equal(fullRes.ok, true);
+        assert.equal(
+          badges.get(42)?.text,
+          'TỐT',
+          'RATE_SIDEPANEL_FETCH_FULL must update action badge once variant resolves'
+        );
+      } finally {
+        g.chrome = prevChrome;
+        g.fetch = prevFetch;
+      }
+    }
+    console.log(
+      '  ✅ [Hydration sig, negative VND, variant tokens, picker/badge & WCAG 2.5.3 (#1664)] Verified'
     );
   }
   console.log('🎉 All Rate Browser Extension MV3 v2 tests passed!');

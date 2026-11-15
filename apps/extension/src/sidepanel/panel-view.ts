@@ -6,10 +6,13 @@
 import type {
   ExtensionLookupData,
   ExtensionOfferItem,
+  ExtensionPriceHistoryPoint,
+  ExtensionVariantCandidate,
   ExtractedPageProductSignal,
 } from '../types.js';
 import {
   escapeSafeExternalHref,
+  filterValidSparklinePrices,
   formatSafeExtensionVnd,
   formatSafeNumber,
   normalizeFiveStarRating,
@@ -19,6 +22,103 @@ import {
 import { contentTextHtml, escapeHtml, t, type MessageKey } from '../i18n.js';
 
 export { escapeHtml };
+
+export function buildSvgSparkline(
+  points: ExtensionPriceHistoryPoint[]
+): string {
+  if (!points || points.length < 2) {
+    return `<div style="font-size: 13px; color: #9ca3af; padding: 8px 0;">${escapeHtml(t('historyAccumulating'))}</div>`;
+  }
+  const prices = filterValidSparklinePrices(points);
+  if (prices.length < 2) return '';
+
+  const minP = Math.min(...prices);
+  const maxP = Math.max(...prices);
+  const range = Math.max(1, maxP - minP);
+  const width = 300;
+  const height = 76;
+
+  const coords = prices.map((p, idx) => {
+    const x = Math.round((idx / (prices.length - 1)) * (width - 16) + 8);
+    const y = Math.round(height - 10 - ((p - minP) / range) * (height - 20));
+    return `${x},${y}`;
+  });
+
+  return `
+    <svg aria-hidden="true" focusable="false" viewBox="0 0 ${width} ${height}" width="100%" height="${height}" style="background: #101318; border-radius: 8px; border: 1px solid #2a2f3a; margin-top: 8px;">
+      <polyline
+        fill="none"
+        stroke="#d83030"
+        stroke-width="2.2"
+        points="${coords.join(' ')}"
+      />
+    </svg>
+  `;
+}
+
+export function isVariantCandidateActive(
+  lookup: Pick<ExtensionLookupData, 'detectedStorageGb' | 'selectedVariant'> & {
+    matchStatus?: ExtensionLookupData['matchStatus'];
+  },
+  candidate: Pick<ExtensionVariantCandidate, 'storageGb' | 'label' | 'slug'>
+): boolean {
+  if (lookup.matchStatus === 'ambiguous_variant') return false;
+  if (
+    typeof lookup.detectedStorageGb === 'number' &&
+    Number.isFinite(lookup.detectedStorageGb) &&
+    lookup.detectedStorageGb > 0 &&
+    typeof candidate.storageGb === 'number' &&
+    Number.isFinite(candidate.storageGb) &&
+    candidate.storageGb > 0
+  ) {
+    return lookup.detectedStorageGb === candidate.storageGb;
+  }
+  const selected =
+    typeof lookup.selectedVariant === 'string'
+      ? lookup.selectedVariant.trim().toLowerCase()
+      : '';
+  if (!selected) return false;
+  const label =
+    typeof candidate.label === 'string'
+      ? candidate.label.trim().toLowerCase()
+      : '';
+  const slug =
+    typeof candidate.slug === 'string'
+      ? candidate.slug.trim().toLowerCase()
+      : '';
+  return selected === label || selected === slug;
+}
+
+export function renderVariantPickerHtml(
+  lookup: Pick<
+    ExtensionLookupData,
+    'variantCandidates' | 'detectedStorageGb' | 'selectedVariant'
+  > & { matchStatus?: ExtensionLookupData['matchStatus'] }
+): string {
+  if (lookup.variantCandidates.length <= 1) return '';
+  return `
+      <div class="card">
+        <div class="card-title">${escapeHtml(t('variantPickerTitle'))}</div>
+        <div class="variant-row">
+          ${lookup.variantCandidates
+            .map((v) => {
+              const active = isVariantCandidateActive(lookup, v);
+              return `
+              <button
+                type="button"
+                class="variant-btn${active ? ' active' : ''}"
+                aria-pressed="${active ? 'true' : 'false'}"
+                data-variant="${escapeHtml(v.label)}"
+              >
+                ${contentTextHtml(v.label)} (${formatSafeExtensionVnd(v.minPrice)})
+              </button>
+            `;
+            })
+            .join('')}
+        </div>
+      </div>
+    `;
+}
 
 type PanelOffer = Pick<
   ExtensionOfferItem,

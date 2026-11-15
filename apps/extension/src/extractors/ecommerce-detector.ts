@@ -319,8 +319,22 @@ export function parseVndPriceText(
     return Math.round(rawText);
   }
   if (typeof rawText !== 'string' || !rawText) return null;
-  // Extract first price when a range like "28.990.000₫ - 34.990.000₫", "28.990.000₫ – 34.990.000₫", or "28.990.000₫ ~ 34.990.000₫" is displayed
-  const firstSegment = (rawText.split(/[-–—~]/)[0] || rawText).trim();
+  const trimmed = rawText
+    .replace(/\p{Cc}+/gu, ' ')
+    .trim()
+    .replace(/^~\s*/, '');
+  if (!trimmed) return null;
+  // Reject leading negative voucher/discount strings (e.g. "-50.000d", "\u22122.000.000d")
+  if (
+    /^(?:(?:\u20ab|\u0111|vnd)\s*)?[-\u2212\u2013\u2014\ufe63\uff0d]/iu.test(
+      trimmed
+    )
+  ) {
+    return null;
+  }
+  // Extract first price when a range like "28.990.000₫ - 34.990.000₫" or "28.990.000₫ ~ 34.990.000₫" is displayed
+  const firstSegment =
+    trimmed.split(/[-\u2212\u2013\u2014\ufe63\uff0d~]/u)[0]?.trim() ?? '';
   const withoutCurrency = firstSegment.replace(/[^\d.,]/g, '');
   if (!withoutCurrency) return null;
   // Handle plain decimal string like "28990000.00" or thousand-separated decimal "28,990,000.00"
@@ -577,10 +591,33 @@ export function extractStockFromJsonLdOffers(offersRaw: unknown): {
   return { stockState: null, stockQty: null };
 }
 
+function tokenizeVariantText(raw: string): string[] {
+  return raw
+    .normalize('NFC')
+    .toLowerCase()
+    .replace(/(\d)\s+(gb|tb|mb|mm)\b/gu, '$1$2')
+    .split(/[^\p{L}\p{N}]+/u)
+    .filter((token) => token.length > 0);
+}
+
+function matchesVariantSku(rawSku: unknown, selectedVariant: string): boolean {
+  if (typeof rawSku !== 'string') return false;
+  const sku = rawSku.trim().toLowerCase();
+  const wanted = selectedVariant.trim().toLowerCase();
+  if (!sku || !wanted) return false;
+  if (sku === wanted) return true;
+  if (/^\d+$/.test(sku)) return false;
+  const escaped = sku.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(
+    `(?<![\\p{L}\\p{N}_-])${escaped}(?![\\p{L}\\p{N}_-])`,
+    'u'
+  ).test(wanted);
+}
+
 /**
  * The offer of the selected variant: the only offer, or the one whose sku or
- * name matches the selected variant; null when several offers and none can be
- * told apart, so stock and SKU are not read off another variant.
+ * name matches the selected variant by whole tokens; null when several offers
+ * and none can be told apart, so stock and SKU are not read off another variant.
  */
 export function pickVariantOffer(
   offers: readonly Record<string, unknown>[],
@@ -588,16 +625,56 @@ export function pickVariantOffer(
 ): Record<string, unknown> | null {
   if (offers.length === 1) return offers[0] ?? null;
   if (!selectedVariant) return null;
-  const wanted = selectedVariant.toLowerCase();
-  const matches = offers.filter((offer) =>
-    [offer.sku, offer.name].some(
-      (v) =>
-        typeof v === 'string' &&
-        v.trim().length > 0 &&
-        wanted.includes(v.trim().toLowerCase())
-    )
-  );
-  return matches.length === 1 ? (matches[0] ?? null) : null;
+  const wantedTokens = tokenizeVariantText(selectedVariant);
+  if (wantedTokens.length === 0) return null;
+  const wantedSet = new Set(wantedTokens);
+  const wantedLower = selectedVariant.trim().toLowerCase();
+
+  const exactMatches: Record<string, unknown>[] = [];
+  const subsetCandidates: Array<{
+    offer: Record<string, unknown>;
+    overlap: number;
+  }> = [];
+
+  for (const offer of offers) {
+    const isExactSku =
+      typeof offer.sku === 'string' &&
+      offer.sku.trim().length > 0 &&
+      offer.sku.trim().toLowerCase() === wantedLower;
+    const nameTokens =
+      typeof offer.name === 'string' ? tokenizeVariantText(offer.name) : [];
+    const nameSet = new Set(nameTokens);
+    const isExactName =
+      nameSet.size > 0 &&
+      nameSet.size === wantedSet.size &&
+      [...nameSet].every((tok) => wantedSet.has(tok));
+
+    if (isExactSku || isExactName) {
+      exactMatches.push(offer);
+      continue;
+    }
+
+    const skuMatched = matchesVariantSku(offer.sku, selectedVariant);
+    const nameSubset =
+      nameSet.size > 0 &&
+      ([...nameSet].every((tok) => wantedSet.has(tok)) ||
+        [...wantedSet].every((tok) => nameSet.has(tok)));
+    if (skuMatched || nameSubset) {
+      const overlap = Math.max(
+        skuMatched ? wantedSet.size + 1 : 0,
+        nameSubset ? Math.min(nameSet.size, wantedSet.size) : 0
+      );
+      subsetCandidates.push({ offer, overlap });
+    }
+  }
+
+  if (exactMatches.length > 0) {
+    return exactMatches.length === 1 ? (exactMatches[0] ?? null) : null;
+  }
+  if (subsetCandidates.length === 0) return null;
+  const bestOverlap = Math.max(...subsetCandidates.map((c) => c.overlap));
+  const best = subsetCandidates.filter((c) => c.overlap === bestOverlap);
+  return best.length === 1 ? (best[0]?.offer ?? null) : null;
 }
 
 const SKU_ID_RE = /^[A-Za-z0-9_-][A-Za-z0-9_.-]{0,63}$/;
