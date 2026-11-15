@@ -144,7 +144,7 @@ export default function CompareQuickToggle({
       compact: true,
       selected,
       limitAlert,
-      itemName: item.name,
+      itemName: item?.name,
     });
     return (
       <div
@@ -154,12 +154,12 @@ export default function CompareQuickToggle({
           <WatchlistQuickToggle
             compact
             item={{
-              slug: item.slug,
-              name: item.name,
-              brand: item.brand,
-              thumbnail: item.thumbnail,
-              min_price: item.min_price,
-              categoryPath: item.categoryPath,
+              slug: item?.slug ?? '',
+              name: item?.name ?? '',
+              brand: item?.brand ?? '',
+              thumbnail: item?.thumbnail ?? null,
+              min_price: item?.min_price ?? 0,
+              categoryPath: item?.categoryPath,
             }}
           />
         )}
@@ -190,7 +190,7 @@ export default function CompareQuickToggle({
     compact: false,
     selected,
     limitAlert,
-    itemName: item.name,
+    itemName: item?.name,
   });
 
   return (
@@ -198,12 +198,12 @@ export default function CompareQuickToggle({
       {includeWatchlist && (
         <WatchlistQuickToggle
           item={{
-            slug: item.slug,
-            name: item.name,
-            brand: item.brand,
-            thumbnail: item.thumbnail,
-            min_price: item.min_price,
-            categoryPath: item.categoryPath,
+            slug: item?.slug ?? '',
+            name: item?.name ?? '',
+            brand: item?.brand ?? '',
+            thumbnail: item?.thumbnail ?? null,
+            min_price: item?.min_price ?? 0,
+            categoryPath: item?.categoryPath,
           }}
           size={size}
         />

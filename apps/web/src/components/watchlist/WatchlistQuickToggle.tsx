@@ -149,7 +149,7 @@ export default function WatchlistQuickToggle({
     } = resolveWatchlistQuickToggleA11y(t, {
       compact: true,
       watched,
-      itemName: item.name,
+      itemName: item?.name,
     });
     return (
       <button
@@ -181,7 +181,7 @@ export default function WatchlistQuickToggle({
   } = resolveWatchlistQuickToggleA11y(t, {
     compact: false,
     watched,
-    itemName: item.name,
+    itemName: item?.name,
   });
 
   return (

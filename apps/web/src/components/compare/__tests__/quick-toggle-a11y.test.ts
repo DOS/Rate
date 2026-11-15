@@ -299,15 +299,28 @@ for (const locale of locales) {
   }
 }
 
-// Control-character and empty-fragment edge cases.
+// Control-character, empty-fragment, and non-string itemName edge cases.
 assert.equal(
   formatCompareQuickToggleAriaLabel('  Compare\u0000 ', ' iPhone\r\n16 '),
   'Compare: iPhone 16'
 );
 assert.equal(formatCompareQuickToggleAriaLabel('Compare', '   '), 'Compare');
+assert.equal(formatCompareQuickToggleAriaLabel('Compare', null), 'Compare');
+assert.equal(
+  formatCompareQuickToggleAriaLabel('Compare', undefined),
+  'Compare'
+);
 assert.equal(
   formatWatchlistQuickToggleAriaLabel('   ', '  Galaxy\u0007 S25 '),
   'Galaxy S25'
+);
+assert.equal(
+  formatWatchlistQuickToggleAriaLabel('Watch price', null),
+  'Watch price'
+);
+assert.equal(
+  formatWatchlistQuickToggleAriaLabel('Watch price', undefined),
+  'Watch price'
 );
 
 // Source-level guards ensure both compact and standard branches wire ariaLabel + ariaPressed.
