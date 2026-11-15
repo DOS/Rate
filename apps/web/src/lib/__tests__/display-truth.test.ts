@@ -159,11 +159,29 @@ for (const locale of LOCALES) {
     ['deals', 'radarBannerBadge'],
     ['homePage', 'radarGenuineTitle'],
     ['merchants', 'mdRadarLine'],
+    ['homePage', 'radarHomeBadge'],
+    ['inspect', 'radarSectionBadge'],
+    ['merchants', 'profileRadarBadge'],
+    ['compare', 'radarRowTitle'],
+    ['compare', 'radarRowMatrixTitle'],
   ] as const) {
     const text = String(messages[ns]![key]);
     assert.ok(
-      !/đáy|\blows?\b|minim/i.test(text),
+      !/đáy|thấp nhất|\blow(?:s|est)?\b|nejniž|minim/i.test(text),
       `${locale}: ${ns}.${key} must not claim a floor: ${text}`
+    );
+  }
+  // The merchant profile badge and the compare radar rows sit over mixed
+  // genuine deals and fake sales, so they name the median instead (#1632).
+  for (const [ns, key] of [
+    ['merchants', 'profileRadarBadge'],
+    ['compare', 'radarRowTitle'],
+    ['compare', 'radarRowMatrixTitle'],
+  ] as const) {
+    assert.match(
+      String(messages[ns]![key]),
+      /trung vị|median|medián/i,
+      `${locale}: ${ns}.${key} names the median`
     );
   }
 }
@@ -286,14 +304,16 @@ assert.equal(
 );
 for (const locale of LOCALES) {
   // The catalog radar box sits over every genuine deal (DOS/Rate#1145).
-  const title = String(
-    (readLocale(locale).catalog as unknown as Record<string, Messages[string]>)
-      .page!.radarDealsTitle
-  );
-  assert.ok(
-    !/đáy|\blows?\b|minim/i.test(title),
-    `${locale}: catalog.page.radarDealsTitle must not claim a floor: ${title}`
-  );
+  const page = (
+    readLocale(locale).catalog as unknown as Record<string, Messages[string]>
+  ).page!;
+  for (const key of ['radarDealsTitle', 'radarBannerBadge']) {
+    const title = String(page[key]);
+    assert.ok(
+      !/đáy|thấp nhất|\blow(?:s|est)?\b|nejniž|minim/i.test(title),
+      `${locale}: catalog.page.${key} must not claim a floor: ${title}`
+    );
+  }
 }
 
 // DOS/Rate#1144: with no expert score, the composite equals the buyer score
