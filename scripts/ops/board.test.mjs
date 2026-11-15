@@ -308,7 +308,7 @@ test('lock: another session cannot release an open issue', async () => {
   await acquireLock({ api, number: 7, claimant: A, agent: 'Ops' });
   await assert.rejects(
     releaseLock({ api, number: 7, claimant: B, issueClosed: false }),
-    /held by claude:local_aaaa1111 \(Agent Ops\), not qwen:bbbb2222.*--force-release/
+    /held by claude:local_aaaa1111 \(Agent Ops\), not this session.*--force-release/
   );
   assert.equal(await holder(api, 7), A);
 });

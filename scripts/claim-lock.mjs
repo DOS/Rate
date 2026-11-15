@@ -52,24 +52,32 @@ export function poTool(claimant) {
  * must be set per session, never in a shared profile.
  */
 export function resolveClaimant({ flag, env = {} } = {}) {
-  const value =
-    flag?.trim() ||
-    (env.CLAUDE_CODE_HOST_SESSION_ID?.trim() &&
-      `claude:${env.CLAUDE_CODE_HOST_SESSION_ID.trim()}`) ||
-    (env.CLAUDE_CODE_SESSION_ID?.trim() &&
-      `claude:${env.CLAUDE_CODE_SESSION_ID.trim()}`) ||
-    env.RATE_CLAIMANT?.trim() ||
-    '';
+  const sources = [
+    ['--claimant', flag?.trim()],
+    [
+      'CLAUDE_CODE_HOST_SESSION_ID',
+      env.CLAUDE_CODE_HOST_SESSION_ID?.trim() &&
+        `claude:${env.CLAUDE_CODE_HOST_SESSION_ID.trim()}`,
+    ],
+    [
+      'CLAUDE_CODE_SESSION_ID',
+      env.CLAUDE_CODE_SESSION_ID?.trim() &&
+        `claude:${env.CLAUDE_CODE_SESSION_ID.trim()}`,
+    ],
+    ['RATE_CLAIMANT', env.RATE_CLAIMANT?.trim()],
+  ];
+  const [source, value] = sources.find(([, v]) => v) ?? [];
   if (!value) {
     throw new Error(
-      'no claimant: pass --claimant <tool>:<session id> or set RATE_CLAIMANT ' +
+      'no claimant: pass --claimant <tool>:<session id> ' +
         '(Claude Code sessions get claude:<session id> automatically; ' +
         'Qwen Code sessions use qwen:<session id>)'
     );
   }
   if (!isClaimant(value)) {
+    // Name the source, not the value: environment values stay out of logs.
     throw new Error(
-      `invalid claimant ${JSON.stringify(value)}: expected <tool>:<session id>, ` +
+      `invalid claimant from ${source}: expected <tool>:<session id>, ` +
         'for example claude:local_1234abcd or qwen:5678efgh'
     );
   }

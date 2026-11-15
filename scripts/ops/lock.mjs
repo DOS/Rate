@@ -105,7 +105,7 @@ export async function releaseLock({ api, number, claimant, issueClosed }) {
   if (!current) return { action: 'none' };
   if (current.claimant !== claimant && !issueClosed) {
     throw new ClaimError(
-      `${lockRef(number)} is held by ${describeLock(current)}, not ${claimant}: ` +
+      `${lockRef(number)} is held by ${describeLock(current)}, not this session: ` +
         'only the holder releases it (a PO clears an orphaned claim with --force-release)'
     );
   }
