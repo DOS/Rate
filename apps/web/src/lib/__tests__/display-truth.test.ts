@@ -184,11 +184,31 @@ for (const locale of LOCALES) {
       `${locale}: ${ns}.${key} names the median`
     );
   }
+  // Deep inspect shows the floor pill only for a real floor; any other
+  // genuine deal gets the below-median pill with the same values (#1661).
+  const belowPill = String(messages.inspect!.radarBelowMedianPill);
+  assert.ok(
+    !/đáy|thấp nhất|\blow(?:s|est)?\b|nejniž|minim/i.test(belowPill),
+    `${locale}: inspect.radarBelowMedianPill must not claim a floor: ${belowPill}`
+  );
+  assert.match(
+    belowPill,
+    /trung vị|median|medián/i,
+    `${locale}: inspect.radarBelowMedianPill names the median`
+  );
+  const placeholders = (text: string) =>
+    [...text.matchAll(/\{(\w+)\}/g)].map((m) => m[1]).sort();
+  assert.deepEqual(
+    placeholders(belowPill),
+    placeholders(String(messages.inspect!.radarGenuinePill)),
+    `${locale}: inspect.radarBelowMedianPill has the placeholders of radarGenuinePill`
+  );
 }
 for (const file of [
   ['components', 'radar', 'RadarBadge.tsx'],
   ['components', 'compare', 'CompareWorkspace.tsx'],
   ['components', 'watchlist', 'WatchlistWorkspace.tsx'],
+  ['components', 'inspect', 'DeepInspectWorkspace.tsx'],
 ]) {
   assert.ok(
     readFileSync(join(__dirname, '..', '..', ...file), 'utf8').includes(
