@@ -29,7 +29,7 @@ const CLAIM_STATUSES = ['status:in-progress', 'status:in-review'];
 const MAX_CLOSING_ISSUES = 25;
 
 /** PRs opened from this moment on need a claim lock and a declared claimant. */
-export const LOCK_REQUIRED_SINCE = '2026-11-16T00:00:00Z';
+export const LOCK_REQUIRED_SINCE = '2026-11-15T17:04:00Z';
 
 // `pr` is the shape the GraphQL query below returns.
 export function evaluateClaim(pr) {

@@ -196,7 +196,7 @@ ruleset `dev-task-claim`) passes a PR into `dev` only when every
 issue it closes carries an `agent:*` label and `status:in-progress` or
 `status:in-review`, and its lock is held by the claimant the PR declares on a
 line of its own in the description: `Claimant: <tool>:<session id>`. PRs
-opened before `LOCK_REQUIRED_SINCE` (2026-11-16T00:00:00Z) keep the
+opened before `LOCK_REQUIRED_SINCE` (2026-11-15T17:04:00Z) keep the
 label-only rule. PRs reference their issue with `Closes #<n>` (the check
 reads closing references). Merging into `dev`, the default branch, closes
 the issue automatically. Do not use DOS.AI's `claim:`/`release:` comments
