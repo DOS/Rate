@@ -1,16 +1,35 @@
 #!/usr/bin/env node
 // Required task-claim check for PRs into `dev` (.github/workflows/task-claim.yml).
-// AGENTS.md section 1: an agent claims an issue before working on it by giving
-// it an `agent:<nick>` label and `status:in-progress`, then `status:in-review`
-// once the PR is open. A PR that closes issues passes only when every issue it
-// closes carries such a claim. Dependabot PRs and the dev to main promotion are
-// exempt. The `dev-task-claim` ruleset requires it, so a failure blocks the merge.
+// AGENTS.md section 1: an agent claims an issue before working on it with
+// `scripts/ops/board.mjs`, which gives it an `agent:<nick>` label and
+// `status:in-progress` (then `status:in-review` once the PR is open) and takes
+// the issue's claim lock `refs/claims/<n>` for the session's claimant
+// (DOS/Rate#1673, scripts/claim-lock.mjs). A PR that closes issues passes only
+// when every issue it closes carries such a claim, and its lock is held by the
+// claimant the PR declares on a `Claimant: <tool>:<session id>` line of its
+// description.
+//
+// Grace: a PR opened before LOCK_REQUIRED_SINCE keeps the label-only rule, so
+// PRs that were open when the lock arrived are not blocked; if such a PR does
+// declare a claimant, a lock held by someone else still fails it.
+//
+// Dependabot PRs and the dev to main promotion are exempt. The
+// `dev-task-claim` ruleset requires this check, so a failure blocks the merge.
 
 import { appendFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
+import {
+  declaredClaimants,
+  isClaimant,
+  lockRef,
+  parseLockMessage,
+} from './claim-lock.mjs';
 
 const CLAIM_STATUSES = ['status:in-progress', 'status:in-review'];
 const MAX_CLOSING_ISSUES = 25;
+
+/** PRs opened from this moment on need a claim lock and a declared claimant. */
+export const LOCK_REQUIRED_SINCE = '2026-11-15T17:04:00Z';
 
 // `pr` is the shape the GraphQL query below returns.
 export function evaluateClaim(pr) {
@@ -49,23 +68,66 @@ export function evaluateClaim(pr) {
     return { ok: true, exempt: false, reason: 'closes no issue', issues: [] };
   }
 
+  // Strict when the creation time is unknown.
+  const legacy =
+    Boolean(pr.createdAt) &&
+    Date.parse(pr.createdAt) < Date.parse(LOCK_REQUIRED_SINCE);
+  const declared = declaredClaimants(pr.body);
+  const base = { exempt: false, legacy, claimant: declared[0] ?? null };
+  if (declared.length > 1) {
+    return {
+      ...base,
+      ok: false,
+      reason: `the PR declares more than one claimant (${declared.join(', ')}); keep one Claimant line`,
+      issues: [],
+    };
+  }
+  if (declared.length === 1 && !isClaimant(declared[0])) {
+    return {
+      ...base,
+      ok: false,
+      reason: `the declared claimant ${declared[0]} is not <tool>:<session id>`,
+      issues: [],
+    };
+  }
+  const claimant = base.claimant;
+
   const results = issues.map((issue) => {
     const labels = issue.labels ?? [];
     const agent = labels.filter((l) => l.startsWith('agent:'));
     const status = labels.filter((l) => CLAIM_STATUSES.includes(l));
+    const lock = issue.lock ?? null;
     const problems = [];
     if (agent.length === 0) problems.push('no agent:* label');
     if (status.length === 0)
       problems.push(`neither ${CLAIM_STATUSES.join(' nor ')}`);
-    return { ...issue, agent, status, problems, ok: problems.length === 0 };
+    if (lock && claimant && lock.claimant !== claimant) {
+      problems.push(
+        `${lockRef(issue.number)} is held by ${lock.claimant ?? 'an unrecognised claimant'}, not the declared ${claimant}`
+      );
+    } else if (!legacy && !lock) {
+      problems.push(`no claim lock ${lockRef(issue.number)}`);
+    } else if (!legacy && !claimant) {
+      problems.push('the PR declares no Claimant');
+    }
+    return {
+      ...issue,
+      agent,
+      status,
+      lock,
+      problems,
+      ok: problems.length === 0,
+    };
   });
   const ok = results.every((r) => r.ok);
   return {
+    ...base,
     ok,
-    exempt: false,
     reason: ok
-      ? 'every closing issue is claimed'
-      : 'a closing issue is not claimed (AGENTS.md section 1)',
+      ? legacy
+        ? `every closing issue is claimed (PR opened before ${LOCK_REQUIRED_SINCE}: labels only)`
+        : 'every closing issue is claimed and locked by the declared claimant'
+      : "a closing issue is not claimed by this PR's claimant (AGENTS.md section 1)",
     issues: results,
   };
 }
@@ -76,25 +138,37 @@ export function renderSummary(number, result) {
     '',
     `${result.ok ? 'Pass' : 'Fail'}: ${result.reason}.`,
   ];
+  if (result.claimant !== undefined) {
+    lines.push(
+      '',
+      `Declared claimant: ${result.claimant ? `\`${result.claimant}\`` : 'none'}`
+    );
+  }
   if (result.issues?.length) {
     lines.push(
       '',
-      '| Issue | agent:* | status | Result |',
-      '| --- | --- | --- | --- |'
+      '| Issue | agent:* | status | claim lock | Result |',
+      '| --- | --- | --- | --- | --- |'
     );
     for (const i of result.issues) {
+      const lock = i.lock ? `\`${i.lock.claimant ?? 'unrecognised'}\`` : '-';
       lines.push(
         `| ${i.repository}#${i.number} | ${i.agent.join(', ') || '-'} | ` +
-          `${i.status.join(', ') || '-'} | ${i.ok ? 'claimed' : i.problems.join('; ')} |`
+          `${i.status.join(', ') || '-'} | ${lock} | ${i.ok ? 'claimed' : i.problems.join('; ')} |`
       );
     }
   }
   if (!result.ok) {
     lines.push(
       '',
-      'Claim the issue before merging: add `agent:<nick>` and `status:in-progress` ' +
-        '(or `status:in-review` once the PR is open), and set Status and Agent on ' +
-        'GitHub Project #9. The check re-runs when the issue labels change.'
+      'Claim the issue from the session that does the work, with `board.mjs` from an ' +
+        'up-to-date `dev` (merge `origin/dev` into the branch first: a copy older than ' +
+        'DOS/Rate#1673 takes no lock): ' +
+        '`node scripts/ops/board.mjs <n> --status in-review --agent <Nick>` ' +
+        '(add `--adopt` for an issue this session claimed before the lock existed). ' +
+        'It sets the labels, Project #9 and the claim lock `refs/claims/<n>`, and ' +
+        'prints the claimant; put `Claimant: <tool>:<session id>` on a line ' +
+        'of its own in the PR description. Editing the description re-runs this check.'
     );
   }
   return lines.join('\n') + '\n';
@@ -103,6 +177,8 @@ export function renderSummary(number, result) {
 const QUERY = `query($owner: String!, $name: String!, $number: Int!) {
   repository(owner: $owner, name: $name) {
     pullRequest(number: $number) {
+      body
+      createdAt
       baseRefName
       headRefName
       author { login }
@@ -143,18 +219,51 @@ async function fetchPr({ token, repo, number }) {
   }
   const refs = pr.closingIssuesReferences;
   const readable = refs.nodes.filter((n) => n?.repository && n?.labels);
+  const closingIssues = [];
+  for (const n of readable) {
+    const repository = n.repository.nameWithOwner;
+    closingIssues.push({
+      number: n.number,
+      repository,
+      labels: n.labels.nodes.map((l) => l.name),
+      lock: await fetchLock({ token, repo: repository, number: n.number }),
+    });
+  }
   return {
+    body: pr.body ?? '',
+    createdAt: pr.createdAt ?? null,
     baseRefName: pr.baseRefName,
     headRefName: pr.headRefName,
     author: pr.author?.login ?? '',
     truncated: refs.totalCount > refs.nodes.length,
     unreadable: refs.nodes.length - readable.length,
-    closingIssues: readable.map((n) => ({
-      number: n.number,
-      repository: n.repository.nameWithOwner,
-      labels: n.labels.nodes.map((l) => l.name),
-    })),
+    closingIssues,
   };
+}
+
+/** The claim lock of an issue, or null when it has none. Fails closed. */
+async function fetchLock({ token, repo, number }) {
+  const get = async (path) => {
+    const res = await fetch(`https://api.github.com/repos/${repo}/${path}`, {
+      headers: {
+        authorization: `bearer ${token}`,
+        accept: 'application/vnd.github+json',
+      },
+    });
+    if (res.status === 404) return null;
+    if (!res.ok) {
+      throw new Error(
+        `reading ${lockRef(number)} of ${repo} failed (${res.status})`
+      );
+    }
+    return res.json();
+  };
+  const ref = await get(`git/ref/claims/${number}`);
+  // The endpoint matches the full name; anything else is not this lock.
+  if (!ref || ref.ref !== lockRef(number)) return null;
+  const commit = await get(`git/commits/${ref.object.sha}`);
+  if (!commit) return null;
+  return parseLockMessage(commit.message);
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {
