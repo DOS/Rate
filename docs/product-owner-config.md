@@ -10,13 +10,27 @@ This file lives at `docs/product-owner-config.md` (lower-case `docs`), the
 one path cc-po reads, although Rate's documentation folder is `Docs/`. On a
 case-sensitive checkout (Linux, CI) it is a separate `docs/` folder holding
 only this file; on macOS it shows up inside `Docs/`. Keep it at this path and
-put nothing else under `docs/`.
+put nothing else under `docs/`. On macOS, `git add` of a new file at this path
+can record it under `Docs/` (the existing casing), where cc-po does not find it:
+stage a re-created file with `git -c core.ignorecase=false add docs/product-owner-config.md`
+and check `git ls-files` shows `docs/`.
+
+This config covers Rate Core (DOS/Rate). Rate Services issues
+(DOS/Rate-Services) follow "Rate Services differences" in
+`.claude/skills/product-owner/SKILL.md`: no `dev` branch, no `task-claim`
+check, PRs into `main`.
+
+The PO's own state file follows `AGENTS.md` section 6, which wins over the
+plugin's check-in and handoff file names: `po-state.qwen.md` (or
+`po-state.claude.md`) in that PO's own notes folder, outside the repository.
 
 ## Owner and reporting
 
 - owner_name: JOY
 - owner_profile: the owner of DOS/Rate; decides product and risk, not code.
-  Bring JOY material decisions in plain words, one at a time.
+  Bring JOY material decisions in plain words, one at a time. A document JOY
+  reads to decide (proposal, plan, report, audit) is a self-contained
+  dark-theme HTML file in the repository, in Vietnamese (`AGENTS.md` 0.3).
 - report_language: Vietnamese (full diacritics, technical terms in English)
 
 ## Board
@@ -28,6 +42,10 @@ put nothing else under `docs/`.
 - product_line_field: none
 - priority_field: none
 - bot_owned_fields: none
+- issue_notes: every issue the PO creates or hands out is on Project #9 with
+  Size set, plus an `area:*` label where one fits;
+  `node scripts/ops/board.mjs` sets Status and
+  Agent ("Board fields" in `.claude/skills/product-owner/SKILL.md`)
 
 ## Lines
 
@@ -63,11 +81,18 @@ side as "Triage" in that skill says.
   (`Docs/Resources/RELEASE.md`); no GitHub workflow deploys and no database
   migration runs (schema changes ship from DOS-Me). The release step after it
   is `node scripts/ops/verify-live.mjs --wait 900`.
+- test_environment: Vercel builds `dev` as a Preview deployment; check it there
+  before a promotion (`Docs/Resources/RELEASE.md`). Previews have no database
+  env.
 - promotion_notes: `Docs/Resources/RELEASE.md`; promotions run
   `node scripts/ops/promote.mjs`, then `node scripts/ops/verify-live.mjs`.
 
 ## Checks and review
 
+- required_checks: `Typecheck & Build Monorepo`, `E2E (Playwright)`,
+  `Secret scan (gitleaks)` and `task-claim` (GitHub Actions, app id 15368),
+  from rulesets `dev-main-light` and `dev-task-claim` (`AGENTS.md` sections 1
+  and 5)
 - claim_gate: the required `task-claim` check (`.github/workflows/task-claim.yml`,
   ruleset `dev-task-claim`), re-run by
   `.github/workflows/task-claim-revalidate.yml`
