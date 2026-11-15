@@ -781,3 +781,10 @@ export {
 
 export { getItemCatalogPage, groupCatalogRowsByItem } from './item-directory';
 export type { ItemCatalogRow } from '@/lib/item-directory';
+
+export {
+  getCachedMasterProductPoints,
+  getMasterProductPoints,
+  type MasterProductPointsData,
+} from './product-points';
+export type { StoredProductPointRow } from '@/lib/product-points-display';

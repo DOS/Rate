@@ -5723,9 +5723,134 @@ async function runTests() {
           `${locale}: ${belowKey} has the placeholders of ${floorKey}`
         );
       }
+      const dealsTitle = messages['radarDealsTitle'];
+      assert.ok(dealsTitle, `${locale}: radarDealsTitle exists`);
+      assert.ok(
+        !/đáy|thấp nhất|\blow(?:est)?\b|nejniž|dno|minim/i.test(
+          dealsTitle.message
+        ),
+        `${locale}: radarDealsTitle claims no floor or all-store minimum`
+      );
+      assert.match(
+        dealsTitle.message,
+        /trung vị|median|medián/i,
+        `${locale}: radarDealsTitle names the median`
+      );
     }
     console.log(
-      '  ✅ [Radar pill: floor only from 3 offers, else below median (#1145)] Verified'
+      '  ✅ [Radar pill & deals title: floor only from 3 offers, else below median (#1145, #1656)] Verified'
+    );
+  }
+  {
+    const {
+      formatSafeNumber,
+      resolveExtensionMasterRating,
+      roundHalfUpDecimal,
+    } = await import('./security-guards.js');
+    const { ratingStarText, renderReviewCardHtml } =
+      await import('./sidepanel/panel-view.js');
+    const { runExtensionLookupRouteTests } =
+      await import('../../web/src/app/api/v1/rate/extension/lookup/__tests__/route.test.js');
+
+    // Every x.x5 value (and every thousandth 0.001..5.000) rounds half up on
+    // the decimal value, identical to rate.vn (#1646, #1656).
+    for (let thousandths = 1; thousandths <= 5000; thousandths++) {
+      const val = thousandths / 1000;
+      const expectedNum = Math.floor((thousandths + 50) / 100) / 10;
+      const expectedText = expectedNum.toFixed(1);
+      assert.equal(roundHalfUpDecimal(val, 1), expectedNum, `round(${val})`);
+      assert.equal(
+        formatSafeNumber(val, { min: 0, max: 5, decimals: 1 }),
+        expectedText,
+        `formatSafeNumber(${val})`
+      );
+      if (expectedNum > 0) {
+        assert.equal(ratingStarText(val), `★ ${expectedText}`);
+      }
+    }
+    assert.equal(ratingStarText(4.35), '★ 4.4');
+    assert.equal(ratingStarText(4.05), '★ 4.1');
+    assert.equal(ratingStarText(4.55), '★ 4.6');
+    assert.equal(ratingStarText(4.249), '★ 4.2');
+
+    // Source priority: rating_score_5 ?? rating_score ?? user_rating_weighted ?? average_rating
+    assert.equal(
+      resolveExtensionMasterRating({
+        rating_score_5: 4.4,
+        rating_score: 4.35,
+        user_rating_weighted: 4.8,
+        average_rating: 4.9,
+      }),
+      4.4
+    );
+    assert.equal(
+      resolveExtensionMasterRating({
+        rating_score_5: null,
+        rating_score: 4.35,
+        user_rating_weighted: 4.8,
+        average_rating: 4.9,
+      }),
+      4.4
+    );
+    assert.equal(
+      resolveExtensionMasterRating({
+        rating_score: 4.249,
+        user_rating_weighted: 4.8,
+        average_rating: 4.9,
+      }),
+      4.2
+    );
+    assert.equal(
+      resolveExtensionMasterRating({
+        rating_score_5: null,
+        rating_score: 0,
+        user_rating_weighted: 4.05,
+        average_rating: 4.9,
+      }),
+      4.1
+    );
+    assert.equal(
+      resolveExtensionMasterRating({
+        rating_score_5: null,
+        rating_score: 7,
+        user_rating_weighted: 0,
+        average_rating: 4.55,
+      }),
+      4.6
+    );
+    assert.equal(
+      resolveExtensionMasterRating({
+        rating_score_5: null,
+        rating_score: 0,
+        user_rating_weighted: 0,
+        average_rating: 0,
+      }),
+      null
+    );
+    const reviewCard435 = renderReviewCardHtml(
+      {
+        total_analyzed: 18,
+        authentic_pct: 89,
+        suspicious_pct: 6,
+        fake_pct: 5,
+        pros: [],
+        cons: [],
+        ai_summary: null,
+      },
+      { rating_score: 4.35, user_rating_weighted: 4.1, average_rating: 4.1 }
+    );
+    assert.ok(reviewCard435.includes('★ 4.4 / 5'));
+    const pillSource = fs.readFileSync(
+      path.resolve(__dirname, 'content/content-script.ts'),
+      'utf8'
+    );
+    assert.ok(
+      pillSource.includes('resolveExtensionMasterRating(lookup.masterProduct)'),
+      'the pill resolves masterProduct rating with the same priority chain'
+    );
+    await runExtensionLookupRouteTests();
+    console.log(
+      '  ✅ [Extension rating source priority & x.x5 half-up rounding (#1656)] Verified'
     );
   }
   console.log('🎉 All Rate Browser Extension MV3 v2 tests passed!');

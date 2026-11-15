@@ -30,6 +30,7 @@ import {
   type CrossPlatformDealRadarItem,
   type CrossPlatformDealRadarResponse,
   type CrossPlatformPriceSpreadItem,
+  type RadarSignal,
 } from '@/lib/deal-radar';
 import RadarBadge from '@/components/radar/RadarBadge';
 import { useDealRadarIndex } from '@/components/radar/use-deal-radar';
@@ -40,6 +41,7 @@ import {
   formatPlainNumber,
   formatPriceVnd,
 } from '@/lib/locale-format';
+import { formatScoreFixed } from '@/lib/rating-display';
 import StarRating from '@/components/elementary/StarRating';
 
 interface DealFinderWorkspaceProps {
@@ -230,6 +232,36 @@ export function rankProductsForDealFinder(
   }));
 }
 
+export function formatDealPersonaScore(
+  personaScore5: number,
+  persona: PersonaKey
+): string | null {
+  if (!(personaScore5 > 0)) return null;
+  return formatScoreFixed(personaScore5, persona === 'default' ? 1 : 2);
+}
+
+export function buildDealJsonItem(
+  d: ReturnType<typeof rankProductsForDealFinder>[number],
+  signal: RadarSignal | null | undefined
+) {
+  return {
+    rank: d.rank,
+    slug: d.slug,
+    name: d.name,
+    brand: d.brand,
+    category: d.categorySlug,
+    dealRadar: radarExportFields(signal),
+    personaScore5: d.personaScore5,
+    userScore5: d.userScore5,
+    ratingScore5: d.userScore5 > 0 ? displayedScore5(d.userScore5) : null,
+    expertScore10: d.expertScore10,
+    minPriceVnd: d.minPrice,
+    spreadSavingsVnd: d.spreadSavingsVnd,
+    costPerPointVnd: d.costPerPointVnd,
+    href: d.productHref,
+  };
+}
+
 export default function DealFinderWorkspace({
   products,
   initialCategory = 'all',
@@ -345,7 +377,7 @@ export default function DealFinderWorkspace({
         '| --- | --- | --- | --- | --- | --- |',
         ...filteredGenuineDeals.map(
           (g) =>
-            `| ${sanitizeDealFinderMarkdownCell(g.productName)} | ${sanitizeDealFinderMarkdownCell(g.platform.toUpperCase())} (${sanitizeDealFinderMarkdownCell(g.merchantName)}) | **${g.priceCurrent.toLocaleString('vi-VN')} ₫** | ${g.marketMedianPrice.toLocaleString('vi-VN')} ₫ | -${g.savingsVsMedianVnd.toLocaleString('vi-VN')} ₫ (-${g.savingsVsMedianPct}%) | ${g.jreviewsScore10 != null ? `${g.jreviewsScore10.toFixed(1)}/10` : t('noScore')} |`
+            `| ${sanitizeDealFinderMarkdownCell(g.productName)} | ${sanitizeDealFinderMarkdownCell(g.platform.toUpperCase())} (${sanitizeDealFinderMarkdownCell(g.merchantName)}) | **${g.priceCurrent.toLocaleString('vi-VN')} ₫** | ${g.marketMedianPrice.toLocaleString('vi-VN')} ₫ | -${g.savingsVsMedianVnd.toLocaleString('vi-VN')} ₫ (-${g.savingsVsMedianPct}%) | ${g.jreviewsScore10 != null ? `${formatScoreFixed(g.jreviewsScore10, 1)}/10` : t('noScore')} |`
         ),
         '',
         t('radarMdFakeTitle'),
@@ -405,7 +437,9 @@ export default function DealFinderWorkspace({
         it.marketMedianPrice,
         it.savingsVsMedianPct,
         it.fakeMarkupPct,
-        it.jreviewsScore10 != null ? it.jreviewsScore10.toFixed(1) : '',
+        it.jreviewsScore10 != null
+          ? formatScoreFixed(it.jreviewsScore10, 1)
+          : '',
       ]),
       ...filteredPriceSpreadLeaders.map((sp) => [
         'price_spread_leader',
@@ -484,12 +518,10 @@ export default function DealFinderWorkspace({
         '',
         t('dealsMdTableHead'),
         '| --- | --- | --- | --- | --- | --- | --- | --- |',
-        ...rankedDeals
-          .slice(0, 20)
-          .map(
-            (d) =>
-              `| #${d.rank} | ${sanitizeDealFinderMarkdownCell(d.name)} | ${sanitizeDealFinderMarkdownCell(d.brand)} | **${d.personaScore5 > 0 ? `${d.personaScore5.toFixed(2)}/5.0` : t('noScore')}** | ★ ${d.userScore5 > 0 ? displayedScore5(d.userScore5).toFixed(1) : t('noScore')} (${d.expertScore10 != null ? `Lab ${d.expertScore10.toFixed(1)}/10` : t('labNoScore')}) | **${d.minPrice.toLocaleString('vi-VN')} ₫** | ${d.spreadSavingsVnd > 0 ? `-${d.spreadSavingsVnd.toLocaleString('vi-VN')} ₫` : t('samePrice')} | ${radarMarkdownCell(getRadarSignal(radarIndex, d.slug))} |`
-          ),
+        ...rankedDeals.slice(0, 20).map((d) => {
+          const personaStr = formatDealPersonaScore(d.personaScore5, persona);
+          return `| #${d.rank} | ${sanitizeDealFinderMarkdownCell(d.name)} | ${sanitizeDealFinderMarkdownCell(d.brand)} | **${personaStr ? `${personaStr}/5.0` : t('noScore')}** | ★ ${d.userScore5 > 0 ? formatScoreFixed(displayedScore5(d.userScore5), 1) : t('noScore')} (${d.expertScore10 != null ? `Lab ${formatScoreFixed(d.expertScore10, 1)}/10` : t('labNoScore')}) | **${d.minPrice.toLocaleString('vi-VN')} ₫** | ${d.spreadSavingsVnd > 0 ? `-${d.spreadSavingsVnd.toLocaleString('vi-VN')} ₫` : t('samePrice')} | ${radarMarkdownCell(getRadarSignal(radarIndex, d.slug))} |`;
+        }),
       ];
       await navigator.clipboard.writeText(lines.join('\n'));
       setCopiedMarkdown(true);
@@ -521,9 +553,11 @@ export default function DealFinderWorkspace({
       d.name,
       d.brand,
       d.categorySlug,
-      d.personaScore5 > 0 ? d.personaScore5.toFixed(2) : '',
-      d.userScore5 > 0 ? displayedScore5(d.userScore5).toFixed(1) : '',
-      d.expertScore10 != null ? d.expertScore10.toFixed(1) : '',
+      formatDealPersonaScore(d.personaScore5, persona) ?? '',
+      d.userScore5 > 0
+        ? formatScoreFixed(displayedScore5(d.userScore5), 1)
+        : '',
+      d.expertScore10 != null ? formatScoreFixed(d.expertScore10, 1) : '',
       d.minPrice,
       d.spreadSavingsVnd,
       d.costPerPointVnd > 0 ? d.costPerPointVnd : '',
@@ -552,21 +586,9 @@ export default function DealFinderWorkspace({
       maxBudgetVnd,
       exportedAt: new Date().toISOString(),
       dealCount: rankedDeals.length,
-      deals: rankedDeals.map((d) => ({
-        rank: d.rank,
-        slug: d.slug,
-        name: d.name,
-        brand: d.brand,
-        category: d.categorySlug,
-        dealRadar: radarExportFields(getRadarSignal(radarIndex, d.slug)),
-        personaScore5: d.personaScore5,
-        userScore5: d.userScore5,
-        expertScore10: d.expertScore10,
-        minPriceVnd: d.minPrice,
-        spreadSavingsVnd: d.spreadSavingsVnd,
-        costPerPointVnd: d.costPerPointVnd,
-        href: d.productHref,
-      })),
+      deals: rankedDeals.map((d) =>
+        buildDealJsonItem(d, getRadarSignal(radarIndex, d.slug))
+      ),
     };
     const blob = new Blob([JSON.stringify(payload, null, 2)], {
       type: 'application/json;charset=utf-8;',

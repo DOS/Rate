@@ -3,6 +3,12 @@ updates:
   # One npm entry at the workspace root: Dependabot updates every pnpm
   # workspace package and the single root pnpm-lock.yaml together. Per-app
   # entries changed apps/*/package.json without the lockfile (frozen install failed).
+  #
+  # Keep pnpm.overrides in the root package.json (not pnpm-workspace.yaml,
+  # dependabot/dependabot-core#16529) so Dependabot rewrites an override
+  # together with the direct dependency of the same name (#1335, #1337).
+  # Platform @swc/core-* bindings come from @swc/core optionalDependencies
+  # and are not pinned directly (#1645).
   - package-ecosystem: "npm"
     directory: "/"
     schedule:

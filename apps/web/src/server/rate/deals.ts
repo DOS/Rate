@@ -19,6 +19,7 @@ import {
   type RadarSignal,
 } from '../../lib/deal-radar';
 import { isOfferUnavailable } from '../../lib/product-market-stats';
+import { roundScore } from '../../lib/rating-display';
 import { plausibleOffers } from '@repo/shared-data/rules';
 import {
   RATE_CACHE_TAGS,
@@ -436,7 +437,7 @@ export function computeCrossPlatformDealRadarFromData(
     // No expert or user rating yet: leave the score empty instead of inventing one.
     const jreviewsScore10 =
       Number.isFinite(rawExpert) && rawExpert > 0 && rawExpert <= 10
-        ? Number((rawExpert <= 5 ? rawExpert * 2 : rawExpert).toFixed(1))
+        ? roundScore(rawExpert <= 5 ? rawExpert * 2 : rawExpert, 1)
         : null;
     const imageUrl = resolveProductImageUrl(master);
     const productHref = `/${categorySlug}/${safeMasterSlug}`;

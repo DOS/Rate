@@ -124,6 +124,8 @@ export interface ExtensionLookupData {
     merchant_count: number;
     average_rating: number;
     user_rating_weighted: number;
+    rating_score?: number | null;
+    rating_score_5?: number | null;
     expert_rating: number | null;
     authentic_review_count: number;
     total_reviews: number;

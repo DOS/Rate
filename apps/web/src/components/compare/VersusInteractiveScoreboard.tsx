@@ -27,6 +27,11 @@ import RadarBadge from '@/components/radar/RadarBadge';
 import StarRating from '@/components/elementary/StarRating';
 import { useDealRadarIndex } from '@/components/radar/use-deal-radar';
 import { formatDecimal, formatPercent } from '@/lib/locale-format';
+import {
+  displayedScore5,
+  formatRatingValue,
+  formatScoreFixed,
+} from '@/lib/rating-display';
 
 export type ScoredVersusItem = Omit<ScoredLeaderboardItem, 'rank'>;
 
@@ -202,16 +207,62 @@ export function computeVersusWeightedResult(
           ? scoreB
           : scoreA;
 
+  const shownA = displayedScore5(finalA);
+  const shownB = displayedScore5(finalB);
+  const bothScored = shownA > 0 && shownB > 0;
+  const anyScored = shownA > 0 || shownB > 0;
+
   return {
     finalA,
     finalB,
-    // The gap between the scores as shown, at one decimal.
-    delta: Math.abs(
-      Number(finalA.toFixed(1)) - Number(finalB.toFixed(1))
-    ).toFixed(1),
+    bothScored,
+    // The gap between the scores as shown, at one decimal; null when one side
+    // has no score at all so an unrated 0 never creates a fake gap (#1647).
+    delta: bothScored
+      ? formatScoreFixed(Math.abs(shownA - shownB), 1)
+      : !anyScored
+        ? '0.0'
+        : null,
     winner,
     // Level at the shown precision: no lead for either (DOS/Rate#1209).
     tie: isVersusScoreTie(finalA, finalB),
+  };
+}
+
+export function formatVersusWeightedMarkdown(
+  weightedResult: ReturnType<typeof computeVersusWeightedResult>,
+  safeWinnerName: string,
+  copy: {
+    tie1v1Badge: string;
+    mdTieLine: (score: string) => string;
+    valNoReviews: string;
+    mdLeadingDevice: string;
+    mdScoreDelta: (delta: string) => string;
+    mdRowWeightedScore: string;
+    mdRowTie: string;
+  }
+): { summaryBullet: string; weightedScoreRow: string } {
+  const shownA = displayedScore5(weightedResult.finalA);
+  const shownB = displayedScore5(weightedResult.finalB);
+  const anyScored = shownA > 0 || shownB > 0;
+  const leadScore = formatScoreFixed(Math.max(shownA, shownB), 1);
+  const summaryBullet = weightedResult.tie
+    ? anyScored
+      ? `- **${copy.tie1v1Badge}:** ${copy.mdTieLine(leadScore)}`
+      : `- **${copy.tie1v1Badge}:** ${copy.valNoReviews}`
+    : weightedResult.delta != null
+      ? `- **${copy.mdLeadingDevice}:** **${safeWinnerName}** (${leadScore}/5.0 - ${copy.mdScoreDelta(weightedResult.delta)})`
+      : `- **${copy.mdLeadingDevice}:** **${safeWinnerName}** (${leadScore}/5.0)`;
+  const cellA = shownA > 0 ? `**${formatScoreFixed(shownA, 1)}/5.0**` : 'N/A';
+  const cellB = shownB > 0 ? `**${formatScoreFixed(shownB, 1)}/5.0**` : 'N/A';
+  const advantage = !anyScored
+    ? '-'
+    : weightedResult.tie
+      ? `**${sanitizeVersusMarkdownCell(copy.mdRowTie)}**`
+      : `**${safeWinnerName}**`;
+  return {
+    summaryBullet,
+    weightedScoreRow: `| **${copy.mdRowWeightedScore}** | ${cellA} | ${cellB} | ${advantage} |`,
   };
 }
 
@@ -228,7 +279,7 @@ export default function VersusInteractiveScoreboard({
   const tStars = useTranslations('starRating');
   // A side with no score reads like its stars, not "0.0" (DOS/Rate#1545).
   const summaryScore = (score: number): string =>
-    score > 0 ? formatDecimal(score, locale, 1) : tStars('empty');
+    score > 0 ? formatRatingValue(score, locale) : tStars('empty');
   const locale = useLocale();
   const useCaseLabelId = useId();
   const slidersPanelId = useId();
@@ -318,7 +369,7 @@ export default function VersusInteractiveScoreboard({
     }
   );
   const criterionCell = (v: number | null) =>
-    v != null ? `${v.toFixed(2)}/5.0` : noData;
+    v != null ? `${formatScoreFixed(v, 2)}/5.0` : noData;
 
   const handleCopy1v1Markdown = async () => {
     if (typeof window === 'undefined') return;
@@ -331,20 +382,27 @@ export default function VersusInteractiveScoreboard({
         weightedResult.winner.name
       );
       const safePriceAdv = sanitizeVersusMarkdownCell(priceAdvantageLabel);
-      const leadScore =
-        weightedResult.finalA >= weightedResult.finalB
-          ? weightedResult.finalA.toFixed(1)
-          : weightedResult.finalB.toFixed(1);
+      const { summaryBullet, weightedScoreRow } = formatVersusWeightedMarkdown(
+        weightedResult,
+        safeWinnerName,
+        {
+          tie1v1Badge: t('tie1v1Badge'),
+          mdTieLine: (score) => t('mdTieLine', { score }),
+          valNoReviews: t('valNoReviews'),
+          mdLeadingDevice: t('mdLeadingDevice'),
+          mdScoreDelta: (delta) => t('mdScoreDelta', { delta }),
+          mdRowWeightedScore: t('mdRowWeightedScore'),
+          mdRowTie: t('mdRowTie'),
+        }
+      );
       const lines = [
         `### ${t('md1v1Heading', { nameA: safeNameA, nameB: safeNameB })}`,
-        weightedResult.tie
-          ? `- **${t('tie1v1Badge')}:** ${t('mdTieLine', { score: leadScore })}`
-          : `- **${t('mdLeadingDevice')}:** **${safeWinnerName}** (${leadScore}/5.0 - ${t('mdScoreDelta', { delta: weightedResult.delta })})`,
+        summaryBullet,
         `- **${t('mdAuditUrl')}:** ${window.location.href}`,
         '',
         `| ${t('mdColCriterion')} | ${safeNameA} | ${safeNameB} | ${t('mdColAdvantage')} |`,
         `| --- | --- | --- | --- |`,
-        `| **${t('mdRowWeightedScore')}** | **${weightedResult.finalA.toFixed(1)}/5.0** | **${weightedResult.finalB.toFixed(1)}/5.0** | **${weightedResult.tie ? sanitizeVersusMarkdownCell(t('mdRowTie')) : safeWinnerName}** |`,
+        weightedScoreRow,
         ...criteriaRows.map((r) => {
           const winName = !r.compared
             ? '-'
@@ -379,19 +437,25 @@ export default function VersusInteractiveScoreboard({
       scoreB.name,
       t('csvColAdvantage'),
     ];
+    const shownA = displayedScore5(weightedResult.finalA);
+    const shownB = displayedScore5(weightedResult.finalB);
     const rows: Array<Array<string | number>> = [
       [
         t('csvRowWeightedScore5'),
         100,
-        weightedResult.finalA.toFixed(1),
-        weightedResult.finalB.toFixed(1),
-        weightedResult.tie ? t('mdRowTie') : weightedResult.winner.name,
+        shownA > 0 ? formatScoreFixed(shownA, 1) : '',
+        shownB > 0 ? formatScoreFixed(shownB, 1) : '',
+        shownA <= 0 && shownB <= 0
+          ? '-'
+          : weightedResult.tie
+            ? t('mdRowTie')
+            : weightedResult.winner.name,
       ],
       ...criteriaRows.map((r) => [
         r.label,
         activeWeights[r.key],
-        r.aVal != null ? r.aVal.toFixed(2) : '',
-        r.bVal != null ? r.bVal.toFixed(2) : '',
+        r.aVal != null ? formatScoreFixed(r.aVal, 2) : '',
+        r.bVal != null ? formatScoreFixed(r.bVal, 2) : '',
         !r.compared
           ? ''
           : r.aWins
@@ -403,8 +467,12 @@ export default function VersusInteractiveScoreboard({
       [
         t('csvRowExpertScore10'),
         '-',
-        scoreA.expertScore10 != null ? scoreA.expertScore10.toFixed(1) : '',
-        scoreB.expertScore10 != null ? scoreB.expertScore10.toFixed(1) : '',
+        scoreA.expertScore10 != null
+          ? formatScoreFixed(scoreA.expertScore10, 1)
+          : '',
+        scoreB.expertScore10 != null
+          ? formatScoreFixed(scoreB.expertScore10, 1)
+          : '',
         scoreA.expertScore10 != null && scoreB.expertScore10 != null
           ? scoreA.expertScore10 > scoreB.expertScore10
             ? scoreA.name
@@ -462,6 +530,8 @@ export default function VersusInteractiveScoreboard({
     const sigB = getRadarSignal(radarIndex, scoreB.slug);
     const safeSlugA = sanitizeVersusExportSlug(scoreA.slug);
     const safeSlugB = sanitizeVersusExportSlug(scoreB.slug);
+    const shownA = displayedScore5(weightedResult.finalA);
+    const shownB = displayedScore5(weightedResult.finalB);
     const payload = {
       source: 'Rate.vn 1v1 Versus Scoreboard',
       versusSlug: `${safeSlugA}-vs-${safeSlugB}`,
@@ -474,13 +544,16 @@ export default function VersusInteractiveScoreboard({
         : {
             slug: sanitizeVersusExportSlug(weightedResult.winner.slug),
             name: weightedResult.winner.name,
-            scoreDelta5: Number(weightedResult.delta),
+            scoreDelta5:
+              weightedResult.delta != null
+                ? Number(weightedResult.delta)
+                : null,
           },
       productA: {
         slug: safeSlugA,
         name: scoreA.name,
         brand: scoreA.brand,
-        weightedScore5: Number(weightedResult.finalA.toFixed(1)),
+        weightedScore5: shownA > 0 ? shownA : null,
         expertScore10: scoreA.expertScore10,
         minPriceVnd: scoreA.minPrice,
         dealRadar: radarExportFields(sigA),
@@ -489,7 +562,7 @@ export default function VersusInteractiveScoreboard({
         slug: safeSlugB,
         name: scoreB.name,
         brand: scoreB.brand,
-        weightedScore5: Number(weightedResult.finalB.toFixed(1)),
+        weightedScore5: shownB > 0 ? shownB : null,
         expertScore10: scoreB.expertScore10,
         minPriceVnd: scoreB.minPrice,
         dealRadar: radarExportFields(sigB),
@@ -704,21 +777,27 @@ export default function VersusInteractiveScoreboard({
               {weightedResult.tie ? t('tie1v1Badge') : t('leading1v1Badge')}
             </span>
             {weightedResult.tie ? (
-              <span className="text-white-50 small">{t('tieDeltaNote')}</span>
+              <span className="text-white-50 small">
+                {weightedResult.bothScored
+                  ? t('tieDeltaNote')
+                  : t('valNoReviews')}
+              </span>
             ) : (
               <>
                 <strong className="text-white">
                   {weightedResult.winner.name}
                 </strong>
-                <span className="text-white-50 small ms-2">
-                  {t('leadingDeltaNote', {
-                    delta: formatDecimal(
-                      Number(weightedResult.delta),
-                      locale,
-                      1
-                    ),
-                  })}
-                </span>
+                {weightedResult.delta != null && (
+                  <span className="text-white-50 small ms-2">
+                    {t('leadingDeltaNote', {
+                      delta: formatDecimal(
+                        Number(weightedResult.delta),
+                        locale,
+                        1
+                      ),
+                    })}
+                  </span>
+                )}
               </>
             )}
           </div>
@@ -790,7 +869,7 @@ export default function VersusInteractiveScoreboard({
                     }`}
                   >
                     {row.aVal != null
-                      ? `${formatDecimal(row.aVal, locale, 2)}/5`
+                      ? `${formatRatingValue(row.aVal, locale, 2)}/5`
                       : noData}{' '}
                     {aWins ? '✓' : ''}
                   </span>
@@ -839,7 +918,7 @@ export default function VersusInteractiveScoreboard({
                   >
                     {bWins ? '✓ ' : ''}
                     {row.bVal != null
-                      ? `${formatDecimal(row.bVal, locale, 2)}/5`
+                      ? `${formatRatingValue(row.bVal, locale, 2)}/5`
                       : noData}
                   </span>
                 </div>

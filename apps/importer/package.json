@@ -3,6 +3,7 @@
   "version": "2.0.0",
   "private": true,
   "description": "Open-Core Product Normalization, 3-Tier Entity Matching, AI 10-Group Spec Enricher & Anti-Seeding Review Intelligence Engine for Rate Platform",
+  "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "exports": {
@@ -26,23 +27,31 @@
       "types": "./dist/shopee/jobs/backfill-specs.d.ts",
       "import": "./dist/shopee/jobs/backfill-specs.js"
     },
+    "./shopee/jobs/product-points-ai": {
+      "types": "./dist/shopee/jobs/product-points-ai.d.ts",
+      "import": "./dist/shopee/jobs/product-points-ai.js"
+    },
+    "./shopee/product-points-ai-prompt": {
+      "types": "./dist/shopee/product-points-ai-prompt.d.ts",
+      "import": "./dist/shopee/product-points-ai-prompt.js"
+    },
     "./package.json": "./package.json"
   },
-  "type": "module",
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.typecheck.json --noEmit",
-    "start": "node dist/index.js",
     "dev": "tsx watch src/index.ts",
-    "lint": "eslint . --max-warnings 0",
-    "format": "prettier --write \"src/**/*.ts\"",
+    "start": "node dist/index.js",
     "backfill:specs": "tsx src/shopee/jobs/backfill-specs.ts",
-    "test": "tsx src/shopee/__tests__/open-core-intelligence.test.ts && tsx src/shopee/__tests__/sourced-seeds.test.ts && tsx src/shopee/__tests__/entity-matcher.test.ts && tsx src/shopee/__tests__/item-matcher.test.ts && tsx src/shopee/__tests__/shopee-to-supabase.test.ts && tsx src/shopee/__tests__/paging.test.ts && tsx src/shopee/__tests__/backfill-review-risk.test.ts && tsx src/shopee/__tests__/item-inventory-report.test.ts && tsx src/shopee/__tests__/arena-audit.test.ts && tsx src/shopee/__tests__/item-aware-jobs.test.ts && tsx src/shopee/__tests__/product-points.test.ts && tsx src/shopee/__tests__/review-values.test.ts && tsx src/shopee/__tests__/review-ai-points.test.ts && tsx src/shopee/test-ai-enricher.ts && tsx src/shopee/test-review-analyzer.ts",
-    "test:dist": "node src/shopee/__tests__/dist-exports.smoke.mjs",
     "backfill:review-risk": "tsx src/shopee/jobs/backfill-review-risk.ts",
     "product-points": "tsx src/shopee/jobs/product-points.ts",
+    "product-points-ai": "tsx src/shopee/jobs/product-points-ai.ts",
     "review-values": "tsx src/shopee/jobs/review-values.ts",
-    "review-ai-points": "tsx src/shopee/jobs/review-ai-points.ts"
+    "review-ai-points": "tsx src/shopee/jobs/review-ai-points.ts",
+    "test": "tsx src/shopee/__tests__/open-core-intelligence.test.ts && tsx src/shopee/__tests__/sourced-seeds.test.ts && tsx src/shopee/__tests__/entity-matcher.test.ts && tsx src/shopee/__tests__/item-matcher.test.ts && tsx src/shopee/__tests__/shopee-to-supabase.test.ts && tsx src/shopee/__tests__/paging.test.ts && tsx src/shopee/__tests__/backfill-review-risk.test.ts && tsx src/shopee/__tests__/item-inventory-report.test.ts && tsx src/shopee/__tests__/arena-audit.test.ts && tsx src/shopee/__tests__/item-aware-jobs.test.ts && tsx src/shopee/__tests__/product-points.test.ts && tsx --test src/shopee/__tests__/product-points-ai.test.ts && tsx src/shopee/__tests__/review-values.test.ts && tsx src/shopee/__tests__/review-ai-points.test.ts && tsx src/shopee/test-ai-enricher.ts && tsx src/shopee/test-review-analyzer.ts",
+    "test:dist": "node src/shopee/__tests__/dist-exports.smoke.mjs",
+    "lint": "eslint . --max-warnings 0",
+    "format": "prettier --write \"src/**/*.ts\""
   },
   "keywords": [
     "product-normalizer",

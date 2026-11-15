@@ -7,7 +7,7 @@ import type {
   ProductLeaderboardBadgeInfo,
 } from '@/lib/leaderboard-engine';
 import { BsAwardFill, BsTrophyFill } from 'react-icons/bs';
-import { formatDecimal } from '@/lib/locale-format';
+import { formatRatingValue, roundScore } from '@/lib/rating-display';
 
 const VALID_BADGE_CATEGORIES = new Set<CanonicalCategorySlug>([
   'smartphones',
@@ -59,8 +59,8 @@ export function sanitizeLeaderboardBadgeEntry(
   const rawScore10 = Number(candidate.score10);
   const safeScore10 =
     Number.isFinite(rawScore10) && rawScore10 > 0
-      ? Math.min(10, Math.max(0, Number(rawScore10.toFixed(2))))
-      : Number((safeScore5 * 2).toFixed(2));
+      ? Math.min(10, Math.max(0, roundScore(rawScore10, 2)))
+      : roundScore(safeScore5 * 2, 2);
 
   return {
     categorySlug: candidate.categorySlug as CanonicalCategorySlug,
@@ -178,7 +178,7 @@ export default async function ProductLeaderboardBadges({
               }}
             >
               (
-              {formatDecimal(
+              {formatRatingValue(
                 b.score5,
                 lang,
                 b.criterion === 'combined' ? 1 : 2

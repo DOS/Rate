@@ -276,7 +276,7 @@
     "message": "Body historie cen se stále sbírají."
   },
   "radarDealsTitle": {
-    "message": "Nejnižší cena v 10 obchodech"
+    "message": "Skutečné slevy pod mediánem (10 obchodů)"
   },
   "radarSavings": {
     "message": "Ušetříte $AMOUNT$ (-$PCT$ %)",

@@ -191,3 +191,7 @@ storageState*.json
 !Docs/Proposals/2026-11-06-dos-me-review-author-keys.sql
 !Docs/Proposals/2026-11-06-dos-me-review-author-keys-rollback.sql
 !Docs/Proposals/2026-11-06-dos-me-review-author-keys-verify.sql
+# Reviewed DOS-Me migration proposal (DOS/Rate#1623): DDL only, no data, no credentials.
+!Docs/Proposals/2026-11-14-dos-me-product-verdict.sql
+!Docs/Proposals/2026-11-14-dos-me-product-verdict-rollback.sql
+!Docs/Proposals/2026-11-14-dos-me-product-verdict-verify.sql

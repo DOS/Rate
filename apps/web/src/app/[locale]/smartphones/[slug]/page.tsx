@@ -31,6 +31,7 @@ import {
   getCachedMasterProductBySlug,
   getCachedPublishedMasterProductCategory,
   getCachedMasterProductOffers,
+  getCachedMasterProductPoints,
   getCachedMasterProductPriceHistory,
   getCachedMasterProductReviews,
   getCachedMasterProductReviewSummary,
@@ -134,6 +135,7 @@ import {
   formatPercent,
   formatPriceVnd,
 } from '@/lib/locale-format';
+import { displayedScore5 } from '@/lib/rating-display';
 import { versusHref } from '@/lib/item-compare';
 import StarRating from '@/components/elementary/StarRating';
 
@@ -367,8 +369,17 @@ export async function ProductDetailView({
     'reviews',
     getCachedMasterProductReviews(storedProduct.id)
   );
+  const productPointsRead = timing.time(
+    'productPoints',
+    getCachedMasterProductPoints(
+      storedProduct.id,
+      storedProduct.slug,
+      categorySlug
+    )
+  );
   offersRead.catch(() => undefined);
   reviewsRead.catch(() => undefined);
+  productPointsRead.catch(() => undefined);
   // The other variants of this model, linked under the price where the
   // quick-spec cards used to be; Item routes (flag on) keep the #1154 size
   // picker instead. Cached per model and bounded. A failure fails the render
@@ -462,6 +473,7 @@ export async function ProductDetailView({
   const [
     offers,
     reviews,
+    productPointsData,
     priceHistory,
     reviewSummary,
     { categoryPeers, relatedCompetitors, competitorOffers },
@@ -469,6 +481,7 @@ export async function ProductDetailView({
   ] = await Promise.all([
     offersRead,
     reviewsRead,
+    productPointsRead,
     priceHistoryRead,
     reviewSummaryRead,
     competitorsRead,
@@ -575,7 +588,7 @@ export async function ProductDetailView({
     displayUserRating > 0 && authenticCount > 0
       ? {
           '@type': 'AggregateRating',
-          ratingValue: Math.round(displayUserRating * 10) / 10,
+          ratingValue: displayedScore5(displayUserRating),
           reviewCount: authenticCount,
           bestRating: 5,
           worstRating: 1,
@@ -1466,6 +1479,8 @@ export async function ProductDetailView({
               ignoredReviewCount={ignoredCount}
               reviews={reviews}
               summary={reviewSummary}
+              productPoints={productPointsData.rows}
+              productPointsReviewCount={productPointsData.reviewCount}
               radarSignal={radarSignal}
             />
           </div>

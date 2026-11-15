@@ -7,6 +7,7 @@ import {
   knownDosafeRiskScore,
 } from '@/lib/merchant-risk-tone';
 import { discountVerdictCopy } from '@/lib/discount-verdict-copy';
+import { formatScoreFixed } from '@/lib/rating-display';
 import AnalyzerText from '@/components/reviews/AnalyzerText';
 import { useDetailsDismiss } from '@/components/elementary/use-details-dismiss';
 import { Link, useRouter } from '@/lib/navigation';
@@ -257,7 +258,7 @@ export default function DeepInspectWorkspace({
         ...(master
           ? [
               `- **${t('mdProduct')}:** ${master.name} (\`${master.model_key}\`)`,
-              `- **${t('mdBuyerScore')}:** ${masterUserRating > 0 ? `★ ${masterUserRating.toFixed(2)}/5.0` : t('userNoScore')}${masterExpertRating10 != null ? ` | ${t('mdExpertScore')}: ${masterExpertRating10.toFixed(1)}/10` : ''} ${t('verifiedReviewsCount', { count: master.authentic_review_count || master.total_reviews || 0 })}`,
+              `- **${t('mdBuyerScore')}:** ${masterUserRating > 0 ? `★ ${formatScoreFixed(masterUserRating, 2)}/5.0` : t('userNoScore')}${masterExpertRating10 != null ? ` | ${t('mdExpertScore')}: ${formatScoreFixed(masterExpertRating10, 1)}/10` : ''} ${t('verifiedReviewsCount', { count: master.authentic_review_count || master.total_reviews || 0 })}`,
               `- **${t('mdPriceSignal')}:** ${radarMarkdownCell(radarSignal, locale)}`,
             ]
           : []),

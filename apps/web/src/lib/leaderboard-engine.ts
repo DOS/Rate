@@ -7,6 +7,7 @@ import {
 } from './rate-domain-core';
 import { catalogRowSlug, type ItemCatalogRow } from './item-directory';
 import { canonicalVersusOrder } from './item-compare';
+import { displayedScore5, roundScore } from './rating-display';
 import type { CanonicalCategorySlug, MasterProduct } from './rate-api';
 import type { KeySpecs, ProductSpecifications } from '@repo/shared-data';
 
@@ -181,7 +182,7 @@ function sanitizeLeaderboardSlug(raw: unknown): string {
 
 function clampScore5(value: number): number {
   if (!Number.isFinite(value) || value <= 0) return 0;
-  return Number(Math.min(5.0, value).toFixed(2));
+  return roundScore(Math.min(5.0, value), 2);
 }
 
 function toSafePositiveNumber(raw: unknown): number {
@@ -368,7 +369,7 @@ export function weightedCriteriaScore5(
     sum += score * weight;
     weightSum += weight;
   }
-  return weightSum > 0 ? Number((sum / weightSum).toFixed(2)) : null;
+  return weightSum > 0 ? roundScore(sum / weightSum, 2) : null;
 }
 
 /** The criteria both products have a score for. */
@@ -419,12 +420,10 @@ export function scoreMasterProductForLeaderboard(
   const rawExpert = toSafePositiveNumber(safeItem.expert_rating);
   const expertScore10: number | null =
     Number.isFinite(rawExpert) && rawExpert > 0 && rawExpert <= 10
-      ? Number(
-          Math.min(10, rawExpert > 5 ? rawExpert : rawExpert * 2).toFixed(1)
-        )
+      ? roundScore(Math.min(10, rawExpert > 5 ? rawExpert : rawExpert * 2), 1)
       : null;
   const expertScore5: number | null =
-    expertScore10 != null ? Number((expertScore10 / 2).toFixed(2)) : null;
+    expertScore10 != null ? roundScore(expertScore10 / 2, 2) : null;
 
   // Only real criterion scores join the composite; a product without them
   // ranks on its user and expert scores alone (DOS/Rate#1143). Ranking reads
@@ -522,7 +521,7 @@ export function scoreMasterProductForLeaderboard(
     activeScore10:
       safeCriterion === 'expert'
         ? (expertScore10 ?? 0)
-        : Number((Math.round(activeScore5 * 10) / 5).toFixed(1)),
+        : roundScore(displayedScore5(activeScore5) * 2, 1),
     authenticReviewCount,
     filteredNoiseReviewCount,
     minPrice,
@@ -534,10 +533,9 @@ export function scoreMasterProductForLeaderboard(
   };
 }
 
-/** A score as the page shows it: one decimal, rounded once (D3). */
-export function displayedScore5(score: number): number {
-  return Number.isFinite(score) && score > 0 ? Math.round(score * 10) / 10 : 0;
-}
+// A score as the page shows it: one decimal, rounded once (D3). Defined with
+// the star display, re-exported here for the callers that already import it.
+export { displayedScore5 };
 
 function readFilteredReviewCount(
   counts: FilteredReviewCountsByMaster | null | undefined,
@@ -847,7 +845,7 @@ export function buildPopular1v1BattlesForCategory(
     // The rating as shown decides the pair; the composite breaks a tie (D3).
     const shownA = displayedScore5(itemA.userScore5);
     const shownB = displayedScore5(itemB.userScore5);
-    const scoreDelta5 = Number(Math.abs(shownA - shownB).toFixed(1));
+    const scoreDelta5 = roundScore(Math.abs(shownA - shownB), 1);
     const priceDeltaVnd =
       itemA.minPrice > 0 && itemB.minPrice > 0
         ? Math.abs(itemA.minPrice - itemB.minPrice)
@@ -907,4 +905,50 @@ export function comparePositiveMinPrices(
   if (validA && !validB) return 'A';
   if (!validA && validB) return 'B';
   return 'unknown';
+}
+
+/**
+ * Orders a cross-category leaderboard pool by the shown rating
+ * (`displayedScore5`) then composite (`combinedScore5`), matching the visible
+ * ranking, and builds the top-N JSON-LD `ItemList` entries (DOS/Rate#1647).
+ */
+export function buildLeaderboardItemListElements(
+  products: MasterProduct[],
+  siteUrl: string,
+  filteredReviewCounts?: FilteredReviewCountsByMaster | null,
+  maxItems = 15
+): {
+  orderedProducts: MasterProduct[];
+  itemListElements: Array<{
+    '@type': 'ListItem';
+    position: number;
+    name: string;
+    url: string;
+  }>;
+} {
+  const safeAll = Array.isArray(products) ? products : [];
+  const ranked = rankMasterProductsForLeaderboard(safeAll, {
+    category: 'all',
+    criterion: 'combined',
+    filteredReviewCounts,
+  });
+  const rankedSet = new Set(ranked.map((entry) => entry.product));
+  const orderedProducts = [
+    ...ranked.map((entry) => entry.product),
+    ...safeAll.filter((p) => !rankedSet.has(p)),
+  ];
+  const base = siteUrl.replace(/\/$/, '');
+  const limit = Number.isFinite(maxItems)
+    ? Math.max(0, Math.floor(maxItems))
+    : 15;
+  const itemListElements = ranked.slice(0, limit).map((entry, index) => ({
+    '@type': 'ListItem' as const,
+    position: index + 1,
+    name: entry.product.name,
+    url: `${base}${getMasterProductHref({
+      ...entry.product,
+      slug: catalogRowSlug(entry.product as ItemCatalogRow),
+    })}`,
+  }));
+  return { orderedProducts, itemListElements };
 }

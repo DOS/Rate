@@ -8,6 +8,7 @@ import { parseReviewValueTier } from '@/lib/review-value-display';
 import { listingReviewSummary } from '@/lib/analyzer-copy';
 import { countBrandsByItem } from '@/lib/item-directory';
 import { masterSiblingKeyPrefix } from '@/lib/product-variant-links';
+import { displayedScore5 } from '@/lib/rating-display';
 import {
   implausiblyLowOfferIds,
   plausibleOffers,
@@ -677,12 +678,13 @@ export async function getMasterProducts(
   const getEffectiveRating = (item: MasterProduct): number =>
     resolveCompareEffectiveUserRating(item);
 
-  // Minimum rating, compared at one decimal as the pages show it: a stored
-  // 4.46 shows 4.5 and passes 4.5.
+  // Minimum rating, compared at one decimal with the rounding the pages show
+  // and search_master_products uses: a stored 4.46 shows 4.5 and passes 4.5,
+  // a stored 4.350 shows 4.4 and passes 4.4.
   if (typeof params?.minRating === 'number' && params.minRating > 0) {
     const minRating = params.minRating;
     items = items.filter(
-      (item) => Math.round(getEffectiveRating(item) * 10) / 10 >= minRating
+      (item) => displayedScore5(getEffectiveRating(item)) >= minRating
     );
   }
 

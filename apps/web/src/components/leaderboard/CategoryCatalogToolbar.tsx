@@ -6,6 +6,7 @@ import { BsDownload } from 'react-icons/bs';
 import { Link } from '@/lib/navigation';
 import { useDetailsDismiss } from '@/components/elementary/use-details-dismiss';
 import { escapeCsvCell } from '@/lib/csv-safe';
+import { displayedScore5, formatScoreFixed } from '@/lib/rating-display';
 import {
   MAX_VALID_VND_PRICE,
   resolveCompareEffectiveUserRating,
@@ -19,6 +20,7 @@ import {
   radarMarkdownCell,
   RADAR_CSV_HEADERS,
   type CrossPlatformDealRadarResponse,
+  type RadarSignal,
 } from '@/lib/deal-radar';
 import { useDealRadarIndex } from '@/components/radar/use-deal-radar';
 import { versusHref } from '@/lib/item-compare';
@@ -67,6 +69,26 @@ export function sanitizeCatalogDownloadSlug(
     .replace(/^-+|-+$/g, '')
     .slice(0, 80);
   return slug || fallback;
+}
+
+export function buildCatalogJsonProductEntry(
+  p: MasterProduct,
+  rank: number,
+  signal: RadarSignal | null | undefined
+) {
+  const rawUser = resolveCompareEffectiveUserRating(p);
+  const expertScore10 = resolveCompareExpertRating10(p);
+  return {
+    rank,
+    slug: sanitizeCatalogToolbarText(p.slug, '', 120),
+    name: sanitizeCatalogToolbarText(p.name, 'Unknown'),
+    brand: sanitizeCatalogToolbarText(p.brand, '', 80),
+    userRating: rawUser > 0 ? rawUser : null,
+    ratingScore5: rawUser > 0 ? displayedScore5(rawUser) : null,
+    expertRating: expertScore10,
+    minPriceVnd: sanitizeCatalogPriceVnd(p.min_price),
+    dealRadar: radarExportFields(signal),
+  };
 }
 
 interface CategoryCatalogToolbarProps {
@@ -144,10 +166,10 @@ export default function CategoryCatalogToolbar({
         sanitizeCatalogToolbarText(p.name, 'Unknown'),
         sanitizeCatalogToolbarText(p.brand, '-', 80),
         userRating != null
-          ? `${userRating.toFixed(1)}/5.0`
+          ? `${formatScoreFixed(displayedScore5(userRating), 1)}/5.0`
           : t('toolbar.unratedText'),
         expertScore10 != null
-          ? `${expertScore10.toFixed(1)}/10`
+          ? `${formatScoreFixed(expertScore10, 1)}/10`
           : t('toolbar.unratedText'),
         String(authReviews),
         minPrice > 0 ? `${minPrice.toLocaleString('vi-VN')} ₫` : '-',
@@ -199,8 +221,10 @@ export default function CategoryCatalogToolbar({
         sanitizeCatalogToolbarText(p.name, 'Unknown'),
         sanitizeCatalogToolbarText(p.brand, '', 80),
         safeCategorySlug,
-        userRating != null ? userRating.toFixed(1) : '',
-        expertScore10 != null ? expertScore10.toFixed(1) : '',
+        userRating != null
+          ? formatScoreFixed(displayedScore5(userRating), 1)
+          : '',
+        expertScore10 != null ? formatScoreFixed(expertScore10, 1) : '',
         String(
           sanitizeCatalogCount(p.authentic_review_count || p.total_reviews || 0)
         ),
@@ -237,20 +261,9 @@ export default function CategoryCatalogToolbar({
       categoryTitle: safeCategoryTitle,
       exportedAt: new Date().toISOString(),
       productCount: products.length,
-      products: products.map((p, idx) => {
-        const rawUser = resolveCompareEffectiveUserRating(p);
-        const expertScore10 = resolveCompareExpertRating10(p);
-        return {
-          rank: idx + 1,
-          slug: sanitizeCatalogToolbarText(p.slug, '', 120),
-          name: sanitizeCatalogToolbarText(p.name, 'Unknown'),
-          brand: sanitizeCatalogToolbarText(p.brand, '', 80),
-          userRating: rawUser > 0 ? rawUser : null,
-          expertRating: expertScore10,
-          minPriceVnd: sanitizeCatalogPriceVnd(p.min_price),
-          dealRadar: radarExportFields(radarFor(p.slug)),
-        };
-      }),
+      products: products.map((p, idx) =>
+        buildCatalogJsonProductEntry(p, idx + 1, radarFor(p.slug))
+      ),
     };
     const blob = new Blob([JSON.stringify(payload, null, 2)], {
       type: 'application/json;charset=utf-8;',
