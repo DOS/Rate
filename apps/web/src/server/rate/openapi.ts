@@ -798,7 +798,7 @@ function buildBaseRateOpenApiSpec(
                   criteria_head_to_head: {
                     type: 'array',
                     description:
-                      'One row per criterion of the category (earbuds have no `screen` row). A side with no real score for a criterion has null `score_*` for it; when either side is null, `delta_10` and `winner_slug` are null too: the criterion is not won or lost.',
+                      'One row per criterion of the category (earbuds have no `screen` row). A side with no real score for a criterion has null `score_*` for it; when either side is null, `delta_10` and `winner_slug` are null too: the criterion is not won or lost. `winner_slug` reads the criterion stars as shown, at one decimal on 5 (`tie` when they are equal), as the versus page does; `score_*_10` is that shown value doubled and `delta_10` the signed gap between them.',
                     items: {
                       type: 'object',
                       additionalProperties: true,

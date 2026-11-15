@@ -9,6 +9,7 @@
 import { comparePositiveMinPrices } from './rate-domain';
 import type { ScoredLeaderboardItem } from './rate-domain';
 import {
+  leaderboardCriteriaForCategory,
   sharedScoredCriteria,
   weightedCriteriaScore5,
 } from './leaderboard-engine';
@@ -81,6 +82,39 @@ export function versusCriterionScore5(value: unknown): number | null {
   if (value == null) return null;
   const score = sanitizeVersusScore5(value);
   return score > 0 ? score : null;
+}
+
+/**
+ * Who wins one criterion (DOS/Rate#1647): the criterion stars as shown, at
+ * one decimal, so 4.34 and 4.26 (both 4.3) are level. Null when either side
+ * has no real score: the criterion is not won or lost (DOS/Rate#1143).
+ */
+export function versusCriterionWinner(
+  scoreA: unknown,
+  scoreB: unknown
+): 'A' | 'B' | 'tie' | null {
+  const a = versusCriterionScore5(scoreA);
+  const b = versusCriterionScore5(scoreB);
+  if (a == null || b == null) return null;
+  const shownA = displayedScore5(a);
+  const shownB = displayedScore5(b);
+  return shownA > shownB ? 'A' : shownB > shownA ? 'B' : 'tie';
+}
+
+/**
+ * The criterion rows of a pair, for its category (no screen for earbuds):
+ * each side's real score out of 5, or null, and the row's winner. The page's
+ * table and the API's `criteria_head_to_head` both read these rows.
+ */
+export function versusCriteriaHeadToHead(
+  scoreA: Pick<ScoredVersusItem, 'categorySlug' | 'criteria'>,
+  scoreB: Pick<ScoredVersusItem, 'criteria'>
+) {
+  return leaderboardCriteriaForCategory(scoreA.categorySlug).map((key) => {
+    const aVal = versusCriterionScore5(scoreA.criteria?.[key]);
+    const bVal = versusCriterionScore5(scoreB.criteria?.[key]);
+    return { key, aVal, bVal, winner: versusCriterionWinner(aVal, bVal) };
+  });
 }
 
 /**

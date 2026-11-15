@@ -97,6 +97,13 @@ interface VersusBody {
   custom_weighted_basis: string;
   is_tie: boolean;
   overall_winner: { side: 'A' | 'B'; slug: string; margin_10: number };
+  criteria_head_to_head: Array<{
+    criterion: string;
+    score_a_10: number | null;
+    score_b_10: number | null;
+    delta_10: number | null;
+    winner_slug: string | null;
+  }>;
   product_a: {
     slug: string;
     custom_weighted_score_5: number;
@@ -118,8 +125,12 @@ async function main() {
     await import('@/lib/leaderboard-engine');
   const { canonicalVersusOrder } = await import('@/lib/item-compare');
   const { displayedScore5 } = await import('@/lib/rating-display');
-  const { PERSONA_WEIGHTS, computeVersusWeightedResult, resolveVersusPersona } =
-    await import('@/lib/versus-score');
+  const {
+    PERSONA_WEIGHTS,
+    computeVersusWeightedResult,
+    resolveVersusPersona,
+    versusCriteriaHeadToHead,
+  } = await import('@/lib/versus-score');
   type PersonaPresetKey = Parameters<typeof resolveVersusPersona>[2];
   type CriteriaWeights = Parameters<typeof resolveVersusPersona>[3];
   type MasterRow = Parameters<typeof scoreMasterProductForLeaderboard>[0];
@@ -143,8 +154,17 @@ async function main() {
       'combined'
     );
     const active = resolveVersusPersona(scoreA, scoreB, persona, weights);
+    const slugOf = (side: 'A' | 'B' | 'tie' | null) =>
+      side === 'A' ? scoreA.slug : side === 'B' ? scoreB.slug : side;
     return {
       active: active.persona,
+      // The page's criterion table: each row's winner as a slug.
+      criterionWinners: Object.fromEntries(
+        versusCriteriaHeadToHead(scoreA, scoreB).map((row) => [
+          row.key,
+          slugOf(row.winner),
+        ])
+      ),
       result: computeVersusWeightedResult(
         scoreA,
         scoreB,
@@ -174,7 +194,12 @@ async function main() {
     query = ''
   ) => {
     const api = await apiResult(a, b, query);
-    const { active, result } = pageResult(a, b, page.persona, page.weights);
+    const { active, result, criterionWinners } = pageResult(
+      a,
+      b,
+      page.persona,
+      page.weights
+    );
     assert.equal(api.ok, true, label);
     assert.equal(api.is_tie, result.tie, `${label}: is_tie`);
     assert.equal(
@@ -205,6 +230,14 @@ async function main() {
         `${label}: ${side.slug} score on 10`
       );
     }
+    // Every criterion row names the page's criterion winner.
+    assert.deepEqual(
+      Object.fromEntries(
+        api.criteria_head_to_head.map((row) => [row.criterion, row.winner_slug])
+      ),
+      criterionWinners,
+      `${label}: criterion winners`
+    );
     return { api, result };
   };
 
@@ -368,6 +401,47 @@ async function main() {
     );
     assert.equal(gaming.api.applied_persona, 'gaming');
     assert.equal(gaming.api.overall_winner.slug, 'vp-fallback-b');
+  }
+
+  // 9. Each criterion has its own winner, on the criterion stars as shown at
+  //    one decimal: 4.34 and 4.26 both show 4.3 (a tie), 4.35 shows 4.4 and
+  //    beats 4.3, and a criterion scored on one side only has no winner.
+  {
+    const a = phone('vp-crit-a', 4.0, {
+      screen: 8.68, // 4.34 -> 4.3
+      performance: 8.7, // 4.35 -> 4.4
+      camera: 6,
+      battery: 9,
+    });
+    const b = phone('vp-crit-b', 4.5, {
+      screen: 8.52, // 4.26 -> 4.3
+      performance: 8.6, // 4.3
+      camera: 9,
+      value: 8,
+    });
+    const { api } = await agree('criteria', a, b, byDefault);
+    const row = (key: string) =>
+      api.criteria_head_to_head.find((r) => r.criterion === key)!;
+    assert.equal(row('screen').winner_slug, 'tie');
+    assert.equal(row('screen').delta_10, 0);
+    assert.equal(row('screen').score_a_10, 8.6);
+    assert.equal(row('screen').score_b_10, 8.6);
+    assert.equal(row('performance').winner_slug, 'vp-crit-a');
+    assert.equal(row('performance').delta_10, 0.2);
+    assert.equal(row('camera').winner_slug, 'vp-crit-b');
+    assert.equal(row('camera').delta_10, -3);
+    assert.equal(row('battery').winner_slug, null);
+    assert.equal(row('battery').delta_10, null);
+    assert.equal(row('value').winner_slug, null);
+    // Criteria won do not change the final winner: the overall stars do.
+    assert.equal(api.overall_winner.slug, 'vp-crit-b');
+    // In the other order the rows mirror.
+    const swapped = await agree('criteria swapped', b, a, byDefault);
+    const swappedCamera = swapped.api.criteria_head_to_head.find(
+      (r) => r.criterion === 'camera'
+    )!;
+    assert.equal(swappedCamera.winner_slug, 'vp-crit-b');
+    assert.equal(swappedCamera.delta_10, 3);
   }
 
   // 8. Custom weights with no criterion shared fall back to the default.

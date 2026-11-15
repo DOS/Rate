@@ -5,10 +5,7 @@ import { useLocale, useTranslations } from 'next-intl';
 import { BsSliders } from 'react-icons/bs';
 import { Link } from '@/lib/navigation';
 import { comparePositiveMinPrices } from '@/lib/rate-domain';
-import {
-  leaderboardCriteriaForCategory,
-  sharedScoredCriteria,
-} from '@/lib/leaderboard-engine';
+import { sharedScoredCriteria } from '@/lib/leaderboard-engine';
 import {
   getRadarSignal,
   RADAR_CSV_HEADERS,
@@ -26,6 +23,8 @@ import {
   sanitizeVersusScore5,
   versusAvailablePersonas,
   versusCriterionScore5,
+  versusCriteriaHeadToHead,
+  versusCriterionWinner,
   type CriteriaWeights,
   type PersonaPresetKey,
   type ScoredVersusItem,
@@ -47,6 +46,8 @@ export {
   sanitizeVersusScore5,
   versusAvailablePersonas,
   versusCriterionScore5,
+  versusCriteriaHeadToHead,
+  versusCriterionWinner,
 };
 export type { CriteriaWeights, PersonaPresetKey, ScoredVersusItem };
 
@@ -196,22 +197,17 @@ export default function VersusInteractiveScoreboard({
     value: t('criteriaValue'),
   };
   const noData = t('criterionNoData');
-  const criteriaRows = leaderboardCriteriaForCategory(scoreA.categorySlug).map(
-    (key) => {
-      const aVal = versusCriterionScore5(scoreA.criteria?.[key]);
-      const bVal = versusCriterionScore5(scoreB.criteria?.[key]);
-      const compared = aVal != null && bVal != null;
-      return {
-        key,
-        label: criterionLabels[key],
-        aVal,
-        bVal,
-        aWins: compared && aVal > bVal,
-        bWins: compared && bVal > aVal,
-        compared,
-      };
-    }
-  );
+  // The same rows and criterion winners as the API, on the shown stars
+  // (DOS/Rate#1647).
+  const criteriaRows = versusCriteriaHeadToHead(scoreA, scoreB).map((row) => ({
+    key: row.key,
+    label: criterionLabels[row.key],
+    aVal: row.aVal,
+    bVal: row.bVal,
+    aWins: row.winner === 'A',
+    bWins: row.winner === 'B',
+    compared: row.winner != null,
+  }));
   const criterionCell = (v: number | null) =>
     v != null ? `${formatScoreFixed(v, 2)}/5.0` : noData;
 

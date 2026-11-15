@@ -10,7 +10,6 @@ import { radarExportFields } from '@/lib/deal-radar';
 import {
   comparePositiveMinPrices,
   displayedScore5,
-  leaderboardCriteriaForCategory,
   scoreMasterProductForLeaderboard,
   sharedScoredCriteria,
   type LeaderboardCriteriaWeights,
@@ -19,6 +18,7 @@ import { roundScore } from '@/lib/rating-display';
 import {
   computeVersusWeightedResult,
   resolveVersusPersona,
+  versusCriteriaHeadToHead,
   type PersonaPresetKey,
 } from '@/lib/versus-score';
 import {
@@ -340,31 +340,37 @@ export async function GET(req: NextRequest) {
 
     // A criterion without a real score on both sides has no winner: its
     // scores, delta and winner are null (DOS/Rate#1143).
-    const criteriaHeadToHead = leaderboardCriteriaForCategory(
-      scoreA.categorySlug
-    ).map((key) => {
-      const a5 = scoreA.criteria[key];
-      const b5 = scoreB.criteria[key];
-      const a10 = a5 != null ? roundScore(a5 * 2, 1) : null;
-      const b10 = b5 != null ? roundScore(b5 * 2, 1) : null;
-      const compared = a10 != null && b10 != null;
-      return {
-        criterion: key,
-        weight_pct: normalizedWeights[key],
-        score_a_5: a5,
-        score_a_10: a10,
-        score_b_5: b5,
-        score_b_10: b10,
-        delta_10: compared ? Number((a10 - b10).toFixed(1)) : null,
-        winner_slug: !compared
-          ? null
-          : a10 > b10
-            ? scoreA.slug
-            : b10 > a10
-              ? scoreB.slug
-              : 'tie',
-      };
-    });
+    const criteriaHeadToHead = versusCriteriaHeadToHead(scoreA, scoreB).map(
+      ({ key, winner }) => {
+        const a5 = scoreA.criteria[key];
+        const b5 = scoreB.criteria[key];
+        // On 10 from the criterion stars as shown (one decimal on 5), with
+        // the versus page's criterion winner (DOS/Rate#1647).
+        const a10 = a5 != null ? displayedScore5(a5) * 2 : null;
+        const b10 = b5 != null ? displayedScore5(b5) * 2 : null;
+        const gap10 =
+          winner != null && a10 != null && b10 != null
+            ? roundScore(Math.abs(a10 - b10), 1)
+            : null;
+        return {
+          criterion: key,
+          weight_pct: normalizedWeights[key],
+          score_a_5: a5,
+          score_a_10: a10,
+          score_b_5: b5,
+          score_b_10: b10,
+          delta_10: gap10 == null ? null : winner === 'B' ? -gap10 : gap10,
+          winner_slug:
+            winner == null
+              ? null
+              : winner === 'A'
+                ? scoreA.slug
+                : winner === 'B'
+                  ? scoreB.slug
+                  : 'tie',
+        };
+      }
+    );
 
     const bothPriced =
       Number.isFinite(scoreA.minPrice) &&
