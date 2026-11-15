@@ -41,6 +41,7 @@ import {
   resolveCompareDisplaySizeInch,
   resolveCompareEffectiveUserRating,
   resolveCompareExpertRating5,
+  resolveCompareExpertRating5Shown,
   resolveCompareExpertRating10,
   resolveCompareMemoryScore,
   resolveCompareRamGb,
@@ -55,6 +56,7 @@ import {
   radarExportFields,
   radarLabel,
   radarMarkdownCell,
+  type RadarSignal,
 } from '@/lib/deal-radar';
 import { escapeCsvCell } from '@/lib/csv-safe';
 import RadarBadge from '@/components/radar/RadarBadge';
@@ -92,7 +94,11 @@ import {
   formatNumber,
   formatPriceVnd,
 } from '@/lib/locale-format';
-import { displayedScore5, formatRatingValue } from '@/lib/rating-display';
+import {
+  displayedScore5,
+  formatRatingValue,
+  formatScoreFixed,
+} from '@/lib/rating-display';
 
 interface CompareWorkspaceProps {
   initialProducts: MasterProduct[];
@@ -208,6 +214,24 @@ function getEffectiveRating(p: MasterProduct): number {
 /** The rating as every page shows it: one decimal, rounded once (#1470, #1631). */
 function shownRating(p: MasterProduct): number {
   return displayedScore5(getEffectiveRating(p));
+}
+
+export function buildCompareJsonProductEntry(
+  p: MasterProduct,
+  signal: RadarSignal | null | undefined
+) {
+  const u = getEffectiveRating(p);
+  const e = resolveCompareExpertRating5(p);
+  return {
+    slug: p.slug,
+    name: p.name,
+    brand: p.brand,
+    userRating: u > 0 ? u : null,
+    ratingScore5: u > 0 ? shownRating(p) : null,
+    expertRating: e,
+    minPriceVnd: sanitizeComparePriceVnd(p.min_price),
+    dealRadar: radarExportFields(signal),
+  };
 }
 
 /**
@@ -347,9 +371,9 @@ export function buildSpecGroups(
           id: 'expert_rating',
           label: t('rowExpertRating'),
           renderValue: (p) => {
-            const exp5 = resolveCompareExpertRating5(p);
+            const exp5 = resolveCompareExpertRating5Shown(p);
             return exp5 != null
-              ? `Lab ${formatDecimal(exp5, locale, 1)} / ${formatDecimal(5, locale, 1)}`
+              ? `Lab ${formatRatingValue(exp5, locale, 1)} / ${formatDecimal(5, locale, 1)}`
               : '-';
           },
           // On screen the lab score reads on 10, as the product page shows it.
@@ -1441,15 +1465,15 @@ export default function CompareWorkspace({
             const r = getEffectiveRating(p);
             const cnt = p.authentic_review_count || p.total_reviews || 0;
             return r > 0
-              ? `★ ${shownRating(p).toFixed(1)}/5.0 (${cnt} review)`
+              ? `★ ${formatScoreFixed(shownRating(p), 1)}/5.0 (${cnt} review)`
               : t('unratedShort');
           })
           .join(' | ')} |`,
         `| **${t('mdRowExpertRating')}** | ${products
           .map((p) => {
-            const exp5 = resolveCompareExpertRating5(p);
+            const exp5 = resolveCompareExpertRating5Shown(p);
             return exp5 != null
-              ? `Lab ${exp5.toFixed(1)}/5.0`
+              ? `Lab ${formatScoreFixed(exp5, 1)}/5.0`
               : t('unratedShort');
           })
           .join(' | ')} |`,
@@ -1552,19 +1576,9 @@ export default function CompareWorkspace({
       category: activeCategory,
       exportedAt: new Date().toISOString(),
       productCount: products.length,
-      products: products.map((p) => {
-        const u = getEffectiveRating(p);
-        const e = resolveCompareExpertRating5(p);
-        return {
-          slug: p.slug,
-          name: p.name,
-          brand: p.brand,
-          userRating: u > 0 ? u : null,
-          expertRating: e,
-          minPriceVnd: sanitizeComparePriceVnd(p.min_price),
-          dealRadar: radarExportFields(getRadarSignal(radarIndex, p.slug)),
-        };
-      }),
+      products: products.map((p) =>
+        buildCompareJsonProductEntry(p, getRadarSignal(radarIndex, p.slug))
+      ),
       matrix: specGroups.map((group) => ({
         groupId: group.id,
         groupTitle: groupHeading(group),

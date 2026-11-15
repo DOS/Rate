@@ -12,6 +12,7 @@ import {
   type RadarSignal,
 } from '@/lib/deal-radar';
 import { MAX_VALID_VND_PRICE } from '@/lib/rate-domain';
+import { formatScoreFixed, roundScore } from '@/lib/rating-display';
 
 interface ProductShareAuditButtonProps {
   readonly name: string;
@@ -62,7 +63,7 @@ export function normalizeShareAuditFields(input: {
     input.expertScore10 != null ? Number(input.expertScore10) : 0;
   const safeExpertScore10 =
     Number.isFinite(rawExpert) && rawExpert > 0
-      ? Math.min(10, rawExpert <= 5 ? rawExpert * 2 : rawExpert)
+      ? roundScore(Math.min(10, rawExpert <= 5 ? rawExpert * 2 : rawExpert), 1)
       : null;
   const rawReviews = Number(input.authenticReviews);
   const safeAuthenticReviews =
@@ -151,13 +152,13 @@ export default function ProductShareAuditButton({
       const userScoreStr =
         safeUserScore5 > 0
           ? t('shareAuditMdUserScoreVal', {
-              score: safeUserScore5.toFixed(2),
+              score: formatScoreFixed(safeUserScore5, 2),
               count: safeAuthenticReviews,
             })
           : t('shareAuditMdNoReviews');
       const expertScoreStr =
         safeExpertScore10 != null
-          ? `${safeExpertScore10.toFixed(1)}/10`
+          ? `${formatScoreFixed(safeExpertScore10, 1)}/10`
           : t('shareAuditMdNoExpert');
       const lines = [
         t('shareAuditMdTitle', { name: safeName, brand: safeBrand }),
@@ -212,8 +213,8 @@ export default function ProductShareAuditButton({
       safeName,
       safeBrand,
       safeModelKey,
-      safeUserScore5 > 0 ? safeUserScore5.toFixed(2) : '',
-      safeExpertScore10 != null ? safeExpertScore10.toFixed(1) : '',
+      safeUserScore5 > 0 ? formatScoreFixed(safeUserScore5, 2) : '',
+      safeExpertScore10 != null ? formatScoreFixed(safeExpertScore10, 1) : '',
       safeAuthenticReviews,
       safeMinPriceVnd > 0 ? safeMinPriceVnd : '',
       safeOfferCount,

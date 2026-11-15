@@ -154,11 +154,26 @@ assert.equal(
   ).camera,
   null
 );
-// The expert tab keeps the expert's own score: 8.5/10 stays 8.5.
+// The expert tab keeps the expert's own score: 8.5/10 stays 8.5, and x.xx5 * 2
+// rounds half up on the decimal value (#1647 item 3: 4.175 * 2 = 8.35 -> 8.4).
 assert.equal(
   scoreMasterProductForLeaderboard(phone('a', { expert_rating: 8.5 }), 'expert')
     .activeScore10,
   8.5
+);
+assert.equal(
+  scoreMasterProductForLeaderboard(
+    phone('a', { expert_rating: 4.175 }),
+    'expert'
+  ).expertScore10,
+  8.4
+);
+assert.equal(
+  scoreMasterProductForLeaderboard(
+    phone('a', { expert_rating: 8.35 }),
+    'expert'
+  ).expertScore10,
+  8.4
 );
 
 // A criterion view ranks only scores from 5 writers.

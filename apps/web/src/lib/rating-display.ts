@@ -20,6 +20,42 @@ export function displayRating(value: unknown): number | null {
 }
 
 /**
+ * Decimal-safe half-up fixed-point string (`1.005 -> "1.01"`, `4.345 -> "4.35"`,
+ * `4.35 -> "4.4"` at 1 digit). Reads the shortest decimal form of `value`
+ * instead of scaling in binary float or calling `toFixed` on a midpoint
+ * (DOS/Rate#1647). Non-finite or non-positive values print zero (`0.0`).
+ */
+export function formatScoreFixed(value: number, digits = 1): string {
+  const d = Number.isInteger(digits) && digits >= 0 ? Math.min(6, digits) : 1;
+  if (!Number.isFinite(value) || value <= 0) {
+    return d === 0 ? '0' : `0.${'0'.repeat(d)}`;
+  }
+  const match = /^(\d+)(?:\.(\d+))?(?:e([+-]?\d+))?$/i.exec(String(value));
+  if (!match) return value.toFixed(d);
+  const digitsOnly = match[1] + (match[2] ?? '');
+  const fracLen = (match[2] ?? '').length;
+  const exp = match[3] ? Number(match[3]) : 0;
+  const shift = exp - fracLen + d;
+  if (shift > 20) return value.toFixed(d);
+  let roundedScaled: bigint;
+  if (shift >= 0) {
+    roundedScaled = BigInt(digitsOnly) * 10n ** BigInt(shift);
+  } else if (-shift > digitsOnly.length) {
+    roundedScaled = 0n;
+  } else {
+    const div = 10n ** BigInt(-shift);
+    roundedScaled = (BigInt(digitsOnly) + div / 2n) / div;
+  }
+  const s = roundedScaled.toString().padStart(d + 1, '0');
+  return d === 0 ? s : `${s.slice(0, -d)}.${s.slice(-d)}`;
+}
+
+/** Decimal-safe half-up rounding to `digits` decimals (`0` when `<= 0`). */
+export function roundScore(value: number, digits = 1): number {
+  return Number(formatScoreFixed(value, digits));
+}
+
+/**
  * A score as the page shows it: one decimal, rounded once (D3). This is the
  * one rounding of a 0-5 rating, shared by the star display, the compare and
  * versus marks, the API's `rating_score_5` and the `minRating` filter.
@@ -29,12 +65,12 @@ export function displayRating(value: unknown): number | null {
  * binary float, which sits just under 4.35, and gives 4.3 (DOS/Rate#1631).
  */
 export function displayedScore5(score: number): number {
-  return Number.isFinite(score) && score > 0 ? Math.round(score * 10) / 10 : 0;
+  return Number.isFinite(score) && score > 0 ? roundScore(score, 1) : 0;
 }
 
-/** The value at the printed precision; one decimal goes through D3's rounding. */
+/** The value at the printed precision, rounded half up on the decimal value. */
 function shownValue(value: number, digits: number): number {
-  return digits === 1 ? displayedScore5(value) : Number(value.toFixed(digits));
+  return roundScore(value, digits);
 }
 
 /**

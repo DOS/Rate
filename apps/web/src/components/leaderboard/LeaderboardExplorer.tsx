@@ -39,6 +39,7 @@ import {
   radarMarkdownCell,
   RADAR_CSV_HEADERS,
   type CrossPlatformDealRadarResponse,
+  type RadarSignal,
 } from '@/lib/deal-radar';
 import RadarBadge from '@/components/radar/RadarBadge';
 import { useDealRadarIndex } from '@/components/radar/use-deal-radar';
@@ -77,7 +78,11 @@ import {
   formatPercent,
   formatPriceVnd,
 } from '@/lib/locale-format';
-import { formatRatingValue } from '@/lib/rating-display';
+import {
+  formatRatingValue,
+  formatScoreFixed,
+  roundScore,
+} from '@/lib/rating-display';
 import { versusHref } from '@/lib/item-compare';
 
 export type { LeaderboardCriterionKey, LeaderboardPriceSegment };
@@ -128,6 +133,40 @@ export function sanitizeLeaderboardBarPercentage(score5: unknown): number {
   const num = Number(score5);
   if (!Number.isFinite(num) || num <= 0) return 0;
   return Math.max(0, Math.min(100, Math.round((num / 5) * 100)));
+}
+
+export function formatLeaderboardActiveScore(
+  activeScore5: number,
+  scoreDigits: 1 | 2,
+  emptyText = ''
+): string {
+  return activeScore5 > 0
+    ? formatScoreFixed(activeScore5, scoreDigits)
+    : emptyText;
+}
+
+export function buildLeaderboardJsonItem(
+  entry: Pick<
+    RankedProductEntry,
+    'product' | 'activeScore5' | 'userScore5' | 'expertScore10' | 'criteria'
+  >,
+  rank: number,
+  signal: RadarSignal | null | undefined
+) {
+  return {
+    rank,
+    slug: entry.product.slug,
+    name: entry.product.name,
+    brand: entry.product.brand,
+    activeScore5: entry.activeScore5,
+    userScore5: entry.userScore5,
+    ratingScore5:
+      entry.userScore5 > 0 ? displayedScore5(entry.userScore5) : null,
+    expertScore10: entry.expertScore10,
+    criteria: entry.criteria,
+    minPriceVnd: sanitizeLeaderboardPriceVnd(entry.product.min_price),
+    dealRadar: radarExportFields(signal),
+  };
 }
 
 interface LeaderboardExplorerProps {
@@ -677,12 +716,16 @@ export default function LeaderboardExplorer({
         `#${idx + 1}`,
         sanitizeLeaderboardMarkdownCell(entry.product.name),
         sanitizeLeaderboardMarkdownCell(entry.product.brand),
-        entry.activeScore5.toFixed(2),
+        formatLeaderboardActiveScore(
+          entry.activeScore5,
+          scoreDigits,
+          t('unratedShort')
+        ),
         entry.userScore5 > 0
-          ? displayedScore5(entry.userScore5).toFixed(1)
+          ? formatScoreFixed(displayedScore5(entry.userScore5), 1)
           : t('unratedShort'),
         entry.expertScore10 != null
-          ? entry.expertScore10.toFixed(1)
+          ? formatScoreFixed(entry.expertScore10, 1)
           : t('unratedShort'),
         safePrice > 0 ? formatLeaderboardPriceVnd(safePrice) : '-',
         radarMarkdownCell(radar),
@@ -733,14 +776,16 @@ export default function LeaderboardExplorer({
         entry.product.name,
         entry.product.brand || '',
         entry.categorySlug,
-        entry.activeScore5.toFixed(2),
+        formatLeaderboardActiveScore(entry.activeScore5, scoreDigits),
         entry.userScore5 > 0
-          ? displayedScore5(entry.userScore5).toFixed(1)
+          ? formatScoreFixed(displayedScore5(entry.userScore5), 1)
           : '',
-        entry.expertScore10 != null ? entry.expertScore10.toFixed(1) : '',
+        entry.expertScore10 != null
+          ? formatScoreFixed(entry.expertScore10, 1)
+          : '',
         ...LEADERBOARD_SCORE_CRITERIA.map((c) => {
           const score = entry.criteria[c];
-          return score != null && score > 0 ? score.toFixed(1) : '';
+          return score != null && score > 0 ? formatScoreFixed(score, 1) : '';
         }),
         String(sanitizeLeaderboardPriceVnd(entry.product.min_price)),
         ...radarCsvCells(radar),
@@ -773,20 +818,13 @@ export default function LeaderboardExplorer({
       persona: activePersona,
       exportedAt: new Date().toISOString(),
       count: rankedEntries.length,
-      items: rankedEntries.map((entry, idx) => ({
-        rank: idx + 1,
-        slug: entry.product.slug,
-        name: entry.product.name,
-        brand: entry.product.brand,
-        activeScore5: entry.activeScore5,
-        userScore5: entry.userScore5,
-        expertScore10: entry.expertScore10,
-        criteria: entry.criteria,
-        minPriceVnd: sanitizeLeaderboardPriceVnd(entry.product.min_price),
-        dealRadar: radarExportFields(
+      items: rankedEntries.map((entry, idx) =>
+        buildLeaderboardJsonItem(
+          entry,
+          idx + 1,
           getRadarSignal(radarIndex, entry.product.slug)
-        ),
-      })),
+        )
+      ),
     };
     const blob = new Blob([JSON.stringify(payload, null, 2)], {
       type: 'application/json;charset=utf-8;',
@@ -1494,7 +1532,7 @@ export default function LeaderboardExplorer({
                                     <span>{c.label}</span>
                                     <strong className="rate-tabular text-white">
                                       {val != null
-                                        ? formatDecimal(val, locale, 2)
+                                        ? formatRatingValue(val, locale, 2)
                                         : t('criterionNoData')}
                                     </strong>
                                   </div>
@@ -1597,10 +1635,8 @@ export default function LeaderboardExplorer({
                 const vHref = versusHref(a.product.slug, b.product.slug);
                 const delta = formatDecimal(
                   Math.abs(
-                    scoreDigits === 1
-                      ? displayedScore5(a.activeScore5) -
-                          displayedScore5(b.activeScore5)
-                      : a.activeScore5 - b.activeScore5
+                    roundScore(a.activeScore5, scoreDigits) -
+                      roundScore(b.activeScore5, scoreDigits)
                   ),
                   locale,
                   scoreDigits
@@ -1841,7 +1877,7 @@ export default function LeaderboardExplorer({
                               style={{ fontSize: '0.8125rem' }}
                             >
                               {(entry.criteria[c.key] ?? 0) > 0
-                                ? formatDecimal(
+                                ? formatRatingValue(
                                     entry.criteria[c.key] ?? 0,
                                     locale,
                                     2

@@ -29,9 +29,8 @@ export {
   resolveCompareEffectiveUserRating,
   resolveStoredRatingScore,
 } from './rate-domain-core';
-import { displayedScore5 } from './rating-display';
+import { displayedScore5, roundScore } from './rating-display';
 import {
-  normalizeCompareFiveStarRating,
   parseFiniteNumericSpec,
   resolveCompareEffectiveUserRating,
 } from './rate-domain-core';
@@ -118,19 +117,38 @@ export function productRatingScore5(
   return displayedScore5(rating) || null;
 }
 
-export function resolveCompareExpertRating5(
+function scaleCompareExpertRating5(
   p: Pick<SharedMasterProduct, 'expert_rating'>
 ): number | null {
   if (!p || typeof p !== 'object' || Array.isArray(p)) return null;
-  const norm = normalizeCompareFiveStarRating(p.expert_rating);
-  return norm > 0 ? norm : null;
+  const num = parseFiniteNumericSpec(p.expert_rating);
+  if (!Number.isFinite(num) || num <= 0 || num > 100) return null;
+  const scaled5 = num > 10 ? num / 20 : num > 5 ? num / 2 : num;
+  return scaled5 > 0 && scaled5 <= 5 ? scaled5 : null;
+}
+
+export function resolveCompareExpertRating5(
+  p: Pick<SharedMasterProduct, 'expert_rating'>
+): number | null {
+  const scaled5 = scaleCompareExpertRating5(p);
+  return scaled5 != null ? roundScore(scaled5, 2) : null;
+}
+
+export function resolveCompareExpertRating5Shown(
+  p: Pick<SharedMasterProduct, 'expert_rating'>
+): number | null {
+  const scaled5 = scaleCompareExpertRating5(p);
+  return scaled5 != null ? roundScore(scaled5, 1) : null;
 }
 
 export function resolveCompareExpertRating10(
   p: Pick<SharedMasterProduct, 'expert_rating'>
 ): number | null {
-  const norm5 = resolveCompareExpertRating5(p);
-  return norm5 != null ? Number((norm5 * 2).toFixed(1)) : null;
+  if (!p || typeof p !== 'object' || Array.isArray(p)) return null;
+  const num = parseFiniteNumericSpec(p.expert_rating);
+  if (!Number.isFinite(num) || num <= 0 || num > 100) return null;
+  const scaled10 = num > 10 ? num / 10 : num > 5 ? num : num * 2;
+  return scaled10 > 0 && scaled10 <= 10 ? roundScore(scaled10, 1) : null;
 }
 
 const MAX_COMPARE_DISPLAY_INCH = 100;
