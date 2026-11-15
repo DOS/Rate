@@ -530,6 +530,43 @@ void (async () => {
     itemListElements.map((item) => item.name),
     ['Composite Higher', 'Raw Higher']
   );
+
+  // Item 2 and the review panel (#1647): criterion scores printed as `x/5`,
+  // the review average on 2 decimals and the lab score on 10 go through the
+  // decimal-safe `formatRatingValue`, never `toFixed` or a bare
+  // `formatDecimal` (4.35 prints 4.4, 4.345 prints 4.35).
+  const scorePrintSources = {
+    'smartphones/[slug]/page.tsx': readFileSync(
+      join(__dirname, '../../app/[locale]/smartphones/[slug]/page.tsx'),
+      'utf8'
+    ),
+    'JReviewsSection.tsx': readFileSync(
+      join(__dirname, '../../components/reviews/JReviewsSection.tsx'),
+      'utf8'
+    ),
+  };
+  for (const [name, src] of Object.entries(scorePrintSources)) {
+    assert.ok(
+      !/formatDecimal\([^)]*\)\}\/5`/.test(src),
+      `${name}: a criterion "x/5" print must use formatRatingValue`
+    );
+    assert.ok(
+      !/\b(?:crit\.score|liveScores\.(?:user|expert))\b[^;\n]*toFixed/.test(
+        src
+      ),
+      `${name}: no toFixed on a score print`
+    );
+  }
+  assert.ok(
+    scorePrintSources['JReviewsSection.tsx'].includes(
+      'formatRatingValue(liveScores.user, locale, 2)'
+    )
+  );
+  assert.ok(
+    scorePrintSources['smartphones/[slug]/page.tsx'].includes(
+      'formatRatingValue(val, locale, 1)}/5'
+    )
+  );
   console.warn('  ✅ Ratings show as stars with a short count (#1528)');
 })().catch((error: unknown) => {
   console.error(error);
