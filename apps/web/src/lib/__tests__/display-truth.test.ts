@@ -159,11 +159,27 @@ for (const locale of LOCALES) {
     ['deals', 'radarBannerBadge'],
     ['homePage', 'radarGenuineTitle'],
     ['merchants', 'mdRadarLine'],
+    ['merchants', 'profileRadarBadge'],
+    ['compare', 'radarRowTitle'],
+    ['compare', 'radarRowMatrixTitle'],
   ] as const) {
     const text = String(messages[ns]![key]);
     assert.ok(
-      !/đáy|\blows?\b|minim/i.test(text),
+      !/đáy|thấp nhất|\blow(?:s|est)?\b|nejniž|minim/i.test(text),
       `${locale}: ${ns}.${key} must not claim a floor: ${text}`
+    );
+  }
+  // The merchant profile badge and the compare radar rows sit over mixed
+  // genuine deals and fake sales, so they name the median instead (#1632).
+  for (const [ns, key] of [
+    ['merchants', 'profileRadarBadge'],
+    ['compare', 'radarRowTitle'],
+    ['compare', 'radarRowMatrixTitle'],
+  ] as const) {
+    assert.match(
+      String(messages[ns]![key]),
+      /trung vị|median|mediánem/i,
+      `${locale}: ${ns}.${key} names the median`
     );
   }
 }
