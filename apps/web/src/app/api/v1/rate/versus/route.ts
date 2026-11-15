@@ -7,16 +7,19 @@ import {
   getMasterProductOffersBatch,
 } from '@/server/rate';
 import { radarExportFields } from '@/lib/deal-radar';
-import { versusApiWinner } from '@/lib/versus-verdict';
 import {
   comparePositiveMinPrices,
   displayedScore5,
-  leaderboardCriteriaForCategory,
   scoreMasterProductForLeaderboard,
   sharedScoredCriteria,
-  weightedCriteriaScore5,
   type LeaderboardCriteriaWeights,
 } from '@/lib/leaderboard-engine';
+import { roundScore } from '@/lib/rating-display';
+import {
+  computeVersusResult,
+  versusCriteriaHeadToHead,
+  type PersonaPresetKey,
+} from '@/lib/versus-score';
 import {
   PUBLIC_API_CORS_HEADERS,
   jsonApiError,
@@ -38,12 +41,19 @@ export async function OPTIONS() {
 
 interface VersusPersonaConfig {
   id: string;
+  /**
+   * The shared preset this one scores as (DOS/Rate#1647, `PERSONA_WEIGHTS`
+   * in `lib/versus-score.ts`): `default` adds no lead; a preset outside
+   * that list (`creator`, `gamer`, `traveler`) scores as custom weights.
+   */
+  preset: PersonaPresetKey;
   weights: LeaderboardCriteriaWeights;
 }
 
 const VERSUS_PERSONAS: VersusPersonaConfig[] = [
   {
     id: 'balanced',
+    preset: 'default',
     weights: {
       screen: 20,
       performance: 20,
@@ -54,6 +64,7 @@ const VERSUS_PERSONAS: VersusPersonaConfig[] = [
   },
   {
     id: 'default',
+    preset: 'default',
     weights: {
       screen: 20,
       performance: 20,
@@ -64,6 +75,7 @@ const VERSUS_PERSONAS: VersusPersonaConfig[] = [
   },
   {
     id: 'creator',
+    preset: 'custom',
     weights: {
       screen: 25,
       performance: 15,
@@ -74,6 +86,7 @@ const VERSUS_PERSONAS: VersusPersonaConfig[] = [
   },
   {
     id: 'photography',
+    preset: 'photography',
     weights: {
       screen: 20,
       performance: 15,
@@ -84,6 +97,7 @@ const VERSUS_PERSONAS: VersusPersonaConfig[] = [
   },
   {
     id: 'gamer',
+    preset: 'custom',
     weights: {
       screen: 25,
       performance: 40,
@@ -94,6 +108,7 @@ const VERSUS_PERSONAS: VersusPersonaConfig[] = [
   },
   {
     id: 'gaming',
+    preset: 'gaming',
     weights: {
       screen: 25,
       performance: 45,
@@ -104,6 +119,7 @@ const VERSUS_PERSONAS: VersusPersonaConfig[] = [
   },
   {
     id: 'traveler',
+    preset: 'custom',
     weights: {
       screen: 15,
       performance: 15,
@@ -114,6 +130,7 @@ const VERSUS_PERSONAS: VersusPersonaConfig[] = [
   },
   {
     id: 'endurance',
+    preset: 'endurance',
     weights: {
       screen: 15,
       performance: 15,
@@ -124,6 +141,7 @@ const VERSUS_PERSONAS: VersusPersonaConfig[] = [
   },
   {
     id: 'business',
+    preset: 'business',
     weights: {
       screen: 35,
       performance: 25,
@@ -134,6 +152,7 @@ const VERSUS_PERSONAS: VersusPersonaConfig[] = [
   },
   {
     id: 'budget',
+    preset: 'value_hunter',
     weights: {
       screen: 15,
       performance: 20,
@@ -144,6 +163,7 @@ const VERSUS_PERSONAS: VersusPersonaConfig[] = [
   },
   {
     id: 'value_hunter',
+    preset: 'value_hunter',
     weights: {
       screen: 15,
       performance: 20,
@@ -216,50 +236,52 @@ export async function GET(req: NextRequest) {
       VERSUS_PERSONAS.find((p) => p.id === requestedPersonaId) ||
       VERSUS_PERSONAS[0]!;
 
-    const parseWeight = (paramName: string, fallback: number): number => {
-      const raw = parseBoundedStringParam(searchParams.get(paramName), 32);
-      if (!raw) return fallback;
+    const WEIGHT_PARAMS = {
+      screen: 'w_screen',
+      performance: 'w_performance',
+      camera: 'w_camera',
+      battery: 'w_battery',
+      value: 'w_value',
+    } as const;
+    const weightParam = (key: keyof typeof WEIGHT_PARAMS): number | null => {
+      const raw = parseBoundedStringParam(
+        searchParams.get(WEIGHT_PARAMS[key]),
+        32
+      );
+      if (!raw) return null;
       const num = Number(raw);
-      return Number.isFinite(num) ? Math.max(0, Math.min(100, num)) : fallback;
+      return Number.isFinite(num) ? Math.max(0, Math.min(100, num)) : null;
     };
+    const weightKeys = Object.keys(WEIGHT_PARAMS) as Array<
+      keyof typeof WEIGHT_PARAMS
+    >;
+    const explicitWeights = Object.fromEntries(
+      weightKeys.map((key) => [key, weightParam(key)])
+    ) as Record<keyof typeof WEIGHT_PARAMS, number | null>;
+    // A weight given in the query is the page's custom sliders: the
+    // preset's weights with that one changed (DOS/Rate#1647).
+    const hasCustomWeights = weightKeys.some(
+      (key) => explicitWeights[key] != null
+    );
+    const sanitizedWeights = Object.fromEntries(
+      weightKeys.map((key) => [
+        key,
+        explicitWeights[key] ?? matchedPersona.weights[key],
+      ])
+    ) as unknown as LeaderboardCriteriaWeights;
 
-    const sanitizedWeights: LeaderboardCriteriaWeights = {
-      screen: parseWeight('w_screen', matchedPersona.weights.screen),
-      performance: parseWeight(
-        'w_performance',
-        matchedPersona.weights.performance
-      ),
-      camera: parseWeight('w_camera', matchedPersona.weights.camera),
-      battery: parseWeight('w_battery', matchedPersona.weights.battery),
-      value: parseWeight('w_value', matchedPersona.weights.value),
-    };
-
-    const weightTotal =
-      sanitizedWeights.screen +
-      sanitizedWeights.performance +
-      sanitizedWeights.camera +
-      sanitizedWeights.battery +
-      sanitizedWeights.value;
-
-    const normalizedWeights: LeaderboardCriteriaWeights =
-      weightTotal > 0
-        ? {
-            screen: Number(
-              ((sanitizedWeights.screen / weightTotal) * 100).toFixed(1)
-            ),
-            performance: Number(
-              ((sanitizedWeights.performance / weightTotal) * 100).toFixed(1)
-            ),
-            camera: Number(
-              ((sanitizedWeights.camera / weightTotal) * 100).toFixed(1)
-            ),
-            battery: Number(
-              ((sanitizedWeights.battery / weightTotal) * 100).toFixed(1)
-            ),
-            value: Number(
-              ((sanitizedWeights.value / weightTotal) * 100).toFixed(1)
-            ),
-          }
+    // Weights as percentages of their total; equal when all are 0.
+    const toPercentWeights = (
+      w: LeaderboardCriteriaWeights
+    ): LeaderboardCriteriaWeights => {
+      const total = weightKeys.reduce((sum, key) => sum + w[key], 0);
+      return total > 0
+        ? (Object.fromEntries(
+            weightKeys.map((key) => [
+              key,
+              roundScore((w[key] / total) * 100, 1),
+            ])
+          ) as unknown as LeaderboardCriteriaWeights)
         : {
             screen: 20,
             performance: 20,
@@ -267,86 +289,105 @@ export async function GET(req: NextRequest) {
             battery: 20,
             value: 20,
           };
+    };
+    const normalizedWeights = toPercentWeights(sanitizedWeights);
 
-    // The weights apply to the criteria both products have a score for
-    // past the ranking threshold (D9); with none in common, both sides use
-    // their rating as every page shows it, and no criterion counts as won
-    // or lost (DOS/Rate#1143, D3).
+    // The criteria both products have a score for past the ranking
+    // threshold (D9); a criterion outside them is not won or lost
+    // (DOS/Rate#1143).
     const comparedCriteria = sharedScoredCriteria(
       scoreA.rankCriteria,
       scoreB.rankCriteria
     );
-    const weightedA5 = weightedCriteriaScore5(
-      scoreA.rankCriteria,
-      normalizedWeights,
-      comparedCriteria
+
+    // The same result as the versus page, from the same function and with
+    // the same preset fallback (DOS/Rate#1647). The final winner and the tie
+    // read the overall rating as shown (`rating_score_5`, or the composite
+    // for a model with no buyer rating yet), whatever weights are asked for:
+    // the overall stars are the final comparison. On a tie the higher
+    // unrounded score, the lower price, then the pair's canonical first slug
+    // pick `overall_winner`. A preset or custom weights only add
+    // `persona_result`: 0.35 * rating + 0.65 * the weighted shared criteria.
+    const versus = computeVersusResult(
+      scoreA,
+      scoreB,
+      hasCustomWeights ? 'custom' : matchedPersona.preset,
+      sanitizedWeights
     );
-    const weightedB5 = weightedCriteriaScore5(
-      scoreB.rankCriteria,
-      normalizedWeights,
-      comparedCriteria
-    );
-    const byCriteria = weightedA5 != null && weightedB5 != null;
-    const baseScore5 = (s: typeof scoreA) =>
-      s.userScore5 > 0 ? s.userScore5 : s.combinedScore5;
-    const customScoreA5 = byCriteria ? weightedA5 : baseScore5(scoreA);
-    const customScoreB5 = byCriteria ? weightedB5 : baseScore5(scoreB);
-    // Rounded once, as the pages round (D3).
-    const customScoreA10 = Number(
-      (Math.round(customScoreA5 * 10) / 5).toFixed(1)
-    );
-    const customScoreB10 = Number(
-      (Math.round(customScoreB5 * 10) / 5).toFixed(1)
-    );
+    const overall = versus.overall;
+    // The weights the pair is scored with, after the preset fallback.
+    const appliedWeights = toPercentWeights(versus.appliedWeights);
+    const byWeights = versus.persona ?? overall;
+    // Rounded once, as the page rounds (D3), then put on 10.
+    const shown10 = (score5: number) => displayedScore5(score5) * 2;
+    const overallA5 = displayedScore5(overall.finalA) || null;
+    const overallB5 = displayedScore5(overall.finalB) || null;
+    const customScoreA5 = byWeights.finalA;
+    const customScoreB5 = byWeights.finalB;
+    const customScoreA10 = shown10(customScoreA5);
+    const customScoreB10 = shown10(customScoreB5);
     const priceSide = comparePositiveMinPrices(
       scoreA.minPrice,
       scoreB.minPrice
     );
 
-    // The winner and the tie read the scores as the response shows them, at
-    // one decimal; the composite and then the price only break a tie
-    // (DOS/Rate#1545, D3).
-    const { tie: isTie, side: winnerSide } = versusApiWinner(
-      customScoreA10,
-      customScoreB10,
-      scoreA.combinedScore5,
-      scoreB.combinedScore5,
-      priceSide
-    );
-
+    const isTie = overall.tie;
+    const winnerSide = overall.winnerSide;
     const winnerScore = winnerSide === 'A' ? scoreA : scoreB;
-    const winnerCustom10 = winnerSide === 'A' ? customScoreA10 : customScoreB10;
-    const margin10 = Number(
-      Math.abs(customScoreA10 - customScoreB10).toFixed(1)
-    );
+    // The gap between the overall stars as shown, on 10; null when one side
+    // has no score, as the page shows no gap then.
+    const margin10 =
+      overallA5 != null && overallB5 != null
+        ? roundScore(Math.abs(overallA5 - overallB5) * 2, 1)
+        : overallA5 == null && overallB5 == null
+          ? 0
+          : null;
+    const personaResult = versus.persona
+      ? {
+          persona: versus.appliedPersona,
+          basis: versus.persona.basis,
+          is_tie: versus.persona.tie,
+          winner_slug: versus.persona.winner.slug,
+          score_a_5: versus.persona.finalA,
+          score_a_10: shown10(versus.persona.finalA),
+          score_b_5: versus.persona.finalB,
+          score_b_10: shown10(versus.persona.finalB),
+        }
+      : null;
 
     // A criterion without a real score on both sides has no winner: its
     // scores, delta and winner are null (DOS/Rate#1143).
-    const criteriaHeadToHead = leaderboardCriteriaForCategory(
-      scoreA.categorySlug
-    ).map((key) => {
-      const a5 = scoreA.criteria[key];
-      const b5 = scoreB.criteria[key];
-      const a10 = a5 != null ? Number((a5 * 2).toFixed(1)) : null;
-      const b10 = b5 != null ? Number((b5 * 2).toFixed(1)) : null;
-      const compared = a10 != null && b10 != null;
-      return {
-        criterion: key,
-        weight_pct: normalizedWeights[key],
-        score_a_5: a5,
-        score_a_10: a10,
-        score_b_5: b5,
-        score_b_10: b10,
-        delta_10: compared ? Number((a10 - b10).toFixed(1)) : null,
-        winner_slug: !compared
-          ? null
-          : a10 > b10
-            ? scoreA.slug
-            : b10 > a10
-              ? scoreB.slug
-              : 'tie',
-      };
-    });
+    const criteriaHeadToHead = versusCriteriaHeadToHead(scoreA, scoreB).map(
+      ({ key, winner }) => {
+        const a5 = scoreA.criteria[key];
+        const b5 = scoreB.criteria[key];
+        // On 10 from the criterion stars as shown (one decimal on 5), with
+        // the versus page's criterion winner (DOS/Rate#1647).
+        const a10 = a5 != null ? displayedScore5(a5) * 2 : null;
+        const b10 = b5 != null ? displayedScore5(b5) * 2 : null;
+        const gap10 =
+          winner != null && a10 != null && b10 != null
+            ? roundScore(Math.abs(a10 - b10), 1)
+            : null;
+        return {
+          criterion: key,
+          weight_pct: appliedWeights[key],
+          score_a_5: a5,
+          score_a_10: a10,
+          score_b_5: b5,
+          score_b_10: b10,
+          delta_10: gap10 == null ? null : winner === 'B' ? -gap10 : gap10,
+          winner_slug:
+            winner == null
+              ? null
+              : winner === 'A'
+                ? scoreA.slug
+                : winner === 'B'
+                  ? scoreB.slug
+                  : 'tie',
+        };
+      }
+    );
 
     const bothPriced =
       Number.isFinite(scoreA.minPrice) &&
@@ -401,10 +442,18 @@ export async function GET(req: NextRequest) {
         versus_url: versusHref(scoreA.slug, scoreB.slug),
         compare_matrix_url: `/compare?cat=${category}&slugs=${scoreA.slug},${scoreB.slug}`,
         persona: matchedPersona.id,
+        // The page preset the pair is scored with: `default` when the
+        // requested one cannot weigh this pair (DOS/Rate#1556, #1647).
+        applied_persona: versus.appliedPersona,
         weights: normalizedWeights,
-        // What the custom weighted scores weigh: the criteria both products
-        // have a real score for, or their main scores when they share none.
-        custom_weighted_basis: byCriteria ? 'criteria' : 'combined',
+        applied_weights: appliedWeights,
+        // What the custom weighted scores weigh: the shown rating alone, or
+        // 0.35 * rating + 0.65 * the weighted criteria both products have a
+        // real score for (`compared_criteria`).
+        custom_weighted_basis: byWeights.basis,
+        // The lead under the asked preset or weights; null with the default
+        // weights. It never replaces `overall_winner` (DOS/Rate#1647).
+        persona_result: personaResult,
         compared_criteria: comparedCriteria,
         deal_radar: {
           productA: radarSignalA,
@@ -419,12 +468,13 @@ export async function GET(req: NextRequest) {
           name: winnerScore.name,
           brand: winnerScore.brand,
           combined_score_5: winnerScore.combinedScore5,
-          combined_score_10: Number(
-            (winnerScore.combinedScore5 * 2).toFixed(1)
-          ),
-          custom_weighted_score_5:
-            winnerSide === 'A' ? customScoreA5 : customScoreB5,
-          custom_weighted_score_10: winnerCustom10,
+          combined_score_10: roundScore(winnerScore.combinedScore5 * 2, 1),
+          // The deciding score; the weighted ones are in `persona_result`.
+          overall_score_5: winnerSide === 'A' ? overallA5 : overallB5,
+          overall_score_10:
+            (winnerSide === 'A' ? overallA5 : overallB5) != null
+              ? shown10(winnerSide === 'A' ? overall.finalA : overall.finalB)
+              : null,
           margin_10: margin10,
           min_price: winnerScore.minPrice,
         },
@@ -445,11 +495,12 @@ export async function GET(req: NextRequest) {
           product_url: scoreA.productHref,
           thumbnail: scoreA.thumbnail,
           combined_score_5: scoreA.combinedScore5,
-          combined_score_10: Number((scoreA.combinedScore5 * 2).toFixed(1)),
+          combined_score_10: roundScore(scoreA.combinedScore5 * 2, 1),
           custom_weighted_score_5: customScoreA5,
           custom_weighted_score_10: customScoreA10,
           user_score_5: scoreA.userScore5,
           rating_score_5: displayedScore5(scoreA.userScore5) || null,
+          overall_score_5: overallA5,
           expert_score_10: scoreA.expertScore10,
           authentic_review_count: scoreA.authenticReviewCount,
           filtered_noise_review_count: scoreA.filteredNoiseReviewCount,
@@ -471,11 +522,12 @@ export async function GET(req: NextRequest) {
           product_url: scoreB.productHref,
           thumbnail: scoreB.thumbnail,
           combined_score_5: scoreB.combinedScore5,
-          combined_score_10: Number((scoreB.combinedScore5 * 2).toFixed(1)),
+          combined_score_10: roundScore(scoreB.combinedScore5 * 2, 1),
           custom_weighted_score_5: customScoreB5,
           custom_weighted_score_10: customScoreB10,
           user_score_5: scoreB.userScore5,
           rating_score_5: displayedScore5(scoreB.userScore5) || null,
+          overall_score_5: overallB5,
           expert_score_10: scoreB.expertScore10,
           authentic_review_count: scoreB.authenticReviewCount,
           filtered_noise_review_count: scoreB.filteredNoiseReviewCount,

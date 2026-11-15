@@ -284,7 +284,7 @@ function buildBaseRateOpenApiSpec(
     openapi: '3.1.0',
     info: {
       title: 'Rate.vn Open-Core Intelligence REST API v1',
-      version: '1.8.0',
+      version: '1.9.0',
       summary:
         'Standardized 10-Group Tech Specs, Price History, Product Deal Radar & AI Review Auditing API',
       description:
@@ -662,7 +662,7 @@ function buildBaseRateOpenApiSpec(
           summary:
             'Get programmatic 1v1 Head-to-Head JReviews verdict, 5-criteria scoreboard & price delta',
           description:
-            'Evaluates two same-category master products (`?pair=<slugA>-vs-<slugB>` or `?slugA=...&slugB=...`) with optional persona/custom 5-criteria weights (`persona`, `w_screen`, `w_performance`, `w_camera`, `w_battery`, `w_value`) and returns the overall winner (with `is_tie` true when both `custom_weighted_score_10` values are equal at one decimal; `overall_winner` is then only the tie-break: the combined score, then the lower price, then side A), per-criterion head-to-head breakdown, price delta, Deal Radar signals (`deal_radar`), and 10-group specs.',
+            'Evaluates two same-category master products (`?pair=<slugA>-vs-<slugB>` or `?slugA=...&slugB=...`) with optional persona/custom 5-criteria weights (`persona`, `w_screen`, `w_performance`, `w_camera`, `w_battery`, `w_value`) and returns the overall winner, picked exactly as the versus page picks it: always by the product rating as shown (`overall_score_5`: `rating_score_5`, or the combined score for a model with no buyer rating yet), whatever persona or weights are asked for. `is_tie` is true when both are equal at one decimal; `overall_winner` is then only the tie-break: the higher unrounded score, then the lower price, then the first slug of the canonical pair (so the pick does not depend on the order asked). `margin_10` is the gap between the two on 10, null when only one side has a score. `overall_winner` carries `overall_score_5` and `overall_score_10`, the deciding scores. A persona other than `balanced`/`default`, or any `w_*` weight, adds `persona_result`: the lead under those weights, 0.35 * that rating + 0.65 * the weighted criteria both products have a real score for; it never replaces `overall_winner`. A `w_*` weight changes that one of the persona weights (like the sliders on the page) and scores as custom weights. A page preset (`photography`, `gaming`, `endurance`, `business`, `value_hunter`/`budget`) whose heaviest criterion is not scored on both sides falls back to the default weights; custom weights (`creator`, `gamer`, `traveler`, any `w_*`) fall back only when no criterion is scored on both sides (`applied_persona`, `applied_weights`). `persona_result` is null with the default weights, after a fallback, or when the weights fall on no shared criterion. Also returns the per-criterion head-to-head breakdown, price delta, Deal Radar signals (`deal_radar`), and 10-group specs.',
           tags: ['Comparison & Watchlist'],
           parameters: [
             {
@@ -762,11 +762,43 @@ function buildBaseRateOpenApiSpec(
                   is_tie: { type: 'boolean' },
                   overall_winner: { type: 'object' },
                   price_comparison: { type: 'object' },
+                  persona: {
+                    type: 'string',
+                    description: 'The persona requested (or `balanced`).',
+                  },
+                  applied_persona: {
+                    type: 'string',
+                    enum: [
+                      'default',
+                      'photography',
+                      'gaming',
+                      'endurance',
+                      'business',
+                      'value_hunter',
+                      'custom',
+                    ],
+                    description:
+                      'The versus page preset the pair is scored with. `budget` scores as `value_hunter`, `balanced` as `default`; `creator`, `gamer`, `traveler` and any `w_*` weight score as `custom`. `default` when the requested preset cannot weigh this pair.',
+                  },
+                  weights: {
+                    type: 'object',
+                    description: 'The requested weights as percentages.',
+                  },
+                  applied_weights: {
+                    type: 'object',
+                    description:
+                      'The weights the pair is scored with after a preset fallback, as percentages (also each `criteria_head_to_head[].weight_pct`).',
+                  },
                   custom_weighted_basis: {
                     type: 'string',
-                    enum: ['criteria', 'combined'],
+                    enum: ['rating', 'rating_and_criteria'],
                     description:
-                      'What `custom_weighted_score_*` weighs: the criteria both products have a real score for (`compared_criteria`), or their combined scores when they share none.',
+                      "What each product's `custom_weighted_score_*` weighs: the rating alone, or 0.35 * rating + 0.65 * the weighted criteria both products have a real score for (`compared_criteria`). `custom_weighted_score_5` is unrounded; `custom_weighted_score_10` is it at one decimal on 5, doubled. Neither decides `overall_winner`.",
+                  },
+                  persona_result: {
+                    type: ['object', 'null'],
+                    description:
+                      'The lead under the asked persona or `w_*` weights (`persona`, `basis`, `is_tie`, `winner_slug`, `score_a_5`, `score_a_10`, `score_b_5`, `score_b_10`); null when the default weights apply. It is shown apart and never replaces `overall_winner`.',
                   },
                   compared_criteria: {
                     type: 'array',
@@ -775,7 +807,7 @@ function buildBaseRateOpenApiSpec(
                   criteria_head_to_head: {
                     type: 'array',
                     description:
-                      'One row per criterion of the category (earbuds have no `screen` row). A side with no real score for a criterion has null `score_*` for it; when either side is null, `delta_10` and `winner_slug` are null too: the criterion is not won or lost.',
+                      'One row per criterion of the category (earbuds have no `screen` row). A side with no real score for a criterion has null `score_*` for it; when either side is null, `delta_10` and `winner_slug` are null too: the criterion is not won or lost. `winner_slug` reads the criterion stars as shown, at one decimal on 5 (`tie` when they are equal), as the versus page does; `score_*_10` is that shown value doubled and `delta_10` the signed gap between them.',
                     items: {
                       type: 'object',
                       additionalProperties: true,

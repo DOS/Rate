@@ -11,32 +11,6 @@ export function isVersusScoreTie(scoreA: number, scoreB: number): boolean {
   return displayedScore5(scoreA) === displayedScore5(scoreB);
 }
 
-/**
- * The 1v1 API's winner and tie (DOS/Rate#1545): the persona scores on 10, at
- * one decimal as the response shows them, decide; on a tie the composite,
- * then the lower price, then side A only pick `overall_winner`.
- */
-export function versusApiWinner(
-  score10A: number,
-  score10B: number,
-  combined5A: number,
-  combined5B: number,
-  lowerPriceSide: string | null | undefined
-): { tie: boolean; side: 'A' | 'B' } {
-  const a = Number.isFinite(score10A) ? Number(score10A.toFixed(1)) : 0;
-  const b = Number.isFinite(score10B) ? Number(score10B.toFixed(1)) : 0;
-  if (a !== b) return { tie: false, side: a > b ? 'A' : 'B' };
-  const side: 'A' | 'B' =
-    combined5A > combined5B
-      ? 'A'
-      : combined5B > combined5A
-        ? 'B'
-        : lowerPriceSide === 'B'
-          ? 'B'
-          : 'A';
-  return { tie: true, side };
-}
-
 export interface VersusVerdictInput {
   tie: boolean;
   /** The leader's score under the weights in use (either side on a tie). */
@@ -135,4 +109,42 @@ export function versusVerdictFor(
     },
     locale
   );
+}
+
+export type VersusPersonaLeadCopy =
+  | {
+      key: 'versusPersonaLead';
+      values: { weights: string; winner: string; score: string };
+    }
+  | { key: 'versusPersonaTie'; values: { weights: string; score: string } };
+
+/**
+ * The lead under a picked preset or custom weights (DOS/Rate#1647), shown
+ * apart from the verdict: the final winner stays the one by the overall
+ * stars. Null with the default weights or when neither side has a score.
+ */
+export function versusPersonaLeadCopy(
+  result: {
+    tie: boolean;
+    finalA: number;
+    finalB: number;
+    winner: { slug: string; name: string };
+  } | null,
+  slugA: string,
+  persona: string,
+  labels: Partial<Record<string, string>> & { custom: string },
+  locale?: string | null
+): VersusPersonaLeadCopy | null {
+  if (!result || persona === 'default') return null;
+  const lead =
+    result.tie || result.winner.slug === slugA ? result.finalA : result.finalB;
+  if (!(lead > 0)) return null;
+  const weights = labels[persona] ?? labels.custom;
+  const score = formatRatingValue(lead, locale);
+  return result.tie
+    ? { key: 'versusPersonaTie', values: { weights, score } }
+    : {
+        key: 'versusPersonaLead',
+        values: { weights, winner: result.winner.name, score },
+      };
 }

@@ -16,6 +16,72 @@ export function normalizeQuickCompareSlug(value: unknown): string {
   return sanitizeTraySlug(value);
 }
 
+export type CompareQuickToggleTranslate = (
+  key:
+    | 'quickToggleShortLimit'
+    | 'quickToggleShortSelected'
+    | 'quickToggleShortAdd'
+    | 'quickToggleLimitBtn'
+    | 'quickToggleSelectedBtn'
+    | 'quickToggleAddBtn'
+) => string;
+
+// Keep the active visible label inside aria-label without parentheses so
+// axe-core 4.14 label-content-name-mismatch passes WCAG 2.5.3 (DOS/Rate#1666).
+export function formatCompareQuickToggleAriaLabel(
+  visibleLabel: string,
+  itemName: unknown
+): string {
+  const label = visibleLabel
+    .replace(/[\r\n\t]+/g, ' ')
+    .replace(/\p{Cc}+/gu, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  const name =
+    typeof itemName === 'string'
+      ? itemName
+          .replace(/[\r\n\t]+/g, ' ')
+          .replace(/\p{Cc}+/gu, '')
+          .replace(/\s+/g, ' ')
+          .trim()
+      : '';
+  if (!name) return label;
+  if (!label) return name;
+  return `${label}: ${name}`;
+}
+
+export function resolveCompareQuickToggleA11y(
+  t: CompareQuickToggleTranslate,
+  options: {
+    compact?: boolean;
+    selected: boolean;
+    limitAlert: boolean;
+    itemName: unknown;
+  }
+): {
+  visibleLabel: string;
+  ariaLabel: string;
+  ariaPressed: boolean;
+} {
+  const { compact = false, selected, limitAlert, itemName } = options;
+  const visibleLabel = compact
+    ? limitAlert
+      ? t('quickToggleShortLimit')
+      : selected
+        ? t('quickToggleShortSelected')
+        : t('quickToggleShortAdd')
+    : limitAlert
+      ? t('quickToggleLimitBtn')
+      : selected
+        ? t('quickToggleSelectedBtn')
+        : t('quickToggleAddBtn');
+  return {
+    visibleLabel,
+    ariaLabel: formatCompareQuickToggleAriaLabel(visibleLabel, itemName),
+    ariaPressed: selected,
+  };
+}
+
 interface CompareQuickToggleProps {
   item: CompareTrayItem & { categoryPath?: string };
   size?: 'sm' | 'md';
@@ -70,6 +136,16 @@ export default function CompareQuickToggle({
       : selected
         ? t('quickToggleRemoveTitle')
         : t('quickToggleAddTitle');
+    const {
+      visibleLabel: shortLabel,
+      ariaLabel,
+      ariaPressed,
+    } = resolveCompareQuickToggleA11y(t, {
+      compact: true,
+      selected,
+      limitAlert,
+      itemName: item?.name,
+    });
     return (
       <div
         className={`d-inline-flex align-items-center gap-1 ${className}`.trim()}
@@ -78,12 +154,12 @@ export default function CompareQuickToggle({
           <WatchlistQuickToggle
             compact
             item={{
-              slug: item.slug,
-              name: item.name,
-              brand: item.brand,
-              thumbnail: item.thumbnail,
-              min_price: item.min_price,
-              categoryPath: item.categoryPath,
+              slug: item?.slug ?? '',
+              name: item?.name ?? '',
+              brand: item?.brand ?? '',
+              thumbnail: item?.thumbnail ?? null,
+              min_price: item?.min_price ?? 0,
+              categoryPath: item?.categoryPath,
             }}
           />
         )}
@@ -91,8 +167,8 @@ export default function CompareQuickToggle({
           type="button"
           onClick={handleToggle}
           title={title}
-          aria-label={`${t('quickToggleShortAdd')}: ${item.name}`}
-          aria-pressed={selected}
+          aria-label={ariaLabel}
+          aria-pressed={ariaPressed}
           className={`rate-chip-btn${selected ? ' is-active' : ''}${limitAlert ? ' is-warning' : ''}`}
         >
           {selected ? (
@@ -100,29 +176,34 @@ export default function CompareQuickToggle({
           ) : (
             <BsPlusLg aria-hidden="true" />
           )}
-          <span>
-            {limitAlert
-              ? t('quickToggleShortLimit')
-              : selected
-                ? t('quickToggleShortSelected')
-                : t('quickToggleShortAdd')}
-          </span>
+          <span>{shortLabel}</span>
         </button>
       </div>
     );
   }
+
+  const {
+    visibleLabel: btnLabel,
+    ariaLabel,
+    ariaPressed,
+  } = resolveCompareQuickToggleA11y(t, {
+    compact: false,
+    selected,
+    limitAlert,
+    itemName: item?.name,
+  });
 
   return (
     <div className="d-inline-flex align-items-center flex-wrap gap-1">
       {includeWatchlist && (
         <WatchlistQuickToggle
           item={{
-            slug: item.slug,
-            name: item.name,
-            brand: item.brand,
-            thumbnail: item.thumbnail,
-            min_price: item.min_price,
-            categoryPath: item.categoryPath,
+            slug: item?.slug ?? '',
+            name: item?.name ?? '',
+            brand: item?.brand ?? '',
+            thumbnail: item?.thumbnail ?? null,
+            min_price: item?.min_price ?? 0,
+            categoryPath: item?.categoryPath,
           }}
           size={size}
         />
@@ -137,6 +218,8 @@ export default function CompareQuickToggle({
               ? t('quickToggleRemoveTitle')
               : t('quickToggleAddTitle')
         }
+        aria-label={ariaLabel}
+        aria-pressed={ariaPressed}
         className={`btn ${
           limitAlert
             ? 'btn-warning text-dark'
@@ -146,13 +229,7 @@ export default function CompareQuickToggle({
         } ${size === 'sm' ? 'btn-sm small px-2 py-1' : 'px-3 py-2'} rounded-pill fw-medium d-inline-flex align-items-center gap-1 shadow-sm ${className}`}
         style={{ fontSize: size === 'sm' ? '0.8125rem' : '13.5px' }}
       >
-        <span>
-          {limitAlert
-            ? t('quickToggleLimitBtn')
-            : selected
-              ? t('quickToggleSelectedBtn')
-              : t('quickToggleAddBtn')}
-        </span>
+        <span>{btnLabel}</span>
       </button>
     </div>
   );
