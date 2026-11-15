@@ -304,6 +304,8 @@ export function buildPillAriaLabel(
     if (trimmed) parts.push(trimmed);
   }
   if (summary.trim()) parts.push(summary.trim());
+  const details = t('pillDetails').trim();
+  if (details) parts.push(details);
   parts.push(t('pillOpenPanel'));
   return parts.join('. ');
 }

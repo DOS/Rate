@@ -601,6 +601,8 @@ function renderPanelContent(
   });
 }
 
+let panelLoadGeneration = 0;
+
 async function loadSidePanel(selectedVariant?: string): Promise<void> {
   const root = document.getElementById('panel-root');
   const chkOptIn = document.getElementById(
@@ -610,6 +612,7 @@ async function loadSidePanel(selectedVariant?: string): Promise<void> {
     'inp-api-base'
   ) as HTMLInputElement | null;
   if (!root) return;
+  const generation = ++panelLoadGeneration;
 
   try {
     const res = (await chrome.runtime.sendMessage({
@@ -617,12 +620,14 @@ async function loadSidePanel(selectedVariant?: string): Promise<void> {
       selectedVariant: selectedVariant ?? null,
     })) as {
       ok?: boolean;
+      stale?: boolean;
       settings?: ExtensionSettings;
       signal?: ExtractedPageProductSignal | null;
       data?: ExtensionLookupData | null;
       status?: number | null;
       retryAfterSeconds?: number;
     };
+    if (generation !== panelLoadGeneration || res?.stale) return;
 
     const settings: ExtensionSettings = res?.settings || {
       apiBaseUrl: DEFAULT_API_BASE_URL,
@@ -659,6 +664,7 @@ async function loadSidePanel(selectedVariant?: string): Promise<void> {
       }
     );
   } catch {
+    if (generation !== panelLoadGeneration) return;
     renderLookupError(root, null, null, () => {
       void loadSidePanel(selectedVariant);
     });
@@ -689,6 +695,7 @@ function renderLookupError(
 async function runQuickQuery(query: string): Promise<void> {
   const root = document.getElementById('panel-root');
   if (!root || !query.trim()) return;
+  const generation = ++panelLoadGeneration;
 
   root.innerHTML = `
     <div class="card">
@@ -709,6 +716,7 @@ async function runQuickQuery(query: string): Promise<void> {
       status?: number | null;
       retryAfterSeconds?: number;
     };
+    if (generation !== panelLoadGeneration) return;
 
     const settings: ExtensionSettings = res?.settings || {
       apiBaseUrl: DEFAULT_API_BASE_URL,

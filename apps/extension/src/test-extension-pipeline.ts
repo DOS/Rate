@@ -6118,11 +6118,11 @@ async function runTests() {
     );
     assert.equal(
       isLabelInName(
-        'Rate.vn Giảm giá ảo Bẫy Sale (+35%) 4.4 (89% thật) Rẻ hơn tại 3 nơi (-1.500.000 ₫)',
+        'Rate.vn Giảm giá ảo Bẫy Sale (+35%) 4.4 (89% thật) Rẻ hơn tại 3 nơi (-1.500.000 ₫) Chi tiết',
         directAria
       ),
       true,
-      'buildPillAriaLabel must contain all visible non-aria-hidden pill tokens in order'
+      'buildPillAriaLabel must contain all on-screen pill tokens including cta-btn in order'
     );
 
     // Live content-script hydration & rendered Shadow DOM pill WCAG 2.5.3 check.
@@ -6271,10 +6271,10 @@ async function runTests() {
         );
         const visibleDomText = pillMarkup
           .replace(/^[^>]*>/, '')
-          .replace(/<span[^>]*aria-hidden="true"[^>]*>[\s\S]*?<\/span>/g, ' ')
           .replace(/<[^>]+>/g, ' ')
           .replace(/\s+/g, ' ')
           .trim();
+        assert.ok(visibleDomText.includes('Chi tiết'));
         assert.equal(isLabelInName(visibleDomText, ariaMatch![1]!), true);
         h1Text = 'Điện thoại Apple iPhone 16 Pro Max 256GB VN/A';
         mutationCb!();
@@ -6303,7 +6303,8 @@ async function runTests() {
             cb: (r: unknown) => void
           ) => boolean | void)
         | null = null;
-      let fetchResponder: (url: string) => Response = () =>
+      let activeTabId = 42;
+      let fetchResponder: (url: string) => Response | Promise<Response> = () =>
         new Response(JSON.stringify({ ok: true, data: null }), { status: 200 });
       try {
         g.chrome = {
@@ -6380,7 +6381,7 @@ async function runTests() {
             onClicked: { addListener() {} },
           },
           tabs: {
-            query: async () => [{ id: 42, active: true }],
+            query: async () => [{ id: activeTabId, active: true }],
             create: async () => ({ id: 1 }),
           },
         };
@@ -6493,6 +6494,78 @@ async function runTests() {
           badges.get(42)?.text,
           'TỐT',
           'RATE_SIDEPANEL_FETCH_FULL must update action badge once variant resolves'
+        );
+
+        // (c) Non-product active tab 77 falling back to tab_latest must NOT get tab 42's badge/cache.
+        activeTabId = 77;
+        await callSw(
+          { type: 'RATE_SIDEPANEL_FETCH_FULL', selectedVariant: '512GB' },
+          panelSender
+        );
+        assert.equal(
+          badges.has(77),
+          false,
+          'unrelated non-product tab must not inherit previous tab badge'
+        );
+        assert.equal(sessionMap.has('tab_77'), false);
+        assert.equal(sessionMap.has('lookup_tab_77'), false);
+
+        // (d) Overlapping full lookups on tab 42 reject slower superseded responses.
+        activeTabId = 42;
+        const pendingResolvers: Array<(r: Response) => void> = [];
+        fetchResponder = () =>
+          new Promise<Response>((resolve) => {
+            pendingResolvers.push(resolve);
+          });
+        const firstFull = callSw(
+          { type: 'RATE_SIDEPANEL_FETCH_FULL', selectedVariant: '256GB' },
+          panelSender
+        );
+        while (pendingResolvers.length < 1) {
+          await new Promise((r) => setTimeout(r, 0));
+        }
+        const secondFull = callSw(
+          { type: 'RATE_SIDEPANEL_FETCH_FULL', selectedVariant: '512GB' },
+          panelSender
+        );
+        while (pendingResolvers.length < 2) {
+          await new Promise((r) => setTimeout(r, 0));
+        }
+        pendingResolvers[1]!(
+          new Response(
+            JSON.stringify({
+              ok: true,
+              data: mkLookup('canonical_model', 'inflated_fake_sale'),
+            }),
+            { status: 200 }
+          )
+        );
+        const secondDone = await secondFull;
+        assert.equal(secondDone.stale, undefined);
+        assert.equal(badges.get(42)?.text, 'ẢO!');
+        pendingResolvers[0]!(
+          new Response(
+            JSON.stringify({
+              ok: true,
+              data: mkLookup('canonical_model', 'genuine_deal'),
+            }),
+            { status: 200 }
+          )
+        );
+        const firstDone = await firstFull;
+        assert.equal(firstDone.stale, true);
+        assert.equal(
+          badges.get(42)?.text,
+          'ẢO!',
+          'superseded earlier variant lookup must not overwrite newer badge'
+        );
+        assert.equal(
+          (
+            sessionMap.get('lookup_tab_42') as {
+              priceAssessment?: { verdict?: string };
+            }
+          )?.priceAssessment?.verdict,
+          'inflated_fake_sale'
         );
       } finally {
         g.chrome = prevChrome;

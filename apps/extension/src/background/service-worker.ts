@@ -151,9 +151,11 @@ const SUPPORTED_CROWD_PLATFORMS = new Set([
   'phongvu',
 ]);
 
-// The latest product lookup per tab (DOS/Rate#1300).
+// The latest product lookup per tab (DOS/Rate#1300, #1664).
 let detectRequestCounter = 0;
 const latestDetectByTab = new Map<number, number>();
+let fullLookupRequestCounter = 0;
+const latestFullLookupByTab = new Map<number, number>();
 async function maybeSendOptInCrowdSignal(
   rawSignal: ExtractedPageProductSignal
 ): Promise<void> {
@@ -453,6 +455,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           Boolean(latestEntry?.signal) &&
           baseSignal === latestEntry?.signal &&
           latestEntry?.source === 'quick_query';
+        const isActiveTabPageSignal =
+          Boolean(activeTab?.id && tabEntry?.signal) &&
+          baseSignal === tabEntry?.signal &&
+          tabEntry?.source !== 'quick_query' &&
+          !isQuickQuerySelected;
 
         const effectiveSignal: ExtractedPageProductSignal = overrideVariant
           ? { ...baseSignal, selectedVariant: overrideVariant }
@@ -460,15 +467,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
         if (overrideVariant) {
           const now = Date.now();
-          if (isQuickQuerySelected) {
-            await chrome.storage.session.set({
-              tab_latest: {
-                signal: effectiveSignal,
-                updatedAt: now,
-                source: 'quick_query',
-              },
-            });
-          } else {
+          if (isActiveTabPageSignal) {
             await chrome.storage.session.set({
               [tabKey]: {
                 signal: effectiveSignal,
@@ -481,24 +480,38 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                 source: 'page',
               },
             });
+          } else {
+            await chrome.storage.session.set({
+              tab_latest: {
+                signal: effectiveSignal,
+                updatedAt: now,
+                source: isQuickQuerySelected ? 'quick_query' : 'page',
+              },
+            });
           }
         }
 
-        const detectSeqBefore = activeTab?.id
-          ? latestDetectByTab.get(activeTab.id)
+        const trackedTabId = isActiveTabPageSignal ? activeTab?.id : undefined;
+        const detectSeqBefore = trackedTabId
+          ? latestDetectByTab.get(trackedTabId)
           : undefined;
+        const fullSeq = trackedTabId ? ++fullLookupRequestCounter : undefined;
+        if (trackedTabId && fullSeq !== undefined) {
+          latestFullLookupByTab.set(trackedTabId, fullSeq);
+        }
         const outcome = await fetchExtensionLookup(effectiveSignal, 'full');
-        if (
-          !isQuickQuerySelected &&
-          activeTab?.id &&
-          latestDetectByTab.get(activeTab.id) === detectSeqBefore
-        ) {
+        const isCurrentTabLookup =
+          trackedTabId !== undefined &&
+          latestDetectByTab.get(trackedTabId) === detectSeqBefore &&
+          latestFullLookupByTab.get(trackedTabId) === fullSeq;
+        if (isCurrentTabLookup && trackedTabId !== undefined) {
           const resolvedLookup = outcome.ok ? outcome.data : null;
-          await updateActionBadge(activeTab.id, resolvedLookup);
+          await updateActionBadge(trackedTabId, resolvedLookup);
           await chrome.storage.session.set({
             [`lookup_${tabKey}`]: resolvedLookup,
           });
         }
+        const stale = trackedTabId !== undefined && !isCurrentTabLookup;
         sendResponse(
           outcome.ok
             ? {
@@ -506,6 +519,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                 settings,
                 signal: effectiveSignal,
                 data: outcome.data,
+                ...(stale ? { stale: true } : {}),
               }
             : {
                 ok: false,
@@ -513,6 +527,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                 retryAfterSeconds: outcome.retryAfterSeconds,
                 settings,
                 signal: effectiveSignal,
+                ...(stale ? { stale: true } : {}),
               }
         );
       } catch (err) {
