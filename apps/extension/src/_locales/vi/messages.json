@@ -276,7 +276,7 @@
     "message": "Đang tích lũy thêm các mốc thời gian lịch sử giá."
   },
   "radarDealsTitle": {
-    "message": "Giá thấp nhất giữa 10 sàn"
+    "message": "Deal thật dưới giá trung vị (10 sàn)"
   },
   "radarSavings": {
     "message": "Tiết kiệm $AMOUNT$ (-$PCT$%)",

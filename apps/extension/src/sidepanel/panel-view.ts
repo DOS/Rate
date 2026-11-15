@@ -13,6 +13,7 @@ import {
   formatSafeExtensionVnd,
   formatSafeNumber,
   normalizeFiveStarRating,
+  resolveExtensionMasterRating,
   resolveSafeApiRelativeUrl,
 } from '../security-guards.js';
 import { contentTextHtml, escapeHtml, t, type MessageKey } from '../i18n.js';
@@ -188,13 +189,14 @@ export function renderReviewCardHtml(
   reviews: ExtensionLookupData['reviewSummary'],
   master: Pick<
     NonNullable<ExtensionLookupData['masterProduct']>,
-    'user_rating_weighted' | 'average_rating'
+    | 'rating_score_5'
+    | 'rating_score'
+    | 'user_rating_weighted'
+    | 'average_rating'
   > | null
 ): string {
   if (!reviews) return '';
-  const star = ratingStarText(
-    master?.user_rating_weighted || master?.average_rating
-  );
+  const star = ratingStarText(resolveExtensionMasterRating(master));
   const analysed = Number(reviews.total_analyzed);
   const hasReviews = Number.isFinite(analysed) && analysed > 0;
   // The server writes the summary in Vietnamese only. An English or Czech

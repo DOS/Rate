@@ -144,19 +144,81 @@ export function isPrivilegedExtensionSender(
   return true;
 }
 
+function parseDecimalNumber(val: unknown): number {
+  if (typeof val === 'number') return val;
+  if (typeof val !== 'string') return NaN;
+  const cleaned = val.replace(/\p{Cc}+/gu, '').trim();
+  if (!cleaned || cleaned.length > 32 || /^[+-]?0[xbo]/i.test(cleaned)) {
+    return NaN;
+  }
+  return Number(cleaned.replace(',', '.'));
+}
+
+export function roundHalfUpDecimal(value: number, decimals: number): number {
+  if (!Number.isFinite(value) || value === 0) return 0;
+  const d = Math.max(0, Math.min(6, Math.floor(decimals)));
+  if (d === 0) {
+    return (value < 0 ? -Math.round(-value) : Math.round(value)) || 0;
+  }
+  const sign = value < 0 ? -1 : 1;
+  const [coef, exp = '0'] = Math.abs(value).toExponential().split('e');
+  const shifted = Number(`${coef}e${Number(exp) + d}`);
+  if (!Number.isFinite(shifted) || shifted >= 1e15) return value;
+  const rounded = Math.round(shifted);
+  return rounded === 0 ? 0 : sign * Number(`${rounded}e-${d}`);
+}
+
 export function normalizeFiveStarRating(val: unknown): number | null {
-  const num =
-    typeof val === 'number'
-      ? val
-      : typeof val === 'string' && val.trim() !== ''
-        ? Number(val.trim().replace(',', '.'))
-        : NaN;
+  const num = parseDecimalNumber(val);
   if (!Number.isFinite(num) || num <= 0 || num > 100) {
     return null;
   }
   const scaled = num > 10 ? num / 20 : num > 5 ? num / 2 : num;
   if (scaled <= 0 || scaled > 5) return null;
-  return Number(scaled.toFixed(2));
+  const rounded = roundHalfUpDecimal(scaled, 3);
+  return rounded > 0 ? rounded : null;
+}
+
+export interface ExtensionMasterRatingSource {
+  rating_score_5?: unknown;
+  rating_score?: unknown;
+  user_rating_weighted?: unknown;
+  average_rating?: unknown;
+}
+
+function parseStrictFiveStarScore(val: unknown): number | null {
+  const num = parseDecimalNumber(val);
+  if (!Number.isFinite(num) || num <= 0 || num > 5) return null;
+  const rounded = roundHalfUpDecimal(num, 1);
+  return rounded > 0 ? rounded : null;
+}
+
+/**
+ * Resolves the 0-5 product rating in site priority order
+ * (`rating_score_5 ?? rating_score ?? user_rating_weighted ?? average_rating`)
+ * rounded once half-up to 1 decimal (DOS/Rate#1656).
+ */
+export function resolveExtensionMasterRating(
+  master: ExtensionMasterRatingSource | null | undefined
+): number | null {
+  if (!master || typeof master !== 'object' || Array.isArray(master)) {
+    return null;
+  }
+  const storedScore5 = parseStrictFiveStarScore(master.rating_score_5);
+  if (storedScore5 !== null) return storedScore5;
+  const storedScore = parseStrictFiveStarScore(master.rating_score);
+  if (storedScore !== null) return storedScore;
+  const weighted = normalizeFiveStarRating(master.user_rating_weighted);
+  if (weighted !== null) {
+    const rounded = roundHalfUpDecimal(weighted, 1);
+    if (rounded > 0) return rounded;
+  }
+  const average = normalizeFiveStarRating(master.average_rating);
+  if (average !== null) {
+    const rounded = roundHalfUpDecimal(average, 1);
+    if (rounded > 0) return rounded;
+  }
+  return null;
 }
 
 export interface SessionSignalEntry {
@@ -548,9 +610,10 @@ export function formatSafeNumber(
     Number.isFinite(safeOpts.decimals) &&
     safeOpts.decimals >= 0
   ) {
-    return clamped.toFixed(Math.min(6, Math.floor(safeOpts.decimals)));
+    const decimals = Math.min(6, Math.floor(safeOpts.decimals));
+    return roundHalfUpDecimal(clamped, decimals).toFixed(decimals);
   }
-  return String(Math.round(clamped));
+  return String(roundHalfUpDecimal(clamped, 0));
 }
 
 const ALLOWED_VERDICT_CLASS_SUFFIXES = new Set([

@@ -2,7 +2,7 @@ import { extractProductSignalFromDom } from '../extractors/ecommerce-detector.js
 import {
   formatSafeExtensionVnd,
   formatSafeNumber,
-  normalizeFiveStarRating,
+  resolveExtensionMasterRating,
   shouldRenderTrustPill,
 } from '../security-guards.js';
 import { escapeHtml, t } from '../i18n.js';
@@ -53,11 +53,7 @@ function renderShadowTrustPill(lookup: ExtensionLookupData): void {
       assessment.implausiblyLow
     );
 
-    const rawRating =
-      lookup.masterProduct?.user_rating_weighted ||
-      lookup.masterProduct?.average_rating ||
-      null;
-    const trustedRating = normalizeFiveStarRating(rawRating);
+    const trustedRating = resolveExtensionMasterRating(lookup.masterProduct);
     // No share of genuine reviews when none was analysed (#1301).
     const authenticRatio =
       (lookup.reviewSummary?.total_analyzed ?? 0) > 0

@@ -276,7 +276,7 @@
     "message": "Still collecting price history points."
   },
   "radarDealsTitle": {
-    "message": "Lowest price across 10 stores"
+    "message": "Genuine deals below the median (10 stores)"
   },
   "radarSavings": {
     "message": "Save $AMOUNT$ (-$PCT$%)",
