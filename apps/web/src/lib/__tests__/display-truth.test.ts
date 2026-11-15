@@ -217,6 +217,21 @@ for (const file of [
     `${file.join('/')} must label only real floors as the multi-platform floor`
   );
 }
+// The deep inspect floor pill is picked only through the floor check (#1661).
+assert.ok(
+  !readFileSync(
+    join(
+      __dirname,
+      '..',
+      '..',
+      'components',
+      'inspect',
+      'DeepInspectWorkspace.tsx'
+    ),
+    'utf8'
+  ).includes("t('radarGenuinePill'"),
+  'DeepInspectWorkspace.tsx must not hard-code the floor pill'
+);
 const note = radarExplanation(signal);
 assert.equal(note?.key, 'radarExplanationGenuineDeal');
 assert.equal(note!.values.count, '2');
