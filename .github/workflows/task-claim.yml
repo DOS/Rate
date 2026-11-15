@@ -2,7 +2,10 @@ name: Task Claim
 
 # Required check for the AGENTS.md section 1 claim workflow: a PR into `dev`
 # that closes an issue needs that issue to carry an `agent:*` label and
-# `status:in-progress` or `status:in-review`. Dependabot PRs are exempt, and
+# `status:in-progress` or `status:in-review`, and its claim lock
+# `refs/claims/<n>` held by the claimant the PR declares (`Claimant:` line,
+# DOS/Rate#1673; PRs opened before the lock existed keep the label rule).
+# Dependabot PRs are exempt, and
 # the dev to main promotion is out of scope (the `dev-task-claim` ruleset
 # covers dev only). Logic and tests: scripts/task-claim-check.mjs.
 #
@@ -10,11 +13,12 @@ name: Task Claim
 # PR, so a PR cannot weaken the check it is held to. No PR code is checked out
 # or run, and the token is read-only.
 #
-# The check reads issue labels when it runs. When an issue gains or loses an
-# agent:* or status:* label, task-claim-revalidate.yml re-runs this check on
-# every open PR into dev that closes it, so a claim added later unblocks the
-# PR and a released claim blocks it again. `gh run rerun <id>` does the same
-# by hand.
+# The check reads issue labels and locks when it runs. When an issue gains or
+# loses an agent:* or status:* label, or board.mjs changes its lock,
+# task-claim-revalidate.yml re-runs this check on every open PR into dev that
+# closes it, so a claim added later unblocks the PR and a released claim
+# blocks it again. Editing the PR description (the `edited` event) or
+# `gh run rerun <id>` does the same by hand.
 
 on:
   pull_request_target:
@@ -33,6 +37,7 @@ jobs:
     # (GitHub reports the newest run) and blocks the merge (#444). Runs are
     # read-only, take seconds and read the labels live, so overlap is harmless.
     permissions:
+      # contents: read also covers the claim lock refs (refs/claims/<n>).
       contents: read
       issues: read
       pull-requests: read
@@ -42,7 +47,9 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          sparse-checkout: scripts/task-claim-check.mjs
+          sparse-checkout: |
+            scripts/task-claim-check.mjs
+            scripts/claim-lock.mjs
           sparse-checkout-cone-mode: false
 
       - name: Check that closing issues are claimed
