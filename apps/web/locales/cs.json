@@ -848,6 +848,7 @@
     "radarSectionBadge": "Cenové signály a rozdíly cen v 10 obchodech",
     "openDealRadarLink": "Zobrazit nabídky z 10 obchodů →",
     "radarGenuinePill": "Nejnižší cena v obchodech: -{pct} % na {platform} ({price} ₫)",
+    "radarBelowMedianPill": "Pod mediánem: -{pct} % na {platform} ({price} ₫)",
     "radarFakePill": "Falešná sleva: +{pct} % na {platform}",
     "radarSpreadPill": "Rozdíl cen v 10 obchodech: +{pct} % ({vnd} ₫ mezi {cheapest} a {priciest})",
     "masterProductSection": "Nalezený produkt (10 skupin parametrů)",

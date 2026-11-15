@@ -848,6 +848,7 @@
     "radarSectionBadge": "Tín hiệu giá trên 10 sàn và chênh lệch giá",
     "openDealRadarLink": "Xem deal trên 10 sàn →",
     "radarGenuinePill": "Giá thấp nhất các sàn: -{pct}% tại {platform} ({price} ₫)",
+    "radarBelowMedianPill": "Dưới giá trung vị: -{pct}% tại {platform} ({price} ₫)",
     "radarFakePill": "Giảm giá ảo: +{pct}% tại {platform}",
     "radarSpreadPill": "Chênh lệch giá trên 10 sàn: +{pct}% ({vnd} ₫ giữa {cheapest} và {priciest})",
     "masterProductSection": "Sản phẩm khớp (10 nhóm thông số)",
