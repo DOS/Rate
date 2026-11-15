@@ -80,6 +80,7 @@ import {
   formatPercent,
   formatPlainNumber,
 } from '@/lib/locale-format';
+import { formatRatingValue, roundScore } from '@/lib/rating-display';
 
 type VoteChoice = 'up' | 'down' | 'report';
 type FilterTab = 'all' | 'authentic' | 'expert' | 'ignored';
@@ -384,7 +385,7 @@ export default function JReviewsSection({
         0
       );
       if (expWeightSum > 0) {
-        computedExpert = Number((expStars / expWeightSum).toFixed(2));
+        computedExpert = roundScore(expStars / expWeightSum, 2);
       }
     }
 
@@ -411,7 +412,8 @@ export default function JReviewsSection({
       if (wSum > 0) {
         return {
           ...crit,
-          score: Number((valSum / wSum).toFixed(2)) as number | null,
+          // Unrounded: printed once, at one decimal (D3, DOS/Rate#1647).
+          score: (valSum / wSum) as number | null,
         };
       }
       return {
@@ -1126,7 +1128,7 @@ export default function JReviewsSection({
             <span className="text-muted small">
               {t('avg5CriteriaLabel')}{' '}
               <strong className="text-danger">
-                {formatDecimal(
+                {formatRatingValue(
                   Object.values(criteriaScores).reduce((a, b) => a + b, 0) /
                     Object.values(criteriaScores).length,
                   locale,
@@ -1211,7 +1213,7 @@ export default function JReviewsSection({
                     ),
                     avgScore:
                       liveScores.user != null
-                        ? formatDecimal(liveScores.user, locale, 2)
+                        ? formatRatingValue(liveScores.user, locale, 2)
                         : 'N/A',
                   })}
                 />
@@ -1270,11 +1272,7 @@ export default function JReviewsSection({
                   <div className="d-flex align-items-baseline my-2 gap-2">
                     {/* On 10, as the scoreboard above shows it. */}
                     <span className="display-6 fw-bold text-dark font-monospace">
-                      {formatDecimal(
-                        Number((liveScores.expert * 2).toFixed(1)),
-                        locale,
-                        1
-                      )}
+                      {formatRatingValue(liveScores.expert * 2, locale, 1)}
                     </span>
                     <span className="text-muted small">/10</span>
                   </div>
@@ -1350,7 +1348,7 @@ export default function JReviewsSection({
                   <span className="text-muted fw-medium">{crit.label}</span>
                   <strong className="text-dark font-monospace">
                     {crit.score != null
-                      ? `${formatDecimal(crit.score, locale, 1)}/5`
+                      ? `${formatRatingValue(crit.score, locale, 1)}/5`
                       : t('notAvailableShort')}
                   </strong>
                 </span>

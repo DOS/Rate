@@ -4,14 +4,10 @@ import { useId, useMemo, useState } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
 import { BsSliders } from 'react-icons/bs';
 import { Link } from '@/lib/navigation';
-import {
-  comparePositiveMinPrices,
-  type ScoredLeaderboardItem,
-} from '@/lib/rate-domain';
+import { comparePositiveMinPrices } from '@/lib/rate-domain';
 import {
   leaderboardCriteriaForCategory,
   sharedScoredCriteria,
-  weightedCriteriaScore5,
 } from '@/lib/leaderboard-engine';
 import {
   getRadarSignal,
@@ -22,7 +18,18 @@ import {
   radarMarkdownCell,
 } from '@/lib/deal-radar';
 import { escapeCsvCell } from '@/lib/csv-safe';
-import { isVersusScoreTie, versusVerdictFor } from '@/lib/versus-verdict';
+import { versusVerdictFor } from '@/lib/versus-verdict';
+import {
+  PERSONA_WEIGHTS,
+  computeVersusWeightedResult,
+  resolveVersusPersona,
+  sanitizeVersusScore5,
+  versusAvailablePersonas,
+  versusCriterionScore5,
+  type CriteriaWeights,
+  type PersonaPresetKey,
+  type ScoredVersusItem,
+} from '@/lib/versus-score';
 import RadarBadge from '@/components/radar/RadarBadge';
 import StarRating from '@/components/elementary/StarRating';
 import { useDealRadarIndex } from '@/components/radar/use-deal-radar';
@@ -33,73 +40,20 @@ import {
   formatScoreFixed,
 } from '@/lib/rating-display';
 
-export type ScoredVersusItem = Omit<ScoredLeaderboardItem, 'rank'>;
+export {
+  PERSONA_WEIGHTS,
+  computeVersusWeightedResult,
+  resolveVersusPersona,
+  sanitizeVersusScore5,
+  versusAvailablePersonas,
+  versusCriterionScore5,
+};
+export type { CriteriaWeights, PersonaPresetKey, ScoredVersusItem };
 
 interface VersusInteractiveScoreboardProps {
   readonly scoreA: ScoredVersusItem;
   readonly scoreB: ScoredVersusItem;
   readonly locale?: string;
-}
-
-export type PersonaPresetKey =
-  | 'default'
-  | 'photography'
-  | 'gaming'
-  | 'endurance'
-  | 'business'
-  | 'value_hunter'
-  | 'custom';
-
-export interface CriteriaWeights {
-  screen: number;
-  performance: number;
-  camera: number;
-  battery: number;
-  value: number;
-}
-
-export const PERSONA_WEIGHTS: Record<
-  Exclude<PersonaPresetKey, 'custom'>,
-  CriteriaWeights
-> = {
-  default: { screen: 20, performance: 20, camera: 20, battery: 20, value: 20 },
-  photography: {
-    screen: 20,
-    performance: 15,
-    camera: 45,
-    battery: 10,
-    value: 10,
-  },
-  gaming: { screen: 25, performance: 45, camera: 5, battery: 15, value: 10 },
-  endurance: {
-    screen: 15,
-    performance: 15,
-    camera: 10,
-    battery: 45,
-    value: 15,
-  },
-  business: { screen: 35, performance: 25, camera: 10, battery: 20, value: 10 },
-  value_hunter: {
-    screen: 15,
-    performance: 20,
-    camera: 10,
-    battery: 15,
-    value: 40,
-  },
-};
-
-export function sanitizeVersusScore5(value: unknown): number {
-  const num = typeof value === 'number' ? value : Number(value);
-  if (!Number.isFinite(num) || num <= 0) return 0;
-  // Unrounded: the page rounds once, to 1 decimal (D3).
-  return Math.min(5, num);
-}
-
-/** A criterion score out of 5, or null when there is no real one. */
-export function versusCriterionScore5(value: unknown): number | null {
-  if (value == null) return null;
-  const score = sanitizeVersusScore5(value);
-  return score > 0 ? score : null;
 }
 
 export function sanitizeVersusExportSlug(value: unknown): string {
@@ -124,109 +78,6 @@ export function sanitizeVersusMarkdownCell(value: unknown): string {
     .trim()
     .slice(0, 180);
   return cleaned || '-';
-}
-
-/**
- * The use-case presets worth offering for a pair (DOS/Rate#1556): one whose
- * heaviest criterion both models have a real score for. With no criterion
- * scored on both sides every preset would read as the default one.
- */
-export function versusAvailablePersonas(
-  shared: readonly string[]
-): Exclude<PersonaPresetKey, 'custom'>[] {
-  if (shared.length === 0) return [];
-  return (
-    Object.keys(PERSONA_WEIGHTS) as Exclude<PersonaPresetKey, 'custom'>[]
-  ).filter((key) => {
-    if (key === 'default') return true;
-    const weights = PERSONA_WEIGHTS[key];
-    const lead = (Object.keys(weights) as (keyof CriteriaWeights)[]).reduce(
-      (best, c) => (weights[c] > weights[best] ? c : best)
-    );
-    return shared.includes(lead);
-  });
-}
-
-export function computeVersusWeightedResult(
-  scoreA: ScoredVersusItem,
-  scoreB: ScoredVersusItem,
-  weights: CriteriaWeights,
-  persona: PersonaPresetKey
-) {
-  const sanitizeWeight = (v: number): number =>
-    Number.isFinite(v) ? Math.max(0, Math.min(100, v)) : 0;
-  const wScreen = sanitizeWeight(weights.screen);
-  const wPerf = sanitizeWeight(weights.performance);
-  const wCam = sanitizeWeight(weights.camera);
-  const wBat = sanitizeWeight(weights.battery);
-  const wVal = sanitizeWeight(weights.value);
-  const rawSumW = wScreen + wPerf + wCam + wBat + wVal;
-
-  // Weights read the scores past the ranking threshold (D9).
-  const shared = sharedScoredCriteria(scoreA.rankCriteria, scoreB.rankCriteria);
-  const calcWeighted = (item: ScoredVersusItem): number => {
-    // The product's rating as every page shows it (DOS/Rate#1470); a model
-    // with no buyer rating yet keeps its composite (expert or criteria).
-    const baseScore5 = sanitizeVersusScore5(
-      item.userScore5 > 0 ? item.userScore5 : item.combinedScore5
-    );
-    if (persona === 'default') {
-      return baseScore5;
-    }
-    // Only the criteria both models have a real score for are weighed; with
-    // none in common the weights change nothing (DOS/Rate#1143).
-    const wAvg = weightedCriteriaScore5(
-      item.rankCriteria,
-      rawSumW > 0
-        ? {
-            screen: wScreen,
-            performance: wPerf,
-            camera: wCam,
-            battery: wBat,
-            value: wVal,
-          }
-        : { screen: 1, performance: 1, camera: 1, battery: 1, value: 1 },
-      shared
-    );
-    if (wAvg == null) return baseScore5;
-    return sanitizeVersusScore5(baseScore5 * 0.35 + wAvg * 0.65);
-  };
-
-  const finalA = calcWeighted(scoreA);
-  const finalB = calcWeighted(scoreB);
-  const tiePriceSide = comparePositiveMinPrices(
-    scoreA.minPrice,
-    scoreB.minPrice
-  );
-  const winner =
-    finalA > finalB
-      ? scoreA
-      : finalB > finalA
-        ? scoreB
-        : tiePriceSide === 'B'
-          ? scoreB
-          : scoreA;
-
-  const shownA = displayedScore5(finalA);
-  const shownB = displayedScore5(finalB);
-  const bothScored = shownA > 0 && shownB > 0;
-  const anyScored = shownA > 0 || shownB > 0;
-
-  return {
-    finalA,
-    finalB,
-    bothScored,
-    // The gap between the scores as shown, at one decimal; null when one side
-    // has no score at all so an unrated 0 never creates a fake gap (#1647).
-    delta: bothScored
-      ? formatScoreFixed(Math.abs(shownA - shownB), 1)
-      : !anyScored
-        ? '0.0'
-        : null,
-    winner,
-    // Level at the shown precision: no lead for either (DOS/Rate#1209).
-    tie: isVersusScoreTie(finalA, finalB),
-  };
 }
 
 export function formatVersusWeightedMarkdown(
@@ -324,16 +175,9 @@ export default function VersusInteractiveScoreboard({
   );
   const availablePersonas = versusAvailablePersonas(sharedCriteria);
   const canWeigh = availablePersonas.length > 0;
-  const activePersona: PersonaPresetKey =
-    persona === 'custom'
-      ? canWeigh
-        ? 'custom'
-        : 'default'
-      : availablePersonas.includes(persona)
-        ? persona
-        : 'default';
-  const activeWeights =
-    activePersona === persona ? weights : PERSONA_WEIGHTS.default;
+  // The same fallback as GET /api/v1/rate/versus (DOS/Rate#1647).
+  const { persona: activePersona, weights: activeWeights } =
+    resolveVersusPersona(scoreA, scoreB, persona, weights);
 
   const weightedResult = useMemo(
     () =>

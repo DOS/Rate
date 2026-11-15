@@ -662,7 +662,7 @@ function buildBaseRateOpenApiSpec(
           summary:
             'Get programmatic 1v1 Head-to-Head JReviews verdict, 5-criteria scoreboard & price delta',
           description:
-            'Evaluates two same-category master products (`?pair=<slugA>-vs-<slugB>` or `?slugA=...&slugB=...`) with optional persona/custom 5-criteria weights (`persona`, `w_screen`, `w_performance`, `w_camera`, `w_battery`, `w_value`) and returns the overall winner (with `is_tie` true when both `custom_weighted_score_10` values are equal at one decimal; `overall_winner` is then only the tie-break: the combined score, then the lower price, then side A), per-criterion head-to-head breakdown, price delta, Deal Radar signals (`deal_radar`), and 10-group specs.',
+            'Evaluates two same-category master products (`?pair=<slugA>-vs-<slugB>` or `?slugA=...&slugB=...`) with optional persona/custom 5-criteria weights (`persona`, `w_screen`, `w_performance`, `w_camera`, `w_battery`, `w_value`) and returns the overall winner, picked exactly as the versus page picks it: with the default weights (`balanced`, `default`, no `w_*`) the score is the product rating as shown (`rating_score_5`, or the combined score for a model with no buyer rating yet); with another persona or any `w_*` weight it is 0.35 * that rating + 0.65 * the weighted criteria both products have a real score for. A persona whose heaviest criterion is not scored on both sides, or custom weights when no criterion is, falls back to the default weights (`applied_persona`). `is_tie` is true when both `custom_weighted_score_10` values are equal at one decimal; `overall_winner` is then only the tie-break: the higher unrounded score, then the lower price, then side A. Also returns the per-criterion head-to-head breakdown, price delta, Deal Radar signals (`deal_radar`), and 10-group specs.',
           tags: ['Comparison & Watchlist'],
           parameters: [
             {
@@ -762,11 +762,34 @@ function buildBaseRateOpenApiSpec(
                   is_tie: { type: 'boolean' },
                   overall_winner: { type: 'object' },
                   price_comparison: { type: 'object' },
+                  persona: {
+                    type: 'string',
+                    description: 'The persona requested (or `balanced`).',
+                  },
+                  applied_persona: {
+                    type: 'string',
+                    enum: [
+                      'default',
+                      'photography',
+                      'gaming',
+                      'endurance',
+                      'business',
+                      'value_hunter',
+                      'custom',
+                    ],
+                    description:
+                      'The versus page preset the pair is scored with. `budget` scores as `value_hunter`, `balanced` as `default`; `creator`, `gamer`, `traveler` and any `w_*` weight score as `custom`. `default` when the requested preset cannot weigh this pair.',
+                  },
+                  weights: {
+                    type: 'object',
+                    description:
+                      'The requested weights as percentages; they apply only when `custom_weighted_basis` is `rating_and_criteria`.',
+                  },
                   custom_weighted_basis: {
                     type: 'string',
-                    enum: ['criteria', 'combined'],
+                    enum: ['rating', 'rating_and_criteria'],
                     description:
-                      'What `custom_weighted_score_*` weighs: the criteria both products have a real score for (`compared_criteria`), or their combined scores when they share none.',
+                      'What `custom_weighted_score_*` weighs: the rating as shown alone, or 0.35 * rating + 0.65 * the weighted criteria both products have a real score for (`compared_criteria`).',
                   },
                   compared_criteria: {
                     type: 'array',
