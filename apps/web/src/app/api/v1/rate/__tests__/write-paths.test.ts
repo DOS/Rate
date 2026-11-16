@@ -43,7 +43,205 @@ const MASTER_ID = '99999999-8888-4777-8666-555555555555';
 const DRAFT_MASTER_ID = '99999999-8888-4777-8666-444444444444';
 // A published product with no category row (DOS/Rate#1544).
 const NO_CATEGORY_MASTER_ID = '99999999-8888-4777-8666-333333333333';
+const HIDE_FAKE_MASTER_ID = '99999999-8888-4777-8666-222222222222';
+const HIDE_FAKE_SLUG = 'samsung-galaxy-s25-256gb';
+const HIDE_FAKE_LISTING_ID = '88888888-7777-4666-8555-111111111111';
 const PHONES_CATEGORY_ID = '77777777-8888-4777-8666-555555555555';
+
+const HIDE_FAKE_REVIEW_ROWS = [
+  {
+    id: 'rev-authentic-good',
+    author_name: 'Buyer 1',
+    rating_star: 5,
+    comment: 'Máy dùng ổn định, pin khỏe cả ngày.',
+    created_at: '2026-11-16T14:00:00Z',
+    reviewer_type: 'user',
+    helpfulness_weight: 1.2,
+    review_flags: {
+      verdict: 'authentic',
+      flag_category: 'authentic',
+      include_in_rating: true,
+    },
+  },
+  {
+    id: 'rev-pending-null-flag',
+    author_name: 'Community 1',
+    rating_star: 4,
+    comment: 'Đánh giá mới gửi đang chờ phân tích.',
+    created_at: '2026-11-16T13:00:00Z',
+    reviewer_type: 'user',
+    helpfulness_weight: 0,
+    review_flags: {
+      verdict: 'unanalyzed',
+      flag_category: null,
+      include_in_rating: false,
+    },
+  },
+  {
+    id: 'rev-pending-authentic-flag',
+    author_name: 'Community 2',
+    rating_star: 4,
+    comment: 'Đánh giá cộng đồng chưa phân tích.',
+    created_at: '2026-11-16T12:00:00Z',
+    reviewer_type: 'user',
+    helpfulness_weight: 0,
+    review_flags: {
+      verdict: 'unanalyzed',
+      flag_category: 'authentic',
+      include_in_rating: false,
+    },
+  },
+  {
+    id: 'rev-unflagged-marketplace',
+    author_name: 'Shopee Buyer',
+    rating_star: 5,
+    comment: 'Màn hình sáng rõ, giao hàng đúng hẹn.',
+    created_at: '2026-11-16T11:00:00Z',
+    reviewer_type: 'user',
+    helpfulness_weight: 1,
+    review_flags: null,
+  },
+  {
+    id: 'rev-sabotage-suspicious',
+    author_name: 'Saboteur 1',
+    rating_star: 1,
+    comment: 'Hàng giả lừa đảo đừng mua shop này.',
+    created_at: '2026-11-16T10:00:00Z',
+    reviewer_type: 'user',
+    helpfulness_weight: 1,
+    review_flags: {
+      verdict: 'suspicious',
+      flag_category: 'competitor_sabotage',
+      include_in_rating: true,
+    },
+  },
+  {
+    id: 'rev-sabotage-null-verdict',
+    author_name: 'Saboteur 2',
+    rating_star: 1,
+    comment: 'Phá hoại shop đối thủ.',
+    created_at: '2026-11-16T09:00:00Z',
+    reviewer_type: 'user',
+    helpfulness_weight: 1,
+    review_flags: {
+      verdict: null,
+      flag_category: 'competitor_sabotage',
+      include_in_rating: true,
+    },
+  },
+  {
+    id: 'rev-bombing-suspicious',
+    author_name: 'Bomber 1',
+    rating_star: 1,
+    comment: 'Spam 1 sao hàng loạt.',
+    created_at: '2026-11-16T08:00:00Z',
+    reviewer_type: 'user',
+    helpfulness_weight: 1,
+    review_flags: {
+      verdict: 'suspicious',
+      flag_category: 'review_bombing',
+      include_in_rating: true,
+    },
+  },
+  {
+    id: 'rev-bombing-null-verdict',
+    author_name: 'Bomber 2',
+    rating_star: 1,
+    comment: 'Đánh sập điểm sản phẩm.',
+    created_at: '2026-11-16T07:00:00Z',
+    reviewer_type: 'user',
+    helpfulness_weight: 1,
+    review_flags: {
+      verdict: null,
+      flag_category: 'review_bombing',
+      include_in_rating: true,
+    },
+  },
+  {
+    id: 'rev-seeding-fake',
+    author_name: 'Seeder',
+    rating_star: 5,
+    comment: 'Sản phẩm tuyệt vời nhất thế giới mua ngay.',
+    created_at: '2026-11-16T06:00:00Z',
+    reviewer_type: 'user',
+    helpfulness_weight: 0,
+    review_flags: {
+      verdict: 'suspicious',
+      flag_category: 'seeding_fake',
+      include_in_rating: false,
+    },
+  },
+  {
+    id: 'rev-coin-spam',
+    author_name: 'Coin Hunter',
+    rating_star: 5,
+    comment: 'Hình ảnh chỉ mang tính chất nhận xu.',
+    created_at: '2026-11-16T05:00:00Z',
+    reviewer_type: 'user',
+    helpfulness_weight: 0,
+    review_flags: {
+      verdict: 'suspicious',
+      flag_category: 'low_value_coin_spam',
+      include_in_rating: false,
+    },
+  },
+  {
+    id: 'rev-verdict-fake',
+    author_name: 'Fake Verdict',
+    rating_star: 5,
+    comment: 'Đánh giá ảo đã gắn verdict fake.',
+    created_at: '2026-11-16T04:00:00Z',
+    reviewer_type: 'user',
+    helpfulness_weight: 1,
+    review_flags: {
+      verdict: 'fake',
+      flag_category: 'authentic',
+      include_in_rating: true,
+    },
+  },
+  {
+    id: 'rev-excluded-rating',
+    author_name: 'Excluded Buyer',
+    rating_star: 5,
+    comment: 'Đã phân tích nhưng bị loại khỏi điểm.',
+    created_at: '2026-11-16T03:00:00Z',
+    reviewer_type: 'user',
+    helpfulness_weight: 1,
+    review_flags: {
+      verdict: 'authentic',
+      flag_category: 'authentic',
+      include_in_rating: false,
+    },
+  },
+  {
+    id: 'rev-zero-weight',
+    author_name: 'Zero Weight',
+    rating_star: 5,
+    comment: 'Trọng số hữu ích bằng 0.',
+    created_at: '2026-11-16T02:00:00Z',
+    reviewer_type: 'user',
+    helpfulness_weight: 0,
+    review_flags: {
+      verdict: 'authentic',
+      flag_category: 'authentic',
+      include_in_rating: true,
+    },
+  },
+  {
+    id: 'rev-requeued-sabotage',
+    author_name: 'Requeued Saboteur',
+    rating_star: 1,
+    comment: 'Đặt lại unanalyzed để phân tích lại nhưng cờ cũ vẫn là sabotage.',
+    created_at: '2026-11-16T01:00:00Z',
+    reviewer_type: 'user',
+    helpfulness_weight: 0,
+    review_flags: {
+      verdict: 'unanalyzed',
+      flag_category: 'competitor_sabotage',
+      include_in_rating: false,
+    },
+  },
+];
 
 process.env.NEXT_PUBLIC_SUPABASE_URL = SUPABASE_URL;
 process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = ANON_KEY;
@@ -164,6 +362,50 @@ globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
     return jsonResponse(200, [
       { id: NO_CATEGORY_MASTER_ID, category_id: null, status: 'published' },
     ]);
+  }
+  if (
+    pathname === '/rest/v1/master_products' &&
+    (new URL(url).searchParams.get('id') === `eq.${HIDE_FAKE_MASTER_ID}` ||
+      new URL(url).searchParams.get('slug') === `eq.${HIDE_FAKE_SLUG}`)
+  ) {
+    const masterRow = {
+      id: HIDE_FAKE_MASTER_ID,
+      category_id: PHONES_CATEGORY_ID,
+      slug: HIDE_FAKE_SLUG,
+      name: 'Samsung Galaxy S25 256GB',
+      brand: 'Samsung',
+      status: 'published',
+      min_price: 20000000,
+      max_price: 22000000,
+      merchant_count: 1,
+      specifications: {},
+      key_specs: {},
+    };
+    return jsonResponse(
+      200,
+      headers.accept?.includes('application/vnd.pgrst.object+json')
+        ? masterRow
+        : [masterRow]
+    );
+  }
+  if (
+    pathname === '/rest/v1/products' &&
+    new URL(url).searchParams.get('cluster_id') === `eq.${HIDE_FAKE_MASTER_ID}`
+  ) {
+    const page =
+      !headers.range || headers.range === '0-999'
+        ? [{ id: HIDE_FAKE_LISTING_ID }]
+        : [];
+    return new Response(JSON.stringify(page), {
+      status: 200,
+      headers: {
+        'Content-Type': 'application/json',
+        'Content-Range': '0-0/1',
+      },
+    });
+  }
+  if (pathname === '/rest/v1/reviews' && url.includes(HIDE_FAKE_LISTING_ID)) {
+    return jsonResponse(200, HIDE_FAKE_REVIEW_ROWS);
   }
   if (pathname === '/rest/v1/master_products') {
     return jsonResponse(200, [
@@ -735,6 +977,154 @@ async function testReviewsByIdPublishedOnly() {
   assert.equal((await res.json()).masterProductId, MASTER_ID);
   console.log(
     '  ✅ GET /api/v1/rate/reviews?masterProductId= serves published products only (#1309)'
+  );
+}
+
+async function testReviewsHideFakeAnd413Cors() {
+  const { GET, OPTIONS, POST } = await import('../reviews/route');
+  const { MAX_JSON_BODY_BYTES } = await import('@/server/rate/api-handler');
+  type GetReq = Parameters<typeof GET>[0];
+  type PostReq = Parameters<typeof POST>[0];
+
+  const getReviews = (query: string) =>
+    GET({
+      nextUrl: new URL(`http://localhost/api/v1/rate/reviews?${query}`),
+      headers: new Headers(),
+    } as unknown as GetReq);
+
+  const expectedKeptIds = [
+    'rev-authentic-good',
+    'rev-pending-null-flag',
+    'rev-pending-authentic-flag',
+    'rev-unflagged-marketplace',
+  ];
+
+  // Unfiltered GET returns every review row.
+  for (const query of [
+    `masterProductId=${HIDE_FAKE_MASTER_ID}`,
+    `masterProductId=${HIDE_FAKE_MASTER_ID}&hideFake=0`,
+    `slug=${HIDE_FAKE_SLUG}&hideFake=false`,
+  ]) {
+    const unfilteredRes = await getReviews(query);
+    assert.equal(unfilteredRes.status, 200, query);
+    const unfilteredBody = await unfilteredRes.json();
+    assert.equal(unfilteredBody.totalCount, HIDE_FAKE_REVIEW_ROWS.length);
+    assert.equal(unfilteredBody.count, HIDE_FAKE_REVIEW_ROWS.length);
+    assert.equal(unfilteredBody.data.length, HIDE_FAKE_REVIEW_ROWS.length);
+  }
+
+  // ?hideFake=1 and ?hideFake=true exclude sabotage, bombing, seeding, coin
+  // spam, verdict==='fake', and rating-excluded analyzed reviews while keeping
+  // authentic and pending community reviews (DOS/Rate#1685).
+  for (const query of [
+    `masterProductId=${HIDE_FAKE_MASTER_ID}&hideFake=1`,
+    `slug=${HIDE_FAKE_SLUG}&hideFake=true`,
+    `slug=${HIDE_FAKE_SLUG}&hideFake=TRUE`,
+  ]) {
+    const filteredRes = await getReviews(query);
+    assert.equal(filteredRes.status, 200, query);
+    const filteredBody = await filteredRes.json();
+    assert.equal(filteredBody.totalCount, HIDE_FAKE_REVIEW_ROWS.length, query);
+    assert.equal(filteredBody.count, expectedKeptIds.length, query);
+    assert.deepEqual(
+      filteredBody.data.map((r: { id: string }) => r.id),
+      expectedKeptIds,
+      query
+    );
+  }
+
+  // limit applies after hideFake filtering while totalCount stays pre-filter.
+  const limitedRes = await getReviews(
+    `masterProductId=${HIDE_FAKE_MASTER_ID}&hideFake=1&limit=2`
+  );
+  assert.equal(limitedRes.status, 200);
+  const limitedBody = await limitedRes.json();
+  assert.equal(limitedBody.totalCount, HIDE_FAKE_REVIEW_ROWS.length);
+  assert.equal(limitedBody.count, 2);
+  assert.deepEqual(
+    limitedBody.data.map((r: { id: string }) => r.id),
+    expectedKeptIds.slice(0, 2)
+  );
+
+  // POST 413 returns REVIEWS_CORS_HEADERS (including POST in Allow-Methods),
+  // matching OPTIONS() both via declared Content-Length and via streamed body.
+  const optionsRes = await OPTIONS();
+  const expectedAllowOrigin = optionsRes.headers.get(
+    'access-control-allow-origin'
+  );
+  const expectedAllowMethods = optionsRes.headers.get(
+    'access-control-allow-methods'
+  );
+  const expectedAllowHeaders = optionsRes.headers.get(
+    'access-control-allow-headers'
+  );
+  assert.equal(expectedAllowMethods, 'GET, POST, OPTIONS');
+
+  calls = [];
+  const oversizeDeclaredRes = await POST(
+    new Request('http://localhost/api/v1/rate/reviews', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Content-Length': String(MAX_JSON_BODY_BYTES + 1),
+      },
+      body: '{}',
+    }) as unknown as PostReq
+  );
+  assert.equal(oversizeDeclaredRes.status, 413);
+  assert.equal((await oversizeDeclaredRes.json()).code, 'PAYLOAD_TOO_LARGE');
+  assert.equal(
+    oversizeDeclaredRes.headers.get('access-control-allow-origin'),
+    expectedAllowOrigin
+  );
+  assert.equal(
+    oversizeDeclaredRes.headers.get('access-control-allow-methods'),
+    'GET, POST, OPTIONS'
+  );
+  assert.equal(
+    oversizeDeclaredRes.headers.get('access-control-allow-headers'),
+    expectedAllowHeaders
+  );
+  assert.equal(
+    calls.length,
+    0,
+    'oversized body is rejected before auth or RPC'
+  );
+
+  const streamedBytes = new Uint8Array(MAX_JSON_BODY_BYTES + 64).fill(0x61);
+  const streamedBody = new ReadableStream<Uint8Array>({
+    start(controller) {
+      controller.enqueue(streamedBytes);
+      controller.close();
+    },
+  });
+  calls = [];
+  const oversizeStreamRes = await POST(
+    new Request('http://localhost/api/v1/rate/reviews', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: streamedBody,
+      duplex: 'half',
+    } as RequestInit) as unknown as PostReq
+  );
+  assert.equal(oversizeStreamRes.status, 413);
+  assert.equal((await oversizeStreamRes.json()).code, 'PAYLOAD_TOO_LARGE');
+  assert.equal(
+    oversizeStreamRes.headers.get('access-control-allow-origin'),
+    expectedAllowOrigin
+  );
+  assert.equal(
+    oversizeStreamRes.headers.get('access-control-allow-methods'),
+    'GET, POST, OPTIONS'
+  );
+  assert.equal(
+    oversizeStreamRes.headers.get('access-control-allow-headers'),
+    expectedAllowHeaders
+  );
+  assert.equal(calls.length, 0);
+
+  console.log(
+    '  ✅ GET /api/v1/rate/reviews?hideFake=1 excludes sabotage/bombing/excluded reviews and POST 413 carries REVIEWS_CORS_HEADERS (#1685)'
   );
 }
 
@@ -2441,6 +2831,7 @@ async function main() {
   await testReviews();
   await testReviewsV2();
   await testReviewsByIdPublishedOnly();
+  await testReviewsHideFakeAnd413Cors();
   await testMyReviewValues();
   await testExtensionObservations();
   await testWatchlist();
