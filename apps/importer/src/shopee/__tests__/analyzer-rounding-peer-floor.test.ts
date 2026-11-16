@@ -185,11 +185,41 @@ export function runAnalyzerRoundingAndPeerFloorTests(): void {
   assert.equal(
     bayesianSubnormalGuard.score,
     2.01,
-    'Negligible sub-1e-24 weight must not revert batch to binary-float rounding'
+    'Convertible 1e-30 weight must preserve exact decimal rounding'
+  );
+
+  const bayesianMixedSub1e36 = computeBayesianProductRating([
+    { rating_star: 1, weight: 1e-36 },
+    { rating_star: 5, weight: 9e-37 },
+  ]);
+  assert.equal(
+    bayesianMixedSub1e36.raw_weighted_average,
+    2.89,
+    'Mixed 1e-36 and unconvertible 9e-37 weights must fall back to numeric average 2.89 instead of 1'
   );
 
   // 4. Summary & merchant risk midpoint ties
   const analyzer = new AiReviewAnalyzer({ provider: 'dos-ai', apiKey: '' });
+  const mixedScaleUserSummary = analyzer.computeJReviewsSummary(
+    [
+      { id: 'ms-u1', rating_star: 1, comment: 'Poor' },
+      { id: 'ms-u2', rating_star: 5, comment: 'Good' },
+    ],
+    [makeAuthenticResult('ms-u1', 1e-36), makeAuthenticResult('ms-u2', 9e-37)]
+  );
+  assert.equal(mixedScaleUserSummary.user_rating_weighted, 2.89);
+  assert.equal(mixedScaleUserSummary.overall_rating, 2.89);
+  assert.equal(mixedScaleUserSummary.bayesian_rating?.raw_weighted_average, 2.89);
+
+  const mixedScaleExpertSummary = analyzer.computeJReviewsSummary(
+    [
+      { id: 'ms-e1', rating_star: 1, reviewer_type: 'expert', comment: 'Poor' },
+      { id: 'ms-e2', rating_star: 5, reviewer_type: 'expert', comment: 'Good' },
+    ],
+    [makeAuthenticResult('ms-e1', 1e-36), makeAuthenticResult('ms-e2', 9e-37)]
+  );
+  assert.equal(mixedScaleExpertSummary.expert_rating, 2.89);
+  assert.equal(mixedScaleExpertSummary.overall_rating, 2.89);
   const reviews200: ReviewInputItem[] = [];
   const results200: AnalyzedReviewResult[] = [];
   for (let i = 0; i < 200; i++) {

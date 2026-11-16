@@ -719,8 +719,6 @@ export function computeBayesianProductRating(
           exactWeightedRatingSum,
           mulExactDecimal(wDec, rDec)
         );
-      } else if (w < 1e-24 && k >= 1e-12 && rDec) {
-        // Sub-1e-24 weight is >12 orders of magnitude below prior k; keep exact batch state intact.
       } else {
         exactValid = false;
       }
@@ -2132,9 +2130,6 @@ Rules for "ai_summary": these reviews come from ONE listing's latest batch, not 
           if (starDec && wDec) {
             exactExpertSum = addExactDecimal(exactExpertSum, mulExactDecimal(starDec, wDec));
             exactExpertWeight = addExactDecimal(exactExpertWeight, wDec);
-          } else if (weight < 1e-24 && starDec) {
-            // Sub-1e-24 weight is negligible when non-trivial weights exist; if all are <1e-24,
-            // exactExpertWeight.m === 0n falls back to divideDecimalsHalfUp(expertSum, expertWeight).
           } else {
             exactSummaryValid = false;
           }
@@ -2149,8 +2144,6 @@ Rules for "ai_summary": these reviews come from ONE listing's latest batch, not 
               mulExactDecimal(starDec, wDec)
             );
             exactTotalUserWeight = addExactDecimal(exactTotalUserWeight, wDec);
-          } else if (weight < 1e-24 && starDec) {
-            // Keep exact summary accumulator intact; if all weights are <1e-24, falls back cleanly.
           } else {
             exactSummaryValid = false;
           }
