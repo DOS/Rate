@@ -422,13 +422,13 @@ export function buildProductSignalSignature(
     (signal.price === null || signal.originalPrice > signal.price)
       ? String(signal.originalPrice)
       : '';
-  return [
+  return JSON.stringify([
     signal.canonicalUrl,
     signal.selectedVariant ?? '',
     signal.price ?? '',
     originalPrice,
     signal.title,
-  ].join('|');
+  ]);
 }
 
 /**

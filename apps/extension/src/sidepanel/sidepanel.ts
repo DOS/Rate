@@ -746,6 +746,7 @@ async function runQuickQuery(query: string): Promise<void> {
       }
     );
   } catch {
+    if (generation !== panelLoadGeneration) return;
     renderLookupError(root, null, query, () => {
       void runQuickQuery(query);
     });

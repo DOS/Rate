@@ -404,6 +404,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       });
       return false;
     }
+    const fullSeq = ++fullLookupRequestCounter;
+    const detectSnapshotAtEntry = new Map(latestDetectByTab);
     (async () => {
       try {
         const cleanedVariant =
@@ -419,6 +421,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           currentWindow: true,
         });
         const tabKey = activeTab?.id ? `tab_${activeTab.id}` : 'tab_latest';
+        const detectSeqAtEntry =
+          activeTab?.id !== undefined
+            ? detectSnapshotAtEntry.get(activeTab.id)
+            : undefined;
         const sessionData = await chrome.storage.session.get([
           tabKey,
           'tab_latest',
@@ -461,6 +467,18 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           tabEntry?.source !== 'quick_query' &&
           !isQuickQuerySelected;
 
+        const trackedTabId = isActiveTabPageSignal ? activeTab?.id : undefined;
+        if (
+          trackedTabId !== undefined &&
+          (latestFullLookupByTab.get(trackedTabId) ?? 0) < fullSeq
+        ) {
+          latestFullLookupByTab.set(trackedTabId, fullSeq);
+        }
+        const isCurrentTabLookup = () =>
+          trackedTabId !== undefined &&
+          latestDetectByTab.get(trackedTabId) === detectSeqAtEntry &&
+          latestFullLookupByTab.get(trackedTabId) === fullSeq;
+
         const effectiveSignal: ExtractedPageProductSignal = overrideVariant
           ? { ...baseSignal, selectedVariant: overrideVariant }
           : baseSignal;
@@ -468,19 +486,21 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         if (overrideVariant) {
           const now = Date.now();
           if (isActiveTabPageSignal) {
-            await chrome.storage.session.set({
-              [tabKey]: {
-                signal: effectiveSignal,
-                updatedAt: now,
-                source: 'page',
-              },
-              tab_latest: {
-                signal: effectiveSignal,
-                updatedAt: now,
-                source: 'page',
-              },
-            });
-          } else {
+            if (isCurrentTabLookup()) {
+              await chrome.storage.session.set({
+                [tabKey]: {
+                  signal: effectiveSignal,
+                  updatedAt: now,
+                  source: 'page',
+                },
+                tab_latest: {
+                  signal: effectiveSignal,
+                  updatedAt: now,
+                  source: 'page',
+                },
+              });
+            }
+          } else if (fullSeq === fullLookupRequestCounter) {
             await chrome.storage.session.set({
               tab_latest: {
                 signal: effectiveSignal,
@@ -491,27 +511,18 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           }
         }
 
-        const trackedTabId = isActiveTabPageSignal ? activeTab?.id : undefined;
-        const detectSeqBefore = trackedTabId
-          ? latestDetectByTab.get(trackedTabId)
-          : undefined;
-        const fullSeq = trackedTabId ? ++fullLookupRequestCounter : undefined;
-        if (trackedTabId && fullSeq !== undefined) {
-          latestFullLookupByTab.set(trackedTabId, fullSeq);
-        }
         const outcome = await fetchExtensionLookup(effectiveSignal, 'full');
-        const isCurrentTabLookup =
-          trackedTabId !== undefined &&
-          latestDetectByTab.get(trackedTabId) === detectSeqBefore &&
-          latestFullLookupByTab.get(trackedTabId) === fullSeq;
-        if (isCurrentTabLookup && trackedTabId !== undefined) {
+        const currentTabLookup = isCurrentTabLookup();
+        if (currentTabLookup && trackedTabId !== undefined) {
           const resolvedLookup = outcome.ok ? outcome.data : null;
           await updateActionBadge(trackedTabId, resolvedLookup);
           await chrome.storage.session.set({
             [`lookup_${tabKey}`]: resolvedLookup,
           });
         }
-        const stale = trackedTabId !== undefined && !isCurrentTabLookup;
+        const stale = isActiveTabPageSignal
+          ? !currentTabLookup
+          : fullSeq !== fullLookupRequestCounter;
         sendResponse(
           outcome.ok
             ? {
@@ -550,6 +561,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       });
       return false;
     }
+    const quickSeq = ++fullLookupRequestCounter;
     (async () => {
       try {
         const rawQuery =
@@ -627,14 +639,16 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           syntheticSignal.platform = fullLookup.platform;
         }
 
-        const now = Date.now();
-        await chrome.storage.session.set({
-          tab_latest: {
-            signal: syntheticSignal,
-            updatedAt: now,
-            source: 'quick_query',
-          },
-        });
+        if (quickSeq === fullLookupRequestCounter) {
+          const now = Date.now();
+          await chrome.storage.session.set({
+            tab_latest: {
+              signal: syntheticSignal,
+              updatedAt: now,
+              source: 'quick_query',
+            },
+          });
+        }
 
         sendResponse({
           ok: true,

@@ -602,8 +602,8 @@ function tokenizeVariantText(raw: string): string[] {
 
 function matchesVariantSku(rawSku: unknown, selectedVariant: string): boolean {
   if (typeof rawSku !== 'string') return false;
-  const sku = rawSku.trim().toLowerCase();
-  const wanted = selectedVariant.trim().toLowerCase();
+  const sku = rawSku.normalize('NFC').trim().toLowerCase();
+  const wanted = selectedVariant.normalize('NFC').trim().toLowerCase();
   if (!sku || !wanted) return false;
   if (sku === wanted) return true;
   if (/^\d+$/.test(sku)) return false;
@@ -628,7 +628,7 @@ export function pickVariantOffer(
   const wantedTokens = tokenizeVariantText(selectedVariant);
   if (wantedTokens.length === 0) return null;
   const wantedSet = new Set(wantedTokens);
-  const wantedLower = selectedVariant.trim().toLowerCase();
+  const wantedLower = selectedVariant.normalize('NFC').trim().toLowerCase();
 
   const exactMatches: Record<string, unknown>[] = [];
   const subsetCandidates: Array<{
@@ -640,7 +640,7 @@ export function pickVariantOffer(
     const isExactSku =
       typeof offer.sku === 'string' &&
       offer.sku.trim().length > 0 &&
-      offer.sku.trim().toLowerCase() === wantedLower;
+      offer.sku.normalize('NFC').trim().toLowerCase() === wantedLower;
     const nameTokens =
       typeof offer.name === 'string' ? tokenizeVariantText(offer.name) : [];
     const nameSet = new Set(nameTokens);
@@ -654,16 +654,25 @@ export function pickVariantOffer(
       continue;
     }
 
-    const skuMatched = matchesVariantSku(offer.sku, selectedVariant);
     const nameSubset =
       nameSet.size > 0 &&
       ([...nameSet].every((tok) => wantedSet.has(tok)) ||
         [...wantedSet].every((tok) => nameSet.has(tok)));
-    if (skuMatched || nameSubset) {
-      const overlap = Math.max(
-        skuMatched ? wantedSet.size + 1 : 0,
-        nameSubset ? Math.min(nameSet.size, wantedSet.size) : 0
-      );
+    const skuAllowed =
+      matchesVariantSku(offer.sku, selectedVariant) &&
+      (nameSet.size === 0 || nameSubset);
+    if (skuAllowed || nameSubset) {
+      const candidateTokens = new Set<string>(nameSubset ? nameSet : []);
+      if (skuAllowed && typeof offer.sku === 'string') {
+        for (const tok of tokenizeVariantText(offer.sku)) {
+          candidateTokens.add(tok);
+        }
+      }
+      let matchedWanted = 0;
+      for (const tok of wantedSet) {
+        if (candidateTokens.has(tok)) matchedWanted += 1;
+      }
+      const overlap = Math.max(skuAllowed ? 1 : 0, matchedWanted);
       subsetCandidates.push({ offer, overlap });
     }
   }

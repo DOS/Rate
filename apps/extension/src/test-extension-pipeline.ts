@@ -5863,6 +5863,30 @@ async function runTests() {
     const { buildPillAriaLabel } = await import('./verdict-display.js');
     const { buildSvgSparkline, renderVariantPickerHtml } =
       await import('./sidepanel/panel-view.js');
+    const { formatCatalogueEntry } = await import('./i18n.js');
+
+    const snapshotGlobals = (
+      target: Record<string, unknown>,
+      keys: readonly string[]
+    ): (() => void) => {
+      const entries = keys.map(
+        (key) =>
+          [
+            key,
+            Object.prototype.hasOwnProperty.call(target, key),
+            target[key],
+          ] as const
+      );
+      return () => {
+        for (const [key, hadOwn, prevVal] of entries) {
+          if (hadOwn) {
+            target[key] = prevVal;
+          } else {
+            Reflect.deleteProperty(target, key);
+          }
+        }
+      };
+    };
 
     // 1. Negative VND voucher strings rejected before stripping non-digits.
     for (const neg of [
@@ -5935,6 +5959,34 @@ async function runTests() {
     assert.equal(
       pickVariantOffer(colorOffers, 'Đen Nhám - 256GB'),
       colorOffers[1]
+    );
+    const multiAttrSkuOffers = [
+      { sku: 'black', name: 'Galaxy S25 128GB Black' },
+      { sku: 'silver', name: 'Galaxy S25 128GB Silver' },
+      { sku: 'black-256', name: 'Galaxy S25 256GB Black' },
+    ];
+    assert.equal(
+      pickVariantOffer(multiAttrSkuOffers, 'Black - 256GB'),
+      multiAttrSkuOffers[2],
+      'partial SKU token must not override conflicting offer.name storage'
+    );
+    const partialSkuColorOffers = [
+      { sku: '256GB', name: 'iPhone 16 256GB Đen' },
+      { sku: '256GB-WHT', name: 'iPhone 16 256GB Trắng' },
+    ];
+    assert.equal(
+      pickVariantOffer(partialSkuColorOffers, 'Trắng - 256GB'),
+      partialSkuColorOffers[1],
+      'partial SKU "256GB" must not match wrong color offer'
+    );
+    const nfdSkuOffers = [
+      { sku: 'Đen'.normalize('NFD') },
+      { sku: 'Trắng'.normalize('NFD') },
+    ];
+    assert.equal(
+      pickVariantOffer(nfdSkuOffers, 'Đen'.normalize('NFC')),
+      nfdSkuOffers[0],
+      'NFC normalization must match decomposed Vietnamese SKU'
     );
 
     // 3. Variant picker null-storage check, aria-pressed & sparkline aria-hidden.
@@ -6085,6 +6137,19 @@ async function runTests() {
       sigHydratedTitle,
       'whitespace churn or non-discount originalPrice <= price keeps sig stable'
     );
+    assert.notEqual(
+      buildProductSignalSignature({
+        ...baseSigInput,
+        selectedVariant: 'A|B',
+        title: 'C',
+      }),
+      buildProductSignalSignature({
+        ...baseSigInput,
+        selectedVariant: 'A',
+        title: 'B|C',
+      }),
+      'pipe characters inside fields must not collide across field boundaries'
+    );
 
     // 5. WCAG 2.5.3 Label in Name + live content-script SPA hydration re-lookup.
     const removeParens = (v: string): string => {
@@ -6111,32 +6176,65 @@ async function runTests() {
       }
       return false;
     };
-    const directAria = buildPillAriaLabel(
-      'Giảm giá ảo',
-      'Rẻ hơn tại 3 nơi (-1.500.000 ₫)',
-      ['Bẫy Sale (+35%)', '4.4 (89% thật)']
-    );
-    assert.equal(
-      isLabelInName(
-        'Rate.vn Giảm giá ảo Bẫy Sale (+35%) 4.4 (89% thật) Rẻ hơn tại 3 nơi (-1.500.000 ₫) Chi tiết',
-        directAria
-      ),
-      true,
-      'buildPillAriaLabel must contain all on-screen pill tokens including cta-btn in order'
-    );
+    const catalogues = readLocaleCatalogues();
+    {
+      const g = globalThis as Record<string, unknown>;
+      const restoreI18nChrome = snapshotGlobals(g, ['chrome']);
+      try {
+        for (const locale of ['vi', 'en', 'cs'] as const) {
+          const cat = catalogues[locale];
+          g.chrome = {
+            i18n: {
+              getUILanguage: () => locale,
+              getMessage: (key: string, subs?: string | string[]) => {
+                const entry = cat[key];
+                if (!entry) return '';
+                const list = Array.isArray(subs)
+                  ? subs
+                  : subs !== undefined
+                    ? [subs]
+                    : [];
+                return formatCatalogueEntry(entry, list);
+              },
+            },
+          };
+          const detailsCta = formatCatalogueEntry(cat.pillDetails!);
+          const radarTrap = formatCatalogueEntry(cat.pillRadarTrap!, ['35']);
+          const authentic = formatCatalogueEntry(cat.pillAuthentic!, ['89']);
+          const ratingChip = `4.4 ${authentic}`;
+          const summary = formatCatalogueEntry(cat.pillCheaperAt!, [
+            '3',
+            '-1.500.000 ₫',
+          ]);
+          const aria = buildPillAriaLabel('Fake sale', summary, [
+            radarTrap,
+            ratingChip,
+          ]);
+          const visible = `Rate.vn Fake sale ${radarTrap} ${ratingChip} ${summary} ${detailsCta}`;
+          assert.equal(
+            isLabelInName(visible, aria),
+            true,
+            `buildPillAriaLabel must satisfy WCAG 2.5.3 in locale ${locale}`
+          );
+        }
+      } finally {
+        restoreI18nChrome();
+      }
+    }
 
     // Live content-script hydration & rendered Shadow DOM pill WCAG 2.5.3 check.
     {
       const g = globalThis as Record<string, unknown>;
-      const saved = {
-        window: g.window,
-        document: g.document,
-        MutationObserver: g.MutationObserver,
-        requestAnimationFrame: g.requestAnimationFrame,
-        setTimeout: g.setTimeout,
-        clearTimeout: g.clearTimeout,
-        chrome: g.chrome,
-      };
+      const hadWindowBefore = Object.prototype.hasOwnProperty.call(g, 'window');
+      const restoreDomGlobals = snapshotGlobals(g, [
+        'window',
+        'document',
+        'MutationObserver',
+        'requestAnimationFrame',
+        'setTimeout',
+        'clearTimeout',
+        'chrome',
+      ]);
       let h1Text = 'iPhone 16';
       let delText = '';
       let shadowHtml = '';
@@ -6281,21 +6379,28 @@ async function runTests() {
         await flush();
         assert.equal(sentSignals.length, 3, 'hydrated title must re-lookup');
       } finally {
-        Object.assign(g, saved);
+        restoreDomGlobals();
       }
+      assert.equal(
+        Object.prototype.hasOwnProperty.call(g, 'window'),
+        hadWindowBefore,
+        'globalThis.window presence must be cleanly restored'
+      );
     }
 
     // 6. Service worker: clear stale lookup_tab_<id> & update badge after variant fetch.
     {
       const g = globalThis as Record<string, unknown>;
-      const prevChrome = g.chrome;
-      const prevFetch = g.fetch;
+      const restoreSwGlobals = snapshotGlobals(g, ['chrome', 'fetch']);
       const sessionMap = new Map<string, unknown>();
       const localMap = new Map<string, unknown>([
         ['apiBaseUrl', 'https://rate.vn'],
         ['crowdContributeOptIn', false],
       ]);
       const badges = new Map<number, { text: string; color?: string }>();
+      let delayLocalGetOnce = false;
+      let onLocalGetBlocked: (() => void) | null = null;
+      let releaseLocalGet: (() => void) | null = null;
       let onMsg:
         | ((
             m: Record<string, unknown>,
@@ -6323,6 +6428,14 @@ async function runTests() {
           storage: {
             local: {
               get: async (k?: string | string[]) => {
+                if (delayLocalGetOnce) {
+                  delayLocalGetOnce = false;
+                  const gate = new Promise<void>((r) => {
+                    releaseLocalGet = r;
+                  });
+                  onLocalGetBlocked?.();
+                  await gate;
+                }
                 const keys = Array.isArray(k) ? k : k ? [k] : [];
                 return Object.fromEntries(
                   keys
@@ -6567,9 +6680,83 @@ async function runTests() {
           )?.priceAssessment?.verdict,
           'inflated_fake_sale'
         );
+
+        // (e) New RATE_PRODUCT_DETECTED arriving while RATE_SIDEPANEL_FETCH_FULL awaits settings must not be overwritten.
+        fetchResponder = (url: string) => {
+          const parsed = new URL(url);
+          const isProductB = parsed.searchParams.get('title') === 'Product B';
+          return new Response(
+            JSON.stringify({
+              ok: true,
+              data: mkLookup(
+                'canonical_model',
+                isProductB ? 'inflated_fake_sale' : 'genuine_deal'
+              ),
+            }),
+            { status: 200 }
+          );
+        };
+        await callSw(
+          {
+            type: 'RATE_PRODUCT_DETECTED',
+            signal: { ...baseSigInput, title: 'Product A' },
+          },
+          { tab: { id: 42, active: true } }
+        );
+        assert.equal(badges.get(42)?.text, 'TỐT');
+        delayLocalGetOnce = true;
+        const blockedAtSettings = new Promise<void>((r) => {
+          onLocalGetBlocked = r;
+        });
+        const inFlightFullA = callSw(
+          { type: 'RATE_SIDEPANEL_FETCH_FULL', selectedVariant: '256GB' },
+          panelSender
+        );
+        await blockedAtSettings;
+        await callSw(
+          {
+            type: 'RATE_PRODUCT_DETECTED',
+            signal: {
+              ...baseSigInput,
+              canonicalUrl: 'https://shopee.vn/galaxy-s25-ultra-i.88.100',
+              title: 'Product B',
+              selectedVariant: null,
+            },
+          },
+          { tab: { id: 42, active: true } }
+        );
+        assert.equal(badges.get(42)?.text, 'ẢO!');
+        releaseLocalGet!();
+        const staleFullA = await inFlightFullA;
+        assert.equal(
+          staleFullA.stale,
+          true,
+          'full lookup started before newer tab detection must be marked stale'
+        );
+        assert.equal(
+          badges.get(42)?.text,
+          'ẢO!',
+          'stale full lookup must not overwrite newer product badge'
+        );
+        assert.equal(
+          (
+            sessionMap.get('lookup_tab_42') as {
+              priceAssessment?: { verdict?: string };
+            }
+          )?.priceAssessment?.verdict,
+          'inflated_fake_sale'
+        );
+        assert.equal(
+          (
+            sessionMap.get('tab_42') as {
+              signal?: { title?: string; selectedVariant?: string | null };
+            }
+          )?.signal?.title,
+          'Product B',
+          'stale overrideVariant write must not clobber newer tab_42 signal'
+        );
       } finally {
-        g.chrome = prevChrome;
-        g.fetch = prevFetch;
+        restoreSwGlobals();
       }
     }
     console.log(
