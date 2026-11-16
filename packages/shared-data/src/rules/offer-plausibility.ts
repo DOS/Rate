@@ -116,7 +116,9 @@ function cleanOfferId(raw: unknown): string {
     /^[.:]|[.:]$/.test(id) ||
     id.includes('..') ||
     id.includes('::') ||
-    /^(?:0+|null|undefined|nan|infinity|-infinity|true|false)$/i.test(id)
+    /^(?:0+|null|undefined|nan|infinity|-infinity|true|false|__proto__|constructor|prototype|tostring|valueof)$/i.test(
+      id
+    )
   ) {
     return '';
   }
@@ -135,6 +137,78 @@ function hasSetLookup(
 
 function isUnavailableStatus(availability: unknown): boolean {
   return availability === 'out_of_stock' || availability === 'discontinued';
+}
+
+interface PrecomputedReferenceBait {
+  length: number;
+  flaggedObjects: WeakSet<object>;
+  nonFlaggedObjects: WeakSet<object>;
+  naturalBaitIds: Set<string>;
+  presentCanonicalIds: Set<string>;
+  presentTrimmedIds: Set<string>;
+  flaggedTrimmedIds: Set<string>;
+  plausibleCutoff: number;
+}
+
+const referenceBaitCache = new WeakMap<
+  readonly unknown[],
+  PrecomputedReferenceBait
+>();
+
+function getPrecomputedReferenceBait(
+  referenceOffers: readonly { id?: string | null; price_current: number }[]
+): PrecomputedReferenceBait {
+  const cached = referenceBaitCache.get(referenceOffers);
+  if (cached && cached.length === referenceOffers.length) return cached;
+
+  const flaggedIndexes = implausiblyLowIndexes(
+    referenceOffers.map((o) => o?.price_current)
+  );
+  const flaggedObjects = new WeakSet<object>();
+  const nonFlaggedObjects = new WeakSet<object>();
+  const naturalBaitIds = new Set<string>();
+  const presentCanonicalIds = new Set<string>();
+  const presentTrimmedIds = new Set<string>();
+  const flaggedTrimmedIds = new Set<string>();
+  const plausiblePrices: number[] = [];
+
+  for (let i = 0; i < referenceOffers.length; i++) {
+    const item = referenceOffers[i];
+    if (!isNonArrayObject(item)) continue;
+    const canonical = cleanOfferId(item.id);
+    const trimmed = trimOfferString(item.id);
+    if (canonical) presentCanonicalIds.add(canonical);
+    if (trimmed) presentTrimmedIds.add(trimmed);
+    if (flaggedIndexes.has(i)) {
+      flaggedObjects.add(item);
+      if (canonical) naturalBaitIds.add(canonical);
+      if (trimmed) flaggedTrimmedIds.add(trimmed);
+    } else {
+      nonFlaggedObjects.add(item);
+      const p = toSafePlausiblePrice(item.price_current);
+      if (isValidPlausiblePrice(p)) plausiblePrices.push(p);
+    }
+  }
+
+  plausiblePrices.sort((a, b) => a - b);
+  const plausibleCutoff =
+    plausiblePrices.length >= MIN_OFFERS_FOR_OUTLIER - 1
+      ? plausiblePrices[Math.floor((plausiblePrices.length - 1) / 2)]! *
+        IMPLAUSIBLY_LOW_RATIO
+      : 0;
+
+  const entry: PrecomputedReferenceBait = {
+    length: referenceOffers.length,
+    flaggedObjects,
+    nonFlaggedObjects,
+    naturalBaitIds,
+    presentCanonicalIds,
+    presentTrimmedIds,
+    flaggedTrimmedIds,
+    plausibleCutoff,
+  };
+  referenceBaitCache.set(referenceOffers, entry);
+  return entry;
 }
 
 /**
@@ -195,42 +269,33 @@ export function isOfferImplausiblyLowAgainstInStock(
   if (hasImplausiblyLowOfferId(inStockBaitIds, offer.id)) {
     return true;
   }
-  const safeInStock = Array.isArray(inStockOffers) ? inStockOffers : [];
-  if (isUnavailableStatus(offer.availability)) {
-    return isImplausiblyLowPrice(
-      offer.price_current,
-      plausibleOffers(safeInStock)
-    );
-  }
-  const canonicalId = cleanOfferId(offer.id);
-  if (
-    Boolean(canonicalId) &&
-    hasSetLookup(inStockBaitIds) &&
-    safeInStock.some((c) => c === offer || cleanOfferId(c?.id) === canonicalId)
-  ) {
+  if (!Array.isArray(inStockOffers) || inStockOffers.length === 0) {
     return false;
   }
-  const rawCleaned = trimOfferString(offer.id);
-  let excludedSelf = false;
-  const others = safeInStock.filter((candidate) => {
-    if (!excludedSelf) {
-      if (candidate === offer) {
-        excludedSelf = true;
-        return false;
-      }
-      if (
-        Boolean(rawCleaned) &&
-        isNonArrayObject(candidate) &&
-        (trimOfferString(candidate.id) === rawCleaned ||
-          (Boolean(canonicalId) && cleanOfferId(candidate.id) === canonicalId))
-      ) {
-        excludedSelf = true;
-        return false;
-      }
+  const pre = getPrecomputedReferenceBait(inStockOffers);
+  const canonicalId = cleanOfferId(offer.id);
+  const hasCustomSet = hasSetLookup(inStockBaitIds);
+  if (pre.flaggedObjects.has(offer)) {
+    return !(hasCustomSet && Boolean(canonicalId));
+  }
+  if (pre.nonFlaggedObjects.has(offer)) {
+    return false;
+  }
+  if (!isUnavailableStatus(offer.availability)) {
+    if (Boolean(canonicalId) && pre.presentCanonicalIds.has(canonicalId)) {
+      return hasCustomSet ? false : pre.naturalBaitIds.has(canonicalId);
     }
-    return true;
-  });
-  return isImplausiblyLowPrice(offer.price_current, others);
+    const trimmedId = trimOfferString(offer.id);
+    if (Boolean(trimmedId) && pre.presentTrimmedIds.has(trimmedId)) {
+      return pre.flaggedTrimmedIds.has(trimmedId);
+    }
+  }
+  const numPrice = toSafePlausiblePrice(offer.price_current);
+  return (
+    isValidPlausiblePrice(numPrice) &&
+    pre.plausibleCutoff > 0 &&
+    numPrice < pre.plausibleCutoff
+  );
 }
 
 /**

@@ -893,6 +893,45 @@ function testPriceRules(): void {
     ),
     true
   );
+  for (const protoKey of [
+    'constructor',
+    'prototype',
+    '__proto__',
+    'toString',
+    'valueOf',
+  ]) {
+    assert.equal(rules.normalizeOfferId(protoKey), '');
+  }
+  const perfInStock = Array.from({ length: 1500 }, (_, i) => ({
+    id: `in-${i}`,
+    price_current: 3_000_000 + i * 1_000,
+    availability: 'in_stock',
+  }));
+  const perfBaitIds = rules.implausiblyLowOfferIds(perfInStock);
+  const perfStart = Date.now();
+  for (let i = 0; i < 1500; i++) {
+    assert.equal(
+      rules.isOfferImplausiblyLowAgainstInStock(
+        perfInStock[i],
+        perfInStock,
+        perfBaitIds
+      ),
+      false
+    );
+    assert.equal(
+      rules.isOfferImplausiblyLowAgainstInStock(
+        {
+          id: `out-${i}`,
+          price_current: i === 0 ? 500_000 : 3_200_000,
+          availability: 'out_of_stock',
+        },
+        perfInStock,
+        perfBaitIds
+      ),
+      i === 0
+    );
+  }
+  assert.ok(Date.now() - perfStart < 100);
 
   // One definition of the ceiling: the schemas re-export it, never redefine it.
   assert.doesNotMatch(

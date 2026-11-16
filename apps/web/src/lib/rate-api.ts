@@ -2279,7 +2279,13 @@ export async function getMasterProductPriceHistory(
     }
   }
 
-  const productIds = offers.map((o) => o.id);
+  const productIds = Array.from(
+    new Set(
+      offers
+        .map((o) => normalizeOfferId(o.id) || sanitizeRateEntityId(o.id))
+        .filter(Boolean)
+    )
+  );
   const supabase = getRateClient();
   let rawRows: unknown[];
   let extremeRows: unknown[];
@@ -2300,18 +2306,23 @@ export async function getMasterProductPriceHistory(
         .limit(1)
     );
   try {
-    const [windowRows, lowRows, highRows] = await Promise.all([
-      readInChunks(productIds, 'price history', (chunk) =>
-        supabase
-          .from('price_history')
-          .select('id, product_id, price, price_original, recorded_at, source')
-          .in('product_id', chunk)
-          .order('recorded_at', { ascending: false })
-          .limit(1000)
-      ),
-      allTime ? extremes(true) : Promise.resolve([]),
-      allTime ? extremes(false) : Promise.resolve([]),
-    ]);
+    const [windowRows, lowRows, highRows] =
+      productIds.length > 0
+        ? await Promise.all([
+            readInChunks(productIds, 'price history', (chunk) =>
+              supabase
+                .from('price_history')
+                .select(
+                  'id, product_id, price, price_original, recorded_at, source'
+                )
+                .in('product_id', chunk)
+                .order('recorded_at', { ascending: false })
+                .limit(1000)
+            ),
+            allTime ? extremes(true) : Promise.resolve([]),
+            allTime ? extremes(false) : Promise.resolve([]),
+          ])
+        : [[], [], []];
     rawRows = windowRows;
     extremeRows = [...lowRows, ...highRows];
   } catch (err) {
@@ -4490,6 +4501,23 @@ const PLATFORM_ITEM_ID_PREFIX: Partial<
   phongvu: 'pv-',
 };
 
+function lookupOfferDiscountAnalysis(
+  byOffer: Record<string, OfferDiscountAnalysis> | null | undefined,
+  rawId: unknown
+): OfferDiscountAnalysis | null {
+  if (!byOffer || typeof byOffer !== 'object' || typeof rawId !== 'string') {
+    return null;
+  }
+  if (Object.hasOwn(byOffer, rawId)) {
+    return byOffer[rawId] ?? null;
+  }
+  const canonicalId = normalizeOfferId(rawId);
+  if (canonicalId && Object.hasOwn(byOffer, canonicalId)) {
+    return byOffer[canonicalId] ?? null;
+  }
+  return null;
+}
+
 export function selectOfferForUrlInspection(
   offers: readonly MerchantOffer[],
   matchedMerchantByShopId:
@@ -4641,12 +4669,18 @@ export async function inspectProductOrShopUrl(
         ]);
         // No bait-price or sold-out listing as the fallback match
         // (DOS/Rate#797, #1177).
+        const canonicalMatchedProdId = normalizeOfferId(matchedProd.id);
         const matchedOffer =
-          offers.find((o) => o.id === matchedProd.id) ||
+          offers.find(
+            (o) =>
+              o.id === matchedProd.id ||
+              (canonicalMatchedProdId !== '' &&
+                normalizeOfferId(o.id) === canonicalMatchedProdId)
+          ) ||
           plausibleOffers(offers.filter((o) => !isOfferUnavailable(o)))[0] ||
           null;
         const discountAnalysis = matchedOffer
-          ? priceHistory.byOffer[matchedOffer.id] || null
+          ? lookupOfferDiscountAnalysis(priceHistory.byOffer, matchedOffer.id)
           : null;
         const merchantProfile =
           merchantsList.find((m) => m.id === matchedProd.merchant_id) || null;
@@ -4791,7 +4825,7 @@ export async function inspectProductOrShopUrl(
           ),
     ]);
     const discountAnalysis = matchedOffer
-      ? priceHistory.byOffer[matchedOffer.id] || null
+      ? lookupOfferDiscountAnalysis(priceHistory.byOffer, matchedOffer.id)
       : null;
     const merchantProfile = hasShopOfferMatch
       ? matchedMerchantByShopId
@@ -4867,7 +4901,7 @@ export async function inspectProductOrShopUrl(
             matchedMerchantByShopId.platform_shop_id))
     );
     const discountAnalysis = matchedOffer
-      ? priceHistory.byOffer[matchedOffer.id] || null
+      ? lookupOfferDiscountAnalysis(priceHistory.byOffer, matchedOffer.id)
       : null;
     const merchantProfile = hasShopOfferMatch
       ? matchedMerchantByShopId
@@ -4910,7 +4944,7 @@ export async function inspectProductOrShopUrl(
             matchedMerchantByShopId.platform_shop_id))
     );
     const discountAnalysis = matchedOffer
-      ? priceHistory.byOffer[matchedOffer.id] || null
+      ? lookupOfferDiscountAnalysis(priceHistory.byOffer, matchedOffer.id)
       : null;
     const merchantProfile = hasShopOfferMatch
       ? matchedMerchantByShopId

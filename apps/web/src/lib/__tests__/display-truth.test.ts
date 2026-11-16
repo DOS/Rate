@@ -20,6 +20,7 @@ import {
 } from '../rate-domain-core';
 import { merchantDirectoryDosafeDisplay } from '../../components/merchants/MerchantDirectoryExplorer';
 import {
+  filterInspectOfferDiscount,
   inspectDosafeDisplay,
   isInspectOfferBait,
   orderInspectOffers,
@@ -712,10 +713,54 @@ assert.equal(
   isInspectOfferBait(
     paddedInspectOffers.listedOffers[2],
     paddedInspectOffers.implausibleOfferIds,
-    paddedInspectOffers.inStockOffers
+    paddedInspectOffers.plausibilityOffers
   ),
   true
 );
+assert.equal(
+  filterInspectOfferDiscount({ verdict: 'normal_price' }, true),
+  null
+);
+assert.equal(
+  filterInspectOfferDiscount({ verdict: 'genuine_deal' }, true),
+  null
+);
+assert.deepEqual(
+  filterInspectOfferDiscount({ verdict: 'fake_discount' }, true),
+  { verdict: 'fake_discount' }
+);
+const allUnavailableInspect = orderInspectOffers([
+  {
+    id: 'so-bait',
+    price_current: 500_000,
+    availability: 'out_of_stock' as const,
+  },
+  {
+    id: 'so-1',
+    price_current: 3_032_000,
+    availability: 'out_of_stock' as const,
+  },
+  {
+    id: 'so-2',
+    price_current: 3_140_000,
+    availability: 'out_of_stock' as const,
+  },
+]);
+assert.deepEqual([...allUnavailableInspect.implausibleOfferIds], ['so-bait']);
+assert.deepEqual(
+  allUnavailableInspect.listedOffers.map((o) => o.id),
+  ['so-1', 'so-2', 'so-bait']
+);
+const largeAlternatingOffers = Array.from({ length: 3000 }, (_, i) => ({
+  id: `offer-${i}`,
+  price_current: 3_000_000 + i * 1_000,
+  availability: (i % 2 === 0 ? 'in_stock' : 'out_of_stock') as
+    'in_stock' | 'out_of_stock',
+}));
+const sortStartedAt = Date.now();
+const orderedLarge = orderInspectOffers(largeAlternatingOffers);
+assert.equal(orderedLarge.listedOffers.length, 3000);
+assert.ok(Date.now() - sortStartedAt < 100, 'orderInspectOffers is O(n log n)');
 for (const locale of LOCALES) {
   const inspectClientMsgs = pickClientMessages(readLocale(locale), 'inspect');
   const detailSubset = inspectClientMsgs.productDetail as

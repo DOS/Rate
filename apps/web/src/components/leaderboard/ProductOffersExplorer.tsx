@@ -153,9 +153,13 @@ export function resolveExplorerOfferDiscountAnalysis(
   }
   const canonicalId = normalizeOfferId(offer.id);
   const raw =
-    byOffer?.[offer.id] ??
-    (canonicalId ? byOffer?.[canonicalId] : null) ??
-    null;
+    byOffer && typeof byOffer === 'object'
+      ? Object.hasOwn(byOffer, offer.id)
+        ? (byOffer[offer.id] ?? null)
+        : canonicalId && Object.hasOwn(byOffer, canonicalId)
+          ? (byOffer[canonicalId] ?? null)
+          : null
+      : null;
   if (!raw) return null;
   if (isOfferUnavailable(offer) && raw.verdict === 'genuine_deal') {
     return null;
@@ -239,10 +243,10 @@ export default function ProductOffersExplorer({
   // Bait-price listings far below every other store (DOS/Rate#797): labelled,
   // listed after the plausible offers and left out of the price spread. Judged
   // among the in-stock listings, as the stored min_price is (DOS/Rate#1141).
-  const inStockOffers = useMemo(
-    () => safeOffers.filter((o) => !isOfferUnavailable(o)),
-    [safeOffers]
-  );
+  const inStockOffers = useMemo(() => {
+    const inStock = safeOffers.filter((o) => !isOfferUnavailable(o));
+    return inStock.length > 0 ? inStock : safeOffers;
+  }, [safeOffers]);
   const implausibleOfferIds = useMemo(
     () => implausiblyLowOfferIds(inStockOffers),
     [inStockOffers]

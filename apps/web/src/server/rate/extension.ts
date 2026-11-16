@@ -796,17 +796,38 @@ export function evaluateExtensionPriceVerdict(params: {
   // verdict keeps the extension's allow-list; the label says why. Judged
   // against every other offer, as the offers table judges each row, so the
   // two never disagree about a listing.
+  const trimmedObservedId =
+    typeof observedOfferId === 'string'
+      ? observedOfferId.replace(/\p{Cc}+/gu, '').trim()
+      : '';
   const normalizedObservedOfferId = normalizeOfferId(observedOfferId);
-  const otherOffers = observedOfferId
-    ? safeOffers.filter(
-        (o) =>
-          o &&
-          o.id !== observedOfferId &&
-          (!normalizedObservedOfferId ||
-            normalizeOfferId(o.id) !== normalizedObservedOfferId)
-      )
+  let removedObservedSelf = false;
+  const otherOffers = trimmedObservedId
+    ? safeOffers.filter((o) => {
+        if (!o) return false;
+        if (!removedObservedSelf) {
+          const trimmedId =
+            typeof o.id === 'string'
+              ? o.id.replace(/\p{Cc}+/gu, '').trim()
+              : '';
+          if (
+            o.id === observedOfferId ||
+            (trimmedId !== '' && trimmedId === trimmedObservedId) ||
+            (normalizedObservedOfferId !== '' &&
+              normalizeOfferId(o.id) === normalizedObservedOfferId)
+          ) {
+            removedObservedSelf = true;
+            return false;
+          }
+        }
+        return true;
+      })
     : safeOffers;
-  if (observedPrice && isImplausiblyLowPrice(observedPrice, otherOffers)) {
+  const baitReferenceOffers = removedObservedSelf ? otherOffers : marketOffers;
+  if (
+    observedPrice &&
+    isImplausiblyLowPrice(observedPrice, baitReferenceOffers)
+  ) {
     const roundedMedian = Math.round(marketMedianPrice ?? 0);
     return {
       verdict: 'insufficient_data',
@@ -1565,12 +1586,13 @@ export async function lookupExtensionProduct(
     : null;
   const radarSignal = computeProductRadarSignal(matchedMaster, offers);
 
-  // Bait prices are judged among the in-stock listings, as the market numbers
-  // are; the flag lets the side panel mark both in-stock and sold-out bait rows
-  // (DOS/Rate#1297, #1697).
-  const baitIds = implausiblyLowOfferIds(inStockOffers);
+  // Bait prices are judged among the in-stock listings (falling back to all
+  // offers only when zero in-stock offers exist); the flag lets the side panel
+  // mark both in-stock and sold-out bait rows (DOS/Rate#1297, #1697).
+  const plausibilityPool = inStockOffers.length > 0 ? inStockOffers : offers;
+  const baitIds = implausiblyLowOfferIds(plausibilityPool);
   const flagBait = (o: MerchantOffer): ExtensionOffer =>
-    isOfferImplausiblyLowAgainstInStock(o, inStockOffers, baitIds)
+    isOfferImplausiblyLowAgainstInStock(o, plausibilityPool, baitIds)
       ? { ...o, implausiblyLow: true }
       : o;
   const flaggedCheaperOffers = topCheaperOffers.map(flagBait);

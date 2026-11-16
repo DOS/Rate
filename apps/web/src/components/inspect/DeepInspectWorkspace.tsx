@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
 import {
   hasReviewRiskEvidence,
@@ -62,6 +62,7 @@ import { SAMPLE_AUDIT_URLS } from '@/lib/inspect-samples';
 import {
   implausiblyLowOfferIds,
   isOfferImplausiblyLowAgainstInStock,
+  normalizeOfferId,
   plausibleOffers,
 } from '@repo/shared-data/rules';
 import {
@@ -155,12 +156,15 @@ export function orderInspectOffers<
   offers: readonly T[] | null | undefined
 ): {
   inStockOffers: T[];
+  plausibilityOffers: T[];
   implausibleOfferIds: Set<string>;
   listedOffers: T[];
 } {
   const safeOffers = Array.isArray(offers) ? offers : [];
   const inStockOffers = safeOffers.filter((o) => !isOfferUnavailable(o));
-  const implausibleOfferIds = implausiblyLowOfferIds(inStockOffers);
+  const plausibilityOffers =
+    inStockOffers.length > 0 ? inStockOffers : safeOffers;
+  const implausibleOfferIds = implausiblyLowOfferIds(plausibilityOffers);
   const listedOffers = [...safeOffers].sort((a, b) => {
     const unavailableA = isOfferUnavailable(a) ? 1 : 0;
     const unavailableB = isOfferUnavailable(b) ? 1 : 0;
@@ -168,20 +172,39 @@ export function orderInspectOffers<
     const implausibleA = isInspectOfferBait(
       a,
       implausibleOfferIds,
-      inStockOffers
+      plausibilityOffers
     )
       ? 1
       : 0;
     const implausibleB = isInspectOfferBait(
       b,
       implausibleOfferIds,
-      inStockOffers
+      plausibilityOffers
     )
       ? 1
       : 0;
     return implausibleA - implausibleB;
   });
-  return { inStockOffers, implausibleOfferIds, listedOffers };
+  return {
+    inStockOffers,
+    plausibilityOffers,
+    implausibleOfferIds,
+    listedOffers,
+  };
+}
+
+export function filterInspectOfferDiscount<
+  T extends { verdict?: string | null },
+>(analysis: T | null | undefined, unavailable: boolean): T | null {
+  if (!analysis) return null;
+  if (
+    unavailable &&
+    analysis.verdict !== 'fake_discount' &&
+    analysis.verdict !== 'suspicious_discount'
+  ) {
+    return null;
+  }
+  return analysis;
 }
 
 export function resolveInspectOfferPlatform(offer: {
@@ -302,8 +325,12 @@ export default function DeepInspectWorkspace({
   };
 
   const master = result?.masterProduct ?? null;
-  const { inStockOffers, implausibleOfferIds, listedOffers } =
-    orderInspectOffers(result?.allOffers);
+  const {
+    inStockOffers,
+    plausibilityOffers,
+    implausibleOfferIds,
+    listedOffers,
+  } = useMemo(() => orderInspectOffers(result?.allOffers), [result?.allOffers]);
   // A sold-out listing is never the fallback match (DOS/Rate#1177).
   const matchedOffer =
     result?.matchedOffer ?? plausibleOffers(inStockOffers)[0] ?? null;
@@ -311,17 +338,17 @@ export default function DeepInspectWorkspace({
   const offerImplausiblyLow = isInspectOfferBait(
     matchedOffer,
     implausibleOfferIds,
-    inStockOffers
+    plausibilityOffers
   );
   const matchedOfferUnavailable = Boolean(
     matchedOffer && isOfferUnavailable(matchedOffer)
   );
-  const rawDiscount = result?.discountAnalysis ?? null;
-  const discount =
-    offerImplausiblyLow ||
-    (matchedOfferUnavailable && rawDiscount?.verdict === 'genuine_deal')
-      ? null
-      : rawDiscount;
+  const discount = offerImplausiblyLow
+    ? null
+    : filterInspectOfferDiscount(
+        result?.discountAnalysis,
+        matchedOfferUnavailable
+      );
   const priceHistory = result?.priceHistory ?? null;
   const reviewSummary = result?.reviewSummary ?? null;
   const merchant = result?.merchantProfile ?? null;
@@ -470,16 +497,29 @@ export default function DeepInspectWorkspace({
       histHigh,
       matchedPriceSpread?.spreadPct ?? 0,
       (() => {
-        if (isInspectOfferBait(o, implausibleOfferIds, inStockOffers)) {
+        if (isInspectOfferBait(o, implausibleOfferIds, plausibilityOffers)) {
           return t('implausiblyLowBadge');
         }
+        const canonicalOfferId = normalizeOfferId(o.id);
+        const byOfferMap = priceHistory?.byOffer;
+        const directByOffer =
+          byOfferMap && Object.hasOwn(byOfferMap, o.id)
+            ? priceHistory?.byOffer?.[o.id]
+            : undefined;
+        const canonicalByOffer =
+          canonicalOfferId &&
+          byOfferMap &&
+          Object.hasOwn(byOfferMap, canonicalOfferId)
+            ? byOfferMap[canonicalOfferId]
+            : undefined;
         const rawAnalysis =
-          priceHistory?.byOffer?.[o.id] ??
+          directByOffer ??
+          canonicalByOffer ??
           (o.id === matchedOffer?.id ? discount : null);
-        const a =
-          isOfferUnavailable(o) && rawAnalysis?.verdict === 'genuine_deal'
-            ? null
-            : rawAnalysis;
+        const a = filterInspectOfferDiscount(
+          rawAnalysis,
+          isOfferUnavailable(o)
+        );
         if (a) return discountVerdictCopy(tVerdict, a).label;
         if (isOfferUnavailable(o)) {
           return o.availability === 'discontinued'
@@ -1031,7 +1071,7 @@ export default function DeepInspectWorkspace({
                               {isInspectOfferBait(
                                 offer,
                                 implausibleOfferIds,
-                                inStockOffers
+                                plausibilityOffers
                               ) && (
                                 <span
                                   className="badge bg-warning text-dark d-block mt-1"

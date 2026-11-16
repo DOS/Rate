@@ -377,6 +377,65 @@ async function main() {
   });
   assert.equal(paddedSelfVerdict.implausiblyLow, true);
 
+  // Sold-out 500k bait listing still gets implausiblyLow: true in extension
+  // verdict even when 2+ in-stock bait rows exist alongside real offers.
+  const soldOutMultiBaitVerdict = evaluateExtensionPriceVerdict({
+    isAccessory: false,
+    accessoryReason: null,
+    isAmbiguousVariant: false,
+    observedPrice: 500_000,
+    observedOriginalPrice: null,
+    offers: [
+      mkOffer('in-bait-1', 'shop-a', 500_000, 'in_stock') as never,
+      mkOffer('in-bait-2', 'shop-b', 550_000, 'in_stock') as never,
+      mkOffer('real-1', 'shop-c', 3_032_000, 'in_stock') as never,
+      mkOffer('real-2', 'shop-d', 3_140_000, 'in_stock') as never,
+      mkOffer('sold-out-bait', 'shop-e', 500_000, 'out_of_stock') as never,
+    ],
+    observedOfferId: 'sold-out-bait',
+    priceHistory: null,
+  });
+  assert.equal(soldOutMultiBaitVerdict.implausiblyLow, true);
+  assert.equal(soldOutMultiBaitVerdict.verdict, 'insufficient_data');
+
+  // getMasterProductPriceHistory sends sanitized product_id in .in() and maps
+  // clean DB rows back to padded existingOffers.
+  const seenHistoryQueries: string[] = [];
+  try {
+    globalThis.fetch = (async (input: RequestInfo | URL) => {
+      const urlStr = typeof input === 'string' ? input : input.toString();
+      seenHistoryQueries.push(urlStr);
+      return new Response(
+        JSON.stringify([
+          {
+            id: 1,
+            product_id: 'clean-real-1',
+            price: 3_032_000,
+            price_original: null,
+            recorded_at: '2026-10-01T00:00:00Z',
+            source: 'crawler',
+          },
+        ]),
+        { status: 200, headers: { 'content-type': 'application/json' } }
+      );
+    }) as typeof fetch;
+    const paddedHist = await getMasterProductPriceHistory('master-1697', [
+      mkOffer('  clean-real-1\u0000  ', 'shop-a', 3_032_000, 'in_stock'),
+      mkOffer('clean-real-2', 'shop-b', 3_140_000, 'in_stock'),
+    ]);
+    assert.ok(seenHistoryQueries.some((q) => q.includes('clean-real-1')));
+    assert.equal(
+      seenHistoryQueries.some((q) => q.includes('%00')),
+      false
+    );
+    assert.equal(
+      paddedHist.byOffer['  clean-real-1\u0000  ']?.observation_count,
+      1
+    );
+  } finally {
+    globalThis.fetch = origFetch;
+  }
+
   // ProductOffersExplorer suppresses genuine_deal on sold-out bait and renders
   // offer-implausibly-low + offer-unavailable badges even with stale byOffer.
   const staleByOffer = {
@@ -412,6 +471,15 @@ async function main() {
   assert.equal(
     ProductOffersExplorerMod.resolveExplorerOfferDiscountAnalysis(
       offersWithSoldOutBait[0]!,
+      staleByOffer,
+      explorerInStock,
+      explorerBaitIds
+    ),
+    null
+  );
+  assert.equal(
+    ProductOffersExplorerMod.resolveExplorerOfferDiscountAnalysis(
+      mkOffer('constructor', 'shop-a', 3_140_000, 'in_stock'),
       staleByOffer,
       explorerInStock,
       explorerBaitIds
