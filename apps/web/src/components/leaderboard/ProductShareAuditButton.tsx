@@ -161,6 +161,9 @@ export default function ProductShareAuditButton({
         safeExpertScore10 != null
           ? `${formatScoreFixed(safeExpertScore10, 1)}/10`
           : t('shareAuditMdNoExpert');
+      const radarSignalLabel = radarSignal
+        ? radarLabel(radarSignal, 0, locale)
+        : '';
       const lines = [
         t('shareAuditMdTitle', { name: safeName, brand: safeBrand }),
         t('shareAuditMdUserScore', { score: userScoreStr }),
@@ -169,12 +172,8 @@ export default function ProductShareAuditButton({
           ? [t('shareAuditMdKeySpecs', { specs: safeKeySpecLine })]
           : []),
         t('shareAuditMdMinPrice', { price: priceStr }),
-        ...(radarSignal
-          ? [
-              t('shareAuditMdRadar', {
-                signal: radarLabel(radarSignal, 0, locale),
-              }),
-            ]
+        ...(radarSignalLabel
+          ? [t('shareAuditMdRadar', { signal: radarSignalLabel })]
           : []),
         t('shareAuditMdModelKey', {
           modelKey: sanitizeShareAuditCodeSpan(modelKey, 120),

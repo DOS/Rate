@@ -9,9 +9,16 @@ import csMessages from '../../../locales/cs.json';
 import enMessages from '../../../locales/en.json';
 import viMessages from '../../../locales/vi.json';
 import DealFinderWorkspace from '../../components/deals/DealFinderWorkspace';
-import LeaderboardExplorer from '../../components/leaderboard/LeaderboardExplorer';
+import LeaderboardExplorer, {
+  resolveLeaderboardActiveScoreLabel,
+} from '../../components/leaderboard/LeaderboardExplorer';
 import ProductOffersExplorer from '../../components/leaderboard/ProductOffersExplorer';
-import { radarLabel, radarMarkdownCell, type RadarSignal } from '../deal-radar';
+import {
+  EMPTY_RADAR_SIGNAL,
+  radarLabel,
+  radarMarkdownCell,
+  type RadarSignal,
+} from '../deal-radar';
 import { discountVerdictCopy } from '../discount-verdict-copy';
 import {
   computeJReviewsCriteriaScores,
@@ -432,10 +439,62 @@ assert.equal(
       `${locale}: default leaderboard renders critCombined when activePersona is none`
     );
 
+    const lbCopy = {
+      personaLabels: {
+        none: fullMessages.leaderboard.personaNone,
+        photography: fullMessages.leaderboard.personaPhotography,
+        gaming: fullMessages.leaderboard.personaGaming,
+        endurance: fullMessages.leaderboard.personaEndurance,
+        business: fullMessages.leaderboard.personaBusiness,
+        value_hunter: fullMessages.leaderboard.personaValueHunter,
+        custom: fullMessages.leaderboard.personaCustom,
+      },
+      critLabels: {
+        combined: fullMessages.leaderboard.critCombined,
+        user: fullMessages.leaderboard.critUser,
+        expert: fullMessages.leaderboard.critExpert,
+        screen: fullMessages.leaderboard.critScreen,
+        performance: fullMessages.leaderboard.critPerformance,
+        camera: fullMessages.leaderboard.critCamera,
+        battery: fullMessages.leaderboard.critBattery,
+        value: fullMessages.leaderboard.critValue,
+      },
+    } as const;
+
+    assert.equal(
+      resolveLeaderboardActiveScoreLabel('none', 'combined', lbCopy),
+      lbCopy.critLabels.combined
+    );
+    assert.equal(
+      resolveLeaderboardActiveScoreLabel('none', 'battery', lbCopy),
+      lbCopy.critLabels.battery
+    );
+    for (const preset of [
+      'photography',
+      'gaming',
+      'endurance',
+      'business',
+      'value_hunter',
+      'custom',
+    ] as const) {
+      assert.equal(
+        resolveLeaderboardActiveScoreLabel(preset, 'combined', lbCopy, 100),
+        lbCopy.personaLabels[preset],
+        `${locale}: active persona ${preset} resolves to personaLabels[${preset}]`
+      );
+    }
+    assert.equal(
+      resolveLeaderboardActiveScoreLabel('custom', 'combined', lbCopy, 0),
+      lbCopy.critLabels.combined,
+      `${locale}: zero-sum custom weights fall back to active criterion label`
+    );
+
     // 4. Radar & verdict helper outputs follow active locale instead of defaulting to Vietnamese.
     const mdCell = radarMarkdownCell(genuineRadarSignal, locale);
     const labelStr = radarLabel(genuineRadarSignal, 0, locale);
     assert.equal(mdCell, labelStr);
+    assert.equal(radarLabel(EMPTY_RADAR_SIGNAL, 0, locale), '');
+    assert.equal(radarMarkdownCell(EMPTY_RADAR_SIGNAL, locale), '-');
     if (locale !== 'vi') {
       assert.doesNotMatch(
         mdCell,
@@ -459,26 +518,38 @@ assert.equal(
     }
   }
 
-  // 5. Source-level guards for activePersona label ternary and locale forwarding across all 6 files.
+  // 5. Source-level guards for activeScoreLabel wiring and locale forwarding across all 6 files.
   const leaderboardSrc = fs.readFileSync(
     path.join(webSrcDir, 'components/leaderboard/LeaderboardExplorer.tsx'),
     'utf8'
   );
-  const personaTernaryRe =
-    /activePersona\s*!==\s*'none'\s*\?\s*copy\.personaLabels\[activePersona\]\s*:\s*copy\.critLabels\[activeCriterion\]/g;
   assert.equal(
-    [...leaderboardSrc.matchAll(personaTernaryRe)].length,
+    [
+      ...leaderboardSrc.matchAll(
+        /(?:\$\{activeScoreLabel\}|\{activeScoreLabel\})/g
+      ),
+    ].length,
     3,
-    'LeaderboardExplorer must render personaLabels[activePersona] ternary in Markdown heading, podium badge, and ranked row caption'
+    'LeaderboardExplorer must render activeScoreLabel in Markdown heading, podium badge, and ranked row caption'
   );
   assert.equal(
     [
       ...leaderboardSrc
-        .replace(personaTernaryRe, '')
+        .replace(/copy\.critLabels\[activeCriterion\]/, '')
         .matchAll(/copy\.critLabels\[activeCriterion\]/g),
     ].length,
     0,
-    'LeaderboardExplorer must have no unconditional copy.critLabels[activeCriterion] left'
+    'LeaderboardExplorer must reference copy.critLabels[activeCriterion] only inside resolveLeaderboardActiveScoreLabel'
+  );
+
+  const shareAuditSrc = fs.readFileSync(
+    path.join(webSrcDir, 'components/leaderboard/ProductShareAuditButton.tsx'),
+    'utf8'
+  );
+  assert.match(
+    shareAuditSrc,
+    /radarSignalLabel\s*\?\s*\[t\('shareAuditMdRadar'/,
+    'ProductShareAuditButton must gate shareAuditMdRadar on non-empty radarSignalLabel'
   );
 
   const radarLocaleFiles = [
@@ -493,9 +564,11 @@ assert.equal(
   for (const relPath of radarLocaleFiles) {
     const src = fs.readFileSync(path.join(webSrcDir, relPath), 'utf8');
     assert.match(src, /\buseLocale\b/, `${relPath} must read useLocale()`);
+    let matchedCalls = 0;
     for (const match of src.matchAll(
       /\bradarMarkdownCell\(((?:[^()]+|\([^()]*\))*)\)/g
     )) {
+      matchedCalls++;
       assert.match(
         match[1]!,
         /,\s*locale\s*$/,
@@ -505,6 +578,7 @@ assert.equal(
     for (const match of src.matchAll(
       /\bradarLabel\(((?:[^()]+|\([^()]*\))*)\)/g
     )) {
+      matchedCalls++;
       assert.match(
         match[1]!,
         /,\s*0\s*,\s*locale\s*$/,
@@ -514,12 +588,17 @@ assert.equal(
     for (const match of src.matchAll(
       /\bdiscountVerdictCopy\(((?:[^()]+|\([^()]*\))*)\)/g
     )) {
+      matchedCalls++;
       assert.match(
         match[1]!,
         /,\s*locale\s*$/,
         `${relPath}: discountVerdictCopy(${match[1]}) must pass locale`
       );
     }
+    assert.ok(
+      matchedCalls > 0,
+      `${relPath}: expected at least one localized radar/verdict helper call`
+    );
   }
 }
 

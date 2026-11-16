@@ -135,6 +135,29 @@ export function sanitizeLeaderboardBarPercentage(score5: unknown): number {
   return Math.max(0, Math.min(100, Math.round((num / 5) * 100)));
 }
 
+export type LeaderboardPersonaKey =
+  | 'none'
+  | 'photography'
+  | 'gaming'
+  | 'endurance'
+  | 'business'
+  | 'value_hunter'
+  | 'custom';
+
+export function resolveLeaderboardActiveScoreLabel(
+  activePersona: LeaderboardPersonaKey,
+  activeCriterion: LeaderboardCriterionKey,
+  copy: {
+    readonly personaLabels: Readonly<Record<LeaderboardPersonaKey, string>>;
+    readonly critLabels: Readonly<Record<LeaderboardCriterionKey, string>>;
+  },
+  totalWeight = 100
+): string {
+  return activePersona !== 'none' && totalWeight > 0
+    ? copy.personaLabels[activePersona]
+    : copy.critLabels[activeCriterion];
+}
+
 export function formatLeaderboardActiveScore(
   activeScore5: number,
   scoreDigits: 1 | 2,
@@ -324,15 +347,8 @@ export default function LeaderboardExplorer({
     useState<LeaderboardPriceSegment>('all');
   const [selectedBrand, setSelectedBrand] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
-  const [activePersona, setActivePersona] = useState<
-    | 'none'
-    | 'photography'
-    | 'gaming'
-    | 'endurance'
-    | 'business'
-    | 'value_hunter'
-    | 'custom'
-  >('none');
+  const [activePersona, setActivePersona] =
+    useState<LeaderboardPersonaKey>('none');
   const [showWeightSliders, setShowWeightSliders] = useState<boolean>(false);
   const [customWeights, setCustomWeights] = useState<{
     screen: number;
@@ -513,10 +529,27 @@ export default function LeaderboardExplorer({
   }, [activeCategory, categoryProducts, filteredReviewCounts]);
   const hasScoredCriteria = scoredCriteria.length > 0;
   const hasShownCriteria = shownCriteria.length > 0;
+  // Only the weights of the category's own criteria count: a screen
+  // weight left over from phones does not empty the earbuds list.
+  const weightedCriteria = useMemo(
+    () => leaderboardCriteriaForCategory(activeCategory),
+    [activeCategory]
+  );
+  const totalWeight = weightedCriteria.reduce(
+    (sum, c) => sum + customWeights[c],
+    0
+  );
+  const hasActivePersonaWeights = activePersona !== 'none' && totalWeight > 0;
+  const activeScoreLabel = resolveLeaderboardActiveScoreLabel(
+    activePersona,
+    activeCriterion,
+    copy,
+    totalWeight
+  );
   // The one rating shows at 1 decimal (D3); a persona's own weighted score
   // keeps 2, under the persona's name.
   const ratingView =
-    activePersona === 'none' &&
+    !hasActivePersonaWeights &&
     (activeCriterion === 'combined' || activeCriterion === 'user');
   const scoreDigits: 1 | 2 = ratingView ? 1 : 2;
 
@@ -569,14 +602,6 @@ export default function LeaderboardExplorer({
       return true;
     });
 
-    // Only the weights of the category's own criteria count: a screen
-    // weight left over from phones does not empty the earbuds list.
-    const weightedCriteria = leaderboardCriteriaForCategory(activeCategory);
-    const totalWeight = weightedCriteria.reduce(
-      (sum, c) => sum + customWeights[c],
-      0
-    );
-
     const scored = filtered
       .map((item) => {
         const base = computeProductScores(
@@ -588,8 +613,7 @@ export default function LeaderboardExplorer({
         // not; one with no real score on the weighted criteria drops out of
         // the weighted ranking, like a criterion tab (DOS/Rate#1143).
         if (
-          activePersona !== 'none' &&
-          totalWeight > 0 &&
+          hasActivePersonaWeights &&
           (activeCriterion === 'combined'
             ? base.combinedScore5 > 0
             : base.activeScore5 > 0)
@@ -615,7 +639,7 @@ export default function LeaderboardExplorer({
         }
         // The overall view keeps a product with an expert score but no
         // rating yet, after every rated one (D3).
-        if (activeCriterion === 'combined' && activePersona === 'none') {
+        if (activeCriterion === 'combined' && !hasActivePersonaWeights) {
           return entry.combinedScore5 > 0;
         }
         return entry.activeScore5 > 0;
@@ -624,7 +648,7 @@ export default function LeaderboardExplorer({
     // Ranked by the score as shown, so equal-looking scores never rank by
     // a hidden decimal; the composite breaks the tie (D3).
     const shown = (score: number) =>
-      activePersona === 'none' &&
+      !hasActivePersonaWeights &&
       (activeCriterion === 'combined' || activeCriterion === 'user')
         ? displayedScore5(score)
         : score;
@@ -652,13 +676,13 @@ export default function LeaderboardExplorer({
       return a.product.slug.localeCompare(b.product.slug);
     });
   }, [
-    activeCategory,
     categoryProducts,
     selectedBrand,
     priceSegment,
     searchQuery,
     activeCriterion,
-    activePersona,
+    hasActivePersonaWeights,
+    weightedCriteria,
     customWeights,
     filteredReviewCounts,
   ]);
@@ -732,7 +756,7 @@ export default function LeaderboardExplorer({
       ];
     });
     const md = [
-      `### 🏆 Rate.vn JReviews Leaderboard (${activeCategory.toUpperCase()} - ${activePersona !== 'none' ? copy.personaLabels[activePersona] : copy.critLabels[activeCriterion]})`,
+      `### 🏆 Rate.vn JReviews Leaderboard (${activeCategory.toUpperCase()} - ${activeScoreLabel})`,
       '',
       `| ${headers.join(' | ')} |`,
       `| ${sep.join(' | ')} |`,
@@ -1066,13 +1090,13 @@ export default function LeaderboardExplorer({
                 <button
                   key={opt.key}
                   type="button"
-                  aria-pressed={isSelected && activePersona === 'none'}
+                  aria-pressed={isSelected && !hasActivePersonaWeights}
                   onClick={() => {
                     setActivePersona('none');
                     handleSelectCriterion(opt.key);
                   }}
                   className={`btn btn-sm rounded-pill d-inline-flex align-items-center gap-2 px-3 py-2 ${
-                    isSelected && activePersona === 'none'
+                    isSelected && !hasActivePersonaWeights
                       ? 'btn-dark fw-semibold text-white shadow-sm'
                       : 'btn-outline-secondary text-dark bg-white'
                   }`}
@@ -1362,9 +1386,7 @@ export default function LeaderboardExplorer({
               <h2 className="h4 fw-bold mb-0 text-white">{copy.podiumTitle}</h2>
             </div>
             <span className="badge bg-warning text-dark rounded-pill fw-bold px-3 py-2">
-              {activePersona !== 'none'
-                ? copy.personaLabels[activePersona]
-                : copy.critLabels[activeCriterion]}
+              {activeScoreLabel}
             </span>
           </div>
 
@@ -1896,11 +1918,7 @@ export default function LeaderboardExplorer({
                 <div className="col-lg-3 col-md-5 text-md-end">
                   <div className="d-flex flex-md-column justify-content-between align-items-center align-items-md-end gap-2">
                     <div>
-                      <div className="small text-muted">
-                        {activePersona !== 'none'
-                          ? copy.personaLabels[activePersona]
-                          : copy.critLabels[activeCriterion]}
-                      </div>
+                      <div className="small text-muted">{activeScoreLabel}</div>
                       <StarRating
                         value={entry.activeScore5}
                         digits={scoreDigits}
