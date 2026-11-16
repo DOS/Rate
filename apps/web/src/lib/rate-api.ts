@@ -2199,7 +2199,11 @@ async function fetchAllRowsInChunks<T>(
     chunk: string[],
     from: number,
     to: number
-  ) => PromiseLike<{ data: T[] | null; error: { message: string } | null }>
+  ) => PromiseLike<{
+    data: T[] | null;
+    error: { message: string; code?: string } | null;
+    count?: number | null;
+  }>
 ): Promise<T[]> {
   const rows: T[] = [];
   for (let i = 0; i < ids.length; i += IN_FILTER_CHUNK_SIZE) {
@@ -3621,12 +3625,36 @@ export async function attachMerchantDiscountAnalysis(
   };
 }
 
+// Linear single-pass check for merchant UUIDs, slugs, and dotted handles
+// (e.g. `anker.vn`, `viettel.store`); `..` and trailing `.` are rejected below.
+const MERCHANT_IDENTIFIER_REGEX = /^[a-zA-Z0-9][a-zA-Z0-9._-]{0,119}$/;
+
+function sanitizeMerchantLookupIdentifier(raw: unknown): string {
+  if (typeof raw !== 'string') return '';
+  const cleaned = raw.trim();
+  if (
+    cleaned.length === 0 ||
+    cleaned.length > 120 ||
+    !MERCHANT_IDENTIFIER_REGEX.test(cleaned) ||
+    cleaned.endsWith('.') ||
+    cleaned.includes('..') ||
+    SENTINEL_RATE_API_TOKENS.has(cleaned.toLowerCase())
+  ) {
+    return '';
+  }
+  return cleaned;
+}
+
+function quotePostgrestFilterLiteral(token: string): string {
+  return `"${token.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`;
+}
+
 /** The merchant profile without discount analysis; see MerchantProfileBase. */
 export async function getMerchantProfileBase(
   idOrSlug: string
 ): Promise<MerchantProfileBase | null> {
-  const cleaned = sanitizeRateEntityId(idOrSlug);
-  if (!cleaned || cleaned.includes('..')) return null;
+  const cleaned = sanitizeMerchantLookupIdentifier(idOrSlug);
+  if (!cleaned) return null;
 
   const supabase = getRateClient();
   const isUuid =
@@ -3680,14 +3708,11 @@ export async function getMerchantProfileBase(
   }
 
   if (!merchantRow) {
-    const safeToken = sanitizePostgrestFilterToken(cleaned);
-    if (!safeToken) {
-      return null;
-    }
+    const quoted = quotePostgrestFilterLiteral(cleaned);
     const { data, error } = await supabase
       .from('merchants')
       .select(selectCols)
-      .or(`slug.eq.${safeToken},platform_shop_id.eq.${safeToken}`)
+      .or(`slug.eq.${quoted},platform_shop_id.eq.${quoted}`)
       .limit(1)
       .maybeSingle();
     if (error) throw new RateDataUnavailableError('merchant', error);
@@ -5580,18 +5605,22 @@ export async function getItemVariantsBatch(
   );
   const byItem = new Map<string, RateItemVariant[]>(ids.map((id) => [id, []]));
   if (ids.length === 0) return byItem;
-  const rows = await readInChunks(
-    ids,
+  const rows = await fetchAllRowsInChunks(
     'item variants',
-    (chunk) =>
+    ids,
+    (chunk, from, to) =>
       untypedRate()
         .from('master_products')
         .select(ITEM_VARIANT_SELECT)
         .in('item_id', chunk)
         .eq('status', 'published')
-        .then(throwIfItemSchemaMissing('item variants')) as PromiseLike<{
+        .order('id')
+        .range(from, to)
+        .then(
+          throwIfItemSchemaMissing('item variants')
+        ) as unknown as PromiseLike<{
         data: unknown[] | null;
-        error: { message?: string } | null;
+        error: { message: string; code?: string } | null;
       }>
   );
   for (const variant of rows.map(mapItemVariantRow)) {
