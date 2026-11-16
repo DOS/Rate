@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import ExportMenu from '@/components/elementary/ExportMenu';
 import type { KeySpecs, ProductSpecifications } from '@repo/shared-data';
 import {
@@ -268,6 +268,7 @@ export default function ProductSpecsExportToolbar({
   radarSignal,
 }: ProductSpecsExportToolbarProps) {
   const t = useTranslations('productDetail');
+  const locale = useLocale();
   const [copiedSpecsMd, setCopiedSpecsMd] = useState(false);
 
   const safeProductName = sanitizeSpecExportText(productName, 'Unknown', 160);
@@ -284,7 +285,7 @@ export default function ProductSpecsExportToolbar({
 
     const md = [
       `### 📋 Rate.vn Technical Specifications: ${safeProductName} (${safeBrand})`,
-      `- **Price signal:** ${radarMarkdownCell(radarSignal)}`,
+      `- **Price signal:** ${radarMarkdownCell(radarSignal, locale)}`,
       '',
       '| Field Group | Attribute | Specification |',
       '| --- | --- | --- |',

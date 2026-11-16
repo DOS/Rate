@@ -728,11 +728,11 @@ export default function LeaderboardExplorer({
           ? formatScoreFixed(entry.expertScore10, 1)
           : t('unratedShort'),
         safePrice > 0 ? formatLeaderboardPriceVnd(safePrice) : '-',
-        radarMarkdownCell(radar),
+        radarMarkdownCell(radar, locale),
       ];
     });
     const md = [
-      `### 🏆 Rate.vn JReviews Leaderboard (${activeCategory.toUpperCase()} - ${copy.critLabels[activeCriterion]})`,
+      `### 🏆 Rate.vn JReviews Leaderboard (${activeCategory.toUpperCase()} - ${activePersona !== 'none' ? copy.personaLabels[activePersona] : copy.critLabels[activeCriterion]})`,
       '',
       `| ${headers.join(' | ')} |`,
       `| ${sep.join(' | ')} |`,
@@ -1362,7 +1362,9 @@ export default function LeaderboardExplorer({
               <h2 className="h4 fw-bold mb-0 text-white">{copy.podiumTitle}</h2>
             </div>
             <span className="badge bg-warning text-dark rounded-pill fw-bold px-3 py-2">
-              {copy.critLabels[activeCriterion]}
+              {activePersona !== 'none'
+                ? copy.personaLabels[activePersona]
+                : copy.critLabels[activeCriterion]}
             </span>
           </div>
 
@@ -1895,7 +1897,9 @@ export default function LeaderboardExplorer({
                   <div className="d-flex flex-md-column justify-content-between align-items-center align-items-md-end gap-2">
                     <div>
                       <div className="small text-muted">
-                        {copy.critLabels[activeCriterion]}
+                        {activePersona !== 'none'
+                          ? copy.personaLabels[activePersona]
+                          : copy.critLabels[activeCriterion]}
                       </div>
                       <StarRating
                         value={entry.activeScore5}

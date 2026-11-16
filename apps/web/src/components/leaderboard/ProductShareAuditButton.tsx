@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import ExportMenu from '@/components/elementary/ExportMenu';
 import { escapeCsvCell } from '@/lib/csv-safe';
 import {
@@ -113,6 +113,7 @@ export default function ProductShareAuditButton({
   radarSignal,
 }: ProductShareAuditButtonProps) {
   const t = useTranslations('productDetail');
+  const locale = useLocale();
   const [copiedMd, setCopiedMd] = useState(false);
   const [copiedUrl, setCopiedUrl] = useState(false);
 
@@ -169,7 +170,11 @@ export default function ProductShareAuditButton({
           : []),
         t('shareAuditMdMinPrice', { price: priceStr }),
         ...(radarSignal
-          ? [t('shareAuditMdRadar', { signal: radarLabel(radarSignal) })]
+          ? [
+              t('shareAuditMdRadar', {
+                signal: radarLabel(radarSignal, 0, locale),
+              }),
+            ]
           : []),
         t('shareAuditMdModelKey', {
           modelKey: sanitizeShareAuditCodeSpan(modelKey, 120),
