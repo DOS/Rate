@@ -5660,7 +5660,7 @@ async function runTests() {
       });
       await client.send(BASE, obs);
       const del = calls.find((c) => c.method === 'DELETE');
-      assert.ok(del && del.url.startsWith('http://localhost:3000'));
+      assert.ok(del && new URL(del.url).origin === 'http://localhost:3000');
       assert.deepEqual(del.body, { submitterId: ID2 });
       assert.deepEqual(
         calls.find((c) => c.url.endsWith('/observation'))?.body,
@@ -5706,7 +5706,7 @@ async function runTests() {
             body: init.body ? JSON.parse(String(init.body)) : undefined,
           };
           calls.push(call);
-          if (url.startsWith(BASE)) {
+          if (new URL(url).origin === BASE) {
             if (call.method === 'POST' && url.endsWith('/submitter')) {
               return json(200, { ok: true, submitterId: ID1 });
             }
@@ -5752,8 +5752,9 @@ async function runTests() {
       nowMs += 3_600_001;
       await client.send(ALT, obs);
       assert.equal(
-        calls.filter((c) => c.method === 'DELETE' && c.url.startsWith(BASE))
-          .length,
+        calls.filter(
+          (c) => c.method === 'DELETE' && new URL(c.url).origin === BASE
+        ).length,
         1,
         'once origin A hold expires, queued ID1 erasure flushes cleanly'
       );
@@ -5789,7 +5790,7 @@ async function runTests() {
             body: init.body ? JSON.parse(String(init.body)) : undefined,
           };
           calls.push(call);
-          if (call.method === 'DELETE' && url.startsWith(BASE)) {
+          if (call.method === 'DELETE' && new URL(url).origin === BASE) {
             if (deleteStatus === '404') {
               return json(404, { ok: false, code: 'NOT_ENABLED' });
             }
@@ -5935,6 +5936,89 @@ async function runTests() {
         'explicit forget() must erase immediately despite active observation hold'
       );
       assert.equal(store.has(PENDING_ERASURE_KEY), false);
+    }
+    // (o) DOS/Rate#1682: a transient storage write error during queueErasure
+    // keeps SUBMITTER_KEY recoverable so the next retry rotates and erases it.
+    {
+      const ALT = 'http://localhost:3000';
+      let failPendingWrite = true;
+      const store = new Map<string, unknown>([
+        [SUBMITTER_KEY, { id: ID1, apiBaseUrl: BASE }],
+      ]);
+      const calls: Call[] = [];
+      const client = new ObservationClient({
+        storage: {
+          get: async (key) => (store.has(key) ? { [key]: store.get(key) } : {}),
+          set: async (items) => {
+            if (failPendingWrite && PENDING_ERASURE_KEY in items) {
+              throw new Error('transient storage write failure');
+            }
+            for (const [k, v] of Object.entries(items)) store.set(k, v);
+          },
+          remove: async (key) => {
+            store.delete(key);
+          },
+        },
+        fetch: async (url, init) => {
+          const call: Call = {
+            method: String(init.method),
+            url,
+            headers: (init.headers ?? {}) as Record<string, string>,
+            body: init.body ? JSON.parse(String(init.body)) : undefined,
+          };
+          calls.push(call);
+          if (call.method === 'DELETE') return json(200, { ok: true });
+          if (call.method === 'POST' && url.endsWith('/submitter')) {
+            return json(200, { ok: true, submitterId: ID2 });
+          }
+          return json(200, { ok: true, status: 'quarantined' });
+        },
+        now: () => 3_000_000,
+        extensionVersion: '2.1.0',
+        optedIn: async () => true,
+        submitterPath: '/api/v1/rate/extension/submitter',
+        observationPath: '/api/v1/rate/extension/observation',
+      });
+
+      // Transient write error during syncServer() preserves SUBMITTER_KEY.
+      await client.syncServer(ALT);
+      assert.deepEqual(store.get(SUBMITTER_KEY), { id: ID1, apiBaseUrl: BASE });
+      assert.equal(store.has(PENDING_ERASURE_KEY), false);
+
+      // Transient write error during send() rotation also preserves SUBMITTER_KEY.
+      await client.send(ALT, obs);
+      assert.deepEqual(store.get(SUBMITTER_KEY), { id: ID1, apiBaseUrl: BASE });
+      assert.equal(calls.length, 0);
+
+      // Once storage recovers, the next call queues ID1, erases it on BASE,
+      // and rotates cleanly to ID2 on ALT.
+      failPendingWrite = false;
+      await client.send(ALT, obs);
+      assert.deepEqual(store.get(SUBMITTER_KEY), { id: ID2, apiBaseUrl: ALT });
+      assert.equal(store.has(PENDING_ERASURE_KEY), false);
+      assert.deepEqual(
+        calls
+          .filter(
+            (c) => c.method === 'DELETE' && new URL(c.url).origin === BASE
+          )
+          .map((c) => c.body),
+        [{ submitterId: ID1 }]
+      );
+
+      // Transient write error during forget() likewise retains ID2 until retry.
+      failPendingWrite = true;
+      await client.forget();
+      assert.deepEqual(store.get(SUBMITTER_KEY), { id: ID2, apiBaseUrl: ALT });
+      failPendingWrite = false;
+      await client.forget();
+      assert.equal(store.has(SUBMITTER_KEY), false);
+      assert.equal(store.has(PENDING_ERASURE_KEY), false);
+      assert.deepEqual(
+        calls
+          .filter((c) => c.method === 'DELETE' && new URL(c.url).origin === ALT)
+          .map((c) => c.body),
+        [{ submitterId: ID2 }]
+      );
     }
     console.log(
       '  ✅ [Observation client: one id, erasure kept until confirmed, holds (#1606, #1682)] Verified'
@@ -7124,9 +7208,13 @@ async function runTests() {
         );
         await new Promise((r) => setTimeout(r, 10));
         assert.equal(
-          eraseCallsOnHeld.some((u) =>
-            u.startsWith('https://rate.vn/api/v1/rate/extension/submitter')
-          ),
+          eraseCallsOnHeld.some((u) => {
+            const parsed = new URL(u);
+            return (
+              parsed.origin === 'https://rate.vn' &&
+              parsed.pathname === '/api/v1/rate/extension/submitter'
+            );
+          }),
           true,
           'opted-out page visit must flush pending erasure once hold expires'
         );

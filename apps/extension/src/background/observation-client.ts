@@ -283,8 +283,8 @@ export class ObservationClient {
     const record = await this.read(SUBMITTER_KEY, asRecord);
     if (!record) return null;
     if (record.apiBaseUrl === apiBaseUrl) return record.id;
-    await this.deps.storage.remove(SUBMITTER_KEY);
     await this.queueErasure(record);
+    await this.deps.storage.remove(SUBMITTER_KEY);
     return null;
   }
 
@@ -389,8 +389,8 @@ export class ObservationClient {
         if (!apiBaseUrl) return;
         const record = await this.read(SUBMITTER_KEY, asRecord);
         if (!record || record.apiBaseUrl === apiBaseUrl) return;
-        await this.deps.storage.remove(SUBMITTER_KEY);
         await this.queueErasure(record);
+        await this.deps.storage.remove(SUBMITTER_KEY);
         await this.flushErasures();
       } catch {
         // The queued erasure is retried on the next start or send.
@@ -406,8 +406,8 @@ export class ObservationClient {
     return this.run(async () => {
       try {
         const record = await this.read(SUBMITTER_KEY, asRecord);
-        await this.deps.storage.remove(SUBMITTER_KEY);
         if (record) await this.queueErasure(record);
+        await this.deps.storage.remove(SUBMITTER_KEY);
         await this.flushErasures(record?.id);
       } catch {
         // The queued erasure is retried on the next start or send.
