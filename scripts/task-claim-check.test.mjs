@@ -260,3 +260,23 @@ test('summary shows the declared claimant, the lock and the fix', () => {
   assert.match(s, /\| - \| no claim lock refs\/claims\/7 \|/);
   assert.match(s, /Claimant: <tool>:<session id>/);
 });
+
+test('a released lock (tombstone) counts as no lock (DOS/Rate#1675)', () => {
+  const tombstone = {
+    claimant: null,
+    agent: 'Web',
+    released: true,
+    releasedBy: ME,
+  };
+  const r = evaluateClaim(
+    pr({ closingIssues: [issue(claimed, 7, tombstone)] })
+  );
+  assert.equal(r.ok, false);
+  assert.deepEqual(r.issues[0].problems, ['no claim lock refs/claims/7']);
+  assert.match(renderSummary(1, r), /\| - \| no claim lock/);
+  // Under the label-only grace it is no lock either, not someone else's.
+  const legacy = evaluateClaim(
+    pr({ createdAt: BEFORE, closingIssues: [issue(claimed, 7, tombstone)] })
+  );
+  assert.equal(legacy.ok, true);
+});
