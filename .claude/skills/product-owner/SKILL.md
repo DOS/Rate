@@ -179,21 +179,28 @@ names a role and two sessions can share it:
   the claimant and posts it in a lock comment on the issue.
 - Re-claiming by the holder changes nothing. `ready`, `backlog` and `done`
   release the lock; only the holder may, except on a closed (merged) issue,
-  so the PO can mark a runtime issue Done after the promotion, or when the
-  lock is stale (below).
+  so the PO can mark a runtime issue Done after the promotion.
 - A release never deletes the ref (DOS/Rate#1675): it replaces the lock,
   compare-and-swap, with a tombstone commit (`release: ...`,
   `Released-By: <claimant>`), so a `--take-over` that lands between the
   release's read and its write is never removed (the release fails
   instead). A tombstone is a free lock: the next claim replaces it, and
   `task-claim` treats it as no lock.
-- A lock taken before the issue was last closed is stale: the merge that
-  closed it ended that work. On a reopened issue, `in-progress` or
-  `in-review` replaces a stale lock without `--take-over` (and its stale
+- A lock taken before a merged PR last closed the issue is stale: the merge
+  ended that work. On a reopened issue, a claim (`in-progress` or
+  `in-review`) replaces a stale lock without `--take-over` (and its stale
   `agent:*` label; the other PO's `po:*` label still needs `--take-over`),
-  and the lock comment names the lock it replaced. The old holder
-  re-claiming the reopened issue takes a fresh lock the same way. Nothing
-  releases locks automatically when an issue closes.
+  and the lock comment names the lock it replaced. A release does not: on an
+  open issue only the holder releases, or the PO with `--force-release`. A
+  close that was not a merge (not planned, by hand) never makes a lock stale.
+  Nothing releases locks automatically when an issue closes.
+- A session that keeps working on an issue after it was reopened re-runs
+  `board.mjs <n> --status in-progress --agent <Nick>` at once: that renews
+  its lock, which is otherwise stale and open to the next claim.
+- Until every active worktree has merged `origin/dev` past DOS/Rate#1675,
+  an older `board.mjs` can still delete a lock when it releases a closed
+  issue's lock or force-releases, so keep the hand-over order: the next
+  session claims only after the "released" comment.
 - `--take-over` moves the lock to the new session (after a hand-over or on
   JOY's assignment), and fails if the lock changed since it was read.
 - `node scripts/ops/board.mjs <n> --force-release --agent PO --reason "<evidence>"`

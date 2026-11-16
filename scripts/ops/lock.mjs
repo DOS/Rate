@@ -18,13 +18,15 @@
 //   afterOid did not delete, verified 2026-11-15), so a delete could remove a
 //   take-over that landed after the release read the lock. A tombstone is a
 //   free lock, and claiming it replaces it the same way. Only the holder
-//   releases, or anyone once the lock is stale (below). `forceRelease` (PO
-//   only) releases it whoever holds it. Cost: one ref per issue ever claimed.
-// - Stale lock (DOS/Rate#1675): a lock taken before the issue was last
-//   closed guarded work that the close ended (the PR merged). It counts as
-//   free, so claiming a reopened issue replaces it, and anyone may release it.
-//   The holder re-claiming a reopened issue also replaces it, so its renewed
-//   lock is not stale.
+//   releases, or anyone once the issue is closed. `forceRelease` (PO only)
+//   releases it whoever holds it. Cost: one ref per issue ever claimed.
+// - Stale lock (DOS/Rate#1675): a lock taken before a merged PR last closed
+//   the issue guarded work that the merge ended. A claim treats it as free,
+//   so claiming a reopened issue replaces it without --take-over. A release
+//   does not: on an open issue only the holder (or --force-release) releases
+//   it. The holder re-claiming a reopened issue also replaces it, so its
+//   renewed lock is not stale. A close without a merged PR (not planned, by
+//   hand) never makes a lock stale.
 //
 // Every function takes an `api` with the four operations below, so the tests
 // run the same logic against an in-memory ref store.
@@ -45,8 +47,8 @@ export const describeLock = (lock) =>
   `${lock.claimedAt ? ` since ${lock.claimedAt}` : ''}`;
 
 /**
- * True when `lock` is a live lock taken before `closedAt`, the time the
- * issue was last closed: the close ended the work it guarded. A lock whose
+ * True when `lock` is a live lock taken before `closedAt`, the time a merged
+ * PR last closed the issue: the merge ended the work it guarded. A lock whose
  * time is unknown is never stale.
  */
 export function isStale(lock, closedAt) {
@@ -58,7 +60,8 @@ export function isStale(lock, closedAt) {
 
 /**
  * Takes the lock of issue `number` for `claimant`, or confirms it is held.
- * `closedAt` is when the issue was last closed (null if never). Returns
+ * `closedAt` is when a merged PR last closed the issue (null if its last
+ * close was not a merge, or it was never closed). Returns
  * { action: 'taken' | 'held' | 'taken-over', previous? }; `previous` is the
  * lock that was replaced, with `stale: true` for a stale one.
  */
@@ -158,9 +161,8 @@ async function tombstone({ api, number, current, claimant, agent }) {
 
 /**
  * Releases the lock of issue `number`. Only its holder may, unless the issue
- * is closed (merged) or the lock is stale, where it has nothing left to
- * guard. Returns { action: 'none' | 'released', previous? }; `previous` has
- * `stale: true` when that was the reason.
+ * is closed (merged), where the lock has nothing left to guard. Returns
+ * { action: 'none' | 'released', previous? }.
  */
 export async function releaseLock({
   api,
@@ -168,24 +170,16 @@ export async function releaseLock({
   claimant,
   agent = null,
   issueClosed,
-  closedAt = null,
 }) {
   const current = await api.read(number);
   if (!current || current.released) return { action: 'none' };
-  const stale = isStale(current, closedAt);
-  if (current.claimant !== claimant && !issueClosed && !stale) {
+  if (current.claimant !== claimant && !issueClosed) {
     throw new ClaimError(
       `${lockRef(number)} is held by ${describeLock(current)}, not this session: ` +
         'only the holder releases it (a PO clears an orphaned claim with --force-release)'
     );
   }
-  return tombstone({
-    api,
-    number,
-    current: stale ? { ...current, stale } : current,
-    claimant,
-    agent,
-  });
+  return tombstone({ api, number, current, claimant, agent });
 }
 
 /** Releases the lock whoever holds it (an orphaned claim). PO only. */

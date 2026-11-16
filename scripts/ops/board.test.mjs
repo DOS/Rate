@@ -14,6 +14,7 @@ import {
   forceReleaseBoard,
   isPoNick,
   labelChanges,
+  lastMergedClose,
   lockComment,
   setBoard,
 } from './board.mjs';
@@ -663,7 +664,10 @@ test('github lock api: a failed compare-and-swap is judged by re-reading the ref
 
 // ---- setBoard with fake I/O ----
 
-function fakeIo(labels, { state = 'OPEN', closedAt = null } = {}) {
+function fakeIo(
+  labels,
+  { state = 'OPEN', closedAt = null, closedByMerge = true } = {}
+) {
   const log = [];
   return {
     log,
@@ -677,7 +681,14 @@ function fakeIo(labels, { state = 'OPEN', closedAt = null } = {}) {
                   url: 'https://github.com/DOS/Rate/issues/7',
                   state,
                   timelineItems: {
-                    nodes: closedAt ? [{ createdAt: closedAt }] : [],
+                    nodes: closedAt
+                      ? [
+                          {
+                            createdAt: closedAt,
+                            closer: closedByMerge ? { merged: true } : null,
+                          },
+                        ]
+                      : [],
                   },
                   labels: { nodes: labels.map((name) => ({ name })) },
                   projectItems: {
@@ -1047,21 +1058,62 @@ test('stale: two sessions claiming the same stale lock, exactly one wins', async
   );
 });
 
-test('stale: anyone may release a stale lock of a reopened issue', async () => {
-  const api = fakeLocks();
+test('stale: only a close by a merged PR counts', () => {
+  assert.equal(
+    lastMergedClose([{ createdAt: T_CLOSE, closer: { merged: true } }]),
+    T_CLOSE
+  );
+  // Closed by hand or as not planned: no closer, or not a merged PR.
+  assert.equal(lastMergedClose([{ createdAt: T_CLOSE, closer: null }]), null);
+  assert.equal(lastMergedClose([{ createdAt: T_CLOSE, closer: {} }]), null);
+  assert.equal(
+    lastMergedClose([{ createdAt: T_CLOSE, closer: { merged: false } }]),
+    null
+  );
+  assert.equal(lastMergedClose([]), null);
+  assert.equal(lastMergedClose(undefined), null);
+});
+
+test('setBoard: a reopened issue whose last close was not a merge keeps its lock', async () => {
+  const { io, log } = fakeIo(['status:in-progress', 'agent:ops'], {
+    closedAt: T_CLOSE,
+    closedByMerge: false,
+  });
+  const api = loggingLocks(log);
   api.now = T_CLAIM;
-  await acquireLock({ api, number: 7, claimant: A, agent: 'Ops' });
-  const r = await releaseLock({
-    api,
-    number: 7,
-    claimant: B,
-    agent: 'PO',
-    issueClosed: false,
+  await acquireLock({ api, number: 7, claimant: B, agent: 'Ops' });
+  log.length = 0;
+  await assert.rejects(
+    setBoard({
+      number: 7,
+      status: 'in-progress',
+      nick: 'Ops',
+      claimant: A,
+      api,
+      io,
+    }),
+    /claimed by qwen:bbbb2222/
+  );
+  assert.deepEqual(log, []);
+  assert.equal(await holder(api, 7), B);
+});
+
+test('setBoard: another session cannot release a stale lock of a reopened issue', async () => {
+  const { io, log } = fakeIo(['status:in-review', 'agent:ops'], {
     closedAt: T_CLOSE,
   });
-  assert.equal(r.action, 'released');
-  assert.equal(r.previous.stale, true);
-  assert.equal(await holder(api, 7), null);
+  const api = loggingLocks(log);
+  api.now = T_CLAIM;
+  await acquireLock({ api, number: 7, claimant: B, agent: 'Ops' });
+  log.length = 0;
+  for (const status of ['ready', 'backlog', 'done']) {
+    await assert.rejects(
+      setBoard({ number: 7, status, nick: 'Ops', claimant: A, api, io }),
+      /only the holder releases it/
+    );
+  }
+  assert.deepEqual(log, []);
+  assert.equal(await holder(api, 7), B);
 });
 
 test('stale: the agent label of a stale claim needs no --take-over, the other PO line still does', () => {
@@ -1090,7 +1142,7 @@ test('stale: the agent label of a stale claim needs no --take-over, the other PO
   );
 });
 
-test('stale and tombstone lock comments', () => {
+test('the lock comment names a stale lock it replaced', () => {
   const base = {
     repo: 'DOS/Rate',
     number: 7,
@@ -1107,17 +1159,6 @@ test('stale and tombstone lock comments', () => {
       },
     }),
     /taken by claimant `qwen:bbbb2222`, replacing the stale lock of claude:local_aaaa1111 \(Agent Web\) from before DOS\/Rate#7 was last closed/
-  );
-  assert.match(
-    lockComment({
-      ...base,
-      status: 'ready',
-      lock: {
-        action: 'released',
-        previous: { claimant: A, agent: 'Web', stale: true },
-      },
-    }),
-    /released by claimant `qwen:bbbb2222` because it was taken before DOS\/Rate#7 was last closed/
   );
 });
 
@@ -1189,4 +1230,49 @@ test('setBoard: release and done leave a tombstone', async () => {
   assert.equal(log[0], 'lock replace');
   assert.equal((await api.read(7)).released, true);
   assert.equal((await api.read(7)).agent, 'Ops');
+});
+
+test('github lock api: a release is a compare-and-swap from the lock read to its tombstone', async () => {
+  const msgs = { s1: lockMsg };
+  let head = 's1';
+  const fake = fakeGh([
+    [
+      /git\/ref\/claims\/7$/,
+      () => ok({ ref: 'refs/claims/7', object: { sha: head } }),
+    ],
+    [
+      /git\/commits\/\w+$/,
+      (line) =>
+        ok({ message: msgs[line.split('/').pop()], committer: { date: 'd' } }),
+    ],
+    [/git\/blobs/, ok({ sha: 'b1' })],
+    [/git\/trees/, ok({ sha: 't1' })],
+    [
+      /git\/commits -f message=/,
+      (line) => {
+        msgs.k1 = line.match(/message=([\s\S]*?) -f tree=/)[1];
+        return ok({ sha: 'k1' });
+      },
+    ],
+    [/--jq \{id: \.node_id\}/, ok({ id: 'R_1' })],
+    [
+      /updateRefs/,
+      (line) => {
+        if (!line.includes('before=s1') || !line.includes('after=k1')) {
+          return err(500, 'stale beforeOid');
+        }
+        head = 'k1';
+        return ok({ data: { updateRefs: {} } });
+      },
+    ],
+  ]);
+  const api = githubLockApi('DOS/Rate', { call: fake.call });
+  const r = await releaseLock({ api, number: 7, claimant: A, agent: 'Ops' });
+  assert.equal(r.action, 'released');
+  const cas = fake.calls.find((c) => c.includes('updateRefs'));
+  assert.match(cas, /name=refs\/claims\/7/);
+  assert.match(cas, /before=s1/);
+  assert.match(cas, /after=k1/);
+  assert.ok(!fake.calls.some((c) => c.includes('DELETE')));
+  assert.equal((await api.read(7)).released, true);
 });

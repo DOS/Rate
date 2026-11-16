@@ -12,8 +12,8 @@
 // session's claimant, so two sessions can never both claim an issue;
 // `ready`, `backlog` and `done` release it, leaving a tombstone (a free lock)
 // rather than deleting the ref, so a release never removes a newer lock
-// (DOS/Rate#1675). A lock taken before the issue was last closed is stale:
-// claiming the reopened issue replaces it, and anyone may release it. The claimant is `--claimant`, else
+// (DOS/Rate#1675). A lock taken before a merged PR last closed the issue is
+// stale: claiming the reopened issue replaces it without --take-over. The claimant is `--claimant`, else
 // RATE_CLAIMANT, else the Claude Code session id (scripts/claim-lock.mjs).
 // `--force-release` (PO only) clears an orphaned lock and says why on the
 // issue. `--adopt` takes the lock of an issue this session claimed with
@@ -68,9 +68,9 @@ export const isPoNick = (nick) => nick.trim().toLowerCase() === 'po';
  * when `po` names the claimant's PO line, that line's `po:*` label.
  * An issue claimed by another agent or dispatched by the other PO is never
  * taken silently (AGENTS.md sections 1 and 6): that needs `takeOver`, and the
- * other claim label is then removed. `staleClaim` (the issue was closed after
- * its lock was taken) waives that for the agent label, which is as stale as
- * the lock, but not for the other PO's line.
+ * other claim label is then removed. `staleClaim` (a claim, and a merged PR
+ * closed the issue after its lock was taken) waives that for the agent
+ * label, which is as stale as the lock, but not for the other PO's line.
  */
 export function labelChanges(
   current,
@@ -129,11 +129,7 @@ export function lockComment({ repo, number, nick, claimant, status, lock }) {
       return lock.previous.claimant === claimant
         ? `🔓 ${head} Claim lock ${ref} released by claimant ${who} (Status: ${status}).`
         : `🔓 ${head} Claim lock ${ref} of ${describeLock(lock.previous)} ` +
-            `released by claimant ${who} because ${
-              lock.previous.stale
-                ? `it was taken before ${closed} was last closed`
-                : `${closed} is closed`
-            } (Status: ${status}).`;
+            `released by claimant ${who} because ${closed} is closed (Status: ${status}).`;
     default:
       return null;
   }
@@ -145,13 +141,24 @@ const ISSUE_QUERY = `query($owner: String!, $name: String!, $n: Int!) {
       url
       state
       timelineItems(itemTypes: [CLOSED_EVENT], last: 1) {
-        nodes { ... on ClosedEvent { createdAt } }
+        nodes {
+          ... on ClosedEvent {
+            createdAt
+            closer { ... on PullRequest { merged } }
+          }
+        }
       }
       labels(first: 50) { nodes { name } }
       projectItems(first: 20) { nodes { id project { number } } }
     }
   }
 }`;
+
+/** The time of the last ClosedEvent if a merged PR made it, else null. */
+export function lastMergedClose(closedEvents) {
+  const last = closedEvents?.at(-1);
+  return last?.closer?.merged === true ? (last.createdAt ?? null) : null;
+}
 
 function readIssue(repo, number, { ghJson: json = ghJson } = {}) {
   const [owner, name] = repo.split('/');
@@ -172,8 +179,9 @@ function readIssue(repo, number, { ghJson: json = ghJson } = {}) {
   return {
     url: issue.url,
     closed: issue.state === 'CLOSED',
-    // When the issue was last closed (it may have been reopened since).
-    closedAt: issue.timelineItems?.nodes?.at(-1)?.createdAt ?? null,
+    // When a merged PR last closed the issue (it may have been reopened
+    // since); null when its last close was not a merge or it never closed.
+    mergedCloseAt: lastMergedClose(issue.timelineItems?.nodes),
     labels: issue.labels.nodes.map((l) => l.name),
     itemId:
       issue.projectItems.nodes.find((i) => i.project.number === PROJECT.number)
@@ -233,11 +241,13 @@ export async function setBoard({
   const claiming = CLAIM_STATUSES.includes(status);
   const { gh, ghJson } = io;
 
-  // A lock taken before the issue was last closed is stale (lock.mjs), and
-  // so is the agent label that came with it.
-  const staleClaim = issue.closedAt
-    ? isStale(await api.read(number), issue.closedAt)
-    : false;
+  // A claim treats a lock taken before a merged PR last closed the issue as
+  // stale (lock.mjs), and so the agent label that came with it. A release
+  // never does: only the holder releases a lock on an open issue.
+  const staleClaim =
+    claiming && issue.mergedCloseAt
+      ? isStale(await api.read(number), issue.mergedCloseAt)
+      : false;
 
   // Refuse before changing anything when the labels say someone else holds
   // the issue.
@@ -262,7 +272,7 @@ export async function setBoard({
         claimedWithoutLock: issue.labels.some((l) =>
           CLAIM_STATUSES.some((c) => STATUSES[c].label === l)
         ),
-        closedAt: issue.closedAt,
+        closedAt: issue.mergedCloseAt,
       })
     : await releaseLock({
         api,
@@ -270,7 +280,6 @@ export async function setBoard({
         claimant,
         agent: nick,
         issueClosed: issue.closed,
-        closedAt: issue.closedAt,
       });
   const note = lockComment({ repo, number, nick, claimant, status, lock });
   if (note) comment(io, repo, number, note);
