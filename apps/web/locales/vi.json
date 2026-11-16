@@ -126,6 +126,10 @@
   },
   "compare": {
     "criteriaSourceExpert": "Điểm tiêu chí từ người review hoặc chuyên gia",
+    "overallSourceExpertBadge": "Từ chuyên gia/tiêu chí",
+    "overallSourceExpertNote": "{name} chưa có đánh giá của người mua, nên số sao là điểm tổng hợp từ chuyên gia Rate Lab và/hoặc điểm tiêu chí, không phải từ người mua.",
+    "overallSourceBuyers": "Người mua",
+    "csvRowOverallSource": "Nguồn của sao tổng",
     "criterionNoData": "Chưa đủ dữ liệu",
     "versusMetaTitle": "So sánh {nameA} và {nameB}: 10 nhóm thông số và điểm đánh giá | Rate.vn",
     "versusMetaTitleShort": "{nameA} vs {nameB} | Rate.vn",

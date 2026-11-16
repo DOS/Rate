@@ -126,6 +126,10 @@
   },
   "compare": {
     "criteriaSourceExpert": "Hodnocení kritérií od recenzentů nebo expertů",
+    "overallSourceExpertBadge": "Od expertů/kritérií",
+    "overallSourceExpertNote": "{name} zatím nemá hodnocení kupujících, proto jsou jeho hvězdičky složeným skóre z expertního hodnocení Rate Lab a/nebo hodnocení kritérií, ne od kupujících.",
+    "overallSourceBuyers": "Kupující",
+    "csvRowOverallSource": "Zdroj celkových hvězdiček",
     "criterionNoData": "Nedostatek dat",
     "versusMetaTitle": "{nameA} vs {nameB}: 10 skupin parametrů a hodnocení | Rate.vn",
     "versusMetaTitleShort": "{nameA} vs {nameB} | Rate.vn",

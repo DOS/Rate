@@ -175,6 +175,39 @@ export function resolveVersusPersona(
   };
 }
 
+/**
+ * Where a model's overall versus score comes from (DOS/Rate#1663):
+ * `buyers` for its buyer rating, `expert_criteria` for a model with no buyer
+ * rating yet, which keeps its composite (the Rate Lab expert score and/or the
+ * criterion scores, `combinedScore5`). Null when it shows no score at all.
+ */
+export type VersusOverallScoreSource = 'buyers' | 'expert_criteria';
+
+/**
+ * A model's overall versus score, unrounded, and where it comes from: the
+ * product's rating as every page shows it (DOS/Rate#1470), or for a model
+ * with no buyer rating yet its composite, labelled as such (DOS/Rate#1663,
+ * JOY 2026-11-16: keep it and label it).
+ */
+export function versusOverallScore(
+  item: Pick<ScoredVersusItem, 'userScore5' | 'combinedScore5'>
+): { score5: number; source: VersusOverallScoreSource | null } {
+  const fromBuyers = item.userScore5 > 0;
+  const score5 = sanitizeVersusScore5(
+    fromBuyers ? item.userScore5 : item.combinedScore5
+  );
+  return {
+    score5,
+    // A score that shows as no stars has no source either.
+    source:
+      displayedScore5(score5) > 0
+        ? fromBuyers
+          ? 'buyers'
+          : 'expert_criteria'
+        : null,
+  };
+}
+
 export function computeVersusWeightedResult(
   scoreA: ScoredVersusItem,
   scoreB: ScoredVersusItem,
@@ -197,9 +230,7 @@ export function computeVersusWeightedResult(
   ): { score: number; byCriteria: boolean } => {
     // The product's rating as every page shows it (DOS/Rate#1470); a model
     // with no buyer rating yet keeps its composite (expert or criteria).
-    const baseScore5 = sanitizeVersusScore5(
-      item.userScore5 > 0 ? item.userScore5 : item.combinedScore5
-    );
+    const baseScore5 = versusOverallScore(item).score5;
     if (persona === 'default') {
       return { score: baseScore5, byCriteria: false };
     }
@@ -262,6 +293,10 @@ export function computeVersusWeightedResult(
   return {
     finalA,
     finalB,
+    // Where each side's overall score comes from (DOS/Rate#1663); under a
+    // preset it is the source of the rating share of the blend.
+    sourceA: versusOverallScore(scoreA).source,
+    sourceB: versusOverallScore(scoreB).source,
     bothScored,
     // What the scores weigh: the shown rating alone, or blended with the
     // criteria both models have a real score for.
