@@ -28,6 +28,7 @@ import RadarBadge from '@/components/radar/RadarBadge';
 import {
   EMPTY_RADAR_SIGNAL,
   getRadarSignal,
+  isMultiPlatformFloor,
   RADAR_CSV_HEADERS,
   radarCsvCells,
   radarExportFields,
@@ -222,6 +223,11 @@ export default function DeepInspectWorkspace({
     result?.radarSignal ??
     (master ? getRadarSignal(radarIndex, master.slug) : EMPTY_RADAR_SIGNAL);
   const matchedGenuineDeal = radarSignal.genuineDeal ?? null;
+  // Only a multi-platform floor is the lowest price across stores; any other
+  // genuine deal is just below the median (DOS/Rate#1661).
+  const genuinePillKey = isMultiPlatformFloor(matchedGenuineDeal)
+    ? 'radarGenuinePill'
+    : 'radarBelowMedianPill';
   const matchedFakeTrap = radarSignal.fakeSaleTrap ?? null;
   const matchedPriceSpread = radarSignal.priceSpread ?? null;
 
@@ -275,7 +281,7 @@ export default function DeepInspectWorkspace({
           : []),
         ...(matchedGenuineDeal
           ? [
-              `- ${t('radarGenuinePill', { pct: matchedGenuineDeal.savingsVsMedianPct, platform: matchedGenuineDeal.platform.toUpperCase(), price: matchedGenuineDeal.priceCurrent.toLocaleString('vi-VN') })}`,
+              `- ${t(genuinePillKey, { pct: matchedGenuineDeal.savingsVsMedianPct, platform: matchedGenuineDeal.platform.toUpperCase(), price: matchedGenuineDeal.priceCurrent.toLocaleString('vi-VN') })}`,
             ]
           : []),
         ...(matchedFakeTrap
@@ -677,7 +683,7 @@ export default function DeepInspectWorkspace({
                       <div className="d-flex align-items-center flex-wrap gap-2">
                         {matchedGenuineDeal && (
                           <span className="badge bg-success-subtle text-success border-success-subtle rounded-pill border px-3 py-2">
-                            {t('radarGenuinePill', {
+                            {t(genuinePillKey, {
                               pct: formatPlainNumber(
                                 matchedGenuineDeal.savingsVsMedianPct,
                                 locale

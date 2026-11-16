@@ -159,18 +159,56 @@ for (const locale of LOCALES) {
     ['deals', 'radarBannerBadge'],
     ['homePage', 'radarGenuineTitle'],
     ['merchants', 'mdRadarLine'],
+    ['homePage', 'radarHomeBadge'],
+    ['inspect', 'radarSectionBadge'],
+    ['merchants', 'profileRadarBadge'],
+    ['compare', 'radarRowTitle'],
+    ['compare', 'radarRowMatrixTitle'],
   ] as const) {
     const text = String(messages[ns]![key]);
     assert.ok(
-      !/đáy|\blows?\b|minim/i.test(text),
+      !/đáy|thấp nhất|\blow(?:s|est)?\b|nejniž|minim/i.test(text),
       `${locale}: ${ns}.${key} must not claim a floor: ${text}`
     );
   }
+  // The merchant profile badge and the compare radar rows sit over mixed
+  // genuine deals and fake sales, so they name the median instead (#1632).
+  for (const [ns, key] of [
+    ['merchants', 'profileRadarBadge'],
+    ['compare', 'radarRowTitle'],
+    ['compare', 'radarRowMatrixTitle'],
+  ] as const) {
+    assert.match(
+      String(messages[ns]![key]),
+      /trung vị|median|medián/i,
+      `${locale}: ${ns}.${key} names the median`
+    );
+  }
+  // Deep inspect shows the floor pill only for a real floor; any other
+  // genuine deal gets the below-median pill with the same values (#1661).
+  const belowPill = String(messages.inspect!.radarBelowMedianPill);
+  assert.ok(
+    !/đáy|thấp nhất|\blow(?:s|est)?\b|nejniž|minim/i.test(belowPill),
+    `${locale}: inspect.radarBelowMedianPill must not claim a floor: ${belowPill}`
+  );
+  assert.match(
+    belowPill,
+    /trung vị|median|medián/i,
+    `${locale}: inspect.radarBelowMedianPill names the median`
+  );
+  const placeholders = (text: string) =>
+    [...text.matchAll(/\{(\w+)\}/g)].map((m) => m[1]).sort();
+  assert.deepEqual(
+    placeholders(belowPill),
+    placeholders(String(messages.inspect!.radarGenuinePill)),
+    `${locale}: inspect.radarBelowMedianPill has the placeholders of radarGenuinePill`
+  );
 }
 for (const file of [
   ['components', 'radar', 'RadarBadge.tsx'],
   ['components', 'compare', 'CompareWorkspace.tsx'],
   ['components', 'watchlist', 'WatchlistWorkspace.tsx'],
+  ['components', 'inspect', 'DeepInspectWorkspace.tsx'],
 ]) {
   assert.ok(
     readFileSync(join(__dirname, '..', '..', ...file), 'utf8').includes(
@@ -179,6 +217,21 @@ for (const file of [
     `${file.join('/')} must label only real floors as the multi-platform floor`
   );
 }
+// The deep inspect floor pill is picked only through the floor check (#1661).
+assert.ok(
+  !readFileSync(
+    join(
+      __dirname,
+      '..',
+      '..',
+      'components',
+      'inspect',
+      'DeepInspectWorkspace.tsx'
+    ),
+    'utf8'
+  ).includes("t('radarGenuinePill'"),
+  'DeepInspectWorkspace.tsx must not hard-code the floor pill'
+);
 const note = radarExplanation(signal);
 assert.equal(note?.key, 'radarExplanationGenuineDeal');
 assert.equal(note!.values.count, '2');
@@ -286,14 +339,16 @@ assert.equal(
 );
 for (const locale of LOCALES) {
   // The catalog radar box sits over every genuine deal (DOS/Rate#1145).
-  const title = String(
-    (readLocale(locale).catalog as unknown as Record<string, Messages[string]>)
-      .page!.radarDealsTitle
-  );
-  assert.ok(
-    !/đáy|\blows?\b|minim/i.test(title),
-    `${locale}: catalog.page.radarDealsTitle must not claim a floor: ${title}`
-  );
+  const page = (
+    readLocale(locale).catalog as unknown as Record<string, Messages[string]>
+  ).page!;
+  for (const key of ['radarDealsTitle', 'radarBannerBadge']) {
+    const title = String(page[key]);
+    assert.ok(
+      !/đáy|thấp nhất|\blow(?:s|est)?\b|nejniž|minim/i.test(title),
+      `${locale}: catalog.page.${key} must not claim a floor: ${title}`
+    );
+  }
 }
 
 // DOS/Rate#1144: with no expert score, the composite equals the buyer score

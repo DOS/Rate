@@ -135,7 +135,7 @@ import {
   formatPercent,
   formatPriceVnd,
 } from '@/lib/locale-format';
-import { displayedScore5 } from '@/lib/rating-display';
+import { displayedScore5, formatRatingValue } from '@/lib/rating-display';
 import { versusHref } from '@/lib/item-compare';
 import StarRating from '@/components/elementary/StarRating';
 
@@ -1270,7 +1270,7 @@ export async function ProductDetailView({
                                   className={`rate-pdv-crit-value${val == null ? ' is-empty' : ''}`}
                                 >
                                   {val != null
-                                    ? `${formatDecimal(val, locale, 1)}/5`
+                                    ? `${formatRatingValue(val, locale, 1)}/5`
                                     : t('notAvailableYet')}
                                 </span>
                               </div>

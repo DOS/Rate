@@ -17,6 +17,65 @@ export function normalizeQuickWatchlistSlug(value: unknown): string {
   return sanitizeWatchlistSlug(value);
 }
 
+export type WatchlistQuickToggleTranslate = (
+  key:
+    | 'quickToggleShortWatched'
+    | 'quickToggleShortUnwatched'
+    | 'quickToggleBtnWatched'
+    | 'quickToggleBtnUnwatched'
+) => string;
+
+// Keep the active visible label inside aria-label without parentheses so
+// axe-core 4.14 label-content-name-mismatch passes WCAG 2.5.3 (DOS/Rate#1666).
+export function formatWatchlistQuickToggleAriaLabel(
+  visibleLabel: string,
+  itemName: unknown
+): string {
+  const label = visibleLabel
+    .replace(/[\r\n\t]+/g, ' ')
+    .replace(/\p{Cc}+/gu, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  const name =
+    typeof itemName === 'string'
+      ? itemName
+          .replace(/[\r\n\t]+/g, ' ')
+          .replace(/\p{Cc}+/gu, '')
+          .replace(/\s+/g, ' ')
+          .trim()
+      : '';
+  if (!name) return label;
+  if (!label) return name;
+  return `${label}: ${name}`;
+}
+
+export function resolveWatchlistQuickToggleA11y(
+  t: WatchlistQuickToggleTranslate,
+  options: {
+    compact?: boolean;
+    watched: boolean;
+    itemName: unknown;
+  }
+): {
+  visibleLabel: string;
+  ariaLabel: string;
+  ariaPressed: boolean;
+} {
+  const { compact = false, watched, itemName } = options;
+  const visibleLabel = compact
+    ? watched
+      ? t('quickToggleShortWatched')
+      : t('quickToggleShortUnwatched')
+    : watched
+      ? t('quickToggleBtnWatched')
+      : t('quickToggleBtnUnwatched');
+  return {
+    visibleLabel,
+    ariaLabel: formatWatchlistQuickToggleAriaLabel(visibleLabel, itemName),
+    ariaPressed: watched,
+  };
+}
+
 export interface WatchlistQuickItem {
   slug: string;
   name: string;
@@ -83,6 +142,15 @@ export default function WatchlistQuickToggle({
   };
 
   if (compact) {
+    const {
+      visibleLabel: shortLabel,
+      ariaLabel,
+      ariaPressed,
+    } = resolveWatchlistQuickToggleA11y(t, {
+      compact: true,
+      watched,
+      itemName: item?.name,
+    });
     return (
       <button
         type="button"
@@ -92,8 +160,8 @@ export default function WatchlistQuickToggle({
             ? t('quickToggleTitleWatched')
             : t('quickToggleTitleUnwatched')
         }
-        aria-label={`${t('quickToggleShortUnwatched')}: ${item.name}`}
-        aria-pressed={watched}
+        aria-label={ariaLabel}
+        aria-pressed={ariaPressed}
         className={`rate-chip-btn${watched ? ' is-active' : ''} ${className}`.trim()}
       >
         {watched ? (
@@ -101,14 +169,20 @@ export default function WatchlistQuickToggle({
         ) : (
           <BsBell aria-hidden="true" />
         )}
-        <span>
-          {watched
-            ? t('quickToggleShortWatched')
-            : t('quickToggleShortUnwatched')}
-        </span>
+        <span>{shortLabel}</span>
       </button>
     );
   }
+
+  const {
+    visibleLabel: btnLabel,
+    ariaLabel,
+    ariaPressed,
+  } = resolveWatchlistQuickToggleA11y(t, {
+    compact: false,
+    watched,
+    itemName: item?.name,
+  });
 
   return (
     <button
@@ -117,6 +191,8 @@ export default function WatchlistQuickToggle({
       title={
         watched ? t('quickToggleTitleWatched') : t('quickToggleTitleUnwatched')
       }
+      aria-label={ariaLabel}
+      aria-pressed={ariaPressed}
       className={`btn ${
         watched
           ? 'btn-success text-white'
@@ -124,9 +200,7 @@ export default function WatchlistQuickToggle({
       } ${size === 'sm' ? 'btn-sm small px-2 py-1' : 'px-3 py-2'} rounded-pill fw-medium d-inline-flex align-items-center gap-1 shadow-sm ${className}`}
       style={{ fontSize: size === 'sm' ? '0.8125rem' : '13.5px' }}
     >
-      <span>
-        {watched ? t('quickToggleBtnWatched') : t('quickToggleBtnUnwatched')}
-      </span>
+      <span>{btnLabel}</span>
     </button>
   );
 }

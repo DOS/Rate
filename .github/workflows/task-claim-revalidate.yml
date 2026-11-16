@@ -1,8 +1,11 @@
 name: Task Claim Revalidate
 
 # Re-runs the task-claim check (task-claim.yml) on every open PR into dev that
-# closes an issue whose agent:* or status:* labels just changed. Kept in its
-# own workflow so PR check lists do not show a skipped revalidate job.
+# closes an issue whose agent:* or status:* labels just changed, or whose claim
+# lock refs/claims/<n> scripts/ops/board.mjs just took, took over or released
+# (workflow_dispatch with the issue number: a lock change does not always
+# change a label). Kept in its own workflow so PR check lists do not show a
+# skipped revalidate job.
 #
 # Runs from the default branch (dev) on issue events; no PR code is involved.
 # Concurrency is per job: every issue label event starts a run, and a
@@ -12,6 +15,12 @@ name: Task Claim Revalidate
 on:
   issues:
     types: [labeled, unlabeled]
+  workflow_dispatch:
+    inputs:
+      issue:
+        description: Issue number whose claim lock changed
+        required: true
+        type: number
 
 permissions: {}
 
@@ -19,12 +28,13 @@ jobs:
   revalidate:
     name: Re-run task-claim for PRs closing this issue
     if: >-
+      github.event_name == 'workflow_dispatch' ||
       startsWith(github.event.label.name, 'agent:') ||
       startsWith(github.event.label.name, 'status:')
     runs-on: ubuntu-latest
     timeout-minutes: 10
     concurrency:
-      group: task-claim-issue-${{ github.event.issue.number }}
+      group: task-claim-issue-${{ github.event.issue.number || inputs.issue }}
       cancel-in-progress: false
     permissions:
       actions: write
@@ -37,9 +47,13 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
-          ISSUE: ${{ github.event.issue.number }}
+          ISSUE: ${{ github.event.issue.number || inputs.issue }}
         run: |
           set -euo pipefail
+          if ! [[ "$ISSUE" =~ ^[1-9][0-9]*$ ]]; then
+            echo "::error::Not an issue number: $ISSUE"
+            exit 1
+          fi
           owner=${REPO%/*}; name=${REPO#*/}
           prs=$(gh api graphql -F owner="$owner" -F name="$name" -F number="$ISSUE" -f query='
             query($owner: String!, $name: String!, $number: Int!) {
