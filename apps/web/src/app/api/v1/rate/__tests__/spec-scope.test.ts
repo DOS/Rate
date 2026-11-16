@@ -68,6 +68,9 @@ let catalog: unknown[] = [];
 let masterRows: unknown[] = [];
 // What a `merchants` read answers (merchant list and directory routes).
 let merchantRows: unknown[] = [];
+// What `v_products_with_merchant_trust` and `products` answer (offer reads).
+let trustViewRows: Array<Record<string, unknown>> = [];
+let productRows: Array<Record<string, unknown>> = [];
 let calls: string[] = [];
 // The last `search_master_products` arguments, to see the filters reach SQL.
 let searchArgs: Record<string, unknown> = {};
@@ -78,6 +81,16 @@ const jsonResponse = (status: number, json: unknown) =>
     headers: { 'Content-Type': 'application/json' },
   });
 
+const postgrestWantedValues = (filter: string | null): string[] | null =>
+  filter?.startsWith('eq.')
+    ? [filter.slice(3)]
+    : filter?.startsWith('in.(')
+      ? filter
+          .slice(4, -1)
+          .split(',')
+          .map((s) => s.replace(/^"|"$/g, ''))
+      : null;
+
 globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
   const url =
     typeof input === 'string'
@@ -86,7 +99,7 @@ globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
         ? input.href
         : input.url;
   calls.push(url);
-  const { pathname } = new URL(url);
+  const { pathname, searchParams } = new URL(url);
   if (pathname === '/rest/v1/categories') {
     return jsonResponse(200, [{ id: 'cat-1' }]);
   }
@@ -99,30 +112,62 @@ globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
     );
   }
   if (pathname === '/rest/v1/master_products') {
-    // Honour a slug filter (`eq.` or `in.(...)`) so unknown slugs miss.
-    const slugFilter = new URL(url).searchParams.get('slug');
-    const wanted = slugFilter?.startsWith('eq.')
-      ? [slugFilter.slice(3)]
-      : slugFilter?.startsWith('in.(')
-        ? slugFilter
-            .slice(4, -1)
-            .split(',')
-            .map((s) => s.replace(/^"|"$/g, ''))
-        : null;
+    // Honour slug and id filters (`eq.` or `in.(...)`) so unknown rows miss.
+    const wantedSlugs = postgrestWantedValues(searchParams.get('slug'));
+    const wantedIds = postgrestWantedValues(searchParams.get('id'));
     return jsonResponse(
       200,
-      wanted
-        ? masterRows.filter((row) =>
-            wanted.includes((row as { slug: string }).slug)
-          )
-        : masterRows
+      masterRows.filter((row) => {
+        const r = row as { id: string; slug: string };
+        if (wantedSlugs && !wantedSlugs.includes(r.slug)) return false;
+        if (wantedIds && !wantedIds.includes(r.id)) return false;
+        return true;
+      })
     );
+  }
+  if (pathname === '/rest/v1/v_products_with_merchant_trust') {
+    const wantedClusters = postgrestWantedValues(
+      searchParams.get('cluster_id')
+    );
+    const filtered = wantedClusters
+      ? trustViewRows.filter((row) =>
+          wantedClusters.includes(String(row.cluster_id ?? ''))
+        )
+      : trustViewRows;
+    const from = Number(searchParams.get('offset') ?? 0);
+    const size = Number(searchParams.get('limit') ?? filtered.length);
+    return jsonResponse(200, filtered.slice(from, from + size));
+  }
+  if (pathname === '/rest/v1/products') {
+    const wantedClusters = postgrestWantedValues(
+      searchParams.get('cluster_id')
+    );
+    const wantedItemIds = postgrestWantedValues(
+      searchParams.get('platform_item_id')
+    );
+    const filtered = productRows.filter((row) => {
+      if (
+        wantedClusters &&
+        !wantedClusters.includes(String(row.cluster_id ?? ''))
+      ) {
+        return false;
+      }
+      if (
+        wantedItemIds &&
+        !wantedItemIds.includes(String(row.platform_item_id ?? ''))
+      ) {
+        return false;
+      }
+      return true;
+    });
+    const from = Number(searchParams.get('offset') ?? 0);
+    const size = Number(searchParams.get('limit') ?? filtered.length);
+    return jsonResponse(200, filtered.slice(from, from + size));
   }
   if (pathname === '/rest/v1/merchants') {
     // Paged reads (`.range()`) end on a short page.
-    const params = new URL(url).searchParams;
-    const from = Number(params.get('offset') ?? 0);
-    const size = Number(params.get('limit') ?? merchantRows.length);
+    const from = Number(searchParams.get('offset') ?? 0);
+    const size = Number(searchParams.get('limit') ?? merchantRows.length);
     return jsonResponse(200, merchantRows.slice(from, from + size));
   }
   return jsonResponse(200, []);
@@ -1087,12 +1132,371 @@ async function testSpecMatchesBodies() {
   console.warn('  ✅ The OpenAPI document matches the API v1 response bodies');
 }
 
+// Inspect and lookup scope masterProduct and suggestions[] to each category's
+// template across server helpers and HTTP routes (DOS/Rate#1684).
+async function testInspectAndLookupSpecScope() {
+  const { NextRequest } = await import('next/server');
+  const { getCachedInspectProductOrShopUrl, inspectProductOrShopUrl } =
+    await import('@/server/rate');
+  const inspectRoute = await import('../inspect/route');
+  const lookupRoute = await import('../lookup/route');
+
+  const assertScopedEarbud = (
+    product: Record<string, unknown>,
+    label: string
+  ) => {
+    assert.equal(product.slug, EARBUD.slug, label);
+    assert.equal(product.ram_gb, null, label);
+    assert.equal(product.storage_gb, null, label);
+    assert.equal(product.screen_size_inch, null, label);
+    assert.equal(product.has_5g, false, label);
+    const specs = product.specifications as Record<string, unknown>;
+    assert.equal(specs.display, undefined, label);
+    assert.equal(specs.camera, undefined, label);
+    assert.equal(specs.cellular, undefined, label);
+    assert.deepEqual(
+      Object.keys((product.key_specs as Record<string, unknown>) ?? {}).sort(),
+      ['battery', 'chip'],
+      label
+    );
+  };
+
+  const assertScopedWatch = (
+    product: Record<string, unknown>,
+    label: string
+  ) => {
+    assert.equal(product.slug, WATCH.slug, label);
+    assert.equal(product.has_5g, false, label);
+    assert.equal(product.ram_gb, 1, label);
+    assert.equal(product.storage_gb, 64, label);
+    assert.equal(product.screen_size_inch, 1, label);
+    const specs = product.specifications as Record<string, unknown>;
+    assert.equal(specs.camera, undefined, label);
+    const cellular = specs.cellular as Record<string, unknown>;
+    assert.equal(cellular.has_5g, undefined, label);
+    assert.equal(cellular.bands_5g, undefined, label);
+    assert.equal(cellular.technology, 'LTE', label);
+  };
+
+  try {
+    masterRows = [EARBUD, WATCH];
+    productRows = [
+      {
+        id: 'offer-earbud-1',
+        cluster_id: EARBUD.id,
+        merchant_id: '99999999-9999-4999-8999-999999999999',
+        platform_item_id: '999000111',
+        availability: 'in_stock',
+      },
+      {
+        id: 'offer-watch-1',
+        cluster_id: WATCH.id,
+        merchant_id: '99999999-9999-4999-8999-999999999999',
+        platform_item_id: '999000222',
+        availability: 'in_stock',
+      },
+    ];
+    catalog = [];
+
+    // 1. Server layer (used by SSR /inspect and route handlers): slug + listing URL.
+    const cachedBud = await getCachedInspectProductOrShopUrl(EARBUD.slug);
+    assert.equal(cachedBud.matchedType, 'master_product');
+    assertScopedEarbud(
+      cachedBud.masterProduct as unknown as Record<string, unknown>,
+      'getCachedInspectProductOrShopUrl earbud slug'
+    );
+
+    const directWatch = await inspectProductOrShopUrl(WATCH.slug);
+    assert.equal(directWatch.matchedType, 'master_product');
+    assertScopedWatch(
+      directWatch.masterProduct as unknown as Record<string, unknown>,
+      'inspectProductOrShopUrl watch slug'
+    );
+
+    const listingBud = await getCachedInspectProductOrShopUrl(
+      'https://shopee.vn/product/88201679/999000111'
+    );
+    assert.equal(listingBud.matchedType, 'product_listing');
+    assertScopedEarbud(
+      listingBud.masterProduct as unknown as Record<string, unknown>,
+      'getCachedInspectProductOrShopUrl earbud listing URL'
+    );
+
+    // 2. GET /api/v1/rate/inspect and GET /api/v1/rate/lookup on earbuds & watches.
+    const askRoute = async (
+      route: typeof inspectRoute | typeof lookupRoute,
+      path: string,
+      ip: string
+    ) => {
+      const res = await route.GET(
+        new NextRequest(`http://localhost${path}`, {
+          headers: { 'x-forwarded-for': ip },
+        })
+      );
+      assert.equal(res.status, 200, path);
+      return (await res.json()) as {
+        ok: boolean;
+        data: {
+          matchedType: string;
+          masterProduct: Record<string, unknown> | null;
+          suggestions: Array<Record<string, unknown>>;
+        };
+      };
+    };
+
+    const inspectBud = await askRoute(
+      inspectRoute,
+      `/api/v1/rate/inspect?q=${EARBUD.slug}`,
+      '198.51.100.41'
+    );
+    assertScopedEarbud(
+      inspectBud.data.masterProduct!,
+      'GET /inspect earbud slug'
+    );
+
+    const lookupBudListing = await askRoute(
+      lookupRoute,
+      '/api/v1/rate/lookup?url=https://shopee.vn/product/88201679/999000111',
+      '198.51.100.41'
+    );
+    assert.equal(lookupBudListing.data.matchedType, 'product_listing');
+    assertScopedEarbud(
+      lookupBudListing.data.masterProduct!,
+      'GET /lookup earbud listing URL'
+    );
+
+    const inspectWatchListing = await askRoute(
+      inspectRoute,
+      '/api/v1/rate/inspect?url=https://shopee.vn/product/88201679/999000222',
+      '198.51.100.41'
+    );
+    assert.equal(inspectWatchListing.data.matchedType, 'product_listing');
+    assertScopedWatch(
+      inspectWatchListing.data.masterProduct!,
+      'GET /inspect watch listing URL'
+    );
+
+    const lookupWatch = await askRoute(
+      lookupRoute,
+      `/api/v1/rate/lookup?q=${WATCH.slug}`,
+      '198.51.100.41'
+    );
+    assertScopedWatch(
+      lookupWatch.data.masterProduct!,
+      'GET /lookup watch slug'
+    );
+
+    // 3. Multi-result keyword search and fallback suggestions[] on both routes.
+    masterRows = [];
+    productRows = [];
+    catalog = [EARBUD, WATCH];
+
+    for (const [name, route] of [
+      ['inspect', inspectRoute],
+      ['lookup', lookupRoute],
+    ] as const) {
+      const multi = await askRoute(
+        route,
+        `/api/v1/rate/${name}?q=apple-device-1684`,
+        '198.51.100.42'
+      );
+      assert.equal(multi.data.matchedType, 'search_suggestions', name);
+      assert.equal(multi.data.suggestions.length, 2, name);
+      const budSuggestion = multi.data.suggestions.find(
+        (s) => s.slug === EARBUD.slug
+      );
+      const watchSuggestion = multi.data.suggestions.find(
+        (s) => s.slug === WATCH.slug
+      );
+      assert.ok(budSuggestion, `${name} earbud suggestion`);
+      assert.ok(watchSuggestion, `${name} watch suggestion`);
+      assertScopedEarbud(budSuggestion, `${name} suggestions[] earbud`);
+      assertScopedWatch(watchSuggestion, `${name} suggestions[] watch`);
+    }
+
+    // Fallback suggestions on a query with no search hits (matchedType=not_found).
+    let searchCall = 0;
+    const origFetch = globalThis.fetch;
+    globalThis.fetch = (async (
+      input: RequestInfo | URL,
+      init?: RequestInit
+    ) => {
+      const url =
+        typeof input === 'string'
+          ? input
+          : input instanceof URL
+            ? input.href
+            : input.url;
+      if (new URL(url).pathname === '/rest/v1/rpc/search_master_products') {
+        searchCall++;
+        return jsonResponse(200, searchCall === 1 ? [] : [EARBUD, WATCH]);
+      }
+      return origFetch(input, init);
+    }) as typeof fetch;
+    try {
+      const miss = await getCachedInspectProductOrShopUrl(
+        'unmatched-fallback-1684'
+      );
+      assert.equal(miss.matchedType, 'not_found');
+      assert.equal(miss.masterProduct, null);
+      assert.equal(miss.suggestions.length, 2);
+      assertScopedEarbud(
+        miss.suggestions[0] as unknown as Record<string, unknown>,
+        'not_found fallback earbud suggestion'
+      );
+      assertScopedWatch(
+        miss.suggestions[1] as unknown as Record<string, unknown>,
+        'not_found fallback watch suggestion'
+      );
+    } finally {
+      globalThis.fetch = origFetch;
+    }
+  } finally {
+    masterRows = [];
+    productRows = [];
+    catalog = [];
+  }
+  console.warn(
+    '  ✅ Inspect and lookup scope masterProduct and suggestions[] to category templates'
+  );
+}
+
+// GET /products and GET /compare pass loaded offer counts into saleStateOfMaster
+// so sold_out / not_listed / no_stock match GET /products/[slug] (DOS/Rate#1684).
+async function testProductsAndCompareSaleStateParity() {
+  const { NextRequest } = await import('next/server');
+  const detail = await import('../products/[slug]/route');
+  const compare = await import('../compare/route');
+
+  const zeroPricePhone = (id: string, slug: string) => ({
+    ...phoneShaped(id, slug, 'smartphones'),
+    min_price: 0,
+    max_price: 0,
+    merchant_count: 0,
+  });
+
+  const SOLD_OUT = zeroPricePhone(
+    'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+    'apple-iphone-15-sold-out-1684'
+  );
+  const NOT_LISTED = zeroPricePhone(
+    'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+    'apple-iphone-15-not-listed-1684'
+  );
+  const UNPRICED_IN_STOCK = zeroPricePhone(
+    'cccccccc-cccc-4ccc-8ccc-cccccccccccc',
+    'apple-iphone-15-unpriced-live-1684'
+  );
+
+  const makeOfferPair = (
+    id: string,
+    clusterId: string,
+    availability: 'in_stock' | 'out_of_stock' | 'discontinued'
+  ) => ({
+    trust: {
+      id,
+      cluster_id: clusterId,
+      merchant_id: '99999999-9999-4999-8999-999999999999',
+      platform: 'shopee',
+      title: 'Stub listing',
+      price_current: 14_990_000,
+      price_original: 16_990_000,
+      stock: availability === 'in_stock' ? 3 : 0,
+      rating_star: 4.9,
+      rating_count: 12,
+      url: 'https://shopee.vn/product/88201679/999000333',
+      merchant_name: 'Official Store',
+      merchant_is_official: true,
+      merchant_location: 'TP.HCM',
+      threat_risk_score: 10,
+      threat_source: 'combined',
+      dosafe_risk_score: 10,
+      review_risk_score: 10,
+      review_risk_breakdown: { total_reviews: 5 },
+    },
+    product: {
+      id,
+      cluster_id: clusterId,
+      merchant_id: '99999999-9999-4999-8999-999999999999',
+      platform_item_id: id,
+      availability,
+    },
+  });
+
+  const o1 = makeOfferPair('offer-sold-1', SOLD_OUT.id, 'out_of_stock');
+  const o2 = makeOfferPair('offer-sold-2', SOLD_OUT.id, 'discontinued');
+  const o3 = makeOfferPair('offer-live-1', UNPRICED_IN_STOCK.id, 'in_stock');
+
+  try {
+    catalog = [SOLD_OUT, NOT_LISTED, UNPRICED_IN_STOCK];
+    masterRows = [SOLD_OUT, NOT_LISTED, UNPRICED_IN_STOCK];
+    trustViewRows = [o1.trust, o2.trust, o3.trust];
+    productRows = [o1.product, o2.product, o3.product];
+
+    const list = await listProducts('category=smartphones');
+    assert.equal(list.status, 200);
+    const listStates = new Map(
+      (list.body.data as Array<{ slug: string; sale_state: string }>).map(
+        (p) => [p.slug, p.sale_state]
+      )
+    );
+    assert.equal(listStates.get(SOLD_OUT.slug), 'sold_out');
+    assert.equal(listStates.get(NOT_LISTED.slug), 'not_listed');
+    assert.equal(listStates.get(UNPRICED_IN_STOCK.slug), 'no_stock');
+
+    const cmpRes = await compare.GET(
+      new NextRequest(
+        `http://localhost/api/v1/rate/compare?slugs=${SOLD_OUT.slug},${NOT_LISTED.slug},${UNPRICED_IN_STOCK.slug}`
+      )
+    );
+    assert.equal(cmpRes.status, 200);
+    const cmpBody = await cmpRes.json();
+    const cmpStates = new Map(
+      (cmpBody.data as Array<{ slug: string; sale_state: string }>).map((p) => [
+        p.slug,
+        p.sale_state,
+      ])
+    );
+    assert.equal(cmpStates.get(SOLD_OUT.slug), 'sold_out');
+    assert.equal(cmpStates.get(NOT_LISTED.slug), 'not_listed');
+    assert.equal(cmpStates.get(UNPRICED_IN_STOCK.slug), 'no_stock');
+
+    for (const [fixture, expected] of [
+      [SOLD_OUT, 'sold_out'],
+      [NOT_LISTED, 'not_listed'],
+      [UNPRICED_IN_STOCK, 'no_stock'],
+    ] as const) {
+      const detailRes = await detail.GET(
+        new NextRequest(
+          `http://localhost/api/v1/rate/products/${fixture.slug}`
+        ),
+        { params: Promise.resolve({ slug: fixture.slug }) } as never
+      );
+      assert.equal(detailRes.status, 200, fixture.slug);
+      const detailBody = await detailRes.json();
+      assert.equal(detailBody.data.product.sale_state, expected, fixture.slug);
+      assert.equal(listStates.get(fixture.slug), expected, fixture.slug);
+      assert.equal(cmpStates.get(fixture.slug), expected, fixture.slug);
+    }
+  } finally {
+    catalog = [];
+    masterRows = [];
+    trustViewRows = [];
+    productRows = [];
+  }
+  console.warn(
+    '  ✅ API v1 products and compare sale_state match products/[slug]'
+  );
+}
+
 async function main() {
   console.warn('🧪 API v1 category spec view suite (DOS/Rate#1184)');
   await testProductFilters();
   await testDetailAndCompare();
   await testExtensionLookup();
   await testModelMatch();
+  await testInspectAndLookupSpecScope();
+  await testProductsAndCompareSaleStateParity();
   await testSpecMatchesBodies();
   await testBoundedInputs();
   await testInspectRateLimit();
