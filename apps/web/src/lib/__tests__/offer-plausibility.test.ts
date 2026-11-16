@@ -250,6 +250,17 @@ async function main() {
     assert.equal('so-bait' in allSoldOutHistory.byOffer, false);
     assert.equal(allSoldOutHistory.genuineDealCount, 0);
 
+    // Zero in-stock offers are filtered once, preserving fake_discount against single-pass median.
+    const singlePassSoldOut = [1, 1, 3.5, 8, 10, 20, 30].map((m, idx) => ({
+      ...mkOffer(`sp-${idx}`, `shop-${idx}`, m * 1_000_000, 'out_of_stock'),
+      price_original: idx === 4 ? 12_000_000 : null,
+    }));
+    const singlePassHist = await getMasterProductPriceHistory(
+      'master-1697',
+      singlePassSoldOut
+    );
+    assert.equal(singlePassHist.byOffer['sp-4']?.verdict, 'fake_discount');
+
     // Extension mode === 'full' flags both sold-out bait and padded-ID in-stock bait.
     globalThis.fetch = (async (input: RequestInfo | URL) => {
       const url = new URL(

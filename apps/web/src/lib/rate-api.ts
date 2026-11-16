@@ -2428,7 +2428,7 @@ export async function getMasterProductPriceHistory(
   const validOfferPrices =
     inStockPlausiblePrices.length > 0
       ? inStockPlausiblePrices
-      : plausibleOffers(offers)
+      : (inStockOffers.length > 0 ? plausibleOffers(offers) : offers)
           .map((o) => o.price_current)
           .filter(
             (p) => Number.isFinite(p) && p > 0 && p <= MAX_VALID_VND_PRICE
