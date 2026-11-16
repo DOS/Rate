@@ -288,7 +288,7 @@ export default function ProductOffersExplorer({
       const verdictCell = implausibleOfferIds.has(o.id)
         ? t('offersImplausiblyLowBadge')
         : analysis
-          ? discountVerdictCopy(tVerdict, analysis).label
+          ? discountVerdictCopy(tVerdict, analysis, locale).label
           : tVerdict('labelNormal');
       return [
         sanitizeOffersMarkdownCell(o.platform.toUpperCase()),
@@ -302,7 +302,9 @@ export default function ProductOffersExplorer({
     });
 
     const radarLine = radarSignal
-      ? t('offersMdRadarPrefix', { signal: radarMarkdownCell(radarSignal) })
+      ? t('offersMdRadarPrefix', {
+          signal: radarMarkdownCell(radarSignal, locale),
+        })
       : '';
     const spreadLine = priceSpreadAudit
       ? t('offersMdSpreadLine', {
@@ -507,9 +509,14 @@ export default function ProductOffersExplorer({
       {/* Interactive Filter, Sort & Export Toolbar */}
       <div className="rounded-3 bg-light mb-3 border p-3">
         <div className="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
-          <div className="d-flex align-items-center flex-wrap gap-1">
+          <div
+            className="d-flex align-items-center flex-wrap gap-1"
+            role="group"
+            aria-label={t('offersColPlatformMerchant')}
+          >
             <button
               type="button"
+              aria-pressed={selectedPlatform === 'all'}
               onClick={() => setSelectedPlatform('all')}
               className={`btn btn-sm rounded-pill px-3 py-1 ${
                 selectedPlatform === 'all'
@@ -524,6 +531,7 @@ export default function ProductOffersExplorer({
               <button
                 key={plat}
                 type="button"
+                aria-pressed={selectedPlatform === plat}
                 onClick={() => setSelectedPlatform(plat)}
                 className={`btn btn-sm rounded-pill text-uppercase px-2 py-1 ${
                   selectedPlatform === plat
@@ -578,6 +586,7 @@ export default function ProductOffersExplorer({
           <div className="d-flex align-items-center flex-wrap gap-2">
             <button
               type="button"
+              aria-pressed={officialOnly}
               onClick={() => setOfficialOnly((v) => !v)}
               className={`btn btn-sm rounded-pill px-3 py-1 ${
                 officialOnly
@@ -590,6 +599,7 @@ export default function ProductOffersExplorer({
             </button>
             <button
               type="button"
+              aria-pressed={highTrustOnly}
               onClick={() => setHighTrustOnly((v) => !v)}
               className={`btn btn-sm rounded-pill px-3 py-1 ${
                 highTrustOnly

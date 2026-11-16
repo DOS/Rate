@@ -520,7 +520,7 @@ export default function DealFinderWorkspace({
         '| --- | --- | --- | --- | --- | --- | --- | --- |',
         ...rankedDeals.slice(0, 20).map((d) => {
           const personaStr = formatDealPersonaScore(d.personaScore5, persona);
-          return `| #${d.rank} | ${sanitizeDealFinderMarkdownCell(d.name)} | ${sanitizeDealFinderMarkdownCell(d.brand)} | **${personaStr ? `${personaStr}/5.0` : t('noScore')}** | ★ ${d.userScore5 > 0 ? formatScoreFixed(displayedScore5(d.userScore5), 1) : t('noScore')} (${d.expertScore10 != null ? `Lab ${formatScoreFixed(d.expertScore10, 1)}/10` : t('labNoScore')}) | **${d.minPrice.toLocaleString('vi-VN')} ₫** | ${d.spreadSavingsVnd > 0 ? `-${d.spreadSavingsVnd.toLocaleString('vi-VN')} ₫` : t('samePrice')} | ${radarMarkdownCell(getRadarSignal(radarIndex, d.slug))} |`;
+          return `| #${d.rank} | ${sanitizeDealFinderMarkdownCell(d.name)} | ${sanitizeDealFinderMarkdownCell(d.brand)} | **${personaStr ? `${personaStr}/5.0` : t('noScore')}** | ★ ${d.userScore5 > 0 ? formatScoreFixed(displayedScore5(d.userScore5), 1) : t('noScore')} (${d.expertScore10 != null ? `Lab ${formatScoreFixed(d.expertScore10, 1)}/10` : t('labNoScore')}) | **${d.minPrice.toLocaleString('vi-VN')} ₫** | ${d.spreadSavingsVnd > 0 ? `-${d.spreadSavingsVnd.toLocaleString('vi-VN')} ₫` : t('samePrice')} | ${radarMarkdownCell(getRadarSignal(radarIndex, d.slug), locale)} |`;
         }),
       ];
       await navigator.clipboard.writeText(lines.join('\n'));
@@ -620,6 +620,7 @@ export default function DealFinderWorkspace({
           <div className="d-flex align-items-center flex-wrap gap-2">
             <button
               type="button"
+              disabled={rankedDeals.length === 0}
               onClick={handleCopyDealsMarkdown}
               data-testid="deals-copy-md-btn"
               className="btn btn-sm btn-outline-danger rounded-pill fw-semibold px-3"
@@ -628,6 +629,7 @@ export default function DealFinderWorkspace({
             </button>
             <button
               type="button"
+              disabled={rankedDeals.length === 0}
               onClick={handleDownloadDealsCsv}
               data-testid="deals-export-csv-btn"
               className="btn btn-sm btn-outline-dark rounded-pill fw-semibold px-3"
@@ -636,6 +638,7 @@ export default function DealFinderWorkspace({
             </button>
             <button
               type="button"
+              disabled={rankedDeals.length === 0}
               onClick={handleDownloadDealsJson}
               data-testid="deals-export-json-btn"
               className="btn btn-sm btn-outline-dark rounded-pill fw-semibold px-3"

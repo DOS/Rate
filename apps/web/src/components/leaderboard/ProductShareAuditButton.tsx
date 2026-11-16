@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import ExportMenu from '@/components/elementary/ExportMenu';
 import { escapeCsvCell } from '@/lib/csv-safe';
 import {
@@ -113,6 +113,7 @@ export default function ProductShareAuditButton({
   radarSignal,
 }: ProductShareAuditButtonProps) {
   const t = useTranslations('productDetail');
+  const locale = useLocale();
   const [copiedMd, setCopiedMd] = useState(false);
   const [copiedUrl, setCopiedUrl] = useState(false);
 
@@ -160,6 +161,9 @@ export default function ProductShareAuditButton({
         safeExpertScore10 != null
           ? `${formatScoreFixed(safeExpertScore10, 1)}/10`
           : t('shareAuditMdNoExpert');
+      const radarSignalLabel = radarSignal
+        ? radarLabel(radarSignal, 0, locale)
+        : '';
       const lines = [
         t('shareAuditMdTitle', { name: safeName, brand: safeBrand }),
         t('shareAuditMdUserScore', { score: userScoreStr }),
@@ -168,8 +172,8 @@ export default function ProductShareAuditButton({
           ? [t('shareAuditMdKeySpecs', { specs: safeKeySpecLine })]
           : []),
         t('shareAuditMdMinPrice', { price: priceStr }),
-        ...(radarSignal
-          ? [t('shareAuditMdRadar', { signal: radarLabel(radarSignal) })]
+        ...(radarSignalLabel
+          ? [t('shareAuditMdRadar', { signal: radarSignalLabel })]
           : []),
         t('shareAuditMdModelKey', {
           modelKey: sanitizeShareAuditCodeSpan(modelKey, 120),
