@@ -1,13 +1,11 @@
 import type {
   ExtensionLookupData,
-  ExtensionPriceHistoryPoint,
   ExtensionSettings,
   ExtractedPageProductSignal,
 } from '../types.js';
 import {
   DEFAULT_API_BASE_URL,
   escapeSafeExternalHref,
-  filterValidSparklinePrices,
   formatSafeExtensionVnd,
   formatSafeNumber,
   resolveSafeApiRelativeUrl,
@@ -22,6 +20,7 @@ import {
   type MessageKey,
 } from '../i18n.js';
 import {
+  buildSvgSparkline,
   classifyLookupFailure,
   escapeHtml,
   isLookupWithoutProduct,
@@ -31,6 +30,7 @@ import {
   renderNotFoundHtml,
   renderOffersCardHtml,
   renderReviewCardHtml,
+  renderVariantPickerHtml,
   type PanelActionLink,
   riskScoreText,
   trustText,
@@ -39,37 +39,6 @@ import { verdictTexts } from '../verdict-display.js';
 
 function formatVnd(val: number | null | undefined): string {
   return formatSafeExtensionVnd(val);
-}
-
-function buildSvgSparkline(points: ExtensionPriceHistoryPoint[]): string {
-  if (!points || points.length < 2) {
-    return `<div style="font-size: 13px; color: #9ca3af; padding: 8px 0;">${escapeHtml(t('historyAccumulating'))}</div>`;
-  }
-  const prices = filterValidSparklinePrices(points);
-  if (prices.length < 2) return '';
-
-  const minP = Math.min(...prices);
-  const maxP = Math.max(...prices);
-  const range = Math.max(1, maxP - minP);
-  const width = 300;
-  const height = 76;
-
-  const coords = prices.map((p, idx) => {
-    const x = Math.round((idx / (prices.length - 1)) * (width - 16) + 8);
-    const y = Math.round(height - 10 - ((p - minP) / range) * (height - 20));
-    return `${x},${y}`;
-  });
-
-  return `
-    <svg viewBox="0 0 ${width} ${height}" width="100%" height="${height}" style="background: #101318; border-radius: 8px; border: 1px solid #2a2f3a; margin-top: 8px;">
-      <polyline
-        fill="none"
-        stroke="#d83030"
-        stroke-width="2.2"
-        points="${coords.join(' ')}"
-      />
-    </svg>
-  `;
 }
 
 interface DealRadarFeedItem {
@@ -371,29 +340,7 @@ function renderPanelContent(
   const reviews = lookup.reviewSummary;
   const merchant = lookup.merchantProfile;
 
-  const variantButtonsHtml =
-    lookup.variantCandidates.length > 1
-      ? `
-      <div class="card">
-        <div class="card-title">${escapeHtml(t('variantPickerTitle'))}</div>
-        <div class="variant-row">
-          ${lookup.variantCandidates
-            .map(
-              (v) => `
-              <button
-                type="button"
-                class="variant-btn ${lookup.detectedStorageGb === v.storageGb ? 'active' : ''}"
-                data-variant="${escapeHtml(v.label)}"
-              >
-                ${contentTextHtml(v.label)} (${formatVnd(v.minPrice)})
-              </button>
-            `
-            )
-            .join('')}
-        </div>
-      </div>
-    `
-      : '';
+  const variantButtonsHtml = renderVariantPickerHtml(lookup);
 
   const keySpecs = master?.key_specs;
   const keySpecsHtml =
@@ -654,6 +601,8 @@ function renderPanelContent(
   });
 }
 
+let panelLoadGeneration = 0;
+
 async function loadSidePanel(selectedVariant?: string): Promise<void> {
   const root = document.getElementById('panel-root');
   const chkOptIn = document.getElementById(
@@ -663,6 +612,7 @@ async function loadSidePanel(selectedVariant?: string): Promise<void> {
     'inp-api-base'
   ) as HTMLInputElement | null;
   if (!root) return;
+  const generation = ++panelLoadGeneration;
 
   try {
     const res = (await chrome.runtime.sendMessage({
@@ -670,12 +620,14 @@ async function loadSidePanel(selectedVariant?: string): Promise<void> {
       selectedVariant: selectedVariant ?? null,
     })) as {
       ok?: boolean;
+      stale?: boolean;
       settings?: ExtensionSettings;
       signal?: ExtractedPageProductSignal | null;
       data?: ExtensionLookupData | null;
       status?: number | null;
       retryAfterSeconds?: number;
     };
+    if (generation !== panelLoadGeneration || res?.stale) return;
 
     const settings: ExtensionSettings = res?.settings || {
       apiBaseUrl: DEFAULT_API_BASE_URL,
@@ -712,6 +664,7 @@ async function loadSidePanel(selectedVariant?: string): Promise<void> {
       }
     );
   } catch {
+    if (generation !== panelLoadGeneration) return;
     renderLookupError(root, null, null, () => {
       void loadSidePanel(selectedVariant);
     });
@@ -742,6 +695,7 @@ function renderLookupError(
 async function runQuickQuery(query: string): Promise<void> {
   const root = document.getElementById('panel-root');
   if (!root || !query.trim()) return;
+  const generation = ++panelLoadGeneration;
 
   root.innerHTML = `
     <div class="card">
@@ -762,6 +716,7 @@ async function runQuickQuery(query: string): Promise<void> {
       status?: number | null;
       retryAfterSeconds?: number;
     };
+    if (generation !== panelLoadGeneration) return;
 
     const settings: ExtensionSettings = res?.settings || {
       apiBaseUrl: DEFAULT_API_BASE_URL,
@@ -791,6 +746,7 @@ async function runQuickQuery(query: string): Promise<void> {
       }
     );
   } catch {
+    if (generation !== panelLoadGeneration) return;
     renderLookupError(root, null, query, () => {
       void runQuickQuery(query);
     });

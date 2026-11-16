@@ -26,7 +26,7 @@ export type ExtensionMatchStatus =
   | 'not_found';
 
 export interface ExtensionVariantCandidate {
-  storageGb: number;
+  storageGb: number | null;
   label: string;
   slug: string;
   minPrice: number;
