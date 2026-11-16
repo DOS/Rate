@@ -52,6 +52,9 @@ in Qwen Code Desktop (DOS/Rate#1673). They keep apart like this:
 - **One promoter.** Only the Claude Code PO runs `promote.mjs` and the
   `verify-live.mjs` check after it. The Qwen PO asks the Claude Code PO (or
   JOY, if it cannot reach it) when its merged work needs a promotion.
+  `promote.mjs` refuses to run when the session's claimant (resolved as
+  `board.mjs` does) is not `claude:` or cannot be resolved: a guard against
+  mistakes, not access control.
 - The claim lock (see "Claims") keeps their sub-sessions off each other's
   issues even when two take the same issue at the same moment.
 
@@ -177,6 +180,27 @@ names a role and two sessions can share it:
 - Re-claiming by the holder changes nothing. `ready`, `backlog` and `done`
   release the lock; only the holder may, except on a closed (merged) issue,
   so the PO can mark a runtime issue Done after the promotion.
+- A release never deletes the ref (DOS/Rate#1675): it replaces the lock,
+  compare-and-swap, with a tombstone commit (`release: ...`,
+  `Released-By: <claimant>`), so a `--take-over` that lands between the
+  release's read and its write is never removed (the release fails
+  instead). A tombstone is a free lock: the next claim replaces it, and
+  `task-claim` treats it as no lock.
+- A lock taken before a merged PR last closed the issue is stale: the merge
+  ended that work. On a reopened issue, a claim (`in-progress` or
+  `in-review`) replaces a stale lock without `--take-over` (and its stale
+  `agent:*` label; the other PO's `po:*` label still needs `--take-over`),
+  and the lock comment names the lock it replaced. A release does not: on an
+  open issue only the holder releases, or the PO with `--force-release`. A
+  close that was not a merge (not planned, by hand) never makes a lock stale.
+  Nothing releases locks automatically when an issue closes.
+- A session that keeps working on an issue after it was reopened re-runs
+  `board.mjs <n> --status in-progress --agent <Nick>` at once: that renews
+  its lock, which is otherwise stale and open to the next claim.
+- Until every active worktree has merged `origin/dev` past DOS/Rate#1675,
+  an older `board.mjs` can still delete a lock when it releases a closed
+  issue's lock or force-releases, so keep the hand-over order: the next
+  session claims only after the "released" comment.
 - `--take-over` moves the lock to the new session (after a hand-over or on
   JOY's assignment), and fails if the lock changed since it was read.
 - `node scripts/ops/board.mjs <n> --force-release --agent PO --reason "<evidence>"`
@@ -190,6 +214,9 @@ names a role and two sessions can share it:
   `--take-over`.
 - A worktree cut from `dev` before DOS/Rate#1673 merged has the old
   `board.mjs`, which takes no lock: merge `origin/dev` into the branch first.
+  One cut before DOS/Rate#1675 reads a tombstone as a lock of "an
+  unrecognised claimant" and refuses: merge `origin/dev`, do not
+  `--take-over`.
 
 In DOS/Rate the required `task-claim` check (`scripts/task-claim-check.mjs`,
 ruleset `dev-task-claim`) passes a PR into `dev` only when every

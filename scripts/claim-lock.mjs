@@ -12,6 +12,14 @@
 //   Claimant: claude:local_ad470353-1239-439a-a5ea-c3a902f01548
 //   Agent: Ops
 //
+// Releasing never deletes the ref: it moves it, compare-and-swap, to a
+// tombstone commit (DOS/Rate#1675) that every reader treats as a free lock:
+//
+//   release: DOS/Rate#1673
+//
+//   Released-By: claude:local_ad470353-1239-439a-a5ea-c3a902f01548
+//   Agent: Ops
+//
 // Refs outside refs/heads and refs/tags start no workflow and are not fetched
 // by a plain clone. Pure helpers only: no I/O, so the task-claim workflow can
 // load this file from `dev` next to the check.
@@ -88,19 +96,42 @@ export function formatLockMessage({ repo, number, claimant, agent }) {
   return `claim: ${repo}#${number}\n\nClaimant: ${claimant}\nAgent: ${agent}\n`;
 }
 
+/**
+ * The tombstone a release leaves at refs/claims/<n>: the lock is free.
+ * `releasedBy` is null when a force-release ran without a claimant.
+ */
+export function formatReleaseMessage({ repo, number, releasedBy, agent }) {
+  return (
+    `release: ${repo}#${number}\n\n` +
+    (releasedBy ? `Released-By: ${releasedBy}\n` : '') +
+    (agent ? `Agent: ${agent}\n` : '')
+  );
+}
+
 const trailer = (message, key) =>
   message.match(new RegExp(`^${key}:[ \\t]*(\\S+)[ \\t]*$`, 'm'))?.[1] ?? null;
 
 /**
- * The claimant and agent a lock commit message records. A ref under
+ * What a lock commit message records. A tombstone (`release:` subject) is a
+ * free lock: `released` is true and it has no claimant. A ref under
  * refs/claims that this tool did not write has no valid claimant (null): it
  * still holds the lock, and only --take-over or --force-release clears it.
  */
 export function parseLockMessage(message = '') {
+  if (/^release:/.test(message)) {
+    const by = trailer(message, 'Released-By');
+    return {
+      claimant: null,
+      agent: trailer(message, 'Agent'),
+      released: true,
+      releasedBy: isClaimant(by) ? by : null,
+    };
+  }
   const claimant = trailer(message, 'Claimant');
   return {
     claimant: isClaimant(claimant) ? claimant : null,
     agent: trailer(message, 'Agent'),
+    released: false,
   };
 }
 

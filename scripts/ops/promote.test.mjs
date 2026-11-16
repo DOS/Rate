@@ -1,7 +1,12 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { ownPromotionPr, promotionBody, releasedPrs } from './promote.mjs';
+import {
+  ownPromotionPr,
+  promoterClaimant,
+  promotionBody,
+  releasedPrs,
+} from './promote.mjs';
 
 const commit = (message, parents = 1) => ({
   commit: { message },
@@ -57,4 +62,27 @@ test('a fork PR from its own dev is never taken as the promotion', () => {
     { number: 10, isCrossRepository: false }
   );
   assert.equal(ownPromotionPr([]), null);
+});
+
+test('only a Claude Code session may promote (DOS/Rate#1675)', () => {
+  assert.equal(
+    promoterClaimant({
+      env: { CLAUDE_CODE_HOST_SESSION_ID: 'local_abcd1234' },
+    }),
+    'claude:local_abcd1234'
+  );
+  assert.equal(
+    promoterClaimant({ flag: 'claude:local_abcd1234', env: {} }),
+    'claude:local_abcd1234'
+  );
+  assert.throws(
+    () => promoterClaimant({ flag: 'qwen:abcd1234', env: {} }),
+    /only the Claude Code PO promotes.*qwen: one/
+  );
+  assert.throws(
+    () => promoterClaimant({ env: { RATE_CLAIMANT: 'qwen:abcd1234' } }),
+    /only the Claude Code PO promotes/
+  );
+  // No claimant at all: refused, not assumed to be Claude.
+  assert.throws(() => promoterClaimant({ env: {} }), /no claimant/);
 });

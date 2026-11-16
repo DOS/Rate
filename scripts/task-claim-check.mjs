@@ -7,7 +7,8 @@
 // (DOS/Rate#1673, scripts/claim-lock.mjs). A PR that closes issues passes only
 // when every issue it closes carries such a claim, and its lock is held by the
 // claimant the PR declares on a `Claimant: <tool>:<session id>` line of its
-// description.
+// description. A released lock (a tombstone commit, DOS/Rate#1675) counts as
+// no lock.
 //
 // Grace: a PR opened before LOCK_REQUIRED_SINCE keeps the label-only rule, so
 // PRs that were open when the lock arrived are not blocked; if such a PR does
@@ -96,7 +97,8 @@ export function evaluateClaim(pr) {
     const labels = issue.labels ?? [];
     const agent = labels.filter((l) => l.startsWith('agent:'));
     const status = labels.filter((l) => CLAIM_STATUSES.includes(l));
-    const lock = issue.lock ?? null;
+    // A tombstone left by a release is a free lock, not a claim.
+    const lock = issue.lock && !issue.lock.released ? issue.lock : null;
     const problems = [];
     if (agent.length === 0) problems.push('no agent:* label');
     if (status.length === 0)

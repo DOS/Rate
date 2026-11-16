@@ -4,12 +4,39 @@
 // released, and merges it with a merge commit once its checks pass.
 //
 //   node scripts/ops/promote.mjs [--repo DOS/Rate] [--no-merge]
+//     [--claimant <tool>:<session id>]
 //
 // Then check the release: node scripts/ops/verify-live.mjs --wait 900
+//
+// Only the Claude Code PO promotes (AGENTS.md section 6): the script refuses
+// to run unless the session's claimant, resolved like board.mjs does, is a
+// `claude:` one (DOS/Rate#1675). A guard against a Qwen or other session
+// promoting by mistake, not access control: a claimant can be passed by hand.
 
 import { parseArgs } from 'node:util';
+import { resolveClaimant } from '../claim-lock.mjs';
 import { DEFAULT_REPO, fail, gh, ghJson, isMain } from './lib.mjs';
 import { mergeWhenGreen } from './merge-when-green.mjs';
+
+/** The only tool whose sessions promote dev to main. */
+export const PROMOTER_TOOL = 'claude';
+
+/**
+ * The claimant of the session running the promotion, or an error when it
+ * cannot be resolved or is not a Claude Code session.
+ */
+export function promoterClaimant({ flag, env = {} } = {}) {
+  const claimant = resolveClaimant({ flag, env });
+  const tool = claimant.split(':')[0];
+  if (tool !== PROMOTER_TOOL) {
+    throw new Error(
+      `only the Claude Code PO promotes dev to main (AGENTS.md section 6), ` +
+        `and this session's claimant is a ${tool}: one; ask the Claude Code PO ` +
+        '(through JOY if it cannot be reached) to promote'
+    );
+  }
+  return claimant;
+}
 
 export const PROMOTION_TITLE = 'chore(release): promote dev to main';
 /** The compare API lists at most this many commits. */
@@ -131,8 +158,14 @@ if (isMain(import.meta.url)) {
     options: {
       repo: { type: 'string', default: DEFAULT_REPO },
       'no-merge': { type: 'boolean', default: false },
+      claimant: { type: 'string' },
     },
   });
+  try {
+    promoterClaimant({ flag: values.claimant, env: process.env });
+  } catch (err) {
+    fail(`promote.mjs: ${err.message}`);
+  }
   const result = await promote({
     repo: values.repo,
     merge: !values['no-merge'],
