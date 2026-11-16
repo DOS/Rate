@@ -13,10 +13,18 @@ import {
   radarLabel,
 } from '../deal-radar';
 import { computeJReviewsUserScores } from '../jreviews-user-score';
+import { pickClientMessages } from '../client-messages';
 import {
   computeBayesianRatingSummary,
   computeCombinedDualScore,
 } from '../rate-domain-core';
+import { merchantDirectoryDosafeDisplay } from '../../components/merchants/MerchantDirectoryExplorer';
+import {
+  inspectDosafeDisplay,
+  isInspectOfferBait,
+  orderInspectOffers,
+  resolveInspectOfferPlatform,
+} from '../../components/inspect/DeepInspectWorkspace';
 
 // Display defects from the live audit #1131: numbers and warnings the site
 // showed that were not true.
@@ -393,6 +401,295 @@ assert.match(
   reviewsSection,
   /shownUserScore =\s*ratingScore != null && ratingScore > 0 \? ratingScore : bayesianUserScore;/,
   'the buyer score is the stored rating, else the Bayesian one'
+);
+
+// DOS/Rate#1692: /merchants and /inspect use merchantRiskTone(dosafeScore)
+// (< 20 clean, 20-49 caution, >= 50 alert), /inspect hides the DOSafe bar when
+// DOSafe is unknown, and /inspect scopes offer plausibility to in-stock
+// listings, sorts unavailable listings last, and keeps offer.platform.
+assert.equal(
+  merchantDirectoryDosafeDisplay({
+    dosafe_risk_score: 0,
+    dosafe_risk_known: false,
+  }),
+  null
+);
+assert.equal(merchantDirectoryDosafeDisplay({ dosafe_risk_score: null }), null);
+for (const score of [0, 4, 11, 14, 19]) {
+  assert.deepEqual(
+    merchantDirectoryDosafeDisplay({
+      dosafe_risk_score: score,
+      dosafe_risk_known: true,
+    }),
+    {
+      score,
+      tone: 'good',
+      badgeClass: 'bg-success-subtle text-success',
+      statusKey: 'scamStatusClean',
+    },
+    `/merchants DOSafe ${score} must render clean`
+  );
+}
+for (const score of [20, 35, 49]) {
+  assert.deepEqual(
+    merchantDirectoryDosafeDisplay({
+      dosafe_risk_score: score,
+      dosafe_risk_known: true,
+    }),
+    {
+      score,
+      tone: 'warn',
+      badgeClass: 'bg-warning-subtle text-warning-emphasis',
+      statusKey: 'scamStatusCaution',
+    },
+    `/merchants DOSafe ${score} must render caution`
+  );
+}
+for (const score of [50, 60, 100]) {
+  assert.deepEqual(
+    merchantDirectoryDosafeDisplay({
+      dosafe_risk_score: score,
+      dosafe_risk_known: true,
+    }),
+    {
+      score,
+      tone: 'bad',
+      badgeClass: 'bg-danger-subtle text-danger',
+      statusKey: 'scamStatusAlert',
+    },
+    `/merchants DOSafe ${score} must render alert`
+  );
+}
+for (const locale of LOCALES) {
+  const scoped = pickClientMessages(
+    readLocale(locale) as unknown as Record<string, unknown>,
+    'merchants'
+  ).merchants as Record<string, string>;
+  for (const key of [
+    'scamStatusClean',
+    'scamStatusCaution',
+    'scamStatusAlert',
+  ]) {
+    assert.ok(scoped[key], `${locale}: client merchants scope missing ${key}`);
+  }
+}
+const merchantDirectoryExplorer = readFileSync(
+  join(
+    __dirname,
+    '..',
+    '..',
+    'components',
+    'merchants',
+    'MerchantDirectoryExplorer.tsx'
+  ),
+  'utf8'
+);
+assert.ok(
+  merchantDirectoryExplorer.includes('merchantRiskTone(dosafeScore)') &&
+    merchantDirectoryExplorer.includes('scamStatusClean') &&
+    merchantDirectoryExplorer.includes('scamStatusCaution') &&
+    merchantDirectoryExplorer.includes('scamStatusAlert') &&
+    !merchantDirectoryExplorer.includes('dosafeScore === 0') &&
+    !merchantDirectoryExplorer.includes('dosafeZero') &&
+    !merchantDirectoryExplorer.includes('dosafeAlert'),
+  'MerchantDirectoryExplorer.tsx must use merchantRiskTone(dosafeScore) and scamStatus* keys instead of dosafeScore === 0'
+);
+
+assert.equal(inspectDosafeDisplay(null), null);
+assert.equal(
+  inspectDosafeDisplay({ dosafe_risk_score: 0, dosafe_risk_known: false }),
+  null
+);
+assert.deepEqual(
+  inspectDosafeDisplay({
+    dosafe_risk_score: 0,
+    dosafe_risk_known: true,
+  }),
+  {
+    score: 0,
+    tone: 'good',
+    textClass: 'text-success',
+    barClass: 'bg-success',
+    widthPct: 4,
+  }
+);
+assert.deepEqual(
+  inspectDosafeDisplay({
+    dosafe_risk_score: 14,
+    dosafe_risk_known: true,
+  }),
+  {
+    score: 14,
+    tone: 'good',
+    textClass: 'text-success',
+    barClass: 'bg-success',
+    widthPct: 14,
+  }
+);
+assert.deepEqual(
+  inspectDosafeDisplay({
+    dosafe_risk_score: 35,
+    dosafe_risk_known: true,
+  }),
+  {
+    score: 35,
+    tone: 'warn',
+    textClass: 'text-warning-emphasis',
+    barClass: 'bg-warning',
+    widthPct: 35,
+  }
+);
+assert.deepEqual(
+  inspectDosafeDisplay({
+    dosafe_risk_score: 65,
+    dosafe_risk_known: true,
+  }),
+  {
+    score: 65,
+    tone: 'bad',
+    textClass: 'text-danger',
+    barClass: 'bg-danger',
+    widthPct: 65,
+  }
+);
+
+// Sold-out outliers do not skew bait-price detection among in-stock offers,
+// and unavailable offers sort after both plausible and bait in-stock offers.
+const mixedInspectOffers = orderInspectOffers([
+  {
+    id: 'sold-out-cheap-1',
+    price_current: 500_000,
+    availability: 'out_of_stock' as const,
+  },
+  {
+    id: 'discontinued-cheap-2',
+    price_current: 600_000,
+    availability: 'discontinued' as const,
+  },
+  {
+    id: 'in-stock-bait',
+    price_current: 1_250_000,
+    availability: 'in_stock' as const,
+  },
+  {
+    id: 'in-stock-a',
+    price_current: 3_030_000,
+    availability: 'in_stock' as const,
+  },
+  { id: 'in-stock-b', price_current: 3_140_000 },
+  {
+    id: 'in-stock-c',
+    price_current: 3_690_000,
+    availability: 'in_stock' as const,
+  },
+]);
+assert.deepEqual(
+  [...mixedInspectOffers.implausibleOfferIds],
+  ['in-stock-bait']
+);
+assert.deepEqual(
+  mixedInspectOffers.listedOffers.map((o) => o.id),
+  [
+    'in-stock-a',
+    'in-stock-b',
+    'in-stock-c',
+    'in-stock-bait',
+    'sold-out-cheap-1',
+    'discontinued-cheap-2',
+  ]
+);
+assert.equal(
+  isInspectOfferBait(
+    {
+      id: 'sold-out-cheap-1',
+      price_current: 500_000,
+      availability: 'out_of_stock',
+    },
+    mixedInspectOffers.implausibleOfferIds,
+    mixedInspectOffers.inStockOffers
+  ),
+  true
+);
+assert.equal(
+  isInspectOfferBait(
+    {
+      id: 'sold-out-normal',
+      price_current: 2_900_000,
+      availability: 'out_of_stock',
+    },
+    mixedInspectOffers.implausibleOfferIds,
+    mixedInspectOffers.inStockOffers
+  ),
+  false
+);
+
+// High discontinued prices do not turn real current prices into bait warnings.
+const inflatedDiscontinued = orderInspectOffers([
+  {
+    id: 'old-msrp-1',
+    price_current: 50_000_000,
+    availability: 'out_of_stock' as const,
+  },
+  {
+    id: 'old-msrp-2',
+    price_current: 52_000_000,
+    availability: 'discontinued' as const,
+  },
+  {
+    id: 'current-1',
+    price_current: 15_000_000,
+    availability: 'in_stock' as const,
+  },
+  {
+    id: 'current-2',
+    price_current: 15_500_000,
+    availability: 'in_stock' as const,
+  },
+]);
+assert.deepEqual([...inflatedDiscontinued.implausibleOfferIds], []);
+assert.deepEqual(
+  inflatedDiscontinued.listedOffers.map((o) => o.id),
+  ['current-1', 'current-2', 'old-msrp-1', 'old-msrp-2']
+);
+
+assert.equal(
+  resolveInspectOfferPlatform({
+    platform: 'lazada',
+    merchant: { platform: 'shopee' },
+  }),
+  'lazada'
+);
+assert.equal(
+  resolveInspectOfferPlatform({
+    platform: '',
+    merchant: { platform: 'tiki' },
+  }),
+  'tiki'
+);
+assert.equal(resolveInspectOfferPlatform({}), 'shopee');
+
+const deepInspectWorkspace = readFileSync(
+  join(
+    __dirname,
+    '..',
+    '..',
+    'components',
+    'inspect',
+    'DeepInspectWorkspace.tsx'
+  ),
+  'utf8'
+);
+assert.ok(
+  deepInspectWorkspace.includes('merchantRiskTone(dosafeScore)') &&
+    deepInspectWorkspace.includes('dosafeDisplay != null && (') &&
+    deepInspectWorkspace.includes('!isOfferUnavailable(o)') &&
+    deepInspectWorkspace.includes(
+      "offer.platform || offer.merchant?.platform || 'shopee'"
+    ) &&
+    deepInspectWorkspace.includes('resolveInspectOfferPlatform(offer)') &&
+    !deepInspectWorkspace.includes('<strong className="text-success">') &&
+    !deepInspectWorkspace.includes('className="progress-bar bg-success"'),
+  'DeepInspectWorkspace.tsx must apply merchantRiskTone, hide the DOSafe bar when unknown, scope plausibility to in-stock offers, and prefer offer.platform'
 );
 
 console.log('display-truth: ok');
