@@ -313,6 +313,35 @@ void (async () => {
     '| **Weighted combined score** | N/A | N/A | - |'
   );
 
+  // A model with no buyer rating keeps its composite as its overall score,
+  // tagged in the copied Markdown (DOS/Rate#1663); a buyer rating is not.
+  const expertOnly = {
+    ...side('x', 0),
+    combinedScore5: 4.5,
+  } as unknown as VersusSide;
+  const sourced = computeVersusWeightedResult(
+    expertOnly,
+    side('y', 3.9),
+    noWeights,
+    'default'
+  );
+  assert.equal(sourced.sourceA, 'expert_criteria');
+  assert.equal(sourced.sourceB, 'buyers');
+  assert.equal(sourced.finalA, 4.5);
+  const mdSourced = formatVersusWeightedMarkdown(sourced, 'x', {
+    ...mdCopy,
+    expertSourceTag: 'From experts/criteria',
+  });
+  assert.equal(
+    mdSourced.summaryBullet,
+    '- **Leading device:** **x** (4.5/5.0 (From experts/criteria) - Delta 0.6 pts)'
+  );
+  assert.equal(
+    mdSourced.weightedScoreRow,
+    '| **Weighted combined score** | **4.5/5.0** (From experts/criteria) | **3.9/5.0** | **x** |'
+  );
+  assert.equal(bothUnrated.sourceA, null);
+
   // Items 3, 4, 6, 7, 9 (#1647): lab scores on 10, 2-decimal exports, JSON
   // ratingScore5, 1-decimal export columns in rating views, and JSON-LD order.
   const {

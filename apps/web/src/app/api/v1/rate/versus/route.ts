@@ -303,8 +303,9 @@ export async function GET(req: NextRequest) {
     // The same result as the versus page, from the same function and with
     // the same preset fallback (DOS/Rate#1647). The final winner and the tie
     // read the overall rating as shown (`rating_score_5`, or the composite
-    // for a model with no buyer rating yet), whatever weights are asked for:
-    // the overall stars are the final comparison. On a tie the higher
+    // for a model with no buyer rating yet, `overall_score_source` says
+    // which), whatever weights are asked for: the overall stars are the final
+    // comparison. On a tie the higher
     // unrounded score, the lower price, then the pair's canonical first slug
     // pick `overall_winner`. A preset or custom weights only add
     // `persona_result`: 0.35 * rating + 0.65 * the weighted shared criteria.
@@ -471,6 +472,8 @@ export async function GET(req: NextRequest) {
           combined_score_10: roundScore(winnerScore.combinedScore5 * 2, 1),
           // The deciding score; the weighted ones are in `persona_result`.
           overall_score_5: winnerSide === 'A' ? overallA5 : overallB5,
+          overall_score_source:
+            winnerSide === 'A' ? overall.sourceA : overall.sourceB,
           overall_score_10:
             (winnerSide === 'A' ? overallA5 : overallB5) != null
               ? shown10(winnerSide === 'A' ? overall.finalA : overall.finalB)
@@ -501,6 +504,9 @@ export async function GET(req: NextRequest) {
           user_score_5: scoreA.userScore5,
           rating_score_5: displayedScore5(scoreA.userScore5) || null,
           overall_score_5: overallA5,
+          // `buyers`, or `expert_criteria` for a model with no buyer rating
+          // yet (its composite), as the page labels it (DOS/Rate#1663).
+          overall_score_source: overall.sourceA,
           expert_score_10: scoreA.expertScore10,
           authentic_review_count: scoreA.authenticReviewCount,
           filtered_noise_review_count: scoreA.filteredNoiseReviewCount,
@@ -528,6 +534,7 @@ export async function GET(req: NextRequest) {
           user_score_5: scoreB.userScore5,
           rating_score_5: displayedScore5(scoreB.userScore5) || null,
           overall_score_5: overallB5,
+          overall_score_source: overall.sourceB,
           expert_score_10: scoreB.expertScore10,
           authentic_review_count: scoreB.authenticReviewCount,
           filtered_noise_review_count: scoreB.filteredNoiseReviewCount,

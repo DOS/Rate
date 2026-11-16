@@ -1,5 +1,6 @@
 import { extractProductSignalFromDom } from '../extractors/ecommerce-detector.js';
 import {
+  buildProductSignalSignature,
   formatSafeExtensionVnd,
   formatSafeNumber,
   resolveExtensionMasterRating,
@@ -71,18 +72,51 @@ function renderShadowTrustPill(lookup: ExtensionLookupData): void {
           : t('pillPrompt');
     const radarSig = lookup.radarSignal;
     const radarSpreadPct = Number(radarSig?.spreadPct ?? 0);
-    const radarChipHtml = radarSig
+    const radarBadge = radarSig
       ? radarSig.verdict === 'genuine_deal'
         ? // Only a 3+ offer floor is the multi-platform floor; fewer offers
           // are just below the median (DOS/Rate#1145).
           radarSig.genuineDeal?.verdict === 'genuine_all_time_low'
-          ? `<span class="radar-chip radar-deal">🔥 ${escapeHtml(t('pillRadarDeal', [formatSafeNumber(radarSig.savingsPct, { min: 0, max: 100 })]))}</span>`
-          : `<span class="radar-chip radar-deal">✅ ${escapeHtml(t('pillRadarBelowMedian', [formatSafeNumber(radarSig.savingsPct, { min: 0, max: 100 })]))}</span>`
+          ? {
+              cls: 'radar-deal',
+              icon: '🔥',
+              text: t('pillRadarDeal', [
+                formatSafeNumber(radarSig.savingsPct, { min: 0, max: 100 }),
+              ]),
+            }
+          : {
+              cls: 'radar-deal',
+              icon: '✅',
+              text: t('pillRadarBelowMedian', [
+                formatSafeNumber(radarSig.savingsPct, { min: 0, max: 100 }),
+              ]),
+            }
         : radarSig.verdict === 'fake_sale_trap'
-          ? `<span class="radar-chip radar-trap">🚨 ${escapeHtml(t('pillRadarTrap', [formatSafeNumber(radarSig.fakeMarkupPct, { min: 0, max: 10000 })]))}</span>`
+          ? {
+              cls: 'radar-trap',
+              icon: '🚨',
+              text: t('pillRadarTrap', [
+                formatSafeNumber(radarSig.fakeMarkupPct, {
+                  min: 0,
+                  max: 10000,
+                }),
+              ]),
+            }
           : Number.isFinite(radarSpreadPct) && radarSpreadPct >= 5
-            ? `<span class="radar-chip radar-spread">📊 ${escapeHtml(t('pillRadarSpread', [formatSafeNumber(radarSig.spreadPct, { min: 0, max: 10000 })]))}</span>`
-            : ''
+            ? {
+                cls: 'radar-spread',
+                icon: '📊',
+                text: t('pillRadarSpread', [
+                  formatSafeNumber(radarSig.spreadPct, { min: 0, max: 10000 }),
+                ]),
+              }
+            : null
+      : null;
+    const radarChipHtml = radarBadge
+      ? `<span class="radar-chip ${radarBadge.cls}"><span aria-hidden="true">${radarBadge.icon} </span>${escapeHtml(radarBadge.text)}</span>`
+      : '';
+    const ratingText = trustedRating
+      ? `${formatSafeNumber(trustedRating, { min: 0, max: 5, decimals: 1 })}${authenticRatio == null ? '' : ` ${t('pillAuthentic', [formatSafeNumber(authenticRatio, { min: 0, max: 100 })])}`}`
       : '';
 
     shadow.innerHTML = `
@@ -184,16 +218,16 @@ function renderShadowTrustPill(lookup: ExtensionLookupData): void {
           flex-shrink: 0;
         }
       </style>
-      <div class="pill-card" id="rate-pill-trigger" role="button" tabindex="0" aria-label="${escapeHtml(buildPillAriaLabel(verdict.label, cheaperSummary))}">
-        <span class="brand-dot"></span>
+      <div class="pill-card" id="rate-pill-trigger" role="button" tabindex="0" aria-label="${escapeHtml(buildPillAriaLabel(verdict.label, cheaperSummary, [radarBadge?.text, ratingText]))}">
+        <span class="brand-dot" aria-hidden="true"></span>
         <div class="content">
           <div class="top-row">
             <span>Rate.vn</span>
             <span class="verdict-badge">${escapeHtml(verdict.label)}</span>
             ${radarChipHtml}
             ${
-              trustedRating
-                ? `<span class="rating-tag">★ ${formatSafeNumber(trustedRating, { min: 0, max: 5, decimals: 1 })}${authenticRatio == null ? '' : ` ${escapeHtml(t('pillAuthentic', [formatSafeNumber(authenticRatio, { min: 0, max: 100 })]))}`}</span>`
+              ratingText
+                ? `<span class="rating-tag"><span aria-hidden="true">★ </span>${escapeHtml(ratingText)}</span>`
                 : ''
             }
           </div>
@@ -237,7 +271,7 @@ async function inspectCurrentPage(): Promise<void> {
       return;
     }
 
-    const signature = `${signal.canonicalUrl}|${signal.selectedVariant || ''}|${signal.price || ''}`;
+    const signature = buildProductSignalSignature(signal);
     if (signature === lastProcessedSignature) return;
     lastProcessedSignature = signature;
     rateLimitRetry.track(signature);

@@ -146,6 +146,175 @@ async function main() {
     )
   );
 
+  // getItemVariantsBatch pages each item_id chunk with deterministic id order
+  // and throwIfItemSchemaMissing('item variants') so >1000 published variants
+  // in a chunk never silently truncate (DOS/Rate#1686).
+  {
+    const {
+      getItemVariantsBatch,
+      ItemModelUnavailableError,
+      RateDataUnavailableError,
+    } = await import('../rate-api');
+
+    const ITEM_A = '11111111-1111-4111-8111-00000000000a';
+    const ITEM_B = '11111111-1111-4111-8111-00000000000b';
+    const ITEM_EMPTY = '11111111-1111-4111-8111-00000000000c';
+
+    const makeVariantRow = (index: number, itemId: string) => {
+      const hex = index.toString(16).padStart(12, '0');
+      return {
+        id: `22222222-2222-4222-8222-${hex}`,
+        item_id: itemId,
+        slug: `item-variant-${index}`,
+        name: `Item Variant ${index}`,
+        variant_key: `v-${String(index).padStart(4, '0')}`,
+        variant_name: `Variant ${index}`,
+        sort_order: index,
+        storage_gb: 128,
+        min_price: 10_000_000 + index,
+        max_price: 11_000_000 + index,
+        merchant_count: 1,
+      };
+    };
+
+    // 1,205 published variants across two items in a single IN_FILTER_CHUNK_SIZE
+    // (150) chunk, plus 155 item ids total to exercise multi-chunk + multi-page.
+    const extraItemIds = Array.from({ length: 153 }, (_, idx) => {
+      const hex = (idx + 100).toString(16).padStart(12, '0');
+      return `11111111-1111-4111-8111-${hex}`;
+    });
+    const LAST_CHUNK_ITEM = extraItemIds.at(-1)!;
+
+    // Shuffle insertion order so the mock proves `.order('id')` is requested.
+    const allPublishedVariants = [
+      ...Array.from({ length: 1200 }, (_, i) => makeVariantRow(i + 1, ITEM_A)),
+      ...Array.from({ length: 5 }, (_, i) => makeVariantRow(2000 + i, ITEM_B)),
+      makeVariantRow(3000, LAST_CHUNK_ITEM),
+    ].reverse();
+
+    let failMode: 'none' | 'schema_page2' | 'db_page2' = 'none';
+    const variantPageRequests: {
+      query: string;
+      offset: number;
+      limit: number;
+    }[] = [];
+
+    globalThis.fetch = (async (
+      input: RequestInfo | URL,
+      init?: RequestInit
+    ) => {
+      const url = new URL(
+        typeof input === 'string'
+          ? input
+          : input instanceof URL
+            ? input.href
+            : input.url
+      );
+      const q = decodeURIComponent(url.search);
+      const headers = new Headers(init?.headers);
+      const range = headers.get('range') ?? '';
+      const rangeParts = range.split('-');
+      const offset = Number(
+        rangeParts[0] || url.searchParams.get('offset') || 0
+      );
+      const limitFromRange =
+        rangeParts.length === 2 && rangeParts[1] !== ''
+          ? Number(rangeParts[1]) - Number(rangeParts[0]) + 1
+          : 0;
+      const limit = Math.min(
+        1000,
+        limitFromRange || Number(url.searchParams.get('limit') || 1000)
+      );
+
+      variantPageRequests.push({ query: q, offset, limit });
+
+      assert.equal(url.pathname, '/rest/v1/master_products');
+      assert.match(q, /(?:^|[?&])status=eq\.published(?:&|$)/);
+      assert.match(q, /(?:^|[?&])order=id(?:\.asc)?(?:&|$)/);
+
+      if (offset > 0 && failMode === 'schema_page2') {
+        return new Response(
+          JSON.stringify({
+            code: '42703',
+            message: 'column master_products.sort_order does not exist',
+          }),
+          { status: 400, headers: { 'content-type': 'application/json' } }
+        );
+      }
+      if (offset > 0 && failMode === 'db_page2') {
+        return new Response(
+          JSON.stringify({
+            code: '57014',
+            message: 'canceling statement due to statement timeout',
+          }),
+          { status: 500, headers: { 'content-type': 'application/json' } }
+        );
+      }
+
+      const inMatch = q.match(/item_id=in\.\(([^)]+)\)/);
+      const requestedIds = new Set(
+        (inMatch?.[1] ?? '')
+          .split(',')
+          .map((s) => s.replace(/^"|"$/g, ''))
+          .filter(Boolean)
+      );
+      const matching = allPublishedVariants
+        .filter((row) => requestedIds.has(row.item_id))
+        .sort((a, b) => a.id.localeCompare(b.id));
+      const slice = matching.slice(offset, offset + limit);
+
+      return new Response(JSON.stringify(slice), {
+        status: 200,
+        headers: {
+          'content-type': 'application/json',
+          'content-range': '0-0/*',
+        },
+      });
+    }) as typeof fetch;
+
+    const batch = await getItemVariantsBatch([
+      ITEM_A,
+      ITEM_B,
+      ITEM_EMPTY,
+      ...extraItemIds,
+    ]);
+    assert.equal(batch.get(ITEM_A)?.length, 1200);
+    assert.equal(batch.get(ITEM_B)?.length, 5);
+    assert.deepEqual(batch.get(ITEM_EMPTY), []);
+    assert.equal(batch.get(LAST_CHUNK_ITEM)?.length, 1);
+    assert.equal(
+      batch.get(ITEM_A)?.[0]?.variant_key,
+      'v-0001',
+      'variants are sorted in variant order after paging'
+    );
+    assert.equal(batch.get(ITEM_A)?.at(-1)?.variant_key, 'v-1200');
+    assert.ok(
+      variantPageRequests.some((r) => r.offset === 1000),
+      'chunk 1 paged past PostgREST 1000-row cap'
+    );
+
+    // Missing M1+M2 schema error surfaces as ItemModelUnavailableError.
+    failMode = 'schema_page2';
+    await assert.rejects(
+      () => getItemVariantsBatch([ITEM_A, ITEM_B]),
+      (err: unknown) => err instanceof ItemModelUnavailableError
+    );
+
+    // A mid-pagination DB error throws RateDataUnavailableError instead of
+    // returning truncated page-1 variants.
+    failMode = 'db_page2';
+    const originalConsoleError = console.error;
+    console.error = () => {};
+    try {
+      await assert.rejects(
+        () => getItemVariantsBatch([ITEM_A, ITEM_B]),
+        (err: unknown) => err instanceof RateDataUnavailableError
+      );
+    } finally {
+      console.error = originalConsoleError;
+    }
+  }
+
   console.warn('  ✅ Paged reads stop at the exact count (#1344)');
 }
 

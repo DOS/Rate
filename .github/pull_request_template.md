@@ -6,6 +6,14 @@
 - What changed?
 - Why?
 
+Closes #<issue>
+
+Claimant: <tool>:<session id>
+
+<!-- task-claim (AGENTS.md section 1): replace the line above with the claimant
+scripts/ops/board.mjs printed when this session claimed the issue, for example
+claude:local_1234abcd or qwen:5678efgh. -->
+
 ## Checklist
 - [ ] Build passes: `pnpm --filter <package> build`
 - [ ] Type-check passes: `pnpm --filter @repo/web typecheck`

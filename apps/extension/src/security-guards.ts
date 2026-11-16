@@ -408,6 +408,30 @@ export function sanitizeExtensionProductSignal(
 }
 
 /**
+ * Deduplication key for SPA content-script observations (DOS/Rate#1664).
+ * Includes normalized `originalPrice` and `title` so strikethrough-price or
+ * product-title hydration triggers a fresh lookup instead of suppressing
+ * `inflated_fake_sale` verdicts.
+ */
+export function buildProductSignalSignature(
+  rawSignal: ExtractedPageProductSignal
+): string {
+  const signal = sanitizeExtensionProductSignal(rawSignal);
+  const originalPrice =
+    signal.originalPrice !== null &&
+    (signal.price === null || signal.originalPrice > signal.price)
+      ? String(signal.originalPrice)
+      : '';
+  return JSON.stringify([
+    signal.canonicalUrl,
+    signal.selectedVariant ?? '',
+    signal.price ?? '',
+    originalPrice,
+    signal.title,
+  ]);
+}
+
+/**
  * The query of the product lookup: exactly the fields the disclosures name
  * (store, cleaned URL, title, item and shop ids, variant, price, original
  * price) and the mode. A test pins its output (DOS/Rate#1606).

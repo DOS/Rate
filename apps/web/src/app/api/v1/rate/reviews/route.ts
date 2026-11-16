@@ -36,6 +36,7 @@ import {
 } from '@/server/rate/review-v2';
 import { hasRatingCriteria, storedPoint } from '@repo/shared-data/rules';
 import { evaluateReviewTrustAssessment } from '@/lib/rate-domain';
+import { isFilteredOutReview } from '@/lib/review-display';
 import type { AuthenticatedRateRequest } from '@/server/rate/request-auth';
 
 const log = createLogger('api.reviews');
@@ -101,9 +102,11 @@ export async function GET(request: NextRequest) {
     const filteredReviews = parsedQuery.hideFake
       ? allReviews.filter(
           (r) =>
+            r != null &&
+            typeof r === 'object' &&
             r.verdict !== 'fake' &&
-            r.flag_category !== 'seeding_fake' &&
-            r.flag_category !== 'low_value_coin_spam'
+            r.flag_category === 'authentic' &&
+            !isFilteredOutReview(r)
         )
       : allReviews;
     const reviews = filteredReviews.slice(0, parsedQuery.limit);
@@ -423,8 +426,7 @@ export function toReviewItem(
 export async function POST(request: NextRequest) {
   try {
     const bodyRead = await readBoundedJsonBody(request);
-    if (bodyRead.tooLarge)
-      return payloadTooLargeResponse(PUBLIC_API_CORS_HEADERS);
+    if (bodyRead.tooLarge) return payloadTooLargeResponse(REVIEWS_CORS_HEADERS);
     const rawBody: unknown = bodyRead.value;
 
     const auth = await authenticateRateRequest(

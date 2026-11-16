@@ -21,7 +21,10 @@ import {
   selectFreshestSessionSignal,
 } from '../security-guards.js';
 import { LookupCooldown } from '../rate-limit.js';
-import { ObservationClient } from './observation-client.js';
+import {
+  ObservationClient,
+  PENDING_ERASURE_KEY,
+} from './observation-client.js';
 import { t } from '../i18n.js';
 import { resolveActionBadge } from '../verdict-display.js';
 
@@ -36,6 +39,7 @@ const DEFAULT_SETTINGS: ExtensionSettings = {
  * crowd signal counts as off until the user says yes again.
  */
 const OPT_IN_CONSENT_VERSION = 2;
+let lastSeenPendingErasure = false;
 
 async function getSettings(): Promise<ExtensionSettings> {
   try {
@@ -43,7 +47,11 @@ async function getSettings(): Promise<ExtensionSettings> {
       'apiBaseUrl',
       'crowdContributeOptIn',
       'crowdConsentVersion',
+      PENDING_ERASURE_KEY,
     ]);
+    lastSeenPendingErasure =
+      Array.isArray(stored[PENDING_ERASURE_KEY]) &&
+      stored[PENDING_ERASURE_KEY].length > 0;
     return {
       apiBaseUrl: normalizeAllowedApiBaseUrl(
         typeof stored.apiBaseUrl === 'string' ? stored.apiBaseUrl : null
@@ -151,9 +159,11 @@ const SUPPORTED_CROWD_PLATFORMS = new Set([
   'phongvu',
 ]);
 
-// The latest product lookup per tab (DOS/Rate#1300).
+// The latest product lookup per tab (DOS/Rate#1300, #1664).
 let detectRequestCounter = 0;
 const latestDetectByTab = new Map<number, number>();
+let fullLookupRequestCounter = 0;
+const latestFullLookupByTab = new Map<number, number>();
 async function maybeSendOptInCrowdSignal(
   rawSignal: ExtractedPageProductSignal
 ): Promise<void> {
@@ -164,7 +174,12 @@ async function maybeSendOptInCrowdSignal(
   const settings = await getSettings();
   // Strict Privacy Gate: Only send crowd verification signal if user explicitly opted in
   // and platform is in the 10-platform capability matrix
-  if (!settings.crowdContributeOptIn) return;
+  if (!settings.crowdContributeOptIn) {
+    if (lastSeenPendingErasure) {
+      await observationClient.retryErasures();
+    }
+    return;
+  }
   if (!SUPPORTED_CROWD_PLATFORMS.has(signal.platform)) return;
   if (!signal.externalItemId || !signal.price || signal.price <= 0) return;
   // A 429 may have come back while the settings were read.
@@ -195,15 +210,22 @@ const observationClient = new ObservationClient({
   observationPath: RATE_API_V1_ENDPOINTS.EXTENSION_OBSERVATION,
 });
 
+let badgeWriteCounter = 0;
+const latestBadgeWriteByTab = new Map<number, number>();
 async function updateActionBadge(
   tabId: number | undefined,
-  lookup: ExtensionLookupData | null
+  lookup: ExtensionLookupData | null,
+  isStillCurrent: () => boolean = () => true
 ): Promise<void> {
-  if (!tabId) return;
+  if (!tabId || !isStillCurrent()) return;
+  const writeSeq = ++badgeWriteCounter;
+  latestBadgeWriteByTab.set(tabId, writeSeq);
+  const canContinue = () =>
+    isStillCurrent() && latestBadgeWriteByTab.get(tabId) === writeSeq;
   try {
     const badge = resolveActionBadge(lookup);
     await chrome.action.setBadgeText({ text: badge.text, tabId });
-    if (badge.color) {
+    if (badge.color && canContinue()) {
       await chrome.action.setBadgeBackgroundColor({
         color: badge.color,
         tabId,
@@ -343,13 +365,26 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           sendResponse({ ok: outcome.ok, data: lookup, stale: true });
           return;
         }
-        await updateActionBadge(tabId, lookup);
+        await updateActionBadge(tabId, lookup, isLatest);
+        if (!isLatest()) {
+          sendResponse({ ok: outcome.ok, data: lookup, stale: true });
+          return;
+        }
+        // Always persist or clear `lookup_tab_<id>` (and `lookup_tab_latest`
+        // for the active tab) so stale product state never lingers after a
+        // lookup error or null/unmatched response (DOS/Rate#1664).
+        const lookupPayload: Record<string, unknown> = {
+          [`lookup_${cacheKey}`]: lookup,
+        };
+        if (!isBackgroundTab) {
+          lookupPayload.lookup_tab_latest = lookup;
+        }
+        await chrome.storage.session.set(lookupPayload);
+        if (!isLatest()) {
+          sendResponse({ ok: outcome.ok, data: lookup, stale: true });
+          return;
+        }
         if (!outcome.ok) {
-          // An open side panel reloads for this page instead of keeping the
-          // previous product (it listens to this key).
-          if (!isBackgroundTab) {
-            await chrome.storage.session.set({ lookup_tab_latest: null });
-          }
           sendResponse({
             ok: false,
             status: outcome.status,
@@ -359,19 +394,27 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           return;
         }
 
-        if (lookup) {
-          const lookupPayload: Record<string, unknown> = {
-            [`lookup_${cacheKey}`]: lookup,
-          };
-          if (!isBackgroundTab) {
-            lookupPayload.lookup_tab_latest = lookup;
-          }
-          await chrome.storage.session.set(lookupPayload);
-        }
-
         sendResponse({ ok: true, data: lookup });
       } catch (err) {
-        if (isLatest()) await updateActionBadge(sender.tab?.id, null);
+        if (isLatest()) {
+          await updateActionBadge(sender.tab?.id, null);
+        }
+        if (isLatest()) {
+          const errCacheKey = sender.tab?.id
+            ? `tab_${sender.tab.id}`
+            : 'tab_latest';
+          const errPayload: Record<string, unknown> = {
+            [`lookup_${errCacheKey}`]: null,
+          };
+          if (!(sender.tab && sender.tab.active === false)) {
+            errPayload.lookup_tab_latest = null;
+          }
+          try {
+            await chrome.storage.session.set(errPayload);
+          } catch {
+            // Ignore session storage errors during worker shutdown
+          }
+        }
         sendResponse({
           ok: false,
           status: null,
@@ -391,6 +434,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       });
       return false;
     }
+    const fullSeq = ++fullLookupRequestCounter;
+    const detectSnapshotAtEntry = new Map(latestDetectByTab);
     (async () => {
       try {
         const cleanedVariant =
@@ -406,6 +451,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           currentWindow: true,
         });
         const tabKey = activeTab?.id ? `tab_${activeTab.id}` : 'tab_latest';
+        const detectSeqAtEntry =
+          activeTab?.id !== undefined
+            ? detectSnapshotAtEntry.get(activeTab.id)
+            : undefined;
         const sessionData = await chrome.storage.session.get([
           tabKey,
           'tab_latest',
@@ -438,41 +487,77 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           return;
         }
 
+        const isQuickQuerySelected =
+          Boolean(latestEntry?.signal) &&
+          baseSignal === latestEntry?.signal &&
+          latestEntry?.source === 'quick_query';
+        const isActiveTabPageSignal =
+          Boolean(activeTab?.id && tabEntry?.signal) &&
+          baseSignal === tabEntry?.signal &&
+          tabEntry?.source !== 'quick_query' &&
+          !isQuickQuerySelected;
+
+        const trackedTabId = isActiveTabPageSignal ? activeTab?.id : undefined;
+        if (
+          trackedTabId !== undefined &&
+          (latestFullLookupByTab.get(trackedTabId) ?? 0) < fullSeq
+        ) {
+          latestFullLookupByTab.set(trackedTabId, fullSeq);
+        }
+        const isCurrentTabLookup = () =>
+          trackedTabId !== undefined &&
+          latestDetectByTab.get(trackedTabId) === detectSeqAtEntry &&
+          latestFullLookupByTab.get(trackedTabId) === fullSeq;
+
         const effectiveSignal: ExtractedPageProductSignal = overrideVariant
           ? { ...baseSignal, selectedVariant: overrideVariant }
           : baseSignal;
 
         if (overrideVariant) {
           const now = Date.now();
-          const isQuickQuerySelected =
-            Boolean(latestEntry?.signal) &&
-            baseSignal === latestEntry?.signal &&
-            latestEntry?.source === 'quick_query';
-          if (isQuickQuerySelected) {
+          if (isActiveTabPageSignal) {
+            if (isCurrentTabLookup()) {
+              await chrome.storage.session.set({
+                [tabKey]: {
+                  signal: effectiveSignal,
+                  updatedAt: now,
+                  source: 'page',
+                },
+                tab_latest: {
+                  signal: effectiveSignal,
+                  updatedAt: now,
+                  source: 'page',
+                },
+              });
+            }
+          } else if (fullSeq === fullLookupRequestCounter) {
             await chrome.storage.session.set({
               tab_latest: {
                 signal: effectiveSignal,
                 updatedAt: now,
-                source: 'quick_query',
-              },
-            });
-          } else {
-            await chrome.storage.session.set({
-              [tabKey]: {
-                signal: effectiveSignal,
-                updatedAt: now,
-                source: 'page',
-              },
-              tab_latest: {
-                signal: effectiveSignal,
-                updatedAt: now,
-                source: 'page',
+                source: isQuickQuerySelected ? 'quick_query' : 'page',
               },
             });
           }
         }
 
         const outcome = await fetchExtensionLookup(effectiveSignal, 'full');
+        if (isCurrentTabLookup() && trackedTabId !== undefined) {
+          const resolvedLookup = outcome.ok ? outcome.data : null;
+          await updateActionBadge(
+            trackedTabId,
+            resolvedLookup,
+            isCurrentTabLookup
+          );
+          if (isCurrentTabLookup()) {
+            await chrome.storage.session.set({
+              [`lookup_${tabKey}`]: resolvedLookup,
+            });
+          }
+        }
+        const stale = isActiveTabPageSignal
+          ? !isCurrentTabLookup()
+          : fullSeq !== fullLookupRequestCounter;
         sendResponse(
           outcome.ok
             ? {
@@ -480,6 +565,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                 settings,
                 signal: effectiveSignal,
                 data: outcome.data,
+                ...(stale ? { stale: true } : {}),
               }
             : {
                 ok: false,
@@ -487,6 +573,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                 retryAfterSeconds: outcome.retryAfterSeconds,
                 settings,
                 signal: effectiveSignal,
+                ...(stale ? { stale: true } : {}),
               }
         );
       } catch (err) {
@@ -509,6 +596,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       });
       return false;
     }
+    const quickSeq = ++fullLookupRequestCounter;
     (async () => {
       try {
         const rawQuery =
@@ -586,14 +674,16 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           syntheticSignal.platform = fullLookup.platform;
         }
 
-        const now = Date.now();
-        await chrome.storage.session.set({
-          tab_latest: {
-            signal: syntheticSignal,
-            updatedAt: now,
-            source: 'quick_query',
-          },
-        });
+        if (quickSeq === fullLookupRequestCounter) {
+          const now = Date.now();
+          await chrome.storage.session.set({
+            tab_latest: {
+              signal: syntheticSignal,
+              updatedAt: now,
+              source: 'quick_query',
+            },
+          });
+        }
 
         sendResponse({
           ok: true,
@@ -626,6 +716,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     (async () => {
       try {
         const nextSettings: Partial<ExtensionSettings> = {};
+        let serverChanged = false;
         if (
           !fromOnboarding &&
           typeof message.apiBaseUrl === 'string' &&
@@ -637,6 +728,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           // The cooldown was another server's (DOS/Rate#1466); saving the same one keeps it.
           if (nextSettings.apiBaseUrl !== (await getSettings()).apiBaseUrl) {
             await lookupCooldown.clear();
+            serverChanged = true;
           }
         }
         const consent: Record<string, unknown> = {};
@@ -648,10 +740,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         }
         await chrome.storage.local.set({ ...nextSettings, ...consent });
         // Turning it off erases this install's contributions (DOS/Rate#1606);
-        // a new server address leaves the old id to be erased where it came
-        // from on the next send.
+        // switching servers rotates and queues erasure of the previous server's
+        // submitter id immediately even if that server is held (DOS/Rate#1682).
         if (nextSettings.crowdContributeOptIn === false) {
           void observationClient.forget();
+        } else if (serverChanged && nextSettings.apiBaseUrl) {
+          void observationClient.syncServer(nextSettings.apiBaseUrl);
         }
         const updated = await getSettings();
         sendResponse({ ok: true, settings: updated });

@@ -287,16 +287,25 @@ export function resolvePillTheme(
 }
 
 /**
- * The pill's accessible name: the verdict and the summary a sighted user
- * reads, then what activating it does (DOS/Rate#1302). Plain text; the
- * caller escapes it for the attribute.
+ * The pill's accessible name: all visible non-aria-hidden text inside the
+ * button in DOM order (WCAG 2.5.3 Label in Name, DOS/Rate#1664), then what
+ * activating it does (DOS/Rate#1302). Plain text; the caller escapes it for
+ * the attribute.
  */
 export function buildPillAriaLabel(
   badgeLabel: string,
-  summary: string
+  summary: string,
+  extraDetails: ReadonlyArray<string | null | undefined> = []
 ): string {
-  const parts = [`Rate.vn: ${badgeLabel.trim()}`];
+  const trimmedBadge = badgeLabel.trim();
+  const parts = [trimmedBadge ? `Rate.vn: ${trimmedBadge}` : 'Rate.vn'];
+  for (const detail of extraDetails) {
+    const trimmed = typeof detail === 'string' ? detail.trim() : '';
+    if (trimmed) parts.push(trimmed);
+  }
   if (summary.trim()) parts.push(summary.trim());
+  const details = t('pillDetails').trim();
+  if (details) parts.push(details);
   parts.push(t('pillOpenPanel'));
   return parts.join('. ');
 }

@@ -34,6 +34,30 @@ apply to it: "Starting a sub-session" (its brief), "Review gate",
 
 ## Lines and names
 
+Two POs may run on the same repository at once: one in Claude Code and one
+in Qwen Code Desktop (DOS/Rate#1673). They keep apart like this:
+
+- **PO line label.** `po:claude` or `po:qwen` says which PO dispatched an
+  issue. A PO dispatches only issues with its own label or none, and adds its
+  label when it dispatches
+  (`gh issue edit <n> -R DOS/Rate --add-label po:claude`). `board.mjs` adds
+  the claimant's line label on a claim and refuses an issue of the other line
+  without `--take-over` (JOY's assignment only). A claimant of a tool that
+  runs no PO (for example `codex:...`) gets no `po:*` label and is not
+  refused by line; such an agent still respects the labels by this rule.
+- **Separate state.** Each PO keeps its own state and check-in file, named
+  per tool (`po-state.claude.md`, `po-state.qwen.md`), outside the
+  repository (in that PO's own notes folder), never committed, and never
+  writes the other's.
+- **One promoter.** Only the Claude Code PO runs `promote.mjs` and the
+  `verify-live.mjs` check after it. The Qwen PO asks the Claude Code PO (or
+  JOY, if it cannot reach it) when its merged work needs a promotion.
+  `promote.mjs` refuses to run when the session's claimant (resolved as
+  `board.mjs` does) is not `claude:` or cannot be resolved: a guard against
+  mistakes, not access control.
+- The claim lock (see "Claims") keeps their sub-sessions off each other's
+  issues even when two take the same issue at the same moment.
+
 The line is the repository. There is no Product Line field and no `line:*`
 label; do not add them, and do not bulk-edit existing issues to tag them.
 
@@ -107,7 +131,8 @@ only the issue in their brief.
   with a priority. Urgent work (an `incident`, a security exposure, an
   outage of rate.vn) goes first: if the line is at 5, free a slot before
   starting it. Urgency never adds authority; approvals still apply.
-- While sub-sessions have work in flight, keep a self check-in where the
+- While sub-sessions have work in flight, keep a self check-in (in this
+  PO's own state file, see "Lines and names") where the
   runtime allows one, about every 30 minutes, until the line has no
   authorized work left. Each check-in is coordination: read reports, look at
   the CI of PRs that are waiting, nudge their owners, refill free slots,
@@ -128,17 +153,78 @@ the sub-session's word, or grant any authority JOY has not given. When a
 problem is assigned to the line, start a session at once with what is
 already known (run link, error line, issue) and let it investigate.
 
-## Claims (Rate's label protocol)
+## Claims (Rate's label and lock protocol)
 
-Rate claims an issue with labels, not comments: `agent:<nick>` plus one
-`status:*` label, mirrored to Project #9 Status and Agent by
+Rate claims an issue with labels and a lock, not comments: `agent:<nick>`
+plus one `status:*` label, mirrored to Project #9 Status and Agent, and the
+claim lock `refs/claims/<n>`, all set by
 `node scripts/ops/board.mjs <n> --status <s> --agent <Nick> [--repo DOS/Rate-Services]`.
 `--agent` is required on every call, and `board.mjs` always keeps an
-`agent:*` label on the issue.
+`agent:*` label on the issue. Never claim with bare `gh` label edits: they
+take no lock.
+
+The lock (DOS/Rate#1673, `AGENTS.md` 1) is per session, because a nickname
+names a role and two sessions can share it:
+
+- `in-progress` and `in-review` take or keep the lock, a git ref GitHub
+  creates only when it does not exist, so of two sessions claiming at once
+  exactly one wins and the other is refused with the holder's name. No
+  workflow runs on it.
+- The lock records the **claimant**, `<tool>:<session id>`. Claude Code
+  sessions get `claude:<session id>` automatically (the desktop session id,
+  the one `SendMessage` uses). Qwen Code sessions pass `--claimant qwen:<session id>` on every call.
+  `RATE_CLAIMANT` may only be set for one session, never in a shell profile
+  or an environment other sessions (sub-sessions included) inherit; a Claude
+  Code session id always wins over it. `board.mjs` prints
+  the claimant and posts it in a lock comment on the issue.
+- Re-claiming by the holder changes nothing. `ready`, `backlog` and `done`
+  release the lock; only the holder may, except on a closed (merged) issue,
+  so the PO can mark a runtime issue Done after the promotion.
+- A release never deletes the ref (DOS/Rate#1675): it replaces the lock,
+  compare-and-swap, with a tombstone commit (`release: ...`,
+  `Released-By: <claimant>`), so a `--take-over` that lands between the
+  release's read and its write is never removed (the release fails
+  instead). A tombstone is a free lock: the next claim replaces it, and
+  `task-claim` treats it as no lock.
+- A lock taken before a merged PR last closed the issue is stale: the merge
+  ended that work. On a reopened issue, a claim (`in-progress` or
+  `in-review`) replaces a stale lock without `--take-over` (and its stale
+  `agent:*` label; the other PO's `po:*` label still needs `--take-over`),
+  and the lock comment names the lock it replaced. A release does not: on an
+  open issue only the holder releases, or the PO with `--force-release`. A
+  close that was not a merge (not planned, by hand) never makes a lock stale.
+  Nothing releases locks automatically when an issue closes.
+- A session that keeps working on an issue after it was reopened re-runs
+  `board.mjs <n> --status in-progress --agent <Nick>` at once: that renews
+  its lock, which is otherwise stale and open to the next claim.
+- Until every active worktree has merged `origin/dev` past DOS/Rate#1675,
+  an older `board.mjs` can still delete a lock when it releases a closed
+  issue's lock or force-releases, so keep the hand-over order: the next
+  session claims only after the "released" comment.
+- `--take-over` moves the lock to the new session (after a hand-over or on
+  JOY's assignment), and fails if the lock changed since it was read.
+- `node scripts/ops/board.mjs <n> --force-release --agent PO --reason "<evidence>"`
+  clears an orphaned lock, whoever holds it, and posts the reason. PO only by
+  convention: the script checks only `--agent PO`, and the comment is the
+  record.
+- An issue already `in-progress` or `in-review` without a lock (claimed with
+  labels before the lock existed) is refused, since another session may hold
+  it under the same nickname. The session that made that claim re-runs with
+  `--adopt`; anyone else needs a hand-over or JOY's assignment and
+  `--take-over`.
+- A worktree cut from `dev` before DOS/Rate#1673 merged has the old
+  `board.mjs`, which takes no lock: merge `origin/dev` into the branch first.
+  One cut before DOS/Rate#1675 reads a tombstone as a lock of "an
+  unrecognised claimant" and refuses: merge `origin/dev`, do not
+  `--take-over`.
+
 In DOS/Rate the required `task-claim` check (`scripts/task-claim-check.mjs`,
 ruleset `dev-task-claim`) passes a PR into `dev` only when every
 issue it closes carries an `agent:*` label and `status:in-progress` or
-`status:in-review`. PRs reference their issue with `Closes #<n>` (the check
+`status:in-review`, and its lock is held by the claimant the PR declares on a
+line of its own in the description: `Claimant: <tool>:<session id>`. PRs
+opened before `LOCK_REQUIRED_SINCE` (2026-11-15T17:04:00Z) keep the
+label-only rule. PRs reference their issue with `Closes #<n>` (the check
 reads closing references). Merging into `dev`, the default branch, closes
 the issue automatically. Do not use DOS.AI's `claim:`/`release:` comments
 or its `task-claim` skill here.
@@ -148,7 +234,7 @@ starts with `**[Agent: <Nick>]**`.
 
 | DOS.AI                        | Rate                                                                                                                                                                                                                                     |
 | ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `claim:`                      | `board.mjs <n> --status in-progress --agent <Nick>` plus a claim comment naming the branch                                                                                                                                               |
+| `claim:`                      | `board.mjs <n> --status in-progress --agent <Nick>` (takes the lock) plus a claim comment naming the branch                                                                                                                              |
 | `checkpoint:`                 | A comment at each milestone (PR opened, blocked, paused): done, evidence, next step                                                                                                                                                      |
 | `handoff:` to another session | A handoff comment (done, evidence, remaining work, next step); the receiver runs `board.mjs ... --take-over` with its own nickname                                                                                                       |
 | `handoff:` to JOY             | A handoff comment, then the PO takes the decision to JOY; the issue keeps its labels until JOY answers                                                                                                                                   |
@@ -164,10 +250,17 @@ Antigravity or agents on another machine are invisible to them, so silence
 there is not proof. `AGENTS.md` allows `--take-over` only after a hand-over
 (a handoff or release comment) or on JOY's assignment, so an orphaned claim
 with neither is JOY's call: the PO collects the evidence (labels, branch,
-PR, latest comment, notes folder) and asks JOY in one line. On JOY's yes,
+PR, latest comment, notes folder, and the lock holder from the lock comment
+or `board.mjs`'s refusal) and asks JOY in one line. On JOY's yes,
 quoted in the brief with the date, the new session posts a takeover comment
 linking the evidence and runs
-`board.mjs <n> --status in-progress --agent <Nick> --take-over`.
+`board.mjs <n> --status in-progress --agent <Nick> --take-over`, which
+replaces the old lock. When nobody takes the issue yet, the PO clears the lock
+with `board.mjs <n> --force-release --agent PO --reason "<JOY's yes, date>"`
+and returns the issue with
+`board.mjs <n> --status ready --agent PO --take-over`. A hand-over (release)
+is complete once `board.mjs` posted its "Claim lock ... released" comment;
+the next session claims only after that comment.
 
 ## Triage
 
@@ -177,7 +270,9 @@ linking the evidence and runs
    pages over Project #9 (more than 300 items) time out with 504 or return
    only the first 30 items; look an issue's board item up from the issue as
    `AGENTS.md` 1 shows, or page Project #9 GraphQL in pages of 50 or fewer.
-2. Order: `incident` first, then `status:ready`, then other open issues.
+2. Skip issues labelled with the other PO's line (`po:qwen` for the Claude
+   Code PO, `po:claude` for the Qwen PO); see "Lines and names".
+   Order: `incident` first, then `status:ready`, then other open issues.
    `status:in-progress` and `status:in-review` issues are someone's claim:
    check whether they are live or orphaned (see "Claims").
 3. For each candidate, check ownership: labels, open PRs
@@ -251,8 +346,9 @@ context the session gets, so it carries:
   ("Starting a sub-session", "Review gate", "Coordinating", "Stop lines").
 - **Process**: claim with
   `node scripts/ops/board.mjs <n> --status in-progress --agent <Nick>` before
-  editing; English issue, PR and commit text; PR into `dev` with
-  `Closes #<n>`; `board.mjs <n> --status in-review --agent <Nick>` once the
+  editing (a Qwen sub-session adds `--claimant qwen:<its session id>`);
+  English issue, PR and commit text; PR into `dev` with `Closes #<n>` and a
+  `Claimant: <claimant board.mjs printed>` line; `board.mjs <n> --status in-review --agent <Nick>` once the
   PR is open; the review gate (below); the PO acceptance gate; then
   `node scripts/ops/merge-when-green.mjs <pr>` after the PO answers "merge";
   then, for docs, CI and tooling,
@@ -397,7 +493,7 @@ secrets and credentials (GitHub, Vercel, Supabase, `AI_API_KEY`,
 
 The normal `dev` -> `main` promotion is not one of these steps: it stays
 batched as `AGENTS.md` 0.2 and `Docs/Resources/RELEASE.md` say, needs no
-per-release question, and is run by the PO (`node scripts/ops/promote.mjs`,
+per-release question, and is run by the Claude Code PO only (`node scripts/ops/promote.mjs`,
 then `node scripts/ops/verify-live.mjs --wait 900`) at the first checkpoint:
 no ready backlog left, 10 or more PRs waiting on `dev`, the oldest
 unpromoted change older than 24 hours, or the end of a long working session.

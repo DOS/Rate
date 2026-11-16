@@ -641,6 +641,181 @@ async function main() {
     }
   }
 
+  // Dotted merchant slugs and TikTok Shop handles preserve literal `.` inside
+  // double-quoted PostgREST `.or(...)` values without colliding with dotless
+  // stores, while rejecting PostgREST operator injection and keeping
+  // `sanitizePostgrestFilterToken` strict for `.ilike()` callers (DOS/Rate#1686).
+  {
+    const { sanitizePostgrestFilterToken } = await import('../rate-api');
+    assert.equal(
+      sanitizePostgrestFilterToken('anker.vn,id.eq.1()'),
+      'ankervnideq1',
+      'sanitizePostgrestFilterToken stays strict for .ilike() callers'
+    );
+
+    const DOTTED_MERCHANT_ID = '00000000-0000-4000-8000-000000001686';
+    const DOTLESS_MERCHANT_ID = '00000000-0000-4000-8000-000000001687';
+    const TIKTOK_MERCHANT_ID = '00000000-0000-4000-8000-000000001688';
+    const BOUNDARY_MERCHANT_ID = '00000000-0000-4000-8000-000000001689';
+    const maxLenSlug = `${'a'.repeat(117)}.vn`;
+    assert.equal(maxLenSlug.length, 120);
+
+    const merchantStore = [
+      {
+        ...merchantRow,
+        id: DOTLESS_MERCHANT_ID,
+        slug: 'ankervn',
+        platform_shop_id: 'ankervn',
+        name: 'Dotless Decoy Store',
+      },
+      {
+        ...merchantRow,
+        id: DOTTED_MERCHANT_ID,
+        slug: 'anker.vn',
+        platform_shop_id: '88001686',
+        name: 'Anker Vietnam Official',
+      },
+      {
+        ...merchantRow,
+        id: TIKTOK_MERCHANT_ID,
+        platform: 'tiktok',
+        slug: 'viettel-official',
+        platform_shop_id: 'viettel.store',
+        name: 'Viettel Store TikTok',
+      },
+      {
+        ...merchantRow,
+        id: BOUNDARY_MERCHANT_ID,
+        slug: maxLenSlug,
+        platform_shop_id: 'a',
+        name: 'Boundary Slug Store',
+      },
+    ];
+
+    const seenOrParams: string[] = [];
+    let activeStore = merchantStore;
+    globalThis.fetch = (async (input: RequestInfo | URL) => {
+      const url = new URL(
+        typeof input === 'string'
+          ? input
+          : input instanceof URL
+            ? input.href
+            : input.url
+      );
+      const table = url.pathname.replace('/rest/v1/', '');
+      const offset = Number(url.searchParams.get('offset') ?? 0);
+      if (table === 'merchants') {
+        const orParam = url.searchParams.get('or') ?? '';
+        seenOrParams.push(orParam);
+        const match = orParam.match(
+          /^\(slug\.eq\."([^"\\]*)",platform_shop_id\.eq\."([^"\\]*)"\)$/
+        );
+        const matched = match
+          ? activeStore.filter(
+              (m) => m.slug === match[1] || m.platform_shop_id === match[2]
+            )
+          : [];
+        return new Response(JSON.stringify(matched.slice(0, 1)), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        });
+      }
+      if (table === 'products') {
+        return new Response(JSON.stringify(offset > 0 ? [] : []), {
+          status: 200,
+          headers: {
+            'content-type': 'application/json',
+            'content-range': '0-0/*',
+          },
+        });
+      }
+      return new Response('[]', {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      });
+    }) as typeof fetch;
+
+    const ankerBase = await getMerchantProfileBase('  anker.vn  ');
+    assert.ok(ankerBase);
+    assert.equal(ankerBase.profile.id, DOTTED_MERCHANT_ID);
+    assert.equal(
+      seenOrParams.at(-1),
+      '(slug.eq."anker.vn",platform_shop_id.eq."anker.vn")'
+    );
+
+    const tiktokBase = await getMerchantProfileBase('viettel.store');
+    assert.ok(tiktokBase);
+    assert.equal(tiktokBase.profile.id, TIKTOK_MERCHANT_ID);
+    assert.equal(
+      seenOrParams.at(-1),
+      '(slug.eq."viettel.store",platform_shop_id.eq."viettel.store")'
+    );
+
+    // Boundary lengths: 1-char and 120-char identifiers pass.
+    const singleCharBase = await getMerchantProfileBase('a');
+    assert.ok(singleCharBase);
+    assert.equal(singleCharBase.profile.id, BOUNDARY_MERCHANT_ID);
+    const maxLenBase = await getMerchantProfileBase(maxLenSlug);
+    assert.ok(maxLenBase);
+    assert.equal(maxLenBase.profile.id, BOUNDARY_MERCHANT_ID);
+
+    // When `anker.vn` does not exist, looking up `anker.vn` must return null
+    // and never collide with dot-stripped `ankervn`.
+    activeStore = merchantStore.filter((m) => m.id !== DOTTED_MERCHANT_ID);
+    assert.equal(await getMerchantProfileBase('anker.vn'), null);
+
+    // Malformed / injection inputs are rejected before issuing any PostgREST query.
+    seenOrParams.length = 0;
+    const rejectedInputs = [
+      '',
+      '   ',
+      '.',
+      '..',
+      '.anker.vn',
+      'anker.vn.',
+      'anker..vn',
+      '-anker',
+      '---',
+      '_anker',
+      '__proto__',
+      'anker.vn,id.eq.1',
+      'anker.vn,platform_shop_id.neq.0',
+      'anker(1)',
+      'or(id.eq.1)',
+      'anker"vn',
+      'anker.vn",id.eq."1',
+      "anker'vn",
+      'anker\\vn',
+      'anker/vn',
+      'anker vn',
+      'anker\tvn',
+      'anker\nvn',
+      'anker\u0000.vn',
+      'a'.repeat(121),
+      `${maxLenSlug}x`,
+      '0',
+      'null',
+      'undefined',
+      'NaN',
+      'none',
+      'na',
+      'true',
+      'false',
+    ];
+    for (const bad of rejectedInputs) {
+      assert.equal(
+        await getMerchantProfileBase(bad),
+        null,
+        `expected null for invalid merchant identifier: ${JSON.stringify(bad)}`
+      );
+    }
+    assert.deepEqual(
+      seenOrParams,
+      [],
+      'invalid merchant identifiers must not issue PostgREST queries'
+    );
+  }
+
   console.warn('  ✅ merchant profile reads suite passed');
 }
 

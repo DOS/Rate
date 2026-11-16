@@ -591,7 +591,7 @@ async function run() {
     28_990_000,
     'Self-exclusion trims IDs and boolean prices/fallbacks are rejected'
   );
-  assert.equal(MAX_CLUSTER_PEER_ROWS, 1000);
+  assert.equal(MAX_CLUSTER_PEER_ROWS, 50_000);
 
   assert.equal(toValidPrice(true), 0, 'toValidPrice rejects boolean true');
   assert.equal(mapStoredReview(null as unknown as ReviewRow), null);
