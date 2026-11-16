@@ -561,38 +561,83 @@ assert.equal(
     'components/deals/DealFinderWorkspace.tsx',
   ] as const;
 
+  const findCallArgumentLists = (source: string, fnName: string): string[] => {
+    const results: string[] = [];
+    const token = `${fnName}(`;
+    let searchFrom = 0;
+    while (searchFrom < source.length) {
+      const idx = source.indexOf(token, searchFrom);
+      if (idx === -1) break;
+      const prevChar = idx > 0 ? source[idx - 1]! : '';
+      if (prevChar && /[A-Za-z0-9_]/.test(prevChar)) {
+        searchFrom = idx + token.length;
+        continue;
+      }
+      const argsStart = idx + token.length;
+      let depth = 1;
+      let cursor = argsStart;
+      while (cursor < source.length && depth > 0) {
+        const ch = source[cursor];
+        if (ch === '(') depth++;
+        else if (ch === ')') depth--;
+        cursor++;
+      }
+      assert.equal(
+        depth,
+        0,
+        `${fnName}(...) call at offset ${idx} must have balanced parentheses`
+      );
+      results.push(source.slice(argsStart, cursor - 1));
+      searchFrom = cursor;
+    }
+    return results;
+  };
+
+  const endsWithLocaleArg = (args: string): boolean => {
+    const withoutTrailingWs = args.trimEnd();
+    return (
+      withoutTrailingWs.endsWith('locale') &&
+      withoutTrailingWs.slice(0, -'locale'.length).trimEnd().endsWith(',')
+    );
+  };
+
+  const endsWithZeroAndLocaleArgs = (args: string): boolean => {
+    const withoutTrailingWs = args.trimEnd();
+    const beforeLocale = withoutTrailingWs.endsWith('locale')
+      ? withoutTrailingWs.slice(0, -'locale'.length).trimEnd()
+      : '';
+    const beforeSecondComma = beforeLocale.endsWith(',')
+      ? beforeLocale.slice(0, -1).trimEnd()
+      : '';
+    const beforeZero = beforeSecondComma.endsWith('0')
+      ? beforeSecondComma.slice(0, -1).trimEnd()
+      : '';
+    return beforeZero.endsWith(',');
+  };
+
   for (const relPath of radarLocaleFiles) {
     const src = fs.readFileSync(path.join(webSrcDir, relPath), 'utf8');
     assert.match(src, /\buseLocale\b/, `${relPath} must read useLocale()`);
     let matchedCalls = 0;
-    for (const match of src.matchAll(
-      /\bradarMarkdownCell\(((?:[^()]+|\([^()]*\))*)\)/g
-    )) {
+    for (const args of findCallArgumentLists(src, 'radarMarkdownCell')) {
       matchedCalls++;
-      assert.match(
-        match[1]!,
-        /,\s*locale\s*$/,
-        `${relPath}: radarMarkdownCell(${match[1]}) must pass locale`
+      assert.ok(
+        endsWithLocaleArg(args),
+        `${relPath}: radarMarkdownCell(${args}) must pass locale`
       );
     }
-    for (const match of src.matchAll(
-      /\bradarLabel\(((?:[^()]+|\([^()]*\))*)\)/g
-    )) {
+    for (const args of findCallArgumentLists(src, 'radarLabel')) {
       matchedCalls++;
-      assert.match(
-        match[1]!,
-        /,\s*0\s*,\s*locale\s*$/,
-        `${relPath}: radarLabel(${match[1]}) must pass (signal, 0, locale)`
+      assert.ok(
+        endsWithZeroAndLocaleArgs(args),
+        `${relPath}: radarLabel(${args}) must pass (signal, 0, locale)`
       );
     }
-    for (const match of src.matchAll(
-      /\bdiscountVerdictCopy\(((?:[^()]+|\([^()]*\))*)\)/g
-    )) {
+    for (const args of findCallArgumentLists(src, 'discountVerdictCopy')) {
       matchedCalls++;
-      assert.match(
-        match[1]!,
-        /,\s*locale\s*$/,
-        `${relPath}: discountVerdictCopy(${match[1]}) must pass locale`
+      assert.ok(
+        endsWithLocaleArg(args),
+        `${relPath}: discountVerdictCopy(${args}) must pass locale`
       );
     }
     assert.ok(
