@@ -135,10 +135,6 @@ function hasSetLookup(
   return Boolean(flaggedIds) && typeof flaggedIds?.has === 'function';
 }
 
-function isUnavailableStatus(availability: unknown): boolean {
-  return availability === 'out_of_stock' || availability === 'discontinued';
-}
-
 interface PrecomputedReferenceBait {
   length: number;
   flaggedObjects: WeakSet<object>;
@@ -281,14 +277,12 @@ export function isOfferImplausiblyLowAgainstInStock(
   if (pre.nonFlaggedObjects.has(offer)) {
     return false;
   }
-  if (!isUnavailableStatus(offer.availability)) {
-    if (Boolean(canonicalId) && pre.presentCanonicalIds.has(canonicalId)) {
-      return hasCustomSet ? false : pre.naturalBaitIds.has(canonicalId);
-    }
-    const trimmedId = trimOfferString(offer.id);
-    if (Boolean(trimmedId) && pre.presentTrimmedIds.has(trimmedId)) {
-      return pre.flaggedTrimmedIds.has(trimmedId);
-    }
+  if (Boolean(canonicalId) && pre.presentCanonicalIds.has(canonicalId)) {
+    return hasCustomSet ? false : pre.naturalBaitIds.has(canonicalId);
+  }
+  const trimmedId = trimOfferString(offer.id);
+  if (Boolean(trimmedId) && pre.presentTrimmedIds.has(trimmedId)) {
+    return pre.flaggedTrimmedIds.has(trimmedId);
   }
   const numPrice = toSafePlausiblePrice(offer.price_current);
   return (

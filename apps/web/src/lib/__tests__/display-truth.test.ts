@@ -751,6 +751,36 @@ assert.deepEqual(
   allUnavailableInspect.listedOffers.map((o) => o.id),
   ['so-1', 'so-2', 'so-bait']
 );
+const roundTripSoldOut = [
+  1_000_000, 1_000_000, 3_500_000, 8_000_000, 10_000_000, 20_000_000,
+  30_000_000,
+].map((price_current, i) => ({
+  id: `id-${i}`,
+  price_current,
+  availability: 'out_of_stock' as const,
+}));
+const roundTripParsed = JSON.parse(
+  JSON.stringify({
+    allOffers: roundTripSoldOut,
+    matchedOffer: roundTripSoldOut[2],
+  })
+) as {
+  allOffers: typeof roundTripSoldOut;
+  matchedOffer: (typeof roundTripSoldOut)[number];
+};
+const roundTripOrdered = orderInspectOffers(roundTripParsed.allOffers);
+assert.equal(
+  isInspectOfferBait(
+    roundTripParsed.matchedOffer,
+    roundTripOrdered.implausibleOfferIds,
+    roundTripOrdered.plausibilityOffers
+  ),
+  isInspectOfferBait(
+    roundTripParsed.allOffers[2],
+    roundTripOrdered.implausibleOfferIds,
+    roundTripOrdered.plausibilityOffers
+  )
+);
 const largeAlternatingOffers = Array.from({ length: 3000 }, (_, i) => ({
   id: `offer-${i}`,
   price_current: 3_000_000 + i * 1_000,

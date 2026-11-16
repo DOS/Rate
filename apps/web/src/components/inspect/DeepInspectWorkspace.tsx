@@ -557,7 +557,17 @@ export default function DeepInspectWorkspace({
         fakeSaleTrap: matchedFakeTrap,
         priceSpread: matchedPriceSpread,
       },
-      implausiblyLowOfferIds: [...implausibleOfferIds],
+      implausiblyLowOfferIds: Array.from(
+        new Set([
+          ...implausibleOfferIds,
+          ...listedOffers
+            .filter((o) =>
+              isInspectOfferBait(o, implausibleOfferIds, plausibilityOffers)
+            )
+            .map((o) => normalizeOfferId(o.id))
+            .filter(Boolean),
+        ])
+      ),
       inspection: result,
     };
     const blob = new Blob([JSON.stringify(payload, null, 2)], {
