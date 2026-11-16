@@ -10,7 +10,10 @@
 // Claim lock (DOS/Rate#1673, scripts/ops/lock.mjs): `in-progress` and
 // `in-review` take or keep the atomic lock refs/claims/<issue> for this
 // session's claimant, so two sessions can never both claim an issue;
-// `ready`, `backlog` and `done` release it. The claimant is `--claimant`, else
+// `ready`, `backlog` and `done` release it, leaving a tombstone (a free lock)
+// rather than deleting the ref, so a release never removes a newer lock
+// (DOS/Rate#1675). A lock taken before the issue was last closed is stale:
+// claiming the reopened issue replaces it, and anyone may release it. The claimant is `--claimant`, else
 // RATE_CLAIMANT, else the Claude Code session id (scripts/claim-lock.mjs).
 // `--force-release` (PO only) clears an orphaned lock and says why on the
 // issue. `--adopt` takes the lock of an issue this session claimed with
@@ -32,6 +35,7 @@ import {
   describeLock,
   forceRelease,
   githubLockApi,
+  isStale,
   releaseLock,
 } from './lock.mjs';
 
@@ -64,19 +68,21 @@ export const isPoNick = (nick) => nick.trim().toLowerCase() === 'po';
  * when `po` names the claimant's PO line, that line's `po:*` label.
  * An issue claimed by another agent or dispatched by the other PO is never
  * taken silently (AGENTS.md sections 1 and 6): that needs `takeOver`, and the
- * other claim label is then removed.
+ * other claim label is then removed. `staleClaim` (the issue was closed after
+ * its lock was taken) waives that for the agent label, which is as stale as
+ * the lock, but not for the other PO's line.
  */
 export function labelChanges(
   current,
   status,
   nick,
-  { takeOver = false, po = null } = {}
+  { takeOver = false, staleClaim = false, po = null } = {}
 ) {
   const spec = STATUSES[status];
   if (!spec) throw new Error(`unknown status ${status}`);
   const mine = agentLabel(nick);
   const others = current.filter((l) => l.startsWith('agent:') && l !== mine);
-  if (others.length > 0 && !takeOver) {
+  if (others.length > 0 && !takeOver && !staleClaim) {
     throw new Error(
       `claimed by ${others.join(', ')}: pass --take-over only when that agent handed it over or JOY assigned it`
     );
@@ -107,9 +113,13 @@ export function lockComment({ repo, number, nick, claimant, status, lock }) {
   const ref = `\`${lockRef(number)}\``;
   const who = `\`${claimant}\``;
   const head = `**[Agent: ${nick}]**`;
+  const closed = `${repo}#${number}`;
   switch (lock.action) {
     case 'taken':
-      return `🔒 ${head} Claim lock ${ref} taken by claimant ${who} (Status: ${status}).`;
+      return lock.previous?.stale
+        ? `🔒 ${head} Claim lock ${ref} taken by claimant ${who}, replacing the stale lock of ` +
+            `${describeLock(lock.previous)} from before ${closed} was last closed (Status: ${status}).`
+        : `🔒 ${head} Claim lock ${ref} taken by claimant ${who} (Status: ${status}).`;
     case 'taken-over':
       return (
         `🔒 ${head} Claim lock ${ref} taken over by claimant ${who} ` +
@@ -119,7 +129,11 @@ export function lockComment({ repo, number, nick, claimant, status, lock }) {
       return lock.previous.claimant === claimant
         ? `🔓 ${head} Claim lock ${ref} released by claimant ${who} (Status: ${status}).`
         : `🔓 ${head} Claim lock ${ref} of ${describeLock(lock.previous)} ` +
-            `released by claimant ${who} because ${repo}#${number} is closed (Status: ${status}).`;
+            `released by claimant ${who} because ${
+              lock.previous.stale
+                ? `it was taken before ${closed} was last closed`
+                : `${closed} is closed`
+            } (Status: ${status}).`;
     default:
       return null;
   }
@@ -130,6 +144,9 @@ const ISSUE_QUERY = `query($owner: String!, $name: String!, $n: Int!) {
     issue(number: $n) {
       url
       state
+      timelineItems(itemTypes: [CLOSED_EVENT], last: 1) {
+        nodes { ... on ClosedEvent { createdAt } }
+      }
       labels(first: 50) { nodes { name } }
       projectItems(first: 20) { nodes { id project { number } } }
     }
@@ -155,6 +172,8 @@ function readIssue(repo, number, { ghJson: json = ghJson } = {}) {
   return {
     url: issue.url,
     closed: issue.state === 'CLOSED',
+    // When the issue was last closed (it may have been reopened since).
+    closedAt: issue.timelineItems?.nodes?.at(-1)?.createdAt ?? null,
     labels: issue.labels.nodes.map((l) => l.name),
     itemId:
       issue.projectItems.nodes.find((i) => i.project.number === PROJECT.number)
@@ -214,10 +233,17 @@ export async function setBoard({
   const claiming = CLAIM_STATUSES.includes(status);
   const { gh, ghJson } = io;
 
+  // A lock taken before the issue was last closed is stale (lock.mjs), and
+  // so is the agent label that came with it.
+  const staleClaim = issue.closedAt
+    ? isStale(await api.read(number), issue.closedAt)
+    : false;
+
   // Refuse before changing anything when the labels say someone else holds
   // the issue.
   const { add, remove } = labelChanges(issue.labels, status, nick, {
     takeOver,
+    staleClaim,
     po: claiming ? poTool(claimant) : null,
   });
 
@@ -236,8 +262,16 @@ export async function setBoard({
         claimedWithoutLock: issue.labels.some((l) =>
           CLAIM_STATUSES.some((c) => STATUSES[c].label === l)
         ),
+        closedAt: issue.closedAt,
       })
-    : await releaseLock({ api, number, claimant, issueClosed: issue.closed });
+    : await releaseLock({
+        api,
+        number,
+        claimant,
+        agent: nick,
+        issueClosed: issue.closed,
+        closedAt: issue.closedAt,
+      });
   const note = lockComment({ repo, number, nick, claimant, status, lock });
   if (note) comment(io, repo, number, note);
 
@@ -311,7 +345,7 @@ export async function setBoard({
   return `${repo}#${number} -> ${status} (${nick}, ${claimant}, lock ${lock.action})`;
 }
 
-/** Clears an orphaned claim lock and records why on the issue. */
+/** Releases an orphaned claim lock and records why on the issue. */
 export async function forceReleaseBoard({
   repo = DEFAULT_REPO,
   number,
@@ -333,7 +367,7 @@ export async function forceReleaseBoard({
       "--force-release needs --reason with the evidence (hand-over link or JOY's approval)"
     );
   }
-  const lock = await forceRelease({ api, number });
+  const lock = await forceRelease({ api, number, claimant, agent: nick });
   if (lock.action === 'none')
     return `${repo}#${number}: no claim lock to release`;
   comment(

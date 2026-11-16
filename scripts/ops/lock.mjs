@@ -1,28 +1,37 @@
 // The atomic claim lock behind `board.mjs` (DOS/Rate#1673). Format and
 // claimant rules: scripts/claim-lock.mjs.
 //
-// - Take: create refs/claims/<n>. GitHub creates a ref only when it does not
-//   exist yet (HTTP 422 otherwise), so of two sessions claiming at once
-//   exactly one wins; the other reads the winner and fails naming it.
+// Every change to refs/claims/<n> is atomic:
+// - Take a lock that never existed: create the ref. GitHub creates a ref only
+//   when it does not exist yet (HTTP 422 otherwise), so of two sessions
+//   claiming at once exactly one wins; the other reads the winner and fails
+//   naming it.
+// - Every other change replaces the ref with GraphQL `updateRefs`, which
+//   applies only while the ref still points at the commit that was read
+//   (`beforeOid`), so a lock that changed meanwhile is never overwritten.
+//   (REST PATCH with force=false does not refuse a stale update on
+//   refs/claims, verified 2026-11-15, so it is not used.)
 // - Re-claim by the holder changes nothing.
-// - Take-over (a hand-over or JOY's assignment): replace the lock with
-//   GraphQL `updateRefs`, which applies only while the ref still points at the
-//   lock that was read (`beforeOid`), so a lock that changed meanwhile is never
-//   overwritten. (REST PATCH with force=false does not refuse a stale update
-//   on refs/claims, verified 2026-11-15, so it is not used.)
-// - Release: delete the ref, only by the holder, or by anyone once the issue
-//   is closed. `forceRelease` (PO only) deletes it whoever holds it. GitHub
-//   has no conditional ref delete (updateRefs with a zero afterOid did not
-//   delete, verified 2026-11-15), so a take-over landing between a release's
-//   read and its delete would be deleted with it. The hand-over order avoids
-//   that: the next session takes over only after board.mjs posted the
-//   "released" comment, by which time the ref is gone.
+// - Take-over (a hand-over or JOY's assignment) replaces the holder's lock.
+// - Release (DOS/Rate#1675) replaces the lock with a tombstone commit, never
+//   deletes it: GitHub has no conditional ref delete (updateRefs with a zero
+//   afterOid did not delete, verified 2026-11-15), so a delete could remove a
+//   take-over that landed after the release read the lock. A tombstone is a
+//   free lock, and claiming it replaces it the same way. Only the holder
+//   releases, or anyone once the lock is stale (below). `forceRelease` (PO
+//   only) releases it whoever holds it. Cost: one ref per issue ever claimed.
+// - Stale lock (DOS/Rate#1675): a lock taken before the issue was last
+//   closed guarded work that the close ended (the PR merged). It counts as
+//   free, so claiming a reopened issue replaces it, and anyone may release it.
+//   The holder re-claiming a reopened issue also replaces it, so its renewed
+//   lock is not stale.
 //
-// Every function takes an `api` with the five operations below, so the tests
+// Every function takes an `api` with the four operations below, so the tests
 // run the same logic against an in-memory ref store.
 
 import {
   formatLockMessage,
+  formatReleaseMessage,
   lockRef,
   parseLockMessage,
 } from '../claim-lock.mjs';
@@ -36,8 +45,22 @@ export const describeLock = (lock) =>
   `${lock.claimedAt ? ` since ${lock.claimedAt}` : ''}`;
 
 /**
+ * True when `lock` is a live lock taken before `closedAt`, the time the
+ * issue was last closed: the close ended the work it guarded. A lock whose
+ * time is unknown is never stale.
+ */
+export function isStale(lock, closedAt) {
+  if (!lock || lock.released || !closedAt || !lock.claimedAt) return false;
+  const taken = Date.parse(lock.claimedAt);
+  const closed = Date.parse(closedAt);
+  return Number.isFinite(taken) && Number.isFinite(closed) && taken < closed;
+}
+
+/**
  * Takes the lock of issue `number` for `claimant`, or confirms it is held.
- * Returns { action: 'taken' | 'held' | 'taken-over', previous? }.
+ * `closedAt` is when the issue was last closed (null if never). Returns
+ * { action: 'taken' | 'held' | 'taken-over', previous? }; `previous` is the
+ * lock that was replaced, with `stale: true` for a stale one.
  */
 export async function acquireLock({
   api,
@@ -47,9 +70,37 @@ export async function acquireLock({
   takeOver = false,
   adopt = false,
   claimedWithoutLock = false,
+  closedAt = null,
 }) {
   const current = await api.read(number);
-  if (!current && claimedWithoutLock && !takeOver && !adopt) {
+  const stale = isStale(current, closedAt);
+  if (current && !current.released && !stale) {
+    if (current.claimant === claimant) return { action: 'held' };
+    if (!takeOver) {
+      throw new ClaimError(
+        `claimed by ${describeLock(current)} (${lockRef(number)}): pass --take-over ` +
+          'only when that session handed it over or JOY assigned it'
+      );
+    }
+    const sha = await api.commit({
+      number,
+      claimant,
+      agent,
+      parent: current.sha,
+    });
+    if (await api.replace(number, current.sha, sha)) {
+      return { action: 'taken-over', previous: current };
+    }
+    throw new ClaimError(
+      `${lockRef(number)} changed during the take-over (it was ${describeLock(current)}); ` +
+        'read the issue again before retrying'
+    );
+  }
+
+  // Free: no ref, a tombstone, or a stale lock. The status labels of a stale
+  // lock are as stale as the lock, so only a free lock without one says the
+  // labels were set without the lock.
+  if (!stale && claimedWithoutLock && !takeOver && !adopt) {
     // Labelled in-progress or in-review but never locked: a claim made
     // before the lock existed, maybe by another session with this nickname.
     throw new ClaimError(
@@ -58,67 +109,90 @@ export async function acquireLock({
         "another session's claim (--take-over after a hand-over or JOY's assignment)"
     );
   }
-  if (!current) {
-    const sha = await api.commit({ number, claimant, agent });
-    if (await api.create(number, sha)) return { action: 'taken' };
-    // Another session created it between our read and our create.
-    const winner = await api.read(number);
-    if (winner?.claimant === claimant) return { action: 'held' };
-    if (!winner) {
-      throw new ClaimError(
-        `${lockRef(number)} changed while claiming (taken and released); run the command again`
-      );
-    }
+  const sha = await api.commit({
+    number,
+    claimant,
+    agent,
+    parent: current?.sha,
+  });
+  const won = current
+    ? await api.replace(number, current.sha, sha)
+    : await api.create(number, sha);
+  if (won) {
+    return stale
+      ? { action: 'taken', previous: { ...current, stale: true } }
+      : { action: 'taken' };
+  }
+  // Another session changed it between our read and our write.
+  const winner = await api.read(number);
+  if (winner && !winner.released && winner.claimant === claimant) {
+    return { action: 'held' };
+  }
+  if (!winner || winner.released) {
     throw new ClaimError(
-      `${lockRef(number)} was just taken by ${describeLock(winner)}`
+      `${lockRef(number)} changed while claiming (taken and released); run the command again`
     );
   }
-  if (current.claimant === claimant) return { action: 'held' };
-  if (!takeOver) {
-    throw new ClaimError(
-      `claimed by ${describeLock(current)} (${lockRef(number)}): pass --take-over ` +
-        'only when that session handed it over or JOY assigned it'
-    );
-  }
+  throw new ClaimError(
+    `${lockRef(number)} was just taken by ${describeLock(winner)}`
+  );
+}
+
+/** Replaces the live lock `current` with a tombstone, or fails if it moved. */
+async function tombstone({ api, number, current, claimant, agent }) {
   const sha = await api.commit({
     number,
     claimant,
     agent,
     parent: current.sha,
+    released: true,
   });
   if (await api.replace(number, current.sha, sha)) {
-    return { action: 'taken-over', previous: current };
+    return { action: 'released', previous: current };
   }
   throw new ClaimError(
-    `${lockRef(number)} changed during the take-over (it was ${describeLock(current)}); ` +
-      'read the issue again before retrying'
+    `${lockRef(number)} changed while releasing it (it was ${describeLock(current)}); ` +
+      'read the issue again: another session may hold it now'
   );
 }
 
 /**
  * Releases the lock of issue `number`. Only its holder may, unless the issue
- * is closed (merged), where the lock has nothing left to guard. Returns
- * { action: 'none' | 'released', previous? }.
+ * is closed (merged) or the lock is stale, where it has nothing left to
+ * guard. Returns { action: 'none' | 'released', previous? }; `previous` has
+ * `stale: true` when that was the reason.
  */
-export async function releaseLock({ api, number, claimant, issueClosed }) {
+export async function releaseLock({
+  api,
+  number,
+  claimant,
+  agent = null,
+  issueClosed,
+  closedAt = null,
+}) {
   const current = await api.read(number);
-  if (!current) return { action: 'none' };
-  if (current.claimant !== claimant && !issueClosed) {
+  if (!current || current.released) return { action: 'none' };
+  const stale = isStale(current, closedAt);
+  if (current.claimant !== claimant && !issueClosed && !stale) {
     throw new ClaimError(
       `${lockRef(number)} is held by ${describeLock(current)}, not this session: ` +
         'only the holder releases it (a PO clears an orphaned claim with --force-release)'
     );
   }
-  await api.remove(number);
-  return { action: 'released', previous: current };
+  return tombstone({
+    api,
+    number,
+    current: stale ? { ...current, stale } : current,
+    claimant,
+    agent,
+  });
 }
 
-/** Deletes the lock whoever holds it (an orphaned claim). PO only. */
-export async function forceRelease({ api, number }) {
+/** Releases the lock whoever holds it (an orphaned claim). PO only. */
+export async function forceRelease({ api, number, claimant = null, agent }) {
   const current = await api.read(number);
-  if (!current) return { action: 'none' };
-  await api.remove(number);
-  return { action: 'released', previous: current };
+  if (!current || current.released) return { action: 'none' };
+  return tombstone({ api, number, current, claimant, agent });
 }
 
 /** `gh` with the HTTP status of a failed `gh api` call. */
@@ -159,8 +233,12 @@ export function githubLockApi(repo, { call = ghCall } = {}) {
         claimedAt: commit.committer?.date ?? null,
       };
     },
-    async commit({ number, claimant, agent, parent }) {
-      const record = JSON.stringify({ repo, number, claimant, agent });
+    async commit({ number, claimant, agent, parent, released = false }) {
+      const record = JSON.stringify(
+        released
+          ? { repo, number, released: true, releasedBy: claimant, agent }
+          : { repo, number, claimant, agent }
+      );
       const blob = must(
         call([
           'api',
@@ -188,7 +266,16 @@ export function githubLockApi(repo, { call = ghCall } = {}) {
           'api',
           `${base}/git/commits`,
           '-f',
-          `message=${formatLockMessage({ repo, number, claimant, agent })}`,
+          `message=${
+            released
+              ? formatReleaseMessage({
+                  repo,
+                  number,
+                  releasedBy: claimant,
+                  agent,
+                })
+              : formatLockMessage({ repo, number, claimant, agent })
+          }`,
           '-f',
           `tree=${tree}`,
           ...(parent ? ['-f', `parents[]=${parent}`] : []),
@@ -238,17 +325,6 @@ export function githubLockApi(repo, { call = ghCall } = {}) {
       throw new Error(
         `replacing ${lockRef(number)} failed: ${(r.stderr || r.stdout).trim()}`
       );
-    },
-    async remove(number) {
-      const r = call([
-        'api',
-        '-X',
-        'DELETE',
-        `${base}/git/refs/claims/${number}`,
-      ]);
-      if (r.ok || r.status === 404) return;
-      if (r.status === 422 && /does not exist/i.test(r.stderr)) return;
-      throw new Error(`deleting ${lockRef(number)} failed: ${r.stderr.trim()}`);
     },
   };
   return api;
