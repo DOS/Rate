@@ -231,6 +231,127 @@ function clampNonNegativeInt(n: unknown, max = 1_000_000_000): number {
   return Math.min(max, Math.floor(num));
 }
 
+type ExactDecimal = { m: bigint; s: number };
+
+const ZERO_DECIMAL: ExactDecimal = { m: 0n, s: 0 };
+const ONE_DECIMAL: ExactDecimal = { m: 1n, s: 0 };
+
+function toExactDecimal(value: number): ExactDecimal | null {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return null;
+  if (value === 0) return ZERO_DECIMAL;
+  const neg = value < 0;
+  const match = /^(\d+)(?:\.(\d+))?(?:e([+-]?\d+))?$/i.exec(String(Math.abs(value)));
+  if (!match) return null;
+  const fracLen = (match[2] ?? '').length;
+  const exp = match[3] ? Number(match[3]) : 0;
+  const netExp = exp - fracLen;
+  if (netExp > 24 || netExp < -36) return null;
+  const raw = BigInt(match[1] + (match[2] ?? ''));
+  const signed = neg ? -raw : raw;
+  return netExp >= 0 ? { m: signed * 10n ** BigInt(netExp), s: 0 } : { m: signed, s: -netExp };
+}
+
+function addExactDecimal(a: ExactDecimal, b: ExactDecimal): ExactDecimal {
+  if (a.s === b.s) return { m: a.m + b.m, s: a.s };
+  if (a.s > b.s) return { m: a.m + b.m * 10n ** BigInt(a.s - b.s), s: a.s };
+  return { m: a.m * 10n ** BigInt(b.s - a.s) + b.m, s: b.s };
+}
+
+function mulExactDecimal(a: ExactDecimal, b: ExactDecimal): ExactDecimal {
+  return { m: a.m * b.m, s: a.s + b.s };
+}
+
+function formatExactFractionHalfUp(num: ExactDecimal, den: ExactDecimal, digits = 2): string {
+  const d = Number.isInteger(digits) && digits >= 0 ? Math.min(8, digits) : 2;
+  if (den.m === 0n || num.m === 0n) {
+    return d === 0 ? '0' : `0.${'0'.repeat(d)}`;
+  }
+  const neg = num.m < 0n !== den.m < 0n;
+  const absNum = num.m < 0n ? -num.m : num.m;
+  const absDen = den.m < 0n ? -den.m : den.m;
+  const shift = den.s - num.s + d;
+  if (Math.abs(shift) > 120) {
+    const fallback = Number(num.m) / 10 ** num.s / (Number(den.m) / 10 ** den.s);
+    return Number.isFinite(fallback) ? fallback.toFixed(d) : d === 0 ? '0' : `0.${'0'.repeat(d)}`;
+  }
+  const N = shift >= 0 ? absNum * 10n ** BigInt(shift) : absNum;
+  const D = shift >= 0 ? absDen : absDen * 10n ** BigInt(-shift);
+  const q = (2n * N + D) / (2n * D);
+  if (q === 0n) {
+    return d === 0 ? '0' : `0.${'0'.repeat(d)}`;
+  }
+  const str = q.toString().padStart(d + 1, '0');
+  const formatted = d === 0 ? str : `${str.slice(0, -d)}.${str.slice(-d)}`;
+  return neg ? `-${formatted}` : formatted;
+}
+
+/**
+ * Decimal-safe half-up fixed-point string (`0.175 -> "0.18"`, `1.005 -> "1.01"`,
+ * `4.35 -> "4.4"` at 1 digit). Parses the shortest decimal representation of
+ * `value` instead of relying on IEEE-754 binary `Number.prototype.toFixed`.
+ */
+export function formatDecimalHalfUp(value: number, digits = 2): string {
+  const d = Number.isInteger(digits) && digits >= 0 ? Math.min(8, digits) : 2;
+  if (typeof value !== 'number' || !Number.isFinite(value) || value === 0) {
+    return d === 0 ? '0' : `0.${'0'.repeat(d)}`;
+  }
+  const neg = value < 0;
+  const match = /^(\d+)(?:\.(\d+))?(?:e([+-]?\d+))?$/i.exec(String(Math.abs(value)));
+  if (!match) return value.toFixed(d);
+  const digitsOnly = match[1] + (match[2] ?? '');
+  const fracLen = (match[2] ?? '').length;
+  const exp = match[3] ? Number(match[3]) : 0;
+  const shift = exp - fracLen + d;
+  if (shift > 24) return value.toFixed(d);
+  let roundedScaled: bigint;
+  if (shift >= 0) {
+    roundedScaled = BigInt(digitsOnly) * 10n ** BigInt(shift);
+  } else if (-shift > digitsOnly.length) {
+    roundedScaled = 0n;
+  } else {
+    const div = 10n ** BigInt(-shift);
+    roundedScaled = (BigInt(digitsOnly) + div / 2n) / div;
+  }
+  if (roundedScaled === 0n) {
+    return d === 0 ? '0' : `0.${'0'.repeat(d)}`;
+  }
+  const str = roundedScaled.toString().padStart(d + 1, '0');
+  const formatted = d === 0 ? str : `${str.slice(0, -d)}.${str.slice(-d)}`;
+  return neg ? `-${formatted}` : formatted;
+}
+
+/** Decimal-safe half-up rounding to `digits` decimal places. */
+export function roundDecimalHalfUp(value: number, digits = 2): number {
+  return Number(formatDecimalHalfUp(value, digits));
+}
+
+function multiplyDecimalsHalfUp(factors: readonly number[], digits = 2): number {
+  let prod = ONE_DECIMAL;
+  for (const factor of factors) {
+    const exact = toExactDecimal(factor);
+    if (!exact) {
+      return roundDecimalHalfUp(
+        factors.reduce((acc, v) => acc * v, 1),
+        digits
+      );
+    }
+    prod = mulExactDecimal(prod, exact);
+  }
+  return Number(formatExactFractionHalfUp(prod, ONE_DECIMAL, digits));
+}
+
+function divideDecimalsHalfUp(numerator: number, denominator: number, digits = 2): number {
+  if (!Number.isFinite(numerator) || !Number.isFinite(denominator) || denominator === 0) {
+    return 0;
+  }
+  const numDec = toExactDecimal(numerator);
+  const denDec = toExactDecimal(denominator);
+  if (numDec && denDec) {
+    return Number(formatExactFractionHalfUp(numDec, denDec, digits));
+  }
+  return roundDecimalHalfUp(numerator / denominator, digits);
+}
+
 function clamp0to100(n: unknown, fallback = 0): number {
   const num =
     typeof n === 'number'
@@ -239,7 +360,7 @@ function clamp0to100(n: unknown, fallback = 0): number {
         ? Number(n)
         : Number.NaN;
   if (!Number.isFinite(num)) return fallback;
-  return Math.min(100, Math.max(0, Number(num.toFixed(2))));
+  return roundDecimalHalfUp(Math.min(100, Math.max(0, num)), 2);
 }
 
 function isStrictRiskBoolean(val: unknown): boolean {
@@ -361,7 +482,7 @@ const PROVIDER_DEFAULTS: Record<
 
 function clamp01(n: number): number {
   if (!Number.isFinite(n)) return 0;
-  return Math.max(0, Math.min(1, Number(n.toFixed(3))));
+  return roundDecimalHalfUp(Math.max(0, Math.min(1, n)), 3);
 }
 
 /**
@@ -454,9 +575,8 @@ export function compute6AxisWeightBreakdown(params: {
   const B = Object.hasOwn(independenceMap, independence) ? independenceMap[independence] : 0;
   let C = Object.hasOwn(depthBaseMap, depth) ? depthBaseMap[depth] : 0;
   if (depth === 'specific_short' || depth === 'detailed' || depth === 'expert_depth') {
-    if (hasRealMedia) C += 0.1;
-    if (hasLongTermUsage) C += 0.2;
-    C = Math.min(1.5, Number(C.toFixed(2)));
+    const bonusHundredths = (hasRealMedia ? 10 : 0) + (hasLongTermUsage ? 20 : 0);
+    C = Math.min(1.5, divideDecimalsHalfUp(Math.round(C * 100) + bonusHundredths, 100, 2));
   }
   const safeReviewer = Number.isFinite(reviewerMultiplier) ? reviewerMultiplier : 1.0;
   const safeContext = Number.isFinite(contextMultiplier) ? contextMultiplier : 1.0;
@@ -464,13 +584,32 @@ export function compute6AxisWeightBreakdown(params: {
   const safeDownvotes = Number.isFinite(downvotes) && downvotes > 0 ? downvotes : 0;
   const safeReportCount = Number.isFinite(reportCount) && reportCount > 0 ? reportCount : 0;
 
-  const D = Number(Math.max(0.1, Math.min(1.5, safeReviewer)).toFixed(2));
-  const E = Number(Math.max(0, Math.min(1.0, safeContext)).toFixed(2));
+  const D = roundDecimalHalfUp(Math.max(0.1, Math.min(1.5, safeReviewer)), 2);
+  const E = roundDecimalHalfUp(Math.max(0, Math.min(1.0, safeContext)), 2);
 
   const netPos = Math.max(0, safeUpvotes - safeDownvotes);
   const netNeg = Math.max(0, safeDownvotes - safeUpvotes);
-  const rawF = 1 + 0.45 * Math.log(1 + netPos) - 0.3 * netNeg - 0.35 * safeReportCount;
-  const F = Number(Math.max(0.1, Math.min(2.0, rawF)).toFixed(4));
+  let F: number;
+  if (netPos === 0) {
+    const upDec = toExactDecimal(safeUpvotes);
+    const downDec = toExactDecimal(safeDownvotes);
+    const repDec = toExactDecimal(safeReportCount);
+    if (upDec && downDec && repDec) {
+      const netNegDec = addExactDecimal(downDec, { m: -upDec.m, s: upDec.s });
+      const exactRawF = addExactDecimal(
+        addExactDecimal(ONE_DECIMAL, mulExactDecimal(netNegDec, { m: -3n, s: 1 })),
+        mulExactDecimal(repDec, { m: -35n, s: 2 })
+      );
+      const roundedF = Number(formatExactFractionHalfUp(exactRawF, ONE_DECIMAL, 4));
+      F = Math.max(0.1, Math.min(2.0, roundedF));
+    } else {
+      const rawF = 1 - 0.3 * netNeg - 0.35 * safeReportCount;
+      F = roundDecimalHalfUp(Math.max(0.1, Math.min(2.0, rawF)), 4);
+    }
+  } else {
+    const rawF = 1 + 0.45 * Math.log(1 + netPos) - 0.3 * netNeg - 0.35 * safeReportCount;
+    F = roundDecimalHalfUp(Math.max(0.1, Math.min(2.0, rawF)), 4);
+  }
 
   const cleanGateOverride =
     typeof gateOverrideReason === 'string'
@@ -497,16 +636,17 @@ export function compute6AxisWeightBreakdown(params: {
     gateReason = 'context:non_product_or_invalid';
   }
 
-  const baseWeight = gate === 0 ? 0 : Number((A * B * C * D * E).toFixed(4));
+  const baseWeight = gate === 0 ? 0 : multiplyDecimalsHalfUp([A, B, C, D, E], 4);
   const finalWeight =
-    gate === 0 ? 0 : Number(Math.max(0, Math.min(3.0, baseWeight * F)).toFixed(2));
+    gate === 0 ? 0 : Math.max(0, Math.min(3.0, multiplyDecimalsHalfUp([baseWeight, F], 2)));
+  const communityF = roundDecimalHalfUp(F, 2);
 
   const explanationParts: string[] = [];
   if (gate === 0) {
     explanationParts.push(`Cổng chặn G=0 (${gateReason}) -> Trọng số w=0`);
   } else {
     explanationParts.push(
-      `A=${A} (${authenticity}), B=${B} (${independence}), C=${C} (${depth}), D=${D}, E=${E}, F=${Number(F.toFixed(2))} -> w=${finalWeight}`
+      `A=${A} (${authenticity}), B=${B} (${independence}), C=${C} (${depth}), D=${D}, E=${E}, F=${communityF} -> w=${finalWeight}`
     );
   }
 
@@ -518,7 +658,7 @@ export function compute6AxisWeightBreakdown(params: {
     depth: C,
     reviewer: D,
     context: E,
-    community: Number(F.toFixed(2)),
+    community: communityF,
     base_weight: baseWeight,
     weight: finalWeight,
     explanationVi: explanationParts.join(' | '),
@@ -549,6 +689,9 @@ export function computeBayesianProductRating(
 
   let weightSum = 0;
   let weightedRatingSum = 0;
+  let exactWeightSum = ZERO_DECIMAL;
+  let exactWeightedRatingSum = ZERO_DECIMAL;
+  let exactValid = true;
   const safeItems = Array.isArray(items) ? items : [];
   for (const item of safeItems) {
     if (!item || typeof item !== 'object') continue;
@@ -567,11 +710,44 @@ export function computeBayesianProductRating(
     }
     weightSum += w;
     weightedRatingSum += w * item.rating_star;
+    if (exactValid) {
+      const wDec = toExactDecimal(w);
+      const rDec = toExactDecimal(item.rating_star);
+      if (wDec && rDec) {
+        exactWeightSum = addExactDecimal(exactWeightSum, wDec);
+        exactWeightedRatingSum = addExactDecimal(
+          exactWeightedRatingSum,
+          mulExactDecimal(wDec, rDec)
+        );
+      } else if (w < 1e-24 && k >= 1e-12 && rDec) {
+        // Sub-1e-24 weight is >12 orders of magnitude below prior k; keep exact batch state intact.
+      } else {
+        exactValid = false;
+      }
+    }
   }
 
-  const rawWeightedAverage = weightSum > 0 ? Number((weightedRatingSum / weightSum).toFixed(2)) : 0;
-  const bayesianScore = Number(((k * mu + weightedRatingSum) / (k + weightSum)).toFixed(2));
-  const confidence = Number((weightSum / (weightSum + k)).toFixed(2));
+  const kDec = exactValid ? toExactDecimal(k) : null;
+  const muDec = exactValid ? toExactDecimal(mu) : null;
+  const rawWeightedAverage =
+    weightSum > 0
+      ? exactValid && exactWeightSum.m > 0n
+        ? Number(formatExactFractionHalfUp(exactWeightedRatingSum, exactWeightSum, 2))
+        : divideDecimalsHalfUp(weightedRatingSum, weightSum, 2)
+      : 0;
+  const bayesianScore =
+    kDec && muDec
+      ? Number(
+          formatExactFractionHalfUp(
+            addExactDecimal(mulExactDecimal(kDec, muDec), exactWeightedRatingSum),
+            addExactDecimal(kDec, exactWeightSum),
+            2
+          )
+        )
+      : divideDecimalsHalfUp(k * mu + weightedRatingSum, k + weightSum, 2);
+  const confidence = kDec
+    ? Number(formatExactFractionHalfUp(exactWeightSum, addExactDecimal(exactWeightSum, kDec), 2))
+    : divideDecimalsHalfUp(weightSum, weightSum + k, 2);
 
   let tier: BayesianConfidenceTier;
   let labelVi: string;
@@ -596,7 +772,9 @@ export function computeBayesianProductRating(
     confidence_label_vi: labelVi,
     prior_mean: mu,
     prior_strength: k,
-    effective_weight_sum: Number(weightSum.toFixed(2)),
+    effective_weight_sum: exactValid
+      ? Number(formatExactFractionHalfUp(exactWeightSum, ONE_DECIMAL, 2))
+      : roundDecimalHalfUp(weightSum, 2),
     raw_weighted_average: rawWeightedAverage,
   };
 }
@@ -629,6 +807,22 @@ export function computeReviewWeight(params: {
   const base = verdict === 'suspicious' ? 0.25 : 1.0;
   const netVotes = safeUpvotes - safeDownvotes;
 
+  if (netVotes <= 0) {
+    const baseDec = toExactDecimal(base);
+    const upDec = toExactDecimal(safeUpvotes);
+    const downDec = toExactDecimal(safeDownvotes);
+    const repDec = toExactDecimal(safeReportCount);
+    if (baseDec && upDec && downDec && repDec) {
+      const netNegDec = addExactDecimal(downDec, { m: -upDec.m, s: upDec.s });
+      const exactWeight = addExactDecimal(
+        addExactDecimal(baseDec, mulExactDecimal(netNegDec, { m: -3n, s: 1 })),
+        mulExactDecimal(repDec, { m: -35n, s: 2 })
+      );
+      const rounded = Number(formatExactFractionHalfUp(exactWeight, ONE_DECIMAL, 2));
+      return Math.max(0, Math.min(3.0, rounded));
+    }
+  }
+
   let weight = base;
   if (netVotes > 0) {
     weight = base + Math.log(1 + netVotes) * 0.45;
@@ -638,7 +832,7 @@ export function computeReviewWeight(params: {
 
   weight -= safeReportCount * 0.35;
 
-  return Number(Math.max(0, Math.min(3.0, weight)).toFixed(2));
+  return roundDecimalHalfUp(Math.max(0, Math.min(3.0, weight)), 2);
 }
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -805,7 +999,7 @@ export function computeVoterWeight(params: {
     return 0.1;
   }
   const rawT = typeof trustScore === 'number' && Number.isFinite(trustScore) ? trustScore : 0.5;
-  return Number(Math.max(0.1, Math.min(1.0, rawT)).toFixed(3));
+  return roundDecimalHalfUp(Math.max(0.1, Math.min(1.0, rawT)), 3);
 }
 
 /**
@@ -827,7 +1021,7 @@ export function computeWilsonLowerBound(
   const z2 = safeZ * safeZ;
   const numerator = pHat + z2 / (2 * n) - safeZ * Math.sqrt((pHat * (1 - pHat) + z2 / (4 * n)) / n);
   const denominator = 1 + z2 / n;
-  return Number(Math.max(0, Math.min(1, numerator / denominator)).toFixed(4));
+  return roundDecimalHalfUp(Math.max(0, Math.min(1, numerator / denominator)), 4);
 }
 
 function normalizeTextForDedupe(text: string): string {
@@ -871,7 +1065,7 @@ export function computeTextShingleSimilarity(textA: string, textB: string, k = 3
     if (shinglesB.has(s)) intersection++;
   }
   const union = shinglesA.size + shinglesB.size - intersection;
-  return union > 0 ? Number((intersection / union).toFixed(4)) : 0;
+  return union > 0 ? divideDecimalsHalfUp(intersection, union, 4) : 0;
 }
 
 /**
@@ -1332,7 +1526,7 @@ export class AiReviewAnalyzer {
         fakeProb = 0.85;
         duplicateRatio = Math.max(0.75, duplicateRatio);
         languageMarker = 0.78;
-        reason = `Nội dung sao chép / xào nấu văn mẫu seeding giữa các tài khoản (tương đồng cấu trúc ${(maxShingleSim * 100).toFixed(0)}%).`;
+        reason = `Nội dung sao chép / xào nấu văn mẫu seeding giữa các tài khoản (tương đồng cấu trúc ${formatDecimalHalfUp(multiplyDecimalsHalfUp([maxShingleSim, 100], 0), 0)}%).`;
       } else if (isRatingOnly) {
         // Stars without text are a real rating (many platforms do not ask for a comment) with
         // nothing to verify, so they count at reduced weight: 'authentic' + 'suspicious' is the
@@ -1881,6 +2075,12 @@ Rules for "ai_summary": these reviews come from ONE listing's latest batch, not 
     let totalUserWeight = 0;
     let expertSum = 0;
     let expertWeight = 0;
+    let exactRawSum = ZERO_DECIMAL;
+    let exactWeightedUserSum = ZERO_DECIMAL;
+    let exactTotalUserWeight = ZERO_DECIMAL;
+    let exactExpertSum = ZERO_DECIMAL;
+    let exactExpertWeight = ZERO_DECIMAL;
+    let exactSummaryValid = true;
     let authenticCount = 0;
     let ignoredCount = 0;
     let positiveAuthenticCount = 0;
@@ -1903,6 +2103,14 @@ Rules for "ai_summary": these reviews come from ONE listing's latest batch, not 
           ? Math.max(1, Math.min(5, r.rating_star))
           : 0;
       rawSum += safeStar;
+      const starDec = exactSummaryValid ? toExactDecimal(safeStar) : null;
+      if (exactSummaryValid) {
+        if (starDec) {
+          exactRawSum = addExactDecimal(exactRawSum, starDec);
+        } else {
+          exactSummaryValid = false;
+        }
+      }
 
       const weight =
         res && Number.isFinite(res.helpfulness_weight) && res.helpfulness_weight > 0
@@ -1916,12 +2124,37 @@ Rules for "ai_summary": these reviews come from ONE listing's latest batch, not 
       authenticCount++;
       if (safeStar >= 4) positiveAuthenticCount++;
 
+      const wDec = exactSummaryValid ? toExactDecimal(weight) : null;
       if (r.reviewer_type === 'expert') {
         expertSum += safeStar * weight;
         expertWeight += weight;
+        if (exactSummaryValid) {
+          if (starDec && wDec) {
+            exactExpertSum = addExactDecimal(exactExpertSum, mulExactDecimal(starDec, wDec));
+            exactExpertWeight = addExactDecimal(exactExpertWeight, wDec);
+          } else if (weight < 1e-24 && starDec) {
+            // Sub-1e-24 weight is negligible when non-trivial weights exist; if all are <1e-24,
+            // exactExpertWeight.m === 0n falls back to divideDecimalsHalfUp(expertSum, expertWeight).
+          } else {
+            exactSummaryValid = false;
+          }
+        }
       } else {
         weightedUserSum += safeStar * weight;
         totalUserWeight += weight;
+        if (exactSummaryValid) {
+          if (starDec && wDec) {
+            exactWeightedUserSum = addExactDecimal(
+              exactWeightedUserSum,
+              mulExactDecimal(starDec, wDec)
+            );
+            exactTotalUserWeight = addExactDecimal(exactTotalUserWeight, wDec);
+          } else if (weight < 1e-24 && starDec) {
+            // Keep exact summary accumulator intact; if all weights are <1e-24, falls back cleanly.
+          } else {
+            exactSummaryValid = false;
+          }
+        }
         bayesianInputs.push({
           rating_star: safeStar,
           weight,
@@ -1929,11 +2162,22 @@ Rules for "ai_summary": these reviews come from ONE listing's latest batch, not 
       }
     }
 
-    const rawAvg = safeReviews.length > 0 ? Number((rawSum / safeReviews.length).toFixed(2)) : 0;
+    const rawAvg =
+      safeReviews.length > 0
+        ? exactSummaryValid
+          ? Number(
+              formatExactFractionHalfUp(exactRawSum, { m: BigInt(safeReviews.length), s: 0 }, 2)
+            )
+          : divideDecimalsHalfUp(rawSum, safeReviews.length, 2)
+        : 0;
     // No user review carries weight: there is no weighted rating (0, as refresh_master_product_rating
     // writes), not the raw average of the reviews that were just excluded.
     const weightedUserRating =
-      totalUserWeight > 0 ? Number((weightedUserSum / totalUserWeight).toFixed(2)) : 0;
+      totalUserWeight > 0
+        ? exactSummaryValid && exactTotalUserWeight.m > 0n
+          ? Number(formatExactFractionHalfUp(exactWeightedUserSum, exactTotalUserWeight, 2))
+          : divideDecimalsHalfUp(weightedUserSum, totalUserWeight, 2)
+        : 0;
 
     const bayesianRating = computeBayesianProductRating(bayesianInputs);
 
@@ -1943,33 +2187,50 @@ Rules for "ai_summary": these reviews come from ONE listing's latest batch, not 
       expertRatingInput >= 1 &&
       expertRatingInput <= 5;
     const computedExpertRating = hasValidExpertOverride
-      ? Number(expertRatingInput.toFixed(2))
+      ? roundDecimalHalfUp(expertRatingInput, 2)
       : expertWeight > 0
-        ? Number((expertSum / expertWeight).toFixed(2))
+        ? exactSummaryValid && exactExpertWeight.m > 0n
+          ? Number(formatExactFractionHalfUp(exactExpertSum, exactExpertWeight, 2))
+          : divideDecimalsHalfUp(expertSum, expertWeight, 2)
         : null;
 
     // JReviews overall blend: 40% Expert + 60% Weighted Authentic User (or 100% Weighted User if no Expert review yet)
-    const overallRating =
-      computedExpertRating !== null && totalUserWeight > 0
-        ? Number((computedExpertRating * 0.4 + weightedUserRating * 0.6).toFixed(2))
-        : computedExpertRating !== null
-          ? computedExpertRating
-          : weightedUserRating;
+    let overallRating: number;
+    if (computedExpertRating !== null && totalUserWeight > 0) {
+      const expDec = toExactDecimal(computedExpertRating);
+      const usrDec = toExactDecimal(weightedUserRating);
+      overallRating =
+        expDec && usrDec
+          ? Number(
+              formatExactFractionHalfUp(
+                addExactDecimal(
+                  mulExactDecimal(expDec, { m: 4n, s: 1 }),
+                  mulExactDecimal(usrDec, { m: 6n, s: 1 })
+                ),
+                ONE_DECIMAL,
+                2
+              )
+            )
+          : roundDecimalHalfUp(computedExpertRating * 0.4 + weightedUserRating * 0.6, 2);
+    } else if (computedExpertRating !== null) {
+      overallRating = computedExpertRating;
+    } else {
+      overallRating = weightedUserRating;
+    }
 
     // Authenticity score penalizes seeding_fake, but treats coin_spam mildly
     const seedingCount = breakdown.seeding_fake;
     const coinSpamCount = breakdown.low_value_coin_spam;
     const total = Math.max(1, safeReviews.length);
-    const authenticityScore = Number(
-      Math.max(
-        0,
-        Math.min(100, 100 - (seedingCount / total) * 85 - (coinSpamCount / total) * 25)
-      ).toFixed(2)
+    const authenticityNumerator = Math.max(
+      0,
+      Math.min(total * 100, total * 100 - seedingCount * 85 - coinSpamCount * 25)
     );
+    const authenticityScore = divideDecimalsHalfUp(authenticityNumerator, total, 2);
 
     const sentimentPositiveRatio =
       authenticCount > 0
-        ? Number(((positiveAuthenticCount / authenticCount) * 100).toFixed(2))
+        ? divideDecimalsHalfUp(positiveAuthenticCount * 100, authenticCount, 2)
         : 100;
 
     // One listing's latest batch, not the product; the batch's weighted
@@ -2056,11 +2317,11 @@ Rules for "ai_summary": these reviews come from ONE listing's latest batch, not 
     );
     const flaggedTotal = seedingCount + coinSpamOrExcludedCount + sabotageCount;
     const suspiciousRatioPct =
-      totalReviews > 0 ? Math.round((flaggedTotal / totalReviews) * 1000) / 10 : 0;
+      totalReviews > 0 ? divideDecimalsHalfUp(flaggedTotal * 100, totalReviews, 1) : 0;
 
-    const seedingRatio = Number((seedingCount / total).toFixed(3));
-    const coinSpamRatio = Number((coinSpamCategoryCount / total).toFixed(3));
-    const sabotageRatio = Number((sabotageCount / total).toFixed(3));
+    const seedingRatio = divideDecimalsHalfUp(seedingCount, total, 3);
+    const coinSpamRatio = divideDecimalsHalfUp(coinSpamCategoryCount, total, 3);
+    const sabotageRatio = divideDecimalsHalfUp(sabotageCount, total, 3);
 
     let risk = 15; // Baseline neutral risk
     const reasons: string[] = [];
@@ -2071,7 +2332,7 @@ Rules for "ai_summary": these reviews come from ONE listing's latest batch, not 
       const seedingPenalty = seedingRiskPenalty(seedingCount, total);
       risk += seedingPenalty;
       reasons.push(
-        `Phát hiện ${(seedingRatio * 100).toFixed(0)}% đánh giá có dấu hiệu Seeding/Buff đơn ảo (+${seedingPenalty} điểm rủi ro).`
+        `Phát hiện ${formatDecimalHalfUp(multiplyDecimalsHalfUp([seedingRatio, 100], 0), 0)}% đánh giá có dấu hiệu Seeding/Buff đơn ảo (+${seedingPenalty} điểm rủi ro).`
       );
     }
 
@@ -2122,10 +2383,13 @@ Rules for "ai_summary": these reviews come from ONE listing's latest batch, not 
       }
       const lowStarRatio = authenticLowStarCount / total;
       if (lowStarRatio >= 0.2) {
-        const defectPenalty = Math.min(25, Math.round(lowStarRatio * 45));
+        const defectPenalty = Math.min(
+          25,
+          divideDecimalsHalfUp(authenticLowStarCount * 45, total, 0)
+        );
         risk += defectPenalty;
         reasons.push(
-          `Tỷ lệ phàn nàn thực tế 1-2 sao cao (${(lowStarRatio * 100).toFixed(0)}%) (+${defectPenalty} điểm rủi ro).`
+          `Tỷ lệ phàn nàn thực tế 1-2 sao cao (${formatDecimalHalfUp(divideDecimalsHalfUp(authenticLowStarCount * 100, total, 0), 0)}%) (+${defectPenalty} điểm rủi ro).`
         );
       }
     }

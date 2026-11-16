@@ -1,6 +1,6 @@
 import { MAX_VALID_VND_PRICE } from '@repo/shared-data';
 
-export const MAX_CLUSTER_PEER_ROWS = 1000;
+export const MAX_CLUSTER_PEER_ROWS = 50_000;
 
 const DISALLOWED_CLUSTER_PEER_ID_REGEX =
   /^(?:null|undefined|nan|none|infinity|-infinity|true|false|__proto__|constructor|prototype)$/i;

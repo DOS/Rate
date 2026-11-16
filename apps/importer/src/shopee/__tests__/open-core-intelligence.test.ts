@@ -3118,6 +3118,13 @@ async function runSuite() {
     );
   }
 
+  const { runAnalyzerRoundingAndPeerFloorTests } =
+    await import('./analyzer-rounding-peer-floor.test.js');
+  runAnalyzerRoundingAndPeerFloorTests();
+  console.log(
+    '  ✅ [18/18] AiReviewAnalyzer Decimal Half-Up Rounding & 50k Peer Floor (#1679) passed'
+  );
+
   console.log('🎉 All @repo/crawlers Open-Core Intelligence tests passed!');
 }
 
