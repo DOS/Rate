@@ -21,7 +21,10 @@ import {
   selectFreshestSessionSignal,
 } from '../security-guards.js';
 import { LookupCooldown } from '../rate-limit.js';
-import { ObservationClient } from './observation-client.js';
+import {
+  ObservationClient,
+  PENDING_ERASURE_KEY,
+} from './observation-client.js';
 import { t } from '../i18n.js';
 import { resolveActionBadge } from '../verdict-display.js';
 
@@ -36,6 +39,7 @@ const DEFAULT_SETTINGS: ExtensionSettings = {
  * crowd signal counts as off until the user says yes again.
  */
 const OPT_IN_CONSENT_VERSION = 2;
+let lastSeenPendingErasure = false;
 
 async function getSettings(): Promise<ExtensionSettings> {
   try {
@@ -43,7 +47,11 @@ async function getSettings(): Promise<ExtensionSettings> {
       'apiBaseUrl',
       'crowdContributeOptIn',
       'crowdConsentVersion',
+      PENDING_ERASURE_KEY,
     ]);
+    lastSeenPendingErasure =
+      Array.isArray(stored[PENDING_ERASURE_KEY]) &&
+      stored[PENDING_ERASURE_KEY].length > 0;
     return {
       apiBaseUrl: normalizeAllowedApiBaseUrl(
         typeof stored.apiBaseUrl === 'string' ? stored.apiBaseUrl : null
@@ -166,7 +174,12 @@ async function maybeSendOptInCrowdSignal(
   const settings = await getSettings();
   // Strict Privacy Gate: Only send crowd verification signal if user explicitly opted in
   // and platform is in the 10-platform capability matrix
-  if (!settings.crowdContributeOptIn) return;
+  if (!settings.crowdContributeOptIn) {
+    if (lastSeenPendingErasure) {
+      await observationClient.retryErasures();
+    }
+    return;
+  }
   if (!SUPPORTED_CROWD_PLATFORMS.has(signal.platform)) return;
   if (!signal.externalItemId || !signal.price || signal.price <= 0) return;
   // A 429 may have come back while the settings were read.
@@ -703,6 +716,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     (async () => {
       try {
         const nextSettings: Partial<ExtensionSettings> = {};
+        let serverChanged = false;
         if (
           !fromOnboarding &&
           typeof message.apiBaseUrl === 'string' &&
@@ -714,6 +728,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           // The cooldown was another server's (DOS/Rate#1466); saving the same one keeps it.
           if (nextSettings.apiBaseUrl !== (await getSettings()).apiBaseUrl) {
             await lookupCooldown.clear();
+            serverChanged = true;
           }
         }
         const consent: Record<string, unknown> = {};
@@ -725,10 +740,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         }
         await chrome.storage.local.set({ ...nextSettings, ...consent });
         // Turning it off erases this install's contributions (DOS/Rate#1606);
-        // a new server address leaves the old id to be erased where it came
-        // from on the next send.
+        // switching servers rotates and queues erasure of the previous server's
+        // submitter id immediately even if that server is held (DOS/Rate#1682).
         if (nextSettings.crowdContributeOptIn === false) {
           void observationClient.forget();
+        } else if (serverChanged && nextSettings.apiBaseUrl) {
+          void observationClient.syncServer(nextSettings.apiBaseUrl);
         }
         const updated = await getSettings();
         sendResponse({ ok: true, settings: updated });

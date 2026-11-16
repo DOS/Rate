@@ -5557,7 +5557,11 @@ async function runTests() {
       await client.send(BASE, obs);
       assert.equal(calls.length, 1);
       assert.equal(store.has(SUBMITTER_KEY), false);
-      assert.ok(Number(store.get(HOLD_UNTIL_KEY)) > 1_000_000);
+      assert.ok(
+        ((store.get(HOLD_UNTIL_KEY) as Record<string, number> | undefined)?.[
+          BASE
+        ] ?? 0) > 1_000_000
+      );
     }
     // (e) UNKNOWN_SUBMITTER drops the id; (f) a 429 holds for its Retry-After.
     {
@@ -5573,7 +5577,9 @@ async function runTests() {
       assert.equal(store.has(SUBMITTER_KEY), false);
       observationAnswer = json(429, { ok: false }, { 'Retry-After': '3600' });
       await client.send(BASE, obs);
-      assert.equal(store.get(HOLD_UNTIL_KEY), 1_000_000 + 3_600_000);
+      assert.deepEqual(store.get(HOLD_UNTIL_KEY), {
+        [BASE]: 1_000_000 + 3_600_000,
+      });
       const before = calls.length;
       await client.send(BASE, obs);
       assert.equal(calls.length, before, 'held: nothing is sent');
@@ -5654,7 +5660,7 @@ async function runTests() {
       });
       await client.send(BASE, obs);
       const del = calls.find((c) => c.method === 'DELETE');
-      assert.ok(del && del.url.startsWith('http://localhost:3000'));
+      assert.ok(del && new URL(del.url).origin === 'http://localhost:3000');
       assert.deepEqual(del.body, { submitterId: ID2 });
       assert.deepEqual(
         calls.find((c) => c.url.endsWith('/observation'))?.body,
@@ -5675,8 +5681,347 @@ async function runTests() {
       await client.send(BASE, obs);
       assert.deepEqual(store.get(SUBMITTER_KEY), { id: ID1, apiBaseUrl: BASE });
     }
+    // (l) DOS/Rate#1682: hold on origin A does not block origin B or delay
+    // server-change submitter-ID rotation, and normalized origins share a hold.
+    {
+      const ALT = 'http://localhost:3000';
+      let nowMs = 1_000_000;
+      const store = new Map<string, unknown>();
+      const calls: Call[] = [];
+      const client = new ObservationClient({
+        storage: {
+          get: async (key) => (store.has(key) ? { [key]: store.get(key) } : {}),
+          set: async (items) => {
+            for (const [k, v] of Object.entries(items)) store.set(k, v);
+          },
+          remove: async (key) => {
+            store.delete(key);
+          },
+        },
+        fetch: async (url, init) => {
+          const call: Call = {
+            method: String(init.method),
+            url,
+            headers: (init.headers ?? {}) as Record<string, string>,
+            body: init.body ? JSON.parse(String(init.body)) : undefined,
+          };
+          calls.push(call);
+          if (new URL(url).origin === BASE) {
+            if (call.method === 'POST' && url.endsWith('/submitter')) {
+              return json(200, { ok: true, submitterId: ID1 });
+            }
+            if (call.method === 'DELETE') return json(200, { ok: true });
+            return json(429, { ok: false }, { 'Retry-After': '3600' });
+          }
+          if (call.method === 'POST' && url.endsWith('/submitter')) {
+            return json(200, { ok: true, submitterId: ID2 });
+          }
+          return json(200, { ok: true, status: 'quarantined' });
+        },
+        now: () => nowMs,
+        extensionVersion: '2.1.0',
+        optedIn: async () => true,
+        submitterPath: '/api/v1/rate/extension/submitter',
+        observationPath: '/api/v1/rate/extension/observation',
+      });
+      await client.send(`${BASE.toUpperCase()}/`, obs);
+      assert.deepEqual(store.get(SUBMITTER_KEY), { id: ID1, apiBaseUrl: BASE });
+      assert.deepEqual(store.get(HOLD_UNTIL_KEY), {
+        [BASE]: 1_000_000 + 3_600_000,
+      });
+      const callsAfterHold = calls.length;
+      await client.send(BASE, obs);
+      assert.equal(calls.length, callsAfterHold, 'normalized origin A is held');
+
+      await client.send(`${ALT}/`, obs);
+      assert.deepEqual(store.get(SUBMITTER_KEY), { id: ID2, apiBaseUrl: ALT });
+      assert.deepEqual(store.get(PENDING_ERASURE_KEY), [
+        { id: ID1, apiBaseUrl: BASE },
+      ]);
+      assert.equal(
+        calls.filter((c) => c.method === 'DELETE').length,
+        0,
+        'held origin A is not called during its hold, while ID1 stays queued'
+      );
+      assert.equal(
+        calls.filter(
+          (c) => c.url === `${ALT}/api/v1/rate/extension/observation`
+        ).length,
+        1
+      );
+      nowMs += 3_600_001;
+      await client.send(ALT, obs);
+      assert.equal(
+        calls.filter(
+          (c) => c.method === 'DELETE' && new URL(c.url).origin === BASE
+        ).length,
+        1,
+        'once origin A hold expires, queued ID1 erasure flushes cleanly'
+      );
+      assert.equal(store.has(PENDING_ERASURE_KEY), false);
+    }
+    // (m) DOS/Rate#1682: 404 (NOT_ENABLED), 429 and Retry-After on erase set a
+    // per-origin hold, suppressing repeated flushErasures() on subsequent page
+    // visits while keeping pending erasures durable until acknowledged (200).
+    {
+      const ALT = 'http://localhost:3000';
+      let nowMs = 2_000_000;
+      let deleteStatus: '404' | '429' | '503-retry' | '200' = '404';
+      const store = new Map<string, unknown>([
+        [PENDING_ERASURE_KEY, [{ id: ID1, apiBaseUrl: BASE }]],
+        [SUBMITTER_KEY, { id: ID2, apiBaseUrl: BASE }],
+      ]);
+      const calls: Call[] = [];
+      const client = new ObservationClient({
+        storage: {
+          get: async (key) => (store.has(key) ? { [key]: store.get(key) } : {}),
+          set: async (items) => {
+            for (const [k, v] of Object.entries(items)) store.set(k, v);
+          },
+          remove: async (key) => {
+            store.delete(key);
+          },
+        },
+        fetch: async (url, init) => {
+          const call: Call = {
+            method: String(init.method),
+            url,
+            headers: (init.headers ?? {}) as Record<string, string>,
+            body: init.body ? JSON.parse(String(init.body)) : undefined,
+          };
+          calls.push(call);
+          if (call.method === 'DELETE' && new URL(url).origin === BASE) {
+            if (deleteStatus === '404') {
+              return json(404, { ok: false, code: 'NOT_ENABLED' });
+            }
+            if (deleteStatus === '429') {
+              return json(429, { ok: false }, { 'Retry-After': '120' });
+            }
+            if (deleteStatus === '503-retry') {
+              return json(503, { ok: false }, { 'Retry-After': '90' });
+            }
+            return json(200, { ok: true });
+          }
+          return json(200, { ok: true, status: 'quarantined' });
+        },
+        now: () => nowMs,
+        extensionVersion: '2.1.0',
+        optedIn: async () => true,
+        submitterPath: '/api/v1/rate/extension/submitter',
+        observationPath: '/api/v1/rate/extension/observation',
+      });
+
+      // 404 NOT_ENABLED on erase holds BASE for 3600s and keeps ID1 queued.
+      await client.send(BASE, obs);
+      assert.equal(calls.length, 1);
+      assert.equal(calls[0]!.method, 'DELETE');
+      assert.deepEqual(store.get(PENDING_ERASURE_KEY), [
+        { id: ID1, apiBaseUrl: BASE },
+      ]);
+      await client.send(BASE, obs);
+      await client.retryErasures();
+      assert.equal(calls.length, 1, '404 hold suppresses repeated erase calls');
+
+      // Even if ALT is ALSO held, switching to ALT still rotates ID2 into queue.
+      store.set(HOLD_UNTIL_KEY, {
+        [BASE]: nowMs + 3_600_000,
+        [ALT]: nowMs + 3_600_000,
+      });
+      await client.send(ALT, obs);
+      assert.equal(store.has(SUBMITTER_KEY), false);
+      assert.deepEqual(store.get(PENDING_ERASURE_KEY), [
+        { id: ID1, apiBaseUrl: BASE },
+        { id: ID2, apiBaseUrl: BASE },
+      ]);
+
+      // Advance past 404 hold -> test 429 Retry-After: 120 hold -> test 503 Retry-After: 90 -> 200.
+      nowMs += 3_600_001;
+      deleteStatus = '429';
+      await client.retryErasures();
+      assert.equal(
+        calls.filter((c) => c.method === 'DELETE').length,
+        2,
+        'first record hits 429, setting hold so second record in same batch skips'
+      );
+      await client.retryErasures();
+      assert.equal(calls.filter((c) => c.method === 'DELETE').length, 2);
+      nowMs += 120_001;
+      deleteStatus = '503-retry';
+      await client.retryErasures();
+      assert.equal(calls.filter((c) => c.method === 'DELETE').length, 3);
+      await client.retryErasures();
+      assert.equal(calls.filter((c) => c.method === 'DELETE').length, 3);
+      nowMs += 90_001;
+      deleteStatus = '200';
+      await client.retryErasures();
+      assert.equal(store.has(PENDING_ERASURE_KEY), false);
+    }
+    // (n) DOS/Rate#1682: legacy numeric hold migration, HTTP-date / 0 / huge
+    // Retry-After bounds, origin slash/length bounds, and immediate forget()
+    // erasure even while an observation ingest hold is active.
+    {
+      const { normalizeObservationOrigin } =
+        await import('./background/observation-client.js');
+      assert.equal(normalizeObservationOrigin('x'.repeat(2049)), '');
+      assert.equal(
+        normalizeObservationOrigin(`https://RATE.VN/${'/'.repeat(200)}`),
+        BASE
+      );
+
+      let nowMs = Date.parse('2026-11-16T10:00:00.000Z');
+      let obsResponse: Response = json(200, {
+        ok: true,
+        status: 'quarantined',
+      });
+      const store = new Map<string, unknown>([
+        [HOLD_UNTIL_KEY, nowMs + 999_000],
+      ]);
+      const calls: Call[] = [];
+      const client = new ObservationClient({
+        storage: {
+          get: async (key) => (store.has(key) ? { [key]: store.get(key) } : {}),
+          set: async (items) => {
+            for (const [k, v] of Object.entries(items)) store.set(k, v);
+          },
+          remove: async (key) => {
+            store.delete(key);
+          },
+        },
+        fetch: async (url, init) => {
+          const call: Call = {
+            method: String(init.method),
+            url,
+            headers: (init.headers ?? {}) as Record<string, string>,
+            body: init.body ? JSON.parse(String(init.body)) : undefined,
+          };
+          calls.push(call);
+          if (call.method === 'POST' && url.endsWith('/submitter')) {
+            return json(200, { ok: true, submitterId: ID1 });
+          }
+          if (call.method === 'DELETE') return json(200, { ok: true });
+          return obsResponse;
+        },
+        now: () => nowMs,
+        extensionVersion: '2.1.0',
+        optedIn: async () => true,
+        submitterPath: '/api/v1/rate/extension/submitter',
+        observationPath: '/api/v1/rate/extension/observation',
+      });
+
+      // Legacy numeric observationHoldUntil does not block sends after upgrade.
+      await client.send(BASE, obs);
+      assert.equal(calls.length, 2);
+
+      // Clock-skewed past HTTP-date clamps to 1s instead of 60s/3600s fallback.
+      obsResponse = json(
+        503,
+        { ok: false },
+        { 'Retry-After': new Date(nowMs - 2_000).toUTCString() }
+      );
+      await client.send(BASE, obs);
+      assert.deepEqual(store.get(HOLD_UNTIL_KEY), { [BASE]: nowMs + 1_000 });
+
+      // 10+ digit delta-seconds clamps to MAX_HOLD_SECONDS (3600s), and explicit
+      // forget() still sends immediate DELETE despite the active ingest hold.
+      nowMs += 2_000;
+      obsResponse = json(429, { ok: false }, { 'Retry-After': '99999999999' });
+      await client.send(BASE, obs);
+      assert.deepEqual(store.get(HOLD_UNTIL_KEY), {
+        [BASE]: nowMs + 3_600_000,
+      });
+      await client.forget();
+      assert.equal(
+        calls.filter((c) => c.method === 'DELETE').length,
+        1,
+        'explicit forget() must erase immediately despite active observation hold'
+      );
+      assert.equal(store.has(PENDING_ERASURE_KEY), false);
+    }
+    // (o) DOS/Rate#1682: a transient storage write error during queueErasure
+    // keeps SUBMITTER_KEY recoverable so the next retry rotates and erases it.
+    {
+      const ALT = 'http://localhost:3000';
+      let failPendingWrite = true;
+      const store = new Map<string, unknown>([
+        [SUBMITTER_KEY, { id: ID1, apiBaseUrl: BASE }],
+      ]);
+      const calls: Call[] = [];
+      const client = new ObservationClient({
+        storage: {
+          get: async (key) => (store.has(key) ? { [key]: store.get(key) } : {}),
+          set: async (items) => {
+            if (failPendingWrite && PENDING_ERASURE_KEY in items) {
+              throw new Error('transient storage write failure');
+            }
+            for (const [k, v] of Object.entries(items)) store.set(k, v);
+          },
+          remove: async (key) => {
+            store.delete(key);
+          },
+        },
+        fetch: async (url, init) => {
+          const call: Call = {
+            method: String(init.method),
+            url,
+            headers: (init.headers ?? {}) as Record<string, string>,
+            body: init.body ? JSON.parse(String(init.body)) : undefined,
+          };
+          calls.push(call);
+          if (call.method === 'DELETE') return json(200, { ok: true });
+          if (call.method === 'POST' && url.endsWith('/submitter')) {
+            return json(200, { ok: true, submitterId: ID2 });
+          }
+          return json(200, { ok: true, status: 'quarantined' });
+        },
+        now: () => 3_000_000,
+        extensionVersion: '2.1.0',
+        optedIn: async () => true,
+        submitterPath: '/api/v1/rate/extension/submitter',
+        observationPath: '/api/v1/rate/extension/observation',
+      });
+
+      // Transient write error during syncServer() preserves SUBMITTER_KEY.
+      await client.syncServer(ALT);
+      assert.deepEqual(store.get(SUBMITTER_KEY), { id: ID1, apiBaseUrl: BASE });
+      assert.equal(store.has(PENDING_ERASURE_KEY), false);
+
+      // Transient write error during send() rotation also preserves SUBMITTER_KEY.
+      await client.send(ALT, obs);
+      assert.deepEqual(store.get(SUBMITTER_KEY), { id: ID1, apiBaseUrl: BASE });
+      assert.equal(calls.length, 0);
+
+      // Once storage recovers, the next call queues ID1, erases it on BASE,
+      // and rotates cleanly to ID2 on ALT.
+      failPendingWrite = false;
+      await client.send(ALT, obs);
+      assert.deepEqual(store.get(SUBMITTER_KEY), { id: ID2, apiBaseUrl: ALT });
+      assert.equal(store.has(PENDING_ERASURE_KEY), false);
+      assert.deepEqual(
+        calls
+          .filter(
+            (c) => c.method === 'DELETE' && new URL(c.url).origin === BASE
+          )
+          .map((c) => c.body),
+        [{ submitterId: ID1 }]
+      );
+
+      // Transient write error during forget() likewise retains ID2 until retry.
+      failPendingWrite = true;
+      await client.forget();
+      assert.deepEqual(store.get(SUBMITTER_KEY), { id: ID2, apiBaseUrl: ALT });
+      failPendingWrite = false;
+      await client.forget();
+      assert.equal(store.has(SUBMITTER_KEY), false);
+      assert.equal(store.has(PENDING_ERASURE_KEY), false);
+      assert.deepEqual(
+        calls
+          .filter((c) => c.method === 'DELETE' && new URL(c.url).origin === ALT)
+          .map((c) => c.body),
+        [{ submitterId: ID2 }]
+      );
+    }
     console.log(
-      '  ✅ [Observation client: one id, erasure kept until confirmed, holds (#1606)] Verified'
+      '  ✅ [Observation client: one id, erasure kept until confirmed, holds (#1606, #1682)] Verified'
     );
   }
   {
@@ -6814,6 +7159,66 @@ async function runTests() {
           'inflated_fake_sale',
           'superseded lookup after badge await must not overwrite lookup_tab_42'
         );
+
+        // (g) DOS/Rate#1682: RATE_UPDATE_SETTINGS changing apiBaseUrl rotates
+        // the old server's submitter id immediately even when the old server is held.
+        const heldOriginId = '77777777-8888-4999-8aaa-bbbbbbbbbbbb';
+        localMap.set('apiBaseUrl', 'https://rate.vn');
+        localMap.set('crowdContributeOptIn', true);
+        localMap.set('crowdConsentVersion', 2);
+        localMap.set('observationSubmitter', {
+          id: heldOriginId,
+          apiBaseUrl: 'https://rate.vn',
+        });
+        localMap.set('observationHoldUntil', {
+          'https://rate.vn': Date.now() + 1_800_000,
+        });
+        const eraseCallsOnHeld: string[] = [];
+        fetchResponder = (url: string) => {
+          eraseCallsOnHeld.push(url);
+          return new Response(JSON.stringify({ ok: true }), { status: 200 });
+        };
+        const settingsRes = await callSw(
+          { type: 'RATE_UPDATE_SETTINGS', apiBaseUrl: 'http://localhost:3000' },
+          panelSender
+        );
+        assert.equal(settingsRes.ok, true);
+        await new Promise((r) => setTimeout(r, 10));
+        assert.equal(
+          localMap.has('observationSubmitter'),
+          false,
+          'server change in RATE_UPDATE_SETTINGS must evict previous origin submitter id'
+        );
+        assert.deepEqual(localMap.get('observationPendingErasure'), [
+          { id: heldOriginId, apiBaseUrl: 'https://rate.vn' },
+        ]);
+        assert.equal(
+          eraseCallsOnHeld.length,
+          0,
+          'held previous origin must not receive DELETE during its hold window'
+        );
+
+        // Once opted out and the hold expires, the next product visit flushes
+        // the pending erasure automatically even while crowdContributeOptIn=false.
+        localMap.set('crowdContributeOptIn', false);
+        localMap.set('observationHoldUntil', {});
+        await callSw(
+          { type: 'RATE_PRODUCT_DETECTED', signal: baseSigInput },
+          { tab: { id: 42, active: true } }
+        );
+        await new Promise((r) => setTimeout(r, 10));
+        assert.equal(
+          eraseCallsOnHeld.some((u) => {
+            const parsed = new URL(u);
+            return (
+              parsed.origin === 'https://rate.vn' &&
+              parsed.pathname === '/api/v1/rate/extension/submitter'
+            );
+          }),
+          true,
+          'opted-out page visit must flush pending erasure once hold expires'
+        );
+        assert.equal(localMap.has('observationPendingErasure'), false);
       } finally {
         restoreSwGlobals();
       }

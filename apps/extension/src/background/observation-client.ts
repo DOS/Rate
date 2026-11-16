@@ -30,7 +30,7 @@ export interface ObservationClientDeps {
 export const SUBMITTER_KEY = 'observationSubmitter';
 /** Ids whose erasure the server has not confirmed yet. */
 export const PENDING_ERASURE_KEY = 'observationPendingErasure';
-/** No register or observation before this time (ms). */
+/** Per-origin hold-until timestamps in ms (`Record<apiBaseUrl, number>`). */
 export const HOLD_UNTIL_KEY = 'observationHoldUntil';
 
 /** How long to wait after a 429 without Retry-After, or while the routes are off. */
@@ -47,16 +47,60 @@ interface SubmitterRecord {
   apiBaseUrl: string;
 }
 
+function stripTrailingSlashes(value: string): string {
+  let end = value.length;
+  while (end > 0 && value.charCodeAt(end - 1) === 47) {
+    end -= 1;
+  }
+  return end === value.length ? value : value.slice(0, end);
+}
+
+export function normalizeObservationOrigin(raw: string): string {
+  if (raw.length > 2048) return '';
+  const trimmed = stripTrailingSlashes(raw.trim());
+  if (!trimmed) return '';
+  try {
+    const parsed = new URL(trimmed);
+    const pathname =
+      parsed.pathname && parsed.pathname !== '/'
+        ? stripTrailingSlashes(parsed.pathname)
+        : '';
+    return `${parsed.origin.toLowerCase()}${pathname}`;
+  } catch {
+    return trimmed.toLowerCase();
+  }
+}
+
+function parseRetryAfterSeconds(
+  header: string | null,
+  nowMs: number
+): number | null {
+  if (typeof header !== 'string') return null;
+  const value = header.trim();
+  if (!value || value.length > 128) return null;
+  if (/^\d+$/.test(value)) {
+    return Math.min(Math.max(Number(value), 1), MAX_HOLD_SECONDS);
+  }
+  if (!/[a-z]/i.test(value)) return null;
+  const dateMs = Date.parse(value);
+  if (!Number.isFinite(dateMs)) return null;
+  const seconds = Math.ceil((dateMs - nowMs) / 1000);
+  return Math.min(Math.max(seconds, 1), MAX_HOLD_SECONDS);
+}
+
 function asRecord(raw: unknown): SubmitterRecord | null {
   const r = raw as Partial<SubmitterRecord> | null;
-  return r &&
-    typeof r === 'object' &&
-    typeof r.id === 'string' &&
-    ID_RE.test(r.id) &&
-    typeof r.apiBaseUrl === 'string' &&
-    r.apiBaseUrl.length > 0
-    ? { id: r.id, apiBaseUrl: r.apiBaseUrl }
-    : null;
+  if (
+    !r ||
+    typeof r !== 'object' ||
+    typeof r.id !== 'string' ||
+    !ID_RE.test(r.id) ||
+    typeof r.apiBaseUrl !== 'string'
+  ) {
+    return null;
+  }
+  const apiBaseUrl = normalizeObservationOrigin(r.apiBaseUrl);
+  return apiBaseUrl.length > 0 ? { id: r.id, apiBaseUrl } : null;
 }
 
 export class ObservationClient {
@@ -84,29 +128,69 @@ export class ObservationClient {
       : { 'X-Rate-Extension-Version': this.deps.extensionVersion };
   }
 
-  private async hold(seconds: number): Promise<void> {
-    const ms = Math.min(Math.max(seconds, 1), MAX_HOLD_SECONDS) * 1000;
-    await this.deps.storage.set({ [HOLD_UNTIL_KEY]: this.deps.now() + ms });
+  private async readHolds(nowMs: number): Promise<Record<string, number>> {
+    return this.read(HOLD_UNTIL_KEY, (raw) => {
+      const out: Record<string, number> = Object.create(null) as Record<
+        string,
+        number
+      >;
+      if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return out;
+      for (const [key, val] of Object.entries(raw)) {
+        const origin = normalizeObservationOrigin(key);
+        if (
+          origin.length > 0 &&
+          typeof val === 'number' &&
+          Number.isFinite(val) &&
+          val > nowMs &&
+          val - nowMs <= MAX_HOLD_SECONDS * 1000
+        ) {
+          out[origin] = Math.max(out[origin] ?? 0, val);
+        }
+      }
+      return out;
+    });
   }
 
-  private async holdFor(res: Response): Promise<void> {
+  private async hold(apiBaseUrl: string, seconds: number): Promise<void> {
+    const origin = normalizeObservationOrigin(apiBaseUrl);
+    if (!origin) return;
+    const nowMs = this.deps.now();
+    const ms = Math.min(Math.max(seconds, 1), MAX_HOLD_SECONDS) * 1000;
+    const holds = await this.readHolds(nowMs);
+    const nextUntil = Math.max(holds[origin] ?? 0, nowMs + ms);
+    delete holds[origin];
+    const entries = [
+      ...Object.entries(holds),
+      [origin, nextUntil] as const,
+    ].slice(-MAX_PENDING_ERASURES);
+    await this.deps.storage.set({
+      [HOLD_UNTIL_KEY]: Object.fromEntries(entries),
+    });
+  }
+
+  private async holdFor(apiBaseUrl: string, res: Response): Promise<void> {
+    const retryAfter = parseRetryAfterSeconds(
+      res.headers.get('Retry-After'),
+      this.deps.now()
+    );
     if (res.status === 429) {
-      const header = res.headers.get('Retry-After');
-      const seconds =
-        header && /^\d{1,6}$/.test(header.trim())
-          ? Number(header.trim())
-          : OBSERVATION_DEFAULT_HOLD_SECONDS;
-      await this.hold(seconds);
+      await this.hold(
+        apiBaseUrl,
+        retryAfter ?? OBSERVATION_DEFAULT_HOLD_SECONDS
+      );
+    } else if (retryAfter !== null) {
+      await this.hold(apiBaseUrl, retryAfter);
     } else if (res.status === 503) {
-      await this.hold(OBSERVATION_OFF_HOLD_SECONDS);
+      await this.hold(apiBaseUrl, OBSERVATION_OFF_HOLD_SECONDS);
     }
   }
 
-  private async held(): Promise<boolean> {
-    const until = await this.read(HOLD_UNTIL_KEY, (v) =>
-      typeof v === 'number' && Number.isFinite(v) ? v : 0
-    );
-    return until > this.deps.now();
+  private async held(apiBaseUrl: string): Promise<boolean> {
+    const origin = normalizeObservationOrigin(apiBaseUrl);
+    if (!origin) return false;
+    const nowMs = this.deps.now();
+    const holds = await this.readHolds(nowMs);
+    return (holds[origin] ?? 0) > nowMs;
   }
 
   private async code(res: Response): Promise<string | null> {
@@ -125,23 +209,34 @@ export class ObservationClient {
   }
 
   private async queueErasure(record: SubmitterRecord): Promise<void> {
-    const list = (await this.pending()).filter((r) => r.id !== record.id);
-    list.push(record);
+    const apiBaseUrl = normalizeObservationOrigin(record.apiBaseUrl);
+    if (!apiBaseUrl) return;
+    const normalized: SubmitterRecord = { id: record.id, apiBaseUrl };
+    const list = (await this.pending()).filter((r) => r.id !== normalized.id);
+    list.push(normalized);
     await this.deps.storage.set({
       [PENDING_ERASURE_KEY]: list.slice(-MAX_PENDING_ERASURES),
     });
   }
 
   /**
-   * Sends every queued erasure. One the server confirmed (200), or refused
-   * as malformed (400), leaves the queue; any other answer or a network
-   * error keeps it for the next try.
+   * Sends every queued erasure whose origin is not currently held (plus any
+   * newly forgotten `bypassHoldId`). One the server confirmed (200), or refused
+   * as malformed (400), leaves the queue; 404/429/Retry-After sets a per-origin
+   * hold while keeping the entry queued.
    */
-  private async flushErasures(): Promise<void> {
+  private async flushErasures(bypassHoldId?: string): Promise<void> {
     const list = await this.pending();
     if (list.length === 0) return;
     const left: SubmitterRecord[] = [];
+    let attempted = false;
     for (const record of list) {
+      const bypass = bypassHoldId !== undefined && record.id === bypassHoldId;
+      if (!bypass && (await this.held(record.apiBaseUrl))) {
+        left.push(record);
+        continue;
+      }
+      attempted = true;
       try {
         const res = await this.deps.fetch(
           `${record.apiBaseUrl}${this.deps.submitterPath}`,
@@ -152,11 +247,30 @@ export class ObservationClient {
             body: JSON.stringify({ submitterId: record.id }),
           }
         );
-        if (res.status !== 200 && res.status !== 400) left.push(record);
+        if (res.status === 200 || res.status === 400) continue;
+        const retryAfter = parseRetryAfterSeconds(
+          res.headers.get('Retry-After'),
+          this.deps.now()
+        );
+        if (res.status === 404) {
+          await this.hold(
+            record.apiBaseUrl,
+            retryAfter ?? OBSERVATION_OFF_HOLD_SECONDS
+          );
+        } else if (res.status === 429) {
+          await this.hold(
+            record.apiBaseUrl,
+            retryAfter ?? OBSERVATION_DEFAULT_HOLD_SECONDS
+          );
+        } else if (!res.ok && retryAfter !== null) {
+          await this.hold(record.apiBaseUrl, retryAfter);
+        }
+        left.push(record);
       } catch {
         left.push(record);
       }
     }
+    if (!attempted) return;
     if (left.length > 0) {
       await this.deps.storage.set({ [PENDING_ERASURE_KEY]: left });
     } else {
@@ -164,14 +278,13 @@ export class ObservationClient {
     }
   }
 
-  /** The stored id for this server; an id from another server is erased there. */
+  /** The stored id for this server; an id from another server is queued for erasure there. */
   private async currentId(apiBaseUrl: string): Promise<string | null> {
     const record = await this.read(SUBMITTER_KEY, asRecord);
     if (!record) return null;
     if (record.apiBaseUrl === apiBaseUrl) return record.id;
-    await this.deps.storage.remove(SUBMITTER_KEY);
     await this.queueErasure(record);
-    await this.flushErasures();
+    await this.deps.storage.remove(SUBMITTER_KEY);
     return null;
   }
 
@@ -186,10 +299,14 @@ export class ObservationClient {
     );
     if (!res.ok) {
       if (res.status === 404) {
-        // NOT_ENABLED: the routes are off; ask again in an hour.
-        await this.hold(OBSERVATION_OFF_HOLD_SECONDS);
+        // NOT_ENABLED: the routes are off; ask again in an hour (or Retry-After).
+        const retryAfter = parseRetryAfterSeconds(
+          res.headers.get('Retry-After'),
+          this.deps.now()
+        );
+        await this.hold(apiBaseUrl, retryAfter ?? OBSERVATION_OFF_HOLD_SECONDS);
       } else {
-        await this.holdFor(res);
+        await this.holdFor(apiBaseUrl, res);
       }
       return null;
     }
@@ -201,19 +318,27 @@ export class ObservationClient {
   }
 
   /** Sends one observation for an opted-in install; never throws. */
-  send(apiBaseUrl: string, observation: ExtensionObservationV1): Promise<void> {
+  send(
+    rawApiBaseUrl: string,
+    observation: ExtensionObservationV1
+  ): Promise<void> {
+    const apiBaseUrl = normalizeObservationOrigin(rawApiBaseUrl);
     return this.run(async () => {
       try {
+        if (!apiBaseUrl) return;
+        const existingId = await this.currentId(apiBaseUrl);
         await this.flushErasures();
-        if (!(await this.deps.optedIn()) || (await this.held())) return;
-        let id = await this.currentId(apiBaseUrl);
+        if (!(await this.deps.optedIn()) || (await this.held(apiBaseUrl))) {
+          return;
+        }
+        let id = existingId;
         if (!id) {
           id = await this.register(apiBaseUrl);
           if (!id) return;
           // Turned off while the id was being issued: erase it at once.
           if (!(await this.deps.optedIn())) {
             await this.queueErasure({ id, apiBaseUrl });
-            await this.flushErasures();
+            await this.flushErasures(id);
             return;
           }
           await this.deps.storage.set({ [SUBMITTER_KEY]: { id, apiBaseUrl } });
@@ -233,13 +358,42 @@ export class ObservationClient {
             // Deleted or purged on the server: get a new id next time.
             await this.deps.storage.remove(SUBMITTER_KEY);
           } else if (code === 'NOT_ENABLED') {
-            await this.hold(OBSERVATION_OFF_HOLD_SECONDS);
+            const retryAfter = parseRetryAfterSeconds(
+              res.headers.get('Retry-After'),
+              this.deps.now()
+            );
+            await this.hold(
+              apiBaseUrl,
+              retryAfter ?? OBSERVATION_OFF_HOLD_SECONDS
+            );
+          } else {
+            await this.holdFor(apiBaseUrl, res);
           }
-        } else {
-          await this.holdFor(res);
+        } else if (!res.ok) {
+          await this.holdFor(apiBaseUrl, res);
         }
       } catch {
         // Non-blocking: a lost observation is fine, a lost erasure is queued.
+      }
+    });
+  }
+
+  /**
+   * The configured server changed: rotate out any submitter id from another
+   * server and flush erasures for non-held origins immediately.
+   */
+  syncServer(rawApiBaseUrl: string): Promise<void> {
+    const apiBaseUrl = normalizeObservationOrigin(rawApiBaseUrl);
+    return this.run(async () => {
+      try {
+        if (!apiBaseUrl) return;
+        const record = await this.read(SUBMITTER_KEY, asRecord);
+        if (!record || record.apiBaseUrl === apiBaseUrl) return;
+        await this.queueErasure(record);
+        await this.deps.storage.remove(SUBMITTER_KEY);
+        await this.flushErasures();
+      } catch {
+        // The queued erasure is retried on the next start or send.
       }
     });
   }
@@ -252,9 +406,9 @@ export class ObservationClient {
     return this.run(async () => {
       try {
         const record = await this.read(SUBMITTER_KEY, asRecord);
-        await this.deps.storage.remove(SUBMITTER_KEY);
         if (record) await this.queueErasure(record);
-        await this.flushErasures();
+        await this.deps.storage.remove(SUBMITTER_KEY);
+        await this.flushErasures(record?.id);
       } catch {
         // The queued erasure is retried on the next start or send.
       }
