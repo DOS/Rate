@@ -126,8 +126,8 @@
   },
   "compare": {
     "criteriaSourceExpert": "Hodnocení kritérií od recenzentů nebo expertů",
-    "overallSourceExpertBadge": "Od expertů/kritérií",
-    "overallSourceExpertNote": "{name} zatím nemá hodnocení kupujících, proto jsou jeho hvězdičky složeným skóre z expertního hodnocení Rate Lab a/nebo hodnocení kritérií, ne od kupujících.",
+    "overallSourceExpertBadge": "Od expertů/z kritérií",
+    "overallSourceExpertNote": "{name} zatím nemá hodnocení kupujících, proto jsou hvězdičky složeným skóre z expertního hodnocení Rate Lab a/nebo hodnocení kritérií, nikoli hodnocením kupujících.",
     "overallSourceBuyers": "Kupující",
     "csvRowOverallSource": "Zdroj celkových hvězdiček",
     "criterionNoData": "Nedostatek dat",
@@ -143,6 +143,7 @@
     "versusAutoVerdictTie": "Automatický verdikt: oba modely mají stejné celkové skóre ({score}); rozhodněte podle ceny a parametrů, které potřebujete.",
     "versusAutoVerdictNoScore": "Automatický verdikt: ani jeden model zatím nemá hodnocení; rozhodněte podle ceny a parametrů, které potřebujete.",
     "versusVerdictWeights": "(Váhy: {weights}.)",
+    "versusVerdictExpertSource": "Hvězdičky modelu {name} pocházejí od expertů a/nebo z kritérií, ne od kupujících.",
     "versusPersonaLead": "{weights}: vede {winner} ({score}/5). Celkový vítěz se stále řídí celkovým hodnocením.",
     "versusPersonaTie": "{weights}: oba modely jsou vyrovnané ({score}/5). Celkový vítěz se stále řídí celkovým hodnocením.",
     "compareMetaTitleWithNames": "Porovnání {names} - Hodnocení a 10 skupin parametrů | Rate.vn",

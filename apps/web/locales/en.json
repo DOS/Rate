@@ -143,6 +143,7 @@
     "versusAutoVerdictTie": "Automatic verdict: the two models are level on overall score ({score}); choose on price and the specs you need.",
     "versusAutoVerdictNoScore": "Automatic verdict: neither model has a rating yet; choose on price and the specs you need.",
     "versusVerdictWeights": "(Weights: {weights}.)",
+    "versusVerdictExpertSource": "The stars of {name} come from experts/criteria, not buyers.",
     "versusPersonaLead": "{weights}: {winner} leads ({score}/5). The overall winner still follows the overall stars.",
     "versusPersonaTie": "{weights}: the two models are level ({score}/5). The overall winner still follows the overall stars.",
     "compareMetaTitleWithNames": "Compare {names} - Ratings and 10 spec groups | Rate.vn",

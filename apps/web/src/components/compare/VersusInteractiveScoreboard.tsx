@@ -103,18 +103,23 @@ export function formatVersusWeightedMarkdown(
   const shownB = displayedScore5(overallResult.finalB);
   const anyScored = shownA > 0 || shownB > 0;
   const leadScore = formatScoreFixed(Math.max(shownA, shownB), 1);
-  const summaryBullet = overallResult.tie
-    ? anyScored
-      ? `- **${copy.tie1v1Badge}:** ${copy.mdTieLine(leadScore)}`
-      : `- **${copy.tie1v1Badge}:** ${copy.valNoReviews}`
-    : overallResult.delta != null
-      ? `- **${copy.mdLeadingDevice}:** **${safeWinnerName}** (${leadScore}/5.0 - ${copy.mdScoreDelta(overallResult.delta)})`
-      : `- **${copy.mdLeadingDevice}:** **${safeWinnerName}** (${leadScore}/5.0)`;
   // A model with no buyer rating keeps its composite, said so (#1663).
   const sourceTag = (source: string | null) =>
     source === 'expert_criteria' && copy.expertSourceTag
       ? ` (${sanitizeVersusMarkdownCell(copy.expertSourceTag)})`
       : '';
+  const winnerTag = sourceTag(
+    overallResult.winnerSide === 'A'
+      ? overallResult.sourceA
+      : overallResult.sourceB
+  );
+  const summaryBullet = overallResult.tie
+    ? anyScored
+      ? `- **${copy.tie1v1Badge}:** ${copy.mdTieLine(leadScore)}`
+      : `- **${copy.tie1v1Badge}:** ${copy.valNoReviews}`
+    : overallResult.delta != null
+      ? `- **${copy.mdLeadingDevice}:** **${safeWinnerName}** (${leadScore}/5.0${winnerTag} - ${copy.mdScoreDelta(overallResult.delta)})`
+      : `- **${copy.mdLeadingDevice}:** **${safeWinnerName}** (${leadScore}/5.0${winnerTag})`;
   const cellA =
     shownA > 0
       ? `**${formatScoreFixed(shownA, 1)}/5.0**${sourceTag(overallResult.sourceA)}`
@@ -227,7 +232,7 @@ export default function VersusInteractiveScoreboard({
   ) =>
     source === 'expert_criteria' ? (
       <span
-        className="badge bg-dark border-warning text-warning rounded-pill border"
+        className="rate-score-badge-expert"
         title={t('overallSourceExpertNote', { name })}
         data-testid={`versus-overall-source-${side}`}
       >
@@ -237,9 +242,29 @@ export default function VersusInteractiveScoreboard({
   const sourceSuffix = (source: VersusOverallScoreSource | null) =>
     source === 'expert_criteria' ? ` (${t('overallSourceExpertBadge')})` : null;
   const expertSourceNotes = [
-    expertSourceNote(overallResult.sourceA, scoreA.name),
-    expertSourceNote(overallResult.sourceB, scoreB.name),
-  ].filter((note): note is string => note != null);
+    { side: 'a', note: expertSourceNote(overallResult.sourceA, scoreA.name) },
+    { side: 'b', note: expertSourceNote(overallResult.sourceB, scoreB.name) },
+  ].filter((entry): entry is { side: string; note: string } => !!entry.note);
+  // The verdict quotes the leader's score, or the level score of both: it
+  // names the models whose stars come from experts/criteria.
+  const verdictExpertNames = (
+    overallResult.tie
+      ? [
+          { source: overallResult.sourceA, name: scoreA.name },
+          { source: overallResult.sourceB, name: scoreB.name },
+        ]
+      : [
+          {
+            source:
+              overallResult.winnerSide === 'A'
+                ? overallResult.sourceA
+                : overallResult.sourceB,
+            name: overallResult.winner.name,
+          },
+        ]
+  )
+    .filter((entry) => entry.source === 'expert_criteria')
+    .map((entry) => entry.name);
 
   // The criteria of the pair's category (no screen for earbuds); a side
   // without a real score reads "Chưa đủ dữ liệu", and a row wins only when
@@ -574,6 +599,8 @@ export default function VersusInteractiveScoreboard({
             : t(verdict.key, verdict.values)}
         {verdict.weightsLabel &&
           ` ${t('versusVerdictWeights', { weights: verdict.weightsLabel })}`}
+        {verdictExpertNames.length > 0 &&
+          ` ${t('versusVerdictExpertSource', { name: verdictExpertNames.join(', ') })}`}
         {personaLead && (
           <span className="d-block mt-1" data-testid="versus-persona-lead">
             {t(personaLead.key, personaLead.values)}
@@ -816,8 +843,8 @@ export default function VersusInteractiveScoreboard({
             className="small text-warning mb-3"
             data-testid="versus-overall-source-note"
           >
-            {expertSourceNotes.map((note) => (
-              <div key={note}>* {note}</div>
+            {expertSourceNotes.map(({ side, note }) => (
+              <div key={side}>{note}</div>
             ))}
           </div>
         )}

@@ -426,6 +426,19 @@ async function main() {
       // The winner rule is unchanged: the shown stars, level here.
       assert.equal(api.is_tie, true);
     }
+    // A preset adds its own lead; the overall source stays the same.
+    const photo = await agree(
+      'expert source, photography',
+      phone('vp-src-g', 4.4, ALL8),
+      b,
+      photography,
+      '&persona=photography'
+    );
+    assert.equal(photo.applied_persona, 'photography');
+    const photoSide = (slug: string) =>
+      photo.product_a.slug === slug ? photo.product_a : photo.product_b;
+    assert.equal(photoSide('vp-src-g').overall_score_source, 'buyers');
+    assert.equal(photoSide('vp-src-b').overall_score_source, 'expert_criteria');
     // A model with neither a buyer rating nor a composite has no source.
     const none = await agree(
       'no score, no source',
@@ -667,6 +680,7 @@ async function main() {
     'overallScoreSource: overallResult.sourceA',
     'overallScoreSource: overallResult.sourceB',
     "expertSourceTag: t('overallSourceExpertBadge')",
+    "t('versusVerdictExpertSource'",
   ]) {
     assert.ok(pageSrc.includes(wired), `the versus page runs ${wired}`);
   }
