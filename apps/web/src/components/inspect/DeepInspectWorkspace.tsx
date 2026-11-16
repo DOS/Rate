@@ -5,6 +5,8 @@ import { useLocale, useTranslations } from 'next-intl';
 import {
   hasReviewRiskEvidence,
   knownDosafeRiskScore,
+  merchantRiskTone,
+  type MerchantRiskTone,
 } from '@/lib/merchant-risk-tone';
 import { discountVerdictCopy } from '@/lib/discount-verdict-copy';
 import { formatScoreFixed } from '@/lib/rating-display';
@@ -59,9 +61,13 @@ import { contentLang } from '@/lib/content-lang';
 import { SAMPLE_AUDIT_URLS } from '@/lib/inspect-samples';
 import {
   implausiblyLowOfferIds,
+  isImplausiblyLowPrice,
   plausibleOffers,
 } from '@repo/shared-data/rules';
-import { isOfferUnavailable } from '@/lib/product-market-stats';
+import {
+  isOfferUnavailable,
+  type OfferAvailability,
+} from '@/lib/product-market-stats';
 import { productImageUrl } from '@/lib/rate-domain-core';
 import {
   formatDecimal,
@@ -105,6 +111,92 @@ export function sanitizeInspectDownloadSlug(
     .replace(/^-+|-+$/g, '')
     .slice(0, 80);
   return slug || fallback;
+}
+
+export function inspectDosafeDisplay(
+  merchant: Parameters<typeof knownDosafeRiskScore>[0] | null | undefined
+): {
+  score: number;
+  tone: MerchantRiskTone;
+  textClass: string;
+  barClass: string;
+  widthPct: number;
+} | null {
+  if (!merchant) return null;
+  const dosafeScore = knownDosafeRiskScore(merchant);
+  if (dosafeScore == null) return null;
+  const tone = merchantRiskTone(dosafeScore);
+  return {
+    score: dosafeScore,
+    tone,
+    textClass:
+      tone === 'good'
+        ? 'text-success'
+        : tone === 'warn'
+          ? 'text-warning-emphasis'
+          : 'text-danger',
+    barClass:
+      tone === 'good'
+        ? 'bg-success'
+        : tone === 'warn'
+          ? 'bg-warning'
+          : 'bg-danger',
+    widthPct: Math.min(100, Math.max(4, dosafeScore)),
+  };
+}
+
+export function orderInspectOffers<
+  T extends {
+    id: string;
+    price_current: number;
+    availability?: OfferAvailability | null;
+  },
+>(
+  offers: readonly T[] | null | undefined
+): {
+  inStockOffers: T[];
+  implausibleOfferIds: Set<string>;
+  listedOffers: T[];
+} {
+  const safeOffers = Array.isArray(offers) ? offers : [];
+  const inStockOffers = safeOffers.filter((o) => !isOfferUnavailable(o));
+  const implausibleOfferIds = implausiblyLowOfferIds(inStockOffers);
+  const listedOffers = [...safeOffers].sort((a, b) => {
+    const unavailableA = isOfferUnavailable(a) ? 1 : 0;
+    const unavailableB = isOfferUnavailable(b) ? 1 : 0;
+    if (unavailableA !== unavailableB) return unavailableA - unavailableB;
+    const implausibleA = implausibleOfferIds.has(a.id) ? 1 : 0;
+    const implausibleB = implausibleOfferIds.has(b.id) ? 1 : 0;
+    return implausibleA - implausibleB;
+  });
+  return { inStockOffers, implausibleOfferIds, listedOffers };
+}
+
+export function resolveInspectOfferPlatform(offer: {
+  platform?: string | null;
+  merchant?: { platform?: string | null } | null;
+}): string {
+  return offer.platform || offer.merchant?.platform || 'shopee';
+}
+
+export function isInspectOfferBait(
+  offer:
+    | {
+        id: string;
+        price_current: number;
+        availability?: OfferAvailability | null;
+      }
+    | null
+    | undefined,
+  implausibleOfferIds: ReadonlySet<string>,
+  inStockOffers: readonly { price_current: number }[]
+): boolean {
+  if (!offer) return false;
+  return (
+    implausibleOfferIds.has(offer.id) ||
+    (isOfferUnavailable(offer) &&
+      isImplausiblyLowPrice(offer.price_current, inStockOffers))
+  );
 }
 
 interface DeepInspectWorkspaceProps {
@@ -198,26 +290,24 @@ export default function DeepInspectWorkspace({
   };
 
   const master = result?.masterProduct ?? null;
+  const { inStockOffers, implausibleOfferIds, listedOffers } =
+    orderInspectOffers(result?.allOffers);
   // A sold-out listing is never the fallback match (DOS/Rate#1177).
   const matchedOffer =
-    result?.matchedOffer ??
-    plausibleOffers(
-      (result?.allOffers ?? []).filter((o) => !isOfferUnavailable(o))
-    )[0] ??
-    null;
-  const discount = result?.discountAnalysis ?? null;
-  // Judged as the product page's offers table judges the row (#797).
-  const implausibleOfferIds = implausiblyLowOfferIds(result?.allOffers ?? []);
-  const offerImplausiblyLow =
-    !!matchedOffer && implausibleOfferIds.has(matchedOffer.id);
-  // Bait-price offers are labelled and listed after the plausible ones (#805).
-  const listedOffers = [
-    ...(result?.allOffers ?? []).filter((o) => !implausibleOfferIds.has(o.id)),
-    ...(result?.allOffers ?? []).filter((o) => implausibleOfferIds.has(o.id)),
-  ];
+    result?.matchedOffer ?? plausibleOffers(inStockOffers)[0] ?? null;
+  // Judged among in-stock listings, as the product page's offers table does (#797, #1141).
+  const offerImplausiblyLow = isInspectOfferBait(
+    matchedOffer,
+    implausibleOfferIds,
+    inStockOffers
+  );
+  const discount = offerImplausiblyLow
+    ? null
+    : (result?.discountAnalysis ?? null);
   const priceHistory = result?.priceHistory ?? null;
   const reviewSummary = result?.reviewSummary ?? null;
   const merchant = result?.merchantProfile ?? null;
+  const dosafeDisplay = inspectDosafeDisplay(merchant);
 
   const radarSignal =
     result?.radarSignal ??
@@ -268,11 +358,13 @@ export default function DeepInspectWorkspace({
               `- **${t('mdPriceSignal')}:** ${radarMarkdownCell(radarSignal, locale)}`,
             ]
           : []),
-        ...(discount
-          ? [
-              `- **${t('mdPriceVerdict')}:** **${discountVerdictCopy(tVerdict, discount).label}** (${discountVerdictCopy(tVerdict, discount).explanation})`,
-            ]
-          : []),
+        ...(offerImplausiblyLow
+          ? [`- **${t('mdPriceVerdict')}:** **${t('implausiblyLowBadge')}**`]
+          : discount
+            ? [
+                `- **${t('mdPriceVerdict')}:** **${discountVerdictCopy(tVerdict, discount).label}** (${discountVerdictCopy(tVerdict, discount).explanation})`,
+              ]
+            : []),
         ...(currentListedPrice > 0
           ? [
               `- **${t('currentPriceLabel')}:** ${currentListedPrice.toLocaleString('vi-VN')} ₫${claimedOrigPrice ? ` | ${t('claimedOriginalLabel')}: ${claimedOrigPrice.toLocaleString('vi-VN')} ₫` : ''}`,
@@ -352,7 +444,9 @@ export default function DeepInspectWorkspace({
       histHigh,
       matchedPriceSpread?.spreadPct ?? 0,
       (() => {
-        if (implausibleOfferIds.has(o.id)) return t('implausiblyLowBadge');
+        if (isInspectOfferBait(o, implausibleOfferIds, inStockOffers)) {
+          return t('implausiblyLowBadge');
+        }
         const a =
           priceHistory?.byOffer?.[o.id] ??
           (o.id === matchedOffer?.id ? discount : null);
@@ -874,7 +968,7 @@ export default function DeepInspectWorkspace({
                                 )}
                               </div>
                               <span className="badge bg-secondary bg-opacity-10 text-secondary text-uppercase small">
-                                {offer.merchant?.platform || 'shopee'}
+                                {resolveInspectOfferPlatform(offer)}
                               </span>
                             </td>
                             <td
@@ -957,28 +1051,27 @@ export default function DeepInspectWorkspace({
                     <div className="d-flex justify-content-between small mb-1">
                       <span className="text-muted">{t('dosafeRiskLabel')}</span>
                       {/* No DOSafe score: no number, not 0 (DOS/Rate#1465). */}
-                      {knownDosafeRiskScore(merchant) == null ? (
+                      {dosafeDisplay == null ? (
                         <span className="text-muted">
                           {t('reviewRiskNoData')}
                         </span>
                       ) : (
-                        <strong className="text-success">
-                          {Number(knownDosafeRiskScore(merchant)).toFixed(0)}
+                        <strong className={dosafeDisplay.textClass}>
+                          {Number(dosafeDisplay.score).toFixed(0)}
                           /100
                         </strong>
                       )}
                     </div>
-                    <div className="progress" style={{ height: 8 }}>
-                      <div
-                        className="progress-bar bg-success"
-                        style={{
-                          width: `${Math.min(
-                            100,
-                            Math.max(4, knownDosafeRiskScore(merchant) ?? 0)
-                          )}%`,
-                        }}
-                      />
-                    </div>
+                    {dosafeDisplay != null && (
+                      <div className="progress" style={{ height: 8 }}>
+                        <div
+                          className={`progress-bar ${dosafeDisplay.barClass}`}
+                          style={{
+                            width: `${dosafeDisplay.widthPct}%`,
+                          }}
+                        />
+                      </div>
+                    )}
                   </div>
 
                   <div className="mb-4">
