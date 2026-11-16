@@ -197,15 +197,22 @@ const observationClient = new ObservationClient({
   observationPath: RATE_API_V1_ENDPOINTS.EXTENSION_OBSERVATION,
 });
 
+let badgeWriteCounter = 0;
+const latestBadgeWriteByTab = new Map<number, number>();
 async function updateActionBadge(
   tabId: number | undefined,
-  lookup: ExtensionLookupData | null
+  lookup: ExtensionLookupData | null,
+  isStillCurrent: () => boolean = () => true
 ): Promise<void> {
-  if (!tabId) return;
+  if (!tabId || !isStillCurrent()) return;
+  const writeSeq = ++badgeWriteCounter;
+  latestBadgeWriteByTab.set(tabId, writeSeq);
+  const canContinue = () =>
+    isStillCurrent() && latestBadgeWriteByTab.get(tabId) === writeSeq;
   try {
     const badge = resolveActionBadge(lookup);
     await chrome.action.setBadgeText({ text: badge.text, tabId });
-    if (badge.color) {
+    if (badge.color && canContinue()) {
       await chrome.action.setBadgeBackgroundColor({
         color: badge.color,
         tabId,
@@ -345,7 +352,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           sendResponse({ ok: outcome.ok, data: lookup, stale: true });
           return;
         }
-        await updateActionBadge(tabId, lookup);
+        await updateActionBadge(tabId, lookup, isLatest);
+        if (!isLatest()) {
+          sendResponse({ ok: outcome.ok, data: lookup, stale: true });
+          return;
+        }
         // Always persist or clear `lookup_tab_<id>` (and `lookup_tab_latest`
         // for the active tab) so stale product state never lingers after a
         // lookup error or null/unmatched response (DOS/Rate#1664).
@@ -356,6 +367,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           lookupPayload.lookup_tab_latest = lookup;
         }
         await chrome.storage.session.set(lookupPayload);
+        if (!isLatest()) {
+          sendResponse({ ok: outcome.ok, data: lookup, stale: true });
+          return;
+        }
         if (!outcome.ok) {
           sendResponse({
             ok: false,
@@ -370,6 +385,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       } catch (err) {
         if (isLatest()) {
           await updateActionBadge(sender.tab?.id, null);
+        }
+        if (isLatest()) {
           const errCacheKey = sender.tab?.id
             ? `tab_${sender.tab.id}`
             : 'tab_latest';
@@ -512,16 +529,21 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         }
 
         const outcome = await fetchExtensionLookup(effectiveSignal, 'full');
-        const currentTabLookup = isCurrentTabLookup();
-        if (currentTabLookup && trackedTabId !== undefined) {
+        if (isCurrentTabLookup() && trackedTabId !== undefined) {
           const resolvedLookup = outcome.ok ? outcome.data : null;
-          await updateActionBadge(trackedTabId, resolvedLookup);
-          await chrome.storage.session.set({
-            [`lookup_${tabKey}`]: resolvedLookup,
-          });
+          await updateActionBadge(
+            trackedTabId,
+            resolvedLookup,
+            isCurrentTabLookup
+          );
+          if (isCurrentTabLookup()) {
+            await chrome.storage.session.set({
+              [`lookup_${tabKey}`]: resolvedLookup,
+            });
+          }
         }
         const stale = isActiveTabPageSignal
-          ? !currentTabLookup
+          ? !isCurrentTabLookup()
           : fullSeq !== fullLookupRequestCounter;
         sendResponse(
           outcome.ok

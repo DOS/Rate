@@ -6401,6 +6401,9 @@ async function runTests() {
       let delayLocalGetOnce = false;
       let onLocalGetBlocked: (() => void) | null = null;
       let releaseLocalGet: (() => void) | null = null;
+      let delayBadgeTextOnce = false;
+      let onBadgeTextBlocked: (() => void) | null = null;
+      let releaseBadgeText: (() => void) | null = null;
       let onMsg:
         | ((
             m: Record<string, unknown>,
@@ -6476,6 +6479,14 @@ async function runTests() {
               tabId?: number;
             }) => {
               if (tabId) badges.set(tabId, { ...badges.get(tabId), text });
+              if (delayBadgeTextOnce) {
+                delayBadgeTextOnce = false;
+                const gate = new Promise<void>((r) => {
+                  releaseBadgeText = r;
+                });
+                onBadgeTextBlocked?.();
+                await gate;
+              }
             },
             setBadgeBackgroundColor: async ({
               color,
@@ -6754,6 +6765,54 @@ async function runTests() {
           )?.signal?.title,
           'Product B',
           'stale overrideVariant write must not clobber newer tab_42 signal'
+        );
+
+        // (f) Newer detection completing while updateActionBadge awaits setBadgeText must keep newer badge color & cache.
+        await callSw(
+          {
+            type: 'RATE_PRODUCT_DETECTED',
+            signal: { ...baseSigInput, title: 'Product A' },
+          },
+          { tab: { id: 42, active: true } }
+        );
+        delayBadgeTextOnce = true;
+        const blockedAtBadge = new Promise<void>((r) => {
+          onBadgeTextBlocked = r;
+        });
+        const badgeBlockedFullA = callSw(
+          { type: 'RATE_SIDEPANEL_FETCH_FULL' },
+          panelSender
+        );
+        await blockedAtBadge;
+        await callSw(
+          {
+            type: 'RATE_PRODUCT_DETECTED',
+            signal: {
+              ...baseSigInput,
+              canonicalUrl: 'https://shopee.vn/galaxy-s25-ultra-i.88.100',
+              title: 'Product B',
+            },
+          },
+          { tab: { id: 42, active: true } }
+        );
+        assert.equal(badges.get(42)?.text, 'ẢO!');
+        assert.equal(badges.get(42)?.color, '#d83030');
+        releaseBadgeText!();
+        const staleBadgeFullA = await badgeBlockedFullA;
+        assert.equal(staleBadgeFullA.stale, true);
+        assert.equal(
+          badges.get(42)?.color,
+          '#d83030',
+          'superseded badge write must not overwrite newer badge color'
+        );
+        assert.equal(
+          (
+            sessionMap.get('lookup_tab_42') as {
+              priceAssessment?: { verdict?: string };
+            }
+          )?.priceAssessment?.verdict,
+          'inflated_fake_sale',
+          'superseded lookup after badge await must not overwrite lookup_tab_42'
         );
       } finally {
         restoreSwGlobals();
