@@ -125,6 +125,21 @@ const RATING_SCORE_5 = {
     'The product rating every Rate page shows: the stored Bayesian `rating_score` (k = 3, prior 4.2, weighted reviews) at one decimal; for a product without one, the weighted user rating, then the marketplace average. `null` when there is none ("Chưa có đánh giá"). `user_score_5` and `combined_score_5` stay for older clients; the combined score only breaks ties between equal ratings.',
 } as const;
 
+const VERSUS_OVERALL_SCORE_5 = {
+  type: ['number', 'null'],
+  minimum: 0,
+  maximum: 5,
+  description:
+    'The overall score that decides the versus result, at one decimal: `rating_score_5`, or for a model with no buyer rating yet its combined score (the Rate Lab expert score and/or the criterion scores). `null` when the product has neither.',
+} as const;
+
+const VERSUS_OVERALL_SCORE_SOURCE = {
+  type: ['string', 'null'],
+  enum: ['buyers', 'expert_criteria', null],
+  description:
+    'Where `overall_score_5` comes from: `buyers` (the buyer rating, `rating_score_5`) or `expert_criteria` (no buyer rating yet, so the combined score from the Rate Lab expert score and/or the criterion scores, labelled as such on the versus page). `null` when `overall_score_5` is null.',
+} as const;
+
 const RATING_NOTE =
   ' Each product carries `rating_score_5`, the one rating every Rate page shows (the stored Bayesian score at one decimal, null when there is none).';
 
@@ -284,7 +299,7 @@ function buildBaseRateOpenApiSpec(
     openapi: '3.1.0',
     info: {
       title: 'Rate.vn Open-Core Intelligence REST API v1',
-      version: '1.9.0',
+      version: '1.10.0',
       summary:
         'Standardized 10-Group Tech Specs, Price History, Product Deal Radar & AI Review Auditing API',
       description:
@@ -662,7 +677,7 @@ function buildBaseRateOpenApiSpec(
           summary:
             'Get programmatic 1v1 Head-to-Head JReviews verdict, 5-criteria scoreboard & price delta',
           description:
-            'Evaluates two same-category master products (`?pair=<slugA>-vs-<slugB>` or `?slugA=...&slugB=...`) with optional persona/custom 5-criteria weights (`persona`, `w_screen`, `w_performance`, `w_camera`, `w_battery`, `w_value`) and returns the overall winner, picked exactly as the versus page picks it: always by the product rating as shown (`overall_score_5`: `rating_score_5`, or the combined score for a model with no buyer rating yet), whatever persona or weights are asked for. `is_tie` is true when both are equal at one decimal; `overall_winner` is then only the tie-break: the higher unrounded score, then the lower price, then the first slug of the canonical pair (so the pick does not depend on the order asked). `margin_10` is the gap between the two on 10, null when only one side has a score. `overall_winner` carries `overall_score_5` and `overall_score_10`, the deciding scores. A persona other than `balanced`/`default`, or any `w_*` weight, adds `persona_result`: the lead under those weights, 0.35 * that rating + 0.65 * the weighted criteria both products have a real score for; it never replaces `overall_winner`. A `w_*` weight changes that one of the persona weights (like the sliders on the page) and scores as custom weights. A page preset (`photography`, `gaming`, `endurance`, `business`, `value_hunter`/`budget`) whose heaviest criterion is not scored on both sides falls back to the default weights; custom weights (`creator`, `gamer`, `traveler`, any `w_*`) fall back only when no criterion is scored on both sides (`applied_persona`, `applied_weights`). `persona_result` is null with the default weights, after a fallback, or when the weights fall on no shared criterion. Also returns the per-criterion head-to-head breakdown, price delta, Deal Radar signals (`deal_radar`), and 10-group specs.',
+            'Evaluates two same-category master products (`?pair=<slugA>-vs-<slugB>` or `?slugA=...&slugB=...`) with optional persona/custom 5-criteria weights (`persona`, `w_screen`, `w_performance`, `w_camera`, `w_battery`, `w_value`) and returns the overall winner, picked exactly as the versus page picks it: always by the product rating as shown (`overall_score_5`: `rating_score_5`, or the combined score for a model with no buyer rating yet; `overall_score_source` says which, `buyers` or `expert_criteria`), whatever persona or weights are asked for. `is_tie` is true when both are equal at one decimal; `overall_winner` is then only the tie-break: the higher unrounded score, then the lower price, then the first slug of the canonical pair (so the pick does not depend on the order asked). `margin_10` is the gap between the two on 10, null when only one side has a score. `overall_winner` carries `overall_score_5` and `overall_score_10`, the deciding scores. A persona other than `balanced`/`default`, or any `w_*` weight, adds `persona_result`: the lead under those weights, 0.35 * that rating + 0.65 * the weighted criteria both products have a real score for; it never replaces `overall_winner`. A `w_*` weight changes that one of the persona weights (like the sliders on the page) and scores as custom weights. A page preset (`photography`, `gaming`, `endurance`, `business`, `value_hunter`/`budget`) whose heaviest criterion is not scored on both sides falls back to the default weights; custom weights (`creator`, `gamer`, `traveler`, any `w_*`) fall back only when no criterion is scored on both sides (`applied_persona`, `applied_weights`). `persona_result` is null with the default weights, after a fallback, or when the weights fall on no shared criterion. Also returns the per-criterion head-to-head breakdown, price delta, Deal Radar signals (`deal_radar`), and 10-group specs.',
           tags: ['Comparison & Watchlist'],
           parameters: [
             {
@@ -760,7 +775,18 @@ function buildBaseRateOpenApiSpec(
                   category: { type: 'string' },
                   versus_pair: { type: 'string' },
                   is_tie: { type: 'boolean' },
-                  overall_winner: { type: 'object' },
+                  overall_winner: {
+                    type: 'object',
+                    additionalProperties: true,
+                    properties: {
+                      side: { type: 'string', enum: ['A', 'B'] },
+                      slug: { type: 'string' },
+                      overall_score_5: VERSUS_OVERALL_SCORE_5,
+                      overall_score_source: VERSUS_OVERALL_SCORE_SOURCE,
+                      overall_score_10: { type: ['number', 'null'] },
+                      margin_10: { type: ['number', 'null'] },
+                    },
+                  },
                   price_comparison: { type: 'object' },
                   persona: {
                     type: 'string',
@@ -840,6 +866,8 @@ function buildBaseRateOpenApiSpec(
                     properties: {
                       slug: { type: 'string' },
                       rating_score_5: RATING_SCORE_5,
+                      overall_score_5: VERSUS_OVERALL_SCORE_5,
+                      overall_score_source: VERSUS_OVERALL_SCORE_SOURCE,
                       criteria_scores: CRITERIA_SCORES,
                       deal_radar: RADAR_REF,
                       radar_signal: RADAR_REF,
@@ -851,6 +879,8 @@ function buildBaseRateOpenApiSpec(
                     properties: {
                       slug: { type: 'string' },
                       rating_score_5: RATING_SCORE_5,
+                      overall_score_5: VERSUS_OVERALL_SCORE_5,
+                      overall_score_source: VERSUS_OVERALL_SCORE_SOURCE,
                       criteria_scores: CRITERIA_SCORES,
                       deal_radar: RADAR_REF,
                       radar_signal: RADAR_REF,

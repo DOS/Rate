@@ -29,6 +29,7 @@ import {
   type CriteriaWeights,
   type PersonaPresetKey,
   type ScoredVersusItem,
+  type VersusOverallScoreSource,
 } from '@/lib/versus-score';
 import RadarBadge from '@/components/radar/RadarBadge';
 import StarRating from '@/components/elementary/StarRating';
@@ -94,21 +95,39 @@ export function formatVersusWeightedMarkdown(
     mdScoreDelta: (delta: string) => string;
     mdRowWeightedScore: string;
     mdRowTie: string;
+    /** Tag after a score from experts/criteria (DOS/Rate#1663). */
+    expertSourceTag?: string;
   }
 ): { summaryBullet: string; weightedScoreRow: string } {
   const shownA = displayedScore5(overallResult.finalA);
   const shownB = displayedScore5(overallResult.finalB);
   const anyScored = shownA > 0 || shownB > 0;
   const leadScore = formatScoreFixed(Math.max(shownA, shownB), 1);
+  // A model with no buyer rating keeps its composite, said so (#1663).
+  const sourceTag = (source: string | null) =>
+    source === 'expert_criteria' && copy.expertSourceTag
+      ? ` (${sanitizeVersusMarkdownCell(copy.expertSourceTag)})`
+      : '';
+  const winnerTag = sourceTag(
+    overallResult.winnerSide === 'A'
+      ? overallResult.sourceA
+      : overallResult.sourceB
+  );
   const summaryBullet = overallResult.tie
     ? anyScored
       ? `- **${copy.tie1v1Badge}:** ${copy.mdTieLine(leadScore)}`
       : `- **${copy.tie1v1Badge}:** ${copy.valNoReviews}`
     : overallResult.delta != null
-      ? `- **${copy.mdLeadingDevice}:** **${safeWinnerName}** (${leadScore}/5.0 - ${copy.mdScoreDelta(overallResult.delta)})`
-      : `- **${copy.mdLeadingDevice}:** **${safeWinnerName}** (${leadScore}/5.0)`;
-  const cellA = shownA > 0 ? `**${formatScoreFixed(shownA, 1)}/5.0**` : 'N/A';
-  const cellB = shownB > 0 ? `**${formatScoreFixed(shownB, 1)}/5.0**` : 'N/A';
+      ? `- **${copy.mdLeadingDevice}:** **${safeWinnerName}** (${leadScore}/5.0${winnerTag} - ${copy.mdScoreDelta(overallResult.delta)})`
+      : `- **${copy.mdLeadingDevice}:** **${safeWinnerName}** (${leadScore}/5.0${winnerTag})`;
+  const cellA =
+    shownA > 0
+      ? `**${formatScoreFixed(shownA, 1)}/5.0**${sourceTag(overallResult.sourceA)}`
+      : 'N/A';
+  const cellB =
+    shownB > 0
+      ? `**${formatScoreFixed(shownB, 1)}/5.0**${sourceTag(overallResult.sourceB)}`
+      : 'N/A';
   const advantage = !anyScored
     ? '-'
     : overallResult.tie
@@ -190,6 +209,63 @@ export default function VersusInteractiveScoreboard({
   const activePersona = versus.appliedPersona;
   const activeWeights = versus.appliedWeights;
 
+  // A model with no buyer rating yet keeps its composite (expert and/or
+  // criterion scores) as its overall stars; wherever they show, they say so
+  // (DOS/Rate#1663, JOY 2026-11-16).
+  const overallSourceLabel = (source: VersusOverallScoreSource | null) =>
+    source === 'buyers'
+      ? t('overallSourceBuyers')
+      : source === 'expert_criteria'
+        ? t('overallSourceExpertBadge')
+        : '';
+  const expertSourceNote = (
+    source: VersusOverallScoreSource | null,
+    name: string
+  ) =>
+    source === 'expert_criteria'
+      ? t('overallSourceExpertNote', { name })
+      : undefined;
+  const expertSourceBadge = (
+    source: VersusOverallScoreSource | null,
+    name: string,
+    side: 'a' | 'b'
+  ) =>
+    source === 'expert_criteria' ? (
+      <span
+        className="rate-score-badge-expert"
+        title={t('overallSourceExpertNote', { name })}
+        data-testid={`versus-overall-source-${side}`}
+      >
+        {t('overallSourceExpertBadge')}
+      </span>
+    ) : null;
+  const sourceSuffix = (source: VersusOverallScoreSource | null) =>
+    source === 'expert_criteria' ? ` (${t('overallSourceExpertBadge')})` : null;
+  const expertSourceNotes = [
+    { side: 'a', note: expertSourceNote(overallResult.sourceA, scoreA.name) },
+    { side: 'b', note: expertSourceNote(overallResult.sourceB, scoreB.name) },
+  ].filter((entry): entry is { side: string; note: string } => !!entry.note);
+  // The verdict quotes the leader's score, or the level score of both: it
+  // names the models whose stars come from experts/criteria.
+  const verdictExpertNames = (
+    overallResult.tie
+      ? [
+          { source: overallResult.sourceA, name: scoreA.name },
+          { source: overallResult.sourceB, name: scoreB.name },
+        ]
+      : [
+          {
+            source:
+              overallResult.winnerSide === 'A'
+                ? overallResult.sourceA
+                : overallResult.sourceB,
+            name: overallResult.winner.name,
+          },
+        ]
+  )
+    .filter((entry) => entry.source === 'expert_criteria')
+    .map((entry) => entry.name);
+
   // The criteria of the pair's category (no screen for earbuds); a side
   // without a real score reads "Chưa đủ dữ liệu", and a row wins only when
   // both sides have one (DOS/Rate#1143).
@@ -248,6 +324,7 @@ export default function VersusInteractiveScoreboard({
           mdScoreDelta: (delta) => t('mdScoreDelta', { delta }),
           mdRowWeightedScore: t('mdRowWeightedScore'),
           mdRowTie: t('mdRowTie'),
+          expertSourceTag: t('overallSourceExpertBadge'),
         }
       );
       const lines = [
@@ -320,6 +397,14 @@ export default function VersusInteractiveScoreboard({
           : overallResult.tie
             ? t('mdRowTie')
             : overallResult.winner.name,
+      ],
+      // Where each overall score comes from (DOS/Rate#1663).
+      [
+        t('csvRowOverallSource'),
+        '-',
+        overallSourceLabel(overallResult.sourceA),
+        overallSourceLabel(overallResult.sourceB),
+        '-',
       ],
       // The lead under the picked weights, apart from the overall row.
       ...(personaResult
@@ -434,6 +519,8 @@ export default function VersusInteractiveScoreboard({
         name: scoreA.name,
         brand: scoreA.brand,
         weightedScore5: shownA > 0 ? shownA : null,
+        // As the API's `overall_score_source` (DOS/Rate#1663).
+        overallScoreSource: overallResult.sourceA,
         expertScore10: scoreA.expertScore10,
         minPriceVnd: scoreA.minPrice,
         dealRadar: radarExportFields(sigA),
@@ -443,6 +530,7 @@ export default function VersusInteractiveScoreboard({
         name: scoreB.name,
         brand: scoreB.brand,
         weightedScore5: shownB > 0 ? shownB : null,
+        overallScoreSource: overallResult.sourceB,
         expertScore10: scoreB.expertScore10,
         minPriceVnd: scoreB.minPrice,
         dealRadar: radarExportFields(sigB),
@@ -511,6 +599,8 @@ export default function VersusInteractiveScoreboard({
             : t(verdict.key, verdict.values)}
         {verdict.weightsLabel &&
           ` ${t('versusVerdictWeights', { weights: verdict.weightsLabel })}`}
+        {verdictExpertNames.length > 0 &&
+          ` ${t('versusVerdictExpertSource', { name: verdictExpertNames.join(', ') })}`}
         {personaLead && (
           <span className="d-block mt-1" data-testid="versus-persona-lead">
             {t(personaLead.key, personaLead.values)}
@@ -696,8 +786,10 @@ export default function VersusInteractiveScoreboard({
             )}
           </div>
           <div className="rate-tabular small text-warning fw-bold">
-            {scoreA.brand}: {summaryScore(overallResult.finalA)} •{' '}
-            {scoreB.brand}: {summaryScore(overallResult.finalB)}
+            {scoreA.brand}: {summaryScore(overallResult.finalA)}
+            {sourceSuffix(overallResult.sourceA)} • {scoreB.brand}:{' '}
+            {summaryScore(overallResult.finalB)}
+            {sourceSuffix(overallResult.sourceB)}
           </div>
         </div>
 
@@ -712,6 +804,7 @@ export default function VersusInteractiveScoreboard({
             </Link>
             <div className="d-flex mt-1 flex-wrap gap-2">
               <StarRating value={overallResult.finalA} />
+              {expertSourceBadge(overallResult.sourceA, scoreA.name, 'a')}
               <span className="rate-score-badge-expert">
                 {scoreA.expertScore10 != null
                   ? `Lab ${formatDecimal(scoreA.expertScore10, locale, 1)}/10`
@@ -733,6 +826,7 @@ export default function VersusInteractiveScoreboard({
             </Link>
             <div className="d-flex justify-content-end mt-1 flex-wrap gap-2">
               <StarRating value={overallResult.finalB} />
+              {expertSourceBadge(overallResult.sourceB, scoreB.name, 'b')}
               <span className="rate-score-badge-expert">
                 {scoreB.expertScore10 != null
                   ? `Lab ${formatDecimal(scoreB.expertScore10, locale, 1)}/10`
@@ -741,6 +835,19 @@ export default function VersusInteractiveScoreboard({
             </div>
           </div>
         </div>
+
+        {/* A model with no buyer rating shows its composite as its stars,
+            and says so (DOS/Rate#1663). */}
+        {expertSourceNotes.length > 0 && (
+          <div
+            className="small text-warning mb-3"
+            data-testid="versus-overall-source-note"
+          >
+            {expertSourceNotes.map(({ side, note }) => (
+              <div key={side}>{note}</div>
+            ))}
+          </div>
+        )}
 
         {/* 5-Criteria Dual Progress Bar Comparison Rows */}
         <div className="small text-white-50 mt-2">

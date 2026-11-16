@@ -97,6 +97,8 @@ interface ApiSide {
   custom_weighted_score_10: number;
   rating_score_5: number | null;
   overall_score_5: number | null;
+  overall_score_source: 'buyers' | 'expert_criteria' | null;
+  expert_score_10: number | null;
 }
 
 interface VersusBody {
@@ -109,6 +111,8 @@ interface VersusBody {
     side: 'A' | 'B';
     slug: string;
     margin_10: number | null;
+    overall_score_5: number | null;
+    overall_score_source: 'buyers' | 'expert_criteria' | null;
     overall_score_10: number | null;
     custom_weighted_score_10?: number;
   };
@@ -171,9 +175,13 @@ async function main() {
       result: { finalA: number; finalB: number },
       slug: string
     ) => (slug === scoreA.slug ? result.finalA : result.finalB);
+    /** Where a side's overall stars come from, as the page labels them. */
+    const sourceOf = (slug: string) =>
+      slug === scoreA.slug ? versus.overall.sourceA : versus.overall.sourceB;
     return {
       versus,
       finalOf,
+      sourceOf,
       // The page's criterion table: each row's winner as a slug.
       criterionWinners: Object.fromEntries(
         versusCriteriaHeadToHead(scoreA, scoreB).map((row) => [
@@ -204,7 +212,7 @@ async function main() {
     query = ''
   ) => {
     const api = await apiResult(a, b, query);
-    const { versus, finalOf, criterionWinners } = pageResult(
+    const { versus, finalOf, sourceOf, criterionWinners } = pageResult(
       a,
       b,
       page.persona,
@@ -245,6 +253,18 @@ async function main() {
         displayedScore5(finalOf(overall, side.slug)) || null,
         `${label}: ${side.slug} overall score`
       );
+      // Where the overall stars come from, as the page labels them
+      // (DOS/Rate#1663).
+      assert.equal(
+        side.overall_score_source,
+        sourceOf(side.slug),
+        `${label}: ${side.slug} overall score source`
+      );
+      assert.equal(
+        side.overall_score_source == null,
+        side.overall_score_5 == null,
+        `${label}: ${side.slug} a source only for a score`
+      );
       assert.equal(
         side.custom_weighted_score_5,
         finalOf(byWeights, side.slug),
@@ -256,6 +276,11 @@ async function main() {
         `${label}: ${side.slug} weighted score on 10`
       );
     }
+    assert.equal(
+      api.overall_winner.overall_score_source,
+      sourceOf(api.overall_winner.slug),
+      `${label}: winner overall score source`
+    );
     // Every criterion row names the page's criterion winner.
     assert.deepEqual(
       Object.fromEntries(
@@ -374,6 +399,69 @@ async function main() {
     );
     assert.equal(api.is_tie, true);
     assert.equal(api.overall_winner.margin_10, 0);
+  }
+
+  // 5b. A model with no buyer rating keeps its expert/criteria composite as
+  //     its overall stars, labelled as such (DOS/Rate#1663, JOY 2026-11-16:
+  //     keep it and label it). The issue's example: A has buyer stars 4.4;
+  //     B has none, expert 9.0/10 and criteria 8/10, a composite of
+  //     0.8 * 4.5 + 0.2 * 4 = 4.4. Both show 4.4 and tie; only A's stars come
+  //     from buyers, and the page and the API both say so.
+  {
+    const a = phone('vp-src-a', 4.4);
+    const b = { ...phone('vp-src-b', 0, ALL8), expert_rating: 9 };
+    for (const [label, x, y] of [
+      ['expert source', a, b],
+      ['expert source swapped', b, a],
+    ] as const) {
+      const api = await agree(label, x, y, byDefault);
+      const side = (slug: string) =>
+        api.product_a.slug === slug ? api.product_a : api.product_b;
+      assert.equal(side('vp-src-a').overall_score_source, 'buyers');
+      assert.equal(side('vp-src-a').rating_score_5, 4.4);
+      assert.equal(side('vp-src-b').overall_score_source, 'expert_criteria');
+      assert.equal(side('vp-src-b').rating_score_5, null);
+      assert.equal(side('vp-src-b').overall_score_5, 4.4);
+      assert.equal(side('vp-src-b').expert_score_10, 9);
+      // The winner rule is unchanged: the shown stars, level here.
+      assert.equal(api.is_tie, true);
+    }
+    // A preset adds its own lead; the overall source stays the same.
+    const photo = await agree(
+      'expert source, photography',
+      phone('vp-src-g', 4.4, ALL8),
+      b,
+      photography,
+      '&persona=photography'
+    );
+    assert.equal(photo.applied_persona, 'photography');
+    const photoSide = (slug: string) =>
+      photo.product_a.slug === slug ? photo.product_a : photo.product_b;
+    assert.equal(photoSide('vp-src-g').overall_score_source, 'buyers');
+    assert.equal(photoSide('vp-src-b').overall_score_source, 'expert_criteria');
+    // A model with neither a buyer rating nor a composite has no source.
+    const none = await agree(
+      'no score, no source',
+      phone('vp-src-c', 4.1),
+      phone('vp-src-d', 0),
+      byDefault
+    );
+    assert.equal(none.product_b.overall_score_source, null);
+    assert.equal(none.overall_winner.slug, 'vp-src-c');
+    assert.equal(none.overall_winner.overall_score_source, 'buyers');
+    // An expert-only composite that wins says where its stars come from.
+    const expertWins = await agree(
+      'expert source wins',
+      phone('vp-src-e', 3.9),
+      { ...phone('vp-src-f', 0), expert_rating: 9 },
+      byDefault
+    );
+    assert.equal(expertWins.overall_winner.slug, 'vp-src-f');
+    assert.equal(expertWins.overall_winner.overall_score_5, 4.5);
+    assert.equal(
+      expertWins.overall_winner.overall_score_source,
+      'expert_criteria'
+    );
   }
 
   // 6. A preset never turns the final winner: the stars favour A, the camera
@@ -582,6 +670,20 @@ async function main() {
     'the verdict names the final winner by the overall stars, no weights'
   );
   assert.ok(!pageSrc.includes('weightedResult.'));
+  // The overall stars of a model with no buyer rating carry their source
+  // label in the header, the banner, the note and the exports (#1663).
+  for (const wired of [
+    'expertSourceBadge(overallResult.sourceA, scoreA.name',
+    'expertSourceBadge(overallResult.sourceB, scoreB.name',
+    'sourceSuffix(overallResult.sourceA)',
+    'sourceSuffix(overallResult.sourceB)',
+    'overallScoreSource: overallResult.sourceA',
+    'overallScoreSource: overallResult.sourceB',
+    "expertSourceTag: t('overallSourceExpertBadge')",
+    "t('versusVerdictExpertSource'",
+  ]) {
+    assert.ok(pageSrc.includes(wired), `the versus page runs ${wired}`);
+  }
   // The preset lead never stands in for the overall result: it is read only
   // for its own line, its CSV row and its JSON field.
   assert.ok(!/personaResult\s*\?\?|\?\?\s*personaResult/.test(pageSrc));

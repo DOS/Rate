@@ -126,6 +126,10 @@
   },
   "compare": {
     "criteriaSourceExpert": "Criterion scores from reviewers or experts",
+    "overallSourceExpertBadge": "From experts/criteria",
+    "overallSourceExpertNote": "{name} has no buyer rating yet, so its stars are the composite of the Rate Lab expert score and/or the criterion scores, not buyer ratings.",
+    "overallSourceBuyers": "Buyers",
+    "csvRowOverallSource": "Overall stars source",
     "criterionNoData": "Not enough data",
     "versusMetaTitle": "{nameA} vs {nameB}: 10 spec groups and review scores | Rate.vn",
     "versusMetaTitleShort": "{nameA} vs {nameB} | Rate.vn",
@@ -139,6 +143,7 @@
     "versusAutoVerdictTie": "Automatic verdict: the two models are level on overall score ({score}); choose on price and the specs you need.",
     "versusAutoVerdictNoScore": "Automatic verdict: neither model has a rating yet; choose on price and the specs you need.",
     "versusVerdictWeights": "(Weights: {weights}.)",
+    "versusVerdictExpertSource": "The stars of {name} come from experts/criteria, not buyers.",
     "versusPersonaLead": "{weights}: {winner} leads ({score}/5). The overall winner still follows the overall stars.",
     "versusPersonaTie": "{weights}: the two models are level ({score}/5). The overall winner still follows the overall stars.",
     "compareMetaTitleWithNames": "Compare {names} - Ratings and 10 spec groups | Rate.vn",
