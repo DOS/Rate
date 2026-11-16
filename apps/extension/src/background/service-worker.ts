@@ -703,6 +703,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     (async () => {
       try {
         const nextSettings: Partial<ExtensionSettings> = {};
+        let serverChanged = false;
         if (
           !fromOnboarding &&
           typeof message.apiBaseUrl === 'string' &&
@@ -714,6 +715,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           // The cooldown was another server's (DOS/Rate#1466); saving the same one keeps it.
           if (nextSettings.apiBaseUrl !== (await getSettings()).apiBaseUrl) {
             await lookupCooldown.clear();
+            serverChanged = true;
           }
         }
         const consent: Record<string, unknown> = {};
@@ -725,10 +727,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         }
         await chrome.storage.local.set({ ...nextSettings, ...consent });
         // Turning it off erases this install's contributions (DOS/Rate#1606);
-        // a new server address leaves the old id to be erased where it came
-        // from on the next send.
+        // switching servers rotates and queues erasure of the previous server's
+        // submitter id immediately even if that server is held (DOS/Rate#1682).
         if (nextSettings.crowdContributeOptIn === false) {
           void observationClient.forget();
+        } else if (serverChanged && nextSettings.apiBaseUrl) {
+          void observationClient.syncServer(nextSettings.apiBaseUrl);
         }
         const updated = await getSettings();
         sendResponse({ ok: true, settings: updated });

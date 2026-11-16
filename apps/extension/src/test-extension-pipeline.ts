@@ -5557,7 +5557,11 @@ async function runTests() {
       await client.send(BASE, obs);
       assert.equal(calls.length, 1);
       assert.equal(store.has(SUBMITTER_KEY), false);
-      assert.ok(Number(store.get(HOLD_UNTIL_KEY)) > 1_000_000);
+      assert.ok(
+        ((store.get(HOLD_UNTIL_KEY) as Record<string, number> | undefined)?.[
+          BASE
+        ] ?? 0) > 1_000_000
+      );
     }
     // (e) UNKNOWN_SUBMITTER drops the id; (f) a 429 holds for its Retry-After.
     {
@@ -5573,7 +5577,9 @@ async function runTests() {
       assert.equal(store.has(SUBMITTER_KEY), false);
       observationAnswer = json(429, { ok: false }, { 'Retry-After': '3600' });
       await client.send(BASE, obs);
-      assert.equal(store.get(HOLD_UNTIL_KEY), 1_000_000 + 3_600_000);
+      assert.deepEqual(store.get(HOLD_UNTIL_KEY), {
+        [BASE]: 1_000_000 + 3_600_000,
+      });
       const before = calls.length;
       await client.send(BASE, obs);
       assert.equal(calls.length, before, 'held: nothing is sent');
@@ -5675,8 +5681,182 @@ async function runTests() {
       await client.send(BASE, obs);
       assert.deepEqual(store.get(SUBMITTER_KEY), { id: ID1, apiBaseUrl: BASE });
     }
+    // (l) DOS/Rate#1682: hold on origin A does not block origin B or delay
+    // server-change submitter-ID rotation, and normalized origins share a hold.
+    {
+      const ALT = 'http://localhost:3000';
+      let nowMs = 1_000_000;
+      const store = new Map<string, unknown>();
+      const calls: Call[] = [];
+      const client = new ObservationClient({
+        storage: {
+          get: async (key) => (store.has(key) ? { [key]: store.get(key) } : {}),
+          set: async (items) => {
+            for (const [k, v] of Object.entries(items)) store.set(k, v);
+          },
+          remove: async (key) => {
+            store.delete(key);
+          },
+        },
+        fetch: async (url, init) => {
+          const call: Call = {
+            method: String(init.method),
+            url,
+            headers: (init.headers ?? {}) as Record<string, string>,
+            body: init.body ? JSON.parse(String(init.body)) : undefined,
+          };
+          calls.push(call);
+          if (url.startsWith(BASE)) {
+            if (call.method === 'POST' && url.endsWith('/submitter')) {
+              return json(200, { ok: true, submitterId: ID1 });
+            }
+            if (call.method === 'DELETE') return json(200, { ok: true });
+            return json(429, { ok: false }, { 'Retry-After': '3600' });
+          }
+          if (call.method === 'POST' && url.endsWith('/submitter')) {
+            return json(200, { ok: true, submitterId: ID2 });
+          }
+          return json(200, { ok: true, status: 'quarantined' });
+        },
+        now: () => nowMs,
+        extensionVersion: '2.1.0',
+        optedIn: async () => true,
+        submitterPath: '/api/v1/rate/extension/submitter',
+        observationPath: '/api/v1/rate/extension/observation',
+      });
+      await client.send(`${BASE.toUpperCase()}/`, obs);
+      assert.deepEqual(store.get(SUBMITTER_KEY), { id: ID1, apiBaseUrl: BASE });
+      assert.deepEqual(store.get(HOLD_UNTIL_KEY), {
+        [BASE]: 1_000_000 + 3_600_000,
+      });
+      const callsAfterHold = calls.length;
+      await client.send(BASE, obs);
+      assert.equal(calls.length, callsAfterHold, 'normalized origin A is held');
+
+      await client.send(`${ALT}/`, obs);
+      assert.deepEqual(store.get(SUBMITTER_KEY), { id: ID2, apiBaseUrl: ALT });
+      assert.deepEqual(store.get(PENDING_ERASURE_KEY), [
+        { id: ID1, apiBaseUrl: BASE },
+      ]);
+      assert.equal(
+        calls.filter((c) => c.method === 'DELETE').length,
+        0,
+        'held origin A is not called during its hold, while ID1 stays queued'
+      );
+      assert.equal(
+        calls.filter(
+          (c) => c.url === `${ALT}/api/v1/rate/extension/observation`
+        ).length,
+        1
+      );
+      nowMs += 3_600_001;
+      await client.send(ALT, obs);
+      assert.equal(
+        calls.filter((c) => c.method === 'DELETE' && c.url.startsWith(BASE))
+          .length,
+        1,
+        'once origin A hold expires, queued ID1 erasure flushes cleanly'
+      );
+      assert.equal(store.has(PENDING_ERASURE_KEY), false);
+    }
+    // (m) DOS/Rate#1682: 404 (NOT_ENABLED), 429 and Retry-After on erase set a
+    // per-origin hold, suppressing repeated flushErasures() on subsequent page
+    // visits while keeping pending erasures durable until acknowledged (200).
+    {
+      const ALT = 'http://localhost:3000';
+      let nowMs = 2_000_000;
+      let deleteStatus: '404' | '429' | '503-retry' | '200' = '404';
+      const store = new Map<string, unknown>([
+        [PENDING_ERASURE_KEY, [{ id: ID1, apiBaseUrl: BASE }]],
+        [SUBMITTER_KEY, { id: ID2, apiBaseUrl: BASE }],
+      ]);
+      const calls: Call[] = [];
+      const client = new ObservationClient({
+        storage: {
+          get: async (key) => (store.has(key) ? { [key]: store.get(key) } : {}),
+          set: async (items) => {
+            for (const [k, v] of Object.entries(items)) store.set(k, v);
+          },
+          remove: async (key) => {
+            store.delete(key);
+          },
+        },
+        fetch: async (url, init) => {
+          const call: Call = {
+            method: String(init.method),
+            url,
+            headers: (init.headers ?? {}) as Record<string, string>,
+            body: init.body ? JSON.parse(String(init.body)) : undefined,
+          };
+          calls.push(call);
+          if (call.method === 'DELETE' && url.startsWith(BASE)) {
+            if (deleteStatus === '404') {
+              return json(404, { ok: false, code: 'NOT_ENABLED' });
+            }
+            if (deleteStatus === '429') {
+              return json(429, { ok: false }, { 'Retry-After': '120' });
+            }
+            if (deleteStatus === '503-retry') {
+              return json(503, { ok: false }, { 'Retry-After': '90' });
+            }
+            return json(200, { ok: true });
+          }
+          return json(200, { ok: true, status: 'quarantined' });
+        },
+        now: () => nowMs,
+        extensionVersion: '2.1.0',
+        optedIn: async () => true,
+        submitterPath: '/api/v1/rate/extension/submitter',
+        observationPath: '/api/v1/rate/extension/observation',
+      });
+
+      // 404 NOT_ENABLED on erase holds BASE for 3600s and keeps ID1 queued.
+      await client.send(BASE, obs);
+      assert.equal(calls.length, 1);
+      assert.equal(calls[0]!.method, 'DELETE');
+      assert.deepEqual(store.get(PENDING_ERASURE_KEY), [
+        { id: ID1, apiBaseUrl: BASE },
+      ]);
+      await client.send(BASE, obs);
+      await client.retryErasures();
+      assert.equal(calls.length, 1, '404 hold suppresses repeated erase calls');
+
+      // Even if ALT is ALSO held, switching to ALT still rotates ID2 into queue.
+      store.set(HOLD_UNTIL_KEY, {
+        [BASE]: nowMs + 3_600_000,
+        [ALT]: nowMs + 3_600_000,
+      });
+      await client.send(ALT, obs);
+      assert.equal(store.has(SUBMITTER_KEY), false);
+      assert.deepEqual(store.get(PENDING_ERASURE_KEY), [
+        { id: ID1, apiBaseUrl: BASE },
+        { id: ID2, apiBaseUrl: BASE },
+      ]);
+
+      // Advance past 404 hold -> test 429 Retry-After: 120 hold -> test 503 Retry-After: 90 -> 200.
+      nowMs += 3_600_001;
+      deleteStatus = '429';
+      await client.retryErasures();
+      assert.equal(
+        calls.filter((c) => c.method === 'DELETE').length,
+        2,
+        'first record hits 429, setting hold so second record in same batch skips'
+      );
+      await client.retryErasures();
+      assert.equal(calls.filter((c) => c.method === 'DELETE').length, 2);
+      nowMs += 120_001;
+      deleteStatus = '503-retry';
+      await client.retryErasures();
+      assert.equal(calls.filter((c) => c.method === 'DELETE').length, 3);
+      await client.retryErasures();
+      assert.equal(calls.filter((c) => c.method === 'DELETE').length, 3);
+      nowMs += 90_001;
+      deleteStatus = '200';
+      await client.retryErasures();
+      assert.equal(store.has(PENDING_ERASURE_KEY), false);
+    }
     console.log(
-      '  ✅ [Observation client: one id, erasure kept until confirmed, holds (#1606)] Verified'
+      '  ✅ [Observation client: one id, erasure kept until confirmed, holds (#1606, #1682)] Verified'
     );
   }
   {
@@ -6813,6 +6993,44 @@ async function runTests() {
           )?.priceAssessment?.verdict,
           'inflated_fake_sale',
           'superseded lookup after badge await must not overwrite lookup_tab_42'
+        );
+
+        // (g) DOS/Rate#1682: RATE_UPDATE_SETTINGS changing apiBaseUrl rotates
+        // the old server's submitter id immediately even when the old server is held.
+        const heldOriginId = '77777777-8888-4999-8aaa-bbbbbbbbbbbb';
+        localMap.set('apiBaseUrl', 'https://rate.vn');
+        localMap.set('crowdContributeOptIn', true);
+        localMap.set('crowdConsentVersion', 2);
+        localMap.set('observationSubmitter', {
+          id: heldOriginId,
+          apiBaseUrl: 'https://rate.vn',
+        });
+        localMap.set('observationHoldUntil', {
+          'https://rate.vn': Date.now() + 1_800_000,
+        });
+        const eraseCallsOnHeld: string[] = [];
+        fetchResponder = (url: string) => {
+          eraseCallsOnHeld.push(url);
+          return new Response(JSON.stringify({ ok: true }), { status: 200 });
+        };
+        const settingsRes = await callSw(
+          { type: 'RATE_UPDATE_SETTINGS', apiBaseUrl: 'http://localhost:3000' },
+          panelSender
+        );
+        assert.equal(settingsRes.ok, true);
+        await new Promise((r) => setTimeout(r, 10));
+        assert.equal(
+          localMap.has('observationSubmitter'),
+          false,
+          'server change in RATE_UPDATE_SETTINGS must evict previous origin submitter id'
+        );
+        assert.deepEqual(localMap.get('observationPendingErasure'), [
+          { id: heldOriginId, apiBaseUrl: 'https://rate.vn' },
+        ]);
+        assert.equal(
+          eraseCallsOnHeld.length,
+          0,
+          'held previous origin must not receive DELETE during its hold window'
         );
       } finally {
         restoreSwGlobals();
