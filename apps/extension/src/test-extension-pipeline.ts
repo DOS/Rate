@@ -5855,6 +5855,87 @@ async function runTests() {
       await client.retryErasures();
       assert.equal(store.has(PENDING_ERASURE_KEY), false);
     }
+    // (n) DOS/Rate#1682: legacy numeric hold migration, HTTP-date / 0 / huge
+    // Retry-After bounds, origin slash/length bounds, and immediate forget()
+    // erasure even while an observation ingest hold is active.
+    {
+      const { normalizeObservationOrigin } =
+        await import('./background/observation-client.js');
+      assert.equal(normalizeObservationOrigin('x'.repeat(2049)), '');
+      assert.equal(
+        normalizeObservationOrigin(`https://RATE.VN/${'/'.repeat(200)}`),
+        BASE
+      );
+
+      let nowMs = Date.parse('2026-11-16T10:00:00.000Z');
+      let obsResponse: Response = json(200, {
+        ok: true,
+        status: 'quarantined',
+      });
+      const store = new Map<string, unknown>([
+        [HOLD_UNTIL_KEY, nowMs + 999_000],
+      ]);
+      const calls: Call[] = [];
+      const client = new ObservationClient({
+        storage: {
+          get: async (key) => (store.has(key) ? { [key]: store.get(key) } : {}),
+          set: async (items) => {
+            for (const [k, v] of Object.entries(items)) store.set(k, v);
+          },
+          remove: async (key) => {
+            store.delete(key);
+          },
+        },
+        fetch: async (url, init) => {
+          const call: Call = {
+            method: String(init.method),
+            url,
+            headers: (init.headers ?? {}) as Record<string, string>,
+            body: init.body ? JSON.parse(String(init.body)) : undefined,
+          };
+          calls.push(call);
+          if (call.method === 'POST' && url.endsWith('/submitter')) {
+            return json(200, { ok: true, submitterId: ID1 });
+          }
+          if (call.method === 'DELETE') return json(200, { ok: true });
+          return obsResponse;
+        },
+        now: () => nowMs,
+        extensionVersion: '2.1.0',
+        optedIn: async () => true,
+        submitterPath: '/api/v1/rate/extension/submitter',
+        observationPath: '/api/v1/rate/extension/observation',
+      });
+
+      // Legacy numeric observationHoldUntil does not block sends after upgrade.
+      await client.send(BASE, obs);
+      assert.equal(calls.length, 2);
+
+      // Clock-skewed past HTTP-date clamps to 1s instead of 60s/3600s fallback.
+      obsResponse = json(
+        503,
+        { ok: false },
+        { 'Retry-After': new Date(nowMs - 2_000).toUTCString() }
+      );
+      await client.send(BASE, obs);
+      assert.deepEqual(store.get(HOLD_UNTIL_KEY), { [BASE]: nowMs + 1_000 });
+
+      // 10+ digit delta-seconds clamps to MAX_HOLD_SECONDS (3600s), and explicit
+      // forget() still sends immediate DELETE despite the active ingest hold.
+      nowMs += 2_000;
+      obsResponse = json(429, { ok: false }, { 'Retry-After': '99999999999' });
+      await client.send(BASE, obs);
+      assert.deepEqual(store.get(HOLD_UNTIL_KEY), {
+        [BASE]: nowMs + 3_600_000,
+      });
+      await client.forget();
+      assert.equal(
+        calls.filter((c) => c.method === 'DELETE').length,
+        1,
+        'explicit forget() must erase immediately despite active observation hold'
+      );
+      assert.equal(store.has(PENDING_ERASURE_KEY), false);
+    }
     console.log(
       '  ✅ [Observation client: one id, erasure kept until confirmed, holds (#1606, #1682)] Verified'
     );
@@ -7032,6 +7113,24 @@ async function runTests() {
           0,
           'held previous origin must not receive DELETE during its hold window'
         );
+
+        // Once opted out and the hold expires, the next product visit flushes
+        // the pending erasure automatically even while crowdContributeOptIn=false.
+        localMap.set('crowdContributeOptIn', false);
+        localMap.set('observationHoldUntil', {});
+        await callSw(
+          { type: 'RATE_PRODUCT_DETECTED', signal: baseSigInput },
+          { tab: { id: 42, active: true } }
+        );
+        await new Promise((r) => setTimeout(r, 10));
+        assert.equal(
+          eraseCallsOnHeld.some((u) =>
+            u.startsWith('https://rate.vn/api/v1/rate/extension/submitter')
+          ),
+          true,
+          'opted-out page visit must flush pending erasure once hold expires'
+        );
+        assert.equal(localMap.has('observationPendingErasure'), false);
       } finally {
         restoreSwGlobals();
       }

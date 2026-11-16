@@ -47,14 +47,23 @@ interface SubmitterRecord {
   apiBaseUrl: string;
 }
 
+function stripTrailingSlashes(value: string): string {
+  let end = value.length;
+  while (end > 0 && value.charCodeAt(end - 1) === 47) {
+    end -= 1;
+  }
+  return end === value.length ? value : value.slice(0, end);
+}
+
 export function normalizeObservationOrigin(raw: string): string {
-  const trimmed = raw.trim().replace(/\/+$/, '');
+  if (raw.length > 2048) return '';
+  const trimmed = stripTrailingSlashes(raw.trim());
   if (!trimmed) return '';
   try {
     const parsed = new URL(trimmed);
     const pathname =
       parsed.pathname && parsed.pathname !== '/'
-        ? parsed.pathname.replace(/\/+$/, '')
+        ? stripTrailingSlashes(parsed.pathname)
         : '';
     return `${parsed.origin.toLowerCase()}${pathname}`;
   } catch {
@@ -68,15 +77,15 @@ function parseRetryAfterSeconds(
 ): number | null {
   if (typeof header !== 'string') return null;
   const value = header.trim();
-  if (!value) return null;
-  if (/^\d{1,9}$/.test(value)) {
+  if (!value || value.length > 128) return null;
+  if (/^\d+$/.test(value)) {
     return Math.min(Math.max(Number(value), 1), MAX_HOLD_SECONDS);
   }
   if (!/[a-z]/i.test(value)) return null;
   const dateMs = Date.parse(value);
   if (!Number.isFinite(dateMs)) return null;
   const seconds = Math.ceil((dateMs - nowMs) / 1000);
-  return seconds > 0 ? Math.min(seconds, MAX_HOLD_SECONDS) : null;
+  return Math.min(Math.max(seconds, 1), MAX_HOLD_SECONDS);
 }
 
 function asRecord(raw: unknown): SubmitterRecord | null {
@@ -211,17 +220,19 @@ export class ObservationClient {
   }
 
   /**
-   * Sends every queued erasure whose origin is not currently held. One the
-   * server confirmed (200), or refused as malformed (400), leaves the queue;
-   * 404/429/Retry-After sets a per-origin hold while keeping the entry queued.
+   * Sends every queued erasure whose origin is not currently held (plus any
+   * newly forgotten `bypassHoldId`). One the server confirmed (200), or refused
+   * as malformed (400), leaves the queue; 404/429/Retry-After sets a per-origin
+   * hold while keeping the entry queued.
    */
-  private async flushErasures(): Promise<void> {
+  private async flushErasures(bypassHoldId?: string): Promise<void> {
     const list = await this.pending();
     if (list.length === 0) return;
     const left: SubmitterRecord[] = [];
     let attempted = false;
     for (const record of list) {
-      if (await this.held(record.apiBaseUrl)) {
+      const bypass = bypassHoldId !== undefined && record.id === bypassHoldId;
+      if (!bypass && (await this.held(record.apiBaseUrl))) {
         left.push(record);
         continue;
       }
@@ -327,7 +338,7 @@ export class ObservationClient {
           // Turned off while the id was being issued: erase it at once.
           if (!(await this.deps.optedIn())) {
             await this.queueErasure({ id, apiBaseUrl });
-            await this.flushErasures();
+            await this.flushErasures(id);
             return;
           }
           await this.deps.storage.set({ [SUBMITTER_KEY]: { id, apiBaseUrl } });
@@ -397,7 +408,7 @@ export class ObservationClient {
         const record = await this.read(SUBMITTER_KEY, asRecord);
         await this.deps.storage.remove(SUBMITTER_KEY);
         if (record) await this.queueErasure(record);
-        await this.flushErasures();
+        await this.flushErasures(record?.id);
       } catch {
         // The queued erasure is retried on the next start or send.
       }
