@@ -101,6 +101,7 @@ import {
 } from './cache-tags';
 import { computeProductRadarSignal } from './deals';
 import { createLogger } from '@/lib/logger';
+import { applyCategorySpecTemplate } from '@repo/shared-data/rules';
 
 const log = createLogger('server.rate');
 
@@ -515,9 +516,31 @@ export function getCachedCompareMasterProducts(slugsCsv: string) {
   return _getCachedCompareMasterProductsByKey(canonicalSlugsCsv);
 }
 
+function scopeInspectionProducts<
+  T extends {
+    masterProduct: import('../../lib/rate-api').MasterProduct | null;
+    suggestions: import('../../lib/rate-api').MasterProduct[];
+  },
+>(res: T): T {
+  return {
+    ...res,
+    masterProduct: res.masterProduct
+      ? applyCategorySpecTemplate(
+          getMasterProductCategorySlug(res.masterProduct),
+          res.masterProduct
+        )
+      : null,
+    suggestions: res.suggestions.map((p) =>
+      applyCategorySpecTemplate(getMasterProductCategorySlug(p), p)
+    ),
+  };
+}
+
 async function inspectProductOrShopUrlWithRadar(rawQuery: string) {
   const safeQuery = sanitizeCachedInspectQuery(rawQuery);
-  const res = await _inspectProductOrShopUrl(safeQuery);
+  const res = scopeInspectionProducts(
+    await _inspectProductOrShopUrl(safeQuery)
+  );
   return {
     ...res,
     radarSignal: res.masterProduct
@@ -651,7 +674,8 @@ const _getCachedInspectionByKey = cache(async (query: string) => {
         : result;
     },
     [
-      'rate-inspect',
+      // v2: masterProduct and suggestions carry the category spec template (#1684).
+      'rate-inspect-v2',
       createHash('sha256').update(query).digest('hex').slice(0, 32),
     ],
     {
@@ -666,7 +690,7 @@ const _getCachedInspectionByKey = cache(async (query: string) => {
   )(query);
   return 'tooLarge' in cached
     ? inspectProductOrShopUrlWithRadar(query)
-    : cached;
+    : scopeInspectionProducts(cached);
 });
 
 export function getCachedInspectProductOrShopUrl(rawQuery: string) {

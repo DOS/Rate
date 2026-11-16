@@ -7,12 +7,13 @@ import {
 } from '@/server/rate';
 import { computeProductRadarSignal } from '@/server/rate/deals';
 import { radarExportFields } from '@/lib/deal-radar';
+import { isOfferUnavailable } from '@/lib/product-market-stats';
 import {
   getMasterProductCategorySlug,
   productRatingScore5,
 } from '@/lib/rate-domain';
 import { applyCategorySpecTemplate } from '@repo/shared-data/rules';
-import { saleStateOfMaster } from '@/lib/sale-state';
+import { listingCountForSaleState, saleStateOfMaster } from '@/lib/sale-state';
 import {
   PUBLIC_API_CORS_HEADERS,
   jsonApiError,
@@ -328,7 +329,13 @@ export async function GET(request: NextRequest) {
             ...applyCategorySpecTemplate(getMasterProductCategorySlug(p), p),
             rating_score_5: productRatingScore5(p),
             deal_radar: radarExportFields(computeProductRadarSignal(p, offers)),
-            sale_state: saleStateOfMaster(p),
+            sale_state: saleStateOfMaster(
+              p,
+              listingCountForSaleState(
+                offers.length,
+                offers.filter((o) => !isOfferUnavailable(o)).length
+              )
+            ),
           };
         }),
         ...(facets ? { facets } : {}),
