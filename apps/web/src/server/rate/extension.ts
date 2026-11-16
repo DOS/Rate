@@ -4,7 +4,9 @@ import {
   getCategorySpecTemplate,
   implausiblyLowOfferIds,
   isImplausiblyLowPrice,
+  isOfferImplausiblyLowAgainstInStock,
   minimumListingPriceVnd,
+  normalizeOfferId,
   plausibleOffers,
 } from '@repo/shared-data/rules';
 import type { Database } from '@repo/shared-data';
@@ -794,8 +796,15 @@ export function evaluateExtensionPriceVerdict(params: {
   // verdict keeps the extension's allow-list; the label says why. Judged
   // against every other offer, as the offers table judges each row, so the
   // two never disagree about a listing.
+  const normalizedObservedOfferId = normalizeOfferId(observedOfferId);
   const otherOffers = observedOfferId
-    ? safeOffers.filter((o) => o && o.id !== observedOfferId)
+    ? safeOffers.filter(
+        (o) =>
+          o &&
+          o.id !== observedOfferId &&
+          (!normalizedObservedOfferId ||
+            normalizeOfferId(o.id) !== normalizedObservedOfferId)
+      )
     : safeOffers;
   if (observedPrice && isImplausiblyLowPrice(observedPrice, otherOffers)) {
     const roundedMedian = Math.round(marketMedianPrice ?? 0);
@@ -1557,10 +1566,13 @@ export async function lookupExtensionProduct(
   const radarSignal = computeProductRadarSignal(matchedMaster, offers);
 
   // Bait prices are judged among the in-stock listings, as the market numbers
-  // are; the flag lets the side panel mark the row (DOS/Rate#1297).
+  // are; the flag lets the side panel mark both in-stock and sold-out bait rows
+  // (DOS/Rate#1297, #1697).
   const baitIds = implausiblyLowOfferIds(inStockOffers);
   const flagBait = (o: MerchantOffer): ExtensionOffer =>
-    baitIds.has(o.id) ? { ...o, implausiblyLow: true } : o;
+    isOfferImplausiblyLowAgainstInStock(o, inStockOffers, baitIds)
+      ? { ...o, implausiblyLow: true }
+      : o;
   const flaggedCheaperOffers = topCheaperOffers.map(flagBait);
 
   return {

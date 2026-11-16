@@ -103,6 +103,59 @@ export function plausibleOffers<T extends { price_current: number }>(
   );
 }
 
+function trimOfferString(raw: unknown): string {
+  return typeof raw === 'string' ? raw.replace(/\p{Cc}+/gu, '').trim() : '';
+}
+
+function cleanOfferId(raw: unknown): string {
+  const id = trimOfferString(raw);
+  if (
+    !id ||
+    !/^[a-zA-Z0-9:._-]{1,256}$/.test(id) ||
+    !/[a-zA-Z0-9]/.test(id) ||
+    /^[.:]|[.:]$/.test(id) ||
+    id.includes('..') ||
+    id.includes('::') ||
+    /^(?:0+|null|undefined|nan|infinity|-infinity|true|false)$/i.test(id)
+  ) {
+    return '';
+  }
+  return id;
+}
+
+function isNonArrayObject(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+function hasSetLookup(
+  flaggedIds: ReadonlySet<string> | null | undefined
+): flaggedIds is ReadonlySet<string> {
+  return Boolean(flaggedIds) && typeof flaggedIds?.has === 'function';
+}
+
+function isUnavailableStatus(availability: unknown): boolean {
+  return availability === 'out_of_stock' || availability === 'discontinued';
+}
+
+/**
+ * Canonicalizes an offer identifier so Set lookups match implausiblyLowOfferIds
+ * even when raw IDs carry whitespace, control characters, or composite colons.
+ * Returns '' for empty, path-traversal, or sentinel tokens.
+ */
+export function normalizeOfferId(raw: unknown): string {
+  return cleanOfferId(raw);
+}
+
+/** Canonicalized membership check against a set from implausiblyLowOfferIds. */
+export function hasImplausiblyLowOfferId(
+  flaggedIds: ReadonlySet<string> | null | undefined,
+  rawId: unknown
+): boolean {
+  if (!hasSetLookup(flaggedIds)) return false;
+  const id = cleanOfferId(rawId);
+  return Boolean(id) && flaggedIds.has(id);
+}
+
 /** Ids of the implausibly low offers. */
 export function implausiblyLowOfferIds<
   T extends { id: string; price_current: number },
@@ -111,24 +164,73 @@ export function implausiblyLowOfferIds<
   const flagged = implausiblyLowIndexes(offers.map((o) => o?.price_current));
   return new Set(
     offers
-      .filter(
-        (o, index) =>
-          Boolean(o && typeof o === 'object' && !Array.isArray(o)) &&
-          flagged.has(index)
-      )
-      .map((o) =>
-        typeof o.id === 'string' ? o.id.replace(/\p{Cc}+/gu, '').trim() : ''
-      )
-      .filter(
-        (id) =>
-          /^[a-zA-Z0-9._-]{1,256}$/.test(id) &&
-          /[a-zA-Z0-9]/.test(id) &&
-          !id.startsWith('.') &&
-          !id.endsWith('.') &&
-          !id.includes('..') &&
-          !/^(?:0+|null|undefined|nan|infinity|-infinity|true|false)$/i.test(id)
-      )
+      .filter((o, index) => isNonArrayObject(o) && flagged.has(index))
+      .map((o) => cleanOfferId(o.id))
+      .filter(Boolean)
   );
+}
+
+/**
+ * Whether an offer (in-stock or out_of_stock/discontinued) has a bait price
+ * judged against the in-stock market offers. Falls back to price comparison
+ * when offer.id cannot be canonicalized, preventing fail-open mismatches
+ * between plausibleOffers and implausiblyLowOfferIds.
+ */
+export function isOfferImplausiblyLowAgainstInStock(
+  offer:
+    | {
+        id?: string | null;
+        price_current: number;
+        availability?: string | null;
+      }
+    | null
+    | undefined,
+  inStockOffers: readonly {
+    id?: string | null;
+    price_current: number;
+  }[],
+  inStockBaitIds?: ReadonlySet<string> | null
+): boolean {
+  if (!isNonArrayObject(offer)) return false;
+  if (hasImplausiblyLowOfferId(inStockBaitIds, offer.id)) {
+    return true;
+  }
+  const safeInStock = Array.isArray(inStockOffers) ? inStockOffers : [];
+  if (isUnavailableStatus(offer.availability)) {
+    return isImplausiblyLowPrice(
+      offer.price_current,
+      plausibleOffers(safeInStock)
+    );
+  }
+  const canonicalId = cleanOfferId(offer.id);
+  if (
+    Boolean(canonicalId) &&
+    hasSetLookup(inStockBaitIds) &&
+    safeInStock.some((c) => c === offer || cleanOfferId(c?.id) === canonicalId)
+  ) {
+    return false;
+  }
+  const rawCleaned = trimOfferString(offer.id);
+  let excludedSelf = false;
+  const others = safeInStock.filter((candidate) => {
+    if (!excludedSelf) {
+      if (candidate === offer) {
+        excludedSelf = true;
+        return false;
+      }
+      if (
+        Boolean(rawCleaned) &&
+        isNonArrayObject(candidate) &&
+        (trimOfferString(candidate.id) === rawCleaned ||
+          (Boolean(canonicalId) && cleanOfferId(candidate.id) === canonicalId))
+      ) {
+        excludedSelf = true;
+        return false;
+      }
+    }
+    return true;
+  });
+  return isImplausiblyLowPrice(offer.price_current, others);
 }
 
 /**

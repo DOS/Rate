@@ -61,7 +61,7 @@ import { contentLang } from '@/lib/content-lang';
 import { SAMPLE_AUDIT_URLS } from '@/lib/inspect-samples';
 import {
   implausiblyLowOfferIds,
-  isImplausiblyLowPrice,
+  isOfferImplausiblyLowAgainstInStock,
   plausibleOffers,
 } from '@repo/shared-data/rules';
 import {
@@ -165,8 +165,20 @@ export function orderInspectOffers<
     const unavailableA = isOfferUnavailable(a) ? 1 : 0;
     const unavailableB = isOfferUnavailable(b) ? 1 : 0;
     if (unavailableA !== unavailableB) return unavailableA - unavailableB;
-    const implausibleA = implausibleOfferIds.has(a.id) ? 1 : 0;
-    const implausibleB = implausibleOfferIds.has(b.id) ? 1 : 0;
+    const implausibleA = isInspectOfferBait(
+      a,
+      implausibleOfferIds,
+      inStockOffers
+    )
+      ? 1
+      : 0;
+    const implausibleB = isInspectOfferBait(
+      b,
+      implausibleOfferIds,
+      inStockOffers
+    )
+      ? 1
+      : 0;
     return implausibleA - implausibleB;
   });
   return { inStockOffers, implausibleOfferIds, listedOffers };
@@ -189,13 +201,12 @@ export function isInspectOfferBait(
     | null
     | undefined,
   implausibleOfferIds: ReadonlySet<string>,
-  inStockOffers: readonly { price_current: number }[]
+  inStockOffers: readonly { id?: string | null; price_current: number }[]
 ): boolean {
-  if (!offer) return false;
-  return (
-    implausibleOfferIds.has(offer.id) ||
-    (isOfferUnavailable(offer) &&
-      isImplausiblyLowPrice(offer.price_current, inStockOffers))
+  return isOfferImplausiblyLowAgainstInStock(
+    offer,
+    inStockOffers,
+    implausibleOfferIds
   );
 }
 
@@ -211,6 +222,7 @@ export default function DeepInspectWorkspace({
 }: DeepInspectWorkspaceProps) {
   const t = useTranslations('inspect');
   const tVerdict = useTranslations('priceVerdict');
+  const tOffers = useTranslations('productDetail');
   const locale = useLocale();
   const router = useRouter();
 
@@ -301,9 +313,15 @@ export default function DeepInspectWorkspace({
     implausibleOfferIds,
     inStockOffers
   );
-  const discount = offerImplausiblyLow
-    ? null
-    : (result?.discountAnalysis ?? null);
+  const matchedOfferUnavailable = Boolean(
+    matchedOffer && isOfferUnavailable(matchedOffer)
+  );
+  const rawDiscount = result?.discountAnalysis ?? null;
+  const discount =
+    offerImplausiblyLow ||
+    (matchedOfferUnavailable && rawDiscount?.verdict === 'genuine_deal')
+      ? null
+      : rawDiscount;
   const priceHistory = result?.priceHistory ?? null;
   const reviewSummary = result?.reviewSummary ?? null;
   const merchant = result?.merchantProfile ?? null;
@@ -360,11 +378,19 @@ export default function DeepInspectWorkspace({
           : []),
         ...(offerImplausiblyLow
           ? [`- **${t('mdPriceVerdict')}:** **${t('implausiblyLowBadge')}**`]
-          : discount
+          : matchedOfferUnavailable && !discount
             ? [
-                `- **${t('mdPriceVerdict')}:** **${discountVerdictCopy(tVerdict, discount).label}** (${discountVerdictCopy(tVerdict, discount).explanation})`,
+                `- **${t('mdPriceVerdict')}:** **${
+                  matchedOffer?.availability === 'discontinued'
+                    ? tOffers('offersDiscontinuedBadge')
+                    : tOffers('offersUnavailableBadge')
+                }**`,
               ]
-            : []),
+            : discount
+              ? [
+                  `- **${t('mdPriceVerdict')}:** **${discountVerdictCopy(tVerdict, discount).label}** (${discountVerdictCopy(tVerdict, discount).explanation})`,
+                ]
+              : []),
         ...(currentListedPrice > 0
           ? [
               `- **${t('currentPriceLabel')}:** ${currentListedPrice.toLocaleString('vi-VN')} ₫${claimedOrigPrice ? ` | ${t('claimedOriginalLabel')}: ${claimedOrigPrice.toLocaleString('vi-VN')} ₫` : ''}`,
@@ -447,10 +473,20 @@ export default function DeepInspectWorkspace({
         if (isInspectOfferBait(o, implausibleOfferIds, inStockOffers)) {
           return t('implausiblyLowBadge');
         }
-        const a =
+        const rawAnalysis =
           priceHistory?.byOffer?.[o.id] ??
           (o.id === matchedOffer?.id ? discount : null);
-        return a ? discountVerdictCopy(tVerdict, a).label : t('checkedStatus');
+        const a =
+          isOfferUnavailable(o) && rawAnalysis?.verdict === 'genuine_deal'
+            ? null
+            : rawAnalysis;
+        if (a) return discountVerdictCopy(tVerdict, a).label;
+        if (isOfferUnavailable(o)) {
+          return o.availability === 'discontinued'
+            ? tOffers('offersDiscontinuedBadge')
+            : tOffers('offersUnavailableBadge');
+        }
+        return t('checkedStatus');
       })(),
       ...radarCsvCells(radarSignal),
     ]);
@@ -658,6 +694,16 @@ export default function DeepInspectWorkspace({
                       <span className="badge bg-success bg-opacity-10 text-success rounded-pill px-3 py-2">
                         <BsCheckCircleFill className="me-1" />
                         {t('genuineDiscountBadge')}
+                      </span>
+                    ) : matchedOfferUnavailable ? (
+                      <span
+                        className="badge bg-secondary-subtle text-secondary rounded-pill px-3 py-2"
+                        data-testid="inspect-unavailable"
+                        title={tOffers('offersUnavailableTitle')}
+                      >
+                        {matchedOffer?.availability === 'discontinued'
+                          ? tOffers('offersDiscontinuedBadge')
+                          : tOffers('offersUnavailableBadge')}
                       </span>
                     ) : null}
                   </div>
@@ -982,13 +1028,28 @@ export default function DeepInspectWorkspace({
                                 Number(offer.price_current),
                                 locale
                               )}
-                              {implausibleOfferIds.has(offer.id) && (
+                              {isInspectOfferBait(
+                                offer,
+                                implausibleOfferIds,
+                                inStockOffers
+                              ) && (
                                 <span
                                   className="badge bg-warning text-dark d-block mt-1"
                                   data-testid="inspect-offer-implausibly-low"
                                   title={t('implausiblyLowTitle')}
                                 >
                                   {t('implausiblyLowBadge')}
+                                </span>
+                              )}
+                              {isOfferUnavailable(offer) && (
+                                <span
+                                  className="badge bg-secondary-subtle text-secondary d-block mt-1"
+                                  data-testid="inspect-offer-unavailable"
+                                  title={tOffers('offersUnavailableTitle')}
+                                >
+                                  {offer.availability === 'discontinued'
+                                    ? tOffers('offersDiscontinuedBadge')
+                                    : tOffers('offersUnavailableBadge')}
                                 </span>
                               )}
                             </td>
