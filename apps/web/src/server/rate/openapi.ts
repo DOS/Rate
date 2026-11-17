@@ -299,7 +299,7 @@ function buildBaseRateOpenApiSpec(
     openapi: '3.1.0',
     info: {
       title: 'Rate.vn Open-Core Intelligence REST API v1',
-      version: '1.10.0',
+      version: '1.10.1',
       summary:
         'Standardized 10-Group Tech Specs, Price History, Product Deal Radar & AI Review Auditing API',
       description:
@@ -1592,7 +1592,8 @@ function buildBaseRateOpenApiSpec(
             {
               name: 'hideFake',
               in: 'query',
-              description: 'Filter out reviews flagged as AI seeding/fake',
+              description:
+                'When true, keep only reviews whose `flag_category` is `authentic` (a review with no flag counts as authentic) and whose verdict is not `fake`, and drop analyzed reviews excluded from the rating (`include_in_rating` false or no positive helpfulness weight). This removes AI seeding, coin spam, competitor sabotage and review bombing as well as rating-excluded reviews. Reviews pending analysis (verdict `unanalyzed`) stay.',
               schema: { type: 'boolean' },
             },
             {
@@ -2182,7 +2183,7 @@ function buildBaseRateOpenApiSpec(
             'no_stock',
           ],
           description:
-            'Whether the model can be bought in Vietnam now: `on_sale` (an in-stock price), `discontinued` / `coming_soon` (curated, or from the launch status when no store has stock), `sold_out` (stores list it, none in stock), `not_listed` (no store lists it), `no_stock` (no in-stock store; whether any store lists it is not known, as in list bodies).',
+            'Whether the model can be bought in Vietnam now: `on_sale` (an in-stock price), `discontinued` / `coming_soon` (curated, or from the launch status when no store has stock), `sold_out` (stores list it, none in stock), `not_listed` (no store lists it), `no_stock` (no in-stock price, and the listings cannot tell `sold_out` from `not_listed`). List, compare and detail bodies count the store listings the same way, so a model with no price is `sold_out` or `not_listed` there; `no_stock` is left for a model that has an in-stock listing but no current price yet.',
         },
         ProductDealRadarSignal: {
           type: 'object',

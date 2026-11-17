@@ -7227,6 +7227,194 @@ async function runTests() {
       '  ✅ [Hydration sig, negative VND, variant tokens, picker/badge & WCAG 2.5.3 (#1664)] Verified'
     );
   }
+
+  // DOS/Rate#1710: a stale full lookup is fetched again when no newer panel
+  // load started, because a newer detection that resolves to the same product
+  // writes an unchanged lookup_tab_latest and Chrome fires no onChanged.
+  {
+    const g = globalThis as Record<string, unknown>;
+    const previousGlobals = ['chrome', 'document'].map(
+      (key) => [key, Object.getOwnPropertyDescriptor(g, key)] as const
+    );
+    type Reply = Record<string, unknown>;
+    const sent: Array<Record<string, unknown>> = [];
+    let replies: Array<Reply | Promise<Reply>> = [];
+    const storageListeners: Array<
+      (changes: Record<string, unknown>, area: string) => void
+    > = [];
+    let pickVariant: (() => void) | undefined;
+    const variantButton = {
+      getAttribute: () => 'Red',
+      addEventListener: (_type: string, fn: () => void) => {
+        pickVariant = fn;
+      },
+    };
+    const root = {
+      innerHTML: '',
+      querySelector: () => null,
+      querySelectorAll: (selector: string) =>
+        selector === '.variant-btn' ? [variantButton] : [],
+    };
+    let onReady: (() => void) | undefined;
+    const settle = () => new Promise((r) => setTimeout(r, 5));
+    try {
+      g.chrome = {
+        runtime: {
+          sendMessage: (msg: Record<string, unknown>) => {
+            sent.push(msg);
+            if (msg.type !== 'RATE_SIDEPANEL_FETCH_FULL') {
+              return Promise.resolve({ ok: false });
+            }
+            return Promise.resolve(
+              replies.shift() ?? { ok: false, status: 500 }
+            );
+          },
+        },
+        storage: {
+          onChanged: {
+            addListener: (
+              fn: (changes: Record<string, unknown>, area: string) => void
+            ) => storageListeners.push(fn),
+          },
+        },
+      };
+      g.document = {
+        documentElement: {},
+        title: '',
+        querySelectorAll: () => [],
+        getElementById: (id: string) => (id === 'panel-root' ? root : null),
+        addEventListener: (type: string, fn: () => void) => {
+          if (type === 'DOMContentLoaded') onReady = fn;
+        },
+      };
+      await import('./sidepanel/sidepanel.js');
+      assert.ok(onReady, 'the panel waits for DOMContentLoaded');
+
+      const fullLookups = () =>
+        sent.filter((m) => m.type === 'RATE_SIDEPANEL_FETCH_FULL').length;
+      const failed = { ok: false, status: 500 };
+
+      // (a) Stale reply, no newer panel load: the panel fetches again once
+      // and renders the fresh reply instead of staying on the old state.
+      replies = [{ ok: true, stale: true, signal: null, data: null }, failed];
+      onReady!();
+      await settle();
+      assert.equal(
+        fullLookups(),
+        2,
+        'a stale reply with no newer panel load must be fetched again'
+      );
+      assert.ok(
+        root.innerHTML.length > 0,
+        'the panel renders the reply fetched after the stale one'
+      );
+
+      // (b) The retry is bounded: two stale replies in a row stop after one
+      // extra fetch, so two panels cannot keep invalidating each other.
+      sent.length = 0;
+      root.innerHTML = '';
+      replies = [
+        { ok: true, stale: true, signal: null, data: null },
+        { ok: true, stale: true, signal: null, data: null },
+        failed,
+      ];
+      storageListeners.forEach((fn) =>
+        fn({ lookup_tab_latest: { newValue: null } }, 'session')
+      );
+      await settle();
+      assert.equal(fullLookups(), 2, 'at most one retry per panel load');
+      assert.equal(root.innerHTML, '', 'a stale reply is never rendered');
+
+      // (c) A stale reply superseded by a newer panel load is dropped, not
+      // retried: the newer load already fetches the current product.
+      sent.length = 0;
+      let releaseFirst: (reply: Reply) => void = () => {};
+      replies = [
+        new Promise<Reply>((resolve) => {
+          releaseFirst = resolve;
+        }),
+        failed,
+      ];
+      const reload = () =>
+        storageListeners.forEach((fn) =>
+          fn({ lookup_tab_latest: { newValue: null } }, 'session')
+        );
+      reload();
+      await settle();
+      reload();
+      await settle();
+      releaseFirst({ ok: true, stale: true, signal: null, data: null });
+      await settle();
+      assert.equal(
+        fullLookups(),
+        2,
+        'a stale reply from a superseded panel load must not be retried'
+      );
+
+      // (d) A stale variant load is retried without the variant, as the
+      // onChanged reload would be: the newer detection may be another product,
+      // and the service worker saves a requested variant onto the tab signal.
+      replies = [
+        {
+          ok: true,
+          signal: {
+            title: 'Phone A',
+            platform: 'shopee',
+            url: 'https://shopee.vn/phone-a-i.1.2',
+          },
+          data: {
+            matchStatus: 'matched',
+            platform: 'shopee',
+            canonicalUrl: null,
+            detectedStorageGb: null,
+            isAccessoryOrPart: false,
+            accessoryReason: null,
+            variantCandidates: [],
+            masterProduct: null,
+            matchedOffer: null,
+            topCheaperOffers: [],
+            allOffers: [],
+            merchantProfile: null,
+            reviewSummary: null,
+            priceHistory: null,
+            compareUrl: null,
+            productDetailUrl: null,
+            priceAssessment: {
+              verdict: 'fair_price',
+              badgeLabel: 'Giá hợp lý',
+              explanation: '',
+              observedPrice: 10_000_000,
+              observedOriginalPrice: null,
+              claimedDiscountPct: 0,
+              marketMedianPrice: 10_000_000,
+            },
+          },
+        },
+      ];
+      reload();
+      await settle();
+      assert.ok(pickVariant, 'the product card offers a variant');
+      sent.length = 0;
+      replies = [{ ok: true, stale: true, signal: null, data: null }, failed];
+      pickVariant!();
+      await settle();
+      assert.deepEqual(
+        sent
+          .filter((m) => m.type === 'RATE_SIDEPANEL_FETCH_FULL')
+          .map((m) => m.selectedVariant),
+        ['Red', null],
+        'the retry after a stale variant load must not resend the variant'
+      );
+    } finally {
+      for (const [key, descriptor] of previousGlobals) {
+        if (descriptor) Object.defineProperty(g, key, descriptor);
+        else delete g[key];
+      }
+    }
+    console.log(
+      '  ✅ [Side panel refetches a stale full lookup once (#1710)] Verified'
+    );
+  }
   console.log('🎉 All Rate Browser Extension MV3 v2 tests passed!');
 }
 

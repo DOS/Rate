@@ -603,7 +603,22 @@ function renderPanelContent(
 
 let panelLoadGeneration = 0;
 
-async function loadSidePanel(selectedVariant?: string): Promise<void> {
+/**
+ * A full lookup the service worker marks stale (a newer tab detection started
+ * while it was in flight) is fetched again once when no newer panel load has
+ * started: if that detection resolves to the same product it writes an
+ * unchanged `lookup_tab_latest`, Chrome fires no `onChanged`, and nothing else
+ * would reload the panel (DOS/Rate#1710). The retry is the reload that
+ * `onChanged` would have made: no variant, so a variant picked on the old
+ * product is never saved onto a newer one. One retry keeps two panels from
+ * invalidating each other forever.
+ */
+const STALE_FULL_LOOKUP_RETRIES = 1;
+
+async function loadSidePanel(
+  selectedVariant?: string,
+  staleRetriesLeft = STALE_FULL_LOOKUP_RETRIES
+): Promise<void> {
   const root = document.getElementById('panel-root');
   const chkOptIn = document.getElementById(
     'chk-crowd-optin'
@@ -627,7 +642,13 @@ async function loadSidePanel(selectedVariant?: string): Promise<void> {
       status?: number | null;
       retryAfterSeconds?: number;
     };
-    if (generation !== panelLoadGeneration || res?.stale) return;
+    if (generation !== panelLoadGeneration) return;
+    if (res?.stale) {
+      if (staleRetriesLeft > 0) {
+        void loadSidePanel(undefined, staleRetriesLeft - 1);
+      }
+      return;
+    }
 
     const settings: ExtensionSettings = res?.settings || {
       apiBaseUrl: DEFAULT_API_BASE_URL,
