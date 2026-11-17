@@ -74,11 +74,11 @@ import ContentText from '@/components/elementary/ContentText';
 import StarRating from '@/components/elementary/StarRating';
 import {
   formatDecimal,
-  formatNumber,
   formatPercent,
   formatPriceVnd,
 } from '@/lib/locale-format';
 import {
+  displayRating,
   formatRatingValue,
   formatScoreFixed,
   roundScore,
@@ -113,6 +113,31 @@ export function formatLeaderboardPriceVnd(
   locale?: string | null
 ): string {
   return formatPriceVnd(sanitizeLeaderboardPriceVnd(value), locale);
+}
+
+export function formatLeaderboardDisplayPriceVnd(
+  value: unknown,
+  locale?: string | null
+): string {
+  const safePrice = sanitizeLeaderboardPriceVnd(value);
+  return safePrice > 0 ? formatLeaderboardPriceVnd(safePrice, locale) : '-';
+}
+
+export function formatLeaderboardShowdownDelta(
+  scoreA: number,
+  scoreB: number,
+  scoreDigits: 1 | 2,
+  locale?: string | null
+): string | null {
+  const safeA = displayRating(scoreA);
+  const safeB = displayRating(scoreB);
+  if (safeA === null || safeB === null) return null;
+  const delta = roundScore(
+    Math.abs(roundScore(safeA, scoreDigits) - roundScore(safeB, scoreDigits)),
+    scoreDigits
+  );
+  if (delta <= 0) return null;
+  return `Δ ${formatDecimal(delta, locale, scoreDigits)}`;
 }
 
 export function sanitizeLeaderboardMarkdownCell(
@@ -751,7 +776,7 @@ export default function LeaderboardExplorer({
         entry.expertScore10 != null
           ? formatScoreFixed(entry.expertScore10, 1)
           : t('unratedShort'),
-        safePrice > 0 ? formatLeaderboardPriceVnd(safePrice) : '-',
+        formatLeaderboardDisplayPriceVnd(safePrice),
         radarMarkdownCell(radar, locale),
       ];
     });
@@ -1598,7 +1623,7 @@ export default function LeaderboardExplorer({
 
                     <div className="border-top border-secondary border-opacity-25 d-flex justify-content-between align-items-center flex-wrap gap-2 pt-2">
                       <span className="small text-white-50 rate-tabular">
-                        {formatLeaderboardPriceVnd(
+                        {formatLeaderboardDisplayPriceVnd(
                           entry.product.min_price,
                           locale
                         )}
@@ -1657,13 +1682,11 @@ export default function LeaderboardExplorer({
                 const a = rankedEntries[iA]!;
                 const b = rankedEntries[iB]!;
                 const vHref = versusHref(a.product.slug, b.product.slug);
-                const delta = formatDecimal(
-                  Math.abs(
-                    roundScore(a.activeScore5, scoreDigits) -
-                      roundScore(b.activeScore5, scoreDigits)
-                  ),
-                  locale,
-                  scoreDigits
+                const deltaBadge = formatLeaderboardShowdownDelta(
+                  a.activeScore5,
+                  b.activeScore5,
+                  scoreDigits,
+                  locale
                 );
                 return (
                   <div key={vHref} className="col-lg-4 col-md-6">
@@ -1672,9 +1695,11 @@ export default function LeaderboardExplorer({
                         <span className="badge bg-dark rounded-pill small text-white">
                           #{iA + 1} vs #{iB + 1}
                         </span>
-                        <span className="badge bg-danger-subtle text-danger rounded-pill small rate-tabular">
-                          Δ {delta}
-                        </span>
+                        {deltaBadge && (
+                          <span className="badge bg-danger-subtle text-danger rounded-pill small rate-tabular">
+                            {deltaBadge}
+                          </span>
+                        )}
                       </div>
 
                       <div className="d-flex align-items-center justify-content-between my-2 gap-2">
@@ -1739,7 +1764,10 @@ export default function LeaderboardExplorer({
           const safeRowPrice = sanitizeLeaderboardPriceVnd(
             entry.product.min_price
           );
-          const minPriceText = formatNumber(safeRowPrice, locale);
+          const minPriceText = formatLeaderboardDisplayPriceVnd(
+            safeRowPrice,
+            locale
+          );
           const rowRadarSignal = getRadarSignal(radarIndex, entry.product.slug);
 
           return (
@@ -1925,7 +1953,7 @@ export default function LeaderboardExplorer({
                         emptyLabel={t('unratedShort')}
                       />
                       <div className="small text-secondary rate-tabular">
-                        {minPriceText} ₫ ({entry.product.merchant_count || 0}{' '}
+                        {minPriceText} ({entry.product.merchant_count || 0}{' '}
                         {copy.storesTrackedSuffix})
                       </div>
                     </div>
