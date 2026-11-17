@@ -151,6 +151,22 @@ test('parseBackfillSpecsArgs reads --only and --expect', () => {
   assert.throws(() => parseBackfillSpecsArgs(['--audit-only', '--expect', '1']), /--audit-only/);
 });
 
+test('parseBackfillSpecsArgs refuses what could turn a scoped run into a full one', () => {
+  const keys = APPROVED.join(',');
+  const refused: Array<[string[], RegExp]> = [
+    [[`--only=${keys}`, '--apply', '--expect', '3'], /unknown argument "--only=/],
+    [['--only', keys, '--apply', '--expect=3'], /unknown argument "--expect=3"/],
+    [['--onyl', keys, '--apply'], /unknown argument "--onyl"/],
+    [['--apply', keys], /unknown argument/],
+    [['--only', APPROVED[0]!, '--only', keys, '--apply'], /--only is repeated/],
+    [['--only', keys, '--expect', '3', '--expect', '1'], /--expect is repeated/],
+    [['--apply', '--apply'], /--apply is repeated/],
+  ];
+  for (const [argv, error] of refused) {
+    assert.throws(() => parseBackfillSpecsArgs(argv), error, argv.join(' '));
+  }
+});
+
 test('--only plans and writes the named masters only', async () => {
   const { client, ops, writes } = mockClient(allSeedsExisting(), [
     {
@@ -160,11 +176,15 @@ test('--only plans and writes the named masters only', async () => {
     },
   ]);
   const enrichCalls: string[] = [];
-  const result = await runMasterSpecsBackfillWith(client, deps(enrichCalls), {
-    apply: true,
-    only: APPROVED,
-    expect: 3,
-  });
+  const result = await runMasterSpecsBackfillWith(
+    client,
+    { ...deps(enrichCalls), enricher: { isConfigured: () => true } },
+    {
+      apply: true,
+      only: APPROVED,
+      expect: 3,
+    }
+  );
   assert.equal(result.planned, 3);
   assert.equal(result.catalogUpdated, 3);
   assert.equal(result.catalogInserted, 0);
@@ -189,19 +209,36 @@ test('--only plans and writes the named masters only', async () => {
   assert.deepEqual(enrichCalls, [], 'no AI enrichment in a scoped run');
 });
 
-test('--only inserts a missing named seed and nothing else', async () => {
+test('a named key with no master row stops a scoped apply before any write', async () => {
   const existing = allSeedsExisting();
   delete existing[APPROVED[1]!];
-  const { client, writes } = mockClient(existing);
-  const result = await runMasterSpecsBackfillWith(client, deps(), {
-    apply: true,
-    only: APPROVED,
-  });
-  assert.equal(result.planned, 3);
-  assert.equal(result.catalogInserted, 1);
-  const inserts = writes().filter(o => o.op === 'insert');
-  assert.equal(inserts.length, 1);
-  assert.equal(inserts[0]!.payload!.model_key, APPROVED[1]);
+  const live = mockClient(existing);
+  await assert.rejects(
+    runMasterSpecsBackfillWith(live.client, deps(), { apply: true, only: APPROVED, expect: 3 }),
+    new RegExp(
+      `no master row for ${APPROVED[1]!.replace(/[:.]/g, '\\$&')}: stopped before any write`
+    )
+  );
+  assert.deepEqual(live.writes(), [], 'no insert, no update');
+
+  // The dry run warns and shows the whole insert diff, in parts the logger keeps.
+  const dry = mockClient(existing);
+  const lines: string[] = [];
+  const original = { log: console.log, warn: console.warn };
+  console.log = (...args: unknown[]) => lines.push(args.map(String).join(' '));
+  console.warn = (...args: unknown[]) => lines.push(args.map(String).join(' '));
+  try {
+    await runMasterSpecsBackfillWith(dry.client, deps(), { only: APPROVED });
+  } finally {
+    console.log = original.log;
+    console.warn = original.warn;
+  }
+  assert.deepEqual(dry.writes(), []);
+  const text = lines.join('\n');
+  assert.match(text, /an --apply would stop before any write/);
+  const diffParts = lines.filter(l => l.includes('would insert'));
+  assert.ok(diffParts.length >= 2, 'a long insert diff is logged in several parts');
+  assert.match(diffParts[0]!, /part 1\/\d+, \d+ lines/);
 });
 
 test('an unknown --only key fails before any read or write', async () => {
@@ -217,14 +254,18 @@ test('an unknown --only key fails before any read or write', async () => {
   assert.equal(ops.length, 0, 'the client is never called');
   assert.throws(() => selectOnlySeeds(['']), /no seed/);
   // The CLI entry fails the same way before it reads the environment or builds a client.
-  const saved = { url: process.env.SUPABASE_URL, key: process.env.SUPABASE_SECRET_KEY };
-  delete process.env.SUPABASE_URL;
-  delete process.env.SUPABASE_SECRET_KEY;
+  const envKeys = [
+    'SUPABASE_URL',
+    'NEXT_PUBLIC_SUPABASE_URL',
+    'SUPABASE_SECRET_KEY',
+    'SUPABASE_KEY',
+  ];
+  const saved = Object.fromEntries(envKeys.map(k => [k, process.env[k]]));
+  for (const k of envKeys) delete process.env[k];
   try {
     await assert.rejects(runMasterSpecsBackfill({ only: ['nope:nope:1gb'] }), /no seed/);
   } finally {
-    if (saved.url !== undefined) process.env.SUPABASE_URL = saved.url;
-    if (saved.key !== undefined) process.env.SUPABASE_SECRET_KEY = saved.key;
+    for (const k of envKeys) if (saved[k] !== undefined) process.env[k] = saved[k];
   }
 });
 

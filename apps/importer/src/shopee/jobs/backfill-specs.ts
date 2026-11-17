@@ -14,7 +14,11 @@
  *                  with no seed fails before any database read.
  *   --expect <n>   With --apply, stops before the first write unless the plan updates or
  *                  inserts exactly n masters. A dry run logs whether the plan matches.
- *   Neither flag combines with --audit-only.
+ *   A scoped run only updates existing masters: a named key with no master row stops an
+ *   --apply before any write (a dry run warns). Any unknown argument, `--flag=value` or a
+ *   repeated flag fails. Neither flag combines with --audit-only. The read-only catalog
+ *   audit still runs at the end, so a scoped --apply can exit 1 after its writes when an
+ *   unrelated master fails the audit: read the log, not only the exit code.
  *
  * Safety invariant:
  * - Dry-run by default (`apply = false`): never mutates `rate.master_products` unless `--apply` is passed.
@@ -58,9 +62,9 @@ export const REQUIRED_10_SPEC_GROUPS = [
 export interface BackfillSpecsOptions {
   readonly apply?: boolean;
   /**
-   * `--only`: the seed `model_key`s to plan and write. Nothing else is inserted or updated:
-   * no other seed, no canonical or AI master, no `rate.items` row. A key with no seed is an
-   * error before any read.
+   * `--only`: the seed `model_key`s to update. Nothing else is inserted or updated: no other
+   * seed, no canonical or AI master, no `rate.items` row. A key with no seed is an error
+   * before any read; a key with no master row stops an apply before any write.
    */
   readonly only?: readonly string[];
   /**
@@ -408,19 +412,37 @@ export interface BackfillSpecsArgs {
 
 /** Parses the job's flags; throws on a malformed `--only` or `--expect`. */
 export function parseBackfillSpecsArgs(argv: readonly string[]): BackfillSpecsArgs {
-  const apply = argv.includes('--apply');
-  const auditOnly = argv.includes('--audit-only');
-  const value = (flag: string): string | undefined => {
-    const at = argv.indexOf(flag);
-    if (at === -1) return undefined;
-    const next = argv[at + 1];
-    if (next === undefined || next.startsWith('--')) {
-      throw new Error(`${flag} needs a value`);
+  // Strict: an argument this job does not know (a typo, `--only=keys`) or a repeated flag
+  // fails, so it can never turn a scoped run into a full one.
+  let apply = false;
+  let auditOnly = false;
+  let onlyRaw: string | undefined;
+  let expectRaw: string | undefined;
+  for (let i = 0; i < argv.length; i++) {
+    const arg = argv[i]!;
+    if (arg === '--apply' || arg === '--audit-only') {
+      if ((arg === '--apply' ? apply : auditOnly) === true) throw new Error(`${arg} is repeated`);
+      if (arg === '--apply') apply = true;
+      else auditOnly = true;
+      continue;
     }
-    return next;
-  };
-  const onlyRaw = value('--only');
-  const expectRaw = value('--expect');
+    if (arg === '--only' || arg === '--expect') {
+      if ((arg === '--only' ? onlyRaw : expectRaw) !== undefined) {
+        throw new Error(`${arg} is repeated`);
+      }
+      const next = argv[i + 1];
+      if (next === undefined || next.startsWith('--')) {
+        throw new Error(`${arg} needs a value`);
+      }
+      if (arg === '--only') onlyRaw = next;
+      else expectRaw = next;
+      i++;
+      continue;
+    }
+    throw new Error(
+      `unknown argument ${JSON.stringify(arg)}: this job takes --apply, --audit-only, --only <model_key,...> and --expect <n>`
+    );
+  }
   let only: string[] | undefined;
   if (onlyRaw !== undefined) {
     only = [
@@ -505,6 +527,23 @@ type MasterWrite =
       payload: Record<string, unknown>;
     }
   | { kind: 'ai-enrich'; id: string; name: string };
+
+/**
+ * Logs a field diff in parts of at most 50 lines: the logger keeps only the first 50 items
+ * of an array, and a part beyond that would drop silently. A diff of 50 lines or fewer
+ * logs exactly as before.
+ */
+function logDiff(message: string, modelKey: string, changes: readonly string[]): void {
+  const PART = 50;
+  const parts = Math.max(1, Math.ceil(changes.length / PART));
+  for (let i = 0; i < parts; i++) {
+    logger.info(
+      'backfill.catalog_diff',
+      parts === 1 ? message : `${message} (part ${i + 1}/${parts}, ${changes.length} lines)`,
+      { modelKey, changes: changes.slice(i * PART, (i + 1) * PART) }
+    );
+  }
+}
 
 /** A write payload without its timestamp, for the field diff. */
 function withoutTimestamp(payload: Record<string, unknown>): Record<string, unknown> {
@@ -736,6 +775,23 @@ export async function runMasterSpecsBackfillWith(
     }
   }
 
+  // A scoped run fixes existing masters: a named key with no master row would insert a draft
+  // (and through the master trigger possibly an Item), which --expect alone cannot catch.
+  const scopedInserts = scoped
+    ? seedWrites.filter(w => w.kind === 'seed-insert').map(w => w.device.model_key)
+    : [];
+  if (scopedInserts.length > 0) {
+    const message = `--only updates existing masters only; no master row for ${scopedInserts.join(', ')}`;
+    if (apply) throw new Error(`${message}: stopped before any write`);
+    logger.warn(
+      'backfill.scoped_insert',
+      `DRY-RUN: ${message}; an --apply would stop before any write`,
+      {
+        modelKeys: scopedInserts,
+      }
+    );
+  }
+
   const planned = seedWrites.length + masterWrites.length;
   const plannedKeys = [
     ...seedWrites.map(w => w.device.model_key),
@@ -776,10 +832,10 @@ export async function runMasterSpecsBackfillWith(
       }
       catalogUpdated++;
       if (w.changes) {
-        logger.info(
-          'backfill.catalog_diff',
+        logDiff(
           `[Catalog Specs] ${device.model_key}: ${apply ? 'changed' : 'would change'}`,
-          { modelKey: device.model_key, changes: w.changes }
+          device.model_key,
+          w.changes
         );
       }
       logger.info(
@@ -797,10 +853,10 @@ export async function runMasterSpecsBackfillWith(
       }
       catalogInserted++;
       if (w.changes) {
-        logger.info(
-          'backfill.catalog_diff',
+        logDiff(
           `[Catalog Draft] ${device.model_key}: ${apply ? 'inserted' : 'would insert'}`,
-          { modelKey: device.model_key, changes: w.changes }
+          device.model_key,
+          w.changes
         );
       }
       logger.info(
