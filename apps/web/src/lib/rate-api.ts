@@ -11,6 +11,8 @@ import { masterSiblingKeyPrefix } from '@/lib/product-variant-links';
 import { displayedScore5 } from '@/lib/rating-display';
 import {
   implausiblyLowOfferIds,
+  isOfferImplausiblyLowAgainstInStock,
+  normalizeOfferId,
   plausibleOffers,
 } from '@repo/shared-data/rules';
 import {
@@ -2241,11 +2243,19 @@ export async function getMasterProductPriceHistory(
       ? await getMasterProductOffers(cleanMasterId)
       : [];
   // Bait prices are judged among the in-stock listings, as the stored
-  // min_price is; a sold-out listing keeps its chart (DOS/Rate#1141).
-  const baitIds = implausiblyLowOfferIds(
-    rawOffers.filter((o) => !isOfferUnavailable(o))
+  // min_price is; a sold-out listing keeps its chart unless it is itself a
+  // bait listing (DOS/Rate#1141, #1697).
+  const safeRawOffers = rawOffers.filter((o): o is MerchantOffer =>
+    Boolean(o && typeof o === 'object' && !Array.isArray(o))
   );
-  const offers = rawOffers.filter((o) => !baitIds.has(o.id));
+  const inStockOffers = safeRawOffers.filter((o) => !isOfferUnavailable(o));
+  const baitIds = implausiblyLowOfferIds(inStockOffers);
+  const offers =
+    inStockOffers.length > 0
+      ? safeRawOffers.filter(
+          (o) => !isOfferImplausiblyLowAgainstInStock(o, inStockOffers, baitIds)
+        )
+      : plausibleOffers(safeRawOffers);
   if (offers.length === 0) {
     return {
       points: [],
@@ -2263,9 +2273,19 @@ export async function getMasterProductPriceHistory(
   const offerMap = new Map<string, MerchantOffer>();
   for (const off of offers) {
     offerMap.set(off.id, off);
+    const canonicalOffId = normalizeOfferId(off.id);
+    if (canonicalOffId && !offerMap.has(canonicalOffId)) {
+      offerMap.set(canonicalOffId, off);
+    }
   }
 
-  const productIds = offers.map((o) => o.id);
+  const productIds = Array.from(
+    new Set(
+      offers
+        .map((o) => normalizeOfferId(o.id) || sanitizeRateEntityId(o.id))
+        .filter(Boolean)
+    )
+  );
   const supabase = getRateClient();
   let rawRows: unknown[];
   let extremeRows: unknown[];
@@ -2286,18 +2306,23 @@ export async function getMasterProductPriceHistory(
         .limit(1)
     );
   try {
-    const [windowRows, lowRows, highRows] = await Promise.all([
-      readInChunks(productIds, 'price history', (chunk) =>
-        supabase
-          .from('price_history')
-          .select('id, product_id, price, price_original, recorded_at, source')
-          .in('product_id', chunk)
-          .order('recorded_at', { ascending: false })
-          .limit(1000)
-      ),
-      allTime ? extremes(true) : Promise.resolve([]),
-      allTime ? extremes(false) : Promise.resolve([]),
-    ]);
+    const [windowRows, lowRows, highRows] =
+      productIds.length > 0
+        ? await Promise.all([
+            readInChunks(productIds, 'price history', (chunk) =>
+              supabase
+                .from('price_history')
+                .select(
+                  'id, product_id, price, price_original, recorded_at, source'
+                )
+                .in('product_id', chunk)
+                .order('recorded_at', { ascending: false })
+                .limit(1000)
+            ),
+            allTime ? extremes(true) : Promise.resolve([]),
+            allTime ? extremes(false) : Promise.resolve([]),
+          ])
+        : [[], [], []];
     rawRows = windowRows;
     extremeRows = [...lowRows, ...highRows];
   } catch (err) {
@@ -2321,7 +2346,9 @@ export async function getMasterProductPriceHistory(
   const origPricesByOffer = new Map<string, number[]>();
 
   for (const row of chronologicalRows) {
-    const off = offerMap.get(row.product_id);
+    const off =
+      offerMap.get(row.product_id) ??
+      offerMap.get(normalizeOfferId(row.product_id));
     if (!off) continue;
     const price = Number(row.price || 0);
     if (!Number.isFinite(price) || price <= 0 || price > MAX_VALID_VND_PRICE) {
@@ -2334,7 +2361,7 @@ export async function getMasterProductPriceHistory(
 
     points.push({
       id: Number(row.id),
-      product_id: row.product_id,
+      product_id: off.id,
       merchant_name: off.merchant.name,
       platform: off.platform,
       is_official: off.merchant.is_official,
@@ -2344,14 +2371,14 @@ export async function getMasterProductPriceHistory(
       source: row.source || null,
     });
 
-    const list = pricesByOffer.get(row.product_id) ?? [];
+    const list = pricesByOffer.get(off.id) ?? [];
     list.push(price);
-    pricesByOffer.set(row.product_id, list);
+    pricesByOffer.set(off.id, list);
 
     if (priceOriginal) {
-      const origList = origPricesByOffer.get(row.product_id) ?? [];
+      const origList = origPricesByOffer.get(off.id) ?? [];
       origList.push(priceOriginal);
-      origPricesByOffer.set(row.product_id, origList);
+      origPricesByOffer.set(off.id, origList);
     }
   }
 
@@ -2392,10 +2419,20 @@ export async function getMasterProductPriceHistory(
       new Date(a.recorded_at).getTime() - new Date(b.recorded_at).getTime()
   );
 
-  // Market median across all current offers with valid VND prices
-  const validOfferPrices = offers
+  // Market median across plausible in-stock offers, falling back to plausible
+  // unavailable offers only when zero plausible in-stock offers exist (#1697).
+  const inStockPlausiblePrices = offers
+    .filter((o) => !isOfferUnavailable(o))
     .map((o) => o.price_current)
     .filter((p) => Number.isFinite(p) && p > 0 && p <= MAX_VALID_VND_PRICE);
+  const validOfferPrices =
+    inStockPlausiblePrices.length > 0
+      ? inStockPlausiblePrices
+      : (inStockOffers.length > 0 ? plausibleOffers(offers) : offers)
+          .map((o) => o.price_current)
+          .filter(
+            (p) => Number.isFinite(p) && p > 0 && p <= MAX_VALID_VND_PRICE
+          );
   const marketMedianPrice = computeMedian(validOfferPrices);
 
   const byOffer: Record<string, OfferDiscountAnalysis> = {};
@@ -2451,6 +2488,7 @@ export async function getMasterProductPriceHistory(
     let badgeLabel = 'Giá ổn định';
     let explanation = `Giá bán hiện tại (${priceCurrent.toLocaleString('vi-VN')} ₫) khớp với mức trung vị lịch sử (${histMedian.toLocaleString('vi-VN')} ₫).`;
 
+    const offerUnavailable = isOfferUnavailable(off);
     if (priceOriginal && claimedDiscountPct >= 5) {
       // Case 1: Shop claims >= 8% discount, but current price is at or above historical median
       // AND original price was inflated above historical max actual selling price
@@ -2468,15 +2506,21 @@ export async function getMasterProductPriceHistory(
         badgeLabel = 'Nghi nâng giá gốc';
         explanation = `Mức giảm công bố (-${claimedDiscountPct}%) cao hơn đáng kể so với mức giảm thực tế (-${Math.max(0, realDiscountVsMedianPct)}%) khi đối chiếu lịch sử giá (${histMedian.toLocaleString('vi-VN')} ₫).`;
         fakeDiscountCount += 1;
-      } else if (realDiscountVsMedianPct >= 3 || priceCurrent <= histMin) {
+      } else if (
+        !offerUnavailable &&
+        (realDiscountVsMedianPct >= 3 || priceCurrent <= histMin)
+      ) {
         verdict = 'genuine_deal';
         badgeLabel = 'Giảm giá thật';
         explanation = `Giá hiện tại thấp hơn ${Math.max(realDiscountVsMedianPct, claimedDiscountPct)}% so với mức trung vị lịch sử (${histMedian.toLocaleString('vi-VN')} ₫).`;
         genuineDealCount += 1;
       }
     } else if (
-      realDiscountVsMedianPct >= 3 ||
-      (histPrices.length >= 2 && priceCurrent <= histMin && histMin < histMax)
+      !offerUnavailable &&
+      (realDiscountVsMedianPct >= 3 ||
+        (histPrices.length >= 2 &&
+          priceCurrent <= histMin &&
+          histMin < histMax))
     ) {
       verdict = 'genuine_deal';
       badgeLabel = 'Đáy giá lịch sử';
@@ -2511,7 +2555,9 @@ export async function getMasterProductPriceHistory(
   const allTimeCandidates = [
     ...points,
     ...(extremeRows as unknown as RawPriceHistoryRow[]).flatMap((row) => {
-      const off = offerMap.get(row.product_id);
+      const off =
+        offerMap.get(row.product_id) ??
+        offerMap.get(normalizeOfferId(row.product_id));
       const price = Number(row.price || 0);
       return off &&
         Number.isFinite(price) &&
@@ -4455,6 +4501,64 @@ const PLATFORM_ITEM_ID_PREFIX: Partial<
   phongvu: 'pv-',
 };
 
+function lookupOfferDiscountAnalysis(
+  byOffer: Record<string, OfferDiscountAnalysis> | null | undefined,
+  rawId: unknown
+): OfferDiscountAnalysis | null {
+  if (!byOffer || typeof byOffer !== 'object' || typeof rawId !== 'string') {
+    return null;
+  }
+  if (Object.hasOwn(byOffer, rawId)) {
+    return byOffer[rawId] ?? null;
+  }
+  const canonicalId = normalizeOfferId(rawId);
+  if (canonicalId && Object.hasOwn(byOffer, canonicalId)) {
+    return byOffer[canonicalId] ?? null;
+  }
+  return null;
+}
+
+export function selectOfferForUrlInspection(
+  offers: readonly MerchantOffer[],
+  matchedMerchantByShopId:
+    Pick<MerchantSummary, 'id' | 'platform_shop_id'> | null | undefined
+): MerchantOffer | null {
+  const safeOffers = Array.isArray(offers) ? offers : [];
+  const inStockOffers = safeOffers.filter((o) => !isOfferUnavailable(o));
+  const plausibleInStock = plausibleOffers(inStockOffers);
+  if (matchedMerchantByShopId) {
+    const isShopOffer = (o: MerchantOffer) =>
+      o.merchant.id === matchedMerchantByShopId.id ||
+      Boolean(
+        matchedMerchantByShopId.platform_shop_id &&
+        o.merchant.id === matchedMerchantByShopId.platform_shop_id
+      );
+    const plausibleShopInStock = plausibleInStock.find(isShopOffer);
+    if (plausibleShopInStock) return plausibleShopInStock;
+    const inStockBaitIds = implausiblyLowOfferIds(inStockOffers);
+    const nonBaitOffers =
+      inStockOffers.length > 0
+        ? safeOffers.filter(
+            (o) =>
+              !isOfferImplausiblyLowAgainstInStock(
+                o,
+                inStockOffers,
+                inStockBaitIds
+              )
+          )
+        : plausibleOffers(safeOffers);
+    const plausibleShopAny = nonBaitOffers.find(isShopOffer);
+    if (plausibleShopAny) return plausibleShopAny;
+    const inStockShopAny = inStockOffers.find(isShopOffer);
+    if (inStockShopAny) return inStockShopAny;
+    const anyShopOffer = safeOffers.find(isShopOffer);
+    if (anyShopOffer) return anyShopOffer;
+  }
+  // The cheapest plausible in-stock offer, never a bait-price or sold-out
+  // listing (DOS/Rate#797, #1177).
+  return plausibleInStock[0] || null;
+}
+
 /**
  * Inspect an e-commerce product/shop URL (all 10 platforms) or keyword:
  * - Resolves exact `platform_item_id` or `url` against `rate.products`
@@ -4565,12 +4669,18 @@ export async function inspectProductOrShopUrl(
         ]);
         // No bait-price or sold-out listing as the fallback match
         // (DOS/Rate#797, #1177).
+        const canonicalMatchedProdId = normalizeOfferId(matchedProd.id);
         const matchedOffer =
-          offers.find((o) => o.id === matchedProd.id) ||
+          offers.find(
+            (o) =>
+              o.id === matchedProd.id ||
+              (canonicalMatchedProdId !== '' &&
+                normalizeOfferId(o.id) === canonicalMatchedProdId)
+          ) ||
           plausibleOffers(offers.filter((o) => !isOfferUnavailable(o)))[0] ||
           null;
         const discountAnalysis = matchedOffer
-          ? priceHistory.byOffer[matchedOffer.id] || null
+          ? lookupOfferDiscountAnalysis(priceHistory.byOffer, matchedOffer.id)
           : null;
         const merchantProfile =
           merchantsList.find((m) => m.id === matchedProd.merchant_id) || null;
@@ -4663,22 +4773,8 @@ export async function inspectProductOrShopUrl(
 
   const pickOfferForUrlInspection = (
     offers: MerchantOffer[]
-  ): MerchantOffer | null => {
-    if (matchedMerchantByShopId) {
-      const byShopMerchant = offers.find(
-        (o) =>
-          o.merchant.id === matchedMerchantByShopId.id ||
-          (matchedMerchantByShopId.platform_shop_id &&
-            o.merchant.id === matchedMerchantByShopId.platform_shop_id)
-      );
-      if (byShopMerchant) return byShopMerchant;
-    }
-    // The cheapest plausible in-stock offer, never a bait-price or sold-out
-    // listing (DOS/Rate#797, #1177).
-    return (
-      plausibleOffers(offers.filter((o) => !isOfferUnavailable(o)))[0] || null
-    );
-  };
+  ): MerchantOffer | null =>
+    selectOfferForUrlInspection(offers, matchedMerchantByShopId);
 
   // 3. Internal slug or exact master product slug match (including slugified URL keyword)
   const urlProductKeyword = parsedUrl.isUrl
@@ -4729,7 +4825,7 @@ export async function inspectProductOrShopUrl(
           ),
     ]);
     const discountAnalysis = matchedOffer
-      ? priceHistory.byOffer[matchedOffer.id] || null
+      ? lookupOfferDiscountAnalysis(priceHistory.byOffer, matchedOffer.id)
       : null;
     const merchantProfile = hasShopOfferMatch
       ? matchedMerchantByShopId
@@ -4805,7 +4901,7 @@ export async function inspectProductOrShopUrl(
             matchedMerchantByShopId.platform_shop_id))
     );
     const discountAnalysis = matchedOffer
-      ? priceHistory.byOffer[matchedOffer.id] || null
+      ? lookupOfferDiscountAnalysis(priceHistory.byOffer, matchedOffer.id)
       : null;
     const merchantProfile = hasShopOfferMatch
       ? matchedMerchantByShopId
@@ -4848,7 +4944,7 @@ export async function inspectProductOrShopUrl(
             matchedMerchantByShopId.platform_shop_id))
     );
     const discountAnalysis = matchedOffer
-      ? priceHistory.byOffer[matchedOffer.id] || null
+      ? lookupOfferDiscountAnalysis(priceHistory.byOffer, matchedOffer.id)
       : null;
     const merchantProfile = hasShopOfferMatch
       ? matchedMerchantByShopId

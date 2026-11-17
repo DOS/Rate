@@ -20,6 +20,7 @@ import {
 } from '../rate-domain-core';
 import { merchantDirectoryDosafeDisplay } from '../../components/merchants/MerchantDirectoryExplorer';
 import {
+  filterInspectOfferDiscount,
   inspectDosafeDisplay,
   isInspectOfferBait,
   orderInspectOffers,
@@ -668,6 +669,140 @@ assert.equal(
 );
 assert.equal(resolveInspectOfferPlatform({}), 'shopee');
 
+// DOS/Rate#1697: padded/control-char IDs match implausibleOfferIds in both
+// orderInspectOffers and isInspectOfferBait, and /inspect carries localized
+// unavailable badges for the HTML offers table cell.
+const paddedInspectOffers = orderInspectOffers([
+  {
+    id: '  in-stock-bait\u0000  ',
+    price_current: 500_000,
+    availability: 'in_stock' as const,
+  },
+  {
+    id: 'in-stock-1',
+    price_current: 3_032_000,
+    availability: 'in_stock' as const,
+  },
+  {
+    id: 'in-stock-2',
+    price_current: 3_140_000,
+    availability: 'in_stock' as const,
+  },
+  {
+    id: 'sold-out-normal',
+    price_current: 2_950_000,
+    availability: 'out_of_stock' as const,
+  },
+  {
+    id: 'sold-out-bait',
+    price_current: 500_000,
+    availability: 'out_of_stock' as const,
+  },
+]);
+assert.deepEqual(
+  paddedInspectOffers.listedOffers.map((o) => o.id),
+  [
+    'in-stock-1',
+    'in-stock-2',
+    '  in-stock-bait\u0000  ',
+    'sold-out-normal',
+    'sold-out-bait',
+  ]
+);
+assert.equal(
+  isInspectOfferBait(
+    paddedInspectOffers.listedOffers[2],
+    paddedInspectOffers.implausibleOfferIds,
+    paddedInspectOffers.plausibilityOffers
+  ),
+  true
+);
+assert.equal(
+  filterInspectOfferDiscount({ verdict: 'normal_price' }, true),
+  null
+);
+assert.equal(
+  filterInspectOfferDiscount({ verdict: 'genuine_deal' }, true),
+  null
+);
+assert.deepEqual(
+  filterInspectOfferDiscount({ verdict: 'fake_discount' }, true),
+  { verdict: 'fake_discount' }
+);
+const allUnavailableInspect = orderInspectOffers([
+  {
+    id: 'so-bait',
+    price_current: 500_000,
+    availability: 'out_of_stock' as const,
+  },
+  {
+    id: 'so-1',
+    price_current: 3_032_000,
+    availability: 'out_of_stock' as const,
+  },
+  {
+    id: 'so-2',
+    price_current: 3_140_000,
+    availability: 'out_of_stock' as const,
+  },
+]);
+assert.deepEqual([...allUnavailableInspect.implausibleOfferIds], ['so-bait']);
+assert.deepEqual(
+  allUnavailableInspect.listedOffers.map((o) => o.id),
+  ['so-1', 'so-2', 'so-bait']
+);
+const roundTripSoldOut = [
+  1_000_000, 1_000_000, 3_500_000, 8_000_000, 10_000_000, 20_000_000,
+  30_000_000,
+].map((price_current, i) => ({
+  id: `id-${i}`,
+  price_current,
+  availability: 'out_of_stock' as const,
+}));
+const roundTripParsed = JSON.parse(
+  JSON.stringify({
+    allOffers: roundTripSoldOut,
+    matchedOffer: roundTripSoldOut[2],
+  })
+) as {
+  allOffers: typeof roundTripSoldOut;
+  matchedOffer: (typeof roundTripSoldOut)[number];
+};
+const roundTripOrdered = orderInspectOffers(roundTripParsed.allOffers);
+assert.equal(
+  isInspectOfferBait(
+    roundTripParsed.matchedOffer,
+    roundTripOrdered.implausibleOfferIds,
+    roundTripOrdered.plausibilityOffers
+  ),
+  isInspectOfferBait(
+    roundTripParsed.allOffers[2],
+    roundTripOrdered.implausibleOfferIds,
+    roundTripOrdered.plausibilityOffers
+  )
+);
+const largeAlternatingOffers = Array.from({ length: 3000 }, (_, i) => ({
+  id: `offer-${i}`,
+  price_current: 3_000_000 + i * 1_000,
+  availability: (i % 2 === 0 ? 'in_stock' : 'out_of_stock') as
+    'in_stock' | 'out_of_stock',
+}));
+const sortStartedAt = Date.now();
+const orderedLarge = orderInspectOffers(largeAlternatingOffers);
+assert.equal(orderedLarge.listedOffers.length, 3000);
+assert.ok(Date.now() - sortStartedAt < 100, 'orderInspectOffers is O(n log n)');
+for (const locale of LOCALES) {
+  const inspectClientMsgs = pickClientMessages(readLocale(locale), 'inspect');
+  const detailSubset = inspectClientMsgs.productDetail as
+    Record<string, string> | undefined;
+  assert.ok(
+    detailSubset?.offersUnavailableBadge &&
+      detailSubset?.offersUnavailableTitle &&
+      detailSubset?.offersDiscontinuedBadge,
+    `${locale}: inspect client message scope must ship unavailable offer badge keys`
+  );
+}
+
 const deepInspectWorkspace = readFileSync(
   join(
     __dirname,
@@ -687,9 +822,11 @@ assert.ok(
       "offer.platform || offer.merchant?.platform || 'shopee'"
     ) &&
     deepInspectWorkspace.includes('resolveInspectOfferPlatform(offer)') &&
+    deepInspectWorkspace.includes('data-testid="inspect-offer-unavailable"') &&
+    !deepInspectWorkspace.includes('implausibleOfferIds.has(') &&
     !deepInspectWorkspace.includes('<strong className="text-success">') &&
     !deepInspectWorkspace.includes('className="progress-bar bg-success"'),
-  'DeepInspectWorkspace.tsx must apply merchantRiskTone, hide the DOSafe bar when unknown, scope plausibility to in-stock offers, and prefer offer.platform'
+  'DeepInspectWorkspace.tsx must apply merchantRiskTone, hide the DOSafe bar when unknown, scope plausibility to in-stock offers, use canonical bait helper, and prefer offer.platform'
 );
 
 console.log('display-truth: ok');

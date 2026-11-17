@@ -103,6 +103,129 @@ export function plausibleOffers<T extends { price_current: number }>(
   );
 }
 
+function trimOfferString(raw: unknown): string {
+  return typeof raw === 'string' ? raw.replace(/\p{Cc}+/gu, '').trim() : '';
+}
+
+function cleanOfferId(raw: unknown): string {
+  const id = trimOfferString(raw);
+  if (
+    !id ||
+    !/^[a-zA-Z0-9:._-]{1,256}$/.test(id) ||
+    !/[a-zA-Z0-9]/.test(id) ||
+    /^[.:]|[.:]$/.test(id) ||
+    id.includes('..') ||
+    id.includes('::') ||
+    /^(?:0+|null|undefined|nan|infinity|-infinity|true|false|__proto__|constructor|prototype|tostring|valueof)$/i.test(
+      id
+    )
+  ) {
+    return '';
+  }
+  return id;
+}
+
+function isNonArrayObject(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+function hasSetLookup(
+  flaggedIds: ReadonlySet<string> | null | undefined
+): flaggedIds is ReadonlySet<string> {
+  return Boolean(flaggedIds) && typeof flaggedIds?.has === 'function';
+}
+
+interface PrecomputedReferenceBait {
+  length: number;
+  flaggedObjects: WeakSet<object>;
+  nonFlaggedObjects: WeakSet<object>;
+  naturalBaitIds: Set<string>;
+  presentCanonicalIds: Set<string>;
+  presentTrimmedIds: Set<string>;
+  flaggedTrimmedIds: Set<string>;
+  plausibleCutoff: number;
+}
+
+const referenceBaitCache = new WeakMap<
+  readonly unknown[],
+  PrecomputedReferenceBait
+>();
+
+function getPrecomputedReferenceBait(
+  referenceOffers: readonly { id?: string | null; price_current: number }[]
+): PrecomputedReferenceBait {
+  const cached = referenceBaitCache.get(referenceOffers);
+  if (cached && cached.length === referenceOffers.length) return cached;
+
+  const flaggedIndexes = implausiblyLowIndexes(
+    referenceOffers.map((o) => o?.price_current)
+  );
+  const flaggedObjects = new WeakSet<object>();
+  const nonFlaggedObjects = new WeakSet<object>();
+  const naturalBaitIds = new Set<string>();
+  const presentCanonicalIds = new Set<string>();
+  const presentTrimmedIds = new Set<string>();
+  const flaggedTrimmedIds = new Set<string>();
+  const plausiblePrices: number[] = [];
+
+  for (let i = 0; i < referenceOffers.length; i++) {
+    const item = referenceOffers[i];
+    if (!isNonArrayObject(item)) continue;
+    const canonical = cleanOfferId(item.id);
+    const trimmed = trimOfferString(item.id);
+    if (canonical) presentCanonicalIds.add(canonical);
+    if (trimmed) presentTrimmedIds.add(trimmed);
+    if (flaggedIndexes.has(i)) {
+      flaggedObjects.add(item);
+      if (canonical) naturalBaitIds.add(canonical);
+      if (trimmed) flaggedTrimmedIds.add(trimmed);
+    } else {
+      nonFlaggedObjects.add(item);
+      const p = toSafePlausiblePrice(item.price_current);
+      if (isValidPlausiblePrice(p)) plausiblePrices.push(p);
+    }
+  }
+
+  plausiblePrices.sort((a, b) => a - b);
+  const plausibleCutoff =
+    plausiblePrices.length >= MIN_OFFERS_FOR_OUTLIER - 1
+      ? plausiblePrices[Math.floor((plausiblePrices.length - 1) / 2)]! *
+        IMPLAUSIBLY_LOW_RATIO
+      : 0;
+
+  const entry: PrecomputedReferenceBait = {
+    length: referenceOffers.length,
+    flaggedObjects,
+    nonFlaggedObjects,
+    naturalBaitIds,
+    presentCanonicalIds,
+    presentTrimmedIds,
+    flaggedTrimmedIds,
+    plausibleCutoff,
+  };
+  referenceBaitCache.set(referenceOffers, entry);
+  return entry;
+}
+
+/**
+ * Canonicalizes an offer identifier so Set lookups match implausiblyLowOfferIds
+ * even when raw IDs carry whitespace, control characters, or composite colons.
+ * Returns '' for empty, path-traversal, or sentinel tokens.
+ */
+export function normalizeOfferId(raw: unknown): string {
+  return cleanOfferId(raw);
+}
+
+/** Canonicalized membership check against a set from implausiblyLowOfferIds. */
+export function hasImplausiblyLowOfferId(
+  flaggedIds: ReadonlySet<string> | null | undefined,
+  rawId: unknown
+): boolean {
+  if (!hasSetLookup(flaggedIds)) return false;
+  const id = cleanOfferId(rawId);
+  return Boolean(id) && flaggedIds.has(id);
+}
+
 /** Ids of the implausibly low offers. */
 export function implausiblyLowOfferIds<
   T extends { id: string; price_current: number },
@@ -111,23 +234,61 @@ export function implausiblyLowOfferIds<
   const flagged = implausiblyLowIndexes(offers.map((o) => o?.price_current));
   return new Set(
     offers
-      .filter(
-        (o, index) =>
-          Boolean(o && typeof o === 'object' && !Array.isArray(o)) &&
-          flagged.has(index)
-      )
-      .map((o) =>
-        typeof o.id === 'string' ? o.id.replace(/\p{Cc}+/gu, '').trim() : ''
-      )
-      .filter(
-        (id) =>
-          /^[a-zA-Z0-9._-]{1,256}$/.test(id) &&
-          /[a-zA-Z0-9]/.test(id) &&
-          !id.startsWith('.') &&
-          !id.endsWith('.') &&
-          !id.includes('..') &&
-          !/^(?:0+|null|undefined|nan|infinity|-infinity|true|false)$/i.test(id)
-      )
+      .filter((o, index) => isNonArrayObject(o) && flagged.has(index))
+      .map((o) => cleanOfferId(o.id))
+      .filter(Boolean)
+  );
+}
+
+/**
+ * Whether an offer (in-stock or out_of_stock/discontinued) has a bait price
+ * judged against the in-stock market offers. Falls back to price comparison
+ * when offer.id cannot be canonicalized, preventing fail-open mismatches
+ * between plausibleOffers and implausiblyLowOfferIds.
+ */
+export function isOfferImplausiblyLowAgainstInStock(
+  offer:
+    | {
+        id?: string | null;
+        price_current: number;
+        availability?: string | null;
+      }
+    | null
+    | undefined,
+  inStockOffers: readonly {
+    id?: string | null;
+    price_current: number;
+  }[],
+  inStockBaitIds?: ReadonlySet<string> | null
+): boolean {
+  if (!isNonArrayObject(offer)) return false;
+  if (hasImplausiblyLowOfferId(inStockBaitIds, offer.id)) {
+    return true;
+  }
+  if (!Array.isArray(inStockOffers) || inStockOffers.length === 0) {
+    return false;
+  }
+  const pre = getPrecomputedReferenceBait(inStockOffers);
+  const canonicalId = cleanOfferId(offer.id);
+  const hasCustomSet = hasSetLookup(inStockBaitIds);
+  if (pre.flaggedObjects.has(offer)) {
+    return !(hasCustomSet && Boolean(canonicalId));
+  }
+  if (pre.nonFlaggedObjects.has(offer)) {
+    return false;
+  }
+  if (Boolean(canonicalId) && pre.presentCanonicalIds.has(canonicalId)) {
+    return hasCustomSet ? false : pre.naturalBaitIds.has(canonicalId);
+  }
+  const trimmedId = trimOfferString(offer.id);
+  if (Boolean(trimmedId) && pre.presentTrimmedIds.has(trimmedId)) {
+    return pre.flaggedTrimmedIds.has(trimmedId);
+  }
+  const numPrice = toSafePlausiblePrice(offer.price_current);
+  return (
+    isValidPlausiblePrice(numPrice) &&
+    pre.plausibleCutoff > 0 &&
+    numPrice < pre.plausibleCutoff
   );
 }
 
