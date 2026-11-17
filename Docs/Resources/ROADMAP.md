@@ -79,7 +79,7 @@ Hệ thống **Rate Platform (`rate.vn`)** vận hành trên kiến trúc 4 tầ
   - Trần miền giá trị và kiểm tra số hữu hạn ở mọi tầng (shared schema, REST API v1, extension, engine, scraper); URL chỉ HTTP(S); listing hết hàng không có giá được ghi `listing_unavailable` thay vì lỗi. Chi tiết tại mục 6.5 trong [`CHANGELOG.md`](./CHANGELOG.md).
 - [x] **6.12. Second input-bounds sweep (2026-10-24 -> 2026-10-26, PRs #823-#1056):** the same rules applied file by file across shared-data, the importer, the web BFF, client components and the extension. Details in CHANGELOG 6.8.
 - [x] **6.13. Security headers and API hardening (PRs #957, #1312-#1324, #1408, #1618):** `SUPABASE_SECRET_KEY` naming, fixed public API error messages, rate-limited and cached inspect and lookup, capped JSON write bodies, and `script-src` enforced on ISR pages through the page meta CSP (closes #1323). Still open: the strict nonce policy stays Report-Only ([#1311](https://github.com/DOS/Rate/issues/1311), [#1348](https://github.com/DOS/Rate/issues/1348)); review votes can still flush site-wide caches without a real rate limit ([#1306](https://github.com/DOS/Rate/issues/1306)).
-- [ ] **6.14. Production grants check ([#1173](https://github.com/DOS/Rate/issues/1173)):** verify the Production grants on `review_votes` and two refresh functions. Blocked on access: `rate_worker` cannot read the catalog, so it needs a read-only catalog SELECT by someone with database access (for example once the Supabase plugin is authorised) or a DOS-Me RPC. Waits on JOY.
+- [x] **6.14. Production grants check ([#1173](https://github.com/DOS/Rate/issues/1173)):** the Production grants and policies on `review_votes` and the two refresh functions match intent (read-only catalog check by the PO on 2026-11-17). The Supabase connector now allows read-only `SELECT` checks on Production, so post-promotion checks no longer wait on database access.
 
 ### 🚀 Phase 7: Mở Rộng Độ Phủ Dữ Liệu Thật Đa Sàn & Kiểm Thử E2E (2027 Q1)
 
@@ -134,11 +134,10 @@ Rate Core resumed on the Mac after the 2026-11-12 move. The last promotion of `d
 
 ### 4.2. Waiting on JOY
 
-Nothing in this list can move without a JOY decision or a DOS-Me database step. Options and recommendations for the older items are in `Docs/Proposals/2026-10-30-joy-decisions.html`.
+Nothing in this list can move without a JOY decision or a DOS-Me database step. Read-only Production checks now run through the Supabase connector (6.14). Options and recommendations for the older items are in `Docs/Proposals/2026-10-30-joy-decisions.html`.
 
-- **Production database access:** [#1173](https://github.com/DOS/Rate/issues/1173), a read-only catalog check of the Production grants (6.14).
 - **Normalizer re-key data steps (7.14):** [#1491](https://github.com/DOS/Rate/issues/1491) (D5, D6: iPad Wi-Fi vs 5G, MacBook RAM), [#1441](https://github.com/DOS/Rate/issues/1441) (gift words in keys), [#1407](https://github.com/DOS/Rate/issues/1407) (watch spellings), [#1540](https://github.com/DOS/Rate/issues/1540) (masters keyed before #1506/#1508); `Docs/Proposals/2026-10-30-rekey-decisions.md`.
-- **Catalog expansion D1-D5:** draft PR [#1455](https://github.com/DOS/Rate/pull/1455) and the larger iPhone 18 Pro / S26 Ultra storage variants [#1464](https://github.com/DOS/Rate/issues/1464); `Docs/Proposals/2026-10-30-catalog-expansion.html`.
+- **Catalog expansion D1-D5:** draft PR [#1455](https://github.com/DOS/Rate/pull/1455); `Docs/Proposals/2026-10-30-catalog-expansion.html`. For [#1464](https://github.com/DOS/Rate/issues/1464), a read-only check found no Tier 3 masters at 512GB or above, but the three 256GB seeds on Production (iPhone 18 Pro, 18 Pro Max, Galaxy S26 Ultra) still carry the old registry specs; JOY approved a Production spec backfill on 2026-11-17, which the Rate Services PO is running.
 - **DOS-Me `dev` -> `main` promotion (6.4):** [#613](https://github.com/DOS/Rate/issues/613) (vote eligibility), [#594](https://github.com/DOS/Rate/issues/594) (iPhone 16e offer move), [#887](https://github.com/DOS/Rate/issues/887) (product image bucket), [#802](https://github.com/DOS/Rate/issues/802) (bait price out of `min_price`); then the read-only checks each issue lists. [#1543](https://github.com/DOS/Rate/issues/1543) waits on its post-promotion check.
 - **Item model (6.4, 7.10):** [#1150](https://github.com/DOS/Rate/issues/1150) (M1+M2), [#1160](https://github.com/DOS/Rate/issues/1160) (M3/M4) and the M0 seed re-key [#1123](https://github.com/DOS/Rate/issues/1123), then the go-live runbook.
 - **Product verdict storage:** [#1623](https://github.com/DOS/Rate/issues/1623), the DOS-Me migration `Docs/Proposals/2026-11-14-dos-me-product-verdict.sql` (7.11).
@@ -159,6 +158,6 @@ Nothing in this list can move without a JOY decision or a DOS-Me database step. 
 - [#1172](https://github.com/DOS/Rate/issues/1172) proposal: refresh master market stats on listing changes (DOS-Me trigger).
 - [#1247](https://github.com/DOS/Rate/issues/1247) proposal: global per-network limit for extension ingest.
 - Qwen line (`po:qwen`), in progress: [#1665](https://github.com/DOS/Rate/issues/1665), [#1693](https://github.com/DOS/Rate/issues/1693), [#1704](https://github.com/DOS/Rate/issues/1704).
-- In progress on the Claude line: [#1707](https://github.com/DOS/Rate/issues/1707) post-release audit of the Qwen-line web fixes, [#1708](https://github.com/DOS/Rate/issues/1708) this status refresh.
+- In progress on the Claude line: [#1710](https://github.com/DOS/Rate/issues/1710) extension side panel re-render after a stale lookup, [#1711](https://github.com/DOS/Rate/issues/1711) OpenAPI `hideFake`/`no_stock` text and localised inspect Markdown verdicts, [#1708](https://github.com/DOS/Rate/issues/1708) this status refresh. Both #1710 and #1711 came from the post-release audit [#1707](https://github.com/DOS/Rate/issues/1707) (done, 10 of 11 fixes confirmed).
 
 The board is [Project #9](https://github.com/orgs/DOS/projects/9).
