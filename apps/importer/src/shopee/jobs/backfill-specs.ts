@@ -6,6 +6,20 @@
  *   pnpm --filter @repo/crawlers exec tsx src/shopee/jobs/backfill-specs.ts --apply      (Apply spec updates to rate.master_products)
  *   pnpm --filter @repo/crawlers exec tsx src/shopee/jobs/backfill-specs.ts --audit-only (Read-only 10-Field-Group audit)
  *
+ * Scoped run (DOS/Rate#1464), for an approved fix of named masters only:
+ *   ... backfill-specs.ts --only <model_key,...>                  (Dry-run: per-row field diff + planned count)
+ *   ... backfill-specs.ts --only <model_key,...> --apply --expect <n>
+ *   --only <keys>  Plans and writes only these seed model_keys: no other seed is inserted or
+ *                  updated, no canonical or AI master and no rate.items row is touched. A key
+ *                  with no seed fails before any database read.
+ *   --expect <n>   With --apply, stops before the first write unless the plan updates or
+ *                  inserts exactly n masters. A dry run logs whether the plan matches.
+ *   A scoped run only updates existing masters: a named key with no master row stops an
+ *   --apply before any write (a dry run warns). Any unknown argument, `--flag=value` or a
+ *   repeated flag fails. Neither flag combines with --audit-only. The read-only catalog
+ *   audit still runs at the end, so a scoped --apply can exit 1 after its writes when an
+ *   unrelated master fails the audit: read the log, not only the exit code.
+ *
  * Safety invariant:
  * - Dry-run by default (`apply = false`): never mutates `rate.master_products` unless `--apply` is passed.
  * - Never writes listings (`rate.products`), merchants, reviews, price_history, or fabricated scores.
@@ -47,10 +61,23 @@ export const REQUIRED_10_SPEC_GROUPS = [
 
 export interface BackfillSpecsOptions {
   readonly apply?: boolean;
+  /**
+   * `--only`: the seed `model_key`s to update. Nothing else is inserted or updated: no other
+   * seed, no canonical or AI master, no `rate.items` row. A key with no seed is an error
+   * before any read; a key with no master row stops an apply before any write.
+   */
+  readonly only?: readonly string[];
+  /**
+   * `--expect`: the number of masters the plan must update or insert. With `apply`, a plan
+   * of any other size stops before the first write; a dry run only reports the comparison.
+   */
+  readonly expect?: number;
 }
 
 export interface BackfillSpecsResult {
   readonly apply: boolean;
+  /** Masters the plan updates or inserts (seeds, canonical entries, AI candidates). */
+  readonly planned: number;
   readonly catalogUpdated: number;
   readonly catalogInserted: number;
   /** Items whose specs the seeds set (RATE_ITEM_MODEL on only; 0 otherwise). */
@@ -375,6 +402,156 @@ export function mergeKeySpecs(
   return out;
 }
 
+/** The CLI flags of this job (see the usage header). */
+export interface BackfillSpecsArgs {
+  readonly apply: boolean;
+  readonly auditOnly: boolean;
+  readonly only?: readonly string[];
+  readonly expect?: number;
+}
+
+/** Parses the job's flags; throws on a malformed `--only` or `--expect`. */
+export function parseBackfillSpecsArgs(argv: readonly string[]): BackfillSpecsArgs {
+  // Strict: an argument this job does not know (a typo, `--only=keys`) or a repeated flag
+  // fails, so it can never turn a scoped run into a full one.
+  let apply = false;
+  let auditOnly = false;
+  let onlyRaw: string | undefined;
+  let expectRaw: string | undefined;
+  for (let i = 0; i < argv.length; i++) {
+    const arg = argv[i]!;
+    if (arg === '--apply' || arg === '--audit-only') {
+      if ((arg === '--apply' ? apply : auditOnly) === true) throw new Error(`${arg} is repeated`);
+      if (arg === '--apply') apply = true;
+      else auditOnly = true;
+      continue;
+    }
+    if (arg === '--only' || arg === '--expect') {
+      if ((arg === '--only' ? onlyRaw : expectRaw) !== undefined) {
+        throw new Error(`${arg} is repeated`);
+      }
+      const next = argv[i + 1];
+      if (next === undefined || next.startsWith('--')) {
+        throw new Error(`${arg} needs a value`);
+      }
+      if (arg === '--only') onlyRaw = next;
+      else expectRaw = next;
+      i++;
+      continue;
+    }
+    throw new Error(
+      `unknown argument ${JSON.stringify(arg)}: this job takes --apply, --audit-only, --only <model_key,...> and --expect <n>`
+    );
+  }
+  let only: string[] | undefined;
+  if (onlyRaw !== undefined) {
+    only = [
+      ...new Set(
+        onlyRaw
+          .split(',')
+          .map(k => k.trim())
+          .filter(Boolean)
+      ),
+    ];
+    if (only.length === 0) throw new Error('--only needs at least one model_key');
+  }
+  let expect: number | undefined;
+  if (expectRaw !== undefined) {
+    if (!/^\d+$/.test(expectRaw.trim())) {
+      throw new Error(`--expect takes a whole number of masters, got "${expectRaw}"`);
+    }
+    expect = Number(expectRaw.trim());
+  }
+  if (auditOnly && (only !== undefined || expect !== undefined)) {
+    throw new Error('--only and --expect do not combine with --audit-only');
+  }
+  return {
+    apply,
+    auditOnly,
+    ...(only !== undefined ? { only } : {}),
+    ...(expect !== undefined ? { expect } : {}),
+  };
+}
+
+/**
+ * The seeds a `--only` list names, in seed order. Throws, naming them, on keys with no seed,
+ * so a typo never turns a scoped run into a smaller one.
+ */
+export function selectOnlySeeds(
+  only: readonly string[],
+  seeds: readonly FlagshipDeviceSeed[] = FLAGSHIP_DEVICES_TO_SEED
+): FlagshipDeviceSeed[] {
+  if (!Array.isArray(only) || only.length === 0) {
+    throw new Error('--only needs at least one model_key');
+  }
+  const wanted = new Set(only.map(k => (typeof k === 'string' ? k.trim() : '')));
+  const seedKeys = new Set(seeds.map(s => s.model_key));
+  const unknown = [...wanted].filter(k => !k || !seedKeys.has(k));
+  if (unknown.length > 0) {
+    throw new Error(
+      `--only names ${unknown.length} key(s) with no seed: ${unknown.map(k => JSON.stringify(k)).join(', ')}`
+    );
+  }
+  return seeds.filter(s => wanted.has(s.model_key));
+}
+
+/** What the job needs besides the client, so tests can pass stand-ins. */
+export interface BackfillSpecsDeps {
+  readonly enricher: { isConfigured(): boolean };
+  readonly matcher: { enrichMasterProductById(masterId: string): Promise<boolean> };
+  /** The seed list; the flagship seeds unless a test passes its own. */
+  readonly seeds?: readonly FlagshipDeviceSeed[];
+}
+
+type SeedWrite =
+  | {
+      kind: 'seed-update';
+      device: FlagshipDeviceSeed;
+      id: string;
+      payload: Record<string, unknown>;
+      changes?: string[];
+    }
+  | {
+      kind: 'seed-insert';
+      device: FlagshipDeviceSeed;
+      payload: Record<string, unknown>;
+      changes?: string[];
+    };
+
+type MasterWrite =
+  | {
+      kind: 'canonical-update';
+      id: string;
+      modelKey: string;
+      name: string;
+      payload: Record<string, unknown>;
+    }
+  | { kind: 'ai-enrich'; id: string; name: string };
+
+/**
+ * Logs a field diff in parts of at most 50 lines: the logger keeps only the first 50 items
+ * of an array, and a part beyond that would drop silently. A diff of 50 lines or fewer
+ * logs exactly as before.
+ */
+function logDiff(message: string, modelKey: string, changes: readonly string[]): void {
+  const PART = 50;
+  const parts = Math.max(1, Math.ceil(changes.length / PART));
+  for (let i = 0; i < parts; i++) {
+    logger.info(
+      'backfill.catalog_diff',
+      parts === 1 ? message : `${message} (part ${i + 1}/${parts}, ${changes.length} lines)`,
+      { modelKey, changes: changes.slice(i * PART, (i + 1) * PART) }
+    );
+  }
+}
+
+/** A write payload without its timestamp, for the field diff. */
+function withoutTimestamp(payload: Record<string, unknown>): Record<string, unknown> {
+  const rest = { ...payload };
+  delete rest.updated_at;
+  return rest;
+}
+
 /**
  * Spec-only catalog sync for `rate.master_products`.
  * Defaults to dry-run (`apply = false`) unless explicitly invoked with `{ apply: true }`.
@@ -383,7 +560,8 @@ export async function runMasterSpecsBackfill(
   options: BackfillSpecsOptions = {}
 ): Promise<BackfillSpecsResult> {
   if (!options || typeof options !== 'object' || Array.isArray(options)) options = {};
-  const apply = options.apply === true;
+  // An unknown --only key fails before the client exists.
+  if (options.only !== undefined) selectOnlySeeds(options.only);
   const { createClient } = await import('@supabase/supabase-js');
   const { EntityMatcher } = await import('../entity-matcher.js');
 
@@ -401,14 +579,37 @@ export async function runMasterSpecsBackfill(
   const aiInfo = enricher.getProviderInfo();
   logger.info(
     'backfill.start',
-    `Running Spec-Only Catalog Sync for rate.master_products [mode=${apply ? 'APPLY' : 'DRY-RUN'}]`,
+    `Running Spec-Only Catalog Sync for rate.master_products [mode=${options.apply === true ? 'APPLY' : 'DRY-RUN'}]`,
     {
-      mode: apply ? 'APPLY' : 'DRY-RUN',
+      mode: options.apply === true ? 'APPLY' : 'DRY-RUN',
       provider: aiInfo.provider,
       model: aiInfo.model,
       configured: aiInfo.configured,
     }
   );
+
+  return runMasterSpecsBackfillWith(supabase, { enricher, matcher }, options);
+}
+
+/**
+ * The backfill on a given client. It plans every master write first (reads only), checks
+ * `expect` against the plan, then writes, so a mismatch stops before the first write.
+ */
+export async function runMasterSpecsBackfillWith(
+  supabase: RateSupabaseClient,
+  deps: BackfillSpecsDeps,
+  options: BackfillSpecsOptions = {}
+): Promise<BackfillSpecsResult> {
+  if (!options || typeof options !== 'object' || Array.isArray(options)) options = {};
+  const apply = options.apply === true;
+  const allSeeds = deps.seeds ?? FLAGSHIP_DEVICES_TO_SEED;
+  const scoped = options.only !== undefined;
+  const seeds = scoped ? selectOnlySeeds(options.only!, allSeeds) : allSeeds;
+  const expect = options.expect;
+  if (expect !== undefined && (!Number.isInteger(expect) || expect < 0)) {
+    throw new Error(`expect must be a whole number of masters, got ${String(expect)}`);
+  }
+  const { enricher, matcher } = deps;
 
   const { data: categories, error: catErr } = await supabase
     .from('categories')
@@ -428,12 +629,15 @@ export async function runMasterSpecsBackfill(
     }
   }
 
-  const catalogModelKeys = new Set<string>();
-  let catalogUpdated = 0;
-  let catalogInserted = 0;
-
-  for (const device of FLAGSHIP_DEVICES_TO_SEED) {
-    catalogModelKeys.add(device.model_key);
+  // Plan: reads only.
+  // Typed as a plain string: the client then reads rows as records, not a parsed column union.
+  // A scoped run also reads the image and category columns, so its diff covers every write.
+  const lookupColumns: string = scoped
+    ? 'id, category_id, key_specs, specifications, variant_name, description, ram_gb, storage_gb, screen_size_inch, battery_mah, has_5g, colors, images, thumbnail'
+    : 'id, key_specs, specifications, variant_name, description, ram_gb, storage_gb, screen_size_inch, battery_mah, has_5g, colors';
+  const catalogModelKeys = new Set<string>(allSeeds.map(d => d.model_key));
+  const seedWrites: SeedWrite[] = [];
+  for (const device of seeds) {
     const categoryId = categoryIdBySlug.get(device.categorySlug) || null;
     const specFields = {
       description: device.description,
@@ -451,9 +655,7 @@ export async function runMasterSpecsBackfill(
 
     const { data: existing, error: lookupErr } = await supabase
       .from('master_products')
-      .select(
-        'id, key_specs, specifications, variant_name, description, ram_gb, storage_gb, screen_size_inch, battery_mah, has_5g, colors'
-      )
+      .select(lookupColumns)
       .eq('model_key', device.model_key)
       .maybeSingle();
     if (lookupErr) {
@@ -461,119 +663,92 @@ export async function runMasterSpecsBackfill(
     }
 
     if (existing) {
-      if (apply) {
-        const { error: upErr } = await supabase
-          .from('master_products')
-          .update({
-            ...specFields,
-            ...seedMasterSpecUpdate(
-              existing as { specifications?: unknown; key_specs?: unknown },
-              device
-            ),
-            ...(categoryId ? { category_id: categoryId } : {}),
-          })
-          .eq('id', existing.id);
-        if (upErr) {
-          throw new Error(`Failed to update specs of ${device.name}: ${upErr.message}`);
-        }
-      }
-      catalogUpdated++;
+      const row = existing as unknown as { id: string } & Record<string, unknown>;
+      const specUpdate = seedMasterSpecUpdate(
+        row as { specifications?: unknown; key_specs?: unknown },
+        device
+      );
+      const payload = {
+        ...specFields,
+        ...specUpdate,
+        ...(categoryId ? { category_id: categoryId } : {}),
+      };
       // A replaced seed shows exactly what it changes, so a dry-run can be checked against
-      // the expected diff before an apply (DOS/Rate#1459).
-      if (device.retract_spec_fields) {
-        logger.info(
-          'backfill.catalog_diff',
-          `[Catalog Specs] ${device.model_key}: ${apply ? 'changed' : 'would change'}`,
-          {
-            modelKey: device.model_key,
-            changes: specUpdateChanges(
-              existing as Record<string, unknown>,
-              seedMasterSpecUpdate(
-                existing as { specifications?: unknown; key_specs?: unknown },
-                device
-              )
-            ),
-          }
-        );
-      }
-      logger.info(
-        'backfill.catalog_updated',
-        `[Catalog Specs] ${device.name} (${device.model_key}): ${apply ? 'UPDATED' : 'DRY-RUN WOULD UPDATE'}`,
-        { modelKey: device.model_key, apply }
-      );
+      // the expected diff before an apply (DOS/Rate#1459). A scoped run shows it for every
+      // row, over everything the update writes (DOS/Rate#1464).
+      const changes = scoped
+        ? specUpdateChanges(row, withoutTimestamp(payload))
+        : device.retract_spec_fields
+          ? specUpdateChanges(row, specUpdate)
+          : undefined;
+      seedWrites.push({ kind: 'seed-update', device, id: row.id, payload, changes });
     } else {
-      if (apply) {
-        const { error: insErr } = await supabase.from('master_products').insert({
-          ...specFields,
-          specifications: mergeProductSpecifications(
-            undefined,
-            device.specifications,
-            device.colors
-          ),
-          category_id: categoryId,
-          brand: device.brand,
-          model: device.model,
-          variant_name: device.variant_name,
-          model_key: device.model_key,
-          name: device.name,
-          slug: device.slug,
-          merchant_count: 0,
-          status: 'draft',
-          metadata: { category_slug: device.categorySlug },
-        });
-        if (insErr) {
-          throw new Error(`Failed to insert catalog device ${device.name}: ${insErr.message}`);
-        }
-      }
-      catalogInserted++;
-      logger.info(
-        'backfill.catalog_inserted',
-        `[Catalog Draft] ${device.name} (${device.model_key}): ${apply ? 'INSERTED as draft' : 'DRY-RUN WOULD INSERT'}`,
-        { modelKey: device.model_key, apply }
-      );
+      const payload = {
+        ...specFields,
+        specifications: mergeProductSpecifications(undefined, device.specifications, device.colors),
+        category_id: categoryId,
+        brand: device.brand,
+        model: device.model,
+        variant_name: device.variant_name,
+        model_key: device.model_key,
+        name: device.name,
+        slug: device.slug,
+        merchant_count: 0,
+        status: 'draft',
+        metadata: { category_slug: device.categorySlug },
+      };
+      seedWrites.push({
+        kind: 'seed-insert',
+        device,
+        payload,
+        ...(scoped ? { changes: specUpdateChanges(null, withoutTimestamp(payload)) } : {}),
+      });
     }
   }
 
-  // Item-level specs from the seeds, once Items exist (RATE_ITEM_MODEL on, DOS/Rate#1152).
-  const itemsUpdated = (await syncItemSeedSpecs(supabase, { apply })).updated;
-
-  const masters = await fetchAllPages('Failed to fetch master_products', (from, to) =>
-    supabase
-      .from('master_products')
-      .select('id, name, model_key, key_specs, specifications')
-      .order('created_at', { ascending: false })
-      .order('id')
-      .range(from, to)
-  );
-
+  // Canonical and AI masters: never in a scoped run.
+  const masterWrites: MasterWrite[] = [];
   let skipped = 0;
-  for (const m of masters || []) {
-    if (!m || typeof m !== 'object' || Array.isArray(m)) continue;
-    const safeMasterId =
-      typeof m.id === 'string' && !/\p{Cc}/u.test(m.id.trim()) ? m.id.trim().slice(0, 128) : '';
-    const safeModelKey =
-      typeof m.model_key === 'string'
-        ? stripKeySpecControlChars(m.model_key).trim().slice(0, 160)
-        : '';
-    const safeName =
-      typeof m.name === 'string'
-        ? stripKeySpecControlChars(m.name).replace(/\s+/g, ' ').trim().slice(0, 200) || '(unnamed)'
-        : '(unnamed)';
-    if (!safeMasterId || !safeModelKey) {
-      skipped++;
-      continue;
-    }
-    if (catalogModelKeys.has(safeModelKey)) continue;
+  if (!scoped) {
+    const masters = await fetchAllPages('Failed to fetch master_products', (from, to) =>
+      supabase
+        .from('master_products')
+        .select('id, name, model_key, key_specs, specifications')
+        .order('created_at', { ascending: false })
+        .order('id')
+        .range(from, to)
+    );
 
-    const canonicalEntry = Object.hasOwn(CANONICAL_BACKFILL_SPECS_BY_MODEL_KEY, safeModelKey)
-      ? CANONICAL_BACKFILL_SPECS_BY_MODEL_KEY[safeModelKey]
-      : undefined;
+    for (const m of masters || []) {
+      if (!m || typeof m !== 'object' || Array.isArray(m)) continue;
+      const safeMasterId =
+        typeof m.id === 'string' && !/\p{Cc}/u.test(m.id.trim()) ? m.id.trim().slice(0, 128) : '';
+      const safeModelKey =
+        typeof m.model_key === 'string'
+          ? stripKeySpecControlChars(m.model_key).trim().slice(0, 160)
+          : '';
+      const safeName =
+        typeof m.name === 'string'
+          ? stripKeySpecControlChars(m.name).replace(/\s+/g, ' ').trim().slice(0, 200) ||
+            '(unnamed)'
+          : '(unnamed)';
+      if (!safeMasterId || !safeModelKey) {
+        skipped++;
+        continue;
+      }
+      if (catalogModelKeys.has(safeModelKey)) continue;
 
-    if (canonicalEntry) {
-      if (apply) {
-        const { error: upErr } = await supabase
-          .from('master_products')
-          .update({
+      const canonicalEntry = Object.hasOwn(CANONICAL_BACKFILL_SPECS_BY_MODEL_KEY, safeModelKey)
+        ? CANONICAL_BACKFILL_SPECS_BY_MODEL_KEY[safeModelKey]
+        : undefined;
+
+      if (canonicalEntry) {
+        masterWrites.push({
+          kind: 'canonical-update',
+          id: safeMasterId,
+          modelKey: safeModelKey,
+          name: safeName,
+          payload: {
             ram_gb: canonicalEntry.ram_gb,
             storage_gb: canonicalEntry.storage_gb,
             screen_size_inch: canonicalEntry.screen_size_inch,
@@ -590,21 +765,137 @@ export async function runMasterSpecsBackfill(
               canonicalEntry.key_specs as unknown as Record<string, unknown>
             ),
             updated_at: new Date().toISOString(),
-          })
-          .eq('id', safeMasterId);
+          },
+        });
+      } else if (apply && enricher.isConfigured()) {
+        masterWrites.push({ kind: 'ai-enrich', id: safeMasterId, name: safeName });
+      } else {
+        skipped++;
+      }
+    }
+  }
+
+  // A scoped run fixes existing masters: a named key with no master row would insert a draft
+  // (and through the master trigger possibly an Item), which --expect alone cannot catch.
+  const scopedInserts = scoped
+    ? seedWrites.filter(w => w.kind === 'seed-insert').map(w => w.device.model_key)
+    : [];
+  if (scopedInserts.length > 0) {
+    const message = `--only updates existing masters only; no master row for ${scopedInserts.join(', ')}`;
+    if (apply) throw new Error(`${message}: stopped before any write`);
+    logger.warn(
+      'backfill.scoped_insert',
+      `DRY-RUN: ${message}; an --apply would stop before any write`,
+      {
+        modelKeys: scopedInserts,
+      }
+    );
+  }
+
+  const planned = seedWrites.length + masterWrites.length;
+  const plannedKeys = [
+    ...seedWrites.map(w => w.device.model_key),
+    ...masterWrites.map(w => (w.kind === 'canonical-update' ? w.modelKey : w.id)),
+  ];
+  logger.info(
+    'backfill.plan',
+    `Plan [mode=${apply ? 'APPLY' : 'DRY-RUN'}${scoped ? ', scoped' : ''}]: ${planned} master(s) to update or insert (${seedWrites.filter(w => w.kind === 'seed-insert').length} insert(s))${expect !== undefined ? `, expected ${expect}` : ''}`,
+    { apply, scoped, planned, expect, ...(scoped ? { modelKeys: plannedKeys } : {}) }
+  );
+  if (expect !== undefined && planned !== expect) {
+    if (apply) {
+      throw new Error(
+        `--expect ${expect} does not match the plan of ${planned} master(s) (${plannedKeys.join(', ') || 'none'}): stopped before any write`
+      );
+    }
+    logger.warn(
+      'backfill.expect_mismatch',
+      `DRY-RUN: the plan holds ${planned} master(s), not the expected ${expect}; an --apply with this --expect would stop before any write`,
+      { planned, expect }
+    );
+  }
+
+  // Write.
+  let catalogUpdated = 0;
+  let catalogInserted = 0;
+  for (const w of seedWrites) {
+    if (w.kind === 'seed-update') {
+      const { device } = w;
+      if (apply) {
+        const { error: upErr } = await supabase
+          .from('master_products')
+          .update(w.payload)
+          .eq('id', w.id);
+        if (upErr) {
+          throw new Error(`Failed to update specs of ${device.name}: ${upErr.message}`);
+        }
+      }
+      catalogUpdated++;
+      if (w.changes) {
+        logDiff(
+          `[Catalog Specs] ${device.model_key}: ${apply ? 'changed' : 'would change'}`,
+          device.model_key,
+          w.changes
+        );
+      }
+      logger.info(
+        'backfill.catalog_updated',
+        `[Catalog Specs] ${device.name} (${device.model_key}): ${apply ? 'UPDATED' : 'DRY-RUN WOULD UPDATE'}`,
+        { modelKey: device.model_key, apply }
+      );
+    } else {
+      const { device } = w;
+      if (apply) {
+        const { error: insErr } = await supabase.from('master_products').insert(w.payload);
+        if (insErr) {
+          throw new Error(`Failed to insert catalog device ${device.name}: ${insErr.message}`);
+        }
+      }
+      catalogInserted++;
+      if (w.changes) {
+        logDiff(
+          `[Catalog Draft] ${device.model_key}: ${apply ? 'inserted' : 'would insert'}`,
+          device.model_key,
+          w.changes
+        );
+      }
+      logger.info(
+        'backfill.catalog_inserted',
+        `[Catalog Draft] ${device.name} (${device.model_key}): ${apply ? 'INSERTED as draft' : 'DRY-RUN WOULD INSERT'}`,
+        { modelKey: device.model_key, apply }
+      );
+    }
+  }
+
+  // Item-level specs from the seeds, once Items exist (RATE_ITEM_MODEL on, DOS/Rate#1152).
+  // A scoped run writes masters only: an Item row spans variants outside the scope.
+  let itemsUpdated = 0;
+  if (scoped) {
+    logger.info('backfill.items_skipped', 'Scoped run (--only): rate.items rows are not touched');
+  } else {
+    itemsUpdated = (await syncItemSeedSpecs(supabase, { apply })).updated;
+  }
+
+  for (const w of masterWrites) {
+    if (w.kind === 'canonical-update') {
+      if (apply) {
+        const { error: upErr } = await supabase
+          .from('master_products')
+          .update(w.payload)
+          .eq('id', w.id);
 
         if (upErr) {
-          throw new Error(`Failed to backfill ${safeName}: ${upErr.message}`);
+          throw new Error(`Failed to backfill ${w.name}: ${upErr.message}`);
         }
       }
       catalogUpdated++;
       logger.info(
         'backfill.canonical_updated',
-        `[Canonical Specs] ${safeName} (${safeModelKey}): ${apply ? 'UPDATED' : 'DRY-RUN WOULD UPDATE'}`,
-        { modelKey: safeModelKey, apply }
+        `[Canonical Specs] ${w.name} (${w.modelKey}): ${apply ? 'UPDATED' : 'DRY-RUN WOULD UPDATE'}`,
+        { modelKey: w.modelKey, apply }
       );
-    } else if (apply && enricher.isConfigured()) {
-      const ok = await matcher.enrichMasterProductById(safeMasterId);
+    } else {
+      const ok = await matcher.enrichMasterProductById(w.id);
       if (ok) {
         catalogUpdated++;
       } else {
@@ -612,11 +903,9 @@ export async function runMasterSpecsBackfill(
       }
       logger.info(
         'backfill.ai_enriched',
-        `[AI Enrich] ${safeName} (${safeMasterId}): ${ok ? 'UPDATED' : 'SKIPPED'}`,
-        { masterId: safeMasterId, updated: ok }
+        `[AI Enrich] ${w.name} (${w.id}): ${ok ? 'UPDATED' : 'SKIPPED'}`,
+        { masterId: w.id, updated: ok }
       );
-    } else {
-      skipped++;
     }
   }
 
@@ -629,6 +918,7 @@ export async function runMasterSpecsBackfill(
 
   return {
     apply,
+    planned,
     catalogUpdated,
     catalogInserted,
     itemsUpdated,
@@ -704,16 +994,22 @@ const isDirectExecution =
 if (isDirectExecution) {
   dotenv.config({ quiet: true });
   dotenv.config({ path: '../../.env', quiet: true });
-  const applyFlag = process.argv.includes('--apply');
-  const auditOnlyFlag = process.argv.includes('--audit-only');
-  (auditOnlyFlag
-    ? runQuickSpecSyncAndAudit({ apply: applyFlag })
-    : runMasterSpecsBackfill({ apply: applyFlag })
-  ).catch((err: unknown) => {
-    logger.error(
-      'backfill.fatal',
-      `Spec backfill/audit execution failed: ${err instanceof Error ? err.message : String(err)}`
-    );
-    process.exit(1);
-  });
+  Promise.resolve()
+    .then((): Promise<unknown> => {
+      const args = parseBackfillSpecsArgs(process.argv.slice(2));
+      return args.auditOnly
+        ? runQuickSpecSyncAndAudit({ apply: args.apply })
+        : runMasterSpecsBackfill({
+            apply: args.apply,
+            ...(args.only !== undefined ? { only: args.only } : {}),
+            ...(args.expect !== undefined ? { expect: args.expect } : {}),
+          });
+    })
+    .catch((err: unknown) => {
+      logger.error(
+        'backfill.fatal',
+        `Spec backfill/audit execution failed: ${err instanceof Error ? err.message : String(err)}`
+      );
+      process.exit(1);
+    });
 }
