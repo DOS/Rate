@@ -11,11 +11,13 @@ import viMessages from '../../../locales/vi.json';
 import {
   computeCompareHeadToHeadSummary,
   formatComparePriceVnd,
+  nextCompareReplaceState,
   pickBestBattery,
   pickHighestMemory,
   pickLowestPrice,
   resolveCompareAddSlotAriaLabel,
   resolveCompareReplaceButtonA11y,
+  shouldDismissCompareOnOutsidePointerDown,
 } from '../../components/compare/CompareWorkspace';
 import DealFinderWorkspace from '../../components/deals/DealFinderWorkspace';
 import LeaderboardExplorer, {
@@ -963,7 +965,44 @@ assert.equal(
     );
   }
 
-  // 5. Source guards for CompareWorkspace zero-price and slot a11y wiring.
+  // 5. Two-click Replace pointer sequence (mousedown + click) & source guards.
+  const replaceBtnTarget = {
+    closest: (sel: string) =>
+      sel === '[data-compare-slot-trigger]' ? ({} as unknown) : null,
+  };
+  const outsidePageTarget = { closest: () => null };
+  let simReplaceIndex: number | null = null;
+  let simDropdownOpen = false;
+  const simulatePointerClickOnReplace = (idx: number) => {
+    if (shouldDismissCompareOnOutsidePointerDown(replaceBtnTarget, false)) {
+      simReplaceIndex = null;
+      simDropdownOpen = false;
+    }
+    const next = nextCompareReplaceState(simReplaceIndex, idx);
+    simReplaceIndex = next.replaceIndex;
+    simDropdownOpen = next.dropdownOpen;
+  };
+  simulatePointerClickOnReplace(0);
+  assert.equal(simReplaceIndex, 0);
+  assert.equal(simDropdownOpen, true);
+  simulatePointerClickOnReplace(0);
+  assert.equal(
+    simReplaceIndex,
+    null,
+    'second pointer click toggles Replace off'
+  );
+  assert.equal(simDropdownOpen, false);
+  simulatePointerClickOnReplace(1);
+  assert.equal(simReplaceIndex, 1);
+  assert.equal(
+    shouldDismissCompareOnOutsidePointerDown(outsidePageTarget, false),
+    true
+  );
+  assert.equal(
+    shouldDismissCompareOnOutsidePointerDown(outsidePageTarget, true),
+    false
+  );
+
   const compareSrc = fs.readFileSync(
     path.join(webSrcDir, 'components/compare/CompareWorkspace.tsx'),
     'utf8'
@@ -979,6 +1018,8 @@ assert.equal(
     compareSrc,
     /const minP\s*=\s*sanitizeComparePriceVnd\(p\.min_price\)/
   );
+  assert.match(compareSrc, /data-compare-slot-trigger="replace"/);
+  assert.match(compareSrc, /data-compare-slot-trigger="add"/);
   assert.match(compareSrc, /aria-pressed=\{replaceA11y\.ariaPressed\}/);
   assert.match(compareSrc, /aria-label=\{replaceA11y\.ariaLabel\}/);
   assert.match(compareSrc, /<span aria-hidden="true">\+<\/span>/);

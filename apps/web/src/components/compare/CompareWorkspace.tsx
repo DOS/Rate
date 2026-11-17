@@ -403,6 +403,34 @@ export function resolveCompareAddSlotAriaLabel(
     .trim();
 }
 
+export function shouldDismissCompareOnOutsidePointerDown(
+  target: { closest?: (selector: string) => unknown } | null | undefined,
+  isInsideSearchBox: boolean
+): boolean {
+  if (isInsideSearchBox) return false;
+  if (
+    target &&
+    typeof target.closest === 'function' &&
+    target.closest('[data-compare-slot-trigger]')
+  ) {
+    return false;
+  }
+  return true;
+}
+
+export function nextCompareReplaceState(
+  currentReplaceIndex: number | null,
+  clickedIndex: number
+): {
+  replaceIndex: number | null;
+  dropdownOpen: boolean;
+} {
+  if (currentReplaceIndex === clickedIndex) {
+    return { replaceIndex: null, dropdownOpen: false };
+  }
+  return { replaceIndex: clickedIndex, dropdownOpen: true };
+}
+
 export function sanitizeCompareMerchantCount(value: unknown): number {
   const num = Number(value);
   if (!Number.isFinite(num) || num <= 0) return 0;
@@ -1338,6 +1366,7 @@ export default function CompareWorkspace({
   useEffect(() => {
     if (initialProducts.length > 0) {
       const cat = getMasterProductCategorySlug(initialProducts[0]!);
+      setReplaceIndex(null);
       setActiveCategory(cat);
       setProducts(
         initialProducts.filter((p) => getMasterProductCategorySlug(p) === cat)
@@ -1389,6 +1418,7 @@ export default function CompareWorkspace({
     const sameCategoryProducts = nextProducts.filter(
       (p) => getMasterProductCategorySlug(p) === targetCat
     );
+    setReplaceIndex(null);
     setActiveCategory(targetCat);
     setProducts(sameCategoryProducts);
     setCompareTray(
@@ -1422,10 +1452,13 @@ export default function CompareWorkspace({
   // Close autocomplete dropdown when clicking outside
   useEffect(() => {
     const handleOutside = (e: MouseEvent) => {
-      if (
-        searchBoxRef.current &&
-        !searchBoxRef.current.contains(e.target as Node)
-      ) {
+      if (!searchBoxRef.current) return;
+      const isInside = searchBoxRef.current.contains(e.target as Node);
+      const targetEl =
+        e.target && typeof e.target === 'object'
+          ? (e.target as { closest?: (selector: string) => unknown })
+          : null;
+      if (shouldDismissCompareOnOutsidePointerDown(targetEl, isInside)) {
         setDropdownOpen(false);
         setReplaceIndex(null);
       }
@@ -1554,16 +1587,20 @@ export default function CompareWorkspace({
   };
 
   const handleStartReplace = (idx: number) => {
-    if (replaceIndex === idx) {
-      setReplaceIndex(null);
-      setDropdownOpen(false);
-      return;
+    const activeIdx =
+      replaceIndex !== null &&
+      replaceIndex >= 0 &&
+      replaceIndex < products.length
+        ? replaceIndex
+        : null;
+    const next = nextCompareReplaceState(activeIdx, idx);
+    setReplaceIndex(next.replaceIndex);
+    setDropdownOpen(next.dropdownOpen);
+    if (next.dropdownOpen) {
+      setTimeout(() => {
+        searchInputRef.current?.focus();
+      }, 50);
     }
-    setReplaceIndex(idx);
-    setDropdownOpen(true);
-    setTimeout(() => {
-      searchInputRef.current?.focus();
-    }, 50);
   };
 
   const [watchedAllToast, setWatchedAllToast] = useState(false);
@@ -1781,6 +1818,11 @@ export default function CompareWorkspace({
     [products]
   );
 
+  const activeReplaceIndex =
+    replaceIndex !== null && replaceIndex >= 0 && replaceIndex < products.length
+      ? replaceIndex
+      : null;
+
   const controlsBlock = (
     <>
       {/* 5-Category Lock Switcher Bar */}
@@ -1829,10 +1871,10 @@ export default function CompareWorkspace({
               htmlFor="compare-autocomplete-input"
               className="form-label fw-bold small text-uppercase text-muted mb-1"
             >
-              {replaceIndex !== null && products[replaceIndex]
+              {activeReplaceIndex !== null && products[activeReplaceIndex]
                 ? t('replacingDeviceLabel', {
                     unit: activeCategoryMeta.unitLabel,
-                    name: products[replaceIndex]?.name ?? '',
+                    name: products[activeReplaceIndex]?.name ?? '',
                   })
                 : t('searchAddDeviceLabel', {
                     category: activeCategoryMeta.label,
@@ -1857,7 +1899,7 @@ export default function CompareWorkspace({
                   }}
                   placeholder={
                     products.length >= MAX_COMPARE_ITEMS &&
-                    replaceIndex === null
+                    activeReplaceIndex === null
                       ? t('maxDevicesPlaceholder')
                       : t('searchDevicePlaceholder', {
                           unit: activeCategoryMeta.unitLabel,
@@ -1865,11 +1907,11 @@ export default function CompareWorkspace({
                   }
                   disabled={
                     products.length >= MAX_COMPARE_ITEMS &&
-                    replaceIndex === null
+                    activeReplaceIndex === null
                   }
                   className="form-control bg-light border-start-0 rounded-end-pill py-2"
                 />
-                {replaceIndex !== null && (
+                {activeReplaceIndex !== null && (
                   <button
                     type="button"
                     onClick={() => {
@@ -1886,7 +1928,7 @@ export default function CompareWorkspace({
               {/* Autocomplete Suggestions Dropdown */}
               {dropdownOpen &&
                 (products.length < MAX_COMPARE_ITEMS ||
-                  replaceIndex !== null) && (
+                  activeReplaceIndex !== null) && (
                   <div
                     className="card rounded-4 position-absolute mt-2 w-100 overflow-hidden border shadow-lg"
                     style={{
@@ -1996,14 +2038,14 @@ export default function CompareWorkspace({
                                 className={`badge rounded-pill flex-shrink-0 px-3 py-2 ${
                                   alreadySelected
                                     ? 'bg-secondary text-white'
-                                    : replaceIndex !== null
+                                    : activeReplaceIndex !== null
                                       ? 'bg-dark text-white'
                                       : 'bg-danger text-white'
                                 }`}
                               >
                                 {alreadySelected
                                   ? t('alreadyComparingBadge')
-                                  : replaceIndex !== null
+                                  : activeReplaceIndex !== null
                                     ? t('selectReplacementBadge')
                                     : t('addToCompareBadge')}
                               </span>
@@ -2518,7 +2560,7 @@ export default function CompareWorkspace({
                     );
                     const replaceA11y = resolveCompareReplaceButtonA11y(t, {
                       productName: p.name,
-                      isReplacing: replaceIndex === idx,
+                      isReplacing: activeReplaceIndex === idx,
                     });
                     const userRating = getEffectiveRating(p);
                     const expertRating = resolveCompareExpertRating10(p);
@@ -2535,10 +2577,15 @@ export default function CompareWorkspace({
                         <div className="d-flex justify-content-between align-items-center mb-2">
                           <button
                             type="button"
+                            data-compare-slot-trigger="replace"
                             aria-pressed={replaceA11y.ariaPressed}
                             aria-label={replaceA11y.ariaLabel}
                             onClick={() => handleStartReplace(idx)}
-                            className="btn btn-sm btn-light rounded-pill small text-muted border px-2 py-0"
+                            className={`btn btn-sm rounded-pill small px-2 py-0 ${
+                              replaceA11y.ariaPressed
+                                ? 'btn-dark fw-semibold'
+                                : 'btn-light text-muted border'
+                            }`}
                             title={t('replaceDeviceTitle', {
                               unit: activeCategoryMeta.unitLabel,
                             })}
@@ -2645,6 +2692,7 @@ export default function CompareWorkspace({
                       <div className="d-flex flex-column align-items-center justify-content-center py-4">
                         <button
                           type="button"
+                          data-compare-slot-trigger="add"
                           onClick={() => {
                             setReplaceIndex(null);
                             setDropdownOpen(true);
