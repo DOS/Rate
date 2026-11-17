@@ -25,7 +25,11 @@ import {
   type RadarSignal,
 } from '@/lib/deal-radar';
 import { escapeCsvCell } from '@/lib/csv-safe';
-import { implausiblyLowOfferIds } from '@repo/shared-data/rules';
+import {
+  implausiblyLowOfferIds,
+  isOfferImplausiblyLowAgainstInStock,
+  normalizeOfferId,
+} from '@repo/shared-data/rules';
 import { isOfferUnavailable } from '@/lib/product-market-stats';
 import { contentLang } from '@/lib/content-lang';
 import ContentText from '@/components/elementary/ContentText';
@@ -124,19 +128,60 @@ export function sanitizeOffersFileToken(value: unknown): string {
   return cleaned || 'audit';
 }
 
+export function isExplorerOfferImplausiblyLow(
+  offer: Pick<MerchantOffer, 'id' | 'price_current' | 'availability'>,
+  inStockOffers: readonly Pick<MerchantOffer, 'id' | 'price_current'>[],
+  implausibleOfferIds: ReadonlySet<string>
+): boolean {
+  return isOfferImplausiblyLowAgainstInStock(
+    offer,
+    inStockOffers,
+    implausibleOfferIds
+  );
+}
+
+export function resolveExplorerOfferDiscountAnalysis(
+  offer: Pick<MerchantOffer, 'id' | 'price_current' | 'availability'>,
+  byOffer: MasterProductPriceHistorySummary['byOffer'] | null | undefined,
+  inStockOffers: readonly Pick<MerchantOffer, 'id' | 'price_current'>[],
+  implausibleOfferIds: ReadonlySet<string>
+): MasterProductPriceHistorySummary['byOffer'][string] | null {
+  if (
+    isExplorerOfferImplausiblyLow(offer, inStockOffers, implausibleOfferIds)
+  ) {
+    return null;
+  }
+  const canonicalId = normalizeOfferId(offer.id);
+  const raw =
+    byOffer && typeof byOffer === 'object'
+      ? Object.hasOwn(byOffer, offer.id)
+        ? (byOffer[offer.id] ?? null)
+        : canonicalId && Object.hasOwn(byOffer, canonicalId)
+          ? (byOffer[canonicalId] ?? null)
+          : null
+      : null;
+  if (!raw) return null;
+  if (isOfferUnavailable(offer) && raw.verdict === 'genuine_deal') {
+    return null;
+  }
+  return raw;
+}
+
 export function computeOffersPriceSpreadAudit(
   offers: readonly MerchantOffer[],
-  implausibleOfferIds: ReadonlySet<string> = new Set()
+  implausibleOfferIds?: ReadonlySet<string>
 ) {
   if (!Array.isArray(offers)) return null;
-  const valid = offers.filter((o) => {
+  const inStockOffers = offers.filter((o) => !isOfferUnavailable(o));
+  const effectiveBaitIds =
+    implausibleOfferIds ?? implausiblyLowOfferIds(inStockOffers);
+  const valid = inStockOffers.filter((o) => {
     const p = Number(o?.price_current);
     return (
       Number.isFinite(p) &&
       p > 0 &&
       p <= MAX_VALID_VND_PRICE &&
-      !implausibleOfferIds.has(o.id) &&
-      !isOfferUnavailable(o)
+      !isOfferImplausiblyLowAgainstInStock(o, inStockOffers, effectiveBaitIds)
     );
   });
   if (valid.length < 2) return null;
@@ -198,10 +243,13 @@ export default function ProductOffersExplorer({
   // Bait-price listings far below every other store (DOS/Rate#797): labelled,
   // listed after the plausible offers and left out of the price spread. Judged
   // among the in-stock listings, as the stored min_price is (DOS/Rate#1141).
+  const inStockOffers = useMemo(() => {
+    const inStock = safeOffers.filter((o) => !isOfferUnavailable(o));
+    return inStock.length > 0 ? inStock : safeOffers;
+  }, [safeOffers]);
   const implausibleOfferIds = useMemo(
-    () =>
-      implausiblyLowOfferIds(safeOffers.filter((o) => !isOfferUnavailable(o))),
-    [safeOffers]
+    () => implausiblyLowOfferIds(inStockOffers),
+    [inStockOffers]
   );
 
   const priceSpreadAudit = useMemo(
@@ -231,8 +279,20 @@ export default function ProductOffersExplorer({
       const unavailableA = isOfferUnavailable(a) ? 1 : 0;
       const unavailableB = isOfferUnavailable(b) ? 1 : 0;
       if (unavailableA !== unavailableB) return unavailableA - unavailableB;
-      const implausibleA = implausibleOfferIds.has(a.id) ? 1 : 0;
-      const implausibleB = implausibleOfferIds.has(b.id) ? 1 : 0;
+      const implausibleA = isExplorerOfferImplausiblyLow(
+        a,
+        inStockOffers,
+        implausibleOfferIds
+      )
+        ? 1
+        : 0;
+      const implausibleB = isExplorerOfferImplausiblyLow(
+        b,
+        inStockOffers,
+        implausibleOfferIds
+      )
+        ? 1
+        : 0;
       if (implausibleA !== implausibleB) return implausibleA - implausibleB;
       // A seller with no score sorts after every scored one (DOS/Rate#1484).
       const trustA = offerTrustScore(a.merchant.risk_score) ?? -1;
@@ -256,6 +316,7 @@ export default function ProductOffersExplorer({
     });
   }, [
     safeOffers,
+    inStockOffers,
     selectedPlatform,
     officialOnly,
     highTrustOnly,
@@ -279,16 +340,26 @@ export default function ProductOffersExplorer({
     const sep = headers.map(() => '---');
     const rows = filteredOffers.map((o) => {
       const trust = offerTrustScore(o.merchant.risk_score);
-      const analysis = byOffer[o.id];
+      const isBait = isExplorerOfferImplausiblyLow(
+        o,
+        inStockOffers,
+        implausibleOfferIds
+      );
+      const analysis = resolveExplorerOfferDiscountAnalysis(
+        o,
+        byOffer,
+        inStockOffers,
+        implausibleOfferIds
+      );
       const hasValidOrig =
         o.price_original != null &&
         Number.isFinite(Number(o.price_original)) &&
         Number(o.price_original) > o.price_current &&
         Number(o.price_original) <= MAX_VALID_VND_PRICE;
-      const verdictCell = implausibleOfferIds.has(o.id)
+      const verdictCell = isBait
         ? t('offersImplausiblyLowBadge')
         : analysis
-          ? discountVerdictCopy(tVerdict, analysis).label
+          ? discountVerdictCopy(tVerdict, analysis, locale).label
           : tVerdict('labelNormal');
       return [
         sanitizeOffersMarkdownCell(o.platform.toUpperCase()),
@@ -302,7 +373,9 @@ export default function ProductOffersExplorer({
     });
 
     const radarLine = radarSignal
-      ? t('offersMdRadarPrefix', { signal: radarMarkdownCell(radarSignal) })
+      ? t('offersMdRadarPrefix', {
+          signal: radarMarkdownCell(radarSignal, locale),
+        })
       : '';
     const spreadLine = priceSpreadAudit
       ? t('offersMdSpreadLine', {
@@ -358,7 +431,17 @@ export default function ProductOffersExplorer({
     ];
     const rows = filteredOffers.map((o) => {
       const trust = offerTrustScore(o.merchant.risk_score);
-      const analysis = byOffer[o.id];
+      const isBait = isExplorerOfferImplausiblyLow(
+        o,
+        inStockOffers,
+        implausibleOfferIds
+      );
+      const analysis = resolveExplorerOfferDiscountAnalysis(
+        o,
+        byOffer,
+        inStockOffers,
+        implausibleOfferIds
+      );
       const hasValidOrig =
         o.price_original != null &&
         Number.isFinite(Number(o.price_original)) &&
@@ -377,9 +460,7 @@ export default function ProductOffersExplorer({
           : '',
         String(o.price_current),
         hasValidOrig ? String(o.price_original) : '',
-        implausibleOfferIds.has(o.id)
-          ? 'implausibly_low'
-          : analysis?.verdict || 'normal',
+        isBait ? 'implausibly_low' : analysis?.verdict || 'normal',
         isSafeExternalOfferUrl(o.url) ? o.url.trim() : '',
         ...(radarSignal ? radarCsvCells(radarSignal) : []),
       ];
@@ -425,6 +506,17 @@ export default function ProductOffersExplorer({
           }
         : null,
       offers: filteredOffers.map((o) => {
+        const isBait = isExplorerOfferImplausiblyLow(
+          o,
+          inStockOffers,
+          implausibleOfferIds
+        );
+        const analysis = resolveExplorerOfferDiscountAnalysis(
+          o,
+          byOffer,
+          inStockOffers,
+          implausibleOfferIds
+        );
         const hasValidOrig =
           o.price_original != null &&
           Number.isFinite(Number(o.price_original)) &&
@@ -438,10 +530,8 @@ export default function ProductOffersExplorer({
           trustScorePercent: offerTrustScore(o.merchant.risk_score),
           priceCurrentVnd: o.price_current,
           priceOriginalVnd: hasValidOrig ? o.price_original : null,
-          verdict: implausibleOfferIds.has(o.id)
-            ? 'implausibly_low'
-            : byOffer[o.id]?.verdict || 'normal',
-          implausiblyLow: implausibleOfferIds.has(o.id),
+          verdict: isBait ? 'implausibly_low' : analysis?.verdict || 'normal',
+          implausiblyLow: isBait,
           url: isSafeExternalOfferUrl(o.url) ? o.url.trim() : '',
         };
       }),
@@ -507,9 +597,14 @@ export default function ProductOffersExplorer({
       {/* Interactive Filter, Sort & Export Toolbar */}
       <div className="rounded-3 bg-light mb-3 border p-3">
         <div className="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
-          <div className="d-flex align-items-center flex-wrap gap-1">
+          <div
+            className="d-flex align-items-center flex-wrap gap-1"
+            role="group"
+            aria-label={t('offersColPlatformMerchant')}
+          >
             <button
               type="button"
+              aria-pressed={selectedPlatform === 'all'}
               onClick={() => setSelectedPlatform('all')}
               className={`btn btn-sm rounded-pill px-3 py-1 ${
                 selectedPlatform === 'all'
@@ -524,6 +619,7 @@ export default function ProductOffersExplorer({
               <button
                 key={plat}
                 type="button"
+                aria-pressed={selectedPlatform === plat}
                 onClick={() => setSelectedPlatform(plat)}
                 className={`btn btn-sm rounded-pill text-uppercase px-2 py-1 ${
                   selectedPlatform === plat
@@ -578,6 +674,7 @@ export default function ProductOffersExplorer({
           <div className="d-flex align-items-center flex-wrap gap-2">
             <button
               type="button"
+              aria-pressed={officialOnly}
               onClick={() => setOfficialOnly((v) => !v)}
               className={`btn btn-sm rounded-pill px-3 py-1 ${
                 officialOnly
@@ -590,6 +687,7 @@ export default function ProductOffersExplorer({
             </button>
             <button
               type="button"
+              aria-pressed={highTrustOnly}
               onClick={() => setHighTrustOnly((v) => !v)}
               className={`btn btn-sm rounded-pill px-3 py-1 ${
                 highTrustOnly
@@ -678,7 +776,17 @@ export default function ProductOffersExplorer({
                     ? t('offersTrustBadgeNoData')
                     : t('offersTrustBadge', { score: trustScore });
 
-                const discountAnalysis = byOffer[offer.id];
+                const isBait = isExplorerOfferImplausiblyLow(
+                  offer,
+                  inStockOffers,
+                  implausibleOfferIds
+                );
+                const discountAnalysis = resolveExplorerOfferDiscountAnalysis(
+                  offer,
+                  byOffer,
+                  inStockOffers,
+                  implausibleOfferIds
+                );
                 const discountBadgeClass =
                   discountAnalysis?.verdict === 'fake_discount'
                     ? 'bg-danger text-white'
@@ -727,7 +835,7 @@ export default function ProductOffersExplorer({
                               {t('offersOfficialMallBadge')}
                             </span>
                           )}
-                          {implausibleOfferIds.has(offer.id) && (
+                          {isBait && (
                             <span
                               className="badge bg-danger-subtle text-danger small"
                               data-testid="offer-implausibly-low"

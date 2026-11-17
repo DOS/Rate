@@ -27,7 +27,9 @@ import {
 import {
   hasReviewRiskEvidence,
   knownDosafeRiskScore,
+  merchantRiskTone,
   reviewRiskScoreOrNull,
+  type MerchantRiskTone,
 } from '@/lib/merchant-risk-tone';
 import { selectMerchantRadar } from '@/lib/deal-radar';
 import { useDealRadarPayload } from '@/components/radar/use-deal-radar';
@@ -63,6 +65,35 @@ import StarRating from '@/components/elementary/StarRating';
 // Rows per request when an export collects every matching store.
 const EXPORT_PAGE_SIZE = 500;
 export const MAX_MERCHANT_EXPORT_PAGES = 20;
+
+export function merchantDirectoryDosafeDisplay(
+  merchant: Parameters<typeof knownDosafeRiskScore>[0]
+): {
+  score: number;
+  tone: MerchantRiskTone;
+  badgeClass: string;
+  statusKey: 'scamStatusClean' | 'scamStatusCaution' | 'scamStatusAlert';
+} | null {
+  const dosafeScore = knownDosafeRiskScore(merchant);
+  if (dosafeScore == null) return null;
+  const tone = merchantRiskTone(dosafeScore);
+  return {
+    score: dosafeScore,
+    tone,
+    badgeClass:
+      tone === 'good'
+        ? 'bg-success-subtle text-success'
+        : tone === 'warn'
+          ? 'bg-warning-subtle text-warning-emphasis'
+          : 'bg-danger-subtle text-danger',
+    statusKey:
+      tone === 'good'
+        ? 'scamStatusClean'
+        : tone === 'warn'
+          ? 'scamStatusCaution'
+          : 'scamStatusAlert',
+  };
+}
 
 interface MerchantDirectoryExplorerProps {
   /** First page for the initial filters, rendered on the server. */
@@ -272,8 +303,9 @@ export default function MerchantDirectoryExplorer({
       noRating: t('noRating'),
       followers: t('followers'),
       productsUnit: t('productsUnit'),
-      dosafeZero: t('dosafeZero'),
-      dosafeAlert: t('dosafeAlert'),
+      scamStatusClean: t('scamStatusClean'),
+      scamStatusCaution: t('scamStatusCaution'),
+      scamStatusAlert: t('scamStatusAlert'),
       authenticLabel: t('authenticLabel'),
       noReviewsToAnalyse: t('layer2NoReviews'),
       reviewRiskNoData: t('reviewRiskNoDataShort'),
@@ -798,7 +830,7 @@ export default function MerchantDirectoryExplorer({
         <>
           <div className="row g-4">
             {visibleMerchants.map((merchant) => {
-              const dosafeScore = knownDosafeRiskScore(merchant);
+              const dosafeDisplay = merchantDirectoryDosafeDisplay(merchant);
               const trustScore = merchant.trust_score;
               const trustBadgeClass =
                 trustScore == null
@@ -917,31 +949,25 @@ export default function MerchantDirectoryExplorer({
                               <BsShield aria-hidden="true" className="me-1" />
                               {labels.riskScamLabel}
                             </span>
-                            {dosafeScore == null ? (
+                            {dosafeDisplay == null ? (
                               // No DOSafe score: no number, and no alert (#1465).
                               <span className="badge rounded-pill bg-light text-muted border">
                                 {labels.reviewRiskNoData}
                               </span>
                             ) : (
                               <span
-                                className={`badge rounded-pill rate-tabular ${
-                                  dosafeScore === 0
-                                    ? 'bg-success-subtle text-success'
-                                    : 'bg-danger-subtle text-danger'
-                                }`}
+                                className={`badge rounded-pill rate-tabular ${dosafeDisplay.badgeClass}`}
                               >
-                                {dosafeScore}/100
+                                {dosafeDisplay.score}/100
                               </span>
                             )}
                           </div>
-                          {dosafeScore != null && (
+                          {dosafeDisplay != null && (
                             <div
                               className="small text-muted d-none d-sm-block"
                               style={{ fontSize: '0.8125rem' }}
                             >
-                              {dosafeScore === 0
-                                ? labels.dosafeZero
-                                : labels.dosafeAlert}
+                              {labels[dosafeDisplay.statusKey]}
                             </div>
                           )}
                         </div>

@@ -837,6 +837,102 @@ function testPriceRules(): void {
   assert.deepEqual([...rules.implausiblyLowOfferIds(offers)], ['a']);
   assert.equal(rules.plausibleMinPrice(0, offers), 3_000_000);
 
+  // Canonical offer-ID & unavailable bait helpers (DOS/Rate#1697).
+  assert.equal(rules.normalizeOfferId('  bait-1\u0000  '), 'bait-1');
+  assert.equal(rules.normalizeOfferId('shopee:12345.678'), 'shopee:12345.678');
+  assert.equal(rules.normalizeOfferId('000'), '');
+  assert.equal(rules.normalizeOfferId('..bad..'), '');
+  assert.equal(rules.normalizeOfferId(':bad'), '');
+  assert.equal(rules.normalizeOfferId('a::b'), '');
+  const canonicalOffers = [
+    { id: '  padded-bait\u0007 ', price_current: 500_000 },
+    { id: 'shopee:99.1', price_current: 550_000 },
+    { id: 'fpt', price_current: 3_032_000 },
+    { id: 'tgdd', price_current: 3_140_000 },
+  ];
+  const canonicalBaitIds = rules.implausiblyLowOfferIds(canonicalOffers);
+  assert.deepEqual([...canonicalBaitIds], ['padded-bait', 'shopee:99.1']);
+  assert.equal(
+    rules.hasImplausiblyLowOfferId(canonicalBaitIds, '  padded-bait\u0007 '),
+    true
+  );
+  assert.equal(
+    rules.isOfferImplausiblyLowAgainstInStock(
+      {
+        id: 'sold-out-bait',
+        price_current: 500_000,
+        availability: 'out_of_stock',
+      },
+      canonicalOffers,
+      canonicalBaitIds
+    ),
+    true
+  );
+  assert.equal(
+    rules.isOfferImplausiblyLowAgainstInStock(
+      {
+        id: 'sold-out-normal',
+        price_current: 2_900_000,
+        availability: 'out_of_stock',
+      },
+      canonicalOffers,
+      canonicalBaitIds
+    ),
+    false
+  );
+  const uncanonicalInStock = [
+    { id: '..bad..', price_current: 500_000 },
+    { id: 'fpt', price_current: 3_032_000 },
+    { id: 'tgdd', price_current: 3_140_000 },
+  ];
+  assert.equal(
+    rules.isOfferImplausiblyLowAgainstInStock(
+      uncanonicalInStock[0],
+      uncanonicalInStock,
+      rules.implausiblyLowOfferIds(uncanonicalInStock)
+    ),
+    true
+  );
+  for (const protoKey of [
+    'constructor',
+    'prototype',
+    '__proto__',
+    'toString',
+    'valueOf',
+  ]) {
+    assert.equal(rules.normalizeOfferId(protoKey), '');
+  }
+  const perfInStock = Array.from({ length: 1500 }, (_, i) => ({
+    id: `in-${i}`,
+    price_current: 3_000_000 + i * 1_000,
+    availability: 'in_stock',
+  }));
+  const perfBaitIds = rules.implausiblyLowOfferIds(perfInStock);
+  const perfStart = Date.now();
+  for (let i = 0; i < 1500; i++) {
+    assert.equal(
+      rules.isOfferImplausiblyLowAgainstInStock(
+        perfInStock[i],
+        perfInStock,
+        perfBaitIds
+      ),
+      false
+    );
+    assert.equal(
+      rules.isOfferImplausiblyLowAgainstInStock(
+        {
+          id: `out-${i}`,
+          price_current: i === 0 ? 500_000 : 3_200_000,
+          availability: 'out_of_stock',
+        },
+        perfInStock,
+        perfBaitIds
+      ),
+      i === 0
+    );
+  }
+  assert.ok(Date.now() - perfStart < 100);
+
   // One definition of the ceiling: the schemas re-export it, never redefine it.
   assert.doesNotMatch(
     readFileSync(

@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import { BsDownload } from 'react-icons/bs';
 import { Link } from '@/lib/navigation';
 import { useDetailsDismiss } from '@/components/elementary/use-details-dismiss';
@@ -105,6 +105,7 @@ export default function CategoryCatalogToolbar({
   dealRadar,
 }: CategoryCatalogToolbarProps) {
   const t = useTranslations('catalog');
+  const locale = useLocale();
   const [slugA, setSlugA] = useState<string>('');
   const [slugB, setSlugB] = useState<string>('');
   const [copiedCatalogMd, setCopiedCatalogMd] = useState(false);
@@ -173,7 +174,7 @@ export default function CategoryCatalogToolbar({
           : t('toolbar.unratedText'),
         String(authReviews),
         minPrice > 0 ? `${minPrice.toLocaleString('vi-VN')} ₫` : '-',
-        radarMarkdownCell(radar),
+        radarMarkdownCell(radar, locale),
       ];
     });
 

@@ -2,7 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import {
   computeProductRadarSignal,
   getCachedInspectProductOrShopUrl,
+  getMasterProductCategorySlug,
 } from '@/server/rate';
+import { applyCategorySpecTemplate } from '@repo/shared-data/rules';
 import {
   PUBLIC_API_CORS_HEADERS,
   extractClientRateLimitKey,
@@ -48,8 +50,17 @@ export async function GET(request: NextRequest) {
     }
 
     const result = await getCachedInspectProductOrShopUrl(rawQuery);
-    const radarSignal = result.masterProduct
-      ? computeProductRadarSignal(result.masterProduct, result.allOffers)
+    const masterProduct = result.masterProduct
+      ? applyCategorySpecTemplate(
+          getMasterProductCategorySlug(result.masterProduct),
+          result.masterProduct
+        )
+      : null;
+    const suggestions = result.suggestions.map((p) =>
+      applyCategorySpecTemplate(getMasterProductCategorySlug(p), p)
+    );
+    const radarSignal = masterProduct
+      ? computeProductRadarSignal(masterProduct, result.allOffers)
       : null;
 
     return NextResponse.json(
@@ -57,6 +68,8 @@ export async function GET(request: NextRequest) {
         ok: true,
         data: {
           ...result,
+          masterProduct,
+          suggestions,
           // A seller with no analysed review has no review risk (#1376).
           matchedOffer: result.matchedOffer
             ? withPublicOfferReviewRisk(result.matchedOffer)

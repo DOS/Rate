@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { MAX_VALID_VND_PRICE } from '@/lib/rate-api';
-import { getCachedInspectProductOrShopUrl } from '@/server/rate';
+import {
+  getCachedInspectProductOrShopUrl,
+  getMasterProductCategorySlug,
+} from '@/server/rate';
 import { computeProductRadarSignal } from '@/server/rate/deals';
+import { applyCategorySpecTemplate } from '@repo/shared-data/rules';
 import {
   canonicalizeProductUrl,
   detectAccessoryOrJunk,
@@ -59,6 +63,15 @@ export async function GET(request: NextRequest) {
     );
 
     const inspection = await getCachedInspectProductOrShopUrl(rawQuery);
+    const masterProduct = inspection.masterProduct
+      ? applyCategorySpecTemplate(
+          getMasterProductCategorySlug(inspection.masterProduct),
+          inspection.masterProduct
+        )
+      : null;
+    const suggestions = inspection.suggestions.map((p) =>
+      applyCategorySpecTemplate(getMasterProductCategorySlug(p), p)
+    );
     const canonicalUrl = canonicalizeProductUrl(rawQuery);
     const { observedPrice, observedOriginalPrice } =
       resolveInspectObservedPrices({
@@ -66,15 +79,12 @@ export async function GET(request: NextRequest) {
         queryOriginalPrice,
         matchedOfferPriceCurrent: inspection.matchedOffer?.price_current,
         matchedOfferPriceOriginal: inspection.matchedOffer?.price_original,
-        masterMinPrice: inspection.masterProduct?.min_price,
+        masterMinPrice: masterProduct?.min_price,
         maxVnd: MAX_VALID_VND_PRICE,
       });
 
     const gatekeeper = detectAccessoryOrJunk({
-      title:
-        inspection.matchedOffer?.title ||
-        inspection.masterProduct?.name ||
-        rawQuery,
+      title: inspection.matchedOffer?.title || masterProduct?.name || rawQuery,
       url: canonicalUrl || rawQuery,
       price: observedPrice > 0 ? observedPrice : null,
     });
@@ -97,11 +107,8 @@ export async function GET(request: NextRequest) {
           : null,
       priceHistory: inspection.priceHistory,
     });
-    const radarSignal = inspection.masterProduct
-      ? computeProductRadarSignal(
-          inspection.masterProduct,
-          inspection.allOffers
-        )
+    const radarSignal = masterProduct
+      ? computeProductRadarSignal(masterProduct, inspection.allOffers)
       : null;
 
     return NextResponse.json(
@@ -109,6 +116,8 @@ export async function GET(request: NextRequest) {
         ok: true,
         data: {
           ...inspection,
+          masterProduct,
+          suggestions,
           // A seller with no analysed review has no review risk (#1376).
           matchedOffer: inspection.matchedOffer
             ? withPublicOfferReviewRisk(inspection.matchedOffer)

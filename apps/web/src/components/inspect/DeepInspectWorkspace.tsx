@@ -1,10 +1,12 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
 import {
   hasReviewRiskEvidence,
   knownDosafeRiskScore,
+  merchantRiskTone,
+  type MerchantRiskTone,
 } from '@/lib/merchant-risk-tone';
 import { discountVerdictCopy } from '@/lib/discount-verdict-copy';
 import { formatScoreFixed } from '@/lib/rating-display';
@@ -59,9 +61,14 @@ import { contentLang } from '@/lib/content-lang';
 import { SAMPLE_AUDIT_URLS } from '@/lib/inspect-samples';
 import {
   implausiblyLowOfferIds,
+  isOfferImplausiblyLowAgainstInStock,
+  normalizeOfferId,
   plausibleOffers,
 } from '@repo/shared-data/rules';
-import { isOfferUnavailable } from '@/lib/product-market-stats';
+import {
+  isOfferUnavailable,
+  type OfferAvailability,
+} from '@/lib/product-market-stats';
 import { productImageUrl } from '@/lib/rate-domain-core';
 import {
   formatDecimal,
@@ -107,6 +114,125 @@ export function sanitizeInspectDownloadSlug(
   return slug || fallback;
 }
 
+export function inspectDosafeDisplay(
+  merchant: Parameters<typeof knownDosafeRiskScore>[0] | null | undefined
+): {
+  score: number;
+  tone: MerchantRiskTone;
+  textClass: string;
+  barClass: string;
+  widthPct: number;
+} | null {
+  if (!merchant) return null;
+  const dosafeScore = knownDosafeRiskScore(merchant);
+  if (dosafeScore == null) return null;
+  const tone = merchantRiskTone(dosafeScore);
+  return {
+    score: dosafeScore,
+    tone,
+    textClass:
+      tone === 'good'
+        ? 'text-success'
+        : tone === 'warn'
+          ? 'text-warning-emphasis'
+          : 'text-danger',
+    barClass:
+      tone === 'good'
+        ? 'bg-success'
+        : tone === 'warn'
+          ? 'bg-warning'
+          : 'bg-danger',
+    widthPct: Math.min(100, Math.max(4, dosafeScore)),
+  };
+}
+
+export function orderInspectOffers<
+  T extends {
+    id: string;
+    price_current: number;
+    availability?: OfferAvailability | null;
+  },
+>(
+  offers: readonly T[] | null | undefined
+): {
+  inStockOffers: T[];
+  plausibilityOffers: T[];
+  implausibleOfferIds: Set<string>;
+  listedOffers: T[];
+} {
+  const safeOffers = Array.isArray(offers) ? offers : [];
+  const inStockOffers = safeOffers.filter((o) => !isOfferUnavailable(o));
+  const plausibilityOffers =
+    inStockOffers.length > 0 ? inStockOffers : safeOffers;
+  const implausibleOfferIds = implausiblyLowOfferIds(plausibilityOffers);
+  const listedOffers = [...safeOffers].sort((a, b) => {
+    const unavailableA = isOfferUnavailable(a) ? 1 : 0;
+    const unavailableB = isOfferUnavailable(b) ? 1 : 0;
+    if (unavailableA !== unavailableB) return unavailableA - unavailableB;
+    const implausibleA = isInspectOfferBait(
+      a,
+      implausibleOfferIds,
+      plausibilityOffers
+    )
+      ? 1
+      : 0;
+    const implausibleB = isInspectOfferBait(
+      b,
+      implausibleOfferIds,
+      plausibilityOffers
+    )
+      ? 1
+      : 0;
+    return implausibleA - implausibleB;
+  });
+  return {
+    inStockOffers,
+    plausibilityOffers,
+    implausibleOfferIds,
+    listedOffers,
+  };
+}
+
+export function filterInspectOfferDiscount<
+  T extends { verdict?: string | null },
+>(analysis: T | null | undefined, unavailable: boolean): T | null {
+  if (!analysis) return null;
+  if (
+    unavailable &&
+    analysis.verdict !== 'fake_discount' &&
+    analysis.verdict !== 'suspicious_discount'
+  ) {
+    return null;
+  }
+  return analysis;
+}
+
+export function resolveInspectOfferPlatform(offer: {
+  platform?: string | null;
+  merchant?: { platform?: string | null } | null;
+}): string {
+  return offer.platform || offer.merchant?.platform || 'shopee';
+}
+
+export function isInspectOfferBait(
+  offer:
+    | {
+        id: string;
+        price_current: number;
+        availability?: OfferAvailability | null;
+      }
+    | null
+    | undefined,
+  implausibleOfferIds: ReadonlySet<string>,
+  inStockOffers: readonly { id?: string | null; price_current: number }[]
+): boolean {
+  return isOfferImplausiblyLowAgainstInStock(
+    offer,
+    inStockOffers,
+    implausibleOfferIds
+  );
+}
+
 interface DeepInspectWorkspaceProps {
   initialQuery?: string;
   initialInspection?: UrlInspectionResult | null;
@@ -119,6 +245,7 @@ export default function DeepInspectWorkspace({
 }: DeepInspectWorkspaceProps) {
   const t = useTranslations('inspect');
   const tVerdict = useTranslations('priceVerdict');
+  const tOffers = useTranslations('productDetail');
   const locale = useLocale();
   const router = useRouter();
 
@@ -198,26 +325,34 @@ export default function DeepInspectWorkspace({
   };
 
   const master = result?.masterProduct ?? null;
+  const {
+    inStockOffers,
+    plausibilityOffers,
+    implausibleOfferIds,
+    listedOffers,
+  } = useMemo(() => orderInspectOffers(result?.allOffers), [result?.allOffers]);
   // A sold-out listing is never the fallback match (DOS/Rate#1177).
   const matchedOffer =
-    result?.matchedOffer ??
-    plausibleOffers(
-      (result?.allOffers ?? []).filter((o) => !isOfferUnavailable(o))
-    )[0] ??
-    null;
-  const discount = result?.discountAnalysis ?? null;
-  // Judged as the product page's offers table judges the row (#797).
-  const implausibleOfferIds = implausiblyLowOfferIds(result?.allOffers ?? []);
-  const offerImplausiblyLow =
-    !!matchedOffer && implausibleOfferIds.has(matchedOffer.id);
-  // Bait-price offers are labelled and listed after the plausible ones (#805).
-  const listedOffers = [
-    ...(result?.allOffers ?? []).filter((o) => !implausibleOfferIds.has(o.id)),
-    ...(result?.allOffers ?? []).filter((o) => implausibleOfferIds.has(o.id)),
-  ];
+    result?.matchedOffer ?? plausibleOffers(inStockOffers)[0] ?? null;
+  // Judged among in-stock listings, as the product page's offers table does (#797, #1141).
+  const offerImplausiblyLow = isInspectOfferBait(
+    matchedOffer,
+    implausibleOfferIds,
+    plausibilityOffers
+  );
+  const matchedOfferUnavailable = Boolean(
+    matchedOffer && isOfferUnavailable(matchedOffer)
+  );
+  const discount = offerImplausiblyLow
+    ? null
+    : filterInspectOfferDiscount(
+        result?.discountAnalysis,
+        matchedOfferUnavailable
+      );
   const priceHistory = result?.priceHistory ?? null;
   const reviewSummary = result?.reviewSummary ?? null;
   const merchant = result?.merchantProfile ?? null;
+  const dosafeDisplay = inspectDosafeDisplay(merchant);
 
   const radarSignal =
     result?.radarSignal ??
@@ -268,11 +403,21 @@ export default function DeepInspectWorkspace({
               `- **${t('mdPriceSignal')}:** ${radarMarkdownCell(radarSignal, locale)}`,
             ]
           : []),
-        ...(discount
-          ? [
-              `- **${t('mdPriceVerdict')}:** **${discountVerdictCopy(tVerdict, discount).label}** (${discountVerdictCopy(tVerdict, discount).explanation})`,
-            ]
-          : []),
+        ...(offerImplausiblyLow
+          ? [`- **${t('mdPriceVerdict')}:** **${t('implausiblyLowBadge')}**`]
+          : matchedOfferUnavailable && !discount
+            ? [
+                `- **${t('mdPriceVerdict')}:** **${
+                  matchedOffer?.availability === 'discontinued'
+                    ? tOffers('offersDiscontinuedBadge')
+                    : tOffers('offersUnavailableBadge')
+                }**`,
+              ]
+            : discount
+              ? [
+                  `- **${t('mdPriceVerdict')}:** **${discountVerdictCopy(tVerdict, discount).label}** (${discountVerdictCopy(tVerdict, discount).explanation})`,
+                ]
+              : []),
         ...(currentListedPrice > 0
           ? [
               `- **${t('currentPriceLabel')}:** ${currentListedPrice.toLocaleString('vi-VN')} ₫${claimedOrigPrice ? ` | ${t('claimedOriginalLabel')}: ${claimedOrigPrice.toLocaleString('vi-VN')} ₫` : ''}`,
@@ -352,11 +497,36 @@ export default function DeepInspectWorkspace({
       histHigh,
       matchedPriceSpread?.spreadPct ?? 0,
       (() => {
-        if (implausibleOfferIds.has(o.id)) return t('implausiblyLowBadge');
-        const a =
-          priceHistory?.byOffer?.[o.id] ??
+        if (isInspectOfferBait(o, implausibleOfferIds, plausibilityOffers)) {
+          return t('implausiblyLowBadge');
+        }
+        const canonicalOfferId = normalizeOfferId(o.id);
+        const byOfferMap = priceHistory?.byOffer;
+        const directByOffer =
+          byOfferMap && Object.hasOwn(byOfferMap, o.id)
+            ? priceHistory?.byOffer?.[o.id]
+            : undefined;
+        const canonicalByOffer =
+          canonicalOfferId &&
+          byOfferMap &&
+          Object.hasOwn(byOfferMap, canonicalOfferId)
+            ? byOfferMap[canonicalOfferId]
+            : undefined;
+        const rawAnalysis =
+          directByOffer ??
+          canonicalByOffer ??
           (o.id === matchedOffer?.id ? discount : null);
-        return a ? discountVerdictCopy(tVerdict, a).label : t('checkedStatus');
+        const a = filterInspectOfferDiscount(
+          rawAnalysis,
+          isOfferUnavailable(o)
+        );
+        if (a) return discountVerdictCopy(tVerdict, a).label;
+        if (isOfferUnavailable(o)) {
+          return o.availability === 'discontinued'
+            ? tOffers('offersDiscontinuedBadge')
+            : tOffers('offersUnavailableBadge');
+        }
+        return t('checkedStatus');
       })(),
       ...radarCsvCells(radarSignal),
     ]);
@@ -387,7 +557,17 @@ export default function DeepInspectWorkspace({
         fakeSaleTrap: matchedFakeTrap,
         priceSpread: matchedPriceSpread,
       },
-      implausiblyLowOfferIds: [...implausibleOfferIds],
+      implausiblyLowOfferIds: Array.from(
+        new Set([
+          ...implausibleOfferIds,
+          ...listedOffers
+            .filter((o) =>
+              isInspectOfferBait(o, implausibleOfferIds, plausibilityOffers)
+            )
+            .map((o) => normalizeOfferId(o.id))
+            .filter(Boolean),
+        ])
+      ),
       inspection: result,
     };
     const blob = new Blob([JSON.stringify(payload, null, 2)], {
@@ -564,6 +744,16 @@ export default function DeepInspectWorkspace({
                       <span className="badge bg-success bg-opacity-10 text-success rounded-pill px-3 py-2">
                         <BsCheckCircleFill className="me-1" />
                         {t('genuineDiscountBadge')}
+                      </span>
+                    ) : matchedOfferUnavailable ? (
+                      <span
+                        className="badge bg-secondary-subtle text-secondary rounded-pill px-3 py-2"
+                        data-testid="inspect-unavailable"
+                        title={tOffers('offersUnavailableTitle')}
+                      >
+                        {matchedOffer?.availability === 'discontinued'
+                          ? tOffers('offersDiscontinuedBadge')
+                          : tOffers('offersUnavailableBadge')}
                       </span>
                     ) : null}
                   </div>
@@ -874,7 +1064,7 @@ export default function DeepInspectWorkspace({
                                 )}
                               </div>
                               <span className="badge bg-secondary bg-opacity-10 text-secondary text-uppercase small">
-                                {offer.merchant?.platform || 'shopee'}
+                                {resolveInspectOfferPlatform(offer)}
                               </span>
                             </td>
                             <td
@@ -888,13 +1078,28 @@ export default function DeepInspectWorkspace({
                                 Number(offer.price_current),
                                 locale
                               )}
-                              {implausibleOfferIds.has(offer.id) && (
+                              {isInspectOfferBait(
+                                offer,
+                                implausibleOfferIds,
+                                plausibilityOffers
+                              ) && (
                                 <span
                                   className="badge bg-warning text-dark d-block mt-1"
                                   data-testid="inspect-offer-implausibly-low"
                                   title={t('implausiblyLowTitle')}
                                 >
                                   {t('implausiblyLowBadge')}
+                                </span>
+                              )}
+                              {isOfferUnavailable(offer) && (
+                                <span
+                                  className="badge bg-secondary-subtle text-secondary d-block mt-1"
+                                  data-testid="inspect-offer-unavailable"
+                                  title={tOffers('offersUnavailableTitle')}
+                                >
+                                  {offer.availability === 'discontinued'
+                                    ? tOffers('offersDiscontinuedBadge')
+                                    : tOffers('offersUnavailableBadge')}
                                 </span>
                               )}
                             </td>
@@ -957,28 +1162,27 @@ export default function DeepInspectWorkspace({
                     <div className="d-flex justify-content-between small mb-1">
                       <span className="text-muted">{t('dosafeRiskLabel')}</span>
                       {/* No DOSafe score: no number, not 0 (DOS/Rate#1465). */}
-                      {knownDosafeRiskScore(merchant) == null ? (
+                      {dosafeDisplay == null ? (
                         <span className="text-muted">
                           {t('reviewRiskNoData')}
                         </span>
                       ) : (
-                        <strong className="text-success">
-                          {Number(knownDosafeRiskScore(merchant)).toFixed(0)}
+                        <strong className={dosafeDisplay.textClass}>
+                          {Number(dosafeDisplay.score).toFixed(0)}
                           /100
                         </strong>
                       )}
                     </div>
-                    <div className="progress" style={{ height: 8 }}>
-                      <div
-                        className="progress-bar bg-success"
-                        style={{
-                          width: `${Math.min(
-                            100,
-                            Math.max(4, knownDosafeRiskScore(merchant) ?? 0)
-                          )}%`,
-                        }}
-                      />
-                    </div>
+                    {dosafeDisplay != null && (
+                      <div className="progress" style={{ height: 8 }}>
+                        <div
+                          className={`progress-bar ${dosafeDisplay.barClass}`}
+                          style={{
+                            width: `${dosafeDisplay.widthPct}%`,
+                          }}
+                        />
+                      </div>
+                    )}
                   </div>
 
                   <div className="mb-4">
