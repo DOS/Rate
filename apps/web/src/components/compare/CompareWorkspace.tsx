@@ -431,6 +431,84 @@ export function nextCompareReplaceState(
   return { replaceIndex: clickedIndex, dropdownOpen: true };
 }
 
+export const COMPARE_REPLACE_FOCUS_DELAY_MS = 50;
+
+export interface CompareReplaceFocusTimerRef {
+  current: ReturnType<typeof setTimeout> | null;
+}
+
+export interface CompareReplaceIndexRef {
+  current: number | null;
+}
+
+export function cancelPendingCompareReplaceFocus(
+  timerRef: CompareReplaceFocusTimerRef,
+  scheduledReplaceRef?: CompareReplaceIndexRef
+): void {
+  if (timerRef.current !== null) {
+    clearTimeout(timerRef.current);
+    timerRef.current = null;
+  }
+  if (scheduledReplaceRef) {
+    scheduledReplaceRef.current = null;
+  }
+}
+
+export function syncCompareReplaceFocusState(options: {
+  timerRef: CompareReplaceFocusTimerRef;
+  activeReplaceRef: CompareReplaceIndexRef;
+  scheduledReplaceRef: CompareReplaceIndexRef;
+  activeReplaceIndex: number | null;
+}): void {
+  const {
+    timerRef,
+    activeReplaceRef,
+    scheduledReplaceRef,
+    activeReplaceIndex,
+  } = options;
+  activeReplaceRef.current = activeReplaceIndex;
+  if (
+    activeReplaceIndex === null ||
+    activeReplaceIndex !== scheduledReplaceRef.current
+  ) {
+    cancelPendingCompareReplaceFocus(timerRef, scheduledReplaceRef);
+  }
+}
+
+export function scheduleCompareReplaceFocus(options: {
+  timerRef: CompareReplaceFocusTimerRef;
+  activeReplaceRef: CompareReplaceIndexRef;
+  scheduledReplaceRef: CompareReplaceIndexRef;
+  expectedReplaceIndex: number | null;
+  focusInput: () => void;
+  delayMs?: number;
+}): void {
+  const {
+    timerRef,
+    activeReplaceRef,
+    scheduledReplaceRef,
+    expectedReplaceIndex,
+    focusInput,
+    delayMs = COMPARE_REPLACE_FOCUS_DELAY_MS,
+  } = options;
+  cancelPendingCompareReplaceFocus(timerRef, scheduledReplaceRef);
+  activeReplaceRef.current = expectedReplaceIndex;
+  if (expectedReplaceIndex === null) {
+    return;
+  }
+  scheduledReplaceRef.current = expectedReplaceIndex;
+  timerRef.current = setTimeout(() => {
+    timerRef.current = null;
+    const stillActive =
+      activeReplaceRef.current === expectedReplaceIndex &&
+      scheduledReplaceRef.current === expectedReplaceIndex;
+    scheduledReplaceRef.current = null;
+    if (stillActive) {
+      focusInput();
+    }
+  }, delayMs);
+}
+
 export function sanitizeCompareMerchantCount(value: unknown): number {
   const num = Number(value);
   if (!Number.isFinite(num) || num <= 0) return 0;
@@ -1294,7 +1372,45 @@ export default function CompareWorkspace({
 
   const searchInputRef = useRef<HTMLInputElement | null>(null);
   const searchBoxRef = useRef<HTMLDivElement | null>(null);
+  const replaceFocusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null
+  );
+  const activeReplaceIndexRef = useRef<number | null>(null);
+  const scheduledReplaceIndexRef = useRef<number | null>(null);
   const restoredTrayRef = useRef(false);
+
+  const activeReplaceIndex =
+    replaceIndex !== null && replaceIndex >= 0 && replaceIndex < products.length
+      ? replaceIndex
+      : null;
+
+  useEffect(() => {
+    syncCompareReplaceFocusState({
+      timerRef: replaceFocusTimerRef,
+      activeReplaceRef: activeReplaceIndexRef,
+      scheduledReplaceRef: scheduledReplaceIndexRef,
+      activeReplaceIndex,
+    });
+  }, [activeReplaceIndex]);
+
+  useEffect(() => {
+    return () => {
+      activeReplaceIndexRef.current = null;
+      cancelPendingCompareReplaceFocus(
+        replaceFocusTimerRef,
+        scheduledReplaceIndexRef
+      );
+    };
+  }, []);
+
+  const clearReplaceMode = () => {
+    cancelPendingCompareReplaceFocus(
+      replaceFocusTimerRef,
+      scheduledReplaceIndexRef
+    );
+    activeReplaceIndexRef.current = null;
+    setReplaceIndex(null);
+  };
 
   const activeCategoryMeta = useMemo(
     () =>
@@ -1366,6 +1482,11 @@ export default function CompareWorkspace({
   useEffect(() => {
     if (initialProducts.length > 0) {
       const cat = getMasterProductCategorySlug(initialProducts[0]!);
+      cancelPendingCompareReplaceFocus(
+        replaceFocusTimerRef,
+        scheduledReplaceIndexRef
+      );
+      activeReplaceIndexRef.current = null;
       setReplaceIndex(null);
       setActiveCategory(cat);
       setProducts(
@@ -1418,7 +1539,7 @@ export default function CompareWorkspace({
     const sameCategoryProducts = nextProducts.filter(
       (p) => getMasterProductCategorySlug(p) === targetCat
     );
-    setReplaceIndex(null);
+    clearReplaceMode();
     setActiveCategory(targetCat);
     setProducts(sameCategoryProducts);
     setCompareTray(
@@ -1440,7 +1561,7 @@ export default function CompareWorkspace({
 
   const handleSwitchCategoryTab = (nextCat: CanonicalCategorySlug) => {
     if (nextCat === activeCategory && products.length > 0) return;
-    setReplaceIndex(null);
+    clearReplaceMode();
     setSearchQuery('');
     setDropdownOpen(false);
     const nextDefaults = catalogCandidates
@@ -1459,6 +1580,11 @@ export default function CompareWorkspace({
           ? (e.target as { closest?: (selector: string) => unknown })
           : null;
       if (shouldDismissCompareOnOutsidePointerDown(targetEl, isInside)) {
+        cancelPendingCompareReplaceFocus(
+          replaceFocusTimerRef,
+          scheduledReplaceIndexRef
+        );
+        activeReplaceIndexRef.current = null;
         setDropdownOpen(false);
         setReplaceIndex(null);
       }
@@ -1544,24 +1670,20 @@ export default function CompareWorkspace({
     const candidateCat = getMasterProductCategorySlug(candidate);
     if (candidateCat !== activeCategory) {
       syncSelection([candidate], candidateCat);
-      setReplaceIndex(null);
+      clearReplaceMode();
       setSearchQuery('');
       setDropdownOpen(false);
       return;
     }
 
-    if (
-      replaceIndex !== null &&
-      replaceIndex >= 0 &&
-      replaceIndex < products.length
-    ) {
+    if (activeReplaceIndex !== null) {
       const next = [...products];
-      next[replaceIndex] = candidate;
+      next[activeReplaceIndex] = candidate;
       const deduped = Array.from(
         new Map(next.map((p) => [p.slug, p])).values()
       );
       syncSelection(deduped, activeCategory);
-      setReplaceIndex(null);
+      clearReplaceMode();
       setSearchQuery('');
       setDropdownOpen(false);
       return;
@@ -1579,7 +1701,7 @@ export default function CompareWorkspace({
   };
 
   const handleRemoveProduct = (slug: string) => {
-    setReplaceIndex(null);
+    clearReplaceMode();
     syncSelection(
       products.filter((p) => p.slug !== slug),
       activeCategory
@@ -1587,20 +1709,21 @@ export default function CompareWorkspace({
   };
 
   const handleStartReplace = (idx: number) => {
-    const activeIdx =
-      replaceIndex !== null &&
-      replaceIndex >= 0 &&
-      replaceIndex < products.length
-        ? replaceIndex
-        : null;
-    const next = nextCompareReplaceState(activeIdx, idx);
+    const next =
+      idx >= 0 && idx < products.length
+        ? nextCompareReplaceState(activeReplaceIndex, idx)
+        : { replaceIndex: null, dropdownOpen: false };
     setReplaceIndex(next.replaceIndex);
     setDropdownOpen(next.dropdownOpen);
-    if (next.dropdownOpen) {
-      setTimeout(() => {
+    scheduleCompareReplaceFocus({
+      timerRef: replaceFocusTimerRef,
+      activeReplaceRef: activeReplaceIndexRef,
+      scheduledReplaceRef: scheduledReplaceIndexRef,
+      expectedReplaceIndex: next.dropdownOpen ? next.replaceIndex : null,
+      focusInput: () => {
         searchInputRef.current?.focus();
-      }, 50);
-    }
+      },
+    });
   };
 
   const [watchedAllToast, setWatchedAllToast] = useState(false);
@@ -1818,11 +1941,6 @@ export default function CompareWorkspace({
     [products]
   );
 
-  const activeReplaceIndex =
-    replaceIndex !== null && replaceIndex >= 0 && replaceIndex < products.length
-      ? replaceIndex
-      : null;
-
   const controlsBlock = (
     <>
       {/* 5-Category Lock Switcher Bar */}
@@ -1915,7 +2033,7 @@ export default function CompareWorkspace({
                   <button
                     type="button"
                     onClick={() => {
-                      setReplaceIndex(null);
+                      clearReplaceMode();
                       setDropdownOpen(false);
                     }}
                     className="btn btn-outline-secondary rounded-pill btn-sm ms-2"
@@ -2694,7 +2812,7 @@ export default function CompareWorkspace({
                           type="button"
                           data-compare-slot-trigger="add"
                           onClick={() => {
-                            setReplaceIndex(null);
+                            clearReplaceMode();
                             setDropdownOpen(true);
                             searchInputRef.current?.focus();
                           }}

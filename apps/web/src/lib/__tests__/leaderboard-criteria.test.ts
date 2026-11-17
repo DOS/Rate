@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
+import { mock } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
@@ -9,6 +10,8 @@ import csMessages from '../../../locales/cs.json';
 import enMessages from '../../../locales/en.json';
 import viMessages from '../../../locales/vi.json';
 import {
+  COMPARE_REPLACE_FOCUS_DELAY_MS,
+  cancelPendingCompareReplaceFocus,
   computeCompareHeadToHeadSummary,
   formatComparePriceVnd,
   nextCompareReplaceState,
@@ -17,7 +20,9 @@ import {
   pickLowestPrice,
   resolveCompareAddSlotAriaLabel,
   resolveCompareReplaceButtonA11y,
+  scheduleCompareReplaceFocus,
   shouldDismissCompareOnOutsidePointerDown,
+  syncCompareReplaceFocusState,
 } from '../../components/compare/CompareWorkspace';
 import DealFinderWorkspace from '../../components/deals/DealFinderWorkspace';
 import LeaderboardExplorer, {
@@ -965,7 +970,8 @@ assert.equal(
     );
   }
 
-  // 5. Two-click Replace pointer sequence (mousedown + click) & source guards.
+  // 5. Two-click Replace pointer sequence (mousedown + click), < 50 ms focus
+  // timer cancellation, and source guards.
   const replaceBtnTarget = {
     closest: (sel: string) =>
       sel === '[data-compare-slot-trigger]' ? ({} as unknown) : null,
@@ -973,27 +979,129 @@ assert.equal(
   const outsidePageTarget = { closest: () => null };
   let simReplaceIndex: number | null = null;
   let simDropdownOpen = false;
+  let focusCount = 0;
+  const simTimerRef = { current: null as ReturnType<typeof setTimeout> | null };
+  const simActiveReplaceRef = { current: null as number | null };
+  const simScheduledReplaceRef = { current: null as number | null };
+
+  // Mirrors <input ref={searchInputRef} onFocus={() => setDropdownOpen(true)} />
+  // when fewer than 4 products are compared (input is enabled in add mode).
+  const focusSearchInput = () => {
+    focusCount += 1;
+    simDropdownOpen = true;
+  };
+
   const simulatePointerClickOnReplace = (idx: number) => {
     if (shouldDismissCompareOnOutsidePointerDown(replaceBtnTarget, false)) {
+      cancelPendingCompareReplaceFocus(simTimerRef, simScheduledReplaceRef);
+      simActiveReplaceRef.current = null;
       simReplaceIndex = null;
       simDropdownOpen = false;
     }
     const next = nextCompareReplaceState(simReplaceIndex, idx);
     simReplaceIndex = next.replaceIndex;
     simDropdownOpen = next.dropdownOpen;
+    scheduleCompareReplaceFocus({
+      timerRef: simTimerRef,
+      activeReplaceRef: simActiveReplaceRef,
+      scheduledReplaceRef: simScheduledReplaceRef,
+      expectedReplaceIndex: next.dropdownOpen ? next.replaceIndex : null,
+      focusInput: focusSearchInput,
+    });
+    syncCompareReplaceFocusState({
+      timerRef: simTimerRef,
+      activeReplaceRef: simActiveReplaceRef,
+      scheduledReplaceRef: simScheduledReplaceRef,
+      activeReplaceIndex: simReplaceIndex,
+    });
   };
-  simulatePointerClickOnReplace(0);
-  assert.equal(simReplaceIndex, 0);
-  assert.equal(simDropdownOpen, true);
-  simulatePointerClickOnReplace(0);
-  assert.equal(
-    simReplaceIndex,
-    null,
-    'second pointer click toggles Replace off'
-  );
-  assert.equal(simDropdownOpen, false);
-  simulatePointerClickOnReplace(1);
-  assert.equal(simReplaceIndex, 1);
+
+  mock.timers.enable({ apis: ['setTimeout'] });
+  try {
+    // Rapid two-click toggle-off on the same Replace button within < 50 ms:
+    // advancing past 50 ms must not focus the input or reopen dropdownOpen.
+    simulatePointerClickOnReplace(0);
+    assert.equal(simReplaceIndex, 0);
+    assert.equal(simDropdownOpen, true);
+    assert.equal(focusCount, 0);
+    assert.notEqual(simTimerRef.current, null);
+
+    mock.timers.tick(15);
+    assert.equal(focusCount, 0);
+
+    simulatePointerClickOnReplace(0);
+    assert.equal(
+      simReplaceIndex,
+      null,
+      'second pointer click toggles Replace off'
+    );
+    assert.equal(simDropdownOpen, false);
+    assert.equal(simTimerRef.current, null);
+
+    mock.timers.tick(COMPARE_REPLACE_FOCUS_DELAY_MS);
+    assert.equal(
+      focusCount,
+      0,
+      'canceled replacement before 50 ms must never focus search input'
+    );
+    assert.equal(
+      simDropdownOpen,
+      false,
+      'dropdownOpen stays false after 50 ms delay advances'
+    );
+    assert.equal(simReplaceIndex, null);
+
+    // Rapid switch from slot 0 to slot 1 at 20 ms cancels the first timer and
+    // focuses once at 20 + 50 = 70 ms.
+    simulatePointerClickOnReplace(0);
+    mock.timers.tick(20);
+    simulatePointerClickOnReplace(1);
+    assert.equal(simReplaceIndex, 1);
+    assert.equal(simDropdownOpen, true);
+    mock.timers.tick(30);
+    assert.equal(focusCount, 0, 'slot 0 timer at 50 ms was canceled');
+    mock.timers.tick(20);
+    assert.equal(focusCount, 1, 'slot 1 timer focuses input at 70 ms');
+    assert.equal(simTimerRef.current, null);
+
+    // State-driven close (e.g. outside dismiss / cancel / unmount) before 50 ms
+    // cancels pending focus and keeps dropdownOpen closed.
+    focusCount = 0;
+    simReplaceIndex = null;
+    simDropdownOpen = false;
+    simulatePointerClickOnReplace(0);
+    mock.timers.tick(10);
+    simReplaceIndex = null;
+    simDropdownOpen = false;
+    syncCompareReplaceFocusState({
+      timerRef: simTimerRef,
+      activeReplaceRef: simActiveReplaceRef,
+      scheduledReplaceRef: simScheduledReplaceRef,
+      activeReplaceIndex: null,
+    });
+    assert.equal(simTimerRef.current, null);
+    mock.timers.tick(COMPARE_REPLACE_FOCUS_DELAY_MS);
+    assert.equal(focusCount, 0);
+    assert.equal(simDropdownOpen, false);
+
+    // Callback state guard: even if activeReplaceRef changes without clearTimeout,
+    // the callback refuses to focus or reopen dropdownOpen.
+    scheduleCompareReplaceFocus({
+      timerRef: simTimerRef,
+      activeReplaceRef: simActiveReplaceRef,
+      scheduledReplaceRef: simScheduledReplaceRef,
+      expectedReplaceIndex: 0,
+      focusInput: focusSearchInput,
+    });
+    simActiveReplaceRef.current = null;
+    simDropdownOpen = false;
+    mock.timers.tick(COMPARE_REPLACE_FOCUS_DELAY_MS);
+    assert.equal(focusCount, 0);
+    assert.equal(simDropdownOpen, false);
+  } finally {
+    mock.timers.reset();
+  }
+
   assert.equal(
     shouldDismissCompareOnOutsidePointerDown(outsidePageTarget, false),
     true
@@ -1023,6 +1131,12 @@ assert.equal(
   assert.match(compareSrc, /aria-pressed=\{replaceA11y\.ariaPressed\}/);
   assert.match(compareSrc, /aria-label=\{replaceA11y\.ariaLabel\}/);
   assert.match(compareSrc, /<span aria-hidden="true">\+<\/span>/);
+  assert.match(
+    compareSrc,
+    /useRef<ReturnType<typeof setTimeout>\s*\|\s*null>\(\s*null\s*\)/
+  );
+  assert.match(compareSrc, /scheduleCompareReplaceFocus\(/);
+  assert.match(compareSrc, /syncCompareReplaceFocusState\(/);
 }
 
 console.log('leaderboard-criteria: criterion scores are real or null');
