@@ -20,9 +20,13 @@ import {
   computeCombinedDualScore,
 } from '../rate-domain-core';
 import { merchantDirectoryDosafeDisplay } from '../../components/merchants/MerchantDirectoryExplorer';
+import { formatPriceVnd } from '../locale-format';
+import type { VerdictTranslator } from '../discount-verdict-copy';
+import type { OfferDiscountAnalysis } from '../rate-api';
 import {
   filterInspectOfferDiscount,
   inspectDosafeDisplay,
+  inspectMarkdownPriceVerdict,
   isInspectOfferBait,
   orderInspectOffers,
   resolveInspectOfferPlatform,
@@ -991,6 +995,80 @@ assert.equal(
 assert.equal(
   selectMerchantRadar(dedupRadar1702, { id: ':bad', name: '' }).fakeTrapCount,
   0
+);
+
+// DOS/Rate#1711: the copied inspect Markdown and the CSV verdict cell follow
+// the UI locale, like the page badges, instead of Vietnamese formatting.
+const verdictTranslator =
+  (messages: Record<string, string>): VerdictTranslator =>
+  (key, values = {}) => {
+    const message = messages[key];
+    assert.ok(message, `missing priceVerdict.${key}`);
+    return message.replace(/\{(\w+)\}/g, (_, name: string) =>
+      String(values[name])
+    );
+  };
+const fakeDiscount1711: OfferDiscountAnalysis = {
+  product_id: 'p-1711',
+  merchant_name: 'Shop',
+  platform: 'shopee',
+  price_current: 9_000_000,
+  price_original: 15_000_000,
+  claimed_discount_pct: 40.5,
+  real_discount_vs_median_pct: 0,
+  historical_min_price: 8_500_000,
+  historical_max_price: 10_000_000,
+  historical_median_price: 9_000_000,
+  observation_count: 4,
+  verdict: 'fake_discount',
+  badge_label: 'Cảnh báo giảm giá ảo',
+  explanation: '',
+};
+const viVerdictKeys = Object.keys(readLocale('vi').priceVerdict!).sort();
+for (const locale of LOCALES) {
+  const messages = readLocale(locale).priceVerdict!;
+  assert.deepEqual(
+    Object.keys(messages).sort(),
+    viVerdictKeys,
+    `${locale}: priceVerdict keys match vi`
+  );
+  const markdown = inspectMarkdownPriceVerdict(
+    verdictTranslator(messages),
+    fakeDiscount1711,
+    locale
+  );
+  assert.ok(
+    markdown.startsWith(`**${messages.labelFake}** (`) &&
+      markdown.endsWith(')'),
+    `${locale}: Markdown verdict is **label** (explanation)`
+  );
+  for (const price of [15_000_000, 10_000_000, 9_000_000]) {
+    assert.ok(
+      markdown.includes(formatPriceVnd(price, locale)),
+      `${locale}: Markdown verdict formats ${price} for the locale`
+    );
+  }
+}
+const csMarkdown1711 = inspectMarkdownPriceVerdict(
+  verdictTranslator(readLocale('cs').priceVerdict!),
+  fakeDiscount1711,
+  'cs'
+);
+assert.ok(csMarkdown1711.includes('15\u00a0000\u00a0000\u00a0₫'));
+assert.ok(csMarkdown1711.includes('(-40,5\u00a0%)'));
+assert.ok(!csMarkdown1711.includes('15.000.000'));
+assert.ok(!/Giá|giá|gạch ngang/.test(csMarkdown1711));
+assert.ok(
+  !/discountVerdictCopy\(tVerdict, (?:discount|a)\)/.test(
+    deepInspectWorkspace
+  ) &&
+    deepInspectWorkspace.includes(
+      'inspectMarkdownPriceVerdict(tVerdict, discount, locale)'
+    ) &&
+    deepInspectWorkspace.includes(
+      'discountVerdictCopy(tVerdict, a, locale).label'
+    ),
+  'DeepInspectWorkspace.tsx must pass the UI locale to every verdict copy'
 );
 
 console.log('display-truth: ok');

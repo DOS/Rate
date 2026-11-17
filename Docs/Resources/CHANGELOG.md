@@ -342,6 +342,7 @@ Hệ thống **Rate Platform (`rate.vn`)** vận hành trên kiến trúc **4 T�
   - Every surface reads the stored market stats for price and seller count (#1164); batch offers read availability, and the radar, best offer, extension verdict and cheaper-elsewhere skip sold-out listings (#1176, #1180); a published model with no in-stock listing shows a sale state (#1204).
   - Sold-count labels (20k+) and locale-aware exact counts (#690, #693); deals show 12 at a time and the radar counts every offer of a cluster (#634, #869).
   - **Merged to dev, awaiting promotion:** the multi-platform floor deal label needs 3 or more offers (#1630, closes #1145).
+  - The `/inspect` copied Markdown verdict and CSV verdict cell follow the UI locale (vi, en, cs), like the page badges. API v1.10.1, wording only: the `hideFake` reviews filter and the `no_stock` sale state are described as they now behave (#1711).
 - [x] **6.14. Category spec templates and honest spec display (PRs #1163-#1201, #1447-#1535):**
   - Per-category spec templates for earbuds and watches, applied to the product page, compare, leaderboard, export, API v1 filters and the extension lookup (#1163, #1182, #1191).
   - Empty spec rows and groups are hidden, unknown specs show empty instead of invented values, no half-translated values, one language per spec label (#1192, #1199, #1201, #1532).
