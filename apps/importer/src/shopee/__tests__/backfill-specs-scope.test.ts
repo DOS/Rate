@@ -215,9 +215,9 @@ test('a named key with no master row stops a scoped apply before any write', asy
   const live = mockClient(existing);
   await assert.rejects(
     runMasterSpecsBackfillWith(live.client, deps(), { apply: true, only: APPROVED, expect: 3 }),
-    new RegExp(
-      `no master row for ${APPROVED[1]!.replace(/[:.]/g, '\\$&')}: stopped before any write`
-    )
+    (err: unknown) =>
+      err instanceof Error &&
+      err.message.includes(`no master row for ${APPROVED[1]!}: stopped before any write`)
   );
   assert.deepEqual(live.writes(), [], 'no insert, no update');
 
@@ -310,7 +310,7 @@ test('the scoped dry run writes nothing and reports the plan and the field diff'
   assert.match(text, /3 master\(s\) to update or insert/);
   assert.match(text, /not the expected 5/);
   for (const key of APPROVED) {
-    assert.match(text, new RegExp(`${key.replace(/[:.]/g, '\\$&')}: would change`));
+    assert.ok(text.includes(`${key}: would change`), `${key}: would change`);
   }
   assert.match(text, /battery_mah: 1 -> \d+/, 'the diff shows the changed leaves');
 });
