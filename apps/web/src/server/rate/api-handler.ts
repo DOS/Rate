@@ -393,38 +393,59 @@ export interface WatchlistCandidateOffer {
 }
 
 // The stored min_price can be a bait-price listing; target checks use the
-// lowest plausible offer instead (DOS/Rate#797).
+// lowest plausible offer instead (DOS/Rate#797, #1699).
 export function withPlausibleMinPrice<T extends { min_price?: unknown }>(
   master: T,
-  offers: readonly { price_current: number }[]
+  offers: readonly {
+    price_current: number;
+    availability?: OfferAvailability | null;
+  }[]
 ): T {
   const rawMin =
     !master || typeof master !== 'object'
       ? 0
       : parseFiniteDecimalInput(master.min_price);
+  const safeOffers = (Array.isArray(offers) ? offers : []).filter(
+    (o) =>
+      Boolean(o && typeof o === 'object' && !Array.isArray(o)) &&
+      !isOfferUnavailable(o)
+  );
   return {
     ...master,
     min_price: plausibleMinPrice(
       Number.isFinite(rawMin) && rawMin > 0 ? rawMin : 0,
-      Array.isArray(offers) ? offers : []
+      safeOffers
     ),
   };
+}
+
+function getPlausibleInStockOffers(
+  offers: readonly WatchlistCandidateOffer[]
+): WatchlistCandidateOffer[] {
+  // A sold-out or discontinued listing is never the best offer. stock is no
+  // signal: the crawlers report 0 when they read no count (DOS/Rate#1171).
+  const safeOffers = (Array.isArray(offers) ? offers : []).filter(
+    (o) =>
+      Boolean(o && typeof o === 'object' && !Array.isArray(o)) &&
+      !isOfferUnavailable(o)
+  );
+  // A bait-price listing is never the best offer (DOS/Rate#797).
+  return plausibleOffers(safeOffers).filter((o) => {
+    const price = parseFiniteDecimalInput(o.price_current);
+    return Number.isFinite(price) && price > 0 && price <= MAX_VALID_VND_PRICE;
+  });
+}
+
+export function countPlausibleInStockOffers(
+  offers: readonly WatchlistCandidateOffer[]
+): number {
+  return getPlausibleInStockOffers(offers).length;
 }
 
 export function selectBestOfferFromListings(
   offers: readonly WatchlistCandidateOffer[]
 ): { bestOffer: WatchlistBestOffer | null; offerPlatforms: string[] } {
-  // A sold-out or discontinued listing is never the best offer. stock is no
-  // signal: the crawlers report 0 when they read no count (DOS/Rate#1171).
-  const safeOffers = (Array.isArray(offers) ? offers : []).filter(
-    (o) => !isOfferUnavailable(o)
-  );
-  // A bait-price listing is never the best offer (DOS/Rate#797).
-  const valid = plausibleOffers(safeOffers).filter((o) => {
-    if (!o || typeof o !== 'object') return false;
-    const price = parseFiniteDecimalInput(o.price_current);
-    return Number.isFinite(price) && price > 0 && price <= MAX_VALID_VND_PRICE;
-  });
+  const valid = getPlausibleInStockOffers(offers);
   const normalizeOfferPlatform = (o: WatchlistCandidateOffer): string =>
     String(o.merchant?.platform || o.platform || 'shopee')
       .replace(/\p{Cc}+/gu, '')

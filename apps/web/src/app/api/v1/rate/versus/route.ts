@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { applyCategorySpecTemplate } from '@repo/shared-data/rules';
 import {
   computeProductRadarSignal,
   getCachedCompareMasterProducts,
@@ -206,9 +207,12 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    const prodA = compared[0];
-    const prodB = compared[1];
-    const category = getMasterProductCategorySlug(prodA);
+    const category = getMasterProductCategorySlug(compared[0]);
+    const prodA = applyCategorySpecTemplate(category, compared[0]);
+    const prodB = applyCategorySpecTemplate(
+      getMasterProductCategorySlug(compared[1]),
+      compared[1]
+    );
 
     // filtered_noise_review_count counts stored reviews only (DOS/Rate#1139).
     // On a read failure no product claims a blocked count, which is still true.

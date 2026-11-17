@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { applyCategorySpecTemplate } from '@repo/shared-data/rules';
 import {
   computeProductRadarSignal,
   getCachedFilteredReviewCountsByMaster,
   getCachedMasterProducts,
+  getMasterProductCategorySlug,
   getMasterProductOffersBatch,
 } from '@/server/rate';
 import { radarExportFields } from '@/lib/deal-radar';
@@ -69,7 +71,11 @@ export async function GET(req: NextRequest) {
       ),
     ]);
 
-    const ranked = rankMasterProductsForLeaderboard(allProducts, {
+    const scopedProducts = allProducts.map((p) =>
+      applyCategorySpecTemplate(getMasterProductCategorySlug(p), p)
+    );
+
+    const ranked = rankMasterProductsForLeaderboard(scopedProducts, {
       category,
       criterion,
       priceSegment,
