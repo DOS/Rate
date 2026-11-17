@@ -20,7 +20,7 @@ import {
 } from '../../lib/deal-radar';
 import { isOfferUnavailable } from '../../lib/product-market-stats';
 import { roundScore } from '../../lib/rating-display';
-import { plausibleOffers } from '@repo/shared-data/rules';
+import { normalizeOfferId, plausibleOffers } from '@repo/shared-data/rules';
 import {
   RATE_CACHE_TAGS,
   categoryCacheTag,
@@ -155,7 +155,34 @@ function resolveEffectiveMerchantRisk(
  *    across 10 retailers so buyers can avoid overpriced listings and buy at the lowest verified retailer.
  */
 const SAFE_PLATFORM_FILTER_REGEX = /^[a-z0-9_-]{1,40}$/;
+const MAX_DEAL_ENTITY_ID_LEN = 128;
+export const FAKE_MARKUP_THRESHOLD_PCT = 11;
 export const MAX_DEAL_RADAR_CLUSTERS = 500;
+
+function sanitizeDealEntityId(raw: unknown): string {
+  if (typeof raw !== 'string' || raw.length > 512) return '';
+  const id = normalizeOfferId(raw);
+  return id.length <= MAX_DEAL_ENTITY_ID_LEN ? id : '';
+}
+
+function computeFakeMarkupPct(
+  validOrig: number,
+  marketMedianPrice: number
+): number {
+  return Number(
+    (((validOrig - marketMedianPrice) / marketMedianPrice) * 100).toFixed(1)
+  );
+}
+
+function hasInflatedFakeMarkup(
+  validOrig: number,
+  marketMedianPrice: number
+): boolean {
+  return (
+    computeFakeMarkupPct(validOrig, marketMedianPrice) >=
+    FAKE_MARKUP_THRESHOLD_PCT
+  );
+}
 
 function sanitizeDealOfferHttpUrl(rawUrl: unknown): string {
   if (typeof rawUrl !== 'string') return '';
@@ -354,42 +381,8 @@ export function computeCrossPlatformDealRadarFromData(
                   .trim()
                   .slice(0, 160) || safePlatform.toUpperCase()
               : safePlatform.toUpperCase();
-          const cleanedMerchantId =
-            typeof rawMerchant.id === 'string'
-              ? rawMerchant.id
-                  .replace(/\p{Cc}+/gu, '')
-                  .trim()
-                  .slice(0, 128)
-              : '';
-          const safeMerchantId =
-            /^[a-zA-Z0-9._-]{1,128}$/.test(cleanedMerchantId) &&
-            /[a-zA-Z0-9]/.test(cleanedMerchantId) &&
-            !cleanedMerchantId.startsWith('.') &&
-            !cleanedMerchantId.endsWith('.') &&
-            !cleanedMerchantId.includes('..') &&
-            !/^(?:0+|null|undefined|nan|infinity|-infinity|true|false)$/i.test(
-              cleanedMerchantId
-            )
-              ? cleanedMerchantId
-              : '';
-          const cleanedOfferId =
-            typeof o.id === 'string'
-              ? o.id
-                  .replace(/\p{Cc}+/gu, '')
-                  .trim()
-                  .slice(0, 128)
-              : '';
-          const safeOfferId =
-            /^[a-zA-Z0-9._-]{1,128}$/.test(cleanedOfferId) &&
-            /[a-zA-Z0-9]/.test(cleanedOfferId) &&
-            !cleanedOfferId.startsWith('.') &&
-            !cleanedOfferId.endsWith('.') &&
-            !cleanedOfferId.includes('..') &&
-            !/^(?:0+|null|undefined|nan|infinity|-infinity|true|false)$/i.test(
-              cleanedOfferId
-            )
-              ? cleanedOfferId
-              : `offer-${idx + 1}`;
+          const safeMerchantId = sanitizeDealEntityId(rawMerchant.id);
+          const safeOfferId = sanitizeDealEntityId(o.id) || `offer-${idx + 1}`;
           return {
             ...o,
             id: safeOfferId,
@@ -412,12 +405,15 @@ export function computeCrossPlatformDealRadarFromData(
     for (const o of validOffers) {
       // Without an id, a seller is its platform and name; without a name
       // either (the name fell back to the platform), only the offer is known.
+      // Prefix each namespace so colon-composite merchant IDs never collide
+      // with platform:name or offer:id keys (DOS/Rate#1702).
       const named = o.merchant.name !== o.platform.toUpperCase();
       analyzedMerchantKeys.add(
-        o.merchant.id ||
-          (named
-            ? `${o.platform.toLowerCase()}:${o.merchant.name.toLowerCase()}`
-            : `offer:${o.id}`)
+        o.merchant.id
+          ? `id:${o.merchant.id}`
+          : named
+            ? `name:${o.platform.toLowerCase()}:${o.merchant.name.toLowerCase()}`
+            : `offer:${o.platform.toLowerCase()}:${o.id}`
       );
     }
 
@@ -499,10 +495,15 @@ export function computeCrossPlatformDealRadarFromData(
       const savingsVsMedianPct = Number(
         ((savingsVsMedianVnd / marketMedianPrice) * 100).toFixed(1)
       );
-      const validBestOrig = normalizeOfferOriginalPrice(
+      const rawBestOrig = normalizeOfferOriginalPrice(
         bestOffer.price_current,
         bestOffer.price_original
       );
+      const validBestOrig =
+        rawBestOrig !== null &&
+        !hasInflatedFakeMarkup(rawBestOrig, marketMedianPrice)
+          ? rawBestOrig
+          : null;
       const claimedDiscountPct =
         validBestOrig && validBestOrig > bestOffer.price_current
           ? Math.round(
@@ -570,15 +571,16 @@ export function computeCrossPlatformDealRadarFromData(
       if (!validOrig || validOrig <= off.price_current) {
         continue;
       }
-      const fakeMarkupPct = Number(
-        (((validOrig - marketMedianPrice) / marketMedianPrice) * 100).toFixed(1)
-      );
+      const fakeMarkupPct = computeFakeMarkupPct(validOrig, marketMedianPrice);
       const claimedDiscountPct = Math.round(
         ((validOrig - off.price_current) / validOrig) * 100
       );
 
       // Flag when original price is >= 11% above market median and current price is >= market median
-      if (fakeMarkupPct >= 11 && off.price_current >= marketMedianPrice) {
+      if (
+        fakeMarkupPct >= FAKE_MARKUP_THRESHOLD_PCT &&
+        off.price_current >= marketMedianPrice
+      ) {
         const candidateTrap: CrossPlatformDealRadarItem = {
           id: `trap-${safeMasterSlug}-${off.platform}-${off.id}`,
           verdict: 'inflated_fake_sale',
@@ -712,7 +714,8 @@ const _getCrossPlatformDealRadarByKey = cache(
       [
         // v2: the response gained totalMerchantsAnalyzed and marketOfferCount.
         // v3: genuine_all_time_low needs 3+ offers (DOS/Rate#1145).
-        'rate-cross-platform-deal-radar-v3',
+        // v4: suppress inflated strikethroughs on genuineDeals and preserve composite IDs (DOS/Rate#1702).
+        'rate-cross-platform-deal-radar-v4',
         categorySlug,
         platformFilter,
         String(limit),

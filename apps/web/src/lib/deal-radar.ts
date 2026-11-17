@@ -5,6 +5,7 @@
  * watchlist, inspect, compare, exports) must go through this module instead
  * of re-implementing fetch, slug lookup, labels or export columns.
  */
+import { normalizeOfferId } from '@repo/shared-data/rules';
 import { formatPercent } from './locale-format';
 import type {
   CrossPlatformDealRadarItem,
@@ -329,26 +330,18 @@ export function selectMerchantRadar(
   payload: CrossPlatformDealRadarResponse | null | undefined,
   merchant: { id: string; name: string }
 ) {
-  const rawTargetId = String(merchant?.id || '')
-    .replace(CONTROL_CHAR_RE, '')
-    .trim()
-    .slice(0, 256);
   const targetId =
-    /^[a-zA-Z0-9._-]{1,256}$/.test(rawTargetId) &&
-    /[a-zA-Z0-9]/.test(rawTargetId) &&
-    !rawTargetId.startsWith('.') &&
-    !rawTargetId.endsWith('.') &&
-    !rawTargetId.includes('..') &&
-    !/^(?:0+|null|undefined|nan|infinity|-infinity|true|false)$/i.test(
-      rawTargetId
-    )
-      ? rawTargetId
+    typeof merchant?.id === 'string' && merchant.id.length <= 512
+      ? normalizeOfferId(merchant.id)
       : '';
-  const rawNameLower = String(merchant?.name || '')
-    .replace(CONTROL_CHAR_RE, '')
-    .trim()
-    .slice(0, 256)
-    .toLowerCase();
+  const rawNameLower =
+    typeof merchant?.name === 'string'
+      ? merchant.name
+          .replace(CONTROL_CHAR_RE, '')
+          .trim()
+          .slice(0, 256)
+          .toLowerCase()
+      : '';
   const nameLower =
     rawNameLower &&
     !/^(?:0+|null|undefined|nan|infinity|-infinity|true|false)$/i.test(
@@ -358,14 +351,13 @@ export function selectMerchantRadar(
       : '';
   const belongs = (i: CrossPlatformDealRadarItem) =>
     (Boolean(targetId) &&
-      String(i?.merchantId || '')
-        .replace(CONTROL_CHAR_RE, '')
-        .trim() === targetId) ||
+      typeof i?.merchantId === 'string' &&
+      i.merchantId.length <= 512 &&
+      normalizeOfferId(i.merchantId) === targetId) ||
     (Boolean(nameLower) &&
-      String(i?.merchantName || '')
-        .replace(CONTROL_CHAR_RE, '')
-        .trim()
-        .toLowerCase() === nameLower);
+      typeof i?.merchantName === 'string' &&
+      i.merchantName.replace(CONTROL_CHAR_RE, '').trim().toLowerCase() ===
+        nameLower);
   const rawDeals = Array.isArray(payload?.genuineDeals)
     ? payload.genuineDeals
     : [];

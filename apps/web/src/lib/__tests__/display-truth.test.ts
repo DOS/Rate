@@ -11,6 +11,7 @@ import {
   buildRadarIndex,
   isMultiPlatformFloor,
   radarLabel,
+  selectMerchantRadar,
 } from '../deal-radar';
 import { computeJReviewsUserScores } from '../jreviews-user-score';
 import { pickClientMessages } from '../client-messages';
@@ -827,6 +828,169 @@ assert.ok(
     !deepInspectWorkspace.includes('<strong className="text-success">') &&
     !deepInspectWorkspace.includes('className="progress-bar bg-success"'),
   'DeepInspectWorkspace.tsx must apply merchantRiskTone, hide the DOSafe bar when unknown, scope plausibility to in-stock offers, use canonical bait helper, and prefer offer.platform'
+);
+
+// DOS/Rate#1702: suppress inflated strikethrough list prices on genuineDeals
+// (>= 11% above marketMedianPrice) while preserving legitimate strikethroughs.
+const master1702 = {
+  id: 'mp-1702',
+  slug: 'iphone-16-1702',
+  name: 'iPhone 16 128GB',
+  brand: 'Apple',
+  category_id: 'smartphones',
+  metadata: { category_slug: 'smartphones' },
+};
+const buildDealCluster1702 = (bestOrig: number | null) => [
+  {
+    id: '  shopee:88201.991\u0000 ',
+    platform: 'shopee',
+    price_current: 19_500_000,
+    price_original: bestOrig,
+    url: 'https://shopee.vn/product/99/88201',
+    merchant: {
+      id: '  shopee:shop_99\u0000 ',
+      name: '',
+      platform: 'shopee',
+      risk_score: 5,
+      is_official: true,
+    },
+  },
+  {
+    id: 'tiki:1002',
+    platform: 'tiki',
+    price_current: 20_000_000,
+    price_original: 20_000_000,
+    url: 'https://tiki.vn/product-p1002.html',
+    merchant: {
+      id: 'tiki:trading',
+      name: 'Tiki Trading',
+      platform: 'tiki',
+      risk_score: 4,
+      is_official: true,
+    },
+  },
+  {
+    id: 'lazada:77102.445',
+    platform: 'lazada',
+    price_current: 20_500_000,
+    price_original: 29_900_000,
+    url: 'https://www.lazada.vn/products/p-i77102.html',
+    merchant: {
+      id: 'lazada:mall_42',
+      name: '',
+      platform: 'lazada',
+      risk_score: 8,
+      is_official: true,
+    },
+  },
+];
+
+const inflatedGenuine1702 = computeCrossPlatformDealRadarFromData([
+  {
+    master: master1702 as never,
+    offers: buildDealCluster1702(29_900_000) as never,
+  },
+]);
+assert.equal(inflatedGenuine1702.genuineDeals[0]?.priceCurrent, 19_500_000);
+assert.equal(inflatedGenuine1702.genuineDeals[0]?.priceOriginal, null);
+assert.equal(inflatedGenuine1702.genuineDeals[0]?.claimedDiscountPct, 0);
+assert.equal(inflatedGenuine1702.genuineDeals[0]?.fakeMarkupPct, 0);
+const inflatedSignal1702 = computeProductRadarSignal(
+  master1702 as never,
+  buildDealCluster1702(29_900_000) as never
+);
+assert.equal(inflatedSignal1702.genuineDeal?.priceOriginal, null);
+assert.equal(inflatedSignal1702.genuineDeal?.claimedDiscountPct, 0);
+
+// Exact 1-decimal rounding boundary: +10.96% rounds to 11.0% (suppressed),
+// +11.0% is suppressed, and +10.9% (< 11%) or below-median list prices stay.
+for (const suppressedOrig of [22_192_000, 22_200_000]) {
+  const res = computeCrossPlatformDealRadarFromData([
+    {
+      master: master1702 as never,
+      offers: buildDealCluster1702(suppressedOrig) as never,
+    },
+  ]);
+  assert.equal(res.genuineDeals[0]?.priceOriginal, null);
+  assert.equal(res.genuineDeals[0]?.claimedDiscountPct, 0);
+}
+const legitimateOrig1702 = computeCrossPlatformDealRadarFromData([
+  {
+    master: master1702 as never,
+    offers: buildDealCluster1702(22_180_000) as never,
+  },
+]);
+assert.equal(legitimateOrig1702.genuineDeals[0]?.priceOriginal, 22_180_000);
+assert.equal(legitimateOrig1702.genuineDeals[0]?.claimedDiscountPct, 12);
+const belowMedianOrig1702 = computeCrossPlatformDealRadarFromData([
+  {
+    master: master1702 as never,
+    offers: buildDealCluster1702(19_900_000) as never,
+  },
+]);
+assert.equal(belowMedianOrig1702.genuineDeals[0]?.priceOriginal, 19_900_000);
+assert.equal(belowMedianOrig1702.genuineDeals[0]?.claimedDiscountPct, 2);
+
+// Colon-composite merchantId and offerId preservation + selectMerchantRadar lookup.
+assert.equal(inflatedGenuine1702.genuineDeals[0]?.merchantId, 'shopee:shop_99');
+assert.equal(
+  inflatedGenuine1702.fakeSaleTraps[0]?.id,
+  'trap-iphone-16-1702-lazada-lazada:77102.445'
+);
+assert.equal(
+  inflatedGenuine1702.fakeSaleTraps[0]?.merchantId,
+  'lazada:mall_42'
+);
+assert.equal(
+  selectMerchantRadar(inflatedGenuine1702, {
+    id: '  shopee:shop_99\u0000 ',
+    name: '',
+  }).genuineDealCount,
+  1
+);
+assert.equal(
+  selectMerchantRadar(inflatedGenuine1702, { id: 'lazada:mall_42', name: '' })
+    .fakeTrapCount,
+  1
+);
+
+// Unnamed composite merchant deduplication & namespace isolation vs malformed IDs.
+const dedupRadar1702 = computeCrossPlatformDealRadarFromData([
+  {
+    master: master1702 as never,
+    offers: [
+      buildDealCluster1702(null)[0],
+      {
+        ...buildDealCluster1702(null)[0],
+        id: 'shopee:88201.992',
+        price_current: 19_700_000,
+      },
+      {
+        id: '::invalid::',
+        platform: 'shopee',
+        price_current: 20_500_000,
+        price_original: 29_900_000,
+        url: 'https://shopee.vn/product/1/2',
+        merchant: {
+          id: ':bad',
+          name: 'shop_99',
+          platform: 'shopee',
+          risk_score: 5,
+          is_official: false,
+        },
+      },
+    ] as never,
+  },
+]);
+assert.equal(dedupRadar1702.totalMerchantsAnalyzed, 2);
+assert.equal(dedupRadar1702.fakeSaleTraps[0]?.merchantId, '');
+assert.equal(
+  dedupRadar1702.fakeSaleTraps[0]?.id,
+  'trap-iphone-16-1702-shopee-offer-3'
+);
+assert.equal(
+  selectMerchantRadar(dedupRadar1702, { id: ':bad', name: '' }).fakeTrapCount,
+  0
 );
 
 console.log('display-truth: ok');
