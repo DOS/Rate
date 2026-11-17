@@ -579,6 +579,32 @@ async function main() {
     3_086_000
   );
 
+  // When removedObservedSelf is false, baitReferenceOffers is already plausible-filtered;
+  // do not run a second plausibleOffers pass that would drop borderline 3.5M and skew median to 15M.
+  const borderlinePrices = [
+    500_000, 1_000_000, 1_000_000, 3_500_000, 8_000_000, 10_000_000, 20_000_000,
+    30_000_000,
+  ];
+  const borderlineSoldOutVerdict = evaluateExtensionPriceVerdict({
+    isAccessory: false,
+    accessoryReason: null,
+    isAmbiguousVariant: false,
+    observedPrice: 500_000,
+    observedOriginalPrice: null,
+    offers: borderlinePrices.map((price, idx) =>
+      mkOffer(`borderline-${idx}`, `shop-${idx}`, price, 'out_of_stock')
+    ) as never[],
+    observedOfferId: null,
+    priceHistory: null,
+  });
+  assert.equal(borderlineSoldOutVerdict.implausiblyLow, true);
+  assert.equal(borderlineSoldOutVerdict.marketMedianPrice, null);
+  assert.equal(
+    borderlineSoldOutVerdict.messageParams?.marketMedianPrice,
+    10_000_000
+  );
+  assert.ok(borderlineSoldOutVerdict.explanation.includes('10.000.000 ₫'));
+
   const allSoldOutRealVerdict = evaluateExtensionPriceVerdict({
     isAccessory: false,
     accessoryReason: null,

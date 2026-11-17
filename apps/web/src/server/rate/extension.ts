@@ -841,7 +841,11 @@ export function evaluateExtensionPriceVerdict(params: {
     observedPrice <= MAX_VALID_VND_PRICE &&
     isImplausiblyLowPrice(observedPrice, baitReferenceOffers)
   ) {
-    const fallbackPlausiblePrices = plausibleOffers(baitReferenceOffers)
+    const fallbackPlausiblePrices = (
+      removedObservedSelf
+        ? plausibleOffers(baitReferenceOffers)
+        : baitReferenceOffers
+    )
       .map((o) => {
         const rawPrice: unknown = o.price_current;
         if (typeof rawPrice === 'number') return rawPrice;
