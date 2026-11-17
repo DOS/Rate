@@ -8,7 +8,10 @@ import {
   merchantRiskTone,
   type MerchantRiskTone,
 } from '@/lib/merchant-risk-tone';
-import { discountVerdictCopy } from '@/lib/discount-verdict-copy';
+import {
+  discountVerdictCopy,
+  type VerdictTranslator,
+} from '@/lib/discount-verdict-copy';
 import { formatScoreFixed } from '@/lib/rating-display';
 import AnalyzerText from '@/components/reviews/AnalyzerText';
 import { useDetailsDismiss } from '@/components/elementary/use-details-dismiss';
@@ -22,6 +25,7 @@ import {
   resolveCompareRamGb,
   resolveCompareStorageGb,
   resolveProductImageUrl,
+  type OfferDiscountAnalysis,
   type UrlInspectionResult,
 } from '@/lib/rate-domain';
 import CompareQuickToggle from '@/components/compare/CompareQuickToggle';
@@ -205,6 +209,19 @@ export function filterInspectOfferDiscount<
     return null;
   }
   return analysis;
+}
+
+/**
+ * The copied Markdown's price verdict, `**label** (explanation)`, in the UI
+ * locale so prices and percentages match the page badges (DOS/Rate#1711).
+ */
+export function inspectMarkdownPriceVerdict(
+  tVerdict: VerdictTranslator,
+  discount: OfferDiscountAnalysis,
+  locale: string
+): string {
+  const copy = discountVerdictCopy(tVerdict, discount, locale);
+  return `**${copy.label}** (${copy.explanation})`;
 }
 
 export function resolveInspectOfferPlatform(offer: {
@@ -415,7 +432,7 @@ export default function DeepInspectWorkspace({
               ]
             : discount
               ? [
-                  `- **${t('mdPriceVerdict')}:** **${discountVerdictCopy(tVerdict, discount).label}** (${discountVerdictCopy(tVerdict, discount).explanation})`,
+                  `- **${t('mdPriceVerdict')}:** ${inspectMarkdownPriceVerdict(tVerdict, discount, locale)}`,
                 ]
               : []),
         ...(currentListedPrice > 0
@@ -520,7 +537,7 @@ export default function DeepInspectWorkspace({
           rawAnalysis,
           isOfferUnavailable(o)
         );
-        if (a) return discountVerdictCopy(tVerdict, a).label;
+        if (a) return discountVerdictCopy(tVerdict, a, locale).label;
         if (isOfferUnavailable(o)) {
           return o.availability === 'discontinued'
             ? tOffers('offersDiscontinuedBadge')

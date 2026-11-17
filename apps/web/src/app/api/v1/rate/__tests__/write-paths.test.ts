@@ -1123,6 +1123,36 @@ async function testReviewsHideFakeAnd413Cors() {
   );
   assert.equal(calls.length, 0);
 
+  // The OpenAPI text says what hideFake and no_stock now mean (DOS/Rate#1711).
+  const { buildRateOpenApiSpec } = await import('@/server/rate/openapi');
+  const spec = buildRateOpenApiSpec('https://rate.vn');
+  assert.equal(spec.info.version, '1.10.1');
+  const hideFakeDoc = String(
+    spec.paths['/api/v1/rate/reviews']!.get!.parameters!.find(
+      (p) => p.name === 'hideFake'
+    )?.description ?? ''
+  );
+  for (const phrase of [
+    '`authentic`',
+    'competitor sabotage',
+    'review bombing',
+    'excluded from the rating',
+    '`unanalyzed`) stay',
+  ]) {
+    assert.ok(hideFakeDoc.includes(phrase), `hideFake doc: ${phrase}`);
+  }
+  assert.ok(!hideFakeDoc.includes('Filter out reviews flagged as AI'));
+  const saleStateDoc = String(
+    (spec.components.schemas.ProductSaleState as { description?: string })
+      .description ?? ''
+  );
+  assert.ok(!saleStateDoc.includes('as in list bodies'));
+  assert.ok(
+    saleStateDoc.includes('`sold_out` or `not_listed` there') &&
+      saleStateDoc.includes('in-stock listing but no current price'),
+    'ProductSaleState doc names when no_stock is still returned'
+  );
+
   console.log(
     '  ✅ GET /api/v1/rate/reviews?hideFake=1 excludes sabotage/bombing/excluded reviews and POST 413 carries REVIEWS_CORS_HEADERS (#1685)'
   );
