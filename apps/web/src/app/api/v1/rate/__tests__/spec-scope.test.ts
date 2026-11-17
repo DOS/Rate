@@ -1489,6 +1489,289 @@ async function testProductsAndCompareSaleStateParity() {
   );
 }
 
+// DOS/Rate#1699: GET /versus and GET /leaderboard scope specs per category,
+// and GET /watchlist reports merchant_count from plausible in-stock offers only.
+async function testVersusAndLeaderboardSpecScope() {
+  const { NextRequest } = await import('next/server');
+  const versus = await import('../versus/route');
+  const leaderboard = await import('../leaderboard/route');
+
+  const ratedBud = (id: string, slug: string, rating: number) => ({
+    ...phoneShaped(id, slug, 'earbuds'),
+    rating_score: rating,
+    user_rating_weighted: rating,
+    average_rating: rating,
+    total_reviews: 25,
+    expert_criteria_scores: {
+      screen: 9,
+      performance: 8.5,
+      camera: 9,
+      battery: 8,
+      value: 8.5,
+    },
+    metadata: { category_slug: 'earbuds' },
+  });
+  const ratedWatch = (id: string, slug: string, rating: number) => ({
+    ...phoneShaped(id, slug, 'smartwatches'),
+    rating_score: rating,
+    user_rating_weighted: rating,
+    average_rating: rating,
+    total_reviews: 25,
+    metadata: { category_slug: 'smartwatches' },
+  });
+
+  const BUD_A = ratedBud(
+    'd1111111-1111-4111-8111-111111111111',
+    'apple-airpods-pro-2-1699',
+    4.8
+  );
+  const BUD_B = ratedBud(
+    'd2222222-2222-4222-8222-222222222222',
+    'sony-wf-1000xm5-1699',
+    4.6
+  );
+  const WATCH_A = ratedWatch(
+    'd3333333-3333-4333-8333-333333333333',
+    'apple-watch-s10-lte-1699',
+    4.7
+  );
+  const WATCH_B = ratedWatch(
+    'd4444444-4444-4444-8444-444444444444',
+    'galaxy-watch-7-lte-1699',
+    4.5
+  );
+
+  try {
+    masterRows = [BUD_A, BUD_B];
+    const vsBudRes = await versus.GET(
+      new NextRequest(
+        `http://localhost/api/v1/rate/versus?pair=${BUD_A.slug}-vs-${BUD_B.slug}`
+      )
+    );
+    assert.equal(vsBudRes.status, 200);
+    const vsBud = await vsBudRes.json();
+    for (const side of [vsBud.product_a, vsBud.product_b]) {
+      assert.deepEqual(Object.keys(side.key_specs).sort(), ['battery', 'chip']);
+      assert.equal(side.specifications.display, undefined);
+      assert.equal(side.specifications.camera, undefined);
+      assert.equal(side.specifications.cellular, undefined);
+      assert.equal(side.specifications.hardware?.ram_gb, undefined);
+      assert.equal(side.specifications.hardware?.storage_gb, undefined);
+      assert.equal(side.criteria_scores.screen, null);
+    }
+    assert.equal(vsBud.compared_criteria.includes('screen'), false);
+
+    masterRows = [WATCH_A, WATCH_B];
+    const vsWatchRes = await versus.GET(
+      new NextRequest(
+        `http://localhost/api/v1/rate/versus?pair=${WATCH_A.slug}-vs-${WATCH_B.slug}`
+      )
+    );
+    assert.equal(vsWatchRes.status, 200);
+    const vsWatch = await vsWatchRes.json();
+    for (const side of [vsWatch.product_a, vsWatch.product_b]) {
+      assert.equal(side.key_specs.camera, undefined);
+      assert.equal(side.specifications.camera, undefined);
+      assert.equal(side.specifications.cellular?.has_5g, undefined);
+      assert.equal(side.specifications.cellular?.bands_5g, undefined);
+      assert.equal(side.specifications.cellular?.technology, 'LTE');
+    }
+
+    catalog = [BUD_A, BUD_B];
+    const lbBudRes = await leaderboard.GET(
+      new NextRequest(
+        'http://localhost/api/v1/rate/leaderboard?category=earbuds'
+      )
+    );
+    assert.equal(lbBudRes.status, 200);
+    const lbBud = await lbBudRes.json();
+    assert.equal(lbBud.items.length, 2);
+    assert.deepEqual(Object.keys(lbBud.items[0].key_specs).sort(), [
+      'battery',
+      'chip',
+    ]);
+
+    const lbBudScreenQueryRes = await leaderboard.GET(
+      new NextRequest(
+        'http://localhost/api/v1/rate/leaderboard?category=earbuds&q=1%20inch'
+      )
+    );
+    const lbBudScreenQuery = await lbBudScreenQueryRes.json();
+    assert.equal(lbBudScreenQuery.items.length, 0);
+    assert.equal(lbBudScreenQuery.total_matched, 0);
+
+    const lbBudChipQueryRes = await leaderboard.GET(
+      new NextRequest(
+        'http://localhost/api/v1/rate/leaderboard?category=earbuds&q=h2'
+      )
+    );
+    const lbBudChipQuery = await lbBudChipQueryRes.json();
+    assert.equal(lbBudChipQuery.items.length, 2);
+
+    catalog = [BUD_A, WATCH_A];
+    const lbAllRes = await leaderboard.GET(
+      new NextRequest(
+        'http://localhost/api/v1/rate/leaderboard?category=all&q=1%20inch'
+      )
+    );
+    const lbAll = await lbAllRes.json();
+    assert.deepEqual(
+      lbAll.items.map((i: { slug: string }) => i.slug),
+      [WATCH_A.slug]
+    );
+    assert.equal(lbAll.items[0].key_specs.camera, undefined);
+
+    const watchlist = await import('../watchlist/route');
+    const SOLD_OUT_WATCHED = {
+      ...phoneShaped(
+        'd5555555-5555-4555-8555-555555555555',
+        'iphone-15-sold-out-watch-1699',
+        'smartphones'
+      ),
+      min_price: 0,
+      max_price: 0,
+      merchant_count: 0,
+    };
+    const STALE_COUNT_WATCHED = {
+      ...phoneShaped(
+        'd6666666-6666-4666-8666-666666666666',
+        'iphone-16-fallback-watch-1699',
+        'smartphones'
+      ),
+      min_price: 0,
+      max_price: 0,
+      merchant_count: 0,
+    };
+    masterRows = [SOLD_OUT_WATCHED, STALE_COUNT_WATCHED];
+    trustViewRows = [
+      {
+        id: 'w-so-1',
+        cluster_id: SOLD_OUT_WATCHED.id,
+        merchant_id: 'm1',
+        platform: 'shopee',
+        title: 'Sold out 1',
+        price_current: 18_990_000,
+        stock: 0,
+        url: 'https://shopee.vn/product/1/10',
+        threat_risk_score: 5,
+      },
+      {
+        id: 'w-so-2',
+        cluster_id: SOLD_OUT_WATCHED.id,
+        merchant_id: 'm2',
+        platform: 'lazada',
+        title: 'Discontinued 2',
+        price_current: 19_490_000,
+        stock: 0,
+        url: 'https://www.lazada.vn/products/i11.html',
+        threat_risk_score: 5,
+      },
+      {
+        id: 'w-live-bait',
+        cluster_id: STALE_COUNT_WATCHED.id,
+        merchant_id: 'm3',
+        platform: 'shopee',
+        title: 'Bait case',
+        price_current: 500_000,
+        stock: 5,
+        url: 'https://shopee.vn/product/1/12',
+        threat_risk_score: 5,
+      },
+      {
+        id: 'w-live-1',
+        cluster_id: STALE_COUNT_WATCHED.id,
+        merchant_id: 'm4',
+        platform: 'shopee',
+        title: 'iPhone 16',
+        price_current: 20_990_000,
+        stock: 5,
+        url: 'https://shopee.vn/product/1/13',
+        threat_risk_score: 5,
+      },
+      {
+        id: 'w-live-2',
+        cluster_id: STALE_COUNT_WATCHED.id,
+        merchant_id: 'm5',
+        platform: 'tiki',
+        title: 'iPhone 16',
+        price_current: 21_490_000,
+        stock: 5,
+        url: 'https://tiki.vn/iphone-p14.html',
+        threat_risk_score: 5,
+      },
+      {
+        id: 'w-live-so',
+        cluster_id: STALE_COUNT_WATCHED.id,
+        merchant_id: 'm6',
+        platform: 'lazada',
+        title: 'Sold out iPhone 16',
+        price_current: 19_990_000,
+        stock: 0,
+        url: 'https://www.lazada.vn/products/i15.html',
+        threat_risk_score: 5,
+      },
+    ];
+    productRows = [
+      {
+        id: 'w-so-1',
+        cluster_id: SOLD_OUT_WATCHED.id,
+        availability: 'out_of_stock',
+      },
+      {
+        id: 'w-so-2',
+        cluster_id: SOLD_OUT_WATCHED.id,
+        availability: 'discontinued',
+      },
+      {
+        id: 'w-live-bait',
+        cluster_id: STALE_COUNT_WATCHED.id,
+        availability: 'in_stock',
+      },
+      {
+        id: 'w-live-1',
+        cluster_id: STALE_COUNT_WATCHED.id,
+        availability: 'in_stock',
+      },
+      {
+        id: 'w-live-2',
+        cluster_id: STALE_COUNT_WATCHED.id,
+        availability: 'in_stock',
+      },
+      {
+        id: 'w-live-so',
+        cluster_id: STALE_COUNT_WATCHED.id,
+        availability: 'out_of_stock',
+      },
+    ];
+    const watchRes = await watchlist.GET(
+      new NextRequest(
+        `http://localhost/api/v1/rate/watchlist?slugs=${SOLD_OUT_WATCHED.slug},${STALE_COUNT_WATCHED.slug}`
+      )
+    );
+    assert.equal(watchRes.status, 200);
+    const watchJson = await watchRes.json();
+    assert.equal(watchJson.items[SOLD_OUT_WATCHED.slug].current_min_price, 0);
+    assert.equal(watchJson.items[SOLD_OUT_WATCHED.slug].best_offer, null);
+    assert.equal(watchJson.items[SOLD_OUT_WATCHED.slug].merchant_count, 0);
+    assert.equal(watchJson.items[SOLD_OUT_WATCHED.slug].platform_count, 0);
+    assert.equal(
+      watchJson.items[STALE_COUNT_WATCHED.slug].current_min_price,
+      20_990_000
+    );
+    assert.equal(watchJson.items[STALE_COUNT_WATCHED.slug].merchant_count, 2);
+    assert.equal(watchlist.resolveWatchlistMerchantCount(3, 0, 0), 0);
+    assert.equal(watchlist.resolveWatchlistMerchantCount(0, 0, 0), 0);
+  } finally {
+    masterRows = [];
+    catalog = [];
+    trustViewRows = [];
+    productRows = [];
+  }
+  console.warn(
+    '  ✅ API v1 versus, leaderboard and watchlist enforce spec and offer truth'
+  );
+}
+
 async function main() {
   console.warn('🧪 API v1 category spec view suite (DOS/Rate#1184)');
   await testProductFilters();
@@ -1497,6 +1780,7 @@ async function main() {
   await testModelMatch();
   await testInspectAndLookupSpecScope();
   await testProductsAndCompareSaleStateParity();
+  await testVersusAndLeaderboardSpecScope();
   await testSpecMatchesBodies();
   await testBoundedInputs();
   await testInspectRateLimit();

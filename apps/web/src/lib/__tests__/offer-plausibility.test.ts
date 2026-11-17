@@ -522,6 +522,243 @@ async function main() {
   assert.ok(explorerHtml.includes('data-testid="offer-unavailable"'));
   assert.equal(explorerHtml.includes('bg-success text-white'), false);
 
+  // DOS/Rate#1699: All-sold-out clusters still flag bait in evaluateExtensionPriceVerdict,
+  // exclude unavailable offers from market stats, and interpolate positive fallback median.
+  const allSoldOutCluster = [
+    mkOffer('  so-bait\u0000 ', 'shop-a', 500_000, 'out_of_stock') as never,
+    mkOffer('so-1', 'shop-b', 3_032_000, 'out_of_stock') as never,
+    mkOffer('so-2', 'shop-c', 3_140_000, 'discontinued') as never,
+  ];
+  const allSoldOutSelfVerdict = evaluateExtensionPriceVerdict({
+    isAccessory: false,
+    accessoryReason: null,
+    isAmbiguousVariant: false,
+    observedPrice: 500_000,
+    observedOriginalPrice: null,
+    offers: allSoldOutCluster,
+    observedOfferId: 'so-bait',
+    priceHistory: null,
+  });
+  assert.equal(allSoldOutSelfVerdict.verdict, 'insufficient_data');
+  assert.equal(allSoldOutSelfVerdict.implausiblyLow, true);
+  assert.equal(allSoldOutSelfVerdict.messageKey, 'implausibly_low');
+  assert.equal(allSoldOutSelfVerdict.marketMinPrice, null);
+  assert.equal(allSoldOutSelfVerdict.marketMedianPrice, null);
+  assert.equal(allSoldOutSelfVerdict.marketMaxPrice, null);
+  assert.equal(allSoldOutSelfVerdict.cheaperOfferCount, 0);
+  assert.equal(allSoldOutSelfVerdict.maxSavingsAmount, 0);
+  assert.equal(
+    allSoldOutSelfVerdict.messageParams?.marketMedianPrice,
+    3_086_000
+  );
+  assert.equal(
+    allSoldOutSelfVerdict.explanation.includes('trung vị 0 ₫'),
+    false
+  );
+  assert.ok(allSoldOutSelfVerdict.explanation.includes('3.086.000 ₫'));
+
+  const allSoldOutUncrawledMultiBait = evaluateExtensionPriceVerdict({
+    isAccessory: false,
+    accessoryReason: null,
+    isAmbiguousVariant: false,
+    observedPrice: 500_000,
+    observedOriginalPrice: null,
+    offers: [
+      mkOffer('so-bait-1', 'shop-a', 500_000, 'out_of_stock') as never,
+      mkOffer('so-bait-2', 'shop-b', 550_000, 'discontinued') as never,
+      mkOffer('so-real-1', 'shop-c', 3_032_000, 'out_of_stock') as never,
+      mkOffer('so-real-2', 'shop-d', 3_140_000, 'discontinued') as never,
+    ],
+    observedOfferId: null,
+    priceHistory: null,
+  });
+  assert.equal(allSoldOutUncrawledMultiBait.implausiblyLow, true);
+  assert.equal(allSoldOutUncrawledMultiBait.marketMedianPrice, null);
+  assert.equal(
+    allSoldOutUncrawledMultiBait.messageParams?.marketMedianPrice,
+    3_086_000
+  );
+
+  const allSoldOutRealVerdict = evaluateExtensionPriceVerdict({
+    isAccessory: false,
+    accessoryReason: null,
+    isAmbiguousVariant: false,
+    observedPrice: 3_032_000,
+    observedOriginalPrice: null,
+    offers: allSoldOutCluster,
+    observedOfferId: 'so-1',
+    priceHistory: null,
+  });
+  assert.equal(allSoldOutRealVerdict.implausiblyLow, undefined);
+  assert.equal(allSoldOutRealVerdict.messageKey, 'insufficient_history');
+  assert.equal(allSoldOutRealVerdict.marketMinPrice, null);
+
+  // lookupExtensionProduct flags matchedOffer with implausiblyLow: true on URL-matched
+  // bait listings (both in-stock and all-sold-out clusters) and leaves real offers unflagged.
+  const { withPlausibleMinPrice } =
+    await import('../../server/rate/api-handler');
+  assert.equal(
+    withPlausibleMinPrice({ min_price: 22_990_000 }, [
+      { price_current: 15_000_000, availability: 'out_of_stock' },
+      { price_current: 16_000_000, availability: 'discontinued' },
+      { price_current: 21_990_000, availability: 'in_stock' },
+    ]).min_price,
+    21_990_000
+  );
+  assert.equal(
+    withPlausibleMinPrice({ min_price: 0 }, [
+      { price_current: 15_000_000, availability: 'out_of_stock' },
+      { price_current: 16_000_000, availability: 'discontinued' },
+    ]).min_price,
+    0
+  );
+
+  try {
+    let allSoldOutMode = false;
+    globalThis.fetch = (async (input: RequestInfo | URL) => {
+      const url = new URL(
+        typeof input === 'string'
+          ? input
+          : input instanceof URL
+            ? input.toString()
+            : input.url
+      );
+      const firstPage = Number(url.searchParams.get('offset') ?? 0) === 0;
+      const select = url.searchParams.get('select') ?? '';
+      const json = (body: unknown) =>
+        new Response(JSON.stringify(body), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        });
+      if (
+        url.pathname.endsWith('/products') &&
+        url.searchParams.has('platform_item_id')
+      ) {
+        return json([
+          { cluster_id: 'master-1699', platform_item_id: '1699_1000' },
+          { cluster_id: 'master-1699', platform_item_id: '1699_1001' },
+        ]);
+      }
+      if (
+        url.pathname.endsWith('/master_products') &&
+        url.searchParams.get('id') === 'eq.master-1699'
+      ) {
+        return json({
+          id: 'master-1699',
+          slug: 'buds3-pro-1699',
+          name: 'Galaxy Buds3 Pro',
+          brand: 'Samsung',
+          model: 'Galaxy Buds3 Pro',
+          images: [],
+          key_specs: {},
+          specifications: {},
+          min_price: allSoldOutMode ? 0 : 3_032_000,
+          max_price: allSoldOutMode ? 0 : 3_140_000,
+          category_id: 'cat-earbuds',
+        });
+      }
+      if (url.pathname.endsWith('/v_products_with_merchant_trust')) {
+        return json(
+          firstPage
+            ? [
+                {
+                  id: 'bait-1000',
+                  cluster_id: 'master-1699',
+                  merchant_id: 'm1',
+                  platform: 'shopee',
+                  title: 'Buds Case Bait',
+                  price_current: 500_000,
+                  stock: 0,
+                  url: 'https://shopee.vn/product-i.1699.1000',
+                  threat_risk_score: 5,
+                },
+                {
+                  id: 'real-1001',
+                  cluster_id: 'master-1699',
+                  merchant_id: 'm2',
+                  platform: 'shopee',
+                  title: 'Galaxy Buds3 Pro',
+                  price_current: 3_032_000,
+                  stock: allSoldOutMode ? 0 : 5,
+                  url: 'https://shopee.vn/product-i.1699.1001',
+                  threat_risk_score: 5,
+                },
+                {
+                  id: 'real-1002',
+                  cluster_id: 'master-1699',
+                  merchant_id: 'm3',
+                  platform: 'shopee',
+                  title: 'Galaxy Buds3 Pro',
+                  price_current: 3_140_000,
+                  stock: allSoldOutMode ? 0 : 5,
+                  url: 'https://shopee.vn/product-i.1699.1002',
+                  threat_risk_score: 5,
+                },
+              ]
+            : []
+        );
+      }
+      if (url.pathname.endsWith('/products') && select === 'id,availability') {
+        return json(
+          firstPage
+            ? [
+                {
+                  id: 'bait-1000',
+                  availability: allSoldOutMode ? 'out_of_stock' : 'in_stock',
+                },
+                {
+                  id: 'real-1001',
+                  availability: allSoldOutMode ? 'out_of_stock' : 'in_stock',
+                },
+                {
+                  id: 'real-1002',
+                  availability: allSoldOutMode ? 'discontinued' : 'in_stock',
+                },
+              ]
+            : []
+        );
+      }
+      return json([]);
+    }) as typeof fetch;
+
+    const inStockBaitLookup = await lookupExtensionProduct({
+      platform: 'shopee',
+      externalId: '1699_1000',
+      url: 'https://shopee.vn/product-i.1699.1000',
+      mode: 'pill',
+    });
+    assert.equal(inStockBaitLookup.matchedOffer?.id, 'bait-1000');
+    assert.equal(inStockBaitLookup.matchedOffer?.implausiblyLow, true);
+    assert.equal(inStockBaitLookup.priceAssessment.implausiblyLow, true);
+
+    const inStockRealLookup = await lookupExtensionProduct({
+      platform: 'shopee',
+      externalId: '1699_1001',
+      url: 'https://shopee.vn/product-i.1699.1001',
+      mode: 'pill',
+    });
+    assert.equal(inStockRealLookup.matchedOffer?.id, 'real-1001');
+    assert.equal(inStockRealLookup.matchedOffer?.implausiblyLow, undefined);
+
+    allSoldOutMode = true;
+    const soldOutBaitLookup = await lookupExtensionProduct({
+      platform: 'shopee',
+      externalId: '1699_1000',
+      url: 'https://shopee.vn/product-i.1699.1000',
+      mode: 'full',
+    });
+    assert.equal(soldOutBaitLookup.matchedOffer?.id, 'bait-1000');
+    assert.equal(soldOutBaitLookup.matchedOffer?.implausiblyLow, true);
+    assert.equal(soldOutBaitLookup.priceAssessment.implausiblyLow, true);
+    assert.equal(soldOutBaitLookup.priceAssessment.marketMedianPrice, null);
+    assert.equal(
+      soldOutBaitLookup.priceAssessment.messageParams?.marketMedianPrice,
+      3_086_000
+    );
+  } finally {
+    globalThis.fetch = origFetch;
+  }
+
   console.warn('✅ Offer plausibility suite passed');
 }
 

@@ -11,6 +11,7 @@ import { resolveWatchlistSlug } from '@/server/rate/item-compare';
 import { radarExportFields } from '@/lib/deal-radar';
 import {
   PUBLIC_API_CORS_HEADERS,
+  countPlausibleInStockOffers,
   jsonApiError,
   parseWatchlistSlugsParam,
   resolveWatchlistMasterPriceBounds,
@@ -36,11 +37,20 @@ const WATCHLIST_CORS_HEADERS: Record<string, string> = {
 
 export function resolveWatchlistMerchantCount(
   rawMerchantCount: unknown,
-  offersCount: number
+  plausibleInStockOffersCount: number,
+  currentMinPrice?: number
 ): number {
+  if (
+    typeof currentMinPrice === 'number' &&
+    (!Number.isFinite(currentMinPrice) || currentMinPrice <= 0)
+  ) {
+    return 0;
+  }
   const safeOffersCount =
-    Number.isFinite(offersCount) && offersCount > 0
-      ? Math.min(10_000, Math.floor(offersCount))
+    typeof plausibleInStockOffersCount === 'number' &&
+    Number.isFinite(plausibleInStockOffersCount) &&
+    plausibleInStockOffersCount > 0
+      ? Math.min(10_000, Math.floor(plausibleInStockOffersCount))
       : 0;
   if (
     typeof rawMerchantCount !== 'boolean' &&
@@ -48,9 +58,22 @@ export function resolveWatchlistMerchantCount(
     rawMerchantCount !== undefined &&
     !(typeof rawMerchantCount === 'string' && !rawMerchantCount.trim())
   ) {
-    const n = Number(rawMerchantCount);
-    if (Number.isFinite(n) && n > 0) {
-      return Math.min(10_000, Math.floor(n));
+    const trimmed =
+      typeof rawMerchantCount === 'string'
+        ? rawMerchantCount.replace(/\p{Cc}+/gu, '').trim()
+        : rawMerchantCount;
+    if (
+      typeof trimmed === 'string' &&
+      (!trimmed || /^[+-]?0[xbo]/i.test(trimmed))
+    ) {
+      return safeOffersCount;
+    }
+    const n = Number(trimmed);
+    if (Number.isFinite(n) && n >= 0) {
+      const floored = Math.min(10_000, Math.floor(n));
+      if (floored > 0 || safeOffersCount === 0) {
+        return floored;
+      }
     }
   }
   return safeOffersCount;
@@ -141,6 +164,7 @@ export async function GET(request: NextRequest) {
     const entries = validMasterEntries.map(([slug, master]) => {
       const offers = offersByMaster.get(master.id) ?? [];
       const { bestOffer, offerPlatforms } = selectBestOfferFromListings(offers);
+      const plausibleOfferCount = countPlausibleInStockOffers(offers);
       const radarSignal = computeProductRadarSignal(master, offers);
       const { currentMinPrice, currentMaxPrice } =
         // The stored stats every page shows: in stock, no bait prices
@@ -165,7 +189,8 @@ export async function GET(request: NextRequest) {
           current_max_price: currentMaxPrice,
           merchant_count: resolveWatchlistMerchantCount(
             master.merchant_count,
-            offers.length
+            plausibleOfferCount,
+            currentMinPrice
           ),
           platform_count: offerPlatforms.length,
           offer_platforms: offerPlatforms,

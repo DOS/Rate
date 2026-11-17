@@ -279,7 +279,7 @@ export interface ExtensionLookupResponse {
   variantCandidates: ExtensionVariantCandidate[];
   priceAssessment: ExtensionPriceAssessment;
   masterProduct: MasterProduct | null;
-  matchedOffer: MerchantOffer | null;
+  matchedOffer: ExtensionOffer | null;
   topCheaperOffers: ExtensionOffer[];
   allOffers: ExtensionOffer[];
   merchantProfile: MerchantSummary | null;
@@ -697,11 +697,13 @@ export function evaluateExtensionPriceVerdict(params: {
     observedOfferId,
     priceHistory,
   } = safeParams;
+  const allOffers = (Array.isArray(offers) ? offers : []).filter(
+    (o): o is MerchantOffer =>
+      Boolean(o && typeof o === 'object' && !Array.isArray(o))
+  );
   // Sold-out and discontinued listings keep their last price; they set no
   // market reference and are no cheaper option (DOS/Rate#1177).
-  const safeOffers = (Array.isArray(offers) ? offers : []).filter(
-    (o) => !isOfferUnavailable(o)
-  );
+  const safeOffers = allOffers.filter((o) => !isOfferUnavailable(o));
 
   if (isAccessory) {
     // A reason without a message key is free text: the client shows it as
@@ -801,9 +803,13 @@ export function evaluateExtensionPriceVerdict(params: {
       ? observedOfferId.replace(/\p{Cc}+/gu, '').trim()
       : '';
   const normalizedObservedOfferId = normalizeOfferId(observedOfferId);
+  // When every listing in the cluster is unavailable, fall back to all offers
+  // only for the bait reference so all-sold-out bait listings match allOffers
+  // and DeepInspectWorkspace without polluting market stats (DOS/Rate#1699).
+  const baitPool = safeOffers.length > 0 ? safeOffers : allOffers;
   let removedObservedSelf = false;
   const otherOffers = trimmedObservedId
-    ? safeOffers.filter((o) => {
+    ? baitPool.filter((o) => {
         if (!o) return false;
         if (!removedObservedSelf) {
           const trimmedId =
@@ -822,13 +828,40 @@ export function evaluateExtensionPriceVerdict(params: {
         }
         return true;
       })
-    : safeOffers;
-  const baitReferenceOffers = removedObservedSelf ? otherOffers : marketOffers;
+    : baitPool;
+  const baitReferenceOffers = removedObservedSelf
+    ? otherOffers
+    : safeOffers.length > 0
+      ? marketOffers
+      : plausibleOffers(baitPool);
   if (
-    observedPrice &&
+    typeof observedPrice === 'number' &&
+    Number.isFinite(observedPrice) &&
+    observedPrice > 0 &&
+    observedPrice <= MAX_VALID_VND_PRICE &&
     isImplausiblyLowPrice(observedPrice, baitReferenceOffers)
   ) {
-    const roundedMedian = Math.round(marketMedianPrice ?? 0);
+    const fallbackPlausiblePrices = plausibleOffers(baitReferenceOffers)
+      .map((o) => {
+        const rawPrice: unknown = o.price_current;
+        if (typeof rawPrice === 'number') return rawPrice;
+        if (typeof rawPrice === 'string') {
+          const cleaned = rawPrice.replace(/\p{Cc}+/gu, '').trim();
+          if (
+            !cleaned ||
+            cleaned.length > 32 ||
+            /^[+-]?0[xbo]/i.test(cleaned)
+          ) {
+            return Number.NaN;
+          }
+          return Number(cleaned);
+        }
+        return Number.NaN;
+      })
+      .filter((p) => Number.isFinite(p) && p > 0 && p <= MAX_VALID_VND_PRICE);
+    const roundedMedian = Math.round(
+      marketMedianPrice ?? computeMedian(fallbackPlausiblePrices)
+    );
     return {
       verdict: 'insufficient_data',
       badgeLabel: 'Giá thấp bất thường',
@@ -1612,7 +1645,7 @@ export async function lookupExtensionProduct(
     // The category's spec view, as rate.vn shows it: no earbud screen, RAM,
     // storage or camera, no watch 5G (DOS/Rate#1184).
     masterProduct: applyCategorySpecTemplate(categoryPath, matchedMaster),
-    matchedOffer,
+    matchedOffer: matchedOffer ? flagBait(matchedOffer) : null,
     topCheaperOffers: flaggedCheaperOffers,
     allOffers: mode === 'full' ? offers.map(flagBait) : flaggedCheaperOffers,
     merchantProfile,
