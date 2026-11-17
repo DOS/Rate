@@ -251,6 +251,88 @@ export function pickHighestRated(
   return first;
 }
 
+export interface CompareHeadToHeadSummary {
+  bestRated: MasterProduct | null;
+  lowestPrice: MasterProduct | null;
+  highestMemory: MasterProduct | null;
+  bestBattery: MasterProduct | null;
+}
+
+export function pickLowestPrice(
+  products: readonly MasterProduct[]
+): MasterProduct | null {
+  const byPrice = products
+    .filter((p) => sanitizeComparePriceVnd(p.min_price) > 0)
+    .sort(
+      (a, b) =>
+        sanitizeComparePriceVnd(a.min_price) -
+        sanitizeComparePriceVnd(b.min_price)
+    );
+  const [first, second] = byPrice;
+  if (!first || !second) return null;
+  if (
+    sanitizeComparePriceVnd(first.min_price) ===
+    sanitizeComparePriceVnd(second.min_price)
+  ) {
+    return null;
+  }
+  return first;
+}
+
+export function pickHighestMemory(
+  products: readonly MasterProduct[]
+): MasterProduct | null {
+  const byMemory = products
+    .filter((p) => resolveCompareMemoryScore(p) > 0)
+    .sort(
+      (a, b) => resolveCompareMemoryScore(b) - resolveCompareMemoryScore(a)
+    );
+  const [first, second] = byMemory;
+  if (!first) return null;
+  if (
+    second &&
+    resolveCompareMemoryScore(second) === resolveCompareMemoryScore(first)
+  ) {
+    return null;
+  }
+  return first;
+}
+
+export function pickBestBattery(
+  products: readonly MasterProduct[]
+): MasterProduct | null {
+  const byBattery = products
+    .filter((p) => (resolveCompareBatteryMah(p) ?? 0) > 0)
+    .sort(
+      (a, b) =>
+        (resolveCompareBatteryMah(b) ?? 0) - (resolveCompareBatteryMah(a) ?? 0)
+    );
+  const [first, second] = byBattery;
+  if (!first) return null;
+  if (
+    second &&
+    (resolveCompareBatteryMah(second) ?? 0) ===
+      (resolveCompareBatteryMah(first) ?? 0)
+  ) {
+    return null;
+  }
+  return first;
+}
+
+export function computeCompareHeadToHeadSummary(
+  products: readonly MasterProduct[]
+): CompareHeadToHeadSummary | null {
+  if (products.length < 2) return null;
+  const bestRated = pickHighestRated(products);
+  const lowestPrice = pickLowestPrice(products);
+  const highestMemory = pickHighestMemory(products);
+  const bestBattery = pickBestBattery(products);
+  if (!bestRated && !lowestPrice && !highestMemory && !bestBattery) {
+    return null;
+  }
+  return { bestRated, lowestPrice, highestMemory, bestBattery };
+}
+
 const COMPARE_CONTROL_CHARS_RE = /\p{Cc}+/gu;
 
 export function sanitizeComparePriceVnd(value: unknown): number {
@@ -267,6 +349,58 @@ export function formatComparePriceVnd(
 ): string {
   const safe = sanitizeComparePriceVnd(value);
   return safe > 0 ? formatPriceVnd(safe, locale) : '-';
+}
+
+export type CompareReplaceTranslate = (key: 'replaceDeviceBtn') => string;
+
+export type CompareAddSlotTranslate = (
+  key: 'addSameCategoryTitle',
+  values: { unit: string }
+) => string;
+
+export function resolveCompareReplaceButtonA11y(
+  t: CompareReplaceTranslate,
+  options: {
+    productName: unknown;
+    isReplacing: boolean;
+  }
+): {
+  visibleLabel: string;
+  ariaLabel: string;
+  ariaPressed: boolean;
+} {
+  const visibleLabel = t('replaceDeviceBtn')
+    .replace(/[\r\n\t]+/g, ' ')
+    .replace(COMPARE_CONTROL_CHARS_RE, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  const cleanName =
+    typeof options.productName === 'string'
+      ? options.productName
+          .replace(/[\r\n\t]+/g, ' ')
+          .replace(COMPARE_CONTROL_CHARS_RE, '')
+          .replace(/\s+/g, ' ')
+          .trim()
+      : '';
+  return {
+    visibleLabel,
+    ariaLabel:
+      cleanName && visibleLabel
+        ? `${visibleLabel}: ${cleanName}`
+        : visibleLabel || cleanName,
+    ariaPressed: Boolean(options.isReplacing),
+  };
+}
+
+export function resolveCompareAddSlotAriaLabel(
+  t: CompareAddSlotTranslate,
+  unitLabel: string
+): string {
+  return t('addSameCategoryTitle', { unit: unitLabel })
+    .replace(/[\r\n\t]+/g, ' ')
+    .replace(COMPARE_CONTROL_CHARS_RE, '')
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 export function sanitizeCompareMerchantCount(value: unknown): number {
@@ -1263,7 +1397,7 @@ export default function CompareWorkspace({
         name: p.name,
         brand: p.brand,
         thumbnail: resolveProductImageUrl(p.slug, productImageUrl(p)),
-        min_price: Number(p.min_price || 0),
+        min_price: sanitizeComparePriceVnd(p.min_price),
         categorySlug: targetCat,
       }))
     );
@@ -1412,6 +1546,7 @@ export default function CompareWorkspace({
   };
 
   const handleRemoveProduct = (slug: string) => {
+    setReplaceIndex(null);
     syncSelection(
       products.filter((p) => p.slug !== slug),
       activeCategory
@@ -1419,6 +1554,11 @@ export default function CompareWorkspace({
   };
 
   const handleStartReplace = (idx: number) => {
+    if (replaceIndex === idx) {
+      setReplaceIndex(null);
+      setDropdownOpen(false);
+      return;
+    }
     setReplaceIndex(idx);
     setDropdownOpen(true);
     setTimeout(() => {
@@ -1612,7 +1752,7 @@ export default function CompareWorkspace({
 
   const handleWatchAllCompared = () => {
     for (const p of products) {
-      const minP = Math.max(0, Number(p.min_price || 0));
+      const minP = sanitizeComparePriceVnd(p.min_price);
       const targetP =
         minP > 0
           ? Math.max(100_000, Math.round((minP * 0.95) / 100_000) * 100_000)
@@ -1636,34 +1776,10 @@ export default function CompareWorkspace({
     setTimeout(() => setWatchedAllToast(false), 2200);
   };
 
-  const headToHeadSummary = useMemo(() => {
-    if (products.length < 2) return null;
-    const byPrice = [...products]
-      .filter((p) => sanitizeComparePriceVnd(p.min_price) > 0)
-      .sort(
-        (a, b) =>
-          sanitizeComparePriceVnd(a.min_price) -
-          sanitizeComparePriceVnd(b.min_price)
-      );
-    const byMemory = [...products]
-      .filter((p) => resolveCompareMemoryScore(p) > 0)
-      .sort(
-        (a, b) => resolveCompareMemoryScore(b) - resolveCompareMemoryScore(a)
-      );
-    const byBattery = [...products]
-      .filter((p) => (resolveCompareBatteryMah(p) ?? 0) > 0)
-      .sort(
-        (a, b) =>
-          (resolveCompareBatteryMah(b) ?? 0) -
-          (resolveCompareBatteryMah(a) ?? 0)
-      );
-    return {
-      bestRated: pickHighestRated(products),
-      lowestPrice: byPrice[0] ?? null,
-      highestMemory: byMemory[0] ?? null,
-      bestBattery: byBattery[0] ?? null,
-    };
-  }, [products]);
+  const headToHeadSummary = useMemo(
+    () => computeCompareHeadToHeadSummary(products),
+    [products]
+  );
 
   const controlsBlock = (
     <>
@@ -1812,8 +1928,8 @@ export default function CompareWorkspace({
                             item.slug,
                             productImageUrl(item)
                           );
-                          const priceFormatted = formatNumber(
-                            Number(item.min_price || 0),
+                          const priceFormatted = formatComparePriceVnd(
+                            item.min_price,
                             locale
                           );
                           const rating = getEffectiveRating(item);
@@ -1870,7 +1986,7 @@ export default function CompareWorkspace({
                                       className="text-secondary fw-semibold rate-tabular"
                                       style={{ fontSize: '0.8125rem' }}
                                     >
-                                      {priceFormatted} ₫
+                                      {priceFormatted}
                                     </span>
                                   </div>
                                 </div>
@@ -2317,8 +2433,8 @@ export default function CompareWorkspace({
                     {headToHeadSummary.lowestPrice.name}
                   </div>
                   <div className="small text-white-50 rate-tabular">
-                    {formatPriceVnd(
-                      Number(headToHeadSummary.lowestPrice.min_price || 0),
+                    {formatComparePriceVnd(
+                      headToHeadSummary.lowestPrice.min_price,
                       locale
                     )}
                   </div>
@@ -2396,8 +2512,14 @@ export default function CompareWorkspace({
                       p.slug,
                       productImageUrl(p)
                     );
-                    const minPrice = Number(p.min_price || 0);
-                    const minPriceFormatted = formatNumber(minPrice, locale);
+                    const minPriceFormatted = formatComparePriceVnd(
+                      p.min_price,
+                      locale
+                    );
+                    const replaceA11y = resolveCompareReplaceButtonA11y(t, {
+                      productName: p.name,
+                      isReplacing: replaceIndex === idx,
+                    });
                     const userRating = getEffectiveRating(p);
                     const expertRating = resolveCompareExpertRating10(p);
                     const reviewCount =
@@ -2413,13 +2535,15 @@ export default function CompareWorkspace({
                         <div className="d-flex justify-content-between align-items-center mb-2">
                           <button
                             type="button"
+                            aria-pressed={replaceA11y.ariaPressed}
+                            aria-label={replaceA11y.ariaLabel}
                             onClick={() => handleStartReplace(idx)}
                             className="btn btn-sm btn-light rounded-pill small text-muted border px-2 py-0"
                             title={t('replaceDeviceTitle', {
                               unit: activeCategoryMeta.unitLabel,
                             })}
                           >
-                            {t('replaceDeviceBtn')}
+                            {replaceA11y.visibleLabel}
                           </button>
                           <button
                             type="button"
@@ -2485,7 +2609,7 @@ export default function CompareWorkspace({
                           <div className="text-secondary small fw-semibold rate-tabular mb-2">
                             {t('referencePriceLabel')}{' '}
                             <strong className="text-dark">
-                              {minPriceFormatted} ₫
+                              {minPriceFormatted}
                             </strong>
                           </div>
 
@@ -2532,11 +2656,16 @@ export default function CompareWorkspace({
                             height: '52px',
                             fontSize: '24px',
                           }}
-                          title={t('addSameCategoryTitle', {
-                            unit: activeCategoryMeta.unitLabel,
-                          })}
+                          title={resolveCompareAddSlotAriaLabel(
+                            t,
+                            activeCategoryMeta.unitLabel
+                          )}
+                          aria-label={resolveCompareAddSlotAriaLabel(
+                            t,
+                            activeCategoryMeta.unitLabel
+                          )}
                         >
-                          +
+                          <span aria-hidden="true">+</span>
                         </button>
                         <div className="fw-bold small text-dark mb-1">
                           {t('addCategorySlotTitle', {
