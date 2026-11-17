@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
+import { mock } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
@@ -8,11 +9,30 @@ import { NextIntlClientProvider, createTranslator } from 'next-intl';
 import csMessages from '../../../locales/cs.json';
 import enMessages from '../../../locales/en.json';
 import viMessages from '../../../locales/vi.json';
+import {
+  COMPARE_REPLACE_FOCUS_DELAY_MS,
+  cancelPendingCompareReplaceFocus,
+  computeCompareHeadToHeadSummary,
+  formatComparePriceVnd,
+  nextCompareReplaceState,
+  pickBestBattery,
+  pickHighestMemory,
+  pickLowestPrice,
+  resolveCompareAddSlotAriaLabel,
+  resolveCompareReplaceButtonA11y,
+  scheduleCompareReplaceFocus,
+  shouldDismissCompareOnOutsidePointerDown,
+  syncCompareReplaceFocusState,
+} from '../../components/compare/CompareWorkspace';
 import DealFinderWorkspace from '../../components/deals/DealFinderWorkspace';
 import LeaderboardExplorer, {
+  formatLeaderboardDisplayPriceVnd,
+  formatLeaderboardPriceVnd,
+  formatLeaderboardShowdownDelta,
   resolveLeaderboardActiveScoreLabel,
 } from '../../components/leaderboard/LeaderboardExplorer';
 import ProductOffersExplorer from '../../components/leaderboard/ProductOffersExplorer';
+import { pickClientMessages } from '../client-messages';
 import {
   EMPTY_RADAR_SIGNAL,
   radarLabel,
@@ -645,6 +665,478 @@ assert.equal(
       `${relPath}: expected at least one localized radar/verdict helper call`
     );
   }
+}
+
+// DOS/Rate#1704: Compare headToHeadSummary tie & empty-shell suppression,
+// 0 VND sold-out/unpriced suppression, Leaderboard 1v1 tie delta suppression,
+// and Compare matrix slot WCAG 4.1.2 / 2.4.6 / 2.5.3 a11y.
+{
+  const testDir = path.dirname(fileURLToPath(import.meta.url));
+  const webSrcDir = path.resolve(testDir, '../..');
+
+  type SharedCompareProduct = Parameters<
+    typeof computeCompareHeadToHeadSummary
+  >[0][number];
+  const makeCompareProduct = (
+    slug: string,
+    overrides: Partial<Record<string, unknown>> = {}
+  ): SharedCompareProduct =>
+    ({
+      id: `id-${slug}`,
+      slug,
+      name: slug,
+      brand: 'Brand',
+      model: slug,
+      category_id: 'smartphones',
+      metadata: { category_slug: 'smartphones' },
+      min_price: 0,
+      ram_gb: null,
+      storage_gb: null,
+      battery_mah: null,
+      rating_score: 0,
+      user_rating_weighted: 0,
+      average_rating: 0,
+      authentic_review_count: 0,
+      total_reviews: 0,
+      key_specs: {},
+      specifications: {},
+      ...overrides,
+    }) as unknown as SharedCompareProduct;
+
+  const pA = makeCompareProduct('phone-a', {
+    name: 'Phone A',
+    rating_score: 4.84,
+    ram_gb: 8,
+    storage_gb: 256,
+    battery_mah: 5000,
+    min_price: 19_990_000,
+  });
+  const pB = makeCompareProduct('phone-b', {
+    name: 'Phone B',
+    rating_score: 4.76,
+    ram_gb: 8,
+    storage_gb: 256,
+    battery_mah: 5000,
+    min_price: 19_990_000,
+  });
+  const pC = makeCompareProduct('phone-c', {
+    name: 'Phone C',
+    rating_score: 4.9,
+    ram_gb: 12,
+    storage_gb: 512,
+    battery_mah: 5500,
+    min_price: 24_990_000,
+  });
+  const pUnpriced = makeCompareProduct('phone-unpriced', {
+    name: 'Phone Unpriced',
+    rating_score: 4.8,
+    ram_gb: 8,
+    storage_gb: 256,
+    battery_mah: 5000,
+    min_price: 0,
+  });
+
+  // 1. pickLowestPrice requires >= 2 positive prices and no tie at the bottom.
+  assert.equal(pickLowestPrice([pUnpriced, makeCompareProduct('u2')]), null);
+  assert.equal(pickLowestPrice([pA, pUnpriced]), null);
+  assert.equal(
+    pickLowestPrice([
+      pUnpriced,
+      pA,
+      makeCompareProduct('u3', { min_price: null }),
+    ]),
+    null
+  );
+  assert.equal(pickLowestPrice([pA, pB]), null);
+  assert.equal(pickLowestPrice([pA, pB, pC]), null);
+  assert.equal(pickLowestPrice([pC, pA])?.slug, 'phone-a');
+  assert.equal(pickLowestPrice([pC, pA, pUnpriced])?.slug, 'phone-a');
+
+  // 2. pickHighestMemory & pickBestBattery suppress ties and return strict leaders.
+  assert.equal(
+    pickHighestMemory([makeCompareProduct('m1'), makeCompareProduct('m2')]),
+    null
+  );
+  assert.equal(pickHighestMemory([pA, pB]), null);
+  assert.equal(
+    pickHighestMemory([
+      pA,
+      pB,
+      makeCompareProduct('m-low', { ram_gb: 6, storage_gb: 128 }),
+    ]),
+    null
+  );
+  assert.equal(pickHighestMemory([pA, pC])?.slug, 'phone-c');
+  assert.equal(
+    pickBestBattery([makeCompareProduct('b1'), makeCompareProduct('b2')]),
+    null
+  );
+  assert.equal(pickBestBattery([pA, pB]), null);
+  assert.equal(
+    pickBestBattery([
+      pA,
+      pB,
+      makeCompareProduct('b-low', { battery_mah: 4500 }),
+    ]),
+    null
+  );
+  assert.equal(pickBestBattery([pA, pC])?.slug, 'phone-c');
+
+  // 3. computeCompareHeadToHeadSummary returns null when < 2 items or all 4 winners are null.
+  assert.equal(computeCompareHeadToHeadSummary([pC]), null);
+  assert.equal(computeCompareHeadToHeadSummary([pA, pB]), null);
+  assert.equal(computeCompareHeadToHeadSummary([pA, pUnpriced]), null);
+  const mixedSummary = computeCompareHeadToHeadSummary([pA, pC]);
+  assert.ok(mixedSummary);
+  assert.equal(mixedSummary.bestRated?.slug, 'phone-c');
+  assert.equal(mixedSummary.lowestPrice?.slug, 'phone-a');
+  assert.equal(mixedSummary.highestMemory?.slug, 'phone-c');
+  assert.equal(mixedSummary.bestBattery?.slug, 'phone-c');
+
+  // 4. 0 VND / unpriced suppression & 1v1 tie delta suppression across vi, en, cs.
+  assert.equal(formatLeaderboardPriceVnd(-100), '0 ₫');
+  const Provider = NextIntlClientProvider as React.ComponentType<{
+    locale: string;
+    messages: Record<string, unknown>;
+    timeZone: string;
+    children?: React.ReactNode;
+  }>;
+  const localeCatalogs = {
+    vi: viMessages,
+    en: enMessages,
+    cs: csMessages,
+  } as const;
+
+  const removeParentheticals = (value: string): string => {
+    let prev: string;
+    let current = value;
+    do {
+      prev = current;
+      current = current.replace(/\([^()]*\)/g, '');
+    } while (current !== prev);
+    return current;
+  };
+  const axeCurateTokens = (value: string): string[] => {
+    const normalized = removeParentheticals(
+      value.toLowerCase().normalize('NFKD')
+    ).replace(/[^\p{L}\p{N}]+/gu, ' ');
+    const segmenter = new Intl.Segmenter(undefined, { granularity: 'word' });
+    const tokens: string[] = [];
+    for (const part of segmenter.segment(normalized)) {
+      const trimmed = part.segment.trim();
+      if (trimmed) tokens.push(trimmed);
+    }
+    return tokens;
+  };
+  const isAxeLabelContainedInName = (
+    visibleText: string,
+    accessibleName: string
+  ): boolean => {
+    const needle = axeCurateTokens(visibleText);
+    if (needle.length === 0) return true;
+    const haystack = axeCurateTokens(accessibleName);
+    if (haystack.length === 0) return false;
+    for (let i = 0; i + needle.length <= haystack.length; i++) {
+      if (needle.every((word, j) => word === haystack[i + j])) return true;
+    }
+    return false;
+  };
+
+  const lbProducts: MasterProduct[] = [
+    {
+      ...phone('tied-top-1', 4.64),
+      min_price: 0,
+      merchant_count: 0,
+      expert_rating: 9.2,
+    } as unknown as MasterProduct,
+    {
+      ...phone('tied-top-2', 4.56),
+      min_price: null,
+      merchant_count: 0,
+      expert_rating: 8.8,
+    } as unknown as MasterProduct,
+    {
+      ...phone('ranked-3', 4.2),
+      min_price: 19_990_000,
+      merchant_count: 3,
+      expert_rating: 8.4,
+    } as unknown as MasterProduct,
+  ];
+
+  for (const locale of ['vi', 'en', 'cs'] as const) {
+    const fullMessages = localeCatalogs[locale];
+    assert.equal(formatComparePriceVnd(0, locale), '-');
+    assert.equal(formatComparePriceVnd(null, locale), '-');
+    assert.equal(formatComparePriceVnd(-500, locale), '-');
+    assert.match(
+      formatComparePriceVnd(19_990_000, locale),
+      /19[\s.\u00a0]990[\s.\u00a0]000[\s\u00a0]₫/
+    );
+
+    assert.equal(formatLeaderboardDisplayPriceVnd(0, locale), '-');
+    assert.equal(formatLeaderboardDisplayPriceVnd(null, locale), '-');
+    assert.equal(formatLeaderboardDisplayPriceVnd(-500, locale), '-');
+    assert.match(
+      formatLeaderboardDisplayPriceVnd(19_990_000, locale),
+      /19[\s.\u00a0]990[\s.\u00a0]000[\s\u00a0]₫/
+    );
+
+    assert.equal(formatLeaderboardShowdownDelta(4.64, 4.56, 1, locale), null);
+    assert.equal(formatLeaderboardShowdownDelta(4.35, 4.4, 1, locale), null);
+    assert.equal(formatLeaderboardShowdownDelta(4.854, 4.851, 2, locale), null);
+    assert.equal(formatLeaderboardShowdownDelta(0, 0, 1, locale), null);
+    assert.equal(formatLeaderboardShowdownDelta(4.8, 0, 1, locale), null);
+    assert.equal(
+      formatLeaderboardShowdownDelta(4.8, 4.5, 1, locale),
+      locale === 'cs' ? 'Δ 0,3' : 'Δ 0.3'
+    );
+    assert.equal(
+      formatLeaderboardShowdownDelta(4.85, 4.7, 2, locale),
+      locale === 'cs' ? 'Δ 0,15' : 'Δ 0.15'
+    );
+
+    const lbHtml = renderToStaticMarkup(
+      React.createElement(
+        Provider,
+        {
+          locale,
+          messages: pickClientMessages(
+            fullMessages as unknown as Record<string, unknown>,
+            'leaderboard'
+          ),
+          timeZone: 'Asia/Ho_Chi_Minh',
+        },
+        React.createElement(LeaderboardExplorer, {
+          products: lbProducts,
+          locale,
+        })
+      )
+    );
+    assert.doesNotMatch(
+      lbHtml,
+      /\b0[\s\u00a0]₫/,
+      `${locale}: no 0 VND on Podium or Ranked List`
+    );
+    assert.doesNotMatch(
+      lbHtml,
+      /Δ[\s\u00a0]*0[.,]0+\b/,
+      `${locale}: no Δ 0.0 / 0.00 on tied showdown`
+    );
+    assert.ok(
+      lbHtml.includes(locale === 'cs' ? 'Δ 0,4' : 'Δ 0.4'),
+      `${locale}: non-tied showdown keeps positive delta badge`
+    );
+
+    const tCompare = createTranslator({
+      locale,
+      messages: pickClientMessages(
+        fullMessages as unknown as Record<string, unknown>,
+        'compare'
+      ) as unknown as typeof fullMessages,
+      namespace: 'compare',
+    });
+    const addLabel = resolveCompareAddSlotAriaLabel(
+      tCompare,
+      fullMessages.compare.catSmartphonesUnit
+    );
+    assert.equal(
+      addLabel,
+      tCompare('addSameCategoryTitle', {
+        unit: fullMessages.compare.catSmartphonesUnit,
+      })
+    );
+    assert.notEqual(addLabel, '+');
+
+    const activeRep = resolveCompareReplaceButtonA11y(tCompare, {
+      productName: 'Samsung Galaxy S25 Ultra (5G, 256GB)',
+      isReplacing: true,
+    });
+    const idleRep = resolveCompareReplaceButtonA11y(tCompare, {
+      productName: 'iPhone 16 Pro Max',
+      isReplacing: false,
+    });
+    assert.equal(activeRep.visibleLabel, fullMessages.compare.replaceDeviceBtn);
+    assert.equal(activeRep.ariaPressed, true);
+    assert.equal(idleRep.ariaPressed, false);
+    assert.notEqual(activeRep.ariaLabel, idleRep.ariaLabel);
+    assert.equal(
+      activeRep.ariaLabel,
+      `${fullMessages.compare.replaceDeviceBtn}: Samsung Galaxy S25 Ultra (5G, 256GB)`
+    );
+    assert.equal(
+      isAxeLabelContainedInName(activeRep.visibleLabel, activeRep.ariaLabel),
+      true,
+      `${locale}: Replace aria-label passes WCAG 2.5.3`
+    );
+  }
+
+  // 5. Two-click Replace pointer sequence (mousedown + click), < 50 ms focus
+  // timer cancellation, and source guards.
+  const replaceBtnTarget = {
+    closest: (sel: string) =>
+      sel === '[data-compare-slot-trigger]' ? ({} as unknown) : null,
+  };
+  const outsidePageTarget = { closest: () => null };
+  let simReplaceIndex: number | null = null;
+  let simDropdownOpen = false;
+  let focusCount = 0;
+  const simTimerRef = { current: null as ReturnType<typeof setTimeout> | null };
+  const simActiveReplaceRef = { current: null as number | null };
+  const simScheduledReplaceRef = { current: null as number | null };
+
+  // Mirrors <input ref={searchInputRef} onFocus={() => setDropdownOpen(true)} />
+  // when fewer than 4 products are compared (input is enabled in add mode).
+  const focusSearchInput = () => {
+    focusCount += 1;
+    simDropdownOpen = true;
+  };
+
+  const simulatePointerClickOnReplace = (idx: number) => {
+    if (shouldDismissCompareOnOutsidePointerDown(replaceBtnTarget, false)) {
+      cancelPendingCompareReplaceFocus(simTimerRef, simScheduledReplaceRef);
+      simActiveReplaceRef.current = null;
+      simReplaceIndex = null;
+      simDropdownOpen = false;
+    }
+    const next = nextCompareReplaceState(simReplaceIndex, idx);
+    simReplaceIndex = next.replaceIndex;
+    simDropdownOpen = next.dropdownOpen;
+    scheduleCompareReplaceFocus({
+      timerRef: simTimerRef,
+      activeReplaceRef: simActiveReplaceRef,
+      scheduledReplaceRef: simScheduledReplaceRef,
+      expectedReplaceIndex: next.dropdownOpen ? next.replaceIndex : null,
+      focusInput: focusSearchInput,
+    });
+    syncCompareReplaceFocusState({
+      timerRef: simTimerRef,
+      activeReplaceRef: simActiveReplaceRef,
+      scheduledReplaceRef: simScheduledReplaceRef,
+      activeReplaceIndex: simReplaceIndex,
+    });
+  };
+
+  mock.timers.enable({ apis: ['setTimeout'] });
+  try {
+    // Rapid two-click toggle-off on the same Replace button within < 50 ms:
+    // advancing past 50 ms must not focus the input or reopen dropdownOpen.
+    simulatePointerClickOnReplace(0);
+    assert.equal(simReplaceIndex, 0);
+    assert.equal(simDropdownOpen, true);
+    assert.equal(focusCount, 0);
+    assert.notEqual(simTimerRef.current, null);
+
+    mock.timers.tick(15);
+    assert.equal(focusCount, 0);
+
+    simulatePointerClickOnReplace(0);
+    assert.equal(
+      simReplaceIndex,
+      null,
+      'second pointer click toggles Replace off'
+    );
+    assert.equal(simDropdownOpen, false);
+    assert.equal(simTimerRef.current, null);
+
+    mock.timers.tick(COMPARE_REPLACE_FOCUS_DELAY_MS);
+    assert.equal(
+      focusCount,
+      0,
+      'canceled replacement before 50 ms must never focus search input'
+    );
+    assert.equal(
+      simDropdownOpen,
+      false,
+      'dropdownOpen stays false after 50 ms delay advances'
+    );
+    assert.equal(simReplaceIndex, null);
+
+    // Rapid switch from slot 0 to slot 1 at 20 ms cancels the first timer and
+    // focuses once at 20 + 50 = 70 ms.
+    simulatePointerClickOnReplace(0);
+    mock.timers.tick(20);
+    simulatePointerClickOnReplace(1);
+    assert.equal(simReplaceIndex, 1);
+    assert.equal(simDropdownOpen, true);
+    mock.timers.tick(30);
+    assert.equal(focusCount, 0, 'slot 0 timer at 50 ms was canceled');
+    mock.timers.tick(20);
+    assert.equal(focusCount, 1, 'slot 1 timer focuses input at 70 ms');
+    assert.equal(simTimerRef.current, null);
+
+    // State-driven close (e.g. outside dismiss / cancel / unmount) before 50 ms
+    // cancels pending focus and keeps dropdownOpen closed.
+    focusCount = 0;
+    simReplaceIndex = null;
+    simDropdownOpen = false;
+    simulatePointerClickOnReplace(0);
+    mock.timers.tick(10);
+    simReplaceIndex = null;
+    simDropdownOpen = false;
+    syncCompareReplaceFocusState({
+      timerRef: simTimerRef,
+      activeReplaceRef: simActiveReplaceRef,
+      scheduledReplaceRef: simScheduledReplaceRef,
+      activeReplaceIndex: null,
+    });
+    assert.equal(simTimerRef.current, null);
+    mock.timers.tick(COMPARE_REPLACE_FOCUS_DELAY_MS);
+    assert.equal(focusCount, 0);
+    assert.equal(simDropdownOpen, false);
+
+    // Callback state guard: even if activeReplaceRef changes without clearTimeout,
+    // the callback refuses to focus or reopen dropdownOpen.
+    scheduleCompareReplaceFocus({
+      timerRef: simTimerRef,
+      activeReplaceRef: simActiveReplaceRef,
+      scheduledReplaceRef: simScheduledReplaceRef,
+      expectedReplaceIndex: 0,
+      focusInput: focusSearchInput,
+    });
+    simActiveReplaceRef.current = null;
+    simDropdownOpen = false;
+    mock.timers.tick(COMPARE_REPLACE_FOCUS_DELAY_MS);
+    assert.equal(focusCount, 0);
+    assert.equal(simDropdownOpen, false);
+  } finally {
+    mock.timers.reset();
+  }
+
+  assert.equal(
+    shouldDismissCompareOnOutsidePointerDown(outsidePageTarget, false),
+    true
+  );
+  assert.equal(
+    shouldDismissCompareOnOutsidePointerDown(outsidePageTarget, true),
+    false
+  );
+
+  const compareSrc = fs.readFileSync(
+    path.join(webSrcDir, 'components/compare/CompareWorkspace.tsx'),
+    'utf8'
+  );
+  assert.doesNotMatch(compareSrc, /\{priceFormatted\}\s*₫/);
+  assert.doesNotMatch(compareSrc, /\{minPriceFormatted\}\s*₫/);
+  assert.match(compareSrc, /computeCompareHeadToHeadSummary\(products\)/);
+  assert.match(
+    compareSrc,
+    /min_price:\s*sanitizeComparePriceVnd\(p\.min_price\)/
+  );
+  assert.match(
+    compareSrc,
+    /const minP\s*=\s*sanitizeComparePriceVnd\(p\.min_price\)/
+  );
+  assert.match(compareSrc, /data-compare-slot-trigger="replace"/);
+  assert.match(compareSrc, /data-compare-slot-trigger="add"/);
+  assert.match(compareSrc, /aria-pressed=\{replaceA11y\.ariaPressed\}/);
+  assert.match(compareSrc, /aria-label=\{replaceA11y\.ariaLabel\}/);
+  assert.match(compareSrc, /<span aria-hidden="true">\+<\/span>/);
+  assert.match(
+    compareSrc,
+    /useRef<ReturnType<typeof setTimeout>\s*\|\s*null>\(\s*null\s*\)/
+  );
+  assert.match(compareSrc, /scheduleCompareReplaceFocus\(/);
+  assert.match(compareSrc, /syncCompareReplaceFocusState\(/);
 }
 
 console.log('leaderboard-criteria: criterion scores are real or null');

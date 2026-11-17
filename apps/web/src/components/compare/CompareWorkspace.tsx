@@ -251,6 +251,88 @@ export function pickHighestRated(
   return first;
 }
 
+export interface CompareHeadToHeadSummary {
+  bestRated: MasterProduct | null;
+  lowestPrice: MasterProduct | null;
+  highestMemory: MasterProduct | null;
+  bestBattery: MasterProduct | null;
+}
+
+export function pickLowestPrice(
+  products: readonly MasterProduct[]
+): MasterProduct | null {
+  const byPrice = products
+    .filter((p) => sanitizeComparePriceVnd(p.min_price) > 0)
+    .sort(
+      (a, b) =>
+        sanitizeComparePriceVnd(a.min_price) -
+        sanitizeComparePriceVnd(b.min_price)
+    );
+  const [first, second] = byPrice;
+  if (!first || !second) return null;
+  if (
+    sanitizeComparePriceVnd(first.min_price) ===
+    sanitizeComparePriceVnd(second.min_price)
+  ) {
+    return null;
+  }
+  return first;
+}
+
+export function pickHighestMemory(
+  products: readonly MasterProduct[]
+): MasterProduct | null {
+  const byMemory = products
+    .filter((p) => resolveCompareMemoryScore(p) > 0)
+    .sort(
+      (a, b) => resolveCompareMemoryScore(b) - resolveCompareMemoryScore(a)
+    );
+  const [first, second] = byMemory;
+  if (!first) return null;
+  if (
+    second &&
+    resolveCompareMemoryScore(second) === resolveCompareMemoryScore(first)
+  ) {
+    return null;
+  }
+  return first;
+}
+
+export function pickBestBattery(
+  products: readonly MasterProduct[]
+): MasterProduct | null {
+  const byBattery = products
+    .filter((p) => (resolveCompareBatteryMah(p) ?? 0) > 0)
+    .sort(
+      (a, b) =>
+        (resolveCompareBatteryMah(b) ?? 0) - (resolveCompareBatteryMah(a) ?? 0)
+    );
+  const [first, second] = byBattery;
+  if (!first) return null;
+  if (
+    second &&
+    (resolveCompareBatteryMah(second) ?? 0) ===
+      (resolveCompareBatteryMah(first) ?? 0)
+  ) {
+    return null;
+  }
+  return first;
+}
+
+export function computeCompareHeadToHeadSummary(
+  products: readonly MasterProduct[]
+): CompareHeadToHeadSummary | null {
+  if (products.length < 2) return null;
+  const bestRated = pickHighestRated(products);
+  const lowestPrice = pickLowestPrice(products);
+  const highestMemory = pickHighestMemory(products);
+  const bestBattery = pickBestBattery(products);
+  if (!bestRated && !lowestPrice && !highestMemory && !bestBattery) {
+    return null;
+  }
+  return { bestRated, lowestPrice, highestMemory, bestBattery };
+}
+
 const COMPARE_CONTROL_CHARS_RE = /\p{Cc}+/gu;
 
 export function sanitizeComparePriceVnd(value: unknown): number {
@@ -267,6 +349,164 @@ export function formatComparePriceVnd(
 ): string {
   const safe = sanitizeComparePriceVnd(value);
   return safe > 0 ? formatPriceVnd(safe, locale) : '-';
+}
+
+export type CompareReplaceTranslate = (key: 'replaceDeviceBtn') => string;
+
+export type CompareAddSlotTranslate = (
+  key: 'addSameCategoryTitle',
+  values: { unit: string }
+) => string;
+
+export function resolveCompareReplaceButtonA11y(
+  t: CompareReplaceTranslate,
+  options: {
+    productName: unknown;
+    isReplacing: boolean;
+  }
+): {
+  visibleLabel: string;
+  ariaLabel: string;
+  ariaPressed: boolean;
+} {
+  const visibleLabel = t('replaceDeviceBtn')
+    .replace(/[\r\n\t]+/g, ' ')
+    .replace(COMPARE_CONTROL_CHARS_RE, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  const cleanName =
+    typeof options.productName === 'string'
+      ? options.productName
+          .replace(/[\r\n\t]+/g, ' ')
+          .replace(COMPARE_CONTROL_CHARS_RE, '')
+          .replace(/\s+/g, ' ')
+          .trim()
+      : '';
+  return {
+    visibleLabel,
+    ariaLabel:
+      cleanName && visibleLabel
+        ? `${visibleLabel}: ${cleanName}`
+        : visibleLabel || cleanName,
+    ariaPressed: Boolean(options.isReplacing),
+  };
+}
+
+export function resolveCompareAddSlotAriaLabel(
+  t: CompareAddSlotTranslate,
+  unitLabel: string
+): string {
+  return t('addSameCategoryTitle', { unit: unitLabel })
+    .replace(/[\r\n\t]+/g, ' ')
+    .replace(COMPARE_CONTROL_CHARS_RE, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+export function shouldDismissCompareOnOutsidePointerDown(
+  target: { closest?: (selector: string) => unknown } | null | undefined,
+  isInsideSearchBox: boolean
+): boolean {
+  if (isInsideSearchBox) return false;
+  if (
+    target &&
+    typeof target.closest === 'function' &&
+    target.closest('[data-compare-slot-trigger]')
+  ) {
+    return false;
+  }
+  return true;
+}
+
+export function nextCompareReplaceState(
+  currentReplaceIndex: number | null,
+  clickedIndex: number
+): {
+  replaceIndex: number | null;
+  dropdownOpen: boolean;
+} {
+  if (currentReplaceIndex === clickedIndex) {
+    return { replaceIndex: null, dropdownOpen: false };
+  }
+  return { replaceIndex: clickedIndex, dropdownOpen: true };
+}
+
+export const COMPARE_REPLACE_FOCUS_DELAY_MS = 50;
+
+export interface CompareReplaceFocusTimerRef {
+  current: ReturnType<typeof setTimeout> | null;
+}
+
+export interface CompareReplaceIndexRef {
+  current: number | null;
+}
+
+export function cancelPendingCompareReplaceFocus(
+  timerRef: CompareReplaceFocusTimerRef,
+  scheduledReplaceRef?: CompareReplaceIndexRef
+): void {
+  if (timerRef.current !== null) {
+    clearTimeout(timerRef.current);
+    timerRef.current = null;
+  }
+  if (scheduledReplaceRef) {
+    scheduledReplaceRef.current = null;
+  }
+}
+
+export function syncCompareReplaceFocusState(options: {
+  timerRef: CompareReplaceFocusTimerRef;
+  activeReplaceRef: CompareReplaceIndexRef;
+  scheduledReplaceRef: CompareReplaceIndexRef;
+  activeReplaceIndex: number | null;
+}): void {
+  const {
+    timerRef,
+    activeReplaceRef,
+    scheduledReplaceRef,
+    activeReplaceIndex,
+  } = options;
+  activeReplaceRef.current = activeReplaceIndex;
+  if (
+    activeReplaceIndex === null ||
+    activeReplaceIndex !== scheduledReplaceRef.current
+  ) {
+    cancelPendingCompareReplaceFocus(timerRef, scheduledReplaceRef);
+  }
+}
+
+export function scheduleCompareReplaceFocus(options: {
+  timerRef: CompareReplaceFocusTimerRef;
+  activeReplaceRef: CompareReplaceIndexRef;
+  scheduledReplaceRef: CompareReplaceIndexRef;
+  expectedReplaceIndex: number | null;
+  focusInput: () => void;
+  delayMs?: number;
+}): void {
+  const {
+    timerRef,
+    activeReplaceRef,
+    scheduledReplaceRef,
+    expectedReplaceIndex,
+    focusInput,
+    delayMs = COMPARE_REPLACE_FOCUS_DELAY_MS,
+  } = options;
+  cancelPendingCompareReplaceFocus(timerRef, scheduledReplaceRef);
+  activeReplaceRef.current = expectedReplaceIndex;
+  if (expectedReplaceIndex === null) {
+    return;
+  }
+  scheduledReplaceRef.current = expectedReplaceIndex;
+  timerRef.current = setTimeout(() => {
+    timerRef.current = null;
+    const stillActive =
+      activeReplaceRef.current === expectedReplaceIndex &&
+      scheduledReplaceRef.current === expectedReplaceIndex;
+    scheduledReplaceRef.current = null;
+    if (stillActive) {
+      focusInput();
+    }
+  }, delayMs);
 }
 
 export function sanitizeCompareMerchantCount(value: unknown): number {
@@ -1132,7 +1372,45 @@ export default function CompareWorkspace({
 
   const searchInputRef = useRef<HTMLInputElement | null>(null);
   const searchBoxRef = useRef<HTMLDivElement | null>(null);
+  const replaceFocusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null
+  );
+  const activeReplaceIndexRef = useRef<number | null>(null);
+  const scheduledReplaceIndexRef = useRef<number | null>(null);
   const restoredTrayRef = useRef(false);
+
+  const activeReplaceIndex =
+    replaceIndex !== null && replaceIndex >= 0 && replaceIndex < products.length
+      ? replaceIndex
+      : null;
+
+  useEffect(() => {
+    syncCompareReplaceFocusState({
+      timerRef: replaceFocusTimerRef,
+      activeReplaceRef: activeReplaceIndexRef,
+      scheduledReplaceRef: scheduledReplaceIndexRef,
+      activeReplaceIndex,
+    });
+  }, [activeReplaceIndex]);
+
+  useEffect(() => {
+    return () => {
+      activeReplaceIndexRef.current = null;
+      cancelPendingCompareReplaceFocus(
+        replaceFocusTimerRef,
+        scheduledReplaceIndexRef
+      );
+    };
+  }, []);
+
+  const clearReplaceMode = () => {
+    cancelPendingCompareReplaceFocus(
+      replaceFocusTimerRef,
+      scheduledReplaceIndexRef
+    );
+    activeReplaceIndexRef.current = null;
+    setReplaceIndex(null);
+  };
 
   const activeCategoryMeta = useMemo(
     () =>
@@ -1204,6 +1482,12 @@ export default function CompareWorkspace({
   useEffect(() => {
     if (initialProducts.length > 0) {
       const cat = getMasterProductCategorySlug(initialProducts[0]!);
+      cancelPendingCompareReplaceFocus(
+        replaceFocusTimerRef,
+        scheduledReplaceIndexRef
+      );
+      activeReplaceIndexRef.current = null;
+      setReplaceIndex(null);
       setActiveCategory(cat);
       setProducts(
         initialProducts.filter((p) => getMasterProductCategorySlug(p) === cat)
@@ -1255,6 +1539,7 @@ export default function CompareWorkspace({
     const sameCategoryProducts = nextProducts.filter(
       (p) => getMasterProductCategorySlug(p) === targetCat
     );
+    clearReplaceMode();
     setActiveCategory(targetCat);
     setProducts(sameCategoryProducts);
     setCompareTray(
@@ -1263,7 +1548,7 @@ export default function CompareWorkspace({
         name: p.name,
         brand: p.brand,
         thumbnail: resolveProductImageUrl(p.slug, productImageUrl(p)),
-        min_price: Number(p.min_price || 0),
+        min_price: sanitizeComparePriceVnd(p.min_price),
         categorySlug: targetCat,
       }))
     );
@@ -1276,7 +1561,7 @@ export default function CompareWorkspace({
 
   const handleSwitchCategoryTab = (nextCat: CanonicalCategorySlug) => {
     if (nextCat === activeCategory && products.length > 0) return;
-    setReplaceIndex(null);
+    clearReplaceMode();
     setSearchQuery('');
     setDropdownOpen(false);
     const nextDefaults = catalogCandidates
@@ -1288,10 +1573,18 @@ export default function CompareWorkspace({
   // Close autocomplete dropdown when clicking outside
   useEffect(() => {
     const handleOutside = (e: MouseEvent) => {
-      if (
-        searchBoxRef.current &&
-        !searchBoxRef.current.contains(e.target as Node)
-      ) {
+      if (!searchBoxRef.current) return;
+      const isInside = searchBoxRef.current.contains(e.target as Node);
+      const targetEl =
+        e.target && typeof e.target === 'object'
+          ? (e.target as { closest?: (selector: string) => unknown })
+          : null;
+      if (shouldDismissCompareOnOutsidePointerDown(targetEl, isInside)) {
+        cancelPendingCompareReplaceFocus(
+          replaceFocusTimerRef,
+          scheduledReplaceIndexRef
+        );
+        activeReplaceIndexRef.current = null;
         setDropdownOpen(false);
         setReplaceIndex(null);
       }
@@ -1377,24 +1670,20 @@ export default function CompareWorkspace({
     const candidateCat = getMasterProductCategorySlug(candidate);
     if (candidateCat !== activeCategory) {
       syncSelection([candidate], candidateCat);
-      setReplaceIndex(null);
+      clearReplaceMode();
       setSearchQuery('');
       setDropdownOpen(false);
       return;
     }
 
-    if (
-      replaceIndex !== null &&
-      replaceIndex >= 0 &&
-      replaceIndex < products.length
-    ) {
+    if (activeReplaceIndex !== null) {
       const next = [...products];
-      next[replaceIndex] = candidate;
+      next[activeReplaceIndex] = candidate;
       const deduped = Array.from(
         new Map(next.map((p) => [p.slug, p])).values()
       );
       syncSelection(deduped, activeCategory);
-      setReplaceIndex(null);
+      clearReplaceMode();
       setSearchQuery('');
       setDropdownOpen(false);
       return;
@@ -1412,6 +1701,7 @@ export default function CompareWorkspace({
   };
 
   const handleRemoveProduct = (slug: string) => {
+    clearReplaceMode();
     syncSelection(
       products.filter((p) => p.slug !== slug),
       activeCategory
@@ -1419,11 +1709,21 @@ export default function CompareWorkspace({
   };
 
   const handleStartReplace = (idx: number) => {
-    setReplaceIndex(idx);
-    setDropdownOpen(true);
-    setTimeout(() => {
-      searchInputRef.current?.focus();
-    }, 50);
+    const next =
+      idx >= 0 && idx < products.length
+        ? nextCompareReplaceState(activeReplaceIndex, idx)
+        : { replaceIndex: null, dropdownOpen: false };
+    setReplaceIndex(next.replaceIndex);
+    setDropdownOpen(next.dropdownOpen);
+    scheduleCompareReplaceFocus({
+      timerRef: replaceFocusTimerRef,
+      activeReplaceRef: activeReplaceIndexRef,
+      scheduledReplaceRef: scheduledReplaceIndexRef,
+      expectedReplaceIndex: next.dropdownOpen ? next.replaceIndex : null,
+      focusInput: () => {
+        searchInputRef.current?.focus();
+      },
+    });
   };
 
   const [watchedAllToast, setWatchedAllToast] = useState(false);
@@ -1612,7 +1912,7 @@ export default function CompareWorkspace({
 
   const handleWatchAllCompared = () => {
     for (const p of products) {
-      const minP = Math.max(0, Number(p.min_price || 0));
+      const minP = sanitizeComparePriceVnd(p.min_price);
       const targetP =
         minP > 0
           ? Math.max(100_000, Math.round((minP * 0.95) / 100_000) * 100_000)
@@ -1636,34 +1936,10 @@ export default function CompareWorkspace({
     setTimeout(() => setWatchedAllToast(false), 2200);
   };
 
-  const headToHeadSummary = useMemo(() => {
-    if (products.length < 2) return null;
-    const byPrice = [...products]
-      .filter((p) => sanitizeComparePriceVnd(p.min_price) > 0)
-      .sort(
-        (a, b) =>
-          sanitizeComparePriceVnd(a.min_price) -
-          sanitizeComparePriceVnd(b.min_price)
-      );
-    const byMemory = [...products]
-      .filter((p) => resolveCompareMemoryScore(p) > 0)
-      .sort(
-        (a, b) => resolveCompareMemoryScore(b) - resolveCompareMemoryScore(a)
-      );
-    const byBattery = [...products]
-      .filter((p) => (resolveCompareBatteryMah(p) ?? 0) > 0)
-      .sort(
-        (a, b) =>
-          (resolveCompareBatteryMah(b) ?? 0) -
-          (resolveCompareBatteryMah(a) ?? 0)
-      );
-    return {
-      bestRated: pickHighestRated(products),
-      lowestPrice: byPrice[0] ?? null,
-      highestMemory: byMemory[0] ?? null,
-      bestBattery: byBattery[0] ?? null,
-    };
-  }, [products]);
+  const headToHeadSummary = useMemo(
+    () => computeCompareHeadToHeadSummary(products),
+    [products]
+  );
 
   const controlsBlock = (
     <>
@@ -1713,10 +1989,10 @@ export default function CompareWorkspace({
               htmlFor="compare-autocomplete-input"
               className="form-label fw-bold small text-uppercase text-muted mb-1"
             >
-              {replaceIndex !== null && products[replaceIndex]
+              {activeReplaceIndex !== null && products[activeReplaceIndex]
                 ? t('replacingDeviceLabel', {
                     unit: activeCategoryMeta.unitLabel,
-                    name: products[replaceIndex]?.name ?? '',
+                    name: products[activeReplaceIndex]?.name ?? '',
                   })
                 : t('searchAddDeviceLabel', {
                     category: activeCategoryMeta.label,
@@ -1741,7 +2017,7 @@ export default function CompareWorkspace({
                   }}
                   placeholder={
                     products.length >= MAX_COMPARE_ITEMS &&
-                    replaceIndex === null
+                    activeReplaceIndex === null
                       ? t('maxDevicesPlaceholder')
                       : t('searchDevicePlaceholder', {
                           unit: activeCategoryMeta.unitLabel,
@@ -1749,15 +2025,15 @@ export default function CompareWorkspace({
                   }
                   disabled={
                     products.length >= MAX_COMPARE_ITEMS &&
-                    replaceIndex === null
+                    activeReplaceIndex === null
                   }
                   className="form-control bg-light border-start-0 rounded-end-pill py-2"
                 />
-                {replaceIndex !== null && (
+                {activeReplaceIndex !== null && (
                   <button
                     type="button"
                     onClick={() => {
-                      setReplaceIndex(null);
+                      clearReplaceMode();
                       setDropdownOpen(false);
                     }}
                     className="btn btn-outline-secondary rounded-pill btn-sm ms-2"
@@ -1770,7 +2046,7 @@ export default function CompareWorkspace({
               {/* Autocomplete Suggestions Dropdown */}
               {dropdownOpen &&
                 (products.length < MAX_COMPARE_ITEMS ||
-                  replaceIndex !== null) && (
+                  activeReplaceIndex !== null) && (
                   <div
                     className="card rounded-4 position-absolute mt-2 w-100 overflow-hidden border shadow-lg"
                     style={{
@@ -1812,8 +2088,8 @@ export default function CompareWorkspace({
                             item.slug,
                             productImageUrl(item)
                           );
-                          const priceFormatted = formatNumber(
-                            Number(item.min_price || 0),
+                          const priceFormatted = formatComparePriceVnd(
+                            item.min_price,
                             locale
                           );
                           const rating = getEffectiveRating(item);
@@ -1870,7 +2146,7 @@ export default function CompareWorkspace({
                                       className="text-secondary fw-semibold rate-tabular"
                                       style={{ fontSize: '0.8125rem' }}
                                     >
-                                      {priceFormatted} ₫
+                                      {priceFormatted}
                                     </span>
                                   </div>
                                 </div>
@@ -1880,14 +2156,14 @@ export default function CompareWorkspace({
                                 className={`badge rounded-pill flex-shrink-0 px-3 py-2 ${
                                   alreadySelected
                                     ? 'bg-secondary text-white'
-                                    : replaceIndex !== null
+                                    : activeReplaceIndex !== null
                                       ? 'bg-dark text-white'
                                       : 'bg-danger text-white'
                                 }`}
                               >
                                 {alreadySelected
                                   ? t('alreadyComparingBadge')
-                                  : replaceIndex !== null
+                                  : activeReplaceIndex !== null
                                     ? t('selectReplacementBadge')
                                     : t('addToCompareBadge')}
                               </span>
@@ -2317,8 +2593,8 @@ export default function CompareWorkspace({
                     {headToHeadSummary.lowestPrice.name}
                   </div>
                   <div className="small text-white-50 rate-tabular">
-                    {formatPriceVnd(
-                      Number(headToHeadSummary.lowestPrice.min_price || 0),
+                    {formatComparePriceVnd(
+                      headToHeadSummary.lowestPrice.min_price,
                       locale
                     )}
                   </div>
@@ -2396,8 +2672,14 @@ export default function CompareWorkspace({
                       p.slug,
                       productImageUrl(p)
                     );
-                    const minPrice = Number(p.min_price || 0);
-                    const minPriceFormatted = formatNumber(minPrice, locale);
+                    const minPriceFormatted = formatComparePriceVnd(
+                      p.min_price,
+                      locale
+                    );
+                    const replaceA11y = resolveCompareReplaceButtonA11y(t, {
+                      productName: p.name,
+                      isReplacing: activeReplaceIndex === idx,
+                    });
                     const userRating = getEffectiveRating(p);
                     const expertRating = resolveCompareExpertRating10(p);
                     const reviewCount =
@@ -2413,13 +2695,20 @@ export default function CompareWorkspace({
                         <div className="d-flex justify-content-between align-items-center mb-2">
                           <button
                             type="button"
+                            data-compare-slot-trigger="replace"
+                            aria-pressed={replaceA11y.ariaPressed}
+                            aria-label={replaceA11y.ariaLabel}
                             onClick={() => handleStartReplace(idx)}
-                            className="btn btn-sm btn-light rounded-pill small text-muted border px-2 py-0"
+                            className={`btn btn-sm rounded-pill small px-2 py-0 ${
+                              replaceA11y.ariaPressed
+                                ? 'btn-dark fw-semibold'
+                                : 'btn-light text-muted border'
+                            }`}
                             title={t('replaceDeviceTitle', {
                               unit: activeCategoryMeta.unitLabel,
                             })}
                           >
-                            {t('replaceDeviceBtn')}
+                            {replaceA11y.visibleLabel}
                           </button>
                           <button
                             type="button"
@@ -2485,7 +2774,7 @@ export default function CompareWorkspace({
                           <div className="text-secondary small fw-semibold rate-tabular mb-2">
                             {t('referencePriceLabel')}{' '}
                             <strong className="text-dark">
-                              {minPriceFormatted} ₫
+                              {minPriceFormatted}
                             </strong>
                           </div>
 
@@ -2521,8 +2810,9 @@ export default function CompareWorkspace({
                       <div className="d-flex flex-column align-items-center justify-content-center py-4">
                         <button
                           type="button"
+                          data-compare-slot-trigger="add"
                           onClick={() => {
-                            setReplaceIndex(null);
+                            clearReplaceMode();
                             setDropdownOpen(true);
                             searchInputRef.current?.focus();
                           }}
@@ -2532,11 +2822,16 @@ export default function CompareWorkspace({
                             height: '52px',
                             fontSize: '24px',
                           }}
-                          title={t('addSameCategoryTitle', {
-                            unit: activeCategoryMeta.unitLabel,
-                          })}
+                          title={resolveCompareAddSlotAriaLabel(
+                            t,
+                            activeCategoryMeta.unitLabel
+                          )}
+                          aria-label={resolveCompareAddSlotAriaLabel(
+                            t,
+                            activeCategoryMeta.unitLabel
+                          )}
                         >
-                          +
+                          <span aria-hidden="true">+</span>
                         </button>
                         <div className="fw-bold small text-dark mb-1">
                           {t('addCategorySlotTitle', {
