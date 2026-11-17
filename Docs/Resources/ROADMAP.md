@@ -1,7 +1,7 @@
 # 🗺️ Rate Platform Roadmap - Kiến Trúc Zero-Strapi & Open-Core 2026
 
-> **Cập nhật lần cuối:** 12/11/2026  
-> **Tech Stack chuẩn hóa:** TypeScript 7.0.2 + Next.js 16.4 (16.4.1 on `main`, 16.4.5 on `dev`) + React 19.3 + Zod 4 + Pure PostgreSQL 17 (Supabase Cloud `rate` schema) + Open-Core 2 Repositories (`DOS/Rate` & `DOS/Rate-Services`)  
+> **Cập nhật lần cuối:** 17/11/2026  
+> **Tech Stack chuẩn hóa:** TypeScript 7.0.2 + Next.js 16.4 (16.4.5 on `main` and `dev`) + React 19.3 + Zod 4 + Pure PostgreSQL 17 (Supabase Cloud `rate` schema) + Open-Core 2 Repositories (`DOS/Rate` & `DOS/Rate-Services`)  
 > **GitHub Project Board (Multi-Agent Queue):** [https://github.com/orgs/DOS/projects/9](https://github.com/orgs/DOS/projects/9)  
 > **Nhật ký hoàn thành chi tiết (Phases 1 -> 5):** Xem [`Docs/Resources/CHANGELOG.md`](./CHANGELOG.md)  
 > **Đặc tả Mô hình Tin cậy Đánh giá (Review Trust Model v2):** Xem [`Docs/Platform/review-trust-model.html`](../Platform/review-trust-model.html)
@@ -74,11 +74,12 @@ Hệ thống **Rate Platform (`rate.vn`)** vận hành trên kiến trúc 4 tầ
   - Sửa `labels-sync.yml` dùng đúng input `yaml-file`/`skip-delete` của labeler v6 (bản cũ bị bỏ qua nên xóa sạch nhãn `status:*`/`agent:*` ngày 18/10), tạo lại 28 nhãn và gắn lại nhãn claim cho issue/PR đang mở; nhãn `status:*` do `labels.yml` quản lý.
   - Check bắt buộc `task-claim` (ruleset `dev-task-claim`, chỉ áp cho `dev`): PR đóng issue nào thì issue đó phải có `agent:<nick>` và `status:in-progress`/`status:in-review`; chạy bằng `pull_request_target` từ `dev` nên PR không tự sửa được check, tự chạy lại khi nhãn claim thay đổi (`task-claim-revalidate.yml`).
   - AGENTS.md tra item Project #9 từ phía issue (`gh project item-list` mặc định chỉ trả 30/321 item nên cập nhật Status/Agent của issue mới thất bại âm thầm).
+  - Atomic per-session claim lock `refs/claims/<n>` in `board.mjs` and `task-claim`, with tombstone release, stale locks after a merged PR and a promoter guard in `promote.mjs` (#1674, #1678, closes #1673, #1675).
 - [x] **6.11. Củng Cố Ranh Giới Dữ Liệu Đầu Vào Toàn Hệ Thống (`DOS/Rate#522`-`#586`, `DOS/Rate-Services#141`-`#171`):**
   - Trần miền giá trị và kiểm tra số hữu hạn ở mọi tầng (shared schema, REST API v1, extension, engine, scraper); URL chỉ HTTP(S); listing hết hàng không có giá được ghi `listing_unavailable` thay vì lỗi. Chi tiết tại mục 6.5 trong [`CHANGELOG.md`](./CHANGELOG.md).
 - [x] **6.12. Second input-bounds sweep (2026-10-24 -> 2026-10-26, PRs #823-#1056):** the same rules applied file by file across shared-data, the importer, the web BFF, client components and the extension. Details in CHANGELOG 6.8.
 - [x] **6.13. Security headers and API hardening (PRs #957, #1312-#1324, #1408, #1618):** `SUPABASE_SECRET_KEY` naming, fixed public API error messages, rate-limited and cached inspect and lookup, capped JSON write bodies, and `script-src` enforced on ISR pages through the page meta CSP (closes #1323). Still open: the strict nonce policy stays Report-Only ([#1311](https://github.com/DOS/Rate/issues/1311), [#1348](https://github.com/DOS/Rate/issues/1348)); review votes can still flush site-wide caches without a real rate limit ([#1306](https://github.com/DOS/Rate/issues/1306)).
-- [ ] **6.14. Production grants check ([#1173](https://github.com/DOS/Rate/issues/1173)):** verify the Production grants on `review_votes` and two refresh functions. Blocked on access: `rate_worker` cannot read the catalog, so it needs a read-only catalog SELECT by someone with database access (for example once the Supabase plugin is authorised) or a DOS-Me RPC. Waits on JOY.
+- [x] **6.14. Production grants check ([#1173](https://github.com/DOS/Rate/issues/1173)):** the Production grants and policies on `review_votes` and the two refresh functions match intent (read-only catalog check by the PO on 2026-11-17). The Supabase connector now allows read-only `SELECT` checks on Production, so post-promotion checks no longer wait on database access.
 
 ### 🚀 Phase 7: Mở Rộng Độ Phủ Dữ Liệu Thật Đa Sàn & Kiểm Thử E2E (2027 Q1)
 
@@ -100,47 +101,63 @@ Hệ thống **Rate Platform (`rate.vn`)** vận hành trên kiến trúc 4 tầ
   - Token `--rate-ink-*` cho chữ `text-*` và nút outline đạt tối thiểu 4,5:1 trên mọi nền sáng; nền tối (`rate-surface-dark`, scoreboard, `bg-dark`, hero gradient `rate-ink-on-dark`) dùng mực sáng, đảo sáng bên trong quay về mực tối; `bg-white` tôn trọng `bg-opacity-*`, `--bs-form-color` được định nghĩa.
   - `e2e/a11y.spec.ts` chạy axe (WCAG 2.1 A/AA, gồm `color-contrast`) trên toàn bộ 25 trang công khai ở hai viewport desktop 1280 và phone 390; từ 6.823 node vi phạm tương phản về 0.
 - [x] **7.9. Honest catalog data and SEO (PRs #733-#1630, CHANGELOG 6.9, 6.13, 6.14):** spec templates per category, no invented spec values, stored market stats on every surface, sold-out listings out of the best price and radar, bait prices out of the lowest price, used listings rejected at ingest, canonical 308s for products and versus pairs, and structured data on category, leaderboard and compare pages.
-  - **Merged to dev, awaiting promotion:** the static Vietnamese 404 for unknown paths (#1627, closes #1463 and #1373) and the 3-offer rule for the multi-platform floor deal label (#1630, closes #1145).
-  - Open: unknown product, merchant and versus slugs still get Next's empty error shell until Next renders a page-level `notFound()` on the server ([#1625](https://github.com/DOS/Rate/issues/1625)); remaining "lowest" wording over below-median lists and a floor by distinct sellers ([#1632](https://github.com/DOS/Rate/issues/1632)); TGDD thumbnails wait on the DOS-Me image bucket ([#887](https://github.com/DOS/Rate/issues/887)).
+  - [x] On Production: the static Vietnamese 404 for unknown paths (#1627, closes #1463 and #1373), the 3-offer rule for the multi-platform floor deal label (#1630, closes #1145), median wording in deal-radar headers (#1660, closes #1632), the floor pill only for a real floor (#1670), and the 2026-11-16/17 deal and offer truth fixes: sold-out bait dropped, offer ids canonicalized, fake strikethrough markups suppressed, inspect and API v1 aligned (#1690, #1696, #1698, #1701, #1703).
+  - [ ] Open: unknown product, merchant and versus slugs still get Next's empty error shell until Next renders a page-level `notFound()` on the server ([#1625](https://github.com/DOS/Rate/issues/1625)); TGDD thumbnails wait on the DOS-Me image bucket ([#887](https://github.com/DOS/Rate/issues/887)).
 - [ ] **7.10. Item / variant / listing model (behind `RATE_ITEM_MODEL`, off in Production):**
   - [x] Design, shared schemas, item-first matcher, item pages, catalog, compare, versus, watchlist, API and E2E merged and promoted (CHANGELOG 6.15).
   - [ ] DOS-Me M0 seed re-key ([#1123](https://github.com/DOS/Rate/issues/1123)), M1+M2 ([#1150](https://github.com/DOS/Rate/issues/1150)) and M3/M4 ([#1160](https://github.com/DOS/Rate/issues/1160)) applied, then the go-live runbook `Docs/Proposals/2026-10-29-item-model-go-live.md`. Waits on JOY.
 - [ ] **7.11. One rating, per-criterion stars, pros and cons, review quality ([#1531](https://github.com/DOS/Rate/issues/1531), design `Docs/Proposals/2026-10-31-criteria-stars-pros-cons.html`):**
   - [x] One stored rating everywhere, criteria per category, product points from review pros and cons and AI extraction, review value score and quality tier badge, review author keys; the DOS-Me migrations are on Production (CHANGELOG 6.16).
-  - [x] **Merged to dev, awaiting promotion:** the compare best mark reads the rating as shown (#1628, closes #1470).
+  - [x] On Production: the compare best mark reads the rating as shown (#1628, closes #1470); x.x5 ratings round like the stored score (#1646, closes #1631) with decimal-safe rounding in the web, importer and extension (#1658, #1680, #1657); the product page pros and cons block (#1655, closes #1624); versus page and API name the same winner by overall stars, labelled when they come from experts or criteria (#1662, #1687).
   - [ ] Review form v2 is merged behind `NEXT_PUBLIC_RATE_REVIEW_FORM_V2` (off); turning it on is tracked in [#1544](https://github.com/DOS/Rate/issues/1544).
-  - [ ] Product page pros and cons block ([#1624](https://github.com/DOS/Rate/issues/1624)); AI rewording, cluster merge and product verdict ([#1623](https://github.com/DOS/Rate/issues/1623)); `minRating` rounding at x.x5 ([#1631](https://github.com/DOS/Rate/issues/1631)).
+  - [ ] AI rewording, cluster merge and product verdict ([#1623](https://github.com/DOS/Rate/issues/1623)): the importer code is merged (#1654); storing the verdict waits on JOY's review of the DOS-Me migration `Docs/Proposals/2026-11-14-dos-me-product-verdict.sql`.
 - [ ] **7.12. Browser extension as a data source ([#1175](https://github.com/DOS/Rate/issues/1175), M2 [#1606](https://github.com/DOS/Rate/issues/1606)):**
   - [x] Localized extension (vi, en, cs), honest verdicts and disclosures, `Retry-After` handling, onboarding consent and observation v1; the DOS-Me quarantine migrations are on Production (CHANGELOG 6.17).
+  - [x] Hydrated signals re-evaluated, badges synced, observation holds scoped and erasures guarded (#1681, #1683, closes #1664, #1682).
   - [ ] A read-only Production check of the observation tables by Rate Services, then JOY's decision to set `RATE_EXTENSION_OBSERVATIONS=1` on Production, and publishing the new extension build to the Chrome Web Store. Waits on JOY.
-- [x] **7.13. Performance, accessibility and themes (CHANGELOG 6.10, 6.11, 6.19):** smaller client bundles, sized WebP images, parallel product reads, functions in `sin1`, a phone performance budget in E2E, focus and inert handling in the phone menu, and light/dark/system themes (#1440, closes #1435). Open: [#392](https://github.com/DOS/Rate/issues/392) (native dark theme, product decision).
+- [x] **7.13. Performance, accessibility and themes (CHANGELOG 6.10, 6.11, 6.19):** smaller client bundles, sized WebP images, parallel product reads, functions in `sin1`, a phone performance budget in E2E, focus and inert handling in the phone menu, and light/dark/system themes (#1440, closes #1435), and accessible names that match visible text for axe 4.14 and the quick toggles, offers and leaderboard (#1653, #1667, #1671, #1695). Open: [#392](https://github.com/DOS/Rate/issues/392) (native dark theme, product decision).
 - [ ] **7.14. Normalizer re-key data steps (`Docs/Proposals/2026-10-30-rekey-decisions.md`):** the code side is merged (CHANGELOG 6.12) and a read-only dry run exists (#1456). The data steps for watch spellings ([#1407](https://github.com/DOS/Rate/issues/1407)), gift words in keys ([#1441](https://github.com/DOS/Rate/issues/1441)), iPad Wi-Fi vs 5G and MacBook RAM ([#1491](https://github.com/DOS/Rate/issues/1491)) and masters keyed before #1506/#1508 ([#1540](https://github.com/DOS/Rate/issues/1540)) wait on JOY. Used listings ([#1430](https://github.com/DOS/Rate/issues/1430)) took option A (rejected at ingest, #1561).
 
 ---
 
-## 4. Status On 2026-11-12 (Rate Core Paused For The Mac Move)
+## 4. Status On 2026-11-17
 
-JOY paused the Rate Core line on 2026-11-12 to move the development machine from Windows to a Mac. The last promotion of `dev` to `main` was PR #1619 on 2026-11-07.
+Rate Core resumed on the Mac after the 2026-11-12 move. The last promotion of `dev` to `main` is PR #1705 (`main` at `2233f7dc`, 2026-11-17); `dev` has nothing waiting for promotion. Promotions since the move: #1643 (2026-11-12), #1659, #1668, #1672 (2026-11-15), #1691 (2026-11-16), #1700 and #1705 (2026-11-17).
 
-### 4.1. Merged to dev, awaiting promotion
+### 4.1. On Production since the move
 
-- #1627 static Vietnamese 404 for unknown paths (closes #1463, #1373).
-- #1628 compare best mark reads the rating as shown (closes #1470).
-- #1630 multi-platform floor deal label needs 3 or more offers (closes #1145).
-- #1338 Next.js 16.4.1 -> 16.4.5; #1337 and #1629 `@swc/core` 1.16.20 with the matching win32 pin (closes #1626); #1622 `pnpm-lock.yaml` repair; #1335, #1336 minor tooling bumps.
+- 404 and deal radar: #1627, #1630, #1660, #1670 and the deal and offer truth fixes #1690, #1696, #1698, #1701, #1703 (7.9).
+- Ratings, pros and cons, versus: #1628, #1646, #1655, #1658, #1662, #1680, #1687 (7.11).
+- Extension: #1657, #1681, #1683 (7.12).
+- Accessibility: #1653, #1667, #1671, #1695 (7.13).
+- Tooling: the per-session claim lock #1674, #1678 (6.10); Dependabot and `@swc/core` pins #1629, #1644, #1649, #1652; macOS paths in the docs #1642.
 
 ### 4.2. Waiting on JOY
 
-The full list with options and recommendations is in `Docs/Proposals/2026-10-30-joy-decisions.html`. The open ones:
+Nothing in this list can move without a JOY decision or a DOS-Me database step. Read-only Production checks now run through the Supabase connector (6.14). Options and recommendations for the older items are in `Docs/Proposals/2026-10-30-joy-decisions.html`.
 
-- **Re-key decisions D5 and D6** (iPad Wi-Fi vs 5G, MacBook RAM, [#1491](https://github.com/DOS/Rate/issues/1491)) and the data steps of 7.14: `Docs/Proposals/2026-10-30-rekey-decisions.md`.
-- **Catalog expansion D1-D5** (first batch scope, publishing rule, seed run on Production, variants without an offer, base iPhone 18 and 18e): `Docs/Proposals/2026-10-30-catalog-expansion.html`, draft PR #1455; the larger iPhone 18 Pro / S26 Ultra storage variants ([#1464](https://github.com/DOS/Rate/issues/1464)).
-- **DOS-Me promotion items:** [#613](https://github.com/DOS/Rate/issues/613), [#594](https://github.com/DOS/Rate/issues/594), [#887](https://github.com/DOS/Rate/issues/887), [#802](https://github.com/DOS/Rate/issues/802) on DOS-Me `dev`; the post-promotion check of [#1543](https://github.com/DOS/Rate/issues/1543); Item model [#1150](https://github.com/DOS/Rate/issues/1150) and [#1160](https://github.com/DOS/Rate/issues/1160) (6.4, 7.10).
-- **Supabase access for [#1173](https://github.com/DOS/Rate/issues/1173)** (6.14).
-- **Next.js upstream report** for page-level `notFound()` rendering an empty error shell (#1463, #1373, follow-up [#1625](https://github.com/DOS/Rate/issues/1625)): whether to file it on the public Next.js repository.
-- **Extension:** `RATE_EXTENSION_OBSERVATIONS` on Production and the Chrome Web Store publish (7.12).
-- **Secret Scanning + Push Protection** (6.5, [#191](https://github.com/DOS/Rate/issues/191)): enterprise policy.
+- **Normalizer re-key data steps (7.14):** [#1491](https://github.com/DOS/Rate/issues/1491) (D5, D6: iPad Wi-Fi vs 5G, MacBook RAM), [#1441](https://github.com/DOS/Rate/issues/1441) (gift words in keys), [#1407](https://github.com/DOS/Rate/issues/1407) (watch spellings), [#1540](https://github.com/DOS/Rate/issues/1540) (masters keyed before #1506/#1508); `Docs/Proposals/2026-10-30-rekey-decisions.md`.
+- **Catalog expansion D1-D5:** draft PR [#1455](https://github.com/DOS/Rate/pull/1455); `Docs/Proposals/2026-10-30-catalog-expansion.html`. For [#1464](https://github.com/DOS/Rate/issues/1464), a read-only check found no Tier 3 masters at 512GB or above, but the three 256GB seeds on Production (iPhone 18 Pro, 18 Pro Max, Galaxy S26 Ultra) still carry the old registry specs; JOY approved a Production spec backfill on 2026-11-17, which the Rate Services PO is running.
+- **DOS-Me `dev` -> `main` promotion (6.4):** [#613](https://github.com/DOS/Rate/issues/613) (vote eligibility), [#594](https://github.com/DOS/Rate/issues/594) (iPhone 16e offer move), [#887](https://github.com/DOS/Rate/issues/887) (product image bucket), [#802](https://github.com/DOS/Rate/issues/802) (bait price out of `min_price`); then the read-only checks each issue lists. [#1543](https://github.com/DOS/Rate/issues/1543) waits on its post-promotion check.
+- **Item model (6.4, 7.10):** [#1150](https://github.com/DOS/Rate/issues/1150) (M1+M2), [#1160](https://github.com/DOS/Rate/issues/1160) (M3/M4) and the M0 seed re-key [#1123](https://github.com/DOS/Rate/issues/1123), then the go-live runbook.
+- **Product verdict storage:** [#1623](https://github.com/DOS/Rate/issues/1623), the DOS-Me migration `Docs/Proposals/2026-11-14-dos-me-product-verdict.sql` (7.11).
+- **Next.js upstream report:** [#1625](https://github.com/DOS/Rate/issues/1625), whether to file the page-level `notFound()` empty error shell on the public Next.js repository.
+- **CSP on ISR pages:** [#1348](https://github.com/DOS/Rate/issues/1348), nonce with per-request rendering or hashes; the #1323 part is done (6.13).
+- **Vercel Preview Supabase env:** [#438](https://github.com/DOS/Rate/issues/438), whether Preview deployments get Supabase credentials.
+- **Native dark theme:** [#392](https://github.com/DOS/Rate/issues/392), product decision (7.13).
+- **Review form v2 on Production:** [#1544](https://github.com/DOS/Rate/issues/1544), turning on `NEXT_PUBLIC_RATE_REVIEW_FORM_V2` (7.11).
+- **Extension M2:** [#1606](https://github.com/DOS/Rate/issues/1606), the read-only observation check, `RATE_EXTENSION_OBSERVATIONS=1` on Production and the Chrome Web Store publish (7.12).
+- **Secret Scanning + Push Protection:** [#191](https://github.com/DOS/Rate/issues/191), enterprise policy (6.5).
+- **Trust view duplicates:** [#1120](https://github.com/DOS/Rate/issues/1120), a DOS-Me migration waiting for approval.
 
 ### 4.3. Other open engineering issues
 
-[#1633](https://github.com/DOS/Rate/issues/1633) (group `@swc/core*` in Dependabot), [#1120](https://github.com/DOS/Rate/issues/1120) (trust view duplicates offers), [#1172](https://github.com/DOS/Rate/issues/1172) (stats refresh trigger proposal), [#1247](https://github.com/DOS/Rate/issues/1247) (global per-network ingest limit), [#438](https://github.com/DOS/Rate/issues/438) (Vercel Preview data pages need Supabase env). The board is [Project #9](https://github.com/orgs/DOS/projects/9).
+- [#1311](https://github.com/DOS/Rate/issues/1311) CSP `script-src` (Report-Only; enforcing it follows #1348).
+- [#1306](https://github.com/DOS/Rate/issues/1306) review votes can flush site-wide caches without a real rate limit (the database part is a DOS-Me proposal).
+- [#1531](https://github.com/DOS/Rate/issues/1531) criteria stars, pros and cons design umbrella (7.11).
+- [#1172](https://github.com/DOS/Rate/issues/1172) proposal: refresh master market stats on listing changes (DOS-Me trigger).
+- [#1247](https://github.com/DOS/Rate/issues/1247) proposal: global per-network limit for extension ingest.
+- Qwen line (`po:qwen`), in progress: [#1665](https://github.com/DOS/Rate/issues/1665), [#1693](https://github.com/DOS/Rate/issues/1693), [#1704](https://github.com/DOS/Rate/issues/1704).
+- In progress on the Claude line: [#1710](https://github.com/DOS/Rate/issues/1710) extension side panel re-render after a stale lookup, [#1711](https://github.com/DOS/Rate/issues/1711) OpenAPI `hideFake`/`no_stock` text and localised inspect Markdown verdicts, [#1708](https://github.com/DOS/Rate/issues/1708) this status refresh. Both #1710 and #1711 came from the post-release audit [#1707](https://github.com/DOS/Rate/issues/1707) (done, 10 of 11 fixes confirmed).
+
+The board is [Project #9](https://github.com/orgs/DOS/projects/9).
