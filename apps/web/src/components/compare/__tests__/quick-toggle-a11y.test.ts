@@ -20,6 +20,7 @@ import {
   getCompareTray,
   normalizeTrayItem,
   parseTrayCategorySlugFromPath,
+  sanitizeTrayPriceVnd,
   setCompareTray,
   toggleCompareTrayItem,
 } from '../compare-tray';
@@ -633,6 +634,10 @@ assert.equal(
 assert.equal(formatCompareTrayPriceVnd(-50_000), '0 ₫');
 assert.equal(formatCompareTrayPriceVnd(0), '0 ₫');
 assert.equal(formatCompareTrayPriceVnd(25_990_000, 'vi'), '25.990.000 ₫');
+assert.equal(sanitizeTrayPriceVnd(' 25990000 '), 25_990_000);
+assert.equal(formatCompareTrayPriceDisplay(' 25990000 ', 'vi'), '25.990.000 ₫');
+assert.equal(sanitizeTrayPriceVnd('25\n990000'), 0);
+assert.equal(sanitizeTrayPriceVnd('25\u0000990000'), 0);
 
 for (const unpriced of [
   0,
@@ -641,6 +646,8 @@ for (const unpriced of [
   undefined,
   '',
   '0x100000',
+  '25\n990000',
+  '25\u0000990000',
   true,
   Number.NaN,
   9_000_000_000,

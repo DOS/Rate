@@ -58,7 +58,10 @@ export function sanitizeTrayPriceVnd(value: unknown): number {
     return Math.round(value);
   }
   if (typeof value === 'string') {
-    const cleaned = value.replace(TRAY_CONTROL_CHARS_RE, '').trim();
+    if (/\p{Cc}/u.test(value)) {
+      return 0;
+    }
+    const cleaned = value.trim();
     if (!cleaned || /^0[xbo]/i.test(cleaned)) {
       return 0;
     }
