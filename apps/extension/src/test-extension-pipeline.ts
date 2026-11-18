@@ -7796,6 +7796,462 @@ async function runTests() {
       '  ✅ [Side panel merchant trust colors, positive VND verdict params & brand-dot a11y (#1720)] Verified'
     );
   }
+
+  // DOS/Rate#1734: variant switch/checkbox exclusion, onboarding hydration, pill stale/price guards & quick-query bare URLs.
+  {
+    const mkBtn = (textContent: string, role?: string, propOnly = false) => ({
+      textContent,
+      role: propOnly ? role : undefined,
+      getAttribute: (n: string) =>
+        !propOnly && n === 'role' && role ? role : null,
+    });
+    assert.equal(
+      extractSelectedVariantFromDom({
+        querySelectorAll: (sel: string) =>
+          sel === 'button[aria-checked="true"]'
+            ? [
+                mkBtn('Dark Mode', 'switch'),
+                mkBtn('Autoplay', 'CHECKBOX'),
+                mkBtn('Alerts', 'Switch', true),
+                mkBtn('256GB', 'radio'),
+                mkBtn('Natural Titanium'),
+              ]
+            : [],
+      } as unknown as Document),
+      '256GB - Natural Titanium'
+    );
+    assert.equal(
+      extractSelectedVariantFromDom({
+        querySelectorAll: (sel: string) =>
+          sel === 'button[aria-checked="true"]'
+            ? [mkBtn('Dark Mode', 'Switch'), mkBtn('Agree', 'Checkbox')]
+            : [],
+      } as unknown as Document),
+      null
+    );
+
+    const onboardingHtml = fs.readFileSync(
+      path.resolve(__dirname, 'onboarding/onboarding.html'),
+      'utf8'
+    );
+    assert.match(
+      onboardingHtml,
+      /id="btn-no"[\s\S]*?class="primary"[\s\S]*?aria-pressed="true"/
+    );
+    assert.match(onboardingHtml, /id="btn-yes"[\s\S]*?aria-pressed="false"/);
+    const g = globalThis as Record<string, unknown>;
+    const saved = [
+      'chrome',
+      'document',
+      'window',
+      'fetch',
+      'MutationObserver',
+      'requestAnimationFrame',
+      'setTimeout',
+      'clearTimeout',
+    ].map((k) => [k, Object.getOwnPropertyDescriptor(g, k)] as const);
+    try {
+      const mkChoiceBtn = (initialPrimary: boolean, initialPressed: string) => {
+        const attrs = new Map<string, string>([
+          ['aria-pressed', initialPressed],
+        ]);
+        const classes = new Set<string>(initialPrimary ? ['primary'] : []);
+        const clicks: Array<() => void> = [];
+        return {
+          attrs,
+          classes,
+          clicks,
+          setAttribute: (k: string, v: string) => attrs.set(k, v),
+          classList: {
+            toggle: (c: string, force?: boolean) => {
+              const on = force ?? !classes.has(c);
+              if (on) classes.add(c);
+              else classes.delete(c);
+              return on;
+            },
+          },
+          addEventListener: (ev: string, cb: () => void) => {
+            if (ev === 'click') clicks.push(cb);
+          },
+        };
+      };
+      const btnNo = mkChoiceBtn(true, 'true');
+      const btnYes = mkChoiceBtn(false, 'false');
+      const statusEl = { textContent: '' };
+      let onDomReady: (() => void) | undefined;
+      let storedConsent: Record<string, unknown> = {
+        crowdContributeOptIn: true,
+        crowdConsentVersion: 2,
+      };
+      const onChangedListeners: Array<
+        (c: Record<string, unknown>, a: string) => void
+      > = [];
+      g.document = {
+        documentElement: {},
+        title: '',
+        querySelectorAll: () => [],
+        getElementById: (id: string) =>
+          id === 'btn-no'
+            ? btnNo
+            : id === 'btn-yes'
+              ? btnYes
+              : id === 'status'
+                ? statusEl
+                : null,
+        addEventListener: (ev: string, cb: () => void) => {
+          if (ev === 'DOMContentLoaded') onDomReady = cb;
+        },
+      };
+      g.chrome = {
+        runtime: {
+          sendMessage: async (m: { crowdContributeOptIn: boolean }) => ({
+            ok: true,
+            settings: { crowdContributeOptIn: m.crowdContributeOptIn },
+          }),
+        },
+        storage: {
+          local: { get: async () => storedConsent },
+          onChanged: {
+            addListener: (
+              fn: (c: Record<string, unknown>, a: string) => void
+            ) => onChangedListeners.push(fn),
+          },
+        },
+      };
+      await import(
+        new URL('./onboarding/onboarding.js?case=1734a', import.meta.url).href
+      );
+      onDomReady!();
+      assert.equal(btnNo.attrs.get('aria-pressed'), 'true');
+      assert.equal(btnNo.classes.has('primary'), true);
+      await new Promise((r) => setTimeout(r, 10));
+      assert.equal(btnYes.attrs.get('aria-pressed'), 'true');
+      assert.equal(btnYes.classes.has('primary'), true);
+      assert.equal(btnNo.attrs.get('aria-pressed'), 'false');
+      assert.equal(btnNo.classes.has('primary'), false);
+      btnNo.clicks[0]!();
+      await new Promise((r) => setTimeout(r, 10));
+      assert.equal(btnNo.attrs.get('aria-pressed'), 'true');
+      assert.equal(btnNo.classes.has('primary'), true);
+      assert.equal(btnYes.classes.has('primary'), false);
+      onChangedListeners[0]!(
+        {
+          crowdContributeOptIn: { newValue: true },
+          crowdConsentVersion: { newValue: 2 },
+        },
+        'local'
+      );
+      assert.equal(btnYes.classes.has('primary'), true);
+      assert.equal(btnNo.classes.has('primary'), false);
+      onChangedListeners[0]!({ crowdConsentVersion: { newValue: 1 } }, 'local');
+      assert.equal(btnNo.attrs.get('aria-pressed'), 'true');
+      assert.equal(btnNo.classes.has('primary'), true);
+      assert.equal(btnYes.classes.has('primary'), false);
+      const statusAfterRevoke = statusEl.textContent;
+      onChangedListeners[0]!({ crowdConsentVersion: { newValue: 2 } }, 'local');
+      assert.equal(btnYes.attrs.get('aria-pressed'), 'true');
+      assert.equal(btnYes.classes.has('primary'), true);
+      assert.notEqual(statusEl.textContent, statusAfterRevoke);
+
+      storedConsent = { crowdContributeOptIn: true, crowdConsentVersion: 1 };
+      await import(
+        new URL('./onboarding/onboarding.js?case=1734b', import.meta.url).href
+      );
+      onDomReady!();
+      await new Promise((r) => setTimeout(r, 10));
+      assert.equal(btnNo.classes.has('primary'), true);
+      assert.equal(btnYes.classes.has('primary'), false);
+
+      // Content-script pill VND bounds + response.stale guard (#1734-3).
+      let pillHost: { shadowRoot?: { innerHTML: string } } | null = null;
+      let shadowHtml = '';
+      let mutCb: (() => void) | undefined;
+      let h1Title = 'iPhone 16 Pro 256GB';
+      const rafs: Array<() => unknown> = [];
+      const timers: Array<() => unknown> = [];
+      const flushPill = async () => {
+        for (let i = 0; i < 6; i++) {
+          while (rafs.length) await rafs.shift()!();
+          await Promise.resolve();
+        }
+      };
+      g.window = {
+        location: { href: 'https://shopee.vn/p-i.101.202' },
+      };
+      g.document = {
+        body: {
+          appendChild: (el: { shadowRoot?: { innerHTML: string } }) => {
+            pillHost = el;
+          },
+        },
+        getElementById: (id: string) =>
+          id === 'rate-vn-trust-pill-host' ? pillHost : null,
+        createElement: () => {
+          const shadow = {
+            get innerHTML() {
+              return shadowHtml;
+            },
+            set innerHTML(v: string) {
+              shadowHtml = v;
+            },
+            getElementById: () => ({ addEventListener() {} }),
+          };
+          const el = {
+            id: '',
+            shadowRoot: null as typeof shadow | null,
+            attachShadow() {
+              el.shadowRoot = shadow;
+              return shadow;
+            },
+            remove() {
+              pillHost = null;
+            },
+          };
+          return el;
+        },
+        querySelectorAll: () => [],
+        querySelector: (s: string) =>
+          s === 'h1'
+            ? { textContent: h1Title }
+            : s === '.pqTWkA'
+              ? { textContent: '28.990.000₫' }
+              : null,
+      };
+      g.MutationObserver = class {
+        constructor(cb: () => void) {
+          mutCb = cb;
+        }
+        observe() {}
+      };
+      g.requestAnimationFrame = (cb: () => unknown) => {
+        rafs.push(cb);
+        return rafs.length;
+      };
+      g.setTimeout = ((cb: () => unknown) => {
+        timers.push(cb);
+        return timers.length;
+      }) as unknown;
+      g.clearTimeout = () => {};
+      let lookupCall = 0;
+      let pillReply: Record<string, unknown> = {};
+      g.chrome = {
+        runtime: {
+          sendMessage: async (msg: { type?: string }) => {
+            if (msg.type === 'RATE_PRODUCT_DETECTED') lookupCall++;
+            return pillReply;
+          },
+        },
+      };
+      pillReply = {
+        ok: true,
+        data: {
+          matchStatus: 'exact_listing',
+          isAccessoryOrPart: false,
+          priceAssessment: {
+            verdict: 'fair_market_price',
+            badgeLabel: 'Fair',
+            explanation: 'Fair',
+            cheaperOfferCount: 2,
+            maxSavingsAmount: 1_500_000_000,
+            marketMinPrice: 0.4,
+          },
+          masterProduct: { rating_score_5: 4.7 },
+          reviewSummary: null,
+          radarSignal: null,
+        },
+      };
+      await import(
+        new URL('./content/content-script.js?case=1734', import.meta.url).href
+      );
+      await flushPill();
+      assert.ok(pillHost, 'pill rendered');
+      assert.ok(!shadowHtml.includes('0 ₫'));
+      assert.ok(!shadowHtml.includes('Price updating'));
+      assert.ok(!shadowHtml.includes('Đang cập nhật'));
+
+      h1Title = 'iPhone 16 Pro 512GB';
+      pillReply = {
+        ok: true,
+        data: {
+          matchStatus: 'exact_listing',
+          isAccessoryOrPart: false,
+          priceAssessment: {
+            verdict: 'above_market',
+            badgeLabel: 'High',
+            explanation: 'High',
+            cheaperOfferCount: 3,
+            maxSavingsAmount: -500,
+            marketMinPrice: 31_990_000,
+          },
+          masterProduct: { rating_score_5: 4.8 },
+          reviewSummary: null,
+          radarSignal: null,
+        },
+      };
+      mutCb!();
+      while (timers.length) timers.shift()!();
+      await flushPill();
+      assert.ok(shadowHtml.includes('31.990.000 ₫'));
+      assert.ok(!shadowHtml.includes('Price updating'));
+      assert.ok(!shadowHtml.includes('Đang cập nhật'));
+
+      const activeHtmlBeforeStale = shadowHtml;
+      h1Title = 'iPhone 16 Pro 1TB';
+      pillReply = {
+        ok: false,
+        stale: true,
+        data: null,
+        status: 429,
+        retryAfterSeconds: 1,
+      };
+      mutCb!();
+      while (timers.length) timers.shift()!();
+      await flushPill();
+      assert.ok(pillHost, 'stale reply must not remove active pill');
+      assert.equal(shadowHtml, activeHtmlBeforeStale);
+      const callsBeforeTimers = lookupCall;
+      while (timers.length) timers.shift()!();
+      await flushPill();
+      assert.equal(
+        lookupCall,
+        callsBeforeTimers,
+        'stale 429 reply must not schedule a retry'
+      );
+      // Service-worker RATE_SIDEPANEL_QUICK_QUERY bare URLs + lookup_tab_latest (#1734-4).
+      let swMsg:
+        | ((
+            m: Record<string, unknown>,
+            s: Record<string, unknown>,
+            cb: (r: unknown) => void
+          ) => boolean | void)
+        | undefined;
+      const sessionStore = new Map<string, unknown>([
+        ['lookup_tab_latest', { staleOld: true }],
+      ]);
+      const fetchedUrls: string[] = [];
+      g.chrome = {
+        runtime: {
+          id: 'abcdefghijklmnop',
+          getManifest: () => ({ version: '2.0.0' }),
+          onInstalled: { addListener() {} },
+          onMessage: {
+            addListener(fn: NonNullable<typeof swMsg>) {
+              swMsg = fn;
+            },
+          },
+          getURL: (p: string) => `chrome-extension://abcdefghijklmnop/${p}`,
+        },
+        sidePanel: { setPanelBehavior: async () => {} },
+        storage: {
+          local: {
+            get: async () => ({
+              apiBaseUrl: 'https://rate.vn',
+              crowdContributeOptIn: false,
+            }),
+            set: async () => {},
+          },
+          session: {
+            get: async (keys?: string | string[]) => {
+              const list = Array.isArray(keys) ? keys : keys ? [keys] : [];
+              return Object.fromEntries(
+                list.map((k) => [k, sessionStore.get(k)])
+              );
+            },
+            set: async (obj: Record<string, unknown>) => {
+              for (const [k, v] of Object.entries(obj)) sessionStore.set(k, v);
+            },
+          },
+        },
+        action: {
+          setBadgeText: async () => {},
+          setBadgeBackgroundColor: async () => {},
+          onClicked: { addListener() {} },
+        },
+        tabs: { query: async () => [], create: async () => ({ id: 1 }) },
+      };
+      g.fetch = (async (u: string | URL) => {
+        fetchedUrls.push(String(u));
+        return new Response(
+          JSON.stringify({
+            ok: true,
+            data: {
+              matchStatus: 'exact_listing',
+              queryCount: fetchedUrls.length,
+            },
+          }),
+          { status: 200 }
+        );
+      }) as unknown;
+      await import(
+        new URL('./background/service-worker.js?case=1734', import.meta.url)
+          .href
+      );
+      const panelSender = {
+        tab: undefined,
+        url: 'chrome-extension://abcdefghijklmnop/sidepanel/sidepanel.html',
+      };
+      const callQuick = (query: string) =>
+        new Promise<Record<string, unknown>>((resolve) => {
+          swMsg!(
+            { type: 'RATE_SIDEPANEL_QUICK_QUERY', query },
+            panelSender,
+            (r) => resolve(r as Record<string, unknown>)
+          );
+        });
+      const bareCases: Array<[string, string, string]> = [
+        ['shopee.vn/Dien-thoai-i.111.222', 'shopee', '222'],
+        ['lazada.vn/products/p-i333444-s555.html', 'lazada', '333444'],
+        ['tiki.vn/sp-p777888.html', 'tiki', '777888'],
+        ['tiktok.com/@apple/product/999111', 'tiktok', '999111'],
+        ['thegioididong.com/dtdd/iphone-16-pro', 'tgdd', 'iphone-16-pro'],
+        ['fptshop.com.vn/dien-thoai/iphone-16-pro', 'fptshop', 'iphone-16-pro'],
+        ['cellphones.com.vn/iphone-16-pro.html', 'cellphones', 'iphone-16-pro'],
+      ];
+      for (const [bareUrl, expectedPlatform, expectedId] of bareCases) {
+        const res = await callQuick(bareUrl);
+        assert.equal(res.ok, true);
+        const lastUrl = new URL(fetchedUrls.at(-1)!);
+        assert.equal(lastUrl.searchParams.get('platform'), expectedPlatform);
+        assert.equal(lastUrl.searchParams.get('url'), `https://${bareUrl}`);
+        assert.equal(lastUrl.searchParams.get('externalId'), expectedId);
+        assert.deepEqual(sessionStore.get('lookup_tab_latest'), res.data);
+        assert.equal(
+          (
+            sessionStore.get('tab_latest') as {
+              signal: { canonicalUrl: string };
+            }
+          ).signal.canonicalUrl,
+          `https://${bareUrl}`
+        );
+      }
+      const plainRes = await callQuick('iPhone 16 Pro Max');
+      const plainUrl = new URL(fetchedUrls.at(-1)!);
+      assert.equal(plainUrl.searchParams.get('url'), null);
+      assert.equal(plainUrl.searchParams.get('platform'), null);
+      const countAfterQuick = fetchedUrls.length;
+      const callFull = () =>
+        new Promise<Record<string, unknown>>((resolve) => {
+          swMsg!(
+            { type: 'RATE_SIDEPANEL_FETCH_FULL', selectedVariant: null },
+            panelSender,
+            (r) => resolve(r as Record<string, unknown>)
+          );
+        });
+      const cachedFull = await callFull();
+      assert.equal(fetchedUrls.length, countAfterQuick);
+      assert.deepEqual(cachedFull.data, plainRes.data);
+      await callFull();
+      assert.equal(fetchedUrls.length, countAfterQuick + 1);
+      console.log(
+        '  ✅ [Variant switch/checkbox exclusion, onboarding hydration, pill stale/VND & quick-query bare URLs (#1734)] Verified'
+      );
+    } finally {
+      for (const [key, desc] of saved) {
+        if (desc) Object.defineProperty(g, key, desc);
+        else delete g[key];
+      }
+    }
+  }
   console.log('🎉 All Rate Browser Extension MV3 v2 tests passed!');
 }
 

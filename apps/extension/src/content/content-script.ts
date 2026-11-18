@@ -3,6 +3,7 @@ import {
   buildProductSignalSignature,
   formatSafeExtensionVnd,
   formatSafeNumber,
+  MAX_VALID_EXTENSION_VND_PRICE,
   resolveExtensionMasterRating,
   shouldRenderTrustPill,
 } from '../security-guards.js';
@@ -20,6 +21,15 @@ const HOST_ID = 'rate-vn-trust-pill-host';
 function removeTrustPillHost(): void {
   const existing = document.getElementById(HOST_ID);
   if (existing) existing.remove();
+}
+
+function isValidPillVndPrice(amount: unknown): amount is number {
+  return (
+    typeof amount === 'number' &&
+    Number.isFinite(amount) &&
+    Math.round(amount) > 0 &&
+    amount <= MAX_VALID_EXTENSION_VND_PRICE
+  );
 }
 
 function formatCurrencyVnd(amount: number | null | undefined): string {
@@ -61,13 +71,17 @@ function renderShadowTrustPill(lookup: ExtensionLookupData): void {
         ? (lookup.reviewSummary?.authentic_pct ?? null)
         : null;
 
+    const hasCheaperOffers =
+      typeof assessment.cheaperOfferCount === 'number' &&
+      Number.isFinite(assessment.cheaperOfferCount) &&
+      assessment.cheaperOfferCount > 0;
     const cheaperSummary =
-      assessment.cheaperOfferCount > 0 && assessment.maxSavingsAmount > 0
+      hasCheaperOffers && isValidPillVndPrice(assessment.maxSavingsAmount)
         ? t('pillCheaperAt', [
             formatSafeNumber(assessment.cheaperOfferCount, { min: 1 }),
             formatCurrencyVnd(assessment.maxSavingsAmount),
           ])
-        : assessment.marketMinPrice
+        : isValidPillVndPrice(assessment.marketMinPrice)
           ? t('pillMarketLow', [formatCurrencyVnd(assessment.marketMinPrice)])
           : t('pillPrompt');
     const radarSig = lookup.radarSignal;
@@ -285,12 +299,13 @@ async function inspectCurrentPage(): Promise<void> {
         signal,
       })) as {
         ok?: boolean;
+        stale?: boolean;
         data?: ExtensionLookupData | null;
         status?: number | null;
         retryAfterSeconds?: number;
       };
 
-      if (generation !== detectGeneration) return;
+      if (generation !== detectGeneration || response?.stale === true) return;
       rateLimitRetry.after(signature, response, () => {
         lastProcessedSignature = '';
         void inspectCurrentPage();

@@ -164,6 +164,11 @@ let detectRequestCounter = 0;
 const latestDetectByTab = new Map<number, number>();
 let fullLookupRequestCounter = 0;
 const latestFullLookupByTab = new Map<number, number>();
+let pendingQuickQueryReceipt: {
+  updatedAt: number;
+  apiBaseUrl: string;
+  data: ExtensionLookupData | null;
+} | null = null;
 async function maybeSendOptInCrowdSignal(
   rawSignal: ExtractedPageProductSignal
 ): Promise<void> {
@@ -343,6 +348,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           [cacheKey]: { signal, updatedAt: now, source: 'page' },
         };
         if (!isBackgroundTab) {
+          pendingQuickQueryReceipt = null;
           signalPayload.tab_latest = {
             signal,
             updatedAt: now,
@@ -541,6 +547,26 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           }
         }
 
+        if (
+          isQuickQuerySelected &&
+          !overrideVariant &&
+          pendingQuickQueryReceipt &&
+          latestEntry?.updatedAt === pendingQuickQueryReceipt.updatedAt &&
+          settings.apiBaseUrl === pendingQuickQueryReceipt.apiBaseUrl
+        ) {
+          const receipt = pendingQuickQueryReceipt;
+          pendingQuickQueryReceipt = null;
+          const stale = fullSeq !== fullLookupRequestCounter;
+          sendResponse({
+            ok: true,
+            settings,
+            signal: effectiveSignal,
+            data: receipt.data,
+            ...(stale ? { stale: true } : {}),
+          });
+          return;
+        }
+
         const outcome = await fetchExtensionLookup(effectiveSignal, 'full');
         if (isCurrentTabLookup() && trackedTabId !== undefined) {
           const resolvedLookup = outcome.ok ? outcome.data : null;
@@ -597,6 +623,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       return false;
     }
     const quickSeq = ++fullLookupRequestCounter;
+    pendingQuickQueryReceipt = null;
     (async () => {
       try {
         const rawQuery =
@@ -615,12 +642,32 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           return;
         }
 
-        const isUrl = /^https?:\/\//i.test(rawQuery);
-        const canonicalUrl = isUrl ? sanitizeProductUrl(rawQuery) || '' : '';
-        const detectedPlatform =
-          isUrl && canonicalUrl ? detectEcommercePlatform(canonicalUrl) : null;
+        const hasHttpScheme = /^https?:\/\//i.test(rawQuery);
+        const schemelessHostPath =
+          rawQuery.startsWith('//') && !rawQuery.startsWith('///')
+            ? rawQuery.slice(2)
+            : rawQuery;
+        const schemelessCandidate =
+          !hasHttpScheme &&
+          !/\s/.test(schemelessHostPath) &&
+          !/^[a-z][a-z0-9+.-]*:(?!\d+(?:\/|$))/i.test(schemelessHostPath) &&
+          !schemelessHostPath.startsWith('/')
+            ? `https://${schemelessHostPath}`
+            : null;
+        const sanitizedCandidate = hasHttpScheme
+          ? sanitizeProductUrl(rawQuery)
+          : schemelessCandidate
+            ? sanitizeProductUrl(schemelessCandidate)
+            : null;
+        const detectedPlatform = sanitizedCandidate
+          ? detectEcommercePlatform(sanitizedCandidate)
+          : null;
+        const canonicalUrl =
+          sanitizedCandidate && (hasHttpScheme || detectedPlatform)
+            ? sanitizedCandidate
+            : '';
         const extractedIds =
-          isUrl && detectedPlatform && canonicalUrl
+          detectedPlatform && canonicalUrl
             ? extractIdsFromUrl(detectedPlatform, canonicalUrl)
             : { externalItemId: null, externalShopId: null };
 
@@ -676,12 +723,18 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
         if (quickSeq === fullLookupRequestCounter) {
           const now = Date.now();
+          pendingQuickQueryReceipt = {
+            updatedAt: now,
+            apiBaseUrl: settings.apiBaseUrl,
+            data: fullLookup,
+          };
           await chrome.storage.session.set({
             tab_latest: {
               signal: syntheticSignal,
               updatedAt: now,
               source: 'quick_query',
             },
+            lookup_tab_latest: fullLookup,
           });
         }
 

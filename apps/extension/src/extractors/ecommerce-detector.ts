@@ -839,6 +839,19 @@ export function extractSelectedVariantFromDom(doc: Document): string | null {
   for (const sel of selectors) {
     const nodes = doc.querySelectorAll(sel);
     nodes.forEach((node) => {
+      const rawRole =
+        (typeof node.getAttribute === 'function'
+          ? node.getAttribute('role')
+          : null) ??
+        (typeof (node as { role?: unknown }).role === 'string'
+          ? (node as { role: string }).role
+          : null);
+      if (typeof rawRole === 'string') {
+        const roles = rawRole.trim().toLowerCase().split(/\s+/);
+        if (roles.includes('switch') || roles.includes('checkbox')) {
+          return;
+        }
+      }
       const txt = (node.textContent || '')
         .replace(/\p{Cc}+/gu, ' ')
         .replace(/\s+/g, ' ')
