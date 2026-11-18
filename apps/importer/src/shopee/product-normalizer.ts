@@ -619,6 +619,30 @@ function categorySlugOf(t: string): CanonicalCategorySlug | null {
  * Standard device specification registry for benchmark/flagship devices across 5 categories
  * Structured per PhoneArena 10-Field-Group taxonomy + GSMArena technical accuracy
  */
+
+/**
+ * Spec text the sourced iPhone 16e and 17e seeds (flagship-seed-sourced-2025.ts,
+ * flagship-seed-sourced-iphone-17e.ts) state alike, for the registry fields whose generic
+ * Apple default is wrong for them (DOS/Rate#1743). `null`: no source checked states one.
+ */
+const SOURCED_IPHONE_E_SPECS = {
+  keys: 'Action button, side button, volume buttons',
+  bluetooth: '5.3',
+  sensors:
+    'Face ID, barometer, high dynamic range gyro, high-g accelerometer, proximity sensor, dual ambient light sensors',
+  audio_features:
+    'Spatial Audio playback; AAC, MP3, Apple Lossless, FLAC, Dolby Digital, Dolby Digital Plus and Dolby Atmos playback; Audio Mix, wind noise reduction',
+  loudspeaker: null,
+  headphone_jack_35mm: null,
+  sar_head: null,
+  sar_body: null,
+  usb: 'USB-C, USB 2 (up to 480Mb/s)',
+} as const;
+
+/** A registry value: `null` (the sources state none) gives none, absent gives the default. */
+function sourcedOr<T>(value: T | null | undefined, fallback: T): T | undefined {
+  return value === null ? undefined : (value ?? fallback);
+}
 const CANONICAL_PHONE_REGISTRY: Record<
   string,
   {
@@ -663,6 +687,28 @@ const CANONICAL_PHONE_REGISTRY: Record<
     // generic defaults below (DOS/Rate#1739).
     wlan?: string;
     flash?: string;
+    // Spec text as the model's sourced seed states it, where the generic Apple default
+    // below is wrong for the model (Camera Control, Dynamic Island, UWB and MagSafe on the
+    // 16e/17e; two nano-SIMs, USB OTG and Ceramic Shield 1 are wrong too). `null` means the sources state none, so the listing gets no generic value.
+    // Without them a listing gets the generic defaults below (DOS/Rate#1743).
+    keys?: string;
+    display_features?: string;
+    charging?: string;
+    bluetooth?: string;
+    sensors?: string;
+    connectivity_other?: string;
+    audio_features?: string;
+    loudspeaker?: string | null;
+    headphone_jack_35mm?: boolean | null;
+    sar_head?: string | null;
+    sar_body?: string | null;
+    protection?: string;
+    usb?: string;
+    bands_5g?: string;
+    bands_4g?: string;
+    cellular_technology?: string;
+    sim_type?: string;
+    certifications?: string;
   }
 > = {
   'apple:iphone-16-pro-max': {
@@ -757,6 +803,25 @@ const CANONICAL_PHONE_REGISTRY: Record<
     storages_gb: [128, 256, 512],
     wlan: 'Wi-Fi 6 (802.11ax) with 2x2 MIMO',
     flash: 'True Tone flash',
+    // As the sourced seed states them: no Camera Control, a notch instead of the Dynamic
+    // Island, no Ultra Wideband chip and no MagSafe (Qi 7.5W). Its sources state no
+    // loudspeaker layout, headphone jack or SAR (DOS/Rate#1743).
+    ...SOURCED_IPHONE_E_SPECS,
+    display_features:
+      'Notch (no Dynamic Island), True Tone, wide colour (P3), 2,000,000:1 contrast',
+    charging:
+      'USB-C: up to 50% in 30 min with a 20W adapter or higher; Qi wireless up to 7.5W (no MagSafe). Video playback up to 26 h',
+    connectivity_other:
+      'NFC with reader mode; Emergency SOS, Messages, Find My and Roadside Assistance via satellite; Crash Detection; no Ultra Wideband chip, no MagSafe',
+    protection: 'Ceramic Shield front',
+    bands_5g:
+      'n1, n2, n3, n5, n7, n8, n12, n14, n20, n25, n26, n28, n29, n30, n38, n40, n41, n48, n53, n66, n70, n71, n75, n76, n77, n78, n79 (sub-6 GHz) - A3212',
+    bands_4g:
+      'FDD-LTE 1, 2, 3, 4, 5, 7, 8, 12, 13, 14, 17, 18, 19, 20, 25, 26, 28, 29, 30, 32, 66, 71; TD-LTE 34, 38, 39, 40, 41, 42, 48, 53 - A3212',
+    cellular_technology: 'GSM/EDGE / UMTS/HSPA+ / LTE / 5G (Apple C1 modem)',
+    sim_type: 'Dual eSIM; models sold outside the U.S. also have a nano-SIM tray',
+    certifications:
+      'Model numbers A3212 (United States, Puerto Rico), A3408 (Canada, Mexico, Middle East and others), A3410 (China mainland), A3409 (other countries and regions, which covers Vietnam)',
   },
   'apple:iphone-17e': {
     // Sourced with the seed (flagship-seed-sourced-iphone-17e.ts, DOS/Rate#1737): one rear
@@ -783,6 +848,24 @@ const CANONICAL_PHONE_REGISTRY: Record<
     storages_gb: [256, 512],
     wlan: 'Wi-Fi 6 (802.11ax) with 2x2 MIMO',
     flash: 'True Tone flash',
+    // As the seed states them: no Camera Control, no Dynamic Island stated, no Ultra
+    // Wideband or satellite features listed for Vietnam. Its sources state no loudspeaker
+    // layout, headphone jack or SAR (DOS/Rate#1743).
+    ...SOURCED_IPHONE_E_SPECS,
+    display_features: 'True Tone, wide colour (P3), Haptic Touch, 2,000,000:1 contrast',
+    charging:
+      'USB-C: up to 50% in 30 min with a 20W adapter or higher; MagSafe and Qi2 wireless up to 15W. Video playback up to 26 h (streamed up to 21 h)',
+    connectivity_other:
+      'NFC with reader mode, Express Cards with power reserve; Emergency SOS; Crash Detection',
+    protection: 'Ceramic Shield 2 front',
+    bands_5g:
+      'FDD n1, n2, n3, n5, n7, n8, n12, n20, n25, n26, n28, n30, n66, n70, n75; TDD n38, n40, n41, n48, n53, n77, n78, n79 (sub-6 GHz) - A3634',
+    bands_4g:
+      'FDD-LTE 1, 2, 3, 4, 5, 7, 8, 12, 13, 17, 18, 19, 20, 25, 26, 28, 30, 32, 66; TD-LTE 34, 38, 39, 40, 41, 42, 48, 53 - A3634',
+    cellular_technology: 'GSM/EDGE / UMTS/HSPA+ / LTE / 5G (Apple C1X modem)',
+    sim_type: 'Nano-SIM and eSIM; dual eSIM supported (A3634)',
+    certifications:
+      'Model numbers A3575 (United States, Puerto Rico, Canada, Japan, Mexico and others), A3635 (China mainland), A3634 (other countries and regions, which covers Vietnam)',
   },
   'apple:iphone-16-plus': {
     screen_size_inch: 6.7,
@@ -3190,9 +3273,8 @@ export class ProductNormalizer {
             : 'Fingerprint (under display), Face unlock'
           : undefined,
         keys: isSmartphone
-          ? isApple
-            ? 'Action Button, Camera Control, Volume, Power'
-            : 'Volume, Power'
+          ? (benchmark?.keys ??
+            (isApple ? 'Action Button, Camera Control, Volume, Power' : 'Volume, Power'))
           : undefined,
         colors: colors.length > 0 ? colors : ['Tiêu chuẩn'],
       },
@@ -3213,14 +3295,13 @@ export class ProductNormalizer {
                 : undefined,
         ppi: isSmartphone ? (benchmark?.screen_size_inch === 6.8 ? 505 : 460) : undefined,
         protection: isSmartphone
-          ? isApple
-            ? 'Ceramic Shield'
-            : 'Corning Gorilla Glass'
+          ? (benchmark?.protection ?? (isApple ? 'Ceramic Shield' : 'Corning Gorilla Glass'))
           : undefined,
         features: isSmartphone
-          ? isApple
-            ? 'Dynamic Island, True Tone, Wide color (P3), Haptic Touch'
-            : 'Always-on display, HDR10+, Eye Comfort Shield'
+          ? (benchmark?.display_features ??
+            (isApple
+              ? 'Dynamic Island, True Tone, Wide color (P3), Haptic Touch'
+              : 'Always-on display, HDR10+, Eye Comfort Shield'))
           : undefined,
       },
       hardware: {
@@ -3235,7 +3316,9 @@ export class ProductNormalizer {
       battery: {
         capacity_mah: batteryMah || undefined,
         type: 'Li-Ion, không thể tháo rời',
-        charging: isApple ? 'Sạc nhanh PD, Sạc không dây MagSafe/Qi2' : 'Sạc nhanh USB-C PD/PPS',
+        charging:
+          benchmark?.charging ??
+          (isApple ? 'Sạc nhanh PD, Sạc không dây MagSafe/Qi2' : 'Sạc nhanh USB-C PD/PPS'),
         fast_charging_w: fallbackChargingW,
         reverse_charging: false,
       },
@@ -3256,17 +3339,20 @@ export class ProductNormalizer {
         video_recording: '4K@30/60fps, 1080p@30/60/120/240fps, HDR',
       },
       connectivity: {
-        bluetooth: '5.3, A2DP, LE',
+        bluetooth: benchmark?.bluetooth ?? '5.3, A2DP, LE',
         wlan: benchmark?.wlan ?? 'Wi-Fi 6E/7, dual-band, Wi-Fi Direct',
-        usb: 'USB Type-C, OTG',
+        usb: benchmark?.usb ?? 'USB Type-C, OTG',
         sensors: isSmartphone
-          ? isApple
-            ? 'Face ID, gia tốc kế, con quay hồi chuyển, tiệm cận, la bàn, khí áp kế'
-            : 'Vân tay dưới màn hình, gia tốc kế, con quay hồi chuyển, tiệm cận, la bàn'
+          ? (benchmark?.sensors ??
+            (isApple
+              ? 'Face ID, gia tốc kế, con quay hồi chuyển, tiệm cận, la bàn, khí áp kế'
+              : 'Vân tay dưới màn hình, gia tốc kế, con quay hồi chuyển, tiệm cận, la bàn'))
           : undefined,
         location: 'GPS, GLONASS, Galileo, QZSS, BeiDou',
         nfc: true,
-        other: isApple ? 'Ultra Wideband (UWB), SOS vệ tinh' : 'Hỗ trợ OTG, Chia sẻ nhanh',
+        other:
+          benchmark?.connectivity_other ??
+          (isApple ? 'Ultra Wideband (UWB), SOS vệ tinh' : 'Hỗ trợ OTG, Chia sẻ nhanh'),
       },
       // Nothing is known about the network of a phone or tablet whose 5G is unknown.
       cellular:
@@ -3285,22 +3371,26 @@ export class ProductNormalizer {
               }
             : {
                 has_5g: has5g,
-                bands_5g: has5g ? 'SA/NSA/Sub6' : undefined,
-                bands_4g: 'LTE Cat 20',
-                technology: has5g ? 'GSM / HSPA / LTE / 5G' : 'GSM / HSPA / LTE',
-                sim_type: '2 Nano-SIM + eSIM',
+                bands_5g: has5g ? (benchmark?.bands_5g ?? 'SA/NSA/Sub6') : undefined,
+                bands_4g: benchmark?.bands_4g ?? 'LTE Cat 20',
+                technology:
+                  benchmark?.cellular_technology ??
+                  (has5g ? 'GSM / HSPA / LTE / 5G' : 'GSM / HSPA / LTE'),
+                sim_type: benchmark?.sim_type ?? '2 Nano-SIM + eSIM',
                 volte: true,
                 vowifi: true,
               },
       multimedia: {
-        loudspeaker: 'Loa kép Stereo đa chiều',
-        headphone_jack_35mm: false,
-        audio_features: 'Dolby Atmos, Hi-Res Audio',
+        loudspeaker: sourcedOr(benchmark?.loudspeaker, 'Loa kép Stereo đa chiều'),
+        headphone_jack_35mm: sourcedOr(benchmark?.headphone_jack_35mm, false),
+        audio_features: benchmark?.audio_features ?? 'Dolby Atmos, Hi-Res Audio',
       },
       regulatory: {
-        certifications: isApple ? 'CE, FCC ID, Apple Eco Standards' : 'CE, FCC, RoHS',
-        sar_head: isSmartphone ? '1.10 W/kg' : undefined,
-        sar_body: isSmartphone ? '1.15 W/kg' : undefined,
+        certifications:
+          benchmark?.certifications ??
+          (isApple ? 'CE, FCC ID, Apple Eco Standards' : 'CE, FCC, RoHS'),
+        sar_head: isSmartphone ? sourcedOr(benchmark?.sar_head, '1.10 W/kg') : undefined,
+        sar_body: isSmartphone ? sourcedOr(benchmark?.sar_body, '1.15 W/kg') : undefined,
       },
     };
 
