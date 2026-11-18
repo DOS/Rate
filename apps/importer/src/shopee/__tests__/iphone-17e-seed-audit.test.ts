@@ -259,6 +259,9 @@ test('17e titles key exactly to their storage, never to the 16e; near misses do 
   assert.equal(normalize('Apple iPhone 16e 128GB').model_key, 'apple:iphone-16e:128gb');
   assert.equal(normalize('Apple iPhone 16 E 128GB').model_key, 'apple:iphone-16e:128gb');
   assert.equal(normalize('Apple iPhone 17 256GB').model_key, 'apple:iphone-17:256gb');
+  // A spaced "e" after a generation with no e model keeps the plain model.
+  assert.equal(normalize('iPhone 13 E 64GB').model_key, 'apple:iphone-13:64gb');
+  assert.equal(normalize('iPhone 12 e 64 GB').model_key, 'apple:iphone-12:64gb');
 });
 
 test('the rows a scoped insert writes pass the audit (--audit-only logic)', async () => {
