@@ -45,7 +45,7 @@ const E_MODELS = [
   ['Apple iPhone 17e', 'apple:iphone-17e:256gb'],
 ] as const;
 
-test('the 16e and 17e get the keys, display features, charging and connectivity their seeds state', () => {
+test('the 16e and 17e get the keys, display, charging, connectivity, cellular and regulatory values their seeds state', () => {
   for (const [title, seedKey] of E_MODELS) {
     const out = normalize(title).specifications;
     const s = seed(seedKey);
@@ -56,6 +56,15 @@ test('the 16e and 17e get the keys, display features, charging and connectivity 
     assert.equal(out.connectivity?.sensors, s.connectivity?.sensors, title);
     assert.equal(out.connectivity?.other, s.connectivity?.other, title);
     assert.equal(out.multimedia?.audio_features, s.multimedia?.audio_features, title);
+    assert.equal(out.display?.protection, s.display?.protection, title);
+    assert.equal(out.connectivity?.usb, s.connectivity?.usb, title);
+    assert.equal(out.cellular?.bands_5g, s.cellular?.bands_5g, title);
+    assert.equal(out.cellular?.bands_4g, s.cellular?.bands_4g, title);
+    assert.equal(out.cellular?.technology, s.cellular?.technology, title);
+    assert.equal(out.cellular?.sim_type, s.cellular?.sim_type, title);
+    assert.equal(out.regulatory?.certifications, s.regulatory?.certifications, title);
+    assert.doesNotMatch(out.cellular?.sim_type ?? '', /2 Nano-SIM/, title);
+    assert.doesNotMatch(out.connectivity?.usb ?? '', /OTG/, title);
   }
 });
 
@@ -127,6 +136,16 @@ test('models without the new registry fields keep their previous output', () => 
     assert.equal(out.multimedia?.audio_features, 'Dolby Atmos, Hi-Res Audio', title);
     assert.equal(out.regulatory?.sar_head, '1.10 W/kg', title);
     assert.equal(out.regulatory?.sar_body, '1.15 W/kg', title);
+    assert.equal(out.display?.protection, 'Ceramic Shield', title);
+    assert.equal(out.connectivity?.usb, 'USB Type-C, OTG', title);
+    assert.equal(out.regulatory?.certifications, 'CE, FCC ID, Apple Eco Standards', title);
+    // A phone whose 5G is unknown (iPhone 11, outside the registry) gets no cellular group.
+    if (title !== 'Apple iPhone 11 64GB') {
+      assert.equal(out.cellular?.sim_type, '2 Nano-SIM + eSIM', title);
+      assert.equal(out.cellular?.bands_4g, 'LTE Cat 20', title);
+    } else {
+      assert.deepEqual(out.cellular, {}, title);
+    }
   }
 
   for (const title of ['Samsung Galaxy S24 Ultra 256GB', 'Xiaomi Redmi Note 99 Pro 256GB']) {
@@ -137,5 +156,13 @@ test('models without the new registry fields keep their previous output', () => 
     assert.equal(out.connectivity?.other, 'Hỗ trợ OTG, Chia sẻ nhanh', title);
     assert.equal(out.multimedia?.loudspeaker, 'Loa kép Stereo đa chiều', title);
     assert.equal(out.regulatory?.sar_head, '1.10 W/kg', title);
+    assert.equal(out.display?.protection, 'Corning Gorilla Glass', title);
+    assert.equal(out.regulatory?.certifications, 'CE, FCC, RoHS', title);
+    // The Xiaomi is outside the registry and its 5G is unknown: no cellular group.
+    assert.equal(
+      out.cellular?.sim_type,
+      title.startsWith('Samsung') ? '2 Nano-SIM + eSIM' : undefined,
+      title
+    );
   }
 });

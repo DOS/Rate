@@ -636,6 +636,7 @@ const SOURCED_IPHONE_E_SPECS = {
   headphone_jack_35mm: null,
   sar_head: null,
   sar_body: null,
+  usb: 'USB-C, USB 2 (up to 480Mb/s)',
 } as const;
 
 /** A registry value: `null` (the sources state none) gives none, absent gives the default. */
@@ -688,7 +689,7 @@ const CANONICAL_PHONE_REGISTRY: Record<
     flash?: string;
     // Spec text as the model's sourced seed states it, where the generic Apple default
     // below is wrong for the model (Camera Control, Dynamic Island, UWB and MagSafe on the
-    // 16e/17e). `null` means the sources state none, so the listing gets no generic value.
+    // 16e/17e; two nano-SIMs, USB OTG and Ceramic Shield 1 are wrong too). `null` means the sources state none, so the listing gets no generic value.
     // Without them a listing gets the generic defaults below (DOS/Rate#1743).
     keys?: string;
     display_features?: string;
@@ -701,6 +702,13 @@ const CANONICAL_PHONE_REGISTRY: Record<
     headphone_jack_35mm?: boolean | null;
     sar_head?: string | null;
     sar_body?: string | null;
+    protection?: string;
+    usb?: string;
+    bands_5g?: string;
+    bands_4g?: string;
+    cellular_technology?: string;
+    sim_type?: string;
+    certifications?: string;
   }
 > = {
   'apple:iphone-16-pro-max': {
@@ -805,6 +813,15 @@ const CANONICAL_PHONE_REGISTRY: Record<
       'USB-C: up to 50% in 30 min with a 20W adapter or higher; Qi wireless up to 7.5W (no MagSafe). Video playback up to 26 h',
     connectivity_other:
       'NFC with reader mode; Emergency SOS, Messages, Find My and Roadside Assistance via satellite; Crash Detection; no Ultra Wideband chip, no MagSafe',
+    protection: 'Ceramic Shield front',
+    bands_5g:
+      'n1, n2, n3, n5, n7, n8, n12, n14, n20, n25, n26, n28, n29, n30, n38, n40, n41, n48, n53, n66, n70, n71, n75, n76, n77, n78, n79 (sub-6 GHz) - A3212',
+    bands_4g:
+      'FDD-LTE 1, 2, 3, 4, 5, 7, 8, 12, 13, 14, 17, 18, 19, 20, 25, 26, 28, 29, 30, 32, 66, 71; TD-LTE 34, 38, 39, 40, 41, 42, 48, 53 - A3212',
+    cellular_technology: 'GSM/EDGE / UMTS/HSPA+ / LTE / 5G (Apple C1 modem)',
+    sim_type: 'Dual eSIM; models sold outside the U.S. also have a nano-SIM tray',
+    certifications:
+      'Model numbers A3212 (United States, Puerto Rico), A3408 (Canada, Mexico, Middle East and others), A3410 (China mainland), A3409 (other countries and regions, which covers Vietnam)',
   },
   'apple:iphone-17e': {
     // Sourced with the seed (flagship-seed-sourced-iphone-17e.ts, DOS/Rate#1737): one rear
@@ -840,6 +857,15 @@ const CANONICAL_PHONE_REGISTRY: Record<
       'USB-C: up to 50% in 30 min with a 20W adapter or higher; MagSafe and Qi2 wireless up to 15W. Video playback up to 26 h (streamed up to 21 h)',
     connectivity_other:
       'NFC with reader mode, Express Cards with power reserve; Emergency SOS; Crash Detection',
+    protection: 'Ceramic Shield 2 front',
+    bands_5g:
+      'FDD n1, n2, n3, n5, n7, n8, n12, n20, n25, n26, n28, n30, n66, n70, n75; TDD n38, n40, n41, n48, n53, n77, n78, n79 (sub-6 GHz) - A3634',
+    bands_4g:
+      'FDD-LTE 1, 2, 3, 4, 5, 7, 8, 12, 13, 17, 18, 19, 20, 25, 26, 28, 30, 32, 66; TD-LTE 34, 38, 39, 40, 41, 42, 48, 53 - A3634',
+    cellular_technology: 'GSM/EDGE / UMTS/HSPA+ / LTE / 5G (Apple C1X modem)',
+    sim_type: 'Nano-SIM and eSIM; dual eSIM supported (A3634)',
+    certifications:
+      'Model numbers A3575 (United States, Puerto Rico, Canada, Japan, Mexico and others), A3635 (China mainland), A3634 (other countries and regions, which covers Vietnam)',
   },
   'apple:iphone-16-plus': {
     screen_size_inch: 6.7,
@@ -3269,9 +3295,7 @@ export class ProductNormalizer {
                 : undefined,
         ppi: isSmartphone ? (benchmark?.screen_size_inch === 6.8 ? 505 : 460) : undefined,
         protection: isSmartphone
-          ? isApple
-            ? 'Ceramic Shield'
-            : 'Corning Gorilla Glass'
+          ? (benchmark?.protection ?? (isApple ? 'Ceramic Shield' : 'Corning Gorilla Glass'))
           : undefined,
         features: isSmartphone
           ? (benchmark?.display_features ??
@@ -3317,7 +3341,7 @@ export class ProductNormalizer {
       connectivity: {
         bluetooth: benchmark?.bluetooth ?? '5.3, A2DP, LE',
         wlan: benchmark?.wlan ?? 'Wi-Fi 6E/7, dual-band, Wi-Fi Direct',
-        usb: 'USB Type-C, OTG',
+        usb: benchmark?.usb ?? 'USB Type-C, OTG',
         sensors: isSmartphone
           ? (benchmark?.sensors ??
             (isApple
@@ -3347,10 +3371,12 @@ export class ProductNormalizer {
               }
             : {
                 has_5g: has5g,
-                bands_5g: has5g ? 'SA/NSA/Sub6' : undefined,
-                bands_4g: 'LTE Cat 20',
-                technology: has5g ? 'GSM / HSPA / LTE / 5G' : 'GSM / HSPA / LTE',
-                sim_type: '2 Nano-SIM + eSIM',
+                bands_5g: has5g ? (benchmark?.bands_5g ?? 'SA/NSA/Sub6') : undefined,
+                bands_4g: benchmark?.bands_4g ?? 'LTE Cat 20',
+                technology:
+                  benchmark?.cellular_technology ??
+                  (has5g ? 'GSM / HSPA / LTE / 5G' : 'GSM / HSPA / LTE'),
+                sim_type: benchmark?.sim_type ?? '2 Nano-SIM + eSIM',
                 volte: true,
                 vowifi: true,
               },
@@ -3360,7 +3386,9 @@ export class ProductNormalizer {
         audio_features: benchmark?.audio_features ?? 'Dolby Atmos, Hi-Res Audio',
       },
       regulatory: {
-        certifications: isApple ? 'CE, FCC ID, Apple Eco Standards' : 'CE, FCC, RoHS',
+        certifications:
+          benchmark?.certifications ??
+          (isApple ? 'CE, FCC ID, Apple Eco Standards' : 'CE, FCC, RoHS'),
         sar_head: isSmartphone ? sourcedOr(benchmark?.sar_head, '1.10 W/kg') : undefined,
         sar_body: isSmartphone ? sourcedOr(benchmark?.sar_body, '1.15 W/kg') : undefined,
       },
