@@ -129,7 +129,7 @@ export default async function ProductLeaderboardBadges({
           letterSpacing: '0.02em',
         }}
       >
-        <BsTrophyFill className="text-warning" />
+        <BsTrophyFill className="text-warning" aria-hidden="true" />
         {sectionLabel}
       </span>
 

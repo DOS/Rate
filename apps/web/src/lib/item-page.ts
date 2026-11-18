@@ -98,6 +98,37 @@ export function buildItemProductGroupNode(input: {
   variants: readonly ItemJsonLdVariant[];
   aggregateRating?: Record<string, unknown> | null;
 }): Record<string, unknown> {
+  const images = input.images.filter(
+    (url) => typeof url === 'string' && url.trim().length > 0
+  );
+  const hasVariant = input.variants
+    .filter((v) => Number.isFinite(v.minPrice) && v.minPrice > 0)
+    .map((v) => {
+      const rawSellers = Number(v.sellerCount);
+      const offerCount = Number.isFinite(rawSellers)
+        ? Math.max(1, Math.floor(rawSellers))
+        : 1;
+      const highPrice =
+        Number.isFinite(v.maxPrice) && v.maxPrice > v.minPrice
+          ? v.maxPrice
+          : v.minPrice;
+      return {
+        '@type': 'Product',
+        name: `${input.name} ${v.label}`,
+        sku: `${input.itemKey}:${v.variantKey}`,
+        inProductGroupWithID: input.itemKey,
+        size: v.label,
+        url: `${input.canonicalUrl}?v=${encodeURIComponent(v.variantKey)}`,
+        ...(images.length > 0 ? { image: [...images] } : {}),
+        offers: {
+          '@type': 'AggregateOffer',
+          priceCurrency: 'VND',
+          lowPrice: v.minPrice,
+          highPrice,
+          offerCount,
+        },
+      };
+    });
   return {
     '@type': 'ProductGroup',
     name: input.name,
@@ -105,26 +136,9 @@ export function buildItemProductGroupNode(input: {
     productGroupID: input.itemKey,
     url: input.canonicalUrl,
     description: input.description,
-    image: [...input.images],
+    ...(images.length > 0 ? { image: [...images] } : {}),
     variesBy: ['https://schema.org/size'],
-    hasVariant: input.variants
-      .filter((v) => v.minPrice > 0)
-      .map((v) => ({
-        '@type': 'Product',
-        name: `${input.name} ${v.label}`,
-        sku: `${input.itemKey}:${v.variantKey}`,
-        inProductGroupWithID: input.itemKey,
-        size: v.label,
-        url: `${input.canonicalUrl}?v=${encodeURIComponent(v.variantKey)}`,
-        ...(input.images.length > 0 ? { image: [...input.images] } : {}),
-        offers: {
-          '@type': 'AggregateOffer',
-          priceCurrency: 'VND',
-          lowPrice: v.minPrice,
-          highPrice: Math.max(v.maxPrice, v.minPrice),
-          offerCount: v.sellerCount,
-        },
-      })),
+    ...(hasVariant.length > 0 ? { hasVariant } : {}),
     ...(input.aggregateRating
       ? { aggregateRating: input.aggregateRating }
       : {}),

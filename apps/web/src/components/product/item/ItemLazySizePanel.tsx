@@ -99,27 +99,30 @@ export function ItemSizePriceStrip({
                 ~ {formatPriceVnd(stats.maxPrice, locale)}
               </span>
             )}
-            {priceHistory.lowestEverPrice != null && (
-              <span className="badge bg-success-subtle text-success fw-normal ms-2">
-                {t('allTimeLowBadge', {
-                  price: formatNumber(priceHistory.lowestEverPrice, locale),
-                })}
-              </span>
-            )}
+            {priceHistory.lowestEverPrice != null &&
+              priceHistory.lowestEverPrice > 0 && (
+                <span className="badge bg-success-subtle text-success fw-normal ms-2">
+                  {t('allTimeLowBadge', {
+                    price: formatNumber(priceHistory.lowestEverPrice, locale),
+                  })}
+                </span>
+              )}
           </div>
         </div>
         <div className="d-flex align-items-center flex-wrap gap-2">
-          <PriceWatchButton
-            slug={product.slug}
-            name={product.name}
-            brand={product.brand}
-            categoryPath={context.categoryPath}
-            thumbnail={product.image}
-            currentMinPrice={stats.minPrice}
-            size="sm"
-          />
+          {stats.minPrice > 0 && (
+            <PriceWatchButton
+              slug={product.slug}
+              name={product.name}
+              brand={product.brand}
+              categoryPath={context.categoryPath}
+              thumbnail={product.image}
+              currentMinPrice={stats.minPrice}
+              size="sm"
+            />
+          )}
           <a
-            href="#price-history-section"
+            href="#pdv-price-history"
             className="btn btn-sm btn-outline-secondary rounded-pill px-3"
           >
             {t('auditPriceBtn', { count: data.offers.length })}

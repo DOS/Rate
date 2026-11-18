@@ -594,6 +594,7 @@ export async function ProductDetailView({
           worstRating: 1,
         }
       : null;
+  const jsonLdImages = usableImageUrls(product.images).map(absoluteUrl);
   const itemGroupNode =
     itemPage && isItemGroup
       ? buildItemProductGroupNode({
@@ -612,7 +613,7 @@ export async function ProductDetailView({
                   name: displayName,
                   brand: itemPage.item.brand || product.brand,
                 }),
-          images: usableImageUrls(product.images).map(absoluteUrl),
+          images: jsonLdImages,
           variants: itemVariants.map((v) => {
             const stats = productMarketStats(v.product);
             return {
@@ -663,7 +664,7 @@ export async function ProductDetailView({
         sku: product.model_key,
         url: canonicalUrl,
         description: productDescription,
-        image: usableImageUrls(product.images).map(absoluteUrl),
+        ...(jsonLdImages.length > 0 ? { image: jsonLdImages } : {}),
         // Only with a buyable price: a lowPrice of 0 is not an offer.
         ...(currentMinPrice > 0
           ? {
@@ -779,27 +780,30 @@ export async function ProductDetailView({
                 ~ {formatPriceVnd(v.stats.maxPrice, locale)}
               </span>
             )}
-            {v.priceHistory.lowestEverPrice != null && (
-              <span className="badge bg-success-subtle text-success fw-normal ms-2">
-                {t('allTimeLowBadge', {
-                  price: formatNumber(v.priceHistory.lowestEverPrice, locale),
-                })}
-              </span>
-            )}
+            {v.priceHistory.lowestEverPrice != null &&
+              v.priceHistory.lowestEverPrice > 0 && (
+                <span className="badge bg-success-subtle text-success fw-normal ms-2">
+                  {t('allTimeLowBadge', {
+                    price: formatNumber(v.priceHistory.lowestEverPrice, locale),
+                  })}
+                </span>
+              )}
           </div>
         </div>
         <div className="d-flex align-items-center flex-wrap gap-2">
-          <PriceWatchButton
-            slug={v.product.slug}
-            name={v.product.name}
-            brand={v.product.brand}
-            categoryPath={categoryBasePath}
-            thumbnail={productImageUrl(v.product)}
-            currentMinPrice={v.stats.minPrice}
-            size="sm"
-          />
+          {v.stats.minPrice > 0 && (
+            <PriceWatchButton
+              slug={v.product.slug}
+              name={v.product.name}
+              brand={v.product.brand}
+              categoryPath={categoryBasePath}
+              thumbnail={productImageUrl(v.product)}
+              currentMinPrice={v.stats.minPrice}
+              size="sm"
+            />
+          )}
           <a
-            href="#price-history-section"
+            href="#pdv-price-history"
             className="btn btn-sm btn-outline-secondary rounded-pill px-3"
           >
             {t('auditPriceBtn', { count: v.offers.length })}
@@ -1075,10 +1079,12 @@ export async function ProductDetailView({
                 <div className="rate-pdv-board-head">
                   <span className="rate-eyebrow">{t('scoreboardEyebrow')}</span>
                   <div className="rate-pdv-tags">
-                    <span className="rate-pdv-tag is-good">
-                      <BsCheckCircleFill aria-hidden="true" />
-                      {t('authenticReviewsBadge', { count: authenticCount })}
-                    </span>
+                    {authenticCount > 0 && (
+                      <span className="rate-pdv-tag is-good">
+                        <BsCheckCircleFill aria-hidden="true" />
+                        {t('authenticReviewsBadge', { count: authenticCount })}
+                      </span>
+                    )}
                     {ignoredCount > 0 && (
                       <span className="rate-pdv-tag is-bad">
                         <BsShieldExclamation aria-hidden="true" />
