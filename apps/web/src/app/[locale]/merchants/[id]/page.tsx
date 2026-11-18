@@ -8,7 +8,10 @@ import AnalyzerText from '@/components/reviews/AnalyzerText';
 import { Link } from '@/lib/navigation';
 import { IntentLink } from '@/components/elementary/IntentLink';
 import { getCategoryRouteHref, resolveProductImageUrl } from '@/lib/rate-api';
-import { sizedStoreImageUrl } from '@/lib/rate-domain-core';
+import {
+  MAX_VALID_VND_PRICE,
+  sizedStoreImageUrl,
+} from '@/lib/rate-domain-core';
 import { deviceImageSrcSet } from '@/lib/device-images';
 import {
   getCachedMerchantProfileById,
@@ -38,6 +41,8 @@ import {
   hasReviewRiskEvidence,
   knownDosafeRiskScore,
   merchantRiskTone,
+  reviewRiskScoreOrNull,
+  type MerchantRiskTone,
 } from '@/lib/merchant-risk-tone';
 import { isOfferUnavailable } from '@/lib/product-market-stats';
 import ContentText from '@/components/elementary/ContentText';
@@ -65,6 +70,50 @@ export function generateStaticParams(): { id: string }[] {
 
 type PageParams = Promise<{ locale: string; id: string }>;
 
+function parseFiniteNumber(value: unknown): number | null {
+  if (
+    value == null ||
+    (typeof value !== 'number' && typeof value !== 'string')
+  ) {
+    return null;
+  }
+  if (typeof value === 'string') {
+    const trimmed = value.replace(/\p{Cc}+/gu, '').trim();
+    if (!trimmed || trimmed.length > 32 || /^[+-]?0[xbo]/i.test(trimmed)) {
+      return null;
+    }
+    const parsed = Number(trimmed);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return Number.isFinite(value) ? value : null;
+}
+
+function sanitizeMerchantPagePriceVnd(value: unknown): number | null {
+  const raw = parseFiniteNumber(value);
+  if (raw == null || raw <= 0 || raw > MAX_VALID_VND_PRICE) return null;
+  const rounded = Math.round(raw);
+  return rounded > 0 && rounded <= MAX_VALID_VND_PRICE ? rounded : null;
+}
+
+function normalizeMerchantTrustScore(value: unknown): number | null {
+  const raw = parseFiniteNumber(value);
+  if (raw == null) return null;
+  return Math.min(100, Math.max(0, Math.round(raw)));
+}
+
+function resolveMerchantReviewRiskScore(merchant: {
+  review_risk_score?: unknown;
+  review_risk_breakdown?: { total_reviews?: unknown } | null;
+}): number | null {
+  if (!hasReviewRiskEvidence(merchant.review_risk_breakdown)) return null;
+  const raw = parseFiniteNumber(merchant.review_risk_score);
+  if (raw == null) return null;
+  return reviewRiskScoreOrNull({
+    review_risk_score: raw,
+    review_risk_breakdown: merchant.review_risk_breakdown,
+  });
+}
+
 export async function generateMetadata({
   params,
 }: {
@@ -79,9 +128,10 @@ export async function generateMetadata({
     };
   }
   const canonicalUrl = `https://rate.vn/merchants/${merchant.id}`;
+  const metaTrustScore = normalizeMerchantTrustScore(merchant.trust_score);
   // No trust number for a store with no data (DOS/Rate#1484).
   const fullTitle =
-    merchant.trust_score == null
+    metaTrustScore == null
       ? t('profileMetaTitleNoScore', {
           name: merchant.name,
           platform: merchant.platform.toUpperCase(),
@@ -89,25 +139,30 @@ export async function generateMetadata({
       : t('profileMetaTitle', {
           name: merchant.name,
           platform: merchant.platform.toUpperCase(),
-          score: merchant.trust_score,
+          score: metaTrustScore,
         });
   const shortTitle =
-    merchant.trust_score == null
+    metaTrustScore == null
       ? t('profileMetaTitleShortNoScore', { name: merchant.name })
       : t('profileMetaTitleShort', {
           name: merchant.name,
-          score: merchant.trust_score,
+          score: metaTrustScore,
         });
   // No review risk number without analysed reviews (DOS/Rate#1249), and no
   // DOSafe number without a DOSafe score (DOS/Rate#1479).
-  const dosafeScore = knownDosafeRiskScore(merchant);
-  const hasReviews = hasReviewRiskEvidence(merchant.review_risk_breakdown);
+  const rawMetaDosafe = knownDosafeRiskScore(merchant);
+  const dosafeScore =
+    rawMetaDosafe == null
+      ? null
+      : Math.min(100, Math.max(0, Math.round(rawMetaDosafe)));
+  const reviewRiskScore = resolveMerchantReviewRiskScore(merchant);
+  const hasReviews = reviewRiskScore != null;
   const description = fitDescription(
     dosafeScore == null
       ? hasReviews
         ? t('profileMetaDescNoDosafe', {
             name: merchant.name,
-            seeding: merchant.review_risk_score,
+            seeding: reviewRiskScore,
             count: merchant.product_count,
           })
         : t('profileMetaDescNoData', {
@@ -118,7 +173,7 @@ export async function generateMetadata({
         ? t('profileMetaDesc', {
             name: merchant.name,
             dosafe: dosafeScore,
-            seeding: merchant.review_risk_score,
+            seeding: reviewRiskScore,
             count: merchant.product_count,
           })
         : t('profileMetaDescNoReviews', {
@@ -188,13 +243,13 @@ export default async function MerchantProfilePage({
 
   // A store with neither a DOSafe score nor analysed reviews has no trust
   // score: a neutral "no data" tag, never "high trust" (DOS/Rate#1484).
-  const trustScore = merchant.trust_score;
+  const trustScore = normalizeMerchantTrustScore(merchant.trust_score);
   const trustLevelLabel =
     trustScore == null
       ? t('trustNoData')
       : trustScore >= 80
         ? t('trustHigh')
-        : trustScore >= 50
+        : trustScore > 50
           ? t('trustModerate')
           : t('trustRisk');
 
@@ -203,7 +258,7 @@ export default async function MerchantProfilePage({
       ? 'bg-secondary text-white'
       : trustScore >= 80
         ? 'bg-success text-white'
-        : trustScore >= 50
+        : trustScore > 50
           ? 'bg-warning text-dark'
           : 'bg-danger text-white';
 
@@ -215,9 +270,16 @@ export default async function MerchantProfilePage({
       : null;
   // Same cut-offs as the home merchant cards (DOS/Rate#1140). A seller with
   // no DOSafe score has no tone: neither clean nor an alert (DOS/Rate#1479).
-  const dosafeScore = knownDosafeRiskScore(merchant);
-  const scamTone =
+  const rawDosafeScore = knownDosafeRiskScore(merchant);
+  const dosafeScore =
+    rawDosafeScore == null
+      ? null
+      : Math.min(100, Math.max(0, Math.round(rawDosafeScore)));
+  const scamTone: MerchantRiskTone | 'unknown' =
     dosafeScore == null ? 'unknown' : merchantRiskTone(dosafeScore);
+  const reviewRiskScore = resolveMerchantReviewRiskScore(merchant);
+  const reviewTone: MerchantRiskTone | 'unknown' =
+    reviewRiskScore == null ? 'unknown' : merchantRiskTone(reviewRiskScore);
 
   const canonicalUrl = `https://rate.vn/merchants/${merchant.id}`;
 
@@ -317,7 +379,7 @@ export default async function MerchantProfilePage({
                       border: '1px solid var(--rate-glass-border)',
                     }}
                   >
-                    <BsShop />
+                    <BsShop aria-hidden="true" />
                   </div>
                   <div style={{ minWidth: 0 }}>
                     <div className="d-flex align-items-center mb-2 flex-wrap gap-2">
@@ -333,7 +395,8 @@ export default async function MerchantProfilePage({
                             border: '1px solid rgba(45, 186, 105, 0.35)',
                           }}
                         >
-                          <BsCheckCircleFill /> {t('officialMallLabel')}
+                          <BsCheckCircleFill aria-hidden="true" />{' '}
+                          {t('officialMallLabel')}
                         </span>
                       )}
                       <span
@@ -368,7 +431,10 @@ export default async function MerchantProfilePage({
                         />
                       </span>
                       <span className="d-inline-flex align-items-center flex-wrap gap-1">
-                        <BsPeopleFill className="text-info" />
+                        <BsPeopleFill
+                          aria-hidden="true"
+                          className="text-info"
+                        />
                         {t('followersLabel')}{' '}
                         <strong className="font-monospace text-white">
                           {merchant.follower_count > 0
@@ -377,7 +443,10 @@ export default async function MerchantProfilePage({
                         </strong>
                       </span>
                       <span className="d-inline-flex align-items-center flex-wrap gap-1">
-                        <BsBoxSeam className="text-success" />
+                        <BsBoxSeam
+                          aria-hidden="true"
+                          className="text-success"
+                        />
                         {t('trackedModelsLabel')}{' '}
                         <strong className="font-monospace text-white">
                           {t('modelsCountUnit', {
@@ -476,7 +545,10 @@ export default async function MerchantProfilePage({
                       {t('layer1Badge')}
                     </span>
                     <h2 className="h5 fw-bold d-flex align-items-center mb-0 gap-2">
-                      <BsShieldCheck className="text-success" />
+                      <BsShieldCheck
+                        aria-hidden="true"
+                        className="text-success"
+                      />
                       {t('layer1Title')}
                     </h2>
                   </div>
@@ -556,34 +628,30 @@ export default async function MerchantProfilePage({
                       {t('layer2Badge')}
                     </span>
                     <h2 className="h5 fw-bold d-flex align-items-center mb-0 gap-2">
-                      <BsGraphUpArrow className="text-primary" />
+                      <BsGraphUpArrow
+                        aria-hidden="true"
+                        className="text-primary"
+                      />
                       {t('layer2Title')}
                     </h2>
                   </div>
-                  {hasReviewRiskEvidence(brk) ? (
-                    <span
-                      className={`badge rounded-pill fs-6 text-wrap mw-100 px-3 py-2 ${
-                        merchant.review_risk_score <= 15
+                  <span
+                    className={`badge rounded-pill fs-6 text-wrap mw-100 px-3 py-2 ${
+                      reviewTone === 'unknown'
+                        ? 'bg-light text-muted border'
+                        : reviewTone === 'good'
                           ? 'bg-success-subtle text-success'
-                          : merchant.review_risk_score <= 40
+                          : reviewTone === 'warn'
                             ? 'bg-warning-subtle text-warning-emphasis'
                             : 'bg-danger text-white'
-                      }`}
-                    >
-                      {t('reviewRiskBadge', {
-                        score: merchant.review_risk_score,
-                      })}
-                    </span>
-                  ) : (
-                    // No analysed reviews: a number would be a guess
-                    // (DOS/Rate#1249).
-                    <span
-                      className="badge rounded-pill fs-6 bg-light text-muted text-wrap mw-100 border px-3 py-2"
-                      data-testid="merchant-review-risk-badge"
-                    >
-                      {t('reviewRiskNoData')}
-                    </span>
-                  )}
+                    }`}
+                    data-testid="merchant-review-risk-badge"
+                    data-tone={reviewTone}
+                  >
+                    {reviewRiskScore == null
+                      ? t('reviewRiskNoData')
+                      : t('reviewRiskBadge', { score: reviewRiskScore })}
+                  </span>
                 </div>
 
                 <p
@@ -694,79 +762,106 @@ export default async function MerchantProfilePage({
             </div>
             {merchantGenuineDeals.length > 0 || merchantFakeTraps.length > 0 ? (
               <div className="row g-2">
-                {merchantGenuineDeals.slice(0, 4).map((g) => (
-                  <div key={g.id} className="col-md-6">
-                    <div className="rounded-3 border-success-subtle bg-success-subtle bg-opacity-10 d-flex justify-content-between align-items-center border p-2">
-                      <div className="overflow-hidden pe-2">
-                        <Link
-                          href={g.productHref}
-                          className="fw-bold text-dark text-decoration-none d-block text-truncate small"
-                        >
-                          <BsArrowDownCircle
-                            aria-hidden="true"
-                            className="text-success me-1"
-                          />
-                          {g.productName}
-                        </Link>
-                        <div className="text-secondary small">
-                          {t('low60dAndMedian', {
-                            min: formatNumber(g.marketMinPrice, locale),
-                            median: formatNumber(g.marketMedianPrice, locale),
-                          })}
+                {merchantGenuineDeals.slice(0, 4).map((g) => {
+                  const gMinPrice = sanitizeMerchantPagePriceVnd(
+                    g.marketMinPrice
+                  );
+                  const gMedianPrice = sanitizeMerchantPagePriceVnd(
+                    g.marketMedianPrice
+                  );
+                  const gCurrentPrice = sanitizeMerchantPagePriceVnd(
+                    g.priceCurrent
+                  );
+                  return (
+                    <div key={g.id} className="col-md-6">
+                      <div className="rounded-3 border-success-subtle bg-success-subtle bg-opacity-10 d-flex justify-content-between align-items-center border p-2">
+                        <div className="overflow-hidden pe-2">
+                          <Link
+                            href={g.productHref}
+                            className="fw-bold text-dark text-decoration-none d-block text-truncate small"
+                          >
+                            <BsArrowDownCircle
+                              aria-hidden="true"
+                              className="text-success me-1"
+                            />
+                            {g.productName}
+                          </Link>
+                          {gMinPrice != null && gMedianPrice != null && (
+                            <div className="text-secondary small">
+                              {t('low60dAndMedian', {
+                                min: formatNumber(gMinPrice, locale),
+                                median: formatNumber(gMedianPrice, locale),
+                              })}
+                            </div>
+                          )}
                         </div>
-                      </div>
-                      <div className="flex-shrink-0 text-end">
-                        <div className="fw-bold text-success font-monospace small">
-                          {formatPriceVnd(g.priceCurrent, locale)}
+                        <div className="flex-shrink-0 text-end">
+                          <div className="fw-bold text-success font-monospace small">
+                            {gCurrentPrice != null
+                              ? formatPriceVnd(gCurrentPrice, locale)
+                              : '-'}
+                          </div>
+                          <span className="badge bg-success rounded-pill">
+                            {t('vsMedianBadge', {
+                              pct: formatPlainNumber(
+                                g.savingsVsMedianPct,
+                                locale
+                              ),
+                            })}
+                          </span>
                         </div>
-                        <span className="badge bg-success rounded-pill">
-                          {t('vsMedianBadge', {
-                            pct: formatPlainNumber(
-                              g.savingsVsMedianPct,
-                              locale
-                            ),
-                          })}
-                        </span>
                       </div>
                     </div>
-                  </div>
-                ))}
-                {merchantFakeTraps.slice(0, 4).map((tItem) => (
-                  <div key={tItem.id} className="col-md-6">
-                    <div className="rounded-3 border-danger-subtle bg-danger-subtle bg-opacity-10 d-flex justify-content-between align-items-center border p-2">
-                      <div className="overflow-hidden pe-2">
-                        <Link
-                          href={tItem.productHref}
-                          className="fw-bold text-dark text-decoration-none d-block text-truncate small"
-                        >
-                          <BsExclamationTriangle
-                            aria-hidden="true"
-                            className="text-danger me-1"
-                          />
-                          {tItem.productName}
-                        </Link>
-                        <div className="text-secondary small">
-                          {t('inflatedOriginalPrice', {
-                            price: formatNumber(
-                              tItem.priceOriginal || 0,
-                              locale
-                            ),
-                          })}
+                  );
+                })}
+                {merchantFakeTraps.slice(0, 4).map((tItem) => {
+                  const trapOrigPrice = sanitizeMerchantPagePriceVnd(
+                    tItem.priceOriginal
+                  );
+                  const trapCurrentPrice = sanitizeMerchantPagePriceVnd(
+                    tItem.priceCurrent
+                  );
+                  return (
+                    <div key={tItem.id} className="col-md-6">
+                      <div className="rounded-3 border-danger-subtle bg-danger-subtle bg-opacity-10 d-flex justify-content-between align-items-center border p-2">
+                        <div className="overflow-hidden pe-2">
+                          <Link
+                            href={tItem.productHref}
+                            className="fw-bold text-dark text-decoration-none d-block text-truncate small"
+                          >
+                            <BsExclamationTriangle
+                              aria-hidden="true"
+                              className="text-danger me-1"
+                            />
+                            {tItem.productName}
+                          </Link>
+                          {trapOrigPrice != null && (
+                            <div className="text-secondary small">
+                              {t('inflatedOriginalPrice', {
+                                price: formatNumber(trapOrigPrice, locale),
+                              })}
+                            </div>
+                          )}
                         </div>
-                      </div>
-                      <div className="flex-shrink-0 text-end">
-                        <div className="fw-bold text-danger font-monospace small">
-                          {formatPriceVnd(tItem.priceCurrent, locale)}
+                        <div className="flex-shrink-0 text-end">
+                          <div className="fw-bold text-danger font-monospace small">
+                            {trapCurrentPrice != null
+                              ? formatPriceVnd(trapCurrentPrice, locale)
+                              : '-'}
+                          </div>
+                          <span className="badge bg-danger rounded-pill">
+                            {t('fakeMarkupBadge', {
+                              pct: formatPlainNumber(
+                                tItem.fakeMarkupPct,
+                                locale
+                              ),
+                            })}
+                          </span>
                         </div>
-                        <span className="badge bg-danger rounded-pill">
-                          {t('fakeMarkupBadge', {
-                            pct: formatPlainNumber(tItem.fakeMarkupPct, locale),
-                          })}
-                        </span>
                       </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             ) : (
               <div className="small text-muted">
@@ -944,17 +1039,34 @@ export default async function MerchantProfilePage({
                   </thead>
                   <tbody>
                     {merchant.listings.map((item) => {
-                      const priceText = formatNumber(
-                        item.price_current,
-                        locale
+                      const safeCurrentPrice = sanitizeMerchantPagePriceVnd(
+                        item.price_current
                       );
-                      const origText = item.price_original
-                        ? formatNumber(item.price_original, locale)
-                        : null;
+                      const safeOrigPrice = sanitizeMerchantPagePriceVnd(
+                        item.price_original
+                      );
+                      const priceDisplay =
+                        safeCurrentPrice != null
+                          ? formatPriceVnd(safeCurrentPrice, locale)
+                          : '-';
+                      const origPriceDisplay =
+                        safeCurrentPrice != null &&
+                        safeOrigPrice != null &&
+                        safeOrigPrice > safeCurrentPrice
+                          ? formatPriceVnd(safeOrigPrice, locale)
+                          : null;
+                      const safeMarketMinPrice = sanitizeMerchantPagePriceVnd(
+                        item.master_product?.market_min_price
+                      );
                       // A sold-out listing's last price is shown as such,
                       // never as a deal (DOS/Rate#1248).
                       const unavailable = isOfferUnavailable(item);
-                      const da = unavailable ? null : item.discount_analysis;
+                      const da =
+                        unavailable || safeCurrentPrice == null
+                          ? null
+                          : item.discount_analysis;
+                      const safeHistoricalMinPrice =
+                        sanitizeMerchantPagePriceVnd(da?.historical_min_price);
                       const badgeClass =
                         da?.verdict === 'fake_discount'
                           ? 'bg-danger text-white'
@@ -1065,10 +1177,12 @@ export default async function MerchantProfilePage({
                                 >
                                   {t('lowestMarketPriceLabel')}{' '}
                                   <strong className="font-monospace">
-                                    {formatPriceVnd(
-                                      item.master_product.market_min_price,
-                                      locale
-                                    )}
+                                    {safeMarketMinPrice != null
+                                      ? formatPriceVnd(
+                                          safeMarketMinPrice,
+                                          locale
+                                        )
+                                      : '-'}
                                   </strong>
                                 </div>
                               </div>
@@ -1081,14 +1195,16 @@ export default async function MerchantProfilePage({
                           <td>
                             <div
                               className={`fw-bold font-monospace ${
-                                unavailable ? 'text-muted' : 'text-dark'
+                                unavailable || safeCurrentPrice == null
+                                  ? 'text-muted'
+                                  : 'text-dark'
                               }`}
                             >
-                              {priceText} ₫
+                              {priceDisplay}
                             </div>
-                            {origText && !unavailable && (
+                            {origPriceDisplay && !unavailable && (
                               <div className="text-muted small text-decoration-line-through font-monospace">
-                                {origText} ₫
+                                {origPriceDisplay}
                               </div>
                             )}
                             {unavailable && (
@@ -1121,21 +1237,23 @@ export default async function MerchantProfilePage({
                                       .label
                                   }
                                 </span>
-                                <div
-                                  className="text-muted mt-1"
-                                  style={{
-                                    fontSize: '0.8125rem',
-                                    maxWidth: '280px',
-                                  }}
-                                >
-                                  {t('historicalLowObs', {
-                                    price: formatNumber(
-                                      da.historical_min_price,
-                                      locale
-                                    ),
-                                    count: da.observation_count,
-                                  })}
-                                </div>
+                                {safeHistoricalMinPrice != null && (
+                                  <div
+                                    className="text-muted mt-1"
+                                    style={{
+                                      fontSize: '0.8125rem',
+                                      maxWidth: '280px',
+                                    }}
+                                  >
+                                    {t('historicalLowObs', {
+                                      price: formatNumber(
+                                        safeHistoricalMinPrice,
+                                        locale
+                                      ),
+                                      count: da.observation_count,
+                                    })}
+                                  </div>
+                                )}
                               </div>
                             ) : (
                               <span className="badge bg-light text-muted small border">

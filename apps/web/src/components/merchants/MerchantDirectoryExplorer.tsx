@@ -11,7 +11,7 @@ import {
 import { useSearchParams } from 'next/navigation';
 import { Link } from '@/lib/navigation';
 import { escapeCsvCell } from '@/lib/csv-safe';
-import type { MerchantSummary } from '@/lib/rate-domain';
+import { MAX_VALID_VND_PRICE, type MerchantSummary } from '@/lib/rate-domain';
 import {
   DEFAULT_MERCHANT_DIRECTORY_FILTERS,
   MERCHANT_PAGE_SIZE,
@@ -53,7 +53,6 @@ import {
 import {
   sanitizeMerchantAuditText,
   sanitizeMerchantCount,
-  sanitizeMerchantScore100,
 } from '@/components/merchants/MerchantShareAuditButton';
 import {
   formatNumber,
@@ -66,6 +65,24 @@ import StarRating from '@/components/elementary/StarRating';
 const EXPORT_PAGE_SIZE = 500;
 export const MAX_MERCHANT_EXPORT_PAGES = 20;
 
+function parseFiniteDirectoryNumber(value: unknown): number | null {
+  if (
+    value == null ||
+    (typeof value !== 'number' && typeof value !== 'string')
+  ) {
+    return null;
+  }
+  if (typeof value === 'string') {
+    const trimmed = value.replace(/\p{Cc}+/gu, '').trim();
+    if (!trimmed || trimmed.length > 32 || /^[+-]?0[xbo]/i.test(trimmed)) {
+      return null;
+    }
+    const parsed = Number(trimmed);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return Number.isFinite(value) ? value : null;
+}
+
 export function merchantDirectoryDosafeDisplay(
   merchant: Parameters<typeof knownDosafeRiskScore>[0]
 ): {
@@ -74,8 +91,9 @@ export function merchantDirectoryDosafeDisplay(
   badgeClass: string;
   statusKey: 'scamStatusClean' | 'scamStatusCaution' | 'scamStatusAlert';
 } | null {
-  const dosafeScore = knownDosafeRiskScore(merchant);
-  if (dosafeScore == null) return null;
+  const rawDosafeScore = knownDosafeRiskScore(merchant);
+  if (rawDosafeScore == null) return null;
+  const dosafeScore = Math.min(100, Math.max(0, Math.round(rawDosafeScore)));
   const tone = merchantRiskTone(dosafeScore);
   return {
     score: dosafeScore,
@@ -93,6 +111,88 @@ export function merchantDirectoryDosafeDisplay(
           ? 'scamStatusCaution'
           : 'scamStatusAlert',
   };
+}
+
+export function merchantDirectoryReviewRiskDisplay(
+  merchant:
+    | {
+        review_risk_score?: unknown;
+        review_risk_breakdown?: { total_reviews?: unknown } | null;
+      }
+    | null
+    | undefined
+): {
+  score: number;
+  tone: MerchantRiskTone;
+  badgeClass: string;
+} | null {
+  if (!merchant || !hasReviewRiskEvidence(merchant.review_risk_breakdown)) {
+    return null;
+  }
+  const rawScore = parseFiniteDirectoryNumber(merchant.review_risk_score);
+  if (rawScore == null) return null;
+  const reviewScore = Math.min(100, Math.max(0, Math.round(rawScore)));
+  const tone = merchantRiskTone(reviewScore);
+  return {
+    score: reviewScore,
+    tone,
+    badgeClass:
+      tone === 'good'
+        ? 'bg-success-subtle text-success'
+        : tone === 'warn'
+          ? 'bg-warning-subtle text-warning-emphasis'
+          : 'bg-danger-subtle text-danger',
+  };
+}
+
+export function merchantDirectoryTrustDisplay(trustScore: unknown): {
+  score: number;
+  tier: 'high' | 'moderate' | 'risk';
+  badgeClass: string;
+} | null {
+  const rawTrust = parseFiniteDirectoryNumber(trustScore);
+  if (rawTrust == null) return null;
+  const score = Math.min(100, Math.max(0, Math.round(rawTrust)));
+  if (score >= 80) {
+    return { score, tier: 'high', badgeClass: 'bg-success text-white' };
+  }
+  if (score > 50) {
+    return { score, tier: 'moderate', badgeClass: 'bg-warning text-dark' };
+  }
+  return { score, tier: 'risk', badgeClass: 'bg-danger text-white' };
+}
+
+export function sanitizeMerchantDirectoryPriceVnd(
+  value: unknown
+): number | null {
+  const raw = parseFiniteDirectoryNumber(value);
+  if (raw == null || raw <= 0 || raw > MAX_VALID_VND_PRICE) return null;
+  const rounded = Math.round(raw);
+  return rounded > 0 && rounded <= MAX_VALID_VND_PRICE ? rounded : null;
+}
+
+export function formatMerchantDirectoryPriceRange(
+  merchant:
+    | {
+        min_price?: unknown;
+        max_price?: unknown;
+      }
+    | null
+    | undefined,
+  locale?: string | null
+): string | null {
+  if (!merchant) return null;
+  const safeMin = sanitizeMerchantDirectoryPriceVnd(merchant.min_price);
+  const safeMax = sanitizeMerchantDirectoryPriceVnd(merchant.max_price);
+  if (safeMin == null && safeMax == null) return null;
+  if (safeMin != null && safeMax != null) {
+    const low = Math.min(safeMin, safeMax);
+    const high = Math.max(safeMin, safeMax);
+    return high > low
+      ? `${formatPriceVnd(low, locale)} - ${formatPriceVnd(high, locale)}`
+      : formatPriceVnd(low, locale);
+  }
+  return formatPriceVnd((safeMin ?? safeMax)!, locale);
 }
 
 interface MerchantDirectoryExplorerProps {
@@ -389,17 +489,15 @@ export default function MerchantDirectoryExplorer({
     const sep = headers.map(() => '---');
     const rows = filteredMerchants.map((m) => {
       const rStats = getMerchantRadarStats(m);
+      const trust = merchantDirectoryTrustDisplay(m.trust_score);
+      const review = merchantDirectoryReviewRiskDisplay(m);
       return [
         sanitizeMerchantAuditText(m.name, 'Unknown'),
         sanitizeMerchantAuditText(m.platform, 'shopee', 32).toUpperCase(),
         m.is_official ? 'Yes' : 'No',
         // No trust score: no number (DOS/Rate#1484).
-        m.trust_score == null
-          ? labels.trustNoData
-          : `${sanitizeMerchantScore100(m.trust_score)}/100`,
-        hasReviewRiskEvidence(m.review_risk_breakdown)
-          ? `${sanitizeMerchantScore100(m.review_risk_score)}/100`
-          : labels.reviewRiskNoData,
+        trust == null ? labels.trustNoData : `${trust.score}/100`,
+        review == null ? labels.reviewRiskNoData : `${review.score}/100`,
         String(sanitizeMerchantCount(rStats.genuineDealCount)),
         String(sanitizeMerchantCount(rStats.fakeTrapCount)),
         String(sanitizeMerchantCount(m.review_risk_breakdown?.authentic_count)),
@@ -470,6 +568,8 @@ export default function MerchantDirectoryExplorer({
     ];
     const rows = filteredMerchants.map((m) => {
       const rStats = getMerchantRadarStats(m);
+      const trust = merchantDirectoryTrustDisplay(m.trust_score);
+      const review = merchantDirectoryReviewRiskDisplay(m);
       const ignoredReviews =
         sanitizeMerchantCount(m.review_risk_breakdown?.coin_spam_count) +
         sanitizeMerchantCount(m.review_risk_breakdown?.seeding_fake_count);
@@ -479,13 +579,9 @@ export default function MerchantDirectoryExplorer({
         sanitizeMerchantAuditText(m.platform, 'shopee', 32),
         sanitizeMerchantAuditText(m.platform_shop_id, '', 80),
         m.is_official ? 'true' : 'false',
-        m.trust_score == null
-          ? ''
-          : String(sanitizeMerchantScore100(m.trust_score)),
+        trust == null ? '' : String(trust.score),
         // Empty without analysed reviews (DOS/Rate#1258).
-        hasReviewRiskEvidence(m.review_risk_breakdown)
-          ? String(sanitizeMerchantScore100(m.review_risk_score))
-          : '',
+        review == null ? '' : String(review.score),
         String(sanitizeMerchantCount(rStats.genuineDealCount)),
         String(sanitizeMerchantCount(rStats.fakeTrapCount)),
         String(sanitizeMerchantCount(m.review_risk_breakdown?.authentic_count)),
@@ -526,6 +622,8 @@ export default function MerchantDirectoryExplorer({
       merchantCount: filteredMerchants.length,
       merchants: filteredMerchants.map((m) => ({
         ...m,
+        min_price: sanitizeMerchantDirectoryPriceVnd(m.min_price),
+        max_price: sanitizeMerchantDirectoryPriceVnd(m.max_price),
         // Null without analysed reviews (DOS/Rate#1258).
         review_risk_score: reviewRiskScoreOrNull(m),
         dealRadarStats: getMerchantRadarStats(m),
@@ -555,7 +653,7 @@ export default function MerchantDirectoryExplorer({
           <div className="card rounded-4 h-100 border bg-white p-3 shadow-sm">
             <div className="text-muted small">{labels.totalMerchants}</div>
             <div className="fs-4 fw-bold text-dark d-flex align-items-center gap-2">
-              <BsShop className="text-primary" />
+              <BsShop aria-hidden="true" className="text-primary" />
               {summaryStats.total}
             </div>
           </div>
@@ -564,7 +662,7 @@ export default function MerchantDirectoryExplorer({
           <div className="card rounded-4 h-100 border bg-white p-3 shadow-sm">
             <div className="text-muted small">{labels.officialMalls}</div>
             <div className="fs-4 fw-bold text-success d-flex align-items-center gap-2">
-              <BsCheckCircleFill />
+              <BsCheckCircleFill aria-hidden="true" />
               {summaryStats.official}
             </div>
           </div>
@@ -576,7 +674,7 @@ export default function MerchantDirectoryExplorer({
               className="fs-4 fw-bold text-primary d-flex align-items-center gap-2"
               data-testid="merchant-safe-count"
             >
-              <BsShieldCheck />
+              <BsShieldCheck aria-hidden="true" />
               {summaryStats.safe}
             </div>
           </div>
@@ -604,7 +702,7 @@ export default function MerchantDirectoryExplorer({
           <div className="col-lg-5 col-md-12">
             <div className="input-group">
               <span className="input-group-text bg-light border-end-0 text-muted">
-                <BsSearch />
+                <BsSearch aria-hidden="true" />
               </span>
               <input
                 type="search"
@@ -621,7 +719,8 @@ export default function MerchantDirectoryExplorer({
           <div className="col-lg-3 col-md-6">
             <div className="input-group input-group-sm">
               <span className="input-group-text bg-light text-muted">
-                <BsFunnel className="me-1" /> {labels.riskFilterLabel}
+                <BsFunnel aria-hidden="true" className="me-1" />{' '}
+                {labels.riskFilterLabel}
               </span>
               <select
                 className="form-select"
@@ -643,7 +742,8 @@ export default function MerchantDirectoryExplorer({
           <div className="col-lg-4 col-md-6">
             <div className="input-group input-group-sm">
               <span className="input-group-text bg-light text-muted">
-                <BsSortDown className="me-1" /> {labels.sortLabel}
+                <BsSortDown aria-hidden="true" className="me-1" />{' '}
+                {labels.sortLabel}
               </span>
               <select
                 className="form-select"
@@ -712,7 +812,7 @@ export default function MerchantDirectoryExplorer({
                 officialOnly ? 'btn-success fw-semibold' : 'btn-outline-success'
               }`}
             >
-              <BsCheckCircleFill />
+              <BsCheckCircleFill aria-hidden="true" />
               {labels.officialMallOnly}
             </button>
 
@@ -782,7 +882,7 @@ export default function MerchantDirectoryExplorer({
                 onClick={handleReset}
                 className="btn btn-sm btn-link text-danger text-decoration-none d-inline-flex align-items-center gap-1 p-0"
               >
-                <BsArrowCounterclockwise />
+                <BsArrowCounterclockwise aria-hidden="true" />
                 {labels.resetFilters}
               </button>
             )}
@@ -794,7 +894,10 @@ export default function MerchantDirectoryExplorer({
       {matchedCount === 0 ? (
         <div className="card rounded-4 border bg-white p-5 text-center shadow-sm">
           <div className="mb-3">
-            <BsShieldExclamation className="fs-1 text-warning" />
+            <BsShieldExclamation
+              aria-hidden="true"
+              className="fs-1 text-warning"
+            />
           </div>
           <h3 className="h5 fw-bold mb-2">{labels.emptyTitle}</h3>
           <p
@@ -831,23 +934,21 @@ export default function MerchantDirectoryExplorer({
           <div className="row g-4">
             {visibleMerchants.map((merchant) => {
               const dosafeDisplay = merchantDirectoryDosafeDisplay(merchant);
-              const trustScore = merchant.trust_score;
+              const reviewDisplay =
+                merchantDirectoryReviewRiskDisplay(merchant);
+              const trustDisplay = merchantDirectoryTrustDisplay(
+                merchant.trust_score
+              );
               const trustBadgeClass =
-                trustScore == null
+                trustDisplay == null
                   ? 'bg-light text-muted border'
-                  : trustScore >= 80
-                    ? 'bg-success text-white'
-                    : trustScore >= 50
-                      ? 'bg-warning text-dark'
-                      : 'bg-danger text-white';
-
-              const minPriceText = merchant.min_price
-                ? formatPriceVnd(merchant.min_price, locale)
-                : null;
-              const maxPriceText =
-                merchant.max_price && merchant.max_price !== merchant.min_price
-                  ? formatPriceVnd(merchant.max_price, locale)
-                  : null;
+                  : trustDisplay.badgeClass;
+              const priceRangeText = formatMerchantDirectoryPriceRange(
+                merchant,
+                locale
+              );
+              const brk = merchant.review_risk_breakdown;
+              const totalReviews = sanitizeMerchantCount(brk?.total_reviews);
 
               return (
                 <div className="col-lg-6 col-12" key={merchant.id}>
@@ -861,7 +962,7 @@ export default function MerchantDirectoryExplorer({
                           className="rounded-circle bg-primary-subtle text-primary d-flex align-items-center justify-content-center fw-bold fs-4 flex-shrink-0"
                           style={{ width: '56px', height: '56px' }}
                         >
-                          <BsShop />
+                          <BsShop aria-hidden="true" />
                         </div>
                         <div>
                           <div className="d-flex align-items-center mb-1 flex-wrap gap-2">
@@ -870,7 +971,8 @@ export default function MerchantDirectoryExplorer({
                             </span>
                             {merchant.is_official && (
                               <span className="badge bg-success-subtle text-success small d-inline-flex align-items-center gap-1">
-                                <BsCheckCircleFill /> {labels.officialBadge}
+                                <BsCheckCircleFill aria-hidden="true" />{' '}
+                                {labels.officialBadge}
                               </span>
                             )}
                             <span className="text-muted small d-none d-md-inline">
@@ -895,9 +997,9 @@ export default function MerchantDirectoryExplorer({
                         <span
                           className={`badge ${trustBadgeClass} rounded-pill fs-6 rate-tabular px-3 py-2`}
                         >
-                          {trustScore == null
+                          {trustDisplay == null
                             ? t('trustBadgeNoData')
-                            : t('trustBadge', { score: trustScore })}
+                            : t('trustBadge', { score: trustDisplay.score })}
                         </span>
                       </div>
                     </div>
@@ -951,12 +1053,16 @@ export default function MerchantDirectoryExplorer({
                             </span>
                             {dosafeDisplay == null ? (
                               // No DOSafe score: no number, and no alert (#1465).
-                              <span className="badge rounded-pill bg-light text-muted border">
+                              <span
+                                className="badge rounded-pill bg-light text-muted border"
+                                data-tone="unknown"
+                              >
                                 {labels.reviewRiskNoData}
                               </span>
                             ) : (
                               <span
                                 className={`badge rounded-pill rate-tabular ${dosafeDisplay.badgeClass}`}
+                                data-tone={dosafeDisplay.tone}
                               >
                                 {dosafeDisplay.score}/100
                               </span>
@@ -978,24 +1084,20 @@ export default function MerchantDirectoryExplorer({
                               <BsRobot aria-hidden="true" className="me-1" />
                               {labels.riskReviewLabel}
                             </span>
-                            {hasReviewRiskEvidence(
-                              merchant.review_risk_breakdown
-                            ) ? (
+                            {reviewDisplay == null ? (
+                              // No analysed reviews: no number (#1249).
                               <span
-                                className={`badge rounded-pill rate-tabular ${
-                                  merchant.review_risk_score <= 15
-                                    ? 'bg-success-subtle text-success'
-                                    : merchant.review_risk_score <= 40
-                                      ? 'bg-warning-subtle text-warning-emphasis'
-                                      : 'bg-danger-subtle text-danger'
-                                }`}
+                                className="badge rounded-pill bg-light text-muted border"
+                                data-tone="unknown"
                               >
-                                {merchant.review_risk_score}/100
+                                {labels.reviewRiskNoData}
                               </span>
                             ) : (
-                              // No analysed reviews: no number (#1249).
-                              <span className="badge rounded-pill bg-light text-muted border">
-                                {labels.reviewRiskNoData}
+                              <span
+                                className={`badge rounded-pill rate-tabular ${reviewDisplay.badgeClass}`}
+                                data-tone={reviewDisplay.tone}
+                              >
+                                {reviewDisplay.score}/100
                               </span>
                             )}
                           </div>
@@ -1003,24 +1105,21 @@ export default function MerchantDirectoryExplorer({
                             className="small text-muted d-none d-sm-block"
                             style={{ fontSize: '0.8125rem' }}
                           >
-                            {merchant.review_risk_breakdown.total_reviews >
-                            0 ? (
+                            {totalReviews > 0 ? (
                               <>
                                 {labels.authenticLabel}{' '}
                                 <strong>
-                                  {
-                                    merchant.review_risk_breakdown
-                                      .authentic_count
-                                  }
+                                  {sanitizeMerchantCount(brk?.authentic_count)}
                                 </strong>
-                                /{merchant.review_risk_breakdown.total_reviews}{' '}
-                                (
+                                /{totalReviews} (
                                 {t('filteredSpamCount', {
                                   count:
-                                    merchant.review_risk_breakdown
-                                      .coin_spam_count +
-                                    merchant.review_risk_breakdown
-                                      .seeding_fake_count,
+                                    sanitizeMerchantCount(
+                                      brk?.coin_spam_count
+                                    ) +
+                                    sanitizeMerchantCount(
+                                      brk?.seeding_fake_count
+                                    ),
                                 })}
                                 )
                               </>
@@ -1032,12 +1131,11 @@ export default function MerchantDirectoryExplorer({
                       </div>
                     </div>
 
-                    {minPriceText && (
+                    {priceRangeText && (
                       <div className="small text-muted mb-2">
                         {labels.priceRangeLabel}{' '}
                         <strong className="text-dark rate-tabular">
-                          {minPriceText}
-                          {maxPriceText ? ` - ${maxPriceText}` : ''}
+                          {priceRangeText}
                         </strong>
                       </div>
                     )}
