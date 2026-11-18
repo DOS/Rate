@@ -741,26 +741,32 @@ export class ShopeeIngestionPipeline {
       // hinted to the 512GB master): the hint is not applied and the listing is
       // matched like any other (DOS/Rate#1197). A page with no stated storage,
       // a title that also names the hinted size ("256/512GB") and a title too
-      // bare to match keep the hint.
+      // bare to match keep the hint. A size the model is not sold in ("iPhone 17e 128GB",
+      // keyed ':unknown') is stated too, and conflicts the same way (DOS/Rate#1739).
       const hintStorageGb = Number(hintMeta?.storage_gb);
+      const pageStorageGb =
+        candidate.variant_source === 'title' && typeof candidate.storage_gb === 'number'
+          ? candidate.storage_gb
+          : typeof candidate.unsold_storage_gb === 'number'
+            ? candidate.unsold_storage_gb
+            : null;
       const storageConflict =
         candidate.keyable !== false &&
-        candidate.variant_source === 'title' &&
-        typeof candidate.storage_gb === 'number' &&
-        candidate.storage_gb > 0 &&
+        pageStorageGb !== null &&
+        pageStorageGb > 0 &&
         Number.isFinite(hintStorageGb) &&
         hintStorageGb > 0 &&
-        candidate.storage_gb !== hintStorageGb &&
+        pageStorageGb !== hintStorageGb &&
         !titleNamesStorage(product.title, hintStorageGb);
       const hintItemId =
         itemModel === 'off' ? null : sanitizeIngestionEntityId(hintMeta?.item_id, 128);
       if (hintRow?.id && storageConflict) {
         platLogger.warn(
           'ingest.master_hint_storage_conflict',
-          `masterIdHint ${hintRow.id} ignored: the page states ${candidate.storage_gb}GB, the master is ${hintStorageGb}GB`,
+          `masterIdHint ${hintRow.id} ignored: the page states ${pageStorageGb}GB, the master is ${hintStorageGb}GB`,
           {
             masterId: hintRow.id,
-            pageStorageGb: candidate.storage_gb,
+            pageStorageGb,
             hintStorageGb,
           }
         );

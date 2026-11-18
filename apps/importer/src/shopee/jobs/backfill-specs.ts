@@ -912,7 +912,7 @@ export async function runMasterSpecsBackfillWith(
   if (insertsSkippedKeys.length > 0) {
     logger.warn(
       'backfill.unscoped_insert_skipped',
-      `${insertsSkippedKeys.length} seed(s) with no master row left out: an unscoped run never inserts; use --only <keys> --insert-missing --apply --expect <n> (${insertsSkippedKeys.join(', ')})`,
+      `${insertsSkippedKeys.length} seed(s) with no master row left out: an unscoped run never inserts; use --only <keys> --insert-missing --apply --expect <n> --expect-inserts <i> (${insertsSkippedKeys.join(', ')})`,
       { modelKeys: insertsSkippedKeys }
     );
   }

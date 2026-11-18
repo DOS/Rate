@@ -93,20 +93,27 @@ test('models without the new registry fields keep their previous output', () => 
   assert.equal(otherApple.specifications.camera?.flash, 'True Tone Dual-LED');
 });
 
-test('a storage the model is not sold in keys as unknown, never as a phantom master', () => {
-  for (const title of [
-    'Apple iPhone 17e 128GB',
-    'iPhone 17e 64GB Chính hãng',
-    'iPhone 17e 1TB',
-    'Apple iPhone 17 E 128GB',
-    'Apple iPhone 16e 1TB',
-    'Apple iPhone 16e 64GB',
-  ]) {
+test('a storage the model is not sold in keys as unknown, never as a sized phantom master', () => {
+  for (const [title, unsold] of [
+    ['Apple iPhone 17e 128GB', 128],
+    ['iPhone 17e 64GB Chính hãng', 64],
+    ['iPhone 17e 1TB', 1024],
+    ['Apple iPhone 17 E 128GB', 128],
+    // RAM/ROM pairs either way round, and ROM markers.
+    ['iPhone 17e 8GB/128GB', 128],
+    ['iPhone 17e 128GB/8GB', 128],
+    ['iPhone 17e ROM 128GB', 128],
+    ['iPhone 17e dung lượng 128GB', 128],
+    ['iPhone 17e 1TB ROM', 1024],
+    ['Apple iPhone 16e 1TB', 1024],
+    ['Apple iPhone 16e 64GB', 64],
+  ] as const) {
     const out = normalize(title);
     const item = title.includes('16') ? 'apple:iphone-16e' : 'apple:iphone-17e';
     assert.equal(out.item_key, item, title);
     assert.equal(out.model_key, `${item}:unknown`, title);
     assert.equal(out.storage_gb, null, title);
+    assert.equal(out.unsold_storage_gb, unsold, title);
     assert.equal(out.variant_known, false, title);
     assert.equal(out.variant_source, null, title);
     assert.equal(out.needs_review, true, title);
@@ -131,6 +138,7 @@ test('the storages a model is sold in key as before', () => {
     assert.equal(out.model_key, modelKey, title);
     assert.equal(out.variant_known, true, title);
     assert.equal(out.variant_source, 'title', title);
+    assert.equal(out.unsold_storage_gb, undefined, title);
   }
   // A title with no storage keys as unknown, as before.
   assert.equal(normalize('Apple iPhone 17e').model_key, 'apple:iphone-17e:unknown');
