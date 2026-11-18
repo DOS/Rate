@@ -1,4 +1,5 @@
 import { t, type MessageKey } from './i18n.js';
+import { MAX_VALID_EXTENSION_VND_PRICE } from './security-guards.js';
 import type { ExtensionLookupData, ExtensionPriceAssessment } from './types.js';
 
 type VerdictParamKind = 'price' | 'pct' | 'text';
@@ -115,10 +116,18 @@ function formatVerdictParam(
   if (!Object.prototype.hasOwnProperty.call(params, name)) return null;
   const value = params[name];
   switch (VERDICT_PARAM_KINDS[name]) {
-    case 'price':
-      return typeof value === 'number' && Number.isFinite(value) && value >= 0
-        ? `${value.toLocaleString('vi-VN')} ₫`
-        : null;
+    case 'price': {
+      if (
+        typeof value !== 'number' ||
+        !Number.isFinite(value) ||
+        value <= 0 ||
+        value > MAX_VALID_EXTENSION_VND_PRICE
+      ) {
+        return null;
+      }
+      const formatted = value.toLocaleString('vi-VN');
+      return formatted === '0' ? null : `${formatted} ₫`;
+    }
     case 'pct':
       // vi and en print the server's decimal point; Czech writes a comma, as
       // the site does (DOS/Rate#1326). The catalogue's own language decides,
