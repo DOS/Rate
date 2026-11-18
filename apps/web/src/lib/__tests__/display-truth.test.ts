@@ -1,6 +1,13 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import React from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
+import { NextIntlClientProvider } from 'next-intl';
+import {
+  AppRouterContext,
+  type AppRouterInstance,
+} from 'next/dist/shared/lib/app-router-context.shared-runtime';
 import {
   computeCrossPlatformDealRadarFromData,
   computeProductRadarSignal,
@@ -20,16 +27,25 @@ import {
   computeCombinedDualScore,
 } from '../rate-domain-core';
 import { merchantDirectoryDosafeDisplay } from '../../components/merchants/MerchantDirectoryExplorer';
-import { formatPriceVnd } from '../locale-format';
+import { formatPercent, formatPriceVnd } from '../locale-format';
+import { parseEcommerceUrlOrQuery } from '../rate-domain';
 import type { VerdictTranslator } from '../discount-verdict-copy';
-import type { OfferDiscountAnalysis } from '../rate-api';
-import {
+import type { OfferDiscountAnalysis, UrlInspectionResult } from '../rate-api';
+import DeepInspectWorkspace, {
+  buildInspectMarkdownPriceLines,
   filterInspectOfferDiscount,
+  formatInspectPriceVndOrDash,
+  formatInspectSuggestionLabel,
+  hasAnalyzedInspectReviews,
   inspectDosafeDisplay,
   inspectMarkdownPriceVerdict,
+  inspectReviewRiskDisplay,
   isInspectOfferBait,
   orderInspectOffers,
   resolveInspectOfferPlatform,
+  resolveInspectPriceVerdictPrices,
+  resolveInspectReviewTaxonomyDisplay,
+  sanitizeInspectPriceVnd,
 } from '../../components/inspect/DeepInspectWorkspace';
 
 // Display defects from the live audit #1131: numbers and warnings the site
@@ -1070,5 +1086,449 @@ assert.ok(
     ),
   'DeepInspectWorkspace.tsx must pass the UI locale to every verdict copy'
 );
+
+// DOS/Rate#1726: DeepInspectWorkspace suppresses 0-review 100% taxonomy,
+// guards 0/NaN VND fallbacks across verdict tiles, Markdown and suggestions,
+// and aligns merchant review_risk_score with merchantRiskTone.
+assert.equal(resolveInspectReviewTaxonomyDisplay(null, 'en'), null);
+for (const emptyTotal of [0, -1, 0.4, '0', '', null, undefined, Number.NaN]) {
+  assert.equal(
+    hasAnalyzedInspectReviews({ total_analyzed: emptyTotal }),
+    false
+  );
+  assert.deepEqual(
+    resolveInspectReviewTaxonomyDisplay(
+      {
+        total_analyzed: emptyTotal,
+        authentic_pct: 100,
+        suspicious_pct: 0,
+        fake_pct: 0,
+        ai_summary: 'stale summary',
+      },
+      'en'
+    ),
+    {
+      hasAnalyzedReviews: false,
+      totalAnalyzed: 0,
+      aiSummary: null,
+    }
+  );
+}
+assert.equal(hasAnalyzedInspectReviews({ total_analyzed: 12 }), true);
+assert.equal(hasAnalyzedInspectReviews({ total_analyzed: '7' }), true);
+assert.deepEqual(
+  resolveInspectReviewTaxonomyDisplay(
+    {
+      total_analyzed: 1250,
+      authentic_pct: 82.5,
+      suspicious_pct: 120,
+      fake_pct: -5,
+      ai_summary: 'Verified summary',
+    },
+    'cs'
+  ),
+  {
+    hasAnalyzedReviews: true,
+    totalAnalyzed: 1250,
+    authenticPctText: formatPercent(82.5, 'cs'),
+    suspiciousPctText: formatPercent(100, 'cs'),
+    fakePctText: formatPercent(0, 'cs'),
+    aiSummary: 'Verified summary',
+  }
+);
+
+for (const invalidPrice of [
+  0,
+  -500,
+  0.4,
+  null,
+  undefined,
+  Number.NaN,
+  'abc',
+  true,
+  9_000_000_000,
+]) {
+  assert.equal(sanitizeInspectPriceVnd(invalidPrice), 0);
+  assert.equal(formatInspectPriceVndOrDash(invalidPrice, 'vi'), '-');
+  assert.equal(
+    formatInspectSuggestionLabel('iPhone 16', invalidPrice, 'en'),
+    'iPhone 16'
+  );
+}
+assert.equal(
+  formatInspectSuggestionLabel('iPhone 16', 22_990_000, 'cs'),
+  `iPhone 16 (${formatPriceVnd(22_990_000, 'cs')})`
+);
+assert.deepEqual(
+  resolveInspectPriceVerdictPrices({
+    matchedOffer: null,
+    master: { min_price: 0, max_price: 0 },
+    priceHistory: { lowestEverPrice: null, highestEverPrice: null },
+  }),
+  {
+    currentPriceVnd: 0,
+    claimedOriginalVnd: 0,
+    historicalLowVnd: 0,
+    historicalHighVnd: 0,
+  }
+);
+
+assert.deepEqual(
+  resolveInspectPriceVerdictPrices({
+    matchedOffer: { price_current: 'bad', price_original: 29_990_000 },
+    master: { min_price: 24_990_000, max_price: 28_990_000 },
+    priceHistory: { lowestEverPrice: null, highestEverPrice: 0 },
+  }),
+  {
+    currentPriceVnd: 24_990_000,
+    claimedOriginalVnd: 29_990_000,
+    historicalLowVnd: 24_990_000,
+    historicalHighVnd: 28_990_000,
+  }
+);
+
+const mdPriceLabels1726 = {
+  currentPriceLabel: 'Current price',
+  claimedOriginalLabel: 'Strikethrough',
+  historicalLowLabel: 'Low',
+  historicalHighLabel: 'High',
+};
+assert.deepEqual(
+  buildInspectMarkdownPriceLines({
+    currentListedPrice: 0,
+    claimedOrigPrice: 0,
+    histLow: 0,
+    histHigh: 0,
+    labels: mdPriceLabels1726,
+  }),
+  []
+);
+assert.deepEqual(
+  buildInspectMarkdownPriceLines({
+    currentListedPrice: 19_990_000,
+    claimedOrigPrice: 0,
+    histLow: 0,
+    histHigh: 0,
+    labels: mdPriceLabels1726,
+  }),
+  ['- **Current price:** 19.990.000 ₫']
+);
+assert.deepEqual(
+  buildInspectMarkdownPriceLines({
+    currentListedPrice: 19_990_000,
+    claimedOrigPrice: 24_990_000,
+    histLow: 18_500_000,
+    histHigh: 0,
+    labels: mdPriceLabels1726,
+  }),
+  [
+    '- **Current price:** 19.990.000 ₫ | Strikethrough: 24.990.000 ₫',
+    '- **Low / High:** 18.500.000 ₫ - -',
+  ]
+);
+assert.deepEqual(
+  buildInspectMarkdownPriceLines({
+    currentListedPrice: 0,
+    claimedOrigPrice: 24_990_000,
+    histLow: 18_500_000,
+    histHigh: 22_000_000,
+    labels: mdPriceLabels1726,
+  }),
+  ['- **Low / High:** 18.500.000 ₫ - 22.000.000 ₫']
+);
+
+assert.equal(inspectReviewRiskDisplay(null), null);
+assert.equal(
+  inspectReviewRiskDisplay({
+    review_risk_score: 8,
+    review_risk_breakdown: { total_reviews: 0 },
+  }),
+  null
+);
+assert.equal(
+  inspectReviewRiskDisplay({
+    review_risk_score: null,
+    review_risk_breakdown: null,
+  }),
+  null
+);
+
+for (const [raw, expected] of [
+  [
+    0,
+    {
+      score: 0,
+      tone: 'good',
+      textClass: 'text-success',
+      barClass: 'bg-success',
+      widthPct: 4,
+    },
+  ],
+  [
+    19.4,
+    {
+      score: 19,
+      tone: 'good',
+      textClass: 'text-success',
+      barClass: 'bg-success',
+      widthPct: 19,
+    },
+  ],
+  [
+    19.5,
+    {
+      score: 20,
+      tone: 'warn',
+      textClass: 'text-warning-emphasis',
+      barClass: 'bg-warning',
+      widthPct: 20,
+    },
+  ],
+  [
+    25,
+    {
+      score: 25,
+      tone: 'warn',
+      textClass: 'text-warning-emphasis',
+      barClass: 'bg-warning',
+      widthPct: 25,
+    },
+  ],
+  [
+    45,
+    {
+      score: 45,
+      tone: 'warn',
+      textClass: 'text-warning-emphasis',
+      barClass: 'bg-warning',
+      widthPct: 45,
+    },
+  ],
+  [
+    49.4,
+    {
+      score: 49,
+      tone: 'warn',
+      textClass: 'text-warning-emphasis',
+      barClass: 'bg-warning',
+      widthPct: 49,
+    },
+  ],
+  [
+    49.5,
+    {
+      score: 50,
+      tone: 'bad',
+      textClass: 'text-danger',
+      barClass: 'bg-danger',
+      widthPct: 50,
+    },
+  ],
+  [
+    140,
+    {
+      score: 100,
+      tone: 'bad',
+      textClass: 'text-danger',
+      barClass: 'bg-danger',
+      widthPct: 100,
+    },
+  ],
+] as const) {
+  assert.deepEqual(
+    inspectReviewRiskDisplay({
+      review_risk_score: raw,
+      review_risk_breakdown: { total_reviews: 12 },
+    }),
+    expected,
+    `inspectReviewRiskDisplay(${raw}) must match merchantRiskTone after integer rounding`
+  );
+}
+assert.equal(
+  inspectDosafeDisplay({ dosafe_risk_score: 19.6, dosafe_risk_known: true })
+    ?.tone,
+  'warn'
+);
+assert.equal(
+  inspectDosafeDisplay({ dosafe_risk_score: 49.6, dosafe_risk_known: true })
+    ?.tone,
+  'bad'
+);
+
+const mockInspectRouter1726: AppRouterInstance = {
+  back: () => {},
+  forward: () => {},
+  refresh: () => {},
+  push: () => {},
+  replace: () => {},
+  prefetch: () => {},
+  bfcacheId: 'test',
+};
+const IntlProvider1726 = NextIntlClientProvider as React.ComponentType<{
+  locale: string;
+  messages: Record<string, unknown>;
+  timeZone: string;
+  children?: React.ReactNode;
+}>;
+const renderInspect1726 = (
+  locale: (typeof LOCALES)[number],
+  inspection: UrlInspectionResult
+): string =>
+  renderToStaticMarkup(
+    React.createElement(
+      AppRouterContext.Provider,
+      { value: mockInspectRouter1726 },
+      React.createElement(
+        IntlProvider1726,
+        {
+          locale,
+          messages: pickClientMessages(
+            readLocale(locale) as unknown as Record<string, unknown>,
+            'inspect'
+          ),
+          timeZone: 'Asia/Ho_Chi_Minh',
+        },
+        React.createElement(DeepInspectWorkspace, {
+          initialQuery: 'iphone-sold-out',
+          initialInspection: inspection,
+        })
+      )
+    )
+  );
+
+for (const locale of LOCALES) {
+  const inspectMsgs = readLocale(locale).inspect!;
+  const soldOutZeroReviewHtml = renderInspect1726(locale, {
+    query: 'iphone-sold-out',
+    matchedType: 'master_product',
+    parsedUrl: parseEcommerceUrlOrQuery('iphone-sold-out'),
+    masterProduct: {
+      id: 'mp-1726',
+      slug: 'iphone-15-sold-out',
+      name: 'iPhone 15 Sold Out',
+      brand: 'Apple',
+      model: 'iPhone 15',
+      model_key: 'apple_iphone_15_sold_out',
+      min_price: 0,
+      max_price: 0,
+      merchant_count: 1,
+      status: 'published',
+      metadata: { category_slug: 'smartphones' },
+    } as never,
+    matchedOffer: null,
+    allOffers: [
+      {
+        id: 'offer-sold-out-0',
+        platform: 'shopee',
+        title: 'Sold Out Listing',
+        price_current: 0,
+        price_original: 0,
+        availability: 'out_of_stock',
+        url: 'https://shopee.vn/sold-out',
+        merchant: { id: 'm-1726', name: 'Caution Shop', platform: 'shopee' },
+      },
+    ] as never,
+    discountAnalysis: null,
+    priceHistory: {
+      points: [],
+      byOffer: {},
+      lowestEverPrice: null,
+      lowestEverDate: null,
+      lowestEverMerchant: null,
+      highestEverPrice: null,
+      currentMinPrice: null,
+      fakeDiscountCount: 0,
+      genuineDealCount: 0,
+    },
+    reviewSummary: {
+      total_analyzed: 0,
+      authentic_pct: 100,
+      suspicious_pct: 0,
+      fake_pct: 0,
+      pros: [],
+      cons: [],
+      ai_summary: 'Stale summary',
+    },
+    merchantProfile: {
+      id: 'm-1726',
+      name: 'Caution Shop',
+      platform: 'shopee',
+      platform_shop_id: 'shop_1726',
+      is_official: false,
+      dosafe_risk_score: 8,
+      dosafe_risk_known: true,
+      review_risk_score: 42,
+      review_risk_breakdown: { total_reviews: 15 },
+    } as never,
+    suggestions: [],
+  });
+  assert.ok(
+    !soldOutZeroReviewHtml.includes('0 ₫') &&
+      !soldOutZeroReviewHtml.includes('0\u00a0₫') &&
+      !soldOutZeroReviewHtml.includes('NaN') &&
+      !soldOutZeroReviewHtml.includes('100%') &&
+      !soldOutZeroReviewHtml.includes('100\u00a0%') &&
+      !soldOutZeroReviewHtml.includes('Stale summary') &&
+      !soldOutZeroReviewHtml.includes('text-primary') &&
+      !soldOutZeroReviewHtml.includes('bg-primary'),
+    `${locale}: zero-review sold-out inspect view must suppress 0 VND, 100% taxonomy, and legacy primary review-risk colors`
+  );
+  assert.ok(
+    soldOutZeroReviewHtml.includes(inspectMsgs.reviewRiskNoData!) &&
+      soldOutZeroReviewHtml.includes('text-warning-emphasis') &&
+      soldOutZeroReviewHtml.includes('bg-warning') &&
+      soldOutZeroReviewHtml.includes('42/100'),
+    `${locale}: inspect view must show reviewRiskNoData and warning tone for review_risk_score 42`
+  );
+}
+
+for (const locale of LOCALES) {
+  const notFoundHtml = renderInspect1726(locale, {
+    query: 'unknown-device',
+    matchedType: 'search_suggestions',
+    parsedUrl: parseEcommerceUrlOrQuery('unknown-device'),
+    masterProduct: null,
+    matchedOffer: null,
+    allOffers: [],
+    discountAnalysis: null,
+    priceHistory: null,
+    reviewSummary: null,
+    merchantProfile: null,
+    suggestions: [
+      {
+        id: 'sug-zero',
+        slug: 'unpriced-phone',
+        name: 'Unpriced Phone',
+        min_price: 0,
+        metadata: { category_slug: 'smartphones' },
+      },
+      {
+        id: 'sug-nan',
+        slug: 'nan-phone',
+        name: 'NaN Phone',
+        min_price: Number.NaN,
+        metadata: { category_slug: 'smartphones' },
+      },
+      {
+        id: 'sug-priced',
+        slug: 'priced-phone',
+        name: 'Priced Phone',
+        min_price: 22_990_000,
+        metadata: { category_slug: 'smartphones' },
+      },
+    ] as never,
+  });
+  assert.ok(
+    notFoundHtml.includes('>Unpriced Phone<') &&
+      notFoundHtml.includes('>NaN Phone<') &&
+      !notFoundHtml.includes('(0 ₫)') &&
+      !notFoundHtml.includes('(0\u00a0₫)') &&
+      !notFoundHtml.includes('(NaN') &&
+      notFoundHtml.includes(
+        `>Priced Phone (${formatPriceVnd(22_990_000, locale)})<`
+      ),
+    `${locale}: not-found suggestions must omit (0 VND)/(NaN VND) while formatting positive prices`
+  );
+}
 
 console.log('display-truth: ok');

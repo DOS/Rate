@@ -95,12 +95,47 @@ export function sanitizeInspectQuery(rawQuery: unknown, maxLen = 512): string {
   return cleaned.length > maxLen ? cleaned.slice(0, maxLen) : cleaned;
 }
 
+function parseInspectFiniteNumber(value: unknown): number | null {
+  if (typeof value === 'number') {
+    return Number.isFinite(value) ? value : null;
+  }
+  if (typeof value === 'string') {
+    const cleaned = value.replace(INSPECT_CONTROL_CHARS_RE, '').trim();
+    if (!cleaned || cleaned.length > 32 || /^[+-]?0[xbo]/i.test(cleaned)) {
+      return null;
+    }
+    const parsed = Number(cleaned);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+}
+
 export function sanitizeInspectPriceVnd(value: unknown): number {
-  const num = Number(value);
-  if (!Number.isFinite(num) || num <= 0 || num > MAX_VALID_VND_PRICE) {
+  const num = parseInspectFiniteNumber(value);
+  if (num == null || num <= 0 || num > MAX_VALID_VND_PRICE) {
     return 0;
   }
-  return Math.round(num);
+  const rounded = Math.round(num);
+  return rounded > 0 && rounded <= MAX_VALID_VND_PRICE ? rounded : 0;
+}
+
+export function formatInspectPriceVndOrDash(
+  value: unknown,
+  locale?: string | null
+): string {
+  const safePrice = sanitizeInspectPriceVnd(value);
+  return safePrice > 0 ? formatPriceVnd(safePrice, locale) : '-';
+}
+
+export function formatInspectSuggestionLabel(
+  name: string,
+  minPrice: unknown,
+  locale?: string | null
+): string {
+  const safePrice = sanitizeInspectPriceVnd(minPrice);
+  return safePrice > 0
+    ? `${name} (${formatPriceVnd(safePrice, locale)})`
+    : name;
 }
 
 export function sanitizeInspectDownloadSlug(
@@ -118,22 +153,11 @@ export function sanitizeInspectDownloadSlug(
   return slug || fallback;
 }
 
-export function inspectDosafeDisplay(
-  merchant: Parameters<typeof knownDosafeRiskScore>[0] | null | undefined
-): {
-  score: number;
-  tone: MerchantRiskTone;
+function inspectRiskToneClasses(tone: MerchantRiskTone): {
   textClass: string;
   barClass: string;
-  widthPct: number;
-} | null {
-  if (!merchant) return null;
-  const dosafeScore = knownDosafeRiskScore(merchant);
-  if (dosafeScore == null) return null;
-  const tone = merchantRiskTone(dosafeScore);
+} {
   return {
-    score: dosafeScore,
-    tone,
     textClass:
       tone === 'good'
         ? 'text-success'
@@ -146,7 +170,58 @@ export function inspectDosafeDisplay(
         : tone === 'warn'
           ? 'bg-warning'
           : 'bg-danger',
+  };
+}
+
+export function inspectDosafeDisplay(
+  merchant: Parameters<typeof knownDosafeRiskScore>[0] | null | undefined
+): {
+  score: number;
+  tone: MerchantRiskTone;
+  textClass: string;
+  barClass: string;
+  widthPct: number;
+} | null {
+  if (!merchant) return null;
+  const rawDosafeScore = knownDosafeRiskScore(merchant);
+  if (rawDosafeScore == null) return null;
+  const dosafeScore = Math.min(100, Math.max(0, Math.round(rawDosafeScore)));
+  const tone = merchantRiskTone(dosafeScore);
+  return {
+    score: dosafeScore,
+    tone,
+    ...inspectRiskToneClasses(tone),
     widthPct: Math.min(100, Math.max(4, dosafeScore)),
+  };
+}
+
+export function inspectReviewRiskDisplay(
+  merchant:
+    | {
+        review_risk_score?: number | string | null;
+        review_risk_breakdown?: { total_reviews?: unknown } | null;
+      }
+    | null
+    | undefined
+): {
+  score: number;
+  tone: MerchantRiskTone;
+  textClass: string;
+  barClass: string;
+  widthPct: number;
+} | null {
+  if (!merchant || !hasReviewRiskEvidence(merchant.review_risk_breakdown)) {
+    return null;
+  }
+  const rawReviewScore = parseInspectFiniteNumber(merchant.review_risk_score);
+  if (rawReviewScore == null) return null;
+  const reviewScore = Math.min(100, Math.max(0, Math.round(rawReviewScore)));
+  const tone = merchantRiskTone(reviewScore);
+  return {
+    score: reviewScore,
+    tone,
+    ...inspectRiskToneClasses(tone),
+    widthPct: Math.min(100, Math.max(4, reviewScore)),
   };
 }
 
@@ -224,6 +299,76 @@ export function inspectMarkdownPriceVerdict(
   return `**${copy.label}** (${copy.explanation})`;
 }
 
+export function resolveInspectPriceVerdictPrices(params: {
+  matchedOffer?: {
+    price_current?: unknown;
+    price_original?: unknown;
+  } | null;
+  master?: {
+    min_price?: unknown;
+    max_price?: unknown;
+  } | null;
+  priceHistory?: {
+    lowestEverPrice?: unknown;
+    highestEverPrice?: unknown;
+  } | null;
+}): {
+  currentPriceVnd: number;
+  claimedOriginalVnd: number;
+  historicalLowVnd: number;
+  historicalHighVnd: number;
+} {
+  const { matchedOffer, master, priceHistory } = params;
+  return {
+    currentPriceVnd:
+      sanitizeInspectPriceVnd(matchedOffer?.price_current) ||
+      sanitizeInspectPriceVnd(master?.min_price),
+    claimedOriginalVnd: sanitizeInspectPriceVnd(matchedOffer?.price_original),
+    historicalLowVnd:
+      sanitizeInspectPriceVnd(priceHistory?.lowestEverPrice) ||
+      sanitizeInspectPriceVnd(master?.min_price),
+    historicalHighVnd:
+      sanitizeInspectPriceVnd(priceHistory?.highestEverPrice) ||
+      sanitizeInspectPriceVnd(master?.max_price),
+  };
+}
+
+export function buildInspectMarkdownPriceLines(params: {
+  currentListedPrice: unknown;
+  claimedOrigPrice: unknown;
+  histLow: unknown;
+  histHigh: unknown;
+  labels: {
+    currentPriceLabel: string;
+    claimedOriginalLabel: string;
+    historicalLowLabel: string;
+    historicalHighLabel: string;
+  };
+}): string[] {
+  const current = sanitizeInspectPriceVnd(params.currentListedPrice);
+  const orig = sanitizeInspectPriceVnd(params.claimedOrigPrice);
+  const low = sanitizeInspectPriceVnd(params.histLow);
+  const high = sanitizeInspectPriceVnd(params.histHigh);
+  const out: string[] = [];
+  if (current > 0) {
+    const origSuffix =
+      orig > 0
+        ? ` | ${params.labels.claimedOriginalLabel}: ${orig.toLocaleString('vi-VN')} ₫`
+        : '';
+    out.push(
+      `- **${params.labels.currentPriceLabel}:** ${current.toLocaleString('vi-VN')} ₫${origSuffix}`
+    );
+  }
+  if (low > 0 || high > 0) {
+    const lowStr = low > 0 ? `${low.toLocaleString('vi-VN')} ₫` : '-';
+    const highStr = high > 0 ? `${high.toLocaleString('vi-VN')} ₫` : '-';
+    out.push(
+      `- **${params.labels.historicalLowLabel} / ${params.labels.historicalHighLabel}:** ${lowStr} - ${highStr}`
+    );
+  }
+  return out;
+}
+
 export function resolveInspectOfferPlatform(offer: {
   platform?: string | null;
   merchant?: { platform?: string | null } | null;
@@ -248,6 +393,81 @@ export function isInspectOfferBait(
     inStockOffers,
     implausibleOfferIds
   );
+}
+
+function clampInspectPercent(value: unknown): number {
+  const num = parseInspectFiniteNumber(value);
+  if (num == null) return 0;
+  return Math.min(100, Math.max(0, num));
+}
+
+export function hasAnalyzedInspectReviews(
+  reviewSummary: { total_analyzed?: unknown } | null | undefined
+): boolean {
+  const total = parseInspectFiniteNumber(reviewSummary?.total_analyzed);
+  return total != null && Math.floor(total) > 0;
+}
+
+export function resolveInspectReviewTaxonomyDisplay(
+  reviewSummary:
+    | {
+        total_analyzed?: unknown;
+        authentic_pct?: unknown;
+        suspicious_pct?: unknown;
+        fake_pct?: unknown;
+        ai_summary?: string | null;
+      }
+    | null
+    | undefined,
+  locale: string
+):
+  | {
+      hasAnalyzedReviews: true;
+      totalAnalyzed: number;
+      authenticPctText: string;
+      suspiciousPctText: string;
+      fakePctText: string;
+      aiSummary: string | null;
+    }
+  | {
+      hasAnalyzedReviews: false;
+      totalAnalyzed: 0;
+      aiSummary: null;
+    }
+  | null {
+  if (!reviewSummary) return null;
+  const rawTotal = parseInspectFiniteNumber(reviewSummary.total_analyzed);
+  const totalAnalyzed =
+    rawTotal != null && rawTotal > 0 ? Math.floor(rawTotal) : 0;
+  if (totalAnalyzed <= 0) {
+    return {
+      hasAnalyzedReviews: false,
+      totalAnalyzed: 0,
+      aiSummary: null,
+    };
+  }
+  const cleanSummary =
+    typeof reviewSummary.ai_summary === 'string' &&
+    reviewSummary.ai_summary.trim()
+      ? reviewSummary.ai_summary
+      : null;
+  return {
+    hasAnalyzedReviews: true,
+    totalAnalyzed,
+    authenticPctText: formatPercent(
+      clampInspectPercent(reviewSummary.authentic_pct),
+      locale
+    ),
+    suspiciousPctText: formatPercent(
+      clampInspectPercent(reviewSummary.suspicious_pct),
+      locale
+    ),
+    fakePctText: formatPercent(
+      clampInspectPercent(reviewSummary.fake_pct),
+      locale
+    ),
+    aiSummary: cleanSummary,
+  };
 }
 
 interface DeepInspectWorkspaceProps {
@@ -370,6 +590,21 @@ export default function DeepInspectWorkspace({
   const reviewSummary = result?.reviewSummary ?? null;
   const merchant = result?.merchantProfile ?? null;
   const dosafeDisplay = inspectDosafeDisplay(merchant);
+  const reviewRiskDisplay = inspectReviewRiskDisplay(merchant);
+  const reviewTaxonomyDisplay = resolveInspectReviewTaxonomyDisplay(
+    reviewSummary,
+    locale
+  );
+  const verdictPrices = resolveInspectPriceVerdictPrices({
+    matchedOffer,
+    master,
+    priceHistory,
+  });
+  const rawMerchantTrust = parseInspectFiniteNumber(merchant?.trust_score);
+  const safeMerchantTrust =
+    rawMerchantTrust == null
+      ? null
+      : Math.min(100, Math.max(0, Math.round(rawMerchantTrust)));
 
   const radarSignal =
     result?.radarSignal ??
@@ -397,19 +632,16 @@ export default function DeepInspectWorkspace({
       const shareUrl = `${window.location.origin}/inspect?q=${encodeURIComponent(
         cleanQuery
       )}`;
-      const currentListedPrice = sanitizeInspectPriceVnd(
-        matchedOffer?.price_current || master?.min_price || 0
+      const {
+        currentPriceVnd: currentListedPrice,
+        claimedOriginalVnd: rawClaimedOrig,
+        historicalLowVnd: histLow,
+        historicalHighVnd: histHigh,
+      } = verdictPrices;
+      const genuineDealPriceVnd = sanitizeInspectPriceVnd(
+        matchedGenuineDeal?.priceCurrent
       );
-      const rawClaimedOrig = sanitizeInspectPriceVnd(
-        matchedOffer?.price_original
-      );
-      const claimedOrigPrice = rawClaimedOrig > 0 ? rawClaimedOrig : null;
-      const histLow = sanitizeInspectPriceVnd(
-        priceHistory?.lowestEverPrice || master?.min_price || 0
-      );
-      const histHigh = sanitizeInspectPriceVnd(
-        priceHistory?.highestEverPrice || master?.max_price || 0
-      );
+      const spreadVnd = sanitizeInspectPriceVnd(matchedPriceSpread?.spreadVnd);
       const lines = [
         `### 🔬 ${t('title')} · Rate.vn`,
         `- **${t('mdQuery')}:** \`${cleanQuery}\``,
@@ -435,15 +667,21 @@ export default function DeepInspectWorkspace({
                   `- **${t('mdPriceVerdict')}:** ${inspectMarkdownPriceVerdict(tVerdict, discount, locale)}`,
                 ]
               : []),
-        ...(currentListedPrice > 0
+        ...buildInspectMarkdownPriceLines({
+          currentListedPrice,
+          claimedOrigPrice: rawClaimedOrig,
+          histLow,
+          histHigh,
+          labels: {
+            currentPriceLabel: t('currentPriceLabel'),
+            claimedOriginalLabel: t('claimedOriginalLabel'),
+            historicalLowLabel: t('historicalLowLabel'),
+            historicalHighLabel: t('historicalHighLabel'),
+          },
+        }),
+        ...(matchedGenuineDeal && genuineDealPriceVnd > 0
           ? [
-              `- **${t('currentPriceLabel')}:** ${currentListedPrice.toLocaleString('vi-VN')} ₫${claimedOrigPrice ? ` | ${t('claimedOriginalLabel')}: ${claimedOrigPrice.toLocaleString('vi-VN')} ₫` : ''}`,
-              `- **${t('historicalLowLabel')} / ${t('historicalHighLabel')}:** ${histLow.toLocaleString('vi-VN')} ₫ - ${histHigh.toLocaleString('vi-VN')} ₫`,
-            ]
-          : []),
-        ...(matchedGenuineDeal
-          ? [
-              `- ${t(genuinePillKey, { pct: matchedGenuineDeal.savingsVsMedianPct, platform: matchedGenuineDeal.platform.toUpperCase(), price: matchedGenuineDeal.priceCurrent.toLocaleString('vi-VN') })}`,
+              `- ${t(genuinePillKey, { pct: matchedGenuineDeal.savingsVsMedianPct, platform: matchedGenuineDeal.platform.toUpperCase(), price: genuineDealPriceVnd.toLocaleString('vi-VN') })}`,
             ]
           : []),
         ...(matchedFakeTrap
@@ -451,14 +689,14 @@ export default function DeepInspectWorkspace({
               `- ${t('radarFakePill', { pct: matchedFakeTrap.fakeMarkupPct, platform: matchedFakeTrap.platform.toUpperCase() })}`,
             ]
           : []),
-        ...(matchedPriceSpread
+        ...(matchedPriceSpread && spreadVnd > 0
           ? [
-              `- ${t('radarSpreadPill', { pct: matchedPriceSpread.spreadPct, vnd: matchedPriceSpread.spreadVnd.toLocaleString('vi-VN'), cheapest: matchedPriceSpread.cheapestPlatform.toUpperCase(), priciest: matchedPriceSpread.priciestPlatform.toUpperCase() })}`,
+              `- ${t('radarSpreadPill', { pct: matchedPriceSpread.spreadPct, vnd: spreadVnd.toLocaleString('vi-VN'), cheapest: matchedPriceSpread.cheapestPlatform.toUpperCase(), priciest: matchedPriceSpread.priciestPlatform.toUpperCase() })}`,
             ]
           : []),
         ...(merchant
           ? [
-              `- **${t('mdSeller')}:** ${merchant.name} (${merchant.platform.toUpperCase()}) | ${t('mdTrustScore')}: ${merchant.trust_score == null ? t('trustNoData') : `**${merchant.trust_score}/100**`} (${t('dosafeRiskLabel')}: ${knownDosafeRiskScore(merchant) == null ? t('reviewRiskNoData') : `${knownDosafeRiskScore(merchant)}/100`}, ${t('reviewRiskLabel')}: ${hasReviewRiskEvidence(merchant.review_risk_breakdown) ? `${merchant.review_risk_score}/100` : t('reviewRiskNoData')})`,
+              `- **${t('mdSeller')}:** ${merchant.name} (${merchant.platform.toUpperCase()}) | ${t('mdTrustScore')}: ${safeMerchantTrust == null ? t('trustNoData') : `**${safeMerchantTrust}/100**`} (${t('dosafeRiskLabel')}: ${dosafeDisplay == null ? t('reviewRiskNoData') : `${dosafeDisplay.score}/100`}, ${t('reviewRiskLabel')}: ${reviewRiskDisplay == null ? t('reviewRiskNoData') : `${reviewRiskDisplay.score}/100`})`,
             ]
           : []),
         `- **${t('mdLink')}:** ${shareUrl}`,
@@ -492,12 +730,8 @@ export default function DeepInspectWorkspace({
         : matchedOffer
           ? [matchedOffer]
           : [];
-    const histLow = sanitizeInspectPriceVnd(
-      priceHistory?.lowestEverPrice || master?.min_price || 0
-    );
-    const histHigh = sanitizeInspectPriceVnd(
-      priceHistory?.highestEverPrice || master?.max_price || 0
-    );
+    const { historicalLowVnd: histLow, historicalHighVnd: histHigh } =
+      verdictPrices;
     const cleanQuery = sanitizeInspectQuery(queryInput);
     const rows = offers.map((o) => [
       o.merchant?.name || merchant?.name || t('unknownShop'),
@@ -781,13 +1015,15 @@ export default function DeepInspectWorkspace({
                         <div className="small text-muted mb-1">
                           {t('currentPriceLabel')}
                         </div>
-                        <div className="h5 fw-bold text-danger rate-tabular mb-0">
-                          {formatPriceVnd(
-                            Number(
-                              matchedOffer?.price_current ||
-                                master?.min_price ||
-                                0
-                            ),
+                        <div
+                          className={`h5 fw-bold rate-tabular mb-0 ${
+                            verdictPrices.currentPriceVnd > 0
+                              ? 'text-danger'
+                              : 'text-muted'
+                          }`}
+                        >
+                          {formatInspectPriceVndOrDash(
+                            verdictPrices.currentPriceVnd,
                             locale
                           )}
                         </div>
@@ -799,13 +1035,17 @@ export default function DeepInspectWorkspace({
                         <div className="small text-muted mb-1">
                           {t('claimedOriginalLabel')}
                         </div>
-                        <div className="h6 fw-semibold text-secondary text-decoration-line-through rate-tabular mb-0">
-                          {matchedOffer?.price_original
-                            ? formatPriceVnd(
-                                Number(matchedOffer.price_original),
-                                locale
-                              )
-                            : 'N/A'}
+                        <div
+                          className={`h6 fw-semibold rate-tabular mb-0 ${
+                            verdictPrices.claimedOriginalVnd > 0
+                              ? 'text-secondary text-decoration-line-through'
+                              : 'text-muted'
+                          }`}
+                        >
+                          {formatInspectPriceVndOrDash(
+                            verdictPrices.claimedOriginalVnd,
+                            locale
+                          )}
                         </div>
                       </div>
                     </div>
@@ -815,16 +1055,17 @@ export default function DeepInspectWorkspace({
                         <div className="small text-muted mb-1">
                           {t('historicalLowLabel')}
                         </div>
-                        <div className="h6 fw-bold text-success rate-tabular mb-0">
-                          {priceHistory?.lowestEverPrice
-                            ? formatPriceVnd(
-                                Number(priceHistory.lowestEverPrice),
-                                locale
-                              )
-                            : formatPriceVnd(
-                                Number(master?.min_price || 0),
-                                locale
-                              )}
+                        <div
+                          className={`h6 fw-bold rate-tabular mb-0 ${
+                            verdictPrices.historicalLowVnd > 0
+                              ? 'text-success'
+                              : 'text-muted'
+                          }`}
+                        >
+                          {formatInspectPriceVndOrDash(
+                            verdictPrices.historicalLowVnd,
+                            locale
+                          )}
                         </div>
                       </div>
                     </div>
@@ -834,16 +1075,17 @@ export default function DeepInspectWorkspace({
                         <div className="small text-muted mb-1">
                           {t('historicalHighLabel')}
                         </div>
-                        <div className="h6 fw-bold text-dark rate-tabular mb-0">
-                          {priceHistory?.highestEverPrice
-                            ? formatPriceVnd(
-                                Number(priceHistory.highestEverPrice),
-                                locale
-                              )
-                            : formatPriceVnd(
-                                Number(master?.max_price || 0),
-                                locale
-                              )}
+                        <div
+                          className={`h6 fw-bold rate-tabular mb-0 ${
+                            verdictPrices.historicalHighVnd > 0
+                              ? 'text-dark'
+                              : 'text-muted'
+                          }`}
+                        >
+                          {formatInspectPriceVndOrDash(
+                            verdictPrices.historicalHighVnd,
+                            locale
+                          )}
                         </div>
                       </div>
                     </div>
@@ -869,9 +1111,13 @@ export default function DeepInspectWorkspace({
                     </div>
                   )}
 
-                  {(matchedGenuineDeal ||
+                  {((matchedGenuineDeal &&
+                    sanitizeInspectPriceVnd(matchedGenuineDeal.priceCurrent) >
+                      0) ||
                     matchedFakeTrap ||
-                    matchedPriceSpread) && (
+                    (matchedPriceSpread &&
+                      sanitizeInspectPriceVnd(matchedPriceSpread.spreadVnd) >
+                        0)) && (
                     <div
                       className="rounded-3 bg-light mt-3 border p-3"
                       data-testid="inspect-deal-radar-verdict"
@@ -888,22 +1134,27 @@ export default function DeepInspectWorkspace({
                         </Link>
                       </div>
                       <div className="d-flex align-items-center flex-wrap gap-2">
-                        {matchedGenuineDeal && (
-                          <span className="badge bg-success-subtle text-success border-success-subtle rounded-pill border px-3 py-2">
-                            {t(genuinePillKey, {
-                              pct: formatPlainNumber(
-                                matchedGenuineDeal.savingsVsMedianPct,
-                                locale
-                              ),
-                              platform:
-                                matchedGenuineDeal.platform.toUpperCase(),
-                              price: formatNumber(
-                                matchedGenuineDeal.priceCurrent,
-                                locale
-                              ),
-                            })}
-                          </span>
-                        )}
+                        {matchedGenuineDeal &&
+                          sanitizeInspectPriceVnd(
+                            matchedGenuineDeal.priceCurrent
+                          ) > 0 && (
+                            <span className="badge bg-success-subtle text-success border-success-subtle rounded-pill border px-3 py-2">
+                              {t(genuinePillKey, {
+                                pct: formatPlainNumber(
+                                  matchedGenuineDeal.savingsVsMedianPct,
+                                  locale
+                                ),
+                                platform:
+                                  matchedGenuineDeal.platform.toUpperCase(),
+                                price: formatNumber(
+                                  sanitizeInspectPriceVnd(
+                                    matchedGenuineDeal.priceCurrent
+                                  ),
+                                  locale
+                                ),
+                              })}
+                            </span>
+                          )}
                         {matchedFakeTrap && (
                           <span className="badge bg-danger-subtle text-danger border-danger-subtle rounded-pill border px-3 py-2">
                             {t('radarFakePill', {
@@ -915,24 +1166,29 @@ export default function DeepInspectWorkspace({
                             })}
                           </span>
                         )}
-                        {matchedPriceSpread && (
-                          <span className="badge bg-warning-subtle text-dark border-warning-subtle rounded-pill border px-3 py-2">
-                            {t('radarSpreadPill', {
-                              pct: formatPlainNumber(
-                                matchedPriceSpread.spreadPct,
-                                locale
-                              ),
-                              vnd: formatNumber(
-                                matchedPriceSpread.spreadVnd,
-                                locale
-                              ),
-                              cheapest:
-                                matchedPriceSpread.cheapestPlatform.toUpperCase(),
-                              priciest:
-                                matchedPriceSpread.priciestPlatform.toUpperCase(),
-                            })}
-                          </span>
-                        )}
+                        {matchedPriceSpread &&
+                          sanitizeInspectPriceVnd(
+                            matchedPriceSpread.spreadVnd
+                          ) > 0 && (
+                            <span className="badge bg-warning-subtle text-dark border-warning-subtle rounded-pill border px-3 py-2">
+                              {t('radarSpreadPill', {
+                                pct: formatPlainNumber(
+                                  matchedPriceSpread.spreadPct,
+                                  locale
+                                ),
+                                vnd: formatNumber(
+                                  sanitizeInspectPriceVnd(
+                                    matchedPriceSpread.spreadVnd
+                                  ),
+                                  locale
+                                ),
+                                cheapest:
+                                  matchedPriceSpread.cheapestPlatform.toUpperCase(),
+                                priciest:
+                                  matchedPriceSpread.priciestPlatform.toUpperCase(),
+                              })}
+                            </span>
+                          )}
                       </div>
                     </div>
                   )}
@@ -967,7 +1223,7 @@ export default function DeepInspectWorkspace({
                             master.slug,
                             productImageUrl(master)
                           ),
-                          min_price: Number(master.min_price || 0),
+                          min_price: sanitizeInspectPriceVnd(master.min_price),
                         }}
                       />
                       <PriceWatchButton
@@ -979,7 +1235,9 @@ export default function DeepInspectWorkspace({
                           master.slug,
                           productImageUrl(master)
                         )}
-                        currentMinPrice={Number(master.min_price || 0)}
+                        currentMinPrice={sanitizeInspectPriceVnd(
+                          master.min_price
+                        )}
                       />
                     </div>
                   </div>
@@ -1090,9 +1348,15 @@ export default function DeepInspectWorkspace({
                             >
                               {offer.title}
                             </td>
-                            <td className="fw-bold text-danger">
-                              {formatPriceVnd(
-                                Number(offer.price_current),
+                            <td
+                              className={`fw-bold ${
+                                sanitizeInspectPriceVnd(offer.price_current) > 0
+                                  ? 'text-danger'
+                                  : 'text-muted'
+                              }`}
+                            >
+                              {formatInspectPriceVndOrDash(
+                                offer.price_current,
                                 locale
                               )}
                               {isInspectOfferBait(
@@ -1120,13 +1384,18 @@ export default function DeepInspectWorkspace({
                                 </span>
                               )}
                             </td>
-                            <td className="small text-muted text-decoration-line-through">
-                              {offer.price_original
-                                ? formatPriceVnd(
-                                    Number(offer.price_original),
-                                    locale
-                                  )
-                                : '-'}
+                            <td
+                              className={`small text-muted ${
+                                sanitizeInspectPriceVnd(offer.price_original) >
+                                0
+                                  ? 'text-decoration-line-through'
+                                  : ''
+                              }`}
+                            >
+                              {formatInspectPriceVndOrDash(
+                                offer.price_original,
+                                locale
+                              )}
                             </td>
                             <td>
                               {offer.merchant?.id && (
@@ -1205,40 +1474,23 @@ export default function DeepInspectWorkspace({
                   <div className="mb-4">
                     <div className="d-flex justify-content-between small mb-1">
                       <span className="text-muted">{t('reviewRiskLabel')}</span>
-                      {hasReviewRiskEvidence(merchant.review_risk_breakdown) ? (
-                        <strong
-                          className={
-                            Number(merchant.review_risk_score || 0) >= 40
-                              ? 'text-danger'
-                              : 'text-primary'
-                          }
-                        >
-                          {Number(merchant.review_risk_score || 0).toFixed(0)}
-                          /100
-                        </strong>
-                      ) : (
-                        // No analysed reviews: no number (DOS/Rate#1258).
-                        <strong className="text-muted">
+                      {/* No analysed reviews: no number (DOS/Rate#1258). */}
+                      {reviewRiskDisplay == null ? (
+                        <span className="text-muted">
                           {t('reviewRiskNoData')}
+                        </span>
+                      ) : (
+                        <strong className={reviewRiskDisplay.textClass}>
+                          {reviewRiskDisplay.score}/100
                         </strong>
                       )}
                     </div>
-                    {hasReviewRiskEvidence(merchant.review_risk_breakdown) && (
+                    {reviewRiskDisplay != null && (
                       <div className="progress" style={{ height: 8 }}>
                         <div
-                          className={`progress-bar ${
-                            Number(merchant.review_risk_score || 0) >= 40
-                              ? 'bg-danger'
-                              : 'bg-primary'
-                          }`}
+                          className={`progress-bar ${reviewRiskDisplay.barClass}`}
                           style={{
-                            width: `${Math.min(
-                              100,
-                              Math.max(
-                                4,
-                                Number(merchant.review_risk_score || 0)
-                              )
-                            )}%`,
+                            width: `${reviewRiskDisplay.widthPct}%`,
                           }}
                         />
                       </div>
@@ -1255,7 +1507,7 @@ export default function DeepInspectWorkspace({
                 </div>
               )}
 
-              {reviewSummary && (
+              {reviewTaxonomyDisplay && (
                 <div className="card rounded-4 border-0 bg-white p-4 shadow-sm">
                   <div className="d-flex align-items-center mb-3 gap-2">
                     <BsShieldExclamation className="text-danger fs-4" />
@@ -1264,47 +1516,65 @@ export default function DeepInspectWorkspace({
                     </h3>
                   </div>
 
-                  <div className="d-flex flex-column small gap-2">
-                    <div className="d-flex justify-content-between rounded-3 bg-success bg-opacity-10 text-success fw-semibold p-2">
-                      <span>
-                        <BsCheckCircle aria-hidden="true" className="me-1" />
-                        {t('authenticLabel')}
-                      </span>
-                      <span>
-                        {formatPercent(reviewSummary.authentic_pct, locale)}
-                      </span>
-                    </div>
-                    <div className="d-flex justify-content-between rounded-3 bg-warning bg-opacity-10 text-dark p-2">
-                      <span>
-                        <BsCoin aria-hidden="true" className="me-1" />
-                        {t('coinSpamLabel')}
-                      </span>
-                      <strong>
-                        {formatPercent(reviewSummary.suspicious_pct, locale)}
-                      </strong>
-                    </div>
-                    <div className="d-flex justify-content-between rounded-3 bg-danger bg-opacity-10 text-danger p-2">
-                      <span>
-                        <BsRobot aria-hidden="true" className="me-1" />
-                        {t('seedingFakeLabel')}
-                      </span>
-                      <strong>
-                        {formatPercent(reviewSummary.fake_pct, locale)}
-                      </strong>
-                    </div>
-                    <div className="d-flex justify-content-between rounded-3 bg-secondary bg-opacity-10 text-secondary p-2">
-                      <span>
-                        <BsBarChart aria-hidden="true" className="me-1" />
-                        {t('totalAuditedLabel')}
-                      </span>
-                      <strong>{reviewSummary.total_analyzed}</strong>
-                    </div>
-                    {reviewSummary.ai_summary && (
-                      <div className="rounded-3 bg-light text-muted mt-1 p-2">
-                        <AnalyzerText text={reviewSummary.ai_summary} />
+                  {reviewTaxonomyDisplay.hasAnalyzedReviews ? (
+                    <div className="d-flex flex-column small gap-2">
+                      <div className="d-flex justify-content-between rounded-3 bg-success bg-opacity-10 text-success fw-semibold p-2">
+                        <span>
+                          <BsCheckCircle aria-hidden="true" className="me-1" />
+                          {t('authenticLabel')}
+                        </span>
+                        <span>{reviewTaxonomyDisplay.authenticPctText}</span>
                       </div>
-                    )}
-                  </div>
+                      <div className="d-flex justify-content-between rounded-3 bg-warning bg-opacity-10 text-dark p-2">
+                        <span>
+                          <BsCoin aria-hidden="true" className="me-1" />
+                          {t('coinSpamLabel')}
+                        </span>
+                        <strong>
+                          {reviewTaxonomyDisplay.suspiciousPctText}
+                        </strong>
+                      </div>
+                      <div className="d-flex justify-content-between rounded-3 bg-danger bg-opacity-10 text-danger p-2">
+                        <span>
+                          <BsRobot aria-hidden="true" className="me-1" />
+                          {t('seedingFakeLabel')}
+                        </span>
+                        <strong>{reviewTaxonomyDisplay.fakePctText}</strong>
+                      </div>
+                      <div className="d-flex justify-content-between rounded-3 bg-secondary bg-opacity-10 text-secondary p-2">
+                        <span>
+                          <BsBarChart aria-hidden="true" className="me-1" />
+                          {t('totalAuditedLabel')}
+                        </span>
+                        <strong>
+                          {formatNumber(
+                            reviewTaxonomyDisplay.totalAnalyzed,
+                            locale
+                          )}
+                        </strong>
+                      </div>
+                      {reviewTaxonomyDisplay.aiSummary && (
+                        <div className="rounded-3 bg-light text-muted mt-1 p-2">
+                          <AnalyzerText
+                            text={reviewTaxonomyDisplay.aiSummary}
+                          />
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="d-flex flex-column small gap-2">
+                      <div className="rounded-3 bg-light text-muted p-3">
+                        {t('reviewRiskNoData')}
+                      </div>
+                      <div className="d-flex justify-content-between rounded-3 bg-secondary bg-opacity-10 text-secondary p-2">
+                        <span>
+                          <BsBarChart aria-hidden="true" className="me-1" />
+                          {t('totalAuditedLabel')}
+                        </span>
+                        <strong>0</strong>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -1324,8 +1594,11 @@ export default function DeepInspectWorkspace({
                       href={getMasterProductHref(item)}
                       className="btn btn-outline-danger rounded-pill btn-sm px-3"
                     >
-                      {item.name} (
-                      {formatPriceVnd(Number(item.min_price), locale)})
+                      {formatInspectSuggestionLabel(
+                        item.name,
+                        item.min_price,
+                        locale
+                      )}
                     </Link>
                   ))}
                 </div>
