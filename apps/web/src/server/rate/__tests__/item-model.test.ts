@@ -4,6 +4,12 @@
  * PostgREST built from the M1+M2 draft in PR #1242.
  */
 import assert from 'node:assert/strict';
+import React from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
+import { NextIntlClientProvider } from 'next-intl';
+import enMessages from '../../../../locales/en.json';
+import { ItemSizePriceStrip } from '../../../components/product/item/ItemLazySizePanel';
+import { formatNumber } from '../../../lib/locale-format';
 
 process.env.NEXT_PUBLIC_SUPABASE_URL = 'https://stub.supabase.test';
 process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = 'anon-test-key';
@@ -762,6 +768,12 @@ async function main() {
   assert.equal(group.url, 'https://rate.vn/smartphones/apple-iphone-16');
   assert.deepEqual(group.variesBy, ['https://schema.org/size']);
   assert.ok(group.aggregateRating, 'one Item-level rating');
+  assert.equal('image' in group, false, 'empty image list is omitted');
+  assert.equal(
+    'image' in group.hasVariant[0]!,
+    false,
+    'empty variant image list is omitted'
+  );
   assert.equal(group.hasVariant[0]!.sku, 'apple:iphone-16:128gb');
   assert.equal(
     group.hasVariant[0]!.url,
@@ -769,6 +781,122 @@ async function main() {
   );
   assert.equal(group.hasVariant[0]!.offers?.lowPrice, 21990000);
   assert.equal(group.hasVariant.length, 1, 'a size with no price is left out');
+
+  // DOS/Rate#1732: ProductGroup image / hasVariant omission & offerCount clamp.
+  const clampedGroup = page.buildItemProductGroupNode({
+    itemKey: 'apple:iphone-16',
+    name: 'Apple iPhone 16',
+    brand: 'Apple',
+    canonicalUrl: 'https://rate.vn/smartphones/apple-iphone-16',
+    description: 'd',
+    images: ['  https://rate.vn/img/iphone-16.webp  ', '   '],
+    variants: [
+      {
+        variantKey: '128gb',
+        label: '128GB',
+        minPrice: 21990000,
+        maxPrice: 0,
+        sellerCount: 0,
+      },
+      {
+        variantKey: '256gb',
+        label: '256GB',
+        minPrice: 24990000,
+        maxPrice: 26990000,
+        sellerCount: 3.8,
+      },
+      {
+        variantKey: '512gb',
+        label: '512GB',
+        minPrice: 28990000,
+        maxPrice: Number.NaN,
+        sellerCount: Number.NaN,
+      },
+      {
+        variantKey: '1tb',
+        label: '1TB',
+        minPrice: 32990000,
+        maxPrice: Number.POSITIVE_INFINITY,
+        sellerCount: Number.POSITIVE_INFINITY,
+      },
+      {
+        variantKey: 'nan',
+        label: 'NaN',
+        minPrice: Number.NaN,
+        maxPrice: 0,
+        sellerCount: 2,
+      },
+      {
+        variantKey: 'inf',
+        label: 'Inf',
+        minPrice: Number.POSITIVE_INFINITY,
+        maxPrice: 0,
+        sellerCount: 2,
+      },
+    ],
+  }) as {
+    image?: string[];
+    hasVariant: {
+      image?: string[];
+      offers: { lowPrice: number; highPrice: number; offerCount: number };
+    }[];
+  };
+  assert.deepEqual(clampedGroup.image, ['https://rate.vn/img/iphone-16.webp']);
+  assert.deepEqual(clampedGroup.hasVariant[0]!.image, [
+    'https://rate.vn/img/iphone-16.webp',
+  ]);
+  assert.deepEqual(
+    clampedGroup.hasVariant.map((v) => v.offers),
+    [
+      {
+        '@type': 'AggregateOffer',
+        priceCurrency: 'VND',
+        lowPrice: 21990000,
+        highPrice: 21990000,
+        offerCount: 1,
+      },
+      {
+        '@type': 'AggregateOffer',
+        priceCurrency: 'VND',
+        lowPrice: 24990000,
+        highPrice: 26990000,
+        offerCount: 3,
+      },
+      {
+        '@type': 'AggregateOffer',
+        priceCurrency: 'VND',
+        lowPrice: 28990000,
+        highPrice: 28990000,
+        offerCount: 1,
+      },
+      {
+        '@type': 'AggregateOffer',
+        priceCurrency: 'VND',
+        lowPrice: 32990000,
+        highPrice: 32990000,
+        offerCount: 1,
+      },
+    ]
+  );
+  const unpricedGroup = page.buildItemProductGroupNode({
+    itemKey: 'apple:iphone-16',
+    name: 'Apple iPhone 16',
+    brand: 'Apple',
+    canonicalUrl: 'https://rate.vn/smartphones/apple-iphone-16',
+    description: 'd',
+    images: ['  '],
+    variants: [
+      {
+        variantKey: '128gb',
+        label: '128GB',
+        minPrice: 0,
+        maxPrice: 0,
+        sellerCount: 0,
+      },
+    ],
+  });
+  assert.equal('image' in unpricedGroup, false);
+  assert.equal('hasVariant' in unpricedGroup, false);
   assert.deepEqual(
     page.itemFromStats([
       { min_price: 24990000, max_price: 25990000, merchant_count: 2 },
@@ -782,6 +910,101 @@ async function main() {
     maxPrice: 0,
     sellerCount: 0,
   });
+
+  // DOS/Rate#1732: sold-out price strip, #pdv-price-history anchor, 0-review
+  // scoreboard tag, Product JSON-LD image omission, and trophy aria-hidden.
+  const IntlProvider = NextIntlClientProvider as React.ComponentType<{
+    locale: string;
+    messages: Record<string, unknown>;
+    timeZone: string;
+    children?: React.ReactNode;
+  }>;
+  const stripContext = {
+    categoryPath: '/smartphones',
+    userScore5: 0,
+    expertScore10: 8.4,
+    authenticReviews: 0,
+    keySpecLine: '6.1" OLED',
+  };
+  const renderStrip = (minPrice: number, lowestEverPrice: number | null) =>
+    renderToStaticMarkup(
+      React.createElement(
+        IntlProvider,
+        {
+          locale: 'en',
+          messages: enMessages as unknown as Record<string, unknown>,
+          timeZone: 'Asia/Ho_Chi_Minh',
+        },
+        React.createElement(ItemSizePriceStrip, {
+          data: {
+            ...sizeBody.data,
+            stats: {
+              minPrice,
+              maxPrice: minPrice > 0 ? minPrice + 1_000_000 : 0,
+              sellerCount: minPrice > 0 ? 2 : 0,
+            },
+            priceHistory: { ...sizeBody.data.priceHistory, lowestEverPrice },
+          },
+          context: stripContext,
+        })
+      )
+    );
+  const soldOutStripHtml = renderStrip(0, 0);
+  assert.equal(soldOutStripHtml.includes(enMessages.watchlist.btnWatch), false);
+  assert.equal(soldOutStripHtml.includes('bg-success-subtle'), false);
+  assert.match(soldOutStripHtml, /href="#pdv-price-history"/);
+  assert.doesNotMatch(soldOutStripHtml, /href="#price-history-section"/);
+  assert.equal(renderStrip(0, -1).includes('bg-success-subtle'), false);
+  assert.equal(renderStrip(0, Number.NaN).includes('bg-success-subtle'), false);
+  const soldOutWithHistoryHtml = renderStrip(0, 20_990_000);
+  assert.equal(
+    soldOutWithHistoryHtml.includes(enMessages.watchlist.btnWatch),
+    false
+  );
+  assert.equal(
+    soldOutWithHistoryHtml.includes(
+      `All-time low: ${formatNumber(20_990_000, 'en')} ₫`
+    ),
+    true
+  );
+  const pricedStripHtml = renderStrip(21_990_000, 20_990_000);
+  assert.equal(pricedStripHtml.includes(enMessages.watchlist.btnWatch), true);
+  assert.equal(
+    pricedStripHtml.includes(
+      `All-time low: ${formatNumber(20_990_000, 'en')} ₫`
+    ),
+    true
+  );
+  assert.match(pricedStripHtml, /href="#pdv-price-history"/);
+
+  const pdvSrc = fs.readFileSync(productRouteFiles[0]!, 'utf8');
+  assert.match(
+    pdvSrc,
+    /\.\.\.\(jsonLdImages\.length > 0 \? \{ image: jsonLdImages \} : \{\}\)/
+  );
+  assert.doesNotMatch(pdvSrc, /image:\s*usableImageUrls\(/);
+  assert.match(
+    pdvSrc,
+    /v\.priceHistory\.lowestEverPrice != null &&\s*v\.priceHistory\.lowestEverPrice > 0/
+  );
+  assert.match(pdvSrc, /\{v\.stats\.minPrice > 0 && \(\s*<PriceWatchButton/);
+  assert.match(
+    pdvSrc,
+    /\{authenticCount > 0 && \(\s*<span className="rate-pdv-tag is-good">/
+  );
+  assert.doesNotMatch(pdvSrc, /href="#price-history-section"/);
+  const badgesSrc = fs.readFileSync(
+    path.resolve(
+      __dirname,
+      '../../../components/leaderboard/ProductLeaderboardBadges.tsx'
+    ),
+    'utf8'
+  );
+  for (const [iconTag] of badgesSrc.matchAll(
+    /<Bs(?:Trophy|Award)Fill\b[^>]*>/g
+  ))
+    assert.match(iconTag, /\baria-hidden="true"/);
+
   console.warn('✅ Item web data layer suite passed');
 }
 
