@@ -27,6 +27,7 @@ interface ProductValueCalculatorProps {
   readonly expertScore10: number | null;
   readonly valueCriterionScore5: number;
   readonly radarSignal?: RadarSignal | null;
+  readonly initialIncludeResale?: boolean;
 }
 
 export type HorizonMonths = 12 | 24 | 36;
@@ -164,11 +165,13 @@ export default function ProductValueCalculator({
   expertScore10,
   valueCriterionScore5,
   radarSignal,
+  initialIncludeResale = true,
 }: ProductValueCalculatorProps) {
   const t = useTranslations('productDetail');
   const locale = useLocale();
   const [months, setMonths] = useState<HorizonMonths>(24);
-  const [includeResale, setIncludeResale] = useState<boolean>(true);
+  const [includeResale, setIncludeResale] =
+    useState<boolean>(initialIncludeResale);
 
   const metrics = useMemo(
     () =>
@@ -316,6 +319,7 @@ export default function ProductValueCalculator({
 
           <button
             type="button"
+            aria-pressed={includeResale}
             onClick={() => setIncludeResale((prev) => !prev)}
             className={`btn btn-sm rounded-pill fw-medium px-3 ${
               includeResale ? 'btn-dark' : 'btn-outline-dark'
@@ -392,10 +396,14 @@ export default function ProductValueCalculator({
             <div className="text-muted small mb-1">
               {t('valueCalcCardResaleTitle', { months })}
             </div>
-            <div className="h5 fw-bold rate-tabular text-success mb-1">
+            <div
+              className={`h5 fw-bold rate-tabular mb-1 ${
+                includeResale ? 'text-success' : 'text-muted'
+              }`}
+            >
               {includeResale
                 ? formatPriceVnd(metrics.estimatedResaleVnd, locale)
-                : '0 ₫'}
+                : t('valueCalcNotAvailable')}
             </div>
             <div className="small text-secondary">
               {includeResale

@@ -2,7 +2,11 @@
 
 import { useMemo, useState } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
-import { hasReviewRiskEvidence } from '@/lib/merchant-risk-tone';
+import {
+  hasReviewRiskEvidence,
+  merchantRiskTone,
+  type MerchantRiskTone,
+} from '@/lib/merchant-risk-tone';
 import ExportMenu from '@/components/elementary/ExportMenu';
 import {
   BsBarChart,
@@ -10,7 +14,10 @@ import {
   BsExclamationOctagon,
   BsExclamationTriangle,
 } from 'react-icons/bs';
-import { discountVerdictCopy } from '@/lib/discount-verdict-copy';
+import {
+  discountVerdictCopy,
+  type VerdictTranslator,
+} from '@/lib/discount-verdict-copy';
 import { Link } from '@/lib/navigation';
 import {
   MAX_VALID_VND_PRICE,
@@ -41,6 +48,7 @@ interface ProductOffersExplorerProps {
   readonly offers: readonly MerchantOffer[];
   readonly byOffer: MasterProductPriceHistorySummary['byOffer'];
   readonly radarSignal?: RadarSignal | null;
+  readonly initialHighTrustOnly?: boolean;
 }
 
 export type OfferSortKey = 'price_asc' | 'trust_desc' | 'discount_desc';
@@ -58,8 +66,45 @@ export function computeMerchantTrustScore(riskScore: unknown): number {
  * DOSafe score and no stored review score (DOS/Rate#1484). Never 100 from no data.
  */
 export function offerTrustScore(riskScore: unknown): number | null {
-  if (riskScore == null || riskScore === '') return null;
-  return computeMerchantTrustScore(riskScore);
+  if (
+    typeof riskScore === 'string'
+      ? !riskScore.trim()
+      : typeof riskScore !== 'number'
+  ) {
+    return null;
+  }
+  const num = typeof riskScore === 'number' ? riskScore : Number(riskScore);
+  if (!Number.isFinite(num)) return null;
+  return computeMerchantTrustScore(num);
+}
+
+export function offerRiskTone(riskScore: unknown): MerchantRiskTone | null {
+  if (offerTrustScore(riskScore) == null) return null;
+  return merchantRiskTone(riskScore);
+}
+
+export function offerTrustBadgeClass(riskScore: unknown): string {
+  const tone = offerRiskTone(riskScore);
+  if (tone == null) return 'bg-light text-muted border';
+  if (tone === 'good') return 'bg-success-subtle text-success';
+  if (tone === 'warn') return 'bg-warning-subtle text-warning-emphasis';
+  return 'bg-danger-subtle text-danger';
+}
+
+export function hasPositiveOfferPrice(price: unknown): boolean {
+  const num = typeof price === 'number' ? price : Number(price);
+  return Number.isFinite(num) && num > 0 && num <= MAX_VALID_VND_PRICE;
+}
+
+export function buildExplorerInspectHref(
+  safeOfferUrl: string,
+  priceCurrent: unknown
+): string {
+  const base = `/inspect?q=${encodeURIComponent(safeOfferUrl)}`;
+  if (!hasPositiveOfferPrice(priceCurrent)) {
+    return base;
+  }
+  return `${base}&price=${Math.round(Number(priceCurrent))}`;
 }
 
 export function sanitizeOfferRiskScore100(value: unknown): number {
@@ -146,6 +191,9 @@ export function resolveExplorerOfferDiscountAnalysis(
   inStockOffers: readonly Pick<MerchantOffer, 'id' | 'price_current'>[],
   implausibleOfferIds: ReadonlySet<string>
 ): MasterProductPriceHistorySummary['byOffer'][string] | null {
+  if (!hasPositiveOfferPrice(offer.price_current)) {
+    return null;
+  }
   if (
     isExplorerOfferImplausiblyLow(offer, inStockOffers, implausibleOfferIds)
   ) {
@@ -161,10 +209,57 @@ export function resolveExplorerOfferDiscountAnalysis(
           : null
       : null;
   if (!raw) return null;
-  if (isOfferUnavailable(offer) && raw.verdict === 'genuine_deal') {
+  if (
+    isOfferUnavailable(offer) &&
+    raw.verdict !== 'fake_discount' &&
+    raw.verdict !== 'suspicious_discount'
+  ) {
     return null;
   }
   return raw;
+}
+
+export function resolveExplorerMarkdownVerdictCell(params: {
+  offer: Pick<MerchantOffer, 'price_current' | 'availability'>;
+  isBait: boolean;
+  analysis: MasterProductPriceHistorySummary['byOffer'][string] | null;
+  t: (
+    key:
+      | 'offersImplausiblyLowBadge'
+      | 'offersDiscontinuedBadge'
+      | 'offersUnavailableBadge'
+  ) => string;
+  tVerdict: VerdictTranslator;
+  locale: string;
+}): string {
+  const { offer, isBait, analysis, t, tVerdict, locale } = params;
+  if (isBait) return t('offersImplausiblyLowBadge');
+  if (analysis) return discountVerdictCopy(tVerdict, analysis, locale).label;
+  if (isOfferUnavailable(offer)) {
+    return offer.availability === 'discontinued'
+      ? t('offersDiscontinuedBadge')
+      : t('offersUnavailableBadge');
+  }
+  return hasPositiveOfferPrice(offer.price_current)
+    ? tVerdict('labelNormal')
+    : '-';
+}
+
+export function resolveExplorerExportVerdictCode(
+  offer: Pick<MerchantOffer, 'price_current' | 'availability'>,
+  isBait: boolean,
+  analysis: MasterProductPriceHistorySummary['byOffer'][string] | null
+): string {
+  if (isBait) return 'implausibly_low';
+  if (analysis) return analysis.verdict;
+  if (isOfferUnavailable(offer)) {
+    return offer.availability === 'discontinued'
+      ? 'discontinued'
+      : 'out_of_stock';
+  }
+  return hasPositiveOfferPrice(offer.price_current)
+    ? 'normal'
+    : 'insufficient_data';
 }
 
 export function computeOffersPriceSpreadAudit(
@@ -215,13 +310,14 @@ export default function ProductOffersExplorer({
   offers,
   byOffer,
   radarSignal,
+  initialHighTrustOnly = false,
 }: ProductOffersExplorerProps) {
   const t = useTranslations('productDetail');
   const tVerdict = useTranslations('priceVerdict');
   const locale = useLocale();
   const [selectedPlatform, setSelectedPlatform] = useState<string>('all');
   const [officialOnly, setOfficialOnly] = useState(false);
-  const [highTrustOnly, setHighTrustOnly] = useState(false);
+  const [highTrustOnly, setHighTrustOnly] = useState(initialHighTrustOnly);
   const [sortBy, setSortBy] = useState<OfferSortKey>('price_asc');
   const [copiedOffersMd, setCopiedOffersMd] = useState(false);
 
@@ -267,8 +363,7 @@ export default function ProductOffersExplorer({
       if (officialOnly && !o.merchant.is_official) {
         return false;
       }
-      const trustScore = offerTrustScore(o.merchant.risk_score);
-      if (highTrustOnly && (trustScore == null || trustScore < 80)) {
+      if (highTrustOnly && offerRiskTone(o.merchant.risk_score) !== 'good') {
         return false;
       }
       return true;
@@ -294,25 +389,36 @@ export default function ProductOffersExplorer({
         ? 1
         : 0;
       if (implausibleA !== implausibleB) return implausibleA - implausibleB;
+      const hasPriceA = hasPositiveOfferPrice(a.price_current);
+      const hasPriceB = hasPositiveOfferPrice(b.price_current);
+      if (hasPriceA !== hasPriceB) return hasPriceA ? -1 : 1;
+      const priceA = hasPriceA ? a.price_current : Number.POSITIVE_INFINITY;
+      const priceB = hasPriceB ? b.price_current : Number.POSITIVE_INFINITY;
       // A seller with no score sorts after every scored one (DOS/Rate#1484).
       const trustA = offerTrustScore(a.merchant.risk_score) ?? -1;
       const trustB = offerTrustScore(b.merchant.risk_score) ?? -1;
       const discA =
-        a.price_original && a.price_original > a.price_current
+        hasPriceA &&
+        a.price_original &&
+        a.price_original <= MAX_VALID_VND_PRICE &&
+        a.price_original > a.price_current
           ? (a.price_original - a.price_current) / a.price_original
           : 0;
       const discB =
-        b.price_original && b.price_original > b.price_current
+        hasPriceB &&
+        b.price_original &&
+        b.price_original <= MAX_VALID_VND_PRICE &&
+        b.price_original > b.price_current
           ? (b.price_original - b.price_current) / b.price_original
           : 0;
 
       if (sortBy === 'trust_desc') {
-        return trustB - trustA || a.price_current - b.price_current;
+        return trustB - trustA || priceA - priceB;
       }
       if (sortBy === 'discount_desc') {
-        return discB - discA || a.price_current - b.price_current;
+        return discB - discA || priceA - priceB;
       }
-      return a.price_current - b.price_current || trustB - trustA;
+      return priceA - priceB || trustB - trustA;
     });
   }, [
     safeOffers,
@@ -351,23 +457,32 @@ export default function ProductOffersExplorer({
         inStockOffers,
         implausibleOfferIds
       );
+      const hasValidCurrentPrice = hasPositiveOfferPrice(o.price_current);
       const hasValidOrig =
+        hasValidCurrentPrice &&
         o.price_original != null &&
         Number.isFinite(Number(o.price_original)) &&
-        Number(o.price_original) > o.price_current &&
+        Number(o.price_original) > Number(o.price_current) &&
         Number(o.price_original) <= MAX_VALID_VND_PRICE;
-      const verdictCell = isBait
-        ? t('offersImplausiblyLowBadge')
-        : analysis
-          ? discountVerdictCopy(tVerdict, analysis, locale).label
-          : tVerdict('labelNormal');
+      const verdictCell = resolveExplorerMarkdownVerdictCell({
+        offer: o,
+        isBait,
+        analysis,
+        t,
+        tVerdict,
+        locale,
+      });
       return [
         sanitizeOffersMarkdownCell(o.platform.toUpperCase()),
         sanitizeOffersMarkdownCell(o.merchant.name),
         o.merchant.is_official ? 'Yes' : 'No',
         trust == null ? t('offersTrustBadgeNoData') : `${trust}%`,
-        `${o.price_current.toLocaleString('vi-VN')} ₫`,
-        hasValidOrig ? `${o.price_original!.toLocaleString('vi-VN')} ₫` : '-',
+        hasValidCurrentPrice
+          ? `${Math.round(Number(o.price_current)).toLocaleString('vi-VN')} ₫`
+          : '-',
+        hasValidOrig
+          ? `${Math.round(Number(o.price_original)).toLocaleString('vi-VN')} ₫`
+          : '-',
         sanitizeOffersMarkdownCell(verdictCell),
       ];
     });
@@ -442,10 +557,12 @@ export default function ProductOffersExplorer({
         inStockOffers,
         implausibleOfferIds
       );
+      const hasValidCurrentPrice = hasPositiveOfferPrice(o.price_current);
       const hasValidOrig =
+        hasValidCurrentPrice &&
         o.price_original != null &&
         Number.isFinite(Number(o.price_original)) &&
-        Number(o.price_original) > o.price_current &&
+        Number(o.price_original) > Number(o.price_current) &&
         Number(o.price_original) <= MAX_VALID_VND_PRICE;
       return [
         o.id,
@@ -458,9 +575,9 @@ export default function ProductOffersExplorer({
         hasReviewRiskEvidence(o.merchant.review_risk_breakdown)
           ? offerRiskScoreCsvCell(o.merchant.review_risk_score)
           : '',
-        String(o.price_current),
-        hasValidOrig ? String(o.price_original) : '',
-        isBait ? 'implausibly_low' : analysis?.verdict || 'normal',
+        hasValidCurrentPrice ? String(Math.round(Number(o.price_current))) : '',
+        hasValidOrig ? String(Math.round(Number(o.price_original))) : '',
+        resolveExplorerExportVerdictCode(o, isBait, analysis),
         isSafeExternalOfferUrl(o.url) ? o.url.trim() : '',
         ...(radarSignal ? radarCsvCells(radarSignal) : []),
       ];
@@ -517,10 +634,12 @@ export default function ProductOffersExplorer({
           inStockOffers,
           implausibleOfferIds
         );
+        const hasValidCurrentPrice = hasPositiveOfferPrice(o.price_current);
         const hasValidOrig =
+          hasValidCurrentPrice &&
           o.price_original != null &&
           Number.isFinite(Number(o.price_original)) &&
-          Number(o.price_original) > o.price_current &&
+          Number(o.price_original) > Number(o.price_current) &&
           Number(o.price_original) <= MAX_VALID_VND_PRICE;
         return {
           id: o.id,
@@ -528,9 +647,13 @@ export default function ProductOffersExplorer({
           merchantName: o.merchant.name,
           isOfficialMall: o.merchant.is_official,
           trustScorePercent: offerTrustScore(o.merchant.risk_score),
-          priceCurrentVnd: o.price_current,
-          priceOriginalVnd: hasValidOrig ? o.price_original : null,
-          verdict: isBait ? 'implausibly_low' : analysis?.verdict || 'normal',
+          priceCurrentVnd: hasValidCurrentPrice
+            ? Math.round(Number(o.price_current))
+            : null,
+          priceOriginalVnd: hasValidOrig
+            ? Math.round(Number(o.price_original))
+            : null,
+          verdict: resolveExplorerExportVerdictCode(o, isBait, analysis),
           implausiblyLow: isBait,
           url: isSafeExternalOfferUrl(o.url) ? o.url.trim() : '',
         };
@@ -751,26 +874,33 @@ export default function ProductOffersExplorer({
             </thead>
             <tbody>
               {filteredOffers.map((offer) => {
-                const price = formatPriceVnd(offer.price_current, locale);
+                const hasValidCurrentPrice = hasPositiveOfferPrice(
+                  offer.price_current
+                );
+                const price = hasValidCurrentPrice
+                  ? formatPriceVnd(
+                      Math.round(Number(offer.price_current)),
+                      locale
+                    )
+                  : '-';
                 const origPrice =
+                  hasValidCurrentPrice &&
                   offer.price_original != null &&
                   Number.isFinite(Number(offer.price_original)) &&
-                  Number(offer.price_original) > offer.price_current &&
+                  Number(offer.price_original) > Number(offer.price_current) &&
                   Number(offer.price_original) <= MAX_VALID_VND_PRICE
-                    ? formatPriceVnd(offer.price_original, locale)
+                    ? formatPriceVnd(
+                        Math.round(Number(offer.price_original)),
+                        locale
+                      )
                     : null;
                 const trustScore = offerTrustScore(offer.merchant.risk_score);
                 const safeOfferUrl = isSafeExternalOfferUrl(offer.url)
                   ? offer.url.trim()
                   : null;
-                const trustBadgeClass =
-                  trustScore == null
-                    ? 'bg-light text-muted border'
-                    : trustScore >= 80
-                      ? 'bg-success-subtle text-success'
-                      : trustScore >= 50
-                        ? 'bg-warning-subtle text-warning-emphasis'
-                        : 'bg-danger-subtle text-danger';
+                const trustBadgeClass = offerTrustBadgeClass(
+                  offer.merchant.risk_score
+                );
                 const trustBadgeText =
                   trustScore == null
                     ? t('offersTrustBadgeNoData')
@@ -944,7 +1074,10 @@ export default function ProductOffersExplorer({
                       {safeOfferUrl && (
                         <div className="d-inline-flex align-items-center justify-content-end flex-wrap gap-1">
                           <Link
-                            href={`/inspect?q=${encodeURIComponent(safeOfferUrl)}&price=${offer.price_current}`}
+                            href={buildExplorerInspectHref(
+                              safeOfferUrl,
+                              offer.price_current
+                            )}
                             className="btn btn-sm btn-outline-primary rounded-pill px-2"
                             title={t('offersInspectBtnTitle')}
                           >
