@@ -110,6 +110,7 @@ export interface JReviewsSectionProps {
   productPoints?: readonly StoredProductPointRow[];
   productPointsReviewCount?: number;
   radarSignal?: RadarSignal | null;
+  defaultWriteFormOpen?: boolean;
 }
 
 const CRITERIA_KEYS = [
@@ -167,6 +168,46 @@ export function sanitizeJReviewsPercentage(value: unknown): number {
   return Math.max(0, Math.min(100, Math.round(num)));
 }
 
+export function buildJReviewsMarkdown({
+  productName,
+  reviews,
+  radarSignal,
+  locale,
+}: {
+  productName: string;
+  reviews: readonly ReviewItem[];
+  radarSignal?: RadarSignal | null;
+  locale?: string;
+}): string {
+  const headers = [
+    'Author',
+    'Type',
+    'Rating',
+    'JReviews Weight',
+    'AI Flag Category',
+    'Upvotes',
+    'Comment',
+  ];
+  const sep = headers.map(() => '---');
+  const rows = reviews.map((r) => [
+    sanitizeJReviewsMarkdownCell(r.author_name, 80),
+    r.reviewer_type === 'expert' ? 'Expert' : 'Verified Buyer',
+    `${r.rating_star}/5★`,
+    `${r.helpfulness_weight.toFixed(2)}x`,
+    reviewBadgeKind(r),
+    String(r.upvotes),
+    sanitizeJReviewsMarkdownCell(r.comment, 120),
+  ]);
+  return [
+    `### ⭐ Rate.vn JReviews AI-checked buyer reviews: ${sanitizeJReviewsMarkdownCell(productName, 160)} (${reviews.length} reviews)`,
+    `- **Price signal:** ${radarMarkdownCell(radarSignal, locale)}`,
+    '',
+    `| ${headers.join(' | ')} |`,
+    `| ${sep.join(' | ')} |`,
+    ...rows.map((row) => `| ${row.join(' | ')} |`),
+  ].join('\n');
+}
+
 export default function JReviewsSection({
   masterProductId,
   productSlug,
@@ -185,6 +226,7 @@ export default function JReviewsSection({
   radarSignal,
   categorySlug,
   reviewCategorySlug,
+  defaultWriteFormOpen = false,
 }: JReviewsSectionProps) {
   const t = useTranslations('reviews');
   const tAnalyzer = useTranslations('analyzerCopy');
@@ -277,8 +319,14 @@ export default function JReviewsSection({
     !pointsOverview && (summary.pros.length > 0 || summary.cons.length > 0);
 
   // 5-Criteria Write Review Form State
-  const [showWriteForm, setShowWriteForm] = useState(false);
+  const [showWriteForm, setShowWriteForm] = useState(
+    Boolean(defaultWriteFormOpen)
+  );
   const fieldId = useId();
+  const writeFormId = `${fieldId}-write-form`;
+  const totalAnalyzedCount = Number(summary.total_analyzed);
+  const hasAnalyzedReviews =
+    Number.isFinite(totalAnalyzedCount) && totalAnalyzedCount > 0;
   const [authorName, setAuthorName] = useState('');
   const [variation, setVariation] = useState('');
   const [comment, setComment] = useState('');
@@ -781,33 +829,12 @@ export default function JReviewsSection({
       filteredAndSortedReviews.length === 0
     )
       return;
-    const headers = [
-      'Author',
-      'Type',
-      'Rating',
-      'JReviews Weight',
-      'AI Flag Category',
-      'Upvotes',
-      'Comment',
-    ];
-    const sep = headers.map(() => '---');
-    const rows = filteredAndSortedReviews.map((r) => [
-      sanitizeJReviewsMarkdownCell(r.author_name, 80),
-      r.reviewer_type === 'expert' ? 'Expert' : 'Verified Buyer',
-      `${r.rating_star}/5★`,
-      `${r.helpfulness_weight.toFixed(2)}x`,
-      reviewBadgeKind(r),
-      String(r.upvotes),
-      sanitizeJReviewsMarkdownCell(r.comment, 120),
-    ]);
-    const md = [
-      `### ⭐ Rate.vn JReviews AI-checked buyer reviews: ${sanitizeJReviewsMarkdownCell(productName, 160)} (${filteredAndSortedReviews.length} reviews)`,
-      `- **Price signal:** ${radarMarkdownCell(radarSignal)}`,
-      '',
-      `| ${headers.join(' | ')} |`,
-      `| ${sep.join(' | ')} |`,
-      ...rows.map((row) => `| ${row.join(' | ')} |`),
-    ].join('\n');
+    const md = buildJReviewsMarkdown({
+      productName,
+      reviews: filteredAndSortedReviews,
+      radarSignal,
+      locale,
+    });
 
     try {
       await navigator.clipboard.writeText(md);
@@ -959,6 +986,8 @@ export default function JReviewsSection({
               hasRatingCriteria(reviewCategorySlug)) && (
               <button
                 type="button"
+                aria-expanded={showWriteForm}
+                aria-controls={showWriteForm ? writeFormId : undefined}
                 onClick={() => {
                   setShowWriteForm((v) => !v);
                   setSubmitError(null);
@@ -991,19 +1020,22 @@ export default function JReviewsSection({
 
       {/* Review form v2 behind its flag (DOS/Rate#1544) */}
       {showWriteForm && isReviewFormV2Enabled() && (
-        <ReviewFormV2
-          key={masterProductId ?? productSlug ?? productName}
-          masterProductId={masterProductId}
-          productName={productName}
-          categorySlug={reviewCategorySlug ?? undefined}
-          defaultAuthorName={t('defaultAuthorName')}
-          onStored={handleReviewStored}
-        />
+        <div id={writeFormId}>
+          <ReviewFormV2
+            key={masterProductId ?? productSlug ?? productName}
+            masterProductId={masterProductId}
+            productName={productName}
+            categorySlug={reviewCategorySlug ?? undefined}
+            defaultAuthorName={t('defaultAuthorName')}
+            onStored={handleReviewStored}
+          />
+        </div>
       )}
 
       {/* Interactive 5-Criteria Write Review Form */}
       {showWriteForm && !isReviewFormV2Enabled() && (
         <form
+          id={writeFormId}
           onSubmit={handleSubmitCommunityReview}
           className="border-primary border-opacity-25 rounded-4 bg-light mb-4 border p-4"
         >
@@ -1076,11 +1108,17 @@ export default function JReviewsSection({
                     <div className="rounded-3 bg-light h-100 border p-2">
                       <div className="small text-muted mb-1">{crit.label}</div>
                       <div className="d-flex align-items-center justify-content-between">
-                        <div className="btn-group btn-group-sm" role="group">
+                        <div
+                          className="btn-group btn-group-sm"
+                          role="group"
+                          aria-label={crit.label}
+                        >
                           {[1, 2, 3, 4, 5].map((star) => (
                             <button
                               key={star}
                               type="button"
+                              aria-pressed={star === score}
+                              aria-label={`${crit.label}: ${star}/5 ★`}
                               onClick={() =>
                                 setCriteriaScores((prev) => ({
                                   ...prev,
@@ -1428,80 +1466,100 @@ export default function JReviewsSection({
           <div className="fw-bold text-dark d-flex align-items-center gap-2">
             <BsRobot aria-hidden="true" /> {t('aiAuthenticityHeading')}
           </div>
-          <div className="d-flex small flex-wrap gap-2">
-            <span className="badge bg-success text-white">
-              {t('authenticPctBadge', {
+          {hasAnalyzedReviews ? (
+            <div className="d-flex small flex-wrap gap-2">
+              <span className="badge bg-success text-white">
+                {t('authenticPctBadge', {
+                  pct: formatPlainNumber(
+                    sanitizeJReviewsPercentage(summary.authentic_pct),
+                    locale
+                  ),
+                })}
+              </span>
+              <span className="badge bg-warning text-dark">
+                {t('suspiciousPctBadge', {
+                  pct: formatPlainNumber(
+                    sanitizeJReviewsPercentage(summary.suspicious_pct),
+                    locale
+                  ),
+                })}
+              </span>
+              <span className="badge bg-danger text-white">
+                {t('fakePctBadge', {
+                  pct: formatPlainNumber(
+                    sanitizeJReviewsPercentage(summary.fake_pct),
+                    locale
+                  ),
+                })}
+              </span>
+            </div>
+          ) : (
+            <span
+              className="badge bg-secondary-subtle text-secondary rounded-pill small"
+              data-testid="jreviews-authenticity-empty-badge"
+            >
+              {t('notAvailableShort')}
+            </span>
+          )}
+        </div>
+
+        {/* Progress Bar: draws the badge percentages above, so it is hidden
+            from assistive tech rather than labelled (DOS/Rate#1071). */}
+        {hasAnalyzedReviews ? (
+          <div
+            className={`progress rounded-pill ${
+              summary.ai_summary || showLegacyProsCons ? 'mb-3' : 'mb-0'
+            }`}
+            style={{ height: '10px' }}
+            aria-hidden="true"
+          >
+            <div
+              className="progress-bar bg-success"
+              style={{
+                width: `${sanitizeJReviewsPercentage(summary.authentic_pct)}%`,
+              }}
+              title={t('authenticPctBadge', {
                 pct: formatPlainNumber(
                   sanitizeJReviewsPercentage(summary.authentic_pct),
                   locale
                 ),
               })}
-            </span>
-            <span className="badge bg-warning text-dark">
-              {t('suspiciousPctBadge', {
+            />
+            <div
+              className="progress-bar bg-warning"
+              style={{
+                width: `${sanitizeJReviewsPercentage(summary.suspicious_pct)}%`,
+              }}
+              title={t('suspiciousPctBadge', {
                 pct: formatPlainNumber(
                   sanitizeJReviewsPercentage(summary.suspicious_pct),
                   locale
                 ),
               })}
-            </span>
-            <span className="badge bg-danger text-white">
-              {t('fakePctBadge', {
+            />
+            <div
+              className="progress-bar bg-danger"
+              style={{
+                width: `${sanitizeJReviewsPercentage(summary.fake_pct)}%`,
+              }}
+              title={t('fakePctBadge', {
                 pct: formatPlainNumber(
                   sanitizeJReviewsPercentage(summary.fake_pct),
                   locale
                 ),
               })}
-            </span>
+            />
           </div>
-        </div>
-
-        {/* Progress Bar: draws the badge percentages above, so it is hidden
-            from assistive tech rather than labelled (DOS/Rate#1071). */}
-        <div
-          className={`progress rounded-pill ${
-            summary.ai_summary || showLegacyProsCons ? 'mb-3' : 'mb-0'
-          }`}
-          style={{ height: '10px' }}
-          aria-hidden="true"
-        >
+        ) : (
           <div
-            className="progress-bar bg-success"
-            style={{
-              width: `${sanitizeJReviewsPercentage(summary.authentic_pct)}%`,
-            }}
-            title={t('authenticPctBadge', {
-              pct: formatPlainNumber(
-                sanitizeJReviewsPercentage(summary.authentic_pct),
-                locale
-              ),
-            })}
-          />
-          <div
-            className="progress-bar bg-warning"
-            style={{
-              width: `${sanitizeJReviewsPercentage(summary.suspicious_pct)}%`,
-            }}
-            title={t('suspiciousPctBadge', {
-              pct: formatPlainNumber(
-                sanitizeJReviewsPercentage(summary.suspicious_pct),
-                locale
-              ),
-            })}
-          />
-          <div
-            className="progress-bar bg-danger"
-            style={{
-              width: `${sanitizeJReviewsPercentage(summary.fake_pct)}%`,
-            }}
-            title={t('fakePctBadge', {
-              pct: formatPlainNumber(
-                sanitizeJReviewsPercentage(summary.fake_pct),
-                locale
-              ),
-            })}
-          />
-        </div>
+            className={`small text-muted ${
+              summary.ai_summary || showLegacyProsCons ? 'mb-3' : 'mb-0'
+            }`}
+            data-testid="jreviews-authenticity-empty-note"
+          >
+            {t('blendNoteInsufficientData')}
+          </div>
+        )}
 
         {summary.ai_summary && (
           <div
@@ -1650,28 +1708,35 @@ export default function JReviewsSection({
             />
           </div>
           <div className="d-flex align-items-center flex-wrap gap-1">
-            {(
-              [
-                { id: 'all', label: t('starFilterAll') },
-                { id: 5, label: '5 ★' },
-                { id: 4, label: '4 ★' },
-                { id: 3, label: '≤ 3 ★' },
-              ] as const
-            ).map((tier) => (
-              <button
-                key={String(tier.id)}
-                type="button"
-                onClick={() => setStarFilter(tier.id)}
-                className={`btn btn-sm rounded-pill px-3 py-1 ${
-                  starFilter === tier.id
-                    ? 'btn-warning text-dark fw-semibold'
-                    : 'btn-outline-secondary bg-white'
-                }`}
-                style={{ fontSize: '0.8125rem' }}
-              >
-                {tier.label}
-              </button>
-            ))}
+            <div
+              className="d-flex align-items-center flex-wrap gap-1"
+              role="group"
+              aria-label={t('starFilterAll')}
+            >
+              {(
+                [
+                  { id: 'all', label: t('starFilterAll') },
+                  { id: 5, label: '5 ★' },
+                  { id: 4, label: '4 ★' },
+                  { id: 3, label: '≤ 3 ★' },
+                ] as const
+              ).map((tier) => (
+                <button
+                  key={String(tier.id)}
+                  type="button"
+                  aria-pressed={starFilter === tier.id}
+                  onClick={() => setStarFilter(tier.id)}
+                  className={`btn btn-sm rounded-pill px-3 py-1 ${
+                    starFilter === tier.id
+                      ? 'btn-warning text-dark fw-semibold'
+                      : 'btn-outline-secondary bg-white'
+                  }`}
+                  style={{ fontSize: '0.8125rem' }}
+                >
+                  {tier.label}
+                </button>
+              ))}
+            </div>
             {(searchKeyword.trim() !== '' || starFilter !== 'all') && (
               <button
                 type="button"

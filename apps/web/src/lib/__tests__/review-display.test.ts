@@ -1,5 +1,17 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import React from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
+import { NextIntlClientProvider } from 'next-intl';
+import csMessages from '../../../locales/cs.json';
+import enMessages from '../../../locales/en.json';
+import viMessages from '../../../locales/vi.json';
+import JReviewsSection, {
+  buildJReviewsMarkdown,
+  type JReviewsSectionProps,
+} from '../../components/reviews/JReviewsSection';
+import { pickClientMessages } from '../client-messages';
+import { EMPTY_RADAR_SIGNAL, type RadarSignal } from '../deal-radar';
 import {
   isFilteredOutReview,
   isPendingReview,
@@ -15,6 +27,55 @@ import {
   evaluateReviewTrustAssessment,
   type ReviewItem,
 } from '../rate-api';
+
+function renderReviewsSection(
+  locale: 'vi' | 'en' | 'cs',
+  overrides: Partial<JReviewsSectionProps> = {}
+): string {
+  const full =
+    locale === 'en' ? enMessages : locale === 'cs' ? csMessages : viMessages;
+  const messages = pickClientMessages(
+    full as unknown as Record<string, unknown>,
+    'productDetail'
+  );
+  const Provider = NextIntlClientProvider as React.ComponentType<{
+    locale: string;
+    messages: typeof messages;
+    timeZone: string;
+    children?: React.ReactNode;
+  }>;
+  const baseProps: JReviewsSectionProps = {
+    masterProductId: '22222222-2222-4222-8222-222222221727',
+    categorySlug: 'smartphones',
+    reviewCategorySlug: 'smartphones',
+    productSlug: 'iphone-16-pro-max-256gb',
+    productName: 'iPhone 16 Pro Max 256GB',
+    averageRating: 0,
+    userRatingWeighted: null,
+    ratingScore: null,
+    expertRating: null,
+    authenticReviewCount: 0,
+    ignoredReviewCount: 0,
+    reviews: [],
+    summary: {
+      total_analyzed: 0,
+      authentic_pct: 100,
+      suspicious_pct: 0,
+      fake_pct: 0,
+      pros: [],
+      cons: [],
+      ai_summary: null,
+    },
+    ...overrides,
+  };
+  return renderToStaticMarkup(
+    React.createElement(
+      Provider,
+      { locale, messages, timeZone: 'Asia/Ho_Chi_Minh' },
+      React.createElement(JReviewsSection, baseProps)
+    )
+  );
+}
 
 function main() {
   console.warn('🧪 Review display suite');
@@ -410,6 +471,206 @@ function main() {
   for (const [key, text] of Object.entries(cs.reviews)) {
     if (typeof text !== 'string') continue;
     assert.doesNotMatch(text, /\d\.\d/, `cs reviews.${key}`);
+  }
+
+  // DOS/Rate#1727 (1): Zero-review products suppress 100% green badge/bar and
+  // show neutral muted insufficient-data copy; positive total_analyzed keeps it.
+  const localeDicts = {
+    vi: viMessages.reviews,
+    en: enMessages.reviews,
+    cs: csMessages.reviews,
+  } as const;
+  for (const loc of ['vi', 'en', 'cs'] as const) {
+    const dict = localeDicts[loc];
+    for (const emptyTotal of [0, -1, Number.NaN]) {
+      const zeroHtml = renderReviewsSection(loc, {
+        summary: {
+          total_analyzed: emptyTotal,
+          authentic_pct: 100,
+          suspicious_pct: 0,
+          fake_pct: 0,
+          pros: [],
+          cons: [],
+          ai_summary: null,
+        },
+      });
+      assert.match(zeroHtml, /data-testid="jreviews-authenticity-empty-badge"/);
+      assert.match(zeroHtml, /data-testid="jreviews-authenticity-empty-note"/);
+      assert.ok(zeroHtml.includes(dict.notAvailableShort));
+      assert.ok(zeroHtml.includes(dict.blendNoteInsufficientData));
+      assert.doesNotMatch(zeroHtml, /progress-bar bg-success/);
+      assert.doesNotMatch(zeroHtml, /(?:Thực chất|Authentic|Skutečné):\s*100/);
+    }
+
+    const positiveHtml = renderReviewsSection(loc, {
+      summary: {
+        total_analyzed: 6,
+        authentic_pct: 90,
+        suspicious_pct: 5,
+        fake_pct: 5,
+        pros: [],
+        cons: [],
+        ai_summary: null,
+      },
+    });
+    assert.doesNotMatch(
+      positiveHtml,
+      /data-testid="jreviews-authenticity-empty-badge"/
+    );
+    assert.doesNotMatch(
+      positiveHtml,
+      /data-testid="jreviews-authenticity-empty-note"/
+    );
+    assert.match(positiveHtml, /progress-bar bg-success"[^>]*width:90%/);
+    assert.match(positiveHtml, /(?:Thực chất|Authentic|Skutečné):\s*90/);
+  }
+
+  // DOS/Rate#1727 (2): Copied Reviews Markdown localizes Deal Radar strings.
+  const mdSampleReview = {
+    id: 'rev-md-1',
+    author_name: 'Buyer One',
+    reviewer_type: 'user',
+    rating_star: 5,
+    helpfulness_weight: 1.25,
+    include_in_rating: true,
+    flag_category: 'authentic',
+    verdict: 'authentic',
+    upvotes: 3,
+    downvotes: 0,
+    report_count: 0,
+    comment: 'Solid battery life and clean display.',
+    created_at: '2026-11-01T00:00:00Z',
+  } as ReviewItem;
+  const genuineRadar: RadarSignal = {
+    ...EMPTY_RADAR_SIGNAL,
+    verdict: 'genuine_deal',
+    savingsPct: 12.5,
+  };
+  const trapRadar: RadarSignal = {
+    ...EMPTY_RADAR_SIGNAL,
+    verdict: 'fake_sale_trap',
+    fakeMarkupPct: 18,
+  };
+  assert.match(
+    buildJReviewsMarkdown({
+      productName: 'iPhone 16 Pro',
+      reviews: [mdSampleReview],
+      radarSignal: genuineRadar,
+      locale: 'vi',
+    }),
+    /- \*\*Price signal:\*\* ✅ Dưới giá trung vị \(-12\.5%\)/
+  );
+  const enMd = buildJReviewsMarkdown({
+    productName: 'iPhone 16 Pro',
+    reviews: [mdSampleReview],
+    radarSignal: genuineRadar,
+    locale: 'en',
+  });
+  assert.match(enMd, /- \*\*Price signal:\*\* ✅ Below median \(-12\.5%\)/);
+  assert.doesNotMatch(enMd, /Dưới giá trung vị|Đáy giá đa sàn|Cảnh báo/);
+  const csMd = buildJReviewsMarkdown({
+    productName: 'iPhone 16 Pro',
+    reviews: [mdSampleReview],
+    radarSignal: trapRadar,
+    locale: 'cs',
+  });
+  assert.match(
+    csMd,
+    /- \*\*Price signal:\*\* 🚨 Upozornění na falešnou slevu \(\+18,0\s*%\)/
+  );
+  assert.doesNotMatch(csMd, /Dưới giá trung vị|Đáy giá đa sàn|Cảnh báo/);
+  const jreviewsSrc = readFileSync(
+    new URL('../../components/reviews/JReviewsSection.tsx', import.meta.url),
+    'utf8'
+  );
+  assert.match(jreviewsSrc, /radarMarkdownCell\(radarSignal,\s*locale\)/);
+  assert.doesNotMatch(jreviewsSrc, /radarMarkdownCell\(radarSignal\)/);
+
+  // DOS/Rate#1727 (3): Star filter pills, write-review disclosure, and
+  // 5x5 criterion star controls expose WCAG states and 2.5.3 names.
+  const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  for (const loc of ['vi', 'en', 'cs'] as const) {
+    const dict = localeDicts[loc];
+    const closedHtml = renderReviewsSection(loc);
+    assert.match(
+      closedHtml,
+      new RegExp(
+        `role="group"[^>]*aria-label="${escapeRe(dict.starFilterAll)}"`
+      )
+    );
+    assert.match(
+      closedHtml,
+      new RegExp(
+        `aria-pressed="true"[^>]*>${escapeRe(dict.starFilterAll)}</button>`
+      )
+    );
+    for (const tierLabel of ['5 ★', '4 ★', '≤ 3 ★']) {
+      assert.match(
+        closedHtml,
+        new RegExp(`aria-pressed="false"[^>]*>${escapeRe(tierLabel)}</button>`)
+      );
+    }
+    assert.match(
+      closedHtml,
+      new RegExp(
+        `<button[^>]*aria-expanded="false"(?![^>]*aria-controls)[^>]*>${escapeRe(dict.openWriteFormBtn)}</button>`
+      )
+    );
+
+    const openHtml = renderReviewsSection(loc, { defaultWriteFormOpen: true });
+    const toggleMatch = openHtml.match(
+      new RegExp(
+        `<button[^>]*aria-expanded="true"[^>]*aria-controls="([^"]+)"[^>]*>${escapeRe(dict.closeFormBtn)}</button>`
+      )
+    );
+    assert.ok(toggleMatch?.[1], `${loc}: open toggle exposes aria-controls`);
+    assert.match(
+      openHtml,
+      new RegExp(`<form id="${escapeRe(toggleMatch[1])}"`)
+    );
+
+    for (const cKey of [
+      'criteriaScreen',
+      'criteriaPerformance',
+      'criteriaCamera',
+      'criteriaBattery',
+      'criteriaValue',
+    ] as const) {
+      const label = dict[cKey].replace(/&/g, '&amp;');
+      assert.match(
+        openHtml,
+        new RegExp(`role="group"[^>]*aria-label="${escapeRe(label)}"`)
+      );
+      for (const star of [1, 2, 3, 4, 5]) {
+        const pressed = star === 5 ? 'true' : 'false';
+        assert.match(
+          openHtml,
+          new RegExp(
+            `aria-pressed="${pressed}"[^>]*aria-label="${escapeRe(label)}: ${star}/5 ★"[^>]*>★</button>`
+          )
+        );
+      }
+    }
+  }
+
+  const prevV2 = process.env.NEXT_PUBLIC_RATE_REVIEW_FORM_V2;
+  try {
+    process.env.NEXT_PUBLIC_RATE_REVIEW_FORM_V2 = '1';
+    const v2OpenHtml = renderReviewsSection('en', {
+      defaultWriteFormOpen: true,
+    });
+    const v2Match = v2OpenHtml.match(
+      /<button[^>]*aria-expanded="true"[^>]*aria-controls="([^"]+)"[^>]*>✕ Close form<\/button>/
+    );
+    assert.ok(v2Match?.[1], 'v2 open toggle exposes aria-controls');
+    assert.match(
+      v2OpenHtml,
+      new RegExp(`<div id="${escapeRe(v2Match[1])}"><form[^>]*review-form-v2`)
+    );
+  } finally {
+    if (prevV2 === undefined)
+      delete process.env.NEXT_PUBLIC_RATE_REVIEW_FORM_V2;
+    else process.env.NEXT_PUBLIC_RATE_REVIEW_FORM_V2 = prevV2;
   }
 
   console.warn('✅ Review display suite passed');
