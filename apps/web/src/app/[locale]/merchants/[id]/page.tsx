@@ -78,7 +78,8 @@ function parseFiniteNumber(value: unknown): number | null {
     return null;
   }
   if (typeof value === 'string') {
-    const trimmed = value.replace(/\p{Cc}+/gu, '').trim();
+    const trimmed = value.trim();
+    if (/\p{Cc}/u.test(trimmed)) return null;
     if (!trimmed || trimmed.length > 32 || /^[+-]?0[xbo]/i.test(trimmed)) {
       return null;
     }
@@ -88,11 +89,59 @@ function parseFiniteNumber(value: unknown): number | null {
   return Number.isFinite(value) ? value : null;
 }
 
-function sanitizeMerchantPagePriceVnd(value: unknown): number | null {
+export function sanitizeMerchantPagePriceVnd(value: unknown): number | null {
   const raw = parseFiniteNumber(value);
   if (raw == null || raw <= 0 || raw > MAX_VALID_VND_PRICE) return null;
   const rounded = Math.round(raw);
   return rounded > 0 && rounded <= MAX_VALID_VND_PRICE ? rounded : null;
+}
+
+export function formatMerchantPagePriceVnd(
+  value: unknown,
+  locale?: string | null
+): string {
+  const safe = sanitizeMerchantPagePriceVnd(value);
+  return safe != null ? formatPriceVnd(safe, locale) : '-';
+}
+
+export function MerchantProfilePriceBlock({
+  priceCurrent,
+  priceOriginal,
+  unavailable = false,
+  locale,
+}: {
+  readonly priceCurrent: unknown;
+  readonly priceOriginal?: unknown;
+  readonly unavailable?: boolean;
+  readonly locale?: string | null;
+}) {
+  const safeCurrentPrice = sanitizeMerchantPagePriceVnd(priceCurrent);
+  const safeOrigPrice = sanitizeMerchantPagePriceVnd(priceOriginal);
+  const priceDisplay = formatMerchantPagePriceVnd(safeCurrentPrice, locale);
+  const origPriceDisplay =
+    safeCurrentPrice != null &&
+    safeOrigPrice != null &&
+    safeOrigPrice > safeCurrentPrice
+      ? formatPriceVnd(safeOrigPrice, locale)
+      : null;
+
+  return (
+    <>
+      <div
+        className={`fw-bold font-monospace ${
+          unavailable || safeCurrentPrice == null ? 'text-muted' : 'text-dark'
+        }`}
+        data-testid="merchant-profile-recorded-price"
+      >
+        {priceDisplay}
+      </div>
+      {origPriceDisplay && !unavailable && (
+        <div className="text-muted small text-decoration-line-through font-monospace">
+          {origPriceDisplay}
+        </div>
+      )}
+    </>
+  );
 }
 
 function normalizeMerchantTrustScore(value: unknown): number | null {
@@ -769,9 +818,6 @@ export default async function MerchantProfilePage({
                   const gMedianPrice = sanitizeMerchantPagePriceVnd(
                     g.marketMedianPrice
                   );
-                  const gCurrentPrice = sanitizeMerchantPagePriceVnd(
-                    g.priceCurrent
-                  );
                   return (
                     <div key={g.id} className="col-md-6">
                       <div className="rounded-3 border-success-subtle bg-success-subtle bg-opacity-10 d-flex justify-content-between align-items-center border p-2">
@@ -797,9 +843,7 @@ export default async function MerchantProfilePage({
                         </div>
                         <div className="flex-shrink-0 text-end">
                           <div className="fw-bold text-success font-monospace small">
-                            {gCurrentPrice != null
-                              ? formatPriceVnd(gCurrentPrice, locale)
-                              : '-'}
+                            {formatMerchantPagePriceVnd(g.priceCurrent, locale)}
                           </div>
                           <span className="badge bg-success rounded-pill">
                             {t('vsMedianBadge', {
@@ -817,9 +861,6 @@ export default async function MerchantProfilePage({
                 {merchantFakeTraps.slice(0, 4).map((tItem) => {
                   const trapOrigPrice = sanitizeMerchantPagePriceVnd(
                     tItem.priceOriginal
-                  );
-                  const trapCurrentPrice = sanitizeMerchantPagePriceVnd(
-                    tItem.priceCurrent
                   );
                   return (
                     <div key={tItem.id} className="col-md-6">
@@ -845,9 +886,10 @@ export default async function MerchantProfilePage({
                         </div>
                         <div className="flex-shrink-0 text-end">
                           <div className="fw-bold text-danger font-monospace small">
-                            {trapCurrentPrice != null
-                              ? formatPriceVnd(trapCurrentPrice, locale)
-                              : '-'}
+                            {formatMerchantPagePriceVnd(
+                              tItem.priceCurrent,
+                              locale
+                            )}
                           </div>
                           <span className="badge bg-danger rounded-pill">
                             {t('fakeMarkupBadge', {
@@ -1042,22 +1084,6 @@ export default async function MerchantProfilePage({
                       const safeCurrentPrice = sanitizeMerchantPagePriceVnd(
                         item.price_current
                       );
-                      const safeOrigPrice = sanitizeMerchantPagePriceVnd(
-                        item.price_original
-                      );
-                      const priceDisplay =
-                        safeCurrentPrice != null
-                          ? formatPriceVnd(safeCurrentPrice, locale)
-                          : '-';
-                      const origPriceDisplay =
-                        safeCurrentPrice != null &&
-                        safeOrigPrice != null &&
-                        safeOrigPrice > safeCurrentPrice
-                          ? formatPriceVnd(safeOrigPrice, locale)
-                          : null;
-                      const safeMarketMinPrice = sanitizeMerchantPagePriceVnd(
-                        item.master_product?.market_min_price
-                      );
                       // A sold-out listing's last price is shown as such,
                       // never as a deal (DOS/Rate#1248).
                       const unavailable = isOfferUnavailable(item);
@@ -1177,12 +1203,10 @@ export default async function MerchantProfilePage({
                                 >
                                   {t('lowestMarketPriceLabel')}{' '}
                                   <strong className="font-monospace">
-                                    {safeMarketMinPrice != null
-                                      ? formatPriceVnd(
-                                          safeMarketMinPrice,
-                                          locale
-                                        )
-                                      : '-'}
+                                    {formatMerchantPagePriceVnd(
+                                      item.master_product.market_min_price,
+                                      locale
+                                    )}
                                   </strong>
                                 </div>
                               </div>
@@ -1193,20 +1217,12 @@ export default async function MerchantProfilePage({
                             )}
                           </td>
                           <td>
-                            <div
-                              className={`fw-bold font-monospace ${
-                                unavailable || safeCurrentPrice == null
-                                  ? 'text-muted'
-                                  : 'text-dark'
-                              }`}
-                            >
-                              {priceDisplay}
-                            </div>
-                            {origPriceDisplay && !unavailable && (
-                              <div className="text-muted small text-decoration-line-through font-monospace">
-                                {origPriceDisplay}
-                              </div>
-                            )}
+                            <MerchantProfilePriceBlock
+                              priceCurrent={item.price_current}
+                              priceOriginal={item.price_original}
+                              unavailable={unavailable}
+                              locale={locale}
+                            />
                             {unavailable && (
                               <span
                                 className="badge bg-secondary-subtle text-secondary-emphasis rounded-pill small mt-1 border"

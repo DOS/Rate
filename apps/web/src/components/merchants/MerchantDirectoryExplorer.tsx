@@ -73,7 +73,8 @@ function parseFiniteDirectoryNumber(value: unknown): number | null {
     return null;
   }
   if (typeof value === 'string') {
-    const trimmed = value.replace(/\p{Cc}+/gu, '').trim();
+    const trimmed = value.trim();
+    if (/\p{Cc}/u.test(trimmed)) return null;
     if (!trimmed || trimmed.length > 32 || /^[+-]?0[xbo]/i.test(trimmed)) {
       return null;
     }
@@ -952,7 +953,10 @@ export default function MerchantDirectoryExplorer({
 
               return (
                 <div className="col-lg-6 col-12" key={merchant.id}>
-                  <div className="rate-card rounded-4 d-flex flex-column h-100 p-md-4 border bg-white p-3 shadow-sm">
+                  <div
+                    className="rate-card rounded-4 d-flex flex-column h-100 p-md-4 border bg-white p-3 shadow-sm"
+                    data-merchant-id={merchant.id}
+                  >
                     <div className="d-flex justify-content-between align-items-start mb-3 flex-wrap gap-3">
                       <div
                         className="d-flex align-items-center gap-3"
@@ -996,6 +1000,7 @@ export default function MerchantDirectoryExplorer({
                       <div className="flex-shrink-0 text-end">
                         <span
                           className={`badge ${trustBadgeClass} rounded-pill fs-6 rate-tabular px-3 py-2`}
+                          data-testid="merchant-directory-trust-badge"
                         >
                           {trustDisplay == null
                             ? t('trustBadgeNoData')
@@ -1055,6 +1060,7 @@ export default function MerchantDirectoryExplorer({
                               // No DOSafe score: no number, and no alert (#1465).
                               <span
                                 className="badge rounded-pill bg-light text-muted border"
+                                data-testid="merchant-directory-scam-badge"
                                 data-tone="unknown"
                               >
                                 {labels.reviewRiskNoData}
@@ -1062,6 +1068,7 @@ export default function MerchantDirectoryExplorer({
                             ) : (
                               <span
                                 className={`badge rounded-pill rate-tabular ${dosafeDisplay.badgeClass}`}
+                                data-testid="merchant-directory-scam-badge"
                                 data-tone={dosafeDisplay.tone}
                               >
                                 {dosafeDisplay.score}/100
@@ -1088,6 +1095,7 @@ export default function MerchantDirectoryExplorer({
                               // No analysed reviews: no number (#1249).
                               <span
                                 className="badge rounded-pill bg-light text-muted border"
+                                data-testid="merchant-directory-review-badge"
                                 data-tone="unknown"
                               >
                                 {labels.reviewRiskNoData}
@@ -1095,6 +1103,7 @@ export default function MerchantDirectoryExplorer({
                             ) : (
                               <span
                                 className={`badge rounded-pill rate-tabular ${reviewDisplay.badgeClass}`}
+                                data-testid="merchant-directory-review-badge"
                                 data-tone={reviewDisplay.tone}
                               >
                                 {reviewDisplay.score}/100
