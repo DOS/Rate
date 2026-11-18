@@ -319,8 +319,11 @@ export default function JReviewsSection({
     !pointsOverview && (summary.pros.length > 0 || summary.cons.length > 0);
 
   // 5-Criteria Write Review Form State
+  const canWriteReview =
+    Boolean(masterProductId) &&
+    (!isReviewFormV2Enabled() || hasRatingCriteria(reviewCategorySlug));
   const [showWriteForm, setShowWriteForm] = useState(
-    Boolean(defaultWriteFormOpen)
+    Boolean(defaultWriteFormOpen) && canWriteReview
   );
   const fieldId = useId();
   const writeFormId = `${fieldId}-write-form`;
@@ -981,22 +984,20 @@ export default function JReviewsSection({
           </ExportMenu>
           {/* v2 rates a category's own criteria: a category without a
               list has no form, as the RPC refuses it (DOS/Rate#1544). */}
-          {masterProductId &&
-            (!isReviewFormV2Enabled() ||
-              hasRatingCriteria(reviewCategorySlug)) && (
-              <button
-                type="button"
-                aria-expanded={showWriteForm}
-                aria-controls={showWriteForm ? writeFormId : undefined}
-                onClick={() => {
-                  setShowWriteForm((v) => !v);
-                  setSubmitError(null);
-                }}
-                className="btn btn-primary btn-sm rounded-pill fw-medium px-3 py-2"
-              >
-                {showWriteForm ? t('closeFormBtn') : t('openWriteFormBtn')}
-              </button>
-            )}
+          {canWriteReview && (
+            <button
+              type="button"
+              aria-expanded={showWriteForm}
+              aria-controls={showWriteForm ? writeFormId : undefined}
+              onClick={() => {
+                setShowWriteForm((v) => !v);
+                setSubmitError(null);
+              }}
+              className="btn btn-primary btn-sm rounded-pill fw-medium px-3 py-2"
+            >
+              {showWriteForm ? t('closeFormBtn') : t('openWriteFormBtn')}
+            </button>
+          )}
           <span className="badge bg-dark rounded-pill small px-3 py-2 text-white">
             {t('dualRatingStandardBadge')}
           </span>
@@ -1019,7 +1020,7 @@ export default function JReviewsSection({
       )}
 
       {/* Review form v2 behind its flag (DOS/Rate#1544) */}
-      {showWriteForm && isReviewFormV2Enabled() && (
+      {canWriteReview && showWriteForm && isReviewFormV2Enabled() && (
         <div id={writeFormId}>
           <ReviewFormV2
             key={masterProductId ?? productSlug ?? productName}
@@ -1033,7 +1034,7 @@ export default function JReviewsSection({
       )}
 
       {/* Interactive 5-Criteria Write Review Form */}
-      {showWriteForm && !isReviewFormV2Enabled() && (
+      {canWriteReview && showWriteForm && !isReviewFormV2Enabled() && (
         <form
           id={writeFormId}
           onSubmit={handleSubmitCommunityReview}

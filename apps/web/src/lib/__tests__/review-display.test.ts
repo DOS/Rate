@@ -482,13 +482,20 @@ function main() {
   } as const;
   for (const loc of ['vi', 'en', 'cs'] as const) {
     const dict = localeDicts[loc];
-    for (const emptyTotal of [0, -1, Number.NaN]) {
+    for (const emptyTotal of [
+      0,
+      -1,
+      Number.NaN,
+      Number.POSITIVE_INFINITY,
+      null as unknown as number,
+      undefined as unknown as number,
+    ]) {
       const zeroHtml = renderReviewsSection(loc, {
         summary: {
           total_analyzed: emptyTotal,
           authentic_pct: 100,
-          suspicious_pct: 0,
-          fake_pct: 0,
+          suspicious_pct: 20,
+          fake_pct: 10,
           pros: [],
           cons: [],
           ai_summary: null,
@@ -498,8 +505,16 @@ function main() {
       assert.match(zeroHtml, /data-testid="jreviews-authenticity-empty-note"/);
       assert.ok(zeroHtml.includes(dict.notAvailableShort));
       assert.ok(zeroHtml.includes(dict.blendNoteInsufficientData));
-      assert.doesNotMatch(zeroHtml, /progress-bar bg-success/);
+      assert.doesNotMatch(
+        zeroHtml,
+        /<div[^>]*progress-bar bg-(?:success|warning|danger)/
+      );
       assert.doesNotMatch(zeroHtml, /(?:Thực chất|Authentic|Skutečné):\s*100/);
+      assert.doesNotMatch(zeroHtml, /(?:Nghi vấn|suspicious|Podezřelé):\s*20/i);
+      assert.doesNotMatch(
+        zeroHtml,
+        /(?:Đánh giá ảo|Fake reviews|Falešné recenze):\s*10/
+      );
     }
 
     const positiveHtml = renderReviewsSection(loc, {
@@ -589,72 +604,84 @@ function main() {
   // DOS/Rate#1727 (3): Star filter pills, write-review disclosure, and
   // 5x5 criterion star controls expose WCAG states and 2.5.3 names.
   const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  for (const loc of ['vi', 'en', 'cs'] as const) {
-    const dict = localeDicts[loc];
-    const closedHtml = renderReviewsSection(loc);
-    assert.match(
-      closedHtml,
-      new RegExp(
-        `role="group"[^>]*aria-label="${escapeRe(dict.starFilterAll)}"`
-      )
-    );
-    assert.match(
-      closedHtml,
-      new RegExp(
-        `aria-pressed="true"[^>]*>${escapeRe(dict.starFilterAll)}</button>`
-      )
-    );
-    for (const tierLabel of ['5 ★', '4 ★', '≤ 3 ★']) {
+  const prevV2 = process.env.NEXT_PUBLIC_RATE_REVIEW_FORM_V2;
+  try {
+    delete process.env.NEXT_PUBLIC_RATE_REVIEW_FORM_V2;
+    for (const loc of ['vi', 'en', 'cs'] as const) {
+      const dict = localeDicts[loc];
+      const closedHtml = renderReviewsSection(loc);
       assert.match(
         closedHtml,
-        new RegExp(`aria-pressed="false"[^>]*>${escapeRe(tierLabel)}</button>`)
+        new RegExp(
+          `role="group"[^>]*aria-label="${escapeRe(dict.starFilterAll)}"`
+        )
       );
-    }
-    assert.match(
-      closedHtml,
-      new RegExp(
-        `<button[^>]*aria-expanded="false"(?![^>]*aria-controls)[^>]*>${escapeRe(dict.openWriteFormBtn)}</button>`
-      )
-    );
-
-    const openHtml = renderReviewsSection(loc, { defaultWriteFormOpen: true });
-    const toggleMatch = openHtml.match(
-      new RegExp(
-        `<button[^>]*aria-expanded="true"[^>]*aria-controls="([^"]+)"[^>]*>${escapeRe(dict.closeFormBtn)}</button>`
-      )
-    );
-    assert.ok(toggleMatch?.[1], `${loc}: open toggle exposes aria-controls`);
-    assert.match(
-      openHtml,
-      new RegExp(`<form id="${escapeRe(toggleMatch[1])}"`)
-    );
-
-    for (const cKey of [
-      'criteriaScreen',
-      'criteriaPerformance',
-      'criteriaCamera',
-      'criteriaBattery',
-      'criteriaValue',
-    ] as const) {
-      const label = dict[cKey].replace(/&/g, '&amp;');
       assert.match(
-        openHtml,
-        new RegExp(`role="group"[^>]*aria-label="${escapeRe(label)}"`)
+        closedHtml,
+        new RegExp(
+          `aria-pressed="true"[^>]*>${escapeRe(dict.starFilterAll)}</button>`
+        )
       );
-      for (const star of [1, 2, 3, 4, 5]) {
-        const pressed = star === 5 ? 'true' : 'false';
+      for (const tierLabel of ['5 ★', '4 ★', '≤ 3 ★']) {
         assert.match(
-          openHtml,
+          closedHtml,
           new RegExp(
-            `aria-pressed="${pressed}"[^>]*aria-label="${escapeRe(label)}: ${star}/5 ★"[^>]*>★</button>`
+            `aria-pressed="false"[^>]*>${escapeRe(tierLabel)}</button>`
           )
         );
       }
-    }
-  }
+      assert.match(
+        closedHtml,
+        new RegExp(
+          `<button[^>]*aria-expanded="false"(?![^>]*aria-controls)[^>]*>${escapeRe(dict.openWriteFormBtn)}</button>`
+        )
+      );
 
-  const prevV2 = process.env.NEXT_PUBLIC_RATE_REVIEW_FORM_V2;
-  try {
+      const openHtml = renderReviewsSection(loc, {
+        defaultWriteFormOpen: true,
+      });
+      const toggleMatch = openHtml.match(
+        new RegExp(
+          `<button[^>]*aria-expanded="true"[^>]*aria-controls="([^"]+)"[^>]*>${escapeRe(dict.closeFormBtn)}</button>`
+        )
+      );
+      assert.ok(toggleMatch?.[1], `${loc}: open toggle exposes aria-controls`);
+      assert.match(
+        openHtml,
+        new RegExp(`<form id="${escapeRe(toggleMatch[1])}"`)
+      );
+
+      for (const cKey of [
+        'criteriaScreen',
+        'criteriaPerformance',
+        'criteriaCamera',
+        'criteriaBattery',
+        'criteriaValue',
+      ] as const) {
+        const label = dict[cKey].replace(/&/g, '&amp;');
+        assert.match(
+          openHtml,
+          new RegExp(`role="group"[^>]*aria-label="${escapeRe(label)}"`)
+        );
+        for (const star of [1, 2, 3, 4, 5]) {
+          const pressed = star === 5 ? 'true' : 'false';
+          assert.match(
+            openHtml,
+            new RegExp(
+              `aria-pressed="${pressed}"[^>]*aria-label="${escapeRe(label)}: ${star}/5 ★"[^>]*>★</button>`
+            )
+          );
+        }
+      }
+    }
+
+    const ineligibleHtml = renderReviewsSection('en', {
+      masterProductId: undefined,
+      defaultWriteFormOpen: true,
+    });
+    assert.doesNotMatch(ineligibleHtml, /<form\b/);
+    assert.doesNotMatch(ineligibleHtml, /Write a review|✕ Close form/);
+
     process.env.NEXT_PUBLIC_RATE_REVIEW_FORM_V2 = '1';
     const v2OpenHtml = renderReviewsSection('en', {
       defaultWriteFormOpen: true,

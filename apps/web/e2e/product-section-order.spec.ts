@@ -48,7 +48,9 @@ test('phones show three reviews until the rest are asked for', async ({
   const cards = page.locator('#jreviews-section .rate-phone-collapsible > *');
   await expect(cards).toHaveCount(6);
   await expect(cards.filter({ visible: true })).toHaveCount(3);
-  const more = page.locator('#jreviews-section button[aria-expanded]');
+  const more = page.locator(
+    '#jreviews-section .rate-phone-collapsible + button[aria-expanded]'
+  );
   await expect(more).toHaveText(/3/);
   // A click before hydration does nothing; retry until it opens.
   await expect(async () => {
