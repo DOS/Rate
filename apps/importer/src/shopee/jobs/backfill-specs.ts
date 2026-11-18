@@ -243,12 +243,18 @@ export async function syncItemSeedSpecs(
 
 /**
  * Whether `camera.rear_setup` declares a single rear camera ("Single Camera", the label the
- * normalizer gives a one-camera benchmark model). Such a device has no second camera to
- * audit: the iPhone 16e has one camera on the back (DOS/Rate#1718).
+ * normalizer gives a one-camera benchmark model) and no third or fourth camera contradicts
+ * it. Such a device has no second camera to audit: the iPhone 16e has one camera on the
+ * back (DOS/Rate#1718).
  */
-export function hasSingleRearCamera(camera: { rear_setup?: unknown } | null | undefined): boolean {
+export function hasSingleRearCamera(
+  camera:
+    { rear_setup?: unknown; third_camera?: unknown; fourth_camera?: unknown } | null | undefined
+): boolean {
   const setup = camera?.rear_setup;
-  return typeof setup === 'string' && /^\s*single\b/i.test(setup);
+  if (typeof setup !== 'string' || !/^\s*single\b/i.test(setup)) return false;
+  const filled = (v: unknown) => typeof v === 'string' && v.trim().length > 0;
+  return !filled(camera?.third_camera) && !filled(camera?.fourth_camera);
 }
 
 /**

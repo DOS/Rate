@@ -213,6 +213,10 @@ test('the seed declares one rear camera and invents no second one', () => {
   // The benchmark registry also counts one rear camera for the 16e.
   const enriched = normalize(seed.name);
   assert.equal(enriched.specifications.camera?.rear_setup, 'Single Camera');
+  // Nor does the normalizer invent an ultrawide for a listing of any 16e storage.
+  for (const title of [seed.name, 'Apple iPhone 16e 256GB', 'Apple iPhone 16e 512GB']) {
+    assert.equal(normalize(title).specifications.camera?.second_camera, undefined, title);
+  }
   assert.equal(enriched.battery_mah, seed.battery_mah);
   assert.equal(enriched.screen_size_inch, seed.screen_size_inch);
 });
@@ -238,6 +242,10 @@ test('hasSingleRearCamera reads only a leading "single" rear setup', () => {
   for (const setup of ['Dual Camera', 'Triple Camera', 'Singles', '', '   ', 1, null]) {
     assert.equal(hasSingleRearCamera({ rear_setup: setup }), false, String(setup));
   }
+  // A third or fourth camera contradicts the label: the second camera is audited again.
+  assert.equal(hasSingleRearCamera({ rear_setup: 'Single Camera', third_camera: '12 MP' }), false);
+  assert.equal(hasSingleRearCamera({ rear_setup: 'Single Camera', fourth_camera: '8 MP' }), false);
+  assert.equal(hasSingleRearCamera({ rear_setup: 'Single Camera', third_camera: '  ' }), true);
   assert.equal(hasSingleRearCamera(undefined), false);
   assert.equal(hasSingleRearCamera(null), false);
 });
@@ -313,6 +321,7 @@ test('the audit still requires a second camera when the setup is not single', as
     { main_camera: '50 MP' },
     { rear_setup: 'Dual Camera', main_camera: '50 MP', second_camera: '  ' },
     { rear_setup: 'Triple Camera', main_camera: '50 MP' },
+    { rear_setup: 'Single Camera', main_camera: '50 MP', third_camera: '12 MP' },
   ]) {
     const { client } = tableClient([
       {

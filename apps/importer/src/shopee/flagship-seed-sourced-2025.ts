@@ -8,7 +8,9 @@ import type { FlagshipDeviceSeed } from './flagship-seed-data.js';
  * (a whole group, or a field path where the page is narrower, -> URL). Apple states
  * "There's one camera on the back", so the seed declares a single rear camera and has no
  * `second_camera`; the 2x Telephoto is a crop of the same 48MP sensor. Values no source
- * states (loudspeaker layout, headphone jack, SAR, FCC ID, Vietnamese price) are left out.
+ * states (loudspeaker layout, headphone jack, SAR, FCC ID, Vietnamese price) are left out of
+ * the seed; the backfill's field merge keeps what the master already holds (the #594 row's
+ * `hardware.os` and `battery.fast_charging_w`, 20W being Apple's stated adapter).
  * No `images`: the master keeps its own. Researched on 2026-11-18.
  */
 export const SOURCED_SEEDS_2025: FlagshipDeviceSeed[] = [
@@ -122,16 +124,17 @@ export const SOURCED_SEEDS_2025: FlagshipDeviceSeed[] = [
       'design.colors': 'https://support.apple.com/en-us/108044',
       display: 'https://support.apple.com/en-us/122208',
       'display.refresh_rate_hz': 'https://en.wikipedia.org/wiki/IPhone_16e',
-      'display.features.notch': 'https://en.wikipedia.org/wiki/IPhone_16e',
+      'display.features': 'https://en.wikipedia.org/wiki/IPhone_16e',
       hardware: 'https://support.apple.com/en-us/122208',
       'hardware.ram_gb': 'https://en.wikipedia.org/wiki/IPhone_16e',
       'battery.capacity_mah': 'https://en.wikipedia.org/wiki/IPhone_16e',
+      'battery.type': 'https://en.wikipedia.org/wiki/IPhone_16e',
       'battery.charging': 'https://support.apple.com/en-us/122208',
-      'battery.charging.wireless': 'https://en.wikipedia.org/wiki/IPhone_16e',
+      'battery.charging.qi_wattage': 'https://en.wikipedia.org/wiki/IPhone_16e',
       camera: 'https://support.apple.com/en-us/122208',
       'camera.rear_setup': 'https://support.apple.com/en-us/108044',
       connectivity: 'https://support.apple.com/en-us/122208',
-      'connectivity.other.uwb_magsafe': 'https://en.wikipedia.org/wiki/IPhone_16e',
+      'connectivity.other': 'https://en.wikipedia.org/wiki/IPhone_16e',
       cellular: 'https://support.apple.com/en-us/122208',
       'cellular.sim_type': 'https://support.apple.com/en-us/108044',
       multimedia: 'https://support.apple.com/en-us/122208',
