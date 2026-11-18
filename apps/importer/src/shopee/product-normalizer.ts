@@ -737,6 +737,27 @@ const CANONICAL_PHONE_REGISTRY: Record<
     release_date: 'February 2025',
     ip_rating: 'IP68 (6m up to 30 mins)',
   },
+  'apple:iphone-17e': {
+    // Sourced with the seed (flagship-seed-sourced-iphone-17e.ts, DOS/Rate#1737): one rear
+    // camera, so a listing gets no invented ultrawide. Apple publishes no maximum wired
+    // charging wattage or refresh rate, and the Vietnamese model (A3634) weighs 170 g.
+    screen_size_inch: 6.1,
+    battery_mah: 4005,
+    ram_gb: 8,
+    chipset: 'Apple A19 (3 nm)',
+    cpu: '6-core CPU (2 performance + 4 efficiency cores)',
+    gpu: 'Apple 4-core GPU with Neural Accelerators, hardware-accelerated ray tracing',
+    os: 'iOS 26 (upgradable)',
+    weight_g: 170,
+    dimensions: '146.7 x 71.5 x 7.80 mm',
+    resolution: '1170 x 2532 pixels (~460 ppi)',
+    screen_type: 'Super Retina XDR OLED, HDR, 800 nits (typ), 1200 nits (HDR peak)',
+    rear_camera: '48 MP Fusion Main, f/1.6, 26mm, OIS, Hybrid Focus Pixels',
+    front_camera: '12 MP TrueDepth, f/1.9, autofocus with Focus Pixels',
+    has_5g: true,
+    release_date: 'March 2026',
+    ip_rating: 'IP68 (up to 6 m for 30 min)',
+  },
   'apple:iphone-16-plus': {
     screen_size_inch: 6.7,
     battery_mah: 4674,
@@ -2128,7 +2149,7 @@ export class ProductNormalizer {
       const lineTitle = (line: string) =>
         namesAppleFamilyOtherThan(ownAppleTitle, line) ? ownAppleTitle : appleTitle;
       const iphoneMatch = lineTitle('iPhone').match(
-        /iphone\s*(\d+e\b|\d+(?:\s*(?:pro\s*max|pro|plus|mini|air)|\+(?= ?(?:$|[-,]|\d+(?:[.,]\d+)? ?(?:gb|tb)\b|[45]g\b|lte\b|chính\b)))?|air\b|duo\b|se(?:\s*(?:\(\s*(?:2020|2022|2025)\s*\)|(?:2020|2022|2025)\b|(?:gen\s*)?[234]\b))?)/i
+        /iphone\s*(\d+e\b|(?:1[6-9]|[2-9]\d) e(?= ?\d+ ?(?:gb|tb)\b)|\d+(?:\s*(?:pro\s*max|pro|plus|mini|air)|\+(?= ?(?:$|[-,]|\d+(?:[.,]\d+)? ?(?:gb|tb)\b|[45]g\b|lte\b|chính\b)))?|air\b|duo\b|se(?:\s*(?:\(\s*(?:2020|2022|2025)\s*\)|(?:2020|2022|2025)\b|(?:gen\s*)?[234]\b))?)/i
       );
       // The base iPad by its chip, "iPad A16" or "iPad (A16)", and "iPad Gen 10" like
       // "iPad 10" (DOS/Rate#817).
@@ -2165,7 +2186,9 @@ export class ProductNormalizer {
           .replace(/\bgen\s*/i, '')
           .replace(/\s+/g, ' ')
           .trim()
-          .replace(/^(\d+)E\b/, '$1e')
+          // "17 E 256GB" is the 17e: a spaced "e" counts only for an e-line generation (16 on)
+          // right before a storage, so a stray "E" never makes an "iPhone 13e".
+          .replace(/^(\d+) ?E\b/i, '$1e')
           .replace(/^se\b/i, 'SE')
           // The 2020 and 2022 iPhone SE are the 2nd and 3rd generation (DOS/Rate#819).
           .replace(/^SE 2020$/, 'SE 2')

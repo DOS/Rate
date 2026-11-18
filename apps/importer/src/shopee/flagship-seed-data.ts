@@ -1,5 +1,6 @@
 import { splitModelKey, type ProductSpecifications, type KeySpecs } from '@repo/shared-data';
 import { SOURCED_SEEDS_2025 } from './flagship-seed-sourced-2025.js';
+import { SOURCED_SEEDS_IPHONE_17E } from './flagship-seed-sourced-iphone-17e.js';
 import { SOURCED_SEEDS_2026 } from './flagship-seed-sourced-2026.js';
 
 /**
@@ -3567,6 +3568,9 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
   // Sourced iPhone 16e 128GB seed (flagship-seed-sourced-2025.ts, DOS/Rate#1718): the master
   // the DOS/Rate#594 offer move created lacked three spec groups.
   ...SOURCED_SEEDS_2025,
+  // Sourced iPhone 17e 256GB and 512GB seeds (flagship-seed-sourced-iphone-17e.ts,
+  // DOS/Rate#1737): the 16e's successor had no master.
+  ...SOURCED_SEEDS_IPHONE_17E,
 ];
 
 /**
