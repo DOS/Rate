@@ -26,8 +26,11 @@
  *   --insert-missing  A named key with no master row is inserted as a draft master instead of
  *                     stopping the run; named keys that have a row are updated as usual. It
  *                     needs --only, and with --apply also --expect, so the plan (inserts plus
- *                     updates) is checked before the first write. No rate.items row is
- *                     touched, and the draft stays unpublished until someone publishes it.
+ *                     updates) is checked before the first write. A seed slug held by
+ *                     another master stops the run before any write. The job writes no
+ *                     rate.items row (a database master trigger may create a draft Item where
+ *                     the Item model is deployed), and the draft master stays unpublished
+ *                     until someone publishes it.
  *
  * Safety invariant:
  * - Dry-run by default (`apply = false`): never mutates `rate.master_products` unless `--apply` is passed.
@@ -752,6 +755,24 @@ export async function runMasterSpecsBackfillWith(
         status: 'draft',
         metadata: { category_slug: device.categorySlug },
       };
+      // A named insert (--insert-missing) checks the unique slug in the plan, so a clash
+      // stops the run before the first write instead of after a partial insert.
+      if (insertMissing) {
+        const { data: slugOwner, error: slugErr } = await supabase
+          .from('master_products')
+          .select('id, model_key')
+          .eq('slug', device.slug)
+          .maybeSingle();
+        if (slugErr) {
+          throw new Error(`Failed to look up slug ${device.slug}: ${slugErr.message}`);
+        }
+        if (slugOwner) {
+          const owner = String((slugOwner as { model_key?: unknown }).model_key ?? '');
+          throw new Error(
+            `--insert-missing: slug ${device.slug} already belongs to ${owner.slice(0, 160) || 'another master'}: stopped before any write`
+          );
+        }
+      }
       seedWrites.push({
         kind: 'seed-insert',
         device,
@@ -928,7 +949,10 @@ export async function runMasterSpecsBackfillWith(
   // A scoped run writes masters only: an Item row spans variants outside the scope.
   let itemsUpdated = 0;
   if (scoped) {
-    logger.info('backfill.items_skipped', 'Scoped run (--only): rate.items rows are not touched');
+    logger.info(
+      'backfill.items_skipped',
+      'Scoped run (--only): the job writes no rate.items row (a master trigger may still create a draft Item)'
+    );
   } else {
     itemsUpdated = (await syncItemSeedSpecs(supabase, { apply })).updated;
   }

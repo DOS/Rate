@@ -90,8 +90,9 @@ function tableClient(rows: Array<Record<string, unknown>>) {
           return Promise.resolve({ data: structuredClone(data), error: null });
         },
         maybeSingle() {
-          const key = filters.find(([c]) => c === 'model_key')?.[1];
-          const row = table === 'master_products' ? rows.find(r => r.model_key === key) : null;
+          const [column, value] = filters.find(([c]) => c === 'model_key' || c === 'slug') ?? [];
+          const row =
+            table === 'master_products' && column ? rows.find(r => r[column] === value) : null;
           return Promise.resolve({ data: row ? structuredClone(row) : null, error: null });
         },
         update(next: Record<string, unknown>) {
@@ -213,7 +214,7 @@ test('each seed declares one rear camera, and 17e listings get no invented secon
     assert.equal(seed.specifications.camera?.second_camera, undefined, seed.model_key);
     assert.ok(seed.specifications.camera?.main_camera?.startsWith('48 MP Fusion'));
   }
-  for (const title of ['Apple iPhone 17e 256GB', 'Apple iPhone 17e 512GB', 'iPhone 17e 128GB']) {
+  for (const title of ['Apple iPhone 17e 256GB', 'Apple iPhone 17e 512GB', 'iPhone 17 E 256GB']) {
     const enriched = normalize(title);
     assert.equal(enriched.is_benchmark_enriched, true, title);
     assert.equal(enriched.specifications.camera?.rear_setup, 'Single Camera', title);
@@ -236,6 +237,8 @@ test('17e titles key exactly to their storage, never to the 16e; near misses do 
     'Apple iPhone 17e 256GB',
     'iPhone 17E 512GB Chính hãng',
     'Điện thoại Apple iPhone 17e 256GB - Hồng Phai',
+    'Apple iPhone 17 E 256GB',
+    'iPhone 17 e 512 GB',
   ]) {
     assert.notEqual(normalize(title).model_key, 'apple:iphone-16e:128gb', title);
     assert.match(normalize(title).model_key, /^apple:iphone-17e:/, title);
@@ -246,11 +249,16 @@ test('17e titles key exactly to their storage, never to the 16e; near misses do 
     'Apple iPhone 17 Pro 256GB',
     'Apple iPhone Air 256GB',
     'Ốp lưng cho iPhone 17e',
+    // A spaced "e" counts only right before a storage.
+    'iPhone 17 e-SIM 256GB',
+    'iPhone 17 Edge 256GB',
   ]) {
     assert.doesNotMatch(normalize(title).model_key, /^apple:iphone-17e:/, title);
   }
-  // The 16e keeps its own key.
+  // The 16e keeps its own key, spaced too.
   assert.equal(normalize('Apple iPhone 16e 128GB').model_key, 'apple:iphone-16e:128gb');
+  assert.equal(normalize('Apple iPhone 16 E 128GB').model_key, 'apple:iphone-16e:128gb');
+  assert.equal(normalize('Apple iPhone 17 256GB').model_key, 'apple:iphone-17:256gb');
 });
 
 test('the rows a scoped insert writes pass the audit (--audit-only logic)', async () => {
@@ -374,5 +382,63 @@ test('parseBackfillSpecsArgs reads --insert-missing only with --only, and --expe
     [['--only', only, '--insert-missing=true'], /unknown argument/],
   ] as const) {
     assert.throws(() => parseBackfillSpecsArgs(argv), error, argv.join(' '));
+  }
+});
+
+test('a mixed --insert-missing run updates the named key that exists and inserts the other', async () => {
+  const sixtyFour = seedMasterSpecUpdate(null, seeds[0]!).specifications;
+  const rows: Array<Record<string, unknown>> = [
+    {
+      id: 'existing-256',
+      name: seeds[0]!.name,
+      model_key: KEYS[0],
+      slug: seeds[0]!.slug,
+      status: 'draft',
+      specifications: sixtyFour,
+    },
+  ];
+  const { client, updates, inserts } = tableClient(rows);
+  const result = await runMasterSpecsBackfillWith(client, deps, {
+    apply: true,
+    only: [...KEYS],
+    expect: 2,
+    insertMissing: true,
+  });
+  assert.equal(result.catalogUpdated, 1);
+  assert.equal(result.catalogInserted, 1);
+  assert.deepEqual(
+    updates.map(u => u.id),
+    ['existing-256']
+  );
+  assert.deepEqual(
+    inserts.map(i => i.model_key),
+    [KEYS[1]]
+  );
+});
+
+test('a seed slug held by another master stops an --insert-missing run before any write', async () => {
+  for (const apply of [true, false]) {
+    const { client, updates, inserts } = tableClient([
+      existingRow(),
+      { id: 'squatter', model_key: 'apple:iphone-17e:unknown', slug: seeds[1]!.slug },
+    ]);
+    await assert.rejects(
+      () =>
+        runMasterSpecsBackfillWith(client, deps, {
+          apply,
+          only: [...KEYS],
+          expect: 2,
+          insertMissing: true,
+        }),
+      /slug apple-iphone-17e-512gb already belongs to apple:iphone-17e:unknown: stopped before any write/
+    );
+    assert.deepEqual(updates, []);
+    assert.deepEqual(inserts, []);
+  }
+});
+
+test('the 17e seeds cite no satellite feature (apple.com/vn lists none)', () => {
+  for (const seed of seeds) {
+    assert.doesNotMatch(JSON.stringify(seed.specifications), /satellite/i, seed.model_key);
   }
 });

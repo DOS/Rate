@@ -2149,7 +2149,7 @@ export class ProductNormalizer {
       const lineTitle = (line: string) =>
         namesAppleFamilyOtherThan(ownAppleTitle, line) ? ownAppleTitle : appleTitle;
       const iphoneMatch = lineTitle('iPhone').match(
-        /iphone\s*(\d+e\b|\d+(?:\s*(?:pro\s*max|pro|plus|mini|air)|\+(?= ?(?:$|[-,]|\d+(?:[.,]\d+)? ?(?:gb|tb)\b|[45]g\b|lte\b|chính\b)))?|air\b|duo\b|se(?:\s*(?:\(\s*(?:2020|2022|2025)\s*\)|(?:2020|2022|2025)\b|(?:gen\s*)?[234]\b))?)/i
+        /iphone\s*(\d+e\b|\d+ e(?= ?\d+ ?(?:gb|tb)\b)|\d+(?:\s*(?:pro\s*max|pro|plus|mini|air)|\+(?= ?(?:$|[-,]|\d+(?:[.,]\d+)? ?(?:gb|tb)\b|[45]g\b|lte\b|chính\b)))?|air\b|duo\b|se(?:\s*(?:\(\s*(?:2020|2022|2025)\s*\)|(?:2020|2022|2025)\b|(?:gen\s*)?[234]\b))?)/i
       );
       // The base iPad by its chip, "iPad A16" or "iPad (A16)", and "iPad Gen 10" like
       // "iPad 10" (DOS/Rate#817).
@@ -2186,7 +2186,8 @@ export class ProductNormalizer {
           .replace(/\bgen\s*/i, '')
           .replace(/\s+/g, ' ')
           .trim()
-          .replace(/^(\d+)E\b/, '$1e')
+          // "17 E 256GB" is the 17e: a spaced "e" counts only right before a storage.
+          .replace(/^(\d+) ?E\b/i, '$1e')
           .replace(/^se\b/i, 'SE')
           // The 2020 and 2022 iPhone SE are the 2nd and 3rd generation (DOS/Rate#819).
           .replace(/^SE 2020$/, 'SE 2')

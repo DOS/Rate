@@ -9,8 +9,8 @@ const WIKIPEDIA = 'https://en.wikipedia.org/wiki/IPhone_17e';
 const VODAFONE_UK = 'https://deviceguides.vodafone.co.uk/apple/iphone-17e-ios-27/specifications';
 
 /**
- * Sourced seed for the iPhone 17e (DOS/Rate#1737), the successor of the iPhone 16e, which
- * Apple discontinued when it introduced the 17e on 2026-03-02. No master existed for it.
+ * Sourced seed for the iPhone 17e (DOS/Rate#1737), introduced on 2026-03-02 as the successor
+ * of the iPhone 16e (the 16e seed marks it discontinued that day). No master existed for it.
  * One entry per storage Apple Vietnam sells (256GB and 512GB, apple.com/vn). Spec-only,
  * like every seed: no listing, price, merchant or review. Every spec group is cited in
  * `sources` (a whole group, or a field path where the page is narrower, -> URL).
@@ -20,7 +20,9 @@ const VODAFONE_UK = 'https://deviceguides.vodafone.co.uk/apple/iphone-17e-ios-27
  * "There's one camera on the back", so the seed declares a single rear camera and has no
  * `second_camera`; the 2x Telephoto is a crop of the same 48MP sensor. Apple publishes no
  * battery capacity or RAM: 4005 mAh and 8GB are from Wikipedia and Vodafone UK's device
- * guide, which agree. Values no source checked here states are left out: display refresh
+ * guide, which agree but likely share one upstream (the spec sites Wikipedia's infobox cites),
+ * as for the 16e seed. Satellite features are left out: apple.com/vn lists none, and Apple
+ * offers them in a few countries only. Values no source checked here states are left out: display refresh
  * rate, notch, maximum wired charging wattage, loudspeaker layout, SAR, FCC ID and the
  * Vietnamese price (a retail value that changes; the US price already did). No `images`:
  * Rate holds no licensed picture of it yet. Researched on 2026-11-18.
@@ -109,7 +111,7 @@ function iphone17e(storageGb: 256 | 512): FlagshipDeviceSeed {
         sensors:
           'Face ID, barometer, high dynamic range gyro, high-g accelerometer, proximity sensor, dual ambient light sensors',
         other:
-          'NFC with reader mode, Express Cards with power reserve; Emergency SOS, Messages, Find My and Roadside Assistance via satellite; Crash Detection',
+          'NFC with reader mode, Express Cards with power reserve; Emergency SOS; Crash Detection',
       },
       cellular: {
         has_5g: true,
@@ -140,7 +142,8 @@ function iphone17e(storageGb: 256 | 512): FlagshipDeviceSeed {
       display: SPECS_SUPPORT,
       hardware: SPECS_SUPPORT,
       'hardware.chipset': NEWSROOM,
-      'hardware.os': SPECS_VN,
+      'hardware.os': NEWSROOM,
+      'hardware.os.in_the_box': SPECS_VN,
       'hardware.ram_gb': WIKIPEDIA,
       'hardware.ram_gb.corroboration': VODAFONE_UK,
       battery: SPECS_VN,
@@ -151,7 +154,7 @@ function iphone17e(storageGb: 256 | 512): FlagshipDeviceSeed {
       camera: SPECS_US,
       'camera.rear_setup': IDENTIFY,
       connectivity: SPECS_VN,
-      'connectivity.other': SPECS_US,
+      'connectivity.other': SPECS_VN,
       cellular: SPECS_VN,
       'cellular.technology': SPECS_SUPPORT,
       multimedia: SPECS_US,
