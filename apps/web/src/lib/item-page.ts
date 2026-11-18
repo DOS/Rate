@@ -98,9 +98,9 @@ export function buildItemProductGroupNode(input: {
   variants: readonly ItemJsonLdVariant[];
   aggregateRating?: Record<string, unknown> | null;
 }): Record<string, unknown> {
-  const images = input.images.filter(
-    (url) => typeof url === 'string' && url.trim().length > 0
-  );
+  const images = input.images
+    .map((url) => (typeof url === 'string' ? url.trim() : ''))
+    .filter((url) => url.length > 0);
   const hasVariant = input.variants
     .filter((v) => Number.isFinite(v.minPrice) && v.minPrice > 0)
     .map((v) => {

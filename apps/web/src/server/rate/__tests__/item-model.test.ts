@@ -789,7 +789,7 @@ async function main() {
     brand: 'Apple',
     canonicalUrl: 'https://rate.vn/smartphones/apple-iphone-16',
     description: 'd',
-    images: ['https://rate.vn/img/iphone-16.webp', '   '],
+    images: ['  https://rate.vn/img/iphone-16.webp  ', '   '],
     variants: [
       {
         variantKey: '128gb',
@@ -810,7 +810,28 @@ async function main() {
         label: '512GB',
         minPrice: 28990000,
         maxPrice: Number.NaN,
-        sellerCount: -2,
+        sellerCount: Number.NaN,
+      },
+      {
+        variantKey: '1tb',
+        label: '1TB',
+        minPrice: 32990000,
+        maxPrice: Number.POSITIVE_INFINITY,
+        sellerCount: Number.POSITIVE_INFINITY,
+      },
+      {
+        variantKey: 'nan',
+        label: 'NaN',
+        minPrice: Number.NaN,
+        maxPrice: 0,
+        sellerCount: 2,
+      },
+      {
+        variantKey: 'inf',
+        label: 'Inf',
+        minPrice: Number.POSITIVE_INFINITY,
+        maxPrice: 0,
+        sellerCount: 2,
       },
     ],
   }) as {
@@ -846,6 +867,13 @@ async function main() {
         priceCurrency: 'VND',
         lowPrice: 28990000,
         highPrice: 28990000,
+        offerCount: 1,
+      },
+      {
+        '@type': 'AggregateOffer',
+        priceCurrency: 'VND',
+        lowPrice: 32990000,
+        highPrice: 32990000,
         offerCount: 1,
       },
     ]
@@ -927,6 +955,18 @@ async function main() {
   assert.match(soldOutStripHtml, /href="#pdv-price-history"/);
   assert.doesNotMatch(soldOutStripHtml, /href="#price-history-section"/);
   assert.equal(renderStrip(0, -1).includes('bg-success-subtle'), false);
+  assert.equal(renderStrip(0, Number.NaN).includes('bg-success-subtle'), false);
+  const soldOutWithHistoryHtml = renderStrip(0, 20_990_000);
+  assert.equal(
+    soldOutWithHistoryHtml.includes(enMessages.watchlist.btnWatch),
+    false
+  );
+  assert.equal(
+    soldOutWithHistoryHtml.includes(
+      `All-time low: ${formatNumber(20_990_000, 'en')} ₫`
+    ),
+    true
+  );
   const pricedStripHtml = renderStrip(21_990_000, 20_990_000);
   assert.equal(pricedStripHtml.includes(enMessages.watchlist.btnWatch), true);
   assert.equal(
