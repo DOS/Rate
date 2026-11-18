@@ -96,18 +96,19 @@ function toOptionalFiniteScore(value: unknown): number | null {
     return Number.isFinite(value) ? value : null;
   }
   if (typeof value === 'string') {
-    const trimmed = value.trim();
-    if (!trimmed) return null;
-    const parsed = Number(trimmed);
+    const cleaned = value.replace(HERO_INSPECTOR_CONTROL_CHARS_RE, '').trim();
+    if (!cleaned || cleaned.length > 32 || /^[+-]?0[xbo]/i.test(cleaned)) {
+      return null;
+    }
+    const parsed = Number(cleaned);
     return Number.isFinite(parsed) ? parsed : null;
   }
   return null;
 }
 
 export function sanitizeHeroInspectorPriceVnd(value: unknown): number {
-  if (typeof value !== 'number' && typeof value !== 'string') return 0;
-  const num = typeof value === 'string' ? Number(value.trim() || NaN) : value;
-  if (!Number.isFinite(num) || num <= 0 || num > MAX_VALID_VND_PRICE) {
+  const num = toOptionalFiniteScore(value);
+  if (num == null || num <= 0 || num > MAX_VALID_VND_PRICE) {
     return 0;
   }
   return Math.round(num);
@@ -137,11 +138,11 @@ export function resolveHeroMerchantTrustBadge(
 } | null {
   const rawTrust = toOptionalFiniteScore(merchant?.trust_score);
   if (rawTrust == null) return null;
-  const trustScore = Math.min(100, Math.max(0, Math.round(rawTrust)));
+  const clampedTrust = Math.min(100, Math.max(0, rawTrust));
   const rawRisk = toOptionalFiniteScore(merchant?.risk_score);
   const riskScore =
     rawRisk == null ? null : Math.min(100, Math.max(0, rawRisk));
-  const tone = merchantRiskTone(riskScore ?? 100 - trustScore);
+  const tone = merchantRiskTone(riskScore ?? 100 - clampedTrust);
   const badgeClass =
     variant === 'subtle'
       ? tone === 'good'
@@ -155,7 +156,7 @@ export function resolveHeroMerchantTrustBadge(
           ? 'bg-warning text-dark'
           : 'bg-danger text-white';
   return {
-    score: trustScore,
+    score: Math.round(clampedTrust),
     tone,
     badgeClass,
   };
@@ -221,13 +222,15 @@ export function buildHeroCompareItem(
   thumb?: string | null
 ) {
   const resolvedThumb = thumb === undefined ? productImageUrl(item) : thumb;
+  const categorySlug = getMasterProductCategorySlug(item);
   return {
     slug: item.slug,
     name: item.name,
     brand: item.brand,
     thumbnail: resolvedThumb ?? null,
     min_price: sanitizeHeroInspectorPriceVnd(item.min_price),
-    categoryPath: `/${getMasterProductCategorySlug(item)}`,
+    categorySlug,
+    categoryPath: `/${categorySlug}`,
   };
 }
 
@@ -1015,7 +1018,8 @@ export default function HeroSearchInspector({
                                   {inspectResult.merchantProfile
                                     .is_official && (
                                     <BsCheckCircleFill
-                                      aria-hidden="true"
+                                      role="img"
+                                      aria-label={t('officialMallBadge')}
                                       className="text-success ms-1"
                                     />
                                   )}

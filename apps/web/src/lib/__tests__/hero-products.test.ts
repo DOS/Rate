@@ -239,10 +239,19 @@ async function testHeroSearchInspector() {
     resolveHeroReviewAuthenticityDisplay,
     sanitizeHeroInspectorPriceVnd,
   } = await import('../../components/home/HeroSearchInspector');
+  const { normalizeTrayItem } =
+    await import('../../components/compare/compare-tray');
 
   assert.equal(resolveHeroMerchantTrustBadge(null), null);
   assert.equal(resolveHeroMerchantTrustBadge({ trust_score: null }), null);
   assert.equal(resolveHeroMerchantTrustBadge({ trust_score: '' }), null);
+  assert.equal(resolveHeroMerchantTrustBadge({ trust_score: '0x50' }), null);
+  assert.equal(resolveHeroMerchantTrustBadge({ trust_score: '0b1010' }), null);
+  assert.equal(resolveHeroMerchantTrustBadge({ trust_score: '0o77' }), null);
+  assert.equal(
+    resolveHeroMerchantTrustBadge({ trust_score: '\u000085' })?.score,
+    85
+  );
   assert.equal(
     resolveHeroMerchantTrustBadge({ trust_score: Number.NaN }),
     null
@@ -304,6 +313,24 @@ async function testHeroSearchInspector() {
     'good'
   );
 
+  // Fractional trust/risk scores near thresholds classify identically in Mode 1 and Mode 2.
+  assert.equal(
+    resolveHeroMerchantTrustBadge({ trust_score: 80.4 }, 'subtle')?.tone,
+    resolveHeroMerchantTrustBadge({ trust_score: 80.4, risk_score: 19.6 })?.tone
+  );
+  assert.equal(
+    resolveHeroMerchantTrustBadge({ trust_score: 80.4 }, 'subtle')?.tone,
+    'good'
+  );
+  assert.equal(
+    resolveHeroMerchantTrustBadge({ trust_score: 50.4 }, 'subtle')?.tone,
+    resolveHeroMerchantTrustBadge({ trust_score: 50.4, risk_score: 49.6 })?.tone
+  );
+  assert.equal(
+    resolveHeroMerchantTrustBadge({ trust_score: 50.4 }, 'subtle')?.tone,
+    'warn'
+  );
+
   // Price bounds and unpriced "-" suppression without trailing "₫".
   for (const invalid of [
     0,
@@ -311,6 +338,9 @@ async function testHeroSearchInspector() {
     null,
     undefined,
     '',
+    '0x100000',
+    '0b1010',
+    '0o777',
     Number.NaN,
     true,
     MAX_VALID_VND_PRICE + 1,
@@ -325,18 +355,20 @@ async function testHeroSearchInspector() {
     '19\u00a0990\u00a0000\u00a0₫'
   );
 
-  // CompareQuickToggle preserves non-smartphone category paths.
-  const laptopItem = buildHeroCompareItem({
-    id: 'lap-1',
-    slug: 'macbook-air-m3',
-    name: 'MacBook Air M3',
-    brand: 'Apple',
+  // CompareQuickToggle preserves non-smartphone categorySlug & categoryPath.
+  const earbudsItem = buildHeroCompareItem({
+    id: 'ear-1',
+    slug: 'marshall-motif-ii-anc',
+    name: 'Marshall Motif II A.N.C.',
+    brand: 'Marshall',
     min_price: 0,
-    metadata: { category_slug: 'laptops' },
-    specifications: { category_slug: 'laptops' },
+    metadata: { category_slug: 'earbuds' },
+    specifications: { category_slug: 'earbuds' },
   } as unknown as HeroProductSuggestion);
-  assert.equal(laptopItem.categoryPath, '/laptops');
-  assert.equal(laptopItem.min_price, 0);
+  assert.equal(earbudsItem.categorySlug, 'earbuds');
+  assert.equal(earbudsItem.categoryPath, '/earbuds');
+  assert.equal(earbudsItem.min_price, 0);
+  assert.equal(normalizeTrayItem(earbudsItem).categorySlug, 'earbuds');
 
   const mockRouter: AppRouterInstance = {
     back: () => {},
@@ -505,6 +537,12 @@ async function testHeroSearchInspector() {
         `${locale}: authentic pct localized`
       );
 
+      const escRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const switcherBtnPattern = (pressed: boolean, label: string) =>
+        new RegExp(
+          `<button[^>]*aria-pressed="${pressed}"[^>]*>(?:(?!</button>).)*<svg[^>]*aria-hidden="true"(?:(?!</button>).)*${escRe(label)}</button>`
+        );
+
       // Mode 1 open dropdown: aria-pressed, aria-hidden icons, no 0 VND, subtle trust tones.
       const mode1Html = renderHero(locale, scope, {
         initialProducts: heroProducts,
@@ -514,11 +552,11 @@ async function testHeroSearchInspector() {
       });
       assert.match(
         mode1Html,
-        /<button[^>]*aria-pressed="true"[^>]*>.*<svg[^>]*aria-hidden="true"/
+        switcherBtnPattern(true, fullMessages.heroSearch.modeSearchBtn)
       );
       assert.match(
         mode1Html,
-        /<button[^>]*aria-pressed="false"[^>]*>.*<svg[^>]*aria-hidden="true"/
+        switcherBtnPattern(false, fullMessages.heroSearch.modeInspectBtn)
       );
       assert.doesNotMatch(mode1Html, /\b0[\s\u00a0]₫/);
       assert.doesNotMatch(mode1Html, /NaN[\s\u00a0]*₫/);
@@ -589,7 +627,7 @@ async function testHeroSearchInspector() {
             id: 'm-bad',
             name: 'Risky Seller',
             platform: 'shopee',
-            is_official: false,
+            is_official: true,
             risk_score: 68,
             trust_score: 32,
             dosafe_risk_score: 68,
@@ -599,9 +637,22 @@ async function testHeroSearchInspector() {
           suggestions: [],
         },
       });
+      assert.match(
+        mode2ZeroHtml,
+        switcherBtnPattern(false, fullMessages.heroSearch.modeSearchBtn)
+      );
+      assert.match(
+        mode2ZeroHtml,
+        switcherBtnPattern(true, fullMessages.heroSearch.modeInspectBtn)
+      );
       assert.doesNotMatch(mode2ZeroHtml, /\b0[\s\u00a0]₫/);
       assert.doesNotMatch(mode2ZeroHtml, /100\s*%/);
       assert.ok(mode2ZeroHtml.includes(fullMessages.starRating.empty));
+      assert.ok(
+        mode2ZeroHtml.includes(
+          `aria-label="${fullMessages.heroSearch.officialMallBadge}"`
+        )
+      );
       assert.ok(
         mode2ZeroHtml.includes('badge bg-danger text-white rounded-pill')
       );
