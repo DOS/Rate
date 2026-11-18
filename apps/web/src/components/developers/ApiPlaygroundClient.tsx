@@ -99,9 +99,18 @@ export interface PlaygroundRequestResult {
   responseJson: string;
 }
 
+export interface PlaygroundAcceptedResponseState {
+  statusCode: number | null;
+  latencyMs: number | null;
+  responseJson: string | null;
+  responseDownloadSlug: string;
+}
+
 const DEFAULT_PLAYGROUND_PATH =
   '/api/v1/rate/products?limit=3&sort=rating_desc';
 const MAX_NON_JSON_BODY_CHARS = 16_384;
+const MAX_SNIPPET_JSON_DEPTH = 12;
+const MAX_SNIPPET_BODY_CHARS = 8_192;
 
 function toPythonStringLiteral(value: string): string {
   let out = '"';
@@ -142,33 +151,83 @@ function toPythonStringLiteral(value: string): string {
   return out;
 }
 
+function formatPythonLiteralBounded(
+  value: unknown,
+  indent: number,
+  maxDepth: number,
+  budget: { remaining: number }
+): string | null {
+  const consume = (chunk: string): string | null => {
+    budget.remaining -= chunk.length;
+    return budget.remaining < 0 ? null : chunk;
+  };
+
+  const visit = (
+    current: unknown,
+    currentIndent: number,
+    depth: number
+  ): string | null => {
+    if (current === null || current === undefined) return consume('None');
+    if (typeof current === 'boolean') {
+      return consume(current ? 'True' : 'False');
+    }
+    if (typeof current === 'number') {
+      if (!Number.isFinite(current)) return consume('None');
+      return consume(Object.is(current, -0) ? '-0.0' : String(current));
+    }
+    if (typeof current === 'string') {
+      return consume(toPythonStringLiteral(current));
+    }
+    if (Array.isArray(current)) {
+      if (current.length === 0) return consume('[]');
+      if (depth >= maxDepth) return null;
+      if (consume('[\n') === null) return null;
+      const pad = ' '.repeat(currentIndent);
+      const childPad = ' '.repeat(currentIndent + 4);
+      const items: string[] = [];
+      for (const item of current) {
+        if (consume(childPad) === null) return null;
+        const rendered = visit(item, currentIndent + 4, depth + 1);
+        if (rendered === null) return null;
+        if (consume(',\n') === null) return null;
+        items.push(`${childPad}${rendered},`);
+      }
+      if (consume(`${pad}]`) === null) return null;
+      return `[\n${items.join('\n')}\n${pad}]`;
+    }
+    if (typeof current === 'object') {
+      const entries = Object.entries(current as Record<string, unknown>);
+      if (entries.length === 0) return consume('{}');
+      if (depth >= maxDepth) return null;
+      if (consume('{\n') === null) return null;
+      const pad = ' '.repeat(currentIndent);
+      const childPad = ' '.repeat(currentIndent + 4);
+      const lines: string[] = [];
+      for (const [k, v] of entries) {
+        const keyLiteral = toPythonStringLiteral(k);
+        if (consume(`${childPad}${keyLiteral}: `) === null) return null;
+        const rendered = visit(v, currentIndent + 4, depth + 1);
+        if (rendered === null) return null;
+        if (consume(',\n') === null) return null;
+        lines.push(`${childPad}${keyLiteral}: ${rendered},`);
+      }
+      if (consume(`${pad}}`) === null) return null;
+      return `{\n${lines.join('\n')}\n${pad}}`;
+    }
+    return consume('None');
+  };
+
+  return visit(value, indent, 0);
+}
+
 export function toPythonLiteral(value: unknown, indent = 0): string {
-  if (value === null || value === undefined) return 'None';
-  if (typeof value === 'boolean') return value ? 'True' : 'False';
-  if (typeof value === 'number') {
-    if (!Number.isFinite(value)) return 'None';
-    return Object.is(value, -0) ? '-0.0' : String(value);
-  }
-  if (typeof value === 'string') return toPythonStringLiteral(value);
-  const pad = ' '.repeat(indent);
-  const childPad = ' '.repeat(indent + 4);
-  if (Array.isArray(value)) {
-    if (value.length === 0) return '[]';
-    const items = value.map(
-      (item) => `${childPad}${toPythonLiteral(item, indent + 4)},`
-    );
-    return `[\n${items.join('\n')}\n${pad}]`;
-  }
-  if (typeof value === 'object') {
-    const entries = Object.entries(value as Record<string, unknown>);
-    if (entries.length === 0) return '{}';
-    const lines = entries.map(
-      ([k, v]) =>
-        `${childPad}${toPythonStringLiteral(k)}: ${toPythonLiteral(v, indent + 4)},`
-    );
-    return `{\n${lines.join('\n')}\n${pad}}`;
-  }
-  return 'None';
+  const bounded = formatPythonLiteralBounded(
+    value,
+    indent,
+    MAX_SNIPPET_JSON_DEPTH,
+    { remaining: MAX_SNIPPET_BODY_CHARS }
+  );
+  return bounded ?? 'None';
 }
 
 function escapeShellSingleQuoted(value: string): string {
@@ -186,6 +245,118 @@ function hasOwnProtoKey(value: unknown): boolean {
   if (Array.isArray(value)) return value.some(hasOwnProtoKey);
   if (Object.prototype.hasOwnProperty.call(value, '__proto__')) return true;
   return Object.values(value as Record<string, unknown>).some(hasOwnProtoKey);
+}
+
+function isLosslessBoundedJsonSource(
+  trimmedSource: string,
+  maxDepth: number,
+  maxChars: number
+): boolean {
+  let depth = 0;
+  let nonWhitespaceChars = 0;
+  const maxNonWhitespaceSourceChars = maxChars * 6;
+  const objectKeyStack: Array<Set<string> | null> = [];
+  let lastStringToken: string | null = null;
+  let i = 0;
+  const len = trimmedSource.length;
+
+  while (i < len) {
+    const ch = trimmedSource[i]!;
+    if (ch === ' ' || ch === '\t' || ch === '\n' || ch === '\r') {
+      i += 1;
+      continue;
+    }
+    nonWhitespaceChars += 1;
+    if (nonWhitespaceChars > maxNonWhitespaceSourceChars) {
+      return false;
+    }
+    if (ch === '"') {
+      const start = i;
+      i += 1;
+      while (i < len) {
+        const c = trimmedSource[i]!;
+        if (c === '\\') {
+          i += 2;
+        } else if (c === '"') {
+          i += 1;
+          break;
+        } else {
+          i += 1;
+        }
+      }
+      nonWhitespaceChars += i - start - 1;
+      if (nonWhitespaceChars > maxNonWhitespaceSourceChars) {
+        return false;
+      }
+      lastStringToken = trimmedSource.slice(start, i);
+      continue;
+    }
+    if (ch === ':') {
+      const currentKeys = objectKeyStack[objectKeyStack.length - 1];
+      if (currentKeys && lastStringToken !== null) {
+        const parsedKey = JSON.parse(lastStringToken) as string;
+        if (currentKeys.has(parsedKey)) {
+          return false;
+        }
+        currentKeys.add(parsedKey);
+      }
+      lastStringToken = null;
+      i += 1;
+      continue;
+    }
+    lastStringToken = null;
+    if (ch === '{' || ch === '[') {
+      depth += 1;
+      if (depth > maxDepth) {
+        return false;
+      }
+      objectKeyStack.push(ch === '{' ? new Set<string>() : null);
+      i += 1;
+      continue;
+    }
+    if (ch === '}' || ch === ']') {
+      depth -= 1;
+      objectKeyStack.pop();
+      i += 1;
+      continue;
+    }
+    if (ch === '-' || (ch >= '0' && ch <= '9')) {
+      const start = i;
+      i += 1;
+      while (i < len) {
+        const c = trimmedSource[i]!;
+        if (
+          (c >= '0' && c <= '9') ||
+          c === '.' ||
+          c === 'e' ||
+          c === 'E' ||
+          c === '+' ||
+          c === '-'
+        ) {
+          i += 1;
+        } else {
+          break;
+        }
+      }
+      const numToken = trimmedSource.slice(start, i);
+      nonWhitespaceChars += numToken.length - 1;
+      if (nonWhitespaceChars > maxNonWhitespaceSourceChars) {
+        return false;
+      }
+      const num = Number(numToken);
+      if (
+        !Number.isFinite(num) ||
+        Object.is(num, -0) ||
+        String(num) !== numToken
+      ) {
+        return false;
+      }
+      continue;
+    }
+    i += 1;
+  }
+
+  return true;
 }
 
 export function buildPlaygroundSnippets(options: {
@@ -218,28 +389,69 @@ export function buildPlaygroundSnippets(options: {
     }
   }
 
-  const curlPayload = parsedJson.ok
-    ? JSON.stringify(parsedJson.value)
-    : requestBody;
-  const curlSnippet = `curl -X POST "https://rate.vn${safeSnippetPath}" \\\n  -H "Accept: application/json" \\\n  -H "Content-Type: application/json" \\\n  -d '${escapeShellSingleQuoted(curlPayload)}'`;
+  const isLosslessBoundedSource =
+    parsedJson.ok &&
+    (!trimmedBody ||
+      isLosslessBoundedJsonSource(
+        trimmedBody,
+        MAX_SNIPPET_JSON_DEPTH,
+        MAX_SNIPPET_BODY_CHARS
+      ));
+  const compactJson =
+    isLosslessBoundedSource && parsedJson.ok
+      ? JSON.stringify(parsedJson.value)
+      : null;
+  const canUseCompactJson =
+    compactJson !== null && compactJson.length <= MAX_SNIPPET_BODY_CHARS;
+  const rawFallbackBody = parsedJson.ok ? trimmedBody : requestBody;
+
+  const curlPayload =
+    canUseCompactJson && parsedJson.ok && parsedJson.value !== null
+      ? compactJson
+      : parsedJson.ok && parsedJson.value === null
+        ? 'null'
+        : rawFallbackBody;
+  const curlSnippet = `curl -X POST "https://rate.vn${safeSnippetPath}" \\\n  -H "Accept: application/json" \\\n  -H "Content-Type: application/json" \\\n  --data-raw '${escapeShellSingleQuoted(curlPayload)}'`;
 
   let fetchBodyExpr: string;
-  if (!parsedJson.ok) {
-    fetchBodyExpr = escapeJsStringLiteral(requestBody);
+  if (!canUseCompactJson || !parsedJson.ok || parsedJson.value === null) {
+    fetchBodyExpr = escapeJsStringLiteral(
+      parsedJson.ok && parsedJson.value === null ? 'null' : rawFallbackBody
+    );
   } else if (hasOwnProtoKey(parsedJson.value)) {
-    fetchBodyExpr = escapeJsStringLiteral(JSON.stringify(parsedJson.value));
+    fetchBodyExpr = escapeJsStringLiteral(compactJson);
   } else {
-    const formatted = JSON.stringify(parsedJson.value, null, 2)
-      .replace(/\u2028/g, '\\u2028')
-      .replace(/\u2029/g, '\\u2029')
-      .replace(/\n/g, '\n  ');
-    fetchBodyExpr = `JSON.stringify(${formatted})`;
+    const prettyJson = JSON.stringify(parsedJson.value, null, 2);
+    if (prettyJson.length <= MAX_SNIPPET_BODY_CHARS) {
+      const formatted = prettyJson
+        .replace(/\u2028/g, '\\u2028')
+        .replace(/\u2029/g, '\\u2029')
+        .replace(/\n/g, '\n  ');
+      fetchBodyExpr = `JSON.stringify(${formatted})`;
+    } else {
+      fetchBodyExpr = escapeJsStringLiteral(rawFallbackBody);
+    }
   }
   const fetchSnippet = `const res = await fetch("https://rate.vn${safeSnippetPath}", {\n  method: "POST",\n  headers: {\n    Accept: "application/json",\n    "Content-Type": "application/json",\n  },\n  body: ${fetchBodyExpr},\n});\nconst data = await res.json();`;
 
-  const pythonSnippet = parsedJson.ok
-    ? `import requests\n\nres = requests.post(\n    "https://rate.vn${safeSnippetPath}",\n    headers={"Accept": "application/json"},\n    json=${toPythonLiteral(parsedJson.value, 4)},\n    timeout=15,\n)\nprint(res.status_code, res.json())`
-    : `import requests\n\nres = requests.post(\n    "https://rate.vn${safeSnippetPath}",\n    headers={"Accept": "application/json", "Content-Type": "application/json"},\n    data=${toPythonStringLiteral(requestBody)},\n    timeout=15,\n)\nprint(res.status_code, res.json())`;
+  let pythonSnippet: string;
+  if (parsedJson.ok && parsedJson.value === null) {
+    pythonSnippet = `import requests\n\nres = requests.post(\n    "https://rate.vn${safeSnippetPath}",\n    headers={"Accept": "application/json", "Content-Type": "application/json"},\n    data=b"null",\n    timeout=15,\n)\nprint(res.status_code, res.json())`;
+  } else {
+    const pythonLiteral =
+      canUseCompactJson && parsedJson.ok
+        ? formatPythonLiteralBounded(
+            parsedJson.value,
+            4,
+            MAX_SNIPPET_JSON_DEPTH,
+            { remaining: MAX_SNIPPET_BODY_CHARS }
+          )
+        : null;
+    pythonSnippet =
+      pythonLiteral !== null
+        ? `import requests\n\nres = requests.post(\n    "https://rate.vn${safeSnippetPath}",\n    headers={"Accept": "application/json"},\n    json=${pythonLiteral},\n    timeout=15,\n)\nprint(res.status_code, res.json())`
+        : `import requests\n\nres = requests.post(\n    "https://rate.vn${safeSnippetPath}",\n    headers={"Accept": "application/json", "Content-Type": "application/json"},\n    data=${toPythonStringLiteral(rawFallbackBody)}.encode("utf-8"),\n    timeout=15,\n)\nprint(res.status_code, res.json())`;
+  }
 
   return {
     safeSnippetPath,
@@ -273,6 +485,60 @@ export function resolvePlaygroundDownloadSlug(
   }
   const stripped = safeSnippetPath.replace(/^\/api\/(?:v1\/rate\/)?/i, '');
   return sanitizePlaygroundDownloadId(stripped);
+}
+
+export function createInitialPlaygroundResponseState(
+  presets: readonly Pick<ApiPresetEndpoint, 'id' | 'method' | 'path'>[],
+  initialMethod: 'GET' | 'POST',
+  initialPath: string
+): PlaygroundAcceptedResponseState {
+  const safeInitialPath =
+    sanitizePlaygroundApiPath(initialPath) ?? '/api/v1/rate/products';
+  const initialPreset = findMatchingPlaygroundPreset(
+    presets,
+    initialMethod,
+    initialPath
+  );
+  return {
+    statusCode: null,
+    latencyMs: null,
+    responseJson: null,
+    responseDownloadSlug: resolvePlaygroundDownloadSlug(
+      initialPreset,
+      safeInitialPath
+    ),
+  };
+}
+
+export function selectPresetPlaygroundResponseState(
+  preset: Pick<ApiPresetEndpoint, 'id'>
+): PlaygroundAcceptedResponseState {
+  return {
+    statusCode: null,
+    latencyMs: null,
+    responseJson: null,
+    responseDownloadSlug: sanitizePlaygroundDownloadId(preset.id),
+  };
+}
+
+export function acceptExecutedPlaygroundResponseState(
+  presets: readonly Pick<ApiPresetEndpoint, 'id' | 'method' | 'path'>[],
+  executedMethod: 'GET' | 'POST',
+  executedPath: string,
+  outcome: PlaygroundRequestResult
+): PlaygroundAcceptedResponseState {
+  const targetPath = sanitizePlaygroundApiPath(executedPath);
+  const matched = targetPath
+    ? findMatchingPlaygroundPreset(presets, executedMethod, executedPath)
+    : null;
+  return {
+    statusCode: outcome.statusCode,
+    latencyMs: outcome.latencyMs,
+    responseJson: outcome.responseJson,
+    responseDownloadSlug: targetPath
+      ? resolvePlaygroundDownloadSlug(matched, targetPath)
+      : 'endpoint',
+  };
 }
 
 export function formatPlaygroundResponsePayload(
@@ -486,9 +752,16 @@ export default function ApiPlaygroundClient({
     initialSnippetMode
   );
   const [isLoading, setIsLoading] = useState<boolean>(false);
-  const [statusCode, setStatusCode] = useState<number | null>(null);
-  const [latencyMs, setLatencyMs] = useState<number | null>(null);
-  const [responseJson, setResponseJson] = useState<string | null>(null);
+  const [
+    { statusCode, latencyMs, responseJson, responseDownloadSlug },
+    setAcceptedResponse,
+  ] = useState<PlaygroundAcceptedResponseState>(() =>
+    createInitialPlaygroundResponseState(
+      presetEndpoints,
+      initialMethod,
+      initialPath
+    )
+  );
   const [copiedSnippet, setCopiedSnippet] = useState<boolean>(false);
   const [copiedResponse, setCopiedResponse] = useState<boolean>(false);
   const [copiedCatalogMd, setCopiedCatalogMd] = useState<boolean>(false);
@@ -502,25 +775,38 @@ export default function ApiPlaygroundClient({
   const displayedResponse = responseJson ?? t('pgInitialResponseComment');
 
   const handleSelectPreset = (preset: ApiPresetEndpoint) => {
+    requestSeqRef.current += 1;
+    setIsLoading(false);
     setCustomMethod(preset.method);
     setCustomPath(preset.path);
     setRequestBody(preset.defaultBody ?? '');
+    setAcceptedResponse(selectPresetPlaygroundResponseState(preset));
   };
 
   const handleRunRequest = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
-    if (!sanitizePlaygroundApiPath(customPath)) {
+    const executedMethod = customMethod;
+    const executedPath = customPath;
+    const executedBody = requestBody;
+    if (!sanitizePlaygroundApiPath(executedPath)) {
       requestSeqRef.current += 1;
       setIsLoading(false);
-      setStatusCode(400);
-      setLatencyMs(null);
-      setResponseJson(
-        JSON.stringify(
+      setAcceptedResponse(
+        acceptExecutedPlaygroundResponseState(
+          presetEndpoints,
+          executedMethod,
+          executedPath,
           {
-            error: t('pgErrPathPrefix'),
-          },
-          null,
-          2
+            statusCode: 400,
+            latencyMs: null,
+            responseJson: JSON.stringify(
+              {
+                error: t('pgErrPathPrefix'),
+              },
+              null,
+              2
+            ),
+          }
         )
       );
       return;
@@ -530,16 +816,21 @@ export default function ApiPlaygroundClient({
     setIsLoading(true);
     try {
       const outcome = await executePlaygroundRequest({
-        method: customMethod,
-        customPath,
-        requestBody,
+        method: executedMethod,
+        customPath: executedPath,
+        requestBody: executedBody,
         invalidPathMessage: t('pgErrPathPrefix'),
         connectErrorMessage: t('pgErrConnect'),
       });
       if (requestSeqRef.current !== seq) return;
-      setStatusCode(outcome.statusCode);
-      setLatencyMs(outcome.latencyMs);
-      setResponseJson(outcome.responseJson);
+      setAcceptedResponse(
+        acceptExecutedPlaygroundResponseState(
+          presetEndpoints,
+          executedMethod,
+          executedPath,
+          outcome
+        )
+      );
     } finally {
       if (requestSeqRef.current === seq) {
         setIsLoading(false);
@@ -547,7 +838,7 @@ export default function ApiPlaygroundClient({
     }
   };
 
-  const { safeSnippetPath, curlSnippet, fetchSnippet, pythonSnippet } = useMemo(
+  const { curlSnippet, fetchSnippet, pythonSnippet } = useMemo(
     () =>
       buildPlaygroundSnippets({
         method: customMethod,
@@ -592,11 +883,7 @@ export default function ApiPlaygroundClient({
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    const downloadSlug = resolvePlaygroundDownloadSlug(
-      matchedPreset,
-      safeSnippetPath
-    );
-    a.download = `rate-api-${downloadSlug}.json`;
+    a.download = `rate-api-${responseDownloadSlug}.json`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);

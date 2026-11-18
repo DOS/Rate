@@ -8,11 +8,14 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { NextIntlClientProvider } from 'next-intl';
 
 import ApiPlaygroundClient, {
+  acceptExecutedPlaygroundResponseState,
   buildPlaygroundSnippets,
+  createInitialPlaygroundResponseState,
   executePlaygroundRequest,
   findMatchingPlaygroundPreset,
   formatPlaygroundResponsePayload,
   resolvePlaygroundDownloadSlug,
+  selectPresetPlaygroundResponseState,
   toPythonLiteral,
   type ApiPresetEndpoint,
 } from '@/components/developers/ApiPlaygroundClient';
@@ -141,6 +144,65 @@ function assertValidAsyncFetchSyntax(snippet: string, label: string): void {
   }, `fetchSnippet must parse cleanly (${label})`);
 }
 
+async function executeFetchSnippetBody(snippet: string): Promise<unknown> {
+  let capturedBody: unknown = undefined;
+  const context = vm.createContext({
+    JSON,
+    fetch: async (_url: string, init?: { body?: unknown }) => {
+      capturedBody = init?.body;
+      return {
+        json: async () => ({}),
+      };
+    },
+  });
+  const runner = vm.runInContext(
+    `(async () => {\n${snippet}\n})`,
+    context
+  ) as () => Promise<void>;
+  await runner();
+  return capturedBody;
+}
+
+function decodeHtmlEntities(html: string): string {
+  return html
+    .replace(/&quot;/g, '"')
+    .replace(/&#x27;|&#39;|&apos;/g, "'")
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&amp;/g, '&');
+}
+
+function getPressedButtonLabelsInGroup(
+  html: string,
+  groupSuffix: 'presets' | 'code'
+): string[] {
+  const groupRe = new RegExp(
+    `<div\\b[^>]*\\brole="group"[^>]*\\baria-labelledby="[^"]*-${groupSuffix}"[^>]*>([\\s\\S]*?)<\\/div>`
+  );
+  const groupMatch = html.match(groupRe);
+  assert.ok(groupMatch, `expected role="group" for *-${groupSuffix}`);
+  const groupInner = groupMatch[1]!;
+  const buttons = [
+    ...groupInner.matchAll(/<button\b([^>]*)>([\s\S]*?)<\/button>/g),
+  ];
+  assert.ok(buttons.length > 0, `expected buttons in ${groupSuffix} group`);
+
+  const pressedLabels: string[] = [];
+  for (const [, attrs, innerHtml] of buttons) {
+    if (/\baria-pressed="true"/.test(attrs!)) {
+      const withoutHidden = innerHtml!.replace(
+        /<([a-z0-9]+)\b[^>]*\baria-hidden="true"[^>]*>[\s\S]*?<\/\1>/gi,
+        ''
+      );
+      const text = decodeHtmlEntities(withoutHidden.replace(/<[^>]+>/g, ' '))
+        .replace(/\s+/g, ' ')
+        .trim();
+      pressedLabels.push(text);
+    }
+  }
+  return pressedLabels;
+}
+
 // 1. toPythonLiteral & buildPlaygroundSnippets (extension-ingest booleans/nulls,
 //    string-literal spaces, and mid-edit non-JSON safety).
 const extensionIngestBody = JSON.stringify(
@@ -191,7 +253,16 @@ assert.equal(
   '{\n    "lineBreak": "line1\\nline2\\t\\"quoted\\"\\\\slash\\u0000",\n    "negZero": -0.0,\n    "emptyArr": [],\n    "emptyObj": {},\n}'
 );
 
-// curlSnippet preserves spaces inside string values and escapes single quotes.
+// curlSnippet uses --data-raw, preserves spaces inside string values, and escapes single quotes.
+assert.ok(
+  postSnippets.curlSnippet.includes("--data-raw '"),
+  'curlSnippet uses --data-raw so leading @ payloads stay literal'
+);
+assert.equal(
+  postSnippets.curlSnippet.includes(" -d '"),
+  false,
+  'curlSnippet must not use -d'
+);
 assert.ok(
   postSnippets.curlSnippet.includes(
     '"title":"iPhone 16 Pro Max  256GB   Chính hãng VN/A"'
@@ -200,7 +271,139 @@ assert.ok(
 );
 assert.ok(
   postSnippets.curlSnippet.includes("256GB  Titan   Tự Nhiên ('\\''VN/A'\\'')"),
-  'curlSnippet escapes single quotes for POSIX single-quoted -d flag'
+  'curlSnippet escapes single quotes for POSIX single-quoted --data-raw flag'
+);
+
+for (const atPayload of ['@/etc/passwd', '@-']) {
+  const atSnippets = buildPlaygroundSnippets({
+    method: 'POST',
+    customPath: '/api/v1/rate/extension/ingest',
+    requestBody: atPayload,
+  });
+  assert.ok(
+    atSnippets.curlSnippet.includes(`--data-raw '${atPayload}'`),
+    `curlSnippet sends ${atPayload} literally via --data-raw`
+  );
+  assert.equal(
+    atSnippets.curlSnippet.includes(' -d '),
+    false,
+    `curlSnippet never passes ${atPayload} to -d`
+  );
+}
+
+// Exact >53-bit JSON integer preservation (e.g. 9007199254740993).
+const unsafeIntJson = '  {"id":9007199254740993,"neg":-9007199254740993}  ';
+const unsafeIntSnippets = buildPlaygroundSnippets({
+  method: 'POST',
+  customPath: '/api/v1/rate/extension/ingest',
+  requestBody: unsafeIntJson,
+});
+assert.ok(
+  unsafeIntSnippets.curlSnippet.includes(
+    '--data-raw \'{"id":9007199254740993,"neg":-9007199254740993}\''
+  ),
+  'curlSnippet preserves exact >53-bit integer digits in trimmed raw JSON'
+);
+assert.equal(
+  unsafeIntSnippets.curlSnippet.includes('9007199254740992'),
+  false,
+  'curlSnippet must not round 9007199254740993 to 9007199254740992'
+);
+assert.ok(
+  unsafeIntSnippets.pythonSnippet.includes(
+    '"Content-Type": "application/json"'
+  ) &&
+    unsafeIntSnippets.pythonSnippet.includes(
+      'data="{\\"id\\":9007199254740993,\\"neg\\":-9007199254740993}".encode("utf-8")'
+    ),
+  'pythonSnippet preserves exact >53-bit integer digits via UTF-8 data payload'
+);
+assert.equal(
+  unsafeIntSnippets.pythonSnippet.includes('9007199254740992'),
+  false,
+  'pythonSnippet must not round 9007199254740993 to 9007199254740992'
+);
+assertValidAsyncFetchSyntax(
+  unsafeIntSnippets.fetchSnippet,
+  'unsafe >53-bit int'
+);
+assert.equal(
+  unsafeIntSnippets.fetchSnippet.includes('9007199254740992'),
+  false,
+  'fetchSnippet must not round 9007199254740993 to 9007199254740992'
+);
+
+// Top-level JSON null sends an explicit JSON body in Python requests.post.
+const topNullSnippets = buildPlaygroundSnippets({
+  method: 'POST',
+  customPath: '/api/v1/rate/extension/ingest',
+  requestBody: '  null  ',
+});
+assert.ok(
+  topNullSnippets.curlSnippet.includes("--data-raw 'null'"),
+  'top-level null curlSnippet sends literal null'
+);
+assert.ok(
+  topNullSnippets.pythonSnippet.includes(
+    '"Content-Type": "application/json"'
+  ) && topNullSnippets.pythonSnippet.includes('data=b"null"'),
+  'top-level null pythonSnippet sends explicit data=b"null" with Content-Type header'
+);
+assert.equal(
+  topNullSnippets.pythonSnippet.includes('json=None'),
+  false,
+  'top-level null pythonSnippet must not emit json=None'
+);
+assertValidAsyncFetchSyntax(topNullSnippets.fetchSnippet, 'top-level null');
+
+// Deeply nested JSON (2,000 nested arrays) and oversized pretty-print stay O(n) bounded.
+const deepNestedBody = `${'['.repeat(2_000)}1${']'.repeat(2_000)}`;
+const deepNestedSnippets = buildPlaygroundSnippets({
+  method: 'POST',
+  customPath: '/api/v1/rate/extension/ingest',
+  requestBody: deepNestedBody,
+});
+assert.ok(
+  deepNestedSnippets.curlSnippet.length < 10_000 &&
+    deepNestedSnippets.fetchSnippet.length < 10_000 &&
+    deepNestedSnippets.pythonSnippet.length < 10_000,
+  '2,000 nested one-element arrays remain O(n) bounded across all snippets'
+);
+assert.ok(
+  deepNestedSnippets.pythonSnippet.includes(
+    '"Content-Type": "application/json"'
+  ) && deepNestedSnippets.pythonSnippet.includes('.encode("utf-8")'),
+  'deeply nested JSON falls back to escaped UTF-8 raw body in pythonSnippet'
+);
+assertValidAsyncFetchSyntax(
+  deepNestedSnippets.fetchSnippet,
+  'deep 2000-level array'
+);
+
+const shallowBoundaryBody = `${'['.repeat(12)}1${']'.repeat(12)}`;
+const shallowBoundarySnippets = buildPlaygroundSnippets({
+  method: 'POST',
+  customPath: '/api/v1/rate/extension/ingest',
+  requestBody: shallowBoundaryBody,
+});
+assert.ok(
+  shallowBoundarySnippets.pythonSnippet.includes('json=['),
+  'nesting depth 12 within bounds continues using structured Python literal'
+);
+
+const wideArrayBody = JSON.stringify(
+  Array.from({ length: 1_500 }, (_, idx) => idx)
+);
+const wideArraySnippets = buildPlaygroundSnippets({
+  method: 'POST',
+  customPath: '/api/v1/rate/extension/ingest',
+  requestBody: wideArrayBody,
+});
+assert.ok(
+  wideArraySnippets.fetchSnippet.length < 10_000 &&
+    wideArraySnippets.pythonSnippet.length < 10_000 &&
+    wideArraySnippets.pythonSnippet.includes('.encode("utf-8")'),
+  'JSON whose pretty-printed expansion exceeds 8192 chars falls back to bounded raw body'
 );
 
 assertValidAsyncFetchSyntax(postSnippets.fetchSnippet, 'valid POST JSON');
@@ -242,8 +445,9 @@ for (const brokenBody of [
   });
   assertValidAsyncFetchSyntax(midEdit.fetchSnippet, `mid-edit: ${brokenBody}`);
   assert.ok(
-    midEdit.pythonSnippet.includes('data="'),
-    'non-JSON POST body falls back to Python string data=...'
+    midEdit.pythonSnippet.includes('data="') &&
+      midEdit.pythonSnippet.includes('.encode("utf-8")'),
+    'non-JSON POST body falls back to UTF-8 encoded Python string data=...'
   );
   assert.doesNotMatch(
     stripDoubleQuotedStrings(midEdit.pythonSnippet),
@@ -275,6 +479,13 @@ const samplePresets: ApiPresetEndpoint[] = [
     title: 'Extension ingest',
     path: '/api/v1/rate/extension/ingest',
     description: 'Desc 8',
+  },
+  {
+    id: 'platform-stats',
+    method: 'GET',
+    title: 'Platform stats',
+    path: '/api/v1/rate/stats',
+    description: 'Desc 11',
   },
 ];
 
@@ -333,6 +544,64 @@ assert.equal(
 );
 assert.equal(resolvePlaygroundDownloadSlug(null, '/api/v1/rate/'), 'endpoint');
 
+// responseDownloadSlug stays tied to the accepted response when customPath is edited without Run.
+const initialResponseState = createInitialPlaygroundResponseState(
+  samplePresets,
+  'GET',
+  '/api/v1/rate/products?limit=3&sort=rating_desc'
+);
+assert.equal(initialResponseState.responseDownloadSlug, 'list-products');
+assert.equal(initialResponseState.responseJson, null);
+
+const executedProductsState = acceptExecutedPlaygroundResponseState(
+  samplePresets,
+  'GET',
+  '/api/v1/rate/products?limit=3&sort=rating_desc',
+  {
+    statusCode: 200,
+    latencyMs: 24,
+    responseJson: '{"items":[1,2,3]}',
+  }
+);
+assert.equal(executedProductsState.responseDownloadSlug, 'list-products');
+// Editing customPath to /api/v1/rate/stats updates live preset matching without mutating the held responseDownloadSlug.
+assert.equal(
+  findMatchingPlaygroundPreset(samplePresets, 'GET', '/api/v1/rate/stats')?.id,
+  'platform-stats'
+);
+assert.equal(
+  executedProductsState.responseDownloadSlug,
+  'list-products',
+  'held responseDownloadSlug remains list-products until /api/v1/rate/stats is actually run'
+);
+
+const executedCustomState = acceptExecutedPlaygroundResponseState(
+  samplePresets,
+  'GET',
+  '/api/v1/rate/merchants/directory?limit=5',
+  {
+    statusCode: 200,
+    latencyMs: 18,
+    responseJson: '{"merchants":[]}',
+  }
+);
+assert.equal(
+  executedCustomState.responseDownloadSlug,
+  'merchants-directory-limit-5'
+);
+
+const selectedPresetState = selectPresetPlaygroundResponseState(
+  samplePresets[2]!
+);
+assert.equal(selectedPresetState.responseDownloadSlug, 'platform-stats');
+assert.equal(selectedPresetState.responseJson, null);
+assert.ok(
+  playgroundSrc.includes(
+    'a.download = `rate-api-${responseDownloadSlug}.json`;'
+  ),
+  'handleDownloadResponseJson names the file after responseDownloadSlug'
+);
+
 // 3. SSR render verification of ApiPlaygroundClient across vi, en, cs.
 const IntlProvider = NextIntlClientProvider as React.ComponentType<{
   locale: string;
@@ -346,8 +615,15 @@ for (const locale of ['vi', 'en', 'cs'] as const) {
     ...pickClientMessages(fullCatalogs[locale]!),
     developers: messages[locale]!,
   };
+  const expectedPreset1Label = `GET ${String(messages[locale]!.pgPreset1Title)}`
+    .replace(/\s+/g, ' ')
+    .trim();
+  const expectedPreset8Label =
+    `POST ${String(messages[locale]!.pgPreset8Title)}`
+      .replace(/\s+/g, ' ')
+      .trim();
 
-  // Default state: exactly 1 preset pill pressed, preset 1 description shown, all SVGs aria-hidden.
+  // Default state: preset 1 pill pressed, cURL snippet mode pressed, preset 1 description shown, all SVGs aria-hidden.
   const defaultHtml = renderToStaticMarkup(
     React.createElement(
       IntlProvider,
@@ -364,18 +640,22 @@ for (const locale of ['vi', 'en', 'cs'] as const) {
       `${locale}: every rendered SVG icon must carry aria-hidden="true": ${svgTag}`
     );
   }
-  // 1 pressed preset pill + 1 pressed snippet mode pill = 2 total aria-pressed="true" buttons.
-  assert.equal(
-    [...defaultHtml.matchAll(/\baria-pressed="true"/g)].length,
-    2,
-    `${locale}: default playground has 1 active preset pill and 1 active snippet mode pill`
+  assert.deepEqual(
+    getPressedButtonLabelsInGroup(defaultHtml, 'presets'),
+    [expectedPreset1Label],
+    `${locale}: default playground presses the list-products preset pill`
+  );
+  assert.deepEqual(
+    getPressedButtonLabelsInGroup(defaultHtml, 'code'),
+    ['cURL'],
+    `${locale}: default playground presses the cURL snippet mode pill`
   );
   assert.ok(
     defaultHtml.includes(String(messages[locale]!.pgPreset1Desc)),
     `${locale}: default playground renders active preset description`
   );
 
-  // Edited customPath: 0 preset pills pressed (only snippet mode pill stays pressed), stale description cleared.
+  // Edited customPath: 0 preset pills pressed, cURL snippet mode pill pressed, stale description cleared.
   const editedPathHtml = renderToStaticMarkup(
     React.createElement(
       IntlProvider,
@@ -386,10 +666,15 @@ for (const locale of ['vi', 'en', 'cs'] as const) {
       })
     )
   );
-  assert.equal(
-    [...editedPathHtml.matchAll(/\baria-pressed="true"/g)].length,
-    1,
+  assert.deepEqual(
+    getPressedButtonLabelsInGroup(editedPathHtml, 'presets'),
+    [],
     `${locale}: custom path clears aria-pressed="true" on all preset pills`
+  );
+  assert.deepEqual(
+    getPressedButtonLabelsInGroup(editedPathHtml, 'code'),
+    ['cURL'],
+    `${locale}: custom path keeps cURL snippet mode pill pressed`
   );
   for (let i = 1; i <= 13; i++) {
     assert.equal(
@@ -399,7 +684,7 @@ for (const locale of ['vi', 'en', 'cs'] as const) {
     );
   }
 
-  // Edited customMethod (POST on GET preset path): 0 preset pills pressed.
+  // Edited customMethod (POST on GET preset path): 0 preset pills pressed, cURL snippet mode pill pressed.
   const editedMethodHtml = renderToStaticMarkup(
     React.createElement(
       IntlProvider,
@@ -410,13 +695,18 @@ for (const locale of ['vi', 'en', 'cs'] as const) {
       })
     )
   );
-  assert.equal(
-    [...editedMethodHtml.matchAll(/\baria-pressed="true"/g)].length,
-    1,
+  assert.deepEqual(
+    getPressedButtonLabelsInGroup(editedMethodHtml, 'presets'),
+    [],
     `${locale}: changing method clears aria-pressed="true" on GET preset pill`
   );
+  assert.deepEqual(
+    getPressedButtonLabelsInGroup(editedMethodHtml, 'code'),
+    ['cURL'],
+    `${locale}: changing method keeps cURL snippet mode pill pressed`
+  );
 
-  // Built-in extension-ingest POST preset in Python mode renders True, never bare true.
+  // Built-in extension-ingest POST preset in Python mode presses extension-ingest and Python pills.
   const ingestPythonHtml = renderToStaticMarkup(
     React.createElement(
       IntlProvider,
@@ -429,10 +719,15 @@ for (const locale of ['vi', 'en', 'cs'] as const) {
       })
     )
   );
-  assert.equal(
-    [...ingestPythonHtml.matchAll(/\baria-pressed="true"/g)].length,
-    2,
-    `${locale}: extension-ingest POST preset matches and marks preset pill pressed`
+  assert.deepEqual(
+    getPressedButtonLabelsInGroup(ingestPythonHtml, 'presets'),
+    [expectedPreset8Label],
+    `${locale}: extension-ingest POST preset presses the extension-ingest preset pill`
+  );
+  assert.deepEqual(
+    getPressedButtonLabelsInGroup(ingestPythonHtml, 'code'),
+    ['Python'],
+    `${locale}: initialSnippetMode="python" presses the Python snippet mode pill`
   );
   assert.ok(
     ingestPythonHtml.includes(String(messages[locale]!.pgPreset8Desc)),
@@ -606,6 +901,42 @@ async function runAsyncPlaygroundTests() {
   };
   assert.equal(parsedHuge.status, 502);
   assert.equal(parsedHuge.body.length, 16_387);
+
+  // Runtime payload verification: fetchSnippet and executePlaygroundRequest preserve >53-bit ints, top-level null, and deep arrays.
+  assert.equal(
+    await executeFetchSnippetBody(unsafeIntSnippets.fetchSnippet),
+    '{"id":9007199254740993,"neg":-9007199254740993}',
+    'fetchSnippet sends exact >53-bit integer digits at runtime'
+  );
+  assert.equal(
+    await executeFetchSnippetBody(topNullSnippets.fetchSnippet),
+    'null',
+    'fetchSnippet sends literal "null" body for top-level JSON null'
+  );
+  assert.equal(
+    await executeFetchSnippetBody(deepNestedSnippets.fetchSnippet),
+    deepNestedBody,
+    'fetchSnippet sends exact 2,000-level array payload without stack overflow or expansion'
+  );
+
+  let sentRunBody: unknown = undefined;
+  await executePlaygroundRequest({
+    method: 'POST',
+    customPath: '/api/v1/rate/extension/ingest',
+    requestBody: '{"id":9007199254740993}',
+    invalidPathMessage: 'Invalid path',
+    connectErrorMessage: 'Connect error',
+    now,
+    fetchImpl: async (_input, init) => {
+      sentRunBody = init?.body;
+      return new Response('{"ok":true}', { status: 200 });
+    },
+  });
+  assert.equal(
+    sentRunBody,
+    '{"id":9007199254740993}',
+    'executePlaygroundRequest sends >53-bit integer digits unchanged'
+  );
 
   // Network error sets statusCode 500 and clears latencyMs to null.
   const netErrRes = await executePlaygroundRequest({
