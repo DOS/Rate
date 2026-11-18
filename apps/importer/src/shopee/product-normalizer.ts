@@ -3172,7 +3172,12 @@ export class ProductNormalizer {
       camera: {
         rear_setup: rearSetupLabel,
         main_camera: benchmark?.rear_camera || fallbackMainCamera,
-        second_camera: benchmark?.second_camera || fallbackSecondCamera,
+        // A benchmark phone with one rear camera (iPhone 16e) gets no invented ultrawide
+        // (DOS/Rate#1718): its 'Single Camera' label already exempts it from the audit.
+        second_camera:
+          isSmartphone && benchmark && cameraCount === 1
+            ? undefined
+            : benchmark?.second_camera || fallbackSecondCamera,
         third_camera: benchmark?.third_camera || undefined,
         fourth_camera: benchmark?.fourth_camera || undefined,
         front_camera: benchmark?.front_camera || fallbackFrontCamera,
