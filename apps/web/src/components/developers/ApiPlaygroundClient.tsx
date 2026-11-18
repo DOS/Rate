@@ -1,8 +1,9 @@
 'use client';
 
-import React, { useId, useMemo, useState } from 'react';
-import { useTranslations } from 'next-intl';
+import React, { useId, useMemo, useRef, useState } from 'react';
+import { useLocale, useTranslations } from 'next-intl';
 import { escapeCsvCell } from '@/lib/csv-safe';
+import { formatNumber } from '@/lib/locale-format';
 import {
   BsCheck2,
   BsClipboard,
@@ -78,8 +79,292 @@ export function sanitizePlaygroundMarkdownCell(value: unknown): string {
   return cleaned || '-';
 }
 
-export default function ApiPlaygroundClient() {
+export interface ApiPlaygroundClientProps {
+  initialMethod?: 'GET' | 'POST';
+  initialPath?: string;
+  initialBody?: string;
+  initialSnippetMode?: 'curl' | 'fetch' | 'python';
+}
+
+export interface PlaygroundSnippets {
+  safeSnippetPath: string;
+  curlSnippet: string;
+  fetchSnippet: string;
+  pythonSnippet: string;
+}
+
+export interface PlaygroundRequestResult {
+  statusCode: number;
+  latencyMs: number | null;
+  responseJson: string;
+}
+
+const DEFAULT_PLAYGROUND_PATH =
+  '/api/v1/rate/products?limit=3&sort=rating_desc';
+const MAX_NON_JSON_BODY_CHARS = 16_384;
+
+function toPythonStringLiteral(value: string): string {
+  let out = '"';
+  for (let i = 0; i < value.length; i++) {
+    const code = value.charCodeAt(i);
+    if (code === 0x5c) {
+      out += '\\\\';
+    } else if (code === 0x22) {
+      out += '\\"';
+    } else if (code === 0x0a) {
+      out += '\\n';
+    } else if (code === 0x0d) {
+      out += '\\r';
+    } else if (code === 0x09) {
+      out += '\\t';
+    } else if (
+      code <= 0x1f ||
+      (code >= 0x7f && code <= 0x9f) ||
+      code === 0x2028 ||
+      code === 0x2029
+    ) {
+      out += `\\u${code.toString(16).padStart(4, '0')}`;
+    } else if (code >= 0xd800 && code <= 0xdbff) {
+      const next = i + 1 < value.length ? value.charCodeAt(i + 1) : 0;
+      if (next >= 0xdc00 && next <= 0xdfff) {
+        out += value[i]! + value[i + 1]!;
+        i++;
+      } else {
+        out += `\\u${code.toString(16).padStart(4, '0')}`;
+      }
+    } else if (code >= 0xdc00 && code <= 0xdfff) {
+      out += `\\u${code.toString(16).padStart(4, '0')}`;
+    } else {
+      out += value[i]!;
+    }
+  }
+  out += '"';
+  return out;
+}
+
+export function toPythonLiteral(value: unknown, indent = 0): string {
+  if (value === null || value === undefined) return 'None';
+  if (typeof value === 'boolean') return value ? 'True' : 'False';
+  if (typeof value === 'number') {
+    if (!Number.isFinite(value)) return 'None';
+    return Object.is(value, -0) ? '-0.0' : String(value);
+  }
+  if (typeof value === 'string') return toPythonStringLiteral(value);
+  const pad = ' '.repeat(indent);
+  const childPad = ' '.repeat(indent + 4);
+  if (Array.isArray(value)) {
+    if (value.length === 0) return '[]';
+    const items = value.map(
+      (item) => `${childPad}${toPythonLiteral(item, indent + 4)},`
+    );
+    return `[\n${items.join('\n')}\n${pad}]`;
+  }
+  if (typeof value === 'object') {
+    const entries = Object.entries(value as Record<string, unknown>);
+    if (entries.length === 0) return '{}';
+    const lines = entries.map(
+      ([k, v]) =>
+        `${childPad}${toPythonStringLiteral(k)}: ${toPythonLiteral(v, indent + 4)},`
+    );
+    return `{\n${lines.join('\n')}\n${pad}}`;
+  }
+  return 'None';
+}
+
+function escapeShellSingleQuoted(value: string): string {
+  return value.split('\0').join('').replace(/'/g, "'\\''");
+}
+
+function escapeJsStringLiteral(value: string): string {
+  return JSON.stringify(value)
+    .replace(/\u2028/g, '\\u2028')
+    .replace(/\u2029/g, '\\u2029');
+}
+
+function hasOwnProtoKey(value: unknown): boolean {
+  if (!value || typeof value !== 'object') return false;
+  if (Array.isArray(value)) return value.some(hasOwnProtoKey);
+  if (Object.prototype.hasOwnProperty.call(value, '__proto__')) return true;
+  return Object.values(value as Record<string, unknown>).some(hasOwnProtoKey);
+}
+
+export function buildPlaygroundSnippets(options: {
+  method: 'GET' | 'POST';
+  customPath: string;
+  requestBody: string;
+}): PlaygroundSnippets {
+  const { method, customPath, requestBody } = options;
+  const safeSnippetPath =
+    sanitizePlaygroundApiPath(customPath) ?? '/api/v1/rate/products';
+
+  if (method !== 'POST') {
+    return {
+      safeSnippetPath,
+      curlSnippet: `curl -X GET "https://rate.vn${safeSnippetPath}" \\\n  -H "Accept: application/json"`,
+      fetchSnippet: `const res = await fetch("https://rate.vn${safeSnippetPath}", {\n  headers: { Accept: "application/json" },\n});\nconst data = await res.json();`,
+      pythonSnippet: `import requests\n\nres = requests.get(\n    "https://rate.vn${safeSnippetPath}",\n    headers={"Accept": "application/json"},\n    timeout=15,\n)\nprint(res.status_code, res.json())`,
+    };
+  }
+
+  const trimmedBody = requestBody.trim();
+  let parsedJson: { ok: true; value: unknown } | { ok: false };
+  if (!trimmedBody) {
+    parsedJson = { ok: true, value: {} };
+  } else {
+    try {
+      parsedJson = { ok: true, value: JSON.parse(trimmedBody) };
+    } catch {
+      parsedJson = { ok: false };
+    }
+  }
+
+  const curlPayload = parsedJson.ok
+    ? JSON.stringify(parsedJson.value)
+    : requestBody;
+  const curlSnippet = `curl -X POST "https://rate.vn${safeSnippetPath}" \\\n  -H "Accept: application/json" \\\n  -H "Content-Type: application/json" \\\n  -d '${escapeShellSingleQuoted(curlPayload)}'`;
+
+  let fetchBodyExpr: string;
+  if (!parsedJson.ok) {
+    fetchBodyExpr = escapeJsStringLiteral(requestBody);
+  } else if (hasOwnProtoKey(parsedJson.value)) {
+    fetchBodyExpr = escapeJsStringLiteral(JSON.stringify(parsedJson.value));
+  } else {
+    const formatted = JSON.stringify(parsedJson.value, null, 2)
+      .replace(/\u2028/g, '\\u2028')
+      .replace(/\u2029/g, '\\u2029')
+      .replace(/\n/g, '\n  ');
+    fetchBodyExpr = `JSON.stringify(${formatted})`;
+  }
+  const fetchSnippet = `const res = await fetch("https://rate.vn${safeSnippetPath}", {\n  method: "POST",\n  headers: {\n    Accept: "application/json",\n    "Content-Type": "application/json",\n  },\n  body: ${fetchBodyExpr},\n});\nconst data = await res.json();`;
+
+  const pythonSnippet = parsedJson.ok
+    ? `import requests\n\nres = requests.post(\n    "https://rate.vn${safeSnippetPath}",\n    headers={"Accept": "application/json"},\n    json=${toPythonLiteral(parsedJson.value, 4)},\n    timeout=15,\n)\nprint(res.status_code, res.json())`
+    : `import requests\n\nres = requests.post(\n    "https://rate.vn${safeSnippetPath}",\n    headers={"Accept": "application/json", "Content-Type": "application/json"},\n    data=${toPythonStringLiteral(requestBody)},\n    timeout=15,\n)\nprint(res.status_code, res.json())`;
+
+  return {
+    safeSnippetPath,
+    curlSnippet,
+    fetchSnippet,
+    pythonSnippet,
+  };
+}
+
+export function findMatchingPlaygroundPreset<
+  T extends Pick<ApiPresetEndpoint, 'id' | 'method' | 'path'>,
+>(
+  presets: readonly T[],
+  customMethod: 'GET' | 'POST',
+  customPath: string
+): T | null {
+  const trimmedPath = customPath.trim();
+  return (
+    presets.find(
+      (preset) => preset.method === customMethod && preset.path === trimmedPath
+    ) ?? null
+  );
+}
+
+export function resolvePlaygroundDownloadSlug(
+  matchedPreset: Pick<ApiPresetEndpoint, 'id'> | null | undefined,
+  safeSnippetPath: string
+): string {
+  if (matchedPreset?.id) {
+    return sanitizePlaygroundDownloadId(matchedPreset.id);
+  }
+  const stripped = safeSnippetPath.replace(/^\/api\/(?:v1\/rate\/)?/i, '');
+  return sanitizePlaygroundDownloadId(stripped);
+}
+
+export function formatPlaygroundResponsePayload(
+  rawText: string,
+  status: number
+): string {
+  if (!rawText.trim()) {
+    return JSON.stringify({ status, body: null }, null, 2);
+  }
+  try {
+    const parsed: unknown = JSON.parse(rawText);
+    return JSON.stringify(parsed, null, 2);
+  } catch {
+    const boundedBody =
+      rawText.length > MAX_NON_JSON_BODY_CHARS
+        ? `${rawText.slice(0, MAX_NON_JSON_BODY_CHARS)}...`
+        : rawText;
+    return JSON.stringify({ status, body: boundedBody }, null, 2);
+  }
+}
+
+export async function executePlaygroundRequest(options: {
+  method: 'GET' | 'POST';
+  customPath: string;
+  requestBody: string;
+  invalidPathMessage: string;
+  connectErrorMessage: string;
+  fetchImpl?: typeof fetch;
+  now?: () => number;
+}): Promise<PlaygroundRequestResult> {
+  const {
+    method,
+    customPath,
+    requestBody,
+    invalidPathMessage,
+    connectErrorMessage,
+    fetchImpl = fetch,
+    now = () => performance.now(),
+  } = options;
+
+  const targetPath = sanitizePlaygroundApiPath(customPath);
+  if (!targetPath) {
+    return {
+      statusCode: 400,
+      latencyMs: null,
+      responseJson: JSON.stringify({ error: invalidPathMessage }, null, 2),
+    };
+  }
+
+  const start = now();
+  try {
+    const fetchInit: RequestInit = {
+      method,
+      headers: {
+        Accept: 'application/json',
+        ...(method === 'POST' ? { 'Content-Type': 'application/json' } : {}),
+      },
+      ...(method === 'POST' && requestBody.trim() ? { body: requestBody } : {}),
+    };
+
+    const res = await fetchImpl(targetPath, fetchInit);
+    const rawText = await res.text();
+    const elapsed = Math.max(0, Math.round(now() - start));
+    return {
+      statusCode: res.status,
+      latencyMs: elapsed,
+      responseJson: formatPlaygroundResponsePayload(rawText, res.status),
+    };
+  } catch (err) {
+    return {
+      statusCode: 500,
+      latencyMs: null,
+      responseJson: JSON.stringify(
+        {
+          error: connectErrorMessage,
+          details: err instanceof Error ? err.message : String(err),
+        },
+        null,
+        2
+      ),
+    };
+  }
+}
+
+export default function ApiPlaygroundClient({
+  initialMethod = 'GET',
+  initialPath = DEFAULT_PLAYGROUND_PATH,
+  initialBody = '',
+  initialSnippetMode = 'curl',
+}: ApiPlaygroundClientProps) {
   const t = useTranslations('developers');
+  const locale = useLocale();
 
   const presetEndpoints = useMemo<ApiPresetEndpoint[]>(
     () => [
@@ -191,15 +476,14 @@ export default function ApiPlaygroundClient() {
     [t]
   );
 
-  const [selectedId, setSelectedId] = useState<string>('list-products');
-  const [customMethod, setCustomMethod] = useState<'GET' | 'POST'>('GET');
-  const [customPath, setCustomPath] = useState<string>(
-    '/api/v1/rate/products?limit=3&sort=rating_desc'
+  const [customMethod, setCustomMethod] = useState<'GET' | 'POST'>(
+    initialMethod
   );
+  const [customPath, setCustomPath] = useState<string>(initialPath);
   const fieldId = useId();
-  const [requestBody, setRequestBody] = useState<string>('');
+  const [requestBody, setRequestBody] = useState<string>(initialBody);
   const [snippetMode, setSnippetMode] = useState<'curl' | 'fetch' | 'python'>(
-    'curl'
+    initialSnippetMode
   );
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [statusCode, setStatusCode] = useState<number | null>(null);
@@ -208,13 +492,16 @@ export default function ApiPlaygroundClient() {
   const [copiedSnippet, setCopiedSnippet] = useState<boolean>(false);
   const [copiedResponse, setCopiedResponse] = useState<boolean>(false);
   const [copiedCatalogMd, setCopiedCatalogMd] = useState<boolean>(false);
+  const requestSeqRef = useRef<number>(0);
 
-  const activePreset =
-    presetEndpoints.find((p) => p.id === selectedId) ?? presetEndpoints[0]!;
+  const matchedPreset = useMemo(
+    () =>
+      findMatchingPlaygroundPreset(presetEndpoints, customMethod, customPath),
+    [presetEndpoints, customMethod, customPath]
+  );
   const displayedResponse = responseJson ?? t('pgInitialResponseComment');
 
   const handleSelectPreset = (preset: ApiPresetEndpoint) => {
-    setSelectedId(preset.id);
     setCustomMethod(preset.method);
     setCustomPath(preset.path);
     setRequestBody(preset.defaultBody ?? '');
@@ -222,9 +509,11 @@ export default function ApiPlaygroundClient() {
 
   const handleRunRequest = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
-    const targetPath = sanitizePlaygroundApiPath(customPath);
-    if (!targetPath) {
+    if (!sanitizePlaygroundApiPath(customPath)) {
+      requestSeqRef.current += 1;
+      setIsLoading(false);
       setStatusCode(400);
+      setLatencyMs(null);
       setResponseJson(
         JSON.stringify(
           {
@@ -237,62 +526,36 @@ export default function ApiPlaygroundClient() {
       return;
     }
 
+    const seq = ++requestSeqRef.current;
     setIsLoading(true);
-    const start = performance.now();
     try {
-      const fetchInit: RequestInit = {
+      const outcome = await executePlaygroundRequest({
         method: customMethod,
-        headers: {
-          Accept: 'application/json',
-          ...(customMethod === 'POST'
-            ? { 'Content-Type': 'application/json' }
-            : {}),
-        },
-        ...(customMethod === 'POST' && requestBody.trim()
-          ? { body: requestBody }
-          : {}),
-      };
-
-      const res = await fetch(targetPath, fetchInit);
-      const elapsed = Math.round(performance.now() - start);
-      setStatusCode(res.status);
-      setLatencyMs(elapsed);
-      const data = await res.json();
-      setResponseJson(JSON.stringify(data, null, 2));
-    } catch (err) {
-      setStatusCode(500);
-      setResponseJson(
-        JSON.stringify(
-          {
-            error: t('pgErrConnect'),
-            details: err instanceof Error ? err.message : String(err),
-          },
-          null,
-          2
-        )
-      );
+        customPath,
+        requestBody,
+        invalidPathMessage: t('pgErrPathPrefix'),
+        connectErrorMessage: t('pgErrConnect'),
+      });
+      if (requestSeqRef.current !== seq) return;
+      setStatusCode(outcome.statusCode);
+      setLatencyMs(outcome.latencyMs);
+      setResponseJson(outcome.responseJson);
     } finally {
-      setIsLoading(false);
+      if (requestSeqRef.current === seq) {
+        setIsLoading(false);
+      }
     }
   };
 
-  const safeSnippetPath =
-    sanitizePlaygroundApiPath(customPath) ?? '/api/v1/rate/products';
-
-  const curlSnippet =
-    customMethod === 'POST'
-      ? `curl -X POST "https://rate.vn${safeSnippetPath}" \\\n  -H "Accept: application/json" \\\n  -H "Content-Type: application/json" \\\n  -d '${requestBody.replace(/\s+/g, ' ').trim().replace(/'/g, "'\\''")}'`
-      : `curl -X GET "https://rate.vn${safeSnippetPath}" \\\n  -H "Accept: application/json"`;
-
-  const fetchSnippet =
-    customMethod === 'POST'
-      ? `const res = await fetch("https://rate.vn${safeSnippetPath}", {\n  method: "POST",\n  headers: { "Content-Type": "application/json" },\n  body: JSON.stringify(${requestBody.trim() || '{}'}),\n});\nconst data = await res.json();`
-      : `const res = await fetch("https://rate.vn${safeSnippetPath}", {\n  headers: { Accept: "application/json" },\n});\nconst data = await res.json();`;
-
-  const pythonSnippet =
-    customMethod === 'POST'
-      ? `import requests\n\nres = requests.post(\n    "https://rate.vn${safeSnippetPath}",\n    json=${requestBody.trim() || '{}'},\n    timeout=15,\n)\nprint(res.status_code, res.json())`
-      : `import requests\n\nres = requests.get(\n    "https://rate.vn${safeSnippetPath}",\n    headers={"Accept": "application/json"},\n    timeout=15,\n)\nprint(res.status_code, res.json())`;
+  const { safeSnippetPath, curlSnippet, fetchSnippet, pythonSnippet } = useMemo(
+    () =>
+      buildPlaygroundSnippets({
+        method: customMethod,
+        customPath,
+        requestBody,
+      }),
+    [customMethod, customPath, requestBody]
+  );
 
   const activeSnippet =
     snippetMode === 'curl'
@@ -329,7 +592,11 @@ export default function ApiPlaygroundClient() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `rate-api-${sanitizePlaygroundDownloadId(selectedId)}.json`;
+    const downloadSlug = resolvePlaygroundDownloadSlug(
+      matchedPreset,
+      safeSnippetPath
+    );
+    a.download = `rate-api-${downloadSlug}.json`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -386,7 +653,7 @@ export default function ApiPlaygroundClient() {
     <div className="card rounded-4 overflow-hidden border bg-white shadow-sm">
       <div className="card-header bg-dark d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-2 px-4 py-3 text-white">
         <div className="d-flex align-items-center flex-wrap gap-2">
-          <BsTerminal className="text-danger fs-5" />
+          <BsTerminal aria-hidden="true" className="text-danger fs-5" />
           <span className="fw-bold">{t('pgHeaderTitle')}</span>
           <span className="badge bg-success rounded-pill small">
             {t('pgHeaderBadge')}
@@ -397,7 +664,7 @@ export default function ApiPlaygroundClient() {
             rel="noopener noreferrer"
             className="badge bg-primary text-decoration-none rounded-pill d-inline-flex align-items-center gap-1"
           >
-            <BsFileEarmarkCode /> OpenAPI 3.1 JSON
+            <BsFileEarmarkCode aria-hidden="true" /> OpenAPI 3.1 JSON
           </a>
         </div>
         <div className="d-flex align-items-center flex-wrap gap-2">
@@ -436,7 +703,7 @@ export default function ApiPlaygroundClient() {
             aria-labelledby={`${fieldId}-presets`}
           >
             {presetEndpoints.map((preset) => {
-              const isSelected = preset.id === selectedId;
+              const isSelected = matchedPreset?.id === preset.id;
               return (
                 <button
                   key={preset.id}
@@ -461,10 +728,15 @@ export default function ApiPlaygroundClient() {
               );
             })}
           </div>
-          <p className="text-muted small mt-2 mb-0">
-            <BsLightningChargeFill className="text-warning me-1" />
-            {activePreset.description}
-          </p>
+          {matchedPreset && (
+            <p className="text-muted small mt-2 mb-0">
+              <BsLightningChargeFill
+                aria-hidden="true"
+                className="text-warning me-1"
+              />
+              {matchedPreset.description}
+            </p>
+          )}
         </div>
 
         {/* Request Bar */}
@@ -495,7 +767,7 @@ export default function ApiPlaygroundClient() {
               disabled={isLoading}
               className="btn btn-primary fw-semibold d-inline-flex align-items-center gap-2 px-4"
             >
-              <BsPlayFill className="fs-5" />
+              <BsPlayFill aria-hidden="true" className="fs-5" />
               {isLoading ? t('pgRunLoading') : t('pgRunBtn')}
             </button>
           </div>
@@ -584,11 +856,13 @@ export default function ApiPlaygroundClient() {
                 >
                   {copiedSnippet ? (
                     <>
-                      <BsCheck2 className="me-1" /> {t('pgCopiedBtn')}
+                      <BsCheck2 aria-hidden="true" className="me-1" />{' '}
+                      {t('pgCopiedBtn')}
                     </>
                   ) : (
                     <>
-                      <BsClipboard className="me-1" /> {t('pgCopyBtn')}
+                      <BsClipboard aria-hidden="true" className="me-1" />{' '}
+                      {t('pgCopyBtn')}
                     </>
                   )}
                 </button>
@@ -622,7 +896,7 @@ export default function ApiPlaygroundClient() {
                   )}
                   {latencyMs !== null && (
                     <span className="badge bg-secondary rounded-pill">
-                      {latencyMs} ms
+                      {formatNumber(latencyMs, locale)} ms
                     </span>
                   )}
                   <button
