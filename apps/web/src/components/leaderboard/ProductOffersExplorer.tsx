@@ -79,8 +79,9 @@ export function offerTrustScore(riskScore: unknown): number | null {
 }
 
 export function offerRiskTone(riskScore: unknown): MerchantRiskTone | null {
-  if (offerTrustScore(riskScore) == null) return null;
-  return merchantRiskTone(riskScore);
+  const trust = offerTrustScore(riskScore);
+  if (trust == null) return null;
+  return merchantRiskTone(100 - trust);
 }
 
 export function offerTrustBadgeClass(riskScore: unknown): string {
@@ -392,8 +393,9 @@ export default function ProductOffersExplorer({
       const hasPriceA = hasPositiveOfferPrice(a.price_current);
       const hasPriceB = hasPositiveOfferPrice(b.price_current);
       if (hasPriceA !== hasPriceB) return hasPriceA ? -1 : 1;
-      const priceA = hasPriceA ? a.price_current : Number.POSITIVE_INFINITY;
-      const priceB = hasPriceB ? b.price_current : Number.POSITIVE_INFINITY;
+      const priceDiff = hasPriceA
+        ? Number(a.price_current) - Number(b.price_current)
+        : 0;
       // A seller with no score sorts after every scored one (DOS/Rate#1484).
       const trustA = offerTrustScore(a.merchant.risk_score) ?? -1;
       const trustB = offerTrustScore(b.merchant.risk_score) ?? -1;
@@ -413,12 +415,12 @@ export default function ProductOffersExplorer({
           : 0;
 
       if (sortBy === 'trust_desc') {
-        return trustB - trustA || priceA - priceB;
+        return trustB - trustA || priceDiff;
       }
       if (sortBy === 'discount_desc') {
-        return discB - discA || priceA - priceB;
+        return discB - discA || priceDiff;
       }
-      return priceA - priceB || trustB - trustA;
+      return priceDiff || trustB - trustA;
     });
   }, [
     safeOffers,

@@ -793,8 +793,11 @@ async function main() {
   assert.equal(ProductOffersExplorerMod.offerRiskTone(''), null);
   assert.equal(ProductOffersExplorerMod.offerRiskTone(Number.NaN), null);
   assert.equal(ProductOffersExplorerMod.offerRiskTone(19), 'good');
+  assert.equal(ProductOffersExplorerMod.offerRiskTone(19.4), 'good');
+  assert.equal(ProductOffersExplorerMod.offerRiskTone(19.6), 'warn');
   assert.equal(ProductOffersExplorerMod.offerRiskTone(20), 'warn');
   assert.equal(ProductOffersExplorerMod.offerRiskTone(49), 'warn');
+  assert.equal(ProductOffersExplorerMod.offerRiskTone(49.6), 'bad');
   assert.equal(ProductOffersExplorerMod.offerRiskTone(50), 'bad');
   assert.equal(
     ProductOffersExplorerMod.offerTrustBadgeClass(null),
@@ -1003,6 +1006,11 @@ async function main() {
   assert.equal(highTrustHtml.includes('ShopRisk50'), false);
   assert.equal(highTrustHtml.includes('ShopRiskNull'), false);
 
+  const zeroPriceOffer2 = withRisk(
+    mkOffer('zero-2', 'shop-e', 0, 'in_stock'),
+    'ShopZeroHighTrust',
+    2
+  );
   const explorerEdgeHtml = renderToStaticMarkup(
     React.createElement(
       IntlProvider,
@@ -1010,10 +1018,15 @@ async function main() {
       React.createElement(ProductOffersExplorerMod.default, {
         productName: 'Galaxy Buds3 Pro',
         productSlug: 'buds3-pro',
-        offers: [soldOutNormalOffer, zeroPriceOffer],
+        offers: [soldOutNormalOffer, zeroPriceOffer, zeroPriceOffer2],
         byOffer: byOffer1721,
       })
     )
+  );
+  assert.ok(
+    explorerEdgeHtml.indexOf('ShopZeroHighTrust') <
+      explorerEdgeHtml.indexOf('Shop shop-d'),
+    'Unpriced offers sort cleanly by trust tie-breaker without NaN'
   );
   assert.equal(
     explorerEdgeHtml.includes(enMessages.priceVerdict.labelNormal),
