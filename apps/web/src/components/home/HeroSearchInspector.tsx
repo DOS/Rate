@@ -5,6 +5,8 @@ import { useLocale, useTranslations } from 'next-intl';
 import {
   hasReviewRiskEvidence,
   knownDosafeRiskScore,
+  merchantRiskTone,
+  type MerchantRiskTone,
 } from '@/lib/merchant-risk-tone';
 import { discountVerdictCopy } from '@/lib/discount-verdict-copy';
 import { Link, useRouter } from '@/lib/navigation';
@@ -13,6 +15,7 @@ import type { KeySpecs } from '@repo/shared-data';
 import type { HeroProductSuggestion } from '@/lib/hero-products';
 import {
   MAX_VALID_VND_PRICE,
+  getMasterProductCategorySlug,
   getMasterProductHref,
   type UrlInspectionResult,
 } from '@/lib/rate-domain';
@@ -50,6 +53,9 @@ import StarRating from '@/components/elementary/StarRating';
 interface HeroSearchInspectorProps {
   initialProducts: HeroProductSuggestion[];
   initialMerchants: HeroMerchantSuggestion[];
+  initialMode?: 'search' | 'inspect';
+  initialDropdownOpen?: boolean;
+  initialInspectResult?: UrlInspectionResult | null;
 }
 
 const SAMPLE_INSPECT_LINKS = [
@@ -85,12 +91,74 @@ export function isLikelyEcommerceUrl(input: unknown): boolean {
   );
 }
 
+function toOptionalFiniteScore(value: unknown): number | null {
+  if (typeof value === 'number') {
+    return Number.isFinite(value) ? value : null;
+  }
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (!trimmed) return null;
+    const parsed = Number(trimmed);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+}
+
 export function sanitizeHeroInspectorPriceVnd(value: unknown): number {
-  const num = Number(value);
+  if (typeof value !== 'number' && typeof value !== 'string') return 0;
+  const num = typeof value === 'string' ? Number(value.trim() || NaN) : value;
   if (!Number.isFinite(num) || num <= 0 || num > MAX_VALID_VND_PRICE) {
     return 0;
   }
   return Math.round(num);
+}
+
+export function formatHeroInspectorPriceVnd(
+  value: unknown,
+  locale?: string | null
+): string {
+  const safePrice = sanitizeHeroInspectorPriceVnd(value);
+  return safePrice > 0 ? formatPriceVnd(safePrice, locale) : '-';
+}
+
+export function resolveHeroMerchantTrustBadge(
+  merchant:
+    | {
+        trust_score?: number | string | null;
+        risk_score?: number | string | null;
+      }
+    | null
+    | undefined,
+  variant: 'subtle' | 'solid' = 'solid'
+): {
+  score: number;
+  tone: MerchantRiskTone;
+  badgeClass: string;
+} | null {
+  const rawTrust = toOptionalFiniteScore(merchant?.trust_score);
+  if (rawTrust == null) return null;
+  const trustScore = Math.min(100, Math.max(0, Math.round(rawTrust)));
+  const rawRisk = toOptionalFiniteScore(merchant?.risk_score);
+  const riskScore =
+    rawRisk == null ? null : Math.min(100, Math.max(0, rawRisk));
+  const tone = merchantRiskTone(riskScore ?? 100 - trustScore);
+  const badgeClass =
+    variant === 'subtle'
+      ? tone === 'good'
+        ? 'bg-success-subtle text-success'
+        : tone === 'warn'
+          ? 'bg-warning-subtle text-warning-emphasis'
+          : 'bg-danger-subtle text-danger'
+      : tone === 'good'
+        ? 'bg-success text-white'
+        : tone === 'warn'
+          ? 'bg-warning text-dark'
+          : 'bg-danger text-white';
+  return {
+    score: trustScore,
+    tone,
+    badgeClass,
+  };
 }
 
 export function sanitizeHeroInspectorRating(
@@ -108,16 +176,75 @@ export function sanitizeHeroInspectorRating(
   return 0;
 }
 
+export function resolveHeroReviewAuthenticityDisplay(
+  reviewSummary:
+    | {
+        authentic_pct?: number | string | null;
+        total_analyzed?: number | string | null;
+      }
+    | null
+    | undefined,
+  locale: string,
+  copy: {
+    formatAuthentic: (values: { pct: string; total: number }) => string;
+    emptyLabel: string;
+  }
+): {
+  hasAnalyzedReviews: boolean;
+  text: string;
+  className: string;
+} | null {
+  if (!reviewSummary) return null;
+  const rawTotal = toOptionalFiniteScore(reviewSummary.total_analyzed);
+  const total = rawTotal != null && rawTotal > 0 ? Math.floor(rawTotal) : 0;
+  if (total <= 0) {
+    return {
+      hasAnalyzedReviews: false,
+      text: copy.emptyLabel,
+      className: 'text-muted',
+    };
+  }
+  const rawPct = toOptionalFiniteScore(reviewSummary.authentic_pct);
+  const safePct = rawPct != null ? Math.min(100, Math.max(0, rawPct)) : 0;
+  return {
+    hasAnalyzedReviews: true,
+    text: copy.formatAuthentic({
+      pct: formatPlainNumber(safePct, locale),
+      total,
+    }),
+    className: 'fw-bold text-success',
+  };
+}
+
+export function buildHeroCompareItem(
+  item: HeroProductSuggestion,
+  thumb?: string | null
+) {
+  const resolvedThumb = thumb === undefined ? productImageUrl(item) : thumb;
+  return {
+    slug: item.slug,
+    name: item.name,
+    brand: item.brand,
+    thumbnail: resolvedThumb ?? null,
+    min_price: sanitizeHeroInspectorPriceVnd(item.min_price),
+    categoryPath: `/${getMasterProductCategorySlug(item)}`,
+  };
+}
+
 export default function HeroSearchInspector({
   initialProducts,
   initialMerchants,
+  initialMode = 'search',
+  initialDropdownOpen = false,
+  initialInspectResult = null,
 }: HeroSearchInspectorProps) {
   const router = useRouter();
   const t = useTranslations('heroSearch');
   const tVerdict = useTranslations('priceVerdict');
+  const tStarRating = useTranslations('starRating');
   const locale = useLocale();
   const radarIndex = useDealRadarIndex();
-  const [mode, setMode] = useState<'search' | 'inspect'>('search');
+  const [mode, setMode] = useState<'search' | 'inspect'>(initialMode);
   // Phones get a hint short enough to read whole: the long one needs about
   // 460px and the input has about 160px at 360 (DOS/Rate#1488). Wider
   // screens, and the server render, keep the long hint with its examples.
@@ -130,14 +257,14 @@ export default function HeroSearchInspector({
     return () => query.removeEventListener('change', sync);
   }, []);
   const [query, setQuery] = useState('');
-  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const [isDropdownOpen, setIsDropdownOpen] = useState(initialDropdownOpen);
   const [activeIndex, setActiveIndex] = useState(-1);
 
   const [inspectQuery, setInspectQuery] = useState('');
   const [isInspecting, setIsInspecting] = useState(false);
   const [inspectError, setInspectError] = useState<string | null>(null);
   const [inspectResult, setInspectResult] =
-    useState<UrlInspectionResult | null>(null);
+    useState<UrlInspectionResult | null>(initialInspectResult);
 
   const containerRef = useRef<HTMLDivElement | null>(null);
 
@@ -300,6 +427,7 @@ export default function HeroSearchInspector({
       <div className="d-flex justify-content-center mb-3 flex-wrap gap-2">
         <button
           type="button"
+          aria-pressed={mode === 'search'}
           onClick={() => setMode('search')}
           className={`btn btn-sm rounded-pill fw-semibold d-inline-flex align-items-center gap-2 px-4 py-2 ${
             mode === 'search'
@@ -307,11 +435,12 @@ export default function HeroSearchInspector({
               : 'btn-dark bg-opacity-75 text-light border-secondary'
           }`}
         >
-          <BsSearch />
+          <BsSearch aria-hidden="true" />
           {t('modeSearchBtn')}
         </button>
         <button
           type="button"
+          aria-pressed={mode === 'inspect'}
           onClick={() => setMode('inspect')}
           className={`btn btn-sm rounded-pill fw-semibold d-inline-flex align-items-center gap-2 px-4 py-2 ${
             mode === 'inspect'
@@ -319,7 +448,7 @@ export default function HeroSearchInspector({
               : 'btn-dark bg-opacity-75 text-light border-secondary'
           }`}
         >
-          <BsShieldCheck />
+          <BsShieldCheck aria-hidden="true" />
           {t('modeInspectBtn')}
         </button>
       </div>
@@ -333,7 +462,7 @@ export default function HeroSearchInspector({
           >
             <div className="row gx-2 align-items-center m-0">
               <div className="d-none d-sm-flex align-items-center col-auto ps-2">
-                <BsSearch className="text-primary fs-5" />
+                <BsSearch aria-hidden="true" className="text-primary fs-5" />
               </div>
               <div className="col">
                 <input
@@ -365,7 +494,7 @@ export default function HeroSearchInspector({
                     className="btn btn-sm btn-light rounded-circle text-muted"
                     aria-label={t('clearKeywordAria')}
                   >
-                    <BsXLg />
+                    <BsXLg aria-hidden="true" />
                   </button>
                 </div>
               )}
@@ -447,7 +576,10 @@ export default function HeroSearchInspector({
                       const safeMinPrice = sanitizeHeroInspectorPriceVnd(
                         item.min_price
                       );
-                      const minPrice = formatNumber(safeMinPrice, locale);
+                      const minPriceLabel = formatHeroInspectorPriceVnd(
+                        safeMinPrice,
+                        locale
+                      );
                       const rating = sanitizeHeroInspectorRating(
                         item.rating_score || item.user_rating_weighted,
                         item.average_rating
@@ -532,8 +664,14 @@ export default function HeroSearchInspector({
 
                           <div className="d-flex align-items-center flex-shrink-0 gap-2">
                             <div className="me-1 text-end">
-                              <div className="fw-bold text-danger small">
-                                {minPrice} ₫
+                              <div
+                                className={`fw-bold small ${
+                                  safeMinPrice > 0
+                                    ? 'text-danger'
+                                    : 'text-muted'
+                                }`}
+                              >
+                                {minPriceLabel}
                               </div>
                               <div
                                 className="text-muted"
@@ -545,13 +683,7 @@ export default function HeroSearchInspector({
                               </div>
                             </div>
                             <CompareQuickToggle
-                              item={{
-                                slug: item.slug,
-                                name: item.name,
-                                brand: item.brand,
-                                thumbnail: thumb ?? null,
-                                min_price: safeMinPrice,
-                              }}
+                              item={buildHeroCompareItem(item, thumb)}
                             />
                           </div>
                         </div>
@@ -579,49 +711,57 @@ export default function HeroSearchInspector({
                         {t('viewAllMerchantsLink')}
                       </Link>
                     </div>
-                    {filteredMerchants.map((m) => (
-                      <Link
-                        key={m.id}
-                        href={`/merchants/${m.id}`}
-                        onClick={() => setIsDropdownOpen(false)}
-                        className="d-flex align-items-center justify-content-between rounded-3 text-decoration-none text-dark hover-bg-light px-2 py-2"
-                      >
-                        <div className="d-flex align-items-center gap-2">
-                          <span className="badge bg-danger text-uppercase small">
-                            {m.platform}
-                          </span>
-                          <span className="fw-semibold small">
-                            <ContentText text={m.name} locale={locale} />
-                          </span>
-                          {m.is_official && (
-                            <span className="badge bg-success-subtle text-success small">
-                              {t('officialMallBadge')}
+                    {filteredMerchants.map((m) => {
+                      const trustBadge = resolveHeroMerchantTrustBadge(
+                        m,
+                        'subtle'
+                      );
+                      return (
+                        <Link
+                          key={m.id}
+                          href={`/merchants/${m.id}`}
+                          onClick={() => setIsDropdownOpen(false)}
+                          className="d-flex align-items-center justify-content-between rounded-3 text-decoration-none text-dark hover-bg-light px-2 py-2"
+                        >
+                          <div className="d-flex align-items-center gap-2">
+                            <span className="badge bg-danger text-uppercase small">
+                              {m.platform}
                             </span>
-                          )}
-                        </div>
-                        <div className="d-flex align-items-center small gap-2">
-                          {m.trust_score == null ? (
-                            <span className="badge bg-light text-muted border rounded-pill">
-                              {t('trustBadgeNoData')}
+                            <span className="fw-semibold small">
+                              <ContentText text={m.name} locale={locale} />
                             </span>
-                          ) : (
-                            <span className="badge bg-success-subtle text-success rounded-pill">
-                              {t('trustBadge', { score: m.trust_score })}
+                            {m.is_official && (
+                              <span className="badge bg-success-subtle text-success small">
+                                {t('officialMallBadge')}
+                              </span>
+                            )}
+                          </div>
+                          <div className="d-flex align-items-center small gap-2">
+                            {trustBadge == null ? (
+                              <span className="badge bg-light text-muted border rounded-pill">
+                                {t('trustBadgeNoData')}
+                              </span>
+                            ) : (
+                              <span
+                                className={`badge ${trustBadge.badgeClass} rounded-pill`}
+                              >
+                                {t('trustBadge', { score: trustBadge.score })}
+                              </span>
+                            )}
+                            <span
+                              className="text-muted"
+                              style={{ fontSize: '0.8125rem' }}
+                            >
+                              {knownDosafeRiskScore(m) == null
+                                ? t('scamRiskShortNoData')
+                                : t('scamRiskShort', {
+                                    score: knownDosafeRiskScore(m) ?? 0,
+                                  })}
                             </span>
-                          )}
-                          <span
-                            className="text-muted"
-                            style={{ fontSize: '0.8125rem' }}
-                          >
-                            {knownDosafeRiskScore(m) == null
-                              ? t('scamRiskShortNoData')
-                              : t('scamRiskShort', {
-                                  score: knownDosafeRiskScore(m) ?? 0,
-                                })}
-                          </span>
-                        </div>
-                      </Link>
-                    ))}
+                          </div>
+                        </Link>
+                      );
+                    })}
                   </div>
                 )}
               </div>
@@ -637,7 +777,7 @@ export default function HeroSearchInspector({
           >
             <div className="row gx-2 align-items-center m-0">
               <div className="d-none d-sm-flex align-items-center col-auto ps-2">
-                <BsLink45Deg className="text-danger fs-4" />
+                <BsLink45Deg aria-hidden="true" className="text-danger fs-4" />
               </div>
               <div className="col">
                 <input
@@ -661,7 +801,7 @@ export default function HeroSearchInspector({
                     className="btn btn-sm btn-light rounded-circle text-muted"
                     aria-label={t('clearUrlAria')}
                   >
-                    <BsXLg />
+                    <BsXLg aria-hidden="true" />
                   </button>
                 </div>
               )}
@@ -690,7 +830,10 @@ export default function HeroSearchInspector({
                 className="badge bg-dark bg-opacity-75 text-light border-light border-opacity-25 rounded-pill fw-normal border px-3 py-2"
                 style={{ cursor: 'pointer' }}
               >
-                <BsLightningChargeFill className="text-warning me-1" />
+                <BsLightningChargeFill
+                  aria-hidden="true"
+                  className="text-warning me-1"
+                />
                 {sample.label}
               </button>
             ))}
@@ -707,7 +850,10 @@ export default function HeroSearchInspector({
             <div className="card rounded-4 text-dark mt-3 overflow-hidden border-0 shadow-lg">
               <div className="card-header bg-dark d-flex justify-content-between align-items-center flex-wrap gap-2 px-4 py-3 text-white">
                 <div className="d-flex align-items-center gap-2">
-                  <BsShieldCheck className="text-success fs-5" />
+                  <BsShieldCheck
+                    aria-hidden="true"
+                    className="text-success fs-5"
+                  />
                   <span className="fw-bold">{t('resultCardHeader')}</span>
                 </div>
                 <button
@@ -793,23 +939,40 @@ export default function HeroSearchInspector({
                             </Link>
                           </h2>
 
-                          <div className="text-danger fw-bold fs-5 mb-1">
-                            {t('bestPriceLabel')}{' '}
-                            {formatPriceVnd(
-                              Number(inspectResult.masterProduct.min_price),
-                              locale
-                            )}
-                            {inspectResult.priceHistory?.lowestEverPrice && (
-                              <span className="text-success small fw-semibold ms-2">
-                                {t('lowestEverPriceLabel', {
-                                  price: formatNumber(
-                                    inspectResult.priceHistory.lowestEverPrice,
-                                    locale
-                                  ),
-                                })}
-                              </span>
-                            )}
-                          </div>
+                          {(() => {
+                            const safeBestPrice = sanitizeHeroInspectorPriceVnd(
+                              inspectResult.masterProduct.min_price
+                            );
+                            const safeLowestEver =
+                              sanitizeHeroInspectorPriceVnd(
+                                inspectResult.priceHistory?.lowestEverPrice
+                              );
+                            return (
+                              <div
+                                className={`${
+                                  safeBestPrice > 0
+                                    ? 'text-danger'
+                                    : 'text-muted'
+                                } fw-bold fs-5 mb-1`}
+                              >
+                                {t('bestPriceLabel')}{' '}
+                                {formatHeroInspectorPriceVnd(
+                                  safeBestPrice,
+                                  locale
+                                )}
+                                {safeLowestEver > 0 && (
+                                  <span className="text-success small fw-semibold ms-2">
+                                    {t('lowestEverPriceLabel', {
+                                      price: formatNumber(
+                                        safeLowestEver,
+                                        locale
+                                      ),
+                                    })}
+                                  </span>
+                                )}
+                              </div>
+                            );
+                          })()}
 
                           {inspectResult.discountAnalysis && (
                             <p className="text-muted small mb-0">
@@ -828,58 +991,76 @@ export default function HeroSearchInspector({
 
                     <div className="col-lg-5">
                       <div className="rounded-4 bg-light border p-3">
-                        {inspectResult.merchantProfile && (
-                          <div className="d-flex justify-content-between align-items-center border-bottom mb-2 pb-2">
-                            <div className="small">
-                              <span className="text-muted">
-                                {t('merchantLabel')}{' '}
-                              </span>
-                              <Link
-                                href={`/merchants/${inspectResult.merchantProfile.id}`}
-                                className="fw-bold text-dark text-decoration-none"
-                              >
-                                <ContentText
-                                  text={inspectResult.merchantProfile.name}
-                                  locale={locale}
-                                />
-                              </Link>
-                              {inspectResult.merchantProfile.is_official && (
-                                <BsCheckCircleFill className="text-success ms-1" />
-                              )}
-                            </div>
-                            {inspectResult.merchantProfile.trust_score ==
-                            null ? (
-                              <span className="badge bg-light text-muted border rounded-pill">
-                                {t('trustBadgeNoData')}
-                              </span>
-                            ) : (
-                              <span className="badge bg-success rounded-pill text-white">
-                                {t('trustBadge', {
-                                  score:
-                                    inspectResult.merchantProfile.trust_score,
-                                })}
-                              </span>
-                            )}
-                          </div>
-                        )}
+                        {inspectResult.merchantProfile &&
+                          (() => {
+                            const trustBadge = resolveHeroMerchantTrustBadge(
+                              inspectResult.merchantProfile,
+                              'solid'
+                            );
+                            return (
+                              <div className="d-flex justify-content-between align-items-center border-bottom mb-2 pb-2">
+                                <div className="small">
+                                  <span className="text-muted">
+                                    {t('merchantLabel')}{' '}
+                                  </span>
+                                  <Link
+                                    href={`/merchants/${inspectResult.merchantProfile.id}`}
+                                    className="fw-bold text-dark text-decoration-none"
+                                  >
+                                    <ContentText
+                                      text={inspectResult.merchantProfile.name}
+                                      locale={locale}
+                                    />
+                                  </Link>
+                                  {inspectResult.merchantProfile
+                                    .is_official && (
+                                    <BsCheckCircleFill
+                                      aria-hidden="true"
+                                      className="text-success ms-1"
+                                    />
+                                  )}
+                                </div>
+                                {trustBadge == null ? (
+                                  <span className="badge bg-light text-muted border rounded-pill">
+                                    {t('trustBadgeNoData')}
+                                  </span>
+                                ) : (
+                                  <span
+                                    className={`badge ${trustBadge.badgeClass} rounded-pill`}
+                                  >
+                                    {t('trustBadge', {
+                                      score: trustBadge.score,
+                                    })}
+                                  </span>
+                                )}
+                              </div>
+                            );
+                          })()}
 
-                        {inspectResult.reviewSummary && (
-                          <div className="d-flex justify-content-between align-items-center small mb-3">
-                            <span className="text-muted">
-                              {t('aiReviewAuthLabel')}
-                            </span>
-                            <span className="fw-bold text-success">
-                              {t('aiReviewAuthValue', {
-                                pct: formatPlainNumber(
-                                  inspectResult.reviewSummary.authentic_pct,
-                                  locale
-                                ),
-                                total:
-                                  inspectResult.reviewSummary.total_analyzed,
-                              })}
-                            </span>
-                          </div>
-                        )}
+                        {inspectResult.reviewSummary &&
+                          (() => {
+                            const reviewAuth =
+                              resolveHeroReviewAuthenticityDisplay(
+                                inspectResult.reviewSummary,
+                                locale,
+                                {
+                                  formatAuthentic: (values) =>
+                                    t('aiReviewAuthValue', values),
+                                  emptyLabel: tStarRating('empty'),
+                                }
+                              );
+                            if (!reviewAuth) return null;
+                            return (
+                              <div className="d-flex justify-content-between align-items-center small mb-3">
+                                <span className="text-muted">
+                                  {t('aiReviewAuthLabel')}
+                                </span>
+                                <span className={reviewAuth.className}>
+                                  {reviewAuth.text}
+                                </span>
+                              </div>
+                            );
+                          })()}
 
                         <div className="d-flex flex-wrap gap-2">
                           <Link
@@ -889,7 +1070,7 @@ export default function HeroSearchInspector({
                             className="btn btn-primary btn-sm rounded-pill fw-semibold flex-grow-1 px-3"
                           >
                             {t('viewSpecsAndHistoryBtn')}{' '}
-                            <BsArrowRight className="ms-1" />
+                            <BsArrowRight aria-hidden="true" className="ms-1" />
                           </Link>
                           <Link
                             href={`/inspect?q=${encodeURIComponent(inspectQuery)}`}
@@ -921,20 +1102,29 @@ export default function HeroSearchInspector({
                             {t('officialMallBadge')}
                           </span>
                         )}
-                        {inspectResult.merchantProfile.trust_score == null ? (
-                          <span className="badge bg-light text-muted border rounded-pill">
-                            {t('trustBadgeNoData')}
-                          </span>
-                        ) : (
-                          <span className="badge bg-success rounded-pill text-white">
-                            {t('trustBadge', {
-                              score: inspectResult.merchantProfile.trust_score,
-                            })}
-                          </span>
-                        )}
+                        {(() => {
+                          const trustBadge = resolveHeroMerchantTrustBadge(
+                            inspectResult.merchantProfile,
+                            'solid'
+                          );
+                          return trustBadge == null ? (
+                            <span className="badge bg-light text-muted border rounded-pill">
+                              {t('trustBadgeNoData')}
+                            </span>
+                          ) : (
+                            <span
+                              className={`badge ${trustBadge.badgeClass} rounded-pill`}
+                            >
+                              {t('trustBadge', { score: trustBadge.score })}
+                            </span>
+                          );
+                        })()}
                       </div>
                       <h2 className="h5 fw-bold mb-1">
-                        <BsShop className="text-primary me-2" />
+                        <BsShop
+                          aria-hidden="true"
+                          className="text-primary me-2"
+                        />
                         <ContentText
                           text={inspectResult.merchantProfile.name}
                           locale={locale}
@@ -987,7 +1177,10 @@ export default function HeroSearchInspector({
                   <div className="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-3">
                     <div>
                       <h5 className="fw-bold d-flex align-items-center mb-1 gap-2">
-                        <BsExclamationTriangleFill className="text-warning" />
+                        <BsExclamationTriangleFill
+                          aria-hidden="true"
+                          className="text-warning"
+                        />
                         {t('unmatchedHeading')}
                       </h5>
                       <p className="text-muted small mb-0">

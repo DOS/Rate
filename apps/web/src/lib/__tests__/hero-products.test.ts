@@ -1,7 +1,28 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import React from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
+import { NextIntlClientProvider, createTranslator } from 'next-intl';
+import {
+  AppRouterContext,
+  type AppRouterInstance,
+} from 'next/dist/shared/lib/app-router-context.shared-runtime';
 import type { MasterProduct } from '@repo/shared-data';
-import { withScoringSpecs, withoutSpecSheet } from '../hero-products';
+import csMessages from '../../../locales/cs.json';
+import enMessages from '../../../locales/en.json';
+import viMessages from '../../../locales/vi.json';
+import { pickClientMessages } from '../client-messages';
+import type { HeroMerchantSuggestion } from '../hero-merchants';
+import {
+  type HeroProductSuggestion,
+  withScoringSpecs,
+  withoutSpecSheet,
+} from '../hero-products';
+import {
+  MAX_VALID_VND_PRICE,
+  parseEcommerceUrlOrQuery,
+  type UrlInspectionResult,
+} from '../rate-domain';
 import {
   buildPopular1v1BattlesForCategory,
   LEADERBOARD_SPEC_FIELDS,
@@ -196,4 +217,440 @@ assert.ok(page('leaderboard').includes('products.map(withScoringSpecs)'));
 assert.ok(page('compare').includes('catalogCandidates.map(withScoringSpecs)'));
 assert.ok(page('compare/[versus]').includes('directory.map(withScoringSpecs)'));
 
-console.log('hero-products: withoutSpecSheet and withScoringSpecs passed');
+// DOS/Rate#1719: HeroSearchInspector trust badge tones, 0-review suppression,
+// 0 VND / unpriced suppression, CompareQuickToggle categoryPath, and tab a11y.
+async function testHeroSearchInspector() {
+  const nodeModule = await import('node:module');
+  const extMap = (
+    nodeModule.default as unknown as {
+      _extensions?: Record<string, (mod: { exports: unknown }) => void>;
+    }
+  )._extensions;
+  if (extMap && !extMap['.css']) {
+    extMap['.css'] = (mod) => {
+      mod.exports = {};
+    };
+  }
+  const {
+    default: HeroSearchInspector,
+    buildHeroCompareItem,
+    formatHeroInspectorPriceVnd,
+    resolveHeroMerchantTrustBadge,
+    resolveHeroReviewAuthenticityDisplay,
+    sanitizeHeroInspectorPriceVnd,
+  } = await import('../../components/home/HeroSearchInspector');
+
+  assert.equal(resolveHeroMerchantTrustBadge(null), null);
+  assert.equal(resolveHeroMerchantTrustBadge({ trust_score: null }), null);
+  assert.equal(resolveHeroMerchantTrustBadge({ trust_score: '' }), null);
+  assert.equal(
+    resolveHeroMerchantTrustBadge({ trust_score: Number.NaN }),
+    null
+  );
+
+  // Fallback riskScore = 100 - trustScore thresholds (< 20 good, 20..49 warn, >= 50 bad).
+  assert.deepEqual(
+    resolveHeroMerchantTrustBadge({ trust_score: 81 }, 'subtle'),
+    {
+      score: 81,
+      tone: 'good',
+      badgeClass: 'bg-success-subtle text-success',
+    }
+  );
+  assert.deepEqual(
+    resolveHeroMerchantTrustBadge({ trust_score: 80 }, 'subtle'),
+    {
+      score: 80,
+      tone: 'warn',
+      badgeClass: 'bg-warning-subtle text-warning-emphasis',
+    }
+  );
+  assert.deepEqual(
+    resolveHeroMerchantTrustBadge({ trust_score: 51 }, 'solid'),
+    {
+      score: 51,
+      tone: 'warn',
+      badgeClass: 'bg-warning text-dark',
+    }
+  );
+  assert.deepEqual(
+    resolveHeroMerchantTrustBadge({ trust_score: 50 }, 'solid'),
+    {
+      score: 50,
+      tone: 'bad',
+      badgeClass: 'bg-danger text-white',
+    }
+  );
+  assert.deepEqual(
+    resolveHeroMerchantTrustBadge({ trust_score: 32 }, 'subtle'),
+    {
+      score: 32,
+      tone: 'bad',
+      badgeClass: 'bg-danger-subtle text-danger',
+    }
+  );
+
+  // Explicit risk_score takes precedence over 100 - trust_score.
+  assert.equal(
+    resolveHeroMerchantTrustBadge({ trust_score: 90, risk_score: 55 })?.tone,
+    'bad'
+  );
+  assert.equal(
+    resolveHeroMerchantTrustBadge({ trust_score: 90, risk_score: 25 })?.tone,
+    'warn'
+  );
+  assert.equal(
+    resolveHeroMerchantTrustBadge({ trust_score: 40, risk_score: 10 })?.tone,
+    'good'
+  );
+
+  // Price bounds and unpriced "-" suppression without trailing "₫".
+  for (const invalid of [
+    0,
+    -500,
+    null,
+    undefined,
+    '',
+    Number.NaN,
+    true,
+    MAX_VALID_VND_PRICE + 1,
+  ]) {
+    assert.equal(sanitizeHeroInspectorPriceVnd(invalid), 0);
+    assert.equal(formatHeroInspectorPriceVnd(invalid, 'vi'), '-');
+    assert.equal(formatHeroInspectorPriceVnd(invalid, 'cs'), '-');
+  }
+  assert.equal(formatHeroInspectorPriceVnd(19_990_000, 'vi'), '19.990.000 ₫');
+  assert.equal(
+    formatHeroInspectorPriceVnd(19_990_000, 'cs'),
+    '19\u00a0990\u00a0000\u00a0₫'
+  );
+
+  // CompareQuickToggle preserves non-smartphone category paths.
+  const laptopItem = buildHeroCompareItem({
+    id: 'lap-1',
+    slug: 'macbook-air-m3',
+    name: 'MacBook Air M3',
+    brand: 'Apple',
+    min_price: 0,
+    metadata: { category_slug: 'laptops' },
+    specifications: { category_slug: 'laptops' },
+  } as unknown as HeroProductSuggestion);
+  assert.equal(laptopItem.categoryPath, '/laptops');
+  assert.equal(laptopItem.min_price, 0);
+
+  const mockRouter: AppRouterInstance = {
+    back: () => {},
+    forward: () => {},
+    refresh: () => {},
+    push: () => {},
+    replace: () => {},
+    prefetch: () => {},
+    bfcacheId: 'test',
+  };
+  const Provider = NextIntlClientProvider as React.ComponentType<{
+    locale: string;
+    messages: Record<string, unknown>;
+    timeZone: string;
+    children?: React.ReactNode;
+  }>;
+  const renderHero = (
+    locale: 'vi' | 'en' | 'cs',
+    scope: 'home' | 'contact',
+    props: React.ComponentProps<typeof HeroSearchInspector>
+  ): string => {
+    const fullMessages =
+      locale === 'vi' ? viMessages : locale === 'en' ? enMessages : csMessages;
+    return renderToStaticMarkup(
+      React.createElement(
+        AppRouterContext.Provider,
+        { value: mockRouter },
+        React.createElement(
+          Provider,
+          {
+            locale,
+            messages: pickClientMessages(
+              fullMessages as unknown as Record<string, unknown>,
+              scope
+            ),
+            timeZone: 'Asia/Ho_Chi_Minh',
+          },
+          React.createElement(HeroSearchInspector, props)
+        )
+      )
+    );
+  };
+
+  const heroProducts: HeroProductSuggestion[] = [
+    {
+      id: 'p-lap',
+      slug: 'macbook-air-m3',
+      name: 'MacBook Air M3',
+      brand: 'Apple',
+      model: 'MacBook Air M3',
+      model_key: 'apple-macbook-air-m3',
+      min_price: 25_990_000,
+      merchant_count: 4,
+      user_rating_weighted: 4.8,
+      metadata: { category_slug: 'laptops' },
+      specifications: { category_slug: 'laptops' },
+      key_specs: { chip: 'Apple M3' },
+    } as unknown as HeroProductSuggestion,
+    {
+      id: 'p-sold-out',
+      slug: 'ipad-mini-sold-out',
+      name: 'iPad Mini Sold Out',
+      brand: 'Apple',
+      model: 'iPad Mini',
+      model_key: 'apple-ipad-mini',
+      min_price: 0,
+      merchant_count: 0,
+      user_rating_weighted: 0,
+      metadata: { category_slug: 'tablets' },
+      specifications: { category_slug: 'tablets' },
+      key_specs: {},
+    } as unknown as HeroProductSuggestion,
+  ];
+  const heroMerchants: HeroMerchantSuggestion[] = [
+    {
+      id: 'm-good',
+      name: 'Clean Mall',
+      platform: 'shopee',
+      platform_shop_id: '101',
+      is_official: true,
+      trust_score: 92,
+      dosafe_risk_score: 8,
+    },
+    {
+      id: 'm-bad',
+      name: 'Risky Seller',
+      platform: 'lazada',
+      platform_shop_id: '102',
+      is_official: false,
+      trust_score: 35,
+      dosafe_risk_score: 65,
+    },
+  ];
+  const warnAndUnknownMerchants: HeroMerchantSuggestion[] = [
+    {
+      id: 'm-warn',
+      name: 'Caution Shop',
+      platform: 'tiki',
+      platform_shop_id: '103',
+      is_official: false,
+      trust_score: 65,
+      dosafe_risk_score: 35,
+    },
+    {
+      id: 'm-null',
+      name: 'Unscored Shop',
+      platform: 'shopee',
+      platform_shop_id: '104',
+      is_official: false,
+      trust_score: null,
+      dosafe_risk_score: null,
+    },
+  ];
+
+  for (const locale of ['vi', 'en', 'cs'] as const) {
+    const fullMessages =
+      locale === 'vi' ? viMessages : locale === 'en' ? enMessages : csMessages;
+    for (const scope of ['home', 'contact'] as const) {
+      const scopedMessages = pickClientMessages(
+        fullMessages as unknown as Record<string, unknown>,
+        scope
+      );
+      const tHero = createTranslator({
+        locale,
+        messages: scopedMessages as unknown as typeof fullMessages,
+        namespace: 'heroSearch',
+      });
+      const tStar = createTranslator({
+        locale,
+        messages: scopedMessages as unknown as typeof fullMessages,
+        namespace: 'starRating',
+      });
+
+      assert.equal(
+        resolveHeroReviewAuthenticityDisplay(null, locale, {
+          formatAuthentic: (v) => tHero('aiReviewAuthValue', v),
+          emptyLabel: tStar('empty'),
+        }),
+        null
+      );
+      const zeroReviews = resolveHeroReviewAuthenticityDisplay(
+        { total_analyzed: 0, authentic_pct: 100 },
+        locale,
+        {
+          formatAuthentic: (v) => tHero('aiReviewAuthValue', v),
+          emptyLabel: tStar('empty'),
+        }
+      );
+      assert.deepEqual(zeroReviews, {
+        hasAnalyzedReviews: false,
+        text: fullMessages.starRating.empty,
+        className: 'text-muted',
+      });
+      const withReviews = resolveHeroReviewAuthenticityDisplay(
+        { total_analyzed: 12, authentic_pct: 91.5 },
+        locale,
+        {
+          formatAuthentic: (v) => tHero('aiReviewAuthValue', v),
+          emptyLabel: tStar('empty'),
+        }
+      );
+      assert.equal(withReviews?.hasAnalyzedReviews, true);
+      assert.equal(withReviews?.className, 'fw-bold text-success');
+      assert.ok(
+        withReviews?.text.includes(locale === 'cs' ? '91,5' : '91.5'),
+        `${locale}: authentic pct localized`
+      );
+
+      // Mode 1 open dropdown: aria-pressed, aria-hidden icons, no 0 VND, subtle trust tones.
+      const mode1Html = renderHero(locale, scope, {
+        initialProducts: heroProducts,
+        initialMerchants: heroMerchants,
+        initialMode: 'search',
+        initialDropdownOpen: true,
+      });
+      assert.match(
+        mode1Html,
+        /<button[^>]*aria-pressed="true"[^>]*>.*<svg[^>]*aria-hidden="true"/
+      );
+      assert.match(
+        mode1Html,
+        /<button[^>]*aria-pressed="false"[^>]*>.*<svg[^>]*aria-hidden="true"/
+      );
+      assert.doesNotMatch(mode1Html, /\b0[\s\u00a0]₫/);
+      assert.doesNotMatch(mode1Html, /NaN[\s\u00a0]*₫/);
+      assert.ok(
+        mode1Html.includes('>-</div>'),
+        `${locale}/${scope}: Mode 1 renders "-" for 0 VND`
+      );
+      assert.ok(
+        mode1Html.includes('bg-success-subtle text-success rounded-pill')
+      );
+      assert.ok(
+        mode1Html.includes('bg-danger-subtle text-danger rounded-pill')
+      );
+
+      const mode1WarnHtml = renderHero(locale, scope, {
+        initialProducts: heroProducts,
+        initialMerchants: warnAndUnknownMerchants,
+        initialMode: 'search',
+        initialDropdownOpen: true,
+      });
+      assert.ok(
+        mode1WarnHtml.includes(
+          'bg-warning-subtle text-warning-emphasis rounded-pill'
+        )
+      );
+      assert.ok(
+        mode1WarnHtml.includes(fullMessages.heroSearch.trustBadgeNoData)
+      );
+
+      // Mode 2 product + high-risk merchant + 0 reviews + 0 VND:
+      const mode2ZeroHtml = renderHero(locale, scope, {
+        initialProducts: heroProducts,
+        initialMerchants: heroMerchants,
+        initialMode: 'inspect',
+        initialInspectResult: {
+          query: 'https://shopee.vn/item-i.102.999',
+          matchedType: 'product_listing',
+          parsedUrl: parseEcommerceUrlOrQuery(
+            'https://shopee.vn/item-i.102.999'
+          ),
+          masterProduct: {
+            id: 'p-sold-out',
+            slug: 'ipad-mini-sold-out',
+            name: 'iPad Mini Sold Out',
+            brand: 'Apple',
+            model: 'iPad Mini',
+            min_price: 0,
+            images: [],
+            metadata: { category_slug: 'tablets' },
+          } as unknown as UrlInspectionResult['masterProduct'],
+          matchedOffer: null,
+          allOffers: [],
+          discountAnalysis: null,
+          priceHistory: {
+            lowestEverPrice: 0,
+            highestEverPrice: 0,
+            averagePrice: 0,
+            observationCount: 0,
+            points: [],
+          } as unknown as UrlInspectionResult['priceHistory'],
+          reviewSummary: {
+            total_analyzed: 0,
+            authentic_count: 0,
+            suspicious_count: 0,
+            authentic_pct: 100,
+          } as unknown as UrlInspectionResult['reviewSummary'],
+          merchantProfile: {
+            id: 'm-bad',
+            name: 'Risky Seller',
+            platform: 'shopee',
+            is_official: false,
+            risk_score: 68,
+            trust_score: 32,
+            dosafe_risk_score: 68,
+            review_risk_score: 0,
+            product_count: 2,
+          } as unknown as UrlInspectionResult['merchantProfile'],
+          suggestions: [],
+        },
+      });
+      assert.doesNotMatch(mode2ZeroHtml, /\b0[\s\u00a0]₫/);
+      assert.doesNotMatch(mode2ZeroHtml, /100\s*%/);
+      assert.ok(mode2ZeroHtml.includes(fullMessages.starRating.empty));
+      assert.ok(
+        mode2ZeroHtml.includes('badge bg-danger text-white rounded-pill')
+      );
+      assert.ok(
+        !mode2ZeroHtml.includes('badge bg-success rounded-pill text-white')
+      );
+
+      // Mode 2 shop-only card caution tone (risk_score: 30, trust_score: 70):
+      const mode2ShopWarnHtml = renderHero(locale, scope, {
+        initialProducts: heroProducts,
+        initialMerchants: heroMerchants,
+        initialMode: 'inspect',
+        initialInspectResult: {
+          query: 'https://shopee.vn/shop/103',
+          matchedType: 'merchant',
+          parsedUrl: parseEcommerceUrlOrQuery('https://shopee.vn/shop/103'),
+          masterProduct: null,
+          matchedOffer: null,
+          allOffers: [],
+          discountAnalysis: null,
+          priceHistory: null,
+          reviewSummary: null,
+          merchantProfile: {
+            id: 'm-warn',
+            name: 'Caution Shop',
+            platform: 'shopee',
+            is_official: false,
+            risk_score: 30,
+            trust_score: 70,
+            dosafe_risk_score: 30,
+            review_risk_score: 0,
+            review_risk_breakdown: null,
+            product_count: 5,
+          } as unknown as UrlInspectionResult['merchantProfile'],
+          suggestions: [],
+        },
+      });
+      assert.ok(
+        mode2ShopWarnHtml.includes('badge bg-warning text-dark rounded-pill')
+      );
+    }
+  }
+
+  console.log(
+    'hero-products: withoutSpecSheet, withScoringSpecs, and #1719 HeroSearchInspector passed'
+  );
+}
+
+testHeroSearchInspector().catch((error: unknown) => {
+  console.error(error);
+  process.exit(1);
+});
