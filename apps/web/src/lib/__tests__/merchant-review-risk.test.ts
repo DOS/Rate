@@ -1,10 +1,11 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { registerHooks } from 'node:module';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import * as React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { NextIntlClientProvider } from 'next-intl';
+import { NextIntlClientProvider, useTranslations } from 'next-intl';
 import { AppRouterContext } from 'next/dist/shared/lib/app-router-context.shared-runtime';
 import { pickClientMessages } from '../client-messages';
 import { formatPriceVnd } from '../locale-format';
@@ -35,6 +36,8 @@ import {
   formatMerchantPagePriceVnd,
   sanitizeMerchantPagePriceVnd,
 } from '../../app/[locale]/merchants/[id]/page';
+import type { MasterProduct } from '@repo/shared-data';
+import type { CrossPlatformDealRadarResponse } from '../../server/rate';
 
 const testDir = dirname(fileURLToPath(import.meta.url));
 
@@ -177,6 +180,7 @@ async function main() {
   await combinedColumnIsNotReviewRisk();
   await publicOffersSayNoneWithoutReviews();
   merchantPagesRiskPriceAndA11ySuite();
+  await homePageMerchantRadarAndCompareSuite();
 
   // A store with neither a DOSafe score nor analysed reviews has no trust
   // score, not "high trust 100/100"; with one signal, the score is as before
@@ -1280,6 +1284,652 @@ function merchantPagesRiskPriceAndA11ySuite() {
       profilePageSrc.includes('<MerchantProfilePriceBlock') &&
       profilePageSrc.includes('formatMerchantPagePriceVnd('),
     'merchants/[id]/page.tsx must route review risk via merchantRiskTone, expose data-testid + data-tone, use trustScore > 50, and render prices via MerchantProfilePriceBlock / formatMerchantPagePriceVnd'
+  );
+}
+
+// DOS/Rate#1746: homepage merchant cards round scores before classifying and
+// guard null review_risk_score + null risk_score fallbacks; radar cards guard
+// positive VND bounds and strikethrough prices; quickCompareSlugs uses
+// Item-grouped gridProducts + catalogRowSlug; review stars round to 1..5.
+async function homePageMerchantRadarAndCompareSuite() {
+  registerHooks({
+    load(url, context, nextLoad) {
+      if (url.endsWith('.css')) {
+        return {
+          format: 'commonjs',
+          shortCircuit: true,
+          source: 'module.exports = {};',
+        };
+      }
+      return nextLoad(url, context);
+    },
+  });
+  const {
+    HomeDealRadarBlock,
+    HomeMerchantCard,
+    HomeReviewCard,
+    buildHomeQuickCompareSlugs,
+    homeMerchantDosafeDisplay,
+    homeMerchantReviewRiskDisplay,
+    homeMerchantTrustDisplay,
+    resolveHomeRadarOriginalPriceVnd,
+    roundHomeMerchantScore,
+    sanitizeHomePriceVnd,
+    sanitizeHomeReviewStars,
+  } = await import('../../app/[locale]/page');
+
+  // 1. Score rounding + strict control-char / radix-prefix rejection across
+  // DOSafe, review risk, and overall trust.
+  for (const invalid of [
+    null,
+    undefined,
+    '',
+    '   ',
+    '0x10',
+    '0b10',
+    '0o10',
+    '-0x10',
+    '8\t0',
+    '1\n0',
+    '\t80',
+    '\u000016',
+    Number.NaN,
+    Number.POSITIVE_INFINITY,
+    Number.NEGATIVE_INFINITY,
+  ]) {
+    assert.equal(
+      roundHomeMerchantScore(invalid),
+      null,
+      `roundHomeMerchantScore(${JSON.stringify(invalid)}) must return null`
+    );
+    assert.equal(
+      homeMerchantDosafeDisplay({
+        dosafe_risk_score: invalid as never,
+        dosafe_risk_known: true,
+      }),
+      null
+    );
+    assert.equal(
+      homeMerchantReviewRiskDisplay({
+        review_risk_score: invalid,
+        review_risk_breakdown: { total_reviews: 5 },
+      }),
+      null
+    );
+    assert.equal(
+      homeMerchantTrustDisplay({
+        trust_score: invalid,
+        risk_score: null,
+      }),
+      null
+    );
+  }
+
+  // Legacy breakdown rows (null / {}) where hasReviewRiskEvidence is true while
+  // review_risk_score is null or non-finite must return null instead of "/100".
+  for (const legacyBreakdown of [null, {}] as const) {
+    assert.equal(hasReviewRiskEvidence(legacyBreakdown), true);
+    assert.equal(
+      homeMerchantReviewRiskDisplay({
+        review_risk_score: null,
+        review_risk_breakdown: legacyBreakdown,
+      }),
+      null
+    );
+    assert.equal(
+      homeMerchantReviewRiskDisplay({
+        review_risk_score: Number.NaN,
+        review_risk_breakdown: legacyBreakdown,
+      }),
+      null
+    );
+  }
+  assert.equal(
+    homeMerchantReviewRiskDisplay({
+      review_risk_score: 12,
+      review_risk_breakdown: { total_reviews: 0 },
+    }),
+    null
+  );
+  assert.equal(
+    homeMerchantDosafeDisplay({
+      dosafe_risk_score: 0,
+      dosafe_risk_known: false,
+    }),
+    null
+  );
+
+  // Fractional rounding parity with /merchants before tone classification.
+  for (const [raw, expectedScore, expectedTone] of [
+    [0, 0, 'good'],
+    [' 16 ', 16, 'good'],
+    [19.4, 19, 'good'],
+    [19.5, 20, 'warn'],
+    [19.6, 20, 'warn'],
+    [49.4, 49, 'warn'],
+    [49.5, 50, 'bad'],
+    [49.6, 50, 'bad'],
+    [140, 100, 'bad'],
+  ] as const) {
+    const dosafe = homeMerchantDosafeDisplay({
+      dosafe_risk_score: raw as never,
+      dosafe_risk_known: true,
+    });
+    const rev = homeMerchantReviewRiskDisplay({
+      review_risk_score: raw,
+      review_risk_breakdown: { total_reviews: 10 },
+    });
+    const dirRev = merchantDirectoryReviewRiskDisplay({
+      review_risk_score: raw,
+      review_risk_breakdown: { total_reviews: 10 },
+    });
+    assert.deepEqual(dosafe, {
+      score: expectedScore,
+      tone: expectedTone,
+      toneClass: `is-${expectedTone}`,
+    });
+    assert.deepEqual(rev, {
+      score: expectedScore,
+      tone: expectedTone,
+      toneClass: `is-${expectedTone}`,
+    });
+    assert.equal(rev?.score, dirRev?.score);
+    assert.equal(rev?.tone, dirRev?.tone);
+  }
+
+  for (const [rawTrust, rawRisk, expectedScore, expectedTone, dirTier] of [
+    [100, 0, 100, 'good', 'high'],
+    [85, null, 85, 'good', 'high'],
+    [80, null, 80, 'good', 'high'],
+    [80, 20, 80, 'good', 'high'],
+    [' 80 ', null, 80, 'good', 'high'],
+    [79.6, 20.4, 80, 'good', 'high'],
+    [79, null, 79, 'warn', 'moderate'],
+    [65, null, 65, 'warn', 'moderate'],
+    [51, 49, 51, 'warn', 'moderate'],
+    [50.5, 49.5, 51, 'warn', 'moderate'],
+    [50.4, 49.6, 50, 'bad', 'risk'],
+    [50, null, 50, 'bad', 'risk'],
+    [0, 100, 0, 'bad', 'risk'],
+  ] as const) {
+    const homeTrust = homeMerchantTrustDisplay({
+      trust_score: rawTrust,
+      risk_score: rawRisk,
+    });
+    const dirTrust = merchantDirectoryTrustDisplay(rawTrust);
+    assert.deepEqual(homeTrust, {
+      score: expectedScore,
+      tone: expectedTone,
+      toneClass: `is-${expectedTone}`,
+    });
+    assert.equal(homeTrust?.score, dirTrust?.score);
+    assert.equal(dirTrust?.tier, dirTier);
+  }
+
+  // 2. Radar VND price bounds and strikethrough list-price guard.
+  for (const badPrice of [
+    null,
+    undefined,
+    0,
+    '0',
+    0.4,
+    -1,
+    -500_000,
+    Number.NaN,
+    Number.POSITIVE_INFINITY,
+    '0x1000',
+    '1\n000',
+    '8\t0',
+    '1\u0000000',
+    MAX_VALID_VND_PRICE + 1,
+  ]) {
+    assert.equal(sanitizeHomePriceVnd(badPrice), null);
+    assert.equal(resolveHomeRadarOriginalPriceVnd(15_990_000, badPrice), null);
+    assert.equal(resolveHomeRadarOriginalPriceVnd(badPrice, 20_000_000), null);
+  }
+  assert.equal(sanitizeHomePriceVnd(1), 1);
+  assert.equal(sanitizeHomePriceVnd('  15990000  '), 15_990_000);
+  assert.equal(sanitizeHomePriceVnd(MAX_VALID_VND_PRICE), MAX_VALID_VND_PRICE);
+  assert.equal(resolveHomeRadarOriginalPriceVnd(15_990_000, 15_990_000), null);
+  assert.equal(resolveHomeRadarOriginalPriceVnd(15_990_000, 14_000_000), null);
+  assert.equal(resolveHomeRadarOriginalPriceVnd(100, 100.2), null);
+  assert.equal(
+    resolveHomeRadarOriginalPriceVnd(15_990_000, 18_990_000),
+    18_990_000
+  );
+  assert.equal(
+    resolveHomeRadarOriginalPriceVnd(15_990_000, MAX_VALID_VND_PRICE),
+    MAX_VALID_VND_PRICE
+  );
+
+  // 3. Item-grouped quickCompareSlugs + rounded/clamped review stars.
+  const catSlugById = new Map<string, string>([
+    ['cat-phone', 'smartphones'],
+    ['cat-laptop', 'laptops'],
+  ]);
+  const makeMaster = (
+    id: string,
+    slug: string,
+    categoryId: string,
+    itemSlug?: string
+  ) =>
+    ({
+      id,
+      slug,
+      name: id,
+      brand: 'Test',
+      model: id,
+      model_key: `test:${id}`,
+      category_id: categoryId,
+      min_price: 10_000_000,
+      max_price: 12_000_000,
+      merchant_count: 2,
+      images: [],
+      ...(itemSlug ? { item_slug: itemSlug } : {}),
+    }) as unknown as MasterProduct;
+
+  const groupedProducts: MasterProduct[] = [
+    makeMaster(
+      'p1-256',
+      'iphone-16-pro-max-256gb',
+      'cat-phone',
+      'iphone-16-pro-max'
+    ),
+    makeMaster(
+      'p1-512',
+      'iphone-16-pro-max-512gb',
+      'cat-phone',
+      'iphone-16-pro-max'
+    ),
+    makeMaster('lap-1', 'macbook-air-m4', 'cat-laptop', 'macbook-air-m4'),
+    makeMaster(
+      'p2-256',
+      'galaxy-s25-ultra-256gb',
+      'cat-phone',
+      'galaxy-s25-ultra'
+    ),
+    makeMaster('p3', 'xiaomi-15-ultra', 'cat-phone'),
+    makeMaster('p4', 'oppo-find-x8-pro', 'cat-phone'),
+  ];
+  assert.deepEqual(buildHomeQuickCompareSlugs(groupedProducts, catSlugById), [
+    'iphone-16-pro-max',
+    'galaxy-s25-ultra',
+    'xiaomi-15-ultra',
+  ]);
+
+  for (const badStars of [
+    null,
+    undefined,
+    '',
+    Number.NaN,
+    Number.POSITIVE_INFINITY,
+    '0x5',
+    '4\t5',
+    '5\n0',
+  ]) {
+    assert.equal(sanitizeHomeReviewStars(badStars), null);
+  }
+  assert.equal(sanitizeHomeReviewStars(0), 1);
+  assert.equal(sanitizeHomeReviewStars(-2), 1);
+  assert.equal(sanitizeHomeReviewStars(4.4), 4);
+  assert.equal(sanitizeHomeReviewStars(4.6), 5);
+  assert.equal(sanitizeHomeReviewStars(' 3.6 '), 4);
+  assert.equal(sanitizeHomeReviewStars(8), 5);
+
+  // 4. SSR render of HomeMerchantCard, HomeDealRadarBlock, and HomeReviewCard
+  // across vi / en / cs.
+  const readLocale = (loc: string) =>
+    JSON.parse(
+      readFileSync(join(testDir, '../../../locales', `${loc}.json`), 'utf8')
+    ) as Record<string, unknown>;
+  const mockRouter = {
+    back: () => {},
+    forward: () => {},
+    refresh: () => {},
+    push: () => {},
+    replace: () => {},
+    prefetch: () => {},
+    bfcacheId: 'test',
+  };
+  const IntlProvider = NextIntlClientProvider as React.ComponentType<{
+    locale: string;
+    messages: Record<string, unknown>;
+    timeZone: string;
+    children?: React.ReactNode;
+  }>;
+
+  const homeMerchants: MerchantSummary[] = [
+    {
+      ...merchant('hm-trusted-null-risk', 19.4, 10, 85),
+      risk_score: null,
+      dosafe_risk_score: 19.4,
+      is_official: true,
+    },
+    {
+      ...merchant('hm-fractional', 49.6, 10, 50.4),
+      risk_score: 49.6,
+      dosafe_risk_score: 19.6,
+    },
+    {
+      ...merchant('hm-legacy-null-rev', 0, 0, 79),
+      risk_score: null,
+      dosafe_risk_score: null as never,
+      review_risk_score: null as never,
+      review_risk_breakdown:
+        null as unknown as MerchantSummary['review_risk_breakdown'],
+    },
+    {
+      ...merchant('hm-unscored', 12, 0, 80),
+      trust_score: null,
+      risk_score: null,
+      dosafe_risk_score: 0,
+      dosafe_risk_known: false,
+    } as MerchantSummary,
+  ];
+
+  const radarFixture: CrossPlatformDealRadarResponse = {
+    categorySlug: 'all',
+    totalClustersAnalyzed: 4,
+    totalOffersAnalyzed: 12,
+    totalMerchantsAnalyzed: 6,
+    genuineDeals: [
+      {
+        id: 'gd-zero',
+        productName: 'Invalid Zero Deal',
+        productHref: '/smartphones/zero',
+        platform: 'shopee',
+        merchantName: 'Zero Shop',
+        priceCurrent: 0,
+        marketMedianPrice: 10_000_000,
+        savingsVsMedianPct: 100,
+        offerUrl: 'https://shopee.vn/zero',
+        merchantRiskScore: 5,
+      },
+      {
+        id: 'gd-valid',
+        productName: 'Valid Genuine Deal',
+        productHref: '/smartphones/valid',
+        platform: 'shopee',
+        merchantName: 'Good Shop',
+        priceCurrent: 15_990_000,
+        marketMedianPrice: 18_990_000,
+        savingsVsMedianPct: 16,
+        offerUrl: 'https://shopee.vn/valid',
+        merchantRiskScore: 5,
+      },
+    ],
+    fakeSaleTraps: [
+      {
+        id: 'trap-no-orig',
+        productName: 'Trap Without Original',
+        productHref: '/smartphones/trap-no-orig',
+        platform: 'shopee',
+        merchantName: 'Trap Shop A',
+        priceCurrent: 17_490_000,
+        priceOriginal: null,
+        fakeMarkupPct: 18,
+        offerUrl: 'https://shopee.vn/trap-a',
+      },
+      {
+        id: 'trap-equal-orig',
+        productName: 'Trap Equal Original',
+        productHref: '/smartphones/trap-eq',
+        platform: 'lazada',
+        merchantName: 'Trap Shop B',
+        priceCurrent: 16_490_000,
+        priceOriginal: 16_490_000,
+        fakeMarkupPct: 15,
+        offerUrl: 'https://lazada.vn/trap-b',
+      },
+      {
+        id: 'trap-valid-orig',
+        productName: 'Trap Valid Original',
+        productHref: '/smartphones/trap-valid',
+        platform: 'tiktok',
+        merchantName: 'Trap Shop C',
+        priceCurrent: 18_990_000,
+        priceOriginal: 22_990_000,
+        fakeMarkupPct: 21,
+        offerUrl: 'https://tiktok.com/trap-c',
+      },
+    ],
+    priceSpreadLeaders: [
+      {
+        id: 'sp-overflow',
+        productName: 'Overflow Spread',
+        productHref: '/smartphones/sp-overflow',
+        cheapestPlatform: 'shopee',
+        priciestPlatform: 'lazada',
+        spreadVnd: MAX_VALID_VND_PRICE + 999,
+        spreadPct: 99,
+      },
+      {
+        id: 'sp-valid',
+        productName: 'Valid Spread',
+        productHref: '/smartphones/sp-valid',
+        cheapestPlatform: 'shopee',
+        priciestPlatform: 'tiki',
+        spreadVnd: 2_500_000,
+        spreadPct: 14,
+      },
+    ],
+  } as unknown as CrossPlatformDealRadarResponse;
+
+  function HomeSnapshot({ loc }: { loc: string }) {
+    const tHome = useTranslations('homePage');
+    const tRate = useTranslations('rate');
+    return React.createElement(
+      'div',
+      null,
+      homeMerchants.map((m) =>
+        React.createElement(HomeMerchantCard, {
+          key: m.id,
+          merchant: m,
+          locale: loc,
+          tHome: (k, v) => tHome(k, v),
+          viewAuditLabel: tRate('home.viewMerchantAuditBtn'),
+        })
+      ),
+      React.createElement(HomeDealRadarBlock, {
+        dealRadar: radarFixture,
+        locale: loc,
+        tHome: (k, v) => tHome(k, v),
+      }),
+      React.createElement(HomeReviewCard, {
+        rev: {
+          id: 'rev-frac',
+          author_name: 'Buyer One',
+          rating_star: 4.6,
+          comment: 'Solid battery life',
+          flag_category: 'authentic',
+          include_in_rating: true,
+          fake_probability: 0.08,
+          productTitle: 'Phone X',
+          masterRouteHref: '/smartphones/phone-x',
+        } as never,
+        locale: loc,
+        tHome: (k, v) => tHome(k, v),
+      }),
+      React.createElement(HomeReviewCard, {
+        rev: {
+          id: 'rev-nan',
+          author_name: 'Buyer Two',
+          rating_star: Number.NaN,
+          comment: 'Missing stars',
+          flag_category: 'authentic',
+          include_in_rating: true,
+          fake_probability: null,
+          productTitle: 'Phone Y',
+          masterRouteHref: null,
+        } as never,
+        locale: loc,
+        tHome: (k, v) => tHome(k, v),
+      })
+    );
+  }
+
+  const cardSegment = (docHtml: string, merchantId: string): string => {
+    const marker = `data-merchant-id="${merchantId}"`;
+    const start = docHtml.indexOf(marker);
+    assert.notEqual(start, -1, `expected homepage card for ${merchantId}`);
+    const next = docHtml.indexOf('data-merchant-id="', start + marker.length);
+    const radar = docHtml.indexOf('data-testid="homepage-deal-radar"', start);
+    const end = next !== -1 ? next : radar !== -1 ? radar : docHtml.length;
+    return docHtml.slice(start, end);
+  };
+
+  for (const loc of ['vi', 'en', 'cs'] as const) {
+    const localeMessages = readLocale(loc);
+    const homeMsgs = localeMessages.homePage as Record<string, string>;
+    const html = renderToStaticMarkup(
+      React.createElement(
+        AppRouterContext.Provider,
+        { value: mockRouter as never },
+        React.createElement(
+          IntlProvider,
+          {
+            locale: loc,
+            messages: localeMessages,
+            timeZone: 'Asia/Ho_Chi_Minh',
+          },
+          React.createElement(HomeSnapshot, { loc })
+        )
+      )
+    );
+
+    // Trusted store with risk_score = null must never fall through to high-risk.
+    const highRiskLabel = String(homeMsgs.merchantHighRiskLabel);
+    const noScamText = String(homeMsgs.noScamDetected);
+    const reviewNoDataText = String(homeMsgs.reviewRiskNoData);
+    const merchantNoDataText = String(homeMsgs.merchantNoDataLabel);
+    assert.ok(
+      highRiskLabel.length > 0 &&
+        noScamText.length > 0 &&
+        reviewNoDataText.length > 0 &&
+        merchantNoDataText.length > 0
+    );
+
+    const trustedCard = cardSegment(html, 'hm-trusted-null-risk');
+    assert.match(
+      trustedCard,
+      /data-testid="home-merchant-trust-badge"[^>]*\bis-good\b[^>]*>[^<]*85\/100</,
+      `${loc}: trust_score=85 with risk_score=null must render is-good 85/100`
+    );
+    assert.ok(
+      !trustedCard.includes(highRiskLabel),
+      `${loc}: trust_score=85 with risk_score=null must not render high-risk label`
+    );
+    assert.match(
+      trustedCard,
+      /data-testid="home-merchant-dosafe-score"[^>]*\bis-good\b[^>]*>19\/100</
+    );
+    assert.match(
+      trustedCard,
+      /data-testid="home-merchant-review-score"[^>]*\bis-good\b[^>]*>19\/100</
+    );
+
+    // Fractional 50.4 / 19.6 / 49.6 round before tone & text.
+    const fracCard = cardSegment(html, 'hm-fractional');
+    assert.match(
+      fracCard,
+      /data-testid="home-merchant-trust-badge"[^>]*\bis-bad\b[^>]*>[^<]*50\/100</
+    );
+    assert.match(
+      fracCard,
+      /data-testid="home-merchant-dosafe-score"[^>]*\bis-warn\b[^>]*>20\/100</
+    );
+    assert.match(
+      fracCard,
+      /data-testid="home-merchant-review-score"[^>]*\bis-bad\b[^>]*>50\/100</
+    );
+    assert.ok(
+      !fracCard.includes('50.4') &&
+        !fracCard.includes('19.6') &&
+        !fracCard.includes('49.6') &&
+        !fracCard.includes(noScamText),
+      `${loc}: fractional scores must be rounded before display and tone`
+    );
+
+    // Legacy null breakdown + null review_risk_score renders reviewRiskNoData, never "/100".
+    const legacyCard = cardSegment(html, 'hm-legacy-null-rev');
+    assert.match(
+      legacyCard,
+      /data-testid="home-merchant-trust-badge"[^>]*\bis-warn\b[^>]*>[^<]*79\/100</
+    );
+    assert.ok(
+      legacyCard.includes(
+        `data-testid="home-merchant-review-score">${reviewNoDataText}</dd>`
+      ) && !legacyCard.includes('>/100<'),
+      `${loc}: null review_risk_score on legacy null breakdown must render reviewRiskNoData`
+    );
+
+    // Unscored store renders neutral trust pill without /100.
+    const unscoredCard = cardSegment(html, 'hm-unscored');
+    assert.ok(
+      unscoredCard.includes(
+        `data-testid="home-merchant-trust-badge" class="rate-radar-tag">${merchantNoDataText}</span>`
+      ),
+      `${loc}: unscored merchant must render neutral merchantNoDataLabel without /100`
+    );
+
+    // Radar section: never fabricates strikethrough from priceCurrent, never renders 0 VND or > MAX_VALID_VND_PRICE.
+    const radarStart = html.indexOf('data-testid="homepage-deal-radar"');
+    assert.notEqual(radarStart, -1);
+    const radarHtml = html.slice(radarStart);
+    assert.ok(
+      !/(?<![\d.,\u00a0])0[\s\u00a0]*₫/.test(html) &&
+        !html.includes('NaN') &&
+        !radarHtml.includes('Invalid Zero Deal') &&
+        !radarHtml.includes('Overflow Spread') &&
+        !radarHtml.includes(`<s>${formatPriceVnd(17_490_000, loc)}</s>`) &&
+        !radarHtml.includes(`<s>${formatPriceVnd(16_490_000, loc)}</s>`) &&
+        radarHtml.includes(`<s>${formatPriceVnd(22_990_000, loc)}</s>`),
+      `${loc}: radar must guard 0/overflow VND and only strike through valid higher original prices`
+    );
+
+    // Review stars: 4.6 rounds to 5 SVGs, NaN omits .rate-review-stars.
+    const starBlocks =
+      html.match(/class="rate-review-stars"[\s\S]*?<\/div>/g) ?? [];
+    assert.equal(
+      starBlocks.length,
+      1,
+      `${loc}: only finite review rating renders stars`
+    );
+    assert.equal(
+      (starBlocks[0].match(/<svg\b/g) ?? []).length,
+      5,
+      `${loc}: rating_star=4.6 must render 5 star SVGs`
+    );
+
+    const svgs = html.match(/<svg\b[^>]*>/g) ?? [];
+    assert.ok(svgs.length > 0);
+    for (const svg of svgs) {
+      assert.match(
+        svg,
+        /\baria-hidden="true"/,
+        `${loc}: SVG missing aria-hidden: ${svg}`
+      );
+    }
+  }
+
+  // 5. Source contract on apps/web/src/app/[locale]/page.tsx.
+  const homePageSrc = readFileSync(
+    join(testDir, '../../app/[locale]/page.tsx'),
+    'utf8'
+  );
+  assert.ok(
+    homePageSrc.includes('buildHomeQuickCompareSlugs(') &&
+      !homePageSrc.includes('t.priceOriginal || t.priceCurrent') &&
+      /<BsShieldCheck[\s\S]*?className="text-success"[\s\S]*?aria-hidden="true"/.test(
+        homePageSrc
+      ) &&
+      homePageSrc.includes(
+        'className="rate-card rate-card-interactive rate-category-card"'
+      ) &&
+      homePageSrc.includes(
+        'applyCategorySpecTemplate(\n                    getMasterProductCategorySlug('
+      ),
+    'app/[locale]/page.tsx must use buildHomeQuickCompareSlugs, hide hero BsShieldCheck, drop fabricated strikethrough fallback, and preserve category card + spec-template contracts'
   );
 }
 
