@@ -737,6 +737,27 @@ const CANONICAL_PHONE_REGISTRY: Record<
     release_date: 'February 2025',
     ip_rating: 'IP68 (6m up to 30 mins)',
   },
+  'apple:iphone-17e': {
+    // Sourced with the seed (flagship-seed-sourced-iphone-17e.ts, DOS/Rate#1737): one rear
+    // camera, so a listing gets no invented ultrawide. Apple publishes no maximum wired
+    // charging wattage or refresh rate, and the Vietnamese model (A3634) weighs 170 g.
+    screen_size_inch: 6.1,
+    battery_mah: 4005,
+    ram_gb: 8,
+    chipset: 'Apple A19 (3 nm)',
+    cpu: '6-core CPU (2 performance + 4 efficiency cores)',
+    gpu: 'Apple 4-core GPU with Neural Accelerators, hardware-accelerated ray tracing',
+    os: 'iOS 26 (upgradable)',
+    weight_g: 170,
+    dimensions: '146.7 x 71.5 x 7.80 mm',
+    resolution: '1170 x 2532 pixels (~460 ppi)',
+    screen_type: 'Super Retina XDR OLED, HDR, 800 nits (typ), 1200 nits (HDR peak)',
+    rear_camera: '48 MP Fusion Main, f/1.6, 26mm, OIS, Hybrid Focus Pixels',
+    front_camera: '12 MP TrueDepth, f/1.9, autofocus with Focus Pixels',
+    has_5g: true,
+    release_date: 'March 2026',
+    ip_rating: 'IP68 (up to 6 m for 30 min)',
+  },
   'apple:iphone-16-plus': {
     screen_size_inch: 6.7,
     battery_mah: 4674,

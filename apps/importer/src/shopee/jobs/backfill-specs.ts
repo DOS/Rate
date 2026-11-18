@@ -20,6 +20,15 @@
  *   audit still runs at the end, so a scoped --apply can exit 1 after its writes when an
  *   unrelated master fails the audit: read the log, not only the exit code.
  *
+ * Scoped insert (DOS/Rate#1737), for an approved new seed (a model with no master yet):
+ *   ... backfill-specs.ts --only <model_key,...> --insert-missing                (Dry-run)
+ *   ... backfill-specs.ts --only <model_key,...> --insert-missing --apply --expect <n>
+ *   --insert-missing  A named key with no master row is inserted as a draft master instead of
+ *                     stopping the run; named keys that have a row are updated as usual. It
+ *                     needs --only, and with --apply also --expect, so the plan (inserts plus
+ *                     updates) is checked before the first write. No rate.items row is
+ *                     touched, and the draft stays unpublished until someone publishes it.
+ *
  * Safety invariant:
  * - Dry-run by default (`apply = false`): never mutates `rate.master_products` unless `--apply` is passed.
  * - Never writes listings (`rate.products`), merchants, reviews, price_history, or fabricated scores.
@@ -72,6 +81,11 @@ export interface BackfillSpecsOptions {
    * of any other size stops before the first write; a dry run only reports the comparison.
    */
   readonly expect?: number;
+  /**
+   * `--insert-missing` (with `only`): a named key with no master row is inserted as a draft
+   * instead of stopping the run. With `apply`, `expect` is required.
+   */
+  readonly insertMissing?: boolean;
 }
 
 export interface BackfillSpecsResult {
@@ -428,6 +442,7 @@ export interface BackfillSpecsArgs {
   readonly auditOnly: boolean;
   readonly only?: readonly string[];
   readonly expect?: number;
+  readonly insertMissing?: boolean;
 }
 
 /** Parses the job's flags; throws on a malformed `--only` or `--expect`. */
@@ -438,8 +453,14 @@ export function parseBackfillSpecsArgs(argv: readonly string[]): BackfillSpecsAr
   let auditOnly = false;
   let onlyRaw: string | undefined;
   let expectRaw: string | undefined;
+  let insertMissing = false;
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i]!;
+    if (arg === '--insert-missing') {
+      if (insertMissing) throw new Error(`${arg} is repeated`);
+      insertMissing = true;
+      continue;
+    }
     if (arg === '--apply' || arg === '--audit-only') {
       if ((arg === '--apply' ? apply : auditOnly) === true) throw new Error(`${arg} is repeated`);
       if (arg === '--apply') apply = true;
@@ -460,7 +481,7 @@ export function parseBackfillSpecsArgs(argv: readonly string[]): BackfillSpecsAr
       continue;
     }
     throw new Error(
-      `unknown argument ${JSON.stringify(arg)}: this job takes --apply, --audit-only, --only <model_key,...> and --expect <n>`
+      `unknown argument ${JSON.stringify(arg)}: this job takes --apply, --audit-only, --only <model_key,...>, --expect <n> and --insert-missing`
     );
   }
   let only: string[] | undefined;
@@ -485,11 +506,19 @@ export function parseBackfillSpecsArgs(argv: readonly string[]): BackfillSpecsAr
   if (auditOnly && (only !== undefined || expect !== undefined)) {
     throw new Error('--only and --expect do not combine with --audit-only');
   }
+  if (insertMissing) {
+    if (auditOnly) throw new Error('--insert-missing does not combine with --audit-only');
+    if (only === undefined) throw new Error('--insert-missing needs --only');
+    if (apply && expect === undefined) {
+      throw new Error('--insert-missing --apply needs --expect');
+    }
+  }
   return {
     apply,
     auditOnly,
     ...(only !== undefined ? { only } : {}),
     ...(expect !== undefined ? { expect } : {}),
+    ...(insertMissing ? { insertMissing } : {}),
   };
 }
 
@@ -628,6 +657,12 @@ export async function runMasterSpecsBackfillWith(
   const expect = options.expect;
   if (expect !== undefined && (!Number.isInteger(expect) || expect < 0)) {
     throw new Error(`expect must be a whole number of masters, got ${String(expect)}`);
+  }
+  // Checked again here (not only by the CLI parser), before any read.
+  const insertMissing = options.insertMissing === true;
+  if (insertMissing && !scoped) throw new Error('insertMissing needs only');
+  if (insertMissing && apply && expect === undefined) {
+    throw new Error('insertMissing with apply needs expect');
   }
   const { enricher, matcher } = deps;
 
@@ -797,9 +832,11 @@ export async function runMasterSpecsBackfillWith(
 
   // A scoped run fixes existing masters: a named key with no master row would insert a draft
   // (and through the master trigger possibly an Item), which --expect alone cannot catch.
-  const scopedInserts = scoped
-    ? seedWrites.filter(w => w.kind === 'seed-insert').map(w => w.device.model_key)
-    : [];
+  // Unless the run asks for the insert by name (--insert-missing, DOS/Rate#1737).
+  const scopedInserts =
+    scoped && !insertMissing
+      ? seedWrites.filter(w => w.kind === 'seed-insert').map(w => w.device.model_key)
+      : [];
   if (scopedInserts.length > 0) {
     const message = `--only updates existing masters only; no master row for ${scopedInserts.join(', ')}`;
     if (apply) throw new Error(`${message}: stopped before any write`);
@@ -1023,6 +1060,7 @@ if (isDirectExecution) {
             apply: args.apply,
             ...(args.only !== undefined ? { only: args.only } : {}),
             ...(args.expect !== undefined ? { expect: args.expect } : {}),
+            ...(args.insertMissing ? { insertMissing: true } : {}),
           });
     })
     .catch((err: unknown) => {
