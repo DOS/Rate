@@ -7829,6 +7829,18 @@ async function runTests() {
       } as unknown as Document),
       null
     );
+    assert.equal(
+      extractSelectedVariantFromDom({
+        querySelectorAll: (sel: string) =>
+          sel === 'button[aria-checked="true"]'
+            ? [
+                mkBtn('Custom Toggle', 'custom-toggle switch'),
+                mkBtn('512GB', 'radio checkbox'),
+              ]
+            : [],
+      } as unknown as Document),
+      '512GB'
+    );
 
     const onboardingHtml = fs.readFileSync(
       path.resolve(__dirname, 'onboarding/onboarding.html'),
@@ -7902,15 +7914,18 @@ async function runTests() {
           if (ev === 'DOMContentLoaded') onDomReady = cb;
         },
       };
+      let sendMessageImpl = async (m: { crowdContributeOptIn: boolean }) => ({
+        ok: true,
+        settings: { crowdContributeOptIn: m.crowdContributeOptIn },
+      });
+      let localGetImpl = async () => storedConsent;
       g.chrome = {
         runtime: {
-          sendMessage: async (m: { crowdContributeOptIn: boolean }) => ({
-            ok: true,
-            settings: { crowdContributeOptIn: m.crowdContributeOptIn },
-          }),
+          sendMessage: (m: { crowdContributeOptIn: boolean }) =>
+            sendMessageImpl(m),
         },
         storage: {
-          local: { get: async () => storedConsent },
+          local: { get: () => localGetImpl() },
           onChanged: {
             addListener: (
               fn: (c: Record<string, unknown>, a: string) => void
@@ -7941,6 +7956,8 @@ async function runTests() {
         },
         'local'
       );
+      const savedYesText = statusEl.textContent;
+      assert.ok(savedYesText.length > 0);
       assert.equal(btnYes.classes.has('primary'), true);
       assert.equal(btnNo.classes.has('primary'), false);
       onChangedListeners[0]!({ crowdConsentVersion: { newValue: 1 } }, 'local');
@@ -7948,10 +7965,12 @@ async function runTests() {
       assert.equal(btnNo.classes.has('primary'), true);
       assert.equal(btnYes.classes.has('primary'), false);
       const statusAfterRevoke = statusEl.textContent;
+      assert.ok(statusAfterRevoke.length > 0);
+      assert.notEqual(statusAfterRevoke, savedYesText);
       onChangedListeners[0]!({ crowdConsentVersion: { newValue: 2 } }, 'local');
       assert.equal(btnYes.attrs.get('aria-pressed'), 'true');
       assert.equal(btnYes.classes.has('primary'), true);
-      assert.notEqual(statusEl.textContent, statusAfterRevoke);
+      assert.equal(statusEl.textContent, savedYesText);
 
       storedConsent = { crowdContributeOptIn: true, crowdConsentVersion: 1 };
       await import(
@@ -7961,6 +7980,80 @@ async function runTests() {
       await new Promise((r) => setTimeout(r, 10));
       assert.equal(btnNo.classes.has('primary'), true);
       assert.equal(btnYes.classes.has('primary'), false);
+
+      // Partial storage.onChanged before hydration finishes reconciles buttons + status (#1734).
+      statusEl.textContent = '';
+      btnNo.clicks.length = 0;
+      btnYes.clicks.length = 0;
+      let resolveHydrationC!: (v: Record<string, unknown>) => void;
+      localGetImpl = () =>
+        new Promise<Record<string, unknown>>((resolve) => {
+          resolveHydrationC = resolve;
+        });
+      await import(
+        new URL('./onboarding/onboarding.js?case=1734c', import.meta.url).href
+      );
+      onDomReady!();
+      const listenerC = onChangedListeners.at(-1)!;
+      listenerC({ crowdContributeOptIn: { newValue: true } }, 'local');
+      assert.equal(
+        statusEl.textContent,
+        '',
+        'buffered pre-hydration partial update must not write stale No status'
+      );
+      resolveHydrationC({
+        crowdContributeOptIn: false,
+        crowdConsentVersion: 2,
+      });
+      await new Promise((r) => setTimeout(r, 10));
+      assert.equal(btnYes.attrs.get('aria-pressed'), 'true');
+      assert.equal(btnYes.classes.has('primary'), true);
+      assert.equal(btnNo.attrs.get('aria-pressed'), 'false');
+      assert.equal(btnNo.classes.has('primary'), false);
+      assert.equal(statusEl.textContent, savedYesText);
+
+      // Concurrent storage.onChanged during pending choose() preserves newer listener state (#1734).
+      statusEl.textContent = '';
+      btnNo.clicks.length = 0;
+      btnYes.clicks.length = 0;
+      localGetImpl = async () => ({
+        crowdContributeOptIn: false,
+        crowdConsentVersion: 0,
+      });
+      let resolvePendingSave!: (v: {
+        ok: boolean;
+        settings: { crowdContributeOptIn: boolean };
+      }) => void;
+      sendMessageImpl = () =>
+        new Promise((resolve) => {
+          resolvePendingSave = resolve;
+        });
+      await import(
+        new URL('./onboarding/onboarding.js?case=1734d', import.meta.url).href
+      );
+      onDomReady!();
+      await new Promise((r) => setTimeout(r, 10));
+      const listenerD = onChangedListeners.at(-1)!;
+      btnYes.clicks[0]!();
+      listenerD(
+        {
+          crowdContributeOptIn: { newValue: false },
+          crowdConsentVersion: { newValue: null },
+        },
+        'local'
+      );
+      assert.equal(btnNo.classes.has('primary'), true);
+      assert.equal(statusEl.textContent, statusAfterRevoke);
+      resolvePendingSave({
+        ok: true,
+        settings: { crowdContributeOptIn: true },
+      });
+      await new Promise((r) => setTimeout(r, 10));
+      assert.equal(btnNo.attrs.get('aria-pressed'), 'true');
+      assert.equal(btnNo.classes.has('primary'), true);
+      assert.equal(btnYes.attrs.get('aria-pressed'), 'false');
+      assert.equal(btnYes.classes.has('primary'), false);
+      assert.equal(statusEl.textContent, statusAfterRevoke);
 
       // Content-script pill VND bounds + response.stale guard (#1734-3).
       let pillHost: { shadowRoot?: { innerHTML: string } } | null = null;
@@ -8129,6 +8222,25 @@ async function runTests() {
         ['lookup_tab_latest', { staleOld: true }],
       ]);
       const fetchedUrls: string[] = [];
+      let swLocalGetImpl: () => Promise<
+        Record<string, unknown>
+      > = async () => ({
+        apiBaseUrl: 'https://rate.vn',
+        crowdContributeOptIn: false,
+      });
+      let swFetchImpl: (u: string) => Promise<Response> = async (u) => {
+        fetchedUrls.push(u);
+        return new Response(
+          JSON.stringify({
+            ok: true,
+            data: {
+              matchStatus: 'exact_listing',
+              queryCount: fetchedUrls.length,
+            },
+          }),
+          { status: 200 }
+        );
+      };
       g.chrome = {
         runtime: {
           id: 'abcdefghijklmnop',
@@ -8144,10 +8256,7 @@ async function runTests() {
         sidePanel: { setPanelBehavior: async () => {} },
         storage: {
           local: {
-            get: async () => ({
-              apiBaseUrl: 'https://rate.vn',
-              crowdContributeOptIn: false,
-            }),
+            get: () => swLocalGetImpl(),
             set: async () => {},
           },
           session: {
@@ -8169,19 +8278,7 @@ async function runTests() {
         },
         tabs: { query: async () => [], create: async () => ({ id: 1 }) },
       };
-      g.fetch = (async (u: string | URL) => {
-        fetchedUrls.push(String(u));
-        return new Response(
-          JSON.stringify({
-            ok: true,
-            data: {
-              matchStatus: 'exact_listing',
-              queryCount: fetchedUrls.length,
-            },
-          }),
-          { status: 200 }
-        );
-      }) as unknown;
+      g.fetch = ((u: string | URL) => swFetchImpl(String(u))) as unknown;
       await import(
         new URL('./background/service-worker.js?case=1734', import.meta.url)
           .href
@@ -8242,6 +8339,125 @@ async function runTests() {
       assert.deepEqual(cachedFull.data, plainRes.data);
       await callFull();
       assert.equal(fetchedUrls.length, countAfterQuick + 1);
+
+      // Overlapping full reloads: stale request must not consume pendingQuickQueryReceipt (#1734).
+      const overlapQuickRes = await callQuick('Galaxy S25 Ultra');
+      const countBeforeOverlap = fetchedUrls.length;
+      const pendingSettingsResolvers: Array<
+        (v: Record<string, unknown>) => void
+      > = [];
+      swLocalGetImpl = () =>
+        new Promise<Record<string, unknown>>((resolve) => {
+          pendingSettingsResolvers.push(resolve);
+        });
+      const staleFullPromise = callFull();
+      const currentFullPromise = callFull();
+      await new Promise((r) => setImmediate(r));
+      assert.equal(pendingSettingsResolvers.length, 2);
+      pendingSettingsResolvers[0]!({
+        apiBaseUrl: 'https://rate.vn',
+        crowdContributeOptIn: false,
+      });
+      const staleFullRes = await staleFullPromise;
+      assert.equal(staleFullRes.ok, true);
+      assert.equal(staleFullRes.stale, true);
+      assert.deepEqual(staleFullRes.data, overlapQuickRes.data);
+      assert.equal(fetchedUrls.length, countBeforeOverlap);
+      pendingSettingsResolvers[1]!({
+        apiBaseUrl: 'https://rate.vn',
+        crowdContributeOptIn: false,
+      });
+      const currentFullRes = await currentFullPromise;
+      assert.equal(currentFullRes.ok, true);
+      assert.equal(currentFullRes.stale, undefined);
+      assert.deepEqual(currentFullRes.data, overlapQuickRes.data);
+      assert.equal(fetchedUrls.length, countBeforeOverlap);
+      swLocalGetImpl = async () => ({
+        apiBaseUrl: 'https://rate.vn',
+        crowdContributeOptIn: false,
+      });
+      await callFull();
+      assert.equal(fetchedUrls.length, countBeforeOverlap + 1);
+
+      // Older page lookup A finishing after quick query B keeps per-tab cache without clobbering lookup_tab_latest (#1734).
+      let resolveDelayedPageLookup!: (res: Response) => void;
+      swFetchImpl = (u) => {
+        fetchedUrls.push(u);
+        if (u.includes('mode=pill')) {
+          return new Promise<Response>((resolve) => {
+            resolveDelayedPageLookup = resolve;
+          });
+        }
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              ok: true,
+              data: {
+                matchStatus: 'exact_listing',
+                queryCount: fetchedUrls.length,
+              },
+            }),
+            { status: 200 }
+          )
+        );
+      };
+      const pageLookupAPromise = new Promise<Record<string, unknown>>(
+        (resolve) => {
+          swMsg!(
+            {
+              type: 'RATE_PRODUCT_DETECTED',
+              signal: {
+                platform: 'shopee',
+                canonicalUrl: 'https://shopee.vn/Phone-A-i.10.20',
+                externalItemId: '20',
+                externalShopId: '10',
+                title: 'Phone A',
+                selectedVariant: null,
+                price: 15_000_000,
+                originalPrice: null,
+                ratingStar: null,
+                ratingCount: null,
+              },
+            },
+            { tab: { id: 77, active: true } },
+            (r) => resolve(r as Record<string, unknown>)
+          );
+        }
+      );
+      await new Promise((r) => setImmediate(r));
+      const quickQueryBRes = await callQuick('Pixel 9 Pro XL');
+      assert.equal(quickQueryBRes.ok, true);
+      assert.deepEqual(
+        sessionStore.get('lookup_tab_latest'),
+        quickQueryBRes.data
+      );
+      const pageALookupData = {
+        matchStatus: 'exact_listing',
+        fromPageA: true,
+      };
+      resolveDelayedPageLookup(
+        new Response(JSON.stringify({ ok: true, data: pageALookupData }), {
+          status: 200,
+        })
+      );
+      const pageARes = await pageLookupAPromise;
+      assert.equal(pageARes.ok, true);
+      assert.equal(pageARes.stale, undefined);
+      assert.deepEqual(sessionStore.get('lookup_tab_77'), pageALookupData);
+      assert.deepEqual(
+        sessionStore.get('lookup_tab_latest'),
+        quickQueryBRes.data,
+        'older page lookup finishing after quick query must not overwrite lookup_tab_latest'
+      );
+      assert.equal(
+        (
+          sessionStore.get('tab_latest') as {
+            source: string;
+            signal: { title: string };
+          }
+        ).source,
+        'quick_query'
+      );
       console.log(
         '  ✅ [Variant switch/checkbox exclusion, onboarding hydration, pill stale/VND & quick-query bare URLs (#1734)] Verified'
       );

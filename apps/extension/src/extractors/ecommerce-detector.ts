@@ -815,6 +815,93 @@ export function cleanExtractedProductTitle(rawTitle: string): string {
   return keptSegments.join(' ').replace(/\s+/g, ' ').trim().slice(0, 500);
 }
 
+const CONCRETE_WAI_ARIA_ROLES = new Set([
+  'alert',
+  'alertdialog',
+  'application',
+  'article',
+  'banner',
+  'blockquote',
+  'button',
+  'caption',
+  'cell',
+  'checkbox',
+  'code',
+  'columnheader',
+  'combobox',
+  'complementary',
+  'contentinfo',
+  'definition',
+  'deletion',
+  'dialog',
+  'directory',
+  'document',
+  'emphasis',
+  'feed',
+  'figure',
+  'form',
+  'generic',
+  'grid',
+  'gridcell',
+  'group',
+  'heading',
+  'img',
+  'insertion',
+  'link',
+  'list',
+  'listbox',
+  'listitem',
+  'log',
+  'main',
+  'mark',
+  'marquee',
+  'math',
+  'menu',
+  'menubar',
+  'menuitem',
+  'menuitemcheckbox',
+  'menuitemradio',
+  'meter',
+  'navigation',
+  'none',
+  'note',
+  'option',
+  'paragraph',
+  'presentation',
+  'progressbar',
+  'radio',
+  'radiogroup',
+  'region',
+  'row',
+  'rowgroup',
+  'rowheader',
+  'scrollbar',
+  'search',
+  'searchbox',
+  'separator',
+  'slider',
+  'spinbutton',
+  'status',
+  'strong',
+  'subscript',
+  'suggestion',
+  'superscript',
+  'switch',
+  'tab',
+  'table',
+  'tablist',
+  'tabpanel',
+  'term',
+  'textbox',
+  'time',
+  'timer',
+  'toolbar',
+  'tooltip',
+  'tree',
+  'treegrid',
+  'treeitem',
+]);
+
 /**
  * Extract active/selected storage variant from the host page DOM
  * so multi-variant listings (128GB / 256GB / 512GB / 1TB) are disambiguated.
@@ -847,8 +934,13 @@ export function extractSelectedVariantFromDom(doc: Document): string | null {
           ? (node as { role: string }).role
           : null);
       if (typeof rawRole === 'string') {
-        const roles = rawRole.trim().toLowerCase().split(/\s+/);
-        if (roles.includes('switch') || roles.includes('checkbox')) {
+        const effectiveRole =
+          rawRole
+            .trim()
+            .toLowerCase()
+            .split(/\s+/)
+            .find((token) => CONCRETE_WAI_ARIA_ROLES.has(token)) ?? null;
+        if (effectiveRole === 'switch' || effectiveRole === 'checkbox') {
           return;
         }
       }
