@@ -94,6 +94,12 @@ export interface NormalizedProductCandidate {
   name: string;
   slug: string;
   storage_gb: number | null; // null = unparseable from the title; identity carries ':unknown'
+  /**
+   * A storage the title names that the model is not sold in (registry `storages_gb`). The
+   * listing then keys as ':unknown'; a hint to a master of another size is a conflict
+   * (DOS/Rate#1739). Absent otherwise.
+   */
+  unsold_storage_gb?: number;
   needs_review: boolean; // true when identity could not be confidently derived or listing is non-new (plan v7 §5.2, Audit C6)
   condition?: ProductCondition;
   /** The condition the sanitized title alone states; the ingest check reads it (DOS/Rate#1430). */
@@ -648,6 +654,15 @@ const CANONICAL_PHONE_REGISTRY: Record<
     // describe. A title naming another case gets none of them and is not benchmark
     // enriched (DOS/Rate#1152).
     case_mm?: number;
+    // The storages (GB) the model is sold in, when a source states them. A title naming
+    // another storage ("iPhone 17e 128GB") keys as ':unknown', so it never creates a sized
+    // phantom master for a size that does not exist (DOS/Rate#1739). Without it, any
+    // storage in a title is keyed.
+    storages_gb?: readonly number[];
+    // Wi-Fi and rear flash as a source states them. Without them a listing gets the
+    // generic defaults below (DOS/Rate#1739).
+    wlan?: string;
+    flash?: string;
   }
 > = {
   'apple:iphone-16-pro-max': {
@@ -736,6 +751,12 @@ const CANONICAL_PHONE_REGISTRY: Record<
     has_5g: true,
     release_date: 'February 2025',
     ip_rating: 'IP68 (6m up to 30 mins)',
+    // Storages from Apple's iPhone 16e specs (https://www.apple.com/iphone-16e/specs/);
+    // Wi-Fi and flash as the sourced seed states them (flagship-seed-sourced-2025.ts)
+    // (DOS/Rate#1739).
+    storages_gb: [128, 256, 512],
+    wlan: 'Wi-Fi 6 (802.11ax) with 2x2 MIMO',
+    flash: 'True Tone flash',
   },
   'apple:iphone-17e': {
     // Sourced with the seed (flagship-seed-sourced-iphone-17e.ts, DOS/Rate#1737): one rear
@@ -757,6 +778,11 @@ const CANONICAL_PHONE_REGISTRY: Record<
     has_5g: true,
     release_date: 'March 2026',
     ip_rating: 'IP68 (up to 6 m for 30 min)',
+    // The storages Apple Vietnam sells, and Wi-Fi and flash as the seed states them
+    // (DOS/Rate#1739).
+    storages_gb: [256, 512],
+    wlan: 'Wi-Fi 6 (802.11ax) with 2x2 MIMO',
+    flash: 'True Tone flash',
   },
   'apple:iphone-16-plus': {
     screen_size_inch: 6.7,
@@ -2833,6 +2859,20 @@ export class ProductNormalizer {
       storageConfident = true;
       variantSource = 'single_size';
     }
+    // A storage the model is not sold in is not a variant of it: the listing keys as
+    // ':unknown' and needs review, so a Tier 3 upsert never creates a sized phantom master
+    // such as 'apple:iphone-17e:128gb' (DOS/Rate#1739).
+    let unsoldStorageGb: number | null = null;
+    if (
+      storageGb !== null &&
+      benchmark?.storages_gb !== undefined &&
+      !benchmark.storages_gb.includes(storageGb)
+    ) {
+      unsoldStorageGb = storageGb;
+      storageGb = null;
+      storageConfident = false;
+      variantSource = null;
+    }
     const storageKnown = storageGb !== null;
     if (storageKnown && variantSource === null) variantSource = 'title';
 
@@ -3163,7 +3203,14 @@ export class ProductNormalizer {
         refresh_rate_hz:
           categorySlug === 'earbuds'
             ? undefined
-            : benchmark?.refresh_rate_hz || (isSmartphone ? (isApple ? 60 : 120) : undefined),
+            : // A registry model whose sources state no refresh rate gets none (DOS/Rate#1739).
+              benchmark
+              ? benchmark.refresh_rate_hz
+              : isSmartphone
+                ? isApple
+                  ? 60
+                  : 120
+                : undefined,
         ppi: isSmartphone ? (benchmark?.screen_size_inch === 6.8 ? 505 : 460) : undefined,
         protection: isSmartphone
           ? isApple
@@ -3204,12 +3251,13 @@ export class ProductNormalizer {
         third_camera: benchmark?.third_camera || undefined,
         fourth_camera: benchmark?.fourth_camera || undefined,
         front_camera: benchmark?.front_camera || fallbackFrontCamera,
-        flash: isApple ? 'True Tone Dual-LED' : 'LED flash, auto-HDR, panorama',
+        flash:
+          benchmark?.flash ?? (isApple ? 'True Tone Dual-LED' : 'LED flash, auto-HDR, panorama'),
         video_recording: '4K@30/60fps, 1080p@30/60/120/240fps, HDR',
       },
       connectivity: {
         bluetooth: '5.3, A2DP, LE',
-        wlan: 'Wi-Fi 6E/7, dual-band, Wi-Fi Direct',
+        wlan: benchmark?.wlan ?? 'Wi-Fi 6E/7, dual-band, Wi-Fi Direct',
         usb: 'USB Type-C, OTG',
         sensors: isSmartphone
           ? isApple
@@ -3291,6 +3339,7 @@ export class ProductNormalizer {
       name: canonicalName,
       slug,
       storage_gb: storageKnown ? storageGb : null,
+      ...(unsoldStorageGb !== null ? { unsold_storage_gb: unsoldStorageGb } : {}),
       needs_review: !keyable || !storageConfident || condition !== 'new',
       condition,
       title_condition: detectProductCondition(title),
