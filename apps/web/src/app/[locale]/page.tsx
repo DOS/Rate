@@ -149,6 +149,16 @@ function parseStrictFiniteNumber(value: unknown): number | null {
   return null;
 }
 
+function sanitizeNonNegativeInt(value: unknown): number {
+  const parsed = parseStrictFiniteNumber(value);
+  return parsed != null && parsed > 0 ? Math.floor(parsed) : 0;
+}
+
+function sanitizePositiveRadarPct(value: unknown): number | null {
+  const parsed = parseStrictFiniteNumber(value);
+  return parsed != null && parsed > 0 ? parsed : null;
+}
+
 export function roundHomeMerchantScore(value: unknown): number | null {
   const parsed = parseStrictFiniteNumber(value);
   if (parsed == null) return null;
@@ -287,12 +297,16 @@ export function HomeDealRadarBlock({
     values?: Record<string, string | number>
   ) => string;
 }) {
-  const genuineDeals = dealRadar.genuineDeals.filter(
-    (g) => sanitizeHomePriceVnd(g.priceCurrent) != null
-  );
-  const fakeSaleTraps = dealRadar.fakeSaleTraps.filter(
-    (t) => sanitizeHomePriceVnd(t.priceCurrent) != null
-  );
+  const genuineDeals = Array.isArray(dealRadar.genuineDeals)
+    ? dealRadar.genuineDeals.filter(
+        (g) => sanitizeHomePriceVnd(g.priceCurrent) != null
+      )
+    : [];
+  const fakeSaleTraps = Array.isArray(dealRadar.fakeSaleTraps)
+    ? dealRadar.fakeSaleTraps.filter(
+        (t) => sanitizeHomePriceVnd(t.priceCurrent) != null
+      )
+    : [];
   const priceSpreadLeaders = Array.isArray(dealRadar.priceSpreadLeaders)
     ? dealRadar.priceSpreadLeaders.filter(
         (s) => sanitizeHomePriceVnd(s.spreadVnd) != null
@@ -313,9 +327,11 @@ export function HomeDealRadarBlock({
           <span className="rate-eyebrow mb-2">{tHome('radarHomeBadge')}</span>
           <h3 className="rate-home-radar-title">
             {tHome('radarHomeAnalyzed', {
-              offers: dealRadar.totalOffersAnalyzed,
-              merchants: dealRadar.totalMerchantsAnalyzed,
-              clusters: dealRadar.totalClustersAnalyzed,
+              offers: sanitizeNonNegativeInt(dealRadar.totalOffersAnalyzed),
+              merchants: sanitizeNonNegativeInt(
+                dealRadar.totalMerchantsAnalyzed
+              ),
+              clusters: sanitizeNonNegativeInt(dealRadar.totalClustersAnalyzed),
             })}
           </h3>
         </div>
@@ -344,6 +360,9 @@ export function HomeDealRadarBlock({
               {genuineDeals.slice(0, 3).map((g) => {
                 const currentPrice = sanitizeHomePriceVnd(g.priceCurrent)!;
                 const medianPrice = sanitizeHomePriceVnd(g.marketMedianPrice);
+                const savingsPct = sanitizePositiveRadarPct(
+                  g.savingsVsMedianPct
+                );
                 return (
                   <li key={g.id}>
                     <div className="rate-radar-item-main">
@@ -370,11 +389,13 @@ export function HomeDealRadarBlock({
                       <span className="rate-radar-price">
                         {formatPriceVnd(currentPrice, locale)}
                       </span>
-                      <span className="rate-radar-tag is-good">
-                        {tHome('vsMedianPctBadge', {
-                          pct: formatPlainNumber(g.savingsVsMedianPct, locale),
-                        })}
-                      </span>
+                      {savingsPct != null && (
+                        <span className="rate-radar-tag is-good">
+                          {tHome('vsMedianPctBadge', {
+                            pct: formatPlainNumber(savingsPct, locale),
+                          })}
+                        </span>
+                      )}
                     </div>
                   </li>
                 );
@@ -398,6 +419,7 @@ export function HomeDealRadarBlock({
                   currentPrice,
                   t.priceOriginal
                 );
+                const markupPct = sanitizePositiveRadarPct(t.fakeMarkupPct);
                 return (
                   <li key={t.id}>
                     <div className="rate-radar-item-main">
@@ -422,11 +444,13 @@ export function HomeDealRadarBlock({
                       <span className="rate-radar-price">
                         {formatPriceVnd(currentPrice, locale)}
                       </span>
-                      <span className="rate-radar-tag is-bad">
-                        {tHome('fakeMarkupPctBadge', {
-                          pct: formatPlainNumber(t.fakeMarkupPct, locale),
-                        })}
-                      </span>
+                      {markupPct != null && (
+                        <span className="rate-radar-tag is-bad">
+                          {tHome('fakeMarkupPctBadge', {
+                            pct: formatPlainNumber(markupPct, locale),
+                          })}
+                        </span>
+                      )}
                     </div>
                   </li>
                 );
@@ -456,6 +480,7 @@ export function HomeDealRadarBlock({
           <div className="row g-2">
             {priceSpreadLeaders.slice(0, 3).map((s) => {
               const spreadVnd = sanitizeHomePriceVnd(s.spreadVnd)!;
+              const spreadPct = sanitizePositiveRadarPct(s.spreadPct);
               return (
                 <div key={s.id} className="col-lg-4 col-md-6">
                   <div className="rate-radar-spread-item">
@@ -477,11 +502,13 @@ export function HomeDealRadarBlock({
                       <span className="rate-radar-price">
                         -{formatPriceVnd(spreadVnd, locale)}
                       </span>
-                      <span className="rate-radar-tag is-warn">
-                        {tHome('spreadPctBadge', {
-                          pct: formatPlainNumber(s.spreadPct, locale),
-                        })}
-                      </span>
+                      {spreadPct != null && (
+                        <span className="rate-radar-tag is-warn">
+                          {tHome('spreadPctBadge', {
+                            pct: formatPlainNumber(spreadPct, locale),
+                          })}
+                        </span>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -542,12 +569,24 @@ export function HomeMerchantCard({
           ? tHome('merchantCautionLabel')
           : tHome('merchantHighRiskLabel');
   const breakdown = merchant.review_risk_breakdown;
-  const totalRevAnalyzed = breakdown?.total_reviews ?? 0;
-  const flaggedRevCount =
-    (breakdown?.seeding_fake_count ?? 0) +
-    (breakdown?.coin_spam_count ?? 0) +
-    (breakdown?.sabotage_or_bombing_count ?? 0);
-  const ratingStar = parseStrictFiniteNumber(merchant.rating_star);
+  const totalRevAnalyzed = sanitizeNonNegativeInt(breakdown?.total_reviews);
+  const flaggedRevCount = Math.min(
+    totalRevAnalyzed,
+    sanitizeNonNegativeInt(breakdown?.seeding_fake_count) +
+      sanitizeNonNegativeInt(breakdown?.coin_spam_count) +
+      sanitizeNonNegativeInt(breakdown?.sabotage_or_bombing_count)
+  );
+  const rawRatingStar = parseStrictFiniteNumber(merchant.rating_star);
+  const ratingStar =
+    rawRatingStar != null && rawRatingStar > 0
+      ? Math.min(5, rawRatingStar)
+      : null;
+  const productCount = sanitizeNonNegativeInt(merchant.product_count);
+  const followerCount = sanitizeNonNegativeInt(merchant.follower_count);
+  const hasValidUpdatedAt =
+    typeof merchant.updated_at === 'string' &&
+    merchant.updated_at.trim() !== '' &&
+    Number.isFinite(Date.parse(merchant.updated_at));
 
   return (
     <article
@@ -623,12 +662,14 @@ export function HomeMerchantCard({
               >
                 {reviewDisplay.score}/100
               </dd>
-              <dd className="rate-merchant-note">
-                {tHome('flaggedReviewsRatio', {
-                  flagged: flaggedRevCount,
-                  total: totalRevAnalyzed,
-                })}
-              </dd>
+              {totalRevAnalyzed > 0 && (
+                <dd className="rate-merchant-note">
+                  {tHome('flaggedReviewsRatio', {
+                    flagged: flaggedRevCount,
+                    total: totalRevAnalyzed,
+                  })}
+                </dd>
+              )}
             </>
           ) : (
             <>
@@ -650,14 +691,14 @@ export function HomeMerchantCard({
                 {' · '}
               </>
             )}
-            {merchant.product_count} {tHome('productsShortUnit')}
+            {productCount} {tHome('productsShortUnit')}
           </dd>
           <dd className="rate-merchant-note">
-            {merchant.follower_count > 0
+            {followerCount > 0
               ? tHome('followersCountText', {
                   // A number, so the plural picks its form;
                   // the message formats it (DOS/Rate#1398).
-                  count: merchant.follower_count,
+                  count: followerCount,
                 })
               : tHome('periodicMonitoring')}
           </dd>
@@ -665,10 +706,10 @@ export function HomeMerchantCard({
       </dl>
 
       <div className="rate-merchant-foot">
-        {merchant.updated_at ? (
+        {hasValidUpdatedAt ? (
           <span>
             {tHome('lastUpdatedLabel')}{' '}
-            {formatDate(merchant.updated_at, locale)}
+            {formatDate(merchant.updated_at!, locale)}
           </span>
         ) : (
           <span />

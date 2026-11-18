@@ -1619,6 +1619,13 @@ async function homePageMerchantRadarAndCompareSuite() {
         null as unknown as MerchantSummary['review_risk_breakdown'],
     },
     {
+      ...merchant('hm-legacy-scored-null-brk', 24.6, 0, 75),
+      rating_star: 0,
+      updated_at: 'not-a-date',
+      review_risk_breakdown:
+        null as unknown as MerchantSummary['review_risk_breakdown'],
+    },
+    {
       ...merchant('hm-unscored', 12, 0, 80),
       trust_score: null,
       risk_score: null,
@@ -1678,7 +1685,7 @@ async function homePageMerchantRadarAndCompareSuite() {
         merchantName: 'Trap Shop B',
         priceCurrent: 16_490_000,
         priceOriginal: 16_490_000,
-        fakeMarkupPct: 15,
+        fakeMarkupPct: Number.NaN,
         offerUrl: 'https://lazada.vn/trap-b',
       },
       {
@@ -1861,6 +1868,20 @@ async function homePageMerchantRadarAndCompareSuite() {
         `data-testid="home-merchant-review-score">${reviewNoDataText}</dd>`
       ) && !legacyCard.includes('>/100<'),
       `${loc}: null review_risk_score on legacy null breakdown must render reviewRiskNoData`
+    );
+
+    // Legacy null breakdown + finite review_risk_score rounds score without fabricating 0/0,
+    // omits empty StarRating when rating_star=0, and guards invalid updated_at.
+    const legacyScoredCard = cardSegment(html, 'hm-legacy-scored-null-brk');
+    assert.match(
+      legacyScoredCard,
+      /data-testid="home-merchant-review-score"[^>]*\bis-warn\b[^>]*>25\/100</
+    );
+    assert.ok(
+      !legacyScoredCard.includes('0/0') &&
+        !legacyScoredCard.includes('rate-stars') &&
+        !legacyScoredCard.includes('Invalid Date'),
+      `${loc}: legacy scored row with null breakdown and rating_star=0 must omit 0/0, empty StarRating, and Invalid Date`
     );
 
     // Unscored store renders neutral trust pill without /100.
