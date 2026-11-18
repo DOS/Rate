@@ -3,6 +3,7 @@
 import {
   type CanonicalCategorySlug,
   MAX_VALID_VND_PRICE,
+  getCategoryRouteHref,
   getMasterProductCategorySlug,
   resolveProductImageUrl,
 } from '@/lib/rate-domain';
@@ -14,6 +15,7 @@ export interface CompareTrayItem {
   thumbnail: string | null;
   min_price: number;
   categorySlug?: CanonicalCategorySlug;
+  categoryPath?: string;
 }
 
 const STORAGE_KEY = 'rate_compare_tray_v1';
@@ -49,11 +51,24 @@ export function sanitizeTraySlug(value: unknown, maxLen = 160): string {
 }
 
 export function sanitizeTrayPriceVnd(value: unknown): number {
-  const num = Number(value);
-  if (!Number.isFinite(num) || num < 0 || num > MAX_VALID_VND_PRICE) {
-    return 0;
+  if (typeof value === 'number') {
+    if (!Number.isFinite(value) || value <= 0 || value > MAX_VALID_VND_PRICE) {
+      return 0;
+    }
+    return Math.round(value);
   }
-  return Math.round(num);
+  if (typeof value === 'string') {
+    const cleaned = value.replace(TRAY_CONTROL_CHARS_RE, '').trim();
+    if (!cleaned || /^0[xbo]/i.test(cleaned)) {
+      return 0;
+    }
+    const num = Number(cleaned);
+    if (!Number.isFinite(num) || num <= 0 || num > MAX_VALID_VND_PRICE) {
+      return 0;
+    }
+    return Math.round(num);
+  }
+  return 0;
 }
 
 export function isCanonicalTrayCategorySlug(
@@ -65,35 +80,111 @@ export function isCanonicalTrayCategorySlug(
   );
 }
 
+export function parseTrayCategorySlugFromPath(
+  categoryPath: unknown
+): CanonicalCategorySlug | undefined {
+  if (typeof categoryPath !== 'string') return undefined;
+  const withoutQueryOrHash =
+    categoryPath
+      .replace(TRAY_CONTROL_CHARS_RE, '')
+      .trim()
+      .split(/[?#]/, 1)[0] ?? '';
+  if (
+    !withoutQueryOrHash ||
+    /\s/.test(withoutQueryOrHash) ||
+    withoutQueryOrHash.includes(':') ||
+    withoutQueryOrHash.startsWith('//') ||
+    withoutQueryOrHash.includes('\\')
+  ) {
+    return undefined;
+  }
+  const trimmed = withoutQueryOrHash.replace(/^\/+|\/+$/g, '').toLowerCase();
+  if (!trimmed) return undefined;
+  const segments = trimmed.split('/');
+  if (
+    segments.some(
+      (seg) => !seg || seg === '.' || seg === '..' || /%2e/i.test(seg)
+    )
+  ) {
+    return undefined;
+  }
+  if (segments.length <= 2 && isCanonicalTrayCategorySlug(segments[0])) {
+    return segments[0];
+  }
+  if (
+    segments.length <= 3 &&
+    (segments[0] === 'vi' || segments[0] === 'en' || segments[0] === 'cs') &&
+    isCanonicalTrayCategorySlug(segments[1])
+  ) {
+    return segments[1];
+  }
+  return undefined;
+}
+
 export function normalizeTrayItem(item: CompareTrayItem): CompareTrayItem {
-  const safeSlug = sanitizeTraySlug(item?.slug, 160);
-  const safeName = sanitizeTrayText(item?.name, 200);
-  const safeBrand = sanitizeTrayText(item?.brand, 80);
-  const categorySlug = isCanonicalTrayCategorySlug(item?.categorySlug)
-    ? item.categorySlug
-    : getMasterProductCategorySlug({
+  const safeItem =
+    item && typeof item === 'object' && !Array.isArray(item)
+      ? item
+      : ({} as Partial<CompareTrayItem>);
+  const safeSlug = sanitizeTraySlug(safeItem.slug, 160);
+  const safeName = sanitizeTrayText(safeItem.name, 200);
+  const safeBrand = sanitizeTrayText(safeItem.brand, 80);
+  const explicitSlug =
+    typeof safeItem.categorySlug === 'string'
+      ? safeItem.categorySlug
+          .replace(TRAY_CONTROL_CHARS_RE, '')
+          .trim()
+          .toLowerCase()
+      : '';
+  const categorySlug = isCanonicalTrayCategorySlug(explicitSlug)
+    ? explicitSlug
+    : (parseTrayCategorySlugFromPath(safeItem.categoryPath) ??
+      getMasterProductCategorySlug({
         slug: safeSlug,
         name: safeName,
-      });
-  const safePrice = sanitizeTrayPriceVnd(item?.min_price);
-  return {
-    ...item,
+      }));
+  const safePrice = sanitizeTrayPriceVnd(safeItem.min_price);
+  const normalized: CompareTrayItem = {
+    ...(safeItem as CompareTrayItem),
     slug: safeSlug,
     name: safeName,
     brand: safeBrand,
-    thumbnail: resolveProductImageUrl(safeSlug, item?.thumbnail ?? null),
+    thumbnail: resolveProductImageUrl(safeSlug, safeItem.thumbnail ?? null),
     min_price: safePrice,
     categorySlug,
   };
+  if (safeItem.categoryPath !== undefined) {
+    normalized.categoryPath = getCategoryRouteHref(categorySlug);
+  } else {
+    delete normalized.categoryPath;
+  }
+  return normalized;
 }
 
-function enforceSameCategoryTray(items: CompareTrayItem[]): CompareTrayItem[] {
-  const normalized = items
-    .map(normalizeTrayItem)
-    .filter((item) => item.slug && item.name);
-  if (normalized.length <= 1) return normalized;
-  const primaryCategory = normalized[0]!.categorySlug || 'smartphones';
-  return normalized.filter((item) => item.categorySlug === primaryCategory);
+export function normalizeCompareTrayItems(
+  items: readonly CompareTrayItem[]
+): CompareTrayItem[] {
+  if (!Array.isArray(items)) return [];
+  const sameCategory: CompareTrayItem[] = [];
+  const seen = new Set<string>();
+  let primaryCategory: CanonicalCategorySlug | undefined;
+  for (const item of items) {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) continue;
+    const normalized = normalizeTrayItem(item);
+    if (!normalized.slug || !normalized.name || seen.has(normalized.slug)) {
+      continue;
+    }
+    const itemCategory = normalized.categorySlug || 'smartphones';
+    if (!primaryCategory) {
+      primaryCategory = itemCategory;
+    } else if (itemCategory !== primaryCategory) {
+      continue;
+    }
+    seen.add(normalized.slug);
+    sameCategory.push(normalized);
+    if (sameCategory.length >= MAX_COMPARE_ITEMS) break;
+  }
+  return sameCategory;
 }
 
 export function getCompareTray(): CompareTrayItem[] {
@@ -103,20 +194,7 @@ export function getCompareTray(): CompareTrayItem[] {
     if (!raw) return [];
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed)) return [];
-    const deduped: CompareTrayItem[] = [];
-    const seen = new Set<string>();
-    for (const item of parsed) {
-      if (!item || typeof item !== 'object') continue;
-      const slugKey = sanitizeTraySlug((item as { slug?: unknown }).slug, 160);
-      const nameVal = sanitizeTrayText((item as { name?: unknown }).name, 200);
-      if (!slugKey || !nameVal || seen.has(slugKey)) {
-        continue;
-      }
-      seen.add(slugKey);
-      deduped.push(item as CompareTrayItem);
-      if (deduped.length >= MAX_COMPARE_ITEMS) break;
-    }
-    return enforceSameCategoryTray(deduped);
+    return normalizeCompareTrayItems(parsed as CompareTrayItem[]);
   } catch {
     return [];
   }
@@ -124,21 +202,7 @@ export function getCompareTray(): CompareTrayItem[] {
 
 export function setCompareTray(items: CompareTrayItem[]): CompareTrayItem[] {
   if (typeof window === 'undefined') return [];
-  const deduped: CompareTrayItem[] = [];
-  const seen = new Set<string>();
-  if (Array.isArray(items)) {
-    for (const item of items) {
-      if (!item || typeof item !== 'object') continue;
-      const normalized = normalizeTrayItem(item);
-      if (!normalized.slug || !normalized.name || seen.has(normalized.slug)) {
-        continue;
-      }
-      seen.add(normalized.slug);
-      deduped.push(normalized);
-      if (deduped.length >= MAX_COMPARE_ITEMS) break;
-    }
-  }
-  const sameCategory = enforceSameCategoryTray(deduped);
+  const sameCategory = normalizeCompareTrayItems(items);
   try {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(sameCategory));
     window.dispatchEvent(new CustomEvent(EVENT_NAME, { detail: sameCategory }));

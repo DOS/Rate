@@ -4,12 +4,16 @@ import { useEffect, useState } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
 import { BsChevronDown, BsChevronUp, BsPhone } from 'react-icons/bs';
 import { Link } from '@/lib/navigation';
+import type { CanonicalCategorySlug } from '@/lib/rate-domain';
 import {
   clearCompareTray,
   type CompareTrayItem,
   getCompareTray,
   MAX_COMPARE_ITEMS,
+  normalizeCompareTrayItems,
+  normalizeTrayItem,
   sanitizeTrayPriceVnd,
+  sanitizeTraySlug,
   setCompareTray,
   subscribeCompareTray,
 } from './compare-tray';
@@ -26,19 +30,91 @@ export function formatCompareTrayPriceVnd(
   return formatPriceVnd(sanitizeTrayPriceVnd(value), locale);
 }
 
-export default function CompareTrayBar() {
+export function formatCompareTrayPriceDisplay(
+  value: unknown,
+  locale?: string | null
+): string {
+  const safePrice = sanitizeTrayPriceVnd(value);
+  return safePrice <= 0 ? '-' : formatPriceVnd(safePrice, locale);
+}
+
+export function resolveCompareTrayPrimaryCategory(
+  items: readonly CompareTrayItem[]
+): CanonicalCategorySlug {
+  if (!Array.isArray(items) || items.length === 0) return 'smartphones';
+  const normalized = normalizeCompareTrayItems(items);
+  if (normalized.length > 0 && normalized[0]!.categorySlug) {
+    return normalized[0]!.categorySlug;
+  }
+  const first =
+    items.find(
+      (x) =>
+        x &&
+        typeof x === 'object' &&
+        !Array.isArray(x) &&
+        Boolean(sanitizeTraySlug(x.slug))
+    ) ?? items[0];
+  if (!first || typeof first !== 'object' || Array.isArray(first)) {
+    return 'smartphones';
+  }
+  return normalizeTrayItem(first).categorySlug ?? 'smartphones';
+}
+
+export function buildCompareTrayHref(
+  items: readonly CompareTrayItem[]
+): string {
+  if (!Array.isArray(items) || items.length === 0) {
+    return '/compare?cat=smartphones';
+  }
+  const normalized = normalizeCompareTrayItems(items);
+  const primaryCategory =
+    normalized[0]?.categorySlug ?? resolveCompareTrayPrimaryCategory(items);
+  const sourceItems = normalized.length > 0 ? normalized : items;
+  const seen = new Set<string>();
+  const slugs: string[] = [];
+  for (const item of sourceItems) {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) continue;
+    if (
+      normalized.length === 0 &&
+      (normalizeTrayItem(item).categorySlug ?? 'smartphones') !==
+        primaryCategory
+    ) {
+      continue;
+    }
+    const cleanSlug = sanitizeTraySlug(item.slug);
+    if (!cleanSlug || seen.has(cleanSlug)) continue;
+    seen.add(cleanSlug);
+    slugs.push(encodeURIComponent(cleanSlug));
+    if (slugs.length >= MAX_COMPARE_ITEMS) break;
+  }
+  if (slugs.length === 0) {
+    return `/compare?cat=${encodeURIComponent(primaryCategory)}`;
+  }
+  return `/compare?cat=${encodeURIComponent(primaryCategory)}&slugs=${slugs.join(',')}`;
+}
+
+export interface CompareTrayBarProps {
+  initialItems?: readonly CompareTrayItem[];
+}
+
+export default function CompareTrayBar({ initialItems }: CompareTrayBarProps) {
   const t = useTranslations('compare');
   const locale = useLocale();
-  const [items, setItems] = useState<CompareTrayItem[]>([]);
+  const hasInitialItems = initialItems !== undefined;
+  const [items, setItems] = useState<CompareTrayItem[]>(() =>
+    initialItems ? normalizeCompareTrayItems(initialItems) : []
+  );
   const [collapsed, setCollapsed] = useState(false);
 
   useEffect(() => {
     const sync = () => {
       setItems(getCompareTray());
     };
-    sync();
+    if (!hasInitialItems) {
+      sync();
+    }
     return subscribeCompareTray(sync);
-  }, []);
+  }, [hasInitialItems]);
 
   useEffect(() => {
     let saved: string | null = null;
@@ -70,7 +146,7 @@ export default function CompareTrayBar() {
     return null;
   }
 
-  const compareHref = `/compare?slugs=${items.map((x) => encodeURIComponent(x.slug)).join(',')}`;
+  const compareHref = buildCompareTrayHref(items);
 
   const handleRemove = (slug: string) => {
     setCompareTray(items.filter((x) => x.slug !== slug));
@@ -182,7 +258,7 @@ export default function CompareTrayBar() {
                         className="text-warning fw-bold rate-tabular text-nowrap"
                         style={{ fontSize: '0.8125rem' }}
                       >
-                        {formatCompareTrayPriceVnd(item.min_price, locale)}
+                        {formatCompareTrayPriceDisplay(item.min_price, locale)}
                       </div>
                     </div>
                     <button
@@ -192,7 +268,7 @@ export default function CompareTrayBar() {
                       title={t('trayRemoveTitle')}
                       aria-label={t('trayRemoveAria', { name: item.name })}
                     >
-                      ×
+                      <span aria-hidden="true">×</span>
                     </button>
                   </div>
                 </div>
