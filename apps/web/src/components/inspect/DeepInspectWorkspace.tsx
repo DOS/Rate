@@ -600,6 +600,11 @@ export default function DeepInspectWorkspace({
     master,
     priceHistory,
   });
+  const watchableMinPriceVnd =
+    sanitizeInspectPriceVnd(master?.min_price) ||
+    (!offerImplausiblyLow && !matchedOfferUnavailable
+      ? sanitizeInspectPriceVnd(matchedOffer?.price_current)
+      : 0);
   const rawMerchantTrust = parseInspectFiniteNumber(merchant?.trust_score);
   const safeMerchantTrust =
     rawMerchantTrust == null
@@ -1097,7 +1102,7 @@ export default function DeepInspectWorkspace({
                         discount.verdict === 'fake_discount'
                           ? 'bg-danger bg-opacity-10 text-danger'
                           : discount.verdict === 'suspicious_discount'
-                            ? 'bg-warning bg-opacity-10 text-dark'
+                            ? 'bg-warning-subtle text-warning-emphasis'
                             : 'bg-success bg-opacity-10 text-success'
                       }`}
                     >
@@ -1223,22 +1228,22 @@ export default function DeepInspectWorkspace({
                             master.slug,
                             productImageUrl(master)
                           ),
-                          min_price: sanitizeInspectPriceVnd(master.min_price),
+                          min_price: watchableMinPriceVnd,
                         }}
                       />
-                      <PriceWatchButton
-                        slug={master.slug}
-                        name={master.name}
-                        brand={master.brand}
-                        categoryPath={productCategoryPath}
-                        thumbnail={resolveProductImageUrl(
-                          master.slug,
-                          productImageUrl(master)
-                        )}
-                        currentMinPrice={sanitizeInspectPriceVnd(
-                          master.min_price
-                        )}
-                      />
+                      {watchableMinPriceVnd > 0 && (
+                        <PriceWatchButton
+                          slug={master.slug}
+                          name={master.name}
+                          brand={master.brand}
+                          categoryPath={productCategoryPath}
+                          thumbnail={resolveProductImageUrl(
+                            master.slug,
+                            productImageUrl(master)
+                          )}
+                          currentMinPrice={watchableMinPriceVnd}
+                        />
+                      )}
                     </div>
                   </div>
 
@@ -1525,7 +1530,7 @@ export default function DeepInspectWorkspace({
                         </span>
                         <span>{reviewTaxonomyDisplay.authenticPctText}</span>
                       </div>
-                      <div className="d-flex justify-content-between rounded-3 bg-warning bg-opacity-10 text-dark p-2">
+                      <div className="d-flex justify-content-between rounded-3 bg-warning-subtle text-warning-emphasis p-2">
                         <span>
                           <BsCoin aria-hidden="true" className="me-1" />
                           {t('coinSpamLabel')}

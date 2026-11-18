@@ -1462,6 +1462,7 @@ for (const locale of LOCALES) {
     } as never,
     suggestions: [],
   });
+  const watchlistMsgs = readLocale(locale).watchlist!;
   assert.ok(
     !soldOutZeroReviewHtml.includes('0 ₫') &&
       !soldOutZeroReviewHtml.includes('0\u00a0₫') &&
@@ -1470,8 +1471,9 @@ for (const locale of LOCALES) {
       !soldOutZeroReviewHtml.includes('100\u00a0%') &&
       !soldOutZeroReviewHtml.includes('Stale summary') &&
       !soldOutZeroReviewHtml.includes('text-primary') &&
-      !soldOutZeroReviewHtml.includes('bg-primary'),
-    `${locale}: zero-review sold-out inspect view must suppress 0 VND, 100% taxonomy, and legacy primary review-risk colors`
+      !soldOutZeroReviewHtml.includes('bg-primary') &&
+      !soldOutZeroReviewHtml.includes(`>${watchlistMsgs.btnWatch}<`),
+    `${locale}: zero-review sold-out inspect view must suppress 0 VND, 100% taxonomy, unpriced PriceWatchButton, and legacy primary review-risk colors`
   );
   assert.ok(
     soldOutZeroReviewHtml.includes(inspectMsgs.reviewRiskNoData!) &&
@@ -1480,7 +1482,52 @@ for (const locale of LOCALES) {
       soldOutZeroReviewHtml.includes('42/100'),
     `${locale}: inspect view must show reviewRiskNoData and warning tone for review_risk_score 42`
   );
+
+  const pricedAnalyzedHtml = renderInspect1726(locale, {
+    query: 'iphone-priced',
+    matchedType: 'master_product',
+    parsedUrl: parseEcommerceUrlOrQuery('iphone-priced'),
+    masterProduct: {
+      id: 'mp-1726-ok',
+      slug: 'iphone-16-priced',
+      name: 'iPhone 16 Priced',
+      brand: 'Apple',
+      model: 'iPhone 16',
+      model_key: 'apple_iphone_16_priced',
+      min_price: 22_990_000,
+      max_price: 25_990_000,
+      merchant_count: 1,
+      status: 'published',
+      metadata: { category_slug: 'smartphones' },
+    } as never,
+    matchedOffer: null,
+    allOffers: [],
+    discountAnalysis: null,
+    priceHistory: null,
+    reviewSummary: {
+      total_analyzed: 8,
+      authentic_pct: 87.5,
+      suspicious_pct: 12.5,
+      fake_pct: 0,
+      pros: [],
+      cons: [],
+      ai_summary: 'Clean summary',
+    },
+    merchantProfile: null,
+    suggestions: [],
+  });
+  assert.ok(
+    pricedAnalyzedHtml.includes(formatPercent(87.5, locale)) &&
+      pricedAnalyzedHtml.includes('bg-warning-subtle text-warning-emphasis') &&
+      !pricedAnalyzedHtml.includes('bg-warning bg-opacity-10') &&
+      pricedAnalyzedHtml.includes(watchlistMsgs.btnWatch!),
+    `${locale}: analyzed priced inspect view renders percentages, accessible warning contrast, and PriceWatchButton`
+  );
 }
+assert.ok(
+  !deepInspectWorkspace.includes('bg-warning bg-opacity-10'),
+  'DeepInspectWorkspace.tsx must use bg-warning-subtle text-warning-emphasis for dark-theme WCAG AA contrast'
+);
 
 for (const locale of LOCALES) {
   const notFoundHtml = renderInspect1726(locale, {
