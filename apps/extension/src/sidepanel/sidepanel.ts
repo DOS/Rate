@@ -24,6 +24,7 @@ import {
   classifyLookupFailure,
   escapeHtml,
   isLookupWithoutProduct,
+  merchantTrustColor,
   officialBadgeHtml,
   renderActionRowsHtml,
   renderLookupErrorHtml,
@@ -250,15 +251,10 @@ async function fetchAndRenderMerchantTrustDirectory(
               `/merchants/${encodeURIComponent(m.slug || m.id)}`,
               '/merchants'
             );
-            const trustScoreNum = m.trust_score;
             const trustColor =
-              trustScoreNum == null
+              m.trust_score == null || !Number.isFinite(m.trust_score)
                 ? '#9ca3af'
-                : trustScoreNum >= 85
-                  ? '#34d399'
-                  : trustScoreNum >= 65
-                    ? '#fbbf24'
-                    : '#f87171';
+                : merchantTrustColor(m);
             return `
               <div class="offer-item">
                 <div>
@@ -382,6 +378,10 @@ function renderPanelContent(
 
   const reviewHtml = renderReviewCardHtml(reviews, master);
 
+  const merchantNoTrust =
+    !merchant ||
+    merchant.trust_score == null ||
+    !Number.isFinite(merchant.trust_score);
   const merchantRiskHtml = merchant
     ? `
       <div class="card">
@@ -389,7 +389,7 @@ function renderPanelContent(
         <div class="stats-grid">
           <div class="stat-box">
             <div class="stat-label">${escapeHtml(t('merchantTrustScore'))}</div>
-            <div class="stat-val" style="color: ${merchant.trust_score == null ? '#9ca3af' : '#34d399'};">${escapeHtml(merchant.trust_score == null ? t('noDataYet') : `${formatSafeNumber(merchant.trust_score, { min: 0, max: 100 })}/100`)}</div>
+            <div class="stat-val" style="color: ${merchantNoTrust ? '#9ca3af' : merchantTrustColor(merchant)};">${escapeHtml(merchantNoTrust ? t('noDataYet') : `${formatSafeNumber(merchant.trust_score, { min: 0, max: 100 })}/100`)}</div>
           </div>
           <div class="stat-box">
             <div class="stat-label">${escapeHtml(t('merchantRiskPair'))}</div>

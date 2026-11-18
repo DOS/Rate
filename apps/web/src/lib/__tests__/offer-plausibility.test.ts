@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { NextIntlClientProvider } from 'next-intl';
+import csMessages from '../../../locales/cs.json';
+import enMessages from '../../../locales/en.json';
 import viMessages from '../../../locales/vi.json';
 import {
   hasImplausiblyLowOfferId,
@@ -784,6 +786,406 @@ async function main() {
   } finally {
     globalThis.fetch = origFetch;
   }
+
+  // DOS/Rate#1721: ProductOffersExplorer trust cutoffs via merchantRiskTone,
+  // unavailable verdict suppression across UI + exports, and zero-price guards.
+  assert.equal(ProductOffersExplorerMod.offerRiskTone(null), null);
+  assert.equal(ProductOffersExplorerMod.offerRiskTone(''), null);
+  assert.equal(ProductOffersExplorerMod.offerRiskTone(Number.NaN), null);
+  assert.equal(ProductOffersExplorerMod.offerRiskTone(19), 'good');
+  assert.equal(ProductOffersExplorerMod.offerRiskTone(19.4), 'good');
+  assert.equal(ProductOffersExplorerMod.offerRiskTone(19.6), 'warn');
+  assert.equal(ProductOffersExplorerMod.offerRiskTone(20), 'warn');
+  assert.equal(ProductOffersExplorerMod.offerRiskTone(49), 'warn');
+  assert.equal(ProductOffersExplorerMod.offerRiskTone(49.6), 'bad');
+  assert.equal(ProductOffersExplorerMod.offerRiskTone(50), 'bad');
+  assert.equal(
+    ProductOffersExplorerMod.offerTrustBadgeClass(null),
+    'bg-light text-muted border'
+  );
+  assert.equal(
+    ProductOffersExplorerMod.offerTrustBadgeClass(19),
+    'bg-success-subtle text-success'
+  );
+  assert.equal(
+    ProductOffersExplorerMod.offerTrustBadgeClass(20),
+    'bg-warning-subtle text-warning-emphasis'
+  );
+  assert.equal(
+    ProductOffersExplorerMod.offerTrustBadgeClass(50),
+    'bg-danger-subtle text-danger'
+  );
+  assert.equal(
+    ProductOffersExplorerMod.buildExplorerInspectHref(
+      'https://shopee.vn/item-i.1.2',
+      0
+    ),
+    '/inspect?q=https%3A%2F%2Fshopee.vn%2Fitem-i.1.2'
+  );
+  assert.equal(
+    ProductOffersExplorerMod.buildExplorerInspectHref(
+      'https://shopee.vn/item-i.1.2',
+      3_032_000
+    ),
+    '/inspect?q=https%3A%2F%2Fshopee.vn%2Fitem-i.1.2&price=3032000'
+  );
+
+  const mkAnalysis = (
+    id: string,
+    verdict:
+      'normal_price' | 'genuine_deal' | 'fake_discount' | 'suspicious_discount'
+  ) => ({
+    product_id: id,
+    merchant_name: 'Shop A',
+    platform: 'shopee',
+    price_current: 3_032_000,
+    price_original: 4_500_000,
+    claimed_discount_pct: 32,
+    real_discount_vs_median_pct: 0,
+    historical_min_price: 3_032_000,
+    historical_max_price: 3_200_000,
+    historical_median_price: 3_100_000,
+    observation_count: 4,
+    verdict,
+    badge_label: verdict,
+    explanation: verdict,
+  });
+
+  const soldOutNormalOffer = mkOffer(
+    'so-norm',
+    'shop-b',
+    3_032_000,
+    'out_of_stock'
+  );
+  const discontinuedOffer = mkOffer(
+    'disc-1',
+    'shop-c',
+    3_140_000,
+    'discontinued'
+  );
+  const zeroPriceOffer = mkOffer('zero-1', 'shop-d', 0, 'in_stock');
+  const byOffer1721 = {
+    'so-norm': mkAnalysis('so-norm', 'normal_price'),
+    'disc-1': mkAnalysis('disc-1', 'fake_discount'),
+    'zero-1': mkAnalysis('zero-1', 'normal_price'),
+  };
+  assert.equal(
+    ProductOffersExplorerMod.resolveExplorerOfferDiscountAnalysis(
+      soldOutNormalOffer,
+      byOffer1721,
+      explorerInStock,
+      explorerBaitIds
+    ),
+    null
+  );
+  assert.equal(
+    ProductOffersExplorerMod.resolveExplorerOfferDiscountAnalysis(
+      discontinuedOffer,
+      byOffer1721,
+      explorerInStock,
+      explorerBaitIds
+    )?.verdict,
+    'fake_discount'
+  );
+  assert.equal(
+    ProductOffersExplorerMod.resolveExplorerOfferDiscountAnalysis(
+      zeroPriceOffer,
+      byOffer1721,
+      explorerInStock,
+      explorerBaitIds
+    ),
+    null
+  );
+
+  const tDetailEn = (
+    key:
+      | 'offersImplausiblyLowBadge'
+      | 'offersDiscontinuedBadge'
+      | 'offersUnavailableBadge'
+  ) => enMessages.productDetail[key];
+  const tVerdictEn = (
+    key: keyof typeof enMessages.priceVerdict,
+    vals?: Record<string, string | number>
+  ) => {
+    let msg: string = enMessages.priceVerdict[key];
+    for (const [k, v] of Object.entries(vals ?? {})) {
+      msg = msg.replaceAll(`{${k}}`, String(v));
+    }
+    return msg;
+  };
+  assert.equal(
+    ProductOffersExplorerMod.resolveExplorerMarkdownVerdictCell({
+      offer: soldOutNormalOffer,
+      isBait: false,
+      analysis: null,
+      t: tDetailEn,
+      tVerdict: tVerdictEn,
+      locale: 'en',
+    }),
+    enMessages.productDetail.offersUnavailableBadge
+  );
+  assert.equal(
+    ProductOffersExplorerMod.resolveExplorerMarkdownVerdictCell({
+      offer: discontinuedOffer,
+      isBait: false,
+      analysis: null,
+      t: tDetailEn,
+      tVerdict: tVerdictEn,
+      locale: 'en',
+    }),
+    enMessages.productDetail.offersDiscontinuedBadge
+  );
+  assert.equal(
+    ProductOffersExplorerMod.resolveExplorerExportVerdictCode(
+      soldOutNormalOffer,
+      false,
+      null
+    ),
+    'out_of_stock'
+  );
+  assert.equal(
+    ProductOffersExplorerMod.resolveExplorerExportVerdictCode(
+      discontinuedOffer,
+      false,
+      null
+    ),
+    'discontinued'
+  );
+  assert.equal(
+    ProductOffersExplorerMod.resolveExplorerExportVerdictCode(
+      discontinuedOffer,
+      false,
+      mkAnalysis('disc-1', 'suspicious_discount')
+    ),
+    'suspicious_discount'
+  );
+  assert.equal(
+    ProductOffersExplorerMod.resolveExplorerExportVerdictCode(
+      zeroPriceOffer,
+      false,
+      null
+    ),
+    'insufficient_data'
+  );
+
+  const IntlProvider =
+    NextIntlClientProvider as unknown as React.ComponentType<{
+      locale: string;
+      messages: unknown;
+      timeZone: string;
+      children?: React.ReactNode;
+    }>;
+  const withRisk = (
+    base: ReturnType<typeof mkOffer>,
+    name: string,
+    riskScore: number | null
+  ) => ({
+    ...base,
+    merchant: { ...base.merchant, name, risk_score: riskScore },
+  });
+  const highTrustHtml = renderToStaticMarkup(
+    React.createElement(
+      IntlProvider,
+      { locale: 'en', messages: enMessages, timeZone: 'Asia/Ho_Chi_Minh' },
+      React.createElement(ProductOffersExplorerMod.default, {
+        productName: 'Galaxy Buds3 Pro',
+        productSlug: 'buds3-pro',
+        initialHighTrustOnly: true,
+        offers: [
+          withRisk(mkOffer('r19', 'm19', 3_100_000), 'ShopRisk19', 19),
+          withRisk(mkOffer('r20', 'm20', 3_100_000), 'ShopRisk20', 20),
+          withRisk(mkOffer('r50', 'm50', 3_100_000), 'ShopRisk50', 50),
+          withRisk(mkOffer('rnull', 'mnull', 3_100_000), 'ShopRiskNull', null),
+        ],
+        byOffer: {},
+      })
+    )
+  );
+  assert.ok(highTrustHtml.includes('ShopRisk19'));
+  assert.equal(highTrustHtml.includes('ShopRisk20'), false);
+  assert.equal(highTrustHtml.includes('ShopRisk50'), false);
+  assert.equal(highTrustHtml.includes('ShopRiskNull'), false);
+
+  const zeroPriceOffer2 = withRisk(
+    mkOffer('zero-2', 'shop-e', 0, 'in_stock'),
+    'ShopZeroHighTrust',
+    2
+  );
+  const explorerEdgeHtml = renderToStaticMarkup(
+    React.createElement(
+      IntlProvider,
+      { locale: 'en', messages: enMessages, timeZone: 'Asia/Ho_Chi_Minh' },
+      React.createElement(ProductOffersExplorerMod.default, {
+        productName: 'Galaxy Buds3 Pro',
+        productSlug: 'buds3-pro',
+        offers: [soldOutNormalOffer, zeroPriceOffer, zeroPriceOffer2],
+        byOffer: byOffer1721,
+      })
+    )
+  );
+  assert.ok(
+    explorerEdgeHtml.indexOf('ShopZeroHighTrust') <
+      explorerEdgeHtml.indexOf('Shop shop-d'),
+    'Unpriced offers sort cleanly by trust tie-breaker without NaN'
+  );
+  assert.equal(
+    explorerEdgeHtml.includes(enMessages.priceVerdict.labelNormal),
+    false
+  );
+  assert.equal(explorerEdgeHtml.includes('>0 ₫<'), false);
+  assert.equal(explorerEdgeHtml.includes('price=0'), false);
+  assert.ok(explorerEdgeHtml.includes('>Out of stock<'));
+  assert.ok(explorerEdgeHtml.includes('>-<'));
+
+  // DOS/Rate#1721: ProductValueCalculator sets aria-pressed and avoids green '0 ₫' when resale is off.
+  const ProductValueCalculatorMod =
+    await import('../../components/leaderboard/ProductValueCalculator');
+  const calcOnHtml = renderToStaticMarkup(
+    React.createElement(
+      IntlProvider,
+      { locale: 'en', messages: enMessages, timeZone: 'Asia/Ho_Chi_Minh' },
+      React.createElement(ProductValueCalculatorMod.default, {
+        productName: 'iPhone 16',
+        brand: 'Apple',
+        categorySlug: 'smartphones',
+        minPriceVnd: 20_000_000,
+        maxPriceVnd: 22_000_000,
+        userScore5: 4.5,
+        expertScore10: 8.8,
+        valueCriterionScore5: 4.4,
+      })
+    )
+  );
+  assert.match(
+    calcOnHtml,
+    /<button[^>]*aria-pressed="true"[^>]*>Include trade-in resale/
+  );
+  const calcOffHtml = renderToStaticMarkup(
+    React.createElement(
+      IntlProvider,
+      { locale: 'en', messages: enMessages, timeZone: 'Asia/Ho_Chi_Minh' },
+      React.createElement(ProductValueCalculatorMod.default, {
+        productName: 'iPhone 16',
+        brand: 'Apple',
+        categorySlug: 'smartphones',
+        minPriceVnd: 20_000_000,
+        maxPriceVnd: 22_000_000,
+        userScore5: 4.5,
+        expertScore10: 8.8,
+        valueCriterionScore5: 4.4,
+        initialIncludeResale: false,
+      })
+    )
+  );
+  assert.match(
+    calcOffHtml,
+    /<button[^>]*aria-pressed="false"[^>]*>Exclude resale/
+  );
+  assert.equal(calcOffHtml.includes('>0 ₫<'), false);
+  assert.equal(calcOffHtml.includes('text-success'), false);
+  assert.ok(calcOffHtml.includes('text-muted">N/A<'));
+
+  // DOS/Rate#1721: PriceHistorySection forwards locale to radarMarkdownCell and
+  // hides clean/100%-transparent claims when validPoints and offerAnalyses are empty.
+  const PriceHistorySectionMod =
+    await import('../../components/price-history/PriceHistorySection');
+  const emptyHistory = {
+    points: [],
+    lowestEverPrice: null,
+    lowestEverDate: null,
+    lowestEverMerchant: null,
+    highestEverPrice: null,
+    currentMinPrice: null,
+    byOffer: {},
+    fakeDiscountCount: 0,
+    genuineDealCount: 0,
+  };
+  const radarFakeSignal = {
+    verdict: 'fake_sale_trap' as const,
+    savingsPct: 0,
+    fakeMarkupPct: 35,
+    spreadPct: 12,
+    genuineDeal: null,
+    fakeSaleTrap: null,
+    priceSpread: null,
+  };
+  const enHistoryMd = PriceHistorySectionMod.buildPriceHistoryMarkdown({
+    productName: 'Galaxy Buds3 Pro',
+    history: emptyHistory,
+    offerAnalyses: [mkAnalysis('o1', 'fake_discount')],
+    radarSignal: radarFakeSignal,
+    tVerdict: tVerdictEn,
+    locale: 'en',
+  });
+  assert.ok(enHistoryMd.includes('Fake sale warning (+35.0%)'));
+  assert.equal(enHistoryMd.includes('Cảnh báo giảm giá ảo'), false);
+
+  const tVerdictCs = (
+    key: keyof typeof csMessages.priceVerdict,
+    vals?: Record<string, string | number>
+  ) => {
+    let msg: string = csMessages.priceVerdict[key];
+    for (const [k, v] of Object.entries(vals ?? {})) {
+      msg = msg.replaceAll(`{${k}}`, String(v));
+    }
+    return msg;
+  };
+  const csHistoryMd = PriceHistorySectionMod.buildPriceHistoryMarkdown({
+    productName: 'Galaxy Buds3 Pro',
+    history: emptyHistory,
+    offerAnalyses: [mkAnalysis('o1', 'normal_price')],
+    radarSignal: radarFakeSignal,
+    tVerdict: tVerdictCs,
+    locale: 'cs',
+  });
+  assert.ok(csHistoryMd.includes('Upozornění na falešnou slevu'));
+  assert.equal(csHistoryMd.includes('Cảnh báo giảm giá ảo'), false);
+
+  const emptyHistoryHtml = renderToStaticMarkup(
+    React.createElement(
+      IntlProvider,
+      { locale: 'en', messages: enMessages, timeZone: 'Asia/Ho_Chi_Minh' },
+      React.createElement(PriceHistorySectionMod.default, {
+        productName: 'Galaxy Buds3 Pro',
+        history: emptyHistory,
+      })
+    )
+  );
+  assert.equal(
+    emptyHistoryHtml.includes(enMessages.productDetail.priceHistoryCleanBadge),
+    false
+  );
+  assert.equal(
+    emptyHistoryHtml.includes(
+      enMessages.productDetail.priceHistoryKpiAiAuditTransparent
+    ),
+    false
+  );
+  assert.ok(emptyHistoryHtml.includes('text-muted">N/A<'));
+
+  const populatedHistoryHtml = renderToStaticMarkup(
+    React.createElement(
+      IntlProvider,
+      { locale: 'en', messages: enMessages, timeZone: 'Asia/Ho_Chi_Minh' },
+      React.createElement(PriceHistorySectionMod.default, {
+        productName: 'Galaxy Buds3 Pro',
+        history: {
+          ...emptyHistory,
+          byOffer: { o1: mkAnalysis('o1', 'normal_price') },
+        },
+      })
+    )
+  );
+  assert.ok(
+    populatedHistoryHtml.includes(
+      enMessages.productDetail.priceHistoryCleanBadge
+    )
+  );
+  assert.ok(
+    populatedHistoryHtml.includes(
+      enMessages.productDetail.priceHistoryKpiAiAuditTransparent
+    )
+  );
 
   console.warn('✅ Offer plausibility suite passed');
 }

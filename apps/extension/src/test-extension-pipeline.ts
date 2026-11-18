@@ -7415,6 +7415,387 @@ async function runTests() {
       '  ✅ [Side panel refetches a stale full lookup once (#1710)] Verified'
     );
   }
+
+  // DOS/Rate#1720: canonical merchant trust colours, positive bounded VND
+  // verdict params, and aria-hidden brand-dot in sidepanel.html.
+  {
+    const { merchantTrustColor } = await import('./sidepanel/panel-view.js');
+    const { MAX_VALID_EXTENSION_VND_PRICE } =
+      await import('./security-guards.js');
+    const { verdictTexts } = await import('./verdict-display.js');
+
+    assert.equal(
+      merchantTrustColor({ risk_score: 0, trust_score: 100 }),
+      '#34d399'
+    );
+    assert.equal(
+      merchantTrustColor({ risk_score: 19.9, trust_score: 80 }),
+      '#34d399'
+    );
+    assert.equal(
+      merchantTrustColor({ risk_score: null, trust_score: 81 }),
+      '#34d399'
+    );
+    assert.equal(merchantTrustColor({ trust_score: 84 }), '#34d399');
+    assert.equal(
+      merchantTrustColor({ risk_score: 20, trust_score: 80 }),
+      '#fbbf24'
+    );
+    assert.equal(
+      merchantTrustColor({ risk_score: 35, trust_score: 65 }),
+      '#fbbf24'
+    );
+    assert.equal(
+      merchantTrustColor({ risk_score: 49.9, trust_score: 50 }),
+      '#fbbf24'
+    );
+    assert.equal(
+      merchantTrustColor({ risk_score: null, trust_score: 80 }),
+      '#fbbf24'
+    );
+    assert.equal(
+      merchantTrustColor({ risk_score: null, trust_score: 60 }),
+      '#fbbf24'
+    );
+    assert.equal(
+      merchantTrustColor({ risk_score: null, trust_score: 51 }),
+      '#fbbf24'
+    );
+    assert.equal(
+      merchantTrustColor({ risk_score: 50, trust_score: 50 }),
+      '#f87171'
+    );
+    assert.equal(
+      merchantTrustColor({ risk_score: 80, trust_score: 20 }),
+      '#f87171'
+    );
+    assert.equal(
+      merchantTrustColor({ risk_score: null, trust_score: 50 }),
+      '#f87171'
+    );
+    assert.equal(
+      merchantTrustColor({ risk_score: null, trust_score: 0 }),
+      '#f87171'
+    );
+    assert.equal(
+      merchantTrustColor({ risk_score: 55, trust_score: 90 }),
+      '#f87171'
+    );
+    assert.equal(
+      merchantTrustColor({ risk_score: 12, trust_score: 40 }),
+      '#34d399'
+    );
+    for (const unknown of [
+      null,
+      undefined,
+      {},
+      { risk_score: null, trust_score: null },
+      { risk_score: Number.NaN, trust_score: Number.POSITIVE_INFINITY },
+    ]) {
+      assert.equal(merchantTrustColor(unknown), '#9ca3af');
+    }
+
+    const fallback = {
+      badgeLabel: 'Server fallback label',
+      explanation: 'Server fallback explanation',
+    };
+    const expectedFallback = {
+      label: fallback.badgeLabel,
+      explanation: fallback.explanation,
+    };
+    for (const badPrice of [
+      0,
+      -0,
+      -50_000,
+      0.0001,
+      MAX_VALID_EXTENSION_VND_PRICE + 1,
+      Number.POSITIVE_INFINITY,
+    ]) {
+      const rendered = verdictTexts({
+        ...fallback,
+        messageKey: 'fair_market',
+        messageParams: {
+          effectivePrice: badPrice,
+          marketMedianPrice: 20_000_000,
+        },
+      });
+      assert.deepEqual(rendered, expectedFallback);
+      assert.equal(rendered.explanation.includes('0 ₫'), false);
+      assert.deepEqual(
+        verdictTexts({
+          ...fallback,
+          messageKey: 'accessory_price_floor',
+          messageParams: { observedPrice: 50_000, minimumPrice: badPrice },
+        }),
+        expectedFallback
+      );
+      assert.deepEqual(
+        verdictTexts({
+          ...fallback,
+          messageKey: 'fake_discount',
+          messageParams: {
+            originalPrice: 25_000_000,
+            claimedDiscountPct: 10,
+            effectivePrice: 22_500_000,
+            marketMedianPrice: 21_000_000,
+            histMax: badPrice,
+          },
+        }),
+        expectedFallback
+      );
+    }
+    const maxEdge = verdictTexts({
+      ...fallback,
+      messageKey: 'fair_market',
+      messageParams: {
+        effectivePrice: 1,
+        marketMedianPrice: MAX_VALID_EXTENSION_VND_PRICE,
+      },
+    });
+    assert.ok(maxEdge.explanation.includes('1 ₫'));
+    assert.ok(maxEdge.explanation.includes('1.000.000.000 ₫'));
+
+    const panelHtml = fs.readFileSync(
+      path.resolve(__dirname, 'sidepanel/sidepanel.html'),
+      'utf8'
+    );
+    assert.ok(
+      panelHtml.includes('<span class="brand-dot" aria-hidden="true"></span>')
+    );
+    assert.equal(
+      /<span class="brand-dot"(?!\s+aria-hidden="true")/.test(panelHtml),
+      false
+    );
+
+    // Runtime check of Side Panel Merchant card + Merchant Trust Directory feed.
+    const g = globalThis as Record<string, unknown>;
+    const previousGlobals = ['chrome', 'document', 'fetch'].map(
+      (key) => [key, Object.getOwnPropertyDescriptor(g, key)] as const
+    );
+    const root = {
+      innerHTML: '',
+      querySelector: () => null,
+      querySelectorAll: () => [],
+    };
+    const trustSlot = { innerHTML: '' };
+    const storageListeners: Array<
+      (c: Record<string, unknown>, a: string) => void
+    > = [];
+    let currentMerchant: ExtensionLookupData['merchantProfile'] = {
+      id: 'm-scam',
+      name: 'Scam Flagged Shop',
+      is_official: false,
+      trust_score: 20,
+      risk_score: 80,
+      dosafe_risk_score: 80,
+      review_risk_score: 10,
+    };
+    let onReady: (() => void) | undefined;
+    const settle = () => new Promise((r) => setTimeout(r, 10));
+    try {
+      g.fetch = (url: unknown) => {
+        if (String(url).includes('/api/v1/rate/merchants')) {
+          return Promise.resolve({
+            ok: true,
+            json: async () => ({
+              ok: true,
+              data: [
+                {
+                  id: 'd1',
+                  platform: 'shopee',
+                  name: 'Clean 84',
+                  slug: 'c84',
+                  is_official: true,
+                  dosafe_risk_score: 16,
+                  review_risk_score: 10,
+                  risk_score: 16,
+                  trust_score: 84,
+                  product_count: 5,
+                },
+                {
+                  id: 'd2',
+                  platform: 'shopee',
+                  name: 'Caution 60',
+                  slug: 'c60',
+                  is_official: false,
+                  dosafe_risk_score: 40,
+                  review_risk_score: 20,
+                  risk_score: 40,
+                  trust_score: 60,
+                  product_count: 4,
+                },
+                {
+                  id: 'd3',
+                  platform: 'shopee',
+                  name: 'Alert 50',
+                  slug: 'a50',
+                  is_official: false,
+                  dosafe_risk_score: 50,
+                  review_risk_score: null,
+                  risk_score: 50,
+                  trust_score: 50,
+                  product_count: 3,
+                },
+                {
+                  id: 'd4',
+                  platform: 'shopee',
+                  name: 'Unknown',
+                  slug: 'unk',
+                  is_official: false,
+                  dosafe_risk_score: null,
+                  review_risk_score: null,
+                  risk_score: null,
+                  trust_score: null,
+                  product_count: 1,
+                },
+              ],
+            }),
+          });
+        }
+        return Promise.resolve({ ok: false });
+      };
+      g.chrome = {
+        runtime: {
+          sendMessage: () =>
+            Promise.resolve({
+              ok: true,
+              signal: {
+                title: 'Phone B',
+                platform: 'shopee',
+                canonicalUrl: 'https://shopee.vn/p-i.1.2',
+                externalItemId: '2',
+                externalShopId: '1',
+                selectedVariant: null,
+                price: 15_000_000,
+                originalPrice: null,
+                ratingStar: null,
+                ratingCount: null,
+              },
+              data: {
+                matchStatus: 'exact_listing',
+                platform: 'shopee',
+                canonicalUrl: 'https://shopee.vn/p-i.1.2',
+                detectedStorageGb: 128,
+                isAccessoryOrPart: false,
+                accessoryReason: null,
+                variantCandidates: [],
+                masterProduct: {
+                  id: 'mp1',
+                  slug: 'phone-b',
+                  name: 'Phone B',
+                  brand: 'Brand',
+                  model: 'Phone B',
+                  storage_gb: 128,
+                  ram_gb: 8,
+                  min_price: 15_000_000,
+                  max_price: 16_000_000,
+                  merchant_count: 2,
+                  average_rating: 4.8,
+                  user_rating_weighted: 4.8,
+                  expert_rating: null,
+                  authentic_review_count: 10,
+                  total_reviews: 12,
+                },
+                matchedOffer: null,
+                topCheaperOffers: [],
+                allOffers: [],
+                merchantProfile: currentMerchant,
+                reviewSummary: null,
+                priceHistory: null,
+                compareUrl: '/compare',
+                productDetailUrl: '/smartphones/phone-b',
+                priceAssessment: {
+                  verdict: 'fair_market_price',
+                  badgeLabel: 'Fair',
+                  explanation: 'Fair',
+                  observedPrice: 15_000_000,
+                  observedOriginalPrice: null,
+                  claimedDiscountPct: 0,
+                  vsMarketMedianPct: 0,
+                  marketMinPrice: 15_000_000,
+                  marketMedianPrice: 15_000_000,
+                  marketMaxPrice: 16_000_000,
+                  historicalMinPrice: null,
+                  historicalMaxPrice: null,
+                  cheaperOfferCount: 0,
+                  maxSavingsAmount: 0,
+                },
+              },
+            }),
+        },
+        storage: {
+          onChanged: {
+            addListener: (
+              fn: (c: Record<string, unknown>, a: string) => void
+            ) => storageListeners.push(fn),
+          },
+        },
+      };
+      g.document = {
+        documentElement: {},
+        title: '',
+        querySelectorAll: () => [],
+        getElementById: (id: string) =>
+          id === 'panel-root'
+            ? root
+            : id === 'merchant-trust-slot'
+              ? trustSlot
+              : null,
+        addEventListener: (type: string, fn: () => void) => {
+          if (type === 'DOMContentLoaded') onReady = fn;
+        },
+      };
+      await import(
+        new URL('./sidepanel/sidepanel.js?case=1720', import.meta.url).href
+      );
+      onReady!();
+      await settle();
+      assert.ok(
+        root.innerHTML.includes('style="color: #f87171;">20/100</div>')
+      );
+      assert.ok(
+        trustSlot.innerHTML.includes(
+          'href="https://rate.vn/merchants/c84" target="_blank" rel="noopener noreferrer" class="offer-price" style="text-decoration:none;color:#34d399;"'
+        )
+      );
+      assert.ok(
+        trustSlot.innerHTML.includes(
+          'href="https://rate.vn/merchants/c60" target="_blank" rel="noopener noreferrer" class="offer-price" style="text-decoration:none;color:#fbbf24;"'
+        )
+      );
+      assert.ok(
+        trustSlot.innerHTML.includes(
+          'href="https://rate.vn/merchants/a50" target="_blank" rel="noopener noreferrer" class="offer-price" style="text-decoration:none;color:#f87171;"'
+        )
+      );
+      assert.ok(
+        trustSlot.innerHTML.includes(
+          'href="https://rate.vn/merchants/unk" target="_blank" rel="noopener noreferrer" class="offer-price" style="text-decoration:none;color:#9ca3af;"'
+        )
+      );
+
+      currentMerchant = {
+        ...currentMerchant!,
+        trust_score: 65,
+        risk_score: 35,
+      };
+      storageListeners.forEach((fn) =>
+        fn({ lookup_tab_latest: { newValue: 1 } }, 'session')
+      );
+      await settle();
+      assert.ok(
+        root.innerHTML.includes('style="color: #fbbf24;">65/100</div>')
+      );
+    } finally {
+      for (const [key, descriptor] of previousGlobals) {
+        if (descriptor) Object.defineProperty(g, key, descriptor);
+        else delete g[key];
+      }
+    }
+    console.log(
+      '  ✅ [Side panel merchant trust colors, positive VND verdict params & brand-dot a11y (#1720)] Verified'
+    );
+  }
   console.log('🎉 All Rate Browser Extension MV3 v2 tests passed!');
 }
 

@@ -29,7 +29,10 @@ import {
   radarMarkdownCell,
   type RadarSignal,
 } from '@/lib/deal-radar';
-import { discountVerdictCopy } from '@/lib/discount-verdict-copy';
+import {
+  discountVerdictCopy,
+  type VerdictTranslator,
+} from '@/lib/discount-verdict-copy';
 import { escapeCsvCell } from '@/lib/csv-safe';
 import {
   formatDate,
@@ -137,6 +140,54 @@ export function sanitizePriceHistoryMarkdownCell(
 
 const formatVnd = formatPriceHistoryVnd;
 const formatCompactVnd = formatCompactPriceHistoryVnd;
+
+export function buildPriceHistoryMarkdown(params: {
+  productName: string;
+  history: MasterProductPriceHistorySummary;
+  offerAnalyses: readonly OfferDiscountAnalysis[];
+  radarSignal?: RadarSignal | null;
+  tVerdict: VerdictTranslator;
+  locale: string;
+}): string {
+  const { productName, history, offerAnalyses, radarSignal, tVerdict, locale } =
+    params;
+  const headers = [
+    'Merchant',
+    'Platform',
+    'Current Price (VND)',
+    'Original Price (VND)',
+    '90d Median (VND)',
+    '90d Low (VND)',
+    'Price verdict',
+  ];
+  const sep = headers.map(() => '---');
+  const safeFakeCount = sanitizePriceHistoryCount(history.fakeDiscountCount);
+  const safeGenuineCount = sanitizePriceHistoryCount(history.genuineDealCount);
+  const rows = offerAnalyses.map((oa) => [
+    sanitizePriceHistoryMarkdownCell(oa.merchant_name),
+    sanitizePriceHistoryMarkdownCell(oa.platform.toUpperCase()),
+    formatVnd(oa.price_current),
+    formatVnd(oa.price_original),
+    formatVnd(oa.historical_median_price),
+    formatVnd(oa.historical_min_price),
+    sanitizePriceHistoryMarkdownCell(
+      discountVerdictCopy(tVerdict, oa, locale).label
+    ),
+  ]);
+  return [
+    `### 📈 Rate.vn price history and fake sale check: ${sanitizePriceHistoryMarkdownCell(productName)}`,
+    `- **Current Lowest Price**: ${formatVnd(history.currentMinPrice)}`,
+    `- **All-Time Lowest Recorded**: ${formatVnd(history.lowestEverPrice)}`,
+    `- **Fake Sale Alerts**: ${safeFakeCount} | **Genuine Deals**: ${safeGenuineCount}`,
+    ...(radarSignal
+      ? [`- **Price signal**: ${radarMarkdownCell(radarSignal, locale)}`]
+      : []),
+    '',
+    `| ${headers.join(' | ')} |`,
+    `| ${sep.join(' | ')} |`,
+    ...rows.map((r) => `| ${r.join(' | ')} |`),
+  ].join('\n');
+}
 
 function formatDateShort(locale: string, iso: string): string {
   const d = new Date(iso);
@@ -386,42 +437,14 @@ export default function PriceHistorySection({
 
   const handleCopyPriceHistoryMarkdown = async () => {
     if (typeof navigator === 'undefined') return;
-    const headers = [
-      'Merchant',
-      'Platform',
-      'Current Price (VND)',
-      'Original Price (VND)',
-      '90d Median (VND)',
-      '90d Low (VND)',
-      'Price verdict',
-    ];
-    const sep = headers.map(() => '---');
-    const safeFakeCount = sanitizePriceHistoryCount(history.fakeDiscountCount);
-    const safeGenuineCount = sanitizePriceHistoryCount(
-      history.genuineDealCount
-    );
-    const rows = offerAnalyses.map((oa) => [
-      sanitizePriceHistoryMarkdownCell(oa.merchant_name),
-      sanitizePriceHistoryMarkdownCell(oa.platform.toUpperCase()),
-      formatVnd(oa.price_current),
-      formatVnd(oa.price_original),
-      formatVnd(oa.historical_median_price),
-      formatVnd(oa.historical_min_price),
-      sanitizePriceHistoryMarkdownCell(discountVerdictCopy(tVerdict, oa).label),
-    ]);
-    const md = [
-      `### 📈 Rate.vn price history and fake sale check: ${sanitizePriceHistoryMarkdownCell(productName)}`,
-      `- **Current Lowest Price**: ${formatVnd(history.currentMinPrice)}`,
-      `- **All-Time Lowest Recorded**: ${formatVnd(history.lowestEverPrice)}`,
-      `- **Fake Sale Alerts**: ${safeFakeCount} | **Genuine Deals**: ${safeGenuineCount}`,
-      ...(radarSignal
-        ? [`- **Price signal**: ${radarMarkdownCell(radarSignal)}`]
-        : []),
-      '',
-      `| ${headers.join(' | ')} |`,
-      `| ${sep.join(' | ')} |`,
-      ...rows.map((r) => `| ${r.join(' | ')} |`),
-    ].join('\n');
+    const md = buildPriceHistoryMarkdown({
+      productName,
+      history,
+      offerAnalyses,
+      radarSignal,
+      tVerdict,
+      locale,
+    });
 
     try {
       await navigator.clipboard.writeText(md);
@@ -495,6 +518,8 @@ export default function PriceHistorySection({
     URL.revokeObjectURL(url);
   };
 
+  const hasAuditEvidence = validPoints.length > 0 || offerAnalyses.length > 0;
+
   const activeNode =
     chartGeometry && activePointIndex != null
       ? chartGeometry.mapped[activePointIndex] ||
@@ -560,11 +585,11 @@ export default function PriceHistorySection({
                 count: history.fakeDiscountCount,
               })}
             </span>
-          ) : (
+          ) : hasAuditEvidence ? (
             <span className="badge bg-success-subtle text-success rounded-pill small px-3 py-2">
               {t('priceHistoryCleanBadge')}
             </span>
-          )}
+          ) : null}
           {history.genuineDealCount > 0 && (
             <span className="badge bg-success rounded-pill small px-3 py-2 text-white">
               {t('priceHistoryGenuineDealBadge', {
@@ -649,14 +674,20 @@ export default function PriceHistorySection({
             </div>
             <div
               className={`h5 fw-bold mb-1 ${
-                history.fakeDiscountCount > 0 ? 'text-danger' : 'text-success'
+                history.fakeDiscountCount > 0
+                  ? 'text-danger'
+                  : hasAuditEvidence
+                    ? 'text-success'
+                    : 'text-muted'
               }`}
             >
               {history.fakeDiscountCount > 0
                 ? t('priceHistoryKpiAiAuditFakeCount', {
                     count: history.fakeDiscountCount,
                   })
-                : t('priceHistoryKpiAiAuditTransparent')}
+                : hasAuditEvidence
+                  ? t('priceHistoryKpiAiAuditTransparent')
+                  : t('valueCalcNotAvailable')}
             </div>
             <div className="text-muted" style={{ fontSize: '0.8125rem' }}>
               {t('priceHistoryKpiAiAuditSub')}

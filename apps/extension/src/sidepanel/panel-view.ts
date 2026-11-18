@@ -459,17 +459,50 @@ export function renderActionRowsHtml(links: PanelActionLink[]): string {
   return rows.join('\n      ');
 }
 
+export type MerchantTrustColor = '#34d399' | '#fbbf24' | '#f87171' | '#9ca3af';
+
+/**
+ * Resolves the side panel trust score colour from canonical rate.vn merchant
+ * risk cutoffs (`risk < 20` / `trust > 80` `#34d399`, `20 <= risk < 50` /
+ * `trust > 50` `#fbbf24`, `risk >= 50` / `trust <= 50` `#f87171`, unknown
+ * `#9ca3af`), preferring finite `risk_score` over `100 - trust_score`
+ * (DOS/Rate#1720).
+ */
+export function merchantTrustColor(
+  merchant:
+    | {
+        risk_score?: number | null;
+        trust_score?: number | null;
+      }
+    | null
+    | undefined
+): MerchantTrustColor {
+  if (!merchant || typeof merchant !== 'object') return '#9ca3af';
+  const risk =
+    typeof merchant.risk_score === 'number' &&
+    Number.isFinite(merchant.risk_score)
+      ? merchant.risk_score
+      : typeof merchant.trust_score === 'number' &&
+          Number.isFinite(merchant.trust_score)
+        ? 100 - merchant.trust_score
+        : null;
+  if (risk === null) return '#9ca3af';
+  if (risk < 20) return '#34d399';
+  if (risk < 50) return '#fbbf24';
+  return '#f87171';
+}
+
 // A risk score that is not known reads as no data, never as 0, the lowest risk: a store
 // with no analysed review (DOS/Rate#1258) or no DOSafe score (DOS/Rate#1465).
 /** "Trust N/100", or "no data yet" for a store with nothing to score (DOS/Rate#1484). */
 export function trustText(score: number | null | undefined): string {
-  return score == null
+  return typeof score !== 'number' || !Number.isFinite(score)
     ? t('merchantTrustNoData')
     : t('merchantTrust', [formatSafeNumber(score, { min: 0, max: 100 })]);
 }
 
 export function riskScoreText(score: number | null | undefined): string {
-  return score == null
+  return typeof score !== 'number' || !Number.isFinite(score)
     ? t('reviewRiskNoData')
     : formatSafeNumber(score, { min: 0, max: 100 });
 }
