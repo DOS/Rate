@@ -1,4 +1,5 @@
 import { splitModelKey, type ProductSpecifications, type KeySpecs } from '@repo/shared-data';
+import { SOURCED_SEEDS_2025 } from './flagship-seed-sourced-2025.js';
 import { SOURCED_SEEDS_2026 } from './flagship-seed-sourced-2026.js';
 
 /**
@@ -3563,6 +3564,9 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
   // Sourced iPhone 18 Pro, 18 Pro Max and Galaxy S26 Ultra 256GB seeds (flagship-seed-sourced-
   // 2026.ts), in place of the earlier unsourced entries.
   ...SOURCED_SEEDS_2026,
+  // Sourced iPhone 16e 128GB seed (flagship-seed-sourced-2025.ts, DOS/Rate#1718): the master
+  // the DOS/Rate#594 offer move created lacked three spec groups.
+  ...SOURCED_SEEDS_2025,
 ];
 
 /**

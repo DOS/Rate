@@ -242,8 +242,19 @@ export async function syncItemSeedSpecs(
 }
 
 /**
- * Spec-only audit: every master product must carry all 10 Field Groups and the main + second
- * camera. Deliberately asserts nothing about offers, reviews or ratings.
+ * Whether `camera.rear_setup` declares a single rear camera ("Single Camera", the label the
+ * normalizer gives a one-camera benchmark model). Such a device has no second camera to
+ * audit: the iPhone 16e has one camera on the back (DOS/Rate#1718).
+ */
+export function hasSingleRearCamera(camera: { rear_setup?: unknown } | null | undefined): boolean {
+  const setup = camera?.rear_setup;
+  return typeof setup === 'string' && /^\s*single\b/i.test(setup);
+}
+
+/**
+ * Spec-only audit: every master product must carry all 10 Field Groups and the main camera,
+ * plus a second camera unless `camera.rear_setup` declares a single rear camera.
+ * Deliberately asserts nothing about offers, reviews or ratings.
  */
 export async function auditMasterSpecs(supabase: RateSupabaseClient): Promise<number> {
   // Paged: an unpaged read stops at PostgREST's 1000-row cap and would skip
@@ -287,7 +298,10 @@ export async function auditMasterSpecs(supabase: RateSupabaseClient): Promise<nu
     if (!row.specifications?.camera?.main_camera?.trim()) {
       failures.push(`${label} is missing camera.main_camera`);
     }
-    if (!row.specifications?.camera?.second_camera?.trim()) {
+    if (
+      !hasSingleRearCamera(row.specifications?.camera) &&
+      !row.specifications?.camera?.second_camera?.trim()
+    ) {
       failures.push(`${label} is missing camera.second_camera`);
     }
   }
@@ -979,7 +993,7 @@ export async function runQuickSpecSyncAndAudit(
   const total = await auditMasterSpecs(supabase);
   logger.info(
     'backfill.audit_passed',
-    `SPEC CLOUD AUDIT PASSED [mode=${apply ? 'APPLY' : 'AUDIT-ONLY'}]: ${total}/${total} master products on Supabase Cloud verified with 10/10 Field Groups (main + second camera).`,
+    `SPEC CLOUD AUDIT PASSED [mode=${apply ? 'APPLY' : 'AUDIT-ONLY'}]: ${total}/${total} master products on Supabase Cloud verified with 10/10 Field Groups (main camera, and a second camera unless single-camera).`,
     { apply, totalAudited: total }
   );
   return total;

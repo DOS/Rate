@@ -24,6 +24,7 @@ import {
   CANONICAL_BACKFILL_SPECS_BY_MODEL_KEY,
   FLAGSHIP_DEVICES_TO_SEED,
 } from './flagship-seed-data.js';
+import { hasSingleRearCamera } from './jobs/backfill-specs.js';
 import type { ShopeeProduct } from './types.js';
 
 dotenv.config();
@@ -309,7 +310,8 @@ async function runTests() {
       `Flagship seed ${device.model_key} missing main_camera`
     );
     assert.ok(
-      device.specifications.camera?.second_camera,
+      hasSingleRearCamera(device.specifications.camera) ||
+        device.specifications.camera?.second_camera,
       `Flagship seed ${device.model_key} missing second_camera`
     );
     console.log(
