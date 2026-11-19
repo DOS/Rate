@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import {
   compareTarget,
   dedupeCompareTargets,
@@ -434,6 +435,93 @@ async function main() {
     ),
     'apple-iphone-16'
   );
+  // Mixed-case canonical Item slugs (#1383, #1768) are preserved verbatim.
+  assert.equal(
+    itemSlugFromProductAnswer(
+      { ok: true, data: { item: { slug: 'Apple-iPhone-16' } } },
+      'apple-iphone-16-128gb'
+    ),
+    'Apple-iPhone-16'
+  );
+  assert.equal(
+    itemSlugFromProductAnswer(
+      { ok: true, data: { item: { slug: 'Nokia-8.3-5G_2025' } } },
+      'nokia-8-3-5g-128gb'
+    ),
+    'Nokia-8.3-5G_2025'
+  );
+  assert.equal(
+    versusHref('samsung-galaxy-s24', 'apple-iphone-16-128gb', {
+      'apple-iphone-16-128gb': itemSlugFromProductAnswer(
+        { ok: true, data: { item: { slug: 'Apple-iPhone-16' } } },
+        'apple-iphone-16-128gb'
+      ),
+    }),
+    '/compare/Apple-iPhone-16-vs-samsung-galaxy-s24',
+    'client lookup preserves mixed-case canonical Item slug in 1v1 link (#1768)'
+  );
+  const maxLenItemSlug = `A${'b'.repeat(159)}`;
+  assert.equal(
+    itemSlugFromProductAnswer(
+      { ok: true, data: { item: { slug: maxLenItemSlug } } },
+      'fallback-slug'
+    ),
+    maxLenItemSlug
+  );
+  assert.equal(
+    itemSlugFromProductAnswer(
+      { ok: true, data: { item: { slug: `${maxLenItemSlug}x` } } },
+      'fallback-slug'
+    ),
+    'fallback-slug',
+    'over-160-char Item slug falls back to requested slug'
+  );
+  // Rejects path-traversal / dot segments and prototype keys (#1768).
+  for (const unsafeSlug of [
+    '',
+    '.',
+    '..',
+    '.Apple-iPhone-16',
+    'Apple..iPhone-16',
+    'Apple-iPhone-16.',
+    'Apple-iPhone-16..',
+    'Apple/iPhone-16',
+    '../etc/passwd',
+    ' Apple-iPhone-16',
+    'Apple-iPhone-16 ',
+    '__proto__',
+    'constructor',
+    'Constructor',
+    'CONSTRUCTOR',
+    'prototype',
+    'Prototype',
+    'toString',
+    'toLocaleString',
+    'valueOf',
+    'hasOwnProperty',
+    'isPrototypeOf',
+    'propertyIsEnumerable',
+  ]) {
+    assert.equal(
+      itemSlugFromProductAnswer(
+        { ok: true, data: { item: { slug: unsafeSlug } } },
+        'safe-variant-slug'
+      ),
+      'safe-variant-slug',
+      `unsafe Item slug ${JSON.stringify(unsafeSlug)} must fall back to variant slug`
+    );
+  }
+  assert.equal(
+    itemSlugFromProductAnswer(
+      Object.assign([], {
+        ok: true,
+        data: { item: { slug: 'Apple-iPhone-16' } },
+      }),
+      'safe-variant-slug'
+    ),
+    'safe-variant-slug',
+    'array envelope must not pass as a product answer'
+  );
   assert.equal(
     itemSlugFromProductAnswer({ ok: true, data: {} }, 'pixel-10'),
     'pixel-10',
@@ -447,6 +535,127 @@ async function main() {
     ),
     'x'
   );
+
+  // /compare SSR pre-resolves both initialProducts and catalogCandidates via
+  // getItemSlugsFor so popular-battle and selector candidates carry exact Item
+  // membership (including mixed linked/unlinked siblings) from first paint (#1768).
+  const comparePageSrc = readFileSync(
+    new URL('../../app/[locale]/compare/page.tsx', import.meta.url),
+    'utf8'
+  );
+  assert.match(
+    comparePageSrc,
+    /getItemSlugsFor\(\s*\[\s*\.\.\.initialProducts\.map\(\(p\)\s*=>\s*p\.slug\),\s*\.\.\.catalogCandidates\.map\(\(p\)\s*=>\s*p\.slug\),?\s*\]\s*\)/,
+    'apps/web/src/app/[locale]/compare/page.tsx must pass [...initialProducts.map((p) => p.slug), ...catalogCandidates.map((p) => p.slug)] into getItemSlugsFor (#1768)'
+  );
+  assert.ok(
+    comparePageSrc.includes('{...(itemSlugBySlug ? { itemSlugBySlug } : {})}'),
+    'ComparePhonesPage must forward itemSlugBySlug to CompareWorkspace'
+  );
+
+  const prevSupabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const prevSupabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  const prevItemModel = process.env.RATE_ITEM_MODEL;
+  const prevFetch = globalThis.fetch;
+  try {
+    process.env.NEXT_PUBLIC_SUPABASE_URL = 'https://stub.supabase.test';
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = 'anon-test-key';
+    process.env.RATE_ITEM_MODEL = 'item';
+    const ITEM_IPHONE = '11111111-1111-4111-8111-111111111768';
+    const ITEM_XIAOMI = '22222222-2222-4222-8222-222222221768';
+    globalThis.fetch = (async (input: RequestInfo | URL) => {
+      const url = new URL(
+        typeof input === 'string'
+          ? input
+          : input instanceof URL
+            ? input.href
+            : input.url
+      );
+      const q = decodeURIComponent(url.search);
+      const json = (body: unknown) =>
+        new Response(JSON.stringify(body), {
+          status: 200,
+          headers: {
+            'content-type': 'application/json',
+            'content-range': '0-0/*',
+          },
+        });
+      if (Number(url.searchParams.get('offset') ?? 0) > 0) return json([]);
+      if (url.pathname === '/rest/v1/items' && q.includes('select=id,slug')) {
+        return json([
+          { id: ITEM_IPHONE, slug: 'Apple-iPhone-16' },
+          { id: ITEM_XIAOMI, slug: 'xiaomi-15-ultra' },
+        ]);
+      }
+      if (
+        url.pathname === '/rest/v1/master_products' &&
+        q.includes('select=slug,item_id')
+      ) {
+        return json([
+          { slug: 'apple-iphone-16-128gb', item_id: ITEM_IPHONE },
+          { slug: 'apple-iphone-16-256gb', item_id: ITEM_IPHONE },
+          { slug: 'apple-iphone-16-unlinked-import', item_id: null },
+          { slug: 'xiaomi-15-ultra-512gb', item_id: ITEM_XIAOMI },
+          { slug: 'samsung-galaxy-s24', item_id: null },
+        ]);
+      }
+      return json([]);
+    }) as typeof fetch;
+
+    const { getItemSlugsFor } = await import('@/server/rate/item-directory');
+    const ssrInitialProducts = [
+      { slug: 'apple-iphone-16-128gb' },
+      { slug: 'samsung-galaxy-s24' },
+    ];
+    const ssrCatalogCandidates = [
+      { slug: 'apple-iphone-16-128gb' },
+      { slug: 'apple-iphone-16-256gb' },
+      { slug: 'apple-iphone-16-unlinked-import' },
+      { slug: 'xiaomi-15-ultra-512gb' },
+    ];
+    const ssrMap = await getItemSlugsFor([
+      ...ssrInitialProducts.map((p) => p.slug),
+      ...ssrCatalogCandidates.map((p) => p.slug),
+    ]);
+    assert.deepEqual(ssrMap, {
+      'apple-iphone-16-128gb': 'Apple-iPhone-16',
+      'samsung-galaxy-s24': 'samsung-galaxy-s24',
+      'apple-iphone-16-256gb': 'Apple-iPhone-16',
+      'apple-iphone-16-unlinked-import': 'apple-iphone-16-unlinked-import',
+      'xiaomi-15-ultra-512gb': 'xiaomi-15-ultra',
+    });
+    assert.equal(
+      versusHref('xiaomi-15-ultra-512gb', 'apple-iphone-16-256gb', ssrMap),
+      '/compare/Apple-iPhone-16-vs-xiaomi-15-ultra',
+      'popular-battle candidate pair resolves to canonical Item slugs on SSR'
+    );
+    assert.equal(
+      versusHref(
+        'apple-iphone-16-unlinked-import',
+        'xiaomi-15-ultra-512gb',
+        ssrMap
+      ),
+      '/compare/apple-iphone-16-unlinked-import-vs-xiaomi-15-ultra',
+      'unlinked sibling keeps its own variant slug on SSR instead of inheriting a sibling Item'
+    );
+  } finally {
+    globalThis.fetch = prevFetch;
+    if (prevSupabaseUrl === undefined) {
+      delete process.env.NEXT_PUBLIC_SUPABASE_URL;
+    } else {
+      process.env.NEXT_PUBLIC_SUPABASE_URL = prevSupabaseUrl;
+    }
+    if (prevSupabaseAnonKey === undefined) {
+      delete process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    } else {
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = prevSupabaseAnonKey;
+    }
+    if (prevItemModel === undefined) {
+      delete process.env.RATE_ITEM_MODEL;
+    } else {
+      process.env.RATE_ITEM_MODEL = prevItemModel;
+    }
+  }
 
   // A compare candidate's full sheet comes from the product answer, and only
   // the asked product's (DOS/Rate#1515).

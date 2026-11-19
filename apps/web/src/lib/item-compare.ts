@@ -283,17 +283,43 @@ export function versusHref(
   return `/compare/${first}-vs-${second}`;
 }
 
+const ITEM_ANSWER_SLUG_REGEX = /^[a-zA-Z0-9][a-zA-Z0-9._-]{0,159}$/;
+const UNSAFE_ITEM_SLUG_KEYS = new Set([
+  '__proto__',
+  'constructor',
+  'prototype',
+  'tostring',
+  'tolocalestring',
+  'valueof',
+  'hasownproperty',
+  'isprototypeof',
+  'propertyisenumerable',
+]);
+
+function getOwnRecordField(record: unknown, key: string): unknown {
+  return record &&
+    typeof record === 'object' &&
+    !Array.isArray(record) &&
+    Object.prototype.hasOwnProperty.call(record, key)
+    ? (record as Record<string, unknown>)[key]
+    : undefined;
+}
+
 /**
  * The Item slug a `/api/v1/rate/products/{slug}` answer names (its `item`,
- * RATE_ITEM_MODEL on), else the slug itself (DOS/Rate#1294).
+ * RATE_ITEM_MODEL on), else the slug itself (DOS/Rate#1294, DOS/Rate#1768).
  */
 export function itemSlugFromProductAnswer(json: unknown, slug: string): string {
-  const itemSlug =
-    json && typeof json === 'object' && (json as { ok?: unknown }).ok === true
-      ? (json as { data?: { item?: { slug?: unknown } } }).data?.item?.slug
+  const item =
+    getOwnRecordField(json, 'ok') === true
+      ? getOwnRecordField(getOwnRecordField(json, 'data'), 'item')
       : undefined;
+  const itemSlug = getOwnRecordField(item, 'slug');
   return typeof itemSlug === 'string' &&
-    /^[a-z0-9][a-z0-9._-]{0,159}$/.test(itemSlug)
+    ITEM_ANSWER_SLUG_REGEX.test(itemSlug) &&
+    !itemSlug.includes('..') &&
+    !itemSlug.endsWith('.') &&
+    !UNSAFE_ITEM_SLUG_KEYS.has(itemSlug.toLowerCase())
     ? itemSlug
     : slug;
 }
