@@ -419,7 +419,8 @@ export function buildDealRadarMarkdown(params: {
       const safeCurrent = sanitizeDealRadarPriceVnd(g.priceCurrent);
       const safeMedian = sanitizeDealRadarPriceVnd(g.marketMedianPrice);
       const safeSavings = sanitizeDealRadarPriceVnd(g.savingsVsMedianVnd);
-      return `| ${sanitizeDealFinderMarkdownCell(g.productName)} | ${sanitizeDealFinderMarkdownCell(g.platform.toUpperCase())} (${sanitizeDealFinderMarkdownCell(g.merchantName)}) | ${safeCurrent != null ? `**${formatNumber(safeCurrent, locale)} ₫**` : '-'} | ${safeMedian != null ? `${formatNumber(safeMedian, locale)} ₫` : '-'} | ${safeSavings != null ? `-${formatNumber(safeSavings, locale)} ₫ (-${g.savingsVsMedianPct}%)` : '-'} | ${g.jreviewsScore10 != null && g.jreviewsScore10 > 0 ? `${formatScoreFixed(g.jreviewsScore10, 1)}/10` : t('noScore')} |`;
+      const safeSavingsPct = formatPlainNumber(g.savingsVsMedianPct, locale);
+      return `| ${sanitizeDealFinderMarkdownCell(g.productName)} | ${sanitizeDealFinderMarkdownCell(g.platform.toUpperCase())} (${sanitizeDealFinderMarkdownCell(g.merchantName)}) | ${safeCurrent != null ? `**${formatNumber(safeCurrent, locale)} ₫**` : '-'} | ${safeMedian != null ? `${formatNumber(safeMedian, locale)} ₫` : '-'} | ${safeSavings != null ? `-${formatNumber(safeSavings, locale)} ₫ (-${safeSavingsPct}%)` : '-'} | ${g.jreviewsScore10 != null && g.jreviewsScore10 > 0 ? `${formatScoreFixed(g.jreviewsScore10, 1)}/10` : t('noScore')} |`;
     }),
     '',
     t('radarMdFakeTitle'),
@@ -432,7 +433,8 @@ export function buildDealRadarMarkdown(params: {
         trap.priceCurrent
       );
       const safeMedian = sanitizeDealRadarPriceVnd(trap.marketMedianPrice);
-      return `| ${sanitizeDealFinderMarkdownCell(trap.productName)} | ${sanitizeDealFinderMarkdownCell(trap.platform.toUpperCase())} (${sanitizeDealFinderMarkdownCell(trap.merchantName)}) | ${safeCurrent != null ? `${formatNumber(safeCurrent, locale)} ₫` : '-'} | ${claimedOrig != null ? `${formatNumber(claimedOrig, locale)} ₫` : '-'} | ${safeMedian != null ? `${formatNumber(safeMedian, locale)} ₫` : '-'} | **+${trap.fakeMarkupPct}%** |`;
+      const safeMarkupPct = formatPlainNumber(trap.fakeMarkupPct, locale);
+      return `| ${sanitizeDealFinderMarkdownCell(trap.productName)} | ${sanitizeDealFinderMarkdownCell(trap.platform.toUpperCase())} (${sanitizeDealFinderMarkdownCell(trap.merchantName)}) | ${safeCurrent != null ? `${formatNumber(safeCurrent, locale)} ₫` : '-'} | ${claimedOrig != null ? `${formatNumber(claimedOrig, locale)} ₫` : '-'} | ${safeMedian != null ? `${formatNumber(safeMedian, locale)} ₫` : '-'} | **+${safeMarkupPct}%** |`;
     }),
     '',
     t('radarMdSpreadTitle'),
@@ -442,7 +444,8 @@ export function buildDealRadarMarkdown(params: {
       const safeMin = sanitizeDealRadarPriceVnd(s.minPrice);
       const safeMax = sanitizeDealRadarPriceVnd(s.maxPrice);
       const safeSpread = sanitizeDealRadarPriceVnd(s.spreadVnd);
-      return `| ${sanitizeDealFinderMarkdownCell(s.productName)} | ${sanitizeDealFinderMarkdownCell(s.cheapestPlatform.toUpperCase())} (${sanitizeDealFinderMarkdownCell(s.cheapestMerchantName)}) | ${sanitizeDealFinderMarkdownCell(s.priciestPlatform.toUpperCase())} (${sanitizeDealFinderMarkdownCell(s.priciestMerchantName)}) | ${safeMin != null ? `**${formatNumber(safeMin, locale)} ₫**` : '-'} | ${safeMax != null ? `${formatNumber(safeMax, locale)} ₫` : '-'} | ${safeSpread != null ? `**-${formatNumber(safeSpread, locale)} ₫ (${s.spreadPct}%)**` : '-'} |`;
+      const safeSpreadPct = formatPlainNumber(s.spreadPct, locale);
+      return `| ${sanitizeDealFinderMarkdownCell(s.productName)} | ${sanitizeDealFinderMarkdownCell(s.cheapestPlatform.toUpperCase())} (${sanitizeDealFinderMarkdownCell(s.cheapestMerchantName)}) | ${sanitizeDealFinderMarkdownCell(s.priciestPlatform.toUpperCase())} (${sanitizeDealFinderMarkdownCell(s.priciestMerchantName)}) | ${safeMin != null ? `**${formatNumber(safeMin, locale)} ₫**` : '-'} | ${safeMax != null ? `${formatNumber(safeMax, locale)} ₫` : '-'} | ${safeSpread != null ? `**-${formatNumber(safeSpread, locale)} ₫ (${safeSpreadPct}%)**` : '-'} |`;
     }),
   ];
   return lines.join('\n');
@@ -536,13 +539,16 @@ export function buildDealsMarkdown(params: {
     radarIndex,
   } = params;
   const safeBudget = sanitizeDealFinderBudgetVnd(maxBudgetVnd);
+  const safeUrl = String(url ?? '')
+    .replace(/[\r\n\p{Cc}]+/gu, '')
+    .trim();
   const lines = [
     t('dealsMdHeader', { count: rankedDeals.length }),
     t('dealsMdBudgetLine', {
       budget: formatNumber(safeBudget, locale),
       persona: sanitizeDealFinderMarkdownCell(personaLabel),
     }),
-    t('dealsMdUrlLine', { url }),
+    t('dealsMdUrlLine', { url: safeUrl }),
     '',
     t('dealsMdTableHead'),
     '| --- | --- | --- | --- | --- | --- | --- | --- |',

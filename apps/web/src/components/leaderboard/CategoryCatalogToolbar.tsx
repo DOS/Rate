@@ -348,7 +348,7 @@ export default function CategoryCatalogToolbar({
   return (
     <div className="rate-card rate-catalog-toolbar mb-3">
       <div className="d-flex justify-content-between align-items-center flex-wrap gap-2">
-        {products.length >= 2 ? (
+        {effectiveSlugA && effectiveSlugB ? (
           <div className="d-flex align-items-center flex-grow-1 flex-wrap gap-2">
             <span className="rate-catalog-toolbar-label">
               {t('toolbar.quick1v1Label', { title: safeCategoryTitle })}

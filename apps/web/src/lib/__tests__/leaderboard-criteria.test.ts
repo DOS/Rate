@@ -61,7 +61,7 @@ import {
   type RadarSignal,
 } from '../deal-radar';
 import { discountVerdictCopy } from '../discount-verdict-copy';
-import { versusHref } from '../item-compare';
+import { compareTarget, parseCompareToken, versusHref } from '../item-compare';
 import type { ItemCatalogRow } from '../item-directory';
 import { formatNumber } from '../locale-format';
 import { MAX_VALID_VND_PRICE } from '../rate-domain';
@@ -1681,6 +1681,78 @@ assert.equal(
       ]),
       '/compare?cat=smartphones&slugs=apple-iphone-16,samsung-galaxy-s24,sold-out-phone'
     );
+
+    // Multi-variant Item cards (e.g. ?storage=512) pin item_slug@variant_key
+    // so /compare keeps the displayed 512GB variant instead of default 128GB.
+    const iphone512Row = {
+      id: 'v512',
+      slug: 'apple-iphone-16-512gb',
+      item_slug: 'apple-iphone-16',
+      item_variants: [
+        {
+          id: 'v128',
+          variant_key: '128gb',
+          storage_gb: 128,
+          min_price: 19_990_000,
+        },
+        {
+          id: 'v512',
+          variant_key: '512gb',
+          storage_gb: 512,
+          min_price: 25_990_000,
+        },
+      ],
+    };
+    const galaxy512Row = {
+      id: 's512',
+      slug: 'samsung-galaxy-s24-512gb',
+      item_slug: 'samsung-galaxy-s24',
+      item_variants: [
+        {
+          id: 's256',
+          variant_key: '256gb',
+          storage_gb: 256,
+          min_price: 18_990_000,
+        },
+        {
+          id: 's512',
+          variant_key: '512gb',
+          storage_gb: 512,
+          min_price: 22_490_000,
+        },
+      ],
+    };
+    const pinnedHref = buildCatalogQuickCompareHref('smartphones', [
+      iphone512Row,
+      { ...iphone512Row, id: 'v128', slug: 'apple-iphone-16-128gb' },
+      galaxy512Row,
+    ]);
+    assert.equal(
+      pinnedHref,
+      '/compare?cat=smartphones&slugs=apple-iphone-16@512gb,samsung-galaxy-s24@512gb'
+    );
+    const firstToken =
+      new URL(pinnedHref, 'https://rate.vn').searchParams
+        .get('slugs')
+        ?.split(',')[0] ?? '';
+    assert.equal(
+      compareTarget(
+        {
+          kind: 'item',
+          item: {
+            id: 'item-iphone-16',
+            slug: 'apple-iphone-16',
+            default_variant_id: 'v128',
+          },
+          variants: [
+            { id: 'v128', slug: 'apple-iphone-16-128gb', variant_key: '128gb' },
+            { id: 'v512', slug: 'apple-iphone-16-512gb', variant_key: '512gb' },
+          ],
+        },
+        parseCompareToken(firstToken)
+      )?.variantSlug,
+      'apple-iphone-16-512gb'
+    );
   });
 
   const toolbarHtml = renderToStaticMarkup(
@@ -1705,6 +1777,38 @@ assert.equal(
     toolbarHtml,
     /href="\/en\/compare\/apple-iphone-16-vs-samsung-galaxy-s24"|href="\/compare\/apple-iphone-16-vs-samsung-galaxy-s24"/,
     'CategoryCatalogToolbar 1v1 Go button links directly to canonical Item slugs'
+  );
+
+  const sameItemToolbarHtml = renderToStaticMarkup(
+    React.createElement(
+      Provider,
+      {
+        locale: 'en',
+        messages: pickClientMessages(
+          enMessages as unknown as Record<string, unknown>,
+          'catalog'
+        ),
+        timeZone: 'Asia/Ho_Chi_Minh',
+      },
+      React.createElement(CategoryCatalogToolbar, {
+        categorySlug: 'smartphones',
+        categoryTitle: 'Smartphones',
+        products: [
+          secondItemRow,
+          { ...secondItemRow, slug: 'apple-iphone-16-512gb' },
+        ],
+      })
+    )
+  );
+  assert.doesNotMatch(
+    sameItemToolbarHtml,
+    /<select\b/,
+    'CategoryCatalogToolbar hides 1v1 picker instead of rendering an empty <select> when all rows share one Item'
+  );
+  assert.match(
+    sameItemToolbarHtml,
+    /data-testid="download-catalog-csv-btn"/,
+    'CategoryCatalogToolbar still renders export menu when all rows share one Item'
   );
 
   // 5. Source-level guards for DealFinderWorkspace.tsx and smartphones/page.tsx (#1745).

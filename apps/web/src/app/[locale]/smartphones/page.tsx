@@ -30,7 +30,11 @@ import {
   SORT_OPTIONS,
   type ProductSortOption,
 } from '@/lib/category-filters';
-import { catalogRowSlug, itemSizeChips } from '@/lib/item-directory';
+import {
+  catalogRowSlug,
+  itemSizeChips,
+  type ItemVariantChip,
+} from '@/lib/item-directory';
 import PageShell from '../components/page-shell';
 import ListSidebarOne from '../components/list-sidebar-one';
 import CompareTrayBar from '@/components/compare/CompareTrayBar';
@@ -153,21 +157,60 @@ export function buildCatalogPageItemSlugMap(
   return map;
 }
 
+const QUICK_COMPARE_PIN_RE =
+  /^[a-z0-9][a-z0-9._-]{0,159}@[a-z0-9][a-z0-9-]{0,40}$/i;
+
+export type CatalogQuickCompareRow = {
+  id?: string;
+  slug: string;
+  item_slug?: string;
+  item_variants?: readonly ItemVariantChip[];
+};
+
 export function buildCatalogQuickCompareSlugs(
-  rows: readonly { slug: string; item_slug?: string }[]
+  rows: readonly CatalogQuickCompareRow[]
 ): string[] {
-  return Array.from(
-    new Set(rows.map((p) => catalogRowSlug(p).trim()).filter(Boolean))
-  ).slice(0, 3);
+  const seenKeys = new Set<string>();
+  const out: string[] = [];
+  for (const row of rows) {
+    if (!row || typeof row.slug !== 'string') continue;
+    const rawSlug = row.slug.trim();
+    const itemSlug = catalogRowSlug(row).trim();
+    const dedupeKey = (itemSlug || rawSlug).toLowerCase();
+    if (!dedupeKey || seenKeys.has(dedupeKey)) continue;
+
+    let token = itemSlug || rawSlug;
+    if (
+      row.item_slug &&
+      Array.isArray(row.item_variants) &&
+      row.item_variants.length > 1
+    ) {
+      const matched = row.id
+        ? row.item_variants.find((v) => v.id === row.id)
+        : undefined;
+      const pinned =
+        matched && typeof matched.variant_key === 'string'
+          ? `${itemSlug}@${matched.variant_key.trim().toLowerCase()}`
+          : '';
+      token =
+        pinned && QUICK_COMPARE_PIN_RE.test(pinned) ? pinned : rawSlug || token;
+    }
+
+    if (!token) continue;
+    seenKeys.add(dedupeKey);
+    out.push(token);
+    if (out.length >= 3) break;
+  }
+  return out;
 }
 
 export function buildCatalogQuickCompareHref(
   categorySlug: string,
-  rows: readonly { slug: string; item_slug?: string }[]
+  rows: readonly CatalogQuickCompareRow[]
 ): string {
   const slugs = buildCatalogQuickCompareSlugs(rows);
   return `/compare?cat=${encodeURIComponent(categorySlug)}&slugs=${slugs
-    .map((s) => encodeURIComponent(s))
+    .map((s) => encodeURIComponent(s).replace(/%40/gi, '@'))
     .join(',')}`;
 }
 
@@ -780,14 +823,15 @@ export async function CategoryCatalogContent({
                         products[1] && (
                           <IntentLink
                             href={
-                              itemSlugBySlug[versusPairA.slug] ||
-                              itemSlugBySlug[versusPairB.slug]
-                                ? versusHref(
+                              versusPairB === products[1] &&
+                              !itemSlugBySlug[versusPairA.slug] &&
+                              !itemSlugBySlug[versusPairB.slug]
+                                ? versusHref(products[0].slug, products[1].slug)
+                                : versusHref(
                                     versusPairA.slug,
                                     versusPairB.slug,
                                     itemSlugBySlug
                                   )
-                                : versusHref(products[0].slug, products[1].slug)
                             }
                             className="rate-results-link"
                           >
