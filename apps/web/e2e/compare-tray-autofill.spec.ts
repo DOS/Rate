@@ -48,6 +48,38 @@ test('a shared /compare link does not replace the saved tray', async ({
   expect(JSON.parse((await readTray(page)) ?? '[]')).toHaveLength(1);
 });
 
+test('a cold shared link renders the pinned size and its single-size peer in order', async ({
+  page,
+}) => {
+  await page.goto('/compare?slugs=e2e-variant-phone@256gb,e2e-solo-phone');
+  const columns = page.locator('thead .rate-remove-target');
+  await expect(columns).toHaveCount(2);
+  await expect(columns.nth(0)).toHaveAttribute(
+    'aria-label',
+    /E2E Variant Phone 256GB/
+  );
+  await expect(columns.nth(1)).toHaveAttribute(
+    'aria-label',
+    /E2E Solo Phone 128GB/
+  );
+  expect(await readTray(page)).toBeNull();
+});
+
+test('going back to an ambiguous bare link clears the previous comparison', async ({
+  page,
+}) => {
+  const ambiguousLink = '/compare?slugs=e2e-variant-phone';
+  await page.goto(ambiguousLink);
+  const columns = page.locator('thead .rate-remove-target');
+  await expect(columns).toHaveCount(0);
+  await page.locator('footer a[href="/compare"]').first().click();
+  await expect(page).toHaveURL(/\/compare$/);
+  await expect(columns.first()).toBeVisible();
+  await page.goBack();
+  await expect(page).toHaveURL(ambiguousLink);
+  await expect(columns).toHaveCount(0);
+});
+
 test('removing a device on /compare still updates the tray', async ({
   page,
 }) => {

@@ -2,7 +2,6 @@
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
-import { redirect, useSearchParams } from 'next/navigation';
 import type { IconType } from 'react-icons';
 import {
   BsAspectRatio,
@@ -89,7 +88,6 @@ import {
   canonicalVersusOrder,
   isParseableVersusPair,
   itemSlugFromProductAnswer,
-  parseCompareToken,
   productFromProductAnswer,
   versusHref,
 } from '@/lib/item-compare';
@@ -719,157 +717,6 @@ export function startCompareItemLookup(
     }
     settle(itemSlug);
   })();
-}
-
-function isLegacyCompareSlug(slug: string | null): slug is string {
-  return (
-    !!slug &&
-    /^(?=.*[a-z0-9])[a-z0-9._-]{1,120}$/i.test(slug) &&
-    !slug.startsWith('.') &&
-    !slug.endsWith('.') &&
-    !slug.includes('..') &&
-    !/^(?:0+|null|undefined|nan|none|-?infinity|true|false|__proto__|constructor|prototype)$/i.test(
-      slug
-    )
-  );
-}
-
-interface CompareFallbackTarget {
-  token: string;
-  master: string;
-}
-
-/** Keep the original slot order and the first size requested for each Item. */
-export function planComparePinFallback(params: URLSearchParams) {
-  const tokens = [
-    ...new Set(
-      (params.get('slugs') ?? '')
-        .split(',')
-        .map((slug) => slug.trim())
-        .filter(Boolean)
-    ),
-  ].slice(0, MAX_COMPARE_ITEMS);
-  const seenItems = new Set<string>();
-  const masters = new Set<string>();
-  const targets: CompareFallbackTarget[] = [];
-  let recoveredPin = false;
-  let needsVariantRead = false;
-  for (const token of tokens) {
-    const { slug, variantKey } = parseCompareToken(token);
-    if (
-      seenItems.has(slug) ||
-      (!variantKey && !isLegacyCompareSlug(slug)) ||
-      slug.includes('..') ||
-      slug.endsWith('.')
-    )
-      continue;
-    const hint = params.get(`variant.${token.toLowerCase()}`);
-    const suffix = `-${variantKey}`;
-    const derived =
-      variantKey && variantKey !== 'standard' && !slug.endsWith(suffix)
-        ? slug + suffix
-        : slug;
-    const master = isLegacyCompareSlug(hint) ? hint.toLowerCase() : derived;
-    if (!isLegacyCompareSlug(master)) continue;
-    seenItems.add(slug);
-    if (variantKey) recoveredPin = true;
-    if (masters.has(master)) continue;
-    masters.add(master);
-    targets.push({ token, master });
-    // An Item read on a second page request could discard a legacy-only
-    // master or select the default size of an Item sharing its master's slug.
-    if (!/^[a-z0-9]/i.test(master) || (variantKey && master === slug)) {
-      needsVariantRead = true;
-    }
-  }
-  if (!recoveredPin) return null;
-  const query = new URLSearchParams(params);
-  for (const token of tokens) query.delete(`variant.${token.toLowerCase()}`);
-  query.set('slugs', [...masters].join(','));
-  return { href: `/compare?${query}`, targets, needsVariantRead };
-}
-
-/** The compare API accepts legacy master slugs as well as canonical pins. */
-export async function readCompareFallbackMaster(
-  { token, master }: CompareFallbackTarget,
-  signal: AbortSignal
-): Promise<MasterProduct | null> {
-  const slugs = parseCompareToken(token).variantKey
-    ? `${token},${master}`
-    : master;
-  try {
-    const response = await fetch(
-      `/api/v1/rate/compare?${new URLSearchParams({ slugs })}`,
-      { signal }
-    );
-    if (!response.ok) return null;
-    const json = await response.json();
-    return json?.ok === true && Array.isArray(json.data)
-      ? (json.data.find((row: MasterProduct | null) => row?.slug === master) ??
-          null)
-      : null;
-  } catch {
-    return null;
-  }
-}
-
-function CompareFallbackMasters({
-  targets,
-  workspace,
-}: {
-  targets: readonly CompareFallbackTarget[];
-  workspace: CompareWorkspaceProps;
-}) {
-  const t = useTranslations('compare');
-  const [rows, setRows] = useState<MasterProduct[] | null>(null);
-  const { initialProducts } = workspace;
-  useEffect(() => {
-    const controller = new AbortController();
-    const signal = AbortSignal.any([
-      controller.signal,
-      AbortSignal.timeout(COMPARE_ITEM_LOOKUP_TIMEOUT_MS),
-    ]);
-    void Promise.all(
-      targets.map(
-        (target) =>
-          initialProducts.find((row) => row.slug === target.master) ??
-          readCompareFallbackMaster(target, signal)
-      )
-    ).then((results) => {
-      if (!controller.signal.aborted)
-        setRows(results.filter((row): row is MasterProduct => row !== null));
-    });
-    return () => controller.abort();
-  }, [targets, initialProducts]);
-  if (!rows)
-    return (
-      <div
-        role="status"
-        aria-busy="true"
-        aria-label={t('pageTitle')}
-        className="spinner-border"
-      />
-    );
-  return <CompareWorkspaceContent {...workspace} initialProducts={rows} />;
-}
-
-// Only the dynamic matrix reads search params. Conventional masters can
-// be recovered by a render-time redirect before hydration.
-function ComparePinFallbackWorkspace(props: CompareWorkspaceProps) {
-  const params = useSearchParams();
-  const fallback = useMemo(
-    () => params && planComparePinFallback(params),
-    [params]
-  );
-  if (!fallback) return <CompareWorkspaceContent {...props} />;
-  if (!fallback.needsVariantRead) redirect(fallback.href);
-  return (
-    <CompareFallbackMasters
-      key={params.toString()}
-      targets={fallback.targets}
-      workspace={props}
-    />
-  );
 }
 
 export type CompareReplaceTranslate = (key: 'replaceDeviceBtn') => string;
@@ -1766,18 +1613,7 @@ export function filterSpecGroupsForCategory(
     .filter((group) => group.rows.length > 0);
 }
 
-export default function CompareWorkspace(props: CompareWorkspaceProps) {
-  if (
-    props.layout !== 'versus' &&
-    props.hasExplicitSlugs &&
-    !props.itemSlugBySlug
-  ) {
-    return <ComparePinFallbackWorkspace {...props} />;
-  }
-  return <CompareWorkspaceContent {...props} />;
-}
-
-function CompareWorkspaceContent({
+export default function CompareWorkspace({
   initialProducts,
   catalogCandidates,
   initialCategory = 'smartphones',
@@ -2066,20 +1902,20 @@ function CompareWorkspaceContent({
 
   // Sync local products state when server initialProducts prop updates (e.g. Back/Forward navigation)
   useEffect(() => {
-    if (initialProducts.length > 0) {
-      const cat = getMasterProductCategorySlug(initialProducts[0]!);
-      cancelPendingCompareReplaceFocus(
-        replaceFocusTimerRef,
-        scheduledReplaceIndexRef
-      );
-      activeReplaceIndexRef.current = null;
-      setReplaceIndex(null);
-      setActiveCategory(cat);
-      setProducts(
-        initialProducts.filter((p) => getMasterProductCategorySlug(p) === cat)
-      );
-    }
-  }, [initialProducts]);
+    const first = initialProducts[0];
+    if (!first && !hasExplicitSlugs) return;
+    const cat = first ? getMasterProductCategorySlug(first) : initialCategory;
+    cancelPendingCompareReplaceFocus(
+      replaceFocusTimerRef,
+      scheduledReplaceIndexRef
+    );
+    activeReplaceIndexRef.current = null;
+    setReplaceIndex(null);
+    setActiveCategory(cat);
+    setProducts(
+      initialProducts.filter((p) => getMasterProductCategorySlug(p) === cat)
+    );
+  }, [initialProducts, initialCategory, hasExplicitSlugs]);
 
   // If user visits /compare without ?slugs=, restore their saved Compare Tray (strictly filtered to same category)
   useEffect(() => {

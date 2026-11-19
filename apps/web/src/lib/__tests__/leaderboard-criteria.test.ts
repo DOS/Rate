@@ -11,10 +11,6 @@ import {
   AppRouterContext,
   type AppRouterInstance,
 } from 'next/dist/shared/lib/app-router-context.shared-runtime';
-import { SearchParamsContext } from 'next/dist/shared/lib/hooks-client-context.shared-runtime';
-import { getURLFromRedirectError } from 'next/dist/client/components/redirect';
-import { isRedirectError } from 'next/dist/client/components/redirect-error';
-import { sanitizeCachedCompareSlugsCsv } from '../../server/rate';
 import {
   getItemSlugsFor,
   whenItemModel,
@@ -31,8 +27,6 @@ import CompareWorkspace, {
   buildCompareMarkdownMinPriceRow,
   buildCompareVersusSlugMap,
   cancelPendingCompareReplaceFocus,
-  planComparePinFallback,
-  readCompareFallbackMaster,
   computeCompareHeadToHeadSummary,
   formatComparePriceVnd,
   isSameCompareVersusItem,
@@ -2122,7 +2116,7 @@ assert.equal(
     );
     assert.match(
       leaderboardHtml,
-      /href="(?:\/en)?\/compare\?cat=smartphones&amp;slugs=apple-iphone-16,samsung-galaxy-s24,sold-out-phone"/,
+      /href="(?:\/en)?\/compare\?cat=smartphones&amp;slugs=apple-iphone-16,samsung-galaxy-s24,sold-out-phone&amp;variant\.apple-iphone-16=apple-iphone-16-256gb/,
       'LeaderboardExplorer Compare Top 3 CTA must use canonical Item slugs'
     );
 
@@ -2170,7 +2164,7 @@ assert.equal(
     );
     assert.match(
       leaderboardHtml,
-      /href="(?:\/en)?\/compare\?category=smartphones&amp;slugs=apple-iphone-16,samsung-galaxy-s24"/,
+      /href="(?:\/en)?\/compare\?category=smartphones&amp;slugs=apple-iphone-16,samsung-galaxy-s24&amp;variant\.apple-iphone-16=apple-iphone-16-256gb/,
       'LeaderboardExplorer Showdowns Compare Matrix CTA must use canonical Item slugs'
     );
     assert.match(
@@ -3164,7 +3158,7 @@ test('an aborted lookup cannot publish or release its replacement', async (t) =>
   assert.equal(pending.size, 0);
 });
 
-test('a shared leaderboard pin recovers the represented masters on the compare render', () => {
+test('a shared leaderboard link includes its irregular pinned master and bare peer', () => {
   const entries = resolveLeaderboardCompareEntries([
     {
       product: {
@@ -3182,71 +3176,8 @@ test('a shared leaderboard pin recovers the represented masters on the compare r
     'https://rate.test'
   ).searchParams;
   assert.equal(query.get('slugs'), 'acme@1024gb,peer');
-  const router: AppRouterInstance = {
-    back() {},
-    forward() {},
-    refresh() {},
-    push() {},
-    replace() {},
-    prefetch() {},
-    bfcacheId: 'compare-pin',
-  };
-  const Provider = NextIntlClientProvider as React.ComponentType<
-    Partial<React.ComponentProps<typeof NextIntlClientProvider>>
-  >;
-  const render = (itemSlugBySlug?: Record<string, string>) =>
-    renderToStaticMarkup(
-      React.createElement(
-        SearchParamsContext.Provider,
-        { value: query },
-        React.createElement(
-          AppRouterContext.Provider,
-          { value: router },
-          React.createElement(
-            Provider,
-            { locale: 'en', messages: enMessages, timeZone: 'UTC' },
-            React.createElement(CompareWorkspace, {
-              initialProducts: [],
-              catalogCandidates: [],
-              hasExplicitSlugs: true,
-              itemSlugBySlug,
-            })
-          )
-        )
-      )
-    );
-  assert.doesNotThrow(() => render({}));
-  assert.throws(
-    () => render(),
-    (err) => {
-      assert.ok(isRedirectError(err));
-      const url = new URL(getURLFromRedirectError(err), 'https://rate.test');
-      assert.equal(url.pathname, '/compare');
-      assert.equal(url.searchParams.get('cat'), 'tablets');
-      assert.equal(
-        sanitizeCachedCompareSlugsCsv(url.searchParams.get('slugs')),
-        'acme-retail-1tb,peer-retail'
-      );
-      assert.equal(planComparePinFallback(url.searchParams), null);
-      return true;
-    }
-  );
-});
-
-test('older pins without hints derive the master slug once per Item, in order', () => {
-  const query = new URLSearchParams({
-    slugs: 'Acme@256GB,acme@128gb,peer-512gb@512gb,base@standard',
-    'variant.acme@256gb': 'bad,extra',
-  });
-  const plan = planComparePinFallback(query);
-  assert.ok(plan);
-  const slugs = new URL(plan.href, 'https://rate.test').searchParams.get(
-    'slugs'
-  );
-  assert.equal(
-    sanitizeCachedCompareSlugsCsv(slugs),
-    'acme-256gb,peer-512gb,base'
-  );
+  assert.equal(query.get('variant.acme@1024gb'), 'acme-retail-1tb');
+  assert.equal(query.get('variant.peer'), 'peer-retail');
 });
 
 test('a directory outage distinguishes an empty Item selection from no selection', async (t) => {
@@ -3280,79 +3211,16 @@ test('a later failed compare read preserves the selection that already resolved'
   assert.deepEqual(await getItemSlugsFor(slugs, selected), {});
 });
 
-test('a legacy-only master or shared Item slug keeps its requested size across a second Item read', async (t) => {
-  const queries: string[] = [];
-  t.mock.method(globalThis, 'fetch', async (input: string) => {
-    const slugs = new URL(input, 'https://rate.test').searchParams.get(
-      'slugs'
-    )!;
-    queries.push(slugs);
-    const master = slugs.split(',').at(-1)!;
-    return Response.json({
-      ok: true,
-      data: [phone('different-size', 4), phone(master, 5)],
-    });
-  });
-  const query = new URLSearchParams({
-    slugs: 'ACME@1024gb,base@256gb,peer',
-    'variant.acme@1024gb': '_acme-1tb',
-    'variant.base@256gb': 'base',
-    'variant.peer': 'peer-retail',
-  });
-  const plan = planComparePinFallback(query);
-  assert.ok(plan?.needsVariantRead);
-  const signal = new AbortController().signal;
-  const products = await Promise.all(
-    plan.targets.map((target) => readCompareFallbackMaster(target, signal))
-  );
-  assert.deepEqual(queries, [
-    'ACME@1024gb,_acme-1tb',
-    'base@256gb,base',
-    'peer-retail',
+test('an all-bare leaderboard link records the published masters it represents', () => {
+  const entries = resolveLeaderboardCompareEntries([
+    { product: { item_slug: 'acme', slug: 'acme-retail-1tb' } },
+    { product: { item_slug: 'peer', slug: 'peer-512gb' } },
   ]);
-  assert.deepEqual(
-    products.map((p) => p?.slug),
-    ['_acme-1tb', 'base', 'peer-retail']
-  );
-});
-
-test('a conventional pin keeps the exact retail slug of its unpinned peer', () => {
-  const url = new URL(
-    leaderboardCompareHref(
-      [
-        { token: 'acme@256gb', variantSlug: 'acme-256gb' },
-        { token: 'peer', variantSlug: 'peer-retail' },
-      ],
-      'smartphones',
-      'category'
-    ),
+  const query = new URL(
+    leaderboardCompareHref(entries, 'smartphones', 'category'),
     'https://rate.test'
-  );
-  const plan = planComparePinFallback(url.searchParams);
-  assert.deepEqual(
-    plan?.targets.map((target) => target.master),
-    ['acme-256gb', 'peer-retail']
-  );
-});
-
-test('a pinned comparison redirects to the size-suffixed master of its unpinned peer', () => {
-  const url = new URL(
-    leaderboardCompareHref(
-      [
-        { token: 'acme@256gb', variantSlug: 'acme-256gb' },
-        { token: 'peer', variantSlug: 'peer-512gb' },
-      ],
-      'smartphones',
-      'cat'
-    ),
-    'https://rate.test'
-  );
-  assert.equal(url.searchParams.get('variant.peer'), 'peer-512gb');
-  const plan = planComparePinFallback(url.searchParams);
-  assert.ok(plan);
-  assert.equal(plan.needsVariantRead, false);
-  assert.equal(
-    new URL(plan.href, url).searchParams.get('slugs'),
-    'acme-256gb,peer-512gb'
-  );
+  ).searchParams;
+  assert.equal(query.get('slugs'), 'acme,peer');
+  assert.equal(query.get('variant.acme'), 'acme-retail-1tb');
+  assert.equal(query.get('variant.peer'), 'peer-512gb');
 });
