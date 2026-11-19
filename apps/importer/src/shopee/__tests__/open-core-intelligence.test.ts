@@ -2135,13 +2135,16 @@ async function runSuite() {
   assert.equal(synced.specifications.battery?.fast_charging_w, 100);
   assert.equal(synced.specifications.battery?.reverse_charging, true);
   // The page states no network: 5G is unknown and no cellular group is invented (#1196).
+  // It states no sound or SAR either: no multimedia or regulatory group is invented (#1754).
   assert.equal(synced.has5g, null);
   assert.equal(
     countPopulatedFieldGroups(synced.specifications as unknown as Record<string, unknown>),
-    9
+    7
   );
   const syncedWithNetwork = parseGsmArenaHtmlToSpecs(
-    `${sampleGsmHtml}<td data-spec="nettech">GSM / CDMA / HSPA / LTE / 5G</td>`
+    `${sampleGsmHtml}<td data-spec="nettech">GSM / CDMA / HSPA / LTE / 5G</td>` +
+      `<td data-spec="loudspeaker">Yes, with stereo speakers</td>` +
+      `<td data-spec="sar-us">1.10 W/kg (head)</td>`
   );
   assert.equal(syncedWithNetwork.has5g, true);
   assert.equal(
@@ -2829,8 +2832,8 @@ async function runSuite() {
     assert.equal(watchUltra.specifications.design?.biometrics, undefined);
     assert.equal(watchUltra.specifications.regulatory?.sar_head, undefined);
 
-    // Smartphones retain their biometrics. Only a non-Apple phone outside the registry keeps
-    // the template SAR: an Apple or registry phone gets only a sourced one (DOS/Rate#1748).
+    // Smartphones retain their biometrics. A phone gets only a sourced SAR (DOS/Rate#1748,
+    // #1754): no template value, inside the registry or outside it.
     assert.equal(s24.specifications.regulatory?.sar_head, undefined);
     assert.equal(s24.specifications.regulatory?.sar_body, undefined);
     assert.equal(s24.specifications.design?.biometrics, 'Fingerprint (under display), Face unlock');
@@ -2840,8 +2843,8 @@ async function runSuite() {
     const offRegistry = normalizer.normalize(
       createDummyShopeeProduct('Xiaomi Redmi Note 99 Pro 256GB')
     );
-    assert.equal(offRegistry.specifications.regulatory?.sar_head, '1.10 W/kg');
-    assert.equal(offRegistry.specifications.regulatory?.sar_body, '1.15 W/kg');
+    assert.equal(offRegistry.specifications.regulatory?.sar_head, undefined);
+    assert.equal(offRegistry.specifications.regulatory?.sar_body, undefined);
   }
   console.log(
     '  ✅ [14/14] Earbud :unknown Keys, AirPods Pro Years, iPad RAM & Non-Phone Spec Hygiene (#643, #657) passed'
