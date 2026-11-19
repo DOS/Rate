@@ -25,9 +25,71 @@ import {
   PUBLIC_API_CORS_HEADERS,
   jsonApiError,
   parseBoundedStringParam,
+  parseFiniteDecimalInput,
   parseVersusQueryParams,
+  splitComparePinToken,
 } from '@/server/rate/api-handler';
-import { canonicalVersusOrder, versusHref } from '@/lib/item-compare';
+import {
+  canonicalVersusOrder,
+  compareTarget,
+  dedupeCompareTargets,
+  lookupSlugAnyCase,
+  versusHref,
+  type CompareResolution,
+  type VersusPlan,
+} from '@/lib/item-compare';
+import {
+  resolveCompareSlugs,
+  resolveVersusPlan,
+} from '@/server/rate/item-compare';
+import { getItemSlugsFor, whenItemModel } from '@/server/rate/item-directory';
+import {
+  getCachedCatalogSlugResolution,
+  getCachedItemVariants,
+} from '@/server/rate/item-route';
+
+const ITEM_RESOLVER_SLUG_REGEX = /^[a-zA-Z0-9][a-zA-Z0-9._-]{0,159}$/;
+
+async function resolveExtendedVersusTargets(
+  rawSides: readonly [string, string]
+): Promise<string[] | null> {
+  return whenItemModel('versus route tokens', async () => {
+    const targets = await Promise.all(
+      rawSides.map(async (raw) => {
+        const typed = splitComparePinToken(raw, true);
+        const lower = splitComparePinToken(raw, false);
+        if (!ITEM_RESOLVER_SLUG_REGEX.test(typed.slug)) {
+          return typed.variantKey === null
+            ? { variantSlug: lower.slug, itemId: null, itemSlug: null }
+            : null;
+        }
+        const found = await lookupSlugAnyCase(
+          typed.slug,
+          getCachedCatalogSlugResolution
+        );
+        const catalogRes = found.found;
+        const cmpRes: CompareResolution =
+          !catalogRes || catalogRes.kind === 'unlinked'
+            ? { kind: 'unlinked' }
+            : catalogRes.kind === 'item'
+              ? {
+                  kind: 'item',
+                  item: catalogRes.item,
+                  variants: await getCachedItemVariants(catalogRes.item),
+                }
+              : {
+                  kind: 'variant',
+                  item: catalogRes.item,
+                  variant: catalogRes.variant,
+                  variants: await getCachedItemVariants(catalogRes.item),
+                  retired: catalogRes.retired,
+                };
+        return compareTarget(cmpRes, lower);
+      })
+    );
+    return dedupeCompareTargets(targets).map((t) => t.variantSlug);
+  });
+}
 
 export { parseVersusQueryParams };
 
@@ -191,8 +253,71 @@ export async function GET(req: NextRequest) {
       );
     }
 
+    const asTyped =
+      parseVersusQueryParams(searchParams, 120, true) ?? parsedSlugs;
+    const typedA = splitComparePinToken(asTyped[0], true);
+    const typedB = splitComparePinToken(asTyped[1], true);
+    const aInItemGrammar = ITEM_RESOLVER_SLUG_REGEX.test(typedA.slug);
+    const bInItemGrammar = ITEM_RESOLVER_SLUG_REGEX.test(typedB.slug);
+    if (
+      (!aInItemGrammar && typedA.variantKey !== null) ||
+      (!bInItemGrammar && typedB.variantKey !== null)
+    ) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error:
+            'Could not resolve two same-category master products for 1v1 comparison. Verify both slugs exist and belong to the same hardware category.',
+          requested_pair: parsedSlugs,
+        },
+        { status: 404, headers: PUBLIC_API_CORS_HEADERS }
+      );
+    }
+
+    const hasPinnedVariant =
+      typedA.variantKey !== null || typedB.variantKey !== null;
+    let plan: VersusPlan | null = null;
+    if (aInItemGrammar && bInItemGrammar) {
+      plan = await resolveVersusPlan(typedA.slug, typedB.slug);
+      if (plan?.kind === 'not_found') {
+        return NextResponse.json(
+          {
+            ok: false,
+            error:
+              'Could not resolve two same-category master products for 1v1 comparison. Verify both slugs exist and belong to the same hardware category.',
+            requested_pair: parsedSlugs,
+          },
+          { status: 404, headers: PUBLIC_API_CORS_HEADERS }
+        );
+      }
+    }
+
+    let effectivePair: [string, string] = parsedSlugs;
+    if (plan?.kind === 'render' && !hasPinnedVariant) {
+      effectivePair = [plan.slugA, plan.slugB];
+    } else if (plan || hasPinnedVariant || aInItemGrammar !== bInItemGrammar) {
+      const resolved =
+        (await resolveCompareSlugs([])) === null
+          ? null
+          : await resolveExtendedVersusTargets(asTyped);
+      if (resolved) {
+        if (resolved.length < 2 || !resolved[0] || !resolved[1]) {
+          return NextResponse.json(
+            {
+              ok: false,
+              error:
+                'Could not resolve two same-category master products for 1v1 comparison. Verify both slugs exist and belong to the same hardware category.',
+              requested_pair: parsedSlugs,
+            },
+            { status: 404, headers: PUBLIC_API_CORS_HEADERS }
+          );
+        }
+        effectivePair = [resolved[0], resolved[1]];
+      }
+    }
+
     const compared = await getCachedCompareMasterProducts(
-      parsedSlugs.join(',')
+      effectivePair.join(',')
     );
 
     if (compared.length < 2 || !compared[0] || !compared[1]) {
@@ -220,16 +345,22 @@ export async function GET(req: NextRequest) {
       await getCachedFilteredReviewCountsByMaster().catch(
         () => ({}) as Record<string, number>
       );
-    const scoreA = scoreMasterProductForLeaderboard(
+    const rawScoreA = scoreMasterProductForLeaderboard(
       prodA,
       'combined',
       filteredReviewCounts
     );
-    const scoreB = scoreMasterProductForLeaderboard(
+    const scoreA = rawScoreA.slug
+      ? rawScoreA
+      : { ...rawScoreA, slug: prodA.slug };
+    const rawScoreB = scoreMasterProductForLeaderboard(
       prodB,
       'combined',
       filteredReviewCounts
     );
+    const scoreB = rawScoreB.slug
+      ? rawScoreB
+      : { ...rawScoreB, slug: prodB.slug };
 
     const requestedPersonaId = (
       parseBoundedStringParam(searchParams.get('persona'), 32) || 'balanced'
@@ -248,12 +379,9 @@ export async function GET(req: NextRequest) {
       value: 'w_value',
     } as const;
     const weightParam = (key: keyof typeof WEIGHT_PARAMS): number | null => {
-      const raw = parseBoundedStringParam(
-        searchParams.get(WEIGHT_PARAMS[key]),
-        32
-      );
-      if (!raw) return null;
-      const num = Number(raw);
+      const raw = searchParams.get(WEIGHT_PARAMS[key]);
+      if (raw === null) return null;
+      const num = parseFiniteDecimalInput(raw);
       return Number.isFinite(num) ? Math.max(0, Math.min(100, num)) : null;
     };
     const weightKeys = Object.keys(WEIGHT_PARAMS) as Array<
@@ -416,10 +544,20 @@ export async function GET(req: NextRequest) {
           ? scoreB.slug
           : priceSide;
 
-    const offersByMaster = await getMasterProductOffersBatch([
-      prodA.id,
-      prodB.id,
+    const planCanonicalUrl =
+      plan?.kind === 'render'
+        ? plan.canonical
+        : plan?.kind === 'redirect'
+          ? plan.to
+          : null;
+    const [offersByMaster, itemSlugBySlug] = await Promise.all([
+      getMasterProductOffersBatch([prodA.id, prodB.id]),
+      planCanonicalUrl
+        ? Promise.resolve(null)
+        : getItemSlugsFor([scoreA.slug, scoreB.slug]),
     ]);
+    const resolvedVersusUrl =
+      planCanonicalUrl ?? versusHref(scoreA.slug, scoreB.slug, itemSlugBySlug);
     const rawSignalA = computeProductRadarSignal(
       prodA,
       offersByMaster.get(prodA.id) ?? []
@@ -444,7 +582,7 @@ export async function GET(req: NextRequest) {
         swap_pair: canonicalVersusOrder(scoreA.slug, scoreB.slug)
           .reverse()
           .join('-vs-'),
-        versus_url: versusHref(scoreA.slug, scoreB.slug),
+        versus_url: resolvedVersusUrl,
         compare_matrix_url: `/compare?cat=${category}&slugs=${scoreA.slug},${scoreB.slug}`,
         persona: matchedPersona.id,
         // The page preset the pair is scored with: `default` when the

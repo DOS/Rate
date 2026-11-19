@@ -16,7 +16,120 @@ import {
   PUBLIC_API_CORS_HEADERS,
   jsonApiError,
   parseCompareSlugsParam,
+  splitComparePinToken,
 } from '@/server/rate/api-handler';
+import {
+  compareTarget,
+  lookupSlugAnyCase,
+  type CompareResolution,
+} from '@/lib/item-compare';
+import { resolveCompareSlugs } from '@/server/rate/item-compare';
+import { whenItemModel } from '@/server/rate/item-directory';
+import {
+  getCachedCatalogSlugResolution,
+  getCachedItemVariants,
+} from '@/server/rate/item-route';
+
+const ITEM_RESOLVER_SLUG_REGEX = /^[a-zA-Z0-9][a-zA-Z0-9._-]{0,159}$/;
+
+async function resolveCompareEntries(
+  requestedTokens: readonly string[]
+): Promise<
+  Array<{
+    requested: string;
+    variantSlug: string | null;
+    deduplicated: boolean;
+  }>
+> {
+  if ((await resolveCompareSlugs([])) === null) {
+    return requestedTokens.map((requested) => ({
+      requested,
+      variantSlug: requested,
+      deduplicated: false,
+    }));
+  }
+
+  const resolved = await whenItemModel('compare route tokens', async () => {
+    const rawTargets = await Promise.all(
+      requestedTokens.map(async (requested) => {
+        const typed = splitComparePinToken(requested, true);
+        const lower = splitComparePinToken(requested, false);
+        if (!ITEM_RESOLVER_SLUG_REGEX.test(typed.slug)) {
+          return typed.variantKey === null
+            ? {
+                requested,
+                target: {
+                  variantSlug: lower.slug,
+                  itemId: null,
+                  itemSlug: null,
+                },
+              }
+            : { requested, target: null };
+        }
+        const found = await lookupSlugAnyCase(
+          typed.slug,
+          getCachedCatalogSlugResolution
+        );
+        const catalogRes = found.found;
+        const cmpRes: CompareResolution =
+          !catalogRes || catalogRes.kind === 'unlinked'
+            ? { kind: 'unlinked' }
+            : catalogRes.kind === 'item'
+              ? {
+                  kind: 'item',
+                  item: catalogRes.item,
+                  variants: await getCachedItemVariants(catalogRes.item),
+                }
+              : {
+                  kind: 'variant',
+                  item: catalogRes.item,
+                  variant: catalogRes.variant,
+                  variants: await getCachedItemVariants(catalogRes.item),
+                  retired: catalogRes.retired,
+                };
+        return {
+          requested,
+          target: compareTarget(cmpRes, lower),
+        };
+      })
+    );
+
+    const seenItems = new Set<string>();
+    const seenVariantSlugs = new Set<string>();
+    return rawTargets.map(({ requested, target }) => {
+      if (!target) {
+        return { requested, variantSlug: null, deduplicated: false };
+      }
+      const lowerVariantSlug = target.variantSlug.toLowerCase();
+      if (
+        seenVariantSlugs.has(lowerVariantSlug) ||
+        (target.itemId !== null && seenItems.has(target.itemId))
+      ) {
+        return {
+          requested,
+          variantSlug: target.variantSlug,
+          deduplicated: true,
+        };
+      }
+      seenVariantSlugs.add(lowerVariantSlug);
+      if (target.itemId !== null) seenItems.add(target.itemId);
+      return {
+        requested,
+        variantSlug: target.variantSlug,
+        deduplicated: false,
+      };
+    });
+  });
+
+  return (
+    resolved ??
+    requestedTokens.map((requested) => ({
+      requested,
+      variantSlug: requested,
+      deduplicated: false,
+    }))
+  );
+}
 
 export async function OPTIONS() {
   return new NextResponse(null, {
@@ -44,7 +157,22 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const products = await getCachedCompareMasterProducts(slugs.join(','));
+    const resolvedEntries = await resolveCompareEntries(slugs);
+    const comparedSlugs = resolvedEntries
+      .filter(
+        (
+          entry
+        ): entry is {
+          requested: string;
+          variantSlug: string;
+          deduplicated: boolean;
+        } => !entry.deduplicated && entry.variantSlug !== null
+      )
+      .map((entry) => entry.variantSlug);
+    const products =
+      comparedSlugs.length > 0
+        ? await getCachedCompareMasterProducts(comparedSlugs.join(','))
+        : [];
     // Slugs are looked up lowercased, so `IPhone-16` came back as `iphone-16`.
     const returnedSlugSet = new Set(products.map((p) => p.slug.toLowerCase()));
     const lockedCategory = products[0]
@@ -52,26 +180,32 @@ export async function GET(request: NextRequest) {
       : null;
     // A requested slug that did not come back is either a published product
     // of another category, dropped by the lock, or no published product at
-    // all (DOS/Rate#1364). The lookup only labels the slug: if it fails, the
-    // slug stays where it was listed before, with the exclusions.
-    const missingSlugs = slugs.filter(
-      (s) => !returnedSlugSet.has(s.toLowerCase())
+    // all (DOS/Rate#1364). Report the caller's original token in the exclusions.
+    const missingEntries = resolvedEntries.filter(
+      (entry) =>
+        !entry.deduplicated &&
+        (entry.variantSlug === null ||
+          !returnedSlugSet.has(entry.variantSlug.toLowerCase()))
     );
     const [offersByMasterId, missingFound] = await Promise.all([
       getMasterProductOffersBatch(products.map((p) => p.id)),
       Promise.all(
-        missingSlugs.map((s) =>
-          getCachedMasterProductBySlug(s).then(
-            (product) => product !== null,
-            () => true
-          )
+        missingEntries.map((entry) =>
+          entry.variantSlug === null
+            ? Promise.resolve(false)
+            : getCachedMasterProductBySlug(entry.variantSlug).then(
+                (product) => product !== null,
+                () => true
+              )
         )
       ),
     ]);
-    const excludedCrossCategorySlugs = missingSlugs.filter(
-      (_, i) => missingFound[i]
-    );
-    const notFoundSlugs = missingSlugs.filter((_, i) => !missingFound[i]);
+    const excludedCrossCategorySlugs = missingEntries
+      .filter((_, i) => missingFound[i])
+      .map((entry) => entry.requested);
+    const notFoundSlugs = missingEntries
+      .filter((_, i) => !missingFound[i])
+      .map((entry) => entry.requested);
 
     return NextResponse.json(
       {

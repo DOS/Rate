@@ -52,7 +52,9 @@ import {
   type ApiItem,
   type ApiItemContext,
 } from './item-api';
-import { canonicalVersusOrder } from '../../lib/item-compare';
+import { getItemSlugsFor } from './item-directory';
+import { versusHref } from '../../lib/item-compare';
+import { masterSiblingKeyPrefix } from '../../lib/product-variant-links';
 
 const log = createLogger('server.extension');
 
@@ -680,6 +682,8 @@ export function evaluateExtensionPriceVerdict(params: {
   offers: MerchantOffer[];
   /** The listing the observed price belongs to, when it is one of `offers`. */
   observedOfferId?: string | null;
+  /** True when a live caller `observedPrice` overrode the stored offer price. */
+  hasLiveObservedPrice?: boolean;
   priceHistory: MasterProductPriceHistorySummary | null;
 }): ExtensionPriceAssessment {
   const safeParams =
@@ -695,6 +699,7 @@ export function evaluateExtensionPriceVerdict(params: {
     observedOriginalPrice,
     offers,
     observedOfferId,
+    hasLiveObservedPrice,
     priceHistory,
   } = safeParams;
   const allOffers = (Array.isArray(offers) ? offers : []).filter(
@@ -798,11 +803,28 @@ export function evaluateExtensionPriceVerdict(params: {
   // verdict keeps the extension's allow-list; the label says why. Judged
   // against every other offer, as the offers table judges each row, so the
   // two never disagree about a listing.
+  const trimEdgeWsCtrl = (val: string): string => {
+    let start = 0;
+    let end = val.length;
+    while (start < end && /[\s\p{Cc}]/u.test(val[start]!)) start += 1;
+    while (end > start && /[\s\p{Cc}]/u.test(val[end - 1]!)) end -= 1;
+    return start === 0 && end === val.length ? val : val.slice(start, end);
+  };
   const trimmedObservedId =
-    typeof observedOfferId === 'string'
-      ? observedOfferId.replace(/\p{Cc}+/gu, '').trim()
-      : '';
+    typeof observedOfferId === 'string' ? trimEdgeWsCtrl(observedOfferId) : '';
   const normalizedObservedOfferId = normalizeOfferId(observedOfferId);
+  const matchesObservedOffer = (o: MerchantOffer): boolean => {
+    const trimmedId = typeof o.id === 'string' ? trimEdgeWsCtrl(o.id) : '';
+    return (
+      o.id === observedOfferId ||
+      (trimmedObservedId !== '' && trimmedId === trimmedObservedId) ||
+      (normalizedObservedOfferId !== '' &&
+        normalizeOfferId(o.id) === normalizedObservedOfferId)
+    );
+  };
+  const matchedObservedOffer = trimmedObservedId
+    ? (allOffers.find(matchesObservedOffer) ?? null)
+    : null;
   // When every listing in the cluster is unavailable, fall back to all offers
   // only for the bait reference so all-sold-out bait listings match allOffers
   // and DeepInspectWorkspace without polluting market stats (DOS/Rate#1699).
@@ -811,20 +833,9 @@ export function evaluateExtensionPriceVerdict(params: {
   const otherOffers = trimmedObservedId
     ? baitPool.filter((o) => {
         if (!o) return false;
-        if (!removedObservedSelf) {
-          const trimmedId =
-            typeof o.id === 'string'
-              ? o.id.replace(/\p{Cc}+/gu, '').trim()
-              : '';
-          if (
-            o.id === observedOfferId ||
-            (trimmedId !== '' && trimmedId === trimmedObservedId) ||
-            (normalizedObservedOfferId !== '' &&
-              normalizeOfferId(o.id) === normalizedObservedOfferId)
-          ) {
-            removedObservedSelf = true;
-            return false;
-          }
+        if (!removedObservedSelf && matchesObservedOffer(o)) {
+          removedObservedSelf = true;
+          return false;
         }
         return true;
       })
@@ -850,10 +861,11 @@ export function evaluateExtensionPriceVerdict(params: {
         const rawPrice: unknown = o.price_current;
         if (typeof rawPrice === 'number') return rawPrice;
         if (typeof rawPrice === 'string') {
-          const cleaned = rawPrice.replace(/\p{Cc}+/gu, '').trim();
+          const cleaned = trimEdgeWsCtrl(rawPrice);
           if (
             !cleaned ||
             cleaned.length > 32 ||
+            /[\s\p{Cc}]/u.test(cleaned) ||
             /^[+-]?0[xbo]/i.test(cleaned)
           ) {
             return Number.NaN;
@@ -989,8 +1001,37 @@ export function evaluateExtensionPriceVerdict(params: {
     };
   }
 
+  const validCallerObservedPrice =
+    typeof observedPrice === 'number' &&
+    Number.isFinite(observedPrice) &&
+    observedPrice > 0 &&
+    observedPrice <= MAX_VALID_VND_PRICE
+      ? observedPrice
+      : null;
+  const matchedOfferStoredPrice =
+    matchedObservedOffer &&
+    typeof matchedObservedOffer.price_current === 'number' &&
+    Number.isFinite(matchedObservedOffer.price_current) &&
+    matchedObservedOffer.price_current > 0 &&
+    matchedObservedOffer.price_current <= MAX_VALID_VND_PRICE
+      ? matchedObservedOffer.price_current
+      : null;
+  const hasLiveCallerOverride =
+    typeof hasLiveObservedPrice === 'boolean'
+      ? hasLiveObservedPrice && validCallerObservedPrice !== null
+      : validCallerObservedPrice !== null &&
+        (matchedOfferStoredPrice === null ||
+          Math.round(validCallerObservedPrice) !==
+            Math.round(matchedOfferStoredPrice));
+  const suppressUnavailableDeal =
+    Boolean(matchedObservedOffer && isOfferUnavailable(matchedObservedOffer)) &&
+    !hasLiveCallerOverride;
+
   // 2. Genuine Deal: at or below historical/market minimum or >= 3% below market median
-  if (effectivePrice <= histMin * 1.005 || vsMarketMedianPct <= -3) {
+  if (
+    !suppressUnavailableDeal &&
+    (effectivePrice <= histMin * 1.005 || vsMarketMedianPct <= -3)
+  ) {
     return {
       verdict: 'genuine_deal',
       badgeLabel: 'Giá Tốt Thực Sự',
@@ -1532,8 +1573,120 @@ export async function lookupExtensionProduct(
     matchedMaster,
     sameCategoryPeers.length > 0 ? sameCategoryPeers : [matchedMaster]
   );
+  const rawItemSlugBySlug = await getItemSlugsFor([
+    matchedMaster.slug,
+    ...sameCategoryPeers.map((peer) => peer.slug),
+  ]);
+  const itemSlugBySlug: Record<string, string> | null =
+    rawItemSlugBySlug || itemContext
+      ? {
+          ...(rawItemSlugBySlug ?? {}),
+          ...(itemContext
+            ? {
+                [matchedMaster.slug]: itemContext.item.slug,
+                ...Object.fromEntries(
+                  itemContext.variants.map((v) => [
+                    v.slug,
+                    itemContext.item.slug,
+                  ])
+                ),
+              }
+            : {}),
+        }
+      : null;
+  const extractItemId = (row: unknown): string | null => {
+    if (!row || typeof row !== 'object') return null;
+    const raw = (row as { item_id?: unknown }).item_id;
+    return typeof raw === 'string' && raw.trim() ? raw.trim() : null;
+  };
+  const stripStorageSuffix = (token: string | null | undefined): string =>
+    typeof token === 'string'
+      ? token
+          .trim()
+          .toLowerCase()
+          .replace(/[-_:](?:32|64|128|256|512|1024|2048)gb$/i, '')
+          .replace(/[-_:][1248]tb$/i, '')
+      : '';
+  const matchedItemId = itemContext?.item.id ?? extractItemId(matchedMaster);
+  const matchedItemSlug = (
+    itemSlugBySlug?.[matchedMaster.slug] ??
+    itemContext?.item.slug ??
+    ''
+  ).toLowerCase();
+  const matchedKeyPrefix = masterSiblingKeyPrefix(
+    typeof matchedMaster.model_key === 'string'
+      ? matchedMaster.model_key.toLowerCase()
+      : ''
+  );
+  const matchedBaseStem = hasStorage
+    ? stripStorageSuffix(matchedMaster.model_key || matchedMaster.slug)
+    : '';
+  const isSiblingOfMatchedMaster = (peer: MasterProduct): boolean => {
+    if (
+      peer.id === matchedMaster!.id ||
+      peer.slug.toLowerCase() === matchedMaster!.slug.toLowerCase()
+    ) {
+      return true;
+    }
+    const peerItemId = extractItemId(peer);
+    if (matchedItemId && peerItemId) {
+      return matchedItemId === peerItemId;
+    }
+    if (
+      itemContext?.variants.some(
+        (v) =>
+          v.id === peer.id || v.slug.toLowerCase() === peer.slug.toLowerCase()
+      )
+    ) {
+      return true;
+    }
+    const peerItemSlug = (itemSlugBySlug?.[peer.slug] ?? '').toLowerCase();
+    if (matchedItemSlug && peerItemSlug && matchedItemSlug === peerItemSlug) {
+      return true;
+    }
+    const matchedHasItem = Boolean(
+      itemContext ||
+      (rawItemSlugBySlug &&
+        rawItemSlugBySlug[matchedMaster!.slug] &&
+        rawItemSlugBySlug[matchedMaster!.slug] !== matchedMaster!.slug)
+    );
+    const peerHasItem = Boolean(
+      peerItemId ||
+      (rawItemSlugBySlug &&
+        rawItemSlugBySlug[peer.slug] &&
+        rawItemSlugBySlug[peer.slug] !== peer.slug)
+    );
+    if (matchedHasItem && peerHasItem && matchedItemSlug !== peerItemSlug) {
+      return false;
+    }
+    const peerKeyPrefix = masterSiblingKeyPrefix(
+      typeof peer.model_key === 'string' ? peer.model_key.toLowerCase() : ''
+    );
+    if (matchedKeyPrefix && peerKeyPrefix) {
+      return matchedKeyPrefix === peerKeyPrefix;
+    }
+    if (hasStorage) {
+      const peerBaseStem = stripStorageSuffix(peer.model_key || peer.slug);
+      if (matchedBaseStem && peerBaseStem && matchedBaseStem === peerBaseStem) {
+        return true;
+      }
+      if (
+        matchedMaster!.brand &&
+        matchedMaster!.model &&
+        peer.brand &&
+        peer.model &&
+        peer.brand.trim().toLowerCase() ===
+          matchedMaster!.brand.trim().toLowerCase() &&
+        peer.model.trim().toLowerCase() ===
+          matchedMaster!.model.trim().toLowerCase()
+      ) {
+        return true;
+      }
+    }
+    return false;
+  };
   const topRival =
-    sameCategoryPeers.find((peer) => peer.id !== matchedMaster!.id) || null;
+    sameCategoryPeers.find((peer) => !isSiblingOfMatchedMaster(peer)) || null;
 
   const rawTotalRevs =
     typeof matchedMaster.total_reviews === 'number'
@@ -1569,11 +1722,20 @@ export async function lookupExtensionProduct(
           ai_summary: null,
         };
 
-  const effectiveObservedPrice =
-    observedPrice ?? matchedOffer?.price_current ?? null;
+  const matchedOfferCurrentPrice =
+    matchedOffer &&
+    typeof matchedOffer.price_current === 'number' &&
+    Number.isFinite(matchedOffer.price_current) &&
+    matchedOffer.price_current > 0 &&
+    matchedOffer.price_current <= MAX_VALID_VND_PRICE
+      ? matchedOffer.price_current
+      : null;
+  const effectiveObservedPrice = observedPrice ?? matchedOfferCurrentPrice;
   const rawEffectiveOriginal =
     observedOriginalPrice ??
-    (observedPrice === null ? matchedOffer?.price_original : null) ??
+    (observedPrice === null && matchedOfferCurrentPrice !== null
+      ? matchedOffer?.price_original
+      : null) ??
     null;
   const effectiveObservedOriginal =
     rawEffectiveOriginal !== null &&
@@ -1599,7 +1761,10 @@ export async function lookupExtensionProduct(
     // price the fallback offer's own price is the one judged.
     observedOfferId:
       urlMatchedOffer?.id ??
-      (observedPrice === null ? (matchedOffer?.id ?? null) : null),
+      (observedPrice === null && matchedOfferCurrentPrice !== null
+        ? (matchedOffer?.id ?? null)
+        : null),
+    hasLiveObservedPrice: observedPrice !== null,
     priceHistory,
   });
 
@@ -1665,11 +1830,10 @@ export async function lookupExtensionProduct(
         )
       : `/${categoryPath}/${encodeURIComponent(matchedMaster.slug)}`,
     leaderboardUrl: `/leaderboard?cat=${categoryPath}`,
-    // The pair's one canonical URL, sides sorted (DOS/Rate#1367).
+    // The pair's one canonical URL, sides sorted and mapped to Item slugs
+    // when RATE_ITEM_MODEL is on (DOS/Rate#1367, #1765).
     versusUrl: topRival
-      ? `/compare/${canonicalVersusOrder(matchedMaster.slug, topRival.slug)
-          .map(encodeURIComponent)
-          .join('-vs-')}`
+      ? versusHref(matchedMaster.slug, topRival.slug, itemSlugBySlug)
       : null,
     topRivalName: topRival?.name || null,
     leaderboardStandings,
