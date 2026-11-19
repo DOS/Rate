@@ -1,5 +1,8 @@
 import type { Metadata } from 'next';
-import { resolveCompareEffectiveUserRating } from '@/lib/rate-domain';
+import {
+  MAX_VALID_VND_PRICE,
+  resolveCompareEffectiveUserRating,
+} from '@/lib/rate-domain';
 import { getTranslations, setRequestLocale } from 'next-intl/server';
 import { Link } from '@/lib/navigation';
 import PageShell from './components/page-shell';
@@ -132,6 +135,713 @@ function getCategoryIcon(slug: string) {
   }
 }
 
+function parseStrictFiniteNumber(value: unknown): number | null {
+  if (typeof value === 'number') {
+    return Number.isFinite(value) ? value : null;
+  }
+  if (typeof value === 'string') {
+    if (/\p{Cc}/u.test(value)) return null;
+    const trimmed = value.trim();
+    if (trimmed === '' || /^[+-]?0[xbo]/i.test(trimmed)) return null;
+    const parsed = Number(trimmed);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+}
+
+function sanitizeNonNegativeInt(value: unknown): number {
+  const parsed = parseStrictFiniteNumber(value);
+  return parsed != null && parsed > 0 ? Math.floor(parsed) : 0;
+}
+
+function sanitizePositiveRadarPct(value: unknown): number | null {
+  const parsed = parseStrictFiniteNumber(value);
+  return parsed != null && parsed > 0 ? parsed : null;
+}
+
+export function roundHomeMerchantScore(value: unknown): number | null {
+  const parsed = parseStrictFiniteNumber(value);
+  if (parsed == null) return null;
+  const clamped = Math.max(0, Math.min(100, Math.round(parsed)));
+  return clamped === 0 ? 0 : clamped;
+}
+
+export type HomeMerchantScoreDisplay = {
+  score: number;
+  tone: 'good' | 'warn' | 'bad';
+  toneClass: 'is-good' | 'is-warn' | 'is-bad';
+};
+
+export function homeMerchantDosafeDisplay(
+  merchant: Parameters<typeof knownDosafeRiskScore>[0] | null | undefined
+): HomeMerchantScoreDisplay | null {
+  if (!merchant) return null;
+  if (roundHomeMerchantScore(merchant.dosafe_risk_score) == null) return null;
+  const known = knownDosafeRiskScore(merchant);
+  const score = roundHomeMerchantScore(known);
+  if (score == null) return null;
+  const tone = merchantRiskTone(score);
+  return { score, tone, toneClass: `is-${tone}` };
+}
+
+export function homeMerchantReviewRiskDisplay(
+  merchant:
+    | {
+        review_risk_score?: unknown;
+        review_risk_breakdown?: Parameters<typeof hasReviewRiskEvidence>[0];
+      }
+    | null
+    | undefined
+): HomeMerchantScoreDisplay | null {
+  if (!merchant || !hasReviewRiskEvidence(merchant.review_risk_breakdown)) {
+    return null;
+  }
+  const score = roundHomeMerchantScore(merchant.review_risk_score);
+  if (score == null) return null;
+  const tone = merchantRiskTone(score);
+  return { score, tone, toneClass: `is-${tone}` };
+}
+
+export function homeMerchantTrustDisplay(
+  merchant:
+    | {
+        trust_score?: unknown;
+        risk_score?: unknown;
+      }
+    | null
+    | undefined
+): HomeMerchantScoreDisplay | null {
+  if (!merchant) return null;
+  const score = roundHomeMerchantScore(merchant.trust_score);
+  if (score == null) return null;
+  const tone = score >= 80 ? 'good' : score > 50 ? 'warn' : 'bad';
+  return { score, tone, toneClass: `is-${tone}` };
+}
+
+export function sanitizeHomePriceVnd(value: unknown): number | null {
+  const parsed = parseStrictFiniteNumber(value);
+  if (parsed == null || parsed <= 0 || parsed > MAX_VALID_VND_PRICE) {
+    return null;
+  }
+  const rounded = Math.round(parsed);
+  if (rounded <= 0 || rounded > MAX_VALID_VND_PRICE) return null;
+  return rounded;
+}
+
+export function resolveHomeRadarOriginalPriceVnd(
+  priceCurrent: unknown,
+  priceOriginal: unknown
+): number | null {
+  const current = sanitizeHomePriceVnd(priceCurrent);
+  const original = sanitizeHomePriceVnd(priceOriginal);
+  if (current == null || original == null || original <= current) {
+    return null;
+  }
+  return original;
+}
+
+export function buildHomeRadarIndex(
+  dealRadar: CrossPlatformDealRadarResponse | null | undefined
+) {
+  return buildRadarIndex(
+    dealRadar
+      ? {
+          ...dealRadar,
+          genuineDeals: Array.isArray(dealRadar.genuineDeals)
+            ? dealRadar.genuineDeals.filter(
+                (g) => sanitizeHomePriceVnd(g.priceCurrent) != null
+              )
+            : dealRadar.genuineDeals,
+        }
+      : dealRadar
+  );
+}
+
+export function buildHomeQuickCompareSlugs(
+  products: MasterProduct[],
+  catSlugById: Map<string, string>,
+  limit = 3
+): string[] {
+  const seen = new Set<string>();
+  const slugs: string[] = [];
+  for (const p of products) {
+    const slug = catalogRowSlug(p).trim();
+    if (!slug || seen.has(slug)) continue;
+    if (
+      !getMasterProductHref({ ...p, slug }, catSlugById).startsWith(
+        '/smartphones/'
+      )
+    ) {
+      continue;
+    }
+    seen.add(slug);
+    slugs.push(slug);
+    if (slugs.length >= limit) break;
+  }
+  return slugs;
+}
+
+export function sanitizeHomeReviewStars(value: unknown): number | null {
+  const parsed = parseStrictFiniteNumber(value);
+  if (parsed == null) return null;
+  return Math.max(1, Math.min(5, Math.round(parsed)));
+}
+
+export type HomeDealRadarTranslateKey =
+  | 'radarHomeBadge'
+  | 'radarHomeAnalyzed'
+  | 'radarHomeInspectBtn'
+  | 'radarHomeDealHubBtn'
+  | 'radarGenuineTitle'
+  | 'medianPriceInline'
+  | 'vsMedianPctBadge'
+  | 'radarFakeTitle'
+  | 'inflatedOrigInline'
+  | 'fakeMarkupPctBadge'
+  | 'spreadLeadersTitle'
+  | 'viewAllSpreadBtn'
+  | 'spreadPctBadge';
+
+export function HomeDealRadarBlock({
+  dealRadar,
+  locale,
+  tHome,
+}: {
+  dealRadar: CrossPlatformDealRadarResponse;
+  locale: string;
+  tHome: (
+    key: HomeDealRadarTranslateKey,
+    values?: Record<string, string | number>
+  ) => string;
+}) {
+  const genuineDeals = Array.isArray(dealRadar.genuineDeals)
+    ? dealRadar.genuineDeals.filter(
+        (g) => sanitizeHomePriceVnd(g.priceCurrent) != null
+      )
+    : [];
+  const fakeSaleTraps = Array.isArray(dealRadar.fakeSaleTraps)
+    ? dealRadar.fakeSaleTraps.filter(
+        (t) => sanitizeHomePriceVnd(t.priceCurrent) != null
+      )
+    : [];
+  const priceSpreadLeaders = Array.isArray(dealRadar.priceSpreadLeaders)
+    ? dealRadar.priceSpreadLeaders.filter(
+        (s) => sanitizeHomePriceVnd(s.spreadVnd) != null
+      )
+    : [];
+
+  if (
+    genuineDeals.length === 0 &&
+    fakeSaleTraps.length === 0 &&
+    priceSpreadLeaders.length === 0
+  ) {
+    return null;
+  }
+
+  return (
+    <div
+      className="rate-card rate-home-radar mt-4"
+      data-testid="homepage-deal-radar"
+    >
+      <div className="rate-section-head">
+        <div>
+          <span className="rate-eyebrow mb-2">{tHome('radarHomeBadge')}</span>
+          <h3 className="rate-home-radar-title">
+            {tHome('radarHomeAnalyzed', {
+              offers: sanitizeNonNegativeInt(dealRadar.totalOffersAnalyzed),
+              merchants: sanitizeNonNegativeInt(
+                dealRadar.totalMerchantsAnalyzed
+              ),
+              clusters: sanitizeNonNegativeInt(dealRadar.totalClustersAnalyzed),
+            })}
+          </h3>
+        </div>
+        <div className="rate-section-links">
+          <Link href="/inspect">
+            <BsShieldCheck aria-hidden="true" />
+            {tHome('radarHomeInspectBtn')}
+          </Link>
+          <Link href="/deals">
+            {tHome('radarHomeDealHubBtn')}
+            <BsArrowRight aria-hidden="true" />
+          </Link>
+        </div>
+      </div>
+
+      {(genuineDeals.length > 0 || fakeSaleTraps.length > 0) && (
+        <div className="row g-4">
+          {genuineDeals.length > 0 && (
+            <div className="col-lg-6">
+              <h4 className="rate-radar-list-title is-good">
+                <BsGraphDownArrow aria-hidden="true" />
+                {tHome('radarGenuineTitle', {
+                  count: genuineDeals.length,
+                })}
+              </h4>
+              <ul className="rate-radar-list">
+                {genuineDeals.slice(0, 3).map((g) => {
+                  const currentPrice = sanitizeHomePriceVnd(g.priceCurrent)!;
+                  const medianPrice = sanitizeHomePriceVnd(g.marketMedianPrice);
+                  const savingsPct = sanitizePositiveRadarPct(
+                    g.savingsVsMedianPct
+                  );
+                  return (
+                    <li key={g.id}>
+                      <div className="rate-radar-item-main">
+                        <Link href={g.productHref} className="text-truncate">
+                          {g.productName}
+                        </Link>
+                        <span className="rate-radar-item-meta text-truncate">
+                          <span className="rate-radar-platform">
+                            {g.platform}
+                          </span>
+                          <ContentText text={g.merchantName} locale={locale} />
+                          {medianPrice != null && (
+                            <>
+                              {' '}
+                              ·{' '}
+                              {tHome('medianPriceInline', {
+                                price: formatNumber(medianPrice, locale),
+                              })}
+                            </>
+                          )}
+                        </span>
+                      </div>
+                      <div className="rate-radar-item-side">
+                        <span className="rate-radar-price">
+                          {formatPriceVnd(currentPrice, locale)}
+                        </span>
+                        {savingsPct != null && (
+                          <span className="rate-radar-tag is-good">
+                            {tHome('vsMedianPctBadge', {
+                              pct: formatPlainNumber(savingsPct, locale),
+                            })}
+                          </span>
+                        )}
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          )}
+
+          {fakeSaleTraps.length > 0 && (
+            <div className="col-lg-6">
+              <h4 className="rate-radar-list-title is-bad">
+                <BsExclamationTriangle aria-hidden="true" />
+                {tHome('radarFakeTitle', {
+                  count: fakeSaleTraps.length,
+                })}
+              </h4>
+              <ul className="rate-radar-list">
+                {fakeSaleTraps.slice(0, 3).map((t) => {
+                  const currentPrice = sanitizeHomePriceVnd(t.priceCurrent)!;
+                  const origPrice = resolveHomeRadarOriginalPriceVnd(
+                    currentPrice,
+                    t.priceOriginal
+                  );
+                  const markupPct = sanitizePositiveRadarPct(t.fakeMarkupPct);
+                  return (
+                    <li key={t.id}>
+                      <div className="rate-radar-item-main">
+                        <Link href={t.productHref} className="text-truncate">
+                          {t.productName}
+                        </Link>
+                        <span className="rate-radar-item-meta text-truncate">
+                          <span className="rate-radar-platform">
+                            {t.platform}
+                          </span>
+                          <ContentText text={t.merchantName} locale={locale} />
+                          {origPrice != null && (
+                            <>
+                              {' '}
+                              · {tHome('inflatedOrigInline')}{' '}
+                              <s>{formatPriceVnd(origPrice, locale)}</s>
+                            </>
+                          )}
+                        </span>
+                      </div>
+                      <div className="rate-radar-item-side">
+                        <span className="rate-radar-price">
+                          {formatPriceVnd(currentPrice, locale)}
+                        </span>
+                        {markupPct != null && (
+                          <span className="rate-radar-tag is-bad">
+                            {tHome('fakeMarkupPctBadge', {
+                              pct: formatPlainNumber(markupPct, locale),
+                            })}
+                          </span>
+                        )}
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          )}
+        </div>
+      )}
+
+      {priceSpreadLeaders.length > 0 && (
+        <div
+          data-testid="homepage-price-spread-leaders"
+          className="rate-radar-spread"
+        >
+          <div className="rate-radar-spread-head">
+            <h4 className="rate-radar-list-title">
+              <BsArrowLeftRight aria-hidden="true" />
+              {tHome('spreadLeadersTitle')}
+            </h4>
+            <Link href="/deals">
+              {tHome('viewAllSpreadBtn', {
+                count: priceSpreadLeaders.length,
+              })}
+              <BsArrowRight aria-hidden="true" />
+            </Link>
+          </div>
+          <div className="row g-2">
+            {priceSpreadLeaders.slice(0, 3).map((s) => {
+              const spreadVnd = sanitizeHomePriceVnd(s.spreadVnd)!;
+              const spreadPct = sanitizePositiveRadarPct(s.spreadPct);
+              return (
+                <div key={s.id} className="col-lg-4 col-md-6">
+                  <div className="rate-radar-spread-item">
+                    <div className="rate-radar-item-main">
+                      <Link href={s.productHref} className="text-truncate">
+                        {s.productName}
+                      </Link>
+                      <span className="rate-radar-item-meta">
+                        <span className="rate-radar-platform">
+                          {s.cheapestPlatform}
+                        </span>
+                        vs{' '}
+                        <span className="rate-radar-platform">
+                          {s.priciestPlatform}
+                        </span>
+                      </span>
+                    </div>
+                    <div className="rate-radar-item-side">
+                      <span className="rate-radar-price">
+                        -{formatPriceVnd(spreadVnd, locale)}
+                      </span>
+                      {spreadPct != null && (
+                        <span className="rate-radar-tag is-warn">
+                          {tHome('spreadPctBadge', {
+                            pct: formatPlainNumber(spreadPct, locale),
+                          })}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+export type HomeMerchantCardTranslateKey =
+  | 'merchantNoDataLabel'
+  | 'merchantTrustedLabel'
+  | 'merchantCautionLabel'
+  | 'merchantHighRiskLabel'
+  | 'shopIdLabel'
+  | 'officialMallBadge'
+  | 'dosafeRiskLabel'
+  | 'dosafeRiskNoData'
+  | 'noScamDetected'
+  | 'reviewRiskLabel'
+  | 'flaggedReviewsRatio'
+  | 'reviewRiskNoData'
+  | 'reviewRiskNoReviews'
+  | 'ratingsAndProductsLabel'
+  | 'productsShortUnit'
+  | 'followersCountText'
+  | 'periodicMonitoring'
+  | 'lastUpdatedLabel';
+
+export function HomeMerchantCard({
+  merchant,
+  locale,
+  tHome,
+  viewAuditLabel,
+}: {
+  merchant: MerchantSummary;
+  locale: string;
+  tHome: (
+    key: HomeMerchantCardTranslateKey,
+    values?: Record<string, string | number>
+  ) => string;
+  viewAuditLabel: string;
+}) {
+  // No data at all: no tone and no number (DOS/Rate#1484).
+  const trustDisplay = homeMerchantTrustDisplay(merchant);
+  const dosafeDisplay = homeMerchantDosafeDisplay(merchant);
+  const reviewDisplay = homeMerchantReviewRiskDisplay(merchant);
+  const overallTone = trustDisplay?.toneClass ?? '';
+  const trustLabel =
+    trustDisplay == null
+      ? tHome('merchantNoDataLabel')
+      : trustDisplay.tone === 'good'
+        ? tHome('merchantTrustedLabel')
+        : trustDisplay.tone === 'warn'
+          ? tHome('merchantCautionLabel')
+          : tHome('merchantHighRiskLabel');
+  const breakdown = merchant.review_risk_breakdown;
+  const totalRevAnalyzed = sanitizeNonNegativeInt(breakdown?.total_reviews);
+  const flaggedRevCount = Math.min(
+    totalRevAnalyzed,
+    sanitizeNonNegativeInt(breakdown?.seeding_fake_count) +
+      sanitizeNonNegativeInt(breakdown?.coin_spam_count) +
+      sanitizeNonNegativeInt(breakdown?.sabotage_or_bombing_count)
+  );
+  const rawRatingStar = parseStrictFiniteNumber(merchant.rating_star);
+  const ratingStar =
+    rawRatingStar != null && rawRatingStar > 0
+      ? Math.min(5, rawRatingStar)
+      : null;
+  const productCount = sanitizeNonNegativeInt(merchant.product_count);
+  const followerCount = sanitizeNonNegativeInt(merchant.follower_count);
+  const hasValidUpdatedAt =
+    typeof merchant.updated_at === 'string' &&
+    merchant.updated_at.trim() !== '' &&
+    Number.isFinite(Date.parse(merchant.updated_at));
+
+  return (
+    <article
+      className="rate-card rate-merchant-card"
+      data-merchant-id={merchant.id}
+    >
+      <div className="rate-merchant-head">
+        <span className="rate-category-card-icon" aria-hidden="true">
+          <BsShop aria-hidden="true" />
+        </span>
+        <div className="rate-merchant-id">
+          <h3 className="rate-merchant-name">
+            <Link href={`/merchants/${merchant.id}`}>
+              <ContentText text={merchant.name} locale={locale} />
+            </Link>
+          </h3>
+          <div className="rate-merchant-meta">
+            <span className="rate-radar-platform">{merchant.platform}</span>
+            {tHome('shopIdLabel')} {merchant.platform_shop_id}
+            {merchant.is_official && (
+              <span className="rate-merchant-official">
+                <BsCheckCircleFill aria-hidden="true" />
+                {tHome('officialMallBadge')}
+              </span>
+            )}
+          </div>
+        </div>
+        <span
+          data-testid="home-merchant-trust-badge"
+          className={
+            overallTone ? `rate-radar-tag ${overallTone}` : 'rate-radar-tag'
+          }
+        >
+          {trustDisplay == null
+            ? trustLabel
+            : `${trustLabel} · ${trustDisplay.score}/100`}
+        </span>
+      </div>
+
+      <dl className="rate-merchant-metrics">
+        <div>
+          <dt>{tHome('dosafeRiskLabel')}</dt>
+          {/* No DOSafe score: no number, and no "no scam
+              detected" (DOS/Rate#1479). */}
+          {dosafeDisplay == null ? (
+            <dd data-testid="home-merchant-dosafe-score">
+              {tHome('dosafeRiskNoData')}
+            </dd>
+          ) : (
+            <>
+              <dd
+                data-testid="home-merchant-dosafe-score"
+                className={dosafeDisplay.toneClass}
+              >
+                {dosafeDisplay.score}/100
+              </dd>
+              {dosafeDisplay.tone === 'good' && (
+                <dd className="rate-merchant-note">
+                  {tHome('noScamDetected')}
+                </dd>
+              )}
+            </>
+          )}
+        </div>
+        <div>
+          <dt>{tHome('reviewRiskLabel')}</dt>
+          {/* No analysed reviews: no number (DOS/Rate#1249). */}
+          {reviewDisplay != null ? (
+            <>
+              <dd
+                data-testid="home-merchant-review-score"
+                className={reviewDisplay.toneClass}
+              >
+                {reviewDisplay.score}/100
+              </dd>
+              {totalRevAnalyzed > 0 && (
+                <dd className="rate-merchant-note">
+                  {tHome('flaggedReviewsRatio', {
+                    flagged: flaggedRevCount,
+                    total: totalRevAnalyzed,
+                  })}
+                </dd>
+              )}
+            </>
+          ) : (
+            <>
+              <dd data-testid="home-merchant-review-score">
+                {tHome('reviewRiskNoData')}
+              </dd>
+              {parseStrictFiniteNumber(breakdown?.total_reviews) === 0 && (
+                <dd className="rate-merchant-note">
+                  {tHome('reviewRiskNoReviews')}
+                </dd>
+              )}
+            </>
+          )}
+        </div>
+        <div>
+          <dt>{tHome('ratingsAndProductsLabel')}</dt>
+          <dd>
+            {ratingStar != null && (
+              <>
+                <StarRating value={ratingStar} size="sm" />
+                {' · '}
+              </>
+            )}
+            {productCount} {tHome('productsShortUnit')}
+          </dd>
+          <dd className="rate-merchant-note">
+            {followerCount > 0
+              ? tHome('followersCountText', {
+                  // A number, so the plural picks its form;
+                  // the message formats it (DOS/Rate#1398).
+                  count: followerCount,
+                })
+              : tHome('periodicMonitoring')}
+          </dd>
+        </div>
+      </dl>
+
+      <div className="rate-merchant-foot">
+        {hasValidUpdatedAt ? (
+          <span>
+            {tHome('lastUpdatedLabel')}{' '}
+            {formatDate(merchant.updated_at!, locale)}
+          </span>
+        ) : (
+          <span />
+        )}
+        <Link href={`/merchants/${merchant.id}`}>
+          {viewAuditLabel}
+          <BsArrowRight aria-hidden="true" />
+        </Link>
+      </div>
+    </article>
+  );
+}
+
+export type HomeReviewCardTranslateKey =
+  | 'starsAria'
+  | 'pendingAnalysisBadge'
+  | 'coinSpamBadge'
+  | 'suspectedSeedingBadge'
+  | 'authenticConfidenceBadge'
+  | 'authenticBadge';
+
+export function HomeReviewCard({
+  rev,
+  locale,
+  tHome,
+}: {
+  rev: RatePlatformStats['recentReviewsSample'][number];
+  locale: string;
+  tHome: (
+    key: HomeReviewCardTranslateKey,
+    values?: Record<string, string | number>
+  ) => string;
+}) {
+  const isPending = isPendingReview(rev);
+  const isFlagged =
+    !isPending && (!rev.include_in_rating || rev.flag_category !== 'authentic');
+  const rawFakeProb = parseStrictFiniteNumber(rev.fake_probability);
+  const confidencePct =
+    rawFakeProb != null
+      ? Math.max(0, Math.min(100, Math.round((1 - rawFakeProb) * 100)))
+      : null;
+  const stars = sanitizeHomeReviewStars(rev.rating_star);
+
+  return (
+    <article className="rate-card rate-review-card">
+      <div className="rate-review-head">
+        <div>
+          <div className="rate-review-author">
+            <ContentText text={rev.author_name} locale={locale} />
+          </div>
+          {stars != null && (
+            <div
+              className="rate-review-stars"
+              role="img"
+              aria-label={tHome('starsAria', { count: stars })}
+            >
+              {Array.from({ length: stars }).map((_, idx) => (
+                <BsStarFill key={idx} aria-hidden="true" />
+              ))}
+            </div>
+          )}
+        </div>
+        {isPending ? (
+          <span className="rate-radar-tag">
+            {tHome('pendingAnalysisBadge')}
+          </span>
+        ) : isFlagged ? (
+          <span className="rate-radar-tag is-warn">
+            <BsShieldExclamation aria-hidden="true" />
+            {rev.flag_category === 'low_value_coin_spam'
+              ? tHome('coinSpamBadge')
+              : tHome('suspectedSeedingBadge')}
+          </span>
+        ) : (
+          <span className="rate-radar-tag is-good">
+            <BsCheckCircleFill aria-hidden="true" />
+            {confidencePct != null
+              ? tHome('authenticConfidenceBadge', {
+                  pct: formatPlainNumber(confidencePct, locale),
+                })
+              : tHome('authenticBadge')}
+          </span>
+        )}
+      </div>
+
+      {rev.comment?.trim() && (
+        <p className="rate-review-body" lang={contentLang(rev.comment, locale)}>
+          &ldquo;{rev.comment.trim()}&rdquo;
+        </p>
+      )}
+
+      <div className="rate-review-foot">
+        <BsPhone aria-hidden="true" />
+        {rev.masterRouteHref ? (
+          <Link href={rev.masterRouteHref} className="text-truncate">
+            <ContentText text={rev.productTitle} locale={locale} />
+          </Link>
+        ) : (
+          <span className="text-truncate">
+            <ContentText text={rev.productTitle} locale={locale} />
+          </span>
+        )}
+      </div>
+    </article>
+  );
+}
+
 export default async function Home({
   params,
 }: {
@@ -174,7 +884,7 @@ export default async function Home({
     'smartphones',
     3
   );
-  const radarIndex = buildRadarIndex(dealRadar);
+  const radarIndex = buildHomeRadarIndex(dealRadar);
 
   const catSlugById = new Map<string, string>();
   for (const c of platformStats.categoriesWithCounts) {
@@ -185,12 +895,10 @@ export default async function Home({
   const gridProducts = await groupCatalogRowsByItem(masterProducts).catch(
     () => masterProducts
   );
-  const quickCompareSlugs = masterProducts
-    .filter((p) =>
-      getMasterProductHref(p, catSlugById).startsWith('/smartphones/')
-    )
-    .map((p) => p.slug)
-    .slice(0, 3);
+  const quickCompareSlugs = buildHomeQuickCompareSlugs(
+    gridProducts,
+    catSlugById
+  );
 
   return (
     <ClientMessages scope="home">
@@ -228,7 +936,10 @@ export default async function Home({
                       backdropFilter: 'blur(12px)',
                     }}
                   >
-                    <BsShieldCheck className="text-success" />
+                    <BsShieldCheck
+                      className="text-success"
+                      aria-hidden="true"
+                    />
                     <span>{tRate('home.heroBadge')}</span>
                   </div>
                   <h1
@@ -687,210 +1398,13 @@ export default async function Home({
               )}
 
               {/* Section 2.6: Live Cross-Platform Deal & Fake-Sale Trap Radar (#87) */}
-              {dealRadar &&
-                (dealRadar.genuineDeals.length > 0 ||
-                  dealRadar.fakeSaleTraps.length > 0) && (
-                  <div
-                    className="rate-card rate-home-radar mt-4"
-                    data-testid="homepage-deal-radar"
-                  >
-                    <div className="rate-section-head">
-                      <div>
-                        <span className="rate-eyebrow mb-2">
-                          {tHome('radarHomeBadge')}
-                        </span>
-                        <h3 className="rate-home-radar-title">
-                          {tHome('radarHomeAnalyzed', {
-                            offers: dealRadar.totalOffersAnalyzed,
-                            merchants: dealRadar.totalMerchantsAnalyzed,
-                            clusters: dealRadar.totalClustersAnalyzed,
-                          })}
-                        </h3>
-                      </div>
-                      <div className="rate-section-links">
-                        <Link href="/inspect">
-                          <BsShieldCheck aria-hidden="true" />
-                          {tHome('radarHomeInspectBtn')}
-                        </Link>
-                        <Link href="/deals">
-                          {tHome('radarHomeDealHubBtn')}
-                          <BsArrowRight aria-hidden="true" />
-                        </Link>
-                      </div>
-                    </div>
-
-                    <div className="row g-4">
-                      {dealRadar.genuineDeals.length > 0 && (
-                        <div className="col-lg-6">
-                          <h4 className="rate-radar-list-title is-good">
-                            <BsGraphDownArrow aria-hidden="true" />
-                            {tHome('radarGenuineTitle', {
-                              count: dealRadar.genuineDeals.length,
-                            })}
-                          </h4>
-                          <ul className="rate-radar-list">
-                            {dealRadar.genuineDeals.slice(0, 3).map((g) => (
-                              <li key={g.id}>
-                                <div className="rate-radar-item-main">
-                                  <Link
-                                    href={g.productHref}
-                                    className="text-truncate"
-                                  >
-                                    {g.productName}
-                                  </Link>
-                                  <span className="rate-radar-item-meta text-truncate">
-                                    <span className="rate-radar-platform">
-                                      {g.platform}
-                                    </span>
-                                    <ContentText
-                                      text={g.merchantName}
-                                      locale={locale}
-                                    />{' '}
-                                    ·{' '}
-                                    {tHome('medianPriceInline', {
-                                      price: formatNumber(
-                                        g.marketMedianPrice,
-                                        locale
-                                      ),
-                                    })}
-                                  </span>
-                                </div>
-                                <div className="rate-radar-item-side">
-                                  <span className="rate-radar-price">
-                                    {formatPriceVnd(g.priceCurrent, locale)}
-                                  </span>
-                                  <span className="rate-radar-tag is-good">
-                                    {tHome('vsMedianPctBadge', {
-                                      pct: formatPlainNumber(
-                                        g.savingsVsMedianPct,
-                                        locale
-                                      ),
-                                    })}
-                                  </span>
-                                </div>
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
-                      )}
-
-                      {dealRadar.fakeSaleTraps.length > 0 && (
-                        <div className="col-lg-6">
-                          <h4 className="rate-radar-list-title is-bad">
-                            <BsExclamationTriangle aria-hidden="true" />
-                            {tHome('radarFakeTitle', {
-                              count: dealRadar.fakeSaleTraps.length,
-                            })}
-                          </h4>
-                          <ul className="rate-radar-list">
-                            {dealRadar.fakeSaleTraps.slice(0, 3).map((t) => (
-                              <li key={t.id}>
-                                <div className="rate-radar-item-main">
-                                  <Link
-                                    href={t.productHref}
-                                    className="text-truncate"
-                                  >
-                                    {t.productName}
-                                  </Link>
-                                  <span className="rate-radar-item-meta text-truncate">
-                                    <span className="rate-radar-platform">
-                                      {t.platform}
-                                    </span>
-                                    <ContentText
-                                      text={t.merchantName}
-                                      locale={locale}
-                                    />{' '}
-                                    · {tHome('inflatedOrigInline')}{' '}
-                                    <s>
-                                      {formatPriceVnd(
-                                        t.priceOriginal || t.priceCurrent,
-                                        locale
-                                      )}
-                                    </s>
-                                  </span>
-                                </div>
-                                <div className="rate-radar-item-side">
-                                  <span className="rate-radar-price">
-                                    {formatPriceVnd(t.priceCurrent, locale)}
-                                  </span>
-                                  <span className="rate-radar-tag is-bad">
-                                    {tHome('fakeMarkupPctBadge', {
-                                      pct: formatPlainNumber(
-                                        t.fakeMarkupPct,
-                                        locale
-                                      ),
-                                    })}
-                                  </span>
-                                </div>
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
-                      )}
-                    </div>
-
-                    {Array.isArray(dealRadar.priceSpreadLeaders) &&
-                      dealRadar.priceSpreadLeaders.length > 0 && (
-                        <div
-                          data-testid="homepage-price-spread-leaders"
-                          className="rate-radar-spread"
-                        >
-                          <div className="rate-radar-spread-head">
-                            <h4 className="rate-radar-list-title">
-                              <BsArrowLeftRight aria-hidden="true" />
-                              {tHome('spreadLeadersTitle')}
-                            </h4>
-                            <Link href="/deals">
-                              {tHome('viewAllSpreadBtn', {
-                                count: dealRadar.priceSpreadLeaders.length,
-                              })}
-                              <BsArrowRight aria-hidden="true" />
-                            </Link>
-                          </div>
-                          <div className="row g-2">
-                            {dealRadar.priceSpreadLeaders
-                              .slice(0, 3)
-                              .map((s) => (
-                                <div key={s.id} className="col-lg-4 col-md-6">
-                                  <div className="rate-radar-spread-item">
-                                    <div className="rate-radar-item-main">
-                                      <Link
-                                        href={s.productHref}
-                                        className="text-truncate"
-                                      >
-                                        {s.productName}
-                                      </Link>
-                                      <span className="rate-radar-item-meta">
-                                        <span className="rate-radar-platform">
-                                          {s.cheapestPlatform}
-                                        </span>
-                                        vs{' '}
-                                        <span className="rate-radar-platform">
-                                          {s.priciestPlatform}
-                                        </span>
-                                      </span>
-                                    </div>
-                                    <div className="rate-radar-item-side">
-                                      <span className="rate-radar-price">
-                                        -{formatPriceVnd(s.spreadVnd, locale)}
-                                      </span>
-                                      <span className="rate-radar-tag is-warn">
-                                        {tHome('spreadPctBadge', {
-                                          pct: formatPlainNumber(
-                                            s.spreadPct,
-                                            locale
-                                          ),
-                                        })}
-                                      </span>
-                                    </div>
-                                  </div>
-                                </div>
-                              ))}
-                          </div>
-                        </div>
-                      )}
-                  </div>
-                )}
+              {dealRadar && (
+                <HomeDealRadarBlock
+                  dealRadar={dealRadar}
+                  locale={locale}
+                  tHome={(key, values) => tHome(key, values)}
+                />
+              )}
             </div>
           </section>
         )}
@@ -926,159 +1440,16 @@ export default async function Home({
             <div className="row g-4">
               {merchants
                 .slice(0, HOME_MERCHANT_PREVIEW_COUNT)
-                .map((merchant) => {
-                  const tone = (risk: number) => `is-${merchantRiskTone(risk)}`;
-                  // No data at all: no tone and no number (DOS/Rate#1484).
-                  const overallTone =
-                    merchant.risk_score == null
-                      ? ''
-                      : tone(merchant.risk_score);
-                  const dosafeScore = knownDosafeRiskScore(merchant);
-                  const trustLabel =
-                    merchant.trust_score == null
-                      ? tHome('merchantNoDataLabel')
-                      : overallTone === 'is-good'
-                        ? tHome('merchantTrustedLabel')
-                        : overallTone === 'is-warn'
-                          ? tHome('merchantCautionLabel')
-                          : tHome('merchantHighRiskLabel');
-                  const breakdown = merchant.review_risk_breakdown;
-                  const totalRevAnalyzed = breakdown?.total_reviews ?? 0;
-                  const flaggedRevCount =
-                    (breakdown?.seeding_fake_count ?? 0) +
-                    (breakdown?.coin_spam_count ?? 0) +
-                    (breakdown?.sabotage_or_bombing_count ?? 0);
-
-                  return (
-                    <div key={merchant.id} className="col-lg-6 col-12">
-                      <article className="rate-card rate-merchant-card">
-                        <div className="rate-merchant-head">
-                          <span
-                            className="rate-category-card-icon"
-                            aria-hidden="true"
-                          >
-                            <BsShop />
-                          </span>
-                          <div className="rate-merchant-id">
-                            <h3 className="rate-merchant-name">
-                              <Link href={`/merchants/${merchant.id}`}>
-                                <ContentText
-                                  text={merchant.name}
-                                  locale={locale}
-                                />
-                              </Link>
-                            </h3>
-                            <div className="rate-merchant-meta">
-                              <span className="rate-radar-platform">
-                                {merchant.platform}
-                              </span>
-                              {tHome('shopIdLabel')} {merchant.platform_shop_id}
-                              {merchant.is_official && (
-                                <span className="rate-merchant-official">
-                                  <BsCheckCircleFill aria-hidden="true" />
-                                  {tHome('officialMallBadge')}
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                          <span className={`rate-radar-tag ${overallTone}`}>
-                            {merchant.trust_score == null
-                              ? trustLabel
-                              : `${trustLabel} · ${merchant.trust_score}/100`}
-                          </span>
-                        </div>
-
-                        <dl className="rate-merchant-metrics">
-                          <div>
-                            <dt>{tHome('dosafeRiskLabel')}</dt>
-                            {/* No DOSafe score: no number, and no "no scam
-                                detected" (DOS/Rate#1479). */}
-                            {dosafeScore == null ? (
-                              <dd>{tHome('dosafeRiskNoData')}</dd>
-                            ) : (
-                              <>
-                                <dd className={tone(dosafeScore)}>
-                                  {dosafeScore}/100
-                                </dd>
-                                {merchantRiskTone(dosafeScore) === 'good' && (
-                                  <dd className="rate-merchant-note">
-                                    {tHome('noScamDetected')}
-                                  </dd>
-                                )}
-                              </>
-                            )}
-                          </div>
-                          <div>
-                            <dt>{tHome('reviewRiskLabel')}</dt>
-                            {/* No analysed reviews: no number (DOS/Rate#1249). */}
-                            {hasReviewRiskEvidence(breakdown) ? (
-                              <>
-                                <dd
-                                  className={tone(merchant.review_risk_score)}
-                                >
-                                  {merchant.review_risk_score}/100
-                                </dd>
-                                <dd className="rate-merchant-note">
-                                  {tHome('flaggedReviewsRatio', {
-                                    flagged: flaggedRevCount,
-                                    total: totalRevAnalyzed,
-                                  })}
-                                </dd>
-                              </>
-                            ) : (
-                              <>
-                                <dd>{tHome('reviewRiskNoData')}</dd>
-                                <dd className="rate-merchant-note">
-                                  {tHome('reviewRiskNoReviews')}
-                                </dd>
-                              </>
-                            )}
-                          </div>
-                          <div>
-                            <dt>{tHome('ratingsAndProductsLabel')}</dt>
-                            <dd>
-                              {merchant.rating_star != null && (
-                                <>
-                                  <StarRating
-                                    value={merchant.rating_star}
-                                    size="sm"
-                                  />
-                                  {' · '}
-                                </>
-                              )}
-                              {merchant.product_count}{' '}
-                              {tHome('productsShortUnit')}
-                            </dd>
-                            <dd className="rate-merchant-note">
-                              {merchant.follower_count > 0
-                                ? tHome('followersCountText', {
-                                    // A number, so the plural picks its form;
-                                    // the message formats it (DOS/Rate#1398).
-                                    count: merchant.follower_count,
-                                  })
-                                : tHome('periodicMonitoring')}
-                            </dd>
-                          </div>
-                        </dl>
-
-                        <div className="rate-merchant-foot">
-                          {merchant.updated_at ? (
-                            <span>
-                              {tHome('lastUpdatedLabel')}{' '}
-                              {formatDate(merchant.updated_at, locale)}
-                            </span>
-                          ) : (
-                            <span />
-                          )}
-                          <Link href={`/merchants/${merchant.id}`}>
-                            {tRate('home.viewMerchantAuditBtn')}
-                            <BsArrowRight aria-hidden="true" />
-                          </Link>
-                        </div>
-                      </article>
-                    </div>
-                  );
-                })}
+                .map((merchant) => (
+                  <div key={merchant.id} className="col-lg-6 col-12">
+                    <HomeMerchantCard
+                      merchant={merchant}
+                      locale={locale}
+                      tHome={(key, values) => tHome(key, values)}
+                      viewAuditLabel={tRate('home.viewMerchantAuditBtn')}
+                    />
+                  </div>
+                ))}
             </div>
           </div>
         </section>
@@ -1125,99 +1496,15 @@ export default async function Home({
               </div>
 
               <div className="row g-4">
-                {platformStats.recentReviewsSample.map((rev) => {
-                  const isPending = isPendingReview(rev);
-                  const isFlagged =
-                    !isPending &&
-                    (!rev.include_in_rating ||
-                      rev.flag_category !== 'authentic');
-                  const confidencePct =
-                    rev.fake_probability != null
-                      ? Math.round((1 - Number(rev.fake_probability)) * 100)
-                      : null;
-                  const stars = Math.max(1, Math.min(5, rev.rating_star));
-
-                  return (
-                    <div key={rev.id} className="col-lg-4 col-md-6 col-12">
-                      <article className="rate-card rate-review-card">
-                        <div className="rate-review-head">
-                          <div>
-                            <div className="rate-review-author">
-                              <ContentText
-                                text={rev.author_name}
-                                locale={locale}
-                              />
-                            </div>
-                            <div
-                              className="rate-review-stars"
-                              role="img"
-                              aria-label={tHome('starsAria', { count: stars })}
-                            >
-                              {Array.from({ length: stars }).map((_, idx) => (
-                                <BsStarFill key={idx} aria-hidden="true" />
-                              ))}
-                            </div>
-                          </div>
-                          {isPending ? (
-                            <span className="rate-radar-tag">
-                              {tHome('pendingAnalysisBadge')}
-                            </span>
-                          ) : isFlagged ? (
-                            <span className="rate-radar-tag is-warn">
-                              <BsShieldExclamation aria-hidden="true" />
-                              {rev.flag_category === 'low_value_coin_spam'
-                                ? tHome('coinSpamBadge')
-                                : tHome('suspectedSeedingBadge')}
-                            </span>
-                          ) : (
-                            <span className="rate-radar-tag is-good">
-                              <BsCheckCircleFill aria-hidden="true" />
-                              {confidencePct != null
-                                ? tHome('authenticConfidenceBadge', {
-                                    pct: formatPlainNumber(
-                                      confidencePct,
-                                      locale
-                                    ),
-                                  })
-                                : tHome('authenticBadge')}
-                            </span>
-                          )}
-                        </div>
-
-                        {rev.comment?.trim() && (
-                          <p
-                            className="rate-review-body"
-                            lang={contentLang(rev.comment, locale)}
-                          >
-                            &ldquo;{rev.comment.trim()}&rdquo;
-                          </p>
-                        )}
-
-                        <div className="rate-review-foot">
-                          <BsPhone aria-hidden="true" />
-                          {rev.masterRouteHref ? (
-                            <Link
-                              href={rev.masterRouteHref}
-                              className="text-truncate"
-                            >
-                              <ContentText
-                                text={rev.productTitle}
-                                locale={locale}
-                              />
-                            </Link>
-                          ) : (
-                            <span className="text-truncate">
-                              <ContentText
-                                text={rev.productTitle}
-                                locale={locale}
-                              />
-                            </span>
-                          )}
-                        </div>
-                      </article>
-                    </div>
-                  );
-                })}
+                {platformStats.recentReviewsSample.map((rev) => (
+                  <div key={rev.id} className="col-lg-4 col-md-6 col-12">
+                    <HomeReviewCard
+                      rev={rev}
+                      locale={locale}
+                      tHome={(key, values) => tHome(key, values)}
+                    />
+                  </div>
+                ))}
               </div>
             </div>
           </section>
