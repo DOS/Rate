@@ -378,6 +378,32 @@ export function buildCompareMarkdownMinPriceRow(
     .join(' | ')} |`;
 }
 
+function lookupCompareOwnSlug(
+  map: Readonly<Record<string, string>> | null | undefined,
+  slug: string
+): string | undefined {
+  if (!map || !slug || !Object.hasOwn(map, slug)) return undefined;
+  const val = map[slug];
+  return typeof val === 'string' && val ? val : undefined;
+}
+
+function setCompareOwnSlug(
+  map: Record<string, string>,
+  slug: string,
+  value: string
+): void {
+  if (slug === '__proto__') {
+    Object.defineProperty(map, slug, {
+      value,
+      enumerable: true,
+      configurable: true,
+      writable: true,
+    });
+  } else {
+    map[slug] = value;
+  }
+}
+
 export function isSameCompareVersusItem(
   slugA: string,
   slugB: string,
@@ -386,14 +412,14 @@ export function isSameCompareVersusItem(
   if (!slugA || !slugB) return false;
   if (slugA.toLowerCase() === slugB.toLowerCase()) return true;
   const resolveSide = (slug: string) => {
-    const mapped = versusSlugMap?.[slug];
+    const mapped = lookupCompareOwnSlug(versusSlugMap, slug);
     return mapped && !mapped.toLowerCase().includes('-vs-') ? mapped : slug;
   };
   if (resolveSide(slugA).toLowerCase() === resolveSide(slugB).toLowerCase()) {
     return true;
   }
-  const rawItemA = versusSlugMap?.[slugA];
-  const rawItemB = versusSlugMap?.[slugB];
+  const rawItemA = lookupCompareOwnSlug(versusSlugMap, slugA);
+  const rawItemB = lookupCompareOwnSlug(versusSlugMap, slugB);
   return Boolean(
     rawItemA && rawItemB && rawItemA.toLowerCase() === rawItemB.toLowerCase()
   );
@@ -407,13 +433,15 @@ export function isValidCompareVersusPair(
   if (!slugA || !slugB) return false;
   if (isSameCompareVersusItem(slugA, slugB, versusSlugMap)) return false;
   if (
-    versusSlugMap?.[slugA]?.toLowerCase().includes('-vs-') ||
-    versusSlugMap?.[slugB]?.toLowerCase().includes('-vs-')
+    lookupCompareOwnSlug(versusSlugMap, slugA)
+      ?.toLowerCase()
+      .includes('-vs-') ||
+    lookupCompareOwnSlug(versusSlugMap, slugB)?.toLowerCase().includes('-vs-')
   ) {
     return false;
   }
   const resolveSide = (slug: string) => {
-    const mapped = versusSlugMap?.[slug];
+    const mapped = lookupCompareOwnSlug(versusSlugMap, slug);
     return mapped && !mapped.toLowerCase().includes('-vs-') ? mapped : slug;
   };
   const [first, second] = canonicalVersusOrder(
@@ -433,41 +461,45 @@ export function buildCompareVersusSlugMap(
   itemSlugBySlug?: Readonly<Record<string, string>> | null,
   clientItemSlugs?: Readonly<Record<string, string>> | null
 ): Record<string, string> | undefined {
-  const map: Record<string, string> = {};
+  const map = Object.create(null) as Record<string, string>;
+  const explicitRowItemSlugs = new Set<string>();
   for (const row of rows) {
     if (!row || typeof row.slug !== 'string' || !row.slug) continue;
     const itemRow = row as ItemCatalogRow;
     if (typeof itemRow.item_slug === 'string' && itemRow.item_slug) {
-      map[row.slug] = itemRow.item_slug;
+      setCompareOwnSlug(map, row.slug, itemRow.item_slug);
+      explicitRowItemSlugs.add(row.slug);
     }
   }
   if (itemSlugBySlug) {
     for (const [slug, itemSlug] of Object.entries(itemSlugBySlug)) {
       if (slug && typeof itemSlug === 'string' && itemSlug) {
-        map[slug] = itemSlug;
+        setCompareOwnSlug(map, slug, itemSlug);
       }
     }
   }
   if (clientItemSlugs) {
+    // Confirmed client answers (including confirmed unlinked `slug -> slug`)
+    // take precedence over sibling heuristics; failed fetches store `''`.
     for (const [slug, itemSlug] of Object.entries(clientItemSlugs)) {
-      if (
-        slug &&
-        typeof itemSlug === 'string' &&
-        itemSlug &&
-        itemSlug !== slug
-      ) {
-        map[slug] = itemSlug;
+      if (slug && typeof itemSlug === 'string' && itemSlug) {
+        setCompareOwnSlug(map, slug, itemSlug);
       }
     }
   }
 
   const itemModeActive = itemSlugBySlug != null || Object.keys(map).length > 0;
   if (itemModeActive) {
-    // Propagate unambiguous Item slugs across unmapped storage siblings sharing
-    // `brand:model:` on /compare where itemSlugBySlug covers initialProducts only.
+    // Propagate only genuine Item slugs (never `getItemSlugsFor`'s unlinked
+    // identity fallback `slug -> slug`) across unresolved `brand:model:` siblings.
     const prefixItemSlugs = new Map<string, Set<string>>();
     for (const row of rows) {
-      if (!row?.slug || !map[row.slug]) continue;
+      if (!row?.slug) continue;
+      const mapped = lookupCompareOwnSlug(map, row.slug);
+      if (!mapped) continue;
+      const isGenuineItemSlug =
+        mapped !== row.slug || explicitRowItemSlugs.has(row.slug);
+      if (!isGenuineItemSlug) continue;
       const prefix = masterSiblingKeyPrefix(row.model_key);
       if (!prefix) continue;
       let set = prefixItemSlugs.get(prefix);
@@ -475,22 +507,14 @@ export function buildCompareVersusSlugMap(
         set = new Set<string>();
         prefixItemSlugs.set(prefix, set);
       }
-      set.add(map[row.slug]!);
+      set.add(mapped);
     }
     for (const row of rows) {
-      if (!row?.slug || map[row.slug]) continue;
+      if (!row?.slug || lookupCompareOwnSlug(map, row.slug)) continue;
       const prefix = masterSiblingKeyPrefix(row.model_key);
       const set = prefix ? prefixItemSlugs.get(prefix) : undefined;
       if (set && set.size === 1) {
-        map[row.slug] = [...set][0]!;
-      }
-    }
-  }
-
-  if (clientItemSlugs) {
-    for (const [slug, itemSlug] of Object.entries(clientItemSlugs)) {
-      if (slug && typeof itemSlug === 'string' && itemSlug && !map[slug]) {
-        map[slug] = itemSlug;
+        setCompareOwnSlug(map, row.slug, [...set][0]!);
       }
     }
   }
@@ -507,38 +531,29 @@ export function resolveComparePopularBattles(
   maxPairs = 3
 ) {
   const mergedMap =
-    buildCompareVersusSlugMap(catalogCandidates, versusSlugMap) ?? {};
-  const itemModeActive =
-    versusSlugMap != null || Object.keys(mergedMap).length > 0;
+    buildCompareVersusSlugMap(catalogCandidates, versusSlugMap) ??
+    (Object.create(null) as Record<string, string>);
 
   const ranked = rankMasterProductsForLeaderboard(catalogCandidates, {
     category,
     criterion: 'combined',
   });
   const seenItems = new Set<string>();
-  const seenPrefixes = new Set<string>();
   const uniqueItemCandidates: MasterProduct[] = [];
   for (const entry of ranked) {
     const slug = entry.product.slug;
     if (!slug) continue;
-    const mappedItem = mergedMap[slug];
+    const mappedItem = lookupCompareOwnSlug(mergedMap, slug);
     if (mappedItem && mappedItem.toLowerCase().includes('-vs-')) {
       continue;
     }
     const itemKey = (mappedItem || slug).toLowerCase();
-    const siblingPrefix = itemModeActive
-      ? masterSiblingKeyPrefix(entry.product.model_key)
-      : '';
-    if (
-      seenItems.has(itemKey) ||
-      (!mappedItem && siblingPrefix && seenPrefixes.has(siblingPrefix))
-    ) {
+    if (seenItems.has(itemKey)) {
       continue;
     }
     seenItems.add(itemKey);
-    if (siblingPrefix) seenPrefixes.add(siblingPrefix);
     uniqueItemCandidates.push(
-      mappedItem
+      mappedItem && mappedItem !== slug
         ? ({
             ...entry.product,
             item_slug: mappedItem,
@@ -1553,7 +1568,9 @@ export default function CompareWorkspace({
       )
     );
     const missing = candidateSlugs.filter(
-      (slug) => !itemSlugBySlug[slug] && !(slug in clientItemSlugs)
+      (slug) =>
+        !lookupCompareOwnSlug(itemSlugBySlug, slug) &&
+        !Object.hasOwn(clientItemSlugs, slug)
     );
     if (missing.length === 0) return;
     let cancelled = false;
@@ -3002,7 +3019,7 @@ export default function CompareWorkspace({
                             href={getMasterProductHref({
                               ...p,
                               slug:
-                                versusSlugMap?.[p.slug] ||
+                                lookupCompareOwnSlug(versusSlugMap, p.slug) ||
                                 catalogRowSlug(p as ItemCatalogRow),
                             })}
                             className="fw-bold text-dark text-decoration-none h6 mb-2"
@@ -3048,7 +3065,7 @@ export default function CompareWorkspace({
                               href={`${getMasterProductHref({
                                 ...p,
                                 slug:
-                                  versusSlugMap?.[p.slug] ||
+                                  lookupCompareOwnSlug(versusSlugMap, p.slug) ||
                                   catalogRowSlug(p as ItemCatalogRow),
                               })}#jreviews-section`}
                               className="btn btn-sm btn-dark rounded-pill fw-medium px-3"

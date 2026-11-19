@@ -49,15 +49,41 @@ export function formatVersusPeerPriceBadge(value: unknown): string {
   return `${Math.max(1, Math.round(num / 1_000))}K`;
 }
 
+function lookupVersusOwnSlug(
+  map: Readonly<Record<string, string>> | null | undefined,
+  slug: string
+): string | undefined {
+  if (!map || !slug || !Object.hasOwn(map, slug)) return undefined;
+  const val = map[slug];
+  return typeof val === 'string' && val ? val : undefined;
+}
+
+function setVersusOwnSlug(
+  map: Record<string, string>,
+  slug: string,
+  value: string
+): void {
+  if (slug === '__proto__') {
+    Object.defineProperty(map, slug, {
+      value,
+      enumerable: true,
+      configurable: true,
+      writable: true,
+    });
+  } else {
+    map[slug] = value;
+  }
+}
+
 export function buildVersusPeerItemSlugMap(
   peers: readonly ItemCatalogRow[],
   itemSlugBySlug?: Readonly<Record<string, string>> | null
 ): Record<string, string> {
-  const map: Record<string, string> = {};
+  const map = Object.create(null) as Record<string, string>;
   if (itemSlugBySlug) {
     for (const [slug, itemSlug] of Object.entries(itemSlugBySlug)) {
       if (slug && typeof itemSlug === 'string' && itemSlug) {
-        map[slug] = itemSlug;
+        setVersusOwnSlug(map, slug, itemSlug);
       }
     }
   }
@@ -66,9 +92,9 @@ export function buildVersusPeerItemSlugMap(
     if (
       typeof peer.item_slug === 'string' &&
       peer.item_slug &&
-      !map[peer.slug]
+      !lookupVersusOwnSlug(map, peer.slug)
     ) {
-      map[peer.slug] = peer.item_slug;
+      setVersusOwnSlug(map, peer.slug, peer.item_slug);
     }
   }
   return map;
@@ -79,7 +105,7 @@ export function resolveVersusPeerSideSlug(
   itemSlugBySlug?: Readonly<Record<string, string>> | null
 ): string {
   if (!slug) return '';
-  const mapped = itemSlugBySlug?.[slug];
+  const mapped = lookupVersusOwnSlug(itemSlugBySlug, slug);
   return mapped && !mapped.toLowerCase().includes('-vs-') ? mapped : slug;
 }
 
@@ -93,8 +119,8 @@ export function isSameVersusPeerItem(
   const sideA = resolveVersusPeerSideSlug(slugA, itemSlugBySlug);
   const sideB = resolveVersusPeerSideSlug(slugB, itemSlugBySlug);
   if (sideA.toLowerCase() === sideB.toLowerCase()) return true;
-  const rawItemA = itemSlugBySlug?.[slugA];
-  const rawItemB = itemSlugBySlug?.[slugB];
+  const rawItemA = lookupVersusOwnSlug(itemSlugBySlug, slugA);
+  const rawItemB = lookupVersusOwnSlug(itemSlugBySlug, slugB);
   return Boolean(
     rawItemA && rawItemB && rawItemA.toLowerCase() === rawItemB.toLowerCase()
   );
@@ -108,8 +134,10 @@ export function isValidVersusPeerPair(
   if (!slugA || !slugB) return false;
   if (isSameVersusPeerItem(slugA, slugB, itemSlugBySlug)) return false;
   if (
-    itemSlugBySlug?.[slugA]?.toLowerCase().includes('-vs-') ||
-    itemSlugBySlug?.[slugB]?.toLowerCase().includes('-vs-')
+    lookupVersusOwnSlug(itemSlugBySlug, slugA)
+      ?.toLowerCase()
+      .includes('-vs-') ||
+    lookupVersusOwnSlug(itemSlugBySlug, slugB)?.toLowerCase().includes('-vs-')
   ) {
     return false;
   }

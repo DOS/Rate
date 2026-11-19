@@ -119,6 +119,21 @@ export function formatVersusPriceVnd(
   return safe > 0 ? formatPriceVnd(safe, locale) : '-';
 }
 
+export function resolveVersusScoreMinPriceVnd(
+  score:
+    | (Pick<ScoredVersusItem, 'minPrice'> & {
+        product?: { min_price?: unknown } | null;
+      })
+    | null
+    | undefined
+): number {
+  if (!score) return 0;
+  if (score.product && Object.hasOwn(score.product, 'min_price')) {
+    return sanitizeVersusPriceVnd(score.product.min_price);
+  }
+  return sanitizeVersusPriceVnd(score.minPrice);
+}
+
 export function buildVersusMarkdownMinPriceRow(
   rowLabel: string,
   minPriceA: unknown,
@@ -225,8 +240,8 @@ export default function VersusInteractiveScoreboard({
     }));
   };
 
-  const safeMinPriceA = sanitizeVersusPriceVnd(scoreA.minPrice);
-  const safeMinPriceB = sanitizeVersusPriceVnd(scoreB.minPrice);
+  const safeMinPriceA = resolveVersusScoreMinPriceVnd(scoreA);
+  const safeMinPriceB = resolveVersusScoreMinPriceVnd(scoreB);
   const priceSide = comparePositiveMinPrices(safeMinPriceA, safeMinPriceB);
   const priceAdvantageLabel =
     priceSide === 'A'

@@ -135,7 +135,12 @@ export function attachVersusItemSlug<
   product: T,
   itemSlugBySlug?: Readonly<Record<string, string>> | null
 ): T & { item_slug?: string } {
-  const mapped = itemSlugBySlug?.[product.slug];
+  const mapped =
+    itemSlugBySlug &&
+    product.slug &&
+    Object.hasOwn(itemSlugBySlug, product.slug)
+      ? itemSlugBySlug[product.slug]
+      : undefined;
   return typeof mapped === 'string' && mapped
     ? { ...product, item_slug: mapped }
     : product;

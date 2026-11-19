@@ -209,22 +209,52 @@ export function formatLeaderboardActiveScore(
     : emptyText;
 }
 
+function lookupLeaderboardOwnSlug(
+  map: Readonly<Record<string, string>> | null | undefined,
+  slug: string
+): string | undefined {
+  if (!map || !slug || !Object.hasOwn(map, slug)) return undefined;
+  const val = map[slug];
+  return typeof val === 'string' && val ? val : undefined;
+}
+
+function setLeaderboardOwnSlug(
+  map: Record<string, string>,
+  slug: string,
+  value: string
+): void {
+  if (slug === '__proto__') {
+    Object.defineProperty(map, slug, {
+      value,
+      enumerable: true,
+      configurable: true,
+      writable: true,
+    });
+  } else {
+    map[slug] = value;
+  }
+}
+
 export function buildLeaderboardItemSlugMap(
   products: readonly ItemCatalogRow[],
   itemSlugBySlug?: Readonly<Record<string, string>> | null
 ): Record<string, string> {
-  const map: Record<string, string> = {};
+  const map = Object.create(null) as Record<string, string>;
   if (itemSlugBySlug) {
     for (const [slug, itemSlug] of Object.entries(itemSlugBySlug)) {
       if (slug && typeof itemSlug === 'string' && itemSlug) {
-        map[slug] = itemSlug;
+        setLeaderboardOwnSlug(map, slug, itemSlug);
       }
     }
   }
   for (const p of products) {
     if (!p || typeof p.slug !== 'string' || !p.slug) continue;
-    if (typeof p.item_slug === 'string' && p.item_slug && !map[p.slug]) {
-      map[p.slug] = p.item_slug;
+    if (
+      typeof p.item_slug === 'string' &&
+      p.item_slug &&
+      !lookupLeaderboardOwnSlug(map, p.slug)
+    ) {
+      setLeaderboardOwnSlug(map, p.slug, p.item_slug);
     }
   }
   return map;
@@ -235,7 +265,7 @@ export function resolveLeaderboardVersusSideSlug(
   itemSlugBySlug?: Readonly<Record<string, string>> | null
 ): string {
   if (!slug) return '';
-  const mapped = itemSlugBySlug?.[slug];
+  const mapped = lookupLeaderboardOwnSlug(itemSlugBySlug, slug);
   return mapped && !mapped.toLowerCase().includes('-vs-') ? mapped : slug;
 }
 
@@ -249,8 +279,8 @@ export function isSameLeaderboardVersusItem(
   const sideA = resolveLeaderboardVersusSideSlug(slugA, itemSlugBySlug);
   const sideB = resolveLeaderboardVersusSideSlug(slugB, itemSlugBySlug);
   if (sideA.toLowerCase() === sideB.toLowerCase()) return true;
-  const rawItemA = itemSlugBySlug?.[slugA];
-  const rawItemB = itemSlugBySlug?.[slugB];
+  const rawItemA = lookupLeaderboardOwnSlug(itemSlugBySlug, slugA);
+  const rawItemB = lookupLeaderboardOwnSlug(itemSlugBySlug, slugB);
   return Boolean(
     rawItemA && rawItemB && rawItemA.toLowerCase() === rawItemB.toLowerCase()
   );
@@ -264,8 +294,12 @@ export function isValidLeaderboardVersusPair(
   if (!slugA || !slugB) return false;
   if (isSameLeaderboardVersusItem(slugA, slugB, itemSlugBySlug)) return false;
   if (
-    itemSlugBySlug?.[slugA]?.toLowerCase().includes('-vs-') ||
-    itemSlugBySlug?.[slugB]?.toLowerCase().includes('-vs-')
+    lookupLeaderboardOwnSlug(itemSlugBySlug, slugA)
+      ?.toLowerCase()
+      .includes('-vs-') ||
+    lookupLeaderboardOwnSlug(itemSlugBySlug, slugB)
+      ?.toLowerCase()
+      .includes('-vs-')
   ) {
     return false;
   }
@@ -293,7 +327,8 @@ export function resolveLeaderboardCompareSlugs(
     const rawSlug = entry?.product?.slug?.trim() ?? '';
     if (!rawSlug) continue;
     const canonical = (
-      itemSlugBySlug?.[rawSlug] || catalogRowSlug(entry.product)
+      lookupLeaderboardOwnSlug(itemSlugBySlug, rawSlug) ||
+      catalogRowSlug(entry.product)
     ).trim();
     const key = (canonical || rawSlug).toLowerCase();
     if (!key || seen.has(key)) continue;
