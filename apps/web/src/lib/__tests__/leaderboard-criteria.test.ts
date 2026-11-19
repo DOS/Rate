@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import Module from 'node:module';
 import path from 'node:path';
-import { mock } from 'node:test';
+import { mock, test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
@@ -24,7 +25,23 @@ import {
   shouldDismissCompareOnOutsidePointerDown,
   syncCompareReplaceFocusState,
 } from '../../components/compare/CompareWorkspace';
-import DealFinderWorkspace from '../../components/deals/DealFinderWorkspace';
+import DealFinderWorkspace, {
+  buildDealRadarCsvRows,
+  buildDealRadarMarkdown,
+  buildDealsMarkdown,
+  filterValidRadarDeals,
+  filterValidRadarSpreads,
+  formatDealRadarPriceVnd,
+  rankProductsForDealFinder,
+  resolveClaimedOriginalPriceVnd,
+  sanitizeDealFinderBudgetVnd,
+  sanitizeDealRadarPriceVnd,
+} from '../../components/deals/DealFinderWorkspace';
+import CategoryCatalogToolbar, {
+  buildCatalogCsvRow,
+  buildCatalogItemSlugMap,
+  sanitizeCatalogPriceVnd,
+} from '../../components/leaderboard/CategoryCatalogToolbar';
 import LeaderboardExplorer, {
   formatLeaderboardDisplayPriceVnd,
   formatLeaderboardPriceVnd,
@@ -35,11 +52,19 @@ import ProductOffersExplorer from '../../components/leaderboard/ProductOffersExp
 import { pickClientMessages } from '../client-messages';
 import {
   EMPTY_RADAR_SIGNAL,
+  buildRadarIndex,
   radarLabel,
   radarMarkdownCell,
+  type CrossPlatformDealRadarItem,
+  type CrossPlatformDealRadarResponse,
+  type CrossPlatformPriceSpreadItem,
   type RadarSignal,
 } from '../deal-radar';
 import { discountVerdictCopy } from '../discount-verdict-copy';
+import { compareTarget, parseCompareToken, versusHref } from '../item-compare';
+import type { ItemCatalogRow } from '../item-directory';
+import { formatNumber } from '../locale-format';
+import { MAX_VALID_VND_PRICE } from '../rate-domain';
 import {
   computeJReviewsCriteriaScores,
   computeProductStandingInCategory,
@@ -1137,6 +1162,689 @@ assert.equal(
   );
   assert.match(compareSrc, /scheduleCompareReplaceFocus\(/);
   assert.match(compareSrc, /syncCompareReplaceFocusState\(/);
+}
+
+// DealFinder localized exports, unfabricated list prices, catalog CSV unpriced
+// cells, canonical Item versus slugs, and smartphone catalog icon a11y (#1745).
+{
+  const testDir = path.dirname(fileURLToPath(import.meta.url));
+  const webSrcDir = path.resolve(testDir, '../..');
+  const Provider = NextIntlClientProvider as React.ComponentType<{
+    locale: string;
+    messages: Record<string, unknown>;
+    timeZone: string;
+    children?: React.ReactNode;
+  }>;
+  const localeCatalogs = {
+    vi: viMessages,
+    en: enMessages,
+    cs: csMessages,
+  } as const;
+
+  // 1. Strict VND bounds reject <= 0, > MAX_VALID_VND_PRICE, 0x/0b/0o prefixes,
+  // and embedded \p{Cc} control chars across DealFinder and catalog helpers.
+  for (const invalidVnd of [
+    null,
+    undefined,
+    0,
+    -500_000,
+    MAX_VALID_VND_PRICE + 1,
+    '0x1000000',
+    '0b101000',
+    '0o777000',
+    '+0x10000',
+    '\u000025000000',
+    '25000\u0000000',
+    '25000000\n',
+    '\t19990000',
+    Number.NaN,
+    Number.POSITIVE_INFINITY,
+  ]) {
+    assert.equal(sanitizeDealRadarPriceVnd(invalidVnd), null);
+    assert.equal(formatDealRadarPriceVnd(invalidVnd, 'en'), '-');
+  }
+  assert.equal(sanitizeDealRadarPriceVnd(19_990_000), 19_990_000);
+  assert.equal(
+    sanitizeDealRadarPriceVnd(MAX_VALID_VND_PRICE),
+    MAX_VALID_VND_PRICE
+  );
+  assert.equal(sanitizeDealFinderBudgetVnd('0x1000000'), MAX_VALID_VND_PRICE);
+  assert.equal(
+    sanitizeDealFinderBudgetVnd('\u000025000000'),
+    MAX_VALID_VND_PRICE
+  );
+
+  // resolveClaimedOriginalPriceVnd never fabricates list prices from priceCurrent.
+  assert.equal(resolveClaimedOriginalPriceVnd(null, 15_990_000), null);
+  assert.equal(resolveClaimedOriginalPriceVnd(0, 15_990_000), null);
+  assert.equal(resolveClaimedOriginalPriceVnd(15_990_000, 15_990_000), null);
+  assert.equal(resolveClaimedOriginalPriceVnd(14_000_000, 15_990_000), null);
+  assert.equal(
+    resolveClaimedOriginalPriceVnd(MAX_VALID_VND_PRICE + 1, 15_990_000),
+    null
+  );
+  assert.equal(resolveClaimedOriginalPriceVnd('0x2000000', 15_990_000), null);
+  assert.equal(
+    resolveClaimedOriginalPriceVnd('20000\u0000000', 15_990_000),
+    null
+  );
+  assert.equal(resolveClaimedOriginalPriceVnd(21_990_000, 0), null);
+  assert.equal(
+    resolveClaimedOriginalPriceVnd(21_990_000, 15_990_000),
+    21_990_000
+  );
+
+  // 2. DealFinder radar filtering, UI, Markdown, and CSV across vi/en/cs.
+  const makeRadarOffer = (
+    overrides: Partial<CrossPlatformDealRadarItem>
+  ): CrossPlatformDealRadarItem => ({
+    id: 'offer-1',
+    verdict: 'genuine_all_time_low',
+    verdictBadgeVi: 'Day gia',
+    productSlug: 'iphone-16-256gb',
+    productName: 'iPhone 16 256GB',
+    brand: 'Apple',
+    categorySlug: 'smartphones',
+    productHref: '/smartphones/apple-iphone-16',
+    imageUrl: null,
+    platform: 'shopee',
+    merchantId: 'm-1',
+    merchantName: 'Apple Flagship',
+    isOfficialMall: true,
+    merchantRiskScore: 10,
+    offerUrl: 'https://shopee.vn/item-1',
+    priceCurrent: 18_990_000,
+    priceOriginal: null,
+    marketMedianPrice: 20_990_000,
+    marketMinPrice: 18_990_000,
+    marketMaxPrice: 22_990_000,
+    savingsVsMedianVnd: 2_000_000,
+    savingsVsMedianPct: 9.5,
+    marketOfferCount: 4,
+    claimedDiscountPct: 0,
+    fakeMarkupPct: 0,
+    jreviewsScore10: 9.1,
+    explanationVi: 'Verified',
+    ...overrides,
+  });
+
+  const makeSpreadItem = (
+    overrides: Partial<CrossPlatformPriceSpreadItem>
+  ): CrossPlatformPriceSpreadItem => ({
+    id: 'spread-1',
+    productSlug: 'iphone-16-256gb',
+    productName: 'iPhone 16 256GB',
+    brand: 'Apple',
+    categorySlug: 'smartphones',
+    productHref: '/smartphones/apple-iphone-16',
+    imageUrl: null,
+    platformCount: 3,
+    offerCount: 5,
+    minPrice: 18_990_000,
+    maxPrice: 22_990_000,
+    medianPrice: 20_990_000,
+    spreadVnd: 4_000_000,
+    spreadPct: 17.4,
+    cheapestPlatform: 'shopee',
+    cheapestMerchantName: 'Apple Flagship',
+    cheapestOfferUrl: 'https://shopee.vn/item-1',
+    priciestPlatform: 'lazada',
+    priciestMerchantName: 'Overpriced Shop',
+    explanationVi: 'Spread',
+    ...overrides,
+  });
+
+  const radarPayload1745: CrossPlatformDealRadarResponse = {
+    generatedAt: '2026-11-19T00:00:00.000Z',
+    categoryFilter: 'all',
+    totalClustersAnalyzed: 1250,
+    totalOffersAnalyzed: 4320,
+    totalMerchantsAnalyzed: 42,
+    genuineDeals: [
+      makeRadarOffer({
+        id: 'gen-valid',
+        priceCurrent: 18_990_000,
+        priceOriginal: null,
+      }),
+      makeRadarOffer({
+        id: 'gen-zero',
+        productName: 'Zero Price Ghost',
+        priceCurrent: 0,
+      }),
+      makeRadarOffer({
+        id: 'gen-over-cap',
+        productName: 'Billion Price Ghost',
+        priceCurrent: MAX_VALID_VND_PRICE + 500,
+      }),
+      makeRadarOffer({
+        id: 'gen-hex',
+        productName: 'Hex Price Ghost',
+        priceCurrent: '0x1000000' as unknown as number,
+      }),
+    ],
+    fakeSaleTraps: [
+      makeRadarOffer({
+        id: 'trap-no-orig',
+        verdict: 'inflated_fake_sale',
+        productName: 'No Orig Trap Phone',
+        platform: 'lazada',
+        merchantName: 'Trap Seller A',
+        priceCurrent: 24_990_000,
+        priceOriginal: null,
+        fakeMarkupPct: 19,
+      }),
+      makeRadarOffer({
+        id: 'trap-equal-orig',
+        verdict: 'inflated_fake_sale',
+        productName: 'Equal Orig Trap Phone',
+        platform: 'tiki',
+        merchantName: 'Trap Seller B',
+        priceCurrent: 23_500_000,
+        priceOriginal: 23_500_000,
+        fakeMarkupPct: 12,
+      }),
+      makeRadarOffer({
+        id: 'trap-valid-orig',
+        verdict: 'inflated_fake_sale',
+        productName: 'Inflated Orig Trap Phone',
+        platform: 'shopee',
+        merchantName: 'Trap Seller C',
+        priceCurrent: 22_490_000,
+        priceOriginal: 29_990_000,
+        fakeMarkupPct: 33.3,
+      }),
+      makeRadarOffer({
+        id: 'trap-ctrl-price',
+        verdict: 'inflated_fake_sale',
+        productName: 'Control Char Trap Ghost',
+        priceCurrent: '19990000\u0000' as unknown as number,
+        priceOriginal: 25_000_000,
+        fakeMarkupPct: 25,
+      }),
+    ],
+    priceSpreadLeaders: [
+      makeSpreadItem({ id: 'spread-valid' }),
+      makeSpreadItem({
+        id: 'spread-invalid',
+        productName: 'Invalid Spread Ghost',
+        spreadVnd: 0,
+      }),
+    ],
+  };
+
+  const validGen1745 = filterValidRadarDeals(
+    radarPayload1745.genuineDeals,
+    'all'
+  );
+  const validTraps1745 = filterValidRadarDeals(
+    radarPayload1745.fakeSaleTraps,
+    'all'
+  );
+  const validSpreads1745 = filterValidRadarSpreads(
+    radarPayload1745.priceSpreadLeaders,
+    'all'
+  );
+  assert.equal(validGen1745.length, 1);
+  assert.equal(validTraps1745.length, 3);
+  assert.equal(validTraps1745[0]?.priceOriginal, null);
+  assert.equal(validTraps1745[1]?.priceOriginal, null);
+  assert.equal(validTraps1745[2]?.priceOriginal, 29_990_000);
+  assert.equal(validSpreads1745.length, 1);
+
+  const csvRows1745 = buildDealRadarCsvRows(
+    validGen1745,
+    validTraps1745,
+    validSpreads1745
+  );
+  // Genuine deal with null priceOriginal emits '' in Claimed Original Price (index 8)
+  assert.equal(csvRows1745[0]?.[7], 18_990_000);
+  assert.equal(csvRows1745[0]?.[8], '');
+  // Traps with null / <= priceCurrent priceOriginal emit '' instead of fabricating priceCurrent
+  assert.equal(csvRows1745[1]?.[7], 24_990_000);
+  assert.equal(csvRows1745[1]?.[8], '');
+  assert.equal(csvRows1745[2]?.[7], 23_500_000);
+  assert.equal(csvRows1745[2]?.[8], '');
+  // Trap with valid priceOriginal > priceCurrent preserves 29_990_000
+  assert.equal(csvRows1745[3]?.[7], 22_490_000);
+  assert.equal(csvRows1745[3]?.[8], 29_990_000);
+
+  const dealProduct1745: MasterProduct = {
+    ...phone('iphone-16-256gb', 4.6, { value: 9.2 }),
+    name: 'iPhone 16 256GB',
+    brand: 'Apple',
+    min_price: 18_990_000,
+    max_price: 22_990_000,
+    expert_rating: 9.1,
+    expert_criteria_scores: { value: 9.2 },
+  } as unknown as MasterProduct;
+  const ranked1745 = rankProductsForDealFinder([dealProduct1745], {
+    categoryFilter: 'all',
+    persona: 'value_hunter',
+    maxBudgetVnd: 65_000_000,
+    searchQuery: '',
+  });
+  const radarIndex1745 = buildRadarIndex(radarPayload1745);
+
+  for (const locale of ['vi', 'en', 'cs'] as const) {
+    const fullMessages = localeCatalogs[locale];
+    const tDeals = createTranslator({
+      locale,
+      messages: fullMessages,
+      namespace: 'deals',
+    });
+
+    const radarMd = buildDealRadarMarkdown({
+      t: tDeals,
+      locale,
+      categoryLabel: fullMessages.deals.catAll,
+      totalClustersAnalyzed: radarPayload1745.totalClustersAnalyzed,
+      totalOffersAnalyzed: radarPayload1745.totalOffersAnalyzed,
+      genuineDeals: validGen1745,
+      fakeSaleTraps: validTraps1745,
+      priceSpreadLeaders: validSpreads1745,
+    });
+    assert.ok(
+      radarMd.includes(fullMessages.deals.catAll),
+      `${locale}: radar Markdown includes localized category label`
+    );
+    assert.doesNotMatch(
+      radarMd,
+      /\*\*Category:\*\* all\b|\*\*Ngành hàng:\*\* all\b|\*\*Kategorie:\*\* all\b/,
+      `${locale}: radar Markdown must not emit raw categoryFilter slug`
+    );
+    assert.ok(
+      radarMd.includes(formatNumber(18_990_000, locale)),
+      `${locale}: radar Markdown formats numbers via formatNumber(..., locale)`
+    );
+    // Traps without valid > priceCurrent original price emit '-' in column 4
+    assert.match(
+      radarMd,
+      new RegExp(
+        `No Orig Trap Phone \\| LAZADA \\(Trap Seller A\\) \\| ${formatNumber(24_990_000, locale).replace(/\s/g, '\\s')} ₫ \\| - \\|`
+      ),
+      `${locale}: missing priceOriginal emits '-' instead of fabricating priceCurrent`
+    );
+    assert.match(
+      radarMd,
+      new RegExp(
+        `Equal Orig Trap Phone \\| TIKI \\(Trap Seller B\\) \\| ${formatNumber(23_500_000, locale).replace(/\s/g, '\\s')} ₫ \\| - \\|`
+      ),
+      `${locale}: priceOriginal <= priceCurrent emits '-'`
+    );
+    assert.ok(
+      radarMd.includes(`${formatNumber(29_990_000, locale)} ₫`),
+      `${locale}: valid priceOriginal > priceCurrent renders formatted VND`
+    );
+
+    const dealsMd = buildDealsMarkdown({
+      t: tDeals,
+      locale,
+      persona: 'value_hunter',
+      personaLabel: fullMessages.deals.personaValueHunter,
+      maxBudgetVnd: 65_000_000,
+      url: 'https://rate.vn/deals',
+      rankedDeals: ranked1745,
+      radarIndex: radarIndex1745,
+    });
+    assert.ok(
+      dealsMd.includes(fullMessages.deals.personaValueHunter),
+      `${locale}: deals Markdown includes localized persona label`
+    );
+    assert.ok(
+      !dealsMd.includes('value_hunter'),
+      `${locale}: deals Markdown must not emit raw value_hunter key`
+    );
+    assert.ok(
+      dealsMd.includes(formatNumber(65_000_000, locale)),
+      `${locale}: deals Markdown formats budget via formatNumber(..., locale)`
+    );
+    assert.ok(
+      dealsMd.includes(formatNumber(18_990_000, locale)),
+      `${locale}: deals Markdown formats minPrice via formatNumber(..., locale)`
+    );
+
+    const dealFinderHtml = renderToStaticMarkup(
+      React.createElement(
+        Provider,
+        {
+          locale,
+          messages: pickClientMessages(
+            fullMessages as unknown as Record<string, unknown>,
+            'deals'
+          ),
+          timeZone: 'Asia/Ho_Chi_Minh',
+        },
+        React.createElement(DealFinderWorkspace, {
+          products: [dealProduct1745],
+          dealRadar: radarPayload1745,
+        })
+      )
+    );
+    // Exactly one <s> strikethrough (only for trap-valid-orig, never for trap-no-orig or trap-equal-orig)
+    const strikeMatches = [...dealFinderHtml.matchAll(/<s>(.*?)<\/s>/g)];
+    assert.equal(
+      strikeMatches.length,
+      1,
+      `${locale}: UI renders <s> only when priceOriginal is finite, > priceCurrent, and <= MAX_VALID_VND_PRICE`
+    );
+    assert.ok(
+      strikeMatches[0]?.[1]?.includes(
+        locale === 'cs' ? '29\u00a0990\u00a0000' : '29.990.000'
+      ),
+      `${locale}: single <s> shows 29,990,000 VND`
+    );
+    assert.ok(!dealFinderHtml.includes('Zero Price Ghost'));
+    assert.ok(!dealFinderHtml.includes('Billion Price Ghost'));
+    assert.ok(!dealFinderHtml.includes('Hex Price Ghost'));
+    assert.ok(!dealFinderHtml.includes('Control Char Trap Ghost'));
+    assert.ok(!dealFinderHtml.includes('Invalid Spread Ghost'));
+  }
+
+  // 3. CategoryCatalogToolbar CSV unpriced cells & sanitizeCatalogPriceVnd compatibility.
+  assert.equal(sanitizeCatalogPriceVnd(-500_000), 0);
+  assert.equal(sanitizeCatalogPriceVnd(0), 0);
+  assert.equal(sanitizeCatalogPriceVnd(MAX_VALID_VND_PRICE + 1), 0);
+  assert.equal(sanitizeCatalogPriceVnd('0x100000'), 0);
+  assert.equal(sanitizeCatalogPriceVnd('\u0000100000'), 0);
+  assert.equal(sanitizeCatalogPriceVnd(19_990_000.6), 19_990_001);
+
+  const soldOutCatalogRow: ItemCatalogRow = {
+    ...phone('sold-out-phone-256gb', 4.4),
+    min_price: 0,
+    max_price: null,
+    merchant_count: 0,
+    item_slug: 'sold-out-phone',
+  } as unknown as ItemCatalogRow;
+  const pricedCatalogRow: ItemCatalogRow = {
+    ...phone('samsung-galaxy-s24-256gb', 4.7),
+    min_price: 18_990_000,
+    max_price: 21_490_000,
+    merchant_count: 4,
+    item_slug: 'samsung-galaxy-s24',
+  } as unknown as ItemCatalogRow;
+  const secondItemRow: ItemCatalogRow = {
+    ...phone('apple-iphone-16-256gb', 4.8),
+    min_price: 21_990_000,
+    max_price: 24_990_000,
+    merchant_count: 5,
+    item_slug: 'apple-iphone-16',
+  } as unknown as ItemCatalogRow;
+
+  const soldOutCsvCells = buildCatalogCsvRow(
+    soldOutCatalogRow,
+    1,
+    'smartphones',
+    EMPTY_RADAR_SIGNAL
+  );
+  assert.equal(
+    soldOutCsvCells[9],
+    '',
+    'unpriced MinPriceVND CSV cell must be empty string instead of "0"'
+  );
+  assert.equal(
+    soldOutCsvCells[10],
+    '',
+    'unpriced MaxPriceVND CSV cell must be empty string instead of "0"'
+  );
+
+  const pricedCsvCells = buildCatalogCsvRow(
+    pricedCatalogRow,
+    2,
+    'smartphones',
+    EMPTY_RADAR_SIGNAL
+  );
+  assert.equal(pricedCsvCells[9], '18990000');
+  assert.equal(pricedCsvCells[10], '21490000');
+
+  // 4. Canonical Item slugs in CategoryCatalogToolbar versusHref and smartphones/page.tsx.
+  const toolbarItemMap = buildCatalogItemSlugMap([
+    pricedCatalogRow,
+    secondItemRow,
+  ]);
+  assert.deepEqual(toolbarItemMap, {
+    'samsung-galaxy-s24-256gb': 'samsung-galaxy-s24',
+    'apple-iphone-16-256gb': 'apple-iphone-16',
+  });
+  assert.equal(
+    versusHref(pricedCatalogRow.slug, secondItemRow.slug, toolbarItemMap),
+    '/compare/apple-iphone-16-vs-samsung-galaxy-s24'
+  );
+  // Item slug containing '-vs-' falls back to variant slug in versusHref
+  assert.equal(
+    versusHref('weird-a-256gb', 'apple-iphone-16-256gb', {
+      'weird-a-256gb': 'weird-a-vs-b',
+      'apple-iphone-16-256gb': 'apple-iphone-16',
+    }),
+    '/compare/apple-iphone-16-vs-weird-a-256gb'
+  );
+
+  test('smartphones/page.tsx Item slug and radar VND helpers (#1745)', async () => {
+    const extMap = (
+      Module as unknown as {
+        _extensions?: Record<string, (mod: { exports: unknown }) => void>;
+      }
+    )._extensions;
+    if (extMap && !extMap['.css']) {
+      extMap['.css'] = (mod) => {
+        mod.exports = { bar: 'bar' };
+      };
+    }
+    const {
+      buildCatalogPageItemSlugMap,
+      buildCatalogQuickCompareHref,
+      buildCatalogQuickCompareSlugs,
+      formatCatalogRadarPriceVnd,
+      sanitizeCatalogRadarPriceVnd,
+    } = await import('../../app/[locale]/smartphones/page');
+
+    for (const invalidVnd of [
+      null,
+      undefined,
+      0,
+      -500_000,
+      MAX_VALID_VND_PRICE + 1,
+      '0x1000000',
+      '0b101000',
+      '0o777000',
+      '\u000025000000',
+      '25000\u0000000',
+      '25000000\n',
+    ]) {
+      assert.equal(sanitizeCatalogRadarPriceVnd(invalidVnd), null);
+      assert.equal(formatCatalogRadarPriceVnd(invalidVnd, 'en'), '-');
+    }
+    assert.equal(sanitizeCatalogRadarPriceVnd(' 24990000 '), 24_990_000);
+
+    const pageItemMap = buildCatalogPageItemSlugMap([
+      pricedCatalogRow,
+      secondItemRow,
+      { slug: 'plain-variant-only' },
+    ]);
+    assert.deepEqual(pageItemMap, {
+      'samsung-galaxy-s24-256gb': 'samsung-galaxy-s24',
+      'apple-iphone-16-256gb': 'apple-iphone-16',
+    });
+    assert.deepEqual(
+      buildCatalogQuickCompareSlugs([
+        secondItemRow,
+        { slug: 'apple-iphone-16-512gb', item_slug: 'apple-iphone-16' },
+        pricedCatalogRow,
+        soldOutCatalogRow,
+      ]),
+      ['apple-iphone-16', 'samsung-galaxy-s24', 'sold-out-phone']
+    );
+    assert.equal(
+      buildCatalogQuickCompareHref('smartphones', [
+        secondItemRow,
+        pricedCatalogRow,
+        soldOutCatalogRow,
+      ]),
+      '/compare?cat=smartphones&slugs=apple-iphone-16,samsung-galaxy-s24,sold-out-phone'
+    );
+
+    // Multi-variant Item cards (e.g. ?storage=512) pin item_slug@variant_key
+    // so /compare keeps the displayed 512GB variant instead of default 128GB.
+    const iphone512Row = {
+      id: 'v512',
+      slug: 'apple-iphone-16-512gb',
+      item_slug: 'apple-iphone-16',
+      item_variants: [
+        {
+          id: 'v128',
+          variant_key: '128gb',
+          storage_gb: 128,
+          min_price: 19_990_000,
+        },
+        {
+          id: 'v512',
+          variant_key: '512gb',
+          storage_gb: 512,
+          min_price: 25_990_000,
+        },
+      ],
+    };
+    const galaxy512Row = {
+      id: 's512',
+      slug: 'samsung-galaxy-s24-512gb',
+      item_slug: 'samsung-galaxy-s24',
+      item_variants: [
+        {
+          id: 's256',
+          variant_key: '256gb',
+          storage_gb: 256,
+          min_price: 18_990_000,
+        },
+        {
+          id: 's512',
+          variant_key: '512gb',
+          storage_gb: 512,
+          min_price: 22_490_000,
+        },
+      ],
+    };
+    const pinnedHref = buildCatalogQuickCompareHref('smartphones', [
+      iphone512Row,
+      { ...iphone512Row, id: 'v128', slug: 'apple-iphone-16-128gb' },
+      galaxy512Row,
+    ]);
+    assert.equal(
+      pinnedHref,
+      '/compare?cat=smartphones&slugs=apple-iphone-16@512gb,samsung-galaxy-s24@512gb'
+    );
+    const firstToken =
+      new URL(pinnedHref, 'https://rate.vn').searchParams
+        .get('slugs')
+        ?.split(',')[0] ?? '';
+    assert.equal(
+      compareTarget(
+        {
+          kind: 'item',
+          item: {
+            id: 'item-iphone-16',
+            slug: 'apple-iphone-16',
+            default_variant_id: 'v128',
+          },
+          variants: [
+            { id: 'v128', slug: 'apple-iphone-16-128gb', variant_key: '128gb' },
+            { id: 'v512', slug: 'apple-iphone-16-512gb', variant_key: '512gb' },
+          ],
+        },
+        parseCompareToken(firstToken)
+      )?.variantSlug,
+      'apple-iphone-16-512gb'
+    );
+  });
+
+  const toolbarHtml = renderToStaticMarkup(
+    React.createElement(
+      Provider,
+      {
+        locale: 'en',
+        messages: pickClientMessages(
+          enMessages as unknown as Record<string, unknown>,
+          'catalog'
+        ),
+        timeZone: 'Asia/Ho_Chi_Minh',
+      },
+      React.createElement(CategoryCatalogToolbar, {
+        categorySlug: 'smartphones',
+        categoryTitle: 'Smartphones',
+        products: [pricedCatalogRow, secondItemRow],
+      })
+    )
+  );
+  assert.match(
+    toolbarHtml,
+    /href="\/en\/compare\/apple-iphone-16-vs-samsung-galaxy-s24"|href="\/compare\/apple-iphone-16-vs-samsung-galaxy-s24"/,
+    'CategoryCatalogToolbar 1v1 Go button links directly to canonical Item slugs'
+  );
+
+  const sameItemToolbarHtml = renderToStaticMarkup(
+    React.createElement(
+      Provider,
+      {
+        locale: 'en',
+        messages: pickClientMessages(
+          enMessages as unknown as Record<string, unknown>,
+          'catalog'
+        ),
+        timeZone: 'Asia/Ho_Chi_Minh',
+      },
+      React.createElement(CategoryCatalogToolbar, {
+        categorySlug: 'smartphones',
+        categoryTitle: 'Smartphones',
+        products: [
+          secondItemRow,
+          { ...secondItemRow, slug: 'apple-iphone-16-512gb' },
+        ],
+      })
+    )
+  );
+  assert.doesNotMatch(
+    sameItemToolbarHtml,
+    /<select\b/,
+    'CategoryCatalogToolbar hides 1v1 picker instead of rendering an empty <select> when all rows share one Item'
+  );
+  assert.match(
+    sameItemToolbarHtml,
+    /data-testid="download-catalog-csv-btn"/,
+    'CategoryCatalogToolbar still renders export menu when all rows share one Item'
+  );
+
+  // 5. Source-level guards for DealFinderWorkspace.tsx and smartphones/page.tsx (#1745).
+  const dealFinderSrc1745 = fs.readFileSync(
+    path.join(webSrcDir, 'components/deals/DealFinderWorkspace.tsx'),
+    'utf8'
+  );
+  assert.doesNotMatch(
+    dealFinderSrc1745,
+    /toLocaleString\('vi-VN'\)/,
+    'DealFinderWorkspace must use formatNumber(..., locale) instead of hardcoded vi-VN toLocaleString'
+  );
+  assert.doesNotMatch(
+    dealFinderSrc1745,
+    /priceOriginal\s*\|\|\s*\w+\.priceCurrent|priceOriginal\s*\?\?\s*\w+\.priceCurrent/,
+    'DealFinderWorkspace must never fabricate claimed list prices from priceCurrent'
+  );
+
+  const smartphonesPageSrc = fs.readFileSync(
+    path.join(webSrcDir, 'app/[locale]/smartphones/page.tsx'),
+    'utf8'
+  );
+  const bsIconTags = [...smartphonesPageSrc.matchAll(/<Bs[A-Z]\w*[^>]*>/g)].map(
+    (m) => m[0]
+  );
+  assert.ok(
+    bsIconTags.length >= 11,
+    'smartphones/page.tsx decorative Bs* icons matched'
+  );
+  for (const tag of bsIconTags) {
+    assert.match(
+      tag,
+      /\baria-hidden="true"/,
+      `Decorative icon ${tag} in smartphones/page.tsx must carry aria-hidden="true"`
+    );
+  }
 }
 
 console.log('leaderboard-criteria: criterion scores are real or null');
