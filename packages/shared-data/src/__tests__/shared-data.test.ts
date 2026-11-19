@@ -2530,6 +2530,38 @@ function testExtensionObservation(): void {
       },
       'listing_url',
     ],
+    [
+      {
+        ...valid,
+        marketplace: 'tgdd',
+        listing_url: 'https://eviltopzone.vn/iphone/iphone-16-pro-max',
+      },
+      'listing_url',
+    ],
+    [
+      {
+        ...valid,
+        marketplace: 'tgdd',
+        listing_url: 'https://evildienmayxanh.com/dtdd/iphone-16-pro-max',
+      },
+      'listing_url',
+    ],
+    [
+      {
+        ...valid,
+        marketplace: 'tgdd',
+        listing_url: 'https://a..topzone.vn/iphone/iphone-16-pro-max',
+      },
+      'listing_url',
+    ],
+    [
+      {
+        ...valid,
+        marketplace: 'tgdd',
+        listing_url: 'https://topzone.vn.evil.com/iphone/iphone-16-pro-max',
+      },
+      'listing_url',
+    ],
     [{ ...valid, variant_label: 'a\ud800b' }, 'variant_label'],
     [{ ...valid, observed_at: '2026-11-04T10:00:00+16:00' }, 'observed_at'],
     [{ ...valid, observed_at: '2026-11-04T09:59:60Z' }, 'observed_at'],
@@ -2587,12 +2619,42 @@ function testExtensionObservation(): void {
       listing_url: 'https://www.lazada.vn/products/x-i1-s2.html',
     }).ok
   );
+  for (const tgddUrl of [
+    'https://thegioididong.com/dtdd/iphone-16-pro-max',
+    'https://www.thegioididong.com/dtdd/iphone-16-pro-max',
+    'https://topzone.vn/iphone/iphone-16-pro-max',
+    'https://www.topzone.vn/iphone/iphone-16-pro-max',
+    'https://dienmayxanh.com/dtdd/iphone-16-pro-max',
+    'https://www.dienmayxanh.com/dtdd/iphone-16-pro-max',
+  ]) {
+    assert.ok(
+      parse({
+        ...valid,
+        marketplace: 'tgdd',
+        listing_url: tgddUrl,
+      }).ok,
+      tgddUrl
+    );
+  }
   // Every marketplace accepts its own hosts and refuses another's.
   assert.ok(rules.isExtensionMarketplaceHost('lazada', 'www.lazada.vn'));
+  assert.ok(rules.isExtensionMarketplaceHost('tgdd', 'thegioididong.com'));
   assert.ok(rules.isExtensionMarketplaceHost('tgdd', 'www.thegioididong.com'));
+  assert.ok(rules.isExtensionMarketplaceHost('tgdd', 'topzone.vn'));
+  assert.ok(rules.isExtensionMarketplaceHost('tgdd', 'www.topzone.vn'));
+  assert.ok(rules.isExtensionMarketplaceHost('tgdd', 'dienmayxanh.com'));
+  assert.ok(rules.isExtensionMarketplaceHost('tgdd', 'www.dienmayxanh.com'));
   assert.ok(rules.isExtensionMarketplaceHost('tiktok', 'shop.tiktok.com'));
   assert.ok(!rules.isExtensionMarketplaceHost('tiktok', 'm.tiktok.com'));
   assert.ok(!rules.isExtensionMarketplaceHost('lazada', 'notlazada.vn'));
+  assert.ok(!rules.isExtensionMarketplaceHost('tgdd', 'eviltopzone.vn'));
+  assert.ok(!rules.isExtensionMarketplaceHost('tgdd', 'evildienmayxanh.com'));
+  assert.ok(!rules.isExtensionMarketplaceHost('tgdd', 'evilthegioididong.com'));
+  assert.ok(!rules.isExtensionMarketplaceHost('tgdd', 'topzone.vn.evil.com'));
+  assert.ok(
+    !rules.isExtensionMarketplaceHost('tgdd', 'dienmayxanh.com.evil.com')
+  );
+  assert.ok(!rules.isExtensionMarketplaceHost('fptshop', 'www.topzone.vn'));
   assert.ok(!rules.isExtensionMarketplaceHost('shopee', 'tiki.vn'));
   for (const m of rules.EXTENSION_MARKETPLACES) {
     assert.ok(rules.EXTENSION_MARKETPLACE_HOSTS[m].length > 0, m);
