@@ -1,5 +1,8 @@
 import { Suspense } from 'react';
-import { resolveCompareEffectiveUserRating } from '@/lib/rate-domain';
+import {
+  MAX_VALID_VND_PRICE,
+  resolveCompareEffectiveUserRating,
+} from '@/lib/rate-domain';
 import type { Metadata } from 'next';
 import { getTranslations, setRequestLocale } from 'next-intl/server';
 import { Link } from '@/lib/navigation';
@@ -106,6 +109,66 @@ export function catalogCanonicalUrl(
   return Number.isFinite(page) && page > 1 && page <= 500
     ? `${base}?page=${page}`
     : base;
+}
+
+export function sanitizeCatalogRadarPriceVnd(value: unknown): number | null {
+  if (typeof value !== 'number' && typeof value !== 'string') return null;
+  let raw: number;
+  if (typeof value === 'string') {
+    if (/\p{Cc}/u.test(value)) return null;
+    const trimmed = value.trim();
+    if (!trimmed || trimmed.length > 32 || /^[+-]?0[xbo]/i.test(trimmed)) {
+      return null;
+    }
+    raw = Number(trimmed);
+  } else {
+    raw = value;
+  }
+  if (!Number.isFinite(raw) || raw <= 0 || raw > MAX_VALID_VND_PRICE) {
+    return null;
+  }
+  const rounded = Math.round(raw);
+  return rounded > 0 && rounded <= MAX_VALID_VND_PRICE ? rounded : null;
+}
+
+export function formatCatalogRadarPriceVnd(
+  value: unknown,
+  locale?: string | null
+): string {
+  const safe = sanitizeCatalogRadarPriceVnd(value);
+  return safe != null ? formatPriceVnd(safe, locale) : '-';
+}
+
+export function buildCatalogPageItemSlugMap(
+  rows: readonly { slug: string; item_slug?: string }[]
+): Record<string, string> {
+  const map: Record<string, string> = {};
+  for (const row of rows) {
+    if (!row || typeof row.slug !== 'string' || !row.slug) continue;
+    const itemSlug = catalogRowSlug(row);
+    if (itemSlug && itemSlug !== row.slug) {
+      map[row.slug] = itemSlug;
+    }
+  }
+  return map;
+}
+
+export function buildCatalogQuickCompareSlugs(
+  rows: readonly { slug: string; item_slug?: string }[]
+): string[] {
+  return Array.from(
+    new Set(rows.map((p) => catalogRowSlug(p).trim()).filter(Boolean))
+  ).slice(0, 3);
+}
+
+export function buildCatalogQuickCompareHref(
+  categorySlug: string,
+  rows: readonly { slug: string; item_slug?: string }[]
+): string {
+  const slugs = buildCatalogQuickCompareSlugs(rows);
+  return `/compare?cat=${encodeURIComponent(categorySlug)}&slugs=${slugs
+    .map((s) => encodeURIComponent(s))
+    .join(',')}`;
 }
 
 function getSingleParam(val: string | string[] | undefined): string {
@@ -264,6 +327,41 @@ export async function CategoryCatalogContent({
     });
 
   const radarIndex = buildRadarIndex(categoryDealRadar);
+  const itemSlugBySlug = buildCatalogPageItemSlugMap(products);
+  const quickCompareSlugs = buildCatalogQuickCompareSlugs(products);
+  const resolveSideSlug = (slug: string): string => {
+    const mapped = itemSlugBySlug[slug];
+    return mapped && !mapped.includes('-vs-') ? mapped : slug;
+  };
+  const versusPairA = products[0];
+  const versusPairB = versusPairA
+    ? products.find(
+        (p) =>
+          p.slug !== versusPairA.slug &&
+          resolveSideSlug(p.slug) !== resolveSideSlug(versusPairA.slug)
+      )
+    : undefined;
+
+  const validGenuineDeals = Array.isArray(categoryDealRadar?.genuineDeals)
+    ? categoryDealRadar.genuineDeals.filter(
+        (g) => sanitizeCatalogRadarPriceVnd(g?.priceCurrent) != null
+      )
+    : [];
+  const validFakeSaleTraps = Array.isArray(categoryDealRadar?.fakeSaleTraps)
+    ? categoryDealRadar.fakeSaleTraps.filter(
+        (trap) => sanitizeCatalogRadarPriceVnd(trap?.priceCurrent) != null
+      )
+    : [];
+  const validPriceSpreadLeaders = Array.isArray(
+    categoryDealRadar?.priceSpreadLeaders
+  )
+    ? categoryDealRadar.priceSpreadLeaders.filter((sp) => {
+        const minP = sanitizeCatalogRadarPriceVnd(sp?.minPrice);
+        const maxP = sanitizeCatalogRadarPriceVnd(sp?.maxPrice);
+        const spread = sanitizeCatalogRadarPriceVnd(sp?.spreadVnd);
+        return minP != null && maxP != null && maxP >= minP && spread != null;
+      })
+    : [];
 
   const baseSchema = getCategoryFilterSchema(
     categorySlug,
@@ -573,7 +671,7 @@ export async function CategoryCatalogContent({
                           type="submit"
                           className="btn btn-primary full-width fw-medium"
                         >
-                          <BsSearch className="me-2" />
+                          <BsSearch className="me-2" aria-hidden="true" />
                           {t('page.searchBtn')}
                         </button>
                       </div>
@@ -662,32 +760,44 @@ export async function CategoryCatalogContent({
                           total: facets.totalUnfiltered,
                         })}
                       </h2>
-                      {products.length >= 2 && (
+                      {quickCompareSlugs.length >= 2 && (
                         <Link
-                          href={`/compare?cat=${categorySlug}&slugs=${products
-                            .map((p) => p.slug)
-                            .slice(0, 3)
-                            .join(',')}`}
+                          href={buildCatalogQuickCompareHref(
+                            categorySlug,
+                            products
+                          )}
                           className="rate-results-link"
                         >
                           <BsLightningCharge aria-hidden="true" />
-                          {products.length >= 3
+                          {quickCompareSlugs.length >= 3
                             ? t('page.quickCompare3')
                             : t('page.quickCompare2')}
                         </Link>
                       )}
-                      {products.length >= 2 && products[0] && products[1] && (
-                        <IntentLink
-                          href={versusHref(products[0].slug, products[1].slug)}
-                          className="rate-results-link"
-                        >
-                          <BsArrowLeftRight aria-hidden="true" />
-                          {t('page.versus1v1Badge', {
-                            brandA: products[0].brand,
-                            brandB: products[1].brand,
-                          })}
-                        </IntentLink>
-                      )}
+                      {versusPairA &&
+                        versusPairB &&
+                        products[0] &&
+                        products[1] && (
+                          <IntentLink
+                            href={
+                              itemSlugBySlug[versusPairA.slug] ||
+                              itemSlugBySlug[versusPairB.slug]
+                                ? versusHref(
+                                    versusPairA.slug,
+                                    versusPairB.slug,
+                                    itemSlugBySlug
+                                  )
+                                : versusHref(products[0].slug, products[1].slug)
+                            }
+                            className="rate-results-link"
+                          >
+                            <BsArrowLeftRight aria-hidden="true" />
+                            {t('page.versus1v1Badge', {
+                              brandA: versusPairA.brand,
+                              brandB: versusPairB.brand,
+                            })}
+                          </IntentLink>
+                        )}
                       <IntentLink
                         href={`/leaderboard?cat=${categorySlug}`}
                         className="rate-results-link"
@@ -723,6 +833,7 @@ export async function CategoryCatalogContent({
                   }
                   products={products.map(withoutSpecSheet)}
                   dealRadar={categoryDealRadar}
+                  itemSlugBySlug={itemSlugBySlug}
                 />
 
                 {/* Product Cards Grid (DESIGN.md v3.0 Rating & Review-First .rate-card) */}
@@ -811,7 +922,7 @@ export async function CategoryCatalogContent({
                       if (chip) {
                         cardSpecs.push({
                           key: 'chip',
-                          icon: <BsCpu />,
+                          icon: <BsCpu aria-hidden="true" />,
                           label: String(chip),
                         });
                       }
@@ -823,14 +934,14 @@ export async function CategoryCatalogContent({
                       if (screen) {
                         cardSpecs.push({
                           key: 'screen',
-                          icon: <BsPhone />,
+                          icon: <BsPhone aria-hidden="true" />,
                           label: String(screen),
                         });
                       }
                       if (item.battery_mah) {
                         cardSpecs.push({
                           key: 'battery',
-                          icon: <BsBatteryHalf />,
+                          icon: <BsBatteryHalf aria-hidden="true" />,
                           label: `${item.battery_mah} mAh${
                             fastChargeW ? ` · ${fastChargeW}W` : ''
                           }`,
@@ -913,8 +1024,9 @@ export async function CategoryCatalogContent({
                 {/* Deal radar sits after the results so the product list
                 starts right under the toolbar (DOS/Rate#1132). */}
                 {categoryDealRadar &&
-                  (categoryDealRadar.genuineDeals.length > 0 ||
-                    categoryDealRadar.fakeSaleTraps.length > 0) && (
+                  (validGenuineDeals.length > 0 ||
+                    validFakeSaleTraps.length > 0 ||
+                    validPriceSpreadLeaders.length > 0) && (
                     <div
                       className="rate-card rate-home-radar mt-4"
                       data-testid="category-deal-radar"
@@ -938,153 +1050,163 @@ export async function CategoryCatalogContent({
                         </Link>
                       </div>
 
-                      {categoryDealRadar.genuineDeals.length > 0 && (
-                        <h3 className="rate-radar-list-title is-good mt-3">
-                          <BsGraphDownArrow aria-hidden="true" />
-                          {t('page.radarDealsTitle')}
-                        </h3>
-                      )}
-                      <ul className="rate-radar-list">
-                        {categoryDealRadar.genuineDeals.slice(0, 2).map((g) => (
-                          <li key={g.id}>
-                            <div className="rate-radar-item-main">
-                              <Link
-                                href={g.productHref}
-                                className="text-truncate"
-                              >
-                                {g.productName}
-                              </Link>
-                              <span className="rate-radar-item-meta text-truncate">
-                                <span className="rate-radar-platform">
-                                  {g.platform}
-                                </span>
-                                <ContentText
-                                  text={g.merchantName}
-                                  locale={locale}
-                                />
-                              </span>
-                            </div>
-                            <div className="rate-radar-item-side">
-                              <span className="rate-radar-price">
-                                {formatPriceVnd(g.priceCurrent, locale)}
-                              </span>
-                              <span className="rate-radar-tag is-good">
-                                {t('page.vsMedianBadge', {
-                                  pct: formatPlainNumber(
-                                    g.savingsVsMedianPct,
-                                    locale
-                                  ),
-                                })}
-                              </span>
-                            </div>
-                          </li>
-                        ))}
-                      </ul>
-                      {categoryDealRadar.fakeSaleTraps.length > 0 && (
-                        <h3 className="rate-radar-list-title is-bad mt-3">
-                          <BsExclamationTriangle aria-hidden="true" />
-                          {t('page.radarTrapsTitle')}
-                        </h3>
-                      )}
-                      <ul className="rate-radar-list">
-                        {categoryDealRadar.fakeSaleTraps
-                          .slice(0, 2)
-                          .map((trap) => (
-                            <li key={trap.id}>
-                              <div className="rate-radar-item-main">
-                                <Link
-                                  href={trap.productHref}
-                                  className="text-truncate"
-                                >
-                                  {trap.productName}
-                                </Link>
-                                <span className="rate-radar-item-meta text-truncate">
-                                  <span className="rate-radar-platform">
-                                    {trap.platform}
+                      {validGenuineDeals.length > 0 && (
+                        <>
+                          <h3 className="rate-radar-list-title is-good mt-3">
+                            <BsGraphDownArrow aria-hidden="true" />
+                            {t('page.radarDealsTitle')}
+                          </h3>
+                          <ul className="rate-radar-list">
+                            {validGenuineDeals.slice(0, 2).map((g) => (
+                              <li key={g.id}>
+                                <div className="rate-radar-item-main">
+                                  <Link
+                                    href={g.productHref}
+                                    className="text-truncate"
+                                  >
+                                    {g.productName}
+                                  </Link>
+                                  <span className="rate-radar-item-meta text-truncate">
+                                    <span className="rate-radar-platform">
+                                      {g.platform}
+                                    </span>
+                                    <ContentText
+                                      text={g.merchantName}
+                                      locale={locale}
+                                    />
                                   </span>
-                                  <ContentText
-                                    text={trap.merchantName}
-                                    locale={locale}
-                                  />
-                                </span>
-                              </div>
-                              <div className="rate-radar-item-side">
-                                <span className="rate-radar-price">
-                                  {formatPriceVnd(trap.priceCurrent, locale)}
-                                </span>
-                                <span className="rate-radar-tag is-bad">
-                                  {t('page.fakeMarkupBadge', {
-                                    pct: formatPlainNumber(
-                                      trap.fakeMarkupPct,
+                                </div>
+                                <div className="rate-radar-item-side">
+                                  <span className="rate-radar-price">
+                                    {formatCatalogRadarPriceVnd(
+                                      g.priceCurrent,
                                       locale
-                                    ),
-                                  })}
-                                </span>
-                              </div>
-                            </li>
-                          ))}
-                      </ul>
+                                    )}
+                                  </span>
+                                  <span className="rate-radar-tag is-good">
+                                    {t('page.vsMedianBadge', {
+                                      pct: formatPlainNumber(
+                                        g.savingsVsMedianPct,
+                                        locale
+                                      ),
+                                    })}
+                                  </span>
+                                </div>
+                              </li>
+                            ))}
+                          </ul>
+                        </>
+                      )}
+                      {validFakeSaleTraps.length > 0 && (
+                        <>
+                          <h3 className="rate-radar-list-title is-bad mt-3">
+                            <BsExclamationTriangle aria-hidden="true" />
+                            {t('page.radarTrapsTitle')}
+                          </h3>
+                          <ul className="rate-radar-list">
+                            {validFakeSaleTraps.slice(0, 2).map((trap) => (
+                              <li key={trap.id}>
+                                <div className="rate-radar-item-main">
+                                  <Link
+                                    href={trap.productHref}
+                                    className="text-truncate"
+                                  >
+                                    {trap.productName}
+                                  </Link>
+                                  <span className="rate-radar-item-meta text-truncate">
+                                    <span className="rate-radar-platform">
+                                      {trap.platform}
+                                    </span>
+                                    <ContentText
+                                      text={trap.merchantName}
+                                      locale={locale}
+                                    />
+                                  </span>
+                                </div>
+                                <div className="rate-radar-item-side">
+                                  <span className="rate-radar-price">
+                                    {formatCatalogRadarPriceVnd(
+                                      trap.priceCurrent,
+                                      locale
+                                    )}
+                                  </span>
+                                  <span className="rate-radar-tag is-bad">
+                                    {t('page.fakeMarkupBadge', {
+                                      pct: formatPlainNumber(
+                                        trap.fakeMarkupPct,
+                                        locale
+                                      ),
+                                    })}
+                                  </span>
+                                </div>
+                              </li>
+                            ))}
+                          </ul>
+                        </>
+                      )}
 
-                      {Array.isArray(categoryDealRadar.priceSpreadLeaders) &&
-                        categoryDealRadar.priceSpreadLeaders.length > 0 && (
-                          <div
-                            className="rate-radar-spread"
-                            data-testid="category-price-spread-leaders"
-                          >
-                            <div className="rate-radar-spread-head">
-                              <h3 className="rate-radar-list-title">
-                                <BsArrowLeftRight aria-hidden="true" />
-                                {t('page.spreadHeader', {
-                                  title: schema.categoryTitle,
-                                })}
-                              </h3>
-                              <span className="rate-radar-item-meta mb-3">
-                                {t('page.spreadSub')}
-                              </span>
-                            </div>
-                            <div className="row g-2">
-                              {categoryDealRadar.priceSpreadLeaders
-                                .slice(0, 2)
-                                .map((sp) => (
-                                  <div key={sp.productSlug} className="col-12">
-                                    <div className="rate-radar-spread-item">
-                                      <div className="rate-radar-item-main">
-                                        <Link
-                                          href={sp.productHref}
-                                          className="text-truncate"
-                                        >
-                                          {sp.productName}
-                                        </Link>
-                                        <span className="rate-radar-item-meta">
-                                          <span className="rate-radar-platform">
-                                            {sp.cheapestPlatform}
-                                          </span>
-                                          vs{' '}
-                                          <span className="rate-radar-platform">
-                                            {sp.priciestPlatform}
-                                          </span>
+                      {validPriceSpreadLeaders.length > 0 && (
+                        <div
+                          className="rate-radar-spread"
+                          data-testid="category-price-spread-leaders"
+                        >
+                          <div className="rate-radar-spread-head">
+                            <h3 className="rate-radar-list-title">
+                              <BsArrowLeftRight aria-hidden="true" />
+                              {t('page.spreadHeader', {
+                                title: schema.categoryTitle,
+                              })}
+                            </h3>
+                            <span className="rate-radar-item-meta mb-3">
+                              {t('page.spreadSub')}
+                            </span>
+                          </div>
+                          <div className="row g-2">
+                            {validPriceSpreadLeaders.slice(0, 2).map((sp) => {
+                              const safeSpread = sanitizeCatalogRadarPriceVnd(
+                                sp.spreadVnd
+                              );
+                              return (
+                                <div key={sp.productSlug} className="col-12">
+                                  <div className="rate-radar-spread-item">
+                                    <div className="rate-radar-item-main">
+                                      <Link
+                                        href={sp.productHref}
+                                        className="text-truncate"
+                                      >
+                                        {sp.productName}
+                                      </Link>
+                                      <span className="rate-radar-item-meta">
+                                        <span className="rate-radar-platform">
+                                          {sp.cheapestPlatform}
                                         </span>
-                                      </div>
-                                      <div className="rate-radar-item-side">
-                                        <span className="rate-radar-tag is-warn">
-                                          {t('page.spreadDiffBadge', {
-                                            pct: formatPlainNumber(
-                                              sp.spreadPct,
-                                              locale
-                                            ),
-                                            amount: formatNumber(
-                                              sp.spreadVnd,
-                                              locale
-                                            ),
-                                          })}
+                                        vs{' '}
+                                        <span className="rate-radar-platform">
+                                          {sp.priciestPlatform}
                                         </span>
-                                      </div>
+                                      </span>
+                                    </div>
+                                    <div className="rate-radar-item-side">
+                                      <span className="rate-radar-tag is-warn">
+                                        {t('page.spreadDiffBadge', {
+                                          pct: formatPlainNumber(
+                                            sp.spreadPct,
+                                            locale
+                                          ),
+                                          amount:
+                                            safeSpread != null
+                                              ? formatNumber(safeSpread, locale)
+                                              : '-',
+                                        })}
+                                      </span>
                                     </div>
                                   </div>
-                                ))}
-                            </div>
+                                </div>
+                              );
+                            })}
                           </div>
-                        )}
+                        </div>
+                      )}
                     </div>
                   )}
               </div>

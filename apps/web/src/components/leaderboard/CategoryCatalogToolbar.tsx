@@ -6,6 +6,7 @@ import { BsDownload } from 'react-icons/bs';
 import { Link } from '@/lib/navigation';
 import { useDetailsDismiss } from '@/components/elementary/use-details-dismiss';
 import { escapeCsvCell } from '@/lib/csv-safe';
+import { formatNumber } from '@/lib/locale-format';
 import { displayedScore5, formatScoreFixed } from '@/lib/rating-display';
 import {
   MAX_VALID_VND_PRICE,
@@ -24,6 +25,7 @@ import {
 } from '@/lib/deal-radar';
 import { useDealRadarIndex } from '@/components/radar/use-deal-radar';
 import { versusHref } from '@/lib/item-compare';
+import { catalogRowSlug, type ItemCatalogRow } from '@/lib/item-directory';
 
 const CATALOG_CONTROL_CHARS_RE = /\p{Cc}+/gu;
 
@@ -43,11 +45,23 @@ export function sanitizeCatalogToolbarText(
 }
 
 export function sanitizeCatalogPriceVnd(value: unknown): number {
-  const num = Number(value);
+  if (typeof value !== 'number' && typeof value !== 'string') return 0;
+  let num: number;
+  if (typeof value === 'string') {
+    if (/\p{Cc}/u.test(value)) return 0;
+    const trimmed = value.trim();
+    if (!trimmed || trimmed.length > 32 || /^[+-]?0[xbo]/i.test(trimmed)) {
+      return 0;
+    }
+    num = Number(trimmed);
+  } else {
+    num = value;
+  }
   if (!Number.isFinite(num) || num <= 0 || num > MAX_VALID_VND_PRICE) {
     return 0;
   }
-  return Math.round(num);
+  const rounded = Math.round(num);
+  return rounded > 0 && rounded <= MAX_VALID_VND_PRICE ? rounded : 0;
 }
 
 export function sanitizeCatalogCount(value: unknown): number {
@@ -91,11 +105,63 @@ export function buildCatalogJsonProductEntry(
   };
 }
 
+export function buildCatalogItemSlugMap(
+  products: readonly ItemCatalogRow[],
+  itemSlugBySlug?: Readonly<Record<string, string>> | null
+): Record<string, string> {
+  const map: Record<string, string> = {};
+  if (itemSlugBySlug) {
+    for (const [slug, itemSlug] of Object.entries(itemSlugBySlug)) {
+      if (slug && typeof itemSlug === 'string' && itemSlug) {
+        map[slug] = itemSlug;
+      }
+    }
+  }
+  for (const p of products) {
+    if (!p || typeof p.slug !== 'string' || !p.slug) continue;
+    const rowSlug = catalogRowSlug(p);
+    if (rowSlug && rowSlug !== p.slug && !map[p.slug]) {
+      map[p.slug] = rowSlug;
+    }
+  }
+  return map;
+}
+
+export function buildCatalogCsvRow(
+  p: ItemCatalogRow,
+  rank: number,
+  safeCategorySlug: string,
+  radar: RadarSignal | null | undefined
+): string[] {
+  const rawUser = resolveCompareEffectiveUserRating(p);
+  const userRating = rawUser > 0 ? rawUser : null;
+  const expertScore10 = resolveCompareExpertRating10(p);
+  const minPrice = sanitizeCatalogPriceVnd(p.min_price);
+  const maxPrice = sanitizeCatalogPriceVnd(p.max_price);
+  return [
+    String(rank),
+    sanitizeCatalogToolbarText(p.slug, '', 120),
+    sanitizeCatalogToolbarText(p.name, 'Unknown'),
+    sanitizeCatalogToolbarText(p.brand, '', 80),
+    safeCategorySlug,
+    userRating != null ? formatScoreFixed(displayedScore5(userRating), 1) : '',
+    expertScore10 != null ? formatScoreFixed(expertScore10, 1) : '',
+    String(
+      sanitizeCatalogCount(p.authentic_review_count || p.total_reviews || 0)
+    ),
+    String(sanitizeCatalogCount(p.merchant_count)),
+    minPrice > 0 ? String(minPrice) : '',
+    maxPrice > 0 ? String(maxPrice) : '',
+    ...radarCsvCells(radar),
+  ];
+}
+
 interface CategoryCatalogToolbarProps {
   readonly categorySlug: string;
   readonly categoryTitle: string;
-  readonly products: readonly MasterProduct[];
+  readonly products: readonly ItemCatalogRow[];
   readonly dealRadar?: CrossPlatformDealRadarResponse | null;
+  readonly itemSlugBySlug?: Readonly<Record<string, string>>;
 }
 
 export default function CategoryCatalogToolbar({
@@ -103,6 +169,7 @@ export default function CategoryCatalogToolbar({
   categoryTitle,
   products,
   dealRadar,
+  itemSlugBySlug,
 }: CategoryCatalogToolbarProps) {
   const t = useTranslations('catalog');
   const locale = useLocale();
@@ -124,21 +191,39 @@ export default function CategoryCatalogToolbar({
     120
   );
 
+  const resolvedItemSlugBySlug = useMemo(
+    () => buildCatalogItemSlugMap(products, itemSlugBySlug),
+    [products, itemSlugBySlug]
+  );
+
+  const sideSlugFor = (slug: string): string => {
+    const mapped = resolvedItemSlugBySlug[slug];
+    return mapped && !mapped.includes('-vs-') ? mapped : slug;
+  };
+
   const effectiveSlugA = useMemo(() => {
     if (slugA && products.some((p) => p.slug === slugA)) return slugA;
     return products[0]?.slug ?? '';
   }, [slugA, products]);
 
+  const activeSideA = sideSlugFor(effectiveSlugA);
+
   const effectiveSlugB = useMemo(() => {
     if (
       slugB &&
       slugB !== effectiveSlugA &&
+      sideSlugFor(slugB) !== activeSideA &&
       products.some((p) => p.slug === slugB)
     ) {
       return slugB;
     }
-    return products.find((p) => p.slug !== effectiveSlugA)?.slug ?? '';
-  }, [slugB, effectiveSlugA, products]);
+    return (
+      products.find(
+        (p) => p.slug !== effectiveSlugA && sideSlugFor(p.slug) !== activeSideA
+      )?.slug ?? ''
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [slugB, effectiveSlugA, activeSideA, products, resolvedItemSlugBySlug]);
 
   const handleCopyCatalogMarkdown = async () => {
     if (typeof navigator === 'undefined' || products.length === 0) return;
@@ -173,7 +258,7 @@ export default function CategoryCatalogToolbar({
           ? `${formatScoreFixed(expertScore10, 1)}/10`
           : t('toolbar.unratedText'),
         String(authReviews),
-        minPrice > 0 ? `${minPrice.toLocaleString('vi-VN')} ₫` : '-',
+        minPrice > 0 ? `${formatNumber(minPrice, locale)} ₫` : '-',
         radarMarkdownCell(radar, locale),
       ];
     });
@@ -211,30 +296,9 @@ export default function CategoryCatalogToolbar({
       'MaxPriceVND',
       ...RADAR_CSV_HEADERS,
     ];
-    const rows = products.map((p, idx) => {
-      const rawUser = resolveCompareEffectiveUserRating(p);
-      const userRating = rawUser > 0 ? rawUser : null;
-      const expertScore10 = resolveCompareExpertRating10(p);
-      const radar = radarFor(p.slug);
-      return [
-        String(idx + 1),
-        sanitizeCatalogToolbarText(p.slug, '', 120),
-        sanitizeCatalogToolbarText(p.name, 'Unknown'),
-        sanitizeCatalogToolbarText(p.brand, '', 80),
-        safeCategorySlug,
-        userRating != null
-          ? formatScoreFixed(displayedScore5(userRating), 1)
-          : '',
-        expertScore10 != null ? formatScoreFixed(expertScore10, 1) : '',
-        String(
-          sanitizeCatalogCount(p.authentic_review_count || p.total_reviews || 0)
-        ),
-        String(sanitizeCatalogCount(p.merchant_count)),
-        String(sanitizeCatalogPriceVnd(p.min_price)),
-        String(sanitizeCatalogPriceVnd(p.max_price)),
-        ...radarCsvCells(radar),
-      ];
-    });
+    const rows = products.map((p, idx) =>
+      buildCatalogCsvRow(p, idx + 1, safeCategorySlug, radarFor(p.slug))
+    );
 
     const csvContent =
       '\uFEFF' +
@@ -313,22 +377,32 @@ export default function CategoryCatalogToolbar({
               aria-label={t('toolbar.selectDeviceBAria')}
             >
               {products
-                .filter((p) => p.slug !== effectiveSlugA)
+                .filter(
+                  (p) =>
+                    p.slug !== effectiveSlugA &&
+                    sideSlugFor(p.slug) !== activeSideA
+                )
                 .map((p) => (
                   <option key={p.slug} value={p.slug}>
                     {p.name}
                   </option>
                 ))}
             </select>
-            {effectiveSlugA && effectiveSlugB && (
-              <Link
-                href={versusHref(effectiveSlugA, effectiveSlugB)}
-                className="btn btn-sm btn-primary fw-semibold px-3"
-                data-testid="catalog-1v1-go-btn"
-              >
-                {t('toolbar.versusGoBtn')}
-              </Link>
-            )}
+            {effectiveSlugA &&
+              effectiveSlugB &&
+              sideSlugFor(effectiveSlugB) !== activeSideA && (
+                <Link
+                  href={versusHref(
+                    effectiveSlugA,
+                    effectiveSlugB,
+                    resolvedItemSlugBySlug
+                  )}
+                  className="btn btn-sm btn-primary fw-semibold px-3"
+                  data-testid="catalog-1v1-go-btn"
+                >
+                  {t('toolbar.versusGoBtn')}
+                </Link>
+              )}
           </div>
         ) : (
           <div />

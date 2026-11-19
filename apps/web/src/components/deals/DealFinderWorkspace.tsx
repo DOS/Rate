@@ -30,6 +30,7 @@ import {
   type CrossPlatformDealRadarItem,
   type CrossPlatformDealRadarResponse,
   type CrossPlatformPriceSpreadItem,
+  type RadarIndex,
   type RadarSignal,
 } from '@/lib/deal-radar';
 import RadarBadge from '@/components/radar/RadarBadge';
@@ -57,10 +58,53 @@ const DEALS_PAGE_SIZE = 12;
 export type PersonaKey =
   'default' | 'value_hunter' | 'photography' | 'gaming' | 'endurance';
 
+function parseStrictDecimalVnd(value: unknown): number | null {
+  if (typeof value === 'number') {
+    return Number.isFinite(value) ? value : null;
+  }
+  if (typeof value === 'string') {
+    if (/\p{Cc}/u.test(value)) return null;
+    const trimmed = value.trim();
+    if (!trimmed || trimmed.length > 32 || /^[+-]?0[xbo]/i.test(trimmed)) {
+      return null;
+    }
+    const parsed = Number(trimmed);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+}
+
+export function sanitizeDealRadarPriceVnd(value: unknown): number | null {
+  const raw = parseStrictDecimalVnd(value);
+  if (raw == null || raw <= 0 || raw > MAX_VALID_VND_PRICE) return null;
+  const rounded = Math.round(raw);
+  return rounded > 0 && rounded <= MAX_VALID_VND_PRICE ? rounded : null;
+}
+
+export function resolveClaimedOriginalPriceVnd(
+  priceOriginal: unknown,
+  priceCurrent: unknown
+): number | null {
+  const safeCurrent = sanitizeDealRadarPriceVnd(priceCurrent);
+  const safeOriginal = sanitizeDealRadarPriceVnd(priceOriginal);
+  if (safeCurrent == null || safeOriginal == null) return null;
+  return safeOriginal > safeCurrent ? safeOriginal : null;
+}
+
+export function formatDealRadarPriceVnd(
+  value: unknown,
+  locale?: string | null
+): string {
+  const safe = sanitizeDealRadarPriceVnd(value);
+  return safe != null ? formatPriceVnd(safe, locale) : '-';
+}
+
 export function sanitizeDealFinderBudgetVnd(value: unknown): number {
-  const num = typeof value === 'number' ? value : Number(value);
-  if (!Number.isFinite(num) || num <= 0) return MAX_VALID_VND_PRICE;
-  return Math.min(MAX_VALID_VND_PRICE, Math.round(num));
+  const num = parseStrictDecimalVnd(value);
+  if (num == null || num <= 0) return MAX_VALID_VND_PRICE;
+  const rounded = Math.round(num);
+  if (rounded <= 0) return MAX_VALID_VND_PRICE;
+  return Math.min(MAX_VALID_VND_PRICE, rounded);
 }
 
 export function sanitizeDealFinderSearchQuery(value: unknown): string {
@@ -154,9 +198,9 @@ export function rankProductsForDealFinder(
     if (!p || typeof p !== 'object') continue;
     const cat = getMasterProductCategorySlug(p);
     if (categoryFilter !== 'all' && cat !== categoryFilter) continue;
-    const rawMinP = Number(p.min_price);
+    const rawMinP = parseStrictDecimalVnd(p.min_price);
     if (
-      !Number.isFinite(rawMinP) ||
+      rawMinP == null ||
       rawMinP <= 0 ||
       rawMinP > MAX_VALID_VND_PRICE ||
       rawMinP > safeBudget
@@ -164,6 +208,7 @@ export function rankProductsForDealFinder(
       continue;
     }
     const minP = Math.round(rawMinP);
+    if (minP <= 0 || minP > MAX_VALID_VND_PRICE) continue;
     const nameLower = typeof p.name === 'string' ? p.name.toLowerCase() : '';
     const brandLower = typeof p.brand === 'string' ? p.brand.toLowerCase() : '';
     if (q && !nameLower.includes(q) && !brandLower.includes(q)) {
@@ -190,11 +235,9 @@ export function rankProductsForDealFinder(
       personaScore5 = lean(c.battery, 0.6);
     }
 
-    const rawMaxP = Number(p.max_price);
+    const rawMaxP = parseStrictDecimalVnd(p.max_price);
     const maxP =
-      Number.isFinite(rawMaxP) &&
-      rawMaxP >= minP &&
-      rawMaxP <= MAX_VALID_VND_PRICE
+      rawMaxP != null && rawMaxP >= minP && rawMaxP <= MAX_VALID_VND_PRICE
         ? Math.round(rawMaxP)
         : minP;
     const spreadSavingsVnd = Math.max(0, maxP - minP);
@@ -260,6 +303,255 @@ export function buildDealJsonItem(
     costPerPointVnd: d.costPerPointVnd,
     href: d.productHref,
   };
+}
+
+export function filterValidRadarDeals(
+  items: readonly CrossPlatformDealRadarItem[] | null | undefined,
+  categoryFilter: CanonicalCategorySlug | 'all'
+): CrossPlatformDealRadarItem[] {
+  if (!Array.isArray(items)) return [];
+  const out: CrossPlatformDealRadarItem[] = [];
+  for (const item of items) {
+    if (!item || typeof item !== 'object') continue;
+    if (categoryFilter !== 'all' && item.categorySlug !== categoryFilter) {
+      continue;
+    }
+    const safeCurrent = sanitizeDealRadarPriceVnd(item.priceCurrent);
+    if (safeCurrent == null) continue;
+    out.push({
+      ...item,
+      priceCurrent: safeCurrent,
+      priceOriginal: resolveClaimedOriginalPriceVnd(
+        item.priceOriginal,
+        safeCurrent
+      ),
+    });
+  }
+  return out;
+}
+
+export function filterValidRadarSpreads(
+  items: readonly CrossPlatformPriceSpreadItem[] | null | undefined,
+  categoryFilter: CanonicalCategorySlug | 'all'
+): CrossPlatformPriceSpreadItem[] {
+  if (!Array.isArray(items)) return [];
+  const out: CrossPlatformPriceSpreadItem[] = [];
+  for (const item of items) {
+    if (!item || typeof item !== 'object') continue;
+    if (categoryFilter !== 'all' && item.categorySlug !== categoryFilter) {
+      continue;
+    }
+    const safeMin = sanitizeDealRadarPriceVnd(item.minPrice);
+    const safeMax = sanitizeDealRadarPriceVnd(item.maxPrice);
+    const safeSpread = sanitizeDealRadarPriceVnd(item.spreadVnd);
+    if (
+      safeMin == null ||
+      safeMax == null ||
+      safeMax < safeMin ||
+      safeSpread == null
+    ) {
+      continue;
+    }
+    out.push({
+      ...item,
+      minPrice: safeMin,
+      maxPrice: safeMax,
+      spreadVnd: safeSpread,
+    });
+  }
+  return out;
+}
+
+type RadarMarkdownTranslateKey =
+  | 'radarMdHeader'
+  | 'radarMdMeta'
+  | 'radarMdGenuineTitle'
+  | 'radarMdGenuineTableHead'
+  | 'radarMdFakeTitle'
+  | 'radarMdFakeTableHead'
+  | 'radarMdSpreadTitle'
+  | 'radarMdSpreadTableHead'
+  | 'noScore';
+
+export function buildDealRadarMarkdown(params: {
+  readonly t: (
+    key: RadarMarkdownTranslateKey,
+    values?: Record<string, string | number>
+  ) => string;
+  readonly locale: string;
+  readonly categoryLabel: string;
+  readonly totalClustersAnalyzed: number;
+  readonly totalOffersAnalyzed: number;
+  readonly genuineDeals: readonly CrossPlatformDealRadarItem[];
+  readonly fakeSaleTraps: readonly CrossPlatformDealRadarItem[];
+  readonly priceSpreadLeaders: readonly CrossPlatformPriceSpreadItem[];
+}): string {
+  const {
+    t,
+    locale,
+    categoryLabel,
+    totalClustersAnalyzed,
+    totalOffersAnalyzed,
+    genuineDeals,
+    fakeSaleTraps,
+    priceSpreadLeaders,
+  } = params;
+  const safeClusters = Math.max(
+    0,
+    Math.round(parseStrictDecimalVnd(totalClustersAnalyzed) ?? 0)
+  );
+  const safeOffers = Math.max(
+    0,
+    Math.round(parseStrictDecimalVnd(totalOffersAnalyzed) ?? 0)
+  );
+  const lines = [
+    t('radarMdHeader'),
+    t('radarMdMeta', {
+      category: sanitizeDealFinderMarkdownCell(categoryLabel),
+      clusters: formatNumber(safeClusters, locale),
+      offers: safeOffers,
+    }),
+    '',
+    t('radarMdGenuineTitle'),
+    t('radarMdGenuineTableHead'),
+    '| --- | --- | --- | --- | --- | --- |',
+    ...genuineDeals.map((g) => {
+      const safeCurrent = sanitizeDealRadarPriceVnd(g.priceCurrent);
+      const safeMedian = sanitizeDealRadarPriceVnd(g.marketMedianPrice);
+      const safeSavings = sanitizeDealRadarPriceVnd(g.savingsVsMedianVnd);
+      return `| ${sanitizeDealFinderMarkdownCell(g.productName)} | ${sanitizeDealFinderMarkdownCell(g.platform.toUpperCase())} (${sanitizeDealFinderMarkdownCell(g.merchantName)}) | ${safeCurrent != null ? `**${formatNumber(safeCurrent, locale)} ₫**` : '-'} | ${safeMedian != null ? `${formatNumber(safeMedian, locale)} ₫` : '-'} | ${safeSavings != null ? `-${formatNumber(safeSavings, locale)} ₫ (-${g.savingsVsMedianPct}%)` : '-'} | ${g.jreviewsScore10 != null && g.jreviewsScore10 > 0 ? `${formatScoreFixed(g.jreviewsScore10, 1)}/10` : t('noScore')} |`;
+    }),
+    '',
+    t('radarMdFakeTitle'),
+    t('radarMdFakeTableHead'),
+    '| --- | --- | --- | --- | --- | --- |',
+    ...fakeSaleTraps.map((trap) => {
+      const safeCurrent = sanitizeDealRadarPriceVnd(trap.priceCurrent);
+      const claimedOrig = resolveClaimedOriginalPriceVnd(
+        trap.priceOriginal,
+        trap.priceCurrent
+      );
+      const safeMedian = sanitizeDealRadarPriceVnd(trap.marketMedianPrice);
+      return `| ${sanitizeDealFinderMarkdownCell(trap.productName)} | ${sanitizeDealFinderMarkdownCell(trap.platform.toUpperCase())} (${sanitizeDealFinderMarkdownCell(trap.merchantName)}) | ${safeCurrent != null ? `${formatNumber(safeCurrent, locale)} ₫` : '-'} | ${claimedOrig != null ? `${formatNumber(claimedOrig, locale)} ₫` : '-'} | ${safeMedian != null ? `${formatNumber(safeMedian, locale)} ₫` : '-'} | **+${trap.fakeMarkupPct}%** |`;
+    }),
+    '',
+    t('radarMdSpreadTitle'),
+    t('radarMdSpreadTableHead'),
+    '| --- | --- | --- | --- | --- | --- |',
+    ...priceSpreadLeaders.map((s) => {
+      const safeMin = sanitizeDealRadarPriceVnd(s.minPrice);
+      const safeMax = sanitizeDealRadarPriceVnd(s.maxPrice);
+      const safeSpread = sanitizeDealRadarPriceVnd(s.spreadVnd);
+      return `| ${sanitizeDealFinderMarkdownCell(s.productName)} | ${sanitizeDealFinderMarkdownCell(s.cheapestPlatform.toUpperCase())} (${sanitizeDealFinderMarkdownCell(s.cheapestMerchantName)}) | ${sanitizeDealFinderMarkdownCell(s.priciestPlatform.toUpperCase())} (${sanitizeDealFinderMarkdownCell(s.priciestMerchantName)}) | ${safeMin != null ? `**${formatNumber(safeMin, locale)} ₫**` : '-'} | ${safeMax != null ? `${formatNumber(safeMax, locale)} ₫` : '-'} | ${safeSpread != null ? `**-${formatNumber(safeSpread, locale)} ₫ (${s.spreadPct}%)**` : '-'} |`;
+    }),
+  ];
+  return lines.join('\n');
+}
+
+export function buildDealRadarCsvRows(
+  genuineDeals: readonly CrossPlatformDealRadarItem[],
+  fakeSaleTraps: readonly CrossPlatformDealRadarItem[],
+  priceSpreadLeaders: readonly CrossPlatformPriceSpreadItem[]
+): Array<Array<string | number>> {
+  const allItems = [...genuineDeals, ...fakeSaleTraps];
+  return [
+    ...allItems.map((it) => {
+      const safeCurrent = sanitizeDealRadarPriceVnd(it.priceCurrent);
+      const safeOriginal = resolveClaimedOriginalPriceVnd(
+        it.priceOriginal,
+        it.priceCurrent
+      );
+      const safeMedian = sanitizeDealRadarPriceVnd(it.marketMedianPrice);
+      return [
+        it.verdict,
+        it.productName,
+        it.brand,
+        it.categorySlug,
+        it.platform,
+        it.merchantName,
+        it.isOfficialMall ? 'Mall' : 'Standard',
+        safeCurrent ?? '',
+        safeOriginal ?? '',
+        safeMedian ?? '',
+        it.savingsVsMedianPct,
+        it.fakeMarkupPct,
+        it.jreviewsScore10 != null && it.jreviewsScore10 > 0
+          ? formatScoreFixed(it.jreviewsScore10, 1)
+          : '',
+      ];
+    }),
+    ...priceSpreadLeaders.map((sp) => {
+      const safeMin = sanitizeDealRadarPriceVnd(sp.minPrice);
+      const safeMax = sanitizeDealRadarPriceVnd(sp.maxPrice);
+      const safeMedian = sanitizeDealRadarPriceVnd(sp.medianPrice);
+      return [
+        'price_spread_leader',
+        sp.productName,
+        sp.brand,
+        sp.categorySlug,
+        `${sp.cheapestPlatform} vs ${sp.priciestPlatform}`,
+        sp.cheapestMerchantName,
+        'Verified',
+        safeMin ?? '',
+        safeMax ?? '',
+        safeMedian ?? '',
+        sp.spreadPct,
+        0,
+        '-',
+      ];
+    }),
+  ];
+}
+
+type DealsMarkdownTranslateKey =
+  | 'dealsMdHeader'
+  | 'dealsMdBudgetLine'
+  | 'dealsMdUrlLine'
+  | 'dealsMdTableHead'
+  | 'noScore'
+  | 'labNoScore'
+  | 'samePrice';
+
+export function buildDealsMarkdown(params: {
+  readonly t: (
+    key: DealsMarkdownTranslateKey,
+    values?: Record<string, string | number>
+  ) => string;
+  readonly locale: string;
+  readonly persona: PersonaKey;
+  readonly personaLabel: string;
+  readonly maxBudgetVnd: number;
+  readonly url: string;
+  readonly rankedDeals: ReturnType<typeof rankProductsForDealFinder>;
+  readonly radarIndex: RadarIndex;
+}): string {
+  const {
+    t,
+    locale,
+    persona,
+    personaLabel,
+    maxBudgetVnd,
+    url,
+    rankedDeals,
+    radarIndex,
+  } = params;
+  const safeBudget = sanitizeDealFinderBudgetVnd(maxBudgetVnd);
+  const lines = [
+    t('dealsMdHeader', { count: rankedDeals.length }),
+    t('dealsMdBudgetLine', {
+      budget: formatNumber(safeBudget, locale),
+      persona: sanitizeDealFinderMarkdownCell(personaLabel),
+    }),
+    t('dealsMdUrlLine', { url }),
+    '',
+    t('dealsMdTableHead'),
+    '| --- | --- | --- | --- | --- | --- | --- | --- |',
+    ...rankedDeals.slice(0, 20).map((d) => {
+      const personaStr = formatDealPersonaScore(d.personaScore5, persona);
+      return `| #${d.rank} | ${sanitizeDealFinderMarkdownCell(d.name)} | ${sanitizeDealFinderMarkdownCell(d.brand)} | **${personaStr ? `${personaStr}/5.0` : t('noScore')}** | ★ ${d.userScore5 > 0 ? formatScoreFixed(displayedScore5(d.userScore5), 1) : t('noScore')} (${d.expertScore10 != null ? `Lab ${formatScoreFixed(d.expertScore10, 1)}/10` : t('labNoScore')}) | **${formatNumber(d.minPrice, locale)} ₫** | ${d.spreadSavingsVnd > 0 ? `-${formatNumber(d.spreadSavingsVnd, locale)} ₫` : t('samePrice')} | ${radarMarkdownCell(getRadarSignal(radarIndex, d.slug), locale)} |`;
+    }),
+  ];
+  return lines.join('\n');
 }
 
 export default function DealFinderWorkspace({
@@ -338,65 +630,42 @@ export default function DealFinderWorkspace({
     { key: 'endurance', label: t('personaEndurance') },
   ];
 
-  const filteredGenuineDeals = useMemo<CrossPlatformDealRadarItem[]>(() => {
-    if (!dealRadar || !Array.isArray(dealRadar.genuineDeals)) return [];
-    return dealRadar.genuineDeals.filter(
-      (item) => categoryFilter === 'all' || item.categorySlug === categoryFilter
-    );
-  }, [dealRadar, categoryFilter]);
+  const selectedCategoryLabel =
+    categoryOptions.find((opt) => opt.slug === categoryFilter)?.label ??
+    categoryFilter;
+  const selectedPersonaLabel =
+    personaOptions.find((opt) => opt.key === persona)?.label ?? persona;
 
-  const filteredFakeSaleTraps = useMemo<CrossPlatformDealRadarItem[]>(() => {
-    if (!dealRadar || !Array.isArray(dealRadar.fakeSaleTraps)) return [];
-    return dealRadar.fakeSaleTraps.filter(
-      (item) => categoryFilter === 'all' || item.categorySlug === categoryFilter
-    );
-  }, [dealRadar, categoryFilter]);
+  const filteredGenuineDeals = useMemo<CrossPlatformDealRadarItem[]>(
+    () => filterValidRadarDeals(dealRadar?.genuineDeals, categoryFilter),
+    [dealRadar, categoryFilter]
+  );
 
-  const filteredPriceSpreadLeaders = useMemo<
-    CrossPlatformPriceSpreadItem[]
-  >(() => {
-    if (!dealRadar || !Array.isArray(dealRadar.priceSpreadLeaders)) return [];
-    return dealRadar.priceSpreadLeaders.filter(
-      (item) => categoryFilter === 'all' || item.categorySlug === categoryFilter
-    );
-  }, [dealRadar, categoryFilter]);
+  const filteredFakeSaleTraps = useMemo<CrossPlatformDealRadarItem[]>(
+    () => filterValidRadarDeals(dealRadar?.fakeSaleTraps, categoryFilter),
+    [dealRadar, categoryFilter]
+  );
+
+  const filteredPriceSpreadLeaders = useMemo<CrossPlatformPriceSpreadItem[]>(
+    () =>
+      filterValidRadarSpreads(dealRadar?.priceSpreadLeaders, categoryFilter),
+    [dealRadar, categoryFilter]
+  );
 
   const handleCopyRadarMarkdown = async () => {
     if (typeof window === 'undefined' || !dealRadar) return;
     try {
-      const lines = [
-        t('radarMdHeader'),
-        t('radarMdMeta', {
-          category: categoryFilter,
-          clusters: dealRadar.totalClustersAnalyzed,
-          offers: dealRadar.totalOffersAnalyzed,
-        }),
-        '',
-        t('radarMdGenuineTitle'),
-        t('radarMdGenuineTableHead'),
-        '| --- | --- | --- | --- | --- | --- |',
-        ...filteredGenuineDeals.map(
-          (g) =>
-            `| ${sanitizeDealFinderMarkdownCell(g.productName)} | ${sanitizeDealFinderMarkdownCell(g.platform.toUpperCase())} (${sanitizeDealFinderMarkdownCell(g.merchantName)}) | **${g.priceCurrent.toLocaleString('vi-VN')} ₫** | ${g.marketMedianPrice.toLocaleString('vi-VN')} ₫ | -${g.savingsVsMedianVnd.toLocaleString('vi-VN')} ₫ (-${g.savingsVsMedianPct}%) | ${g.jreviewsScore10 != null ? `${formatScoreFixed(g.jreviewsScore10, 1)}/10` : t('noScore')} |`
-        ),
-        '',
-        t('radarMdFakeTitle'),
-        t('radarMdFakeTableHead'),
-        '| --- | --- | --- | --- | --- | --- |',
-        ...filteredFakeSaleTraps.map(
-          (trap) =>
-            `| ${sanitizeDealFinderMarkdownCell(trap.productName)} | ${sanitizeDealFinderMarkdownCell(trap.platform.toUpperCase())} (${sanitizeDealFinderMarkdownCell(trap.merchantName)}) | ${trap.priceCurrent.toLocaleString('vi-VN')} ₫ | ${(trap.priceOriginal || trap.priceCurrent).toLocaleString('vi-VN')} ₫ | ${trap.marketMedianPrice.toLocaleString('vi-VN')} ₫ | **+${trap.fakeMarkupPct}%** |`
-        ),
-        '',
-        t('radarMdSpreadTitle'),
-        t('radarMdSpreadTableHead'),
-        '| --- | --- | --- | --- | --- | --- |',
-        ...filteredPriceSpreadLeaders.map(
-          (s) =>
-            `| ${sanitizeDealFinderMarkdownCell(s.productName)} | ${sanitizeDealFinderMarkdownCell(s.cheapestPlatform.toUpperCase())} (${sanitizeDealFinderMarkdownCell(s.cheapestMerchantName)}) | ${sanitizeDealFinderMarkdownCell(s.priciestPlatform.toUpperCase())} (${sanitizeDealFinderMarkdownCell(s.priciestMerchantName)}) | **${s.minPrice.toLocaleString('vi-VN')} ₫** | ${s.maxPrice.toLocaleString('vi-VN')} ₫ | **-${s.spreadVnd.toLocaleString('vi-VN')} ₫ (${s.spreadPct}%)** |`
-        ),
-      ];
-      await navigator.clipboard.writeText(lines.join('\n'));
+      const md = buildDealRadarMarkdown({
+        t,
+        locale,
+        categoryLabel: selectedCategoryLabel,
+        totalClustersAnalyzed: dealRadar.totalClustersAnalyzed,
+        totalOffersAnalyzed: dealRadar.totalOffersAnalyzed,
+        genuineDeals: filteredGenuineDeals,
+        fakeSaleTraps: filteredFakeSaleTraps,
+        priceSpreadLeaders: filteredPriceSpreadLeaders,
+      });
+      await navigator.clipboard.writeText(md);
       setCopiedRadarMd(true);
       setTimeout(() => setCopiedRadarMd(false), 2200);
     } catch {
@@ -422,41 +691,11 @@ export default function DealFinderWorkspace({
       'Fake Markup (%)',
       'JReviews Score (/10)',
     ];
-    const allItems = [...filteredGenuineDeals, ...filteredFakeSaleTraps];
-    const rows = [
-      ...allItems.map((it) => [
-        it.verdict,
-        it.productName,
-        it.brand,
-        it.categorySlug,
-        it.platform,
-        it.merchantName,
-        it.isOfficialMall ? 'Mall' : 'Standard',
-        it.priceCurrent,
-        it.priceOriginal ?? it.priceCurrent,
-        it.marketMedianPrice,
-        it.savingsVsMedianPct,
-        it.fakeMarkupPct,
-        it.jreviewsScore10 != null
-          ? formatScoreFixed(it.jreviewsScore10, 1)
-          : '',
-      ]),
-      ...filteredPriceSpreadLeaders.map((sp) => [
-        'price_spread_leader',
-        sp.productName,
-        sp.brand,
-        sp.categorySlug,
-        `${sp.cheapestPlatform} vs ${sp.priciestPlatform}`,
-        sp.cheapestMerchantName,
-        'Verified',
-        sp.minPrice,
-        sp.maxPrice,
-        sp.medianPrice,
-        sp.spreadPct,
-        0,
-        '-',
-      ]),
-    ];
+    const rows = buildDealRadarCsvRows(
+      filteredGenuineDeals,
+      filteredFakeSaleTraps,
+      filteredPriceSpreadLeaders
+    );
     const csvContent = `\uFEFF${[
       headers.map(escapeCsv).join(','),
       ...rows.map((r) => r.map(escapeCsv).join(',')),
@@ -508,22 +747,17 @@ export default function DealFinderWorkspace({
   const handleCopyDealsMarkdown = async () => {
     if (typeof window === 'undefined' || rankedDeals.length === 0) return;
     try {
-      const lines = [
-        t('dealsMdHeader', { count: rankedDeals.length }),
-        t('dealsMdBudgetLine', {
-          budget: maxBudgetVnd.toLocaleString('vi-VN'),
-          persona,
-        }),
-        t('dealsMdUrlLine', { url: window.location.href }),
-        '',
-        t('dealsMdTableHead'),
-        '| --- | --- | --- | --- | --- | --- | --- | --- |',
-        ...rankedDeals.slice(0, 20).map((d) => {
-          const personaStr = formatDealPersonaScore(d.personaScore5, persona);
-          return `| #${d.rank} | ${sanitizeDealFinderMarkdownCell(d.name)} | ${sanitizeDealFinderMarkdownCell(d.brand)} | **${personaStr ? `${personaStr}/5.0` : t('noScore')}** | ★ ${d.userScore5 > 0 ? formatScoreFixed(displayedScore5(d.userScore5), 1) : t('noScore')} (${d.expertScore10 != null ? `Lab ${formatScoreFixed(d.expertScore10, 1)}/10` : t('labNoScore')}) | **${d.minPrice.toLocaleString('vi-VN')} ₫** | ${d.spreadSavingsVnd > 0 ? `-${d.spreadSavingsVnd.toLocaleString('vi-VN')} ₫` : t('samePrice')} | ${radarMarkdownCell(getRadarSignal(radarIndex, d.slug), locale)} |`;
-        }),
-      ];
-      await navigator.clipboard.writeText(lines.join('\n'));
+      const md = buildDealsMarkdown({
+        t,
+        locale,
+        persona,
+        personaLabel: selectedPersonaLabel,
+        maxBudgetVnd,
+        url: window.location.href,
+        rankedDeals,
+        radarIndex,
+      });
+      await navigator.clipboard.writeText(md);
       setCopiedMarkdown(true);
       setTimeout(() => setCopiedMarkdown(false), 2200);
     } catch {
@@ -804,41 +1038,54 @@ export default function DealFinderWorkspace({
                 </h3>
                 {filteredGenuineDeals.length > 0 ? (
                   <ul className="rate-radar-list">
-                    {filteredGenuineDeals.slice(0, 6).map((g) => (
-                      <li key={g.id}>
-                        <div className="rate-radar-item-main">
-                          <Link href={g.productHref} className="text-truncate">
-                            {g.productName}
-                          </Link>
-                          <span className="rate-radar-item-meta text-truncate">
-                            <span className="rate-radar-platform">
-                              {g.platform}
+                    {filteredGenuineDeals.slice(0, 6).map((g) => {
+                      const safeMedian = sanitizeDealRadarPriceVnd(
+                        g.marketMedianPrice
+                      );
+                      return (
+                        <li key={g.id}>
+                          <div className="rate-radar-item-main">
+                            <Link
+                              href={g.productHref}
+                              className="text-truncate"
+                            >
+                              {g.productName}
+                            </Link>
+                            <span className="rate-radar-item-meta text-truncate">
+                              <span className="rate-radar-platform">
+                                {g.platform}
+                              </span>
+                              <ContentText
+                                text={g.merchantName}
+                                locale={locale}
+                              />
+                              {safeMedian != null && (
+                                <>
+                                  {' '}
+                                  ·{' '}
+                                  {t('medianPriceLabel', {
+                                    price: formatNumber(safeMedian, locale),
+                                  })}
+                                </>
+                              )}
                             </span>
-                            <ContentText
-                              text={g.merchantName}
-                              locale={locale}
-                            />{' '}
-                            ·{' '}
-                            {t('medianPriceLabel', {
-                              price: formatNumber(g.marketMedianPrice, locale),
-                            })}
-                          </span>
-                        </div>
-                        <div className="rate-radar-item-side">
-                          <span className="rate-radar-price">
-                            {formatPriceVnd(g.priceCurrent, locale)}
-                          </span>
-                          <span className="rate-radar-tag is-good">
-                            {t('savingsVsMedianBadge', {
-                              pct: formatPlainNumber(
-                                g.savingsVsMedianPct,
-                                locale
-                              ),
-                            })}
-                          </span>
-                        </div>
-                      </li>
-                    ))}
+                          </div>
+                          <div className="rate-radar-item-side">
+                            <span className="rate-radar-price">
+                              {formatDealRadarPriceVnd(g.priceCurrent, locale)}
+                            </span>
+                            <span className="rate-radar-tag is-good">
+                              {t('savingsVsMedianBadge', {
+                                pct: formatPlainNumber(
+                                  g.savingsVsMedianPct,
+                                  locale
+                                ),
+                              })}
+                            </span>
+                          </div>
+                        </li>
+                      );
+                    })}
                   </ul>
                 ) : (
                   <p className="rate-radar-empty">{t('radarNoGenuine')}</p>
@@ -854,47 +1101,56 @@ export default function DealFinderWorkspace({
                 </h3>
                 {filteredFakeSaleTraps.length > 0 ? (
                   <ul className="rate-radar-list">
-                    {filteredFakeSaleTraps.slice(0, 6).map((trap) => (
-                      <li key={trap.id}>
-                        <div className="rate-radar-item-main">
-                          <Link
-                            href={trap.productHref}
-                            className="text-truncate"
-                          >
-                            {trap.productName}
-                          </Link>
-                          <span className="rate-radar-item-meta text-truncate">
-                            <span className="rate-radar-platform">
-                              {trap.platform}
+                    {filteredFakeSaleTraps.slice(0, 6).map((trap) => {
+                      const claimedOrig = resolveClaimedOriginalPriceVnd(
+                        trap.priceOriginal,
+                        trap.priceCurrent
+                      );
+                      return (
+                        <li key={trap.id}>
+                          <div className="rate-radar-item-main">
+                            <Link
+                              href={trap.productHref}
+                              className="text-truncate"
+                            >
+                              {trap.productName}
+                            </Link>
+                            <span className="rate-radar-item-meta text-truncate">
+                              <span className="rate-radar-platform">
+                                {trap.platform}
+                              </span>
+                              <ContentText
+                                text={trap.merchantName}
+                                locale={locale}
+                              />
+                              {claimedOrig != null && (
+                                <>
+                                  {' '}
+                                  · {t('claimedOrigLabel')}{' '}
+                                  <s>{formatPriceVnd(claimedOrig, locale)}</s>
+                                </>
+                              )}
                             </span>
-                            <ContentText
-                              text={trap.merchantName}
-                              locale={locale}
-                            />{' '}
-                            · {t('claimedOrigLabel')}{' '}
-                            <s>
-                              {formatPriceVnd(
-                                trap.priceOriginal || trap.priceCurrent,
+                          </div>
+                          <div className="rate-radar-item-side">
+                            <span className="rate-radar-price">
+                              {formatDealRadarPriceVnd(
+                                trap.priceCurrent,
                                 locale
                               )}
-                            </s>
-                          </span>
-                        </div>
-                        <div className="rate-radar-item-side">
-                          <span className="rate-radar-price">
-                            {formatPriceVnd(trap.priceCurrent, locale)}
-                          </span>
-                          <span className="rate-radar-tag is-bad">
-                            {t('fakeMarkupBadge', {
-                              pct: formatPlainNumber(
-                                trap.fakeMarkupPct,
-                                locale
-                              ),
-                            })}
-                          </span>
-                        </div>
-                      </li>
-                    ))}
+                            </span>
+                            <span className="rate-radar-tag is-bad">
+                              {t('fakeMarkupBadge', {
+                                pct: formatPlainNumber(
+                                  trap.fakeMarkupPct,
+                                  locale
+                                ),
+                              })}
+                            </span>
+                          </div>
+                        </li>
+                      );
+                    })}
                   </ul>
                 ) : (
                   <p className="rate-radar-empty">{t('radarNoTraps')}</p>
@@ -925,7 +1181,7 @@ export default function DealFinderWorkspace({
                             <span className="rate-radar-platform">
                               {s.cheapestPlatform}
                             </span>
-                            ({formatPriceVnd(s.minPrice, locale)}) vs{' '}
+                            ({formatDealRadarPriceVnd(s.minPrice, locale)}) vs{' '}
                             <span className="rate-radar-platform">
                               {s.priciestPlatform}
                             </span>
@@ -933,7 +1189,7 @@ export default function DealFinderWorkspace({
                         </div>
                         <div className="rate-radar-item-side">
                           <span className="rate-radar-price">
-                            -{formatPriceVnd(s.spreadVnd, locale)}
+                            -{formatDealRadarPriceVnd(s.spreadVnd, locale)}
                           </span>
                           <span className="rate-radar-tag is-warn">
                             {t('spreadPctBadge', {
