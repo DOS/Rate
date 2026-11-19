@@ -82,7 +82,11 @@ import {
   formatScoreFixed,
   roundScore,
 } from '@/lib/rating-display';
-import { versusHref } from '@/lib/item-compare';
+import {
+  canonicalVersusOrder,
+  isParseableVersusPair,
+  versusHref,
+} from '@/lib/item-compare';
 import { catalogRowSlug, type ItemCatalogRow } from '@/lib/item-directory';
 
 export type { LeaderboardCriterionKey, LeaderboardPriceSegment };
@@ -219,9 +223,8 @@ export function buildLeaderboardItemSlugMap(
   }
   for (const p of products) {
     if (!p || typeof p.slug !== 'string' || !p.slug) continue;
-    const rowSlug = catalogRowSlug(p);
-    if (rowSlug && rowSlug !== p.slug && !map[p.slug]) {
-      map[p.slug] = rowSlug;
+    if (typeof p.item_slug === 'string' && p.item_slug && !map[p.slug]) {
+      map[p.slug] = p.item_slug;
     }
   }
   return map;
@@ -233,7 +236,7 @@ export function resolveLeaderboardVersusSideSlug(
 ): string {
   if (!slug) return '';
   const mapped = itemSlugBySlug?.[slug];
-  return mapped && !mapped.includes('-vs-') ? mapped : slug;
+  return mapped && !mapped.toLowerCase().includes('-vs-') ? mapped : slug;
 }
 
 export function isSameLeaderboardVersusItem(
@@ -250,6 +253,30 @@ export function isSameLeaderboardVersusItem(
   const rawItemB = itemSlugBySlug?.[slugB];
   return Boolean(
     rawItemA && rawItemB && rawItemA.toLowerCase() === rawItemB.toLowerCase()
+  );
+}
+
+export function isValidLeaderboardVersusPair(
+  slugA: string,
+  slugB: string,
+  itemSlugBySlug?: Readonly<Record<string, string>> | null
+): boolean {
+  if (!slugA || !slugB) return false;
+  if (isSameLeaderboardVersusItem(slugA, slugB, itemSlugBySlug)) return false;
+  if (
+    itemSlugBySlug?.[slugA]?.toLowerCase().includes('-vs-') ||
+    itemSlugBySlug?.[slugB]?.toLowerCase().includes('-vs-')
+  ) {
+    return false;
+  }
+  const sideA = resolveLeaderboardVersusSideSlug(slugA, itemSlugBySlug);
+  const sideB = resolveLeaderboardVersusSideSlug(slugB, itemSlugBySlug);
+  const [first, second] = canonicalVersusOrder(sideA, sideB);
+  return Boolean(
+    first &&
+    second &&
+    first.toLowerCase() !== second.toLowerCase() &&
+    isParseableVersusPair(first.toLowerCase(), second.toLowerCase())
   );
 }
 
@@ -288,23 +315,32 @@ export function resolveLeaderboardEffectiveVersusSlugs(
   const effectiveVersusA =
     requestedSlugA && entries.some((e) => e.product.slug === requestedSlugA)
       ? requestedSlugA
-      : (entries[0]?.product.slug ?? '');
+      : (entries.find((e) =>
+          entries.some((other) =>
+            isValidLeaderboardVersusPair(
+              e.product.slug,
+              other.product.slug,
+              itemSlugBySlug
+            )
+          )
+        )?.product.slug ??
+        entries[0]?.product.slug ??
+        '');
   const effectiveVersusB =
     requestedSlugB &&
-    !isSameLeaderboardVersusItem(
+    isValidLeaderboardVersusPair(
       requestedSlugB,
       effectiveVersusA,
       itemSlugBySlug
     ) &&
     entries.some((e) => e.product.slug === requestedSlugB)
       ? requestedSlugB
-      : (entries.find(
-          (e) =>
-            !isSameLeaderboardVersusItem(
-              e.product.slug,
-              effectiveVersusA,
-              itemSlugBySlug
-            )
+      : (entries.find((e) =>
+          isValidLeaderboardVersusPair(
+            e.product.slug,
+            effectiveVersusA,
+            itemSlugBySlug
+          )
         )?.product.slug ?? '');
   return { effectiveVersusA, effectiveVersusB };
 }
@@ -941,7 +977,7 @@ export default function LeaderboardExplorer({
       if (
         !a ||
         !b ||
-        isSameLeaderboardVersusItem(
+        !isValidLeaderboardVersusPair(
           a.product.slug,
           b.product.slug,
           resolvedItemSlugBySlug
@@ -1554,13 +1590,12 @@ export default function LeaderboardExplorer({
                   aria-label={t('selectDeviceBAria')}
                 >
                   {rankedEntries
-                    .filter(
-                      (e) =>
-                        !isSameLeaderboardVersusItem(
-                          e.product.slug,
-                          effectiveVersusA,
-                          resolvedItemSlugBySlug
-                        )
+                    .filter((e) =>
+                      isValidLeaderboardVersusPair(
+                        e.product.slug,
+                        effectiveVersusA,
+                        resolvedItemSlugBySlug
+                      )
                     )
                     .map((entry) => {
                       const rankIdx = rankedEntries.findIndex(
@@ -1586,7 +1621,7 @@ export default function LeaderboardExplorer({
               <div className="col-lg-2 col-md-2">
                 {effectiveVersusA &&
                   effectiveVersusB &&
-                  !isSameLeaderboardVersusItem(
+                  isValidLeaderboardVersusPair(
                     effectiveVersusA,
                     effectiveVersusB,
                     resolvedItemSlugBySlug

@@ -7,6 +7,10 @@ import { fileURLToPath } from 'node:url';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { NextIntlClientProvider, createTranslator } from 'next-intl';
+import {
+  AppRouterContext,
+  type AppRouterInstance,
+} from 'next/dist/shared/lib/app-router-context.shared-runtime';
 import csMessages from '../../../locales/cs.json';
 import enMessages from '../../../locales/en.json';
 import viMessages from '../../../locales/vi.json';
@@ -2146,7 +2150,14 @@ assert.equal(
       null,
       undefined,
       0,
+      -0,
+      0.4,
+      '0.49',
+      Number.NaN,
+      Number.POSITIVE_INFINITY,
+      Number.NEGATIVE_INFINITY,
       -500_000,
+      MAX_VALID_VND_PRICE + 0.4,
       MAX_VALID_VND_PRICE + 1,
       '0x1000000',
       '+0x1000000',
@@ -2167,44 +2178,71 @@ assert.equal(
     assert.equal(sanitizeLeaderboardPriceVnd(' 24990000 '), 24_990_000);
     assert.equal(sanitizeComparePriceVnd(' 24990000 '), 24_990_000);
     assert.equal(sanitizeVersusPriceVnd(' 24990000 '), 24_990_000);
+    assert.equal(
+      sanitizeLeaderboardPriceVnd(MAX_VALID_VND_PRICE - 0.4),
+      MAX_VALID_VND_PRICE
+    );
+    assert.equal(
+      sanitizeComparePriceVnd(MAX_VALID_VND_PRICE - 0.4),
+      MAX_VALID_VND_PRICE
+    );
+    assert.equal(
+      sanitizeVersusPriceVnd(MAX_VALID_VND_PRICE - 0.4),
+      MAX_VALID_VND_PRICE
+    );
 
-    // CompareWorkspace popularBattles maps through versusHref(..., versusSlugMap) and skips same-Item pairs.
+    // CompareWorkspace popularBattles maps through versusHref(..., versusSlugMap) and skips same-Item pairs,
+    // including partial itemSlugBySlug maps (/compare SSR) via model_key sibling prefix propagation.
     const rawCandidateVariants: MasterProduct[] = [
       {
         ...phone('apple-iphone-16-512gb', 4.95),
+        model_key: 'apple:iphone-16:512gb',
         min_price: 25_990_000,
       } as unknown as MasterProduct,
       {
         ...phone('apple-iphone-16-256gb', 4.9),
+        model_key: 'apple:iphone-16:256gb',
         min_price: 21_990_000,
       } as unknown as MasterProduct,
       {
         ...phone('samsung-galaxy-s24-256gb', 4.7),
+        model_key: 'samsung:galaxy-s24:256gb',
         min_price: 18_990_000,
       } as unknown as MasterProduct,
       {
         ...phone('xiaomi-14-ultra-512gb', 4.6),
+        model_key: 'xiaomi:14-ultra:512gb',
         min_price: 23_990_000,
       } as unknown as MasterProduct,
+      {
+        ...phone('weird-vs-phone-256gb', 4.99),
+        model_key: 'brand:weird-vs-phone:256gb',
+        min_price: 15_990_000,
+      } as unknown as MasterProduct,
     ];
-    const candidateSlugMap = {
-      'apple-iphone-16-512gb': 'apple-iphone-16',
+    const partialCandidateSlugMap = {
+      // Simulates /compare where only initialProducts were looked up on SSR:
+      // 512gb sibling is unmapped, and weird-vs-phone has an unparseable -vs- Item slug.
       'apple-iphone-16-256gb': 'apple-iphone-16',
       'samsung-galaxy-s24-256gb': 'samsung-galaxy-s24',
       'xiaomi-14-ultra-512gb': 'xiaomi-14-ultra',
+      'weird-vs-phone-256gb': 'weird-vs-phone',
     };
     assert.equal(
       isSameCompareVersusItem(
         'apple-iphone-16-512gb',
         'apple-iphone-16-256gb',
-        candidateSlugMap
+        {
+          ...partialCandidateSlugMap,
+          'apple-iphone-16-512gb': 'apple-iphone-16',
+        }
       ),
       true
     );
     const resolvedBattles = resolveComparePopularBattles(
       rawCandidateVariants,
       'smartphones',
-      candidateSlugMap,
+      partialCandidateSlugMap,
       3
     );
     assert.deepEqual(
@@ -2264,6 +2302,7 @@ assert.equal(
       const { attachVersusItemSlug, buildVersusItemListSchema } =
         await import('../../app/[locale]/compare/[versus]/page');
       const {
+        default: VersusMatchupSwitcher,
         buildVersusPeerItemSlugMap,
         formatVersusPeerPriceBadge,
         isSameVersusPeerItem,
@@ -2278,7 +2317,14 @@ assert.equal(
         null,
         undefined,
         0,
+        -0,
+        0.4,
+        '0.49',
+        Number.NaN,
+        Number.POSITIVE_INFINITY,
+        Number.NEGATIVE_INFINITY,
         -500_000,
+        MAX_VALID_VND_PRICE + 0.4,
         MAX_VALID_VND_PRICE + 1,
         '0x1000000',
         '+0x1000000',
@@ -2304,7 +2350,11 @@ assert.equal(
         pricedCatalogRow,
         thirdItemRow,
       ];
-      const switcherMap = buildVersusPeerItemSlugMap(switcherPeers);
+      const switcherMap = {
+        ...buildVersusPeerItemSlugMap(switcherPeers),
+        // Out-of-top-60 default variant mapped to the same Item:
+        'apple-iphone-16-64gb': 'apple-iphone-16',
+      };
       assert.equal(
         resolveVersusPeerSideSlug('apple-iphone-16-128gb', switcherMap),
         'apple-iphone-16'
@@ -2320,7 +2370,7 @@ assert.equal(
       assert.deepEqual(
         resolveEffectivePeerSlugs(
           switcherPeers,
-          'apple-iphone-16-128gb',
+          'apple-iphone-16-64gb',
           'apple-iphone-16-256gb',
           switcherMap
         ),
@@ -2340,6 +2390,91 @@ assert.equal(
           effectiveSlugA: 'apple-iphone-16-128gb',
           effectiveSlugB: '',
         }
+      );
+
+      const stubRouter: AppRouterInstance = {
+        bfcacheId: '',
+        back: () => {},
+        forward: () => {},
+        refresh: () => {},
+        push: () => {},
+        replace: () => {},
+        prefetch: () => {},
+      };
+      const switcherHtml = renderToStaticMarkup(
+        React.createElement(
+          AppRouterContext.Provider,
+          { value: stubRouter },
+          React.createElement(
+            Provider,
+            {
+              locale: 'en',
+              messages: pickClientMessages(
+                enMessages as unknown as Record<string, unknown>,
+                'compare'
+              ),
+              timeZone: 'Asia/Ho_Chi_Minh',
+            },
+            React.createElement(VersusMatchupSwitcher, {
+              currentSlugA: 'apple-iphone-16-64gb',
+              currentSlugB: 'samsung-galaxy-s24-256gb',
+              categorySlug: 'smartphones',
+              catalogCandidates: switcherPeers,
+              locale: 'en',
+              itemSlugBySlug: switcherMap,
+            })
+          )
+        )
+      );
+      const selectMatches = [
+        ...switcherHtml.matchAll(/<select\b[\s\S]*?<\/select>/g),
+      ].map((m) => m[0]);
+      assert.equal(selectMatches.length, 2);
+      assert.match(
+        selectMatches[1]!,
+        /<option value="apple-iphone-16-128gb" disabled=""/,
+        'Device B select disables primary variant of Device A Item'
+      );
+      assert.match(
+        selectMatches[1]!,
+        /<option value="apple-iphone-16-256gb" disabled=""/,
+        'Device B select disables sibling storage variant of Device A Item'
+      );
+      assert.match(
+        switcherHtml,
+        /<button type="submit" disabled=""/,
+        'Submit button stays disabled when resolved canonical versusHref matches current page'
+      );
+
+      const sameItemOnlySwitcherHtml = renderToStaticMarkup(
+        React.createElement(
+          AppRouterContext.Provider,
+          { value: stubRouter },
+          React.createElement(
+            Provider,
+            {
+              locale: 'en',
+              messages: pickClientMessages(
+                enMessages as unknown as Record<string, unknown>,
+                'compare'
+              ),
+              timeZone: 'Asia/Ho_Chi_Minh',
+            },
+            React.createElement(VersusMatchupSwitcher, {
+              currentSlugA: 'apple-iphone-16-128gb',
+              currentSlugB: 'apple-iphone-16-256gb',
+              categorySlug: 'smartphones',
+              catalogCandidates: switcherPeers.slice(0, 2),
+              locale: 'en',
+              itemSlugBySlug: switcherMap,
+            })
+          )
+        )
+      );
+      assert.equal(
+        sameItemOnlySwitcherHtml,
+        '',
+        'VersusMatchupSwitcher renders nothing when all peers belong to one Item'
       );
 
       const rawA = phone('apple-iphone-16-256gb', 4.8);

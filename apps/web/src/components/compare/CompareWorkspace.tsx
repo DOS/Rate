@@ -85,11 +85,14 @@ import {
 } from '@/lib/compare-cell';
 import { productImageUrl } from '@/lib/rate-domain-core';
 import {
+  canonicalVersusOrder,
+  isParseableVersusPair,
   itemSlugFromProductAnswer,
   productFromProductAnswer,
   versusHref,
 } from '@/lib/item-compare';
 import { catalogRowSlug, type ItemCatalogRow } from '@/lib/item-directory';
+import { masterSiblingKeyPrefix } from '@/lib/product-variant-links';
 import StarRating from '@/components/elementary/StarRating';
 import {
   formatDecimal,
@@ -384,7 +387,7 @@ export function isSameCompareVersusItem(
   if (slugA.toLowerCase() === slugB.toLowerCase()) return true;
   const resolveSide = (slug: string) => {
     const mapped = versusSlugMap?.[slug];
-    return mapped && !mapped.includes('-vs-') ? mapped : slug;
+    return mapped && !mapped.toLowerCase().includes('-vs-') ? mapped : slug;
   };
   if (resolveSide(slugA).toLowerCase() === resolveSide(slugB).toLowerCase()) {
     return true;
@@ -393,6 +396,35 @@ export function isSameCompareVersusItem(
   const rawItemB = versusSlugMap?.[slugB];
   return Boolean(
     rawItemA && rawItemB && rawItemA.toLowerCase() === rawItemB.toLowerCase()
+  );
+}
+
+export function isValidCompareVersusPair(
+  slugA: string,
+  slugB: string,
+  versusSlugMap?: Readonly<Record<string, string>> | null
+): boolean {
+  if (!slugA || !slugB) return false;
+  if (isSameCompareVersusItem(slugA, slugB, versusSlugMap)) return false;
+  if (
+    versusSlugMap?.[slugA]?.toLowerCase().includes('-vs-') ||
+    versusSlugMap?.[slugB]?.toLowerCase().includes('-vs-')
+  ) {
+    return false;
+  }
+  const resolveSide = (slug: string) => {
+    const mapped = versusSlugMap?.[slug];
+    return mapped && !mapped.toLowerCase().includes('-vs-') ? mapped : slug;
+  };
+  const [first, second] = canonicalVersusOrder(
+    resolveSide(slugA),
+    resolveSide(slugB)
+  );
+  return Boolean(
+    first &&
+    second &&
+    first.toLowerCase() !== second.toLowerCase() &&
+    isParseableVersusPair(first.toLowerCase(), second.toLowerCase())
   );
 }
 
@@ -405,9 +437,9 @@ export function resolveComparePopularBattles(
   const mergedMap: Record<string, string> = {};
   for (const row of catalogCandidates) {
     if (!row || typeof row.slug !== 'string' || !row.slug) continue;
-    const rowItemSlug = catalogRowSlug(row as ItemCatalogRow);
-    if (rowItemSlug && rowItemSlug !== row.slug) {
-      mergedMap[row.slug] = rowItemSlug;
+    const itemRow = row as ItemCatalogRow;
+    if (typeof itemRow.item_slug === 'string' && itemRow.item_slug) {
+      mergedMap[row.slug] = itemRow.item_slug;
     }
   }
   if (versusSlugMap) {
@@ -418,23 +450,64 @@ export function resolveComparePopularBattles(
     }
   }
 
+  const itemModeActive =
+    versusSlugMap != null || Object.keys(mergedMap).length > 0;
+  if (itemModeActive) {
+    // Propagate unambiguous Item slugs across unmapped storage siblings sharing
+    // `brand:model:` on /compare where itemSlugBySlug covers initialProducts only.
+    const prefixItemSlugs = new Map<string, Set<string>>();
+    for (const row of catalogCandidates) {
+      if (!row?.slug || !mergedMap[row.slug]) continue;
+      const prefix = masterSiblingKeyPrefix(row.model_key);
+      if (!prefix) continue;
+      let set = prefixItemSlugs.get(prefix);
+      if (!set) {
+        set = new Set<string>();
+        prefixItemSlugs.set(prefix, set);
+      }
+      set.add(mergedMap[row.slug]!);
+    }
+    for (const row of catalogCandidates) {
+      if (!row?.slug || mergedMap[row.slug]) continue;
+      const prefix = masterSiblingKeyPrefix(row.model_key);
+      const set = prefix ? prefixItemSlugs.get(prefix) : undefined;
+      if (set && set.size === 1) {
+        mergedMap[row.slug] = [...set][0]!;
+      }
+    }
+  }
+
   const ranked = rankMasterProductsForLeaderboard(catalogCandidates, {
     category,
     criterion: 'combined',
   });
   const seenItems = new Set<string>();
+  const seenPrefixes = new Set<string>();
   const uniqueItemCandidates: MasterProduct[] = [];
   for (const entry of ranked) {
     const slug = entry.product.slug;
     if (!slug) continue;
-    const itemKey = (mergedMap[slug] || slug).toLowerCase();
-    if (seenItems.has(itemKey)) continue;
+    const mappedItem = mergedMap[slug];
+    if (mappedItem && mappedItem.toLowerCase().includes('-vs-')) {
+      continue;
+    }
+    const itemKey = (mappedItem || slug).toLowerCase();
+    const siblingPrefix = itemModeActive
+      ? masterSiblingKeyPrefix(entry.product.model_key)
+      : '';
+    if (
+      seenItems.has(itemKey) ||
+      (!mappedItem && siblingPrefix && seenPrefixes.has(siblingPrefix))
+    ) {
+      continue;
+    }
     seenItems.add(itemKey);
+    if (siblingPrefix) seenPrefixes.add(siblingPrefix);
     uniqueItemCandidates.push(
-      mergedMap[slug]
+      mappedItem
         ? ({
             ...entry.product,
-            item_slug: mergedMap[slug],
+            item_slug: mappedItem,
           } as MasterProduct)
         : entry.product
     );
@@ -450,20 +523,11 @@ export function resolveComparePopularBattles(
   for (const battle of rawBattles) {
     const slugA = battle.productA.slug;
     const slugB = battle.productB.slug;
-    if (isSameCompareVersusItem(slugA, slugB, mergedMap)) {
+    if (!isValidCompareVersusPair(slugA, slugB, mergedMap)) {
       continue;
     }
     const href = versusHref(slugA, slugB, mergedMap);
     const nextVersusSlug = href.replace(/^\/compare\//, '');
-    const sides = nextVersusSlug.split('-vs-');
-    if (
-      sides.length !== 2 ||
-      !sides[0] ||
-      !sides[1] ||
-      sides[0].toLowerCase() === sides[1].toLowerCase()
-    ) {
-      continue;
-    }
     const hrefKey = href.toLowerCase();
     if (seenHrefs.has(hrefKey)) continue;
     seenHrefs.add(hrefKey);
@@ -1418,17 +1482,57 @@ export default function CompareWorkspace({
       storedProducts.map((p) => applyCategorySpecTemplate(activeCategory, p)),
     [storedProducts, activeCategory]
   );
-  // RATE_ITEM_MODEL on (the page passed a map): products the client added
-  // or restored from the tray are read as Items too, so the 1v1 link names
-  // the Item pair without a 308 (DOS/Rate#1294). Off: no map, no reads.
+  // RATE_ITEM_MODEL on (the page passed a map): products the client added,
+  // restored from the tray, or surfaced in Popular 1v1 Battles are read as
+  // Items too, so 1v1 and product links name Canonical Items without a 308
+  // (DOS/Rate#1294, #1764). Off: no map, no reads.
   const [clientItemSlugs, setClientItemSlugs] = useState<
     Record<string, string>
   >({});
-  const pairSlugA = products.length === 2 ? (products[0]?.slug ?? '') : '';
-  const pairSlugB = products.length === 2 ? (products[1]?.slug ?? '') : '';
+  const versusSlugMap = useMemo(() => {
+    const map: Record<string, string> = {};
+    for (const row of [...catalogCandidates, ...products]) {
+      if (!row || typeof row.slug !== 'string' || !row.slug) continue;
+      const itemRow = row as ItemCatalogRow;
+      if (typeof itemRow.item_slug === 'string' && itemRow.item_slug) {
+        map[row.slug] = itemRow.item_slug;
+      }
+    }
+    if (itemSlugBySlug) {
+      for (const [slug, itemSlug] of Object.entries(itemSlugBySlug)) {
+        if (slug && typeof itemSlug === 'string' && itemSlug) {
+          map[slug] = itemSlug;
+        }
+      }
+    }
+    for (const [slug, itemSlug] of Object.entries(clientItemSlugs)) {
+      if (slug && typeof itemSlug === 'string' && itemSlug) {
+        map[slug] = itemSlug;
+      }
+    }
+    return itemSlugBySlug || Object.keys(map).length > 0 ? map : undefined;
+  }, [catalogCandidates, products, itemSlugBySlug, clientItemSlugs]);
+  const popularBattles = useMemo(
+    () =>
+      resolveComparePopularBattles(
+        catalogCandidates,
+        activeCategory,
+        versusSlugMap,
+        3
+      ),
+    [catalogCandidates, activeCategory, versusSlugMap]
+  );
   useEffect(() => {
-    if (!itemSlugBySlug || !pairSlugA || !pairSlugB) return;
-    const missing = [pairSlugA, pairSlugB].filter(
+    if (!itemSlugBySlug) return;
+    const candidateSlugs = Array.from(
+      new Set(
+        [
+          ...products.map((p) => p.slug),
+          ...popularBattles.flatMap((b) => [b.productA.slug, b.productB.slug]),
+        ].filter(Boolean)
+      )
+    );
+    const missing = candidateSlugs.filter(
       (slug) => !itemSlugBySlug[slug] && !(slug in clientItemSlugs)
     );
     if (missing.length === 0) return;
@@ -1454,30 +1558,7 @@ export default function CompareWorkspace({
     return () => {
       cancelled = true;
     };
-  }, [itemSlugBySlug, pairSlugA, pairSlugB, clientItemSlugs]);
-  const versusSlugMap = useMemo(() => {
-    const map: Record<string, string> = {};
-    for (const row of [...catalogCandidates, ...products]) {
-      if (!row || typeof row.slug !== 'string' || !row.slug) continue;
-      const rowSlug = catalogRowSlug(row as ItemCatalogRow);
-      if (rowSlug && rowSlug !== row.slug) {
-        map[row.slug] = rowSlug;
-      }
-    }
-    if (itemSlugBySlug) {
-      for (const [slug, itemSlug] of Object.entries(itemSlugBySlug)) {
-        if (slug && typeof itemSlug === 'string' && itemSlug) {
-          map[slug] = itemSlug;
-        }
-      }
-    }
-    for (const [slug, itemSlug] of Object.entries(clientItemSlugs)) {
-      if (slug && typeof itemSlug === 'string' && itemSlug) {
-        map[slug] = itemSlug;
-      }
-    }
-    return Object.keys(map).length > 0 ? map : undefined;
-  }, [catalogCandidates, products, itemSlugBySlug, clientItemSlugs]);
+  }, [itemSlugBySlug, products, popularBattles, clientItemSlugs]);
   const specGroups = useMemo(
     () => filterSpecGroupsForCategory(allSpecGroups, activeCategory),
     [allSpecGroups, activeCategory]
@@ -1874,17 +1955,6 @@ export default function CompareWorkspace({
 
   const [watchedAllToast, setWatchedAllToast] = useState(false);
   const [copiedMarkdown, setCopiedMarkdown] = useState(false);
-
-  const popularBattles = useMemo(
-    () =>
-      resolveComparePopularBattles(
-        catalogCandidates,
-        activeCategory,
-        versusSlugMap,
-        3
-      ),
-    [catalogCandidates, activeCategory, versusSlugMap]
-  );
 
   const handleCopyShareLink = async () => {
     if (typeof window === 'undefined') return;
@@ -2405,7 +2475,7 @@ export default function CompareWorkspace({
               {products.length === 2 &&
                 products[0] &&
                 products[1] &&
-                !isSameCompareVersusItem(
+                isValidCompareVersusPair(
                   products[0].slug,
                   products[1].slug,
                   versusSlugMap
