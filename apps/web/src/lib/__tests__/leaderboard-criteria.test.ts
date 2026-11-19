@@ -11,17 +11,28 @@ import {
   AppRouterContext,
   type AppRouterInstance,
 } from 'next/dist/shared/lib/app-router-context.shared-runtime';
+import { SearchParamsContext } from 'next/dist/shared/lib/hooks-client-context.shared-runtime';
+import { getURLFromRedirectError } from 'next/dist/client/components/redirect';
+import { isRedirectError } from 'next/dist/client/components/redirect-error';
+import { sanitizeCachedCompareSlugsCsv } from '../../server/rate';
+import {
+  getItemSlugsFor,
+  whenItemModel,
+} from '../../server/rate/item-directory';
 import csMessages from '../../../locales/cs.json';
 import enMessages from '../../../locales/en.json';
 import viMessages from '../../../locales/vi.json';
 import CompareWorkspace, {
   COMPARE_ITEM_LOOKUP_RETRY_MS,
+  COMPARE_ITEM_LOOKUP_TIMEOUT_MS,
   COMPARE_REPLACE_FOCUS_DELAY_MS,
   MAX_COMPARE_ITEM_LOOKUP_ATTEMPTS,
   applyCompareItemLookupOutcomes,
   buildCompareMarkdownMinPriceRow,
   buildCompareVersusSlugMap,
   cancelPendingCompareReplaceFocus,
+  planComparePinFallback,
+  readCompareFallbackMaster,
   computeCompareHeadToHeadSummary,
   formatComparePriceVnd,
   isSameCompareVersusItem,
@@ -38,6 +49,7 @@ import CompareWorkspace, {
   sanitizeComparePriceVnd,
   scheduleCompareReplaceFocus,
   shouldDismissCompareOnOutsidePointerDown,
+  startCompareItemLookup,
   syncCompareReplaceFocusState,
   type CompareItemLookupFailure,
 } from '../../components/compare/CompareWorkspace';
@@ -73,7 +85,9 @@ import LeaderboardExplorer, {
   formatLeaderboardPriceVnd,
   formatLeaderboardShowdownDelta,
   isSameLeaderboardVersusItem,
+  leaderboardCompareHref,
   resolveLeaderboardActiveScoreLabel,
+  resolveLeaderboardCompareEntries,
   resolveLeaderboardCompareSlugs,
   resolveLeaderboardEffectiveVersusSlugs,
   sanitizeLeaderboardPriceVnd,
@@ -3039,3 +3053,272 @@ assert.equal(
 }
 
 console.log('leaderboard-criteria: criterion scores are real or null');
+
+test('a retry settles independently while a sibling body is still pending', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout', 'Date'], now: 1_000 });
+  const pending = new Map<string, AbortController>();
+  const failures = new Map<string, CompareItemLookupFailure>();
+  const confirmed: Record<string, string> = {};
+  const settled: string[] = [];
+  const calls: string[] = [];
+  const body = new ReadableStream<Uint8Array>();
+  const fetchProduct: typeof fetch = async (url) => {
+    const slug = String(url).split('/').pop()!;
+    calls.push(slug);
+    if (slug === 'slow') return new Response(body);
+    if (slug === 'flaky' && !failures.has(slug)) {
+      return new Response(null, { status: 503 });
+    }
+    return Response.json({
+      ok: true,
+      data: { item: { slug: `${slug}-item` } },
+    });
+  };
+  const plan = () => {
+    const batch = planCompareItemLookupBatch(
+      ['slow', 'flaky', 'fast'],
+      {},
+      confirmed,
+      failures,
+      Date.now()
+    );
+    for (const slug of batch.readyToFetch) {
+      startCompareItemLookup(
+        slug,
+        pending,
+        (key, itemSlug) => {
+          settled.push(key);
+          applyCompareItemLookupOutcomes(
+            [[key, itemSlug]],
+            failures,
+            Date.now()
+          );
+          if (itemSlug) confirmed[key] = itemSlug;
+        },
+        fetchProduct
+      );
+    }
+    return batch;
+  };
+  plan();
+  const slow = pending.get('slow')!;
+  await new Promise<void>((resolve) => setImmediate(resolve));
+  assert.deepEqual({ ...confirmed }, { fast: 'fast-item' });
+  assert.equal(plan().earliestRetryAt, 1_000 + COMPARE_ITEM_LOOKUP_RETRY_MS);
+  t.mock.timers.tick(COMPARE_ITEM_LOOKUP_RETRY_MS);
+  plan();
+  await new Promise<void>((resolve) => setImmediate(resolve));
+  assert.deepEqual(calls, ['slow', 'flaky', 'fast', 'flaky']);
+  assert.equal(pending.get('slow'), slow);
+  assert.equal(slow.signal.aborted, false);
+  assert.equal(confirmed.flaky, 'flaky-item');
+
+  t.mock.timers.tick(
+    COMPARE_ITEM_LOOKUP_TIMEOUT_MS - COMPARE_ITEM_LOOKUP_RETRY_MS
+  );
+  assert.equal(slow.signal.aborted, true);
+  assert.equal(pending.size, 0);
+  assert.equal(settled.filter((slug) => slug === 'slow').length, 1);
+  assert.equal(
+    failures.get('slow')?.retryAt,
+    Date.now() + COMPARE_ITEM_LOOKUP_RETRY_MS
+  );
+});
+
+test('an aborted lookup cannot publish or release its replacement', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const pending = new Map<string, AbortController>();
+  const answers: Array<string | null> = [];
+  const responses: Array<(value: Response) => void> = [];
+  const start = () =>
+    startCompareItemLookup(
+      'phone',
+      pending,
+      (_, item) => answers.push(item),
+      () => new Promise<Response>((resolve) => responses.push(resolve))
+    );
+  start();
+  pending.get('phone')!.abort();
+  assert.equal(pending.size, 0);
+  start();
+  const replacement = pending.get('phone');
+  responses[0]!(Response.json({ ok: true, data: { item: { slug: 'old' } } }));
+  await new Promise<void>((resolve) => setImmediate(resolve));
+  assert.deepEqual(answers, []);
+  assert.equal(pending.get('phone'), replacement);
+  responses[1]!(Response.json({ ok: true, data: { item: { slug: 'new' } } }));
+  await new Promise<void>((resolve) => setImmediate(resolve));
+  t.mock.timers.tick(COMPARE_ITEM_LOOKUP_TIMEOUT_MS);
+  assert.deepEqual(answers, ['new']);
+  assert.equal(pending.size, 0);
+});
+
+test('a shared leaderboard pin recovers the represented masters on the compare render', () => {
+  const entries = resolveLeaderboardCompareEntries([
+    {
+      product: {
+        id: 'big',
+        item_slug: 'acme',
+        slug: 'acme-retail-1tb',
+        variant_key: '1024gb',
+        variant_count: 2,
+      },
+    },
+    { product: { item_slug: 'peer', slug: 'peer-retail' } },
+  ]);
+  const query = new URL(
+    leaderboardCompareHref(entries, 'tablets', 'cat'),
+    'https://rate.test'
+  ).searchParams;
+  assert.equal(query.get('slugs'), 'acme@1024gb,peer');
+  const router: AppRouterInstance = {
+    back() {},
+    forward() {},
+    refresh() {},
+    push() {},
+    replace() {},
+    prefetch() {},
+    bfcacheId: 'compare-pin',
+  };
+  const Provider = NextIntlClientProvider as React.ComponentType<
+    Partial<React.ComponentProps<typeof NextIntlClientProvider>>
+  >;
+  const render = (itemSlugBySlug?: Record<string, string>) =>
+    renderToStaticMarkup(
+      React.createElement(
+        SearchParamsContext.Provider,
+        { value: query },
+        React.createElement(
+          AppRouterContext.Provider,
+          { value: router },
+          React.createElement(
+            Provider,
+            { locale: 'en', messages: enMessages, timeZone: 'UTC' },
+            React.createElement(CompareWorkspace, {
+              initialProducts: [],
+              catalogCandidates: [],
+              hasExplicitSlugs: true,
+              itemSlugBySlug,
+            })
+          )
+        )
+      )
+    );
+  assert.doesNotThrow(() => render({}));
+  assert.throws(
+    () => render(),
+    (err) => {
+      assert.ok(isRedirectError(err));
+      const url = new URL(getURLFromRedirectError(err), 'https://rate.test');
+      assert.equal(url.pathname, '/compare');
+      assert.equal(url.searchParams.get('cat'), 'tablets');
+      assert.equal(
+        sanitizeCachedCompareSlugsCsv(url.searchParams.get('slugs')),
+        'acme-retail-1tb,peer-retail'
+      );
+      assert.equal(planComparePinFallback(url.searchParams), null);
+      return true;
+    }
+  );
+});
+
+test('older pins without hints derive the master slug once per Item, in order', () => {
+  const query = new URLSearchParams({
+    slugs: 'Acme@256GB,acme@128gb,peer-512gb@512gb,base@standard',
+    'variant.acme@256gb': 'bad,extra',
+  });
+  const plan = planComparePinFallback(query);
+  assert.ok(plan);
+  const slugs = new URL(plan.href, 'https://rate.test').searchParams.get(
+    'slugs'
+  );
+  assert.equal(
+    sanitizeCachedCompareSlugsCsv(slugs),
+    'acme-256gb,peer-512gb,base'
+  );
+});
+
+test('a failed Item comparison and a failed directory read take independent paths', async (t) => {
+  const previous = process.env.RATE_ITEM_MODEL;
+  t.after(() => {
+    if (previous === undefined) delete process.env.RATE_ITEM_MODEL;
+    else process.env.RATE_ITEM_MODEL = previous;
+  });
+  process.env.RATE_ITEM_MODEL = 'item';
+  const failed = {};
+  const healthy = {};
+  const slugs = ['acme-retail-1tb'];
+  assert.equal(
+    await whenItemModel(
+      'compare slugs',
+      async () => {
+        throw new Error('simulated Item read failure');
+      },
+      failed
+    ),
+    null
+  );
+  assert.deepEqual(
+    await whenItemModel('compare slugs', async () => slugs, healthy),
+    slugs
+  );
+  assert.equal(await getItemSlugsFor(slugs, failed), null);
+  process.env.RATE_ITEM_MODEL = 'off';
+  assert.deepEqual(await getItemSlugsFor(slugs, healthy), {});
+  assert.equal(await getItemSlugsFor(slugs), null);
+});
+
+test('a legacy-only master or shared Item slug keeps its requested size across a second Item read', async (t) => {
+  const queries: string[] = [];
+  t.mock.method(globalThis, 'fetch', async (input: string) => {
+    const slugs = new URL(input, 'https://rate.test').searchParams.get(
+      'slugs'
+    )!;
+    queries.push(slugs);
+    const master = slugs.split(',').at(-1)!;
+    return Response.json({
+      ok: true,
+      data: [phone('different-size', 4), phone(master, 5)],
+    });
+  });
+  const query = new URLSearchParams({
+    slugs: 'ACME@1024gb,base@256gb,peer',
+    'variant.acme@1024gb': '_acme-1tb',
+    'variant.base@256gb': 'base',
+    'variant.peer': 'peer-retail',
+  });
+  const plan = planComparePinFallback(query);
+  assert.ok(plan?.needsVariantRead);
+  const signal = new AbortController().signal;
+  const products = await Promise.all(
+    plan.targets.map((target) => readCompareFallbackMaster(target, signal))
+  );
+  assert.deepEqual(queries, [
+    'ACME@1024gb,_acme-1tb',
+    'base@256gb,base',
+    'peer-retail',
+  ]);
+  assert.deepEqual(
+    products.map((p) => p?.slug),
+    ['_acme-1tb', 'base', 'peer-retail']
+  );
+});
+
+test('a conventional pin keeps the exact retail slug of its unpinned peer', () => {
+  const url = new URL(
+    leaderboardCompareHref(
+      [
+        { token: 'acme@256gb', variantSlug: 'acme-256gb' },
+        { token: 'peer', variantSlug: 'peer-retail' },
+      ],
+      'smartphones',
+      'category'
+    ),
+    'https://rate.test'
+  );
+  const plan = planComparePinFallback(url.searchParams);
+  assert.deepEqual(
+    plan?.targets.map((target) => target.master),
+    ['acme-256gb', 'peer-retail']
+  );
+});

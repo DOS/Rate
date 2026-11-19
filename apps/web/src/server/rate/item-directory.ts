@@ -1,5 +1,6 @@
 import 'server-only';
 import { createHash } from 'node:crypto';
+import { cache } from 'react';
 import type { MasterProduct } from '@repo/shared-data';
 import {
   ItemModelUnavailableError,
@@ -25,14 +26,21 @@ import { isItemModelOn } from './item-model';
 
 const log = createLogger('server.item-directory');
 
+// The compare page reads its selection before asking for the workspace's
+// slug map. These are independent RPCs: a successful directory read must
+// not hide a failed selection, or a failed directory read undo a valid pin.
+const compareReadStatus = cache((): { available?: boolean } => ({}));
+
 /** Runs `read` under the Item model; null when it is off or unavailable. */
 export async function whenItemModel<T>(
   what: string,
-  read: () => Promise<T>
+  read: () => Promise<T>,
+  status = compareReadStatus()
 ): Promise<T | null> {
   if (!isItemModelOn()) return null;
+  let result: T | null = null;
   try {
-    return await read();
+    result = await read();
   } catch (err) {
     // Any failed Item read shows the variant pages, which still work: a
     // listing, facet or stats outage must not follow from the Item layer.
@@ -42,8 +50,9 @@ export async function whenItemModel<T>(
     } else {
       log.error('item read failed, showing variants', { what, message });
     }
-    return null;
   }
+  if (what === 'compare slugs') status.available = result !== null;
+  return result;
 }
 
 // Keyed by the master ids (hashed: a page holds up to 500), refreshed with
@@ -179,13 +188,13 @@ export function getItemSlugByVariantSlug() {
  * null while the Item model is off, so pages pass nothing new.
  */
 export async function getItemSlugsFor(
-  slugs: readonly string[]
+  slugs: readonly string[],
+  status = compareReadStatus()
 ): Promise<Record<string, string> | null> {
+  if (status.available === false) return null;
   const map = await getItemSlugByVariantSlug();
-  if (!map) return null;
-  const out: Record<string, string> = {};
+  if (!map) return status.available ? {} : null;
   // A slug with no Item maps to itself: it is resolved, so the compare
   // workspace does not read it again on the client (#1294).
-  for (const slug of slugs) out[slug] = map.get(slug) ?? slug;
-  return out;
+  return Object.fromEntries(slugs.map((slug) => [slug, map.get(slug) ?? slug]));
 }

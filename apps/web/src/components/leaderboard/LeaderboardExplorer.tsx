@@ -85,6 +85,7 @@ import {
 import {
   canonicalVersusOrder,
   isParseableVersusPair,
+  parseCompareToken,
   versusHref,
 } from '@/lib/item-compare';
 import {
@@ -320,7 +321,6 @@ export function isValidLeaderboardVersusPair(
 
 const LEADERBOARD_COMPARE_PIN_RE =
   /^[a-z0-9][a-z0-9._-]{0,159}@[a-z0-9][a-z0-9-]{0,40}$/i;
-
 export type LeaderboardCompareSlugRow = Pick<
   ItemCatalogRow,
   'slug' | 'item_slug'
@@ -332,19 +332,25 @@ export type LeaderboardCompareSlugRow = Pick<
   default_variant_id?: string | null;
 };
 
+interface LeaderboardCompareEntry {
+  token: string;
+  variantSlug: string;
+}
+
 export function encodeLeaderboardCompareSlug(token: string): string {
   return encodeURIComponent(token).replace(/%40/gi, '@');
 }
 
-export function resolveLeaderboardCompareSlugs(
+export function resolveLeaderboardCompareEntries(
   entries: ReadonlyArray<{
     product: LeaderboardCompareSlugRow;
   }>,
   itemSlugBySlug?: Readonly<Record<string, string>> | null,
   limit = 3
-): string[] {
+): LeaderboardCompareEntry[] {
   const seen = new Set<string>();
-  const out: string[] = [];
+  const out: LeaderboardCompareEntry[] = [];
+  if (limit <= 0) return out;
   for (const entry of entries) {
     const product = entry?.product;
     const rawSlug = product?.slug?.trim() ?? '';
@@ -354,10 +360,10 @@ export function resolveLeaderboardCompareSlugs(
     const key = (canonical || rawSlug).toLowerCase();
     if (!key || seen.has(key)) continue;
 
-    let token = canonical || rawSlug;
-    const hasExplicitItemSlug = Boolean(
-      product.item_slug || (mappedSlug && mappedSlug !== rawSlug)
-    );
+    let token = itemSlugBySlug === null ? rawSlug : canonical || rawSlug;
+    const hasExplicitItemSlug =
+      itemSlugBySlug !== null &&
+      Boolean(product.item_slug || (mappedSlug && mappedSlug !== rawSlug));
     const isConfirmedDefault = Boolean(
       product.default_variant_id &&
       product.id &&
@@ -394,10 +400,68 @@ export function resolveLeaderboardCompareSlugs(
 
     if (!token) continue;
     seen.add(key);
-    out.push(token);
+    out.push({ token, variantSlug: rawSlug });
     if (out.length >= limit) break;
   }
   return out;
+}
+
+export function resolveLeaderboardCompareSlugs(
+  entries: ReadonlyArray<{ product: LeaderboardCompareSlugRow }>,
+  itemSlugBySlug?: Readonly<Record<string, string>> | null,
+  limit = 3
+): string[] {
+  return resolveLeaderboardCompareEntries(entries, itemSlugBySlug, limit).map(
+    (entry) => entry.token
+  );
+}
+
+/** Keep the represented masters in the shared link in case Item reads fail later. */
+export function leaderboardCompareHref(
+  entries: readonly LeaderboardCompareEntry[],
+  activeCategory: CanonicalCategorySlug,
+  categoryParam: 'cat' | 'category'
+): string {
+  const slugs = entries
+    .map(({ token }) => encodeLeaderboardCompareSlug(token))
+    .join(',');
+  const fallbacks = new URLSearchParams();
+  // Conventional size pins already name their master. Keep those URLs stable.
+  // For an irregular pin, carry the exact masters for the entire comparison.
+  const hasPin = entries.some(
+    ({ token }) => !!parseCompareToken(token).variantKey
+  );
+  const needsFallback =
+    hasPin &&
+    entries.some(({ token, variantSlug }) => {
+      const { slug, variantKey } = parseCompareToken(token);
+      const master = variantSlug.toLowerCase();
+      if (!variantKey) {
+        // A grouped single-size row can have an unrelated retail identifier.
+        return (
+          master !== slug &&
+          !/^-[0-9]+(?:gb|tb)$/i.test(
+            master.startsWith(slug) ? master.slice(slug.length) : ''
+          )
+        );
+      }
+      return (
+        variantKey === 'standard' ||
+        slug.endsWith(`-${variantKey}`) ||
+        `${slug}-${variantKey}` !== master
+      );
+    });
+  if (needsFallback) {
+    for (const { token, variantSlug } of entries) {
+      if (token !== variantSlug)
+        fallbacks.set(`variant.${token.toLowerCase()}`, variantSlug);
+    }
+  }
+  const href =
+    categoryParam === 'cat'
+      ? `/compare?cat=${activeCategory}&slugs=${slugs}`
+      : `/compare?category=${activeCategory}&slugs=${slugs}`;
+  return fallbacks.size ? `${href}&${fallbacks}` : href;
 }
 
 export function resolveLeaderboardEffectiveVersusSlugs(
@@ -1034,9 +1098,13 @@ export default function LeaderboardExplorer({
     [products, itemSlugBySlug]
   );
 
-  const top3Slugs = useMemo(
+  const top3Compare = useMemo(
     () =>
-      resolveLeaderboardCompareSlugs(rankedEntries, resolvedItemSlugBySlug, 3),
+      resolveLeaderboardCompareEntries(
+        rankedEntries,
+        resolvedItemSlugBySlug,
+        3
+      ),
     [rankedEntries, resolvedItemSlugBySlug]
   );
 
@@ -1368,9 +1436,13 @@ export default function LeaderboardExplorer({
             >
               JSON
             </button>
-            {top3Slugs.length >= 2 && (
+            {top3Compare.length >= 2 && (
               <Link
-                href={`/compare?cat=${activeCategory}&slugs=${top3Slugs.map(encodeLeaderboardCompareSlug).join(',')}`}
+                href={leaderboardCompareHref(
+                  top3Compare,
+                  activeCategory,
+                  'cat'
+                )}
                 className="btn btn-sm btn-danger rounded-pill fw-semibold d-inline-flex align-items-center gap-2 px-3 py-1"
               >
                 <BsArrowLeftRight aria-hidden="true" />
@@ -1998,7 +2070,7 @@ export default function LeaderboardExplorer({
       )}
 
       {/* 2.5. Top 1v1 Head-to-Head Battles among Current Leaderboard */}
-      {showdownPairs.length > 0 && top3Slugs.length >= 2 && (
+      {showdownPairs.length > 0 && top3Compare.length >= 2 && (
         <div className="rate-card rounded-4 p-md-4 mb-4 border bg-white p-3 shadow-sm">
           <div className="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
             <div>
@@ -2008,10 +2080,11 @@ export default function LeaderboardExplorer({
               </h3>
             </div>
             <Link
-              href={`/compare?category=${activeCategory}&slugs=${top3Slugs
-                .slice(0, 2)
-                .map(encodeLeaderboardCompareSlug)
-                .join(',')}`}
+              href={leaderboardCompareHref(
+                top3Compare.slice(0, 2),
+                activeCategory,
+                'category'
+              )}
               className="btn btn-sm btn-outline-dark rounded-pill px-3"
             >
               {t('openCompareMatrixBtn')}

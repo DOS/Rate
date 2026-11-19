@@ -2,6 +2,7 @@
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
+import { redirect, useSearchParams } from 'next/navigation';
 import type { IconType } from 'react-icons';
 import {
   BsAspectRatio,
@@ -88,6 +89,7 @@ import {
   canonicalVersusOrder,
   isParseableVersusPair,
   itemSlugFromProductAnswer,
+  parseCompareToken,
   productFromProductAnswer,
   versusHref,
 } from '@/lib/item-compare';
@@ -592,6 +594,7 @@ export function resolveComparePopularBattles(
 
 export const MAX_COMPARE_ITEM_LOOKUP_ATTEMPTS = 2;
 export const COMPARE_ITEM_LOOKUP_RETRY_MS = 800;
+export const COMPARE_ITEM_LOOKUP_TIMEOUT_MS = 5_000;
 
 export interface CompareItemLookupFailure {
   attempts: number;
@@ -671,6 +674,202 @@ export function applyCompareItemLookupOutcomes(
     }
   }
   return { confirmed, nextRetryAt };
+}
+
+/** A retry render can join an existing lookup. Only its owner may settle it. */
+export function startCompareItemLookup(
+  slug: string,
+  inFlight: Map<string, AbortController>,
+  onSettled: (slug: string, itemSlug: string | null) => void,
+  fetchProduct: typeof fetch = fetch
+): void {
+  if (inFlight.has(slug)) return;
+  const controller = new AbortController();
+  inFlight.set(slug, controller);
+  const timeout = setTimeout(() => {
+    settle(null);
+    controller.abort();
+  }, COMPARE_ITEM_LOOKUP_TIMEOUT_MS);
+
+  function settle(itemSlug: string | null) {
+    if (inFlight.get(slug) !== controller) return;
+    clearTimeout(timeout);
+    controller.signal.onabort = null;
+    inFlight.delete(slug);
+    if (!controller.signal.aborted) onSettled(slug, itemSlug);
+  }
+
+  controller.signal.onabort = () => settle(null);
+  void (async () => {
+    let itemSlug: string | null = null;
+    try {
+      const response = await fetchProduct(
+        `/api/v1/rate/products/${encodeURIComponent(slug)}`,
+        { signal: controller.signal }
+      );
+      if (response.ok) {
+        itemSlug = parseCompareItemLookupAnswer(
+          true,
+          await response.json(),
+          slug
+        );
+      }
+    } catch {
+      // A failed request or body read follows the same per-slug backoff.
+    }
+    settle(itemSlug);
+  })();
+}
+
+function isLegacyCompareSlug(slug: string | null): slug is string {
+  return (
+    !!slug &&
+    /^(?=.*[a-z0-9])[a-z0-9._-]{1,120}$/i.test(slug) &&
+    !slug.startsWith('.') &&
+    !slug.endsWith('.') &&
+    !slug.includes('..') &&
+    !/^(?:0+|null|undefined|nan|none|-?infinity|true|false|__proto__|constructor|prototype)$/i.test(
+      slug
+    )
+  );
+}
+
+interface CompareFallbackTarget {
+  token: string;
+  master: string;
+}
+
+/** Keep the original slot order and the first size requested for each Item. */
+export function planComparePinFallback(params: URLSearchParams) {
+  const tokens = [
+    ...new Set(
+      (params.get('slugs') ?? '')
+        .split(',')
+        .map((slug) => slug.trim())
+        .filter(Boolean)
+    ),
+  ].slice(0, MAX_COMPARE_ITEMS);
+  const seenItems = new Set<string>();
+  const masters = new Set<string>();
+  const targets: CompareFallbackTarget[] = [];
+  let recoveredPin = false;
+  let needsVariantRead = false;
+  for (const token of tokens) {
+    const { slug, variantKey } = parseCompareToken(token);
+    if (
+      seenItems.has(slug) ||
+      (!variantKey && !isLegacyCompareSlug(slug)) ||
+      slug.includes('..') ||
+      slug.endsWith('.')
+    )
+      continue;
+    const hint = params.get(`variant.${token.toLowerCase()}`);
+    const suffix = `-${variantKey}`;
+    const derived =
+      variantKey && variantKey !== 'standard' && !slug.endsWith(suffix)
+        ? slug + suffix
+        : slug;
+    const master = isLegacyCompareSlug(hint) ? hint.toLowerCase() : derived;
+    if (!isLegacyCompareSlug(master)) continue;
+    seenItems.add(slug);
+    if (variantKey) recoveredPin = true;
+    if (masters.has(master)) continue;
+    masters.add(master);
+    targets.push({ token, master });
+    // An Item read on a second page request could discard a legacy-only
+    // master or select the default size of an Item sharing its master's slug.
+    if (!/^[a-z0-9]/i.test(master) || (variantKey && master === slug)) {
+      needsVariantRead = true;
+    }
+  }
+  if (!recoveredPin) return null;
+  const query = new URLSearchParams(params);
+  for (const token of tokens) query.delete(`variant.${token.toLowerCase()}`);
+  query.set('slugs', [...masters].join(','));
+  return { href: `/compare?${query}`, targets, needsVariantRead };
+}
+
+/** The compare API accepts legacy master slugs as well as canonical pins. */
+export async function readCompareFallbackMaster(
+  { token, master }: CompareFallbackTarget,
+  signal: AbortSignal
+): Promise<MasterProduct | null> {
+  const slugs = parseCompareToken(token).variantKey
+    ? `${token},${master}`
+    : master;
+  try {
+    const response = await fetch(
+      `/api/v1/rate/compare?${new URLSearchParams({ slugs })}`,
+      { signal }
+    );
+    if (!response.ok) return null;
+    const json = await response.json();
+    return json?.ok === true && Array.isArray(json.data)
+      ? (json.data.find((row: MasterProduct | null) => row?.slug === master) ??
+          null)
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+function CompareFallbackMasters({
+  targets,
+  workspace,
+}: {
+  targets: readonly CompareFallbackTarget[];
+  workspace: CompareWorkspaceProps;
+}) {
+  const t = useTranslations('compare');
+  const [rows, setRows] = useState<MasterProduct[] | null>(null);
+  const { initialProducts } = workspace;
+  useEffect(() => {
+    const controller = new AbortController();
+    const signal = AbortSignal.any([
+      controller.signal,
+      AbortSignal.timeout(COMPARE_ITEM_LOOKUP_TIMEOUT_MS),
+    ]);
+    void Promise.all(
+      targets.map(
+        (target) =>
+          initialProducts.find((row) => row.slug === target.master) ??
+          readCompareFallbackMaster(target, signal)
+      )
+    ).then((results) => {
+      if (!controller.signal.aborted)
+        setRows(results.filter((row): row is MasterProduct => row !== null));
+    });
+    return () => controller.abort();
+  }, [targets, initialProducts]);
+  if (!rows)
+    return (
+      <div
+        role="status"
+        aria-busy="true"
+        aria-label={t('pageTitle')}
+        className="spinner-border"
+      />
+    );
+  return <CompareWorkspaceContent {...workspace} initialProducts={rows} />;
+}
+
+// Only the dynamic matrix reads search params. Conventional masters can
+// be recovered by a render-time redirect before hydration.
+function ComparePinFallbackWorkspace(props: CompareWorkspaceProps) {
+  const params = useSearchParams();
+  const fallback = useMemo(
+    () => params && planComparePinFallback(params),
+    [params]
+  );
+  if (!fallback) return <CompareWorkspaceContent {...props} />;
+  if (!fallback.needsVariantRead) redirect(fallback.href);
+  return (
+    <CompareFallbackMasters
+      key={params.toString()}
+      targets={fallback.targets}
+      workspace={props}
+    />
+  );
 }
 
 export type CompareReplaceTranslate = (key: 'replaceDeviceBtn') => string;
@@ -1567,7 +1766,18 @@ export function filterSpecGroupsForCategory(
     .filter((group) => group.rows.length > 0);
 }
 
-export default function CompareWorkspace({
+export default function CompareWorkspace(props: CompareWorkspaceProps) {
+  if (
+    props.layout !== 'versus' &&
+    props.hasExplicitSlugs &&
+    !props.itemSlugBySlug
+  ) {
+    return <ComparePinFallbackWorkspace {...props} />;
+  }
+  return <CompareWorkspaceContent {...props} />;
+}
+
+function CompareWorkspaceContent({
   initialProducts,
   catalogCandidates,
   initialCategory = 'smartphones',
@@ -1625,6 +1835,13 @@ export default function CompareWorkspace({
   const itemLookupFailuresRef = useRef<Map<string, CompareItemLookupFailure>>(
     new Map()
   );
+  const itemLookupsRef = useRef(new Map<string, AbortController>());
+  useEffect(() => {
+    const inFlight = itemLookupsRef.current;
+    return () => {
+      for (const controller of inFlight.values()) controller.abort();
+    };
+  }, []);
   const versusSlugMap = useMemo(
     () =>
       buildCompareVersusSlugMap(
@@ -1645,79 +1862,55 @@ export default function CompareWorkspace({
     [catalogCandidates, activeCategory, versusSlugMap]
   );
   useEffect(() => {
+    const candidates = new Set([
+      ...products.map((p) => p.slug),
+      ...popularBattles.flatMap((b) => [b.productA.slug, b.productB.slug]),
+    ]);
+    const inFlight = itemLookupsRef.current;
+    for (const [slug, controller] of inFlight) {
+      if (
+        !itemSlugBySlug ||
+        !candidates.has(slug) ||
+        lookupCompareOwnSlug(itemSlugBySlug, slug)
+      ) {
+        controller.abort();
+      }
+    }
     if (!itemSlugBySlug) return;
-    const candidateSlugs = Array.from(
-      new Set(
-        [
-          ...products.map((p) => p.slug),
-          ...popularBattles.flatMap((b) => [b.productA.slug, b.productB.slug]),
-        ].filter(Boolean)
-      )
-    );
+    const failures = itemLookupFailuresRef.current;
     const { readyToFetch, earliestRetryAt } = planCompareItemLookupBatch(
-      candidateSlugs,
+      [...candidates],
       itemSlugBySlug,
       clientItemSlugs,
-      itemLookupFailuresRef.current,
+      failures,
       Date.now()
     );
-    if (readyToFetch.length === 0 && !Number.isFinite(earliestRetryAt)) {
-      return;
-    }
-    let cancelled = false;
-    let retryTimer: ReturnType<typeof setTimeout> | null = null;
-    const scheduleRetryAt = (targetMs: number) => {
-      if (cancelled || !Number.isFinite(targetMs)) return;
-      if (retryTimer) clearTimeout(retryTimer);
-      const delayMs = Math.max(50, targetMs - Date.now());
-      retryTimer = setTimeout(() => {
-        if (!cancelled) {
-          setItemLookupRetryTick((tick) => tick + 1);
-        }
-      }, delayMs);
-    };
-    if (Number.isFinite(earliestRetryAt)) {
-      scheduleRetryAt(earliestRetryAt);
-    }
-    if (readyToFetch.length > 0) {
-      void Promise.all(
-        readyToFetch.map((slug) =>
-          fetch(`/api/v1/rate/products/${encodeURIComponent(slug)}`)
-            .then(async (res) => {
-              if (!res.ok) return [slug, null] as const;
-              const json: unknown = await res.json();
-              return [
-                slug,
-                parseCompareItemLookupAnswer(res.ok, json, slug),
-              ] as const;
-            })
-            .catch(() => [slug, null] as const)
-        )
-      ).then((entries) => {
-        if (cancelled) return;
-        const { confirmed, nextRetryAt } = applyCompareItemLookupOutcomes(
-          entries,
-          itemLookupFailuresRef.current,
-          Date.now(),
-          earliestRetryAt
+    const replan = () => setItemLookupRetryTick((tick) => tick + 1);
+    for (const slug of readyToFetch) {
+      startCompareItemLookup(slug, inFlight, (completedSlug, itemSlug) => {
+        const { nextRetryAt } = applyCompareItemLookupOutcomes(
+          [[completedSlug, itemSlug]],
+          failures,
+          Date.now()
         );
-        if (confirmed.length > 0) {
+        if (itemSlug) {
           setClientItemSlugs((prev) => {
             const next = { ...prev };
-            for (const [slug, itemSlug] of confirmed) {
-              setCompareOwnSlug(next, slug, itemSlug);
-            }
+            setCompareOwnSlug(next, completedSlug, itemSlug);
             return next;
           });
         } else if (Number.isFinite(nextRetryAt)) {
-          scheduleRetryAt(nextRetryAt);
+          replan();
         }
       });
     }
-    return () => {
-      cancelled = true;
-      if (retryTimer) clearTimeout(retryTimer);
-    };
+    if (Number.isFinite(earliestRetryAt)) {
+      const timer = setTimeout(
+        replan,
+        Math.max(0, earliestRetryAt - Date.now())
+      );
+      return () => clearTimeout(timer);
+    }
   }, [
     itemSlugBySlug,
     products,
