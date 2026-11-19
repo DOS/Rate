@@ -4,7 +4,10 @@ import { useId, useMemo, useState } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
 import { BsSliders } from 'react-icons/bs';
 import { Link } from '@/lib/navigation';
-import { comparePositiveMinPrices } from '@/lib/rate-domain';
+import {
+  MAX_VALID_VND_PRICE,
+  comparePositiveMinPrices,
+} from '@/lib/rate-domain';
 import { sharedScoredCriteria } from '@/lib/leaderboard-engine';
 import {
   getRadarSignal,
@@ -34,7 +37,11 @@ import {
 import RadarBadge from '@/components/radar/RadarBadge';
 import StarRating from '@/components/elementary/StarRating';
 import { useDealRadarIndex } from '@/components/radar/use-deal-radar';
-import { formatDecimal, formatPercent } from '@/lib/locale-format';
+import {
+  formatDecimal,
+  formatPercent,
+  formatPriceVnd,
+} from '@/lib/locale-format';
 import {
   displayedScore5,
   formatRatingValue,
@@ -82,6 +89,59 @@ export function sanitizeVersusMarkdownCell(value: unknown): string {
     .trim()
     .slice(0, 180);
   return cleaned || '-';
+}
+
+export function sanitizeVersusPriceVnd(value: unknown): number {
+  if (typeof value !== 'number' && typeof value !== 'string') return 0;
+  let num: number;
+  if (typeof value === 'string') {
+    if (/\p{Cc}/u.test(value)) return 0;
+    const trimmed = value.trim();
+    if (!trimmed || trimmed.length > 32 || /^[+-]?0[xbo]/i.test(trimmed)) {
+      return 0;
+    }
+    num = Number(trimmed);
+  } else {
+    num = value;
+  }
+  if (!Number.isFinite(num) || num <= 0 || num > MAX_VALID_VND_PRICE) {
+    return 0;
+  }
+  const rounded = Math.round(num);
+  return rounded > 0 && rounded <= MAX_VALID_VND_PRICE ? rounded : 0;
+}
+
+export function formatVersusPriceVnd(
+  value: unknown,
+  locale?: string | null
+): string {
+  const safe = sanitizeVersusPriceVnd(value);
+  return safe > 0 ? formatPriceVnd(safe, locale) : '-';
+}
+
+export function resolveVersusScoreMinPriceVnd(
+  score:
+    | (Pick<ScoredVersusItem, 'minPrice'> & {
+        product?: { min_price?: unknown } | null;
+      })
+    | null
+    | undefined
+): number {
+  if (!score) return 0;
+  if (score.product && Object.hasOwn(score.product, 'min_price')) {
+    return sanitizeVersusPriceVnd(score.product.min_price);
+  }
+  return sanitizeVersusPriceVnd(score.minPrice);
+}
+
+export function buildVersusMarkdownMinPriceRow(
+  rowLabel: string,
+  minPriceA: unknown,
+  minPriceB: unknown,
+  safePriceAdv: string,
+  locale?: string | null
+): string {
+  return `| **${rowLabel}** | ${formatVersusPriceVnd(minPriceA, locale)} | ${formatVersusPriceVnd(minPriceB, locale)} | ${safePriceAdv} |`;
 }
 
 export function formatVersusWeightedMarkdown(
@@ -142,6 +202,7 @@ export function formatVersusWeightedMarkdown(
 export default function VersusInteractiveScoreboard({
   scoreA: firstScore,
   scoreB: secondScore,
+  locale: localeProp,
 }: VersusInteractiveScoreboardProps) {
   // A pair has one URL, its sides sorted (DOS/Rate#1367), so the swap button
   // swaps the two sides here instead of linking to the other order.
@@ -150,10 +211,11 @@ export default function VersusInteractiveScoreboard({
   const scoreB = swapped ? firstScore : secondScore;
   const t = useTranslations('compare');
   const tStars = useTranslations('starRating');
+  const hookLocale = useLocale();
+  const locale = localeProp || hookLocale;
   // A side with no score reads like its stars, not "0.0" (DOS/Rate#1545).
   const summaryScore = (score: number): string =>
     score > 0 ? formatRatingValue(score, locale) : tStars('empty');
-  const locale = useLocale();
   const useCaseLabelId = useId();
   const slidersPanelId = useId();
   const [persona, setPersona] = useState<PersonaPresetKey>('default');
@@ -178,7 +240,9 @@ export default function VersusInteractiveScoreboard({
     }));
   };
 
-  const priceSide = comparePositiveMinPrices(scoreA.minPrice, scoreB.minPrice);
+  const safeMinPriceA = resolveVersusScoreMinPriceVnd(scoreA);
+  const safeMinPriceB = resolveVersusScoreMinPriceVnd(scoreB);
+  const priceSide = comparePositiveMinPrices(safeMinPriceA, safeMinPriceB);
   const priceAdvantageLabel =
     priceSide === 'A'
       ? scoreA.name
@@ -360,7 +424,13 @@ export default function VersusInteractiveScoreboard({
                 : sanitizeVersusMarkdownCell(t('mdRowTie'));
           return `| ${sanitizeVersusMarkdownCell(r.label)} | ${sanitizeVersusMarkdownCell(criterionCell(r.aVal))} | ${sanitizeVersusMarkdownCell(criterionCell(r.bVal))} | ${winName} |`;
         }),
-        `| **${t('mdRowMinPrice')}** | ${scoreA.minPrice > 0 ? `${scoreA.minPrice.toLocaleString('vi-VN')} ₫` : '-'} | ${scoreB.minPrice > 0 ? `${scoreB.minPrice.toLocaleString('vi-VN')} ₫` : '-'} | ${safePriceAdv} |`,
+        buildVersusMarkdownMinPriceRow(
+          t('mdRowMinPrice'),
+          safeMinPriceA,
+          safeMinPriceB,
+          safePriceAdv,
+          locale
+        ),
         `| **${t('mdRowDealRadar')}** | ${radarMarkdownCell(sigA, locale)} | ${radarMarkdownCell(sigB, locale)} | ${sigA.verdict === 'genuine_deal' ? safeNameA : sigB.verdict === 'genuine_deal' ? safeNameB : '-'} |`,
       ];
       await navigator.clipboard.writeText(lines.join('\n'));
@@ -455,8 +525,8 @@ export default function VersusInteractiveScoreboard({
       [
         t('csvRowMinPriceVnd'),
         '-',
-        scoreA.minPrice > 0 ? scoreA.minPrice : '',
-        scoreB.minPrice > 0 ? scoreB.minPrice : '',
+        safeMinPriceA > 0 ? safeMinPriceA : '',
+        safeMinPriceB > 0 ? safeMinPriceB : '',
         priceAdvantageLabel,
       ],
       [
@@ -522,7 +592,7 @@ export default function VersusInteractiveScoreboard({
         // As the API's `overall_score_source` (DOS/Rate#1663).
         overallScoreSource: overallResult.sourceA,
         expertScore10: scoreA.expertScore10,
-        minPriceVnd: scoreA.minPrice,
+        minPriceVnd: safeMinPriceA,
         dealRadar: radarExportFields(sigA),
       },
       productB: {
@@ -532,7 +602,7 @@ export default function VersusInteractiveScoreboard({
         weightedScore5: shownB > 0 ? shownB : null,
         overallScoreSource: overallResult.sourceB,
         expertScore10: scoreB.expertScore10,
-        minPriceVnd: scoreB.minPrice,
+        minPriceVnd: safeMinPriceB,
         dealRadar: radarExportFields(sigB),
       },
       // The lead under the picked preset or weights; never the winner.
