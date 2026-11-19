@@ -5,7 +5,12 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import sharp from 'sharp';
 import { DEVICE_IMAGE_RENDITIONS } from '../device-image-renditions';
-import { deviceImageSizesForHeight, deviceImageSrcSet } from '../device-images';
+import {
+  DEVICE_IMAGE_CREDITS,
+  deviceImageCredit,
+  deviceImageSizesForHeight,
+  deviceImageSrcSet,
+} from '../device-images';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const devicesDir = join(here, '../../../public/img/devices');
@@ -192,6 +197,43 @@ async function main() {
       'apple-macbook-pro-m4-pro-14-inch-512gb'
     ]?.widths.includes(800)
   );
+
+  // Licence notices (DOS/Rate#1756): every credited photo exists and has
+  // renditions, and the notice is found only for that local photo.
+  for (const [slug, credit] of Object.entries(DEVICE_IMAGE_CREDITS)) {
+    assert.ok(
+      existsSync(join(devicesDir, `${slug}.jpg`)),
+      `${slug}: credited photo is in public/img/devices`
+    );
+    assert.ok(DEVICE_IMAGE_RENDITIONS[slug], `${slug}: has renditions`);
+    assert.match(
+      credit.sourceUrl,
+      /^https:\/\/commons\.wikimedia\.org\/wiki\/File:/
+    );
+    assert.equal(credit.license, 'CC BY-SA 4.0');
+    assert.equal(
+      credit.licenseUrl,
+      'https://creativecommons.org/licenses/by-sa/4.0/'
+    );
+    assert.ok(credit.author.trim().length > 0, `${slug}: names the author`);
+  }
+  const iphone17e = deviceImageCredit('/img/devices/apple-iphone-17e.jpg');
+  assert.equal(iphone17e?.author, '茅野ふたば');
+  assert.equal(
+    iphone17e?.sourceUrl,
+    'https://commons.wikimedia.org/wiki/File:IPhone_17e_backside.jpg'
+  );
+  assert.equal(
+    deviceImageCredit('/img/devices/apple-iphone-16-128gb.jpg'),
+    null
+  );
+  assert.equal(
+    deviceImageCredit('https://cdn.example/apple-iphone-17e.jpg'),
+    null
+  );
+  assert.equal(deviceImageCredit('/img/devices/constructor.jpg'), null);
+  assert.equal(deviceImageCredit(null), null);
+  assert.equal(deviceImageCredit(undefined), null);
 
   console.warn('✅ Device image renditions suite passed');
 }

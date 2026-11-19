@@ -24,9 +24,18 @@ const VODAFONE_UK = 'https://deviceguides.vodafone.co.uk/apple/iphone-17e-ios-27
  * as for the 16e seed. Satellite features are left out: apple.com/vn lists none, and Apple
  * offers them in a few countries only. Values no source checked here states are left out: display refresh
  * rate, notch, maximum wired charging wattage, loudspeaker layout, SAR, FCC ID and the
- * Vietnamese price (a retail value that changes; the US price already did). No `images`:
- * Rate holds no licensed picture of it yet. Researched on 2026-11-18.
+ * Vietnamese price (a retail value that changes; the US price already did). Researched on
+ * 2026-11-18.
+ *
+ * Image (DOS/Rate#1756): one photo for both storages, `/img/devices/apple-iphone-17e.jpg`
+ * in apps/web, cropped and resized from a Wikimedia Commons photo under CC BY-SA 4.0
+ * (`DEVICE_IMAGE_CREDITS` in apps/web/src/lib/device-images.ts holds the author, source and
+ * licence, and the product page prints them). Apple's own newsroom and store images are not
+ * used: their pages grant no reuse licence.
  */
+/** The licensed photo the web app serves (DOS/Rate#1756); its credit is in apps/web. */
+export const IPHONE_17E_IMAGE = '/img/devices/apple-iphone-17e.jpg';
+
 function iphone17e(storageGb: 256 | 512): FlagshipDeviceSeed {
   const storage = `${storageGb}GB`;
   return {
@@ -45,7 +54,7 @@ function iphone17e(storageGb: 256 | 512): FlagshipDeviceSeed {
     battery_mah: 4005,
     has_5g: true,
     colors: ['Đen', 'Trắng', 'Hồng Phai'],
-    images: [],
+    images: [IPHONE_17E_IMAGE],
     key_specs: {
       screen: '6.1" OLED Super Retina XDR, 1200 nit (HDR)',
       chip: 'Apple A19, CPU 6 nhân, GPU 4 nhân',

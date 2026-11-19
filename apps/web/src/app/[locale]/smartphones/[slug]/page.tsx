@@ -104,6 +104,7 @@ import {
   scoreMasterProductForLeaderboard,
 } from '@/lib/leaderboard-engine';
 import {
+  deviceImageCredit,
   deviceImageSizesForHeight,
   deviceImageSrcSet,
 } from '@/lib/device-images';
@@ -563,6 +564,8 @@ export async function ProductDetailView({
   const heroDeviceSrcSet = deviceImageSrcSet(mainImage);
   const heroStoreSrcSet = heroDeviceSrcSet ? null : storeImageSrcSet(mainImage);
   const heroSrcSet = heroDeviceSrcSet ?? heroStoreSrcSet ?? undefined;
+  // A licensed photo is shown with its notice (DOS/Rate#1756).
+  const heroCredit = deviceImageCredit(mainImage);
   const heroSizes = heroDeviceSrcSet
     ? deviceImageSizesForHeight(mainImage, { phone: 190, other: 350 })
     : heroStoreSrcSet
@@ -967,6 +970,34 @@ export async function ProductDetailView({
                     <div className="text-muted">{t('noProductImage')}</div>
                   )}
                 </div>
+                {heroCredit && (
+                  <p className="small text-muted mt-2 mb-0">
+                    {t.rich('imageCredit', {
+                      author: heroCredit.author,
+                      license: heroCredit.license,
+                      source: (chunks) => (
+                        <a
+                          href={heroCredit.sourceUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-muted"
+                        >
+                          {chunks}
+                        </a>
+                      ),
+                      licenseLink: (chunks) => (
+                        <a
+                          href={heroCredit.licenseUrl}
+                          target="_blank"
+                          rel="noopener noreferrer license"
+                          className="text-muted"
+                        >
+                          {chunks}
+                        </a>
+                      ),
+                    })}
+                  </p>
+                )}
 
                 {/* Colors: under the photo on desktop; on a phone they move below the
                 scoreboard, so the jump row fits the first screen (DOS/Rate#1517). */}

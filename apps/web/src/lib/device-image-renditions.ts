@@ -48,6 +48,11 @@ export const DEVICE_IMAGE_RENDITIONS: Readonly<
     widths: [160],
     aspect: 0.755,
   },
+  'apple-iphone-17e': {
+    hash: 'ffd6645109',
+    widths: [200, 400, 600],
+    aspect: 0.75,
+  },
   'apple-iphone-18-pro-256gb': {
     hash: 'fc2fe0d0f7',
     widths: [160],

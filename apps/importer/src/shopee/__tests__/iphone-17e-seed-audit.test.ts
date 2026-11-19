@@ -191,7 +191,8 @@ test('each seed parses, fills all 10 groups, and cites every group', () => {
     // Values no checked source states are left out.
     assert.equal(seed.specifications.display?.refresh_rate_hz, undefined);
     assert.equal(seed.specifications.battery?.fast_charging_w, undefined);
-    assert.deepEqual(seed.images, []);
+    // The licensed photo (DOS/Rate#1756), the same for both storages.
+    assert.deepEqual(seed.images, ['/img/devices/apple-iphone-17e.jpg']);
     assert.equal(seed.retract_spec_fields, undefined);
   }
   // The two variants differ only in their storage.
@@ -306,7 +307,8 @@ test('a scoped --insert-missing apply inserts exactly the two 17e drafts and tou
     assert.equal(row.category_id, 'cat-1');
     assert.equal(row.storage_gb, seed.storage_gb);
     assert.deepEqual(row.colors, ['Đen', 'Trắng', 'Hồng Phai']);
-    assert.equal('images' in row, false, 'no images on the draft');
+    assert.deepEqual(row.images, ['/img/devices/apple-iphone-17e.jpg']);
+    assert.equal(row.thumbnail, '/img/devices/apple-iphone-17e.jpg');
     const specs = row.specifications as Record<string, Record<string, unknown>>;
     assert.equal(specs.camera?.rear_setup, seed.specifications.camera?.rear_setup);
     assert.equal(specs.camera?.second_camera, undefined);

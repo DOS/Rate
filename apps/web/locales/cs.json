@@ -1096,6 +1096,7 @@
     "ogDesc": "Nejlepší cena od {minPrice} ₫. Prohlédněte si 10 standardizovaných skupin parametrů GSMArena/PhoneArena a graf historie cen.",
     "breadcrumbHome": "Domů",
     "noProductImage": "Obrázek produktu není k dispozici",
+    "imageCredit": "Foto: <source>{author}, Wikimedia Commons</source>, <licenseLink>{license}</licenseLink>, oříznuto a zmenšeno",
     "availableColors": "Dostupné barvy:",
     "scoreboardEyebrow": "Hodnocení bez falešných recenzí",
     "authenticReviewsBadge": "{count, plural, one {# autentická recenze} few {# autentické recenze} other {# autentických recenzí}}",
