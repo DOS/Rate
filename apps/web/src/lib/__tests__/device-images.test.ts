@@ -8,6 +8,7 @@ import { DEVICE_IMAGE_RENDITIONS } from '../device-image-renditions';
 import {
   DEVICE_IMAGE_CREDITS,
   deviceImageCredit,
+  deviceImageJsonLd,
   deviceImageSizesForHeight,
   deviceImageSrcSet,
 } from '../device-images';
@@ -234,6 +235,32 @@ async function main() {
   assert.equal(deviceImageCredit('/img/devices/constructor.jpg'), null);
   assert.equal(deviceImageCredit(null), null);
   assert.equal(deviceImageCredit(undefined), null);
+
+  assert.equal(iphone17e?.authorLang, 'ja');
+  // JSON-LD: a credited photo is an ImageObject with its licence; any other
+  // image stays a plain URL.
+  assert.deepEqual(
+    deviceImageJsonLd(
+      '/img/devices/apple-iphone-17e.jpg',
+      'https://rate.vn/img/devices/apple-iphone-17e.jpg'
+    ),
+    {
+      '@type': 'ImageObject',
+      contentUrl: 'https://rate.vn/img/devices/apple-iphone-17e.jpg',
+      creator: { '@type': 'Person', name: '茅野ふたば' },
+      creditText: '茅野ふたば, Wikimedia Commons, CC BY-SA 4.0',
+      license: 'https://creativecommons.org/licenses/by-sa/4.0/',
+      acquireLicensePage:
+        'https://commons.wikimedia.org/wiki/File:IPhone_17e_backside.jpg',
+    }
+  );
+  assert.equal(
+    deviceImageJsonLd(
+      '/img/devices/apple-iphone-16-128gb.jpg',
+      'https://rate.vn/img/devices/apple-iphone-16-128gb.jpg'
+    ),
+    'https://rate.vn/img/devices/apple-iphone-16-128gb.jpg'
+  );
 
   console.warn('✅ Device image renditions suite passed');
 }

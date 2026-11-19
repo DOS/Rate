@@ -105,6 +105,7 @@ import {
 } from '@/lib/leaderboard-engine';
 import {
   deviceImageCredit,
+  deviceImageJsonLd,
   deviceImageSizesForHeight,
   deviceImageSrcSet,
 } from '@/lib/device-images';
@@ -277,9 +278,16 @@ export async function generateCategoryProductMetadata(
       title: t('ogTitle', { name }),
       description: hasPrice ? t('ogDesc', { minPrice }) : t('ogDescNoStock'),
       url: canonicalUrl,
-      images: [firstImageUrl(product.images) ?? SHARE_IMAGE],
+      // A credited photo carries its notice only on the page, so a share
+      // preview uses the site image instead (DOS/Rate#1756).
+      images: [shareImage(firstImageUrl(product.images))],
     },
   };
+}
+
+/** The Open Graph image: the product photo, unless it needs a credit. */
+function shareImage(src: string | null): string | typeof SHARE_IMAGE {
+  return src && !deviceImageCredit(src) ? src : SHARE_IMAGE;
 }
 
 export async function generateMetadata({
@@ -598,6 +606,10 @@ export async function ProductDetailView({
         }
       : null;
   const jsonLdImages = usableImageUrls(product.images).map(absoluteUrl);
+  // The product node names a credited photo's licence (DOS/Rate#1756).
+  const jsonLdProductImages = usableImageUrls(product.images).map((src) =>
+    deviceImageJsonLd(src, absoluteUrl(src))
+  );
   const itemGroupNode =
     itemPage && isItemGroup
       ? buildItemProductGroupNode({
@@ -667,7 +679,9 @@ export async function ProductDetailView({
         sku: product.model_key,
         url: canonicalUrl,
         description: productDescription,
-        ...(jsonLdImages.length > 0 ? { image: jsonLdImages } : {}),
+        ...(jsonLdProductImages.length > 0
+          ? { image: jsonLdProductImages }
+          : {}),
         // Only with a buyable price: a lowPrice of 0 is not an offer.
         ...(currentMinPrice > 0
           ? {
@@ -975,10 +989,12 @@ export async function ProductDetailView({
                     {t.rich('imageCredit', {
                       author: heroCredit.author,
                       license: heroCredit.license,
+                      name: (chunks) => (
+                        <span lang={heroCredit.authorLang}>{chunks}</span>
+                      ),
                       source: (chunks) => (
                         <a
                           href={heroCredit.sourceUrl}
-                          target="_blank"
                           rel="noopener noreferrer"
                           className="text-muted"
                         >
@@ -988,7 +1004,6 @@ export async function ProductDetailView({
                       licenseLink: (chunks) => (
                         <a
                           href={heroCredit.licenseUrl}
-                          target="_blank"
                           rel="noopener noreferrer license"
                           className="text-muted"
                         >

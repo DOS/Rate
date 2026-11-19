@@ -1096,7 +1096,7 @@
     "ogDesc": "Best price from {minPrice} ₫. See the 10 standardized GSMArena/PhoneArena spec groups and the price history chart.",
     "breadcrumbHome": "Home",
     "noProductImage": "No product image available",
-    "imageCredit": "Photo: <source>{author}, Wikimedia Commons</source>, <licenseLink>{license}</licenseLink>, cropped and resized",
+    "imageCredit": "Photo: <source><name>{author}</name>, Wikimedia Commons</source>, <licenseLink>{license}</licenseLink>, cropped and resized",
     "availableColors": "Available colors:",
     "scoreboardEyebrow": "Scores with fake reviews filtered out",
     "authenticReviewsBadge": "{count, plural, one {# authentic buyer review} other {# authentic buyer reviews}}",

@@ -1096,7 +1096,7 @@
     "ogDesc": "Giá tốt nhất từ {minPrice} ₫. Xem 10 nhóm thông số kỹ thuật chuẩn GSMArena/PhoneArena và biểu đồ lịch sử giá.",
     "breadcrumbHome": "Trang chủ",
     "noProductImage": "Chưa có ảnh sản phẩm",
-    "imageCredit": "Ảnh: <source>{author}, Wikimedia Commons</source>, <licenseLink>{license}</licenseLink>, đã cắt và thu nhỏ",
+    "imageCredit": "Ảnh: <source><name>{author}</name>, Wikimedia Commons</source>, <licenseLink>{license}</licenseLink>, đã cắt và thu nhỏ",
     "availableColors": "Màu sắc có sẵn:",
     "scoreboardEyebrow": "Điểm số đã lọc đánh giá ảo",
     "authenticReviewsBadge": "{count} đánh giá thực chất",

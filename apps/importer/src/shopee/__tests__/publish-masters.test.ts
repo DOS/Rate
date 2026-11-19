@@ -44,7 +44,6 @@ function tableClient(rows: Array<Record<string, unknown>>, onWrite?: () => void)
   const writes: Array<{ id: unknown; status: unknown; payload: Record<string, unknown> }> = [];
   const client = {
     from(table: string) {
-      assert.equal(table, 'master_products');
       const filters: Array<[string, unknown]> = [];
       let payload: Record<string, unknown> | undefined;
       const matching = () => rows.filter(r => filters.every(([c, v]) => r[c] === v));
@@ -70,6 +69,14 @@ function tableClient(rows: Array<Record<string, unknown>>, onWrite?: () => void)
           return builder;
         },
         maybeSingle() {
+          if (table === 'categories') {
+            const slug = filters.find(([c]) => c === 'slug')?.[1];
+            return Promise.resolve({
+              data: slug === 'smartphones' ? { id: 'cat-1' } : null,
+              error: null,
+            });
+          }
+          assert.equal(table, 'master_products');
           const hit = matching();
           return Promise.resolve({ data: hit[0] ? structuredClone(hit[0]) : null, error: null });
         },
@@ -170,6 +177,7 @@ test('a draft without the seed image, specs or category stops the run before any
     ],
     [{ thumbnail: null }, /thumbnail null/],
     [{ category_id: null }, /no category/],
+    [{ category_id: 'cat-tablets' }, /category "cat-tablets" is not "smartphones" \(cat-1\)/],
     [{ slug: 'apple-iphone-17e-256gb-1a2b3c4d' }, /is not the seed's/],
     [{ specifications: {} }, /missing specification group "availability"/],
     [{ status: 'archived' }, /status "archived" is not draft/],
@@ -194,8 +202,8 @@ test('a draft without the seed image, specs or category stops the run before any
 test('a seed with no images is never published', () => {
   const seed = { ...seeds[0]!, images: [] };
   assert.deepEqual(
-    publishBlockers(draftRow(0, { images: [], thumbnail: null }) as never, seed).filter(p =>
-      p.includes('image')
+    publishBlockers(draftRow(0, { images: [], thumbnail: null }) as never, seed, 'cat-1').filter(
+      p => p.includes('image')
     ),
     ['the seed has no images']
   );
@@ -229,8 +237,33 @@ test('a status change between plan and write stops the run', async () => {
   });
   await assert.rejects(
     publishSeedMastersWith(client, { only: [...KEYS], apply: true, expect: 2 }),
-    /touched 0 rows, not 1: its status changed after the plan \(1 published before it\)/
+    /touched 0 rows, not 1: its status, slug or thumbnail changed after the plan \(1 published before it\)/
   );
   assert.equal(rows[0]!.status, 'published');
   assert.equal(rows[1]!.status, 'archived');
+});
+
+test('a dry run with a mismatched --expect fails without writing', async () => {
+  const rows = [draftRow(0), draftRow(1)];
+  const { client, writes } = tableClient(rows);
+  await assert.rejects(
+    publishSeedMastersWith(client, { only: [...KEYS], expect: 1 }),
+    /--expect 1 does not match the plan \(2 draft/
+  );
+  assert.deepEqual(writes, []);
+});
+
+test("an apply writes only while slug and thumbnail are still the seed's", async () => {
+  const rows = [draftRow(0), draftRow(1)];
+  let n = 0;
+  const { client } = tableClient(rows, () => {
+    // The image is replaced after the plan read it.
+    if (++n === 1) rows[0]!.thumbnail = 'https://cdn.example/other.jpg';
+  });
+  await assert.rejects(
+    publishSeedMastersWith(client, { only: [...KEYS], apply: true, expect: 2 }),
+    /Publishing apple:iphone-17e:256gb touched 0 rows/
+  );
+  assert.equal(rows[0]!.status, 'draft');
+  assert.equal(rows[1]!.status, 'draft');
 });

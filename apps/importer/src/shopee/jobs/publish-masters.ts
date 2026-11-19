@@ -12,20 +12,22 @@
  *                  any read.
  *   --apply        Writes. Needs --expect.
  *   --expect <n>   With --apply, stops before the first write unless exactly n drafts are
- *                  ready to publish. A dry run logs whether the plan matches.
+ *                  ready to publish. A dry run with --expect fails (exit 1) when the plan
+ *                  does not match, so its exit code can be checked.
  *   Unknown, repeated or `--flag=value` arguments fail.
  *
  * A named master is published only when all of these hold, so a run cannot publish a page
  * that is missing its specs or its licensed image:
  * - its row exists and its status is `draft` (an already published row is reported and left
  *   alone; any other status, such as `archived`, stops the run);
- * - its slug and category are set, and its slug is the seed's (the page URL);
+ * - its slug is the seed's (the page URL) and its category is the seed's category;
  * - the seed has images, and the row's `images` and `thumbnail` are the seed's (so the
  *   scoped `backfill-specs.ts --apply` that writes them ran first);
  * - its specifications pass the same checks as the catalog audit (schema, the 10 groups,
  *   the main camera, and a second camera unless the phone has one rear camera).
  * Any named master that fails stops the run before the first write. Each write is
- * `update ... where id = <id> and status = 'draft'` and must touch exactly that row.
+ * `update ... where id = <id> and status = 'draft' and slug and thumbnail are the seed's`
+ * and must touch exactly that row.
  *
  * Never writes listings, merchants, reviews, prices, specs, images or `rate.items`.
  */
@@ -106,7 +108,11 @@ interface MasterRow {
 }
 
 /** Why a named master may not be published; empty when it may. */
-export function publishBlockers(row: MasterRow, seed: FlagshipDeviceSeed): string[] {
+export function publishBlockers(
+  row: MasterRow,
+  seed: FlagshipDeviceSeed,
+  categoryId: string | null
+): string[] {
   const problems: string[] = [];
   if (!row.slug) problems.push('no slug');
   else if (row.slug !== seed.slug) {
@@ -115,6 +121,12 @@ export function publishBlockers(row: MasterRow, seed: FlagshipDeviceSeed): strin
     );
   }
   if (!row.category_id) problems.push('no category');
+  else if (!categoryId) problems.push(`no category ${JSON.stringify(seed.categorySlug)} exists`);
+  else if (row.category_id !== categoryId) {
+    problems.push(
+      `category ${JSON.stringify(row.category_id)} is not ${JSON.stringify(seed.categorySlug)} (${categoryId})`
+    );
+  }
   if (seed.images.length === 0) {
     problems.push('the seed has no images');
   } else {
@@ -176,6 +188,19 @@ export async function publishSeedMastersWith(
   if (apply && expect === undefined) throw new Error('apply needs expect');
   const seeds = selectOnlySeeds(options.only, options.seeds ?? FLAGSHIP_DEVICES_TO_SEED);
 
+  // The seeds' categories, by slug, so a draft filed elsewhere is not published.
+  const categoryIds = new Map<string, string | null>();
+  for (const slug of new Set(seeds.map(s => s.categorySlug))) {
+    const { data, error } = await supabase
+      .from('categories')
+      .select('id')
+      .eq('slug', slug)
+      .maybeSingle();
+    if (error) throw new Error(`Failed to look up category ${slug}: ${error.message}`);
+    const id = (data as { id?: unknown } | null)?.id;
+    categoryIds.set(slug, typeof id === 'string' ? id : null);
+  }
+
   const planned: Array<{ seed: FlagshipDeviceSeed; id: string }> = [];
   const alreadyPublished: string[] = [];
   const failures: string[] = [];
@@ -202,7 +227,7 @@ export async function publishSeedMastersWith(
       failures.push(`${seed.model_key}: status ${JSON.stringify(row.status)} is not draft`);
       continue;
     }
-    const blockers = publishBlockers(row, seed);
+    const blockers = publishBlockers(row, seed, categoryIds.get(seed.categorySlug) ?? null);
     if (blockers.length > 0) {
       failures.push(`${seed.model_key}: ${blockers.join('; ')}`);
       continue;
@@ -227,12 +252,14 @@ export async function publishSeedMastersWith(
     `Plan [mode=${apply ? 'APPLY' : 'DRY-RUN'}]: ${planned.length} draft(s) to publish, ${alreadyPublished.length} already published${expect === undefined ? '' : `, expected ${expect}${matches ? '' : ' (MISMATCH)'}`}`,
     { planned: plannedKeys, alreadyPublished, expect }
   );
-  if (!apply) return { planned: plannedKeys, alreadyPublished, published: 0 };
+  if (!apply && expect === undefined)
+    return { planned: plannedKeys, alreadyPublished, published: 0 };
   if (!matches) {
     throw new Error(
       `--expect ${String(expect)} does not match the plan (${planned.length} draft(s) to publish): nothing written`
     );
   }
+  if (!apply) return { planned: plannedKeys, alreadyPublished, published: 0 };
 
   let published = 0;
   for (const { seed, id } of planned) {
@@ -241,11 +268,13 @@ export async function publishSeedMastersWith(
       .update({ status: 'published', updated_at: new Date().toISOString() })
       .eq('id', id)
       .eq('status', 'draft')
+      .eq('slug', seed.slug)
+      .eq('thumbnail', seed.images[0]!)
       .select('id');
     if (error) throw new Error(`Failed to publish ${seed.model_key}: ${error.message}`);
     if (!Array.isArray(data) || data.length !== 1) {
       throw new Error(
-        `Publishing ${seed.model_key} touched ${Array.isArray(data) ? data.length : 0} rows, not 1: its status changed after the plan (${published} published before it)`
+        `Publishing ${seed.model_key} touched ${Array.isArray(data) ? data.length : 0} rows, not 1: its status, slug or thumbnail changed after the plan (${published} published before it)`
       );
     }
     published++;

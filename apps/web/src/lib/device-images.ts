@@ -61,6 +61,8 @@ export function deviceImageSizesForHeight(
 export interface DeviceImageCredit {
   /** The author as the source page names them. */
   readonly author: string;
+  /** The BCP 47 language of the author's name, so screen readers say it right. */
+  readonly authorLang?: string;
   /** The source file page (Wikimedia Commons), which carries the licence. */
   readonly sourceUrl: string;
   readonly license: 'CC BY-SA 4.0';
@@ -76,6 +78,7 @@ export const DEVICE_IMAGE_CREDITS: Readonly<Record<string, DeviceImageCredit>> =
     // licence (CC BY-SA 4.0, ShareAlike).
     'apple-iphone-17e': {
       author: '茅野ふたば',
+      authorLang: 'ja',
       sourceUrl:
         'https://commons.wikimedia.org/wiki/File:IPhone_17e_backside.jpg',
       license: 'CC BY-SA 4.0',
@@ -92,4 +95,25 @@ export function deviceImageCredit(
   return slug && Object.hasOwn(DEVICE_IMAGE_CREDITS, slug)
     ? DEVICE_IMAGE_CREDITS[slug]!
     : null;
+}
+
+/**
+ * A schema.org image for a product's JSON-LD: the absolute URL, or for a
+ * credited photo an ImageObject with its creator, credit and licence, so the
+ * notice travels with the image (DOS/Rate#1756).
+ */
+export function deviceImageJsonLd(
+  src: string,
+  absoluteSrc: string
+): string | Record<string, unknown> {
+  const credit = deviceImageCredit(src);
+  if (!credit) return absoluteSrc;
+  return {
+    '@type': 'ImageObject',
+    contentUrl: absoluteSrc,
+    creator: { '@type': 'Person', name: credit.author },
+    creditText: `${credit.author}, Wikimedia Commons, ${credit.license}`,
+    license: credit.licenseUrl,
+    acquireLicensePage: credit.sourceUrl,
+  };
 }
