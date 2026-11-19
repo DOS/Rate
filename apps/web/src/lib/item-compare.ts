@@ -113,10 +113,19 @@ export function dedupeCompareTargets<
   return out;
 }
 
-/** True when `{a}-vs-{b}` parses back to exactly `a` and `b`. */
+/** True when `{a}-vs-{b}` parses back to exactly `a` and `b` (both exact and lower-cased). */
 function versusRoundTrips(slugA: string, slugB: string): boolean {
-  const parts = `${slugA}-vs-${slugB}`.split('-vs-');
-  return parts.length === 2 && parts[0] === slugA && parts[1] === slugB;
+  const joined = `${slugA}-vs-${slugB}`;
+  const exact = joined.split('-vs-');
+  const lower = joined.toLowerCase().split('-vs-');
+  return (
+    exact.length === 2 &&
+    exact[0] === slugA &&
+    exact[1] === slugB &&
+    lower.length === 2 &&
+    lower[0] === slugA.toLowerCase() &&
+    lower[1] === slugB.toLowerCase()
+  );
 }
 
 /**
@@ -230,7 +239,10 @@ export function planVersusRoute(
   const urlSlugB = b.itemSlug ?? b.variantSlug;
   // A slug holding "-vs-" cannot be one side of a versus URL (it would not
   // parse back), so there is no versus page for it (#1275).
-  if (urlSlugA.includes('-vs-') || urlSlugB.includes('-vs-')) {
+  if (
+    urlSlugA.toLowerCase().includes('-vs-') ||
+    urlSlugB.toLowerCase().includes('-vs-')
+  ) {
     return { kind: 'not_found' };
   }
   // One URL per pair, the slugs sorted; the other order 308s there (#1367).
@@ -264,25 +276,6 @@ export function planVersusRoute(
   };
 }
 
-/**
- * The canonical versus URL for two catalogue slugs: the sides in sorted
- * order (#1367), each named by its Item when `itemSlugBySlug` maps it
- * (RATE_ITEM_MODEL on), so in-app links need no 308 hop (DOS/Rate#1290). A
- * side whose Item slug holds "-vs-" keeps its own slug.
- */
-export function versusHref(
-  slugA: string,
-  slugB: string,
-  itemSlugBySlug?: Readonly<Record<string, string>> | null
-): string {
-  const side = (slug: string) => {
-    const itemSlug = itemSlugBySlug?.[slug];
-    return itemSlug && !itemSlug.includes('-vs-') ? itemSlug : slug;
-  };
-  const [first, second] = canonicalVersusOrder(side(slugA), side(slugB));
-  return `/compare/${first}-vs-${second}`;
-}
-
 const ITEM_ANSWER_SLUG_REGEX = /^[a-zA-Z0-9][a-zA-Z0-9._-]{0,159}$/;
 const UNSAFE_ITEM_SLUG_KEYS = new Set([
   '__proto__',
@@ -303,6 +296,29 @@ function getOwnRecordField(record: unknown, key: string): unknown {
     Object.prototype.hasOwnProperty.call(record, key)
     ? (record as Record<string, unknown>)[key]
     : undefined;
+}
+
+/**
+ * The canonical versus URL for two catalogue slugs: the sides in sorted
+ * order (#1367), each named by its Item when `itemSlugBySlug` maps it
+ * (RATE_ITEM_MODEL on), so in-app links need no 308 hop (DOS/Rate#1290). A
+ * side whose Item slug holds "-vs-" keeps its own slug.
+ */
+export function versusHref(
+  slugA: string,
+  slugB: string,
+  itemSlugBySlug?: Readonly<Record<string, string>> | null
+): string {
+  const side = (slug: string) => {
+    const itemSlug = getOwnRecordField(itemSlugBySlug, slug);
+    return typeof itemSlug === 'string' &&
+      itemSlug &&
+      !itemSlug.toLowerCase().includes('-vs-')
+      ? itemSlug
+      : slug;
+  };
+  const [first, second] = canonicalVersusOrder(side(slugA), side(slugB));
+  return `/compare/${first}-vs-${second}`;
 }
 
 /**

@@ -460,6 +460,47 @@ async function main() {
     '/compare/Apple-iPhone-16-vs-samsung-galaxy-s24',
     'client lookup preserves mixed-case canonical Item slug in 1v1 link (#1768)'
   );
+  assert.equal(
+    versusHref('case-a-std', 'pixel-10', {
+      'case-a-std': itemSlugFromProductAnswer(
+        { ok: true, data: { item: { slug: 'Case-VS-Cover' } } },
+        'case-a-std'
+      ),
+    }),
+    '/compare/case-a-std-vs-pixel-10',
+    'mixed-case Item slug holding -VS- keeps the variant slug in versusHref'
+  );
+  assert.deepEqual(
+    planVersusRoute(
+      {
+        slug: 'case-a-std',
+        resolution: {
+          kind: 'item',
+          item: {
+            id: 'item-vs-caps',
+            slug: 'Case-VS-Cover',
+            default_variant_id: null,
+          },
+          variants: [
+            { id: 'cv-caps', slug: 'case-a-std', variant_key: 'standard' },
+          ],
+        },
+      },
+      { slug: 'samsung-galaxy-s24', resolution: s24 }
+    ),
+    { kind: 'not_found' }
+  );
+  assert.deepEqual(canonicalVersusOrder('A-Phone-VS', 'z-phone'), [
+    'z-phone',
+    'A-Phone-VS',
+  ]);
+  assert.equal(
+    versusHref('constructor', 'pixel-10', {
+      'apple-iphone-16-128gb': 'Apple-iPhone-16',
+    }),
+    '/compare/constructor-vs-pixel-10',
+    'versusHref ignores Object.prototype properties on itemSlugBySlug'
+  );
   const maxLenItemSlug = `A${'b'.repeat(159)}`;
   assert.equal(
     itemSlugFromProductAnswer(
@@ -553,6 +594,7 @@ async function main() {
     'ComparePhonesPage must forward itemSlugBySlug to CompareWorkspace'
   );
 
+  const { resetRateClientForTests } = await import('../rate-api');
   const prevSupabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const prevSupabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   const prevItemModel = process.env.RATE_ITEM_MODEL;
@@ -561,6 +603,7 @@ async function main() {
     process.env.NEXT_PUBLIC_SUPABASE_URL = 'https://stub.supabase.test';
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = 'anon-test-key';
     process.env.RATE_ITEM_MODEL = 'item';
+    resetRateClientForTests();
     const ITEM_IPHONE = '11111111-1111-4111-8111-111111111768';
     const ITEM_XIAOMI = '22222222-2222-4222-8222-222222221768';
     globalThis.fetch = (async (input: RequestInfo | URL) => {
@@ -655,6 +698,7 @@ async function main() {
     } else {
       process.env.RATE_ITEM_MODEL = prevItemModel;
     }
+    resetRateClientForTests();
   }
 
   // A compare candidate's full sheet comes from the product answer, and only
