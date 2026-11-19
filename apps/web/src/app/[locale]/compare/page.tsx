@@ -154,10 +154,11 @@ export default async function ComparePhonesPage({
           (p) => getMasterProductCategorySlug(p) === activeCategory
         )
       : sameCategoryCandidates.slice(0, 3);
-  // RATE_ITEM_MODEL on: versus links name Items (DOS/Rate#1290); off: null.
-  const itemSlugBySlug = await getItemSlugsFor(
-    initialProducts.map((p) => p.slug)
-  );
+  // RATE_ITEM_MODEL on: versus links name Items (DOS/Rate#1290, DOS/Rate#1768); off: null.
+  const itemSlugBySlug = await getItemSlugsFor([
+    ...initialProducts.map((p) => p.slug),
+    ...catalogCandidates.map((p) => p.slug),
+  ]);
 
   return (
     <ClientMessages scope="compare">
