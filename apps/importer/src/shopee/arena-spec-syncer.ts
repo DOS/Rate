@@ -375,7 +375,8 @@ export function parseGsmArenaHtmlToSpecs(
 
   // 3.5mm headphone jack check
   const jackRaw = d['jack'] || d['3.5mm jack'] || pa['headphones'] || '';
-  const has35mmJack = jackRaw ? /^yes\b|3\.5\s*mm\s*jack/i.test(jackRaw.trim()) : false;
+  // A page that omits the jack says nothing about it (DOS/Rate#1754).
+  const has35mmJack = jackRaw ? /^yes\b|3\.5\s*mm\s*jack/i.test(jackRaw.trim()) : undefined;
 
   const colorsRaw = d['colors'] || pa['colors'] || '';
   const parsedColors = colorsRaw
@@ -432,7 +433,7 @@ export function parseGsmArenaHtmlToSpecs(
       front_camera: capSpec(
         d['cam2modules'] ? d['cam2modules'].replace(/\r?\n/g, ' | ') : pa['front camera']
       ),
-      flash: capSpec(d['cam1features'] || 'LED Flash, HDR, Panorama'),
+      flash: capSpec(d['cam1features']),
     },
     battery: {
       capacity_mah: batteryMah ?? undefined,
@@ -475,14 +476,16 @@ export function parseGsmArenaHtmlToSpecs(
       bluetooth: capSpec(d['bluetooth'] || pa['bluetooth']),
       wlan: capSpec(d['wlan'] || pa['wi-fi']),
       usb: capSpec(d['usb'] || pa['usb']),
-      nfc: nfcRaw ? /yes|true|nfc/i.test(nfcRaw) && !/^no\b/i.test(nfcRaw.trim()) : true,
+      nfc: nfcRaw ? /yes|true|nfc/i.test(nfcRaw) && !/^no\b/i.test(nfcRaw.trim()) : undefined,
       location: capSpec(d['gps']),
       sensors: capSpec(d['sensors']),
     },
+    // A field the page omits stays empty: no generic flash, NFC, jack, loudspeaker, audio or
+    // certification text that no source states (DOS/Rate#1754).
     multimedia: {
-      loudspeaker: capSpec(d['loudspeaker'] || 'Stereo speakers, Dolby Atmos'),
+      loudspeaker: capSpec(d['loudspeaker']),
       headphone_jack_35mm: has35mmJack,
-      audio_features: capSpec(d['soundother'] || '24-bit/192kHz Hi-Res & Hi-Res Wireless audio'),
+      audio_features: capSpec(d['soundother']),
     },
     availability: {
       announced: capSpec(d['announced']),
@@ -492,7 +495,6 @@ export function parseGsmArenaHtmlToSpecs(
     regulatory: {
       sar_head: capSpec(d['sar-us']),
       sar_body: capSpec(d['sar-eu']),
-      certifications: 'CE, FCC, RoHS, QCVN (BTTTT Vietnam)',
     },
   };
 
