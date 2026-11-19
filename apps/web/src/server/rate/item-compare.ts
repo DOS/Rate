@@ -60,24 +60,43 @@ async function toCompareResolution(
 }
 
 /**
- * The variant slugs to compare for the requested tokens (Item or variant
+ * The targets to compare for the requested tokens (Item or variant
  * slugs, `slug@256gb` pinning a size), one per Item, in request order; null
  * while the Item model is off.
  */
-export function resolveCompareSlugs(
-  tokens: readonly string[]
-): Promise<string[] | null> {
+export function resolveCompareTargets(
+  tokens: readonly string[],
+  resolveUnlinkedPin?: (raw: string) => string | undefined
+) {
   return whenItemModel('compare slugs', async () => {
     const targets = await Promise.all(
       tokens.map(async (raw) => {
         const token = parseCompareToken(raw);
         // Looked up as typed, then lower-cased (#1383).
         const typed = parseCompareToken(raw, true).slug;
-        return compareTarget(await resolveSlug(typed), token);
+        const target = compareTarget(await resolveSlug(typed), token);
+        if (!target) return null;
+        const masterSlug =
+          target.itemId === null && token.variantKey && resolveUnlinkedPin
+            ? resolveUnlinkedPin(raw)
+            : target.variantSlug;
+        return masterSlug ? { ...target, masterSlug } : null;
       })
     );
-    return dedupeCompareTargets(targets).map((t) => t.variantSlug);
+    // Take the first size for each Item or unlinked alias before comparing
+    // the exact masters and their published owners.
+    return dedupeCompareTargets(targets).map(({ masterSlug, itemId }) => ({
+      variantSlug: masterSlug,
+      itemId,
+    }));
   });
+}
+
+export async function resolveCompareSlugs(
+  tokens: readonly string[]
+): Promise<string[] | null> {
+  const targets = await resolveCompareTargets(tokens);
+  return targets?.map((target) => target.variantSlug) ?? null;
 }
 
 /** The versus route for two URL slugs; null while the Item model is off. */

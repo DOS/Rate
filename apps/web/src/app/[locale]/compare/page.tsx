@@ -2,14 +2,11 @@ import type { Metadata } from 'next';
 import { getTranslations, setRequestLocale } from 'next-intl/server';
 import { Link } from '@/lib/navigation';
 import {
-  type CanonicalCategorySlug,
-  getCachedCompareMasterProducts,
-  getCachedMasterProducts,
-  getMasterProductCategorySlug,
-} from '@/server/rate';
-import { resolveCompareSlugs } from '@/server/rate/item-compare';
+  getComparePageSelection,
+  getRequestedComparison,
+  parseCompareSlugs,
+} from '@/server/rate/compare-selection';
 import { getItemSlugsFor } from '@/server/rate/item-directory';
-import { compareCategoryParam } from '@/lib/compare-params';
 import { normalizeRateLocale } from '@/lib/rate-i18n';
 import { defaultOpenGraph, fitTitle, fitDescription } from '@/lib/seo';
 import CompareWorkspace from '@/components/compare/CompareWorkspace';
@@ -24,43 +21,8 @@ export const dynamic = 'force-dynamic';
 
 type PageProps = {
   params: Promise<{ locale: string }>;
-  searchParams: Promise<{ slugs?: string; category?: string; cat?: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 };
-
-const VALID_CATEGORIES = new Set<CanonicalCategorySlug>([
-  'smartphones',
-  'tablets',
-  'laptops',
-  'smartwatches',
-  'earbuds',
-]);
-
-function normalizeCategoryParam(raw?: string): CanonicalCategorySlug {
-  if (raw && VALID_CATEGORIES.has(raw as CanonicalCategorySlug)) {
-    return raw as CanonicalCategorySlug;
-  }
-  return 'smartphones';
-}
-
-function parseSlugsCsv(slugsParam?: string): string[] {
-  if (!slugsParam) return [];
-  return Array.from(
-    new Set(
-      slugsParam
-        .split(',')
-        .map((s) => s.trim())
-        .filter(Boolean)
-    )
-  ).slice(0, 4);
-}
-
-/**
- * The slugs to compare. RATE_ITEM_MODEL on: Item or variant slugs, with
- * `slug@256gb` pinning a size, one per Item (DOS/Rate#1156); off: as sent.
- */
-async function comparedSlugs(requested: string[]): Promise<string[]> {
-  return (await resolveCompareSlugs(requested)) ?? requested;
-}
 
 export async function generateMetadata({
   params,
@@ -69,14 +31,15 @@ export async function generateMetadata({
   const { locale } = await params;
   const lang = normalizeRateLocale(locale);
   const t = await getTranslations({ locale: lang, namespace: 'compare' });
-  const { slugs: slugsParam } = await searchParams;
-  const requestedSlugs = parseSlugsCsv(slugsParam);
+  const query = await searchParams;
+  const requestedSlugs = parseCompareSlugs(query.slugs);
 
   const canonicalUrl = 'https://rate.vn/compare';
 
   if (requestedSlugs.length >= 2) {
-    const compared = await getCachedCompareMasterProducts(
-      (await comparedSlugs(requestedSlugs)).join(',')
+    const { products: compared } = await getRequestedComparison(
+      requestedSlugs,
+      query
     );
     if (compared.length >= 2) {
       const names = compared.map((p) => p.name).join(' vs ');
@@ -123,40 +86,20 @@ export default async function ComparePhonesPage({
   setRequestLocale(locale);
   const lang = normalizeRateLocale(locale);
   const t = await getTranslations({ locale: lang, namespace: 'compare' });
-  const resolvedSearch = await searchParams;
-  const slugsParam = resolvedSearch.slugs;
-  const categoryParam = compareCategoryParam(resolvedSearch);
-  const requestedSlugs = parseSlugsCsv(slugsParam);
-
-  const [catalogCandidates, requestedProducts] = await Promise.all([
-    // Fixed key, so it shares the data cache; only the compared slugs vary.
-    getCachedMasterProducts({ categorySlug: 'all', limit: 50 }),
-    requestedSlugs.length > 0
-      ? comparedSlugs(requestedSlugs).then((slugs) =>
-          getCachedCompareMasterProducts(slugs.join(','))
-        )
-      : Promise.resolve([]),
-  ]);
-
-  const activeCategory: CanonicalCategorySlug =
-    requestedProducts.length > 0
-      ? getMasterProductCategorySlug(requestedProducts[0]!)
-      : normalizeCategoryParam(categoryParam);
-
-  // Strictly lock default products to the active category (never mix Smartphones with Earbuds/Laptops)
-  const sameCategoryCandidates = catalogCandidates.filter(
-    (c) => getMasterProductCategorySlug(c) === activeCategory
-  );
-
-  const initialProducts =
-    requestedProducts.length > 0
-      ? requestedProducts.filter(
-          (p) => getMasterProductCategorySlug(p) === activeCategory
-        )
-      : sameCategoryCandidates.slice(0, 3);
-  // RATE_ITEM_MODEL on: versus links name Items (DOS/Rate#1290); off: null.
+  const {
+    catalogCandidates,
+    activeCategory,
+    initialProducts,
+    hasExplicitSlugs,
+    resolvedSelection,
+  } = await getComparePageSelection(await searchParams);
+  // RATE_ITEM_MODEL on: versus links name Items (DOS/Rate#1290, DOS/Rate#1768); off: null.
   const itemSlugBySlug = await getItemSlugsFor(
-    initialProducts.map((p) => p.slug)
+    [
+      ...initialProducts.map((p) => p.slug),
+      ...catalogCandidates.map((p) => p.slug),
+    ],
+    resolvedSelection
   );
 
   return (
@@ -202,7 +145,7 @@ export default async function ComparePhonesPage({
               // sheet from the page the selection navigates to (#1515).
               catalogCandidates={catalogCandidates.map(withScoringSpecs)}
               initialCategory={activeCategory}
-              hasExplicitSlugs={requestedSlugs.length > 0}
+              hasExplicitSlugs={hasExplicitSlugs}
               locale={locale}
               {...(itemSlugBySlug ? { itemSlugBySlug } : {})}
             />

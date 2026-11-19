@@ -145,6 +145,9 @@ export function planItemRoute(input: {
   };
 }
 
+export const ITEM_VARIANT_SLUG_SUFFIX = '-([0-9]+(gb|tb)|standard|unknown)';
+const trailingVariant = new RegExp(ITEM_VARIANT_SLUG_SUFFIX + '$', 'i');
+
 /**
  * The Item slug an old variant slug most likely belongs to, by the rule M1
  * uses to create Items (`rate.item_slug_from_master`): the trailing size or
@@ -154,6 +157,6 @@ export function planItemRoute(input: {
  */
 export function itemSlugFromVariantSlug(slug: string): string {
   const clean = String(slug ?? '').trim();
-  const stripped = clean.replace(/-([0-9]+(gb|tb)|standard|unknown)$/i, '');
+  const stripped = clean.replace(trailingVariant, '');
   return stripped || clean;
 }
