@@ -1,17 +1,39 @@
 import 'server-only';
 import { cache } from 'react';
-import { parseCompareToken } from '@/lib/item-compare';
+import { compareCategoryParam } from '@/lib/compare-params';
+import { dedupeCompareTargets, parseCompareToken } from '@/lib/item-compare';
 import { createLogger } from '@/lib/logger';
-import { getRateClient, RateDataUnavailableError } from '@/lib/rate-api';
+import {
+  getItemById,
+  getRateClient,
+  RateDataUnavailableError,
+} from '@/lib/rate-api';
 import {
   getCachedCompareMasterProducts,
+  getCachedMasterProducts,
+  getMasterProductCategorySlug,
+  isCanonicalCategorySlug,
   sanitizeCachedProductSlug,
 } from './index';
 import { RATE_CACHE_TAGS, withRateDataCache } from './cache-tags';
-import { resolveCompareSlugs } from './item-compare';
+import { resolveCompareTargets } from './item-compare';
+import { whenItemModel } from './item-directory';
 import { ITEM_VARIANT_SLUG_SUFFIX } from './item-model';
 
 type CompareSearchParams = Record<string, string | string[] | undefined>;
+
+export function parseCompareSlugs(value?: string | string[]): string[] {
+  const csv = Array.isArray(value) ? value[0] : value;
+  if (!csv) return [];
+  return Array.from(
+    new Set(
+      csv
+        .split(',')
+        .map((slug) => slug.trim())
+        .filter(Boolean)
+    )
+  ).slice(0, 4);
+}
 
 function validMasterSlug(slug: string) {
   return slug.length > 0 && sanitizeCachedProductSlug(slug) === slug;
@@ -21,34 +43,26 @@ function regexLiteral(value: string) {
   return value.replace(/[.*+?^$(){}|[\]\\]/g, '\\$&');
 }
 
-/** Keep the first requested size per Item. Pins and represented-master hints are exact. */
-function legacyTargets(tokens: readonly string[], params: CompareSearchParams) {
-  const seen = new Set<string>();
-  const targets: Array<{ master: string; bare: boolean }> = [];
-  for (const token of tokens) {
-    const { slug, variantKey } = parseCompareToken(token);
-    if (
-      seen.has(slug) ||
-      slug.includes('..') ||
-      slug.endsWith('.') ||
-      (!variantKey && !validMasterSlug(slug))
-    )
-      continue;
-    const value = params[`variant.${token.toLowerCase()}`];
-    const hint = (Array.isArray(value) ? value[0] : value)?.toLowerCase() ?? '';
-    const hasHint = validMasterSlug(hint);
-    const suffix =
-      variantKey &&
-      variantKey !== 'standard' &&
-      !slug.endsWith(`-${variantKey}`)
-        ? `-${variantKey}`
-        : '';
-    const master = hasHint ? hint : slug + suffix;
-    if (!validMasterSlug(master)) continue;
-    seen.add(slug);
-    targets.push({ master, bare: !variantKey && !hasHint });
-  }
-  return targets;
+/** A pin or represented-master hint names an exact catalogue row. */
+function legacyTarget(token: string, params: CompareSearchParams) {
+  const { slug, variantKey } = parseCompareToken(token);
+  if (
+    slug.includes('..') ||
+    slug.endsWith('.') ||
+    (!variantKey && !validMasterSlug(slug))
+  )
+    return null;
+  const value = params[`variant.${token.toLowerCase()}`];
+  const hint = (Array.isArray(value) ? value[0] : value)?.toLowerCase() ?? '';
+  const hasHint = validMasterSlug(hint);
+  const suffix =
+    variantKey && variantKey !== 'standard' && !slug.endsWith(`-${variantKey}`)
+      ? `-${variantKey}`
+      : '';
+  const master = hasHint ? hint : slug + suffix;
+  return validMasterSlug(master)
+    ? { slug, master, bare: !variantKey && !hasHint }
+    : null;
 }
 
 // The picker only holds 50 rows. Check the published catalogue for the exact
@@ -99,23 +113,64 @@ const getUniqueCompareMaster = cache(
 );
 const log = createLogger('server.item-compare');
 
+const getPublishedCompareItem = cache((id: string) =>
+  whenItemModel('compare pin owner', () => getItemById(id))
+);
+
+async function readItemComparison(
+  targets: { variantSlug: string; itemId: string | null }[]
+) {
+  // Compare cache keys are limited to 120 characters. A truncated slug
+  // could name a different published master.
+  const selection = dedupeCompareTargets(targets)
+    .map((target) => target.variantSlug)
+    .filter((slug) => validMasterSlug(slug.toLowerCase()));
+  const products = await getCachedCompareMasterProducts(selection.join(','));
+  const publishedOwners = new Set(targets.map((target) => target.itemId));
+  const seenOwners = new Set<string>();
+  const duplicateSlugs = new Set<string>();
+  for (const product of products) {
+    // An old alias and a current Item slug can name two of its masters.
+    // Check publication only for a repeated owner; draft Items stay unlinked.
+    const owner = 'item_id' in product ? product.item_id : null;
+    if (typeof owner !== 'string' || !owner) continue;
+    if (
+      seenOwners.has(owner) &&
+      (publishedOwners.has(owner) || (await getPublishedCompareItem(owner)))
+    ) {
+      duplicateSlugs.add(product.slug);
+    }
+    seenOwners.add(owner);
+  }
+  return {
+    products: products.filter((product) => !duplicateSlugs.has(product.slug)),
+    resolvedSelection: selection.filter(
+      (slug) => !duplicateSlugs.has(slug.toLowerCase())
+    ),
+  };
+}
+
 /** Read full comparison rows in URL order, without relying on the visitor's tray. */
 export async function getRequestedComparison(
-  tokens: string[],
+  tokens: readonly string[],
   params: CompareSearchParams
 ) {
   if (!tokens.length) return { products: [], resolvedSelection: undefined };
-  const resolvedSelection = await resolveCompareSlugs(tokens);
-  if (resolvedSelection !== null) {
-    return {
-      products: await getCachedCompareMasterProducts(
-        resolvedSelection.join(',')
-      ),
-      resolvedSelection,
-    };
+  const itemTargets = await resolveCompareTargets(
+    tokens,
+    (pin) => legacyTarget(pin, params)?.master
+  );
+  if (itemTargets !== null) {
+    return readItemComparison(itemTargets);
   }
 
-  const targets = legacyTargets(tokens, params);
+  const seen = new Set<string>();
+  const targets = tokens.flatMap((token) => {
+    const target = legacyTarget(token, params);
+    if (!target || seen.has(target.slug)) return [];
+    seen.add(target.slug);
+    return [target];
+  });
   const direct = targets.map((target) => target.master).join(',');
   const exact = await getCachedCompareMasterProducts(direct);
   const found = new Set(exact.map((row) => row.slug));
@@ -140,5 +195,37 @@ export async function getRequestedComparison(
     selection === direct
       ? exact
       : await getCachedCompareMasterProducts(selection);
-  return { products, resolvedSelection };
+  return { products, resolvedSelection: null };
+}
+
+/** Initial columns and picker candidates for a visit to the compare page. */
+export async function getComparePageSelection(params: CompareSearchParams) {
+  const tokens = parseCompareSlugs(params.slugs);
+  const [catalogCandidates, { products, resolvedSelection }] =
+    await Promise.all([
+      getCachedMasterProducts({ categorySlug: 'all', limit: 50 }),
+      getRequestedComparison(tokens, params),
+    ]);
+  const categoryParam = compareCategoryParam(params);
+  const defaultCategory = isCanonicalCategorySlug(categoryParam)
+    ? categoryParam
+    : 'smartphones';
+  const activeCategory = products[0]
+    ? getMasterProductCategorySlug(products[0])
+    : defaultCategory;
+  const hasExplicitSlugs = tokens.length > 0;
+  const initialProducts = hasExplicitSlugs
+    ? products
+    : catalogCandidates
+        .filter(
+          (product) => getMasterProductCategorySlug(product) === activeCategory
+        )
+        .slice(0, 3);
+  return {
+    catalogCandidates,
+    activeCategory,
+    initialProducts,
+    hasExplicitSlugs,
+    resolvedSelection,
+  };
 }

@@ -2,13 +2,11 @@ import type { Metadata } from 'next';
 import { getTranslations, setRequestLocale } from 'next-intl/server';
 import { Link } from '@/lib/navigation';
 import {
-  type CanonicalCategorySlug,
-  getCachedMasterProducts,
-  getMasterProductCategorySlug,
-} from '@/server/rate';
-import { getRequestedComparison } from '@/server/rate/compare-selection';
+  getComparePageSelection,
+  getRequestedComparison,
+  parseCompareSlugs,
+} from '@/server/rate/compare-selection';
 import { getItemSlugsFor } from '@/server/rate/item-directory';
-import { compareCategoryParam } from '@/lib/compare-params';
 import { normalizeRateLocale } from '@/lib/rate-i18n';
 import { defaultOpenGraph, fitTitle, fitDescription } from '@/lib/seo';
 import CompareWorkspace from '@/components/compare/CompareWorkspace';
@@ -26,34 +24,6 @@ type PageProps = {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 };
 
-const VALID_CATEGORIES = new Set<CanonicalCategorySlug>([
-  'smartphones',
-  'tablets',
-  'laptops',
-  'smartwatches',
-  'earbuds',
-]);
-
-function normalizeCategoryParam(raw?: string): CanonicalCategorySlug {
-  if (raw && VALID_CATEGORIES.has(raw as CanonicalCategorySlug)) {
-    return raw as CanonicalCategorySlug;
-  }
-  return 'smartphones';
-}
-
-function parseSlugsCsv(value?: string | string[]): string[] {
-  const slugsParam = Array.isArray(value) ? value[0] : value;
-  if (!slugsParam) return [];
-  return Array.from(
-    new Set(
-      slugsParam
-        .split(',')
-        .map((s) => s.trim())
-        .filter(Boolean)
-    )
-  ).slice(0, 4);
-}
-
 export async function generateMetadata({
   params,
   searchParams,
@@ -62,7 +32,7 @@ export async function generateMetadata({
   const lang = normalizeRateLocale(locale);
   const t = await getTranslations({ locale: lang, namespace: 'compare' });
   const query = await searchParams;
-  const requestedSlugs = parseSlugsCsv(query.slugs);
+  const requestedSlugs = parseCompareSlugs(query.slugs);
 
   const canonicalUrl = 'https://rate.vn/compare';
 
@@ -116,36 +86,13 @@ export default async function ComparePhonesPage({
   setRequestLocale(locale);
   const lang = normalizeRateLocale(locale);
   const t = await getTranslations({ locale: lang, namespace: 'compare' });
-  const resolvedSearch = await searchParams;
-  const slugsParam = resolvedSearch.slugs;
-  const categoryParam = compareCategoryParam(resolvedSearch);
-  const requestedSlugs = parseSlugsCsv(slugsParam);
-
-  const [
+  const {
     catalogCandidates,
-    { products: requestedProducts, resolvedSelection },
-  ] = await Promise.all([
-    // Fixed key, so it shares the data cache; only the compared slugs vary.
-    getCachedMasterProducts({ categorySlug: 'all', limit: 50 }),
-    getRequestedComparison(requestedSlugs, resolvedSearch),
-  ]);
-
-  const activeCategory: CanonicalCategorySlug =
-    requestedProducts.length > 0
-      ? getMasterProductCategorySlug(requestedProducts[0]!)
-      : normalizeCategoryParam(categoryParam);
-
-  // Strictly lock default products to the active category (never mix Smartphones with Earbuds/Laptops)
-  const sameCategoryCandidates = catalogCandidates.filter(
-    (c) => getMasterProductCategorySlug(c) === activeCategory
-  );
-
-  const initialProducts =
-    requestedProducts.length > 0 || resolvedSelection === null
-      ? requestedProducts.filter(
-          (p) => getMasterProductCategorySlug(p) === activeCategory
-        )
-      : sameCategoryCandidates.slice(0, 3);
+    activeCategory,
+    initialProducts,
+    hasExplicitSlugs,
+    resolvedSelection,
+  } = await getComparePageSelection(await searchParams);
   // RATE_ITEM_MODEL on: versus links name Items (DOS/Rate#1290, DOS/Rate#1768); off: null.
   const itemSlugBySlug = await getItemSlugsFor(
     [
@@ -198,7 +145,7 @@ export default async function ComparePhonesPage({
               // sheet from the page the selection navigates to (#1515).
               catalogCandidates={catalogCandidates.map(withScoringSpecs)}
               initialCategory={activeCategory}
-              hasExplicitSlugs={requestedSlugs.length > 0}
+              hasExplicitSlugs={hasExplicitSlugs}
               locale={locale}
               {...(itemSlugBySlug ? { itemSlugBySlug } : {})}
             />

@@ -1,7 +1,10 @@
 import assert from 'node:assert/strict';
 import { afterEach, beforeEach, mock, test } from 'node:test';
 import { resetRateClientForTests } from '@/lib/rate-api';
-import { getRequestedComparison } from '../compare-selection';
+import {
+  getComparePageSelection,
+  getRequestedComparison,
+} from '../compare-selection';
 
 function master(
   slug: string,
@@ -48,23 +51,47 @@ const catalogue = [
 process.env.NEXT_PUBLIC_SUPABASE_URL = 'https://stub.supabase.test';
 process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = 'anon-test-key';
 const requests: URL[] = [];
-let serveAcmeItem = false;
+const acmeItem = {
+  id: 'acme-item',
+  slug: 'acme',
+  default_variant_id: 'acme-128gb',
+};
+let publishedItems: (typeof acmeItem)[] | null;
 
 beforeEach(() => {
   process.env.RATE_ITEM_MODEL = 'off';
   resetRateClientForTests();
   requests.length = 0;
-  serveAcmeItem = false;
+  publishedItems = null;
   mock.method(globalThis, 'fetch', async (input: string | URL | Request) => {
     const url = new URL(input instanceof Request ? input.url : input);
     requests.push(url);
     const query = url.searchParams;
     if (url.pathname.endsWith('/categories')) return Response.json([]);
+    const published = catalogue
+      .filter((row) => row.status === 'published')
+      .map((row) =>
+        publishedItems?.some((item) => item.id === acmeItem.id) &&
+        row.model_key.startsWith('brand:acme:')
+          ? {
+              ...row,
+              item_id: acmeItem.id,
+              variant_key: row.model_key.split(':')[2],
+            }
+          : row
+      );
+    if (url.pathname.endsWith('/rpc/search_master_products')) {
+      return Response.json(published);
+    }
     if (url.pathname.endsWith('/items')) {
-      if (serveAcmeItem) {
-        return Response.json([
-          { id: 'acme-item', slug: 'acme', default_variant_id: 'acme-128gb' },
-        ]);
+      if (publishedItems) {
+        return Response.json(
+          publishedItems.filter(
+            (item) =>
+              query.get('slug') === `eq.${item.slug}` ||
+              query.get('id') === `eq.${item.id}`
+          )
+        );
       }
       return Response.json(
         { code: 'PGRST205', message: 'Item table unavailable' },
@@ -72,19 +99,20 @@ beforeEach(() => {
       );
     }
     assert.equal(url.pathname, '/rest/v1/master_products');
+    const slugFilter = query.get('slug') ?? '';
+    if (slugFilter.startsWith('eq.')) {
+      assert.equal(query.get('status'), 'in.(published,archived)');
+      return Response.json(
+        published.filter((row) => row.slug === slugFilter.slice(3))
+      );
+    }
     assert.equal(query.get('status'), 'eq.published');
-    const published = catalogue.filter((row) => row.status === 'published');
-    if (serveAcmeItem && query.get('item_id') === 'eq.acme-item') {
-      const variants = published
-        .filter((row) => row.model_key.startsWith('brand:acme:'))
-        .map((row) => ({
-          ...row,
-          item_id: 'acme-item',
-          variant_key: row.model_key.split(':')[2],
-        }));
+    if (query.get('item_id') === 'eq.acme-item') {
+      const variants = published.filter(
+        (row) => 'item_id' in row && row.item_id === acmeItem.id
+      );
       return Response.json(Number(query.get('offset')) > 0 ? [] : variants);
     }
-    const slugFilter = query.get('slug') ?? '';
     if (slugFilter.startsWith('in.(')) {
       const slugs = slugFilter.slice(4, -1).split(',');
       return Response.json(published.filter((row) => slugs.includes(row.slug)));
@@ -177,7 +205,7 @@ test('a failed alias lookup or an overlong master cannot replace a column with a
 });
 
 test('a working Item lookup selects the pin or default before any fallback hint', async () => {
-  serveAcmeItem = true;
+  publishedItems = [acmeItem];
   process.env.RATE_ITEM_MODEL = 'item';
   for (const [token, expected] of [
     ['acme@256gb', 'acme-256gb'],
@@ -194,6 +222,91 @@ test('a working Item lookup selects the pin or default before any fallback hint'
   }
   assert.ok(
     requests.every((url) => !url.searchParams.get('slug')?.startsWith('match.'))
+  );
+});
+
+test('an unknown explicit token keeps the matrix empty and tokenless URLs keep category defaults', async () => {
+  process.env.RATE_ITEM_MODEL = 'item';
+  publishedItems = [];
+  const requested = await getComparePageSelection({ slugs: 'missing-phone' });
+  assert.deepEqual(requested.resolvedSelection, ['missing-phone']);
+  assert.equal(requested.hasExplicitSlugs, true);
+  assert.deepEqual(requested.initialProducts, []);
+
+  for (const slugs of [undefined, '', ' , , ']) {
+    const defaults = await getComparePageSelection({ slugs, cat: 'tablets' });
+    assert.equal(defaults.hasExplicitSlugs, false);
+    assert.deepEqual(
+      defaults.initialProducts.map((row) => row.slug),
+      ['pad-1tb', 'tab']
+    );
+  }
+});
+
+test('working Item reads keep unlinked pins and Item-backed pins in URL order', async () => {
+  process.env.RATE_ITEM_MODEL = 'item';
+  const tokens = ['first', 'acme@256gb', 'base@512gb', 'last'];
+  const expected = ['first', 'acme-256gb', 'base-512gb', 'last'];
+  for (const items of [[], [acmeItem]]) {
+    publishedItems = items;
+    const selection = await getRequestedComparison(tokens, {});
+    assert.deepEqual(selection.resolvedSelection, expected);
+    assert.deepEqual(
+      selection.products.map((row) => row.slug),
+      expected
+    );
+  }
+});
+
+test('an inferred master and a renamed Item keep only the first requested size', async () => {
+  process.env.RATE_ITEM_MODEL = 'item';
+  publishedItems = [{ ...acmeItem, slug: 'acme-new' }];
+  for (const [tokens, expected] of [
+    [
+      ['acme@128gb', 'last', 'acme-new@256gb'],
+      ['acme-128gb', 'last'],
+    ],
+    [
+      ['acme-new@256gb', 'last', 'acme@128gb'],
+      ['acme-256gb', 'last'],
+    ],
+  ] as const) {
+    const selection = await getRequestedComparison(tokens, {});
+    assert.deepEqual(selection.resolvedSelection, expected);
+    assert.deepEqual(
+      selection.products.map((row) => row.slug),
+      expected
+    );
+  }
+  assert.ok(
+    requests.every(
+      (url) => !url.pathname.endsWith('/items') || !url.searchParams.has('id')
+    )
+  );
+  const aliases = await getRequestedComparison(['old@128gb', 'other@256gb'], {
+    'variant.old@128gb': 'acme-128gb',
+    'variant.other@256gb': 'acme-256gb',
+  });
+  assert.deepEqual(aliases.resolvedSelection, ['acme-128gb']);
+});
+
+test('an overlong unlinked token cannot select a different master by its truncated slug', async () => {
+  process.env.RATE_ITEM_MODEL = 'item';
+  publishedItems = [];
+  const selection = await getComparePageSelection({ slugs: `${longAlias}-1x` });
+  assert.deepEqual(selection.initialProducts, []);
+});
+
+test('unlinked pins honor represented masters, keep the first size, and drop unpublished sizes', async () => {
+  process.env.RATE_ITEM_MODEL = 'item';
+  publishedItems = [];
+  const selection = await getRequestedComparison(
+    ['acme@1024gb', 'last', 'acme@128gb', 'base@256gb'],
+    { 'variant.acme@1024gb': '_retail-1tb' }
+  );
+  assert.deepEqual(
+    selection.products.map((row) => row.slug),
+    ['_retail-1tb', 'last']
   );
 });
 
