@@ -90,8 +90,8 @@ importers:
         specifier: ^16.4.5
         version: 16.4.5(@opentelemetry/api@1.9.1)(@playwright/test@1.64.1)(@types/node@26.6.6)(babel-plugin-react-compiler@1.0.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(sass@1.105.2)
       prettier:
-        specifier: ^3.9.6
-        version: 3.9.6
+        specifier: ^3.10.1
+        version: 3.10.1
       turbo:
         specifier: ^2.10.12
         version: 2.10.12
@@ -146,8 +146,8 @@ importers:
         specifier: ^9.39.5
         version: 9.39.5(jiti@2.7.0)
       prettier:
-        specifier: ^3.9.6
-        version: 3.9.6
+        specifier: ^3.10.1
+        version: 3.10.1
       tsx:
         specifier: ^4.23.15
         version: 4.23.15
@@ -305,10 +305,10 @@ importers:
     devDependencies:
       '@ianvs/prettier-plugin-sort-imports':
         specifier: ^4.3.1
-        version: 4.7.1(prettier@3.9.10)
+        version: 4.7.1(prettier@3.10.1)
       prettier-plugin-packagejson:
         specifier: ^3.0.3
-        version: 3.0.3(prettier@3.9.10)
+        version: 3.0.3(prettier@3.10.1)
 
   packages/shared-data:
     dependencies:
@@ -3777,13 +3777,8 @@ packages:
       prettier:
         optional: true
 
-  prettier@3.9.10:
-    resolution: {integrity: sha512-skGHTH1Yb9QvaTC4hWnRTzEYtCpApF0UMBPz+t/0ZPzP8ihefo/btKd+QA7pUE0fEwA1SbS/NmhyEcstdXOIdA==}
-    engines: {node: '>=14'}
-    hasBin: true
-
-  prettier@3.9.6:
-    resolution: {integrity: sha512-OpN0zzVdiaiAhxpuuj5efpIS4sY9j7bY6uR5mnj5yPzGkdkjNKSJeUThPb60Jw29QuAZgA4o+/iB49kFiaBX6g==}
+  prettier@3.10.1:
+    resolution: {integrity: sha512-70vp3ZUYoPlFbF9uiTdXHUUCGEIp7d4+6p+8DYbkm2jP7x/3i/paXVF6dopSI3zd/CEitrZN1rc4i85xWmmXlg==}
     engines: {node: '>=14'}
     hasBin: true
 
@@ -4797,13 +4792,13 @@ snapshots:
 
   '@humanwhocodes/retry@0.4.3': {}
 
-  '@ianvs/prettier-plugin-sort-imports@4.7.1(prettier@3.9.10)':
+  '@ianvs/prettier-plugin-sort-imports@4.7.1(prettier@3.10.1)':
     dependencies:
       '@babel/generator': 7.29.8
       '@babel/parser': 7.29.8
       '@babel/traverse': 7.29.8
       '@babel/types': 7.29.8
-      prettier: 3.9.10
+      prettier: 3.10.1
       semver: 7.8.5
     transitivePeerDependencies:
       - supports-color
@@ -7662,15 +7657,13 @@ snapshots:
 
   prelude-ls@1.2.1: {}
 
-  prettier-plugin-packagejson@3.0.3(prettier@3.9.10):
+  prettier-plugin-packagejson@3.0.3(prettier@3.10.1):
     dependencies:
       sort-package-json: 4.1.0
     optionalDependencies:
-      prettier: 3.9.10
+      prettier: 3.10.1
 
-  prettier@3.9.10: {}
-
-  prettier@3.9.6: {}
+  prettier@3.10.1: {}
 
   prop-types@15.8.1:
     dependencies:
