@@ -428,36 +428,46 @@ export function isValidCompareVersusPair(
   );
 }
 
-export function resolveComparePopularBattles(
-  catalogCandidates: MasterProduct[],
-  category: CanonicalCategorySlug,
-  versusSlugMap?: Readonly<Record<string, string>> | null,
-  maxPairs = 3
-) {
-  const mergedMap: Record<string, string> = {};
-  for (const row of catalogCandidates) {
+export function buildCompareVersusSlugMap(
+  rows: readonly MasterProduct[],
+  itemSlugBySlug?: Readonly<Record<string, string>> | null,
+  clientItemSlugs?: Readonly<Record<string, string>> | null
+): Record<string, string> | undefined {
+  const map: Record<string, string> = {};
+  for (const row of rows) {
     if (!row || typeof row.slug !== 'string' || !row.slug) continue;
     const itemRow = row as ItemCatalogRow;
     if (typeof itemRow.item_slug === 'string' && itemRow.item_slug) {
-      mergedMap[row.slug] = itemRow.item_slug;
+      map[row.slug] = itemRow.item_slug;
     }
   }
-  if (versusSlugMap) {
-    for (const [slug, itemSlug] of Object.entries(versusSlugMap)) {
+  if (itemSlugBySlug) {
+    for (const [slug, itemSlug] of Object.entries(itemSlugBySlug)) {
       if (slug && typeof itemSlug === 'string' && itemSlug) {
-        mergedMap[slug] = itemSlug;
+        map[slug] = itemSlug;
+      }
+    }
+  }
+  if (clientItemSlugs) {
+    for (const [slug, itemSlug] of Object.entries(clientItemSlugs)) {
+      if (
+        slug &&
+        typeof itemSlug === 'string' &&
+        itemSlug &&
+        itemSlug !== slug
+      ) {
+        map[slug] = itemSlug;
       }
     }
   }
 
-  const itemModeActive =
-    versusSlugMap != null || Object.keys(mergedMap).length > 0;
+  const itemModeActive = itemSlugBySlug != null || Object.keys(map).length > 0;
   if (itemModeActive) {
     // Propagate unambiguous Item slugs across unmapped storage siblings sharing
     // `brand:model:` on /compare where itemSlugBySlug covers initialProducts only.
     const prefixItemSlugs = new Map<string, Set<string>>();
-    for (const row of catalogCandidates) {
-      if (!row?.slug || !mergedMap[row.slug]) continue;
+    for (const row of rows) {
+      if (!row?.slug || !map[row.slug]) continue;
       const prefix = masterSiblingKeyPrefix(row.model_key);
       if (!prefix) continue;
       let set = prefixItemSlugs.get(prefix);
@@ -465,17 +475,41 @@ export function resolveComparePopularBattles(
         set = new Set<string>();
         prefixItemSlugs.set(prefix, set);
       }
-      set.add(mergedMap[row.slug]!);
+      set.add(map[row.slug]!);
     }
-    for (const row of catalogCandidates) {
-      if (!row?.slug || mergedMap[row.slug]) continue;
+    for (const row of rows) {
+      if (!row?.slug || map[row.slug]) continue;
       const prefix = masterSiblingKeyPrefix(row.model_key);
       const set = prefix ? prefixItemSlugs.get(prefix) : undefined;
       if (set && set.size === 1) {
-        mergedMap[row.slug] = [...set][0]!;
+        map[row.slug] = [...set][0]!;
       }
     }
   }
+
+  if (clientItemSlugs) {
+    for (const [slug, itemSlug] of Object.entries(clientItemSlugs)) {
+      if (slug && typeof itemSlug === 'string' && itemSlug && !map[slug]) {
+        map[slug] = itemSlug;
+      }
+    }
+  }
+
+  return itemSlugBySlug != null || Object.keys(map).length > 0
+    ? map
+    : undefined;
+}
+
+export function resolveComparePopularBattles(
+  catalogCandidates: MasterProduct[],
+  category: CanonicalCategorySlug,
+  versusSlugMap?: Readonly<Record<string, string>> | null,
+  maxPairs = 3
+) {
+  const mergedMap =
+    buildCompareVersusSlugMap(catalogCandidates, versusSlugMap) ?? {};
+  const itemModeActive =
+    versusSlugMap != null || Object.keys(mergedMap).length > 0;
 
   const ranked = rankMasterProductsForLeaderboard(catalogCandidates, {
     category,
@@ -1489,29 +1523,15 @@ export default function CompareWorkspace({
   const [clientItemSlugs, setClientItemSlugs] = useState<
     Record<string, string>
   >({});
-  const versusSlugMap = useMemo(() => {
-    const map: Record<string, string> = {};
-    for (const row of [...catalogCandidates, ...products]) {
-      if (!row || typeof row.slug !== 'string' || !row.slug) continue;
-      const itemRow = row as ItemCatalogRow;
-      if (typeof itemRow.item_slug === 'string' && itemRow.item_slug) {
-        map[row.slug] = itemRow.item_slug;
-      }
-    }
-    if (itemSlugBySlug) {
-      for (const [slug, itemSlug] of Object.entries(itemSlugBySlug)) {
-        if (slug && typeof itemSlug === 'string' && itemSlug) {
-          map[slug] = itemSlug;
-        }
-      }
-    }
-    for (const [slug, itemSlug] of Object.entries(clientItemSlugs)) {
-      if (slug && typeof itemSlug === 'string' && itemSlug) {
-        map[slug] = itemSlug;
-      }
-    }
-    return itemSlugBySlug || Object.keys(map).length > 0 ? map : undefined;
-  }, [catalogCandidates, products, itemSlugBySlug, clientItemSlugs]);
+  const versusSlugMap = useMemo(
+    () =>
+      buildCompareVersusSlugMap(
+        [...catalogCandidates, ...products],
+        itemSlugBySlug,
+        clientItemSlugs
+      ),
+    [catalogCandidates, products, itemSlugBySlug, clientItemSlugs]
+  );
   const popularBattles = useMemo(
     () =>
       resolveComparePopularBattles(
@@ -1543,9 +1563,9 @@ export default function CompareWorkspace({
           .then((res) => (res.ok ? res.json() : null))
           .then((json: unknown) => [
             slug,
-            itemSlugFromProductAnswer(json, slug),
+            json ? itemSlugFromProductAnswer(json, slug) : '',
           ])
-          .catch(() => [slug, slug])
+          .catch(() => [slug, ''])
       )
     ).then((entries) => {
       if (!cancelled) {

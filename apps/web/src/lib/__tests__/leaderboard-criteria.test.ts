@@ -14,13 +14,15 @@ import {
 import csMessages from '../../../locales/cs.json';
 import enMessages from '../../../locales/en.json';
 import viMessages from '../../../locales/vi.json';
-import {
+import CompareWorkspace, {
   COMPARE_REPLACE_FOCUS_DELAY_MS,
   buildCompareMarkdownMinPriceRow,
+  buildCompareVersusSlugMap,
   cancelPendingCompareReplaceFocus,
   computeCompareHeadToHeadSummary,
   formatComparePriceVnd,
   isSameCompareVersusItem,
+  isValidCompareVersusPair,
   nextCompareReplaceState,
   pickBestBattery,
   pickHighestMemory,
@@ -2239,6 +2241,25 @@ assert.equal(
       ),
       true
     );
+    const propagatedCompareMap = buildCompareVersusSlugMap(
+      rawCandidateVariants,
+      partialCandidateSlugMap,
+      { 'apple-iphone-16-512gb': '' }
+    );
+    assert.equal(
+      propagatedCompareMap?.['apple-iphone-16-512gb'],
+      'apple-iphone-16',
+      'buildCompareVersusSlugMap propagates Item slug to unmapped sibling even if client fetch failed'
+    );
+    assert.equal(
+      isValidCompareVersusPair(
+        'apple-iphone-16-512gb',
+        'apple-iphone-16-256gb',
+        propagatedCompareMap
+      ),
+      false,
+      'Same-Item storage siblings are rejected by isValidCompareVersusPair'
+    );
     const resolvedBattles = resolveComparePopularBattles(
       rawCandidateVariants,
       'smartphones',
@@ -2475,6 +2496,45 @@ assert.equal(
         sameItemOnlySwitcherHtml,
         '',
         'VersusMatchupSwitcher renders nothing when all peers belong to one Item'
+      );
+
+      const compareWorkspaceHtml = renderToStaticMarkup(
+        React.createElement(
+          AppRouterContext.Provider,
+          { value: stubRouter },
+          React.createElement(
+            Provider,
+            {
+              locale: 'en',
+              messages: pickClientMessages(
+                enMessages as unknown as Record<string, unknown>,
+                'compare'
+              ),
+              timeZone: 'Asia/Ho_Chi_Minh',
+            },
+            React.createElement(CompareWorkspace, {
+              initialProducts: [
+                rawCandidateVariants[1]!,
+                rawCandidateVariants[2]!,
+              ],
+              catalogCandidates: rawCandidateVariants,
+              initialCategory: 'smartphones',
+              hasExplicitSlugs: true,
+              locale: 'en',
+              itemSlugBySlug: partialCandidateSlugMap,
+            })
+          )
+        )
+      );
+      assert.match(
+        compareWorkspaceHtml,
+        /href="(?:\/en)?\/compare\/apple-iphone-16-vs-samsung-galaxy-s24"/,
+        'CompareWorkspace SSR popularBattles renders propagated canonical Item versusHref even when higher-ranked sibling was omitted from itemSlugBySlug'
+      );
+      assert.doesNotMatch(
+        compareWorkspaceHtml,
+        /\/compare\/apple-iphone-16-512gb-vs-/,
+        'CompareWorkspace SSR popularBattles never leaks redirecting variant slug'
       );
 
       const rawA = phone('apple-iphone-16-256gb', 4.8);
