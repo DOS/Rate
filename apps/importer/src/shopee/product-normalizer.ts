@@ -650,8 +650,12 @@ function sourcedOr<T>(value: T | null | undefined, fallback: T): T | undefined {
  * (111879), 12 (111876), 12 mini (111877), 13 (111872), 13 Pro (111871), 14 (111850),
  * 14 Plus (111854), 14 Pro (111849), 15 (111831), 15 Plus (111830), 15 Pro (111829),
  * 16 Plus (121030), 16 Pro (121031), 17 (125089), 17 Pro (125090), Air (125092), all at
- * https://support.apple.com/en-us/<id>. A field is undefined where the generation's pages
- * do not state it (the SE, an unnumbered or pre-iPhone 11 title, the 16e/17e line).
+ * https://support.apple.com/en-us/<id>. A model without a checked page of its own (the 13
+ * mini, 12 Pro, 14 Pro Max, 17 Pro Max) takes its generation and tier's checked pages,
+ * which agree on these fields. A field is undefined where no checked page states it: the
+ * SE, an unnumbered or pre-iPhone 11 title, a generation after the 17. The 16e and 17e
+ * ("iPhone 16e", no space) do not match and get {}: only their registry entries describe
+ * them (no Camera Control, Dynamic Island or UWB).
  */
 export function iphoneGenerationSpecs(model: string): {
   keys?: string;
@@ -660,13 +664,10 @@ export function iphoneGenerationSpecs(model: string): {
   connectivity_other?: string;
 } {
   const air = /^iPhone Air\b/i.test(model);
-  const match = model.match(/^iPhone (\d{2})(?:\s+(Pro Max|Pro|Plus|mini|e))?\b/i);
+  const match = model.match(/^iPhone (\d{2})(?:\s+(Pro Max|Pro|Plus|mini))?\b/i);
   const generation = air ? 17 : match ? Number(match[1]) : null;
   const tier = air ? '' : (match?.[2] ?? '').toLowerCase();
-  // The 16e and 17e differ from their line (no Camera Control, Dynamic Island or UWB):
-  // only their registry entries describe them.
-  // A generation after the 17 has no checked page.
-  if (generation === null || generation < 11 || generation > 17 || tier === 'e') return {};
+  if (generation === null || generation < 11 || generation > 17) return {};
   const pro = tier === 'pro' || tier === 'pro max';
   return {
     // Every listed iPhone 16 and later lists the Action button and Camera Control; the
@@ -684,11 +685,13 @@ export function iphoneGenerationSpecs(model: string): {
         ? 'Dynamic Island, True Tone, Wide color (P3), Haptic Touch'
         : 'True Tone, Wide color (P3), Haptic Touch',
     // MagSafe and Qi2 are both listed for the 13 and the 15 and later; the 12, 13 Pro and
-    // 14 pages list MagSafe without Qi2, the 11 plain Qi only.
+    // 14 pages list MagSafe and Qi without Qi2, the 11 Qi only ("works with Qi chargers").
     charging:
       generation >= 15 || (generation === 13 && tier === '')
         ? 'Sạc nhanh PD, Sạc không dây MagSafe/Qi2'
-        : undefined,
+        : generation >= 12
+          ? 'Sạc không dây MagSafe/Qi'
+          : 'Sạc không dây Qi',
     // Ultra Wideband from the 11, Emergency SOS via satellite from the 14.
     connectivity_other:
       generation >= 14 ? 'Ultra Wideband (UWB), SOS vệ tinh' : 'Ultra Wideband (UWB)',
@@ -3432,19 +3435,25 @@ export class ProductNormalizer {
         third_camera: benchmark?.third_camera || undefined,
         fourth_camera: benchmark?.fourth_camera || undefined,
         front_camera: benchmark?.front_camera || fallbackFrontCamera,
-        // A laptop, watch or earbuds has no rear flash, and iPads differ by model (the
-        // iPad Air has none): only phones and non-Apple tablets keep a default
-        // (DOS/Rate#1754).
+        // A laptop, watch or earbuds has no rear flash or rear video, and iPads differ by
+        // model (the iPad Air has no flash): only phones and non-Apple tablets keep a
+        // default. An iPhone outside the registry gets none: no checked page states
+        // "Dual-LED" (DOS/Rate#1754).
         flash:
           benchmark?.flash ??
           (isSmartphone
             ? isApple
-              ? 'True Tone Dual-LED'
+              ? iphoneSpecs
+                ? undefined
+                : 'True Tone Dual-LED'
               : 'LED flash, auto-HDR, panorama'
             : categorySlug === 'tablets' && !isApple
               ? 'LED flash, auto-HDR, panorama'
               : undefined),
-        video_recording: '4K@30/60fps, 1080p@30/60/120/240fps, HDR',
+        video_recording:
+          isSmartphone || categorySlug === 'tablets'
+            ? '4K@30/60fps, 1080p@30/60/120/240fps, HDR'
+            : undefined,
       },
       connectivity: {
         bluetooth: benchmark?.bluetooth ?? '5.3, A2DP, LE',
@@ -3456,7 +3465,9 @@ export class ProductNormalizer {
               ? 'Face ID, gia tốc kế, con quay hồi chuyển, tiệm cận, la bàn, khí áp kế'
               : 'Vân tay dưới màn hình, gia tốc kế, con quay hồi chuyển, tiệm cận, la bàn'))
           : undefined,
-        location: hasPhoneRadios ? 'GPS, GLONASS, Galileo, QZSS, BeiDou' : undefined,
+        // An iPhone outside the registry gets no generic GNSS list either (DOS/Rate#1754).
+        location:
+          hasPhoneRadios && !iphoneSpecs ? 'GPS, GLONASS, Galileo, QZSS, BeiDou' : undefined,
         nfc: hasPhoneRadios ? true : undefined,
         other:
           benchmark?.connectivity_other ??
@@ -3496,12 +3507,15 @@ export class ProductNormalizer {
         // A device gets only the loudspeaker and SAR its sources state (DOS/Rate#1748,
         // #1754); `null` in the registry means none is stated.
         loudspeaker: benchmark?.loudspeaker ?? undefined,
-        // Most laptops have a 3.5 mm jack: a laptop gets one only from a source
-        // (DOS/Rate#1754).
+        // A device outside the registry gets no jack value: many phones, tablets, headphones
+        // and most laptops have one (DOS/Rate#1754). A registry laptop gets one only from
+        // its entry; other registry devices keep "no jack" unless the entry says otherwise.
         headphone_jack_35mm:
-          categorySlug === 'laptops'
-            ? (benchmark?.headphone_jack_35mm ?? undefined)
-            : sourcedOr(benchmark?.headphone_jack_35mm, false),
+          benchmark === undefined
+            ? undefined
+            : categorySlug === 'laptops'
+              ? (benchmark.headphone_jack_35mm ?? undefined)
+              : sourcedOr(benchmark.headphone_jack_35mm, false),
         audio_features: benchmark?.audio_features ?? 'Dolby Atmos, Hi-Res Audio',
       },
       regulatory: {

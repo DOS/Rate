@@ -39,24 +39,32 @@ const CAMERA_CONTROL = 'Action Button, Camera Control, Volume, Power';
 const ISLAND = 'Dynamic Island, True Tone, Wide color (P3), Haptic Touch';
 const NO_ISLAND = 'True Tone, Wide color (P3), Haptic Touch';
 const MAGSAFE_QI2 = 'Sạc nhanh PD, Sạc không dây MagSafe/Qi2';
+const MAGSAFE_QI = 'Sạc không dây MagSafe/Qi';
+const QI = 'Sạc không dây Qi';
 const UWB = 'Ultra Wideband (UWB)';
 const UWB_SOS = 'Ultra Wideband (UWB), SOS vệ tinh';
 
 test('an iPhone outside the registry gets its generation’s Apple Tech Specs text', () => {
   // [title, keys, display features, charging, connectivity other]
-  const cases: Array<[string, string, string, string | undefined, string]> = [
-    ['Apple iPhone 11 64GB', RING, NO_ISLAND, undefined, UWB],
-    ['iPhone 12 mini 64GB', RING, NO_ISLAND, undefined, UWB],
+  const cases: Array<[string, string, string, string, string]> = [
+    ['Apple iPhone 11 64GB', RING, NO_ISLAND, QI, UWB],
+    ['iPhone 11Pro 64GB', RING, NO_ISLAND, QI, UWB],
+    ['iPhone 12 mini 64GB', RING, NO_ISLAND, MAGSAFE_QI, UWB],
+    ['iPhone 12mini 64GB', RING, NO_ISLAND, MAGSAFE_QI, UWB],
+    ['iPhone 12 Pro 128GB', RING, NO_ISLAND, MAGSAFE_QI, UWB],
     ['Apple iPhone 13 128GB', RING, NO_ISLAND, MAGSAFE_QI2, UWB],
-    ['iPhone 13 Pro Max 256GB', RING, NO_ISLAND, undefined, UWB],
-    ['Apple iPhone 14 128GB', RING, NO_ISLAND, undefined, UWB_SOS],
-    ['iPhone 14 Plus 128GB', RING, NO_ISLAND, undefined, UWB_SOS],
-    ['Apple iPhone 14 Pro Max 256GB', RING, ISLAND, undefined, UWB_SOS],
+    ['iPhone 13 mini 128GB', RING, NO_ISLAND, MAGSAFE_QI, UWB],
+    ['iPhone 13 Pro Max 256GB', RING, NO_ISLAND, MAGSAFE_QI, UWB],
+    ['Apple iPhone 14 128GB', RING, NO_ISLAND, MAGSAFE_QI, UWB_SOS],
+    ['iPhone 14 Plus 128GB', RING, NO_ISLAND, MAGSAFE_QI, UWB_SOS],
+    ['iphone 14 pro 128GB', RING, ISLAND, MAGSAFE_QI, UWB_SOS],
+    ['APPLE IPHONE 14 PRO MAX 256GB', RING, ISLAND, MAGSAFE_QI, UWB_SOS],
     ['iPhone 15 Plus 128GB', RING, ISLAND, MAGSAFE_QI2, UWB_SOS],
     ['Apple iPhone 15 Pro 128GB', ACTION, ISLAND, MAGSAFE_QI2, UWB_SOS],
-    ['iPhone 16 Plus 128GB', CAMERA_CONTROL, ISLAND, MAGSAFE_QI2, UWB_SOS],
+    ['iPhone 17 256GB', CAMERA_CONTROL, ISLAND, MAGSAFE_QI2, UWB_SOS],
     ['iPhone 17 Pro Max 256GB', CAMERA_CONTROL, ISLAND, MAGSAFE_QI2, UWB_SOS],
     ['iPhone Air 256GB', CAMERA_CONTROL, ISLAND, MAGSAFE_QI2, UWB_SOS],
+    ['iPhone 17 Air 256GB', CAMERA_CONTROL, ISLAND, MAGSAFE_QI2, UWB_SOS],
   ];
   for (const [title, keys, features, charging, other] of cases) {
     const n = normalize(title);
@@ -66,8 +74,13 @@ test('an iPhone outside the registry gets its generation’s Apple Tech Specs te
     assert.equal(out.display?.features, features, title);
     assert.equal(out.battery?.charging, charging, title);
     assert.equal(out.connectivity?.other, other, title);
+    // No checked page states "Dual-LED", the generic GNSS list or a jack value: none.
+    assert.equal(out.camera?.flash, undefined, title);
+    assert.equal(out.connectivity?.location, undefined, title);
+    assert.equal(out.multimedia?.headphone_jack_35mm, undefined, title);
+    assert.equal(out.connectivity?.nfc, true, title);
     // The battery and connectivity groups stay non-empty for the catalog audit.
-    for (const name of ['battery', 'connectivity'] as const) {
+    for (const name of ['battery', 'camera', 'connectivity', 'multimedia'] as const) {
       assert.equal(countPopulatedFieldGroups({ [name]: out[name] }), 1, `${title} ${name}`);
     }
   }
@@ -100,7 +113,6 @@ test('registry iPhones keep their previous output', () => {
     assert.equal(out.display?.features, ISLAND, title);
     assert.equal(out.battery?.charging, MAGSAFE_QI2, title);
     assert.equal(out.connectivity?.other, UWB_SOS, title);
-    assert.equal(out.camera?.flash, 'True Tone Dual-LED', title);
     assert.equal(out.connectivity?.location, 'GPS, GLONASS, Galileo, QZSS, BeiDou', title);
     assert.equal(out.connectivity?.nfc, true, title);
     assert.equal(out.multimedia?.headphone_jack_35mm, false, title);
@@ -132,7 +144,11 @@ test('laptops, tablets and earbuds get no rear flash, GPS or NFC no source state
     'Apple Watch Ultra 2 49mm',
     'iPad Air M2 11 inch 128GB',
   ]) {
-    assert.equal(normalize(title).specifications.camera?.flash, undefined, title);
+    const out = normalize(title).specifications;
+    assert.equal(out.camera?.flash, undefined, title);
+    // Tablets record video; a laptop, watch or earbuds has no rear video.
+    if (!title.startsWith('iPad')) assert.equal(out.camera?.video_recording, undefined, title);
+    assert.equal(countPopulatedFieldGroups({ camera: out.camera }), 1, title);
   }
   // A non-Apple tablet and the phones keep their flash; a watch keeps GPS and NFC.
   assert.equal(
@@ -148,7 +164,7 @@ test('laptops, tablets and earbuds get no rear flash, GPS or NFC no source state
   assert.equal(watch.connectivity?.nfc, true);
 });
 
-test('MacBooks get the headphone jack Apple lists; other laptops get no default', () => {
+test('MacBooks get the headphone jack Apple lists; a device outside the registry gets none', () => {
   for (const title of [
     'Apple MacBook Air M3 13 inch 256GB',
     'MacBook Air M4 13 inch 256GB',
@@ -159,12 +175,15 @@ test('MacBooks get the headphone jack Apple lists; other laptops get no default'
   for (const title of [
     'Laptop Dell XPS 13 512GB',
     'Laptop Lenovo ThinkPad X1 Carbon Gen 12 512GB',
+    'Xiaomi Redmi Note 99 Pro 256GB',
+    'Tai nghe JBL Tune 230NC',
+    'Samsung Galaxy Tab A9 64GB',
   ]) {
     const out = normalize(title).specifications;
     assert.equal(out.multimedia?.headphone_jack_35mm, undefined, title);
     assert.equal(countPopulatedFieldGroups({ multimedia: out.multimedia }), 1, title);
   }
-  // Earbuds keep "no jack".
+  // A registry phone or earbuds entry keeps its previous "no jack" (follow-up to source).
   assert.equal(normalize('Sony WF-1000XM5').specifications.multimedia?.headphone_jack_35mm, false);
 });
 

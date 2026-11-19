@@ -136,7 +136,7 @@ test('models without the new registry fields keep their previous output', () => 
     );
     assert.equal(
       out.battery?.charging,
-      iphone11 ? undefined : 'Sạc nhanh PD, Sạc không dây MagSafe/Qi2',
+      iphone11 ? 'Sạc không dây Qi' : 'Sạc nhanh PD, Sạc không dây MagSafe/Qi2',
       title
     );
     assert.equal(out.connectivity?.bluetooth, '5.3, A2DP, LE', title);
@@ -152,7 +152,8 @@ test('models without the new registry fields keep their previous output', () => 
     );
     // No source states their loudspeaker or SAR: no generic value (DOS/Rate#1748).
     assert.equal(out.multimedia?.loudspeaker, undefined, title);
-    assert.equal(out.multimedia?.headphone_jack_35mm, false, title);
+    // The registry phones keep "no jack"; the iPhone 11 outside it gets none (DOS/Rate#1754).
+    assert.equal(out.multimedia?.headphone_jack_35mm, iphone11 ? undefined : false, title);
     assert.equal(out.multimedia?.audio_features, 'Dolby Atmos, Hi-Res Audio', title);
     assert.equal(out.regulatory?.sar_head, undefined, title);
     assert.equal(out.regulatory?.sar_body, undefined, title);

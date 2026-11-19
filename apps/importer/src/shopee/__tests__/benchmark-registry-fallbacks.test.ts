@@ -90,7 +90,9 @@ test('models without the new registry fields keep their previous output', () => 
   const otherApple = normalize('Apple iPhone 11 64GB');
   assert.equal(otherApple.is_benchmark_enriched, false);
   assert.equal(otherApple.specifications.display?.refresh_rate_hz, 60);
-  assert.equal(otherApple.specifications.camera?.flash, 'True Tone Dual-LED');
+  // No checked Apple page states "Dual-LED": an iPhone outside the registry gets no flash
+  // (DOS/Rate#1754).
+  assert.equal(otherApple.specifications.camera?.flash, undefined);
 });
 
 test('a storage the model is not sold in keys as unknown, never as a sized phantom master', () => {
