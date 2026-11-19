@@ -13,6 +13,7 @@ import {
   PUBLIC_API_CORS_HEADERS,
   countPlausibleInStockOffers,
   jsonApiError,
+  parseFiniteDecimalInput,
   parseWatchlistSlugsParam,
   resolveWatchlistMasterPriceBounds,
   selectBestOfferFromListings,
@@ -53,22 +54,10 @@ export function resolveWatchlistMerchantCount(
       ? Math.min(10_000, Math.floor(plausibleInStockOffersCount))
       : 0;
   if (
-    typeof rawMerchantCount !== 'boolean' &&
-    rawMerchantCount !== null &&
-    rawMerchantCount !== undefined &&
-    !(typeof rawMerchantCount === 'string' && !rawMerchantCount.trim())
+    typeof rawMerchantCount === 'number' ||
+    typeof rawMerchantCount === 'string'
   ) {
-    const trimmed =
-      typeof rawMerchantCount === 'string'
-        ? rawMerchantCount.replace(/\p{Cc}+/gu, '').trim()
-        : rawMerchantCount;
-    if (
-      typeof trimmed === 'string' &&
-      (!trimmed || /^[+-]?0[xbo]/i.test(trimmed))
-    ) {
-      return safeOffersCount;
-    }
-    const n = Number(trimmed);
+    const n = parseFiniteDecimalInput(rawMerchantCount);
     if (Number.isFinite(n) && n >= 0) {
       const floored = Math.min(10_000, Math.floor(n));
       if (floored > 0 || safeOffersCount === 0) {
@@ -240,12 +229,18 @@ const PriceAlertBodySchema = z.object({
     .toLowerCase()
     .max(160)
     .regex(/^[a-z0-9]+(?:[._-][a-z0-9]+)*$/, 'Invalid product slug'),
-  targetPrice: z.coerce
-    .number()
-    .finite()
-    .positive('targetPrice must be greater than 0')
-    .max(MAX_VALID_VND_PRICE)
-    .transform((v) => Math.round(v)),
+  targetPrice: z.preprocess(
+    (val) =>
+      typeof val === 'number' || typeof val === 'string'
+        ? parseFiniteDecimalInput(val)
+        : Number.NaN,
+    z
+      .number()
+      .finite()
+      .positive('targetPrice must be greater than 0')
+      .max(MAX_VALID_VND_PRICE)
+      .transform((v) => Math.round(v))
+  ),
   locale: z.enum(['vi', 'en', 'cs']).catch('vi'),
 });
 

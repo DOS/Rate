@@ -9,6 +9,28 @@
  * the enricher filled them.
  */
 import assert from 'node:assert/strict';
+import { NextRequest } from 'next/server';
+import {
+  parseBoundedIntParam,
+  parseBoundedNumberParam,
+  parseBoundedPositiveIntArrayParam,
+  parseCompareSlugsParam,
+  parseFiniteDecimalInput,
+  parseOptionalVndPriceParam,
+  parseProductsFilterBounds,
+  parseReviewsQueryParams,
+  parseVersusQueryParams,
+  resolveInspectObservedPrices,
+} from '@/server/rate/api-handler';
+import {
+  evaluateExtensionPriceVerdict,
+  lookupExtensionProduct,
+} from '@/server/rate/extension';
+import * as compareRouteStatic from '../compare/route';
+import * as inspectRouteStatic from '../inspect/route';
+import * as versusRouteStatic from '../versus/route';
+import * as watchlistRouteStatic from '../watchlist/route';
+import { resolveWatchlistMerchantCount } from '../watchlist/route';
 
 process.env.NEXT_PUBLIC_SUPABASE_URL = 'https://stub.supabase.test';
 process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = 'anon-test-key';
@@ -66,6 +88,8 @@ const WATCH = phoneShaped(
 let catalog: unknown[] = [];
 // What a `master_products` read answers (detail and compare routes).
 let masterRows: unknown[] = [];
+// What an `items` read answers when `RATE_ITEM_MODEL` is active.
+let itemRows: Array<Record<string, unknown>> = [];
 // What a `merchants` read answers (merchant list and directory routes).
 let merchantRows: unknown[] = [];
 // What `v_products_with_merchant_trust` and `products` answer (offer reads).
@@ -100,6 +124,12 @@ globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
         : input.url;
   calls.push(url);
   const { pathname, searchParams } = new URL(url);
+  if (pathname === '/auth/v1/user') {
+    return jsonResponse(200, {
+      id: '33333333-3333-4333-8333-333333331765',
+      email: 'tester@rate.vn',
+    });
+  }
   if (pathname === '/rest/v1/categories') {
     return jsonResponse(200, [{ id: 'cat-1' }]);
   }
@@ -111,16 +141,50 @@ globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
       catalog.slice(from, from + Number(searchArgs.p_limit ?? 200))
     );
   }
-  if (pathname === '/rest/v1/master_products') {
-    // Honour slug and id filters (`eq.` or `in.(...)`) so unknown rows miss.
+  if (pathname === '/rest/v1/items') {
+    const from = Number(searchParams.get('offset') ?? 0);
+    if (from > 0) return jsonResponse(200, []);
     const wantedSlugs = postgrestWantedValues(searchParams.get('slug'));
     const wantedIds = postgrestWantedValues(searchParams.get('id'));
+    const wantedStatuses = postgrestWantedValues(searchParams.get('status'));
+    return jsonResponse(
+      200,
+      itemRows.filter((row) => {
+        if (wantedSlugs && !wantedSlugs.includes(String(row.slug ?? ''))) {
+          return false;
+        }
+        if (wantedIds && !wantedIds.includes(String(row.id ?? ''))) {
+          return false;
+        }
+        if (
+          wantedStatuses &&
+          !wantedStatuses.includes(String(row.status ?? 'published'))
+        ) {
+          return false;
+        }
+        return true;
+      })
+    );
+  }
+  if (pathname === '/rest/v1/master_products') {
+    const from = Number(searchParams.get('offset') ?? 0);
+    if (from > 0) return jsonResponse(200, []);
+    // Honour slug, id and item_id filters (`eq.`, `in.(...)`, `not.is.null`) so unknown rows miss.
+    const wantedSlugs = postgrestWantedValues(searchParams.get('slug'));
+    const wantedIds = postgrestWantedValues(searchParams.get('id'));
+    const rawItemFilter = searchParams.get('item_id');
+    const wantedItemIds = postgrestWantedValues(rawItemFilter);
+    const requireNonNullItem = rawItemFilter === 'not.is.null';
     return jsonResponse(
       200,
       masterRows.filter((row) => {
-        const r = row as { id: string; slug: string };
+        const r = row as { id: string; slug: string; item_id?: string | null };
         if (wantedSlugs && !wantedSlugs.includes(r.slug)) return false;
         if (wantedIds && !wantedIds.includes(r.id)) return false;
+        if (requireNonNullItem && !r.item_id) return false;
+        if (wantedItemIds && !wantedItemIds.includes(String(r.item_id ?? ''))) {
+          return false;
+        }
         return true;
       })
     );
@@ -1772,6 +1836,827 @@ async function testVersusAndLeaderboardSpecScope() {
   );
 }
 
+// DOS/Rate#1765: Reject embedded control-char digit joining & hex/octal versus weights,
+// guard unpriced 0 VND strikethroughs & unavailable genuine_deal verdicts, and resolve
+// Item-model slugs / @variant_key tokens across versus, compare, and extension topRival.
+async function testControlCharsUnavailableVerdictsAndItemRouting() {
+  // 1. Numeric query parsers preserve leading/trailing control-char trimming
+  // while rejecting embedded control-char/whitespace digit joining and hex/octal weights.
+  assert.equal(parseFiniteDecimalInput('\u000036'), 36);
+  assert.equal(parseFiniteDecimalInput(' \u000025000000\n '), 25_000_000);
+  assert.equal(Number.isNaN(parseFiniteDecimalInput('2\u00005000000')), true);
+  assert.equal(Number.isNaN(parseFiniteDecimalInput('1\t0')), true);
+  assert.equal(Number.isNaN(parseFiniteDecimalInput('1\n0')), true);
+  assert.equal(Number.isNaN(parseFiniteDecimalInput('0x10')), true);
+  assert.equal(Number.isNaN(parseFiniteDecimalInput('-0b101')), true);
+  assert.equal(Number.isNaN(parseFiniteDecimalInput('0o77')), true);
+
+  assert.equal(parseBoundedIntParam('\u000036', 24, 1, 100), 36);
+  assert.equal(parseBoundedIntParam('1\t0', 24, 1, 100), 24);
+  assert.equal(parseBoundedIntParam('3\u00006', 24, 1, 100), 24);
+  assert.equal(parseBoundedNumberParam('\u00004.5', 0, 5), 4.5);
+  assert.equal(parseBoundedNumberParam('4\u0000.5', 0, 5), undefined);
+  assert.equal(parseOptionalVndPriceParam('\u000025000000'), 25_000_000);
+  assert.equal(parseOptionalVndPriceParam('2\u00005000000'), null);
+  assert.equal(parseOptionalVndPriceParam('1\t000000'), null);
+  assert.deepEqual(
+    parseBoundedPositiveIntArrayParam('1\u00002,\u000016,2\t4,32', 128),
+    [16, 32]
+  );
+
+  assert.equal(
+    parseReviewsQueryParams(
+      new URLSearchParams({ slug: 'iphone-16', limit: '1\u00000' })
+    ),
+    null
+  );
+  assert.equal(
+    parseReviewsQueryParams(
+      new URLSearchParams({ slug: 'iphone-16', limit: '1\t0' })
+    ),
+    null
+  );
+  assert.equal(
+    parseReviewsQueryParams(
+      new URLSearchParams({ slug: 'iphone-\u000016', limit: '20' })
+    ),
+    null
+  );
+  assert.equal(
+    parseReviewsQueryParams(
+      new URLSearchParams({
+        masterProductId: '11111111-\u00001111-4111-8111-111111111111',
+      })
+    ),
+    null
+  );
+  assert.equal(
+    parseReviewsQueryParams(
+      new URLSearchParams({ slug: '\u0000iphone-16\n', limit: '\u000020' })
+    )?.limit,
+    20
+  );
+
+  assert.equal(
+    parseProductsFilterBounds(
+      new URLSearchParams({ category: 'smart\u0000phones' })
+    ),
+    null
+  );
+  assert.equal(
+    parseProductsFilterBounds(
+      new URLSearchParams({
+        category: '\u0000smartphones\t',
+        minPrice: '2\u00005000000',
+      })
+    )?.minPrice,
+    undefined
+  );
+
+  assert.equal(resolveWatchlistMerchantCount('1\u00005', 2, 20_000_000), 2);
+  assert.equal(resolveWatchlistMerchantCount('1\t0', 2, 20_000_000), 2);
+  assert.equal(resolveWatchlistMerchantCount('0x10', 2, 20_000_000), 2);
+  assert.equal(resolveWatchlistMerchantCount('\u00005', 2, 20_000_000), 5);
+
+  assert.equal(
+    parseVersusQueryParams(
+      new URLSearchParams({ pair: 'iphone-\u000016-vs-galaxy-s25' })
+    ),
+    null
+  );
+  assert.deepEqual(
+    parseCompareSlugsParam('apple-iphone-16@128gb,samsung-galaxy-s25@512gb'),
+    ['apple-iphone-16@128gb', 'samsung-galaxy-s25@512gb']
+  );
+
+  // 2. resolveInspectObservedPrices never pairs masterMinPrice with an unpriced
+  // matchedOffer's price_original, and evaluateExtensionPriceVerdict suppresses
+  // genuine_deal on unavailable offers unless a live caller price overrode it.
+  assert.deepEqual(
+    resolveInspectObservedPrices({
+      queryPrice: null,
+      queryOriginalPrice: null,
+      matchedOfferPriceCurrent: 0,
+      matchedOfferPriceOriginal: 32_000_000,
+      masterMinPrice: 21_000_000,
+    }),
+    { observedPrice: 21_000_000, observedOriginalPrice: 0 }
+  );
+  assert.deepEqual(
+    resolveInspectObservedPrices({
+      queryPrice: null,
+      queryOriginalPrice: null,
+      matchedOfferPriceCurrent: '2\u00002000000',
+      matchedOfferPriceOriginal: 32_000_000,
+      masterMinPrice: 21_000_000,
+    }),
+    { observedPrice: 21_000_000, observedOriginalPrice: 0 }
+  );
+
+  const mkMerchantOffer = (
+    id: string,
+    priceCurrent: number | string,
+    availability: 'in_stock' | 'out_of_stock' | 'discontinued',
+    priceOriginal: number | null = null
+  ) =>
+    ({
+      id,
+      merchant: {
+        id: `m-${id}`,
+        name: `Shop ${id}`,
+        platform: 'shopee',
+        is_official: true,
+        trust_score: 90,
+        risk_score: 10,
+      },
+      platform: 'shopee',
+      platform_item_id: id,
+      title: `Phone ${id}`,
+      price_current: priceCurrent as number,
+      price_original: priceOriginal,
+      stock: availability === 'in_stock' ? 5 : 0,
+      availability,
+      rating_star: 4.9,
+      rating_count: 20,
+      url: `https://shopee.vn/product/88201679/${id}`,
+    }) as never;
+
+  const mixedOffers = [
+    mkMerchantOffer('99176501', 17_990_000, 'out_of_stock'),
+    mkMerchantOffer('99176502', 18_200_000, 'discontinued'),
+    mkMerchantOffer('99176503', 21_500_000, 'out_of_stock', 29_990_000),
+    mkMerchantOffer('99176504', 21_000_000, 'in_stock'),
+    mkMerchantOffer('99176505', 22_000_000, 'in_stock'),
+  ];
+
+  const soldOutStoredVerdict = evaluateExtensionPriceVerdict({
+    isAccessory: false,
+    accessoryReason: null,
+    isAmbiguousVariant: false,
+    observedPrice: 17_990_000,
+    observedOriginalPrice: null,
+    offers: mixedOffers,
+    observedOfferId: '99176501',
+    priceHistory: null,
+  });
+  assert.equal(soldOutStoredVerdict.verdict, 'fair_market_price');
+
+  const discontinuedStoredVerdict = evaluateExtensionPriceVerdict({
+    isAccessory: false,
+    accessoryReason: null,
+    isAmbiguousVariant: false,
+    observedPrice: 18_200_000,
+    observedOriginalPrice: null,
+    offers: mixedOffers,
+    observedOfferId: '99176502',
+    priceHistory: null,
+  });
+  assert.equal(discontinuedStoredVerdict.verdict, 'fair_market_price');
+
+  const soldOutFakeSaleVerdict = evaluateExtensionPriceVerdict({
+    isAccessory: false,
+    accessoryReason: null,
+    isAmbiguousVariant: false,
+    observedPrice: 21_500_000,
+    observedOriginalPrice: 29_990_000,
+    offers: mixedOffers,
+    observedOfferId: '99176503',
+    priceHistory: null,
+  });
+  assert.equal(soldOutFakeSaleVerdict.verdict, 'inflated_fake_sale');
+
+  const liveOverrideVerdict = evaluateExtensionPriceVerdict({
+    isAccessory: false,
+    accessoryReason: null,
+    isAmbiguousVariant: false,
+    observedPrice: 17_990_000,
+    observedOriginalPrice: null,
+    offers: mixedOffers,
+    observedOfferId: '99176501',
+    hasLiveObservedPrice: true,
+    priceHistory: null,
+  });
+  assert.equal(liveOverrideVerdict.verdict, 'genuine_deal');
+
+  // Embedded control-char price_current in all-sold-out fallback median is ignored,
+  // while leading control-char price_current is preserved.
+  const allSoldOutControlVerdict = evaluateExtensionPriceVerdict({
+    isAccessory: false,
+    accessoryReason: null,
+    isAmbiguousVariant: false,
+    observedPrice: 500_000,
+    observedOriginalPrice: null,
+    offers: [
+      mkMerchantOffer('so-bait', 500_000, 'out_of_stock'),
+      mkMerchantOffer('so-corrupt', '2\u00005000000', 'out_of_stock'),
+      mkMerchantOffer('so-clean-lead', '\u000020000000', 'out_of_stock'),
+      mkMerchantOffer('so-clean-2', 22_000_000, 'discontinued'),
+    ],
+    observedOfferId: 'so-bait',
+    priceHistory: null,
+  });
+  assert.equal(allSoldOutControlVerdict.implausiblyLow, true);
+  assert.equal(
+    allSoldOutControlVerdict.messageParams?.marketMedianPrice,
+    21_000_000
+  );
+
+  // 3. Route-level verification for inspect, versus weights, extension topRival,
+  // and RATE_ITEM_MODEL Item slugs + @variant_key tokens on versus and compare.
+  const ITEM_IPHONE = 'a1111111-1111-4111-8111-111111111765';
+  const ITEM_GALAXY = 'a2222222-2222-4222-8222-222222221765';
+  const V_IP_128 = {
+    ...phoneShaped(
+      'b1111111-1111-4111-8111-111111111128',
+      'apple-iphone-16-128gb-1765',
+      'smartphones'
+    ),
+    item_id: ITEM_IPHONE,
+    name: 'Apple iPhone 16 128GB',
+    brand: 'Apple',
+    model: 'iPhone 16',
+    model_key: 'apple:iphone-16-1765:128gb',
+    variant_key: '128gb',
+    variant_name: '128GB',
+    storage_gb: 128,
+    min_price: 20_990_000,
+    max_price: 21_990_000,
+    merchant_count: 2,
+    rating_score: 4.8,
+    user_rating_weighted: 4.8,
+    average_rating: 4.8,
+    total_reviews: 30,
+    expert_criteria_scores: {
+      screen: 8.8,
+      performance: 9.2,
+      camera: 8.9,
+      battery: 8.5,
+      value: 8.6,
+    },
+  };
+  const V_IP_256 = {
+    ...V_IP_128,
+    id: 'b1111111-1111-4111-8111-111111111256',
+    slug: 'apple-iphone-16-256gb-1765',
+    name: 'Apple iPhone 16 256GB',
+    model_key: 'apple:iphone-16-1765:256gb',
+    variant_key: '256gb',
+    variant_name: '256GB',
+    storage_gb: 256,
+    min_price: 23_990_000,
+    max_price: 24_990_000,
+  };
+  const V_S25_256 = {
+    ...phoneShaped(
+      'b2222222-2222-4222-8222-222222222256',
+      'samsung-galaxy-s25-256gb-1765',
+      'smartphones'
+    ),
+    item_id: ITEM_GALAXY,
+    name: 'Samsung Galaxy S25 256GB',
+    brand: 'Samsung',
+    model: 'Galaxy S25',
+    model_key: 'samsung:galaxy-s25-1765:256gb',
+    variant_key: '256gb',
+    variant_name: '256GB',
+    storage_gb: 256,
+    min_price: 19_990_000,
+    max_price: 20_990_000,
+    merchant_count: 2,
+    rating_score: 4.7,
+    user_rating_weighted: 4.7,
+    average_rating: 4.7,
+    total_reviews: 25,
+    expert_criteria_scores: {
+      screen: 9.0,
+      performance: 9.0,
+      camera: 8.6,
+      battery: 8.4,
+      value: 8.9,
+    },
+  };
+  const V_S25_512 = {
+    ...V_S25_256,
+    id: 'b2222222-2222-4222-8222-222222222512',
+    slug: 'samsung-galaxy-s25-512gb-1765',
+    name: 'Samsung Galaxy S25 512GB',
+    model_key: 'samsung:galaxy-s25-1765:512gb',
+    variant_key: '512gb',
+    variant_name: '512GB',
+    storage_gb: 512,
+    min_price: 22_990_000,
+    max_price: 23_990_000,
+  };
+
+  const prevFlag = process.env.RATE_ITEM_MODEL;
+  try {
+    delete process.env.RATE_ITEM_MODEL;
+    masterRows = [V_IP_128, V_IP_256, V_S25_256, V_S25_512];
+    catalog = [V_IP_128, V_IP_256, V_S25_256];
+    trustViewRows = [
+      {
+        id: 'off-zero-orig',
+        cluster_id: V_IP_128.id,
+        merchant_id: 'm-zero',
+        platform: 'shopee',
+        title: 'Apple iPhone 16 128GB Unpriced',
+        price_current: 0,
+        price_original: 32_000_000,
+        stock: 0,
+        url: 'https://shopee.vn/product/88201679/77176501',
+        merchant_name: 'Zero Shop',
+        merchant_is_official: false,
+        threat_risk_score: 10,
+      },
+      {
+        id: 'off-sold-low',
+        cluster_id: V_IP_128.id,
+        merchant_id: 'm-sold',
+        platform: 'shopee',
+        title: 'Apple iPhone 16 128GB Sold Out',
+        price_current: 17_990_000,
+        price_original: null,
+        stock: 0,
+        url: 'https://shopee.vn/product/88201679/77176502',
+        merchant_name: 'Sold Shop',
+        merchant_is_official: true,
+        threat_risk_score: 5,
+      },
+      {
+        id: 'off-live-1',
+        cluster_id: V_IP_128.id,
+        merchant_id: 'm-live-1',
+        platform: 'shopee',
+        title: 'Apple iPhone 16 128GB Official',
+        price_current: 20_990_000,
+        price_original: null,
+        stock: 5,
+        url: 'https://shopee.vn/product/88201679/77176503',
+        merchant_name: 'Apple Flagship',
+        merchant_is_official: true,
+        threat_risk_score: 5,
+      },
+      {
+        id: 'off-live-2',
+        cluster_id: V_IP_128.id,
+        merchant_id: 'm-live-2',
+        platform: 'lazada',
+        title: 'Apple iPhone 16 128GB Mall',
+        price_current: 21_490_000,
+        price_original: null,
+        stock: 5,
+        url: 'https://www.lazada.vn/products/i77176504.html',
+        merchant_name: 'LazMall',
+        merchant_is_official: true,
+        threat_risk_score: 5,
+      },
+    ];
+    productRows = [
+      {
+        id: 'off-zero-orig',
+        cluster_id: V_IP_128.id,
+        merchant_id: 'm-zero',
+        platform_item_id: '88201679_77176501',
+        availability: 'out_of_stock',
+      },
+      {
+        id: 'off-sold-low',
+        cluster_id: V_IP_128.id,
+        merchant_id: 'm-sold',
+        platform_item_id: '88201679_77176502',
+        availability: 'out_of_stock',
+      },
+      {
+        id: 'off-live-1',
+        cluster_id: V_IP_128.id,
+        merchant_id: 'm-live-1',
+        platform_item_id: '88201679_77176503',
+        availability: 'in_stock',
+      },
+      {
+        id: 'off-live-2',
+        cluster_id: V_IP_128.id,
+        merchant_id: 'm-live-2',
+        platform_item_id: '77176504',
+        availability: 'in_stock',
+      },
+    ];
+
+    // Inspect on 0 VND sold-out listing never pairs its 32M price_original with
+    // masterMinPrice AND never awards genuine_deal when masterMinPrice == histMin.
+    const fullTrustRows = trustViewRows;
+    const fullProductRows = productRows;
+    trustViewRows = fullTrustRows.filter((r) => r.id !== 'off-sold-low');
+    productRows = fullProductRows.filter((r) => r.id !== 'off-sold-low');
+    const zeroInspectRes = await inspectRouteStatic.GET(
+      new NextRequest(
+        'http://localhost/api/v1/rate/inspect?url=https://shopee.vn/product/88201679/77176501',
+        { headers: { 'x-forwarded-for': '198.51.100.91' } }
+      )
+    );
+    assert.equal(zeroInspectRes.status, 200);
+    const zeroInspectBody = await zeroInspectRes.json();
+    assert.equal(zeroInspectBody.data.priceVerdict.observedOriginalPrice, null);
+    assert.equal(
+      zeroInspectBody.data.priceVerdict.verdict,
+      'fair_market_price'
+    );
+    trustViewRows = fullTrustRows;
+    productRows = fullProductRows;
+
+    // Inspect on out-of-stock listing suppresses genuine_deal unless ?price= overrides it.
+    const soldInspectRes = await inspectRouteStatic.GET(
+      new NextRequest(
+        'http://localhost/api/v1/rate/inspect?url=https://shopee.vn/product/88201679/77176502',
+        { headers: { 'x-forwarded-for': '198.51.100.92' } }
+      )
+    );
+    assert.equal(soldInspectRes.status, 200);
+    const soldInspectBody = await soldInspectRes.json();
+    assert.equal(
+      soldInspectBody.data.priceVerdict.verdict,
+      'fair_market_price'
+    );
+
+    const liveInspectRes = await inspectRouteStatic.GET(
+      new NextRequest(
+        'http://localhost/api/v1/rate/inspect?url=https://shopee.vn/product/88201679/77176502&price=17990000',
+        { headers: { 'x-forwarded-for': '198.51.100.93' } }
+      )
+    );
+    assert.equal(liveInspectRes.status, 200);
+    const liveInspectBody = await liveInspectRes.json();
+    assert.equal(liveInspectBody.data.priceVerdict.verdict, 'genuine_deal');
+
+    // Versus route rejects hex/octal/binary and embedded control-char weights,
+    // while preserving leading control-char trimming.
+    const badWeightsRes = await versusRouteStatic.GET(
+      new NextRequest(
+        `http://localhost/api/v1/rate/versus?pair=${V_IP_128.slug}-vs-${V_S25_256.slug}&w_screen=0x40&w_performance=0o77&w_camera=0b1010&w_battery=3%005&w_value=1%090`
+      )
+    );
+    assert.equal(badWeightsRes.status, 200);
+    const badWeightsBody = await badWeightsRes.json();
+    assert.equal(badWeightsBody.applied_persona, 'default');
+    assert.deepEqual(badWeightsBody.applied_weights, {
+      screen: 20,
+      performance: 20,
+      camera: 20,
+      battery: 20,
+      value: 20,
+    });
+
+    const trimmedWeightRes = await versusRouteStatic.GET(
+      new NextRequest(
+        `http://localhost/api/v1/rate/versus?pair=${V_IP_128.slug}-vs-${V_S25_256.slug}&w_screen=%0060&w_camera=0`
+      )
+    );
+    assert.equal(trimmedWeightRes.status, 200);
+    const trimmedWeightBody = await trimmedWeightRes.json();
+    assert.equal(trimmedWeightBody.applied_persona, 'custom');
+
+    // Extension lookup with flag off skips sibling 256GB variant and picks Samsung rival.
+    const offLookup = await lookupExtensionProduct({
+      url: 'https://shopee.vn/product/88201679/77176502',
+      title: 'Apple iPhone 16 128GB',
+      mode: 'pill',
+    });
+    assert.equal(offLookup.priceAssessment.verdict, 'fair_market_price');
+    assert.equal(offLookup.topRivalName, V_S25_256.name);
+    assert.equal(
+      offLookup.versusUrl,
+      `/compare/${V_IP_128.slug}-vs-${V_S25_256.slug}`
+    );
+
+    // Sibling-only peers produce no self/sibling topRival.
+    catalog = [V_IP_128, V_IP_256];
+    const siblingOnlyLookup = await lookupExtensionProduct({
+      url: 'https://shopee.vn/product/88201679/77176503',
+      title: 'Apple iPhone 16 128GB',
+      mode: 'pill',
+    });
+    assert.equal(siblingOnlyLookup.topRivalName, null);
+    assert.equal(siblingOnlyLookup.versusUrl, null);
+
+    // Enable RATE_ITEM_MODEL: extension topRival, /versus, and /compare resolve Item slugs & @variant_key.
+    process.env.RATE_ITEM_MODEL = 'item';
+    itemRows = [
+      {
+        id: ITEM_IPHONE,
+        item_key: 'apple:iphone-16-1765',
+        slug: 'apple-iphone-16-1765',
+        name: 'Apple iPhone 16',
+        brand: 'Apple',
+        model: 'iPhone 16',
+        category_id: 'cat-1',
+        status: 'published',
+        default_variant_id: V_IP_256.id,
+        min_price: 20_990_000,
+        max_price: 24_990_000,
+        price_variant_count: 2,
+        merchant_count: 2,
+        listing_count: 3,
+        unknown_variant_listing_count: 0,
+        updated_at: '2026-11-19T00:00:00Z',
+      },
+      {
+        id: ITEM_GALAXY,
+        item_key: 'samsung:galaxy-s25-1765',
+        slug: 'samsung-galaxy-s25-1765',
+        name: 'Samsung Galaxy S25',
+        brand: 'Samsung',
+        model: 'Galaxy S25',
+        category_id: 'cat-1',
+        status: 'published',
+        default_variant_id: V_S25_256.id,
+        min_price: 19_990_000,
+        max_price: 23_990_000,
+        price_variant_count: 2,
+        merchant_count: 2,
+        listing_count: 2,
+        unknown_variant_listing_count: 0,
+        updated_at: '2026-11-19T00:00:00Z',
+      },
+    ];
+    catalog = [V_IP_128, V_IP_256, V_S25_256];
+
+    const onLookup = await lookupExtensionProduct({
+      url: 'https://shopee.vn/product/88201679/77176503',
+      title: 'Apple iPhone 16 128GB',
+      mode: 'pill',
+    });
+    assert.equal(onLookup.topRivalName, V_S25_256.name);
+    assert.equal(
+      onLookup.versusUrl,
+      '/compare/apple-iphone-16-1765-vs-samsung-galaxy-s25-1765'
+    );
+
+    const vsItemRes = await versusRouteStatic.GET(
+      new NextRequest(
+        'http://localhost/api/v1/rate/versus?pair=samsung-galaxy-s25-1765-vs-apple-iphone-16-1765'
+      )
+    );
+    assert.equal(vsItemRes.status, 200);
+    const vsItemBody = await vsItemRes.json();
+    assert.equal(vsItemBody.product_a.slug, V_S25_256.slug);
+    assert.equal(vsItemBody.product_b.slug, V_IP_256.slug);
+    assert.equal(
+      vsItemBody.versus_url,
+      '/compare/apple-iphone-16-1765-vs-samsung-galaxy-s25-1765'
+    );
+
+    const vsPinnedRes = await versusRouteStatic.GET(
+      new NextRequest(
+        'http://localhost/api/v1/rate/versus?slugA=apple-iphone-16-1765@128gb&slugB=samsung-galaxy-s25-1765@512gb'
+      )
+    );
+    assert.equal(vsPinnedRes.status, 200);
+    const vsPinnedBody = await vsPinnedRes.json();
+    assert.equal(vsPinnedBody.product_a.slug, V_IP_128.slug);
+    assert.equal(vsPinnedBody.product_b.slug, V_S25_512.slug);
+    assert.equal(
+      vsPinnedBody.versus_url,
+      '/compare/apple-iphone-16-1765-vs-samsung-galaxy-s25-1765'
+    );
+
+    const vsSameItemRes = await versusRouteStatic.GET(
+      new NextRequest(
+        `http://localhost/api/v1/rate/versus?pair=${V_IP_128.slug}-vs-${V_IP_256.slug}`
+      )
+    );
+    assert.equal(vsSameItemRes.status, 404);
+
+    const vsSamePinnedItemRes = await versusRouteStatic.GET(
+      new NextRequest(
+        'http://localhost/api/v1/rate/versus?pair=apple-iphone-16-1765@128gb-vs-apple-iphone-16-1765@256gb'
+      )
+    );
+    assert.equal(vsSamePinnedItemRes.status, 404);
+
+    const cmpItemRes = await compareRouteStatic.GET(
+      new NextRequest(
+        'http://localhost/api/v1/rate/compare?slugs=apple-iphone-16-1765,samsung-galaxy-s25-1765'
+      )
+    );
+    assert.equal(cmpItemRes.status, 200);
+    const cmpItemBody = await cmpItemRes.json();
+    assert.deepEqual(
+      cmpItemBody.data.map((p: { slug: string }) => p.slug),
+      [V_IP_256.slug, V_S25_256.slug]
+    );
+    assert.deepEqual(cmpItemBody.not_found_slugs, []);
+    assert.deepEqual(cmpItemBody.excluded_cross_category_slugs, []);
+
+    const cmpPinnedRes = await compareRouteStatic.GET(
+      new NextRequest(
+        'http://localhost/api/v1/rate/compare?slugs=apple-iphone-16-1765@128gb,apple-iphone-16-1765@256gb,samsung-galaxy-s25-1765@512gb'
+      )
+    );
+    assert.equal(cmpPinnedRes.status, 200);
+    const cmpPinnedBody = await cmpPinnedRes.json();
+    assert.deepEqual(
+      cmpPinnedBody.data.map((p: { slug: string }) => p.slug),
+      [V_IP_128.slug, V_S25_512.slug]
+    );
+    assert.deepEqual(cmpPinnedBody.not_found_slugs, []);
+
+    // Unresolved tokens paired with a valid Item slug stay in not_found_slugs,
+    // legacy _prefix masters still compare, underscore variant_key pins resolve,
+    // and diagnostic arrays report the caller's requested tokens.
+    const LEGACY_UNDERSCORE = {
+      ...V_S25_256,
+      id: 'b3333333-3333-4333-8333-333333331765',
+      item_id: null,
+      slug: '_legacy-phone-1765',
+      name: 'Legacy Phone 1765',
+      model: 'Legacy 1765',
+      model_key: 'legacy:phone-1765:256gb',
+    };
+    const V_S25_CELLULAR = {
+      ...V_S25_512,
+      id: 'b2222222-2222-4222-8222-222222222999',
+      slug: 'samsung-galaxy-s25-256gb-cellular-1765',
+      name: 'Samsung Galaxy S25 256GB Cellular',
+      model_key: 'samsung:galaxy-s25-1765:256gb_cellular',
+      variant_key: '256gb_cellular',
+      variant_name: '256GB Cellular',
+    };
+    const CROSS_WATCH_ITEM = 'a9999999-9999-4999-8999-999999991765';
+    const V_WATCH_64 = {
+      ...phoneShaped(
+        'b9999999-9999-4999-8999-999999991765',
+        'apple-watch-cross-64gb-1765',
+        'smartwatches'
+      ),
+      item_id: CROSS_WATCH_ITEM,
+      variant_key: '64gb',
+      variant_name: '64GB',
+    };
+    masterRows = [
+      V_IP_128,
+      V_IP_256,
+      V_S25_256,
+      V_S25_512,
+      V_S25_CELLULAR,
+      LEGACY_UNDERSCORE,
+      V_WATCH_64,
+    ];
+    itemRows = [
+      ...itemRows,
+      {
+        id: CROSS_WATCH_ITEM,
+        item_key: 'apple:watch-cross-1765',
+        slug: 'apple-watch-cross-1765',
+        name: 'Apple Watch Cross',
+        brand: 'Apple',
+        model: 'Watch Cross',
+        category_id: 'cat-1',
+        status: 'published',
+        default_variant_id: V_WATCH_64.id,
+        min_price: 9_990_000,
+        max_price: 9_990_000,
+        price_variant_count: 1,
+        merchant_count: 1,
+        listing_count: 1,
+        unknown_variant_listing_count: 0,
+        updated_at: '2026-11-19T00:00:00Z',
+      },
+    ];
+
+    const cmpMixedMissingRes = await compareRouteStatic.GET(
+      new NextRequest(
+        'http://localhost/api/v1/rate/compare?slugs=apple-iphone-16-1765@128gb,_legacy-phone-1765,apple-watch-cross-1765@64gb,missing-1765@64gb'
+      )
+    );
+    assert.equal(cmpMixedMissingRes.status, 200);
+    const cmpMixedMissingBody = await cmpMixedMissingRes.json();
+    assert.deepEqual(
+      cmpMixedMissingBody.data.map((p: { slug: string }) => p.slug),
+      [V_IP_128.slug, LEGACY_UNDERSCORE.slug]
+    );
+    assert.deepEqual(cmpMixedMissingBody.excluded_cross_category_slugs, [
+      'apple-watch-cross-1765@64gb',
+    ]);
+    assert.deepEqual(cmpMixedMissingBody.not_found_slugs, [
+      'missing-1765@64gb',
+    ]);
+
+    const vsUnderscorePinRes = await versusRouteStatic.GET(
+      new NextRequest(
+        'http://localhost/api/v1/rate/versus?slugA=apple-iphone-16-1765@128gb&slugB=samsung-galaxy-s25-1765@256gb_cellular'
+      )
+    );
+    assert.equal(vsUnderscorePinRes.status, 200);
+    const vsUnderscorePinBody = await vsUnderscorePinRes.json();
+    assert.equal(vsUnderscorePinBody.product_a.slug, V_IP_128.slug);
+    assert.equal(vsUnderscorePinBody.product_b.slug, V_S25_CELLULAR.slug);
+    assert.equal(
+      vsUnderscorePinBody.versus_url,
+      '/compare/apple-iphone-16-1765-vs-samsung-galaxy-s25-1765'
+    );
+
+    const vsLegacyMixRes = await versusRouteStatic.GET(
+      new NextRequest(
+        'http://localhost/api/v1/rate/versus?pair=_legacy-phone-1765-vs-apple-iphone-16-1765'
+      )
+    );
+    assert.equal(vsLegacyMixRes.status, 200);
+    const vsLegacyMixBody = await vsLegacyMixRes.json();
+    assert.equal(vsLegacyMixBody.product_a.slug, LEGACY_UNDERSCORE.slug);
+    assert.equal(vsLegacyMixBody.product_b.slug, V_IP_256.slug);
+    assert.equal(
+      vsLegacyMixBody.versus_url,
+      '/compare/_legacy-phone-1765-vs-apple-iphone-16-1765'
+    );
+
+    // Sub-0.5 VND ?price=0.1 rounds to 0 -> null, never overriding an out-of-stock verdict.
+    assert.equal(parseOptionalVndPriceParam('0.1'), null);
+    const subVndInspectRes = await inspectRouteStatic.GET(
+      new NextRequest(
+        'http://localhost/api/v1/rate/inspect?url=https://shopee.vn/product/88201679/77176502&price=0.1',
+        { headers: { 'x-forwarded-for': '198.51.100.94' } }
+      )
+    );
+    assert.equal(subVndInspectRes.status, 200);
+    const subVndInspectBody = await subVndInspectRes.json();
+    assert.equal(
+      subVndInspectBody.data.priceVerdict.verdict,
+      'fair_market_price'
+    );
+
+    // Distinct Watch models sharing coarse brand + model strings (46mm vs 42mm)
+    // but distinct item_ids / model_key prefixes remain eligible topRivals.
+    delete process.env.RATE_ITEM_MODEL;
+    const WATCH_46 = {
+      ...phoneShaped(
+        'c4600000-0000-4000-8000-000000001765',
+        'apple-watch-s11-46mm-1765',
+        'smartwatches'
+      ),
+      item_id: 'a4600000-0000-4000-8000-000000001765',
+      name: 'Apple Watch Series 11 46mm',
+      brand: 'Apple',
+      model: 'Watch Series 11',
+      model_key: 'apple:watch-s11-46mm-1765:64gb',
+      storage_gb: 64,
+    };
+    const WATCH_42 = {
+      ...WATCH_46,
+      id: 'c4200000-0000-4000-8000-000000001765',
+      item_id: 'a4200000-0000-4000-8000-000000001765',
+      slug: 'apple-watch-s11-42mm-1765',
+      name: 'Apple Watch Series 11 42mm',
+      model_key: 'apple:watch-s11-42mm-1765:64gb',
+    };
+    masterRows = [V_IP_128, WATCH_46, WATCH_42];
+    catalog = [WATCH_46, WATCH_42];
+    const watchLookup = await lookupExtensionProduct({
+      title: 'Apple Watch Series 11 46mm 64GB',
+      mode: 'pill',
+    });
+    assert.equal(watchLookup.topRivalName, WATCH_42.name);
+    assert.equal(
+      watchLookup.versusUrl,
+      `/compare/${WATCH_42.slug}-vs-${WATCH_46.slug}`
+    );
+
+    // POST /api/v1/rate/watchlist rejects hex, embedded control-char, and boolean
+    // targetPrice inputs while trimming leading control chars.
+    const validBearer = 'stub-bearer-token-1765';
+    const postWatchlistAlert = (targetPrice: unknown) =>
+      watchlistRouteStatic.POST(
+        new NextRequest('http://localhost/api/v1/rate/watchlist', {
+          method: 'POST',
+          headers: {
+            authorization: `Bearer ${validBearer}`,
+            'content-type': 'application/json',
+          },
+          body: JSON.stringify({
+            slug: V_IP_128.slug,
+            targetPrice,
+          }),
+        })
+      );
+    for (const badPrice of ['2\u00005000000', '0x100000', true]) {
+      const badRes = await postWatchlistAlert(badPrice);
+      assert.equal(badRes.status, 400, `targetPrice=${String(badPrice)}`);
+    }
+    const okLeadCtrlRes = await postWatchlistAlert('\u000020000000');
+    assert.equal(okLeadCtrlRes.status, 200);
+  } finally {
+    if (prevFlag === undefined) delete process.env.RATE_ITEM_MODEL;
+    else process.env.RATE_ITEM_MODEL = prevFlag;
+    itemRows = [];
+    masterRows = [];
+    catalog = [];
+    trustViewRows = [];
+    productRows = [];
+  }
+  console.warn(
+    '  ✅ Control-char numeric guards, unavailable offer verdicts and Item-model routing verified (#1765)'
+  );
+}
+
 async function main() {
   console.warn('🧪 API v1 category spec view suite (DOS/Rate#1184)');
   await testProductFilters();
@@ -1785,6 +2670,7 @@ async function main() {
   await testBoundedInputs();
   await testInspectRateLimit();
   await testExtensionRateLimit();
+  await testControlCharsUnavailableVerdictsAndItemRouting();
 }
 
 main().catch((err) => {

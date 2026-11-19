@@ -19,6 +19,7 @@ import {
   jsonApiError,
   withPublicReviewRisk,
   parseBoundedStringParam,
+  parseFiniteDecimalInput,
   parseOptionalVndPriceParam,
   resolveInspectObservedPrices,
   withPublicOfferReviewRisk,
@@ -89,6 +90,14 @@ export async function GET(request: NextRequest) {
       price: observedPrice > 0 ? observedPrice : null,
     });
 
+    const rawMatchedOfferPrice = parseFiniteDecimalInput(
+      inspection.matchedOffer?.price_current
+    );
+    const matchedOfferHasPositivePrice =
+      Number.isFinite(rawMatchedOfferPrice) &&
+      rawMatchedOfferPrice > 0 &&
+      rawMatchedOfferPrice <= MAX_VALID_VND_PRICE;
+
     const priceVerdict = evaluateExtensionPriceVerdict({
       isAccessory: gatekeeper.isAccessory,
       accessoryReason: gatekeeper.reason,
@@ -98,13 +107,16 @@ export async function GET(request: NextRequest) {
       observedOriginalPrice:
         observedOriginalPrice > 0 ? observedOriginalPrice : null,
       offers: inspection.allOffers,
-      // The observed price is the matched listing's: its stored price, or a
-      // ?price= read from that listing (the offers table's "Inspect" link).
-      // A fallback offer for a slug or keyword is not the priced listing.
+      // The observed price is the matched listing's: an exact product_listing
+      // URL always identifies its matchedOffer (so an unpriced/sold-out listing
+      // never inherits a genuine_deal verdict from masterMinPrice), whereas a
+      // fallback offer for a slug or keyword only matches when unoverridden and priced.
       observedOfferId:
-        queryPrice === null || inspection.matchedType === 'product_listing'
+        inspection.matchedType === 'product_listing' ||
+        (queryPrice === null && matchedOfferHasPositivePrice)
           ? (inspection.matchedOffer?.id ?? null)
           : null,
+      hasLiveObservedPrice: typeof queryPrice === 'number' && queryPrice > 0,
       priceHistory: inspection.priceHistory,
     });
     const radarSignal = masterProduct
