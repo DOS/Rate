@@ -175,17 +175,18 @@ export function getItemSlugByVariantSlug() {
 }
 
 /**
- * Item slugs for the given variant slugs, for in-app versus links (#1290);
- * null while the Item model is off, so pages pass nothing new.
+ * Map variant slugs to Items for in-app versus links (#1290). A failed
+ * comparison needs fallback. A resolved selection keeps its pins even if
+ * the directory is unavailable.
  */
 export async function getItemSlugsFor(
-  slugs: readonly string[]
+  slugs: readonly string[],
+  resolvedSelection?: readonly string[] | null
 ): Promise<Record<string, string> | null> {
+  if (resolvedSelection === null) return null;
   const map = await getItemSlugByVariantSlug();
-  if (!map) return null;
-  const out: Record<string, string> = {};
+  if (!map) return resolvedSelection === undefined ? null : {};
   // A slug with no Item maps to itself: it is resolved, so the compare
   // workspace does not read it again on the client (#1294).
-  for (const slug of slugs) out[slug] = map.get(slug) ?? slug;
-  return out;
+  return Object.fromEntries(slugs.map((slug) => [slug, map.get(slug) ?? slug]));
 }
